@@ -1,6 +1,6 @@
 /* scripttest.c -- test wheather the sieve script is valid
  * Tim Martin
- * $Id: scripttest.c,v 1.6 1999/10/04 18:37:27 leg Exp $
+ * $Id: scripttest.c,v 1.7 1999/11/03 18:09:45 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -33,6 +33,10 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #include "mystring.h"
 
+#include "xmalloc.h"
+#include <string.h>
+#include <stdlib.h>
+
 /* to make larry's stupid functions happy :) */ 
 void foo(void)
 {
@@ -43,8 +47,12 @@ void foo(void)
 sieve_vacation_t vacation = {
     0,				/* min response */
     0,				/* max response */
-    &foo,			/* autorespond() */
-    &foo			/* send_response() */
+    (int (*)(unsigned char *, int, int, 
+	     void *, void *, 
+	     void *))    &foo,	/* autorespond() */
+    (int (*)(char *, char *, char *, int, int,
+	     void *, void *,
+	     void *) )   &foo   /* send_response() */
 };
 
 int mysieve_error(int lineno, char *msg,
@@ -66,8 +74,7 @@ int is_script_parsable(FILE *stream, char **errstr)
 {
   sieve_interp_t *i;
   sieve_script_t *s;
-  int fd, res;
-  int lup;
+  int res;
   
   res = sieve_interp_alloc(&i, NULL);
   if (res != SIEVE_OK) {

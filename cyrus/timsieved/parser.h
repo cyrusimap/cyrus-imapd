@@ -1,7 +1,7 @@
-/* lex.h -- lexer for timsieved
+/* parser.h
  * Tim Martin
  * 9/21/99
- * $Id: lex.h,v 1.4 1999/11/03 18:09:43 tmartin Exp $
+ * $Id: parser.h,v 1.1 1999/11/03 18:09:44 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -26,44 +26,13 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
 OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ******************************************************************/
 
-
-#ifndef _LEX_H_
-#define _LEX_H_
+#ifndef PARSER_H
+#define PARSER_H
 
 #include "prot.h"
-#include "mystring.h"
 
-#define LEXER_STATE_TAG         60
-#define LEXER_STATE_RECOVER     61
-#define LEXER_STATE_RECOVER_CR  62
-#define LEXER_STATE_CR          63
-#define LEXER_STATE_QSTR        64
-#define LEXER_STATE_LITERAL     65
-#define LEXER_STATE_NUMBER      66
-#define LEXER_STATE_NORMAL      67
-#define LEXER_STATE_ATOM        68
+int parser(struct protstream *sieved_out, 
+	   struct protstream *sieved_in);
 
 
-/* possible tokens */
-
-#define SPACE 32
-
-/* these must be above 255 */
-#define EOL          300
-#define STRING       301
-#define AUTHENTICATE 302
-#define LOGOUT       304
-#define GETSCRIPT    305
-#define PUTSCRIPT    306
-#define SETACTIVE    307
-#define LISTSCRIPTS  308
-#define DELETESCRIPT 309
-
-
-int lex_init(void);
-
-int timlex(string_t **outstr,   struct protstream *stream);
-
-void lex_setrecovering(void);
-
-#endif
+#endif /* PARSER_H */

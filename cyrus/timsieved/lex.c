@@ -1,7 +1,7 @@
 /* lex.c -- lexer for timsieved
  * Tim Martin
  * 9/21/99
- * $Id: lex.c,v 1.8 1999/10/13 16:43:32 leg Exp $
+ * $Id: lex.c,v 1.9 1999/11/03 18:09:43 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -35,7 +35,9 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "lex.h"
 #include "codes.h"
 #include "mystring.h"
-#include "y.tab.h"
+#include "actions.h"
+#include "config.h"
+#include "xmalloc.h"
 
 int token_lookup (char *str, int len)
 {
@@ -55,10 +57,6 @@ int token_lookup (char *str, int len)
     case 'l':
 	if (strcmp(str, "listscripts")==0) return LISTSCRIPTS;
 	if (strcmp(str, "logout")==0) return LOGOUT;
-	break;
-
-    case 'n':
-	if (strcmp(str, "noop")==0) return NOOP;
 	break;
 
     case 'p':
@@ -96,6 +94,10 @@ int lex_reset(void)
   return 0;
 }
 
+void lex_setrecovering(void)
+{
+  lexer_state = LEXER_STATE_RECOVER;
+}
 
 int maxscriptsize=0;
 char *buffer;
@@ -110,7 +112,11 @@ int lex_init(void)
   return 0;
 }
 
-int timlex(YYSTYPE * lvalp, void * client)
+/**
+ * if outstr is NULL it isn't filled in
+ */
+
+int timlex(string_t **outstr,   struct protstream *stream)
 {
 
   int ch;
@@ -118,15 +124,15 @@ int timlex(YYSTYPE * lvalp, void * client)
   char *buff_ptr;
   char *buff_end;
 
-  unsigned long count;
+  unsigned long count=0;
 
-  int result;
+  int result = TIMSIEVE_OK;
 
   int synchronizing=TRUE;  /* wheather we are in the process of reading a
 			      synchronizing string or not */
 
 
-  struct protstream *stream=(struct protstream *) client;
+
 
   buff_ptr = buffer; /* ptr into the buffer */
   buff_end = buffer + maxscriptsize - 10; /* ptr to end of buffer */
@@ -151,13 +157,16 @@ int timlex(YYSTYPE * lvalp, void * client)
     
 
     case LEXER_STATE_RECOVER:
-      if (ch == '\r')
+      if (ch == '\n') {
+	lexer_state=LEXER_STATE_NORMAL;
+      }
+      if (ch == '\r') 
 	lexer_state=LEXER_STATE_RECOVER_CR;
       break;
     case LEXER_STATE_RECOVER_CR:
       if (ch == '\n')
 	lexer_state=LEXER_STATE_NORMAL;
-      return EOL;
+      break;
     case LEXER_STATE_CR:
       if (ch == '\n') {
 	lexer_state=LEXER_STATE_NORMAL;
@@ -168,11 +177,13 @@ int timlex(YYSTYPE * lvalp, void * client)
     case LEXER_STATE_QSTR:
       if (ch == '\"') {
 	/* End of the string */
-	lvalp->str = NULL;
-	/*	if (! client->recovering) { */
-	  result = string_allocate(buff_ptr - buffer, buffer, &lvalp->str);
+	if (outstr!=NULL)
+	{
+	  *outstr = NULL;
+	  result = string_allocate(buff_ptr - buffer, buffer, outstr);
 	  if (result != TIMSIEVE_OK)
 	    ERR_PUSHBACK();
+	}
 	  /*} */
 	lexer_state=LEXER_STATE_NORMAL;
 	return STRING;
@@ -240,20 +251,29 @@ int timlex(YYSTYPE * lvalp, void * client)
 	  ERR();
       }
 
-      lvalp->str = NULL;
-      result = string_allocate(count, NULL, &lvalp->str);
-      if (result != TIMSIEVE_OK)
-	ERR_PUSHBACK();
+      if (outstr!=NULL)
+      {
+	*outstr = NULL;
+	result = string_allocate(count, NULL, outstr);
+	if (result != TIMSIEVE_OK)
+	  ERR_PUSHBACK();
+      }
 
       /* there is a literal string on the wire. let's read it */
-      {
-	char           *it = string_DATAPTR(lvalp->str),
+      if (outstr!=NULL) {
+	char           *it = string_DATAPTR(*outstr),
 	               *end = it + count;
 
 	while (it < end) {
 	  *it=prot_getc(stream);
 	  it++;
 	}
+      } else {
+	/* just read the chars and throw them away */
+	int lup;
+
+	for (lup=0;lup<count;lup++)
+	  prot_getc(stream);
       }
       lexer_state=LEXER_STATE_NORMAL;
       return STRING;
@@ -288,7 +308,7 @@ int timlex(YYSTYPE * lvalp, void * client)
 	return EOL;
 	break;
       default:
-	ERR_PUSHBACK();
+	return ch;
       }
       break;
     case LEXER_STATE_ATOM:
