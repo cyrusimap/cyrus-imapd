@@ -1,11 +1,49 @@
                    Changes to the Cyrus IMAP Server
 
+Changes to the Cyrus IMAP Server Since Version 1.5.19 
+
+      * Most of the charset.c code (and mkchartable.c code) has been
+        replaced thanks to John Myers). 
+      * Bug fix in message.c to look up headers in the cache when they're
+        in the cache correctly; thanks to Chris Newman for the fix. 
+      * Code cleanup here and there (thanks to Bruce Balden). 
+      * Annoying (and confusing) lines in syslog every time a message was
+        delivered if deliver was compiled using dbm saying that deliver was
+        "unable to fetch entry" have been removed. 
+      * Content-Disposition lines were being parsed improperly. If they had
+        no optional arguments, they were being ignored as if they were
+        syntactically incorrect. This is fixed, but imapd will continue to
+        serve wrong information unless cyrus.caches are rebuilt (with
+        reconstruct) for any message that was added to the mailbox before
+        this bug was fixed. 
+      * The arbitron program now takes a mailbox pattern argument for the
+        mailbox to run on. The manpage always said it did anyway. 
+      * Uninitialized variable fixed in imapd.c with the shutdown file
+        code. 
+      * Minor tweaks to purify build config. 
+      * Fix minor memory leak in proc.c where procfname wasn't being
+        free'd. 
+      * Fix brain fart in auth_krb_pts.c where a CLOSE() was done to a DB
+        handle BEFORE we access the data read from the DB database. This
+        means we were copying free'd memory into the groups list. Note this
+        only affects people using DB, AFS and ptloader. 
+      * Committed minor syslog log level changes in ptloader and deliver. 
+      * make distclean now does what it's supposed to. 
+      * Possibly misnamed experimental --enable-static-libraries switch
+        that tries to do a good job of building binaries with whatever
+        static libraries are availible. If you use this, you do so at your
+        own risk, and if it fails, we will disavow all knowledge of you and
+        your team. Good luck, Jim. 
+
 Changes to the Cyrus IMAP Server Since Version 1.5.14
 
-      * LIST now honors the reference argument. This behavior can be turned
-        off by a configuration option imapd.conf--which may be desirable
-        because of certain clients that ask for a "mail directory" setting
-        for IMAP which will now cause problems when it was ignored before. 
+      * LIST now honors the reference argument. 
+
+        This behavior can be turned off by a configuration option
+        imapd.conf--which may be desirable because of certain clients that
+        ask for a "mail directory" setting for IMAP which will now cause
+        problems when it was ignored before. (The default is for the
+        reference argument to be honored.) 
       * The arbitron program now takes a mailbox pattern argument for the
         mailbox to run on. The manpage always said it did anyway. 
       * Added --disable-server switch to optionally prevent compilation of
@@ -18,6 +56,8 @@ Changes to the Cyrus IMAP Server Since Version 1.5.14
         problems on complex searches. Thanks to Jeff Schiller for pointing
         this out. Fixed a potential leak in mboxlist.c that happened if a
         rename went awry. Thanks to Chris Newman for pointing this out. 
+      * Fixed a bug in LIST and LSUB code so that user.* mailboxes will be
+        printed on every LIST instead of just the first one. 
       * Implemented the POP3 Extension Mechanism, RFC 2449, in order to
         advertise the capabilities already supported. 
       * Fixed a bug in mailbox.c that disallowed MUTF-7 representations of
