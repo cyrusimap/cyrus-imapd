@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.180 2000/06/14 15:46:14 ken3 Exp $
+dnl $Id: configure.in,v 1.181 2000/06/18 20:16:31 leg Exp $
 dnl
 
 
@@ -640,31 +640,6 @@ AC_SUBST(COMPILE_ET)
 AC_SUBST(COM_ERR_LIBS)
 AC_SUBST(COM_ERR_LDFLAGS)
 AC_SUBST(COM_ERR_CPPFLAGS)
-
-dnl
-dnl Look for inn
-dnl
-AC_ARG_WITH(inn,[  --with-inn=PATH         use INN from PATH],
-	innpath="$withval")
-AC_MSG_CHECKING(for inn)
-if test -f ${innpath}/innshellvars; then
-	INNSHELLVARS=${innpath}/innshellvars
-elif test -f ${innpath}/lib/innshellvars; then
-	INNSHELLVARS=${innpath}/lib/innshellvars
-elif test -f /usr/local/news/innshellvars; then
-	INNSHELLVARS=/usr/local/news/innshellvars
-elif test -f /usr/lib/news/innshellvars; then
-	INNSHELLVARS=/usr/lib/news/innshellvars
-elif test -f /usr/news/lib/innshellvars; then
-	INNSHELLVARS=/usr/news/lib/innshellvars
-elif test -f /usr/news/innshellvars; then
-	INNSHELLVARS=/usr/news/innshellvars
-else
-	INNSHELLVARS=no
-fi
-AC_MSG_RESULT($INNSHELLVARS)
-
-AC_SUBST(INNSHELLVARS)
 
 AC_MSG_CHECKING(for modern syslog)
 AC_CACHE_VAL(cyrus_cv_lib_syslog, AC_TRY_CPP([#include <syslog.h>
