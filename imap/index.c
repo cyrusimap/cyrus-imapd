@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.95 2000/02/10 21:25:27 leg Exp $
+ * $Id: index.c,v 1.96 2000/02/16 22:53:40 leg Exp $
  */
 #include <config.h>
 
@@ -2627,7 +2627,7 @@ char *name;
 char *substr;
 comp_pat *pat;
 {
-    char *p, *q;
+    char *q;
     static struct strlist header;
     static char *buf;
     static int bufsize;
@@ -2656,7 +2656,7 @@ comp_pat *pat;
     index_pruneheader(buf, &header, 0);
     if (!*buf) return 0;	/* Header not present, fail */
     if (!*substr) return 1;	/* Only checking existence, succeed */
-    p = charset_decode1522(buf, NULL, 0);
+    q = charset_decode1522(buf, NULL, 0);
     r = charset_searchstring(substr, pat, q, strlen(q));
     free(q);
     return r;
