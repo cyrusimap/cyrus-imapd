@@ -30,6 +30,7 @@
 #include <ctype.h>
 #include <string.h>
 #include <syslog.h>
+#include <fcntl.h>
 #include <errno.h>
 #ifdef __STDC__
 #include <stdarg.h>
@@ -52,6 +53,8 @@
 
 #define VECSIZE 15
 
+static int imsp_open();
+
 /*
  * Drop off a request to send an IMSP LAST command stating the highest
  * uid for mailbox 'name' is 'uid' and has 'exists' messages.
@@ -71,7 +74,7 @@ va_dcl
     int num_iov = 0;
     char *tag;
     char *sval;
-    bit32 *nval;
+    bit32 nval;
 
 #ifdef __STDC__
     va_start(pvar, uidvalidity);
@@ -88,7 +91,7 @@ va_dcl
     if (fd == -1) return;
 
     /* Start with newline */
-    iov[num_iov].iov_base = '\n';
+    iov[num_iov].iov_base = "\n";
     iov[num_iov++].iov_len = 1;
 
     iov[num_iov].iov_base = name;
@@ -127,7 +130,11 @@ va_dcl
 
     va_end(pvar);
 
-    n = retry_writev(fd, iov, num_iov);
+    if (num_iov > VECSIZE) {
+	abort("Internal error: toimsp arg list overflow", EX_SOFTWARE);
+    }
+
+    (void) retry_writev(fd, iov, num_iov);
     fclose(fd);
     
     return 0;
