@@ -1,5 +1,5 @@
 # SIEVE Makefile for cyrus software
-# $Id: Makefile.in,v 1.13 2002/05/25 19:57:50 leg Exp $
+# $Id: Makefile.in,v 1.14 2002/07/22 16:16:09 rjs3 Exp $
 #
 # @configure_input@
 # 
@@ -41,7 +41,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.in,v 1.13 2002/05/25 19:57:50 leg Exp $
+# $Id: Makefile.in,v 1.14 2002/07/22 16:16:09 rjs3 Exp $
 # 
 
 SUBDIRS = lib managesieve
@@ -65,6 +65,8 @@ cyrus_prefix = @cyrus_prefix@
 # Note that we use the *dynamic* sasl libraries
 SASL_LIB=@LIB_DYN_SASL@
 SASL_INC=@DYNSASLFLAGS@
+OPENSSL_LIB=@OPENSSL_LIB@
+OPENSSL_INC=@OPENSSL_INC@
 
 CC=@CC@
 PERL=@PERL@
@@ -74,6 +76,7 @@ all::
 	do \
 		(cd $$d; echo "### Making" all "in" `pwd`;	\
 			if [ -f Makefile.PL ]; then \
+			   OPENSSL_LIB="$(OPENSSL_LIB)" OPENSSL_INC="$(OPENSSL_INC)" \
 			   SASL_LIB="$(SASL_LIB)" SASL_INC="$(SASL_INC)" CC="$(CC)" \
 			     $(PERL) Makefile.PL PREFIX=$(prefix); \
 			fi; \
