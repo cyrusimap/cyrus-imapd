@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.93 2001/05/30 23:12:01 ken3 Exp $
+ * $Id: pop3d.c,v 1.94 2001/06/01 02:59:02 ken3 Exp $
  */
 #include <config.h>
 
@@ -468,7 +468,8 @@ static void cmdloop(void)
 	}
 	else if (!popd_mailbox) {
 	    if (!strcmp(inputbuf, "user") &&
-		(popd_starttls_done || config_getswitch("allowplaintext", 1))) {
+		(kflag || popd_starttls_done ||
+		 config_getswitch("allowplaintext", 1))) {
 		if (!arg) {
 		    prot_printf(popd_out, "-ERR Missing argument\r\n");
 		}
@@ -477,7 +478,8 @@ static void cmdloop(void)
 		}
 	    }
 	    else if (!strcmp(inputbuf, "pass") &&
-		     (popd_starttls_done || config_getswitch("allowplaintext", 1))) {
+		     (kflag || popd_starttls_done ||
+		      config_getswitch("allowplaintext", 1))) {
 		if (!arg) prot_printf(popd_out, "-ERR Missing argument\r\n");
 		else cmd_pass(arg);
 	    }
@@ -1007,7 +1009,7 @@ cmd_capa()
     prot_printf(popd_out, "PIPELINING\r\n");
     prot_printf(popd_out, "RESP-CODES\r\n");
 
-    if (popd_starttls_done || config_getswitch("allowplaintext", 1)) {
+    if (kflag || popd_starttls_done || config_getswitch("allowplaintext", 1)) {
 	prot_printf(popd_out, "USER\r\n");
     }
     
