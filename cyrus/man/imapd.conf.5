@@ -170,6 +170,11 @@ potentially large disk savings.
 If enabled, deliver rejects messages with 8-bit characters in the headers.
 Otherwise, 8-bit characters are changed to `X'.  (A proper soultion to
 non-ASCII characters in headers is offered by RFC 2047 and its predecessors.)
+.IP "\fBpostuser:\fR <none>" 5
+Userid used to deliver messages to shared folders.  For example, if
+set to "bb", email sent to "bb+shared.blah" would be delivered to the
+"shared.blah" folder.  By default, an email address of "+shared.blah"
+would be used.
 .IP "\fBnetscapeurl:\fR http://andrew2.andrew.cmu.edu/cyrus/imapd/netscape-admin.html" 5
 If enabled at compile time, this specifies a URL to reply when Netscape
 asks the server where the mail administration HTTP server is.  The default
