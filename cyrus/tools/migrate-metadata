@@ -42,7 +42,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #!perl -w
 # script to upgrade from versions of imapd previous to 1.6.2
 # make sure you run it as the cyrus user
-# $Id: migrate-metadata,v 1.1.2.1 2004/04/14 01:02:28 ken3 Exp $
+# $Id: migrate-metadata,v 1.1.2.2 2004/04/14 15:42:18 ken3 Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -60,6 +60,8 @@ if ($@) { die "$@"; }
 
 __END__
 require 5;
+
+use File::Copy
 
 $| = 1;
 
@@ -134,8 +136,10 @@ sub migrate {
 	if ($subdir =~ /^cyrus\.(.+)/s) {
 	    # cyrus.* file, see if we should migrate it
 	    if (defined($mfiles{$1})) {
-		rename($part . $subpath, $mpart . $subpath) ||
-		    ouch "couldn't move $part$subpath to $mpart$subpath";
+		copy($part . $subpath, $mpart . $subpath) ||
+		    ouch "couldn't copy $part$subpath to $mpart$subpath";
+		unlink($part . $subpath) ||
+		    ouch "couldn't delete $part$subpath";
 	    }
 	}
 	elsif ($subdir =~ /^[^\.]+$/s) {
