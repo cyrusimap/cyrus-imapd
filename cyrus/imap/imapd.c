@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.159 1998/11/09 21:03:11 tjs Exp $ */
+/* $Id: imapd.c,v 1.160 1998/12/01 22:37:54 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -2598,7 +2598,7 @@ char *identifier;
 	    rightsdesc = "\"\" l r s w i p c d a 0 1 2 3 4 5 6 7 8 9";
 	}
 
-	prot_printf(imapd_out, "* LISTRIGHTS");
+	prot_printf(imapd_out, "* LISTRIGHTS ");
 	printastring(name);
 	prot_putc(' ', imapd_out);
 	printastring(identifier);
