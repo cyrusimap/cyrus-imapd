@@ -1,4 +1,4 @@
-<!-- $Id: install.html,v 1.42 1998/07/31 22:17:11 tjs Exp $ -->
+<!-- $Id: install.html,v 1.43 1998/08/04 05:46:22 tjs Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
@@ -39,13 +39,16 @@ These files must be removed.  (There is no danger in deleting the PTS cache,
 and if the delivered database is removed, there is a chance that some duplicate
 messages may come through, but this is not a serious concern.
 
+<li> The format for the PTS cache for IMSP has changed.  If you use
+AFS ACLs, IMSPd, and IMAPd on the same machine, make sure you have version
+1.5a5 of the IMSP server for this version of the IMAP server.  (If you don't
+have IMSP, or AFS, don't worry about it.)
+
 </ul>
 <p>
 See the file <a
 HREF="changes.html"><TT>doc/changes</TT></a> in the distribution for
 more information.
-
-
 
 <H2>Prerequisites and other notes</H2>
 
@@ -872,7 +875,7 @@ to work with the IMAP server.
 
 <P><HR><P>
 <!-- hhmts start -->
-last modified by tjs at Fri Jul 31 18:17:01 1998
+last modified by tjs at Tue Aug  4 00:36:47 1998
 <!-- hhmts end -->
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
