@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.35.4.18 2003/06/19 20:49:41 ken3 Exp $ */
+/* $Id: acconfig.h,v 1.35.4.19 2003/07/02 14:24:56 ken3 Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -64,6 +64,9 @@
 
 /* And what sort of GSS_C_NT_HOSTBASED_SERVICE do we use? */
 #undef HAVE_GSS_C_NT_HOSTBASED_SERVICE
+
+/* And what sort of GSS_C_NT_USER_NAME do we use? */
+#undef HAVE_GSS_C_NT_USER_NAME
 
 /* do we already have sys_errlist? */
 #undef NEED_SYS_ERRLIST
