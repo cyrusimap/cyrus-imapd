@@ -6,7 +6,7 @@ AC_DEFUN(CMU_LIBSSL_INC_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
 saved_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="$saved_CPPFLAGS -I$1"
-AC_CHECK_HEADER(ssl.h,
+AC_CHECK_HEADER(openssl/ssl.h,
 ac_cv_found_libssl_inc=yes,
 ac_cv_found_libssl_inc=no)
 CPPFLAGS=$saved_CPPFLAGS
@@ -91,7 +91,7 @@ AC_ARG_WITH(libssl-include,
 	    ac_cv_libssl_where_inc=$with_libssl_include
 	  fi
 	  if test "X$ac_cv_libssl_where_inc" = "X"; then
-	    CMU_LIBSSL_INC_WHERE(/usr/local/include/openssl /usr/local/include/ssl /usr/local/include /usr/include/openssl /usr/include/ssl /usr/include)
+	    CMU_LIBSSL_INC_WHERE(/usr/local/include /usr/include)
 	  fi
 	fi
 
