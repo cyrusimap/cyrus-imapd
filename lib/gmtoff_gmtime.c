@@ -55,5 +55,5 @@ time_t time;
 
     /* Restore the data in the struct 'tm' points to */
     *tm = local;
-    return offset;
+    return offset * 60;
 }
