@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.98 2004/01/02 20:34:10 rjs3 Exp $
+ * $Id: lmtpengine.c,v 1.99 2004/01/08 19:10:27 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -756,6 +756,7 @@ static int process_recipient(char *addr,
     int r, sl;
     address_data_t *ret = (address_data_t *) xmalloc(sizeof(address_data_t));
     int forcedowncase = config_getswitch(IMAPOPT_LMTP_DOWNCASE_RCPT);
+    int quoted, detail;
 
     assert(addr != NULL && msg != NULL);
 
@@ -781,37 +782,34 @@ static int process_recipient(char *addr,
 	addr++;
     }
     
-    if (*addr == '\"') {
-	addr++;
-	while (*addr && *addr != '\"') {
-	    if (*addr == '\\') addr++;
-	    *dest++ = *addr++;
+    quoted = detail = 0;
+    while (*addr &&
+	   (quoted ||
+	    ((config_virtdomains || *addr != '@') && *addr != '>'))) {
+	/* start/end of quoted localpart, skip the quote */
+	if (*addr == '\"') {
+	    quoted = !quoted;
+	    addr++;
+	    continue;
 	}
-    }
-    else {
-	if(forcedowncase) {
-	    /* We should downcase the localpart up to the first + */
-	    while(*addr != '@' && *addr != '>' && *addr != '+') {
-		if(*addr == '\\') addr++;
-		*dest++ = TOLOWER(*addr++);
-	    }
-	    if (*addr == '+') {
-	      while(*addr != '@' && *addr != '>') {
-		if(*addr == '\\') addr++;
-		*dest++ = *addr++;
-	      }
-	    }
-	    while ((config_virtdomains || *addr != '@') && *addr != '>') {
-		if(*addr == '\\') addr++;
-		*dest++ = TOLOWER(*addr++);
-	    }
+
+	/* escaped char, pass it through */
+	if (*addr == '\\') {
+	    addr++;
+	    if (!*addr) break;
 	} else {
-	  /* Now finish the remainder of the localpart */
-	  while ((config_virtdomains || *addr != '@') && *addr != '>') {
-	      if (*addr == '\\') addr++;
-	      *dest++ = *addr++;
-	  }
-       }
+	    /* start of detail */
+	    if (*addr == '+') detail = 1;
+
+	    /* end of localpart (unless quoted) */
+	    if (*addr == '@' && !quoted) detail = 0;
+	}
+
+	/* downcase everything accept the detail */
+	if (forcedowncase && !detail)
+	    *dest++ = TOLOWER(*addr++);
+	else
+	    *dest++ = *addr++;
     }
     *dest = '\0';
 	
