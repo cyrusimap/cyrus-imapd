@@ -919,7 +919,10 @@ struct cyrusdb_backend cyrusdb_db3 =
     &delete,
 
     &commit_txn,
-    &abort_txn
+    &abort_txn,
+    
+    NULL,
+    NULL
 };
 
 struct cyrusdb_backend cyrusdb_db3_nosync = 
