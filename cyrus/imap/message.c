@@ -1094,8 +1094,25 @@ int newformat;
 	}
 	PUTIBUF(ibuf, ' ');
 	message_write_nstring(ibuf, body->subtype);
-	PUTIBUF(ibuf, ')');
 
+	if (newformat) {
+	    PUTIBUF(ibuf, ' ');
+	    if (param = body->params) {
+		PUTIBUF(ibuf, '(');
+		while (param) {
+		    message_write_nstring(ibuf, param->attribute);
+		    PUTIBUF(ibuf, ' ');
+		    message_write_nstring(ibuf, param->value);
+		    if (param = param->next) {
+			PUTIBUF(ibuf, ' ');
+		    }
+		}
+		PUTIBUF(ibuf, ')');
+	    }
+	    else message_write_nstring(ibuf, (char *)0);
+	}
+
+	PUTIBUF(ibuf, ')');
 	return;
     }
 
