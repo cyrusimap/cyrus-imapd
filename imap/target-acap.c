@@ -26,14 +26,13 @@
  *  (412) 268-4387, fax: (412) 268-7395
  *  tech-transfer@andrew.cmu.edu
  *
- * $Id: target-acap.c,v 1.5 2000/02/19 04:46:06 leg Exp $
+ * $Id: target-acap.c,v 1.6 2000/03/08 01:43:36 leg Exp $
  */
 
 #include <config.h>
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <pthread.h>
 #include <com_err.h>
 #include <syslog.h>
 #include <string.h>
@@ -49,6 +48,7 @@
 
 #include <sasl.h>
 #include <acap.h>
+#include <skip-list.h>
 
 #include "config.h"
 #include "mboxlist.h"
@@ -58,12 +58,15 @@
 #include "imapurl.h"
 #include "acapmbox.h"
 
+int noop = 0;
+
 extern sasl_callback_t *mysasl_callbacks(const char *username,
 					 const char *authname,
 					 const char *realm,
 					 const char *password);
 
 static acap_conn_t *acap_conn;
+static acap_context_t *mycontext;
 
 static unsigned int getintattr(acap_entry_t *e, char *attrname)
 {
@@ -142,48 +145,40 @@ void connect_acap(const char *server)
     }
 }
 
-void myacap_entry(acap_entry_t *entry, void *rock)
-{
-    /* name is a UTF-8 encoded representation of the mailbox;
-       technically we should reencode it into modified UTF-7. however,
-       right now both my client and server will violate this. */
-    char *name = acap_entry_getname(entry);
-    acap_value_t *url = acap_entry_getattr(entry, "mailbox.url");
-    acap_value_t *acl = acap_entry_getattr(entry, "mailbox.acl");
-    char *server, *mailbox;
-    int r;
-
-    if (!name || !url || !acl) {
-	if (name && (name[0] == '\0')) return; /* null entry, ok */
-	syslog(LOG_NOTICE, "%s received with incomplete ACAP entry",
-	       name ? name : "<entry?>");
-	return;
-    }
-
-    server = (char *) xmalloc(sizeof(char) * url->len);
-    mailbox = (char *) xmalloc(sizeof(char) * 2 * url->len);
-    imapurl_fromURL(server, mailbox, url->data);
-
-    r = mboxlist_insertremote(mailbox, 0, server, acl->data, NULL);
-    if (r) {
-	syslog(LOG_ERR, "failed to insert %s into new mailboxes file",
-	       name);
-	fatal("fatal mailboxes error", 0);
-    }
-}
-
 void myacap_addto(acap_entry_t *entry,
 		  unsigned position,
 		  void *rock)
 {
     acapmbox_data_t d;
     char *name = acap_entry_getname(entry);
+    char *server, *mailbox;
+    int r;
 
     if (!name || !name[0]) return; /* null entry */
-    if (dissect_entry(entry, &d) != ACAP_OK) return;
-    if (d.status != ACAPMBOX_COMMITTED) return;
+    r = dissect_entry(entry, &d);
+    if (r) {
+	syslog(LOG_ERR, "dissect_entry: %s", error_message(r));
+	return;
+    }
+    if (d.status != ACAPMBOX_COMMITTED) {
+	syslog(LOG_ERR,
+	    "my context only allows committed mailboxes, but this one isn't!");
+	return;
+    }
 
-    mboxlist_insertremote(d.name, MBTYPE_REMOTE, d.url, d.acl, NULL);
+    server = (char *) xmalloc(sizeof(char) * strlen(d.url));
+    mailbox = (char *) xmalloc(sizeof(char) * 2 * strlen(d.url));
+    imapurl_fromURL(server, mailbox, d.url);
+
+    syslog(LOG_DEBUG, "creating mailbox %s", name);
+    r = mboxlist_insertremote(mailbox, MBTYPE_REMOTE, server, d.acl, NULL);
+    if (r) {
+	syslog(LOG_ERR, "couldn't insert %s into mailbox list: %s\n",
+	       d.name, error_message(r));
+    }
+
+    free(mailbox);
+    free(server);
 }
 
 void myacap_removefrom(acap_entry_t *entry,
@@ -194,22 +189,92 @@ void myacap_removefrom(acap_entry_t *entry,
 
     if (!name || !name[0]) return; /* null entry */
 
-    mboxlist_deletemailbox(name, 1, "", NULL, 0);
+    /* need to reencode UTF-8 name into a UTF-7 IMAP name */
 
+    syslog(LOG_DEBUG, "deleting mailbox %s", name);
+    mboxlist_deletemailbox(name, 1, "", NULL, 0);
 }
 
 void myacap_change(acap_entry_t *entry,
 		   unsigned oldpos, unsigned newpos,
 		   void *rock)
 {
-
-
-
+    /* nothing to do here */
 }
 
 void myacap_modtime(char *modtime, void *rock)
 {
     syslog(LOG_NOTICE, "synchronized new mailboxes file to '%s'", modtime);
+}
+
+static int mbox_comp(const void *v1, const void *v2)
+{
+    return strcmp((const char *)v1, (const char *)v2);
+}
+
+static int mboxadd(char *name, int matchlen, int maycreate, void *rock)
+{
+    skiplist *s = (skiplist *) rock;
+
+    sinsert(s, xstrdup(name));
+    return 0;
+}
+
+static int num = 0;
+
+void myacap_entry(acap_entry_t *entry, void *rock)
+{
+    /* name is a UTF-8 encoded representation of the mailbox;
+       technically we should reencode it into modified UTF-7. however,
+       right now both my client and server will violate this. */
+    char *name = acap_entry_getname(entry);
+    acap_value_t *url = acap_entry_getattr(entry, "mailbox.url");
+    acap_value_t *acl = acap_entry_getattr(entry, "mailbox.acl");
+    char *server, *mailbox;
+    skiplist *s = (skiplist *) rock;
+    void *v;
+    int r = 0;
+
+    if (!name || !url || !acl) {
+	if (name && (name[0] == '\0')) return; /* null entry, ok */
+	syslog(LOG_NOTICE, "%s received with incomplete ACAP entry",
+	       name ? name : "<entry?>");
+	return;
+    }
+
+    num++;
+    if (!(num % 1000)) syslog(LOG_NOTICE, "received %d mailboxes (on %s)",
+			      num, name);
+
+    server = (char *) xmalloc(sizeof(char) * url->len);
+    mailbox = (char *) xmalloc(sizeof(char) * 2 * url->len);
+
+    imapurl_fromURL(server, mailbox, url->data);
+
+    v = ssearch(s, mailbox);
+    if (v) { 
+	sdelete(s, mailbox);
+	free(v);
+	r = 0;
+    } else { /* we don't have it, add it */
+	r = mboxlist_insertremote(mailbox, MBTYPE_REMOTE, server, 
+				  acl->data, NULL);
+    }
+
+    if (r) {
+	syslog(LOG_ERR, "failed to insert %s into new mailboxes file",
+	       name);
+	fatal("fatal mailboxes error", EC_DATAERR);
+    }
+    free(server);
+    free(mailbox);
+}
+
+static void mboxdel(const void *v)
+{
+    char *name = (char *) v;
+
+    mboxlist_deletemailbox(name, 1, "", NULL, 0);
 }
 
 static struct acap_search_callback myacap_search_cb = {
@@ -227,57 +292,63 @@ static struct acap_context_callback myacap_context_cb = {
     &myacap_modtime /* reuse modtime cb */
 };
 
-static acap_context_t *mycontext;
-
 /* this code grabs the current list of mailboxes from the ACAP server,
    saves it into a brand new database, and then moves the database into
    place. it also initializes the callbacks */
 void synchronize_mboxlist(void)
 {
-    char newmblist[1024];
-    char mblist[1024];
     acap_cmd_t *cmd;
     int r;
+    skiplist *mailboxes = skiplist_new(10, 0.5, &mbox_comp);
+    char s[30];
 
-    strcpy(newmblist, config_dir);
-    sprintf(newmblist, "%s%s.NEW", config_dir, FNAME_MBOXLIST);
-    unlink(newmblist);
-    mboxlist_open(newmblist);
+    if (!mailboxes) {
+	syslog(LOG_ERR, "skiplist_new failed");
+	fatal("skiplist_new failed", EC_TEMPFAIL);
+    }
+
+    mboxlist_open(NULL);
     
-    /* xxx eventually need to fill in context stuff here */
+    syslog(LOG_NOTICE, "starting mailbox synchronization");
+
+    strcpy(s, "*");
+    r = mboxlist_findall(s, 1, "", NULL, &mboxadd, mailboxes);
+
     r = acap_search_dataset(acap_conn, global_dataset "/", 
-			    "NOT EQUAL \"entry\" \"i;octet\" \"\"", 1,
+		      "EQUAL \"mailbox.status\" \"i;octet\" \"committed\"", 1,
 			    &myacap_request, NULL,
 			    NULL,
 			    &myacap_search_cb,
-			    &mycontext, &myacap_context_cb, NULL, &cmd);
+			    &mycontext, &myacap_context_cb, 
+			    mailboxes, &cmd);
     if (r != ACAP_OK) {
-	printf("acap_search_dataset() failed with %d\n", r);
+	syslog(LOG_ERR, "acap_search_dataset() failed: %s\n", 
+	       error_message(r));
 	fatal("can't download list of datasets\n", EC_NOHOST);
     }
 	
     r = acap_process_on_command(acap_conn, cmd, NULL);
     if (r != ACAP_OK) {
-	printf("acap_process_on_command() failed with %d\n", r);
+	syslog(LOG_ERR, "acap_process_on_command() failed: %s\n", 
+	       error_message(r));
 	fatal("can't download list of datasets\n", EC_NOHOST);
     }
 
+    /* anything left over has been deleted */
+    sforeach(mailboxes, &mboxdel);
+    sforeach(mailboxes, &free);
+    skiplist_free(mailboxes);
+
     mboxlist_close();
 
-    sprintf(mblist, "%s%s", config_dir, FNAME_MBOXLIST);
-    errno = 0;
-    r = rename(newmblist, mblist);
-    if (r) {
-	syslog(LOG_ERR, "couldn't rename mailboxes file: %m");
-	fatal("couldn't rename mailboxes file", 0);
-    }
+    syslog(LOG_NOTICE, "done synchronizing mailbox database: %d entries", num);
 }
 
 void fatal(const char *s, int code)
 {
     static int recurse_code = 0;
 
-    printf("arg: %s\n", s);
+    fprintf(stderr, "target-acap: %s\n", s);
     if (recurse_code) {
 	/* We were called recursively. Just give up */
 	exit(recurse_code);
@@ -287,31 +358,6 @@ void fatal(const char *s, int code)
     exit(code);
 }
 
-static int do_update = 0;
-static pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
-
-void *process_loop(void *v)
-{
-    int r;
-
-    /* process from the ACAP server */
-    for (;;) {
-	r = acap_process_line(acap_conn, 0);
-	if (r != ACAP_OK) break;
-	if (do_update) {
-	    pthread_mutex_lock(&mut);
-	    /* xxx UPDATECONTEXT here */
-
-	    do_update = 0;
-	    pthread_cond_broadcast(&cond);
-	    pthread_mutex_unlock(&mut);
-	}
-    }
-
-    return NULL;
-}
-
 void listen_for_kicks()
 {
     struct sockaddr_un srvaddr;
@@ -319,22 +365,26 @@ void listen_for_kicks()
     char fnamebuf[1024];
     int s, r, len;
     mode_t oldumask;
+    int acapsock = acap_conn_get_sock(acap_conn);
+    fd_set read_set, rset;
+    int nfds;
 
     s = socket(AF_UNIX, SOCK_STREAM, 0);
     if (s == -1) {
 	syslog(LOG_ERR, "socket: %m");
-	fatal("socket", 1);
+	return;
     }
 
-    strcpy(fnamebuf, STATEDIR);
+    strcpy(fnamebuf, config_dir);
     strcat(fnamebuf, FNAME_TARGET_SOCK);
 
     (void) unlink(fnamebuf);
     memset((char *)&srvaddr, 0, sizeof(srvaddr));
     srvaddr.sun_family = AF_UNIX;
     strcpy(srvaddr.sun_path, fnamebuf);
+    len = strlen(srvaddr.sun_path) + sizeof(srvaddr.sun_family);
     oldumask = umask((mode_t) 0); /* for Linux */
-    r = bind(s, (struct sockaddr *)&srvaddr, sizeof(srvaddr));
+    r = bind(s, (struct sockaddr *)&srvaddr, len);
     umask(oldumask); /* for Linux */
     chmod(fnamebuf, 0777); /* for DUX */
     if (r == -1) {
@@ -347,45 +397,79 @@ void listen_for_kicks()
 	exit(1);
     }
 
-    len = sizeof(clientaddr);
+    /* get ready for select() */
+    FD_ZERO(&read_set);
+    FD_SET(s, &read_set);
+    FD_SET(acapsock, &read_set);
+    if (acapsock > s) nfds = acapsock + 1;
+    else nfds = s + 1;
+
     for (;;) {
-	int c = accept(s, (struct sockaddr *)&clientaddr, &len);
+	int c, n;
 	char buf[64];
 
-	if (c == -1) {
-	    syslog(LOG_WARNING, "WARNING: accept: %m");
-	    continue;
-	}
-	
-	/* now talk to c */
-	if (read(c, &buf, 1) < 0) {
-	    syslog(LOG_ERR, "can't read from IPC socket?");
-	}
-	
-	pthread_mutex_lock(&mut);
-	/* c wants an update! */
-	do_update = 1;
-	while (do_update) {
-	    /* xxx timedwait? */
-	    pthread_cond_wait(&cond, &mut);
-	}
-	pthread_mutex_unlock(&mut);
+	/* process any outstanding ACAP stuff */
+	r = acap_process_outstanding(acap_conn);
+	if (r != ACAP_OK) syslog(LOG_ERR, "acap_process_outstanding(): %s",
+				 error_message(r));
+	if (r == ACAP_NO_CONNECTION) return;
 
-	if (write(c, "ok", 2) < 0) {
-	    syslog(LOG_WARNING, "can't write to IPC socket?");
+	/* check for the next input */
+	rset = read_set;
+	n = select(nfds, &rset, NULL, NULL, NULL);
+	if (n < 0 && errno == EAGAIN) continue;
+	if (n < 0 && errno == EINTR) continue;
+	if (n == -1) {
+	    /* uh oh */
+	    syslog(LOG_ERR, "select(): %m");
+	    close(s);
+	    return;
 	}
-	close(c);
+
+	/* if (FD_ISSET(acap_conn, &rfds)) 
+	       when we loop we'll take care of it 
+	 */
+
+	if (FD_ISSET(s, &rset)) {
+	    acap_cmd_t *cmd;
+
+	    len = sizeof(clientaddr);
+	    c = accept(s, (struct sockaddr *)&clientaddr, &len);
+	    if (c == -1) {
+		syslog(LOG_WARNING, "erg, accept(): %m");
+		continue;
+	    }
+	    
+	    /* c wants an update! */
+	    r = acap_updatecontext(acap_conn, mycontext, NULL, NULL, &cmd);
+	    if (r == ACAP_OK) {
+		r = acap_process_on_command(acap_conn, cmd, NULL);
+	    }
+	    
+	    if (r != ACAP_OK) {
+		syslog(LOG_ERR, "unable to UPDATECONTEXT: %s",
+		       error_message(r));
+		/* we might as well tell the client ok now; if this is a
+		   fatal error with the ACAP server, we'll detect it the
+		   next time around */
+	    }
+
+	    if (write(c, "ok", 2) < 0) {
+		syslog(LOG_WARNING, "can't write to IPC socket?");
+	    }
+	    close(c);
+	}
     }
 }
 
 void handler(int sig)
 {
-    fatal("received signal", 0);
+    fatal("received signal", 1);
 }
 
 int main(int argc, char *argv[], char *envp[])
 {
-    pthread_t acap_thread;
+    const char *server;
 
     config_init("target");
 
@@ -395,11 +479,8 @@ int main(int argc, char *argv[], char *envp[])
 
     acap_init();
 
-    if (argc != 2) {
-	/* should be moved into config file ! */
-	printf("please give me an ACAP server as an argument.\n");
-	fatal("no ACAP servers specified", EC_USAGE);
-    }
+    server = config_getstring("acap_server", NULL);
+    if (!server) fatal("no ACAP servers specified", EC_USAGE);
     
     mboxlist_init(0);
 
@@ -407,22 +488,25 @@ int main(int argc, char *argv[], char *envp[])
     signal(SIGINT, &handler);
     signal(SIGPIPE, SIG_IGN);
 
-    connect_acap(argv[1]);
+    connect_acap(server);
 
     synchronize_mboxlist();
 
-    mboxlist_open(NULL);
+    /* we fork to return immediately */
+    if (fork() == 0) {
+	mboxlist_open(NULL);
 
-    if (pthread_create(&acap_thread, NULL, process_loop, NULL) < 0) {
-	perror("pthread_create");
-	mboxlist_close();	
-	mboxlist_done();
-	return 2;
+	/* we now look for processes asking us to issue an UPDATECONTEXT,
+	   presumably because they are looking for a mailbox that 
+	   doesn't exist */
+	listen_for_kicks();
+
+	/* if this returns, we have a problem.  we should probably try
+	   to reestablish the connection with the ACAP server and
+	   resynchronize, but we're not that smart yet */
+	return 1;
     }
 
-    /* we now look for processes asking us to issue an UPDATECONTEXT,
-       presumably because they are looking for a mailbox that doesn't exist */
-    listen_for_kicks();
-
+    /* parent */
     return 0;
 }
