@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.18 2004/02/25 17:10:44 ken3 Exp $
+ * $Id: nntpd.c,v 1.19 2004/02/25 17:12:40 ken3 Exp $
  */
 
 /*
@@ -3344,7 +3344,7 @@ static int strip_post_addresses(char *body)
     size_t postlen, n;
     int nonpost = 0;
 
-    if (!newspostuser) return 1;  /* we didn't add this header to leave it */
+    if (!newspostuser) return 1;  /* we didn't add this header, so leave it */
     postlen = strlen(newspostuser);
 
     for (p = body;; p += n) {
