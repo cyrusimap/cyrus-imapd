@@ -35,10 +35,7 @@ typedef struct glob {
 /* glob_init flags: */
 #define GLOB_ICASE        0x01	/* case insensitive */
 #define GLOB_SUBSTRING    0x02	/* match a substring */
-#define GLOB_HIERARCHY    0x04	/* use '%' as hierarchy matching */
-
-/* internal flags: */
-#define GLOB_MULTIPARTIAL 0x10	/* multiple partial matches possible */
+#define GLOB_HIERARCHY    0x04	/* use '%' as hierarchy matching and no '?' */
 
 /* initialize globbing structure
  *  str -- globbing string
@@ -53,7 +50,7 @@ void glob_free( /* glob **g */ );
 /* returns -1 if no match, otherwise length of match or partial-match
  *  g         pre-processed glob string
  *  ptr       string to perform glob on
- *  len       length of ptr string
+ *  len       length of ptr string (if 0, strlen() is used)
  *  min       pointer to minimum length of a valid partial-match.
  *            Set to -1 if no more matches.  Set to return value + 1
  *     	      if another match is possible.  If NULL, no partial-matches
@@ -62,5 +59,5 @@ void glob_free( /* glob **g */ );
 int glob_test( /* glob *g, char *str, long len, long *min */ );
 
 /* macros */
-#define GLOB_TEST(g, str) glob_test((g), (str), -1L, NULL)
+#define GLOB_TEST(g, str) glob_test((g), (str), 0, NULL)
 #define GLOB_SET_SEPARATOR(g, c) ((g)->sep_char = (c))
