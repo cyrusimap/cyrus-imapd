@@ -30,7 +30,6 @@
 #include <errno.h>
 #include <string.h>
 #include <signal.h>
-#include <setjmp.h>
 #ifdef __STDC__
 #include <stdarg.h>
 #else
@@ -41,14 +40,6 @@
 
 #include "prot.h"
 #include "xmalloc.h"
-
-/* Signal handler used for read timeouts */
-static jmp_buf timeoutbuf;
-static void
-alarmhandler()
-{
-    longjmp(timeoutbuf, 1);
-}
 
 /*
  * Create a new protection stream for file descriptor 'fd'.  Stream
@@ -150,7 +141,19 @@ struct protstream *s;
 int timeout;
 {
     s->read_timeout = timeout;
-    signal(SIGALRM, alarmhandler);
+    return 0;
+}
+
+/*
+ * Set the stream 's' to flush the stream 'flushs' before
+ * blocking for reading. 's' must have been created for reading,
+ * 'flushs' for writing.
+ */
+int prot_setflushonread(s, flushs)
+struct protstream *s;
+struct protstream *flushs;
+{
+    s->flushonread = flushs;
     return 0;
 }
 
@@ -195,6 +198,10 @@ struct protstream *s;
     char *ptr;
     const char *err;
     int left;
+    int r;
+    struct timeval timeout;
+    fd_set rfds;
+    int haveinput;
     
     if (s->eof || s->error) return EOF;
 
@@ -206,17 +213,37 @@ struct protstream *s;
 	    s->leftcnt = 0;
 	}
 	else {
-	    if (s->read_timeout) {
-		if (setjmp(timeoutbuf)) {
+	    haveinput = 0;
+	    if (s->flushonread && s->flushonread->ptr != s->flushonread->buf) {
+		timeout.tv_sec = timeout.tv_usec = 0;
+		FD_ZERO(&rfds);
+		FD_SET(s->fd, &rfds);
+		if (select(s->fd + 1, &rfds, (fd_set *)0, (fd_set *)0,
+			   &timeout) <= 0) {
+		    prot_flush(s->flushonread);
+		}
+		else {
+		    haveinput = 1;
+		}
+	    }
+
+	    if (!haveinput && s->read_timeout) {
+		timeout.tv_sec = s->read_timeout;
+		timeout.tv_usec = 0;
+		FD_ZERO(&rfds);
+		FD_SET(s->fd, &rfds);
+		do {
+		    r = select(s->fd + 1, &rfds, (fd_set *)0, (fd_set *)0,
+			       &timeout);
+		} while (r == -1 && errno == EINTR);
+		if (r == 0) {
 		    s->error = "idle for too long";
 		    return EOF;
 		}
-		alarm(s->read_timeout);
 	    }
 	    do {
 		n = read(s->fd, s->buf+cnt, sizeof(s->buf)-cnt);
 	    } while (n == -1 && errno == EINTR);
-	    if (s->read_timeout) alarm(0);
 	}
     
 	if (n <= 0) {

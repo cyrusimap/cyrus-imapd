@@ -205,6 +205,7 @@ char **envp;
     timeout = config_getint("timeout", 30);
     if (timeout < 30) timeout = 30;
     prot_settimeout(imapd_in, timeout*60);
+    prot_setflushonread(imapd_in, imapd_out);
 
     prot_printf(imapd_out,
 		"* OK %s Cyrus IMAP4 %s server ready\r\n", hostname,
@@ -267,8 +268,6 @@ cmdloop()
     const char *err;
 
     for (;;) {
-	prot_flush(imapd_out);
-
 	/* Parse tag */
 	c = getword(&tag);
 	if (c == EOF) {
