@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.28.4.11 2003/05/05 15:28:59 ken3 Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.28.4.12 2003/05/09 13:56:20 rjs3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -7,6 +7,15 @@
 <body>
 
 <h1>Upgrading From Previous Versions</h1>
+
+<h2>Upgrading from 2.2.0 or earlier</h2>
+
+<ul>
+<li>The format of mailbox index files has changed.  They are upgraded on
+the fly, so you need to do nothing to upgrade.  However, to downgrade them
+you will need to remove the cyrus.index files, and reconstruct the mailboxes,
+otherwise the index files will be invalid.</li>
+</ul>
 
 <h2>Upgrading from 2.1.x or earlier</h2>
 
@@ -351,7 +360,7 @@ worry about it.)
 </ul>
 
 <HR><P>
-last modified: $Date: 2003/05/05 15:28:59 $
+last modified: $Date: 2003/05/09 13:56:20 $
 </BODY></HTML>
 
 
