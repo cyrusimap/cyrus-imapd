@@ -195,7 +195,7 @@ static int acapmbox_store(acapmbox_handle_t *AC,
     /* create the cmd; if it's the first time through, we ACAP_STORE_INITIAL */
     result = acap_store_entry(AC->conn,
 			      newentry,
-			      &acapmbox_cb,
+			      NULL,
 			      NULL,
 			      commit ? 0 : ACAP_STORE_INITIAL,
 			      &cmd);
@@ -354,7 +354,7 @@ int acapmbox_setproperty(acapmbox_handle_t *AC,
 				  fullname,
 				  tmpattr,
 				  NULL, /* don't care about unchangedsince */
-				  &acapmbox_cb,
+				  NULL,
 				  NULL,
 				  &cmd);
 
@@ -403,7 +403,7 @@ int acapmbox_setproperty_acl(acapmbox_handle_t *AC,
 				  fullname,
 				  tmpattr,
 				  NULL, /* don't care about unchangedsince */
-				  &acapmbox_cb,
+				  NULL,
 				  NULL,
 				  &cmd);
 
@@ -483,7 +483,7 @@ int acapmbox_delete(acapmbox_handle_t *AC,
 
     r = acap_delete_entry_name(AC->conn,
 			       fullname,
-			       &acapmbox_cb,
+			       NULL,
 			       NULL,
 			       &cmd);
     if (!r) r = acap_process_on_command(AC->conn, cmd, NULL);
@@ -500,7 +500,7 @@ int acapmbox_deleteall(acapmbox_handle_t *AC)
 
     r = acap_delete_entry_name(AC->conn,
 			       global_dataset,
-			       &acapmbox_cb,
+			       NULL,
 			       NULL,
 			       &cmd);
     if (!r) r = acap_process_on_command(AC->conn, cmd, NULL);
