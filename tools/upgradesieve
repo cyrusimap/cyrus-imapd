@@ -4,7 +4,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 # script to upgrade sievedir from imapd 1.6.13
 # make sure you run it as the cyrus user
 #!/usr/bin/perl
-# $Id: upgradesieve,v 1.4 2001/01/31 19:12:02 leg Exp $
+# $Id: upgradesieve,v 1.5 2001/02/23 04:40:47 leg Exp $
 # 
 # Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
 #
@@ -91,7 +91,7 @@ $sievedir = "/usr/sieve";
 
 open CONF, $imapdconf or die "can't open $imapdconf";
 while (<CONF>) {
-    if (/^sievedir:\s(.*)$/) {
+    if (/^sievedir:\s*(.*)$/) {
 	$sievedir = $1;
 	print "you are using $sievedir as your sieve directory.\n";
     }
