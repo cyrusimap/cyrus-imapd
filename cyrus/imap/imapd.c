@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.55 2003/01/08 14:37:55 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.56 2003/01/08 14:42:57 ken3 Exp $ */
 
 #include <config.h>
 
@@ -3474,9 +3474,13 @@ void cmd_delete(char *tag, char *name, int localonly)
     if (!r && !localonly &&
 	!strncmp(mailboxname+domainlen, "user.", 5) &&
 	!strchr(mailboxname+domainlen+5, '.')) {
+ 	int mailboxname_len = strlen(mailboxname);
 
-	p = mailboxname + strlen(mailboxname); /* end of mailboxname */
-	strcpy(p, ".*");
+ 	/* If we aren't too close to MAX_MAILBOX_NAME, append .* */
+ 	p = mailboxname + mailboxname_len; /* end of mailboxname */
+ 	if (mailboxname_len < sizeof(mailboxname) - 3) {
+ 	    strcpy(p, ".*");
+ 	}
 	
 	/* build a list of mailboxes - we're using internal names here */
 	mboxlist_findall(NULL, mailboxname, imapd_userisadmin, imapd_userid,
