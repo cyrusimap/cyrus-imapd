@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122.4.35 2003/06/29 00:18:18 ken3 Exp $
+ * $Id: pop3d.c,v 1.122.4.36 2003/06/29 01:25:19 ken3 Exp $
  */
 #include <config.h>
 
@@ -1207,7 +1207,12 @@ void cmd_auth(char *arg)
     char *authtype;
     char *canon_user;
 
-    /* if client didn't specify an argument we give them the list */
+    /* if client didn't specify an argument we give them the list
+     *
+     * XXX This method of mechanism discovery, as well as the optional
+     * initial response, are undocumented features that appeared in
+     * draft-myers-sasl-pop3 and are still used by some clients.
+     */
     if (!arg) {
 	const char *sasllist;
 	unsigned int mechnum;
