@@ -189,6 +189,10 @@ savings.
 If enabled, lmtpd rejects messages with 8-bit characters in the headers.
 Otherwise, 8-bit characters are changed to `X'.  (A proper soultion to
 non-ASCII characters in headers is offered by RFC 2047 and its predecessors.)
+.IP "\fBmaxmessagesize:\fR <unlimited>" 5
+Maximum incoming LMTP message size.  If set, lmtpd will
+reject messages larger than \fImaxmessagesize\fR bytes.  The default
+is to allow messages of any size.
 .IP "\fBpostuser:\fR <none>" 5
 Userid used to deliver messages to shared folders.  For example, if
 set to "bb", email sent to "bb+shared.blah" would be delivered to the

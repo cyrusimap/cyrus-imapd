@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.80 2001/03/15 22:31:11 leg Exp $
+ * $Id: append.c,v 1.81 2001/08/31 18:42:48 ken3 Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -79,6 +79,60 @@ static int append_addseen(struct mailbox *mailbox, const char *userid,
 static void addme(char **msgrange, int *alloced, long uid);
 
 #define zero_index(i) { memset(&i, 0, sizeof(struct index_record)); }
+
+/*
+ * Check to see if mailbox can be appended to
+ *
+ * Arguments:
+ *	name	   - name of mailbox directory
+ *	format     - mailbox must be of this format
+ *	aclcheck   - user must have these rights on mailbox ACL
+ *	quotacheck - mailbox must have this much quota left
+ *		     (-1 means don't care about quota)
+ *
+ */
+int append_check(const char *name, int format, 
+		 struct auth_state *auth_state,
+		 long aclcheck, long quotacheck)
+{
+    struct mailbox m;
+    int r;
+
+    r = mailbox_open_header(name, auth_state, &m);
+    if (r) return r;
+
+    if ((m.myrights & aclcheck) != aclcheck) {
+	r = (m.myrights & ACL_LOOKUP) ?
+	  IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+	mailbox_close(&m);
+	return r;
+    }
+
+    r = mailbox_open_index(&m);
+    if (r) {
+	mailbox_close(&m);
+	return r;
+    }
+
+    if (m.format != format) {
+	mailbox_close(&m);
+	return IMAP_MAILBOX_NOTSUPPORTED;
+    }
+
+    r = mailbox_read_quota(&m.quota);
+    if (r) {
+	mailbox_close(&m);
+	return r;
+    }
+
+    if (m.quota.limit >= 0 && quotacheck >= 0 &&
+	m.quota.used + quotacheck > m.quota.limit * QUOTA_UNITS) {
+	mailbox_close(&m);
+	return IMAP_QUOTA_EXCEEDED;
+    }
+
+    return 0;
+}
 
 /*
  * Open a mailbox for appending

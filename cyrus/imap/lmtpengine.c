@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.32 2001/08/23 12:59:31 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.33 2001/08/31 18:42:48 ken3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -934,15 +934,17 @@ static int savemsg(struct clientdata *cd,
    on success, return NULL.
    on failure, return an error message. */
 static char *process_recipient(char *addr,
-			       int (*verify_user)(const char *),
-			       address_data_t **ad)
+			       int ignorequota,
+			       int (*verify_user)(const char *, long,
+						  struct auth_state *),
+			       message_data_t *msg)
 {
     char *dest;
     char *user;
     int r, sl;
     address_data_t *ret = (address_data_t *) xmalloc(sizeof(address_data_t));
 
-    assert(addr != NULL && ad != NULL);
+    assert(addr != NULL && msg != NULL);
 
     if (*addr == '<') addr++;
     dest = user = addr;
@@ -981,7 +983,7 @@ static char *process_recipient(char *addr,
     }
     *dest = '\0';
 	
-    r = verify_user(user);
+    r = verify_user(user, ignorequota ? -1 : msg->size, msg->authstate);
     if (r) {
 	/* we lost */
 	free(ret->all);
@@ -990,7 +992,9 @@ static char *process_recipient(char *addr,
     }
     ret->user = xstrdup(user);
 
-    *ad = ret;
+    ret->ignorequota = ignorequota;
+
+    msg->rcpt[msg->rcpt_num] = ret;
 
     return NULL;
 }    
@@ -1001,6 +1005,7 @@ void lmtpmode(struct lmtp_func *func,
 	      int fd)
 {
     message_data_t *msg = NULL;
+    int max_msgsize;
     char buf[4096];
     char *p;
     int r;
@@ -1030,6 +1035,8 @@ void lmtpmode(struct lmtp_func *func,
     cd.clienthost[0] = '\0';
     cd.lhlo_param[0] = '\0';
     cd.tls_info[0] = '\0';
+
+    max_msgsize = config_getint("maxmessagesize", INT_MAX);
 
     msg_new(&msg);
     if (sasl_server_new("lmtp", NULL, NULL, NULL, 0, &cd.conn) != SASL_OK) {
@@ -1264,6 +1271,14 @@ void lmtpmode(struct lmtp_func *func,
 		r = savemsg(&cd, func->addheaders, msg);
 		if (r) continue;
 
+		if (msg->size > max_msgsize) {
+		    prot_printf(pout, 
+				"552 5.2.3 Message size (%d) exceeds fixed "
+				"maximum message size (%d)\r\n",
+				msg->size, max_msgsize);
+		    continue;
+		}
+
 		snmp_increment(mtaReceivedMessages, 1);
 		snmp_increment(mtaReceivedVolume, roundToK(msg->size));
 		snmp_increment(mtaReceivedRecipients, msg->rcpt_num);
@@ -1290,10 +1305,14 @@ void lmtpmode(struct lmtp_func *func,
 	      char *mechs;
 	      
 	      prot_printf(pout, "250-%s\r\n"
-			  "250-IGNOREQUOTA\r\n"
 			  "250-8BITMIME\r\n"
-			  "250-ENHANCEDSTATUSCODES\r\n",
+			  "250-ENHANCEDSTATUSCODES\r\n"
+			  "250-PIPELINING\r\n",
 			  config_servername);
+	      if (max_msgsize < INT_MAX)
+		  prot_printf(pout, "250-SIZE %d\r\n", max_msgsize);
+	      else
+		  prot_printf(pout, "250-SIZE\r\n");
 	      if (tls_enabled("lmtp") && !func->preauth) {
 		  prot_printf(pout, "250-STARTTLS\r\n");
 	      }
@@ -1303,7 +1322,7 @@ void lmtpmode(struct lmtp_func *func,
 		  prot_printf(pout,"250-%s\r\n", mechs);
 		  free(mechs);
 	      }
-	      prot_printf(pout, "250 PIPELINING\r\n");
+	      prot_printf(pout, "250 IGNOREQUOTA\r\n");
 
 	      strlcpy(cd.lhlo_param, buf + 5, sizeof(cd.lhlo_param));
 	      
@@ -1367,6 +1386,30 @@ void lmtpmode(struct lmtp_func *func,
 			} else {
 			    prot_printf(pout, 
 			      "501 5.5.4 Unrecognized BODY type\r\n");
+			    goto nextcmd;
+			}
+			break;
+
+		    case 's': case 'S':
+			if (strncasecmp(tmp, "size=", 5) != 0) {
+			    goto badparam;
+			}
+			tmp += 5;
+			/* make sure we have a value */
+			if (!isdigit((int) *tmp)) {
+				prot_printf(pout, 
+					    "501 5.5.2 SIZE requires a value\r\n");
+				goto nextcmd;
+			}
+			msg->size = strtoul(tmp, &p, 10);
+			tmp = p;
+			/* make sure the value is in range */
+			if (errno == ERANGE || msg->size < 0 ||
+			    msg->size > max_msgsize) {
+			    prot_printf(pout, 
+					"552 5.2.3 Message SIZE exceeds fixed "
+					"maximum message size (%d)\r\n",
+					max_msgsize);
 			    goto nextcmd;
 			}
 			break;
@@ -1454,15 +1497,15 @@ void lmtpmode(struct lmtp_func *func,
 		    continue;
 		}
 
-		err = process_recipient(rcpt, 
+		err = process_recipient(rcpt,
+					ignorequota,
 					func->verify_user,
-					&msg->rcpt[msg->rcpt_num]);
+					msg);
 		if (rcpt) free(rcpt); /* malloc'd in parseaddr() */
 		if (err != NULL) {
 		    prot_printf(pout, "%s\r\n", err);
 		    continue;
 		}
-		msg->rcpt[msg->rcpt_num]->ignorequota = ignorequota;
 		msg->rcpt_num++;
 		msg->rcpt[msg->rcpt_num] = NULL;
 		prot_printf(pout, "250 2.1.5 ok\r\n");
