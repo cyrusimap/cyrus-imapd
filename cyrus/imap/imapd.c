@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.73 2003/05/13 23:48:18 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.74 2003/05/13 23:54:29 ken3 Exp $ */
 
 #include <config.h>
 
@@ -6232,7 +6232,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	    /* Don't do full namespace tointernal, since for altnamespace
 	     * that will assume we're in this admin's inbox namespace, which
 	     * we aren't! */
-	    mboxname_hiersep_tointernal(&imapd_namespace, mailboxname);
+	    mboxname_hiersep_tointernal(&imapd_namespace, mailboxname, 0);
 	}
     }
 
