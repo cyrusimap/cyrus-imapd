@@ -530,6 +530,12 @@ static int commit_txn(struct db *db, struct txn *tid)
 	free(tid->fnamenew);
     } else {
 	/* read-only txn */
+	/* release lock */
+	r = lock_unlock(db->fd);
+	if (r == -1) {
+	    syslog(LOG_ERR, "IOERROR: unlocking db %s: %m", db->fname);
+	    r = CYRUSDB_IOERROR;
+	}
     }
 
     free(tid);
