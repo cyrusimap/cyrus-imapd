@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.194 2001/02/19 17:54:42 leg Exp $
+dnl $Id: configure.in,v 1.195 2001/03/28 16:11:49 ken3 Exp $
 dnl
 
 
@@ -702,6 +702,11 @@ AC_ARG_ENABLE(netscapehack,
 
 AC_CHECK_FUNC(dlopen,,AC_CHECK_LIB(dl, dlopen))
 CMU_SASL_REQUIRED
+
+dnl
+dnl Check for sasl_checkapop()
+dnl
+AC_CHECK_LIB(sasl, sasl_checkapop, AC_DEFINE(HAVE_APOP))
 
 dnl --- cmu agentx library deprecated in favor of ucd snmp
 dnl CMU_AGENTX

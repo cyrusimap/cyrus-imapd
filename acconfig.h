@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.16 2001/02/07 21:46:56 leg Exp $ */
+/* $Id: acconfig.h,v 1.17 2001/03/28 16:11:49 ken3 Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -77,6 +77,9 @@
 
 /* the TCP control package */
 #undef HAVE_LIBWRAP
+
+/* do we have SASL support for APOP? */
+#undef HAVE_APOP
 
 /* do we have OpenSSL? */
 #undef HAVE_SSL
