@@ -65,6 +65,9 @@ ec IMAP_MAILBOX_BADNAME,
 ec IMAP_MAILBOX_MOVED,
    "Mailbox has been moved to another server"
 
+ec IMAP_MAILBOX_RESERVED,
+   "Mailbox is currently reserved"
+
 ec IMAP_MAILBOX_POPLOCKED,
    "Mailbox is locked by POP server"
 

@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.29 2002/02/22 17:25:26 rjs3 Exp $ */
+/* $Id: fud.c,v 1.30 2002/05/01 15:17:17 rjs3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -293,7 +293,7 @@ int handle_request(const char *who, const char *name,
     if (r) return r; 
 
     r = mboxlist_detail(mboxname, &mbflag, &location, NULL, &acl, NULL);
-    if(r) {
+    if(r | mbflag & MBTYPE_RESERVE) {
 	send_reply(sfrom, REQ_UNK, who, name, 0, 0, 0);
 	return r;
     }
