@@ -1,0 +1,40 @@
+.\" -*- nroff -*-
+.TH KRB.EQUIV 5
+.\" 	(C) Copyright 1994 by Carnegie Mellon University
+.\" 
+.\"                      All Rights Reserved
+.\" 
+.\" Permission to use, copy, modify, and distribute this software and its 
+.\" documentation for any purpose and without fee is hereby granted, 
+.\" provided that the above copyright notice appear in all copies and that
+.\" both that copyright notice and this permission notice appear in 
+.\" supporting documentation, and that the name of CMU not be
+.\" used in advertising or publicity pertaining to distribution of the
+.\" software without specific, written prior permission.  
+.\" 
+.\" CMU DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING
+.\" ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL
+.\" CMU BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR
+.\" ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+.\" WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+.\" ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
+.\" SOFTWARE.
+.SH NAME
+/etc/krb.equiv \- Kerberos equivalences
+.SH DESCRIPTION
+.I krb.equiv
+contains zero or more lines, each of which describes a mapping of a kerberos
+principal to a local user.  Each line of the file consists of two tokens,
+separated by at least one whitespace character and optionally preceeded or
+followed by whitespace.  The first token is the kerberos principal name to
+remap, and the second is the name of the corresponding local user.
+For example:
+.PP
+.nf
+cg2v@ANDREW.CMU.EDU cg2v
+cg2v@DEMENTIA.ORG cg2v
+cg347@ECE.CMU.EDU cg2v
+db74@ANDREW.CMU.EDU shadow
+shadow@DEMENTIA.ORG shadow
+jh4o@ANDREW.CMU.EDU jhutz
+jhutz@CS.CMU.EDU jhutz
