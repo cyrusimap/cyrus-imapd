@@ -1,5 +1,5 @@
 /* bc_eval.c - evaluate the bytecode
- * $Id: bc_eval.c,v 1.1.4.14 2003/06/28 22:51:18 ken3 Exp $
+ * $Id: bc_eval.c,v 1.1.4.15 2003/06/30 19:04:28 jsmith2 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -691,6 +691,7 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
     unsigned int ip = 0, ip_max = (bc_len/sizeof(bytecode_input_t));
     int res=0;
     int op;
+    int version;
     
     bytecode_input_t *bc = (bytecode_input_t *)bc_in;
     
@@ -709,9 +710,23 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 
     ip = BYTECODE_MAGIC_LEN / sizeof(bytecode_input_t);
 
-   
+    version= ntohl(bc[ip].op);
+
+
+    /* this is because there was a time where integers were not network byte
+       order.  all the scripts written then would have version 0x01 written
+       in host byte order.*/
+
+     if(version == ntohl(1)) {
+	if(errmsg) {
+	    *errmsg =
+		"Incorrect Bytecode Version, please recompile (use sievec)";
+	    
+	}
+	return SIEVE_FAIL;
+    }
     
-    if( ntohl(bc[ip].op) != BYTECODE_VERSION) {
+    if( version != BYTECODE_VERSION) {
 	if(errmsg) {
 	    *errmsg =
 		"Incorrect Bytecode Version, please recompile (use sievec)";
@@ -720,7 +735,7 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
     }
 
 #if VERBOSE
-    printf("version number %d\n",bc[ip].op); 
+    printf("version number %d\n",version); 
 #endif
 
     for(ip++; ip<ip_max; ) { 

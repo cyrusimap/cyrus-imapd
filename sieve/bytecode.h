@@ -68,7 +68,11 @@ typedef union
     int str;
 } bytecode_input_t;
 
-#define BYTECODE_VERSION 0x01
+
+   /*version 0x01 scripts were written in host byte order.
+   we don't want to use this version number again and cause a mess
+   this isn't a huge concern, since this is version ntohl(1), or 16777216*/
+#define BYTECODE_VERSION 0x02
 #define BYTECODE_MAGIC "CyrSBytecode"
 #define BYTECODE_MAGIC_LEN 12 /* Should be multiple of 4 */
 
