@@ -1,5 +1,5 @@
 /* cyrusdb_skiplist.c -- cyrusdb skiplist implementation
- * $Id: cyrusdb_skiplist.c,v 1.47 2004/06/04 17:58:55 rjs3 Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.48 2004/06/04 17:59:19 rjs3 Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -445,7 +445,6 @@ static int read_header(struct db *db)
 	       db->fname, db->maxlevel, SKIPLIST_MAXLEVEL);
 	return CYRUSDB_IOERROR;
     }
-       
 
     db->curlevel = ntohl(*((bit32 *)(db->map_base + OFFSET_CURLEVEL)));
     db->listsize = ntohl(*((bit32 *)(db->map_base + OFFSET_LISTSIZE)));
