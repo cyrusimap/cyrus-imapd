@@ -29,6 +29,7 @@
 #include <stdio.h>
 #include <pwd.h>
 
+#include "acte.h"
 #include "config.h"
 #include "sysexits.h"
 #include "mailbox.h"
