@@ -1,6 +1,5 @@
 /* config.h -- Configuration routines
- $Id: imapconf.h,v 1.9 2001/11/27 02:24:57 ken3 Exp $
- 
+ * $Id: imapconf.h,v 1.10 2001/12/04 02:23:04 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -61,6 +60,17 @@ extern int mysasl_config(void *context,
 			 const char **result,
 			 unsigned *len);
 extern sasl_security_properties_t *mysasl_secprops(int flags);
+
+extern int mysasl_canon_user(sasl_conn_t *conn,
+		             void *context,
+		             const char *user, unsigned ulen,
+		             const char *authid, unsigned alen,
+		             unsigned flags,
+		             const char *user_realm,
+		             char *out_user,
+		             unsigned out_max, unsigned *out_ulen,
+		             char *out_authid,
+		             unsigned out_amax, unsigned *out_alen);
 
 /* check if `authstate' is a valid member of class */
 extern int authisa(struct auth_state *authstate, 

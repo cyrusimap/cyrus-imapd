@@ -398,3 +398,50 @@ int authisa(struct auth_state *authstate,
     
     return 0;
 }
+int mysasl_canon_user(sasl_conn_t *conn,
+		      void *context,
+		      const char *user, unsigned ulen,
+		      const char *authid, unsigned alen,
+		      unsigned flags,
+		      const char *user_realm,
+		      char *out_user,
+		      unsigned out_max, unsigned *out_ulen,
+		      char *out_authid,
+		      unsigned out_amax, unsigned *out_alen) 
+{
+    char *canon_authuser = NULL, *canon_requser = NULL;
+
+    canon_authuser = auth_canonifyid(authid, alen);
+    if (!canon_authuser) {
+	sasl_seterror(conn, 0, "bad userid authenticated");
+	return SASL_BADAUTH;
+    }
+    *out_alen = strlen(canon_authuser);
+    if(*out_alen > out_amax) {
+	sasl_seterror(conn, 0, "buffer overflow while canonicalizing");
+	return SASL_BUFOVER;
+    }
+    
+    strncpy(out_authid, canon_authuser, out_amax);
+    
+    if (!user) {
+	/* don't bother calling auth_canonifyid twice */
+	canon_requser = canon_authuser;
+    } else {
+	canon_requser = auth_canonifyid(user, ulen);
+    }
+
+    if (!canon_requser) {
+	sasl_seterror(conn, 0, "bad userid requested");
+	return SASL_BADAUTH;
+    }
+    *out_ulen = strlen(canon_requser);
+    if(*out_ulen > out_max) {
+	sasl_seterror(conn, 0, "buffer overflow while canonicalizing");
+	return SASL_BUFOVER;
+    }
+    
+    strncpy(out_user, canon_requser, out_max);
+
+    return SASL_OK;
+}
