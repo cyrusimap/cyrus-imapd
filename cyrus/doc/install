@@ -461,20 +461,31 @@ Configuring the IMAP Server
         "cyrus" is the Cyrus user and "/usr/cyrus/bin/" is the path name to
         the executable. 
 
-    13. Sendmail versions 8.7 and later include support for the Cyrus IMAP
+    13. If you wish to use the interm finger information service: 
+
+         1. Add the following line to the "/etc/services" file if it isn't
+            already there. 
+
+               fud       4201/udp
+
+         2. Add the following line to the "/etc/inetd.conf" file. 
+
+               fud  dgram  udp  wait  cyrus  /usr/cyrus/bin/fud   fud
+
+    14. Sendmail versions 8.7 and later include support for the Cyrus IMAP
         server. If you are running a verson of Sendmail older than 8.7.1,
         replace it with 8.7.1 or later. Sendmail distributions may be
         obtained from ftp://ftp.cs.berkely.edu/ucb/sendmail 
 
-    14. Generate a sendmail configuration file which delivers local mail to
+    15. Generate a sendmail configuration file which delivers local mail to
         the IMAP server. See the files cf/README and cf/cf/cyrusproto.mc in
         the Sendmail distribution for information on how to do this. 
 
-    15. Edit /etc/group and add user "daemon" to the "mail" group. This
+    16. Edit /etc/group and add user "daemon" to the "mail" group. This
         will permit sendmail to run the "deliver" program to deliver mail
         to the IMAP server. 
 
-    16. The Cyrus IMAP server support in Sendmail defaults to enabling
+    17. The Cyrus IMAP server support in Sendmail defaults to enabling
         duplicate delivery suppression, by invoking the "deliver" program
         with the "-e" switch. This prevents two messages with the same
         Message-ID: (Resent-Message-ID: if it exits) from being delivered
