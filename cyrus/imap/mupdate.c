@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.77.2.2 2003/11/05 15:36:39 ken3 Exp $
+ * $Id: mupdate.c,v 1.77.2.3 2003/11/05 16:02:13 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1348,15 +1348,17 @@ void cmd_set(struct conn *C,
     }
     
     if (t == SET_DELETE) {
-	if (!m &&
-	    (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD)) {
-	    /* failed; mailbox doesn't exist */
-	    msg = DOESNTEXIST;
-	    goto done;
+	if (!m) {
+	    if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD) {
+		/* failed; mailbox doesn't exist */
+		msg = DOESNTEXIST;
+		goto done;
+	    }
+	    /* otherwise do nothing (local delete on master) */
+	} else {
+	    /* do the deletion */
+	    m->t = SET_DELETE;
 	}
-
-	/* do the deletion */
-	m->t = SET_DELETE;
     } else {
 	if (m && (!acl || strlen(acl) < strlen(m->acl))) {
 	    /* change what's already there */
@@ -1391,7 +1393,7 @@ void cmd_set(struct conn *C,
     }
 
     /* write to disk */
-    database_log(m, NULL);
+    if (m) database_log(m, NULL);
 
     /* post pending changes */
     for (upc = updatelist; upc != NULL; upc = upc->updatelist_next) {
