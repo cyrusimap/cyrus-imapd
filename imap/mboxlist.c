@@ -50,6 +50,8 @@ extern int errno;
 #include "imap_err.h"
 #include "xmalloc.h"
 
+long mboxlist_ensureOwnerRights();
+
 static char *listfname, *newlistfname;
 static int listfd = -1;
 static long list_ino;
@@ -62,8 +64,6 @@ static void mboxlist_closesubs();
 static void mboxlist_reopen();
 static void mboxlist_badline();
 static void mboxlist_parseline();
-static long ensureOwnerRights();
-static int mboxlist_deletesubmailbox();
 
 static struct quota *mboxlist_newquota;
 static int mboxlist_changequota();
@@ -77,19 +77,6 @@ static int mboxlist_changequota();
  */
 #define MAX_PARTITION_LEN 10
 
-/* Mailbox patterns which the design of the server prohibits */
-static char *badmboxpatterns[] = {
-    "",
-    "*\t*",
-    "*\n*",
-    "*/*",
-    ".*",
-    "*.",
-    "*..*",
-    "user",
-};
-#define NUM_BADMBOXPATTERNS (sizeof(badmboxpatterns)/sizeof(*badmboxpatterns))
-
 /*
  * Check our configuration for consistency, die if there's a problem
  */
@@ -97,7 +84,6 @@ mboxlist_checkconfig()
 {
     mboxlist_reopen();
 }
-
 
 /*
  * Lookup 'name' in the mailbox list.
@@ -180,8 +166,6 @@ char *userid;
 char **newacl;
 char **newpartition;
 {
-    int i;
-    struct glob *g;
     int r;
     char *p;
     unsigned long offset;
@@ -193,17 +177,8 @@ char **newpartition;
     unsigned long parentpartitionlen, parentacllen;
 
     /* Check for invalid name/partition */
-    if (strlen(name) > MAX_MAILBOX_NAME) return IMAP_MAILBOX_BADNAME;
     if (partition && strlen(partition) > MAX_PARTITION_LEN) {
 	return IMAP_PARTITION_UNKNOWN;
-    }
-    for (i = 0; i < NUM_BADMBOXPATTERNS; i++) {
-	g = glob_init(badmboxpatterns[i], 0);
-	if (GLOB_TEST(g, name) != -1) {
-	    glob_free(&g);
-	    return IMAP_MAILBOX_BADNAME;
-	}
-	glob_free(&g);
     }
     r = mboxname_policycheck(name);
     if (r) return r;
@@ -331,7 +306,6 @@ char **newpartition;
 
     return 0;
 }
-
 
 /*
  * Create a mailbox
@@ -864,7 +838,7 @@ char *userid;
     newacl = strsave(acl);
     if (rights) {
 	if (acl_set(&newacl, identifier, acl_strtomask(rights),
-		    isusermbox ? ensureOwnerRights : 0, userid)) {
+		    isusermbox ? mboxlist_ensureOwnerRights : 0, userid)) {
 	    mailbox_close(&mailbox);
 	    mboxlist_unlock();
 	    free(newacl);
@@ -873,7 +847,7 @@ char *userid;
     }
     else {
 	if (acl_delete(&newacl, identifier,
-		       isusermbox ? ensureOwnerRights : 0, userid)) {
+		       isusermbox ? mboxlist_ensureOwnerRights : 0, userid)) {
 	    mailbox_close(&mailbox);
 	    mboxlist_unlock();
 	    free(newacl);
@@ -1910,7 +1884,7 @@ unsigned long *acllenp;
  * ACL access canonicalization routine which ensures that 'owner'
  * retains lookup, administer, and create rights over a mailbox.
  */
-static long ensureOwnerRights(owner, identifier, access)
+long mboxlist_ensureOwnerRights(owner, identifier, access)
 char *owner;
 char *identifier;
 long access;

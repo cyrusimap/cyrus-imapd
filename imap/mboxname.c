@@ -33,11 +33,25 @@
 #include <com_err.h>
 
 #include "assert.h"
+#include "glob.h"
 #include "config.h"
 #include "mailbox.h"
 #include "sysexits.h"
 #include "imap_err.h"
 #include "xmalloc.h"
+
+/* Mailbox patterns which the design of the server prohibits */
+static char *badmboxpatterns[] = {
+    "",
+    "*\t*",
+    "*\n*",
+    "*/*",
+    ".*",
+    "*.",
+    "*..*",
+    "user",
+};
+#define NUM_BADMBOXPATTERNS (sizeof(badmboxpatterns)/sizeof(*badmboxpatterns))
 
 /*
  * Convert the external mailbox 'name' to an internal name.
@@ -101,6 +115,19 @@ int
 mboxname_policycheck(name)
 char *name;
 {
+    int i;
+    struct glob *g;
+
+    if (strlen(name) > MAX_MAILBOX_NAME) return IMAP_MAILBOX_BADNAME;
+    for (i = 0; i < NUM_BADMBOXPATTERNS; i++) {
+	g = glob_init(badmboxpatterns[i], 0);
+	if (GLOB_TEST(g, name) != -1) {
+	    glob_free(&g);
+	    return IMAP_MAILBOX_BADNAME;
+	}
+	glob_free(&g);
+    }
+
     if (*name == '~') return IMAP_MAILBOX_BADNAME;
     while (*name) {
 	if (!strchr(GOODCHARS, *name++)) return IMAP_MAILBOX_BADNAME;
