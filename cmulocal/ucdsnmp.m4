@@ -22,6 +22,8 @@ AC_DEFUN(CMU_UCDSNMP, [
   if test "$with_ucdsnmp" != no; then
     AC_DEFINE(HAVE_UCDSNMP)
     LIB_UCDSNMP="-lucdagent -lucdmibs -lsnmp"
+    AC_CHECK_LIB(rpm, rpmdbOpen,
+		 LIB_UCDSNMP="${LIB_UCDSNMP} -lrpm -lpopt",,-lpopt)
   fi
   AC_SUBST(LIB_UCDSNMP)
 ])
