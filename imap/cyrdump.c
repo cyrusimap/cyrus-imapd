@@ -1,4 +1,4 @@
-/* $Id: cyrdump.c,v 1.3 2001/02/23 22:00:49 leg Exp $
+/* $Id: cyrdump.c,v 1.4 2001/03/10 05:55:11 leg Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -169,6 +169,7 @@ static int dump_me(char *name, int matchlen, int maycreate, void *rock)
     }
     
     r = mailbox_open_index(&m);
+    if (!r) r = mailbox_lock_pop(&m);
     if (r) {
 	if (verbose) {
 	    printf("error locking index %s: %s\n", name, error_message(r));
