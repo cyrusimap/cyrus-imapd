@@ -1,4 +1,4 @@
-<!-- $Id: install-configure.html,v 1.26 2002/08/29 16:18:23 ken3 Exp $ -->
+<!-- $Id: install-configure.html,v 1.27 2002/09/12 16:46:54 rjs3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and configuring the IMAP Server
@@ -145,8 +145,10 @@ Sieve directory:
 </kbd></pre>
 
 <li>Change to the Cyrus user and use the tool
-"<tt>tools/mkimap</tt>" to create the rest of the directories
-(subdirectories of the directories you just created).
+&quot;<tt>tools/mkimap</tt>&quot; to create the rest of the directories
+(subdirectories of the directories you just created).  Note that if
+you compiled cyrus with <tt>--enable-fulldirhash</tt>, you need to use 
+&quot;<tt>tools/rehash</tt>&quot; instead.
 
 <pre>
 <kbd>   su cyrus
@@ -577,5 +579,5 @@ convention, consult <a
 href=altnamespace.html#altnameconfig>altnamespace.html</a>.
 
 <P><HR>
-last modified: $Date: 2002/08/29 16:18:23 $
+last modified: $Date: 2002/09/12 16:46:54 $
 </BODY></HTML>
