@@ -351,6 +351,7 @@ char **newpartition;
  */
 mboxlist_createmailbox(name, format, partition, isadmin, userid)
 char *name;
+int format;
 char *partition;
 int isadmin;
 char *userid;
@@ -467,6 +468,7 @@ mboxlist_deletemailbox(name, isadmin, userid, checkacl)
 char *name;
 int isadmin;
 char *userid;
+int checkacl;
 {
     int r;
     char *acl;
