@@ -1,7 +1,7 @@
 /* timsieved.c -- main file for timsieved (sieve script accepting program)
  * Tim Martin
  * 9/21/99
- * $Id: timsieved.c,v 1.48.2.7 2004/08/05 16:23:52 ken3 Exp $
+ * $Id: timsieved.c,v 1.48.2.8 2004/09/08 20:01:14 shadow Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -129,6 +129,8 @@ static struct proxy_context sieved_proxyctx = {
 void shut_down(int code) __attribute__ ((noreturn));
 void shut_down(int code)
 {
+    int nullfd = -1;
+
     /* free interpreter */
     if (interp) sieve_interp_free(&interp);
 
@@ -147,9 +149,14 @@ void shut_down(int code)
 
     cyrus_done();
 
-    cyrus_close_sock(0);
-    cyrus_close_sock(1);
-    cyrus_close_sock(2);
+    nullfd = open("/dev/null", O_RDONLY, 0);
+    if (nullfd < 0) {
+       fatal("open() failed", EC_TEMPFAIL);
+    }
+    cyrus_dup2_sock(nullfd, 0);
+    cyrus_dup2_sock(nullfd, 1);
+    cyrus_dup2_sock(nullfd, 2);
+    close(nullfd);
     
     /* done */
     exit(code);
