@@ -29,9 +29,9 @@ quotas on mailbox hierarchies.
 <p>This document is organized into the following areas:
 
 <UL>
-<LI><a href="#access">Access</a>
-<UL>
+<LI><a href="#mboxname">Mailbox Namespace</a>
 <LI><a href="#acl">Access Control Lists</a>
+<UL>
 <li><A href="#aclrt">Access Rights</A>
 <li><A href="#aclident">Identifiers</A>
 <li><A href="#aclany">"<TT>anonymous</TT>" and "<TT>anyone</TT>"</A>
@@ -42,34 +42,12 @@ quotas on mailbox hierarchies.
 Mailboxes</A>
 <li><A href="#aclmbox">Initial ACLs for Newly Created Mailboxes</A>
 </UL>
-<li><a href="#configdir">Configuration Directory</a>
-<UL>
-<li><a href="#configdirlog">"<TT>log</TT>" Directory</a>
-<li><a href="#configdirproc">"<TT>proc</TT>" Directory</a>
-</UL>
-<li><A href="#imsp">IMSP Integration</A>
 <li><a href="#login">Login Authentication</A>
 <UL>
 <li><a href="#loginanon">Anonymous Logins</A>
 <li><a href="#loginker">Kerberos Logins</A>
 <li><a href="#loginunix">Unix Logins</A>
 </UL>
-<LI><a href="#mboxname">Mailbox Namespace</a>
-<li><a href="#news">News</a>
-<UL>
-<li><a href="#newspart">"<TT>news</TT>" Partition</a>
-<li><a href="#netnews">Netnews</a>
-<li><a href="#newscollect"><TT>collectnews</TT></a>
-<li><a href="#newsrm"><TT>rmnews</TT></a>
-<li><a href="#newssync"><TT>syncnews</TT></a>
-</UL>
-<li><a href="#partitions">Partitions</a>
-<UL>
-<li><a href="#partitionscreate">Specifying Partitions with "<TT>create</TT>"</a>
-<li><a href="#partitionsrename">Changing Partitions with "<TT>rename</TT>"</a>
-</UL>
-<li><A href="#pop3">POP3 Server</A>
-<li><A href="#syslog">The <TT>syslog</TT> facility</A>
 <li><a href="#quota">Quotas</a>
 <UL>
 <li><a href="#quotasup">Supports Quotas on Storage</a>
@@ -78,6 +56,22 @@ Mailboxes</A>
 <li><a href="#quotawarnings">Quota Warnings Upon Select When User Has "<TT>d</TT>" Rights</a>
 <li><a href="#quotapartitions">Quotas and Partitions</a>
 </UL>
+<li><a href="#partitions">Partitions</a>
+<UL>
+<li><a href="#partitionscreate">Specifying Partitions with "<TT>create</TT>"</a>
+<li><a href="#partitionsrename">Changing Partitions with "<TT>rename</TT>"</a>
+</UL>
+<li><a href="#news">News</a>
+<UL>
+<li><a href="#newspart">"<TT>news</TT>" Partition</a>
+<li><a href="#netnews">Netnews</a>
+<li><a href="#newscollect"><TT>collectnews</TT></a>
+<li><a href="#newsrm"><TT>rmnews</TT></a>
+<li><a href="#newssync"><TT>syncnews</TT></a>
+</UL>
+<li><A href="#imsp">IMSP Integration</A>
+<li><A href="#pop3">POP3 Server</A>
+<li><A href="#syslog">The <TT>syslog</TT> facility</A>
 <li><A href="#recovery">Mail Directory Recovery</A>
 <UL>
 <li><a href="#recoverymboxdir">Reconstructing Mailbox Directories</a>
@@ -86,11 +80,16 @@ Mailboxes</A>
 <li><a href="#recoverymbox">Mailboxes File</a>
 <li><a href="#recoverysubs">Subscriptions</a>
 </UL>
+<li><a href="#configdir">Configuration Directory</a>
+<UL>
+<li><a href="#configdirlog">"<TT>log</TT>" Directory</a>
+<li><a href="#configdirproc">"<TT>proc</TT>" Directory</a>
+</UL>
 </UL>
 
 <H2><a name="mboxname">Mailbox Namespace</a></H2>
 
-This section describes mailbox namespace.  The Cyrus IMAP server
+The Cyrus IMAP server
 presents mailboxes using the <TT>netnews</TT> namespace convention.
 While mailbox names are case-insensitive, the case used when
 creating a mailbox is preserved.  A mailbox name may not start or end
@@ -144,14 +143,10 @@ resolves to "<TT>comp.infosystems.www</TT>" and the name
 "<TT>.comp.infosystems.www</TT>" resolves to
 "<TT>cmu.comp.infosystems.www</TT>".
 
-<H2><A NAME="access">Access</A></H2>
-
-This section describes Access Control Lists and access rights.
-
-<H3><A NAME="acl">Access Control Lists</A></H3>
+<H2><A NAME="acl">Access Control Lists</A></H2>
 
 Access to each mailbox is controlled by each mailbox's access control list.
-Access Control Lists (ACLs), provide a powerful mechanism
+Access Control Lists (ACLs) provide a powerful mechanism
 for specifying the users or groups of users who have permission to
 access the mailboxes.
 
@@ -283,7 +278,7 @@ example, a line in "<TT>/etc/krb.equiv</TT>" of:
 </pre>
 
 will cause the identity "<TT>bovik@REMOTE.COM</TT>" to be treated as if
-it were the local principal "<TT>bovik</TT>".
+it were the local identity "<TT>bovik</TT>".
 
 <p>A site may wish to write their own authorization mechanism, perhaps
 to implement a local group mechanism.
@@ -292,7 +287,7 @@ to implement a local group mechanism.
 
 Any of the above defined identifiers may be prefixed with a "<TT>-</TT>"
 character.  The associated rights are then removed from that
-identifier.  These are referred to as "negative rights."
+identifier.  These are referred to as "negative rights".
 
 <H3><A NAME="acluser">Calculating Users' Rights</A></H3>
 
@@ -639,31 +634,23 @@ mailbox directory contains the following files:
 <DD> There is one file per message, containing the
    message in RFC 822 format.  Lines in the message are separated by
    CRLF, not just LF.  The file name of each message is the message's
-   UID followed by a dot (.).
+   UID followed by a dot (.). 
 
-<DD>In netnews newsgroups, the message files instead follow the
-   format and naming conventions imposed by the netnews software.
-</DL>
+<P>In netnews newsgroups, the message files instead follow the
+   format and naming conventions imposed by the netnews software. <P>
 
-<DL>
 <DT><TT>cyrus.header</TT> 
 <DD>This file contains a magic number and variable-length
-   information about the mailbox itself. 
-</DL>
+   information about the mailbox itself.  <P>
 
-<DL>
 <DT><TT>cyrus.index</TT>
 <DD>This file contains fixed-length information about the
-   mailbox itself and each message in the mailbox. 
-</DL>
+   mailbox itself and each message in the mailbox.  <P>
 
-<DL>
 <DT><TT>cyrus.cache</TT>
 <DD>This file contans variable-length information about
-   each message in the mailbox.
-</DL>
+   each message in the mailbox. <P>
 
-<DL>
 <DT><TT>cyrus.seen</TT>
 <DD>This file contains variable-length state information about
    each reader of the mailbox who has "<TT>s</TT>" permissions.  
@@ -711,9 +698,8 @@ ACL.  Because the ACL is security-critical information that cannot be
 reconstructed from information stored elsewhere, there is no program
 to recover from a damaged mailboxes file.
 
-<p>To protect the contents of the mailboxes, we suggest
-making frequent, even hourly backups of the
-mailboxes file to some other part of the disk.
+<p>To protect the contents of the <TT>mailboxes</TT> file, we suggest
+making frequent, even hourly backups of it to some other part of the disk.
 
 <h3><a name="recoverysubs">Subscriptions</a></h3>
 
@@ -723,7 +709,7 @@ userid followed by "<TT>.sub</TT>".  Each file contains a sorted list of
 subscribed mailboxes.
 
 <p>There is no program to recover from damaged subscription files.  A
-site may recover from lost files simply by restoring from backups.
+site may recover from lost subscription files by restoring from backups.
 
 <h2><a name="configdir">Configuration Directory</a></h2>
 
