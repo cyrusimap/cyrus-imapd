@@ -20,8 +20,9 @@ result in NO.
 <li> 8-bit set characters are coerced to 'X', but not before the notify_zephyr 
 code (if used) has had a chance to send them out.
 
-<li> imtest cheats and sends a non-synchronizing literal if you try to
-LOGIN (cleartext passwords).
+<li> imtest cheats and sends a non-synchronizing literal if you try to LOGIN
+(cleartext passwords) without checking to see if the server supports the
+relavant extension.
 
 <li> In some failures of the krbck program, the error messages printed out
 bear no resemblance to what actually went wrong.
@@ -33,17 +34,22 @@ lost.)
 <li> Depending on how <tt>getpwnam</tt>/<tt>getspnam</tt> make their calls,
 pwcheck may "cache" users undesirably.  This has not yet been fixed.
 
+<li> Cyradm doesn't handle BYE quite properly (especially a BYE right after
+connect).
+
 </ul>
 
 <p>
-Please report bugs to cyrus-bugs@andrew.cmu.edu.  Be sure to include
-(at least) system type, compiler used, and the options passed to configure,
-along with a detailed report.  Additional information is welcome, and
-naturally, patches are deeply appreciated.
+Please report bugs to
+<a href="mailto:cyrus-bugs@andrew.cmu.edu">cyrus-bugs@andrew.cmu.edu</a>.  Be
+sure to include (at least) system type, compiler used, and the options passed
+to configure, along with a detailed report.  Additional information is
+welcome, and naturally, patches are deeply appreciated.
 
 <p>
 If you submit a patch, please send unified diffs (-u) if your diff program
-supports them, or context diffs (-c) if it doesn't.
+supports them, or context diffs (-c) if it doesn't.  Plain diffs are very
+difficult to evaluate.
 
 <P><HR><P>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
