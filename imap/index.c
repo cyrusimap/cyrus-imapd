@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.206 2004/05/22 03:45:50 rjs3 Exp $
+ * $Id: index.c,v 1.207 2004/06/18 19:03:50 rjs3 Exp $
  */
 #include <config.h>
 
@@ -346,6 +346,7 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 	r = seen_open(mailbox, imapd_userid, SEEN_CREATE, &seendb);
 	if (!r) {
 	    free(seenuids);
+	    seenuids = NULL;
 	    r = seen_lockread(seendb, &last_read, &recentuid,
 			      &seen_last_change, &seenuids);
 	    if (r) seen_close(seendb);

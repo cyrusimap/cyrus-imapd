@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
- * $Id: seen_db.c,v 1.47 2004/06/07 15:26:02 ken3 Exp $
+ * $Id: seen_db.c,v 1.48 2004/06/18 19:03:50 rjs3 Exp $
  * 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -420,8 +420,10 @@ int seen_close(struct seen *seendb)
 		   cyrusdb_strerror(r));
 	    r = IMAP_IOERROR;
 	}
+	if(!r) lastseen->db = NULL;
 	free(lastseen->user);
 	free(lastseen);
+	lastseen = NULL;
     }
 
     /* this database can now be reused */
