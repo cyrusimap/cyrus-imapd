@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- $Id: mboxname.c,v 1.19 2000/05/23 20:52:24 robeson Exp $
+ $Id: mboxname.c,v 1.20 2001/01/05 06:00:18 leg Exp $
 
  * Copyright (c)1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -102,7 +102,7 @@ static const char index_mod64[256] = {
  * On success, results are placed in the buffer pointed to by
  * 'result', the buffer must be of size MAX_MAILBOX_NAME+1.
  */
-int mboxname_tointernal(char *name, char *userid, char *result)
+int mboxname_tointernal(const char *name, const char *userid, char *result)
 {
     if ((name[0] == 'i' || name[0] == 'I') &&
 	!strncasecmp(name, "inbox", 5) &&
