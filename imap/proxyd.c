@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.135 2002/08/13 16:46:33 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.136 2002/08/30 15:34:13 leg Exp $ */
 
 #undef PROXY_IDLE
 
@@ -2292,10 +2292,11 @@ void cmd_login(char *tag, char *user)
 
     proxyd_authstate = auth_newstate(canon_user, (char *)0);
 
+    /* xxx why aren't we using authisa() */
     val = config_getstring("admins", "");
     while (*val) {
 	for (p = (char *)val; *p && !isspace((int) *p); p++);
-	strlcpy(buf, val, p - val);
+	strncpy(buf, val, p - val);
 	buf[p-val] = 0;
 	if (auth_memberof(proxyd_authstate, buf)) {
 	    proxyd_userisadmin = 1;
