@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.271 2003/11/11 03:25:59 rjs3 Exp $
+dnl $Id: configure.in,v 1.272 2003/11/12 04:02:00 rjs3 Exp $
 dnl
 
 
@@ -66,6 +66,10 @@ AC_ARG_WITH(cyrus-prefix,[  --with-cyrus-prefix=DIR    use DIR as cyrus install 
 	cyrus_prefix="$withval",cyrus_prefix="/usr/cyrus")
 AC_SUBST(cyrus_prefix)
 AC_DEFINE_UNQUOTED(CYRUS_PATH,"$cyrus_prefix",[Where will we be installed?])
+AC_ARG_WITH(service-path,[  --with-service-path=DIR    use DIR as service install directory],
+	service_path="$withval",service_path="$cyrus_prefix/bin")
+AC_SUBST(service_path)
+AC_DEFINE_UNQUOTED(SERVICE_PATH,"$service_path",[Directiory to use for service binaries])
 AC_ARG_WITH(cyrus-user,[  --with-cyrus-user=USERID   use USERID cyrus userid],
 	cyrus_user="$withval",cyrus_user="cyrus")
 AC_SUBST(cyrus_user)
@@ -1056,7 +1060,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.271 2003/11/11 03:25:59 rjs3 Exp $ */
+/* $Id: configure.in,v 1.272 2003/11/12 04:02:00 rjs3 Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -1129,9 +1133,6 @@ AH_BOTTOM([
 #    define O_DSYNC     O_FSYNC         /* BSD */
 #  endif
 #endif
-
-/* where are our binaries? */
-#define SERVICE_PATH (CYRUS_PATH "/bin")
 
 #ifndef HAVE___ATTRIBUTE__
 /* Can't use attributes... */

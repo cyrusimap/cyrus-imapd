@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.178 2003/11/07 21:03:06 ken3 Exp $
+# $Id: Makefile.in,v 1.179 2003/11/12 04:02:01 rjs3 Exp $
 # 
 # @configure_input@
 # 
@@ -95,6 +95,7 @@ QUANTOPT=-windows=no -filename-prefix=/tmp/quant/%v.%p -write-summary-file= -log
 prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
+service_path = @service_path@
 
 LOBJS= append.o mailbox.o mboxlist.o mupdate-client.o mboxname.o message.o \
 	global.o imap_err.o mupdate_err.o proc.o setproctitle.o \
@@ -131,12 +132,12 @@ pure: imapd.pure lmtpd.pure proxyd.pure mupdate.pure lmtpproxyd.pure
 
 
 install:
-	$(srcdir)/../install-sh -d ${DESTDIR}$(cyrus_prefix)/bin
+	$(srcdir)/../install-sh -d ${DESTDIR}$(service_path)
 	for file in $(PROGS); \
 	do \
-		$(INSTALL) -m 755 $$file $(DESTDIR)$(cyrus_prefix)/bin || exit 1; \
+		$(INSTALL) -m 755 $$file $(DESTDIR)$(service_path) || exit 1; \
 	done
-	ln -f $(DESTDIR)$(cyrus_prefix)/bin/pop3d $(DESTDIR)$(cyrus_prefix)/bin/pop3proxyd
+	ln -f $(DESTDIR)$(service_path)/pop3d $(DESTDIR)$(service_path)/pop3proxyd
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) \
