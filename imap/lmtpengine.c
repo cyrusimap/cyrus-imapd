@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.58 2002/02/21 17:43:08 rjs3 Exp $
+ * $Id: lmtpengine.c,v 1.59 2002/02/22 18:08:34 ken3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -729,7 +729,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
 		/* no header here! */
 		goto ph_error;
 	    }
-	    if (!isalpha(c)) {
+	    if (!isgraph(c) || c == ':') {
 		/* invalid header name */
 		goto ph_error;
 	    }
