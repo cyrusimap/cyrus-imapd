@@ -1,5 +1,5 @@
 /* auth_pts.c -- PTLOADER authorization
- * $Id: auth_pts.c,v 1.2.2.3 2004/02/27 21:17:38 ken3 Exp $
+ * $Id: auth_pts.c,v 1.2.2.4 2005/02/16 21:06:50 shadow Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -63,16 +63,15 @@
 #include "strhash.h"
 #include "xmalloc.h"
 
-const char *auth_method_desc = "pts";
-
-char *canonuser_id = NULL;
-struct auth_state *canonuser_cache = NULL;
+static char *canonuser_id = NULL;
+static struct auth_state *canonuser_cache = NULL;
 
 /* Returns 0 on successful connection to ptloader/valid cache entry,
  * complete with allocated & filled in struct auth_state.
  *
  * state must be a NULL pointer when passed in */
-int ptload(const char *identifier,struct auth_state **state);
+static int ptload(const char *identifier,struct auth_state **state);
+static void myfreestate(struct auth_state *auth_state);
 
 /*
  * Determine if the user is a member of 'identifier'
@@ -82,7 +81,7 @@ int ptload(const char *identifier,struct auth_state **state);
  *      2       User is in the group that is identifier
  *      3       User is identifer
  */
-int auth_memberof(struct auth_state *auth_state,
+static int mymemberof(struct auth_state *auth_state,
 		  const char *identifier)
 {
     int i;
@@ -110,10 +109,8 @@ int auth_memberof(struct auth_state *auth_state,
     
     /* is it a group i'm a member of ? */
     for (i=0; i < auth_state->ngroups; i++)
-        if ( idhash == auth_state->groups[i].hash &&
-	        (( !strncmp(identifier, "group:", 6) && 
-                !strcmp(identifier+6, auth_state->groups[i].id) ) ||
-             !strcmp(identifier, auth_state->groups[i].id)) )
+        if (idhash == auth_state->groups[i].hash &&
+            !strcmp(identifier, auth_state->groups[i].id))
             return 2;
   
     return 0;
@@ -124,7 +121,7 @@ int auth_memberof(struct auth_state *auth_state,
  * Returns a pointer to a static buffer containing the canonical form
  * or NULL if 'identifier' is invalid.
  */
-char *auth_canonifyid(const char *identifier,
+static char *mycanonifyid(const char *identifier,
 		      size_t len __attribute__((unused)))
 {
     static char retbuf[PTS_DB_KEYSIZE];
@@ -136,7 +133,7 @@ char *auth_canonifyid(const char *identifier,
     } else if(canonuser_id) {
 	/* We've got a new one, invalidate our cache */
 	free(canonuser_id);
-	auth_freestate(canonuser_cache);
+	myfreestate(canonuser_cache);
 
 	canonuser_id = NULL;
 	canonuser_cache = NULL;
@@ -160,7 +157,7 @@ char *auth_canonifyid(const char *identifier,
 /* 
  * Produce an auth_state structure for the given identifier
  */
-struct auth_state *auth_newstate(const char *identifier) 
+static struct auth_state *mynewstate(const char *identifier) 
 {
     struct auth_state *output = NULL;
 
@@ -189,10 +186,10 @@ struct auth_state *auth_newstate(const char *identifier)
     return output;
 }
 
-struct cyrusdb_backend *the_ptscache_db = NULL;
+static struct cyrusdb_backend *the_ptscache_db = NULL;
 
 /* Returns 0 on success */
-int ptload(const char *identifier, struct auth_state **state) 
+static int ptload(const char *identifier, struct auth_state **state) 
 {
     struct auth_state *fetched = NULL;
     size_t id_len;
@@ -251,7 +248,7 @@ int ptload(const char *identifier, struct auth_state **state)
 
     if(fetched) {        
 	time_t now = time(NULL);
-	int timeout = libcyrus_config_getint(CYRUSOPT_PTS_CACHE_TIMEOUT);
+	long timeout = libcyrus_config_getlong(CYRUSOPT_PTS_CACHE_TIMEOUT);
 	
 	syslog(LOG_DEBUG,
 	       "ptload(): fetched cache record " \
@@ -345,7 +342,17 @@ int ptload(const char *identifier, struct auth_state **state)
     return (*state) ? 0 : -1;
 }
 
-void auth_freestate(struct auth_state *auth_state)
+static void myfreestate(struct auth_state *auth_state)
 {
     free(auth_state);
 }
+
+struct auth_mech auth_pts = 
+{
+    "pts",		/* name */
+
+    &mycanonifyid,
+    &mymemberof,
+    &mynewstate,
+    &myfreestate,
+};

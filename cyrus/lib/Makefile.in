@@ -40,10 +40,10 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-# $Id: Makefile.in,v 1.55.2.6 2004/08/09 18:51:21 ken3 Exp $
+# $Id: Makefile.in,v 1.55.2.7 2005/02/16 21:06:50 shadow Exp $
 
 # Authorization namespace.
-AUTH=auth_@WITH_AUTH@.o
+AUTH=auth.o auth_krb.o auth_unix.o auth_krb5.o auth_pts.o
 
 # ACL interpretation.  Only one choice for now:
 ACL=acl_afs.o

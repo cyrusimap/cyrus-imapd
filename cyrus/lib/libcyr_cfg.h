@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: libcyr_cfg.h,v 1.2.2.4 2004/03/24 19:53:15 ken3 Exp $
+ * $Id: libcyr_cfg.h,v 1.2.2.5 2005/02/16 21:06:51 shadow Exp $
  */
 
 #ifndef INCLUDED_LIBCYR_CFG_H
@@ -93,6 +93,8 @@ enum cyrus_opt {
     CYRUSOPT_VIRTDOMAINS,
     /* BDB cache size (512KB) */
     CYRUSOPT_BERKELEY_CACHESIZE,
+    /* authorization mechanism (unix) */
+    CYRUSOPT_AUTH_MECH,
     /* BDB max locks (50000) */
     CYRUSOPT_BERKELEY_LOCKS_MAX,
     /* BDB max txns (100) */
@@ -117,8 +119,8 @@ struct cyrusopt_s {
 /* these will assert() if they're called on the wrong type of
    option (imapopt.c) */
 extern const char *libcyrus_config_getstring(enum cyrus_opt opt);
-extern int libcyrus_config_getint(enum cyrus_opt opt);
-extern int libcyrus_config_getswitch(enum cyrus_opt opt);
+extern long libcyrus_config_getlong(enum cyrus_opt opt);
+extern long libcyrus_config_getswitch(enum cyrus_opt opt);
 
 void libcyrus_config_setstring(enum cyrus_opt opt, const char *val);
 void libcyrus_config_setint(enum cyrus_opt opt, int val);

@@ -1,5 +1,5 @@
 /* auth_krb5.c -- Kerberos V authorization for Cyrus IMAP
- * $Id: auth_krb5.c,v 1.2.2.1 2004/01/27 23:13:52 ken3 Exp $
+ * $Id: auth_krb5.c,v 1.2.2.2 2005/02/16 21:06:50 shadow Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,6 +42,12 @@
 
 #include <config.h>
 #include <stdlib.h>
+
+#include "auth.h"
+#include "exitcodes.h"
+
+#ifdef HAVE_GSSAPI_H
+
 #include <limits.h>
 #include <stdio.h>
 #include <ctype.h>
@@ -52,8 +58,6 @@
 
 #include "auth.h"
 #include "xmalloc.h"
-
-const char *auth_method_desc = "krb5";
 
 struct auth_state {
     char *userid; /* Canonified Userid */
@@ -67,7 +71,7 @@ struct auth_state {
  *	2	User is in the group that is identifier
  *	3	User is identifer
  */
-int auth_memberof(struct auth_state *auth_state, const char *identifier)
+static int mymemberof(struct auth_state *auth_state, const char *identifier)
 {
     char *ident;
     int ret=0;
@@ -92,7 +96,7 @@ int auth_memberof(struct auth_state *auth_state, const char *identifier)
  * Returns a pointer to a static buffer containing the canonical form
  * or NULL if 'identifier' is invalid.
  */
-char *auth_canonifyid(const char *identifier, size_t len)
+static char *mycanonifyid(const char *identifier, size_t len)
 {
     static char *retbuf = NULL;
     krb5_context context;
@@ -172,7 +176,7 @@ char *auth_canonifyid(const char *identifier, size_t len)
 /*
  * Set the current user to 'identifier'.
  */
-struct auth_state *auth_newstate(const char *identifier)
+static struct auth_state *mynewstate(const char *identifier)
 {
     struct auth_state *newstate;
     char *ident;
@@ -185,7 +189,7 @@ struct auth_state *auth_newstate(const char *identifier)
     return newstate;
 }
 
-void auth_freestate(struct auth_state *auth_state)
+static void myfreestate(struct auth_state *auth_state)
 {
     if(!auth_state) return;
     
@@ -193,4 +197,42 @@ void auth_freestate(struct auth_state *auth_state)
     free(auth_state);
 }
 
+#else /* HAVE_GSSAPI_H */
 
+static int mymemberof(
+    struct auth_state *auth_state __attribute__((unused)), 
+    const char *identifier __attribute__((unused)))
+{
+	fatal("Authentication mechanism (krb5) not compiled in", EC_CONFIG);
+}
+
+static char *mycanonifyid(
+    const char *identifier __attribute__((unused)), 
+    size_t len __attribute__((unused)))
+{
+	fatal("Authentication mechanism (krb5) not compiled in", EC_CONFIG);
+}
+
+static struct auth_state *mynewstate(
+    const char *identifier __attribute__((unused)))
+{
+	fatal("Authentication mechanism (krb5) not compiled in", EC_CONFIG);
+}
+
+static void myfreestate(
+    struct auth_state *auth_state __attribute__((unused)))
+{
+	fatal("Authentication mechanism (krb5) not compiled in", EC_CONFIG);
+}
+
+#endif
+
+struct auth_mech auth_krb5 = 
+{
+    "krb5",		/* name */
+
+    &mycanonifyid,
+    &mymemberof,
+    &mynewstate,
+    &myfreestate,
+};

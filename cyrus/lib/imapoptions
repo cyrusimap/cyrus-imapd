@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.2.2.27 2005/01/11 19:18:46 ken3 Exp $
+.\" $Id: imapoptions,v 1.2.2.28 2005/02/16 21:06:51 shadow Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -146,6 +146,9 @@ are listed with ``<none>''.
 
 { "annotation_db", "skiplist", STRINGLIST("berkeley", "skiplist") }
 /* The cyrusdb backend to use for mailbox annotations. */
+
+{ "auth_mech", "unix", STRINGLIST("unix", "pts", "krb", "krb5")}
+/* The authorization mechanism to use. */
 
 { "autocreatequota", 0, INT }
 /* If nonzero, normal users may create their own IMAP accounts by
@@ -349,9 +352,10 @@ are listed with ``<none>''.
 
 { "ldap_member_method", "attribute", STRINGLIST("attribute", "filter") }
 /* Specify a group method.  The "attribute" method retrieves groups from 
-   a multi-valued attributed specified in ldap_member_attribute.  
-   The "filter" method uses a filter, ldap_member_filter, to find groups; 
-   ldap_member_attribute is a single-value attribute group name. */
+   a multi-valued attribute specified in ldap_member_attribute.  
+
+   The "filter" method uses a filter, specified by ldap_member_filter, to find
+   groups; ldap_member_attribute is a single-value attribute group name. */
 
 { "ldap_member_scope", "sub", STRINGLIST("sub", "one", "base") }
 /* Specify search scope for ldap_member_filter. */
@@ -688,6 +692,9 @@ are listed with ``<none>''.
 /* A list of users and groups that are allowed to proxy for other
    users, seperated by spaces.  Any user listed in this will be
    allowed to login for any other user: use with caution. */ 
+
+{ "pts_module", "afskrb", STRINGLIST("afskrb", "ldap") }
+/* The PTS module to use. */
 
 { "ptloader_sock", NULL, STRING }
 /* Unix domain socket that ptloader listens on.

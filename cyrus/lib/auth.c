@@ -1,6 +1,4 @@
-/* auth.h -- Site authorization module
- * $Id: auth.h,v 1.15.2.1 2005/02/16 21:06:50 shadow Exp $
- *
+/* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -38,43 +36,84 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *
  */
 
-#ifndef INCLUDED_AUTH_H
-#define INCLUDED_AUTH_H
+/* $Id: auth.c,v 1.1.2.1 2005/02/16 21:06:50 shadow Exp $ */
 
-struct auth_state;
+#include <config.h>
+#include <stdlib.h>
+#include <string.h>
 
-struct auth_mech {
-    const char *name;
+#include "auth.h"
+#include "exitcodes.h"
+#include "libcyr_cfg.h"
+#include "xmalloc.h"
 
-    char *(*canonifyid)(const char *identifier, size_t len);
-    int (*memberof)(struct auth_state *auth_state, 
-             const char *identifier);
-    struct auth_state *(*newstate)(const char *identifier);
-    void (*freestate)(struct auth_state *auth_state);
-};
+struct auth_mech *auth_mechs[] = {
+    &auth_unix,
+    &auth_pts,
+#ifdef HAVE_KRB
+    &auth_krb,
+#endif
+#ifdef HAVE_GSSAPI_H
+    &auth_krb5,
+#endif
+    NULL };
 
-extern struct auth_mech *auth_mechs[];
+static struct auth_mech *auth_fromname()
+{
+    int i;
+    const char *name = libcyrus_config_getstring(CYRUSOPT_AUTH_MECH);
+    static struct auth_mech *auth = NULL;
 
-/* Note that some of these may be undefined symbols
- * if libcyrus was not built with support for them */
-extern struct auth_mech auth_unix;
-extern struct auth_mech auth_pts;
-extern struct auth_mech auth_krb;
-extern struct auth_mech auth_krb5;
+    if (auth)
+        return auth;
 
-/* auth_canonifyid: canonify the given identifier and return a pointer
- *                  to a static buffer with the canonified ID, or NULL on
- *                  failure */
-/* identifier: id to canonify */
-/* len: length of id, or 0 to do strlen(identifier) */
-char *auth_canonifyid(const char *identifier, size_t len);
+    for (i = 0; auth_mechs[i]; i++) {
+	if (!strcmp(auth_mechs[i]->name, name)) {
+	    auth = auth_mechs[i]; break;
+	}
+    }
+    if (!auth) {
+	char errbuf[1024];
+	snprintf(errbuf, sizeof(errbuf),
+		 "Authorization mechanism %s not supported", name);
+	fatal(errbuf, EC_CONFIG);
+    }
 
-int auth_memberof(struct auth_state *auth_state, 
- 	 const char *identifier);
-struct auth_state *auth_newstate(const char *identifier);
-void auth_freestate(struct auth_state *auth_state);
+    return auth;
+}
 
-#endif /* INCLUDED_AUTH_H */
+int auth_memberof(auth_state, identifier)
+struct auth_state *auth_state;
+const char *identifier;
+{
+    struct auth_mech *auth = auth_fromname();
+
+    return auth->memberof(auth_state, identifier);
+}
+
+char *auth_canonifyid(identifier, len)
+const char *identifier;
+size_t len;
+{
+    struct auth_mech *auth = auth_fromname();
+
+    return auth->canonifyid(identifier, len);
+}
+
+struct auth_state *auth_newstate(identifier)
+const char *identifier;
+{
+    struct auth_mech *auth = auth_fromname();
+
+    return auth->newstate(identifier);
+}
+
+void auth_freestate(auth_state)
+struct auth_state *auth_state;
+{
+    struct auth_mech *auth = auth_fromname();
+
+    auth->freestate(auth_state);
+}

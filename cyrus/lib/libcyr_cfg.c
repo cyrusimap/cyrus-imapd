@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: libcyr_cfg.c,v 1.2.2.5 2004/03/24 19:53:15 ken3 Exp $
+ * $Id: libcyr_cfg.c,v 1.2.2.6 2005/02/16 21:06:51 shadow Exp $
  */
 
 #include <config.h>
@@ -110,6 +110,10 @@ struct cyrusopt_s cyrus_options[] = {
       CFGVAL(int, 512 * 1024), /* 512KB */
       CYRUS_OPT_INT },
 
+    { CYRUSOPT_AUTH_MECH,
+      CFGVAL(const char *, "unix"),
+      CYRUS_OPT_STRING },
+
     { CYRUSOPT_BERKELEY_LOCKS_MAX,
       CFGVAL(int, 50000),
       CYRUS_OPT_INT },
@@ -130,7 +134,7 @@ const char *libcyrus_config_getstring(enum cyrus_opt opt)
     return cyrus_options[opt].val.s;
 }
 
-int libcyrus_config_getint(enum cyrus_opt opt)
+long libcyrus_config_getlong(enum cyrus_opt opt)
 {
     assert(opt > CYRUSOPT_ZERO && opt < CYRUSOPT_LAST);
     assert(cyrus_options[opt].opt == opt);
@@ -139,7 +143,7 @@ int libcyrus_config_getint(enum cyrus_opt opt)
     return cyrus_options[opt].val.i;
 }
 
-int libcyrus_config_getswitch(enum cyrus_opt opt)
+long libcyrus_config_getswitch(enum cyrus_opt opt)
 {
     assert(opt > CYRUSOPT_ZERO && opt < CYRUSOPT_LAST);
     assert(cyrus_options[opt].opt == opt);

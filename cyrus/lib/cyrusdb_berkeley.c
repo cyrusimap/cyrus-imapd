@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_berkeley.c,v 1.2.2.4 2004/11/17 15:40:43 shadow Exp $ */
+/* $Id: cyrusdb_berkeley.c,v 1.2.2.5 2005/02/16 21:06:51 shadow Exp $ */
 
 #include <config.h>
 
@@ -116,7 +116,7 @@ static int init(const char *dbdir, int myflags)
     int maj, min, patch;
     char *vstr;
     static char errpfx[10]; /* needs to be static; bdb doesn't copy */
-    int opt;
+    long opt;
 
     if (dbinit++) return 0;
 
@@ -155,7 +155,7 @@ static int init(const char *dbdir, int myflags)
 
     dbenv->set_lk_detect(dbenv, CONFIG_DEADLOCK_DETECTION);
 
-    if ((opt = libcyrus_config_getint(CYRUSOPT_BERKELEY_LOCKS_MAX)) < 0) {
+    if ((opt = libcyrus_config_getlong(CYRUSOPT_BERKELEY_LOCKS_MAX)) < 0) {
 	syslog(LOG_WARNING,
 	       "DBERROR: invalid berkeley_locks_max value, using internal default");
     } else {
@@ -167,7 +167,7 @@ static int init(const char *dbdir, int myflags)
 	}
     }
 
-    if ((opt = libcyrus_config_getint(CYRUSOPT_BERKELEY_TXNS_MAX)) < 0) {
+    if ((opt = libcyrus_config_getlong(CYRUSOPT_BERKELEY_TXNS_MAX)) < 0) {
 	syslog(LOG_WARNING,
 	       "DBERROR: invalid berkeley_txns_max value, using internal default");
     } else {
@@ -179,7 +179,7 @@ static int init(const char *dbdir, int myflags)
 	}
     }
 
-    opt = libcyrus_config_getint(CYRUSOPT_BERKELEY_CACHESIZE);
+    opt = libcyrus_config_getlong(CYRUSOPT_BERKELEY_CACHESIZE);
     if (opt < MIN_CACHESIZE || opt > MAX_CACHESIZE) {
 	syslog(LOG_WARNING,
 	       "DBERROR: invalid berkeley_cachesize value, using internal default");
