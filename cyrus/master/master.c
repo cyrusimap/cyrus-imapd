@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.82 2003/04/01 15:03:09 rjs3 Exp $ */
+/* $Id: master.c,v 1.83 2003/09/04 19:57:57 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -804,7 +804,7 @@ void sigterm_handler(int sig __attribute__((unused)))
     }
     /* kill my process group */
     if (kill(0, SIGTERM) < 0) {
-	syslog(LOG_ERR, "kill(0, SIGTERM): %m");
+	syslog(LOG_ERR, "sigterm_handler: kill(0, SIGTERM): %m");
     }
 
 #if HAVE_UCDSNMP
@@ -812,7 +812,7 @@ void sigterm_handler(int sig __attribute__((unused)))
     snmp_shutdown("cyrusMaster");
 #endif
 
-    syslog(LOG_INFO, "exiting on SIGTERM");
+    syslog(LOG_INFO, "exiting on SIGTERM/SIGINT");
     exit(0);
 }
 
@@ -841,9 +841,14 @@ void sighandler_setup(void)
 	fatal("unable to install signal handler for SIGALRM: %m", 1);
     }
 
+    /* Handle SIGTERM and SIGINT the same way -- kill
+     * off our children! */
     action.sa_handler = sigterm_handler;
     if (sigaction(SIGTERM, &action, NULL) < 0) {
 	fatal("unable to install signal handler for SIGTERM: %m", 1);
+    }
+    if (sigaction(SIGINT, &action, NULL) < 0) {
+	fatal("unable to install signal handler for SIGINT: %m", 1);
     }
 
     action.sa_flags |= SA_NOCLDSTOP;
