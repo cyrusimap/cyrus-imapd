@@ -42,6 +42,10 @@
 
 #define PROT_BUFSIZE 4096
 
+struct protstream;
+
+typedef void prot_readcallback_t P((struct protstream *s, void *rock));
+
 struct protstream {
     unsigned char buf[PROT_BUFSIZE+4];
     unsigned char *ptr;
@@ -59,6 +63,8 @@ struct protstream {
     int eof;
     int read_timeout;
     struct protstream *flushonread;
+    prot_readcallback_t *readcallback_proc;
+    void *readcallback_rock;
 };
 
 #define prot_getc(s) ((s)->cnt-- > 0 ? (int)*(s)->ptr++ : prot_fill(s))
@@ -74,6 +80,8 @@ extern int prot_setfunc P((struct protstream *s,
 extern int prot_settimeout P((struct protstream *s, int timeout));
 extern int prot_setflushonread P((struct protstream *s,
 				  struct protstream *flushs));
+extern int prot_setreadcallback P((struct protstream *s,
+				   prot_readcallback_t *proc, void *rock));
 extern const char *prot_error P((struct protstream *s));
 extern int prot_rewind P((struct protstream *s));
 extern int prot_fill P((struct protstream *s));

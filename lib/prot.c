@@ -162,6 +162,20 @@ struct protstream *flushs;
 }
 
 /*
+ * Set on stream 's' the callback 'proc' and 'rock'
+ * to make the next time we have to wait for input.
+ */
+int prot_setreadcallback(s, proc, rock)
+struct protstream *s;
+prot_readcallback_t *proc;
+void *rock;
+{
+    s->readcallback_proc = proc;
+    s->readcallback_rock = rock;
+    return 0;
+}
+
+/*
  * Return a pointer to a statically-allocated string describing the
  * error encountered on 's'.  If there is no error condition, return a
  * null pointer.
@@ -218,13 +232,19 @@ struct protstream *s;
 	}
 	else {
 	    haveinput = 0;
-	    if (s->flushonread && s->flushonread->ptr != s->flushonread->buf) {
+	    if (s->readcallback_proc ||
+		(s->flushonread && s->flushonread->ptr != s->flushonread->buf)) {
 		timeout.tv_sec = timeout.tv_usec = 0;
 		FD_ZERO(&rfds);
 		FD_SET(s->fd, &rfds);
 		if (select(s->fd + 1, &rfds, (fd_set *)0, (fd_set *)0,
 			   &timeout) <= 0) {
-		    prot_flush(s->flushonread);
+		    if (s->readcallback_proc) {
+			(*s->readcallback_proc)(s, s->readcallback_rock);
+			s->readcallback_proc = 0;
+			s->readcallback_rock = 0;
+		    }
+		    if (s->flushonread) prot_flush(s->flushonread);
 		}
 		else {
 		    haveinput = 1;
