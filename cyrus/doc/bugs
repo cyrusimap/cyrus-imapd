@@ -18,7 +18,7 @@
         Well, ok, it hangs. 
       * cyradm doesn't handle BYE quite properly (especially a BYE right
         after connect). 
-      * Random kerberos problems (and no, we don't know why they happen): 
+      * Random krb4 problems (and no, we don't know why they happen): 
 
           * It's possible to cause imtest/imapd to crash with Decoding
             error: Incorrect network address (krb_rd_req) by sending a
@@ -27,9 +27,10 @@
             protection or privacy layers causes the same problem. A work
             around is to not use any layers (imtest -l 0). 
 
+      * imtest doesn't have a manpage. 
+
                      Things we want to do
 
-      * Split the quota files into different directories. 
       * Implement the IMAP ID extension. 
       * Implement the IMAP VIEW extension. 
 

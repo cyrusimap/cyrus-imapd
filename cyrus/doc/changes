@@ -6,24 +6,34 @@ Changes to the Cyrus IMAP Server Since Version 1.6.1-BETA
         challenges and responses). 
       * Fixed deliver to deal with arbitrarily long headers 
       * COPY for non-existent sequence numbers returns NO; this contrasts
-        to UID COPY, which always returns OK 
+        to UID COPY, which always returns OK. 
       * FETCH for non-existent sequence numbers returns NO; this contrasts
-        to UID FETCH, which always returns OK 
+        to UID FETCH, which always returns OK. 
       * Fixed a misleading BAD responses to commands that take sequences. 
       * Added UIDNEXT untagged response to a SELECT (from
         draft-crispin-imapv-07.txt). 
       * pop3d now correctly passes SASL configuration options to libsasl. 
-      * imtest now correctly flushes the server's output to the screen 
-      * Added more stupid hashing. Now whenever there is a mailbox access,
-        it goes through a hash function. 
-      * deliver now checks sieveusehomedir and sievedir to see where to
-        look for sieve scripts 
-      * ptloader now has a workaround for afs 3.5 
+      * imtest now correctly flushes the server's output to the screen. 
+      * Added more hashing using a simple but stupid algorithm. Now
+        whenever there is a mailbox access, quota access, or subscription
+        access, it goes through a hash function. this is done to help
+        reduce the number of files/directories in any given directory. 
+      * Added the binary mbpath. Given a mailbox name, this binary will
+        print the filesystem path to that mailbox. This way if you have
+        multiple partitions and hashing turned out, you don't have to spend
+        as many mental cycles figuring out where the actual directory is. 
+      * deliver now checks sieveusehomedir and sievedir in the config file
+        to determine where to look for sieve scripts. 
+      * ptloader now has a workaround for afs 3.5. 
       * clarified an error message in message.c when an unexpected end of
-        file is encountered 
-      * fixed some random memory leaks in deliver 
-      * fixed a fairly major bug in prot_fill. it was performing correctly
-        when reading only a single character. 
+        file is encountered. 
+      * fixed some random memory leaks in deliver. 
+      * fixed a fairly major bug in prot_fill. it was performing
+        incorrectly when reading only a single character. 
+      * fixed a bug in how imtest looked for OK or NO. 
+      * fixed a memory leak in imapd. 
+      * imapd now allows any user (or member of a group) listed in
+        "proxyservers" to proxy. 
 
 Changes to the Cyrus IMAP Server Since Version 1.6.0-BETA 
 
