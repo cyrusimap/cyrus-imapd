@@ -1,4 +1,4 @@
-<!-- $Id: install-virtdomains.html,v 1.1.2.6 2003/03/05 22:53:01 rjs3 Exp $ -->
+<!-- $Id: install-virtdomains.html,v 1.1.2.7 2003/03/06 15:12:33 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Configuring Virtual Domains
@@ -40,22 +40,35 @@ the changes in the paradigm.</p>
 <li><b>Everyone is in a domain</b> - It's best to think of every user
 as existing inside a domain.  Unqualified users are technically inside the
 <tt>defaultdomain</tt>.</li>
-<li><b>Names can be qualified</b>Global admins can reference mailboxes and ids by qualified names.  That is, for any given mailbox command, you can add
-<tt>@domain</tt> to the end of the mailbox name.  Here are some examples:
+<li><b>Names can be qualified</b> - Global admins can reference
+mailboxes and ids by qualified names.  That is, for any given mailbox
+command, you can add <tt>@domain</tt> to the end of the mailbox name.
+Here are some examples:
  <ul>
-    <li><tt>cyradm> create user.jill@example.net</tt> <em>create a user</em></li>
-    <li><tt>cyradm> create user.rick@example.net</tt> <em>create another user</em></li>
-    <li><tt>cyradm> setquota user.rick@example.net 50000</tt> <em>define a quota</em></li>
-    <li><tt>cyradm> setaclmailbox user.rick@example.net jill@example.net read</tt> <em>Give Jill read access to Rick's mailbox</em></li>
-    <li><tt>cyradm> listmailbox *@example.net</tt> <em>list all mailboxes in the example.net domain</em></li>
+    <li><tt>cyradm> create user.jill@example.net</tt> <em>(create a
+    user)</em></li>
+    <li><tt>cyradm> create user.rick@example.net</tt> <em>(create
+    another user)</em></li>
+    <li><tt>cyradm> setquota user.rick@example.net 50000</tt>
+    <em>(define a quota)</em></li>
+    <li><tt>cyradm> setaclmailbox user.rick@example.net
+    jill@example.net read</tt> <em>(give Jill read access to Rick's
+    mailbox)</em></li>
+    <li><tt>cyradm> listmailbox *@example.net</tt> <em>(list all
+    mailboxes in the example.net domain)</em></li>
  </ul></li>
  <li><b>Each mailbox exists in only one domain</b></li>
- <li><b>Domains are completely separate</b> - Only users inside a given domain
-can access mailboxes inside of that domain.  The following example will not work: <tt>setacl user.jill@herdomain.com rick@hisdomain.com read</tt>.
- <li><b>Global and Domain admins</b> - The Cyrus virtual domains implementation supports per-domain administrators as well as global (inter-domain) administrators.  Domain-specific administrators are specified with a fully qualified
-userid in the <tt>admins</tt> option (e.g. <tt>admin@example.net</tt>) and
-only have access to mailboxes in the associated domain.  Global
-administrators are specified with an unqualified userid.
+ <li><b>Domains are mutually exclusive</b> - Users only have access to
+    mailboxes within their own domain (intra-domain).  The following
+    example will not work: <tt>setacl user.jill@herdomain.com
+    rick@hisdomain.com read</tt>.
+ <li><b>Global and Domain admins</b> - The Cyrus virtual domains
+    implementation supports per-domain administrators as well as
+    global (inter-domain) administrators.  Domain-specific
+    administrators are specified with a fully qualified userid in the
+    <tt>admins</tt> option (e.g. <tt>admin@example.net</tt>) and only
+    have access to mailboxes in the associated domain.  Global
+    administrators are specified with an unqualified userid.
 </ul>
 
 <h2>Quick Start</h2>
@@ -94,10 +107,15 @@ virtdomains: yes
 defaultdomain: exampleisp.net
 </pre>
 
-<p>This example has three domains: exampleisp.net, hisdomain.com, and herdomain.net.  <tt>admin</tt> can administer all three domains, while <tt>rick.admin@hisdomain.com</tt> and <tt>jill.admin@herdomain.net</tt> can only administer
-their respective domains.</p>
+<p>This example has three domains: exampleisp.net, hisdomain.com, and
+herdomain.net.  <tt>admin</tt> can administer all three domains, while
+<tt>rick.admin@hisdomain.com</tt> and
+<tt>jill.admin@herdomain.net</tt> can only administer their respective
+domains.</p>
 
-<p>Note that everyday users should not be administrators.  In the above example, Jill and Rick have separate administrative accounts for their domains.</p>
+<p>Note that everyday users should not be administrators.  In the
+above example, Jill and Rick have separate administrative accounts for
+their domains.</p>
 
 <h3>Multiple IP Addresses</h3>
 
@@ -132,15 +150,17 @@ instructions</a>.  Here are a few caveots:</p>
 
 <ul>
 <li> It is easiest to use the mailertable to route mail to Cyrus,
-rather than adding the domain to the local-host-names file ($w).  This prevents
-Sendmail from changing the domain name to the local host name.
+rather than adding the domain to the local-host-names file ($w).  This
+prevents Sendmail from changing the domain name to the local host
+name.
 
 <pre>
 example.com              cyrusv2:/var/imap/socket/lmtp
 </pre></li>
 
 <li> You'll have to use the Cyrus mailer in LMTP mode, and you'll have
-to change the mailer flags so that it provides the full domain while communicating LMTP.  Specifically these changes:
+to change the mailer flags so that it provides the full domain while
+communicating LMTP.  Specifically these changes:
 
 <pre>
 S=EnvFromSMTP/HdrFromSMTP, R=EnvToSMTP
@@ -197,5 +217,5 @@ To list all mailboxes in domain 'example.com':</p>
 </kbd></pre>
 
 <P><HR>
-last modified: $Date: 2003/03/05 22:53:01 $
+last modified: $Date: 2003/03/06 15:12:33 $
 </BODY></HTML>
