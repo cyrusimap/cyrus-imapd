@@ -99,8 +99,7 @@ setproctitle_init(argc, argv, envp)
 int argc;
 char **argv, **envp;
 {
-    int i, j;
-    char *p;
+    int i;
 
     /*
      * Move the environment so setproctitle can use the space at

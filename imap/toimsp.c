@@ -56,7 +56,7 @@
 
 #define VECSIZE 15
 
-static int imsp_open();
+static int toimsp_open();
 
 /*
  * Drop off a request to send an IMSP LAST command stating the highest
@@ -91,7 +91,7 @@ va_dcl
 #endif
     
     fd = toimsp_open();
-    if (fd == -1) return;
+    if (fd == -1) return 0;
 
     /* Start with newline */
     iov[num_iov].iov_base = "\n";
