@@ -39,10 +39,11 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: protocol.c,v 1.11 2004/06/11 18:15:53 ken3 Exp $ */
+/* $Id: protocol.c,v 1.12 2004/08/04 13:03:16 ken3 Exp $ */
 
 #include <config.h>
 
+#include <ctype.h>
 #include <string.h>
 #include <limits.h>
 
@@ -76,7 +77,8 @@ static char *imap_parsemechlist(const char *str, struct protocol_t *prot)
     return ret;
 }
 
-static char *nntp_parsemechlist(const char *str, struct protocol_t *prot)
+static char *nntp_parsemechlist(const char *str,
+				struct protocol_t *prot __attribute__((unused)))
 {
     char *ret;
     char *tmp;

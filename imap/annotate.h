@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: annotate.h,v 1.8 2004/06/22 21:36:17 rjs3 Exp $
+ * $Id: annotate.h,v 1.9 2004/08/04 13:03:12 ken3 Exp $
  */
 
 #ifndef ANNOTATE_H
@@ -75,6 +75,7 @@ struct entryattlist {
 
 /* String List Management */
 void appendstrlist(struct strlist **l, char *s);
+void appendstrlistpat(struct strlist **l, char *s);
 void appendstrlist_withdata(struct strlist **l, char *s, void *d, size_t size);
 void freestrlist(struct strlist *l);
 
