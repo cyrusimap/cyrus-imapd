@@ -1,4 +1,4 @@
-$Id: drac_auth.patch,v 1.14 2002/05/20 14:29:16 ken3 Exp $
+$Id: drac_auth.patch,v 1.15 2002/08/14 20:50:59 ken3 Exp $
 
 Patch to add support for Dynamic Relay Authorization Control
 
@@ -67,10 +67,10 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
 Index: acconfig.h
 ===================================================================
 RCS file: /afs/andrew/system/cvs/src/cyrus/acconfig.h,v
-retrieving revision 1.35
-diff -u -r1.35 acconfig.h
---- acconfig.h	2002/05/15 15:21:36	1.35
-+++ acconfig.h	2002/05/20 14:11:50
+retrieving revision 1.36
+diff -u -r1.36 acconfig.h
+--- acconfig.h	2002/08/13 00:11:28	1.36
++++ acconfig.h	2002/08/14 20:37:45
 @@ -101,6 +101,9 @@
  /* do we have SASL support for APOP? */
  #undef HAVE_APOP
@@ -84,11 +84,11 @@ diff -u -r1.35 acconfig.h
 Index: configure.in
 ===================================================================
 RCS file: /afs/andrew/system/cvs/src/cyrus/configure.in,v
-retrieving revision 1.230
-diff -u -r1.230 configure.in
---- configure.in	2002/04/15 19:35:48	1.230
-+++ configure.in	2002/05/20 14:11:50
-@@ -865,6 +865,19 @@
+retrieving revision 1.237
+diff -u -r1.237 configure.in
+--- configure.in	2002/07/22 16:16:02	1.237
++++ configure.in	2002/08/14 20:37:45
+@@ -879,6 +879,19 @@
  SNMP_SUBDIRS=""
  AC_SUBST(SNMP_SUBDIRS)
  
@@ -111,10 +111,10 @@ diff -u -r1.230 configure.in
 Index: imap/Makefile.in
 ===================================================================
 RCS file: /afs/andrew/system/cvs/src/cyrus/imap/Makefile.in,v
-retrieving revision 1.162
-diff -u -r1.162 Makefile.in
---- imap/Makefile.in	2002/04/18 17:35:26	1.162
-+++ imap/Makefile.in	2002/05/20 14:11:53
+retrieving revision 1.165
+diff -u -r1.165 Makefile.in
+--- imap/Makefile.in	2002/07/25 21:07:05	1.165
++++ imap/Makefile.in	2002/08/14 20:37:48
 @@ -67,6 +67,7 @@
  SIEVE_LIBS = @SIEVE_LIBS@
  IMAP_COM_ERR_LIBS = @IMAP_COM_ERR_LIBS@
@@ -123,7 +123,7 @@ diff -u -r1.162 Makefile.in
  LIBS = $(IMAP_LIBS) $(IMAP_COM_ERR_LIBS)
  DEPLIBS = ../acap/libacap.a ../lib/libcyrus.a @DEPLIBS@
  
-@@ -201,15 +202,18 @@
+@@ -213,15 +214,18 @@
  
  imapd: xversion $(IMAPDOBJS) libimap.a $(DEPLIBS) $(SERVICE)
  	$(CC) $(LDFLAGS) -o imapd \
@@ -145,7 +145,7 @@ diff -u -r1.162 Makefile.in
  
  proxyd: $(PROXYDOBJS) libimap.a $(DEPLIBS) $(SERVICE)
  	$(CC) $(LDFLAGS) -o proxyd \
-@@ -235,7 +239,7 @@
+@@ -253,7 +257,7 @@
  
  pop3d: pop3d.o tls.o libimap.a $(DEPLIBS) $(SERVICE)
  	$(CC) $(LDFLAGS) -o pop3d pop3d.o tls.o $(SERVICE) \
@@ -157,10 +157,10 @@ diff -u -r1.162 Makefile.in
 Index: imap/imapd.c
 ===================================================================
 RCS file: /afs/andrew/system/cvs/src/cyrus/imap/imapd.c,v
-retrieving revision 1.388
-diff -u -r1.388 imapd.c
---- imap/imapd.c	2002/05/17 20:56:42	1.388
-+++ imap/imapd.c	2002/05/20 14:11:53
+retrieving revision 1.404
+diff -u -r1.404 imapd.c
+--- imap/imapd.c	2002/08/12 23:53:38	1.404
++++ imap/imapd.c	2002/08/14 20:37:48
 @@ -120,6 +120,18 @@
  static SSL *tls_conn = NULL;
  #endif /* HAVE_SSL */
@@ -180,7 +180,7 @@ diff -u -r1.388 imapd.c
  /* current sub-user state */
  static struct mailbox mboxstruct;
  static struct mailbox *imapd_mailbox;
-@@ -544,6 +556,23 @@
+@@ -543,6 +555,23 @@
      /* setup for sending IMAP IDLE notifications */
      idle_enabled();
  
@@ -204,7 +204,7 @@ diff -u -r1.388 imapd.c
      /* create connection to the SNMP listener, if available. */
      snmp_connect(); /* ignore return code */
      snmp_set_str(SERVER_NAME_VERSION,CYRUS_VERSION);
-@@ -626,6 +655,12 @@
+@@ -627,6 +656,12 @@
  		  imapd_haveaddr = 1;
  	      }
  	}
@@ -217,7 +217,7 @@ diff -u -r1.388 imapd.c
      }
  
      /* create the SASL connection */
-@@ -668,6 +703,11 @@
+@@ -669,6 +704,11 @@
      prot_flush(imapd_out);
      snmp_increment(ACTIVE_CONNECTIONS, -1);
  
@@ -229,7 +229,7 @@ diff -u -r1.388 imapd.c
      /* cleanup */
      imapd_reset();
  
-@@ -758,6 +798,10 @@
+@@ -759,6 +799,10 @@
      tls_shutdown_serverengine();
  #endif
  
@@ -240,7 +240,7 @@ diff -u -r1.388 imapd.c
      exit(code);
  }
  
-@@ -780,7 +824,36 @@
+@@ -781,7 +825,36 @@
  
  }
  
@@ -277,7 +277,7 @@ diff -u -r1.388 imapd.c
   * Top-level command loop parsing
   */
  void cmdloop()
-@@ -1801,6 +1874,11 @@
+@@ -1802,6 +1875,11 @@
  
      prot_printf(imapd_out, "%s OK %s\r\n", tag, reply);
  
@@ -289,7 +289,7 @@ diff -u -r1.388 imapd.c
      /* Create telemetry log */
      imapd_logfd = telemetry_log(imapd_userid, imapd_in, imapd_out);
  
-@@ -1955,6 +2033,11 @@
+@@ -1942,6 +2020,11 @@
  
      prot_setsasl(imapd_in,  imapd_saslconn);
      prot_setsasl(imapd_out, imapd_saslconn);
@@ -304,10 +304,10 @@ diff -u -r1.388 imapd.c
 Index: imap/pop3d.c
 ===================================================================
 RCS file: /afs/andrew/system/cvs/src/cyrus/imap/pop3d.c,v
-retrieving revision 1.120
-diff -u -r1.120 pop3d.c
---- imap/pop3d.c	2002/05/06 17:18:51	1.120
-+++ imap/pop3d.c	2002/05/20 14:11:53
+retrieving revision 1.124
+diff -u -r1.124 pop3d.c
+--- imap/pop3d.c	2002/07/24 19:30:37	1.124
++++ imap/pop3d.c	2002/08/14 20:37:48
 @@ -101,6 +101,10 @@
  
  extern int errno;
@@ -319,7 +319,7 @@ diff -u -r1.120 pop3d.c
  
  
  #ifdef HAVE_SSL
-@@ -438,6 +442,10 @@
+@@ -440,6 +444,10 @@
      prot_settimeout(popd_in, timeout*60);
      prot_setflushonread(popd_in, popd_out);
  
@@ -330,7 +330,7 @@ diff -u -r1.120 pop3d.c
      if (kflag) kpop();
  
      /* we were connected on pop3s port so we should do 
-@@ -1426,6 +1434,20 @@
+@@ -1429,6 +1437,20 @@
      }
      popd_mailbox = &mboxstruct;
      proc_register("pop3d", popd_clienthost, popd_userid, popd_mailbox->name);
@@ -354,11 +354,11 @@ diff -u -r1.120 pop3d.c
 Index: imap/version.c
 ===================================================================
 RCS file: /afs/andrew/system/cvs/src/cyrus/imap/version.c,v
-retrieving revision 1.7
-diff -u -r1.7 version.c
---- imap/version.c	2002/03/21 21:10:04	1.7
-+++ imap/version.c	2002/05/20 14:11:53
-@@ -130,6 +130,10 @@
+retrieving revision 1.9
+diff -u -r1.9 version.c
+--- imap/version.c	2002/07/09 18:50:24	1.9
++++ imap/version.c	2002/08/14 20:37:48
+@@ -132,6 +132,10 @@
      snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
  	     "; %s", SIEVE_VERSION);
  #endif
@@ -372,14 +372,14 @@ diff -u -r1.7 version.c
 Index: man/imapd.conf.5
 ===================================================================
 RCS file: /afs/andrew/system/cvs/src/cyrus/man/imapd.conf.5,v
-retrieving revision 1.57
-diff -u -r1.57 imapd.conf.5
---- man/imapd.conf.5	2002/05/15 18:51:08	1.57
-+++ man/imapd.conf.5	2002/05/20 14:11:55
-@@ -313,8 +313,14 @@
- Unix domain socket that idled listens on.
- .IP "\fBnotifysocket:\fR /var/imap/socket/notify" 5
- Unix domain socket that the new mail notification daemon listens on.
+retrieving revision 1.65
+diff -u -r1.65 imapd.conf.5
+--- man/imapd.conf.5	2002/06/12 17:38:58	1.65
++++ man/imapd.conf.5	2002/08/14 20:37:49
+@@ -355,8 +355,14 @@
+ The SASL password (if needed) to use when authenticating to the mupdate server.
+ .IP "\fBmupdate_retry_delay:\fR 20" 5
+ The time to wait between connection retries to the mupdate server.
 +.IP "\fBdracinterval:\fR 5" 5
 +If nonzero, enables the use of DRAC (Dynamic Relay Authorization Control)
 +by the pop3d and imapd daemons.  Also sets the interval (in minutes) between 
