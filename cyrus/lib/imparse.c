@@ -1,5 +1,5 @@
 /* imparse.c -- IMxP client-side parsing routines
- $Id: imparse.c,v 1.6 1998/05/15 21:51:43 neplokh Exp $
+ $Id: imparse.c,v 1.7 1999/03/02 20:57:54 tjs Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -65,7 +65,7 @@ char **retval;
     int c;
     char *d;
     int len = 0;
-    int sawdigit;
+    int sawdigit = 0;
 
     switch (**s) {
     case '\0':
@@ -149,13 +149,13 @@ const char *s;
  * Return nonzero if 's' matches the grammar for a sequence
  */
 int imparse_issequence(s)
-const char *s;
+const unsigned char *s;
 {
     int c;
     int len = 0;
     int sawcolon = 0;
 
-    while (c = *s) {
+    while ((c = *s)) {
 	if (c == ',') {
 	    if (!len) return 0;
 	    if (!isdigit(s[-1]) && s[-1] != '*') return 0;
