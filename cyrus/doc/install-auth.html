@@ -1,4 +1,4 @@
-<!-- $Id: install-auth.html,v 1.6 2002/04/23 19:38:58 rjs3 Exp $ -->
+<!-- $Id: install-auth.html,v 1.7 2002/04/23 19:44:54 rjs3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Authenticating Users
@@ -33,6 +33,10 @@ text password over the wire unless the connection is encrypted.
 without using SASL. This is via the 'LOGIN' command (not to be
 confused by the LOGIN SASL mechanism). The IMAP LOGIN command (as with
 PLAIN) will send your password in clear-text to the server.
+
+<p>The POP server is capable of APOP authentication, but this requries that
+SASL be compiled <tt>--with-checkapop</tt>, and also that you are using
+an auxprop backend for your password store (e.g. sasldb).
 
 <h2>Authentication Recommendations</h2>
 
@@ -184,5 +188,5 @@ current ticket's held.  Override this with the <tt>-u</tt> option.</li>
 </ol>
 
 <P><HR>
-last modified: $Date: 2002/04/23 19:38:58 $
+last modified: $Date: 2002/04/23 19:44:54 $
 </BODY></HTML>
