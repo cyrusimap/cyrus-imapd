@@ -989,7 +989,7 @@ char *name;
     }
     if (size < 2) {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag,
-		    error_message(IMAP_MESSAGE_NOBLANKLINE);
+		    error_message(IMAP_MESSAGE_NOBLANKLINE));
 	if (c != '\n') eatline();
 	goto freeflags;
     }
