@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.144.2.15 2004/04/22 19:22:41 ken3 Exp $
+ * $Id: pop3d.c,v 1.144.2.16 2004/04/23 20:19:45 ken3 Exp $
  */
 #include <config.h>
 
@@ -194,6 +194,58 @@ static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
+static int popd_canon_user(sasl_conn_t *conn, void *context,
+			   const char *user, unsigned ulen,
+			   unsigned flags, const char *user_realm,
+			   char *out, unsigned out_max, unsigned *out_ulen)
+{
+    char userbuf[MAX_MAILBOX_NAME+1], *p;
+
+    if (!ulen) ulen = strlen(user);
+    memcpy(userbuf, user, ulen);
+    userbuf[ulen] = '\0';
+
+    /* See if we're trying to access a subfolder */
+    if (p = strchr(userbuf, '+')) {
+	size_t n = strcspn(p, "@");
+	if (flags & SASL_CU_AUTHZID) {
+	    /* make a copy of the subfolder, but leave it with the authzid
+	       in case its used in the challenge/response calculatation */
+	    popd_subfolder = xstrndup(p, n);
+	}
+	if (flags & SASL_CU_AUTHID) {
+	    /* strip the subfolder from the authid */
+	    memmove(p, p+n, strlen(p+n)+1);
+	    ulen -= n;
+	}
+    }
+
+    return mysasl_canon_user(conn, context, userbuf, ulen, flags, user_realm,
+			     out, out_max, out_ulen);
+}
+
+static int popd_proxy_policy(sasl_conn_t *conn,
+			     void *context,
+			     const char *requested_user, unsigned rlen,
+			     const char *auth_identity, unsigned alen,
+			     const char *def_realm,
+			     unsigned urlen,
+			     struct propctx *propctx)
+{
+    char *p;
+
+    /* See if we're trying to access a subfolder */
+    if (p = strchr(requested_user, '+')) {
+	/* strip the subfolder from the authzid */
+	size_t n = strcspn(p, "@");
+	memmove(p, p+n, strlen(p+n)+1);
+	rlen -= n;
+    }
+
+    return mysasl_proxy_policy(conn, context, requested_user, rlen,
+			       auth_identity, alen, def_realm, urlen, propctx);
+}
+
 static void popd_reset(void)
 {
     proc_cleanup();
@@ -290,6 +342,18 @@ int service_init(int argc __attribute__((unused)),
     signals_set_shutdown(&shut_down);
     signals_add_handlers();
     signal(SIGPIPE, SIG_IGN);
+
+    /* if we're supporting subfolders, use our wrapper callbacks */
+    if (config_getswitch(IMAPOPT_POPSUBFOLDERS)) {
+	sasl_callback_t *cb;
+
+	for (cb = mysasl_cb; cb->id != SASL_CB_LIST_END; cb++) {
+	    if (cb->id == SASL_CB_PROXY_POLICY)
+		cb->proc = &popd_proxy_policy;
+	    if (cb->id == SASL_CB_CANON_USER)
+		cb->proc = &popd_canon_user;
+	}
+    }
 
     /* load the SASL plugins */
     global_sasl_init(1, 1, mysasl_cb);
@@ -999,20 +1063,13 @@ static void cmd_starttls(int pop3s __attribute__((unused)))
 static void cmd_apop(char *response)
 {
     int sasl_result;
-    char *p, *canon_user;
+    char *canon_user;
 
     assert(response != NULL);
 
     if (popd_userid) {
 	prot_printf(popd_out, "-ERR [AUTH] Must give PASS command\r\n");
 	return;
-    }
-
-    /* See if we're trying to access a subfolder */
-    if (p = strchr(response, '+')) {
-	size_t n = strcspn(p, "@ ");
-	popd_subfolder = xstrndup(p, n);
-	memmove(p, p+n, strlen(p+n)+1);
     }
 
     sasl_result = sasl_checkapop(popd_saslconn,
@@ -1033,6 +1090,10 @@ static void cmd_apop(char *response)
 	       popd_clienthost, popd_apop_chal,
 	       sasl_errdetail(popd_saslconn));
 	
+	if (popd_subfolder) {
+	    free(popd_subfolder);
+	    popd_subfolder = 0;
+	}
 	return;
     }
 
@@ -1049,18 +1110,24 @@ static void cmd_apop(char *response)
 	prot_printf(popd_out, 
 		    "-ERR [AUTH] weird SASL error %d getting SASL_USERNAME\r\n", 
 		    sasl_result);
+	if (popd_subfolder) {
+	    free(popd_subfolder);
+	    popd_subfolder = 0;
+	}
 	return;
     }
     
-    syslog(LOG_NOTICE, "login: %s %s APOP%s %s", popd_clienthost,
-	   popd_userid, popd_starttls_done ? "+TLS" : "", "User logged in");
+    syslog(LOG_NOTICE, "login: %s %s%s APOP%s %s", popd_clienthost,
+	   popd_userid, popd_subfolder ? popd_subfolder : "",
+	   popd_starttls_done ? "+TLS" : "", "User logged in");
 
     openinbox();
 }
 
 void cmd_user(char *user)
 {
-    char *p, *dot, *domain;
+    char userbuf[MAX_MAILBOX_NAME+1], *dot, *domain;
+    unsigned userlen;
 
     /* possibly disallow USER */
     if (!(kflag || popd_starttls_done ||
@@ -1075,26 +1142,21 @@ void cmd_user(char *user)
 	return;
     }
 
-    /* See if we're trying to access a subfolder */
-    if (p = strchr(user, '+')) {
-	size_t n = strcspn(p, "@");
-	popd_subfolder = xstrndup(p, n);
-	memmove(p, p+n, strlen(p+n)+1);
-    }
-
-    if (!(p = canonify_userid(user, NULL, NULL)) ||
+    if (popd_canon_user(popd_saslconn, NULL, user, 0,
+			SASL_CU_AUTHID | SASL_CU_AUTHZID,
+			NULL, userbuf, sizeof(userbuf), &userlen) ||
 	     /* '.' isn't allowed if '.' is the hierarchy separator */
-	     (popd_namespace.hier_sep == '.' && (dot = strchr(p, '.')) &&
+	     (popd_namespace.hier_sep == '.' && (dot = strchr(userbuf, '.')) &&
 	      !(config_virtdomains &&  /* allow '.' in dom.ain */
-		(domain = strchr(p, '@')) && (dot > domain))) ||
-	     strlen(p) + 6 > MAX_MAILBOX_PATH) {
+		(domain = strchr(userbuf, '@')) && (dot > domain))) ||
+	     strlen(userbuf) + 6 > MAX_MAILBOX_NAME) {
 	prot_printf(popd_out, "-ERR [AUTH] Invalid user\r\n");
 	syslog(LOG_NOTICE,
 	       "badlogin: %s plaintext %s invalid user",
 	       popd_clienthost, beautify_string(user));
     }
     else {
-	popd_userid = xstrdup(p);
+	popd_userid = xstrdup(userbuf);
 	prot_printf(popd_out, "+OK Name is a valid mailbox\r\n");
     }
 }
@@ -1158,7 +1220,6 @@ void cmd_pass(char *pass)
 	    free(popd_subfolder);
 	    popd_subfolder = 0;
 	}
-
 	return;
     }
     else {
@@ -1311,6 +1372,10 @@ void cmd_auth(char *arg)
 	    }
 	}
 	
+	if (popd_subfolder) {
+	    free(popd_subfolder);
+	    popd_subfolder = 0;
+	}
 	reset_saslconn(&popd_saslconn);
 	return;
     }
@@ -1329,8 +1394,9 @@ void cmd_auth(char *arg)
 		    sasl_result);
 	return;
     }
-    
-    syslog(LOG_NOTICE, "login: %s %s %s%s %s", popd_clienthost, popd_userid,
+
+    syslog(LOG_NOTICE, "login: %s %s%s %s%s %s", popd_clienthost,
+	   popd_userid, popd_subfolder ? popd_subfolder : "",
 	   authtype, popd_starttls_done ? "+TLS" : "", "User logged in");
 
     if (!openinbox()) {
