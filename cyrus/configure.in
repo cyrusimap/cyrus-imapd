@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.154 2000/02/15 22:19:59 leg Exp $
+dnl $Id: configure.in,v 1.155 2000/02/16 19:46:53 tmartin Exp $
 dnl
 
 AC_INIT(imap/imapd.c)
@@ -82,6 +82,11 @@ if test "$sievedir" != "no"; then
 	AC_PROG_YACC
 	AC_PROG_LEX
 	AC_CHECK_LIB(fl,main)
+
+ 	AC_SEARCH_LIBS(regcomp, rx regex,
+ 			AC_DEFINE(ENABLE_REGEX)
+		 	AC_CHECK_HEADER(rxposix.h, AC_DEFINE(HAVE_RX)))
+  		
 
 	PRE_SUBDIRS="${PRE_SUBDIRS} $sievedir"
 	EXTRA_OUTPUT="${EXTRA_OUTPUT} $sievedir/Makefile"
@@ -868,6 +873,8 @@ if test "$with_zephyr" = "no"; then
      fi
 fi     
 
+
+
 dnl
 dnl Try and find a system version of com_err.
 dnl If we see something that looks a little wacky, ignore it (there are many
@@ -1134,4 +1141,4 @@ fi
 AC_SUBST(IMAP_COM_ERR_LIBS)
 AC_SUBST(IMAP_LIBS)
 
-AC_OUTPUT(Makefile man/Makefile master/Makefile lib/Makefile acap/Makefile imap/Makefile imap/feedcyrus imtest/Makefile netnews/Makefile $EXTRA_OUTPUT)
+AC_OUTPUT(Makefile man/Makefile master/Makefile lib/Makefile acap/Makefile imap/Makefile imap/feedcyrus imtest/Makefile netnews/Makefile snmp/Makefile $EXTRA_OUTPUT)
