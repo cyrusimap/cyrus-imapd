@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: cyrus.conf.5,v 1.7 2002/05/25 19:57:47 leg Exp $
+.\" $Id: cyrus.conf.5,v 1.7.4.1 2002/10/01 16:33:37 ken3 Exp $
 .SH NAME
 cyrus.conf \- Cyrus configuration file
 .SH DESCRIPTION
@@ -129,6 +129,10 @@ argument is required.
 .IP "\fBperiod=\fR0" 5
 The interval (in minutes) at which to run the command.  This integer value is
 optional, but SHOULD be a positive integer > 10.
+.IP "\fBat=\fR<hhmm>" 5
+The time (24-hour format) at which to run the command each day.  If
+set to a valid time (0000-2359), period is automatically set to 1440.
+This string argument is optional.
 .SH EXAMPLE
 # example cyrus.conf
 
@@ -147,8 +151,8 @@ SERVICES {
 
 EVENTS {
   checkpoint	cmd="ctl_cyrusdb -c" period=30
-  delprune	cmd="ctl_deliver -E 3" period=1440
-  tlsprune	cmd="tls_prune" period=1440
+  delprune	cmd="ctl_deliver -E 3" at=0400
+  tlsprune	cmd="tls_prune" at=0400
 .br
 }
 .SH ACCESS CONTROL

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.67.4.1 2002/07/25 17:21:49 ken3 Exp $ */
+/* $Id: master.c,v 1.67.4.2 2002/10/01 16:33:38 ken3 Exp $ */
 
 #include <config.h>
 
@@ -687,7 +687,7 @@ void spawn_schedule(time_t now)
 	/* reschedule as needed */
 	b = a->next;
 	if (a->period) {
-	    a->mark = now + a->period;
+	    a->mark += a->period;
 	    /* reschedule a */
 	    schedule_event(a);
 	} else {
@@ -1041,6 +1041,8 @@ void add_event(const char *name, struct entry *e, void *rock)
     int ignore_err = (int) rock;
     char *cmd = mystrdup(masterconf_getstring(e, "cmd", NULL));
     int period = 60 * masterconf_getint(e, "period", 0);
+    int at = masterconf_getint(e, "at", -1), hour, min;
+    time_t now = time(NULL);
     struct event *evt;
 
     if (!cmd) {
@@ -1059,12 +1061,28 @@ void add_event(const char *name, struct entry *e, void *rock)
     evt = (struct event *) malloc(sizeof(struct event));
     if (!evt) fatal("out of memory", EX_UNAVAILABLE);
     evt->name = strdup(name);
-    evt->mark = 0;
+
+    if (at >= 0 && ((hour = at / 100) <= 23) && ((min = at % 100) <= 59)) {
+	struct tm *tm = localtime(&now);
+
+	period = 86400; /* 24 hours */
+	tm->tm_hour = hour;
+	tm->tm_min = min;
+	tm->tm_sec = 0;
+	if ((evt->mark = mktime(tm)) < now) {
+	    /* already missed it, so schedule for next day */
+	    evt->mark += period;
+	}
+    }
+    else {
+	evt->mark = now + period;
+    }
     evt->period = period;
+
     evt->exec = tokenize(cmd);
     if (!evt->exec) fatal("out of memory", EX_UNAVAILABLE);
-    evt->next = schedule;
-    schedule = evt;
+
+    schedule_event(evt);
 }
 
 #ifdef HAVE_SETRLIMIT
@@ -1156,6 +1174,7 @@ void reread_conf(void)
 	free((char**) ptr->exec);
 	free(ptr);
     }
+    schedule = NULL;
 
     /* read events */
     masterconf_getsection("EVENTS", &add_event, (void*) 1);
