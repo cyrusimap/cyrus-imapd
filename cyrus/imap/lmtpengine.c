@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.4 2000/06/04 22:28:17 leg Exp $
+ * $Id: lmtpengine.c,v 1.5 2000/06/04 22:47:32 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -57,6 +57,11 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <netdb.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include <netdb.h>
 #include <sys/socket.h>
@@ -1276,7 +1281,7 @@ void lmtpmode(struct lmtp_func *func,
       case 'r':
       case 'R':
 	    if (!strncasecmp(buf, "rcpt ", 5)) {
-		char *rcpt;
+		char *rcpt = NULL;
 
 		if (!msg->return_path) {
 		    prot_printf(pout, "503 5.5.1 Need MAIL command\r\n");
@@ -1296,7 +1301,7 @@ void lmtpmode(struct lmtp_func *func,
 		err = process_recipient(rcpt, 
 					func->verify_user,
 					&msg->rcpt[msg->rcpt_num]);
-		free(rcpt); /* malloc'd in parseaddr() */
+		if (rcpt) free(rcpt); /* malloc'd in parseaddr() */
 		if (err != NULL) {
 		    prot_printf(pout, "%s\r\n", err);
 		    continue;
@@ -1348,3 +1353,445 @@ void lmtpmode(struct lmtp_func *func,
     if (authstate) auth_freestate(authstate);
 }
 
+/************** client-side LMTP ****************/
+
+enum {
+    CAPA_PIPELINING = 1 << 0,
+    CAPA_AUTH       = 1 << 1,
+};
+
+struct lmtp_conn {
+    char *host;
+    int sock;
+    struct protstream *pin, *pout;
+    sasl_conn_t *saslconn;
+
+    /* lmtp specific properties */
+    int capability;
+    char *mechs;
+};
+
+#define ISGOOD(r) (((r) / 100) == 2)
+#define TEMPFAIL(r) (((r) / 100) == 4)
+#define PERMFAIL(r) (((r) / 100) == 5)
+#define ISCONT(s) (s && (s[3] == '-'))
+
+static int ask_code(const char *s)
+{
+    int ret = 0;
+    
+    if (s==NULL) return -1;
+
+    if (strlen(s) < 3) return -1;
+
+    /* check to make sure 0-2 are digits */
+    if ((isdigit((int) s[0])==0) ||
+	(isdigit((int) s[1])==0) ||
+	(isdigit((int) s[2])==0))
+    {
+	return -1;
+    }
+
+    ret = ((s[0]-'0')*100)+((s[1]-'0')*10)+(s[2]-'0');
+    
+    return ret;
+}
+
+static void chop(char *s)
+{
+    char *p;
+
+    assert(s);
+    p = s + strlen(s) - 1;
+    if (p[0] == '\n') {
+	*p-- = '\0';
+    }
+    if (p >= s && p[0] == '\r') {
+	*p-- = '\0';
+    }
+}
+
+static int do_auth(struct lmtp_conn *conn)
+{
+    return 1;
+}
+
+/* establish connection, LHLO, and AUTH if possible */
+int lmtp_connect(const char *phost, 
+		 sasl_callback_t *cb, 
+		 struct lmtp_conn **ret)
+{
+    int sock = -1;
+    char *host = xstrdup(phost);
+    struct lmtp_conn *conn;
+    char buf[8192];
+    int code;
+    sasl_external_properties_t *extprops = NULL;
+
+    assert(host);
+    assert(conn);
+
+    if (host[0] == '/') {
+	struct sockaddr_un addr;
+
+	/* open unix socket */
+	if ((sock = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
+	    syslog(LOG_ERR, "socket() failed %m");
+	    goto donesock;
+	}
+	addr.sun_family = AF_UNIX;
+	strcpy(addr.sun_path, host);
+	if (connect(sock, (struct sockaddr *) &addr, 
+		    sizeof(addr.sun_family) + strlen(addr.sun_path)) < 0) {
+	    syslog(LOG_ERR, "connect(%s) failed: %m", addr.sun_path);
+	    goto donesock;
+	}
+
+	/* set external properties */
+	extprops = (sasl_external_properties_t *) 
+	    xmalloc(sizeof(sasl_external_properties_t));
+	extprops->ssf = 2;
+	extprops->auth_id = "postman";
+
+	/* change host to 'config_servername' */
+	free(host);
+	host = xstrdup(config_servername);
+    } else {
+	struct hostent *hp;
+	struct sockaddr_in addr;
+	struct servent *service;
+	char *p;
+
+	p = strchr(host, ':');
+	if (p) {
+	    *p++ = '\0';
+	} else {
+	    p = "lmtp";
+	}
+
+	if ((hp = gethostbyname(host)) == NULL) {
+	    syslog(LOG_ERR, "gethostbyname(%s) failed", host);
+	    goto donesock;
+	}
+
+	/* open inet socket */
+	if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+	    syslog(LOG_ERR, "socket() failed: %m");
+	    goto donesock;
+	}
+
+	addr.sin_family = AF_INET;
+	memcpy(&addr.sin_addr, hp->h_addr, hp->h_length);
+	service = getservbyname(p, "tcp");
+	if (service) {
+	    addr.sin_port = service->s_port;
+	} else {
+	    int pn = atoi(p);
+	    if (pn == 0) {
+		syslog(LOG_ERR, "couldn't find valid lmtp port");
+		goto donesock;
+	    }
+	    addr.sin_port = htons(pn);
+	}
+
+	if (connect(sock, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
+	    syslog(LOG_ERR, "connect(%s:%s) failed: %m", host, p);
+	    goto donesock;
+	}	    
+    }
+
+ donesock:
+    if (sock == -1) {
+	/* error during connection */
+	free(host);
+	return IMAP_IOERROR;
+    }
+    
+    conn = xmalloc(sizeof(struct lmtp_conn));
+    conn->host = host;
+    conn->sock = sock;
+    conn->capability = 0;
+    conn->mechs = NULL;
+    conn->saslconn = NULL;
+    /* setup prot layers */
+    conn->pin = prot_new(sock, 0);
+    conn->pout = prot_new(sock, 1);
+    prot_setflushonread(conn->pin, conn->pout);
+
+    /* read greeting */
+    for (;;) {
+	if (prot_fgets(buf, sizeof(buf)-1, conn->pin)) {
+	    code = ask_code(buf);
+	    if (ISCONT(buf) && ISGOOD(code)) {
+		continue;
+	    }
+	} else {
+	    /* can't read greeting */
+	    code = 400;
+	}
+	break;
+    }
+    /* check status code */
+    if (!ISGOOD(code)) goto done;
+
+    /* LHLO */
+    prot_printf(conn->pout, "LHLO %s\r\n", config_servername);
+    /* read responses */
+    for (;;) {
+	if (prot_fgets(buf, sizeof(buf)-1, conn->pin)) {
+	    code = ask_code(buf);
+	    if (code == 250) {
+		chop(buf);
+		/* check capability */
+		if (!strcasecmp(buf + 4, "PIPELINING")) {
+		    conn->capability |= CAPA_PIPELINING;
+		}
+		if (!strcasecmp(buf + 4, "AUTH ")) {
+		    conn->capability |= CAPA_AUTH;
+		    /* save mechanisms for later */
+		    conn->mechs = xstrdup(buf + 9);
+		}
+	    }
+
+	    if (ISCONT(buf) && ISGOOD(code)) {
+		continue;
+	    } else {
+		break;
+	    }
+	}
+	/* can't read response */
+	code = 400; 
+	break;
+    }
+    /* check status code */
+    if (!ISGOOD(code)) goto done;
+
+    /* AUTH */
+    if ((conn->capability & CAPA_AUTH) && (conn->mechs)) {
+	sasl_client_new("lmtp", host, cb, 0, &conn->saslconn);
+	code = do_auth(conn);
+    }
+
+ done:
+    if (ISGOOD(code)) {
+	/* return connection */
+	*ret = conn;
+	return 0;
+    } else {
+	/* not a successful connection; tear it down and return failure */
+	if (conn) {
+	    if (conn->host) free(conn->host);
+	    if (conn->mechs) free(conn->mechs);
+	    if (conn->saslconn) sasl_dispose(&conn->saslconn);
+	    if (conn->sock) close(conn->sock);
+	    free(conn);
+	}
+	return IMAP_SERVER_UNAVAILABLE;
+    }
+}
+
+static void pushmsg(struct protstream *in, struct protstream *out,
+		    int isdotstuffed)
+{
+    int r;
+    char buf[8192], *p;
+    int lastline_hadendline = 1;
+
+    prot_rewind(in);
+    while (prot_fgets(buf, sizeof(buf)-1, in)) {
+	/* dot stuff */
+	if (!isdotstuffed && (lastline_hadendline == 1) && (buf[0]=='.')) {
+	    prot_putc('.', out);
+	}
+	p = buf + strlen(buf) - 1;
+	if (*p == '\n') {
+	    if (p == buf || p[-1] != '\r') {
+		p[0] = '\r';
+		p[1] = '\n';
+		p[2] = '\0';
+	    }
+	    lastline_hadendline = 1;
+	}
+	else if (*p == '\r') {
+	    if (buf[0] == '\r' && buf[1] == '\0') {
+		/* The message contained \r\0, and fgets is confusing us.
+		   XXX ignored
+		 */
+		lastline_hadendline = 1;
+	    } else {
+		/*
+		 * We were unlucky enough to get a CR just before we ran
+		 * out of buffer--put it back.
+		 */
+		prot_ungetc('\r', in);
+		*p = '\0';
+		lastline_hadendline = 0;
+	    }
+	} else {
+	    lastline_hadendline = 0;
+	}
+
+	/* Remove any lone CR characters */
+	while ((p = strchr(buf, '\r')) && p[1] != '\n') {
+	    strcpy(p, p+1);
+	}
+
+	prot_write(out, buf, strlen(buf));
+    }
+
+    if (!isdotstuffed) {
+	/* signify end of message */
+	prot_printf(out, "\r\n.\r\n");
+    }
+}
+
+int lmtp_runtxn(struct lmtp_conn *conn, struct lmtp_txn *txn)
+{
+    int j, code, r = 0;
+    char buf[8192];
+    int onegood;
+
+    /* pipelining v. no pipelining? */
+
+    /* here's the straightforward non-pipelining version */
+
+    /* rset */
+    prot_printf(conn->pout, "RSET\r\n");
+    if (!prot_fgets(buf, sizeof(buf)-1, conn->pin)) {
+	code = 400;
+	r = IMAP_SERVER_UNAVAILABLE;
+	goto failall;
+    }
+    code = ask_code(buf);
+    if (!ISGOOD(code)) {
+	goto failall;
+    }
+
+    /* mail from */
+    prot_printf(conn->pout, "MAIL FROM:<%s>", txn->from ? txn->from : "<>");
+    if (conn->capability & CAPA_AUTH) {
+	prot_printf(conn->pout, "AUTH=%s", txn->auth ? txn->auth : "<>");
+    }
+    prot_printf(conn->pout, "\r\n");
+    if (!prot_fgets(buf, sizeof(buf)-1, conn->pin)) {
+	code = 400;
+	r = IMAP_SERVER_UNAVAILABLE;
+	goto failall;
+    }
+    code = ask_code(buf);
+    if (!ISGOOD(code)) {
+	goto failall;
+    }
+
+    /* rcpt to */
+    onegood = 0;
+    for (j = 0; j < txn->rcpt_num; j++) {
+	prot_printf(conn->pout, "RCPT TO:<%s>\r\n", txn->rcpt[j].addr);
+	if (!prot_fgets(buf, sizeof(buf)-1, conn->pin)) {
+	    code = 400;
+	    r = IMAP_SERVER_UNAVAILABLE;
+	    goto failall;
+	}
+	code = ask_code(buf);
+	if (ISGOOD(code)) {
+	    onegood = 1;
+	    txn->rcpt[j].result = RCPT_GOOD;
+	} else if (TEMPFAIL(code)) {
+	    txn->rcpt[j].result = RCPT_TEMPFAIL;
+	} else if (PERMFAIL(code)) {
+	    txn->rcpt[j].result = RCPT_PERMFAIL;
+	} else {
+	    /* yikes?!? */
+	    code = 400;
+	    goto failall;
+	}
+    }
+    if (!onegood) {
+	/* all recipients failed! */
+	return 0;
+    }
+
+    /* data */
+    prot_printf(conn->pout, "DATA\r\n");
+    if (!prot_fgets(buf, sizeof(buf)-1, conn->pin)) {
+	code = 400;
+	r = IMAP_SERVER_UNAVAILABLE;
+	goto failall;
+    }
+    code = ask_code(buf);
+    if (code != 354) {
+	/* erg? */
+	goto failall;
+    }
+
+    /* send the data, dot-stuffing as needed */
+    pushmsg(txn->data, conn->pout, txn->isdotstuffed);
+
+    /* read the response codes, one for each accepted RCPT TO */
+    for (j = 0; j < txn->rcpt_num; j++) {
+	if (txn->rcpt[j].result == RCPT_GOOD) {
+	    /* expecting a status code for this recipient */
+	    if (!prot_fgets(buf, sizeof(buf)-1, conn->pin)) {
+		/* technically, some recipients might've succeeded here, 
+		   but we'll be paranoid */
+		code = 400;
+		r = IMAP_SERVER_UNAVAILABLE;
+		goto failall;
+	    }
+	    code = ask_code(buf);
+	    if (ISGOOD(code)) {
+		onegood = 1;
+		txn->rcpt[j].result = RCPT_GOOD;
+	    } else if (TEMPFAIL(code)) {
+		txn->rcpt[j].result = RCPT_TEMPFAIL;
+	    } else if (PERMFAIL(code)) {
+		txn->rcpt[j].result = RCPT_PERMFAIL;
+	    } else {
+		/* yikes?!? */
+		txn->rcpt[j].result = RCPT_TEMPFAIL;
+	    }
+	}
+    }
+    
+    /* done with txn */
+    return 0;
+    
+ failall:
+    /* something fatal happened during the transaction; we should assign
+       'code' to all recipients and return */
+    for (j = 0; j < txn->rcpt_num; j++) {
+	if (ISGOOD(code)) {
+	    txn->rcpt[j].result = RCPT_GOOD;
+	} else if (TEMPFAIL(code)) {
+	    txn->rcpt[j].result = RCPT_TEMPFAIL;
+	} else if (PERMFAIL(code)) {
+	    txn->rcpt[j].result = RCPT_PERMFAIL;
+	} else {
+	    /* code should have been a valid number */
+	    abort();
+	}
+    }
+
+    /* return overall error code already set */
+    return r;
+}
+
+int lmtp_disconnect(struct lmtp_conn *conn)
+{
+    /* quit */
+    prot_printf(conn->pout, "QUIT\r\n");
+    /* wait for any response */
+    prot_getc(conn->pin);
+
+    /* close connection */
+    close(conn->sock);
+
+    /* free 'conn' */
+    free(conn->host);
+    prot_free(conn->pin);
+    prot_free(conn->pout);
+    if (conn->saslconn) sasl_dispose(&conn->saslconn);
+    if (conn->mechs) free(conn->mechs);
+
+    return 0;
+}

@@ -1,5 +1,5 @@
 /* lmtpengine.h: lmtp protocol engine interface
- * $Id: lmtpengine.h,v 1.1 2000/05/28 23:19:40 leg Exp $
+ * $Id: lmtpengine.h,v 1.2 2000/06/04 22:47:32 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -40,8 +40,10 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#ifndef LMTP_PARSE_H
-#define LMTP_PARSE_H
+#ifndef LMTPENGINE_H
+#define LMTPENGINE_H
+
+/***************** server-side LMTP *******************/
 
 #define HEADERCACHESIZE 4009
 
@@ -62,15 +64,6 @@ struct message_data {
     int rcpt_num;		/* number of recipients */
     header_t *cache[HEADERCACHESIZE];
 };
-
-/*
- * to do: 
- *
- * figure out how to ask the delivery system to deliver the message multiple
- * times, and allow the delivery system to return status.
- * perhaps a register_deliver() function, and that function gets called on
- * every rcpt w/ the message, and the message 
- */
 
 /* return the corresponding header */
 const char **msg_getheader(message_data_t *m, const char *phead);
@@ -95,7 +88,7 @@ struct lmtp_func {
     int (*deliver)(message_data_t *m, 
 		   char *authuser, struct auth_state *authstate);
     int (*verify_user)(const char *user);
-    char *addheaders;
+    char *addheaders;		/* add these headers to all messages */
 };
 
 /* run LMTP on 'pin' and 'pout', doing callbacks to 'func' where appropriate
@@ -108,4 +101,43 @@ void lmtpmode(struct lmtp_func *func,
 	      struct protstream *pout,
 	      int fd);
 
-#endif /* LMTP_PARSE_H */
+/************** client-side LMTP ****************/
+
+struct lmtp_conn;
+
+struct lmtp_txn {
+    char *from;
+    char *auth;
+    int isdotstuffed;		/* 1 if 'data' is a dotstuffed stream
+                                   (including end-of-file \r\n.\r\n) */
+    struct protstream *data;
+    int rcpt_num;
+    struct lmtp_rcpt {
+	char *addr;
+	enum {			/* this should be more detailed, 
+				   or the 3 digit (+) code */
+	    RCPT_GOOD,
+	    RCPT_TEMPFAIL,
+	    RCPT_PERMFAIL
+	} result;
+    } rcpt[1];
+};
+
+#define LMTP_TXN_ALLOC(n) (xmalloc(sizeof(struct lmtp_txn) + \
+				   ((n) * (sizeof(struct lmtp_rcpt)))))
+
+
+int lmtp_connect(const char *host,
+		 sasl_callback_t *cb,
+		 struct lmtp_conn **conn);
+
+/* lmtp_runtxn() attempts delivery of the message in 'txn' on the
+   connection 'conn'.  regardless of the return code (which indicates
+   something about the protocol/connection state) 'rcpt[n].result' is
+   guaranteed to be filled in. */
+int lmtp_runtxn(struct lmtp_conn *conn, struct lmtp_txn *txn);
+
+/* disconnect from lmtp server */
+int lmtp_disconnect(struct lmtp_conn *conn);
+
+#endif /* LMTPENGINE_H */
