@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.27 2000/04/18 01:00:21 leg Exp $
+ * $Id: script.c,v 1.28 2000/05/28 22:45:59 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -207,7 +207,7 @@ static int sysaddr(char *addr)
 }
 
 /* look for myaddr and myaddrs in the body of a header */
-static int look_for_me(char *myaddr, stringlist_t *myaddrs, char **body)
+static int look_for_me(char *myaddr, stringlist_t *myaddrs, const char **body)
 {
     int found = 0;
     int l;
@@ -264,7 +264,7 @@ static int evaltest(sieve_interp_t *i, test_t *t, void *m)
 	}
 	for (sl = t->u.ae.sl; sl != NULL && !res; sl = sl->next) {
 	    int l;
-	    char **body;
+	    const char **body;
 
 	    /* use getheader for address, getenvelope for envelope */
 	    if (((t->type == ADDRESS) ? 
@@ -305,7 +305,7 @@ static int evaltest(sieve_interp_t *i, test_t *t, void *m)
     case EXISTS:
 	res = 1;
 	for (sl = t->u.sl; sl != NULL && res; sl = sl->next) {
-	    char **headbody = NULL;
+	    const char **headbody = NULL;
 	    res &= (i->getheader(m, sl->s, &headbody) == SIEVE_OK);
 	}
 	break;
@@ -318,7 +318,7 @@ static int evaltest(sieve_interp_t *i, test_t *t, void *m)
     case HEADER:
 	res = 0;
 	for (sl = t->u.h.sl; sl != NULL && !res; sl = sl->next) {
-	    char **val;
+	    const char **val;
 	    int l;
 	    if (i->getheader(m, sl->s, &val) != SIEVE_OK)
 		continue;
@@ -400,7 +400,8 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 	    break;
 	case VACATION:
 	    {
-		char **body, buf[128], myaddr[256], *fromaddr;
+		const char **body;
+		char buf[128], myaddr[256], *fromaddr;
 		char *reply_to = NULL;
 		int l = SIEVE_OK;
 
@@ -482,7 +483,7 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 		
 		    if (c->u.v.subject == NULL) {
 			/* we have to generate a subject */
-			char **s;
+			const char **s;
 		    
 			strcpy(buf, "subject");
 			if (i->getheader(m, buf, &s) != SIEVE_OK ||
@@ -585,7 +586,7 @@ static void add_header(sieve_interp_t *i, char *header,
 		       void *message_context, char **out, 
 		       int *outlen, int *outalloc)
 {
-    char **h;
+    const char **h;
     int addlen;
     /* get header value */
     i->getheader(message_context, header, &h);	

@@ -1,6 +1,6 @@
 /* message.c -- message parsing functions
  * Larry Greenfield
- * $Id: message.c,v 1.13 2000/02/22 08:08:12 tmartin Exp $
+ * $Id: message.c,v 1.14 2000/05/28 22:45:59 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -432,7 +432,7 @@ struct addr_marker {
     char *freeme;
 };
 
-int parse_address(char *header, void **data, void **marker)
+int parse_address(const char *header, void **data, void **marker)
 {
     struct addr_marker *am = (struct addr_marker *) *marker;
 

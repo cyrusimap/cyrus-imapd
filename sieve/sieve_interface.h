@@ -1,5 +1,5 @@
 /* sieve_interface.h -- interface for deliver
- * $Id: sieve_interface.h,v 1.12 2000/04/06 15:18:41 leg Exp $
+ * $Id: sieve_interface.h,v 1.13 2000/05/28 22:45:59 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -44,10 +44,12 @@ typedef int sieve_callback(void *action_context, void *interp_context,
 			   void *script_context,
 			   void *message_context, const char **errmsg);
 typedef int sieve_get_size(void *message_context, int *size);
-typedef int sieve_get_header(void *message_context, char *header,
-			     char ***contents);
-typedef int sieve_get_envelope(void *message_context, char *field,
-			       char ***contents);
+typedef int sieve_get_header(void *message_context, 
+			     const char *header,
+			     const char ***contents);
+typedef int sieve_get_envelope(void *message_context, 
+			       const char *field,
+			       const char ***contents);
 
 typedef struct sieve_vacation {
     int min_response;		/* 0 -> defaults to 3 */

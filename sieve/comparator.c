@@ -1,6 +1,6 @@
 /* comparator.c -- comparator functions
  * Larry Greenfield
- * $Id: comparator.c,v 1.5 2000/02/02 20:01:27 leg Exp $
+ * $Id: comparator.c,v 1.6 2000/05/28 22:45:58 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -37,7 +37,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 /* --- i;octet comparators --- */
 
 /* just compare the two; these should be NULL terminated */
-static int octet_is(char *pat, char *text)
+static int octet_is(const char *pat, const char *text)
 {
     int sl;
     sl = strlen(pat);
@@ -82,18 +82,18 @@ int boyer_moore(char *pat, char *text)
 #endif
 
 /* we do a brute force attack */
-static int octet_contains(char *pat, char *text)
+static int octet_contains(const char *pat, const char *text)
 {
     return (strstr(text, pat) != NULL);
 }
 
-static int octet_matches(char *pat, char *text)
+static int octet_matches(const char *pat, const char *text)
 {
     return !fnmatch(pat, text, 0);
 }
 
 #ifdef ENABLE_REGEX
-static int octet_regex(char *pat, char *text)
+static int octet_regex(const char *pat, const char *text)
 {
     return (!regexec((regex_t *) pat, text, 0, NULL, 0));
 }
@@ -102,7 +102,7 @@ static int octet_regex(char *pat, char *text)
 
 /* --- i;ascii-casemap comparators --- */
 
-static int ascii_casemap_is(char *pat, char *text)
+static int ascii_casemap_is(const char *pat, const char *text)
 {
     int sl;
     sl = strlen(pat);
@@ -111,7 +111,7 @@ static int ascii_casemap_is(char *pat, char *text)
 }
 
 /* sheer brute force */
-static int ascii_casemap_contains(char *pat, char *text)
+static int ascii_casemap_contains(const char *pat, const char *text)
 {
     int N = strlen(text);
     int M = strlen(pat);
@@ -129,7 +129,7 @@ static int ascii_casemap_contains(char *pat, char *text)
     return (j == M); /* we found a match! */
 }
 
-static int ascii_casemap_matches(char *pat, char *text)
+static int ascii_casemap_matches(const char *pat, const char *text)
 {
     int ret;
     char *p, *t;
@@ -150,7 +150,7 @@ static int ascii_casemap_matches(char *pat, char *text)
 
 /* i;ascii-numeric; only supports "is"
  equality: numerically equal, or both not numbers */
-static int ascii_numeric_is(char *pat, char *text)
+static int ascii_numeric_is(const char *pat, const char *text)
 {
     if (isdigit((int) *pat)) {
 	if (isdigit((int) *text)) {
@@ -162,7 +162,7 @@ static int ascii_numeric_is(char *pat, char *text)
     else return 1; /* both not digits */
 }
 
-comparator_t *lookup_comp(char *comp, int mode)
+comparator_t *lookup_comp(const char *comp, int mode)
 {
     comparator_t *ret;
 
