@@ -1,6 +1,7 @@
 dnl Process this file with autoconf to produce a configure script.
 AC_INIT(imap/imapd.c)
 
+
 AC_CHECK_PROG(HAVE_MAKEDEPEND,makedepend,yes)
 if test "$HAVE_MAKEDEPEND" != "yes"; then
 	AC_MSG_ERROR(Makedepend is not installed on this system.  First compile and install the version in the makedepend subdirectory.)
@@ -30,9 +31,9 @@ AC_SYS_LONG_FILE_NAMES
 if test $ac_cv_sys_long_file_names = no; then
 	AC_MSG_ERROR(The Cyrus IMAPD requires support for long file names)
 fi
+
 dnl get this over with; important if we're not using gcc
-CPPFLAGS="-I/usr/local/include ${CPPFLAGS}"
-LDFLAGS="-L/usr/local/lib ${CFLAGS}"
+
 dnl if db_185.h is present, we're using db2.0 and should include db_185.h
 dnl instead of db.h; otherwise, include db.h.  this is handled in the code
 dnl itself.
@@ -41,30 +42,7 @@ AC_REPLACE_FUNCS(memmove strcasecmp ftruncate strerror)
 AC_HEADER_DIRENT
 
 dnl check for -R, etc. switch
-AC_MSG_CHECKING(if compiler supports -R)
-AC_CACHE_VAL(cyrus_cv_cc_dashr,[
-	SAVE_LIBS="${LIBS}"
-	LIBS="-R /usr/lib ${LIBS}"
-	AC_TRY_LINK([], [], cyrus_cv_cc_dashr=yes, cyrus_cv_cc_dashr=no);
-	LIBS="${SAVE_LIBS}"])
-AC_MSG_RESULT($cyrus_cv_cc_dashr)
-if test $cyrus_cv_cc_dashr = "yes"; then
-	ld_runpath_switch="-R"
-else
-	AC_MSG_CHECKING([if compiler supports -Wl,-rpath,])
-	AC_CACHE_VAL(cyrus_cv_cc_rpath,[
-		SAVE_LIBS="${LIBS}"
-		LIBS="-Wl,-rpath,/usr/lib ${LIBS}"
-		AC_TRY_LINK([], [], cyrus_cv_cc_rpath=yes, cyrus_cv_cc_rpath=no)
-		LIBS="${SAVE_LIBS}"])
-	AC_MSG_RESULT($cyrus_cv_cc_rpath)
-	if test $cyrus_cv_cc_rpath = "yes"; then
-		ld_runpath_switch="-Wl,-rpath,"
-	else
-		dnl something innocuous
-		ld_runpath_switch="-L"
-	fi
-fi
+ANDREW_GUESS_RUNPATH_SWITCH
 
 AC_SUBST(CPPFLAGS)
 AC_SUBST(PRE_SUBDIRS)
@@ -250,18 +228,24 @@ AC_ARG_WITH(lock,[  --with-lock=METHOD      force use of METHOD for locking
 	AC_CHECK_FUNC(flock,WITH_LOCK="flock",WITH_LOCK="fcntl"))
 AC_SUBST(WITH_LOCK)
 
+dnl for makedepend and AFS.
 AC_CACHE_VAL(cyrus_sigveclib,[
+ dnl bsd classic flavor
  AC_CHECK_FUNC(sigvec, [
 	cyrus_sigveclib=""
   ], [
+  dnl hp flavor
   AC_CHECK_LIB(BSD, sigvec, cyrus_sigveclib="-lBSD", [
+    dnl not hp flavor
     SAVE_LDFLAGS="$LDFLAGS"
+    dnl solaris flavor
     LDFLAGS="-L/usr/ucblib -R/usr/ucblib $LDFLAGS"
     AC_CHECK_LIB(ucb, sigvec, [
+      dnl more solaris flavor
       cyrus_sigveclib="-lc -L/usr/ucblib -R/usr/ucblib -lucb"],
       [ AC_MSG_WARN(Can't find a sigvec() -- makedepend will not build.)
 	AC_MSG_WARN(Some AFS dependant programs (ptloader) may fail to build.)
-	AC_MSG_WARN(If you're not using AFS and have makedepend)
+	AC_MSG_WARN(If you're not using AFS and have makedepend already,)
 	AC_MSG_WARN(then this isn't a problem.)
 	])
     LDFLAGS="$SAVE_LDFLAGS"])
@@ -329,17 +313,18 @@ if test "$WITH_AUTH" = krb_pts; then
 	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} ptclient"
 	EXTRA_OUTPUT="${EXTRA_OUTPUT} ptclient/Makefile"
 	AC_DEFINE_UNQUOTED(CYRUS_PATH,"$cyrus_prefix")
-	AFSLIBS="${with_afs}/lib/afs/libkauth.a ${with_afs}/lib/afs/libprot.a  ${with_afs}/lib/afs/libauth.a ${with_afs}/lib/afs/libsys.a ${with_afs}/lib/librxkad.a ${with_afs}/lib/librx.a ${with_afs}/lib/afs/libsys.a ${with_afs}/lib/libubik.a  ${with_afs}/lib/liblwp.a ${with_afs}/lib/afs/util.a"
+	AFS_LIBS="${with_afs}/lib/afs/libkauth.a ${with_afs}/lib/afs/libprot.a  ${with_afs}/lib/afs/libauth.a ${with_afs}/lib/afs/libsys.a ${with_afs}/lib/librxkad.a ${with_afs}/lib/librx.a ${with_afs}/lib/afs/libsys.a ${with_afs}/lib/libubik.a  ${with_afs}/lib/liblwp.a ${with_afs}/lib/afs/util.a"
 	if test -f ${with_afs}/lib/afs/libaudit.a; then
-		AFSLIBS="$AFSLIBS ${with_afs}/lib/afs/libaudit.a"
+		AFS_LIBS="$AFS_LIBS ${with_afs}/lib/afs/libaudit.a"
 	fi
 	if test -f /usr/ucblib/libucb.a; then
-		AFSLIBS="$AFSLIBS -lc ${ld_runpath_switch}/usr/ucblib -L/usr/ucblib -lucb"
+		ANDREW_ADD_LIBPATH_TO("/usr/ucblib","AFS_LDFLAGS")
+		AFS_LIBS="$AFS_LIBS -lc -lucb"
 	fi
 
 	AC_CACHE_VAL(cyrus_afs_pr_end,[
 		SAVE_LIBS="$LIBS"
-		LIBS="$AFSLIBS"
+		LIBS="$AFS_LIBS"
 		AC_MSG_CHECKING(if AFS libraries have pr_End)
 		AC_TRY_LINK([pr_End();],
 			[pr_End()],
@@ -376,10 +361,11 @@ if test "$WITH_AUTH" = krb_pts; then
 			])
 		])
 	if test "$cyrus_afs_sigvec" = yes; then
-		AFSLIBS="${AFSLIBS} $cyrus_sigveclib"
+		AFS_LIBS="${AFS_LIBS} $cyrus_sigveclib"
 	fi
 	LIBS="$SAVE_LIBS"
-	AC_SUBST(AFSLIBS)
+	AC_SUBST(AFS_LIBS)
+	AC_SUBST(AFS_LDFLAGS)
 fi
 
 TCL_SUBDIRS="cyradm"
@@ -422,15 +408,15 @@ case "$with_tcl" in
   dnl do bizarro tcl hunt, but only if we have to -- that is, if TCL_SUBDIRS
   dnl is set.
   ""|yes) if test "$TCL_SUBDIRS" != ""; then
-    AC_CHECK_LIB(tcl,Tcl_Init,TCLLIBS="-ltcl -lm",
+    AC_CHECK_LIB(tcl,Tcl_Init,TCL_LIBS="-ltcl -lm",
         dnl not here -- maybe they hid it.
         [
 	SAVE_LIBS="$LIBS"
-	AC_CHECK_LIB(tcl, Tcl_Init, TCLLIBS="-ltcl -lm",
+	AC_CHECK_LIB(tcl, Tcl_Init, TCL_LIBS="-ltcl -lm",
 	    dnl not there -- maybe we want a different name.
 	    AC_CHECK_LIB(tcl8.0,
 	       Tcl_Init,
-	       TCLLIBS="-ltcl8.0 -lm",
+	       TCL_LIBS="-ltcl8.0 -lm",
 	       AC_MSG_ERROR(Could not find Tcl libraries.  You must either install Tcl or configure with --disable-cyradm),
 	       "-lm"), "-lm")
 	LIBS="$SAVE_LIBS"
@@ -440,14 +426,15 @@ case "$with_tcl" in
   ;;
 
   dnl hey, the user told us where it is, do the completely obvious thing!
-  *) TCLCPPFLAGS="${CPPFLAGS} -I${with_tcl}/include"
-     TCLLIBS="-L${with_tcl}/lib ${ld_runpath_switch}${with_tcl}/lib -l${tcllib} -lm"
+  *) TCL_CPPFLAGS="-I${with_tcl}/include"
+     ANDREW_ADD_LIBPATH_TO("${with_tcl}", TCL_LDFLAGS)
+     TCL_LIBS="-l${tcllib} -lm"
      ;;
 esac
+AC_SUBST(TCL_LIBS)
+AC_SUBST(TCL_CPPFLAGS)
+AC_SUBST(TCL_LDFLAGS)
 
-
-AC_SUBST(TCLLIBS)
-AC_SUBST(TCLCPPFLAGS)
 dnl
 dnl thanks to snprintf problems, we have to do this before kerberos checks,
 dnl then put krb libs at front of line
@@ -530,9 +517,32 @@ fi
 dnl
 dnl System version of com_err
 dnl
-AC_CHECK_LIB(com_err, error_message, [LIBS="${LIBS} -lcom_err"
-	AC_CHECK_PROGS(COMPILE_ET, compile_et)
-],[LIBS="${LIBS} ../et/libcom_err.a" COMPILE_ET="../et/compile_et"])
+AC_ARG_WITH(com_err,[  --with-com_err=PATH use com_err from PATH])
+if test -z "$with_com_err"; then
+	if test -f /usr/local/include/com_err.h; then
+		with_com_err="/usr/local"
+	fi
+fi
+if test "${with_com_err}" = "no"; then
+	AC_MSG_WARN([com_err is required.; included version will be used.])
+	with_com_err=""
+fi
+
+case "$with_com_err" in
+	# built-in et
+	""|yes) COM_ERR_LIBS="../et/libcom_err.a" COMPILE_ET="../et/compile_et" COM_ERR_LDFLAGS="" COM_ERR_CPPFLAGS=[-I${srcdir}/../et]
+	;;
+	# use whatever they told us, or whatever we found
+	*)
+	COM_ERR_LIBS="-lcom_err"
+	COM_ERR_CPPFLAGS="-I${with_com_err}"
+	ANDREW_ADD_LIBPATH("${with_com_err}")
+	COMPILE_ET="compile_et"
+esac
+AC_SUBST(COMPILE_ET)
+AC_SUBST(COM_ERR_LIBS)
+AC_SUBST(COM_ERR_LDFLAGS)
+AC_SUBST(COM_ERR_CPPFLAGS)
 
 dnl
 dnl Look for inn
@@ -579,7 +589,7 @@ AC_ARG_ENABLE(amssync,
 # strchr in ossup?
 #		AC_CHECK_LIB(ossup, strchr, LIBS="${LIBS} -lossup")
 	fi)			
-dnl Have to check getdtabalesize after adding ossup, as some ossup's define it
+dnl Have to check getdtabalesize after adding ossup, as some ossups define it
 AC_REPLACE_FUNCS(getdtablesize)
 AC_ARG_ENABLE(cmulocal,
 	[  --enable-cmulocal       enable CMU-specific local support],
@@ -623,7 +633,7 @@ dnl AC_CHECK_LIB(iberty, rindex, LIBS="${LIBS} -liberty")
 dnl
 dnl Shared library support for Tcl
 dnl
-AC_CHECK_LIB(dld, shl_load, TCLLIBS="${TCLLIBS} -ldld")dnl HPUX
-AC_CHECK_LIB(dl, dlopen, TCLLIBS="${TCLLIBS} -ldl")dnl Solaris
+AC_CHECK_LIB(dld, shl_load, TCL_LIBS="${TCL_LIBS} -ldld")dnl HPUX
+AC_CHECK_LIB(dl, dlopen, TCL_LIBS="${TCL_LIBS} -ldl")dnl Solaris
 
 AC_OUTPUT(Makefile man/Makefile et/Makefile lib/Makefile imap/Makefile imap/feedcyrus imtest/Makefile $EXTRA_OUTPUT)

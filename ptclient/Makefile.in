@@ -23,7 +23,8 @@ RANLIB = @RANLIB@
 
 DEFS = @DEFS@
 CPPFLAGS = -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@ 
-AFSLIBS = @AFSLIBS@
+AFS_LDFLAGS = @AFS_LDFLAGS@
+AFS_LIBS = @AFS_LIBS@
 LIBS = @LIBS@ 
 DEPLIBS = ../lib/libcyrus.a @DEPLIBS@
 
@@ -46,10 +47,10 @@ install:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
 
 ptloader: ptloader.o $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o $@ ptloader.o $(AFSLIBS) $(DEPLIBS) $(LIBS)
+	$(CC) $(LDFLAGS) -o $@ ptloader.o ${AFS_LDFLAGS} $(AFS_LIBS) $(DEPLIBS) $(LIBS)
 
 ptloader.pure: ptloader.o $(DEPLIBS)
-	$(PURIFY) $(PUREARGS) $(CC) $(LDFLAGS) -o $@ ptloader.o $(AFSLIBS) $(DEPLIBS) $(LIBS)
+	$(PURIFY) $(PUREARGS) $(CC) $(LDFLAGS) -o $@ ptloader.o ${AFS_LDFLAGS} $(AFS_LIBS) $(DEPLIBS) $(LIBS)
 
 ptexpire: ptexpire.o $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o $@ ptexpire.o $(DEPLIBS) $(LIBS)
