@@ -1,4 +1,4 @@
-<!-- $Id: install-auth.html,v 1.10 2003/07/25 20:54:53 rjs3 Exp $ -->
+<!-- $Id: install-auth.html,v 1.11 2003/07/26 15:23:01 rjs3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Authenticating Users
@@ -37,7 +37,7 @@ the password is still verified through the Cyrus SASL library, though no
 SASL mechanism actually performs a negotiation.
 
 <p>The POP server is capable of APOP authentication, but this requries that
-SASL be compiled <tt>--with-checkapop</tt>, and also that you are using
+Cyrus SASL be compiled <tt>--with-checkapop</tt>, and also that you are using
 an auxprop backend for your password store (e.g. the sasldb auxprop plugin).
 
 <h2>Authentication Recommendations</h2>
@@ -190,5 +190,5 @@ current ticket's held.  Override this with the <tt>-u</tt> option.</li>
 </ol>
 
 <HR>
-last modified: $Date: 2003/07/25 20:54:53 $
+last modified: $Date: 2003/07/26 15:23:01 $
 </BODY></HTML>
