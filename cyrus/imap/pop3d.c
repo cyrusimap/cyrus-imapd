@@ -129,9 +129,12 @@ char **envp;
 	if (hp = gethostbyaddr((char *)&popd_remoteaddr.sin_addr,
 			       sizeof(popd_remoteaddr.sin_addr), AF_INET)) {
 	    if (strlen(hp->h_name) + 30 > sizeof(popd_clienthost)) {
-		hp->h_name[sizeof(popd_clienthost)-30] = '\0';
+		strncpy(popd_clienthost, hp->h_name, sizeof(popd_clienthost)-30);
+		popd_clienthost[sizeof(popd_clienthost)-30] = '\0';
 	    }
-	    strcpy(popd_clienthost, hp->h_name);
+	    else {
+		strcpy(popd_clienthost, hp->h_name);
+	    }
 	}
 	else {
 	    popd_clienthost[0] = '\0';
