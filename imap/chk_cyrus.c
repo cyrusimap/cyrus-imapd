@@ -40,7 +40,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: chk_cyrus.c,v 1.2 2002/05/20 17:53:08 rjs3 Exp $
+ * $Id: chk_cyrus.c,v 1.3 2002/05/20 20:04:08 rjs3 Exp $
  */
 
 #include <config.h>
@@ -68,6 +68,7 @@
 #include "mailbox.h"
 #include "index.h"
 #include "imapconf.h"
+#include "map.h"
 
 /* need to use these names so the macros are happy */
 
@@ -97,9 +98,13 @@ static int chkmbox(char *name,
 {
     int r;
     char *part, *path;
-    
-    int fd,i,exists;
+
+    unsigned long real_len;
+    int fd=-1;
+    int i,exists;
     struct stat sbuf;
+
+    index_base = NULL;
 
     /* Do an mboxlist_detail on the mailbox */
     r = mboxlist_detail(name, NULL, &path, &part, NULL, NULL);
@@ -139,7 +144,9 @@ static int chkmbox(char *name,
     }
 
     index_len = sbuf.st_size;
-    index_base = mmap((caddr_t)0, index_len, PROT_READ, MAP_PRIVATE, fd, 0);
+    real_len = 0;
+    map_refresh(fd, 1, &index_base, &real_len, index_len,
+		"cyrus.index", name);
 
     if(!index_base) {
 	fprintf(stderr, "mmap failed\n");
@@ -170,9 +177,10 @@ static int chkmbox(char *name,
 	
     }
 
-    close(fd);
-
  done:
+    if(index_base) map_free(&index_base, &real_len);
+    if(fd != -1) close(fd);
+
     return 0;
 }
 
