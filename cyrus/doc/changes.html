@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.1 2000/04/25 02:56:39 leg Exp $ -->
+<!-- $Id: changes.html,v 1.2 2000/05/09 17:54:42 leg Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -14,7 +14,8 @@ database.
 <tt>deliver</tt> is now a simple wrapper to create an LMTP transaction.
 
 <li> master process, responsible for spawning services (<tt>imapd</tt>,
-<tt>lmtpd</tt>, etc.) and for routine housekeeping.
+<tt>lmtpd</tt>, etc.) and for routine housekeeping.  Optionally, it
+can use <tt>libwrap</tt> to allow or deny connections.
 
 <li> ACAP (Application Configuration Access Protocol) support for
 Cyrus Murder: IMAP Aggregator.
@@ -970,7 +971,7 @@ restore tab before breaking out of loop.
 
 
 <P><HR>
-last modified: $Date: 2000/04/25 02:56:39 $
+last modified: $Date: 2000/05/09 17:54:42 $
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>

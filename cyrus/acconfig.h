@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.3 2000/04/06 18:31:21 leg Exp $ */
+/* $Id: acconfig.h,v 1.4 2000/05/09 17:54:41 leg Exp $ */
 
 @TOP@
 
@@ -34,6 +34,9 @@
 
 /* the AFS RX (RPC) package */
 #undef HAVE_RX
+
+/* the TCP control package */
+#undef HAVE_LIBWRAP
 
 /* do we have OpenSSL? */
 #undef HAVE_SSL

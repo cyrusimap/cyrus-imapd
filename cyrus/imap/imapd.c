@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.237 2000/05/05 20:13:40 leg Exp $ */
+/* $Id: imapd.c,v 1.238 2000/05/09 17:54:42 leg Exp $ */
 
 #include <config.h>
 
@@ -3428,8 +3428,7 @@ void cmd_starttls(char *tag, int imaps)
 
     if (imapd_starttls_done == 1)
     {
-	prot_printf(imapd_out, "%s NO %s\r\n", tag, 
-		    "TLS already active");
+	prot_printf(imapd_out, "%s NO TLS already active\r\n", tag);
 	return;
     }
 
@@ -3450,19 +3449,18 @@ void cmd_starttls(char *tag, int imaps)
 	       (char *) config_getstring("tls_cert_file", ""),
 	       (char *) config_getstring("tls_key_file", ""));
 
-	if (imaps == 0)
-	    prot_printf(imapd_out, "%s NO %s\r\n", 
-			tag, "Error initializing TLS");
-	else
+	if (imaps == 0) {
+	    prot_printf(imapd_out, "%s NO Error initializing TLS\r\n", tag);
+ 	} else {
 	    fatal("tls_init() failed", EC_CONFIG);
+	}
 
 	return;
     }
 
     if (imaps == 0)
     {
-	prot_printf(imapd_out, "%s OK %s\r\n", tag,
-		    "Begin TLS negotiation now");
+	prot_printf(imapd_out, "%s OK Begin TLS negotiation now\r\n", tag);
 	/* must flush our buffers before starting tls */
 	prot_flush(imapd_out);
     }
