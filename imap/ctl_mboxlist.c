@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.22 2002/01/28 22:34:07 rjs3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.23 2002/01/29 19:45:55 rjs3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -81,7 +81,7 @@ void fatal(const char *message, int code)
 struct dumprock {
     enum mboxop op;
     mupdate_handle *h;
-    char hostname[HOSTNAME_SIZE];
+    char hostname[HOSTNAME_SIZE + 2];
 };
 
 static int dump_p(void *rockp,
@@ -102,6 +102,8 @@ struct mb_node *mb_head = NULL;
 /* For each mailbox that this guy gets called for, check that
  * it is a mailbox that:
  * a) mupdate server thinks *we* host
+ *    -> Because we were called, this is the case, provided we
+ *    -> gave the prefix parameter to the remote.
  * b) we do not actually host
  *
  * if that's the case, enqueue a delete
@@ -109,24 +111,20 @@ struct mb_node *mb_head = NULL;
 static int mupdate_list_cb(struct mupdate_mailboxdata *mdata,
 			   const char *cmd, void *context) 
 {
-    const char *hostname = (const char *)context;
-    int len = strlen(hostname);
     int ret;
 
-    /* Are we the apointed server? */
-    if(!strncmp(mdata->server, hostname, len) && mdata->server[len] == '!') {
-	/* the server thinks we have it, do we think we have it? */
-	ret = mboxlist_lookup(mdata->mailbox, NULL, NULL, NULL);
-	if(ret) {
-	    struct mb_node *next;
+    /* the server thinks we have it, do we think we have it? */
+    ret = mboxlist_lookup(mdata->mailbox, NULL, NULL, NULL);
+    if(ret) {
+	struct mb_node *next;
+	
+	next = xmalloc(sizeof(struct mb_node));
+	strcpy(next->mailbox, mdata->mailbox);
+	
+	next->next = mb_head;
+	mb_head = next;
+    } 
 
-	    next = xmalloc(sizeof(struct mb_node));
-	    strcpy(next->mailbox, mdata->mailbox);
-	    
-	    next->next = mb_head;
-	    mb_head = next;
-	} 
-    }
     return 0;
 }
 
@@ -265,13 +263,17 @@ void do_dump(enum mboxop op)
 	    exit(1);
 	}
 
-	/* Run pending deletes */
-	ret = mupdate_list(d.h, mupdate_list_cb, d.hostname);
+	/* now we need a list of what the remote thinks we have
+	 * To generate it, ask for a prefix of '<our hostname>!',
+	 * (to ensure we get exactly our hostname) */
+	strncat(d.hostname, "!", sizeof(d.hostname));
+	ret = mupdate_list(d.h, mupdate_list_cb, d.hostname, NULL);
 	if(ret) {
 	    fprintf(stderr, "couldn't do LIST command on mupdate server\n");
 	    exit(1);
 	}
 
+	/* Run pending deletes */
 	while(mb_head) {
 	    struct mb_node *me = mb_head;
 	    mb_head = mb_head->next;
