@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.73 1999/03/03 21:21:33 tjs Exp $
+# $Id: Makefile.in,v 1.74 1999/03/05 20:09:20 wcw Exp $
 # 
 # @configure_input@
 #
@@ -63,6 +63,15 @@ MAKEDEPEND = @MAKEDEPEND@
 
 COMPILE_ET=@COMPILE_ET@
 
+#
+# Some notes on purify --
+#     you probably want to run the make as the cyrus user as 
+#     purify sets the cache directory based on the user. So,
+#     if you don't, purify can't find the instrumented libraries
+#     and so you don't get any useful information.
+#     It may also help to run purify by hand to instrument any of
+#     the dynamic libraries that may crop up during run time.
+# 
 PURIFY=/usr/local/bin/purify
 PUREOPT=-windows=no -logfile=/tmp/pure/%v.%p.log -always_use_cache_dir
 QUANTIFY=/usr/local/bin/quantify
