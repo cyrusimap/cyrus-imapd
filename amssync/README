@@ -2,6 +2,8 @@
 amssync.c
 Kevin Martin
 version 4/22/96
+Tim Showalter
+10/14/96
 
 *amssync* mirrors a set of AMS bboards onto a Cyrus IMAP server.  It is run
 regularly by *doamssync*, which starts at boot time.  Authentication is
@@ -12,6 +14,7 @@ Usage: amssync [-A | -a] [-d] [-h] [-m]
 (old options, not all supported yet)
        -a          Synchronize ACL's (read-only) (also creates any new bboards)
        -A          Synchronize ACL's (also creates any new bboards)
+       -b          Delete old bboards not in AMS
        -c          Specify a config file name
        -d          Print debugging info
        -h          Print this message
@@ -54,3 +57,5 @@ Debugging info includes:
   D message from IMAP mailbox deleted
 
 
+Note that the regular expression matching generally isn't, and that it will
+break if the regular expression isn't of the form "^tree.name.*".

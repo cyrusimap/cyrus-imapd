@@ -54,11 +54,13 @@
 #define V 'V'
 
 #define MAXSIZE 2048
+#define BBHASH_SIZE 30341 /* prime */
 
 #include "acte.h"
 #include "imclient.h"
 #include "xmalloc.h"
 #include "amssync.h"
+#include "hash.h" /* tjs -- for bboard deletion stuff */
 
 struct cbdata {
     int done;
@@ -78,26 +80,89 @@ struct acte_client *login_acte_client[] = {
 
 struct cbdata cb;
 struct acldata acldata;
-int content_mode, acl_mode, aclro_mode, verbose, debug, noncommit;
+int content_mode, acl_mode, blast_mode, aclro_mode, verbose, debug, noncommit;
 char *cfgname, *principal, *server, *port;
 char *dir, *rexp, *bbd, *amsdir;
 char buf[2048], buf2[2048], submap[2048];
-struct imclient *imclient;
 FILE *cfgfile, *subfile, *logfile;
 int pos, neg; /* how many positive and negative AMS ACLs in current dir */
 char *posacl[256], *negacl[256]; /* fixed list thereof, dirty hack */
 int posval[256], negval[256];
 int n_imap_acl = 0; /* how many IMAP ACL entries we have */
 char *imapkey[1024], *imapval[1024];
+struct imclient *imclient;
+ht_table *bb_hash; /* tjs */
+
+
+/* tjs */
+/* This is a hash function
+ */
+unsigned long h_string(void* s) {
+    unsigned long r = 0;
+
+    while (*(char*)s != '\0') {
+        r = (r*255) + *(unsigned char*) s;
+        s = ((char*) s) + 1;
+    }
+
+    return r;
+}
+
+/* tjs */
+/* bbh_add: callback to add bboard in imclient->reply to hash table
+   in rock
+ */
+void bbh_add(struct imclient* imclient, void* ht,
+	     struct imclient_reply *reply) {
+    char* c, *cc;
+
+    /* XXX ok, so this is gross */
+    c = strrchr(reply->text, ' ') + 1; /* skip to last space plus one
+					 to grab bboard name */
+
+    if (c==NULL) {
+	if (verbose) {
+	    fprintf(logfile, "bbh_add: confused -- strrchr returned \
+NULL on reply set!");
+	}
+	return ;
+    }
+
+    if (verbose) {
+	fprintf(logfile, "found mailbox on imap server: %s\n",
+		c);
+    }
+
+    cc = xstrdup(c);
+
+    /* and do a ht_add to ht */
+    ht_add((ht_table*) ht, (void*) cc, (void*) cc);
+}
+
+/* tjs */
+/* delete bboard from server on global var imclient
+ */
+void bbdelete(void* bboard) {
+    if (verbose) {
+	fprintf(logfile, "Deleting mailbox %s\n", bboard);
+    }
+    if (noncommit == 1) {
+	imclient_send(imclient, (void(*)()) 0, (void *)0,
+		      "DELETE %s", (char*) bboard);
+    }
+    /* don't wait around */
+}
+
 
 void usage(void)
 {
     fprintf(stderr,"\
-Usage: syncams [-A | -a] [-d] [-h] [-m]\n\
+Usage: syncams [-A | -a] [-b] [-d] [-h] [-m]\n\
                [-u principal] [-v] -c file server [port]\n\
 (old options, not all supported yet)\n\
 \t-a\tSynchronize ACL's (read-only), create any new bboards\n\
 \t-A\tSynchronize ACL's, create any new bboards\n\
+\t-b\tDelete dead bboards\n\
 \t-m\tSynchronize content (messages)\n\
 \t-c\tSpecify a config file name\n\
 \t-d\tPrint debugging info\n\
@@ -613,7 +678,8 @@ int main(int argc, char **argv)
 
     setbuf(stderr,(char *) NULL);
 
-    content_mode = acl_mode = aclro_mode = verbose = debug = noncommit = 0;
+    content_mode = acl_mode = aclro_mode = blast_mode =
+	verbose = debug = noncommit = 0;
     cfgname = principal = server = port = (char *) NULL;
     /* Parse command line */
     while (--argc && *++argv) {
@@ -622,6 +688,8 @@ int main(int argc, char **argv)
 	    aclro_mode = 1;
 	} else if (!strcmp(*argv,"-A")) {
 	    acl_mode = 1;
+	} else if (!strcmp(*argv,"-b")) {
+	    blast_mode = 1;
 	} else if (!strcmp(*argv,"-c")) {
 	    if (argc <= 1) { usage(); }
 	    cfgname = xstrdup(*++argv);
@@ -648,8 +716,8 @@ int main(int argc, char **argv)
 	    usage();
 	}
     }
-    if (!(content_mode || acl_mode || verbose)) {
-	fprintf(stderr,"-a, -A, -v, and/or -m required\n");
+    if (!(content_mode || acl_mode || blast_mode || verbose)) {
+	fprintf(stderr,"-a, -A, -v, -b, and/or -m required\n");
 	usage();
     }
     if (!server) {
@@ -675,7 +743,8 @@ Port: %s\n\
   Mode: %s%s%s\n",server,port,
 		acl_mode ? "Update ACLs" : "No ACLs",
 		aclro_mode ? " (read-only)" : "",
-		content_mode ? ", Update Content" : "No Content");
+		content_mode ? ", Update Content" : ", No Content",
+		blast_mode ? ", blast old bboards" : ", keep old bboards");
     }
     /* Connect to Cyrus server once, no matter what */
     cyr_connect();
@@ -690,6 +759,8 @@ Port: %s\n\
 	fprintf(stderr,"Couldn't read configuration file '%s'\n",cfgname);
 	exit(1);
     }
+
+
     /* Main processing loop */
     err = cnt = 0;
     fgets(buf,256,cfgfile);
@@ -707,6 +778,40 @@ Port: %s\n\
 	if (verbose)  {
 	    fprintf(logfile,"Working on '%s:%s'\n",dir,rexp);
 	}
+
+	/* tjs */
+	if (blast_mode) {
+	    bb_hash = ht_create(h_string, 
+				BBHASH_SIZE /* size; a magic number */,
+				sizeof(char*), /* size of member (useless,
+						  really */
+				strcmp, /* compare fn */
+				free /* free fn */);
+	    
+	    /* tjs: add list callback */
+	    imclient_addcallback(imclient,
+				  "LIST", CALLBACK_NOLITERAL,
+				  bbh_add, bb_hash,
+				  NULL) ;
+	    
+	    /* tjs: LIST bboards from config file into hash table */
+	    cbclear();
+
+	    /* XXX THIS IS REALLY BRAINDEAD
+	     * this code doesn't actually interpret regular expressons
+	     * it just looks and sees if the first char is ^; if so,
+	     * it skips it; if not, it doesn't.  This is what match()
+	     * does anyway...
+	     */
+	    if (verbose)
+		fprintf(logfile, "listing bboards (LIST NIL \
+%s.*)...\n",
+			rexp+(*rexp == '^'));
+	    imclient_send(imclient, callback_finish, (void*) &cb,
+			  "LIST NIL %s.*", rexp+(*rexp=='^'));
+	    cbwait();
+	}
+
 	sprintf(submap,"%s/.MESSAGES/.SubscriptionMap",dir);
 	subfile = fopen(submap,"r");
 	if (!subfile) {
@@ -736,6 +841,17 @@ Port: %s\n\
 		    if (verbose) { fprintf(logfile,"Content...\n"); }
 		    if (do_content(amsdir,bbd)) { err++; }
 		}
+
+		/* tjs */
+		/* if we're in blast mode, remove it from hash table */
+		if (blast_mode) {
+		    if (verbose) {
+			fprintf(logfile, "removing bboard from list \
+of bboards to be blasted ...\n");
+		    }
+		    /* remove from hash table */
+		    ht_remove(bb_hash, (void*) bbd);
+		}
 		cnt++;
 	    }
 	    fgets(buf2,2048,subfile);
@@ -744,6 +860,14 @@ Port: %s\n\
 	fgets(buf,256,cfgfile);
 	buf[255] = 0;
     }
+
+    /* tjs */
+    /* for any bboard left in the hash table,
+       blast it. */
+    if (blast_mode) {
+	ht_foreach(bb_hash, (void*) bbdelete);
+    }
+
     do_imap_noop(imclient);	/* Flush & wait for pending commands */
     imclient_close(imclient);
     if (verbose) {

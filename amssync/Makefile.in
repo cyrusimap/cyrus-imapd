@@ -50,7 +50,7 @@ cyrus_prefix = @cyrus_prefix@
 
 AFS=/usr/local
 
-OBJS = amssync.o ams.o imap.o pioctl.o
+OBJS = amssync.o ams.o imap.o pioctl.o hash.o
 
 all: amssync
 
