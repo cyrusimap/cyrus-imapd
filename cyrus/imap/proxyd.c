@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.115 2002/04/05 19:52:27 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.116 2002/04/11 17:05:05 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -579,6 +579,10 @@ static int pipe_command(struct backend *s, int optimistic_literal)
 		    int j = (litlen > sizeof(buf) ? sizeof(buf) : litlen);
 
 		    j = prot_read(proxyd_in, buf, j);
+		    if(!j) {
+			/* EOF or other error */
+			return -1;
+		    }
 		    prot_write(s->out, buf, j);
 		    litlen -= j;
 		}
