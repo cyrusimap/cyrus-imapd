@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.132 2002/05/25 19:40:41 leg Exp $
+ $Id: mailbox.c,v 1.133 2002/05/28 15:55:05 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1337,7 +1337,7 @@ int mailbox_write_quota(struct quota *quota)
     strcpy(new_quota_path, quota_path);
     strcat(new_quota_path, ".NEW");
 
-    newfd = open(new_quota_path, O_CREAT | O_TRUNC | O_WRONLY, 0666);
+    newfd = open(new_quota_path, O_CREAT | O_TRUNC | O_RDWR, 0666);
     if (newfd == -1) {
 	syslog(LOG_ERR, "IOERROR: creating quota file %s: %m", new_quota_path);
 	return IMAP_IOERROR;
@@ -2024,7 +2024,7 @@ int mailbox_create(const char *name,
     strcpy(fnamebuf, path);
     p = fnamebuf + strlen(fnamebuf);
     strcpy(p, FNAME_HEADER);
-    mailbox.header_fd = open(fnamebuf, O_WRONLY|O_TRUNC|O_CREAT, 0666);
+    mailbox.header_fd = open(fnamebuf, O_RDWR|O_TRUNC|O_CREAT, 0666);
     if (mailbox.header_fd == -1) {
 	syslog(LOG_ERR, "IOERROR: creating %s: %m", fnamebuf);
 	return IMAP_IOERROR;
@@ -2050,7 +2050,7 @@ int mailbox_create(const char *name,
     mailbox.acl = xstrdup(acl);
 
     strcpy(p, FNAME_INDEX);
-    mailbox.index_fd = open(fnamebuf, O_WRONLY|O_TRUNC|O_CREAT, 0666);
+    mailbox.index_fd = open(fnamebuf, O_RDWR|O_TRUNC|O_CREAT, 0666);
     if (mailbox.index_fd == -1) {
 	syslog(LOG_ERR, "IOERROR: creating %s: %m", fnamebuf);
 	mailbox_close(&mailbox);
@@ -2067,7 +2067,7 @@ int mailbox_create(const char *name,
     mailbox.index_lock_count++;
 
     strcpy(p, FNAME_CACHE);
-    mailbox.cache_fd = open(fnamebuf, O_WRONLY|O_TRUNC|O_CREAT, 0666);
+    mailbox.cache_fd = open(fnamebuf, O_RDWR|O_TRUNC|O_CREAT, 0666);
     if (mailbox.cache_fd == -1) {
 	syslog(LOG_ERR, "IOERROR: creating %s: %m", fnamebuf);
 	mailbox_close(&mailbox);
