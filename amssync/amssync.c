@@ -503,6 +503,7 @@ do_content(char *amsname, char *imapname)
     int amsidx, imapidx, done;
     register message *amsmsg, *imapmsg;
     time_t timediff;
+    int deleted = 0;
     
     if (getams(amsname,&amsbbd)) { return 1; }
     if (getimap(imclient,imapname,&imapbbd)) { return 1; }
@@ -518,6 +519,7 @@ do_content(char *amsname, char *imapname)
 	    /* IMAP not in AMS, delete and advance */
 	    if (imapmsg -> stamp != 0x7fffffff) {
 		DeleteIMAP(imclient,imapname,imapmsg);
+		deleted++;
 		if (verbose) {
 		    fprintf(logfile,"Deleted %d:%s\n",imapidx,imapmsg -> name);
 		}
@@ -554,6 +556,7 @@ do_content(char *amsname, char *imapname)
 	    while ((imapidx <= imapbbd.inuse) && (!imap_bboard_error)) {
 		if (imapbbd.msgs[imapidx].stamp != 0x7fffffff) {
 		    DeleteIMAP(imclient,imapname,imapbbd.msgs[imapidx]);
+		    deleted++;
 		    if (verbose) {
 			fprintf(logfile,"Deleted %d:%s\n",
 				imapidx,imapbbd.msgs[imapidx].name);
@@ -594,7 +597,7 @@ do_content(char *amsname, char *imapname)
     amsbbd.inuse = 0;
     imapbbd.alloced = 0;
     imapbbd.inuse = 0;
-    do_imap_close(imclient);
+    if (deleted) do_imap_close(imclient);
     return imap_bboard_error; /* 0 = success */
 } /* do_content */
 
@@ -736,6 +739,7 @@ Port: %s\n\
 	fgets(buf,256,cfgfile);
 	buf[255] = 0;
     }
+    do_imap_noop(imclient);	/* Flush & wait for pending commands */
     imclient_close(imclient);
     if (verbose) {
 	fprintf(logfile,"Done!\n");

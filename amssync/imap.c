@@ -412,15 +412,19 @@ void errcheck(struct imclient *conn, char *rock, struct
  */
 void do_imap_close(struct imclient *imclient)
 {
+    imclient_send(imclient, (void(*)()) 0, (void *)0, "CLOSE");
+}
+
+void do_imap_noop(struct imclient *imclient)
+{
     int waitforcomplete;
 
     waitforcomplete=0;
-    imclient_send(imclient, markdone, &waitforcomplete, "CLOSE");
+    imclient_send(imclient, markdone, &waitforcomplete, "NOOP");
     while (!waitforcomplete) {
 	imclient_processoneevent(imclient);
     }
 }
-
 
 /*
  * Allocate and build a bboard struct for the named IMAP mailbox.
