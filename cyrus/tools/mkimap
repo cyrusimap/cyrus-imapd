@@ -40,7 +40,7 @@
 #
 exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #!perl -w
-# $Id: mkimap,v 1.13 2001/09/27 16:02:34 ken3 Exp $
+# $Id: mkimap,v 1.13.6.1 2002/07/20 01:22:07 ken3 Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -59,10 +59,32 @@ if ($@) { die "$@"; }
 __END__
 require 5;
 
+$domain = 0;
+
+if ("-d" eq $ARGV[0]) {
+    shift @ARGV;
+    $domain = $ARGV[0];
+    shift @ARGV;
+    printf "i will use domain $domain.\n";
+}
 $imapdconf = shift || "/etc/imapd.conf";
 $sievedir = "/usr/sieve";
 $nosievedir = 0;
 $hashispool = 0;
+
+sub mkdomain {
+    my $domain = shift;
+    my $hash = shift;
+
+    mkdir "domain", 0755;
+    chdir "domain";
+    if ($hash) {
+	mkdir substr($domain, 0, 1), 0755;
+	chdir substr($domain, 0, 1);
+    }
+    mkdir "$domain", 0755;
+    chdir $domain;
+}
 
 open CONF, $imapdconf or die "can't open $imapdconf";
 print "reading configure file...\n";
@@ -105,17 +127,21 @@ mkdir $d, 0755;
 chdir $d or die "couldn't change to $d";
 #open FOO, ">mailboxes"; close FOO;
 
-mkdir "user", 0755;
-foreach $i ("a".."z") { mkdir "user/$i", 0755; }
-
-mkdir "quota", 0755;
-foreach $i ("a".."z") { mkdir "quota/$i", 0755; }
-
 mkdir "proc", 0755;
 mkdir "db", 0755;
 mkdir "socket", 0755;
 mkdir "log", 0755;
 mkdir "msg", 0755;
+
+if ($domain) {
+    mkdomain($domain, 1);
+}
+
+mkdir "user", 0755;
+foreach $i ("a".."z") { mkdir "user/$i", 0755; }
+
+mkdir "quota", 0755;
+foreach $i ("a".."z") { mkdir "quota/$i", 0755; }
 
 # create the sieve stuff
 if (!$nosievedir) {
@@ -123,6 +149,10 @@ if (!$nosievedir) {
 
     mkdir $sievedir, 0755;
     if (chdir $sievedir) {
+        if ($domain) {
+	    mkdomain($domain, 1);
+	}
+
 	foreach $i ("a".."z") { mkdir "$i", 0755; }
     }
 }
@@ -135,6 +165,9 @@ while ($part = shift @parts) {
     mkdir $part, 0755;
     chdir $part or die "couldn't change to partition $part";
     mkdir "stage.", 0755;
+    if ($domain) {
+	mkdomain($domain, $hashispool);
+    }
     if ($hashispool) { foreach $i ("a".."z") { mkdir $i, 0755; } }
 }
 
