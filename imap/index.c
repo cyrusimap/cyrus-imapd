@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.161 2001/03/15 22:56:18 leg Exp $
+ * $Id: index.c,v 1.162 2001/05/02 18:16:55 leg Exp $
  */
 #include <config.h>
 
@@ -1019,7 +1019,7 @@ struct searchargs *searchargs;
     }
 
     /* if we didn't find any matches, free msgno_list */
-    if (!n) {
+    if (!n && *msgno_list) {
 	free(*msgno_list);
 	*msgno_list = NULL;
     }
