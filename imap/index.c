@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.124 2000/06/18 19:02:49 ken3 Exp $
+ * $Id: index.c,v 1.125 2000/06/19 17:45:36 ken3 Exp $
  */
 #include <config.h>
 
@@ -994,6 +994,13 @@ struct searchargs *searchargs;
 				  &msgfile.base, &msgfile.size);
 	}
     }
+
+    /* if we didn't find any matches, free msgno_list */
+    if (!n) {
+	free(*msgno_list);
+	*msgno_list = NULL;
+    }
+
     return n;
 }
 
@@ -1018,9 +1025,9 @@ int usinguid;
 	prot_printf(imapd_out, " %u",
 		    usinguid ? UID(msgno_list[i]) : msgno_list[i]);
 
-    prot_printf(imapd_out, "\r\n");
+    if (n) free(msgno_list);
 
-    free(msgno_list);
+    prot_printf(imapd_out, "\r\n");
 }
 
 /*
@@ -1033,21 +1040,19 @@ index_sort(struct mailbox *mailbox,
 	   int usinguid)
 {
     unsigned *msgno_list;
-    MsgData *msgdata = NULL, *freeme = NULL, *cur;
+    MsgData *msgdata = NULL, *freeme = NULL;
     int n;
 
     /* Search for messages based on the given criteria */
     n = _index_search(&msgno_list, mailbox, searchargs);
 
+    prot_printf(imapd_out, "* SORT");
+
     if (n) {
 	/* Create/load the msgdata array */
 	freeme = msgdata = index_msgdata_load(msgno_list, n, sortcrit);
 	free(msgno_list);
-    }
 
-    prot_printf(imapd_out, "* SORT");
-
-    if (msgdata) {
 	/* Sort the messages based on the given criteria */
 	msgdata = lsort(msgdata,
 			(void * (*)(void*)) index_sort_getnext,
@@ -1056,15 +1061,14 @@ index_sort(struct mailbox *mailbox,
 			sortcrit);
 
 	/* Output the sorted messages */ 
-	cur = msgdata;
-	while (cur) {
+	while (msgdata) {
 	    prot_printf(imapd_out, " %u",
-			usinguid ? UID(cur->msgno) : cur->msgno);
+			usinguid ? UID(msgdata->msgno) : msgdata->msgno);
 
 	    /* free contents of the current node */
-	    index_msgdata_free(cur);
+	    index_msgdata_free(msgdata);
 
-	    cur = cur->next;
+	    msgdata = msgdata->next;
 	}
 
 	/* free the msgdata array */
