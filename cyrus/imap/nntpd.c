@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.93 2003/07/06 03:36:24 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.94 2003/07/06 13:37:58 ken3 Exp $
  */
 
 /*
@@ -2052,7 +2052,7 @@ static void cmd_help(void)
 }
 
 /*
- * mboxlist_findall() callback function to LIST an ACTIVE newsgroup
+ * mboxlist_findall() callback function to LIST ACTIVE
  */
 int active_cb(char *name, int matchlen, int maycreate __attribute__((unused)),
 	      void *rock)
@@ -2123,9 +2123,11 @@ int active_cb(char *name, int matchlen, int maycreate __attribute__((unused)),
 }
 
 /*
- * annotatemore_findall() callback function to LIST a NEWSGROUPS
+ * annotatemore_findall() callback function to LIST NEWSGROUPS
  */
-int newsgroups_cb(const char *mailbox, const char *entry, const char *userid,
+int newsgroups_cb(const char *mailbox,
+		  const char *entry __attribute__((unused)),
+		  const char *userid,
 		  struct annotation_data *attrib, void *rock)
 {
     struct wildmat *wild = (struct wildmat *) rock;
