@@ -69,7 +69,7 @@ char *xstrndup(str, len)
 const char *str;
 unsigned len;
 {
-    char *p = xmalloc(strlen(len)+1);
+    char *p = xmalloc(len+1);
     strncpy(p, str, len);
     p[len] = '\0';
     return p;
