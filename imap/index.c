@@ -12,7 +12,7 @@
 #include <com_err.h>
 
 #include <acl.h>
-#include <glob.h>
+#include <util.h>
 #include "assert.h"
 #include "imap_err.h"
 #include "mailbox.h"
@@ -640,6 +640,7 @@ struct searchargs *searchargs;
     struct strlist *l;
     char *cacheitem;
     int cachelen;
+    FILE *msgfile;
 
     if (searchargs->recent_state == SEARCH_SET) {
 	start = lastnotrecent+1;
@@ -679,8 +680,7 @@ struct searchargs *searchargs;
 	    cachelen = CACHE_ITEM_LEN(cacheitem);
 	    
 	    for (l = searchargs->from; l; l = l->next) {
-		if (!l->glob) l->glob = glob_init(l->s, GLOB_ICASE|GLOB_SUBSTRING);
-		if (!glob_test(l->glob, cacheitem+4, cachelen)) break;
+		if (!index_search_string(l->s, cacheitem+4, cachelen)) break;
 	    }
 	    if (l) continue;
 
@@ -688,8 +688,7 @@ struct searchargs *searchargs;
 	    cachelen = CACHE_ITEM_LEN(cacheitem);
 
 	    for (l = searchargs->to; l; l = l->next) {
-		if (!l->glob) l->glob = glob_init(l->s, GLOB_ICASE|GLOB_SUBSTRING);
-		if (!glob_test(l->glob, cacheitem+4, cachelen)) break;
+		if (!index_search_string(l->s, cacheitem+4, cachelen)) break;
 	    }
 	    if (l) continue;
 
@@ -697,8 +696,7 @@ struct searchargs *searchargs;
 	    cachelen = CACHE_ITEM_LEN(cacheitem);
 
 	    for (l = searchargs->cc; l; l = l->next) {
-		if (!l->glob) l->glob = glob_init(l->s, GLOB_ICASE|GLOB_SUBSTRING);
-		if (!glob_test(l->glob, cacheitem+4, cachelen)) break;
+		if (!index_search_string(l->s, cacheitem+4, cachelen)) break;
 	    }
 	    if (l) continue;
 
@@ -706,8 +704,7 @@ struct searchargs *searchargs;
 	    cachelen = CACHE_ITEM_LEN(cacheitem);
 
 	    for (l = searchargs->bcc; l; l = l->next) {
-		if (!l->glob) l->glob = glob_init(l->s, GLOB_ICASE|GLOB_SUBSTRING);
-		if (!glob_test(l->glob, cacheitem+4, cachelen)) break;
+		if (!index_search_string(l->s, cacheitem+4, cachelen)) break;
 	    }
 	    if (l) continue;
 	}
@@ -747,9 +744,27 @@ struct searchargs *searchargs;
 	    }
 
 	    for (l = searchargs->subject; l; l = l->next) {
-		if (!l->glob) l->glob = glob_init(l->s, GLOB_ICASE|GLOB_SUBSTRING);
-		if (!glob_test(l->glob, cacheitem, cachelen)) break;
+		if (!index_search_string(l->s, cacheitem, cachelen)) break;
 	    }
+	    if (l) continue;
+	}
+	if (searchargs->body || searchargs->text) {
+	    msgfile = fopen(message_fname(mailbox, UID(msgno)), "r");
+	    if (!msgfile) continue;
+
+	    for (l = searchargs->body; l; l = l->next) {
+		if (!index_search_msg(l->s, msgfile, mailbox->format,
+				      CONTENT_OFFSET(msgno))) break;
+	    }
+	    if (l) {
+		fclose(msgfile);
+		continue;
+	    }
+	    for (l = searchargs->text; l; l = l->next) {
+		if (!index_search_msg(l->s, msgfile, mailbox->format, 0))
+		  break;
+	    }
+	    fclose(msgfile);
 	    if (l) continue;
 	}
 
@@ -1461,5 +1476,73 @@ char *rock;
     return 0;
 }
 
-	
+static int
+index_search_string(substr, text, textlen)
+char *substr;
+char *text;
+int textlen;
+{
+    int substrlen = strlen(substr);
+    textlen -= substrlen;
+    while (textlen-- >= 0) {
+	if (TOLOWER(*substr) == TOLOWER(*text) &&
+	    !strncasecmp(substr, text, substrlen))
+	  return 1;
+	text++;
+    }
+    return 0;
+}
+	    
+static int
+index_search_msg(substr, msgfile, format, offset)
+char *substr;
+FILE *msgfile;
+int format;
+int offset;
+{
+    int substrlen = strlen(substr);
+    char buf[4096];
+    char *p;
+    int n;
+    
+    if (format == MAILBOX_FORMAT_NETNEWS) {
+	/* Convert the substring to local newline convention */
+	if (p = strchr(substr, '\n')) {
+	    if (p == substr || p[-1] != '\r') return 0;
+	    substr = strsave(substr);
+	    p = substr;
+	    while (p = strchr(p, '\n')) {
+		if (p[-1] != '\r') {
+		    free(substr);
+		    return 0;
+		}
+		strcpy(p-1, p);
+	    }
+	}
+	else {
+	    format = MAILBOX_FORMAT_NORMAL;
+	}
+    }
+
+    fseek(msgfile, offset, 0);
+    n = fread(buf, 1, substrlen-1, msgfile);
+    if (n != substrlen-1) {
+	if (format == MAILBOX_FORMAT_NETNEWS) free(substr);
+	return 0;
+    }
+    while (n = fread(buf+substrlen-1, 1, sizeof(buf)-substrlen+1, msgfile)) {
+	p = buf;
+	while (n-- > 0) {
+	    if (TOLOWER(*substr) == TOLOWER(*p) &&
+		!strncasecmp(substr, p, substrlen)) {
+		if (format == MAILBOX_FORMAT_NETNEWS) free(substr);
+		return 1;
+	    }
+	    p++;
+	}
+	strncpy(buf, p, substrlen-1);
+    }
+    if (format == MAILBOX_FORMAT_NETNEWS) free(substr);
+    return 0;
+}
 	    

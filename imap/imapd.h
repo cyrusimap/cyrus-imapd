@@ -81,7 +81,8 @@ struct searchargs {
     struct strlist *cc;
     struct strlist *bcc;
     struct strlist *subject;
-    /* XXX body, text */
+    struct strlist *body;
+    struct strlist *text;
 };
 
 /* values for seen_state and recent_state */
