@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.49 2001/09/04 22:26:40 leg Exp $ */
+/* $Id: master.c,v 1.50 2001/09/04 22:31:55 leg Exp $ */
 
 #include <config.h>
 
@@ -878,6 +878,9 @@ void add_service(const char *name, struct entry *e, void *rock)
 	Services[nservices].ready_workers = 0;
 	Services[nservices].desired_workers = prefork;
 	Services[nservices].max_workers = atoi(max);
+	if (Services[i].max_workers == -1) {
+	    Services[i].max_workers = INT_MAX;
+	}
 	memset(Services[nservices].stat, 0, sizeof(Services[nservices].stat));
 
 	Services[nservices].nforks = 0;
