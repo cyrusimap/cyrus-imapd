@@ -25,6 +25,35 @@ fatal(char *s, int exit)
 }
 
 /*
+ * Decrement the refcounts of the Perl SV's in the passed rock, then free the
+ * rock.  This cleans up a callback.
+ */
+
+void imclient_xs_callback_free(struct xsccb *rock)
+{
+  struct xscb *xcb;
+
+  if (rock) {
+    /* find the destructor-cleanup version and nuke its record */
+    for (xcb = rock->client->cb; xcb; xcb = xcb->next) {
+      if (xcb->rock == rock) break;
+    }
+    if (xcb) {
+      if (xcb->prev)
+	xcb->prev->next = xcb->next;
+      else
+	rock->client->cb = xcb->next;
+      if (xcb->next) xcb->next->prev = xcb->prev;
+      if (xcb->name) safefree(xcb->name);
+      safefree(xcb);
+    }
+    if (rock->pcb) SvREFCNT_dec(rock->pcb);
+    if (rock->prock) SvREFCNT_dec(rock->prock);
+    safefree(rock);
+  }
+}
+
+/*
  * Invoke a Perl callback on behalf of a Cyrus callback.  This requires some
  * silliness to adapt what we're passed to Perl conventions; specifically,
  * the reply struct becomes a hash (passed as a list).
@@ -87,34 +116,7 @@ void imclient_xs_fcmdcb(struct imclient *client, struct xsccb *rock,
   if (rock->autofree) imclient_xs_callback_free(rock);
 }
 
-/*
- * Decrement the refcounts of the Perl SV's in the passed rock, then free the
- * rock.  This cleans up a callback.
- */
 
-void imclient_xs_callback_free(struct xsccb *rock)
-{
-  struct xscb *xcb;
-
-  if (rock) {
-    /* find the destructor-cleanup version and nuke its record */
-    for (xcb = rock->client->cb; xcb; xcb = xcb->next) {
-      if (xcb->rock == rock) break;
-    }
-    if (xcb) {
-      if (xcb->prev)
-	xcb->prev->next = xcb->next;
-      else
-	rock->client->cb = xcb->next;
-      if (xcb->next) xcb->next->prev = xcb->prev;
-      if (xcb->name) safefree(xcb->name);
-      safefree(xcb);
-    }
-    if (rock->pcb) SvREFCNT_dec(rock->pcb);
-    if (rock->prock) SvREFCNT_dec(rock->prock);
-    safefree(rock);
-  }
-}
 
 MODULE = IMAP::Cyrus	PACKAGE = IMAP::Cyrus	
 PROTOTYPES: ENABLE
