@@ -1,6 +1,6 @@
 dnl Process this file with autoconf to produce a configure script.
 
-dnl $Id: configure.in,v 1.106 1998/06/04 23:01:43 tjs Exp $
+dnl $Id: configure.in,v 1.107 1998/06/05 04:55:57 tjs Exp $
 
 AC_INIT(imap/imapd.c)
 
@@ -675,4 +675,4 @@ dnl
 AC_CHECK_LIB(dld, shl_load, TCL_LIBS="${TCL_LIBS} -ldld")dnl HPUX
 AC_CHECK_LIB(dl, dlopen, TCL_LIBS="${TCL_LIBS} -ldl")dnl Solaris
 
-AC_OUTPUT(Makefile man/Makefile lib/Makefile imap/Makefile imap/feedcyrus imtest/Makefile $EXTRA_OUTPUT)
+AC_OUTPUT(Makefile man/Makefile lib/Makefile imap/Makefile imap/feedcyrus imtest/Makefile makedepend/Makefile $EXTRA_OUTPUT)
