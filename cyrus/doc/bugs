@@ -17,6 +17,8 @@
         we are not sure why this is happening. It seems to happen most with
         mailboxes with a large number of users. We hope to have this fixed
         in a future release. 
+      * UID FETCH of a range of nonexistant UIDs causes the server to drop
+        connection.
 
     Please report bugs to cyrus-bugs@andrew.cmu.edu. Be sure to include (at
     least) system type, compiler used, and the options passed to configure,
