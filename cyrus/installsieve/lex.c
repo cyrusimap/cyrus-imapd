@@ -1,6 +1,6 @@
 /* lex.c -- lexers for command line script installer
  * Tim Martin
- * $Id: lex.c,v 1.5 1999/10/04 18:23:05 leg Exp $
+ * $Id: lex.c,v 1.6 1999/10/04 18:37:27 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -83,11 +83,9 @@ int yylex(lexstate_t * lvalp, void * client)
        this may block on a read if there is nothing
        in the buffer */
 
-    ch=prot_getc(stream);
-    printf("%c\n", ch);
+    ch = prot_getc(stream);
 
-    if (ch==-1) {
-	printf("eof\n");
+    if (ch == -1) {
 	return SIEVE_FAIL;
     }
 
