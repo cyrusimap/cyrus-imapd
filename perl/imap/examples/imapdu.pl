@@ -147,7 +147,7 @@ sub sizeofmailbox {
 			 
 		       },
 		       -rock => \@info});
-  my ($rc, $msg) = $cyrus->send('', '', "SELECT $mb");
+  my ($rc, $msg) = $cyrus->send('', '', "EXAMINE $mb");
   if ($rc eq 'OK') {
   } else {
     print "Failure!\n";
