@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.67 2001/08/16 20:52:06 ken3 Exp $
+ * $Id: lmtpd.c,v 1.68 2001/08/18 00:46:47 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.67 2001/08/16 20:52:06 ken3 Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.68 2001/08/18 00:46:47 ken3 Exp $";*/
 
 #include <config.h>
 
@@ -1337,6 +1337,9 @@ void shut_down(int code)
 {
     mboxlist_close();
     mboxlist_done();
+#ifdef HAVE_SSL
+    tls_shutdown_serverengine();
+#endif
     prot_flush(deliver_out);
 
     snmp_increment(ACTIVE_CONNECTIONS, -1);

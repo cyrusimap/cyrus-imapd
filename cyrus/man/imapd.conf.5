@@ -241,7 +241,7 @@ Any other SASL option can be set by preceeding it with "sasl_".  This
 file overrides the SASL configuration file.
 .IP "\fBtls_cert_file\fR <none>" 5
 File containing the global certificate used for ALL services (imap,
-pop3).
+pop3, lmtp).
 .IP "\fBtls_key_file\fR <none>" 5
 File containing the private key belonging to the global server
 certificate.
@@ -267,6 +267,10 @@ certificate.  If not specified, the global private key is used.
 File containing one or more Certificate Authority (CA) certificates.
 .IP "\fBtls_ca_path\fR <none>" 5
 Path to directory with certificates of CAs.
+.IP "\fBtls_session_timeout\fR 1440" 5
+The length of time (in minutes) that a TLS session will be cached for
+later reuse.  The maximum value is 1440 (24 hours), the default.  A
+value of 0 will disable session caching.
 .IP "\fBlmtpsocket:\fR /var/imap/socket/lmtp" 5
 Unix domain socket that lmtpd listens on.
 .IP "\fBidlesocket:\fR /var/imap/socket/idle" 5

@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.107 2001/08/16 20:52:07 ken3 Exp $
+ * $Id: pop3d.c,v 1.108 2001/08/18 00:46:47 ken3 Exp $
  */
 #include <config.h>
 
@@ -191,13 +191,8 @@ static void popd_reset(void)
     popd_starttls_done = 0;
 #ifdef HAVE_SSL
     if (tls_conn) {
-#ifdef TLS_REUSE
-	/* make sure we re-use sessions */
-	tls_reuse_sessions(&tls_conn);
-#else
-	tls_free(&tls_conn);
+	tls_reset_servertls(&tls_conn);
 	tls_conn = NULL;
-#endif /* TLS_REUSE */
     }
 #endif
 
@@ -380,6 +375,9 @@ void shut_down(int code)
     if (popd_mailbox) {
 	mailbox_close(popd_mailbox);
     }
+#ifdef HAVE_SSL
+    tls_shutdown_serverengine();
+#endif
     prot_flush(popd_out);
     exit(code);
 }

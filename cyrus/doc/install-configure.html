@@ -1,4 +1,4 @@
-<!-- $Id: install-configure.html,v 1.13 2001/08/12 03:31:05 ken3 Exp $ -->
+<!-- $Id: install-configure.html,v 1.14 2001/08/18 00:46:46 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Configuring the IMAP Server
@@ -386,6 +386,9 @@ tls_imap_key_file: /var/imap/imap-server.pem
 
 tls_pop3_cert_file: /var/imap/pop3-server.pem
 tls_pop3_key_file: /var/imap/pop3-server.pem
+
+tls_lmtp_cert_file: /var/imap/lmtp-server.pem
+tls_lmtp_key_file: /var/imap/lmtp-server.pem
 </pre>
 
 This is useful if you want to use different hostnames for each service
@@ -396,6 +399,11 @@ used.
 <p>If you have a Certificate Authority (CA), you may wish to generate
 a certificate request and send it to be signed by your CA.
 
+<p>By default, Cyrus will cache SSL/TLS sessions for reuse for up to
+24 hours. By adjusting the value of the <tt>tls_session_timeout</tt> option in
+<tt>imapd.conf</tt>, the session caching can be disabled (0) or the
+expiration period shortened.
+<p>
 </li>
 
 <li>You can test STARTTLS by using <tt>imtest</tt>:
@@ -425,5 +433,5 @@ authenticate DN (distinguished name) to a SASL authentication
 name.</p>
 
 <P><HR>
-last modified: $Date: 2001/08/12 03:31:05 $
+last modified: $Date: 2001/08/18 00:46:46 $
 </BODY></HTML>
