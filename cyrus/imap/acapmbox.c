@@ -186,7 +186,7 @@ acapmbox_handle_t *acapmbox_get_handle(void)
 	if ((r = sasl_client_init(NULL)) != SASL_OK) {
 	    syslog(LOG_ERR, "failed initializing: sasl_client_init(): %s", 
 		   sasl_errstring(r, NULL, NULL));
-	    return EC_SOFTWARE;
+	    return NULL;
 	}
 	did_sasl_client_init = 1;
     }
