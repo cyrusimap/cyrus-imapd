@@ -1,4 +1,4 @@
-package SIEVE::Cyrus;
+package Cyrus::SIEVE::acap;
 
 use strict;
 use Carp;
@@ -36,14 +36,14 @@ sub AUTOLOAD {
 	    goto &AutoLoader::AUTOLOAD;
 	}
 	else {
-		croak "Your vendor has not defined SIEVE::Cyrus macro $constname";
+		croak "Your vendor has not defined Cyrus::SIEVE::acap macro $constname";
 	}
     }
     eval "sub $AUTOLOAD { $val }";
     goto &$AUTOLOAD;
 }
 
-bootstrap SIEVE::Cyrus $VERSION;
+bootstrap Cyrus::SIEVE::acap $VERSION;
 
 # Preloaded methods go here.
 
@@ -55,16 +55,16 @@ __END__
 
 =head1 NAME
 
-SIEVE::Cyrus - Perl extension for blah blah blah
+Cyrus::SIEVE::acap - Perl extension for blah blah blah
 
 =head1 SYNOPSIS
 
-  use SIEVE::Cyrus;
+  use Cyrus::SIEVE::acap;
   blah blah blah
 
 =head1 DESCRIPTION
 
-Stub documentation for SIEVE::Cyrus was created by h2xs. It looks like the
+Stub documentation for Cyrus::SIEVE::acap was created by h2xs. It looks like the
 author of the extension was negligent enough to leave the stub
 unedited.
 

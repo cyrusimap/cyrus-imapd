@@ -125,7 +125,7 @@ SV *    rock;
 }
 
 
-MODULE = SIEVE::Cyrus		PACKAGE = SIEVE::Cyrus		
+MODULE = Cyrus::SIEVE::acap		PACKAGE = Cyrus::SIEVE::acap
 PROTOTYPES: ENABLE
 
 
