@@ -1,4 +1,4 @@
-<!-- $Id: install-prereq.html,v 1.7 2000/06/10 22:54:12 leg Exp $ -->
+<!-- $Id: install-prereq.html,v 1.8 2001/10/07 13:19:40 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Prerequisites and other notes
@@ -53,7 +53,7 @@ also used for some installation scripts: you don't need it but it may
 make your life easier.  We recommend at least version 5.00502.
 
 <li> <b>OpenSSL</b>, version 0.9.4 or higher.  Required for STARTTLS
-support and eventually for IMAP wrapped in SSL (the imaps port).
+support and for IMAP/POP3 wrapped in SSL (the imaps/pop3s ports).
 Available from <a
 href="http://www.openssl.org/">http://www.openssl.org/</a>.
 
@@ -62,6 +62,10 @@ control who is accessing what service, based on IP address.  Available
 from <a
 href="ftp://ftp.porcupine.org/pub/security/">ftp://ftp.porcupine.org/pub/security/</a>
 in the <tt>tcp_wrappers</tt> package..
+
+<li> <b>Net-SNMP</b> (formerly UCD-SNMP), version 4.2 or higher.
+Required for SNMP monitoring of the IMAP server.  Available from <a
+href="http://www.net-snmp.org/">http://www.net-snmp.org/</a>.
 
 <LI> If you use AFS PTS support for groups, Cyrus still depends on
 Kerberos and AFS.  If you successfully compiled SASL with your
@@ -78,11 +82,6 @@ have reported success with
 server must receive newsgroups with the INN news server.  We are also
 working on patches to the INN news server to allow it to deliver
 newsgroups via LMTP.
-
-<li> For SNMP monitoring of the IMAP server, AgentX and pthreads is
-required.  The CMU implementation is available from our Network
-Development group at <a href="http://www.net.cmu.edu/groups/netdev/agentx/">
-http://www.net.cmu.edu/groups/netdev/agentx/</a>.
 
 <li> For the Cyrus Murder, the IMAP aggregator, an ACAP server is
 required.  You can get an ACAP server from the <a
@@ -102,7 +101,7 @@ traditional lex.
 </ul>
 
 <P><HR>
-last modified: $Date: 2000/06/10 22:54:12 $
+last modified: $Date: 2001/10/07 13:19:40 $
 </BODY></HTML>
 
 
