@@ -41,7 +41,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ldap.c,v 1.4 2004/02/24 23:11:39 rjs3 Exp $";
+      "$Id: ldap.c,v 1.5 2004/02/25 16:36:31 rjs3 Exp $";
 
 #include <config.h>
 
@@ -126,7 +126,7 @@ static char allowedchars[256] = {
 };
 
 typedef struct _ptsm {
-    char   *uri;
+    const char   *uri;
     int    version;
     struct timeval timeout;
     int    size_limit;
@@ -135,30 +135,30 @@ typedef struct _ptsm {
     int    referrals;
     int    restart;
     int    scope;
-    char   *base;
+    const char   *base;
     int    sasl;
-    char   *id;
-    char   *bind_dn;
-    char   *password;
-    char   *authz;
-    char   *mech;
-    char   *realm;
-    char   *filter;
-    char   *sasl_secprops;
+    const char   *id;
+    const char   *bind_dn;
+    const char   *password;
+    const char   *authz;
+    const char   *mech;
+    const char   *realm;
+    const char   *filter;
+    const char   *sasl_secprops;
     int    start_tls;
     int    tls_check_peer;
-    char   *tls_cacert_file;
-    char   *tls_cacert_dir;
-    char   *tls_ciphers;
-    char   *tls_cert;
-    char   *tls_key;
+    const char   *tls_cacert_file;
+    const char   *tls_cacert_dir;
+    const char   *tls_ciphers;
+    const char   *tls_cert;
+    const char   *tls_key;
     int    member_method;
-    char   *member_attribute;
-    char   *member_filter;
-    char   *member_base;
+    const char   *member_attribute;
+    const char   *member_filter;
+    const char   *member_base;
     int    member_scope;
-    char   *group_filter;
-    char   *group_base;
+    const char   *group_filter;
+    const char   *group_base;
     int    group_scope;
     LDAP   *ld;
 } t_ptsm;
@@ -430,7 +430,7 @@ const char *ptsmodule_name = "ldap";
 
 void ptsmodule_init(void) 
 {
-    char *p = NULL;
+    const char *p = NULL;
 
     if (ptsm)
         return; // Already configured
@@ -871,7 +871,7 @@ static int ptsmodule_make_authstate_attribute(
     char *attr, **vals;
     BerElement *ber;
     int rc;
-    char *attrs[] = {ptsm->member_attribute,NULL};
+    char *attrs[] = {(char *)ptsm->member_attribute,NULL};
 
     rc = ptsmodule_connect();
     if (rc != PTSM_OK) {
@@ -981,7 +981,7 @@ static int ptsmodule_make_authstate_filter(
     LDAPMessage *entry;
     char *attr, **vals;
     BerElement *ber = NULL;
-    char *attrs[] = {ptsm->member_attribute,NULL};
+    char *attrs[] = {(char *)ptsm->member_attribute,NULL};
     char *dn = NULL;
 
     rc = ptsmodule_connect();
