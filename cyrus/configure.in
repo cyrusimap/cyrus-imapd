@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.246 2002/11/14 15:17:24 rjs3 Exp $
+dnl $Id: configure.in,v 1.247 2002/11/14 21:58:02 rjs3 Exp $
 dnl
 
 
@@ -714,31 +714,35 @@ AC_ARG_WITH(com_err,
 [  --with-com_err=PATH     use com_err from path -- includes in PATH/include,
                           libs in PATH/lib, and compile_et in PATH/bin])
 if test -z "$with_com_err"; then
-	# no value supplied
-	AC_CHECK_LIB(com_err, com_err, [
+	AC_CHECK_HEADER(com_err.h, [
+  	  # no value supplied
+	  AC_CHECK_LIB(com_err, com_err, [
 		# com_err is already in library path
 		# guess we're okay
 		# can use system com_err
 		with_com_err=""
 		AC_PATH_PROG(COMPILE_ET, compile_et, [no compile et])
-	], [
-	if test -f /usr/local/include/com_err.h; then
+	  ], [
+	  if test -f /usr/local/include/com_err.h; then
 		with_com_err="/usr/local"
 		AC_PATH_PROG(COMPILE_ET, /usr/local/bin/compile_et, [no compile et])
-	else
+	  else
 		# use ours
 		with_com_err=yes
-	fi
+	  fi
+	  ])], [
+	  with_com_err="no"
 	])
 
 	if test "${with_com_err}" = "no"; then
 	  AC_MSG_WARN([com_err is required; included version will be used.])
 	  with_com_err="yes"
-	fi
-	if test "${COMPILE_ET}" = "no compile et" -o "${COMPILE_ET}" = ""; then
-	  AC_MSG_WARN([Parts of com_err distribuion were found, but not compile_et.])
-	  AC_MSG_WARN([Will build com_err from included sources.])
-	  with_com_err="yes" # build it ourselves
+	else
+	  if test "${COMPILE_ET}" = "no compile et" -o "${COMPILE_ET}" = ""; then
+	    AC_MSG_WARN([Parts of com_err distribuion were found, but not compile_et.])
+	    AC_MSG_WARN([Will build com_err from included sources.])
+	    with_com_err="yes" # build it ourselves
+	  fi
 	fi
 fi
 
