@@ -1,5 +1,5 @@
 /* collectnews.c -- program to add news articles to relevant header files
- $Id: collectnews.c,v 1.28 2003/02/13 20:15:23 rjs3 Exp $
+ $Id: collectnews.c,v 1.29 2003/04/08 18:43:30 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,6 +41,7 @@
 
 #include <config.h>
 
+#include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -179,7 +180,7 @@ void collect(char *group, unsigned long feeduid)
 {
     int r;
     struct appendstate as;
-    char namebuf[MAX_MAILBOX_PATH];
+    char namebuf[MAX_MAILBOX_PATH+1];
     struct newsgroup *ng;
     
     /* Some sort of parsing screwup */
@@ -191,13 +192,16 @@ void collect(char *group, unsigned long feeduid)
     if (feeduid <= ng->last_uid) return;
 
     if (newsprefix) {
-	strcpy(namebuf, newsprefix);
+	assert(newsprefixlen+1 < sizeof(namebuf));
+
+	strlcpy(namebuf, newsprefix, sizeof(namebuf));
 	if (namebuf[newsprefixlen-1] != '.') {
 	    namebuf[newsprefixlen] = '.';
-	    strcpy(namebuf+newsprefixlen+1, group);
-	}
-	else {
-	    strcpy(namebuf+newsprefixlen, group);
+	    strlcpy(namebuf+newsprefixlen+1, group,
+		    sizeof(namebuf) - newsprefixlen - 1);
+	} else {
+	    strlcpy(namebuf+newsprefixlen, group,
+		    sizeof(namebuf) - newsprefixlen);
 	}
     }
 
@@ -207,7 +211,7 @@ void collect(char *group, unsigned long feeduid)
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	r = mboxlist_createmailbox(newsprefix ? namebuf : group,
 				   MBTYPE_NETNEWS, "news",
-				   1, "anonymous", 0);
+				   1, "anonymous", 0, 0, 0);
 
 	/* Ignore bad mailbox names */
 	if (r == IMAP_MAILBOX_BADNAME) return;
