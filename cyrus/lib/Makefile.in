@@ -83,7 +83,7 @@ OBJS = acl.o assert.o bsearch.o charset.o glob.o retry.o util.o \
 	lsort.o stristr.o hash.o rfc822date.o \
 	chartable.o imapurl.o nonblock_@WITH_NONBLOCK@.o lock_@WITH_LOCK@.o \
 	gmtoff_@WITH_GMTOFF@.o map_@WITH_MAP@.o $(ACL) $(AUTH) \
-	@LIBOBJS@ cyrusdb_db3.o cyrusdb_flat.o iptostring.o
+	@LIBOBJS@ cyrusdb_db3.o cyrusdb_flat.o cyrusdb_skiplist.o iptostring.o
 
 all: libcyrus.a
 
