@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.232.4.51 2003/06/18 21:03:10 ken3 Exp $
+dnl $Id: configure.in,v 1.232.4.52 2003/06/19 15:26:27 ken3 Exp $
 dnl
 
 
@@ -1034,4 +1034,4 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 dnl make sure that Makefile is the last thing output
-AC_OUTPUT(man/Makefile master/Makefile lib/Makefile imap/Makefile imap/feedcyrus imtest/Makefile netnews/Makefile perl/Makefile $EXTRA_OUTPUT Makefile)
+AC_OUTPUT(man/Makefile master/Makefile lib/Makefile imap/Makefile imtest/Makefile netnews/Makefile perl/Makefile $EXTRA_OUTPUT Makefile)
