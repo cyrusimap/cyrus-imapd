@@ -25,19 +25,22 @@
 
 all: htmlstrip docs
 
-.c.o:
-	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
-
-htmlstrip: htmlstrip.o
-	$(CC) $(CFLAGS) -o htmlstrip htmlstrip.o
+htmlstrip: htmlstrip.c
+	$(CC) $(CFLAGS) -o htmlstrip htmlstrip.c
 
 .html.txt:
 	./htmlstrip $< > $@
 
-docs: install.txt overview.txt
+docs: install.txt overview.txt changes.txt README
+
+README: readme.html
+	./htmlstrip readme.html > README
 
 clean:
-	rm -f *.o Makefile.bak htmlstrip
+	rm -f *.o *~ Makefile.bak htmlstrip
+
+realclean: clean
+	rm -f *.txt
 
 distclean: clean
 
