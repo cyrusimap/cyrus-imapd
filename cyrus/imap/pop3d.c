@@ -26,7 +26,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.62 2000/02/19 04:46:05 leg Exp $
+ * $Id: pop3d.c,v 1.63 2000/02/22 00:54:11 tmartin Exp $
  */
 
 #include <config.h>
@@ -54,11 +54,7 @@
 #include "util.h"
 #include "auth.h"
 #include "config.h"
-
-/* openSSL has it's own DES function which conflict in names with those used by krb.h */
-#ifdef HAVE_SSL
-#undef HAVE_SSL
-#endif /* HAVE_SSL */
+#include "tls.h"
 
 #include "prot.h"
 #include "exitcodes.h"
@@ -66,6 +62,7 @@
 #include "mailbox.h"
 #include "version.h"
 #include "xmalloc.h"
+#include "mboxlist.h"
 
 extern int optind;
 extern char *optarg;
@@ -73,7 +70,11 @@ extern int opterr;
 
 extern int errno;
 
-extern char *login_capabilities();
+/* openSSL has it's own DES function which conflict in names with those used by krb.h. save and reinstate later */
+#ifdef HAVE_SSL
+#undef HAVE_SSL
+#define HAVE_SSL_SAVE 1
+#endif /* HAVE_SSL */
 
 #ifdef HAVE_KRB
 #include <krb.h>
@@ -83,6 +84,11 @@ int kflag = 0;
 char klrealm[REALM_SZ];
 AUTH_DAT kdata;
 #endif
+
+#ifdef HAVE_SSL_SAVE
+extern SSL *tls_conn;
+#define HAVE_SSL 1
+#endif /* HAVE_SSL_SAVE */
 
 sasl_conn_t *popd_saslconn; /* the sasl connection context */
 
@@ -101,6 +107,8 @@ struct msg {
     int deleted;
 } *popd_msg;
 
+int popd_starttls_done = 0;
+
 static struct mailbox mboxstruct;
 
 static int expungedeleted();
@@ -109,6 +117,7 @@ static void cmd_auth();
 static void cmd_capa();
 static void cmd_pass();
 static void cmd_user();
+static void cmd_starttls(void);
 static void eatline(void);
 static void printauthready(int len,unsigned char *data);
 static void blat(int msg,int lines);
@@ -155,6 +164,10 @@ int service_init(int argc, char **argv, char **envp)
 	       sasl_errstring(r, NULL, NULL));
 	return 2;
     }
+
+    /* open the mboxlist, we'll need it for real work */
+    mboxlist_init(0);
+    mboxlist_open(NULL);
 
     return 0;
 }
@@ -565,11 +578,94 @@ static void cmdloop(void)
 		prot_printf(popd_out, ".\r\n");
 	    }
 	}
+#ifdef HAVE_SSL
+	else if (!strcmp(inputbuf, "stls")) {
+	    if (arg) prot_printf(popd_out,"-ERR STLS doesn't take any arguements\r\n");
+	    else {
+		cmd_starttls();
+	    }
+	}
+#endif /* HAVE_SSL */
 	else {
 	    prot_printf(popd_out, "-ERR Unrecognized command\r\n");
 	}
     }		
 }
+
+#ifdef HAVE_SSL
+static void cmd_starttls(void)
+{
+    int result;
+    int *layerp;
+    sasl_external_properties_t external;
+
+
+    /* SASL and openssl have different ideas about whether ssf is signed */
+    layerp = (int *) &(external.ssf);
+
+    if (popd_starttls_done == 1)
+    {
+	prot_printf(popd_out, "-ERR %s\r\n", "Already successfully executed STLS");
+	return;
+    }
+
+    result=tls_init_serverengine(5,        /* depth to verify */
+				 1,        /* can client auth? */
+				 0,        /* required client to auth? */
+				 (char *)config_getstring("tls_ca_file", ""),
+				 (char *)config_getstring("tls_ca_path", ""),
+				 (char *)config_getstring("tls_cert_file", ""),
+				 (char *)config_getstring("tls_key_file", ""));
+
+    if (result == -1) {
+
+	syslog(LOG_ERR, "[pop3d] error initializing TLS: "
+	       "[CA_file: %s] [CA_path: %s] [cert_file: %s] [key_file: %s]",
+	       (char *) config_getstring("tls_ca_file", ""),
+	       (char *) config_getstring("tls_ca_path", ""),
+	       (char *) config_getstring("tls_cert_file", ""),
+	       (char *) config_getstring("tls_key_file", ""));
+
+	prot_printf(popd_out, "-ERR %s\r\n", "Error initializing TLS");	
+	return;
+    }
+
+    prot_printf(popd_out, "+OK %s\r\n", "Begin TLS negotiation now");
+    /* must flush our buffers before starting tls */
+    prot_flush(popd_out);
+  
+    result=tls_start_servertls(0, /* read */
+			       1, /* write */
+			       layerp,
+			       &(external.auth_id));
+
+    /* if error */
+    if (result==-1) {
+	prot_printf(popd_out, "-ERR Starttls failed\r\n");
+	syslog(LOG_NOTICE, "[pop3d] STARTTLS failed: %s", popd_clienthost);
+	return;
+    }
+
+    /* tell SASL about the negotiated layer */
+    result = sasl_setprop(popd_saslconn, SASL_SSF_EXTERNAL, &external);
+
+    if (result != SASL_OK) {
+	fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
+    }
+
+    /* if authenticated set that */
+    if (external.auth_id != NULL) {
+	popd_userid = external.auth_id;
+    }
+
+    /* tell the prot layer about our new layers */
+    prot_settls(popd_in, tls_conn);
+    prot_settls(popd_out, tls_conn);
+
+    popd_starttls_done = 1;
+}
+
+#endif /* HAVE_SSL */
 
 void
 cmd_user(user)
@@ -708,6 +804,10 @@ cmd_capa()
       prot_printf(popd_out, "\r\n");    
     }
 #endif
+
+#ifdef HAVE_SSL
+    prot_printf(popd_out, "STLS\r\n");
+#endif /* HAVE_SSL */
 
     if (expire < 0) {
 	prot_printf(popd_out, "EXPIRE NEVER\r\n");

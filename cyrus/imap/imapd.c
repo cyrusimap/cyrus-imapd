@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.212 2000/02/19 04:46:03 leg Exp $ */
+/* $Id: imapd.c,v 1.213 2000/02/22 00:54:10 tmartin Exp $ */
 
 #include <config.h>
 
@@ -147,7 +147,7 @@ void cmd_getuids(char *tag, char *startuid);
 void cmd_unselect(char* tag);
 void cmd_namespace(char* tag);
 
-void cmd_starttls(char *tag);
+void cmd_starttls(char *tag, int imaps);
 int starttls_enabled(void);
 
 #ifdef ENABLE_X_NETSCAPE_HACK
@@ -375,6 +375,7 @@ int service_init(int argc, char **argv, char **envp)
  */
 int service_main(int argc, char **argv, char **envp)
 {
+    int imaps = 0;
     int opt;
     int salen;
     struct hostent *hp;
@@ -383,8 +384,20 @@ int service_main(int argc, char **argv, char **envp)
     sasl_external_properties_t extprops;
 
     memset(&extprops, 0, sizeof(sasl_external_properties_t));
-    while ((opt = getopt(argc, argv, "p:")) != EOF) {
+    while ((opt = getopt(argc, argv, "sp:")) != EOF) {
 	switch (opt) {
+	case 's': /* imaps (do starttls right away) */
+#ifdef HAVE_SSL
+	    imaps = 1;
+	    if (!starttls_enabled()) {
+		syslog(LOG_ERR, "Required openSSL options not present. Cannot do imaps");
+		fatal("Required openSSL optiongs not present. Cannot do imaps",EC_TEMPFAIL);
+	    }
+#else
+	    syslog(LOG_ERR, "Not compiled with openSSL. Cannot do imaps");
+	    fatal("Not compiled with openSSL. Cannot do imaps",EC_TEMPFAIL);
+#endif /* HAVE_SSL */
+	    break;
 	case 'p': /* external protection */
 	    extprops.ssf = atoi(optarg);
 	    break;
@@ -439,6 +452,9 @@ int service_main(int argc, char **argv, char **envp)
     if (timeout < 30) timeout = 30;
     prot_settimeout(imapd_in, timeout*60);
     prot_setflushonread(imapd_in, imapd_out);
+
+    /* we were connected on imaps port so we should do STARTTLS negotiation immediatly */
+    if (imaps == 1) cmd_starttls(NULL, 1);
 
     cmdloop();
 
@@ -1001,7 +1017,7 @@ cmdloop()
 				tag.s);
 		    continue;
 		}
-		cmd_starttls(tag.s);	
+		cmd_starttls(tag.s, 0);	
 
 		snmp_increment(STARTTLS_COUNT, 1);      
 		continue;
@@ -3260,11 +3276,13 @@ int starttls_enabled(void)
     return 1;
 }
 
-void cmd_starttls(char *tag)
+/* imaps - weather this is an imaps transaction or not */
+void cmd_starttls(char *tag, int imaps)
 {
     int result;
     int *layerp;
     sasl_external_properties_t external;
+
 
     /* SASL and openssl have different ideas about whether ssf is signed */
     layerp = (int *) &(external.ssf);
@@ -3285,30 +3303,46 @@ void cmd_starttls(char *tag)
 				 (char *)config_getstring("tls_key_file", ""));
 
     if (result == -1) {
-	prot_printf(imapd_out, "%s NO %s\r\n", tag, "Error initializing TLS");
+
 	syslog(LOG_ERR, "error initializing TLS: "
 	       "[CA_file: %s] [CA_path: %s] [cert_file: %s] [key_file: %s]",
 	       (char *) config_getstring("tls_ca_file", ""),
 	       (char *) config_getstring("tls_ca_path", ""),
 	       (char *) config_getstring("tls_cert_file", ""),
 	       (char *) config_getstring("tls_key_file", ""));
-	prot_printf(imapd_out, "%s NO %s\r\n", tag, 
-		    error_message(IMAP_IOERROR));
+
+	if (imaps == 0)
+	    prot_printf(imapd_out, "%s NO %s\r\n", tag, "Error initializing TLS");
+	else
+	    fatal("tls_init() failed",EC_TEMPFAIL);
+
 	return;
     }
 
-    prot_printf(imapd_out, "%s OK %s\r\n", tag,	"Begin TLS negotiation now");
-    /* must flush our buffers before starting tls */
-    prot_flush(imapd_out);
+    if (imaps == 0)
+    {
+	prot_printf(imapd_out, "%s OK %s\r\n", tag,	"Begin TLS negotiation now");
+	/* must flush our buffers before starting tls */
+	prot_flush(imapd_out);
+    }
   
     result=tls_start_servertls(0, /* read */
 			       1, /* write */
 			       layerp,
 			       &(external.auth_id));
+
+    /* if error */
     if (result==-1) {
-	prot_printf(imapd_out, "%s NO Starttls failed\r\n", tag);
-	syslog(LOG_NOTICE, "STARTTLS failed: %s", imapd_clienthost);
-	return;
+	if (imaps == 0)
+	{
+	    prot_printf(imapd_out, "%s NO Starttls failed\r\n", tag);
+	    syslog(LOG_NOTICE, "STARTTLS failed: %s", imapd_clienthost);
+	    return;
+	} else {
+	    syslog(LOG_NOTICE, "imaps failed: %s", imapd_clienthost);
+	    fatal("tls_start_servertls() failed", EC_TEMPFAIL);
+	    return;
+	}
     }
 
     /* tell SASL about the negotiated layer */
@@ -3335,7 +3369,7 @@ int starttls_enabled(void)
     return 0;
 }
 
-void cmd_starttls(char *tag)
+void cmd_starttls(char *tag, int imaps)
 {
     fatal("cmd_starttls() executed, but starttls isn't implemented!",
 	  EC_SOFTWARE);
