@@ -482,7 +482,7 @@ static int delete(struct db *db,
 		  const char *key, int keylen,
 		  struct txn **mytid)
 {
-    return mystore(db, key, keylen, NULL, 0, mytid, 0);
+    return mystore(db, key, keylen, NULL, 0, mytid, 1);
 }
 
 static int commit_txn(struct db *db, struct txn *tid)
