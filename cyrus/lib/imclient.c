@@ -1,6 +1,6 @@
 /* imclient.c -- Streaming IMxP client library
  *
- * $Id: imclient.c,v 1.61 2001/11/27 02:25:02 ken3 Exp $
+ * $Id: imclient.c,v 1.62 2002/01/16 16:04:11 rjs3 Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -228,7 +228,6 @@ int imclient_connect(struct imclient **imclient,
     struct hostent *hp;
     struct servent *sp;
     struct sockaddr_in addr;
-    static struct imclient zeroimclient;
     int saslresult;
     static int didinit;
 
@@ -255,8 +254,7 @@ int imclient_connect(struct imclient **imclient,
 	return errno;
     }
     /*    nonblock(s, 1); */
-    *imclient = (struct imclient *)xmalloc(sizeof(struct imclient));
-    **imclient = zeroimclient;
+    *imclient = (struct imclient *)xzmalloc(sizeof(struct imclient));
     (*imclient)->fd = s;
     (*imclient)->saslconn = NULL;
     (*imclient)->saslcompleted = 0;
