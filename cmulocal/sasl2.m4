@@ -50,6 +50,14 @@ AC_DEFUN(SASL_GSSAPI_CHK,[
   fi
  fi
 
+ if test "$ac_cv_header_gssapi_h" = "yes"; then
+  AC_EGREP_HEADER(GSS_C_NT_HOSTBASED_SERVICE, gssapi.h,
+    AC_DEFINE(HAVE_GSS_C_NT_HOSTBASED_SERVICE))
+ elif test "$ac_cv_header_gssapi_gssapi_h"; then
+  AC_EGREP_HEADER(GSS_C_NT_HOSTBASED_SERVICE, gssapi/gssapi.h,
+    AC_DEFINE(HAVE_GSS_C_NT_HOSTBASED_SERVICE))
+ fi
+
  GSSAPI_LIBS=""
  AC_MSG_CHECKING(GSSAPI)
  if test "$gssapi" != no; then
