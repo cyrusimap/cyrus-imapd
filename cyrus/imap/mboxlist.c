@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.23 2002/08/29 20:03:19 ken3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.24 2002/09/30 19:55:47 ken3 Exp $
  */
 
 #include <config.h>
@@ -1184,8 +1184,6 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	r = IMAP_IOERROR;
 	goto done;
     }
-
-    r = mailbox_rename_finish(&newmailbox);
 
  done: /* Commit or cleanup */
     if (r != 0) {
