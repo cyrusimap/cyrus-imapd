@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.270 2003/10/22 20:05:09 ken3 Exp $
+dnl $Id: configure.in,v 1.271 2003/11/11 03:25:59 rjs3 Exp $
 dnl
 
 
@@ -76,6 +76,13 @@ AC_SUBST(cyrus_group)
 AC_ARG_WITH(statedir,[  --with-statedir=DIR        use DIR as state directory],
 	statedir="$withval",statedir="/var")
 AC_DEFINE_UNQUOTED(STATEDIR,"$statedir",[Where should we put our state?])
+
+dnl allow users to override $sysconfdir, but retain old default (/etc)
+dnl if not specified
+if test $sysconfdir = '${prefix}/etc'; then
+  sysconfdir="/etc"
+fi
+AC_DEFINE_UNQUOTED(SYSCONFDIR,"$sysconfdir",[Config File Location])
 
 AC_PROG_CC
 AC_PROG_RANLIB
@@ -1049,7 +1056,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.270 2003/10/22 20:05:09 ken3 Exp $ */
+/* $Id: configure.in,v 1.271 2003/11/11 03:25:59 rjs3 Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -1194,8 +1201,8 @@ struct sockaddr_storage {
 #define FNAME_DOMAINDIR "/domain/"
 #define FNAME_LOGDIR "/log/"
 #define FNAME_PTSDB "/ptclient/ptscache.db"
-#define CONFIG_FILENAME "/etc/imapd.conf"
-#define DEFAULT_MASTER_CONFIG_FILENAME "/etc/cyrus.conf"
+#define CONFIG_FILENAME (SYSCONFDIR "/imapd.conf")
+#define DEFAULT_MASTER_CONFIG_FILENAME (SYSCONFDIR "/cyrus.conf")
 
 #ifndef HAVE_SHUTDOWN
 #define shutdown(fd, mode) 0

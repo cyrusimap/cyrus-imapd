@@ -41,7 +41,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: afskrb.c,v 1.2 2003/10/22 18:03:22 rjs3 Exp $";
+      "$Id: afskrb.c,v 1.3 2003/11/11 03:26:00 rjs3 Exp $";
 
 #include <config.h>
 
@@ -190,7 +190,7 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
 
 /* where is krb.equiv? */
 # ifndef KRB_MAPNAME
-#  define KRB_MAPNAME "/etc/krb.equiv"
+#  define KRB_MAPNAME (SYSCONFDIR "/krb.equiv")
 # endif
 
 /*
