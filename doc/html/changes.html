@@ -3,7 +3,74 @@
 </HEAD><BODY>
 <H1>                   Changes to the Cyrus IMAP Server</H1>
 
-<h2>Changes to the Cyrus IMAP Server Since Version 1.0beta</h2>
+<h2>Changes to the Cyrus IMAP Server Since Version 1.1-Beta</h2>
+
+<ul>
+
+<li>Add support for <tt>UIDVALIDITY</tt> special information token.
+
+<li>Add <tt>syncnews</tt> and <TT>arbitron</TT> programs.
+
+<li>Redo duplicate delivery elimination in <tt>deliver</tt>.
+
+<li>Bug fixed: Must re-read files after acquiring a lock.  Cannot
+trust the mtime of a file to increment when writing the file--file
+could be written to multiple times in the same second.
+
+<li>Bug fixed: <tt>EXAMINE</tt> command should not affect
+<tt>\Recent</tt> status.
+
+<li>Update the user's <tt>\Recent</tt> high-water-mark when we report
+new messages.
+
+<li>Portability changes
+
+<li>Upgrade to autoconf 2.1
+
+<li>Allow privacy to be turned off at compile-time
+
+<li>Fix typo in <tt>cyradm</tt> preventing "<tt>all</tt>" from being
+recognized.
+
+<li>Include <TT>map_private.c</TT> memory mapping module for systems like HPUX
+which have half-working <TT>mmap()</TT> implementations.
+
+<li>Switch to using UTF-8 for internal search format.  Sites which
+care about internationalized searching of headers need to reconstruct
+all their existing mailboxes.
+
+<li>Fix some errors in the iso-8859-* tables.
+
+<li>Add and correct a bunch of case-independence mappings in the
+character tables.
+
+<li>First pass at implementing the <TT>STATUS</TT> extension; disabled for
+release.
+
+<li> First pass at implementing IMAP/IMSP server integration.  Not
+ready for general use.
+
+<li>Add <TT>new_cred</TT> and <TT>free_cred</TT> mechanisms to
+authentication modules.
+
+<li>Don't complain when doing "<tt>reconstruct -r foo</tt>" and
+<tt>foo</tt> isn't a mailbox.
+
+<li>Add <tt>IMAP_QUOTAROOT_NONEXISTENT</tt> error code.
+
+<li>Bug fix: Avoid divide by zero when quota is zero
+
+<li>Bug fix: In an error case of the ACL handling code, we have to
+restore tab before breaking out of loop.
+
+<li>Fix file descriptor leak in quota system.
+
+<li>Change a bunch of int variables to unsigned.
+
+<li>Better error reporting on reads that end up short.
+</ul>
+
+<h2>Changes to the Cyrus IMAP Server Since Version 1.0-Beta</h2>
 <p>
 <ul> 
 <li>Improved <a href="install.html">installation</a> document.
