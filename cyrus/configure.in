@@ -150,6 +150,9 @@ AC_ARG_WITH(login,[  --with-login=METHOD     use login module METHOD
 		WITH_LOGIN=unix
 	fi)
 AC_SUBST(WITH_LOGIN)
+if test "$WITH_LOGIN" = unix_pwcheck; then
+	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} pwcheck"
+fi
 AC_ARG_WITH(auth,[  --with-auth=METHOD      use authorization module METHOD
                           METHOD is unix or krb],[WITH_AUTH="$withval"
 	with_login_base=`echo ${WITH_LOGIN}|sed 's/_.*//'`
@@ -305,4 +308,4 @@ dnl
 AC_CHECK_LIB(ndbm, main)
 AC_CHECK_LIB(dbm, main)
 AC_CHECK_LIB(socket, main, LIBS="${LIBS} -lsocket -lnsl",,-lnsl)
-AC_OUTPUT(Makefile man/Makefile syslog/Makefile et/Makefile lib/Makefile imap/Makefile imap/feedcyrus cyradm/Makefile imtest/Makefile amssync/Makefile amssync/amssynctree cmulocal/Makefile)
+AC_OUTPUT(Makefile man/Makefile syslog/Makefile et/Makefile lib/Makefile imap/Makefile imap/feedcyrus cyradm/Makefile imtest/Makefile pwcheck/Makefile amssync/Makefile amssync/amssynctree cmulocal/Makefile)
