@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_berkeley.c,v 1.1.2.1 2002/08/14 20:21:06 ken3 Exp $ */
+/* $Id: cyrusdb_berkeley.c,v 1.1.2.2 2002/09/20 02:28:52 ken3 Exp $ */
 
 #include <config.h>
 
@@ -232,13 +232,17 @@ static int mysync(void)
 
     assert(dbinit);
 
+#if !(DB_VERSION_MAJOR == 4 && DB_VERSION_MINOR >= 1)
     do {
+#endif
 #if (DB_VERSION_MAJOR > 3) || ((DB_VERSION_MAJOR == 3) && (DB_VERSION_MINOR > 0))
 	r = txn_checkpoint(dbenv, 0, 0, 0);
 #else
 	r = txn_checkpoint(dbenv, 0, 0);
 #endif
-    } while (r == DB_INCOMPLETE);
+#if !(DB_VERSION_MAJOR == 4 && DB_VERSION_MINOR >= 1)
+    } while (r == DB_INCOMPLETE);  /* Never returned by BDB 4.1 */
+#endif
     if (r) {
 	syslog(LOG_ERR, "DBERROR: couldn't checkpoint: %s",
 	       db_strerror(r));
@@ -347,7 +351,11 @@ static int myopen(const char *fname, struct db **ret)
     }
     /* xxx set comparator! */
 
+#if DB_VERSION_MAJOR == 4 && DB_VERSION_MINOR >= 1
+    r = db->open(db, NULL, fname, NULL, DB_BTREE, DB_CREATE, 0664);
+#else
     r = db->open(db, fname, NULL, DB_BTREE, DB_CREATE, 0664);
+#endif
     if (r != 0) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname, db_strerror(r));
 	return CYRUSDB_IOERROR;
