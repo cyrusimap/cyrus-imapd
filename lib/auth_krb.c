@@ -42,8 +42,8 @@
 struct auth_state {
     char userid[MAX_K_NAME_SZ+1];
     char aname[ANAME_SZ];
-    char auth_inst[INST_SZ];
-    char auth_realm[REALM_SZ];
+    char inst[INST_SZ];
+    char realm[REALM_SZ];
 };
 
 static struct auth_state auth_anonymous = {
@@ -78,7 +78,7 @@ const char *identifier;
 
     if (strcmp(identifier, "anyone") == 0) return 1;
 
-    if (strcmp(identifier, auth_userid) == 0) return 3;
+    if (strcmp(identifier, auth_state->userid) == 0) return 3;
 
     /* "anonymous" is not a member of any group */
     if (strcmp(auth_state->userid, "anonymous") == 0) return 0;
