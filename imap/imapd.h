@@ -118,12 +118,15 @@ struct searchsub {
     struct searchargs *sub2;
 };
 
+#define SEARCH_RECENT_SET	(1<<0)
+#define SEARCH_RECENT_UNSET	(1<<1)
+#define SEARCH_SEEN_SET		(1<<2)
+#define SEARCH_SEEN_UNSET	(1<<3)
+#define SEARCH_UNCACHEDHEADER	(1<<4)
+
 /* Things that may be searched for */
 struct searchargs {
-    int recent_set;
-    int recent_unset;
-    int peruser_flags_set;
-    int peruser_flags_unset;
+    int flags;
     unsigned smaller, larger;
     time_t before, after;
     time_t sentbefore, sentafter;

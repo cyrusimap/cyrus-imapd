@@ -2861,7 +2861,7 @@ int parsecharset;
     static struct searchargs zerosearchargs;
     struct searchargs *sub1, *sub2;
     char *p, *str;
-    int c, flag, size;
+    int i, c, flag, size;
     time_t start, end;
 
     c = getword(&criteria);
@@ -2914,7 +2914,8 @@ int parsecharset;
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset);
 	    if (strchr(str, EMPTY)) {
-		searchargs->recent_set = searchargs->recent_unset = 1;
+		/* Force failure */
+		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	    }
 	    else {
 		appendstrlistpat(&searchargs->bcc, str);
@@ -2926,7 +2927,8 @@ int parsecharset;
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset);
 	    if (strchr(str, EMPTY)) {
-		searchargs->recent_set = searchargs->recent_unset = 1;
+		/* Force failure */
+		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	    }
 	    else {
 		appendstrlistpat(&searchargs->body, str);
@@ -2942,7 +2944,8 @@ int parsecharset;
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset);
 	    if (strchr(str, EMPTY)) {
-		searchargs->recent_set = searchargs->recent_unset = 1;
+		/* Force failure */
+		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	    }
 	    else {
 		appendstrlistpat(&searchargs->cc, str);
@@ -2978,7 +2981,8 @@ int parsecharset;
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset);
 	    if (strchr(str, EMPTY)) {
-		searchargs->recent_set = searchargs->recent_unset = 1;
+		/* Force failure */
+		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	    }
 	    else {
 		appendstrlistpat(&searchargs->from, str);
@@ -2992,12 +2996,22 @@ int parsecharset;
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(&arg);
 	    if (c != ' ') goto missingarg;
+	    lcase(arg.s);
+	    if (!(searchargs->flags & SEARCH_UNCACHEDHEADER)) {
+		for (i=0; i<mailbox_num_cache_header; i++) {
+		    if (!strcmp(mailbox_cache_header_name[i], arg.s)) break;
+		}
+		if (i == mailbox_num_cache_header) {
+		    searchargs->flags |= SEARCH_UNCACHEDHEADER;
+		}
+	    }
 	    appendstrlist(&searchargs->header_name, arg.s);
 	    c = getastring(&arg);
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset);
 	    if (strchr(str, EMPTY)) {
-		searchargs->recent_set = searchargs->recent_unset = 1;
+		/* Force failure */
+		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	    }
 	    else {
 		appendstrlistpat(&searchargs->header, str);
@@ -3017,7 +3031,8 @@ int parsecharset;
 		    !strcmp(imapd_mailbox->flagname[flag], arg.s)) break;
 	    }
 	    if (flag == MAX_USER_FLAGS) {
-		searchargs->recent_set = searchargs->recent_unset = 1;
+		/* Force failure */
+		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 		break;
 	    }
 	    searchargs->user_flags_set[flag/32] |= 1<<(flag&31);
@@ -3050,54 +3065,10 @@ int parsecharset;
 		return EOF;
 	    }
 
-#if 0 /* Have to pay attenton to DeMorgan's Law */
-	    /* Pull the trivial stuff into searchargs */
-	    if (sub1->smaller && sub1->smaller > searchargs->larger)
-	      searchargs->larger = sub1->smaller - 1;
-	    if (sub1->larger && sub1->larger < searchargs->smaller)
-	      searchargs->smaller = sub1->larger + 1;
-	    if (sub1->before && sub1->before > searchargs->after)
-	      searchargs->after = sub1->before - 1;
-	    if (sub1->after && sub1->after < searchargs->before)
-	      searchargs->before = sub1->after + 1;
-	    if (sub1->sentbefore && sub1->sentbefore > searchargs->sentafter)
-	      searchargs->sentafter = sub1->sentbefore - 1;
-	    if (sub1->sentafter && sub1->sentafter < searchargs->sentbefore)
-	      searchargs->sentbefore = sub1->sentafter + 1;
-	    searchargs->system_flags_set |= sub1->system_flags_unset;
-	    searchargs->system_flags_unset |= sub1->system_flags_set;
-	    searchargs->peruser_flags_set |= sub1->peruser_flags_unset;
-	    searchargs->peruser_flags_unset |= sub1->peruser_flags_set;
-	    searchargs->recent_set |= sub1->recent_unset;
-	    searchargs->recent_unset |= sub1->recent_set;
-	    for (i = 0; i < MAX_USER_FLAGS/32; i++) {
-		searchargs->user_flags_set[i] |= sub1->user_flags_unset[i];
-		searchargs->user_flags_unset[i] |= sub1->user_flags_set[i];
-		sub1->user_flags_set[i] = sub1->user_flags_unset[i] = 0;
-	    }
-
-	    /* See if we have to append this to the sublist */
-	    if (sub1->sequence || sub1->uidsequence || sub1->from ||
-		sub1->to || sub1->cc || sub1->bcc || sub1->subject ||
-		sub1->body || sub1->text || sub1->header || sub1->sublist) {
- 
-		/* Clear out the trival stuff we moved up */
-		sub1->smaller = sub1->larger = 0;
-		sub1->before = sub1->after = 0;
-		sub1->sentbefore = sub1->sentafter = 0;
-		sub1->system_flags_set = sub1->system_flags_unset = 0;
-		sub1->peruser_flags_set = sub1->peruser_flags_unset = 0;
-		sub1->recent_set = sub1->recent_unset = 0;
-		appendsearchargs(searchargs, sub1, (struct searchargs *)0);
-	    }
-	    else freesearchargs(sub1);
-#else
 	    appendsearchargs(searchargs, sub1, (struct searchargs *)0);
-#endif
 	}
 	else if (!strcmp(criteria.s, "new")) {
-	    searchargs->peruser_flags_unset = 1;
-	    searchargs->recent_set = 1;
+	    searchargs->flags |= (SEARCH_SEEN_UNSET|SEARCH_RECENT_SET);
 	}
 	else goto badcri;
 	break;
@@ -3124,7 +3095,7 @@ int parsecharset;
 	    appendsearchargs(searchargs, sub1, sub2);
 	}
 	else if (!strcmp(criteria.s, "old")) {
-	    searchargs->recent_unset = 1;
+	    searchargs->flags |= SEARCH_RECENT_UNSET;
 	}
 	else if (!strcmp(criteria.s, "on")) {
 	    if (c != ' ') goto missingarg;		
@@ -3142,14 +3113,14 @@ int parsecharset;
 
     case 'r':
 	if (!strcmp(criteria.s, "recent")) {
-	    searchargs->recent_set = 1;
+	    searchargs->flags |= SEARCH_RECENT_SET;
 	}
 	else goto badcri;
 	break;
 
     case 's':
 	if (!strcmp(criteria.s, "seen")) {
-	    searchargs->peruser_flags_set = 1;
+	    searchargs->flags |= SEARCH_SEEN_SET;
 	}
 	else if (!strcmp(criteria.s, "sentbefore")) {
 	    if (c != ' ') goto missingarg;		
@@ -3204,7 +3175,8 @@ int parsecharset;
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset);
 	    if (strchr(str, EMPTY)) {
-		searchargs->recent_set = searchargs->recent_unset = 1;
+		/* Force failure */
+		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	    }
 	    else {
 		appendstrlistpat(&searchargs->subject, str);
@@ -3220,7 +3192,8 @@ int parsecharset;
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset);
 	    if (strchr(str, EMPTY)) {
-		searchargs->recent_set = searchargs->recent_unset = 1;
+		/* Force failure */
+		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	    }
 	    else {
 		appendstrlistpat(&searchargs->to, str);
@@ -3232,7 +3205,8 @@ int parsecharset;
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset);
 	    if (strchr(str, EMPTY)) {
-		searchargs->recent_set = searchargs->recent_unset = 1;
+		/* Force failure */
+		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	    }
 	    else {
 		appendstrlistpat(&searchargs->text, str);
@@ -3249,7 +3223,7 @@ int parsecharset;
 	    appendstrlist(&searchargs->uidsequence, arg.s);
 	}
 	else if (!strcmp(criteria.s, "unseen")) {
-	    searchargs->peruser_flags_unset = 1;
+	    searchargs->flags |= SEARCH_SEEN_UNSET;
 	}
 	else if (!strcmp(criteria.s, "unanswered")) {
 	    searchargs->system_flags_unset |= FLAG_ANSWERED;
