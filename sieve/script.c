@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.61 2004/03/11 17:22:24 ken3 Exp $
+ * $Id: script.c,v 1.62 2004/07/15 15:02:51 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -344,12 +344,6 @@ static int send_notify_callback(sieve_interp_t *interp, void *message_context,
 			 script_context,
 			 message_context,
 			 errmsg);    
-
-    if (nc.options) {
-	/* This stuff lives in the sieve script itself, we only
-	 * need to free the array. */
-	free(nc.options);
-    }
 
     free(build_msg);
 
