@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.26 2002/02/26 20:32:54 leg Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.27 2002/02/27 05:33:39 leg Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -155,8 +155,6 @@ struct db {
 struct txn {
     int ismalloc;
 
-    int oldcurlevel;		/* any updates to curlevel necessary? */
-
     /* logstart is where we start changes from on commit, where we truncate
        to on abort */
     int logstart;
@@ -165,6 +163,10 @@ struct txn {
 
 static time_t global_recovery = 0;
 static int do_fsync = 2;
+
+enum {
+    be_paranoid = 0
+};
 
 #define FSYNC(fd) (do_fsync && fsync(fd))
 #define FDATASYNC(fd) ((do_fsync == 1 && fdatasync(fd)) || \
@@ -297,6 +299,7 @@ enum {
 static int mycommit(struct db *db, struct txn *tid);
 static int myabort(struct db *db, struct txn *tid);
 static int mycheckpoint(struct db *db, int locked);
+static int myconsistent(struct db *db, struct txn *tid, int locked);
 static int recovery(struct db *db);
 
 /* file looks like:
@@ -488,7 +491,8 @@ static int update_lock(struct db *db, struct txn *txn)
     /* txn->logend is the current size of the file */
     map_refresh(db->fd, 0, &db->map_base, &db->map_len, txn->logend,
 		db->fname, 0);
-    
+    db->map_size = txn->logend;
+
     return 0;
 }
 
@@ -510,6 +514,11 @@ static int write_lock(struct db *db, const char *altname)
     
     map_refresh(db->fd, 0, &db->map_base, &db->map_len, sbuf.st_size,
 		fname, 0);
+
+    if (db->curlevel) {
+	/* reread curlevel */
+	db->curlevel = ntohl(*((bit32 *)(db->map_base + OFFSET_CURLEVEL)));
+    }
     
     /* printf("%d: write lock: %d\n", getpid(), db->map_ino); */
 
@@ -562,6 +571,11 @@ static int read_lock(struct db *db)
     map_refresh(db->fd, 0, &db->map_base, &db->map_len, sbuf.st_size,
 		db->fname, 0);
 
+    if (db->curlevel) {
+	/* reread curlevel */
+	db->curlevel = ntohl(*((bit32 *)(db->map_base + OFFSET_CURLEVEL)));
+    }
+    
     return 0;
 }
 
@@ -582,7 +596,6 @@ static int myopen(const char *fname, struct db **ret)
     struct db *db = (struct db *) xzmalloc(sizeof(struct db));
     int r;
     int new = 0;
-    struct stat sbuf;
 
     db->fd = -1;
     db->fname = xstrdup(fname);
@@ -598,18 +611,34 @@ static int myopen(const char *fname, struct db **ret)
 	return CYRUSDB_IOERROR;
     }
 
+ retry:
+    db->curlevel = 0;
+
     if (new) {
-	/* lock the db */
-	if (write_lock(db, NULL) < 0) {
+	/* lock the db (this normally rereads db->curlevel, but
+	 db->curlevel is currently 0) */
+	r = write_lock(db, NULL);
+	if (r < 0) {
 	    dispose_db(db);
-	    return CYRUSDB_IOERROR;
+	    return r;
 	}
+    } else {
+	/* grab a read lock */
+	r = read_lock(db);
+	if (r < 0) {
+	    dispose_db(db);
+	    return r;
+	}
+    }
+
+    if (new && db->map_size == 0) {
+	/* make sure someone didn't come along and "fix" this db */
 
 	/* initialize in memory structure */
 	db->version = SKIPLIST_VERSION;
 	db->version_minor = SKIPLIST_VERSION_MINOR;
 	db->maxlevel = SKIPLIST_MAXLEVEL;
-	db->curlevel = 0;
+	db->curlevel = 1;
 	db->listsize = 0;
 	/* where do we start writing new entries? */
 	db->logstart = DUMMY_OFFSET(db) + DUMMY_SIZE(db);
@@ -642,28 +671,23 @@ static int myopen(const char *fname, struct db **ret)
 	    r = CYRUSDB_IOERROR;
 	}
 
-	/* unlock the db */
+    }
+
+    if (db->map_size == 0) {
+	/* race condition to initialize this guy! */
+	new = 1;
 	unlock(db);
+	goto retry;
     }
-
-    if (fstat(db->fd, &sbuf) == -1) {
-	syslog(LOG_ERR, "IOERROR: fstat %s: %m", fname);
-	dispose_db(db);
-	return CYRUSDB_IOERROR;
-    }
-    db->map_ino = sbuf.st_ino;
-    db->map_size = sbuf.st_size;
-
-    db->map_base = 0;
-    db->map_len = 0;
-    map_refresh(db->fd, 0, &db->map_base, &db->map_len, sbuf.st_size, 
-		fname, 0);
 
     r = read_header(db);
     if (r) {
 	dispose_db(db);
 	return r;
     }
+
+    /* unlock the db */
+    unlock(db);
 
     if (!global_recovery || db->last_recovery < global_recovery) {
 	/* run recovery; we rebooted since the last time recovery
@@ -761,8 +785,7 @@ int myfetch(struct db *db,
 
 	/* fill in t */
 	t.ismalloc = 0;
-	t.oldcurlevel = db->curlevel;
-	t.logstart = lseek(db->fd, 0, SEEK_END);
+	t.logstart = db->map_size;
 	assert(t.logstart != -1);
 	t.logend = t.logstart;
 
@@ -844,8 +867,7 @@ int myforeach(struct db *db,
 
 	/* fill in t */
 	t.ismalloc = 0;
-	t.oldcurlevel = db->curlevel;
-	t.logstart = lseek(db->fd, 0, SEEK_END);
+	t.logstart = db->map_size;
 	assert(t.logstart != -1);
 	t.logend = t.logstart;
 
@@ -938,8 +960,7 @@ int mystore(struct db *db,
 
 	/* fill in t */
 	t.ismalloc = 0;
-	t.oldcurlevel = db->curlevel;
-	t.logstart = lseek(db->fd, 0, SEEK_END);
+	t.logstart = db->map_size;
 	assert(t.logstart != -1);
 	t.logend = t.logstart;
 
@@ -947,6 +968,10 @@ int mystore(struct db *db,
     } else {
 	tp = *tid;
 	update_lock(db, tp);
+    }
+
+    if (be_paranoid) {
+	assert(myconsistent(db, tp, 1) == 0);
     }
 
     num_iov = 0;
@@ -981,7 +1006,7 @@ int mystore(struct db *db,
 	lvl = randlvl(db);
 
 	/* do we need to update the header ? */
-	if (lvl > tp->oldcurlevel) {
+	if (lvl > db->curlevel) {
 	    for (i = db->curlevel; i < lvl; i++) {
 		updateoffsets[i] = DUMMY_OFFSET(db);
 	    }
@@ -1048,6 +1073,10 @@ int mystore(struct db *db,
 	    memcpy(*tid, tp, sizeof(struct txn));
 	    (*tid)->ismalloc = 1;
 	}
+
+	if (be_paranoid) {
+	    assert(myconsistent(db, *tid, 1) == 0);
+	}
     } else {
 	/* commit the store, which releases the write lock */
 	mycommit(db, tp);
@@ -1093,8 +1122,7 @@ int mydelete(struct db *db,
 
 	/* fill in t */
 	t.ismalloc = 0;
-	t.oldcurlevel = db->curlevel;
-	t.logstart = lseek(db->fd, 0, SEEK_END);
+	t.logstart = db->map_size;
 	assert(t.logstart != -1);
 	t.logend = t.logstart;
 
@@ -1102,6 +1130,10 @@ int mydelete(struct db *db,
     } else {
 	tp = *tid;
 	update_lock(db, tp);
+    }
+
+    if (be_paranoid) {
+	assert(myconsistent(db, tp, 1) == 0);
     }
 
     ptr = find_node(db, key, keylen, updateoffsets);
@@ -1141,6 +1173,10 @@ int mydelete(struct db *db,
 	    memcpy(*tid, tp, sizeof(struct txn));
 	    (*tid)->ismalloc = 1;
 	}
+
+	if (be_paranoid) {
+	    assert(myconsistent(db, *tid, 1) == 0);
+	}
     } else {
 	/* commit the store, which releases the write lock */
 	mycommit(db, tp);
@@ -1155,6 +1191,10 @@ int mycommit(struct db *db, struct txn *tid)
     int r;
 
     assert(db && tid);
+
+    if (be_paranoid) {
+	assert(myconsistent(db, tid, 1) == 0);
+    }
 
     /* verify that we did something this txn */
     if (tid->logstart == tid->logend) {
@@ -1184,6 +1224,10 @@ int mycommit(struct db *db, struct txn *tid)
     }
     
  done:
+    if (be_paranoid) {
+	assert(myconsistent(db, NULL, 1) == 0);
+    }
+
     /* release the write lock */
     if ((r = unlock(db)) < 0) {
 	return r;
@@ -1277,6 +1321,8 @@ int myabort(struct db *db, struct txn *tid) /* xxx */
 	return r;
     }
 
+    db->map_size = tid->logstart;
+
     /* release the write lock */
     if ((r = unlock(db)) < 0) {
 	return r;
@@ -1315,6 +1361,12 @@ static int mycheckpoint(struct db *db, int locked)
 	/* we need the latest and greatest data */
 	map_refresh(db->fd, 0, &db->map_base, &db->map_len, MAP_UNKNOWN_LEN,
 		    db->fname, 0);
+    }
+
+    if ((r = myconsistent(db, NULL, 1)) < 0) {
+	syslog(LOG_ERR, "db %s, inconsistent pre-checkpoint, bailing out",
+	       db->fname);
+	return r;
     }
 
     /* open fname.NEW */
@@ -1478,6 +1530,12 @@ static int mycheckpoint(struct db *db, int locked)
 		    db->fname, 0);
     }
 
+    if ((r = myconsistent(db, NULL, 1)) < 0) {
+	syslog(LOG_ERR, "db %s, inconsistent post-checkpoint, bailing out",
+	       db->fname);
+	return r;
+    }
+
     if (!locked) {
 	/* unlock the new db files */
 	unlock(db);
@@ -1557,13 +1615,19 @@ static int dump(struct db *db, int detail __attribute__((unused)))
     return 0;
 }
 
+static int consistent(struct db *db)
+{
+    return myconsistent(db, NULL, 0);
+}
+
 /* perform some basic consistency checks */
-static int consistent(struct db *db) /* xxx */
+static int myconsistent(struct db *db, struct txn *tid, int locked)
 {
     const char *ptr;
     int offset;
 
-    read_lock(db);
+    if (!locked) read_lock(db);
+    else if (tid) update_lock(db, tid);
 
     offset = FORWARD(db->map_base + DUMMY_OFFSET(db), 0);
     while (offset != 0) {
@@ -1574,12 +1638,23 @@ static int consistent(struct db *db) /* xxx */
 	for (i = 0; i < LEVEL(ptr); i++) {
 	    offset = FORWARD(ptr, i);
 
+	    if (offset > db->map_size) {
+		fprintf(stdout, 
+			"skiplist inconsistent: %04X: ptr %d is %04X; "
+			"eof is %04X\n", 
+			ptr - db->map_base,
+			i, offset, (unsigned int) db->map_size);
+		return CYRUSDB_INTERNAL;
+	    }
+
 	    if (offset != 0) {
 		/* check to see that ptr < ptr -> next */
 		const char *q = db->map_base + offset;
-		int cmp = compare(KEY(ptr), KEYLEN(ptr), KEY(q), KEYLEN(q));
+		int cmp;
+
+		cmp = compare(KEY(ptr), KEYLEN(ptr), KEY(q), KEYLEN(q));
 		if (cmp >= 0) {
-		    fprintf(stderr, 
+		    fprintf(stdout, 
 			    "skiplist inconsistent: %04X: ptr %d is %04X; "
 			    "compare() = %d\n", 
 			    ptr - db->map_base,
@@ -1593,7 +1668,7 @@ static int consistent(struct db *db) /* xxx */
 	offset = FORWARD(ptr, 0);
     }
 
-    unlock(db);
+    if (!locked) unlock(db);
 
     return 0;
 }
