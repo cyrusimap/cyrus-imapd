@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.154 2001/01/22 02:21:49 ken3 Exp $
+ * $Id: index.c,v 1.155 2001/02/23 17:35:52 leg Exp $
  */
 #include <config.h>
 
@@ -1005,6 +1005,29 @@ struct searchargs *searchargs;
 	*msgno_list = NULL;
     }
 
+    return n;
+}
+
+/* 'uid_list' is malloc'd string representing the hits from searchargs;
+   returns number of hits */
+int index_getuidsequence(struct mailbox *mailbox, 
+			 struct searchargs *searchargs,
+			 unsigned **uid_list)
+{
+    unsigned *msgno_list;
+    int i, n;
+
+    n = _index_search(&msgno_list, mailbox, searchargs);
+    if (n == 0) {
+	*uid_list = NULL;
+	return 0;
+    }
+
+    for (i = 0; i < n; i++) {
+	msgno_list[i] = UID(msgno_list[i]);
+    }
+
+    *uid_list = msgno_list;
     return n;
 }
 
