@@ -1,4 +1,4 @@
-/* 
+ /* 
  * annotate.h -- Annotation manipulation routines
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: annotate.h,v 1.5 2003/10/22 18:50:07 rjs3 Exp $
+ * $Id: annotate.h,v 1.6 2003/10/24 17:31:48 rjs3 Exp $
  */
 
 #ifndef ANNOTATE_H
@@ -125,6 +125,13 @@ int annotatemore_store(char *mailbox,
 		       struct entryattlist *l, struct namespace *namespace,
 		       int isadmin, char *userid,
 		       struct auth_state *auth_state);
+
+/* low-level interface for use by mbdump routines */
+int annotatemore_write_entry(const char *mboxname, const char *entry,
+			     const char *userid,
+			     const char *value, const char *contenttype,
+			     size_t size, time_t modifiedsince,
+			     struct txn **tid);
 
 /* rename the annotations for 'oldmboxname' to 'newmboxname'
  * if 'olduserid' is non-NULL then the private annotations

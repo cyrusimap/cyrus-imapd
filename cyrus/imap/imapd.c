@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.445 2003/10/22 20:05:11 ken3 Exp $ */
+/* $Id: imapd.c,v 1.446 2003/10/24 17:31:48 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -6229,6 +6229,11 @@ static int do_xfer_single(char *toserver, char *topart,
 	if(r) syslog(LOG_ERR,
 		     "Could not delete local mailbox during move of %s",
 		     mailboxname);
+
+	if (!r) {
+	    /* Delete mailbox annotations */
+	    annotatemore_delete(mailboxname);
+	}
      }
 
 done:
