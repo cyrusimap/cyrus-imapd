@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.19 2003/10/24 17:31:48 rjs3 Exp $
+ * $Id: annotate.c,v 1.20 2003/10/24 18:24:04 rjs3 Exp $
  */
 
 #include <config.h>
@@ -1841,8 +1841,8 @@ static int rename_cb(const char *mailbox, const char *entry,
     return r;
 }
 
-int annotatemore_rename(char *oldmboxname, char *newmboxname,
-			char *olduserid, char *newuserid)
+int annotatemore_rename(const char *oldmboxname, const char *newmboxname,
+			const char *olduserid, const char *newuserid)
 {
     struct rename_rock rrock;
     int r;
@@ -1868,7 +1868,7 @@ int annotatemore_rename(char *oldmboxname, char *newmboxname,
     return r;
 }
 
-int annotatemore_delete(char *mboxname)
+int annotatemore_delete(const char *mboxname)
 {
     /* we treat a deleteion as a rename without a new name */
 

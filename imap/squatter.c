@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squatter.c,v 1.12 2003/10/22 18:50:08 rjs3 Exp $
+ * $Id: squatter.c,v 1.13 2003/10/24 18:24:07 rjs3 Exp $
  */
 
 /*
@@ -98,13 +98,6 @@
 
 /* global state */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
-
-void printstring(const char *s)
-{
-    /* needed to link against annotate.o */
-    fatal("printstring() executed, but its not used for squatter!",
-	  EC_SOFTWARE);
-}
 
 extern char *optarg;
 extern int optind;

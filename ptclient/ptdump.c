@@ -48,7 +48,7 @@
 #include "global.h"
 #include "libconfig.h"
 
-static char rcsid[] = "$Id: ptdump.c,v 1.8 2003/10/22 18:50:29 rjs3 Exp $";
+static char rcsid[] = "$Id: ptdump.c,v 1.9 2003/10/24 18:24:11 rjs3 Exp $";
 
 int config_need_data = 0;
 
@@ -124,10 +124,4 @@ int main(int argc, char *argv[])
     cyrus_done();
 
     return 0;
-}
-
-int fatal(const char *msg,int exitcode)
-{
-  fprintf(stderr,"%s", msg);
-  exit(exitcode);
 }

@@ -1,7 +1,7 @@
 /* timsieved.c -- main file for timsieved (sieve script accepting program)
  * Tim Martin
  * 9/21/99
- * $Id: timsieved.c,v 1.48 2003/10/22 18:50:31 rjs3 Exp $
+ * $Id: timsieved.c,v 1.49 2003/10/24 18:24:12 rjs3 Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -167,6 +167,12 @@ void cmdloop()
     shut_down(0);
 }
 
+void printstring(const char *s __attribute__((unused)))
+{
+    /* needed to link against annotate.o */
+    fatal("printstring() executed, but its not used for timsieved!",
+	  EC_SOFTWARE);
+}
 
 void fatal(const char *s, int code)
 {

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.4 2003/10/22 20:05:13 ken3 Exp $
+ * $Id: nntpd.c,v 1.5 2003/10/24 18:24:06 rjs3 Exp $
  */
 
 /*
@@ -3363,7 +3363,7 @@ static void feedpeer(const char *peer, message_data_t *msg)
     return;
 }
 
-void printstring(const char *s)
+void printstring(const char *s __attribute__((unused)))
 {
     /* needed to link against annotate.o */
     fatal("printstring() executed, but its not used for nntpd!",

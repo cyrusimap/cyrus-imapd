@@ -68,19 +68,13 @@
 #include "libconfig.h"
 #include "lock.h"
 
-static char rcsid[] = "$Id: ptexpire.c,v 1.14 2003/10/22 18:50:29 rjs3 Exp $";
+static char rcsid[] = "$Id: ptexpire.c,v 1.15 2003/10/24 18:24:11 rjs3 Exp $";
 
 /* global */
 time_t timenow;
 time_t expire_time = (3*60*60); /* 3 Hours */
 
 int config_need_data = 0;
-
-int fatal(char *msg, int exitcode __attribute__((unused)))
-{
-    syslog(LOG_ERR,"%s", msg);
-    exit(-1);
-}
 
 static int expire_p(void *rockp __attribute__((unused)),
 		    const char *key __attribute__((unused)),
