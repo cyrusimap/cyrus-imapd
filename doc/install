@@ -6,7 +6,9 @@
 
     A list of answers to common installation problems is maintained in
     http://asg.web.cmu.edu/cyrus/imapd/install-FAQ.html. It is very out of
-    date and will eventually be updated. 
+    date and will eventually be updated. The file doc/html/questions.html
+    contains a list of questions we'd like to answer but haven't gotten to
+    yet. 
 
     Feedback on the software or on the document may be sent to
     "cyrus-bugs@andrew.cmu.edu". The info-cyrus@andrew.cmu.edu mailing list
@@ -378,7 +380,9 @@ Configuring the IMAP Server
 
            auth.debug /var/adm/auth.log
 
-        Create the log files: 
+        After installation and testing, you probably want to change the
+        ".debug" component to something a little less verbose. Create the
+        log files: 
 
            touch /var/adm/imapd.log /var/adm/auth.log
 
@@ -640,22 +644,33 @@ Testing the IMAP Server
         Naturally the version number should match the version you just
         installed. 
 
-     3. Use "imtest" to test logging in with plaintext passwords. 
+     3. Use "imtest" to test logging in with plaintext passwords: 
 
            /usr/local/bin/imtest -m login -p imap foobar
 
+        If you want to specify a different user, do: 
+
+           /usr/local/bin/imtest -m login -a USER -p imap foobar
+
         If your server is running, you'll get the following message: 
 
-           * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.6.0 server ready
-           Password: <enter your password, imtest does not echo it>
-           . LOGIN smith X
-           . OK User logged in
+           /usr/local/bin/imtest -m login -p imap foobar
+           S: * OK mail1.andrew.cmu.edu Cyrus IMAP4 v1.6.20 server ready
+           C: C01 CAPABILITY
+           S: * CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE UIDPLUS 
+           X-NON-HIERARCHICAL-RENAME NO_ATOMIC_RENAME AUTH=GSSAPI AUTH=ANONYMOUS 
+           AUTH=KERBEROS_V4 UNSELECT
+           S: C01 OK Completed
+           Password: 
+           + go ahead
+           L01 OK User logged in
+           Authenticated.
+           Security strength factor: 0
 
-        Any message other than one starting with a ". OK" means there is a
-        problem. If the test fails, a more specific error message is
-        written through syslog to the server log. To terminate the
+        Any message other than one starting with a "L01 OK" means there is
+        a problem. If the test fails, a more specific error message should
+        be written through syslog to the server log. To terminate the
         connection, type ". logout". 
-
      4. You should now test the server with each of the various
         authentication mechanisms you have installed. First to find the
         mechanisms the server thinks are installed use imtest as above.
@@ -667,22 +682,29 @@ Testing the IMAP Server
         This should produce a message similar to: 
 
           * CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE UIDPLUS 
-          X-NON-HIERARCHICAL-RENAME NO_ATOMIC_RENAME AUTH=PLAIN AUTH=ANONYMOUS
+          X-NON-HIERARCHICAL-RENAME NO_ATOMIC_RENAME AUTH=ANONYMOUS
           AUTH=KERBEROS_V4 AUTH=DIGEST-MD5 AUTH=CRAM-MD5 UNSELECT
           . OK Completed
 
         Each of the mechanism names is preceded by a 'AUTH='. For this
-        example PLAIN, ANONYMOUS, KERBEROS_V4, DIGEST-MD5, and CRAM-MD5 are
-        available. If a mechanism does not appear that you believe should
-        appear it may be because the mechanism is unable to initialize. For
+        example the ANONYMOUS, KERBEROS_V4, DIGEST-MD5, and CRAM-MD5
+        mechanims are available. If a mechanism does not appear that you
+        wish to use, examine the libsasl log messages. Generally, if a
+        mechanism does not appear, it means it failed to initialize. (For
         example, if the server is unable to access the srvtab file the
-        KERBEROS_V4 mechanism will be unable to initialize. To terminate
-        the imtest connection, type ". logout". Once you are satisfied with
-        the authentication mechanism list you should attempt to log in with
-        each of those mechanisms. Change to the "cyrus-v1.5.14" directory
-        and run imtest specify\ing which mechanism you would like to use.
-        The mechanism name must be in all capital letters. For example for
-        KERBEROS_V4 type: 
+        KERBEROS_V4 mechanism will refuse to load.) 
+
+        Plaintext login is a special case: the PLAIN SASL mechanism is only
+        advertised under an encrypted connection. However, plaintext logins
+        are available (if the IMAP server was configured to allow them) by
+        using the LOGIN mechanism (as above). 
+
+        To terminate the imtest connection, type ". logout". 
+
+        Once you are satisfied with the authentication mechanism list you
+        should attempt to log in with each of those mechanisms. Run imtest
+        specifying which mechanism you would like to use. The mechanism
+        name must be in all capital letters. 
 
            /usr/local/bin/imtest -m KERBEROS_V4 -p imap foobar
            * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.5.14 server ready
@@ -698,22 +720,81 @@ Testing the IMAP Server
         Any message other than one starting with a "A01 OK" means there is
         a problem. If the test fails, a more specific error message is
         written through syslog to the server log. To terminate the
-        connection, type ". logout". Make sure to test each mechanism this
-        way. Also, many mechanisms have security layers. You should test
-        each layer for mechanisms that support layers. imtest by default
-        will choose the strongest layer. Use the '-l' parameter to force
-        imtest to use a weaker layer. The '-l' parameter takes the security
-        strength factor. A security strength factor of 0 means no layer and
-        1 means integrity layer. Privacy layer security strength factors
-        depend upon the mechanism. For example KERBEROS_V4 has 3 layers:
-        none, integrity, and privacy with security strength factors of 0,1,
-        and 56 respectivly. By default imtest will attempt to use privacy
-        layer. To force imtest to negotiate an integrity layer type: 
+        connection, type ". logout". 
 
-          imtest -m KERBEROS_V4 -l 1 -p imap foobar
+        Make sure to test each mechanism this way. Also, many mechanisms
+        have security layers. You should test each layer for mechanisms
+        that support layers. imtest by default will choose the strongest
+        layer. Use the '-l' parameter to force imtest to use a weaker
+        layer. The '-l' parameter takes the security strength factor. A
+        security strength factor of 0 means no layer and 1 means integrity
+        layer. Privacy layer security strength factors depend upon the
+        mechanism. For example KERBEROS_V4 has 3 layers: none, integrity,
+        and privacy with security strength factors of 0,1, and 56
+        respectivly. By default imtest will attempt to use privacy layer.
+        To force imtest to negotiate an integrity layer type: 
+
+        imtest -m KERBEROS_V4 -l 1 -p imap foobar
 
         See the libsasl documentation for a full description of what
         mechanisms support what layers. 
+
+Administering Mailboxes
+
+    The "cyradm" command (see the cyradm(8) man page for complete
+    documentation) manages the creation of, deletion of, ACLs on, and
+    quotas on mailboxes. To get an overview of the command, type "cyradm
+    <host>". Once "cyradm" has started, the user prompt is replaced with
+    the name of the host followed by a ">". Type "help" at the new prompt.
+    The following information is displayed: 
+
+       createmailbox, cm        create a mailbox
+       deleteaclmailbox, dam    delete an ACL on a mailbox
+       deletemailbox, dm        delete a mailbox
+       help                     get help on commands
+       listaclmailbox, lam      list the ACL on a mailbox
+       listmailbox, lm          list mailboxes
+       listquota, lq            list quota on root
+       listquotaroot, lqr, lqm  list quota roots on mailbox
+       quit                     exit program
+       renamemailbox, renm      rename a mailbox
+       setaclmailbox, sam       set an ACL on a mailbox
+       setquota, sq             set quota limits
+
+    Note:If you run "cyradm" on a system not using Kerberos for
+    authentication, you will be prompted for your user name and password
+    before you can issue any "cyradm" commands. 
+
+    The mailbox naming convention requires that the primary mailbox (inbox)
+    for anyone must be named "user.<userid>". To create a mailbox, type: 
+
+       createmailbox user.<userid>
+
+    For example, to create a mailbox for the userid "smith", type: 
+
+       createmailbox user.smith
+
+    To limit "smith" to 10,000 kilobytes of mail, type: 
+
+       setquota user.smith 10000
+
+    Once the inbox is created, users can create their own additional
+    mailboxes from a mail program. If Smith created a work mailbox and a
+    play mailbox, the full names of the mailboxes would be: 
+
+       user.smith.work
+       user.smith.play
+
+    Access rights are discussed in detail in the cyradm(1) man pages. Note
+    that the administrator must grant herself delete access explicitly
+    before she can delete a mailbox: 
+
+       setaclmailbox <mail_box> <admin_userid> d
+       deletemailbox <mail_box>
+
+    Once you have created mailboxes, your IMAP server installation is done.
+    You must then configure a mail interface, such as Pine, to work with
+    the IMAP server. 
 
 Testing the sieve server
 
@@ -777,63 +858,6 @@ Testing the sieve server
         message to the address you're working on from the address mentioned
         in the sieve script. The message should be rejected. 
 
-Administering Mailboxes
-
-    The "cyradm" command (see the cyradm(8) man page for complete
-    documentation) manages the creation of, deletion of, ACLs on, and
-    quotas on mailboxes. To get an overview of the command, type "cyradm
-    <host>". Once "cyradm" has started, the user prompt is replaced with
-    the name of the host followed by a ">". Type "help" at the new prompt.
-    The following information is displayed: 
-
-       createmailbox, cm        create a mailbox
-       deleteaclmailbox, dam    delete an ACL on a mailbox
-       deletemailbox, dm        delete a mailbox
-       help                     get help on commands
-       listaclmailbox, lam      list the ACL on a mailbox
-       listmailbox, lm          list mailboxes
-       listquota, lq            list quota on root
-       listquotaroot, lqr, lqm  list quota roots on mailbox
-       quit                     exit program
-       renamemailbox, renm      rename a mailbox
-       setaclmailbox, sam       set an ACL on a mailbox
-       setquota, sq             set quota limits
-
-    Note:If you run "cyradm" on a system where Kerberos v4 is not running,
-    you are prompted for your user name an password before you can issue
-    any "cyradm" commands. 
-
-    The mailbox naming convention requires that the primary mailbox (inbox)
-    for anyone must be named "user.<userid>". To create a mailbox, type: 
-
-       createmailbox user.<userid>
-
-    For example, to create a mailbox for the userid "smith", type: 
-
-       createmailbox user.smith
-
-    To limit "smith" to 10,000 kilobytes of mail, type: 
-
-       setquota user.smith 10000
-
-    Once the inbox is created, users can create their own additional
-    mailboxes from a mail program. If Smith created a work mailbox and a
-    play mailbox, the full names of the mailboxes would be: 
-
-       user.smith.work
-       user.smith.play
-
-    Access rights are discussed in detail in the cyradm(1) man pages. Note
-    that the administrator must grant herself delete access explicitly
-    before she can delete a mailbox: 
-
-       setaclmailbox <mail_box> <admin_userid> d
-       deletemailbox <mail_box>
-
-    Once you have created mailboxes, your IMAP server installation is done.
-    You must then configure a mail interface, such as Pine, to work with
-    the IMAP server. 
-
 Performance Notes
 
     If your configuration directory is not /var/imap, adjust accordingly. 
@@ -877,5 +901,6 @@ Performance Notes
         other reports. 
 
       * /var/spool/mqueue - Sendmail can be pretty harsh on the spool
-        partition. Having this on a separate disk is usually a good idea. 
+        partition. Having this on a separate disk is usually a good idea.
+        Consider using LMTP and delivering from a seperate machine. 
 
