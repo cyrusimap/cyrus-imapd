@@ -86,8 +86,8 @@ static const char *sockaddr;
 
 /* forward declarations */
 
-static int deliver_msg(char *return_path, char *authuser, char **users, 
-		 int numusers, char *mailbox);
+static int deliver_msg(char *return_path, char *authuser, int ignorequota,
+		       char **users, int numusers, char *mailbox);
 static int init_net(const char *sockaddr);
 
 static void
@@ -181,6 +181,7 @@ int main(int argc, char **argv)
 {
     int opt;
     int lmtpflag = 0;
+    int ignorequota = 0;
     char *mailboxname = NULL;
     char *authuser = NULL;
     char *return_path = NULL;
@@ -250,7 +251,7 @@ int main(int argc, char **argv)
 	    break;
 
 	case 'q':
-	    /* lmtpd will handle quota issues. ignore */
+	    ignorequota = 1;
 	    break;
 
 	default:
@@ -271,8 +272,8 @@ int main(int argc, char **argv)
     }
 
     /* deliver to users or global mailbox */
-    return deliver_msg(return_path,authuser, argv+optind, 
-		       argc - optind, mailboxname);
+    return deliver_msg(return_path,authuser, ignorequota,
+		       argv+optind, argc - optind, mailboxname);
 }
 
 void just_exit(const char *msg)
@@ -304,7 +305,7 @@ static int init_net(const char *unixpath)
   return lmtpdsock;
 }
 
-static int deliver_msg(char *return_path, char *authuser, 
+static int deliver_msg(char *return_path, char *authuser, int ignorequota,
 		       char **users, int numusers, char *mailbox)
 {
     int r;
@@ -327,6 +328,7 @@ static int deliver_msg(char *return_path, char *authuser,
     /* setup txn */
     txn->from = return_path;
     txn->auth = authuser;
+    txn->ignorequota = ignorequota;
     txn->data = deliver_in;
     txn->isdotstuffed = 0;
     txn->rcpt_num = numusers ? numusers : 1;

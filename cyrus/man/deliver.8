@@ -63,6 +63,9 @@ deliver \- deliver mail to an IMAP mailbox
 .I auth-id
 ]
 [
+.B \-q
+]
+[
 .I userid
 ]...
 .br
@@ -122,6 +125,9 @@ does not grant the sender the "p" right, the delivery fails.
 .TP
 .BI \-a " auth-id"
 Specify the authorization id of the sender.  Defaults to "anonymous".
+.TP
+.B \-q
+Deliver message even when receiving mailbox is over quota.
 .TP
 .B \-l
 Accept messages using the LMTP protocol.

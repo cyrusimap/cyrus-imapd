@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.58 2001/01/30 21:53:41 leg Exp $
+ * $Id: lmtpd.c,v 1.59 2001/01/31 00:59:59 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.58 2001/01/30 21:53:41 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.59 2001/01/31 00:59:59 ken3 Exp $";*/
 
 #include <config.h>
 
@@ -151,7 +151,6 @@ void shut_down(int code);
 
 struct lmtp_func mylmtp = { &deliver, &verify_user, 0, 0 };
 
-static int quotaoverride = 0;		/* should i override quota? */
 int dupelim = 0;
 int singleinstance = 1;
 const char *BB = "";
@@ -316,10 +315,6 @@ int service_main(int argc, char **argv, char **envp)
 	switch(opt) {
 	case 'a':
 	    mylmtp.preauth = 1;
-	    break;
-
-	case 'q':
-	    quotaoverride = 1;
 	    break;
 
 	default:
@@ -697,6 +692,7 @@ int sieve_fileinto(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     script_data_t *sd = (script_data_t *) sc;
     mydata_t *mdata = (mydata_t *) mc;
     message_data_t *md = mdata->m;
+    int quotaoverride = msg_getrcpt_ignorequota(md, mdata->cur_rcpt);
     int ret;
 
     /* we're now the user who owns the script */
@@ -727,6 +723,7 @@ int sieve_keep(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     script_data_t *sd = (script_data_t *) sc;
     mydata_t *mydata = (mydata_t *) mc;
     message_data_t *md = mydata->m;
+    int quotaoverride = msg_getrcpt_ignorequota(md, mydata->cur_rcpt);
     char namebuf[MAX_MAILBOX_PATH];
     int ret = 1;
 
@@ -1170,6 +1167,7 @@ int deliver(message_data_t *msgdata, char *authuser,
     for (n = 0; n < nrcpts; n++) {
 	char *rcpt = xstrdup(msg_getrcpt(msgdata, n));
 	char *plus;
+	int quotaoverride = msg_getrcpt_ignorequota(msgdata, n);
 	int r = 0;
 
 	mydata.cur_rcpt = n;
