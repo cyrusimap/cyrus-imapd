@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: proxyd.c,v 1.24 2000/05/12 22:18:06 leg Exp $ */
+/* $Id: proxyd.c,v 1.25 2000/05/13 03:40:19 leg Exp $ */
 
 #include <config.h>
 
@@ -2719,7 +2719,7 @@ void cmd_create(char *tag, char *name, char *server)
 {
     struct backend *s = NULL;
     char mailboxname[MAX_MAILBOX_NAME+1];
-    int r = 0;
+    int r = 0, res;
     acapmbox_data_t mboxdata;
     char *acl = NULL;
 
@@ -2756,13 +2756,13 @@ void cmd_create(char *tag, char *name, char *server)
 	/* ok, send the create to that server */
 	prot_printf(s->out, "%s CREATE {%d+}\r\n%s\r\n", 
 		    tag, strlen(mailboxname), mailboxname);
-	r = pipe_including_tag(s, tag);
+	res = pipe_including_tag(s, tag);
 	tag = "*";		/* can't send another tagged response */
 	
 	if (!CAPA(s, ACAP)) {
 	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
 	    
-	    switch (r) {
+	    switch (res) {
 	    case OK:
 		/* race condition here, but not much we can do about it */
 		mboxdata.acl = acl;
@@ -2796,7 +2796,7 @@ void cmd_create(char *tag, char *name, char *server)
  */
 void cmd_delete(char *tag, char *name)
 {
-    int r;
+    int r, res;
     char *server;
     struct backend *s = NULL;
     char mailboxname[MAX_MAILBOX_NAME+1];
@@ -2817,10 +2817,10 @@ void cmd_delete(char *tag, char *name)
     if (!r) {
 	prot_printf(s->out, "%s DELETE {%d+}\r\n%s\r\n", 
 		    tag, strlen(mailboxname), mailboxname);
-	r = pipe_including_tag(s, tag);
+	res = pipe_including_tag(s, tag);
 	tag = "*";		/* can't send another tagged response */
 
-	if (!CAPA(s, ACAP) && r == OK) {
+	if (!CAPA(s, ACAP) && res == OK) {
 	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
 	    
 	    /* delete mailbox from acap server */
@@ -2841,7 +2841,7 @@ void cmd_delete(char *tag, char *name)
  */
 void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 {
-    int r = 0;
+    int r = 0, res;
     char *server;
     char oldmailboxname[MAX_MAILBOX_NAME+1];
     char newmailboxname[MAX_MAILBOX_NAME+1];
@@ -2867,24 +2867,24 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
 	    
 	    /* reserve new mailbox */
-	    acapmbox_new(&mboxdata, s->hostname, mailboxname);
+	    acapmbox_new(&mboxdata, s->hostname, newmailboxname);
 	    r = acapmbox_create(acaphandle, &mboxdata);
  	    if (r) {
 		syslog(LOG_ERR, "ACAP: unable to reserve %s: %s\n",
-		       name, error_message(r));
+		       newmailboxname, error_message(r));
 	    }
 	}
 
 	prot_printf(s->out, "%s RENAME {%d+}\r\n%s {%d+}\r\n%s\r\n", 
 		    tag, strlen(oldmailboxname), oldmailboxname,
 		    strlen(newmailboxname), newmailboxname);
-	r = pipe_including_tag(s, tag);
-	tag = "*";
+	res = pipe_including_tag(s, tag);
+	tag = "*";		/* can't send another tagged response */
 	
 	if (!CAPA(s, ACAP)) {
 	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
 	    
-	    switch (r) {
+	    switch (res) {
 	    case OK:
 		/* commit new mailbox */
 		mboxdata.acl = acl;
@@ -2898,7 +2898,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 		r = acapmbox_delete(acaphandle, oldmailboxname);
 		if (r) {
 		    syslog(LOG_ERR, "ACAP: unable to delete %s: %s\n", 
-			   mailboxname, error_message(r));
+			   oldmailboxname, error_message(r));
 		}
 		break;
 		
@@ -3257,22 +3257,20 @@ void cmd_myrights(char *tag, char *name, int oldform)
  */
 void cmd_setacl(char *tag, char *name, char *identifier, char *rights)
 {
-    int r;
+    int r, res;
     char mailboxname[MAX_MAILBOX_NAME+1];
     char *server;
     struct backend *s = NULL;
+    char *acl = NULL;
 
     r = mboxname_tointernal(name, proxyd_userid, mailboxname);
-
-    if (!r) {
-	r = mlookup(mailboxname, &server, NULL, NULL);
-    }
-
+    if (!r) r = mlookup(mailboxname, &server, &acl, NULL);
     if (!r) {
 	s = proxyd_findserver(server);
+	if (!s) r = IMAP_SERVER_UNAVAILABLE;
     }
 
-    if (!r && s) {
+    if (!r) {
 	if (rights) {
 	    prot_printf(s->out, 
 			"%s Setacl {%d+}\r\n%s {%d+}\r\n%s {%d+}\r\n%s\r\n",
@@ -3285,30 +3283,40 @@ void cmd_setacl(char *tag, char *name, char *identifier, char *rights)
 			tag, strlen(name), name,
 			strlen(identifier), identifier);
 	}	    
-	r = pipe_including_tag(s, tag);
-	if (!CAPA(s, ACAP) && r == OK) {
-	    switch (r) {
-	    case OK:
-	    {
-		acapmbox_handle_t *acaphandle = acapmbox_get_handle();
-
-		/* calculate new ACL; race conditions here */
-
-		/* change the ACAP server */
-
+	res = pipe_including_tag(s, tag);
+	tag = "*";		/* can't send another tagged response */
+	if (!CAPA(s, ACAP) && res == OK) {
+	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
+	    int mode;
+	    
+	    /* calculate new ACL; race conditions here */
+	    if (rights) {
+		mode = ACL_MODE_SET;
+		if (*rights == '+') {
+		    rights++;
+		    mode = ACL_MODE_ADD;
+		} else if (*rights == '-') {
+		    rights++;
+		    mode = ACL_MODE_REMOVE;
+		}
 		
+		if (acl_set(&acl, identifier, mode, acl_strtomask(rights),
+			    NULL, proxyd_userid)) {
+		    r = IMAP_INVALID_IDENTIFIER;
+		}
+	    } else {
+		if (acl_remove(&acl, identifier, NULL, proxyd_userid)) {
+		    r = IMAP_INVALID_IDENTIFIER;
+		}
 	    }
-	    default:
-		break;
+	    
+	    /* change the ACAP server */
+	    r = acapmbox_setproperty_acl(acaphandle, mailboxname, acl);
 	}
-    } else {
-	r = IMAP_SERVER_UNAVAILABLE;
     }
 
-    if (r) {
-	prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
-	return;
-    }
+    if (r) prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
+    if (acl) free(acl);
 }
 
 /*
