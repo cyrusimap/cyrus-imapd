@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.252 2003/01/02 17:28:27 rjs3 Exp $
+dnl $Id: configure.in,v 1.253 2003/01/08 16:38:20 rjs3 Exp $
 dnl
 
 
@@ -887,14 +887,8 @@ AC_FUNC_CHECK(MD5Init,,
                     MD5OBJ="md5.o"))
 AC_SUBST(MD5OBJ)
 
-dnl --- cmu agentx library deprecated in favor of ucd snmp
-dnl CMU_AGENTX
-dnl 
-dnl if test "$found_agentx" = yes; then
-dnl   CMU_PTHREADS
-dnl   SNMP_SUBDIRS="snmp"
-dnl fi
-dnl
+dnl snmp
+dnl (agentx was depricated, but SNMP_SUBDIRS is conveinent as a placeholder)
 SNMP_SUBDIRS=""
 AC_SUBST(SNMP_SUBDIRS)
 
@@ -951,4 +945,4 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 dnl make sure that Makefile is the last thing output
-AC_OUTPUT(man/Makefile master/Makefile lib/Makefile acap/Makefile imap/Makefile imap/feedcyrus imtest/Makefile netnews/Makefile snmp/Makefile perl/Makefile $EXTRA_OUTPUT Makefile)
+AC_OUTPUT(man/Makefile master/Makefile lib/Makefile acap/Makefile imap/Makefile imap/feedcyrus imtest/Makefile netnews/Makefile perl/Makefile $EXTRA_OUTPUT Makefile)
