@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.16.2.1 2003/10/22 20:13:06 ken3 Exp $
+ * $Id: annotate.c,v 1.16.2.2 2003/10/28 22:06:48 ken3 Exp $
  */
 
 #include <config.h>

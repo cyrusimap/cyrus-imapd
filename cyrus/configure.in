@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.268.2.1 2003/10/22 20:13:04 ken3 Exp $
+dnl $Id: configure.in,v 1.268.2.2 2003/10/28 22:06:46 ken3 Exp $
 dnl
 
 
@@ -1047,7 +1047,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.268.2.1 2003/10/22 20:13:04 ken3 Exp $ */
+/* $Id: configure.in,v 1.268.2.2 2003/10/28 22:06:46 ken3 Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *

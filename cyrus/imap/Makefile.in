@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.175.2.2 2003/10/28 20:09:45 ken3 Exp $
+# $Id: Makefile.in,v 1.175.2.3 2003/10/28 22:06:47 ken3 Exp $
 # 
 # @configure_input@
 # 

@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.199.2.1 2003/10/22 20:13:11 ken3 Exp $
+ * $Id: index.c,v 1.199.2.2 2003/10/28 22:06:52 ken3 Exp $
  */
 #include <config.h>
 
