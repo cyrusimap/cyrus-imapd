@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.123.2.10 2000/08/22 14:13:23 ken3 Exp $
+ * $Id: deliver.c,v 1.123.2.11 2000/09/13 18:13:11 ken3 Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.123.2.10 2000/08/22 14:13:23 ken3 Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.123.2.11 2000/09/13 18:13:11 ken3 Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -989,7 +989,7 @@ int send_rejection(char *origid,
 	fwrite(buf, i, 1, sm);
     }
     fprintf(sm, "\r\n\r\n");
-    fprintf(sm, "--%d/%s\r\n", p, hostname);
+    fprintf(sm, "--%d/%s--\r\n", p, hostname);
 
     fclose(sm);
     while (waitpid(sm_pid, &sm_stat, 0) < 0);
@@ -1287,7 +1287,7 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     fprintf(sm, "%s\r\n", src->msg);
 
     if (src->mime) {
-	fprintf(sm, "\r\n--%d/%s\r\n", p, hostname);
+	fprintf(sm, "\r\n--%d/%s--\r\n", p, hostname);
     }
     fclose(sm);
     while (waitpid(sm_pid, &sm_stat, 0) < 0);
