@@ -185,7 +185,7 @@ if test -z "$with_tcl"; then
 fi
 case "$with_tcl" in
 	no) TCL_SUBDIRS="" ;;
-	"") AC_CHECK_LIB(tcl,main,LIBS="${LIBS} -ltcl -lm",
+	""|yes) AC_CHECK_LIB(tcl,main,LIBS="${LIBS} -ltcl -lm",
 	    [AC_MSG_WARN([Unable to find Tcl, will not compile cyradm])
 	     TCL_SUBDIRS=""],-lm) ;;
 	*)  CPPFLAGS="${CPPFLAGS} -I${with_tcl}/include"
@@ -204,7 +204,7 @@ if test -z "$with_zephyr"; then
 fi
 case "$with_zephyr" in
 	no) true;;
-	"") AC_CHECK_LIB(zephyr,main,LIBS="${LIBS} -lzephyr",
+	""|yes) AC_CHECK_LIB(zephyr,main,LIBS="${LIBS} -lzephyr",
 		with_zephyr="no",);;
 	*)  CPPFLAGS="${CPPFLAGS} -I${with_zephyr}/include"
 	    LIBS="${LIBS} ${with_zephyr}/lib/libzephyr.a";;
@@ -234,7 +234,7 @@ if test -z "$with_krb"; then
 fi
 case "$with_krb" in
 	no) true;;
-	"") AC_CHECK_LIB(krb,des_ecb_encrypt,LIBS="${LIBS} -lkrb -ldes",
+	""|yes) AC_CHECK_LIB(krb,des_ecb_encrypt,LIBS="${LIBS} -lkrb -ldes",
 		with_krb="no",-ldes);;
 	*)  if test -f ${with_krb}/lib/libdes.a; then
 		CPPFLAGS="${CPPFLAGS} -I${with_krb}/include"
