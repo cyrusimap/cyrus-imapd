@@ -44,9 +44,6 @@ ec IMAP_INVALID_IDENTIFIER,
 ec IMAP_MESSAGE_CONTAINSNULL,
    "message contains NUL characters"
 
-ec IMAP_MESSAGE_CONTAINSCR,
-   "message contains bare carriage returns"
-
 ec IMAP_MESSAGE_CONTAINSNL,
    "message contains bare newlines"
 
