@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.152 2004/02/19 17:09:52 ken3 Exp $
+ * $Id: pop3d.c,v 1.153 2004/03/03 16:22:27 ken3 Exp $
  */
 #include <config.h>
 
@@ -1568,49 +1568,75 @@ static int reset_saslconn(sasl_conn_t **conn)
    now it's all up to them */
 static void bitpipe(void)
 {
-    fd_set read_set, rset;
-    int nfds, r;
+    struct protgroup *protin = protgroup_new(2);
+    struct protgroup *protout = NULL;
+    int n, shutdown = 0;
     char buf[4096];
-    
-    FD_ZERO(&read_set);
-    FD_SET(0, &read_set);  
-    FD_SET(backend->sock, &read_set);
-    nfds = backend->sock + 1;
-    
+
+    /* Reset protin to all zeros (to preserve memory allocation) */
+    protgroup_reset(protin);
+    protgroup_insert(protin, popd_in);
+    protgroup_insert(protin, backend->in);
+
     for (;;) {
 	/* check for shutdown file */
 	if (shutdown_file(buf, sizeof(buf))) {
-	    char *p;
-	    for (p = buf; *p == '['; p++); /* can't have [ be first char */
-	    prot_printf(popd_out, "-ERR [SYS/TEMP] %s\r\n", p);
-	    shut_down(0);
+	    shutdown = 1;
+	    goto done;
 	}
 
-	rset = read_set;
-	r = select(nfds, &rset, NULL, NULL, NULL);
-	/* if select() failed it's not worth trying to figure anything out */
-	if (r < 0) goto done;
+	/* Clear protout if needed */
+	protgroup_free(protout);
+	protout = NULL;
 
-	if (FD_ISSET(0, &rset)) {
-	    do {
-		int c = prot_read(popd_in, buf, sizeof(buf));
-		if (c == 0 || c < 0) goto done;
-		prot_write(backend->out, buf, c);
-	    } while (popd_in->cnt > 0);
-	    prot_flush(backend->out);
+	n = prot_select(protin, PROT_NO_FD, &protout, NULL, NULL);
+	if (n == -1) {
+	    syslog(LOG_ERR, "prot_select() failed in bitpipe(): %m");
+	    fatal("prot_select() failed in bitpipe()", EC_TEMPFAIL);
 	}
+	if (n && protout) {
+	    struct protstream *ptmp;
 
-	if (FD_ISSET(backend->sock, &rset)) {
-	    do {
-		int c = prot_read(backend->in, buf, sizeof(buf));
-		if (c == 0 || c < 0) goto done;
-		prot_write(popd_out, buf, c);
-	    } while (backend->in->cnt > 0);
-	    prot_flush(popd_out);
+	    for (; n; n--) {
+		ptmp = protgroup_getelement(protout, n-1);
+
+		if (ptmp == popd_in) {
+		    do {
+			int c = prot_read(popd_in, buf, sizeof(buf));
+			if (c == 0 || c < 0) goto done;
+			prot_write(backend->out, buf, c);
+		    } while (popd_in->cnt > 0);
+		    prot_flush(backend->out);
+		}
+		else if (ptmp == backend->in) {
+		    do {
+			int c = prot_read(backend->in, buf, sizeof(buf));
+			if (c == 0 || c < 0) goto done;
+			prot_write(popd_out, buf, c);
+		    } while (backend->in->cnt > 0);
+		    prot_flush(popd_out);
+		}
+		else {
+		    /* XXX shouldn't get here !!! */
+		    fatal("unknown protstream returned by prot_select in bitpipe()",
+			  EC_SOFTWARE);
+		}
+	    }
 	}
     }
+
+
  done:
     /* ok, we're done. */
+    protgroup_free(protin);
+    protgroup_free(protout);
+
+    if (shutdown) {
+	char *p;
+	for (p = buf; *p == '['; p++); /* can't have [ be first char */
+	prot_printf(popd_out, "-ERR [SYS/TEMP] %s\r\n", p);
+	shut_down(0);
+    }
 
     return;
 }
