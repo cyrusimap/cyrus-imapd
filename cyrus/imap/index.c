@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.127 2000/06/20 18:08:39 leg Exp $
+ * $Id: index.c,v 1.128 2000/06/21 15:11:33 ken3 Exp $
  */
 #include <config.h>
 
@@ -3554,21 +3554,27 @@ static void _index_thread_print(Thread *thread, int usinguid)
 
     /* for each thread... */
     while (thread) {
+	/* start the thread */
 	prot_printf(imapd_out, "(");
 
-	/* if this is an empty container, print zero */
-	prot_printf(imapd_out, "%u",
-		    thread->msgdata ?
-		    (usinguid ? UID(thread->msgdata->msgno) :
-		     thread->msgdata->msgno) : 0);
+	/* if we have a message, print its identifier
+	 * (do nothing for empty containers)
+	 */
+	if (thread->msgdata) {
+	    prot_printf(imapd_out, "%u",
+			usinguid ? UID(thread->msgdata->msgno) :
+			thread->msgdata->msgno);
 
-	/* free contents of the current node */
-	index_msgdata_free(thread->msgdata);
+	    /* free contents of the current node */
+	    index_msgdata_free(thread->msgdata);
+	}
 
 	/* for each child, grandchild, etc... */
 	child = thread->child;
 	while (child) {
-	    prot_printf(imapd_out, " ");
+	    /* if we have a non-empty parent, print the separator */
+	    if (child->parent->msgdata)
+		prot_printf(imapd_out, " ");
 
 	    /* if the child has siblings, print new branch and break */
 	    if (child->next) {
@@ -3577,11 +3583,9 @@ static void _index_thread_print(Thread *thread, int usinguid)
 	    }
 	    /* otherwise print the only child */
 	    else {
-		/* if this is an empty container, print zero */
 		prot_printf(imapd_out, "%u",
-			    child->msgdata ?
-			    (usinguid ? UID(child->msgdata->msgno) :
-			     child->msgdata->msgno) : 0);
+			    usinguid ? UID(child->msgdata->msgno) :
+			    child->msgdata->msgno);
 
 		/* free contents of the child node */
 		index_msgdata_free(child->msgdata);
@@ -3589,6 +3593,8 @@ static void _index_thread_print(Thread *thread, int usinguid)
 		child = child->child;
 	    }
 	}
+
+	/* end the thread */
 	prot_printf(imapd_out, ")");
 
 	thread = thread->next;
