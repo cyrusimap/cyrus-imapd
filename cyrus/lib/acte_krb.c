@@ -73,9 +73,10 @@ void *state;
     free((char *) state);
 }
 
-static char *krb_en_integrity(), *krb_en_privacy();
-static char *krb_de_integrity(), *krb_de_privacy();
-
+static char *krb_en_integrity(), *krb_de_integrity();
+#ifndef NOPRIVACY
+static char *krb_en_privacy(), *krb_de_privacy();
+#endif
 /*
  * Query public values of the state pointer after authentiation
  * complete.  Fills in buffers pointed to by the following arguments:
@@ -115,11 +116,13 @@ int *maxplain;
 	*maxplain = kstate->maxbufsize - PROTECTION_OVERHEAD;
 	return;
 
+#ifndef NOPRIVACY
     case ACTE_PROT_PRIVACY:
 	*encodefunc = krb_en_privacy;
 	*decodefunc = krb_de_privacy;
 	*maxplain = kstate->maxbufsize - PROTECTION_OVERHEAD;
 	return;
+#endif
 
     default:
 	abort();
@@ -150,7 +153,11 @@ void **state;			/* On success, filled in with state ptr */
     CREDENTIALS cr;
     struct krb_state *kstate;
 
-    protallowed &= ACTE_PROT_NONE|ACTE_PROT_INTEGRITY|ACTE_PROT_PRIVACY;
+    protallowed &= ACTE_PROT_NONE|ACTE_PROT_INTEGRITY
+#ifndef NOPRIVACY
+	|ACTE_PROT_PRIVACY
+#endif
+	;
     if (!localaddr || !remoteaddr) {
 	protallowed &= ACTE_PROT_NONE;
     }
@@ -278,10 +285,13 @@ char **output;			/* Set to point to client reply data */
 	    /* Protection buffer too small */
 	    kstate->protallowed &= ACTE_PROT_NONE;
 	}
+#ifndef NOPRIVACY
 	if (kstate->protallowed & ACTE_PROT_PRIVACY) {
 	    kstate->protallowed = ACTE_PROT_PRIVACY;
 	}
-	else if (kstate->protallowed & ACTE_PROT_INTEGRITY) {
+	else
+#endif
+	if (kstate->protallowed & ACTE_PROT_INTEGRITY) {
 	    kstate->protallowed = ACTE_PROT_INTEGRITY;
 	}
 	else if (kstate->protallowed & ACTE_PROT_NONE) {
@@ -314,13 +324,64 @@ char **output;			/* Set to point to client reply data */
     }
 }
 
+/*
+ * Acquire daemon client credentials for 'service'.  Places lifetime
+ * of credentials in seconds in the buffer pointed to by 'lifetime'
+ * Returns error message on failure, NULL on success.
+ */
+static char *
+krb_new_cred(service, lifetime)
+char *service;
+time_t *lifetime;
+{
+    static int inited = 0;
+    char hostname[MAXHOSTNAMELEN+1];
+    char instance[MAXHOSTNAMELEN+1];
+    char realm[REALM_SZ];
+    char tktstring[256];
+    int r;
+    CREDENTIALS cr;
+
+    if (!inited++) {
+	sprintf(tktstring, "/tmp/tkt_pid_%d", getpid());
+	krb_set_tkt_string(tktstring);
+    }
+
+    if (krb_get_lrealm(realm) != KSUCCESS) {
+	return "cannot get local Kerberos realm";
+    }
+
+    gethostname(hostname, sizeof(hostname));
+    strcpy(instance, krb_get_phost(hostname));
+
+    r = krb_get_svc_in_tkt(service, instance, realm, "krbtgt", realm, 127,
+		       srvtab);
+
+    if (!r) {
+	r = krb_get_cred("krbtgt", realm, realm, &cr);
+	if (!r) *lifetime = cr.lifetime*5*60;
+	memset((char *)&cr, 0, sizeof(cr));
+    }
+
+    if (r) return krb_err_txt[r];
+    return 0;
+}
+    
+static void
+krb_free_cred()
+{
+    dest_tkt();
+}
+
 /* Exported definition of client-side authentication mechanism */
 struct acte_client krb_acte_client = {
     "KERBEROS_V4",
     krb_client_start,
     krb_client_auth,
     krb_query_state,
-    krb_free_state
+    krb_free_state,
+    krb_new_cred,
+    krb_free_cred
 };
 
 /*
@@ -345,7 +406,11 @@ char **reply;			/* On failure, filled in with ptr to reason */
     static char outputbuf[4];
     struct krb_state *kstate;
 
-    protallowed &= ACTE_PROT_NONE|ACTE_PROT_INTEGRITY|ACTE_PROT_PRIVACY;
+    protallowed &= ACTE_PROT_NONE|ACTE_PROT_INTEGRITY
+#ifndef NOPRIVACY
+	|ACTE_PROT_PRIVACY
+#endif
+	;
     if (!localaddr || !remoteaddr) {
 	protallowed &= ACTE_PROT_NONE;
     }
@@ -467,7 +532,10 @@ char **reply;			/* On failure, filled in with ptr to reason */
 	    *reply = "No suitable protection mechanism selected";
 	    return ACTE_FAIL;
 	}
-	if (protallowed != ACTE_PROT_PRIVACY &&
+	if (
+#ifndef NOPRIVACY
+	    protallowed != ACTE_PROT_PRIVACY &&
+#endif
 	    protallowed != ACTE_PROT_INTEGRITY &&
 	    protallowed != ACTE_PROT_NONE) {
 	    kstate->authstepno = -1;
@@ -586,6 +654,7 @@ int *outputlen;
     return 0;
 }
 
+#ifndef NOPRIVACY
 /*
  * Apply privacy protection to the 'inputlen' bytes of data at 'input',
  * using the state in 'state', placing the output data and length in the
@@ -638,6 +707,7 @@ int *outputlen;
     *outputlen = m_data.app_length;
     return 0;
 }
+#endif /* !NOPRIVACY */
 
 static afs_string_to_key();
 
