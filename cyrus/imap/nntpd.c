@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.33 2004/07/15 22:42:45 rjs3 Exp $
+ * $Id: nntpd.c,v 1.34 2004/09/07 20:47:54 ken3 Exp $
  */
 
 /*
@@ -496,6 +496,7 @@ static void nntp_reset(void)
 
     nntp_exists = 0;
     nntp_current = 0;
+    did_extensions = 0;
 }
 
 /*
