@@ -48,7 +48,7 @@ if test $ipv6_cv_$1 = no; then
       AC_EGREP_HEADER(${ipv6_cv_pfx}$1, netdb.h,
 		      [AC_CHECK_FUNC(${ipv6_cv_pfx}$1)])
       if eval test X\$ac_cv_func_${ipv6_cv_pfx}$1 = Xyes; then
-        AC_DEFINE(HAVE_GETADDRINFO)
+        AC_DEFINE(HAVE_GETADDRINFO,[],[Do we have a getaddrinfo?])
         ipv6_cv_$1=yes
         break
       fi
