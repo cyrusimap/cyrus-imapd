@@ -1,5 +1,5 @@
 /* pop3test.c -- pop3 test client
- * $Id: pop3test.c,v 1.5 2002/02/06 22:11:06 rjs3 Exp $
+ * $Id: pop3test.c,v 1.6 2002/03/19 15:56:09 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1032,7 +1032,7 @@ static char *parsemechlist(char *str)
 static char *ask_capability(int *supports_starttls)
 {
   char str[1024];
-  char *ret;
+  char *ret = NULL;
 
   /* request capabilities of server */
   prot_printf(pout, "CAPA\r\n");
@@ -1385,7 +1385,7 @@ int main(int argc, char **argv)
 	  result = auth_sasl(mechanism);
       }
   } else {
-      if (*mechlist) {
+      if (mechlist && *mechlist) {
 	  result = auth_sasl(mechlist);
       } else if (apop_chal) {
 	  result = auth_apop(apop_chal);
