@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.362 2002/03/21 17:26:21 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.363 2002/03/21 17:32:13 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -6017,7 +6017,8 @@ void cmd_xfer(char *tag, char *toserver, char *name)
     /* Step 6: mupdate.activate(mailbox, remote) */
     /* We do this from the local server first so that recovery is easier */
     if(!r) {
-	/* xxx partition????? */
+	/* cannot set partition because if it is the default we don't know it.
+	 * we.  Of course, we're about to force a push anyway, so... */
 	snprintf(buf, sizeof(buf), "%s!", toserver);
 	r = mupdate_activate(mupdate_h, mailboxname, buf, acl);
     }
