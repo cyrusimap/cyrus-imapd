@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.183 2000/08/25 15:01:34 ken3 Exp $
+dnl $Id: configure.in,v 1.184 2000/10/12 19:11:25 leg Exp $
 dnl
 
 
@@ -659,9 +659,9 @@ AC_REPLACE_FUNCS(getdtablesize)
 AC_ARG_ENABLE(cmulocal,
 	[  --enable-cmulocal       enable CMU-specific local support],
 	if test "$enableval" = yes; then
-		EXTRA_SUBDIRS="${EXTRA_SUBDIRS} depot"
+		EXTRA_SUBDIRS="${EXTRA_SUBDIRS} netnews depot"
 		EXTRA_OUTPUT="${EXTRA_OUTPUT} depot/Makefile"
-	fi)			
+	fi)
 
 AC_ARG_ENABLE(netscapehack,
 	[  --enable-netscapehack   enable Netscape hack for the menu option
