@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_expire.c,v 1.4 2004/01/20 01:10:55 ken3 Exp $
+ * $Id: cyr_expire.c,v 1.5 2004/01/26 17:46:55 ken3 Exp $
  */
 
 #include <config.h>
@@ -230,7 +230,7 @@ int main(int argc, char *argv[])
 
     if (!days) usage();
 
-    cyrus_init(alt_config, "cyr_expire");
+    cyrus_init(alt_config, "cyr_expire", 0);
 
     annotatemore_init(0, NULL, NULL);
     annotatemore_open(NULL);

@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: cvt_cyrusdb.c,v 1.12 2003/10/22 18:50:07 rjs3 Exp $
+ * $Id: cvt_cyrusdb.c,v 1.13 2004/01/26 17:46:54 ken3 Exp $
  */
 
 #include <config.h>
@@ -163,7 +163,7 @@ int main(int argc, char *argv[])
 	fatal("no conversion required", EC_TEMPFAIL);
     }
 
-    cyrus_init(alt_config, "cvt_cyrusdb");
+    cyrus_init(alt_config, "cvt_cyrusdb", 0);
 
     printf("Converting from %s (%s) to %s (%s)\n", old_db, DB_OLD->name,
 	   new_db, DB_NEW->name);

@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.22 2004/01/20 01:10:58 ken3 Exp $
+ * $Id: ipurge.c,v 1.23 2004/01/26 17:46:57 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -169,7 +169,7 @@ int main (int argc, char *argv[]) {
     usage(argv[0]);
   }
 
-  cyrus_init(alt_config, "ipurge");
+  cyrus_init(alt_config, "ipurge", 0);
 
   /* Set namespace -- force standard (internal) */
   if ((r = mboxname_init_namespace(&purge_namespace, 1)) != 0) {

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: mbexamine.c,v 1.5 2003/10/22 18:50:08 rjs3 Exp $ */
+/* $Id: mbexamine.c,v 1.6 2004/01/26 17:46:57 ken3 Exp $ */
 
 #include <config.h>
 
@@ -147,7 +147,7 @@ int main(int argc, char **argv)
 	}
     }
 
-    cyrus_init(alt_config, "mbexamine");
+    cyrus_init(alt_config, "mbexamine", 0);
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&recon_namespace, 1)) != 0) {

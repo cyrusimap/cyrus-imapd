@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.83 2004/01/21 21:15:45 ken3 Exp $ */
+/* $Id: reconstruct.c,v 1.84 2004/01/26 17:46:57 ken3 Exp $ */
 
 #include <config.h>
 
@@ -172,7 +172,7 @@ int main(int argc, char **argv)
 	}
     }
 
-    cyrus_init(alt_config, "reconstruct");
+    cyrus_init(alt_config, "reconstruct", 0);
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&recon_namespace, 1)) != 0) {

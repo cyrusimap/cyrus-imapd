@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ctl_cyrusdb.c,v 1.21 2004/01/20 01:10:55 ken3 Exp $
+ * $Id: ctl_cyrusdb.c,v 1.22 2004/01/26 17:46:54 ken3 Exp $
  */
 
 #include <config.h>
@@ -218,7 +218,7 @@ int main(int argc, char *argv[])
 	/* NOTREACHED */
     }
 
-    cyrus_init(alt_config, "ctl_cyrusdb");
+    cyrus_init(alt_config, "ctl_cyrusdb", 0);
 
     /* create the name of the db directory */
     /* (used by backup directory names) */
