@@ -1,4 +1,4 @@
-/* pwcheck_getpwnam.c -- check passwords using getpwnam()
+/* pwcheck_getpwname.c -- check passwords using getpwname()
  *
  *      (C) Copyright 1996 by Carnegie Mellon University
  *
@@ -37,7 +37,7 @@ char *password;
 {
     struct pwd *pwd;
 
-    pwd = getpwnam(request);
+    pwd = getpwnam(userid);
     if (!pwd) {
 	return "Userid not found";
     }
@@ -46,8 +46,7 @@ char *password;
 	return "Account disabled";
     }
 
-    if (strcmp(pwd->pw_passwd,
-	       crypt(request + strlen(request) + 1, pwd->pw_passwd)) != 0) {
+    if (strcmp(pwd->pw_passwd, crypt(password, pwd->pw_passwd)) != 0) {
 	return "Incorrect password";
     }
     else {

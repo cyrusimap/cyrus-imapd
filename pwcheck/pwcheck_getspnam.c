@@ -37,12 +37,12 @@ char *password;
 {
     struct spwd *pwd;
 
-    pwd = getspnam(request);
+    pwd = getspnam(userid);
     if (!pwd) {
 	return "Userid not found";
     }
     
-    if (strcmp(pwd->sp_pwdp, crypt(request + strlen(request) + 1, pwd->sp_pwdp)) != 0) {
+    if (strcmp(pwd->sp_pwdp, crypt(password, pwd->sp_pwdp)) != 0) {
 	return "Incorrect password";
     }
     else {
