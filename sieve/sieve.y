@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.23 2003/10/22 18:50:30 rjs3 Exp $
+ * $Id: sieve.y,v 1.24 2003/10/31 19:24:10 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -117,7 +117,7 @@ static int verify_relat(char *s);
 static int verify_regex(char *s, int cflags);
 static int verify_regexs(stringlist_t *sl, char *comp);
 #endif
-static int ok_header(char *s);
+static int verify_utf8(char *s);
 
 int yyerror(char *msg);
 extern int yylex(void);
@@ -198,7 +198,11 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
 				     yyerror("reject not required");
 				     YYERROR;
 				   }
-				   $$ = new_command(REJCT); $$->u.str = $2; }
+				   if (!verify_utf8($2)) {
+				     YYERROR; /* vu should call yyerror() */
+				   }
+				   $$ = new_command(REJCT);
+				   $$->u.str = $2; }
 	| FILEINTO STRING	 { if (!parse_script->support.fileinto) {
 				     yyerror("fileinto not required");
 	                             YYERROR;
@@ -218,12 +222,13 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
 	| DISCARD		 { $$ = new_command(DISCARD); }
 	| VACATION vtags STRING  { if (!parse_script->support.vacation) {
 				     yyerror("vacation not required");
-				     $$ = new_command(VACATION);
 				     YYERROR;
-				   } else {
-  				     $$ = build_vacation(VACATION,
-					    canon_vtags($2), $3);
-				   } }
+				   }
+				   if (($2->mime == -1) && !verify_utf8($3)) {
+				     YYERROR; /* vu should call yyerror() */
+				   }
+  				   $$ = build_vacation(VACATION,
+					    canon_vtags($2), $3); }
         | SETFLAG stringlist     { if (!parse_script->support.imapflags) {
                                     yyerror("imapflags not required");
                                     YYERROR;
@@ -348,8 +353,8 @@ vtags: /* empty */		 { $$ = new_vtags(); }
 	| vtags SUBJECT STRING	 { if ($$->subject != NULL) { 
 					yyerror("duplicate :subject"); 
 					YYERROR;
-				   } else if (!ok_header($3)) {
-					YYERROR;
+				   } else if (!verify_utf8($3)) {
+				        YYERROR; /* vu should call yyerror() */
 				   } else { $$->subject = $3; } }
 	| vtags MIME		 { if ($$->mime != -1) { 
 					yyerror("duplicate :mime"); 
@@ -378,6 +383,9 @@ test:     ANYOF testlist	 { $$ = new_test(ANYOF); $$->u.tl = $2; }
 				 {
 				     if (!verify_stringlist($3, verify_header)) {
 					 YYERROR; /* vh should call yyerror() */
+				     }
+				     if (!verify_stringlist($4, verify_utf8)) {
+					 YYERROR; /* vu should call yyerror() */
 				     }
 				     
 				     $2 = canon_htags($2);
@@ -826,8 +834,10 @@ static int verify_address(char *s)
     return 1;
 }
 
-static int verify_mailbox(char *s __attribute__((unused)))
+static int verify_mailbox(char *s)
 {
+    if (!verify_utf8(s)) return 0;
+
     /* xxx if not a mailbox, call yyerror */
     return 1;
 }
@@ -938,8 +948,96 @@ static int verify_regexs(stringlist_t *sl, char *comp)
 }
 #endif
 
-/* xxx is it ok to put this in an RFC822 header body? */
-static int ok_header(char *s __attribute__((unused)))
+/*
+ * Valid UTF-8 check (from RFC 2640 Annex B.1)
+ *
+ * The following routine checks if a byte sequence is valid UTF-8. This
+ * is done by checking for the proper tagging of the first and following
+ * bytes to make sure they conform to the UTF-8 format. It then checks
+ * to assure that the data part of the UTF-8 sequence conforms to the
+ * proper range allowed by the encoding. Note: This routine will not
+ * detect characters that have not been assigned and therefore do not
+ * exist.
+ */
+static int verify_utf8(char *s)
 {
+    const unsigned char *buf = s;
+    const unsigned char *endbuf = s + strlen(s);
+    unsigned char byte2mask = 0x00, c;
+    int trailing = 0;  /* trailing (continuation) bytes to follow */
+
+    while (buf != endbuf) {
+	c = *buf++;
+	if (trailing) {
+	    if ((c & 0xC0) == 0x80) {		/* Does trailing byte
+						   follow UTF-8 format? */
+		if (byte2mask) {		/* Need to check 2nd byte
+						   for proper range? */
+		    if (c & byte2mask)		/* Are appropriate bits set? */
+			byte2mask = 0x00;
+		    else
+			break;
+		}
+		trailing--;
+	    }
+	    else
+		break;
+	}
+	else {
+	    if ((c & 0x80) == 0x00)		/* valid 1 byte UTF-8 */
+		continue;
+	    else if ((c & 0xE0) == 0xC0)	/* valid 2 byte UTF-8 */
+		if (c & 0x1E) {			/* Is UTF-8 byte
+						   in proper range? */
+		    trailing = 1;
+		}
+		else
+		    break;
+	    else if ((c & 0xF0) == 0xE0) {	/* valid 3 byte UTF-8 */
+		if (!(c & 0x0F)) {		/* Is UTF-8 byte
+						   in proper range? */
+		    byte2mask = 0x20;		/* If not, set mask
+						   to check next byte */
+		}
+		trailing = 2;
+	    }
+	    else if ((c & 0xF8) == 0xF0) {	/* valid 4 byte UTF-8 */
+		if (!(c & 0x07)) {		/* Is UTF-8 byte
+						   in proper range? */
+		    byte2mask = 0x30;		/* If not, set mask
+						   to check next byte */
+		}
+		trailing = 3;
+	    }
+	    else if ((c & 0xFC) == 0xF8) {	/* valid 5 byte UTF-8 */
+		if (!(c & 0x03)) {		/* Is UTF-8 byte
+						   in proper range? */
+		    byte2mask = 0x38;		/* If not, set mask
+						   to check next byte */
+		}
+		trailing = 4;
+	    }
+	    else if ((c & 0xFE) == 0xFC) {	/* valid 6 byte UTF-8 */
+		if (!(c & 0x01)) {		/* Is UTF-8 byte
+						   in proper range? */
+		    byte2mask = 0x3C;		/* If not, set mask
+						   to check next byte */
+		}
+		trailing = 5;
+	    }
+	    else
+		break;
+	}
+    }
+
+    if ((buf != endbuf) || trailing) {
+	char errbuf[100];
+
+	snprintf(errbuf, sizeof(errbuf),
+		 "string '%s': not valid utf8", s);
+	yyerror(errbuf);
+	return 0;
+    }
+
     return 1;
 }
