@@ -1,5 +1,5 @@
 /* notify.c -- Module to notify of new mail
- * $Id: notify.c,v 1.9 2003/02/13 20:15:29 rjs3 Exp $ 
+ * $Id: notify.c,v 1.10 2003/04/17 20:34:15 rjs3 Exp $ 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -99,11 +99,12 @@ void notify(const char *method,
     sun_data.sun_family = AF_UNIX;
     notify_sock = config_getstring("notifysocket", NULL);
     if (notify_sock) {	
-	strcpy(sun_data.sun_path, notify_sock);
+	strlcpy(sun_data.sun_path, notify_sock, sizeof(sun_data.sun_path));
     }
     else {
-	strcpy(sun_data.sun_path, config_dir);
-	strcat(sun_data.sun_path, FNAME_NOTIFY_SOCK);
+	strlcpy(sun_data.sun_path, config_dir, sizeof(sun_data.sun_path));
+	strlcat(sun_data.sun_path,
+		FNAME_NOTIFY_SOCK, sizeof(sun_data.sun_path));
     }
 
     /*
@@ -113,20 +114,20 @@ void notify(const char *method,
      *   nopt NUL N(option NUL) message NUL
      */
 
-    r = add_arg(buf, NOTIFY_MAXSIZE, method, &buflen);
-    if (!r) r = add_arg(buf, NOTIFY_MAXSIZE, class, &buflen);
-    if (!r) r = add_arg(buf, NOTIFY_MAXSIZE, priority, &buflen);
-    if (!r) r = add_arg(buf, NOTIFY_MAXSIZE, user, &buflen);
-    if (!r) r = add_arg(buf, NOTIFY_MAXSIZE, mailbox, &buflen);
+    r = add_arg(buf, sizeof(buf), method, &buflen);
+    if (!r) r = add_arg(buf, sizeof(buf), class, &buflen);
+    if (!r) r = add_arg(buf, sizeof(buf), priority, &buflen);
+    if (!r) r = add_arg(buf, sizeof(buf), user, &buflen);
+    if (!r) r = add_arg(buf, sizeof(buf), mailbox, &buflen);
 
     snprintf(noptstr, sizeof(noptstr), "%d", nopt);
-    if (!r) r = add_arg(buf, NOTIFY_MAXSIZE, noptstr, &buflen);
+    if (!r) r = add_arg(buf, sizeof(buf), noptstr, &buflen);
 
     for (i = 0; !r && i < nopt; i++) {
-	r = add_arg(buf, NOTIFY_MAXSIZE, options[i], &buflen);
+	r = add_arg(buf, sizeof(buf), options[i], &buflen);
     }
 
-    if (!r) r = add_arg(buf, NOTIFY_MAXSIZE, message, &buflen);
+    if (!r) r = add_arg(buf, sizeof(buf), message, &buflen);
 
     if (r) {
         syslog(LOG_ERR, "notify datagram too large");
