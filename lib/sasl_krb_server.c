@@ -1,5 +1,5 @@
 /* sasl_krb.c -- KERBEROS_V4 authentication routines for IMAP.
- $Id: sasl_krb_server.c,v 1.5 1998/05/15 21:53:19 neplokh Exp $
+ $Id: sasl_krb_server.c,v 1.6 1998/07/30 21:22:36 wcw Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -51,8 +51,12 @@ void *state;
     cacheid = malloc(16);
     if (!cacheid) return 0;
 
-    memset(cacheid, 0, sizeof(cacheid));
-    memcpy(cacheid, kstate->session, sizeof(kstate->session));
+    memset(cacheid, 0, 16);
+    if (sizeof(kstate->session) > 16) {
+      memcpy(cacheid, kstate->session, 16);
+    } else {
+      memcpy(cacheid, kstate->session, sizeof(kstate->session));
+    }
     return cacheid;
 }
 
