@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.99.2.17 2002/11/28 17:49:35 ken3 Exp $
+ * $Id: lmtpd.c,v 1.99.2.18 2002/12/07 00:57:58 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1085,9 +1085,10 @@ int deliver_mailbox(struct protstream *msg,
     time_t now = time(NULL);
 
     /* Translate any separators in user */
-    if (user) mboxname_hiersep_tointernal(&lmtpd_namespace, user,
-					  config_virtdomains ?
-					  strcspn(user, "@") : 0);
+    if (user && *user != '@')
+	mboxname_hiersep_tointernal(&lmtpd_namespace, user,
+				    config_virtdomains ?
+				    strcspn(user, "@") : 0);
 
     r = (*lmtpd_namespace.mboxname_tointernal)(&lmtpd_namespace, mailboxname,
 					       user, namebuf);
@@ -1466,9 +1467,10 @@ FILE *spoolfile(message_data_t *msgdata)
 
 	if (!r) {
 	    /* Translate any separators in user */
-	    if (user) mboxname_hiersep_tointernal(&lmtpd_namespace, user,
-						  config_virtdomains ?
-						  strcspn(user, "@") : 0);
+	    if (user && *user != '@')
+		mboxname_hiersep_tointernal(&lmtpd_namespace, user,
+					    config_virtdomains ?
+					    strcspn(user, "@") : 0);
 
 	    r = (*lmtpd_namespace.mboxname_tointernal)(&lmtpd_namespace,
 						       namebuf,
