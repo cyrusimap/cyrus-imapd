@@ -1,5 +1,5 @@
 /* auth_pts.c -- PTLOADER authorization
- * $Id: auth_pts.c,v 1.2.2.2 2004/01/31 18:57:00 ken3 Exp $
+ * $Id: auth_pts.c,v 1.2.2.3 2004/02/27 21:17:38 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -110,8 +110,10 @@ int auth_memberof(struct auth_state *auth_state,
     
     /* is it a group i'm a member of ? */
     for (i=0; i < auth_state->ngroups; i++)
-        if (idhash == auth_state->groups[i].hash &&
-	    !strcmp(identifier, auth_state->groups[i].id))
+        if ( idhash == auth_state->groups[i].hash &&
+	        (( !strncmp(identifier, "group:", 6) && 
+                !strcmp(identifier+6, auth_state->groups[i].id) ) ||
+             !strcmp(identifier, auth_state->groups[i].id)) )
             return 2;
   
     return 0;
@@ -275,8 +277,12 @@ int ptload(const char *identifier, struct auth_state **state)
         goto done;
     }
         
-    strcpy(fnamebuf, config_dir);
-    strcat(fnamebuf, PTS_DBSOCKET);
+    if (libcyrus_config_getstring(CYRUSOPT_PTLOADER_SOCK))
+        strcpy(fnamebuf, libcyrus_config_getstring(CYRUSOPT_PTLOADER_SOCK));
+    else {
+        strcpy(fnamebuf, config_dir);
+        strcat(fnamebuf, PTS_DBSOCKET);
+    }
 
     memset((char *)&srvaddr, 0, sizeof(srvaddr));
     srvaddr.sun_family = AF_UNIX;

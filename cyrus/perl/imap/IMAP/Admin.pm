@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Admin.pm,v 1.39.2.1 2004/01/15 20:24:42 ken3 Exp $
+# $Id: Admin.pm,v 1.39.2.2 2004/02/27 21:17:43 ken3 Exp $
 
 package Cyrus::IMAP::Admin;
 use strict;
@@ -258,6 +258,32 @@ sub deleteaclmailbox {
     if ($rc eq 'OK') {
       $cnt++;
     } else {
+      if($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
+	my ($refserver, $box) = $self->fromURL($1);
+	my $port = 143;
+	
+	if($refserver =~ /:/) {
+	  $refserver =~ /([^:]+):(\d+)/;
+	  $refserver = $1; $port = $2;
+	}
+	
+	my $cyradm = Cyrus::IMAP::Admin->new($refserver, $port)
+	  or die "cyradm: cannot connect to $refserver\n";
+	$cyradm->addcallback({-trigger => 'EOF',
+			      -callback => \&_cb_ref_eof,
+			      -rock => \$cyradm});
+	$cyradm->authenticate(@{$self->_getauthopts()})
+	  or die "cyradm: cannot authenticate to $refserver\n";
+	
+	$cnt += $cyradm->deleteaclmailbox($mbx,$acl);
+
+	$res .= "\n" if $res ne '';
+	$res .= $acl . ': ' . $cyradm->{error};
+
+	$cyradm = undef;
+      } else {
+	$rc = 0;
+      }
       $res .= "\n" if $res ne '';
       $res .= $acl . ': ' . $msg;
     }
@@ -669,8 +695,10 @@ sub setquota {
 }
 
 sub getinfo {
-  my ($self,$box) = @_;
-
+  my $self = shift;
+  my $box = shift;
+  my @entries = @_;
+  
   if(!defined($box)) {
     $box = "";
   }
@@ -726,8 +754,17 @@ sub getinfo {
 		      -rock => \%info});
 
   # send getannotation "/mailbox/name/* or /server/*"
-  my ($rc, $msg) = $self->send('', '', "GETANNOTATION %s \"*\" \"value.shared\"",
-			       $box);
+  my($rc, $msg);
+  if(scalar(@entries)) {
+    foreach my $annot (@entries) {
+      ($rc, $msg) = $self->send('', '', "GETANNOTATION %s %q \"value.shared\"",
+				$box, $annot);
+      last if($rc ne 'OK');
+    }
+  } else {
+    ($rc, $msg) = $self->send('', '', "GETANNOTATION %s \"*\" \"value.shared\"",
+			      $box);
+  }
   $self->addcallback({-trigger => 'ANNOTATION'});
   if ($rc eq 'OK') {
     $self->{error} = undef;

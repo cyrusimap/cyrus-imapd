@@ -1,6 +1,6 @@
 /* scripttest.c -- test wheather the sieve script is valid
  * Tim Martin
- * $Id: scripttest.c,v 1.21 2003/10/22 18:50:31 rjs3 Exp $
+ * $Id: scripttest.c,v 1.21.2.1 2004/02/27 21:17:48 ken3 Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -72,18 +72,18 @@ sieve_vacation_t vacation = {
     (sieve_callback *) &foo	/* send_response() */
 };
 
-static int sieve_notify(void *ac, 
-			void *interp_context, 
-			void *script_context,
-			void *message_context,
-			const char **errmsg)
+static int sieve_notify(void *ac __attribute__((unused)), 
+			void *interp_context __attribute__((unused)), 
+			void *script_context __attribute__((unused)),
+			void *message_context __attribute__((unused)),
+			const char **errmsg __attribute__((unused)))
 {
     fatal("stub function called", 0);
     return SIEVE_FAIL;
 }
 
 int mysieve_error(int lineno, const char *msg,
-		  void *i, void *s)
+		  void *i __attribute__((unused)), void *s)
 {
     char buf[1024];
     char **errstr = (char **) s;

@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.77.2.9 2004/02/19 16:59:19 ken3 Exp $
+ * $Id: mupdate.c,v 1.77.2.10 2004/02/27 21:17:33 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -111,6 +111,12 @@ struct pending {
     char mailbox[MAX_MAILBOX_NAME+1];
 };
 
+struct stringlist 
+{
+    char *str;
+    struct stringlist *next;
+};
+
 struct conn {
     int fd;
     int logfd;
@@ -140,11 +146,13 @@ struct conn {
 	char *authid;
     } saslprops;
 
-    /* pending changes to send, in reverse order */
+    /* UPDATE command handling */
     const char *streaming; /* tag */
+    struct stringlist *streaming_hosts; /* partial updates */
+
+    /* pending changes to send, in reverse order */
     pthread_mutex_t m;
     pthread_cond_t cond;
-
     struct pending *plist;
     struct conn *updatelist_next;
     struct prot_waitevent *ev; /* invoked every 'update_wait' seconds
@@ -206,9 +214,10 @@ void cmd_set(struct conn *C,
 	     const char *tag, const char *mailbox,
 	     const char *server, const char *acl, enum settype t);
 void cmd_find(struct conn *C, const char *tag, const char *mailbox,
-	      int dook, int send_delete);
+	      int send_ok, int send_delete);
 void cmd_list(struct conn *C, const char *tag, const char *host_prefix);
-void cmd_startupdate(struct conn *C, const char *tag);
+void cmd_startupdate(struct conn *C, const char *tag,
+		     struct stringlist *partial);
 void cmd_starttls(struct conn *C, const char *tag);
 void shut_down(int code);
 static int reset_saslconn(struct conn *c);
@@ -221,6 +230,11 @@ extern int saslserver(sasl_conn_t *conn, const char *mech,
 		      struct protstream *pin, struct protstream *pout,
 		      int *sasl_result,
 		      char **success_data);
+
+/* Functions for manipulating stringlists */
+static void stringlist_add(struct stringlist **list, const char *string);
+static void stringlist_free(struct stringlist **list);
+static int stringlist_contains(struct stringlist *list, const char *str);
 
 /* --- prototypes in mupdate-slave.c */
 void *mupdate_client_start(void *rock);
@@ -406,7 +420,44 @@ static void conn_free(struct conn *C)
     freebuf(&(C->arg2));
     freebuf(&(C->arg3));
 
+    if(C->streaming_hosts) stringlist_free(&(C->streaming_hosts));
+
     free(C);
+}
+
+static void stringlist_add(struct stringlist **list, const char *string) 
+{
+    struct stringlist *tmp;
+
+    assert(list);
+    assert(string);
+    
+    tmp = xmalloc(sizeof(struct stringlist));
+    tmp->str = xstrdup(string);
+    
+    tmp->next = *list;
+    *list = tmp;
+}
+
+static void stringlist_free(struct stringlist **list) 
+{
+    struct stringlist *tmp, *tmp_next;
+    for(tmp = *list; tmp; tmp=tmp_next) {
+	tmp_next = tmp->next;
+	free(tmp->str);
+	free(tmp);
+    }
+    *list = NULL;
+}
+
+/* returns true if the list contains an exact match */
+static int stringlist_contains(struct stringlist *list, const char *str) 
+{
+    struct stringlist *tmp;
+    for(tmp = list; tmp; tmp=tmp->next) {
+	if(!strcmp(str, tmp->str)) return 1;
+    }
+    return 0;
 }
 
 static struct sasl_callback mysasl_cb[] = {
@@ -844,10 +895,27 @@ mupdate_docmd_result_t docmd(struct conn *c)
     case 'U':
 	if (!c->userid) goto nologin;
 	else if (!strcmp(c->cmd.s, "Update")) {
+	    struct stringlist *arg = NULL;
+	    int counter = 30; /* limit on number of processed hosts */
+	    
+	    while(ch == ' ') {
+		/* Hey, look, more bits of a PARTIAL-UPDATE command */
+		ch = getstring(c->pin, c->pout, &(c->arg1));
+		if(c->arg1.s[0] == '\0') {
+		    stringlist_free(&arg);
+		    goto badargs;
+		}
+		if(counter-- == 0) {
+		    stringlist_free(&arg);
+		    goto extraargs;
+		}
+		stringlist_add(&arg,c->arg1.s);
+	    }
+
 	    CHECKNEWLINE(c, ch);
 	    if (c->streaming) goto notwhenstreaming;
 	    
-	    cmd_startupdate(c, c->tag.s);
+	    cmd_startupdate(c, c->tag.s, arg);
 	}
 	else goto badcmd;
 	break;
@@ -861,6 +929,12 @@ mupdate_docmd_result_t docmd(struct conn *c)
 	
     extraargs:
 	prot_printf(c->pout, "%s BAD \"Extra arguments\"\r\n",
+		    c->tag.s);
+	eatline(c->pin, ch);
+	break;
+
+    badargs:
+	prot_printf(c->pout, "%s BAD \"Badly formed arguments\"\r\n",
 		    c->tag.s);
 	eatline(c->pin, ch);
 	break;
@@ -983,6 +1057,8 @@ static void dobanner(struct conn *c)
     if (tls_enabled() && !c->tlsconn) {
 	prot_printf(c->pout, "* STARTTLS\r\n");
     }
+
+    prot_printf(c->pout, "* PARTIAL-UPDATE\r\n");
 
     prot_printf(c->pout,
 		"* OK MUPDATE \"%s\" \"Cyrus Murder\" \"%s\" \"%s\"\r\n",
@@ -1410,6 +1486,9 @@ void cmd_set(struct conn *C,
 	     const char *server, const char *acl, enum settype t)
 {
     struct mbent *m;
+    char *oldserver = NULL;
+    char *thisserver = NULL;
+    char *tmp;
     struct conn *upc;
 
     /* Hold any output that we need to do */
@@ -1451,10 +1530,17 @@ void cmd_set(struct conn *C,
 	    /* do the deletion */
 	    m->t = SET_DELETE;
 	}
+
+	oldserver = xstrdup(m->server);
+
+	/* do the deletion */
+	m->t = SET_DELETE;
     } else {
+	if(m)
+	    oldserver = m->server;
+
 	if (m && (!acl || strlen(acl) < strlen(m->acl))) {
-	    /* change what's already there */
-	    free(m->server);
+	    /* change what's already there -- the acl is smaller */
 	    m->server = xstrdup(server);
 	    if (acl) strcpy(m->acl, acl);
 	    else m->acl[0] = '\0';
@@ -1487,12 +1573,33 @@ void cmd_set(struct conn *C,
     /* write to disk */
     if (m) database_log(m, NULL);
 
+    if(oldserver) {
+	tmp = strchr(oldserver, '!');
+	if(tmp) *tmp = '\0';
+    }
+
+    if(server) {
+	thisserver = xstrdup(server);
+	tmp = strchr(thisserver, '!');
+	if(tmp) *tmp = '\0';
+    }
+
     /* post pending changes */
     for (upc = updatelist; upc != NULL; upc = upc->updatelist_next) {
 	/* for each connection, add to pending list */
 	struct pending *p = (struct pending *) xmalloc(sizeof(struct pending));
 	strlcpy(p->mailbox, mailbox, sizeof(p->mailbox));
 	
+	/* xxx does this need to be inside the mutex?  probably not... */
+	if(upc->streaming_hosts
+	   && (!oldserver || !stringlist_contains(upc->streaming_hosts,
+						  oldserver))
+	   && (!thisserver || !stringlist_contains(upc->streaming_hosts,
+						   thisserver))) {
+	    /* No Match! Continue! */
+	    continue;
+	}
+
 	pthread_mutex_lock(&upc->m);
 	p->next = upc->plist;
 	upc->plist = p;
@@ -1503,6 +1610,8 @@ void cmd_set(struct conn *C,
 
     msg = ISOK;
  done:
+    if(thisserver) free(thisserver);
+    if(oldserver) free(oldserver);
     free_mbent(m);
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 
@@ -1527,11 +1636,11 @@ void cmd_set(struct conn *C,
     }    
 }
 
-void cmd_find(struct conn *C, const char *tag, const char *mailbox, int dook,
-              int send_delete)
+void cmd_find(struct conn *C, const char *tag, const char *mailbox,
+	      int send_ok, int send_delete)
 {
     struct mbent *m;
-
+    
     syslog(LOG_DEBUG, "cmd_find(fd:%d, %s)", C->fd, mailbox);
 
     /* Only hold the mutex around database_lookup,
@@ -1557,10 +1666,10 @@ void cmd_find(struct conn *C, const char *tag, const char *mailbox, int dook,
 	prot_printf(C->pout, "%s DELETE {%d+}\r\n%s\r\n",
 		    tag, strlen(mailbox), mailbox);
     }
-
+    
     free_mbent(m);
 
-    if (dook) {
+    if (send_ok) {
 	prot_printf(C->pout, "%s OK \"Search completed\"\r\n", tag);
     }
 }
@@ -1574,6 +1683,7 @@ static int sendupdate(char *name,
 {
     struct conn *C = (struct conn *)rock;
     struct mbent *m;
+    char *server = NULL; 
     
     if(!C) return -1;
     
@@ -1583,31 +1693,42 @@ static int sendupdate(char *name,
     if(!C->list_prefix ||
        !strncmp(m->server, C->list_prefix, C->list_prefix_len)) {
 	/* Either there is not a prefix to test, or we matched it */
-    
-	switch (m->t) {
-	case SET_ACTIVE:
-	    prot_printf(C->pout,
-			"%s MAILBOX {%d+}\r\n%s {%d+}\r\n%s {%d+}\r\n%s\r\n",
-			C->streaming,
-			strlen(m->mailbox), m->mailbox,
-			strlen(m->server), m->server,
-			strlen(m->acl), m->acl);
-	    break;
-	case SET_RESERVE:
-	    prot_printf(C->pout, "%s RESERVE {%d+}\r\n%s {%d+}\r\n%s\r\n",
-			C->streaming,
-			strlen(m->mailbox), m->mailbox,
-			strlen(m->server), m->server);
-	    break;
-
-	case SET_DELETE:
-	    /* deleted item in the list !?! */
-	case SET_DEACTIVATE:
-	    /* SET_DEACTIVATE is not a real value! */
-	    abort();
+	char *tmp;
+	
+	if(C->streaming_hosts) {
+	    server = xstrdup(m->server);
+	    tmp = strchr(server, '!');
+	    if(tmp) *tmp = '\0';
+	}
+	
+	if(!C->streaming_hosts ||
+	   stringlist_contains(C->streaming_hosts, server)) {
+	    switch (m->t) {
+	    case SET_ACTIVE:
+		prot_printf(C->pout,
+			    "%s MAILBOX {%d+}\r\n%s {%d+}\r\n%s {%d+}\r\n%s\r\n",
+			    C->streaming,
+			    strlen(m->mailbox), m->mailbox,
+			    strlen(m->server), m->server,
+			    strlen(m->acl), m->acl);
+		break;
+	    case SET_RESERVE:
+		prot_printf(C->pout, "%s RESERVE {%d+}\r\n%s {%d+}\r\n%s\r\n",
+			    C->streaming,
+			    strlen(m->mailbox), m->mailbox,
+			    strlen(m->server), m->server);
+		break;
+		
+	    case SET_DELETE:
+		/* deleted item in the list !?! */
+	    case SET_DEACTIVATE:
+		/* SET_DEACTIVATE is not a real value! */
+		abort();
+	    }
 	}
     }
-    
+
+    if(server) free(server);
     free_mbent(m);
     return 0;
 }
@@ -1633,7 +1754,9 @@ void cmd_list(struct conn *C, const char *tag, const char *host_prefix)
 		     NULL, sendupdate, (void*)C);
 
     C->streaming = NULL;
-
+    C->list_prefix = NULL;
+    C->list_prefix_len = 0;
+    
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 
     prot_BLOCK(C->pout);
@@ -1657,7 +1780,8 @@ struct prot_waitevent *sendupdates_evt(struct protstream *s __attribute__((unuse
     return ev;
 }
 
-void cmd_startupdate(struct conn *C, const char *tag)
+void cmd_startupdate(struct conn *C, const char *tag,
+		     struct stringlist *partial)
 {
     char pattern[2] = {'*','\0'};
 
@@ -1674,6 +1798,7 @@ void cmd_startupdate(struct conn *C, const char *tag)
     C->updatelist_next = updatelist;
     updatelist = C;
     C->streaming = xstrdup(tag);
+    C->streaming_hosts = partial;
 
     /* dump initial list */
     mboxlist_findall(NULL, pattern, 1, NULL,

@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: util.c,v 1.27 2003/10/22 18:50:12 rjs3 Exp $
+ * $Id: util.c,v 1.27.2.1 2004/02/27 21:17:40 ken3 Exp $
  */
 
 #include <config.h>
@@ -318,7 +318,7 @@ int create_tempfile()
 /* Create all parent directories for the given path,
  * up to but not including the basename.
  */
-int cyrus_mkdir(const char *path, mode_t mode)
+int cyrus_mkdir(const char *path, mode_t mode __attribute__((unused)))
 {
     char *p = (char *) path;
     int save_errno;

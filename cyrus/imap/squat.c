@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squat.c,v 1.6 2003/02/27 15:59:39 rjs3 Exp $
+ * $Id: squat.c,v 1.6.4.1 2004/02/27 21:17:36 ken3 Exp $
  */
 
 /*
@@ -327,8 +327,12 @@ typedef struct {
    SquatDocSet. The list is extracted from the index file data
    'doc_list' which refers to 'doc_count' documents.
 */
-static int set_to_docs_containing_word(SquatSearchIndex* index,
-  SquatDocSet* set, char const* data, int doc_count, char const* doc_list) {
+static int
+set_to_docs_containing_word(SquatSearchIndex* index __attribute__((unused)),
+			    SquatDocSet* set,
+			    char const* data __attribute__((unused)),
+			    int doc_count, char const* doc_list)
+{
   int i;
 
   set->array_len = doc_count;
@@ -389,8 +393,12 @@ static void filter_doc(SquatDocSet* set, int doc) {
    documents containing the word 'data'. The list is extracted from
    the index file data 'doc_list'.
 */
-static void filter_to_docs_containing_word(SquatSearchIndex* index,
-  SquatDocSet* set, char const* data, char const* doc_list) {
+static void
+filter_to_docs_containing_word(SquatSearchIndex* index __attribute__((unused)),
+			       SquatDocSet* set,
+			       char const* data __attribute__((unused)),
+			       char const* doc_list)
+{
   int i = (int)squat_decode_I(&doc_list);
 
   set->index = 0;

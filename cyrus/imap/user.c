@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: user.c,v 1.17.2.1 2004/01/27 23:13:51 ken3 Exp $
+ * $Id: user.c,v 1.17.2.2 2004/02/27 21:17:36 ken3 Exp $
  */
 
 #include <config.h>
@@ -80,6 +80,7 @@
 #include "util.h"
 #include "seen.h"
 #include "quota.h"
+#include "xmalloc.h"
 
 #if 0
 static int user_deleteacl(char *name, int matchlen, int maycreate, void* rock)
@@ -163,7 +164,8 @@ static int user_deletesieve(char *user)
     return 0;
 }
 
-int user_deletedata(char *user, char *userid, struct auth_state *authstate,
+int user_deletedata(char *user, char *userid __attribute__((unused)),
+		    struct auth_state *authstate __attribute__((unused)),
 		    int wipe_user)
 {
     char *fname;
@@ -205,7 +207,8 @@ struct rename_rock {
     int domainchange;
 };
 
-static int user_renamesub(char *name, int matchlen, int maycreate, void* rock)
+static int user_renamesub(char *name, int matchlen __attribute__((unused)),
+			  int maycreate __attribute__((unused)), void* rock)
 {
     struct rename_rock *rrock = (struct rename_rock *) rock;
     char newname[MAX_MAILBOX_NAME+1];
@@ -302,7 +305,8 @@ static int user_renamesieve(char *olduser, char *newuser)
 }
 
 int user_renamedata(char *olduser, char *newuser,
-		    char *userid, struct auth_state *authstate)
+		    char *userid __attribute__((unused)),
+		    struct auth_state *authstate)
 {
     struct namespace namespace;
     char oldinbox[MAX_MAILBOX_NAME+1], newinbox[MAX_MAILBOX_NAME+1];
@@ -409,7 +413,8 @@ struct find_rock {
 
 static int find_p(void *rockp,
 		  const char *key, int keylen,
-		  const char *data, int datalen)
+		  const char *data __attribute__((unused)),
+		  int datalen __attribute__((unused)))
 {
     char *inboxname = ((struct find_rock *) rockp)->inboxname;
 
@@ -419,7 +424,8 @@ static int find_p(void *rockp,
 
 static int find_cb(void *rockp,
 		  const char *key, int keylen,
-		  const char *data, int datalen)
+		  const char *data __attribute__((unused)),
+		   int datalen __attribute__((unused)))
 {
     struct quota quota_root;
     struct txn **tid = ((struct find_rock *) rockp)->tid;

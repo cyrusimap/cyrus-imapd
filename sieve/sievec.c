@@ -1,6 +1,6 @@
 /* sievec.c -- compile a sieve script to bytecode manually
  * Rob Siemborski
- * $Id: sievec.c,v 1.2.2.1 2003/12/19 18:33:56 ken3 Exp $
+ * $Id: sievec.c,v 1.2.2.2 2004/02/27 21:17:47 ken3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -50,8 +50,9 @@
 #include <sieve_interface.h>
 #include <syslog.h>
 
-
+#include "libconfig.h"
 #include "xmalloc.h"
+
 #include "script.h"
 #include <string.h> 
 #include <stdlib.h>

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.85.2.5 2004/02/19 01:42:47 ken3 Exp $ */
+/* $Id: master.c,v 1.85.2.6 2004/02/27 21:17:41 ken3 Exp $ */
 
 #include <config.h>
 
@@ -334,7 +334,7 @@ void service_create(struct service *s)
     struct sockaddr_un sunsock;
     mode_t oldumask;
     int on = 1;
-    int res0_is_local;
+    int res0_is_local = 0;
     int r;
 
     if (s->associate > 0)

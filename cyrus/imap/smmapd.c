@@ -72,7 +72,7 @@
  * may contain an explanatory message.
  *
  *
- * $Id: smmapd.c,v 1.1.2.4 2004/02/19 01:42:46 ken3 Exp $
+ * $Id: smmapd.c,v 1.1.2.5 2004/02/27 21:17:36 ken3 Exp $
  */
 
 #include <config.h>
@@ -94,6 +94,7 @@
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "util.h"
+#include "xmalloc.h"
 
 const char *BB;
 int forcedowncase;
@@ -225,7 +226,7 @@ int verify_user(const char *key, long quotacheck,
     mboxname_hiersep_tointernal(&map_namespace, rcpt, 0);
 
     /* find mailbox */
-    if (mailbox = strchr(rcpt, '+')) *mailbox++ = '\0';
+    if ((mailbox = strchr(rcpt, '+'))) *mailbox++ = '\0';
 
     /* downcase the rcpt, if necessary */
     if (forcedowncase) {

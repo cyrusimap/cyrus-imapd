@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle.c,v 1.2.2.1 2003/10/22 20:13:06 ken3 Exp $ */
+/* $Id: idle.c,v 1.2.2.2 2004/02/27 21:17:26 ken3 Exp $ */
 
 #include <config.h>
 
@@ -151,7 +151,7 @@ int idle_init(void)
     return 1;
 }
 
-static void idle_handler(int sig) { /* do nothing */ }
+static void idle_handler(int sig __attribute__((unused))) { /* do nothing */ }
 
 void idle_start(struct mailbox *mailbox)
 {

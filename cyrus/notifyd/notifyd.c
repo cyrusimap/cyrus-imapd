@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notifyd.c,v 1.14.2.1 2004/01/31 18:57:01 ken3 Exp $
+ * $Id: notifyd.c,v 1.14.2.2 2004/02/27 21:17:42 ken3 Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -219,7 +219,7 @@ void usage(void)
     exit(EC_USAGE);
 }
 
-int service_init(int argc, char **argv, char **envp)
+int service_init(int argc, char **argv, char **envp __attribute__((unused)))
 {
     int opt;
     char *method = "null";
@@ -256,7 +256,9 @@ void service_abort(int error)
     shut_down(error);
 }
 
-int service_main(int argc, char **argv, char **envp)
+int service_main(int argc __attribute__((unused)),
+		 char **argv __attribute__((unused)),
+		 char **envp __attribute__((unused)))
 {
     int r = 0;
 

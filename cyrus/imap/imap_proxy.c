@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.c,v 1.1.2.6 2004/02/18 19:08:45 ken3 Exp $
+ * $Id: imap_proxy.c,v 1.1.2.7 2004/02/27 21:17:26 ken3 Exp $
  */
 
 #include <config.h>
@@ -115,7 +115,7 @@ int pipe_until_tag(struct backend *s, const char *tag, int force_notfatal)
     char eol[128];
     int sl;
     int cont = 0, last = 0, r = -1;
-    int taglen = strlen(tag);
+    size_t taglen = strlen(tag);
 
     s->timeout->mark = time(NULL) + IDLE_TIMEOUT;
     

@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.121.2.13 2004/02/19 21:16:15 ken3 Exp $
+ * $Id: lmtpd.c,v 1.121.2.14 2004/02/27 21:17:31 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -368,7 +368,7 @@ static int mlookup(const char *name, char **server, char **aclp, void *tid)
  */
 int deliver_mailbox(struct protstream *msg,
 		    struct stagemsg *stage,
-		    unsigned size,
+		    unsigned size __attribute__((unused)),
 		    char **flag,
 		    int nflags,
 		    char *authuser,
@@ -406,13 +406,28 @@ int deliver_mailbox(struct protstream *msg,
     }
 
     if (!r && user && (notifier = config_getstring(IMAPOPT_MAILNOTIFIER))) {
+	char inbox[MAX_MAILBOX_NAME+1];
 	char namebuf[MAX_MAILBOX_NAME+1];
 	char userbuf[MAX_MAILBOX_NAME+1];
+	const char *notify_mailbox = mailboxname;
 	int r2;
+
+	/* translate user.foo to INBOX */
+	if (!(*lmtpd_namespace.mboxname_tointernal)(&lmtpd_namespace,
+						    "INBOX", user, inbox)) {
+	    int inboxlen = strlen(inbox);
+	    if (strlen(mailboxname) >= inboxlen &&
+		!strncmp(mailboxname, inbox, inboxlen) &&
+		(!mailboxname[inboxlen] || mailboxname[inboxlen] == '.')) {
+		strlcpy(inbox, "INBOX", sizeof(inbox)); 
+		strlcat(inbox, mailboxname+inboxlen, sizeof(inbox));
+		notify_mailbox = inbox;
+	    }
+	}
 
 	/* translate mailboxname */
 	r2 = (*lmtpd_namespace.mboxname_toexternal)(&lmtpd_namespace,
-						    mailboxname,
+						    notify_mailbox,
 						    user, namebuf);
 	if (!r2) {
 	    strlcpy(userbuf, user, sizeof(userbuf));

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.16.2.2 2004/02/16 21:20:31 ken3 Exp $ */
+/* $Id: backend.c,v 1.16.2.3 2004/02/27 21:17:25 ken3 Exp $ */
 
 #include <config.h>
 
@@ -96,7 +96,7 @@ static char *ask_capability(struct protstream *pout, struct protstream *pin,
 
 	/* look for capabilities in the string */
 	for (c = prot->capa_cmd.capa; c->str; c++) {
-	    if (tmp = strstr(str, c->str)) {
+	    if ((tmp = strstr(str, c->str)) != NULL) {
 		*capa = *capa | c->flag;
 
 		if (c->flag == CAPA_AUTH) {
@@ -167,7 +167,6 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
     sasl_callback_t *cb;
     char buf[2048], optstr[128], *p;
     const char *mech_conf, *pass;
-    int have_starttls = 1;
 
     strcpy(optstr, s->hostname);
     p = strchr(optstr, '.');

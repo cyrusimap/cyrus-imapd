@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idled.c,v 1.17.2.2 2004/01/27 23:13:40 ken3 Exp $ */
+/* $Id: idled.c,v 1.17.2.3 2004/02/27 21:17:26 ken3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -95,16 +95,20 @@ void fatal(const char *msg, int err)
     exit(err);
 }
 
-static int mbox_count_p(void *rockp,
-			const char *key, int keylen,
-			const char *data, int datalen)
+static int mbox_count_p(void *rockp __attribute__((unused)),
+			const char *key __attribute__((unused)),
+			int keylen __attribute__((unused)),
+			const char *data __attribute__((unused)),
+			int datalen __attribute__((unused)))
 {
     return 1;
 }
 
 static int mbox_count_cb(void *rockp,
-			 const char *key, int keylen,
-			 const char *data, int datalen)
+			 const char *key __attribute__((unused)),
+			 int keylen __attribute__((unused)),
+			 const char *data __attribute__((unused)),
+			 int datalen __attribute__((unused)))
 {
     int *ip = (int *) rockp;
     (*ip)++;
@@ -229,7 +233,9 @@ void process_msg(idle_data_t *idledata)
     }
 }
 
-void idle_alert(char *key, void *data, void *rock)
+void idle_alert(char *key __attribute__((unused)),
+		void *data,
+		void *rock __attribute__((unused)))
 {
     struct ientry *t = (struct ientry *) data;
 

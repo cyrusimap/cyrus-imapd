@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: quota.c,v 1.48.2.1 2004/01/27 23:13:49 ken3 Exp $ */
+/* $Id: quota.c,v 1.48.2.2 2004/02/27 21:17:35 ken3 Exp $ */
 
 
 #include <config.h>
@@ -207,7 +207,8 @@ struct find_rock {
 
 static int find_p(void *rockp,
 		  const char *key, int keylen,
-		  const char *data, int datalen)
+		  const char *data __attribute__((unused)),
+		  int datalen __attribute__((unused)))
 {
     struct find_rock *frock = (struct find_rock *) rockp;
     int i;
@@ -229,15 +230,10 @@ static int find_p(void *rockp,
 /*
  * Add a quota root to the list in 'quota'
  */
-static int find_cb(void *rockp,
+static int find_cb(void *rockp __attribute__((unused)),
 		   const char *key, int keylen,
-		   const char *data, int datalen)
+		   const char *data, int datalen __attribute__((unused)))
 {
-    int r;
-    unsigned long used;
-    int limit;
-    char *p;
-
     if (!data) return 0;
 
     if (quota_num == quota_alloc) {
@@ -374,7 +370,7 @@ int fixquota_mailbox(char *name,
 int fixquota_fixroot(struct mailbox *mailbox,
 		     char *root)
 {
-    int i, r;
+    int r;
 
     redofix = 1;
 

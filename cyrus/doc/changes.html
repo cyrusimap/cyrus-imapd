@@ -1,12 +1,27 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.71.2.3 2004/01/31 02:03:22 ken3 Exp $ -->
+<!-- $Id: changes.html,v 1.71.2.4 2004/02/27 21:17:22 ken3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
 <title>Changes to the Cyrus IMAP Server</title>
 </head>
 <body>
+
+<h1>Changes to the Cyrus IMAP Server since 2.2.3</h1>
+<ul>
+<li>Quota now uses the cyrusdb interface (<tt>quotalegacy</tt> by
+default).</li>
+<li>All incoming messages are now staged to disk before locking the
+destination mailbox (locks are no longer held during a network
+read).</li>
+<li>Fixed off-by-one error in <tt>fetchnews</tt> (articles are no longer
+skipped).</li>
+<li><tt>nntpd</tt> now uses the Followup-To: header (if exists) instead of
+the Newsgroups: header when constructing post address(es) and adds them
+to the Reply-To: header instead of the To: header.</li>
+<li>Added a <tt>berkeley_cachesize</tt> option.</li>
+</ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.2.2</h1>
 <ul>
@@ -1906,7 +1921,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2004/01/31 02:03:22 $ <br />
+last modified: $Date: 2004/02/27 21:17:22 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>

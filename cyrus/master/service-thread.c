@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service-thread.c,v 1.14.2.2 2004/02/12 05:32:38 ken3 Exp $ */
+/* $Id: service-thread.c,v 1.14.2.3 2004/02/27 21:17:41 ken3 Exp $ */
 #include <config.h>
 
 #include <stdio.h>
@@ -126,12 +126,14 @@ static int libwrap_ask(struct request_info *r, int fd)
 #else
 struct request_info { int x; };
 
-static void libwrap_init(struct request_info *r, char *service)
+static void libwrap_init(struct request_info *r __attribute__((unused)),
+			 char *service __attribute__((unused)))
 {
 
 }
 
-static int libwrap_ask(struct request_info *r, int fd)
+static int libwrap_ask(struct request_info *r __attribute__((unused)),
+		       int fd __attribute__((unused)))
 {
     return 1;
 }

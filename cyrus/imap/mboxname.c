@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- * $Id: mboxname.c,v 1.31 2003/10/22 18:50:08 rjs3 Exp $
+ * $Id: mboxname.c,v 1.31.2.1 2004/02/27 21:17:32 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -334,7 +334,7 @@ static int mboxname_toexternal(struct namespace *namespace, const char *name,
 			       const char *userid, char *result)
 {
     char *domain = NULL, *cp;
-    int domainlen = 0;
+    size_t domainlen = 0;
 
     /* Blank the result, just in case */
     result[0] = '\0';
@@ -547,7 +547,8 @@ char *mboxname_hiersep_toexternal(struct namespace *namespace, char *name,
  */
 int mboxname_userownsmailbox(const char *userid, const char *name)
 {
-    struct namespace internal = { '.' };
+    struct namespace internal = { '.', 0, 0, { "INBOX.", "user.", "" },
+				  NULL, NULL, NULL, NULL };
     char inboxname[MAX_MAILBOX_NAME+1];
 
     if (!mboxname_tointernal(&internal, "INBOX", userid, inboxname) &&
@@ -619,7 +620,7 @@ int mboxname_netnewscheck(char *name)
 #define GOODCHARS " +,-.0123456789:=@ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz~"
 int mboxname_policycheck(char *name)
 {
-    int i;
+    unsigned i;
     struct glob *g;
     int sawutf7 = 0;
     unsigned c1, c2, c3, c4, c5, c6, c7, c8;

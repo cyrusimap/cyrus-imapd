@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.18 2004/02/19 16:59:16 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.19 2004/02/27 21:17:27 ken3 Exp $ */
 
 #include <config.h>
 
@@ -81,6 +81,7 @@
 #include "imparse.h"
 #include "iptostring.h"
 #include "mailbox.h"
+#include "message.h"
 #include "mboxname.h"
 #include "mboxlist.h"
 #include "mbdump.h"
@@ -2210,15 +2211,24 @@ void cmd_idle(char *tag)
 		       a) short
 		       b) don't contain literals
 		    */
+
 		    prot_NONBLOCK(backend_current->in);
 		    while (prot_fgets(buf, sizeof(buf), backend_current->in)) {
 			prot_write(imapd_out, buf, strlen(buf));
 			prot_flush(imapd_out);
 		    }
 		    prot_BLOCK(backend_current->in);
+
+		    if (prot_error(backend_current->in)) {
+			/* uh oh, we're not happy */
+			fatal("Lost connection to selected backend",
+			      EC_UNAVAILABLE);
+		    }
 		}
 		else {
 		    /* XXX shouldn't get here !!! */
+		    fatal("unknown protstream returned by prot_select in cmd_idle",
+			  EC_SOFTWARE);
 		}
 	    }
 	}

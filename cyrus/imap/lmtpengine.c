@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.93.2.9 2004/02/19 17:53:41 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.93.2.10 2004/02/27 21:17:31 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -845,7 +845,7 @@ static int process_recipient(char *addr, struct namespace *namespace,
     mboxname_hiersep_tointernal(namespace, ret->rcpt, 0);
 
     /* find mailbox */
-    if (ret->mailbox = strchr(ret->rcpt, '+')) *(ret->mailbox)++ = '\0';
+    if ((ret->mailbox = strchr(ret->rcpt, '+'))) *(ret->mailbox)++ = '\0';
 
     /* see if its a shared mailbox address */
     if (!strcmp(ret->user, config_getstring(IMAPOPT_POSTUSER)))
@@ -958,7 +958,7 @@ void lmtpmode(struct lmtp_func *func,
     char localip[60], remoteip[60];
     socklen_t salen;
     char hbuf[NI_MAXHOST];
-    int niflags;
+    int niflags = 0;
 
     sasl_ssf_t ssf;
     char *auth_id;

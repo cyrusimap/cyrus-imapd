@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_quotalegacy.c,v 1.1.2.1 2004/01/27 23:13:52 ken3 Exp $ */
+/* $Id: cyrusdb_quotalegacy.c,v 1.1.2.2 2004/02/27 21:17:39 ken3 Exp $ */
 
 #include <config.h>
 
@@ -89,6 +89,8 @@ struct subtxn {
 
     int delete;
 };
+
+int abort_txn(struct db *db __attribute__((unused)), struct txn *tid);
 
 /* simple hash so it's easy to find these things in the filesystem;
    our human time is worth more than efficiency */
@@ -239,7 +241,8 @@ static void free_db(struct db *db)
     }
 }
 
-static struct subtxn *new_subtxn(const char *fname, int fd)
+static struct subtxn *new_subtxn(const char *fname __attribute__((unused)),
+				 int fd)
 {
     struct subtxn *ret = (struct subtxn *) xmalloc(sizeof(struct subtxn));
 
@@ -266,7 +269,8 @@ static int mysync(void)
     return 0;
 }
 
-static int myarchive(const char **fnames, const char *dirname)
+static int myarchive(const char **fnames __attribute__((unused)),
+		     const char *dirname __attribute__((unused)))
 {
     return 0;
 }
@@ -284,7 +288,7 @@ static int myopen(const char *fname, int flags, struct db **ret)
     construct_hash_table(&db->table, 32, 0);
 
     /* strip any filename from the path */
-    if (p = strrchr(db->path, '/')) *p = '\0';
+    if ((p = strrchr(db->path, '/'))) *p = '\0';
 
     r = stat(db->path, &sbuf);
     if (r == -1 && errno == ENOENT && (flags & CYRUSDB_CREATE)) {
@@ -498,7 +502,7 @@ static int foreach(struct db *db,
 	if (r) break;
 
 	qr = strrchr(globbuf.gl_pathv[i], '/') + 1;
-	if (p = strstr(globbuf.gl_pathv[i], FNAME_DOMAINDIR)) {
+	if ((p = strstr(globbuf.gl_pathv[i], FNAME_DOMAINDIR))) {
 	    /* use the quota_path as a buffer to construct virtdomain qr */
 	    p += strlen(FNAME_DOMAINDIR) + 2; /* +2 for hashdir */
 	    sprintf(quota_path, "%.*s!%s", strcspn(p, "/"), p,
@@ -700,7 +704,7 @@ static void enum_func(char *fname, void *data, void *rock)
     if (r && !trock->ret) trock->ret = r;
 }
 
-int commit_txn(struct db *db, struct txn *tid)
+int commit_txn(struct db *db __attribute__((unused)), struct txn *tid)
 {
     struct txn_rock trock;
 
@@ -713,7 +717,7 @@ int commit_txn(struct db *db, struct txn *tid)
     return trock.ret;
 }
 
-int abort_txn(struct db *db, struct txn *tid)
+int abort_txn(struct db *db __attribute__((unused)), struct txn *tid)
 {
     struct txn_rock trock;
 

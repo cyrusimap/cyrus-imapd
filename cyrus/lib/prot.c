@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.82.2.2 2004/01/27 23:13:53 ken3 Exp $
+ * $Id: prot.c,v 1.82.2.3 2004/02/27 21:17:40 ken3 Exp $
  */
 
 #include <config.h>
@@ -313,7 +313,9 @@ void prot_removewaitevent(struct protstream *s, struct prot_waitevent *event)
 const char *prot_error(struct protstream *s)
 {
     if(!s) return "bad protstream passed to prot_error";
-    else return s->error;
+    else if(s->error) return s->error;
+    else if(s->eof) return "end of file reached";
+    else return NULL;
 }
 
 /*
@@ -1136,7 +1138,7 @@ char *prot_fgets(char *buf, unsigned size, struct protstream *s)
 
     assert(!s->write);
 
-    if (size < 2) return 0;
+    if (size < 2 || s->eof) return 0;
     size--;
 
     while (size && (c = prot_getc(s)) != EOF) {

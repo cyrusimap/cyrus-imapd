@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.2.2.8 2004/01/27 23:13:52 ken3 Exp $
+.\" $Id: imapoptions,v 1.2.2.9 2004/02/27 21:17:39 ken3 Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -143,6 +143,11 @@ are listed with ``<none>''.
    creating the mailbox INBOX.  The user's quota is set to the value
    if it is positive, otherwise the user has unlimited quota. */
 
+{ "berkeley_cachesize", 512, INT }
+/* Size (in kilobytes) of the shared memory buffer pool (cache) used
+   by the berkeley environment.  The minimum allowed value is 20.  The
+   maximum allowed value is 4194303 (4GB). */
+
 { "configdirectory", NULL, STRING }
 /* The pathname of the IMAP configuration directory.  This field is
    required. */
@@ -228,41 +233,152 @@ are listed with ``<none>''.
 { "implicit_owner_rights", "lca", STRING }
 /* The implicit Access Control List (ACL) for the owner of a mailbox. */
 
-{ "ldap_base", NULL, STRING }
+{ "ldap_authz", NULL, STRING }
+/* SASL authorization ID for the LDAP server */
+
+{ "ldap_base", "", STRING }
 /* Contains the LDAP base dn for the LDAP ptloader module */
 
-{ "ldap_filter", NULL, STRING }
-/* Contains the ldap filter to use when looking up the user id.  The occurance
-   of any %u in the string will be replaced with the canonicalized user id */
+{ "ldap_bind_dn", NULL, STRING }
+/* Bind DN for the connection to the LDAP server (simple bind).
+   Do not use for anonymous simple binds */
 
-{ "ldap_servers", NULL, STRING }
-/* Contains a list of the URLs of all the LDAP servers when using the
-   LDAP PTS module. */
+{ "ldap_deref", "never", STRINGLIST("search", "find", "always", "never") }
+/* Specify how aliases dereferencing is handled during search. */
+
+{ "ldap_filter", "(uid=%u)", STRING }
+/* Specify a filter that searches user identifiers.  The following tokens can be
+   used in the filter string:
+
+   %%   = %
+   %u   = user
+   %U   = user portion of %u (%U = test when %u = test@domain.tld)
+   %d   = domain portion of %u if available (%d = domain.tld when %u =
+          %test@domain.tld), otherwise same as %r
+   %D   = user dn.  (use when ldap_member_method: filter)
+   %1-9 = domain tokens (%1 = tld, %2 = domain when %d = domain.tld)
+
+   ldap_filter is not used when ldap_sasl is enabled. */
+
+{ "ldap_group_base", "", STRING }
+/* LDAP base dn for ldap_group_filter. */
+
+{ "ldap_group_filter", "(cn=%u)", STRING }
+/* Specify a filter that searches for group identifiers.
+   See ldap_filter for more options. */ 
+
+{ "ldap_group_scope", "sub", STRINGLIST("sub", "one", "base") }
+/* Specify search scope for ldap_group_filter. */
+
+{ "ldap_id", NULL, STRING }
+/* SASL authentication ID for the LDAP server */
+
+{ "ldap_mech", NULL, STRING }
+/* SASL mechanism for LDAP authentication */
+
+{ "ldap_member_attribute", NULL, STRING }
+/* See ldap_member_method. */
+
+{ "ldap_member_base", "", STRING }
+/* LDAP base dn for ldap_member_filter. */
+
+{ "ldap_member_filter", "(member=%D)", STRING }
+/* Specify a filter for "ldap_member_method: filter".  
+   See ldap_filter for more options. */ 
+
+{ "ldap_member_method", "attribute", STRINGLIST("attribute", "filter") }
+/* Specify a group method.  The "attribute" method retrieves groups from 
+   a multi-valued attributed specified in ldap_member_attribute.  
+   The "filter" method uses a filter, ldap_member_filter, to find groups; 
+   ldap_member_attribute is a single-value attribute group name. */
+
+{ "ldap_member_scope", "sub", STRINGLIST("sub", "one", "base") }
+/* Specify search scope for ldap_member_filter. */
+
+{ "ldap_password", NULL, STRING }
+/* Password for the connection to the LDAP server (SASL and simple bind).  
+   Do not use for anonymous simple binds */
+
+{ "ldap_realm", NULL, STRING }
+/* SASL realm for LDAP authentication */
+
+{ "ldap_referrals", 0, SWITCH }
+/* Specify whether or not the client should follow referrals. */
+
+{ "ldap_restart", 1, SWITCH }
+/* Specify whether or not LDAP I/O operations are automatically restarted
+   if they abort prematurely. */
 
 { "ldap_sasl", 1, SWITCH }
 /* Use SASL for LDAP binds in the LDAP PTS module. */
 
 { "ldap_sasl_authc", NULL, STRING }
-/* Force the use of a particular SASL authentication ID for the LDAP server */
+/* Depricated.  Use ldap_id */
 
 { "ldap_sasl_authz", NULL, STRING }
-/* Force the use of a particular SASL authorization ID for the LDAP server */
+/* Depricated.  Use ldap_authz */
 
 { "ldap_sasl_mech", NULL, STRING }
-/* Force the use of a particular SASL mechanism for LDAP authentication */
+/* Depricated.  Use ldap_mech */
 
 { "ldap_sasl_password", NULL, STRING }
-/* Password for the LDAP SASL mechanism (if needed) */
+/* Depricated.  User ldap_password */
 
 { "ldap_sasl_realm", NULL, STRING }
-/* Force the use of a particular SASL realm for LDAP authentication */
+/* Depricated.  Use ldap_realm */
 
-{ "ldap_member_attribute", "memberOf", STRING }
-/* The multi-valued attribute name for an entity that lists its groups. */
+{ "ldap_scope", "sub", STRINGLIST("sub", "one", "base") }
+/* Specify search scope. */
+
+{ "ldap_servers", "ldap://localhost/", STRING }
+/* Depricated.  Use ldap_uri */
+
+{ "ldap_size_limit", 1, INT }
+/* Specify a number of entries for a search request to return. */
+
+{ "ldap_start_tls", 0, SWITCH }
+/* Use StartTLS extended operation.  Do not use ldaps: ldap_uri when
+   this option is enabled. */
+
+{ "ldap_time_limit", 5, INT }
+/* Specify a number of seconds for a search request to complete. */
+
+{ "ldap_timeout", 5, INT }
+/* Specify a number of seconds a search can take before timing out. */
+
+{ "ldap_tls_cacert_dir", NULL, STRING }
+/* Path to directory with CA (Certificate Authority) certificates. */
+
+{ "ldap_tls_cacert_file", NULL, STRING }
+/* File containing CA (Certificate Authority) certificate(s). */
+
+{ "ldap_tls_cert", NULL, STRING }
+/* File containing the client certificate. */
+
+{ "ldap_tls_check_peer", 0, SWITCH }
+/* Require and verify server certificate.  If this option is yes,
+   you must specify ldap_tls_cacert_file or ldap_tls_cacert_dir. */
+
+{ "ldap_tls_ciphers", NULL, STRING }
+/* List of SSL/TLS ciphers to allow.  The format of the string is
+   described in ciphers(1). */
+
+{ "ldap_tls_key", NULL, STRING }
+/* File containing the private client key. */
+
+{ "ldap_uri", NULL, STRING }
+/* Contains a list of the URLs of all the LDAP servers when using the
+   LDAP PTS module. */
+
+{ "ldap_version", 3, INT }
+/* Specify the LDAP protocol version.  If ldap_start_tls and/or
+   ldap_use_sasl are enabled, ldap_version will be automatiacally
+   set to 3. */
 
 { "lmtp_downcase_rcpt", 0, SWITCH }
 /* If enabled, lmtpd will convert the recipient address to lowercase
    (up to a '+' character, if present). */
+
 { "lmtp_over_quota_perm_failure", 0, SWITCH }
 /* If enabled, lmtpd returns a permanent failure code when a user's
    mailbox is over quota.  By default, the failure is temporary,
@@ -472,6 +588,10 @@ are listed with ``<none>''.
 /* A list of users and groups that are allowed to proxy for other
    users, seperated by spaces.  Any user listed in this will be
    allowed to login for any other user: use with caution. */ 
+
+{ "ptloader_sock", NULL, STRING }
+/* Unix domain socket that ptloader listens on.
+   (defaults to configdir/ptclient/ptsock) */
 
 { "ptscache_db", "berkeley", STRINGLIST("berkeley", "skiplist")}
 /* The cyrusdb backend to use for the pts cache. */

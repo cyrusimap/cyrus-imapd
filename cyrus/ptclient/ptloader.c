@@ -41,9 +41,6 @@
  *
  */
 
-static char rcsid[] __attribute__((unused)) = 
-      "$Id: ptloader.c,v 1.32.2.4 2004/01/31 18:57:02 ken3 Exp $";
-
 #include <config.h>
 
 #include <string.h>
@@ -69,8 +66,12 @@ static char rcsid[] __attribute__((unused)) =
 #include "retry.h"
 #include "xmalloc.h"
 
+static char rcsid[] __attribute__((unused)) = 
+      "$Id: ptloader.c,v 1.32.2.5 2004/02/27 21:17:46 ken3 Exp $";
+
 extern const char *ptsmodule_name;
 extern void ptsmodule_init(void);
+extern void setproctitle_init(int argc, char **argv, char **envp);
 extern struct auth_state *ptsmodule_make_authstate(const char *identifier,
 						   size_t size,
 						   const char **reply,
@@ -100,7 +101,7 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     signal(SIGPIPE, SIG_IGN);
 
     syslog(LOG_NOTICE,
-	   "starting: $Id: ptloader.c,v 1.32.2.4 2004/01/31 18:57:02 ken3 Exp $ (%s)",
+	   "starting: $Id: ptloader.c,v 1.32.2.5 2004/02/27 21:17:46 ken3 Exp $ (%s)",
 	   ptsmodule_name);
 
     while ((opt = getopt(argc, argv, "d:")) != EOF) {

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_expire.c,v 1.2.2.2 2004/01/31 18:56:54 ken3 Exp $
+ * $Id: cyr_expire.c,v 1.2.2.3 2004/02/27 21:17:25 ken3 Exp $
  */
 
 #include <config.h>
@@ -143,7 +143,8 @@ struct expire_rock {
 /*
  * mailbox_expunge() callback to expunge expired articles.
  */
-static int expunge_cb(struct mailbox *mailbox, void *rock, char *index)
+static int expunge_cb(struct mailbox *mailbox __attribute__((unused)),
+		      void *rock, char *index)
 {
     struct expire_rock *erock = (struct expire_rock *) rock;
     bit32 senttime = ntohl(*((bit32 *)(index+OFFSET_SENTDATE)));
