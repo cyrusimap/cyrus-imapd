@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notify_zephyr.c,v 1.1 2002/03/18 15:14:18 ken3 Exp $
+ * $Id: notify_zephyr.c,v 1.2 2002/07/24 17:36:50 rjs3 Exp $
  */
 
 #include <config.h>
@@ -116,7 +116,7 @@ char* notify_zephyr(const char *class, const char *priority,
 	strcat(msgbody, "\n");
     }
 
-    (void) sprintf(mysender, "imap%s%s@%s",
+    (void) snprintf(mysender, sizeof(mysender), "imap%s%s@%s",
 		   mykrbhost ? "." : "",
 		   mykrbhost ? mykrbhost : "",
 		   ZGetRealm());
