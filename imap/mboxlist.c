@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.106 2000/02/01 20:17:19 leg Exp $
+ * $Id: mboxlist.c,v 1.107 2000/02/01 21:27:29 leg Exp $
  */
 
 #include <stdio.h>
@@ -564,26 +564,6 @@ int real_mboxlist_createmailbox(char *name, int mbtype, char *partition,
 	}
     }
 
-    /* 5. create ACAP entry and set as reserved (CRASH: ACAP inconsistant) */
-    memset(&mboxdata, 0, sizeof(acapmbox_data_t));
-    
-    mboxdata.name = name;	
-    mboxdata.post = acapmbox_get_postaddr(name);
-    mboxdata.url = acapmbox_get_url(name);
-    /* all other are initialized to zero */
-    
-    /* 3. open ACAP connection if necessary */
-    acaphandle = acapmbox_get_handle();
-    
-    r = acapmbox_create(acaphandle,
-			&mboxdata);
-    if (r) {
-	syslog(LOG_ERR, "ACAP: unable to reserve %s: %s\n", name,
-	       error_message(r));
-	goto done;
-    }
-    madereserved = 1; /* so we can roll back on failure */
-    
     /* add the new entry */
     mboxent = (struct mbox_entry *) xmalloc(sizeof(struct mbox_entry) +
 					    strlen(acl));
@@ -607,9 +587,10 @@ int real_mboxlist_createmailbox(char *name, int mbtype, char *partition,
 
     /* database put */
     r = mbdb->put(mbdb, tid, &key, &data, 0);
-
     switch (r) {
     case 0:
+	syslog(LOG_DEBUG, "inserted '%s' into mailboxes database",
+	       name);
 	break;
     case DB_LOCK_DEADLOCK:
 	goto retry;
@@ -621,16 +602,26 @@ int real_mboxlist_createmailbox(char *name, int mbtype, char *partition,
 	goto done;
     }
 
-    if (!r) {
-	/* ACAP: reserve mailbox name */
+    /* 3. open ACAP connection if necessary */
+    acaphandle = acapmbox_get_handle();
+    
+    /* 5. create ACAP entry and set as reserved (CRASH: ACAP inconsistant) */
+    memset(&mboxdata, 0, sizeof(acapmbox_data_t));
+    
+    mboxdata.name = name;	
+    mboxdata.post = acapmbox_get_postaddr(name);
+    mboxdata.url = acapmbox_get_url(name);
+    /* all other are initialized to zero */
+    r = acapmbox_create(acaphandle, &mboxdata);
+    if (r) {
+	syslog(LOG_ERR, "ACAP: unable to reserve %s: %s\n", name,
+	       error_message(r));
+	goto done;
     }
-
+    madereserved = 1; /* so we can roll back on failure */
+    
  done: /* ALL DATABASE OPERATIONS DONE; NEED TO DO FILESYSTEM OPERATIONS */
     if (!r && !(mboxent->mbtype & MBTYPE_REMOTE)) {
-	/* recalculate root */
-	sprintf(buf2, "partition-%s", mboxent->partition);
-	root = config_getstring(buf2, (char *)0);
-	
 	/* Create new mailbox and move new mailbox list file into place */
 	mailbox_hash_mbox(buf2, root, mboxent->name);
 	r = mailbox_create(mboxent->name, buf2, mboxent->acls, 
@@ -643,7 +634,7 @@ int real_mboxlist_createmailbox(char *name, int mbtype, char *partition,
 	}
     }
 
-    if (!r) { /* CREATE failed */ 
+    if (r) { /* CREATE failed */ 
 	int r2;
 
 	/* delete ACAP entry if we made it */
@@ -661,10 +652,9 @@ int real_mboxlist_createmailbox(char *name, int mbtype, char *partition,
 	default:
 	    syslog(LOG_ERR, "DBERROR: failed on abort: %s", db_strerror(r2));
 	}
-    } else {
+    } else { /* all is well */
 	switch (r = txn_commit(tid, 0)) {
 	case 0: 
-	    /* ACAP: set mailbox here */
 	    break;
 	default:
 	    syslog(LOG_ERR, "DBERROR: failed on commit: %s", db_strerror(r));
