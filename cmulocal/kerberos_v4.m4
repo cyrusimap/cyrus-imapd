@@ -21,6 +21,25 @@ fi
 AC_MSG_RESULT($ac_cv_krb_set_key_proto)
 ])
 
+AC_DEFUN(CMU_KRB4_32_DEFN, [
+AC_MSG_CHECKING(for KRB4_32 definition)
+AC_CACHE_VAL(ac_cv_krb4_32_defn, [
+cmu_save_CPPFLAGS="$CPPFLAGS"
+CPPFLAGS="${CPPFLAGS} ${KRB_INC_FLAGS}"
+AC_TRY_COMPILE(
+[#include <krb.h>
+],
+[KRB4_32 foo = 1;],
+ac_cv_krb4_32_defn=yes,
+ac_cv_krb4_32_defn=no)
+])
+CPPFLAGS="${cmu_save_CPPFLAGS}"
+if test "$ac_cv_krb4_32_defn" = yes; then
+	AC_DEFINE(HAVE_KRB4_32_DEFINE)dnl
+fi
+AC_MSG_RESULT($ac_cv_krb4_32_defn)
+])
+
 AC_DEFUN(CMU_KRB_RD_REQ_PROTO, [
 AC_MSG_CHECKING(for krb_rd_req prototype)
 AC_CACHE_VAL(ac_cv_krb_rd_req_proto, [
