@@ -4,7 +4,11 @@
 #include "../cyrusdb.h"
 #include "../exitcodes.h"
 
+#ifdef BACKEND
+struct cyrusdb_backend *DB = &(BACKEND);
+#else
 struct cyrusdb_backend *DB = &cyrusdb_flat;
+#endif
 
 #define TRY(s) { r = s; if (r) { printf("%s failed: %d\n", #s, r); exit(1); } }
 

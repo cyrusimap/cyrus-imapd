@@ -18,19 +18,26 @@ sub mysys {
 }
 
 sub runone {
-    my $t = shift;
+    my ($t, $p, $d, $tname) = @_;
     my $res;
 
-    $res = mysys("gcc -g -o $t $t.c -lcyrus");
+    $p = "" if (!defined $p);
+    $d = "" if (!defined $d);
+    $tname = $t if (!defined $tname);
+    mkdir $tname, 0644;
+    chdir $tname;
+    $res = mysys("gcc $d -g -o $t ../$t.c -lcyrus");
     if (!$res) {
-	$res = mysys("./$t < $t.INPUT > $t.TEMP");
-	$res = mysys("cmp -s $t.TEMP $t.OUTPUT");
+	$res = mysys("./$t $p < ../$t.INPUT > $t.TEMP");
+	$res = mysys("cmp -s $t.TEMP ../$t.OUTPUT");
     }
     if ($res) {
-	print "$t FAILED\n";
+	print "$tname FAILED\n";
     } elsif ($verbose) {
-	print "$t ok\n";
+	print "$tname ok\n";
     }
+    chdir "..";
 }
 
-runone("cyrusdb");
+runone("cyrusdb", undef, "-DBACKEND=cyrusdb_flat");
+runone("cyrusdb", undef, "-DBACKEND=cyrusdb_db3 -ldb", "cyrusdb_db3");
