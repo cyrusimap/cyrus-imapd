@@ -51,6 +51,7 @@ char *identifier;
     char inst[INST_SZ];
     char realm[REALM_SZ];
 
+    if (strcmp(identifier, "anyone") == 0) return 1;
     if (strcmp(identifier, "anybody") == 0) return 1;
 
     if (strcmp(identifier, auth_userid) == 0) return 3;
@@ -208,8 +209,9 @@ char *identifier;
     if (strcasecmp(identifier, "anonymous") == 0) {
 	return "anonymous";
     }
-    if (strcasecmp(identifier, "anybody") == 0) {
-	return "anybody";
+    if (strcasecmp(identifier, "anybody") == 0 ||
+	strcasecmp(identifier, "anyone") == 0) {
+	return "anyone";
     }
     
     aname[0] = inst[0] = realm[0] = '\0';
