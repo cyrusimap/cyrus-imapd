@@ -1,5 +1,5 @@
 /* sieve_interface.h -- interface for deliver
- * $Id: sieve_interface.h,v 1.19 2003/10/22 18:50:30 rjs3 Exp $
+ * $Id: sieve_interface.h,v 1.19.2.1 2004/06/18 16:13:41 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -52,6 +52,15 @@ typedef int sieve_get_header(void *message_context,
 typedef int sieve_get_envelope(void *message_context, 
 			       const char *field,
 			       const char ***contents);
+
+typedef struct sieve_bodypart {
+    const char *content;
+    const char *encoding;
+    unsigned long size;
+} sieve_bodypart_t;
+
+typedef int sieve_get_body(void *message_context, const char *content_type,
+			   sieve_bodypart_t ***parts);
 
 typedef struct sieve_vacation {
     int min_response;		/* 0 -> defaults to 3 */

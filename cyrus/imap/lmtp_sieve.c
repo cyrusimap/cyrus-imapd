@@ -1,6 +1,6 @@
 /* lmtp_sieve.c -- Sieve implementation for lmtpd
  *
- * $Id: lmtp_sieve.c,v 1.1.2.8 2004/06/15 17:13:29 ken3 Exp $
+ * $Id: lmtp_sieve.c,v 1.1.2.9 2004/06/18 16:13:38 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -85,8 +85,8 @@ typedef struct script_data {
 } script_data_t;
 
 /* forward declarations */
-extern int deliver_mailbox(struct protstream *msg,
-			   struct body **body,
+extern int deliver_mailbox(FILE *f,
+			   struct message_content *content,
 			   struct stagemsg *stage,
 			   unsigned size,
 			   char **flag,
@@ -164,6 +164,27 @@ static int getenvelope(void *mc, const char *field, const char ***contents)
 	return SIEVE_FAIL;
     }
 }
+
+static int getbody(void *mc, const char *content_type,
+		   sieve_bodypart_t ***parts)
+{
+    sieve_msgdata_t *mydata = (sieve_msgdata_t *) mc;
+    message_data_t *m = mydata->m;
+    int r = 0;
+
+    if (!mydata->content->body) {
+	/* parse the message body if we haven't already */
+	r = message_parse_file(m->f, &mydata->content->base,
+			       &mydata->content->len, &mydata->content->body);
+    }
+
+    /* XXX currently struct bodypart as defined in message.h is the same as
+       sieve_bodypart_t as defined in sieve_interface.h, so we can typecast */
+    if (!r) message_fetch_part(mydata->content, content_type,
+			       (struct bodypart ***) parts);
+    return (!r ? SIEVE_OK : SIEVE_FAIL);
+}
+
 
 static int global_outgoing_count = 0;
 
@@ -442,7 +463,7 @@ static int sieve_fileinto(void *ac,
 						   fc->mailbox,
 						   sd->username, namebuf);
     if (!ret) {
-	ret = deliver_mailbox(md->data, mdata->body, mdata->stage, md->size,
+	ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
 			      fc->imapflags->flag, fc->imapflags->nflags,
 			      (char *) sd->username, sd->authstate, md->id,
 			      sd->username, mdata->notifyheader,
@@ -482,7 +503,7 @@ static int sieve_keep(void *ac,
 	    strlcat(namebuf, ".", sizeof(namebuf));
 	    strlcat(namebuf, sd->mailboxname, sizeof(namebuf));
 
-	    ret2 = deliver_mailbox(md->data, mydata->body, mydata->stage, md->size,
+	    ret2 = deliver_mailbox(md->f, mydata->content, mydata->stage, md->size,
 				   kc->imapflags->flag, kc->imapflags->nflags,
 				   mydata->authuser, mydata->authstate, md->id,
 				   sd->username, mydata->notifyheader,
@@ -492,7 +513,7 @@ static int sieve_keep(void *ac,
 	    config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH) &&
 	    fuzzy_match(namebuf)) {
 	    /* try delivery to a fuzzy matched mailbox */
-	    ret2 = deliver_mailbox(md->data, mydata->body, mydata->stage, md->size,
+	    ret2 = deliver_mailbox(md->f, mydata->content, mydata->stage, md->size,
 				   kc->imapflags->flag, kc->imapflags->nflags,
 				   mydata->authuser, mydata->authstate, md->id,
 				   sd->username, mydata->notifyheader,
@@ -505,7 +526,7 @@ static int sieve_keep(void *ac,
 	    /* normal delivery to INBOX */
 	    *tail = '\0';
 
-	    ret = deliver_mailbox(md->data, mydata->body, mydata->stage, md->size,
+	    ret = deliver_mailbox(md->f, mydata->content, mydata->stage, md->size,
 				  kc->imapflags->flag, kc->imapflags->nflags,
 				  (char *) sd->username, sd->authstate, md->id,
 				  sd->username, mydata->notifyheader,
@@ -779,6 +800,12 @@ sieve_interp_t *setup_sieve(void)
     if (res != SIEVE_OK) {
 	syslog(LOG_ERR,"sieve_register_envelope() returns %d\n", res);
 	fatal("sieve_register_envelope()", EC_SOFTWARE);
+    }
+    
+    res = sieve_register_body(interp, &getbody);
+    if (res != SIEVE_OK) {
+	syslog(LOG_ERR,"sieve_register_body() returns %d\n", res);
+	fatal("sieve_register_body()", EC_SOFTWARE);
     }
     
     res = sieve_register_vacation(interp, &vacation);

@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.59.2.2 2004/03/24 19:53:20 ken3 Exp $
+ * $Id: script.c,v 1.59.2.3 2004/06/18 16:13:41 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -211,7 +211,7 @@ static int fillin_headers(sieve_interp_t *i, const char *msg,
 {
     int allocsize = GROW_AMOUNT;
     const char *c;
-    int n;
+    size_t n;
 
     *out = xmalloc(GROW_AMOUNT);
     *outlen = 0;
@@ -235,7 +235,41 @@ static int fillin_headers(sieve_interp_t *i, const char *msg,
 	    add_header(i, 0, "Subject", message_context, out, outlen, &allocsize);
 	    c += 9;
 	}
-	/* XXX need to do $text$ variables */
+	else if (!strncasecmp(c, "$text", 5) && (c[5] == '[' || c[5] == '$')) {
+	    sieve_bodypart_t **parts = NULL;
+
+	    c += 5;
+	    n = 0;
+	    if (*c++ == '[') {
+		while (*c != ']') n = n * 10 + (*c++ - '0');
+		c += 2; /* skip ]$ */
+	    }
+
+	    i->getbody(message_context, "text", &parts);
+
+	    /* we only use the first text part */
+	    if (parts && *parts) {
+		if (n == 0 || n > parts[0]->size) n = parts[0]->size;
+
+		/* realloc if necessary */
+		if ( (*outlen) + n+1 >= allocsize) {
+		    allocsize = (*outlen) + n+1 + GROW_AMOUNT;
+		    *out = xrealloc(*out, allocsize);
+		}
+		/* copy the plaintext */
+		strncat(*out, parts[0]->content, n);
+		(*out)[*outlen+n]='\0';
+		(*outlen) += n;
+	    }
+
+	    /* free the results */
+	    if (parts) {
+		sieve_bodypart_t **p;
+
+		for (p = parts; *p; p++) free(*p);
+		free(parts);
+	    }
+	}
 	else {
 	    /* find length of plaintext up to next potential variable */
 	    n = strcspn(c+1, "$") + 1; /* skip opening '$' */

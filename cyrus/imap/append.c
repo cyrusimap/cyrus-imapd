@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.102.2.6 2004/06/15 17:13:26 ken3 Exp $
+ * $Id: append.c,v 1.102.2.7 2004/06/18 16:13:38 ken3 Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -560,7 +560,8 @@ int append_fromstage(struct appendstate *as, struct body **body,
     destfile = fopen(fname, "r");
     if (!r && destfile) {
 	/* ok, we've successfully created the file */
-	if (!*body || (as->nummsg - 1)) r = message_parse_file(destfile, body);
+	if (!*body || (as->nummsg - 1))
+	    r = message_parse_file(destfile, NULL, NULL, body);
 	if (!r) r = message_create_record(mailbox, &message_index, *body);
     }
     if (destfile) {
@@ -717,7 +718,8 @@ int append_fromstream(struct appendstate *as, struct body **body,
     /* Copy and parse message */
     r = message_copy_strict(messagefile, destfile, size);
     if (!r) {
-	if (!*body || (as->nummsg - 1)) r = message_parse_file(destfile, body);
+	if (!*body || (as->nummsg - 1))
+	    r = message_parse_file(destfile, NULL, NULL, body);
 	if (!r) r = message_create_record(mailbox, &message_index, *body);
     }
     fclose(destfile);
@@ -917,7 +919,7 @@ int append_copy(struct mailbox *mailbox,
 	    mailbox_unmap_message(mailbox, copymsg[msg].uid,
 				  &src_base, &src_size);
 
-	    if (!r) r = message_parse_file(destfile, &body);
+	    if (!r) r = message_parse_file(destfile, NULL, NULL, &body);
 	    if (!r) r = message_create_record(append_mailbox,
 					      &message_index[msg], body);
 	    if (body) message_free_body(body);

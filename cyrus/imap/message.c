@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: message.c,v 1.97.2.2 2004/06/15 17:13:31 ken3 Exp $
+ * $Id: message.c,v 1.97.2.3 2004/06/18 16:13:39 ken3 Exp $
  */
 
 #include <config.h>
@@ -313,27 +313,41 @@ unsigned size;
  * cache information to the mailbox's cache file and fills in
  * appropriate information in the index record pointed to by
  * 'message_index'.
+ *
+ * The caller MUST free the allocated body struct.
+ * If msg_base/msg_len are non-NULL, the file will remain memory-mapped
+ * and returned to the caller.  The caller MUST unmap the file.
  */
-int
-message_parse_file(infile, body)
-FILE *infile;
-struct body **body;
+int message_parse_file(FILE *infile,
+		       const char **msg_base, unsigned long *msg_len,
+		       struct body **body)
 {
+    int fd = fileno(infile);
     struct stat sbuf;
-    const char *msg_base = 0;
-    unsigned long msg_len = 0;
-    int r;
+    const char *tmp_base;
+    unsigned long tmp_len;
+    int unmap = 0, r;
 
-    if (!*body) *body = (struct body *) xmalloc(sizeof(struct body));
+    if (!msg_base) {
+	unmap = 1;
+	msg_base = &tmp_base;
+	msg_len = &tmp_len;
+    }
+    *msg_base = 0;
+    *msg_len = 0;
 
-    if (fstat(fileno(infile), &sbuf) == -1) {
+    if (fstat(fd, &sbuf) == -1) {
 	syslog(LOG_ERR, "IOERROR: fstat on new message in spool: %m");
 	fatal("can't fstat message file", EC_OSFILE);
     }
-    map_refresh(fileno(infile), 1, &msg_base, &msg_len, sbuf.st_size,
+    map_refresh(fd, 1, msg_base, msg_len, sbuf.st_size,
 		"new message", 0);
-    r = message_parse_mapped(msg_base, msg_len, *body);
-    map_free(&msg_base, &msg_len);
+
+    if (!*body) *body = (struct body *) xmalloc(sizeof(struct body));
+    r = message_parse_mapped(*msg_base, *msg_len, *body);
+
+    if (unmap) map_free(msg_base, msg_len);
+
     return r;
 }
 
@@ -344,11 +358,8 @@ struct body **body;
  * and fills in appropriate information in the index record pointed to
  * by 'message_index'.
  */
-int
-message_parse_mapped(msg_base, msg_len, body)
-const char *msg_base;
-unsigned long msg_len;
-struct body *body;
+int message_parse_mapped(const char *msg_base, unsigned long msg_len,
+			 struct body *body)
 {
     struct msg msg;
     int n;
@@ -361,6 +372,68 @@ struct body *body;
 		       DEFAULT_CONTENT_TYPE, (struct boundary *)0);
 
     return 0;
+}
+
+static void message_find_part(struct body *body,
+			      const char *type, const char *subtype,
+			      const char *msg_base, unsigned long msg_len,
+			      struct bodypart ***parts, int *n)
+{
+    if ((!type || !*type || !strcmp(body->type, type)) &&
+	(!subtype || !*subtype || !strcmp(body->subtype, subtype))) {
+	/* matching part, sanity check the size against the mmap'd file */
+	if (body->content_offset + body->content_size > msg_len) {
+	    syslog(LOG_ERR, "IOERROR: body part exceeds size of message file");
+	    fatal("body part exceeds size of message file", EC_OSFILE);
+	}
+
+	/* grow the array and add the new part */
+	*parts = xrealloc(*parts, (*n+2)*sizeof(struct bodypart *));
+	(*parts)[*n] = xmalloc(sizeof(struct bodypart));
+	(*parts)[*n]->content = msg_base + body->content_offset;
+	(*parts)[*n]->encoding = body->encoding;
+	(*parts)[*n]->size = body->content_size;
+	(*parts)[++(*n)] = NULL;
+    }
+    else if (!strcmp(body->type, "MULTIPART")) {
+	int i;
+
+	for (i = 0; i < body->numparts; i++) {
+	    message_find_part(&body->subpart[i], type, subtype,
+			      msg_base, msg_len, parts, n);
+	}
+    }
+    else if (!strcmp(body->type, "MESSAGE") &&
+	     !strcmp(body->subtype, "RFC822")) {
+	message_find_part(body->subpart, type, subtype,
+			  msg_base, msg_len, parts, n);
+    }
+}
+
+/*
+ * Fetch the bodypart(s) which match the given content_type and return
+ * them as an allocated array.
+ *
+ * The caller MUST free the array of allocated bodypart(s).
+ */
+void message_fetch_part(struct message_content *msg,
+			const char *content_type,
+			struct bodypart ***parts)
+{
+    char *type = NULL, *subtype = NULL;
+    int n;
+
+    /* split the content_type into type/subtype */
+    if (content_type) {
+	type = ucase(xstrdup(content_type));
+	if ((subtype = strchr(type, '/'))) *subtype++ = '\0';
+    }
+
+    *parts = NULL;
+    n = 0;  /* running count of the number of matching parts */
+    message_find_part(msg->body, type, subtype, msg->base, msg->len, parts, &n);
+
+    if (type) free(type);
 }
 
 /*

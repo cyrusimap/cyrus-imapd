@@ -1,6 +1,6 @@
 /* interp.c -- sieve script interpretor builder
  * Larry Greenfield
- * $Id: interp.c,v 1.22 2002/05/14 16:51:50 ken3 Exp $
+ * $Id: interp.c,v 1.22.8.1 2004/06/18 16:13:41 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -160,6 +160,12 @@ int sieve_register_header(sieve_interp_t *interp, sieve_get_header *f)
 int sieve_register_envelope(sieve_interp_t *interp, sieve_get_envelope *f)
 {
     interp->getenvelope = f;
+    return SIEVE_OK;
+}
+
+int sieve_register_body(sieve_interp_t *interp, sieve_get_body *f)
+{
+    interp->getbody = f;
     return SIEVE_OK;
 }
 

@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.71.2.13 2004/06/18 14:48:44 ken3 Exp $ -->
+<!-- $Id: changes.html,v 1.71.2.14 2004/06/18 16:13:37 ken3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -35,6 +35,9 @@ new <tt>popsubfolders</tt> option for details.</li>
 <li>Added support to <tt>lmtpd</tt> to do "fuzzy" mailbox matching
 on user+detail addresses.  See the new
 <tt>lmtp_fuzzy_mailbox_match</tt> option for details.</li>
+<li>The MIME structure of a new message destined for multiple
+recipients is now only parsed once rather than once per delivery.</li>
+<li>The $text$ variable for Sieve notify messages is now supported.</li>
 </ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.2.5</h1>
@@ -1980,7 +1983,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2004/06/18 14:48:44 $ <br />
+last modified: $Date: 2004/06/18 16:13:37 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>

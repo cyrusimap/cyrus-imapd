@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.121.2.21 2004/06/15 17:13:30 ken3 Exp $
+ * $Id: lmtpd.c,v 1.121.2.22 2004/06/18 16:13:39 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -442,8 +442,8 @@ static int mlookup(const char *name, char **server, char **aclp, void *tid)
  * if you want to force delivery (to force delivery to INBOX, for instance)
  * pass acloverride
  */
-int deliver_mailbox(struct protstream *msg,
-		    struct body **body,
+int deliver_mailbox(FILE *f,
+		    struct message_content *content,
 		    struct stagemsg *stage,
 		    unsigned size __attribute__((unused)),
 		    char **flag,
@@ -474,9 +474,14 @@ int deliver_mailbox(struct protstream *msg,
 		     authuser, authstate, acloverride ? 0 : ACL_POST, 
 		     quotaoverride ? -1 : 0);
 
+    if (!r && !content->body) {
+	/* parse the message body if we haven't already,
+	   and keep the file mmap'ed */
+	r = message_parse_file(f, &content->base, &content->len, &content->body);
+    }
+
     if (!r) {
-	prot_rewind(msg);
-	r = append_fromstage(&as, body, stage, now,
+	r = append_fromstage(&as, &content->body, stage, now,
 			     (const char **) flag, nflags, !singleinstance);
 	if (!r) append_commit(&as, quotaoverride ? -1 : 0, NULL, &uid, NULL);
 	else append_abort(&as);
@@ -616,7 +621,7 @@ int deliver(message_data_t *msgdata, char *authuser,
     struct dest *dlist = NULL;
     enum rcpt_status *status;
     struct stagemsg *stage;
-    struct body *body = NULL;
+    struct message_content content = { NULL, 0, NULL };
     char *notifyheader;
 #ifdef USE_SIEVE
     sieve_msgdata_t mydata;
@@ -635,7 +640,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 #ifdef USE_SIEVE
     /* create 'mydata', our per-delivery data */
     mydata.m = msgdata;
-    mydata.body = &body;
+    mydata.content = &content;
     mydata.stage = stage;
     mydata.notifyheader = notifyheader;
     mydata.namespace = &lmtpd_namespace;
@@ -667,7 +672,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	    }
 	    else if (!r) {
 		/* local mailbox */
-		r = deliver_mailbox(msgdata->data, &body, stage, msgdata->size, 
+		r = deliver_mailbox(msgdata->f, &content, stage, msgdata->size, 
 				    NULL, 0, authuser, authstate,
 				    msgdata->id, NULL, notifyheader,
 				    namebuf, quotaoverride, 0);
@@ -710,7 +715,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 		    strlcat(namebuf, ".", sizeof(namebuf));
 		    strlcat(namebuf, mailbox, sizeof(namebuf));
 		
-		    r = deliver_mailbox(msgdata->data, &body, stage,  msgdata->size, 
+		    r = deliver_mailbox(msgdata->f, &content, stage,  msgdata->size, 
 					NULL, 0, authuser, authstate,
 					msgdata->id, userbuf, notifyheader,
 					namebuf, quotaoverride, 0);
@@ -720,7 +725,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 		    config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH) &&
 		    fuzzy_match(namebuf)) {
 		    /* try delivery to a fuzzy matched mailbox */
-		    r = deliver_mailbox(msgdata->data, &body, stage,  msgdata->size, 
+		    r = deliver_mailbox(msgdata->f, &content, stage,  msgdata->size, 
 					NULL, 0, authuser, authstate,
 					msgdata->id, userbuf, notifyheader,
 					namebuf, quotaoverride, 0);
@@ -731,7 +736,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 		    *tail = '\0';
 		
 		    /* ignore ACL's trying to deliver to INBOX */
-		    r = deliver_mailbox(msgdata->data, &body, stage, msgdata->size, 
+		    r = deliver_mailbox(msgdata->f, &content, stage, msgdata->size, 
 					NULL, 0, authuser, authstate,
 					msgdata->id, userbuf, notifyheader,
 					namebuf, quotaoverride, 1);
@@ -798,9 +803,10 @@ int deliver(message_data_t *msgdata, char *authuser,
    
     /* cleanup */
     free(status);
-    if (body) {
-	message_free_body(body);
-	free(body);
+    if (content.base) map_free(&content.base, &content.len);
+    if (content.body) {
+	message_free_body(content.body);
+	free(content.body);
     }
     append_removestage(stage);
     if (notifyheader) free(notifyheader);
