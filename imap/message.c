@@ -1,30 +1,33 @@
 /* message.c -- Message manipulation/parsing
- $Id: message.c,v 1.53 1998/05/15 21:49:21 neplokh Exp $
- 
- # Copyright 1998 Carnegie Mellon University
- # 
- # No warranties, either expressed or implied, are made regarding the
- # operation, use, or results of the software.
- #
- # Permission to use, copy, modify and distribute this software and its
- # documentation is hereby granted for non-commercial purposes only
- # provided that this copyright notice appears in all copies and in
- # supporting documentation.
- #
- # Permission is also granted to Internet Service Providers and others
- # entities to use the software for internal purposes.
- #
- # The distribution, modification or sale of a product which uses or is
- # based on the software, in whole or in part, for commercial purposes or
- # benefits requires specific, additional permission from:
- #
- #  Office of Technology Transfer
- #  Carnegie Mellon University
- #  5000 Forbes Avenue
- #  Pittsburgh, PA  15213-3890
- #  (412) 268-4387, fax: (412) 268-7395
- #  tech-transfer@andrew.cmu.edu
+ * 
+ * Copyright 1998 Carnegie Mellon University
+ * 
+ * No warranties, either expressed or implied, are made regarding the
+ * operation, use, or results of the software.
  *
+ * Permission to use, copy, modify and distribute this software and its
+ * documentation is hereby granted for non-commercial purposes only
+ * provided that this copyright notice appears in all copies and in
+ * supporting documentation.
+ *
+ * Permission is also granted to Internet Service Providers and others
+ * entities to use the software for internal purposes.
+ *
+ * The distribution, modification or sale of a product which uses or is
+ * based on the software, in whole or in part, for commercial purposes or
+ * benefits requires specific, additional permission from:
+ *
+ *  Office of Technology Transfer
+ *  Carnegie Mellon University
+ *  5000 Forbes Avenue
+ *  Pittsburgh, PA  15213-3890
+ *  (412) 268-4387, fax: (412) 268-7395
+ *  tech-transfer@andrew.cmu.edu
+ *
+ */
+
+/*
+ * $Id: message.c,v 1.54 1998/06/04 20:08:29 tjs Exp $
  */
 
 #ifdef HAVE_UNISTD_H
@@ -191,6 +194,9 @@ static void message_free_body P((struct body *body));
 /*
  * Copy a message of 'size' bytes from 'from' to 'to',
  * ensuring minimal RFC-822 compliance.
+ *
+ * Caller must have initialized config_* routines (with config_init) to read
+ * imapd.conf before calling.
  */
 int
 message_copy_strict(from, to, size)
@@ -203,6 +209,7 @@ unsigned size;
     int r = 0;
     int n;
     int sawcr = 0, sawnl;
+    int reject8bit = config_getswitch(reject8bit, 0);
 
     while (size) {
 	n = prot_read(from, buf, size > 4096 ? 4096 : size);
@@ -257,7 +264,17 @@ unsigned size;
 
 	/* Check for non-ASCII character */ 
 	for (p = (unsigned char *)buf; *p; p++) {
-	    if (*p >= 0x80) return IMAP_MESSAGE_CONTAINS8BIT;
+	    if (*p >= 0x80) {
+		if (reject8bit) {
+		    /* We have been configured to reject all mail of this
+		       form. */
+		    return IMAP_MESSAGE_CONTAINS8BIT;
+		} else {
+		    /* We have been configured to munge all mail of this
+		       form. */
+		    *p = 'X';
+		}
+	    }
 	}
 
 	sawnl = (p[-1] == '\n');
