@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.121 1998/09/29 21:12:37 tjs Exp $
+dnl $Id: configure.in,v 1.122 1998/09/29 21:15:57 tjs Exp $
 dnl
 
 AC_INIT(imap/imapd.c)
@@ -627,9 +627,16 @@ if test -z "use_db"; then
 fi
 
 dnl
-dnl Try like crazy to locate Kerberos libraries.
+dnl Try like crazy to locate Kerberos (4) libraries.
 dnl This used to be easier, but with all the locations the BSD variants
 dnl are using for Kerberos these days, + k5, it's harder.
+dnl
+dnl This might satisfy everyone, but I doubt it.  It should work if
+dnl the code is in /usr/(athena|kerberos|local|.), it should detect if
+dnl some include files are in a kerberosIV subdir, and it should work
+dnl if there's a library called "krb4" instead of krb.  It should also
+dnl correctly deal with crippled Kerberos libraries and refuse to use them,
+dnl but only if the user doesn't specify --with-krb=no.
 dnl
 AC_ARG_WITH(krb,[  --with-krb=PATH         use Kerberos from PATH])
 dnl This may not be the best way to do this, but I like it.
