@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.h,v 1.3.6.10 2003/02/19 17:09:48 ken3 Exp $ */
+/* $Id: backend.h,v 1.3.6.11 2003/02/27 16:32:22 ken3 Exp $ */
 
 #ifndef _INCLUDED_BACKEND_H
 #define _INCLUDED_BACKEND_H
@@ -58,7 +58,10 @@ struct backend {
     struct sockaddr_storage addr;
     int sock;
 
-    /* only used by proxyd */
+    /* service-specific context */
+    void *context;
+
+    /* only used by proxyd and nntpd */
     struct prot_waitevent *timeout;
 
     sasl_conn_t *saslconn;

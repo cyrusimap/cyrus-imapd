@@ -38,14 +38,13 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.63 2003/02/27 14:42:07 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.64 2003/02/27 16:32:22 ken3 Exp $
  */
 
 /*
  * TODO:
  *
  * - remove Xref header from articles
- * - collate recipient backends for posts
  * - figure out what to do with control messages when proxying
  * - figure out how to do singleinstancestore
  */
@@ -298,6 +297,12 @@ struct backend *proxyd_findserver(const char *server)
 			      nntp_userid ? nntp_userid : "anonymous", NULL);
 	if(!ret) return NULL;
 
+	/* set the id */
+	if (!ret->context) {
+	    ret->context = xmalloc(sizeof(unsigned));
+	    *((unsigned *) ret->context) = i;
+	}
+
 	/* add the timeout */
 	ret->timeout = prot_addwaitevent(nntp_in, time(NULL) + IDLE_TIMEOUT,
 					 backend_timeout, ret);
@@ -436,6 +441,7 @@ static void nntp_reset(void)
     i = 0;
     while (backend_cached[i]) {
 	proxyd_downserver(backend_cached[i]);
+	free(backend_cached[i]->context);
 	free(backend_cached[i]);
 	i++;
     }
@@ -698,6 +704,7 @@ void shut_down(int code)
     i = 0;
     while (backend_cached && backend_cached[i]) {
 	proxyd_downserver(backend_cached[i]);
+	free(backend_cached[i]->context);
 	free(backend_cached[i]);
 	i++;
     }
@@ -2370,7 +2377,7 @@ static int deliver(message_data_t *msg)
     int n, r, myrights;
     char *rcpt = NULL, *local_rcpt = NULL, *server, *acl;
     time_t now = time(NULL);
-    unsigned long uid;
+    unsigned long uid, backend_mask = 0;
 
     /* check ACLs of all mailboxes */
     for (n = 0; n < msg->rcpt_num; n++) {
@@ -2416,10 +2423,19 @@ static int deliver(message_data_t *msg)
 	else {
 	    /* remote group */
 	    struct backend *be = NULL;
+	    unsigned id;
 	    char buf[4096];
 
 	    be = proxyd_findserver(server);
 	    if (!be) return IMAP_SERVER_UNAVAILABLE;
+
+	    /* check if we've already sent to this backend
+	     * XXX this only works for <= 32 backends
+	     */
+	    if ((id = *((unsigned *) be->context)) < 32) {
+		if (backend_mask & (1 << id)) continue;
+		backend_mask |= (1 << id);
+	    }
 
 	    /* tell the backend about our new article */
 	    prot_printf(be->out, "IHAVE %s\r\n", msg->id);
