@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.7 2002/07/29 13:01:20 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.8 2002/07/30 16:49:04 ken3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -1065,13 +1065,13 @@ static int mysasl_authproc(sasl_conn_t *conn,
 			   const char *def_realm, unsigned urlen,
 			   struct propctx *propctx)
 {
-    const char *val;
+    const char *val = config_getstring(IMAPOPT_LOGINREALMS);
     char *realm;
 
     /* check if remote realm */
-    if ((realm = strchr(auth_identity, '@'))!=NULL) {
+    if ((!config_virtdomains || *val) &&
+	(realm = strchr(auth_identity, '@'))!=NULL) {
 	realm++;
-	val = config_getstring(IMAPOPT_LOGINREALMS);
 	while (*val) {
 	    if (!strncasecmp(val, realm, strlen(realm)) &&
 		(!val[strlen(realm)] || isspace((int) val[strlen(realm)]))) {

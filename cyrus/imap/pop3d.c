@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122.4.6 2002/07/25 17:21:43 ken3 Exp $
+ * $Id: pop3d.c,v 1.122.4.7 2002/07/30 16:49:04 ken3 Exp $
  */
 #include <config.h>
 
@@ -181,15 +181,15 @@ static int mysasl_authproc(sasl_conn_t *conn,
 			   unsigned urlen __attribute__((unused)),
 			   struct propctx *propctx __attribute__((unused)))
 {
-    const char *val;
+    const char *val = config_getstring(IMAPOPT_LOGINREALMS);
     struct auth_state *authstate;
     int userisadmin = 0;
     char *realm;
 
     /* check if remote realm */
-    if ((realm = strchr(auth_identity, '@'))!=NULL) {
+    if ((!config_virtdomains || *val) &&
+	(realm = strchr(auth_identity, '@'))!=NULL) {
 	realm++;
-	val = config_getstring(IMAPOPT_LOGINREALMS);
 	while (*val) {
 	    if (!strncasecmp(val, realm, strlen(realm)) &&
 		(!val[strlen(realm)] || isspace((int) val[strlen(realm)]))) {
