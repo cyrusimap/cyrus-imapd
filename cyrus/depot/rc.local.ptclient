@@ -1,0 +1,15 @@
+#!/bin/sh
+
+echo -n "Starting ptclient" > /dev/console
+
+ptscache="/var/ptclient/ptscache.db"
+db_load -T -t hash -f /dev/null $ptscache
+touch $ptscache
+chown cyrus $ptscache
+chgrp mail $ptscache
+chmod 660 $ptscache
+
+/bin/su postman -c 'exec /usr/cyrus/bin/doptclient' > /dev/console 2>&1 &
+echo "." > /dev/console
+
+
