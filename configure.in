@@ -227,6 +227,9 @@ AC_ARG_WITH(login,[  --with-login=METHOD     use login module METHOD
 	if test $cyrus_cv_lib_kerberos = yes; then
 		echo using Kerberos authentication
 		WITH_LOGIN=krb
+	elif test -f /etc/shadow; then
+		echo using unix pwcheck daemon authentication.  See pwcheck/README 
+		WITH_LOGIN=unix_pwcheck
 	else
 		echo using unix /etc/passwd authentication
 		WITH_LOGIN=unix
