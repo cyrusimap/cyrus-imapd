@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.20 2001/01/02 04:06:24 leg Exp $
+   $Id: seen_db.c,v 1.21 2001/01/05 06:00:03 leg Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -75,7 +75,7 @@ enum {
 };
 
 struct seen {
-    const char *user;		/* what user is this for? */
+    char *user;			/* what user is this for? */
     const char *uniqueid;	/* what mailbox? */
     const char *path;		/* where is this mailbox? */
     struct db *db;
@@ -148,6 +148,7 @@ int seen_open(struct mailbox *mailbox,
 	    syslog(LOG_ERR, "DBERROR: error closing seendb: %s", 
 		   cyrusdb_strerror(r));
 	}
+	free(seendb->user);
     } else {
 	/* create seendb */
 	seendb = (struct seen *) xmalloc(sizeof(struct seen));
@@ -170,7 +171,7 @@ int seen_open(struct mailbox *mailbox,
     seendb->tid = NULL;
     seendb->uniqueid = mailbox->uniqueid;
     seendb->path = mailbox->path;
-    seendb->user = user;
+    seendb->user = xstrdup(user);
 
     *seendbptr = seendb;
     return r;
@@ -403,7 +404,7 @@ int seen_close(struct seen *seendb)
 		   cyrusdb_strerror(r));
 	    r = IMAP_IOERROR;
 	}
-
+	free(lastseen->user);
 	free(lastseen);
     }
 
@@ -517,6 +518,7 @@ int seen_done(void)
 		   cyrusdb_strerror(r));
 	    r = IMAP_IOERROR;
 	}
+	free(lastseen->user);
 	free(lastseen);
     }
 
