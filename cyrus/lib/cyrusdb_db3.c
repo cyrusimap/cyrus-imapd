@@ -661,12 +661,12 @@ static int mydelete(struct db *mydb,
 	/* start txn for the write */
 	r = txn_begin(dbenv, NULL, &tid, 0);
 	if (r != 0) {
-	    syslog(LOG_ERR, "DBERROR: delete: error beginning txn: %s", 
+	    syslog(LOG_ERR, "DBERROR: mydelete: error beginning txn: %s", 
 		   db_strerror(r));
 	    return CYRUSDB_IOERROR;
 	}
 	if (CONFIG_DB_VERBOSE)
-	    syslog(LOG_DEBUG, "delete: starting txn %lu", txn_id(tid));
+	    syslog(LOG_DEBUG, "mydelete: starting txn %lu", txn_id(tid));
     }
     r = db->del(db, tid, &k, 0);
     if (!mytid) {
@@ -674,10 +674,10 @@ static int mydelete(struct db *mydb,
 	if (r) {
 	    int r2;
 	    if (CONFIG_DB_VERBOSE)
-		syslog(LOG_DEBUG, "delete: aborting txn %lu", txn_id(tid));
+		syslog(LOG_DEBUG, "mydelete: aborting txn %lu", txn_id(tid));
 	    r2 = txn_abort(tid);
 	    if (r2) {
-		syslog(LOG_ERR, "DBERROR: delete: error aborting txn: %s", 
+		syslog(LOG_ERR, "DBERROR: mydelete: error aborting txn: %s", 
 		       db_strerror(r));
 		return CYRUSDB_IOERROR;
 	    }
@@ -687,7 +687,7 @@ static int mydelete(struct db *mydb,
 	    }
 	} else {
 	    if (CONFIG_DB_VERBOSE)
-		syslog(LOG_DEBUG, "delete: committing txn %lu", txn_id(tid));
+		syslog(LOG_DEBUG, "mydelete: committing txn %lu", txn_id(tid));
 	    r = txn_commit(tid, txnflags);
 	}
     }
@@ -700,7 +700,7 @@ static int mydelete(struct db *mydb,
 	if (r == DB_LOCK_DEADLOCK) {
 	    r = CYRUSDB_AGAIN;
 	} else {
-	    syslog(LOG_ERR, "DBERROR: delete: error deleting %s: %s",
+	    syslog(LOG_ERR, "DBERROR: mydelete: error deleting %s: %s",
 		   key, db_strerror(r));
 	    r = CYRUSDB_IOERROR;
 	}
@@ -731,17 +731,17 @@ static int mycommit(struct db *db, struct txn *tid, int txnflags)
     assert(dbinit && tid);
 
     if (CONFIG_DB_VERBOSE)
-	syslog(LOG_DEBUG, "commit_txn: committing txn %lu", txn_id(t));
+	syslog(LOG_DEBUG, "mycommit: committing txn %lu", txn_id(t));
     r = txn_commit(t, txnflags);
     switch (r) {
     case 0:
 	break;
     case EINVAL:
-	syslog(LOG_WARNING, "commit_txn: tried to commit an already aborted transaction");
+	syslog(LOG_WARNING, "mycommit: tried to commit an already aborted transaction");
 	r = CYRUSDB_IOERROR;
 	break;
     default:
-	syslog(LOG_ERR, "DBERROR: commit_txn  failed on commit: %s",
+	syslog(LOG_ERR, "DBERROR: mycommit  failed on commit: %s",
 	       db_strerror(r));
 	r = CYRUSDB_IOERROR;
 	break;
