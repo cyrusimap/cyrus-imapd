@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.37 2001/11/13 19:59:39 leg Exp $
+ * $Id: lmtpengine.c,v 1.38 2001/11/13 20:01:52 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -110,7 +110,6 @@ struct clientdata {
 
     char clienthost[250];
     char lhlo_param[250];
-    char tls_info[250];
 
     sasl_conn_t *conn;
 
@@ -897,7 +896,16 @@ static int savemsg(struct clientdata *cd,
     }
     fprintf(f, "\r\n\tby %s (Cyrus %s) with LMTP",
 		config_servername, CYRUS_VERSION);
-    if (*cd->tls_info) fprintf(f, " (%s)", cd->tls_info);
+
+    if (cd->tls_conn) {
+	char tls_info[250];
+
+	tls_info[0] = '\0';
+	/* grab TLS info for Received: header */
+	tls_get_info(cd->tls_conn, tls_info, sizeof(tls_info));
+	if (*tls_info) fprintf(f, " (%s)", tls_info);
+    }
+
     fprintf(f, "; %s\r\n", datestr);
 
     /* add any requested headers */
@@ -1066,7 +1074,6 @@ void lmtpmode(struct lmtp_func *func,
     cd.fd = fd;
     cd.clienthost[0] = '\0';
     cd.lhlo_param[0] = '\0';
-    cd.tls_info[0] = '\0';
     cd.tls_conn = NULL;
     cd.starttls_done = 0;
 
@@ -1621,9 +1628,6 @@ void lmtpmode(struct lmtp_func *func,
 		/* tell the prot layer about our new layers */
 		prot_settls(pin, cd.tls_conn);
 		prot_settls(pout, cd.tls_conn);
-
-		/* grab TLS info for Received: header */
-		tls_get_info(cd.tls_conn, cd.tls_info, sizeof(cd.tls_info));
 
 		cd.starttls_done = 1;
 
