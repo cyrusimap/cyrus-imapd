@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.232 2000/04/27 18:50:04 leg Exp $ */
+/* $Id: imapd.c,v 1.233 2000/04/27 20:22:18 leg Exp $ */
 
 #include <config.h>
 
@@ -1639,6 +1639,7 @@ cmd_append(char *tag, char *name)
 						 imapd_userid, imapd_authstate,
 						 (char **)0, (char **)0) == 0)
 		    ? "[TRYCREATE] " : "", error_message(r));
+	return;
     }
 
     c = ' '; /* just parsed a space */
