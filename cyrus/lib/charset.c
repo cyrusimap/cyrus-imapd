@@ -372,13 +372,12 @@ int encoding;
     rawlen = len;
     rawleft = decodeleft = 0;
 
-    if (mapnl && !strchr(substr, '\n') && !strchr(substr, '\r')) {
-	/* Doesn't matter -- CRLF won't match anything */
-	mapnl = 0;
-    }
-
     switch (encoding) {
     case ENCODING_NONE:
+	if (mapnl && !strchr(substr, '\n') && !strchr(substr, '\r')) {
+	    /* Doesn't matter -- CRLF won't match anything */
+	    mapnl = 0;
+	}
 	rawproc = mapnl ? charset_readmapnl : charset_readplain;
 	break;
 
@@ -450,7 +449,8 @@ int size;
 	}
 	decodestart++;
 	decodeleft--;
-	while (*buf++ = *translation++) {
+	while (len--) {
+	    *buf++ = *translation++;
 	    retval++;
 	    size--;
 	}
@@ -490,7 +490,7 @@ int size;
 
     limit = sizeof(rawbuf)-rawleft;
     if (limit > rawlen) limit = rawlen;
-    n = fread(rawbuf+rawleft, 1, sizeof(rawbuf)-rawleft, rawfile);
+    n = fread(rawbuf+rawleft, 1, limit, rawfile);
     rawlen -= n;
     rawleft += n;
 
@@ -529,7 +529,7 @@ int size;
 
     limit = sizeof(rawbuf)-rawleft;
     if (limit > rawlen) limit = rawlen;
-    n = fread(rawbuf+rawleft, 1, sizeof(rawbuf)-rawleft, rawfile);
+    n = fread(rawbuf+rawleft, 1, limit, rawfile);
     rawlen -= n;
     rawleft += n;
 
@@ -578,7 +578,7 @@ int size;
 
     limit = sizeof(rawbuf)-rawleft;
     if (limit > rawlen) limit = rawlen;
-    n = fread(rawbuf+rawleft, 1, sizeof(rawbuf)-rawleft, rawfile);
+    n = fread(rawbuf+rawleft, 1, limit, rawfile);
     rawlen -= n;
     rawleft += n;
 
@@ -645,7 +645,7 @@ int size;
 
     limit = sizeof(rawbuf)-rawleft;
     if (limit > rawlen) limit = rawlen;
-    n = fread(rawbuf+rawleft, 1, sizeof(rawbuf)-rawleft, rawfile);
+    n = fread(rawbuf+rawleft, 1, limit, rawfile);
     rawlen -= n;
     rawleft += n;
 
@@ -683,7 +683,7 @@ int size;
 	    c3 = rawbuf[rawstart++];
 	    rawleft--;
 	    if (c3 == '=') {
-		*buf++ = ((c1<<2) | ((c2&0x30)>>4));
+		*buf++ = ((CHAR64(c1)<<2) | ((CHAR64(c2)&0x30)>>4));
 		retval++;
 		rawlen = rawleft = 0;
 		return retval;
@@ -701,8 +701,8 @@ int size;
 	    c4 = rawbuf[rawstart++];
 	    rawleft--;
 	    if (c4 == '=') {
-		*buf++ = ((c1<<2) | ((c2&0x30)>>4));
-		*buf++ = (((c2&0XF) << 4) | ((c3&0x3C) >> 2));
+		*buf++ = ((CHAR64(c1)<<2) | ((CHAR64(c2)&0x30)>>4));
+		*buf++ = (((CHAR64(c2)&0xf)<<4) | ((CHAR64(c3)&0x3c)>>2));
 		retval += 2;
 		rawlen = rawleft = 0;
 		return retval;
@@ -716,9 +716,9 @@ int size;
 	    return retval;
 	}
 
-	*buf++ = ((c1<<2) | ((c2&0x30)>>4));
-	*buf++ = (((c2&0XF) << 4) | ((c3&0x3C) >> 2));
-	*buf++ = (((c3&0x03) <<6) | c4);
+	*buf++ = ((CHAR64(c1)<<2) | ((CHAR64(c2)&0x30)>>4));
+	*buf++ = (((CHAR64(c2)&0xf)<<4) | ((CHAR64(c3)&0x3c)>>2));
+	*buf++ = (((CHAR64(c3)&0x3)<<6) | CHAR64(c4));
 	retval += 3;
 	size -= 3;
     }
