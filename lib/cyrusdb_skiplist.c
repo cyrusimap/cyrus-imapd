@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.7 2002/01/24 21:55:15 leg Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.8 2002/01/24 22:38:02 leg Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -1122,6 +1122,7 @@ int myabort(struct db *db, struct txn *tid) /* xxx */
 	
 	offset = ptr - db->map_base;
 
+	assert(TYPE(ptr) == ADD || TYPE(ptr) == DELETE);
 	switch (TYPE(ptr)) {
 	case DUMMY:
 	case INORDER:
@@ -1149,12 +1150,13 @@ int myabort(struct db *db, struct txn *tid) /* xxx */
 	{
 	    int lvl;
 	    int newoffset;
+	    const char *q;
 	    
 	    /* re-add this record.  it can't exist right now. */
 	    newoffset = *((bit32 *)(ptr + 4));
-	    ptr = db->map_base + ntohl(newoffset);
-	    lvl = LEVEL(ptr);
-	    (void) find_node(db, KEY(ptr), KEYLEN(ptr), updateoffsets);
+	    q = db->map_base + ntohl(newoffset);
+	    lvl = LEVEL(q);
+	    (void) find_node(db, KEY(q), KEYLEN(q), updateoffsets);
 	    for (i = 0; i < lvl; i++) {
 		/* the current pointers FROM this node are correct,
 		   so we just have to update 'updateoffsets' */
@@ -1168,7 +1170,7 @@ int myabort(struct db *db, struct txn *tid) /* xxx */
 	}
 
 	/* remove looking at this */
-	tid->logend -= (ptr - db->map_base);
+	tid->logend -= RECSIZE(ptr);
     }
 
     /* truncate the file to remove log entries */
