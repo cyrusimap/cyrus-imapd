@@ -1,5 +1,5 @@
 /* imclient.h -- Streaming IMxP client library
- $Id: imclient.h,v 1.12 1998/05/15 21:51:39 neplokh Exp $
+ $Id: imclient.h,v 1.13 1998/09/21 20:01:41 tjs Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -35,6 +35,7 @@
 #endif
 
 struct imclient;
+struct sasl_client; /* to avoid having to include sasl sometimes */
 
 struct imclient_reply {
     char *keyword;		/* reply keyword */
