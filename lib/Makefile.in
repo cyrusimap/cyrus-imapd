@@ -50,7 +50,7 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
-HDRS= acl.h acte.h assert.h auth.h charset.h glob.h imclient.h prot.h
+HDRS= acl.h acte.h assert.h auth.h charset.h glob.h imclient.h prot.h \
 	sysexits.h util.h xmalloc.h
 
 OBJS= acl.o assert.o bsearch.o charset.o glob.o is.o retry.o util.o prot.o \
