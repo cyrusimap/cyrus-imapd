@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.57 2000/12/19 19:31:41 ken3 Exp $
+ * $Id: lmtpd.c,v 1.58 2001/01/30 21:53:41 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.57 2000/12/19 19:31:41 ken3 Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.58 2001/01/30 21:53:41 leg Exp $";*/
 
 #include <config.h>
 
@@ -310,7 +310,7 @@ int service_main(int argc, char **argv, char **envp)
     deliver_in = prot_new(0, 0);
     deliver_out = prot_new(1, 1);
     prot_setflushonread(deliver_in, deliver_out);
-    prot_settimeout(deliver_in, 300);
+    prot_settimeout(deliver_in, 360);
 
     while ((opt = getopt(argc, argv, "aq")) != EOF) {
 	switch(opt) {
