@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Shell.pm,v 1.26 2003/06/26 13:57:50 rjs3 Exp $
+# $Id: Shell.pm,v 1.27 2003/07/23 12:57:46 rjs3 Exp $
 #
 # A shell framework for IMAP::Cyrus::Admin
 #
@@ -423,14 +423,14 @@ sub shell {
     ('', 143, undef, $ENV{USER} || $ENV{LOGNAME}, '/usr/local/etc/cyradmrc.pl',
      "$ENV{HOME}/.cyradmrc.pl", 1, undef, undef);
   GetOptions('user|u=s' => \$auth,
-	     'authz|u=s' => \$authz,
+	     'authz|z=s' => \$authz,
 	     'rc|r!' => \$dorc,
 	     'systemrc|S=s' => \$systemrc,
 	     'userrc=s' => \$userrc,
 	     'server|s=s' => \$server,
 	     'port|p=i' => \$port,
 	     'auth|a=s' => \$mech,
-	     'password|u=s' => \$pw,
+	     'password|w=s' => \$pw,
 	    );
   if ($server ne '' && @ARGV) {
     die "cyradm: may not specify server both with --server and bare arg\n";
