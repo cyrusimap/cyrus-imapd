@@ -62,6 +62,7 @@ struct mailbox {
     int header_lock_count;
     int index_lock_count;
     int seen_lock_count;
+    int pop_lock_count;
 
     time_t header_mtime;
     time_t index_mtime;
