@@ -56,10 +56,31 @@ $VERSION = '1.00';
 # causes collisions, so I can get away with shorter versions here.
 #
 
+# callback when referral stream closes
+sub _cb_ref_eof {
+  my %cb = @_;
+  # indicate that the connection went away
+  print STDERR "\nReferral connection to server lost.\n";
+  ${$cb{-rock}} = undef;
+}
+
 sub new {
   my $class = shift;
   my $self = bless {}, $class;
   $self->{cyrus} = Cyrus::IMAP->new(@_) or $self = undef;
+
+  # Figure out if the remote supports MAILBOX-REFERRALS
+  # This is sort of annoying that authenticate also issues a CAPABILITY
+  # but the API makes it difficult to get at the results of that command.
+  $self->{support_referrals} = 0;
+  $self->addcallback({-trigger => 'CAPABILITY',
+		      -callback => sub {my %a = @_;
+					map { $self->{support_referrals} = 1
+					       if /^MAILBOX-REFERRALS$/i}
+					split(/ /, $a{-text})}});
+  $self->send(undef, undef, 'CAPABILITY');
+  $self->addcallback({-trigger => 'CAPABILITY'});
+
   $self;
 }
 
@@ -79,6 +100,24 @@ sub AUTOLOAD {
   goto &$AUTOLOAD;
 }
 
+# Wrap around Cyrus::IMAP's authenticate, so that we are sure to 
+# send an rlist command if they support referrals 
+sub authenticate {
+    my $self = shift;
+    my $rc = $self->{cyrus}->authenticate(@_);
+    if($rc && $self->{support_referrals}) {
+      # Advertise our desire for referrals
+      my $msg;
+      ($rc, $msg) = $self->send('', '', 'RLIST "" ""');
+      if($rc eq "OK") {
+	$rc = 1;
+      } else {
+	$rc = 0;
+      }
+    }
+    return $rc;
+}
+
 sub createmailbox {
   my ($self, $mbx, $partition) = @_;
   $partition = '' if !defined($partition);
@@ -88,6 +127,27 @@ sub createmailbox {
     $self->{error} = undef;
     1;
   } else {
+    if($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
+      my ($refserver, $box) = Cyrus::IMAP->fromURL($1);
+      my $port = 143;
+
+      if($refserver =~ /:/) {
+	$refserver =~ /([^:]+):(\d+)/;
+	$refserver = $1; $port = $2;
+      }
+
+      my $cyradm = Cyrus::IMAP::Admin->new($refserver, $port)
+	or die "cyradm: cannot connect to $refserver\n";
+      $cyradm->addcallback({-trigger => 'EOF',
+			    -callback => \&_cb_ref_eof,
+			    -rock => \$cyradm});
+      $cyradm->authenticate()
+	or die "cyradm: cannot authenticate to $refserver\n";
+
+      my $ret = $cyradm->createmailbox($box);
+      $cyradm = undef;
+      return $ret;
+    }
     $self->{error} = $msg;
     undef;
   }
@@ -101,6 +161,27 @@ sub deletemailbox {
     $self->{error} = undef;
     1;
   } else {
+    if($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
+      my ($refserver, $box) = Cyrus::IMAP->fromURL($1);
+      my $port = 143;
+
+      if($refserver =~ /:/) {
+	$refserver =~ /([^:]+):(\d+)/;
+	$refserver = $1; $port = $2;
+      }
+
+      my $cyradm = Cyrus::IMAP::Admin->new($refserver, $port)
+	or die "cyradm: cannot connect to $refserver\n";
+      $cyradm->addcallback({-trigger => 'EOF',
+			    -callback => \&_cb_ref_eof,
+			    -rock => \$cyradm});
+      $cyradm->authenticate()
+	or die "cyradm: cannot authenticate to $refserver\n";
+
+      my $ret = $cyradm->deletemailbox($box);
+      $cyradm = undef;
+      return $ret;
+    }
     $self->{error} = $msg;
     undef;
   }
@@ -158,6 +239,12 @@ sub listmailbox {
   my ($self, $pat, $ref) = @_;
   $ref ||= "";
   my @info = ();
+  my $list_cmd;
+  if($self->{support_referrals}) {
+    $list_cmd = 'RLIST';
+  } else {
+    $list_cmd = 'LIST';
+  }
   $self->addcallback({-trigger => 'LIST',
 		      -callback => sub {
 			my %d = @_;
@@ -182,8 +269,8 @@ sub listmailbox {
 			push @{$d{-rock}}, [$mbox, $attrs, $sep];
 		      },
 		      -rock => \@info});
-  my ($rc, $msg) = $self->send('', '', 'LIST %s %s', $ref, $pat);
-  $self->addcallback({-trigger => 'LIST'});
+  my ($rc, $msg) = $self->send('', '', "$list_cmd %s %s", $ref, $pat);
+  $self->addcallback({-trigger => $list_cmd});
   if ($rc eq 'OK') {
     $self->{error} = undef;
     @info;
@@ -198,6 +285,12 @@ sub listsubscribed {
   my ($self, $pat, $ref) = @_;
   $ref ||= $pat;
   my @info = ();
+  my $list_cmd;
+  if($self->{support_referrals}) {
+    $list_cmd = 'RLSUB';
+  } else {
+    $list_cmd = 'LSUB';
+  }  
   $self->addcallback({-trigger => 'LSUB',
 		      -callback => sub {
 			my %d = @_;
@@ -222,8 +315,8 @@ sub listsubscribed {
 			push @{$d{-rock}}, [$mbox, $attrs, $sep];
 		      },
 		      -rock => \@info});
-  my ($rc, $msg) = $self->send('', '', 'LSUB %s %s', $pat, $ref);
-  $self->addcallback({-trigger => 'LSUB'});
+  my ($rc, $msg) = $self->send('', '', "$list_cmd %s %s", $pat, $ref);
+  $self->addcallback({-trigger => $list_cmd});
   if ($rc eq 'OK') {
     $self->{error} = undef;
     @info;
@@ -296,6 +389,35 @@ sub renamemailbox {
     $self->{error} = undef;
     1;
   } else {
+    if($self->{support_referrals} &&
+       $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\s+([^\]\s]+)\]|) {
+      # We need two referrals for this to be valid
+      my ($refserver, $box) = Cyrus::IMAP->fromURL($1);
+      my ($refserver2, $nbox) = Cyrus::IMAP->fromURL($2);
+      my $port = 143;
+
+      if(!($refserver eq $refserver2)) {
+	$self->{error} = "Inter-server referral.  Not implemented.";
+	return 1;
+      }
+
+      if($refserver =~ /:/) {
+	$refserver =~ /([^:]+):(\d+)/;
+	$refserver = $1; $port = $2;
+      }
+
+      my $cyradm = Cyrus::IMAP::Admin->new($refserver, $port)
+	or die "cyradm: cannot connect to $refserver\n";
+      $cyradm->addcallback({-trigger => 'EOF',
+			    -callback => \&_cb_ref_eof,
+			    -rock => \$cyradm});
+      $cyradm->authenticate()
+	or die "cyradm: cannot authenticate to $refserver\n";
+
+      my $ret = $cyradm->renamemailbox($box, $box, $nbox);
+      $cyradm = undef;
+      return $ret;
+    }
     $self->{error} = $msg;
     undef;
   }
