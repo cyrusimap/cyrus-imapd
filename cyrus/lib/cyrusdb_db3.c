@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_db3.c,v 1.43 2002/05/25 19:57:47 leg Exp $ */
+/* $Id: cyrusdb_db3.c,v 1.43.4.1 2002/08/11 16:53:25 ken3 Exp $ */
 
 #include <config.h>
 
@@ -100,7 +100,7 @@ static void db_panic(DB_ENV *dbenv __attribute__((unused)),
 
 static void db_err(const char *db_prfx, char *buffer)
 {
-    syslog(LOG_ERR, "DBERROR %s: %s", db_prfx, buffer);
+    syslog(LOG_WARNING, "DBERROR %s: %s", db_prfx, buffer);
 }
 
 static int init(const char *dbdir, int myflags)

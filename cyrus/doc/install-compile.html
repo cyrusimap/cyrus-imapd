@@ -1,4 +1,4 @@
-<!-- $Id: install-compile.html,v 1.8 2001/08/12 18:22:11 ken3 Exp $ -->
+<!-- $Id: install-compile.html,v 1.8.6.1 2002/08/11 16:53:22 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Compiling the IMAP Server
@@ -155,14 +155,6 @@ default, looks for INN in a few common places.  It is only necessary
 for "<tt>configure</tt>" to find INN if you are going to export newsgroups
 using IMAP. <P>
 
-<dt><tt>--with-tcl=PATH</tt>
-<dt><tt>--without-tcl</tt>
-<dd>Specifies the path to the Tcl (version 7.5 or 7.6) library and header file (optional).
-By default, looks in "<tt>/usr/local</tt>" and then in the compiler's
-default link path.  The Tcl library is necessary to compile
-"<tt>cyradm</tt>", the administrative client.  If compiling without Tcl, it 
-is necessary to give configure the "<TT>--disable-cyradm</TT>" switch. <P>
-
 <dt><tt>--with-lock=METHOD</tt>
 <dd>Specifies the locking method to use.  Currently implemented locking
 methods are:
@@ -269,5 +261,5 @@ If you want, you can override the "<tt>make</tt>" variables
 </kbd></pre>
 
 <P><HR>
-last modified: $Date: 2001/08/12 18:22:11 $
+last modified: $Date: 2002/08/11 16:53:22 $
 </BODY></HTML>

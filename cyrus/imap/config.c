@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.55.4.9 2002/08/02 17:18:20 rjs3 Exp $ */
+/* $Id: config.c,v 1.55.4.10 2002/08/11 16:53:23 ken3 Exp $ */
 
 #include <config.h>
 
@@ -546,7 +546,7 @@ int config_authisa(struct auth_state *authstate, enum imapopt opt)
 	char *p;
 	
 	for (p = (char *) val; *p && !isspace((int) *p); p++);
-	strlcpy(buf, val, p-val);
+	strncpy(buf, val, p-val);
 	buf[p-val] = 0;
 
 	if (auth_memberof(authstate, buf)) {

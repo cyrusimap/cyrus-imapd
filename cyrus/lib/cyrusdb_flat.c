@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_flat.c,v 1.19 2002/05/25 19:57:47 leg Exp $ */
+/* $Id: cyrusdb_flat.c,v 1.19.4.1 2002/08/11 16:53:25 ken3 Exp $ */
 
 #include <config.h>
 
@@ -476,13 +476,14 @@ static int mystore(struct db *db,
 	syslog(LOG_ERR, "IOERROR: writing %s: %m", fnamebuf);
 	close(writefd);
 	if (mytid) abort_txn(db, *mytid);
+        /* xxx return error ? */
     }
     r = 0;
 
     if (mytid) {
 	/* setup so further accesses will be against fname.NEW */
 	if (fstat(writefd, &sbuf) == -1) {
-
+            /* xxx ? */
 	}
 
 	if (!(*mytid)->fnamenew) (*mytid)->fnamenew = xstrdup(fnamebuf);

@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.42.4.6 2002/07/30 19:40:13 ken3 Exp $
+ * $Id: pop3proxyd.c,v 1.42.4.7 2002/08/11 16:53:24 ken3 Exp $
  */
 #include <config.h>
 
@@ -81,6 +81,7 @@
 #include "version.h"
 #include "xmalloc.h"
 #include "mboxlist.h"
+#include "telemetry.h"
 
 #ifdef HAVE_KRB
 /* kerberos des is purported to conflict with OpenSSL DES */
@@ -111,6 +112,7 @@ char *popd_userid = 0;
 struct sockaddr_in popd_localaddr, popd_remoteaddr;
 int popd_haveaddr = 0;
 char popd_clienthost[250] = "[local]";
+static int popd_logfd = -1;
 struct protstream *popd_out = NULL;
 struct protstream *popd_in = NULL;
 int popd_starttls_done = 0;
@@ -412,6 +414,9 @@ void shut_down(int code)
 
 	prot_free(popd_out);
     }
+
+    if(popd_logfd != -1)
+	close(popd_logfd);
 
 #ifdef HAVE_SSL
     tls_shutdown_serverengine();
@@ -789,6 +794,10 @@ static void cmd_apop(char *response)
 	   popd_clienthost, popd_userid, "User logged in");
 
     openproxy();
+
+    /* Create telemetry log */
+    popd_logfd = telemetry_log(popd_userid, popd_in, popd_out);
+
     popd_auth_done = 1;
 }
 
@@ -856,6 +865,10 @@ void cmd_pass(char *pass)
 
 	openproxy();
 	syslog(LOG_NOTICE, "login: %s %s kpop", popd_clienthost, popd_userid);
+
+	/* Create telemetry log */
+	popd_logfd = telemetry_log(popd_userid, popd_in, popd_out);
+
 	popd_auth_done = 1;
 	return;
     }
@@ -901,6 +914,10 @@ void cmd_pass(char *pass)
     }
 
     openproxy();
+
+    /* Create telemetry log */
+    popd_logfd = telemetry_log(popd_userid, popd_in, popd_out);
+
     popd_auth_done = 1;
 }
 
@@ -1097,6 +1114,9 @@ void cmd_auth(char *arg)
 
     prot_setsasl(popd_in,  popd_saslconn);
     prot_setsasl(popd_out, popd_saslconn);
+
+    /* Create telemetry log */
+    popd_logfd = telemetry_log(popd_userid, popd_in, popd_out);
 
     popd_auth_done = 1;
 }

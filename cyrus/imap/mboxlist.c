@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.12 2002/08/09 13:24:41 ken3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.13 2002/08/11 16:53:23 ken3 Exp $
  */
 
 #include <config.h>
@@ -421,7 +421,7 @@ mboxlist_mycreatemailboxcheck(char *name,
 	acl[parentacllen] = '\0';
 
 	/* Canonicalize case of parent prefix */
-	strlcpy(name, parent, strlen(parent));
+	strncpy(name, parent, strlen(parent));
     } else { /* parentlen == 0, no parent mailbox */
 	if (!isadmin) {
 	    return IMAP_PERMISSION_DENIED;
@@ -546,11 +546,12 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
     struct txn *tid = NULL;
     mupdate_handle *mupdate_h = NULL;
     char *mboxent = NULL;
+    int newreserved = 0; /* made reserved entry in local mailbox list */
+    int madereserved = 0; /* made reserved entry on mupdate server */
 
     /* Must be atleast MAX_PARTITION_LEN + 30 for partition, need
      * MAX_PARTITION_LEN + HOSTNAME_SIZE + 2 for mupdate location */
     char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
-    int madereserved = 0; /* made reserved entry on mupdate server */
 
  retry:
     tid = NULL;
@@ -588,8 +589,25 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 	}
     }
 
+    /* 3a. Reserve mailbox in local database */
+    mboxent = mboxlist_makeentry(mbtype | MBTYPE_RESERVE,
+				 newpartition, acl);
+    r = DB->store(mbdb, name, strlen(name), 
+		  mboxent, strlen(mboxent), &tid);
+    free(mboxent);
+    mboxent = NULL;
+
+    /* 3b. Unlock mailbox list (before calling out to mupdate) */
+    if(r) {
+	syslog(LOG_ERR, "Could not reserve mailbox %s during create", name);
+	goto done;
+    } else {
+	DB->commit(mbdb, tid);
+	tid = NULL;
+	newreserved = 1;
+    }
+
     /* 4. Create mupdate reservation */
-    /* xxx this is network I/O being done while holding a mboxlist lock */
     if (config_mupdate_server && !localonly) {
 	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
 	if(r) {
@@ -609,32 +627,13 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 	    goto done;
 	}
     }
-
     madereserved = 1; /* so we can roll back on failure */
-    
-    /* 5. add the new entry */
-    mboxent = mboxlist_makeentry(mbtype, newpartition, acl);
 
-    r = DB->store(mbdb, name, strlen(name), mboxent, strlen(mboxent),
-		  &tid);
-    switch (r) {
-    case CYRUSDB_OK:
-	break;
-    case CYRUSDB_AGAIN:
-	goto retry;
-	break;
-    default:
-	syslog(LOG_ERR, "DBERROR: error updating database %s: %s",
-	       name, cyrusdb_strerror(r));
-	r = IMAP_IOERROR;
-	goto done;
-    }
-
- done: /* ALL DATABASE OPERATIONS DONE; NEED TO DO FILESYSTEM OPERATIONS */
+ done: /* All checks compete.  Time to fish or cut bait. */
     if (!r && !(mbtype & MBTYPE_REMOTE)) {
 	char mbbuf[MAX_MAILBOX_PATH];
 
-	/* Create new mailbox and move new mailbox list file into place */
+	/* Create new mailbox in the filesystem */
 	mailbox_hash_mbox(mbbuf, root, name);
 	r = mailbox_create(name, mbbuf, acl, NULL,
 			   ((mbtype & MBTYPE_NETNEWS) ?
@@ -644,20 +643,20 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
     }
 
     if (r) { /* CREATE failed */ 
-	int r2;
+	int r2 = 0;
 
-	r2 = 0;
-	if (tid) r2 = DB->abort(mbdb, tid);
-	switch (r2) {
-	case 0:
-	    break;
-	default:
-	    syslog(LOG_ERR, "DBERROR: failed on abort: %s", 
-		   cyrusdb_strerror(r2));
+	if(newreserved) {
+	    /* remove the RESERVED mailbox entry if we failed */
+	    r2 = DB->delete(mbdb, name, strlen(name), NULL, 0);
+	    if(r2) {
+		syslog(LOG_ERR,
+		       "DBERROR: can't remove RESERVE entry for %s (%s)",
+		       name, cyrusdb_strerror(r2));
+	    }
 	}
 
 	/* delete mupdate entry if we made it */
-	if (madereserved == 1 && config_mupdate_server) {
+	if (madereserved && config_mupdate_server) {
 	    r2 = mupdate_delete(mupdate_h, name);
 	    if(r2 > 0) {
 		/* Disconnect, reconnect, and retry */
@@ -676,12 +675,17 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 		       name);
 	    }		
 	}
-    } else { /* all is well */
-	switch (r = DB->commit(mbdb, tid)) {
+    } else { /* all is well - activate the mailbox */
+	mboxent = mboxlist_makeentry(mbtype, newpartition, acl);
+
+	switch(r = DB->store(mbdb, name, strlen(name),
+			     mboxent, strlen(mboxent), NULL)) {
 	case 0: 
 	    break;
 	default:
-	    syslog(LOG_ERR, "DBERROR: failed on commit: %s", 
+	    /* xxx This leaves a reserved entry around, it is unclear
+	     * that a DB->delete would work though */
+	    syslog(LOG_ERR, "DBERROR: failed on activation: %s", 
 		   cyrusdb_strerror(r));
 	    r = IMAP_IOERROR;
 	}
@@ -917,17 +921,6 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 /*
  * Rename/move a single mailbox (recursive renames are handled at a
  * higher level)
- *
- * 1. get path & acl from mboxlist (with lock)
- * 2. verify acls
- * 3. open mupdate connection / reserve destination if needed
- * 4. Reserve mailbox locally (MBTYPE_RESERVE)
- * 5. lock original mailbox / unlock mboxlist
- * 6. Copy mailbox from src->dest
- * 7. Perform update on mboxlist
- * 8. finish mupdate updates (activate new, delete old)
- * 9. delete from disk
- *
  */
 int mboxlist_renamemailbox(char *oldname, char *newname, char *partition, 
 			   int isadmin, char *userid, 
@@ -1065,7 +1058,28 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	}
     }
 
-    /* 3. Open mupdate connection and reserve new name (if needed) */ 
+    /* 3a. mark as reserved in the local DB */
+    if(!r && !partitionmove) {
+	mboxent = mboxlist_makeentry(mbtype | MBTYPE_RESERVE,
+				     newpartition, newacl);
+
+	r = DB->store(mbdb, newname, strlen(newname), 
+		      mboxent, strlen(mboxent), &tid);
+
+	free(mboxent);
+    }
+        
+    /* 3b. unlock mboxlist (before calling out to mupdate) */
+    if(r) {
+	syslog(LOG_ERR, "Could not reserve mailbox %s during rename", oldname);
+	goto done;
+    } else {
+	DB->commit(mbdb, tid);
+	tid = NULL;
+	newreserved = 1;
+    }
+
+    /* 4. Open mupdate connection and reserve new name (if needed) */ 
     if(!r && config_mupdate_server) {	
 	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
 	if(r) {
@@ -1091,26 +1105,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	}
     }
 
-    /* 4. mark as reserved in the DB */
-    if(!r && !partitionmove) {
-	mboxent = mboxlist_makeentry(mbtype | MBTYPE_RESERVE,
-				     newpartition, newacl);
-
-	r = DB->store(mbdb, newname, strlen(newname), 
-		      mboxent, strlen(mboxent), &tid);
-
-	free(mboxent);
-    }
-        
-    /* 4. unlock mboxlist, Lock oldname/oldpath */
-    if(r) {
-	syslog(LOG_ERR, "Could not lock mailbox %s during rename", oldname);
-	goto done;
-    } else {
-	DB->commit(mbdb, tid);
-	tid = NULL;
-	newreserved = 1;
-    }
+    /* 5. Lock oldname/oldpath */
 
     if(!r) {
 	r = mailbox_open_locked(oldname, oldpath, oldacl, auth_state,
@@ -1118,7 +1113,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	oldopen = 1;
     }
 
-    /* 5. Copy mailbox */
+    /* 6. Copy mailbox */
     if (!r && !(mbtype & MBTYPE_REMOTE)) {
 	/* Rename the actual mailbox */
 	assert(root != NULL); /* from above */
@@ -1152,10 +1147,10 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	}
     }
 
-    /* create new entry */
+    /* 7a. create new entry */
     mboxent = mboxlist_makeentry(mbtype, newpartition, newacl);
 
-    /* put it into the db */
+    /* 7b. put it into the db */
     r = DB->store(mbdb, newname, strlen(newname), 
 		  mboxent, strlen(mboxent), &tid);
     switch (r) {
@@ -1172,7 +1167,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 
     r = mailbox_rename_finish(&oldmailbox,&newmailbox,isusermbox);
 
-  done:
+ done: /* Commit or cleanup */
     if (r != 0) {
 	int r2 = 0;
 	

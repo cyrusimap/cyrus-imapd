@@ -3,7 +3,7 @@
 <!-- Changed by: Larry Greenfield 15-Aug-1999 -->
 <!-- Changed by: Larry Greenfield 01-Jul-1999 -->
 <!-- Changed by: Tim Showalter 16-Jun-1997 -->
-<!-- $Id: bugs.html,v 1.24 2002/05/25 19:57:43 leg Exp $ -->
+<!-- $Id: bugs.html,v 1.24.4.1 2002/08/11 16:53:22 ken3 Exp $ -->
 </HEAD><BODY>
 <h1>                     Known bugs in the Cyrus IMAP Server</h1>
 
@@ -45,36 +45,9 @@ services.
 
 <h3>proxyd and Cyrus Murder</h3>
 <ul>
-<li> <tt>proxyd</tt> doesn't advertise <tt>ACAP=</tt>.
-
-<li> COPY across servers isn't tested and isn't robust.
-
-<li> RENAME across servers isn't implemented (less severe).
+<li> RENAME across servers isn't implemented.
 
 <li> Tagged lines with literals can cause problems for <tt>proxyd</tt>.
-
-<li> <tt>acappush</tt> doesn't seem to deal with the ACAP server dying
-well.
-
-<li> <tt>acappush</tt>: should we be avoiding some ACAP round trips?
-do we have any concerns speed-wise?  what about out-of-memory
-situations?
-
-<li> <tt>proxyd</tt> should deal with errors more cleanly in
-proxy_authenticate() and with backend servers overall.
-
-<li> <tt>target-acap</tt> doesn't work on ignoring zero-information
-updates.  it doesn't deal with the ACAP server dying and in general
-should be replaced with something more general.
-
-<li> is <tt>proxyd</tt> implementing idle timeouts correctly?
-
-<li>skip-list code uses assert(). Does SIGABRT get properly trapped
- so we don't end up exiting holding locks?
-
-<li> setacl/getacl commands seem to reliably cause the proxy the die.
-
-<li> <tt>pop3proxyd</tt> appears to be non-functional.
 
 </ul>
 
@@ -91,10 +64,6 @@ lost.)
 <li> Deliver doesn't gracefully handle CR CR sequences in messages.
 Well, ok, it hangs.
 
-<li> <tt>duplicate.c</tt> could be much more efficient than repeatedly
-opening and closing databases.  (Cache last N databases used?)
-
-<li> Should <tt>duplicate.c</tt> use transactions?  A single file?
 </ul>
 
 <h3>authentication and authorization</h3>
@@ -123,6 +92,10 @@ either remove <tt>collectnews</tt> or fix it.
 
 <li> any utilities doing db operations should catch signals and poll
 for them to see if it should exit (like mbpath, ipurge).
+
+<li> <tt>imtest</tt> uses <tt>getpass()</tt> to grab passwords from
+users. On some systems (Solaris reported), this will only return the
+first 8 characters, causing authentication failures.
 
 </ul>
 
@@ -163,7 +136,7 @@ move all metadata per-user data. (seen, subscriptions, sieve state?)
 would like to submit a bug, feature request or (best of all) patch.
 
 <P><HR>
-Last update: $Date: 2002/05/25 19:57:43 $
+Last update: $Date: 2002/08/11 16:53:22 $
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>
