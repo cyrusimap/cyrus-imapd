@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.83 2002/02/19 18:50:11 ken3 Exp $
+ * $Id: append.c,v 1.84 2002/03/07 21:41:17 rjs3 Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -97,6 +97,16 @@ int append_check(const char *name, int format,
 {
     struct mailbox m;
     int r;
+    int mbflags;
+    
+    /* Is mailbox moved? */
+    r = mboxlist_detail(name, &mbflags, NULL, NULL, NULL, NULL);
+
+    if (!r) {
+	if(mbflags & MBTYPE_REMOTE) return IMAP_MAILBOX_MOVED;
+    } else {
+	return r;
+    }
 
     r = mailbox_open_header(name, auth_state, &m);
     if (r) return r;
