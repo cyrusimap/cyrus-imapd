@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.79 2001/12/04 02:23:05 rjs3 Exp $
+ * $Id: lmtpd.c,v 1.80 2002/01/25 19:26:54 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -403,12 +403,6 @@ int getenvelope(void *mc, const char *field, const char ***contents)
 	return SIEVE_FAIL;
     }
 }
-
-#define DEFAULT_SENDMAIL ("/usr/lib/sendmail")
-#define DEFAULT_POSTMASTER ("postmaster")
-
-#define SENDMAIL (config_getstring("sendmail", DEFAULT_SENDMAIL))
-#define POSTMASTER (config_getstring("postmaster", DEFAULT_POSTMASTER))
 
 static int global_outgoing_count = 0;
 

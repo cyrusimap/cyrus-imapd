@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.25 2002/01/18 22:58:48 rjs3 Exp $
+   $Id: seen_db.c,v 1.26 2002/01/25 19:26:55 leg Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -66,6 +66,7 @@
 #include "xmalloc.h"
 #include "mailbox.h"
 #include "imap_err.h"
+#include "seen.h"
 
 #define FNAME_SEENSUFFIX ".seen" /* per user seen state extension */
 #define FNAME_SEEN "/cyrus.seen" /* for legacy seen state */
@@ -87,7 +88,7 @@ struct seen {
 static struct seen *lastseen = NULL;
 
 /* choose "flat" or "db3" here */
-#define DB (&cyrusdb_flat)
+#define DB (CONFIG_DB_SEEN)
 
 static void abortcurrent(struct seen *s)
 {

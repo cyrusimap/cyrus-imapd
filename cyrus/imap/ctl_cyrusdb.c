@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ctl_cyrusdb.c,v 1.5 2002/01/18 22:58:47 rjs3 Exp $
+ * $Id: ctl_cyrusdb.c,v 1.6 2002/01/25 19:26:54 leg Exp $
  */
 
 #include <config.h>
@@ -62,6 +62,21 @@
 #include "exitcodes.h"
 #include "cyrusdb.h"
 
+/* find out what things are using... */
+#include "mboxlist.h"
+#include "seen.h"
+#include "duplicate.h"
+#include "tls.h"
+
+struct cyrusdb_backend *dbenvs[] =
+{
+    CONFIG_DB_MBOX,
+    CONFIG_DB_SUBS,
+    CONFIG_DB_SEEN,
+    CONFIG_DB_DUPLICATE,
+    CONFIG_DB_TLS,
+    NULL
+};
 
 void fatal(const char *message, int code)
 {
@@ -89,6 +104,7 @@ main(argc, argv)
     enum { RECOVER, CHECKPOINT, NONE } op = NONE;
     char dirname[1024];
     char *msg = "";
+    int i;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
     r = r2 = 0;
@@ -130,38 +146,45 @@ main(argc, argv)
     strcat(dirname, FNAME_DBDIR);
 
     syslog(LOG_NOTICE, "%s", msg);
-    r = (&cyrusdb_db3)->init(dirname, flag);
-
-    if (r) {
-	syslog(LOG_ERR, "DBERROR: init %s: %s", dirname,
-	       cyrusdb_strerror(r));
-	fprintf(stderr, 
-		"ctl_cyrusdb: unable to init environment\n");
-	op = NONE;
-    }
-
-    r2 = 0;
-    switch (op) {
-    case RECOVER:
-	break;
-
-    case CHECKPOINT:
-	r2 = (&cyrusdb_db3)->sync();
-	if (r2) {
-	    syslog(LOG_ERR, "DBERROR: sync %s: %s", dirname,
+    for (i = 0; dbenvs[i] != NULL; i++) {
+	r = (dbenvs[i])->init(dirname, flag);
+	if (r) {
+	    syslog(LOG_ERR, "DBERROR: init %s: %s", dirname,
 		   cyrusdb_strerror(r));
 	    fprintf(stderr, 
-		    "ctl_cyrusdb: unable to sync environment\n");
+		    "ctl_cyrusdb: unable to init environment\n");
+	    dbenvs[i] = NULL;
+	    /* stop here, but we need to close all existing ones */
+	    break;
 	}
-	break;
-
-    default:
-	break;
+	
+	r2 = 0;
+	switch (op) {
+	case RECOVER:
+	    break;
+	    
+	case CHECKPOINT:
+	    r2 = (dbenvs[i])->sync();
+	    if (r2) {
+		syslog(LOG_ERR, "DBERROR: sync %s: %s", dirname,
+		       cyrusdb_strerror(r));
+		fprintf(stderr, 
+			"ctl_cyrusdb: unable to sync environment\n");
+	    }
+	    break;
+	    
+	default:
+	    break;
+	}
     }
 
-    if (!r) (&cyrusdb_db3)->done();
+    for (i = 0; dbenvs[i] != NULL; i++) {
+	r2 = (dbenvs[i])->done();
+	if (r2) {
+	    syslog(LOG_ERR, "DBERROR: done: %s", cyrusdb_strerror(r));
+	}
+    }
 
     syslog(LOG_NOTICE, "done %s", msg);
-
     exit(r || r2);
 }

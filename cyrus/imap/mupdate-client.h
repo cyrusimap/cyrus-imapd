@@ -1,6 +1,6 @@
 /* mupdate-client.h -- cyrus murder database clients
  *
- * $Id: mupdate-client.h,v 1.3 2002/01/22 22:31:52 rjs3 Exp $
+ * $Id: mupdate-client.h,v 1.4 2002/01/25 19:26:55 leg Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -75,7 +75,8 @@ struct mupdate_mailboxdata {
 };
 
 /* does a given mailbox exist?  1 if false, 0 if true, -1 if error,
- * if target is non-null, it fills in the caller-provided buffer */
+ * if target is non-null, it fills in the caller-provided buffer 
+ */
 int mupdate_find(mupdate_handle *handle, const char *mailbox,
 		 struct mupdate_mailboxdata **target);
 
