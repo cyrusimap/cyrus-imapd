@@ -587,11 +587,12 @@ int smtpmode;
 		}
 		else sawnotifyheader = 0;
 	    }
-	    else if (sawidhdr || sawresentidhdr) {
+	    if (sawidhdr || sawresentidhdr) {
 		if (*buf == ' ' || *buf == '\t') p = buf+1;
 		else sawidhdr = sawresentidhdr = 0;
 	    }
-	    else if (!*idptr && !strncasecmp(buf, "message-id:", 11)) {
+
+	    if (!*idptr && !strncasecmp(buf, "message-id:", 11)) {
 		sawidhdr = 1;
 		p = buf + 11;
 	    }
@@ -612,6 +613,7 @@ int smtpmode;
 		}
 		sawnotifyheader = 1;
 	    }
+
 	    if (p) {
 		clean822space(p);
 		if (*p) {
