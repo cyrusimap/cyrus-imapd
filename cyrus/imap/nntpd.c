@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.82 2003/05/11 19:13:31 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.83 2003/05/16 14:29:14 ken3 Exp $
  */
 
 /*
@@ -151,6 +151,15 @@ unsigned nntp_current = 0;
 unsigned did_extensions = 0;
 int config_allowanonymous;
 
+/* Bitmasks for NNTP modes */
+enum {
+    MODE_READ =		(1<<0),
+    MODE_FEED =		(1<<1),
+    MODE_STREAM =	(1<<2)
+};
+
+static unsigned nntp_capa = MODE_READ | MODE_FEED | MODE_STREAM;
+
 static int nntps = 0;
 int nntp_starttls_done = 0;
 
@@ -180,7 +189,7 @@ enum {
     POST_POST     = 0,
     POST_IHAVE    = 1,
     POST_CHECK    = 2,
-    POST_TAKETHIS = 3,
+    POST_TAKETHIS = 3
 };
 
 /* response codes for each stage of posting */
@@ -557,7 +566,7 @@ int service_init(int argc __attribute__((unused)),
     mboxlist_init(0);
     mboxlist_open(NULL);
 
-    while ((opt = getopt(argc, argv, "s")) != EOF) {
+    while ((opt = getopt(argc, argv, "srf")) != EOF) {
 	switch(opt) {
 	case 's': /* nntps (do starttls right away) */
 	    nntps = 1;
@@ -566,6 +575,14 @@ int service_init(int argc __attribute__((unused)),
 		fatal("nntps: required OpenSSL options not present",
 		      EC_CONFIG);
 	    }
+	    break;
+
+	case 'r': /* enter reader-only mode */
+	    nntp_capa &= MODE_READ;
+	    break;
+
+	case 'f': /* enter feeder-only mode */
+	    nntp_capa &= ~MODE_READ;
 	    break;
 
 	default:
@@ -664,9 +681,11 @@ int service_main(int argc, char **argv, char **envp)
     }
 
     prot_printf(nntp_out,
-		"200 %s Cyrus NNTP%s %s server ready, posting allowed\r\n",
+		"%u %s Cyrus NNTP%s %s server ready, posting %s\r\n",
+		(nntp_capa & MODE_READ) ? 200 : 201,
 		config_servername, config_mupdate_server ? " Murder" : "",
-		CYRUS_VERSION);
+		CYRUS_VERSION,
+		(nntp_capa & MODE_READ) ? "allowed" : "prohibited");
 
     cmdloop();
 
@@ -841,11 +860,22 @@ static void cmdloop(void)
 	    if (isupper((unsigned char) *p)) *p = tolower((unsigned char) *p);
 	}
 
+	/* Check/Takethis only allowed for streamers */
+	if (!(nntp_capa & MODE_STREAM) && strchr("CT", cmd.s[0])) goto noperm;
+    
+	/* Ihave only allowed for feeders */
+	if (!(nntp_capa & MODE_FEED) && cmd.s[0] == 'I') goto noperm;
+    
+	/* Body/Date/Group/Newgroups/Newnews/Next/Over/Post/Xhdr/Xover
+	   only allowed for readers */
+	if (!(nntp_capa & MODE_READ) &&
+	    strchr("BDGNOPX", cmd.s[0])) goto noperm;
+    
 	/* Only Authinfo/Check/Head/Help/Ihave/List [ Active | Extensions ]/
 	   Mode/Quit/Stat/Starttls/Takethis allowed when not logged in */
 	if (!nntp_userid && !config_allowanonymous &&
 	    !strchr("ACHILMQST", cmd.s[0])) goto nologin;
-    
+
 	switch (cmd.s[0]) {
 	case 'A':
 	    if (!strcmp(cmd.s, "Authinfo")) {
@@ -875,6 +905,7 @@ static void cmdloop(void)
 		    prot_printf(nntp_out,
 				"501 Unrecognized AUTHINFO command\r\n");
 	    }
+	    else if (!(nntp_capa & MODE_READ)) goto noperm;
 	    else if (!nntp_userid && !config_allowanonymous) goto nologin;
 	    else if (!strcmp(cmd.s, "Article")) {
 		char curgroup[MAX_MAILBOX_NAME+1], *msgid;
@@ -998,6 +1029,7 @@ static void cmdloop(void)
 
 		cmd_help();
 	    }
+	    else if (!(nntp_capa & MODE_READ)) goto noperm;
 	    else if (!nntp_userid && !config_allowanonymous) goto nologin;
 	    else if (!strcmp(cmd.s, "Hdr")) {
 		char curgroup[MAX_MAILBOX_NAME+1], *msgid;
@@ -1080,6 +1112,7 @@ static void cmdloop(void)
 
 		cmd_list(arg1.len ? arg1.s : NULL, arg2.len ? arg2.s : NULL);
 	    }
+	    else if (!(nntp_capa & MODE_READ)) goto noperm;
 	    else if (!nntp_userid && !config_allowanonymous) goto nologin;
 	    else if (!strcmp(cmd.s, "Last")) {
 		if (c == '\r') c = prot_getc(nntp_in);
@@ -1350,6 +1383,11 @@ static void cmdloop(void)
 
 	continue;
 
+      noperm:
+	prot_printf(nntp_out, "502 Permission denied\r\n");
+	eatline(nntp_in, c);
+	continue;
+
       nologin:
 	prot_printf(nntp_out, "480 Authentication required\r\n");
 	eatline(nntp_in, c);
@@ -1361,7 +1399,7 @@ static void cmdloop(void)
 	continue;
 
       cmddisabled:
-	prot_printf(nntp_out, "500 \"%s\" disabled\r\n", cmd.s);
+	prot_printf(nntp_out, "503 \"%s\" disabled\r\n", cmd.s);
 	eatline(nntp_in, c);
 	continue;
 
@@ -1917,31 +1955,57 @@ static void cmd_hdr(char *cmd, char *hdr, char *msgid,
 static void cmd_help(void)
 {
     prot_printf(nntp_out, "100 Supported commands:\r\n");
-    prot_printf(nntp_out, "\tARTICLE\r\n");
-    prot_printf(nntp_out, "\tAUTHINFO USER | PASS | SASL\r\n");
-    prot_printf(nntp_out, "\tBODY\r\n");
-    prot_printf(nntp_out, "\tCHECK\r\n");
-    prot_printf(nntp_out, "\tDATE\r\n");
-    prot_printf(nntp_out, "\tGROUP\r\n");
-    prot_printf(nntp_out, "\tHDR | XHDR\r\n");
-    prot_printf(nntp_out, "\tHEAD\r\n");
-    prot_printf(nntp_out, "\tHELP\r\n");
-    prot_printf(nntp_out, "\tIHAVE\r\n");
-    prot_printf(nntp_out, "\tLAST\r\n");
-    prot_printf(nntp_out, "\tLIST [ ACTIVE | EXTENSIONS | OVERVIEW.FMT ]\r\n");
-    prot_printf(nntp_out, "\tLISTGROUP\r\n");
-    prot_printf(nntp_out, "\tMODE READER | STREAM\r\n");
-    if (config_getswitch(IMAPOPT_ALLOWNEWNEWS))
-	prot_printf(nntp_out, "\tNEWNEWS\r\n");
-    prot_printf(nntp_out, "\tNEXT\r\n");
-    prot_printf(nntp_out, "\tOVER | XOVER\r\n");
-    prot_printf(nntp_out, "\tPOST\r\n");
-    prot_printf(nntp_out, "\tQUIT\r\n");
-    prot_printf(nntp_out, "\tSLAVE\r\n");
+
+    /* auth/security commands */
+    if (!nntp_authstate)
+	prot_printf(nntp_out, "\tAUTHINFO USER | PASS | SASL\r\n");
     if (tls_enabled() && !nntp_starttls_done)
 	prot_printf(nntp_out, "\tSTARTTLS\r\n");
+
+    /* reader-only commands */
+    if (nntp_capa & MODE_READ) {
+	prot_printf(nntp_out, "\tARTICLE\r\n");
+	prot_printf(nntp_out, "\tBODY\r\n");
+	prot_printf(nntp_out, "\tDATE\r\n");
+	prot_printf(nntp_out, "\tGROUP\r\n");
+	prot_printf(nntp_out, "\tHDR | XHDR\r\n");
+	prot_printf(nntp_out, "\tLAST\r\n");
+	prot_printf(nntp_out, "\tLISTGROUP\r\n");
+	if (config_getswitch(IMAPOPT_ALLOWNEWNEWS))
+	    prot_printf(nntp_out, "\tNEWNEWS\r\n");
+	prot_printf(nntp_out, "\tNEXT\r\n");
+	prot_printf(nntp_out, "\tOVER | XOVER\r\n");
+	prot_printf(nntp_out, "\tPOST\r\n");
+	prot_printf(nntp_out, "\tSLAVE\r\n");
+    }
+
+    /* feeder-only commands */
+    if (nntp_capa & MODE_FEED) prot_printf(nntp_out, "\tIHAVE\r\n");
+
+    /* streaming-only commands */
+    if (nntp_capa & MODE_STREAM) {
+	prot_printf(nntp_out, "\tCHECK\r\n");
+	prot_printf(nntp_out, "\tTAKETHIS\r\n");
+    }
+
+    /* generic commands */
+    prot_printf(nntp_out, "\tHEAD\r\n");
+    prot_printf(nntp_out, "\tHELP\r\n");
+
+    prot_printf(nntp_out, "\tLIST [ ACTIVE | EXTENSIONS");
+    if (nntp_capa & MODE_READ) prot_printf(nntp_out, " | OVERVIEW.FMT");
+    prot_printf(nntp_out, " ]\r\n");
+
+    prot_printf(nntp_out, "\tMODE");
+    if (nntp_capa & MODE_READ) prot_printf(nntp_out, " READER");
+    if (nntp_capa & MODE_STREAM) {
+	prot_printf(nntp_out, "%s STREAM",
+		    (nntp_capa & MODE_READ) ? " |" : "");
+    }
+    prot_printf(nntp_out, "\r\n");
+
     prot_printf(nntp_out, "\tSTAT\r\n");
-    prot_printf(nntp_out, "\tTAKETHIS\r\n");
+    prot_printf(nntp_out, "\tQUIT\r\n");
     prot_printf(nntp_out, ".\r\n");
 }
 
@@ -2052,28 +2116,40 @@ static void cmd_list(char *arg1, char *arg2)
 
 	prot_printf(nntp_out, "202 Extensions supported:\r\n");
 
-	/* check for SASL mechs */
-	sasl_listmech(nntp_saslconn, NULL, "SASL ", " ", "\r\n",
-		      &mechlist, NULL, &mechcount);
+	if (!nntp_authstate) {
+	    /* check for SASL mechs */
+	    sasl_listmech(nntp_saslconn, NULL, "SASL ", " ", "\r\n",
+			  &mechlist, NULL, &mechcount);
 
-	if (mechcount || nntp_starttls_done ||
-	    config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
-	    prot_printf(nntp_out, "AUTHINFO%s\r\n",
-			nntp_starttls_done ||
-			config_getswitch(IMAPOPT_ALLOWPLAINTEXT) ? " USER" : "");
+	    if (mechcount || nntp_starttls_done ||
+		config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
+		prot_printf(nntp_out, "AUTHINFO%s\r\n",
+			    (nntp_starttls_done ||
+			     config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) ?
+			    " USER" : "");
 
-	    /* add the SASL mechs */
-	    if (mechcount) prot_write(nntp_out, mechlist, strlen(mechlist));
+		/* add the SASL mechs */
+		if (mechcount)
+		    prot_write(nntp_out, mechlist, strlen(mechlist));
+	    }
 	}
 
-	prot_printf(nntp_out, "HDR\r\n");
-	prot_printf(nntp_out, "LISTGROUP\r\n");
-	prot_printf(nntp_out, "OVER\r\n");
+	if ((nntp_capa & MODE_READ) &&
+	    (nntp_userid || config_allowanonymous)) {
+	    prot_printf(nntp_out, "HDR\r\n");
+	    prot_printf(nntp_out, "LISTGROUP\r\n");
+	    prot_printf(nntp_out, "OVER\r\n");
+	}
+
 	if (tls_enabled() && !nntp_starttls_done)
 	    prot_printf(nntp_out, "STARTTLS\r\n");
 	prot_printf(nntp_out, ".\r\n");
 
 	did_extensions = 1;
+    }
+    else if (!(nntp_capa & MODE_READ)) {
+	prot_printf(nntp_out, "502 Permission denied\r\n");
+	return;
     }
     else if (!nntp_userid && !config_allowanonymous) {
 	prot_printf(nntp_out, "480 Authentication required\r\n");
@@ -2117,10 +2193,20 @@ static void cmd_mode(char *arg)
     lcase(arg);
 
     if (!strcmp(arg, "reader")) {
-	prot_printf(nntp_out, "200 Cyrus NNTP ready, posting allowed\r\n");
+	prot_printf(nntp_out,
+		    "%u %s Cyrus NNTP%s %s server ready, posting %s\r\n",
+		    (nntp_capa & MODE_READ) ? 200 : 201,
+		    config_servername, config_mupdate_server ? " Murder" : "",
+		    CYRUS_VERSION,
+		    (nntp_capa & MODE_READ) ? "allowed" : "prohibited");
     }
     else if (!strcmp(arg, "stream")) {
-	prot_printf(nntp_out, "203 Streaming is OK\r\n");
+	if (nntp_capa & MODE_STREAM) {
+	    prot_printf(nntp_out, "203 Streaming is OK\r\n");
+	}
+	else {
+	    prot_printf(nntp_out, "502 Streaming is prohibited\r\n");
+	}
     }
     else {
 	prot_printf(nntp_out, "501 Unrecognized MODE\r\n");

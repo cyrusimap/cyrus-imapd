@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: nntpd.8,v 1.1.2.2 2002/10/09 20:58:30 ken3 Exp $
+.\" $Id: nntpd.8,v 1.1.2.3 2003/05/16 14:29:16 ken3 Exp $
 .SH NAME
 nntpd \- NNTP server process
 .SH SYNOPSIS
@@ -63,6 +63,12 @@ nntpd \- NNTP server process
       [
 .B \-s
 ]
+[
+.B \-r
+]
+[
+.B \-f
+]
 .SH DESCRIPTION
 .I Nntpd
 is a NNTP server.
@@ -78,13 +84,16 @@ file unless specified otherwise by \fB-C\fR.  The optional
 .I newsprefix
 option specifies a prefix to be prepended to newsgroup names to make
 the corresponding IMAP mailbox names.  The optional
-.I newpostuser
+.I newspostuser
 option specifies the special userid to be used when contructing the To:
 header address for following up to articles when read via IMAP.  The
 optional
 .I newspeer
 option specifies the fully qualified hostname of the upstream news
-server to which articles are fed.
+server to which articles are fed.  The optional
+.I allownewnews
+option enables the NNTP NEWNEWS command.  NOTE: For servers with a large
+volume of articles, the NEWNEWS command can be expensive.
 .PP
 If the directory
 .RI log/ user
@@ -120,6 +129,14 @@ Run external debugger specified in debug_command.
 Serve NNTP over SSL (nntps).  All data to and from
 .I nntpd
 is encrypted using the Secure Sockets Layer.
+.TP
+.BI \-r
+Only allow NNTP reader commands.  Permitted clients will only be
+allowed to read/post articles.
+.TP
+.BI \-f
+Only allow NNTP feeder commands.  Permitted clients will only be
+allowed to feed articles (no reading).
 .SH FILES
 .TP
 .B /etc/imapd.conf
