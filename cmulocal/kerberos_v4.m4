@@ -30,7 +30,7 @@ AC_TRY_COMPILE(
 [#include <krb.h>
 int krb_rd_req(KTEXT authent, char *service, char *instance,
 unsigned KRB_INT32 from_addr, AUTH_DAT *ad, char *fn);],
-[int foo = krb_rd_req(NULL, NULL, NULL, 0, NULL, NULL);],
+[int foo = krb_rd_req(0,0,0,0,0,0);],
 ac_cv_krb_rd_req_proto=no,
 ac_cv_krb_rd_req_proto=yes)
 ])
