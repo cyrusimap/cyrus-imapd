@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.106 2000/06/01 22:22:14 leg Exp $
+ * $Id: index.c,v 1.107 2000/06/04 16:10:36 ken3 Exp $
  */
 #include <config.h>
 
@@ -3331,7 +3331,6 @@ static void index_thread_print(struct thread *thread, int usinguid)
 
 	    /* if the child has siblings, print new branch and break */
 	    if (child->next) {
-		prot_printf(imapd_out, "siblings\r\n");
 		index_thread_print(child, usinguid);
 		break;
 	    }
