@@ -1,7 +1,10 @@
 #ifndef HAVE_MASTER_H
 #define HAVE_MASTER_H
 
-/* $Id: master.h,v 1.6 2002/05/25 19:57:48 leg Exp $ */
+/* $Id: master.h,v 1.7 2003/02/21 19:12:33 rjs3 Exp $ */
+
+#include <config.h>
+#include <sys/resource.h> /* for rlim_t */
 
 /* needed for possible SNMP monitoring */
 struct service {
@@ -30,6 +33,9 @@ struct service {
     int nconnections;
 
     unsigned int forkrate;
+
+    /* limits */
+    rlim_t maxfds;
 };
 
 extern struct service *Services;
