@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.361 2002/03/20 20:46:42 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.362 2002/03/21 17:26:21 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -389,8 +389,9 @@ static int mlookup(const char *tag, const char *ext_name,
     int r, mbtype;
     char *remote, *acl;
 
-    r = mboxlist_detail(name, &mbtype, &remote, partp, &acl, tid);
-    if(pathp) *pathp = remote;
+    r = mboxlist_detail(name, &mbtype, pathp, &remote, &acl, tid);
+
+    if(partp) *partp = remote;
     if(aclp) *aclp = acl;
     if(flags) *flags = mbtype;
     if(r) return r;
@@ -401,13 +402,19 @@ static int mlookup(const char *tag, const char *ext_name,
 	   (!acl || !(cyrus_acl_myrights(imapd_authstate,acl) & ACL_LOOKUP))) {
 	    r = IMAP_MAILBOX_NONEXISTENT;
 	} else if(tag && ext_name && remote && *remote) {
-	    char *c;
+	    /* xxx this doesn't work because the partition has to stay
+	     * the same throughout (what we actually want to do is refer
+	     * to the host we are moving too) */
+	    char *c = NULL;
+	    
 	    c = strchr(remote, '!');
 	    if(c) *c = '\0';
 	    imapd_refer(tag, remote, ext_name);
 	    r = IMAP_MAILBOX_MOVED;
-	} else {
+	} else if(mupdate_server) {
 	    r = IMAP_SERVER_UNAVAILABLE;
+	} else {
+	    r = IMAP_MAILBOX_NOTSUPPORTED;
 	}
     }
     
@@ -5594,7 +5601,7 @@ void cmd_dump(char *tag, char *name, int uid_start)
 {
     int r = 0;
     char mailboxname[MAX_MAILBOX_NAME+1];
-    char *path;
+    char *path, *acl;
 
     /* administrators only please */
     if (!imapd_userisadmin) {
@@ -5607,12 +5614,12 @@ void cmd_dump(char *tag, char *name, int uid_start)
     }
     
     if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL, &path, NULL, NULL, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, &path, NULL, &acl, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
     if(!r) {
-	r = dump_mailbox(tag, path, mailboxname, uid_start, imapd_in,
+	r = dump_mailbox(tag, mailboxname, path, acl, uid_start, imapd_in,
 			 imapd_out, imapd_authstate);
     }
 
@@ -5628,7 +5635,7 @@ void cmd_undump(char *tag, char *name)
 {
     int r = 0;
     char mailboxname[MAX_MAILBOX_NAME+1];
-    char *path;
+    char *path, *acl;
 
     /* administrators only please */
     if (!imapd_userisadmin) {
@@ -5641,12 +5648,12 @@ void cmd_undump(char *tag, char *name)
     }
     
     if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL, &path, NULL, NULL, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, &path, NULL, &acl, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
     if(!r) {
-	r = undump_mailbox(path, mailboxname, imapd_in, imapd_out,
+	r = undump_mailbox(mailboxname, path, acl, imapd_in, imapd_out,
 			   imapd_authstate);
     }
 
@@ -5883,6 +5890,7 @@ void cmd_xfer(char *tag, char *toserver, char *name)
     if (!r) {
 	path = xstrdup(inpath);
 	part = xstrdup(inpart);
+	syslog(LOG_ERR, "%s", part, inpart);
 	acl = xstrdup(inacl);
     }
 
@@ -5939,14 +5947,12 @@ void cmd_xfer(char *tag, char *toserver, char *name)
     /* Step 2.5: Set mailbox as REMOTE on local server */
     /* xxx NEED TO ALSO SET REMOTE HOST SO REFERRAL WORKS CORRECTLY */
     if(!r) {
-#if 0
-	/* xxx Though this works, it seems to trigger a very strange
-	 * interaction with dump_mailbox */
-	r = mboxlist_update(mailboxname, mbflags|MBTYPE_REMOTE, part, acl);
-#endif
+	/* Note that we change partition to be path here, since MBTYPE_REMOTE
+	 * will cause us to return the partition verbatim */
+	/* xxx we probably just want a different flag like MBTYPE_MOVING */
+	r = mboxlist_update(mailboxname, mbflags|MBTYPE_REMOTE, path, acl);
 	if(r) syslog(LOG_ERR, "Could not move mailbox: %s, " \
 		     "mboxlist_update failed", mailboxname);
-	else syslog(LOG_ERR, "my path: %s", path);
     }
 
 
@@ -5970,7 +5976,7 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 	prot_printf(be->out, "D01 UNDUMP {%d+}\r\n%s ", strlen(mailboxname),
 		    mailboxname);
 
-	r = dump_mailbox(NULL, path, mailboxname, 0, be->in, be->out,
+	r = dump_mailbox(NULL, mailboxname, path, acl, 0, be->in, be->out,
 			 imapd_authstate);
 	/* xxx I think we need to eat the reply here on an error*/
 	if(r)

@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.5 2002/03/19 21:19:45 rjs3 Exp $
+ * $Id: mbdump.c,v 1.6 2002/03/21 17:26:21 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -71,12 +71,14 @@
 #include "xmalloc.h"
 
 static int lock_mailbox_ctl_files(const char *mbname,
+				  const char *mbpath,
+				  const char *mbacl,
 				  struct auth_state *auth_state,
 				  struct mailbox *mb) 
 {
     int r;
     
-    r = mailbox_open_header(mbname, auth_state, mb);
+    r = mailbox_open_header_path(mbname, mbpath, mbacl, auth_state, mb, 0);
     if(r) return r;
 
     /* now we have to close the mailbox if we fail */
@@ -92,8 +94,8 @@ static int lock_mailbox_ctl_files(const char *mbname,
     return r;
 }
 
-int dump_mailbox(const char *tag, const char *mbpath, const char *mbname,
-		 int uid_start,
+int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
+		 const char *mbacl, int uid_start,
 		 struct protstream *pin, struct protstream *pout,
 		 struct auth_state *auth_state)
 {
@@ -128,7 +130,7 @@ int dump_mailbox(const char *tag, const char *mbpath, const char *mbname,
 	return IMAP_SYS_ERROR;
     }
 
-    r = lock_mailbox_ctl_files(mbname, auth_state, &mb);
+    r = lock_mailbox_ctl_files(mbname, mbpath, mbacl, auth_state, &mb);
     if(r) {
 	closedir(mbdir);
 	return r;
@@ -277,7 +279,7 @@ int dump_mailbox(const char *tag, const char *mbpath, const char *mbname,
     return r;
 }
 
-int undump_mailbox(const char *mbpath, const char *mbname,
+int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
 		   struct protstream *pin, struct protstream *pout,
 		   struct auth_state *auth_state)
 {
@@ -299,7 +301,7 @@ int undump_mailbox(const char *mbpath, const char *mbname,
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
     }
 
-    r = lock_mailbox_ctl_files(mbname, auth_state, &mb);
+    r = lock_mailbox_ctl_files(mbname, mbpath, mbacl, auth_state, &mb);
     if(r) goto done;
 
     while(1) {
