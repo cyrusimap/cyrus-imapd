@@ -84,7 +84,7 @@ char *identifier;
 
     if (*realm) {
 	if (krb_get_lrealm(lrealm,1)) {
-	    abort();		/* XXX krb configuration error */
+	    return 0;		/* configuration error */
 	}
 	if (strcmp(lrealm, realm) == 0) {
 	    *realm = 0;
@@ -114,7 +114,7 @@ auth_setid(identifier)
 char *identifier;
 {
     identifier = auth_canonifyid(identifier);
-    if (!identifier) return 1;	/* XXX bad identifier */
+    if (!identifier) return -1;
 
     strcpy(auth_userid, identifier);
     auth_aname[0] = auth_inst[0] = auth_realm[0] = '\0';

@@ -55,7 +55,6 @@ struct storeargs {
     /* private to index.c */
     bit32 user_flags[MAX_USER_FLAGS/32];
     time_t update_time;
-    int exists;
     int usinguid;
     /* private to index_storeflag() */
     int last_msgno;

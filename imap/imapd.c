@@ -85,7 +85,7 @@ int code;
 cmdloop()
 {
     int c;
-    int usinguid;
+    int usinguid, havepartition;
     static struct buf tag, cmd, arg1, arg2, arg3, arg4;
     char *p;
 
@@ -146,6 +146,20 @@ cmdloop()
 		if (c == '\r') c = getc(stdin);
 		if (c != '\n') goto extraargs;
 		cmd_noop(tag.s, cmd.s);
+	    }
+	    if (!strcmp(cmd.s, "Create")) {
+		havepartition = 0;
+		if (c != ' ') goto missingargs;
+		c = getastring(&arg1);
+		if (c == EOF) goto missingargs;
+		if (c == ' ') {
+		    havepartition = 1;
+		    c = getword(&arg2);
+		    if (!isatom(&arg2)) goto badpartition;
+		}
+		if (c == '\r') c = getc(stdin);
+		if (c != '\n') goto extraargs;
+		cmd_create(tag.s, arg1.s, havepartition ? arg2.s : 0);
 	    }
 	    else goto badcmd;
 	    break;
@@ -323,6 +337,11 @@ cmdloop()
 	if (c != '\n') eatline();
 	continue;
 
+    badpartition:
+	printf("%s BAD Invalid partition name in %s\r\n",
+	       tag.s, cmd.s);
+	if (c != '\n') eatline();
+	continue;
     }
 }
 
@@ -336,13 +355,15 @@ char *passwd;
 
     canon_user = auth_canonifyid(user);
     if (!canon_user) {
-	printf("%s NO Invalid user %s\r\n", tag, user);	/* XXX beautify user */
+	printf("%s NO Invalid user %s\r\n", tag, beautify_string(user));
 	return;
     }
 
     if (!strcmp(canon_user, "anonymous")) {
 	if (config_getswitch("allowanonymouslogin", 0)) {
-	    syslog(LOG_NOTICE, "login: anonymous"); /* XXX Log cleaned passwd*/
+	    passwd = beautify_string(passwd);
+	    if (strlen(passwd) > 500) passwd[500] = '\0';
+	    syslog(LOG_NOTICE, "login: anonymous %s", passwd);
 	    reply = "Anonymous access granted";
 	}
 	else {
@@ -388,6 +409,7 @@ char *name;
     char *p;
     unsigned size = 0;
     int r;
+    char inboxname[MAX_MAILBOX_PATH];
     struct mailbox mailbox;
 
     /* Get flags */
@@ -425,12 +447,22 @@ char *name;
 	goto freeflags;
     }
     
-    r = append_setup(&mailbox, name, MAILBOX_FORMAT_NORMAL, ACL_INSERT, size);
+    if (strcasecmp(name, "inbox") == 0 &&
+	!strchr(imapd_userid, '.') &&
+	strlen(imapd_userid) + 6 <= MAX_MAILBOX_PATH) {
+	strcpy(inboxname, "user.");
+	strcat(inboxname, imapd_userid);
+	r = append_setup(&mailbox, inboxname, MAILBOX_FORMAT_NORMAL,
+			 ACL_INSERT, size);
+    }
+    else {
+	r = append_setup(&mailbox, name, MAILBOX_FORMAT_NORMAL,
+			 ACL_INSERT, size);
+    }
     if (r) {
 	printf("%s NO %sAppend to %s failed: %s\r\n",
 	       tag, r == IMAP_MAILBOX_NONEXISTENT ? "[TRYCREATE] " : "",
-	       name, error_message(r));
-	/* XXX clean name */
+	       beautify_string(name), error_message(r));
 	/* XXX check create permissions for [TRYCREATE] */
 	goto freeflags;
     }
@@ -441,12 +473,17 @@ char *name;
     r = append_fromstream(&mailbox, stdin, size, flag, nflags, imapd_userid);
     mailbox_close(&mailbox);
 
-    if (imapd_mailbox) index_check(imapd_mailbox, 0, 0);
+    if (imapd_mailbox) {
+	/*
+	 * We do a full check to pick up any \Seen flag we might have
+	 * set on the appended message.
+	 */
+	index_check(imapd_mailbox, 0, 1);
+    }
 
     if (r) {
 	printf("%s NO Append to %s failed: %s\r\n",
-	       tag, name, error_message(r));
-	/* XXX clean name */
+	       tag, beautify_string(name), error_message(r));
     }
     else {
 	printf("%s OK Append completed\r\n", tag);
@@ -466,25 +503,42 @@ char *cmd;
 char *name;
 {
     struct mailbox mailbox;
-    int r;
+    char inboxname[MAX_MAILBOX_PATH];
+    int r = 0;
     int i;
     int usage;
     int doclose = 0;
 
-    r = mailbox_open_header(name, &mailbox);
+    if (cmd[0] == 'B') {
+	/* BBoard namespace is empty */
+	r = IMAP_MAILBOX_NONEXISTENT;
+    }
+    else if (strcasecmp(name, "inbox") == 0 &&
+	     !strchr(imapd_userid, '.') &&
+	     strlen(imapd_userid) + 6 <= MAX_MAILBOX_PATH) {
+	strcpy(inboxname, "user.");
+	strcat(inboxname, imapd_userid);
+	r = mailbox_open_header(inboxname, &mailbox);
+    }
+    else {
+	r = mailbox_open_header(name, &mailbox);
+    }
+
     if (!r) {
 	doclose = 1;
 	r = mailbox_open_index(&mailbox);
     }
-    if (!r && !(mailbox.my_acl & ACL_READ)) r = IMAP_PERMISSION_DENIED;
+    if (!r && !(mailbox.myrights & ACL_READ)) {
+	r = (mailbox.myrights & ACL_LOOKUP) ?
+	  IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+    }
     if (!r && chdir(mailbox.path)) {
 	r = IMAP_IOERROR;
     }
 
     if (r) {
 	printf("%s NO %s of %s failed: %s\r\n", tag, cmd,
-	       name, error_message(r));
-				/* XXX clean name, reply token */
+	       beautify_string(name), error_message(r));
 	if (doclose) mailbox_close(&mailbox);
 	return;
     }
@@ -500,10 +554,10 @@ char *name;
 
     /* Examine command puts mailbox in read-only mode */
     if (cmd[0] == 'E') {
-	imapd_mailbox->my_acl &= ~(ACL_SEEN|ACL_WRITE|ACL_DELETE);
+	imapd_mailbox->myrights &= ~(ACL_SEEN|ACL_WRITE|ACL_DELETE);
     }
 
-    if (imapd_mailbox->my_acl & ACL_DELETE) {
+    if (imapd_mailbox->myrights & ACL_DELETE) {
 	mailbox_read_quota(imapd_mailbox);
 	if (imapd_mailbox->quota_limit > 0) {
 	    usage = imapd_mailbox->quota_used * 100 /
@@ -519,7 +573,7 @@ char *name;
     }
 
     printf("%s OK [READ-%s] %s completed\r\n", tag,
-	   imapd_mailbox->my_acl & ACL_WRITE ? "WRITE" : "ONLY", cmd);
+	   imapd_mailbox->myrights & ACL_WRITE ? "WRITE" : "ONLY", cmd);
 
     syslog(LOG_INFO, "open: user %s opened %s", imapd_userid, name);
 }
@@ -530,7 +584,7 @@ char *sequence;
 int usinguid;
 {
     char *cmd = usinguid ? "UID Fetch" : "Fetch";
-    static struct buf fetchatt;
+    static struct buf fetchatt, fieldname;
     int c;
     int inlist = 0;
     int fetchitems = 0;
@@ -617,6 +671,44 @@ int usinguid;
 	    }
 	    else if (!strcmp(fetchatt.s, "rfc822.text")) {
 		fetchitems |= FETCH_TEXT;
+	    }
+	    else if (!strcmp(fetchatt.s, "rfc822.header.lines") ||
+		     !strcmp(fetchatt.s, "rfc822.header.lines.not")) {
+		if (c != ' ') {
+		    printf("%s BAD Missing required argument to %s %s\r\n",
+			   tag, cmd, fetchatt.s);
+		    if (c != '\n') eatline();
+		    goto freeargs;
+		}
+		c = getc(stdin);
+		if (c != '(') {
+		    printf("%s BAD Missing required open parenthesis in %s %s\r\n",
+			   tag, cmd, fetchatt.s);
+		    if (c != '\n') eatline();
+		    goto freeargs;
+		}
+		do {
+		    c = getastring(&fieldname);
+		    for (p = fieldname.s; *p; p++) {
+			if (*p <= ' ' || *p & 0x80 || *p == ':') break;
+		    }
+		    if (*p || !*fieldname.s) {
+			printf("%s BAD Invalid field-name in %s %s\r\n",
+			       tag, cmd, fetchatt.s);
+			if (c != '\n') eatline();
+			goto freeargs;
+		    }
+		    appendstrlist(strlen(fetchatt.s) == 19 ?
+				  &fetchargs.headers : &fetchargs.headers_not,
+				  fieldname.s);
+		} while (c == ' ');
+		if (c != ')') {
+		    printf("%s BAD Missing required close parenthesis in %s %s\r\n",
+			   tag, cmd, fetchatt.s);
+		    if (c != '\n') eatline();
+		    goto freeargs;
+		}
+		c = getc(stdin);
 	    }
 	    else goto badatt;
 	    break;
@@ -1101,6 +1193,29 @@ char *tag;
     return;
 }
     
+cmd_create(tag, name, partition)
+char *tag;
+char *name;
+char *partition;
+{
+    int r;
+
+    if (partition && !imapd_userisadmin) {
+	printf("%s NO Only administrators may specify partition\r\n", tag);
+	return;
+    }
+
+    r = mboxlist_createmailbox(name, MAILBOX_FORMAT_NORMAL, partition,
+			       imapd_userisadmin, imapd_userid);
+
+    if (r) {
+	printf("%s NO Create failed: %s\r\n", tag, error_message(r));
+    }
+    else {
+	printf("%s OK Create completed\r\n", tag);
+    }
+}	
+
   
 #define BUFGROWSIZE 100
 int getword(buf)
@@ -1213,6 +1328,7 @@ struct buf *buf;
 	    buf->s[i] = c;
 	}
 	buf->s[len] = '\0';
+	if (strlen(buf->s) != len) return EOF; /* Disallow imbedded NUL */
 	return getc(stdin);
     }
 }
