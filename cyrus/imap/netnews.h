@@ -1,6 +1,5 @@
-/* spool.h -- Routines for spooling/parsing messages from a prot stream
- * 
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+/* 
+ * Copyright (c) 2002 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -37,24 +36,28 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *
- */
-/*
- * $Id: spool.h,v 1.1.2.2 2002/10/15 19:12:50 ken3 Exp $
  */
 
-#ifndef INCLUDED_SPOOL_H
-#define INCLUDED_SPOOL_H
+/* $Id: netnews.h,v 1.1.2.1 2002/10/15 19:12:49 ken3 Exp $ */
 
-#include <stdio.h>
-#include "prot.h"
+#ifndef NETNEWS_H
+#define NETNEWS_H
 
-typedef struct Header **hdrcache_t;
+#define NETNEWS_RECOVER 0x01
 
-hdrcache_t spool_new_hdrcache();
-int spool_fill_hdrcache(struct protstream *fin, FILE *fout, hdrcache_t cache);
-const char **spool_getheader(hdrcache_t cache, const char *phead);
-void spool_free_hdrcache(hdrcache_t cache);
-int spool_copy_msg(struct protstream *fin, FILE *fout, unsigned long *lines);
+/* name of the netnews database */
+#define FNAME_NETNEWSDB "/netnews.db"
 
-#endif
+int netnews_init(char*, int);
+
+int netnews_lookup(char *msgid, char **mailbox, unsigned long *uid,
+		   unsigned long *lines, time_t *tstamp);
+void netnews_store(char *msgid, char *mailbox, unsigned long uid,
+		   unsigned long lines, time_t tstamp);
+
+int netnews_expire(int days);
+int netnews_dump(FILE *f);
+
+int netnews_done(void);
+
+#endif /* NETNEWS_H */

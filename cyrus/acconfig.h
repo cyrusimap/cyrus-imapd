@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.35.4.2 2002/08/16 22:00:34 rjs3 Exp $ */
+/* $Id: acconfig.h,v 1.35.4.3 2002/10/15 19:12:46 ken3 Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -149,6 +149,7 @@
 #undef CONFIG_DB_SEEN
 #undef CONFIG_DB_SUBS
 #undef CONFIG_DB_TLS
+#undef CONFIG_DB_NETNEWS
 
 @BOTTOM@
 

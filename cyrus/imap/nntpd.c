@@ -44,12 +44,10 @@
  *
  * - support for control messages
  * - wildmat support
- * - support for msgid in commands
- * - use nntpd-specific DB instead of deliver.db?
  */
 
 /*
- * $Id: nntpd.c,v 1.1.2.19 2002/10/14 21:09:07 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.20 2002/10/15 19:12:49 ken3 Exp $
  */
 #include <config.h>
 
@@ -91,6 +89,7 @@
 #include "spool.h"
 #include "append.h"
 #include "duplicate.h"
+#include "netnews.h"
 #include "version.h"
 #include "xmalloc.h"
 #include "mboxlist.h"
@@ -121,7 +120,7 @@ static SSL *tls_conn;
 
 sasl_conn_t *nntp_saslconn; /* the sasl connection context */
 
-static int have_dupdb = 1;	/* duplicate delivery db is initialized */
+static int have_newsdb = 1;	/* news db is initialized */
 static int dupelim = 1;		/* eliminate duplicate messages with
 				   same message-id */
 char newsprefix[100] = "";
@@ -301,12 +300,18 @@ int service_init(int argc __attribute__((unused)),
     if ((prefix = config_getstring(IMAPOPT_NEWSPREFIX)))
 	snprintf(newsprefix, sizeof(newsprefix), "%s.", prefix);
 
+    /* initialize news database */
+    if (netnews_init(NULL, 0) != 0) {
+	syslog(LOG_ERR, "nntpd: unable to init news database\n");
+	have_newsdb = 0;
+    }
+
     dupelim = config_getswitch(IMAPOPT_DUPLICATESUPPRESSION);
     /* initialize duplicate delivery database */
     if (duplicate_init(NULL, 0) != 0) {
 	syslog(LOG_ERR, 
-	       "lmtpd: unable to init duplicate delivery database\n");
-	dupelim = have_dupdb = 0;
+	       "nntpd: unable to init duplicate delivery database\n");
+	dupelim = 0;
     }
 
     /* open the mboxlist, we'll need it for real work */
@@ -440,6 +445,7 @@ void shut_down(int code)
 	mailbox_close(nntp_group);
     }
 
+    netnews_done();
     duplicate_done();
 
     mboxlist_close();
@@ -536,6 +542,10 @@ static void cmdloop(void)
 		    prot_printf(nntp_out, "500 Unrecognized command\r\n");
 	    }
 	    else if (!strcmp(cmd.s, "Article")) {
+		char fname[MAX_MAILBOX_PATH];
+		char *msgid;
+		struct mailbox *mbox, tmpbox;
+
 		mode = ARTICLE_ALL;
 
 	      article:
@@ -548,8 +558,20 @@ static void cmdloop(void)
 		if (c == '\r') c = prot_getc(nntp_in);
 		if (c != '\n') goto extraargs;
 		if (uid == -1) {
-		    /* XXX search for msgid (arg1.s) */
-		    goto nomsgid;
+		    char *mailbox, *path;
+
+		    msgid = arg1.s;
+		    if (netnews_lookup(msgid, &mailbox, &uid, NULL, NULL)) {
+			r = mboxlist_lookup(mailbox, &path, NULL, NULL);
+			if (r) goto nogroup;
+
+			strcpy(fname, path);
+			mbox = &tmpbox;
+			mbox->name = mailbox;
+			mbox->format = MAILBOX_FORMAT_NORMAL;
+		    } else {
+			goto nomsgid;
+		    }
 		} else {
 		    if (!nntp_group) goto noopengroup;
 		    if (uid) {
@@ -559,9 +581,16 @@ static void cmdloop(void)
 		    } else {
 			uid = index_getuid(nntp_current);
 		    }
+
+		    msgid = index_get_msgid(nntp_group, index_finduid(uid));
+		    strcpy(fname, nntp_group->path);
+		    mbox = nntp_group;
 		}
 
-		cmd_article(uid, mode);
+		strcat(fname, "/");
+		mailbox_message_get_fname(mbox, uid, fname + strlen(fname));
+
+		cmd_article(fname, msgid, uid, mode);
 	    }
 	    else goto badcmd;
 	    break;
@@ -1196,11 +1225,6 @@ int open_group(char *name, int has_prefix)
 	r = (mboxstruct.myrights & ACL_LOOKUP) ?
 	    IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
     }
-    if (!r && chdir(mboxstruct.path)) {
-	syslog(LOG_ERR,
-	       "IOERROR: changing directory to %s: %m", mboxstruct.path);
-	r = IMAP_IOERROR;
-    }
 
     if (r) {
 	if (doclose) mailbox_close(&mboxstruct);
@@ -1218,15 +1242,12 @@ int open_group(char *name, int has_prefix)
     return 0;
 }
 
-static void cmd_article(unsigned long uid, int part)
+static void cmd_article(char *fname, char *msgid, unsigned long uid, int part)
 {
     FILE *msgfile;
     char buf[4096];
-    char fnamebuf[MAILBOX_FNAME_LEN];
-    char *msgid = index_get_msgid(nntp_group, index_finduid(uid));
 
-    mailbox_message_get_fname(nntp_group, uid, fnamebuf);
-    msgfile = fopen(fnamebuf, "r");
+    msgfile = fopen(fname, "r");
     if (!msgfile) {
 	prot_printf(nntp_out, "502 Could not read message file\r\n");
 	return;
@@ -1301,7 +1322,8 @@ struct message_data {
     char *id;			/* message id */
     char *path;			/* path */
     char *control;		/* control message */
-    int size;			/* size of message */
+    unsigned long size;		/* size of message in bytes */
+    unsigned long lines;	/* number of lines in body of message */
 
     char **rcpt;		/* mailboxes to post message */
     int rcpt_num;		/* number of groups */
@@ -1320,6 +1342,7 @@ int msg_new(message_data_t **m)
     ret->path = NULL;
     ret->control = NULL;
     ret->size = 0;
+    ret->lines = 0;
     ret->rcpt = NULL;
     ret->rcpt_num = 0;
 
@@ -1412,7 +1435,7 @@ static int savemsg(message_data_t *m, FILE *f)
 	/* got a bad header */
 
 	/* flush the remaining output */
-	spool_copy_msg(nntp_in, f);
+	spool_copy_msg(nntp_in, f, NULL);
 	return r;
     }
 
@@ -1466,7 +1489,7 @@ static int savemsg(message_data_t *m, FILE *f)
 	r = NNTP_NO_NEWSGROUPS;		/* no newsgroups */
     }
 
-    r |= spool_copy_msg(nntp_in, f);
+    r |= spool_copy_msg(nntp_in, f, &m->lines);
 
     if (r) return r;
 
@@ -1479,6 +1502,7 @@ static int savemsg(message_data_t *m, FILE *f)
 	return IMAP_IOERROR;
     }
     m->size = sbuf.st_size;
+    m->lines--; /* don't count header/body separator */
     m->f = f;
     m->data = prot_new(fileno(f), 0);
 
@@ -1488,7 +1512,7 @@ static int savemsg(message_data_t *m, FILE *f)
 static int deliver(message_data_t *msg)
 {
     int n, r;
-    char *rcpt;
+    char *rcpt = NULL;
     struct appendstate as;
     time_t now = time(NULL);
     unsigned long uid;
@@ -1520,14 +1544,9 @@ static int deliver(message_data_t *msg)
 	if (r) return r;
     }
 
-    /* mark msgid for IHAVE/CHECK/TAKETHIS and reader commands
-     *
-     * XXX this should be replaced with netnews.db having the form:
-     *
-     * key = <msgid>   data = <mbox>:<uid>\t<lines>\t<time>\0
-     */
-    if (dupelim && msg->id)
-	duplicate_mark(msg->id, strlen(msg->id), "", 0, time(NULL));
+    /* store msgid for IHAVE/CHECK/TAKETHIS and reader commands */
+    if (have_newsdb && msg->id && rcpt)
+	netnews_store(msg->id, rcpt, uid, msg->lines, now);
 
     return  0;
 }
@@ -1637,13 +1656,10 @@ static void cmd_post(char *msgid, int mode)
     message_data_t *msg;
     int r = 0;
 
-    /* check if we want this article
-     *
-     * XXX this should be replaced with netnews.db (see above)
-     */
-    if (dupelim && msgid && 
-	duplicate_check(msgid, strlen(msgid), "", 0)) {
-	/* duplicate message */
+    /* check if we want this article */
+    if (have_newsdb && msgid &&
+	netnews_lookup(msgid, NULL, NULL, NULL, NULL)) {
+	/* already have it */
 	r = NNTP_DONT_SEND;
     }
 
@@ -1696,7 +1712,7 @@ static void cmd_post(char *msgid, int mode)
     }
     else {
 	/* flush the article from the stream */
-	spool_copy_msg(nntp_in, NULL);
+	spool_copy_msg(nntp_in, NULL, NULL);
     }
 
     if (r) {

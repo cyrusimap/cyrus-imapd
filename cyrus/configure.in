@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.232.4.12 2002/10/08 16:25:08 ken3 Exp $
+dnl $Id: configure.in,v 1.232.4.13 2002/10/15 19:12:47 ken3 Exp $
 dnl
 
 
@@ -207,6 +207,12 @@ AC_ARG_WITH(tls-db,
                           for the TLS cache (Default: berkeley_nosync) ],
 	DB="$withval", DB="berkeley_nosync")
 CYRUS_SET_BACKEND_BINARY("TLS cache", CONFIG_DB_TLS, $DB)
+
+AC_ARG_WITH(news-db,
+	[  --with-news-db=DB       use DB (flat, berkeley, skiplist) as a backend
+                          for the netnews article db (Default: berkeley) ],
+	DB="$withval", DB="berkeley")
+CYRUS_SET_BACKEND("netnews db", CONFIG_DB_NETNEWS, $DB)
 
 sievedir="sieve"
 AC_ARG_ENABLE(sieve,

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ctl_cyrusdb.c,v 1.14.4.1 2002/10/08 20:50:10 rjs3 Exp $
+ * $Id: ctl_cyrusdb.c,v 1.14.4.2 2002/10/15 19:12:49 ken3 Exp $
  */
 
 #include <config.h>
@@ -85,6 +85,7 @@
 #include "seen.h"
 #include "duplicate.h"
 #include "tls.h"
+#include "netnews.h"
 
 #define N(a) (sizeof(a) / sizeof(a[0]))
 
@@ -99,6 +100,7 @@ struct cyrusdb {
     { FNAME_MBOXLIST,		CONFIG_DB_MBOX,		1 },
     { FNAME_DELIVERDB,		CONFIG_DB_DUPLICATE,	0 },
     { FNAME_TLSSESSIONS,	CONFIG_DB_TLS,		0 },
+    { FNAME_NETNEWSDB,		CONFIG_DB_NETNEWS,	0 },
     { NULL,			NULL,			0 }
 };
 
