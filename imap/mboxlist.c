@@ -1812,7 +1812,7 @@ mboxlist_reopen()
 	map_free(&list_base, &list_size);
     }
 
-    listfd = open(listfname, O_RDONLY, 0666);
+    listfd = open(listfname, O_RDWR, 0666);
     if (listfd == -1) {
 	syslog(LOG_ERR, "IOERROR: opening %s: %m", listfname);
 	fatal("can't read mailbox list", EX_OSFILE);
