@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.34.6.5 2003/03/06 01:17:51 ken3 Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.34.6.6 2003/04/10 16:51:40 ken3 Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -1956,6 +1956,11 @@ static int recovery(struct db *db)
 	q = db->map_base + db->map_size;
 	p = ptr;
 	for (;;) {
+            if (RECSIZE(p) <= 0) {
+                /* hmm, we can't trust this transaction */
+                p = q;
+                break;
+            }
 	    p += RECSIZE(p);
 	    if (p >= q) break;
 	    if (TYPE(p) == COMMIT) break;
