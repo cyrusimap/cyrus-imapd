@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.104 1999/10/02 00:42:33 leg Exp $
+ * $Id: deliver.c,v 1.105 1999/10/04 18:22:54 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.104 1999/10/02 00:42:33 leg Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.105 1999/10/04 18:22:54 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -66,6 +66,12 @@ static char _rcsid[] = "$Id: deliver.c,v 1.104 1999/10/02 00:42:33 leg Exp $";
 #include <sys/types.h>
 #endif
 
+#include <netdb.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <sasl.h>
+
 #include "acl.h"
 #include "util.h"
 #include "auth.h"
@@ -78,6 +84,8 @@ static char _rcsid[] = "$Id: deliver.c,v 1.104 1999/10/02 00:42:33 leg Exp $";
 #include "mailbox.h"
 #include "xmalloc.h"
 #include "version.h"
+
+struct protstream *deliver_out, *deliver_in;
 
 extern int optind;
 extern char *optarg;
@@ -156,8 +164,7 @@ static int sieve_usehomedir = 0;
 static const char *sieve_dir = NULL;
 #endif
 
-#ifdef DELIVER_USES_SASL
-#include <sasl.h>
+struct sockaddr_in deliver_localaddr, deliver_remoteaddr;
 
 static sasl_security_properties_t *make_secprops(int min, int max)
 {
@@ -172,9 +179,8 @@ static sasl_security_properties_t *make_secprops(int min, int max)
     if (!config_getswitch("allowplaintext", 1)) {
 	ret->security_flags |= SASL_SEC_NOPLAINTEXT;
     }
-    if (!config_getswitch("allowanonymouslogin", 0)) {
-	ret->security_flags |= SASL_SEC_NOANONYMOUS;
-    }
+    ret->security_flags |= SASL_SEC_NOANONYMOUS;
+
     ret->property_names = NULL;
     ret->property_values = NULL;
     
@@ -213,13 +219,101 @@ static int mysasl_config(void *context __attribute__((unused)),
     return SASL_FAIL;
 }
 
+/* returns true if imapd_authstate is in "item";
+   expected: item = admins or proxyservers */
+static int authisa(char *authname, const char *item)
+{
+    const char *val = config_getstring(item, "");
+    char buf[MAX_MAILBOX_PATH];
+
+    while (*val) {
+	char *p;
+	
+	for (p = (char *) val; *p && !isspace(*p); p++);
+	strncpy(buf, val, p-val);
+	buf[p-val] = 0;
+
+	if (strcasecmp(authname, buf)==0) {
+	    return 1;
+	}
+	val = p;
+	while (*val && isspace(*val)) val++;
+    }
+    return 0;
+}
+
+
+/* should we allow users to proxy?  return SASL_OK if yes,
+   SASL_BADAUTH otherwise */
+static mysasl_authproc(void *context __attribute__((unused)),
+		       const char *auth_identity,
+		       const char *requested_user,
+		       const char **user,
+		       const char **errstr)
+{
+    char *p;
+    const char *val;
+    char *canon_authuser, *canon_requser;
+    char *username=NULL, *realm;
+    char buf[MAX_MAILBOX_PATH];
+    static char replybuf[100];
+    int allowed=0;
+
+    canon_authuser = auth_canonifyid(auth_identity);
+    if (!canon_authuser) {
+	*errstr = "bad userid authenticated";
+	return SASL_BADAUTH;
+    }
+    canon_authuser = xstrdup(canon_authuser);
+
+    canon_requser = auth_canonifyid(requested_user);
+    if (!canon_requser) {
+	*errstr = "bad userid requested";
+	return SASL_BADAUTH;
+    }
+    canon_requser = xstrdup(canon_requser);
+
+    /* check if remote realm */
+    if (realm = strchr(canon_authuser, '@')) {
+	realm++;
+	val = config_getstring("loginrealms", "");
+	while (*val) {
+	    if (!strncasecmp(val, realm, strlen(realm)) &&
+		(!val[strlen(realm)] || isspace(val[strlen(realm)]))) {
+		break;
+	    }
+	    /* not this realm, try next one */
+	    while (*val && !isspace(*val)) val++;
+	    while (*val && isspace(*val)) val++;
+	}
+	if (!*val) {
+	    snprintf(replybuf, 100, "cross-realm login %s denied", 
+		     canon_authuser);
+	    *errstr = replybuf;
+	    return SASL_BADAUTH;
+	}
+    }
+
+    /* ok, is auth_identity an admin? */
+    allowed = authisa(canon_authuser, "lmtpadmins");
+
+    if (allowed==0)
+    {
+      return SASL_BADAUTH;
+    }
+
+    free(canon_authuser);
+    *user = canon_requser;
+    *errstr = NULL;
+    return SASL_OK;
+}
+
+
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
+    { SASL_CB_PROXY_POLICY, &mysasl_authproc, NULL },
     { SASL_CB_LIST_END, NULL, NULL }
 };
-
-
-#endif
 
 
 int
@@ -240,6 +334,9 @@ char **argv;
     message_data_t *msgdata;
 
     config_init("deliver");
+
+    deliver_in = prot_new(0, 0);
+    deliver_out = prot_new(1, 1);
 
 #ifdef USE_SIEVE
     sieve_usehomedir = config_getswitch("sieveusehomedir", 0);
@@ -1377,11 +1474,13 @@ deliver_opts_t *delopts;
     int r;
     char *err;
     int i;
-    int mechcount = 0;
-#ifdef DELIVER_USES_SASL
+    unsigned int mechcount = 0;
+    int salen;
+    struct stat sbuf;
+
     sasl_conn_t *conn;
     sasl_security_properties_t *secprops = NULL;
-#endif
+    sasl_external_properties_t *extprops = NULL;
 
     delopts->authuser = 0;
     delopts->authstate = 0;
@@ -1395,7 +1494,6 @@ deliver_opts_t *delopts;
 	fatal("out of memory", EC_TEMPFAIL);
     }
 
-#ifdef DELIVER_USES_SASL
     if (sasl_server_init(mysasl_cb, "Cyrus") != SASL_OK) {
 	fatal("SASL failed initializing: sasl_server_init()", EC_TEMPFAIL);
     }
@@ -1404,75 +1502,169 @@ deliver_opts_t *delopts;
 	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL);
     }
 
-    /* currently, we don't allow any encryption; this will change */
-    secprops = make_secprops(0, 0);
+    secprops = make_secprops(0, 10000);
     sasl_setprop(conn, SASL_SEC_PROPS, secprops);
 
-    /* set the ip addresses here */
-#endif
-    
-    printf("220 %s LMTP ready\r\n", myhostname);
-    for (;;) {
-	fflush(stdout);
-	if (!fgets(buf, sizeof(buf)-1, stdin)) {
-	    exit(0);
-	}
-	p = buf + strlen(buf) - 1;
-	if (p >= buf && *p == '\n') *p-- = '\0';
-	if (p >= buf && *p == '\r') *p-- = '\0';
+    fstat(0, &sbuf);
 
-	switch (buf[0]) {
-	case 'a':
-	case 'A':
-#ifdef DELIVER_USES_SASL
+
+    salen = sizeof(deliver_remoteaddr);
+    r = getpeername(0, (struct sockaddr *)&deliver_remoteaddr, &salen);
+    switch (r) {
+    case 0:
+	salen = sizeof(deliver_localaddr);
+	if (getsockname(0, (struct sockaddr *)&deliver_localaddr, &salen) 
+	    != 0) {
+	    printf("xxx can't get local addr\n");
+	}
+
+	/* set the ip addresses here */
+	sasl_setprop(conn, SASL_IP_REMOTE, &deliver_remoteaddr);  
+	sasl_setprop(conn, SASL_IP_LOCAL,  &deliver_localaddr );
+
+	syslog(LOG_DEBUG, "connection from [%s]", 
+	       inet_ntoa(deliver_remoteaddr.sin_addr));
+	break;
+
+    default:
+	/* we're not connected to a internet socket! */
+	extprops = (sasl_external_properties_t *) 
+	    xmalloc(sizeof(sasl_external_properties_t));
+	extprops->ssf = 2;
+	extprops->auth_id = "postman";
+	sasl_setprop(conn, SASL_SSF_EXTERNAL, extprops);
+
+	syslog(LOG_DEBUG, "lmtp connection preauth'd as postman");
+
+	break;
+    }
+
+    prot_printf(deliver_out,"220 %s LMTP ready\r\n", myhostname);
+
+    for (;;) {
+      if (!prot_fgets(buf, sizeof(buf)-1, deliver_in)) {
+	exit(0);
+      }
+      p = buf + strlen(buf) - 1;
+      if (p >= buf && *p == '\n') *p-- = '\0';
+      if (p >= buf && *p == '\r') *p-- = '\0';
+
+      switch (buf[0]) {
+      case 'a':
+      case 'A':
 	    if (!strncasecmp(buf, "auth ", 5)) {
 		char *mech;
+		char *data;
 		char *in, *out;
-		int inlen, outlen;
-
-		if (mechcount == 0) {
-		    printf("503 5.3.3 AUTH not available\r\n");
-		    continue;
-		}
+		unsigned int inlen, outlen;
+		const char *errstr;
+		
 		if (delopts->authuser) {
-		    printf("503 5.5.0 already authenticated\r\n");
+		    prot_printf(deliver_out,"503 5.5.0 already authenticated\r\n");
 		    continue;
 		}
 		if (msg->rcpt_num != 0) {
-		    printf("503 5.5.0 AUTH not permitted now\r\n");
+		    prot_printf(deliver_out,"503 5.5.0 AUTH not permitted now\r\n");
 		    continue;
 		}
 
 		/* ok, what mechanism ? */
 		mech = buf + 5;
-		while (*mech != ' ' && *mech != '\0') {
-		    mech++;
+		p=mech;
+		while ((*p != ' ') && (*p != '\0')) {
+		    p++;
 		}
-		if (mech == ' ') {
-		    p = mech + 1;
+		if (*p == ' ') {
+		  *p = '\0';
+		  p++;
 		} else {
-		    p = '\0';
-		}
-		*mech = '\0';
-		
-		in = xmalloc(strlen(q));
-		result = sasl_decode64(q, strlen(q), in, &inlen);
-		if (result != SASL_OK) {
-		    printf("501 5.5.4 cannot base64 decode\r\n");
-		    continue;
-		    if (in) { free(in); }
+		  p = NULL;
 		}
 
-		continue;
+		if (p != NULL) {
+		    in = xmalloc(strlen(p));
+		    r = sasl_decode64(p, strlen(p), in, &inlen);
+		    if (r != SASL_OK) {
+			prot_printf(deliver_out,
+				    "501 5.5.4 cannot base64 decode\r\n");
+			if (in) { free(in); }
+			continue;
+		    }
+		} else {
+		    in = NULL;
+		    inlen = 0;
+		}
+
+		r = sasl_server_start(conn,
+				      mech,
+				      in,
+				      inlen,
+				      &out,
+				      &outlen,
+				      &errstr);
+		
+		if (in) { free(in); }
+
+		while (r == SASL_CONTINUE) {
+		    char inbase64[4096];
+
+		    r = sasl_encode64(out, outlen, 
+				      inbase64, sizeof(inbase64), NULL);
+		    
+		    if (r != SASL_OK) {
+			 break;
+		     }
+
+		     /* send out */
+		     prot_printf(deliver_out,"334 %s\r\n", inbase64);
+
+		     /* read a line */
+		     if (!prot_fgets(buf, sizeof(buf)-1, deliver_in)) {
+			 exit(0);
+		     }
+		     p = buf + strlen(buf) - 1;
+		     if (p >= buf && *p == '\n') *p-- = '\0';
+		     if (p >= buf && *p == '\r') *p-- = '\0';
+
+		     in = xmalloc(strlen(buf));
+		     r = sasl_decode64(buf, strlen(buf), in, &inlen);
+		     if (r != SASL_OK) {
+			 prot_printf(deliver_out,
+				     "501 5.5.4 cannot base64 decode\r\n");
+			 if (in) { free(in); }
+			 continue; /* xxx */
+		     }
+
+		     r = sasl_server_step(conn,
+					  in,
+					  inlen,
+					  &out,
+					  &outlen,
+					  &errstr);
+
+		 }
+
+		 if ((r != SASL_OK) && (r != SASL_CONTINUE)) {
+		     prot_printf(deliver_out, "501 5.5.4 %s\n",
+				 sasl_errstring(r, NULL, NULL));
+		     continue;
+		 }
+
+		 /* authenticated successfully! */
+		 prot_printf(deliver_out, "250 Authenticated!\r\n");
+
+		 /* set protection layers */
+		 prot_setsasl(deliver_in,  conn);
+		 prot_setsasl(deliver_out, conn);
+		 continue;
 	    }
-#endif
 	    goto syntaxerr;
 
 	case 'd':
 	case 'D':
 	    if (!strcasecmp(buf, "data")) {
 		if (!msg->rcpt_num) {
-		    printf("503 5.5.1 No recipients\r\n");
+		    prot_printf(deliver_out,"503 5.5.1 No recipients\r\n");
 		    continue;
 		}
 		savemsg(msg, 1);
@@ -1487,7 +1679,7 @@ deliver_opts_t *delopts;
 				msg->rcpt[cur]->mailbox : (char *)0, 
 				msg->rcpt[cur]->detail);
 
-		    printf("%s\r\n", convert_lmtp(r));
+		    prot_printf(deliver_out,"%s\r\n", convert_lmtp(r));
 		}
 		goto rset;
 	    }
@@ -1498,18 +1690,16 @@ deliver_opts_t *delopts;
 	    if (!strncasecmp(buf, "lhlo ", 5)) {
 		char *mechs;
 
-		printf("250-%s\r\n250-8BITMIME\r\n"
-		       "250-ENHANCEDSTATUSCODES\r\n",
-		       myhostname);
-#ifdef DELIVER_USES_SASL
-		if (sasl_listmech(conn, NULL, "250-AUTH ", " ", "", &mechs, 
+		prot_printf(deliver_out,"250-%s\r\n250-8BITMIME\r\n"
+			    "250-ENHANCEDSTATUSCODES\r\n",
+			    myhostname);
+		if (sasl_listmech(conn, NULL, "AUTH ", " ", "", &mechs, 
 				  NULL, &mechcount) == SASL_OK && 
 		    mechcount > 0) {
-		    printf("%s\r\n", mechs);
-		    free(mechs);
+		  prot_printf(deliver_out,"250-%s\r\n", mechs);
+		  free(mechs);
 		}
-#endif
-		printf("250 PIPELINING\r\n");
+		prot_printf(deliver_out, "250 PIPELINING\r\n");
 
 		continue;
 	    }
@@ -1519,15 +1709,15 @@ deliver_opts_t *delopts;
 	case 'M':
 	    if (!strncasecmp(buf, "mail ", 5)) {
 		if (msg->return_path) {
-		    printf("503 5.5.1 Nested MAIL command\r\n");
+		    prot_printf(deliver_out, "503 5.5.1 Nested MAIL command\r\n");
 		    continue;
 		}
 		if (strncasecmp(buf+5, "from:", 5) != 0 ||
 		    !(msg->return_path = parseaddr(buf+10))) {
-		    printf("501 5.5.4 Syntax error in parameters\r\n");
+		    prot_printf(deliver_out, "501 5.5.4 Syntax error in parameters\r\n");
 		    continue;
 		}
-		printf("250 2.1.0 ok\r\n");
+		prot_printf(deliver_out, "250 2.1.0 ok\r\n");
 		continue;
 	    }
 	    goto syntaxerr;
@@ -1535,7 +1725,7 @@ deliver_opts_t *delopts;
 	case 'n':
 	case 'N':
 	    if (!strcasecmp(buf, "noop")) {
-		printf("250 2.0.0 ok\r\n");
+		prot_printf(deliver_out,"250 2.0.0 ok\r\n");
 		continue;
 	    }
 	    goto syntaxerr;
@@ -1543,7 +1733,7 @@ deliver_opts_t *delopts;
 	case 'q':
 	case 'Q':
 	    if (!strcasecmp(buf, "quit")) {
-		printf("221 2.0.0 bye\r\n");
+		prot_printf(deliver_out,"221 2.0.0 bye\r\n");
 		exit(0);
 	    }
 	    goto syntaxerr;
@@ -1554,7 +1744,7 @@ deliver_opts_t *delopts;
 		char *rcpt;
 
 		if (!msg->return_path) {
-		    printf("503 5.5.1 Need MAIL command\r\n");
+		    prot_printf(deliver_out, "503 5.5.1 Need MAIL command\r\n");
 		    continue;
 		}
 		if (!(msg->rcpt_num % RCPT_GROW)) { /* time to alloc more */
@@ -1564,21 +1754,21 @@ deliver_opts_t *delopts;
 		}
 		if (strncasecmp(buf+5, "to:", 3) != 0 ||
 		    !(rcpt = parseaddr(buf+8))) {
-		    printf("501 5.5.4 Syntax error in parameters\r\n");
+		    prot_printf(deliver_out, "501 5.5.4 Syntax error in parameters\r\n");
 		    continue;
 		}
 		if (err = process_recipient(rcpt, 
 					    &msg->rcpt[msg->rcpt_num])) {
-		    printf("%s\r\n", err);
+		    prot_printf(deliver_out, "%s\r\n", err);
 		    continue;
 		}
 		msg->rcpt_num++;
 		msg->rcpt[msg->rcpt_num] = NULL;
-		printf("250 2.1.5 ok\r\n");
+		prot_printf(deliver_out, "250 2.1.5 ok\r\n");
 		continue;
 	    }
 	    else if (!strcasecmp(buf, "rset")) {
-		printf("250 2.0.0 ok\r\n");
+		prot_printf(deliver_out, "250 2.0.0 ok\r\n");
 
 	      rset:
 		msg_free(msg);
@@ -1592,14 +1782,14 @@ deliver_opts_t *delopts;
 	case 'v':
 	case 'V':
 	    if (!strncasecmp(buf, "vrfy ", 5)) {
-		printf("252 2.3.3 try RCPT to attempt delivery\r\n");
+		prot_printf(deliver_out, "252 2.3.3 try RCPT to attempt delivery\r\n");
 		continue;
 	    }
 	    goto syntaxerr;
 
 	default:
 	syntaxerr:
-	    printf("500 5.5.2 Syntax error\r\n");
+	    prot_printf(deliver_out, "500 5.5.2 Syntax error\r\n");
 	    continue;
 	}
     }
@@ -1644,7 +1834,7 @@ savemsg(message_data_t *m, int lmtpmode)
     f = tmpfile();
     if (!f) {
 	if (lmtpmode) {
-	    printf("451 4.3.%c cannot create temporary file: %s\r\n",
+	    prot_printf(deliver_out,"451 4.3.%c cannot create temporary file: %s\r\n",
 		   (
 #ifdef EDQUOT
 		    errno == EDQUOT ||
@@ -1657,8 +1847,7 @@ savemsg(message_data_t *m, int lmtpmode)
     }
 
     if (lmtpmode) {
-	printf("354 go ahead\r\n");
-	fflush(stdout);
+	prot_printf(deliver_out,"354 go ahead\r\n");
     }
 
     if (m->return_path) { /* add the return path */
@@ -1872,7 +2061,8 @@ savemsg(message_data_t *m, int lmtpmode)
 	    exit(EC_TEMPFAIL);
 	}
 	while (lmtpmode--) {
-	    printf("451 4.3.%c cannot copy message to temporary file: %s\r\n",
+	    prot_printf(deliver_out,
+	       "451 4.3.%c cannot copy message to temporary file: %s\r\n",
 		   (
 #ifdef EDQUOT
 		    errno == EDQUOT ||
@@ -1890,8 +2080,9 @@ savemsg(message_data_t *m, int lmtpmode)
 	    exit(EC_TEMPFAIL);
 	}
 	while (lmtpmode--) {
-	    printf("451 4.3.2 cannot stat message temporary file: %s\r\n",
-		   error_message(errno));
+	    prot_printf(deliver_out,
+			"451 4.3.2 cannot stat message temporary file: %s\r\n",
+			error_message(errno));
 	}
 	fclose(f);
 	return;
@@ -2225,7 +2416,7 @@ char
 
 void fatal(const char* s, int code)
 {
-    printf("421 4.3.0 deliver: %s\r\n", s);
+    prot_printf(deliver_out,"421 4.3.0 deliver: %s\r\n", s);
     exit(code);
 }
 
@@ -2407,9 +2598,10 @@ int idlen, tolen;
       syslog(LOG_ERR, "checkdelivered: error looking up %s/%d: %m", id, to);
     }
 
-    if (logdebug) 
+    if (logdebug) {
       syslog(LOG_DEBUG, "checkdelivered: checking %s %s - result = %d", id, to, i);
-    
+    }
+
     if (i == 0) {
 	/* found the record */
 	memcpy(&mark, date.data, sizeof(time_t));
