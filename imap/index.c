@@ -38,6 +38,7 @@
 #include "mailbox.h"
 #include "imapd.h"
 #include "append.h"
+#include "charset.h"
 #include "xmalloc.h"
 
 /* The index and cache files, mapped into memory */
@@ -1046,22 +1047,25 @@ int octet_count;
     printf("NIL");
 }
 
-static
-index_fetchheader(msgfile, format, size, headers, headers_not)
+/*
+ * Helper function to read a header section into a static buffer
+ */
+static char *
+index_readheader(msgfile, format, size)
 FILE *msgfile;
 int format;
 int size;
-struct strlist *headers;
-struct strlist *headers_not;
 {
+    static char *buf;
+    static int bufsize;
     int n, left;
-    char *buf = xmalloc(size+2);
-    char *p, *colon, *nextheader;
-    int goodheader;
-    char *endlastgood = buf;
-    struct strlist *l;
+    char *p;
 
-    rewind(msgfile);
+    if (bufsize < size+2) {
+	bufsize = size+100;
+	buf = xrealloc(buf, bufsize);
+    }
+
     if (format == MAILBOX_FORMAT_NETNEWS) {
 	left = size;
 	p = buf;
@@ -1084,7 +1088,25 @@ struct strlist *headers_not;
 	n = fread(buf, 1, size, msgfile);
 	buf[n] = '\0';
     }
+    return buf;
+}
 
+/*
+ * Prune the header section in buf to include only those headers
+ * listed in headers or (if headers_not is non-empty) those headers
+ * not in headers_not.
+ */
+static
+index_pruneheader(buf, headers, headers_not)
+char *buf;
+struct strlist *headers;
+struct strlist *headers_not;
+{
+    char *p, *colon, *nextheader;
+    int goodheader;
+    char *endlastgood = buf;
+    struct strlist *l;
+    
     p = buf;
     while (*p && *p != '\r') {
 	colon = strchr(p, ':');
@@ -1129,6 +1151,70 @@ struct strlist *headers_not;
     }
 	    
     *endlastgood = '\0';
+}
+
+/*
+ * Handle a FETCH RFC822.HEADER.LINES or RFC822.HEADER.LINES.NOT
+ * that can't use the cacheheaders in cyrus.cache
+ */
+static
+index_fetchheader(msgfile, format, size, headers, headers_not)
+FILE *msgfile;
+int format;
+int size;
+struct strlist *headers;
+struct strlist *headers_not;
+{
+    char *buf;
+
+    /* If no data, output null quoted string */
+    if (!msgfile) {
+	printf("\"\"");
+	return;
+    }
+
+    rewind(msgfile);
+    buf = index_readheader(msgfile, format, size);
+
+    index_pruneheader(buf, headers, headers_not);
+
+    size = strlen(buf);
+    printf("{%d}\r\n", size+2);
+    fputs(buf, stdout);
+    printf("\r\n");		/* Delimiting blank line */
+}
+
+/*
+ * Handle a FETCH RFC822.HEADER.LINES that can use the
+ * cacheheaders in cyrus.cache
+ */
+static
+index_fetchcacheheader(msgno, headers)
+int msgno;
+struct strlist *headers;
+{
+    static char *buf;
+    static int bufsize;
+    char *cacheitem;
+    int size;
+
+    cacheitem = cache_base + CACHE_OFFSET(msgno);
+    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip envelope */
+    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bodystructure */
+    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body */
+    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip section */
+    
+    size = CACHE_ITEM_LEN(cacheitem);
+    if (bufsize < size+2) {
+	bufsize = size+100;
+	buf = xrealloc(buf, bufsize);
+    }
+
+    bcopy(cacheitem+4, buf, size);
+    buf[size] = '\0';
+
+    index_pruneheader(buf, headers, 0);
+
     size = strlen(buf);
     printf("{%d}\r\n", size+2);
     fputs(buf, stdout);
@@ -1264,9 +1350,8 @@ char *rock;
     struct strlist *section;
 
     /* Open the message file if we're going to need it */
-    if ((fetchitems & (FETCH_HEADER|FETCH_TEXT|FETCH_RFC822)) ||
-	fetchargs->bodysections ||
-	fetchargs->headers || fetchargs->headers_not) {
+    if ((fetchitems & (FETCH_HEADER|FETCH_TEXT|FETCH_RFC822|FETCH_UNCACHEDHEADER)) ||
+	fetchargs->bodysections || fetchargs->headers_not) {
 	msgfile = fopen(mailbox_message_fname(mailbox, UID(msgno)), "r");
 	if (!msgfile) printf("* NO Message %d no longer exists\r\n", msgno);
     }
@@ -1343,11 +1428,16 @@ char *rock;
 	index_fetchmsg(msgfile, mailbox->format, 0, HEADER_SIZE(msgno),
 		       fetchargs->start_octet, fetchargs->octet_count);
     }
-    else if (fetchargs->headers || fetchargs->headers_not) {
+    else if ((fetchitems & FETCH_UNCACHEDHEADER) || fetchargs->headers_not) {
 	printf("%cRFC822.HEADER ", sepchar);
 	sepchar = ' ';
 	index_fetchheader(msgfile, mailbox->format, HEADER_SIZE(msgno),
 			  fetchargs->headers, fetchargs->headers_not);
+    }
+    else if (fetchargs->headers) {
+	printf("%cRFC822.HEADER ", sepchar);
+	sepchar = ' ';
+	index_fetchcacheheader(msgno, fetchargs->headers);
     }
 
     if (fetchitems & FETCH_TEXT) {
@@ -1550,7 +1640,7 @@ int msgno;
 FILE **msgfile;
 {
     int i;
-    struct strlist *l;
+    struct strlist *l, *h;
     char *cacheitem;
     int cachelen;
     struct searchsub *s;
@@ -1597,6 +1687,7 @@ FILE **msgfile;
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bodystructure */
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body */
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip section */
+	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip cacheheaders */
 	cachelen = CACHE_ITEM_LEN(cacheitem);
 	    
 	for (l = searchargs->from; l; l = l->next) {
@@ -1647,6 +1738,12 @@ FILE **msgfile;
 	if (!*msgfile) {
 	    *msgfile = fopen(mailbox_message_fname(mailbox, UID(msgno)), "r");
 	    if (!*msgfile) return 0;
+	}
+
+	h = searchargs->header_name;
+	for (l = searchargs->header; l; (l = l->next), (h = h->next)) {
+	    if (!index_searchheader(h->s, l->s, *msgfile, mailbox->format,
+				    HEADER_SIZE(msgno))) return 0;
 	}
 
 	cacheitem = cache_base + CACHE_OFFSET(msgno);
@@ -1700,10 +1797,9 @@ char *cacheitem;
     int partsleft = 1;
     int subparts;
     int len, charset, encoding;
-
-    char buf[4096];
     char *p;
     int n;
+    int substrlen = strlen(substr);
     
     cacheitem += 4;
     while (partsleft--) {
@@ -1716,7 +1812,19 @@ char *cacheitem;
 		skipheader = 0;	/* Only skip top-level message header */
 	    }
 	    else {
-		;		/* XXX search header */
+		len = CACHE_ITEM_BIT32(cacheitem+4);
+		if (len > 0) {
+		    fseek(msgfile, CACHE_ITEM_BIT32(cacheitem), 0);
+		    p = index_readheader(msgfile, format, len);
+		    p = charset_decode1522(p);
+		    n = strlen(p) - substrlen + 1;
+		    while (n-- > 0) {
+			if (*substr == *p && !strncmp(substr, p, substrlen)) {
+			    return 1;
+			}
+			p++;
+		    }
+		}
 	    }
 	    cacheitem += 3*4;
 
@@ -1738,6 +1846,38 @@ char *cacheitem;
     return 0;
 }
 	    
+/*
+ * Search named header of a message for a substring
+ */
+static int
+index_searchheader(name, substr, msgfile, format, size)
+char *name;
+char *substr;
+FILE *msgfile;
+int format;
+int size;
+{
+    char *p;
+    static struct strlist header;
+    int n;
+    int substrlen = strlen(substr);
+
+    header.s = name;
+
+    rewind(msgfile);
+    p = index_readheader(msgfile, format, size);
+    index_pruneheader(p, &header, 0);
+    p = charset_decode1522(p);
+    n = strlen(p) - substrlen + 1;
+    while (n-- > 0) {
+	if (*substr == *p && !strncmp(substr, p, substrlen)) {
+	    return 1;
+	}
+	p++;
+    }
+    return 0;
+}
+
 /*
  * Helper function to set up arguments to append_copy()
  */
