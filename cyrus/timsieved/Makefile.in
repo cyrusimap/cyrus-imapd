@@ -1,5 +1,5 @@
 # Makefile.in - timsieved makefile
-# $Id: Makefile.in,v 1.15 2000/07/21 18:50:03 leg Exp $
+# $Id: Makefile.in,v 1.16 2001/02/19 17:54:43 leg Exp $
 # @configure_input@
 # 
 # Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
@@ -68,6 +68,7 @@ SERVICE=../master/service.o
 
 IMAP_LIBS = @IMAP_LIBS@
 IMAP_COM_ERR_LIBS = @IMAP_COM_ERR_LIBS@
+LIB_WRAP = @LIB_WRAP@
 LIBS = $(IMAP_COM_ERR_LIBS)
 DEPLIBS=../sieve/libsieve.a ../imap/libimap.a ../lib/libcyrus.a @DEPLIBS@
 
@@ -81,14 +82,14 @@ install:
 
 OBJS= actions.o lex.o mystring.o scripttest.o timsieved.o parser.o
 
-timsieved: $(OBJS) $(SERVIVE)
+timsieved: $(OBJS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o timsieved \
-	 $(SERVICE) $(OBJS) $(DEPLIBS) $(IMAP_LIBS) $(LIBS)
+	 $(SERVICE) $(OBJS) $(DEPLIBS) $(IMAP_LIBS) $(LIBS) $(LIB_WRAP)
 
-timsieved.pure: $(OBJS)
+timsieved.pure: $(OBJS) $(SERVICE)
 	$(PURIFY) $(PUREOPT) \
 	$(CC) $(LDFLAGS) -o timsieved.pure \
-	 $(SERVICE) $(OBJS) $(DEPLIBS) $(IMAP_LIBS) $(LIBS)
+	 $(SERVICE) $(OBJS) $(DEPLIBS) $(IMAP_LIBS) $(LIBS) $(LIB_WRAP)
 
 clean:
 	rm -f *.o *.a Makefile.bak makedepend.log

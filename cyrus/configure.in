@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.193 2001/02/07 21:46:56 leg Exp $
+dnl $Id: configure.in,v 1.194 2001/02/19 17:54:42 leg Exp $
 dnl
 
 
@@ -718,7 +718,7 @@ CMU_SOCKETS
 CMU_LIBWRAP
 CMU_UCDSNMP
 
-LIBS="$LIBS ${LIB_WRAP} ${LIB_SOCKET}"
+LIBS="$LIBS ${LIB_SOCKET}"
 
 # Figure out what directories we're linking against.
 # Lots of fun for the whole family.
