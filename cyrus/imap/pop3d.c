@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.144.2.16 2004/04/23 20:19:45 ken3 Exp $
+ * $Id: pop3d.c,v 1.144.2.17 2004/04/30 19:47:22 ken3 Exp $
  */
 #include <config.h>
 
@@ -187,41 +187,59 @@ static struct
     char *authid;
 } saslprops = {NULL,NULL,0,NULL};
 
-static struct sasl_callback mysasl_cb[] = {
-    { SASL_CB_GETOPT, &mysasl_config, NULL },
-    { SASL_CB_PROXY_POLICY, &mysasl_proxy_policy, (void*) &popd_proxyctx },
-    { SASL_CB_CANON_USER, &mysasl_canon_user, NULL },
-    { SASL_CB_LIST_END, NULL, NULL }
-};
-
 static int popd_canon_user(sasl_conn_t *conn, void *context,
 			   const char *user, unsigned ulen,
 			   unsigned flags, const char *user_realm,
 			   char *out, unsigned out_max, unsigned *out_ulen)
 {
     char userbuf[MAX_MAILBOX_NAME+1], *p;
+    size_t n;
+    int r;
 
-    if (!ulen) ulen = strlen(user);
-    memcpy(userbuf, user, ulen);
-    userbuf[ulen] = '\0';
+    if (config_getswitch(IMAPOPT_POPSUBFOLDERS)) {
+	/* make a working copy of the auth[z]id */
+	if (!ulen) ulen = strlen(user);
+	memcpy(userbuf, user, ulen);
+	userbuf[ulen] = '\0';
+	user = userbuf;
 
-    /* See if we're trying to access a subfolder */
-    if (p = strchr(userbuf, '+')) {
-	size_t n = strcspn(p, "@");
-	if (flags & SASL_CU_AUTHZID) {
-	    /* make a copy of the subfolder, but leave it with the authzid
-	       in case its used in the challenge/response calculatation */
-	    popd_subfolder = xstrndup(p, n);
-	}
-	if (flags & SASL_CU_AUTHID) {
-	    /* strip the subfolder from the authid */
+	/* See if we're trying to access a subfolder */
+	if (p = strchr(userbuf, '+')) {
+	    n = config_virtdomains ? strcspn(p, "@") : strlen(p);
+
+	    if (flags & SASL_CU_AUTHZID) {
+		/* make a copy of the subfolder */
+		if (popd_subfolder) free(popd_subfolder);
+		popd_subfolder = xstrndup(p, n);
+	    }
+
+	    /* strip the subfolder from the auth[z]id */
 	    memmove(p, p+n, strlen(p+n)+1);
 	    ulen -= n;
 	}
     }
 
-    return mysasl_canon_user(conn, context, userbuf, ulen, flags, user_realm,
-			     out, out_max, out_ulen);
+    r = mysasl_canon_user(conn, context, user, ulen, flags, user_realm,
+			  out, out_max, out_ulen);
+
+    if (!r && popd_subfolder && flags == SASL_CU_AUTHZID) {
+	/* If we're only doing the authzid, put back the subfolder
+	   in case its used in the challenge/response calculation */
+	n = strlen(popd_subfolder);
+	if (*out_ulen + n > out_max) {
+	    sasl_seterror(conn, 0, "buffer overflow while canonicalizing");
+	    r = SASL_BUFOVER;
+	}
+	else {
+	    p = (config_virtdomains && (p = strchr(out, '@'))) ?
+		p : out + *out_ulen;
+	    memmove(p+n, p, strlen(p)+1);
+	    memcpy(p, popd_subfolder, n);
+	    *out_ulen += n;
+	}
+    }
+
+    return r;
 }
 
 static int popd_proxy_policy(sasl_conn_t *conn,
@@ -235,9 +253,11 @@ static int popd_proxy_policy(sasl_conn_t *conn,
     char *p;
 
     /* See if we're trying to access a subfolder */
-    if (p = strchr(requested_user, '+')) {
+    if (config_getswitch(IMAPOPT_POPSUBFOLDERS) &&
+	(p = strchr(requested_user, '+'))) {
+	size_t n = config_virtdomains ? strcspn(p, "@") : strlen(p);
+
 	/* strip the subfolder from the authzid */
-	size_t n = strcspn(p, "@");
 	memmove(p, p+n, strlen(p+n)+1);
 	rlen -= n;
     }
@@ -245,6 +265,13 @@ static int popd_proxy_policy(sasl_conn_t *conn,
     return mysasl_proxy_policy(conn, context, requested_user, rlen,
 			       auth_identity, alen, def_realm, urlen, propctx);
 }
+
+static struct sasl_callback mysasl_cb[] = {
+    { SASL_CB_GETOPT, &mysasl_config, NULL },
+    { SASL_CB_PROXY_POLICY, &popd_proxy_policy, (void*) &popd_proxyctx },
+    { SASL_CB_CANON_USER, &popd_canon_user, NULL },
+    { SASL_CB_LIST_END, NULL, NULL }
+};
 
 static void popd_reset(void)
 {
@@ -342,18 +369,6 @@ int service_init(int argc __attribute__((unused)),
     signals_set_shutdown(&shut_down);
     signals_add_handlers();
     signal(SIGPIPE, SIG_IGN);
-
-    /* if we're supporting subfolders, use our wrapper callbacks */
-    if (config_getswitch(IMAPOPT_POPSUBFOLDERS)) {
-	sasl_callback_t *cb;
-
-	for (cb = mysasl_cb; cb->id != SASL_CB_LIST_END; cb++) {
-	    if (cb->id == SASL_CB_PROXY_POLICY)
-		cb->proc = &popd_proxy_policy;
-	    if (cb->id == SASL_CB_CANON_USER)
-		cb->proc = &popd_canon_user;
-	}
-    }
 
     /* load the SASL plugins */
     global_sasl_init(1, 1, mysasl_cb);
@@ -1454,8 +1469,20 @@ int openinbox(void)
 	    if(c) *c = '\0';
 	}
 
+	/* Make a working copy of userid in case we need to alter it */
+	strlcpy(userid, popd_userid, sizeof(userid));
+
+	if (popd_subfolder) {
+	    /* Add the subfolder back to the userid for proxying */
+	    size_t n = strlen(popd_subfolder);
+	    char *p = (config_virtdomains && (p = strchr(userid, '@'))) ?
+		p : userid + strlen(userid);
+	    memmove(p+n, p, strlen(p)+1);
+	    memcpy(p, popd_subfolder, n);
+	}
+
 	backend = backend_connect(NULL, server, &protocol[PROTOCOL_POP3],
-				  popd_userid, &statusline);
+				  userid, &statusline);
 
 	if (!backend) {
 	    syslog(LOG_ERR, "couldn't authenticate to backend server");
