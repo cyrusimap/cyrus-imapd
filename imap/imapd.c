@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.299 2001/02/23 22:01:48 leg Exp $ */
+/* $Id: imapd.c,v 1.300 2001/03/07 19:48:46 leg Exp $ */
 
 #include <config.h>
 
@@ -88,33 +88,34 @@
 
 #ifdef HAVE_SSL
 #include "tls.h"
-
-/* our tls connection, if any */
-static SSL *tls_conn = NULL;
 #endif /* HAVE_SSL */
 
 extern int optind;
 extern char *optarg;
 extern int errno;
 
-sasl_conn_t *imapd_saslconn; /* the sasl connection context */
-int imapd_starttls_done = 0; /* have we done a successful starttls yet? */
-
-char *imapd_userid;
-struct auth_state *imapd_authstate = 0;
-int imapd_userisadmin;
-struct mailbox *imapd_mailbox;
-int imapd_exists;
-
-static struct sockaddr_in imapd_localaddr, imapd_remoteaddr;
-static int imapd_haveaddr = 0;
-static char imapd_clienthost[250] = "[local]";
-
-struct protstream *imapd_out, *imapd_in;
-time_t imapd_logtime;
+/* global state */
 static char shutdownfilename[1024];
 
+/* per-user/session state */
+struct protstream *imapd_out, *imapd_in;
+static int imapd_haveaddr = 0;
+static char imapd_clienthost[250] = "[local]";
+static time_t imapd_logtime;
+char *imapd_userid;
+struct auth_state *imapd_authstate = 0;
+static int imapd_userisadmin;
+static sasl_conn_t *imapd_saslconn; /* the sasl connection context */
+static int imapd_starttls_done = 0; /* have we done a successful starttls? */
+#ifdef HAVE_SSL
+/* our tls connection, if any */
+static SSL *tls_conn = NULL;
+#endif /* HAVE_SSL */
+
+/* current sub-user state */
 static struct mailbox mboxstruct;
+static struct mailbox *imapd_mailbox;
+int imapd_exists;
 
 static const char *monthname[] = {
     "jan", "feb", "mar", "apr", "may", "jun",
@@ -408,6 +409,7 @@ int service_main(int argc, char **argv, char **envp)
     int timeout;
     sasl_security_properties_t *secprops = NULL;
     sasl_external_properties_t extprops;
+    struct sockaddr_in imapd_localaddr, imapd_remoteaddr;
 
     signals_poll();
 

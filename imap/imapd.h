@@ -1,5 +1,5 @@
 /* imapd.h -- Common state for IMAP daemon
- * $Id: imapd.h,v 1.44 2001/02/23 22:01:49 leg Exp $
+ * $Id: imapd.h,v 1.45 2001/03/07 19:48:47 leg Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -62,6 +62,9 @@ extern struct mailbox *imapd_mailbox;
 
 /* Number of messages in currently open mailbox */
 extern int imapd_exists;
+
+/* Name of client host */
+extern char imapd_clienthost[];
 
 /* List of strings, for fetch and search argument blocks */
 struct strlist {
@@ -246,7 +249,7 @@ extern int index_getstate(struct mailbox *mailbox);
 extern int index_checkstate(struct mailbox *mailbox, unsigned indexdate,
 			       unsigned seendate);
 
-extern int index_finduid(struct mailbox *mailbox, unsigned uid);
+extern int index_finduid(unsigned uid);
 
 extern mailbox_decideproc_t index_expungeuidlist;
 
