@@ -1,11 +1,34 @@
-<!-- $Id: changes.html,v 1.12 2001/02/19 19:34:22 leg Exp $ -->
+<!-- $Id: changes.html,v 1.13 2001/04/26 22:37:44 leg Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
 </HEAD><BODY>
 <H1>                   Changes to the Cyrus IMAP Server</H1>
 
-<h2>Changes to the cyrus IMAP Server since 2.0.11</h2>
+<h2>Changes to the Cyrus IMAP Server since 2.0.12</h2>
+<ul>
+<li> refactored code so less duplication
+
+<li> added alternate config file for partial virtual domain support
+
+<li> <tt>pop3d</tt> can now disable USER/PASS commands.
+
+<li> STARTTLS now accepts a SSLv23 hello but doesn't allow SSLv23 to
+be negotiated.
+
+<li> <tt>imtest</tt> no longer buffers to aid use as an automated
+layer.
+
+<li> <tt>master</tt> now supports maximum number of service processes
+via the "maxchild" modifier.
+
+<li> fixed a bug in the Sieve string lexer.
+
+<li> one <tt>imapd</tt> process can now service multiple clients in
+sequence, eliminating a large number of forks.
+</ul>
+
+<h2>Changes to the Cyrus IMAP Server since 2.0.11</h2>
 <ul>
 <li> portability fixes involving <tt>setrlimit()</tt></li>
 
@@ -19,7 +42,7 @@ The <tt>imaps</tt> port is unaffected by this change.</li>
 </ul>
 
 
-<h2>Changes to the cyrus IMAP Server since 2.0.9</h2>
+<h2>Changes to the Cyrus IMAP Server since 2.0.9</h2>
 <ul>
 <li> some small memory savings</li>
 
@@ -64,7 +87,7 @@ issues.</li>
 
 </ul>
 
-<h2>Changes to the cyrus IMAP Server since 2.0.8</h2>
+<h2>Changes to the Cyrus IMAP Server since 2.0.8</h2>
 <ul>
 <li> remembered to update this file
 
@@ -74,7 +97,7 @@ setquota fixed
 <li> portability fix with <tt>socklen_t</tt>
 </ul>
 
-<h2>Changes to the cyrus IMAP Server since 2.0.7</h2>
+<h2>Changes to the Cyrus IMAP Server since 2.0.7</h2>
 <ul>
 <li> preliminary implementation of the IDLE extension (Ken Murchison,
 <tt>ken@oceana.com</tt>).
@@ -98,7 +121,7 @@ interface to the perl code, but it still needs work.
 
 </ul>
 
-<h2>Changes to the cyrus IMAP Server since 2.0.6</h2>
+<h2>Changes to the Cyrus IMAP Server since 2.0.6</h2>
 <ul>
 <li> some number of random static variables eliminated, to save on
 memory footprint
@@ -132,7 +155,7 @@ usage message).
 <li> added a "make dist" target so i won't dread releases as much.
 </ul>
 
-<h2>Changes to the cyrus IMAP Server since 2.0.5</h2>
+<h2>Changes to the Cyrus IMAP Server since 2.0.5</h2>
 <ul>
 <li> APPEND now honors the \Seen flag.
 
@@ -177,7 +200,7 @@ and awesome implementations.
 </ul>
 
 
-<h2>Changes to the cyrus IMAP Server SINCE 2.0.4</h2>
+<h2>Changes to the Cyrus IMAP Server SINCE 2.0.4</h2>
 <ul>
 <li> Now should work with Berkeley DB 3.1, but does <b>not</b>
 auto-upgrade 3.0 databases (and, in fact, I haven't written any
@@ -195,7 +218,7 @@ and database structures.
 <li> Some non gcc compile fixes with structure initialization.
 </ul>
 
-<h2>Changes to the cyrus IMAP Server SINCE 2.0.3</h2>
+<h2>Changes to the Cyrus IMAP Server SINCE 2.0.3</h2>
 <ul>
 <li>fixed <tt>mbpath</tt> and <tt>ipurge</tt>. Thanks to Alain Turbide
 for the bug report.
@@ -1205,7 +1228,7 @@ restore tab before breaking out of loop.
 
 
 <P><HR>
-last modified: $Date: 2001/02/19 19:34:22 $
+last modified: $Date: 2001/04/26 22:37:44 $
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>
