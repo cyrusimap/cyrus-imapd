@@ -42,9 +42,8 @@
 #ifndef DUPLICATE_H
 #define DUPLICATE_H
 
-#include <db.h>
-
-extern DB_ENV *duplicate_dbenv;
+#define CONFIG_DB_DELIVER (&cyrusdb_db3)
+#define FNAME_DELIVERDB "/deliver.db"
 
 #define DUPLICATE_RECOVER 0x01
 
@@ -58,4 +57,3 @@ int duplicate_prune(int days);
 int duplicate_done(void);
 
 #endif /* DUPLICATE_H */
-

@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.72 2001/09/05 13:19:49 leg Exp $
+ * $Id: lmtpd.c,v 1.73 2001/09/07 18:31:58 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.72 2001/09/05 13:19:49 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.73 2001/09/07 18:31:58 ken3 Exp $";*/
 
 #include <config.h>
 
@@ -353,6 +353,8 @@ int service_main(int argc, char **argv, char **envp)
 /* called if 'service_init()' was called but not 'service_main()' */
 void service_abort(void)
 {
+    duplicate_done();
+
     mboxlist_close();
     mboxlist_done();
 }
@@ -1310,6 +1312,8 @@ void fatal(const char* s, int code)
 void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
+    duplicate_done();
+
     mboxlist_close();
     mboxlist_done();
 #ifdef HAVE_SSL

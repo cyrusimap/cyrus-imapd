@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to sieve and proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.18 2001/08/18 00:46:47 ken3 Exp $
+ * $Id: lmtpproxyd.c,v 1.19 2001/09/07 18:31:58 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpproxyd.c,v 1.18 2001/08/18 00:46:47 ken3 Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpproxyd.c,v 1.19 2001/09/07 18:31:58 ken3 Exp $";*/
 
 #include <config.h>
 
@@ -347,6 +347,8 @@ int service_main(int argc, char **argv, char **envp)
 /* called if 'service_init()' was called but not 'service_main()' */
 void service_abort(void)
 {
+    duplicate_done();
+
     mboxlist_close();
     mboxlist_done();
 }
@@ -1416,6 +1418,8 @@ void fatal(const char* s, int code)
 void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
+    duplicate_done();
+
     mboxlist_close();
     mboxlist_done();
 #ifdef HAVE_SSL
