@@ -43,17 +43,19 @@ define mgmt 1.3.6.1.2
 define mib2 [mgmt].1
 define mtamib [mib2].28
 
-define cmutree 1.3.6.1.4.1.3.2.2.2
+define cmutree 1.3.6.1.4.1.3.2.2.3
+define cmulmtp [cmutree].2
+define cmusieve [cmutree].3
 
 # 'C' means counter
 # 'auto' means just pick any number you want
 
-BASE [cmutree].7.1
+BASE [cmulmtp].1
 
 # Connections
 
-C,TOTAL_CONNECTIONS,"Count of the total number of connections since the beginning of time", auto
-C,ACTIVE_CONNECTIONS,"Count of the active number of connections", auto
+C,TOTAL_CONNECTIONS,"Count of the total number of connections since the beginning of time", 1
+C,ACTIVE_CONNECTIONS,"Count of the active number of connections", 2
 
 #
 # Authentication stats
@@ -61,10 +63,19 @@ C,ACTIVE_CONNECTIONS,"Count of the active number of connections", auto
 
 var AUTH
 
-BASE [cmutree].7.2.{AUTH}
+BASE [cmulmtp].2.{AUTH}
 
 C,AUTHENTICATION_YES,"Successful authentication of given mechanism",auto
 C,AUTHENTICATION_NO, "Failed authentication of given mechanism",   auto
+
+#
+# General information
+#
+
+BASE [cmulmtp].3
+
+S,SERVER_NAME_VERSION,"Name and version string for server",auto
+T,SERVER_UPTIME,"Amount of time server has been running",auto
 
 #
 # Message stats
@@ -85,7 +96,7 @@ C,mtaSuccessfulConvertedMessages,"Messages converted because of 8bit foo",10
 # Sieve stats
 #
 
-BASE [cmutree].7.4
+BASE [cmusieve].4
 
 C,SIEVE_MESSAGES_PROCESSED,"Number of messages processed by Sieve scripts",auto
 
@@ -99,11 +110,3 @@ C,SIEVE_VACATION_REPLIED,"vacation messages sent",auto
 C,SIEVE_VACATION_TOTAL  ,"vacation messages considered",auto
 
 
-#
-# General information
-#
-
-BASE [cmutree].7.3
-
-S,SERVER_NAME_VERSION,"Name and version string for server",auto
-T,SERVER_UPTIME,"Amount of time server has been running",auto
