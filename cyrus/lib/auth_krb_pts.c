@@ -1,5 +1,5 @@
 /* auth_krb_pts.c -- Kerberos authorization with AFS PTServer groups
- $Id: auth_krb_pts.c,v 1.39 2001/10/02 21:08:13 ken3 Exp $
+ $Id: auth_krb_pts.c,v 1.40 2001/11/27 02:25:02 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -233,7 +233,7 @@ char *auth_map_krbid(const char *real_aname,
  * Returns a pointer to a static buffer containing the canonical form
  * or NULL if 'identifier' is invalid.
  */
-char *auth_canonifyid(const char *identifier)
+char *auth_canonifyid(const char *identifier, size_t len)
 {
     static char retbuf[MAX_K_NAME_SZ+1];
     char aname[ANAME_SZ];
@@ -241,20 +241,33 @@ char *auth_canonifyid(const char *identifier)
     char realm[REALM_SZ];
     char lrealm[REALM_SZ];
     char krbhst[MAX_HSTNM];
+    char *canon_buf;
     char *p;
-    
-    if (strcasecmp(identifier, "anonymous") == 0) {
-        return "anonymous";
+
+    if(!len) len = strlen(identifier);
+
+    canon_buf = malloc(len + 1);
+    if(!canon_buf) return 0;
+    memcpy(canon_buf, identifier, len);
+    canon_buf[len] = '\0';
+   
+    if (strcasecmp(canon_buf, "anonymous") == 0) {
+	free(canon_buf);
+	return "anonymous";
     }
-    if (strcasecmp(identifier, "anybody") == 0 ||
-        strcasecmp(identifier, "anyone") == 0) {
-        return "anyone";
+    if (strcasecmp(canon_buf, "anybody") == 0 ||
+	strcasecmp(canon_buf, "anyone") == 0) {
+	free(canon_buf);
+	return "anyone";
     }
-    
+
     aname[0] = inst[0] = realm[0] = '\0';
-    if (kname_parse(aname, inst, realm, (char *) identifier) != 0) {
+    if (kname_parse(aname, inst, realm, canon_buf) != 0) {
+	free(canon_buf);
         return 0;
     }
+
+    free(canon_buf);
     
     /* Upcase realm name */
     for (p = realm; *p; p++) {
@@ -332,7 +345,7 @@ struct auth_state *auth_newstate(const char *identifier,
     struct iovec iov[10];
     int start, n;
 
-    identifier = auth_canonifyid(identifier);
+    identifier = auth_canonifyid(identifier, 0);
     if (!identifier) return 0;
 
     newstate = (struct auth_state *)xmalloc(sizeof(struct auth_state));

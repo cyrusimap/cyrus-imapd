@@ -1,7 +1,12 @@
-/* proc.c -- Server process registry
- $Id: proc.c,v 1.22 2001/11/27 02:24:59 ken3 Exp $
- 
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+/*
+ * Mar  8, 2000 by Hajimu UMEMOTO <ume@mahoroba.org>
+ * $Id: gai.h,v 1.2 2001/11/27 02:25:02 ken3 Exp $
+ *
+ * This module is besed on ssh-1.2.27-IPv6-1.5 written by
+ * KIKUCHI Takahiro <kick@kyoto.wide.ad.jp>
+ */
+/* 
+ * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -38,76 +43,57 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *
  */
-#include <config.h>
+/*
+ * fake library for ssh
+ *
+ * This file is included in getaddrinfo.c and getnameinfo.c.
+ * See getaddrinfo.c and getnameinfo.c.
+ */
 
-#include <stdlib.h>
-#include <stdio.h>
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#ifndef _GAI_H_
+#define _GAI_H_
+
+#ifndef NI_MAXHOST
+#define	NI_MAXHOST	1025
 #endif
-#include <syslog.h>
-#include <string.h>
+#ifndef NI_MAXSERV
+#define	NI_MAXSERV	32
+#endif
 
-#include "imapconf.h"
-#include "exitcodes.h"
-#include "xmalloc.h"
+/* for old netdb.h */
+#ifndef EAI_NODATA
+#define EAI_NODATA	1
+#define EAI_MEMORY	2
+#define EAI_FAMILY	5	/* ai_family not supported */
+#define EAI_SERVICE	9	/* servname not supported for ai_socktype */
+#endif
 
-#define FNAME_PROCDIR "/proc/"
+/* dummy value for old netdb.h */
+#ifndef AI_PASSIVE
+#define AI_PASSIVE	1
+#define AI_CANONNAME	2
+#define	AI_NUMERICHOST	4
+#define NI_NUMERICHOST	2
+#define NI_NAMEREQD	4
+#define NI_NUMERICSERV	8
+struct addrinfo {
+	int	ai_flags;	/* AI_PASSIVE, AI_CANONNAME */
+	int	ai_family;	/* PF_xxx */
+	int	ai_socktype;	/* SOCK_xxx */
+	int	ai_protocol;	/* 0 or IPPROTO_xxx for IPv4 and IPv6 */
+	size_t	ai_addrlen;	/* length of ai_addr */
+	char	*ai_canonname;	/* canonical name for hostname */
+	struct sockaddr *ai_addr;	/* binary address */
+	struct addrinfo *ai_next;	/* next structure in linked list */
+};
+#endif
 
-static char *procfname = 0;
-static FILE *procfile = 0;
+int	getaddrinfo(const char *, const char *,
+		    const struct addrinfo *, struct addrinfo **);
+int	getnameinfo(const struct sockaddr *, socklen_t, char *,
+		    size_t, char *, size_t, int);
+void	freeaddrinfo(struct addrinfo *);
+char	*gai_strerror(int);
 
-extern void setproctitle_init(int argc, char **argv, char **envp);
-extern void setproctitle(const char *fmt, ...);
-
-int proc_register(progname, clienthost, userid, mailbox)
-const char *progname;
-const char *clienthost;
-const char *userid;
-const char *mailbox;
-{
-    unsigned pid;
-
-    if (!procfname) {
-	pid = getpid();
-    
-	procfname = xmalloc(strlen(config_dir)+sizeof(FNAME_PROCDIR)+10);
-	sprintf(procfname, "%s%s%u", config_dir, FNAME_PROCDIR, pid);
-
-	procfile = fopen(procfname, "w+");
-	if (!procfile) {
-	    syslog(LOG_ERR, "IOERROR: creating %s: %m", procfname);
-	    fatal("can't write proc file", EC_IOERR);
-	}
-    }
-
-    rewind(procfile);
-    fprintf(procfile, "%s", clienthost);
-    if (userid) {
-	fprintf(procfile, "\t%s", userid);
-	if (mailbox) {
-	    fprintf(procfile, "\t%s", mailbox);
-	}
-    }
-    putc('\n', procfile);
-    fflush(procfile);
-    ftruncate(fileno(procfile), ftell(procfile));
-
-    setproctitle("%s: %s %s %s", progname, clienthost, 
-		 userid ? userid : "",
-		 mailbox ? mailbox : "");
-
-    return 0;
-}
-
-void proc_cleanup(void)
-{
-    if (procfname) {
-	fclose(procfile);
-	unlink(procfname);
-	free(procfname);
-	procfname = NULL;
-    }
-}
+#endif

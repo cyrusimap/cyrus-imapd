@@ -63,7 +63,6 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <sasl.h>
 #include <sys/un.h>
 
 #include "imapconf.h"

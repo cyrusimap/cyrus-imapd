@@ -39,14 +39,14 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: saslclient.c,v 1.7 2001/03/15 22:31:11 leg Exp $ */
+/* $Id: saslclient.c,v 1.8 2001/11/27 02:25:00 ken3 Exp $ */
 
 #include <config.h>
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sasl.h>
+#include <sasl/sasl.h>
 
 #include "xmalloc.h"
 
@@ -96,20 +96,12 @@ static int mysasl_getsecret_cb(sasl_conn_t *conn,
 {
     const char *pass;
     size_t len;
-    /*    struct backend *s = (struct backend *) context; */
-    
-    
 
     if (!conn || !result || id != SASL_CB_PASS) {
 	return SASL_BADPARAM;
     }
 
-    pass = (char *) context;
-    len = strlen(pass);
-
-    *result = (sasl_secret_t *) xmalloc(sizeof(sasl_secret_t) + len);
-    (*result)->len = len;
-    strcpy((*result)->data, pass);
+    *result = (sasl_secret_t *)context;
 
     return SASL_OK;
 }
@@ -147,10 +139,22 @@ sasl_callback_t *mysasl_callbacks(const char *username,
     }
 
     if (password) {
+	sasl_secret_t *secret;
+	size_t len = strlen(password);
+	
+	secret = (sasl_secret_t *)xmalloc(sizeof(sasl_secret_t) + len);
+	if(!secret) {
+	    free(ret);
+	    return NULL;
+	}
+
+	strcpy(secret->data,password);
+	secret->len = len;
+		
 	/* password */
 	ret[n].id = SASL_CB_PASS;
 	ret[n].proc = &mysasl_getsecret_cb;
-	ret[n].context = (char *) password;
+	ret[n].context = secret;
 	n++;
     }
     
@@ -159,4 +163,16 @@ sasl_callback_t *mysasl_callbacks(const char *username,
     ret[n].context = NULL;
 
     return ret;
+}
+
+void free_callbacks(sasl_callback_t *in) 
+{
+    int i;
+    if(!in) return;
+
+    for(i=0; in[i].id != SASL_CB_LIST_END; i++)
+	if(in[i].id == SASL_CB_PASS)
+	    free(in[i].context);
+    
+    free(in);
 }

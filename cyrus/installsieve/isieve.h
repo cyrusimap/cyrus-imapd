@@ -40,7 +40,7 @@
 #ifndef ISIEVE_H_
 #define ISIEVE_H_
 
-#include <sasl.h>
+#include <sasl/sasl.h>
 
 typedef struct iseive_s isieve_t;
 

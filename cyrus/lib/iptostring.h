@@ -1,6 +1,4 @@
-/* proc.c -- Server process registry
- $Id: proc.c,v 1.22 2001/11/27 02:24:59 ken3 Exp $
- 
+/* 
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -38,76 +36,20 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *
  */
-#include <config.h>
+
+/* $Id: iptostring.h,v 1.2 2001/11/27 02:25:03 ken3 Exp $ */
+
+#ifndef IPTOSTRING_H
+#define IPTOSTRING_H
 
 #include <stdlib.h>
-#include <stdio.h>
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif
-#include <syslog.h>
-#include <string.h>
+#include <netdb.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
-#include "imapconf.h"
-#include "exitcodes.h"
-#include "xmalloc.h"
+int iptostring(const struct sockaddr *addr, socklen_t addrlen,
+	       char *out, unsigned outlen);
 
-#define FNAME_PROCDIR "/proc/"
-
-static char *procfname = 0;
-static FILE *procfile = 0;
-
-extern void setproctitle_init(int argc, char **argv, char **envp);
-extern void setproctitle(const char *fmt, ...);
-
-int proc_register(progname, clienthost, userid, mailbox)
-const char *progname;
-const char *clienthost;
-const char *userid;
-const char *mailbox;
-{
-    unsigned pid;
-
-    if (!procfname) {
-	pid = getpid();
-    
-	procfname = xmalloc(strlen(config_dir)+sizeof(FNAME_PROCDIR)+10);
-	sprintf(procfname, "%s%s%u", config_dir, FNAME_PROCDIR, pid);
-
-	procfile = fopen(procfname, "w+");
-	if (!procfile) {
-	    syslog(LOG_ERR, "IOERROR: creating %s: %m", procfname);
-	    fatal("can't write proc file", EC_IOERR);
-	}
-    }
-
-    rewind(procfile);
-    fprintf(procfile, "%s", clienthost);
-    if (userid) {
-	fprintf(procfile, "\t%s", userid);
-	if (mailbox) {
-	    fprintf(procfile, "\t%s", mailbox);
-	}
-    }
-    putc('\n', procfile);
-    fflush(procfile);
-    ftruncate(fileno(procfile), ftell(procfile));
-
-    setproctitle("%s: %s %s %s", progname, clienthost, 
-		 userid ? userid : "",
-		 mailbox ? mailbox : "");
-
-    return 0;
-}
-
-void proc_cleanup(void)
-{
-    if (procfname) {
-	fclose(procfile);
-	unlink(procfname);
-	free(procfname);
-	procfname = NULL;
-    }
-}
+#endif /* IPTOSTRING_H */

@@ -1,6 +1,6 @@
 /* auth.h -- Site authorization module
-	$Id: auth.h,v 1.11 2001/10/02 21:08:11 ken3 Exp $
-
+ * $Id: auth.h,v 1.12 2001/11/27 02:25:02 ken3 Exp $
+ *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -48,9 +48,15 @@ extern const char *auth_method_desc;
 
 struct auth_state;
 
+/* auth_canonifyid: canonify the given identifier and return a pointer
+ *                  to a static buffer with the canonified ID, or NULL on
+ *                  failure */
+/* identifier: id to canonify */
+/* len: length of id, or 0 to do strlen(identifier) */
+extern char *auth_canonifyid(const char *identifier, size_t len);
+
 extern int auth_memberof(struct auth_state *auth_state, 
 			 const char *identifier);
-extern char *auth_canonifyid(const char *identifier);
 extern struct auth_state *auth_newstate(const char *identifier,
 					const char *cacheid);
 extern void auth_freestate(struct auth_state *auth_state);

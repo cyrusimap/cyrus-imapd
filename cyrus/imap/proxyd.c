@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.77 2001/11/19 21:32:44 leg Exp $ */
+/* $Id: proxyd.c,v 1.78 2001/11/27 02:24:59 ken3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -67,8 +67,8 @@
 #include <ctype.h>
 #include <errno.h>
 
-#include <sasl.h>
-#include <saslutil.h>
+#include <sasl/sasl.h>
+#include <sasl/saslutil.h>
 
 #include "prot.h"
 
@@ -81,6 +81,7 @@
 #include "version.h"
 #include "charset.h"
 #include "imparse.h"
+#include "iptostring.h"
 #include "mkgmtime.h"
 #include "exitcodes.h"
 #include "imap_err.h"
@@ -231,6 +232,17 @@ void printastring (const char *s);
 /* XXX fix when proto-izing mboxlist.c */
 static int mailboxdata(), listdata(), lsubdata();
 static void mstringdata(char *cmd, char *name, int matchlen, int maycreate);
+
+/* Enable the resetting of a sasl_conn_t */
+static int reset_saslconn(sasl_conn_t **conn);
+
+static struct 
+{
+    char *ipremoteport;
+    char *iplocalport;    
+    sasl_ssf_t ssf;
+    char *authid;
+} saslprops = {NULL,NULL,0,NULL};
 
 #define BUFGROWSIZE 100
 
@@ -511,13 +523,16 @@ static int mysasl_getauthline(struct protstream *p, char *tag,
 	if (!strncasecmp(str, "NO ", 3)) { return SASL_BADAUTH; }
 	return SASL_FAIL; /* huh? */
     } else if (str[0] == '+' && str[1] == ' ') {
+	unsigned buflen;
 	str += 2; /* jump past the "+ " */
 
-	*line = xmalloc(strlen(str) + 1);
+	buflen = strlen(str) + 1;
+
+	*line = xmalloc(buflen);
 	if (*str != '\r') {	/* decode it */
 	    int r;
 	    
-	    r = sasl_decode64(str, strlen(str), *line, linelen);
+	    r = sasl_decode64(str, strlen(str), *line, buflen, linelen);
 	    if (r != SASL_OK) {
 		return r;
 	    }
@@ -539,21 +554,21 @@ extern sasl_callback_t *mysasl_callbacks(const char *username,
 					 const char *authname,
 					 const char *realm,
 					 const char *password);
+void free_callbacks(sasl_callback_t *in);
 
 static int proxy_authenticate(struct backend *s)
 {
     int r;
     sasl_security_properties_t *secprops = NULL;
-    struct sockaddr_in *saddr_l = 
-	(struct sockaddr_in *) malloc(sizeof(struct sockaddr_in));
-    struct sockaddr_in *saddr_r = 
-	(struct sockaddr_in *) malloc(sizeof(struct sockaddr_in));
-    socklen_t addrsize = sizeof(struct sockaddr_in);
+    struct sockaddr_in saddr_l, saddr_r;
+    char remoteip[60], localip[60];
+    socklen_t addrsize;
     sasl_callback_t *cb;
     char mytag[128];
     char buf[2048];
     char optstr[128];
-    char *in, *out, *p;
+    char *in, *p;
+    const char *out;
     unsigned int inlen, outlen;
     const char *mechusing;
     unsigned b64len;
@@ -569,7 +584,23 @@ static int proxy_authenticate(struct backend *s)
 			  config_getstring("proxy_realm", NULL),
 			  pass);
 
-    r = sasl_client_new("imap", s->hostname, cb, 0, &s->saslconn);
+    /* set the IP addresses */
+    addrsize=sizeof(struct sockaddr_in);
+    if (getpeername(s->sock, (struct sockaddr *)&saddr_r, &addrsize) != 0)
+	return SASL_FAIL;
+    if(iptostring((struct sockaddr *)&saddr_r, sizeof(struct sockaddr_in),
+		  remoteip, 60) != 0)
+	return SASL_FAIL;
+  
+    addrsize=sizeof(struct sockaddr_in);
+    if (getsockname(s->sock, (struct sockaddr *)&saddr_l, &addrsize)!=0)
+	return SASL_FAIL;
+    if(iptostring((struct sockaddr *)&saddr_l, sizeof(struct sockaddr_in),
+		  localip, 60) != 0)
+	return SASL_FAIL;
+
+    r = sasl_client_new("imap", s->hostname, localip, remoteip,
+			cb, 0, &s->saslconn);
     if (r != SASL_OK) {
 	return r;
     }
@@ -579,21 +610,6 @@ static int proxy_authenticate(struct backend *s)
     if (r != SASL_OK) {
 	return r;
     }
-
-    /* set the IP addresses */
-    if (getpeername(s->sock, (struct sockaddr *)saddr_r, &addrsize) != 0)
-	return SASL_FAIL;
-    r = sasl_setprop(s->saslconn, SASL_IP_REMOTE, saddr_r);
-  
-    if (r == SASL_OK) {
-	addrsize=sizeof(struct sockaddr_in);
-	if (getsockname(s->sock, (struct sockaddr *)saddr_l,&addrsize)!=0)
-	    return SASL_FAIL;
-	r = sasl_setprop(s->saslconn, SASL_IP_LOCAL, saddr_l);
-    }
-    free(saddr_l);
-    free(saddr_r);
-    if (r != SASL_OK) return r;
 
     /* read the initial greeting */
     if (!prot_fgets(buf, sizeof(buf), s->in)) {
@@ -610,13 +626,9 @@ static int proxy_authenticate(struct backend *s)
 
     /* we now do the actual SASL exchange */
     r = sasl_client_start(s->saslconn, config_getstring(buf, "KERBEROS_V4"),
-			  NULL, NULL, &out, &outlen, &mechusing);
+			  NULL, NULL, NULL, &mechusing);
     if ((r != SASL_OK) && (r != SASL_CONTINUE)) {
 	return r;
-    }
-    if (out) {
-	/* IMAP can't deal with client-sends-first */
-	free(out);
     }
     proxyd_gentag(mytag);
     prot_printf(s->out, "%s AUTHENTICATE %s\r\n", mytag, mechusing);
@@ -637,13 +649,14 @@ static int proxy_authenticate(struct backend *s)
 	if (r != SASL_OK) {
 	    return r;
 	}
-	if (outlen > 0) { free(out); }
 
 	prot_write(s->out, buf, b64len);
 	prot_printf(s->out, "\r\n");
 
 	r = mysasl_getauthline(s->in, mytag, &in, &inlen);
     }
+
+    free_callbacks(cb);
 
     if (r == SASL_OK) {
 	prot_setsasl(s->in, s->saslconn);
@@ -888,35 +901,18 @@ static int acl_ok(const char *user, const char *auth_identity)
 
 /* should we allow users to proxy?  return SASL_OK if yes,
    SASL_BADAUTH otherwise */
-static int mysasl_authproc(void *context __attribute__((unused)),
-			   const char *auth_identity,
-			   const char *requested_user,
-			   const char **user,
-			   const char **errstr)
+static int mysasl_authproc(sasl_conn_t *conn,
+			   void *context,
+			   const char *requested_user, unsigned rlen,
+			   const char *auth_identity, unsigned alen,
+			   const char *def_realm, unsigned urlen,
+			   struct propctx *propctx)
 {
     const char *val;
-    char *canon_authuser, *canon_requser;
     char *realm;
-    static char replybuf[100];
-
-    canon_authuser = auth_canonifyid(auth_identity);
-    if (!canon_authuser) {
-	if (errstr) *errstr = "bad userid authenticated";
-	return SASL_BADAUTH;
-    }
-    canon_authuser = xstrdup(canon_authuser);
-
-    if (!requested_user) requested_user = auth_identity;
-    canon_requser = auth_canonifyid(requested_user);
-    if (!canon_requser) {
-	if (errstr) *errstr = "bad userid requested";
-	return SASL_BADAUTH;
-    }
-    canon_requser = xstrdup(canon_requser);
 
     /* check if remote realm */
-    realm = strchr(canon_authuser, '@');
-    if (realm) {
+    if ((realm = strchr(auth_identity, '@'))!=NULL) {
 	realm++;
 	val = config_getstring("loginrealms", "");
 	while (*val) {
@@ -929,58 +925,96 @@ static int mysasl_authproc(void *context __attribute__((unused)),
 	    while (*val && isspace((int) *val)) val++;
 	}
 	if (!*val) {
-	    snprintf(replybuf, 100, "cross-realm login %s denied", 
-		     canon_authuser);
-	    if (errstr) *errstr = replybuf;
+	    sasl_seterror(conn, 0, "cross-realm login %s denied",
+			  auth_identity);
 	    return SASL_BADAUTH;
 	}
     }
 
-    proxyd_authstate = auth_newstate(canon_authuser, NULL);
+    proxyd_authstate = auth_newstate(auth_identity, NULL);
 
     /* ok, is auth_identity an admin? */
     proxyd_userisadmin = authisa(proxyd_authstate, "imap", "admins");
 
-    if (strcmp(canon_authuser, canon_requser)) {
+    if (strcmp(auth_identity, requested_user)) {
 	/* we want to authenticate as a different user; we'll allow this
 	   if we're an admin or if we've allowed ACL proxy logins */
 	int use_acl = config_getswitch("loginuseacl", 0);
 
 	if (proxyd_userisadmin ||
-	    (use_acl && acl_ok(canon_requser, canon_authuser)) ||
+	    (use_acl && acl_ok(requested_user, auth_identity)) ||
 	    authisa(proxyd_authstate, "imap", "proxyservers")) {
 	    /* proxy ok! */
 
 	    proxyd_userisadmin = 0;	/* no longer admin */
 	    auth_freestate(proxyd_authstate);
 	    
-	    proxyd_authstate = auth_newstate(canon_requser, NULL);
+	    proxyd_authstate = auth_newstate(requested_user, NULL);
 	} else {
-	    if (errstr) *errstr = "user is not allowed to proxy";
+	    sasl_seterror(conn, 0, "user %s is not allowed to proxy", auth_identity);
 	    
-	    free(canon_authuser);
-	    free(canon_requser);
 	    auth_freestate(proxyd_authstate);
 	    
 	    return SASL_BADAUTH;
 	}
     }
 
-    free(canon_authuser);
-    *user = canon_requser;
-    if (errstr) *errstr = NULL;
+    return SASL_OK;
+}
+
+int mysasl_canon_user(sasl_conn_t *conn,
+		      void *context,
+		      const char *user, unsigned ulen,
+		      const char *authid, unsigned alen,
+		      unsigned flags,
+		      const char *user_realm,
+		      char *out_user,
+		      unsigned out_max, unsigned *out_ulen,
+		      char *out_authid,
+		      unsigned out_amax, unsigned *out_alen) 
+{
+    char *canon_authuser = NULL, *canon_requser = NULL;
+
+    canon_authuser = auth_canonifyid(authid, alen);
+    if (!canon_authuser) {
+	sasl_seterror(conn, 0, "bad userid authenticated");
+	return SASL_BADAUTH;
+    }
+    *out_alen = strlen(canon_authuser);
+    if(*out_alen > strlen(canon_authuser) > out_amax+1) {
+	sasl_seterror(conn, 0, "buffer overflow while canonicalizing");
+	return SASL_BUFOVER;
+    }
+    
+    strncpy(out_authid, canon_authuser, out_amax);
+    
+    if (!user) user = authid;
+    canon_requser = auth_canonifyid(user, ulen);
+    if (!canon_requser) {
+	sasl_seterror(conn, 0, "bad userid requested");
+	return SASL_BADAUTH;
+    }
+    *out_ulen = strlen(canon_requser);
+    if(*out_ulen > out_max+1) {
+	sasl_seterror(conn, 0, "buffer overflow while canonicalizing");
+	return SASL_BUFOVER;
+    }
+    
+    strncpy(out_user, canon_requser, out_max);
+
     return SASL_OK;
 }
 
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
     { SASL_CB_PROXY_POLICY, &mysasl_authproc, NULL },
+    { SASL_CB_CANON_USER, &mysasl_canon_user, NULL },   
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
 extern void setproctitle_init(int argc, char **argv, char **envp);
-extern int proc_register(char *progname, char *clienthost, 
-			 char *userid, char *mailbox);
+extern int proc_register(const char *progname, const char *clienthost, 
+			 const char *userid, const char *mailbox);
 extern void proc_cleanup(void);
 
 /*
@@ -1032,10 +1066,11 @@ int service_main(int argc, char **argv, char **envp)
     int opt;
     socklen_t salen;
     struct hostent *hp;
+    char localip[60], remoteip[60];
     int timeout;
     sasl_security_properties_t *secprops = NULL;
-    sasl_external_properties_t extprops;
-
+    sasl_ssf_t ssf;
+    
     signals_poll();
 
 #ifdef ID_SAVE_CMDLINE
@@ -1043,7 +1078,6 @@ int service_main(int argc, char **argv, char **envp)
     id_getcmdline(argc, argv);
 #endif
 
-    memset(&extprops, 0, sizeof(sasl_external_properties_t));
     while ((opt = getopt(argc, argv, "C:sp:")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file - handled by service::main() */
@@ -1058,13 +1092,12 @@ int service_main(int argc, char **argv, char **envp)
 	    }
 	    break;
 	case 'p': /* external protection */
-	    extprops.ssf = atoi(optarg);
+	    saslprops.ssf = ssf = atoi(optarg);
 	    break;
 	default:
 	    break;
 	}
     }
-
 
     proxyd_in = prot_new(0, 0);
     proxyd_out = prot_new(1, 1);
@@ -1087,7 +1120,12 @@ int service_main(int argc, char **argv, char **envp)
 	salen = sizeof(proxyd_localaddr);
 	if (getsockname(0, (struct sockaddr *)&proxyd_localaddr,
 			&salen) == 0) {
-	    proxyd_haveaddr = 1;
+	    if(iptostring((struct sockaddr *)&proxyd_remoteaddr,
+			  sizeof(struct sockaddr_in), remoteip, 60) == 0
+	       && iptostring((struct sockaddr *)&proxyd_localaddr,
+			     sizeof(struct sockaddr_in), localip, 60) == 0) {
+		proxyd_haveaddr = 1;
+	    }
 	}
     }
 
@@ -1095,15 +1133,21 @@ int service_main(int argc, char **argv, char **envp)
     /* Make a SASL connection and setup some properties for it */
     /* other params should be filled in */
     if (sasl_server_new("imap", config_servername, 
-			NULL, NULL, SASL_SECURITY_LAYER, 
+			NULL,
+			(proxyd_haveaddr ? localip : NULL),
+			(proxyd_haveaddr ? remoteip : NULL),
+			NULL, 0, 
 			&proxyd_saslconn) != SASL_OK) {
 	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL); 
     }
 
+    if(proxyd_haveaddr) {
+        saslprops.ipremoteport = xstrdup(remoteip);
+        saslprops.iplocalport = xstrdup(localip);
+    }    
+
     secprops = mysasl_secprops(SASL_SEC_NOPLAINTEXT);
     sasl_setprop(proxyd_saslconn, SASL_SEC_PROPS, secprops);
-    sasl_setprop(proxyd_saslconn, SASL_IP_REMOTE, &proxyd_remoteaddr);  
-    sasl_setprop(proxyd_saslconn, SASL_IP_LOCAL, &proxyd_localaddr);  
 
     proc_register("proxyd", proxyd_clienthost, (char *)0, (char *)0);
 
@@ -1900,7 +1944,7 @@ void cmd_login(char *tag, char *user, char *passwd)
     int plaintextloginpause;
     int r;
 
-    canon_user = auth_canonifyid(user);
+    canon_user = auth_canonifyid(user, 0);
 
     /* possibly disallow login */
     if ((proxyd_starttls_done == 0) &&
@@ -1940,8 +1984,7 @@ void cmd_login(char *tag, char *user, char *passwd)
 				 canon_user,
 				 strlen(canon_user),
 				 passwd,
-				 strlen(passwd),
-				 (const char **) &reply))!=SASL_OK) {
+				 strlen(passwd)))!=SASL_OK) {
 	const char *errorstring = sasl_errstring(r, NULL, NULL);
 	if (reply) {
 	    syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
@@ -2012,33 +2055,45 @@ void cmd_authenticate(char *tag, char *authtype)
     static struct buf clientin;
     int clientinlen=0;
     
-    char *serverout;
+    const char *serverout;
     unsigned int serveroutlen;
-    const char *errstr;
     
     const char *errorstring = NULL;
 
-    int *ssfp;
+    const int *ssfp;
     char *ssfmsg=NULL;
 
     int r;
 
     sasl_result = sasl_server_start(proxyd_saslconn, authtype,
 				    NULL, 0,
-				    &serverout, &serveroutlen,
-				    &errstr);    
+				    &serverout, &serveroutlen);    
 
     /* sasl_server_start will return SASL_OK or SASL_CONTINUE on success */
 
     while (sasl_result == SASL_CONTINUE)
     {
+      char c;
+	
+
       /* print the message to the user */
       printauthready(proxyd_out, serveroutlen, (unsigned char *)serverout);
-      free(serverout);
+
+      c = prot_getc(proxyd_in);
+      if(c == '*') {
+         eatline(proxyd_in,c);
+         prot_printf(proxyd_out,
+                     "%s NO Client canceled authentication\r\n", tag);
+         reset_saslconn(&proxyd_saslconn);
+         return;
+      } else {
+         prot_ungetc(c, proxyd_in);
+      }
 
       /* get string from user */
       clientinlen = getbase64string(proxyd_in, &clientin);
       if (clientinlen == -1) {
+	reset_saslconn(&proxyd_saslconn);
 	prot_printf(proxyd_out, "%s BAD Invalid base64 string\r\n", tag);
 	return;
       }
@@ -2046,8 +2101,7 @@ void cmd_authenticate(char *tag, char *authtype)
       sasl_result = sasl_server_step(proxyd_saslconn,
 				     clientin.s,
 				     clientinlen,
-				     &serverout, &serveroutlen,
-				     &errstr);
+				     &serverout, &serveroutlen);
     }
 
 
@@ -2058,15 +2112,11 @@ void cmd_authenticate(char *tag, char *authtype)
 	errorstring = sasl_errstring(sasl_result, NULL, NULL);
       
 	syslog(LOG_NOTICE, "badlogin: %s %s %s",
-	       proxyd_clienthost, authtype, errorstring);
-	
-	if (errstr) {
-	    syslog(LOG_NOTICE, "badlogin: %s %s %s",
-		   proxyd_clienthost, authtype, errstr);
-	}
+	       proxyd_clienthost, authtype, sasl_errdetail(proxyd_saslconn));
 	
 	sleep(3);
-	
+
+	reset_saslconn(&proxyd_saslconn);
 	if (errorstring) {
 	    prot_printf(proxyd_out, "%s NO %s\r\n", tag, errorstring);
 	} else {
@@ -2081,14 +2131,16 @@ void cmd_authenticate(char *tag, char *authtype)
     /* get the userid from SASL --- already canonicalized from
      * mysasl_authproc()
      */
+    /* FIXME / XXX: proxyd_userid is *not* const */
     sasl_result = sasl_getprop(proxyd_saslconn, SASL_USERNAME,
-			     (void **) &proxyd_userid);
+			     (const void **) &proxyd_userid);
     if (sasl_result!=SASL_OK)
     {
 	prot_printf(proxyd_out, "%s NO weird SASL error %d SASL_USERNAME\r\n", 
 		    tag, sasl_result);
 	syslog(LOG_ERR, "weird SASL error %d getting SASL_USERNAME", 
 	       sasl_result);
+	reset_saslconn(&proxyd_saslconn);
 	return;
     }
 
@@ -2097,7 +2149,7 @@ void cmd_authenticate(char *tag, char *authtype)
     syslog(LOG_NOTICE, "login: %s %s %s %s", proxyd_clienthost, proxyd_userid,
 	   authtype, "User logged in");
 
-    sasl_getprop(proxyd_saslconn, SASL_SSF, (void **) &ssfp);
+    sasl_getprop(proxyd_saslconn, SASL_SSF, (const void **) &ssfp);
 
     if (proxyd_starttls_done) {
 	switch(*ssfp) {
@@ -2540,7 +2592,7 @@ char idle_simulate(char *tag, int idle_period, struct buf *arg)
  */
 void cmd_capability(char *tag)
 {
-    char *sasllist; /* the list of SASL mechanisms */
+    const char *sasllist; /* the list of SASL mechanisms */
     unsigned mechcount;
 
     if (backend_current) {
@@ -2568,7 +2620,6 @@ void cmd_capability(char *tag)
 		      &sasllist,
 		      NULL, &mechcount) == SASL_OK && mechcount > 0) {
 	prot_printf(proxyd_out, " %s", sasllist);      
-	free(sasllist);
     } else {
 	/* else don't show anything */
     }
@@ -3732,7 +3783,7 @@ void cmd_listrights(char *tag, char *name, char *identifier)
     }
 
     if (!r) {
-	canon_identifier = auth_canonifyid(identifier);
+	canon_identifier = auth_canonifyid(identifier, 0);
 	if (canon_identifier) canonidlen = strlen(canon_identifier);
 
 	if (!canon_identifier) {
@@ -3939,11 +3990,11 @@ void cmd_starttls(char *tag, int imaps)
 {
     int result;
     int *layerp;
-    sasl_external_properties_t external;
-
-
+    sasl_ssf_t ssf;
+    char *auth_id;
+    
     /* SASL and openssl have different ideas about whether ssf is signed */
-    layerp = (int *) &(external.ssf);
+    layerp = (int *) &(ssf);
 
     if (proxyd_starttls_done == 1)
     {
@@ -3982,7 +4033,7 @@ void cmd_starttls(char *tag, int imaps)
     result=tls_start_servertls(0, /* read */
 			       1, /* write */
 			       layerp,
-			       &(external.auth_id),
+			       &auth_id,
 			       &tls_conn);
 
     /* if error */
@@ -3999,11 +4050,22 @@ void cmd_starttls(char *tag, int imaps)
     }
 
     /* tell SASL about the negotiated layer */
-    result = sasl_setprop(proxyd_saslconn, SASL_SSF_EXTERNAL, &external);
-
+    result = sasl_setprop(proxyd_saslconn, SASL_SSF_EXTERNAL, &ssf);
     if (result != SASL_OK) {
 	fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
     }
+    saslprops.ssf = ssf;
+
+    result = sasl_setprop(proxyd_saslconn, SASL_AUTH_EXTERNAL, auth_id);
+    if (result != SASL_OK) {
+       fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
+    }
+    if(saslprops.authid) {
+	free(saslprops.authid);
+	saslprops.authid = NULL;
+    }
+    if(auth_id)
+        saslprops.authid = xstrdup(auth_id);
 
     /* tell the prot layer about our new layers */
     prot_settls(proxyd_in, tls_conn);
@@ -4346,4 +4408,48 @@ void* rock;
 {
     mstringdata("LSUB", name, matchlen, maycreate);
     return 0;
+}
+
+/* Reset the given sasl_conn_t to a sane state */
+static int reset_saslconn(sasl_conn_t **conn) 
+{
+    int ret;
+    sasl_security_properties_t *secprops = NULL;
+
+    sasl_dispose(conn);
+    /* do initialization typical of service_main */
+    ret = sasl_server_new("imap", config_servername,
+                         NULL, NULL, NULL,
+                         NULL, 0, conn);
+    if(ret != SASL_OK) return ret;
+
+    if(saslprops.ipremoteport)
+       ret = sasl_setprop(*conn, SASL_IPREMOTEPORT,
+                          saslprops.ipremoteport);
+    if(ret != SASL_OK) return ret;
+    
+    if(saslprops.iplocalport)
+       ret = sasl_setprop(*conn, SASL_IPLOCALPORT,
+                          saslprops.iplocalport);
+    if(ret != SASL_OK) return ret;
+    
+    secprops = mysasl_secprops(SASL_SEC_NOPLAINTEXT);
+    ret = sasl_setprop(*conn, SASL_SEC_PROPS, secprops);
+    if(ret != SASL_OK) return ret;
+    /* end of service_main initialization excepting SSF */
+
+    /* If we have TLS/SSL info, set it */
+    if(saslprops.ssf) {
+       ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &saslprops.ssf);
+    }
+    if(ret != SASL_OK) return ret;
+
+
+    if(saslprops.authid) {
+       ret = sasl_setprop(*conn, SASL_AUTH_EXTERNAL, saslprops.authid);
+       if(ret != SASL_OK) return ret;
+    }
+    /* End TLS/SSL Info */
+
+    return SASL_OK;
 }

@@ -8,7 +8,7 @@
  *
  */
 /* 
- $Id: acl_afs.c,v 1.20 2000/12/18 04:53:42 leg Exp $
+ $Id: acl_afs.c,v 1.21 2001/11/27 02:25:02 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -124,7 +124,7 @@ void *canonrock;
 
     /* Convert 'identifier' into canonical form */
     if (*identifier == '-') {
-	char *canonid = auth_canonifyid(identifier+1);
+	char *canonid = auth_canonifyid(identifier+1, 0);
 	if (!canonid) {
 	    return -1;
 	}
@@ -137,7 +137,7 @@ void *canonrock;
 	}
     }
     else {
-	identifier = auth_canonifyid(identifier);
+	identifier = auth_canonifyid(identifier, 0);
 	if (!identifier) {
 	    return -1;
 	}

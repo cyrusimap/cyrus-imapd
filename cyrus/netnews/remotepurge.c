@@ -1,7 +1,6 @@
 /*
  * Remotely purge old/too big articles
  */
-
 /*
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -68,9 +67,6 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <syslog.h>
-
-#include <sasl.h>
-#include <saslutil.h>
 
 #include <pwd.h>
 

@@ -1,7 +1,12 @@
-/* proc.c -- Server process registry
- $Id: proc.c,v 1.22 2001/11/27 02:24:59 ken3 Exp $
- 
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+/*
+ * Mar  8, 2000 by Hajimu UMEMOTO <ume@mahoroba.org>
+ * $Id: getnameinfo.c,v 1.2 2001/11/27 02:25:02 ken3 Exp $
+ *
+ * This module is besed on ssh-1.2.27-IPv6-1.5 written by
+ * KIKUCHI Takahiro <kick@kyoto.wide.ad.jp>
+ */
+/* 
+ * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -38,76 +43,63 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *
  */
-#include <config.h>
+/*
+ * fake library for ssh
+ *
+ * This file includes getnameinfo().
+ * These funtions are defined in rfc2133.
+ *
+ * But these functions are not implemented correctly. The minimum subset
+ * is implemented for ssh use only. For exapmle, this routine assumes
+ * that ai_family is AF_INET. Don't use it for another purpose.
+ * 
+ * In the case not using 'configure --enable-ipv6', this getnameinfo.c
+ * will be used if you have broken getnameinfo or no getnameinfo.
+ */
 
-#include <stdlib.h>
+#include "config.h"
+#include <arpa/inet.h>
 #include <stdio.h>
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif
-#include <syslog.h>
 #include <string.h>
 
-#include "imapconf.h"
-#include "exitcodes.h"
-#include "xmalloc.h"
-
-#define FNAME_PROCDIR "/proc/"
-
-static char *procfname = 0;
-static FILE *procfile = 0;
-
-extern void setproctitle_init(int argc, char **argv, char **envp);
-extern void setproctitle(const char *fmt, ...);
-
-int proc_register(progname, clienthost, userid, mailbox)
-const char *progname;
-const char *clienthost;
-const char *userid;
-const char *mailbox;
+int
+getnameinfo(const struct sockaddr *sa, socklen_t salen __attribute__((unused)),
+	    char *host, size_t hostlen, char *serv, size_t servlen, int flags)
 {
-    unsigned pid;
-
-    if (!procfname) {
-	pid = getpid();
+    struct sockaddr_in *sin = (struct sockaddr_in *)sa;
+    struct hostent *hp;
+    char tmpserv[16];
+  
+    if (serv) {
+	sprintf(tmpserv, "%d", ntohs(sin->sin_port));
+	if (strlen(tmpserv) > servlen)
+	    return EAI_MEMORY;
+	else
+	    strcpy(serv, tmpserv);
+    }
+    if (host) {
+	if (flags & NI_NUMERICHOST) {
+	    if (strlen(inet_ntoa(sin->sin_addr)) >= hostlen)
+		return EAI_MEMORY;
+	    else {
+		strcpy(host, inet_ntoa(sin->sin_addr));
+		return 0;
+	    }
+	} else {
+	    hp = gethostbyaddr((char *)&sin->sin_addr,
+			       sizeof(struct in_addr), AF_INET);
+	    if (hp)
+		if (strlen(hp->h_name) >= hostlen)
+		    return EAI_MEMORY;
+		else {
+		    strcpy(host, hp->h_name);
+		    return 0;
+		}
+	    else
+		return EAI_NODATA;
+	}
+    }
     
-	procfname = xmalloc(strlen(config_dir)+sizeof(FNAME_PROCDIR)+10);
-	sprintf(procfname, "%s%s%u", config_dir, FNAME_PROCDIR, pid);
-
-	procfile = fopen(procfname, "w+");
-	if (!procfile) {
-	    syslog(LOG_ERR, "IOERROR: creating %s: %m", procfname);
-	    fatal("can't write proc file", EC_IOERR);
-	}
-    }
-
-    rewind(procfile);
-    fprintf(procfile, "%s", clienthost);
-    if (userid) {
-	fprintf(procfile, "\t%s", userid);
-	if (mailbox) {
-	    fprintf(procfile, "\t%s", mailbox);
-	}
-    }
-    putc('\n', procfile);
-    fflush(procfile);
-    ftruncate(fileno(procfile), ftell(procfile));
-
-    setproctitle("%s: %s %s %s", progname, clienthost, 
-		 userid ? userid : "",
-		 mailbox ? mailbox : "");
-
     return 0;
-}
-
-void proc_cleanup(void)
-{
-    if (procfname) {
-	fclose(procfile);
-	unlink(procfname);
-	free(procfname);
-	procfname = NULL;
-    }
 }

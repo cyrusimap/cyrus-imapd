@@ -44,6 +44,7 @@
 #include <config.h>
 #endif
 
+#include <stdlib.h>
 #include "imapconf.h"
 #include "xmalloc.h"
 #include "prot.h"

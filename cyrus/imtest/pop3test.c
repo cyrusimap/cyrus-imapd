@@ -1,6 +1,6 @@
-/* imtest.c -- imap test client
+/* pop3test.c -- pop3 test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.64 2001/11/27 02:25:00 ken3 Exp $
+ * $Id: pop3test.c,v 1.2 2001/11/27 02:25:00 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -75,6 +75,14 @@
 
 static SSL_CTX *tls_ctx = NULL;
 static SSL *tls_conn = NULL;
+
+#else
+#include <sasl/md5global.h>
+#include <sasl/md5.h>
+
+#define MD5_Init _sasl_MD5Init
+#define MD5_Update _sasl_MD5Update
+#define MD5_Final _sasl_MD5Final
 
 #endif /* HAVE_SSL */
 
@@ -634,7 +642,7 @@ static int init_sasl(char *serverFQDN, int port, int minssf, int maxssf)
   
 
   /* client new connection */
-  saslresult=sasl_client_new("imap",
+  saslresult=sasl_client_new("pop3",
 			     serverFQDN,
 			     localip,
 			     remoteip,
@@ -668,8 +676,8 @@ imt_stat getauthline(char **line, int *linelen)
   if (str == NULL) imtest_fatal("prot layer failure");
   printf("S: %s",str);
 
-  if (!strncasecmp(str, "A01 OK ", 7)) { return STAT_OK; }
-  if (!strncasecmp(str, "A01 NO ", 7)) { return STAT_NO; }
+  if (!strncasecmp(str, "+OK ", 4)) { return STAT_OK; }
+  if (!strncasecmp(str, "-ERR ", 5)) { return STAT_NO; }
 
   str += 2; /* jump past the "+ " */
 
@@ -790,36 +798,87 @@ static int waitfor(char *tag)
     return 0;
 }
 
-static int auth_login(void)
+static int auth_user(void)
 {
   char str[1024];
-  /* we need username and password to do "login" */
+  /* we need username and password to do USER/PASS */
   char *username;
   unsigned int userlen;
   char *pass;
   unsigned int passlen;
-  char *tag = "L01 ";
 
   interaction(SASL_CB_AUTHNAME,NULL,"Authname",&username,&userlen);
   interaction(SASL_CB_PASS,NULL,"Password",&pass,&passlen);
 
-  printf("C: %sLOGIN %s {%d}\r\n", tag, username, passlen);
-  prot_printf(pout,"%sLOGIN %s {%d}\r\n", tag, username, passlen);
+  printf("C: USER %s\r\n", username);
+  prot_printf(pout,"USER %s\r\n", username);
   prot_flush(pout);
 
-  waitfor("+");
-  printf("C: <omitted>\r\n");
-  prot_printf(pout,"%s\r\n",pass);
+  if(prot_fgets(str, 1024, pin) == NULL) {
+      imtest_fatal("prot layer failure");
+  }
+
+  printf("S: %s", str);
+
+  if (strncasecmp(str, "+OK ", 4)) return IMTEST_FAIL;
+
+  printf("C: PASS <omitted>\r\n");
+  prot_printf(pout,"PASS %s\r\n",pass);
   prot_flush(pout);
 
-  do {
-      if (prot_fgets(str,sizeof(str),pin) == NULL) {
-	  imtest_fatal("prot layer failure");
-      }
-      printf("%s", str);
-  } while (strncmp(str, tag, strlen(tag)));
+  if(prot_fgets(str, 1024, pin) == NULL) {
+      imtest_fatal("prot layer failure");
+  }
 
-  if (!strncasecmp(str + 4, "OK", 2)) {
+  if (!strncasecmp(str, "+OK ", 4)) {
+      return IMTEST_OK;
+  } else {
+      return IMTEST_FAIL;
+  }
+}
+
+static int auth_apop(char *apop_chal)
+{
+  char str[1024];
+  /* we need username and password to do "APOP" */
+  char *username;
+  unsigned int userlen;
+  char *pass;
+  unsigned int passlen;
+  int i;
+  MD5_CTX ctx;
+  unsigned char digest[16];
+  char digeststr[32];
+
+  if(!apop_chal) {
+      prot_printf(pout, "QUIT\r\n");
+      printf("C: QUIT\r\n");
+      imtest_fatal("[Server does not support APOP]\n");
+  }
+
+  interaction(SASL_CB_AUTHNAME,NULL,"Authname",&username,&userlen);
+  interaction(SASL_CB_PASS,NULL,"Password",&pass,&passlen);
+
+  MD5_Init(&ctx);
+  MD5_Update(&ctx,apop_chal,strlen(apop_chal));
+  MD5_Update(&ctx,pass,passlen);
+  MD5_Final(digest, &ctx);
+
+  /* convert digest from binary to ASCII hex */
+  for (i = 0; i < 16; i++)
+      sprintf(digeststr + (i*2), "%02x", digest[i]);
+
+  printf("C: APOP %s %s\r\n", username,digeststr);
+  prot_printf(pout,"APOP %s %s\r\n", username,digeststr);
+  prot_flush(pout);
+
+  if(prot_fgets(str, 1024, pin) == NULL) {
+      imtest_fatal("prot layer failure");
+  }
+
+  printf("S: %s", str);
+
+  if (!strncasecmp(str, "+OK ", 4)) {
       return IMTEST_OK;
   } else {
       return IMTEST_FAIL;
@@ -857,9 +916,9 @@ int auth_sasl(char *mechlist)
       return saslresult;
   }
 
-  prot_printf(pout,"A01 AUTHENTICATE %s\r\n",mechusing);
+  prot_printf(pout,"AUTH %s\r\n",mechusing);
   prot_flush(pout);
-  printf("C: A01 AUTHENTICATE %s\r\n", mechusing);
+  printf("C: AUTH %s\r\n", mechusing);
 
   inlen = 0;
   status = getauthline(&in, &inlen);
@@ -939,7 +998,7 @@ int init_net(char *serverFQDN, int port)
 }
 
 /***********************
- * Parse a mech list of the form: ... AUTH=foo AUTH=bar ...
+ * Parse a mech list of the form: ... SASL foo bar ...
  *
  * Return: string with mechs seperated by spaces
  *
@@ -954,32 +1013,22 @@ static char *parsemechlist(char *str)
 
   strcpy(ret,"");
 
-  while ((tmp=strstr(str,"AUTH="))!=NULL)
+  if ((tmp=strstr(str,"SASL "))!=NULL)
   {
     char *end=tmp+5;
     tmp+=5;
 
-    while(((*end)!=' ') && ((*end)!='\0'))
+    while(((*end)!='\n') && ((*end)!='\0'))
       end++;
 
     (*end)='\0';
 
-    /* add entry to list */
-    if (num>0)
-      strcat(ret," ");
-    strcat(ret, tmp);
-    num++;
-
-    /* reset the string */
-    str=end+1;
-
+    strcpy(ret, tmp);
   }
 
   return ret;
 }
 
-#define CAPATAG "C01"
-#define CAPABILITY "C01 CAPABILITY\r\n"
 
 static char *ask_capability(int *supports_starttls)
 {
@@ -987,107 +1036,30 @@ static char *ask_capability(int *supports_starttls)
   char *ret;
 
   /* request capabilities of server */
-  prot_printf(pout, CAPATAG " CAPABILITY\r\n");
+  prot_printf(pout, "CAPA\r\n");
   prot_flush(pout);
 
-  printf("C: %s", CAPABILITY);
+  printf("C: %s", "CAPA\r\n");
+
+  *supports_starttls=0;
 
   do { /* look for the * CAPABILITY response */
       if (prot_fgets(str,sizeof(str),pin) == NULL) {
 	  imtest_fatal("prot layer failure");
       }
       printf("S: %s", str);
-  } while (strncasecmp(str, "* CAPABILITY", 12));
-
-  /* check for starttls */
-  if (strstr(str,"STARTTLS")!=NULL)
-    *supports_starttls=1;
-  else
-    *supports_starttls=0;
-
-  ret=parsemechlist(str);
-
-  do { /* look for TAG */
-      if (prot_fgets(str, sizeof(str), pin) == NULL) {
-	  imtest_fatal("prot layer failure");
+      if (!strncasecmp(str,"SASL ",5)) {
+	  ret=parsemechlist(str);
       }
- 
-      printf("S: %s",str);
-  } while (strncmp(str, CAPATAG, strlen(CAPATAG)));
+      if (!strncasecmp(str,"STLS",4)) {
+	  *supports_starttls=1;
+      }
+  } while (strncasecmp(str, ".", 1));
 
   return ret;
 }
 
-#define HEADERS "Date: Mon, 7 Feb 1994 21:52:25 -0800 (PST)\r\n \
-From: Fred Foobar <foobar@Blurdybloop.COM>\r\n \
-Subject: afternoon meeting\r\n \
-To: mooch@owatagu.siam.edu\r\n \
-Message-Id: <B27397-0100000@Blurdybloop.COM>\r\n \
-MIME-Version: 1.0\r\n \
-Content-Type: TEXT/PLAIN; CHARSET=US-ASCII\r\n\r\n"
-
-static int append_msg(char *mbox, int size)
-{
-  int lup;
-
-  prot_printf(pout,"A003 APPEND %s (\\Seen) {%u}\r\n",mbox,size+strlen(HEADERS));
-  /* do normal header foo */
-  prot_printf(pout,HEADERS);
-
-  for (lup=0;lup<size/10;lup++)
-    prot_printf(pout,"0123456789");
-  prot_printf(pout,"\r\n");
-
-  prot_flush(pout);
-
-  waitfor("A003");
-
-  return IMTEST_OK;
-}
-
-/**************
- *
- * This tests throughput of IMAP server
- *
- * Steps:
- *  Creat mailbox
- *  Append message of 200 bytes, 2000 bytes, 20k, 200k, 2M
- *  Delete mailbox
- *  
- *************/
-
-
-static void send_recv_test(void)
-{
-  char *mboxname="inbox.imtest";
-  time_t start, end;
-  int lup;
-
-  start=time(NULL);
-
-  for (lup=0;lup<10;lup++)
-  {
-    prot_printf(pout,"C01 CREATE %s\r\n",mboxname);
-    prot_flush(pout);  
-    waitfor("C01");
-    
-    append_msg(mboxname,200);
-    append_msg(mboxname,2000);
-    append_msg(mboxname,20000);
-    append_msg(mboxname,200000);
-    append_msg(mboxname,2000000);
-
-    prot_printf(pout,"D01 DELETE %s\r\n",mboxname);
-    prot_flush(pout);  
-    waitfor("D01");
-  }
-
-  end=time(NULL);
-
-  printf("took %ld seconds\n", end - start);
-}
-
-#define LOGOUT "L01 LOGOUT\r\n"
+#define LOGOUT "QUIT"
 
 void interactive(char *filename)
 {
@@ -1203,13 +1175,12 @@ void usage(void)
 {
   printf("Usage: imtest [options] hostname\n");
   printf("  -p port  : port to use\n");
-  printf("  -z       : timing test\n");
   printf("  -k #     : minimum protection layer required\n");
   printf("  -l #     : max protection layer (0=none; 1=integrity; etc)\n");
   printf("  -u user  : authorization name to use\n");
   printf("  -a user  : authentication name to use\n");
   printf("  -v       : verbose\n");
-  printf("  -m mech  : SASL mechanism to use (\"login\" for LOGIN)\n");
+  printf("  -m mech  : SASL mechanism to use (\"user\" for USER/PASS, \"apop\" for APOP)\n");
   printf("  -f file  : pipe file into connection after authentication\n");
   printf("  -r realm : realm\n");
 #ifdef HAVE_SSL
@@ -1238,12 +1209,14 @@ int main(int argc, char **argv)
   int errflg = 0;
 
   char *tls_keyfile="";
-  char *port = "imap";
+  char *port = "pop3";
   struct servent *serv;
   int servport;
   int run_stress_test=0;
   int dotls=0;
   int server_supports_tls;
+  char str[1024], *start, *cp;
+  char *apop_chal=NULL;
 
   struct stringlist *cur, *cur_next;
 
@@ -1253,13 +1226,10 @@ int main(int argc, char **argv)
   setbuf(stderr, NULL);
 
   /* look at all the extra args */
-  while ((c = getopt(argc, argv, "czvk:l:p:u:a:m:f:r:t:")) != EOF)
+  while ((c = getopt(argc, argv, "cvk:l:p:u:a:m:f:r:t:")) != EOF)
     switch (c) {
     case 'c':
 	dochallenge=0;
-	break;
-    case 'z':
-	run_stress_test=1;
 	break;
     case 'v':
 	verbose=1;
@@ -1329,7 +1299,33 @@ int main(int argc, char **argv)
   pin = prot_new(sock, 0);
   pout = prot_new(sock, 1); 
 
-  mechlist=ask_capability(&server_supports_tls);   /* get the * line also */
+  /* Get header line */
+  if(prot_fgets(str,sizeof(str),pin) == NULL) {
+      imtest_fatal("prot layer failure");
+  }
+
+  printf("S: %s",str);
+  
+  if(strncmp(str, "+OK", 3)) {
+      imtest_fatal("bad POP3 header");
+  }
+  
+  /* look for APOP challenge in header '<...@...>' */
+  cp = str+4;
+  while (cp && (start = strchr(cp, '<'))) {
+      cp = start + 1;
+      while (*cp && *cp != '@' && *cp != '<' && *cp != '>') cp++;
+      if (*cp != '@') continue;
+      while (*cp && *cp != '<' && *cp != '>') cp++;
+      if (*cp == '>') {
+	  *(++cp) = '\0';
+	  apop_chal = strdup(start);
+	  if (!apop_chal) imtest_fatal("memory error");
+	  break;
+      }	    
+  }
+
+  mechlist=ask_capability(&server_supports_tls);
 
 #ifdef HAVE_SSL
   if ((dotls==1) && (server_supports_tls==1))
@@ -1337,10 +1333,10 @@ int main(int argc, char **argv)
     unsigned ssf;
     char *auth_id;
       
-    prot_printf(pout,"S01 STARTTLS\r\n");
+    prot_printf(pout,"STLS\r\n");
     prot_flush(pout);
     
-    waitfor("S01");
+    waitfor("+OK");
 
     result=tls_init_clientengine(10, tls_keyfile, tls_keyfile);
     if (result!=IMTEST_OK)
@@ -1382,17 +1378,26 @@ int main(int argc, char **argv)
 #endif /* HAVE_SSL */
 
   if (mechanism) {
-      if (!strcasecmp(mechanism, "login")) {
-	  result = auth_login();
+      if (!strcasecmp(mechanism, "apop")) {
+	  result = auth_apop(apop_chal);
+      } else if (!strcasecmp(mechanism, "user")) {
+	  result = auth_user();
       } else {
 	  result = auth_sasl(mechanism);
       }
   } else {
       if (*mechlist) {
 	  result = auth_sasl(mechlist);
+      } else if (apop_chal) {
+	  result = auth_apop(apop_chal);
       } else {
-	  result = auth_login();
+	  result = auth_user();
       }
+  }
+
+  if (apop_chal) {
+      free(apop_chal);
+      apop_chal = NULL;
   }
 
   if (result == IMTEST_OK) {
@@ -1414,19 +1419,15 @@ int main(int argc, char **argv)
       printf("Security strength factor: %d\n", *ssfp);
   }
 
-  if (run_stress_test == 1) {
-      send_recv_test();
-  } else {
-      /* else run in interactive mode or 
-	 pipe in a filename if applicable */
-      interactive(filename);
-  }
+  /* run in interactive mode or 
+     pipe in a filename if applicable */
+  interactive(filename);
 
   for(cur=strlist_head; cur; cur=cur_next) {
       cur_next = cur->next;
       free(cur->str);
       free(cur);
   }
-  
+
   exit(0);
 }

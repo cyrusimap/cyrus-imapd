@@ -1,6 +1,6 @@
-dnl aclocal.m4 generated automatically by aclocal 1.4
+dnl aclocal.m4 generated automatically by aclocal 1.4-p5
 
-dnl Copyright (C) 1994, 1995-8, 1999 Free Software Foundation, Inc.
+dnl Copyright (C) 1994, 1995-8, 1999, 2001 Free Software Foundation, Inc.
 dnl This file is free software; the Free Software Foundation
 dnl gives unlimited permission to copy and/or distribute it,
 dnl with or without modifications, as long as this notice is preserved.
@@ -73,59 +73,91 @@ AC_DEFUN(CMU_GUESS_RUNPATH_SWITCH, [
   LDFLAGS="${SAVE_LDFLAGS}"
   ])])
 
-dnl sasl.m4--sasl libraries and includes
-dnl Derrick Brashear
-dnl from KTH sasl and Arla
+dnl sasl2.m4--sasl2 libraries and includes
+dnl Rob Siemborski
 
-AC_DEFUN(CMU_SASL_INC_WHERE1, [
-AC_REQUIRE([AC_PROG_CC_GNU])
-saved_CPPFLAGS=$CPPFLAGS
-CPPFLAGS="$saved_CPPFLAGS -I$1"
-CMU_CHECK_HEADER_NOCACHE(sasl.h,
-ac_cv_found_sasl_inc=yes,
-ac_cv_found_sasl_inc=no)
-CPPFLAGS=$saved_CPPFLAGS
+AC_DEFUN(SASL_GSSAPI_CHK,[
+ AC_ARG_ENABLE(gssapi, [  --with-gssapi=<DIR>	  enable GSSAPI authentication (for staticsasl only) [yes] ],
+    gssapi=$enableval,
+    gssapi=yes)
+
+ if test "$gssapi" != no; then
+    if test -d ${gssapi}; then
+       CPPFLAGS="$CPPFLAGS -I$gssapi/include"
+       LDFLAGS="$LDFLAGS -L$gssapi/lib"
+    fi
+    AC_CHECK_HEADER(gssapi.h, ,
+      AC_CHECK_HEADER(gssapi/gssapi.h,, AC_WARN(Disabling GSSAPI); gssapi=no))
+ fi
+
+ if test "$gssapi" != no; then
+  dnl We need to find out which gssapi implementation we are
+  dnl using. Supported alternatives are: MIT Kerberos 5 and
+  dnl Heimdal Kerberos 5 (http://www.pdc.kth.se/heimdal)
+  dnl
+  dnl The choice is reflected in GSSAPIBASE_LIBS
+  dnl we might need libdb
+  AC_CHECK_LIB(db, db_open)
+
+  gss_impl="mit";
+  AC_CHECK_LIB(resolv,res_search)
+  if test -d ${gssapi}; then 
+     CPPFLAGS="$CPPFLAGS -I$gssapi/include"
+     LDFLAGS="$LDFLAGS -L$gssapi/lib"
+  fi
+
+  # the base64_decode check fails because libroken has dependencies
+  # FIXME: this is probabally non-optimal as well
+  AC_CHECK_LIB(krb5,krb5_vlog,gss_impl="heimdal",,)
+  #  AC_CHECK_LIB(roken,base64_decode,gss_impl="heimdal",, $LIB_CRYPT)
+
+  if test -d ${gssapi}; then
+     GSSAPIBASE_LIBS="-L$gssapi/lib"
+  fi
+
+  if test "$gss_impl" = mit; then
+     GSSAPIBASE_LIBS="$GSSAPIBASE_LIBS -lgssapi_krb5 -lkrb5 -lk5crypto -lcom_err"
+  elif test "$gss_impl" = "heimdal"; then
+     GSSAPIBASE_LIBS="$GSSAPIBASE_LIBS -lgssapi -lkrb5 -ldes -lasn1 -lroken ${LIB_CRYPT} -lcom_err"
+  else
+     gssapi="no"
+     AC_WARN(Disabling GSSAPI)
+  fi
+ fi
+
+ GSSAPI_LIBS=""
+ AC_MSG_CHECKING(GSSAPI)
+ if test "$gssapi" != no; then
+  AC_MSG_RESULT(with implementation ${gss_impl})
+  AC_CHECK_LIB(ndbm,dbm_open,GSSAPIBASE_LIBS="$GSSAPIBASE_LIBS -lndbm")
+  AC_CHECK_LIB(resolv,res_search,GSSAPIBASE_LIBS="$GSSAPIBASE_LIBS -lresolv")
+  SASL_MECHS="$SASL_MECHS libgssapiv2.la"
+  SASL_STATIC_OBJS="$SASL_STATIC_OBJS ../plugins/gssapi.o"
+
+  cmu_save_LIBS="$LIBS"
+  LIBS="$LIBS $GSSAPIBASE_LIBS"
+  AC_CHECK_FUNCS(gsskrb5_register_acceptor_identity)
+  LIBS="$cmu_save_LIBS"
+else
+  AC_MSG_RESULT(disabled)
+fi
+AC_SUBST(GSSAPI_LIBS)
+AC_SUBST(GSSAPIBASE_LIBS)
 ])
 
-AC_DEFUN(CMU_SASL_INC_WHERE, [
-   for i in $1; do
-      CMU_SASL_INC_WHERE1($i)
-      CMU_TEST_INCPATH($i, sasl)
-      if test "$ac_cv_found_sasl_inc" = "yes"; then
-        ac_cv_sasl_where_inc=$i
-        break
-      fi
-    done
-])
-
-AC_DEFUN(CMU_SASL_LIB_WHERE1, [
-AC_REQUIRE([AC_PROG_CC_GNU])
-saved_LIBS=$LIBS
-LIBS="$saved_LIBS -L$1 -lsasl"
-AC_TRY_LINK(,
-[sasl_getprop();],
-[ac_cv_found_sasl_lib=yes],
-ac_cv_found_sasl_lib=no)
-LIBS=$saved_LIBS
-])
-
-AC_DEFUN(CMU_SASL_LIB_WHERE, [
-   for i in $1; do
-      CMU_SASL_LIB_WHERE1($i)
-      dnl deal with false positives from implicit link paths
-      CMU_TEST_LIBPATH($i, sasl)
-      if test "$ac_cv_found_sasl_lib" = "yes" ; then
-        ac_cv_sasl_where_lib=$i
-        break
-      fi
-    done
-])
-
-AC_DEFUN(CMU_SASL, [
+AC_DEFUN(CMU_SASL2, [
 AC_ARG_WITH(sasl,
-            [  --with-sasl=DIR        Compile with libsasl in <DIR>],
+            [  --with-sasl=DIR         Compile with libsasl2 in <DIR>],
 	    with_sasl="$withval",
             with_sasl="yes")
+
+AC_ARG_WITH(staticsasl,
+	    [  --with-staticsasl=DIR  Compile with staticly linked libsasl2 in <DIR>],
+	    with_staticsasl="$withval";
+	    if test $with_staticsasl != "no"; then
+		with_sasl="static"
+	    fi,
+	    with_staticsasl="no")
 
 	SASLFLAGS=""
 	LIB_SASL=""
@@ -133,80 +165,79 @@ AC_ARG_WITH(sasl,
 	cmu_saved_CPPFLAGS=$CPPFLAGS
 	cmu_saved_LDFLAGS=$LDFLAGS
 	cmu_saved_LIBS=$LIBS
-	if test -d ${with_sasl}; then
-          ac_cv_sasl_where_lib=${with_sasl}/lib
-          ac_cv_sasl_where_inc=${with_sasl}/include
 
-	  SASLFLAGS="-I$ac_cv_sasl_where_inc"
-	  LIB_SASL="-L$ac_cv_sasl_where_lib"
-	  CPPFLAGS="${cmu_saved_CPPFLAGS} -I${ac_cv_sasl_where_inc}"
-	  LDFLAGS="${cmu_saved_LDFLAGS} -L${ac_cv_sasl_where_lib}"
+	if test ${with_sasl} = "static"; then
+	  if test -d ${with_staticsasl}; then
+	    ac_cv_sasl_where_lib=${with_staticsasl}/lib
+	    ac_cv_sasl_where_inc=${with_staticsasl}/include
+
+	    SASLFLAGS="-I$ac_cv_sasl_where_inc"
+	    LIB_SASL="-L$ac_cv_sasl_where_lib"
+	    CPPFLAGS="${cmu_saved_CPPFLAGS} -I${ac_cv_sasl_where_inc}"
+	    LDFLAGS="${cmu_saved_LDFLAGS} -L${ac_cv_sasl_where_lib}"
+	  else
+	    with_staticsasl="/usr"
+	  fi
+
+	  AC_CHECK_HEADER(sasl/sasl.h,
+	    AC_CHECK_HEADER(sasl/saslutil.h,
+	     if test -r ${with_staticsasl}/lib/libsasl2.a; then
+		ac_cv_found_sasl=yes
+		AC_MSG_CHECKING(for static libsasl)
+		LIB_SASL="$LIB_SASL ${with_staticsasl}/lib/libsasl2.a"
+	     else
+	        AC_MSG_CHECKING(for static libsasl)
+		AC_ERROR([Could not find ${with_staticsasl}/lib/libsasl2.a])
+	     fi
+	    ))
+
+	  AC_MSG_RESULT(found)
+
+	  SASL_GSSAPI_CHK
+
+	  LIB_SASL="$LIB_SASL $GSSAPIBASE_LIBS"
+
+	else
+	  if test -d ${with_sasl}; then
+            ac_cv_sasl_where_lib=${with_sasl}/lib
+            ac_cv_sasl_where_inc=${with_sasl}/include
+
+	    SASLFLAGS="-I$ac_cv_sasl_where_inc"
+	    LIB_SASL="-L$ac_cv_sasl_where_lib"
+	    CPPFLAGS="${cmu_saved_CPPFLAGS} -I${ac_cv_sasl_where_inc}"
+	    LDFLAGS="${cmu_saved_LDFLAGS} -L${ac_cv_sasl_where_lib}"
+	  fi
+
+	  dnl be sure to check for a SASLv2 specific function
+	  AC_CHECK_HEADER(sasl/sasl.h,
+	    AC_CHECK_HEADER(sasl/saslutil.h,
+	      AC_CHECK_LIB(sasl2, prop_get, 
+                           ac_cv_found_sasl=yes,
+		           ac_cv_found_sasl=no),
+	                   ac_cv_found_sasl=no), ac_cv_found_sasl=no)
+
+	  if test "$ac_cv_found_sasl" = yes; then
+	    LIB_SASL="$LIB_SASL -lsasl2"
+	  else
+	    LIB_SASL=""
+	    SASLFLAGS=""
+	  fi
 	fi
-
-	AC_CHECK_HEADER(sasl.h,
-	  AC_CHECK_LIB(sasl, sasl_getprop, 
-                       ac_cv_found_sasl=yes,
-		       ac_cv_found_sasl=no), ac_cv_found_sasl=no)
 
 	LIBS="$cmu_saved_LIBS"
 	LDFLAGS="$cmu_saved_LDFLAGS"
 	CPPFLAGS="$cmu_saved_CPPFLAGS"
-	if test "$ac_cv_found_sasl" = yes; then
-	  LIB_SASL="$LIB_SASL -lsasl"
-	else
-	  LIB_SASL=""
-	  SASLFLAGS=""
-	fi
+
 	AC_SUBST(LIB_SASL)
 	AC_SUBST(SASLFLAGS)
 	])
 
-AC_DEFUN(CMU_SASL_REQUIRED,
-[AC_REQUIRE([CMU_SASL])
+AC_DEFUN(CMU_SASL2_REQUIRED,
+[AC_REQUIRE([CMU_SASL2])
 if test "$ac_cv_found_sasl" != "yes"; then
-        AC_ERROR([Cannot continue without libsasl.
-Get it from ftp://ftp.andrew.cmu.edu:/pub/cyrus-mail/.])
+        AC_ERROR([Cannot continue without libsasl2.
+Get it from ftp://ftp.andrew.cmu.edu/pub/cyrus-mail/.])
 fi])
-
-AC_DEFUN(CMU_TEST_LIBPATH, [
-changequote(<<, >>)
-define(<<CMU_AC_CV_FOUND>>, translit(ac_cv_found_$2_lib, [ *], [_p]))
-changequote([, ])
-if test "$CMU_AC_CV_FOUND" = "yes"; then
-  if test \! -r "$1/lib$2.a" -a \! -r "$1/lib$2.so" -a \! -r "$1/lib$2.sl"; then
-    CMU_AC_CV_FOUND=no
-  fi
-fi
-])
-
-AC_DEFUN(CMU_TEST_INCPATH, [
-changequote(<<, >>)
-define(<<CMU_AC_CV_FOUND>>, translit(ac_cv_found_$2_inc, [ *], [_p]))
-changequote([, ])
-if test "$CMU_AC_CV_FOUND" = "yes"; then
-  if test \! -r "$1/$2.h"; then
-    CMU_AC_CV_FOUND=no
-  fi
-fi
-])
-
-dnl CMU_CHECK_HEADER_NOCACHE(HEADER-FILE, [ACTION-IF-FOUND [, ACTION-IF-NOT-FOUND]])
-AC_DEFUN(CMU_CHECK_HEADER_NOCACHE,
-[dnl Do the transliteration at runtime so arg 1 can be a shell variable.
-ac_safe=`echo "$1" | sed 'y%./+-%__p_%'`
-AC_MSG_CHECKING([for $1])
-AC_TRY_CPP([#include <$1>], eval "ac_cv_header_$ac_safe=yes",
-  eval "ac_cv_header_$ac_safe=no")
-if eval "test \"`echo '$ac_cv_header_'$ac_safe`\" = yes"; then
-  AC_MSG_RESULT(yes)
-  ifelse([$2], , :, [$2])
-else
-  AC_MSG_RESULT(no)
-ifelse([$3], , , [$3
-])dnl
-fi
-])
-
 dnl bsd_sockets.m4--which socket libraries do we need? 
 dnl Derrick Brashear
 dnl from Zephyr

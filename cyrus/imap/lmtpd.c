@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.77 2001/11/21 20:28:18 ken3 Exp $
+ * $Id: lmtpd.c,v 1.78 2001/11/27 02:24:57 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,8 +42,6 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.77 2001/11/21 20:28:18 ken3 Exp $";*/
-
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
@@ -74,8 +72,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <sasl.h>
-#include <saslutil.h>
+#include <sasl/sasl.h>
+#include <sasl/saslutil.h>
 
 #include "acl.h"
 #include "assert.h"
@@ -172,36 +170,20 @@ static struct namespace lmtpd_namespace;
 
 /* should we allow users to proxy?  return SASL_OK if yes,
    SASL_BADAUTH otherwise */
-static int mysasl_authproc(void *context __attribute__((unused)),
-			   const char *auth_identity,
-			   const char *requested_user,
-			   const char **user,
-			   const char **errstr)
+static int mysasl_authproc(sasl_conn_t *conn,
+			   void *context,
+			   const char *requested_user, unsigned rlen,
+			   const char *auth_identity, unsigned alen,
+			   const char *def_realm, unsigned urlen,
+			   struct propctx *propctx)
 {
     const char *val;
-    char *canon_authuser, *canon_requser;
     char *realm;
-    static char replybuf[100];
     int allowed=0;
     struct auth_state *authstate;
 
-    canon_authuser = auth_canonifyid(auth_identity);
-    if (!canon_authuser) {
-	if (errstr) *errstr = "bad userid authenticated";
-	return SASL_BADAUTH;
-    }
-    canon_authuser = xstrdup(canon_authuser);
-
-    if (!requested_user) requested_user = auth_identity;
-    canon_requser = auth_canonifyid(requested_user);
-    if (!canon_requser) {
-	if (errstr) *errstr = "bad userid requested";
-	return SASL_BADAUTH;
-    }
-    canon_requser = xstrdup(canon_requser);
-
     /* check if remote realm */
-    if ((realm = strchr(canon_authuser, '@'))!=NULL) {
+    if ((realm = strchr(auth_identity, '@'))!=NULL) {
 	realm++;
 	val = config_getstring("loginrealms", "");
 	while (*val) {
@@ -214,9 +196,8 @@ static int mysasl_authproc(void *context __attribute__((unused)),
 	    while (*val && isspace((int) *val)) val++;
 	}
 	if (!*val) {
-	    snprintf(replybuf, 100, "cross-realm login %s denied", 
-		     canon_authuser);
-	    if (errstr) *errstr = replybuf;
+	    sasl_seterror(conn, 0, "cross-realm login %s denied",
+			  auth_identity);
 	    return SASL_BADAUTH;
 	}
     }
@@ -224,25 +205,65 @@ static int mysasl_authproc(void *context __attribute__((unused)),
     /* ok, is auth_identity an admin? 
      * for now only admins can do lmtp from another machine
      */
-
-    authstate = auth_newstate(canon_authuser, NULL);
+    authstate = auth_newstate(auth_identity, NULL);
     allowed = authisa(authstate, "lmtp", "admins");
     auth_freestate(authstate);
     
     if (!allowed) {
-	if (errstr) *errstr = "only admins may authenticate";
+	sasl_seterror(conn, 0, "only admins may authenticate");
 	return SASL_BADAUTH;
     }
 
-    free(canon_authuser);
-    *user = canon_requser;
-    if (errstr) *errstr = NULL;
+    return SASL_OK;
+}
+
+int mysasl_canon_user(sasl_conn_t *conn,
+		      void *context,
+		      const char *user, unsigned ulen,
+		      const char *authid, unsigned alen,
+		      unsigned flags,
+		      const char *user_realm,
+		      char *out_user,
+		      unsigned out_max, unsigned *out_ulen,
+		      char *out_authid,
+		      unsigned out_amax, unsigned *out_alen) 
+{
+    char *canon_authuser = NULL, *canon_requser = NULL;
+
+    canon_authuser = auth_canonifyid(authid, alen);
+    if (!canon_authuser) {
+	sasl_seterror(conn, 0, "bad userid authenticated");
+	return SASL_BADAUTH;
+    }
+    *out_alen = strlen(canon_authuser);
+    if(*out_alen > strlen(canon_authuser) > out_amax+1) {
+	sasl_seterror(conn, 0, "buffer overflow while canonicalizing");
+	return SASL_BUFOVER;
+    }
+    
+    strncpy(out_authid, canon_authuser, out_amax);
+    
+    if (!user) user = authid;
+    canon_requser = auth_canonifyid(user, ulen);
+    if (!canon_requser) {
+	sasl_seterror(conn, 0, "bad userid requested");
+	return SASL_BADAUTH;
+    }
+    *out_ulen = strlen(canon_requser);
+    if(*out_ulen > out_max+1) {
+	sasl_seterror(conn, 0, "buffer overflow while canonicalizing");
+	return SASL_BUFOVER;
+    }
+    
+    strncpy(out_user, canon_requser, out_max);
+
     return SASL_OK;
 }
 
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
     { SASL_CB_PROXY_POLICY, &mysasl_authproc, NULL },
+    { SASL_CB_CANON_USER, &mysasl_canon_user, NULL },
     { SASL_CB_LIST_END, NULL, NULL }
 };
 

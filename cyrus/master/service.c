@@ -39,7 +39,8 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.25 2001/08/14 16:11:26 leg Exp $ */
+/* $Id: service.c,v 1.26 2001/11/27 02:25:04 ken3 Exp $ */
+
 #include <config.h>
 
 #include <stdio.h>

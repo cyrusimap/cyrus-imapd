@@ -57,8 +57,6 @@ extern "C" {
 #include <netinet/in.h>
 #include <netdb.h>
 
-#include <sasl.h>
-
 typedef struct xscyrus *Sieveobj;
 static char *globalerr = NULL;
 

@@ -37,12 +37,12 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: version.c,v 1.3 2001/11/08 17:03:44 ken3 Exp $
+ * $Id: version.c,v 1.4 2001/11/27 02:25:00 ken3 Exp $
  */
 
 #include <config.h>
 
-#include <sasl.h>
+#include <sasl/sasl.h>
 #include <db.h>
 #include <sys/utsname.h>
 #ifdef HAVE_KRB

@@ -70,6 +70,7 @@ extern sasl_callback_t *mysasl_callbacks(const char *username,
 					 const char *authname,
 					 const char *realm,
 					 const char *password);
+extern void free_callbacks(sasl_callback_t *in);
 
 struct acapmbox_handle_s {
     acap_conn_t *conn;
@@ -212,7 +213,7 @@ acapmbox_handle_t *acapmbox_get_handle(void)
 			  config_getstring("acap_password", NULL));
     snprintf(str, sizeof(str), "acap://%s@%s/", user, acapserver);
     r = acap_conn_connect(str, cb, &(cached_conn->conn));
-    free(cb);
+    free_callbacks(cb);
 
     if (r != ACAP_OK) {
 	syslog(LOG_ERR, "acap_conn_connect() failed: %s",
