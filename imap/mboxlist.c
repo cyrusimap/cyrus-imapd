@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.139 2000/10/12 19:10:43 leg Exp $
+ * $Id: mboxlist.c,v 1.140 2000/12/12 18:40:56 leg Exp $
  */
 
 #include <config.h>
@@ -494,7 +494,6 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 {
     int r;
     char *acl = NULL;
-    char buf[MAX_PARTITION_LEN + 30];
     const char *root = NULL;
     char *newpartition = NULL;
     struct mailbox newmailbox;
@@ -522,6 +521,8 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
     }
 
     if (!(mbtype & MBTYPE_REMOTE)) {
+	char buf[MAX_PARTITION_LEN + 30];
+    
 	/* Get partition's path */
 	sprintf(buf, "partition-%s", newpartition);
 	root = config_getstring(buf, (char *)0);
@@ -568,6 +569,8 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 
  done: /* ALL DATABASE OPERATIONS DONE; NEED TO DO FILESYSTEM OPERATIONS */
     if (!r && !(mbtype & MBTYPE_REMOTE)) {
+	char buf[MAX_MAILBOX_PATH];
+
 	/* Create new mailbox and move new mailbox list file into place */
 	mailbox_hash_mbox(buf, root, name);
 	r = mailbox_create(name, buf, acl, 
