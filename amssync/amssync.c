@@ -845,13 +845,13 @@ Port: %s\n\
 	     * since this was converted from perl.
 	     */
 	    if (verbose)
-		fprintf(logfile, "listing bboards (LIST NIL \
+		fprintf(logfile, "listing bboards (LIST \"\" \
 %s.*)...\n",
 			rexp+(*rexp == '^'));
 	    /* tjs: LIST bboards from config file into hash table */
 	    cbclear();
 	    imclient_send(imclient, callback_finish, (void*) &cb,
-			  "LIST NIL %s.*", rexp+(*rexp=='^'));
+			  "LIST \"\" %s.*", rexp+(*rexp=='^'));
 	    cbwait();
 
 	    if (debug) { ht_foreach(bb_hash, (void*) puts); }
