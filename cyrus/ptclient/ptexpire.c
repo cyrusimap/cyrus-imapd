@@ -42,7 +42,7 @@ int main()
     info.ffactor = 8;
     strcpy(fnamebuf, STATEDIR);
     strcat(fnamebuf, PTS_DBLOCK);
-    fd=open(fnamebuf, O_CREAT|O_TRUNC|O_RDWR, 0644);
+    fd=open(fnamebuf, O_CREAT|O_TRUNC|O_RDWR, 0664);
     if (fd == -1) {
         syslog(LOG_ERR, "IOERROR: creating lock file %s: %m", fnamebuf);
         return -1;
