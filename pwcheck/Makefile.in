@@ -48,7 +48,7 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
-OBJS=pwcheck.o
+OBJS=pwcheck.o pwcheck_@WITH_PWCHECK@.o
 
 all: pwcheck
 

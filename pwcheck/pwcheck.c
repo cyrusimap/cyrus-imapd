@@ -32,10 +32,8 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/uio.h>
-#include <shadow.h>
 
 extern int errno;
-extern char *crypt();
 
 /*
  * Unix pwcheck daemon-authenticated login (shadow password)
@@ -89,7 +87,6 @@ newclient(c)
 int c;
 {
     char request[1024];
-    struct spwd *pwd;
     int start, n;
     char *reply;
     
@@ -110,20 +107,9 @@ int c;
 
     if (start >= sizeof(request) - 1) {
 	reply = "Request too big";
-	goto sendreply;
-    }
-
-    pwd = getspnam(request);
-    if (!pwd) {
-	reply = "Userid not found";
-	goto sendreply;
-    }
-    
-    if (strcmp(pwd->sp_pwdp, crypt(request + strlen(request) + 1, pwd->sp_pwdp)) != 0) {
-	reply = "Incorrect password";
     }
     else {
-	reply = "OK";
+	reply = pwcheck(request, request + strlen(request) + 1);
     }
 
 sendreply:
