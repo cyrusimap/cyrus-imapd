@@ -1,4 +1,4 @@
-/* service.c -- skeleton for Cyrus service; calls the real main
+/* service-thread.c -- skeleton for Cyrus service; calls the real main
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service-thread.c,v 1.11 2003/05/29 02:10:55 rjs3 Exp $ */
+/* $Id: service-thread.c,v 1.12 2003/09/09 14:48:33 rjs3 Exp $ */
 #include <config.h>
 
 #include <stdio.h>
