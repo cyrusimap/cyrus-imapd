@@ -1,6 +1,6 @@
 <HTML><HEAD>
     <TITLE>Cyrus IMAP Server FAQ</TITLE>
-    <!-- $Id: faq.html,v 1.4 2000/05/28 19:48:58 leg Exp $ -->
+    <!-- $Id: faq.html,v 1.5 2000/06/09 19:09:42 leg Exp $ -->
   </HEAD><BODY>
       <H1>                Cyrus IMAP Server FAQ</H1>
 
@@ -15,10 +15,24 @@ mailing list archives for more information.
 <li>Virtual hosting - We don't support it and don't plan to support
 it.  If you want it, you'll need to do it yourself or use a commercial
 product. Check the list archives for more information.
+</ol>
+
+<h2>Troubleshooting</h2>
+
+<dl compact>
+<dt><b>Q:</b> I'm getting syslog'd messages from the master process
+saying processes are "signaled to death by 10".  What's up?</dt>
+<dd>
+<p><b>A:</b> Try installing some <a
+href="http://www.sleepycat.com/update/3.0.55/patch.3.0.55.html">patches
+to Berkeley DB</a> available from <a
+href="http://www.sleepycat.com/update/3.0.55/patch.3.0.55.html">
+http://www.sleepycat.com/update/3.0.55/patch.3.0.55.html</a>.</dd>
+</dl>
 
 </ul>
 <P><HR>
-last modified: $Date: 2000/05/28 19:48:58 $
+last modified: $Date: 2000/06/09 19:09:42 $
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>
