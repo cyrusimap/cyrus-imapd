@@ -32,6 +32,11 @@ CMU_NANA
   libnana.  If not set, or if libnana is unavailable, or if we're not
   using gcc, it defines WITHOUT_NANA.
 
+CMU_PROG_LIBTOOL
+  Just like AM_PROG_LIBTOOL, except it performs a couple little hacks
+  to make sure that things don't break on picky vendor compilers
+  which whine about empty translation units.
+
 CMU_PTHREADS
   This attempts to link against libpthread (failing if it can't be found),
   and attempts to do any system-specific setup required for thread
