@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: libconfig.c,v 1.2.2.4 2004/01/15 20:24:38 ken3 Exp $ */
+/* $Id: libconfig.c,v 1.2.2.5 2004/04/05 14:59:04 ken3 Exp $ */
 
 #include <config.h>
 
@@ -92,7 +92,8 @@ const char *config_getstring(enum imapopt opt)
 int config_getint(enum imapopt opt)
 {
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
-    assert(imapopts[opt].t == OPT_INT);
+    assert((imapopts[opt].t == OPT_INT) ||
+	   (imapopts[opt].t == OPT_BITFIELD));
 
     return imapopts[opt].val.i;
 }
@@ -353,6 +354,36 @@ void config_read(const char *alt_config)
 			    imapopts[opt].optname, lineno);
 		    fatal(errbuf, EC_CONFIG);
 		}
+		break;
+	    }
+	    case OPT_BITFIELD:
+	    {
+		const struct enum_option_s *e;
+
+		imapopts[opt].val.i = 0;
+
+		while (*p) {
+		    /* find the end of the first value */
+		    for (q = p; *q && !isspace((int) *q); q++);
+		    *q++ = '\0';
+
+		    /* see if its a legal value */
+		    for (e = imapopts[opt].enum_options;
+			 e->name && strcmp(e->name, p); e++);
+
+		    if (e->name) imapopts[opt].val.i |= e->val;
+		    else {
+			/* error during conversion */
+			sprintf(errbuf, "invalid value for %s in line %d",
+				imapopts[opt].optname, lineno);
+			fatal(errbuf, EC_CONFIG);
+		    }
+
+		    /* find the start of the next value */
+		    p = q;
+		    while (*p && isspace((int) *p)) p++;
+		}
+
 		break;
 	    }
 	    case OPT_NOTOPT:
