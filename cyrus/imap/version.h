@@ -37,10 +37,10 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: version.h,v 1.116.2.5 2003/06/18 21:03:12 ken3 Exp $
+ * $Id: version.h,v 1.116.2.6 2003/07/16 21:18:54 rjs3 Exp $
  */
 
-#define _CYRUS_VERSION "v2.2.0-ALPHA"
+#define _CYRUS_VERSION "v2.2.1-BETA"
 
 /* EXTRA_IDENT is a hack to add some version information for which compile
  * was used to build this version (at CMU, but we don't care what you do with
