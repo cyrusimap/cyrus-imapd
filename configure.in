@@ -45,7 +45,7 @@ if test "$spt_type" = ""; then
 	AC_CHECK_HEADER(sys/pstat.h,spt_type=SPT_PSTAT)
 fi
 if test "$spt_type" = ""; then
-	AC_CHECK_HEADER(sys/sysmips.h,spt_type=SPT_SYSMIPS)
+	AC_CHECK_HEADER(sys/sysnews.h,spt_type=SPT_SYSMIPS)
 fi
 if test "$spt_type" = ""; then
 	AC_MSG_CHECKING(for PS_STRINGS)
