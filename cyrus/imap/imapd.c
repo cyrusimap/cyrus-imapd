@@ -662,6 +662,26 @@ cmdloop()
 	    else goto badcmd;
 	    break;
 
+#ifdef ENABLE_EXPERIMENT
+	case 'X':
+	    if (!strcmp(cmd.s, "Xgetuids")) {
+		if (!imapd_mailbox) goto nomailbox;
+		if (c != ' ') goto missingargs;
+		c = getword(&arg1);
+		if (c == '\r') c = prot_getc(imapd_in);
+		if (c != '\n') goto extraargs;
+		cmd_getuids(tag.s, arg1.s);
+	    }
+	    else if (!strcmp(cmd.s, "Xgetstate")) {
+		if (!imapd_mailbox) goto nomailbox;
+		if (c == '\r') c = prot_getc(imapd_in);
+		if (c != '\n') goto extraargs;
+		cmd_getstate(tag.s);
+	    }
+	    else goto badcmd;
+	    break;
+#endif /* ENABLE_EXPERIMENT */
+
 	default:
 	badcmd:
 	    prot_printf(imapd_out, "%s BAD Unrecognized command\r\n", tag.s);
@@ -2591,6 +2611,47 @@ char *name;
  badlist:
     prot_printf(imapd_out, "%s BAD Invalid status list in Status\r\n", tag);
     eatline(c);
+}
+
+/*
+ * Perform a XGETUIDS command
+ */
+cmd_getuids(tag, startuid)
+char *tag;
+char *startuid;
+{
+    char *p;
+    unsigned uid = 0;
+
+    for (p = startuid; *p; p++) {
+	if (!isdigit(*p)) break;
+	uid = uid * 10 + *p - '0';
+    }
+    if (*p || !uid) {
+	prot_printf(imapd_out, "%s BAD Invalid UID\r\n", tag);
+	return;
+    }
+
+    index_check(imapd_mailbox, 0, 0);
+
+    index_getuids(imapd_mailbox, uid);
+
+    prot_printf(imapd_out, "%s OK Getuids completed\r\n", tag);
+}
+
+/*
+ * Perform a XGETSTATE command
+ */
+cmd_getstate(tag)
+char *tag;
+{
+    int r;
+
+    index_check(imapd_mailbox, 0, 1);
+
+    index_getstate(imapd_mailbox);
+
+    prot_printf(imapd_out, "%s OK Getstate completed\r\n", tag);
 }
 
 /*
