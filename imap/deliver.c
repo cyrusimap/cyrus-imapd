@@ -1,5 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
- * Copyright 1998 Carnegie Mellon University
+ * Copyright 1999 Carnegie Mellon University
+ * $Id: deliver.c,v 1.93 1999/07/01 20:14:40 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -25,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.92 1999/06/30 19:05:08 leg Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.93 1999/07/01 20:14:40 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -373,7 +374,9 @@ static int parseheader(FILE *fin, FILE *fout, int lmtpmode,
 	case BODY:
 	    /* now we want to convert all newlines into \r\n */
 	    if (c == '\r' || c == '\n') {
-		int peek = getc(fin);
+		int peek;
+
+		peek = getc(fin);
 
 		putc('\r', fout);
 		putc('\n', fout);
@@ -466,10 +469,11 @@ static void copy_msg(FILE *fin, FILE *fout, int lmtpmode)
 
     if (lmtpmode) {
 	/* wow, serious error---got a premature EOF */
-	exit(0);
+	exit(EC_TEMPFAIL);
     }
 
 lmtpdot:
+    return;
 }
 
 static void fill_cache(FILE *fin, FILE *fout, int lmtpmode, message_data_t *m)
@@ -616,6 +620,10 @@ int open_sendmail(char *argv[], FILE **sm)
 	/* make the pipe be stdin */
 	dup2(fds[0], 0);
 	execv(SENDMAIL, argv);
+
+	/* if we're here we suck */
+	printf("451 deliver: didn't exec?!?\r\n");
+	exit(1);
     }
     /* i'm the parent */
     close(fds[0]);
@@ -632,7 +640,7 @@ int send_rejection(char *rejto,
 {
     FILE *sm;
     char *smbuf[3];
-    char hostname[1024], buf[8192], namebuf[MAX_MAILBOX_PATH];
+    char hostname[1024], buf[8192], *namebuf;
     int i;
     struct tm *tm;
     int tz;
@@ -652,12 +660,10 @@ int send_rejection(char *rejto,
     p = getpid();
     snprintf(buf, sizeof(buf), "<cmu-sieve-%d-%d-%d@%s>", p, t, 
 	     global_outgoing_count++, hostname);
-    strcpy(namebuf, ".sieve.");
-    strcat(namebuf, mailreceip);
+    
+    namebuf = make_sieve_db(mailreceip);
     markdelivered(buf, strlen(buf), namebuf, strlen(namebuf));
     fprintf(sm, "Message-ID: %s\r\n", buf);
-    /* this message-id generation should be improved! (especially if we
-       have a long running deliver process! */
 
     tm = localtime(&t);
     tz = timezone / 60;
@@ -861,12 +867,24 @@ int autorespond(unsigned char *hash, int len, int days,
     return ret;
 }
 
+static char *make_sieve_db(char *user)
+{
+    static char buf[MAX_MAILBOX_PATH];
+
+    buf[0] = '.';
+    buf[1] = '\0';
+    strcat(buf, user);
+    strcat(buf, ".sieve.");
+
+    return buf;
+}
+
 int send_response(char *addr, char *subj, char *msg, int mime,
 		  void *ic, void *sc, void *mc)
 {
     FILE *sm;
     char *smbuf[3];
-    char hostname[1024], buf[8192], namebuf[MAX_MAILBOX_PATH];
+    char hostname[1024], buf[8192], *namebuf;
     int i, sl;
     struct tm *tm;
     int tz;
@@ -888,13 +906,11 @@ int send_response(char *addr, char *subj, char *msg, int mime,
     p = getpid();
     snprintf(buf, sizeof(buf), "<cmu-sieve-%d-%d-%d@%s>", p, t, 
 	     global_outgoing_count++, hostname);
-    strcpy(namebuf, ".sieve.");
-    strcat(namebuf, sdata->username);
+    
+    namebuf = make_sieve_db(sdata->username);
     markdelivered(buf, strlen(buf), namebuf, strlen(namebuf));
 
     fprintf(sm, "Message-ID: %s\r\n", buf);
-    /* this message-id generation should be improved! (especially if we
-       have a long running deliver process! */
 
     tm = localtime(&t);
     tz = timezone / 60;
@@ -1805,11 +1821,10 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 		if (msgdata->id) {
 		    /* sigh; this should be hashing the envelope & id 
 		       to figure out whether or not to keep it */
+		    char *sdb = make_sieve_db(user);
 
-		    strcpy(namebuf, ".sieve.");
-		    strcat(namebuf, user);
 		    if (checkdelivered(msgdata->id, strlen(msgdata->id),
-				       namebuf, strlen(namebuf))) {
+				       sdb, strlen(sdb))) {
 			/* done it before ! */
 			return 0;
 		    }
@@ -1825,8 +1840,10 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 
 	    if (msgdata->id) {
 		/* ok, we've run the script */
+		char *sdb = make_sieve_db(user);
+
 		markdelivered(msgdata->id, strlen(msgdata->id), 
-			      namebuf, strlen(namebuf));
+			      sdb, strlen(sdb));
 	    }
 
 	    /* free everything */
