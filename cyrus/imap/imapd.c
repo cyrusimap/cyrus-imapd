@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.349 2002/03/14 18:32:45 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.350 2002/03/14 20:02:02 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -68,6 +68,7 @@
 #include "annotate.h"
 #include "append.h"
 #include "auth.h"
+#include "backend.h"
 #include "charset.h"
 #include "exitcodes.h"
 #include "idle.h"

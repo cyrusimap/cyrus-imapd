@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.105 2002/03/11 15:59:39 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.106 2002/03/14 20:02:03 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -94,35 +94,14 @@
 #include "imapurl.h"
 #include "pushstats.h"
 #include "telemetry.h"
+#include "backend.h"
 
 /* PROXY STUFF */
 /* we want a list of our outgoing connections here and which one we're
    currently piping */
-#define LAST_RESULT_LEN 1024
 #define IDLE_TIMEOUT (5 * 60)
 
 static const int ultraparanoid = 1; /* should we kick after every operation? */
-
-struct backend {
-    char *hostname;
-    struct sockaddr_in addr;
-    int sock;
-    struct prot_waitevent *timeout;
-
-    sasl_conn_t *saslconn;
-
-    enum {
-	ACAP = 0x1, /* not used */
-	IDLE = 0x2,
-	MUPDATE = 0x4
-    } capability;
-
-    char last_result[LAST_RESULT_LEN];
-    struct protstream *in; /* from the be server to me, the proxy */
-    struct protstream *out; /* to the be server */
-};
-
-#define CAPA(s, c) ((s)->capability & (c))
 
 static unsigned int proxyd_cmdcnt;
 
@@ -615,217 +594,15 @@ static int pipe_command(struct backend *s, int optimistic_literal)
     }
 }
 
-static int mysasl_getauthline(struct protstream *p, char *tag,
-			      char **line, unsigned int *linelen)
-{
-    char buf[2096];
-    char *str = (char *) buf;
-    
-    if (!prot_fgets(str, sizeof(buf), p)) {
-	return SASL_FAIL;
-    }
-    if (!strncmp(str, tag, strlen(tag))) {
-	str += strlen(tag) + 1;
-	if (!strncasecmp(str, "OK ", 3)) { return SASL_OK; }
-	if (!strncasecmp(str, "NO ", 3)) { return SASL_BADAUTH; }
-	return SASL_FAIL; /* huh? */
-    } else if (str[0] == '+' && str[1] == ' ') {
-	unsigned buflen;
-	str += 2; /* jump past the "+ " */
-
-	buflen = strlen(str) + 1;
-
-	*line = xmalloc(buflen);
-	if (*str != '\r') {	/* decode it */
-	    int r;
-	    
-	    r = sasl_decode64(str, strlen(str), *line, buflen, linelen);
-	    if (r != SASL_OK) {
-		return r;
-	    }
-	    
-	    return SASL_CONTINUE;
-	} else {		/* blank challenge */
-	    *line = NULL;
-	    *linelen = 0;
-
-	    return SASL_CONTINUE;
-	}
-    } else {
-	/* huh??? */
-	return SASL_FAIL;
-    }
-}
-
-extern sasl_callback_t *mysasl_callbacks(const char *username,
-					 const char *authname,
-					 const char *realm,
-					 const char *password);
-void free_callbacks(sasl_callback_t *in);
-
-static int proxy_authenticate(struct backend *s)
-{
-    int r;
-    sasl_security_properties_t *secprops = NULL;
-    struct sockaddr_in saddr_l, saddr_r;
-    char remoteip[60], localip[60];
-    socklen_t addrsize;
-    sasl_callback_t *cb;
-    char mytag[128];
-    char buf[2048];
-    char optstr[128];
-    char *in, *p;
-    const char *out;
-    unsigned int inlen, outlen;
-    const char *mechusing;
-    unsigned b64len;
-    const char *pass;
-
-    strcpy(optstr, s->hostname);
-    p = strchr(optstr, '.');
-    if (p) *p = '\0';
-    strcat(optstr, "_password");
-    pass = config_getstring(optstr, NULL);
-    cb = mysasl_callbacks(proxyd_userid, 
-			  config_getstring("proxy_authname", "proxy"),
-			  config_getstring("proxy_realm", NULL),
-			  pass);
-
-    /* set the IP addresses */
-    addrsize=sizeof(struct sockaddr_in);
-    if (getpeername(s->sock, (struct sockaddr *)&saddr_r, &addrsize) != 0)
-	return SASL_FAIL;
-    if(iptostring((struct sockaddr *)&saddr_r, sizeof(struct sockaddr_in),
-		  remoteip, 60) != 0)
-	return SASL_FAIL;
-  
-    addrsize=sizeof(struct sockaddr_in);
-    if (getsockname(s->sock, (struct sockaddr *)&saddr_l, &addrsize)!=0)
-	return SASL_FAIL;
-    if(iptostring((struct sockaddr *)&saddr_l, sizeof(struct sockaddr_in),
-		  localip, 60) != 0)
-	return SASL_FAIL;
-
-    r = sasl_client_new("imap", s->hostname, localip, remoteip,
-			cb, 0, &s->saslconn);
-    if (r != SASL_OK) {
-	return r;
-    }
-
-    secprops = mysasl_secprops(0);
-    r = sasl_setprop(s->saslconn, SASL_SEC_PROPS, secprops);
-    if (r != SASL_OK) {
-	return r;
-    }
-
-    /* read the initial greeting */
-    if (!prot_fgets(buf, sizeof(buf), s->in)) {
-	syslog(LOG_ERR,
-	       "proxyd_authenticate(): couldn't read initial greeting: %s",
-	       s->in->error ? s->in->error : "(null)");
-	return SASL_FAIL;
-    }
-
-    strcpy(buf, s->hostname);
-    p = strchr(buf, '.');
-    *p = '\0';
-    strcat(buf, "_mechs");
-
-    /* we now do the actual SASL exchange */
-    r = sasl_client_start(s->saslconn, config_getstring(buf, "KERBEROS_V4"),
-			  NULL, NULL, NULL, &mechusing);
-    if ((r != SASL_OK) && (r != SASL_CONTINUE)) {
-	return r;
-    }
-    proxyd_gentag(mytag);
-    prot_printf(s->out, "%s AUTHENTICATE %s\r\n", mytag, mechusing);
-
-    in = NULL;
-    inlen = 0;
-    r = mysasl_getauthline(s->in, mytag, &in, &inlen);
-    while (r == SASL_CONTINUE) {
-	r = sasl_client_step(s->saslconn, in, inlen, NULL, &out, &outlen);
-	if (in) { 
-	    free(in);
-	}
-	if (r != SASL_OK && r != SASL_CONTINUE) {
-	    return r;
-	}
-
-	r = sasl_encode64(out, outlen, buf, sizeof(buf), &b64len);
-	if (r != SASL_OK) {
-	    return r;
-	}
-
-	prot_write(s->out, buf, b64len);
-	prot_printf(s->out, "\r\n");
-
-	r = mysasl_getauthline(s->in, mytag, &in, &inlen);
-    }
-
-    free_callbacks(cb);
-
-    if (r == SASL_OK) {
-	prot_setsasl(s->in, s->saslconn);
-	prot_setsasl(s->out, s->saslconn);
-    }
-
-    /* r == SASL_OK on success */
-    return r;
-}
-
-void proxyd_capability(struct backend *s)
-{
-    char tag[128];
-    char resp[1024];
-    int st = 0;
-
-    proxyd_gentag(tag);
-    prot_printf(s->out, "%s Capability\r\n", tag);
-    do {
-	if (!prot_fgets(resp, sizeof(resp), s->in)) return;
-	if (!strncasecmp(resp, "* Capability ", 13)) {
-	    st++; /* increment state */
-	    if (strstr(resp, "IDLE")) s->capability |= IDLE;
-	    if (strstr(resp, "MUPDATE")) s->capability |= MUPDATE;
-	} else {
-	    /* line we weren't expecting. hmmm. */
-	}
-    } while (st == 0);
-    do {
-	if (!prot_fgets(resp, sizeof(resp), s->in)) return;
-	if (!strncmp(resp, tag, strlen(tag))) {
-	    st++; /* increment state */
-	} else {
-	    /* line we weren't expecting. hmmm. */
-	}
-    } while (st == 1);
-}
-
 void proxyd_downserver(struct backend *s)
 {
-    char tag[128];
-    int taglen;
-    char buf[1024];
-
     if (!s || !s->timeout) {
 	/* already disconnected */
 	return;
     }
 
     /* need to logout of server */
-    proxyd_gentag(tag);
-    taglen = strlen(tag);
-    prot_printf(s->out, "%s LOGOUT\r\n", tag);
-    while (prot_fgets(buf, sizeof(buf), s->in)) {
-	if (!strncmp(tag, buf, taglen)) {
-	    break;
-	}
-    }
-
-    close(s->sock);
-    prot_free(s->in);
-    prot_free(s->out);
+    downserver(s);
 
     if(s == backend_inbox) backend_inbox = NULL;
     if(s == backend_current) backend_current = NULL;
@@ -889,36 +666,8 @@ struct backend *proxyd_findserver(char *server)
  	
     if (!ret->timeout) {
 	/* need to (re)establish connection to server or create one */
-	int sock;
-	int r;
-
-	if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-	    syslog(LOG_ERR, "socket() failed: %m");
-	    free(ret);
-	    return NULL;
-	}
-	if (connect(sock, (struct sockaddr *) &ret->addr, 
-		    sizeof(ret->addr)) < 0) {
-	    syslog(LOG_ERR, "connect(%s) failed: %m", server);
-	    free(ret);
-	    return NULL;
-	}
-	
-	ret->in = prot_new(sock, 0);
-	ret->out = prot_new(sock, 1);
-	ret->sock = sock;
-	prot_setflushonread(ret->in, ret->out);
-
-	/* now need to authenticate to backend server */
-	if ((r = proxy_authenticate(ret))) {
-	    syslog(LOG_ERR, "couldn't authenticate to backend server: %s",
-		   sasl_errstring(r, NULL, NULL));
-	    free(ret);
-	    return NULL;
-	}
-
-	/* find the capabilities of the server */
-	proxyd_capability(ret);
+	ret = findserver(server, proxyd_userid);
+	if(!ret) return NULL;
 
 	/* add the timeout */
 	ret->timeout = prot_addwaitevent(proxyd_in, time(NULL) + IDLE_TIMEOUT,
