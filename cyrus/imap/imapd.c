@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.275 2000/10/26 23:08:35 leg Exp $ */
+/* $Id: imapd.c,v 1.276 2000/11/06 21:15:41 ken3 Exp $ */
 
 #include <config.h>
 
@@ -63,6 +63,7 @@
 #include <sys/utsname.h>
 
 #include <sasl.h>
+#include <db.h>			/* for cmd_id() 'environment' info */
 
 #include "acl.h"
 #include "util.h"
@@ -156,6 +157,7 @@ void cmd_status(char *tag, char *name);
 void cmd_getuids(char *tag, char *startuid);
 void cmd_unselect(char* tag);
 void cmd_namespace(char* tag);
+void cmd_idle(char* tag);
 void cmd_id(char* tag);
 
 void id_getcmdline(int argc, char **argv);
@@ -873,6 +875,13 @@ cmdloop()
 		if (c != ' ') goto missingargs;
 		cmd_id(tag.s);
 	    }
+	    else if (!imapd_userid) goto nologin;
+	    else if (!strcmp(cmd.s, "Idle")) {
+		if (c == '\r') c = prot_getc(imapd_in);
+		if (c != '\n') goto extraargs;
+		mboxlist_close();
+		cmd_idle(tag.s);
+	    }
 	    else goto badcmd;
 	    break;
 
@@ -1579,6 +1588,63 @@ char *cmd;
     }
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
+}
+
+/*
+ * Perform an IDLE command
+ */
+void idle_poll(struct protstream *s, void *rock)
+{
+    struct mailbox *mailbox = (struct mailbox *) rock;
+
+    if (mailbox) {
+	index_check(mailbox, 0, 1);
+    }
+    prot_flush(imapd_out);
+}
+
+void
+cmd_idle(tag)
+char *tag;
+{
+    int c;
+    static struct buf arg;
+    static time_t period = -1;
+    prot_waitevent_t idle;
+
+    /* get polling period */
+    if (period == -1) {
+      period = config_getint("imapidlepoll", 60);
+      if (period < 0) period = 0;
+    }
+
+    /* Tell client we are idling and waiting for end of command */
+    prot_printf(imapd_out, "+ go ahead\r\n");
+    prot_flush(imapd_out);
+
+    /* Setup the mailbox polling function to be called at 'period' seconds */
+    idle = prot_addwaitevent(imapd_in, period, idle_poll, imapd_mailbox);
+
+    /* Get continuation data */
+    c = getword(&arg);
+    if (c != EOF) {
+	if (!strcasecmp(arg.s, "Done") &&
+	    (c = (c == '\r') ? prot_getc(imapd_in) : c) == '\n') {
+	    prot_printf(imapd_out, "%s OK %s\r\n", tag,
+			error_message(IMAP_OK_COMPLETED));
+	}
+
+	else {
+	    prot_printf(imapd_out, 
+			"%s BAD Invalid Idle continuation\r\n", tag);
+	    eatline(c);
+	}
+    }
+
+    /* Remove the polling function */
+    prot_removewaitevent(imapd_in, idle);
+
+    return;
 }
 
 /*
