@@ -1,6 +1,6 @@
 /* pop3test.c -- pop3 test client
  * Tim Martin (SASL implementation)
- * $Id: pop3test.c,v 1.3 2002/01/17 21:08:18 ken3 Exp $
+ * $Id: pop3test.c,v 1.4 2002/02/06 22:10:17 rjs3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -642,7 +642,7 @@ static int init_sasl(char *serverFQDN, int port, int minssf, int maxssf)
   
 
   /* client new connection */
-  saslresult=sasl_client_new("pop3",
+  saslresult=sasl_client_new("pop",
 			     serverFQDN,
 			     localip,
 			     remoteip,
