@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.4 2002/03/15 19:54:27 rjs3 Exp $
+ * $Id: mbdump.c,v 1.5 2002/03/19 21:19:45 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -59,6 +59,7 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <time.h>
+#include <assert.h>
 
 #include "exitcodes.h"
 #include "imap_err.h"
@@ -113,6 +114,8 @@ int dump_mailbox(const char *tag, const char *mbpath, const char *mbname,
 				 "cyrus.index",
 				 NULL 
                                };
+
+    assert(mbpath);
 
     mbdir = opendir(mbpath);
     if(!mbdir && errno == EACCES) {

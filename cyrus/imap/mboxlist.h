@@ -40,7 +40,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: mboxlist.h,v 1.25 2002/03/15 20:20:25 rjs3 Exp $
+ * $Id: mboxlist.h,v 1.26 2002/03/19 21:19:45 rjs3 Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -88,6 +88,9 @@ int mboxlist_detail(const char *name, int *typep, char **pathp, char **partp,
 /* insert a stub entry */
 int mboxlist_insertremote(const char *name, int mbtype, const char *host,
 			  const char *acl, void **rettid);
+
+/* Update a mailbox's entry */
+int mboxlist_update(char *name, int flags, const char *part, const char *acl);
 
 /* check user's ability to create mailbox */
 int mboxlist_createmailboxcheck(char *name, int mbtype, char *partition, 
