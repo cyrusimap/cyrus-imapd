@@ -1,5 +1,5 @@
 /* map.h -- memory mapping functions
- $Id: map.h,v 1.9.2.1 2002/11/22 18:32:33 rjs3 Exp $
+ $Id: map.h,v 1.9.2.2 2003/02/11 19:10:28 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -51,15 +51,15 @@ extern const char *map_method_desc;
 /* Create a memory map
  *
  * fd is the file descriptor which is to be mapped
- * onceonly is set to be nonzero if you do not intend to ever refresh the  
- *          map
- * base and len are output parameters that recieve the address and length
- *              of the map once it is created.
- * newlen is set to the size of the file, or MAP_UNKNOWN_LEN to have th
- *        mapping facility compute it for you.
+ * onceonly is set to be nonzero if you do not intend to ever refresh the map
+ * base and len are output parameters that receive the address and length
+ * 	of the map once it is created.  NOTE: *len should be zero the first
+ * 	time map_refresh() is called to force the initial mapping
+ * newlen is set to the size of the file, or MAP_UNKNOWN_LEN to have the
+ * 	mapping facility compute it for you.
  * name and mboxname are used for logging purposes, name is the name
- * of the file, and shouldn't be NULL, while mboxname is the name
- * of the applicable mailbox (if any), and may be NULL)
+ * 	of the file, and shouldn't be NULL, while mboxname is the name
+ * 	of the applicable mailbox (if any), and may be NULL
  */
 extern void map_refresh(int fd, int onceonly, const char **base,
 			unsigned long *len, unsigned long newlen,
