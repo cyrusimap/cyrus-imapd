@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- * $Id: imapconf.h,v 1.16.4.7 2002/08/19 01:57:20 ken3 Exp $
+ * $Id: imapconf.h,v 1.16.4.8 2002/08/29 23:32:31 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -155,6 +155,9 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 void freebuf(struct buf *buf);
 
 void eatline(struct protstream *pin, int c);
+
+/* Misc utils */
+extern void cyrus_ctime(time_t date, char *datebuf);
 
 /* filenames */
 #define FNAME_DBDIR "/db"

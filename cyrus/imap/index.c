@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.180.4.6 2002/08/23 19:52:04 rjs3 Exp $
+ * $Id: index.c,v 1.180.4.7 2002/08/29 23:32:31 rjs3 Exp $
  */
 #include <config.h>
 
@@ -2246,28 +2246,10 @@ void *rock;
     }
     if (fetchitems & FETCH_INTERNALDATE) {
 	time_t msgdate = INTERNALDATE(msgno);
-	struct tm *tm = localtime(&msgdate);
-	long gmtoff = gmtoff_of(tm, msgdate);
-	int gmtnegative = 0;
-	static const char *monthname[] = {
-	    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-	    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
 	char datebuf[30];
 
-	if (msgdate == 0 || tm->tm_year < 69) {
-	    abort();
-	}
+	cyrus_ctime(msgdate, datebuf);
 
-	if (gmtoff < 0) {
-	    gmtoff = -gmtoff;
-	    gmtnegative = 1;
-	}
-	gmtoff /= 60;
-	snprintf(datebuf, sizeof(datebuf),
-		 "%2u-%s-%u %.2u:%.2u:%.2u %c%.2lu%.2lu",
-		 tm->tm_mday, monthname[tm->tm_mon], tm->tm_year+1900,
-		 tm->tm_hour, tm->tm_min, tm->tm_sec,
-		 gmtnegative ? '-' : '+', gmtoff/60, gmtoff%60);
 	prot_printf(imapd_out, "%cINTERNALDATE \"%s\"",
 		    sepchar, datebuf);
 	sepchar = ' ';

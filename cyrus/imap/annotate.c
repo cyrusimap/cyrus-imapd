@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.16 2002/08/29 20:33:50 ken3 Exp $
+ * $Id: annotate.c,v 1.8.6.17 2002/08/29 23:32:30 rjs3 Exp $
  */
 
 #include <config.h>
@@ -457,10 +457,7 @@ static void annotation_get_lastupdate(const char *mboxname,
     modtime = (header.st_mtime > index.st_mtime) ?
 	header.st_mtime : index.st_mtime;
 
-    strlcpy(valuebuf, ctime(&modtime), sizeof(valuebuf));
-    
-    /* chop off trailing \n */
-    valuebuf[strlen(valuebuf) - 1] = '\0';
+    cyrus_ctime(modtime, valuebuf);
     
     result->value = valuebuf;
     result->size = strlen(valuebuf);
