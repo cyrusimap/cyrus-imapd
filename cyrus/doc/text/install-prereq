@@ -1,0 +1,43 @@
+Prerequisites and other notes
+
+    The following programs and/or packages are required. 
+
+      * libsasl, version 1.5.15 or higher. To obtain libsasl, ftp it from
+        ftp.andrew.cmu.edu. Earlier versions of SASL will not work; please
+        get the latest one. Configure SASL so that it supports whatever
+        authentication method your site uses. Please pay careful attention
+        to the SASL configuration. This is the biggest problem that most
+        people have. 
+      * Berkeley DB, version 3.0.55 or higher. Berkeley DB can be obtained
+        from Sleepycat. 
+      * GNU Make is required. Get it from the Free Software Foundation. It
+        is probably easier to find it via ftp. 
+
+    The following programs and/or packages are required for specific
+    features. If you don't have them, certain features of the IMAP server
+    will be disabled. 
+
+      * makedepend. A version is included in the makedepend subdirectory of
+        the distribution. Try and install it before installing the Cyrus
+        IMAPd. If it fails, the configure script will use a dummy shell
+        script instead of makedepend, and you should be sure to always give
+        the command "make clean" before "make all". If you don't mind
+        builds taking longer, this isn't a big deal and you can ignore any
+        makedepend errors. 
+      * Tcl, version 7.5 or 7.6, or 8.0. To obtain Tcl, see the
+        comp.lang.tcl FAQ. Other versions of Tcl might work, but it must be
+        at least Tcl 7.5. (Tcl 7.4 ships with some Unix variants, and it is
+        not sufficient.), for the older cyradm. 
+      * Perl, version 5. To obtain Perl, see the comprehensive Perl
+        archive. This is required for the newer version of cyradm written
+        by Brandon Allbery. It is also used for some installation scripts:
+        you don't need it but it may make your life easier. 
+      * OpenSSL, version 0.9.4 or higher. Required for STARTTLS support and
+        eventually for IMAP wrapped in SSL (the imaps port). Available from
+        http://www.openssl.org/. 
+      * If you use AFS PTS support for groups, Cyrus still depends on
+        Kerberos and AFS. If you successfully compiled SASL with your
+        Kerberos library, it's likely that it will work well with Cyrus. 
+      * We recommend using an MTA (mail transfer agent) that supports LMTP
+        (local mail transfer protocol). We use Sendmail and recommend
+        version 8.10.0 or higher, available from http://www.sendmail.org.

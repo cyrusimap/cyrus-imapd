@@ -1,0 +1,47 @@
+Cyrus IMAP Server, version 1.6
+
+    IMAP (Internet Message Access Protocol) is an Internet standards-track
+    protocol for accessing messages (mail, bboards, news, etc). The Cyrus
+    IMAP server differs from other IMAP server implementations in that it
+    is generally intended to be run on sealed servers, where normal users
+    are not permitted to log in. The mailbox database is stored in parts of
+    the filesystem that are private to the Cyrus IMAP system. All user
+    access to mail is through the IMAP, POP3, or KPOP protocols. 
+
+    The private mailbox database design gives the server large advantages
+    in efficiency, scalability, and administratability. Multiple concurrent
+    read/write connections to the same mailbox are permitted. The server
+    supports access control lists on mailboxes and storage quotas on
+    mailbox hierarchies. 
+
+    The Cyrus project is the implementation of IMAP servers by the Carnegie
+    Mellon University Computing Services Department. Over the next few
+    months, we will be releasing components of this server, which will
+    provide better mail security and easier mail administration. 
+
+The Cyrus IMAP Server Distribution
+
+    Cyrus IMAP Server distribution 
+
+    Documentation 
+
+      * General release information 
+      * Overview and Concepts 
+      * Unpacking the Cyrus IMAP Server 
+      * Installing the Cyrus IMAP Server 
+      * Changes since the last release 
+
+    Man Pages 
+
+      * collectnews(8) 
+      * cyradm(1) 
+      * deliver(8) 
+      * imapd(8) 
+      * imapd.conf(5) 
+      * krb.equiv(5) 
+      * pop3d(8) 
+      * quota(8) 
+      * reconstruct(8) 
+      * rmnews(8) 
+      * syncnews(8) 
+
