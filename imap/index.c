@@ -1188,6 +1188,11 @@ void *rock;
     int i, start = 0, end;
     int r, result = 0;
 
+    /* no messages, no calls.  dumps core otherwise */
+    if (! imapd_exists) {
+	return 0;
+    }
+
     for (;;) {
 	if (isdigit(*sequence)) {
 	    start = start*10 + *sequence - '0';
