@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.34 2002/02/27 01:58:03 rjs3 Exp $
+ * $Id: pop3proxyd.c,v 1.35 2002/02/27 03:47:15 rjs3 Exp $
  */
 #include <config.h>
 
@@ -1121,9 +1121,9 @@ static int proxy_authenticate(const char *hostname)
 		   sizeof(struct sockaddr_in), localip, 60) != 0)
 	return SASL_FAIL;
 
-    r = sasl_setprop(popd_saslconn, SASL_IPLOCALPORT, localip);
+    r = sasl_setprop(backend_saslconn, SASL_IPLOCALPORT, localip);
     if (r != SASL_OK) return r;
-    r = sasl_setprop(popd_saslconn, SASL_IPREMOTEPORT, remoteip);
+    r = sasl_setprop(backend_saslconn, SASL_IPREMOTEPORT, remoteip);
     if (r != SASL_OK) return r;
 
     /* read the initial greeting */
@@ -1239,6 +1239,7 @@ static void openproxy(void)
     }
 
     prot_printf(popd_out, "+OK Maildrop locked and ready\r\n");
+    prot_flush(popd_out);
     return;
 }
 
