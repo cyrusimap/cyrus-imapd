@@ -1382,13 +1382,16 @@ char *rock;
 	static char *monthname[] = {
 	    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
 	    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+	char datebuf[30];
 
 	if (gmtoff < 0) gmtoff = -gmtoff;
 	gmtoff /= 60;
-	prot_printf(imapd_out, "%cINTERNALDATE \"%2d-%s-%d %.2d:%.2d:%.2d %c%.2d%.2d\"",
-	       sepchar, tm->tm_mday, monthname[tm->tm_mon], tm->tm_year+1900,
-	       tm->tm_hour, tm->tm_min, tm->tm_sec,
-	       tm->tm_gmtoff < 0 ? '-' : '+', gmtoff/60, gmtoff%60);
+	sprintf(datebuf, "%2d-%s-%d %.2d:%.2d:%.2d %c%.2d%.2d",
+		tm->tm_mday, monthname[tm->tm_mon], tm->tm_year+1900,
+		tm->tm_hour, tm->tm_min, tm->tm_sec,
+		tm->tm_gmtoff < 0 ? '-' : '+', gmtoff/60, gmtoff%60);
+	prot_printf(imapd_out, "%cINTERNALDATE \"%s\"",
+		    sepchar, datebuf);
 	sepchar = ' ';
     }
     if (fetchitems & FETCH_SIZE) {
