@@ -46,6 +46,7 @@ INSTALL = @INSTALL@
 RANLIB = @RANLIB@
 
 CYRUS_USER=@cyrus_user@
+CYRUS_GROUP=@cyrus_group@
 
 DEFS = @DEFS@
 CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@ 
@@ -79,10 +80,10 @@ all: $(PROGS) $(SUIDPROGS) $(SUGIDPROGS)
 install:
 	for file in $(PROGS); \
 	do \
-		$(INSTALL) -s -o $(CYRUS_USER) -m 755 $$file $(DESTDIR)$(cyrus_prefix)/bin || exit 1; \
+		$(INSTALL) -s -o $(CYRUS_USER) -g $(CYRUS_GROUP) -m 755 $$file $(DESTDIR)$(cyrus_prefix)/bin || exit 1; \
 	done
-	$(INSTALL) -s -o $(CYRUS_USER) -m 4750 $(SUIDPROGS) $(DESTDIR)$(cyrus_prefix)/bin
-	$(INSTALL) -o $(CYRUS_USER) -m 755 feedcyrus $(DESTDIR)$(cyrus_prefix)/bin
+	$(INSTALL) -s -o $(CYRUS_USER) -g $(CYRUS_GROUP) -m 4750 $(SUIDPROGS) $(DESTDIR)$(cyrus_prefix)/bin
+	$(INSTALL) -o $(CYRUS_USER) -g $(CYRUS_GROUP) -m 755 feedcyrus $(DESTDIR)$(cyrus_prefix)/bin
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
