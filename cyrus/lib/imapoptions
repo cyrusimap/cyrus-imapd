@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.2.2.12 2004/03/25 18:21:09 ken3 Exp $
+.\" $Id: imapoptions,v 1.2.2.13 2004/04/03 19:11:47 ken3 Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -191,12 +191,15 @@ are listed with ``<none>''.
 
 { "expunge_mode", "immediate", ENUM("immediate", "delayed") }
 /* The mode in which messages (and their corresponding cache entries)
-   are expunged.  "immediate" is the default behavior in which the
+   are expunged.  "Immediate" mode is the default behavior in which the
    message files and cache entries are purged at the time of the
    EXPUNGE.  In "delayed" mode, the messages are removed from the
    mailbox index at the time of the EXPUNGE (hiding them from the
    client), but the message files and cache entries are left behind,
-   to be purged at a later time by "cyr_expire". */
+   to be purged at a later time by "cyr_expire".  This reduces the
+   amount of I/O that takes place at the time of EXPUNGE and should
+   result in greater responsiveness for the client, especially when
+   expunging a large number of messages. */
 
 { "foolstupidclients", 0, SWITCH }
 /* If enabled, only list the personal namespace when a LIST "*" is performed.
