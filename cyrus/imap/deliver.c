@@ -323,7 +323,7 @@ smtpmode()
     char **rcpt_addr = 0;
     int rcpt_num = 0;
     int rcpt_alloc = 0;
-    int mult_mode = 0;
+    int mrep_mode = 0;
     char myhostname[1024];
     char buf[4096];
     int r;
@@ -410,8 +410,8 @@ smtpmode()
 		printf("250 2.1.5 ok\r\n");
 		continue;
 	    }
-	    else if (!strcasecmp(buf, "mult")) {
-		mult_mode = 1;
+	    else if (!strcasecmp(buf, "mrep")) {
+		mrep_mode = 1;
 		printf("250 2.0.0 ok\r\n");
 		continue;
 	    }
@@ -440,8 +440,8 @@ smtpmode()
 		    printf("503 5.5.1 Need MAIL command\r\n");
 		    continue;
 		}
-		if (!mult_mode && rcpt_num) {
-		    printf("450 4.5.3 Need MULT for multiple recipients\r\n");
+		if (!mrep_mode && rcpt_num) {
+		    printf("450 4.5.3 Need MREP for multiple recipients\r\n");
 		    continue;
 		}
 		if (rcpt_num == rcpt_alloc) {
