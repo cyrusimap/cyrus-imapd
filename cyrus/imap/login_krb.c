@@ -147,18 +147,20 @@ char **reply;
 	val = config_getstring("imspservers", "");
 	while (*val) {
 	    if (!strncasecmp(val, auth_inst, strlen(auth_inst)) &&
-		(!val[strlen(auth_inst)] || val[strlen(auth_inst)] != '.')) {
+		(!val[strlen(auth_inst)] || val[strlen(auth_inst)] == '.' ||
+		 val[strlen(auth_inst)] == ' ')) {
 		break;
 	    }
 	    while (*val && !isspace(*val)) val++;
-		while (*val && isspace(*val)) val++;
-	    }
-	    if (*val) {
-		sprintf(replybuf, "proxy from imap.%s@%s",
-			auth_inst, auth_realm);
-		*reply = replybuf;
-		return 0;
-	    }
+	    while (*val && isspace(*val)) val++;
+	}
+
+	if (*val) {
+	    sprintf(replybuf, "proxy from imap.%s@%s",
+		    auth_inst, auth_realm);
+	    *reply = replybuf;
+	    return 0;
+	}
     }
 
     sprintf(replybuf, "proxy login from %s%s%s@%s denied",
