@@ -81,6 +81,8 @@ char **argv;
 
     config_init("deliver");
 
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+
     while ((opt = getopt(argc, argv, "df:r:m:a:F:eE:s")) != EOF) {
 	switch(opt) {
 	case 'd':

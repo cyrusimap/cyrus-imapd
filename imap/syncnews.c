@@ -64,6 +64,8 @@ char **argv;
 
     config_init("syncnews");
 
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+
     while ((opt = getopt(argc, argv, "")) != EOF) {
 	switch (opt) {
 	default:
