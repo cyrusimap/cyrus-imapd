@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.131 2000/07/06 17:19:31 leg Exp $
+ * $Id: mboxlist.c,v 1.132 2000/07/11 17:54:59 leg Exp $
  */
 
 #include <config.h>
@@ -330,9 +330,6 @@ mboxlist_mycreatemailboxcheck(char *name, int mbtype, char *partition,
 	return IMAP_PARTITION_UNKNOWN;
     }
     r = mboxname_policycheck(name);
-    if (r) return r;
-
-    if (mbtype & MBTYPE_NETNEWS) r = mboxname_netnewscheck(name);
     if (r) return r;
 
     /* User has admin rights over their own mailbox namespace */
@@ -1011,14 +1008,6 @@ int mboxlist_deletemailbox(char *name, int isadmin, char *userid,
      * See if we have to remove mailbox's quota root
      */
     if (!r && !isremote) {
-	if (deleteuser) {
-	    /* Delete any subscription list file */
-	    char *fname = mboxlist_hash_usersubs(mboxent->name + 5);
-	    
-	    (void) unlink(fname);
-	    free(fname);
-	}
-
 	r = mboxlist_getpath(mboxent->partition, mboxent->name, &path);
 	if (!r) r = mailbox_open_header_path(mboxent->name, path, 
 					     mboxent->acls, 0, &mailbox, 0);
@@ -1063,6 +1052,14 @@ int mboxlist_deletemailbox(char *name, int isadmin, char *userid,
 		   db_strerror(r));
 	    r = IMAP_IOERROR;
 	}
+    }
+
+    if (!r && deleteuser) {
+	/* Delete any subscription list file */
+	char *fname = mboxlist_hash_usersubs(mboxent->name + 5);
+	
+	(void) unlink(fname);
+	free(fname);
     }
 
     return r;
@@ -1839,6 +1836,528 @@ int mboxlist_findall(char *pattern, int isadmin, char *userid,
     return r;
 }
 
+/*
+ * Set the quota on or create a quota root
+ */
+int mboxlist_setquota(const char *root, int newquota)
+{
+    char quota_path[MAX_MAILBOX_PATH];
+    char pattern[MAX_MAILBOX_PATH];
+    struct quota quota;
+    static struct quota zeroquota;
+    int r;
+    unsigned long len = 0;
+
+    if (!root[0] || root[0] == '.' || strchr(root, '/')
+	|| strchr(root, '*') || strchr(root, '%') || strchr(root, '?')) {
+	return IMAP_MAILBOX_BADNAME;
+    }
+    
+    quota = zeroquota;
+
+    quota.root = (char *) root;
+    mailbox_hash_quota(quota_path, root);
+
+    if ((quota.fd = open(quota_path, O_RDWR, 0)) != -1) {
+	/* Just lock and change it */
+	r = mailbox_lock_quota(&quota);
+
+	quota.limit = newquota;
+
+	if (!r) r = mailbox_write_quota(&quota);
+	if (quota.fd != -1) {
+	    close(quota.fd);
+	}
+	return r;
+    }
+
+    /*
+     * Have to create a new quota root
+     */
+
+    {
+	DBC *cursor = NULL;
+	struct mbox_entry *mboxent = NULL;
+	DBT key, data;
+	int r2;
+	
+	r = mbdb->cursor(mbdb, NULL, &cursor, 0);
+	if (r != 0) { 
+	    syslog(LOG_ERR, "DBERROR: couldn't create cursor in createqr: %s",
+		   db_strerror(r));
+	    return r;
+	}
+	
+	memset(&data, 0, sizeof(data));
+	memset(&key, 0, sizeof(key));
+	key.data = quota.root; 
+	key.size = strlen(quota.root);
+
+	/* look for a mailbox in the proposed quotaroot */
+	r = cursor->c_get(cursor, &key, &data, DB_SET_RANGE);
+	switch (r) {
+	case 0:
+	    mboxent = (struct mbox_entry *) data.data;
+	    
+	    if ( strlen(mboxent->name) < strlen(quota.root)) {
+		/* found mailbox shorter than qr name */
+		r = IMAP_MAILBOX_NONEXISTENT;
+	    } else if (strncmp(mboxent->name, quota.root, 
+			       strlen(quota.root)) != 0) {
+		/* the prefix of the mailbox doesn't match the qr */
+		r = IMAP_MAILBOX_NONEXISTENT;
+	    } else if (strlen(mboxent->name) > strlen(quota.root) &&
+		       (mboxent->name[ strlen(quota.root) ] != '.')) {
+		/* the prefix matches, but it's not a seperator */
+		r = IMAP_MAILBOX_NONEXISTENT;
+	    }
+	    break;
+	    
+	case DB_NOTFOUND:
+	    /* no mailbox */
+	    r = IMAP_MAILBOX_NONEXISTENT;
+	    break;
+	    
+	default:
+	    syslog(LOG_ERR, "DBERROR: error search for mbox: %s", 
+		   db_strerror(r));
+	    r = IMAP_IOERROR;
+	    break;
+	}
+	
+	switch (r2 = cursor->c_close(cursor)) {
+	case 0:
+	    if (r != 0) {
+		/* cursor close is ok, but don't create the qr */
+		return r;
+	    }
+	    break;
+	default:
+	    syslog(LOG_ERR, "DBERROR: couldn't close cursor: %s",
+		   db_strerror(r2));
+	    return IMAP_IOERROR;
+	    break;
+	}
+    }
+
+    /* perhaps create .NEW, lock, check if it got recreated, move in place */
+    quota.lock_count = 1;
+    quota.used = 0;
+    quota.limit = newquota;
+    r = mailbox_write_quota(&quota);
+
+    if (r) {
+	return r;
+    }
+
+    strcpy(pattern, quota.root);
+    strcat(pattern, ".*");
+    mboxlist_newquota = &quota;
+    
+    if (len) {
+	mboxlist_changequota(quota.root, 0, 0);
+    }
+    mboxlist_findall(pattern, 1, 0, 0, mboxlist_changequota, NULL);
+    
+    r = mailbox_write_quota(&quota);
+    if (quota.fd != -1) {
+	close(quota.fd);
+    }
+
+    return r;
+}
+
+/*
+ * Retrieve internal information, for reconstructing mailboxes file
+ */
+void mboxlist_getinternalstuff(const char **listfnamep,
+			       const char **newlistfnamep, 
+			       const char **basep,
+			       unsigned long * sizep)
+{
+    printf("yikes! don't reconstruct me!\n");
+    abort();
+}
+
+/* Case-dependent comparison converter.
+ * Treats \r and \t as end-of-string and treats '.' lower than
+ * everything else.
+ */
+#define TOCOMPARE(c) (convert_to_compare[(unsigned char)(c)])
+static unsigned char convert_to_compare[256] = {
+    0x00, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09,
+    0x0a, 0x01, 0x01, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+    0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+    0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27,
+    0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x02, 0x2f,
+    0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
+    0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
+    0x40, 'A', 'B', 'C', 'D', 'E', 'F', 'G',
+    'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O',
+    'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W',
+    'X', 'Y', 'Z', 0x5b, 0x5c, 0x5d, 0x5e, 0x5f,
+    0x60, 'a', 'b', 'c', 'd', 'e', 'f', 'g',
+    'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o',
+    'p', 'q', 'r', 's', 't', 'u', 'v', 'w',
+    'x', 'y', 'z', 0x7b, 0x7c, 0x7d, 0x7e, 0x7f,
+    0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87,
+    0x88, 0x89, 0x8a, 0x8b, 0x8c, 0x8d, 0x8e, 0x8f,
+    0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97,
+    0x98, 0x99, 0x9a, 0x9b, 0x9c, 0x9d, 0x9e, 0x9f,
+    0xa0, 0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7,
+    0xa8, 0xa9, 0xaa, 0xab, 0xac, 0xad, 0xae, 0xaf,
+    0xb0, 0xb1, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7,
+    0xb8, 0xb9, 0xba, 0xbb, 0xbc, 0xbd, 0xbe, 0xbf,
+    0xc0, 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7,
+    0xc8, 0xc9, 0xca, 0xcb, 0xcc, 0xcd, 0xce, 0xcf,
+    0xd0, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 0xd7,
+    0xd8, 0xd9, 0xda, 0xdb, 0xdc, 0xdd, 0xde, 0xdf,
+    0xe0, 0xe1, 0xe2, 0xe3, 0xe4, 0xe5, 0xe6, 0xe7,
+    0xe8, 0xe9, 0xea, 0xeb, 0xec, 0xed, 0xee, 0xef,
+    0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7,
+    0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff
+};
+
+__inline__ static int MIN(int a, int b)
+{
+    if (a < b) {
+	return a;
+    } else {
+	return b;
+    }
+}
+
+static int mbdb_order(const DBT *a, const DBT *b)
+{
+    char *s1 = a->data;
+    char *s2 = b->data;
+    int cmp;
+    int i, m;
+
+    m = MIN(a->size, b->size);
+    i = 0;
+    for (i = 0; i < m; i++) {
+        cmp = TOCOMPARE(s1[i]) - TOCOMPARE(s2[i]);
+        if (cmp) return cmp;
+    }
+    if (i == a->size) {
+	if (i == b->size) {
+	    return 0;
+	}
+        /* s1 is shorter than s2 */
+        return -1;
+    }
+    /* s2 is shorter than s1 */
+    return 1;
+}
+
+
+
+/*
+ * ACL access canonicalization routine which ensures that 'owner'
+ * retains lookup, administer, and create rights over a mailbox.
+ */
+int mboxlist_ensureOwnerRights(rock, identifier, access)
+void *rock;
+const char *identifier;
+int access;
+{
+    char *owner = (char *)rock;
+    if (strcmp(identifier, owner) != 0) return access;
+    return access|ACL_LOOKUP|ACL_ADMIN|ACL_CREATE;
+}
+
+/*
+ * Helper function to change the quota root for 'name' to that pointed
+ * to by the static global struct pointer 'mboxlist_newquota'.
+ */
+static int
+mboxlist_changequota(name, matchlen, maycreate)
+char *name;
+int matchlen;
+int maycreate;
+{
+    int r;
+    struct mailbox mailbox;
+
+    r = mailbox_open_header(name, 0, &mailbox);
+    if (r) goto error_noclose;
+
+    r = mailbox_lock_header(&mailbox);
+    if (r) goto error;
+
+    r = mailbox_open_index(&mailbox);
+    if (r) goto error;
+
+    r = mailbox_lock_index(&mailbox);
+    if (r) goto error;
+
+    if (mailbox.quota.root) {
+	if (strlen(mailbox.quota.root) >= strlen(mboxlist_newquota->root)) {
+	    /* Part of a child quota root */
+	    mailbox_close(&mailbox);
+	    return 0;
+	}
+
+	r = mailbox_lock_quota(&mailbox.quota);
+	if (r) goto error;
+	if (mailbox.quota.used >= mailbox.quota_mailbox_used) {
+	    mailbox.quota.used -= mailbox.quota_mailbox_used;
+	}
+	else {
+	    mailbox.quota.used = 0;
+	}
+	r = mailbox_write_quota(&mailbox.quota);
+	if (r) {
+	    syslog(LOG_ERR,
+		   "LOSTQUOTA: unable to record free of %u bytes in quota %s",
+		   mailbox.quota_mailbox_used, mailbox.quota.root);
+	}
+	mailbox_unlock_quota(&mailbox.quota);
+	free(mailbox.quota.root);
+    }
+
+    mailbox.quota.root = xstrdup(mboxlist_newquota->root);
+    r = mailbox_write_header(&mailbox);
+    if (r) goto error;
+
+    mboxlist_newquota->used += mailbox.quota_mailbox_used;
+    mailbox_close(&mailbox);
+    return 0;
+
+ error:
+    mailbox_close(&mailbox);
+ error_noclose:
+    syslog(LOG_ERR, "LOSTQUOTA: unable to change quota root for %s to %s: %s",
+	   name, mboxlist_newquota->root, error_message(r));
+    
+    return 0;
+}
+
+void db_panic(DB_ENV *dbenv, int errno)
+{
+    syslog(LOG_CRIT, "DBERROR: critical database situation");
+    /* but don't bounce mail */
+    exit(EC_TEMPFAIL);
+}
+
+static void db_err(const char *db_prfx, char *buffer)
+{
+    syslog(LOG_ERR, "DBERROR %s: %s", db_prfx, buffer);
+}
+
+void mboxlist_init(int myflags)
+{
+    int r;
+    int flags = 0;
+    char dbdir[1024];
+
+    assert (!mboxlist_dbinit);
+
+    if (myflags & MBOXLIST_RECOVER) flags |= DB_RECOVER;
+
+    if ((r = db_env_create(&dbenv, 0)) != 0) {
+	char err[1024];
+	    
+	sprintf(err, "DBERROR: db_appinit failed: %s", db_strerror(r));
+	    
+	syslog(LOG_ERR, err);
+	fatal(err, EC_TEMPFAIL);
+    }
+
+    dbenv->set_paniccall(dbenv, (void (*)(DB_ENV *, int)) &db_panic);
+
+    dbenv->set_verbose(dbenv, DB_VERB_DEADLOCK, 1);
+    dbenv->set_verbose(dbenv, DB_VERB_WAITSFOR, 1);
+    dbenv->set_verbose(dbenv, DB_VERB_CHKPOINT, 1);
+    dbenv->set_errpfx(dbenv, "mbdb");
+    dbenv->set_lk_detect(dbenv, CONFIG_DEADLOCK_DETECTION);
+    dbenv->set_lk_max(dbenv, 10000);
+    dbenv->set_errcall(dbenv, db_err);
+
+    /*
+     * We want to specify the shared memory buffer pool cachesize,
+     * but everything else is the default.
+     */
+    if ((r = dbenv->set_cachesize(dbenv, 0, 64 * 1024, 0)) != 0) {
+	dbenv->err(dbenv, r, "set_cachesize");
+	dbenv->close(dbenv, 0);
+	fatal("DBERROR: set_cachesize()", EC_TEMPFAIL);
+    }
+
+    /* create the name of the db file */
+    strcpy(dbdir, config_dir);
+    strcat(dbdir, FNAME_DBDIR);
+    flags |= DB_CREATE | DB_INIT_LOCK | DB_INIT_MPOOL | 
+	     DB_INIT_LOG | DB_INIT_TXN;
+#if DB_VERSION_MINOR > 0
+    r = dbenv->open(dbenv, dbdir, flags, 0644); 
+#else
+    r = dbenv->open(dbenv, dbdir, NULL, flags, 0644); 
+#endif
+    if (r) {
+	char err[1024];
+	    
+	sprintf(err, "DBERROR: dbenv->open '%s' failed: %s", dbdir,
+		db_strerror(r));
+	syslog(LOG_ERR, err);
+	fatal(err, EC_TEMPFAIL);
+    }
+
+    if (myflags & MBOXLIST_SYNC) {
+	do {
+#if DB_VERSION_MINOR > 0
+	    r = txn_checkpoint(dbenv, 0, 0, 0);
+#else
+	    r = txn_checkpoint(dbenv, 0, 0);
+#endif
+	} while (r == DB_INCOMPLETE);
+	if (r) {
+	    syslog(LOG_ERR, "DBERROR: couldn't checkpoint: %s",
+		   db_strerror(r));
+	}
+    }
+
+    mboxlist_dbinit = 1;
+
+    r = acap_init();
+    if (r != ACAP_OK) {
+	syslog(LOG_ERR,"acap_init failed()");
+    }
+}
+
+void mboxlist_open(char *fname)
+{
+    int ret;
+    char *tofree = NULL;
+
+    assert (mboxlist_dbinit);
+
+    /* create db file name */
+    if (!fname) {
+	fname = xmalloc(strlen(config_dir)+sizeof(FNAME_MBOXLIST));
+	tofree = fname;
+	strcpy(fname, config_dir);
+	strcat(fname, FNAME_MBOXLIST);
+    }
+
+    ret = db_create(&mbdb, dbenv, 0);
+    if (ret != 0) {
+	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
+	       db_strerror(ret));
+	    /* Exiting TEMPFAIL because Sendmail thinks this
+	       EC_OSFILE == permanent failure. */
+	fatal("db_create() failed", EC_TEMPFAIL);
+    }    
+    mbdb->set_bt_compare(mbdb, &mbdb_order);
+    /* mbdb->set_bt_prefix(mbdb, &mbdb_prefix);*/
+
+    ret = mbdb->open(mbdb, fname, NULL, DB_BTREE, DB_CREATE, 0664);
+    if (ret != 0) {
+	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
+	       db_strerror(ret));
+	    /* Exiting TEMPFAIL because Sendmail thinks this
+	       EC_OSFILE == permanent failure. */
+	fatal("can't read mailboxes file", EC_TEMPFAIL);
+    }    
+
+    if (tofree) free(tofree);
+
+    mboxlist_dbopen = 1;
+}
+
+void
+mboxlist_close(void)
+{
+    int r;
+
+    if (mboxlist_dbopen) {
+	r = mbdb->close(mbdb, 0);
+	if (r) {
+	    syslog(LOG_ERR, "DBERROR: error closing mailboxes: %s",
+		   db_strerror(r));
+	}
+    }
+}
+
+void mboxlist_done(void)
+{
+    int r;
+
+    assert (mboxlist_dbinit);
+
+    r = dbenv->close(dbenv, 0);
+    if (r) {
+	syslog(LOG_ERR, "DBERROR: error exiting application: %s",
+	       db_strerror(r));
+    }
+    
+    mboxlist_dbinit = 0;
+
+    /* finish ACAP API here */
+}
+
+/* hash the userid to a file containing the subscriptions for that user */
+static char *mboxlist_hash_usersubs(const char *userid)
+{
+    char *fname = xmalloc(strlen(config_dir) + sizeof(FNAME_USERDIR) +
+			  strlen(userid) + sizeof(FNAME_SUBSSUFFIX) + 10);
+    char c;
+
+    c = (char) tolower((int) *userid);
+    if (!islower((int) c)) {
+	c = 'q';
+    }
+    sprintf(fname, "%s%s%c/%s%s", config_dir, FNAME_USERDIR, c, userid,
+	    FNAME_SUBSSUFFIX);
+
+    return fname;
+}
+
+/*
+ * Open the subscription list for 'userid'.
+ * 
+ * On success, returns zero.
+ * On failure, returns an error code.
+ */
+static int
+mboxlist_opensubs(const char *userid,
+		  struct db **ret)
+{
+    int r = 0;
+    char *subsfname;
+    char inboxname[MAX_MAILBOX_NAME+1];
+
+    /* Users without INBOXes may not keep subscriptions */
+    if (strchr(userid, '.') || strlen(userid) + 6 > MAX_MAILBOX_NAME) {
+	return IMAP_PERMISSION_DENIED;
+    }
+    strcpy(inboxname, "user.");
+    strcat(inboxname, userid);
+    if (mboxlist_lookup(inboxname, NULL, NULL, NULL) != 0) {
+	return IMAP_PERMISSION_DENIED;
+    }
+
+    /* Build subscription list filename */
+    subsfname = mboxlist_hash_usersubs(userid);
+    r = SUBDB->open(subsfname, ret);
+    if (r != CYRUSDB_OK) {
+	r = IMAP_IOERROR;
+    }
+    free(subsfname);
+
+    return r;
+}
+
+/*
+ * Close a subscription file
+ */
+static void mboxlist_closesubs(struct db *sub)
+{
+    SUBDB->close(sub);
+}
+
 struct findsub_rock {
     struct glob *g;
     int inboxsubs;
@@ -2077,527 +2596,4 @@ int mboxlist_changesub(const char *name, const char *userid,
 
     mboxlist_closesubs(subs);
     return r;
-}
-
-/*
- * Set the quota on or create a quota root
- */
-int mboxlist_setquota(const char *root, int newquota)
-{
-    char quota_path[MAX_MAILBOX_PATH];
-    char pattern[MAX_MAILBOX_PATH];
-    struct quota quota;
-    static struct quota zeroquota;
-    int r;
-    unsigned long len = 0;
-
-    if (!root[0] || root[0] == '.' || strchr(root, '/')
-	|| strchr(root, '*') || strchr(root, '%') || strchr(root, '?')) {
-	return IMAP_MAILBOX_BADNAME;
-    }
-    
-    quota = zeroquota;
-
-    quota.root = (char *) root;
-    mailbox_hash_quota(quota_path, root);
-
-    if ((quota.fd = open(quota_path, O_RDWR, 0)) != -1) {
-	/* Just lock and change it */
-	r = mailbox_lock_quota(&quota);
-
-	quota.limit = newquota;
-
-	if (!r) r = mailbox_write_quota(&quota);
-	if (quota.fd != -1) {
-	    close(quota.fd);
-	}
-	return r;
-    }
-
-    /*
-     * Have to create a new quota root
-     */
-
-    {
-	DBC *cursor = NULL;
-	struct mbox_entry *mboxent = NULL;
-	DBT key, data;
-	int r2;
-	
-	r = mbdb->cursor(mbdb, NULL, &cursor, 0);
-	if (r != 0) { 
-	    syslog(LOG_ERR, "DBERROR: couldn't create cursor in createqr: %s",
-		   db_strerror(r));
-	    return r;
-	}
-	
-	memset(&data, 0, sizeof(data));
-	memset(&key, 0, sizeof(key));
-	key.data = quota.root; 
-	key.size = strlen(quota.root);
-
-	/* look for a mailbox in the proposed quotaroot */
-	r = cursor->c_get(cursor, &key, &data, DB_SET_RANGE);
-	switch (r) {
-	case 0:
-	    mboxent = (struct mbox_entry *) data.data;
-	    
-	    if ( strlen(mboxent->name) < strlen(quota.root)) {
-		/* found mailbox shorter than qr name */
-		r = IMAP_MAILBOX_NONEXISTENT;
-	    } else if (strncmp(mboxent->name, quota.root, 
-			       strlen(quota.root)) != 0) {
-		/* the prefix of the mailbox doesn't match the qr */
-		r = IMAP_MAILBOX_NONEXISTENT;
-	    } else if (strlen(mboxent->name) > strlen(quota.root) &&
-		       (mboxent->name[ strlen(quota.root) ] != '.')) {
-		/* the prefix matches, but it's not a seperator */
-		r = IMAP_MAILBOX_NONEXISTENT;
-	    }
-	    break;
-	    
-	case DB_NOTFOUND:
-	    /* no mailbox */
-	    r = IMAP_MAILBOX_NONEXISTENT;
-	    break;
-	    
-	default:
-	    syslog(LOG_ERR, "DBERROR: error search for mbox: %s", 
-		   db_strerror(r));
-	    r = IMAP_IOERROR;
-	    break;
-	}
-	
-	switch (r2 = cursor->c_close(cursor)) {
-	case 0:
-	    if (r != 0) {
-		/* cursor close is ok, but don't create the qr */
-		return r;
-	    }
-	    break;
-	default:
-	    syslog(LOG_ERR, "DBERROR: couldn't close cursor: %s",
-		   db_strerror(r2));
-	    return IMAP_IOERROR;
-	    break;
-	}
-    }
-
-    /* perhaps create .NEW, lock, check if it got recreated, move in place */
-    quota.lock_count = 1;
-    quota.used = 0;
-    quota.limit = newquota;
-    r = mailbox_write_quota(&quota);
-
-    if (r) {
-	return r;
-    }
-
-    strcpy(pattern, quota.root);
-    strcat(pattern, ".*");
-    mboxlist_newquota = &quota;
-    
-    if (len) {
-	mboxlist_changequota(quota.root, 0, 0);
-    }
-    mboxlist_findall(pattern, 1, 0, 0, mboxlist_changequota, NULL);
-    
-    r = mailbox_write_quota(&quota);
-    if (quota.fd != -1) {
-	close(quota.fd);
-    }
-
-    return r;
-}
-
-/*
- * Retrieve internal information, for reconstructing mailboxes file
- */
-void mboxlist_getinternalstuff(const char **listfnamep,
-			       const char **newlistfnamep, 
-			       const char **basep,
-			       unsigned long * sizep)
-{
-    printf("yikes! don't reconstruct me!\n");
-    abort();
-}
-
-/*
- * Open the subscription list for 'userid'.
- * 
- * On success, returns zero.
- * On failure, returns an error code.
- */
-static int
-mboxlist_opensubs(const char *userid,
-		  struct db **ret)
-{
-    int r = 0;
-    char *subsfname;
-    char inboxname[MAX_MAILBOX_NAME+1];
-
-    /* Users without INBOXes may not keep subscriptions */
-    if (strchr(userid, '.') || strlen(userid) + 6 > MAX_MAILBOX_NAME) {
-	return IMAP_PERMISSION_DENIED;
-    }
-    strcpy(inboxname, "user.");
-    strcat(inboxname, userid);
-    if (mboxlist_lookup(inboxname, NULL, NULL, NULL) != 0) {
-	return IMAP_PERMISSION_DENIED;
-    }
-
-    /* Build subscription list filename */
-    subsfname = mboxlist_hash_usersubs(userid);
-    r = SUBDB->open(subsfname, ret);
-    if (r != CYRUSDB_OK) {
-	r = IMAP_IOERROR;
-    }
-    free(subsfname);
-
-    return r;
-}
-
-/*
- * Close a subscription file
- */
-static void mboxlist_closesubs(struct db *sub)
-{
-    SUBDB->close(sub);
-}
-
-/* Case-dependent comparison converter.
- * Treats \r and \t as end-of-string and treats '.' lower than
- * everything else.
- */
-#define TOCOMPARE(c) (convert_to_compare[(unsigned char)(c)])
-static unsigned char convert_to_compare[256] = {
-    0x00, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09,
-    0x0a, 0x01, 0x01, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
-    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
-    0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
-    0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27,
-    0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x02, 0x2f,
-    0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
-    0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
-    0x40, 'A', 'B', 'C', 'D', 'E', 'F', 'G',
-    'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O',
-    'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W',
-    'X', 'Y', 'Z', 0x5b, 0x5c, 0x5d, 0x5e, 0x5f,
-    0x60, 'a', 'b', 'c', 'd', 'e', 'f', 'g',
-    'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o',
-    'p', 'q', 'r', 's', 't', 'u', 'v', 'w',
-    'x', 'y', 'z', 0x7b, 0x7c, 0x7d, 0x7e, 0x7f,
-    0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87,
-    0x88, 0x89, 0x8a, 0x8b, 0x8c, 0x8d, 0x8e, 0x8f,
-    0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97,
-    0x98, 0x99, 0x9a, 0x9b, 0x9c, 0x9d, 0x9e, 0x9f,
-    0xa0, 0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7,
-    0xa8, 0xa9, 0xaa, 0xab, 0xac, 0xad, 0xae, 0xaf,
-    0xb0, 0xb1, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7,
-    0xb8, 0xb9, 0xba, 0xbb, 0xbc, 0xbd, 0xbe, 0xbf,
-    0xc0, 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7,
-    0xc8, 0xc9, 0xca, 0xcb, 0xcc, 0xcd, 0xce, 0xcf,
-    0xd0, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 0xd7,
-    0xd8, 0xd9, 0xda, 0xdb, 0xdc, 0xdd, 0xde, 0xdf,
-    0xe0, 0xe1, 0xe2, 0xe3, 0xe4, 0xe5, 0xe6, 0xe7,
-    0xe8, 0xe9, 0xea, 0xeb, 0xec, 0xed, 0xee, 0xef,
-    0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7,
-    0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff
-};
-
-__inline__ static int MIN(int a, int b)
-{
-    if (a < b) {
-	return a;
-    } else {
-	return b;
-    }
-}
-
-static int mbdb_order(const DBT *a, const DBT *b)
-{
-    char *s1 = a->data;
-    char *s2 = b->data;
-    int cmp;
-    int i, m;
-
-    m = MIN(a->size, b->size);
-    i = 0;
-    for (i = 0; i < m; i++) {
-        cmp = TOCOMPARE(s1[i]) - TOCOMPARE(s2[i]);
-        if (cmp) return cmp;
-    }
-    if (i == a->size) {
-	if (i == b->size) {
-	    return 0;
-	}
-        /* s1 is shorter than s2 */
-        return -1;
-    }
-    /* s2 is shorter than s1 */
-    return 1;
-}
-
-
-
-/*
- * ACL access canonicalization routine which ensures that 'owner'
- * retains lookup, administer, and create rights over a mailbox.
- */
-int mboxlist_ensureOwnerRights(rock, identifier, access)
-void *rock;
-const char *identifier;
-int access;
-{
-    char *owner = (char *)rock;
-    if (strcmp(identifier, owner) != 0) return access;
-    return access|ACL_LOOKUP|ACL_ADMIN|ACL_CREATE;
-}
-
-/*
- * Helper function to change the quota root for 'name' to that pointed
- * to by the static global struct pointer 'mboxlist_newquota'.
- */
-static int
-mboxlist_changequota(name, matchlen, maycreate)
-char *name;
-int matchlen;
-int maycreate;
-{
-    int r;
-    struct mailbox mailbox;
-
-    r = mailbox_open_header(name, 0, &mailbox);
-    if (r) goto error_noclose;
-
-    r = mailbox_lock_header(&mailbox);
-    if (r) goto error;
-
-    r = mailbox_open_index(&mailbox);
-    if (r) goto error;
-
-    r = mailbox_lock_index(&mailbox);
-    if (r) goto error;
-
-    if (mailbox.quota.root) {
-	if (strlen(mailbox.quota.root) >= strlen(mboxlist_newquota->root)) {
-	    /* Part of a child quota root */
-	    mailbox_close(&mailbox);
-	    return 0;
-	}
-
-	r = mailbox_lock_quota(&mailbox.quota);
-	if (r) goto error;
-	if (mailbox.quota.used >= mailbox.quota_mailbox_used) {
-	    mailbox.quota.used -= mailbox.quota_mailbox_used;
-	}
-	else {
-	    mailbox.quota.used = 0;
-	}
-	r = mailbox_write_quota(&mailbox.quota);
-	if (r) {
-	    syslog(LOG_ERR,
-		   "LOSTQUOTA: unable to record free of %u bytes in quota %s",
-		   mailbox.quota_mailbox_used, mailbox.quota.root);
-	}
-	mailbox_unlock_quota(&mailbox.quota);
-	free(mailbox.quota.root);
-    }
-
-    mailbox.quota.root = xstrdup(mboxlist_newquota->root);
-    r = mailbox_write_header(&mailbox);
-    if (r) goto error;
-
-    mboxlist_newquota->used += mailbox.quota_mailbox_used;
-    mailbox_close(&mailbox);
-    return 0;
-
- error:
-    mailbox_close(&mailbox);
- error_noclose:
-    syslog(LOG_ERR, "LOSTQUOTA: unable to change quota root for %s to %s: %s",
-	   name, mboxlist_newquota->root, error_message(r));
-    
-    return 0;
-}
-
-void db_panic(DB_ENV *dbenv, int errno)
-{
-    syslog(LOG_CRIT, "DBERROR: critical database situation");
-    /* but don't bounce mail */
-    exit(EC_TEMPFAIL);
-}
-
-static void db_err(const char *db_prfx, char *buffer)
-{
-    syslog(LOG_ERR, "DBERROR %s: %s", db_prfx, buffer);
-}
-
-void mboxlist_init(int myflags)
-{
-    int r;
-    int flags = 0;
-    char dbdir[1024];
-
-    assert (!mboxlist_dbinit);
-
-    if (myflags & MBOXLIST_RECOVER) flags |= DB_RECOVER;
-
-    if ((r = db_env_create(&dbenv, 0)) != 0) {
-	char err[1024];
-	    
-	sprintf(err, "DBERROR: db_appinit failed: %s", db_strerror(r));
-	    
-	syslog(LOG_ERR, err);
-	fatal(err, EC_TEMPFAIL);
-    }
-
-    dbenv->set_paniccall(dbenv, (void (*)(DB_ENV *, int)) &db_panic);
-
-    dbenv->set_verbose(dbenv, DB_VERB_DEADLOCK, 1);
-    dbenv->set_verbose(dbenv, DB_VERB_WAITSFOR, 1);
-    dbenv->set_verbose(dbenv, DB_VERB_CHKPOINT, 1);
-    dbenv->set_verbose(dbenv, DB_VERB_WAITSFOR, 1);
-    dbenv->set_errpfx(dbenv, "mbdb");
-    dbenv->set_lk_detect(dbenv, CONFIG_DEADLOCK_DETECTION);
-    dbenv->set_lk_max(dbenv, 10000);
-    dbenv->set_errcall(dbenv, db_err);
-
-    /*
-     * We want to specify the shared memory buffer pool cachesize,
-     * but everything else is the default.
-     */
-    if ((r = dbenv->set_cachesize(dbenv, 0, 64 * 1024, 0)) != 0) {
-	dbenv->err(dbenv, r, "set_cachesize");
-	dbenv->close(dbenv, 0);
-	fatal("DBERROR: set_cachesize()", EC_TEMPFAIL);
-    }
-
-    /* create the name of the db file */
-    strcpy(dbdir, config_dir);
-    strcat(dbdir, FNAME_DBDIR);
-    flags |= DB_CREATE | DB_INIT_LOCK | DB_INIT_MPOOL | 
-	     DB_INIT_LOG | DB_INIT_TXN;
-#if DB_VERSION_MINOR > 0
-    r = dbenv->open(dbenv, dbdir, flags, 0644); 
-#else
-    r = dbenv->open(dbenv, dbdir, NULL, flags, 0644); 
-#endif
-    if (r) {
-	char err[1024];
-	    
-	sprintf(err, "DBERROR: dbenv->open '%s' failed: %s", dbdir,
-		db_strerror(r));
-	syslog(LOG_ERR, err);
-	fatal(err, EC_TEMPFAIL);
-    }
-
-    if (myflags & MBOXLIST_SYNC) {
-	do {
-#if DB_VERSION_MINOR > 0
-	    r = txn_checkpoint(dbenv, 0, 0, 0);
-#else
-	    r = txn_checkpoint(dbenv, 0, 0);
-#endif
-	} while (r == DB_INCOMPLETE);
-	if (r) {
-	    syslog(LOG_ERR, "DBERROR: couldn't checkpoint: %s",
-		   db_strerror(r));
-	}
-    }
-
-    mboxlist_dbinit = 1;
-
-    r = acap_init();
-    if (r != ACAP_OK) {
-	syslog(LOG_ERR,"acap_init failed()");
-    }
-}
-
-void mboxlist_open(char *fname)
-{
-    int ret;
-    char *tofree = NULL;
-
-    assert (mboxlist_dbinit);
-
-    /* create db file name */
-    if (!fname) {
-	fname = xmalloc(strlen(config_dir)+sizeof(FNAME_MBOXLIST));
-	tofree = fname;
-	strcpy(fname, config_dir);
-	strcat(fname, FNAME_MBOXLIST);
-    }
-
-    ret = db_create(&mbdb, dbenv, 0);
-    if (ret != 0) {
-	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
-	       db_strerror(ret));
-	    /* Exiting TEMPFAIL because Sendmail thinks this
-	       EC_OSFILE == permanent failure. */
-	fatal("db_create() failed", EC_TEMPFAIL);
-    }    
-    mbdb->set_bt_compare(mbdb, &mbdb_order);
-    /* mbdb->set_bt_prefix(mbdb, &mbdb_prefix);*/
-
-    ret = mbdb->open(mbdb, fname, NULL, DB_BTREE, DB_CREATE, 0664);
-    if (ret != 0) {
-	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
-	       db_strerror(ret));
-	    /* Exiting TEMPFAIL because Sendmail thinks this
-	       EC_OSFILE == permanent failure. */
-	fatal("can't read mailboxes file", EC_TEMPFAIL);
-    }    
-
-    if (tofree) free(tofree);
-
-    mboxlist_dbopen = 1;
-}
-
-void
-mboxlist_close(void)
-{
-    int r;
-
-    if (mboxlist_dbopen) {
-	r = mbdb->close(mbdb, 0);
-	if (r) {
-	    syslog(LOG_ERR, "DBERROR: error closing mailboxes: %s",
-		   db_strerror(r));
-	}
-    }
-}
-
-void mboxlist_done(void)
-{
-    int r;
-
-    assert (mboxlist_dbinit);
-
-    r = dbenv->close(dbenv, 0);
-    if (r) {
-	syslog(LOG_ERR, "DBERROR: error exiting application: %s",
-	       db_strerror(r));
-    }
-    
-    mboxlist_dbinit = 0;
-
-    /* finish ACAP API here */
-}
-
-/* hash the userid to a file containing the subscriptions for that user */
-static char *mboxlist_hash_usersubs(const char *userid)
-{
-    char *fname = xmalloc(strlen(config_dir) + sizeof(FNAME_USERDIR) +
-			  strlen(userid) + sizeof(FNAME_SUBSSUFFIX) + 10);
-    char c;
-
-    c = (char) tolower((int) *userid);
-    if (!islower((int) c)) {
-	c = 'q';
-    }
-    sprintf(fname, "%s%s%c/%s%s", config_dir, FNAME_USERDIR, c, userid,
-	    FNAME_SUBSSUFFIX);
-
-    return fname;
 }

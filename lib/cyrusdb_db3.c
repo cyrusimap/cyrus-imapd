@@ -48,7 +48,25 @@
 #include "cyrusdb.h"
 #include "exitcodes.h"
 
+/* --- cut here --- */
+/*
+ * what berkeley db algorithm should we use for deadlock detection?
+ * 
+ * DB_LOCK_DEFAULT
+ *    Use the default policy as specified by db_deadlock. 
+ * DB_LOCK_OLDEST
+ *    Abort the oldest transaction. 
+ * DB_LOCK_RANDOM
+ *    Abort a random transaction involved in the deadlock. 
+ * DB_LOCK_YOUNGEST
+ *    Abort the youngest transaction. 
+ */
+
+#define CONFIG_DEADLOCK_DETECTION DB_LOCK_YOUNGEST
+#define CONFIG_DB_VERBOSE 1
 #define FNAME_DBDIR "/db"
+
+/* --- cut here --- */
 
 static int dbinit = 0;
 static DB_ENV *dbenv;
@@ -82,10 +100,14 @@ static int init(const char *dbdir, int myflags)
 	return CYRUSDB_IOERROR;
     }
     dbenv->set_paniccall(dbenv, (void (*)(DB_ENV *, int)) &db_panic);
-    /* dbenv->set_verbose(dbenv, DB_VERB_DEADLOCK, 1); */
-    /* dbenv->set_verbose(dbenv, DB_VERB_WAITSFOR, 1); */
-    /* dbenv->set_errpfx(dbenv, ""); */
-    dbenv->set_lk_detect(dbenv, DB_LOCK_DEFAULT);
+    if (CONFIG_DB_VERBOSE) {
+	dbenv->set_verbose(dbenv, DB_VERB_DEADLOCK, 1);
+	dbenv->set_verbose(dbenv, DB_VERB_WAITSFOR, 1);
+    }
+    if (CONFIG_DB_VERBOSE > 1) {
+	dbenv->set_verbose(dbenv, DB_VERB_CHKPOINT, 1);
+    }
+    dbenv->set_lk_detect(dbenv, CONFIG_DEADLOCK_DETECTION);
     dbenv->set_lk_max(dbenv, 10000);
     dbenv->set_errcall(dbenv, db_err);
 

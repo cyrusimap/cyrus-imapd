@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.131 2000/07/02 04:59:21 ken3 Exp $
+ * $Id: index.c,v 1.132 2000/07/11 17:54:57 leg Exp $
  */
 #include <config.h>
 
@@ -1580,7 +1580,6 @@ unsigned size;     /* this is the correct size for a news message after
 unsigned start_octet;
 unsigned octet_count;
 {
-    const char *line, *p;
     int n;
 
     /* partial fetch: adjust 'size', normalize 'start_octet' to be 0-based */
@@ -1604,64 +1603,16 @@ unsigned octet_count;
     /* Write size of literal */
     prot_printf(imapd_out, "{%u}\r\n", size);
 
-    if (format == MAILBOX_FORMAT_NETNEWS) {
-	/* Have to fetch line-by-line, converting LF to CRLF */
-	while (size) {
-	    line = msg_base + offset;
-	    p = memchr(line, '\n', msg_size - offset);
-	    if (!p) {
-		/* partial last line */
-		p = msg_base + msg_size;
-		offset--;	/* hack to keep from going off end
-				 * of mapped region on next iteration */
-		if (p == line) {
-		    /* File too short, resynch client */
-		    while (size--) prot_putc(' ', imapd_out);
-		    return;
-		}
-	    }
-	    n = p - line;
-	    offset += n + 1;
-	    if (start_octet >= n) {
-		/* Skip over entire line */
-		start_octet -= n;
-		if (!start_octet--) {
-		    start_octet = 0;
-		    prot_putc('\r', imapd_out);
-		    if (--size == 0) return;
-		}
-		if (!start_octet--) {
-		    start_octet = 0;
-		    prot_putc('\n', imapd_out);
-		    size--;
-		}
-	    }
-	    else {
-		/* Skip over (possibly zero) first part of line */
-		n -= start_octet;
-		if (n > size) n = size;
-		prot_write(imapd_out, line + start_octet, n);
-		start_octet = 0;
-		size -= n;
-		if (!size--) return;
-		prot_putc('\r', imapd_out);
-		if (!size--) return;
-		prot_putc('\n', imapd_out);
-	    }
-	}
+    /* Seek over PARTIAL constraint */
+    offset += start_octet;
+    n = size;
+    if (offset + size > msg_size) {
+	n = msg_size - offset;
     }
-    else {
-	/* Seek over PARTIAL constraint */
-	offset += start_octet;
-	n = size;
-	if (offset + size > msg_size) {
-	    n = msg_size - offset;
-	}
-	prot_write(imapd_out, msg_base + offset, n);
-	while (n++ < size) {
-	    /* File too short, resynch client */
-	    prot_putc(' ', imapd_out);
-	}
+    prot_write(imapd_out, msg_base + offset, n);
+    while (n++ < size) {
+	/* File too short, resynch client */
+	prot_putc(' ', imapd_out);
     }
 }
 
@@ -1904,8 +1855,6 @@ unsigned size;
 {
     static char *buf;
     static int bufsize;
-    int linelen, left;
-    char *p, *endline;
 
     if (offset + size > msg_size) {
 	/* Message file is too short, truncate request */
@@ -1924,29 +1873,9 @@ unsigned size;
 
     msg_base += offset;
 
-    if (format == MAILBOX_FORMAT_NETNEWS) {
-	left = size;
-	p = buf;
-	while ((endline = memchr(msg_base, '\n', left))!=NULL) {
-	    linelen = endline - msg_base;
-	    memcpy(p, msg_base, linelen);
-	    p += linelen;
-	    msg_base += linelen+1;
-	    *p++ = '\r';
-	    *p++ = '\n';
-	    left -= linelen + 1;
-	    if (left) left--;
-	}
-	if (left) {
-	    memcpy(p, msg_base, left);
-	    p += left;
-	}
-	*p = '\0';
-    }
-    else {
-	memcpy(buf, msg_base, size);
-	buf[size] = '\0';
-    }
+    memcpy(buf, msg_base, size);
+    buf[size] = '\0';
+
     return buf;
 }
 

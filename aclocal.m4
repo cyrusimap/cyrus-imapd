@@ -119,8 +119,8 @@ AC_ARG_WITH(sasl,
           ac_cv_sasl_where_lib=${with_sasl}/lib
           ac_cv_sasl_where_inc=${with_sasl}/include
 
-	  SASLFLAGS="-I$ac_cv_sasl_where_lib"
-	  LIB_SASL"-L$ac_cv_sasl_where_inc"
+	  SASLFLAGS="-I$ac_cv_sasl_where_inc"
+	  LIB_SASL"-L$ac_cv_sasl_where_lib"
 	  CPPFLAGS="${cmu_saved_CPPFLAGS} -I${ac_cv_sasl_where_inc}"
 	  LDFLAGS="${cmu_saved_LDFLAGS} -L${ac_cv_sasl_where_lib}"
 	fi
@@ -299,6 +299,7 @@ AC_DEFUN(CMU_LIBWRAP, [
   if test "$with_libwrap" != no; then
     AC_DEFINE(HAVE_LIBWRAP)
     LIB_WRAP="-lwrap"
+    AC_CHECK_LIB(nsl, yp_get_default_domain, LIB_WRAP="${LIB_WRAP} -lnsl")
   fi
   AC_SUBST(LIB_WRAP)
 ])

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.261 2000/07/03 20:14:20 leg Exp $ */
+/* $Id: imapd.c,v 1.262 2000/07/11 17:54:56 leg Exp $ */
 
 #include <config.h>
 
@@ -2021,10 +2021,6 @@ void cmd_select(char *tag, char *cmd, char *name)
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
 	if (doclose) mailbox_close(&mailbox);
 	return;
-    }
-
-    if (mailbox.format == MAILBOX_FORMAT_NETNEWS) {
-	(void) mailbox_expungenews(&mailbox);
     }
 
     mboxstruct = mailbox;
@@ -4046,8 +4042,7 @@ void cmd_namespace(tag)
  * (token not containing whitespace, parens, or double quotes)
  */
 #define BUFGROWSIZE 100
-int getword(buf)
-struct buf *buf;
+int getword(struct buf *buf)
 {
     int c;
     int len = 0;
