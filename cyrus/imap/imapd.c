@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.198.2.2 2000/05/16 21:39:07 ken3 Exp $ */
+/* $Id: imapd.c,v 1.198.2.3 2000/06/24 13:57:20 ken3 Exp $ */
 
 #ifndef __GNUC__
 #define __attribute__(foo)
@@ -1585,7 +1585,7 @@ void cmd_id(char *tag)
 	sprintf(logbuf, "client id:");
 	for (fptr = fields, vptr = values; fptr;
 	     fptr = fptr->next, vptr = vptr->next) {
-	    /* should we check for an format literals here ??? */
+	    /* should we check for and format literals here ??? */
 	    sprintf(logbuf+strlen(logbuf), " \"%s\" ", fptr->s);
 	    if (!strcmp(vptr->s, "NIL"))
 		sprintf(logbuf+strlen(logbuf), "NIL");
@@ -1609,7 +1609,7 @@ void cmd_id(char *tag)
 		" \"vendor\" \"Project Cyrus <http://asg.web.cmu.edu/cyrus>\"",
 		CYRUS_VERSION);
     /* add the os info */
-    if (!uname(&os))
+    if (uname(&os) != -1)
 	prot_printf(imapd_out,
 		    " \"os\" \"%s\""
 		    " \"os-version\" \"%s\"",
