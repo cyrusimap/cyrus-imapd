@@ -1,5 +1,5 @@
-/* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.38 2003/06/17 20:10:47 rjs3 Exp $
+/* cyrusdb_skiplist.c -- cyrusdb skiplist implementation
+ * $Id: cyrusdb_skiplist.c,v 1.39 2003/08/08 18:42:41 rjs3 Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -1956,6 +1956,10 @@ static int recovery(struct db *db)
 	for (;;) {
             if (RECSIZE(p) <= 0) {
                 /* hmm, we can't trust this transaction */
+		syslog(LOG_ERR,
+		       "DBERROR: skiplist recovery %s: found a RECSIZE of 0, "
+		       "truncating corrupted file instead of looping forever...",
+		       db->fname);
                 p = q;
                 break;
             }
