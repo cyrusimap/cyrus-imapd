@@ -1,4 +1,4 @@
-<!-- $Id: install-virtdomains.html,v 1.1.2.5 2002/11/14 16:04:16 ken3 Exp $ -->
+<!-- $Id: install-virtdomains.html,v 1.1.2.6 2003/03/05 22:53:01 rjs3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Configuring Virtual Domains
@@ -9,14 +9,15 @@
 <body>
 
 <h2>Introduction</h2>
-Virtual domains is the practice of hosting a service for more than one
+
+<p>Virtual domains is the practice of hosting a service for more than one
 domain on one server.  Cyrus IMAP has the ability to host IMAP/POP
 mailboxes for multiple domains (e.g. <tt>test@example.com</tt> and
-<tt>test@example.net</tt>) on a single server or Murder.
+<tt>test@example.net</tt>) on a single server or Murder.</p>
 
 <p>In order to accomplish this, Cyrus needs to know which domain to look
 in when a mailbox is accessed.  There are two ways in which Cyrus can
-determine the domain:
+determine the domain:</p>
 
 <ul>
 <li>Fully qualified userid - the client logs in with a userid
@@ -27,9 +28,43 @@ address of the receiving interface (useful for servers with multiple
 NICs or using IP aliasing)</li>
 </ul>
 
-Both of these methods are always active and can be used in conjunction
+<p>Both of these methods are always active and can be used in conjunction
 with one another.  Note that a fully qualified userid takes precedence
-over a domain obtained from the IP address.
+over a domain obtained from the IP address.</p>
+
+<h3>Concepts</h3>
+<p>Perhaps the most important part of this process is to understand
+the changes in the paradigm.</p>
+
+<ul>
+<li><b>Everyone is in a domain</b> - It's best to think of every user
+as existing inside a domain.  Unqualified users are technically inside the
+<tt>defaultdomain</tt>.</li>
+<li><b>Names can be qualified</b>Global admins can reference mailboxes and ids by qualified names.  That is, for any given mailbox command, you can add
+<tt>@domain</tt> to the end of the mailbox name.  Here are some examples:
+ <ul>
+    <li><tt>cyradm> create user.jill@example.net</tt> <em>create a user</em></li>
+    <li><tt>cyradm> create user.rick@example.net</tt> <em>create another user</em></li>
+    <li><tt>cyradm> setquota user.rick@example.net 50000</tt> <em>define a quota</em></li>
+    <li><tt>cyradm> setaclmailbox user.rick@example.net jill@example.net read</tt> <em>Give Jill read access to Rick's mailbox</em></li>
+    <li><tt>cyradm> listmailbox *@example.net</tt> <em>list all mailboxes in the example.net domain</em></li>
+ </ul></li>
+ <li><b>Each mailbox exists in only one domain</b></li>
+ <li><b>Domains are completely separate</b> - Only users inside a given domain
+can access mailboxes inside of that domain.  The following example will not work: <tt>setacl user.jill@herdomain.com rick@hisdomain.com read</tt>.
+ <li><b>Global and Domain admins</b> - The Cyrus virtual domains implementation supports per-domain administrators as well as global (inter-domain) administrators.  Domain-specific administrators are specified with a fully qualified
+userid in the <tt>admins</tt> option (e.g. <tt>admin@example.net</tt>) and
+only have access to mailboxes in the associated domain.  Global
+administrators are specified with an unqualified userid.
+</ul>
+
+<h2>Quick Start</h2>
+<ol>
+<li>Add <tt>virtdomains: yes</tt> to <tt>imapd.conf</tt></li>
+<li>Add a <tt>defaultdomain</tt> entry to <tt>imapd.conf</tt></li>
+<li>Use cyradm (as a global or domain admin) to create mailboxes for
+each domain.</li>
+</ol>
 
 <h2>Configuration</h2>
 Support for virtual domains is enabled by turning on the
@@ -48,11 +83,27 @@ then set <tt>defaultdomain</tt> to 'xxx.yyy.zzz'.
 to the <tt>defaultdomain</tt>.  See <a href=#admins>Administrators</a>
 below for further discussion.
 
+<p>Here is a sample <tt>imapd.conf</tt> with a minimal set of configuration
+options.</p>
+
+<pre>
+configdirectory: /var/imap
+partition-default: /var/spool/imap
+admins: admin rick.admin@hisdomain.com jill.admin@herdomain.net
+virtdomains: yes
+defaultdomain: exampleisp.net
+</pre>
+
+<p>This example has three domains: exampleisp.net, hisdomain.com, and herdomain.net.  <tt>admin</tt> can administer all three domains, while <tt>rick.admin@hisdomain.com</tt> and <tt>jill.admin@herdomain.net</tt> can only administer
+their respective domains.</p>
+
+<p>Note that everyday users should not be administrators.  In the above example, Jill and Rick have separate administrative accounts for their domains.</p>
+
 <h3>Multiple IP Addresses</h3>
 
-In order to use a multiple IP address configuration, the server must
+<p>In order to use a multiple IP address configuration, the server must
 be able to do a reverse lookup on the IP address to determine the
-hostname of the receiving interface.  For example:
+hostname of the receiving interface.  For example:</p>
 
 <pre><kbd>
 192.168.0.1  ->  mail.example.com
@@ -62,38 +113,57 @@ hostname of the receiving interface.  For example:
 
 <p>Once the server obtains the fully qualified hostname of the
 interface, it removes the localpart (ie, 'mail') and uses the
-remainder as the domain for any user that logs in.
+remainder as the domain for any user that logs in.</p>
 
 <p>This address to hostname mapping would usually be done via DNS,
 <tt>/etc/hosts</tt>, NIS, etc.  Configuration of the various naming
-services is beyond the scope of this document.
+services is beyond the scope of this document.</p>
 
 <h3>Delivering mail</h3>
 
-To deliver mail to your virtual domains, configure your MTA so that
+<p>To deliver mail to your virtual domains, configure your MTA so that
 the envelope recipient (RCPT TO) passed to <tt>lmtpd</tt> is fully
-qualified with the correct domain.
+qualified with the correct domain.</p>
 
-<h2>Administration</h2>
+<h4>Configuring Sendmail</h4>
 
-To add a new domain, use the tool <tt>tools/mkimap</tt> to create the
-appropriate directories:
+<p>In general, follow the basic <a href=install-configure.html>configuration
+instructions</a>.  Here are a few caveots:</p>
 
-<pre><kbd>
-   su cyrus
-   tools/mkimap -d example.com
-   exit
-</kbd></pre>
+<ul>
+<li> It is easiest to use the mailertable to route mail to Cyrus,
+rather than adding the domain to the local-host-names file ($w).  This prevents
+Sendmail from changing the domain name to the local host name.
 
-<a name="admins"><h3>Administrators</h3></a>
+<pre>
+example.com              cyrusv2:/var/imap/socket/lmtp
+</pre></li>
 
-The Cyrus virtual domains implementation supports per-domain
+<li> You'll have to use the Cyrus mailer in LMTP mode, and you'll have
+to change the mailer flags so that it provides the full domain while communicating LMTP.  Specifically these changes:
+
+<pre>
+S=EnvFromSMTP/HdrFromSMTP, R=EnvToSMTP
+</pre></li>
+</ul>
+
+<h3>Mail Clients</h3>
+<p>The only changes you'll need to make to the mail client is to change the
+username to the fully qualified domain name, ie <tt>user@example.com</tt>.
+Note that to support some mail clients, the <tt>user%example.com</tt>
+form of userid is also supported.  Users in the default domain will not
+need to reconfigur their clients (as unqualified userids are assumed to
+be in the default domain)</p>
+
+<a name="admins"><h3>Administration</h3></a>
+
+<p>The Cyrus virtual domains implementation supports per-domain
 administrators as well as "global" (inter-domain) administrators.
 Domain-specific administrators are specified with a
 fully qualified userid in the <tt>admins</tt> option
 (e.g. <tt>admin@example.net</tt>) and only have access to mailboxes in
 the associated domain.  Mailbox names should be specified in the same
-fashion as on a single domain configuration.
+fashion as on a single domain configuration.</p>
 
 <p>Global administrators are specified with an unqualified userid in the
 <tt>admins</tt> option and have access to <i>any</i> mailbox on the
@@ -102,30 +172,30 @@ to the <tt>defaultdomain</tt>.  As a result, you can NOT have a global
 admin without specifying a <tt>defaultdomain</tt>.  Note that when
 trying to login as a global admin to a multi-homed server from remote
 machine, it might be necessary to fully qualify the userid with the
-<tt>defaultdomain</tt>.
+<tt>defaultdomain</tt>.</p>
 
 <p>Global admins must use a <tt>mailbox@domain</tt> syntax when
 specifying mailboxes outside of the <tt>defaultdomain</tt>.  Examples
-(using <tt>cyradm</tt>):
+(using <tt>cyradm</tt>):</p>
 
-<p>To create a new INBOX for user 'test' in <tt>defaultdomain</tt>:
+<p>To create a new INBOX for user 'test' in <tt>defaultdomain</tt>:</p>
 
 <pre><kbd>
    cm user.test
 </kbd></pre>
 
-<p>To create a new INBOX for user 'test' in domain 'example.com':
+<p>To create a new INBOX for user 'test' in domain 'example.com':</p>
 
 <pre><kbd>
    cm user.test@example.com
 </kbd></pre>
 
-To list all mailboxes in domain 'example.com':
+To list all mailboxes in domain 'example.com':</p>
 
 <pre><kbd>
    lm *@example.com
 </kbd></pre>
 
 <P><HR>
-last modified: $Date: 2002/11/14 16:04:16 $
+last modified: $Date: 2003/03/05 22:53:01 $
 </BODY></HTML>
