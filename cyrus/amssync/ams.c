@@ -53,7 +53,7 @@
 # endif
 #endif
 
-#include "acte.h"
+#include "sasl.h"
 #include "imclient.h"
 #include "xmalloc.h"
 #include "AMSstuff.h"

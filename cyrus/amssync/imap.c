@@ -39,7 +39,7 @@
 
 #include <atk/unscribe.h>
 #include "xmalloc.h"
-#include "acte.h"
+#include "sasl.h"
 #include "imclient.h"
 #include "amssync.h"
 
