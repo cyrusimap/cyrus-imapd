@@ -27,7 +27,7 @@
  */
 
 /*
- * $Id: message.c,v 1.56 1998/07/10 19:39:23 tjs Exp $
+ * $Id: message.c,v 1.57 1998/07/24 01:05:34 tjs Exp $
  */
 
 #ifdef HAVE_UNISTD_H
@@ -278,7 +278,7 @@ unsigned size;
 	/* Used to be some 8bit checks here but those were moved above so that 
 	   we could do something other than refuse the message.
 	   Unfortunately, we still need to look for the end of the string. */
-	while(*p) p++;
+	for(p = (unsigned char*) buf; *p; p++);
 	
 	sawnl = (p[-1] == '\n');
     }
