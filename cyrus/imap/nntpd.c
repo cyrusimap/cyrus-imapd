@@ -50,7 +50,7 @@
  */
 
 /*
- * $Id: nntpd.c,v 1.1.2.4 2002/09/24 19:53:50 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.5 2002/09/24 20:34:24 ken3 Exp $
  */
 #include <config.h>
 
@@ -1747,11 +1747,13 @@ static void cmd_post(char *msgid, int mode)
 
     if (mode != POST_TAKETHIS) {
 	if (want) {
-	    prot_printf(nntp_out, "%u Send article\r\n",
-			post_codes[mode].cont);
-	} else {
-	    prot_printf(nntp_out, "%u Article not wanted\r\n",
-			post_codes[mode].no);
+	    prot_printf(nntp_out, "%u Send article %s\r\n",
+			post_codes[mode].cont, msgid ? msgid : "");
+	    if (mode == POST_CHECK) return;
+	}
+	else {
+	    prot_printf(nntp_out, "%u Do not send article %s\r\n",
+			post_codes[mode].no, msgid ? msgid : "");
 	    return;
 	}
     }
@@ -1769,30 +1771,34 @@ static void cmd_post(char *msgid, int mode)
 	if (!r) r = deliver(msg);
 
 	if (!r) {
-	    /* mark for IHAVE */
+	    /* mark for IHAVE/CHECK/TAKETHIS */
 	    if (dupelim && msg->id) duplicate_mark(msg->id, strlen(msg->id),
 						   "", 0, time(NULL));
-
-	    prot_printf(nntp_out, "%u Article received ok\r\n",
-			post_codes[mode].ok);
 
 	    if (mode == POST_POST) {
 		/* XXX send the article upstream */
 	    }
-	} else {
-	    prot_printf(nntp_out, "%u %s\r\n",
-			post_codes[mode].fail, error_message(r));
 	}
 
 	msg_free(msg);
 
 	fclose(f);
-    } else {
+    }
+    else {
 	/* flush the article from the stream */
 	copy_msg(nntp_in, NULL);
 
-	prot_printf(nntp_out, "%u Failed receiving article\r\n",
-		    post_codes[mode].fail);
+	r = IMAP_IOERROR;
+    }
+
+    if (r) {
+	prot_printf(nntp_out, "%u Failed receiving article %s (%s)\r\n",
+		    post_codes[mode].fail, msgid ? msgid : "",
+		    error_message(r));
+    }
+    else {
+	prot_printf(nntp_out, "%u Article %s received ok\r\n",
+		    post_codes[mode].ok, msg->id ? msg->id : "");
     }
 
     prot_flush(nntp_out);
