@@ -1,6 +1,6 @@
 /* comparator.c -- comparator functions
  * Larry Greenfield
- * $Id: comparator.c,v 1.10 2002/05/14 16:51:49 ken3 Exp $
+ * $Id: comparator.c,v 1.11 2002/07/01 13:27:13 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -183,7 +183,7 @@ static int octet_matches_(const char *text, const char *pat, int casemap)
 
 	    while (*t != '\0') {
 		/* recurse */
-		if (octet_matches_(p, t, casemap)) return 1;
+		if (octet_matches_(t, p, casemap)) return 1;
 		t++;
 	    }
 	case '\\':
