@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.169 2003/11/21 15:14:15 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.170 2003/12/05 21:30:25 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -4672,8 +4672,9 @@ int maycreate;
     }
 
     /* Suppress any output of a partial match */
-    if (name[matchlen] && strncmp(lastname, name, matchlen) == 0
-	&& lastname[matchlen] == '\0') {
+    if ((name[matchlen]
+	 && strncmp(lastname, name, matchlen) == 0
+	 && lastname[matchlen] == '\0') || strlen(name) != matchlen) {
 	return;
     }
 	
