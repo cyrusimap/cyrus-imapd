@@ -1,4 +1,5 @@
-<!-- $Id: changes.html,v 1.33 1998/05/02 02:49:04 shadow Exp $ -->
+<!-- $Id: changes.html,v 1.34 1998/05/07 06:19:49 tjs Exp $ -->
+
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
 </HEAD><BODY>
@@ -41,7 +42,7 @@
 order to allow weird characters like ) in passwords.  But it doesn't
 look to see if the server supports non-synchronizing literals.
 
-<li> If the file "<TT>msg/motd</TT>" exists, the first line is sent to
+<li> If the file "<TT>msg/motd</TT>" exists, the first line is now sent to
 clients upon login.
 
 <li> Bug fix: to handle BODY[] properly when fetching news articles
@@ -60,9 +61,11 @@ confused.
 
 <li> The configure scripts and makefiles have some random fixes.
 
-<li> Added reauth from srvtab to ptloader
+<li> ptloader can now renew its AFS authentication by reading from a srvtab
+	  file.
 
-<li> Attempt to use libcom_err if one exists
+<li> The configure script now looks for a libcom_err and can use an
+	  installed one if one exists.
 
 <li> Other small bug fixes.
 
@@ -493,7 +496,7 @@ restore tab before breaking out of loop.
 </ul>
 <P><HR><P>
 <!-- hhmts start -->
-last modified by tjs at Fri May  1 19:13:04 1998
+last modified by tjs at Thu May  7 02:15:06 1998
 <!-- hhmts end -->
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
