@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.1.2.3 2005/03/01 21:04:28 ken3 Exp $
+ * $Id: sync_server.c,v 1.1.2.4 2005/03/04 02:59:56 ken3 Exp $
  */
 
 #include <config.h>
@@ -140,16 +140,18 @@ int sync_starttls_done = 0;
 static void cmdloop(void);
 static void cmd_authenticate(char *mech, char *resp);
 static void cmd_starttls(void);
+#if 0
 static void cmd_user(struct sync_user_lock *user_lock, char *user);
 static void cmd_enduser(struct sync_user_lock *user_lock,
 			struct mailbox **mailboxp, int restart);
+#endif
 static void cmd_select(struct mailbox **mailboxp, char *name);
 static void cmd_reserve(char *mailbox_name,
 			struct sync_message_list *message_list);
 static void cmd_quota_work(char *quotaroot);
 static void cmd_quota(char *quotaroot);
 static void cmd_setquota(char *root, int limit);
-static void cmd_reset(struct sync_user_lock *user_lock, char *user);
+static void cmd_reset(char *user);
 static void cmd_status(struct mailbox *mailbox);
 #if 0
 static void cmd_info(struct mailbox *mailbox);
@@ -169,11 +171,9 @@ static void cmd_setacl(char *name, char *acl);
 static void cmd_expunge(struct mailbox *mailbox);
 #if 0
 static void cmd_list();
-static void cmd_mailboxes(struct sync_user_lock *user_lock, char *userid);
-#else
-static void cmd_mailboxes(struct sync_user_lock *user_lock);
 #endif
-static void cmd_user_all(struct sync_user_lock *user_lock, char *userid);
+static void cmd_mailboxes();
+static void cmd_user_all(char *userid);
 static void cmd_create(char *mailboxname, char *uniqueid, char *acl,
 		       int mbtype, unsigned long uidvalidity);
 static void cmd_delete(char *name);
@@ -570,11 +570,12 @@ static void cmdloop(void)
 {
     struct sync_message_list *message_list;
     struct mailbox *mailbox = NULL;
+#if 0
     struct sync_user_lock user_lock;
+#endif
     static struct buf cmd;
-    static struct buf arg1, arg2, arg3;
-    static struct buf arg4, arg5, arg6, arg7;
-    int   c;
+    static struct buf arg1, arg2, arg3, arg4, arg5, arg6;
+    int c;
     char *p;
 
     syslog(LOG_DEBUG, "cmdloop(): startup");
@@ -585,9 +586,9 @@ static void cmdloop(void)
     if (message_list == NULL) {
         fatal("* [BYE] Unable to start up server", EC_TEMPFAIL);
     }
-    
+#if 0    
     sync_user_lock_reset(&user_lock);
-
+#endif
     for (;;) {
         prot_flush(sync_out);
 
@@ -743,6 +744,7 @@ static void cmdloop(void)
 		if (c != ' ') goto missingargs;
                 cmd_expunge(mailbox);
                 continue;
+#if 0
             } else if (!strcmp(cmd.s, "Enduser")) {
 		if (c == '\r') c = prot_getc(sync_in);
 		if (c != '\n') goto extraargs;
@@ -761,6 +763,7 @@ static void cmdloop(void)
                     cmd_enduser(&user_lock, &mailbox, 0);
 
                 continue;
+#endif
             }
 
             break;
@@ -815,13 +818,7 @@ static void cmdloop(void)
 	case 'M':
 	    if (!strcmp(cmd.s, "Mailboxes")) {
 		if (c != ' ') goto missingargs;
-#if 0
-		c = getastring(sync_in, sync_out, &arg1);
-		if (c != ' ') goto missingargs;
-                cmd_user_some(&user_lock, arg1.s);
-#else
-                cmd_mailboxes(&user_lock);
-#endif
+                cmd_mailboxes();
                 continue;
 	    }
 	    break;
@@ -861,7 +858,7 @@ static void cmdloop(void)
 		c = getastring(sync_in, sync_out, &arg1);
 		if (c == '\r') c = prot_getc(sync_in);
 		if (c != '\n') goto extraargs;
-                cmd_reset(&user_lock, arg1.s);
+                cmd_reset(arg1.s);
                 continue;
             } else if (!strcmp(cmd.s, "Reserve")) {
 		if (c != ' ') goto missingargs;
@@ -1001,6 +998,7 @@ static void cmdloop(void)
 
                 cmd_uidlast(mailbox, sync_atoul(arg1.s), sync_atoul(arg2.s));
                 continue;
+#if 0
             } else if (!strcmp(cmd.s, "User")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(sync_in, sync_out, &arg1);
@@ -1009,12 +1007,13 @@ static void cmdloop(void)
 		if (c != '\n') goto extraargs;
                 cmd_user(&user_lock, arg1.s);
                 continue;
+#endif
             } else if (!strcmp(cmd.s, "User_all")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(sync_in, sync_out, &arg1);
 		if (c == '\r') c = prot_getc(sync_in);
 		if (c != '\n') goto extraargs;
-                cmd_user_all(&user_lock, arg1.s);
+                cmd_user_all(arg1.s);
                 continue;
             } else if (!strcmp(cmd.s, "Upload_sieve")) {
 		if (c != ' ') goto missingargs;
@@ -1080,7 +1079,6 @@ static void cmdloop(void)
     sync_authstate = NULL;
 #endif
     sync_message_list_free(&message_list);
-    sync_user_unlock(&user_lock);
 }
 
 static void cmd_authenticate(char *mech, char *resp)
@@ -1293,7 +1291,7 @@ user_master_is_local(char *user)
 /* ====================================================================== */
 
 /* Routines implementing individual commands for server */
-
+#if 0
 static void cmd_user(struct sync_user_lock *user_lock, char *user)
 {
     int r;
@@ -1349,25 +1347,13 @@ static void cmd_enduser(struct sync_user_lock *user_lock,
     sync_authstate = NULL;
 #endif
 }
-
+#endif
 static void cmd_select(struct mailbox **mailboxp, char *name)
 {
     static struct mailbox select_mailbox;
     struct mailbox *mailbox = *mailboxp;
-#if 0
-    struct seen *seendb;
-    unsigned int last_recent_uid;
-    time_t lastread, lastchange;
-    char *seenuid;
-#endif
     int r = 0;
 
-#if 0
-    if (!sync_userid) {
-        prot_printf(sync_out, "NO No user selected\r\n");
-        return;
-    }
-#endif
     if (mailbox) {
         mailbox_close(mailbox);
         *mailboxp = NULL;
@@ -1378,29 +1364,14 @@ static void cmd_select(struct mailbox **mailboxp, char *name)
     
     if (!r) mailbox = &select_mailbox;
     if (!r) r = mailbox_open_index(mailbox);
-#if 0
-    /* XXX Make lastseen reporting optional? */
-    if (!r) r = seen_open(mailbox, sync_userid, SEEN_CREATE, &seendb);
-    if (!r) {
-        r = seen_read(seendb, &lastread, &last_recent_uid,
-                      &lastchange, &seenuid);
-        seen_close(seendb);
-        free(seenuid);
-    }
-#endif
     if (r) {
         prot_printf(sync_out, "NO Failed to select mailbox \"%s\": %s\r\n",
                  name, error_message(r));
         if (mailbox) mailbox_close(mailbox);
         return;
     }
-#if 0
-    prot_printf(sync_out, "OK %s %lu %lu %lu\r\n", mailbox->uniqueid,
-             mailbox->last_uid, lastchange, last_recent_uid);
-#else
     prot_printf(sync_out, "OK %s %lu\r\n",
 		mailbox->uniqueid, mailbox->last_uid);
-#endif
     *mailboxp = mailbox;
 }
 
@@ -1571,63 +1542,39 @@ static void cmd_setquota(char *root, int limit)
 
 /* ====================================================================== */
 
-static int
-addmbox_full(char *name,
-             int matchlen __attribute__((unused)),
-             int maycreate __attribute__((unused)),
-             void *rock)
+static int addmbox_full(char *name,
+			int matchlen __attribute__((unused)),
+			int maycreate __attribute__((unused)),
+			void *rock)
 {
     struct sync_folder_list *list = (struct sync_folder_list *) rock;
 
     /* List all mailboxes, including directories and deleted items */
 
-    sync_folder_list_add(list, name, name, NULL);
+    sync_folder_list_add(list, name, name, NULL, NULL);
     return(0);
 }
 
-static int
-addmbox_sub(char *name,
-            int matchlen __attribute__((unused)),
-            int maycreate __attribute__((unused)),
-            void *rock)
+static int addmbox_sub(char *name,
+		       int matchlen __attribute__((unused)),
+		       int maycreate __attribute__((unused)),
+		       void *rock)
 {
     struct sync_folder_list *list = (struct sync_folder_list *) rock;
 
-    sync_folder_list_add(list, name, name, NULL);
+    sync_folder_list_add(list, name, name, NULL, NULL);
     return(0);
 }
 
-static void cmd_reset(struct sync_user_lock *user_lock, char *user)
+static void cmd_reset(char *user)
 {
     struct sync_folder_list *list = NULL;
     struct sync_folder *item;
     char buf[MAX_MAILBOX_NAME+1];
     int r = 0;
     
-    if (user_master_is_local(user)) {
-        prot_printf(sync_out,
-                 "NO IMAP_INVALID_USER Attempt to reset master copy of %s\r\n",
-                 user);
-        return;
-    }
-
-    if ((r = sync_user_lock(user_lock, user))) {
-        prot_printf(sync_out, "NO Failed to lock %s: %s\r\n",
-                 user, error_message(r));
-        return;
-    }
-#if 0
-    if (sync_userid)    free(sync_userid);
-    if (sync_authstate) auth_freestate(sync_authstate);
-
-    sync_userid    = xstrdup(user);
-    sync_authstate = auth_newstate(sync_userid);
-#endif
     /* Nuke subscriptions */
     list = sync_folder_list_create();
-#if 0
-    snprintf(buf, sizeof(buf)-1, "user.%s.*", user);
-#endif
     r = (sync_namespacep->mboxlist_findsub)(sync_namespacep, "*",
 					    sync_userisadmin,
                                             user, sync_authstate,
@@ -1639,28 +1586,13 @@ static void cmd_reset(struct sync_user_lock *user_lock, char *user)
         if (r) goto fail;
     }
     sync_folder_list_free(&list);
-#if 0
-    /* Nuke DELETED folders */
-    list = sync_folder_list_create();
 
-    snprintf(buf, sizeof(buf)-1, "user.%s.^DELETED.*", user);
-    r = (sync_namespacep->mboxlist_findall)(sync_namespacep, buf, 0,
-                                           user, sync_authstate, addmbox_full,
-                                           (void *)list);
-    if (r) goto fail;
-
-    for (item = list->head ; item ; item = item->next) {
-        r=mboxlist_deletemailbox(item->name, sync_userisadmin, sync_userid,
-				 sync_authstate, 1, 0, 0);
-
-        if (r) goto fail;
-    }
-    sync_folder_list_free(&list);
-#endif
     /* Nuke normal folders */
     list = sync_folder_list_create();
 
-    snprintf(buf, sizeof(buf)-1, "user.%s.*", user);
+    (sync_namespacep->mboxname_tointernal)(sync_namespacep, "INBOX",
+					   user, buf);
+    strlcat(buf, ".*", sizeof(buf));
     r = (sync_namespacep->mboxlist_findall)(sync_namespacep, buf,
 					    sync_userisadmin,
 					    user, sync_authstate,
@@ -1676,7 +1608,8 @@ static void cmd_reset(struct sync_user_lock *user_lock, char *user)
     sync_folder_list_free(&list);
 
     /* Nuke inbox (recursive nuke possible?) */
-    snprintf(buf, sizeof(buf)-1, "user.%s", user);
+    (sync_namespacep->mboxname_tointernal)(sync_namespacep, "INBOX",
+					   user, buf);
     r = mboxlist_deletemailbox(buf, sync_userisadmin, sync_userid,
 			       sync_authstate, 0, 0, 1);
     if (r && (r != IMAP_MAILBOX_NONEXISTENT)) goto fail;
@@ -1688,8 +1621,7 @@ static void cmd_reset(struct sync_user_lock *user_lock, char *user)
     return;
 
  fail:
-    if (list)
-        sync_folder_list_free(&list);
+    if (list) sync_folder_list_free(&list);
     prot_printf(sync_out, "NO Failed to reset account %s: %s\r\n",
              sync_userid, error_message(r));
 }
@@ -2286,16 +2218,9 @@ static void cmd_setseen(struct mailbox **mailboxp, char *user, char *mboxname,
     unsigned int last_recent_uid0;
     char *seenuid0;
 
-#if 0
-    if (!mailbox) {
-        prot_printf(sync_out, "NO Mailbox not open\r\n");
-        return;
-    }
-#else
     if (mailbox && strcmp(mailbox->name, mboxname)) {
         mailbox_close(mailbox);
-	mailbox = NULL;
-        *mailboxp = NULL;
+	mailbox = *mailboxp = NULL;
     }
 
     if (!mailbox) {
@@ -2309,12 +2234,13 @@ static void cmd_setseen(struct mailbox **mailboxp, char *user, char *mboxname,
 	    prot_printf(sync_out, "NO Failed to select mailbox \"%s\": %s\r\n",
 			mboxname, error_message(r));
 	    if (mailbox) mailbox_close(mailbox);
+	    *mailboxp = NULL;
 	    return;
 	}
 
 	*mailboxp = mailbox;
     }
-#endif
+
     r = seen_open(mailbox, user, SEEN_CREATE, &seendb);
 
     if (r) {
@@ -2567,24 +2493,11 @@ static int do_mailbox_single(char *name, int matchlen, int maycreate, void *rock
     struct mailbox m;
     int r;
     int open = 0;
-    struct seen *seendb;
-    unsigned int last_recent_uid;
-    time_t lastread, lastchange;
-    char *seenuid;
     int  *livep = (int *)rock;
 
     r = mailbox_open_header(name, 0, &m);
     if (!r) open = 1;
     if (!r) r = mailbox_open_index(&m);
-#if 0
-    if (!r) r = seen_open(&m, sync_userid, 0, &seendb);
-    if (!r) {
-        r = seen_read(seendb, &lastread, &last_recent_uid,
-                      &lastchange, &seenuid);
-        seen_close(seendb);
-        free(seenuid);
-    }
-#endif
     if (r) {
         if (open) mailbox_close(&m);
         return(r);
@@ -2595,10 +2508,30 @@ static int do_mailbox_single(char *name, int matchlen, int maycreate, void *rock
         sync_printastring(sync_out, m.uniqueid);
         prot_printf(sync_out, " ");
         sync_printastring(sync_out, m.name);
-        prot_printf(sync_out, " ");
+#if 0
+	prot_printf(sync_out, " (");
+	if (m.quota.root) {
+	    sync_printastring(sync_out, m.quota.root);
+	    if (!strcmp(name, m.quota.root) &&
+		!quota_read(&m.quota, NULL, 0)) {
+		prot_printf(sync_out, " %d", m.quota.limit);
+	    }
+	}
+	prot_printf(sync_out, ") ");
+#else
+	prot_printf(sync_out, " ");
+#endif
         sync_printastring(sync_out, m.acl);
-        prot_printf(sync_out, " %lu %lu %lu\r\n",
-                 m.last_uid, lastchange, last_recent_uid);
+#if 0
+        prot_printf(sync_out, " %lu\r\n", m.last_uid);
+#else
+        prot_printf(sync_out, " %lu", m.last_uid);
+	if (m.quota.root && !strcmp(name, m.quota.root) &&
+	    !quota_read(&m.quota, NULL, 0)) {
+	    prot_printf(sync_out, " %d", m.quota.limit);
+	}
+        prot_printf(sync_out, "\r\n");
+#endif
         cmd_status_work(&m);
     } else
         cmd_status_work_preload(&m);
@@ -2622,11 +2555,7 @@ static int do_lsub_all_single(char *name, int matchlen, int maycreate,
 
 #define USER_DELTA (50)
 
-#if 0
-static void cmd_mailboxes(struct sync_user_lock *user_lock, char *userid)
-#else
-static void cmd_mailboxes(struct sync_user_lock *user_lock)
-#endif
+static void cmd_mailboxes()
 {
     static struct buf arg;
     int c = ' ';
@@ -2635,28 +2564,7 @@ static void cmd_mailboxes(struct sync_user_lock *user_lock)
     char *err;
     int live = 1;
     int r = 0;
-#if 0
-    if (user_master_is_local(userid)) {
-        eatline(sync_in, ' ');
-        prot_printf(sync_out,
-                 "NO IMAP_INVALID_USER Attempt to update master for %s\r\n",
-                 userid);
-        return;
-    }
-    
-    if ((r = sync_user_lock(user_lock, userid))) {
-        eatline(sync_in, ' ');
-        prot_printf(sync_out, "NO Failed to lock %s: %s\r\n",
-                 userid, error_message(r));
-        return;
-    }
 
-    if (sync_userid)    free(sync_userid);
-    if (sync_authstate) auth_freestate(sync_authstate);
-
-    sync_userid    = xstrdup(userid);
-    sync_authstate = auth_newstate(sync_userid);
-#endif
     /* Parse list of Folders */
     do {
         c = getastring(sync_in, sync_out, &arg);
@@ -2693,7 +2601,7 @@ static void cmd_mailboxes(struct sync_user_lock *user_lock)
     free(folder_name);
 }
 
-static void cmd_user_all(struct sync_user_lock *user_lock, char *userid)
+static void cmd_user_all(char *userid)
 {
     char buf[MAX_MAILBOX_PATH];
     int r; 
@@ -2701,33 +2609,14 @@ static void cmd_user_all(struct sync_user_lock *user_lock, char *userid)
     struct sync_sieve_list *sieve_list;
     struct sync_sieve_item *sieve_item;
 
-    if (user_master_is_local(userid)) {
-        prot_printf(sync_out,
-                 "NO IMAP_INVALID_USER Attempt to update master for %s\r\n",
-                 userid);
-        return;
-    }
-
-    r = sync_user_lock(user_lock, userid);    
-    if (r) {
-        prot_printf(sync_out, "NO Failed to lock %s: %s\r\n",
-                 userid, error_message(r));
-        return;
-    }
-#if 0
-    if (sync_userid)    free(sync_userid);
-    if (sync_authstate) auth_freestate(sync_authstate);
-
-    sync_userid    = xstrdup(userid);
-    sync_authstate = auth_newstate(sync_userid);
-#endif
     /* Dry run: load all index files into memory before we start
      * generating sync_out: reduces latency */
 
     live = 0;
 
     /* inbox */
-    snprintf(buf, sizeof(buf)-1, "user.%s", userid);
+    ((*sync_namespacep).mboxname_tointernal)(sync_namespacep, "INBOX",
+					     userid, buf);
     r = do_mailbox_single(buf, 0, 0, &live);
 
     if (r) {
@@ -2741,7 +2630,7 @@ static void cmd_user_all(struct sync_user_lock *user_lock, char *userid)
     }
 
     /* And then all folders */
-    snprintf(buf, sizeof(buf)-1, "user.%s.*", userid);
+    strlcat(buf, ".*", sizeof(buf));
     r = ((*sync_namespacep).mboxlist_findall)(sync_namespacep, buf,
 					      sync_userisadmin,
                                               userid, sync_authstate,
@@ -2758,7 +2647,8 @@ static void cmd_user_all(struct sync_user_lock *user_lock, char *userid)
     live = 1;
 
     /* inbox */
-    snprintf(buf, sizeof(buf)-1, "user.%s", userid);
+    ((*sync_namespacep).mboxname_tointernal)(sync_namespacep, "INBOX",
+					     userid, buf);
     r = do_mailbox_single(buf, 0, 0, &live);
 
     if (r) {
@@ -2771,7 +2661,7 @@ static void cmd_user_all(struct sync_user_lock *user_lock, char *userid)
     }
 
     /* And then all folders */
-    snprintf(buf, sizeof(buf)-1, "user.%s.*", userid);
+    strlcat(buf, ".*", sizeof(buf));
     r = ((*sync_namespacep).mboxlist_findall)(sync_namespacep, buf,
 					      sync_userisadmin,
                                               userid, sync_authstate,
@@ -2784,8 +2674,7 @@ static void cmd_user_all(struct sync_user_lock *user_lock, char *userid)
         return;
     }
 
-    /* LSUB: Includes subsiduaries automatically */
-    snprintf(buf, sizeof(buf)-1, "user.%s", userid);
+    /* LSUB */
     r = (((*sync_namespacep).mboxlist_findsub)(sync_namespacep, "*",
 					       sync_userisadmin,
 					       userid, sync_authstate,
@@ -2814,13 +2703,8 @@ static void cmd_user_all(struct sync_user_lock *user_lock, char *userid)
         }
         sync_sieve_list_free(&sieve_list);
     }
-#if 0
-    /* Final OK response includes quota information */
-    snprintf(buf, sizeof(buf)-1, "user.%s", userid);
-    cmd_quota_work(buf);
-#else
+
     prot_printf(sync_out, "OK User_all completed\r\n");
-#endif
 }
 
 /* ====================================================================== */
@@ -2930,16 +2814,6 @@ static void cmd_lsub(char *user)
     char buf[MAX_MAILBOX_PATH];
     int r;
 
-#if 0
-    if (sync_userid == NULL) {
-        prot_printf(sync_out, "NO User not selected\r\n");
-        return;
-    }
-#endif
-    /* Includes subsiduaries automatically */
-#if 0
-    snprintf(buf, sizeof(buf)-1, "user.%s", user);
-#endif
     r = ((*sync_namespacep).mboxlist_findsub)(sync_namespacep, "*",
 					      sync_userisadmin,
                                               sync_userid, sync_authstate,

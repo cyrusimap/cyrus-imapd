@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.c,v 1.1.2.3 2005/03/01 18:04:56 ken3 Exp $
+ * $Id: sync_support.c,v 1.1.2.4 2005/03/04 02:59:57 ken3 Exp $
  */
 
 #include <config.h>
@@ -417,9 +417,7 @@ int sync_getflags(struct protstream *input,
 /* sync_msg stuff */
 
 struct sync_msg_list *sync_msg_list_create(char **flagname,
-					   unsigned long last_uid, 
-					   unsigned long lastseen,
-					   unsigned long last_recent_uid)
+					   unsigned long last_uid)
 {
     struct sync_msg_list *l = xzmalloc(sizeof (struct sync_msg_list));
 
@@ -427,9 +425,6 @@ struct sync_msg_list *sync_msg_list_create(char **flagname,
     l->tail     = NULL;
     l->count    = 0;
     l->last_uid = last_uid;
-    l->lastseen = lastseen;
-    l->last_recent_uid = last_recent_uid;
-
     sync_flags_meta_clear(&l->meta);
 
     if (flagname)
@@ -564,7 +559,8 @@ struct sync_folder_list *sync_folder_list_create(void)
 }
 
 struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
-					 char *id, char *name, char *acl)
+					 char *id, char *name, char *acl,
+					 struct quota *quota)
 {
     struct sync_folder *result = xzmalloc(sizeof(struct sync_folder));
 
@@ -580,6 +576,10 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
     result->id      = (id)   ? xstrdup(id)   : NULL;
     result->name    = (name) ? xstrdup(name) : NULL;
     result->acl     = (acl)  ? xstrdup(acl)  : NULL;
+    if (quota) {
+	result->quota.root = result->name;
+	result->quota.limit = quota->limit;
+    }
     result->mark    = 0;
     result->reserve = 0;
 

@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.5 2005/03/01 21:04:27 ken3 Exp $
+ * $Id: sync_client.c,v 1.1.2.6 2005/03/04 02:59:55 ken3 Exp $
  */
 
 #include <config.h>
@@ -149,9 +149,8 @@ void fatal(const char *s, int code)
 }
 
 /* ====================================================================== */
-
-static int
-send_user(char *user)
+#if 0
+static int send_user(char *user)
 {
     prot_printf(toserver, "USER "); 
     sync_printastring(toserver, user);
@@ -161,8 +160,7 @@ send_user(char *user)
     return(sync_parse_code("USER", fromserver, SYNC_PARSE_EAT_OKLINE, NULL));
 }
 
-static int
-send_enduser()
+static int send_enduser()
 {
     int r = 0;
     int c = ' ';
@@ -191,7 +189,7 @@ send_enduser()
 
     return(0);
 }
-
+#endif
 /* ====================================================================== */
 
 /* Routines relevant to reserve operation */
@@ -199,11 +197,10 @@ send_enduser()
 /* Find the messages that we will want to upload from this mailbox,
  * flag messages that are already available at the server end */
 
-static int
-find_reserve_messages(struct mailbox *mailbox,
-                      struct sync_msg_list   *msg_list,
-                      struct sync_msgid_list *server_msgid_list,
-                      struct sync_msgid_list *reserve_msgid_list)
+static int find_reserve_messages(struct mailbox *mailbox,
+				 struct sync_msg_list   *msg_list,
+				 struct sync_msgid_list *server_msgid_list,
+				 struct sync_msgid_list *reserve_msgid_list)
 {
     struct sync_msg *msg;
     struct index_record record;
@@ -239,10 +236,9 @@ find_reserve_messages(struct mailbox *mailbox,
     return(0);
 }
 
-static int
-reserve_all_messages(struct mailbox *mailbox,
-                     struct sync_msgid_list *server_msgid_list,
-                     struct sync_msgid_list *reserve_msgid_list)
+static int reserve_all_messages(struct mailbox *mailbox,
+				struct sync_msgid_list *server_msgid_list,
+				struct sync_msgid_list *reserve_msgid_list)
 {
     struct index_record record;
     unsigned long msgno;
@@ -272,9 +268,8 @@ reserve_all_messages(struct mailbox *mailbox,
 /* Count numbers of instances on server of each MessageID that we will
  * want to copy */
 
-static int
-count_reserve_messages(struct sync_folder *server_folder,
-                       struct sync_msgid_list *reserve_msgid_list)
+static int count_reserve_messages(struct sync_folder *server_folder,
+				  struct sync_msgid_list *reserve_msgid_list)
 {
     struct sync_msg_list *msglist = server_folder->msglist;
     struct sync_msg      *msg;
@@ -288,9 +283,8 @@ count_reserve_messages(struct sync_folder *server_folder,
     return(0);
 }
 
-static int
-reserve_check_folder(struct sync_msgid_list *reserve_msgid_list,
-                     struct sync_folder     *folder)
+static int reserve_check_folder(struct sync_msgid_list *reserve_msgid_list,
+				struct sync_folder *folder)
 {
     struct sync_msg   *msg;
     struct sync_msgid *msgid;
@@ -304,9 +298,8 @@ reserve_check_folder(struct sync_msgid_list *reserve_msgid_list,
     return(0);
 }
 
-static int
-reserve_folder(struct sync_msgid_list *reserve_msgid_list,
-               struct sync_folder     *folder)
+static int reserve_folder(struct sync_msgid_list *reserve_msgid_list,
+			  struct sync_folder *folder)
 {
     struct sync_msg   *msg;
     struct sync_msgid *msgid;
@@ -371,8 +364,7 @@ struct reserve_sort_item {
     unsigned long count;
 };
 
-static int
-reserve_folder_compare(const void *v1, const void *v2)
+static int reserve_folder_compare(const void *v1, const void *v2)
 {
     struct reserve_sort_item *s1 = (struct reserve_sort_item *)v1;
     struct reserve_sort_item *s2 = (struct reserve_sort_item *)v2;
@@ -380,10 +372,9 @@ reserve_folder_compare(const void *v1, const void *v2)
     return(s1->count - s2->count);
 }
 
-static int
-reserve_messages(struct sync_folder_list *client_list,
-                 struct sync_folder_list *server_list,
-                 int *vanishedp)
+static int reserve_messages(struct sync_folder_list *client_list,
+			    struct sync_folder_list *server_list,
+			    int *vanishedp)
 {
     struct sync_msgid_list *server_msgid_list  = NULL;
     struct sync_msgid_list *reserve_msgid_list = NULL;
@@ -527,8 +518,8 @@ reserve_messages(struct sync_folder_list *client_list,
     return(r);
 }
 
-static int
-folders_get_uniqueid(struct sync_folder_list *client_list, int *vanishedp)
+static int folders_get_uniqueid(struct sync_folder_list *client_list,
+				int *vanishedp)
 {
     struct sync_folder *folder;
     int r = 0;
@@ -628,8 +619,8 @@ static int folder_select(char *name, char *myuniqueid,
     return(0);
 }
 
-static int
-folder_create(char *name, char *uniqueid, char *acl, unsigned long uidvalidity)
+static int folder_create(char *name, char *uniqueid, char *acl,
+			 unsigned long uidvalidity)
 {
     prot_printf(toserver, "CREATE ");
     sync_printastring(toserver, name);
@@ -646,8 +637,7 @@ folder_create(char *name, char *uniqueid, char *acl, unsigned long uidvalidity)
     return(sync_parse_code("CREATE", fromserver, SYNC_PARSE_EAT_OKLINE, NULL));
 }
 
-static int
-folder_rename(char *oldname, char *newname)
+static int folder_rename(char *oldname, char *newname)
 {
     prot_printf(toserver, "RENAME ");
     sync_printastring(toserver, oldname);
@@ -659,8 +649,7 @@ folder_rename(char *oldname, char *newname)
     return(sync_parse_code("RENAME", fromserver, SYNC_PARSE_EAT_OKLINE, NULL));
 }
 
-static int
-folder_delete(char *name)
+static int folder_delete(char *name)
 {
     prot_printf(toserver, "DELETE "); 
     sync_printastring(toserver, name);
@@ -670,8 +659,7 @@ folder_delete(char *name)
     return(sync_parse_code("DELETE", fromserver, SYNC_PARSE_EAT_OKLINE, NULL));
 }
 
-static int
-user_addsub(char *user, char *name)
+static int user_addsub(char *user, char *name)
 {
     if (verbose) 
         printf("ADDSUB %s %s\n", user, name);
@@ -689,8 +677,7 @@ user_addsub(char *user, char *name)
     return(sync_parse_code("ADDSUB", fromserver, SYNC_PARSE_EAT_OKLINE, NULL));
 }
 
-static int
-user_delsub(char *user, char *name)
+static int user_delsub(char *user, char *name)
 {
     if (verbose) 
         printf("DELSUB %s %s\n", user, name);
@@ -708,8 +695,7 @@ user_delsub(char *user, char *name)
     return(sync_parse_code("DELSUB", fromserver, SYNC_PARSE_EAT_OKLINE, NULL));
 }
 
-static int
-folder_setacl(char *name, char *acl)
+static int folder_setacl(char *name, char *acl)
 {
     prot_printf(toserver, "SETACL "); 
     sync_printastring(toserver, name);
@@ -803,7 +789,7 @@ static int update_quota_work(struct quota *client, struct quota *server)
         return(0);
     }
 
-    if (server && client->limit == server->limit)
+    if (server && (client->limit == server->limit))
         return(0);
 
     prot_printf(toserver, "SETQUOTA ");
@@ -817,8 +803,7 @@ static int update_quota_work(struct quota *client, struct quota *server)
 
 /* ====================================================================== */
 
-static void
-create_flags_lookup(int table[], char *client[], char *server[])
+static void create_flags_lookup(int table[], char *client[], char *server[])
 {
     int i, j;
 
@@ -841,9 +826,8 @@ create_flags_lookup(int table[], char *client[], char *server[])
     }
 }
 
-static int
-check_flags(struct mailbox *mailbox, struct sync_msg_list *list,
-            int flag_lookup_table[])
+static int check_flags(struct mailbox *mailbox, struct sync_msg_list *list,
+		       int flag_lookup_table[])
 {
     struct sync_msg *msg;
     unsigned long msgno;
@@ -891,9 +875,8 @@ check_flags(struct mailbox *mailbox, struct sync_msg_list *list,
     return(0);
 }
 
-static int
-update_flags(struct mailbox *mailbox, struct sync_msg_list *list,
-             int flag_lookup_table[])
+static int update_flags(struct mailbox *mailbox, struct sync_msg_list *list,
+			int flag_lookup_table[])
 {
     struct sync_msg *msg;
     unsigned long msgno;
@@ -982,8 +965,7 @@ update_flags(struct mailbox *mailbox, struct sync_msg_list *list,
 
 /* ====================================================================== */
 
-static int
-check_expunged(struct mailbox *mailbox, struct sync_msg_list *list)
+static int check_expunged(struct mailbox *mailbox, struct sync_msg_list *list)
 {
     struct sync_msg *msg = list->head;
     unsigned long msgno = 1;
@@ -1006,8 +988,7 @@ check_expunged(struct mailbox *mailbox, struct sync_msg_list *list)
     return((msg) ? 1 : 0);  /* Remaining messages on server: expunge needed */
 }
 
-static int
-expunge(struct mailbox *mailbox, struct sync_msg_list *list)
+static int expunge(struct mailbox *mailbox, struct sync_msg_list *list)
 {
     struct sync_msg *msg = list->head;
     unsigned long msgno = 1;
@@ -1057,8 +1038,8 @@ expunge(struct mailbox *mailbox, struct sync_msg_list *list)
 
 /* Check whether there are any messages to upload in this folder */
 
-static int
-check_upload_messages(struct mailbox *mailbox, struct sync_msg_list *list)
+static int check_upload_messages(struct mailbox *mailbox,
+				 struct sync_msg_list *list)
 {
     struct sync_msg *msg;
     struct index_record record;
@@ -1095,9 +1076,9 @@ check_upload_messages(struct mailbox *mailbox, struct sync_msg_list *list)
 
 /* Upload missing messages from folders (uses UPLOAD COPY where possible) */
 
-static int
-upload_message_work(struct mailbox *mailbox,
-                    unsigned long msgno, struct index_record *record)
+static int upload_message_work(struct mailbox *mailbox,
+			       unsigned long msgno,
+			       struct index_record *record)
 {
     unsigned long cache_size;
     int flags_printed = 0;
@@ -1187,8 +1168,8 @@ upload_message_work(struct mailbox *mailbox,
     return(r);
 }
 
-static int
-upload_messages_list(struct mailbox *mailbox, struct sync_msg_list *list)
+static int upload_messages_list(struct mailbox *mailbox,
+				struct sync_msg_list *list)
 {
     unsigned long msgno;
     int r = 0;
@@ -1244,8 +1225,8 @@ upload_messages_list(struct mailbox *mailbox, struct sync_msg_list *list)
     return(sync_parse_code("UPLOAD", fromserver, SYNC_PARSE_EAT_OKLINE, NULL));
 }
 
-static int
-upload_messages_from(struct mailbox *mailbox, unsigned long old_last_uid)
+static int upload_messages_from(struct mailbox *mailbox,
+				unsigned long old_last_uid)
 {
     unsigned long msgno;
     int r = 0;
@@ -1289,8 +1270,7 @@ upload_messages_from(struct mailbox *mailbox, unsigned long old_last_uid)
 
 /* upload_messages() null operations still requires UIDLAST update */
 
-static int
-update_uidlast(struct mailbox *mailbox)
+static int update_uidlast(struct mailbox *mailbox)
 {
     prot_printf(toserver, "UIDLAST %lu %lu\r\n",
              mailbox->last_uid, mailbox->last_appenddate);
@@ -1301,17 +1281,25 @@ update_uidlast(struct mailbox *mailbox)
 
 /* ====================================================================== */
 
-static int
-do_seen_work(struct mailbox *mailbox,
-             char *user, time_t *lastseenp, int selected)
-{    
+static int do_seen(char *user, char *name)
+{
     int r = 0;
+    struct mailbox m;
     struct seen *seendb;
     time_t lastread, lastchange;
     unsigned int last_recent_uid;
-    char *seenuid;
+    char *seenuid = NULL;
 
-    if (!r) r = seen_open(mailbox, user, 0, &seendb);
+    if (verbose) 
+        printf("SEEN %s %s\n", user, name);
+
+    if (verbose_logging)
+        syslog(LOG_INFO, "SEEN %s %s", user, name);
+
+    r = mailbox_open_header(name, 0, &m);
+    if (r) return(r);
+
+    r = seen_open(&m, user, 0, &seendb);
     if (!r) {
         r = seen_read(seendb, &lastread, &last_recent_uid,
                       &lastchange, &seenuid);
@@ -1320,43 +1308,24 @@ do_seen_work(struct mailbox *mailbox,
 
     if (r) {
         syslog(LOG_ERR, "Failed to read seendb (%s, %s): %s",
-               mailbox->name, user, error_message(r));
-        return(r);
+               user, m.name, error_message(r));
+	goto bail;
     }
 
     /* Update seen list */
     prot_printf(toserver, "SETSEEN %s %s %lu %lu %lu ",
-             user, mailbox->name, lastread, last_recent_uid, lastchange);
+             user, m.name, lastread, last_recent_uid, lastchange);
 
     sync_printastring(toserver, seenuid);
     prot_printf(toserver, "\r\n");
     prot_flush(toserver);
-    free(seenuid);
-    return(sync_parse_code("SETSEEN",fromserver,SYNC_PARSE_EAT_OKLINE,NULL));
-}
+    r = sync_parse_code("SETSEEN",fromserver,SYNC_PARSE_EAT_OKLINE,NULL);
 
-
-static int
-do_seen(char *name, char *user)
-{
-    int r = 0;
-    struct mailbox m;
-
-    if (verbose) 
-        printf("SEEN %s %s\n", user, name);
-
-    if (verbose_logging)
-        syslog(LOG_INFO, "SEEN %s %s", user, name);
-
-    if ((r = mailbox_open_header(name, 0, &m)))
-        goto bail;
-
-    r = mailbox_open_index(&m);
-    if (!r) r = do_seen_work(&m, user, NULL, 0);
+  bail:
     mailbox_close(&m);
+    if (seenuid) free(seenuid);
 
- bail:
-    return(r);
+    return r;
 }
 
 /* ====================================================================== */
@@ -1414,13 +1383,12 @@ static int do_acl(char *name)
     if (verbose_logging)
         syslog(LOG_INFO, "SETACL: %s", name);
 
-    if ((r = mailbox_open_header(name, 0, &m)))
-        goto bail;
+    r = mailbox_open_header(name, 0, &m);
+    if (r) return r;
 
     r = folder_setacl(m.name, m.acl);
     mailbox_close(&m);
 
- bail:
     return(r);
 }
 
@@ -1636,13 +1604,13 @@ int do_folders(struct sync_folder_list *client_list,
                     goto bail;
 
 		if (!r && m.quota.root && !strcmp(m.name, m.quota.root))
-		    r = update_quota_work(&m.quota, NULL);
+		    r = update_quota_work(&m.quota, &folder2->quota);
 
                 if (do_contents) {
                     struct sync_msg_list *folder_msglist;
 
                     /* 0L, 0L Forces last_uid and seendb push as well */
-                    folder_msglist = sync_msg_list_create(m.flagname, 0, 0, 0);
+                    folder_msglist = sync_msg_list_create(m.flagname, 0);
                     r = do_mailbox_work(&m, folder_msglist, 1, m.uniqueid);
                     sync_msg_list_free(&folder_msglist);
                 }
@@ -1652,7 +1620,7 @@ int do_folders(struct sync_folder_list *client_list,
                     r = folder_setacl(folder->name, m.acl);
 
 		if (!r && m.quota.root && !strcmp(m.name, m.quota.root))
-		    r = update_quota_work(&m.quota, NULL);
+		    r = update_quota_work(&m.quota, &folder2->quota);
 
                 if (!r && do_contents)
                     r = do_mailbox_work(&m, folder2->msglist, 0, m.uniqueid);
@@ -1663,13 +1631,13 @@ int do_folders(struct sync_folder_list *client_list,
                 goto bail;
 
 	    if (!r && m.quota.root && !strcmp(m.name, m.quota.root))
-		r = update_quota_work(&m.quota, NULL);
+		r = update_quota_work(&m.quota, &folder2->quota);
 
             if (do_contents) {
                 struct sync_msg_list *folder_msglist;
 
                 /* 0L, 0L Forces last_uid and seendb push as well */
-                folder_msglist = sync_msg_list_create(m.flagname, 0, 0, 0);
+                folder_msglist = sync_msg_list_create(m.flagname, 0);
                 r = do_mailbox_work(&m, folder_msglist, 1, m.uniqueid);
                 sync_msg_list_free(&folder_msglist);
             }
@@ -1702,9 +1670,8 @@ int do_mailboxes_work(struct sync_folder_list *client_list,
     static struct buf acl;
     static struct buf name;
     static struct buf lastuid;
-    static struct buf last_recent_uid;
-    static struct buf lastseen;
     static struct buf arg;
+    struct quota quota, *quotap;
 
     prot_printf(toserver, "MAILBOXES"); 
 
@@ -1731,25 +1698,22 @@ int do_mailboxes_work(struct sync_folder_list *client_list,
             if ((c = getastring(fromserver, toserver, &acl)) != ' ')
                 goto parse_err;
 
-            if ((c = getastring(fromserver, toserver, &lastuid)) != ' ')
-                goto parse_err;
+            c = getastring(fromserver, toserver, &lastuid);
 
-            if ((c = getastring(fromserver, toserver, &lastseen)) != ' ')
-                goto parse_err;
-
-            c = getastring(fromserver, toserver, &last_recent_uid);
+	    quotap = NULL;
+	    if (c == ' ') {
+		c = getword(fromserver, &arg);
+		quota.limit = atoi(arg.s);
+		quotap = &quota;
+	    }
 
             if (c == '\r') c = prot_getc(fromserver);
             if (c != '\n') goto parse_err;
             if (!imparse_isnumber(lastuid.s))  goto parse_err;
-            if (!imparse_isnumber(lastseen.s)) goto parse_err;
-            if (!imparse_isnumber(last_recent_uid.s)) goto parse_err;
 
-            folder = sync_folder_list_add(server_list, id.s, name.s, acl.s);
-            folder->msglist
-                = sync_msg_list_create(NULL, sync_atoul(lastuid.s),
-                                       sync_atoul(lastseen.s),
-                                       sync_atoul(last_recent_uid.s));
+            folder = sync_folder_list_add(server_list, id.s, name.s, acl.s,
+					  quotap);
+            folder->msglist = sync_msg_list_create(NULL, sync_atoul(lastuid.s));
             break;
         case 1:
             /* New message in current folder */
@@ -1817,42 +1781,37 @@ static int do_mailboxes(struct sync_folder_list *client_folder_list)
     if (!r) r = do_folders(client_folder_list, server_folder_list,
                            &vanished, 1);
 
-    send_enduser();
-
     sync_folder_list_free(&server_folder_list);
     return(r);
 }
 
 /* ====================================================================== */
 
-static int
-addmbox(char *name,
-        int matchlen __attribute__((unused)),
-        int maycreate __attribute__((unused)),
-        void *rock)
+static int addmbox(char *name,
+		   int matchlen __attribute__((unused)),
+		   int maycreate __attribute__((unused)),
+		   void *rock)
 {
     struct sync_folder_list *list = (struct sync_folder_list *) rock;
 
-    sync_folder_list_add(list, NULL, name, NULL);
+    sync_folder_list_add(list, NULL, name, NULL, NULL);
     return(0);
 }
 
-static int
-addmbox_sub(char *name,
-            int matchlen __attribute__((unused)),
-            int maycreate __attribute__((unused)),
-            void *rock)
+static int addmbox_sub(char *name,
+		       int matchlen __attribute__((unused)),
+		       int maycreate __attribute__((unused)),
+		       void *rock)
 {
     struct sync_folder_list *list = (struct sync_folder_list *) rock;
 
-    sync_folder_list_add(list, name, name, NULL);
+    sync_folder_list_add(list, name, name, NULL, NULL);
     return(0);
 }
 
 /* ====================================================================== */
 
-int
-do_mailbox_preload(struct sync_folder *folder)
+int do_mailbox_preload(struct sync_folder *folder)
 {
     struct mailbox m;
     int r = 0;
@@ -2075,8 +2034,7 @@ int do_user_sieve(char *user, struct sync_sieve_list *server_list)
 /* do_user_all() separated into two parts so that we can start process
  * asynchronously, come back and parse result when local list generated */
 
-int
-do_user_all_start(char *user)
+int do_user_all_start(char *user)
 {
     prot_printf(toserver, "USER_ALL "); 
     sync_printastring(toserver, user);
@@ -2085,12 +2043,10 @@ do_user_all_start(char *user)
     return(0);
 }
 
-int
-do_user_all_parse(char *user,
-                  struct sync_folder_list *server_list,
-                  struct sync_folder_list *server_sub_list,
-                  struct sync_sieve_list  *server_sieve_list,
-                  struct quota *quota)
+int do_user_all_parse(char *user,
+		      struct sync_folder_list *server_list,
+		      struct sync_folder_list *server_sub_list,
+		      struct sync_sieve_list  *server_sieve_list)
 {
     int r = 0;
     int c = ' ';
@@ -2102,11 +2058,10 @@ do_user_all_parse(char *user,
     static struct buf flag;
     static struct buf acl;
     static struct buf lastuid;
-    static struct buf lastseen;
-    static struct buf last_recent_uid;
     static struct buf arg;
     struct sync_folder *folder = NULL;
     struct sync_msg    *msg    = NULL;
+    struct quota quota, *quotap;
 
     r = sync_parse_code("USER_ALL", fromserver,
                         SYNC_PARSE_NOEAT_OKLINE, &unsolicited_type);
@@ -2139,7 +2094,7 @@ do_user_all_parse(char *user,
             c = getastring(fromserver, toserver, &name);
             if (c == '\r') c = prot_getc(fromserver);
             if (c != '\n') goto parse_err;
-            sync_folder_list_add(server_sub_list, name.s, name.s, NULL);
+            sync_folder_list_add(server_sub_list, name.s, name.s, NULL, NULL);
             break;
         case 2:
             /* New folder */
@@ -2152,25 +2107,22 @@ do_user_all_parse(char *user,
             if ((c = getastring(fromserver, toserver, &acl)) != ' ')
                 goto parse_err;
 
-            if ((c = getastring(fromserver, toserver, &lastuid)) != ' ')
-                goto parse_err;
+            c = getastring(fromserver, toserver, &lastuid);
 
-            if ((c = getastring(fromserver, toserver, &lastseen)) != ' ')
-                goto parse_err;
-
-            c = getastring(fromserver, toserver, &last_recent_uid);
+	    quotap = NULL;
+	    if (c == ' ') {
+		c = getword(fromserver, &arg);
+		quota.limit = atoi(arg.s);
+		quotap = &quota;
+	    }
 
             if (c == '\r') c = prot_getc(fromserver);
             if (c != '\n') goto parse_err;
             if (!imparse_isnumber(lastuid.s)) goto parse_err;
-            if (!imparse_isnumber(lastseen.s)) goto parse_err;
-            if (!imparse_isnumber(last_recent_uid.s)) goto parse_err;
 
-            folder = sync_folder_list_add(server_list, id.s, name.s, acl.s);
-            folder->msglist
-                = sync_msg_list_create(NULL, sync_atoul(lastuid.s),
-                                       sync_atoul(lastseen.s),
-                                       sync_atoul(last_recent_uid.s));
+            folder = sync_folder_list_add(server_list, id.s, name.s, acl.s,
+					  quotap);
+            folder->msglist = sync_msg_list_create(NULL, sync_atoul(lastuid.s));
             break;
         case 1:
             /* New message in current folder */
@@ -2194,23 +2146,10 @@ do_user_all_parse(char *user,
         }
 
         r = sync_parse_code("USER_ALL", fromserver,
-#if 0
-                            SYNC_PARSE_NOEAT_OKLINE, &unsolicited_type);
-#else
                             SYNC_PARSE_EAT_OKLINE, &unsolicited_type);
-#endif
     }
-    if (r) return(r);
-#if 0
-    /* Parse quota response */
 
-    c = getword(fromserver, &arg);
-    quota->limit = atoi(arg.s);
-
-    if (c == '\r') c = prot_getc(fromserver);
-    if (c != '\n') goto parse_err;
-#endif
-    return(0);
+    return(r);
 
  parse_err:
     syslog(LOG_ERR, "USER_ALL: Invalid type %d response from server",
@@ -2226,7 +2165,6 @@ int do_user_work(char *user, int *vanishedp)
     struct sync_folder_list *server_list      = sync_folder_list_create();
     struct sync_folder_list *server_sub_list  = sync_folder_list_create();
     struct sync_sieve_list *server_sieve_list = sync_sieve_list_create();
-    struct quota server_quota;
     struct mailbox m;
     struct sync_folder *folder2;
 
@@ -2236,8 +2174,6 @@ int do_user_work(char *user, int *vanishedp)
     if (verbose_logging)
         syslog(LOG_INFO, "USER %s", user);
 
-    memset(&server_quota, 0, sizeof(struct quota));
-
     /* Get server started */
     do_user_all_start(user);
 
@@ -2245,8 +2181,7 @@ int do_user_work(char *user, int *vanishedp)
     do_user_preload(user);
 
     r = do_user_all_parse(user,
-                          server_list, server_sub_list, server_sieve_list,
-                          &server_quota);
+                          server_list, server_sub_list, server_sieve_list);
 
     if (r) {
         sync_folder_list_free(&server_list);
@@ -2281,7 +2216,6 @@ int do_user_work(char *user, int *vanishedp)
         sync_folder_list_free(&server_sub_list);
         server_list     = sync_folder_list_create();
         server_sub_list = sync_folder_list_create();
-        memset(&server_quota, 0, sizeof(struct quota));
     }
 
     mailbox_close(&m);
@@ -2292,15 +2226,13 @@ int do_user_work(char *user, int *vanishedp)
     if (!r) r = do_user_sieve(user, server_sieve_list);
 
  bail:
-    send_enduser();
-
     sync_folder_list_free(&server_list);
     sync_folder_list_free(&server_sub_list);
     sync_sieve_list_free(&server_sieve_list);
     return(r);
 }
 
-int do_user(char *user)
+static int do_user(char *user)
 {
     struct sync_user_lock user_lock;
     int r = 0;
@@ -2368,7 +2300,7 @@ static int do_meta_sub(char *user)
             r = IMAP_PROTOCOL_ERROR;
             break;
         }
-        sync_folder_list_add(server_list, name.s, name.s, NULL);
+        sync_folder_list_add(server_list, name.s, name.s, NULL, NULL);
 
         r = sync_parse_code("LSUB", fromserver,
                             SYNC_PARSE_EAT_OKLINE, &unsolicited);
@@ -2380,7 +2312,7 @@ static int do_meta_sub(char *user)
     return(r);
 }
 
-int do_meta_sieve(char *user)
+static int do_meta_sieve(char *user)
 {
     int unsolicited, c, r = 0;
     static struct buf name;
@@ -2447,11 +2379,10 @@ static int do_sieve(char *user)
 
     r = do_meta_sieve(user);
 
- bail:
     return(r);
 }
 
-int do_meta(char *user)   
+static int do_meta(char *user)   
 {
     int r = 0;
 
@@ -2465,7 +2396,6 @@ int do_meta(char *user)
     if (!r) r = do_user_seen(user);
     if (!r) r = do_meta_sieve(user);
 
- bail:
     return(r);
 }
 
@@ -2499,7 +2429,7 @@ static void remove_folder(char *name, struct sync_action_list *list,
 
 /* ====================================================================== */
 
-int do_sync(const char *filename)
+static int do_sync(const char *filename)
 {
     struct sync_user_list   *user_folder_list = sync_user_list_create();
     struct sync_user        *user;
@@ -2680,7 +2610,7 @@ int do_sync(const char *filename)
     }
 
     for (action = seen_list->head ; action ; action = action->next) {
-        if (action->active && do_seen(action->name, action->user)) {
+        if (action->active && do_seen(action->user, action->name)) {
             sync_action_list_add(meta_list, NULL, action->user);
             if (verbose) {
                 printf("  Promoting: SEEN %s %s -> META %s\n",
@@ -2724,7 +2654,7 @@ int do_sync(const char *filename)
         if (!action->active)
             continue;
 
-	sync_folder_list_add(folder_list, NULL, action->name, NULL);
+	sync_folder_list_add(folder_list, NULL, action->name, NULL, NULL);
     }
 
     if (folder_list->count && (r=do_mailboxes(folder_list)))
@@ -2777,10 +2707,9 @@ int do_sync(const char *filename)
 
 /* ====================================================================== */
 
-int
-do_daemon_work(const char *sync_log_file, const char *sync_shutdown_file,
-               unsigned long timeout, unsigned long min_delta,
-               int *restartp)
+int do_daemon_work(const char *sync_log_file, const char *sync_shutdown_file,
+		   unsigned long timeout, unsigned long min_delta,
+		   int *restartp)
 {
     int r = 0;
     char *work_file_name;
@@ -2855,9 +2784,8 @@ do_daemon_work(const char *sync_log_file, const char *sync_shutdown_file,
     return(r);
 }
 
-void
-do_daemon(const char *sync_log_file, const char *sync_shutdown_file,
-          unsigned long timeout, unsigned long min_delta)
+void do_daemon(const char *sync_log_file, const char *sync_shutdown_file,
+	       unsigned long timeout, unsigned long min_delta)
 {
     int r = 0;
     pid_t pid;
@@ -2895,8 +2823,7 @@ static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
     int   opt, i = 0;
     char *alt_config     = NULL;
@@ -3119,13 +3046,13 @@ main(int argc, char **argv)
 
                 if (!sync_folder_lookup_byname(folder_list, argv[i]))
                     sync_folder_list_add(folder_list,
-                                         NULL, argv[i], NULL);
+                                         NULL, argv[i], NULL, NULL);
             }
             fclose(file);
         } else for (i = optind; i < argc; i++) {
 
             if (!sync_folder_lookup_byname(folder_list, argv[i]))
-                sync_folder_list_add(folder_list, NULL, argv[i], NULL);
+                sync_folder_list_add(folder_list, NULL, argv[i], NULL, NULL);
         }
 
 	if (do_mailboxes(folder_list)) {

@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.h,v 1.1.2.2 2005/02/28 20:45:16 ken3 Exp $
+ * $Id: sync_support.h,v 1.1.2.3 2005/03/04 02:59:57 ken3 Exp $
  */
 
 #ifndef INCLUDED_SYNC_SUPPORT_H
@@ -109,15 +109,11 @@ struct sync_msg_list {
     struct sync_msg *head, *tail;
     unsigned long count;
     unsigned long last_uid;
-    time_t        lastseen;
-    unsigned long last_recent_uid;
     struct sync_flags_meta meta;
 };
 
 struct sync_msg_list *sync_msg_list_create(char **flagname,
-					   unsigned long last_uid,
-					   unsigned long lastseen,
-					   unsigned long last_recent_uid);
+					   unsigned long last_uid);
 
 struct sync_msg *sync_msg_list_add(struct sync_msg_list *l);
 
@@ -160,6 +156,7 @@ struct sync_folder {
     char *id;
     char *name;
     char *acl;
+    struct quota quota;
     int   mark; 
     int   reserve;  /* Folder has been processed by reserve operation */
 };
@@ -173,7 +170,8 @@ struct sync_folder_list *sync_folder_list_create(void);
 
 
 struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
-					 char *id, char *name, char *acl);
+					 char *id, char *name, char *acl,
+					 struct quota *quota);
 
 struct sync_folder *sync_folder_lookup(struct sync_folder_list *l, char *id);
 
