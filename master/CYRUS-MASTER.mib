@@ -23,6 +23,8 @@ cyrusMasterMIB MODULE-IDENTITY
 	         master process.
 		"
 	::= { cmuCyrus 1 }
+           -- cmuCyrus = .1.3.6.1.4.1.3.6
+           -- cyrusMasterMIB = .1.3.6.1.4.1.3.6.1
 
 -- general information
 
@@ -52,11 +54,24 @@ cyrusMasterInfo OBJECT IDENTIFIER ::= { cyrusMasterMIB 1 }
 
                          STATUS     mandatory 
 
-                         DESCRIPTION  "The Version of the Cyrus server."
+                         DESCRIPTION  "The version of the Cyrus server."
 
                          ::= { cyrusMasterInfo 2 } 
 
--- service table
+   cyrusMasterInfoUptime OBJECT-TYPE
+
+                         SYNTAX	    TimeTicks
+
+			 ACCESS	    read-only
+			 
+			 STATUS	    current
+
+			 DESCRIPTION "The amount of time since the master
+			              process was last started."
+
+			 ::= { cyrusMasterInfo 3 }
+
+   -- service table
 
    serviceTable          OBJECT-TYPE 
 
