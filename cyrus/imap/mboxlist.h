@@ -41,17 +41,23 @@
  *
 
  * 
- * $Id: mboxlist.h,v 1.10 2000/07/06 17:19:47 leg Exp $
+ * $Id: mboxlist.h,v 1.11 2000/07/17 04:33:58 leg Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
 #define INCLUDED_MBOXLIST_H
 
-#include <db.h>
+#include "cyrusdb.h"
 #include "mailbox.h"
 #include "auth.h"
 #include "acap.h"
 #include "mailbox.h"
+
+/* --- cut here --- */
+#define CONFIG_DB_SUBS (&cyrusdb_flat)
+#define CONFIG_DB_MBOX (&cyrusdb_flat)
+/* -- cut here -- */
+extern struct db *mbdb;
 
 /*
  * Maximum length of partition name. [config.c has a limit of 70]
@@ -126,8 +132,9 @@ int mboxlist_changesub(const char *name, const char *userid,
 /* set or create quota root */
 int mboxlist_setquota(const char *root, int newquota);
 
-/* Resynchronize the news mailboxes. */
-int mboxlist_syncnews(int num, char **group, int *seen);
+/* returns a malloc() string that is the representation in the mailboxes 
+   file.  for ctl_mboxlist */
+char *mboxlist_makeentry(int mbtype, char *part, char *acl);
 
 /* open the mailboxes db */
 void mboxlist_open(char *name);
