@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.39 2004/09/01 21:10:57 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.40 2004/09/03 17:03:27 ken3 Exp $ */
 
 #include <config.h>
 
@@ -917,14 +917,14 @@ static void imapd_check(struct backend *be, int usinguid, int checkseen)
  * If input from the client is pending, returns 1, otherwise returns 0.
  * Input from the backend is sent to the client immediately.
  */
-int check_input(long timeout_sec)
+static inline int check_input(long timeout_sec)
 {
     struct protgroup *protout = NULL;
     struct timeval timeout = { timeout_sec, 0 };
     int n, clientin = 0;
 
     n = prot_select(protin, PROT_NO_FD, &protout, NULL, &timeout);
-    if (n == -1) {
+    if (n == -1 && errno != EINTR) {
 	syslog(LOG_ERR, "prot_select() failed in check_input(): %m");
 	fatal("prot_select() failed in check_input()", EC_TEMPFAIL);
     }
