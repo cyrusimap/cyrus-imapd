@@ -1,0 +1,196 @@
+#!/bin/sh
+exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
+#!perl -w
+# script to translate sieve scripts to use altnamespace
+# make sure you run it as the cyrus user
+#!/usr/bin/perl
+# $Id: translatesieve,v 1.1.2.1 2001/06/28 20:08:03 ken3 Exp $
+# 
+# Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer. 
+#
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in
+#    the documentation and/or other materials provided with the
+#    distribution.
+#
+# 3. The name "Carnegie Mellon University" must not be used to
+#    endorse or promote products derived from this software without
+#    prior written permission. For permission or any other legal
+#    details, please contact  
+#      Office of Technology Transfer
+#      Carnegie Mellon University
+#      5000 Forbes Avenue
+#      Pittsburgh, PA  15213-3890
+#      (412) 268-4387, fax: (412) 268-7395
+#      tech-transfer@andrew.cmu.edu
+#
+# 4. Redistributions of any form whatsoever must retain the following
+#    acknowledgment:
+#    "This product includes software developed by Computing Services
+#     at Carnegie Mellon University (http://www.cmu.edu/computing/)."
+#
+# CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
+# THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+# AND FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE
+# FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+# AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
+# OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+#
+
+if ($] !~ /^5\..*/) {
+  # uh-oh. this isn't perl 5.
+  foreach (split(/:/, $ENV{PATH})) { # try to find "perl5".
+    exec("$_/perl5", "-x", "-S", $0, @ARGV) if (-x "$_/perl5");
+  }
+  # we failed. bail.
+  die "Your perl is too old; I need perl 5.\n";
+}
+
+# load the real script. this is isolated in an 'eval' so perl4 won't
+# choke on the perl5-isms.
+eval join("\n", <DATA>);
+if ($@) { die "$@"; }
+
+__END__
+require 5;
+
+$| = 1;
+
+if (($#ARGV > -1) && ("-f" eq $ARGV[0])) {
+    $force = 1;
+    shift @ARGV;
+}
+if ((($#ARGV > -1) && ($ARGV[0] eq "-h")) || ($#ARGV > 0)) {
+    print "usage: translateesieve [-f] [imapd.conf]\n";
+    print "       -f keep going on errors\n";
+    exit;
+}
+
+sub ouch {
+    my $msg = shift;
+
+    if ($force) {
+	print "error: $msg\n";
+    } else {
+	print "fatal error: $msg\n";
+	exit 1;
+    }
+}
+
+$imapdconf = shift || "/etc/imapd.conf";
+
+$sievedir = "/usr/sieve";
+$altnamespace = "no";
+$userprefix = "Other Users";
+$sharedprefix = "Shared Folders";
+
+open CONF, $imapdconf or die "can't open $imapdconf";
+while (<CONF>) {
+    if (/^sievedir:\s*(.*)$/) {
+	$sievedir = $1;
+	print "you are using $sievedir as your sieve directory.\n";
+    }
+    if (/^altnamespace:\s*(.*)$/) {
+	$altnamespace = $1;
+    }
+    if (/^userprefix:\s*(.*)$/) {
+	$userprefix = $1;
+	print "you are using $userprefix as your other users prefix.\n";
+    }
+    if (/^sharedprefix:\s*(.*)$/) {
+	$sharedprefix = $1;
+	print "you are using $sharedprefix as your shared prefix.\n";
+    }
+}
+close CONF;
+
+if ($altnamespace eq "no") {
+    ouch "you are not using the alternate namespace";
+}
+
+print "translating sievedir $sievedir... ";
+chdir $sievedir or die "couldn't change to $sievedir";
+foreach $i ("a".."z") {
+    print "$i ";
+    if (! chdir $i) {
+	ouch "couldn't chdir to $i";
+	next;
+    }
+
+    # translate the scripts user by user
+    opendir (D, ".");
+    while ($d = readdir D) {
+	next if ($d =~ /^\./s);
+	if (! -d $d) {
+	    ouch "expected $d to be a directory";
+	    next;
+	}
+
+	if (! chdir $d) {
+	    ouch "couldn't chdir to $d";
+	    next;
+	}
+	
+	# translate all of the user's scripts
+	opendir DIR, ".";
+	while ($file = readdir DIR) {
+	    next if (!($file =~ /\.script$/));
+	    
+	    # print "translating $file... ";
+	    if (!open(IN, $file)) {
+		ouch "cannot open $file for reading: $!";
+		next;
+	    }
+	    if (!open(OUT, ">.$file")) {
+		close(IN);
+		ouch "cannot create /.$file: $!";
+		next;
+	    }
+
+	    $inbox = "[Ii][Nn][Bb][Oo][Xx]";
+	    while (<IN>) {
+		# INBOX
+		if (/\s+fileinto\s+"$inbox"\s*;/) {
+		    # do nothing
+		}
+		# Personal namespace
+		elsif (/\s+fileinto\s+"($inbox\.[^"]*)"\s*;/) {
+		    substr($_, index($_, $1), 6) = "";
+		}
+		# Other Users namespace
+		elsif (/\s+fileinto\s+"(user\.[^"]*)"\s*;/) {
+		    substr($_, index($_, $1), 4) = $userprefix;
+		}
+		# Shared namespace
+		elsif (/\s+fileinto\s+"([^"]*)"\s*;/) {
+		    substr($_, index($_, $1), 0) = $sharedprefix . ".";
+		}
+		print OUT $_;
+	    }
+	    close(IN);
+	    close(OUT);
+
+	    rename(".$file", "$file")
+		or ouch "couldn't move .$file to $f";
+
+	    # print "\n";
+	}
+	
+	closedir DIR;
+	chdir "..";
+    }
+    closedir D;
+
+    # back to "/usr/sieve"
+    chdir "..";
+}
+
+print "done\n";
