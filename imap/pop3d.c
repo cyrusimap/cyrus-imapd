@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.142.2.1 2004/03/26 00:38:24 rjs3 Exp $
+ * $Id: pop3d.c,v 1.142.2.2 2004/03/26 02:01:08 ken3 Exp $
  */
 #include <config.h>
 
@@ -122,7 +122,7 @@ struct msg {
     unsigned uid;
     unsigned size;
     int deleted;
-} *popd_msg;
+} *popd_msg = NULL;
 
 static int pop3s = 0;
 static int pop3_logfd = -1;
