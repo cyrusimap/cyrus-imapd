@@ -1,24 +1,23 @@
-ACL=acl_afs.o
-AUTH=auth_krb.o
 LOGIN=login_krb.o
 SEEN=seen_local.o
 AUTHLIBS=/usr/local/lib/libkrb.a /usr/local/lib/libdes.a
 
+COMPILE_ET=compile_et
+COM_ERR=/usr/local/lib/libcom_err.a
+
+OPT=-g
+
 LOBJS= append.o mailbox.o mboxlist.o message.o \
 	parsel.o parsey.o parseadd.o parseutl.o \
-	config.o imap_err.o \
-	assert.o xmalloc.o \
-	$(ACL) $(AUTH) $(LOGIN) $(SEEN)
+	config.o imap_err.o assert.o xmalloc.o \
+	$(LOGIN) $(SEEN)
 
 IMAPDOBJS= imapd.o index.o
 
-COMPILE_ET=compile_et
-
 CFLAGS= $(OPT) $(INCLUDES) $(DEFINES)
 
-OPT=-g
 INCLUDES= -I../lib -I/usr/local/include -I/usr/local/include/afs
-LIBS=../lib/libcyrus.a /usr/local/lib/libcom_err.a $(AUTHLIBS)
+LIBS=../lib/libcyrus.a $(COM_ERR) $(AUTHLIBS)
 
 all: deliver imapd
 
@@ -59,43 +58,86 @@ imap_err.h imap_err.o: imap_err.et
 	$(CC) $(CFLAGS) -c imap_err.c
 
 clean:
-	rm -f *.o *.a parsey.c parsey.h parsel.c deliver
-	rm -f testmkdir
+	rm -f *.o *.a parsey.c parsey.h parsel.c deliver imapd
 
-depend:
-	grep '^#[ 	]*include[ 	]*"' *.[ch] | \
-	sed -e 's/:[^"]*"\([^"]*\)"/:	\1/' -e 's/\.c/.o/' | \
-	awk ' { if ($$1 != prev) { print rec; rec = $$0; prev = $$1; } \
-		else { if (length(rec $$2) > 78) { print rec; rec = $$0; } \
-		       else rec = rec " " $$2 } } \
-	      END { print rec } ' > makedep
-	echo '/^# DO NOT DELETE THIS LINE/+2,$$d' >eddep
-	echo '$$r makedep' >>eddep
-	echo 'w' >>eddep
-	cp Makefile Makefile.bak
-	ed - Makefile < eddep
-	rm eddep makedep
-	echo '' >> Makefile
-	echo '# DEPENDENCIES MUST END AT END OF FILE' >> Makefile
-	echo '# IF YOU PUT STUFF HERE IT WILL GO AWAY' >> Makefile
-	echo '# see make depend above' >> Makefile
+depend: parsel.c parsey.c
+	makedepend $(CFLAGS) *.c
 
-# DO NOT DELETE THIS LINE -- make depend uses it
+# DO NOT DELETE THIS LINE -- make depend depends on it.
 
-
-acl_afs.o:	auth.h xmalloc.h
-append.o:	assert.h imap_err.h mailbox.h message.h xmalloc.h
-config.o:	config.h xmalloc.h
-deliver.o:	imap_err.h mailbox.h
-imapd.o:	auth.h imap_err.h mailbox.h imapd.h xmalloc.h
-index.o:	imap_err.h mailbox.h imapd.h message.h xmalloc.h
-login_krb.o:	config.h imapd.h
-mailbox.o:	assert.h imap_err.h mailbox.h xmalloc.h
-mboxlist.o:	config.h imap_err.h xmalloc.h
-message.o:	imap_err.h mailbox.h parseadd.h xmalloc.h
-parseutl.o:	parseadd.h
-testmkdir.o:	mailbox.h
-
-# DEPENDENCIES MUST END AT END OF FILE
-# IF YOU PUT STUFF HERE IT WILL GO AWAY
-# see make depend above
+append.o: /usr/include/stdio.h /usr/include/ctype.h /usr/include/sys/types.h
+append.o: /usr/include/sys/stdtypes.h /usr/include/sys/sysmacros.h
+append.o: /usr/include/syslog.h ../lib/acl.h assert.h imap_err.h mailbox.h
+append.o: message.h append.h xmalloc.h
+assert.o: /usr/include/stdio.h /usr/include/sysexits.h
+config.o: /usr/include/stdio.h /usr/include/ctype.h /usr/include/sysexits.h
+config.o: /usr/include/syslog.h /usr/local/include/afs/com_err.h config.h
+config.o: xmalloc.h
+deliver.o: /usr/include/stdio.h /usr/include/string.h
+deliver.o: /usr/include/sys/stdtypes.h /usr/include/sysexits.h
+deliver.o: /usr/local/include/afs/com_err.h /usr/include/ndbm.h
+deliver.o: /usr/include/sys/file.h /usr/include/sys/types.h
+deliver.o: /usr/include/sys/sysmacros.h /usr/include/sys/fcntlcom.h
+deliver.o: /usr/include/sys/stat.h ../lib/acl.h ../lib/util.h
+deliver.o: /usr/local/include/afs/auth.h /usr/local/include/rx/rxkad.h
+deliver.o: config.h imap_err.h mailbox.h xmalloc.h
+imapd.o: /usr/include/stdio.h /usr/include/string.h
+imapd.o: /usr/include/sys/stdtypes.h /usr/include/time.h
+imapd.o: /usr/include/sysexits.h /usr/include/signal.h
+imapd.o: /usr/include/sys/signal.h /usr/include/vm/faultcode.h
+imapd.o: /usr/include/sys/types.h /usr/include/sys/sysmacros.h
+imapd.o: /usr/include/sys/param.h /usr/include/machine/param.h
+imapd.o: /usr/include/machine/devaddr.h /usr/include/sys/stat.h
+imapd.o: /usr/include/syslog.h /usr/local/include/afs/com_err.h
+imapd.o: /usr/include/netdb.h /usr/include/sys/socket.h
+imapd.o: /usr/include/netinet/in.h ../lib/acl.h ../lib/util.h
+imapd.o: /usr/local/include/afs/auth.h /usr/local/include/rx/rxkad.h
+imapd.o: imap_err.h mailbox.h imapd.h xmalloc.h
+index.o: /usr/include/stdio.h /usr/include/string.h
+index.o: /usr/include/sys/stdtypes.h /usr/include/time.h
+index.o: /usr/include/sysexits.h /usr/include/sys/types.h
+index.o: /usr/include/sys/sysmacros.h /usr/include/sys/stat.h
+index.o: /usr/include/netinet/in.h /usr/include/sys/mman.h
+index.o: /usr/local/include/afs/com_err.h ../lib/acl.h ../lib/util.h assert.h
+index.o: imap_err.h mailbox.h imapd.h message.h append.h xmalloc.h
+login_krb.o: /usr/include/stdio.h /usr/include/ctype.h
+login_krb.o: /usr/include/sysexits.h /usr/local/include/krb.h
+login_krb.o: /usr/local/include/mit-copyright.h /usr/local/include/des.h
+login_krb.o: /usr/local/include/mit-cpyright.h /usr/include/syslog.h
+login_krb.o: ../lib/kerberos.h config.h mailbox.h /usr/include/sys/types.h
+login_krb.o: /usr/include/sys/stdtypes.h /usr/include/sys/sysmacros.h imapd.h
+login_trivial.o: /usr/include/syslog.h
+login_unix.o: /usr/include/stdio.h /usr/include/sysexits.h /usr/include/pwd.h
+login_unix.o: /usr/include/sys/types.h /usr/include/sys/stdtypes.h
+login_unix.o: /usr/include/sys/sysmacros.h /usr/include/syslog.h config.h
+login_unix.o: mailbox.h imapd.h
+mailbox.o: /usr/include/stdio.h /usr/include/string.h
+mailbox.o: /usr/include/sys/stdtypes.h /usr/include/errno.h
+mailbox.o: /usr/include/sys/errno.h /usr/include/syslog.h
+mailbox.o: /usr/include/sys/types.h /usr/include/sys/sysmacros.h
+mailbox.o: /usr/include/netinet/in.h /usr/include/sys/stat.h
+mailbox.o: /usr/include/sys/file.h /usr/include/sys/fcntlcom.h ../lib/acl.h
+mailbox.o: assert.h imap_err.h mailbox.h xmalloc.h
+mboxlist.o: /usr/include/stdio.h /usr/include/sysexits.h
+mboxlist.o: /usr/include/string.h /usr/include/sys/stdtypes.h
+mboxlist.o: /usr/include/errno.h /usr/include/sys/errno.h
+mboxlist.o: /usr/include/sys/types.h /usr/include/sys/sysmacros.h
+mboxlist.o: /usr/include/sys/stat.h /usr/include/sys/file.h
+mboxlist.o: /usr/include/sys/fcntlcom.h ../lib/acl.h ../lib/glob.h assert.h
+mboxlist.o: config.h mailbox.h imap_err.h xmalloc.h
+message.o: /usr/include/stdio.h /usr/include/ctype.h /usr/include/string.h
+message.o: /usr/include/sys/stdtypes.h imap_err.h mailbox.h
+message.o: /usr/include/sys/types.h /usr/include/sys/sysmacros.h parseadd.h
+message.o: xmalloc.h
+parseadd.o: /usr/include/stdio.h /usr/include/ctype.h parseadd.h
+parsel.o: /usr/include/stdio.h parseadd.h parsey.h
+parseutl.o: /usr/include/stdio.h parseadd.h
+parsey.o: parseadd.h
+seen_local.o: /usr/include/stdio.h /usr/include/errno.h
+seen_local.o: /usr/include/sys/errno.h /usr/include/ctype.h
+seen_local.o: /usr/include/strings.h /usr/include/sys/stat.h
+seen_local.o: /usr/include/sys/types.h /usr/include/sys/stdtypes.h
+seen_local.o: /usr/include/sys/sysmacros.h /usr/include/sys/file.h
+seen_local.o: /usr/include/sys/fcntlcom.h assert.h mailbox.h imap_err.h
+seen_local.o: xmalloc.h
+xmalloc.o: /usr/include/stdio.h /usr/include/sysexits.h

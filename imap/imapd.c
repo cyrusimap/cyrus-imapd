@@ -16,9 +16,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
-#include <acl.h>
-#include <glob.h>
-#include <util.h>
+#include "acl.h"
+#include "util.h"
 #include "auth.h"
 #include "imap_err.h"
 #include "mailbox.h"
@@ -1964,7 +1963,6 @@ struct strlist *l;
     while (l) {
 	n = l->next;
 	free(l->s);
-	if (l->glob) glob_free(l->glob);
 	free((char *)l);
 	l = n;
     }

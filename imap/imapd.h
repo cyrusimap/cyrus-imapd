@@ -21,7 +21,6 @@ extern char imapd_clienthost[];
 struct strlist {
     char *s;			/* String */
     struct strlist *next;
-    struct glob *glob;
 };
 
 
