@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.114 1998/07/06 23:13:29 tjs Exp $
+dnl $Id: configure.in,v 1.115 1998/07/07 00:06:12 tjs Exp $
 dnl
 
 AC_INIT(imap/imapd.c)
@@ -493,8 +493,8 @@ if test "$TCL_SUBDIRS" != ""; then
 
     # Did the user tell us where to find tclsh?
     if test -z "$TCLSH"; then
-      # Try and find tclsh.
-      AC_PATH_PROGS(TCLSH, [tclsh tclsh8.0], unknown)
+      # Try and find tclsh.  Any tclsh.
+      AC_PATH_PROGS(TCLSH, [tclsh8.0 tclsh], "unknown")
     fi
 
     # If we know where to get a tclsh,
@@ -512,16 +512,16 @@ if test "$TCL_SUBDIRS" != ""; then
     # It looks like under 7.5, it does -- and under 8.0, it lives elsewhere.
     # That's "bad", as far as I know.
     AC_MSG_CHECKING([if tclsh knows where tclConfig.sh is])
-    if test -e ${TclLibBase}tclConfig.sh ; then
+    if test -r "${TclLibBase}/tclConfig.sh"; then
       AC_MSG_RESULT([yes])
     else
       AC_MSG_RESULT([no])
       AC_MSG_WARN([tclsh does not really know where its install is.])
       AC_MSG_WARN([The configure script will try and guess where it is.])
-      AC_MSG_CHECKING([a tclConfig.sh in likely places])
+      AC_MSG_CHECKING([for a tclConfig.sh in likely places])
       # Whee!  Okay, let's guess -- maybe it's in ../tclConfig.sh, which is
       # likely on some of the warped tcl8 systems I tried.
-      if test -e "${TclLibBase}/../tclConfig.sh" ; then
+      if test -r "${TclLibBase}/../tclConfig.sh" ; then
         TclLibBase="${TclLibBase}/.."
       # possibly others for other creative vendors
       else
