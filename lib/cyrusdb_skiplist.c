@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.27 2002/02/27 05:33:39 leg Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.28 2002/02/27 05:52:20 leg Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -42,6 +42,8 @@
  */
 
 /* xxx check retry_xxx for failure */
+
+/* xxx all offsets should be bit32s i think */
 
 #include <config.h>
 
@@ -1241,7 +1243,7 @@ int mycommit(struct db *db, struct txn *tid)
     return 0;
 }
 
-int myabort(struct db *db, struct txn *tid) /* xxx */
+int myabort(struct db *db, struct txn *tid)
 {
     const char *ptr;
     int updateoffsets[SKIPLIST_MAXLEVEL];
@@ -1346,7 +1348,7 @@ static int mycheckpoint(struct db *db, int locked)
     int num_iov;
     int updateoffsets[SKIPLIST_MAXLEVEL];
     const char *ptr;
-    int offset;
+    bit32 offset;
     int r = 0;
     int iorectype = htonl(INORDER);
     int i;
@@ -1624,7 +1626,7 @@ static int consistent(struct db *db)
 static int myconsistent(struct db *db, struct txn *tid, int locked)
 {
     const char *ptr;
-    int offset;
+    bit32 offset;
 
     if (!locked) read_lock(db);
     else if (tid) update_lock(db, tid);
