@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.40 2002/08/30 19:55:33 rjs3 Exp $ */
+/* $Id: fud.c,v 1.41 2002/10/03 19:02:37 ken3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -158,24 +158,11 @@ void shut_down(int code)
  */
 int service_init(int argc, char **argv, char **envp)
 {
-    int opt;
-   
     config_changeident("fud");
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
     setproctitle_init(argc, argv, envp);
-
-    while ((opt = getopt(argc, argv, "C:D")) != EOF) {
-	switch (opt) {
-	case 'C': /* alt config file - handled by service::main() */
-	    break;
-	case 'D': /* external debugger - handled by service::main() */
- 	    break;
-	default:
-	    break;
-	}
-    }
 
     signals_set_shutdown(&shut_down);
     signals_add_handlers();
