@@ -1,5 +1,5 @@
 /* prot.h -- stdio-like module that handles IMAP protection mechanisms
- * $Id: prot.h,v 1.29 2000/11/06 21:12:38 ken3 Exp $
+ * $Id: prot.h,v 1.30 2000/11/13 22:09:43 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -121,7 +121,8 @@ extern int prot_rewind(struct protstream *s);
 extern int prot_fill(struct protstream *s);
 extern int prot_flush(struct protstream *s);
 extern int prot_write(struct protstream *s, const char *buf, unsigned len);
-extern int prot_printf(struct protstream *, const char *, ...);
+extern int prot_printf(struct protstream *, const char *, ...)
+    __attribute__ ((format (printf, 2, 3)));
 extern int prot_read(struct protstream *s, char *buf, unsigned size);
 extern char *prot_fgets(char *buf, unsigned size, struct protstream *s);
 
