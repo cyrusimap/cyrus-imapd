@@ -136,7 +136,7 @@ sub listaclmailbox {
   $self->addcallback({-trigger => 'ACL',
 		      -callback => sub {
 			my %d = @_;
-			return unless $d{-text} =~ s/^$mbx\s+//;
+			return unless $d{-text} =~ s/^\"*$mbx\"*\s+//;
 			while ($d{-text} =~ s/(\S+)\s+(\S+)\s*//) {
 			  $d{-rock}{$1} = $2;
 			}
