@@ -75,23 +75,24 @@ struct variable4 cyrusMasterMIB_variables[] = {
 /*    (L = length of the oidsuffix) */
 
 
-static time_t startTime;
+static time_t startTime = 0;
 
 /*
  * init_cyrusMasterMIB():
  *   Initialization routine.  This is called when the agent starts up.
  *   At a minimum, registration of your variables should take place here.
  */
-void init_cyrusMasterMIB(void) {
+void init_cyrusMasterMIB(void) 
+{
+    /* register ourselves with the agent to handle our mib tree */
+    REGISTER_MIB("cyrusMasterMIB", cyrusMasterMIB_variables, variable4,
+		 cyrusMasterMIB_variables_oid);
 
 
-  /* register ourselves with the agent to handle our mib tree */
-  REGISTER_MIB("cyrusMasterMIB", cyrusMasterMIB_variables, variable4,
-               cyrusMasterMIB_variables_oid);
-
-
-  /* place any other initialization junk you need here */
-  startTime = time(NULL);
+    /* place any other initialization junk you need here */
+    if (!startTime) {
+	startTime = time(NULL);
+    }
 }
 
 
