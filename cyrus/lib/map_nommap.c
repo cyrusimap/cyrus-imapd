@@ -1,5 +1,5 @@
 /* map_nommap.c -- dummy memory-mapping routines.
- $Id: map_nommap.c,v 1.15 2000/02/10 21:25:41 leg Exp $
+ $Id: map_nommap.c,v 1.14.2.1 2000/10/31 20:29:06 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -22,7 +22,6 @@
  # SOFTWARE.
  *
  */
-#include <config.h>
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -89,7 +88,7 @@ const char *mboxname;
 	    sprintf(buf, "failed to read %s file", name);
 	    fatal(buf, EC_IOERR);
 	}
-	p += left;
+	p += n;
 	left -= n;
     }
 }
