@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.19 2004/02/04 18:05:30 ken3 Exp $ */
+/* $Id: backend.c,v 1.20 2004/02/26 21:10:38 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -96,7 +96,7 @@ static char *ask_capability(struct protstream *pout, struct protstream *pin,
 
 	/* look for capabilities in the string */
 	for (c = prot->capa_cmd.capa; c->str; c++) {
-	    if (tmp = strstr(str, c->str)) {
+	    if ((tmp = strstr(str, c->str)) != NULL) {
 		*capa = *capa | c->flag;
 
 		if (c->flag == CAPA_AUTH) {
