@@ -44,8 +44,7 @@
 
 enum {
     STATUS_FD = 3,
-    LISTEN_FD = 4,
-    LOCK_FD = 5
+    LISTEN_FD = 4
 };
 
 enum {
