@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.52 2002/11/06 20:43:23 rjs3 Exp $
+ * $Id: pop3proxyd.c,v 1.53 2003/02/04 17:46:06 rjs3 Exp $
  */
 #include <config.h>
 
@@ -1375,13 +1375,14 @@ static void bitpipe(void)
     /* ok, we're done. close backend connection */
     prot_free(backend_in);
     prot_free(backend_out);
-    close(backend_sock);
+    cyrus_close_sock(backend_sock);
 
     /* close the connection to the client */
-    close(0);
-    close(1);
     prot_free(popd_in);
     prot_free(popd_out);
+    cyrus_close_sock(0);
+    cyrus_close_sock(1);
+    cyrus_close_sock(2);
 
     return;
 }

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.39 2002/10/03 20:31:55 ken3 Exp $ */
+/* $Id: service.c,v 1.40 2003/02/04 17:46:11 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -476,6 +476,7 @@ int main(int argc, char **argv, char **envp)
 
 	    if (!libwrap_ask(&request, fd)) {
 		/* connection denied! */
+		shutdown(fd, SHUT_RDWR);
 		close(fd);
 		continue;
 	    }

@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.67 2002/10/21 17:17:42 rjs3 Exp $
+ * $Id: mupdate.c,v 1.68 2003/02/04 17:46:06 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -244,7 +244,7 @@ static void conn_free(struct conn *C)
     if (C->ev) prot_removewaitevent(C->pin, C->ev);
     if (C->pin) prot_free(C->pin);
     if (C->pout) prot_free(C->pout);
-    close(C->fd);
+    cyrus_close_sock(C->fd);
     if (C->saslconn) sasl_dispose(&C->saslconn);
 
     /* free update list */

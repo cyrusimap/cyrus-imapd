@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.257 2003/01/28 20:49:42 rjs3 Exp $
+dnl $Id: configure.in,v 1.258 2003/02/04 17:46:02 rjs3 Exp $
 dnl
 
 
@@ -256,6 +256,9 @@ AC_CHECK_FUNCS(getrlimit)
 
 dnl for detaching terminal
 AC_CHECK_FUNCS(daemon setsid)
+
+dnl for turning off sockets
+AC_CHECK_FUNCS(shutdown)
 
 AC_EGREP_HEADER(socklen_t, sys/socket.h, AC_DEFINE(HAVE_SOCKLEN_T))
 AC_EGREP_HEADER(rlim_t, sys/resource.h, AC_DEFINE(HAVE_RLIM_T))

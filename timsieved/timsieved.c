@@ -1,7 +1,7 @@
 /* timsieved.c -- main file for timsieved (sieve script accepting program)
  * Tim Martin
  * 9/21/99
- * $Id: timsieved.c,v 1.41 2002/09/19 18:16:53 rjs3 Exp $
+ * $Id: timsieved.c,v 1.42 2003/02/04 17:46:13 rjs3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -83,6 +83,7 @@
 #include "auth.h"
 #include "acl.h"
 #include "mboxlist.h"
+#include "util.h"
 
 static struct 
 {
@@ -125,6 +126,10 @@ void shut_down(int code)
     if (sieved_in) prot_free(sieved_in);
 
     if (sieved_logfd != -1) close(sieved_logfd);
+
+    cyrus_close_sock(0);
+    cyrus_close_sock(1);
+    cyrus_close_sock(2);
     
     /* done */
     exit(code);
