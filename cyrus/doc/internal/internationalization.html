@@ -1,0 +1,149 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta name="revision" content="$Id: internationalization.html,v 1.1 2002/12/26 17:52:00 leg Exp $" />
+<title>internationalization</title>
+</head>
+<body>
+<h1>charset code</h1>
+
+<h2>overall</h2>
+
+<p>Cyrus currently transcodes characters to a canonical UTF-8 form for
+searching. The base spec of IMAP4 only requires internationalization
+to implement SEARCH. Since the base spec came out, several extensions
+have been proposed that require further charset support: SORT, THREAD,
+and the Sieve subsystem. As of this writing, Cyrus doesn't correctly
+support these other commands.</p>
+
+<p>Cyrus currently only believes in 16-bit characters. Technically,
+Unicode has up to 21-bit characters (expressible in UTF-16 and 3-byte
+UTF-8) and ISO 10646 allows up to 31-bit characters (though ISO's
+current policy is to not allocate any characters outside of the 21-bit
+Unicode range). The lower 16-bit characters make up the basic
+multilingual plane where the majority of languages live. This
+restriction is apparent in <tt>charset.c:writeutf8()</tt>, the UTF-8
+decoders, and the Unicode canonicalization table used by Cyrus. Since
+Cyrus's known character sets (except for UTF-8) don't contain any
+characters off of the BMP this isn't seen to be a major problem.</p>
+
+<h3>cyrus canonical form</h3>
+
+<p>fully decomposed. case mapped into lower case. whitespace
+eliminated.</p>
+
+<h2>transcoding</h2>
+
+<p>The central part of Cyrus's internationalization support is it's
+transcoding routines in <tt>lib/charset.[ch]</tt>, and
+<tt>lib/chartable.[ch]</tt>. Cyrus's transcoding routines are very
+elegant and very compact, thus somewhat intimidating. During
+compilation, Cyrus builds up a large number of tables (see <a
+href="#mkchartable">mkchartable</a>) and uses them so that it never
+has to consider more than a single octet at a time.</p>
+
+<h3>external interface</h3>
+
+<p>
+<tt>lib/charset.h</tt> is the public interface for Cyrus lib clients
+to get character canonicalization and searching support. In contains
+the following functions:</p>
+
+<dl>
+<dt><tt>char *charset_convert(const char *s, int charset, char *buf,
+int bufsz)</tt></dt>
+
+<dd> Given a string <i>s</i> in charset <i>charset</i>, decode it into
+canonical form in <i>buf</i>. <i>buf</i> must be reallocable and
+currently at least size <i>bufsz</i>.</dd>
+
+<dt><tt>char *charset_decode1522(const char *s, char *buf, int bufsz)</tt></dt>
+<dd> Given a string <i>s</i> containing possible RFC 1522 (revised as RFC
+2047) encoded substrings, decode into canonical form in
+<i>buf</i>. <i>buf</i> must be reallocable and currently at least size
+<i>bufsz</i>.</dd>
+
+<dt><tt>charset_index charset_lookupname(const char *name)</tt></dt>
+<dd> Given <i>name</i> return the Cyrus charset index. 0 always
+represents US-ASCII. The returned charset_index may be saved in a
+file; it is stable and is an integer. If this version of Cyrus does
+not support the charset, <tt>CHARSET_UNKNOWN_CHARSET</tt> is
+returned.</dd>
+
+<dt><tt>comp_pat *charset_compilepat(const char *s)</tt></dt> 
+<dd>
+Compiles a NUL-terminated canonicalized string <i>s</i> into a
+Boyer-Moore table for fast searching. I'll describe these <a
+href="#comp_pat">compiled patterns</a> later. </dd>
+
+<dt><tt>void charset_freepat(comp_pat *pat)</tt></dt>
+<dd> Frees a pattern previously return by <tt>charset_compilepat()</tt>.</dd>
+
+<dt><tt>int charset_searchstring(const char *substr, comp_pat *pat,
+    const char *s, int len)</tt></dt>
+<dd> Searches for a canonicalized string <i>substr</i> in the
+    canonicalized string <i>s</i>. <i>s</i> is of length <i>len</i>.
+    <i>substr</i> must have been previously compiled into <i>pat</i>. 
+    Returns non-zero for a hit, zero for no match.
+</dd>
+
+<dt><tt>int charset_searchfile(const char *substr, comp_pat *pat,
+                              const char *msg_base, int mapnl, int len, 
+                              charset_index charset, int encoding)</tt></dt>
+
+<dd> 
+Searches for the canonicalized string <i>substr</i> with compiled
+pattern <i>pat</i> in a large buffer starting at <i>msg_base</i> of
+length <i>len</i>. The large buffer is of charset <i>charset</i> with
+the encoding <i>encoding</i>. <tt>charset_searchfile()</tt> will
+dynamically unencode and canonicalize the search text looking for
+<i>substr</i>. (If <i>mapnl</i> is set, the buffer has only <tt>\n</tt>
+instead of <tt>\r\n</tt>, but the length assumes that each <tt>\n</tt>
+is dynamically converted to <tt>\r\n</tt>. This feature is deprecated.)
+</dd>
+
+<dt><tt>charset_extractfile()</tt></dt>
+<dd> Used by <tt>squatter</tt> and possibly other text indexing engines,
+but not described here.</dd>
+
+</dl>
+
+<h3 id="comp_pat">boyer-moore searching, compiled patterns</h3>
+
+<p>brief description of boyer-moore</p>
+
+<p>why two arrays?</p>
+
+<p>meta-data stored at the end</p>
+
+<h3>the TRANSLATE macro: using the transcoding tables</h3>
+
+<p>implicit case mapping</p>
+
+<p>output characters or control codes. control codes are uppercase
+US-ASCII characters since those can never be output characters.</p>
+
+<h2>generating tables: <tt>mkchartable</tt></h2>
+
+<p>unifix.txt: fixups for more generous matching. besides casemapping,
+and whitespace elimination, is the Cyrus normalization
+file. (eliminates accents, etc.)</p>
+
+<p>unidata2.txt: describes each unicode character</p>
+
+<h2>for the future</h2>
+
+<h3>Sieve/ACAP comparators</h3>
+
+<h3>adjustable normalization?</h3>
+
+<h2>references</h2>
+
+<ul>
+<li>utf-8 RFC</li>
+<li>boyer-moore</li>
+</ul>
+
+</body>
+</html>

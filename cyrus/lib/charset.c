@@ -38,12 +38,14 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-/* $Id: charset.c,v 1.39 2002/03/14 00:37:55 ken3 Exp $
+/* $Id: charset.c,v 1.40 2002/12/26 17:52:00 leg Exp $
  */
 #include <config.h>
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "assert.h"
 #include "charset.h"
 #include "xmalloc.h"
 #include "chartable.h"
@@ -132,7 +134,7 @@ static int writeutf8(unsigned utfcode, char *to);
  \
 	case XLT: \
 	    idx += xlate((_translation[0]<<8) + (_translation[1]), ptr+idx); \
-	    _translation += 2; \
+	    _translation += 2; \ /* next translation is a RET or END */
 	    continue; \
  \
 	default: \
@@ -147,7 +149,7 @@ static int writeutf8(unsigned utfcode, char *to);
    in the pattern */
 struct comp_pat_s {
     int pat[256];		/* boyer-moore skip table */
-    int ascii[256];		/* case-mapped vesion of table */
+    int ascii[256];		/* case-mapped version of table */
     int patlen;
     int patlastchar;		/* last character in the pattern */
     int patotherlastchar;	/* case-flip of the last character */
@@ -226,8 +228,8 @@ int charset_lookupname(const char *name)
 
 /*
  * Convert the string 's' in the character set numbered 'charset'
- * into canonical searching form.  Returns a pointer to a static
- * buffer containing 's' in canonical searching form.
+ * into canonical searching form.  Decodes into 'retval', which 
+ * must be reallocable and currently at least size 'alloced'.
  */
 char *charset_convert(const char *s, int charset, char *retval,
     int alloced)
@@ -261,7 +263,8 @@ char *charset_convert(const char *s, int charset, char *retval,
 }
 
 /*
- * Decode 1522-strings in 's'.  Returns a pointer to a static buffer
+ * Decode 1522-strings in 's'.  It writes the decoded string to 'retval',
+ * calling realloc() as needed. (Thus retval may be NULL.) Returns retval,
  * contining 's' in canonical searching form.
  */
 char *charset_decode1522(const char *s, char *retval, int alloced)
@@ -452,6 +455,7 @@ int charset_searchstring(const char *substr, comp_pat *pat,
 {
     int i, j, large;
     
+    assert(pat != NULL);
     i = PATLEN(pat) - 1;
     if (i < 0) return 1;
     pat[PATLASTCHAR(pat)] = large = len + i + 2;
