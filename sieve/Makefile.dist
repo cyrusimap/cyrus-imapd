@@ -1,6 +1,7 @@
 YACC = bison -y
 YFLAGS = -d
 LEX = flex
+COMPILE_ET = /usr/local/bin/compile_et
 
 BUILT_SOURCES = addr.c addr.h addr-lex.c \
 	sieve.c sieve.h sieve-lex.c \
@@ -17,10 +18,10 @@ addr-lex.c: addr-lex.l addr.h
 	$(LEX) -t -Paddr addr-lex.l > $@
 
 sieve.c sieve.h: sieve.y
-	$(YACC) $(YFLAGS) $(srcdir)/sieve.y
+	$(YACC) $(YFLAGS) sieve.y
 	mv -f y.tab.c sieve.c
 	mv -f y.tab.h sieve.h
 
 sieve_err.h sieve_err.c: sieve_err.et
-	$(COMPILE_ET) $(srcdir)/sieve_err.et
+	$(COMPILE_ET) sieve_err.et
 
