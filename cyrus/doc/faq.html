@@ -4,7 +4,7 @@
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
 <title>Cyrus IMAP Server FAQ</title>
-<!-- $Id: faq.html,v 1.23 2003/06/06 13:05:03 rjs3 Exp $ -->
+<!-- $Id: faq.html,v 1.24 2003/06/20 14:59:41 rjs3 Exp $ -->
 </head>
 <body>
 <h1>Cyrus IMAP Server FAQ</h1>
@@ -206,10 +206,34 @@ QP-encoding the corrupted headers).
 </p>
 </dd>
 
+<dt><b>Q:</b> Why can't I delete any messages from my over-quota mailbox?
+I'm using a client with a 'trash folder'.</dt>
+
+<dd>
+<p><b>A:</b>
+Trash folders, as they are commonly implemented (as an actual IMAP mailbox),
+do not fit the IMAP delete/expunge model very well.  In fact, naieve
+client implementations will get stuck in a situation where they cannot
+delete a message from a mailbox because they try to COPY it to the trash
+folder before deleting the meessage.  This operation will fail due to the
+mailbox being over quota.  This is separate from the fact that a specific 
+mailbox name is not interoperable between clients (one might call it 'trash',
+another 'trash', another 'recycle bin', etc)
+</p><p>
+This is solely a quality-of-implementation issue on the client side.  There
+are really only three options here: Contact your client vendor to have
+the broken client fixed.  Stop using the 'trash mailbox' feature of
+your client (if possible).  Set a separate qutoa root on the 'trash folders'
+of users.  This last option is significantly harder to do, since
+it assumes that all clients that make use of a trash folder do so with the
+same folder name.
+</p>
+</dd>
+
 </dl>
 
 <hr />
-last modified: $Date: 2003/06/06 13:05:03 $ <br />
+last modified: $Date: 2003/06/20 14:59:41 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
