@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.57 1998/12/04 17:55:19 tjs Exp $ -->
+<!-- $Id: changes.html,v 1.58 1998/12/21 15:33:46 dar Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -64,8 +64,14 @@
 	    lock when trying to check for duplicates. Only markdelivered()
 	    grabs a write lock.
 	</ul>
+
+      <li> Added logic to cause cyradm to abort more cleanly if not given
+        command line arguments in an interactive session.  This gets
+        rid of the dreaded <tt>application-specific intialization failed</tt>
+        messages.
     </ul>
 
+    
 
 <h2> Changes to the Cyrus IMAP Server Since Version 1.5.11</h2>
 
