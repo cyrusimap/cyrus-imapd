@@ -35,6 +35,7 @@ RANLIB = @RANLIB@
 DEFS = @DEFS@
 CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@ 
 LIBS = @LIBS@ 
+IMAP_LIBS = @IMAP_LIBS@
 DEPLIBS = ../lib/libcyrus.a @DEPLIBS@
 
 CFLAGS = -g
@@ -58,7 +59,7 @@ install:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
 
 imtest: $(OBJS) $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o imtest $(OBJS) $(DEPLIBS) $(LIBS)
+	$(CC) $(LDFLAGS) -o imtest $(OBJS) $(DEPLIBS) $(LIBS) $(IMAP_LIBS)
 
 clean:
 	rm -f *.o Makefile.bak makedepend.log imtest
