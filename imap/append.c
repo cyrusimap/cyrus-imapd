@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.78 2000/12/26 21:35:40 leg Exp $
+ * $Id: append.c,v 1.79 2001/01/30 21:53:27 leg Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -556,6 +556,7 @@ int append_fromstream(struct appendstate *as,
 			      fname + strlen(fname));
     as->nummsg++;
 
+    unlink(fname);
     destfile = fopen(fname, "w+");
     if (!destfile) {
 	syslog(LOG_ERR, "IOERROR: creating message file %s: %m", fname);
@@ -718,6 +719,7 @@ int append_copy(struct mailbox *mailbox,
 	     * Then, we have to parse the message.
 	     */
 	    r = 0;
+	    unlink(fname);
 	    destfile = fopen(fname, "w+");
 	    if (!destfile) {
 		syslog(LOG_ERR, "IOERROR: writing message file %s: %m", fname);
