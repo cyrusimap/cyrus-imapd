@@ -92,7 +92,7 @@ mkchartable: mkchartable.o xmalloc.o assert.o
 	$(CC) $(LDFLAGS) -o mkchartable mkchartable.o xmalloc.o assert.o
 
 clean:
-	rm -f *.o *.a chartables.h Makefile.bak
+	rm -f *.o *.a chartables.h Makefile.bak mkchartable makedepend.log
 
 distclean: clean
 	rm -f Makefile
@@ -101,5 +101,3 @@ depend:
 	${MAKEDEPEND} $(CPPFLAGS) $(DEFS) -I$(srcdir) $(CFLAGS) *.c $(srcdir)/*.c 1>makedepend.log 2>&1
 
 # DO NOT DELETE THIS LINE -- make depend depends on it.
-
-
