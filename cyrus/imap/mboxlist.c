@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.43 2003/04/30 20:31:33 ken3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.44 2003/05/29 01:48:22 ken3 Exp $
  */
 
 #include <config.h>
@@ -2165,12 +2165,12 @@ int mboxlist_findall_alt(struct namespace *namespace,
 			NULL);
 	}
 	else if (pattern[len] == '.') {
-	    strlcpy(domainpat+domainlen, pattern+len,
+	    strlcpy(domainpat+domainlen, pattern+len+1,
 		    sizeof(domainpat)-domainlen);
 	    cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
 
 	    DB->foreach(mbdb,
-			domainpat, strlen(domainpat),
+			domainpat, domainlen+prefixlen-(len+1),
 			&find_p, &find_cb, &cbrock,
 			NULL);
 	}
@@ -2934,12 +2934,12 @@ int mboxlist_findsub_alt(struct namespace *namespace,
 			   NULL);
 	}
 	else if (pattern[len] == '.') {
-	    strlcpy(domainpat+domainlen, pattern+len,
+	    strlcpy(domainpat+domainlen, pattern+len+1,
 		    sizeof(domainpat)-domainlen);
 	    cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
 
 	    SUBDB->foreach(subs,
-			   domainpat, strlen(domainpat),
+			   domainpat, domainlen+prefixlen-(len+1),
 			   &find_p, &find_cb, &cbrock,
 			   NULL);
 	}
