@@ -84,7 +84,7 @@ depend::
 	echo '/^# DO NOT DELETE THIS LINE/+2,$$d' >eddep
 	echo 'w' >>eddep
 	cp Makefile Makefile.bak
-	ed - Makefile < eddep
+	ed -s Makefile < eddep
 	rm eddep
 	echo '' >> Makefile
 	echo '# IF YOU PUT STUFF HERE IT WILL GO AWAY' >> Makefile
