@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.15 2001/01/02 05:58:10 leg Exp $ */
+/* $Id: acconfig.h,v 1.16 2001/02/07 21:46:56 leg Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -105,6 +105,9 @@
 /* do we have socklen_t? */
 #undef HAVE_SOCKLEN_T
 
+/* do we have rlim_t? */
+#undef HAVE_RLIM_T
+
 @BOTTOM@
 
 #ifndef __GNUC__
@@ -113,6 +116,10 @@
 
 #ifndef HAVE_SOCKLEN_T
 typedef int socklen_t;
+#endif
+
+#ifndef HAVE_RLIM_T
+typedef int rlim_t;
 #endif
 
 /* some potentially memory saving tradeoffs, 

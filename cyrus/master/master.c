@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.31 2001/01/29 21:53:26 leg Exp $ */
+/* $Id: master.c,v 1.32 2001/02/07 21:46:57 leg Exp $ */
 
 #include <config.h>
 
@@ -128,7 +128,7 @@ struct centry {
 static struct centry *ctable[child_table_size];
 static struct centry *cfreelist;
 
-void limit_fds(int);
+void limit_fds(rlim_t);
 
 static char *mystrdup(const char *s)
 {
@@ -869,7 +869,7 @@ void add_event(const char *name, struct entry *e, void *rock)
 #  define RLIMIT_NUMFDS RLIMIT_OFILE
 # endif
 #endif
-void limit_fds(int x)
+void limit_fds(rlim_t x)
 {
     struct rlimit rl;
     int r;
@@ -877,15 +877,17 @@ void limit_fds(int x)
     rl.rlim_cur = x;
     rl.rlim_max = x;
     if (setrlimit(RLIMIT_NUMFDS, &rl) < 0) {
-	syslog(LOG_ERR, "unable to unlimit the number of file descriptors avialable");
+	syslog(LOG_ERR, "unable to change limit of file descriptors available");
     }
 
-    r = getrlimit(RLIMIT_NUMFDS, &rl);
-    syslog(LOG_DEBUG, "set maximum file descriptors to %d/%d", rl.rlim_cur,
-	   rl.rlim_max);
+    if (verbose > 1) {
+	r = getrlimit(RLIMIT_NUMFDS, &rl);
+	syslog(LOG_DEBUG, "set maximum file descriptors to %d/%d", rl.rlim_cur,
+	       rl.rlim_max);
+    }
 }
 #else
-void limit_fds(int x)
+void limit_fds(rlim_t x)
 {
 }
 #endif
@@ -969,8 +971,6 @@ int main(int argc, char **argv, char **envp)
 	}
     }
 
-    limit_fds(RLIM_INFINITY);
-
     /* zero out the children table */
     memset(&ctable, 0, sizeof(struct centry *) * child_table_size);
 
@@ -987,6 +987,8 @@ int main(int argc, char **argv, char **envp)
 	close(fd);
 	if (dup(0) != fd) fatal("couldn't dup fd 0: %m", 2);
     }
+
+    limit_fds(RLIM_INFINITY);
 
     masterconf_init("master");
     syslog(LOG_NOTICE, "process started");

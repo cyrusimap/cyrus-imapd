@@ -1,5 +1,10 @@
 # Modifications to Unicode data for better case-insensitive searching
 
+# unicode char;char name;general category;canonical combining class;
+#   bidirectional category; character decomp; decimal digit value;
+#   digit value; numeric value; mirrored char; unicode 1.0 name;
+#   comment; upper case equiv; lower case equiv
+
 # Make these whitespace, so they're ignored
 0009;<control>;Zs;0;ON;;;;;N;HORIZONTAL TABULATION;;;;
 000A;<control>;Zs;0;ON;;;;;N;LINE FEED;;;;
