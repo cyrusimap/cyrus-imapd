@@ -452,7 +452,7 @@ static rawproc_t charset_readbase64;
 /*
  * State for the various charset_searchfile() helper functions
  */
-static int (*rawproc)();	/* Function to read and transfer-decode data */
+static rawproc_t *rawproc;	/* Function to read and transfer-decode data */
 static const char *rawbase;	/* Location in mapped file of raw data */
 static int rawlen;		/* # bytes raw data left to read from file */
 static char decodebuf[4096];	/* Buffer of data deocded, but not converted
@@ -496,10 +496,6 @@ int encoding;
     rawlen = len;
     switch (encoding) {
     case ENCODING_NONE:
-	if (mapnl && !strchr(substr, '\n') && !strchr(substr, '\r')) {
-	    /* Doesn't matter -- CRLF won't match anything */
-	    mapnl = 0;
-	}
 	rawproc = mapnl ? charset_readmapnl : charset_readplain;
 	break;
 
