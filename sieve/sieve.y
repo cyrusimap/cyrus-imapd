@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.27 2004/01/07 20:17:18 ken3 Exp $
+ * $Id: sieve.y,v 1.28 2004/03/22 01:50:52 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -877,6 +877,7 @@ static int verify_addrheader(char *hdr)
 	"resent-to", "resent-cc", "resent-bcc",
 	"return-path",				/* RFC2822 trace fields */
 	"disposition-notification-to",		/* RFC2298 MDN request fields */
+	"delivered-to",				/* non-standard (loop detection) */
 	NULL
     };
     char errbuf[100];
