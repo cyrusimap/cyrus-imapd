@@ -1,5 +1,5 @@
 /* config.c -- Configuration routines
- $Id: config.c,v 1.25 2000/02/10 21:25:24 leg Exp $
+ $Id: config.c,v 1.26 2000/02/15 22:21:18 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -45,6 +45,7 @@
 #include "exitcodes.h"
 #include "xmalloc.h"
 #include "mboxlist.h"
+#include "util.h"
 
 extern int errno;
 
@@ -89,8 +90,6 @@ const char *ident;
 	      EC_CONFIG);
     }
 
-    mboxlist_checkconfig();
-
     /* Look up default partition */
     config_defpartition = config_getstring("defaultpartition", "default");
     for (p = (char *)config_defpartition; *p; p++) {
@@ -126,6 +125,13 @@ const char *ident;
 	gethostname((char *) config_servername, 256);
     }
 
+    return 0;
+}
+
+int config_changeident(const char *ident)
+{
+    closelog();
+    openlog(ident, LOG_PID, LOG_LOCAL6);
     return 0;
 }
 

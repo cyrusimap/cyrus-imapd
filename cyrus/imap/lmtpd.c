@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.135 2000/02/10 21:25:24 leg Exp $
+ * $Id: lmtpd.c,v 1.1 2000/02/15 22:21:23 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: deliver.c,v 1.135 2000/02/10 21:25:24 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.1 2000/02/15 22:21:23 leg Exp $";*/
 
 #include <config.h>
 
@@ -159,7 +159,6 @@ int deliver_mailbox(struct protstream *msg,
 		    int quotaoverride,
 		    int acloverride);
 int isvalidflag(char *f);
-int convert_sysexit(int r);
 int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 	    char **flag, int nflags,
 	    char *user, char *mailboxname);
@@ -167,7 +166,6 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 
 
 int dupelim = 0;
-int logdebug = 0;
 int singleinstance = 1;
 
 void savemsg();
@@ -337,30 +335,11 @@ static struct sasl_callback mysasl_cb[] = {
 };
 
 
-int
-main(argc, argv)
-int argc;
-char **argv;
+int service_init(int argc, char **argv, char **envp)
 {
-    int opt;
-    int r;
-    int exitval = 0;
-    int lmtpflag = 0;
-    char *mailboxname = 0;
-    char **flag = 0;
-    int nflags = 0;
-    char *authuser = 0;
-    deliver_opts_t *delopts =
-	(deliver_opts_t *) xmalloc(sizeof(deliver_opts_t));
-    message_data_t *msgdata;
-
-    deliver_in = prot_new(0, 0);
-    deliver_out = prot_new(1, 1);
-    prot_setflushonread(deliver_in, deliver_out);
-    prot_settimeout(deliver_in, 300);
-
-    config_init("deliver");
-
+    config_changeident("lmtpd");
+    if (geteuid() == 0) return 1;
+    
 #ifdef USE_SIEVE
     sieve_usehomedir = config_getswitch("sieveusehomedir", 0);
     if (!sieve_usehomedir) {
@@ -372,76 +351,41 @@ char **argv;
 
     singleinstance = config_getswitch("singleinstancestore", 1);
 
+    if (sasl_server_init(mysasl_cb, "Cyrus") != SASL_OK) {
+	fatal("SASL failed initializing: sasl_server_init()", EC_TEMPFAIL);
+    }
+
+    return 0;
+}
+
+/*
+ * run for each accepted connection
+ */
+int service_main(int argc, char **argv, char **envp)
+{
+    deliver_opts_t *delopts =
+	(deliver_opts_t *) xmalloc(sizeof(deliver_opts_t));
+    message_data_t *msgdata;
+    int lmtpflag = 0;
+    int opt;
+
     msg_new(&msgdata);
     memset((void *) delopts, 0, sizeof(deliver_opts_t));
 
-    /* Can't be EC_USAGE; sendmail thinks that EX_USAGE implies
-     * a permenant failure.
-     */
-    if (geteuid() == 0) {
-	fatal("must run as the Cyrus user", EC_TEMPFAIL);
+    deliver_in = prot_new(0, 0);
+    deliver_out = prot_new(1, 1);
+    prot_setflushonread(deliver_in, deliver_out);
+    prot_settimeout(deliver_in, 300);
+
+    dupelim = 1;
+    if (duplicate_init() != 0) {
+	syslog(LOG_ERR, 
+	       "deliver: unable to init duplicate delivery database\n");
+	dupelim = 0;
     }
 
-    while ((opt = getopt(argc, argv, "df:r:m:a:F:eE:lqD")) != EOF) {
+    while ((opt = getopt(argc, argv, "q")) != EOF) {
 	switch(opt) {
-	case 'd':
-	    /* Ignore -- /bin/mail compatibility flags */
-	    break;
-
-        case 'D':
-	    logdebug = 1;
-	    break;
-
-	case 'r':
-	case 'f':
-	    msgdata->return_path = optarg;
-	    break;
-
-	case 'm':
-	    if (mailboxname) {
-		fprintf(stderr, "deliver: multiple -m options\n");
-		usage();
-	    }
-	    if (*optarg) mailboxname = optarg;
-	    break;
-
-	case 'a':
-	    if (authuser) {
-		fprintf(stderr, "deliver: multiple -a options\n");
-		usage();
-	    }
-	    authuser = optarg;
-	    break;
-
-	case 'F':
-	    if (!isvalidflag(optarg)) break;
-	    nflags++;
-	    flag = 
-		(char **)xrealloc((char *)flag, nflags*sizeof(char *));
-	    flag[nflags-1] = optarg;
-	    break;
-
-	case 'e':
-	    dupelim = 1;
-	    if (duplicate_init() != 0) {
-		syslog(LOG_ERR, "deliver: unable to init duplicate delivery database\n");
-		dupelim = 0;
-	    }
-	    break;
-
-	case 'E':
-	    if (duplicate_init() != 0) {
-		fprintf(stderr, "deliver: unable to init duplicate delivery database\n");
-		exit(1);
-	    }
-	    r = duplicate_prune(atoi(optarg));
-	    duplicate_done();
-	    exit(r);
-
-	case 'l':
-	    lmtpflag = 1;
-	    break;
-
 	case 'q':
 	    delopts->quotaoverride = 1;
 	    break;
@@ -456,53 +400,9 @@ char **argv;
     setup_sieve(delopts, lmtpflag);
 #endif
 
-    if (lmtpflag) {
-	lmtpmode(delopts);
-	exit(0);
-    }
+    lmtpmode(delopts);
 
-    if (authuser) {
-	delopts->authuser = auth_canonifyid(authuser);
-	if (authuser) {
-	    delopts->authstate = auth_newstate(delopts->authuser, (char *)0);
-	} else {
-	    delopts->authstate = 0;
-	}
-    }
-
-    /* Copy message to temp file */
-    savemsg(msgdata, 0);
-
-    if (optind == argc) {
-	/* deliver to global mailbox */
-	r = deliver(delopts, msgdata, flag, nflags,
-		    (char *)0, mailboxname);
-	
-	if (r) {
-	    com_err(mailboxname, r,
-		    (r == IMAP_IOERROR) ? error_message(errno) : NULL);
-	}
-
-	exitval = convert_sysexit(r);
-    }
-    while (optind < argc) {
-	/* deliver to users */
-	r = deliver(delopts, msgdata, flag, nflags,
-		    argv[optind], mailboxname);
-
-	if (r) {
-	    com_err(argv[optind], r,
-		    (r == IMAP_IOERROR) ? error_message(errno) : NULL);
-	}
-
-	if (r && exitval != EC_TEMPFAIL) exitval = convert_sysexit(r);
-
-	optind++;
-    }
-
-    msg_free(msgdata);
-
-    exit(exitval);
+    return 0;
 }
 
 #ifdef USE_SIEVE
@@ -552,7 +452,7 @@ typedef enum {
 /* we don't have to worry about dotstuffing here, since it's illegal
    for a header to begin with a dot! */
 static int parseheader(struct protstream *fin, FILE *fout, 
-		       int lmtpmode, char **headname, char **contents) {
+		       char **headname, char **contents) {
     int c;
     static char *name = NULL, *body = NULL;
     static int namelen = 0, bodylen = 0;
@@ -679,10 +579,8 @@ static int parseheader(struct protstream *fin, FILE *fout,
 }
 
 /* copies the message from fin to fout, massaging accordingly: mostly
- * newlines are fiddled. in lmtpmode, "." terminates; otherwise, EOF
- * does it.  */
-static void copy_msg(struct protstream *fin, FILE *fout, 
-		     int lmtpmode)
+ * newlines are fiddled. "." terminates */
+static void copy_msg(struct protstream *fin, FILE *fout)
 {
     char buf[8192], *p;
 
@@ -711,7 +609,7 @@ static void copy_msg(struct protstream *fin, FILE *fout,
 	    strcpy(p, p+1);
 	}
 	
-	if (lmtpmode && buf[0] == '.') {
+	if (buf[0] == '.') {
 	    if (buf[1] == '\r' && buf[2] == '\n') {
 		/* End of message */
 		goto lmtpdot;
@@ -723,24 +621,21 @@ static void copy_msg(struct protstream *fin, FILE *fout,
 	}
     }
 
-    if (lmtpmode) {
-	/* wow, serious error---got a premature EOF */
-	exit(EC_TEMPFAIL);
-    }
+    /* wow, serious error---got a premature EOF */
+    exit(EC_TEMPFAIL);
 
 lmtpdot:
     return;
 }
 
-static void fill_cache(struct protstream *fin, FILE *fout, 
-		       int lmtpmode, message_data_t *m)
+static void fill_cache(struct protstream *fin, FILE *fout, message_data_t *m)
 {
     /* let's fill that header cache */
     for (;;) {
 	char *name, *body;
 	int cl, clinit;
 
-	if (parseheader(fin, fout, lmtpmode, &name, &body) < 0) {
+	if (parseheader(fin, fout, &name, &body) < 0) {
 	    break;
 	}
 
@@ -780,7 +675,7 @@ static void fill_cache(struct protstream *fin, FILE *fout,
 	m->cache[cl]->contents[m->cache[cl]->ncontents] = NULL;
     }
 
-    copy_msg(fin, fout, lmtpmode);
+    copy_msg(fin, fout);
 }
 
 /* gets the header "head" from msg. */
@@ -1289,7 +1184,7 @@ static char *markflags[] = { "\\flagged" };
 static sieve_imapflags_t mark = { markflags, 1 };
 
 static void
-setup_sieve(deliver_opts_t *delopts, int lmtpmode)
+setup_sieve(deliver_opts_t *delopts)
 {
     int res;
 
@@ -1346,18 +1241,16 @@ setup_sieve(deliver_opts_t *delopts, int lmtpmode)
 	fatal("sieve_register_header()", EC_TEMPFAIL);
     }
 
-    if (lmtpmode) {
-	res = sieve_register_envelope(sieve_interp, &getenvelope);
-	if (res != SIEVE_OK) {
-	    syslog(LOG_ERR,"sieve_register_envelope() returns %d\n", res);
-	    fatal("sieve_register_envelope()", EC_TEMPFAIL);
-	}
-
-	res = sieve_register_vacation(sieve_interp, &vacation);
-	if (res != SIEVE_OK) {
-	    syslog(LOG_ERR, "sieve_register_vacation() returns %d\n", res);
-	    fatal("sieve_register_vacation()", EC_TEMPFAIL);
-	}
+    res = sieve_register_envelope(sieve_interp, &getenvelope);
+    if (res != SIEVE_OK) {
+	syslog(LOG_ERR,"sieve_register_envelope() returns %d\n", res);
+	fatal("sieve_register_envelope()", EC_TEMPFAIL);
+    }
+    
+    res = sieve_register_vacation(sieve_interp, &vacation);
+    if (res != SIEVE_OK) {
+	syslog(LOG_ERR, "sieve_register_vacation() returns %d\n", res);
+	fatal("sieve_register_vacation()", EC_TEMPFAIL);
     }
 }
 
@@ -1625,10 +1518,6 @@ void lmtpmode(deliver_opts_t *delopts)
 	fatal("out of memory", EC_TEMPFAIL);
     }
 
-    if (sasl_server_init(mysasl_cb, "Cyrus") != SASL_OK) {
-	fatal("SASL failed initializing: sasl_server_init()", EC_TEMPFAIL);
-    }
-
     if (sasl_server_new("lmtp", NULL, NULL, NULL, 0, &conn) != SASL_OK) {
 	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL);
     }
@@ -1672,7 +1561,7 @@ void lmtpmode(deliver_opts_t *delopts)
     }
 
     /* so we can do mboxlist operations */
-    mboxlist_init();
+    mboxlist_init(0);
     mboxlist_open(NULL);
 
     prot_printf(deliver_out,"220 %s LMTP Cyrus %s ready\r\n", myhostname,
@@ -1804,7 +1693,7 @@ void lmtpmode(deliver_opts_t *delopts)
 		    prot_printf(deliver_out,"503 5.5.1 No recipients\r\n");
 		    continue;
 		}
-		savemsg(msg, msg->rcpt_num);
+		savemsg(msg);
 		if (!msg->data) continue;
 
 		i = msg->rcpt_num;
@@ -1952,7 +1841,7 @@ void clean_retpath(char *rpath)
 }
 
 void
-savemsg(message_data_t *m, int lmtpmode)
+savemsg(message_data_t *m)
 {
     FILE *f;
     char *hostname = 0;
@@ -1967,27 +1856,23 @@ savemsg(message_data_t *m, int lmtpmode)
     char buf[8192];
     char **body, **frombody, **subjbody, **tobody;
     int sl, i;
+    int nrcpts = m->rcpt_num;
 
     /* Copy to temp file */
     f = tmpfile();
     if (!f) {
-	if (lmtpmode) {
-	    prot_printf(deliver_out,
-			"451 4.3.%c cannot create temporary file: %s\r\n",
-		   (
+	prot_printf(deliver_out,
+		    "451 4.3.%c cannot create temporary file: %s\r\n",
+		    (
 #ifdef EDQUOT
-		    errno == EDQUOT ||
+			errno == EDQUOT ||
 #endif
-		    errno == ENOSPC) ? '1' : '2',
-		   error_message(errno));
-	    return;
-	}
-	exit(EC_TEMPFAIL);
+			errno == ENOSPC) ? '1' : '2',
+		    error_message(errno));
+	return;
     }
 
-    if (lmtpmode) {
-	prot_printf(deliver_out,"354 go ahead\r\n");
-    }
+    prot_printf(deliver_out,"354 go ahead\r\n");
 
     if (m->return_path) { /* add the return path */
 	char *rpath = m->return_path;
@@ -2010,7 +1895,7 @@ savemsg(message_data_t *m, int lmtpmode)
     fprintf(f, "X-Sieve: %s\r\n", sieve_version);
 
     /* fill the cache */
-    fill_cache(deliver_in, f, lmtpmode, m);
+    fill_cache(deliver_in, f, m);
 
     /* now, using our header cache, fill in the data that we want */
 
@@ -2096,15 +1981,14 @@ savemsg(message_data_t *m, int lmtpmode)
 	    strcpy(p, p+1);
 	}
 
-	if (lmtpmode && buf[0] == '.') {
+	if (buf[0] == '.') {
 	    if (buf[1] == '\r' && buf[2] == '\n') {
 		/* End of message */
 		goto lmtpdot;
 	    }
 	    /* Remove the dot-stuffing */
 	    fputs(buf+1, f);
-	}
-	else {
+	} else {
 	    fputs(buf, f);
 	}
 
@@ -2182,10 +2066,8 @@ savemsg(message_data_t *m, int lmtpmode)
 	clean_retpath(m->return_path);
     }
 
-    if (lmtpmode) {
-	/* Got a premature EOF -- toss message and exit */
-	exit(0);
-    }
+    /* Got a premature EOF -- toss message and exit */
+    exit(0);
 
   lmtpdot:
 
@@ -2193,11 +2075,7 @@ savemsg(message_data_t *m, int lmtpmode)
 
     fflush(f);
     if (ferror(f)) {
-	if (!lmtpmode) {
-	    perror("deliver: copying message");
-	    exit(EC_TEMPFAIL);
-	}
-	while (lmtpmode--) {
+	while (nrcpts--) {
 	    prot_printf(deliver_out,
 	       "451 4.3.%c cannot copy message to temporary file: %s\r\n",
 		   (
@@ -2212,11 +2090,7 @@ savemsg(message_data_t *m, int lmtpmode)
     }
 
     if (fstat(fileno(f), &sbuf) == -1) {
-	if (!lmtpmode) {
-	    perror("deliver: stating message");
-	    exit(EC_TEMPFAIL);
-	}
-	while (lmtpmode--) {
+	while (nrcpts--) {
 	    prot_printf(deliver_out,
 			"451 4.3.2 cannot stat message temporary file: %s\r\n",
 			error_message(errno));
@@ -2485,39 +2359,6 @@ char *name;
 	       name);
     }	
 }
-
-int convert_sysexit(int r)
-{
-    switch (r) {
-    case 0:
-	return 0;
-	
-    case IMAP_IOERROR:
-	return EC_IOERR;
-
-    case IMAP_PERMISSION_DENIED:
-	return EC_NOPERM;
-
-    case IMAP_MAILBOX_BADFORMAT:
-    case IMAP_MAILBOX_NOTSUPPORTED:
-    case IMAP_QUOTA_EXCEEDED:
-	return EC_TEMPFAIL;
-
-    case IMAP_MESSAGE_CONTAINSNULL:
-    case IMAP_MESSAGE_CONTAINSNL:
-    case IMAP_MESSAGE_CONTAINS8BIT:
-    case IMAP_MESSAGE_BADHEADER:
-    case IMAP_MESSAGE_NOBLANKLINE:
-	return EC_DATAERR;
-
-    case IMAP_MAILBOX_NONEXISTENT:
-	/* XXX Might have been moved to other server */
-	return EC_NOUSER;
-    }
-	
-    /* Some error we're not expecting. */
-    return EC_SOFTWARE;
-}	
 
 char 
 *convert_lmtp(r)

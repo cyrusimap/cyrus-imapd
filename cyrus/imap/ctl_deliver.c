@@ -1,7 +1,7 @@
-/* dump_deliver.c -- Program to dump deliver db for debugging purposes
- $Id: dump_deliver.c,v 1.9 2000/02/10 21:25:25 leg Exp $
+/* ctl_deliver.c -- Program to perform operations on duplicate delivery db
+ $Id: ctl_deliver.c,v 1.1 2000/02/15 22:21:18 leg Exp $
  
- # Copyright 1998 Carnegie Mellon University
+ # Copyright 2000 Carnegie Mellon University
  # 
  # No warranties, either expressed or implied, are made regarding the
  # operation, use, or results of the software.
@@ -27,7 +27,10 @@
  *
  */
 
-/* static char _rcsid[] = "$Id: dump_deliver.c,v 1.9 2000/02/10 21:25:25 leg Exp $"; */
+/* add a -r RECOVER flag? */
+
+static char _rcsid[] = 
+        "$Id: ctl_deliver.c,v 1.1 2000/02/15 22:21:18 leg Exp $";
 
 #include <config.h>
 
@@ -49,6 +52,7 @@
 #include "util.h"
 #include "config.h"
 #include "mailbox.h"
+#include "exitcodes.h"
 #include "mboxlist.h"
 #include "duplicate.h"
 
@@ -101,59 +105,92 @@ dump_deliver(fname)
     return 0;
 }
 
+void fatal(const char *message, int code)
+{
+    fprintf(stderr, "fatal error: %s\n", message);
+    exit(code);
+}
+
+void usage(void)
+{
+    fprintf(stderr, "ctl_deliver -d [-f <dbfile>]\n"
+	    "ctl_deliver -E <days>\n");
+    exit(-1);
+}
+
 
 int
 main(argc, argv)
      int argc;
      char *argv[];
 {
-  extern char *optarg;
-  int opt;
-  char *alt_file = NULL;
+    extern char *optarg;
+    int opt, r = 0;
+    char *alt_file = NULL;
+    int days = 0;
+    enum { DUMP, PRUNE, NONE } op = NONE;
 
-  while ((opt = getopt(argc, argv, "f:")) != EOF) {
-    switch (opt) {
-    case 'f':
-      alt_file = optarg;
-      break;
-    case '?':
-      fprintf(stderr,"usage: -f"
-	      "\n\t-f <dbfile>\tAlternate location for deliver.db file."
-	      "\n");
-      exit(-1);
-      break;
-    default:
-      break;
-      /* just pass through */
+    config_init("dump_deliverdb");
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+
+    while ((opt = getopt(argc, argv, "dE:f:")) != EOF) {
+	switch (opt) {
+	case 'd':
+	    if (op == NONE) op = DUMP;
+	    else usage();
+	    break;
+
+	case 'f':
+	    if (alt_file == NULL) alt_file = optarg;
+	    else usage ();
+	    break;
+
+	case 'E':
+	    if (op == NONE) op = PRUNE;
+	    else usage();
+	    days = atoi(optarg);
+	    break;
+	
+	default:
+	    usage();
+	    break;
+	}
     }
-  }
 
-  config_init("dump_deliverdb");
-  
-  printf("it is NOW: %d\n", (int) time(NULL));
-  
-  duplicate_init();
-  if (alt_file == NULL) {
-    char fname[MAX_MAILBOX_PATH];
-    
-    (void)strcpy(fname, config_dir);
-    (void)strcat(fname, "/delivered.db");
-    
-    dump_deliver(fname);
-  } else {
-    dump_deliver(alt_file) ;
-  }
+    if (duplicate_init() != 0) {
+	fprintf(stderr, 
+		"deliver: unable to init duplicate delivery database\n");
+	exit(1);
+    }
+    switch (op) {
+    case PRUNE:
+	r = duplicate_prune(days);
+	break;
 
-  duplicate_done();
+    case DUMP:
+	printf("it is NOW: %d\n", (int) time(NULL));
   
-  return 0;
+	if (alt_file == NULL) {
+	    char fname[MAX_MAILBOX_PATH];
+	    
+	    (void)strcpy(fname, config_dir);
+	    (void)strcat(fname, "/delivered.db");
+	    
+	    dump_deliver(fname);
+	} else {
+	    dump_deliver(alt_file);
+	}
+	r = 0;
+	break;
+
+    case NONE:
+	r = 2;
+	usage();
+	break;
+    }
+    duplicate_done();
+
+    return r;
 }
 
-void fatal(char *s,
-	   int code)
-{
-    fprintf(stderr,"dump_deliver: %s\n", s);
-    exit(code);
-}
-
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/Attic/dump_deliver.c,v 1.9 2000/02/10 21:25:25 leg Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/ctl_deliver.c,v 1.1 2000/02/15 22:21:18 leg Exp $ */

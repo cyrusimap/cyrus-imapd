@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- $Id: config.h,v 1.10 2000/02/10 05:10:33 tmartin Exp $
+ $Id: config.h,v 1.11 2000/02/15 22:21:18 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -30,19 +30,12 @@
 #ifndef INCLUDED_CONFIG_H
 #define INCLUDED_CONFIG_H
 
-#ifndef P
-#ifdef __STDC__
-#define P(x) x
-#else
-#define P(x) ()
-#endif
-#endif
-
-extern int config_init P((const char *ident));
-extern const char *config_getstring P((const char *key, const char *def));
-extern int config_getint P((const char *key, int def));
-extern int config_getswitch P((const char *key, int def));
-extern const char *config_partitiondir P((const char *partition));
+extern int config_init(const char *ident);
+extern const char *config_getstring(const char *key, const char *def);
+extern int config_getint(const char *key, int def);
+extern int config_getswitch(const char *key, int def);
+extern const char *config_partitiondir(const char *partition);
+extern int config_changeident(const char *ident);
 
 /* Values of mandatory options */
 extern const char *config_dir;
