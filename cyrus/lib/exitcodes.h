@@ -1,5 +1,5 @@
 /* exitcodes.h -- wrapper around sysextis.h
- * $Id: exitcodes.h,v 1.1 1999/04/08 21:00:48 tjs Exp $
+ * $Id: exitcodes.h,v 1.2 1999/04/08 22:17:52 tjs Exp $
  *
  *        Copyright 1998 by Carnegie Mellon University
  *
@@ -37,7 +37,10 @@
    behavior be different and we start deriving benefit from Sendmail knowing
    stuff, we can easily change it back.
 
-   Comments stolen from sysexits.h.  */
+   So other code uses the EC_* error, then we maybe change it to TEMPFAIL if
+   we don't agree on whether the error should be permenant or not.
+   
+   Comments below stolen from sysexits.h.  */
 
 #ifndef INCLUDED_EXITCODES_H
 #define INCLUDED_EXITCODES_H
@@ -47,7 +50,7 @@
 #define EC_OK          0		/* successful termination */
 
 #define EC_USAGE       EX_TEMPFAIL	/* command line usage error */
-#define EC_DATAERR     EX_TEMPFAIL	/* data format error */
+#define EC_DATAERR     EX_DATAERR	/* data format error */
 #define EC_NOINPUT     EX_TEMPFAIL	/* cannot open input */
 #define EC_NOUSER      EX_NOUSER	/* addressee unknown */
 #define EC_NOHOST      EX_TEMPFAIL	/* host name unknown */
@@ -59,7 +62,7 @@
 #define EC_IOERR       EX_TEMPFAIL	/* input/output error */
 #define EC_TEMPFAIL    EX_TEMPFAIL	/* user is invited to retry */
 #define EC_PROTOCOL    EX_TEMPFAIL	/* remote error in protocol */
-#define EC_NOPERM      EX_NOPERM	/* permission denied */
+#define EC_NOPERM      EX_TEMPFAIL	/* permission denied */
 #define EC_CONFIG      EX_TEMPFAIL	/* configuration error */
 
 #endif /* INCLUDED_EXITCODES_H */
