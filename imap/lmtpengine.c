@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.74 2002/06/02 15:25:41 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.75 2002/06/06 00:12:34 rjs3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -135,21 +135,6 @@ static struct
     sasl_ssf_t ssf;
     char *authid;
 } saslprops = {NULL,NULL,0,NULL};
-
-/* a simple hash function for sasl mechanisms */
-static int hash_simple (const char *str)
-{
-    int     value = 0;
-    int     i;
-
-    if (!str)
-	return 0;
-    for (i = 0; *str; i++)
-    {
-	value ^= (*str++ << ((i & 3)*8));
-    }
-    return value;
-}
 
 /* round to nearest 1024 bytes and return number of Kbytes.
  used for SNMP updates. */
