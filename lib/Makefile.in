@@ -50,10 +50,12 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
-HDRS= acl.h acte.h assert.h auth.h charset.h glob.h imclient.h prot.h \
-	sysexits.h util.h xmalloc.h
+HDRS = $(srcdir)/acl.h $(srcdir)/acte.h $(srcdir)/assert.h $(srcdir)/auth.h \
+	$(srcdir)/charset.h $(srcdir)/glob.h $(srcdir)/imclient.h \
+	$(srcdir)/prot.h $(srcdir)/sysexits.h $(srcdir)/util.h \
+	$(srcdir)/xmalloc.h
 
-OBJS= acl.o assert.o bsearch.o charset.o glob.o is.o retry.o util.o prot.o \
+OBJS = acl.o assert.o bsearch.o charset.o glob.o is.o retry.o util.o prot.o \
 	imclient.o imparse.o xmalloc.o \
 	nonblock_@WITH_NONBLOCK@.o lock_@WITH_LOCK@.o gmtoff_@WITH_GMTOFF@.o \
 	map_@WITH_MAP@.o $(ACL) $(AUTH) @LIBOBJS@
