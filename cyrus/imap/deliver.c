@@ -41,7 +41,7 @@
  *
  */
 
-/* $Id: deliver.c,v 1.169.2.6 2004/05/25 01:28:03 ken3 Exp $ */
+/* $Id: deliver.c,v 1.169.2.7 2004/09/05 19:58:56 ken3 Exp $ */
 
 #include <config.h>
 
@@ -80,7 +80,6 @@ const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 extern int optind;
 extern char *optarg;
 
-static int lmtpdsock;
 static int logdebug = 0;
 
 static struct protstream *deliver_out, *deliver_in;
@@ -94,7 +93,7 @@ int deliver_logfd = -1;
 
 static int deliver_msg(char *return_path, char *authuser, int ignorequota,
 		       char **users, int numusers, char *mailbox);
-static int init_net(const char *sockaddr);
+static struct backend *init_net(const char *sockaddr);
 
 static void usage()
 {
@@ -118,79 +117,34 @@ void fatal(const char* s, int code)
     exit(code);
 }
 
-static int push(int in, int out)
-{
-    char buf[4096];
-    int len;
-    int cnt;
-    int amnt = 0;
-
-    len = read(in, buf, sizeof(buf)-1);
-    if (len == -1) {
-	exit(EC_IOERR);
-    }
-    if (len == 0) {
-	exit(0);
-    }
-
-    /* keep writing until we have written the whole thing
-       xxx can cause deadlock??? */
-    do {
-	cnt = write(out, buf+amnt,len-amnt);
-    	if (cnt == -1) exit(EC_IOERR);
-	amnt += cnt;
-    } while (amnt<len);
-
-    return 0;
-}
-
 /*
  * Here we're just an intermediatory piping stdin to lmtp socket
  * and lmtp socket to stdout
  */
-void pipe_through(int lmtp_in, int lmtp_out, int local_in, int local_out)
+void pipe_through(struct backend *conn)
 {
-    int nfound;
-    int highest = 3;
-    fd_set read_set, rset;
-    fd_set write_set, wset;
+    struct protgroup *protin = protgroup_new(2);
 
+    protgroup_insert(protin, deliver_in);
+    protgroup_insert(protin, conn->in);
 
-    FD_ZERO(&read_set);
-    FD_SET(lmtp_in, &read_set);
-    if (lmtp_in >= highest) highest = lmtp_in+1;
-    FD_SET(local_in, &read_set);
+    do {
+	/* Flush any buffered output */
+	prot_flush(deliver_out);
+	prot_flush(conn->out);
 
-    FD_ZERO(&write_set);
-    FD_SET(lmtp_out, &write_set);
-    if (lmtp_out >= highest) highest = lmtp_out+1;
-    FD_SET(local_out, &write_set);
+    } while (!proxy_check_input(protin, deliver_in, deliver_out,
+				conn->in, conn->out, 60));
 
-    while (1)
-    {
-	rset = read_set;
-	wset = write_set;
-	nfound = select(highest, &rset, &wset, NULL, NULL);
-	if (nfound < 0) {
-	    if (errno == EINTR) continue;
-	    exit(EC_IOERR);
-	}
+    /* ok, we're done. */
+    protgroup_free(protin);
 
-	if ((FD_ISSET(lmtp_in,&rset))  && (FD_ISSET(local_out,&wset))) {
-	    push(lmtp_in, local_out);
-	}
-	if ((FD_ISSET(local_in,&rset)) && (FD_ISSET(lmtp_out,&wset))) {
-	    push(local_in, lmtp_out);
-	} else {
-	    /* weird; this shouldn't happen */
-	    usleep(1000);
-	}
-    }
+    return;
 }
 
 int main(int argc, char **argv)
 {
-    int r;
+    int r = 0;
     int opt;
     int lmtpflag = 0;
     int ignorequota = 0;
@@ -280,20 +234,23 @@ int main(int argc, char **argv)
     }
 
     if (lmtpflag == 1) {
-	int s = init_net(sockaddr);
+	struct backend *conn = init_net(sockaddr);
 
-	pipe_through(s,s,0,1);
+	pipe_through(conn);
+
+	backend_disconnect(conn);
     }
+    else {
+	if (return_path == NULL) {
+	    uid_t me = getuid();
+	    struct passwd *p = getpwuid(me);
+	    return_path = p->pw_name;
+	}
 
-    if (return_path == NULL) {
-	uid_t me = getuid();
-	struct passwd *p = getpwuid(me);
-	return_path = p->pw_name;
+	/* deliver to users or global mailbox */
+	r = deliver_msg(return_path,authuser, ignorequota,
+			argv+optind, argc - optind, mailboxname);
     }
-
-    /* deliver to users or global mailbox */
-    r = deliver_msg(return_path,authuser, ignorequota,
-		    argv+optind, argc - optind, mailboxname);
 
     cyrus_done();
 
@@ -310,9 +267,11 @@ void just_exit(const char *msg)
 /* initialize the network 
  * we talk on unix sockets
  */
-static int init_net(const char *unixpath)
+static struct backend *init_net(const char *unixpath)
 {
+  int lmtpdsock;
   struct sockaddr_un addr;
+  struct backend *conn;
 
   if ((lmtpdsock = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
       just_exit("socket failed");
@@ -326,7 +285,15 @@ static int init_net(const char *unixpath)
       just_exit("connect failed");
   }
 
-  return lmtpdsock;
+  conn = xzmalloc(sizeof(struct backend));
+  conn->timeout = NULL;
+  conn->in = prot_new(lmtpdsock, 0);
+  conn->out = prot_new(lmtpdsock, 1);
+  conn->sock = lmtpdsock;
+  prot_setflushonread(conn->in, conn->out);
+  conn->prot = &protocol[PROTOCOL_LMTP];
+
+  return conn;
 }
 
 static int deliver_msg(char *return_path, char *authuser, int ignorequota,

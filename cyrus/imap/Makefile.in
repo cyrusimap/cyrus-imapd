@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.175.2.14 2004/09/03 20:12:33 ken3 Exp $
+# $Id: Makefile.in,v 1.175.2.15 2004/09/05 19:58:55 ken3 Exp $
 # 
 # @configure_input@
 # 
@@ -259,8 +259,8 @@ chk_cyrus: chk_cyrus.o mutex_fake.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o chk_cyrus chk_cyrus.o $(CLIOBJS) \
 	libimap.a $(DEPLIBS) $(LIBS)
 
-deliver: deliver.o $(LMTPOBJS) mutex_fake.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o deliver deliver.o $(LMTPOBJS) \
+deliver: deliver.o $(LMTPOBJS) proxy.o mutex_fake.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o deliver deliver.o $(LMTPOBJS) proxy.o \
 	mutex_fake.o libimap.a $(DEPLIBS) $(LIBS)
 
 ctl_deliver: ctl_deliver.o $(CLIOBJS) libimap.a $(DEPLIBS)
