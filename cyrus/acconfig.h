@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.35 2002/05/15 15:21:36 rjs3 Exp $ */
+/* $Id: acconfig.h,v 1.36 2002/08/13 00:11:28 rjs3 Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -143,6 +143,15 @@
 /* do we have fdatasync */
 #undef HAVE_FDATASYNC
 
+/* Database Backends that are configurable */
+#undef CONFIG_DB_DUPLICATE
+#undef CONFIG_DB_MBOX
+#undef CONFIG_DB_SEEN
+#undef CONFIG_DB_SUBS
+#undef CONFIG_DB_TLS
+
+@BOTTOM@
+
 /* This allows us to work even when we don't have an fdatasync */
 #ifndef HAVE_FDATASYNC
 #define fdatasync(fd) fsync(fd)
@@ -158,15 +167,6 @@
 #    define O_DSYNC     O_FSYNC         /* BSD */
 #  endif
 #endif
-
-/* Database Backends that are configurable */
-#undef CONFIG_DB_DUPLICATE
-#undef CONFIG_DB_MBOX
-#undef CONFIG_DB_SEEN
-#undef CONFIG_DB_SUBS
-#undef CONFIG_DB_TLS
-
-@BOTTOM@
 
 /* where are our binaries? */
 #define SERVICE_PATH (CYRUS_PATH "/bin")
