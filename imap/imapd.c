@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.166 1999/03/02 06:33:39 tjs Exp $ */
+/* $Id: imapd.c,v 1.167 1999/04/01 21:16:05 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -1531,7 +1531,7 @@ int usinguid;
 		     !strncmp(fetchatt.s, "BODY.PEEK[", 10)) {
 		p = section = fetchatt.s + 5;
 		if (*p == 'P') {
-		    p = section += 5;
+		    p = section += 6;
 		}
 		else {
 		    fetchitems |= FETCH_SETSEEN;
