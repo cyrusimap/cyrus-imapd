@@ -705,6 +705,7 @@ char *passwd;
 	    syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
 		   imapd_clienthost, canon_user, reply);
 	}
+	sleep(3);
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(IMAP_INVALID_LOGIN));
 	return;
     }
@@ -794,6 +795,7 @@ char *authtype;
 	    syslog(LOG_NOTICE, "badlogin: %s %s %s",
 		   imapd_clienthost, authtype, reply);
 	}
+	sleep(3);
 	prot_printf(imapd_out, "%s NO %s\r\n", tag,
 		    error_message(IMAP_INVALID_LOGIN));
 	return;
