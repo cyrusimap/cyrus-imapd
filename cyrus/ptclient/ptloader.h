@@ -1,5 +1,5 @@
-/* auth.h -- Site authorization module
- * $Id: auth.h,v 1.16 2005/02/16 20:38:01 shadow Exp $
+/* ptloader.h -- Site authorization module
+ * $Id: ptloader.h,v 1.1 2005/02/16 20:38:04 shadow Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -41,40 +41,30 @@
  *
  */
 
-#ifndef INCLUDED_AUTH_H
-#define INCLUDED_AUTH_H
+#ifndef INCLUDED_PTLOADER_H
+#define INCLUDED_PTLOADER_H
 
 struct auth_state;
 
-struct auth_mech {
+struct pts_module {
     const char *name;
 
-    char *(*canonifyid)(const char *identifier, size_t len);
-    int (*memberof)(struct auth_state *auth_state, 
-             const char *identifier);
-    struct auth_state *(*newstate)(const char *identifier);
-    void (*freestate)(struct auth_state *auth_state);
+    void (*init)(void);
+    struct auth_state *(*make_authstate)(const char *identifier,
+                size_t size,
+                const char **reply, int *dsize);
 };
 
-extern struct auth_mech *auth_mechs[];
+extern struct pts_module *pts_modules[];
 
 /* Note that some of these may be undefined symbols
  * if libcyrus was not built with support for them */
-extern struct auth_mech auth_unix;
-extern struct auth_mech auth_pts;
-extern struct auth_mech auth_krb;
-extern struct auth_mech auth_krb5;
+extern struct pts_module pts_ldap;
+extern struct pts_module pts_afskrb;
 
-/* auth_canonifyid: canonify the given identifier and return a pointer
- *                  to a static buffer with the canonified ID, or NULL on
- *                  failure */
-/* identifier: id to canonify */
-/* len: length of id, or 0 to do strlen(identifier) */
-char *auth_canonifyid(const char *identifier, size_t len);
+struct auth_state *ptsmodule_make_authstate(const char *identifier,
+					    size_t size,
+					    const char **reply, int *dsize);
+void ptsmodule_init(void);
 
-int auth_memberof(struct auth_state *auth_state, 
- 	 const char *identifier);
-struct auth_state *auth_newstate(const char *identifier);
-void auth_freestate(struct auth_state *auth_state);
-
-#endif /* INCLUDED_AUTH_H */
+#endif /* INCLUDED_PTLOADER_H */

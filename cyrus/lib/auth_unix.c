@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: auth_unix.c,v 1.38 2004/09/13 22:49:29 shadow Exp $
+ * $Id: auth_unix.c,v 1.39 2005/02/16 20:38:01 shadow Exp $
  */
 
 #include <config.h>
@@ -54,8 +54,6 @@
 #include "auth.h"
 #include "libcyr_cfg.h"
 #include "xmalloc.h"
-
-const char *auth_method_desc = "unix";
 
 struct auth_state {
     char userid[81];
@@ -75,7 +73,7 @@ static struct auth_state auth_anonymous = {
  *	2	User is in the group that is identifier
  *	3	User is identifer
  */
-int auth_memberof(auth_state, identifier)
+static int mymemberof(auth_state, identifier)
 struct auth_state *auth_state;
 const char *identifier;
 {
@@ -154,7 +152,7 @@ static char allowedchars[256] = {
  * representations: one for getpwent calls and one for folder names.  The
  * latter canonicalizes to a MUTF7 representation.
  */
-char *auth_canonifyid(identifier, len)
+static char *mycanonifyid(identifier, len)
 const char *identifier;
 size_t len;
 {
@@ -220,14 +218,14 @@ size_t len;
  * points to a 16-byte binary key to cache identifier's information
  * with.
  */
-struct auth_state *auth_newstate(const char *identifier)
+static struct auth_state *mynewstate(const char *identifier)
 {
     struct auth_state *newstate;
     struct passwd *pwd;
     struct group *grp;
     char **mem;
 
-    identifier = auth_canonifyid(identifier, 0);
+    identifier = mycanonifyid(identifier, 0);
     if (!identifier) return 0;
     if (!strncmp(identifier, "group:", 6)) return 0;
     
@@ -259,8 +257,7 @@ struct auth_state *auth_newstate(const char *identifier)
     return newstate;
 }
 
-void
-auth_freestate(auth_state)
+static void myfreestate(auth_state)
 struct auth_state *auth_state;
 {
     if (auth_state->group) free((char *)auth_state->group);
@@ -268,3 +265,12 @@ struct auth_state *auth_state;
 }
 
 
+struct auth_mech auth_unix = 
+{
+    "unix",		/* name */
+
+    &mycanonifyid,
+    &mymemberof,
+    &mynewstate,
+    &myfreestate,
+};
