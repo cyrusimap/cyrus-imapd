@@ -1,6 +1,6 @@
 /* message.c -- message parsing functions
  * Larry Greenfield
- * $Id: message.c,v 1.20 2000/12/18 04:53:43 leg Exp $
+ * $Id: message.c,v 1.21 2001/02/16 18:56:43 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -117,7 +117,7 @@ int do_forward(action_list_t *a, char *addr)
 {
     action_list_t *b = NULL;
 
-    /* *** we should validate addr */
+    /* xxx we should validate addr */
 
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {
@@ -361,10 +361,21 @@ int do_unmark(action_list_t *a)
 
 static int priority_tonum(const char *str)
 {
-    if (strcasecmp(str,"low")==0) return 1;
-    if (strcasecmp(str,"medium")==0) return 2;
-    if (strcasecmp(str,"high")==0) return 3;
+    switch (*str) {
+    case 'l':
+	if (strcasecmp(str,"low")==0) return 1;
+	break;
 
+    case 'm':
+	if (strcasecmp(str,"medium")==0) return 2;
+	break;
+
+    case 'h':
+	if (strcasecmp(str,"high")==0) return 3;
+	break;
+    }
+
+    /* didn't match */
     return -1;
 }
 /* returns 1 if new is less than old */
