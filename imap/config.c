@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.58 2002/08/13 16:46:32 rjs3 Exp $ */
+/* $Id: config.c,v 1.59 2002/08/30 20:25:38 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -347,7 +347,7 @@ static int isa(struct auth_state *authstate, const char *opt)
 	char *p;
 	
 	for (p = (char *) val; *p && !isspace((int) *p); p++);
-	strncpy(buf, val, p-val);
+	memcpy(buf, val, p-val);
 	buf[p-val] = 0;
 
 	if (auth_memberof(authstate, buf)) {
