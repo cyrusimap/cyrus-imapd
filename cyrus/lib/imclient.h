@@ -37,11 +37,15 @@ struct imclient_reply {
 #define CALLBACK_NUMBERED 1	/* Has a message sequence number */
 #define CALLBACK_NOLITERAL 2	/* Data cannot contain a literal */
 
+/* Connection flags */
+#define IMCLIENT_CONN_NOWAITLITERAL 1
 
 #ifdef __STDC__
 struct imclient;
 extern int imclient_connect(struct imclient **, char *, char *);
 extern void imclient_close(struct imclient *);
+extern void imclient_setflags(struct imclient *, int);
+extern void imclient_clearflags(struct imclient *, int);
 extern char *imclient_servername(struct imclient *);
 extern void imclient_addcallback(struct imclient *, ...);
 extern void imclient_send(struct imclient *, void (*)(), void *, char *, ...);
@@ -50,7 +54,10 @@ extern int imclient_authenticate(struct imclient *, struct acte_client **,
 				 char *, int);
 #else
 extern char *imclient_servername();
-extern void imclient_close(), imclient_processoneevent();
+extern void imclient_close();
+extern void imclient_setflags();
+extern void imclient_clearflags();
+extern void imclient_processoneevent();
 extern void imclient_addcallback();
 extern void imclient_send();
 #endif
