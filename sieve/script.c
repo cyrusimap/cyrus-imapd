@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.54.4.8 2003/05/18 13:51:13 ken3 Exp $
+ * $Id: script.c,v 1.54.4.9 2003/05/18 13:52:16 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -784,7 +784,13 @@ int sieve_execute_bytecode(sieve_bytecode_t *bc, sieve_interp_t *interp,
     {
 	notify_list = new_notify_list();
 	if (notify_list == NULL)
-	    return SIEVE_NOMEM;
+	    {
+		ret = SIEVE_NOMEM;
+		return do_sieve_error(ret, interp, script_context,
+				      message_context, &imapflags,
+				      actions, notify_list, lastaction, 0,
+				      actions_string, errmsg);
+	    }
     }
 
     actions = new_action_list();
