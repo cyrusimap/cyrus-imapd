@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- * $Id: mboxname.c,v 1.26 2003/02/13 20:15:28 rjs3 Exp $
+ * $Id: mboxname.c,v 1.27 2003/04/25 16:18:58 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -108,6 +108,9 @@ static const char index_mod64[256] = {
 static int mboxname_tointernal(struct namespace *namespace, const char *name,
 			       const char *userid, char *result)
 {
+    /* Blank the result, just in case */
+    result[0] = '\0';
+
     /* Personal (INBOX) namespace */
     if ((name[0] == 'i' || name[0] == 'I') &&
 	!strncasecmp(name, "inbox", 5) &&
@@ -142,13 +145,19 @@ static int mboxname_tointernal(struct namespace *namespace, const char *name,
 }
 
 /* Handle conversion from the alternate namespace to the internal namespace */
-static int mboxname_tointernal_alt(struct namespace *namespace, const char *name,
+static int mboxname_tointernal_alt(struct namespace *namespace,
+				   const char *name,
 				   const char *userid, char *result)
 {
     int prefixlen;
 
+    /* Blank the result, just in case */
+    result[0] = '\0';
+
     /* Shared namespace */
     prefixlen = strlen(namespace->prefix[NAMESPACE_SHARED]);
+    if(prefixlen == 0) return IMAP_MAILBOX_BADNAME;
+
     if (!strncmp(name, namespace->prefix[NAMESPACE_SHARED], prefixlen-1) &&
 	(name[prefixlen-1] == '\0' || name[prefixlen-1] == namespace->hier_sep)) {
 
@@ -238,6 +247,11 @@ static int mboxname_tointernal_alt(struct namespace *namespace, const char *name
 static int mboxname_toexternal(struct namespace *namespace, const char *name,
 			       const char *userid, char *result)
 {
+    /* Blank the result, just in case */
+    result[0] = '\0';
+
+    if(strlen(name) > MAX_MAILBOX_NAME) return IMAP_MAILBOX_BADNAME;
+    
     strcpy(result, name);
 
     /* Translate any separators in mailboxname */
