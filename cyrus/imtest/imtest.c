@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.59 2001/02/17 20:07:04 ken3 Exp $
+ * $Id: imtest.c,v 1.60 2001/02/19 19:32:06 leg Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -782,10 +782,17 @@ int auth_sasl(char *mechlist)
   /* call sasl client start */
   while (saslresult==SASL_INTERACT)
   {
-    saslresult=sasl_client_start(conn, mechlist,
-				 NULL, &client_interact,
-				 &out, &outlen,
-				 &mechusing);
+#if (SASL_VERSION_MAJOR == 1) && (SASL_VERSION_MINOR == 5) && (SASL_VERSION_STEP < 26)
+    saslresult = sasl_client_start(conn, mechlist,
+				   NULL, &client_interact,
+				   &out, &outlen,
+				   &mechusing);
+#else
+    saslresult = sasl_client_start(conn, mechlist,
+				   NULL, &client_interact,
+				   NULL, NULL,
+				   &mechusing);
+#endif
     if (saslresult==SASL_INTERACT)
       fillin_interactions(client_interact); /* fill in prompts */      
 
