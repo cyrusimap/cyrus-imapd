@@ -1,7 +1,9 @@
-
 cyrus-graphtools v1.0
 Alison Greenwald <alison@andrew.cmu.edu>
 
+Please send all comments/questions/bugs to cyrus-bugs@andrew.cmu.edu.
+
+--------
 
 This archive contains the scripts necessary for collecting data from
 CMU cyrus server with UCD SNMP support.  It contains:
@@ -31,8 +33,10 @@ http://ee-staff.ethz.ch/~oetiker/webtools/rrdtool/pub
 
 Also required is net-snmp 4.2 (formerly ucd-snmp), however this is
 required for the cyrus snmp functionality as well.  It is available at
-http://sourceforge.net/project/showfiles.php?group_id=12694
+http://net-snmp.sourceforge.net/
 
+or maybe
+http://sourceforge.net/project/showfiles.php?group_id=12694
  
 -------
 
@@ -62,4 +66,4 @@ html directory and you should be ready to go.
 
 -------
 
-any comments or suggestions can be sent to alison@andrew.cmu.edu
+Please send any comments or suggestions to cyrus-bugs@andrew.cmu.edu.
