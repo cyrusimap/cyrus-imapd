@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.468 2004/05/26 15:32:09 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.469 2004/05/29 05:18:18 ken3 Exp $ */
 
 #include <config.h>
 
@@ -251,7 +251,7 @@ extern void proc_cleanup(void);
 
 extern int saslserver(sasl_conn_t *conn, const char *mech,
 		      const char *init_resp, const char *resp_prefix,
-		      const char *continuation,
+		      const char *continuation, const char *empty_resp,
 		      struct protstream *pin, struct protstream *pout,
 		      int *sasl_result, char **success_data);
 
@@ -1838,7 +1838,7 @@ cmd_authenticate(char *tag, char *authtype, char *resp)
 
     int r;
 
-    r = saslserver(imapd_saslconn, authtype, resp, "", "+ ",
+    r = saslserver(imapd_saslconn, authtype, resp, "", "+ ", "",
 		   imapd_in, imapd_out, &sasl_result, NULL);
 
     if (r) {

@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.112 2004/05/22 03:45:51 rjs3 Exp $
+ * $Id: lmtpengine.c,v 1.113 2004/05/29 05:18:20 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -128,7 +128,7 @@ extern int deliver_logfd;
 
 extern int saslserver(sasl_conn_t *conn, const char *mech,
 		      const char *init_resp, const char *resp_prefix,
-		      const char *continuation,
+		      const char *continuation, const char *empty_chal,
 		      struct protstream *pin, struct protstream *pout,
 		      int *sasl_result, char **success_data);
 
@@ -1188,7 +1188,7 @@ void lmtpmode(struct lmtp_func *func,
 	      }
 	      strlcpy(mech, buf + 5, sizeof(mech));
 
-	      r = saslserver(cd.conn, mech, p, "", "334 ",
+	      r = saslserver(cd.conn, mech, p, "", "334 ", "",
 			     pin, pout, &sasl_result, NULL);
 
 	      if (r) {

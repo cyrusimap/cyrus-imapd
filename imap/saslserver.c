@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: saslserver.c,v 1.5 2003/10/22 18:30:56 rjs3 Exp $ */
+/* $Id: saslserver.c,v 1.6 2004/05/29 05:18:24 ken3 Exp $ */
 
 #include <config.h>
 
@@ -55,7 +55,7 @@
 
 int saslserver(sasl_conn_t *conn, const char *mech,
 	       const char *init_resp, const char *resp_prefix,
-	       const char *continuation,
+	       const char *continuation, const char *empty_chal,
                struct protstream *pin, struct protstream *pout,
 	       int *sasl_result, char **success_data)
 {
@@ -90,13 +90,17 @@ int saslserver(sasl_conn_t *conn, const char *mech,
 	char *p;
 
 	/* send the challenge to the client */
-	if (serverout) {
+	if (serveroutlen) {
 	    r = sasl_encode64(serverout, serveroutlen,
 			      base64, BASE64_BUF_SIZE, NULL);
 	    if (r != SASL_OK) break;
-
-	    prot_printf(pout, "%s%s\r\n", continuation, base64);
+	    serverout = base64;
 	}
+	else {
+	    serverout = empty_chal;
+	}
+
+	prot_printf(pout, "%s%s\r\n", continuation, serverout);
 
 	/* get response from the client */
 	if (!prot_fgets(base64, BASE64_BUF_SIZE, pin) ||
