@@ -42,13 +42,17 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.265 2003/06/04 03:27:47 rjs3 Exp $
+dnl $Id: configure.in,v 1.266 2003/06/25 21:12:54 rjs3 Exp $
 dnl
 
 
 AC_INIT(imap/imapd.c)
 AC_CONFIG_HEADER(config.h)
 AC_CANONICAL_HOST
+
+dnl Useful hook for distributions
+AC_ARG_WITH(extraident,[  --with-extraident=STRING   use STRING as extra version information],
+	[AC_DEFINE_UNQUOTED(EXTRA_IDENT,"$withval", [Extra version information for imap/version.h])])
 
 AC_CHECK_PROG(MAKEDEPEND,makedepend,makedepend,[`cd ${srcdir};pwd`/tools/not-mkdep])
 if test "$MAKEDEPEND" != "makedepend"; then
@@ -87,6 +91,7 @@ if test $ac_cv_sys_long_file_names = no; then
 fi
 
 CMU_C___ATTRIBUTE__
+CMU_C_FPIC
 
 dnl check for -R, etc. switch
 CMU_GUESS_RUNPATH_SWITCH
