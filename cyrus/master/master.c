@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.24 2000/12/18 04:53:42 leg Exp $ */
+/* $Id: master.c,v 1.25 2000/12/18 20:26:25 leg Exp $ */
 
 #include <config.h>
 
@@ -51,6 +51,9 @@
 #include <sys/wait.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
+#endif
+#ifdef HAVE_SYS_RESOURCE_H
+#include <sys/resource.h>
 #endif
 #include <fcntl.h>
 #include <signal.h>
@@ -187,6 +190,8 @@ static struct centry *get_centry(void)
 	for (i = 0; i < child_table_inc - 1; i++) {
 	    n[i].next = n + (i + 1);
 	}
+	/* i == child_table_inc - 1, last item in block */
+	n[i].next = NULL;
     }
 
     t = cfreelist;
@@ -727,6 +732,30 @@ void add_event(const char *name, struct entry *e, void *rock)
     evt->next = schedule;
     schedule = evt;
 }
+
+#ifdef HAVE_SETRLIMIT
+
+#ifdef RLIMIT_NOFILE
+# define RLIMIT_NUMFDS RLIMIT_NOFILE
+#else
+# ifdef RLIMIT_OFILE
+#  define RLIMIT_NUMFDS RLIMIT_OFILE
+# endif
+#endif
+void unlimit_fds(void)
+{
+    struct rlimit r;
+
+    r.rlim_max = RLIM_INFINITY;
+    if (setrlimit(RLIMIT_NUMFDS, &r) < 0) {
+	syslog(LOG_ERR, "unable to unlimit the number of file descriptors avialable");
+    }
+}
+#else
+void unlimit_fds(void)
+{
+}
+#endif
 
 int main(int argc, char **argv, char **envp)
 {
