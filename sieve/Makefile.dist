@@ -1,9 +1,6 @@
-# $Id: Makefile.dist,v 1.6 2002/05/25 19:57:52 leg Exp $
+# $Id: Makefile.dist,v 1.6.8.1 2003/11/18 16:22:51 ken3 Exp $
 
-YACC = bison -y
 YFLAGS = -d
-LEX = flex
-COMPILE_ET = /usr/local/bin/compile_et
 
 BUILT_SOURCES = addr.c addr.h addr-lex.c \
 	sieve.c sieve.h sieve-lex.c \
