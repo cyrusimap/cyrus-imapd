@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.180.4.13 2002/10/16 01:11:10 ken3 Exp $
+ * $Id: index.c,v 1.180.4.14 2002/10/16 01:13:51 ken3 Exp $
  */
 #include <config.h>
 
@@ -4672,7 +4672,6 @@ extern struct nntp_overview *index_overview(struct mailbox *mailbox,
 	    fromsize = size;
 	    from = xrealloc(from, fromsize);
 	}
-	from = xmalloc(size);
 	strcpy(from, "");
 	if (addr.name)
 	    sprintf(from, "\"%s\" ", addr.name);
