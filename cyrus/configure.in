@@ -42,11 +42,12 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.288 2004/07/05 18:18:02 rjs3 Exp $
+dnl $Id: configure.in,v 1.289 2004/11/22 21:27:07 shadow Exp $
 dnl
 
 
 AC_INIT(imap/imapd.c)
+AC_PREREQ([2.54])
 AC_CONFIG_HEADER(config.h)
 AC_CANONICAL_HOST
 
@@ -1022,7 +1023,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.288 2004/07/05 18:18:02 rjs3 Exp $ */
+/* $Id: configure.in,v 1.289 2004/11/22 21:27:07 shadow Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
