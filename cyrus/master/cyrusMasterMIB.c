@@ -36,13 +36,15 @@
 #include "master.h"
 #include "../imap/version.h"
 
+/* tmp change. do not commit */
+#define __FUNCTION__  "func"
+
 /* 
  * cyrusMasterMIB_variables_oid:
  *   this is the top level oid that we want to register under.  This
  *   is essentially a prefix, with the suffix appearing in the
  *   variable below.
  */
-
 
 oid cyrusMasterMIB_variables_oid[] = { 1,3,6,1,4,1,3,6,1 };
 
