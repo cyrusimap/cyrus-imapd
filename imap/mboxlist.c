@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.183 2002/04/08 01:46:38 leg Exp $
+ * $Id: mboxlist.c,v 1.184 2002/04/08 21:01:04 rjs3 Exp $
  */
 
 #include <config.h>
@@ -822,7 +822,7 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 
     /* remove from mupdate */
     /* xxx this can lead to inconsistancies if the later stuff fails */
-    if (!r && !local_only && config_mupdate_server) {
+    if (!r && !isremote && !local_only && config_mupdate_server) {
 	/* delete the mailbox in MUPDATE */
 	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
 	if(r) {
