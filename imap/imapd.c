@@ -67,6 +67,7 @@ struct sockaddr_in imapd_localaddr, imapd_remoteaddr;
 int imapd_haveaddr = 0;
 char imapd_clienthost[250] = "[local]";
 struct protstream *imapd_out, *imapd_in;
+time_t imapd_logtime;
 
 static struct mailbox mboxstruct;
 
@@ -752,6 +753,10 @@ char *passwd;
     if (logfile) {
 	prot_setlog(imapd_in, fileno(logfile));
 	prot_setlog(imapd_out, fileno(logfile));
+	if (config_getswitch("logtimestamps", 0)) {
+	    prot_setlogtime(imapd_in, &imapd_logtime);
+	    prot_setlogtime(imapd_out, &imapd_logtime);
+	}
     }
 
     prot_printf(imapd_out, "%s OK %s\r\n", tag, reply);
@@ -876,6 +881,10 @@ char *authtype;
     if (logfile) {
 	prot_setlog(imapd_in, fileno(logfile));
 	prot_setlog(imapd_out, fileno(logfile));
+	if (config_getswitch("logtimestamps", 0)) {
+	    prot_setlogtime(imapd_in, &imapd_logtime);
+	    prot_setlogtime(imapd_out, &imapd_logtime);
+	}
     }
 
     return;
