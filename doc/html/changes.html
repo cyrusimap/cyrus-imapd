@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.62 1999/03/01 20:11:01 tjs Exp $ -->
+<!-- $Id: changes.html,v 1.63 1999/03/01 20:13:12 tjs Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -72,6 +72,9 @@
 	for pointing this out.  Fixed a potential leak in mboxlist.c that
 	happened if a rename went awry.  Thanks to Chris Newman for pointing
 	this out.
+
+      <li> Fixed a bug in LIST and LSUB code so that user.* mailboxes will be
+	printed on every LIST instead of just the first one.
 
       <li> Implemented the <i>POP3 Extension Mechanism</i>, RFC 2449,
 	in order to advertise the capabilities already supported.
@@ -678,7 +681,7 @@ restore tab before breaking out of loop.
 </ul>
 <P><HR><P>
 <!-- hhmts start -->
-last modified by tjs at Mon Mar  1 15:06:08 1999
+last modified by tjs at Mon Mar  1 15:13:00 1999
 <!-- hhmts end -->
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
