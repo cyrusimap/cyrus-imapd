@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.35 2000/07/25 17:00:45 ken3 Exp $
+ * $Id: script.c,v 1.36 2000/09/05 04:15:35 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -107,6 +107,7 @@ int sieve_script_parse(sieve_interp_t *interp, FILE *script,
 {
     sieve_script_t *s;
     int res = SIEVE_OK;
+    extern int yylineno;
 
     res = interp_verify(interp);
     if (res != SIEVE_OK) {
@@ -121,6 +122,7 @@ int sieve_script_parse(sieve_interp_t *interp, FILE *script,
 
     s->err = 0;
 
+    yylineno = 1;		/* reset line number */
     s->cmds = sieve_parse(s, script);
     if (s->err > 0) {
 	if (s->cmds) {
