@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.178 2004/03/09 18:08:41 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.179 2004/05/05 18:53:07 ken3 Exp $ */
 
 #include <config.h>
 
@@ -141,6 +141,7 @@ static char proxyd_clienthost[NI_MAXHOST*2+1] = "[local]";
 static int proxyd_logfd = -1;
 time_t proxyd_logtime;
 char *proxyd_userid = NULL;
+static char *proxyd_magicplus = NULL;
 struct auth_state *proxyd_authstate = 0;
 int proxyd_userisadmin;
 sasl_conn_t *proxyd_saslconn; /* the sasl connection context to the client */
@@ -655,7 +656,7 @@ static int pipe_command(struct backend *s, int optimistic_literal)
  * down the response when this is the case.
  */
 static int pipe_lsub(struct backend *s, char *tag, int force_notfatal,
-		     int for_find) 
+		     const char *resp)
 {
     int taglen = strlen(tag);
     int c;
@@ -845,23 +846,23 @@ static int pipe_lsub(struct backend *s, char *tag, int force_notfatal,
 
 	    /* send our response */
 	    /* we need to set \Noselect if it's not in our mailboxes.db */
-	    if(!for_find) {
+	    if(resp[0] == 'L') {
 		if(!exist_r) {
-		    prot_printf(proxyd_out, "* LSUB %s \"%s\" ",
-				flags, sep.s);
+		    prot_printf(proxyd_out, "* %s %s \"%s\" ",
+				resp, flags, sep.s);
 		} else {
-		    prot_printf(proxyd_out, "* LSUB (\\Noselect) \"%s\" ",
-				sep.s);
+		    prot_printf(proxyd_out, "* %s (\\Noselect) \"%s\" ",
+				resp, sep.s);
 		}
 
 		printstring(name.s);
 		prot_printf(proxyd_out, "\r\n");
 
-	    } else if(for_find && !exist_r) {
+	    } else if(resp[0] == 'M' && !exist_r) {
 		/* Note that it has to exist for a find response */
 
 		/* xxx what happens if name.s isn't an atom? */
-		prot_printf(proxyd_out, "* MAILBOX %s\r\n",name.s);
+		prot_printf(proxyd_out, "* %s %s\r\n", resp, name.s);
 	    }
 	}
     } /* while(1) */
@@ -1019,10 +1020,98 @@ static void proxyd_refer(const char *tag,
 		tag, url);
 }
 
+static int proxyd_canon_user(sasl_conn_t *conn, void *context,
+			     const char *user, unsigned ulen,
+			     unsigned flags, const char *user_realm,
+			     char *out, unsigned out_max, unsigned *out_ulen)
+{
+    char userbuf[MAX_MAILBOX_NAME+1], *p;
+    size_t n;
+    int r;
+
+    if (config_getswitch(IMAPOPT_IMAPMAGICPLUS)) {
+	/* make a working copy of the auth[z]id */
+	if (!ulen) ulen = strlen(user);
+	memcpy(userbuf, user, ulen);
+	userbuf[ulen] = '\0';
+	user = userbuf;
+
+	/* See if we're using the magic plus
+	   (currently we don't support anything after '+') */
+	if ((p = strchr(userbuf, '+')) && 
+	    (n = config_virtdomains ? strcspn(p, "@") : strlen(p)) == 1) {
+
+	    if (flags & SASL_CU_AUTHZID) {
+		/* make a copy of the magic plus */
+		if (proxyd_magicplus) free(proxyd_magicplus);
+		proxyd_magicplus = xstrndup(p, n);
+	    }
+
+	    /* strip the magic plus from the auth[z]id */
+	    memmove(p, p+n, strlen(p+n)+1);
+	    ulen -= n;
+	}
+    }
+
+    r = mysasl_canon_user(conn, context, user, ulen, flags, user_realm,
+			  out, out_max, out_ulen);
+
+    if (!r && proxyd_magicplus && flags == SASL_CU_AUTHZID) {
+	/* If we're only doing the authzid, put back the magic plus
+	   in case its used in the challenge/response calculation */
+	n = strlen(proxyd_magicplus);
+	if (*out_ulen + n > out_max) {
+	    sasl_seterror(conn, 0, "buffer overflow while canonicalizing");
+	    r = SASL_BUFOVER;
+	}
+	else {
+	    p = (config_virtdomains && (p = strchr(out, '@'))) ?
+		p : out + *out_ulen;
+	    memmove(p+n, p, strlen(p)+1);
+	    memcpy(p, proxyd_magicplus, n);
+	    *out_ulen += n;
+	}
+    }
+
+    return r;
+}
+
+static int proxyd_proxy_policy(sasl_conn_t *conn,
+			       void *context,
+			       const char *requested_user, unsigned rlen,
+			       const char *auth_identity, unsigned alen,
+			       const char *def_realm,
+			       unsigned urlen,
+			       struct propctx *propctx)
+{
+    if (config_getswitch(IMAPOPT_IMAPMAGICPLUS)) {
+	char userbuf[MAX_MAILBOX_NAME+1], *p;
+	size_t n;
+
+	/* make a working copy of the authzid */
+	if (!rlen) rlen = strlen(requested_user);
+	memcpy(userbuf, requested_user, rlen);
+	userbuf[rlen] = '\0';
+	requested_user = userbuf;
+
+	/* See if we're using the magic plus */
+	if (p = strchr(userbuf, '+')) {
+	    n = config_virtdomains ? strcspn(p, "@") : strlen(p);
+
+	    /* strip the magic plus from the authzid */
+	    memmove(p, p+n, strlen(p+n)+1);
+	    rlen -= n;
+	}
+    }
+
+    return mysasl_proxy_policy(conn, context, requested_user, rlen,
+			       auth_identity, alen, def_realm, urlen, propctx);
+}
+
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
-    { SASL_CB_PROXY_POLICY, &mysasl_proxy_policy, (void*) &proxyd_proxyctx },
-    { SASL_CB_CANON_USER, &mysasl_canon_user, (void*) &disable_referrals },
+    { SASL_CB_PROXY_POLICY, &proxyd_proxy_policy, (void*) &proxyd_proxyctx },
+    { SASL_CB_CANON_USER, &proxyd_canon_user, (void*) &disable_referrals },
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
@@ -1141,6 +1230,10 @@ static void proxyd_reset(void)
     if(proxyd_userid) {
 	free(proxyd_userid);
 	proxyd_userid = NULL;
+    }
+    if(proxyd_magicplus != NULL) {
+	free(proxyd_magicplus);
+	proxyd_magicplus = NULL;
     }
     if(proxyd_authstate) {
 	auth_freestate(proxyd_authstate);
@@ -2050,7 +2143,8 @@ void cmdloop()
  */
 void cmd_login(char *tag, char *user)
 {
-    char *canon_user;
+    char userbuf[MAX_MAILBOX_NAME+1], *canon_user = userbuf;
+    unsigned userlen;
     char c;
     struct buf passwdbuf;
     char *passwd;
@@ -2064,9 +2158,11 @@ void cmd_login(char *tag, char *user)
 	return;
     }
 
-    canon_user = canonify_userid(user, NULL, &disable_referrals);
+    r = proxyd_canon_user(proxyd_saslconn, &disable_referrals, user, 0,
+			  SASL_CU_AUTHID | SASL_CU_AUTHZID, NULL,
+			  userbuf, sizeof(userbuf), &userlen);
 
-    if (!canon_user) {
+    if (r) {
 	syslog(LOG_NOTICE, "badlogin: %s plaintext %s invalid user",
 	       proxyd_clienthost, beautify_string(user));
 	prot_printf(proxyd_out, "%s NO %s\r\n", tag, 
@@ -2142,8 +2238,9 @@ void cmd_login(char *tag, char *user)
     else {
 	proxyd_userid = xstrdup(canon_user);
 
-	syslog(LOG_NOTICE, "login: %s %s plaintext%s %s", proxyd_clienthost,
-	       canon_user, proxyd_starttls_done ? "+TLS" : "", 
+	syslog(LOG_NOTICE, "login: %s %s%s plaintext%s %s", proxyd_clienthost,
+	       proxyd_userid, proxyd_magicplus ? proxyd_magicplus : "",
+	       proxyd_starttls_done ? "+TLS" : "", 
 	       reply ? reply : "");
 
 	plaintextloginpause = config_getint(IMAPOPT_PLAINTEXTLOGINPAUSE);
@@ -2187,7 +2284,7 @@ void cmd_login(char *tag, char *user)
 void cmd_authenticate(char *tag, char *authtype, char *resp)
 {
     int sasl_result;
-    const char *userid_buf;
+    const char *canon_user;
     
     const int *ssfp;
     char *ssfmsg=NULL;
@@ -2241,8 +2338,7 @@ void cmd_authenticate(char *tag, char *authtype, char *resp)
      * mysasl_proxy_policy()
      */
     sasl_result = sasl_getprop(proxyd_saslconn, SASL_USERNAME,
-			       (const void **)&userid_buf);
-    proxyd_userid = xstrdup(userid_buf);
+			       (const void **)&canon_user);
 
     if (sasl_result!=SASL_OK)
     {
@@ -2254,10 +2350,32 @@ void cmd_authenticate(char *tag, char *authtype, char *resp)
 	return;
     }
 
+    /* If we're proxying, the authzid may contain a magic plus,
+       so re-canonify it */
+    if (config_getswitch(IMAPOPT_IMAPMAGICPLUS) && strchr(canon_user, '+')) {
+	char userbuf[MAX_MAILBOX_NAME+1];
+	unsigned userlen;
+
+	sasl_result = proxyd_canon_user(proxyd_saslconn, NULL, canon_user, 0,
+					SASL_CU_AUTHID | SASL_CU_AUTHZID,
+					NULL, userbuf, sizeof(userbuf), &userlen);
+	if (sasl_result != SASL_OK) {
+	    prot_printf(proxyd_out, 
+			"%s NO SASL canonification error %d\r\n", 
+			tag, sasl_result);
+	    reset_saslconn(&proxyd_saslconn);
+	    return;
+	}
+
+	proxyd_userid = xstrdup(userbuf);
+    } else {
+	proxyd_userid = xstrdup(canon_user);
+    }
+
     proc_register("proxyd", proxyd_clienthost, proxyd_userid, (char *)0);
 
-    syslog(LOG_NOTICE, "login: %s %s %s%s %s", 
-	   proxyd_clienthost, proxyd_userid,
+    syslog(LOG_NOTICE, "login: %s %s%s %s%s %s", proxyd_clienthost,
+	   proxyd_userid, proxyd_magicplus ? proxyd_magicplus : "",
 	   authtype, proxyd_starttls_done ? "+TLS" : "", "User logged in");
 
     sasl_getprop(proxyd_saslconn, SASL_SSF, (const void **) &ssfp);
@@ -3645,7 +3763,7 @@ void cmd_find(char *tag, char *namespace, char *pattern)
 	    prot_printf(backend_inbox->out, 
 			"%s Lsub \"\" {%d+}\r\n%s\r\n",
 			tag, strlen(pattern), pattern);
-	    pipe_lsub(backend_inbox, tag, 0, 1);
+	    pipe_lsub(backend_inbox, tag, 0, "MAILBOX");
 	} else {		/* user doesn't have an INBOX */
 	    /* noop */
 	}
@@ -3705,7 +3823,8 @@ void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
 	/* Special case: query top-level hierarchy separator */
 	prot_printf(proxyd_out, "* LIST (\\Noselect) \"%c\" \"\"\r\n",
 		    proxyd_namespace.hier_sep);
-    } else if (subscribed) {	/* do an LSUB command; contact our INBOX */
+    } else if (proxyd_magicplus || subscribed) {
+	/* do an LSUB command; contact our INBOX */
 	if (!backend_inbox) {
 	    backend_inbox = proxyd_findinboxserver();
 	}
@@ -3715,7 +3834,7 @@ void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
 			"%s Lsub {%d+}\r\n%s {%d+}\r\n%s\r\n",
 			tag, strlen(reference), reference,
 			strlen(pattern), pattern);
-	    pipe_lsub(backend_inbox, tag, 0, 0);
+	    pipe_lsub(backend_inbox, tag, 0, subscribed ? "LSUB" : "LIST");
 	} else {		/* user doesn't have an INBOX */
 	    /* noop */
 	}
