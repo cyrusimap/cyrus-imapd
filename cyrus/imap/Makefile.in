@@ -1,3 +1,5 @@
+DEFINES=-DSETPROCTITLE
+
 # Authentication (login) routines.  Two choices
 #
 # Kerberos.  Requires auth_krb.o and kerberos.o in libcyrus.a
@@ -18,7 +20,8 @@ OPT=-g
 
 LOBJS= append.o mailbox.o mboxlist.o message.o \
 	parsel.o parsey.o parseadd.o parseutl.o \
-	config.o imap_err.o $(LOGIN) $(SEEN)
+	config.o imap_err.o proc.o setproctitle.o \
+	$(LOGIN) $(SEEN)
 
 IMAPDOBJS= imapd.o index.o
 

@@ -49,13 +49,19 @@ static char *monthname[] = {
     "jul", "aug", "sep", "oct", "nov", "dec"
 };
 
-main(argc, argv)
+
+
+main(argc, argv, envp)
+int argc;
+char **argv;
+char **envp;
 {
     char hostname[MAXHOSTNAMELEN+1];
     struct sockaddr_in sa;
     int salen = sizeof(sa);
     struct hostent *hp;
 
+    setproctitle_init(argc, argv, envp);
     config_init("imapd");
 
     signal(SIGPIPE, SIG_IGN);
@@ -79,6 +85,8 @@ main(argc, argv)
 	strcat(imapd_clienthost, "]");
     }
 
+    proc_register("imapd", imapd_clienthost, (char *)0, (char *)0);
+
     printf("* OK %s Cyrus IMAP2bis v0.2-ALPHA server ready\r\n", hostname);
     cmdloop();
 }
@@ -95,6 +103,7 @@ usage()
 shutdown(code)
 int code;
 {
+    proc_cleanup();
     if (imapd_mailbox) {
 	index_checkseen(imapd_mailbox, 1, 0, imapd_exists);
 	mailbox_close(imapd_mailbox);
@@ -536,6 +545,7 @@ char *passwd;
 
     auth_setid(canon_user);
     imapd_userid = strsave(canon_user);
+    proc_register("imapd", imapd_clienthost, imapd_userid, (char *)0);
 
     if (!reply) reply = "User logged in";
     
@@ -705,6 +715,8 @@ char *name;
     int usage;
     int doclose = 0;
 
+    inboxname[0] = '\0';
+
     if (cmd[0] == 'B') {
 	/* BBoard namespace is empty */
 	r = IMAP_MAILBOX_NONEXISTENT;
@@ -773,6 +785,8 @@ char *name;
     printf("%s OK [READ-%s] %s completed\r\n", tag,
 	   imapd_mailbox->myrights & ACL_WRITE ? "WRITE" : "ONLY", cmd);
 
+    proc_register("imapd", imapd_clienthost, imapd_userid,
+		  inboxname[0] ? inboxname : name);
     syslog(LOG_INFO, "open: user %s opened %s", imapd_userid, name);
 }
 	  
