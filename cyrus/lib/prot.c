@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.54 2000/11/06 21:12:38 ken3 Exp $
+ * $Id: prot.c,v 1.55 2000/11/10 21:52:38 leg Exp $
  */
 
 #include <config.h>
@@ -378,27 +378,34 @@ int prot_fill(struct protstream *s)
 	}
 
 	if (!haveinput && (s->read_timeout || s->dontblock)) {
-	    read_timeout = time(0) + s->read_timeout;
+	    time_t now = time(NULL);
+	    time_t sleepfor;
+
+	    read_timeout = now + s->read_timeout;
 	    do {
+		sleepfor = read_timeout - now;
 		/* execute each callback that has timed out */
-		event = s->waitevent;
-		while (event) {
-		    if (time(0) >= event->mark) {
+		for (event = s->waitevent; event != NULL; event = event->next)
+		{
+		    if (now >= event->mark) {
 			(*event->proc)(s, event->rock);
-			event->mark = time(0) + event->period;
+			event->mark = now + event->period;
 		    }
-		    event = event->next;
+		    if (sleepfor > (event->mark - now)) {
+			sleepfor = event->mark - now;
+		    }
 		}
 
 		/* check for input */
-		timeout.tv_sec = 0;
+		timeout.tv_sec = sleepfor;
 		timeout.tv_usec = 0;
 		FD_ZERO(&rfds);
 		FD_SET(s->fd, &rfds);
 		r = select(s->fd + 1, &rfds, (fd_set *)0, (fd_set *)0,
 			   &timeout);
+		now = time(NULL);
 	    } while ((r == 0 || (r == -1 && errno == EINTR)) &&
-		     time(0) < read_timeout);
+		     (now < read_timeout));
 	    if (r == 0) {
 		if (!s->dontblock) {
 		    s->error = "idle for too long";
