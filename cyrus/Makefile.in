@@ -21,7 +21,7 @@
 # SOFTWARE.
 # 
 
-SUBDIRS = @EXTRA_SUBDIRS@ et lib imap imtest
+SUBDIRS = @EXTRA_SUBDIRS@ et lib imap imtest @TCL_SUBDIRS@
 
 srcdir = @srcdir@
 VPATH = @srcdir@
