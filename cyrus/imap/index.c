@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.103 2000/05/30 21:02:07 ken3 Exp $
+ * $Id: index.c,v 1.104 2000/05/31 16:21:57 ken3 Exp $
  */
 #include <config.h>
 
@@ -3283,11 +3283,10 @@ static struct thread *index_thread_orderedsubj(unsigned *msgno_list, int nmsg)
 
     /* build threads under a dummy head */
     tmp = cur = NEWTHREAD;
+    psubj = msgdata->xsubj_hash + 1;	/* guarantee psubj != first subj */
     while (msgdata) {
-	/* if this is the first message or current subj != previous subj,
-	 * then create a new thread
-	 */
-	if ((cur == tmp) || (msgdata->xsubj_hash != psubj)) {
+	/* if current subj != previous subj, then create a new thread */
+	if (msgdata->xsubj_hash != psubj) {
 	    parent = cur = cur->next = NEWTHREAD;
 	    cur->msgdata = msgdata;
 	}
