@@ -9,9 +9,9 @@ AC_DEFUN(CMU_SOCKETS, [
 	LIB_SOCKET=""
 	AC_CHECK_FUNC(connect, :,
 		AC_CHECK_LIB(nsl, gethostbyname,
-			     LIB_SOCKET="$LIB_SOCKET -lnsl")
+			     LIB_SOCKET="-lnsl $LIB_SOCKET")
 		AC_CHECK_LIB(socket, connect,
-			     LIB_SOCKET="$LIB_SOCKET -lsocket")
+			     LIB_SOCKET="-lsocket $LIB_SOCKET")
 	)
 	AC_SUBST(LIB_SOCKET)
 	])
