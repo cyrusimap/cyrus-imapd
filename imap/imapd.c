@@ -1541,7 +1541,7 @@ int add;
 	r = mboxlist_changesub(name, imapd_userid, add);
     }
     else if (!strcmp(namespace, "bboard")) {
-	r = add ? IMAP_MAILBOX_NONEXISTENT : IMAP_MAILBOX_UNSUBSCRIBED;
+	r = add ? IMAP_MAILBOX_NONEXISTENT : 0;
     }
     else {
 	printf("%s BAD Invalid %s subcommand\r\n", tag,
