@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.303 2001/03/14 20:44:25 leg Exp $ */
+/* $Id: imapd.c,v 1.304 2001/03/15 22:29:02 leg Exp $ */
 
 #include <config.h>
 
@@ -4128,11 +4128,6 @@ void cmd_starttls(char *tag, int imaps)
 
     if (result != SASL_OK) {
 	fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
-    }
-
-    /* if authenticated set that */
-    if (external.auth_id != NULL) {
-	imapd_userid = external.auth_id;
     }
 
     /* tell the prot layer about our new layers */
