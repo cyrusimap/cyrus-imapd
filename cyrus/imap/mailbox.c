@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.133 2002/05/28 15:55:05 leg Exp $
+ $Id: mailbox.c,v 1.134 2002/06/20 16:35:52 rjs3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -2208,10 +2208,9 @@ static int expungeall(struct mailbox *mailbox __attribute__((unused)),
 int mailbox_rename_copy(struct mailbox *oldmailbox, 
 			const char *newname, char *newpath,
 			bit32 *olduidvalidityp, bit32 *newuidvalidityp,
-			struct mailbox *mailboxp)
+			struct mailbox *newmailbox)
 {
     int r;
-    struct mailbox newmailbox;
     unsigned int flag, msgno;
     struct index_record record;
     char oldfname[MAX_MAILBOX_PATH], newfname[MAX_MAILBOX_PATH];
@@ -2224,51 +2223,50 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     /* Create new mailbox */
     r = mailbox_create(newname, newpath, 
 		       oldmailbox->acl, oldmailbox->uniqueid,
-		       oldmailbox->format, &newmailbox);
+		       oldmailbox->format, newmailbox);
 
     if (r) return r;
-    if (mailboxp) mailboxp = &newmailbox;
 
     if (strcmp(oldmailbox->name, newname) == 0) {
 	/* Just moving mailboxes between partitions */
-	newmailbox.uidvalidity = oldmailbox->uidvalidity;
+	newmailbox->uidvalidity = oldmailbox->uidvalidity;
     }
 
     if (olduidvalidityp) *olduidvalidityp = oldmailbox->uidvalidity;
-    if (newuidvalidityp) *newuidvalidityp = newmailbox.uidvalidity;
+    if (newuidvalidityp) *newuidvalidityp = newmailbox->uidvalidity;
 
     /* Copy flag names */
     for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
 	if (oldmailbox->flagname[flag]) {
-	    newmailbox.flagname[flag] = xstrdup(oldmailbox->flagname[flag]);
+	    newmailbox->flagname[flag] = xstrdup(oldmailbox->flagname[flag]);
 	}
     }
-    r = mailbox_write_header(&newmailbox);
+    r = mailbox_write_header(newmailbox);
     if (r) {
-	mailbox_close(&newmailbox);
+	mailbox_close(newmailbox);
 	return r;
     }
 
     /* Check quota if necessary */
-    if (newmailbox.quota.root) {
-	r = mailbox_lock_quota(&newmailbox.quota);
+    if (newmailbox->quota.root) {
+	r = mailbox_lock_quota(&(newmailbox->quota));
 	if (!oldmailbox->quota.root ||
-	    strcmp(oldmailbox->quota.root, newmailbox.quota.root) != 0) {
-	    if (!r && newmailbox.quota.limit >= 0 &&
-		newmailbox.quota.used + oldmailbox->quota_mailbox_used >
-		((unsigned) newmailbox.quota.limit * QUOTA_UNITS)) {
+	    strcmp(oldmailbox->quota.root, newmailbox->quota.root) != 0) {
+	    if (!r && newmailbox->quota.limit >= 0 &&
+		newmailbox->quota.used + oldmailbox->quota_mailbox_used >
+		((unsigned) newmailbox->quota.limit * QUOTA_UNITS)) {
 		r = IMAP_QUOTA_EXCEEDED;
 	    }
 	}
 	if (r) {
-	    mailbox_close(&newmailbox);
+	    mailbox_close(newmailbox);
 	    return r;
 	}
     }
 
     strcpy(oldfname, oldmailbox->path);
     oldfnametail = oldfname + strlen(oldfname);
-    strcpy(newfname, newmailbox.path);
+    strcpy(newfname, newmailbox->path);
     newfnametail = newfname + strlen(newfname);
 
     /* Copy over index/cache files */
@@ -2281,16 +2279,16 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     unlink(newfname);
     if (!r) r = mailbox_copyfile(oldfname, newfname);
     if (r) {
-	mailbox_close(&newmailbox);
+	mailbox_close(newmailbox);
 	return r;
     }
 
     /* Re-open index file and store new uidvalidity  */
-    close(newmailbox.index_fd);
-    newmailbox.index_fd = dup(oldmailbox->index_fd);
-    (void) mailbox_read_index_header(&newmailbox);
-    newmailbox.generation_no = oldmailbox->generation_no;
-    (void) mailbox_write_index_header(&newmailbox);
+    close(newmailbox->index_fd);
+    newmailbox->index_fd = dup(oldmailbox->index_fd);
+    (void) mailbox_read_index_header(newmailbox);
+    newmailbox->generation_no = oldmailbox->generation_no;
+    (void) mailbox_write_index_header(newmailbox);
 
     /* Copy over message files */
     oldfnametail++;
@@ -2303,13 +2301,13 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
 	r = mailbox_copyfile(oldfname, newfname);
 	if (r) break;
     }
-    if (!r) r = seen_copy(oldmailbox, &newmailbox);
+    if (!r) r = seen_copy(oldmailbox, newmailbox);
 
     /* Record new quota usage */
-    if (!r && newmailbox.quota.root) {
-	newmailbox.quota.used += oldmailbox->quota_mailbox_used;
-	r = mailbox_write_quota(&newmailbox.quota);
-	mailbox_unlock_quota(&newmailbox.quota);
+    if (!r && newmailbox->quota.root) {
+	newmailbox->quota.used += oldmailbox->quota_mailbox_used;
+	r = mailbox_write_quota(&(newmailbox->quota));
+	mailbox_unlock_quota(&(newmailbox->quota));
     }
     if (r) {
 	/* failure and back out */
