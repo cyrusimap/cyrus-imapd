@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.128 2000/06/21 15:11:33 ken3 Exp $
+ * $Id: index.c,v 1.129 2000/06/21 15:44:56 ken3 Exp $
  */
 #include <config.h>
 
@@ -3565,6 +3565,9 @@ static void _index_thread_print(Thread *thread, int usinguid)
 			usinguid ? UID(thread->msgdata->msgno) :
 			thread->msgdata->msgno);
 
+	    /* if we have a child, print the parent-child separator */
+	    if (thread->child) prot_printf(imapd_out, " ");
+
 	    /* free contents of the current node */
 	    index_msgdata_free(thread->msgdata);
 	}
@@ -3572,10 +3575,6 @@ static void _index_thread_print(Thread *thread, int usinguid)
 	/* for each child, grandchild, etc... */
 	child = thread->child;
 	while (child) {
-	    /* if we have a non-empty parent, print the separator */
-	    if (child->parent->msgdata)
-		prot_printf(imapd_out, " ");
-
 	    /* if the child has siblings, print new branch and break */
 	    if (child->next) {
 		_index_thread_print(child, usinguid);
@@ -3586,6 +3585,9 @@ static void _index_thread_print(Thread *thread, int usinguid)
 		prot_printf(imapd_out, "%u",
 			    usinguid ? UID(child->msgdata->msgno) :
 			    child->msgdata->msgno);
+
+		/* if we have a child, print the parent-child separator */
+		if (child->child) prot_printf(imapd_out, " ");
 
 		/* free contents of the child node */
 		index_msgdata_free(child->msgdata);
