@@ -194,7 +194,7 @@ Configuring the Mail Transfer Agent
         the IMAP server. See the files cf/README in the Sendmail
         distribution for information on how to do this. A suggested
         "config.mc" file to create a Sendmail configuration file can be
-        found here. 
+        found here. This requires Sendmail 8.10 or newer. 
 
         The interface between the MTA and Cyrus has changed in Cyrus
         version 2, so take care when using older Sendmails. 

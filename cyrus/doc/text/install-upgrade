@@ -29,7 +29,8 @@ Upgrading from 1.6.22
       * remove inetd.conf entries. The imap and popd3d lines need to be
         removed from /etc/inetd.conf and inetd needs to be restarted. 
       * sendmail configuration. You need to use a new cyrus mc file. See
-        doc/cyrusv2.mc for a sample mc file. 
+        doc/cyrusv2.mc for a sample mc file. This requires Sendmail 8.10 or
+        newer. 
 
 Upgrading from 1.6.13
 

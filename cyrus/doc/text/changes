@@ -1,5 +1,41 @@
                    Changes to the Cyrus IMAP Server
 
+Changes to the cyrus IMAP Server SINCE 2.0.4
+
+      * Now should work with Berkeley DB 3.1, but does not auto-upgrade 3.0
+        databases (and, in fact, I haven't written any upgrade software
+        yet). 
+      * Some configure fixes. 
+      * Some fixes for possible race conditions in initializing services
+        and database structures. 
+      * SORT and THREAD should now function correctly. 
+
+Changes to the cyrus IMAP Server SINCE 2.0.3
+
+      * fixed mbpath and ipurge. Thanks to Alain Turbide for the bug
+        report. 
+      * configure: removed mmap_private.c; it was buggy, and not worth
+        supporting. 
+      * configure: improvements in detecting libwrap, typos fixed in
+        detecting libsasl. 
+      * Merged the acapsieve library into libacap. 
+      * improvements to the ACAP API. 
+      * invariant checks added to the skiplist code. 
+      * bugfix in TCL cyradm. 
+      * acapmbox.c: bugfixes in handling acap connections. 
+      * fix the size given for a unix socket address (changes throughout
+        the code), patch thanks to Vladimir Kravchenko, jimson@null.ru. 
+      * rewrote deliver to use the generic LMTP API in lmtpengine.c.
+        Likewise, implemented the client-side API in lmtpengine.c. (Still
+        need to implement AUTH.) 
+      * added SORT and THREAD support (Ken Murchison, ken@oceana.com.) 
+      * In checking an APPEND command, we were rejecting valid system flags
+        and accepting invalid ones. 
+      * minor bug fixes to proxyd. 
+      * large amount of debugging code added to target-acap. 
+      * build fixes to Perl programs. 
+      * allow plaintext authentication to timsieved. 
+
 Changes to the Cyrus IMAP Server in 2.0 
 
       * The mailboxes file is now a transaction-protected Berkeley
