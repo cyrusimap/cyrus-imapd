@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.34 2002/04/23 18:25:48 rjs3 Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.34.6.1 2002/07/25 17:21:46 ken3 Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -1263,7 +1263,7 @@ int mydelete(struct db *db,
 int mycommit(struct db *db, struct txn *tid)
 {
     bit32 commitrectype = htonl(COMMIT);
-    int r;
+    int r = 0;
 
     assert(db && tid);
 
@@ -1276,13 +1276,15 @@ int mycommit(struct db *db, struct txn *tid)
     /* verify that we did something this txn */
     if (tid->logstart == tid->logend) {
 	/* empty txn, done */
+        r = 0;
 	goto done;
     }
 
     /* fsync if we're not using O_SYNC writes */
     if (!use_osync && do_fsync && (fdatasync(db->fd) < 0)) {
 	syslog(LOG_ERR, "IOERROR: writing %s: %m", db->fname);
-	return CYRUSDB_IOERROR;
+	r = CYRUSDB_IOERROR;
+        goto done;
     }
 
     /* write a commit record */
@@ -1293,33 +1295,44 @@ int mycommit(struct db *db, struct txn *tid)
     /* fsync if we're not using O_SYNC writes */
     if (!use_osync && do_fsync && (fdatasync(db->fd) < 0)) {
 	syslog(LOG_ERR, "IOERROR: writing %s: %m", db->fname);
-	return CYRUSDB_IOERROR;
+	r = CYRUSDB_IOERROR;
+        goto done;
     }
 
+ done:
     /* consider checkpointing */
-    if (tid->logend > (2 * db->logstart + SKIPLIST_MINREWRITE)) {
+    if (!r && tid->logend > (2 * db->logstart + SKIPLIST_MINREWRITE)) {
 	r = mycheckpoint(db, 1);
     }
     
- done:
     if (be_paranoid) {
 	assert(myconsistent(db, NULL, 1) == 0);
     }
 
-    /* release the write lock */
-    if ((r = unlock(db)) < 0) {
-	return r;
-    }
-    
-    /* must close this after releasing the lock */
-    closesyncfd(db, tid);
+    if (r) {
+        int r2;
 
-    /* free tid if needed */
-    if (tid->ismalloc) {
-	free(tid);
+        /* error during commit; we must abort */
+        r2 = myabort(db, tid);
+        if (r2) {
+            syslog(LOG_ERR, "DBERROR: commit AND abort failed");
+        }
+    } else {
+        /* release the write lock */
+        if ((r = unlock(db)) < 0) {
+            return r;
+        }
+        
+        /* must close this after releasing the lock */
+        closesyncfd(db, tid);
+
+        /* free tid if needed */
+        if (tid->ismalloc) {
+            free(tid);
+        }
     }
 
-    return 0;
+    return r;
 }
 
 int myabort(struct db *db, struct txn *tid)

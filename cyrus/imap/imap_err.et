@@ -24,7 +24,7 @@
 #  (412) 268-4387, fax: (412) 268-7395
 #  tech-transfer@andrew.cmu.edu
 # 
-# $Id: imap_err.et,v 1.45 2002/05/25 19:57:45 leg Exp $
+# $Id: imap_err.et,v 1.45.4.1 2002/07/25 17:21:41 ken3 Exp $
 error_table imap
 
 ec IMAP_INTERNAL,
@@ -44,6 +44,9 @@ ec IMAP_PERMISSION_DENIED,
 
 ec IMAP_QUOTA_EXCEEDED,
    "Over quota"
+
+ec IMAP_MESSAGE_TOO_LARGE,
+   "Message size exceeds fixed limit"
 
 ec IMAP_USERFLAG_EXHAUSTED,
    "Too many user flags in mailbox"

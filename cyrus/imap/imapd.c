@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.10 2002/07/21 17:27:22 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.11 2002/07/25 17:21:41 ken3 Exp $ */
 
 #include <config.h>
 
@@ -529,7 +529,8 @@ int service_init(int argc, char **argv, char **envp)
     }
 #endif
 
-    sprintf(shutdownfilename, "%s/msg/shutdown", config_dir);
+    snprintf(shutdownfilename, sizeof(shutdownfilename), "%s/msg/shutdown",
+	     config_dir);
 
     /* open the mboxlist, we'll need it for real work */
     mboxlist_init(0);
@@ -794,7 +795,7 @@ void cmdloop()
 		"* OK %s Cyrus IMAP4 %s server ready\r\n", config_servername,
 		CYRUS_VERSION);
 
-    sprintf(motdfilename, "%s/msg/motd", config_dir);
+    snprintf(motdfilename, sizeof(motdfilename), "%s/msg/motd", config_dir);
     if ((fd = open(motdfilename, O_RDONLY, 0)) != -1) {
 	motd_file(fd);
 	close(fd);
@@ -3279,7 +3280,8 @@ int usinguid;
     }
     else {
 	n = index_search(imapd_mailbox, searchargs, usinguid);
-	sprintf(mytime, "%2.3f", (clock() - start) / (double) CLOCKS_PER_SEC);
+	snprintf(mytime, sizeof(mytime), "%2.3f", 
+		 (clock() - start) / (double) CLOCKS_PER_SEC);
 	prot_printf(imapd_out, "%s OK %s (%d msgs in %s secs)\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED), n, mytime);
     }
@@ -3360,7 +3362,8 @@ int usinguid;
     }
 
     n = index_sort(imapd_mailbox, sortcrit, searchargs, usinguid);
-    sprintf(mytime, "%2.3f", (clock() - start) / (double) CLOCKS_PER_SEC);
+    snprintf(mytime, sizeof(mytime), "%2.3f",
+	     (clock() - start) / (double) CLOCKS_PER_SEC);
     prot_printf(imapd_out, "%s OK %s (%d msgs in %s secs)\r\n", tag,
 		error_message(IMAP_OK_COMPLETED), n, mytime);
 
@@ -3438,7 +3441,8 @@ int usinguid;
     }
 
     n = index_thread(imapd_mailbox, alg, searchargs, usinguid);
-    sprintf(mytime, "%2.3f", (clock() - start) / (double) CLOCKS_PER_SEC);
+    snprintf(mytime, sizeof(mytime), "%2.3f", 
+	     (clock() - start) / (double) CLOCKS_PER_SEC);
     prot_printf(imapd_out, "%s OK %s (%d msgs in %s secs)\r\n", tag,
 		error_message(IMAP_OK_COMPLETED), n, mytime);
 
@@ -4067,7 +4071,8 @@ void cmd_list(char *tag, int listopts, char *reference, char *pattern)
 
 	if (buf) free(buf);
     }
-    sprintf(mytime, "%2.3f", (clock() - start) / (double) CLOCKS_PER_SEC);
+    snprintf(mytime, sizeof(mytime), "%2.3f",
+	     (clock() - start) / (double) CLOCKS_PER_SEC);
     prot_printf(imapd_out, "%s OK %s (%s secs %d calls)\r\n", tag,
 		error_message(IMAP_OK_COMPLETED), mytime, mstringdatacalls);
 }
@@ -4847,7 +4852,7 @@ void cmd_namespace(tag)
 	if (strlen(imapd_userid) + 5 > MAX_MAILBOX_NAME)
 	    sawone[NAMESPACE_INBOX] = 0;
 	else {
-	    sprintf(inboxname, "user.%s", imapd_userid);
+	    snprintf(inboxname, sizeof(inboxname), "user.%s", imapd_userid);
 	    sawone[NAMESPACE_INBOX] = 
 		!mboxlist_lookup(inboxname, NULL, NULL, NULL);
 	}
@@ -6030,7 +6035,7 @@ static int do_xfer_single(char *toserver, char *topart,
      * 2.5) Set mailbox as REMOTE on local server
      * 3) mupdate.DEACTIVATE(mailbox, remoteserver) xxx what partition?
      * 4) undump mailbox from local to remote
-     * 5) reconstruct remote mailbox
+     * 5) Sync remote acl
      * 6) mupdate.ACTIVATE(mailbox, remoteserver)
      * ** MAILBOX NOW LIVING ON REMOTE SERVER
      * 6.5) force remote server to push the final mupdate entry to ensure
@@ -6127,7 +6132,7 @@ static int do_xfer_single(char *toserver, char *topart,
 		     mailboxname);
     }
     
-    /* Step 4.5: Set ACL on remote */
+    /* Step 5: Set ACL on remote */
     if(!r) {
 	r = trashacl(be->in, be->out, mailboxname);
 	if(r) syslog(LOG_ERR, "Could not clear remote acl on %s",
@@ -7372,7 +7377,7 @@ void cmd_mupdatepush(char *tag, char *name)
     }
 
     if (!r) {
-	sprintf(buf, "%s!%s", config_servername, part);
+	snprintf(buf, sizeof(buf), "%s!%s", config_servername, part);
 
 	r = mupdate_activate(mupdate_h, mailboxname, buf, acl);
     }

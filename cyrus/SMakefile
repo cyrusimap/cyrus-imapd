@@ -40,7 +40,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.85 2002/05/17 15:38:35 rjs3 Exp $
+# $Id: SMakefile,v 1.85.4.1 2002/07/25 17:21:36 ken3 Exp $
 #
 
 if test ! -x configure; then
@@ -57,10 +57,6 @@ fi
 
 MAKE=gmake
 
-if test "${CC-unset}" = "unset"; then
-  CC=cc
-fi
-
 if [ -r /.hostname ]; then
   # probably an andrew machine
   VER=`smake -D | sed 's;^.*\/;;'`
@@ -73,55 +69,38 @@ LOCALDEFS="-DEXTRA_IDENT=\\\"$VER\\\""
 # PERL CONFIGURATION
 PERL_MM_OPT="INSTALLPRIVLIB=${DESTDIR}/usr/local/lib/perl5 INSTALLARCHLIB=${DESTDIR}/usr/local/lib/perl5/5.6.1 INSTALLSITELIB=${DESTDIR}/usr/local/lib/perl5/site_perl/5.6.1 INSTALLSITEARCH=${DESTDIR}/usr/local/lib/perl5/site_perl/5.6.1 INSTALLBIN=${DESTDIR}/usr/local/bin INSTALLSCRIPT=${DESTDIR}/usr/local/bin INSTALLMAN1DIR=${DESTDIR}/usr/local/man/man1 INSTALLMAN3DIR=${DESTDIR}/usr/local/man/man3"
 export PERL_MM_OPT
-
 # end perl configuration
+
+# Let's just assume we are using gcc...
+if test "${WASH_CYRUS_INSURE}" = "t"; then
+  CC="insure"
+  CFLAGS="-g"
+else
+  CC="gcc"
+  CFLAGS="${CFLAGS} -O3 -g -Wall -W"
+fi
+
+if test "${WASH_CYRUS_DEBUG}" = "t"; then
+    CC="gcc"
+    CFLAGS="-g"
+    LDFLAGS="${LDFLAGS}"
+    DEBUG="--enable-debug"
+fi
 
 case `uname` in	
     Linux) 
-	CC="gcc"
-	CFLAGS="${CFLAGS} -O3 -g -Wall -W"
 	LDFLAGS="${LDFLAGS}"
 	LIBS="-lnsl" # for libwrap
-
-        if test "${WASH_CYRUS_DEBUG}" = "t"; then
-	    CC="gcc"
-	    CFLAGS="-g"
-            LDFLAGS="${LDFLAGS}"
-        fi
     ;;
     SunOS)
-# Sun CC
-#      CC=cc
-#      CFLAGS="${CFLAGS} -xs -xO3 -xdepend"
-#      LDFLAGS="${LDFLAGS} -xs -xO3 -xdepend"
-
-# Standard build
-	CC=gcc
-	CFLAGS="${CFLAGS} -g -O3 -Wall"
-
-# Insure++ from parasoft
-#	CC="insure"
-#       CFLAGS="${CFLAGS} -g"
-
         LDFLAGS="${LDFLAGS} -L/usr/local/lib -Wl,-R,/usr/local/lib"
 	LIBS="-lkstat -ldoor"
-
-#     if test "${WASH_CYRUS_DEBUG}" = "t"; then
-#        CFLAGS="-g -xs"
-#        LDFLAGS="-L/usr/local/lib -R/usr/local/lib -xs -g"
-#      fi
-
-      if test "${WASH_CYRUS_DEBUG}" = "t"; then
-        CFLAGS="-g"
-      fi
-      ;;
-  *)    
-  ;;
+    ;;
+    *)
+        CC=cc
+    ;;
 esac
 
-if test "${WASH_CYRUS_DEBUG}" = "t"; then
-  DEBUG="--enable-debug"
-fi
 
 # settings; we have to disable these on some platforms
 DEBUG=""

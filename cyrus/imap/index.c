@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.180 2002/06/18 16:40:19 rjs3 Exp $
+ * $Id: index.c,v 1.180.4.1 2002/07/25 17:21:42 ken3 Exp $
  */
 #include <config.h>
 
@@ -1176,7 +1176,7 @@ index_copy(struct mailbox *mailbox,
     if (!r) {
 	copyuid_size = 1024;
 	copyuid = xmalloc(copyuid_size);
-	sprintf(copyuid, "%lu", uidvalidity);
+	snprintf(copyuid, copyuid_size, "%lu", uidvalidity);
 	copyuid_len = strlen(copyuid);
 	sepchar = ' ';
 
@@ -1185,8 +1185,8 @@ index_copy(struct mailbox *mailbox,
 		copyuid_size += 1024;
 		copyuid = xrealloc(copyuid, copyuid_size);
 	    }
-	    sprintf(copyuid+copyuid_len, "%c%lu", sepchar,
-		    copyargs.copymsg[i].uid);
+	    snprintf(copyuid+copyuid_len, copyuid_size-copyuid_len, 
+		    "%c%lu", sepchar, copyargs.copymsg[i].uid);
 	    copyuid_len += strlen(copyuid+copyuid_len);
 	    if (i+1 < copyargs.nummsg &&
 		copyargs.copymsg[i+1].uid == copyargs.copymsg[i].uid + 1) {
@@ -1194,16 +1194,17 @@ index_copy(struct mailbox *mailbox,
 		    i++;
 		} while (i+1 < copyargs.nummsg &&
 			 copyargs.copymsg[i+1].uid == copyargs.copymsg[i].uid + 1);
-		sprintf(copyuid+copyuid_len, ":%lu",
+		snprintf(copyuid+copyuid_len, copyuid_size-copyuid_len, ":%lu",
 			copyargs.copymsg[i].uid);
 		copyuid_len += strlen(copyuid+copyuid_len);
 	    }
 	    sepchar = ',';
 	}
 	if (num == 1) {
-	    sprintf(copyuid+copyuid_len, " %lu", startuid);
+	    snprintf(copyuid+copyuid_len, copyuid_size-copyuid_len, " %lu",
+		     startuid);
 	} else {
-	    sprintf(copyuid+copyuid_len, " %lu:%lu",
+	    snprintf(copyuid+copyuid_len, copyuid_size-copyuid_len, " %lu:%lu",
 		    startuid, startuid + num - 1);
 	}
 	*copyuidp = copyuid;
@@ -2261,10 +2262,11 @@ void *rock;
 	    gmtnegative = 1;
 	}
 	gmtoff /= 60;
-	sprintf(datebuf, "%2u-%s-%u %.2u:%.2u:%.2u %c%.2lu%.2lu",
-		tm->tm_mday, monthname[tm->tm_mon], tm->tm_year+1900,
-		tm->tm_hour, tm->tm_min, tm->tm_sec,
-		gmtnegative ? '-' : '+', gmtoff/60, gmtoff%60);
+	snprintf(datebuf, sizeof(datebuf),
+		 "%2u-%s-%u %.2u:%.2u:%.2u %c%.2lu%.2lu",
+		 tm->tm_mday, monthname[tm->tm_mon], tm->tm_year+1900,
+		 tm->tm_hour, tm->tm_min, tm->tm_sec,
+		 gmtnegative ? '-' : '+', gmtoff/60, gmtoff%60);
 	prot_printf(imapd_out, "%cINTERNALDATE \"%s\"",
 		    sepchar, datebuf);
 	sepchar = ' ';
@@ -3496,7 +3498,7 @@ static char *find_msgid(char *str, char **rem)
 	if (*++cp == '\"') {
 	    /* find the endquote, making sure it isn't escaped */
 	    do {
-		cp = strchr(++cp, '\"');
+		++cp; cp = strchr(cp, '\"');
 	    } while (cp && *(cp-1) == '\\');
 
 	    /* no endquote, so bail */
@@ -3564,7 +3566,7 @@ void index_get_ids(MsgData *msgdata, char *envtokens[], const char *headers)
     msgdata->msgid = find_msgid(envtokens[ENV_MSGID], NULL);
      /* if we don't have one, create one */
     if (!msgdata->msgid) {
-	sprintf(buf, "<Empty-ID: %u>", msgdata->msgno);
+	snprintf(buf, sizeof(buf), "<Empty-ID: %u>", msgdata->msgno);
 	msgdata->msgid = xstrdup(buf);
     }
 
@@ -4005,7 +4007,7 @@ static void ref_link_messages(MsgData *msgdata, Thread **newnode,
 	     * on the old one.
 	     */
 	    if (cur->msgdata) {
-		sprintf(buf, "-dup%d", dup_count++);
+		snprintf(buf, sizeof(buf), "-dup%d", dup_count++);
 		msgdata->msgid =
 		    (char *) xrealloc(msgdata->msgid,
 				      strlen(msgdata->msgid) + strlen(buf) + 1);

@@ -1,5 +1,5 @@
 /* map_nommap.c -- dummy memory-mapping routines.
- $Id: map_nommap.c,v 1.19 2002/07/09 18:41:15 ken3 Exp $
+ $Id: map_nommap.c,v 1.19.2.1 2002/07/25 17:21:47 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -78,7 +78,7 @@ const char *mboxname;
 	if (fstat(fd, &sbuf) == -1) {
 	    syslog(LOG_ERR, "IOERROR: fstating %s file%s%s: %m", name,
 		   mboxname ? " for " : "", mboxname ? mboxname : "");
-	    sprintf(buf, "failed to fstat %s file", name);
+	    snprintf(buf, sizeof(buf), "failed to fstat %s file", name);
 	    fatal(buf, EC_IOERR);
 	}
 	newlen = sbuf.st_size;
@@ -108,7 +108,7 @@ const char *mboxname;
 		       name, 
 		       mboxname ? " for " : "", mboxname ? mboxname : "");
 	    }
-	    sprintf(buf, "failed to read %s file", name);
+	    snprintf(buf, sizeof(buf), "failed to read %s file", name);
 	    fatal(buf, EC_IOERR);
 	}
 	p += n;

@@ -42,7 +42,7 @@
  */
 
 /*
- * $Id: message.c,v 1.88.16.1 2002/07/10 20:45:09 rjs3 Exp $
+ * $Id: message.c,v 1.88.16.2 2002/07/25 17:21:43 ken3 Exp $
  */
 
 #include <config.h>
@@ -2069,7 +2069,7 @@ char *s;
     if (*p || len >= 1024) {
 	/* Write out as literal */
 	char buf[100];
-	sprintf(buf, "{%u}\r\n", strlen(s));
+	snprintf(buf, sizeof(buf), "{%u}\r\n", strlen(s));
 	message_ibuf_ensure(ibuf, strlen(s)+strlen(buf));
 	for (p = buf; *p; p++) *(ibuf->end)++ = *p;
 	for (p = s; *p; p++) *(ibuf->end)++ = *p;
@@ -2107,7 +2107,7 @@ unsigned n;
 {
     char buf[100], *p;
 
-    sprintf(buf, "%u", n);
+    snprintf(buf, sizeof(buf), "%u", n);
 
     message_ibuf_ensure(ibuf, strlen(buf));
     for (p = buf; *p; p++) *(ibuf->end)++ = *p;

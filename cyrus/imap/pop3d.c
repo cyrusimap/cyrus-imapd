@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122.4.5 2002/07/20 01:18:22 ken3 Exp $
+ * $Id: pop3d.c,v 1.122.4.6 2002/07/25 17:21:43 ken3 Exp $
  */
 #include <config.h>
 
@@ -968,7 +968,8 @@ static void cmd_apop(char *response)
 	return;
     }
 
-    sprintf(shutdownfilename, "%s/msg/shutdown", config_dir);
+    snprintf(shutdownfilename, sizeof(shutdownfilename), 
+	     "%s/msg/shutdown", config_dir);
     if ((fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
 	shutdown_in = prot_new(fd, 0);
 	prot_fgets(buf, sizeof(buf), shutdown_in);
@@ -1047,7 +1048,8 @@ char *user;
 	return;
     }
 
-    sprintf(shutdownfilename, "%s/msg/shutdown", config_dir);
+    snprintf(shutdownfilename, sizeof(shutdownfilename),
+	     "%s/msg/shutdown", config_dir);
     if ((fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
 	shutdown_in = prot_new(fd, 0);
 	prot_fgets(buf, sizeof(buf), shutdown_in);

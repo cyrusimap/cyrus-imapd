@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: user.c,v 1.10.4.1 2002/07/10 20:45:14 rjs3 Exp $
+ * $Id: user.c,v 1.10.4.2 2002/07/25 17:21:45 ken3 Exp $
  */
 
 #include <config.h>
@@ -282,7 +282,7 @@ int user_deletequotas(const char *user)
 
     /* this violates the quota abstraction layer; oh well */
     c = dir_hash_c(user);
-    sprintf(qpath, "%s%s%c/", config_dir, FNAME_QUOTADIR, c);
+    snprintf(qpath, sizeof(qpath), "%s%s%c/", config_dir, FNAME_QUOTADIR, c);
     tail = qpath + strlen(qpath);
 
     dirp = opendir(qpath);

@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squatter.c,v 1.5.4.1 2002/07/10 20:00:07 ken3 Exp $
+ * $Id: squatter.c,v 1.5.4.2 2002/07/25 17:21:45 ken3 Exp $
  */
 
 /*
@@ -225,7 +225,7 @@ static void search_text_receiver(int uid, int part, int cmd,
       break;
     }
 
-    sprintf(buf, "%c%d", part_char, uid);
+    snprintf(buf, sizeof(buf), "%c%d", part_char, uid);
 
     /* don't index document parts that are going to be empty (or too
        short to search) */
@@ -350,7 +350,8 @@ static int index_me(char *name, int matchlen, int maycreate, void *rock) {
 
     /* write an empty document at the beginning to record the validity
        nonce */
-    sprintf(uid_validity_buf, "validity.%ld", m.uidvalidity);
+    snprintf(uid_validity_buf, sizeof(uid_validity_buf), 
+	     "validity.%ld", m.uidvalidity);
     if (squat_index_open_document(data.index, uid_validity_buf) != SQUAT_OK
         || squat_index_close_document(data.index) != SQUAT_OK) {
       fatal_squat_error("Writing index");

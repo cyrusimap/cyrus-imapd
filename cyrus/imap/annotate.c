@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.6 2002/07/20 01:21:12 ken3 Exp $
+ * $Id: annotate.c,v 1.8.6.7 2002/07/25 17:21:40 ken3 Exp $
  */
 
 #include <config.h>
@@ -401,7 +401,7 @@ static int fetch_cb(char *name, int matchlen,
 	entries_ptr = entries_ptr->next) {
 	int appended_one = 0;
 	
-	sprintf(entry, "/mailbox/{%s}%s",
+	snprintf(entry, sizeof(entry), "/mailbox/{%s}%s",
 		ext_mboxname, entries_ptr->entry->name);
 
 	attvalues = NULL;
@@ -427,7 +427,7 @@ static int fetch_cb(char *name, int matchlen,
 	 * an attribute, not wether size is nonzero. */
 	if ((fdata->attribs & ATTRIB_SIZE_SHARED) && result.value) {
 	    appended_one = 1;
-	    sprintf(size, "%u", result.size);
+	    snprintf(size, sizeof(size), "%u", result.size);
 	    appendattvalue(&attvalues, "size.shared", size);
 	}
 
@@ -436,7 +436,8 @@ static int fetch_cb(char *name, int matchlen,
 	if ((fdata->attribs & ATTRIB_MODIFIEDSINCE_SHARED)
 	    && result.value && result.modifiedsince) {
 	    appended_one = 1;
-	    sprintf(modifiedsince, "%d", (int)result.modifiedsince);
+	    snprintf(modifiedsince, sizeof(modifiedsince),
+		     "%d", (int)result.modifiedsince);
 	    appendattvalue(&attvalues, "modifiedsince.shared", modifiedsince);
 	}
 
@@ -557,7 +558,7 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 	    glob_free(&g);
 
 	    if (fdata.entries & SRVENTRY_MOTD) {
-		sprintf(filename, "%s/msg/motd", config_dir);
+		snprintf(filename, sizeof(filename), "%s/msg/motd", config_dir);
 		if ((f = fopen(filename, "r")) != NULL) {
 		    fgets(buf, sizeof(buf), f);
 		    fclose(f);
@@ -569,7 +570,7 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 		    if (fdata.attribs & ATTRIB_VALUE_SHARED)
 			appendattvalue(&attvalues, "value.shared", buf);
 		    if (fdata.attribs & ATTRIB_SIZE_SHARED) {
-			sprintf(size, "%u", strlen(buf));
+			snprintf(size, sizeof(size), "%u", strlen(buf));
 			appendattvalue(&attvalues, "size.shared", size);
 		    }
 
@@ -577,7 +578,8 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 		}
 	    }
 	    if (fdata.entries & SRVENTRY_COMMENT) {
-		sprintf(filename, "%s/msg/comment", config_dir);
+		snprintf(filename, sizeof(filename), 
+			 "%s/msg/comment", config_dir);
 		if ((f = fopen(filename, "r")) != NULL) {
 		    fgets(buf, sizeof(buf), f);
 		    fclose(f);
@@ -589,7 +591,7 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 		    if (fdata.attribs & ATTRIB_VALUE_SHARED)
 			appendattvalue(&attvalues, "value.shared", buf);
 		    if (fdata.attribs & ATTRIB_SIZE_SHARED) {
-			sprintf(size, "%u", strlen(buf));
+			snprintf(size, sizeof(size), "%u", strlen(buf));
 			appendattvalue(&attvalues, "size.shared", size);
 		    }
 
@@ -663,11 +665,11 @@ int annotatemore_store(struct entryattlist *l,
 
     /* XXX check for failures -- how to do this atomic? */
     if (motd) {
-	sprintf(filename, "%s/msg/motd", config_dir);
+	snprintf(filename, sizeof(filename), "%s/msg/motd", config_dir);
 	server_store(filename, value);
     }
     if (comment) {
-	sprintf(filename, "%s/msg/comment", config_dir);
+	snprintf(filename, sizeof(filename), "%s/msg/comment", config_dir);
 	server_store(filename, value);
     }
 

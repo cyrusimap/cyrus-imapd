@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.75.4.3 2002/07/21 14:24:48 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.75.4.4 2002/07/25 17:21:42 ken3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1230,7 +1230,8 @@ void lmtpmode(struct lmtp_func *func,
 #endif
     cd.starttls_done = 0;
 
-    sprintf(shutdownfilename, "%s/msg/shutdown", config_dir);
+    snprintf(shutdownfilename, sizeof(shutdownfilename), 
+	     "%s/msg/shutdown", config_dir);
     max_msgsize = config_getint(IMAPOPT_MAXMESSAGESIZE);
 
     /* If max_msgsize is 0, allow any size */
@@ -1955,6 +1956,13 @@ static int revconvert_lmtp(const char *code)
 	    return IMAP_MAILBOX_NONEXISTENT;
 	}
 	return IMAP_PERMISSION_DENIED;
+    case 552:
+	if (code[6] == '2') {
+	    return IMAP_QUOTA_EXCEEDED;
+	} else if (code[6] == '3') {
+	    return IMAP_MESSAGE_TOO_LARGE;
+	}
+	return IMAP_QUOTA_EXCEEDED;
     case 554:
 	return IMAP_MESSAGE_BADHEADER; /* sigh, pick one */
 

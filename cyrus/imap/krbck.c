@@ -1,5 +1,5 @@
 /* krbck.c -- Test KERBEROS_V4 server configuration
- * $Id: krbck.c,v 1.12 2000/10/26 23:08:46 leg Exp $
+ * $Id: krbck.c,v 1.12.16.1 2002/07/25 17:21:42 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -193,8 +193,8 @@ char **argv;
      * need two options).*/
     infile = fopen(CONFIG_FILENAME, "r");
     if (!infile) {
-        sprintf(buf, "can't open configuration file %s: %s", CONFIG_FILENAME,
-                strerror(errno));
+        snprintf(buf, sizeof(buf), "can't open configuration file %s: %s",
+		CONFIG_FILENAME, strerror(errno));
         fatal(buf, EXIT_CHOKE);
     }
     
@@ -212,7 +212,7 @@ char **argv;
             p++;
         }
         if (*p != ':') {
-            sprintf(buf,
+            snprintf(buf, sizeof(buf),
                     "invalid option name on line %d of configuration file",
                     lineno);
             fatal(buf, EXIT_CHOKE);
@@ -222,7 +222,8 @@ char **argv;
         while (*p && isspace(*p)) p++;
         
         if (!*p) {
-            sprintf(buf, "empty option value on line %d of configuration file",
+            snprintf(buf, sizeof(buf),
+		    "empty option value on line %d of configuration file",
                     lineno);
             fatal(buf, EXIT_CHOKE);
         }
@@ -241,7 +242,8 @@ char **argv;
     fclose(infile);
 
 
-    sprintf(tempbuf, "configdirectory option not set in %s", CONFIG_FILENAME);
+    snprintf(tempbuf, sizeof(tempbuf),
+	     "configdirectory option not set in %s", CONFIG_FILENAME);
     if (evalcheck("looking up configdirectory option", (configdirectory != NULL), tempbuf)) {
 	exit(EXIT_CHOKE);
     } else {
@@ -264,7 +266,8 @@ char **argv;
 	exit(EXIT_CHOKE);
     }
     
-    sprintf(tempbuf, "srvtab option not set in %s", CONFIG_FILENAME);
+    snprintf(tempbuf, sizeof(tempbuf),
+	     "srvtab option not set in %s", CONFIG_FILENAME);
     if (evalcheck("looking up srvtab option", (srvtab != NULL), tempbuf)) {
 	exit(EXIT_CHOKE);
     } else {
@@ -322,7 +325,7 @@ char **argv;
 
     printf("\tserver's Kerberos identity: imap.%s@%s\n", phost, realm);
 
-    sprintf(tktstring, "/tmp/tkt_pid_%d", getpid());
+    snprintf(tktstring, sizeof(tktstring), "/tmp/tkt_pid_%d", getpid());
     krb_set_tkt_string(tktstring);
     if (evalcheck("attempting to get tickets (krb_get_svc_in_tkt)",
 		  (err = krb_get_svc_in_tkt("imap", phost, realm,

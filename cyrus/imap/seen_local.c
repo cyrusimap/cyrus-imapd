@@ -1,5 +1,5 @@
 /* seen_local.c -- Storage for /Recent and /Seen state on local filesystem
- $Id: seen_local.c,v 1.33 2002/05/13 20:32:04 rjs3 Exp $
+ $Id: seen_local.c,v 1.33.4.1 2002/07/25 17:21:45 ken3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -270,7 +270,7 @@ int seen_write(struct seen *seendb, time_t lastread, unsigned int lastuid,
 
     assert(seendb->mailbox->seen_lock_count != 0);
 
-    sprintf(timeuidbuf, "\t%u %u %u ", (unsigned int) lastread, lastuid, (unsigned int) lastchange);
+    snprintf(timeuidbuf, sizeof(timeuidbuf), "\t%u %u %u ", (unsigned int) lastread, lastuid, (unsigned int) lastchange);
     
     length = strlen(seendb->user)+strlen(timeuidbuf)+strlen(seenuids)+1;
 
