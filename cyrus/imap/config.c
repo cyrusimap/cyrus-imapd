@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.62 2003/02/05 20:43:00 ken3 Exp $ */
+/* $Id: config.c,v 1.63 2003/02/05 21:03:32 ken3 Exp $ */
 
 #include <config.h>
 
@@ -423,7 +423,7 @@ static int acl_ok(const char *user, struct auth_state *authstate)
 {
     struct namespace namespace;
     char *acl;
-    char inboxname[1024];
+    char bufuser[MAX_MAILBOX_NAME], inboxname[MAX_MAILBOX_NAME];
     int r;
 
     /* Set namespace */
@@ -432,11 +432,14 @@ static int acl_ok(const char *user, struct auth_state *authstate)
 	fatal(error_message(r), EC_CONFIG);
     }
     
-    mboxname_hiersep_tointernal(&namespace, user);
+    strlcpy(bufuser, user, sizeof(bufuser));
+
+    /* Translate any separators in userid */
+    mboxname_hiersep_tointernal(&namespace, bufuser);
 
     if (!r)
 	r = (*namespace.mboxname_tointernal)(&namespace, "INBOX",
-					     user, inboxname);
+					     bufuser, inboxname);
 
     if (r || !authstate ||
 	mboxlist_lookup(inboxname, NULL, &acl, NULL)) {
