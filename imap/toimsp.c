@@ -23,11 +23,14 @@
  */
 #include <stdio.h>
 #include <ctype.h>
+#include <string.h>
 #include <sysexits.h>
 #include <syslog.h>
 #include <com_err.h>
 
 #include "config.h"
+#include "mailbox.h"
+#include "imap_err.h"
 #include "xmalloc.h"
 
 #define FNAME_DROPDIR "/dropoff/"
@@ -73,7 +76,7 @@ unsigned long uid;
  * message 'uid'.
  */
 int
-drop_last(name, userid, uid)
+drop_seen(name, userid, uid)
 char *name;
 char *userid;
 unsigned long uid;
