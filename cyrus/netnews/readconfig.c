@@ -45,11 +45,11 @@
  *
  */
 
-/* $Id: readconfig.c,v 1.4 2002/05/25 19:57:49 leg Exp $ */
+/* $Id: readconfig.c,v 1.5 2002/08/26 19:20:05 leg Exp $ */
 
 /*     Copyright 1991 Rich Salz.
  *   All rights reserved.
- *   $Revision: 1.4 $
+ *   $Revision: 1.5 $
  *
  *    Redistribution and use in any form are permitted provided that the
  *    following restrictions are are met:
@@ -495,9 +495,8 @@ callback_list(struct imclient *imclient,
     c = imparse_astring(&s, &mailbox);
     if (c != '\0') return;
 
-    if ((strncasecmp(mailbox,"INBOX",5)!=0) && (strncasecmp(mailbox,"user.",5)!=0))
-    {
-
+    /* don't match one of our own INBOXs */
+    if (strncasecmp(mailbox,"INBOX",5) != 0) {
 	Groups[nGroups].Name = malloc( strlen(mailbox)+1);
 	strcpy(Groups[nGroups].Name, mailbox);
 	nGroups++;
