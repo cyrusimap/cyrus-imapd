@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: reconstruct.c,v 1.48 2000/02/17 03:04:30 leg Exp $ */
+/* $Id: reconstruct.c,v 1.49 2000/02/17 08:24:22 leg Exp $ */
 
 #include <config.h>
 
@@ -78,30 +78,41 @@
 #include "retry.h"
 #include "convert_code.h"
 #include "util.h"
+#include "acapmbox.h"
 
 extern int errno;
 extern int optind;
 extern char *optarg;
 
+struct discovered {
+    char *name;
+    struct discovered *next;
+};       
+
 /* forward declarations */
 void do_mboxlist(void);
-int reconstruct(char *name);
+int do_reconstruct(char *name, int matchlen, int maycreate, void *rock);
+int reconstruct(char *name, struct discovered *l);
 void usage(void);
+void shut_down(int code);
 
-extern char *mailbox_findquota P((const char *name));
+extern char *mailbox_findquota(const char *name);
 extern acl_canonproc_t mboxlist_ensureOwnerRights;
 
-int code = 0;
+static acapmbox_handle_t *acaphandle = NULL;
 
-int do_reconstruct();
+int code = 0;
 
 int main(int argc, char **argv)
 {
     int opt, i;
     int rflag = 0;
     int mflag = 0;
+    int fflag = 0;
     char buf[MAX_MAILBOX_PATH];
+    struct discovered head;
 
+    memset(&head, 0, sizeof(head));
     config_init("reconstruct");
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
@@ -110,7 +121,7 @@ int main(int argc, char **argv)
     assert(INDEX_HEADER_SIZE == (OFFSET_UIDVALIDITY+4));
     assert(INDEX_RECORD_SIZE == (OFFSET_USER_FLAGS+MAX_USER_FLAGS/8));
 
-    while ((opt = getopt(argc, argv, "rm")) != EOF) {
+    while ((opt = getopt(argc, argv, "rmf")) != EOF) {
 	switch (opt) {
 	case 'r':
 	    rflag = 1;
@@ -120,42 +131,70 @@ int main(int argc, char **argv)
 	    mflag = 1;
 	    break;
 
+	case 'f':
+	    fflag = 1;
+	    break;
+
 	default:
 	    usage();
 	}
     }
 
     if (mflag) {
-	if (rflag || optind != argc) usage();
+	if (rflag || fflag || optind != argc) usage();
 	do_mboxlist();
     }
+
+    mboxlist_init(0);
+    mboxlist_open(NULL);
+
+    signals_set_shutdown(&shut_down);
+    signals_add_handlers();
 
     mailbox_reconstructmode();
 
     if (optind == argc) {
-	if (!rflag) usage();
+	assert(!rflag);
 	strcpy(buf, "*");
 	mboxlist_findall(buf, 1, 0, 0, do_reconstruct, NULL);
     }
 
     for (i = optind; i < argc; i++) {
+	do_reconstruct(argv[i], 0, 0, fflag ? &head : NULL);
 	if (rflag) {
 	    strcpy(buf, argv[i]);
 	    strcat(buf, ".*");
-	    mboxlist_findall(argv[i], 1, 0, 0, do_reconstruct, NULL);
-	    mboxlist_findall(buf, 1, 0, 0, do_reconstruct, NULL);
-	}
-	else {
-	    do_reconstruct(argv[i], 0, 0);
+	    mboxlist_findall(buf, 1, 0, 0, do_reconstruct, 
+			     fflag ? &head : NULL);
 	}
     }
+
+    /* examine our list to see if we discovered anything */
+    while (head.next) {
+	struct discovered *p;
+	int r;
+
+	p = head.next;
+	head.next = p->next;
+
+	/* create p and reconstruct it */
+	r = mboxlist_createmailbox(p->name, 0, NULL, 1, "cyrus", NULL);
+	if (!r) do_reconstruct(p->name, 0, 0, &head);
+	/* may have added more things into our list */
+
+	free(p->name);
+	free(p);
+    }
+
+    mboxlist_close();
+    mboxlist_done();
 
     exit(code);
 }
 
 void usage(void)
 {
-    fprintf(stderr, "usage: reconstruct [-r] mailbox...\n");
+    fprintf(stderr, "usage: reconstruct [-r] [-f] mailbox...\n");
     fprintf(stderr, "       reconstruct -m\n");
     exit(EC_USAGE);
 }    
@@ -168,19 +207,17 @@ char *a, *b;
 
 #define UIDGROW 300
 
+
 /*
  * mboxlist_findall() callback function to reconstruct a mailbox
  */
 int
-do_reconstruct(name, matchlen, maycreate, rock)
-char *name;
-int matchlen;
-int maycreate;
-void* rock;
+do_reconstruct(char *name, int matchlen, int maycreate, void *rock)
 {
     int r;
 
-    r = reconstruct(name);
+    signals_poll();
+    r = reconstruct(name, rock);
     if (r) {
 	com_err(name, r, (r == IMAP_IOERROR) ? error_message(errno) : NULL);
 	code = convert_code(r);
@@ -195,7 +232,7 @@ void* rock;
 /*
  * Reconstruct the single mailbox named 'name'
  */
-int reconstruct(char *name)
+int reconstruct(char *name, struct discovered *found)
 {
     int r;
     struct mailbox mailbox;
@@ -529,14 +566,47 @@ int reconstruct(char *name)
 	return IMAP_IOERROR;
     }
     
-#if TOIMSP
-    toimsp(mailbox.name, mailbox.uidvalidity,
-	   "UIDNnn", mailbox.last_uid, new_exists, 0);
-#endif
+    acapmbox_setproperty(acaphandle, mailbox.name, ACAPMBOX_UIDVALIDITY,
+			 mailbox.uidvalidity);
 
     fclose(newindex);
     r = seen_reconstruct(&mailbox, (time_t)0, (time_t)0, (int (*)())0, (void *)0);
     mailbox_close(&mailbox);
+
+    if (found) {
+	/* we recurse down this directory to see if there's any mailboxes
+	   under this not in the mailboxes database */
+	dirp = opendir(".");
+
+	while ((dirent = readdir(dirp)) != NULL) {
+	    struct discovered *new;
+
+	    /* mailbox directories never have a dot in them */
+	    if (strchr(dirent->d_name, '.')) continue;
+	    if (stat(dirent->d_name, &sbuf) < 0) continue;
+	    if (!S_ISDIR(sbuf.st_mode)) continue;
+
+	    /* ok, we found a directory that doesn't have a dot in it */
+	    strcpy(fnamebuf, name);
+	    strcat(fnamebuf, ".");
+	    strcat(fnamebuf, dirent->d_name);
+
+	    /* does fnamebuf exist as a mailbox? */
+	    do {
+		r = mboxlist_lookup(fnamebuf, NULL, NULL, NULL);
+	    } while (r == IMAP_AGAIN);
+	    if (!r) continue; /* mailbox exists; it'll be reconstructed
+			         with a -r */
+	    if (r != IMAP_MAILBOX_NONEXISTENT) break; /* erg? */
+	    printf("discovered %s\n", fnamebuf);
+	    new = (struct discovered *) xmalloc(sizeof(struct discovered));
+	    new->name = strdup(fnamebuf);
+	    new->next = found->next;
+	    found->next = new;
+	}
+	closedir(dirp);
+    }
+
     return r;
 }
 
@@ -913,9 +983,28 @@ void do_mboxlist(void)
     exit(0);
 }
 
+/*
+ * Cleanly shut down and exit
+ */
+void shut_down(int code) __attribute__((noreturn));
+void shut_down(int code)
+{
+    mboxlist_close();
+    mboxlist_done();
+    exit(code);
+}
+
 void fatal(const char* s, int code)
 {
+    static int recurse_code = 0;
+
+    if (recurse_code) {
+	/* We were called recursively. Just give up */
+	exit(recurse_code);
+    }
+
+    recurse_code = code;
     fprintf(stderr, "reconstruct: %s\n", s);
-    exit(code);
+    shut_down(code);
 }
 
