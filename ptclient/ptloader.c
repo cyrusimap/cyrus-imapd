@@ -84,6 +84,7 @@ main()
 newclient(c)
 int c;
 {
+    char fnamebuf[1024];
     const char *reply;
     HASHINFO info;
     DB * ptdb;
@@ -162,27 +163,31 @@ int c;
     datalist.size = us.ngroups*PR_MAXNAMELEN;
     indata[key.size-4] = 'H';
   
-    fd=open(DBLOCK, O_CREAT|O_TRUNC|O_RDWR, 0644);
+    strcpy(fnamebuf, STATEDIR);
+    strcat(fnamebuf, PTS_DBLOCK);
+    fd=open(fnamebuf, O_CREAT|O_TRUNC|O_RDWR, 0644);
     if (fd == -1) {
-        syslog(LOG_ERR, "IOERROR: creating lock file %s: %m", DBLOCK);
+        syslog(LOG_ERR, "IOERROR: creating lock file %s: %m", fnamebuf);
         reply="Couldn't lock database";
         goto sendreply;
     }
     if (lock_blocking(fd) < 0) {
-        syslog(LOG_ERR, "IOERROR: locking lock file %s: %m", DBLOCK);
+        syslog(LOG_ERR, "IOERROR: locking lock file %s: %m", fnamebuf);
         reply="Couldn't lock database";
         goto sendreply;
     }
-    ptdb=dbopen(DBFIL, O_RDWR, 0, DB_HASH, &info);
+    strcpy(fnamebuf, STATEDIR);
+    strcat(fnamebuf, PTS_DBFIL);
+    ptdb=dbopen(fnamebuf, O_RDWR, 0, DB_HASH, &info);
     if (!ptdb) {
-        syslog(LOG_ERR, "IOERROR: opening database %s: %m", DBFIL);
+        syslog(LOG_ERR, "IOERROR: opening database %s: %m", fnamebuf);
         close(fd);
         reply="Couldn't open database";
         goto sendreply;
     }
     rc=PUT(ptdb, &key, &dataheader, 0);
     if (rc < 0) {
-        syslog(LOG_ERR, "IOERROR: writing database %s: %m", DBFIL);
+        syslog(LOG_ERR, "IOERROR: writing database %s: %m", fnamebuf);
         CLOSE(ptdb);
         close(fd);
         reply="Couldn't write database";
@@ -192,7 +197,7 @@ int c;
     indata[key.size-4] = 'D';
     rc=PUT(ptdb, &key, &datalist, 0);
     if (rc < 0) {
-        syslog(LOG_ERR, "IOERROR: writing database %s: %m", DBFIL);
+        syslog(LOG_ERR, "IOERROR: writing database %s: %m", fnamebuf);
         CLOSE(ptdb);
         close(fd);
     }

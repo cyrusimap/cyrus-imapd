@@ -64,7 +64,8 @@ const char **reply;
 
     memset((char *)&srvaddr, 0, sizeof(srvaddr));
     srvaddr.sun_family = AF_UNIX;
-    strcpy(srvaddr.sun_path, "/etc/pwcheck/pwcheck");
+    strcpy(srvaddr.sun_path, STATEDIR);
+    strcat(srvaddr.sun_path, "/pwcheck/pwcheck");
     r = connect(s, (struct sockaddr *)&srvaddr, sizeof(srvaddr));
     if (r == -1) {
 	*reply = "cannot connect to pwcheck server";

@@ -302,6 +302,7 @@ const char *cacheid;
     DBT key, dataheader,datalist;
     char keydata[PR_MAXNAMELEN + 4]; /* or 20, whichever is greater */
     int fd,rc,xpid;
+    char fnamebuf[1024];
     DB *ptdb;
     HASHINFO info;
     ptluser us;
@@ -333,33 +334,37 @@ const char *cacheid;
     info.ffactor = 8;
     key.data = keydata;
     key.size = 20;
-    fd=open(DBLOCK, O_CREAT|O_TRUNC|O_RDWR, 0644);
+    strcpy(fnamebuf, STATEDIR);
+    strcat(fnamebuf, PTS_DBLOCK);
+    fd = open(fnamebuf, O_CREAT|O_TRUNC|O_RDWR, 0644);
     if (fd == -1) {
-        syslog(LOG_ERR, "IOERROR: creating lock file %s: %m", DBLOCK);
+        syslog(LOG_ERR, "IOERROR: creating lock file %s: %m", fnamebuf);
         return newstate;
     }
     if (lock_shared(fd) < 0) {
-        syslog(LOG_ERR, "IOERROR: locking lock file %s: %m", DBLOCK);
+        syslog(LOG_ERR, "IOERROR: locking lock file %s: %m", fnamebuf);
         return newstate;
     }
-    ptdb = dbopen(DBFIL, O_RDONLY, 0, DB_HASH, &info);
+    strcpy(fnamebuf, STATEDIR);
+    strcat(fnamebuf, PTS_DBFIL);
+    ptdb = dbopen(fnamebuf, O_RDONLY, 0, DB_HASH, &info);
     if (!ptdb) {
 	if (errno == ENOENT) {
 	    /*
 	     * Hopefully, this should prevent two different processes from
 	     * trying to create the database at the same time
 	     */
-	    ptdb = dbopen(DBFIL, O_CREAT|O_RDWR|O_EXCL, 0644, DB_HASH, &info);
+	    ptdb = dbopen(fnamebuf, O_CREAT|O_RDWR|O_EXCL, 0644, DB_HASH, &info);
 	    if (!ptdb && errno == EEXIST) {
-		ptdb = dbopen(DBFIL,O_RDONLY,0,DB_HASH,&info);
+		ptdb = dbopen(fnamebuf, O_RDONLY, 0, DB_HASH, &info);
 		if (!ptdb) {
-		    syslog(LOG_ERR, "IOERROR: opening database %s: %m", DBFIL);
+		    syslog(LOG_ERR, "IOERROR: opening database %s: %m", fnamebuf);
 		    close(fd);
 		    return newstate;
 		}
 	    }
 	    else if (!ptdb) {
-		syslog(LOG_ERR, "IOERROR: creating database %s: %m", DBFIL);
+		syslog(LOG_ERR, "IOERROR: creating database %s: %m", fnamebuf);
 		CLOSE(ptdb);
 		close(fd);
 		return newstate;
@@ -375,7 +380,7 @@ const char *cacheid;
 		dataheader.data = "NULL";
 		if (PUT(ptdb, &key, &dataheader, 0) < 0) {
 		    syslog(LOG_ERR, "IOERROR: initializing database %s: %m",
-			   DBFIL); 
+			   fnamebuf); 
 		    CLOSE(ptdb);
 		    close(fd);
 		    return newstate;
@@ -383,21 +388,21 @@ const char *cacheid;
 		/* close and reopen the database in read-only mode */
 		if (CLOSE(ptdb) < 0) {
 		    syslog(LOG_ERR, "IOERROR: initializing database %s: %m",
-			   DBFIL); 
+			   fnamebuf); 
 		    close(fd);
 		    return newstate;
 		}
-		ptdb = dbopen(DBFIL, O_RDONLY, 0644, DB_HASH, &info);
+		ptdb = dbopen(fnamebuf, O_RDONLY, 0644, DB_HASH, &info);
 		if (!ptdb) {
 		    syslog(LOG_ERR, "IOERROR: reopening new database %s: %m",
-			   DBFIL); 
+			   fnamebuf); 
 		    close(fd);
 		    return newstate;
 		}
 	    }          
 	}
 	else {
-	    syslog(LOG_ERR, "IOERROR: opening database %s: %m", DBFIL);
+	    syslog(LOG_ERR, "IOERROR: opening database %s: %m", fnamebuf);
 	    close(fd);
 	    return newstate;
 	}
@@ -424,14 +429,14 @@ const char *cacheid;
     rc = GET(ptdb, &key, &dataheader, 0);
     keydata[key.size-4] = 0;
     if (rc < 0) {
-        syslog(LOG_ERR, "IOERROR: reading database %s: %m", DBFIL);
+        syslog(LOG_ERR, "IOERROR: reading database %s: %m", fnamebuf);
         CLOSE(ptdb);
         close(fd);
         return newstate;
     }
     if (!rc) {
         if(dataheader.size != sizeof(ptluser)) {
-            syslog(LOG_ERR, "IOERROR: Database %s probably corrupt", DBFIL);
+            syslog(LOG_ERR, "IOERROR: Database %s probably corrupt", fnamebuf);
             CLOSE(ptdb);
             close(fd);
             return newstate;
@@ -446,9 +451,12 @@ const char *cacheid;
         s = socket(AF_UNIX, SOCK_STREAM, 0);
         if (s == -1) return newstate;
         
+	strcpy(fnamebuf, STATEDIR);
+	strcat(fnamebuf, PTS_DBSOCKET);
+
         memset((char *)&srvaddr, 0, sizeof(srvaddr));
         srvaddr.sun_family = AF_UNIX;
-        strcpy(srvaddr.sun_path, DBSOCKET);
+        strcpy(srvaddr.sun_path, fnamebuf);
         r = connect(s, (struct sockaddr *)&srvaddr, sizeof(srvaddr));
         if (r == -1) {
 	    /* *reply = "cannot connect to ptloader server";*/
@@ -478,18 +486,22 @@ const char *cacheid;
 
         /* The database must be re-opened after external modifications, at
            least in db 1.1.85 */
-        fd = open(DBLOCK, O_CREAT|O_TRUNC|O_RDWR, 0644);
+	strcpy(fnamebuf, STATEDIR);
+	strcat(fnamebuf, PTS_DBLOCK);
+        fd = open(fnamebuf, O_CREAT|O_TRUNC|O_RDWR, 0644);
         if (fd == -1) {
-            syslog(LOG_ERR, "IOERROR: creating lock file %s: %m", DBLOCK);
+            syslog(LOG_ERR, "IOERROR: creating lock file %s: %m", fnamebuf);
             return newstate;
         }
         if (lock_shared(fd) < 0) {
-            syslog(LOG_ERR, "IOERROR: locking lock file %s: %m", DBLOCK);
+            syslog(LOG_ERR, "IOERROR: locking lock file %s: %m", fnamebuf);
             return newstate;
         }
-        ptdb = dbopen(DBFIL, O_RDONLY, 0, DB_HASH, &info);
+	strcpy(fnamebuf, STATEDIR);
+	strcat(fnamebuf, PTS_DBFIL);
+        ptdb = dbopen(fnamebuf, O_RDONLY, 0, DB_HASH, &info);
         if (!ptdb) {
-            syslog(LOG_ERR, "IOERROR: opening database %s: %m", DBFIL);
+            syslog(LOG_ERR, "IOERROR: opening database %s: %m", fnamebuf);
             close(fd);
             return newstate;
         }
@@ -536,12 +548,12 @@ const char *cacheid;
     CLOSE(ptdb);    
     close(fd);
     if (rc < 0) {
-        syslog(LOG_ERR, "IOERROR: reading database %s: %m", DBFIL);
+        syslog(LOG_ERR, "IOERROR: reading database %s: %m", fnamebuf);
         return newstate;
     }
     if (rc) {
         syslog(LOG_ERR,
-               "Database %s inconsistent: header record found, data record missing", DBFIL);
+               "Database %s inconsistent: header record found, data record missing", fnamebuf);
         return newstate;
     }
     newstate->ngroups = us.ngroups;
