@@ -42,7 +42,7 @@
  * Start Date: 4/5/93
  */
 /*
- * $Id: glob.c,v 1.30 2003/12/08 20:25:42 rjs3 Exp $
+ * $Id: glob.c,v 1.31 2003/12/08 20:57:13 rjs3 Exp $
  */
 
 #include <config.h>
@@ -317,13 +317,6 @@ int glob_test (g, ptr, len, min)
 		    break;
 		}
 		
-		/* have we hit the end of the pattern? */
-		if(!*gptr) {
-		    if(pstar == pend) {
-			printf("endofboth\n");
-		    }
-		}
-
 		/* look for a match with first char following '*' */
 		while (pstar != pend && *gstar != *pstar) ++pstar;
 		if (pstar == pend) {
