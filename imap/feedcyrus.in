@@ -25,24 +25,24 @@ test -z "${D_FLAG}" && {
     chmod 0660 ${LOG}
     exec >>${LOG} 2>&1
 }
-PPID=$$
-echo "${PROGNAME}: [${PPID}] start"
+PARENTPID=$$
+echo "${PROGNAME}: [${PARENTPID}] start"
 
 ##  Set up environment.
-export BATCH PROGNAME PPID CYRUS_DIR
+export BATCH PROGNAME PARENTPID CYRUS_DIR
 
 ##  Loop over all sites.
 for PROG in collectnews; do
 
     ##  Start sending this site in the background.
-    export PROG LOCKS BATCHFILE PROGNAME PPID TMPDIR
+    export PROG LOCKS BATCHFILE PROGNAME PARENTPID TMPDIR
     sh -c '
 	BATCHFILE=${PROG}.input
 	LOCK=${LOCKS}/LOCK.${PROG}
 	trap "rm -f ${LOCK} ; exit 1" 1 2 3 15
 	shlock -p $$ -f ${LOCK} || {
 	    WHY="`cat ${LOCK}`"
-	    echo "${PROGNAME}: [${PPID}:$$] ${PROG} locked ${WHY} `date`"
+	    echo "${PROGNAME}: [${PARENTPID}:$$] ${PROG} locked ${WHY} `date`"
 	    exit
 	}
 	if [ -f ${PROG}.work ] ; then
@@ -58,9 +58,9 @@ for PROG in collectnews; do
 		mv ${PROG}.work ${BATCHFILE}
 	    fi
 	    if [ -s ${BATCHFILE} ] ; then
-		echo "${PROGNAME}: [${PPID}:$$] begin ${PROG} `date`"
+		echo "${PROGNAME}: [${PARENTPID}:$$] begin ${PROG} `date`"
 		${CYRUS_DIR}/${PROG} < ${BATCH}/${BATCHFILE} && rm -f ${BATCHFILE} 
-		echo "${PROGNAME}: [${PPID}:$$] end ${PROG} `date`"
+		echo "${PROGNAME}: [${PARENTPID}:$$] end ${PROG} `date`"
 	    else
 		rm -f ${BATCHFILE}
 	    fi
@@ -71,4 +71,4 @@ for PROG in collectnews; do
 done
 
 wait
-echo "${PROGNAME}: [${PPID}] stop"
+echo "${PROGNAME}: [${PARENTPID}] stop"
