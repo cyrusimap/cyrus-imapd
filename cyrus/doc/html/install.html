@@ -1,6 +1,7 @@
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
+<!-- Changed by: John Gardiner Myers, 20-Sep-1995 -->
 </HEAD>
 <BODY>
 <h1>           Installing and Configuring the Cyrus IMAP Server</h1>
@@ -19,8 +20,8 @@ discussion of this server and other Cyrus software.  Send mail to
 
 Once you have unpacked the files (see the <A
 HREF="readme.html"><TT>README</TT></A> file for more information),
-"<TT>cd</TT>" to the "<tt>imapd-1.3</tt>" directory (This document
-assumes that the version number is 1.3.). The configuration files and
+"<TT>cd</TT>" to the "<tt>imapd-1.4</tt>" directory (This document
+assumes that the version number is 1.4.). The configuration files and
 various subdirectories are stored there.  In the directory that the
 <TT>configure</TT> file is in, type "<kbd>./configure</kbd>" to
 configure the software.
@@ -47,6 +48,25 @@ where you want the object files and executables to go and run the
 "<tt>configure</tt>" script.  "<tt>configure</tt>" automatically
 checks for the source code in the directory that "<tt>configure</tt>"
 is in and in "<tt>..</tt>".
+
+<P>By default, "<TT>make install</TT>" will install files (other than
+server-specific programs) in "<TT>/usr/local/bin</TT>",
+"<TT>/usr/local/man</TT>", etc.  You can specify an installation
+prefix other than "<TT>/usr/local</TT>" by giving "<TT>configure</TT>"
+the option "<TT>--prefix=PATH</TT>".
+
+<P>You can specify separate installation prefixes for
+architecture-specific files and architecture-independent files.  If
+you give "<TT>configure</TT>" the option
+"<TT>--exec-prefix=PATH</TT>", the package will use <TT>PATH</TT> as
+the prefix for installing programs and libraries.  Documentation and
+other data files will still use the regular prefix.
+
+<P>By default, "<TT>make install</TT>" will install the
+server-specific programs in "<TT>/usr/cyrus/bin</TT>".  You can
+specify a server-specific installation prefix other than
+"<TT>/usr/cyrus</TT>" by giving "<TT>configure</TT>" the option
+"<TT>--with-cyrus-prefix=PATH</TT>".
 
 <p>Here are a list of switches that can be used with "<A
 NAME="configure"><tt>configure</tt></A>".
@@ -109,6 +129,24 @@ The selected authorization module must be compatible with the
 login module.  By default, uses the authorization module with 
 the same name as the selected login module. <P>
 
+<dt><tt>--with-notify=METHOD</tt>
+<dt><tt>--without-notify</tt>
+<dd>Specifies the new mail notification method to use.
+Currently implemented notification methods are:
+
+<dl compact> 
+
+<DT><tt>zephyr</tt>
+<DD>New mail notification through Zephyr
+
+<DT><tt>no</tt>
+<DD>No new mail notification
+
+</dl>
+
+By default, uses "<TT>zephyr</TT>" if the Zephyr libraries are available, 
+otherwise "<TT>no</TT>".<P>
+
 <dt><tt>--with-inn=PATH</tt>
 <dd>Specifies the location of INN's <TT>NEWSLIB</TT> directory.  By
 default, looks for INN in a few common places.  It is not necessary
@@ -127,10 +165,17 @@ Kerberos v4 support from being compiled in. <P>
 <dt><tt>--without-tcl</tt>
 <dd>Specifies the path to the Tcl library and header file (optional).
 By default, looks in "<tt>/usr/local</tt>" and then in the compiler's
-default link path.  The Tcl libraries are needed to compile
+default link path.  The Tcl library is needed to compile
 "<tt>cyradm</tt>", the administrative client.  Either
 "<tt>--without-tcl</tt>" or "<tt>--with-tcl=no</tt>" prevents cyradm from
 being compiled. <P>
+
+<dt><tt>--with-zephyr=PATH</tt>
+<dt><tt>--without-zephyr</tt>
+<dd>Specifies the path to the Zephyr library and header file
+(optional).  By default, looks in "<tt>/usr/local</tt>" and then in
+the compiler's default link path.  The Zephyr library is optional, if
+found it may be used to notify users of new mail.<P>
 
 <dt><tt>--with-lock=METHOD</tt>
 <dd>Specifies the locking method to use.  Currently implemented locking
@@ -153,6 +198,12 @@ the appropriate routines in the authentication libraries (for example,
 <TT>krb_rd_priv()</TT> and <TT>krb_mk_priv()</TT> for Kerberos v4) or
 are compiling binaries subject to export control restrictions.
 
+<dt><tt>--enable-amssync</tt>
+<dd>Include AMS (Andrew Message System) to IMAP bboard synchronization
+support.  Requires the AMS libraries.
+
+<dt><tt>--enable-cmulocal</tt>
+<dd>Include Carnegie Mellon's internal support features.
 </dl>
 
 "<tt>configure</tt>" ignores any other arguments that you give it.
@@ -167,7 +218,7 @@ on the command line like this:
    CC=c89 CFLAGS=-O2 LIBS=-lposix ./configure
 </pre>
 
-Or on systems that have the `env' program, you can do it like this:
+Or on systems that have the "<TT>env</TT>" program, you can do it like this:
 
 <pre>
    env CPPFLAGS=-I/usr/local/include LDFLAGS=-s ./configure
@@ -243,57 +294,49 @@ examples in this document assume a user of "<tt>cyrus</tt>" and
 a group of "<tt>mail</tt>", though any user and group name can be used.
  <P>
 
-<li>After you've logged in as "<tt>root</tt>", install the "<A
-HREF="deliver.8.html"><tt>deliver</tt></A>", "<A
-HREF="imapd.8.html"><tt>imapd</tt></A>", and "<A
-HREF="pop3d.8.html"><tt>pop3d</tt></A>" programs. We recommend
-installing them in the "<tt>/usr/etc</tt>" directory.  Change directory
-to "<tt>imap</tt>", a subdirectory of <tt>imapd-1.3</tt>.  Make "<A
-NAME="deliver"><tt>deliver</tt></A>" setuid to the Cyrus user:
+<li>Log in as the cyrus user and install the cyrus software.
 
 <pre>
-<kbd>   install -s deliver /usr/etc/deliver
-   install -s imapd /usr/etc/imapd
-   install -s pop3d /usr/etc/pop3d
-   chown cyrus /usr/etc/deliver
-   chgrp mail /usr/etc/deliver
-   chmod 4750 /usr/etc/deliver
+<kbd>   make install
 </kbd></pre>
+
+<li> Log in as root to perform the rest of the configuration steps.
 
 <li>The Cyrus IMAP server uses the 4.3BSD syslog that separates
 messages into both levels and categories.  Invoke "<kbd>man
 syslog</kbd>" to see if "<tt>openlog()</tt>" takes three arguments. If
 it does not, replace the system "<tt>syslogd</tt>" and
 "<tt>syslog.conf</tt>" with the files provided in the <A
-NAME="syslog"><tt>imapd-1.3/syslog</tt></A> directory.
+NAME="syslog"><tt>imapd-1.4/syslog</tt></A> directory.
 
 <pre>
 <kbd>   mv syslogd /etc/syslogd
    mv syslog.conf /etc/syslog.conf
 </kbd></pre>
 
-If you do not copy the latest "<tt>syslog.conf</tt>" file to the 
+If you do not copy the "<tt>syslog.conf</tt>" file in 
+"<TT>imapd-1.4/syslog</TT>" to the 
 "<tt>/etc</tt>" directory, be sure to add support for
 "<tt>local6.debug</tt>".  The file should include a line like:
 
 <pre>
-   local6.debug  /usr/adm/imapd.log
+   local6.debug  /var/adm/imapd.log
 </pre>
 
 Create the <TT>imapd.log</TT> file:
 
 <pre>
-<kbd>   touch /usr/adm/imapd.log
+<kbd>   touch /var/adm/imapd.log
 </kbd></pre>
 
 <li>Create the file "<tt>/etc/imapd.conf</tt>". Here is a sample
 "<tt>imapd.conf</tt>" with a minimal number of values defined:
 
 <pre>
-   configdirectory: /usr/cyrus
-   partition-default: /usr/spool/cyrus
+   configdirectory: /var/cyrus
+   partition-default: /var/spool/cyrus
    admins: curtj abell
-   srvtab: /usr/cyrus/srvtab
+   srvtab: /var/cyrus/srvtab
 </pre>
 
 For a description of all the fields in this file, see the <A
@@ -306,12 +349,12 @@ configuration directory is similar in concept to the
 "<tt>/usr/lib/news</tt>" directory.  It stores information about the
 IMAP server as a whole.
 
-<p>This document uses the configuration directory "<tt>/usr/cyrus</tt>"
+<p>This document uses the configuration directory "<tt>/var/cyrus</tt>"
 in its examples.  This directory should be owned by the
 cyrus user and group and should not permit access to other users.
 
 <pre>
-<kbd>   cd /usr
+<kbd>   cd /var
    mkdir cyrus
    chown cyrus cyrus
    chgrp mail cyrus
@@ -334,10 +377,10 @@ and a set of empty directories:
 "<tt>/etc/imapd.conf</tt>" file.
 
 <p>This document uses a default partition directory of 
-"<tt>/usr/spool/cyrus</tt>" in the following example:
+"<tt>/var/spool/cyrus</tt>" in the following example:
 
 <pre>
-<kbd>   cd /usr/spool
+<kbd>   cd /var/spool
    mkdir cyrus
    chown cyrus cyrus
    chgrp mail cyrus
@@ -345,12 +388,29 @@ and a set of empty directories:
 </kbd></pre>
 
 The partition directory is similar in concept to
-<tt>/usr/spool/news</tt>.  It is where the mailboxes are stored.
+<tt>/var/spool/news</tt>.  It is where the mailboxes are stored.
 Unlike most netnews systems, Cyrus allows you to have more
 than one partition.  Do not use the string "<tt>news</tt>" as a
 partition name, as it is reserved for netnews.
 
  <P>
+
+<li>LINUX SYSTEMS ONLY: Set the configuration, user, quota, and
+partition directories to update synchronously.  Failure to do this may
+lead to data corruption and/or loss of mail after a system crash.
+
+<pre>
+<kbd>   cd /var/cyrus
+   chattr +S . user quota
+   chattr +S /var/spool/cyrus
+</kbd></pre>
+
+Also set the queue directory of the mail daemon to update
+synchronously.  The following example is for sendmail:
+
+<pre>
+<kbd>   chattr +S /var/spool/mqueue
+</kbd></pre>
 
 <li>If the Cyrus IMAP server was compiled with Kerberos v4 authentication,
 create a Kerberos v4 identity for the server and add the server's key to
@@ -363,7 +423,7 @@ name and "<tt>REALM</tt>" is the machine's Kerberos realm.
 host named "<tt>foobar</tt>":
 
 <pre>
-<kbd>   ksrvutil -f /usr/cyrus/srvtab add  
+<kbd>   ksrvutil -f /var/cyrus/srvtab add  
 </kbd></pre>
 
 Here is the information "<tt>ksrvutil</tt>" requests.  Respond by
@@ -402,31 +462,31 @@ aren't already there.
 <li>Add the following line to the "<tt>/etc/inetd.conf</tt>" file.
 
 <pre>
-   imap  stream  tcp  nowait  cyrus  /usr/etc/imapd  imapd
+   imap  stream  tcp  nowait  cyrus  /usr/cyrus/bin/imapd  imapd
 </pre>
 
 If you want to run the POP3 protocol, add the following line.
 
 <pre>
-   pop3  stream  tcp  nowait  cyrus  /usr/etc/pop3d  pop3d
+   pop3  stream  tcp  nowait  cyrus  /usr/cyrus/bin/pop3d  pop3d
 </pre>
 
 If you want to run MIT's KPOP (Kerberized POP)
 protocol, add the following line
 
 <pre>
-   kpop  stream  tcp  nowait  cyrus  /usr/etc/pop3d  pop3d -k
+   kpop  stream  tcp  nowait  cyrus  /usr/cyrus/bin/pop3d  pop3d -k
 </pre>
 
-"<tt>cyrus</tt>" is the Cyrus user and "<tt>/usr/etc/</tt>" is the
+"<tt>cyrus</tt>" is the Cyrus user and "<tt>/usr/cyrus/bin/</tt>" is the
 path name to the executable.
 
  <P>
 
 <li>Modify the "<tt>sendmail.cf</tt>" file to have the local mailer call
-"<tt>/usr/etc/deliver</tt>" instead of "<tt>/bin/mail</tt>".  On the line
+"<tt>/usr/cyrus/bin/deliver</tt>" instead of "<tt>/bin/mail</tt>".  On the line
 beginning with "<tt>Mlocal</tt>", change the "<tt>P=/bin/mail,</tt>" to
-"<tt>P=/usr/etc/deliver,</tt>" and add the "<tt>S</tt>" character to the
+"<tt>P=/usr/cyrus/bin/deliver,</tt>" and add the "<tt>S</tt>" character to the
 "<tt>F=</tt>" field.
 
 <P>If you want to enable duplicate delivery suppression, add the
@@ -434,7 +494,7 @@ beginning with "<tt>Mlocal</tt>", change the "<tt>P=/bin/mail,</tt>" to
 two messages with the same <TT>Message-ID:</TT>
 (<TT>Resent-Message-ID:</TT> if it exits) from being delivered to the
 same mailbox.  Periodically prune the database of deliveries by
-running "<TT>/usr/etc/deliver -E 3</TT>" daily as the cyrus user.
+running "<TT>/usr/cyrus/bin/deliver -E 3</TT>" daily as the cyrus user.
 
 </ol>
 
@@ -458,7 +518,7 @@ If your server is running, you'll get the following message:
    Trying 128.2.44.20...
    Connected to foobar.andrew.cmu.edu.
    Escape character is '^]'.
-   * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.3 server ready
+   * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.4 server ready
 </pre>
 
 Any message other than one starting with "<tt>* OK</tt>" means there
@@ -466,7 +526,7 @@ is a problem.  To terminate the connection, type "<kbd>. logout</kbd>".
 
 <P>
 <li>Use "<tt>imtest</tt>" to test logging in with plaintext passwords.  Change
-to the "<tt>imapd-1.3</tt>" directory and type the following.
+to the "<tt>imapd-1.4</tt>" directory and type the following.
 
 <pre>
 <kbd>   imtest/imtest -p foobar imap
@@ -475,7 +535,7 @@ to the "<tt>imapd-1.3</tt>" directory and type the following.
 If your server is running, you'll get the following message:
 
 <pre>
-   * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.3 server ready
+   * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.4 server ready
    Password: <var>&lt;enter your password, imtest does not echo it&gt;</var>
    . LOGIN smith X
    . OK User logged in
@@ -489,11 +549,11 @@ connection, type "<kbd>. logout</kbd>".
 <P>
 <li>If the server is compiled with Kerberos v4 authentication, test
 Kerberos authentication by using the imtest command.  Change
-to the "<tt>cyrus-v1.3</tt>" directory and type the following:
+to the "<tt>cyrus-v1.4</tt>" directory and type the following:
 
 <pre>
    <kbd>imtest/imtest -k foobar imap</kbd>
-   * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.3 server ready
+   * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.4 server ready
    . AUTHENTICATE KERBEROS_V4
    + Ln8h6Q==
    BAcBQU5EUkVXLkNNVS5FRFUAOCA+0y5YnrqIVikng46sam7RSObZXCVSA9xCx
