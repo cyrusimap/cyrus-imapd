@@ -1,9 +1,39 @@
-ACL=acl_afs.o
+# Makefile for cyrus library
+# 
+#	(C) Copyright 1993 by Carnegie Mellon University
+# 
+#                      All Rights Reserved
+# 
+# Permission to use, copy, modify, and distribute this software and its 
+# documentation for any purpose and without fee is hereby granted, 
+# provided that the above copyright notice appear in all copies and that
+# both that copyright notice and this permission notice appear in 
+# supporting documentation, and that the name of CMU not be
+# used in advertising or publicity pertaining to distribution of the
+# software without specific, written prior permission.  
+# 
+# CMU DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING
+# ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL
+# CMU BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR
+# ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+# WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+# ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
+# SOFTWARE.
+# 
+
+# Authorization namespace.  Two choices:
+#
+# Kerberos
 AUTH=auth_krb.o kerberos.o
+# Unix passwd file
+#AUTH=auth_unix.o
+
+# ACL interpretation.  Only one choice for now:
+ACL=acl_afs.o
 
 OPT=-g
 
-OBJS= acl.o assert.o glob.o util.o n_binsearch.o xmalloc.o \
+OBJS= acl.o assert.o charset.o glob.o util.o n_binsearch.o xmalloc.o \
 	$(ACL) $(AUTH)
 
 CFLAGS=$(OPT) $(DEFINES) -I/usr/local/include
@@ -32,6 +62,12 @@ auth_krb.o: /usr/local/include/mit-cpyright.h
 auth_unix.o: /usr/include/pwd.h /usr/include/sys/types.h
 auth_unix.o: /usr/include/sys/stdtypes.h /usr/include/sys/sysmacros.h
 auth_unix.o: /usr/include/grp.h xmalloc.h
+charset.o: /usr/include/stdio.h /usr/include/ctype.h /usr/include/string.h
+charset.o: /usr/include/sys/stdtypes.h assert.h xmalloc.h charset.h
+charset.o: charset/us-ascii.h charset/iso-8859-1.h charset/iso-8859-2.h
+charset.o: charset/iso-8859-3.h charset/iso-8859-4.h charset/iso-8859-5.h
+charset.o: charset/iso-8859-6.h charset/iso-8859-7.h charset/iso-8859-8.h
+charset.o: charset/iso-8859-9.h
 glob.o: /usr/include/stdio.h /usr/include/ctype.h util.h glob.h
 kerberos.o: /usr/include/stdio.h /usr/include/string.h
 kerberos.o: /usr/include/sys/stdtypes.h /usr/include/netdb.h
