@@ -72,7 +72,7 @@
  * may contain an explanatory message.
  *
  *
- * $Id: smmapd.c,v 1.3 2004/02/09 20:23:57 ken3 Exp $
+ * $Id: smmapd.c,v 1.4 2004/02/11 19:38:51 rjs3 Exp $
  */
 
 #include <config.h>
@@ -85,6 +85,7 @@
 #include <syslog.h>
 #include <signal.h>
 #include <com_err.h>
+#include <ctype.h>
 
 #include "acl.h"
 #include "append.h"
@@ -92,6 +93,7 @@
 #include "global.h"
 #include "exitcodes.h"
 #include "imap_err.h"
+#include "util.h"
 
 const char *BB = "";
 
@@ -207,7 +209,7 @@ int verify_user(const char *user, long quotacheck,
     int r = 0;
     int sl = strlen(BB);
     char *domain = NULL;
-    int userlen = strlen(user), domainlen = 0;
+    size_t userlen = strlen(user), domainlen = 0;
 
     if ((domain = strchr(user, '@'))) {
 	userlen = domain - user;
@@ -269,7 +271,7 @@ int begin_handling(void)
 	int r = 0, sawdigit = 0, len = 0, size = 0;
 	struct auth_state *authstate = NULL;
 	char request[MAXREQUEST+1];
-	char *mapname, *key;
+	char *mapname = NULL, *key = NULL;
 	const char *errstring = NULL;
 
 	signals_poll();
