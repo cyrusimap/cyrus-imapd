@@ -1199,14 +1199,41 @@ index_listflags(mailbox)
 struct mailbox *mailbox;
 {
     int i;
+    int cancreate = 0;
+    char sepchar = '(';
 
     printf("* FLAGS (\\Answered \\Flagged \\Deleted \\Seen");
     for (i = 0; i < MAX_USER_FLAGS; i++) {
 	if (mailbox->flagname[i]) {
 	    printf(" %s", mailbox->flagname[i]);
 	}
+	else cancreate++;
     }
-    printf(")\r\n");
+    printf(")\r\n* OK [PERMANENTFLAGS ");
+    if (mailbox->myrights & ACL_WRITE) {
+	printf("%c\\Answered \\Flagged", sepchar);
+	sepchar = ' ';
+    }
+    if (mailbox->myrights & ACL_DELETE) {
+	printf("%c\\Deleted", sepchar);
+	sepchar = ' ';
+    }
+    if (mailbox->myrights & ACL_SEEN) {
+	printf("%c\\Seen", sepchar);
+	sepchar = ' ';
+    }
+    if (mailbox->myrights & ACL_WRITE) {
+	for (i = 0; i < MAX_USER_FLAGS; i++) {
+	    if (mailbox->flagname[i]) {
+		printf(" %s", mailbox->flagname[i]);
+	    }
+	}
+	if (cancreate) {
+	    printf(" \\*");
+	}
+    }
+    if (sepchar == '(') printf("(");
+    printf(")] \r\n");
 }
 
 /*
@@ -1594,6 +1621,7 @@ char *rock;
     copyargs->copymsg[copyargs->nummsg].header_size = HEADER_SIZE(msgno);
     copyargs->copymsg[copyargs->nummsg].cache_begin = cache_base + CACHE_OFFSET(msgno);
     if (mailbox->format != MAILBOX_FORMAT_NORMAL) {
+	/* Force copy and re-parse of message */
 	copyargs->copymsg[copyargs->nummsg].cache_len = 0;
     }
     else if (msgno < imapd_exists) {
