@@ -46,7 +46,7 @@ cyrus_prefix = @cyrus_prefix@
 all:
 
 install:
-	$(INSTALL) -m 644 depot.conf $(DESTDIR)
+	$(INSTALL) -m 644 $(srcdir)/depot.conf $(DESTDIR)
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<

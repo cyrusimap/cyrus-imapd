@@ -19,6 +19,7 @@ AC_CHECK_HEADERS(unistd.h)
 AC_REPLACE_FUNCS(bcopy strcasecmp ftruncate getdtablesize)
 AC_HEADER_DIRENT
 AC_SUBST(CPPFLAGS)
+AC_SUBST(PRE_SUBDIRS)
 AC_SUBST(EXTRA_SUBDIRS)
 AC_SUBST(DEPLIBS)
 AC_FUNC_VPRINTF
@@ -262,7 +263,7 @@ AC_CACHE_VAL(cyrus_cv_lib_syslog, AC_TRY_CPP([#include <syslog.h>
 #include </nonexistent>
 #endif],cyrus_cv_lib_syslog=yes,cyrus_cv_lib_syslog=no))
 if test $cyrus_cv_lib_syslog = no; then
-	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} syslog"
+	PRE_SUBDIRS="${PRE_SUBDIRS} syslog"
 	DEPLIBS="${DEPLIBS} ../syslog/libsyslog.a"
 	CPPFLAGS="$CPPFLAGS -I\$(srcdir)/../syslog"
 fi
@@ -285,4 +286,4 @@ dnl
 AC_CHECK_LIB(ndbm, main)
 AC_CHECK_LIB(dbm, main)
 AC_CHECK_LIB(socket, main, LIBS="${LIBS} -lsocket -lnsl",,-lnsl)
-AC_OUTPUT(Makefile syslog/Makefile et/Makefile lib/Makefile imap/Makefile cyradm/Makefile imtest/Makefile glue/feedcyrus amssync/amssynctree)
+AC_OUTPUT(Makefile man/Makefile syslog/Makefile et/Makefile lib/Makefile imap/Makefile imap/feedcyrus cyradm/Makefile imtest/Makefile amssync/Makefile amssync/amssynctree cmulocal/Makefile)
