@@ -43,6 +43,8 @@
  *
  */
 
+#include <config.h>
+
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
@@ -327,7 +329,7 @@ callback_search(struct imclient *imclient,
    
 }
 
-static int send_delete(char *uidlist)
+static int send_delete(const char *mbox, const char *uidlist)
 {
     imclient_send(imclient_conn, callback_finish, imclient_conn,
 		  "UID STORE %a +FLAGS.SILENT (\\Deleted)", uidlist);
@@ -337,13 +339,14 @@ static int send_delete(char *uidlist)
     }
     if (cmd_done == IMAP_OK) return 0;
     else if (cmd_done == IMAP_NO) {
-	syslog(LOG_ERR, "%s can't mark messages deleted: %s", cmd_resp ? cmd_resp : "");
+	syslog(LOG_ERR, "%s can't mark messages deleted: %s", 
+	       mbox, cmd_resp ? cmd_resp : "");
 	return -1;
     }
     else fatal("marking message deleted", EC_TEMPFAIL);
 }
 
-void mark_all_deleted(uid_list_t *list, mbox_stats_t *stats)
+void mark_all_deleted(const char *mbox, uid_list_t *list, mbox_stats_t *stats)
 {
     int i;
     char buf[1024];
@@ -377,7 +380,7 @@ void mark_all_deleted(uid_list_t *list, mbox_stats_t *stats)
 	    pos += sprintf(buf + pos, "%lu", A[i-1]);
 	}
 	if (pos > 500) {
-	    r = send_delete(buf);
+	    r = send_delete(mbox, buf);
 	    pos = 0; first_time = 1;
 	}
 	run_start = A[i];
@@ -395,7 +398,7 @@ void mark_all_deleted(uid_list_t *list, mbox_stats_t *stats)
 	}
 	
 	/* send out the last one */
-	send_delete(buf);
+	send_delete(mbox, buf);
 	
 	stats->deleted += list->size;
     }
@@ -497,7 +500,7 @@ int purge_me(char *name, time_t when)
     }
 
     if (uidlist.size > 0) {
-	mark_all_deleted(&uidlist, &stats);
+	mark_all_deleted(name, &uidlist, &stats);
     }
 
     /* close mailbox */   
@@ -635,112 +638,112 @@ void usage(void)
 
 int main(int argc, char **argv)
 {
-  char *mechanism=NULL;
-  char servername[1024];
-  char *expirectlfile = NULL;
+    char *mechanism=NULL;
+    char servername[1024];
+    char *expirectlfile = NULL;
 
-  int maxssf = 0;
-  int minssf = 0;
-  char c;
+    int maxssf = 128;
+    int minssf = 0;
+    char c;
 
-  char *tls_keyfile="";
-  char *port = "imap";
-  int dotls=0;
-  int r;
-  capabilities_t *capabilitylist;
+    char *tls_keyfile="";
+    char *port = "imap";
+    int dotls=0;
+    int r;
+    capabilities_t *capabilitylist;
 
-  /* look at all the extra args */
-  while ((c = getopt(argc, argv, "d:ve:k:l:p:u:a:m:t:")) != EOF)
-    switch (c) {
-    case 'd':
-	days = atoi(optarg);
-	break;
-    case 'e':
-	expirectlfile = optarg;
-	break;
-    case 'v':
-	verbose++;
-	break;
-    case 'k':
-	minssf=atoi(optarg);      
-	break;
-    case 'l':
-	maxssf=atoi(optarg);      
-	break;
-    case 'p':
-	port = optarg;
-	break;
-    case 'u':
-	username = optarg;
-	break;
-    case 'm':
-	mechanism=optarg;
-	break;
-    case 'r':
-        realm=optarg;
-        break;
-    case 't':
-      dotls=1;
-      tls_keyfile=optarg;
-      break;
-    case '?':
-    default:
+    /* look at all the extra args */
+    while ((c = getopt(argc, argv, "d:ve:k:l:p:u:a:m:t:")) != EOF)
+	switch (c) {
+	case 'd':
+	    days = atoi(optarg);
+	    break;
+	case 'e':
+	    expirectlfile = optarg;
+	    break;
+	case 'v':
+	    verbose++;
+	    break;
+	case 'k':
+	    minssf=atoi(optarg);      
+	    break;
+	case 'l':
+	    maxssf=atoi(optarg);      
+	    break;
+	case 'p':
+	    port = optarg;
+	    break;
+	case 'u':
+	    username = optarg;
+	    break;
+	case 'm':
+	    mechanism=optarg;
+	    break;
+	case 'r':
+	    realm=optarg;
+	    break;
+	case 't':
+	    dotls=1;
+	    tls_keyfile=optarg;
+	    break;
+	case '?':
+	default:
+	    usage();
+	    break;
+	}
+
+    if (optind >= argc) usage();
+
+
+    if ((days==-1) && (expirectlfile == NULL))
+    {
+	printf("Must specify expire.ctl file OR days old OR bytes large\n\n");
 	usage();
-	break;
     }
 
-  if (optind >= argc) usage();
+    /* next to last arg is server name */
+    strncpy(servername, argv[optind], 1023);
 
-
-  if ((days==-1) && (expirectlfile == NULL))
-  {
-      printf("Must specify expire.ctl file OR days old OR bytes large\n\n");
-      usage();
-  }
-
-  /* next to last arg is server name */
-  strncpy(servername, argv[optind], 1023);
-
-  r = imclient_connect (&imclient_conn, servername, port);
+    r = imclient_connect (&imclient_conn, servername, port);
   
-  if (r!=0) {
-      fatal("imclient_connect()", EC_TEMPFAIL);
-  }
+    if (r!=0) {
+	fatal("imclient_connect()", EC_TEMPFAIL);
+    }
 
-  spew(0, "connected");
+    spew(0, "connected");
 
-  /* get capabilities */
-  imclient_addcallback(imclient_conn, "CAPABILITY", 0,
-		       callback_capability, (void *) &capabilitylist, 
-		       (char *) 0);
+    /* get capabilities */
+    imclient_addcallback(imclient_conn, "CAPABILITY", 0,
+			 callback_capability, (void *) &capabilitylist, 
+			 (char *) 0);
   
-  imclient_send(imclient_conn, callback_finish, NULL,
-		"CAPABILITY");
+    imclient_send(imclient_conn, callback_finish, NULL,
+		  "CAPABILITY");
 
-  cmd_done = 0;
+    cmd_done = 0;
 
-  while (cmd_done == 0) {
-      imclient_processoneevent(imclient_conn);
-  }
+    while (cmd_done == 0) {
+	imclient_processoneevent(imclient_conn);
+    }
 
-  r = imclient_authenticate(imclient_conn,
-			    capabilitylist->mechs,
-			    "imap",
-			    username,
-			    minssf,
-			    maxssf);
+    r = imclient_authenticate(imclient_conn,
+			      capabilitylist->mechs,
+			      "imap",
+			      username,
+			      minssf,
+			      maxssf);
 
-  if (r!=0) {
-      fatal("imclient_authenticate()\n", EC_CONFIG);
-  }
+    if (r!=0) {
+	fatal("imclient_authenticate()\n", EC_CONFIG);
+    }
 
-  spew(0, "authenticated");
+    spew(0, "authenticated");
 
-  readconfig_init();
+    readconfig_init();
 
-  remote_purge(expirectlfile, argv+(optind+1));
+    remote_purge(expirectlfile, argv+(optind+1));
 
-  spew(0, "done");
+    spew(0, "done");
 
-  exit(0);
+    exit(0);
 }
