@@ -36,13 +36,28 @@ AC_CHECK_FUNC($1, [dnl
       fi
     fi])dnl
 ])dnl
+ipv6_cv_$1=no
 if test $ac_cv_func_$1 = yes -o $ac_cv_lib_socket_$1 = yes \
      -o $ac_cv_lib_inet6_$1 = yes
 then
   ipv6_cv_$1=yes
+fi
+if test $ipv6_cv_$1 = no; then
+  if test $1 = getaddrinfo; then
+    for ipv6_cv_pfx in o n; do
+      AC_EGREP_HEADER(${ipv6_cv_pfx}$1, netdb.h,
+		      AC_CHECK_FUNC(${ipv6_cv_pfx}$1))
+      if eval test X\$ac_cv_func_${ipv6_cv_pfx}$1 = Xyes; then
+        AC_DEFINE(HAVE_GETADDRINFO)
+        ipv6_cv_$1=yes
+        break
+      fi
+    done
+  fi
+fi
+if test $ipv6_cv_$1 = yes; then
   ifelse([$2], , :, [$2])
 else
-  ipv6_cv_$1=no
   ifelse([$3], , :, [$3])
 fi])
 
