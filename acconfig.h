@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.30 2002/02/28 20:33:19 rjs3 Exp $ */
+/* $Id: acconfig.h,v 1.31 2002/03/18 15:14:16 ken3 Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -103,6 +103,9 @@
 
 /* alternative to /dev/urandom? */
 #undef EGD_SOCKET
+
+/* do we have zephyr? */
+#undef HAVE_ZEPHYR
 
 /* where should we put state information? */
 #undef STATEDIR
