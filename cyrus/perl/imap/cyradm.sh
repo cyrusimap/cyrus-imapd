@@ -279,7 +279,8 @@ Administer (SETACL)
 =item C<sq> I<root> I<resource> I<value> [I<resource> I<value> ...]
 
 Set a quota on the specified root, which may or may not be an actual mailbox.
-The only I<resource> understood by B<Cyrus> is C<STORAGE>.
+The only I<resource> understood by B<Cyrus> is C<STORAGE>.  The I<value> may
+be the special string C<none> which will remove the quota.
 
 =back
 
