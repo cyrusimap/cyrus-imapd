@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.196 2000/01/04 21:09:24 leg Exp $ */
+/* $Id: imapd.c,v 1.197 2000/01/05 00:00:11 leg Exp $ */
 
 #ifndef __GNUC__
 #define __attribute__(foo)
@@ -1774,9 +1774,10 @@ char *name;
 			    error_message(IMAP_NO_OVERQUOTA));
 	    }
 	    else if (usage > config_getint("quotawarn", 90)) {
+		int usageint = (int) usage;
 		prot_printf(imapd_out, "* NO [ALERT] ");
 		prot_printf(imapd_out, error_message(IMAP_NO_CLOSEQUOTA),
-			    usage);
+			    usageint);
 		prot_printf(imapd_out, "\r\n");
 	    }
 	}
