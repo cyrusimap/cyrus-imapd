@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.478 2004/07/15 13:10:43 ken3 Exp $ */
+/* $Id: imapd.c,v 1.479 2004/07/15 16:14:48 ken3 Exp $ */
 
 #include <config.h>
 
@@ -128,6 +128,7 @@ struct appendstage {
     struct stagemsg *stage;
     char **flag;
     int nflags, flagalloc;
+    time_t internaldate;
 } **stage = NULL;
 unsigned long numstage = 0;
 
@@ -2307,7 +2308,7 @@ void cmd_append(char *tag, char *name)
     int c;
     static struct buf arg;
     char *p;
-    time_t internaldate, now = time(NULL);
+    time_t now = time(NULL);
     unsigned size, totalsize = 0;
     int sawdigit = 0;
     int isnowait = 0;
@@ -2391,7 +2392,7 @@ void cmd_append(char *tag, char *name)
 	/* Parse internaldate */
 	if (c == '\"' && !arg.s[0]) {
 	    prot_ungetc(c, imapd_in);
-	    c = getdatetime(&internaldate);
+	    c = getdatetime(&(curstage->internaldate));
 	    if (c != ' ') {
 		parseerr = "Invalid date-time in Append command";
 		r = IMAP_PROTOCOL_ERROR;
@@ -2399,7 +2400,7 @@ void cmd_append(char *tag, char *name)
 	    }
 	    c = getword(imapd_in, &arg);
 	} else {
-	    internaldate = time(NULL);
+	    curstage->internaldate = time(NULL);
 	}
 
 	p = arg.s;
@@ -2493,7 +2494,7 @@ void cmd_append(char *tag, char *name)
     }
     if (!r) {
 	for (i = 0; !r && i < numstage; i++) {
-	    r = append_fromstage(&mailbox, stage[i]->stage, internaldate, 
+	    r = append_fromstage(&mailbox, stage[i]->stage, stage[i]->internaldate, 
 				 (const char **) stage[i]->flag, stage[i]->nflags, 0);
 	}
 
