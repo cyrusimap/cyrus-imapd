@@ -62,6 +62,7 @@ int write;
     newstream->maxplain = PROT_BUFSIZE;
     newstream->fd = fd;
     newstream->write = write;
+    newstream->logfd = -1;
     newstream->func = 0;
     newstream->state = 0;
     newstream->error = 0;
@@ -80,6 +81,18 @@ struct protstream *s;
     free((char*)s);
     return 0;
 }
+
+/*
+ * Set the logging file descriptor for stream 's' to be 'fd'.
+ */
+int prot_setlog(s, fd)
+struct protstream *s;
+int fd;
+{
+    s->logfd = fd;
+    return 0;
+}
+
 
 /*
  * Set the protection function for stream 's' to be 'func'.  The opaque
@@ -162,6 +175,8 @@ struct protstream *s;
 {
     int n, cnt = 0;
     unsigned inputlen = 0;
+    char *ptr;
+    int left;
     
     if (s->eof || s->error) return EOF;
 
@@ -196,6 +211,20 @@ struct protstream *s;
 	    /* No protection function, just use the raw data */
 	    s->cnt = n-1;
 	    s->ptr = s->buf+1;
+	    if (s->logfd != -1) {
+		left = s->cnt;
+		ptr = s->buf;
+		do {
+		    n = write(s->logfd, ptr, left);
+		    if (n == -1 && errno != EINTR) {
+			break;
+		    }
+		    if (n > 0) {
+			ptr += n;
+			left -= n;
+		    }
+		} while (left);
+	    }
 	    return *s->buf;
 	}
 	cnt += n;
@@ -221,6 +250,19 @@ struct protstream *s;
 	s->leftcnt = cnt - (inputlen + 4);
     }
 
+    left = s->cnt;
+    ptr = s->buf;
+    do {
+	n = write(s->logfd, ptr, left);
+	if (n == -1 && errno != EINTR) {
+	    break;
+	}
+	if (n > 0) {
+	    ptr += n;
+	    left -= n;
+	}
+    } while (left);
+
     s->cnt--;
     return *s->ptr++;
 }
@@ -242,6 +284,21 @@ struct protstream *s;
 	return EOF;
     }
     if (!left) return 0;
+
+    if (s->logfd != -1) {
+	do {
+	    n = write(s->logfd, ptr, left);
+	    if (n == -1 && errno != EINTR) {
+		break;
+	    }
+	    if (n > 0) {
+		ptr += n;
+		left -= n;
+	    }
+	} while (left);
+	left = s->ptr - s->buf;
+	ptr = s->buf;
+    }
 
     if (s->func) {
 	/* Encode the data */
