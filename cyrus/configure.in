@@ -85,7 +85,7 @@ exit(0);}
 cyrus_cv_func_mmap_shared=no))
 AC_MSG_RESULT($cyrus_cv_func_mmap_shared)
 if test $cyrus_cv_func_mmap_shared = yes; then
-	WITH_MAP="mmap"
+	WITH_MAP="shared"
 else
 	AC_MSG_CHECKING(for non-shared mmap)
 	AC_CACHE_VAL(cyrus_cv_func_mmap_private,AC_TRY_RUN([
