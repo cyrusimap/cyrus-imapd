@@ -23,6 +23,9 @@
 pop3d \- POP3 server process
 .SH SYNOPSIS
 .B pop3d
+[
+.B \-k
+]
 .SH DESCRIPTION
 .I Pop3d
 is a POP3 server.
@@ -49,6 +52,11 @@ The telemetry logs will be stored in the
 directory with a filename of the
 .I pop3d
 process-id.
+.SH OPTIONS
+.TP
+.B \-k
+Serve MIT's KPOP (Kerberized POP) protocol instead.
+.TP
 .SH FILES
 .TP
 .B /etc/imapd.conf
