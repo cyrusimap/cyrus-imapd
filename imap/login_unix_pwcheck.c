@@ -33,6 +33,7 @@
 #include <sys/un.h>
 #include <sys/uio.h>
 
+#include "acte.h"
 #include "retry.h"
 #include "config.h"
 #include "sysexits.h"
@@ -75,7 +76,7 @@ const char **reply;
     iov[1].iov_base = (char *)pass;
     iov[1].iov_len = strlen(pass)+1;
 
-    retry_writev(s, &iov, 2);
+    retry_writev(s, iov, 2);
 
     start = 0;
     while (start < sizeof(response) - 1) {
