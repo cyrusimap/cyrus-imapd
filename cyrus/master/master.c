@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.48 2001/09/04 22:26:19 leg Exp $ */
+/* $Id: master.c,v 1.49 2001/09/04 22:26:40 leg Exp $ */
 
 #include <config.h>
 
@@ -938,7 +938,7 @@ void limit_fds(rlim_t x)
     rl.rlim_cur = x;
     rl.rlim_max = x;
     if (setrlimit(RLIMIT_NUMFDS, &rl) < 0) {
-	syslog(LOG_ERR, "setrlimit: Unable to set file descriptors limit to %d", x);
+	syslog(LOG_ERR, "setrlimit: Unable to set file descriptors limit to %d: %m", x);
     }
 
     if (verbose > 1) {
