@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.301 2001/03/10 05:54:27 leg Exp $ */
+/* $Id: imapd.c,v 1.302 2001/03/14 06:02:11 leg Exp $ */
 
 #include <config.h>
 
@@ -83,6 +83,7 @@
 #include "mboxlist.h"
 #include "acapmbox.h"
 #include "idle.h"
+#include "telemetry.h"
 
 #include "pushstats.h"		/* SNMP interface */
 
@@ -378,10 +379,12 @@ static void imapd_reset(void)
 	imapd_saslconn = NULL;
     }
     imapd_starttls_done = 0;
+#ifdef HAVE_SSL
     if (tls_conn) {
 	tls_free(&tls_conn);
 	tls_conn = NULL;
     }
+#endif
 
     imapd_exists = -1;
 }
@@ -1486,18 +1489,7 @@ char *passwd;
     if (!reply) reply = "User logged in";
 
     /* Create telemetry log */
-    sprintf(buf, "%s%s%s/%lu", config_dir, FNAME_LOGDIR, imapd_userid,
-	    (unsigned long) getpid());
-    logfile = fopen(buf, "w");
-    if (logfile) {
-	imapd_logfd = fileno(logfile);
-	prot_setlog(imapd_in, imapd_logfd);
-	prot_setlog(imapd_out, imapd_logfd);
-	if (config_getswitch("logtimestamps", 0)) {
-	    prot_setlogtime(imapd_in, &imapd_logtime);
-	    prot_setlogtime(imapd_out, &imapd_logtime);
-	}
-    }
+    imapd_logfd = telemetry_log(imapd_userid, imapd_in, imapd_out);
 
     prot_printf(imapd_out, "%s OK %s\r\n", tag, reply);
     return;
@@ -1644,18 +1636,7 @@ cmd_authenticate(char *tag,char *authtype)
     prot_setsasl(imapd_out, imapd_saslconn);
 
     /* Create telemetry log */
-    sprintf(buf, "%s%s%s/%lu", config_dir, FNAME_LOGDIR, imapd_userid,
-	    (unsigned long) getpid());
-    logfile = fopen(buf, "w");
-    if (logfile) {
-	imapd_logfd = fileno(logfile);
-	prot_setlog(imapd_in, imapd_logfd);
-	prot_setlog(imapd_out, imapd_logfd);
-	if (config_getswitch("logtimestamps", 0)) {
-	    prot_setlogtime(imapd_in, &imapd_logtime);
-	    prot_setlogtime(imapd_out, &imapd_logtime);
-	}
-    }
+    imapd_logfd = telemetry_log(imapd_userid, imapd_in, imapd_out);
 
     return;
 }

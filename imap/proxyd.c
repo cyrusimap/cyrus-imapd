@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.66 2001/03/06 20:05:50 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.67 2001/03/14 06:02:11 leg Exp $ */
 
 #undef PROXY_IDLE
 
@@ -91,6 +91,7 @@
 #include "acapmbox.h"
 #include "imapurl.h"
 #include "pushstats.h"
+#include "telemetry.h"
 
 /* PROXY STUFF */
 /* we want a list of our outgoing connections here and which one we're
@@ -1995,17 +1996,7 @@ void cmd_login(char *tag, char *user, char *passwd)
     if (!reply) reply = "User logged in";
 
     /* Create telemetry log */
-    sprintf(buf, "%s%s%s/%lu", config_dir, FNAME_LOGDIR, proxyd_userid,
-	    (unsigned long) getpid());
-    logfile = fopen(buf, "w");
-    if (logfile) {
-	prot_setlog(proxyd_in, fileno(logfile));
-	prot_setlog(proxyd_out, fileno(logfile));
-	if (config_getswitch("logtimestamps", 0)) {
-	    prot_setlogtime(proxyd_in, &proxyd_logtime);
-	    prot_setlogtime(proxyd_out, &proxyd_logtime);
-	}
-    }
+    telemetry_log(proxyd_userid, proxyd_in, proxyd_out);
 
     prot_printf(proxyd_out, "%s OK %s\r\n", tag, reply);
     return;
@@ -2128,17 +2119,7 @@ void cmd_authenticate(char *tag, char *authtype)
     prot_setsasl(proxyd_out, proxyd_saslconn);
 
     /* Create telemetry log */
-    sprintf(buf, "%s%s%s/%lu", config_dir, FNAME_LOGDIR, proxyd_userid,
-	    (unsigned long) getpid());
-    logfile = fopen(buf, "w");
-    if (logfile) {
-	prot_setlog(proxyd_in, fileno(logfile));
-	prot_setlog(proxyd_out, fileno(logfile));
-	if (config_getswitch("logtimestamps", 0)) {
-	    prot_setlogtime(proxyd_in, &proxyd_logtime);
-	    prot_setlogtime(proxyd_out, &proxyd_logtime);
-	}
-    }
+    telemetry_log(proxyd_userid, proxyd_in, proxyd_out);
 
     return;
 }

@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.85 2001/02/27 05:41:42 ken3 Exp $
+ * $Id: pop3d.c,v 1.86 2001/03/14 06:02:11 leg Exp $
  */
 #include <config.h>
 
@@ -80,6 +80,7 @@
 #include "xmalloc.h"
 #include "mboxlist.h"
 #include "idle.h"
+#include "telemetry.h"
 
 #ifdef HAVE_KRB
 /* kerberos des is purported to conflict with OpenSSL DES */
@@ -1115,13 +1116,7 @@ int openinbox(void)
     proc_register("pop3d", popd_clienthost, popd_userid, popd_mailbox->name);
 
     /* Create telemetry log */
-    sprintf(buf, "%s%s%s/%lu", config_dir, FNAME_LOGDIR, popd_userid,
-	    (long unsigned) getpid());
-    logfile = fopen(buf, "w");
-    if (logfile) {
-	prot_setlog(popd_in, fileno(logfile));
-	prot_setlog(popd_out, fileno(logfile));
-    }
+    telemetry_log(popd_userid, popd_in, popd_out);
 
     prot_printf(popd_out, "+OK Maildrop locked and ready\r\n");
     return 0;
