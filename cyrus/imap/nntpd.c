@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.20 2004/02/27 17:44:55 ken3 Exp $
+ * $Id: nntpd.c,v 1.21 2004/03/04 21:01:17 ken3 Exp $
  */
 
 /*
@@ -2889,6 +2889,7 @@ static int savemsg(message_data_t *m, FILE *f)
 	"Reply-To",	/* need to add "post" email addresses */
 	NULL
     };
+    int addlen;
 
     /* fill the cache */
     r = spool_fill_hdrcache(nntp_in, f, m->hdrcache, skipheaders);
@@ -2903,15 +2904,25 @@ static int savemsg(message_data_t *m, FILE *f)
     /* now, using our header cache, fill in the data that we want */
 
     /* get path */
+    addlen = strlen(config_servername) + 1;
     if ((body = spool_getheader(m->hdrcache, "path")) != NULL) {
+	/* prepend to the cached path */
+	addlen += strlen(body[0]);
+	body[0] = xrealloc((char *) body[0], addlen + 1);
+	memmove((char *) body[0] + strlen(config_servername) + 1, body[0],
+		strlen(body[0]) + 1);  /* +1 for \0 */
+	strcpy((char *) body[0], config_servername);
+	*((char *) body[0] + strlen(config_servername)) = '!';
 	m->path = xstrdup(body[0]);
     } else {
-	m->path = NULL;		/* no path-id */
+	/* no path, create one */
+	addlen += nntp_userid ? strlen(nntp_userid) : strlen("anonymous");
+	m->path = xmalloc(addlen + 1);
+	sprintf(m->path, "%s!%s", config_servername,
+		nntp_userid ? nntp_userid : "anonymous");
+	spool_cache_header(xstrdup("Path"), xstrdup(m->path), m->hdrcache);
     }
-
-    /* add Path: header */
-    fprintf(f, "Path: %s!%s\r\n", config_servername,
-	    m->path ? m->path : (nntp_userid ? nntp_userid : "anonymous"));
+    fprintf(f, "Path: %s\r\n", m->path);
 
     /* get message-id */
     if ((body = spool_getheader(m->hdrcache, "message-id")) != NULL) {
@@ -2924,15 +2935,17 @@ static int savemsg(message_data_t *m, FILE *f)
 	sprintf(m->id, "<cmu-nntpd-%d-%d-%d@%s>", p, (int) now, 
 		post_count++, config_servername);
 	fprintf(f, "Message-ID: %s\r\n", m->id);
+	spool_cache_header(xstrdup("Message-ID"), xstrdup(m->id), m->hdrcache);
     }
 
     /* get date */
     if ((body = spool_getheader(m->hdrcache, "date")) == NULL) {
-	/* date, create one */
+	/* no date, create one */
 	char datestr[80];
 
 	rfc822date_gen(datestr, sizeof(datestr), now);
 	fprintf(f, "Date: %s\r\n", datestr);
+	spool_cache_header(xstrdup("Date"), xstrdup(datestr), m->hdrcache);
     }
 
     /* get control */
@@ -2964,29 +2977,42 @@ static int savemsg(message_data_t *m, FILE *f)
 
 		/* add Reply-To: header */
 		if (body || newspostuser) {
-		    const char *sep = "";
+		    const char **postto, *p;
+		    char *replyto, *r, *fold = NULL, *sep = "";
+		    size_t n;
 
-		    /* begin header */
-		    fprintf(f, "Reply-To: ");
-
-		    /* add existing body */
-		    if (body) {
-			fprintf(f, "%s", body[0]);
-			sep = ", ";
-		    }
-
-		    /* add "post" email addresses based on newsgroup */
 		    if (newspostuser) {
-			const char *replyto, *p;
-			size_t n;
+			/* add "post" email addresses based on newsgroup */
 
 			/* determine which groups header to use */
-			if ((body = spool_getheader(m->hdrcache, "followup-to")))
-			    replyto = body[0];
-			else
-			    replyto = groups[0];
+			postto = spool_getheader(m->hdrcache, "followup-to");
+			if (!postto) postto = groups;
 
-			for (p = replyto;; p += n) {
+			/* count the number of groups */
+			for (n = 0, p = postto[0]; p; n++) {
+			    p = strchr(p, ',');
+			    if (p) p++;
+			}
+
+			/* estimate size of post addresses */
+			addlen = strlen(postto[0]) +
+			    n * (strlen(newspostuser) + 3);
+
+			if (body) {
+			    /* append to the cached header */
+			    addlen += strlen(body[0]);
+			    body[0] = xrealloc((char *) body[0], addlen + 1);
+			    replyto = (char *) body[0];
+			    fold = replyto + strlen(replyto) + 1;
+			    sep = ", ";
+			}
+			else {
+			    /* create a new header body */
+			    replyto = xzmalloc(addlen + 1);
+			}
+
+			r = replyto + strlen(replyto);
+			for (p = postto[0];; p += n) {
 			    /* skip whitespace */
 			    while (p && *p &&
 				   (isspace((int) *p) || *p == ',')) p++;
@@ -2996,14 +3022,30 @@ static int savemsg(message_data_t *m, FILE *f)
 			    n = strcspn(p, ", \t");
 
 			    /* add the post address */
-			    fprintf(f, "%s%s+%.*s", sep, newspostuser, n, p);
+			    r += sprintf(r, "%s%s+%.*s",
+					 sep, newspostuser, n, p);
 
 			    sep = ", ";
 			}
+
+			if (!body) {
+			    /* add the new header to the cache */
+			    spool_cache_header(xstrdup("Reply-To"), replyto,
+					       m->hdrcache);
+			}
+		    } else {
+			/* no newspostuser, use original replyto */
+			replyto = (char *) body[0];
 		    }
 
-		    /* end header */
-		    fprintf(f, "\r\n");
+		    /* add the header to the file */
+		    fprintf(f, "Reply-To: ");
+		    r = replyto;
+		    if (fold) {
+			fprintf(f, "%.*s\r\n\t", fold - r, r);
+			r = fold;
+		    }
+		    fprintf(f, "%s\r\n", r);
 		}
 	    }
 	} else {
