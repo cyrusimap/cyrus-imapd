@@ -85,6 +85,10 @@ warnings.
 .IP "\fBtimeout:\fR 30" 5
 The length of the IMAP server's inactivity autologout timer,
 in minutes.  The minimum value is 30, the default.
+.IP "\fBimapidresponse:\fR yes" 5
+If enabled, the server responds to an ID command with a parameter
+list containing: version, vendor, support-url, os, os-version,
+command, arguments, environment.  Otherwise the server returns NIL.
 .IP "\fBpoptimeout:\fR 10" 5
 Set the length of the POP server's inactivity autologout timer,
 in minutes.  The minimum value is 10, the default.
