@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.164 2002/05/26 00:50:52 ken3 Exp $
+# $Id: Makefile.in,v 1.165 2002/07/25 21:07:05 wcw Exp $
 # 
 # @configure_input@
 # 
@@ -88,7 +88,7 @@ COMPILE_ET=@COMPILE_ET@
 #     the dynamic libraries that may crop up during run time.
 # 
 PURIFY=/usr/local/bin/purify
-PUREOPT= -best-effort -logfile=/tmp/pure/%v.%p.log -always_use_cache_dir
+PUREOPT= -best-effort -logfile=/tmp/pure/%v.%p.log -always_use_cache_dir -cachedir=/usr/tmp/$(USER)
 QUANTIFY=/usr/local/bin/quantify
 QUANTOPT=-windows=no -filename-prefix=/tmp/quant/%v.%p -write-summary-file= -logfile=/tmp/quant/%v.%p.log
 
@@ -121,6 +121,9 @@ BUILTSOURCES = imap_err.c imap_err.h pushstats.c pushstats.h \
 	lmtpstats.c lmtpstats.h xversion.h mupdate_err.c mupdate_err.h
 
 all: $(BUILTSOURCES) $(PROGS) $(SUIDPROGS)
+
+pure: imapd.pure lmtpd.pure proxyd.pure mupdate.pure lmtpproxyd.pure
+
 
 install:
 	$(srcdir)/../install-sh -d ${DESTDIR}$(cyrus_prefix)/bin
@@ -190,6 +193,12 @@ lmtpproxyd: lmtpproxyd.o $(LMTPOBJS) \
 	 $(SERVICE) lmtpproxyd.o $(LMTPOBJS) \
 	 libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
+lmtpproxyd.pure: lmtpproxyd.o $(LMTPOBJS) \
+	libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(SERVICE)
+	$(PURIFY) $(PUREOPT) $(CC) $(LDFLAGS) -o lmtpproxyd.pure \
+	 $(SERVICE) lmtpproxyd.o $(LMTPOBJS) \
+	 libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(LIBS) $(LIB_WRAP)
+
 ctl_deliver: ctl_deliver.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o \
 	 $@ ctl_deliver.o libimap.a $(DEPLIBS) $(LIBS)
@@ -219,6 +228,11 @@ proxyd: $(PROXYDOBJS) libimap.a $(DEPLIBS) $(SERVICE)
 	 $(SERVICE) $(PROXYDOBJS) libimap.a \
 	 $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
+proxyd.pure: $(PROXYDOBJS) libimap.a $(DEPLIBS) $(SERVICE)
+	$(PURIFY) $(PUREOPT) $(CC) $(LDFLAGS) -o proxyd.pure \
+	 $(SERVICE) $(PROXYDOBJS) libimap.a \
+	 $(DEPLIBS) $(LIBS) $(LIB_WRAP)
+
 target-acap: target-acap.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o target-acap \
 	 target-acap.o libimap.a $(DEPLIBS) $(LIBS)
@@ -229,6 +243,11 @@ sendmail-map: sendmail-map.o libimap.a $(DEPLIBS)
 
 mupdate: mupdate.o mupdate-slave.o mupdate-client.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o mupdate \
+	 $(SERVICETHREAD) mupdate.o mupdate-slave.o mupdate-client.o \
+	 libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP) -lpthread
+
+mupdate.pure: mupdate.o mupdate-slave.o mupdate-client.o libimap.a $(DEPLIBS)
+	$(PURIFY) $(PUREOPT) $(CC) $(LDFLAGS) -o mupdate.pure \
 	 $(SERVICETHREAD) mupdate.o mupdate-slave.o mupdate-client.o \
 	 libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP) -lpthread
 
