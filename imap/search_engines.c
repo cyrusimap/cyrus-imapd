@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: search_engines.c,v 1.4 2003/02/13 20:15:30 rjs3 Exp $
+ * $Id: search_engines.c,v 1.5 2003/04/23 18:07:48 rjs3 Exp $
  */
 
 #include <config.h>
@@ -242,7 +242,7 @@ cleanup:
 
 static int search_squat(unsigned* msg_list, struct mailbox *mailbox,
                         struct searchargs *searchargs) {
-  char index_file_name[MAX_MAILBOX_PATH];
+  char index_file_name[MAX_MAILBOX_PATH+1];
   int fd;
   SquatSearchIndex* index;
   unsigned char* msg_vector;
