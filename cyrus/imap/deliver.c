@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.123.2.8 2000/07/06 13:48:07 ken3 Exp $
+ * $Id: deliver.c,v 1.123.2.9 2000/07/10 19:50:09 ken3 Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.123.2.8 2000/07/06 13:48:07 ken3 Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.123.2.9 2000/07/10 19:50:09 ken3 Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -834,8 +834,11 @@ int getenvelope(void *mc, const char *field, const char ***contents)
     }
 }
 
-#define SENDMAIL "/usr/lib/sendmail"
-#define POSTMASTER "postmaster"
+#define DEFAULT_SENDMAIL "/usr/lib/sendmail"
+#define DEFAULT_POSTMASTER "postmaster"
+
+#define SENDMAIL (config_getstring("sendmail", DEFAULT_SENDMAIL))
+#define POSTMASTER (config_getstring("postmaster", DEFAULT_POSTMASTER))
 
 static char *month[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
                          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
@@ -906,7 +909,7 @@ int send_rejection(char *origid,
 		   struct protstream *file)
 {
     FILE *sm;
-    char *smbuf[3];
+    char *smbuf[6];
     char hostname[1024], buf[8192], *namebuf;
     int i, sm_stat;
     struct tm *tm;
@@ -915,8 +918,11 @@ int send_rejection(char *origid,
     pid_t sm_pid, p;
 
     smbuf[0] = "sendmail";
-    smbuf[1] = rejto;
-    smbuf[2] = NULL;
+    smbuf[1] = "-f";
+    smbuf[2] = "<>";
+    smbuf[3] = "--";
+    smbuf[4] = rejto;
+    smbuf[5] = NULL;
     sm_pid = open_sendmail(smbuf, &sm);
     if (sm == NULL) {
 	return -1;
@@ -1005,7 +1011,7 @@ int send_forward(char *forwardto, char *return_path, struct protstream *file)
 	smbuf[2] = return_path;
     } else {
 	smbuf[1] = "-f";
-	smbuf[2] = "postmaster"; /* how do i represent <>? */
+	smbuf[2] = "<>";
     }
     smbuf[3] = "--";
     smbuf[4] = forwardto;
@@ -1212,7 +1218,7 @@ int autorespond(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     FILE *sm;
-    char *smbuf[3];
+    char *smbuf[6];
     char hostname[1024], outmsgid[8192], *sievedb;
     int i, sl, sm_stat;
     struct tm *tm;
@@ -1224,8 +1230,11 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     script_data_t *sdata = (script_data_t *) sc;
 
     smbuf[0] = "sendmail";
-    smbuf[1] = src->addr;
-    smbuf[2] = NULL;
+    smbuf[1] = "-f";
+    smbuf[2] = "<>";
+    smbuf[3] = "--";
+    smbuf[4] = src->addr;
+    smbuf[5] = NULL;
     sm_pid = open_sendmail(smbuf, &sm);
     if (sm == NULL) {
 	*errmsg = "Could not spawn sendmail process";
@@ -1263,6 +1272,7 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 	    break;
 	}
     fprintf(sm, "Subject: %s\r\n", src->subj);
+    fprintf(sm, "In-Reply-To: %s\r\n", m->id);
     fprintf(sm, "Auto-Submitted: auto-generated (vacation)\r\n");
     if (src->mime) {
 	fprintf(sm, "MIME-Version: 1.0\r\n");
