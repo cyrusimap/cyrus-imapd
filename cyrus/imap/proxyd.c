@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.143 2002/11/12 16:40:51 leg Exp $ */
+/* $Id: proxyd.c,v 1.144 2002/12/23 21:18:50 leg Exp $ */
 
 #undef PROXY_IDLE
 
@@ -3372,7 +3372,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 	}
 
 	/* start the append */
-	prot_printf(s->out, "%s Append %s", tag, name);
+	prot_printf(s->out, "%s Append {%d+}\r\n%s", tag, strlen(name), name);
 	prot_printf(backend_current->out, "%s %s %s (Rfc822.peek)\r\n",
 		    mytag, usinguid ? "Uid Fetch" : "Fetch", sequence);
 	for (/* each FETCH response */;;) {
