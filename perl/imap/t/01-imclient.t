@@ -7,7 +7,7 @@
 # (It may become useful if the test is moved to ./t subdirectory.)
 
 END {print "not ok 1\n" unless $loaded;}
-use IMAP::Cyrus;
+use Cyrus::IMAP;
 $loaded = 1;
 print "ok 1\n";
 
@@ -24,7 +24,7 @@ while (!defined($server) || $server eq '') {
 }
 
 # create an imclient object
-$client = IMAP::Cyrus->new($server);
+$client = Cyrus::IMAP->new($server);
 print "not " if !defined($client);
 print "ok 2\n";
 
@@ -48,7 +48,7 @@ print "not " if $aserver ne $server;
 print "ok 4\n";
 
 # reauthenticate with the proper method (ugh)
-$client = IMAP::Cyrus->new($server);
+$client = Cyrus::IMAP->new($server);
 print "not " if !$client->authenticate('PLAIN');
 print "ok 5\n";
 
@@ -74,7 +74,7 @@ print "ok 7\n";
 
 # if we support kerberos 4 or gssapi auth, log in that way.
 foreach $cap (@caps) {
-  $client = IMAP::Cyrus->new($server);
+  $client = Cyrus::IMAP->new($server);
   # this is not fatal because someone might not have e.g. Krb5 tickets
   print STDERR "authentication via $cap failed\n"
     if !$client->authenticate($cap);
@@ -82,7 +82,7 @@ foreach $cap (@caps) {
 print "ok 8\n";
 
 # more advanced send usage
-$client = IMAP::Cyrus->new($server);
+$client = Cyrus::IMAP->new($server);
 print STDERR "enter a different user to authenticate (plaintext) as: ";
 chomp($auser = scalar(<STDIN>));
 system "stty -echo";
@@ -94,7 +94,7 @@ print "not " if !$client->send(undef, undef, 'LOGIN %a %s', $auser, $pass);
 print "ok 9\n";
 
 # authentication with extra parameters
-$client = IMAP::Cyrus->new($server);
+$client = Cyrus::IMAP->new($server);
 print "not " if !$client->authenticate(-mechanism => 'PLAIN',
 				       -service => 'imap',
 				       -user => $auser,

@@ -7,7 +7,7 @@
 # (It may become useful if the test is moved to ./t subdirectory.)
 
 END {print "not ok 1\n" unless $loaded;}
-use IMAP::Cyrus::Admin;
+use Cyrus::IMAP::Admin;
 $loaded = 1;
 print "ok 1\n";
 
@@ -23,10 +23,10 @@ while (!defined($server) || $server eq '') {
   $server = (gethostbyname($server))[0];
 }
 
-# somewhat lame test of IMAP::Cyrus::Admin; can't really test it without
+# somewhat lame test of Cyrus::IMAP::Admin; can't really test it without
 # test accounts and maybe even a test server...
 
-print "not " unless defined ($client = IMAP::Cyrus::Admin->new($server));
+print "not " unless defined ($client = Cyrus::IMAP::Admin->new($server));
 print "ok 2\n";
 print "not " unless $client->authenticate;
 print "ok 3\n";

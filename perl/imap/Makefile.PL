@@ -3,9 +3,9 @@ use ExtUtils::MakeMaker;
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
 # the contents of the Makefile that is written.
 WriteMakefile( 
-    'NAME'	=> 'IMAP::Cyrus',
+    'NAME'	=> 'Cyrus::IMAP',
     'ABSTRACT'  => 'Cyrus administrative interface',
-    'VERSION_FROM' => 'Cyrus.pm', # finds $VERSION
+    'VERSION_FROM' => 'IMAP.pm', # finds $VERSION
     'macro'	=> {'IMCLIENT_LIBS' => ''},	# hack
     'clean'	=> {'FILES' => 'libcyrperl.a cyradm'},
     'LIBS'	=> ['-lsasl -L../../../lib/ -lcyrus -lssl -lcrypto'],   # e.g., '-lm'
