@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- $Id: mailbox.h,v 1.68.4.1 2002/08/23 20:08:14 ken3 Exp $
+ $Id: mailbox.h,v 1.68.4.2 2002/08/29 19:48:04 rjs3 Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -237,6 +237,12 @@ extern void mailbox_unmap_message(struct mailbox *mailbox,
 				  const char **basep, unsigned long *lenp);
 
 extern void mailbox_reconstructmode(void);
+
+extern int mailbox_stat(const char *mbpath,
+			struct stat *header,
+			struct stat *index,
+			struct stat *cache);
+
 extern int mailbox_open_header(const char *name, struct auth_state *auth_state,
 			       struct mailbox *mailbox);
 extern int mailbox_open_header_path(const char *name, const char *path,

@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.134.4.7 2002/08/29 14:25:35 ken3 Exp $
+ $Id: mailbox.c,v 1.134.4.8 2002/08/29 19:48:03 rjs3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -227,6 +227,38 @@ mailbox_reconstructmode()
 {
     mailbox_doing_reconstruct = 1;
 }
+
+/* stat a mailbox's control files.  returns a bitmask that sets
+ * 0x1 if the header fialed, 0x2 if the index failed, and 0x4 if the cache failed */
+int mailbox_stat(const char *mbpath,
+		 struct stat *header, struct stat *index, struct stat *cache) 
+{
+    char fnamebuf[MAX_MAILBOX_PATH];
+    int r = 0, ret = 0;
+    
+    assert(mbpath && (header || index));
+    
+    if(header) {
+	snprintf(fnamebuf, "%s/cyrus.header", mbpath);
+	r = stat(fnamebuf, header);
+	if(r) ret |= 0x1;
+    }
+    
+    if(!r && index) {
+	snprintf(fnamebuf, "%s/cyrus.index", mbpath);
+	r = stat(fnamebuf, header);
+	if(r) ret |= 0x2;
+    }
+
+    if(!r && cache) {
+	snprintf(fnamebuf, "%s/cyrus.cache", mbpath);
+	r = stat(fnamebuf, header);
+	if(r) ret |= 0x4;
+    }
+    
+    return ret;
+}
+
 
 /*
  * Open and read the header of the mailbox with name 'name'

@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.12 2002/08/21 18:53:51 rjs3 Exp $
+ * $Id: annotate.c,v 1.8.6.13 2002/08/29 19:48:03 rjs3 Exp $
  */
 
 #include <config.h>
@@ -293,6 +293,7 @@ typedef enum {
 struct mailbox_annotation_rock 
 {
     char *server, *partition, *acl;
+    const char *path;
 };
 
 struct annotation_result 
@@ -325,6 +326,8 @@ static void get_mb_data(const char *mboxname,
 	} else {
 	    mbrock->partition = mbrock->server;
 	    mbrock->server = NULL;
+
+	    mbrock->path = config_partitiondir(mbrock->partition);
 	}
     }
 }
@@ -392,7 +395,7 @@ static void annotation_get_size(const char *mboxname,
     static char value[21];
 
     if(!mboxname || !result || !mbrock)
-	fatal("annotation_get_partition called with bad parameters",
+	fatal("annotation_get_size called with bad parameters",
 	      EC_TEMPFAIL);
     
     get_mb_data(mboxname, mbrock);
@@ -426,6 +429,43 @@ static void annotation_get_size(const char *mboxname,
     result->size = strlen(value);
 }
 
+static void annotation_get_lastupdate(const char *mboxname,
+				      int isadmin,
+				      struct auth_state *auth_state,
+				      struct annotation_result *result,
+				      struct mailbox_annotation_rock *mbrock,
+				      void *rock __attribute__((unused))) 
+{
+    time_t modtime = 0;
+    struct stat header, index;
+    static char valuebuf[128];
+    
+    if(!mboxname || !result || !mbrock)
+	fatal("annotation_get_lastupdate called with bad parameters",
+	      EC_TEMPFAIL);
+    
+    get_mb_data(mboxname, mbrock);
+
+    /* Check ACL */
+    if(!isadmin &&
+       (!mbrock->acl ||
+        !(cyrus_acl_myrights(auth_state, mbrock->acl) & ACL_LOOKUP) ||
+        !(cyrus_acl_myrights(auth_state, mbrock->acl) & ACL_READ)))
+	return;
+
+    if (!mbrock->path) return;
+    
+    if (mailbox_stat(mbrock->path, &header, &index, NULL)) return;
+
+    modtime = (header.st_mtime > index.st_mtime) ?
+	header.st_mtime : index.st_mtime;
+
+    strlcpy(valuebuf, ctime(&modtime), sizeof(valuebuf));
+
+    result->value = valuebuf;
+    result->size = strlen(valuebuf);
+}
+
 struct annotate_entry
 {
     const char *name;
@@ -453,6 +493,8 @@ const struct annotate_entry mailbox_ro_entries[] =
     { "/vendor/cmu/cyrus-imapd/server", annotation_get_server,
 	  NULL, ENTRY_SERVER, PROXY_ONLY },
     { "/vendor/cmu/cyrus-imapd/size", annotation_get_size,
+	  NULL, ENTRY_SIZE, BACKEND_ONLY },
+    { "/vendor/cmu/cyrus-imapd/lastupdate", annotation_get_lastupdate,
 	  NULL, ENTRY_SIZE, BACKEND_ONLY },
     { NULL, NULL, NULL, 0, ANNOTATION_PROXY_T_INVALID }
 };
