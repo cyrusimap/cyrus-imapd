@@ -60,10 +60,6 @@ struct msg {
     int deleted;
 } *popd_msg;
 
-/* Eudora kludge */
-#define STATUS "Status: "
-#define SLEN (sizeof (STATUS)-1+4)
-
 static struct mailbox mboxstruct;
 
 static int expungedeleted();
@@ -351,6 +347,30 @@ cmdloop()
 		}
 	    }
 	}
+	else if (!strcmp(inputbuf, "uidl")) {
+	    if (arg) {
+		msg = parsenum(&arg);
+		if (arg) {
+		    fprintf(stdout, "-ERR Unexpected extra argument\r\n");
+		}
+		else if (msg < 1 || msg > popd_exists ||
+			 popd_msg[msg].deleted) {
+		    fprintf(stdout, "-ERR No such message\r\n");
+		}
+		else {
+		    fprintf(stdout, "+OK %d %d\r\n", msg, popd_msg[msg].uid);
+		}
+	    }
+	    else {
+		fprintf(stdout, "+OK unique-id listing follows\r\n");
+		for (msg = 1; msg <= popd_exists; msg++) {
+		    if (!popd_msg[msg].deleted) {
+			fprintf(stdout, "%d %d\r\n", msg, popd_msg[msg].uid);
+		    }
+		}
+		fprintf(stdout, ".\r\n");
+	    }
+	}
 	else {
 	    fprintf(stdout, "-ERR Unrecognized command\r\n");
 	}
@@ -416,7 +436,7 @@ char *pass;
 	    if (r = mailbox_read_index_record(&mboxstruct, msg, &record))
 	      break;
 	    popd_msg[msg].uid = record.uid;
-	    popd_msg[msg].size = record.size /* XXX + SLEN */;
+	    popd_msg[msg].size = record.size;
 	    popd_msg[msg].deleted = 0;
 	    if (record.uid <= mboxstruct.pop3_last_uid) popd_highest = msg;
 	}
