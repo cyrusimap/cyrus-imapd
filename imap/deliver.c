@@ -341,7 +341,7 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
     if (numusers == 0) {
 	/* just deliver to mailbox 'mailbox' */
 	const char *BB = config_getstring("postuser", "");
-	txn->rcpt[0].addr = (char *) xmalloc(ml + strlen(BB) + 1); /* leaks! */
+	txn->rcpt[0].addr = (char *) xmalloc(ml + strlen(BB) + 2); /* leaks! */
 	sprintf(txn->rcpt[0].addr, "%s+%s", BB, mailbox);
     } else {
 	/* setup each recipient */
@@ -349,7 +349,7 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
 	    if (mailbox) {
 		/* we let it leak ! */
 		txn->rcpt[j].addr = 
-		    (char *) xmalloc(strlen(users[j]) + ml + 1);
+		    (char *) xmalloc(strlen(users[j]) + ml + 2);
 		sprintf(txn->rcpt[j].addr, "%s+%s", users[j], mailbox);
 	    } else {
 		txn->rcpt[j].addr = users[j];
