@@ -1,7 +1,7 @@
 dnl kerberos_v4.m4--Kerberos 4 libraries and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
-dnl $Id: kerberos_v4.m4,v 1.5 1998/10/26 22:38:12 shadow Exp $
+dnl $Id: kerberos_v4.m4,v 1.6 1998/11/10 23:11:12 shadow Exp $
 
 AC_DEFUN(CMU_KRB_INC_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
@@ -138,6 +138,13 @@ AC_ARG_WITH(krb4-include,
 	    *-*-hpux*)
 	      if test "X$RPATH" = "X"; then
 	        RPATH="-Wl,+b/usr/local/lib"
+	      else 
+		RPATH="${RPATH}:/usr/local/lib"
+	      fi
+	      ;;
+	    *-*-irix*)
+	      if test "X$RPATH" = "X"; then
+	        RPATH="-Wl,-rpath,/usr/local/lib"
 	      else 
 		RPATH="${RPATH}:/usr/local/lib"
 	      fi
