@@ -42,18 +42,27 @@ char *acapmbox_get_url(char *name)
    currently, we don't set this for personal mailboxes */
 char *acapmbox_get_postaddr(char *name)
 {
-    const char *postspec = config_getstring("postspec", NULL);
-    static char postaddr[MAX_MAILBOX_PATH];
+    static char postaddr[MAX_MAILBOX_PATH + 30];
 
     if (!strncmp(name, "user.", 5)) {
-	return NULL;
-    }
+	char *p;
 
-    if (postspec) {
-	snprintf(postaddr, sizeof(postaddr), postspec, name);
+	/* user+detail */
+	strcpy(postaddr, name + 5);
+	p = strchr(postaddr, '.');
+	if (p) *p = '+';
+	strcat(postaddr, "@");
+	strcat(postaddr, config_servername);
     } else {
-	snprintf(postaddr, sizeof(postaddr), "bb+%s@%s", 
-		 name, config_servername);
+	const char *postspec = config_getstring("postspec", NULL);
+	const char *BB = config_getstring("postuser", "bb");
+
+	if (postspec) {
+	    snprintf(postaddr, sizeof(postaddr), postspec, name);
+	} else {
+	    snprintf(postaddr, sizeof(postaddr), "%s+%s@%s", BB,
+		     name, config_servername);
+	}
     }
 
     return postaddr;
