@@ -93,7 +93,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.38.4.3 2002/11/17 05:06:35 ken3 Exp $ */
+/* $Id: tls.c,v 1.38.4.4 2002/12/13 19:28:37 ken3 Exp $ */
 
 #include <config.h>
 
@@ -136,15 +136,17 @@ static const char hexcodes[] = "0123456789ABCDEF";
 
 enum {
     var_imapd_tls_loglevel = 0,
+    var_proxy_tls_loglevel = 0,
     CCERT_BUFSIZ = 256
 };
 
 static int verify_depth = 5;
 static int verify_error = X509_V_OK;
 
-static SSL_CTX *ctx = NULL;
+static SSL_CTX *s_ctx = NULL, *c_ctx = NULL;
 
 static int tls_serverengine = 0; /* server engine initialized? */
+static int tls_clientengine = 0; /* client engine initialized? */
 static int do_dump = 0;		/* actively dumping protocol? */
 
 
@@ -579,27 +581,27 @@ int     tls_init_serverengine(const char *ident,
 	return (0);				/* already running */
 
     if (var_imapd_tls_loglevel >= 2)
-	syslog(LOG_DEBUG, "starting TLS engine");
+	syslog(LOG_DEBUG, "starting TLS server engine");
 
     SSL_library_init();
     SSL_load_error_strings();
     if (tls_rand_init() == -1) {
-	syslog(LOG_ERR,"TLS engine: cannot seed PRNG");
+	syslog(LOG_ERR,"TLS server engine: cannot seed PRNG");
 	return -1;
     }
 
 #if 0
     if (tlsonly) {
-	ctx = SSL_CTX_new(TLSv1_server_method());
+	s_ctx = SSL_CTX_new(TLSv1_server_method());
     } else {
-	ctx = SSL_CTX_new(SSLv23_server_method());
+	s_ctx = SSL_CTX_new(SSLv23_server_method());
     }
 #endif
     /* even if we want TLS only, we use SSLv23 server method so we can
        deal with a client sending an SSLv2 greeting message */
 
-    ctx = SSL_CTX_new(SSLv23_server_method());
-    if (ctx == NULL) {
+    s_ctx = SSL_CTX_new(SSLv23_server_method());
+    if (s_ctx == NULL) {
 	return (-1);
     };
 
@@ -608,12 +610,12 @@ int     tls_init_serverengine(const char *ident,
 	off |= SSL_OP_NO_SSLv2;
 	off |= SSL_OP_NO_SSLv3;
     }
-    SSL_CTX_set_options(ctx, off);
-    SSL_CTX_set_info_callback(ctx, apps_ssl_info_callback);
+    SSL_CTX_set_options(s_ctx, off);
+    SSL_CTX_set_info_callback(s_ctx, apps_ssl_info_callback);
 
     /* Don't use an internal session cache */
-    SSL_CTX_sess_set_cache_size(ctx, 1);  /* 0 is unlimited, so use 1 */
-    SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_SERVER |
+    SSL_CTX_sess_set_cache_size(s_ctx, 1);  /* 0 is unlimited, so use 1 */
+    SSL_CTX_set_session_cache_mode(s_ctx, SSL_SESS_CACHE_SERVER |
 				   SSL_SESS_CACHE_NO_AUTO_CLEAR |
 				   SSL_SESS_CACHE_NO_INTERNAL_LOOKUP);
 
@@ -628,15 +630,15 @@ int     tls_init_serverengine(const char *ident,
 	int r;
 
 	/* Set the context for session reuse -- use the service ident */
-	SSL_CTX_set_session_id_context(ctx, (void*) ident, strlen(ident));
+	SSL_CTX_set_session_id_context(s_ctx, (void*) ident, strlen(ident));
 
 	/* Set the timeout for the internal/external cache (in seconds) */
-	SSL_CTX_set_timeout(ctx, timeout*60);
+	SSL_CTX_set_timeout(s_ctx, timeout*60);
 
 	/* Set the callback functions for the external session cache */
-	SSL_CTX_sess_set_new_cb(ctx, new_session_cb);
-	SSL_CTX_sess_set_remove_cb(ctx, remove_session_cb);
-	SSL_CTX_sess_set_get_cb(ctx, get_session_cb);
+	SSL_CTX_sess_set_new_cb(s_ctx, new_session_cb);
+	SSL_CTX_sess_set_remove_cb(s_ctx, remove_session_cb);
+	SSL_CTX_sess_set_get_cb(s_ctx, get_session_cb);
 
 	/* create the name of the db file */
 	strcpy(dbdir, config_dir);
@@ -652,8 +654,8 @@ int     tls_init_serverengine(const char *ident,
     }
 
     cipher_list = config_getstring(IMAPOPT_TLS_CIPHER_LIST);
-    if (!SSL_CTX_set_cipher_list(ctx, cipher_list)) {
-	syslog(LOG_ERR,"TLS engine: cannot load cipher list '%s'",
+    if (!SSL_CTX_set_cipher_list(s_ctx, cipher_list)) {
+	syslog(LOG_ERR,"TLS server engine: cannot load cipher list '%s'",
 	       cipher_list);
 	return (-1);
     }
@@ -661,20 +663,20 @@ int     tls_init_serverengine(const char *ident,
     CAfile = config_getstring(IMAPOPT_TLS_CA_FILE);
     CApath = config_getstring(IMAPOPT_TLS_CA_PATH);
 
-    if ((!SSL_CTX_load_verify_locations(ctx, CAfile, CApath)) ||
-	(!SSL_CTX_set_default_verify_paths(ctx))) {
+    if ((!SSL_CTX_load_verify_locations(s_ctx, CAfile, CApath)) ||
+	(!SSL_CTX_set_default_verify_paths(s_ctx))) {
 	/* just a warning since this is only necessary for client auth */
-	syslog(LOG_NOTICE,"TLS engine: cannot load CA data");	
+	syslog(LOG_NOTICE,"TLS server engine: cannot load CA data");	
     }
 
     s_cert_file = config_getstring(IMAPOPT_TLS_CERT_FILE);
     s_key_file = config_getstring(IMAPOPT_TLS_KEY_FILE);
 
-    if (!set_cert_stuff(ctx, s_cert_file, s_key_file)) {
-	syslog(LOG_ERR,"TLS engine: cannot load cert/key data");
+    if (!set_cert_stuff(s_ctx, s_cert_file, s_key_file)) {
+	syslog(LOG_ERR,"TLS server engine: cannot load cert/key data");
 	return (-1);
     }
-    SSL_CTX_set_tmp_rsa_callback(ctx, tmp_rsa_cb);
+    SSL_CTX_set_tmp_rsa_callback(s_ctx, tmp_rsa_cb);
 
     verify_depth = verifydepth;
     if (askcert!=0)
@@ -684,15 +686,15 @@ int     tls_init_serverengine(const char *ident,
     if (requirecert)
 	verify_flags |= SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT
 	    | SSL_VERIFY_CLIENT_ONCE;
-    SSL_CTX_set_verify(ctx, verify_flags, verify_callback);
+    SSL_CTX_set_verify(s_ctx, verify_flags, verify_callback);
 
     if (askcert || requirecert) {
       if (CAfile == NULL) {
 	  syslog(LOG_ERR, 
-		 "TLS engine: No CA file specified. "
+		 "TLS server engine: No CA file specified. "
 		 "Client side certs may not work");
       } else {
-	  SSL_CTX_set_client_CA_list(ctx, SSL_load_client_CA_file(CAfile));
+	  SSL_CTX_set_client_CA_list(s_ctx, SSL_load_client_CA_file(CAfile));
       }
     }
 
@@ -759,7 +761,7 @@ int tls_start_servertls(int readfd, int writefd,
 
     if (authid) *authid = NULL;
 
-    tls_conn = (SSL *) SSL_new(ctx);
+    tls_conn = (SSL *) SSL_new(s_ctx);
     if (tls_conn == NULL) {
 	*ret = NULL;
 	r = -1;
@@ -795,7 +797,7 @@ int tls_start_servertls(int readfd, int writefd,
     if ((sts = SSL_accept(tls_conn)) <= 0) {
 	SSL_SESSION *session = SSL_get_session(tls_conn);
 	if (session) {
-	    SSL_CTX_remove_session(ctx, session);
+	    SSL_CTX_remove_session(s_ctx, session);
 	}
 	r = -1;
 	goto done;
@@ -1036,6 +1038,196 @@ int tls_get_info(SSL *conn, char *buf, size_t len)
 	     SSL_get_verify_result(conn) == X509_V_OK ? "YES" : "NO");
 
     return (strlen(buf));
+}
+
+int tls_init_clientengine(int verifydepth,
+			  char *var_tls_cert_file,
+			  char *var_tls_key_file)
+{
+    int     off = 0;
+    int     verify_flags = SSL_VERIFY_NONE;
+    const char   *CApath;
+    const char   *CAfile;
+    char   *c_cert_file;
+    char   *c_key_file;
+    
+    if (tls_clientengine)
+	return (0);				/* already running */
+
+    if (var_proxy_tls_loglevel >= 2)
+	syslog(LOG_DEBUG, "starting TLS client engine");
+
+    SSL_library_init();
+    SSL_load_error_strings();
+    if (tls_rand_init() == -1) {
+	printf("TLS client engine: cannot seed PRNG\n");
+	return -1;
+    }
+    
+    c_ctx = SSL_CTX_new(TLSv1_client_method());
+    if (c_ctx == NULL) {
+	return (-1);
+    };
+    
+    off |= SSL_OP_ALL;		/* Work around all known bugs */
+    SSL_CTX_set_options(c_ctx, off);
+    SSL_CTX_set_info_callback(c_ctx, apps_ssl_info_callback);
+    
+    CAfile = config_getstring(IMAPOPT_TLS_CA_FILE);
+    CApath = config_getstring(IMAPOPT_TLS_CA_PATH);
+
+    if ((!SSL_CTX_load_verify_locations(c_ctx, CAfile, CApath)) ||
+	(!SSL_CTX_set_default_verify_paths(c_ctx))) {
+	/* just a warning since this is only necessary for client auth */
+	syslog(LOG_NOTICE,"TLS client engine: cannot load CA data");	
+    }
+
+    if (strlen(var_tls_cert_file) == 0)
+	c_cert_file = NULL;
+    else
+	c_cert_file = var_tls_cert_file;
+    if (strlen(var_tls_key_file) == 0)
+	c_key_file = NULL;
+    else
+	c_key_file = var_tls_key_file;
+    
+    if (c_cert_file || c_key_file) {
+	if (!set_cert_stuff(c_ctx, c_cert_file, c_key_file)) {
+	    syslog(LOG_ERR,"TLS client engine: cannot load cert/key data");
+	    return (-1);
+	}
+    }
+    SSL_CTX_set_tmp_rsa_callback(c_ctx, tmp_rsa_cb);
+    
+    verify_depth = verifydepth;
+    SSL_CTX_set_verify(c_ctx, verify_flags, verify_callback);
+    
+    tls_clientengine = 1;
+    return (0);
+}
+
+int tls_start_clienttls(int readfd, int writefd,
+			int *layerbits, char **authid, SSL **ret,
+			SSL_SESSION **sess)
+{
+    int     sts;
+    SSL_CIPHER *cipher;
+    X509   *peer;
+    const char *tls_protocol = NULL;
+    const char *tls_cipher_name = NULL;
+    int tls_cipher_usebits = 0;
+    int tls_cipher_algbits = 0;
+    SSL *tls_conn;
+    int r = 0;
+    
+    assert(tls_clientengine);
+    assert(ret);
+    if (var_proxy_tls_loglevel >= 1)
+	syslog(LOG_DEBUG, "setting up TLS connection");
+
+    if (authid) *authid = NULL;
+
+    tls_conn = (SSL *) SSL_new(c_ctx);
+    if (tls_conn == NULL) {
+	*ret = NULL;
+	r = -1;
+	goto done;
+    }
+    SSL_clear(tls_conn);
+    
+    /* set the file descriptors for SSL to use */
+    if ((SSL_set_rfd(tls_conn, readfd) == 0) || 
+	(SSL_set_wfd(tls_conn, writefd) == 0)) {
+	r = -1;
+	goto done;
+    }
+
+    /*
+     * This is the actual handshake routine. It will do all the negotiations
+     * and will check the client cert etc.
+     */
+    SSL_set_connect_state(tls_conn);
+    
+    /*
+     * We do have an SSL_set_fd() and now suddenly a BIO_ routine is called?
+     * Well there is a BIO below the SSL routines that is automatically
+     * created for us, so we can use it for debugging purposes.
+     */
+    if (var_proxy_tls_loglevel >= 3)
+	BIO_set_callback(SSL_get_rbio(tls_conn), bio_dump_cb);
+
+    /* Dump the negotiation for loglevels 3 and 4*/
+    if (var_proxy_tls_loglevel >= 3)
+	do_dump = 1;
+
+    if (sess && *sess)  /* Reuse a session if we have one */
+	SSL_set_session(tls_conn, *sess);
+
+    if ((sts = SSL_connect(tls_conn)) <= 0) {
+	SSL_SESSION *session = SSL_get_session(tls_conn);
+	if (session) {
+	    SSL_CTX_remove_session(c_ctx, session);
+	}
+	if (sess) *sess = NULL;
+	r = -1;
+	goto done;
+    }
+    if (sess) *sess = SSL_get_session(tls_conn);
+
+    /* Only loglevel==4 dumps everything */
+    if (var_proxy_tls_loglevel < 4)
+	do_dump = 0;
+    
+    /*
+     * Lets see, whether a peer certificate is available and what is
+     * the actual information. We want to save it for later use.
+     */
+    peer = SSL_get_peer_certificate(tls_conn);
+    if (peer != NULL) {
+	char issuer_CN[CCERT_BUFSIZ];
+	char peer_CN[CCERT_BUFSIZ];
+
+	syslog(LOG_DEBUG, "received server certificate");
+
+	X509_NAME_get_text_by_NID(X509_get_subject_name(peer),
+				  NID_commonName, peer_CN, CCERT_BUFSIZ);
+	X509_NAME_get_text_by_NID(X509_get_issuer_name(peer),
+				  NID_commonName, issuer_CN, CCERT_BUFSIZ);
+	if (var_proxy_tls_loglevel >= 3)
+	    syslog(LOG_DEBUG, "subject_CN=%s, issuer_CN=%s", 
+		   peer_CN, issuer_CN);
+
+	/* xxx verify that we like the peer_issuer/issuer_CN */
+
+	if (authid != NULL) {
+	    /* save the peer id for our caller */
+	    *authid = peer_CN ? xstrdup(peer_CN) : NULL;
+	}
+	X509_free(peer);
+    }
+    tls_protocol = SSL_get_version(tls_conn);
+    cipher = SSL_get_current_cipher(tls_conn);
+    tls_cipher_name = SSL_CIPHER_get_name(cipher);
+    tls_cipher_usebits = SSL_CIPHER_get_bits(cipher, &tls_cipher_algbits);
+    
+    if (layerbits != NULL)
+	*layerbits = tls_cipher_usebits;
+    
+    syslog(LOG_NOTICE, "starttls: %s with cipher %s (%d/%d bits %s)"
+	   " no authentication", 
+	   tls_protocol, tls_cipher_name,
+	   tls_cipher_usebits, tls_cipher_algbits,
+	   SSL_session_reused(tls_conn) ? "reused" : "new");
+
+  done:
+    if (r && tls_conn) {
+	/* error; clean up */
+	SSL_free(tls_conn);
+	tls_conn = NULL;
+    }
+    *ret = tls_conn;
+    return r;
+
 }
 
 #else

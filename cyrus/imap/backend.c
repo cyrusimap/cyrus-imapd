@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.7.6.6 2002/12/12 20:24:24 ken3 Exp $ */
+/* $Id: backend.c,v 1.7.6.7 2002/12/13 19:28:37 ken3 Exp $ */
 
 #include <config.h>
 
@@ -113,7 +113,7 @@ static char *ask_capability(struct protstream *pout, struct protstream *pin,
     char str[4096];
     char *ret = NULL, *tmp;
     
-    *supports_starttls = 0;
+    if (supports_starttls) *supports_starttls = 0;
 
     /* request capabilities of server */
     prot_printf(pout, "%s\r\n", capa_cmd->cmd);
@@ -127,7 +127,7 @@ static char *ask_capability(struct protstream *pout, struct protstream *pin,
 	/* check for starttls */
 	if (capa_cmd->tls &&
 	    strstr(str, capa_cmd->tls) != NULL) {
-	    *supports_starttls = 1;
+	    if (supports_starttls) *supports_starttls = 1;
 	}
 	
 	/* check for auth */
@@ -143,6 +143,44 @@ static char *ask_capability(struct protstream *pout, struct protstream *pin,
     return ret;
 }
 
+static int do_starttls(struct backend *s, struct tls_cmd_t *tls_cmd)
+{
+    char buf[2048];
+    int r;
+    int *layerp;
+    char *auth_id;
+    sasl_ssf_t ssf;
+
+    /* send starttls command */
+    prot_printf(s->out, "%s\r\n", tls_cmd->cmd);
+    prot_flush(s->out);
+
+    /* check response */
+    if (!prot_fgets(buf, sizeof(buf), s->in) ||
+	strncmp(buf, tls_cmd->ok, strlen(tls_cmd->ok)))
+	return -1;
+
+    r = tls_init_clientengine(5, "", "");
+    if (r == -1) return -1;
+
+    /* SASL and openssl have different ideas about whether ssf is signed */
+    layerp = (int *) &ssf;
+    r = tls_start_clienttls(s->in->fd, s->out->fd, layerp, &auth_id,
+			    &s->tlsconn, &s->tlssess);
+    if (r == -1) return -1;
+
+    r = sasl_setprop(s->saslconn, SASL_SSF_EXTERNAL, &ssf);
+    if (r != SASL_OK) return -1;
+
+    r = sasl_setprop(s->saslconn, SASL_AUTH_EXTERNAL, auth_id);
+    if (r != SASL_OK) return -1;
+
+    prot_settls(s->in,  s->tlsconn);
+    prot_settls(s->out, s->tlsconn);
+
+    return 0;
+}
+
 static int backend_authenticate(struct backend *s, struct protocol_t *prot,
 				const char *userid, const char **status)
 {
@@ -154,7 +192,7 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
     sasl_callback_t *cb;
     char buf[2048], optstr[128], *p, *mechlist;
     const char *mech_conf, *pass;
-    int starttls;
+    int have_starttls = 1;
 
     strcpy(optstr, s->hostname);
     p = strchr(optstr, '.');
@@ -204,31 +242,38 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
 	return SASL_FAIL;
     }
 
-    /* Get SASL mechanism list */
-    /* We can force a particular mechanism using a <shorthost>_mechs option */
+    /* Get SASL mechanism list.  We can force a particular
+       mechanism using a <shorthost>_mechs option */
+
     strcpy(buf, s->hostname);
     p = strchr(buf, '.');
     if (p) *p = '\0';
     strcat(buf, "_mechs");
     mech_conf = config_getoverflowstring(buf, NULL);
     
-    /* If we don't have a mech_conf, ask the server what it can do */
-    if(!mech_conf) {
-	mechlist = ask_capability(s->out, s->in, &prot->capa_cmd, &starttls);
-    } else {
-	mechlist = xstrdup(mech_conf);
-    }
+    do {
+	/* If we don't have a mech_conf, ask the server what it can do */
+	if(!mech_conf) {
+	    mechlist = ask_capability(s->out, s->in, &prot->capa_cmd,
+				      have_starttls ? &have_starttls : NULL);
+	} else {
+	    mechlist = xstrdup(mech_conf);
+	}
 
-    if (mechlist) {
-	r = saslclient(s->saslconn, &prot->sasl_cmd, mechlist,
-		       s->in, s->out, NULL, status);
+	if (mechlist) {
+	    /* we now do the actual SASL exchange */
+	    saslclient(s->saslconn, &prot->sasl_cmd, mechlist,
+			   s->in, s->out, &r, status);
 
-	/* garbage collect */
-	free(mechlist);
-	mechlist = NULL;
-    }
-    else
-	r = SASL_NOMECH;
+	    /* garbage collect */
+	    free(mechlist);
+	    mechlist = NULL;
+	}
+	else
+	    r = SASL_NOMECH;
+
+    } while (r == SASL_NOMECH && have_starttls-- &&
+	     do_starttls(s, &prot->tls_cmd) != -1);
 
     /* xxx unclear that this is correct */
     free_callbacks(cb);
@@ -324,6 +369,12 @@ void downserver(struct backend *s, struct logout_cmd_t *logout)
     /* Flush the incoming buffer */
     prot_NONBLOCK(s->in);
     prot_fill(s->in);
+
+    /* Free tlsconn */
+    if (s->tlsconn) {
+	tls_reset_servertls(&s->tlsconn);
+	s->tlsconn = NULL;
+    }
 
     /* close/free socket & prot layer */
     close(s->sock);

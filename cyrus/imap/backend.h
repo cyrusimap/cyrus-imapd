@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.h,v 1.3.6.3 2002/12/12 20:24:25 ken3 Exp $ */
+/* $Id: backend.h,v 1.3.6.4 2002/12/13 19:28:37 ken3 Exp $ */
 
 #ifndef _INCLUDED_BACKEND_H
 #define _INCLUDED_BACKEND_H
@@ -47,6 +47,7 @@
 #include "mboxlist.h"
 #include "prot.h"
 #include "saslclient.h"
+#include "tls.h"
 
 /* Functionality to bring up/down connections to backend servers */
 
@@ -93,6 +94,8 @@ struct backend {
     struct prot_waitevent *timeout;
 
     sasl_conn_t *saslconn;
+    SSL *tlsconn;
+    SSL_SESSION *tlssess;
 
     enum {
 	ACAP = 0x1, /* obsolete */
