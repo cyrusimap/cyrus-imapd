@@ -317,7 +317,8 @@ va_dcl
  *   %s -- astring (will be quoted or literalized as needed)
  *   %d -- decimal
  *   %u -- unsigned decimal
- *   %k -- key-value pair list [XXX]
+ *   %v -- #astring (arg is an null-terminated array of (char *)
+ *         which are written as space separated astrings)
  */ 
 #ifdef __STDC__
 void
@@ -396,13 +397,13 @@ va_dcl
 	    
 	case 'd':
 	    num = va_arg(pvar, int);
-	    sprintf(buf, "%ld ", num);
+	    sprintf(buf, "%ld", num);
 	    imclient_write(imclient, buf, strlen(buf));
 	    break;
 
 	case 'u':
 	    unum = va_arg(pvar, int);
-	    sprintf(buf, "%lu ", unum);
+	    sprintf(buf, "%lu", unum);
 	    imclient_write(imclient, buf, strlen(buf));
 	    break;
 
@@ -689,14 +690,15 @@ int len;
 	/* parse keyword */
 	reply.keyword = p;
 	while (*p != ' ' && *p != '\n') p++;
-	if (*p != ' ') {
-	    /* XXX Got junk from the server */
-	    /* Start parsing the next reply */
-	    imclient->replystart = endreply + 1;
-	    continue;
-	}
 	keywordlen = p - reply.keyword;
 	reply.text = p + 1;
+	if (*p == '\n') {
+	    if (keywordlen && p[-1] == '\r') {
+	        keywordlen--;
+		reply.text--;
+	    }
+	    reply.text--;
+	}
 
 	/* Handle tagged replies */
 	if (replytag != 0) {
