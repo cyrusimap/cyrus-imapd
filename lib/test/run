@@ -3,8 +3,14 @@
 use strict;
 
 my $verbose = 0;
+my $clean = 0;
 while (defined $ARGV[0] && ("-v" eq $ARGV[0])) {
     $verbose++;
+    shift @ARGV;
+}
+
+while (defined $ARGV[0] && ("-c" eq $ARGV[0])) {
+    $clean++;
     shift @ARGV;
 }
 
@@ -30,6 +36,10 @@ sub runone {
     $input = $t if (!defined $input);
     $output = "$input.OUTPUT";
     $input =  "$input.INPUT";
+
+    if ($clean) {
+	system "rm -rf $tname";
+    }
 
     mkdir $tname, 0755;
     chdir $tname;
