@@ -49,7 +49,7 @@ SHELL = /bin/sh
 OBJS= acl.o assert.o charset.o glob.o is.o util.o prot.o n_binsearch.o \
 	imclient.o imparse.o xmalloc.o \
 	nonblock_@WITH_NONBLOCK@.o lock_@WITH_LOCK@.o gmtoff_@WITH_GMTOFF@.o \
-	$(ACL) $(AUTH) @LIBOBJS@
+	map_@WITH_MAP@.o $(ACL) $(AUTH) @LIBOBJS@
 
 all: libcyrus.a
 
