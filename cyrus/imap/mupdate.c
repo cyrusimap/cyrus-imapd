@@ -1,3 +1,45 @@
+/* mupdate.c -- cyrus murder database master 
+ *
+ * $Id: mupdate.c,v 1.8 2001/07/15 18:08:15 leg Exp $
+ * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer. 
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in
+ *    the documentation and/or other materials provided with the
+ *    distribution.
+ *
+ * 3. The name "Carnegie Mellon University" must not be used to
+ *    endorse or promote products derived from this software without
+ *    prior written permission. For permission or any other legal
+ *    details, please contact  
+ *      Office of Technology Transfer
+ *      Carnegie Mellon University
+ *      5000 Forbes Avenue
+ *      Pittsburgh, PA  15213-3890
+ *      (412) 268-4387, fax: (412) 268-7395
+ *      tech-transfer@andrew.cmu.edu
+ *
+ * 4. Redistributions of any form whatsoever must retain the following
+ *    acknowledgment:
+ *    "This product includes software developed by Computing Services
+ *     at Carnegie Mellon University (http://www.cmu.edu/computing/)."
+ *
+ * CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
+ * THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+ * AND FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE
+ * FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+ * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
+ * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
 /*
  * Work in progress by larry. compiles now but not useful yet.
  * 
@@ -6,6 +48,7 @@
 
 #include <config.h>
 
+#include <sys/time.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -17,6 +60,7 @@
 #include <time.h>
 #include <assert.h>
 #include <syslog.h>
+#include <errno.h>
 
 #include <netdb.h>
 #include <sys/socket.h>
@@ -41,6 +85,10 @@ enum settype {
     SET_ACTIVE,
     SET_RESERVE,
     SET_DELETE
+};
+
+enum {
+    poll_interval = 1
 };
 
 struct pending {
@@ -71,10 +119,17 @@ struct conn {
 pthread_mutex_t connlist_mutex = PTHREAD_MUTEX_INITIALIZER;
 struct conn *connlist;
 
+/* ---- database access ---- */
+skiplist *mailboxes;
+pthread_mutex_t mailboxes_mutex = PTHREAD_MUTEX_INITIALIZER;
+struct conn *updatelist;
+
+/* --- prototypes --- */
 void cmd_set(struct conn *C, 
 	     const char *tag, const char *mailbox,
 	     const char *server, const char *acl, enum settype t);
-void cmd_find(struct conn *C, const char *tag, const char *mailbox);
+void cmd_find(struct conn *C, const char *tag, const char *mailbox,
+	      int dook);
 void cmd_update(struct conn *C, const char *tag);
 void shut_down(int code);
 void database_init();
@@ -94,10 +149,27 @@ static struct conn *conn_new(int fd)
 
 static void conn_free(struct conn *C)
 {
-    if (C->streaming) {
-	/* xxx remove from updatelist */
+    if (C->streaming) {		/* remove from updatelist */
+	struct conn *upc;
 
+	pthread_mutex_lock(&mailboxes_mutex);
 
+	if (C == updatelist) {
+	    /* first thing in updatelist */
+	    updatelist = C->updatelist_next;
+	} else {
+	    /* find in update list */
+	    for (upc = updatelist; upc->next != NULL; 
+		 upc = upc->updatelist_next) {
+		if (upc->updatelist_next == C) break;
+	    }
+	    /* must find it ! */
+	    assert(upc->updatelist_next == C);
+
+	    upc->next = C->updatelist_next;
+	}
+
+	pthread_mutex_unlock(&mailboxes_mutex);
     }
 
     pthread_mutex_lock(&connlist_mutex); /* LOCK */
@@ -239,17 +311,16 @@ void cmdloop(struct conn *c)
 	char *p;
 
 	signals_poll();
-
+	
 	if (c->streaming) {
-	    /* if streaming updates, do the select */
-	    ch = EOF;
-	} else {
-	    /* not streaming */
-	    ch = getword(c->pin, &tag);
-	}
-	if (ch == EOF) {
-	    const char *err;
+	    /* if streaming updates, check if i have data to send */
 
+	}
+
+	ch = getword(c->pin, &tag);
+	if (ch == EOF && errno != EAGAIN) {
+	    const char *err;
+	    
 	    if ((err = prot_error(c->pin)) != NULL) {
 		syslog(LOG_WARNING, "%s, closing connection", err);
 		prot_printf(c->pout, "* BYE %s\r\n", err);
@@ -318,6 +389,8 @@ void cmdloop(struct conn *c)
 		ch = getstring(c->pin, c->pout, &arg3);
 		CHECKNEWLINE(c, ch);
 
+		if (c->streaming) goto notwhenstreaming;
+		
 		cmd_set(c, tag.s, arg1.s, arg2.s, arg3.s, SET_ACTIVE);
 	    }
 	    else goto badcmd;
@@ -330,6 +403,8 @@ void cmdloop(struct conn *c)
 		ch = getstring(c->pin, c->pout, &arg1);
 		CHECKNEWLINE(c, ch);
 
+		if (c->streaming) goto notwhenstreaming;
+		
 		cmd_set(c, tag.s, arg1.s, NULL, NULL, SET_DELETE);
 	    }
 	    else goto badcmd;
@@ -342,7 +417,9 @@ void cmdloop(struct conn *c)
 		ch = getstring(c->pin, c->pout, &arg1);
 		CHECKNEWLINE(c, ch);
 
-		cmd_find(c, tag.s, arg1.s);
+		if (c->streaming) goto notwhenstreaming;
+		
+		cmd_find(c, tag.s, arg1.s, 1);
 	    }
 	    else goto badcmd;
 	    break;
@@ -375,6 +452,8 @@ void cmdloop(struct conn *c)
 		ch = getstring(c->pin, c->pout, &arg2);
 		CHECKNEWLINE(c, ch);
 
+		if (c->streaming) goto notwhenstreaming;
+		
 		cmd_set(c, tag.s, arg1.s, arg2.s, NULL, SET_RESERVE);
 	    }
 	    else goto badcmd;
@@ -382,8 +461,11 @@ void cmdloop(struct conn *c)
 
 	case 'U':
 	    if (!c->userid) goto nologin;
-	    else if (!strcmp(cmd.s, "Update")) { /* xxx */
-		cmd_update(c, tag.s);
+	    else if (!strcmp(cmd.s, "Update")) {
+		CHECKNEWLINE(c, ch);
+		if (c->streaming) goto notwhenstreaming;
+		
+		cmd_startupdate(c, tag.s);
 		/* no other commands are legal after this */
 		goto done;
 	    }
@@ -404,6 +486,11 @@ void cmdloop(struct conn *c)
 	missingargs:
 	    prot_printf(c->pout, "%s BAD \"Missing arguments\"\r\n", tag.s);
 	    eatline(c->pin, ch);
+	    continue;
+
+	notwhenstreaming:
+	    prot_printf(c->pout, "%s BAD \"not legal when streaming\"\r\n",
+			tag.s);
 	    continue;
 	}
 
@@ -487,11 +574,6 @@ int service_main_fd(int fd, int argc, char **argv, char **envp)
 
     return pthread_create(&t, NULL, &start, c);
 }
-
-/* ---- database access ---- */
-skiplist *mailboxes;
-pthread_mutex_t mailboxes_mutex = PTHREAD_MUTEX_INITIALIZER;
-struct conn *updatelist;
 
 /* mailbox name MUST be first, since it is the key */
 struct mbent {
@@ -742,8 +824,6 @@ void cmd_set(struct conn *C,
 	/* remove from memory */
 	sdelete(mailboxes, m);
 	free(m);
-
-	prot_printf(C->pout, "%s OK \"deleted\"\r\n", tag);
     } else {
 	if (m && (!acl || strlen(acl) < strlen(m->acl))) {
 	    /* change what's already there */
@@ -790,7 +870,8 @@ void cmd_set(struct conn *C,
 	pthread_mutex_lock(&upc->m);
 	p->next = upc->plist;
 	upc->plist = p;
-	/* xxx notify server? */
+
+	pthread_cond_signal(&upc->cond);
 	pthread_mutex_unlock(&upc->m);
     }
 
@@ -800,7 +881,7 @@ void cmd_set(struct conn *C,
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 }
 
-void cmd_find(struct conn *C, const char *tag, const char *mailbox)
+void cmd_find(struct conn *C, const char *tag, const char *mailbox, int dook)
 {
     struct mbent *m;
 
@@ -825,7 +906,9 @@ void cmd_find(struct conn *C, const char *tag, const char *mailbox)
     }
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 
-    prot_printf(C->pout, "%s OK \"Search completed\"\r\n", tag);
+    if (dook) {
+	prot_printf(C->pout, "%s OK \"Search completed\"\r\n", tag);
+    }
 }
 
 void cmd_update(struct conn *C, const char *tag)
@@ -868,13 +951,38 @@ void cmd_update(struct conn *C, const char *tag)
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 
     prot_printf(C->pout, "%s OK \"streaming starts\"\r\n", tag);
+    prot_flush(C->pout);
+
+    prot_NONBLOCK(C->pin);
 
     /* start streaming updates */
     for (;;) {
-	struct pending *p;
+	struct pending *p, *q;
+	struct timeval now;
+	struct timespec timeout;
+	int r, ch;
 
 	pthread_mutex_lock(&C->m);
-	pthread_cond_wait(&C->cond, &C->m);
+
+	do {
+	    gettimeofday(&now, NULL);
+	    timeout.tv_sec = now.tv_sec + poll_interval;
+	    timeout.tv_nsec = now.tv_usec * 1000;
+	    
+	    r = pthread_cond_timedwait(&C->cond, &C->m, &timeout);
+
+	    /* xxx poll input for LOGOUT, NOOP, closed connection */
+	    ch = prot_getc(C->pin);
+	    if (ch != -1 || errno != EAGAIN) {
+		/* whoa, have input */
+		if (ch == -1) {
+		    /* "input" is a closed connection */
+		} else {
+		    /* input is a command */
+
+		}
+	    }
+	} while (r == ETIMEDOUT);
 
 	/* just grab the update list and release the lock */
 	p = C->plist;
@@ -883,9 +991,20 @@ void cmd_update(struct conn *C, const char *tag)
 
 	while (p != NULL) {
 	    /* send update */
-	    
+	    q = p;
+	    p = p->next;
 
+	    if (q->t == SET_DELETE) {
+		prot_printf(C->pout, "%s DELETE {%d}\r\n%s\r\n",
+			    tag, strlen(q->mailbox), q->mailbox);
+	    } else {
+		/* notify just like a FIND */
+		cmd_find(C, tag, q->mailbox, 0);
+	    }
+	    free(q);
 	}
+
+	prot_flush(C->pout);
     }
 }
 

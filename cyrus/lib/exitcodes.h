@@ -1,5 +1,5 @@
 /* exitcodes.h -- wrapper around sysextis.h
- * $Id: exitcodes.h,v 1.3 2000/05/23 20:56:14 robeson Exp $
+ * $Id: exitcodes.h,v 1.4 2001/07/15 18:08:15 leg Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -81,7 +81,7 @@
 #define EC_IOERR       EX_TEMPFAIL	/* input/output error */
 #define EC_TEMPFAIL    EX_TEMPFAIL	/* user is invited to retry */
 #define EC_PROTOCOL    EX_TEMPFAIL	/* remote error in protocol */
-#define EC_NOPERM      EX_TEMPFAIL	/* permission denied */
+#define EC_NOPERM      EX_NOPERM	/* permission denied */
 #define EC_CONFIG      EX_TEMPFAIL	/* configuration error */
 
 #endif /* INCLUDED_EXITCODES_H */
