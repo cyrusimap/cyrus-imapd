@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.12 2000/11/05 22:11:27 leg Exp $ */
+/* $Id: acconfig.h,v 1.13 2000/12/20 21:28:46 leg Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -102,10 +102,17 @@
 /* This seems to be required to make Solaris happy. */
 #undef __EXTENSIONS__
 
+/* do we have socklen_t? */
+#undef HAVE_SOCKLEN_T
+
 @BOTTOM@
 
 #ifndef __GNUC__
 #define __attribute__(foo)
+#endif
+
+#ifndef HAVE_SOCKLEN_T
+typedef int socklen_t;
 #endif
 
 /* compile time options; think carefully before modifying */

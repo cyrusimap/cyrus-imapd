@@ -47,6 +47,11 @@ To make a release:
 ---
 to bring up a new Andrew Cyrus server:
 
+a) backend server
+b) frontend server
+c) smtp server
+
+
 - include cyrus-basic.mpp
 - include uses.imap.mpp
 - (optional) include uses.timsieved.mpp
