@@ -1,5 +1,5 @@
 /* imapd.h -- Common state for IMAP daemon
- * $Id: imapd.h,v 1.59 2004/06/22 18:58:12 rjs3 Exp $
+ * $Id: imapd.h,v 1.60 2004/06/22 19:04:16 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -75,6 +75,8 @@ struct fetchargs {
     struct fieldlist *fsections;  /* BODY[xHEADER.FIELDSx]<x> values */
     struct strlist *headers;	/* RFC822.HEADER.LINES */
     struct strlist *headers_not; /* RFC822.HEADER.LINES.NOT */
+    int start_octet;           /* start_octet for partial fetch */
+    int octet_count;           /* octet_count for partial fetch, or 0 */
 
     bit32 cache_atleast;          /* to do headers we need atleast this
 				   * cache version */
