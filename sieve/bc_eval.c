@@ -1,5 +1,5 @@
 /* bc_eval.c - evaluate the bytecode
- * $Id: bc_eval.c,v 1.1.4.11 2003/06/23 16:31:42 jsmith2 Exp $
+ * $Id: bc_eval.c,v 1.1.4.12 2003/06/24 00:31:01 jsmith2 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -53,7 +53,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  * item */
 int unwrap_string(bytecode_input_t *bc, int pos, const char **str, int *len) 
 {
-    int local_len = bc[pos].value;
+    int local_len = ntohl(bc[pos].value);
 
     pos++;
     
@@ -81,7 +81,7 @@ const char ** bc_makeArray(bytecode_input_t *bc, int *pos)
 { 
     int i;
     const char** array;
-    int len = bc[*pos].value;
+    int len = ntohl(bc[*pos].value);
 
     (*pos)+=2; /* Skip # Values and Total Byte Length */
   
@@ -300,7 +300,9 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
     int address=0;/*to differentiate between address and envelope*/
     comparator_t * comp=NULL;
     void * comprock=NULL;
-    switch(bc[i].value)
+    int op= ntohl(bc[i].op);
+    
+    switch(op)
     {
     case BC_FALSE:
 	res=0; i++; break;
@@ -314,7 +316,7 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
     case BC_EXISTS:/*3*/
     {
 	int headersi=i+1;
-	int numheaders=bc[headersi].len;
+	int numheaders=ntohl(bc[headersi].len);
 	const char** val;
 	int currh;
 	res=1;
@@ -328,29 +330,31 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 	    if(interp->getheader(m,str, &val) != SIEVE_OK)
 		res = 0;
 	}
-	i=(bc[headersi+1].value/4);
+	i=(ntohl(bc[headersi+1].value)/4);
 	break;
     }
     case BC_SIZE:/*4*/
     {
 	int s;
-
+	int sizevar=ntohl(bc[i+1].value);
+	int x=ntohl(bc[i+2].value);
+	
 	if (interp->getsize(m, &s) != SIEVE_OK)
 	    break;
 	
-	if (bc[i+1].value==B_OVER) {
+	if (sizevar ==B_OVER) {
 	    /* over */
-	    res=s>bc[i+2].value;
+	    res= s > x;
 	} else {
             /* under */
-	    res=s<bc[i+2].value;
+	    res= s < x;
 	}
 	i+=3;
 	break;
     }
     case BC_ANYOF:/*5*/
 	res = 0;
-	list_len=bc[i+1].len;
+	list_len=ntohl(bc[i+1].len);
 	i+=2;
 	/* return 0 unless you find one, then return 1 */
 	for (x=0; x<list_len && !res; x++) { 
@@ -359,7 +363,7 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 	break; 
     case BC_ALLOF:/*6*/ 
         res=1;     
-	list_len=bc[i+1].len;
+	list_len=ntohl(bc[i+1].len);
 	i+=2;
 
 	/* return 1 unless you find one that isn't true, then return 0 */
@@ -379,16 +383,17 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 	int addrpart=ADDRESS_ALL;/* XXX correct default behavior?*/
 
  	int headersi=i+5;/* the i value for the begining of the headers */
-	int datai=(bc[headersi+1].value/4);
+	int datai=(ntohl(bc[headersi+1].value)/4);
 
-	int numheaders=bc[headersi].len;
-	int numdata=bc[datai].len;
+	int numheaders=ntohl(bc[headersi].len);
+	int numdata=ntohl(bc[datai].len);
 
 	int currh, currd; /* current header, current data */
 
-	int match=bc[i+1].value;
-	int relation=bc[i+2].value;
-	int comparator=bc[i+3].value;
+	int match=ntohl(bc[i+1].value);
+	int relation=ntohl(bc[i+2].value);
+	int comparator=ntohl(bc[i+3].value);
+	int apart=ntohl(bc[i+4].value);
 	int count=0;
 	char scount[3];
 	int isReg = (match==B_REGEX);
@@ -418,7 +423,7 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 	}
 	
 	/*find the part of the address that we want*/
-	switch(bc[i+4].value)
+	switch(apart)
 	{
 	case B_ALL:
 	    addrpart = ADDRESS_ALL; break;
@@ -535,7 +540,7 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 	}
 
 	/* Update IP */
-	i=(bc[datai+1].value/4);
+	i=(ntohl(bc[datai+1].value)/4);
 	
 	break;
     }
@@ -544,16 +549,16 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 	const char** val;
 
 	int headersi=i+4;/*the i value for the begining of hte headers*/
-	int datai=(bc[headersi+1].value/4);
+	int datai=(ntohl(bc[headersi+1].value)/4);
 
-	int numheaders=bc[headersi].len;
-	int numdata=bc[datai].len;
+	int numheaders=ntohl(bc[headersi].len);
+	int numdata=ntohl(bc[datai].len);
 
 	int currh, currd; /*current header, current data*/
 
-	int match=bc[i+1].value;
-	int relation=bc[i+2].value;
-	int comparator=bc[i+3].value;
+	int match=ntohl(bc[i+1].value);
+	int relation=ntohl(bc[i+2].value);
+	int comparator=ntohl(bc[i+3].value);
 	int count=0;	
 	char scount[3];
 	int isReg = (match==B_REGEX);
@@ -647,17 +652,18 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 	}
 
 	/* Update IP */
-	i=(bc[datai+1].value/4);
+	i=(ntohl(bc[datai+1].value)/4);
 	
 	break;
     }
     default:
 #if VERBOSE
 	printf("WERT, can't evaluate if statement. %d is not a valid command",
-	       bc[i].value);
+	       op);
 #endif     
 	return SIEVE_RUN_ERROR;
     }
+    
   
  alldone:
     
@@ -675,7 +681,8 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
     const char *data;
     unsigned int ip = 0, ip_max = (bc_len/sizeof(bytecode_input_t));
     int res=0;
-   
+    int op;
+    
     bytecode_input_t *bc = (bytecode_input_t *)bc_in;
     
     /* Check that we
@@ -693,7 +700,9 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 
     ip = BYTECODE_MAGIC_LEN / sizeof(bytecode_input_t);
 
-    if(bc[ip].op != BYTECODE_VERSION) {
+   
+    
+    if( ntohl(bc[ip].op) != BYTECODE_VERSION) {
 	if(errmsg) {
 	    *errmsg =
 		"Incorrect Bytecode Version, please recompile (use sievec)";
@@ -706,8 +715,8 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 #endif
 
     for(ip++; ip<ip_max; ) { 
-	
-	switch(bc[ip].op) {
+	op=ntohl(bc[ip].op);
+	switch(op) {
 	case B_STOP:/*0*/
 	    res=1;
 	    break;
@@ -760,7 +769,7 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 
 	case B_IF:/*6*/
 	{
-	    int testend=bc[ip+1].value;
+	    int testend=ntohl(bc[ip+1].value);
 	    int result;
 	   
 	    ip+=2;
@@ -791,7 +800,7 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 	case B_ADDFLAG:/*10*/ 
 	{
 	    int x;
-	    int list_len=bc[ip+1].len;
+	    int list_len=ntohl(bc[ip+1].len);
 
 	    ip+=3; /* skip opcode, list_len, and list data len */
 
@@ -809,7 +818,7 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 	case B_SETFLAG:
 	{
 	    int x;
-	    int list_len=bc[ip+1].len;
+	    int list_len=ntohl(bc[ip+1].len);
 
 	    ip+=3; /* skip opcode, list_len, and list data len */
 
@@ -836,7 +845,7 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 	case B_REMOVEFLAG:
 	{
 	    int x;
-	    int list_len=bc[ip+1].len;
+	    int list_len=ntohl(bc[ip+1].len);
 
 	    ip+=3; /* skip opcode, list_len, and list data len */
 
@@ -858,6 +867,8 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 	    const char **options = NULL;
 	    const char *priority = NULL;
 	    const char * message;
+	    int pri;
+	    
 	    ip++;
 
 	    /* method */
@@ -870,7 +881,10 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 	    options=bc_makeArray(bc, &ip); 
 
 	    /* priority */
-	    switch (bc[ip++].value)
+	    pri=ntohl(bc[ip].value);
+	    ip++;
+	    
+	    switch (pri)
 	    {
 	    case B_LOW:
 		priority="low";
@@ -913,9 +927,13 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 	    void *comprock = NULL;
 	    
 	    int comparator;
+	    int pri;
 	    
 	    ip++;
-	    switch (bc[ip++].value)
+	    pri=ntohl(bc[ip].value);
+	    ip++;
+	    
+	    switch (pri)
 	    {
 	    case B_LOW:
 		priority="low";		
@@ -935,15 +953,19 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 	    if(res == SIEVE_RUN_ERROR)
 		break;
 	   
-	    comparator = bc[ip++].value;
+	    comparator =ntohl( bc[ip].value);
+	    ip++;
 	    
 	    if (comparator == B_ANY)
 	    { 
-		ip++; /* skip placeholder this has no comparator function */
+		ip++;/* skip placeholder this has no comparator function */
 		comp=NULL;
 	    } else {
+		int x= ntohl(bc[ip].value);
+		ip++;
+		
 		comp=lookup_comp(B_ASCIICASEMAP,comparator,
-				 bc[ip++].value, &comprock);
+				 x, &comprock);
 	    }
 	    
 	    ip = unwrap_string(bc, ip, &pattern, NULL);
@@ -977,12 +999,16 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 	    const char *message = NULL;
 	    char buf[128];
 	    char subject[1024];
+	    int x;
+	    
 	    ip++;
 
-	    respond=shouldRespond(m,i, bc[ip].len, bc, ip+2,
+	    x=ntohl( bc[ip].len);
+	    
+	    respond=shouldRespond(m, i, x, bc, ip+2,
 				  &fromaddr, &toaddr);
 	    
-	    ip=bc[ip+1].value/4;	
+	    ip=(ntohl(bc[ip+1].value)/4);	
 	    if (respond==SIEVE_OK)
 	    {	 
 		ip = unwrap_string(bc, ip, &data, NULL);
@@ -1013,7 +1039,7 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 
 		res = do_vacation(actions, toaddr, fromaddr,
 				  xstrdup(subject), message,
-				  bc[ip].value, bc[ip+1].value);
+				  ntohl(bc[ip].value), ntohl(bc[ip+1].value));
 
 		ip+=2;		
 
@@ -1037,7 +1063,7 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 	    break;
 
 	case B_JUMP:/*16*/
-	    ip= bc[ip+1].jump;
+	    ip= ntohl(bc[ip+1].jump);
 	    break;
 	    
 	default:
