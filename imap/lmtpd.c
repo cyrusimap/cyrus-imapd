@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: lmtpd.c,v 1.5 2000/02/18 06:44:16 tmartin Exp $
+ * $Id: lmtpd.c,v 1.6 2000/02/18 22:51:37 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.5 2000/02/18 06:44:16 tmartin Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.6 2000/02/18 22:51:37 leg Exp $";*/
 
 #include <config.h>
 
@@ -84,7 +84,6 @@
 #include "append.h"
 #include "mboxlist.h"
 #include "notify.h"
-
 
 struct protstream *deliver_out, *deliver_in;
 
@@ -166,6 +165,7 @@ void shut_down(int code);
 
 int dupelim = 0;
 int singleinstance = 1;
+const char *BB = "bb";
 
 void savemsg();
 char *convert_lmtp();
@@ -205,38 +205,6 @@ static sasl_security_properties_t *make_secprops(int min, int max)
     ret->property_values = NULL;
     
     return ret;
-}
-
-/* this is a wrapper to call the cyrus configuration from SASL */
-static int mysasl_config(void *context __attribute__((unused)), 
-			 const char *plugin_name,
-			 const char *option,
-			 const char **result,
-			 unsigned *len)
-{
-    char opt[1024];
-
-    if (strcmp(option, "srvtab")) { /* we don't transform srvtab! */
-	int sl = 5 + (plugin_name ? strlen(plugin_name) + 1 : 0);
-
-	strncpy(opt, "sasl_", 1024);
-	if (plugin_name) {
-	    strncat(opt, plugin_name, 1019);
-	    strncat(opt, "_", 1024 - sl);
-	}
- 	strncat(opt, option, 1024 - sl - 1);
-	opt[1023] = '\0';
-    } else {
-	strncpy(opt, option, 1024);
-    }
-
-    *result = config_getstring(opt, NULL);
-    if (*result != NULL) {
-	if (len) { *len = strlen(*result); }
-	return SASL_OK;
-    }
-   
-    return SASL_FAIL;
 }
 
 /* returns true if imapd_authstate is in "item";
@@ -357,6 +325,7 @@ int service_init(int argc, char **argv, char **envp)
 #endif USE_SIEVE
 
     singleinstance = config_getswitch("singleinstancestore", 1);
+    BB = config_getstring("postuser", "bb");
 
     if (sasl_server_init(mysasl_cb, "Cyrus") != SASL_OK) {
 	fatal("SASL failed initializing: sasl_server_init()", EC_TEMPFAIL);
@@ -1402,8 +1371,7 @@ char *process_recipient(char *addr,
 	}
 
 	/* special case bb */
-	if (strcasecmp(user,"bb")==0)
-	{
+	if (!strcmp(user, BB)) {
 	    r = mboxlist_lookup(user+3, (char **)0, (char **)0, NULL);
 	} else {	    
 	    strcpy(buf, "user.");
@@ -2235,10 +2203,8 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
     FILE *f;
 
     if (user) {
-
 	/* this is a netnews delivery. special case */
-	if (strcasecmp(user,"bb")==0)
-	{
+	if (!strcmp(user, BB)) {
 	    r = deliver_mailbox(msgdata->data,
 				&msgdata->stage,
 				msgdata->size, 

@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.210 2000/02/17 04:51:19 tmartin Exp $ */
+/* $Id: imapd.c,v 1.211 2000/02/18 22:51:36 leg Exp $ */
 
 #include <config.h>
 
@@ -211,51 +211,6 @@ static sasl_security_properties_t *make_secprops(int min, int max)
   ret->property_values = NULL;
 
   return ret;
-}
-
-/* this is a wrapper to call the cyrus configuration from SASL */
-static int mysasl_config(void *context __attribute__((unused)), 
-			 const char *plugin_name,
-			 const char *option,
-			 const char **result,
-			 unsigned *len)
-{
-    char opt[1024];
-
-    if (strcmp(option, "srvtab")) { /* we don't transform srvtab! */
-	int sl = 5 + (plugin_name ? strlen(plugin_name) + 1 : 0);
-
-	strncpy(opt, "sasl_", 1024);
-	if (plugin_name) {
-	    int i = 5;
-
-	    for (i = 0; i < strlen(plugin_name); i++) {
-		opt[i + 5] = tolower(plugin_name[i]);
-	    }
-	    opt[i] = '_';
-	}
- 	strncat(opt, option, 1024 - sl - 1);
-    } else {
-	strncpy(opt, option, 1024);
-    }
-    opt[1023] = '\0';		/* paranoia */
-
-    *result = config_getstring(opt, NULL);
-    if (*result == NULL && plugin_name) {
-	/* try again without plugin name */
-
-	strncpy(opt, "sasl_", 1024);
- 	strncat(opt, option, 1024 - 6);
-	opt[1023] = '\0';	/* paranoia */
-	*result = config_getstring(opt, NULL);
-    }
-
-    if (*result) {
-	if (len) { *len = strlen(*result); }
-	return SASL_OK;
-    } else {
-	return SASL_FAIL;
-    }
 }
 
 /*

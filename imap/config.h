@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- $Id: config.h,v 1.12 2000/02/17 03:04:29 leg Exp $
+ $Id: config.h,v 1.13 2000/02/18 22:51:35 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -36,6 +36,11 @@ extern int config_getint(const char *key, int def);
 extern int config_getswitch(const char *key, int def);
 extern const char *config_partitiondir(const char *partition);
 extern int config_changeident(const char *ident);
+extern int mysasl_config(void *context,
+			 const char *plugin_name,
+			 const char *option,
+			 const char **result,
+			 unsigned *len);
 
 /* Values of mandatory options */
 extern const char *config_dir;
