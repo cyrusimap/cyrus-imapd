@@ -22,6 +22,7 @@ AC_DEFUN(CMU_LIBWRAP, [
   if test "$with_libwrap" != no; then
     AC_DEFINE(HAVE_LIBWRAP)
     LIB_WRAP="-lwrap"
+    AC_CHECK_LIB(nsl, yp_get_default_domain, LIB_WRAP="${LIB_WRAP} -lnsl")
   fi
   AC_SUBST(LIB_WRAP)
 ])
