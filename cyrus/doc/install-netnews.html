@@ -1,4 +1,4 @@
-<!-- $Id: install-netnews.html,v 1.2.2.1 2004/01/15 20:24:24 ken3 Exp $ -->
+<!-- $Id: install-netnews.html,v 1.2.2.2 2004/01/31 02:03:23 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Cyrus and Netnews
@@ -165,10 +165,10 @@ news article.  A simple rule for doing this in Sendmail is shown
 below:
 
 <pre>
-<kdb># mail addressed to post+ goes to lmtp2nntp@localhost
+# mail addressed to post+ goes to lmtp2nntp@localhost
 LOCAL_RULE_0
-Rpost + $+ < @ $=w . >		$#lmtp2nntp $@ localhost $: $1
-</kbd></pre>
+Rpost + $+ &lt; @ $=w . &gt;		$#lmtp2nntp $@ localhost $: $1
+</pre>
 
 <p>For other configurations, consult the <tt>lmtp2nntp</tt> and
 documentation and your MTA documentation.
@@ -210,5 +210,5 @@ newsgroups under <tt>alt</tt> will be expired at the same time
 (independently from <tt>comp</tt>).
 
 <P><HR>
-last modified: $Date: 2004/01/15 20:24:24 $
+last modified: $Date: 2004/01/31 02:03:23 $
 </BODY></HTML>
