@@ -1350,7 +1350,7 @@ char *rock;
 	msgfile = fopen(mailbox_message_fname(mailbox, UID(msgno)), "r");
 	if (!msgfile) {
 	    printf("* NO ");
-	    printf(error_code(IMAP_NO_MSGGONE), msgno);
+	    printf(error_message(IMAP_NO_MSGGONE), msgno);
 	    printf("\r\n");
 	}
     }
