@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.41 2001/11/27 02:24:57 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.42 2001/12/11 20:52:15 rjs3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1106,6 +1106,7 @@ void lmtpmode(struct lmtp_func *func,
     }
 
     /* set my allowable security properties */
+    /* ANONYMOUS is silly because we allow that anyway */
     secflags = SASL_SEC_NOANONYMOUS;
     if (!config_getswitch("allowplaintext", 1)) {
 	secflags |= SASL_SEC_NOPLAINTEXT;
@@ -1891,7 +1892,7 @@ static int do_auth(struct lmtp_conn *conn)
     struct sockaddr_in saddr_r;
     socklen_t addrsize;
     char buf[2048];
-    char *in, *p;
+    char *in;
     const char *out;
     unsigned int inlen, outlen;
     const char *mechusing;
@@ -1924,14 +1925,9 @@ static int do_auth(struct lmtp_conn *conn)
     r = sasl_setprop(conn->saslconn, SASL_IPREMOTEPORT, remoteip);
     if (r != SASL_OK) return r;
 
-    strcpy(buf, conn->host);
-    p = strchr(buf, '.');
-    *p = '\0';
-    strcat(buf, "_mechs");
-
     /* we now do the actual SASL exchange */
     r = sasl_client_start(conn->saslconn, 
-			  config_getstring(buf, "KERBEROS_V4"),
+			  conn->mechs,
 			  NULL, &out, &outlen, &mechusing);
     if ((r != SASL_OK) && (r != SASL_CONTINUE)) {
 	return r;
@@ -1988,8 +1984,7 @@ int lmtp_connect(const char *phost,
     struct lmtp_conn *conn;
     char buf[8192];
     int code;
-    unsigned ssf;
-    const char *auth_id;
+    int unix_socket = 0;
     
     assert(host);
     assert(ret);
@@ -2010,9 +2005,8 @@ int lmtp_connect(const char *phost,
 	    goto donesock;
 	}
 
-	/* set external properties */
-	ssf = 2;
-	auth_id = "postman";
+	/* set that we are preauthed */
+	unix_socket = 1;
 
 	/* change host to 'config_servername' */
 	free(host);
@@ -2118,8 +2112,8 @@ int lmtp_connect(const char *phost,
     /* check status code */
     if (!ISGOOD(code)) goto done;
 
-    /* AUTH */
-    if ((conn->capability & CAPA_AUTH) && (conn->mechs)) {
+    /* AUTH (but only if we're not preauthed as postman!) */
+    if (!unix_socket && (conn->capability & CAPA_AUTH) && (conn->mechs)) {
 	sasl_client_new("lmtp", host, NULL, NULL, cb, 0, &conn->saslconn);
 	code = do_auth(conn);
     }
@@ -2362,7 +2356,7 @@ int lmtp_disconnect(struct lmtp_conn *conn)
 /* Reset the given sasl_conn_t to a sane state */
 static int reset_saslconn(sasl_conn_t **conn) 
 {
-    int ret;
+    int ret, secflags;
     sasl_security_properties_t *secprops = NULL;
 
     sasl_dispose(conn);
@@ -2382,7 +2376,11 @@ static int reset_saslconn(sasl_conn_t **conn)
                           saslprops.iplocalport);
     if(ret != SASL_OK) return ret;
     
-    secprops = mysasl_secprops(SASL_SEC_NOPLAINTEXT);
+    secflags = SASL_SEC_NOANONYMOUS;
+    if (!config_getswitch("allowplaintext", 1)) {
+	secflags |= SASL_SEC_NOPLAINTEXT;
+    }
+    secprops = mysasl_secprops(secflags);
     ret = sasl_setprop(*conn, SASL_SEC_PROPS, secprops);
     if(ret != SASL_OK) return ret;
     /* end of service_main initialization excepting SSF */
