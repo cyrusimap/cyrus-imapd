@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.51 2003/03/05 18:32:08 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.52 2003/03/12 20:34:44 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1026,11 +1026,14 @@ static int mlookup(const char *name, char **pathp,
 		   char **aclp, void *tid)
 {
     int r;
+    int mbtype = 0;
 
     if(pathp) *pathp = NULL;
 
-    r = mboxlist_lookup(name, pathp, aclp, tid);
-    if (r == IMAP_MAILBOX_NONEXISTENT) {
+    r = mboxlist_detail(name, &mbtype, pathp, NULL, aclp, tid);
+    if (r == IMAP_MAILBOX_NONEXISTENT || (mbtype & MBTYPE_RESERVE)) {
+	/* It is not currently active, make sure we have the most recent
+	 * copy of the database */
 	kick_mupdate();
 	r = mboxlist_lookup(name, pathp, aclp, tid);
     }
