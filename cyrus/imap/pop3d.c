@@ -26,7 +26,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.68 2000/04/06 15:14:47 leg Exp $
+ * $Id: pop3d.c,v 1.69 2000/04/25 16:42:04 leg Exp $
  */
 #include <config.h>
 
@@ -72,11 +72,10 @@
 #include <krb.h>
 
 /* MIT's kpop authentication kludge */
-int kflag = 0;
 char klrealm[REALM_SZ];
 AUTH_DAT kdata;
 #endif /* HAVE_KRB */
-
+static int kflag = 0;
 
 extern int optind;
 extern char *optarg;
@@ -754,6 +753,7 @@ char *pass;
 	return;
     }
 
+#ifdef HAVE_KRB
     if (kflag) {
 	if (strcmp(popd_userid, kdata.pname) != 0 ||
 	    kdata.pinst[0] ||
@@ -772,6 +772,7 @@ char *pass;
 	openinbox();
 	return;
     }
+#endif
 
     if (!strcmp(popd_userid, "anonymous")) {
 	if (config_getswitch("allowanonymouslogin", 0)) {
