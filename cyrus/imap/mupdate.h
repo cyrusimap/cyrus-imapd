@@ -1,6 +1,6 @@
-/* mupdate-client.h -- cyrus murder database clients
+/* mupdate.h - private mupdate header file
  *
- * $Id: mupdate-client.h,v 1.3 2002/01/22 22:31:52 rjs3 Exp $
+ * $Id: mupdate.h,v 1.1 2002/01/22 22:31:52 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -40,43 +40,36 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#ifndef INCLUDED_MUPDATE_CLIENT_H
-#define INCLUDED_MUPDATE_CLIENT_H
+#include "mupdate-client.h"
+#include "mupdate_err.h"
 
-#include <sasl/sasl.h>
+struct mupdate_handle_s {
+    int sock;
 
-typedef struct mupdate_handle_s mupdate_handle;
+    struct protstream *pin;
+    struct protstream *pout;
 
-/* connect & authenticate to an mupdate server */
-int mupdate_connect(const char *server, const char *port,
-		    mupdate_handle **handle, sasl_callback_t *cbs);
+    unsigned int tag;
 
-/* disconnect from mupdate server */
-void mupdate_disconnect(mupdate_handle **h);
-
-/* activate a mailbox */
-int mupdate_activate(mupdate_handle *handle, 
-		     const char *mailbox, const char *server,
-		     const char *acl);
-
-/* reserve a piece of namespace */
-int mupdate_reserve(mupdate_handle *handle,
-		    const char *mailbox, const char *server);
-
-/* delete a mailbox */
-int mupdate_delete(mupdate_handle *handle,
-		   const char *mailbox);
-
-/* mailbox data structure */
-struct mupdate_mailboxdata {
-    const char *mailbox;
-    const char *server;
-    const char *acl;
+    sasl_conn_t *saslconn;
+    int saslcompleted;
 };
 
-/* does a given mailbox exist?  1 if false, 0 if true, -1 if error,
- * if target is non-null, it fills in the caller-provided buffer */
-int mupdate_find(mupdate_handle *handle, const char *mailbox,
-		 struct mupdate_mailboxdata **target);
+/* Callbacks for mupdate_scarf */
+/* cmd is one of DELETE, MAILBOX, RESERVE */
+/* context is as provided to mupdate_scarf */
+typedef int (*mupdate_callback)(struct mupdate_mailboxdata *mdata,
+                                const char *cmd, void *context);
 
-#endif
+/* Scarf up the incoming data and perform the requested operations */
+/* Returns 0 on no error (or success, if wait_for_ok set) */
+/* Returns 1 on fatal error */
+/* Returns -1 on command-related error (if wait_for_ok set) */
+int mupdate_scarf(mupdate_handle *handle,
+		  mupdate_callback callback,
+		  void *context,
+		  int wait_for_ok);
+
+/* Used by the slave listener thread to update the local database */
+int cmd_change(struct mupdate_mailboxdata *mdata,
+	       const char *cmd, void *context);

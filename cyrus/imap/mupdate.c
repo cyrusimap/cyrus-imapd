@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.23 2002/01/22 01:27:40 rjs3 Exp $
+ * $Id: mupdate.c,v 1.24 2002/01/22 22:31:52 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -678,7 +678,7 @@ void *start(void *rock)
 
     cmdloop(c);
     
-    close (c->fd);
+    close(c->fd);
     conn_free(c);
 
     return NULL;
@@ -1046,7 +1046,7 @@ void cmd_set(struct conn *C,
     if (t == SET_DELETE) {
 	if (!m) {
 	    /* failed; mailbox doesn't exist */
-	    prot_printf(C->pout, "%s NO \"mailbox doesn't exist\"\r\n", tag);
+            prot_printf(C->pout, "%s NO \"mailbox doesn't exist\"\r\n", tag);
 	    goto done;
 	}
 
@@ -1116,8 +1116,8 @@ void cmd_set(struct conn *C,
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 }
 
-void cmd_change(struct mupdate_mailboxdata *mdata,
-		const char *rock)
+int cmd_change(struct mupdate_mailboxdata *mdata,
+	       const char *rock, void *context)
 {
     struct mbent *m = NULL;
     struct conn *upc = NULL;
@@ -1125,18 +1125,84 @@ void cmd_change(struct mupdate_mailboxdata *mdata,
 
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
 
-    if(!strncmp(rock, "CREATE", 6)) {
+    if(!mdata || !rock) return 1;
+
+    if(!strncmp(rock, "DELETE", 6)) {
+	m = ssearch(mailboxes, mdata->mailbox);
+	if(!m) {
+	    syslog(LOG_DEBUG, "attempt to delete unknown mailbox %s",
+		   mdata->mailbox);
+	    /* Mailbox doesn't exist */
+	    return -1;
+	}
+	m->t = SET_DELETE;
+	
 	/* write to disk */
 	database_log(m);
-    } else if(!strncmp(rock, "RESERVE", 7)) {
-	/* write to disk */
-	database_log(m);
-    } else if(!strncmp(rock, "DELETE", 6)) {
-	/* write to disk */
-	database_log(m);
+
+	sdelete(mailboxes, m);
+	free(m);
+    } else {
+	if(!mdata->mailbox) return 1;
+
+	m = ssearch(mailboxes, mdata->mailbox);
+	
+	if (m && (!mdata->acl || strlen(mdata->acl) < strlen(m->acl))) {
+	    /* change what's already there */
+	    strcpy(m->server, mdata->server);
+	    if (mdata->acl) strcpy(m->acl, mdata->acl);
+
+	    if(!strncmp(rock, "MAILBOX", 6)) {
+		m->t = SET_ACTIVE;
+	    } else if(!strncmp(rock, "RESERVE", 7)) {
+		m->t = SET_RESERVE;
+	    } else {
+		syslog(LOG_DEBUG,
+		       "bad mupdate command in cmd_change: %s", rock);
+		return 1;
+	    }
+
+	    database_log(m);
+	} else {
+	    struct mbent *newm;
+
+	    if(m) {
+		/* need a bigger one */
+		sdelete(mailboxes, m);
+	    }
+
+	    /* allocate new mailbox */
+	    if (mdata->acl) {
+		newm = xrealloc(m, sizeof(struct mbent) + strlen(mdata->acl));
+	    } else {
+		newm = xrealloc(m, sizeof(struct mbent) + 1);
+	    }
+	    strcpy(newm->mailbox, mdata->mailbox);
+	    strcpy(newm->server, mdata->server);
+	    if (mdata->acl) {
+		strcpy(newm->acl, mdata->acl);
+	    } else {
+		newm->acl[0] = '\0';
+	    }
+
+	    if(!strncmp(rock, "MAILBOX", 6)) {
+		newm->t = SET_ACTIVE;
+	    } else if(!strncmp(rock, "RESERVE", 7)) {
+		newm->t = SET_RESERVE;
+	    } else {
+		syslog(LOG_DEBUG,
+		       "bad mupdate command in cmd_change: %s", rock);
+		return 1;
+	    }
+	    
+	    /* write to disk */
+	    database_log(newm);
+	    /* insert it */
+	    sinsert(mailboxes, newm);
+	}
     }
     
-    /* post pending changes */
+    /* post pending changes to anyone we are talking to */
     for (upc = updatelist; upc != NULL; upc = upc->updatelist_next) {
 	/* for each connection, add to pending list */
 
@@ -1154,6 +1220,8 @@ void cmd_change(struct mupdate_mailboxdata *mdata,
 
     database_compress();
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
+
+    return 0;
 }
 
 void cmd_find(struct conn *C, const char *tag, const char *mailbox, int dook)
@@ -1166,13 +1234,13 @@ void cmd_find(struct conn *C, const char *tag, const char *mailbox, int dook)
     m = ssearch(mailboxes, mailbox);
 
     if (m && m->t == SET_ACTIVE) {
-	prot_printf(C->pout, "%s MAILBOX {%d}\r\n%s {%d}\r\n%s {%d}\r\n%s\r\n",
+	prot_printf(C->pout, "%s MAILBOX {%d+}\r\n%s {%d+}\r\n%s {%d+}\r\n%s\r\n",
 		    tag,
 		    strlen(m->mailbox), m->mailbox,
 		    strlen(m->server), m->server,
 		    strlen(m->acl), m->acl);
     } else if (m && m->t == SET_RESERVE) {
-	prot_printf(C->pout, "%s RESERVE {%d}\r\n%s {%d}\r\n%s\r\n",
+	prot_printf(C->pout, "%s RESERVE {%d+}\r\n%s {%d+}\r\n%s\r\n",
 		    tag,
 		    strlen(m->mailbox), m->mailbox,
 		    strlen(m->server), m->server);
@@ -1205,14 +1273,14 @@ void cmd_startupdate(struct conn *C, const char *tag)
     for (m = sfirst(mailboxes, &ptr); m != NULL; m = snext(&ptr)) {
 	switch (m->t) {
 	case SET_ACTIVE:
-	    prot_printf(C->pout, "%s MAILBOX {%d}\r\n%s {%d}\r\n%s {%d}\r\n%s\r\n",
+	    prot_printf(C->pout, "%s MAILBOX {%d+}\r\n%s {%d+}\r\n%s {%d+}\r\n%s\r\n",
 			tag,
 			strlen(m->mailbox), m->mailbox,
 			strlen(m->server), m->server,
 			strlen(m->acl), m->acl);
 	    break;
 	case SET_RESERVE:
-	    prot_printf(C->pout, "%s RESERVE {%d}\r\n%s {%d}\r\n%s\r\n",
+	    prot_printf(C->pout, "%s RESERVE {%d+}\r\n%s {%d+}\r\n%s\r\n",
 			tag,
 			strlen(m->mailbox), m->mailbox,
 			strlen(m->server), m->server);

@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.8 2002/01/22 01:27:40 rjs3 Exp $
+ * $Id: mupdate-client.c,v 1.9 2002/01/22 22:31:52 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -70,25 +70,11 @@
 #include "assert.h"
 #include "imparse.h"
 #include "iptostring.h"
+#include "mupdate.h"
 #include "mupdate_err.h"
 #include "exitcodes.h"
 
 const char service_name[] = "mupdate";
-
-typedef struct mupdate_handle_s {
-    int sock;
-
-    struct protstream *pin;
-    struct protstream *pout;
-
-    unsigned int tag;
-
-    sasl_conn_t *saslconn;
-    int saslcompleted;
-} mupdate_handle;
-
-/* Scarf up the incoming data and perform the requested operations */
-static int mupdate_scarf(mupdate_handle *handle, int wait_for_ok);
 
 /* We're only going to supply SASL_CB_USER, other people can supply
  * more if they feel like it */
@@ -109,116 +95,6 @@ static const sasl_callback_t callbacks[] = {
   { SASL_CB_USER, get_user, NULL }, 
   { SASL_CB_LIST_END, NULL, NULL }
 };
-
-static int mupdate_authenticate(mupdate_handle *h,
-				const char *mechlist);
-
-int mupdate_connect(const char *server, const char *port,
-		    mupdate_handle **handle,
-		    sasl_callback_t *cbs)
-{
-    mupdate_handle *h;
-    struct hostent *hp;
-    struct servent *sp;
-    struct sockaddr_in addr;
-    int s, saslresult;
-    char buf[4096];
-    char *mechlist;
-    
-    if(!server || !handle)
-	return MUPDATE_BADPARAM;
-
-    /* open connection to 'server' */
-    hp = gethostbyname(server);
-    if(!hp) return -2;
-    
-    s = socket(AF_INET, SOCK_STREAM, 0);
-    if(s == -1) return errno;
-    
-    addr.sin_family = AF_INET;
-    memcpy(&addr.sin_addr, hp->h_addr, sizeof(addr.sin_addr));
-
-    if (port && imparse_isnumber(port)) {
-	addr.sin_port = htons(atoi(port));
-    } else if (port) {
-	sp = getservbyname(port, "tcp");
-	if (!sp) return -2;
-	addr.sin_port = sp->s_port;
-    } else if((sp = getservbyname("mupdate", "tcp")) != NULL) {
-	addr.sin_port = sp->s_port;
-    } else {
-	addr.sin_port = htons(2004);
-    }
-
-    if (connect(s, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
-	return errno;
-    }
-
-    h = xzmalloc(sizeof(mupdate_handle));
-    h->sock = s;
-
-    saslresult = sasl_client_new(service_name,
-				 server,
-				 NULL, NULL,
-				 cbs ? cbs : callbacks,
-				 0,
-				 &(h->saslconn));
-
-    /* create protstream */
-    h->pin=prot_new(h->sock, 0);
-    h->pout=prot_new(h->sock, 1);
-
-    prot_setflushonread(h->pin, h->pout);
-    prot_settimeout(h->pin, 30*60);
-
-    *handle = h;
-
-    /* Read the banner */
-    if(!prot_fgets(buf, sizeof(buf)-1, h->pin)) {
-	syslog(LOG_ERR,"connection to master dropped");
-	return -3;
-    }
-
-    if(strncmp(buf, "* OK MUPDATE", 12)) {
-	syslog(LOG_ERR,"invalid banner from remote mupdate server");
-	return -4;
-    }
-
-    /* Read the mechlist */
-    if(!prot_fgets(buf, sizeof(buf)-1, h->pin)) {
-	syslog(LOG_ERR,"connection to master dropped");
-	return -5;
-    }
-
-    if(strncmp(buf, "* AUTH", 6)) {
-	syslog(LOG_ERR,"remote server did not send AUTH banner");
-	return -6;
-    }
-
-    mechlist = buf + 6;
-    
-    if(mupdate_authenticate(h, mechlist)) {
-	syslog(LOG_ERR, "authentication to remote mupdate failed");
-	return -7;
-    }
-
-    return 0; /* SUCCESS */
-}
-
-void mupdate_disconnect(mupdate_handle *h) 
-{
-    if(!h) return;
-    
-    prot_printf(h->pout, "L01 LOGOUT\r\n");
-    prot_flush(h->pout);
-
-    prot_free(h->pin);
-    prot_free(h->pout);
-    sasl_dispose(&h->saslconn);
-    close(h->sock);
-
-    free(h);
-}
 
 static sasl_security_properties_t *make_secprops(int min, int max)
 {
@@ -373,10 +249,119 @@ static int mupdate_authenticate(mupdate_handle *h,
     return 0; /* SUCCESS */
 }
 
+int mupdate_connect(const char *server, const char *port,
+		    mupdate_handle **handle,
+		    sasl_callback_t *cbs)
+{
+    mupdate_handle *h;
+    struct hostent *hp;
+    struct servent *sp;
+    struct sockaddr_in addr;
+    int s, saslresult;
+    char buf[4096];
+    char *mechlist;
+    
+    if(!server || !handle)
+	return MUPDATE_BADPARAM;
+
+    /* open connection to 'server' */
+    hp = gethostbyname(server);
+    if(!hp) return -2;
+    
+    s = socket(AF_INET, SOCK_STREAM, 0);
+    if(s == -1) return errno;
+    
+    addr.sin_family = AF_INET;
+    memcpy(&addr.sin_addr, hp->h_addr, sizeof(addr.sin_addr));
+
+    if (port && imparse_isnumber(port)) {
+	addr.sin_port = htons(atoi(port));
+    } else if (port) {
+	sp = getservbyname(port, "tcp");
+	if (!sp) return -2;
+	addr.sin_port = sp->s_port;
+    } else if((sp = getservbyname("mupdate", "tcp")) != NULL) {
+	addr.sin_port = sp->s_port;
+    } else {
+	addr.sin_port = htons(2004);
+    }
+
+    if (connect(s, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
+	return errno;
+    }
+
+    h = xzmalloc(sizeof(mupdate_handle));
+    h->sock = s;
+
+    saslresult = sasl_client_new(service_name,
+				 server,
+				 NULL, NULL,
+				 cbs ? cbs : callbacks,
+				 0,
+				 &(h->saslconn));
+
+    /* create protstream */
+    h->pin=prot_new(h->sock, 0);
+    h->pout=prot_new(h->sock, 1);
+
+    prot_setflushonread(h->pin, h->pout);
+    prot_settimeout(h->pin, 30*60);
+
+    *handle = h;
+
+    /* Read the banner */
+    if(!prot_fgets(buf, sizeof(buf)-1, h->pin)) {
+	syslog(LOG_ERR,"connection to master dropped");
+	return -3;
+    }
+
+    if(strncmp(buf, "* OK MUPDATE", 12)) {
+	syslog(LOG_ERR,"invalid banner from remote mupdate server");
+	return -4;
+    }
+
+    /* Read the mechlist */
+    if(!prot_fgets(buf, sizeof(buf)-1, h->pin)) {
+	syslog(LOG_ERR,"connection to master dropped");
+	return -5;
+    }
+
+    if(strncmp(buf, "* AUTH", 6)) {
+	syslog(LOG_ERR,"remote server did not send AUTH banner");
+	return -6;
+    }
+
+    mechlist = buf + 6;
+    
+    if(mupdate_authenticate(h, mechlist)) {
+	syslog(LOG_ERR, "authentication to remote mupdate failed");
+	return -7;
+    }
+
+    return 0; /* SUCCESS */
+}
+
+void mupdate_disconnect(mupdate_handle **h) 
+{
+    if(!h || !(*h)) return;
+    
+    prot_printf((*h)->pout, "L01 LOGOUT\r\n");
+    prot_flush((*h)->pout);
+
+    prot_free((*h)->pin);
+    prot_free((*h)->pout);
+    sasl_dispose(&((*h)->saslconn));
+    close((*h)->sock);
+
+    free(*h); *h=NULL;
+}
+
 int mupdate_activate(mupdate_handle *handle, 
 		     const char *mailbox, const char *server,
 		     const char *acl)
 {
+    int ret;
+    
     if (!handle) return MUPDATE_BADPARAM;
     if (!mailbox || !server || !acl) return MUPDATE_BADPARAM;
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
@@ -385,7 +370,11 @@ int mupdate_activate(mupdate_handle *handle,
 		"X%u ACTIVATE %s %s %s\r\n", handle->tag++,
 		mailbox, server, acl);
 
-    if(mupdate_scarf(handle, 1))
+    /* FIXME: NULL is invalid! */
+    ret = mupdate_scarf(handle, NULL, NULL, 1);
+    if(ret > 0)
+	return MUPDATE_NOCONN;
+    else if(ret < 0)
 	return MUPDATE_FAIL;
     else
 	return 0;
@@ -394,6 +383,8 @@ int mupdate_activate(mupdate_handle *handle,
 int mupdate_reserve(mupdate_handle *handle,
 		    const char *mailbox, const char *server)
 {
+    int ret;
+    
     if (!handle) return MUPDATE_BADPARAM;
     if (!mailbox || !server) return MUPDATE_BADPARAM;
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
@@ -401,7 +392,11 @@ int mupdate_reserve(mupdate_handle *handle,
     prot_printf(handle->pout,
 		"X%u RESERVE %s %s\r\n", handle->tag++, mailbox, server);
 
-    if(mupdate_scarf(handle, 1))
+    /* FIXME: NULL is invalid! */
+    ret = mupdate_scarf(handle, NULL, NULL, 1);
+    if(ret > 0)
+	return MUPDATE_NOCONN;
+    else if(ret < 0)
 	return MUPDATE_FAIL;
     else
 	return 0;
@@ -410,6 +405,8 @@ int mupdate_reserve(mupdate_handle *handle,
 int mupdate_delete(mupdate_handle *handle,
 		   const char *mailbox)
 {
+    int ret;
+    
     if (!handle) return MUPDATE_BADPARAM;
     if (!mailbox) return MUPDATE_BADPARAM;
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
@@ -417,10 +414,14 @@ int mupdate_delete(mupdate_handle *handle,
     prot_printf(handle->pout,
 		"X%u DELETE %s\r\n", handle->tag++, mailbox);
 
-    if(mupdate_scarf(handle, 1))
+    /* FIXME: NULL is invalid! */
+    ret = mupdate_scarf(handle, NULL, NULL, 1);
+    if(ret > 0)
+	return MUPDATE_NOCONN;
+    else if(ret < 0)
 	return MUPDATE_FAIL;
     else
-	return 0;    
+	return 0;
 }
 
 #define CHECKNEWLINE(c, ch) do { if ((ch) == '\r') (ch)=prot_getc((c)->pin); \
@@ -429,13 +430,17 @@ int mupdate_delete(mupdate_handle *handle,
                                  return 1; }} while(0);
 
 /* Scarf up the incoming data and perform the requested operations */
-static int mupdate_scarf(mupdate_handle *handle, int wait_for_ok)
+int mupdate_scarf(mupdate_handle *handle, mupdate_callback callback,
+		  void *context, int wait_for_ok)
 {
     fd_set read_set;
-    int highest_fd, select_result;
+    int highest_fd, select_result=0, ret;
     struct timeval tv;
+    struct mupdate_mailboxdata box;
 
-    if(!handle) return 1;
+    if(!handle || !callback) return 1;
+
+    memset(&box, 0, sizeof(box));
 
     highest_fd = handle->sock + 1;
 
@@ -471,16 +476,31 @@ static int mupdate_scarf(mupdate_handle *handle, int wait_for_ok)
 	}
 	
 	switch(cmd.s[0]) {
+	case 'B':
+	    if(!strncmp(cmd.s, "BAD", 6)) {
+		ch = getstring(handle->pin, handle->pout, &arg1);
+		
+		CHECKNEWLINE(handle, ch);
+
+		syslog(LOG_DEBUG, "mupdate BAD response: %s", arg1.s);
+		if(wait_for_ok) return -1;
+		break;
+	    }
+	    syslog(LOG_ERR, "bad command from master: %s", cmd.s);
+	    return 1;
 	case 'D':
 	    if(!strncmp(cmd.s, "DELETE", 6)) {
 		ch = getstring(handle->pin, handle->pout, &arg1);
 		
 		CHECKNEWLINE(handle, ch);
 		
+		box.mailbox = arg1.s;
+
 		/* Handle delete command */
-		if(mupdate_delete(handle, arg1.s)) {
-		    syslog(LOG_ERR, "Error in mupdate_delete");
-		    return 1;
+		ret = callback(&box, cmd.s, context);
+		if(ret) {
+		    syslog(LOG_ERR, "Error deleting mailbox");
+		    return ret;
 		}
 		break;
 	    }
@@ -489,7 +509,7 @@ static int mupdate_scarf(mupdate_handle *handle, int wait_for_ok)
 	case 'M':
 	    if(!strncmp(cmd.s, "MAILBOX", 7)) {
 		memset(&arg2, 0, sizeof(arg2));
-		memset(&arg3, 0, sizeof(arg2));
+		memset(&arg3, 0, sizeof(arg3));
 		
 		/* Mailbox Name */
 		ch = getstring(handle->pin, handle->pout, &arg1);
@@ -500,16 +520,32 @@ static int mupdate_scarf(mupdate_handle *handle, int wait_for_ok)
 		if(ch != ' ') return 1;
 		
 		/* ACL */
-		getstring(handle->pin, handle->pout, &arg3);
+		ch = getstring(handle->pin, handle->pout, &arg3);
 		
 		CHECKNEWLINE(handle, ch);
 		
 		/* Handle mailbox command */
-		if(mupdate_activate(handle, arg1.s, arg2.s, arg3.s)) {
+		box.mailbox = arg1.s;
+		box.server = arg2.s;
+		box.acl = arg3.s;
+		ret = callback(&box, cmd.s, context);
+		if(ret) {
 		    /* Was there an error? */
-		    syslog(LOG_ERR, "Error in mupdate_activate");
-		    return 1;
+		    syslog(LOG_ERR, "Error activating mailbox");
+		    return ret;
 		}
+		break;
+	    }
+	    syslog(LOG_ERR, "bad command from master: %s", cmd.s);
+	    return 1;
+	case 'N':
+	    if(!strncmp(cmd.s, "NO", 6)) {
+		ch = getstring(handle->pin, handle->pout, &arg1);
+		
+		CHECKNEWLINE(handle, ch);
+
+		syslog(LOG_DEBUG, "mupdate NO response: %s", arg1.s);
+		if(wait_for_ok) return -1;
 		break;
 	    }
 	    syslog(LOG_ERR, "bad command from master: %s", cmd.s);
@@ -540,11 +576,13 @@ static int mupdate_scarf(mupdate_handle *handle, int wait_for_ok)
 		CHECKNEWLINE(handle, ch);
 		
 		/* Handle reserve command */
-		if(mupdate_reserve(handle,arg1.s,arg2.s)) 
-		{
+		box.mailbox=arg1.s;
+		box.server=arg2.s;
+		ret = callback(&box, cmd.s, context);
+		if(ret) {
 		    /* Was there an error? */
-		    syslog(LOG_ERR, "Error in mupdate_reserve");
-		    return 1;
+		    syslog(LOG_ERR, "Error reserveing mailbox");
+		    return ret;
 		}
 		
 		break;
@@ -553,8 +591,17 @@ static int mupdate_scarf(mupdate_handle *handle, int wait_for_ok)
 	    return 1;
 	default:
 	    /* Bad Data */
-	    syslog(LOG_ERR, "bad command from master: %s", cmd.s);
+	    syslog(LOG_ERR, "bad/unexpected command from master: %s", cmd.s);
 	    return 1;
+	}
+
+	/* If we are waiting for an OK message, block, otherwise, drop
+	   through immediately */
+	ch = prot_getc(handle->pin);
+	if(ch != EOF) {
+	    prot_ungetc(ch, handle->pin);
+	    select_result = 1;
+	    continue;
 	}
 
 	FD_ZERO(&read_set);
@@ -563,8 +610,6 @@ static int mupdate_scarf(mupdate_handle *handle, int wait_for_ok)
 	tv.tv_sec = 0;
 	tv.tv_usec = 0;
 
-	/* If we are waiting for an OK message, block, otherwise, drop
-	   throug immediately */
 	select_result = select(highest_fd, &read_set, NULL, NULL, 
 			       (wait_for_ok ? NULL : &tv));
     } while((!wait_for_ok && select_result > 0) || (select_result > 0));
@@ -572,134 +617,3 @@ static int mupdate_scarf(mupdate_handle *handle, int wait_for_ok)
     if(select_result != 0) return 1;
     else return 0;
 }
-
-void mupdate_listen(mupdate_handle *handle, int pingtimeout)
-{
-    int gotdata = 0, firsttime = 1;
-    fd_set read_set;
-    int highest_fd;
-    
-    if (!handle || !handle->saslcompleted) return;
-
-    highest_fd = handle->sock + 1;
-    
-    /* ask for updates and set nonblocking */
-    prot_printf(handle->pout, "U01 UPDATE\r\n");
-    prot_NONBLOCK(handle->pin);
-
-    while(1) {
-	struct timeval tv;
-
-	tv.tv_sec = 15;
-	tv.tv_usec = 0;
-
-	prot_flush(handle->pout);
-	
-	FD_ZERO(&read_set);
-	FD_SET(handle->sock, &read_set);
-
-	gotdata = select(highest_fd, &read_set, NULL, NULL, &tv);
-
-	if (gotdata > 0) {
-	    if(mupdate_scarf(handle, firsttime)) return;
-	    else {
-		firsttime = 0;
-		continue;
-	    }
-	} else if(gotdata == 0) {
-	    /* timed out, send a NOOP */
-	    prot_printf(handle->pout, "N%u NOOP\r\n", handle->tag++);
-	    prot_flush(handle->pout);
-
-	    /* wait 'pingtimeout' seconds for response */
-	    FD_ZERO(&read_set);
-	    FD_SET(handle->sock, &read_set);
-
-	    tv.tv_sec = pingtimeout;
-	    tv.tv_usec = 0;
-	    
-	    gotdata = select(highest_fd, &read_set, NULL, NULL, &tv);
-	    if(gotdata <= 0) {
-		/* We died, reconnect */
-		syslog(LOG_ERR, "master did not respond to NOOP in %d seconds",
-		       pingtimeout);
-		return;
-	    }
-	} else {
-	    syslog(LOG_ERR, "select failed");
-	    return;
-	}
-    }
-}
-
-void *mupdate_client_start(void *rock __attribute__((unused)))
-{
-    const char *server, *port, *num;
-    mupdate_handle *h;
-    int connection_count = 0;
-    int retries = 15;
-    int retry_delay = 20;
-    int ret;
-
-    server = config_getstring("mupdate_server", NULL);
-    if(server == NULL) {
-	fatal("couldn't get mupdate server name", EC_UNAVAILABLE);
-    }
-
-    port = config_getstring("mupdate_port",NULL);
-
-    num = config_getstring("mupdate_retry_count",NULL);
-    if(num && imparse_isnumber(num)) {
-	retries = atoi(num);
-	if(retries < 0) {
-	    fatal("invalid value for mupdate_retry_count", EC_UNAVAILABLE);
-	}
-    }
-
-    num = config_getstring("mupdate_retry_delay",NULL);
-    if(num && imparse_isnumber(num)) {
-	retry_delay = atoi(num);
-	if(retry_delay < 0) {
-	    fatal("invalid value for mupdate_retry_delay", EC_UNAVAILABLE);
-	}
-    }
-    
-    while(1) {
-	ret = mupdate_connect(server, port, &h, NULL);
-	if(ret) {
-	    syslog(LOG_ERR,"couldn't connect to mupdate server");
-	    goto retry;
-	}
-   
-	/* Successful Connection, reset counter: */
-	connection_count = -1;
-	syslog(LOG_ERR, "successful mupdate connection to %s", server);
-
-	mupdate_listen(h, retry_delay);
-
-    retry:
-	/* Cleanup */
-	prot_free(h->pin);
-	prot_free(h->pout);
-	close(h->sock);
-	sasl_dispose(&h->saslconn);
-	free(h); h = NULL;
-	
-	/* Should we retry? */
-	if(++connection_count < retries) {
-	    syslog(LOG_ERR,
-		   "retrying connection to mupdate server in %d seconds",
-		   retry_delay);
-	} else {
-	    syslog(LOG_ERR,
-		   "too many connection retries. dying.");
-	    break;
-	}
-	
-	/* Wait before retrying */
-	sleep(retry_delay);
-    }
-
-    return NULL;
-}
-
