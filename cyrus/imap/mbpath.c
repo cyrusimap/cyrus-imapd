@@ -1,6 +1,6 @@
 /* mbpath.c -- help the sysadmin to find the path matching the mailbox
  *
- * $Id: mbpath.c,v 1.17 2004/06/02 15:58:19 rjs3 Exp $
+ * $Id: mbpath.c,v 1.18 2004/06/02 17:35:08 ken3 Exp $
  * 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -42,7 +42,7 @@
  *
  */
 
-/* static char _rcsid[] = "$Id: mbpath.c,v 1.17 2004/06/02 15:58:19 rjs3 Exp $"; */
+/* static char _rcsid[] = "$Id: mbpath.c,v 1.18 2004/06/02 17:35:08 ken3 Exp $"; */
 
 #include <config.h>
 
@@ -75,7 +75,7 @@ extern int optind;
 extern char *optarg;
 
 /* current namespace */
-static struct namespace recon_namespace;
+static struct namespace mbpath_namespace;
 
 /* config.c stuff */
 const int config_need_data = 0;
@@ -115,7 +115,7 @@ main(int argc, char **argv)
 
   cyrus_init(alt_config, "mbpath", 0);
 
-  if ((rc = mboxname_init_namespace(&recon_namespace, 1)) != 0) {
+  if ((rc = mboxname_init_namespace(&mbpath_namespace, 1)) != 0) {
     fatal(error_message(rc), -1);
   }
 
@@ -126,7 +126,7 @@ main(int argc, char **argv)
     (void)memset(&path, 0, sizeof(path));
 
     /* Translate mailboxname */
-    (*recon_namespace.mboxname_tointernal)(&recon_namespace, argv[i], NULL, buf);
+    (*mbpath_namespace.mboxname_tointernal)(&mbpath_namespace, argv[i], NULL, buf);
 
     if ((rc = mboxlist_lookup(buf, &path, NULL, NULL)) == 0) {
       printf("%s\n", path);
@@ -152,5 +152,5 @@ main(int argc, char **argv)
   return 0;
 }
 
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/mbpath.c,v 1.17 2004/06/02 15:58:19 rjs3 Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/mbpath.c,v 1.18 2004/06/02 17:35:08 ken3 Exp $ */
 
