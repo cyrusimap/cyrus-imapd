@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.22 2002/08/28 18:40:43 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.23 2002/08/29 20:03:19 ken3 Exp $
  */
 
 #include <config.h>
@@ -1325,7 +1325,8 @@ int mboxlist_setacl(const char *name, const char *identifier,
 		    struct auth_state *auth_state)
 {
     int useridlen = strlen(userid), domainlen = 0;
-    char *cp, *domain = NULL, ident[256];
+    char *cp, ident[256];
+    const char *domain = NULL;
     int r;
     int access;
     int mode = ACL_MODE_SET;
