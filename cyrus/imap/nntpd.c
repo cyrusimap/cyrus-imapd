@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.43 2002/11/17 03:45:35 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.44 2002/11/17 04:53:51 ken3 Exp $
  */
 
 /*
@@ -954,11 +954,11 @@ static void cmdloop(void)
 	    break;
 
 	case 'X':
-	    if (!strcmp(cmd.s, "Xover")) {
-		goto over;
-	    }
-	    else if (!strcmp(cmd.s, "Xhdr")) {
+	    if (!strcmp(cmd.s, "Xhdr")) {
 		goto hdr;
+	    }
+	    else if (!strcmp(cmd.s, "Xover")) {
+		goto over;
 	    }
 	    else goto badcmd;
 	    break;
@@ -1543,7 +1543,7 @@ static void cmd_help()
     prot_printf(nntp_out, "\tHELP\r\n");
     prot_printf(nntp_out, "\tIHAVE\r\n");
     prot_printf(nntp_out, "\tLAST\r\n");
-    prot_printf(nntp_out, "\tLIST [ ACTIVE ]\r\n");
+    prot_printf(nntp_out, "\tLIST [ ACTIVE | EXTENSIONS | OVERVIEW.FMT ]\r\n");
     prot_printf(nntp_out, "\tLISTGROUP\r\n");
     prot_printf(nntp_out, "\tMODE READER | STREAM\r\n");
     if (config_getswitch(IMAPOPT_ALLOWNEWNEWS))
