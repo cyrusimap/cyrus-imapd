@@ -49,24 +49,24 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
-OBJS=listenstats.o
+OBJS=tugowar.o
 
-all: listenstats
+all: tugowar
 
 install:
-	$(INSTALL) -s -m 755 listenstats $(DESTDIR)$(exec_prefix)/bin
+	$(INSTALL) -s -m 755 tugowar $(DESTDIR)$(exec_prefix)/bin
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
 
 listenstats: $(OBJS)
-	$(CC) $(LDFLAGS) -o listenstats $(OBJS) $(LIBS)
+	$(CC) $(LDFLAGS) -o tugowar $(OBJS) $(LIBS)
 
 listenstats.pure: $(OBJS)
-	$(PURIFY) $(PUREOPT) $(CC) $(LDFLAGS) -o listenstats $(OBJS) $(LIBS)
+	$(PURIFY) $(PUREOPT) $(CC) $(LDFLAGS) -o tugowar $(OBJS) $(LIBS)
 
 clean:
-	rm -f *.o Makefile.bak makedepend.log listenstats
+	rm -f *.o Makefile.bak makedepend.log tugowar
 
 distclean: clean
 	rm -f Makefile
