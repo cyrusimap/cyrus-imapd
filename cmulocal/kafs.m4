@@ -90,7 +90,7 @@ AC_ARG_WITH(kafs-include,
 	fi])
 
 	if test "X$with_kafs" != "X"; then
-	  if test "$with_kafs" != "yes" -a test "$with_kafs" != no; then
+	  if test "$with_kafs" != "yes" -a "$with_kafs" != no; then
 	    ac_cv_kafs_where_lib=$with_kafs/lib
 	    ac_cv_kafs_where_inc=$with_kafs/include
 	  fi
