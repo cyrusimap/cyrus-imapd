@@ -42,7 +42,7 @@
  */
 
 /*
- * $Id: message.c,v 1.85 2000/09/22 21:04:18 ken3 Exp $
+ * $Id: message.c,v 1.86 2000/10/12 19:15:32 leg Exp $
  */
 
 #include <config.h>
@@ -733,7 +733,7 @@ char **hdrp;
 
     /* Save encoding token */
     *hdrp = xmalloc(len + 1);
-    strncpy(*hdrp, hdr, len);
+    strlcpy(*hdrp, hdr, len);
     (*hdrp)[len] = '\0';
     for (p = *hdrp; *p; p++) {
 	if (islower((int) *p)) *p = toupper((int) *p);
@@ -772,7 +772,7 @@ char **hdrp;
     /* Save header value */
     len = hdrend - hdr;
     *hdrp = xmalloc(len + 1);
-    strncpy(*hdrp, hdr, len);
+    strlcpy(*hdrp, hdr, len);
     (*hdrp)[len] = '\0';
 
     /* Un-fold header */
@@ -814,7 +814,7 @@ struct ibuf *ibuf;
     /* Save header value */
     len = hdrend - hdr;
     message_ibuf_ensure(ibuf, len+2);
-    strncpy(ibuf->end, hdr, len);
+    strlcpy(ibuf->end, hdr, len);
     ibuf->end += len;
     *(ibuf->end)++ = '\r';
     *(ibuf->end)++ = '\n';
@@ -874,13 +874,13 @@ struct body *body;
 
     /* Save content type & subtype */
     body->type = xmalloc(typelen + 1);
-    strncpy(body->type, type, typelen);
+    strlcpy(body->type, type, typelen);
     body->type[typelen] = '\0';
     for (p = body->type; *p; p++) {
 	if (islower((int) *p)) *p = toupper((int) *p);
     }
     body->subtype = xmalloc(subtypelen + 1);
-    strncpy(body->subtype, subtype, subtypelen);
+    strlcpy(body->subtype, subtype, subtypelen);
     body->subtype[subtypelen] = '\0';
     for (p = body->subtype; *p; p++) {
 	if (islower((int) *p)) *p = toupper((int) *p);
@@ -927,7 +927,7 @@ struct body *body;
 
     /* Save content disposition */
     body->disposition = xmalloc(dispositionlen + 1);
-    strncpy(body->disposition, disposition, dispositionlen);
+    strlcpy(body->disposition, disposition, dispositionlen);
     body->disposition[dispositionlen] = '\0';
     for (p = body->disposition; *p; p++) {
 	if (islower((int) *p)) *p = toupper((int) *p);
@@ -1013,7 +1013,7 @@ struct param **paramp;
 	*paramp = param = (struct param *)xmalloc(sizeof(struct param));
 	*param = zeroparam;
 	param->attribute = xmalloc(attributelen + 1);
-	strncpy(param->attribute, attribute, attributelen);
+	strlcpy(param->attribute, attribute, attributelen);
 	param->attribute[attributelen] = '\0';
 	for (p = param->attribute; *p; p++) {
 	    if (islower((int) *p)) *p = toupper((int) *p);
@@ -1030,7 +1030,7 @@ struct param **paramp;
 	    *p = '\0';
 	}
 	else {
-	    strncpy(param->value, value, valuelen);
+	    strlcpy(param->value, value, valuelen);
 	    param->value[valuelen] = '\0';
 	}
 
@@ -1249,7 +1249,7 @@ struct param **paramp;
 	*paramp = param = (struct param *)xmalloc(sizeof(struct param));
 	*param = zeroparam;
 	param->value = xmalloc(valuelen + 1);
-	strncpy(param->value, value, valuelen);
+	strlcpy(param->value, value, valuelen);
 	param->value[valuelen] = '\0';
 	for (p = param->value; *p; p++) {
 	    if (islower((int) *p)) *p = toupper((int) *p);
