@@ -418,7 +418,7 @@ struct mailbox *mailbox;
 	}
     }
 
-    mailbox->pop3_last_uid = ntohl(*((bit32 *)(buf+OFFSET_POP3_LAST_UID)));
+    mailbox->pop3_last_login = ntohl(*((bit32 *)(buf+OFFSET_POP3_LAST_LOGIN)));
     mailbox->uidvalidity = ntohl(*((bit32 *)(buf+OFFSET_UIDVALIDITY)));
 
     return 0;
@@ -795,7 +795,7 @@ struct mailbox *mailbox;
     *((bit32 *)(buf+OFFSET_LAST_APPENDDATE)) = htonl(mailbox->last_appenddate);
     *((bit32 *)(buf+OFFSET_LAST_UID)) = htonl(mailbox->last_uid);
     *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) = htonl(mailbox->quota_mailbox_used);
-    *((bit32 *)(buf+OFFSET_POP3_LAST_UID)) = htonl(mailbox->pop3_last_uid);
+    *((bit32 *)(buf+OFFSET_POP3_LAST_LOGIN)) = htonl(mailbox->pop3_last_login);
     *((bit32 *)(buf+OFFSET_UIDVALIDITY)) = htonl(mailbox->uidvalidity);
 
     if (mailbox->start_offset < header_size) header_size = mailbox->start_offset;
@@ -1357,7 +1357,7 @@ struct mailbox *mailboxp;
     mailbox.last_appenddate = 0;
     mailbox.last_uid = 0;
     mailbox.quota_mailbox_used = 0;
-    mailbox.pop3_last_uid = 0;
+    mailbox.pop3_last_login = 0;
     mailbox.uidvalidity = time(0);
 
     r = mailbox_write_header(&mailbox);

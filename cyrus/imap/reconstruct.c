@@ -251,13 +251,13 @@ char *name;
 	mailbox.exists = 0;
 	mailbox.last_uid = 0;
 	mailbox.last_appenddate = 0;
-	mailbox.pop3_last_uid = 0;
 	mailbox.uidvalidity = time(0);
     }
     else {
 	(void) mailbox_lock_index(&mailbox);
     }
     mailbox.index_lock_count = 1;
+    mailbox.pop3_last_login = 0;
 
     /* Create new index/cache files */
     strcpy(fnamebuf, FNAME_INDEX+1);
@@ -405,9 +405,6 @@ char *name;
     if (mailbox.last_appenddate == 0 || mailbox.last_appenddate > time(0)) {
 	mailbox.last_appenddate = time(0);
     }
-    if (mailbox.pop3_last_uid > uid[uid_num-1]) {
-	mailbox.pop3_last_uid = uid[uid_num-1];
-    }
     if (mailbox.uidvalidity == 0 || mailbox.uidvalidity > time(0)) {
 	mailbox.uidvalidity = time(0);
     }
@@ -421,7 +418,7 @@ char *name;
     *((bit32 *)(buf+OFFSET_LAST_APPENDDATE)) = htonl(mailbox.last_appenddate);
     *((bit32 *)(buf+OFFSET_LAST_UID)) = htonl(mailbox.last_uid);
     *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) = htonl(new_quota);
-    *((bit32 *)(buf+OFFSET_POP3_LAST_UID)) = htonl(mailbox.pop3_last_uid);
+    *((bit32 *)(buf+OFFSET_POP3_LAST_LOGIN)) = htonl(mailbox.pop3_last_login);
     *((bit32 *)(buf+OFFSET_UIDVALIDITY)) = htonl(mailbox.uidvalidity);
 
     n = fwrite(buf, 1, INDEX_HEADER_SIZE, newindex);
