@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.94 2003/10/24 18:24:06 rjs3 Exp $
+ * $Id: lmtpengine.c,v 1.95 2003/10/28 17:14:07 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -785,13 +785,23 @@ static int process_recipient(char *addr,
 		if(*addr == '\\') addr++;
 		*dest++ = TOLOWER(*addr++);
 	    }
-	}
-
-	/* Now finish the remainder of the localpart */
-	while ((config_virtdomains || *addr != '@') && *addr != '>') {
-	    if (*addr == '\\') addr++;
-	    *dest++ = *addr++;
-	}
+	    if (*addr == '+') {
+	      while(*addr != '@' && *addr != '>') {
+		if(*addr == '\\') addr++;
+		*dest++ = *addr++;
+	      }
+	    }
+	    while ((config_virtdomains || *addr != '@') && *addr != '>') {
+		if(*addr == '\\') addr++;
+		*dest++ = TOLOWER(*addr++);
+	    }
+	} else {
+	  /* Now finish the remainder of the localpart */
+	  while ((config_virtdomains || *addr != '@') && *addr != '>') {
+	      if (*addr == '\\') addr++;
+	      *dest++ = *addr++;
+	  }
+       }
     }
     *dest = '\0';
 	
