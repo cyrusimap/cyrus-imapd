@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.256 2003/01/27 22:12:48 rjs3 Exp $
+dnl $Id: configure.in,v 1.257 2003/01/28 20:49:42 rjs3 Exp $
 dnl
 
 
@@ -108,6 +108,10 @@ AC_CHECK_HEADERS(unistd.h sys/select.h sys/param.h)
 AC_REPLACE_FUNCS(memmove strcasecmp ftruncate strerror)
 AC_HEADER_DIRENT
 
+dnl do this before Berkeley DB/IPv6 detection
+CMU_SOCKETS
+LIBS="$LIBS ${LIB_SOCKET}"
+
 dnl check for IPv6 functions (fall back to sasl's if we don't have them)
 cyrus_cv_getaddrinfo=yes
 IPv6_CHECK_FUNC(getaddrinfo, [IPv6_CHECK_FUNC(gai_strerror,[
@@ -119,6 +123,7 @@ IPv6_CHECK_FUNC(getnameinfo,
 	AC_DEFINE(HAVE_GETNAMEINFO),
 	cyrus_cv_getnameinfo=no)
 
+
 dnl this is to check for time things for sieve
 AC_STRUCT_TM
 AC_STRUCT_TIMEZONE
@@ -129,9 +134,6 @@ AC_SUBST(EXTRA_SUBDIRS)
 AC_SUBST(DEPLIBS)
 AC_SUBST(LOCALDEFS)
 AC_FUNC_VPRINTF
-
-dnl do this before Berkeley DB detection
-CMU_SOCKETS
 
 dnl Berkeley DB Detection
 
@@ -905,8 +907,6 @@ AC_SUBST(SNMP_SUBDIRS)
 
 CMU_LIBWRAP
 CMU_UCDSNMP
-
-LIBS="$LIBS ${LIB_SOCKET}"
 
 # Figure out what directories we're linking against.
 # Lots of fun for the whole family.
