@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.4 2002/07/13 20:18:52 ken3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.5 2002/07/14 03:24:21 ken3 Exp $
  */
 
 #include <config.h>
@@ -1502,6 +1502,7 @@ struct find_rock {
     struct glob *g;
     struct namespace *namespace;
     int find_namespace;
+    int domainlen;
     int inboxoffset;
     const char *inboxcase;
     const char *usermboxname;
@@ -1523,6 +1524,9 @@ static int find_p(void *rockp,
     long minmatch;
     struct glob *g = rock->g;
     long matchlen;
+
+    /* don't list mailboxes outside of the default domain */
+    if (!rock->domainlen && !rock->isadmin && strchr(key, '!')) return 0; 
 
     minmatch = 0;
     if (rock->inboxoffset) {
@@ -1722,6 +1726,7 @@ int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
 
     cbrock.g = glob_init(pattern, GLOB_HIERARCHY|GLOB_INBOXCASE);
     cbrock.namespace = NULL;
+    cbrock.domainlen = domainlen;
     cbrock.inboxcase = glob_inboxcase(cbrock.g);
     cbrock.isadmin = isadmin;
     cbrock.auth_state = auth_state;
@@ -1788,6 +1793,9 @@ int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
 	 !strncasecmp("inbox.", pattern, prefixlen < 6 ? prefixlen : 6))) {
 
 	if (!strncmp(usermboxname+domainlen, pattern, usermboxnamelen-domainlen-1)) {
+	    /* switch to pattern with domain prepended */
+	    glob_free(&cbrock.g);
+	    cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
 	    cbrock.inboxoffset = 0;
 	}
 	else {
@@ -1804,6 +1812,9 @@ int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
 
     if(!r) {
 	cbrock.find_namespace = NAMESPACE_USER;
+	/* switch to pattern with domain prepended */
+	glob_free(&cbrock.g);
+	cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
 	cbrock.inboxoffset = 0;
 	if (usermboxnamelen) {
 	    usermboxname[--usermboxnamelen] = '\0';
@@ -2428,9 +2439,20 @@ int mboxlist_findsub(struct namespace *namespace __attribute__((unused)),
     int r = 0;
     char *p;
     int prefixlen;
+    int userlen = strlen(userid), domainlen = 0;
+    char domainpat[MAX_MAILBOX_NAME+1]; /* do intra-domain fetches only */
+
+    if (config_virtdomains && userid && (p = strchr(userid, '@'))) {
+	userlen = p - userid;
+	domainlen = strlen(p); /* includes separator */
+	sprintf(domainpat, "%s!%s", p+1, pattern);
+    }
+    else
+	strcpy(domainpat, pattern);
 
     cbrock.g = glob_init(pattern, GLOB_HIERARCHY|GLOB_INBOXCASE);
     cbrock.namespace = NULL;
+    cbrock.domainlen = domainlen;
     cbrock.inboxcase = glob_inboxcase(cbrock.g);
     cbrock.isadmin = 1;		/* user can always see their subs */
     cbrock.auth_state = auth_state;
@@ -2446,10 +2468,11 @@ int mboxlist_findsub(struct namespace *namespace __attribute__((unused)),
     }
 
     /* Build usermboxname */
-    if (userid && !strchr(userid, '.') &&
+    if (userid && (!(p = strchr(userid, '.')) || ((p - userid) > userlen)) &&
 	strlen(userid)+5 < MAX_MAILBOX_NAME) {
-	strcpy(usermboxname, "user.");
-	strcat(usermboxname, userid);
+	if (domainlen)
+	    sprintf(usermboxname, "%s!", userid+userlen+1);
+	sprintf(usermboxname+domainlen, "user.%.*s", userlen, userid);
 	usermboxnamelen = strlen(usermboxname);
     }
     else {
@@ -2465,8 +2488,9 @@ int mboxlist_findsub(struct namespace *namespace __attribute__((unused)),
 		r = (*proc)(cbrock.inboxcase, 5, 1, rock);
 	    }
 	}
-	else if (!strncmp(pattern, usermboxname, usermboxnamelen) &&
-		 GLOB_TEST(cbrock.g, usermboxname) != -1) {
+	else if (!strncmp(pattern,
+			  usermboxname+domainlen, usermboxnamelen-domainlen) &&
+		 GLOB_TEST(cbrock.g, usermboxname+domainlen) != -1) {
 	    r = SUBDB->fetch(subs, usermboxname, usermboxnamelen,
 			     &data, &datalen, NULL);
 	    if (!r && data) {
@@ -2494,10 +2518,13 @@ int mboxlist_findsub(struct namespace *namespace __attribute__((unused)),
      * search for those mailboxes next
      */
     if (userid &&
-	(!strncmp(usermboxname, pattern, usermboxnamelen-1) ||
+	(!strncmp(usermboxname+domainlen, pattern, usermboxnamelen-domainlen-1) ||
 	 !strncasecmp("inbox.", pattern, prefixlen < 6 ? prefixlen : 6))) {
 
-	if (!strncmp(usermboxname, pattern, usermboxnamelen-1)) {
+	if (!strncmp(usermboxname+domainlen, pattern, usermboxnamelen-domainlen-1)) {
+	    /* switch to pattern with domain prepended */
+	    glob_free(&cbrock.g);
+	    cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
 	    cbrock.inboxoffset = 0;
 	}
 	else {
@@ -2519,6 +2546,9 @@ int mboxlist_findsub(struct namespace *namespace __attribute__((unused)),
     }
 
     cbrock.find_namespace = NAMESPACE_USER;
+    /* switch to pattern with domain prepended */
+    glob_free(&cbrock.g);
+    cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
     cbrock.inboxoffset = 0;
     if (usermboxnamelen) {
 	usermboxname[--usermboxnamelen] = '\0';
@@ -2527,7 +2557,7 @@ int mboxlist_findsub(struct namespace *namespace __attribute__((unused)),
     }
     /* search for all remaining mailboxes.
        just bother looking at the ones that have the same pattern prefix. */
-    SUBDB->foreach(subs, pattern, prefixlen, 
+    SUBDB->foreach(subs, domainpat, domainlen + prefixlen, 
 		   &find_p, &find_cb, &cbrock, NULL);
 
   done:

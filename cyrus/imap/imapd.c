@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.5 2002/07/13 19:38:01 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.6 2002/07/14 03:24:20 ken3 Exp $ */
 
 #include <config.h>
 
@@ -7209,8 +7209,14 @@ static void mstringdata(char *cmd, char *name, int matchlen, int maycreate,
 
     /* Now we need to see if this mailbox exists */
     /* first convert "INBOX" to "user.<userid>" */
-    if (!strncasecmp(lastname, "inbox", 5))
-	sprintf(mboxname, "user.%s%s", imapd_userid, lastname+5);
+    if (!strncasecmp(lastname, "inbox", 5)) {
+	char *domain;
+	if (config_virtdomains && (domain = strchr(imapd_userid, '@')))
+	    sprintf(mboxname, "%s!user.%.*s%s",
+		    domain+1, domain - imapd_userid, imapd_userid, lastname+5);
+	else
+	    sprintf(mboxname, "user.%s%s", imapd_userid, lastname+5);
+    }
     else
 	strcpy(mboxname, lastname);
 

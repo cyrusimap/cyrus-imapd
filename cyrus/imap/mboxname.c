@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- * $Id: mboxname.c,v 1.25.4.3 2002/07/13 20:17:13 ken3 Exp $
+ * $Id: mboxname.c,v 1.25.4.4 2002/07/14 03:24:22 ken3 Exp $
  * Copyright (c)1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -304,19 +304,16 @@ static int mboxname_tointernal_alt(struct namespace *namespace, const char *name
 
 /* Handle conversion from the internal namespace to the standard namespace */
 static int mboxname_toexternal(struct namespace *namespace, const char *name,
-			       const char *userid __attribute__((unused)),
-			       char *result)
+			       const char *userid, char *result)
 {
-#if 0
     char *domain;
 
     if (config_virtdomains && (domain = strchr(userid, '@')) &&
 	!strncmp(name, domain+1, strlen(domain)-1) &&
 	name[strlen(domain)-1] == '!')
-	strcpy(result, name + strlen(domain));
-    else
-#endif
-	strcpy(result, name);
+	name += strlen(domain);
+
+    strcpy(result, name);
 
     /* Translate any separators in mailboxname */
     mboxname_hiersep_toexternal(namespace, result);
@@ -327,6 +324,13 @@ static int mboxname_toexternal(struct namespace *namespace, const char *name,
 static int mboxname_toexternal_alt(struct namespace *namespace, const char *name,
 				  const char *userid, char *result)
 {
+    char *domain;
+
+    if (config_virtdomains && (domain = strchr(userid, '@')) &&
+	!strncmp(name, domain+1, strlen(domain)-1) &&
+	name[strlen(domain)-1] == '!')
+	name += strlen(domain);
+
     /* Personal (INBOX) namespace */
     if (!strncasecmp(name, "inbox", 5) &&
 	(name[5] == '\0' || name[5] == '.')) {
