@@ -1,17 +1,33 @@
-/* deliver shell - this just calls lmtpd through a unix domain socket
- * as defined in imapd.conf
+/* deliver.c -- deliver shell - just calls lmtpd
+ * Tim Martin
  *
- * */
-
-/* issues:
-   -l flag
-   buffer up whole message
-   doesn't deal w/ multiple responses from DATA
-   doesn't correctly exit based on response code
-   MAIL FROM:<> isn't filled in with the sender
-*/
+ * Copyright 2000 Carnegie Mellon University
+ * 
+ * No warranties, either expressed or implied, are made regarding the
+ * operation, use, or results of the software.
+ *
+ * Permission to use, copy, modify and distribute this software and its
+ * documentation is hereby granted for non-commercial purposes only
+ * provided that this copyright notice appears in all copies and in
+ * supporting documentation.
+ *
+ * Permission is also granted to Internet Service Providers and others
+ * entities to use the software for internal purposes.
+ *
+ * The distribution, modification or sale of a product which uses or is
+ * based on the software, in whole or in part, for commercial purposes or
+ * benefits requires specific, additional permission from:
+ *
+ *  Office of Technology Transfer
+ *  Carnegie Mellon University
+ *  5000 Forbes Avenue
+ *  Pittsburgh, PA  15213-3890
+ *  (412) 268-4387, fax: (412) 268-7395
+ *  tech-transfer@andrew.cmu.edu
+ */
 
 #include <config.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -25,30 +41,6 @@
 #include <syslog.h>
 #include <com_err.h>
 #include <errno.h>
-#ifdef HAVE_LIBDB
-#ifdef HAVE_DB_185_H
-#include <db_185.h>
-#else
-#include <db.h>
-#endif
-#else
-#include <ndbm.h>
-#endif
-
-#ifdef USE_SIEVE
-#include <sieve_interface.h>
-
-#define HEADERCACHESIZE 4009
-
-#ifdef TM_IN_SYS_TIME
-#include <sys/time.h>
-#else
-#include <time.h>
-#endif
-
-#include <pwd.h>
-#include <sys/types.h>
-#endif
 
 #include <netdb.h>
 #include <sys/socket.h>
@@ -70,32 +62,32 @@
 #include "xmalloc.h"
 #include "version.h"
 
-#define DEFAULT_PORT 2003
-
 extern int optind;
 extern char *optarg;
 
-int lmtpdsock;
+static int lmtpdsock;
 
-struct protstream *deliver_out, *deliver_in;
+static struct protstream *deliver_out, *deliver_in;
+static struct protstream *lmtpd_out, *lmtpd_in;
 
-struct protstream *lmtpd_out, *lmtpd_in;
+static int logdebug = 0;
+static int exitcode = 0;
 
-int logdebug = 0;
-int exitcode = 0;
+static const char *BB = "";
+static const char *sockaddr;
 
 /* forward declarations */
 
 void pushmsg(struct protstream *out);
-void deliver_msg(char *return_path, char *authuser, char **users, int numusers, char *mailbox, int portnum);
-static int init_net(void);
+void deliver_msg(char *return_path, char *authuser, char **users, 
+		 int numusers, char *mailbox);
+static int init_net(const char *sockaddr);
 
 static void
 usage()
 {
     fprintf(stderr, 
-	    "421-4.3.0 usage: deliver [-m mailbox] [-a auth] [-i]... [user]...\r\n");
-    fprintf(stderr, "421 4.3.0        deliver -E age\n");
+    "421-4.3.0 usage: deliver [-m mailbox] [-a auth] [-i]... [user]...\r\n");
     fprintf(stderr, "421 4.3.0 %s\n", CYRUS_VERSION);
     exit(EC_USAGE);
 }
@@ -113,28 +105,21 @@ static int push(int in, int out)
     int len;
     int cnt;
     int amnt = 0;
+
     len = read(in, buf, sizeof(buf)-1);
-    
-    if (len == -1)
-    {
-	/* xxx what to do here? */
-	exit (EC_IOERR);
+    if (len == -1) {
+	exit(EC_IOERR);
     }
-    if (len == 0)
-    {
+    if (len == 0) {
 	exit(0);
     }
 
-    /* keep writing until we have written the whole thing xxx can cause deadlock??? */
+    /* keep writing until we have written the whole thing
+       xxx can cause deadlock??? */
     do {
 	cnt = write(out, buf+amnt,len-amnt);
-    
-	if (cnt == -1)
-	{
-	    /* xxx what to do here? */
-	    exit (EC_IOERR);
-	}
-	amnt+=cnt;
+    	if (cnt == -1) exit(EC_IOERR);
+	amnt += cnt;
     } while (amnt<len);
 
     return 0;
@@ -168,15 +153,17 @@ void pipe_through(int lmtp_in, int lmtp_out, int local_in, int local_out)
 	wset = write_set;
 	nfound = select(highest, &rset, &wset, NULL, NULL);
 	if (nfound < 0) {
-	    printf("xxx select err\n");
+	    if (errno == EINTR) continue;
+	    exit(EC_IOERR);
 	}
 
-	if ((FD_ISSET(lmtp_in,&rset))  && (FD_ISSET(local_out,&wset)))
-	{
+	if ((FD_ISSET(lmtp_in,&rset))  && (FD_ISSET(local_out,&wset))) {
 	    push(lmtp_in, local_out);
-	} else if ((FD_ISSET(local_in,&rset)) && (FD_ISSET(lmtp_out,&wset))) {
+	}
+	if ((FD_ISSET(local_in,&rset)) && (FD_ISSET(lmtp_out,&wset))) {
 	    push(local_in, lmtp_out);
 	} else {
+	    /* weird; this shouldn't happen */
 	    usleep(1000);
 	}
     }
@@ -194,7 +181,7 @@ clean822space(char *buf)
     int c;
     int commentlevel = 0;
 
-    while ((c = *from++)!=NULL) {
+    while ((c = *from++) != '\0') {
 	switch (c) {
 	case '\r':
 	case '\n':
@@ -232,17 +219,15 @@ int main(int argc, char **argv)
     char *mailboxname = NULL;
     char *authuser = NULL;
     char *return_path = NULL;
-    struct servent *serv;
-    char *port = "lmtp";
-    int portnum;
+    char buf[1024];
 
-    /* map port -> num */
-    serv = getservbyname(port, "tcp");
-    if (serv == NULL) {
-	portnum = DEFAULT_PORT;
-    } else {
-	portnum = ntohs(serv->s_port);
+    sockaddr = config_getstring("lmtpsocket", NULL);
+    if (!sockaddr) {
+	strcpy(buf, config_dir);
+	strcat(buf, "/socket/lmtp");
+	sockaddr = buf;
     }
+    BB = config_getstring("postuser", BB);
 
     deliver_in = prot_new(0, 0);
     deliver_out = prot_new(1, 1);
@@ -307,15 +292,15 @@ int main(int argc, char **argv)
 	}
     }
 
-    if (lmtpflag == 1)
-    {	
-	int s = init_net();
+    if (lmtpflag == 1) {
+	int s = init_net(sockaddr);
 
 	pipe_through(s,s,0,1);
     }
 
     /* deliver to users or global mailbox */
-    deliver_msg(return_path,authuser, argv+optind, argc - optind, mailboxname, portnum);
+    deliver_msg(return_path,authuser, argv+optind, 
+		argc - optind, mailboxname);
     
     /* if we got here there were no errors */
     exit(exitcode);
@@ -325,19 +310,15 @@ void just_exit(const char *msg)
 {
     com_err(msg, 0, error_message(errno));
 
-    fatal(msg,0);
+    fatal(msg, EC_CONFIG);
 }
 
 /* initialize the network 
  * we talk on unix sockets
  */
-static int init_net(void)
+static int init_net(const char *unixpath)
 {
   struct sockaddr_un addr;
-  struct hostent *hp;
-  char *unixpath = NULL;
-
-  unixpath = config_getstring("lmtpsockpath","/var/lmtp");
 
   if ((lmtpdsock = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
       just_exit("socket failed");
@@ -346,7 +327,8 @@ static int init_net(void)
   addr.sun_family = AF_UNIX;
   strcpy(addr.sun_path, unixpath);
 
-  if (connect(lmtpdsock, (struct sockaddr *) &addr, sizeof (addr)) < 0) {
+  if (connect(lmtpdsock, (struct sockaddr *) &addr, 
+	      sizeof(addr.sun_family) + strlen(addr.sun_path)) < 0) {
       just_exit("connect failed");
   }
 
@@ -367,8 +349,6 @@ static void close_net(void)
 
 void close_and_exit(int code, const char *msg)
 {    
-
-    
     com_err(msg, code,
 	    (code == EC_IOERR) ? error_message(errno) : NULL);
 
@@ -405,29 +385,24 @@ static int ask_code(char *str)
     return ret;
 }
 
+#define ISGOOD(r) (((r) / 100) == 2)
+#define TEMPFAIL(r) (((r) / 100) == 4)
+#define PERMFAIL(r) (((r) / 100) == 5)
+
 static void read_initial(void)
 {
     char buf[4096];
+    int r;
 
     do {
-
 	if (prot_fgets(buf, sizeof(buf)-1, lmtpd_in) == NULL)
 	    close_and_exit (EC_IOERR, "Error reading initial");
+    } while (ISGOOD(ask_code(buf)) && (buf[3]=='-'));
 
-    } while ((ask_code(buf)==220) && (buf[3]=='-'));
-
-
-    switch (ask_code(buf))
-	{
-	case 421:
-	    close_and_exit(EC_TEMPFAIL,"Service shutting down");
-	    break;
-	case 220: /* good */
-	    break;
-	default:
-	    close_and_exit (EC_TEMPFAIL, "Received wrong initial code");	    
-	    break;
-	}
+    r = ask_code(buf);
+    if (r == 421) close_and_exit(EC_TEMPFAIL, "service shutting down");
+    if (TEMPFAIL(r)) close_and_exit(EC_TEMPFAIL, "temporary failure");
+    if (PERMFAIL(r)) close_and_exit(EC_UNAVAILABLE, "service unavailable");
 }
 
 static void say_hello(void)
@@ -439,19 +414,14 @@ static void say_hello(void)
     if (r) close_and_exit(EC_IOERR, "Error writing LHLO");
 
     do {
-
 	if (prot_fgets(buf, sizeof(buf)-1, lmtpd_in) == NULL)
 	    close_and_exit (EC_IOERR, "Error reading LHLO response");
+    } while (ISGOOD(ask_code(buf)) && (buf[3]=='-'));
 
-    } while ((ask_code(buf)==250) && (buf[3]=='-'));
-
-    switch (ask_code(buf))
-	{
-	case 250: break;
-	case 421: close_and_exit (EC_TEMPFAIL, "Temporarily unavailable"); break;
-	default: close_and_exit (EC_SOFTWARE, "Got 5xx response from LHLO"); break;	    
-	}
-
+    r = ask_code(buf);
+    if (TEMPFAIL(r)) close_and_exit(EC_TEMPFAIL, "Temporarily unavailable");
+    if (PERMFAIL(r)) close_and_exit (EC_DATAERR, 
+				     "Got 5xx response from LHLO");
 }
 
 static void say_whofrom(char *from, char *authuser)
@@ -462,49 +432,33 @@ static void say_whofrom(char *from, char *authuser)
     char *who = ""; /* leave blank so we don't get any bounces */
     if (from) who = from;
 
-    if (authuser)
-    {
+    if (authuser) {
 	r = prot_printf(lmtpd_out,"MAIL FROM:<%s> AUTH=%s\r\n",who,authuser);
     } else {
 	r = prot_printf(lmtpd_out,"MAIL FROM:<%s>\r\n",who);
     }
-
     if (r) close_and_exit(EC_IOERR, "Error writing mail from");
 
     if (prot_fgets(buf, sizeof(buf)-1, lmtpd_in) == NULL)
 	close_and_exit(EC_IOERR, "Error reading mail from response");
-
     
     code = ask_code(buf);
 
-    if (code/100 == 4)
-	close_and_exit (EC_TEMPFAIL, "Temporary failure from MAIL FROM command");
+    if (TEMPFAIL(code))	
+	close_and_exit(EC_TEMPFAIL, "MAIL FROM: temporary failure");
 
-    if (code/100 == 5)
-	close_and_exit (EC_SOFTWARE, "MAIL FROM command rejected");
-
-    
+    if (PERMFAIL(code))
+	close_and_exit(EC_DATAERR, "MAIL FROM command rejected");
 }
 
 static void handle_rcpt_code(char *buf, int *rcpts)
 {
-    switch (ask_code(buf))
-	{
-	case 251:
-	case 250:
-	    (*rcpts)++;
-	    break;
-	case 551: /* xxx user not local. how do we handle? */
-	case 550: /* 550 5.1.1 User unknown */
-	    exitcode = EC_NOUSER;
-	    break;
-	case 421:
-	    close_and_exit(EC_TEMPFAIL,"Service shutting down");
-	    break;
-	default:
-	    close_and_exit(EC_SOFTWARE, "Bad rcpt to response");	    
-	    break;
-	}
+    int r = ask_code(buf);
+
+    if (ISGOOD(r)) (*rcpts)++;
+    if (PERMFAIL(r)) exitcode = EC_NOUSER; /* likely reason */
+    if (TEMPFAIL(r)) exitcode = EC_TEMPFAIL;
+    if (r == 421) close_and_exit(EC_TEMPFAIL,"Service shutting down");
 }
 
 /*
@@ -517,41 +471,37 @@ static int say_rcpt(char **users, int numusers, char *mailbox)
     int r;
     int rcpts = 0;
 
-    if ((numusers == 0) && (mailbox==NULL))
-    {
+    if ((numusers == 0) && (mailbox==NULL)) {
 	close_and_exit(EC_TEMPFAIL,"No mailbox or users specified");
     }
 
     /* deliver to bboard */
     if (numusers == 0)
     {
-	r = prot_printf(lmtpd_out,"RCPT TO:<bb+%s>\r\n",mailbox);
+	r = prot_printf(lmtpd_out,"RCPT TO:<%s+%s>\r\n", BB, mailbox);
 	if (r) close_and_exit(EC_IOERR, "Error writing rcpt to");
 
 	if (prot_fgets(buf, sizeof(buf)-1, lmtpd_in) == NULL)
 	    close_and_exit(EC_IOERR, "Error reading rcpt to response");
 	
 	handle_rcpt_code(buf, &rcpts);
-
     } else {
 	int lup;
 
-	for (lup=0;lup<numusers;lup++)
-	{
+	for (lup=0;lup<numusers;lup++) {
 	    if (mailbox == NULL) {
-		r = prot_printf(lmtpd_out,"RCPT TO:<%s>\r\n",users[lup]);		
+		r = prot_printf(lmtpd_out,"RCPT TO:<%s>\r\n", users[lup]);
 	    } else {
-		r = prot_printf(lmtpd_out,"RCPT TO:<%s+%s>\r\n",users[lup],mailbox);		
+		r = prot_printf(lmtpd_out,"RCPT TO:<%s+%s>\r\n",
+				users[lup], mailbox);
 	    }
 
 	    if (r) close_and_exit(EC_IOERR, "Error writing rcpt to");
-
 
 	    if (prot_fgets(buf, sizeof(buf)-1, lmtpd_in) == NULL)
 		close_and_exit(EC_IOERR, "Error reading rcpt to response");
 
 	    handle_rcpt_code(buf, &rcpts);
-
 	}
     } 
 
@@ -571,46 +521,39 @@ static void pump_data(int rcpts)
 	close_and_exit(EC_IOERR, "Error reading after DATA");
 
     switch (ask_code(buf))
-	{
-	case 354: /* good */ break;
-	case 421: close_and_exit(EC_TEMPFAIL, "Service unavailable"); break;
-	default:
-	    close_and_exit(EC_SOFTWARE, "Service unavailable");	 break;	    
-	}
+    {
+    case 354: /* good */ break;
+    case 421: close_and_exit(EC_TEMPFAIL, "Service unavailable"); 
+	break;
+    default:
+	close_and_exit(EC_SOFTWARE, "Service unavailable");
+	break;
+    }
 
     pushmsg(lmtpd_out);
 
     /* should receive one response for each sucessful rcpt to */
-    for (lup=0;lup<rcpts;lup++)
-    {
+    for (lup=0;lup<rcpts;lup++) {
+	int r;
+
 	if (prot_fgets(buf, sizeof(buf)-1, lmtpd_in) == NULL)
 	    close_and_exit(EC_IOERR, "Error reading after message data");
-	
-	switch (ask_code(buf))
-		{
-		case 552:
-		case 452: /* quota issue */
-		    exitcode = EC_TEMPFAIL; break;
 
-		case 250: /* good */
-		    break;
-		    
-		case 421:
-		case 451:
-		case 554: /* transaction failed */
-		default:
-		    close_and_exit(EC_SOFTWARE, "Error reading after message data"); 
-		    break;
-		}
+	r = ask_code(buf);
+	if (r == 421) close_and_exit(EC_TEMPFAIL, "Service unavailable"); 
+	if (TEMPFAIL(r)) exitcode = EC_TEMPFAIL;
+	if (PERMFAIL(r)) 
+	    exitcode = EC_DATAERR; /* probably didn't like the message */
     }
 }
  
-void deliver_msg(char *return_path, char *authuser, char **users, int numusers, char *mailbox, int portnum)
+void deliver_msg(char *return_path, char *authuser, 
+		 char **users, int numusers, char *mailbox)
 {
     int rcpts;
 
     /* connect */
-    init_net("/var/lmtp",portnum);
+    init_net(sockaddr);
 
     lmtpd_in = prot_new(lmtpdsock, 0);
     lmtpd_out = prot_new(lmtpdsock, 1);
@@ -627,10 +570,9 @@ void deliver_msg(char *return_path, char *authuser, char **users, int numusers, 
     say_whofrom(return_path, authuser);
     
     /* rcpt to */
-    rcpts = say_rcpt(users,numusers, mailbox);
+    rcpts = say_rcpt(users, numusers, mailbox);
 
-    if (rcpts > 0)
-    {
+    if (rcpts > 0) {
 	/* data */
 	pump_data(rcpts);
     }
@@ -638,13 +580,10 @@ void deliver_msg(char *return_path, char *authuser, char **users, int numusers, 
     close_net();
 }
 
-
 void pushmsg(struct protstream *out)
 {
     int r;
-    char *hostname = 0;
     char buf[8192], *p;
-    int retpathclean = 0;
     int lastline_hadendline = 1;
 
     while (prot_fgets(buf, sizeof(buf)-1, deliver_in)) {
@@ -652,7 +591,7 @@ void pushmsg(struct protstream *out)
 	/* dot stuff */
 	if (lastline_hadendline == 1)
 	    if (buf[0]=='.') {
-		r = prot_write(out,".",1);
+		r = prot_putc('.', out);
 		if (r) close_and_exit(EC_IOERR, "Error writing message data");
 	    }
 
