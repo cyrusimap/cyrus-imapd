@@ -29,7 +29,7 @@
 
 #include "acte.h"
 
-char *prot_tostring(protlevel)
+char *acte_prottostring(protlevel)
 int protlevel;
 {
     switch (protlevel) {

@@ -58,4 +58,4 @@ struct acte_server {
 
 #define ACTE_DONE 3		/* Server has authenticated user */
 
-extern char *prot_tostring();
+extern char *acte_prottostring();
