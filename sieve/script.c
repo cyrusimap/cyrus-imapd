@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.19 2000/02/13 06:22:49 leg Exp $
+ * $Id: script.c,v 1.20 2000/02/14 20:05:41 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -927,7 +927,7 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
     }
 
     /* Now process notify action if there is one */
-    if ((ret == SIEVE_OK) && (notify_action->exists))
+    if ((ret == SIEVE_OK) && (notify_action->exists) && s->interp.notify)
     {
 	ret = send_notify_callback(s, message_context, notify_action,actions_string);
     }
