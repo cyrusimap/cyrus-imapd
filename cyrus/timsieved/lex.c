@@ -101,7 +101,8 @@ char *buffer;
 
 int lex_init(void)
 {
-  maxscriptsize = config_getint("sieve_maxscriptsize", 32000);
+  maxscriptsize = config_getint("sieve_maxscriptsize", 32);
+  maxscriptsize *= 1024;
 
   buffer = (char *) xmalloc(maxscriptsize);
 
@@ -234,8 +235,9 @@ int timlex(YYSTYPE * lvalp, void * client)
 	prot_printf(sieved_out, sync_reply);
       }
 
-      if (count > config_getint("maxscriptsize",32000))
-	ERR();
+      if (count > maxscriptsize) {
+	  ERR();
+      }
 
       lvalp->str = NULL;
       result = string_allocate(count, NULL, &lvalp->str);
