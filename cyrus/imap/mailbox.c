@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.147.2.5 2004/04/01 02:40:20 ken3 Exp $
+ * $Id: mailbox.c,v 1.147.2.6 2004/04/02 16:43:48 ken3 Exp $
  *
  */
 
@@ -2591,6 +2591,8 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
 	return r;
     }
 
+    /* XXX For two-phase expunge, we also need to copy cyrus.expunge */
+
     /* Re-open index file and store new uidvalidity  */
     close(newmailbox->index_fd);
     newmailbox->index_fd = dup(oldmailbox->index_fd);
@@ -2619,6 +2621,9 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
 	if (r) break;
     }
     if (!r) r = seen_copy(oldmailbox, newmailbox);
+
+    /* XXX For two-phase expunge, we also need to copy message files
+       referenced by cyrus.expunge */
 
     /* Record new quota usage */
     if (!r && newmailbox->quota.root) {
