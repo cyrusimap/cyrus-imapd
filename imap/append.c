@@ -200,6 +200,11 @@ char *userid;
 		message_index.system_flags |= FLAG_ANSWERED;
 	    }
 	}
+	else if (!strcmp(flag[i], "\\draft")) {
+	    if (mailbox->myrights & ACL_WRITE) {
+		message_index.system_flags |= FLAG_DRAFT;
+	    }
+	}
 	else if (mailbox->myrights & ACL_WRITE) {
 	    /* User flag */
 	    emptyflag = -1;
