@@ -193,7 +193,7 @@ cmdloop()
 	    }
 	    shutdown(0);
 	}
-	if (c != ' ' || !isatom(tag.s) || (tag.s[0] == '*' && !tag.s[1])) {
+	if (c != ' ' || !is_atom(tag.s) || (tag.s[0] == '*' && !tag.s[1])) {
 	    prot_printf(imapd_out, "* BAD Invalid tag\r\n");
 	    if (c != '\n') eatline();
 	    continue;
@@ -219,7 +219,7 @@ cmdloop()
 	    if (!strcmp(cmd.s, "Authenticate")) {
 		if (c != ' ') goto missingargs;
 		c = getword(&arg1);
-		if (!isatom(arg1.s)) {
+		if (!is_atom(arg1.s)) {
 		    prot_printf(imapd_out, "%s BAD Invalid authenticate mechanism\r\n", tag.s);
 		    if (c != '\n') eatline();
 		    continue;
@@ -276,7 +276,7 @@ cmdloop()
 		if (c != ' ') goto missingargs;
 	    copy:
 		c = getword(&arg1);
-		if (c != ' ' || !issequence(arg1.s)) goto badsequence;
+		if (c != ' ' || !is_sequence(arg1.s)) goto badsequence;
 		c = getastring(&arg2);
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(imapd_in);
@@ -292,7 +292,7 @@ cmdloop()
 		if (c == ' ') {
 		    havepartition = 1;
 		    c = getword(&arg2);
-		    if (!isatom(arg2.s)) goto badpartition;
+		    if (!is_atom(arg2.s)) goto badpartition;
 		}
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
@@ -357,7 +357,7 @@ cmdloop()
 		if (c != ' ') goto missingargs;
 	    fetch:
 		c = getword(&arg1);
-		if (c != ' ' || !issequence(arg1.s)) goto badsequence;
+		if (c != ' ' || !is_sequence(arg1.s)) goto badsequence;
 		cmd_fetch(tag.s, arg1.s, usinguid);
 	    }
 	    else if (!strcmp(cmd.s, "Find")) {
@@ -499,7 +499,7 @@ cmdloop()
 		if (c == ' ') {
 		    havepartition = 1;
 		    c = getword(&arg3);
-		    if (!isatom(arg3.s)) goto badpartition;
+		    if (!is_atom(arg3.s)) goto badpartition;
 		}
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
@@ -515,7 +515,7 @@ cmdloop()
 		if (c != ' ') goto missingargs;
 	    store:
 		c = getword(&arg1);
-		if (c != ' ' || !issequence(arg1.s)) goto badsequence;
+		if (c != ' ' || !is_sequence(arg1.s)) goto badsequence;
 		c = getword(&arg2);
 		if (c != ' ') goto badsequence;
 		cmd_store(tag.s, arg1.s, arg2.s, usinguid);
@@ -901,7 +901,7 @@ char *name;
 		goto freeflags;
 	    }
 	}
-	else if (!isatom(arg.s)) {
+	else if (!is_atom(arg.s)) {
 	    prot_printf(imapd_out, "%s BAD Invalid flag name %s in Append command\r\n",
 		   tag, arg.s);
 	    if (c != '\n') eatline();
@@ -1525,7 +1525,7 @@ int usinguid;
 		goto freeflags;
 	    }
 	}
-	else if (!isatom(flagname.s)) {
+	else if (!is_atom(flagname.s)) {
 	    prot_printf(imapd_out, "%s BAD Invalid flag name %s in %s command\r\n",
 		   tag, flagname.s, cmd);
 	    if (c != '\n') eatline();
@@ -2504,7 +2504,7 @@ int parsecharset;
     case '0': case '1': case '2': case '3': case '4':
     case '5': case '6': case '7': case '8': case '9':
     case '*':
-	if (issequence(criteria.s)) {
+	if (is_sequence(criteria.s)) {
 	    appendstrlist(&searchargs->sequence, criteria.s);
 	}
 	else goto badcri;
@@ -2631,7 +2631,7 @@ int parsecharset;
 	if (!strcmp(criteria.s, "keyword")) {
 	    if (c != ' ') goto missingarg;		
 	    c = getword(&arg);
-	    if (!isatom(arg.s)) goto badflag;
+	    if (!is_atom(arg.s)) goto badflag;
 	    lcase(arg.s);
 	    for (flag=0; flag < MAX_USER_FLAGS; flag++) {
 		if (imapd_mailbox->flagname[flag] &&
@@ -2866,7 +2866,7 @@ int parsecharset;
 	if (!strcmp(criteria.s, "uid")) {
 	    if (c != ' ') goto missingarg;
 	    c = getword(&arg);
-	    if (!issequence(arg.s)) goto badcri;
+	    if (!is_sequence(arg.s)) goto badcri;
 	    appendstrlist(&searchargs->uidsequence, arg.s);
 	}
 	else if (!strcmp(criteria.s, "unseen")) {
@@ -2887,7 +2887,7 @@ int parsecharset;
 	else if (!strcmp(criteria.s, "unkeyword")) {
 	    if (c != ' ') goto missingarg;		
 	    c = getword(&arg);
-	    if (!isatom(arg.s)) goto badflag;
+	    if (!is_atom(arg.s)) goto badflag;
 	    lcase(arg.s);
 	    for (flag=0; flag < MAX_USER_FLAGS; flag++) {
 		if (imapd_mailbox->flagname[flag] &&
@@ -3213,57 +3213,6 @@ time_t *date;
     prot_ungetc(c, imapd_in);
     return EOF;
 }
-	
-/*
- * Return nonzero if 's' matches the grammar for an atom
- */
-int isatom(s)
-char *s;
-{
-    if (!*s) return 0;
-    for (; *s; s++) {
-	if (*s & 0x80 || *s < 0x1f || *s == 0x7f ||
-	    *s == ' ' || *s == '{' || *s == '(' || *s == ')' ||
-	    *s == '\"' || *s == '%' || *s == '*' || *s == '\\') return 0;
-    }
-    return 1;
-}
-
-/*
- * Return nonzero if 's' matches the grammar for a sequence
- */
-int issequence(s)
-char *s;
-{
-    int c;
-    int len = 0;
-    int sawcolon = 0;
-
-    while (c = *s) {
-	if (c == ',') {
-	    if (!len) return 0;
-	    if (!isdigit(s[-1]) && s[-1] != '*') return 0;
-	    sawcolon = 0;
-	}
-	else if (c == ':') {
-	    if (sawcolon || !len) return 0;
-	    if (!isdigit(s[-1]) && s[-1] != '*') return 0;
-	    sawcolon = 1;
-	}
-	else if (c == '*') {
-	    if (len && s[-1] != ',' && s[-1] != ':') return 0;
-	    if (isdigit(s[1])) return 0;
-	}
-	else if (!isdigit(c)) {
-	    return 0;
-	}
-	s++;
-	len++;
-    }
-    if (len == 0) return 0;
-    if (!isdigit(s[-1]) && s[-1] != '*') return 0;
-    return 1;
-}
 
 /*
  * Eat characters up to and including the next newline
@@ -3283,7 +3232,7 @@ char *s;
 {
     char *p;
 
-    if (isatom(s)) {
+    if (is_atom(s)) {
 	prot_printf(imapd_out, "%s", s);
 	return;
     }
