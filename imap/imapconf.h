@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- * $Id: imapconf.h,v 1.19 2003/02/13 20:15:24 rjs3 Exp $
+ * $Id: imapconf.h,v 1.20 2003/03/10 19:00:19 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -126,6 +126,8 @@ struct buf {
 };
 
 struct proxy_context {
+    const char *service;
+    int admin_only;
     int use_acl;
     int proxy_servers;
     struct auth_state **authstate;

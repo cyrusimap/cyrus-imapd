@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.64 2003/02/13 20:15:23 rjs3 Exp $ */
+/* $Id: config.c,v 1.65 2003/03/10 19:00:19 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -467,6 +467,9 @@ int mysasl_proxy_policy(sasl_conn_t *conn,
     int userisadmin = 0;
     char *realm;
 
+    if(!ctx)
+	fatal("mysasl_proxy_policy without a context", EC_SOFTWARE);
+
     /* check if remote realm */
     if ((realm = strchr(auth_identity, '@'))!=NULL) {
 	realm++;
@@ -490,10 +493,10 @@ int mysasl_proxy_policy(sasl_conn_t *conn,
     authstate = auth_newstate(auth_identity, NULL);
 
     /* ok, is auth_identity an admin? */
-    userisadmin = authisa(authstate, "imap", "admins");
+    userisadmin = authisa(authstate, ctx->service, "admins");
 
-    if (!ctx) {
-	/* for now only admins are allowed */
+    if (ctx->admin_only) {
+	/* only admins are allowed */
 	auth_freestate(authstate);
     
 	if (!userisadmin) {
@@ -512,7 +515,7 @@ int mysasl_proxy_policy(sasl_conn_t *conn,
 	if (userisadmin ||
 	    (use_acl && acl_ok(requested_user, authstate)) ||
 	    (ctx->proxy_servers &&
-	     authisa(authstate, "imap", "proxyservers"))) {
+	     authisa(authstate, ctx->service, "proxyservers"))) {
 	    /* proxy ok! */
 
 	    userisadmin = 0;	/* no longer admin */
@@ -523,7 +526,7 @@ int mysasl_proxy_policy(sasl_conn_t *conn,
 	    /* are we a proxy admin? */
 	    if (ctx->userisproxyadmin)
 		*(ctx->userisproxyadmin) =
-		    authisa(authstate, "imap", "admins");
+		    authisa(authstate, ctx->service, "admins");
 	} else {
 	    sasl_seterror(conn, 0, "user %s is not allowed to proxy",
 			  auth_identity);
