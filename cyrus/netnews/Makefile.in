@@ -1,4 +1,4 @@
-# Makefile for cyradm
+# Makefile for netnews tools useful with cyrus
 #
 # @configure_input@
 # Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
@@ -47,9 +47,9 @@ CC = @CC@
 INSTALL = @INSTALL@
 RANLIB = @RANLIB@
 
-DEFS = @DEFS@ @TCL_DEFS@
-CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@ @TCL_CPPFLAGS@
-LIBS =  @TCL_LIBS@ @IMAP_LIBS@
+DEFS = @DEFS@
+CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@
+LIBS =  @IMAP_LIBS@
 DEPLIBS = ../lib/libcyrus.a @DEPLIBS@ 
 
 CFLAGS = @CFLAGS@
@@ -67,7 +67,7 @@ OBJS = remotepurge.o readconfig.o wildmat.o
 all: remotepurge
 
 install:
-	$(INSTALL) -s -m 755 cyradm $(DESTDIR)$(exec_prefix)/bin
+	$(INSTALL) -s -m 755 remotepurge $(DESTDIR)$(cyrus_prefix)/bin
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
