@@ -40,7 +40,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: mboxlist.h,v 1.21 2002/02/28 19:54:17 rjs3 Exp $
+ * $Id: mboxlist.h,v 1.22 2002/03/05 16:18:15 rjs3 Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -60,9 +60,9 @@ extern struct db *mbdb;
 #define MAX_PARTITION_LEN 64
 
 /* flags for types of mailboxes */
-#define MBTYPE_REMOTE 0x01
-#define MBTYPE_RESERVE 0x02
-#define MBTYPE_NETNEWS 0x04
+#define MBTYPE_REMOTE 0x01 /* Does not live on this server */
+#define MBTYPE_RESERVE 0x02 /* Unused */
+#define MBTYPE_NETNEWS 0x04 /* Netnews Mailbox */
 
 /* master name of the mailboxes file */
 #define FNAME_MBOXLIST "/mailboxes.db"
