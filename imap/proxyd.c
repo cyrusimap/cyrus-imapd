@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.94 2002/02/15 20:38:52 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.95 2002/02/15 20:59:11 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -1324,7 +1324,7 @@ void shut_down(int code)
     proc_cleanup();
 
     i = 0;
-    while (backend_cached[i]) {
+    while (backend_cached && backend_cached[i]) {
 	proxyd_downserver(backend_cached[i]);
 	free(backend_cached[i]);
 	i++;
