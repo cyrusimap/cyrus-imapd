@@ -342,7 +342,7 @@ char *userid;
 	     * Have to copy the message, possibly converting LF to CR LF
 	     * Then, we have to parse the message.
 	     */
-	    destfile = fopen(fname, "w");
+	    destfile = fopen(fname, "w+");
 	    if (!destfile) {
 		syslog(LOG_ERR, "IOERROR: writing message file %s: %m", fname);
 		r = IMAP_IOERROR;
