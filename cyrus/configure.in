@@ -30,6 +30,8 @@ AC_SYS_LONG_FILE_NAMES
 if test $ac_cv_sys_long_file_names = no; then
 	AC_MSG_ERROR(The Cyrus IMAPD requires support for long file names)
 fi
+dnl get this over with; important if we're not using gcc
+CFLAGS="-I/usr/local/include ${CFLAGS}"
 AC_CHECK_HEADERS(unistd.h sys/select.h db_185.h)
 AC_REPLACE_FUNCS(memmove strcasecmp ftruncate strerror)
 AC_HEADER_DIRENT
@@ -253,8 +255,10 @@ AC_CACHE_VAL(cyrus_sigveclib,[
     CFLAGS="-L/usr/ucblib -R/usr/ucblib $CFLAGS"
     AC_CHECK_LIB(ucb, sigvec, [
       cyrus_sigveclib="-L/usr/ucblib -R/usr/ucblib -lucb"],
-      [ AC_MSG_WARN(** Can't find a sigvec() -- makedepend and)
-	AC_MSG_WARN(AFS dependant programs may not build.)])
+      [ AC_MSG_WARN(** Can't find a sigvec() -- makedepend will not build.)
+	AC_MSG_WARN(** Some AFS dependant programs (ptloader) may fail to build.)
+	AC_MSG_WARN(** If you're not using AFS and have makedepend, this isn't a problem.)
+	])
     CFLAGS="$SAVE_CFLAGS"])
   ])
 ])
