@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.33 2002/03/07 20:06:01 leg Exp $ -->
+<!-- $Id: changes.html,v 1.34 2002/03/21 21:10:01 ken3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -8,6 +8,16 @@
 </head>
 <body>
 <h1>Changes to the Cyrus IMAP Server</h1>
+
+<h2>Changes to the Cyrus IMAP Server since 2.1.3</h2>
+
+<ul>
+<li> All "MAIL" and "SIEVE" notifications are now handled by
+<tt>notifyd</tt> which is a daemon that supports multiple notification
+methods.  The <tt>mailnotifier</tt> and <tt>sievenotifier</tt> options
+have been added to <tt>/etc/imapd.conf</tt> to configure notifications.</li>
+
+</ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.1.2</h2>
 
@@ -1532,7 +1542,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2002/03/07 20:06:01 $ <br />
+last modified: $Date: 2002/03/21 21:10:01 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
