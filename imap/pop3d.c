@@ -26,7 +26,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.48 1999/08/26 18:51:03 leg Exp $
+ * $Id: pop3d.c,v 1.49 1999/08/30 18:00:42 leg Exp $
  */
 
 #ifndef __GNUC__
@@ -718,6 +718,7 @@ cmd_capa()
     
     prot_printf(popd_out, "+OK List of capabilities follows\r\n");
 
+#if 0
     /* SASL special case: print SASL, then a list of supported capabilities
        (parsed from the IMAP-style login_capabilities function, then a CRLF */
     if (sasl_listmech(popd_saslconn,
@@ -730,6 +731,7 @@ cmd_capa()
       prot_printf(popd_out," %s",sasllist);
       prot_printf(popd_out, "\r\n");    
     }
+#endif
 
     if (expire < 0) {
 	prot_printf(popd_out, "EXPIRE NEVER\r\n");
@@ -755,7 +757,7 @@ void
 cmd_auth(authtype)
 char *authtype;
 {
-  /*    char *initial_response;
+    char *initial_response;
     char *canon_user;
     int r;
     struct sasl_server *mech;
@@ -768,8 +770,6 @@ char *authtype;
     const char *reply = 0;
     int protlevel;
     char *user;
-    sasl_encodefunc_t *encodefunc;
-    sasl_decodefunc_t *decodefunc;
     int maxplain;
     char *val;
 
@@ -777,7 +777,7 @@ char *authtype;
 	const char *capabilities, *next_capabilities;
 
 	prot_printf(popd_out, "+OK List of supported mechanisms follows\r\n");
-	next_capabilities = login_capabilities();
+	next_capabilities = "";
 	while (next_capabilities[0]) {
 	    capabilities = next_capabilities;
 	    next_capabilities = strchr(capabilities+1, ' ');
@@ -795,6 +795,7 @@ char *authtype;
 	return;
     }
 
+#if 0
     if ((initial_response = strchr(authtype, ' '))) {
 	*initial_response++ = '\0';
     }
@@ -880,7 +881,8 @@ char *authtype;
     }
     else {
 	mech->free_state(state);
-	}*/
+	}
+#endif
 }
 
 /*
