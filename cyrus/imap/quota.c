@@ -185,9 +185,10 @@ int nroots;
 	quota[quota_num].quota.root = xstrdup(dirent->d_name);
 	
 	r = mailbox_read_quota(&quota[quota_num].quota);
-	if (quota[quota_num].quota.file) {
-	    fclose(quota[quota_num].quota.file);
-	    quota[quota_num].quota.file = 0;
+	if (quota[quota_num].quota.fd != -1) {
+	    close(quota[quota_num].quota.fd);
+	    quota[quota_num].quota.fd = -1;
+	    map_free(&quota[quota_num].quota.base, &quota[quota_num].quota.len);
 	}
 	if (r) {
 	    com_err(dirent->d_name, r,
@@ -263,7 +264,7 @@ int maycreate;
 	}
     }
     
-    if (!quota[thisquota].quota.file) {
+    if (quota[thisquota].quota.fd == -1) {
 	r = mailbox_lock_quota(&quota[thisquota].quota);
 	if (r) {
 	    mailbox_close(&mailbox);
@@ -301,9 +302,10 @@ char *root;
      * the header and unlocking all the quota roots only when that fails.
      */
     for (i = firstquota; i < quota_num; i++) {
-	if (quota[i].quota.file) {
-	    fclose(quota[i].quota.file);
-	    quota[i].quota.file = 0;
+	if (quota[i].quota.fd != -1) {
+	    close(quota[i].quota.fd);
+	    quota[i].quota.fd = -1;
+	    map_free(&quota[i].quota.base, &quota[i].quota.len);
 	}
     }
     redofix = 1;
@@ -345,12 +347,13 @@ int thisquota;
 	return 0;
     }
 
-    if (!quota[thisquota].quota.file) {
+    if (quota[thisquota].quota.fd == -1) {
 	r = mailbox_lock_quota(&quota[thisquota].quota);
 	if (r) {
-	    if (quota[thisquota].quota.file) {
-		fclose(quota[thisquota].quota.file);
-		quota[thisquota].quota.file = 0;
+	    if (quota[thisquota].quota.fd != -1) {
+		close(quota[thisquota].quota.fd);
+		quota[thisquota].quota.fd = -1;
+		map_free(&quota[thisquota].quota.base, &quota[thisquota].quota.len);
 	    }
 	    return r;
 	}
@@ -364,8 +367,9 @@ int thisquota;
 	if (r) return r;
     }
 
-    fclose(quota[thisquota].quota.file);
-    quota[thisquota].quota.file = 0;
+    close(quota[thisquota].quota.fd);
+    quota[thisquota].quota.fd = -1;
+    map_free(&quota[thisquota].quota.base, &quota[thisquota].quota.len);
     return 0;
 }
 

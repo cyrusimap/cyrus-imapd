@@ -154,8 +154,7 @@ const char *userid;
     assert(size != 0);
 
     /* Setup */
-    fseek(mailbox->cache, 0L, 2);
-    last_cacheoffset = ftell(mailbox->cache);
+    last_cacheoffset= lseek(mailbox->cache_fd, 0L, SEEK_END);
     message_index = zero_index;
     message_index.uid = mailbox->last_uid + 1;
     message_index.last_updated = time(0);
@@ -182,8 +181,7 @@ const char *userid;
     fclose(destfile);
     if (!r) {
 	/* Flush out the cache file data */
-	fflush(mailbox->cache);
-	if (ferror(mailbox->cache) || fsync(fileno(mailbox->cache))) {
+	if (fsync(mailbox->cache_fd)) {
 	    syslog(LOG_ERR, "IOERROR: writing cache file for %s: %m",
 		   mailbox->name);
 	    r = IMAP_IOERROR;
@@ -191,7 +189,7 @@ const char *userid;
     }
     if (r) {
 	unlink(fname);
-	ftruncate(fileno(mailbox->cache), last_cacheoffset);
+	ftruncate(mailbox->cache_fd, last_cacheoffset);
 	mailbox_unlock_quota(&mailbox->quota);
 	mailbox_unlock_index(mailbox);
 	mailbox_unlock_header(mailbox);
@@ -250,7 +248,7 @@ const char *userid;
 	r = mailbox_write_header(mailbox);
 	if (r) {
 	    unlink(fname);
-	    ftruncate(fileno(mailbox->cache), last_cacheoffset);
+	    ftruncate(mailbox->cache_fd, last_cacheoffset);
 	    mailbox_unlock_quota(&mailbox->quota);
 	    mailbox_unlock_index(mailbox);
 	    mailbox_unlock_header(mailbox);
@@ -262,7 +260,7 @@ const char *userid;
     r = mailbox_append_index(mailbox, &message_index, mailbox->exists, 1);
     if (r) {
 	unlink(fname);
-	ftruncate(fileno(mailbox->cache), last_cacheoffset);
+	ftruncate(mailbox->cache_fd, last_cacheoffset);
 	mailbox_unlock_quota(&mailbox->quota);
 	mailbox_unlock_index(mailbox);
 	mailbox_unlock_header(mailbox);
@@ -282,7 +280,7 @@ const char *userid;
     r = mailbox_write_index_header(mailbox);
     if (r) {
 	unlink(fname);
-	ftruncate(fileno(mailbox->cache), last_cacheoffset);
+	ftruncate(mailbox->cache_fd, last_cacheoffset);
 	/* We don't ftruncate index file.  It doesn't matter */
 	mailbox_unlock_quota(&mailbox->quota);
 	mailbox_unlock_index(mailbox);
@@ -337,7 +335,7 @@ const char *userid;
     unsigned long src_size;
     const char *startline, *endline;
     FILE *destfile;
-    int r;
+    int r, n;
     long last_cacheoffset;
     int writeheader = 0;
     int flag, userflag, emptyflag;
@@ -352,8 +350,8 @@ const char *userid;
 	return 0;
     }
 
-    fseek(append_mailbox->cache, 0L, 2);
-    last_cacheoffset = ftell(append_mailbox->cache);
+    
+    last_cacheoffset = lseek(append_mailbox->cache_fd, 0L, SEEK_END);
     message_index = (struct index_record *)
       xmalloc(nummsg * sizeof(struct index_record));
 
@@ -377,13 +375,21 @@ const char *userid;
 	    if (r) goto fail;
 
 	    /* Write out cache info, copy other info */
-	    message_index[msg].cache_offset = ftell(append_mailbox->cache);
-	    fwrite(copymsg[msg].cache_begin, 1, copymsg[msg].cache_len,
-		   append_mailbox->cache);
+	    message_index[msg].cache_offset =
+		lseek(append_mailbox->cache_fd, 0L, SEEK_CUR);
 	    message_index[msg].sentdate = copymsg[msg].sentdate;
 	    message_index[msg].size = copymsg[msg].size;
 	    message_index[msg].header_size = copymsg[msg].header_size;
 	    message_index[msg].content_offset = copymsg[msg].header_size;
+
+	    n = retry_write(append_mailbox->cache_fd, copymsg[msg].cache_begin,
+			    copymsg[msg].cache_len);
+	    if (n == -1) {
+		syslog(LOG_ERR, "IOERROR: writing cache file for %s: %m",
+		       append_mailbox->name);
+		r = IMAP_IOERROR;
+		goto fail;
+	    }
 	}
 	else {
 	    /*
@@ -472,9 +478,7 @@ const char *userid;
     }
 
     /* Flush out the cache file data */
-    fflush(append_mailbox->cache);
-    if (ferror(append_mailbox->cache) ||
-	fsync(fileno(append_mailbox->cache))) {
+    if (fsync(append_mailbox->cache_fd)) {
 	syslog(LOG_ERR, "IOERROR: writing cache file for %s: %m",
 	       append_mailbox->name);
 	r = IMAP_IOERROR;
@@ -555,7 +559,7 @@ const char *userid;
 	unlink(fname);
     }
 
-    ftruncate(fileno(append_mailbox->cache), last_cacheoffset);
+    ftruncate(append_mailbox->cache_fd, last_cacheoffset);
     free(message_index);
     mailbox_unlock_quota(&append_mailbox->quota);
     mailbox_unlock_index(append_mailbox);
@@ -592,8 +596,7 @@ unsigned long feeduid;
 
     if (feeduid < mailbox->last_uid) feeduid = mailbox->last_uid;
     curtime = internaldate = time(0);
-    fseek(mailbox->cache, 0L, 2);
-    last_cacheoffset = ftell(mailbox->cache);
+    last_cacheoffset = lseek(mailbox->cache_fd, 0L, SEEK_END);
 
     size_message_index = feeduid - mailbox->last_uid + COLLECTGROW;
     message_index = (struct index_record *)
@@ -665,8 +668,7 @@ unsigned long feeduid;
     }
 
     /* Flush out the cache file data */
-    fflush(mailbox->cache);
-    if (ferror(mailbox->cache) || fsync(fileno(mailbox->cache))) {
+    if (fsync(mailbox->cache_fd)) {
 	syslog(LOG_ERR, "IOERROR: writing cache file for %s: %m",
 	       mailbox->name);
 	r = IMAP_IOERROR;
@@ -710,7 +712,7 @@ unsigned long feeduid;
     return 0;
 
  fail:
-    ftruncate(fileno(mailbox->cache), last_cacheoffset);
+    ftruncate(mailbox->cache_fd, last_cacheoffset);
     free(message_index);
     mailbox_unlock_quota(&mailbox->quota);
     mailbox_unlock_index(mailbox);

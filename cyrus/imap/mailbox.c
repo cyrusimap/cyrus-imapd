@@ -652,14 +652,14 @@ struct quota *quota;
     }
     
     p = quota->base;
-    eol = memchr(p, '\n', mailbox->quota.len - (p - mailbox->quota.base));
+    eol = memchr(p, '\n', quota->len - (p - quota->base));
     if (!eol) {
 	return IMAP_MAILBOX_BADFORMAT;
     }
     quota->used = atol(p);
 
     p = eol + 1;
-    eol = memchr(p, '\n', mailbox->quota.len - (p - mailbox->quota.base));
+    eol = memchr(p, '\n', quota->len - (p - quota->base));
     if (!eol) {
 	return IMAP_MAILBOX_BADFORMAT;
     }
