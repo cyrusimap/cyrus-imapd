@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.72.4.12 2002/08/18 01:06:21 ken3 Exp $
+ * $Id: prot.c,v 1.72.4.13 2002/10/21 20:46:19 ken3 Exp $
  */
 
 #include <config.h>
@@ -1131,7 +1131,7 @@ char *prot_fgets(char *buf, unsigned size, struct protstream *s)
     assert(!s->write);
 
     if (size < 2) return 0;
-    size -= 2;
+    size--;
 
     while (size && (c = prot_getc(s)) != EOF) {
 	size--;
