@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.57 2001/06/14 19:26:38 leg Exp $
+ $Id: imclient.c,v 1.58 2001/07/27 23:30:37 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -220,6 +220,7 @@ int imclient_connect(struct imclient **imclient,
     struct sockaddr_in addr;
     static struct imclient zeroimclient;
     int saslresult;
+    static didinit;
 
     hp = gethostbyname(host);
     if (!hp) return -1;
@@ -267,18 +268,17 @@ int imclient_connect(struct imclient **imclient,
 #endif /* HAVE_SSL */
 
 
-  /* attempt to start sasl */
-    if (cbs) {
-	saslresult=sasl_client_init(cbs);	
-    } else {
-	saslresult=sasl_client_init(callbacks);	
+    if (!didinit) {
+	/* attempt to start sasl */
+	saslresult=sasl_client_init(NULL);
+	if (saslresult!=SASL_OK) return 1;
+	didinit = 1;
     }
-    if (saslresult!=SASL_OK) return 1;
 
   /* client new connection */
   saslresult=sasl_client_new("imap", /* xxx ideally this should be configurable */
 			     (*imclient)->servername,
-			     NULL,
+			     cbs ? cbs : callbacks,
 			     0,
 			     &((*imclient)->saslconn));
   if (saslresult!=SASL_OK) return 1;
@@ -300,7 +300,7 @@ struct imclient *imclient;
     free(imclient->servername);
     if (imclient->replybuf) free(imclient->replybuf);
     /*    if (imclient->state) imclient->mech->free_state(imclient->state);*/
-    
+    sasl_dispose(&(imclient->saslconn));
     for (i = 0; i < imclient->callback_num; i++) {
 	free(imclient->callback[i].keyword);
     }
