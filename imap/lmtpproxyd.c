@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.34 2002/02/14 22:41:18 leg Exp $
+ * $Id: lmtpproxyd.c,v 1.35 2002/02/23 00:30:09 rjs3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -253,6 +253,16 @@ int service_init(int argc, char **argv, char **envp)
     return 0;
 }
 
+static int mupdate_ignore_cb(struct mupdate_mailboxdata *mdata __attribute__((unused)),
+			     const char *cmd __attribute__((unused)),
+			     void *context __attribute__((unused))) 
+{
+    /* If we get called, we've recieved something other than an OK in
+     * response to the NOOP, so we want to hang up this connection anyway */
+    return MUPDATE_FAIL;
+}
+
+
 /*
  * run for each accepted connection
  */
@@ -282,9 +292,18 @@ int service_main(int argc, char **argv, char **envp)
 
     /* get a connection to the mupdate server */
     r = 0;
+    if (mhandle) {
+	/* we have one already, test it */
+	r = mupdate_noop(mhandle, mupdate_ignore_cb, NULL);
+	if(r) {
+	    /* will NULL mhandle for us */
+	    mupdate_disconnect(&mhandle);
+	}
+    }
+    /* connect to the mupdate server */
     if (!mhandle) {
 	r = mupdate_connect(mupdate_server, NULL, &mhandle, NULL);
-    }
+    }	
     if (!r) {
 	lmtpmode(&mylmtp, deliver_in, deliver_out, 0);
     } else {

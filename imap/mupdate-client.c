@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.23 2002/02/15 20:09:32 rjs3 Exp $
+ * $Id: mupdate-client.c,v 1.24 2002/02/23 00:30:09 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -585,6 +585,27 @@ int mupdate_list(mupdate_handle *handle, mupdate_callback callback,
 	return MUPDATE_FAIL;
     } else {
 	return 0;
+    }
+}
+
+
+int mupdate_noop(mupdate_handle *handle, mupdate_callback callback,
+		 void *context)
+{
+    int ret;
+    enum mupdate_cmd_response response;
+    
+    if(!handle || !callback) return MUPDATE_BADPARAM;
+
+    prot_printf(handle->pout,
+		"X%u NOOP\r\n", handle->tagn++);
+
+    ret = mupdate_scarf(handle, callback, context, 1, &response);
+
+    if (!ret && response == MUPDATE_OK) {
+	return 0;
+    } else {
+	return ret ? ret : MUPDATE_FAIL;
     }
 }
 
