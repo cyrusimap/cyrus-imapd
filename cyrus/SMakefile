@@ -40,7 +40,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.93 2003/12/22 17:05:40 rjs3 Exp $
+# $Id: SMakefile,v 1.94 2004/06/02 17:22:11 rjs3 Exp $
 #
 
 NEW_AUTOTOOLS=yes
@@ -116,7 +116,7 @@ DB_CONFIG=""
 # the following is for staticly linking SASL only
 SASL_CONFIG="--with-staticsasl=/usr/local --with-gssapi=/usr/local"
 KRB_CONFIG="--enable-statickrb --with-krb=/usr/local"
-FEATURE_CONFIG="--enable-murder --enable-annotatemore --enable-cmulocal"
+FEATURE_CONFIG="--enable-murder --enable-cmulocal"
 EXT_PACKAGE_CONFIG="--with-inn=/usr/news --with-ucdsnmp=/usr/local"
 
 MFCOMMAND="./configure $WITHAUTH $KRB_CONFIG $DB_CONFIG --enable-experiment --with-cyrus-group=staff $FEATURE_CONFIG $EXT_PACKAGE_CONFIG $SASL_CONFIG $DEBUG"
