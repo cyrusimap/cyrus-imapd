@@ -328,7 +328,7 @@ sasl_security_properties_t *mysasl_secprops(int flags)
 				/* maximum allowable security strength */
 
     ret.security_flags = flags;
-    ret.security_flags |= SASL_SEC_NOPLAINTEXT;
+    /* ret.security_flags |= SASL_SEC_NOPLAINTEXT; */
     if (!config_getswitch("allowanonymouslogin", 0)) {
 	ret.security_flags |= SASL_SEC_NOANONYMOUS;
     }

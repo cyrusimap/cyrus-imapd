@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.250 2000/06/01 05:48:32 leg Exp $ */
+/* $Id: imapd.c,v 1.251 2000/06/04 22:28:15 leg Exp $ */
 
 #include <config.h>
 
@@ -436,7 +436,7 @@ int service_main(int argc, char **argv, char **envp)
 	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL);
     }
 
-    secprops = mysasl_secprops(0);
+    secprops = mysasl_secprops(SASL_SEC_NOPLAINTEXT);
     sasl_setprop(imapd_saslconn, SASL_SEC_PROPS, secprops);
     if (extprops.ssf) {
 	sasl_setprop(imapd_saslconn, SASL_SSF_EXTERNAL, &extprops);

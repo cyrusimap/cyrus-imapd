@@ -278,7 +278,7 @@ int service_main(int argc, char **argv, char **envp)
 
     /* will always return something valid */
     /* should be configurable! */
-    secprops = mysasl_secprops(0);
+    secprops = mysasl_secprops(SASL_SEC_NOANONYMOUS);
     sasl_setprop(sieved_saslconn, SASL_SEC_PROPS, secprops);
     
     sasl_setprop(sieved_saslconn, SASL_IP_REMOTE, &sieved_remoteaddr);  

@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.3 2000/05/29 03:02:58 leg Exp $
+ * $Id: lmtpengine.c,v 1.4 2000/06/04 22:28:17 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -960,7 +960,7 @@ void lmtpmode(struct lmtp_func *func,
     }
 
     /* set my allowable security properties */
-    secprops = mysasl_secprops(SASL_SEC_NOANONYMOUS);
+    secprops = mysasl_secprops(SASL_SEC_NOANONYMOUS | SASL_SEC_NOPLAINTEXT);
     sasl_setprop(conn, SASL_SEC_PROPS, secprops);
 
     /* determine who we're talking to */
