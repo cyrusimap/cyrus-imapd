@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.162 2001/05/02 18:16:55 leg Exp $
+ * $Id: index.c,v 1.163 2001/05/02 19:52:45 leg Exp $
  */
 #include <config.h>
 
@@ -1002,6 +1002,8 @@ struct searchargs *searchargs;
     unsigned msgno;
     struct mapfile msgfile;
     int n = 0;
+
+    if (imapd_exists <= 0) return 0;
 
     *msgno_list = (unsigned *) xmalloc(imapd_exists * sizeof(unsigned));
 
