@@ -1,6 +1,6 @@
 dnl sasl2.m4--sasl2 libraries and includes
 dnl Rob Siemborski
-dnl $Id: sasl2.m4,v 1.17.4.4 2002/08/21 15:32:21 ken3 Exp $
+dnl $Id: sasl2.m4,v 1.17.4.5 2002/09/30 20:43:21 rjs3 Exp $
 
 AC_DEFUN(SASL_GSSAPI_CHK,[
  AC_ARG_ENABLE(gssapi, [  --enable-gssapi=<DIR>   enable GSSAPI authentication [yes] ],
@@ -202,6 +202,10 @@ fi])
 
 AC_DEFUN(CMU_SASL2_REQUIRE_VER, [
 	AC_REQUIRE([CMU_SASL2_REQUIRED])
+
+	cmu_saved_CPPFLAGS=$CPPFLAGS
+	CPPFLAGS="$CPPFLAGS $SASLFLAGS"
+
 	AC_TRY_CPP([
 #include <sasl/sasl.h>
 
@@ -219,6 +223,8 @@ AC_DEFUN(CMU_SASL2_REQUIRE_VER, [
 #error SASL version is less than $1.$2.$3
 #endif
 	],,AC_ERROR([Incorrect SASL headers found.  This package requires SASL $1.$2.$3 or newer.]))
+
+	CPPFLAGS=$cmu_saved_CPPFLAGS
 ])
 
 AC_DEFUN(CMU_SASL2_CHECKAPOP_REQUIRED, [
