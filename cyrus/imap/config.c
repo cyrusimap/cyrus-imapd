@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.50 2002/05/25 19:57:43 leg Exp $ */
+/* $Id: config.c,v 1.51 2002/06/14 18:18:49 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -63,20 +63,15 @@
 #include "util.h"
 #include "imap_err.h"
 #include "mupdate_err.h"
+#include "hash.h"
 #include "prot.h" /* for PROT_BUFSIZE */
 
 extern int errno;
 
 #define CONFIG_FILENAME "/etc/imapd.conf"
 
-struct configlist {
-    char *key;
-    char *value;
-};
-
-static struct configlist *configlist;
-static int nconfiglist;
-
+#define CONFIGHASHSIZE 200 /* > 2x # of options */
+static struct hash_table confighash;
 
 /* variables accessible to the external world */
 const char *config_filename;     /* filename of configuration file */
@@ -102,6 +97,10 @@ int config_init(const char *alt_config, const char *ident)
     initialize_mupd_error_table();
 
     openlog(ident, LOG_PID, LOG_LOCAL6);
+
+    if(!construct_hash_table(&confighash, CONFIGHASHSIZE)) {
+	fatal("could not construct configuration hash table", EC_CONFIG);
+    }
 
     config_read(alt_config);
 
@@ -161,14 +160,11 @@ int config_changeident(const char *ident)
 
 const char *config_getstring(const char *key, const char *def)
 {
-    int opt;
+    char *ret;
 
-    for (opt = 0; opt < nconfiglist; opt++) {
-	if (*key == configlist[opt].key[0] &&
-	    !strcmp(key, configlist[opt].key))
-	  return configlist[opt].value;
-    }
-    return def;
+    ret = hash_lookup(key, &confighash);
+
+    return ret ? ret : def;
 }
 
 int config_getint(const char *key, int def)
@@ -209,14 +205,12 @@ const char *config_partitiondir(const char *partition)
     return config_getstring(buf, (char *)0);
 }
 
-#define CONFIGLISTGROWSIZE 30 /* 100 */
 static void config_read(const char *alt_config)
 {
     FILE *infile;
     int lineno = 0;
-    int alloced = 0;
     char buf[4096];
-    char *p, *q, *key;
+    char *p, *q, *key, *val, *newval;
 
     if(alt_config) config_filename = xstrdup(alt_config);
     else config_filename = xstrdup(CONFIG_FILENAME);
@@ -267,34 +261,15 @@ static void config_read(const char *alt_config)
 	    fatal(buf, EC_CONFIG);
 	}
 
-	if (nconfiglist == alloced) {
-	    alloced += CONFIGLISTGROWSIZE;
-	    configlist = (struct configlist *)
-	      xrealloc((char *)configlist, alloced*sizeof(struct configlist));
+	newval = xstrdup(p);
+	val = hash_insert(key, newval, &confighash);
+	if(val != newval) {
+	    sprintf(buf, "option %s was specified twice in config file",
+		    key);
+	    fatal(buf, EC_CONFIG);
 	}
-
-	configlist[nconfiglist].key = xstrdup(key);
-	configlist[nconfiglist].value = xstrdup(p);
-	nconfiglist++;
     }
     fclose(infile);
-}
-
-/*
- * Call proc (expected to be todo_append in reconstruct.c) with
- * information on each configured partition
- */
-void config_scanpartition( void (*proc)() )
-{
-    int opt;
-    char *s;
-
-    for (opt = 0; opt < nconfiglist; opt++) {
-	if (!strncmp(configlist[opt].key, "partition-", 10)) {
-	    s = xstrdup(configlist[opt].value);
-	    (*proc)(xstrdup(""), s, configlist[opt].key+10);
-	}
-    }
 }
 
 /* this is a wrapper to call the cyrus configuration from SASL */
