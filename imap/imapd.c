@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.273 2000/10/24 02:12:06 leg Exp $ */
+/* $Id: imapd.c,v 1.274 2000/10/26 20:13:45 ken3 Exp $ */
 
 #include <config.h>
 
@@ -4898,12 +4898,12 @@ time_t *start, *end;
 #define SORTGROWSIZE	10
 
 /*
- * Parse a sort criteria
+ * Parse sort criteria
  */
 int getsortcriteria(char *tag, struct sortcrit **sortcrit)
 {
     int c;
-    static struct buf arg;
+    static struct buf criteria, arg;
     int nsort, n;
 
     *sortcrit = NULL;
@@ -4911,8 +4911,8 @@ int getsortcriteria(char *tag, struct sortcrit **sortcrit)
     c = prot_getc(imapd_in);
     if (c != '(') goto missingcrit;
 
-    c = getword(&arg);
-    if (arg.s[0] == '\0') goto missingcrit;
+    c = getword(&criteria);
+    if (criteria.s[0] == '\0') goto missingcrit;
 
     *sortcrit = NULL;
     nsort = 0;
@@ -4928,39 +4928,53 @@ int getsortcriteria(char *tag, struct sortcrit **sortcrit)
 	    memset((*sortcrit)+n, 0, SORTGROWSIZE * sizeof(struct sortcrit));
 	}
 
-	lcase(arg.s);
-	if (!strcmp(arg.s, "reverse")) {
-	    (*sortcrit)[n].key = SORT_REVERSE;
+	lcase(criteria.s);
+	if (!strcmp(criteria.s, "reverse")) {
+	    (*sortcrit)[n].flags |= SORT_REVERSE;
 	    goto nextcrit;
 	}
-	else if (!strcmp(arg.s, "arrival"))
-	    (*sortcrit)[n].key |= SORT_ARRIVAL;
-	else if (!strcmp(arg.s, "cc"))
-	    (*sortcrit)[n].key |= SORT_CC;
-	else if (!strcmp(arg.s, "date"))
-	    (*sortcrit)[n].key |= SORT_DATE;
-	else if (!strcmp(arg.s, "from"))
-	    (*sortcrit)[n].key |= SORT_FROM;
-	else if (!strcmp(arg.s, "size"))
-	    (*sortcrit)[n].key |= SORT_SIZE;
-	else if (!strcmp(arg.s, "subject"))
-	    (*sortcrit)[n].key |= SORT_SUBJECT;
-	else if (!strcmp(arg.s, "to"))
-	    (*sortcrit)[n].key |= SORT_TO;
+	else if (!strcmp(criteria.s, "arrival"))
+	    (*sortcrit)[n].key = SORT_ARRIVAL;
+	else if (!strcmp(criteria.s, "cc"))
+	    (*sortcrit)[n].key = SORT_CC;
+	else if (!strcmp(criteria.s, "date"))
+	    (*sortcrit)[n].key = SORT_DATE;
+	else if (!strcmp(criteria.s, "from"))
+	    (*sortcrit)[n].key = SORT_FROM;
+	else if (!strcmp(criteria.s, "size"))
+	    (*sortcrit)[n].key = SORT_SIZE;
+	else if (!strcmp(criteria.s, "subject"))
+	    (*sortcrit)[n].key = SORT_SUBJECT;
+	else if (!strcmp(criteria.s, "to"))
+	    (*sortcrit)[n].key = SORT_TO;
+#if 0
+	else if (!strcmp(criteria.s, "annotation")) {
+	    (*sortcrit)[n].key = SORT_ANNOTATION;
+	    if (c != ' ') goto missingarg;
+	    c = getstring(&arg);
+	    if (c != ' ') goto missingarg;
+	    (*sortcrit)[n].args.annot.entry = strdup(arg.s);
+	    c = getstring(&arg);
+	    if (c == EOF) goto missingarg;
+	    (*sortcrit)[n].args.annot.attrib = strdup(arg.s);
+	}
+#endif
 	else {
+ badcrit:
 	    prot_printf(imapd_out, "%s BAD Invalid Sort criterion %s\r\n",
-			tag, arg.s);
+			tag, criteria.s);
 	    if (c != EOF) prot_ungetc(c, imapd_in);
 	    return EOF;
 	}
+
 	n++;
 
-nextcrit:
-	if (c == ' ') c = getword(&arg);
+ nextcrit:
+	if (c == ' ') c = getword(&criteria);
 	else break;
     }
 
-    if ((*sortcrit)[n].key == SORT_REVERSE) {
+    if ((*sortcrit)[n].flags & SORT_REVERSE  && !(*sortcrit)[n].key) {
 	prot_printf(imapd_out,
 		    "%s BAD Missing Sort criterion to reverse\r\n", tag);
 	if (c != EOF) prot_ungetc(c, imapd_in);
@@ -4983,6 +4997,12 @@ nextcrit:
 
  missingcrit:
     prot_printf(imapd_out, "%s BAD Missing Sort criteria\r\n", tag);
+    if (c != EOF) prot_ungetc(c, imapd_in);
+    return EOF;
+
+ missingarg:
+    prot_printf(imapd_out, "%s BAD Missing argument to Sort criterion %s\r\n",
+		tag, criteria.s);
     if (c != EOF) prot_ungetc(c, imapd_in);
     return EOF;
 }
@@ -5420,8 +5440,12 @@ static void freesortcrit(struct sortcrit *s)
 
     if (!s) return;
     do {
-	if (s[i].args[0]) free(s[i].args[0]);
-	if (s[i].args[1]) free(s[i].args[1]);
+	switch (s[i].key) {
+	case SORT_ANNOTATION:
+	    free(s[i].args.annot.entry);
+	    free(s[i].args.annot.attrib);
+	    break;
+	}
 	i++;
     } while (s[i].key != SORT_SEQUENCE);
     free(s);
