@@ -1,7 +1,7 @@
 /* timsieved.c -- main file for timsieved (sieve script accepting program)
  * Tim Martin
  * 9/21/99
- * $Id: timsieved.c,v 1.40.4.2 2002/07/30 19:20:12 ken3 Exp $
+ * $Id: timsieved.c,v 1.40.4.3 2002/08/04 14:04:48 ken3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -104,6 +104,7 @@ int sieved_haveaddr = 0;
 char sieved_clienthost[250] = "[local]";
 
 int sieved_userisadmin;
+int sieved_domainfromip = 0;
 
 /*
  * Cleanly shut down and exit
@@ -171,16 +172,19 @@ static int acl_ok(const char *user,
                   const char *auth_identity,
                   struct auth_state *authstate)
 {
+    struct namespace sieved_namespace;
     char *acl;
     char inboxname[1024];
     int r;
 
-    if (strchr(user, '.') || strlen(user)+6 >= sizeof(inboxname)) return 0;
+    /* Set namespace */
+    r = mboxname_init_namespace(&sieved_namespace, 0);
 
-    strcpy(inboxname, "user.");
-    strcat(inboxname, user);
+    if (!r)
+	r = (*sieved_namespace.mboxname_tointernal)(&sieved_namespace, "INBOX",
+						    user, inboxname);
 
-    if (!authstate ||
+    if (r || !authstate ||
         mboxlist_lookup(inboxname, (char **)0, &acl, NULL)) {
         r = 0;  /* Failed so assume no proxy access */
     }
@@ -258,7 +262,7 @@ static int mysasl_authproc(sasl_conn_t *conn,
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
     { SASL_CB_PROXY_POLICY, &mysasl_authproc, NULL },
-    { SASL_CB_CANON_USER, &mysasl_canon_user, NULL },
+    { SASL_CB_CANON_USER, &mysasl_canon_user, (void*) &sieved_domainfromip },
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
