@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_expire.c,v 1.1.2.1 2003/06/18 20:22:06 ken3 Exp $
+ * $Id: cyr_expire.c,v 1.1.2.2 2003/06/18 20:40:12 ken3 Exp $
  */
 
 #include <config.h>
@@ -73,6 +73,9 @@ const int config_need_data = 0;
 
 void printstring(const char *s)
 {
+    /* needed to link against annotate.o */
+    fatal("printstring() executed, but its not used for cyr_expire!",
+	  EC_SOFTWARE);
 }
 
 void usage(void)
@@ -249,7 +252,7 @@ int main(int argc, char *argv[])
     }
 
     /* xxx better way to determine a size for this table? */
-    construct_hash_table(&expire_table, 100, 1);
+    construct_hash_table(&expire_table, 10000, 1);
 
     strlcpy(buf, "*", sizeof(buf));
     mboxlist_findall(NULL, buf, 1, 0, 0, &build_table, &expire_table);
