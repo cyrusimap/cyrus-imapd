@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.288 2000/12/27 18:08:11 ken3 Exp $ */
+/* $Id: imapd.c,v 1.289 2001/01/02 06:06:50 leg Exp $ */
 
 #include <config.h>
 
@@ -3503,20 +3503,19 @@ char *pattern;
 		error_message(IMAP_OK_COMPLETED));
 }
 
+static int mstringdatacalls;
+
 /*
  * Perform a LIST or LSUB command
  */
-void
-cmd_list(tag, subscribed, reference, pattern)
-char *tag;
-int subscribed;
-char *reference;
-char *pattern;
+void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
 {
     char *buf = NULL;
     int patlen = 0;
     int reflen = 0;
     static int ignorereference = 0;
+    clock_t start = clock();
+    char mytime[100];
 
     /* Ignore the reference argument?
        (the behavior in 1.5.10 & older) */
@@ -3571,8 +3570,9 @@ char *pattern;
 
 	if (buf) free(buf);
     }
-    prot_printf(imapd_out, "%s OK %s\r\n", tag,
-		error_message(IMAP_OK_COMPLETED));
+    sprintf(mytime, "%2.3f", (clock() - start) / (double) CLOCKS_PER_SEC);
+    prot_printf(imapd_out, "%s OK %s (%s secs %d calls)\r\n", tag,
+		error_message(IMAP_OK_COMPLETED), mytime, mstringdatacalls);
 }
   
 /*
@@ -4298,11 +4298,19 @@ void cmd_namespace(tag)
     char* tag;
 {
     int sawone[3] = {0, 0, 0};
-    char* pattern = xstrdup("%");
+    char* pattern;
 
-    /* now find all the exciting toplevel namespaces */
-    mboxlist_findall(pattern, imapd_userisadmin, imapd_userid,
-		     imapd_authstate, namespacedata, (void*) sawone);
+    if (SLEEZY_NAMESPACE) {
+	sawone[NAMESPACE_INBOX] = 1;
+	sawone[NAMESPACE_USER] = 1;
+	sawone[NAMESPACE_SHARED] = 1;
+    } else {
+	pattern = xstrdup("%");
+	/* now find all the exciting toplevel namespaces */
+	mboxlist_findall(pattern, imapd_userisadmin, imapd_userid,
+			 imapd_authstate, namespacedata, (void*) sawone);
+	free(pattern);
+    }
 
     prot_printf(imapd_out, "* NAMESPACE %s %s %s\r\n",
 		(sawone[NAMESPACE_INBOX]) ? "((\"INBOX.\" \".\"))" : "NIL",
@@ -4311,7 +4319,6 @@ void cmd_namespace(tag)
 
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
-    free(pattern);
 }
 
 /*
@@ -5614,8 +5621,10 @@ static void mstringdata(char *cmd, char *name, int matchlen, int maycreate)
      */
     if (cmd == NULL) {
 	sawuser = 0;
+	mstringdatacalls = 0;
 	return;
     }
+    mstringdatacalls++;
     
     if (lastnamedelayed) {
 	if (name && strncmp(lastname, name, strlen(lastname)) == 0 &&
