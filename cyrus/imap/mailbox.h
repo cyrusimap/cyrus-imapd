@@ -40,20 +40,28 @@ typedef unsigned bit32;
 #define FNAME_HEADER "/cyrus.header"
 #define FNAME_INDEX "/cyrus.index"
 #define FNAME_CACHE "/cyrus.cache"
-#define FNAME_QUOTA "/cyrus.quota"
+#define FNAME_QUOTADIR "/quota/"
 
 #define QUOTA_UNITS (1024)
+
+struct quota {
+    FILE *file;
+    int lock_count;
+    char *root;
+
+    /* Information in quota file */
+    unsigned long used;
+    int limit;			/* in QUOTA_UNITS */
+};
 
 struct mailbox {
     FILE *header;
     FILE *index;
     FILE *cache;
-    FILE *quota;
 
     int header_lock_count;
     int index_lock_count;
     int seen_lock_count;
-    int quota_lock_count;
 
     time_t header_mtime;
     time_t index_mtime;
@@ -66,7 +74,7 @@ struct mailbox {
     long myrights;
 
     /* Information in header */
-    char *quota_root;
+    /* quota.root */
     char *flagname[MAX_USER_FLAGS];
 
     /* Information in index file */
@@ -80,9 +88,7 @@ struct mailbox {
     unsigned long last_uid;
     unsigned long quota_mailbox_used;
 
-    /* Information in quota file */
-    unsigned long quota_used;
-    int quota_limit;		/* in QUOTA_UNITS */
+    struct quota quota;
 };
 
 struct index_record {
