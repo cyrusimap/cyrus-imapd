@@ -1,5 +1,5 @@
 /* bc_eval.c - evaluate the bytecode
- * $Id: bc_eval.c,v 1.1.4.13 2003/06/27 23:10:58 jsmith2 Exp $
+ * $Id: bc_eval.c,v 1.1.4.14 2003/06/28 22:51:18 ken3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -472,22 +472,22 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 	    
 	    for (y=0; val[y]!=NULL && !res; y++) {
 		
-		if (match == B_COUNT) {
-		    count++;
-		} else {
 #if VERBOSE
-		    printf("about to parse %s\n", val[y]);
+		printf("about to parse %s\n", val[y]);
 #endif
 		    
-		    if (parse_address(val[y], &data, &marker)!=SIEVE_OK) 
-			return 0;
+		if (parse_address(val[y], &data, &marker)!=SIEVE_OK) 
+		    return 0;
 		    
-		    while (!res &&
-			   (addr = get_address(addrpart, &data, &marker, 0))) {
+		while (!res &&
+		       (addr = get_address(addrpart, &data, &marker, 0))) {
 #if VERBOSE
-			printf("working addr %s\n", (addr ? addr : "[nil]"));
+		    printf("working addr %s\n", (addr ? addr : "[nil]"));
 #endif
 			
+		    if (match == B_COUNT) {
+			count++;
+		    } else {
 			/*search through all the data*/ 
 			currd=datai+2;
 			for (z=0; z<numdata && !res; z++)
@@ -516,10 +516,10 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 				res |= comp(addr, data_val, comprock);
 			    }
 			} /* For each data */
-		    } /* For each address */
+		    }
+		} /* For each address */
 
-		    free_address(&data, &marker);
-		}
+		free_address(&data, &marker);
 	    }/* For each message header */
 	    
 #if VERBOSE
@@ -602,7 +602,9 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 	    if(interp->getheader(m, this_header, &val) != SIEVE_OK) {
 		continue; /*this header does not exist, search the next*/ 
 	    }
+#if VERBOSE
 	    printf ("val %s %s %s\n", val[0], val[1], val[2]);
+#endif
 	    
 	    /* search through all the headers that match */
 	    
@@ -650,7 +652,9 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 		const char *data_val;
 			
 		currd = unwrap_string(bc, currd, &data_val, NULL);
+#if VERBOSE
 		printf("%d, %s \n", count, data_val);
+#endif
 		res |= comp(scount, data_val, comprock);
 	    }
 	      
