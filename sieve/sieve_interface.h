@@ -1,5 +1,5 @@
 /* sieve_interface.h -- interface for deliver
- * $Id: sieve_interface.h,v 1.17.4.1 2003/02/27 18:13:54 rjs3 Exp $
+ * $Id: sieve_interface.h,v 1.17.4.2 2003/03/05 18:15:10 rjs3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -102,8 +102,8 @@ typedef struct sieve_autorespond_context {
 } sieve_autorespond_context_t;
 
 typedef struct sieve_send_response_context {
-    const char *addr;
-    const char *fromaddr;
+    char *addr;
+    char *fromaddr;
     const char *msg;
     char *subj;
     int mime;

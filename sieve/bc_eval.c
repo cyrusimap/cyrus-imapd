@@ -1,5 +1,5 @@
 /* bc_eval.c - evaluate the bytecode
- * $Id: bc_eval.c,v 1.1.4.3 2003/02/28 18:42:59 rjs3 Exp $
+ * $Id: bc_eval.c,v 1.1.4.4 2003/03/05 18:15:09 rjs3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -134,10 +134,10 @@ static int sysaddr(const char *addr)
 }
 
 /* look for myaddr and myaddrs in the body of a header - return the match */
-static const char* look_for_me(char *myaddr, int numaddresses,
+static char* look_for_me(char *myaddr, int numaddresses,
 			       bytecode_input_t *bc, int i, const char **body)
 {
-    const char *found = NULL;
+    char *found = NULL;
     int l;
     int curra,x ;
 
@@ -153,7 +153,7 @@ static const char* look_for_me(char *myaddr, int numaddresses,
 	       ((addr = get_address(ADDRESS_ALL,&data, &marker, 1))!= NULL)) {
 
 	    if (!strcmp(addr, myaddr)) {
-		found = myaddr;
+		found = xstrdup(myaddr);
 		break;
 	    }
 
@@ -172,8 +172,10 @@ static const char* look_for_me(char *myaddr, int numaddresses,
 
 		altaddr = get_address(ADDRESS_ALL, &altdata, &altmarker, 1);
 
-		if (!strcmp(addr,altaddr))
-		    found=str;
+		if (!strcmp(addr,altaddr)) {
+		    found=xstrdup(str);
+		    break;
+		}
 
 		free_address(&altdata, &altmarker);
 	    }
@@ -181,13 +183,14 @@ static const char* look_for_me(char *myaddr, int numaddresses,
 	}
 	free_address(&data, &marker);
     }
+
     return found;
 }
  
 /* Determine if we should respond to a vacation message */
 int shouldRespond(void * m, sieve_interp_t *interp,
 		  int numaddresses, bytecode_input_t* bc,
-		  int i, const char **from, const char **to)
+		  int i, char **from, char **to)
 {
     const char **body;
     char buf[128];
@@ -196,8 +199,8 @@ int shouldRespond(void * m, sieve_interp_t *interp,
     void *data = NULL, *marker = NULL;
     char *tmp;
     int curra, x;
-    const char *found=NULL;
-    const char *reply_to=NULL;
+    char *found=NULL;
+    char *reply_to=NULL;
   
     /* is there an Auto-Submitted keyword other than "no"? */
     strcpy(buf, "auto-submitted");
@@ -212,7 +215,6 @@ int shouldRespond(void * m, sieve_interp_t *interp,
     if (l == SIEVE_OK) {
 	strcpy(buf, "to");
 	l = interp->getenvelope(m, buf, &body);
-   
 	
 	if (body[0]) {  
 	    parse_address(body[0], &data, &marker);
@@ -964,8 +966,8 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 	case B_VACATION:
 	{
 	    int respond;
-	    const char *fromaddr = NULL; /* relative to message we send */
-	    const char *toaddr = NULL; /* relative to message we send */
+	    char *fromaddr = NULL; /* relative to message we send */
+	    char *toaddr = NULL; /* relative to message we send */
 	    const char *message = NULL;
 	    char buf[128];
 	    char subject[1024];
