@@ -26,6 +26,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <syslog.h>
 #include <com_err.h>
 #ifdef NEWDB
 #include <db.h>
@@ -276,7 +277,10 @@ char *user;
 	    strcat(namebuf, user);
 	    strcat(namebuf, ".");
 	    strcat(namebuf, mailboxname);
-	    if (dupelim && id && checkdelivered(id, namebuf)) return 0;
+	    if (id && checkdelivered(id, namebuf)) {
+		logdupelem(id, namebuf);
+		return 0;
+	    }
 	    r = append_setup(&mailbox, namebuf, MAILBOX_FORMAT_NORMAL,
 			     ACL_POST, 0);
 	}
@@ -284,13 +288,19 @@ char *user;
 	    strcpy(namebuf, "user.");
 	    strcat(namebuf, user);
 	    
-	    if (dupelim && id && checkdelivered(id, namebuf)) return 0;
+	    if (id && checkdelivered(id, namebuf)) {
+		logdupelem(id, namebuf);
+		return 0;
+	    }
 	    r = append_setup(&mailbox, namebuf, MAILBOX_FORMAT_NORMAL,
 			     0, 0);
 	}
     }
     else if (mailboxname) {
-	if (dupelim && id && checkdelivered(id, mailboxname)) return 0;
+	if (id && checkdelivered(id, mailboxname)) {
+	    logdupelem(id, mailboxname);
+	    return 0;
+	}
 	r = append_setup(&mailbox, mailboxname, MAILBOX_FORMAT_NORMAL,
 			 ACL_POST, 0);
     }
@@ -314,6 +324,20 @@ char *user;
     if (!r && dupelim && id) markdelivered(id, user ? namebuf : mailboxname);
 
     return convert_code(r);
+}
+
+logdupelem(msgid, name)
+char *msgid;
+char *name;
+{
+    if (strlen(msgid) < 80) {
+	syslog(LOG_INFO, "dupelim: elminated duplicate message to %s id %s",
+	       name, msgid);
+    }
+    else {
+	syslog(LOG_INFO, "dupelim: elminated duplicate message to %s",
+	       name);
+    }	
 }
 
 int convert_code(r)
