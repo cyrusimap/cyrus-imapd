@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.183 1999/10/18 02:21:36 leg Exp $ */
+/* $Id: imapd.c,v 1.184 1999/10/19 22:08:43 leg Exp $ */
 
 #ifndef __GNUC__
 #define __attribute__(foo)
@@ -210,22 +210,34 @@ static int mysasl_config(void *context __attribute__((unused)),
 
 	strncpy(opt, "sasl_", 1024);
 	if (plugin_name) {
-	    strncat(opt, plugin_name, 1019);
-	    strncat(opt, "_", 1024 - sl);
+	    i = 5;
+	    for (i = 0; i < strlen(plugin_name); i++) {
+		opt[i + 5] = tolower(plugin_name[i]);
+	    }
+	    opt[i] = '_';
 	}
  	strncat(opt, option, 1024 - sl - 1);
-	opt[1023] = '\0';
     } else {
 	strncpy(opt, option, 1024);
     }
+    opt[1023] = '\0';		/* paranoia */
 
     *result = config_getstring(opt, NULL);
-    if (*result != NULL) {
+    if (*result == NULL && plugin_name) {
+	/* try again without plugin name */
+
+	strncpy(opt, "sasl_", 1024);
+ 	strncat(opt, option, 1024 - 6);
+	opt[1023] = '\0';	/* paranoia */
+	*result = config_getstring(opt, NULL);
+    }
+
+    if (*result) {
 	if (len) { *len = strlen(*result); }
 	return SASL_OK;
+    } else {
+	return SASL_FAIL;
     }
-   
-    return SASL_FAIL;
 }
 
 /*
