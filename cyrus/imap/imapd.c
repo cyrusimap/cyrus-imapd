@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.178 1999/08/12 19:27:38 leg Exp $ */
+/* $Id: imapd.c,v 1.179 1999/08/17 05:59:26 leg Exp $ */
 
 #ifndef __GNUC__
 /* can't use attributes... */
@@ -258,6 +258,29 @@ const char *auth_identity;
     return r;
 }
 
+/* returns true if imapd_authstate is in "item";
+   expected: item = admins or proxyservers */
+static int authisa(const char *item)
+{
+    const char *val = config_getstring(item, "");
+    char buf[MAX_MAILBOX_PATH];
+
+    while (*val) {
+	char *p;
+	
+	for (p = (char *) val; *p && !isspace(*p); p++);
+	strncpy(buf, val, p-val);
+	buf[p-val] = 0;
+
+	if (auth_memberof(imapd_authstate, buf)) {
+	    return 1;
+	}
+	val = p;
+	while (*val && isspace(*val)) val++;
+    }
+    return 0;
+}
+
 /* should we allow users to proxy?  return SASL_OK if yes,
    SASL_BADAUTH otherwise */
 static mysasl_authproc(void *context __attribute__((unused)),
@@ -311,19 +334,7 @@ static mysasl_authproc(void *context __attribute__((unused)),
     imapd_authstate = auth_newstate(canon_authuser, NULL);
 
     /* ok, is auth_identity an admin? */
-    val = config_getstring("admins", "");
-    while (*val) {
-	for (p = (char *)val; *p && !isspace(*p); p++);
-	strncpy(buf, val, p - val);
-	buf[p-val] = 0;
-
-	if (auth_memberof(imapd_authstate, buf)) {
-	    imapd_userisadmin = 1;
-	    break;
-	}
-	val = p;
-	while (*val && isspace(*val)) val++;
-    }
+    imapd_userisadmin = authisa("admins");
 
     if (strcmp(canon_authuser, canon_requser)) {
 	/* we want to authenticate as a different user; we'll allow this
@@ -331,7 +342,8 @@ static mysasl_authproc(void *context __attribute__((unused)),
 	int use_acl = config_getswitch("loginuseacl", 0);
 
 	if (imapd_userisadmin ||
-	    (use_acl && acl_ok(canon_requser, canon_authuser))) {
+	    (use_acl && acl_ok(canon_requser, canon_authuser)) ||
+	    authisa("proxyservers")) {
 	    /* proxy ok! */
 
 	    imapd_userisadmin = 0;	/* no longer admin */
@@ -1254,6 +1266,7 @@ char *authtype;
 
       /* print the message to the user */
       printauthready(serveroutlen, (unsigned char *)serverout);
+      free(serverout);
 
       /* get string from user */
       clientinlen = getbase64string(&clientin);

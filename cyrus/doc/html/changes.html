@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.81 1999/08/16 02:30:41 leg Exp $ -->
+<!-- $Id: changes.html,v 1.82 1999/08/17 05:59:24 leg Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -14,10 +14,10 @@
       <li> Fixed deliver to deal with arbitrarily long headers
 
       <li> COPY for non-existent sequence numbers returns NO; this
-      contrasts to UID COPY, which always returns OK
+      contrasts to UID COPY, which always returns OK.
 
       <li> FETCH for non-existent sequence numbers returns NO; this
-      contrasts to UID FETCH, which always returns OK
+      contrasts to UID FETCH, which always returns OK.
 
       <li> Fixed a misleading BAD responses to commands that take
       sequences.
@@ -28,7 +28,7 @@
       <li> pop3d now correctly passes SASL configuration options to libsasl.
 
       <li> imtest now correctly flushes the server's output to the
-      screen
+      screen.
 
       <li> Added more hashing using a simple but stupid algorithm.
       Now whenever there is a mailbox access, quota access, or
@@ -40,23 +40,28 @@
       binary will print the filesystem path to that mailbox. This way
       if you have multiple partitions and hashing turned out, you
       don't have to spend as many mental cycles figuring out where the
-      actual directory is is.
+      actual directory is.
 
       <li> deliver now checks <tt>sieveusehomedir</tt> and
       <tt>sievedir</tt> in the config file to determine where to look
       for sieve scripts.
 
-      <li> ptloader now has a workaround for afs 3.5
+      <li> ptloader now has a workaround for afs 3.5.
 
       <li> clarified an error message in message.c when an unexpected
-      end of file is encountered
+      end of file is encountered.
 
-      <li> fixed some random memory leaks in deliver
+      <li> fixed some random memory leaks in deliver.
 
       <li> fixed a fairly major bug in prot_fill.  it was performing
       incorrectly when reading only a single character.
 
-      <li> fixed a bug in how imtest looked for OK or NO
+      <li> fixed a bug in how imtest looked for OK or NO.
+
+      <li> fixed a memory leak in imapd.
+
+      <li> imapd now allows any user (or member of a group) listed in
+      "proxyservers" to proxy.
     </ul>
 
     <h2> Changes to the Cyrus IMAP Server Since Version 1.6.0-BETA </h2>
