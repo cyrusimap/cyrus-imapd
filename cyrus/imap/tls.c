@@ -642,6 +642,8 @@ int tls_free(SSL **conn)
     if (*conn) {
 	SSL_free(*conn);
     }
+    
+    return 0;
 }
 
 #endif /* HAVE_SSL */
