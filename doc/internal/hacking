@@ -1,0 +1,22 @@
+Some general hints that all made it into my 11/15 16:47 commit that I
+think may be generally useful to people hacking on the cyrus source:
+
+- Command line apps should link cli_fatal.o so they all fatal()
+in the same way, unless there is a really good reason they need to do
+something unique.
+- If you call config_init() you must call cyrus_done() before you exit.
+- No one should ever call DB->init() or DB->done() cyrusdb functions
+except for in libcyrus_init()
+- I've been trying to keep #include statements for libcyrus and libimap
+alphabetical, and below any system includes, but this is merely my personal
+style
+- Don't exit at the bottom of main with exit(x) use return instead.
+- For all the command line utilities that need to be sure that they are
+running as cyrus, it should be the first thing they do, and they should
+exit with an appropriate fatal() call
+- All services should have a shut_down call.  It should be the ONLY way of
+exiting the application.  fatal() should always make an attempt to call
+shut_down() if it can (though it should have a recursive fatal() trap just
+in case).  Similarly, commandline utilities probably don't need a shut_down().
+
+
