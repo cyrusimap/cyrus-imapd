@@ -211,6 +211,28 @@ extern int UV_SetSecurity();],
           else
              AC_MSG_RESULT([no])
           fi
+          AC_MSG_CHECKING([if new-style afs_ integer types are defined])
+          AC_CACHE_VAL(ac_cv_afs_int32,
+dnl The next few lines contain a quoted argument to egrep
+dnl It is critical that there be no leading or trailing whitespace
+dnl or newlines
+[AC_EGREP_CPP(dnl
+changequote(<<,>>)dnl
+<<(^|[^a-zA-Z_0-9])afs_int32[^a-zA-Z_0-9]>>dnl
+changequote([,]), [#include <afs/param.h>
+#ifdef HAVE_AFS_STDS_H
+#include <afs/stds.h>
+#endif],
+ac_cv_afs_int32=yes, ac_cv_afs_int32=no)])
+          AC_MSG_RESULT($ac_cv_afs_int32)
+          if test $ac_cv_afs_int32 = yes ; then
+            AC_DEFINE(HAVE_AFS_INT32)
+          else
+            AC_DEFINE(afs_int16, int16)
+            AC_DEFINE(afs_int32, int32)
+            AC_DEFINE(afs_uint16, u_int16)
+            AC_DEFINE(afs_uint32, u_int32)
+          fi
 
           CPPFLAGS="${cmu_save_CPPFLAGS}"
           LDFLAGS="${cmu_save_LDFLAGS}"
