@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.35 2001/11/09 01:48:19 leg Exp $
+ * $Id: lmtpengine.c,v 1.36 2001/11/13 17:33:46 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -143,7 +143,7 @@ static int roundToK(int x)
 	return ri+1;    
 }
 
-static void *send_lmtp_error(struct protstream *pout, int r)
+static void send_lmtp_error(struct protstream *pout, int r)
 {
     switch (r) {
     case 0:
@@ -1040,7 +1040,6 @@ void lmtpmode(struct lmtp_func *func,
     char buf[4096];
     char *p;
     int r;
-    char *err;
     struct clientdata cd;
 
     struct sockaddr_in localaddr, remoteaddr;
