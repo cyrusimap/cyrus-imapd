@@ -556,7 +556,9 @@ int UploadAMS(struct imclient *imclient, char *name, char *amsdir, message
 	    break;
         }
 	/* If a BE2 message, pass the version number into UnScribeInit */
-	if (!strncmp(buf, "Content-Type: X-BE2", 19)) {
+	if ((!strncmp(buf, "Content-Type: X-BE2", 19)) || 
+	    (!strncmp(buf, "X-Andrew-ScribeFormat: 10", 25))) 
+	  {
 	    r=&buf[strlen(buf)-2];
 	    buf[strlen(buf)-1]=0;
 	    if ((scribeval = UnScribeInit(&buf[20], &scribestate)) < 0) {
