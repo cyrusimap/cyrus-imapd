@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.14 2002/07/27 13:05:49 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.15 2002/07/29 02:28:37 ken3 Exp $ */
 
 #include <config.h>
 
@@ -4213,7 +4213,6 @@ char *identifier;
     int canonidlen = 0;
     char *acl;
     char *rightsdesc;
-    struct auth_state *authstate;
     char *p;
 
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
@@ -4234,7 +4233,8 @@ char *identifier;
     }
 
     if (!r) {
-	authstate = auth_newstate(identifier, NULL);
+	struct auth_state *authstate = auth_newstate(identifier, NULL);
+
 	if (config_authisa(authstate, IMAPOPT_ADMINS))
 	    canon_identifier = identifier; /* don't canonify global admins */
 	else
