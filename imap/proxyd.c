@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.95 2002/02/15 20:59:11 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.96 2002/02/19 16:58:54 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -1249,9 +1249,6 @@ int service_main(int argc, char **argv, char **envp)
     /* setup the cache */
     backend_cached = xmalloc(sizeof(struct backend *));
     backend_cached[0] = NULL;
-
-    /* create connection to the SNMP listener, if available. */
-    snmp_connect(); /* ignore return code */
 
     /* we were connected on imaps port so we should do 
        TLS negotiation immediately */
