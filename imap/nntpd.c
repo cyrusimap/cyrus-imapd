@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.21 2004/03/04 21:01:17 ken3 Exp $
+ * $Id: nntpd.c,v 1.22 2004/03/04 21:23:59 ken3 Exp $
  */
 
 /*
@@ -2509,7 +2509,7 @@ static void cmd_list(char *arg1, char *arg2)
 
 	if ((nntp_capa & MODE_READ) &&
 	    (nntp_userid || allowanonymous)) {
-	    prot_printf(nntp_out, "HDR ALL\r\n");
+	    prot_printf(nntp_out, "HDR\r\n");
 	    prot_printf(nntp_out, "LISTGROUP\r\n");
 	    prot_printf(nntp_out, "OVER\r\n");
 	}
@@ -2533,7 +2533,7 @@ static void cmd_list(char *arg1, char *arg2)
 	return;
     }
     else if (!strcmp(arg1, "headers")) {
-	if (arg2 && strcmp(arg2, "msgid")) {
+	if (arg2 && strcmp(arg2, "msgid") && strcmp(arg2, "range")) {
 	    prot_printf(nntp_out, "501 Unexpected extra argument\r\n");
 	    return;
 	}
