@@ -584,14 +584,12 @@ cmdloop()
 		if (c != ' ') goto missingargs;
 		cmd_setquota(tag.s, arg1.s);
 	    }
-#if 0 /* Not yet ready for prime time */
 	    else if (!strcmp(cmd.s, "Status")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(&arg1);
 		if (c != ' ') goto missingargs;
 		cmd_status(tag.s, arg1.s);
 	    }
-#endif
 	    else goto badcmd;
 	    break;
 
@@ -928,11 +926,7 @@ char *tag;
 	index_check(imapd_mailbox, 0, 0);
     }
     prot_printf(imapd_out,
-#if 0 /* Not yet ready for prime time */
-		"* CAPABILITY IMAP4 STATUS\r\n%s OK Capability completed\r\n",
-#else
 		"* CAPABILITY IMAP4\r\n%s OK Capability completed\r\n",
-#endif
 		tag);
 };
 
@@ -973,6 +967,7 @@ char *name;
 		}
 	    }
 	    else if (!is_atom(arg.s)) {
+		if (!nflags && !arg.s[0] && c == ')') break; /* empty list */
 		prot_printf(imapd_out, "%s BAD Invalid flag name %s in Append command\r\n",
 			    tag, arg.s);
 		if (c != '\n') eatline();
