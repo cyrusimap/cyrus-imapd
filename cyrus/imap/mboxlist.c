@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.238 2004/07/13 02:34:20 ken3 Exp $
+ * $Id: mboxlist.c,v 1.239 2004/07/13 15:02:08 ken3 Exp $
  */
 
 #include <config.h>
@@ -1899,10 +1899,23 @@ int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
     char *pat = NULL;
 
     if (config_virtdomains) {
-	if (userid && (p = strrchr(userid, '@'))) {
-	    userlen = p - userid;
-	    domainlen = strlen(p); /* includes separator */
-	    snprintf(domainpat, sizeof(domainpat), "%s!%s", p+1, pattern);
+	char *domain;
+
+	if (userid && (domain = strrchr(userid, '@'))) {
+	    userlen = domain - userid;
+	    domainlen = strlen(domain); /* includes separator */
+
+	    if ((p = strchr(pattern , '!'))) {
+		if ((p-pattern != domainlen-1) ||
+		    strncmp(pattern, domain+1, domainlen-1)) {
+		    /* don't allow cross-domain access */
+		    return IMAP_MAILBOX_BADNAME;
+		}
+
+		pattern = p+1;
+	    }
+
+	    snprintf(domainpat, sizeof(domainpat), "%s!%s", domain+1, pattern);
 	}
 	if ((p = strrchr(pattern, '@'))) {
 	    /* global admin specified mbox@domain */

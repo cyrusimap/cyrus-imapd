@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- * $Id: mboxname.c,v 1.34 2004/05/22 03:45:51 rjs3 Exp $
+ * $Id: mboxname.c,v 1.35 2004/07/13 15:02:08 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -368,6 +368,7 @@ static int mboxname_toexternal_alt(struct namespace *namespace, const char *name
 				  const char *userid, char *result)
 {
     char *domain;
+    size_t userlen;
 
     /* Blank the result, just in case */
     result[0] = '\0';
@@ -376,10 +377,18 @@ static int mboxname_toexternal_alt(struct namespace *namespace, const char *name
     
     if (!userid) return IMAP_MAILBOX_BADNAME;
 
-    if (config_virtdomains && (domain = strchr(userid, '@')) &&
-	!strncmp(name, domain+1, strlen(domain)-1) &&
-	name[strlen(domain)-1] == '!')
-	name += strlen(domain);
+    userlen = strlen(userid);
+
+    if (config_virtdomains && (domain = strchr(userid, '@'))) {
+	size_t domainlen = strlen(domain);
+
+	userlen = domain - userid;
+
+	if (!strncmp(name, domain+1, domainlen-1) &&
+	    name[domainlen-1] == '!') {
+	    name += domainlen;
+	}
+    }
 
     /* Personal (INBOX) namespace */
     if (!strncasecmp(name, "inbox", 5) &&
@@ -391,13 +400,13 @@ static int mboxname_toexternal_alt(struct namespace *namespace, const char *name
     }
     /* paranoia - this shouldn't be needed */
     else if (!strncmp(name, "user.", 5) &&
-	     !strncmp(name+5, userid, strlen(userid)) &&
-	     (name[5+strlen(userid)] == '\0' ||
-	      name[5+strlen(userid)] == '.')) {
-	if (name[5+strlen(userid)] == '\0')
+	     !strncmp(name+5, userid, userlen) &&
+	     (name[5+userlen] == '\0' ||
+	      name[5+userlen] == '.')) {
+	if (name[5+userlen] == '\0')
 	    strcpy(result, "INBOX");
 	else
-	    strcpy(result, name+5+strlen(userid)+1);
+	    strcpy(result, name+5+userlen+1);
     }
 
     /* Other Users namespace */
