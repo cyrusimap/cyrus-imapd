@@ -13,6 +13,7 @@ void freebuf(struct buf *buf)
 	free(buf->s);
 	buf->s = NULL;
     }
+    buf->len = 0;
     buf->alloc = 0;
 }
 
@@ -35,6 +36,7 @@ int getword(struct protstream *in, struct buf *buf)
 	c = prot_getc(in);
 	if (c == EOF || isspace(c) || c == '(' || c == ')' || c == '\"') {
 	    buf->s[len] = '\0';
+	    buf->len = len;
 	    return c;
 	}
 	if (len == buf->alloc) {
@@ -72,11 +74,13 @@ int getxstring(struct protstream *pin, struct protstream *pout,
     case '\n':
 	/* Invalid starting character */
 	buf->s[0] = '\0';
+	buf->len = 0;
 	if (c != EOF) prot_ungetc(c, pin);
 	return EOF;
 
     default:
 	switch (type) {
+	case IMAP_BIN_ASTRING:   /* binary-allowed ASTRING */
 	case IMAP_ASTRING:	 /* atom, quoted-string or literal */
 	    /*
 	     * Atom -- server is liberal in accepting specials other
@@ -86,6 +90,7 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 		if (c == EOF || isspace(c) || c == '(' || 
 		          c == ')' || c == '\"') {
 		    buf->s[len] = '\0';
+		    buf->len = len;
 		    return c;
 		}
 		if (len == buf->alloc) {
@@ -131,10 +136,12 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 	    }
 	    else if (c == '\"') {
 		buf->s[len] = '\0';
+		buf->len = len;
 		return prot_getc(pin);
 	    }
 	    else if (c == EOF || c == '\r' || c == '\n') {
 		buf->s[len] = '\0';
+		buf->len = len;
 		if (c != EOF) prot_ungetc(c, pin);
 		return EOF;
 	    }
@@ -148,6 +155,7 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 	if (type == IMAP_QSTRING) {
 	    /* Invalid starting character */
 	    buf->s[0] = '\0';
+	    buf->len = 0;
 	    if (c != EOF) prot_ungetc(c, pin);
 	    return EOF;
 	}
@@ -189,12 +197,15 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 	    c = prot_getc(pin);
 	    if (c == EOF) {
 		buf->s[len] = '\0';
+		buf->len = len;
 		return EOF;
 	    }
 	    buf->s[i] = c;
 	}
 	buf->s[len] = '\0';
-	if (strlen(buf->s) != len) return EOF; /* Disallow imbedded NUL */
+	buf->len = len;
+	if (type != IMAP_BIN_ASTRING && strlen(buf->s) != len)
+	    return EOF; /* Disallow imbedded NUL for non IMAP_BIN_ASTRING */
 	return prot_getc(pin);
     }
 }
