@@ -1,6 +1,6 @@
 /* message.c -- message parsing functions
  * Larry Greenfield
- * $Id: message.c,v 1.15 2000/06/22 19:19:42 ken3 Exp $
+ * $Id: message.c,v 1.16 2000/06/23 16:11:35 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -498,22 +498,27 @@ char *get_address(address_part_t addrpart, void **data, void **marker)
 	    break;
 
 	case ADDRESS_USER:
-	{
-	    char *p = strchr(a->mailbox, '+');
-	    int len = p ? p - a->mailbox : strlen(a->mailbox);
+	    if (a->mailbox) {
+		char *p = strchr(a->mailbox, '+');
+		int len = p ? p - a->mailbox : strlen(a->mailbox);
 
-	    am->freeme = (char *) xmalloc(len + 1);
-	    strncpy(am->freeme, a->mailbox, len);
-	    am->freeme[len] = '\0';
-	    ret = am->freeme;
+		am->freeme = (char *) xmalloc(len + 1);
+		strncpy(am->freeme, a->mailbox, len);
+		am->freeme[len] = '\0';
+		ret = am->freeme;
+	    } else {
+		ret = NULL;
+	    }
 	    break;
-	}
+
 	case ADDRESS_DETAIL:
-	{
-	    char *p = strchr(a->mailbox, '+');
-	    ret = (p ? p + 1 : NULL);
+	    if (a->mailbox) {
+		char *p = strchr(a->mailbox, '+');
+		ret = (p ? p + 1 : NULL);
+	    } else {
+		ret = NULL;
+	    }
 	    break;
-	}
 	}
 	a = a->next;
 	am->where = a;
