@@ -36,6 +36,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <sys/stat.h>
 #include <fcntl.h> 
 #include <unistd.h> 
+#include <netinet/in.h>
 
 #include <string.h>
 
@@ -127,7 +128,7 @@ int write_list(int list_len, int i, bytecode_input_t * d)
 int printComparison(bytecode_input_t *d ,int i)
 {
     printf("Comparison: ");
-    switch(d[i].value)
+    switch(ntohl(d[i].value))
     {
     case B_IS: printf("Is"); break;
     case B_CONTAINS:printf("Contains"); break;
@@ -136,7 +137,7 @@ int printComparison(bytecode_input_t *d ,int i)
     case B_COUNT:
 	printf("Count");
 	
-	switch(d[i+1].value)
+	switch(ntohl(d[i+1].value))
 	{
 	case B_GT: printf(" greater than "); break;   
 	case B_GE: printf(" greater than or equal "); break;
@@ -150,7 +151,7 @@ int printComparison(bytecode_input_t *d ,int i)
     case B_VALUE:
 	printf("Value");
 	
-	switch(d[i+1].value)
+	switch(ntohl(d[i+1].value))
 	{
 	case B_GT: printf(" greater than "); break;   
 	case B_GE: printf(" greater than or equal ");break;
@@ -165,7 +166,7 @@ int printComparison(bytecode_input_t *d ,int i)
 	exit(1);
     }
 
-    switch (d[i+2].value)
+    switch (ntohl(d[i+2].value))
     {
     case B_ASCIICASEMAP: printf("   (ascii-casemap) "); break;
     case B_OCTET: printf("    (octet) "); break;
@@ -181,7 +182,7 @@ int printComparison(bytecode_input_t *d ,int i)
 int dump2_test(bytecode_input_t * d, int i)
 {
     int l,x;
-    switch(d[i].value) {
+    switch(ntohl(d[i].value)) {
     case BC_FALSE:
 	printf("false");
 	i++;
@@ -201,22 +202,22 @@ int dump2_test(bytecode_input_t * d, int i)
 	break;
     case BC_EXISTS:
 	printf("exists");
-	i=write_list(d[i+1].len, i+2, d);
+	i=write_list(ntohl(d[i+1].len), i+2, d);
 	break;
     case BC_SIZE:
 	printf("size");
-	if (d[i+1].value==B_OVER) {
+	if (ntohl(d[i+1].value)==B_OVER) {
 	    /* over */
-	    printf("over %d", d[i+2].value);
+	    printf("over %d", ntohl(d[i+2].value));
 	} else {
 	    /* under */
-	    printf("over %d", d[i+2].value);
+	    printf("under %d", ntohl(d[i+2].value));
 	}
 	i+=3;
 	break;
     case BC_ANYOF:/*5*/
 	printf("any of \n(");
-	l=d[i+1].len;
+	l=ntohl(d[i+1].len);
 	i+=2;
 	
 	for (x=0; x<l; x++)
@@ -230,7 +231,7 @@ int dump2_test(bytecode_input_t * d, int i)
 	break;
     case BC_ALLOF:/*6*/
 	printf("all of \n(");
-	l=d[i+1].len;
+	l=ntohl(d[i+1].len);
 	i+=2;
 	
 	for (x=0; x<l; x++)
@@ -246,7 +247,7 @@ int dump2_test(bytecode_input_t * d, int i)
 	printf("Address (");
 	i=printComparison(d, i+1);
 	printf("               type: ");
-	switch(d[i++].value)
+	switch(ntohl(d[i++].value))
 	{
 	case B_ALL: printf("all"); break;
 	case B_LOCALPART:printf("localpart"); break;
@@ -255,16 +256,16 @@ int dump2_test(bytecode_input_t * d, int i)
 	case B_DETAIL:printf("detail"); break;
 	}
 	printf("              Headers:");
-	i=write_list(d[i].len, i+1, d);
+	i=write_list(ntohl(d[i].len), i+1, d);
 	printf("              Data:");
-	i=write_list(d[i].len, i+1, d);
+	i=write_list(ntohl(d[i].len), i+1, d);
 	printf("             ]\n");
 	break;
     case BC_ENVELOPE:/*8*/
 	printf("Envelope (");
 	i=printComparison(d, i+1);
 	printf("                type: ");
-	switch(d[i++].value)
+	switch(ntohl(d[i++].value))
 	{
 	case B_ALL: printf("all"); break;
 	case B_LOCALPART:printf("localpart"); break;
@@ -273,22 +274,22 @@ int dump2_test(bytecode_input_t * d, int i)
 	case B_DETAIL:printf("detail"); break;
 	}
 	printf("              Headers:");
-	i=write_list(d[i].len, i+1, d);
+	i=write_list(ntohl(d[i].len), i+1, d);
 	printf("              Data:");
-	i=write_list(d[i].len, i+1, d);
+	i=write_list(ntohl(d[i].len), i+1, d);
 	printf("             ]\n");
 	break;
     case BC_HEADER:/*9*/
 	printf("Header [");
 	i= printComparison(d, i+1);
 	printf("              Headers: ");
-	i=write_list(d[i].len, i+1, d);
+	i=write_list(ntohl(d[i].len), i+1, d);
 	printf("              Data: ");
-	i=write_list(d[i].len, i+1, d);
+	i=write_list(ntohl(d[i].len), i+1, d);
 	printf("             ]\n");
 	break;
     default:
-	printf("WERT %d ",d[i].value);
+	printf("WERT %d ", ntohl(d[i].value));
     }   
     return i;
 }
@@ -306,12 +307,12 @@ void dump2(bytecode_input_t *d, int bc_len)
 
     i = BYTECODE_MAGIC_LEN / sizeof(bytecode_input_t);
 
-    printf("Sievecode version %d\n", d[i].op);
+    printf("Sievecode version %d\n", ntohl(d[i].op));
     if(!d) return;
     
     for(i++; i<bc_len;) 
     {
-	switch(d[i].op) {
+	switch(ntohl(d[i].op)) {
 	    
 	case B_STOP:/*0*/
 	    printf("%d: STOP\n",i);
@@ -344,7 +345,7 @@ void dump2(bytecode_input_t *d, int bc_len)
 	    break;
 	     
 	case B_IF:/*6*/
-	    printf("%d: IF (ends at %d)",i, d[i+1].value);
+	    printf("%d: IF (ends at %d)",i, ntohl(d[i+1].value));
 
             /* there is no short circuiting involved here*/
 	    i = dump2_test(d,i+2);
@@ -363,25 +364,25 @@ void dump2(bytecode_input_t *d, int bc_len)
 	    break;
 
 	case B_ADDFLAG: /*9*/
-	    printf("%d: ADDFLAG  {%d}\n",i,d[i+1].len);
+	    printf("%d: ADDFLAG  {%d}\n",i,ntohl(d[i+1].len));
 	    i=write_list(d[i+1].len,i+2,d);
 	    break;
 
 	case B_SETFLAG: /*10*/
-	    printf("%d: SETFLAG  {%d}\n",i,d[i+1].len);
+	    printf("%d: SETFLAG  {%d}\n",i,ntohl(d[i+1].len));
 	    i=write_list(d[i+1].len,i+2,d);
 	    break;
 	    
 	case B_REMOVEFLAG: /*11*/
-	    printf("%d: REMOVEFLAG  {%d}\n",i,d[i+1].len);
-	    i=write_list(d[i+1].len,i+2,d);
+	    printf("%d: REMOVEFLAG  {%d}\n",i,ntohl(d[i+1].len));
+	    i=write_list(ntohl(d[i+1].len),i+2,d);
 	    break;
 	    
 	case B_DENOTIFY:/*12*/
 	    printf("%d: DENOTIFY\n",i);
 	    i++; 
 	    printf("            PRIORITY(%d) Comparison type %d (relat %d)\n",
-		   d[i].value,d[i+1].value, d[i+2].value);
+		   ntohl(d[i].value), ntohl(d[i+1].value), ntohl(d[i+2].value));
 	    i+=3;
 
 	    i = unwrap_string(d, i+1, &data, &len);
@@ -399,9 +400,9 @@ void dump2(bytecode_input_t *d, int bc_len)
 	    printf("            ID({%d}%s) OPTIONS ", len,
 		   (!data ? "[nil]" : data));
 
-	    i=write_list(d[i].len,i+1,d);
+	    i=write_list(ntohl(d[i].len),i+1,d);
 	    
-	    printf("            PRIORITY(%d)\n",d[i].value);
+	    printf("            PRIORITY(%d)\n", ntohl(d[i].value));
       	    i++;
 		  
 	    i = unwrap_string(d, i, &data, &len);
@@ -413,7 +414,7 @@ void dump2(bytecode_input_t *d, int bc_len)
 	case B_VACATION:/*14*/
 	    printf("%d: VACATION\n",i);
 	    /*add address list here!*/
-	    i=write_list(d[i+1].len,i+2,d);
+	    i=write_list(ntohl(d[i+1].len),i+2,d);
 
 	    i = unwrap_string(d, i, &data, &len);
 	  
@@ -423,7 +424,7 @@ void dump2(bytecode_input_t *d, int bc_len)
 
 	    printf("%d MESG({%d}%s) \n", i, len, (!data ? "[nil]" : data));
 
-	    printf("DAYS(%d) MIME(%d)\n",d[i].value, d[i+1].value);
+	    printf("DAYS(%d) MIME(%d)\n", ntohl(d[i].value), ntohl(d[i+1].value));
 	    i+=2;
 
 	    break;
@@ -432,11 +433,11 @@ void dump2(bytecode_input_t *d, int bc_len)
 	    i++;
 	    break;
 	case B_JUMP:/*16*/
-	    printf("%d:JUMP %d\n",i, d[i+1].jump);
+	    printf("%d:JUMP %d\n",i, ntohl(d[i+1].jump));
 	    i+=2;
 	    break;		  
 	default:
-	    printf("%d: %d (NOT AN OP)\n",i,d[i].op);
+	    printf("%d: %d (NOT AN OP)\n",i,ntohl(d[i].op));
 	    exit(1);
 	}
     }
