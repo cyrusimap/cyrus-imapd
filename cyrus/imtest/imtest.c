@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.86 2002/09/19 14:35:12 ken3 Exp $
+ * $Id: imtest.c,v 1.87 2002/09/25 20:58:00 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1564,7 +1564,7 @@ static char *imap_parse_mechlist(char *str)
     return ret;
 }
 
-static int auth_login(void)
+static int auth_imap(void)
 {
     char str[1024];
     /* we need username and password to do "login" */
@@ -1610,7 +1610,7 @@ static int imap_do_auth(struct sasl_cmd_t *sasl_cmd,
 
     if (mech) {
 	if (!strcasecmp(mech, "login")) {
-	    result = auth_login();
+	    result = auth_imap();
 	} else {
 	    result = auth_sasl(sasl_cmd, mech);
 	}
@@ -1618,7 +1618,7 @@ static int imap_do_auth(struct sasl_cmd_t *sasl_cmd,
 	if (mechlist) {
 	    result = auth_sasl(sasl_cmd, mechlist);
 	} else {
-	    result = auth_login();
+	    result = auth_imap();
 	}
     }
 
@@ -1821,7 +1821,7 @@ static void *pop3_parse_banner(char *str)
     return chal;
 }
 
-static int auth_user(void)
+static int auth_pop(void)
 {
     char str[1024];
     /* we need username and password to do USER/PASS */
@@ -1920,7 +1920,7 @@ static int pop3_do_auth(struct sasl_cmd_t *sasl_cmd, void *rock,
 	if (!strcasecmp(mech, "apop")) {
 	    result = auth_apop((char *) rock);
 	} else if (!strcasecmp(mech, "user")) {
-	    result = auth_user();
+	    result = auth_pop();
 	} else {
 	    result = auth_sasl(sasl_cmd, mech);
 	}
@@ -1930,7 +1930,7 @@ static int pop3_do_auth(struct sasl_cmd_t *sasl_cmd, void *rock,
 	} else if (rock) {
 	    result = auth_apop((char *) rock);
 	} else {
-	    result = auth_user();
+	    result = auth_pop();
 	}
     }
 
