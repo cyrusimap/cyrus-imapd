@@ -21,26 +21,32 @@
 # SOFTWARE.
 # 
 
-.SUFFIXES: .txt .html
+all: htmlstrip docs clean
 
-all: htmlstrip docs
+DOCS= README install overview changes
 
-htmlstrip: htmlstrip.c
-	$(CC) $(CFLAGS) -o htmlstrip htmlstrip.c
+docs: $(DOCS)
 
-.html.txt:
-	./htmlstrip $< > $@
+htmlstrip: html/htmlstrip.c
+	$(CC) $(CFLAGS) -o htmlstrip html/htmlstrip.c
 
-docs: install.txt overview.txt changes.txt README
+README: html/readme.html htmlstrip
+	./htmlstrip html/readme.html > README
 
-README: readme.html
-	./htmlstrip readme.html > README
+install: html/install.html htmlstrip
+	./htmlstrip html/install.html > install
+
+overview: html/overview.html htmlstrip
+	./htmlstrip html/overview.html > overview
+
+changes: html/changes.html htmlstrip
+	./htmlstrip html/changes.html > changes
 
 clean:
 	rm -f *.o *~ Makefile.bak htmlstrip
 
 realclean: clean
-	rm -f *.txt
+	rm -f $(DOCS)
 
 distclean: clean
 
