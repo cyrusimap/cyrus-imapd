@@ -42,7 +42,7 @@
  */
 
 /*
- * $Id: message.c,v 1.79 2000/06/07 19:17:22 leg Exp $
+ * $Id: message.c,v 1.80 2000/06/20 18:11:37 leg Exp $
  */
 
 #include <config.h>
@@ -1408,7 +1408,7 @@ unsigned flags;
 		if (!hdr || !isdigit((int) *hdr)) goto baddate;
 		offset = east * 60 * (offset + (*hdr++ - '0'));
 	    }
-	    else if (isalpha(*hdr)) {
+	    else if (isalpha((int) *hdr)) {
 		/* Parse zone */
 		int zone;
 		char zonestr[4];
@@ -1421,11 +1421,11 @@ unsigned flags;
 		};
 
 		zonestr[0] = *hdr++;
-		if (!isalpha(*hdr))
+		if (!isalpha((int) *hdr))
 		    zonestr[1] = '\0';
 		else {
 		    zonestr[1] = *hdr++;
-		    if (!isalpha(*hdr))
+		    if (!isalpha((int) *hdr))
 			zonestr[2] = '\0';
 		    else {
 			zonestr[2] = *hdr;
