@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.258 2000/06/16 03:32:02 ken3 Exp $ */
+/* $Id: imapd.c,v 1.259 2000/06/18 04:47:20 leg Exp $ */
 
 #include <config.h>
 
@@ -193,7 +193,7 @@ void freestrlist(struct strlist *l);
 void appendsearchargs(struct searchargs *s, struct searchargs *s1,
 			 struct searchargs *s2);
 void freesearchargs(struct searchargs *s);
-void freesortcrit(struct sortcrit *s);
+static void freesortcrit(struct sortcrit *s);
 
 static int mailboxdata(), listdata(), lsubdata();
 static void mstringdata(char *cmd, char *name, int matchlen, int maycreate);
@@ -2824,7 +2824,8 @@ int usinguid;
 
     if (c == '\r') c = prot_getc(imapd_in);
     if (c != '\n') {
-	prot_printf(imapd_out, "%s BAD Unexpected extra arguments to Sort\r\n", tag);
+	prot_printf(imapd_out, 
+		    "%s BAD Unexpected extra arguments to Sort\r\n", tag);
 	eatline(c);
 	freesearchargs(searchargs);
 	freesortcrit(sortcrit);
@@ -5272,13 +5273,13 @@ struct searchargs *s;
 /*
  * Free an array of sortcrit
  */
-void freesortcrit(struct sortcrit *s)
+static void freesortcrit(struct sortcrit *s)
 {
     int i = 0;
 
     do {
-	if (s[i].args[0]) s[i].args[0];
-	if (s[i].args[1]) s[i].args[1];
+	if (s[i].args[0]) free(s[i].args[0]);
+	if (s[i].args[1]) free(s[i].args[1]);
 	i++;
     } while (s[i].key != SORT_SEQUENCE);
     free(s);
