@@ -41,7 +41,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: afskrb.c,v 1.4 2004/04/23 16:00:52 rjs3 Exp $";
+      "$Id: afskrb.c,v 1.5 2004/04/27 19:53:04 rjs3 Exp $";
 
 #include <config.h>
 
@@ -88,6 +88,35 @@ static char rcsid[] __attribute__((unused)) =
 #error PTS_DB_KEYSIZE is smaller than PR_MAXNAMELEN
 #endif
 
+static const char *localrealms = NULL;
+
+int is_local_realm(const char *realm) 
+{
+    const char *val = localrealms;
+    
+    if(!realm) return 0;
+
+    while (*val) {
+	char buf[1024];
+	size_t len;
+	char *p;
+	
+	for (p = (char *) val; *p && !isspace((int) *p); p++);
+	len = p-val;
+	if(len >= sizeof(buf))
+	    len = sizeof(buf) - 1;
+	memcpy(buf, val, len);
+	buf[len] = '\0';
+
+	if (!strcasecmp(realm,buf)) {
+	    return 1;
+	}
+	val = p;
+	while (*val && isspace((int) *val)) val++;
+    }
+
+    return 0;
+}
 
 #ifdef AFSPTS_USE_KRB5
 
@@ -102,6 +131,7 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
     krb5_context context;
     krb5_principal princ, princ_dummy;
     char *realm;
+    char *realmbegin;
     int striprealm = 0;
 
     if(retbuf) free(retbuf);
@@ -177,10 +207,22 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
     }
 
     /* we have the canonical name pointed to by p -- strip realm if local */
-    if (striprealm)
-    {
-	char *realmbegin = strrchr(retbuf, '@');
-	if(realmbegin) *realmbegin = '\0';
+    realmbegin = strrchr(retbuf, '@');
+    if(realmbegin) {
+	if(!striprealm) {
+	    realm = realmbegin+1;
+	    if(is_local_realm(realm))
+		striprealm = 1;
+	}
+	
+	if(striprealm) {
+	    *realmbegin = '\0';
+	} else {
+	    /* Force realm to uppercase */
+	    while(*(++realmbegin)) {
+		*realmbegin = toupper(*realmbegin);
+	    }
+	}	
     }
     
     krb5_free_principal(context,princ);
@@ -367,7 +409,7 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
         strcat(retbuf, ".");
         strcat(retbuf, inst);
     }
-    if (*realm) {
+    if (*realm && !is_local_realm(realm)) {
         strcat(retbuf, "@");
         strcat(retbuf, realm);
     }
@@ -381,11 +423,14 @@ const char *ptsmodule_name = "afskrb";
 
 void ptsmodule_init(void) 
 {
-    int r = pr_Initialize (1L, AFSCONF_CLIENTNAME, 0);
+    int r = pr_Initialize (1L, AFSCONF_CLIENTNAME, config_getstring(IMAPOPT_AFSPTS_MYCELL));
     if (r) {
 	syslog(LOG_DEBUG, "pr_Initialize failed: %d", r);
 	fatal("pr_initialize failed", EC_TEMPFAIL);
     }
+
+    localrealms = config_getstring(IMAPOPT_AFSPTS_LOCALREALMS);
+
     return;
 }
 
