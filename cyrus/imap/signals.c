@@ -2,7 +2,7 @@
 
    insert copyright */
 
-/* $Id: signals.c,v 1.1 2000/02/17 03:04:30 leg Exp $ */
+/* $Id: signals.c,v 1.2 2000/02/17 05:24:22 leg Exp $ */
 
 #include <config.h>
 
@@ -32,7 +32,9 @@ void signals_add_handlers(void)
     sigemptyset(&action.sa_mask);
 
     action.sa_flags = 0;
-    action.sa_flags |= SA_ONESHOT;
+#ifdef SA_RESETHAND
+    action.sa_flags |= SA_RESETHAND;
+#endif
 #ifdef SA_RESTART
     action.sa_flags |= SA_RESTART;
 #endif
