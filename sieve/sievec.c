@@ -1,6 +1,6 @@
 /* sievec.c -- compile a sieve script to bytecode manually
  * Rob Siemborski
- * $Id: sievec.c,v 1.2 2003/10/22 18:03:25 rjs3 Exp $
+ * $Id: sievec.c,v 1.2.2.1 2003/12/19 18:33:56 ken3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -62,6 +62,9 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+/* config.c stuff */
+const int config_need_data = 0;
+
 int is_script_parsable(FILE *stream, char **errstr, sieve_script_t **ret);
 
 #define TIMSIEVE_FAIL -1
@@ -73,19 +76,34 @@ int main(int argc, char **argv)
     char *err = NULL;
     sieve_script_t *s;
     bytecode_info_t *bc;
-    int fd;
-    
-    if(argc < 3) {
-	printf("Syntax: %s <filename> <outputfile>\n", argv[0]);
+    int c, fd, usage_error = 0;
+    char *alt_config = NULL;
+
+    while ((c = getopt(argc, argv, "C:")) != EOF)
+	switch (c) {
+	case 'C': /* alt config file */
+	    alt_config = optarg;
+	    break;
+	default:
+	    usage_error = 1;
+	    break;
+	}
+
+    if (usage_error || (argc - optind) < 2) {
+	printf("Syntax: %s [-C <altconfig>] <filename> <outputfile>\n",
+	       argv[0]);
 	exit(1);
     }
 
-    instream = fopen(argv[1],"r");
+    instream = fopen(argv[optind++],"r");
     if(instream == NULL) {
 	printf("Unable to open %s for reading\n", argv[1]);
 	exit(1);
     }
     
+    /* Load configuration file. */
+    config_read(alt_config);
+
     if(is_script_parsable(instream, &err, &s) == TIMSIEVE_FAIL) {
 	if(err) {
 	    printf("Unable to parse script: %s\n", err);
@@ -103,7 +121,7 @@ int main(int argc, char **argv)
     }
 
     /* Now, open the new file */
-    fd = open(argv[2], O_CREAT | O_TRUNC | O_WRONLY, 0644);
+    fd = open(argv[optind], O_CREAT | O_TRUNC | O_WRONLY, 0644);
     if(fd < 0) {
 	printf("couldn't open bytecode output file\n");
 	exit(1);

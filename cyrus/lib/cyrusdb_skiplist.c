@@ -1,5 +1,5 @@
 /* cyrusdb_skiplist.c -- cyrusdb skiplist implementation
- * $Id: cyrusdb_skiplist.c,v 1.42 2003/10/22 18:50:12 rjs3 Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.42.2.1 2003/12/19 18:33:42 ken3 Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -802,10 +802,12 @@ int myfetch(struct db *db,
 {
     const char *ptr;
     struct txn t, *tp;
-    int r;
+    int r = 0;
 
     assert(db != NULL && key != NULL);
-    assert(data != NULL && datalen != NULL);
+
+    if (data) *data = NULL;
+    if (datalen) *datalen = 0;
 
     if (!mytid) {
 	/* grab a r lock */
@@ -833,11 +835,10 @@ int myfetch(struct db *db,
 
     if (ptr == db->map_base || compare(KEY(ptr), KEYLEN(ptr), key, keylen)) {
 	/* failed to find key/keylen */
-	*data = NULL;
-	*datalen = 0;
+	r = CYRUSDB_NOTFOUND;
     } else {
-	*datalen = DATALEN(ptr);
-	*data = DATA(ptr);
+	if (datalen) *datalen = DATALEN(ptr);
+	if (data) *data = DATA(ptr);
     }
 
     if (mytid) {
@@ -850,12 +851,13 @@ int myfetch(struct db *db,
 	}
     } else {
 	/* release read lock */
-	if ((r = unlock(db)) < 0) {
-	    return r;
+	int r1;
+	if ((r1 = unlock(db)) < 0) {
+	    return r1;
 	}
     }
 
-    return 0;
+    return r;
 }
 
 static int fetch(struct db *mydb, 

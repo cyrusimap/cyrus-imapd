@@ -1,5 +1,5 @@
 # Makefile.in - notifyd makefile
-# $Id: Makefile.in,v 1.7 2003/10/22 18:50:16 rjs3 Exp $
+# $Id: Makefile.in,v 1.7.2.1 2003/12/19 18:33:49 ken3 Exp $
 # @configure_input@
 # 
 # Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
@@ -59,6 +59,7 @@ LDFLAGS = @LDFLAGS@
 prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
+service_path = @service_path@
 
 MAKEDEPEND = @MAKEDEPEND@
 
@@ -78,7 +79,7 @@ PUREOPT=-best-effort
 all: notifyd
 
 install:
-	$(INSTALL) -m 755 notifyd $(DESTDIR)$(cyrus_prefix)/bin
+	$(INSTALL) -m 755 notifyd $(DESTDIR)$(service_path)
 
 OBJS= notifyd.o notify_null.o notify_log.o notify_mailto.o notify_zephyr.o
 

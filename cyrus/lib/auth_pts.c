@@ -1,5 +1,5 @@
 /* auth_pts.c -- PTLOADER authorization
- * $Id: auth_pts.c,v 1.2 2003/10/22 18:03:04 rjs3 Exp $
+ * $Id: auth_pts.c,v 1.2.2.1 2003/12/19 18:33:41 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -187,10 +187,12 @@ struct auth_state *auth_newstate(const char *identifier)
     return output;
 }
 
+struct cyrusdb_backend *the_ptscache_db = NULL;
+
 /* Returns 0 on success */
 int ptload(const char *identifier, struct auth_state **state) 
 {
-    struct auth_state *fetched;
+    struct auth_state *fetched = NULL;
     size_t id_len;
     const char *data;
     int dsize;
@@ -206,13 +208,19 @@ int ptload(const char *identifier, struct auth_state **state)
     const char *config_dir =
 	libcyrus_config_getstring(CYRUSOPT_CONFIG_DIR);
 
+    /* xxx this sucks, but it seems to be the only way to satisfy the linker */
+    if(the_ptscache_db == NULL) {
+	the_ptscache_db =
+	    cyrusdb_fromname(libcyrus_config_getstring(CYRUSOPT_PTSCACHE_DB));
+    }
+
     if(!state || *state) {
 	fatal("bad state pointer passed to ptload()", EC_TEMPFAIL);
     }
     
     strcpy(fnamebuf, config_dir);
     strcat(fnamebuf, PTS_DBFIL);
-    r = CONFIG_DB_PTS->open(fnamebuf, CYRUSDB_CREATE, &ptdb);
+    r = the_ptscache_db->open(fnamebuf, CYRUSDB_CREATE, &ptdb);
     if (r != 0) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s", fnamebuf,
 	       cyrusdb_strerror(ret));
@@ -226,9 +234,9 @@ int ptload(const char *identifier, struct auth_state **state)
     }
       
     /* fetch the current record for the user */
-    r = CONFIG_DB_PTS->fetch(ptdb, identifier, id_len,
-                             &data, &dsize, NULL);
-    if (r != 0) {
+    r = the_ptscache_db->fetch(ptdb, identifier, id_len,
+			       &data, &dsize, NULL);
+    if (r && r != CYRUSDB_NOTFOUND) {
         syslog(LOG_ERR, "auth_newstate: error fetching record: %s",
                cyrusdb_strerror(r));
 
@@ -307,8 +315,8 @@ int ptload(const char *identifier, struct auth_state **state)
     }
 
     /* fetch the current record for the user */
-    r = CONFIG_DB_PTS->fetch(ptdb, identifier, id_len, 
-			     &data, &dsize, NULL);
+    r = the_ptscache_db->fetch(ptdb, identifier, id_len, 
+			       &data, &dsize, NULL);
     if (r != 0 || !data) {
 	syslog(LOG_ERR, "ptload(): error fetching record: %s"
 	       "(did ptloader add the record?)",
@@ -326,7 +334,7 @@ int ptload(const char *identifier, struct auth_state **state)
 
  done:
     /* close and unlock the database */
-    CONFIG_DB_PTS->close(ptdb);
+    the_ptscache_db->close(ptdb);
 
     return (*state) ? 0 : -1;
 }

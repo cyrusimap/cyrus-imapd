@@ -38,11 +38,11 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: auditmbox.pl,v 1.3 2002/05/25 19:57:49 leg Exp $
+# $Id: auditmbox.pl,v 1.3.8.1 2003/12/19 18:33:52 ken3 Exp $
 #
 # This script WON'T work for you.  Guaranteed.
 # It checks CMU ECE policy, and your policy *will* be different.
-# Use it only as an example of how to use IMAP::Cyrus::Admin, as it will
+# Use it only as an example of how to use Cyrus::IMAP::Admin, as it will
 # almost certainly be useless to you as an actual program.
 #
 # This script sanity-checks departmental accounts against both the password
@@ -53,7 +53,7 @@
 #
 
 use strict;
-use IMAP::Cyrus::Admin;
+use Cyrus::IMAP::Admin;
 use IO::File;
 
 # this sucks, but the current Authen::Krb4 doesn't support any ticket cache
@@ -70,7 +70,7 @@ my ($user, $instance, $dot);
   chomp($instance = $cache->getline);
   $dot = ($instance eq '' ? '' : '.');
 }
-my $cyradm = IMAP::Cyrus::Admin->new('ece') or die "Can't connect to Cyrus.\n";
+my $cyradm = Cyrus::IMAP::Admin->new('ece') or die "Can't connect to Cyrus.\n";
 $cyradm->authenticate(-user => "$user$dot$instance")
   or die "Can't authenticate to Cyrus.\n";
 my (%mailbox, $found);

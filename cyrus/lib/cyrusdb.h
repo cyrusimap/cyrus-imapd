@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb.h,v 1.25 2003/10/22 18:50:12 rjs3 Exp $ */
+/* $Id: cyrusdb.h,v 1.25.2.1 2003/12/19 18:33:42 ken3 Exp $ */
 
 #ifndef INCLUDED_CYRUSDB_H
 #define INCLUDED_CYRUSDB_H
@@ -52,7 +52,8 @@ enum cyrusdb_ret {
     CYRUSDB_IOERROR = -1,
     CYRUSDB_AGAIN = -2,
     CYRUSDB_EXISTS = -3,
-    CYRUSDB_INTERNAL = -4
+    CYRUSDB_INTERNAL = -4,
+    CYRUSDB_NOTFOUND = -5
 };
 
 #define cyrusdb_strerror(c) ("cyrusdb error")
@@ -190,5 +191,8 @@ extern int cyrusdb_copyfile(const char *srcname, const char *dstname);
 /* Start/Stop the backends */
 void cyrusdb_init();
 void cyrusdb_done();
+
+/* Configuration */
+struct cyrusdb_backend *cyrusdb_fromname(const char *name);
 
 #endif /* INCLUDED_CYRUSDB_H */

@@ -37,9 +37,9 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Shell.pm,v 1.31 2003/10/22 18:50:19 rjs3 Exp $
+# $Id: Shell.pm,v 1.31.2.1 2003/12/19 18:33:51 ken3 Exp $
 #
-# A shell framework for IMAP::Cyrus::Admin
+# A shell framework for Cyrus::IMAP::Admin
 #
 # run(*FH|'FH')
 #	read commands from the filehandle and pass to exec(); defaults to
@@ -1429,7 +1429,7 @@ but possibly
 
 or even (not recommended)
 
-  use IMAP::Admin::Shell;
+  use Cyrus::IMAP::Admin::Shell;
 
   run('myscriptname');
 

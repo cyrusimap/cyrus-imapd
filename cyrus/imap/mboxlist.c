@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.221.2.3 2003/11/05 00:54:05 ken3 Exp $
+ * $Id: mboxlist.c,v 1.221.2.4 2003/12/19 18:33:36 ken3 Exp $
  */
 
 #include <config.h>
@@ -80,8 +80,8 @@
 
 #include "mboxlist.h"
 
-#define DB CONFIG_DB_MBOX
-#define SUBDB CONFIG_DB_SUBS
+#define DB config_mboxlist_db
+#define SUBDB config_subscription_db
 
 cyrus_acl_canonproc_t mboxlist_ensureOwnerRights;
 
@@ -171,11 +171,6 @@ static int mboxlist_mylookup(const char *name, int *typep,
     }
     switch (r) {
     case CYRUSDB_OK:
-	if (data == NULL) {
-	    return IMAP_MAILBOX_NONEXISTENT;
-	    break;
-	}
-
 	/* copy out interesting parts */
 	mbtype = strtol(data, &p, 10);
 	if (typep) *typep = mbtype;
@@ -226,6 +221,10 @@ static int mboxlist_mylookup(const char *name, int *typep,
 
     case CYRUSDB_AGAIN:
 	return IMAP_AGAIN;
+	break;
+
+    case CYRUSDB_NOTFOUND:
+	return IMAP_MAILBOX_NONEXISTENT;
 	break;
 
     default:
@@ -1706,7 +1705,9 @@ static int find_p(void *rockp,
     } else {
 	matchlen = glob_test(g, key, keylen, &minmatch);
     }
-    if (matchlen == -1) return 0;
+
+    /* If its not a match, skip it -- partial matches are ok. */
+    if(matchlen == -1) return 0;
 
     if (rock->find_namespace != NAMESPACE_INBOX &&
 	rock->usermboxname &&
@@ -1942,6 +1943,7 @@ int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
 	    if (!r && data) {
 		r = (*proc)(cbrock.inboxcase, 5, 1, rock);
 	    }
+	    else if (r == CYRUSDB_NOTFOUND) r = 0;
 	}
 	else if (!strncmp(pattern,
 			  usermboxname+domainlen, usermboxnamelen-domainlen) &&
@@ -1951,6 +1953,7 @@ int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
 	    if (!r && data) {
 		r = (*proc)(usermboxname, usermboxnamelen, 1, rock);
 	    }
+	    else if (r == CYRUSDB_NOTFOUND) r = 0;
 	}
 	strlcat(usermboxname, ".", sizeof(usermboxname));
 	usermboxnamelen++;
@@ -2081,6 +2084,7 @@ int mboxlist_findall_alt(struct namespace *namespace,
 	    if (!r && data) {
 		r = (*proc)(cbrock.inboxcase, 5, 0, rock);
 	    }
+	    else if (r == CYRUSDB_NOTFOUND) r = 0;
 	}
 
 	strlcat(usermboxname, ".", sizeof(usermboxname));
@@ -2698,6 +2702,7 @@ int mboxlist_findsub(struct namespace *namespace __attribute__((unused)),
 	    if (!r && data) {
 		r = (*proc)(cbrock.inboxcase, 5, 1, rock);
 	    }
+	    else if (r == CYRUSDB_NOTFOUND) r = 0;
 	}
 	else if (!strncmp(pattern,
 			  usermboxname+domainlen, usermboxnamelen-domainlen) &&
@@ -2707,6 +2712,7 @@ int mboxlist_findsub(struct namespace *namespace __attribute__((unused)),
 	    if (!r && data) {
 		r = (*proc)(usermboxname, usermboxnamelen, 1, rock);
 	    }
+	    else if (r == CYRUSDB_NOTFOUND) r = 0;
 	}
 	strlcat(usermboxname, ".", sizeof(usermboxname));
 	usermboxnamelen++;
@@ -2842,6 +2848,7 @@ int mboxlist_findsub_alt(struct namespace *namespace,
 	    if (!r && data) {
 		r = (*proc)(cbrock.inboxcase, 5, 0, rock);
 	    }
+	    else if (r == CYRUSDB_NOTFOUND) r = 0;
 	}
 	strlcat(usermboxname, ".", sizeof(usermboxname));
 	usermboxnamelen++;

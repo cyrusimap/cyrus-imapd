@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb.c,v 1.5 2003/10/22 18:50:12 rjs3 Exp $ */
+/* $Id: cyrusdb.c,v 1.5.2.1 2003/12/19 18:33:42 ken3 Exp $ */
 
 #include <config.h>
 #include <stdlib.h>
@@ -54,13 +54,15 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
+
 #include "cyrusdb.h"
+#include "exitcodes.h"
 #include "libcyr_cfg.h"
 #include "retry.h"
 #include "xmalloc.h"
 
 struct cyrusdb_backend *cyrusdb_backends[] = {
-#ifdef CONFIG_DB_BERKELEY
+#ifdef WITH_BERKELEY
     &cyrusdb_berkeley,
     &cyrusdb_berkeley_nosync,
 #endif
@@ -158,4 +160,24 @@ int cyrusdb_copyfile(const char *srcname, const char *dstname)
     close(srcfd);
     close(dstfd);
     return 0;
+}
+
+struct cyrusdb_backend *cyrusdb_fromname(const char *name)
+{
+    int i;
+    struct cyrusdb_backend *db = NULL;
+
+    for (i = 0; cyrusdb_backends[i]; i++) {
+	if (!strcmp(cyrusdb_backends[i]->name, name)) {
+	    db = cyrusdb_backends[i]; break;
+	}
+    }
+    if (!db) {
+	char errbuf[1024];
+	snprintf(errbuf, sizeof(errbuf),
+		 "cyrusdb backend %s not supported", name);
+	fatal(errbuf, EC_CONFIG);
+    }
+
+    return db;
 }

@@ -1,5 +1,5 @@
 /* masterconfig.c -- Configuration routines for master process
- * $Id: masterconf.c,v 1.11 2003/10/22 18:50:14 rjs3 Exp $
+ * $Id: masterconf.c,v 1.11.2.1 2003/12/19 18:33:47 ken3 Exp $
  * 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -74,8 +74,11 @@ int masterconf_init(const char *ident, const char *alt_config)
     char *buf;
     const char *prefix;
 
+    /* Open the log file with the appropriate facility so we 
+     * correctly log any config errors */
+    openlog(ident, LOG_PID, SYSLOG_FACILITY);
+
     config_ident = ident;
-    
     config_read(alt_config);
 
     prefix = config_getstring(IMAPOPT_SYSLOG_PREFIX);
@@ -86,13 +89,13 @@ int masterconf_init(const char *ident, const char *alt_config)
 	strlcpy(buf, prefix, size);
 	strlcat(buf, "/", size);
 	strlcat(buf, ident, size);
-    } else {
-	buf = xstrdup(ident);
+
+	/* Reopen the log with the new prefix */
+	closelog();
+	openlog(buf, LOG_PID, SYSLOG_FACILITY);
+
+        /* don't free the openlog() string! */
     }
-
-    openlog(buf, LOG_PID, SYSLOG_FACILITY);
-
-    /* don't free the openlog() string! */
 
     return 0;
 }

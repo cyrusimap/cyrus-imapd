@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.23.2.1 2003/11/05 00:54:07 ken3 Exp $
+ * $Id: sieve.y,v 1.23.2.2 2003/12/19 18:33:56 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -42,6 +42,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #include "../lib/util.h"
 #include "../lib/imparse.h"
+#include "../lib/libconfig.h"
 
     /* definitions */
     extern int addrparse(void);
@@ -111,6 +112,8 @@ static int verify_stringlist(stringlist_t *sl, int (*verify)(char *));
 static int verify_mailbox(char *s);
 static int verify_address(char *s);
 static int verify_header(char *s);
+static int verify_addrheader(char *s);
+static int verify_envelope(char *s);
 static int verify_flag(char *s);
 static int verify_relat(char *s);
 #ifdef ENABLE_REGEX
@@ -405,11 +408,12 @@ test:     ANYOF testlist	 { $$ = new_test(ANYOF); $$->u.tl = $2; }
 
         | addrorenv aetags stringlist stringlist
 				 { 
-				     if (!verify_stringlist($3, verify_header))
-				     {
-					 YYERROR; /* vh should call yyerror() */
-				     }
-				     
+				     if (($1 == ADDRESS) &&
+					 !verify_stringlist($3, verify_addrheader))
+					 { YYERROR; }
+				     else if (($1 == ENVELOPE) &&
+					      !verify_stringlist($3, verify_envelope))
+					 { YYERROR; }
 				     $2 = canon_aetags($2);
 #ifdef ENABLE_REGEX
 				     if ($2->comptag == REGEX)
@@ -862,6 +866,45 @@ static int verify_header(char *hdr)
 	h++;
     }
     return 1;
+}
+ 
+static int verify_addrheader(char *hdr)
+{
+    const char **h, *hdrs[] = {
+	"from", "sender", "reply-to",		/* RFC2822 originator fields */
+	"to", "cc", "bcc",			/* RFC2822 destination fields */
+	"resent-from", "resent-sender",		/* RFC2822 resent fields */
+	"resent-to", "resent-cc", "resent-bcc",
+	"return-path",				/* RFC2822 trace fields */
+	"disposition-notification-to",		/* RFC2298 MDN request fields */
+	NULL
+    };
+    char errbuf[100];
+
+    if (!config_getswitch(IMAPOPT_RFC3028_STRICT))
+	return verify_header(hdr);
+
+    for (lcase(hdr), h = hdrs; *h; h++) {
+	if (!strcmp(*h, hdr)) return 1;
+    }
+
+    snprintf(errbuf, sizeof(errbuf),
+	     "header '%s': not a valid header for an address test", hdr);
+    yyerror(errbuf);
+    return 0;
+}
+ 
+static int verify_envelope(char *env)
+{
+    char errbuf[100];
+
+    lcase(env);
+    if (!strcmp(env, "from") || !strcmp(env, "to")) return 1;
+
+    snprintf(errbuf, sizeof(errbuf),
+	     "env-part '%s': not a valid part for an envelope test", env);
+    yyerror(errbuf);
+    return 0;
 }
  
 static int verify_relat(char *r)

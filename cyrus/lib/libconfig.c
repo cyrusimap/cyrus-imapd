@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: libconfig.c,v 1.2.2.2 2003/10/29 20:19:20 ken3 Exp $ */
+/* $Id: libconfig.c,v 1.2.2.3 2003/12/19 18:33:43 ken3 Exp $ */
 
 #include <config.h>
 
@@ -83,7 +83,8 @@ extern void fatal(const char *fatal_message, int fatal_code)
 const char *config_getstring(enum imapopt opt)
 {
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
-    assert(imapopts[opt].t == OPT_STRING);
+    assert((imapopts[opt].t == OPT_STRING) ||
+	   (imapopts[opt].t == OPT_STRINGLIST));
     
     return imapopts[opt].val.s;
 }
@@ -196,7 +197,7 @@ void config_read(const char *alt_config)
 	    snprintf(errbuf, sizeof(errbuf),
 		    "invalid option name on line %d of configuration file",
 		    lineno);
-	    fatal(buf, EC_CONFIG);
+	    fatal(errbuf, EC_CONFIG);
 	}
 	*p++ = '\0';
 	
@@ -211,7 +212,7 @@ void config_read(const char *alt_config)
 	    snprintf(errbuf, sizeof(errbuf),
 		    "empty option value on line %d of configuration file",
 		    lineno);
-	    fatal(buf, EC_CONFIG);
+	    fatal(errbuf, EC_CONFIG);
 	}
 	
 	srvkey = NULL;
@@ -297,7 +298,7 @@ void config_read(const char *alt_config)
 		    /* error during conversion */
 		    sprintf(errbuf, "non-integer value for %s in line %d",
 			    imapopts[opt].optname, lineno);
-		    fatal(buf, EC_CONFIG);
+		    fatal(errbuf, EC_CONFIG);
 		}
 
 		imapopts[opt].val.i = val;
@@ -317,11 +318,12 @@ void config_read(const char *alt_config)
 		    /* error during conversion */
 		    sprintf(errbuf, "non-switch value for %s in line %d",
 			    imapopts[opt].optname, lineno);
-		    fatal(buf, EC_CONFIG);
+		    fatal(errbuf, EC_CONFIG);
 		}
 		break;
 	    }
 	    case OPT_ENUM:
+	    case OPT_STRINGLIST:
 	    {
 		const struct enum_option_s *e = imapopts[opt].enum_options;
 
@@ -329,13 +331,16 @@ void config_read(const char *alt_config)
 		    if (!strcasecmp(e->name, p)) break;
 		    e++;
 		}
-		if (e->name)
-		    imapopts[opt].val.e = e->val;
-		else {
+		if (e->name) {
+		    if (imapopts[opt].t == OPT_STRINGLIST)
+			imapopts[opt].val.s = e->name;
+		    else
+			imapopts[opt].val.e = e->val;
+		} else {
 		    /* error during conversion */
 		    sprintf(errbuf, "invalid value for %s in line %d",
 			    imapopts[opt].optname, lineno);
-		    fatal(buf, EC_CONFIG);
+		    fatal(errbuf, EC_CONFIG);
 		}
 		break;
 	    }

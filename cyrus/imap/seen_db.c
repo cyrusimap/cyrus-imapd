@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
- * $Id: seen_db.c,v 1.42 2003/10/22 18:50:08 rjs3 Exp $
+ * $Id: seen_db.c,v 1.42.2.1 2003/12/19 18:33:38 ken3 Exp $
  * 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -87,7 +87,7 @@ struct seen {
 
 static struct seen *lastseen = NULL;
 
-#define DB (CONFIG_DB_SEEN)
+#define DB (config_seenstate_db)
 
 static void abortcurrent(struct seen *s)
 {
@@ -295,14 +295,14 @@ static int seen_readit(struct seen *seendb,
 	       cyrusdb_strerror(r));
 	return IMAP_IOERROR;
 	break;
-    }
-    if (data == NULL) {
+    case CYRUSDB_NOTFOUND:
 	r = seen_readold(seendb, lastreadptr, lastuidptr,
 			 lastchangeptr, seenuidsptr);
 	if (r) {
 	    abortcurrent(seendb);
 	}
 	return r;
+	break;
     }
 
     /* remember that 'data' may not be null terminated ! */

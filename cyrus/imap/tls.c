@@ -93,7 +93,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.47 2003/10/22 18:50:08 rjs3 Exp $ */
+/* $Id: tls.c,v 1.47.2.1 2003/12/19 18:33:40 ken3 Exp $ */
 
 #include <config.h>
 
@@ -125,7 +125,7 @@
 #include "global.h"
 #include "cyrusdb.h"
 
-#define DB (CONFIG_DB_TLS) /* sessions are binary -> MUST use DB3 */
+#define DB (config_tlscache_db) /* sessions are binary -> MUST use DB3 */
 
 static struct db *sessdb = NULL;
 static int sess_dbopen = 0;
@@ -510,7 +510,7 @@ static SSL_SESSION *get_session_cb(SSL *ssl __attribute__((unused)),
 	ret = DB->fetch(sessdb, id, idlen, &data, &len, NULL);
     } while (ret == CYRUSDB_AGAIN);
 
-    if (data) {
+    if (!ret && data) {
 	assert(len >= (int) sizeof(time_t));
 
 	/* grab the expire time */

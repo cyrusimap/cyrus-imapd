@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.16.2.2 2003/10/28 22:06:48 ken3 Exp $
+ * $Id: annotate.c,v 1.16.2.3 2003/12/19 18:33:28 ken3 Exp $
  */
 
 #include <config.h>
@@ -75,7 +75,7 @@
 
 #include "annotate.h"
 
-#define DB CONFIG_DB_ANNOTATION
+#define DB config_annotation_db
 
 extern void printstring(const char *s);
 extern void appendattvalue(struct attvaluelist **l, char *attrib,
@@ -1210,6 +1210,7 @@ int annotatemore_lookup(const char *mboxname, const char *entry,
     if (!r && data) {
 	r = split_attribs(data, datalen, attrib);
     }
+    else if (r == CYRUSDB_NOTFOUND) r = 0;
 
     return r;
 }

@@ -1,6 +1,6 @@
 # Makefile.in - sieve makefile
 # @configure_input@
-# $Id: Makefile.in,v 1.30 2003/10/22 18:50:30 rjs3 Exp $
+# $Id: Makefile.in,v 1.30.2.1 2003/12/19 18:33:56 ken3 Exp $
 ################################################################
 #        Copyright 1998 by Carnegie Mellon University
 #
@@ -27,6 +27,7 @@ srcdir = @srcdir@
 VPATH = @srcdir@
 
 cyrus_prefix = @cyrus_prefix@
+service_path = @service_path@
 
 CC = @CC@
 YACC = @YACC@
@@ -57,8 +58,8 @@ all: libsieve.a sievec sieved
 dist: $(BUILT_SOURCES)
 
 install: sievec
-	$(srcdir)/../install-sh -d ${DESTDIR}$(cyrus_prefix)/bin
-	$(srcdir)/../install-sh -m 755 sievec $(DESTDIR)$(cyrus_prefix)/bin || exit
+	$(srcdir)/../install-sh -d ${DESTDIR}$(service_path)
+	$(srcdir)/../install-sh -m 755 sievec $(DESTDIR)$(service_path) || exit
 
 test: $(DEPLIBS) libsieve.a test.o
 	$(CC) $(LDFLAGS) -o test test.o libsieve.a $(DEPLIBS) $(LIBS)

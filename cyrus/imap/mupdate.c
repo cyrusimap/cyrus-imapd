@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.77.2.5 2003/11/17 20:42:57 ken3 Exp $
+ * $Id: mupdate.c,v 1.77.2.6 2003/12/19 18:33:38 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -113,6 +113,8 @@ struct pending {
 
 struct conn {
     int fd;
+    int logfd;
+    
     struct protstream *pin;
     struct protstream *pout;
     sasl_conn_t *saslconn;
@@ -241,7 +243,8 @@ static struct conn *conn_new(int fd)
     char hbuf[NI_MAXHOST];
     
     C->fd = fd;
-    
+    C->logfd = -1;
+
     C->pin = prot_new(C->fd, 0);
     C->pout = prot_new(C->fd, 1);
     
@@ -383,6 +386,8 @@ static void conn_free(struct conn *C)
 #endif
 
     cyrus_close_sock(C->fd);
+    if(C->logfd != -1) close(C->logfd);
+    
     if (C->saslconn) sasl_dispose(&C->saslconn);
 
     if (C->saslprops.authid) free(C->saslprops.authid);
@@ -1378,7 +1383,7 @@ void cmd_authenticate(struct conn *C,
     prot_setsasl(C->pin, C->saslconn);
     prot_setsasl(C->pout, C->saslconn);
 
-    telemetry_log(C->userid, C->pin, C->pout, 1);
+    C->logfd = telemetry_log(C->userid, C->pin, C->pout, 1);
 
     return;
 }

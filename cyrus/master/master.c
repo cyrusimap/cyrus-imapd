@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.85 2003/10/22 18:50:14 rjs3 Exp $ */
+/* $Id: master.c,v 1.85.2.1 2003/12/19 18:33:47 ken3 Exp $ */
 
 #include <config.h>
 
@@ -91,6 +91,10 @@
 #include <ucd-snmp/ucd-snmp-agent-includes.h>
 
 #include "cyrusMasterMIB.h"
+
+int allow_severity = LOG_DEBUG;
+int deny_severity = LOG_ERR;
+
 #endif
 
 #include "masterconf.h"
@@ -2016,7 +2020,8 @@ int main(int argc, char **argv)
 		process_msg(&Services[i], &msg);
 	    }
 
-	    if (Services[i].nactive < Services[i].max_workers) {
+	    if (Services[i].exec &&
+		Services[i].nactive < Services[i].max_workers) {
 		/* bring us up to desired_workers */
 		for (j = Services[i].ready_workers;
 		     j < Services[i].desired_workers; 

@@ -39,7 +39,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.in,v 1.8 2003/10/22 18:50:15 rjs3 Exp $
+# $Id: Makefile.in,v 1.8.2.1 2003/12/19 18:33:48 ken3 Exp $
 # 
 srcdir = @srcdir@
 VPATH = @srcdir@
@@ -62,13 +62,14 @@ MAKEDEPEND = @MAKEDEPEND@
 prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
+service_path = @service_path@
 
 OBJS = remotepurge.o readconfig.o
 
 all: remotepurge
 
 install:
-	$(INSTALL) -s -m 755 remotepurge $(DESTDIR)$(cyrus_prefix)/bin
+	$(INSTALL) -s -m 755 remotepurge $(DESTDIR)$(service_path)
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<

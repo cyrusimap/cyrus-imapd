@@ -39,7 +39,7 @@
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 #
-# $Id: cyradm.sh,v 1.13 2003/10/22 18:50:18 rjs3 Exp $
+# $Id: cyradm.sh,v 1.13.2.1 2003/12/19 18:33:50 ken3 Exp $
 case "x$BASH_VERSION" in
 x) exec perl -MCyrus::IMAP::Shell -e shell -- ${1+"$@"} ;;
 *) exec perl -MCyrus::IMAP::Shell -e shell -- "$@" ;;
@@ -62,7 +62,7 @@ but possibly
 
 or even (not recommended)
 
-  use IMAP::Admin::Shell;
+  use Cyrus::IMAP::Admin::Shell;
 
   run('myscriptname');
 

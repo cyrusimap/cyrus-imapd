@@ -1,6 +1,6 @@
 /* mupdate-slave.c -- cyrus murder database clients
  *
- * $Id: mupdate-slave.c,v 1.24 2003/10/22 18:50:08 rjs3 Exp $
+ * $Id: mupdate-slave.c,v 1.24.2.1 2003/12/19 18:33:37 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -115,12 +115,63 @@ static int open_kick_socket()
     return s;
 }
 
+/* Accept up to max_fds connections on kicksock, put the fds into
+ * the array fd_list (atleast max_fds big), and the number of connections
+ * into num_fds */
+static int get_kick_fds(int kicksock,
+			int *fd_list, int *num_fds, int max_fds) {
+    fd_set read_set;
+    int highest_fd = kicksock + 1;
+    struct timeval tv;
+
+    tv.tv_sec = 0;
+    tv.tv_usec = 0;
+
+    FD_ZERO(&read_set);
+    FD_SET(kicksock, &read_set);
+
+    *num_fds = 0;
+
+    for(*num_fds = 0; *num_fds<max_fds; (*num_fds)++) {
+        int gotdata;
+	fd_set rset;
+
+	rset = read_set;
+	gotdata = select(highest_fd, &rset, NULL, NULL, &tv);
+
+	if(gotdata == -1) {
+	  /* Select Error! */
+	  syslog(LOG_ERR, "kicksock select failed");
+	  return -1;
+	} else if (gotdata != 0 && FD_ISSET(kicksock, &rset)) {
+	  struct sockaddr_un clientaddr;
+	  int len = sizeof(clientaddr);
+
+	  fd_list[*num_fds] =
+	    accept(kicksock, (struct sockaddr *)&clientaddr, &len);
+	  if (fd_list[*num_fds] == -1) {
+	    syslog(LOG_WARNING, "kicksock accept() failed: %m %d", kicksock);
+	    return -1;
+	  }
+	} else {
+	  /* Timeout Expired, we're done! */
+	  break;
+	}
+    }
+
+    return 0;
+}
+
+#define KICK_FDS_LEN 5
+
 static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
 {
-    int len, gotdata = 0;
+    int gotdata = 0;
     fd_set rset, read_set;
-    int highest_fd, kicksock, kickconn = -1;
+    int highest_fd, kicksock;
     int waiting_for_noop = 0;
+    int kick_fds[KICK_FDS_LEN];
+    int num_kick_fds = 0;
     
     if (!handle || !handle->saslcompleted) return;
 
@@ -173,30 +224,24 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
 	     * If we have been kicked, tell them we're done now */
 	    if(waiting_for_noop) {
 		waiting_for_noop = 0;
-		if(kickconn >= 0) {
-		    if (write(kickconn, "ok", 2) < 0) {
-			syslog(LOG_WARNING, "can't write to IPC socket?");
-			break;
+
+		for(;num_kick_fds;num_kick_fds--) {
+		    if (write(kick_fds[num_kick_fds-1], "ok", 2) < 0) {
+			syslog(LOG_WARNING,
+			       "can't write to IPC socket (ignoring)");
 		    }
-		    close(kickconn);
-		    kickconn = -1;
+		    close(kick_fds[num_kick_fds-1]);
 		}
 	    }
 	    
 	    if (FD_ISSET(kicksock, &rset)) {
-		/* We got a kickme, force a NOOP */
-		struct sockaddr_un clientaddr;
-		
-		/* Only handle one kick at a time */
-		len = sizeof(clientaddr);
-		kickconn =
-		    accept(kicksock, (struct sockaddr *)&clientaddr, &len);
-		
-		if (kickconn == -1) {
-		    syslog(LOG_WARNING, "accept(): %m");
+	        /* We were kicked--collect outstanding kicks! */
+	        if(get_kick_fds(kicksock,
+				kick_fds, &num_kick_fds, KICK_FDS_LEN)) {
+		    /* Nonzero return code -- Error */
 		    break;
 		}
-		
+
 		prot_printf(handle->pout, "N%u NOOP\r\n", handle->tagn++);
 		prot_flush(handle->pout);
 		waiting_for_noop = 1;
@@ -215,9 +260,10 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
 	}
     } /* Loop */
 
-    /* Don't leak the descriptor! */
-    if(kickconn >= 0) close(kickconn);
-    close(kicksock);
+    /* Don't leak the descriptors! */
+    for(;num_kick_fds;num_kick_fds--) {
+      close(kick_fds[num_kick_fds-1]);
+    }
 }
 
 void *mupdate_client_start(void *rock __attribute__((unused)))
@@ -272,46 +318,29 @@ void *mupdate_client_start(void *rock __attribute__((unused)))
 
 void *mupdate_placebo_kick_start(void *rock __attribute__((unused)))
 {
-    int len, gotdata = 0;
-    fd_set rset, read_set;
     int kicksock, kickconn = -1;
     
     kicksock = open_kick_socket();
 
-    FD_ZERO(&read_set);
-    FD_SET(kicksock, &read_set);
-
     /* Now just listen to the rest of the updates */
     while(1) {
-	rset = read_set;
-
-	gotdata = select(kicksock+1, &rset, NULL, NULL, NULL);
-
-	if(gotdata == -1) {
-	    /* Oops? */
-	    syslog(LOG_ERR, "kick socket select failed");
-	    break;
-	} else if(gotdata != 0) {
-	    if (FD_ISSET(kicksock, &rset)) {
-		/* We got a kickme, force a NOOP */
-		struct sockaddr_un clientaddr;
-		
-		/* Only handle one kick at a time */
-		len = sizeof(clientaddr);
-		kickconn =
-		    accept(kicksock, (struct sockaddr *)&clientaddr, &len);
-		
-		if (kickconn == -1) {
-		    syslog(LOG_WARNING, "accept(): %m");
-		    break;
-		} else {
-		    if (write(kickconn, "ok", 2) < 0) {
-			syslog(LOG_WARNING, "can't write to IPC socket?");
-		    }
-		    close(kickconn);
-		    kickconn = -1;
-		}
-	    }
+        struct sockaddr_un clientaddr;
+	int len;
+      
+	/* Only handle one kick at a time -- they're fast */
+	len = sizeof(clientaddr);
+	kickconn =
+	  accept(kicksock, (struct sockaddr *)&clientaddr, &len);
+	
+	if (kickconn == -1) {
+	  syslog(LOG_WARNING, "accept(): %m");
+	  break;
+	} else {
+	  if (write(kickconn, "ok", 2) < 0) {
+	    syslog(LOG_WARNING, "can't write to IPC socket?");
+	  }
+	  close(kickconn);
+	  kickconn = -1;
 	}
     } /* Loop */
 

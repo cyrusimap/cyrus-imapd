@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.43 2003/10/22 18:50:07 rjs3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.43.2.1 2003/12/19 18:33:29 ken3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -199,7 +199,7 @@ static int dump_cb(void *rockp,
 	if(!d->partition || !strcmp(d->partition, part)) {
 	    printf("%s\t%s\t%s\n", name, part, acl);
 	    if(d->purge) {
-		CONFIG_DB_MBOX->delete(mbdb, key, keylen, &(d->tid), 0);
+		config_mboxlist_db->delete(mbdb, key, keylen, &(d->tid), 0);
 	    }
 	}
 	break;
@@ -409,10 +409,10 @@ void do_dump(enum mboxop op, const char *part, int purge)
     }
 
     /* Dump Database */
-    CONFIG_DB_MBOX->foreach(mbdb, "", 0, &dump_p, &dump_cb, &d, NULL);
+    config_mboxlist_db->foreach(mbdb, "", 0, &dump_p, &dump_cb, &d, NULL);
 
     if(d.tid) {
-	CONFIG_DB_MBOX->commit(mbdb, d.tid);
+	config_mboxlist_db->commit(mbdb, d.tid);
 	d.tid = NULL;
     }
 
@@ -537,7 +537,7 @@ void do_undump(void)
 	
 	tries = 0;
     retry:
-	r = CONFIG_DB_MBOX->store(mbdb, key, keylen, data, datalen, &tid);
+	r = config_mboxlist_db->store(mbdb, key, keylen, data, datalen, &tid);
 	switch (r) {
 	case 0:
 	    break;
@@ -557,7 +557,7 @@ void do_undump(void)
 
 	if(--untilCommit == 0) {
 	    /* commit */
-	    r = CONFIG_DB_MBOX->commit(mbdb, tid);
+	    r = config_mboxlist_db->commit(mbdb, tid);
 	    if(r) break;
 	    tid = NULL;
 	    untilCommit = PER_COMMIT;
@@ -569,11 +569,11 @@ void do_undump(void)
 
     if(!r && tid) {
 	/* commit the last transaction */
-	r=CONFIG_DB_MBOX->commit(mbdb, tid);
+	r=config_mboxlist_db->commit(mbdb, tid);
     }
 
     if (r) {
-	if(tid) CONFIG_DB_MBOX->abort(mbdb, tid);
+	if(tid) config_mboxlist_db->abort(mbdb, tid);
 	fprintf(stderr, "db error: %s\n", cyrusdb_strerror(r));
 	if(key) fprintf(stderr, "was processing mailbox: %s\n", key);
 	if(last_commit[0]) fprintf(stderr, "last commit was at: %s\n",

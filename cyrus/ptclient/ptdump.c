@@ -48,7 +48,7 @@
 #include "global.h"
 #include "libconfig.h"
 
-static char rcsid[] = "$Id: ptdump.c,v 1.8 2003/10/22 18:50:29 rjs3 Exp $";
+static char rcsid[] = "$Id: ptdump.c,v 1.8.2.1 2003/12/19 18:33:53 ken3 Exp $";
 
 int config_need_data = 0;
 
@@ -109,7 +109,7 @@ int main(int argc, char *argv[])
     /* open database */
     strcpy(fnamebuf, config_dir);
     strcat(fnamebuf, PTS_DBFIL);
-    r = CONFIG_DB_PTS->open(fnamebuf, CYRUSDB_CREATE, &ptdb);
+    r = config_ptscache_db->open(fnamebuf, CYRUSDB_CREATE, &ptdb);
     if(r != CYRUSDB_OK) {
 	fprintf(stderr,"error opening %s (%s)", fnamebuf,
 	       cyrusdb_strerror(r));
@@ -117,9 +117,9 @@ int main(int argc, char *argv[])
     }
 
     /* iterate through db, wiping expired entries */
-    CONFIG_DB_PTS->foreach(ptdb, "", 0, dump_p, dump_cb, ptdb, NULL);
+    config_ptscache_db->foreach(ptdb, "", 0, dump_p, dump_cb, ptdb, NULL);
 
-    CONFIG_DB_PTS->close(ptdb);
+    config_ptscache_db->close(ptdb);
 
     cyrus_done();
 

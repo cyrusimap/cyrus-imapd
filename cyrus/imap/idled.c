@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idled.c,v 1.17 2003/10/22 18:50:07 rjs3 Exp $ */
+/* $Id: idled.c,v 1.17.2.1 2003/12/19 18:33:30 ken3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -295,8 +295,8 @@ int main(int argc, char **argv)
     /* count the number of mailboxes */
     mboxlist_init(0);
     mboxlist_open(NULL);
-    CONFIG_DB_MBOX->foreach(mbdb, "", 0, &mbox_count_p, &mbox_count_cb,
-			    &nmbox, NULL);
+    config_mboxlist_db->foreach(mbdb, "", 0, &mbox_count_p, &mbox_count_cb,
+				&nmbox, NULL);
     mboxlist_close();
     mboxlist_done();
 
@@ -409,3 +409,11 @@ int main(int argc, char **argv)
     /* never gets here */      
     exit(1);
 }
+
+void printstring(const char *s __attribute__((unused)))
+{ 
+    /* needed to link against annotate.o */
+    fatal("printstring() executed, but its not used for POP3!",
+          EC_SOFTWARE);
+}
+

@@ -1,4 +1,4 @@
-<!-- $Id: install-configure.html,v 1.30 2003/10/22 18:50:04 rjs3 Exp $ -->
+<!-- $Id: install-configure.html,v 1.30.2.1 2003/12/19 18:33:26 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and configuring the IMAP Server
@@ -292,6 +292,12 @@ permit sendmail to run the "<TT>deliver</TT>" (LMTP client) program to
 deliver mail to the IMAP server.</li>
 </ul>
 
+<p>Cyrus also includes a socket map daemon <tt>smmapd</tt> which can
+be used by Sendmail 8.13 and higher (a patch for 8.12 is available) to
+verify at RCPT TO time that a message can be delivered to the
+particular mailbox.  To use this daemon, add <tt>smmapd</tt> as a
+service in <tt>cyrus.conf</tt> and configure Sendmail accordingly.
+
 <h4>Configuring <a href="http://www.postfix.org/">Postfix</a></h4>
 
 The Postfix source distribution comes with the
@@ -537,5 +543,5 @@ convention, consult <a
 href=altnamespace.html#altnameconfig>altnamespace.html</a>.
 
 <P><HR>
-last modified: $Date: 2003/10/22 18:50:04 $
+last modified: $Date: 2003/12/19 18:33:26 $
 </BODY></HTML>

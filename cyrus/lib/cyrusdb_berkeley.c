@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_berkeley.c,v 1.2 2003/10/22 18:03:04 rjs3 Exp $ */
+/* $Id: cyrusdb_berkeley.c,v 1.2.2.1 2003/12/19 18:33:42 ken3 Exp $ */
 
 #include <config.h>
 
@@ -79,6 +79,9 @@ extern void fatal(const char *, int);
 #define txn_checkpoint(xx1,xx2,xx3,xx4) (xx1)->txn_checkpoint(xx1,xx2,xx3,xx4)
 #define txn_id(xx1) (xx1)->id(xx1)
 #define log_archive(xx1,xx2,xx3,xx4) (xx1)->log_archive(xx1,xx2,xx3)
+#define txn_begin(xx1,xx2,xx3,xx4) (xx1)->txn_begin(xx1,xx2,xx3,xx4)
+#define txn_commit(xx1,xx2) (xx1)->commit(xx1,xx2)
+#define txn_abort(xx1) (xx1)->abort(xx1)
 #elif DB_VERSION_MINOR == 3
 #define log_archive(xx1,xx2,xx3,xx4) log_archive(xx1,xx2,xx3)
 #endif
@@ -433,6 +436,9 @@ static int myfetch(struct db *mydb,
 	
     assert(dbinit && db);
 
+    if (data) *data = NULL;
+    if (datalen) *datalen = 0;
+
     r = gettid(mytid, &tid, "myfetch");
     if (r) return r;
 
@@ -449,9 +455,7 @@ static int myfetch(struct db *mydb,
 	if (datalen) *datalen = d.size;
 	break;
     case DB_NOTFOUND:
-	*data = NULL;
-	*datalen = 0;
-	r = 0;
+	r = CYRUSDB_NOTFOUND;
 	break;
     case DB_LOCK_DEADLOCK:
 	if (mytid) {
