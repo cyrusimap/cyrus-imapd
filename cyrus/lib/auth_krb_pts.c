@@ -1,6 +1,5 @@
 /* auth_krb_pts.c -- Kerberos authorization with AFS PTServer groups
- $Id: auth_krb_pts.c,v 1.42 2002/01/31 19:54:55 rjs3 Exp $
- 
+ * $Id: auth_krb_pts.c,v 1.43 2002/02/19 16:56:03 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -468,6 +467,7 @@ struct auth_state *auth_newstate(const char *identifier,
     r = connect(s, (struct sockaddr *)&srvaddr, sizeof(srvaddr));
     if (r == -1) {
 	syslog(LOG_ERR, "auth_newstate: can't connect to ptloader server: %m");
+	close(s);
 	return newstate;
     }
         
