@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_berkeley.c,v 1.7 2004/03/09 15:05:58 ken3 Exp $ */
+/* $Id: cyrusdb_berkeley.c,v 1.8 2004/03/11 18:36:44 ken3 Exp $ */
 
 #include <config.h>
 
@@ -581,7 +581,7 @@ static int foreach(struct db *mydb,
 	/* does this match our prefix? */
 	if (prefixlen && memcmp(k.data, prefix, prefixlen)) break;
 
-	if (goodp(rock, k.data, k.size, d.data, d.size)) {
+	if (!goodp || goodp(rock, k.data, k.size, d.data, d.size)) {
 	    /* we have a winner! */
 
 	    /* close the cursor, so we're not holding locks 

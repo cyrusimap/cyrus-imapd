@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb.h,v 1.28 2004/01/20 01:11:03 ken3 Exp $ */
+/* $Id: cyrusdb.h,v 1.29 2004/03/11 18:36:44 ken3 Exp $ */
 
 #ifndef INCLUDED_CYRUSDB_H
 #define INCLUDED_CYRUSDB_H
@@ -131,7 +131,7 @@ struct cyrusdb_backend {
 		     struct txn **mytid);
 
     /* foreach: iterate through entries that start with 'prefix'
-       if 'p' returns true, call 'cb'
+       if 'p' is NULL (always true) or returns true, call 'cb'
 
        if 'cb' changes the database, these changes will only be visible
        if they are after the current database cursor.  If other processes

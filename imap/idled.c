@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idled.c,v 1.21 2004/02/27 17:44:49 ken3 Exp $ */
+/* $Id: idled.c,v 1.22 2004/03/11 18:36:42 ken3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -93,15 +93,6 @@ void fatal(const char *msg, int err)
     cyrus_done();
     
     exit(err);
-}
-
-static int mbox_count_p(void *rockp __attribute__((unused)),
-			const char *key __attribute__((unused)),
-			int keylen __attribute__((unused)),
-			const char *data __attribute__((unused)),
-			int datalen __attribute__((unused)))
-{
-    return 1;
 }
 
 static int mbox_count_cb(void *rockp,
@@ -301,7 +292,7 @@ int main(int argc, char **argv)
     /* count the number of mailboxes */
     mboxlist_init(0);
     mboxlist_open(NULL);
-    config_mboxlist_db->foreach(mbdb, "", 0, &mbox_count_p, &mbox_count_cb,
+    config_mboxlist_db->foreach(mbdb, "", 0, NULL, &mbox_count_cb,
 				&nmbox, NULL);
     mboxlist_close();
     mboxlist_done();
