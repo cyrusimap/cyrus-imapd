@@ -7,7 +7,9 @@ struct service {
     char *listen;
     char *proto;
     char *const *exec;
-
+    int babysit;
+    unsigned int maxforkrate;
+    
     int socket;
     struct sockaddr *saddr;
 
@@ -16,10 +18,16 @@ struct service {
     int max_workers;
     int stat[2];
 
+    /* fork rate computation */
+    time_t last_interval_start;
+    unsigned int interval_forks;
+
     /* stats */
     int nforks;
     int nactive;
     int nconnections;
+
+    unsigned int forkrate;
 };
 
 extern struct service *Services;
