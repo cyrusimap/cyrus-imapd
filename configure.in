@@ -29,7 +29,6 @@ AC_SUBST(PRE_SUBDIRS)
 AC_SUBST(EXTRA_SUBDIRS)
 AC_SUBST(DEPLIBS)
 AC_FUNC_VPRINTF
-
 dnl for et routines
 AC_FUNC_CHECK(strerror,AC_DEFINE(HAS_STRERROR))
 
@@ -167,6 +166,10 @@ AC_ARG_WITH(auth,[  --with-auth=METHOD      use authorization module METHOD
 		WITH_AUTH=`echo $WITH_LOGIN | sed 's/_.*$//'`
 	fi)
 AC_SUBST(WITH_AUTH)
+if test "$WITH_AUTH" = krb_pts; then
+	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} ptclient"
+	AC_DEFINE_UNQUOTED(CYRUS_PATH,"$cyrus_prefix")
+fi
 dnl
 dnl XXX MUST CHECK FOR TCL BEFORE KERBEROS V4 XXX
 dnl This is because some genius at MIT named one of the Kerberos v4
@@ -307,5 +310,6 @@ dnl Random other libraries
 dnl
 AC_CHECK_LIB(ndbm, main)
 AC_CHECK_LIB(dbm, main)
+AC_CHECK_LIB(db, main)
 AC_CHECK_LIB(socket, main, LIBS="${LIBS} -lsocket -lnsl",,-lnsl)
-AC_OUTPUT(Makefile man/Makefile syslog/Makefile et/Makefile lib/Makefile imap/Makefile imap/feedcyrus cyradm/Makefile imtest/Makefile pwcheck/Makefile amssync/Makefile amssync/amssynctree cmulocal/Makefile)
+AC_OUTPUT(Makefile man/Makefile syslog/Makefile et/Makefile lib/Makefile imap/Makefile imap/feedcyrus cyradm/Makefile imtest/Makefile ptclient/Makefile pwcheck/Makefile amssync/Makefile amssync/amssynctree cmulocal/Makefile)
