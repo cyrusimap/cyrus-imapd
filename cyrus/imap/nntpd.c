@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.30 2004/05/29 05:18:22 ken3 Exp $
+ * $Id: nntpd.c,v 1.31 2004/06/11 18:15:52 ken3 Exp $
  */
 
 /*
@@ -2460,7 +2460,6 @@ static void cmd_list(char *arg1, char *arg2)
 	}
     }
     else if (!strcmp(arg1, "extensions")) {
-	unsigned mechcount = 0;
 	const char *mechlist;
 
 	if (arg2) {
@@ -2472,17 +2471,13 @@ static void cmd_list(char *arg1, char *arg2)
 
 	/* check for SASL mechs */
 	sasl_listmech(nntp_saslconn, NULL, " SASL:", ",", "",
-		      &mechlist, NULL, &mechcount);
+		      &mechlist, NULL, NULL);
 
-	if (mechcount || nntp_starttls_done ||
-	    config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
-	    prot_printf(nntp_out, "AUTHINFO%s%s\r\n",
-			!nntp_authstate &&
-			(nntp_starttls_done ||
-			 config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) ?
-			" USER" : "",
-			mechcount ? mechlist : "");
-	}
+	prot_printf(nntp_out, "AUTHINFO%s%s\r\n",
+		    !nntp_authstate &&
+		    (nntp_starttls_done ||
+		     config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) ?
+		    " USER" : "", mechlist);
 
 	if ((nntp_capa & MODE_READ) &&
 	    (nntp_userid || allowanonymous)) {
