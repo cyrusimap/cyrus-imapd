@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.224 2002/03/01 17:07:21 rjs3 Exp $
+dnl $Id: configure.in,v 1.225 2002/03/01 19:39:38 ken3 Exp $
 dnl
 
 
@@ -114,7 +114,7 @@ AC_SUBST(DEPLIBS)
 AC_SUBST(LOCALDEFS)
 AC_FUNC_VPRINTF
 
-AC_ARG_WITH(dbdir,[  --with-dbdir=DIR           Berkeley DB in <DIR>],
+AC_ARG_WITH(dbdir,[  --with-dbdir=DIR        Berkeley DB in <DIR>],
   LDFLAGS="-L$withval/lib $LDFLAGS"
   CMU_ADD_LIBPATH($withval/lib)
   if test -d $withval/include/db3; then
@@ -174,27 +174,32 @@ AC_DEFUN(CYRUS_SET_BACKEND_BINARY, [
 ])
 
 AC_ARG_WITH(duplicate-db,
-	[  --with-duplicate-db=DB     use DB (db3, skiplist) as a backend for the duplicate delivery db (Default: db3_nosync) ],
+	[  --with-duplicate-db=DB  use DB (db3, skiplist) as a backend
+                          for the duplicate delivery db (Default: db3_nosync) ],
 	DB="$withval", DB="db3_nosync")
 CYRUS_SET_BACKEND_BINARY("duplicate db", CONFIG_DB_DUPLICATE, $DB)
 
 AC_ARG_WITH(mboxlist-db,
-	[  --with-mboxlist-db=DB      use DB (flat, db3, skiplist) as a backend for the mailbox list (Default: db3) ],
-	DB="$withval",DB="db3")
+	[  --with-mboxlist-db=DB   use DB (flat, db3, skiplist) as a backend
+                          for the mailbox list (Default: db3) ],
+	DB="$withval", DB="db3")
 CYRUS_SET_BACKEND("mboxlist", CONFIG_DB_MBOX, $DB)
 
 AC_ARG_WITH(seen-db,
-	[  --with-seen-db=DB          use DB (flat, db3, skiplist) as a backend for the seen state (Default: flat) ],
+	[  --with-seen-db=DB       use DB (flat, db3, skiplist) as a backend
+                          for the seen state (Default: flat) ],
 	DB="$withval", DB="flat")
 CYRUS_SET_BACKEND("seen state", CONFIG_DB_SEEN, $DB)
 
 AC_ARG_WITH(subs-db,
-	[  --with-subs-db=DB          use DB (flat, db3, skiplist) as a backend for the subscriptions list (Default: flat) ],
+	[  --with-subs-db=DB       use DB (flat, db3, skiplist) as a backend
+                          for the subscriptions list (Default: flat) ],
 	DB="$withval", DB="flat")
 CYRUS_SET_BACKEND("subscription", CONFIG_DB_SUBS, $DB)
 
 AC_ARG_WITH(tls-db,
-	[  --with-tls-db=DB           use DB (db3, skiplist) as a backend for the TLS cache (Default: db3_nosync) ],
+	[  --with-tls-db=DB        use DB (db3, skiplist) as a backend
+                          for the TLS cache (Default: db3_nosync) ],
 	DB="$withval", DB="db3_nosync")
 CYRUS_SET_BACKEND_BINARY("TLS cache", CONFIG_DB_TLS, $DB)
 
@@ -572,7 +577,7 @@ dnl
 dnl Test for OpenSSL
 dnl
 IMAP_PROGS=""
-AC_ARG_WITH(with-openssl,[  --with-openssl=PATH      use OpenSSL from PATH],
+AC_ARG_WITH(with-openssl,[  --with-openssl=PATH     use OpenSSL from PATH],
 	with_openssl="${withval}")
 
 case "$with_openssl" in
@@ -611,7 +616,7 @@ dnl Allow for setting EGD socket file on systems without /dev/*random.
 dnl
 AC_ARG_WITH(egd-socket,
       [  --with-egd-socket=FILE  Entropy Gathering Daemon socket pathname
-                           for systems without /dev/urandom],
+                          for systems without /dev/urandom],
               [ EGD_SOCKET="$withval" ]
       )
 if test -n "$EGD_SOCKET" ; then
@@ -810,7 +815,7 @@ AC_ARG_ENABLE(netscapehack,
 AC_CHECK_FUNC(dlopen,,AC_CHECK_LIB(dl, dlopen))
 CMU_SASL2_REQUIRED
 
-AC_ARG_WITH(perl,       [  --with-perl=PERL           use PERL for perl],
+AC_ARG_WITH(perl,       [  --with-perl=PERL        use PERL for perl],
 	with_perl="$withval", with_perl="perl5")
 
 if test "${with_perl}" = yes; then
