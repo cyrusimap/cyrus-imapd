@@ -24,13 +24,13 @@
 #include <sys/types.h>
 #include <limits.h>
 
-#if UINT_MAX == 4294967295UL
+#if UINT_MAX == 4294967295
 typedef unsigned int bit32;
 #else
-#if ULONG_MAX == 4294967295UL
+#if ULONG_MAX == 4294967295
 typedef unsigned long bit32;
 #else
-#if USHRT_MAX == 4294967295UL
+#if USHRT_MAX == 4294967295
 typedef unsigned short bit32;
 #else
 dont know what to use for bit32
