@@ -1,5 +1,5 @@
 /* util.h -- general utility functions
- * $Id: util.h,v 1.12 2001/08/12 18:22:14 ken3 Exp $
+ * $Id: util.h,v 1.13 2001/08/13 16:36:56 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -98,6 +98,6 @@ enum {
  *  directory.  Caller is responsible for skipping any prefix
  *  of the name.
  */
-extern int dir_hash_c(char *name);
+extern int dir_hash_c(const char *name);
 
 #endif /* INCLUDED_UTIL_H */

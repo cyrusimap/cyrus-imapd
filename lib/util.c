@@ -41,7 +41,7 @@
  * Author: Chris Newman
  * Start Date: 4/6/93
  */
-/* $Id: util.c,v 1.17 2001/08/12 18:22:13 ken3 Exp $
+/* $Id: util.c,v 1.18 2001/08/13 16:36:56 ken3 Exp $
  */
 
 #include <config.h>
@@ -235,7 +235,7 @@ keyvalue *kv_bsearch(const char* key, keyvalue* kv, int nelem,
  *  directory.  Caller is responsible for skipping any prefix
  *  of the name.
  */
-int dir_hash_c(char *name)
+int dir_hash_c(const char *name)
 {
     int c;
 #ifdef USE_DIR_FULL
