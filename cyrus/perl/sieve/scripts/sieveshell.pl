@@ -44,6 +44,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 use Cyrus::SIEVE::managesieve;
 use Getopt::Long;
 use strict;
+use File::Temp qw/ tempfile /;
 
 my $puthelp =        "put <filename>   - upload script to server\n";
 my $gethelp =        "get <name> [<filename>]\n" .
@@ -72,13 +73,12 @@ my $filehandle;
 my $interactive;
 
 if (! $ex eq "") {
-    my $tmpfile = "/tmp/sieveshell.tmp";
-    open (TMP,">$tmpfile") || die "Unable to open tmp file";
-    print TMP $ex;
-    close(TMP);
-    open (TMP,"<$tmpfile") || die "Unable to open tmp file";
-    unlink($tmpfile);
-    $filehandle = *TMP;
+    $filehandle = tempfile();
+
+    if (!$filehandle) { die "unable to open tmp file: $?"; }
+
+    print $filehandle $ex;
+    seek $filehandle, 0, 0; # rewind file
     $interactive = 0;
 } else {
     $filehandle = *STDIN;
