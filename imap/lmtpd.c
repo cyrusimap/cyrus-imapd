@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.69 2001/08/22 14:51:36 ken3 Exp $
+ * $Id: lmtpd.c,v 1.70 2001/08/31 18:42:48 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.69 2001/08/22 14:51:36 ken3 Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.70 2001/08/31 18:42:48 ken3 Exp $";*/
 
 #include <config.h>
 
@@ -137,7 +137,8 @@ int deliver_mailbox(struct protstream *msg,
 		    int acloverride);
 static int deliver(message_data_t *msgdata, char *authuser,
 		   struct auth_state *authstate);
-static int verify_user(const char *user);
+static int verify_user(const char *user, long quotacheck,
+		       struct auth_state *authstate);
 static char *generate_notify(message_data_t *m);
 
 void shut_down(int code);
@@ -1318,20 +1319,24 @@ void shut_down(int code)
     exit(code);
 }
 
-static int verify_user(const char *user)
+static int verify_user(const char *user, long quotacheck,
+		       struct auth_state *authstate)
 {
     char buf[MAX_MAILBOX_NAME];
     char *plus;
     int r;
     int sl = strlen(BB);
 
-    /* check to see if mailbox exists */
+    /* check to see if mailbox exists and we can append to it */
     if (!strncmp(user, BB, sl) && user[sl] == '+') {
 	/* special shared folder address */
 	strcpy(buf, user + sl + 1);
 	/* Translate any separators in user */
 	mboxname_hiersep_tointernal(&lmtpd_namespace, buf);
-	r = mboxlist_lookup(buf, NULL, NULL, NULL);
+	/* - must have posting privileges on shared folders
+	   - don't care about message size (1 msg over quota allowed) */
+	r = append_check(buf, MAILBOX_FORMAT_NORMAL, authstate,
+			 ACL_POST, quotacheck > 0 ? 0 : quotacheck);
     } else {
 	/* ordinary user */
 	if (strlen(user) > sizeof(buf)-10) {
@@ -1343,7 +1348,10 @@ static int verify_user(const char *user)
 	    if (plus) *plus = '\0';
 	    /* Translate any separators in user */
 	    mboxname_hiersep_tointernal(&lmtpd_namespace, buf+5);
-	    r = mboxlist_lookup(buf, NULL, NULL, NULL);
+	    /* - don't care about ACL on INBOX (always allow post)
+	       - don't care about message size (1 msg over quota allowed) */
+	    r = append_check(buf, MAILBOX_FORMAT_NORMAL, authstate,
+			     0, quotacheck > 0 ? 0 : quotacheck);
 	}
     }
 
