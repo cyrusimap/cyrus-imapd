@@ -39,17 +39,21 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.168 2003/10/22 20:05:14 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.164.2.1 2004/02/04 19:32:47 ken3 Exp $ */
+
+#undef PROXY_IDLE
 
 #include <config.h>
 
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 #include <signal.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
 #include <fcntl.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/stat.h>
@@ -74,7 +78,7 @@
 #include "util.h"
 #include "auth.h"
 #include "map.h"
-#include "global.h"
+#include "imapconf.h"
 #include "tls.h"
 #include "version.h"
 #include "charset.h"
@@ -91,9 +95,6 @@
 #include "pushstats.h"
 #include "telemetry.h"
 #include "backend.h"
-
-/* config.c stuff */
-const int config_need_data = 0;
 
 /* PROXY STUFF */
 /* we want a list of our outgoing connections here and which one we're
@@ -117,12 +118,8 @@ struct backend *backend_current = NULL;
 /* our cached connections */
 struct backend **backend_cached = NULL;
 
-/* are we doing virtdomains with multiple IPs? */
-static int disable_referrals;
-
 /* has the client issued an RLIST or RLSUB? */
 static int supports_referrals;
-
 
 /* -------- from imapd ---------- */
 
@@ -137,7 +134,7 @@ static sasl_ssf_t extprops_ssf = 0;
 /* per-user session state */
 struct protstream *proxyd_out = NULL;
 struct protstream *proxyd_in = NULL;
-static char proxyd_clienthost[NI_MAXHOST*2+1] = "[local]";
+static char proxyd_clienthost[250] = "[local]";
 static int proxyd_logfd = -1;
 time_t proxyd_logtime;
 char *proxyd_userid = NULL;
@@ -151,12 +148,13 @@ static SSL *tls_conn;
 
 /* the sasl proxy policy context */
 static struct proxy_context proxyd_proxyctx = {
-    1, 1, &proxyd_authstate, &proxyd_userisadmin, NULL
+    "imap", 0, 1, 1, &proxyd_authstate, &proxyd_userisadmin, NULL
 };
 
 /* current namespace */
 static struct namespace proxyd_namespace;
 
+void shutdown_file(int fd);
 void motd_file(int fd);
 void shut_down(int code);
 void fatal(const char *s, int code);
@@ -165,7 +163,7 @@ void proxyd_downserver(struct backend *s);
 
 void cmdloop(void);
 void cmd_login(char *tag, char *user);
-void cmd_authenticate(char *tag, char *authtype, char *resp);
+void cmd_authenticate(char *tag, char *authtype);
 void cmd_noop(char *tag, char *cmd);
 void cmd_capability(char *tag);
 void cmd_append(char *tag, char *name);
@@ -186,11 +184,10 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition);
 void cmd_find(char *tag, char *namespace, char *pattern);
 void cmd_list(char *tag, int subscribed, char *reference, char *pattern);
 void cmd_changesub(char *tag, char *namespace, char *name, int add);
-void cmd_getacl(const char *tag, const char *name);
+void cmd_getacl(char *tag, char *name, int oldform);
 void cmd_listrights(char *tag, char *name, char *identifier);
-void cmd_myrights(const char *tag, const char *name);
-void cmd_setacl(char *tag, const char *name,
-		const char *identifier, const char *rights);
+void cmd_myrights(char *tag, char *name, int oldform);
+void cmd_setacl(char *tag, char *name, char *identifier, char *rights);
 void cmd_getquota(char *tag, char *name);
 void cmd_getquotaroot(char *tag, char *name);
 void cmd_setquota(char *tag, char *quotaroot);
@@ -212,25 +209,31 @@ void id_appendparamlist(struct idparamlist **l, char *field, char *value);
 void id_freeparamlist(struct idparamlist *l);
 
 void cmd_idle(char* tag);
+char idle_nomailbox(char* tag, int idle_period, struct buf *arg);
+char idle_passthrough(char* tag, int idle_period, struct buf *arg);
+char idle_simulate(char* tag, int idle_period, struct buf *arg);
+
 void cmd_starttls(char *tag, int imaps);
 
 #ifdef ENABLE_X_NETSCAPE_HACK
 void cmd_netscape (char* tag);
 #endif
 
-void cmd_getannotation(char* tag, char *mboxpat);
-void cmd_setannotation(char* tag, char *mboxpat);
+#ifdef ENABLE_ANNOTATEMORE
+void cmd_getannotation(char* tag);
+void cmd_setannotation(char* tag);
 
 int getannotatefetchdata(char *tag,
 			 struct strlist **entries, struct strlist **attribs);
 int getannotatestoredata(char *tag, struct entryattlist **entryatts);
 
 void annotate_response(struct entryattlist *l);
-int annotate_fetch_proxy(const char *server, const char *mbox_pat,
-			 struct strlist *entry_pat,
-			 struct strlist *attribute_pat);
-int annotate_store_proxy(const char *server, const char *mbox_pat,
-			 struct entryattlist *entryatts);
+
+void appendstrlist(struct strlist **l, char *s);
+void freestrlist(struct strlist *l);
+void appendattvalue(struct attvaluelist **l, char *attrib, char *value);
+void freeattvalues(struct attvaluelist *l);
+#endif /* ENABLE_ANNOTATEMORE */
 
 void printstring (const char *s);
 void printastring (const char *s);
@@ -243,8 +246,7 @@ static int mlookup(const char *name, char **pathp,
 		   char **aclp, void *tid);
 
 extern int saslserver(sasl_conn_t *conn, const char *mech,
-		      const char *init_resp, const char *resp_prefix,
-		      const char *continuation,
+		      const char *init_resp, const char *continuation,
 		      struct protstream *pin, struct protstream *pout,
 		      int *sasl_result, char **success_data);
 
@@ -878,7 +880,7 @@ void proxyd_downserver(struct backend *s)
     }
 
     /* need to logout of server */
-    backend_disconnect(s, &protocol[PROTOCOL_IMAP]);
+    downserver(s);
 
     if(s == backend_inbox) backend_inbox = NULL;
     if(s == backend_current) backend_current = NULL;
@@ -888,7 +890,7 @@ void proxyd_downserver(struct backend *s)
     s->timeout = NULL;
 }
 
-struct prot_waitevent *backend_timeout(struct protstream *s __attribute__((unused)),
+struct prot_waitevent *backend_timeout(struct protstream *s,
 				       struct prot_waitevent *ev, void *rock)
 {
     struct backend *be = (struct backend *) rock;
@@ -907,39 +909,8 @@ struct prot_waitevent *backend_timeout(struct protstream *s __attribute__((unuse
     }
 }
 
-static void get_capability(struct backend *s)
-{
-    static int cap_tag_num = 0;
-    char tag[64];
-    char resp[1024];
-    int st = 0;
-
-    cap_tag_num++;
-    snprintf(tag, sizeof(tag), "C%d", cap_tag_num);
-
-    prot_printf(s->out, "%s Capability\r\n",tag);
-    do {
-	if (!prot_fgets(resp, sizeof(resp), s->in)) return;
-	if (!strncasecmp(resp, "* Capability ", 13)) {
-	    st++; /* increment state */
-	    if (strstr(resp, "IDLE")) s->capability |= IDLE;
-	    if (strstr(resp, "MUPDATE")) s->capability |= MUPDATE;
-	} else {
-	    /* line we weren't expecting. hmmm. */
-	}
-    } while (st == 0);
-    do {
-	if (!prot_fgets(resp, sizeof(resp), s->in)) return;
-	if (!strncmp(resp, tag, strlen(tag))) {
-	    st++; /* increment state */
-	} else {
-	    /* line we weren't expecting. hmmm. */
-	}
-    } while (st == 1);
-}
-
 /* return the connection to the server */
-struct backend *proxyd_findserver(const char *server)
+struct backend *proxyd_findserver(char *server)
 {
     int i = 0;
     struct backend *ret = NULL;
@@ -954,22 +925,10 @@ struct backend *proxyd_findserver(const char *server)
     }
 
     if (!ret || !ret->timeout) {
-	char authid[MAX_MAILBOX_NAME+1];
-
-	/* Translate any separators in userid for AUTH to backend */
-	strlcpy(authid, proxyd_userid, sizeof(authid));
-        mboxname_hiersep_toexternal(&proxyd_namespace, authid,
-				    config_virtdomains ?
-				    strcspn(authid, "@") : 0);
-
 	/* need to (re)establish connection to server or create one */
-	ret = backend_connect(ret, server, &protocol[PROTOCOL_IMAP],
-			      authid, NULL);
+	ret = findserver(ret, server, proxyd_userid);
 	if(!ret) return NULL;
 
-	/* find the capabilities of the server */
-	get_capability(ret);
-    
 	/* add the timeout */
 	ret->timeout = prot_addwaitevent(proxyd_in, time(NULL) + IDLE_TIMEOUT,
 					 backend_timeout, ret);
@@ -1092,7 +1051,7 @@ static void proxyd_refer(const char *tag,
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
     { SASL_CB_PROXY_POLICY, &mysasl_proxy_policy, (void*) &proxyd_proxyctx },
-    { SASL_CB_CANON_USER, &mysasl_canon_user, (void*) &disable_referrals },
+    { SASL_CB_CANON_USER, &mysasl_canon_user, NULL },   
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
@@ -1108,7 +1067,9 @@ extern void proc_cleanup(void);
 int service_init(int argc, char **argv, char **envp)
 {
     int opt;
+    int r;
 
+    config_changeident("proxyd");
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
     setproctitle_init(argc, argv, envp);
 
@@ -1117,8 +1078,24 @@ int service_init(int argc, char **argv, char **envp)
     signals_add_handlers();
     signal(SIGPIPE, SIG_IGN);
 
+    /* set the SASL allocation functions */
+    sasl_set_alloc((sasl_malloc_t *) &xmalloc, 
+		   (sasl_calloc_t *) &calloc, 
+		   (sasl_realloc_t *) &xrealloc, 
+		   (sasl_free_t *) &free);
+
     /* load the SASL plugins */
-    global_sasl_init(1, 1, mysasl_cb);
+    if ((r = sasl_server_init(mysasl_cb, "Cyrus")) != SASL_OK) {
+	syslog(LOG_ERR, "SASL failed initializing: sasl_server_init(): %s", 
+	       sasl_errstring(r, NULL, NULL));
+	return EC_SOFTWARE;
+    }
+
+    if ((r = sasl_client_init(NULL)) != SASL_OK) {
+	syslog(LOG_ERR, "SASL failed initializing: sasl_client_init(): %s", 
+	       sasl_errstring(r, NULL, NULL));
+	return EC_SOFTWARE;
+    }
 
     /* open the mboxlist, we'll need it for real work */
     mboxlist_init(0);
@@ -1128,7 +1105,7 @@ int service_init(int argc, char **argv, char **envp)
 	switch (opt) {
 	case 's': /* imaps (do starttls right away) */
 	    imaps = 1;
-	    if (!tls_enabled()) {
+	    if (!tls_enabled("imap")) {
 		syslog(LOG_ERR, "imaps: required OpenSSL options not present");
 		fatal("imaps: required OpenSSL options not present",
 		      EC_CONFIG);
@@ -1141,10 +1118,6 @@ int service_init(int argc, char **argv, char **envp)
 	    break;
 	}
     }
-
-    /* Initialize the annotatemore extention */
-    annotatemore_init(0, annotate_fetch_proxy, annotate_store_proxy);
-    annotatemore_open(NULL);
 
     return 0;
 }
@@ -1195,7 +1168,6 @@ static void proxyd_reset(void)
     
     /* Cleanup Globals */
     proxyd_cmdcnt = 0;
-    disable_referrals = 0;
     supports_referrals = 0;
     proxyd_userisadmin = 0;
     proxyd_starttls_done = 0;
@@ -1237,13 +1209,11 @@ static void proxyd_reset(void)
     saslprops.ssf = 0;
 }
 
-int service_main(int argc __attribute__((unused)),
-		 char **argv __attribute__((unused)),
-		 char **envp __attribute__((unused)))
+int service_main(int argc, char **argv, char **envp)
 {
     socklen_t salen;
-    char hbuf[NI_MAXHOST];
-    struct sockaddr_storage proxyd_localaddr, proxyd_remoteaddr;
+    struct hostent *hp;
+    struct sockaddr_in proxyd_localaddr, proxyd_remoteaddr;
     char localip[60], remoteip[60];
     int timeout;
     int proxyd_haveaddr = 0;
@@ -1262,27 +1232,25 @@ int service_main(int argc __attribute__((unused)),
     /* Find out name of client host */
     salen = sizeof(proxyd_remoteaddr);
     if (getpeername(0, (struct sockaddr *)&proxyd_remoteaddr, &salen) == 0 &&
-	(proxyd_remoteaddr.ss_family == AF_INET ||
-	 proxyd_remoteaddr.ss_family == AF_INET6)) {
-	if (getnameinfo((struct sockaddr *)&proxyd_remoteaddr, salen,
-			hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) == 0) {
-	    strncpy(proxyd_clienthost, hbuf, sizeof(hbuf));
-	    strlcat(proxyd_clienthost, " ", sizeof(proxyd_clienthost));
+	proxyd_remoteaddr.sin_family == AF_INET) {
+	hp = gethostbyaddr((char *)&proxyd_remoteaddr.sin_addr,
+			   sizeof(proxyd_remoteaddr.sin_addr), AF_INET);
+	if (hp != NULL) {
+	    strncpy(proxyd_clienthost,hp->h_name,sizeof(proxyd_clienthost)-30);
+	    proxyd_clienthost[sizeof(proxyd_clienthost)-30] = '\0';
 	} else {
 	    proxyd_clienthost[0] = '\0';
 	}
-	getnameinfo((struct sockaddr *)&proxyd_remoteaddr, salen, hbuf,
-		    sizeof(hbuf), NULL, 0, NI_NUMERICHOST | NI_WITHSCOPEID);
-	strlcat(proxyd_clienthost, "[", sizeof(proxyd_clienthost));
-	strlcat(proxyd_clienthost, hbuf, sizeof(proxyd_clienthost));
-	strlcat(proxyd_clienthost, "]", sizeof(proxyd_clienthost));
+	strcat(proxyd_clienthost, "[");
+	strcat(proxyd_clienthost, inet_ntoa(proxyd_remoteaddr.sin_addr));
+	strcat(proxyd_clienthost, "]");
 	salen = sizeof(proxyd_localaddr);
 	if (getsockname(0, (struct sockaddr *)&proxyd_localaddr,
 			&salen) == 0) {
 	    if(iptostring((struct sockaddr *)&proxyd_remoteaddr,
-			  salen, remoteip, 60) == 0
+			  sizeof(struct sockaddr_in), remoteip, 60) == 0
 	       && iptostring((struct sockaddr *)&proxyd_localaddr,
-			     salen, localip, 60) == 0) {
+			     sizeof(struct sockaddr_in), localip, 60) == 0) {
 		proxyd_haveaddr = 1;
 	    }
 	}
@@ -1312,7 +1280,7 @@ int service_main(int argc __attribute__((unused)),
     proc_register("proxyd", proxyd_clienthost, (char *)0, (char *)0);
 
     /* Set inactivity timer */
-    timeout = config_getint(IMAPOPT_TIMEOUT);
+    timeout = config_getint("timeout", 30);
     if (timeout < 30) timeout = 30;
     prot_settimeout(proxyd_in, timeout*60);
     prot_setflushonread(proxyd_in, proxyd_out);
@@ -1361,6 +1329,27 @@ void motd_file(int fd)
 }
 
 /*
+ * Found a shutdown file: Spit out an untagged BYE and shut down
+ */
+void shutdown_file(int fd)
+{
+    struct protstream *shutdown_in;
+    char buf[1024];
+    char *p;
+
+    shutdown_in = prot_new(fd, 0);
+
+    prot_fgets(buf, sizeof(buf), shutdown_in);
+    if ((p = strchr(buf, '\r')) != NULL) *p = 0;
+    if ((p = strchr(buf, '\n')) != NULL) *p = 0;
+
+    for (p = buf; *p == '['; p++); /* can't have [ be first char, sigh */
+    prot_printf(proxyd_out, "* BYE [ALERT] %s\r\n", p);
+
+    shut_down(0);
+}
+
+/*
  * Cleanly shut down and exit
  */
 void shut_down(int code) __attribute__((noreturn));
@@ -1380,9 +1369,6 @@ void shut_down(int code)
     mboxlist_close();
     mboxlist_done();
 
-    annotatemore_close();
-    annotatemore_done();
-
     if (proxyd_in) {
 	prot_NONBLOCK(proxyd_in);
 	prot_fill(proxyd_in);
@@ -1399,8 +1385,6 @@ void shut_down(int code)
 #ifdef HAVE_SSL
     tls_shutdown_serverengine();
 #endif
-
-    cyrus_done();
 
     exit(code);
 }
@@ -1431,9 +1415,9 @@ void cmdloop()
     char motdfilename[1024];
     char hostname[MAXHOSTNAMELEN+1];
     int c;
-    int usinguid, havepartition, havenamespace;
+    int usinguid, havepartition, havenamespace, oldform;
     static struct buf tag, cmd, arg1, arg2, arg3, arg4;
-    char *p, shut[1024];
+    char *p;
     const char *err;
 
     snprintf(shutdownfilename, sizeof(shutdownfilename), 
@@ -1451,10 +1435,9 @@ void cmdloop()
     }
 
     for (;;) {
-	if (! proxyd_userisadmin && shutdown_file(shut, sizeof(shut))) {
-	    for (p = shut; *p == '['; p++); /* can't have [ be first char */
-	    prot_printf(proxyd_out, "* BYE [ALERT] %s\r\n", p);
-	    shut_down(0);
+	if (! proxyd_userisadmin &&
+	    (fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
+	    shutdown_file(fd);
 	}
 
 	signals_poll();
@@ -1500,8 +1483,6 @@ void cmdloop()
     	switch (cmd.s[0]) {
 	case 'A':
 	    if (!strcmp(cmd.s, "Authenticate")) {
-		int haveinitresp = 0;
-
 		if (c != ' ') goto missingargs;
 		c = getword(proxyd_in, &arg1);
 		if (!imparse_isatom(arg1.s)) {
@@ -1511,11 +1492,6 @@ void cmdloop()
 		    eatline(proxyd_in, c);
 		    continue;
 		}
-		if (c == ' ') {
-		    haveinitresp = 1;
-		    c = getword(proxyd_in, &arg2);
-		    if (c == EOF) goto missingargs;
-		}
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
 		
@@ -1524,7 +1500,7 @@ void cmdloop()
 				"%s BAD Already authenticated\r\n", tag.s);
 		    continue;
 		}
-		cmd_authenticate(tag.s, arg1.s, haveinitresp ? arg2.s : NULL);
+		cmd_authenticate(tag.s, arg1.s);
 	    }
 	    else if (!proxyd_userid) goto nologin;
 	    else if (!strcmp(cmd.s, "Append")) {
@@ -1613,6 +1589,10 @@ void cmdloop()
 	    else if (!strcmp(cmd.s, "Deleteacl")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(proxyd_in, proxyd_out, &arg1);
+		if (!strcasecmp(arg1.s, "mailbox")) {
+		    if (c != ' ') goto missingargs;
+		    c = getastring(proxyd_in, proxyd_out, &arg1);
+		}
 		if (c != ' ') goto missingargs;
 		c = getastring(proxyd_in, proxyd_out, &arg2);
 		if (c == EOF) goto missingargs;
@@ -1667,22 +1647,26 @@ void cmdloop()
 
 	case 'G':
 	    if (!strcmp(cmd.s, "Getacl")) {
+		oldform = 0;
 		if (c != ' ') goto missingargs;
 		c = getastring(proxyd_in, proxyd_out, &arg1);
+		if (!strcasecmp(arg1.s, "mailbox")) {
+		    oldform = 1;
+		    if (c != ' ') goto missingargs;
+		    c = getastring(proxyd_in, proxyd_out, &arg1);
+		}
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
-		cmd_getacl(tag.s, arg1.s);
+		cmd_getacl(tag.s, arg1.s, oldform);
 	    }
+#ifdef ENABLE_ANNOTATEMORE
 	    else if (!strcmp(cmd.s, "Getannotation")) {
 		if (c != ' ') goto missingargs;
-		c = getastring(proxyd_in, proxyd_out, &arg1);
-		if (c != ' ') goto missingargs;
 
-		cmd_getannotation(tag.s, arg1.s);
-
-		snmp_increment(GETANNOTATION_COUNT, 1);
+		cmd_getannotation(tag.s);
 	    }
+#endif
 	    else if (!strcmp(cmd.s, "Getquota")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(proxyd_in, proxyd_out, &arg1);
@@ -1765,12 +1749,18 @@ void cmdloop()
 
 	case 'M':
 	    if (!strcmp(cmd.s, "Myrights")) {
+		oldform = 0;
 		if (c != ' ') goto missingargs;
 		c = getastring(proxyd_in, proxyd_out, &arg1);
+		if (!strcasecmp(arg1.s, "mailbox")) {
+		    oldform = 1;
+		    if (c != ' ') goto missingargs;
+		    c = getastring(proxyd_in, proxyd_out, &arg1);
+		}
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
-		cmd_myrights(tag.s, arg1.s);
+		cmd_myrights(tag.s, arg1.s, oldform);
 	    }
 	    else goto badcmd;
 	    break;
@@ -1833,7 +1823,7 @@ void cmdloop()
 		cmd_rename(tag.s, arg1.s, arg2.s, havepartition ? arg3.s : 0);
 	    }
 	    else if (!strcmp(cmd.s, "Rlist")) {
-		supports_referrals = !disable_referrals;
+		supports_referrals = 1;
 		c = getastring(proxyd_in, proxyd_out, &arg1);
 		if (c != ' ') goto missingargs;
 		c = getastring(proxyd_in, proxyd_out, &arg2);
@@ -1842,7 +1832,7 @@ void cmdloop()
 		cmd_list(tag.s, 0, arg1.s, arg2.s);
 	    }
 	    else if (!strcmp(cmd.s, "Rlsub")) {
-		supports_referrals = !disable_referrals;
+		supports_referrals = 1;
 		c = getastring(proxyd_in, proxyd_out, &arg1);
 		if (c != ' ') goto missingargs;
 		c = getastring(proxyd_in, proxyd_out, &arg2);
@@ -1870,7 +1860,7 @@ void cmdloop()
 	    
 	case 'S':
 	    if (!strcmp(cmd.s, "Starttls")) {
-		if (!tls_enabled()) {
+		if (!tls_enabled("imap")) {
 		    /* we don't support starttls */
 		    goto badcmd;
 		}
@@ -1947,6 +1937,10 @@ void cmdloop()
 	    else if (!strcmp(cmd.s, "Setacl")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(proxyd_in, proxyd_out, &arg1);
+		if (!strcasecmp(arg1.s, "mailbox")) {
+		    if (c != ' ') goto missingargs;
+		    c = getastring(proxyd_in, proxyd_out, &arg1);
+		}
 		if (c != ' ') goto missingargs;
 		c = getastring(proxyd_in, proxyd_out, &arg2);
 		if (c != ' ') goto missingargs;
@@ -1956,13 +1950,13 @@ void cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_setacl(tag.s, arg1.s, arg2.s, arg3.s);
 	    }
+#ifdef ENABLE_ANNOTATEMORE
 	    else if (!strcmp(cmd.s, "Setannotation")) {
 		if (c != ' ') goto missingargs;
-		c = getastring(proxyd_in, proxyd_out, &arg1);
-		if (c != ' ') goto missingargs;
 
-		cmd_setannotation(tag.s, arg1.s);
+		cmd_setannotation(tag.s);
 	    }
+#endif
 	    else if (!strcmp(cmd.s, "Setquota")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(proxyd_in, proxyd_out, &arg1);
@@ -2127,7 +2121,7 @@ void cmd_login(char *tag, char *user)
 	return;
     }
 
-    canon_user = canonify_userid(user, NULL, &disable_referrals);
+    canon_user = auth_canonifyid(user, 0);
 
     if (!canon_user) {
 	syslog(LOG_NOTICE, "badlogin: %s plaintext %s invalid user",
@@ -2139,7 +2133,7 @@ void cmd_login(char *tag, char *user)
 
     /* possibly disallow login */
     if ((proxyd_starttls_done == 0) &&
-	(config_getswitch(IMAPOPT_ALLOWPLAINTEXT) == 0) &&
+	(config_getswitch("allowplaintext", 1) == 0) &&
 	strcmp(canon_user, "anonymous") != 0) {
 	eatline(proxyd_in, ' ');
 	prot_printf(proxyd_out, "%s NO Login only available under a layer\r\n",
@@ -2163,7 +2157,7 @@ void cmd_login(char *tag, char *user)
     passwd = passwdbuf.s;
 
     if (!strcmp(canon_user, "anonymous")) {
-	if (config_getswitch(IMAPOPT_ALLOWANONYMOUSLOGIN)) {
+	if (config_getswitch("allowanonymouslogin", 0)) {
 	    passwd = beautify_string(passwd);
 	    if (strlen(passwd) > 500) passwd[500] = '\0';
 	    syslog(LOG_NOTICE, "login: %s anonymous %s",
@@ -2209,7 +2203,7 @@ void cmd_login(char *tag, char *user)
 	       canon_user, proxyd_starttls_done ? "+TLS" : "", 
 	       reply ? reply : "");
 
-	plaintextloginpause = config_getint(IMAPOPT_PLAINTEXTLOGINPAUSE);
+	plaintextloginpause = config_getint("plaintextloginpause", 0);
 	if (plaintextloginpause) {
 
 	    /* Apply penalty only if not under layer */
@@ -2218,9 +2212,10 @@ void cmd_login(char *tag, char *user)
 	}
     }
     
-    proxyd_authstate = auth_newstate(proxyd_userid);
 
-    proxyd_userisadmin = global_authisa(proxyd_authstate, IMAPOPT_ADMINS);
+    proxyd_authstate = auth_newstate(canon_user, (char *)0);
+
+    proxyd_userisadmin = authisa(proxyd_authstate, "imap", "admins");
 
     if (!reply) reply = "User logged in";
 
@@ -2235,11 +2230,6 @@ void cmd_login(char *tag, char *user)
 	fatal(error_message(r), EC_CONFIG);
     }
 
-    /* Translate any separators in userid */
-    mboxname_hiersep_tointernal(&proxyd_namespace, proxyd_userid,
-				config_virtdomains ?
-				strcspn(proxyd_userid, "@") : 0);
-
     freebuf(&passwdbuf);
     return;
 }
@@ -2247,7 +2237,7 @@ void cmd_login(char *tag, char *user)
 /*
  * Perform an AUTHENTICATE command
  */
-void cmd_authenticate(char *tag, char *authtype, char *resp)
+void cmd_authenticate(char *tag, char *authtype)
 {
     int sasl_result;
     const char *userid_buf;
@@ -2257,7 +2247,7 @@ void cmd_authenticate(char *tag, char *authtype, char *resp)
 
     int r;
 
-    r = saslserver(proxyd_saslconn, authtype, resp, "", "+ ",
+    r = saslserver(proxyd_saslconn, authtype, NULL, "+ ",
 		   proxyd_in, proxyd_out, &sasl_result, NULL);
 
     if (r) {
@@ -2353,11 +2343,6 @@ void cmd_authenticate(char *tag, char *authtype, char *resp)
 	syslog(LOG_ERR, error_message(r));
 	fatal(error_message(r), EC_CONFIG);
     }
-
-    /* Translate any separators in userid */
-    mboxname_hiersep_tointernal(&proxyd_namespace, proxyd_userid,
-				config_virtdomains ?
-				strcspn(proxyd_userid, "@") : 0);
 
     return;
 }
@@ -2525,7 +2510,7 @@ void cmd_id(char *tag)
 
     /* spit out our ID string.
        eventually this might be configurable. */
-    if (config_getswitch(IMAPOPT_IMAPIDRESPONSE)) {
+    if (config_getswitch("imapidresponse", 1)) {
 	id_response(proxyd_out);
 
 	/* add info about the backend */
@@ -2582,134 +2567,24 @@ void id_freeparamlist(struct idparamlist *l)
  */
 void cmd_idle(char *tag)
 {
+#ifdef PROXY_IDLE
     static int idle_period = -1;
+    int c;
     static struct buf arg;
-    struct protgroup *protin = protgroup_new(2);
-    struct protgroup *protout = NULL;
-    struct timeval timeout;
-    int c = EOF, n, done = 0, shutdown = 0;
-    char buf[2048], shut[1024];
 
     /* get polling period */
     if (idle_period == -1) {
-      idle_period = config_getint(IMAPOPT_IMAPIDLEPOLL);
-      if (idle_period < 1) idle_period = 0;
+      idle_period = config_getint("imapidlepoll", 60);
+      if (idle_period < 1) idle_period = 1;
     }
 
-    if (!idle_period) {
-	/* IDLE has been disabled */
-	prot_printf(proxyd_out, "%s BAD Unrecognized command\r\n", tag);
-	return;
+    if (!backend_current) {
+	c = idle_nomailbox(tag, idle_period, &arg);
+    } else if (CAPA(backend_current, IDLE)) {
+	c = idle_passthrough(tag, idle_period, &arg);
+    } else {
+	c = idle_simulate(tag, idle_period, &arg);
     }
-
-    /* Reset protin to all zeros (to preserve memory allocation) */
-    protgroup_reset(protin);
-    protgroup_insert(protin, proxyd_in);
-
-    if (backend_current && CAPA(backend_current, IDLE)) {
-	/* Start IDLE on backend */
-	prot_printf(backend_current->out, "%s IDLE\r\n", tag);
-	if (!prot_fgets(buf, sizeof(buf), backend_current->in)) {
-
-	    /* If we received nothing from the backend, fail */
-	    prot_printf(proxyd_out, "%s NO %s\r\n", tag, 
-			error_message(IMAP_SERVER_UNAVAILABLE));
-	    goto done;
-	}
-	if (buf[0] != '+') {
-
-	    /* If we received anything but a continuation response,
-	       spit out what we received and quit */
-	    prot_write(proxyd_out, buf, strlen(buf));
-	    goto done;
-	}
-
-	protgroup_insert(protin, backend_current->in);
-    }
-
-    /* Tell client we are idling and waiting for end of command */
-    prot_printf(proxyd_out, "+ go ahead\r\n");
-    prot_flush(proxyd_out);
-
-    while (!done) {
-	/* Clear protout if needed */
-	protgroup_free(protout);
-	protout = NULL;
-
-	timeout.tv_sec = idle_period;
-	timeout.tv_usec = 0;
-
-	n = prot_select(protin, PROT_NO_FD, &protout, NULL, &timeout);
-	if (n == -1) {
-	    syslog(LOG_ERR, "prot_select() failed in cmd_idle(): %m");
-	    fatal("prot_select() failed in cmd_idle()", EC_TEMPFAIL);
-	}
-	if (n && protout) {
-	    struct protstream *ptmp;
-
-	    for (; n; n--) {
-		ptmp = protgroup_getelement(protout, n-1);
-		if (ptmp == proxyd_in) {
-		    /* The client sent us something, we're done */
-		    done = 1;
-		}
-		else if (backend_current && ptmp == backend_current->in) {
-		    /* Get unsolicited untagged responses from the backend
-		       assumes that untagged responses are:
-		       a) short
-		       b) don't contain literals
-		    */
-		    prot_NONBLOCK(backend_current->in);
-		    while (prot_fgets(buf, sizeof(buf), backend_current->in)) {
-			prot_write(proxyd_out, buf, strlen(buf));
-			prot_flush(proxyd_out);
-		    }
-		    prot_BLOCK(backend_current->in);
-		}
-		else {
-		    /* XXX shouldn't get here !!! */
-		}
-	    }
-	}
-
-	/* Check for ALERTs */
-	if (!proxyd_userisadmin && shutdown_file(shut, sizeof(shut))) {
-	    shutdown = done = 1;
-	}
-
-	if (!done && backend_current && !CAPA(backend_current, IDLE)) {
-	    /* Simulate IDLE by polling the backend */
-	    char mytag[128];
-	
-	    proxyd_gentag(mytag, sizeof(mytag));
-	    prot_printf(backend_current->out, "%s Noop\r\n", mytag);
-	    pipe_until_tag(backend_current, mytag, 0);
-	    prot_flush(proxyd_out);
-	}
-    }
-
-    if (backend_current && CAPA(backend_current, IDLE)) {
-	/* Either the client timed out, or gave us a continuation.
-	   In either case we're done, so terminate IDLE on backend */
-	prot_printf(backend_current->out, "DONE\r\n");
-	pipe_until_tag(backend_current, tag, 0);
-    }
-
-    if (shutdown) {
-	char *p;
-
-	for (p = shut; *p == '['; p++); /* can't have [ be first char */
-	prot_printf(proxyd_out, "* BYE [ALERT] %s\r\n", p);
-	shut_down(0);
-    }
-
-    /* Get continuation data */
-    c = getword(proxyd_in, &arg);
-
-  done:
-    protgroup_free(protin);
-    protgroup_free(protout);
-
 
     if (c != EOF) {
 	if (!strcasecmp(arg.s, "Done") &&
@@ -2723,6 +2598,159 @@ void cmd_idle(char *tag)
 	    eatline(proxyd_in, c);
 	}
     }
+#else
+    prot_printf(proxyd_out, "%s NO idle disabled\r\n", tag);
+#endif
+}
+
+/* Check for alerts */ 
+struct prot_waitevent *idle_getalerts(struct protstream *s,
+				      struct prot_waitevent *ev, void *rock)
+{
+    int idle_period = *((int *) rock);
+    int fd;
+
+    if (! proxyd_userisadmin &&
+	(fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
+
+	/* if we're actually running IDLE on the be, terminate it */
+	if (backend_current && CAPA(backend_current, IDLE))
+	    prot_printf(backend_current->out, "DONE\r\n");
+
+	shutdown_file(fd);
+    }
+
+    ev->mark = time(NULL) + idle_period;
+    return ev;
+}
+
+/* Run IDLE in the authenticated state (no mailbox) */
+char idle_nomailbox(char *tag, int idle_period, struct buf *arg)
+{
+    struct prot_waitevent *idle_event;
+    int c;
+
+    /* Tell client we are idling and waiting for end of command */
+    prot_printf(proxyd_out, "+ go ahead\r\n");
+    prot_flush(proxyd_out);
+
+    /* Setup an event function to check for alerts */
+    idle_event = prot_addwaitevent(proxyd_in,
+				   time(NULL) + idle_period,
+				   idle_getalerts, &idle_period);
+
+    /* Get continuation data */
+    c = getword(proxyd_in, arg);
+
+    /* Remove the event function */
+    prot_removewaitevent(proxyd_in, idle_event);
+
+    return c;
+}
+
+/* Get unsolicited untagged responses from the backend
+   assumes that untagged responses are:
+   a) short
+   b) don't contain literals
+*/
+struct prot_waitevent *idle_getresp(struct protstream *s,
+				    struct prot_waitevent *ev, void *rock)
+{
+    char buf[2048];
+
+    prot_NONBLOCK(backend_current->in);
+    while (prot_fgets(buf, sizeof(buf), backend_current->in)) {
+	prot_write(proxyd_out, buf, strlen(buf));
+	prot_flush(proxyd_out);
+    }
+    prot_BLOCK(backend_current->in);
+
+    return idle_getalerts(s, ev, rock);
+}
+
+/* Run IDLE on the backend */
+char idle_passthrough(char *tag, int idle_period, struct buf *arg)
+{
+    struct prot_waitevent *idle_event;
+    int c;
+    char buf[2048];
+
+    /* Start IDLE on backend */
+    prot_printf(backend_current->out, "%s IDLE\r\n", tag);
+    if (!prot_fgets(buf, sizeof(buf), backend_current->in)) {
+
+	/* if we received nothing from the backend, fail */
+	prot_printf(proxyd_out, "%s NO %s\r\n", tag, 
+		    error_message(IMAP_SERVER_UNAVAILABLE));
+	return EOF;
+    }
+    if (buf[0] != '+') {
+
+	/* if we received anything but a continuation response,
+	   spit out what we received and quit */
+	prot_write(proxyd_out, buf, strlen(buf));
+	return EOF;
+    }
+
+    /* Tell client we are idling and waiting for end of command */
+    prot_printf(proxyd_out, "+ go ahead\r\n");
+    prot_flush(proxyd_out);
+
+    /* Setup an event function to get responses from the idling backend */
+    idle_event = prot_addwaitevent(proxyd_in,
+				   time(NULL) + idle_period,
+				   idle_getresp, &idle_period);
+
+    /* Get continuation data */
+    c = getword(proxyd_in, arg);
+
+    /* Remove the event function */
+    prot_removewaitevent(backend_current->in, idle_event);
+
+    /* Either the client timed out, or gave us a continuation.
+       In either case we're done, so terminate IDLE on backend */
+    prot_printf(backend_current->out, "DONE\r\n");
+    pipe_until_tag(backend_current, tag, 0);
+
+    return c;
+}
+
+/* Poll the backend for updates */
+static struct prot_waitevent *idle_poll(struct protstream *s,
+				 struct prot_waitevent *ev, void *rock)
+{
+    char mytag[128];
+	
+    proxyd_gentag(mytag, sizeof(mytag));
+    prot_printf(backend_current->out, "%s Noop\r\n", mytag);
+    pipe_until_tag(backend_current, mytag, 0);
+    prot_flush(proxyd_out);
+
+    return idle_getalerts(s, ev, rock);
+}
+
+/* Simulate IDLE by polling the backend */
+char idle_simulate(char *tag, int idle_period, struct buf *arg)
+{
+    struct prot_waitevent *idle_event;
+    int c;
+
+    /* Tell client we are idling and waiting for end of command */
+    prot_printf(proxyd_out, "+ go ahead\r\n");
+    prot_flush(proxyd_out);
+
+    /* Setup an event function to poll the backend for updates */
+    idle_event = prot_addwaitevent(proxyd_in,
+				   time(NULL) + idle_period,
+				   idle_poll, &idle_period);
+
+    /* Get continuation data */
+    c = getword(proxyd_in, arg);
+
+    /* Remove the event function */
+    prot_removewaitevent(proxyd_in, idle_event);
+
+    return c;
 }
 
 /*
@@ -2744,27 +2772,31 @@ void cmd_capability(char *tag)
     prot_printf(proxyd_out, "* CAPABILITY ");
     prot_printf(proxyd_out, CAPABILITY_STRING);
 
-    if (config_getint(IMAPOPT_IMAPIDLEPOLL) > 0) {
-	prot_printf(proxyd_out, " IDLE");
-    }
+#ifdef PROXY_IDLE
+    prot_printf(proxyd_out, " IDLE");
+#endif
 
-    if (tls_enabled() && !proxyd_starttls_done && !proxyd_authstate) {
+    if (tls_enabled("imap") && !proxyd_starttls_done && !proxyd_authstate) {
 	prot_printf(proxyd_out, " STARTTLS");
     }
     if (proxyd_authstate ||
-	(!proxyd_starttls_done && !config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
+	(!proxyd_starttls_done && !config_getswitch("allowplaintext", 1))) {
 	prot_printf(proxyd_out, " LOGINDISABLED");	
     }
 
     if (!proxyd_authstate &&
 	sasl_listmech(proxyd_saslconn, NULL, 
-		      "AUTH=", " AUTH=", " SASL-IR",
+		      "AUTH=", " AUTH=", "",
 		      &sasllist,
 		      NULL, &mechcount) == SASL_OK && mechcount > 0) {
 	prot_printf(proxyd_out, " %s", sasllist);      
     } else {
 	/* else don't show anything */
     }
+
+#ifdef ENABLE_ANNOTATEMORE
+    prot_printf(proxyd_out, " ANNOTATEMORE");
+#endif
 
 #ifdef ENABLE_X_NETSCAPE_HACK
     prot_printf(proxyd_out, " X-NETSCAPE");
@@ -2797,7 +2829,7 @@ void cmd_append(char *tag, char *name)
 	r = mlookup(mailboxname, &newserver, NULL, NULL);
     }
     if (!r && supports_referrals) { 
-	proxyd_refer(tag, newserver, name);
+	proxyd_refer(tag, newserver, mailboxname);
 	/* Eat the argument */
 	eatline(proxyd_in, prot_getc(proxyd_in));
 	return;
@@ -2854,7 +2886,7 @@ void cmd_select(char *tag, char *cmd, char *name)
 
     if (!r) r = mlookup(mailboxname, &newserver, NULL, NULL);
     if (!r && supports_referrals) { 
-	proxyd_refer(tag, newserver, name);
+	proxyd_refer(tag, newserver, mailboxname);
 	return;
     }
 
@@ -3489,7 +3521,17 @@ void cmd_create(char *tag, char *name, char *server)
     }
     if (!r) {
 	if (!CAPA(s, MUPDATE)) {
-	    /* reserve mailbox on MUPDATE */
+#if 0
+	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
+	    
+	    /* reserve mailbox on ACAP */
+	    acapmbox_new(&mboxdata, s->hostname, mailboxname);
+	    r = acapmbox_create(acaphandle, &mboxdata);
+	    if (r) {
+		syslog(LOG_ERR, "ACAP: unable to reserve %s: %s\n",
+		       name, error_message(r));
+	    }
+#endif
 	}
     }
 
@@ -3501,7 +3543,32 @@ void cmd_create(char *tag, char *name, char *server)
 	tag = "*";		/* can't send another tagged response */
 	
 	if (!CAPA(s, MUPDATE)) {
-	    /* do MUPDATE create operations */
+#if 0
+	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
+	    
+	    switch (res) {
+	    case PROXY_OK:
+		/* race condition here, but not much we can do about it */
+		mboxdata.acl = acl;
+
+		/* commit mailbox */
+		r = acapmbox_markactive(acaphandle, &mboxdata);
+		if (r) {
+		    syslog(LOG_ERR, "ACAP: unable to commit %s: %s\n",
+			   mailboxname, error_message(r));
+		}
+		break;
+		
+	    default:
+		/* abort mailbox */
+		r = acapmbox_delete(acaphandle, mailboxname);
+		if (r) {
+		    syslog(LOG_ERR, "ACAP: unable to unreserve %s: %s\n", 
+			   mailboxname, error_message(r));
+		}
+		break;
+	    }
+#endif
 	}
 	/* make sure we've seen the update */
 	if (ultraparanoid && res == PROXY_OK) kick_mupdate();
@@ -3525,7 +3592,7 @@ void cmd_delete(char *tag, char *name)
 
     if (!r) r = mlookup(mailboxname, &server, NULL, NULL);
     if (!r && supports_referrals) { 
-	proxyd_refer(tag, server, name);
+	proxyd_refer(tag, server, mailboxname);
 	referral_kick = 1;
 	return;
     }
@@ -3542,7 +3609,17 @@ void cmd_delete(char *tag, char *name)
 	tag = "*";		/* can't send another tagged response */
 
 	if (!CAPA(s, MUPDATE) && res == PROXY_OK) {
-	    /* do MUPDATE delete operations */
+#if 0
+	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
+	    
+	    /* delete mailbox from acap server */
+	    r = acapmbox_delete(acaphandle, mailboxname);
+	    if (r) {
+		syslog(LOG_ERR, 
+		       "ACAP: can't delete mailbox entry %s: %s",
+		       name, error_message(r));
+	    }
+#endif
 	}
 
 	/* make sure we've seen the update */
@@ -3573,7 +3650,7 @@ void cmd_reconstruct(char *tag, char *name)
 	r = mlookup(mailboxname, &server, NULL, NULL);
 
     if(!r) {
-	proxyd_refer(tag, server, name);
+	proxyd_refer(tag, server, mailboxname);
     } else {
 	prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
     }
@@ -3606,7 +3683,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	char *destpart;
 	
 	if(strcmp(oldname, newname)) {
-	    prot_printf(proxyd_out,
+	    prot_printf(s->out,
 			"%s NO Cross-server or cross-partition move w/rename not supported\r\n",
 			tag);
 	    return;
@@ -3618,7 +3695,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	if(destpart) {
 	    char newserver[MAX_MAILBOX_NAME+1];	    
 	    if(strlen(partition)>=sizeof(newserver)) {
-		prot_printf(proxyd_out,
+		prot_printf(s->out,
 			    "%s NO Partition name too long\r\n", tag);
 		return;
 	    }
@@ -3661,7 +3738,17 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 
     if (!r) {
 	if (!CAPA(s, MUPDATE)) {
-	    /* do MUPDATE create operations for new mailbox */
+#if 0
+	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
+	    
+	    /* reserve new mailbox */
+	    acapmbox_new(&mboxdata, s->hostname, newmailboxname);
+	    r = acapmbox_create(acaphandle, &mboxdata);
+ 	    if (r) {
+		syslog(LOG_ERR, "ACAP: unable to reserve %s: %s\n",
+		       newmailboxname, error_message(r));
+	    }
+#endif
 	}
 
 	prot_printf(s->out, "%s RENAME {%d+}\r\n%s {%d+}\r\n%s\r\n", 
@@ -3671,10 +3758,38 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	tag = "*";		/* can't send another tagged response */
 	
 	if (!CAPA(s, MUPDATE)) {
-	    /* Activate/abort new mailbox in MUPDATE*/
-	    /* delete old mailbox from MUPDATE */
-	}
+#if 0
+	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
+	    
+	    switch (res) {
+	    case PROXY_OK:
+		/* commit new mailbox */
+		mboxdata.acl = acl;
+		r = acapmbox_markactive(acaphandle, &mboxdata);
+		if (r) {
+		    syslog(LOG_ERR, "ACAP: unable to commit %s: %s\n",
+			   oldmailboxname, error_message(r));
+		}
 
+		/* delete old mailbox */
+		r = acapmbox_delete(acaphandle, oldmailboxname);
+		if (r) {
+		    syslog(LOG_ERR, "ACAP: unable to delete %s: %s\n", 
+			   oldmailboxname, error_message(r));
+		}
+		break;
+		
+	    default:
+		/* abort new mailbox */
+		r = acapmbox_delete(acaphandle, newmailboxname);
+		if (r) {
+		    syslog(LOG_ERR, "ACAP: unable to unreserve %s: %s\n", 
+			   newmailboxname, error_message(r));
+		}
+		break;
+	    }
+#endif
+	}
 	/* make sure we've seen the update */
 	if (res == PROXY_OK) kick_mupdate();
     }
@@ -3694,6 +3809,9 @@ void cmd_find(char *tag, char *namespace, char *pattern)
 	if (*p == '%') *p = '?';
     }
 
+    /* Translate any separators in pattern */
+    mboxname_hiersep_tointernal(&proxyd_namespace, pattern);
+
     if (!strcasecmp(namespace, "mailboxes")) {
 	if (!backend_inbox) {
 	    backend_inbox = proxyd_findinboxserver();
@@ -3708,11 +3826,6 @@ void cmd_find(char *tag, char *namespace, char *pattern)
 	    /* noop */
 	}
     } else if (!strcasecmp(namespace, "all.mailboxes")) {
-	/* Translate any separators in pattern */
-	mboxname_hiersep_tointernal(&proxyd_namespace, pattern,
-				    config_virtdomains ?
-				    strcspn(pattern, "@") : 0);
-
 	(*proxyd_namespace.mboxlist_findall)(&proxyd_namespace, pattern,
 					     proxyd_userisadmin, proxyd_userid,
 					     proxyd_authstate, mailboxdata,
@@ -3753,7 +3866,7 @@ void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
     /* Ignore the reference argument?
        (the behavior in 1.5.10 & older) */
     if (ignorereference == -1) {
-	ignorereference = config_getswitch(IMAPOPT_IGNOREREFERENCE);
+	ignorereference = config_getswitch("ignorereference", 0);
     }
 
     /* Reset state in mstringdata */
@@ -3805,9 +3918,7 @@ void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
 	}
 
 	/* Translate any separators in pattern */
-	mboxname_hiersep_tointernal(&proxyd_namespace, pattern,
- 				    config_virtdomains ?
- 				    strcspn(pattern, "@") : 0);
+	mboxname_hiersep_tointernal(&proxyd_namespace, pattern);
 
 	(*proxyd_namespace.mboxlist_findall)(&proxyd_namespace, pattern,
 					     proxyd_userisadmin, proxyd_userid,
@@ -3884,7 +3995,7 @@ void cmd_changesub(char *tag, char *namespace, char *name, int add)
 /*
  * Perform a GETACL command
  */
-void cmd_getacl(const char *tag, const char *name)
+void cmd_getacl(char *tag, char *name, int oldform)
 {
     char mailboxname[MAX_MAILBOX_NAME+1];
     int r, access;
@@ -3911,25 +4022,47 @@ void cmd_getacl(const char *tag, const char *name)
 	return;
     }
     
-    prot_printf(proxyd_out, "* ACL ");
-    printastring(name);
-    
-    while (acl) {
-	rights = strchr(acl, '\t');
-	if (!rights) break;
-	*rights++ = '\0';
-	
-	nextid = strchr(rights, '\t');
-	if (!nextid) break;
-	*nextid++ = '\0';
-	
-	prot_printf(proxyd_out, " ");
-	printastring(acl);
-	prot_printf(proxyd_out, " ");
-	printastring(rights);
-	acl = nextid;
+    if (oldform) {
+	while (acl) {
+	    rights = strchr(acl, '\t');
+	    if (!rights) break;
+	    *rights++ = '\0';
+
+	    nextid = strchr(rights, '\t');
+	    if (!nextid) break;
+	    *nextid++ = '\0';
+
+	    prot_printf(proxyd_out, "* ACL MAILBOX ");
+	    printastring(name);
+	    prot_printf(proxyd_out, " ");
+	    printastring(acl);
+	    prot_printf(proxyd_out, " ");
+	    printastring(rights);
+	    prot_printf(proxyd_out, "\r\n");
+	    acl = nextid;
+	}
     }
-    prot_printf(proxyd_out, "\r\n");
+    else {
+	prot_printf(proxyd_out, "* ACL ");
+	printastring(name);
+	
+	while (acl) {
+	    rights = strchr(acl, '\t');
+	    if (!rights) break;
+	    *rights++ = '\0';
+
+	    nextid = strchr(rights, '\t');
+	    if (!nextid) break;
+	    *nextid++ = '\0';
+
+	    prot_printf(proxyd_out, " ");
+	    printastring(acl);
+	    prot_printf(proxyd_out, " ");
+	    printastring(rights);
+	    acl = nextid;
+	}
+	prot_printf(proxyd_out, "\r\n");
+    }
     prot_printf(proxyd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
 }
@@ -3941,7 +4074,10 @@ void cmd_listrights(char *tag, char *name, char *identifier)
 {
     char mailboxname[MAX_MAILBOX_NAME+1];
     int r, rights;
+    char *canon_identifier;
+    int canonidlen = 0;
     char *acl;
+    char *rightsdesc;
 
     r = (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace, name,
 						proxyd_userid, mailboxname);
@@ -3960,56 +4096,21 @@ void cmd_listrights(char *tag, char *name, char *identifier)
     }
 
     if (!r) {
-	struct auth_state *authstate = auth_newstate(identifier);
-	char *canon_identifier;
-	int canonidlen = 0;
-	int implicit;
-	char rightsdesc[100], optional[33];
-
-	if (global_authisa(authstate, IMAPOPT_ADMINS))
-	    canon_identifier = identifier; /* don't canonify global admins */
-	else
-	    canon_identifier = canonify_userid(identifier, proxyd_userid, NULL);
-	auth_freestate(authstate);
-
+	canon_identifier = auth_canonifyid(identifier, 0);
 	if (canon_identifier) canonidlen = strlen(canon_identifier);
 
 	if (!canon_identifier) {
-	    implicit = 0;
+	    rightsdesc = "\"\"";
 	}
-	else if (mboxname_userownsmailbox(canon_identifier, mailboxname)) {
-	    /* identifier's personal mailbox */
-	    implicit = config_implicitrights;
-	}
-	else if (mboxname_isusermailbox(mailboxname, 1)) {
-	    /* anyone can post to an INBOX */
-	    implicit = ACL_POST;
-	}
-	else {
-	    implicit = 0;
-	}
-
-	/* calculate optional rights */
-	cyrus_acl_masktostr(implicit ^ (canon_identifier ? ACL_FULL : 0),
-			    optional);
-
-	/* build the rights string */
-	if (implicit) {
-	    cyrus_acl_masktostr(implicit, rightsdesc);
+	else if (!strncmp(mailboxname, "user.", 5) &&
+		 !strchr(canon_identifier, '.') &&
+		 !strncmp(mailboxname+5, canon_identifier, canonidlen) &&
+		 (mailboxname[5+canonidlen] == '\0' ||
+		  mailboxname[5+canonidlen] == '.')) {
+	    rightsdesc = "lca r s w i p d 0 1 2 3 4 5 6 7 8 9";
 	}
 	else {
-	    strcpy(rightsdesc, "\"\"");
-	}
-
-	if (*optional) {
-	    int i, n = strlen(optional);
-	    char *p = rightsdesc + strlen(rightsdesc);
-
-	    for (i = 0; i < n; i++) {
-		*p++ = ' ';
-		*p++ = optional[i];
-	    }
-	    *p = '\0';
+	    rightsdesc = "\"\" l r s w i p c d a 0 1 2 3 4 5 6 7 8 9";
 	}
 
 	prot_printf(proxyd_out, "* LISTRIGHTS ");
@@ -4029,7 +4130,7 @@ void cmd_listrights(char *tag, char *name, char *identifier)
 /*
  * Perform a MYRIGHTS command
  */
-void cmd_myrights(const char *tag, const char *name)
+void cmd_myrights(char *tag, char *name, int oldform)
 {
     char mailboxname[MAX_MAILBOX_NAME+1];
     int r, rights = 0;
@@ -4047,11 +4148,9 @@ void cmd_myrights(const char *tag, const char *name)
 	rights = cyrus_acl_myrights(proxyd_authstate, acl);
 
 	/* Add in implicit rights */
-	if (proxyd_userisadmin) {
+	if (proxyd_userisadmin ||
+	    mboxname_userownsmailbox(proxyd_userid, mailboxname)) {
 	    rights |= ACL_LOOKUP|ACL_ADMIN;
-	}
-	else if (mboxname_userownsmailbox(proxyd_userid, mailboxname)) {
-	    rights |= config_implicitrights;
 	}
 
 	if (!rights) {
@@ -4064,6 +4163,7 @@ void cmd_myrights(const char *tag, const char *name)
     }
     
     prot_printf(proxyd_out, "* MYRIGHTS ");
+    if (oldform) prot_printf(proxyd_out, "MAILBOX ");
     printastring(name);
     prot_printf(proxyd_out, " ");
     printastring(cyrus_acl_masktostr(rights, str));
@@ -4074,8 +4174,7 @@ void cmd_myrights(const char *tag, const char *name)
 /*
  * Perform a SETACL command
  */
-void cmd_setacl(char *tag, const char *name,
-		const char *identifier, const char *rights)
+void cmd_setacl(char *tag, char *name, char *identifier, char *rights)
 {
     int r, res;
     char mailboxname[MAX_MAILBOX_NAME+1];
@@ -4112,7 +4211,38 @@ void cmd_setacl(char *tag, const char *name,
 	res = pipe_including_tag(s, tag, 0);
 	tag = "*";		/* can't send another tagged response */
 	if (!CAPA(s, MUPDATE) && res == PROXY_OK) {
-	    /* setup new ACL in MUPDATE */
+#if 0
+	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
+	    int mode;
+	    
+	    /* calculate new ACL; race conditions here */
+	    if (rights) {
+		mode = ACL_MODE_SET;
+		if (*rights == '+') {
+		    rights++;
+		    mode = ACL_MODE_ADD;
+		} else if (*rights == '-') {
+		    rights++;
+		    mode = ACL_MODE_REMOVE;
+		}
+		
+		if (cyrus_acl_set(&acl, identifier, mode, cyrus_acl_strtomask(rights),
+			    NULL, proxyd_userid)) {
+		    r = IMAP_INVALID_IDENTIFIER;
+		}
+	    } else {
+		if (cyrus_acl_remove(&acl, identifier, NULL, proxyd_userid)) {
+		    r = IMAP_INVALID_IDENTIFIER;
+		}
+	    }
+	    
+	    /* change the ACAP server */
+	    r = acapmbox_setproperty_acl(acaphandle, mailboxname, acl);
+	    if (r) {
+		syslog(LOG_ERR, "ACAP: unable to change ACL on %s: %s\n", 
+		       mailboxname, error_message(r));
+	    }
+#endif
 	}
 	/* make sure we've seen the update */
 	if (ultraparanoid && res == PROXY_OK) kick_mupdate();
@@ -4125,8 +4255,7 @@ void cmd_setacl(char *tag, const char *name,
  * Callback for (get|set)quota, to ensure that all of the
  * submailboxes are on the same server.
  */
-static int quota_cb(char *name, int matchlen __attribute__((unused)),
-		    int maycreate __attribute__((unused)), void *rock) 
+static int quota_cb(char *name, int matchlen, int maycreate, void *rock) 
 {
     int r;
     char *this_server;
@@ -4176,7 +4305,7 @@ void cmd_getquota(char *tag, char *name)
 
     if (!r) {
 	/* Do the referral */
-	proxyd_refer(tag, server_rock, name);
+	proxyd_refer(tag, server_rock, mailboxname);
 	free(server_rock);
     } else {
 	if(server_rock) free(server_rock);
@@ -4290,7 +4419,7 @@ void cmd_setquota(char *tag, char *quotaroot)
 
     if (!r) {
 	/* Do the referral */
-	proxyd_refer(tag, server_rock, quotaroot);
+	proxyd_refer(tag, server_rock, mailboxname);
 	free(server_rock);
     } else {
 	if(server_rock) free(server_rock);
@@ -4423,8 +4552,8 @@ void cmd_status(char *tag, char *name)
 
     if (!r) r = mlookup(mailboxname, &server, NULL, NULL);
     if (!r && supports_referrals
-	&& config_getswitch(IMAPOPT_PROXYD_ALLOW_STATUS_REFERRAL)) { 
-	proxyd_refer(tag, server, name);
+	&& config_getswitch("proxyd_allow_status_referral",0)) { 
+	proxyd_refer(tag, server, mailboxname);
 	/* Eat the argument */
 	eatline(proxyd_in, prot_getc(proxyd_in));
 	return;
@@ -4468,7 +4597,8 @@ cmd_netscape(tag)
     const char *url;
     /* so tempting, and yet ... */
     /* url = "http://random.yahoo.com/ryl/"; */
-    url = config_getstring(IMAPOPT_NETSCAPEURL);
+    url = config_getstring("netscapeurl",
+			   "http://andrew2.andrew.cmu.edu/cyrus/imapd/netscape-admin.html");
 
     /* I only know of three things to reply with: */
     prot_printf(proxyd_out,
@@ -4488,8 +4618,11 @@ cmd_netscape(tag)
  * order to ensure the namespace response is correct on a server with
  * no shared namespace.
  */
-static int namespacedata(char *name, int matchlen __attribute__((unused)),
-			 int maycreate __attribute__((unused)), void *rock)
+static int namespacedata(name, matchlen, maycreate, rock)
+    char* name;
+    int matchlen;
+    int maycreate;
+    void* rock;
 {
     int* sawone = (int*) rock;
 
@@ -4500,7 +4633,7 @@ static int namespacedata(char *name, int matchlen __attribute__((unused)),
     if (!(strncmp(name, "INBOX.", 6))) {
 	/* The user has a "personal" namespace. */
 	sawone[NAMESPACE_INBOX] = 1;
-    } else if (mboxname_isusermailbox(name, 0)) {
+    } else if (!(strncmp(name, "user.", 5))) {
 	/* The user can see the "other users" namespace. */
 	sawone[NAMESPACE_USER] = 1;
     } else {
@@ -4612,9 +4745,9 @@ void printastring(const char *s)
  * Issue a MAILBOX untagged response
  */
 static int mailboxdata(char *name, 
-		       int matchlen __attribute__((unused)), 
-		       int maycreate __attribute__((unused)), 
-		       void* rock __attribute__((unused)))
+		       int matchlen, 
+		       int maycreate, 
+		       void* rock)
 {
     char mboxname[MAX_MAILBOX_PATH+1];
 
@@ -4673,7 +4806,7 @@ int maycreate;
 
     /* Suppress any output of a partial match */
     if (name[matchlen] && strncmp(lastname, name, matchlen) == 0
-	&& lastname[matchlen] == '\0') {
+	&& (lastname[matchlen] == '\0' || lastname[matchlen] == '.')) {
 	return;
     }
 	
@@ -4711,13 +4844,13 @@ int maycreate;
 /*
  * Issue a LIST untagged response
  */
-static int listdata(char *name, int matchlen, int maycreate,
-		    void *rock __attribute__((unused)))
+static int listdata(char *name, int matchlen, int maycreate, void *rock)
 {
     mstringdata("LIST", name, matchlen, maycreate);
     return 0;
 }
 
+#ifdef ENABLE_ANNOTATEMORE
 /*
  * Parse annotate fetch data.
  *
@@ -4955,16 +5088,18 @@ void annotate_response(struct entryattlist *l)
  *
  * The command has been parsed up to the entries
  */    
-void cmd_getannotation(char *tag, char *mboxpat)
+void cmd_getannotation(char *tag)
 {
     int c, r = 0;
     struct strlist *entries = NULL, *attribs = NULL;
+    struct entryattlist *entryatts = NULL;
 
     c = getannotatefetchdata(tag, &entries, &attribs);
     if (c == EOF) {
 	eatline(proxyd_in, c);
 	return;
     }
+
 
     /* check for CRLF */
     if (c == '\r') c = prot_getc(proxyd_in);
@@ -4976,20 +5111,28 @@ void cmd_getannotation(char *tag, char *mboxpat)
 	goto freeargs;
     }
 
-    r = annotatemore_fetch(mboxpat, entries, attribs, &proxyd_namespace,
+    r = annotatemore_fetch(entries, attribs, &proxyd_namespace,
 			   proxyd_userisadmin, proxyd_userid,
-			   proxyd_authstate, proxyd_out);
+			   proxyd_authstate, &entryatts);
 
     if (r) {
 	prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
-    } else {
+    }
+    else if (entryatts) {
+	prot_printf(proxyd_out, "* ANNOTATION ");
+	annotate_response(entryatts);
+	prot_printf(proxyd_out, "\r\n");
 	prot_printf(proxyd_out, "%s OK %s\r\n",
 		    tag, error_message(IMAP_OK_COMPLETED));
     }
-    
+    else
+	prot_printf(proxyd_out, "%s NO %s\r\n", tag,
+		    error_message(IMAP_NO_NOSUCHANNOTATION));
+
   freeargs:
     if (entries) freestrlist(entries);
     if (attribs) freestrlist(attribs);
+    if (entryatts) freeentryatts(entryatts);
 
     return;
 }
@@ -4999,9 +5142,9 @@ void cmd_getannotation(char *tag, char *mboxpat)
  *
  * The command has been parsed up to the entry-att list
  */    
-void cmd_setannotation(char *tag, char *mboxpat __attribute__((unused)))
+void cmd_setannotation(char *tag)
 {
-    int c, r = 0;
+    int c;
     struct entryattlist *entryatts = NULL;
 
     c = getannotatestoredata(tag, &entryatts);
@@ -5020,92 +5163,79 @@ void cmd_setannotation(char *tag, char *mboxpat __attribute__((unused)))
 	goto freeargs;
     }
 
-    r = annotatemore_store(mboxpat,
-			   entryatts, &proxyd_namespace, proxyd_userisadmin,
-			   proxyd_userid, proxyd_authstate);
-
-    if (r) {
-	prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
-    } else {
-	prot_printf(proxyd_out, "%s OK %s\r\n", tag,
-		    error_message(IMAP_OK_COMPLETED));
-    }
+    prot_printf(proxyd_out, "%s NO setting annotations not supported\r\n", tag);
 
   freeargs:
     if (entryatts) freeentryatts(entryatts);
     return;
 }
 
-/* Proxy GETANNOTATION commands to backend */
-int annotate_fetch_proxy(const char *server, const char *mbox_pat,
-			 struct strlist *entry_pat,
-			 struct strlist *attribute_pat) 
+/*
+ * Append 's' to the strlist 'l'.
+ */
+void
+appendstrlist(l, s)
+struct strlist **l;
+char *s;
 {
-    struct backend *be;
-    struct strlist *l;
-    char mytag[128];
-    
-    assert(server && mbox_pat && entry_pat && attribute_pat);
-    
-    be = proxyd_findserver(server);    
-    if(!be) return IMAP_SERVER_UNAVAILABLE;
+    struct strlist **tail = l;
 
-    /* Send command to remote */
-    proxyd_gentag(mytag, sizeof(mytag));
-    prot_printf(be->out, "%s GETANNOTATION \"%s\" (", mytag, mbox_pat);
-    for(l=entry_pat;l;l=l->next) {
-	prot_printf(be->out, "\"%s\"%s", l->s, l->next ? " " : "");
-    }
-    prot_printf(be->out, ") (");
-    for(l=attribute_pat;l;l=l->next) {
-	prot_printf(be->out, "\"%s\"%s", l->s, l->next ? " " : "");
-    }
-    prot_printf(be->out, ")\r\n");
-    prot_flush(be->out);
+    while (*tail) tail = &(*tail)->next;
 
-    /* Pipe the results.  Note that backend-current may also pipe us other
-       messages. */
-    pipe_until_tag(be, mytag, 0);
-
-    return 0;
+    *tail = (struct strlist *)xmalloc(sizeof(struct strlist));
+    (*tail)->s = xstrdup(s);
+    (*tail)->p = 0;
+    (*tail)->next = 0;
 }
 
-/* Proxy SETANNOTATION commands to backend */
-int annotate_store_proxy(const char *server, const char *mbox_pat,
-			 struct entryattlist *entryatts)
+/*
+ * Free the strlist 'l'
+ */
+void
+freestrlist(l)
+struct strlist *l;
 {
-    struct backend *be;
-    struct entryattlist *e;
-    struct attvaluelist *av;
-    char mytag[128];
-    
-    assert(server && mbox_pat && entryatts);
-    
-    be = proxyd_findserver(server);    
-    if(!be) return IMAP_SERVER_UNAVAILABLE;
+    struct strlist *n;
 
-    /* Send command to remote */
-    proxyd_gentag(mytag, sizeof(mytag));
-    prot_printf(be->out, "%s SETANNOTATION \"%s\" (", mytag, mbox_pat);
-    for (e = entryatts; e; e = e->next) {
-	prot_printf(be->out, "\"%s\" (", e->entry);
-
-	for (av = e->attvalues; av; av = av->next) {
-	    prot_printf(be->out, "\"%s\" \"%s\"%s", av->attrib, av->value,
-			av->next ? " " : "");
-	}
-	prot_printf(be->out, ")");
-	if (e->next) prot_printf(be->out, " ");
+    while (l) {
+	n = l->next;
+	free(l->s);
+	if (l->p) charset_freepat(l->p);
+	free((char *)l);
+	l = n;
     }
-    prot_printf(be->out, ")\r\n");
-    prot_flush(be->out);
-
-    /* Pipe the results.  Note that backend-current may also pipe us other
-       messages. */
-    pipe_until_tag(be, mytag, 0);
-
-    return 0;
 }
+
+/*
+ * Append the 'attrib'/'value' pair to the attvaluelist 'l'.
+ */
+void appendattvalue(struct attvaluelist **l, char *attrib, char *value)
+{
+    struct attvaluelist **tail = l;
+
+    while (*tail) tail = &(*tail)->next;
+
+    *tail = (struct attvaluelist *)xmalloc(sizeof(struct attvaluelist));
+    (*tail)->attrib = xstrdup(attrib);
+    (*tail)->value = xstrdup(value);
+    (*tail)->next = 0;
+}
+
+/*
+ * Free the attvaluelist 'l'
+ */
+void freeattvalues(struct attvaluelist *l)
+{
+    struct attvaluelist *n;
+
+    while (l) {
+	n = l->next;
+	free(l->attrib);
+	free(l->value);
+	l = n;
+    }
+}
+#endif /* ENABLE_ANNOTATEMORE */
 
 /* Reset the given sasl_conn_t to a sane state */
 static int reset_saslconn(sasl_conn_t **conn) 
