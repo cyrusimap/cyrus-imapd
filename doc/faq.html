@@ -1,71 +1,68 @@
-<HTML><HEAD>
-    <TITLE>Cyrus IMAP Server FAQ</TITLE>
-    <!-- $Id: faq.html,v 1.15 2001/09/10 16:40:18 ken3 Exp $ -->
-  </HEAD><BODY>
-      <H1>                Cyrus IMAP Server FAQ</H1>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta name="generator" content="HTML Tidy, see www.w3.org" />
+<title>Cyrus IMAP Server FAQ</title>
+<!-- $Id: faq.html,v 1.16 2001/11/18 19:38:44 leg Exp $ -->
+</head>
+<body>
+<h1>Cyrus IMAP Server FAQ</h1>
 
 <ul>
-<li><b>Using PAM</b> Under Linux when using PAM and shadow passwords,
-/etc/shadow needs to be readable by the Cyrus user. 
+<li><b>Using PAM</b> Under Linux when using PAM and shadow
+passwords, /etc/shadow needs to be readable by the Cyrus user.</li>
 
-<li><b>Using NFS</b> We don't recommend it. If you want to do it, it
-may possibly work but you may also lose your email or have corrupted
-<tt>cyrus.*</tt> files. You can look at the mailing list archives for
-more information.
+<li><b>Using NFS</b> We don't recommend it. If you want to do it,
+it may possibly work but you may also lose your email or have
+corrupted <tt>cyrus.*</tt> files. You can look at the mailing list
+archives for more information.</li>
 
-<li><b>Virtual hosting</b> - We don't support it and don't plan to support it
-unless we get a set of complete patches.  If you want it, you'll need
-to do it yourself or use a commercial product. Check the list archives
-for more information.
+<li><b>Virtual hosting</b> - We don't support it and don't plan to
+support it unless we get a set of complete patches. If you want it,
+you'll need to do it yourself or use a commercial product. Check
+the list archives for more information.</li>
 
-<li><b>dots in userids</b> - you can have a '.' in your username IF,
-AND ONLY IF, you use the <a href=altnamespace.html#unixhiersep>UNIX
-hierarchy convention</a>.
+<li><b>dots in userids</b> - you can have a '.' in your username
+IF, AND ONLY IF, you use the <a
+href="altnamespace.html#unixhiersep">UNIX hierarchy
+convention</a>.</li>
 
-<li><b>renaming users</b> - nope, not supported.
+<li><b>renaming users</b> - nope, not supported.</li>
 
-<li><b>plus addressing</b>
+<li><b>plus addressing</b></li>
 
-<li><b>Performance/Capacity/Scaling</b> - There is no good answer for
-this. It depends on your hardware, your operating system, and how your
-users use the system.  In general, an <tt>imapd</tt> process takes up
-anywhere from 256 Kbytes of memory to 512 Kbytes when it is first
-fired up. CPU has not been a big deal, but it may become more
-important as the imap sessions are encrypted and now that searching
-may be more frequent. Disk I/O is probably the most important and
-having a hardware RAID subsystem with an amount of write-back cache
-would be a good thing.
-
-<p>Finally, if you are talking about less than 100 interactive users
-it is likely that any relatively modern hardware can support it. If
-you are talking about having more than 1000 interactive users, you
-should know how to predict your utilization, go overboard on hardware,
-be willing to suffer growing pains, or be able to hire someone that
-can help. 
-
-<p>There are a number of good performance tuning articles out for
-Solaris by Adrian Cockcroft. Go to your favorite search engine and
-look for his name.
+<li><b>Performance/Capacity/Scaling</b> - See <a
+href="install-perf.html">the performance guide</a>.</li>
 </ul>
 
 <h2>Troubleshooting</h2>
 
-<dl compact>
+<dl compact="compact">
 <dt><b>Q:</b> I'm getting syslog'd messages from the master process
-saying processes are "signaled to death by 10".  What's up?</dt>
+saying processes are "signaled to death by 10". What's up?</dt>
+
 <dd>
-<p><b>A:</b> If you're using Berkeley DB 3.0.55, try installing some
-<a href="http://www.sleepycat.com/update/3.0.55/patch.3.0.55.html">patches
+<p><b>A:</b> If you're using Berkeley DB 3.0.55, try installing
+some <a
+href="http://www.sleepycat.com/update/3.0.55/patch.3.0.55.html">patches
 to Berkeley DB</a> available from <a
-href="http://www.sleepycat.com/update/3.0.55/patch.3.0.55.html">
-http://www.sleepycat.com/update/3.0.55/patch.3.0.55.html</a>.</dd>
+href="http://www.sleepycat.com/update/3.0.55/patch.3.0.55.html">http://www.sleepycat.com/update/3.0.55/patch.3.0.55.html</a>.</p>
+</dd>
 
 <dt><b>Q:</b> I've used <tt>saslpasswd</tt> to create CRAM-MD5
-secrets, but imapd doesn't say <tt>AUTH=CRAM-MD5</tt>. Why?
-<dd>
-<p><b>A:</b> Make sure <tt>/etc/sasldb</tt> is readable by the Cyrus user.
+secrets, but imapd doesn't say <tt>AUTH=CRAM-MD5</tt>. Why?</dt>
 
-<dt><b>Q:</b> I'm getting messages like:
+<dd>
+<p><b>A:</b> Make sure <tt>/etc/sasldb</tt> is readable by the
+Cyrus user.</p>
+</dd>
+
+<dt><b>Q:</b> I'm getting messages about "duplicate_prune". What's
+wrong?</dt>
+
+<dd><b>A:</b>These messages look like 
+
 <pre>
 Jan 14 13:46:24 grant ctl_deliver[9060]: duplicate_prune: opening
 /var/imap/deliverdb/deliver-x.db: No such file or directory
@@ -74,60 +71,71 @@ Jan 14 13:46:24 grant ctl_deliver[9060]: duplicate_prune: opening
 Jan 14 13:46:24 grant ctl_deliver[9060]: duplicate_prune: opening
   /var/imap/deliverdb/deliver-z.db: No such file or directory
 </pre>
-in my <tt>imapd.log</tt> file.  What's wrong?
-<dd>
-<p><b>A:</b> These messages are normal; one file is maintained for
-each user beginning with "x", "y", "z", etc.  If you're first starting
-or you have no users beginning with these letters, these messages are
-completely normal and can be ignored.
 
-<dt><b>Q:</b> I'm getting messages like:
-<pre>
-Jul  3 16:51:36 acadia imapd: could not getenv(CYRUS_SERVICE); exiting
-</pre>
-in my <tt>imapd.log</tt> file.  What's wrong?
-<dd>
-<p><b>A:</b> Remove all <tt>imap</tt>, <tt>pop</tt>, <tt>lmtp</tt> and
-<tt>sieve</tt> lines from <tt>[x]inetd.conf</tt> and restart
-<tt>[x]inetd</tt>.
+<p>These messages are normal; one file is maintained for each user
+beginning with "x", "y", "z", etc. If you're first starting or you
+have no users beginning with these letters, these messages are
+completely normal and can be ignored.</p>
+</dd>
 
-<dt><b>Q:</b> How do I use different SSL/TLS certificates for
-imap and pop?
-<dd>
-<p><b>A:</b> Specify the different certs using the appropriate options
-in <tt>imapd.conf<//t>.  Read <tt>imapd.conf(5)</tt> for details.
+<dt><b>Q:</b> I'm getting a message about "<tt>imapd: could not
+getenv(CYRUS_SERVICE); exiting</tt>" in my <tt>imapd.log</tt>.
+What's wrong?</dt>
 
-<dt><b>Q:</b> My KPOP client is complaining about TLS keys.  What
-should I do?
 <dd>
-<p><b>A:</b> Disable TLS for the kpop service.  Either set
-<tt>tls_pop3_cert_file</tt> to <b>disabled</b> in <tt>imapd.conf</tt>
-(which will also disable SSL/TLS for pop3), or use a separate config
-file for kpop.  For example, change the kpop service in
-<tt>cyrus.conf</tt> to something like:
+<p><b>A:</b> Remove all <tt>imap</tt>, <tt>pop</tt>, <tt>lmtp</tt>
+and <tt>sieve</tt> lines from <tt>[x]inetd.conf</tt> and restart
+<tt>[x]inetd</tt>.</p>
+</dd>
+
+<dt><b>Q:</b> How do I use different SSL/TLS certificates for imap
+and pop?</dt>
+
+<dd>
+<p><b>A:</b> Specify the different certs using the appropriate
+options in <tt>imapd.conf</tt>. Read <tt>imapd.conf(5)</tt> for
+details.</p>
+</dd>
+
+<dt><b>Q:</b> My KPOP client is complaining about TLS keys. What
+should I do?</dt>
+
+<dd>
+<p><b>A:</b> Disable TLS for the kpop service. Either set
+<tt>tls_pop3_cert_file</tt> to <b>disabled</b> in
+<tt>imapd.conf</tt> (which will also disable SSL/TLS for pop3), or
+use a separate config file for kpop. For example, change the kpop
+service in <tt>cyrus.conf</tt> to something like:</p>
+
 <pre>
 kpop    cmd="pop3d -k -C /etc/kpopd.conf" listen="kpop"
 </pre>
+
 then copy <tt>/etc/imapd.conf</tt> to <tt>/etc/kpopd.conf</tt> and
-remove the <tt>tls_*</tt> options.
+remove the <tt>tls_*</tt> options.</dd>
 
 <dt><b>Q:</b> Eudora 5.x can't connect using STARTTLS ("SSL
-Neogotiation Failed").  What should I do?
+Neogotiation Failed"). What should I do?</dt>
+
 <dd>
 <p><b>A:</b> First, complain to QUALCOMM because their STARTTLS
-implementation is broken.  Eudora doesn't support TLSv1 (per RFC2246)
-and Cyrus requires it.  If you really need this before it is fixed in
-Eudora, remove or comment out the following lines in tls.c:
+implementation is broken. Eudora doesn't support TLSv1 (per
+RFC2246) and Cyrus requires it. If you really need this before it
+is fixed in Eudora, remove or comment out the following lines in
+tls.c:</p>
+
 <pre>
     if (tlsonly) {
-	off |= SSL_OP_NO_SSLv2;
-	off |= SSL_OP_NO_SSLv3;
+        off |= SSL_OP_NO_SSLv2;
+        off |= SSL_OP_NO_SSLv3;
     }
 </pre>
+</dd>
 </dl>
 
-<P><HR>
-last modified: $Date: 2001/09/10 16:40:18 $
-<br>
-<A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
-</BODY></HTML>
+<hr />
+last modified: $Date: 2001/11/18 19:38:44 $ <br />
+<a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
+</body>
+</html>
+
