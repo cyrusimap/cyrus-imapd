@@ -91,7 +91,7 @@ imap_err.h imap_err.o: imap_err.et
 	$(CC) $(CFLAGS) -c imap_err.c
 
 clean:
-	rm -f *.o *.a parsey.c parsey.h parsel.c imap_err.c imap_err.h deliver imapd
+	rm -f *.o *.a Makefile.bak parsey.c parsey.h parsel.c imap_err.c imap_err.h deliver imapd
 
 depend: parsel.c parsey.c
 	makedepend $(CFLAGS) *.c
