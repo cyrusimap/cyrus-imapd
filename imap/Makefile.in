@@ -36,13 +36,11 @@ CYRUS_GROUP=@cyrus_group@
 
 DEFS = @DEFS@
 CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@ 
-LIBS = @LIBS@
+LIBS = @LIBS@ 
 DEPLIBS = ../et/libcom_err.a ../lib/libcyrus.a @DEPLIBS@
 
-CFLAGS = @CMULOCAL_CFLAGS@ @CFLAGS@
+CFLAGS = @CFLAGS@
 LDFLAGS = @LDFLAGS@
-
-CMULOCAL_LIBS = @CMULOCAL_LIBS@
 
 SHELL = /bin/sh
 
@@ -77,8 +75,8 @@ install:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
 
 collectnews: collectnews.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o collectnews collectnews.o \
-		$(CMULOCAL_OBJS) libimap.a $(DEPLIBS) $(LIBS)
+	$(CC) $(LDFLAGS) -o collectnews collectnews.o libimap.a \
+		$(DEPLIBS) $(LIBS)
 
 syncnews: syncnews.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o syncnews syncnews.o libimap.a \
