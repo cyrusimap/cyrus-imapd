@@ -8,11 +8,11 @@ Please send all comments/questions/bugs to cyrus-bugs@andrew.cmu.edu.
 This archive contains the scripts necessary for collecting data from
 CMU cyrus server with UCD SNMP support.  It contains:
 
-script/cyrus.pl - script for retreiving data from the server and
+script/cyrus.pl - script for retrieving data from the server and
 		  dumping it into an rrdtool database
 script/cyrusrc  - configuration options for rrdtool database
 script/run      - a shell script to automatically run cyrus.pl every
-                  4 minutes.  Due to rrdtool excentricities, a cron
+                  4 minutes.  Due to rrdtool eccentricities, a cron
                   job that runs every 5 minutes is not sufficient.
 
 cgi-bin/cyrus_master.pl	   - a cgi script that determines what rrdtool
