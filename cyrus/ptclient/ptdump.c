@@ -40,13 +40,14 @@
  */
 #include <config.h>
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 
 #include "auth_krb_pts.h"
 #include "cyrusdb.h"
 #include "imapconf.h"
 
-static char rcsid[] = "$Id: ptdump.c,v 1.5.16.2 2002/11/15 21:47:05 rjs3 Exp $";
+static char rcsid[] = "$Id: ptdump.c,v 1.5.16.3 2002/12/11 17:24:14 rjs3 Exp $";
 
 int config_need_data = 0;
 
