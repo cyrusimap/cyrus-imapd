@@ -34,6 +34,8 @@ Changes to the Cyrus IMAP Server Since Version 1.5.19
         static libraries are availible. If you use this, you do so at your
         own risk, and if it fails, we will disavow all knowledge of you and
         your team. Good luck, Jim. 
+      * Add optional third argument to imtest for it to take input from a
+        file. This is a gross hack. 
 
 Changes to the Cyrus IMAP Server Since Version 1.5.14
 

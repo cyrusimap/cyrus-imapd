@@ -31,8 +31,10 @@
         itself from the basic HP C) must be built on the target system. 
 
         The author further notes that the memory mapping support in HP-UX
-        is lacking, as of 9.0.5. It is recommended that large-scale sites
-        consider using some other platform for IMAP servers. 
+        is lacking on 9.0 versions of HP-UX and 10.20 as well; it appears
+        this is related to the hardware's use of inverse page tables. It is
+        recommended that large-scale sites consider using some other
+        platform for IMAP servers. 
 
     The following are notes on specific Unix features: 
 
