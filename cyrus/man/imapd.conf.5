@@ -72,6 +72,10 @@ in minutes.  The minimum value is 30, the default.
 .IP "\fBpoptimeout:\fR 10" 5
 Set the length of the POP server's inactivity autologout timer,
 in minutes.  The minimum value is 10, the default.
+.IP "\fBpopminpoll:\fR 0" 5
+Set the minimum amount of time the server forces users to wait between
+successive POP logins,
+in minutes.  The default is 0.
 .IP "\fBadmins:\fR <none>" 5
 The list of userids with administrative rights.  Separate each userid
 with a space. We recommend that administrator userids be separate from
@@ -95,6 +99,10 @@ it is positive, otherwise the user has unlimited quota.
 .IP "\fBlogtimestamps:\fR no" 5
 Include notations in the protocol telemetry logs indicating the number of
 seconds since the last command or response.
+.IP "\fBplaintextloginpause:\fR 0" 5
+Number of seconds to pause after a successful plaintext login.
+For systems that support strong authentication, this permits users to
+perceive a cost of using plaintext passwords.
 .IP "\fBsrvtab:\fR /etc/srvtab" 5
 The pathname of \fIsrvtab\fR file containing the server's private 
 key.  This option is only used when the server is compiled with
