@@ -62,6 +62,7 @@ static time_t *flagreport;	/* Array for each msgno of last_updated when
 static char *seenflag;		/* Array for each msgno, nonzero if \Seen */
 static int flagalloced = -1;	/* Allocated size of above two arrays */
 static int keepingseen;		/* Nonzero if /Seen is meaningful */
+static unsigned allseen;	/* Last UID if all msgs /Seen last checkpoint */
 struct seen *seendb;		/* Seen state database object */
 static char *seenuids;		/* Sequence of UID's from last seen checkpoint */
 
@@ -124,6 +125,7 @@ index_newmailbox(mailbox)
 struct mailbox *mailbox;
 {
     keepingseen = (mailbox->myrights & ACL_SEEN);
+    allseen = 0;
     recentuid = 0;
     index_listflags(mailbox);
     imapd_exists = -1;
@@ -269,10 +271,12 @@ int checkseen;
 
     /* Check Flags */
     if (checkseen) index_checkseen(mailbox, 0, usinguid, oldexists);
-    if (oldexists == -1 && imapd_exists) {
-	for (i = 1; i <= imapd_exists && seenflag[i]; i++);
-	if (i <= imapd_exists) prot_printf(imapd_out, "* OK [UNSEEN %d] \r\n", i);
+    for (i = 1; i <= imapd_exists && seenflag[i]; i++);
+    if (i == imapd_exists) allseen = mailbox->last_uid;
+    if (oldexists == -1 && imapd_exists && i <= imapd_exists) {
+	prot_printf(imapd_out, "* OK [UNSEEN %d] \r\n", i);
     }
+
     for (msgno = 1; msgno <= oldexists; msgno++) {
 	if (flagreport[msgno] && flagreport[msgno] < LAST_UPDATED(msgno)) {
 	    for (i = 0; i < MAX_USER_FLAGS/32; i++) {
@@ -309,7 +313,7 @@ int oldexists;
     bit32 user_flags[MAX_USER_FLAGS/32];
     char *saveseenuids, *save;
     int savealloced;
-    int start, inrange, usecomma;
+    int start, newallseen, inrange, usecomma;
 
     if (!keepingseen || !seendb) return;
     if (imapd_exists == 0) {
@@ -398,6 +402,7 @@ int oldexists;
     /* Build the seenuids string to save to the database */
     start = 1;
     inrange = 1;
+    newallseen = mailbox->last_uid;
     usecomma = 0;
     savealloced = SAVEGROW;
     save = saveseenuids = xmalloc(savealloced);
@@ -405,6 +410,7 @@ int oldexists;
     for (msgno = 1; msgno <= imapd_exists; msgno++) {
 	uid = UID(msgno);
 	if (seenflag[msgno] != inrange) {
+	    newallseen = 0;
 	    if (inrange) {
 		if (start == uid-1) {
 		    if (usecomma++) *save++ = ',';
@@ -531,6 +537,11 @@ int oldexists;
 	free(saveseenuids);
 	seenuids = newseenuids;
 	return;
+    }
+
+    if (newallseen) drop_seen(mailbox->name, imapd_userid, mailbox->last_uid);
+    else if (allseen == mailbox->last_uid) {
+	drop_seen(mailbox->name, imapd_userid, 0);
     }
     
     free(newseenuids);
