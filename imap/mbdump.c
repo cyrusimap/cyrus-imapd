@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.16 2002/05/14 16:18:40 rjs3 Exp $
+ * $Id: mbdump.c,v 1.17 2002/05/23 21:12:38 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -492,7 +492,7 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
 	mboxlist_unsetquota(mbname);
     } else if(imparse_isnumber(data.s)) {
 	/* Set a Quota */ 
-	mboxlist_setquota(mbname, atoi(data.s));
+	mboxlist_setquota(mbname, atoi(data.s), 0);
     } else {
 	/* Huh? */
 	freebuf(&data);

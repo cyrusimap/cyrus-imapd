@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.192 2002/05/23 19:52:11 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.193 2002/05/23 21:12:39 rjs3 Exp $
  */
 
 #include <config.h>
@@ -1959,11 +1959,12 @@ int mboxlist_findall_alt(struct namespace *namespace,
 /*
  * Set the quota on or create a quota root
  */
-int mboxlist_setquota(const char *root, int newquota)
+int mboxlist_setquota(const char *root, int newquota, int force)
 {
     char quota_path[MAX_MAILBOX_PATH];
     char pattern[MAX_MAILBOX_PATH];
     struct quota quota;
+    int have_mailbox = 1;
     int r, t;
 
     if (!root[0] || root[0] == '.' || strchr(root, '/')
@@ -1995,10 +1996,16 @@ int mboxlist_setquota(const char *root, int newquota)
     /* look for a top-level mailbox in the proposed quotaroot */
     r = mboxlist_detail(quota.root, &t, NULL, NULL, NULL, NULL);
     if (r) {
-	return r;
+	/* are we going to force the create anyway? */
+	if(!force) return r;
+	else {
+	    have_mailbox = 0;
+	    t = 0;
+	}
     }
-    /* Can't set quota on a remote mailbox */
-    if (t & (MBTYPE_REMOTE | MBTYPE_MOVING)) {
+
+    if(t & (MBTYPE_REMOTE | MBTYPE_MOVING)) {
+	/* Can't set quota on a remote mailbox */
 	return IMAP_MAILBOX_NOTSUPPORTED;
     }
 
@@ -2016,7 +2023,8 @@ int mboxlist_setquota(const char *root, int newquota)
     strcat(pattern, ".*");
     
     /* top level mailbox */
-    mboxlist_changequota(quota.root, 0, 0, &quota);
+    if(have_mailbox)
+	mboxlist_changequota(quota.root, 0, 0, &quota);
     /* submailboxes - we're using internal names here */
     mboxlist_findall(NULL, pattern, 1, 0, 0, mboxlist_changequota, &quota);
     
