@@ -1506,7 +1506,7 @@ int newquota;
     quota.root = quota_path + strlen(quota_path);
     strcpy(quota.root, root);
 
-    if (quota.fd = open(quota_path, O_RDWR, 0)) {
+    if ((quota.fd = open(quota_path, O_RDWR, 0)) != -1) {
 	/* Just lock and change it */
 	r = mailbox_lock_quota(&quota);
 
