@@ -25,6 +25,7 @@
 
 typedef unsigned bit32;
 
+#define MAX_MAILBOX_NAME 490
 #define MAX_MAILBOX_PATH 4096
 
 #define MAX_USER_FLAGS (16*8)
