@@ -72,6 +72,7 @@ char *mailbox_cache_header_name[] = {
 /*    "in-reply-to", in ENVELOPE */
     "priority",
     "references",
+    "resent-from",
 };
 int mailbox_num_cache_header =
   sizeof(mailbox_cache_header_name)/sizeof(char *);
@@ -420,6 +421,10 @@ struct mailbox *mailbox;
 
     mailbox->pop3_last_login = ntohl(*((bit32 *)(buf+OFFSET_POP3_LAST_LOGIN)));
     mailbox->uidvalidity = ntohl(*((bit32 *)(buf+OFFSET_UIDVALIDITY)));
+
+    if (!reconstructmode && (mailbox->minor_version < MAILBOX_MINOR_VERSION)) {
+	return IMAP_MAILBOX_BADFORMAT;
+    }
 
     return 0;
 }
@@ -1080,7 +1085,7 @@ char *deciderock;
 	    goto fail;
 	}
 	
-	/* XXX Sanity check */
+	/* Sanity check */
 	if (*((bit32 *)(buf+OFFSET_UID)) == 0) {
 	    syslog(LOG_ERR, "IOERROR: %s zero index record %u/%u",
 		   mailbox->name, msgno, mailbox->exists);
@@ -1150,7 +1155,6 @@ char *deciderock;
 	goto fail;
     }
     /* Fix up exists */
-/*XXX use mailbox->exists - numdeleted*/
     newexists = ntohl(*((bit32 *)(buf+OFFSET_EXISTS)))-numdeleted;
     *((bit32 *)(buf+OFFSET_EXISTS)) = htonl(newexists);
     /* Fix up quota_mailbox_used */
