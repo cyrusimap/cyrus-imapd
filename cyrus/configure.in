@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.232.4.33 2003/01/27 18:15:53 ken3 Exp $
+dnl $Id: configure.in,v 1.232.4.34 2003/01/28 01:54:32 ken3 Exp $
 dnl
 
 
@@ -104,8 +104,19 @@ fi
 CMU_ADD_LIBPATH("/usr/local/lib")
 
 AC_CHECK_HEADERS(unistd.h sys/select.h sys/param.h)
-AC_REPLACE_FUNCS(memmove strcasecmp ftruncate strerror getaddrinfo getnameinfo)
+AC_REPLACE_FUNCS(memmove strcasecmp ftruncate strerror)
 AC_HEADER_DIRENT
+
+dnl check for IPv6 functions (fall back to sasl's if we don't have them)
+cyrus_cv_getaddrinfo=yes
+IPv6_CHECK_FUNC(getaddrinfo, [IPv6_CHECK_FUNC(gai_strerror,[
+	AC_DEFINE(HAVE_GETADDRINFO)
+	cyrus_cv_getaddrinfo=no])])
+
+cyrus_cv_getnameinfo=yes
+IPv6_CHECK_FUNC(getnameinfo,
+	AC_DEFINE(HAVE_GETNAMEINFO),
+	cyrus_cv_getnameinfo=no)
 
 dnl this is to check for time things
 AC_CHECK_HEADERS(sys/time.h)

@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.35.4.8 2003/01/08 22:18:12 rjs3 Exp $ */
+/* $Id: acconfig.h,v 1.35.4.9 2003/01/28 01:54:32 ken3 Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -155,6 +155,10 @@
 /* Facility for syslog */
 #undef SYSLOG_FACILITY
 
+/* IPv6 */
+#undef HAVE_GETADDRINFO
+#undef HAVE_GETNAMEINFO
+
 @BOTTOM@
 
 /* time.h */
@@ -215,9 +219,12 @@ typedef int rlim_t;
 #ifndef HAVE_GETADDRINFO
 #define	getaddrinfo	sasl_getaddrinfo
 #define	freeaddrinfo	sasl_freeaddrinfo
-#define	getnameinfo	sasl_getnameinfo
 #define	gai_strerror	sasl_gai_strerror
 #include "gai.h"
+#endif
+
+#ifndef HAVE_GETNAMEINFO
+#define	getnameinfo	sasl_getnameinfo
 #endif
 
 #ifndef	NI_WITHSCOPEID
