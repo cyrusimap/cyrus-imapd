@@ -516,7 +516,8 @@ int purge_me(char *name, time_t when)
 	fatal("unable to CLOSE mailbox", EC_TEMPFAIL);
     }
 
-    spew(0, "%s exists %d deleted %d", name, current_mbox_exists, uidlist.size);
+    spew(1, "%s exists %d deleted %d", 
+	 name, current_mbox_exists, uidlist.size);
 
     return 0;
 }
