@@ -929,10 +929,12 @@ int (*proc)();
     char namebuf[MAX_MAILBOX_NAME+1];
     int rights;
     int r;
+    char *inboxcase;
 
     mboxlist_reopen();
 
     g = glob_init(pattern, GLOB_HIERARCHY|GLOB_INBOXCASE);
+    inboxcase = glob_inboxcase(g);
 
     /* Build usermboxname */
     if (userid && !strchr(userid, '.') &&
@@ -950,7 +952,7 @@ int (*proc)();
 	if (GLOB_TEST(g, "INBOX") != -1) {
 	    (void) bsearch_mem(usermboxname, 1, list_base, list_size, 0, &len);
 	    if (len) {
-		r = (*proc)("INBOX", 5, 1);
+		r = (*proc)(inboxcase, 5, 1);
 		if (r) {
 		    glob_free(&g);
 		    return r;
@@ -1018,11 +1020,11 @@ int (*proc)();
 		namebuf[namelen] = '\0';
 
 		if (inboxoffset) {
-		    namebuf[inboxoffset] = 'I';
-		    namebuf[inboxoffset+1] = 'N';
-		    namebuf[inboxoffset+2] = 'B';
-		    namebuf[inboxoffset+3] = 'O';
-		    namebuf[inboxoffset+4] = 'X';
+		    namebuf[inboxoffset] = inboxcase[0];
+		    namebuf[inboxoffset+1] = inboxcase[1];
+		    namebuf[inboxoffset+2] = inboxcase[2];
+		    namebuf[inboxoffset+3] = inboxcase[3];
+		    namebuf[inboxoffset+4] = inboxcase[4];
 		}
 
 		matchlen = glob_test(g, namebuf+inboxoffset,
@@ -1132,6 +1134,7 @@ int (*proc)();
     unsigned long namelen;
     long matchlen, minmatch;
     char *acl;
+    char *inboxcase;
 
     if (r = mboxlist_opensubs(userid, 0, &subsfd, &subs_base, &subs_size,
 			      &subsfname, (char **) 0)) {
@@ -1141,6 +1144,7 @@ int (*proc)();
     mboxlist_reopen();
 
     g = glob_init(pattern, GLOB_HIERARCHY|GLOB_INBOXCASE);
+    inboxcase = glob_inboxcase(g);
 
     /* Build usermboxname */
     if (userid && !strchr(userid, '.') &&
@@ -1158,7 +1162,7 @@ int (*proc)();
 	if (GLOB_TEST(g, "INBOX") != -1) {
 	    (void) bsearch_mem(usermboxname, 1, subs_base, subs_size, 0, &len);
 	    if (len) {
-		r = (*proc)("INBOX", 5, 1);
+		r = (*proc)(inboxcase, 5, 1);
 		if (r) {
 		    mboxlist_closesubs(subsfd, subs_base, subs_size);
 		    glob_free(&g);
@@ -1170,7 +1174,7 @@ int (*proc)();
 		 GLOB_TEST(g, usermboxname) != -1) {
 	    (void) bsearch_mem(usermboxname, 1, subs_base, subs_size, 0, &len);
 	    if (len) {
-		r = (*proc)("INBOX", 5, 1);
+		r = (*proc)(inboxcase, 5, 1);
 		if (r) {
 		    mboxlist_closesubs(subsfd, subs_base, subs_size);
 		    glob_free(&g);
@@ -1229,11 +1233,11 @@ int (*proc)();
 		strcpy(namematchbuf, namebuf);
 
 		if (inboxoffset) {
-		    namematchbuf[inboxoffset] = 'I';
-		    namematchbuf[inboxoffset+1] = 'N';
-		    namematchbuf[inboxoffset+2] = 'B';
-		    namematchbuf[inboxoffset+3] = 'O';
-		    namematchbuf[inboxoffset+4] = 'X';
+		    namematchbuf[inboxoffset] = inboxcase[0];
+		    namematchbuf[inboxoffset+1] = inboxcase[1];
+		    namematchbuf[inboxoffset+2] = inboxcase[2];
+		    namematchbuf[inboxoffset+3] = inboxcase[3];
+		    namematchbuf[inboxoffset+4] = inboxcase[4];
 		}
 
 		matchlen = glob_test(g, namematchbuf+inboxoffset,
@@ -1658,6 +1662,21 @@ mboxlist_unlock()
     lock_unlock(listfd);
     list_locked = 0;
     return 0;
+}
+
+/*
+ * Retrieve internal information, for reconstructing mailboxes file
+ */
+mboxlist_getinternalstuff(listfnamep, newlistfnamep, basep, sizep)
+char **listfnamep;
+char **newlistfnamep;
+char **basep;
+unsigned long *sizep;
+{
+    *listfnamep = listfname;
+    *newlistfnamep = newlistfname;
+    *basep = list_base;
+    *sizep = list_size;
 }
 
 /*
