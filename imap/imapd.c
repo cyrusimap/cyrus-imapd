@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.208 2000/02/16 03:12:00 leg Exp $ */
+/* $Id: imapd.c,v 1.209 2000/02/17 02:48:56 leg Exp $ */
 
 #include <config.h>
 
@@ -109,49 +109,49 @@ static char *monthname[] = {
     "jul", "aug", "sep", "oct", "nov", "dec"
 };
 
-void shutdown_file P((int fd));
-void motd_file P((int fd));
-void shut_down P((int code));
-void fatal P((const char *s, int code));
+void shutdown_file(int fd);
+void motd_file(int fd);
+void shut_down(int code);
+void fatal(const char *s, int code);
 
-void cmdloop P((void));
-void cmd_login P((char *tag, char *user, char *passwd));
-void cmd_authenticate P((char *tag, char *authtype));
-void cmd_noop P((char *tag, char *cmd));
-void cmd_capability P((char *tag));
-void cmd_append P((char *tag, char *name));
-void cmd_select P((char *tag, char *cmd, char *name));
-void cmd_close P((char *tag));
-void cmd_fetch P((char *tag, char *sequence, int usinguid));
-void cmd_partial P((char *tag, char *msgno, char *data,
-		    char *start, char *count));
-void cmd_store P((char *tag, char *sequence, char *operation, int usinguid));
-void cmd_search P((char *tag, int usinguid));
-void cmd_copy P((char *tag, char *sequence, char *name, int usinguid));
-void cmd_expunge P((char *tag, char *sequence));
-void cmd_create P((char *tag, char *name, char *partition));
-void cmd_delete P((char *tag, char *name));
-void cmd_rename P((char *tag, char *oldname, char *newname, char *partition));
-void cmd_find P((char *tag, char *namespace, char *pattern));
-void cmd_list P((char *tag, int subscribed, char *reference, char *pattern));
-void cmd_changesub P((char *tag, char *namespace, char *name, int add));
-void cmd_getacl P((char *tag, char *name, int oldform));
-void cmd_listrights P((char *tag, char *name, char *identifier));
-void cmd_myrights P((char *tag, char *name, int oldform));
-void cmd_setacl P((char *tag, char *name, char *identifier, char *rights));
-void cmd_getquota P((char *tag, char *name));
-void cmd_getquotaroot P((char *tag, char *name));
-void cmd_setquota P((char *tag, char *quotaroot));
-void cmd_status P((char *tag, char *name));
-void cmd_getuids P((char *tag, char *startuid));
-void cmd_unselect P((char* tag));
-void cmd_namespace P((char* tag));
+void cmdloop(void);
+void cmd_login(char *tag, char *user, char *passwd);
+void cmd_authenticate(char *tag, char *authtype);
+void cmd_noop(char *tag, char *cmd);
+void cmd_capability(char *tag);
+void cmd_append(char *tag, char *name);
+void cmd_select(char *tag, char *cmd, char *name);
+void cmd_close(char *tag);
+void cmd_fetch(char *tag, char *sequence, int usinguid);
+void cmd_partial(char *tag, char *msgno, char *data,
+		 char *start, char *count);
+void cmd_store(char *tag, char *sequence, char *operation, int usinguid);
+void cmd_search(char *tag, int usinguid);
+void cmd_copy(char *tag, char *sequence, char *name, int usinguid);
+void cmd_expunge(char *tag, char *sequence);
+void cmd_create(char *tag, char *name, char *partition);
+void cmd_delete(char *tag, char *name);
+void cmd_rename(char *tag, char *oldname, char *newname, char *partition);
+void cmd_find(char *tag, char *namespace, char *pattern);
+void cmd_list(char *tag, int subscribed, char *reference, char *pattern);
+void cmd_changesub(char *tag, char *namespace, char *name, int add);
+void cmd_getacl(char *tag, char *name, int oldform);
+void cmd_listrights(char *tag, char *name, char *identifier);
+void cmd_myrights(char *tag, char *name, int oldform);
+void cmd_setacl(char *tag, char *name, char *identifier, char *rights);
+void cmd_getquota(char *tag, char *name);
+void cmd_getquotaroot(char *tag, char *name);
+void cmd_setquota(char *tag, char *quotaroot);
+void cmd_status(char *tag, char *name);
+void cmd_getuids(char *tag, char *startuid);
+void cmd_unselect(char* tag);
+void cmd_namespace(char* tag);
 
 void cmd_starttls(char *tag);
 int starttls_enabled(void);
 
 #ifdef ENABLE_X_NETSCAPE_HACK
-void cmd_netscrape P((char* tag));
+void cmd_netscrape(char* tag);
 #endif
 
 int getword P((struct buf *buf));
@@ -409,6 +409,7 @@ int service_init(int argc, char **argv, char **envp)
     int r;
 
     config_changeident("imapd");
+    
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
     setproctitle_init(argc, argv, envp);
 
@@ -416,6 +417,8 @@ int service_init(int argc, char **argv, char **envp)
     mboxlist_init(0);
     mboxlist_open(NULL);
 
+    signals_set_shutdown(&shut_down);
+    signals_add_handlers();
     signal(SIGPIPE, SIG_IGN);
 
     /* set the SASL allocation functions */
@@ -569,15 +572,13 @@ void shut_down(int code)
 	index_closemailbox(imapd_mailbox);
 	mailbox_close(imapd_mailbox);
     }
+    mboxlist_close();
     mboxlist_done();
     prot_flush(imapd_out);
     exit(code);
 }
 
-void
-fatal(s, code)
-const char *s;
-int code;
+void fatal(const char *s, int code)
 {
     static int recurse_code = 0;
 
@@ -627,6 +628,8 @@ cmdloop()
 	    (fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
 	    shutdown_file(fd);
 	}
+
+	signals_poll();
 
 	/* Parse tag */
 	c = getword(&tag);
@@ -892,20 +895,6 @@ cmdloop()
 
 		snmp_increment(GETQUOTAROOT_COUNT, 1);
 	    }
-#ifdef ENABLE_EXPERIMENT_OPTIMIZE_1
-	    /* This command is disabled because it was removed from the
-	       OPTIMIZE-1 extension, now known as UIDPLUS. */
-	    else if (!strcmp(cmd.s, "Getuids")) {
-		if (!imapd_mailbox) goto nomailbox;
-		if (c != ' ') goto missingargs;
-		c = getword(&arg1);
-		if (c == '\r') c = prot_getc(imapd_in);
-		if (c != '\n') goto extraargs;
-		cmd_getuids(tag.s, arg1.s);
-
-		snmp_increment(GETUIDS_COUNT, 1);
-	    }
-#endif /* ENABLE_EXPERIMENT_OPTIMIZE_1 */
 	    else goto badcmd;
 	    break;
 
@@ -3534,38 +3523,6 @@ char *name;
     prot_printf(imapd_out, "%s BAD Invalid status list in Status\r\n", tag);
     eatline(c);
 }
-
-#ifdef ENABLE_EXPERIMENT_OPTIMIZE_1
-/* This extension has been superceded by UIDPLUS and therefore this code
- * is not used. */
-/*
- * Perform a GETUIDS command
- */
-void
-cmd_getuids(tag, startuid)
-char *tag;
-char *startuid;
-{
-    char *p;
-    unsigned uid = 0;
-
-    for (p = startuid; *p; p++) {
-	if (!isdigit((int) *p)) break;
-	uid = uid * 10 + *p - '0';
-    }
-    if (*p || !uid) {
-	prot_printf(imapd_out, "%s BAD Invalid UID\r\n", tag);
-	return;
-    }
-
-    index_check(imapd_mailbox, 0, 0);
-
-    index_getuids(imapd_mailbox, uid);
-
-    prot_printf(imapd_out, "%s OK %s\r\n", tag,
-		error_message(IMAP_OK_COMPLETED));
-}
-#endif /* ENABLE_EXPERIMENT_OPTIMIZE_1 */
 
 #ifdef ENABLE_X_NETSCAPE_HACK
 /*
