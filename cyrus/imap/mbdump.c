@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.26.2.3 2004/03/24 19:53:07 ken3 Exp $
+ * $Id: mbdump.c,v 1.26.2.4 2004/04/02 20:50:50 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -152,12 +152,14 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
     DIR *mbdir = NULL;
     int r = 0;
     struct dirent *next = NULL;
-    char filename[MAX_MAILBOX_PATH + 1024];
+    char filename[MAX_MAILBOX_PATH + 1024], *fname_tail;
+    size_t fname_len;
     int filefd;
     const char *base;
     unsigned long len;
     int first = 1;
     struct mailbox mb;
+    unsigned int msgno;
     struct stat sbuf;
     char c;
     int i;
@@ -166,6 +168,8 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
 				 "cyrus.index",
 				 NULL 
                                };
+    /* XXX For two-phase expunge, we also need to copy cyrus.expunge */
+
     /* non-null userid means we are moving the user */
     const char *userid = NULL;
     enum { SEEN_DB = 0, SUBS_DB = 1 };
@@ -233,23 +237,26 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
 
  dump_files:
     
-    while((next = readdir(mbdir)) != NULL) {
-	char *name = next->d_name;  /* Alias */
-	char *p = name;
+    snprintf(filename, sizeof(filename), "%s/", mbpath);
+    fname_len = strlen(filename);
+    fname_tail = filename + fname_len;
 
-	/* special case for '.'
-	   (well, it gets '..' too) */
-	if(name[0] == '.') continue;
+    for (msgno = 1; msgno <= mb.exists; msgno++) {
+	char name[MAILBOX_FNAME_LEN];
+	struct index_record record;
 
-	/* skip non-message files */
-	while(*p && isdigit((int)(*p))) p++;
-	if(p[0] != '.' || p[1] != '\0') continue;
+	r = mailbox_read_index_record(&mb, msgno, &record);
+	if (r) {
+	    syslog(LOG_ERR, "IOERROR: reading index record %u: %m", msgno);
+	    goto done;
+	}
 
 	/* ensure (number) is >= our target uid */
-	if(atoi(name) < uid_start) continue;
+	if(record.uid < uid_start) continue;
 
 	/* map file */
-	snprintf(filename,sizeof(filename),"%s/%s",mbpath,name);
+	mailbox_message_get_fname(&mb, record.uid, fname_tail,
+				  sizeof(filename) - fname_len);
 
 	filefd = open(filename, O_RDONLY, 0666);
 	if (filefd == -1) {
@@ -303,9 +310,12 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
 	map_free(&base, &len);
     }
 
+    /* XXX For two-phase expunge, we also need to copy message files
+       referenced by cyrus.expunge */
+
     for(i=0;data_files[i];i++) {
 	/* map file */
-	snprintf(filename,sizeof(filename),"%s/%s",mbpath,data_files[i]);
+	strlcpy(fname_tail, data_files[i], sizeof(filename) - fname_len);
 
 	filefd = open(filename, O_RDONLY, 0666);
 	if (filefd == -1) {
@@ -435,6 +445,10 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
 	    mbdir=opendir(sieve_path);
 	    
 	    if(mbdir) {
+		snprintf(filename, sizeof(filename), "%s/", sieve_path);
+		fname_len = strlen(filename);
+		fname_tail = filename + fname_len;
+
 		while((next = readdir(mbdir)) != NULL) {
 		    int length=strlen(next->d_name);
 		    /* 7 == strlen(".script"); 3 == strlen(".bc") */
@@ -442,8 +456,8 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
 			(length >= 3 && !strcmp(next->d_name + (length - 3), ".bc")))
 		    {
 			    /* map file */
-			    snprintf(filename, sizeof(filename), "%s/%s",
-				     sieve_path, next->d_name);
+			    strlcpy(fname_tail, next->d_name,
+				    sizeof(filename) - fname_len);
 			    syslog(LOG_DEBUG, "wanting to dump %s", filename);
 			    filefd = open(filename, O_RDONLY, 0666);
 			    if (filefd == -1) {
