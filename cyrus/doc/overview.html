@@ -33,6 +33,10 @@ quotas on mailbox hierarchies.
 
 <UL>
 <LI><a href="#mboxname">Mailbox Namespace</a>
+<UL>
+<li><A href="#mboxnamestd">Standard (Internal) Namespace</A>
+<li><A href="#mboxnamealt">Alternate Namespace</A>
+</UL>
 <LI><a href="#acl">Access Control Lists</a>
 <UL>
 <li><A href="#aclrt">Access Rights</A>
@@ -110,6 +114,8 @@ metacharacters, and "/" are not permitted in mailbox names.  Later
 versions of the server may make the set of permissible characters
 configurable at each site.
 
+<H3><A NAME="mboxnamestd">Standard (Internal) Namespace</A></H3>
+
 <p>All personal mailboxes for user "<TT>bovik</TT>" begin with the
 string "<TT>user.bovik.</TT>".  For example, if user "<TT>bovik</TT>"
 had a personal "<TT>work</TT>" mailbox, it would be called
@@ -156,6 +162,26 @@ resolves to "<TT>comp.infosystems.www</TT>" and the name
 "<TT>.comp.infosystems.www</TT>" resolves to
 "<TT>cmu.comp.infosystems.www</TT>".
 
+<H3><A NAME="mboxnamealt">Alternate Namespace</A></H3>
+
+The Cyrus IMAP server can also use an alternate namespace which allows
+a user's personal mailboxes to appear as if they reside at the same
+level as that user's <TT>INBOX</TT> as opposed to children of it.
+For example, if user "<TT>bovik</TT>" had a personal "<TT>work</TT>"
+mailbox, it would appear to user "<TT>bovik</TT>" as "<TT>work</TT>"
+instead of "<TT>INBOX.work</TT>" as it would in the standard namespace.
+
+<p>The alternate namespace does NOT change the behavior of mailboxes
+(as described elsewhere in this document) or how mailboxes are stored
+on the filesystem.  The mailboxes are always stored using their
+internal namespace names and the server simply translates mailbox
+names between the internal namespace names and the alternate namespace
+names when used by the client in the IMAP protocol and in Sieve
+scripts.
+
+<p>All tools for administering the server always use the internal
+namespace.
+
 <H2><A NAME="acl">Access Control Lists</A></H2>
 
 Access to each mailbox is controlled by each mailbox's access control list.
@@ -163,7 +189,7 @@ Access Control Lists (ACLs) provide a powerful mechanism
 for specifying the users or groups of users who have permission to
 access the mailboxes.
 
-<p>An ACL is a list of zero or more entries.  Each entry has an identifier
+An ACL is a list of zero or more entries.  Each entry has an identifier
 and a set of rights.  The identifier specifies the user or group of
 users for which the entry applies.  The set of rights is one or more
 letters or digits, each letter or digit conferring a particular privilege.
