@@ -39,7 +39,7 @@
  *
  */
 /*
- * $Id: charset.h,v 1.17 2003/02/13 20:15:39 rjs3 Exp $
+ * $Id: charset.h,v 1.18 2003/10/22 18:03:04 rjs3 Exp $
  */
 
 #ifndef INCLUDED_CHARSET_H
@@ -62,7 +62,7 @@ typedef int charset_index;
 /* ensure up to MAXTRANSLATION times expansion into buf */
 extern char *charset_convert(const char *s, charset_index charset, char *buf,
     int bufsz);
-extern char *charset_decode1522(const char *s, char *buf, int bufsz);
+extern char *charset_decode_mimeheader(const char *s, char *buf, int bufsz);
 
 extern charset_index charset_lookupname(const char *name);
 extern comp_pat *charset_compilepat(const char *s);
@@ -72,6 +72,9 @@ extern int charset_searchstring(const char *substr, comp_pat *pat,
 extern int charset_searchfile(const char *substr, comp_pat *pat,
                               const char *msg_base, int mapnl, int len, 
                               charset_index charset, int encoding);
+extern char *charset_decode_mimebody(const char *msg_base, int len,
+				     int encoding, char **retval, int alloced,
+				     int *outlen);
 
 /* Definitions for charset_extractfile */
 

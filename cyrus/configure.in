@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.266 2003/06/25 21:12:54 rjs3 Exp $
+dnl $Id: configure.in,v 1.267 2003/10/22 18:02:40 rjs3 Exp $
 dnl
 
 
@@ -65,17 +65,17 @@ Configure SASL appropriately instead.]))
 AC_ARG_WITH(cyrus-prefix,[  --with-cyrus-prefix=DIR    use DIR as cyrus install directory],
 	cyrus_prefix="$withval",cyrus_prefix="/usr/cyrus")
 AC_SUBST(cyrus_prefix)
-AC_DEFINE_UNQUOTED(CYRUS_PATH,"$cyrus_prefix")
+AC_DEFINE_UNQUOTED(CYRUS_PATH,"$cyrus_prefix",[Where will we be installed?])
 AC_ARG_WITH(cyrus-user,[  --with-cyrus-user=USERID   use USERID cyrus userid],
 	cyrus_user="$withval",cyrus_user="cyrus")
 AC_SUBST(cyrus_user)
-AC_DEFINE_UNQUOTED(CYRUS_USER, "$cyrus_user")
+AC_DEFINE_UNQUOTED(CYRUS_USER, "$cyrus_user",[What user will we run as?])
 AC_ARG_WITH(cyrus-group,[  --with-cyrus-group=GROUPID use GROUPID cyrus group],
 	cyrus_group="$withval",cyrus_group="mail")
 AC_SUBST(cyrus_group)
 AC_ARG_WITH(statedir,[  --with-statedir=DIR        use DIR as state directory],
 	statedir="$withval",statedir="/var")
-AC_DEFINE_UNQUOTED(STATEDIR,"$statedir")
+AC_DEFINE_UNQUOTED(STATEDIR,"$statedir",[Where should we put our state?])
 
 AC_PROG_CC
 AC_PROG_RANLIB
@@ -95,19 +95,6 @@ CMU_C_FPIC
 
 dnl check for -R, etc. switch
 CMU_GUESS_RUNPATH_SWITCH
-dnl let's just link against local.  otherwise we never find anything useful.
-if test "$ac_cv_prog_gcc" = yes; then
-  dnl xxx we should add -W at some point (but that might scare people)
-  CFLAGS="-Wall ${CFLAGS}"
-  GCC_VERSION=`$CC -v 2>&1 | sed -n -e '/version/s/.*version \([[0-9]]\)\..*/\1/p'`
-  if test "$GCC_VERSION" != "3"; then
-    CPPFLAGS="${CPPFLAGS} -I/usr/local/include"
-  fi
-else
-  CPPFLAGS="${CPPFLAGS} -I/usr/local/include"
-fi 
-CMU_ADD_LIBPATH("/usr/local/lib")
-
 
 AC_CHECK_HEADERS(unistd.h sys/select.h sys/param.h stdarg.h)
 AC_REPLACE_FUNCS(memmove strcasecmp ftruncate strerror)
@@ -120,17 +107,31 @@ LIBS="$LIBS ${LIB_SOCKET}"
 
 dnl check for IPv6 functions (fall back to sasl's if we don't have them)
 cyrus_cv_getaddrinfo=yes
-IPv6_CHECK_FUNC(getaddrinfo, [IPv6_CHECK_FUNC(gai_strerror,[
-	AC_DEFINE(HAVE_GETADDRINFO)
-	cyrus_cv_getaddrinfo=no])])
+IPv6_CHECK_FUNC(getaddrinfo, [IPv6_CHECK_FUNC(gai_strerror,
+	AC_DEFINE(HAVE_GETADDRINFO,[],[Do we have a getaddrinfo?]),
+	cyrus_cv_getaddrinfo=no)], cyrus_cv_getaddrinfo=no)
+
+if test $cyrus_cv_getaddrinfo = no; then
+	IPV6_OBJS="getaddrinfo.o"
+fi
 
 cyrus_cv_getnameinfo=yes
 IPv6_CHECK_FUNC(getnameinfo,
-	AC_DEFINE(HAVE_GETNAMEINFO),
+	AC_DEFINE(HAVE_GETNAMEINFO,[],[Do we have a getnameinfo?]),
 	cyrus_cv_getnameinfo=no)
 
+if test $cyrus_cv_getnameinfo = no; then
+	IPV6_OBJS="$IPV6_OBJS getnameinfo.o"
+fi
 
-dnl this is to check for time things for sieve
+IPv6_CHECK_SS_FAMILY()
+IPv6_CHECK_SA_LEN()
+
+AC_SUBST(IPV6_OBJS)
+
+dnl this is to check for time things
+AC_CHECK_HEADERS(sys/time.h)
+AC_HEADER_TIME
 AC_STRUCT_TM
 AC_STRUCT_TIMEZONE
 
@@ -141,6 +142,104 @@ AC_SUBST(DEPLIBS)
 AC_SUBST(LOCALDEFS)
 AC_FUNC_VPRINTF
 
+dnl check authorization method before databases, to find out
+dnl if we need a PTS database or not
+AC_ARG_WITH(auth,[  --with-auth=METHOD      use authorization module METHOD
+                          METHOD is 'unix' (default), 'krb', 'krb5', or 'pts'],
+	WITH_AUTH="$withval", WITH_AUTH="unix")
+AC_SUBST(WITH_AUTH)
+
+AC_MSG_CHECKING(authorization method)
+AC_MSG_RESULT($WITH_AUTH)
+
+dnl function for doing each of the database backends
+dnl parameters: backend name, variable to set, withval
+
+use_berkeley="no"
+
+AC_DEFUN(CYRUS_SET_BACKEND, [
+	AC_MSG_CHECKING([$1 database backend])
+	if test "$3" != "berkeley" -a \
+		"$3" != "berkeley_nosync" -a \
+	 	"$3" != "flat" -a \
+		"$3" != "skiplist"; then
+	   AC_ERROR([invalid $1 value])
+	fi
+	if test "$3" = "berkeley" -o \
+	        "$3" = "berkeley_nosync"; then
+	   AC_DEFINE(CONFIG_DB_BERKELEY,[],[Build Berkley DB Backend])
+	   use_berkeley="yes"
+	fi
+	DB_STRING="(&cyrusdb_$3)"
+	AC_DEFINE_UNQUOTED($2, $DB_STRING, [Database backend for $1])
+	AC_MSG_RESULT($3)
+])
+AC_DEFUN(CYRUS_SET_BACKEND_BINARY, [
+	AC_MSG_CHECKING([$1 database backend])
+	if test "$3" = "flat"; then
+	   AC_ERROR([this database requires a backend capable of binary data])
+	fi
+	if test "$3" != "berkeley" -a \
+		"$3" != "berkeley_nosync" -a \
+		"$3" != "skiplist"; then
+	   AC_ERROR([invalid $1 value])
+	fi
+	if test "$3" = "berkeley" -o \
+	        "$3" = "berkeley_nosync"; then
+	   AC_DEFINE(CONFIG_DB_BERKELEY)
+	   use_berkeley="yes"
+	fi
+	DB_STRING="(&cyrusdb_$3)"
+	AC_DEFINE_UNQUOTED($2, $DB_STRING, [Database backend for $1])
+	AC_MSG_RESULT($3)
+])
+
+AC_ARG_WITH(duplicate-db,
+	[  --with-duplicate-db=DB  use DB (berkeley, skiplist) as a backend
+                          for the duplicate delivery db                                                   (Default: berkeley_nosync) ],
+	DB="$withval", DB="berkeley_nosync")
+CYRUS_SET_BACKEND_BINARY("duplicate db", CONFIG_DB_DUPLICATE, $DB)
+
+AC_ARG_WITH(mboxlist-db,
+	[  --with-mboxlist-db=DB   use DB (flat, berkeley, skiplist) as a backend
+                          for the mailbox list (Default: skiplist) ],
+	DB="$withval", DB="skiplist")
+CYRUS_SET_BACKEND("mboxlist", CONFIG_DB_MBOX, $DB)
+
+AC_ARG_WITH(seen-db,
+	[  --with-seen-db=DB       use DB (flat, berkeley, skiplist) as a backend
+                          for the seen state (Default: skiplist) ],
+	DB="$withval", DB="skiplist")
+CYRUS_SET_BACKEND("seen state", CONFIG_DB_SEEN, $DB)
+
+if test "$WITH_AUTH" = "pts"; then 
+  AC_ARG_WITH(pts-db,
+	[  --with-pts-db=DB        use DB (berkeley, skiplist) as a backend
+                          for the pts cache (Default: berkeley) ],
+	DB="$withval", DB="berkeley") 
+  CYRUS_SET_BACKEND_BINARY("pts", CONFIG_DB_PTS, $DB)
+fi
+
+AC_ARG_WITH(subs-db,
+	[  --with-subs-db=DB       use DB (flat, berkeley, skiplist) as a backend
+                          for the subscriptions list (Default: flat) ],
+	DB="$withval", DB="flat")
+CYRUS_SET_BACKEND("subscription", CONFIG_DB_SUBS, $DB)
+
+AC_ARG_WITH(tls-db,
+	[  --with-tls-db=DB        use DB (berkeley, skiplist) as a backend
+                          for the TLS cache (Default: berkeley_nosync) ],
+	DB="$withval", DB="berkeley_nosync")
+CYRUS_SET_BACKEND_BINARY("TLS cache", CONFIG_DB_TLS, $DB)
+
+AC_ARG_WITH(annotation-db,
+	[  --with-annotation-db=DB use DB (berkeley, skiplist) as a backend
+                          for the mailbox annotations (Default: skiplist) ],
+	DB="$withval", DB="skiplist")
+CYRUS_SET_BACKEND_BINARY("annotation db", CONFIG_DB_ANNOTATION, $DB)
+
+CYRUSDB_OBJS="cyrusdb_flat.o cyrusdb_skiplist.o"
+
 dnl Berkeley DB Detection
 
 dnl support old-style
@@ -149,81 +248,35 @@ AC_ARG_WITH(dbdir,
 	with_bdb_lib="$withval/lib"; with_bdb_inc="$withval/include",
 	with_bdb_lib=none; with_bdb_inc=none)
 
-CYRUS_BERKELEY_DB_CHK()
+if test "$use_berkeley" != "no"; then
+  CYRUS_BERKELEY_DB_CHK()
 
-if test "$dblib" = "no"; then
-  AC_ERROR([this version requires Berkeley DB 3.x or later.
-(Get it from http://www.sleepycat.com/).  You may need to suppply the
---with-bdb-libdir or --with-bdb-incdir configure options.])
-fi
+  if test "$dblib" = "no"; then
+    AC_ERROR([one or more databases require Berkeley DB 3.x or later.
+    (Get it from http://www.sleepycat.com/).  You may need to suppply the
+    --with-bdb-libdir or --with-bdb-incdir configure options.])
+  fi
 
-if test "$with_bdb_lib" != "none"; then
-  CMU_ADD_LIBPATH($with_bdb_lib)
+  if test "$with_bdb_lib" != "none"; then
+    CMU_ADD_LIBPATH($with_bdb_lib)
+  fi
+
+  BDB_INC=${BDB_INCADD}
+  BDB_LIB=${BDB_LIBADD}
+  AC_SUBST(BDB_INC)
+  AC_SUBST(BDB_LIB)
+
+  LIBS="${LIBS} ${BDB_LIBADD}"
+  CPPFLAGS="${BDB_INCADD} ${CPPFLAGS}"
+
+  CYRUSDB_OBJS="$CYRUSDB_OBJS cyrusdb_berkeley.o"
 fi
-LIBS="${LIBS} ${BDB_LIBADD}"
-CPPFLAGS="${BDB_INCADD} ${CPPFLAGS}"
 
 dnl End Berkeley DB Detection
 
-dnl function for doing each of the database backends
-dnl parameters: backend name, variable to set, withval
-AC_DEFUN(CYRUS_SET_BACKEND, [
-	AC_MSG_CHECKING([$1 database backend])
-	if test "$3" != "db3" -a \
-		"$3" != "db3_nosync" -a \
-	 	"$3" != "flat" -a \
-		"$3" != "skiplist"; then
-	   AC_ERROR([invalid $1 value])
-	fi
-	DB_STRING="(&cyrusdb_$3)"
-	AC_DEFINE_UNQUOTED($2, $DB_STRING)
-	AC_MSG_RESULT($3)
-])
-AC_DEFUN(CYRUS_SET_BACKEND_BINARY, [
-	AC_MSG_CHECKING([$1 database backend])
-	if test "$3" = "flat"; then
-	   AC_ERROR([this database requires a backend capable of binary data])
-	fi
-	if test "$3" != "db3" -a \
-		"$3" != "db3_nosync" -a \
-		"$3" != "skiplist"; then
-	   AC_ERROR([invalid $1 value])
-	fi
-	DB_STRING="(&cyrusdb_$3)"
-	AC_DEFINE_UNQUOTED($2, $DB_STRING)
-	AC_MSG_RESULT($3)
-])
+AC_SUBST(CYRUSDB_OBJS)
 
-AC_ARG_WITH(duplicate-db,
-	[  --with-duplicate-db=DB  use DB (db3, skiplist) as a backend
-                          for the duplicate delivery db (Default: db3_nosync) ],
-	DB="$withval", DB="db3_nosync")
-CYRUS_SET_BACKEND_BINARY("duplicate db", CONFIG_DB_DUPLICATE, $DB)
-
-AC_ARG_WITH(mboxlist-db,
-	[  --with-mboxlist-db=DB   use DB (flat, db3, skiplist) as a backend
-                          for the mailbox list (Default: db3) ],
-	DB="$withval", DB="db3")
-CYRUS_SET_BACKEND("mboxlist", CONFIG_DB_MBOX, $DB)
-
-AC_ARG_WITH(seen-db,
-	[  --with-seen-db=DB       use DB (flat, db3, skiplist) as a backend
-                          for the seen state (Default: flat) ],
-	DB="$withval", DB="flat")
-CYRUS_SET_BACKEND("seen state", CONFIG_DB_SEEN, $DB)
-
-AC_ARG_WITH(subs-db,
-	[  --with-subs-db=DB       use DB (flat, db3, skiplist) as a backend
-                          for the subscriptions list (Default: flat) ],
-	DB="$withval", DB="flat")
-CYRUS_SET_BACKEND("subscription", CONFIG_DB_SUBS, $DB)
-
-AC_ARG_WITH(tls-db,
-	[  --with-tls-db=DB        use DB (db3, skiplist) as a backend
-                          for the TLS cache (Default: db3_nosync) ],
-	DB="$withval", DB="db3_nosync")
-CYRUS_SET_BACKEND_BINARY("TLS cache", CONFIG_DB_TLS, $DB)
-
+SIEVE_SUBDIRS=""
 sievedir="sieve"
 AC_ARG_ENABLE(sieve,
         [  --disable-sieve         disable Sieve support],
@@ -236,7 +289,7 @@ if test "$sievedir" != "no"; then
 	AC_SUBST(SIEVE_LIBS)
 	SIEVE_CPPFLAGS="-I\$(srcdir)/../$sievedir"
 	AC_SUBST(SIEVE_CPPFLAGS)
-	AC_DEFINE(USE_SIEVE)
+	AC_DEFINE(USE_SIEVE,[],[Build in Sieve support?])
 
 	dnl Sieve configure stuff
 	AC_PROG_YACC
@@ -244,16 +297,19 @@ if test "$sievedir" != "no"; then
 	AC_CHECK_LIB(fl,main)
 
  	AC_SEARCH_LIBS(regcomp, rx regex, [
- 			AC_DEFINE(ENABLE_REGEX)
-		 	AC_CHECK_HEADER(rxposix.h, AC_DEFINE(HAVE_RX))])
+ 			AC_DEFINE(ENABLE_REGEX,[],[Do we have a decent regex library?])
+		 	AC_CHECK_HEADER(rxposix.h, AC_DEFINE(HAVE_RX,[],[Do we have rxposix.h?]))])
   		
 
-	PRE_SUBDIRS="${PRE_SUBDIRS} $sievedir"
+	SIEVE_SUBDIRS="${SIEVE_SUBDIRS} $sievedir"
 	EXTRA_OUTPUT="${EXTRA_OUTPUT} $sievedir/Makefile"
 fi
 
+AC_SUBST(SIEVE_SUBDIRS)
+
 dnl for et routines
-AC_FUNC_CHECK(strerror,AC_DEFINE(HAS_STRERROR),AC_DEFINE(NEED_SYS_ERRLIST))
+AC_FUNC_CHECK(strerror,AC_DEFINE(HAS_STRERROR,[],[Do we have strerror()?]),
+              AC_DEFINE(NEED_SYS_ERRLIST,[],[Do we have a sys_errlist?]))
 
 dnl for master fd limits
 AC_CHECK_HEADERS(sys/resource.h)
@@ -266,8 +322,10 @@ AC_CHECK_FUNCS(daemon setsid)
 dnl for turning off sockets
 AC_CHECK_FUNCS(shutdown)
 
-AC_EGREP_HEADER(socklen_t, sys/socket.h, AC_DEFINE(HAVE_SOCKLEN_T))
-AC_EGREP_HEADER(rlim_t, sys/resource.h, AC_DEFINE(HAVE_RLIM_T))
+AC_EGREP_HEADER(socklen_t, sys/socket.h, AC_DEFINE(HAVE_SOCKLEN_T,[],[Do we have a socklen_t?]))
+AC_EGREP_HEADER(sockaddr_storage, sys/socket.h,
+		AC_DEFINE(HAVE_STRUCT_SOCKADDR_STORAGE,[],[Do we have a sockaddr_storage?]))
+AC_EGREP_HEADER(rlim_t, sys/resource.h, AC_DEFINE(HAVE_RLIM_T,[],[Do we have an rlim_t?]))
 
 dnl Bunch of setproctitle stuff
 spt_type=""
@@ -319,7 +377,7 @@ if test "$spt_type" = ""; then
 	AC_MSG_RESULT($cyrus_cv_sys_setproctitle)
 fi
 if test "$spt_type" != ""; then
-	AC_DEFINE_UNQUOTED(SPT_TYPE,$spt_type)
+	AC_DEFINE_UNQUOTED(SPT_TYPE,$spt_type,[Do we already have setproctitle?])
 fi
 
 AC_MSG_CHECKING(nonblocking method)
@@ -426,10 +484,10 @@ AC_SUBST(WITH_LOCK)
 
 dnl check for fdatasync (used by cyrusdb_skiplist)
 LIB_RT=""
-AC_CHECK_FUNC(fdatasync, AC_DEFINE(HAVE_FDATASYNC), [
+AC_CHECK_FUNC(fdatasync, AC_DEFINE(HAVE_FDATASYNC,[],[Do we have fdatasync()?]), [
   AC_CHECK_LIB(rt, fdatasync, [
 	LIB_RT="-lrt"
-	AC_DEFINE(HAVE_FDATASYNC)
+	AC_DEFINE(HAVE_FDATASYNC,[],[Do we have fdatasync()?])
   ])
 ])
 
@@ -462,47 +520,42 @@ AC_ARG_WITH(afs,[  --with-afs=PATH         use AFS libraries from PATH],
 	[with_afs="${withval}"
 	CFLAGS="${CFLAGS} -I${withval}/include"],with_afs="/usr/local")
 
-AC_ARG_WITH(auth,[  --with-auth=METHOD      use authorization module METHOD
-                          METHOD is unix or krb],WITH_AUTH="$withval",
-	if test -f /etc/krb.conf -o -f /etc/kerberosIV/krb.conf ; then
-		WITH_AUTH="krb"
-	else
-		WITH_AUTH="unix"
-	fi)
-AC_SUBST(WITH_AUTH)
-if test "$WITH_AUTH" = krb_pts; then
+AC_ARG_WITH(ldap, [  --with-ldap=DIR         use LDAP (in DIR) (experimental) [/usr/local] ],
+	with_ldap=$withval, with_ldap="/usr/local")
+
+dnl select module for ptloader
+AC_ARG_WITH(pts,[  --with-pts=MODULE       use PTS module MODULE
+                          MODULE is 'afskrb' (default) or 'ldap' (experimental)],
+	    WITH_PTS="$withval", WITH_PTS="afskrb")
+AC_SUBST(WITH_PTS)
+
+dnl select mode of afspts
+AC_ARG_ENABLE(krb5afspts,[  --enable-krb5afspts     compile afskrb PTS module with krb5 support],
+	[SASL_SET_GSSAPI_LIBS
+         AC_DEFINE(AFSPTS_USE_KRB5,[],[Should the AFS PTS plugin use krb5?])])
+
+if test "$WITH_AUTH" = "pts"; then
+	AC_MSG_CHECKING(which pts module to use)
+	AC_MSG_RESULT($WITH_PTS)
+
 	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} ptclient"
 	EXTRA_OUTPUT="${EXTRA_OUTPUT} ptclient/Makefile"
-	AFS_LIBS="${with_afs}/lib/afs/libkauth.a ${with_afs}/lib/afs/libprot.a  ${with_afs}/lib/afs/libauth.a ${with_afs}/lib/afs/libsys.a ${with_afs}/lib/librxkad.a ${with_afs}/lib/librx.a ${with_afs}/lib/afs/libsys.a ${with_afs}/lib/libubik.a  ${with_afs}/lib/liblwp.a ${with_afs}/lib/afs/util.a"
-	if test -f ${with_afs}/lib/afs/libaudit.a; then
+
+	LDAP_CPPFLAGS=""
+	LDAP_LDFLAGS=""
+	LDAP_LIBS=""
+
+  	if test "$WITH_PTS" = "afskrb"; then
+	    AFS_LIBS="${with_afs}/lib/afs/libkauth.a ${with_afs}/lib/afs/libprot.a  ${with_afs}/lib/afs/libauth.a ${with_afs}/lib/afs/libsys.a ${with_afs}/lib/librxkad.a ${with_afs}/lib/librx.a ${with_afs}/lib/afs/libsys.a ${with_afs}/lib/libubik.a  ${with_afs}/lib/liblwp.a ${with_afs}/lib/afs/util.a"
+	    if test -f ${with_afs}/lib/afs/libaudit.a; then
 		AFS_LIBS="$AFS_LIBS ${with_afs}/lib/afs/libaudit.a"
-	fi
-	if test -f /usr/ucblib/libucb.a; then
+	    fi
+	    if test -f /usr/ucblib/libucb.a; then
 		CMU_ADD_LIBPATH_TO(/usr/ucblib, AFS_LDFLAGS)
 		AFS_LIBS="$AFS_LIBS -lc -lucb"
-	fi
+	    fi
 
-	AC_CACHE_VAL(cyrus_afs_pr_end,[
-		SAVE_LIBS="$LIBS"
-		LIBS="$AFS_LIBS"
-		AC_MSG_CHECKING(if AFS libraries have pr_End)
-		AC_TRY_LINK([pr_End();],
-			[pr_End()],
-			[
-				dnl it linked; have it
-				AC_MSG_RESULT(yes)
-				cyrus_afs_pr_end="yes"
-			], [
-				dnl didn't link; use old code
-				AC_MSG_RESULT(no)
-				cyrus_afs_pr_end="no"
-			])
-		])
-	LIBS="$SAVE_LIBS"
-	if test "$cyrus_afs_pr_end" = no; then
-		AC_DEFINE(HAVE_PR_END)
-	fi
-	AC_CACHE_VAL(cyrus_afs_sigvec,[
+	    AC_CACHE_VAL(cyrus_afs_sigvec,[
 		SAVE_LIBS="$LIBS"
 		LIBS="${with_afs}/lib/liblwp.a"
 		AC_MSG_CHECKING(if AFS libraries need sigvec)
@@ -520,18 +573,39 @@ if test "$WITH_AUTH" = krb_pts; then
 				cyrus_afs_sigvec="yes"
 			])
 		])
-	if test "$cyrus_afs_sigvec" = yes; then
-	  if test "$cant_find_sigvec" = yes; then
-            AC_MSG_WARN([Can't find a sigvec for AFS libraries which seem to])
-	    AC_MSG_WARN([need one; ptloader may not build.])
-          else
-	    AFS_LIBS="${AFS_LIBS} $cyrus_sigveclib"
-	  fi
+	    if test "$cyrus_afs_sigvec" = yes; then
+	      if test "$cant_find_sigvec" = yes; then
+                AC_MSG_WARN([Can't find a sigvec for AFS libraries which seem])
+	        AC_MSG_WARN([to need one; ptloader may not build.])
+              else
+	        AFS_LIBS="${AFS_LIBS} $cyrus_sigveclib"
+	      fi
+	    fi
+	    LIBS="$SAVE_LIBS"
+	    AC_SUBST(AFS_LIBS)
+	    AC_SUBST(AFS_LDFLAGS)
+	elif test "$WITH_PTS" = "ldap"; then
+	    AC_MSG_WARN([*** WARNING: COMPILING WITH EXPERIMENTAL LDAP PTLOADER MODULE ***])
+	    if test -d $with_ldap; then
+	        LDAP_CPPFLAGS="$CPPFLAGS -I${with_ldap}/include"
+	        LDAP_LDFLAGS="$LDFLAGS -L${with_ldap}/lib"
+	    else
+	 	AC_ERROR(LDAP path isn't a directory)
+	    fi	
+
+	    LDAP_LIBS=""
+	    AC_CHECK_LIB(ldap, ldap_initialize, [
+                         LDAP_LIBS="-lldap -llber -llutil" ],,-llber)
+	else
+	    AC_ERROR(unknown with-pts value)
 	fi
-	LIBS="$SAVE_LIBS"
-	AC_SUBST(AFS_LIBS)
-	AC_SUBST(AFS_LDFLAGS)
+
+   	AC_SUBST(LDAP_CPPFLAGS)
+	AC_SUBST(LDAP_LDFLAGS)
+	AC_SUBST(LDAP_LIBS)	
 fi
+
+
 
 SERVER_SUBDIRS="master imap"
 AC_ARG_ENABLE(server,
@@ -545,13 +619,13 @@ AC_SUBST(SERVER_SUBDIRS)
 dnl this is the new simple check for kerberos; since the person had to
 dnl compile SASL, we might as well use the same checks.
 AC_ARG_WITH(krb,[  --with-krb=PATH         use Kerberos from PATH],
-	with_krb="$withval", with_krb="yes")
+	with_krb="$withval", with_krb="no")
 
 AC_ARG_ENABLE(statickrb,
 		[  --enable-statickrb      link Kerberos statically],
 	with_statickrb="yes", with_statickrb="no")
 
-if test "$WITH_AUTH" = "krb" -o "$WITH_AUTH" = "krb_pts" ; then
+if test "$WITH_AUTH" = "krb" -o "$WITH_AUTH" = "krb_pts" -o "$with_krb" != "no"; then
   dnl In order to compile kerberos4, we need libkrb and libdes.
 
   dnl we might need -lresolv for kerberos
@@ -605,13 +679,17 @@ if test "$WITH_AUTH" = "krb" -o "$WITH_AUTH" = "krb_pts" ; then
   fi
 
   if test "${krb4}" != no; then
-    AC_DEFINE(HAVE_KRB)
+    AC_DEFINE(HAVE_KRB,[],[Support for Kerberos?])
   else
     AC_ERROR([Kerberos not found for authorization module])
   fi
 fi
 
-AC_SUBST(KRB_LIBS)
+LIBS="$KRB_LIBS $LIBS"
+
+if test "$WITH_AUTH" = "krb5"; then
+    SASL_SET_GSSAPI_LIBS
+fi
 
 dnl
 dnl Test for OpenSSL
@@ -653,7 +731,7 @@ AC_MSG_CHECKING(for openssl)
 AC_MSG_RESULT($with_openssl)
 
 if test "$with_openssl" != "no"; then
-	AC_DEFINE(HAVE_SSL)
+	AC_DEFINE(HAVE_SSL,[],[Build with SSL support?])
 	IMAP_PROGS="$IMAP_PROGS tls_prune"
 fi
 AC_SUBST(OPENSSL_INC)
@@ -668,7 +746,7 @@ AC_ARG_WITH(egd-socket,
               [ EGD_SOCKET="$withval" ]
       )
 if test -n "$EGD_SOCKET" ; then
-      AC_DEFINE_UNQUOTED(EGD_SOCKET, "$EGD_SOCKET")
+      AC_DEFINE_UNQUOTED(EGD_SOCKET, "$EGD_SOCKET", [Alternative to /dev/urandom?])
 fi
 
 dnl
@@ -699,17 +777,17 @@ esac
 AC_SUBST(ZEPHYR_LIBS)
 AC_SUBST(ZEPHYR_CPPFLAGS)
 if test "$with_zephyr" != "no"; then
-	AC_DEFINE(HAVE_ZEPHYR)
+	AC_DEFINE(HAVE_ZEPHYR,[],[Build with Zephyr support?])
 fi
 
 dnl
 dnl Set pidfile location
 dnl
-AC_ARG_WITH(pidfile,[  --with-pidfile[=PATH]     pidfile in PATH (/var/run/cyrus-master.pid)],
+AC_ARG_WITH(pidfile,[  --with-pidfile[=PATH]   pidfile in PATH (/var/run/cyrus-master.pid)],
 	[MASTERPIDFILE="$withval"],
 	[MASTERPIDFILE="/var/run/cyrus-master.pid"])
 MASTERPIDFILE="\"$MASTERPIDFILE\""
-AC_DEFINE_UNQUOTED(MASTER_PIDFILE, $MASTERPIDFILE)
+AC_DEFINE_UNQUOTED(MASTER_PIDFILE, $MASTERPIDFILE,[Name of the pidfile for master])
 
 dnl
 dnl Select a method for IMAP IDLE
@@ -723,12 +801,23 @@ if test "$WITH_IDLE" = "idled"; then
 fi
 
 dnl
+dnl see if we're compiling with NNTP support
+dnl
+ENABLE_NNTP=no
+AC_ARG_ENABLE(nntp,
+        [  --enable-nntp           enable NNTP support (experimental)],
+	ENABLE_NNTP=$enableval
+        if test "$ENABLE_NNTP" != no; then
+	  IMAP_PROGS="$IMAP_PROGS nntpd fetchnews"
+        fi) 
+
+dnl
 dnl see if we're compiling the Murder support programs
 dnl
 AC_ARG_ENABLE(murder,
         [  --enable-murder         enable IMAP Murder support],
         if test "$enableval" != no; then
-	  IMAP_PROGS="$IMAP_PROGS proxyd pop3proxyd lmtpproxyd mupdate"
+	  IMAP_PROGS="$IMAP_PROGS proxyd lmtpproxyd mupdate"
         fi) 
 
 AC_SUBST(IMAP_PROGS)
@@ -742,35 +831,31 @@ AC_ARG_WITH(com_err,
 [  --with-com_err=PATH     use com_err from path -- includes in PATH/include,
                           libs in PATH/lib, and compile_et in PATH/bin])
 if test -z "$with_com_err"; then
-	AC_CHECK_HEADER(com_err.h, [
-  	  # no value supplied
-	  AC_CHECK_LIB(com_err, com_err, [
+	# no value supplied
+	AC_CHECK_LIB(com_err, com_err, [
 		# com_err is already in library path
 		# guess we're okay
 		# can use system com_err
 		with_com_err=""
 		AC_PATH_PROG(COMPILE_ET, compile_et, [no compile et])
-	  ], [
-	  if test -f /usr/local/include/com_err.h; then
+	], [
+	if test -f /usr/local/include/com_err.h; then
 		with_com_err="/usr/local"
 		AC_PATH_PROG(COMPILE_ET, /usr/local/bin/compile_et, [no compile et])
-	  else
+	else
 		# use ours
 		with_com_err=yes
-	  fi
-	  ])], [
-	  with_com_err="no"
+	fi
 	])
 
 	if test "${with_com_err}" = "no"; then
 	  AC_MSG_WARN([com_err is required; included version will be used.])
 	  with_com_err="yes"
-	else
-	  if test "${COMPILE_ET}" = "no compile et" -o "${COMPILE_ET}" = ""; then
-	    AC_MSG_WARN([Parts of com_err distribuion were found, but not compile_et.])
-	    AC_MSG_WARN([Will build com_err from included sources.])
-	    with_com_err="yes" # build it ourselves
-	  fi
+	fi
+	if test "${COMPILE_ET}" = "no compile et" -o "${COMPILE_ET}" = ""; then
+	  AC_MSG_WARN([Parts of com_err distribuion were found, but not compile_et.])
+	  AC_MSG_WARN([Will build com_err from included sources.])
+	  with_com_err="yes" # build it ourselves
 	fi
 fi
 
@@ -820,6 +905,15 @@ if test $cyrus_cv_lib_syslog = no; then
 fi
 AC_MSG_RESULT($cyrus_cv_lib_syslog)
 
+AC_MSG_CHECKING(which syslog facility to use)
+SYSLOG_FACILITY=LOG_LOCAL6
+AC_ARG_WITH(syslogfacility,[  --with-syslogfacility=FACILITY set the syslog facility to use (default LOCAL6)],
+               [ if test "$withval" != "yes" -a "$withval" != "no" ; then
+                       SYSLOG_FACILITY=LOG_$withval
+               fi; ])
+AC_DEFINE_UNQUOTED(SYSLOG_FACILITY, $SYSLOG_FACILITY, [Syslog facility to use.])
+AC_MSG_RESULT($SYSLOG_FACILITY)
+
 dnl Have to check getdtabalesize after adding ossup, as some ossups define it
 AC_REPLACE_FUNCS(getdtablesize)
 AC_ARG_ENABLE(cmulocal,
@@ -829,19 +923,12 @@ AC_ARG_ENABLE(cmulocal,
 		EXTRA_OUTPUT="${EXTRA_OUTPUT} depot/Makefile"
 	fi)
 
-AC_ARG_ENABLE(fulldirhash,
-	[  --enable-fulldirhash    enable improved directory hashing -- hashes full
-                          username instead of using just the first letter],
-	if test "$enableval" = yes; then
-		AC_DEFINE(USE_DIR_FULL)
-	fi)
-
 AC_MSG_CHECKING(to use old sieve service name)
 AC_ARG_ENABLE(oldsievename,
 	[  --enable-oldsievename   enable the use of 'imap' as the sieve service name],
 	if test "$enableval" = yes; then
 		AC_MSG_RESULT(yes)
-		AC_DEFINE(OLD_SIEVE_SERVICE_NAME)
+		AC_DEFINE(OLD_SIEVE_SERVICE_NAME,[],[Use "imap" as sieve service name?])
 	else
 		AC_MSG_RESULT(no)
 	fi,
@@ -850,23 +937,18 @@ AC_ARG_ENABLE(oldsievename,
 AC_ARG_ENABLE(listext,
 	[  --enable-listext        enable IMAP List extensions],
 	if test "$enableval" = yes; then
-		AC_DEFINE(ENABLE_LISTEXT)
-	fi)
-
-AC_ARG_ENABLE(annotatemore,
-	[  --enable-annotatemore   enable IMAP mailbox/server annotations],
-	if test "$enableval" = yes; then
-		AC_DEFINE(ENABLE_ANNOTATEMORE)
+		AC_DEFINE(ENABLE_LISTEXT,[],[Enable the LISTEXT extension?])
 	fi)
 
 AC_ARG_ENABLE(netscapehack,
 	[  --enable-netscapehack   enable Netscape hack for the menu option
                           in Communicator to Administrate Mail],
 	if test "$enableval" = yes; then
-		AC_DEFINE(ENABLE_X_NETSCAPE_HACK)
+		AC_DEFINE(ENABLE_X_NETSCAPE_HACK,[],[Enable Netscape Menu Option Hack?])
 	fi)
 
 AC_CHECK_FUNC(dlopen,,[AC_CHECK_LIB(dl, dlopen)])
+CMU_SASL2_REQUIRE_VER(2,1,7)
 CMU_SASL2_CHECKAPOP_REQUIRED
 
 AC_ARG_WITH(perl,       [  --with-perl=PERL        use PERL for perl],
@@ -950,14 +1032,14 @@ for flag in ${ldflags} ${default_ldflags}; do
 done
 
 IMAP_COM_ERR_LIBS="${COM_ERR_LIBS}"
-IMAP_LIBS="${LIB_SASL} ${KRB_LIBS} ${LIB_RT} ${LIBS}"
+IMAP_LIBS="${LIB_SASL} ${LIBS}"
 
+AC_SUBST(LIB_RT)
 AC_SUBST(IMAP_COM_ERR_LIBS)
 AC_SUBST(IMAP_LIBS)
 
 dnl AC_OUTPUT_COMMANDS([
 dnl   if test "$with_perl" != "no"; then
-dnl     (cd perl/sieve/acap; $perl Makefile.PL PREFIX=$prefix)
 dnl     (cd perl/sieve/managesieve; $perl Makefile.PL PREFIX=$prefix)
 dnl     (cd perl/imap; $perl Makefile.PL PREFIX=$prefix)
 dnl   fi
@@ -966,5 +1048,194 @@ AC_SUBST(PERL_SUBDIRS)
 AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
+AH_TOP([
+/* $Id: configure.in,v 1.267 2003/10/22 18:02:40 rjs3 Exp $ */
+/* 
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer. 
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in
+ *    the documentation and/or other materials provided with the
+ *    distribution.
+ *
+ * 3. The name "Carnegie Mellon University" must not be used to
+ *    endorse or promote products derived from this software without
+ *    prior written permission. For permission or any other legal
+ *    details, please contact  
+ *      Office of Technology Transfer
+ *      Carnegie Mellon University
+ *      5000 Forbes Avenue
+ *      Pittsburgh, PA  15213-3890
+ *      (412) 268-4387, fax: (412) 268-7395
+ *      tech-transfer@andrew.cmu.edu
+ *
+ * 4. Redistributions of any form whatsoever must retain the following
+ *    acknowledgment:
+ *    "This product includes software developed by Computing Services
+ *     at Carnegie Mellon University (http://www.cmu.edu/computing/)."
+ *
+ * CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
+ * THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+ * AND FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE
+ * FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+ * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
+ * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+#ifndef _CYRUS_IMAPD_CONFIG_H_
+#define _CYRUS_IMAPD_CONFIG_H_
+])
+
+AH_BOTTOM([
+/* time.h */
+#if TIME_WITH_SYS_TIME
+# include <sys/time.h>
+# include <time.h>
+#else
+# if HAVE_SYS_TIME_H
+#  include <sys/time.h>
+# else
+#  include <time.h>
+# endif
+#endif
+
+/* This allows us to work even when we don't have an fdatasync */
+#ifndef HAVE_FDATASYNC
+#define fdatasync(fd) fsync(fd)
+#endif
+
+/* A similar setup for not having O_DSYNC */
+#include <fcntl.h>
+
+#ifndef O_DSYNC
+#  ifdef O_SYNC
+#    define O_DSYNC     O_SYNC          /* POSIX */
+#  else
+#    define O_DSYNC     O_FSYNC         /* BSD */
+#  endif
+#endif
+
+/* where are our binaries? */
+#define SERVICE_PATH (CYRUS_PATH "/bin")
+
+#ifndef HAVE___ATTRIBUTE__
+/* Can't use attributes... */
+#define __attribute__(foo)
+#endif
+
+#ifndef HAVE_SOCKLEN_T
+typedef unsigned int socklen_t;
+#endif
+
+#ifndef HAVE_RLIM_T
+typedef int rlim_t;
+#endif
+
+/* some potentially memory saving tradeoffs, 
+   preconfigured in memory-saving mode */
+
+/* save the cmdlines for the ID command */
+#undef ID_SAVE_CMDLINE
+
+/* IPv6 things */
+#include <netdb.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+
+#ifndef HAVE_STRUCT_SOCKADDR_STORAGE
+#define	_SS_MAXSIZE	128	/* Implementation specific max size */
+#define	_SS_PADSIZE	(_SS_MAXSIZE - sizeof (struct sockaddr))
+
+struct sockaddr_storage {
+	struct	sockaddr ss_sa;
+	char		__ss_pad2[_SS_PADSIZE];
+};
+# define ss_family ss_sa.sa_family
+# define HAVE_SS_FAMILY
+#endif /* !HAVE_STRUCT_SOCKADDR_STORAGE */
+
+#ifndef HAVE_SS_FAMILY
+#define ss_family	__ss_family
+#endif
+
+#ifndef AF_INET6
+/* Define it to something that should never appear */
+#define	AF_INET6	AF_MAX
+#endif
+
+#if !defined(HAVE_GETADDRINFO) || !defined(HAVE_GETNAMEINFO)
+#include "gai.h"
+#endif
+
+#ifndef	NI_WITHSCOPEID
+#define	NI_WITHSCOPEID	0
+#endif
+
+/* End IPv6 things */
+
+#ifdef OLD_SIEVE_SERVICE_NAME
+#define SIEVE_SERVICE_NAME "imap"
+#else
+#define SIEVE_SERVICE_NAME "sieve"
+#endif
+
+/* filenames */
+#define FNAME_DBDIR "/db"
+#define FNAME_USERDIR "/user/"
+#define FNAME_DOMAINDIR "/domain/"
+#define FNAME_LOGDIR "/log/"
+#define FNAME_PTSDB "/ptclient/ptscache.db"
+#define CONFIG_FILENAME "/etc/imapd.conf"
+#define DEFAULT_MASTER_CONFIG_FILENAME "/etc/cyrus.conf"
+
+#ifndef HAVE_SHUTDOWN
+#define shutdown(fd, mode) 0
+#endif
+
+/* compile time options; think carefully before modifying */
+enum {
+    /* should we send an UNAVAILABLE message to master when
+     * a service is exiting (master is already going to be 
+     * informed of the exit by the SIGCHLD signal anyway) ? */
+    MESSAGE_MASTER_ON_EXIT = 0,
+
+    /* should a hierarchical rename stop on error? */
+    RENAME_STOP_ON_ERROR = 1,
+
+    /* should we call fsync() to maybe help with softupdates? (it should) */
+    APPEND_ULTRA_PARANOID = 1,
+
+    /* should we log extra information at the DEBUG level for DB stuff? 
+     * 0 -> nothing; 1 -> some; higher -> even more */
+    CONFIG_DB_VERBOSE = 1,
+
+    /* log timing information to LOG_DEBUG */
+    CONFIG_TIMING_VERBOSE = 0,
+
+    /* should we be pedantic about namespace or sleezy? */
+    SLEEZY_NAMESPACE = 1,
+
+    /* should we do a fast TLS session shutdown? */
+    TLS_FAST_SHUTDOWN = 1,
+
+    /* should we use the SQUAT engine to accelerate SEARCH? */
+    SQUAT_ENGINE = 1,
+
+    /* should we have long LMTP error messages? */
+    LMTP_LONG_ERROR_MSGS = 1
+};
+
+#endif /* _CYRUS_IMAPD_CONFIG_H_ */
+])
+
 dnl make sure that Makefile is the last thing output
-AC_OUTPUT(man/Makefile master/Makefile lib/Makefile acap/Makefile imap/Makefile imap/feedcyrus imtest/Makefile netnews/Makefile perl/Makefile $EXTRA_OUTPUT Makefile)
+AC_OUTPUT(man/Makefile master/Makefile lib/Makefile imap/Makefile imtest/Makefile netnews/Makefile perl/Makefile $EXTRA_OUTPUT Makefile)

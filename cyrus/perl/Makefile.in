@@ -1,5 +1,5 @@
 # SIEVE Makefile for cyrus software
-# $Id: Makefile.in,v 1.12 2003/01/02 17:27:35 rjs3 Exp $
+# $Id: Makefile.in,v 1.13 2003/10/22 18:03:14 rjs3 Exp $
 #
 # @configure_input@
 # 
@@ -56,6 +56,10 @@ SASL_LIB=@LIB_DYN_SASL@
 SASL_INC=@DYNSASLFLAGS@
 OPENSSL_LIB=@OPENSSL_LIB@
 OPENSSL_INC=@OPENSSL_INC@
+BDB_LIB=@BDB_LIB@
+BDB_INC=@BDB_INC@
+
+LIB_RT=@LIB_RT@
 
 PERL=@PERL@
 
@@ -69,18 +73,19 @@ cyrus_prefix = @cyrus_prefix@
 CC = @CC@
 PLMAKE = imap/Makefile
 
-all:: $(PLMAKE)
+all::
 	@for d in  $(SUBDIRS); \
 	do \
 		(cd $$d; echo "### Making" all "in" `pwd`;	\
+			if [ -f Makefile.PL ]; then \
+			   LIB_RT="$(LIB_RT)" \
+			   BDB_LIB="$(BDB_LIB)" BDB_INC="$(BDB_INC)" \
+			   OPENSSL_LIB="$(OPENSSL_LIB)" OPENSSL_INC="$(OPENSSL_INC)" \
+			   SASL_LIB="$(SASL_LIB)" SASL_INC="$(SASL_INC)" CC="$(CC)" \
+			     $(PERL) Makefile.PL PREFIX=$(prefix); \
+			fi; \
 			$(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) all) || exit 1; \
 	done
-
-imap/Makefile: imap/Makefile.PL
-	(cd imap; \
-	 OPENSSL_LIB="$(OPENSSL_LIB)" OPENSSL_INC="$(OPENSSL_INC)" \
-	 SASL_LIB="$(SASL_LIB)" SASL_INC="$(SASL_INC)" CC="$(CC)" \
-	   $(PERL) Makefile.PL PREFIX=$(prefix))
 
 install::
 	@for d in  $(SUBDIRS); \

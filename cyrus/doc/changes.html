@@ -1,13 +1,244 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.69 2003/08/14 16:42:34 rjs3 Exp $ -->
+<!-- $Id: changes.html,v 1.70 2003/10/22 18:02:52 rjs3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
 <title>Changes to the Cyrus IMAP Server</title>
 </head>
 <body>
-<h1>Changes to the Cyrus IMAP Server</h1>
+
+<h1>Changes to the Cyrus IMAP Server since 2.2.1</h1>
+
+<ul>
+<li>Major bugfixes in murder altnamespace/unixhierarchysep/virtdomain
+support (Thanks in large part to work by Christian Schulte &lt;cs@schulte.it&gt;)</li>
+<li>Improved master process accounting (Henrique de Moraes Holschuh
+&lt;hmh@debian.org&gt;)</li>
+<li>Significantly improved message header caching (based in large part
+on code supplied by David Carter &lt;David.Carter@ucs.cam.ac.uk&gt; from
+the University of Cambridge)
+<li>The sieve bytecode format has been updated once more, to correctly
+handle short-circuiting of the allof and anyof operators</li>
+</ul>
+
+<h1>Changes to the Cyrus IMAP Server since 2.2.0</h1>
+
+<ul>
+<li>The improved directory hashing (fulldirhash) is now a runtime
+configuration option.</li>
+<li>The netnews.db has been integrated into deliver.db.</li>
+<li>Full r/w ANNOTATEMORE support, including more annotations that
+allow the control of operations such as message expiration.
+ANNOTATEMORE is also always enabled now.</li>
+<li><tt>expirenews</tt> has been replaced by <tt>cyr_expire</tt> which
+uses annotations for fine-grained mailbox expiration.</li>
+<li><tt>squatter</tt> can now use annotations for fine-grained mailbox
+indexing.</li> 
+<li>Many nntpd enhancements including: reader-only and feeder-only
+modes, support for LIST NEWSGROUPS (via mailbox annotations) and
+gatewaying news to mail (via mailbox annotations).</li>
+<li><tt>fetchnews</tt> can now authenticate to the remote server.</li>
+<li>Removed deprecated LAST command from pop3d.</li>
+<li>Sieve Bytecode is now stored in network byte order, meaning that
+bytecode files can be freely moved between different platforms</li>
+<li>Sieve relational extension now working again.</li>
+<li>Sieve vacation now uses the correct subject.</li>
+<li>A large number of bugs involving virtual domain support have been
+fixed, including issues with the Murder, and with Sieve.</li>
+</ul>
+
+<h1>Changes to the Cyrus IMAP Server since 2.1.x</h1>
+
+<ul>
+<li>There have been extensive performance and consistancy changes to
+the configuration subsystem.  This will both ensure greater consistancy
+between the documentation and the code, as well as a more standard format
+for specifing service-specific configuration options in imapd.conf.  Important
+changes are detailed here:
+<ul>
+  <li> The tls_[service]_* configuration options have been removed.  Now
+use [servicename]_tls_*, where servicename is the service identifier from
+cyrus.conf for that particular process.</li>
+  <li> Administrative groups (e.g. admins and lmtp_admins) no longer union,
+service groups completely override the generic group. </li>
+  <li> lmtp_allowplaintext is no longer a defined parameter and must
+be specified using the service name of your lmtp process if you
+require a specific value</li>
+</ul></li>
+
+<li> libcyrus has been split into libcyrus_min and libcyrus, so as to allow
+sensative applications (such as master) include the least amount of code
+necessary for operation </li>
+
+<li> Virtual domain support.  See the <a
+href="install-virtdomains.html">virtual domains</a> document for
+details.</li>
+
+<li> Users can now be renamed (even across domains).  Note that this
+is not atomic and weirdness may occur if the user is logged in during
+the rename.  See the <tt>allowusermoves</tt> option in
+<tt>imapd.conf(5)</tt> for details.</li>
+
+<li> The <tt>db3</tt> and <tt>db3-nosync</tt> database backends have
+been renamed to <tt>berkeley</tt> and <tt>berkeley-nosync</tt>
+respectively (to avoid confusion over whether or not db4 is supported).</li>
+
+<li> The default mailbox list and seen state database formats have changed
+to skiplist from Berkeley and Flat, respectively. </li>
+
+<li> ptloader is now a regular cyrus service.  This has several implications,
+see <a href=install-upgrade.html>install-upgrade.html</a> for more details.</li>
+
+<li> NNTP support.  Usenet news can now be fed to and read from Cyrus
+directly via NNTP, without the need for a local news server.  See <a
+href="install-netnews.html">netnews</a> document for details.</li>
+
+<li>IPv6 support, provided by Hajimu UMEMOTO &lt;ume@mahoroba.org&gt;</li>
+
+<li> Sieve scripts are now compiled to bytecode to allow for faster
+execution (and lmtpd no longer needs lex or yacc).  See
+<a href=install-upgrade.html>install-upgrade.html</a> for more details.</li>
+
+<li> The functionality of pop3proxyd has been merged into pop3d.  Be
+sure to update <tt>cyrus.conf</tt> on your frontend machines accordingly.</li>
+
+<li> The functionality of <tt>ctl_deliver -E</tt> has been moved to
+<tt>cyr_expire -E</tt>.  Be sure to update <tt>cyrus.conf</tt> on your
+machines accordingly.</li>
+
+</ul>
+
+<h2>Changes to the Cyrus IMAP Server since 2.1.14</h2>
+<ul>
+<li>Correct a potential DOS attack in the fud daemon.</li>
+<li>Arbitron now works again</li>
+<li>Telemetry logging for mupdate</li>
+<li>Duplicate Suppression logging for redirect sieve actions</li>
+<li>A number of bugs in reconstruct have been fixed. also added the -p and -x
+options</li>
+<li>Better stubbing out of user_deleteacl</li>
+<li>No longer log any shutdown() failures</li>
+<li>Improved IPv6 support (for systems with two getnameinfo implementations)</li>
+<li>Misc Documentation Improvements</li>
+</ul>
+
+<h2>Changes to the Cyrus IMAP Server since 2.1.13</h2>
+<ul>
+<li>Be more forgiving in the parsing of MIME boundary headers, specifically
+    those generated by Eudora where the outer boundaries are substrings of
+    the inner boundaries.  This feature can be disabled by enabling the
+    <tt>rfc2046_strict</tt> option.</li>
+<li>Allow cyradm to handle aggregate mailbox sets for ACL and DELETE
+    operations.</li>
+<li>Add a lmtp_downcase_rcpt option to force the lowercasing of
+    recipient addresses (Henrique de Moraes Holschuh &lt;hmh@debian.org&gt;).</li>
+<li>Include more MIME headers in sieve rejection notices</li>
+<li>Add an mbexamine command for debugging purposes</li>
+<li>LMTP will now fatal error if we cannot initialize the duplicate
+    delivery database.</li>
+<li>Continued audit by Security Appraisers and Bynari</li>
+<li>Correctly terminate the processes by calling service_abort even on
+    successful exit (helps to fix a db3 lockers problem)</li>
+<li>Fix some murder+altnamespace/unixhiersep issues</li>
+<li>Fix imclient's handling of literals.</li>
+<li>Add support for the windows-1256 character set</li>
+<li>Don't log 'could not shut down filedescriptor' messages when the
+    socket is already not connected</li>
+<li>Now include a script to convert sieve script names to the altnamespace
+    format</li>
+<li>Added a <tt>--with-extraident</tt> configure option to make it easier
+    to set the extra version information that is compiled into the binary.</li>
+<li>Minor build fixes.</li>
+<li>Minor other bug fixes.</li>
+</ul>
+
+<h2>Changes to the Cyrus IMAP Server since 2.1.12</h2>
+<ul>
+<li>Add maxfds= option in cyrus.conf</li>
+<li>&quot;The shutdown() Patch&quot; by
+Henrique de Moraes Holschuh &lt;hmh@debian.org&gt; and
+Jeremy Howard &lt;jhoward@fastmail.fm&gt;</li>
+<li>Now report both built-with and running-with OpenSSL versions</li>
+<li>Misc other small bugfixes</li>
+<li>Security Appraisers and Bynari review of the majority of the modules
+in <tt>imap/</tt></li>
+</ul>
+
+<h2>Changes to the Cyrus IMAP Server since 2.1.11</h2>
+<ul>
+<li>Master now will forcibly exit if a service is not executable</li>
+<li>Master now has a daemon mode and pidfile support (-d and -p options)</li>
+<li>Berkeley DB Configuration methods have changed.  Hopefully they're
+more generic now.  You can still use --with-dbdir, or you can use
+--with-bdb-libdir and --with-bdb-incdir</li>
+<li>timsieved now handles usernames with dots (when unixhierarchysep is active)</li>
+<li>tugowar has been removed from the distribution.</li>
+<li>Squatter now has an option to skip unmodified mailboxes.</li>
+<li>Properly hash username to remove a user's sieve scripts when their INBOX
+is removed.</li>
+<li>Reset output buffer when prot_flush returns EOF.</li>
+<li>Minor Makefile improvements with use of $(srcdir)</li>
+<li>Remotepurge improvement for empty mailboxes</li>
+<li>Fix for AFS overwriting the canonicalized username in ptloader</li>
+<li>Security audit of imapd.c performed by SecurityAppraisers and Bynari</li>
+</ul>
+
+<h2>Changes to the Cyrus IMAP Server since 2.1.10</h2>
+<ul>
+<li>Fixed some potential buffer overflows in the sieve code, as well
+as a pre-login buffer overflow in the IMAP parsing code.</li>
+<li>ipurge can now skip flagged messages</li>
+<li>Fix a problem with the flat backend and tracking new files</li>
+<li>Fix a problem with the memory pool routines on 64-bit machines</li>
+</ul>
+
+<h2>Changes to the Cyrus IMAP Server since 2.1.9</h2>
+<ul>
+<li>support Berkley DB 4.1
+<li>more portable use of errno throughout
+<li>timsieved now does telemetry logging
+<li>libcyrus.a no longer supplies fs_get() and fs_give()
+</ul>
+
+<h2>Changes to the Cyrus IMAP Server since 2.1.8</h2>
+<ul>
+<li>Fix a strlcpy() off-by-one error.
+<li>Better handling of errors in connecting to LMTP servers for deliver and
+lmtpproxyd.
+<li>Fix bug in pop3proxyd's pop3s handling.
+<li>Fix Exim install documentation.
+</ul>
+
+<h2>Changes to the Cyrus IMAP Server since 2.1.7</h2>
+<ul>
+<li>Fix a severe locking problem during failed CREATEs</li>
+<li>Change default locking method to fcntl from flock</li>
+<li>Don't cleanup the original mailbox during a RENAME while holding the
+mailbox list lock</li>
+<li>Quoting fixes in cyradm</li>
+<li>Small pathname fix in rehash script</li>
+</ul>
+
+<h2>Changes to the Cyrus IMAP Server since 2.1.6</h2>
+<ul>
+<li>Correct some minor version number errors.</li>
+</ul>
+
+<h2>Changes to the Cyrus IMAP Server since 2.1.5</h2>
+<ul>
+<li>Better locking of the mailbox list during mupdate operations for
+CREATE and RENAME</li>
+<li>Permissions fixes for annotations.</li>
+<li>pop3proxyd now does telemetry logging</li>
+<li>Cleanup a number of leaks in the murder code</li>
+<li>Correct semantics of our provided strlcpy().  Fix places where strlcpy()
+was being used incorrectly.</li>
+<li>Correct a significant memory leak in the memory pool routines</li>
+<li>OpenSSL is now handled correctly for the perl modules</li>
+<li>Small documentation cleanups</li>
+<li>The normal assortment of small bugfixes</li>
+</ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.1.14</h2>
 <ul>
@@ -152,6 +383,7 @@ was being used incorrectly.</li>
 <h2>Changes to the Cyrus IMAP Server since 2.1.4</h2>
 
 <ul>
+
 <li> Sieve is no longer dependent on duplicate delivery suppression
 (it still uses the duplicate delivery database however). </li>
 
@@ -1778,7 +2010,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2003/08/14 16:42:34 $ <br />
+last modified: $Date: 2003/10/22 18:02:52 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>

@@ -1,5 +1,5 @@
 dnl look for the ucdsnmp libraries
-dnl $Id: ucdsnmp.m4,v 1.6 2003/10/08 20:35:26 rjs3 Exp $
+dnl $Id: ucdsnmp.m4,v 1.7 2003/10/22 18:02:47 rjs3 Exp $
 
 AC_DEFUN([CMU_UCDSNMP], [
   AC_REQUIRE([CMU_SOCKETS])
@@ -21,7 +21,7 @@ AC_DEFUN([CMU_UCDSNMP], [
   AC_MSG_RESULT($with_ucdsnmp)
   LIB_UCDSNMP=""
   if test "$with_ucdsnmp" != no; then
-    AC_DEFINE(HAVE_UCDSNMP)
+    AC_DEFINE(HAVE_UCDSNMP,1,[Do we have SNMP support?])
     LIB_UCDSNMP="-lucdagent -lucdmibs -lsnmp"
     AC_CHECK_LIB(rpm, rpmdbOpen,
 		 LIB_UCDSNMP="${LIB_UCDSNMP} -lrpm -lpopt",,-lpopt)

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: arbitron.c,v 1.29 2003/08/14 16:20:32 rjs3 Exp $ */
+/* $Id: arbitron.c,v 1.30 2003/10/22 18:02:56 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -57,10 +57,9 @@
 #include <netinet/in.h>
 #include <sys/stat.h>
 #include <com_err.h>
-#include <time.h>
 
 #include "assert.h"
-#include "imapconf.h"
+#include "global.h"
 #include "exitcodes.h"
 #include "hash.h"
 #include "imap_err.h"
@@ -70,6 +69,9 @@
 #include "convert_code.h"
 #include "seen.h"
 #include "xmalloc.h"
+
+/* config.c stuff */
+const int config_need_data = 0;
 
 #define DB (CONFIG_DB_SEEN)
 #define SUBDB (CONFIG_DB_SUBS)
@@ -140,7 +142,7 @@ int main(int argc,char **argv)
     }
 
     /* Init Cyrus Backend Foo */
-    config_init(alt_config, "arbitron");
+    cyrus_init(alt_config, "arbitron");
 
     mboxlist_init(0);
     mboxlist_open(NULL);
@@ -164,7 +166,7 @@ int main(int argc,char **argv)
     construct_hash_table(&mboxname_table, 2047, 1);
 
     /* Translate any separators in mailboxname */
-    mboxname_hiersep_tointernal(&arb_namespace, pattern);
+    mboxname_hiersep_tointernal(&arb_namespace, pattern, 0);
     
     /* Get the mailbox list */
     fprintf(stderr, "Loading Mailboxes...");
@@ -187,6 +189,8 @@ int main(int argc,char **argv)
     free_mpool(arb_pool);    
     mboxlist_close();
     mboxlist_done();    
+
+    cyrus_done();
 
     return code;
 }
@@ -399,16 +403,9 @@ void make_report(char *key, void *data, void *rock)
     if(!strncasecmp(key, "user.", 5) && mbox->readers <= 1)
 	return;    
 
-    mboxname_hiersep_toexternal(&arb_namespace, key);
+    mboxname_hiersep_toexternal(&arb_namespace, key, 0);
 
     printf("%s %d", key, mbox->readers);
     if(dosubs) printf(" %d", mbox->subscribers);
     printf("\n");   
 }
-
-void fatal(const char* s, int code)
-{
-    fprintf(stderr, "arbitron: %s\n", s);
-    exit(code);
-}
-

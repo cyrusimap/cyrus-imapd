@@ -1,6 +1,5 @@
 /* mboxlist.h -- Mailbox list manipulation routines
  * 
- * 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -38,9 +37,8 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *
  * 
- * $Id: mboxlist.h,v 1.36 2003/08/08 23:08:52 rjs3 Exp $
+ * $Id: mboxlist.h,v 1.37 2003/10/22 18:02:58 rjs3 Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -83,15 +81,19 @@ struct mbox_entry {
 };
 
 /* Lookup 'name' in the mailbox list. */
-int mboxlist_lookup(const char *name, char **pathp, char **aclp, void *tid);
+int mboxlist_lookup(const char *name, char **pathp, char **aclp,
+		    struct txn **tid);
 
 /* Lookup 'name' and get more detail */
 int mboxlist_detail(const char *name, int *typep, char **pathp, char **partp,
-		    char **aclp, struct txn *tid);
+		    char **aclp, struct txn **tid);
 
-/* insert a stub entry */
+/* insert/delete stub entries */
 int mboxlist_insertremote(const char *name, int mbtype, const char *host,
-			  const char *acl, void **rettid);
+			  const char *acl, struct txn **rettid);
+int mboxlist_deleteremote(const char *name, struct txn **in_tid);
+
+
 
 /* Update a mailbox's entry */
 int mboxlist_update(char *name, int flags, const char *part, const char *acl,
@@ -128,8 +130,9 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 			   struct auth_state *auth_state);
 
 /* change ACL */
-int mboxlist_setacl(char *name, char *identifier, char *rights, int isadmin, 
-		    char *userid, struct auth_state *auth_state);
+int mboxlist_setacl(const char *name, const char *identifier,
+		    const char *rights, int isadmin, 
+		    const char *userid, struct auth_state *auth_state);
 
 /* Find all mailboxes that match 'pattern'. */
 int mboxlist_findall(struct namespace *namespace,
@@ -184,11 +187,14 @@ void mboxlist_open(char *name);
 void mboxlist_close(void);
 
 /* initialize database structures */
-#define MBOXLIST_RECOVER 0x01
 #define MBOXLIST_SYNC 0x02
 void mboxlist_init(int flags);
 
 /* done with database stuff */
 void mboxlist_done(void);
+
+/* for transactions */
+int mboxlist_commit(struct txn *tid);
+int mboxlist_abort(struct txn *tid);
 
 #endif

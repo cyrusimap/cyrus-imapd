@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.54 2003/05/29 02:14:32 rjs3 Exp $
+ * $Id: lmtpproxyd.c,v 1.55 2003/10/22 18:02:58 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -71,7 +71,7 @@
 #include "assert.h"
 #include "util.h"
 #include "prot.h"
-#include "imapconf.h"
+#include "global.h"
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"
@@ -82,6 +82,9 @@
 #include "mupdate-client.h"
 #include "lmtpengine.h"
 #include "lmtpstats.h"
+
+/* config.c stuff */
+const int config_need_data = 0;
 
 struct protstream *deliver_out = NULL, *deliver_in = NULL;
 
@@ -150,20 +153,14 @@ struct lmtp_func mylmtp = { &deliver, &verify_user, &shut_down,
 static int quotaoverride = 0;		/* should i override quota? */
 const char *BB = "";
 static mupdate_handle *mhandle = NULL;
-static const char *mupdate_server = NULL;
 int deliver_logfd = -1; /* used in lmtpengine.c */
 
 /* current namespace */
 static struct namespace lmtpd_namespace;
 
-/* the sasl proxy policy context */
-static struct proxy_context lmtpd_proxyctx = {
-    "lmtp", 1, 0, 0, NULL, NULL, NULL
-};
-
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
-    { SASL_CB_PROXY_POLICY, &mysasl_proxy_policy, (void*) &lmtpd_proxyctx },
+    { SASL_CB_PROXY_POLICY, &mysasl_proxy_policy, NULL },
     { SASL_CB_CANON_USER, &mysasl_canon_user, NULL },
     { SASL_CB_LIST_END, NULL, NULL }
 };
@@ -174,27 +171,15 @@ int service_init(int argc __attribute__((unused)),
 {
     int r;
 
-    config_changeident("lmtpproxyd");
     if (geteuid() == 0) return 1;
     
     signals_set_shutdown(&shut_down);
     signals_add_handlers();
     signal(SIGPIPE, SIG_IGN);
 
-    BB = config_getstring("postuser", BB);
+    BB = config_getstring(IMAPOPT_POSTUSER);
 
-    if ((r = sasl_server_init(mysasl_cb, "Cyrus")) != SASL_OK) {
-	syslog(LOG_ERR, "SASL failed initializing: sasl_server_init(): %s", 
-	       sasl_errstring(r, NULL, NULL));
-	return EC_SOFTWARE;
-    }
-
-    r = sasl_client_init(NULL);
-    if(r != 0) {
-	syslog(LOG_ERR, "could not initialize client-side SASL: %s",
-	       sasl_errstring(r, NULL, NULL));
-	return EC_SOFTWARE;
-    }
+    global_sasl_init(1, 1, mysasl_cb);
 
     /* Set namespace */
     if ((r = mboxname_init_namespace(&lmtpd_namespace, 0)) != 0) {
@@ -202,8 +187,7 @@ int service_init(int argc __attribute__((unused)),
 	fatal(error_message(r), EC_CONFIG);
     }
 
-    mupdate_server = config_getstring("mupdate_server", NULL);
-    if (!mupdate_server) {
+    if (!config_mupdate_server) {
 	syslog(LOG_ERR, "no mupdate_server defined");
 	return EC_CONFIG;
     }
@@ -260,13 +244,13 @@ int service_main(int argc __attribute__((unused)),
     }
     /* connect to the mupdate server */
     if (!mhandle) {
-	r = mupdate_connect(mupdate_server, NULL, &mhandle, NULL);
+	r = mupdate_connect(config_mupdate_server, NULL, &mhandle, NULL);
     }	
     if (!r) {
 	lmtpmode(&mylmtp, deliver_in, deliver_out, 0);
     } else {
 	mhandle = NULL;
-	syslog(LOG_ERR, "couldn't connect to %s: %s", mupdate_server,
+	syslog(LOG_ERR, "couldn't connect to %s: %s", config_mupdate_server,
 	       error_message(r));
 	prot_printf(deliver_out, "451 %s LMTP Cyrus %s %s\r\n",
 		    config_servername, CYRUS_VERSION, error_message(r));
@@ -291,7 +275,7 @@ int service_main(int argc __attribute__((unused)),
 /* Called by service API to shut down the service */
 void service_abort(int error)
 {
-    exit(error);
+    shut_down(error);
 }
 
 static void usage()
@@ -335,11 +319,14 @@ static struct lmtp_conn *getconn(const char *server)
 	cp = strchr(optstr, '.');
 	if (cp) *cp = '\0';
 	strlcat(optstr, "_password", sizeof(optstr));
-	pass = config_getstring(optstr, NULL);
+	pass = config_getoverflowstring(optstr, NULL);
+	if(!pass) pass = config_getstring(IMAPOPT_PROXY_PASSWORD);
 
-	cb = mysasl_callbacks(config_getstring("lmtpproxy_username", ""),
-			      config_getstring("lmtpproxy_authname", "proxy"),
-			      config_getstring("lmtpproxy_realm", NULL),
+	/* Authorization does not matter for LMTP, so we'll just pass
+	 * the empty string. */
+	cb = mysasl_callbacks("",
+			      config_getstring(IMAPOPT_PROXY_AUTHNAME),
+			      config_getstring(IMAPOPT_PROXY_REALM),
 			      pass);
 	
 	r = lmtp_connect(p->host, cb, &p->conn);
@@ -386,25 +373,46 @@ static int adddest(struct mydata *mydata,
     int sl = strlen(BB);
     int r;
     char buf[MAX_MAILBOX_NAME+1];
+    char *domain = NULL;
+    int userlen = strlen(mailbox), domainlen = 0;
+
+    if (config_virtdomains && (domain = strchr(mailbox, '@'))) {
+	userlen = domain - mailbox;
+	domain++;
+	/* ignore default domain */
+	if (!(config_defdomain && !strcasecmp(config_defdomain, domain)))
+	    domainlen = strlen(domain)+1;
+    }
 
     strlcpy(new_rcpt->mailbox, mailbox, sizeof(new_rcpt->mailbox));
     new_rcpt->rcpt_num = mydata->cur_rcpt;
     
     /* find what server we're sending this to */
-    if (sl < strlen(mailbox) && 
-	!strncmp(mailbox, BB, sl) && 
+    if (sl < strlen(mailbox) &&
+	!strncmp(mailbox, BB, sl) &&
 	mailbox[sl] == '+') {
 	/* special shared folder address */
-	strlcpy(buf, mailbox + sl + 1, sizeof(buf));
-	mboxname_hiersep_tointernal(&lmtpd_namespace, buf);
+	if (domainlen)
+	    snprintf(buf, sizeof(buf),
+		     "%s!%.*s", domain, userlen - sl - 1, mailbox + sl + 1);
+	else
+	    snprintf(buf, sizeof(buf),
+		     "%.*s", userlen - sl - 1, mailbox + sl + 1);
+	/* Translate any separators in user */
+	mboxname_hiersep_tointernal(&lmtpd_namespace, buf+domainlen, 0);
 	r = mupdate_find(mhandle, buf, &mailboxdata);
     } else {
 	char *plus;
 
-	strlcpy(buf, "user.", sizeof(buf));
-	strlcat(buf, mailbox, sizeof(buf));
+	if (domainlen)
+	    snprintf(buf, sizeof(buf),
+		     "%s!user.%.*s", domain, userlen, mailbox);
+	else
+	    snprintf(buf, sizeof(buf), "user.%.*s", userlen, mailbox);
 	plus = strchr(buf, '+');
 	if (plus) *plus = '\0';
+	/* Translate any separators in user */
+	mboxname_hiersep_tointernal(&lmtpd_namespace, buf+domainlen+5, 0);
 
 	/* find where this user lives */
 	r = mupdate_find(mhandle, buf, &mailboxdata);
@@ -570,15 +578,20 @@ int deliver(message_data_t *msgdata, char *authuser,
     /* loop through each recipient, compiling list of destinations */
     for (n = 0; n < nrcpts; n++) {
 	char *rcpt = xstrdup(msg_getrcpt(msgdata, n));
-	char *plus;
+	char *plus, *domain = NULL;
 	int r = 0;
+
+	if (config_virtdomains && (domain = strchr(rcpt, '@'))) {
+	    *domain++ = '\0';
+	}
 
 	mydata.cur_rcpt = n;
 	plus = strchr(rcpt, '+');
 	if (plus) *plus++ = '\0';
 	/* case 1: shared mailbox request */
 	if (plus && !strcmp(rcpt, BB)) {
-	    *--plus = '+';	/* put that plus back */
+	    *--plus = '+';		/* put that plus back */
+	    if (domain) *--domain = '@'; /* put that at-sign back */
 	    r = adddest(&mydata, rcpt, mydata.authuser);
 	    
 	    if (r) {
@@ -594,6 +607,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	/* case 3: ordinary user, no Sieve script */
 	else {
 	    if (plus) *--plus = '+';
+	    if (domain) *--domain = '@';
 
 	    r = adddest(&mydata, rcpt, authuser);
 	    if (r) {
@@ -686,6 +700,8 @@ void shut_down(int code)
 	mupdate_disconnect(&mhandle);
     }
 
+    cyrus_done();
+
     exit(code);
 }
 
@@ -693,36 +709,54 @@ static int verify_user(const char *user,
 		       long quotacheck __attribute__((unused)),
 		       struct auth_state *authstate)
 {
-    char buf[MAX_MAILBOX_PATH+1];
+    char buf[MAX_MAILBOX_NAME+1];
     int r = 0;
     int sl = strlen(BB);
+    char *domain = NULL;
+    int userlen = strlen(user), domainlen = 0;
+
+    if (config_virtdomains && (domain = strchr(user, '@'))) {
+	userlen = domain - user;
+	domain++;
+	/* ignore default domain */
+	if (!(config_defdomain && !strcasecmp(config_defdomain, domain)))
+	    domainlen = strlen(domain)+1;
+    }
+
 
     /* check to see if mailbox exists */
     if (!strncmp(user, BB, sl) && user[sl] == '+') {
 	/* special shared folder address */
-	strlcpy(buf, user + sl + 1, sizeof(buf));
+	if (domainlen)
+	    snprintf(buf, sizeof(buf),
+		     "%s!%.*s", domain, userlen - sl - 1, user + sl + 1);
+	else
+	    snprintf(buf, sizeof(buf),
+		     "%.*s", userlen - sl - 1, user + sl + 1);
+	/* Translate any separators in user */
+	mboxname_hiersep_tointernal(&lmtpd_namespace, buf+domainlen, 0);
     } else {			/* ordinary user */
 	int l;
 	char *plus = strchr(user, '+');
 
 	if (plus) l = plus - user;
-	else l = strlen(user);
+	else l = userlen;
 
-	if (l >= MAX_MAILBOX_NAME - 5) {
-	    /* too long a name (including user. prefix) */
+	if ((l + domainlen) >= MAX_MAILBOX_NAME - 5) {
+	    /* too long a name */
 	    r = IMAP_MAILBOX_NONEXISTENT;
 	} else {
-	    /* strcpy is safe here since we know buf is large enough */
-	    strcpy(buf, "user.");
-	    /* just copy before the plus -- strlcpy not applicable */
-	    strncat(buf, user, l);
-	    buf[l + 5] = '\0';
+	    /* just copy before the plus */
+	    if (domainlen)
+		snprintf(buf, sizeof(buf), "%s!user.%.*s", domain, l, user);
+	    else
+		snprintf(buf, sizeof(buf), "user.%.*s", l, user);
 	}
     }
 
 #ifdef CHECK_MUPDATE_EARLY
     /* Translate any separators */
-    if (!r) mboxname_hiersep_tointernal(&lmtpd_namespace, buf);
+    if (!r) mboxname_hiersep_tointernal(&lmtpd_namespace, buf+domainlen, 0);
     if (!r) {
 	r = mupdate_find(mhandle, buf, &mailboxdata);
 	if (r == MUPDATE_NOCONN) {

@@ -38,23 +38,30 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * Author: Chris Newman
- * Start Date: 4/6/93
  */
-/* $Id: util.c,v 1.25 2003/07/26 15:32:07 rjs3 Exp $
+/*
+ * $Id: util.c,v 1.26 2003/10/22 18:03:05 rjs3 Exp $
  */
 
 #include <config.h>
+
 #include <stdio.h>
 #include <ctype.h>
+#include <errno.h>
 #include <string.h>
-
+#include <stdlib.h>
 #include <syslog.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#ifdef HAVE_UNISTD_H
 #include <unistd.h>
+#endif
 
 #include <sys/socket.h>
 #include <errno.h>
 
+#include "exitcodes.h"
+#include "libcyr_cfg.h"
 #include "util.h"
 #include "xmalloc.h"
 
@@ -245,21 +252,30 @@ keyvalue *kv_bsearch(const char* key, keyvalue* kv, int nelem,
 int dir_hash_c(const char *name)
 {
     int c;
-#ifdef USE_DIR_FULL
-    unsigned char *pt;
-    unsigned int n;
 
-    n = 0;
-    pt = (unsigned char *)name;
-    while (*pt && *pt != '.') {
-	n = ((n << DIR_X) ^ (n >> DIR_Y)) ^ *pt;
-	++pt;
+    if (libcyrus_config_getswitch(CYRUSOPT_FULLDIRHASH)) {
+	unsigned char *pt;
+	unsigned int n;
+	enum {
+	    DIR_X = 3,
+	    DIR_Y = 5,
+	    DIR_P = 23,
+	    DIR_A = 'A'
+	};
+
+	n = 0;
+	pt = (unsigned char *)name;
+	while (*pt && *pt != '.') {
+	    n = ((n << DIR_X) ^ (n >> DIR_Y)) ^ *pt;
+	    ++pt;
+	}
+	c = DIR_A + (n % DIR_P);
     }
-    c = DIR_A + (n % DIR_P);
-#else
-    c = tolower(*name);
-    if (!isascii(c) || !islower(c)) c = 'q';
-#endif
+    else {
+	c = tolower(*name);
+	if (!isascii(c) || !islower(c)) c = 'q';
+    }
+
     return c;
 }
 
@@ -267,4 +283,59 @@ int cyrus_close_sock(int fd)
 {
     shutdown(fd, SHUT_RD);
     return close(fd);
+}
+
+/* Given a mkstemp(3) pattern for a filename,
+ * create the file and return the file descriptor.
+ *
+ * This routine also unlinks the file so it won't appear in the
+ * directory listing (but you won't have to worry about cleaning up
+ * after it)
+ */
+int create_tempfile() 
+{
+    int fd;
+    char pattern[2048];
+    const char *path = libcyrus_config_getstring(CYRUSOPT_TEMP_PATH);
+
+    if(snprintf(pattern, sizeof(pattern), "%s/cyrus_tmpfile_XXXXXX",
+		path) >= sizeof(pattern)){
+	fatal("temporary file pathname is too long in prot_flush",
+	      EC_TEMPFAIL);
+    }
+
+    fd = mkstemp(pattern);
+    if(fd == -1) {
+	return -1;
+    } else if(unlink(pattern) == -1) {
+	close(fd);
+	return -1;
+    }
+
+    return fd;
+}
+
+/* Create all parent directories for the given path,
+ * up to but not including the basename.
+ */
+int cyrus_mkdir(const char *path, mode_t mode)
+{
+    char *p = (char *) path;
+    int save_errno;
+    struct stat sbuf;
+
+    while ((p = strchr(p+1, '/'))) {
+	*p = '\0';
+	if (mkdir(path, 0755) == -1 && errno != EEXIST) {
+	    save_errno = errno;
+	    if (stat(path, &sbuf) == -1) {
+		errno = save_errno;
+		syslog(LOG_ERR, "IOERROR: creating directory %s: %m", path);
+		return -1;
+	    }
+	}
+	*p = '/';
+    }
+
+    return 0;
 }

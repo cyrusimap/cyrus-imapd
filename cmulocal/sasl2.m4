@@ -1,6 +1,6 @@
 dnl sasl2.m4--sasl2 libraries and includes
 dnl Rob Siemborski
-dnl $Id: sasl2.m4,v 1.34 2003/10/20 15:34:28 rjs3 Exp $
+dnl $Id: sasl2.m4,v 1.35 2003/10/22 18:02:47 rjs3 Exp $
 
 AC_DEFUN([SASL_GSSAPI_CHK],[
  AC_ARG_ENABLE(gssapi, [  --enable-gssapi=<DIR>   enable GSSAPI authentication [yes] ],
@@ -109,6 +109,10 @@ AC_SUBST(GSSAPI_LIBS)
 AC_SUBST(GSSAPIBASE_LIBS)
 ])
 
+AC_DEFUN(SASL_SET_GSSAPI_LIBS, [
+    SASL_GSSAPI_LIBS_SET="yes"
+])
+
 dnl What we want to do here is setup LIB_SASL with what one would
 dnl generally want to have (e.g. if static is requested, make it that,
 dnl otherwise make it dynamic.
@@ -118,6 +122,8 @@ dnl We also want to create LIB_DYN_SASL and DYNSASLFLAGS.
 dnl Also sets using_static_sasl to "no" "static" or "staticonly"
 
 AC_DEFUN([CMU_SASL2], [
+	AC_REQUIRE([SASL_GSSAPI_CHK])
+
 AC_ARG_WITH(sasl,
             [  --with-sasl=DIR         Compile with libsasl2 in <DIR>],
 	    with_sasl="$withval",
@@ -165,9 +171,12 @@ AC_ARG_WITH(staticsasl,
 
 	  AC_MSG_RESULT(found)
 
-	  SASL_GSSAPI_CHK
-
-	  LIB_SASL="$LIB_SASL $GSSAPIBASE_STATIC_LIBS"
+          if test "x$SASL_GSSAPI_LIBS_SET" = "x"; then
+	    LIB_SASL="$LIB_SASL $GSSAPIBASE_STATIC_LIBS"
+	  else
+	    SASL_GSSAPI_LIBS_SET=""
+	    cmu_saved_LIBS="$GSSAPIBASE_STATIC_LIBS $cmu_saved_LIBS" 
+	  fi
 	fi
 
 	if test -d ${with_sasl}; then
@@ -206,6 +215,11 @@ AC_ARG_WITH(staticsasl,
 	    using_static_sasl="staticonly"
 	fi
 
+        if test "x$SASL_GSSAPI_LIBS_SET" != "x"; then
+	    SASL_GSSAPI_LIBS_SET=""
+	    cmu_saved_LIBS="$GSSAPIBASE_LIBS $cmu_saved_LIBS" 
+	fi
+
 	LIBS="$cmu_saved_LIBS"
 	LDFLAGS="$cmu_saved_LDFLAGS"
 	CPPFLAGS="$cmu_saved_CPPFLAGS"
@@ -223,6 +237,33 @@ if test "$ac_cv_found_sasl" != "yes"; then
 Get it from ftp://ftp.andrew.cmu.edu/pub/cyrus-mail/.])
 fi])
 
+AC_DEFUN([CMU_SASL2_REQUIRE_VER], [
+	AC_REQUIRE([CMU_SASL2_REQUIRED])
+
+	cmu_saved_CPPFLAGS=$CPPFLAGS
+	CPPFLAGS="$CPPFLAGS $SASLFLAGS"
+
+	AC_TRY_CPP([
+#include <sasl/sasl.h>
+
+#ifndef SASL_VERSION_MAJOR
+#error SASL_VERSION_MAJOR not defined
+#endif
+#ifndef SASL_VERSION_MINOR
+#error SASL_VERSION_MINOR not defined
+#endif
+#ifndef SASL_VERSION_STEP
+#error SASL_VERSION_STEP not defined
+#endif
+
+#if SASL_VERSION_MAJOR < $1 || SASL_VERSION_MINOR < $2 || SASL_VERSION_STEP < $3
+#error SASL version is less than $1.$2.$3
+#endif
+	],,AC_ERROR([Incorrect SASL headers found.  This package requires SASL $1.$2.$3 or newer.]))
+
+	CPPFLAGS=$cmu_saved_CPPFLAGS
+])
+
 AC_DEFUN([CMU_SASL2_CHECKAPOP_REQUIRED], [
 	AC_REQUIRE([CMU_SASL2_REQUIRED])
 
@@ -230,7 +271,7 @@ AC_DEFUN([CMU_SASL2_CHECKAPOP_REQUIRED], [
 
 	LDFLAGS="$LDFLAGS $LIB_SASL"
 
-	AC_CHECK_LIB(sasl2, sasl_checkapop, AC_DEFINE(HAVE_APOP,[],[Does our libsasl2 support APOP?]),
+	AC_CHECK_LIB(sasl2, sasl_checkapop, AC_DEFINE(HAVE_APOP,[],[Does SASL support APOP?]),
 		AC_MSG_ERROR([libsasl2 without working sasl_checkapop.  Cannot continue.]))
 
 	LDFLAGS=$cmu_saved_LDFLAGS

@@ -49,7 +49,7 @@ RANLIB = @RANLIB@
 DEFS = @DEFS@
 CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@ 
 LIBS = @LIBS@ 
-DEPLIBS = ../lib/libcyrus.a @DEPLIBS@
+DEPLIBS = ../lib/libcyrus.a ../lib/libcyrus_min.a @DEPLIBS@
 
 CFLAGS = -g
 LDFLAGS = -g

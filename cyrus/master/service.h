@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.h,v 1.14 2003/02/13 20:15:45 rjs3 Exp $ */
+/* $Id: service.h,v 1.15 2003/10/22 18:03:09 rjs3 Exp $ */
 
 #ifndef SERVICE_H
 #define SERVICE_H
@@ -51,7 +51,8 @@ enum {
 enum {
     MASTER_SERVICE_AVAILABLE = 0x01,
     MASTER_SERVICE_UNAVAILABLE = 0x02,
-    MASTER_SERVICE_CONNECTION = 0x03
+    MASTER_SERVICE_CONNECTION = 0x03,
+    MASTER_SERVICE_CONNECTION_MULTI = 0x04
 };
 
 extern int service_init(int argc, char **argv, char **envp);
@@ -62,6 +63,11 @@ extern int service_abort(int error);
 enum {
     MAX_USE = 250,
     REUSE_TIMEOUT = 60
+};
+
+struct notify_message {
+    int message;
+    pid_t service_pid;
 };
 
 #endif

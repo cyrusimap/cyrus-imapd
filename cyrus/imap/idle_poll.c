@@ -38,19 +38,18 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle_poll.c,v 1.6 2003/02/13 20:15:24 rjs3 Exp $ */
+/* $Id: idle_poll.c,v 1.7 2003/10/22 18:02:57 rjs3 Exp $ */
 
 #include <config.h>
 
 #include <syslog.h>
-#include <time.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
 #include <signal.h>
 
 #include "idle.h"
-#include "imapconf.h"
+#include "global.h"
 
 const char *idle_method_desc = "poll";
 
@@ -60,12 +59,11 @@ static idle_updateproc_t *idle_update = NULL;
 /* how often to poll the mailbox */
 static time_t idle_period = -1;
 
-
 int idle_enabled(void)
 {
     /* get polling period */
     if (idle_period == -1) {
-      idle_period = config_getint("imapidlepoll", 60);
+      idle_period = config_getint(IMAPOPT_IMAPIDLEPOLL);
       if (idle_period < 0) idle_period = 0;
     }
 
@@ -73,14 +71,15 @@ int idle_enabled(void)
     return idle_period;
 }
 
-static void idle_poll(int sig)
+static void idle_poll(int sig __attribute__((unused)))
 {
     idle_update(IDLE_MAILBOX|IDLE_ALERT);
 
     alarm(idle_period);
 }
 
-int idle_init(struct mailbox *mailbox, idle_updateproc_t *proc)
+int idle_init(struct mailbox *mailbox __attribute__((unused)),
+	      idle_updateproc_t *proc)
 {
     struct sigaction action;
 
@@ -104,7 +103,7 @@ int idle_init(struct mailbox *mailbox, idle_updateproc_t *proc)
     return 1;
 }
 
-void idle_done(struct mailbox *mailbox)
+void idle_done(struct mailbox *mailbox __attribute__((unused)))
 {
     /* Remove the polling function */
     signal(SIGALRM, SIG_IGN);

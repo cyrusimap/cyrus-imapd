@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: auth_unix.c,v 1.35 2003/05/13 15:33:26 rjs3 Exp $
+ * $Id: auth_unix.c,v 1.36 2003/10/22 18:03:04 rjs3 Exp $
  */
 
 #include <config.h>
@@ -52,6 +52,7 @@
 #include <string.h>
 
 #include "auth.h"
+#include "libcyr_cfg.h"
 #include "xmalloc.h"
 
 const char *auth_method_desc = "unix";
@@ -161,18 +162,11 @@ size_t len;
     struct group *grp;
     char sawalpha;
     char *p;
+    int username_tolower = 0;
 
     if(!len) len = strlen(identifier);
     if(len >= sizeof(retbuf)) return NULL;
 
-    if (strcasecmp(identifier, "anonymous") == 0) {
-	return "anonymous";
-    }
-    if (strcasecmp(identifier, "anybody") == 0 ||
-	strcasecmp(identifier, "anyone") == 0) {
-	return "anyone";
-    }
-    
     memmove(retbuf, identifier, len);
     retbuf[len] = '\0';
 
@@ -193,9 +187,14 @@ size_t len;
 
     /* Copy the string and look up values in the allowedchars array above.
      * If we see any we don't like, reject the string.
+     * Lowercase usernames if requested.
      */
+    username_tolower = libcyrus_config_getswitch(CYRUSOPT_USERNAME_TOLOWER);
     sawalpha = 0;
     for(p = retbuf; *p; p++) {
+	if (username_tolower && isupper((unsigned char)*p))
+	    *p = tolower((unsigned char)*p);
+
 	switch (allowedchars[*(unsigned char*) p]) {
 	case 0:
 	    return NULL;
@@ -219,10 +218,7 @@ size_t len;
  * points to a 16-byte binary key to cache identifier's information
  * with.
  */
-struct auth_state *
-auth_newstate(identifier, cacheid)
-const char *identifier;
-const char *cacheid;
+struct auth_state *auth_newstate(const char *identifier)
 {
     struct auth_state *newstate;
     struct passwd *pwd;
@@ -233,14 +229,17 @@ const char *cacheid;
     if (!identifier) return 0;
     if (!strncmp(identifier, "group:", 6)) return 0;
     
-    pwd = getpwnam(identifier);
-
     newstate = (struct auth_state *)xmalloc(sizeof(struct auth_state));
 
     strcpy(newstate->userid, identifier);
     newstate->ngroups = 0;
-    newstate->group = (char **) 0;
+    newstate->group = NULL;
+    
+    if(!libcyrus_config_getswitch(CYRUSOPT_AUTH_UNIX_GROUP_ENABLE))
+	return newstate;
 
+    pwd = getpwnam(identifier);
+	
     setgrent();
     while ((grp = getgrent())) {
 	for (mem = grp->gr_mem; *mem; mem++) {

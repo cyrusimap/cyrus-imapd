@@ -1,6 +1,6 @@
 /* mbpath.c -- help the sysadmin to find the path matching the mailbox
  *
- * $Id: mbpath.c,v 1.12 2003/02/13 20:15:28 rjs3 Exp $
+ * $Id: mbpath.c,v 1.13 2003/10/22 18:02:58 rjs3 Exp $
  * 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -42,7 +42,7 @@
  *
  */
 
-/* static char _rcsid[] = "$Id: mbpath.c,v 1.12 2003/02/13 20:15:28 rjs3 Exp $"; */
+/* static char _rcsid[] = "$Id: mbpath.c,v 1.13 2003/10/22 18:02:58 rjs3 Exp $"; */
 
 #include <config.h>
 
@@ -64,7 +64,7 @@
 #include "prot.h"
 #include "imparse.h"
 #include "lock.h"
-#include "imapconf.h"
+#include "global.h"
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"
@@ -74,15 +74,8 @@
 extern int optind;
 extern char *optarg;
 
-void
-fatal(const char *s, int code) 
-{
-  if (s) {
-    fprintf(stderr,"%s\n",s);
-  }
-  mboxlist_done();
-  exit(code);
-}
+/* config.c stuff */
+const int config_need_data = 0;
 
 static int 
 usage(void) {
@@ -116,7 +109,7 @@ main(int argc, char **argv)
     }
   }
 
-  config_init(alt_config, "mbpath");
+  cyrus_init(alt_config, "mbpath");
 
   mboxlist_init(0);
   mboxlist_open(NULL);
@@ -142,8 +135,10 @@ main(int argc, char **argv)
   mboxlist_close();
   mboxlist_done();
 
-  exit(0);
+  cyrus_done();
+
+  return 0;
 }
 
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/mbpath.c,v 1.12 2003/02/13 20:15:28 rjs3 Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/mbpath.c,v 1.13 2003/10/22 18:02:58 rjs3 Exp $ */
 

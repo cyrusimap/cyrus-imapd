@@ -1,6 +1,6 @@
 <HTML><HEAD>
 <title>Cyrus IMAP Server:  Overview and Concepts</title>
-<!-- $Id: overview.html,v 1.19 2003/10/16 15:33:31 rjs3 Exp $ -->
+<!-- $Id: overview.html,v 1.20 2003/10/22 18:02:53 rjs3 Exp $ -->
 </HEAD><BODY>
 <H1>Cyrus IMAP Server:  Overview and Concepts</H1>
 
@@ -251,7 +251,7 @@ for which the entry applies.
 <p>There are two special identifiers,
 "anonymous", and "anyone", which are explained below.  The meaning of 
 other identifiers usually depends on the authorization mechanism being used
-(selected by <tt>--with-auth</tt> at compile time, defaulting to Kerberos).
+(selected by <tt>--with-auth</tt> at compile time, defaulting to Unix).
 
 <H4><A NAME="aclany">"<TT>anonymous</TT>" and "<TT>anyone</TT>"</A></H4>
 
@@ -262,16 +262,16 @@ anonymous user.
 
 <H3><A NAME="aclauth">Kerberos vs. Unix Authorization</A></H3>
 
-The Cyrus IMAP server comes with three authorization mechanisms, one is
+The Cyrus IMAP server comes with four authorization mechanisms, one is
 compatible with Unix-style ("<tt>/etc/passwd</tt>") authorization, one for
-use with Kerberos, and one for use with Kerberos and AFS pts groups.
+use with Kerberos 4, one for use with Kerberos 5, and one for use with
+an external authorization process (ptloader) which can interface with
+other group databases (e.g. AFS PTS groups, LDAP Groups, etc).
 
 <p>Note that authorization is <b>not</b> authentication.  Authentication
 is the act of proving who you are.  Authorization is the act of determining
 what rights you have.  Authentication is discussed in the
-<a href="#login">Login Authentication</a> part of this document.  To find
-out more about the differences between authorization and authentication,
-read the included <A href=faq.html>FAQ</a>.
+<a href="#login">Login Authentication</a> part of this document.
 
 <p>In the Unix authorization mechanism, identifiers are either a
 valid userid or the string "<tt>group</tt>": 
@@ -881,12 +881,12 @@ LMTP AUTH.  This is accomplished using SASL to authenticate the delivering
 user.  If your mail server is performing delivery via LMTP AUTH (that is,
 using a SASL mechanism), you will want their authentication id to be an
 LMTP admins (either via the <tt>admins</tt> imapd.conf option or via the
-<tt>lmtp_admins</tt> option).</p>
+<tt><service>_admins</tt> option, typically <tt>lmtp_admins</tt>).</p>
 
 <p>Alternatively you may deliver via LMTP to a unix domain socket, and the
 connection will be preauthenticated as an administrative user (and access
 control is accomplished by controlling access to the socket).</p>
-
+  
 <p>Note that if a user has a sieve script, the sieve script runs authorized
 as *that* user, and the rights of the posting user are ignored for the purposes
 of determining the outcome of the sieve script.</p>

@@ -1,6 +1,6 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.40 2003/08/14 16:20:33 rjs3 Exp $
- 
+ * $Id: seen_db.c,v 1.41 2003/10/22 18:02:59 rjs3 Exp $
+ * 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -62,7 +62,7 @@
 #include "bsearch.h"
 #include "util.h"
 
-#include "imapconf.h"
+#include "global.h"
 #include "xmalloc.h"
 #include "mailbox.h"
 #include "imap_err.h"
@@ -87,7 +87,6 @@ struct seen {
 
 static struct seen *lastseen = NULL;
 
-/* choose "flat" or "db3" here */
 #define DB (CONFIG_DB_SEEN)
 
 static void abortcurrent(struct seen *s)
@@ -104,13 +103,24 @@ static void abortcurrent(struct seen *s)
 
 char *seen_getpath(const char *userid)
 {
-    char *fname = xmalloc(strlen(config_dir) + sizeof(FNAME_USERDIR) +
-		    strlen(userid) + sizeof(FNAME_SEENSUFFIX) + 10);
-    char c;
+    char *fname = xmalloc(strlen(config_dir) + sizeof(FNAME_DOMAINDIR) +
+			  sizeof(FNAME_USERDIR) + strlen(userid) +
+			  sizeof(FNAME_SEENSUFFIX) + 10);
+    char c, *domain;
 
-    c = (char) dir_hash_c(userid);
-    sprintf(fname, "%s%s%c/%s%s", config_dir, FNAME_USERDIR, c, userid,
-	    FNAME_SEENSUFFIX);
+    if (config_virtdomains && (domain = strchr(userid, '@'))) {
+	char d = (char) dir_hash_c(domain+1);
+	*domain = '\0';  /* split user@domain */
+	c = (char) dir_hash_c(userid);
+	sprintf(fname, "%s%s%c/%s%s%c/%s%s", config_dir, FNAME_DOMAINDIR, d,
+		domain+1, FNAME_USERDIR, c, userid, FNAME_SEENSUFFIX);
+	*domain = '@';  /* reassemble user@domain */
+    }
+    else {
+	c = (char) dir_hash_c(userid);
+	sprintf(fname, "%s%s%c/%s%s", config_dir, FNAME_USERDIR, c, userid,
+		FNAME_SEENSUFFIX);
+    }
 
     return fname;
 }
@@ -474,6 +484,25 @@ int seen_delete_user(const char *user)
 	r = IMAP_IOERROR;
     }
     free(fname);
+    
+    return r;
+}
+
+int seen_rename_user(const char *olduser, const char *newuser)
+{
+    char *oldfname = seen_getpath(olduser);
+    char *newfname = seen_getpath(newuser);
+    int r;
+
+    if (SEEN_DEBUG) {
+	syslog(LOG_DEBUG, "seen_db: seen_rename_user(%s, %s)", 
+	       olduser, newuser);
+    }
+
+    r = seen_merge(oldfname, newfname);
+
+    free(oldfname);
+    free(newfname);
     
     return r;
 }

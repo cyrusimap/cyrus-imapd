@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-/* $Id: signals.c,v 1.9 2003/02/13 20:15:30 rjs3 Exp $ */
+/* $Id: signals.c,v 1.10 2003/10/22 18:02:59 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -46,7 +46,7 @@
 #include <signal.h>
 #include <syslog.h>
 
-#include "imapconf.h"
+#include "global.h"
 #include "xmalloc.h"
 #include "exitcodes.h"
 

@@ -45,11 +45,10 @@
  *
  */
 
-/* $Id: readconfig.c,v 1.6 2003/02/13 20:15:46 rjs3 Exp $ */
+/* $Id: readconfig.c,v 1.7 2003/10/22 18:03:11 rjs3 Exp $ */
 
-/*     Copyright 1991 Rich Salz.
+/*   Copyright 1991 Rich Salz.
  *   All rights reserved.
- *   $Revision: 1.6 $
  *
  *    Redistribution and use in any form are permitted provided that the
  *    following restrictions are are met:
@@ -82,6 +81,7 @@
 #include "xmalloc.h"
 #include "imclient.h"
 #include "imparse.h"
+#include "wildmat.h"
 
 #define NUM_STORAGE_CLASSES 100
 
@@ -89,8 +89,6 @@
 #define FALSE (0)
 #define TRUE  (1)
 #define STATIC static
-
-extern int wildmat(const char *text, const char *p);
 
 
 typedef struct _NEWSGROUP {

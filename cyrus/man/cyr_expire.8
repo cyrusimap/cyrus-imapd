@@ -1,0 +1,93 @@
+.\" -*- nroff -*-
+.TH CYR_EXPIRE 8 "Project Cyrus" CMU
+.\" 
+.\" Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
+.\"
+.\" Redistribution and use in source and binary forms, with or without
+.\" modification, are permitted provided that the following conditions
+.\" are met:
+.\"
+.\" 1. Redistributions of source code must retain the above copyright
+.\"    notice, this list of conditions and the following disclaimer. 
+.\"
+.\" 2. Redistributions in binary form must reproduce the above copyright
+.\"    notice, this list of conditions and the following disclaimer in
+.\"    the documentation and/or other materials provided with the
+.\"    distribution.
+.\"
+.\" 3. The name "Carnegie Mellon University" must not be used to
+.\"    endorse or promote products derived from this software without
+.\"    prior written permission. For permission or any other legal
+.\"    details, please contact  
+.\"      Office of Technology Transfer
+.\"      Carnegie Mellon University
+.\"      5000 Forbes Avenue
+.\"      Pittsburgh, PA  15213-3890
+.\"      (412) 268-4387, fax: (412) 268-7395
+.\"      tech-transfer@andrew.cmu.edu
+.\"
+.\" 4. Redistributions of any form whatsoever must retain the following
+.\"    acknowledgment:
+.\"    "This product includes software developed by Computing Services
+.\"     at Carnegie Mellon University (http://www.cmu.edu/computing/)."
+.\"
+.\" CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
+.\" THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+.\" AND FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE
+.\" FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+.\" WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+.\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
+.\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+.\" 
+.\" $Id: cyr_expire.8,v 1.2 2003/10/22 18:03:08 rjs3 Exp $
+.SH NAME
+cyr_expire \- expire messages and duplicate delivery database entries
+.SH SYNOPSIS
+.B cyr_expire
+[
+.B \-C
+.I config-file
+]
+.BI \-E " days"
+[
+.B \-v
+]
+.SH DESCRIPTION
+.I Cyr_expire
+is used to expire messages and duplicate delivery database entries.
+The expiration of messages is controlled by the
+\fB/vendor/cmu/cyrus-imapd/expire\fR mailbox annotation which
+specifies the age (in days) of messages in the given mailbox that
+should be deleted.  Any duplicate delivery database entries which
+correspond to the mailbox are also deleted at the same frequency.
+.br
+.sp
+The value of the \fB/vendor/cmu/cyrus-imapd/expire\fR annotation is
+inherited by all children of the given mailbox, so an entire mailbox
+tree can be expired by seting a single annotation on the root of that
+tree.  If a mailbox does not have a
+\fB/vendor/cmu/cyrus-imapd/expire\fR annotation set on it (or does not
+inherit one), then no messages are expired from the mailbox.
+.PP
+.I Cyr_expire
+reads its configuration options out of the
+.IR imapd.conf (5)
+file unless specified otherwise by \fB-C\fR.
+.SH OPTIONS
+.TP
+.BI \-C " config-file"
+Read configuration options from \fIconfig-file\fR.
+.TP
+\fB\-E \fIdays\fR
+Prune the duplicate database of entries older than \fIdays\fR.  This
+value is only used for entries which do not have a corresponding
+\fB/vendor/cmu/cyrus-imapd/expire\fR mailbox annotation.
+.TP
+.B \-v
+Enable verbose output.
+.SH FILES
+.TP
+.B /etc/imapd.conf
+.SH SEE ALSO
+.PP
+\fBimapd.conf(5)\fR, \fBmaster(8)\fR

@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- $Id: masterconf.h,v 1.4 2003/02/13 20:15:45 rjs3 Exp $
+ $Id: masterconf.h,v 1.5 2003/10/22 18:03:09 rjs3 Exp $
  
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -44,7 +44,7 @@
 #ifndef INCLUDED_MASTERCONF_H
 #define INCLUDED_MASTERCONF_H
 
-extern int masterconf_init(const char *ident);
+extern int masterconf_init(const char *ident, const char *alt_config);
 
 struct entry;
 

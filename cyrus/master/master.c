@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.83 2003/09/04 19:57:57 rjs3 Exp $ */
+/* $Id: master.c,v 1.84 2003/10/22 18:03:09 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -81,6 +81,10 @@
 #define INADDR_ANY 0x00000000
 #endif
 
+#if !defined(IPV6_V6ONLY) && defined(IPV6_BINDV6ONLY)
+#define	IPV6_V6ONLY	IPV6_BINDV6ONLY
+#endif
+
 #ifdef HAVE_UCDSNMP
 #include <ucd-snmp/ucd-snmp-config.h>
 #include <ucd-snmp/ucd-snmp-includes.h>
@@ -96,6 +100,8 @@
 
 #include "lock.h"
 
+#include "xmalloc.h"
+
 enum {
     become_cyrus_early = 1,
     child_table_size = 10000,
@@ -106,14 +112,14 @@ static int verbose = 0;
 static int listen_queue_backlog = 32;
 static int pidfd = -1;
 
+const char *MASTER_CONFIG_FILENAME = DEFAULT_MASTER_CONFIG_FILENAME;
+
 struct service *Services = NULL;
 int allocservices = 0;
 int nservices = 0;
 
-struct recover {
-    char *name;
-    char *const *exec;
-};
+/* make libcyrus_min happy */
+int config_need_data = 0;
 
 struct event {
     char *name;
@@ -124,28 +130,45 @@ struct event {
 };
 static struct event *schedule = NULL;
 
+enum sstate {
+    SERVICE_STATE_UNKNOWN = 0,  /* duh */
+    SERVICE_STATE_INIT    = 1,  /* Service forked - UNUSED */
+    SERVICE_STATE_READY   = 2,  /* Service told us it is ready */
+    				/* or it just forked and has not
+				 * talked to us yet */
+    SERVICE_STATE_BUSY    = 3,  /* Service told us it is not ready */
+    SERVICE_STATE_DEAD    = 4   /* We received a sigchld from this service */
+};
+
 struct centry {
     pid_t pid;
+    enum sstate service_state;	/* SERVICE_STATE_* */
+    time_t janitor_deadline;	/* cleanup deadline */
     struct service *s;
     struct centry *next;
 };
 static struct centry *ctable[child_table_size];
 static struct centry *cfreelist;
 
+static int janitor_frequency = 1;	/* Janitor sweeps per second */
+static int janitor_position;		/* Entry to begin at in next sweep */
+static struct timeval janitor_mark;	/* Last time janitor did a sweep */
+
 void limit_fds(rlim_t);
 void schedule_event(struct event *a);
 
-static char *mystrdup(const char *s)
-{
-    if (!s) return NULL;
-    return strdup(s);
-}
-
-void fatal(char *msg, int code)
+void fatal(const char *msg, int code)
 {
     syslog(LOG_CRIT, "%s", msg);
     syslog(LOG_NOTICE, "exiting");
     exit(code);
+}
+
+void event_free(struct event *a) 
+{
+    if(a->exec) free((char**)a->exec);
+    if(a->name) free((char*)a->name);
+    free(a);
 }
 
 int become_cyrus(void)
@@ -231,7 +254,7 @@ static struct centry *get_centry(void)
 	struct centry *n;
 	int i;
 
-	n = malloc(child_table_inc * sizeof(struct centry));
+	n = xmalloc(child_table_inc * sizeof(struct centry));
 	cfreelist = n;
 	for (i = 0; i < child_table_inc - 1; i++) {
 	    n[i].next = n + (i + 1);
@@ -242,6 +265,8 @@ static struct centry *get_centry(void)
 
     t = cfreelist;
     cfreelist = cfreelist->next;
+
+    t->janitor_deadline = 0;
 
     return t;
 }
@@ -270,58 +295,19 @@ char *parse_listen(char *listen)
     return port;
 }
 
-/* set sin_port accordingly. return of 0 indicates failure. */
-int resolve_port(char *port, struct service *s, struct sockaddr_in *sin)
+char *parse_host(char *listen)
 {
-    struct servent *serv;
-    
-    serv = getservbyname(port, s->proto);
-    if (serv) {
-        sin->sin_port = serv->s_port;
-    } else {
-        sin->sin_port = htons(atoi(port));
-        if (sin->sin_port == 0) {
-            syslog(LOG_INFO, "no service '%s' in /etc/services, "
-                   "disabling %s", port, s->name);
-            s->exec = NULL;
-            return 0;
-        }
-    }
-    return 1;
-}
-
-/* set sin_addr accordingly. return of 0 indicates failure. */
-int resolve_host(char *listen, struct sockaddr_in *sin)
-{
-    struct hostent *hp;
     char *cp;
 
     /* do we have a hostname, or IP number? */
-    /* XXX are brackets necessary, like for IPv6 later? */
+    /* XXX are brackets necessary  */
     if (*listen == '[') {
         listen++;  /* skip first bracket */
         if ((cp = strrchr(listen,']')) != NULL) {
             *cp = '\0';
         }
     }
-    sin->sin_addr.s_addr = inet_addr(listen);
-    if ((sin->sin_addr.s_addr == INADDR_NONE) || (sin->sin_addr.s_addr == 0)) {
-        /* looks like it isn't an IP address, so look up the host */
-        if ((hp = gethostbyname(listen)) == 0) {
-            syslog(LOG_INFO, "host not found: %s", listen);
-            return 0;
-        }
-        if (hp->h_addrtype != AF_INET) {
-            syslog(LOG_INFO, "unexpected address family: %d", hp->h_addrtype);
-            return 0;
-        }
-        if (hp->h_length != sizeof(sin->sin_addr)) {
-            syslog(LOG_INFO, "unexpected address length %d", hp->h_length);
-            return 0;
-        }
-        memcpy((char *) &sin->sin_addr, hp->h_addr, hp->h_length);
-    }
-    return 1;
+    return listen;
 }
 
 int verify_service_file(char *const *filename)
@@ -337,112 +323,177 @@ int verify_service_file(char *const *filename)
 
 void service_create(struct service *s)
 {
-    struct sockaddr_in sin;
+    struct service service0, service;
+    struct addrinfo hints, *res0, *res;
+    int error, nsocket = 0;
     struct sockaddr_un sunsock;
-    struct sockaddr *sa;
     mode_t oldumask;
-    int on = 1, salen;
+    int on = 1;
     int r;
 
-    memset(&sin, 0, sizeof(sin));
-
+    if (s->associate > 0)
+	return;			/* service is already activated */
+    
     if (s->listen[0] == '/') { /* unix socket */
+	res0 = (struct addrinfo *)malloc(sizeof(struct addrinfo));
+	if (!res0)
+	    fatal("out of memory", EX_UNAVAILABLE);
+	memset(res0, 0, sizeof(struct addrinfo));
+	res0->ai_flags = AI_PASSIVE;
+	res0->ai_family = PF_UNIX;
+	if(!strcmp(s->proto, "tcp")) {
+	    res0->ai_socktype = SOCK_STREAM;
+	} else {
+	    /* udp */
+	    res0->ai_socktype = SOCK_DGRAM;
+	}
+ 	res0->ai_addr = (struct sockaddr *)&sunsock;
+ 	res0->ai_addrlen = sizeof(sunsock.sun_family) + strlen(s->listen) + 1;
+#ifdef SIN6_LEN
+ 	res0->ai_addrlen += sizeof(sunsock.sun_len);
+ 	sunsock.sun_len = res0->ai_addrlen;
+#endif
 	sunsock.sun_family = AF_UNIX;
 	strcpy(sunsock.sun_path, s->listen);
 	unlink(s->listen);
-	sa = (struct sockaddr *) &sunsock;
-	salen = sizeof(sunsock.sun_family) + strlen(sunsock.sun_path) + 1;
-
-	if(!strcmp(s->proto, "tcp")) {
-	    s->socket = socket(AF_UNIX, SOCK_STREAM, 0);
-	} else {
-	    /* udp */
-	    s->socket = socket(AF_UNIX, SOCK_DGRAM, 0);
-	}
     } else { /* inet socket */
 	char *listen, *port;
-
-	sin.sin_family = AF_INET;
+	char *listen_addr;
+	
+ 	memset(&hints, 0, sizeof(hints));
+ 	hints.ai_flags = AI_PASSIVE;
+ 	if (!strcmp(s->proto, "tcp")) {
+ 	    hints.ai_family = PF_UNSPEC;
+ 	    hints.ai_socktype = SOCK_STREAM;
+ 	} else if (!strcmp(s->proto, "tcp4")) {
+ 	    hints.ai_family = PF_INET;
+ 	    hints.ai_socktype = SOCK_STREAM;
+ 	} else if (!strcmp(s->proto, "tcp6")) {
+ 	    hints.ai_family = PF_INET6;
+ 	    hints.ai_socktype = SOCK_STREAM;
+ 	} else if (!strcmp(s->proto, "udp")) {
+ 	    hints.ai_family = PF_UNSPEC;
+ 	    hints.ai_socktype = SOCK_DGRAM;
+ 	} else if (!strcmp(s->proto, "udp4")) {
+ 	    hints.ai_family = PF_INET;
+ 	    hints.ai_socktype = SOCK_DGRAM;
+ 	} else if (!strcmp(s->proto, "udp6")) {
+ 	    hints.ai_family = PF_INET6;
+ 	    hints.ai_socktype = SOCK_DGRAM;
+ 	} else {
+  	    syslog(LOG_INFO, "invalid proto '%s', disabling %s",
+		   s->proto, s->name);
+ 	    s->exec = NULL;
+ 	    return;
+ 	}
 
 	/* parse_listen() and resolve_host() are destructive,
 	 * so make a work copy of s->listen
 	 */
-	listen = strdup(s->listen);
+	listen = xstrdup(s->listen);
 
         if ((port = parse_listen(listen)) == NULL) {
             /* listen IS the port */
-            if (!resolve_port(listen, s, &sin)) {
-		free(listen);
-                return;
-            }
-            sin.sin_addr.s_addr = INADDR_ANY;
+	    port = listen;
+	    listen_addr = NULL;
         } else {
-            /* listen is now just the address */
-            if (!resolve_port(port, s, &sin)) {
-		free(listen);
-                return;
-            }
-            if (!resolve_host(listen, &sin)) {
-		s->exec = NULL;
-		free(listen);
-                return;
-            }
+            /* s->listen is now just the address */
+	    listen_addr = parse_host(listen);
+	    if (*listen_addr == '\0')
+		listen_addr = NULL;	    
         }
-	sa = (struct sockaddr *) &sin;
-	salen = sizeof(sin);
 
-	if(!strcmp(s->proto, "tcp")) {
-	    s->socket = socket(AF_INET, SOCK_STREAM, 0);
-	} else {
-	    /* udp */
-	    s->socket = socket(AF_INET, SOCK_DGRAM, 0);
-	}
-	
+	error = getaddrinfo(listen_addr, port, &hints, &res0);
+
 	free(listen);
+
+	if (error) {
+	    syslog(LOG_INFO, "%s, disabling %s", gai_strerror(error), s->name);
+	    s->exec = NULL;
+	    return;
+	}
     }
 
-    if (s->socket < 0) {
+    memcpy(&service0, s, sizeof(struct service));
+
+    for (res = res0; res; res = res->ai_next) {
+	if (s->socket > 0) {
+	    memcpy(&service, &service0, sizeof(struct service));
+	    s = &service;
+	}
+
+	s->socket = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+	if (s->socket < 0) {
+	    s->socket = 0;
+	    if (verbose > 2)
+		syslog(LOG_ERR, "unable to open %s socket: %m", s->name);
+	    continue;
+	}
+
+	/* allow reuse of address */
+	r = setsockopt(s->socket, SOL_SOCKET, SO_REUSEADDR, 
+		       (void *) &on, sizeof(on));
+	if (r < 0) {
+	    syslog(LOG_ERR, "unable to setsocketopt(SO_REUSEADDR): %m");
+	}
+#if defined(IPV6_V6ONLY) && !(defined(__FreeBSD__) && __FreeBSD__ < 3)
+	if (res->ai_family == AF_INET6) {
+	    r = setsockopt(s->socket, IPPROTO_IPV6, IPV6_V6ONLY,
+			   (void *) &on, sizeof(on));
+	    if (r < 0) {
+		syslog(LOG_ERR, "unable to setsocketopt(IPV6_V6ONLY): %m");
+	    }
+	}
+#endif
+
+	oldumask = umask((mode_t) 0); /* for linux */
+	r = bind(s->socket, res->ai_addr, res->ai_addrlen);
+	umask(oldumask);
+	if (r < 0) {
+	    close(s->socket);
+	    s->socket = 0;
+	    if (verbose > 2)
+		syslog(LOG_ERR, "unable to bind to %s socket: %m", s->name);
+	    continue;
+	}
+	
+	if (s->listen[0] == '/') { /* unix socket */
+	    /* for DUX, where this isn't the default.
+	       (harmlessly fails on some systems) */
+	    chmod(s->listen, (mode_t) 0777);
+	}
+	
+	if ((!strcmp(s->proto, "tcp") || !strcmp(s->proto, "tcp4")
+	     || !strcmp(s->proto, "tcp6"))
+	    && listen(s->socket, listen_queue_backlog) < 0) {
+	    syslog(LOG_ERR, "unable to listen to %s socket: %m", s->name);
+	    close(s->socket);
+	    s->socket = 0;
+	    continue;
+	}
+	
+	s->ready_workers = 0;
+	s->associate = nsocket;
+	
+	get_statsock(s->stat);
+	
+	if (s == &service) {
+	    if (nservices == allocservices) {
+		Services = xrealloc(Services, 
+				    (allocservices+=5) * sizeof(struct service));
+		if (!Services) fatal("out of memory", EX_UNAVAILABLE);
+	    }
+	    memcpy(&Services[nservices++], s, sizeof(struct service));
+	}
+	nsocket++;
+    }
+    if (res0)
+	freeaddrinfo(res0);
+    if (nsocket <= 0) {
 	syslog(LOG_ERR, "unable to create %s listener socket: %m", s->name);
 	s->exec = NULL;
 	return;
     }
-
-    /* allow reuse of address */
-    r = setsockopt(s->socket, SOL_SOCKET, SO_REUSEADDR, 
-		   (void *) &on, sizeof(on));
-    if (r < 0) {
-	syslog(LOG_ERR, "unable to setsocketopt(SO_REUSEADDR): %m");
-    }
-
-    oldumask = umask((mode_t) 0); /* for linux */
-    r = bind(s->socket, sa, salen);
-    umask(oldumask);
-    if (r < 0) {
-	syslog(LOG_ERR, "unable to bind socket for service %s: %m", s->name);
-	close(s->socket);
-	s->socket = 0;
-	s->exec = NULL;
-	return;
-    }
-
-    if (s->listen[0] == '/') { /* unix socket */
-	/* for DUX, where this isn't the default.
-	   (harmlessly fails on some systems) */
-	chmod(s->listen, (mode_t) 0777);
-    }
-
-    if (!strcmp(s->proto, "tcp")
-	&& listen(s->socket, listen_queue_backlog) < 0) {
-	syslog(LOG_ERR, "unable to listen to %s socket: %m", s->name);
-	close(s->socket);
-	s->socket = 0;
-	s->exec = NULL;
-	return;
-    }
-
-    s->ready_workers = 0;
-
-    get_statsock(s->stat);
 }
 
 void run_startup(char **cmd)
@@ -453,7 +504,7 @@ void run_startup(char **cmd)
 
     switch (pid = fork()) {
     case -1:
-	syslog(LOG_CRIT, "can't fork process to run startup");
+	syslog(LOG_CRIT, "can't fork process to run startup: %m");
 	fatal("can't run startup", 1);
 	break;
 	
@@ -462,7 +513,7 @@ void run_startup(char **cmd)
 	if(pidfd != -1) close(pidfd);
 
 	if (become_cyrus() != 0) {
-	    syslog(LOG_ERR, "can't change to the cyrus user");
+	    syslog(LOG_ERR, "can't change to the cyrus user: %m");
 	    exit(1);
 	}
 
@@ -474,7 +525,7 @@ void run_startup(char **cmd)
 	syslog(LOG_ERR, "can't exec %s for startup: %m", path);
 	exit(EX_OSERR);
 	
-    default:
+    default: /* parent */
 	if (waitpid(pid, &status, 0) < 0) {
 	    syslog(LOG_ERR, "waitpid(): %m");
 	} else if (status != 0) {
@@ -510,10 +561,9 @@ void spawn_service(struct service *s)
     pid_t p;
     int i;
     char path[PATH_MAX];
-    static char name_env[100];
+    static char name_env[100], name_env2[100];
     struct centry *c;
     time_t now = time(NULL);
-    int msg;
     
     /* update our fork rate */
     if(now - s->last_interval_start >= FORKRATE_INTERVAL) {
@@ -544,11 +594,11 @@ void spawn_service(struct service *s)
     /* (We schedule a wakeup call for sometime soon though to be
      * sure that we don't wait to do the fork that is required forever! */
     if(s->maxforkrate && s->forkrate >= s->maxforkrate) {
-	struct event *evt = (struct event *) malloc(sizeof(struct event));
-	if (!evt) fatal("out of memory", EX_UNAVAILABLE);
+	struct event *evt = (struct event *) xmalloc(sizeof(struct event));
+
 	memset(evt, 0, sizeof(struct event));
 
-	evt->name = "forkrate wakeup call";
+	evt->name = xstrdup("forkrate wakeup call");
 	evt->mark = time(NULL) + FORKRATE_INTERVAL;
 	schedule_event(evt);
 
@@ -595,12 +645,11 @@ void spawn_service(struct service *s)
 	/* add service name to environment */
 	snprintf(name_env, sizeof(name_env), "CYRUS_SERVICE=%s", s->name);
 	putenv(name_env);
+	snprintf(name_env2, sizeof(name_env2), "CYRUS_ID=%d", s->associate);
+	putenv(name_env2);
 
 	execv(path, s->exec);
 	syslog(LOG_ERR, "couldn't exec %s: %m", path);
-	if (write(STATUS_FD, &msg, sizeof(msg)) != sizeof(msg)) {
-	    syslog(LOG_ERR, "unable to tell master %x: %m", msg);
-	}
 	exit(EX_OSERR);
 
     default:			/* parent */
@@ -612,6 +661,7 @@ void spawn_service(struct service *s)
 	/* add to child table */
 	c = get_centry();
 	c->pid = p;
+	c->service_state = SERVICE_STATE_READY;
 	c->s = s;
 	c->next = ctable[p % child_table_size];
 	ctable[p % child_table_size] = c;
@@ -701,6 +751,7 @@ void spawn_schedule(time_t now)
 		/* add to child table */
 		c = get_centry();
 		c->pid = p;
+		c->service_state = SERVICE_STATE_READY;
 		c->s = NULL;
 		c->next = ctable[p % child_table_size];
 		ctable[p % child_table_size] = c;
@@ -716,7 +767,7 @@ void spawn_schedule(time_t now)
 	    /* reschedule a */
 	    schedule_event(a);
 	} else {
-	    free(a);
+	    event_free(a);
 	}
 	/* examine next event */
 	a = b;
@@ -742,48 +793,168 @@ void reap_child(void)
 
 	/* account for the child */
 	c = ctable[pid % child_table_size];
+	while(c && c->pid != pid) c = c->next;
+	
 	if (c && c->pid == pid) {
-	    /* first thing in the linked list */
-
-	    /* decrement active count for service */
-	    if (c->s) c->s->nactive--;
-
-	    ctable[pid % child_table_size] = c->next;
-	    c->next = cfreelist;
-	    cfreelist = c;
-	} else {
-	    /* not the first thing in the linked list */
-
-	    while (c->next) {
-		if (c->next->pid == pid) break;
-		c = c->next;
+	    /* paranoia */
+	    switch (c->service_state) {
+	    case SERVICE_STATE_READY:
+	    case SERVICE_STATE_BUSY:
+	    case SERVICE_STATE_UNKNOWN:
+	    case SERVICE_STATE_DEAD:
+		break;
+	    default:
+		syslog(LOG_CRIT, 
+		       "service %s pid %d in ILLEGAL STATE: exited. Serious software bug or memory corruption detected!",
+		       ((c->s) ? c->s->name : "unknown"), pid);
+		syslog(LOG_DEBUG,
+		       "service %s pid %d in ILLEGAL state: forced to valid UNKNOWN state",
+		       ((c->s) ? c->s->name : "unknown"), pid);
+		c->service_state = SERVICE_STATE_UNKNOWN;
 	    }
-	    if (c->next) {
-		struct centry *t;
+	    if (c->s) {
+	        /* update counters for known services */
+		switch (c->service_state) {
+		case SERVICE_STATE_READY:
+		    c->s->nactive--;
+		    c->s->ready_workers--;
+		    if (WIFSIGNALED(status) ||
+			(WIFEXITED(status) && WEXITSTATUS(status))) {
+			syslog(LOG_WARNING, 
+			       "service %s pid %d in READY state: terminated abnormally",
+			       c->s->name, pid);
+		    }
+		    break;
+		    
+		case SERVICE_STATE_DEAD:
+		    /* uh? either we got duplicate signals, or we are now MT */
+		    syslog(LOG_WARNING, 
+			   "service %s pid %d in DEAD state: receiving duplicate signals", 
+			   c->s->name, pid);
+		    break;
+		    
+		case SERVICE_STATE_BUSY:
+		    c->s->nactive--;
+		    if (WIFSIGNALED(status) ||
+			(WIFEXITED(status) && WEXITSTATUS(status))) {
+			syslog(LOG_DEBUG,
+			       "service %s pid %d in BUSY state: terminated abnormally",
+			       c->s->name, pid);
+		    }
+		    break;
+		    
+		case SERVICE_STATE_UNKNOWN:
+		    c->s->nactive--;
+		    syslog(LOG_WARNING,
+			   "service %s pid %d in UNKNOWN state: exited",
+			   c->s->name, pid);
+		    break;
 
-		t = c->next;
-		/* decrement active count for service */
-		if (t->s) t->s->nactive--;
-
-		c->next = t->next; /* remove node */
-		t->next = cfreelist; /* add to freelist */
-		cfreelist = t;
+		default:
+		    /* Prevent Warning */
+		    break;
+		} 
 	    } else {
-		/* yikes! don't know about this child! */
-		syslog(LOG_ERR, "process %d not recognized", pid);
+	    	/* children from spawn_schedule (events) or children that messaged us before being registered */
+		if (c->service_state != SERVICE_STATE_READY) {
+		    syslog(LOG_ERR,
+			   "unknown service pid %d in state %d: exited (maybe using a service as an event?)",
+			   pid, c->service_state);
+		}
+	    }
+	    c->service_state = SERVICE_STATE_DEAD;
+	    c->janitor_deadline = time(NULL) + 2;
+	} else {
+	    /* weird. Are we multithreaded now? we don't know this child */
+	    syslog(LOG_WARNING,
+		   "receiving signals from unregistered child %d. Handling it anyway",
+		   pid);
+	    c = get_centry();
+	    c->pid = pid;
+	    c->service_state = SERVICE_STATE_DEAD;
+	    c->janitor_deadline = time(NULL) + 2;
+	    c->s = NULL;
+	    c->next = ctable[pid % child_table_size];
+	    ctable[pid % child_table_size] = c;
+	}
+    if (verbose && c && c->s)
+	syslog(LOG_DEBUG, "service %s now has %d ready workers\n", 
+	       c->s->name, c->s->ready_workers);
+    }
+}
+
+void init_janitor(void)
+{
+    struct event *evt = (struct event *) malloc(sizeof(struct event));
+    
+    if (!evt) fatal("out of memory", EX_UNAVAILABLE);
+    memset(evt, 0, sizeof(struct event));
+    
+    gettimeofday(&janitor_mark, NULL);
+    janitor_position = 0;
+    
+    evt->name = xstrdup("janitor periodic wakeup call");
+    evt->period = 10;
+    evt->mark = time(NULL) + 2;
+    schedule_event(evt);
+}
+
+void child_janitor(void)
+{
+    int i;
+    struct centry **p;
+    struct centry *c;
+    struct timeval rightnow;
+    time_t now;
+    
+    now = time(NULL);
+    
+    /* Estimate the number of entries to clean up in this sweep */
+    gettimeofday(&rightnow, NULL);
+    if (rightnow.tv_sec > janitor_mark.tv_sec + 1) {
+	/* overflow protection */
+	i = child_table_size;
+    } else {
+	double n;
+	
+	n = child_table_size * janitor_frequency * 
+	    (double) ((rightnow.tv_sec - janitor_mark.tv_sec) * 1000000 +
+	              rightnow.tv_usec - janitor_mark.tv_usec ) / 1000000;
+	if (n < child_table_size) {
+	    i = n;
+	} else {
+	    i = child_table_size;
+	}
+    }
+    
+    while (i-- > 0) {
+	p = &ctable[janitor_position++];
+	janitor_position = janitor_position % child_table_size;
+	while (*p) {
+	    c = *p;
+	    if (c->service_state == SERVICE_STATE_DEAD) {
+		if (c->janitor_deadline < now) {
+		    *p = c->next;
+		    c->next = cfreelist;
+		    cfreelist = c;
+		} else {
+		    p = &((*p)->next);
+		}
+	    } else {
+		p = &((*p)->next);
 	    }
 	}
     }
 }
 
-static int gotsigchld = 0;
+static volatile int gotsigchld = 0;
 
 void sigchld_handler(int sig __attribute__((unused)))
 {
     gotsigchld = 1;
 }
 
-static int gotsighup = 0;
+static volatile int gotsighup = 0;
 
 void sighup_handler(int sig __attribute__((unused)))
 {
@@ -807,7 +978,7 @@ void sigterm_handler(int sig __attribute__((unused)))
 	syslog(LOG_ERR, "sigterm_handler: kill(0, SIGTERM): %m");
     }
 
-#if HAVE_UCDSNMP
+#ifdef HAVE_UCDSNMP
     /* tell master agent we're exiting */
     snmp_shutdown("cyrusMaster");
 #endif
@@ -858,29 +1029,203 @@ void sighandler_setup(void)
     }
 }
 
-void process_msg(struct service *s, int msg)
+void process_msg(struct service *s, struct notify_message *msg) 
 {
-    switch (msg) {
+    struct centry * c;
+    
+    /* s must NOT be null
+     * but we don't assert(s) since the current code 
+     * makes NULL s an impossibility anyway 
+     */
+
+    /* Search hash table with linked list for pid */
+    c = ctable[msg->service_pid % child_table_size];
+    while (c && c->pid != msg->service_pid) c = c->next;
+    
+    /* Did we find it? */
+    if (!c || c->pid != msg->service_pid) {
+	syslog(LOG_WARNING, "service %s pid %d: while trying to process message 0x%x: not registered yet", 
+	       s->name, msg->service_pid, msg->message);
+	/* resilience paranoia. Causes small performance loss when used */
+	c = get_centry();
+	c->s = s;
+	c->pid = msg->service_pid;
+	c->service_state = SERVICE_STATE_UNKNOWN;
+	c->next = ctable[c->pid % child_table_size];
+	ctable[c->pid % child_table_size] = c;
+    }
+    
+    /* paranoia */
+    if (s != c->s) {
+	syslog(LOG_ERR, 
+	       "service %s pid %d: changing from service %s due to received message",
+	       s->name, c->pid, ( (c->s) ? c->s->name : "unknown" ));
+	c->s = s;
+    }
+    switch (c->service_state) {
+    case SERVICE_STATE_UNKNOWN:
+	syslog(LOG_WARNING, 
+	       "service %s pid %d in UNKNOWN state: processing message 0x%x",
+	       s->name, c->pid, msg->message);
+	break;
+    case SERVICE_STATE_READY:
+    case SERVICE_STATE_BUSY:
+    case SERVICE_STATE_DEAD:
+	break;
+    default:
+	syslog(LOG_CRIT,
+	       "service %s pid %d in ILLEGAL state: detected. Serious software bug or memory corruption uncloaked while processing message 0x%x from child!",
+	       s->name, c->pid, msg->message);
+	syslog(LOG_DEBUG,
+	       "service %s pid %d in ILLEGAL state: forced to valid UNKNOWN state",
+	       s->name, c->pid);
+	c->service_state = SERVICE_STATE_UNKNOWN;
+	break;
+    }
+    
+    /* process message, according to state machine */
+    switch (msg->message) {
     case MASTER_SERVICE_AVAILABLE:
-	s->ready_workers++;
+	switch (c->service_state) {
+	case SERVICE_STATE_READY:
+	    /* duplicate message? */
+	    syslog(LOG_WARNING,
+		   "service %s pid %d in READY state: sent available message but it is already ready",
+		   s->name, c->pid);
+	    break;
+	    
+	case SERVICE_STATE_UNKNOWN:
+	    /* since state is unknwon, error in non-DoS way, i.e.
+	     * we don't increment ready_workers */
+	    syslog(LOG_DEBUG,
+		   "service %s pid %d in UNKNOWN state: now available and in READY state",
+		   s->name, c->pid);
+	    c->service_state = SERVICE_STATE_READY;
+	    break;
+	    
+	case SERVICE_STATE_BUSY:
+	    if (verbose) 
+		syslog(LOG_DEBUG,
+		       "service %s pid %d in BUSY state: now available and in READY state",
+		       s->name, c->pid);
+	    c->service_state = SERVICE_STATE_READY;
+	    s->ready_workers++;
+	    break;
+
+	default:
+	    /* Prevent Warning */
+	    break;
+	}
 	break;
 
     case MASTER_SERVICE_UNAVAILABLE:
-	s->ready_workers--;
+	switch (c->service_state) {
+	case SERVICE_STATE_BUSY:
+	    /* duplicate message? */
+	    syslog(LOG_WARNING,
+		   "service %s pid %d in BUSY state: sent unavailable message but it is already busy",
+		   s->name, c->pid);
+	    break;
+	    
+	case SERVICE_STATE_UNKNOWN:
+	    syslog(LOG_DEBUG,
+		   "service %s pid %d in UNKNOWN state: now unavailable and in BUSY state",
+		   s->name, c->pid);
+	    c->service_state = SERVICE_STATE_BUSY;
+	    break;
+	    
+	case SERVICE_STATE_READY:
+	    if (verbose)
+		syslog(LOG_DEBUG,
+		       "service %s pid %d in READY state: now unavailable and in BUSY state",
+		       s->name, c->pid);
+	    c->service_state = SERVICE_STATE_BUSY;
+	    s->ready_workers--;
+	    break;
+
+	default:
+	    /* Prevent Warning */
+	    break;
+	}
 	break;
 
     case MASTER_SERVICE_CONNECTION:
-	s->nconnections++;
+	switch (c->service_state) {
+	case SERVICE_STATE_BUSY:
+	    s->nconnections++;
+	    if (verbose)
+		syslog(LOG_DEBUG,
+		       "service %s pid %d in BUSY state: now serving connection",
+		       s->name, c->pid);
+	    break;
+	    
+	case SERVICE_STATE_UNKNOWN:
+	    s->nconnections++;
+	    c->service_state = SERVICE_STATE_BUSY;
+	    syslog(LOG_DEBUG,
+		   "service %s pid %d in UNKNOWN state: now in BUSY state and serving connection",
+		   s->name, c->pid);
+	    break;
+	    
+	case SERVICE_STATE_READY:
+	    syslog(LOG_ERR, 
+		   "service %s pid %d in READY state: reported new connection, forced to BUSY state",
+		   s->name, c->pid);
+	    /* be resilient on face of a bogon source, so lets err to the side
+	     * of non-denial-of-service */
+	    c->service_state = SERVICE_STATE_BUSY;
+	    s->nconnections++;
+	    s->ready_workers--;
+
+	default:
+	    /* Prevent Warning */
+	    break;
+	}
+	break;
+	
+    case MASTER_SERVICE_CONNECTION_MULTI:
+	switch (c->service_state) {
+	case SERVICE_STATE_READY:
+	    s->nconnections++;
+	    if (verbose)
+		syslog(LOG_DEBUG, 
+		       "service %s pid %d in READY state: serving one more multi-threaded connection",
+		       s->name, c->pid);
+	    break;
+	    
+	case SERVICE_STATE_BUSY:
+	    syslog(LOG_ERR, 
+		   "service %s pid %d in BUSY state: serving one more multi-threaded connection, forced to READY state",
+		   s->name, c->pid);
+	    /* be resilient on face of a bogon source, so lets err to the side
+	     * of non-denial-of-service */
+	    c->service_state = SERVICE_STATE_READY;
+	    s->nconnections++;
+	    s->ready_workers++;
+	    break;
+	    
+	case SERVICE_STATE_UNKNOWN:
+	    s->nconnections++;
+	    c->service_state = SERVICE_STATE_READY;
+	    syslog(LOG_ERR,
+		   "service %s pid %d in UNKNOWN state: serving one more multi-threaded connection, forced to READY state",
+		   s->name, c->pid);
+	    break;
+
+	default:
+	    /* Prevent Warning */
+	    break;
+	}
 	break;
 	
     default:
-	syslog(LOG_ERR, "unrecognized message for service '%s': %x", 
-	       s->name, msg);
+	syslog(LOG_CRIT, "service %s pid %d: Software bug: unrecognized message 0x%x", 
+	       s->name, c->pid, msg->message);
 	break;
     }
 
     if (verbose)
-	syslog(LOG_DEBUG, "service %s now has %d workers\n", 
+	syslog(LOG_DEBUG, "service %s now has %d ready workers\n", 
 	       s->name, s->ready_workers);
 }
 
@@ -893,8 +1238,7 @@ static char **tokenize(char *p)
     while (*p) {
 	while (*p && isspace((int) *p)) p++; /* skip whitespace */
 
-	if (!(i % 10)) tokens = realloc(tokens, (i+10) * sizeof(char *));
-	if (!tokens) return NULL;
+	if (!(i % 10)) tokens = xrealloc(tokens, (i+10) * sizeof(char *));
 
 	/* got a token */
 	tokens[i++] = p;
@@ -904,7 +1248,7 @@ static char **tokenize(char *p)
 	if (*p) *p++ = '\0';
     }
     /* add a NULL on the end */
-    if (!(i % 10)) tokens = realloc(tokens, (i+1) * sizeof(char *));
+    if (!(i % 10)) tokens = xrealloc(tokens, (i+1) * sizeof(char *));
     if (!tokens) return NULL;
     tokens[i] = NULL;
 
@@ -914,7 +1258,7 @@ static char **tokenize(char *p)
 void add_start(const char *name, struct entry *e,
 	       void *rock __attribute__((unused)))
 {
-    char *cmd = mystrdup(masterconf_getstring(e, "cmd", NULL));
+    char *cmd = xstrdup(masterconf_getstring(e, "cmd", NULL));
     char buf[256];
     char **tok;
 
@@ -933,15 +1277,15 @@ void add_start(const char *name, struct entry *e,
 void add_service(const char *name, struct entry *e, void *rock)
 {
     int ignore_err = (int) rock;
-    char *cmd = mystrdup(masterconf_getstring(e, "cmd", NULL));
+    char *cmd = xstrdup(masterconf_getstring(e, "cmd", NULL));
     int prefork = masterconf_getint(e, "prefork", 0);
     int babysit = masterconf_getswitch(e, "babysit", 0);
     int maxforkrate = masterconf_getint(e, "maxforkrate", 0);
-    char *listen = mystrdup(masterconf_getstring(e, "listen", NULL));
-    char *proto = mystrdup(masterconf_getstring(e, "proto", "tcp"));
-    char *max = mystrdup(masterconf_getstring(e, "maxchild", "-1"));
+    char *listen = xstrdup(masterconf_getstring(e, "listen", NULL));
+    char *proto = xstrdup(masterconf_getstring(e, "proto", "tcp"));
+    char *max = xstrdup(masterconf_getstring(e, "maxchild", "-1"));
     rlim_t maxfds = (rlim_t) masterconf_getint(e, "maxfds", 256);
-    int i;
+    int i, j;
 
     if(babysit && prefork == 0) prefork = 1;
     if(babysit && maxforkrate == 0) maxforkrate = 10; /* reasonable safety */
@@ -961,6 +1305,8 @@ void add_service(const char *name, struct entry *e, void *rock)
 
     /* see if we have an existing entry for this service */
     for (i = 0; i < nservices; i++) {
+	if (Services[i].associate > 0)
+	    continue;
 	if (Services[i].name && !strcmp(Services[i].name, name)) break;
     }
 
@@ -996,9 +1342,12 @@ void add_service(const char *name, struct entry *e, void *rock)
 	}
 
 	Services[i].maxforkrate = maxforkrate;
-	Services[i].maxfds = maxfds;
 
-	if (!strcmp(Services[i].proto, "tcp")) {
+ 	Services[nservices].maxfds = maxfds;
+
+	if (!strcmp(Services[i].proto, "tcp") ||
+	    !strcmp(Services[i].proto, "tcp4") ||
+	    !strcmp(Services[i].proto, "tcp6")) {
 	    Services[i].desired_workers = prefork;
 	    Services[i].babysit = babysit;
 	    Services[i].max_workers = atoi(max);
@@ -1010,6 +1359,17 @@ void add_service(const char *name, struct entry *e, void *rock)
 	    if (prefork > 1) prefork = 1;
 	    Services[i].desired_workers = prefork;
 	    Services[i].max_workers = 1;
+	}
+ 
+	for (j = 0; j < nservices; j++) {
+	    if (Services[j].associate > 0 &&
+		Services[j].name && !strcmp(Services[j].name, name)) {
+		Services[j].maxforkrate = Services[i].maxforkrate;
+		Services[j].exec = Services[i].exec;
+		Services[j].desired_workers = Services[i].desired_workers;
+		Services[j].babysit = Services[i].babysit;
+		Services[j].max_workers = Services[i].max_workers;
+	    }
 	}
 
 	if (verbose > 2)
@@ -1024,12 +1384,11 @@ void add_service(const char *name, struct entry *e, void *rock)
 	 * the port parameters, so create a new service
 	 */
 	if (nservices == allocservices) {
-	    Services = realloc(Services, 
+	    Services = xrealloc(Services, 
 			       (allocservices+=5) * sizeof(struct service));
-	    if (!Services) fatal("out of memory", EX_UNAVAILABLE);
 	}
 
-	Services[nservices].name = strdup(name);
+	Services[nservices].name = xstrdup(name);
 	Services[nservices].listen = listen;
 	Services[nservices].proto = proto;
 	Services[nservices].exec = tokenize(cmd);
@@ -1050,11 +1409,12 @@ void add_service(const char *name, struct entry *e, void *rock)
 
 	Services[nservices].ready_workers = 0;
 
+ 	Services[nservices].maxfds = maxfds;
 	Services[nservices].maxforkrate = maxforkrate;
 
-	Services[nservices].maxfds = maxfds;
-
-	if(!strcmp(Services[nservices].proto, "tcp")) {
+	if(!strcmp(Services[nservices].proto, "tcp") ||
+	   !strcmp(Services[nservices].proto, "tcp4") ||
+	   !strcmp(Services[nservices].proto, "tcp6")) {
 	    Services[nservices].desired_workers = prefork;
 	    Services[nservices].babysit = babysit;
 	    Services[nservices].max_workers = atoi(max);
@@ -1076,7 +1436,8 @@ void add_service(const char *name, struct entry *e, void *rock)
 	Services[nservices].nforks = 0;
 	Services[nservices].nactive = 0;
 	Services[nservices].nconnections = 0;
-
+	Services[nservices].associate = 0;
+	
 	if (verbose > 2)
 	    syslog(LOG_DEBUG, "add: service '%s' (%s, %s:%s, %d, %d, %d)",
 		   Services[nservices].name, cmd,
@@ -1094,7 +1455,7 @@ void add_service(const char *name, struct entry *e, void *rock)
 void add_event(const char *name, struct entry *e, void *rock)
 {
     int ignore_err = (int) rock;
-    char *cmd = mystrdup(masterconf_getstring(e, "cmd", NULL));
+    char *cmd = xstrdup(masterconf_getstring(e, "cmd", NULL));
     int period = 60 * masterconf_getint(e, "period", 0);
     int at = masterconf_getint(e, "at", -1), hour, min;
     time_t now = time(NULL);
@@ -1113,9 +1474,8 @@ void add_event(const char *name, struct entry *e, void *rock)
 	fatal(buf, EX_CONFIG);
     }
     
-    evt = (struct event *) malloc(sizeof(struct event));
-    if (!evt) fatal("out of memory", EX_UNAVAILABLE);
-    evt->name = strdup(name);
+    evt = (struct event *) xmalloc(sizeof(struct event));
+    evt->name = xstrdup(name);
 
     if (at >= 0 && ((hour = at / 100) <= 23) && ((min = at % 100) <= 59)) {
 	struct tm *tm = localtime(&now);
@@ -1206,16 +1566,24 @@ void reread_conf(void)
 		syslog(LOG_DEBUG, "disable: service %s socket %d pipe %d %d",
 		       Services[i].name, Services[i].socket,
 		       Services[i].stat[0], Services[i].stat[1]);
-	    free(Services[i].name); Services[i].name = NULL;
-	    free(Services[i].listen);
-	    free(Services[i].proto);
+
+	    /* Only free the service info once */
+	    if(Services[i].associate == 0) {
+		free(Services[i].name);
+		free(Services[i].listen);
+		free(Services[i].proto);
+	    }
+	    Services[i].name = NULL;
 	    Services[i].desired_workers = 0;
 	    Services[i].nforks = 0;
 	    Services[i].nactive = 0;
 	    Services[i].nconnections = 0;
 
 	    /* close all listeners */
-	    if (Services[i].socket > 0) close(Services[i].socket);
+	    if (Services[i].socket > 0) {
+		shutdown(Services[i].socket, SHUT_RDWR);
+		close(Services[i].socket);
+	    }
 	    Services[i].socket = 0;
 	    Services[i].saddr = NULL;
 
@@ -1239,14 +1607,15 @@ void reread_conf(void)
     while (schedule) {
 	ptr = schedule;
 	schedule = schedule->next;
-	free(ptr->name);
-	free((char**) ptr->exec);
-	free(ptr);
+	event_free(ptr);
     }
     schedule = NULL;
 
     /* read events */
     masterconf_getsection("EVENTS", &add_event, (void*) 1);
+
+    /* reinit child janitor */
+    init_janitor();
 }
 
 int main(int argc, char **argv)
@@ -1263,14 +1632,23 @@ int main(int argc, char **argv)
     int i, opt, close_std = 1, daemon_mode = 0;
     extern int optind;
     extern char *optarg;
+
+    char *alt_config = NULL;
+    
     int fd;
     fd_set rfds;
     char *p = NULL;
 
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
-    while ((opt = getopt(argc, argv, "p:l:Dd")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:M:p:l:Ddj:")) != EOF) {
 	switch (opt) {
+	case 'C': /* alt imapd.conf file */
+	    alt_config = optarg;
+	    break;
+	case 'M': /* alt cyrus.conf file */
+	    MASTER_CONFIG_FILENAME = optarg;
+	    break;
 	case 'l':
             /* user defined listen queue backlog */
 	    listen_queue_backlog = atoi(optarg);
@@ -1291,12 +1669,18 @@ int main(int argc, char **argv)
 		fatal("Unable to be both debug and daemon mode", EX_CONFIG);
 	    close_std = 0;
 	    break;
+	case 'j':
+	    /* Janitor frequency */
+	    janitor_frequency = atoi(optarg);
+	    if(janitor_frequency < 1)
+		fatal("The janitor period must be at least 1 second", EX_CONFIG);
+	    break;   
 	default:
 	    break;
 	}
     }
 
-    masterconf_init("master");
+    masterconf_init("master", alt_config);
 
     /* zero out the children table */
     memset(&ctable, 0, sizeof(struct centry *) * child_table_size);
@@ -1336,8 +1720,7 @@ int main(int argc, char **argv)
 	/* Daemonize */
 	pid_t pid = -1;
 
-	pidfile_lock = malloc(strlen(pidfile) + strlen(lock_suffix) + 1);
-	if(!pidfile_lock) fatal("out of memory", EX_TEMPFAIL);
+	pidfile_lock = xmalloc(strlen(pidfile) + strlen(lock_suffix) + 1);
 
 	strcpy(pidfile_lock, pidfile);
 	strcat(pidfile_lock, lock_suffix);
@@ -1440,7 +1823,7 @@ int main(int argc, char **argv)
 	    }
 	    
 	    /* Write PID */
-	    snprintf(buf, sizeof(buf), "%lu\n", (unsigned long)getpid());
+	    snprintf(buf, sizeof(buf), "%lu\n", (unsigned long int)getpid());
 	    if(lseek(pidfd, 0, SEEK_SET) == -1 ||
 	       ftruncate(pidfd, 0) == -1 ||
 	       write(pidfd, buf, strlen(buf)) == -1) {
@@ -1501,15 +1884,24 @@ int main(int argc, char **argv)
 		   Services[i].stat[0], Services[i].stat[1]);
     }
 
-    if (become_cyrus_early) become_cyrus();
-
+    if (become_cyrus_early) {
+	if (become_cyrus() != 0) {
+	    syslog(LOG_ERR, "can't change to the cyrus user: %m");
+	    exit(1);
+	}
+    }
+    
+    /* init ctable janitor */
+    init_janitor();
+    
     /* ok, we're going to start spawning like mad now */
     syslog(LOG_NOTICE, "ready for work");
 
     for (;;) {
-	int r, i, msg, maxfd;
+	int r, i, maxfd;
 	struct timeval tv, *tvptr;
 	time_t now = time(NULL);
+	struct notify_message msg;
 #if HAVE_UCDSNMP
 	int blockp = 0;
 #endif
@@ -1615,13 +2007,13 @@ int main(int argc, char **argv)
 	    int j;
 
 	    if (FD_ISSET(x, &rfds)) {
-		r = read(x, &msg, sizeof(int));
-		if (r != sizeof(int)) {
-		    syslog(LOG_ERR, "got weird response from child: %x", i);
+		r = read(x, &msg, sizeof(msg));
+		if (r != sizeof(msg)) {
+		    syslog(LOG_ERR, "got incorrectly sized response from child: %x", i);
 		    continue;
 		}
 		
-		process_msg(&Services[i], msg);
+		process_msg(&Services[i], &msg);
 	    }
 
 	    if (Services[i].nactive < Services[i].max_workers) {
@@ -1640,5 +2032,6 @@ int main(int argc, char **argv)
 		}
 	    }
 	}
+	child_janitor();
     }
 }

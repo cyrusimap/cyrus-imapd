@@ -1,3 +1,4 @@
 Makefile
+makedepend.log
 notifyd
 notifytest

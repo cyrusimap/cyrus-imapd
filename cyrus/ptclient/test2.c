@@ -39,14 +39,14 @@
  *
  */
 
-/* $Id: test2.c,v 1.4 2003/02/13 20:15:56 rjs3 Exp $ */
+/* $Id: test2.c,v 1.5 2003/10/22 18:03:22 rjs3 Exp $ */
 
 #include <stdio.h>
 #include <sys/syslog.h>
 
 int main(void) {
   char cacheid[16]="4224423";
-  openlog("testr", LOG_PID,LOG_LOCAL6);
+  openlog("testr", LOG_PID, SYSLOG_FACILITY);
   
   if (!auth_setid("cg2v@club.cc.cmu.edu",cacheid))
     printf ("Auth_memberof(cg2v,cg2v:me) is %d\n",

@@ -1,4 +1,4 @@
-<!-- $Id: install-configure.html,v 1.28 2003/02/10 21:03:25 leg Exp $ -->
+<!-- $Id: install-configure.html,v 1.29 2003/10/22 18:02:53 rjs3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and configuring the IMAP Server
@@ -129,8 +129,7 @@ cyrus user and group and should not permit access to other users.
 The partition directory is similar in concept to
 <tt>/var/spool/news</tt>.  It is where the mailboxes are stored.
 Unlike most netnews systems, Cyrus allows you to have more
-than one partition.  Do not use the string "<tt>news</tt>" as a
-partition name, as it is reserved for netnews.
+than one partition.
 
 <li>If you wish to use Sieve, and you didn't configure deliver to look
 in home directories (see the <tt>imapd.conf</tt> man page), create the
@@ -145,10 +144,8 @@ Sieve directory:
 </kbd></pre>
 
 <li>Change to the Cyrus user and use the tool
-&quot;<tt>tools/mkimap</tt>&quot; to create the rest of the directories
-(subdirectories of the directories you just created).  Note that if
-you compiled cyrus with <tt>--enable-fulldirhash</tt>, you need to use 
-&quot;<tt>tools/rehash</tt>&quot; instead.
+"<tt>tools/mkimap</tt>" to create the rest of the directories
+(subdirectories of the directories you just created).
 
 <pre>
 <kbd>   su cyrus
@@ -188,8 +185,10 @@ aren't already there.
 
 <pre>
    pop3      110/tcp
+   nntp      119/tcp
    imap      143/tcp
    imsp      406/tcp
+   nntps     563/tcp
    acap      674/tcp
    imaps     993/tcp
    pop3s     995/tcp
@@ -398,6 +397,11 @@ local_delivery:
 <p>For more advanced configurations (such as address verification, etc),
 consult the Exim documentation and sample configurations.
 
+<h3>Exporting Netnews via IMAP</h3>
+
+If you wish to use export Netnews via IMAP, consult <a
+href=install-netnews.html>install-netnews.html</a>.
+
 <a name="openssl"><h2>SSL, TLS, and OpenSSL</h2></a>
 
 <p>Transport Layer Security (TLS), is a standardized version of the Secure
@@ -533,5 +537,5 @@ convention, consult <a
 href=altnamespace.html#altnameconfig>altnamespace.html</a>.
 
 <P><HR>
-last modified: $Date: 2003/02/10 21:03:25 $
+last modified: $Date: 2003/10/22 18:02:53 $
 </BODY></HTML>

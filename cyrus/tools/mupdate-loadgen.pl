@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl
+#!/usr/bin/perl
 
 $prefix = "test.mupdate-load.";
 $lups = 150;

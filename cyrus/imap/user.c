@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: user.c,v 1.15 2003/07/28 04:00:32 rjs3 Exp $
+ * $Id: user.c,v 1.16 2003/10/22 18:02:59 rjs3 Exp $
  */
 
 #include <config.h>
@@ -73,13 +73,12 @@
 # endif
 #endif
 
-#include "imapconf.h"
+#include "global.h"
 #include "user.h"
 #include "mboxlist.h"
 #include "mailbox.h"
 #include "util.h"
 #include "seen.h"
-#include "xmalloc.h"
 
 #if 0
 static int user_deleteacl(char *name, int matchlen, int maycreate, void* rock)
@@ -114,19 +113,33 @@ static int user_deleteacl(char *name, int matchlen, int maycreate, void* rock)
 }
 #endif
 
-int user_deletesieve(char *user) 
+static int user_deletesieve(char *user) 
 {
+    char hash, *domain;
     char sieve_path[2048];
     char filename[2048];
     DIR *mbdir;
     struct dirent *next = NULL;
     
     /* oh well */
-    if(config_getswitch("sieveusehomedir", 0)) return 0;
+    if(config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR)) return 0;
     
-    snprintf(sieve_path, sizeof(sieve_path), "%s/%c/%s",
-	     config_getstring("sievedir", "/usr/sieve"),
-	     dir_hash_c(user), user);
+    if (config_virtdomains && (domain = strchr(user, '@'))) {
+	char d = (char) dir_hash_c(domain+1);
+	*domain = '\0';  /* split user@domain */
+	hash = (char) dir_hash_c(user);
+	snprintf(sieve_path, sizeof(sieve_path), "%s%s%c/%s/%c/%s",
+		 config_getstring(IMAPOPT_SIEVEDIR),
+		 FNAME_DOMAINDIR, d, domain+1, hash, user);
+	*domain = '@';  /* reassemble user@domain */
+    }
+    else {
+	hash = (char) dir_hash_c(user);
+
+	snprintf(sieve_path, sizeof(sieve_path), "%s/%c/%s",
+		 config_getstring(IMAPOPT_SIEVEDIR), hash, user);
+    }
+
     mbdir=opendir(sieve_path);
 
     if(mbdir) {
@@ -149,8 +162,8 @@ int user_deletesieve(char *user)
     return 0;
 }
 
-int user_delete(char *user, char *userid, struct auth_state *authstate,
-		int wipe_user)
+int user_deletedata(char *user, char *userid, struct auth_state *authstate,
+		    int wipe_user)
 {
     char *fname;
 
@@ -164,7 +177,7 @@ int user_delete(char *user, char *userid, struct auth_state *authstate,
     free(fname);
 
     /* delete quotas */
-    user_deletequotas(user);
+    user_deletequotaroots(user);
 
     /* delete ACLs - we're using the internal names here */
 #if 0
@@ -182,11 +195,171 @@ int user_delete(char *user, char *userid, struct auth_state *authstate,
     
     return 0;
 }
-#if 0
-static int user_renameacl(char *name, int matchlen, int maycreate, void* rock)
+
+struct rename_rock {
+    char *olduser;
+    char *newuser;
+    char *oldinbox;
+    char *newinbox;
+    int domainchange;
+};
+
+static int user_renamesub(char *name, int matchlen, int maycreate, void* rock)
 {
-    char **ident = (char **) rock;
+    struct rename_rock *rrock = (struct rename_rock *) rock;
+    char newname[MAX_MAILBOX_NAME+1];
+
+    if (!strncasecmp(name, "INBOX", 5) &&
+	(name[5] == '\0' || name[5] == '.')) {
+	/* generate new name of personal mailbox */
+	snprintf(newname, sizeof(newname), "%s%s",
+		 rrock->newinbox, name+5);
+	name = newname;
+    }
+    else if (!strncmp(name, rrock->oldinbox, strlen(rrock->oldinbox)) &&
+	(name[strlen(rrock->oldinbox)] == '\0' ||
+	 name[strlen(rrock->oldinbox)] == '.')) {
+	/* generate new name of personal mailbox */
+	snprintf(newname, sizeof(newname), "%s%s",
+		 rrock->newinbox, name+strlen(rrock->oldinbox));
+	name = newname;
+    }
+    else if (rrock->domainchange) {
+	/* if we're changing domains, don't subscribe to other mailboxes */
+	return 0;
+    }
+
+    mboxlist_changesub(name, rrock->newuser, NULL, 1, 1);
+
+    return 0;
+}
+
+static int user_renamesieve(char *olduser, char *newuser)
+{
+    char hash, *domain;
+    char oldpath[2048], newpath[2048];
     int r;
+    
+    /* oh well */
+    if(config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR)) return 0;
+    
+    if (config_virtdomains && (domain = strchr(olduser, '@'))) {
+	char d = (char) dir_hash_c(domain+1);
+	*domain = '\0';  /* split user@domain */
+	hash = (char) dir_hash_c(olduser);
+	snprintf(oldpath, sizeof(oldpath), "%s%s%c/%s/%c/%s",
+		 config_getstring(IMAPOPT_SIEVEDIR),
+		 FNAME_DOMAINDIR, d, domain+1, hash, olduser);
+	*domain = '@';  /* reassemble user@domain */
+    }
+    else {
+	hash = (char) dir_hash_c(olduser);
+
+	snprintf(oldpath, sizeof(oldpath), "%s/%c/%s",
+		 config_getstring(IMAPOPT_SIEVEDIR), hash, olduser);
+    }
+
+    if (config_virtdomains && (domain = strchr(newuser, '@'))) {
+	char d = (char) dir_hash_c(domain+1);
+	*domain = '\0';  /* split user@domain */
+	hash = (char) dir_hash_c(newuser);
+	snprintf(newpath, sizeof(newpath), "%s%s%c/%s/%c/%s",
+		 config_getstring(IMAPOPT_SIEVEDIR),
+		 FNAME_DOMAINDIR, d, domain+1, hash, newuser);
+	*domain = '@';  /* reassemble user@domain */
+    }
+    else {
+	hash = (char) dir_hash_c(newuser);
+
+	snprintf(newpath, sizeof(newpath), "%s/%c/%s",
+		 config_getstring(IMAPOPT_SIEVEDIR), hash, newuser);
+    }
+
+    /* rename sieve directory
+     *
+     * XXX this doesn't rename sieve scripts
+     */
+    r = rename(oldpath, newpath);
+    if (r < 0) {
+	if (errno == ENOENT) {
+	    syslog(LOG_WARNING, "error renaming %s to %s: %m",
+		   oldpath, newpath);
+	    /* but maybe the user doesn't have any scripts ? */
+	    r = 0;
+	}
+	else if (errno == EXDEV) {
+	    syslog(LOG_ERR, "error renaming %s to %s: different filesystems",
+		   oldpath, newpath);
+	    /* doh!  need to copy entire directory tree */
+	}
+	else {
+	    syslog(LOG_ERR, "error renaming %s to %s: %m", oldpath, newpath);
+	}
+    }
+
+    return r;
+}
+
+int user_renamedata(char *olduser, char *newuser,
+		    char *userid, struct auth_state *authstate)
+{
+    struct namespace namespace;
+    char oldinbox[MAX_MAILBOX_NAME+1], newinbox[MAX_MAILBOX_NAME+1];
+    char *olddomain, *newdomain;
+    struct rename_rock rrock;
+    char pat[MAX_MAILBOX_NAME+1];
+    int r;
+
+    /* set namespace */
+    r = mboxname_init_namespace(&namespace, 0);
+
+    /* get olduser's INBOX */
+    if (!r) r = (*namespace.mboxname_tointernal)(&namespace, "INBOX",
+						 olduser, oldinbox);
+
+    /* get newuser's INBOX */
+    if (!r) r = (*namespace.mboxname_tointernal)(&namespace, "INBOX",
+						 newuser, newinbox);
+
+    if (!r) {
+	/* copy seen db */
+	seen_rename_user(olduser, newuser);
+    }
+
+    /* setup rock for find operations */
+    rrock.olduser = olduser;
+    rrock.newuser = newuser;
+    rrock.oldinbox = oldinbox;
+    rrock.newinbox = newinbox;
+
+    olddomain = strchr(oldinbox, '!');
+    newdomain = strchr(newinbox, '!');
+    if ((!olddomain && !newdomain) ||
+	(olddomain && newdomain &&
+	 (olddomain - oldinbox) == (newdomain - newinbox) &&
+	 !strncmp(oldinbox, newinbox, (olddomain - newdomain))))
+	rrock.domainchange = 0;
+    else
+	rrock.domainchange = 1;
+
+    if (!r) {
+	/* copy/rename subscriptions - we're using the internal names here */
+	strcpy(pat, "*");
+	mboxlist_findsub(NULL, pat, 1, olduser, authstate, user_renamesub,
+			 &rrock, 1);
+    }
+
+    if (!r) {
+	/* move sieve scripts */
+	user_renamesieve(olduser, newuser);
+    }
+    
+    return r;
+}
+
+int user_renameacl(char *name, char *olduser, char *newuser)
+{
+    int r = 0;
     char *acl;
     char *rights, *nextid;
 
@@ -201,113 +374,78 @@ static int user_renameacl(char *name, int matchlen, int maycreate, void* rock)
 	if (!nextid) break;
 	*nextid++ = '\0';
 
-	if (!strcmp(acl, ident[0])) {
-	    /* copy ACL for old ident to new ident */
-	    r = mboxlist_setacl(name, ident[1], rights, 1, ident[1], NULL);
-	    /* delete ACL for old ident */
-	    if (!r) mboxlist_setacl(name, ident[0], (char *)0,
-				    1, ident[1], NULL);
+	if (!strcmp(acl, olduser)) {
+	    /* copy ACL for olduser to newuser */
+	    r = mboxlist_setacl(name, newuser, rights, 1, newuser, NULL);
+	    /* delete ACL for olduser */
+	    if (!r)
+		r = mboxlist_setacl(name, olduser, (char *)0, 1, newuser, NULL);
 	}
 
 	acl = nextid;
     }
-    return 0;
+
+    return r;
 }
 
-static int user_renamesub(char *name, int matchlen, int maycreate, void* rock)
+int user_copyquotaroot(char *oldname, char *newname)
 {
-    char **ident = (char **) rock;
-    char newname[MAX_MAILBOX_NAME+1];
-
-    /* unsubscribe from old folder */
-    mboxlist_changesub(name, ident[1], NULL, 0, 1);
-
-    /* subscribe to new folder */
-    snprintf(newname, sizeof(newname),
-	     "user.%s.%s", ident[1], name+6+strlen(ident[0]));
-    mboxlist_changesub(newname, ident[1], NULL, 1, 1);
-
-    return 0;
-}
-
-int user_rename(char *oldmailboxname, char *newmailboxname,
-		char *userid, struct auth_state *authstate)
-{
-    char *ident[] = { oldmailboxname+5, newmailboxname+5 };
-    char pat[MAX_MAILBOX_NAME+1];
-    char *oldfname, *newfname;
     int r = 0;
-
-    /* change ACLs - we're using the internal names here */
-    strcpy(pat, "*");
-    mboxlist_findall(NULL, pat, 1, userid, authstate, user_renameacl, ident);
-
-    /* rename/change subscriptions */
-    oldfname = mboxlist_hash_usersubs(ident[0]);
-    newfname = mboxlist_hash_usersubs(ident[1]);
-    unlink(newfname);
-    r = mailbox_copyfile(oldfname, newfname);
-    if (!r) {
-	unlink(oldfname);
-	snprintf(pat, sizeof(pat), "%s.*", oldmailboxname);
-	/* we're using internal names here */
-	mboxlist_findsub(NULL, pat, 1, ident[1], authstate, user_renamesub,
-			 ident, 1);
-    }
-    free(oldfname);
-    free(newfname);
-
-    /* rename seendb */
-    seen_rename_user(ident[0], ident[1]);
-
-    /* set quota on INBOX */
-    user_copyquota(oldmailboxname, newmailboxname);
-}
-
-int user_copyquota(char *oldname, char *newname)
-{
-    int r;
     struct quota quota;
-    char buf[MAX_MAILBOX_PATH];
+    char buf[MAX_MAILBOX_PATH+1];
 
     quota.root = oldname;
     quota.fd = -1;
 
-    mailbox_hash_quota(buf, quota.root);
+    mailbox_hash_quota(buf, sizeof(buf), quota.root);
     quota.fd = open(buf, O_RDWR, 0);
     if (quota.fd > 0) {
 	r = mailbox_read_quota(&quota);
 	if (!r) mboxlist_setquota(newname, quota.limit, 0);
     }
+
+    return r;
 }
-#endif
-int user_deletequotas(const char *user)
+
+int user_deletequotaroots(const char *user)
 {
-    char c, qpath[MAX_MAILBOX_NAME], *tail;
-    size_t qp_len;
+    struct namespace namespace;
+    char inboxname[1024];
+    int r;
+    char dir[MAX_MAILBOX_NAME+1], *fname, qpath[MAX_MAILBOX_NAME];
     DIR *dirp;
     struct dirent *f;
 
-    /* this violates the quota abstraction layer; oh well */
-    c = dir_hash_c(user);
-    snprintf(qpath, sizeof(qpath), "%s%s%c/", config_dir, FNAME_QUOTADIR, c);
-    qp_len = strlen(qpath);
-    tail = qpath + qp_len;
+    /* set namespace */
+    r = mboxname_init_namespace(&namespace, 0);
 
-    dirp = opendir(qpath);
-    if (dirp) {
-	while ((f = readdir(dirp)) != NULL) {
-	    if (!strncmp(f->d_name, "user.", 5) &&
-		!strncmp(f->d_name+5, user, strlen(user)) &&
-		(f->d_name[5+strlen(user)] == '\0'||
-		 f->d_name[5+strlen(user)] == '.')) {
+    /* get user's toplevel quotaroot (INBOX) */
+    if (!r)
+	r = (*namespace.mboxname_tointernal)(&namespace, "INBOX",
+					     user, inboxname);
 
-		strlcpy(tail, f->d_name, sizeof(qpath) - qp_len);
-		unlink(qpath);
+    if (!r) {
+	/* get path to toplevel quotaroot */
+	mailbox_hash_quota(dir, sizeof(dir), inboxname);
+
+	/* split directory and filename */
+	fname = strrchr(dir, '/');
+	*fname++ = '\0';
+
+	dirp = opendir(dir);
+	if (dirp) {
+	    while ((f = readdir(dirp)) != NULL) {
+		if (!strncmp(f->d_name, fname, strlen(fname)) &&
+		    (f->d_name[strlen(fname)] == '\0'||
+		     f->d_name[strlen(fname)] == '.')) {
+
+		    snprintf(qpath, sizeof(qpath), "%s/%s", dir, f->d_name);
+		    unlink(qpath);
+		}
 	    }
+	    closedir(dirp);
 	}
-	closedir(dirp);
     }
 
-    return 0;
+    return r;
 }

@@ -1,4 +1,4 @@
-# $Id: Makefile.dist,v 1.9 2002/05/25 19:57:43 leg Exp $
+# $Id: Makefile.dist,v 1.10 2003/10/22 18:02:52 rjs3 Exp $
 dist:
 	mkdir -p man
 	for man in ../man/*.[1-9]; \
@@ -14,5 +14,6 @@ dist:
 	rm -f groff-html-*.png pod2htm*
 
 	fig2dev -L png murder.fig murder.png
+	fig2dev -L png netnews.fig netnews.png
 
 	(cd text; make)

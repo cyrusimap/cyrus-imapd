@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.100 2003/09/02 19:11:33 rjs3 Exp $
+ * $Id: append.c,v 1.101 2003/10/22 18:02:56 rjs3 Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -59,7 +59,7 @@
 #include "mailbox.h"
 #include "message.h"
 #include "append.h"
-#include "imapconf.h"
+#include "global.h"
 #include "prot.h"
 #include "xmalloc.h"
 #include "mboxlist.h"
@@ -292,8 +292,7 @@ int append_commit(struct appendstate *as,
 	as->m.minor_version = MAILBOX_MINOR_VERSION;
     }
     
-    /* Write out index header & synchronize to disk.
-       this writes to acappush too. */
+    /* Write out index header & synchronize to disk. */
     r = mailbox_write_index_header(&as->m);
     if (r) {
 	syslog(LOG_ERR, "IOERROR: writing index header for %s: %s",
@@ -849,6 +848,8 @@ int append_copy(struct mailbox *mailbox,
 	    message_index[msg].size = copymsg[msg].size;
 	    message_index[msg].header_size = copymsg[msg].header_size;
 	    message_index[msg].content_offset = copymsg[msg].header_size;
+	    message_index[msg].content_lines = copymsg[msg].content_lines;
+	    message_index[msg].cache_version = copymsg[msg].cache_version;
 
 	    n = retry_write(append_mailbox->cache_fd, copymsg[msg].cache_begin,
 			    copymsg[msg].cache_len);

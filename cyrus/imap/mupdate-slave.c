@@ -1,6 +1,6 @@
 /* mupdate-slave.c -- cyrus murder database clients
  *
- * $Id: mupdate-slave.c,v 1.22 2003/06/04 03:27:52 rjs3 Exp $
+ * $Id: mupdate-slave.c,v 1.23 2003/10/22 18:02:58 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -61,7 +61,6 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/stat.h>
-#include <sys/time.h>
 #include <netinet/in.h>
 #ifdef HAVE_SYS_SELECT_H
 #include <sys/select.h>
@@ -69,7 +68,7 @@
 
 #include "prot.h"
 #include "xmalloc.h"
-#include "imapconf.h"
+#include "global.h"
 #include "assert.h"
 #include "imparse.h"
 #include "iptostring.h"
@@ -223,34 +222,30 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
 
 void *mupdate_client_start(void *rock __attribute__((unused)))
 {
-    const char *server, *num;
     mupdate_handle *h = NULL;
     int retry_delay = 20, real_delay;
     int ret;
 
     srand(time(NULL) * getpid());
 
-    server = config_getstring("mupdate_server", NULL);
-    if(server == NULL) {
+    if(!config_mupdate_server) {
 	fatal("couldn't get mupdate server name", EC_UNAVAILABLE);
     }
 
-    num = config_getstring("mupdate_retry_delay",NULL);
-    if(num && imparse_isnumber(num)) {
-	retry_delay = atoi(num);
-	if(retry_delay < 0) {
-	    fatal("invalid value for mupdate_retry_delay", EC_UNAVAILABLE);
-	}
+    retry_delay = config_getint(IMAPOPT_MUPDATE_RETRY_DELAY);
+    if(retry_delay < 0) {
+	fatal("invalid value for mupdate_retry_delay", EC_UNAVAILABLE);
     }
 
     while(1) {
-	ret = mupdate_connect(server, NULL, &h, NULL);
+	ret = mupdate_connect(config_mupdate_server, NULL, &h, NULL);
 	if(ret) {
 	    syslog(LOG_ERR,"couldn't connect to mupdate server");
 	    goto retry;
 	}
    
-	syslog(LOG_ERR, "successful mupdate connection to %s", server);
+	syslog(LOG_ERR, "successful mupdate connection to %s",
+	       config_mupdate_server);
 
 	mupdate_listen(h, retry_delay);
 

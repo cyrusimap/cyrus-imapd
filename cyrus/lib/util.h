@@ -1,5 +1,5 @@
 /* util.h -- general utility functions
- * $Id: util.h,v 1.15 2003/02/13 20:15:42 rjs3 Exp $
+ * $Id: util.h,v 1.16 2003/10/22 18:03:05 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -84,15 +84,6 @@ extern char *beautify_string (const char *src);
 extern keyvalue *kv_bsearch (const char *key, keyvalue *kv, int nelem,
 			       int (*cmpf)(const char *s1, const char *s2));
 
-#ifdef USE_DIR_FULL
-enum {
-    DIR_X = 3,
-    DIR_Y = 5,
-    DIR_P = 23,
-    DIR_A = 'A'
-};
-#endif
-
 /* Examine the name of a file, and return a single character
  *  (as an int) that can be used as the name of a hash
  *  directory.  Caller is responsible for skipping any prefix
@@ -100,7 +91,17 @@ enum {
  */
 extern int dir_hash_c(const char *name);
 
+/* 
+ * create an [unlinked] temporary file and return the file descriptor.
+ */
+extern int create_tempfile();
+
 /* Close a network filedescriptor the "safe" way */
-int cyrus_close_sock(int fd);
+extern int cyrus_close_sock(int fd);
+
+/* Create all parent directories for the given path,
+ * up to but not including the basename.
+ */
+extern int cyrus_mkdir(const char *path, mode_t mode);
 
 #endif /* INCLUDED_UTIL_H */

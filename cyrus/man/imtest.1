@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imtest.1,v 1.11 2003/08/09 23:43:14 rjs3 Exp $
+.\" $Id: imtest.1,v 1.12 2003/10/22 18:03:08 rjs3 Exp $
 .SH NAME
 imtest \- interactive IMAP test program
 .SH SYNOPSIS
@@ -88,12 +88,15 @@ imtest \- interactive IMAP test program
 ]
 [
 .B \-s
-]-n
+]
 [
 .B \-c
 ]
 .br
        [
+.B \-i
+]
+[
 .B \-z
 ]
 [
@@ -107,9 +110,14 @@ imtest \- interactive IMAP test program
 .B \-x
 .I file
 ]
-[
+.br
+       [
 .B \-X
 .I file
+]
+[
+.B \-o
+\fIoption\fB=\fIvalue\fR
 ]
 \fIhostname\fR
 .SH DESCRIPTION
@@ -174,6 +182,10 @@ Enable challenge prompt callbacks.  This will cause the OTP mechanism
 to ask for the the one-time password instead of the secret pass-phrase
 (library generates the correct response).
 .TP
+.B -c
+Don't send an initial client response for SASL mechanisms, even if the
+protocol supports it.
+.TP
 .BI -I " file"
 Echo the PID of the running process into
 .I file
@@ -184,6 +196,9 @@ Open the named socket for the interactive portion
 .TP
 .BI -X " file"
 Like -x, only close all file descriptors & daemonize the process.
+.TP
+\fB-o \fIoption\fB=\fIvalue\fR
+Set the SASL \fIoption\fR to \fIvalue\fR.
 .TP
 .B -v
 Verbose. Print out more information than usual.

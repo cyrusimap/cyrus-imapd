@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: managesieve.xs,v 1.19 2002/12/02 20:48:38 rjs3 Exp $ */
+/* $Id: managesieve.xs,v 1.20 2003/10/22 18:03:20 rjs3 Exp $ */
 
 #ifdef __cplusplus
 extern "C" {
@@ -228,6 +228,7 @@ sieve_get_handle(servername, username_cb, authname_cb, password_cb, realm_cb)
   char *mechlist=NULL,*mlist=NULL;
   const char *mtried;
   isieve_t *obj;
+  char *p;
 
   CODE:
 
@@ -248,12 +249,26 @@ sieve_get_handle(servername, username_cb, authname_cb, password_cb, realm_cb)
   callbacks[3].context = password_cb;
   callbacks[4].id = SASL_CB_LIST_END;
 
-  /* map port -> num */
-  serv = getservbyname("sieve", "tcp");
-  if (serv == NULL) {
-      port = 2000;
+  /* see if we have server:port (or IPv6, etc)*/
+  p = servername;
+  if (*servername == '[') {
+      if ((p = strrchr(servername + 1, ']')) != NULL) {
+	  *p++ = '\0';
+	  servername++;			/* skip first bracket */
+      } else
+	  p = servername;
+  }
+  if ((p = strchr(p, ':'))) {
+      *p++ = '\0';
+      port = atoi(p);
   } else {
-      port = ntohs(serv->s_port);
+      /* map port -> num */
+      serv = getservbyname("sieve", "tcp");
+      if (serv == NULL) {
+	  port = 2000;
+      } else {
+	  port = ntohs(serv->s_port);
+      }
   }
 
   if (init_net(servername, port, &obj)) {

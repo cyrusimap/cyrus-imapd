@@ -38,12 +38,12 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: duplicate.h,v 1.12 2003/02/13 20:15:24 rjs3 Exp $ */
+/* $Id: duplicate.h,v 1.13 2003/10/22 18:02:57 rjs3 Exp $ */
 
 #ifndef DUPLICATE_H
 #define DUPLICATE_H
 
-#define DUPLICATE_RECOVER 0x01
+#include "hash.h"
 
 /* name of the duplicate delivery database */
 #define FNAME_DELIVERDB "/deliver.db"
@@ -51,9 +51,12 @@
 int duplicate_init(char*, int);
 
 time_t duplicate_check(char *id, int idlen, char *to, int tolen);
-void duplicate_mark(char *id, int idlen, char *to, int tolen, time_t mark);
+void duplicate_log(char *msgid, char *name, char *action);
+void duplicate_mark(char *id, int idlen, char *to, int tolen, time_t mark,
+		    unsigned long uid);
+int duplicate_find(char *msgid, int (*proc)(), void *rock);
 
-int duplicate_prune(int days);
+int duplicate_prune(int days, struct hash_table *expire_table);
 int duplicate_dump(FILE *f);
 
 int duplicate_done(void);

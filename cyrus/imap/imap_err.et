@@ -24,7 +24,8 @@
 #  (412) 268-4387, fax: (412) 268-7395
 #  tech-transfer@andrew.cmu.edu
 # 
-# $Id: imap_err.et,v 1.48 2002/10/21 17:17:39 rjs3 Exp $
+# $Id: imap_err.et,v 1.49 2003/10/22 18:02:57 rjs3 Exp $
+
 error_table imap
 
 ec IMAP_INTERNAL,
@@ -114,6 +115,9 @@ ec IMAP_ANNOTATION_BADENTRY,
 ec IMAP_ANNOTATION_BADATTRIB,
    "Invalid annotation attribute"
 
+ec IMAP_ANNOTATION_BADVALUE,
+   "Invalid annotation value"
+
 # following used only proxy/db operations
 ec IMAP_BAD_SERVER,
    "Invalid server requested"
@@ -180,6 +184,9 @@ ec IMAP_NO_NOSUCHMSG,
 
 ec IMAP_NO_NOSUCHANNOTATION,
    "No matching annotations"
+
+ec IMAP_NO_UNKNOWN_CTE,
+   "[UNKNOWN-CTE] Can not process the binary data"
 
 # Following used for internationalization of untagged BYE response
 

@@ -1,6 +1,6 @@
 <HTML><HEAD>
     <TITLE>Cyrus IMAP Server Release Information</TITLE>
-    <!-- $Id: readme.html,v 1.17 2003/06/19 15:34:41 ken3 Exp $ -->
+    <!-- $Id: readme.html,v 1.18 2003/10/22 18:02:53 rjs3 Exp $ -->
   </HEAD><BODY>
       <H1>                Cyrus IMAP Server Release Information</H1>
       
@@ -11,7 +11,7 @@ IMAP server differs from other IMAP server implementations in that it
 is generally intended to be run on "sealed" servers, where normal
 users are not permitted to log in.  The mailbox database is stored in
 parts of the filesystem that are private to the Cyrus IMAP system.
-All user access to mail is through the IMAP, POP3, or KPOP protocols.
+All user access to mail is through the IMAP, NNTP, POP3, or KPOP protocols.
       
 <P> The private mailbox database design gives the server large
 advantages in efficiency, scalability, and administratability.
@@ -34,7 +34,7 @@ character mapping tables most likely contain errors.
 the SASL library. Currently, support includes: KERBEROS_V4, GSSAPI,
 CRAM-MD5, DIGEST-MD5, OTP, PLAIN, and STARTTLS.
 
-<p> The server supports imaps/pop3s (IMAP/POP3 encrypted using SSL).
+<p> The server supports imaps/pop3s/nntps (IMAP/POP3/NNTP encrypted using SSL).
 
 <p> The server makes an attempt to do single instance store where 
 possible when an email message is addressed to multiple recipients.
@@ -43,7 +43,7 @@ possible when an email message is addressed to multiple recipients.
 <tt>
 IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE UIDPLUS ID
 NO_ATOMIC_RENAME UNSELECT CHILDREN MULTIAPPEND SORT
-THREAD=ORDEREDSUBJECT THREAD=REFERENCES IDLE STARTTLS</tt>.
+THREAD=ORDEREDSUBJECT THREAD=REFERENCES ANNOTATEMORE IDLE STARTTLS</tt>.
 
 <p> The server supports SIEVE for server side email filtering.
 

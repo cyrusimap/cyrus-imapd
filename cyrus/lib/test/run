@@ -58,21 +58,21 @@ sub runone {
 
 runone("cyrusdb", undef, "-DBACKEND=cyrusdb_flat -ldb ${libs}");
 runone("cyrusdb", undef, "-DBACKEND=cyrusdb_skiplist -ldb ${libs}", "cyrusdb_skiplist");
-runone("cyrusdb", undef, "-DBACKEND=cyrusdb_db3 -ldb ${libs}", "cyrusdb_db3");
+runone("cyrusdb", undef, "-DBACKEND=cyrusdb_berkeley -ldb ${libs}", "cyrusdb_berkeley");
 
 runone("cyrusdb", undef, "-DBACKEND=cyrusdb_flat -ldb ${libs}", 
        "cyrusdbtxn_flat", "cyrusdbtxn");
 runone("cyrusdb", undef, "-DBACKEND=cyrusdb_skiplist -ldb ${libs}", 
        "cyrusdbtxn_skiplist", "cyrusdbtxn");
-runone("cyrusdb", undef, "-DBACKEND=cyrusdb_db3 -ldb ${libs}", 
-       "cyrusdbtxn_db3", "cyrusdbtxn");
+runone("cyrusdb", undef, "-DBACKEND=cyrusdb_berkeley -ldb ${libs}", 
+       "cyrusdbtxn_berkeley", "cyrusdbtxn");
 
 runone("cyrusdb", undef, "-DBACKEND=cyrusdb_flat -ldb ${libs}", 
        "cyrusdblong_flat", "cyrusdblong");
 runone("cyrusdb", undef, "-DBACKEND=cyrusdb_skiplist -ldb ${libs}", 
        "cyrusdblong_skiplist", "cyrusdblong");
-runone("cyrusdb", undef, "-DBACKEND=cyrusdb_db3 -ldb ${libs}", 
-       "cyrusdblong_db3", "cyrusdblong");
+runone("cyrusdb", undef, "-DBACKEND=cyrusdb_berkeley -ldb ${libs}", 
+       "cyrusdblong_berkeley", "cyrusdblong");
 
 runone("rnddb", undef, "-DBACKEND=cyrusdb_skiplist -ldb ${libs}",
        "rndskip", "rnddb");

@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.18 2003/04/22 17:39:41 rjs3 Exp $
+ * $Id: ipurge.c,v 1.19 2003/10/22 18:02:57 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -58,17 +58,19 @@
 #include <syslog.h>
 #include <com_err.h>
 #include <string.h>
-#include <time.h>
 #include <netinet/in.h>
 
 /* cyrus includes */
-#include "imapconf.h"
+#include "global.h"
 #include "sysexits.h"
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "xmalloc.h"
 #include "mboxlist.h"
+
+/* config.c stuff */
+const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
 /* globals for getopt routines */
 extern char *optarg;
@@ -110,9 +112,7 @@ int main (int argc, char *argv[]) {
   char *alt_config = NULL;
   int r;
 
-  if (geteuid() == 0) { /* don't run as root, changes permissions */
-    usage(argv[0]);
-  }
+  if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
 
   while ((option = getopt(argc, argv, "C:hxd:b:k:m:fs")) != EOF) {
     switch (option) {
@@ -161,9 +161,7 @@ int main (int argc, char *argv[]) {
     usage(argv[0]);
   }
 
-  config_init(alt_config, "ipurge");
-
-  if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+  cyrus_init(alt_config, "ipurge");
 
   /* Set namespace -- force standard (internal) */
   if ((r = mboxname_init_namespace(&purge_namespace, 1)) != 0) {
@@ -182,7 +180,9 @@ int main (int argc, char *argv[]) {
     for (; optind < argc; optind++) {
       strncpy(buf, argv[optind], MAX_MAILBOX_NAME);
       /* Translate any separators in mailboxname */
-      mboxname_hiersep_tointernal(&purge_namespace, buf);
+      mboxname_hiersep_tointernal(&purge_namespace, buf,
+				  config_virtdomains ?
+				  strcspn(buf, "@") : 0);
       (*purge_namespace.mboxlist_findall)(&purge_namespace, buf, 1, 0, 0,
 					  purge_me, NULL);
     }
@@ -190,6 +190,8 @@ int main (int argc, char *argv[]) {
   mboxlist_close();
   mboxlist_done();
 
+  cyrus_done();
+  
   return 0;
 }
 
@@ -205,22 +207,28 @@ usage(char *name) {
 }
 
 /* we don't check what comes in on matchlen and maycreate, should we? */
-int
-purge_me(char *name, int matchlen, int maycreate) {
+int purge_me(char *name, int matchlen __attribute__((unused)),
+	     int maycreate __attribute__((unused))) {
   struct mailbox the_box;
   int            error;
   mbox_stats_t   stats;
 
   if( ! forceall ) {
-    /* DON'T purge INBOX* and user.* */
-    if ((strncasecmp(name,"INBOX",5)==0) || (strncasecmp(name,"user.",5)==0))
-      return 0;
+      /* DON'T purge INBOX* and user.* */
+      if (!strncasecmp(name,"INBOX",5) || mboxname_isusermailbox(name, 0))
+	  return 0;
   }
 
   memset(&stats, '\0', sizeof(mbox_stats_t));
 
-  if (verbose)
-      printf("Working on %s...\n",name);
+  if (verbose) {
+      char mboxname[MAX_MAILBOX_NAME+1];
+
+      /* Convert internal name to external */
+      (*purge_namespace.mboxname_toexternal)(&purge_namespace, name,
+					     "cyrus", mboxname);
+      printf("Working on %s...\n", mboxname);
+  }
 
   error = mailbox_open_header(name, 0, &the_box);
   if (error != 0) { /* did we find it? */
@@ -262,8 +270,8 @@ void deleteit(bit32 msgsize, mbox_stats_t *stats)
 
 /* thumbs up routine, checks date & size and returns yes or no for deletion */
 /* 0 = no, 1 = yes */
-int
-purge_check(struct mailbox *mailbox, void *deciderock, char *buf) {
+int purge_check(struct mailbox *mailbox __attribute__((unused)),
+		void *deciderock, char *buf) {
   time_t my_time;
   mbox_stats_t *stats = (mbox_stats_t *) deciderock;
   bit32 senttime;
@@ -324,12 +332,6 @@ void print_stats(mbox_stats_t *stats)
     printf("Deleted messages  \t\t %d\n",stats->deleted);
     printf("Deleted bytes     \t\t %d\n",stats->deleted_bytes);
     printf("Remaining messages\t\t %d\n",stats->total - stats->deleted);
-    printf("Remaining bytes   \t\t %d\n",stats->total_bytes - stats->deleted_bytes);
-}
-
-/* fatal needed for imap library */
-void
-fatal(const char *s, int code) {
-  fprintf(stderr, "ipurge: %s\n", s);
-  exit(code);
+    printf("Remaining bytes   \t\t %d\n",
+	   stats->total_bytes - stats->deleted_bytes);
 }

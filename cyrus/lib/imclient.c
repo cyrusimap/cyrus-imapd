@@ -1,6 +1,6 @@
 /* imclient.c -- Streaming IMxP client library
  *
- * $Id: imclient.c,v 1.82 2003/06/23 21:13:50 rjs3 Exp $
+ * $Id: imclient.c,v 1.83 2003/10/22 18:03:04 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -58,7 +58,6 @@
 #include <varargs.h>
 #endif
 #include <sys/types.h>
-#include <sys/time.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
@@ -223,46 +222,41 @@ int imclient_connect(struct imclient **imclient,
 		     const char *port, 
 		     sasl_callback_t *cbs)
 {
-    int s;
-    struct hostent *hp;
-    struct servent *sp;
-    struct sockaddr_in addr;
+    int s = -1;
+    struct addrinfo hints, *res0 = NULL, *res;
     int saslresult;
     static int didinit;
 
     assert(imclient);
     assert(host);
 
-    hp = gethostbyname(host);
-    if (!hp) return -1;
-
-    addr.sin_family = AF_INET;
-    memcpy(&addr.sin_addr, hp->h_addr, sizeof(addr.sin_addr));
-    if (port && imparse_isnumber(port)) {
-	addr.sin_port = htons(atoi(port));
-    }
-    else if (port) {
-	sp = getservbyname(port, "tcp");
-	if (!sp) return -2;
-	addr.sin_port = sp->s_port;
-    }
-    else {
-	addr.sin_port = htons(143);
-    }
-
-    s = socket(AF_INET, SOCK_STREAM, 0);
-    if (s == -1) return errno;
-
-    if (connect(s, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
+    if (!port)
+	port = "143";
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = PF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_CANONNAME;
+    if (getaddrinfo(host, port, &hints, &res0))
+	return -1;
+    for (res = res0; res; res = res->ai_next) {
+	s = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+	if (s < 0)
+	    continue;
+	if (connect(s, res->ai_addr, res->ai_addrlen) >= 0)
+	    break;
 	close(s);
-	return errno;
+	s = -1;
     }
+    if (s < 0)
+	return errno;
     /*    nonblock(s, 1); */
     *imclient = (struct imclient *)xzmalloc(sizeof(struct imclient));
     (*imclient)->fd = s;
     (*imclient)->saslconn = NULL;
     (*imclient)->saslcompleted = 0;
-    (*imclient)->servername = xstrdup(hp->h_name);
+    (*imclient)->servername = xstrdup(res0->ai_canonname ?
+				      res0->ai_canonname : host);
+    freeaddrinfo(res0);
     (*imclient)->outptr = (*imclient)->outstart = (*imclient)->outbuf;
     (*imclient)->outleft = (*imclient)->maxplain = sizeof((*imclient)->outbuf);
     (*imclient)->interact_results = NULL;
@@ -1236,8 +1230,8 @@ static int imclient_authenticate_sub(struct imclient *imclient,
   int saslresult;
   sasl_security_properties_t *secprops=NULL;
   socklen_t addrsize;
-  struct sockaddr_in saddr_l;
-  struct sockaddr_in saddr_r;
+  struct sockaddr_storage saddr_l;
+  struct sockaddr_storage saddr_r;
   char localip[60], remoteip[60];
   sasl_interact_t *client_interact=NULL;
   const char *out;
@@ -1258,19 +1252,19 @@ static int imclient_authenticate_sub(struct imclient *imclient,
   if (saslresult!=SASL_OK) return 1;
   free(secprops);
 
-  addrsize=sizeof(struct sockaddr_in);
+  addrsize=sizeof(struct sockaddr_storage);
   if (getpeername(imclient->fd,(struct sockaddr *)&saddr_r,&addrsize)!=0)
       return 1;
 
-  addrsize=sizeof(struct sockaddr_in);
+  addrsize=sizeof(struct sockaddr_storage);
   if (getsockname(imclient->fd,(struct sockaddr *)&saddr_l,&addrsize)!=0)
       return 1;
 
-  if(iptostring((const struct sockaddr *)&saddr_l, sizeof(struct sockaddr_in),
+  if(iptostring((const struct sockaddr *)&saddr_l, addrsize,
 		localip, sizeof(localip)) != 0)
       return 1;
 
-  if(iptostring((const struct sockaddr *)&saddr_r, sizeof(struct sockaddr_in),
+  if(iptostring((const struct sockaddr *)&saddr_r, addrsize,
 		remoteip, sizeof(remoteip)) != 0)
       return 1;
 
@@ -1354,9 +1348,8 @@ static int imclient_authenticate_sub(struct imclient *imclient,
             imclient_writebase64(imclient, out, outlen);
         }
     } else {
-	/* Failed; cancel the authentication exchange.  Wait for
-	 * the server's BAD or NO response before we return. */
 	imclient_write(imclient,"*\r\n", 3);
+	return saslresult;
     }
 
     outlen = 0;

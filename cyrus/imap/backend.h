@@ -39,13 +39,15 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.h,v 1.5 2003/02/13 20:15:23 rjs3 Exp $ */
+/* $Id: backend.h,v 1.6 2003/10/22 18:02:56 rjs3 Exp $ */
 
 #ifndef _INCLUDED_BACKEND_H
 #define _INCLUDED_BACKEND_H
 
 #include "mboxlist.h"
 #include "prot.h"
+#include "protocol.h"
+#include "tls.h"
 
 /* Functionality to bring up/down connections to backend servers */
 
@@ -53,16 +55,23 @@
 
 struct backend {
     char hostname[MAX_PARTITION_LEN];
-    struct sockaddr_in addr;
+    struct sockaddr_storage addr;
     int sock;
 
-    /* only used by proxyd */
+    /* service-specific context */
+    void *context;
+
+    /* only used by proxyd and nntpd */
     struct prot_waitevent *timeout;
 
     sasl_conn_t *saslconn;
+#ifdef HAVE_SSL
+    SSL *tlsconn;
+    SSL_SESSION *tlssess;
+#endif /* HAVE_SSL */
 
     enum {
-	ACAP = 0x1, /* not used */
+	ACAP = 0x1, /* obsolete */
 	IDLE = 0x2,
 	MUPDATE = 0x4
     } capability;
@@ -74,9 +83,10 @@ struct backend {
 
 /* if cache is NULL, returns a new struct backend, otherwise returns
  * cache on success (and returns NULL on failure, but leaves cache alone) */
-struct backend *findserver(struct backend *cache, const char *server,
-			   const char *userid);
-void downserver(struct backend *s);
+struct backend *backend_connect(struct backend *cache, const char *server,
+				struct protocol_t *prot, const char *userid,
+				const char **auth_status);
+void backend_disconnect(struct backend *s, struct protocol_t *prot);
 
 #define CAPA(s, c) ((s)->capability & (c))
 

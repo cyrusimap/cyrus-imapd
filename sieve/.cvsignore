@@ -1,4 +1,5 @@
 Makefile
+makedepend.log
 addr-lex.c
 addr.c
 addr.h
@@ -7,4 +8,6 @@ sieve.c
 sieve.h
 sieve_err.c
 sieve_err.h
+sievec
+sieved
 test

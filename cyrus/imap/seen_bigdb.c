@@ -1,6 +1,5 @@
 /* seen_bigdb.c -- implementation of seen database using one big cyrusdb
-   $Id: seen_bigdb.c,v 1.7 2003/08/14 16:20:33 rjs3 Exp $
- 
+ * $Id: seen_bigdb.c,v 1.8 2003/10/22 18:02:59 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -59,7 +58,7 @@
 #include <sys/uio.h>
 #include "cyrusdb.h"
 
-#include "imapconf.h"
+#include "global.h"
 #include "xmalloc.h"
 #include "mailbox.h"
 #include "imap_err.h"
@@ -70,8 +69,8 @@
 
 #define FNAME_SEENDB "/seenstate.db"
 
-/* choose "flat" or "db3" here --- db3 highly recommended */
-#define DB (&cyrusdb_db3)
+/* choose "flat" or "berkeley" here --- berkeley highly recommended */
+#define DB (&cyrusdb_berkeley)
 
 enum {
     MAX_KEY = MAX_MAILBOX_PATH + MAX_MAILBOX_NAME + 30,
@@ -355,6 +354,11 @@ int seen_create_user(const char *user)
 }
 
 int seen_delete_user(const char *user)
+{
+    return 0;			/* noop */
+}
+
+int seen_rename_user(const char *olduser, const char *newuser)
 {
     return 0;			/* noop */
 }

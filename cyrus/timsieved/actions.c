@@ -1,7 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.34 2003/06/25 03:34:03 ken3 Exp $
- * 
+ * $Id: actions.c,v 1.35 2003/10/22 18:03:46 rjs3 Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -55,6 +54,8 @@
 #include <stdlib.h>
 #include <limits.h>
 #include <sys/param.h>
+#include <sys/types.h>
+#include <fcntl.h>
 #include <syslog.h>
 #include <dirent.h>
 #include <ctype.h>
@@ -64,7 +65,8 @@
 #include "prot.h"
 #include "tls.h"
 #include "util.h"
-#include "imapconf.h"
+#include "global.h"
+#include "libconfig.h"
 #include "xmalloc.h"
 #include "sieve_interface.h"
 
@@ -81,10 +83,10 @@ int actions_init(void)
 {
   int sieve_usehomedir = 0;
 
-  sieve_usehomedir = config_getswitch("sieveusehomedir", 0);
+  sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
   
   if (!sieve_usehomedir) {
-      sieve_dir = (char *) config_getstring("sievedir", "/usr/sieve");
+      sieve_dir = (char *) config_getstring(IMAPOPT_SIEVEDIR);
   } else {
       /* can't use home directories with timsieved */
       syslog(LOG_ERR, "can't use home directories");
@@ -97,19 +99,31 @@ int actions_init(void)
 
 int actions_setuser(const char *userid)
 {
-  char hash;
+  char hash, *domain;
   char *foo=sieve_dir;
   int result;  
 
   sieve_dir=(char *) xmalloc(1024);
   
-  hash = (char) dir_hash_c(userid);
+  if (config_virtdomains && (domain = strchr(userid, '@'))) {
+      char d = (char) dir_hash_c(domain+1);
+      *domain = '\0';  /* split user@domain */
+      hash = (char) dir_hash_c(userid);
+      snprintf(sieve_dir, 1023, "%s%s%c/%s/%c/%s",
+	       foo, FNAME_DOMAINDIR, d, domain+1,
+	       hash, userid);
+      *domain = '@';  /* reassemble user@domain */
+  }
+  else {
+      hash = (char) dir_hash_c(userid);
     
-  snprintf(sieve_dir, 1023, "%s/%c/%s", foo, hash,userid);
+      snprintf(sieve_dir, 1023, "%s/%c/%s", foo, hash,userid);
+  }
 
   result = chdir(sieve_dir);
   if (result != 0) {
-      result = mkdir(sieve_dir, 0755);
+      result = cyrus_mkdir(sieve_dir, 0755);
+      if (!result) result = mkdir(sieve_dir, 0755);
       if (!result) result = chdir(sieve_dir);
       if (result) {
 	  syslog(LOG_ERR, "mkdir %s: %m", sieve_dir);
@@ -168,7 +182,7 @@ int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
     /* Sieve capabilities */
     prot_printf(conn,"\"SIEVE\" \"%s\"\r\n",sieve_listextensions());
 
-    if (tls_enabled("sieve") && !starttls_done && !authenticated) {
+    if (tls_enabled() && !starttls_done && !authenticated) {
 	prot_printf(conn, "\"STARTTLS\"\r\n");
     }
 
@@ -281,7 +295,9 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data,
   int lup;
   int result;
   char path[1024], p2[1024];
+  char bc_path[1024], bc_p2[1024];
   int maxscripts;
+  sieve_script_t *s;
 
   result = scriptname_valid(name);
   if (result!=TIMSIEVE_OK)
@@ -295,7 +311,7 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data,
 
   else {
       /* see if this would put the user over quota */
-      maxscripts = config_getint("sieve_maxscripts",5);
+      maxscripts = config_getint(IMAPOPT_SIEVE_MAXSCRIPTS);
 
       if (countscripts(string_DATAPTR(name))+1 > maxscripts)
       {
@@ -309,6 +325,7 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data,
 
       stream = fopen(path, "w+");
   }
+
 
   if (stream == NULL) {
       prot_printf(conn, "NO \"Unable to open script for writing (%s)\"\r\n",
@@ -332,7 +349,7 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data,
   /* let's make sure this is a valid script
      (no parse errors)
   */
-  result = is_script_parsable(stream, &errstr);
+  result = is_script_parsable(stream, &errstr, &s);
 
   if (result != TIMSIEVE_OK) {
       if (errstr && *errstr) { 
@@ -351,8 +368,50 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data,
   fclose(stream);
   
   if (!verify_only) {
+      int fd;
+      bytecode_info_t *bc;
+      
+      /* Now, generate the bytecode */
+      if(sieve_generate_bytecode(&bc, s) == -1) {
+	  unlink(path);
+	  sieve_script_free(&s);
+	  prot_printf(conn, "NO \"bytecode generate failed\"\r\n");
+	  return TIMSIEVE_FAIL;
+      }
+
+      /* Now, open the new file */
+      snprintf(bc_path, 1023, "%s.bc.NEW", string_DATAPTR(name));
+      fd = open(bc_path, O_CREAT | O_TRUNC | O_WRONLY, 0600);
+      if(fd < 0) {
+	  unlink(path);
+	  sieve_free_bytecode(&bc);
+	  sieve_script_free(&s);
+	  prot_printf(conn, "NO \"couldn't open bytecode file\"\r\n");
+	  return TIMSIEVE_FAIL;
+      }
+	  
+      /* Now, emit the bytecode */
+      if(sieve_emit_bytecode(fd, bc) == -1) {
+	  close(fd);
+	  unlink(path);
+	  unlink(bc_path);
+	  sieve_free_bytecode(&bc);
+	  sieve_script_free(&s);
+	  prot_printf(conn, "NO \"bytecode emit failed\"\r\n");
+	  return TIMSIEVE_FAIL;
+      }
+
+      sieve_free_bytecode(&bc);
+      sieve_script_free(&s);
+
+      close(fd);
+
+      /* Now, rename! */
       snprintf(p2, 1023, "%s.script", string_DATAPTR(name));
+      snprintf(bc_p2, 1023, "%s.bc", string_DATAPTR(name));
       rename(path, p2);
+      rename(bc_path, bc_p2);
+
   }
 
   prot_printf(conn, "OK\r\n");
@@ -364,7 +423,7 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data,
 
 static int deleteactive(struct protstream *conn)
 {
-    if (unlink("default") != 0) {
+    if (unlink("defaultbc") != 0) {
 	prot_printf(conn,"NO \"Unable to unlink active script\"\r\n");
 	return TIMSIEVE_FAIL;
     }
@@ -379,12 +438,12 @@ static int isactive(char *name)
     char filename[1024];
     char activelink[1024];
 
-    snprintf(filename, 1023, "%s.script", name);
+    snprintf(filename, 1023, "%s.bc", name);
     memset(activelink, 0, sizeof(activelink));
-    if ((readlink("default", activelink, sizeof(activelink)-1) < 0) && 
+    if ((readlink("defaultbc", activelink, sizeof(activelink)-1) < 0) && 
 	(errno != ENOENT)) 
     {
-	syslog(LOG_ERR, "readlink(default): %m");
+	syslog(LOG_ERR, "readlink(defaultbc): %m");
 	return FALSE;
     }
 
@@ -418,6 +477,15 @@ int deletescript(struct protstream *conn, mystring_t *name)
 
   if (result != 0) {
       prot_printf(conn,"NO \"Error deleting script\"\r\n");
+      return TIMSIEVE_FAIL;
+  }
+
+  snprintf(path, 1023, "%s.bc", string_DATAPTR(name));
+
+  result = unlink(path);
+
+  if (result != 0) {
+      prot_printf(conn,"NO \"Error deleting bytecode\"\r\n");
       return TIMSIEVE_FAIL;
   }
 
@@ -523,23 +591,23 @@ int setactive(struct protstream *conn, mystring_t *name)
     }
 
     /* get the name of the active sieve script */
-    snprintf(filename, sizeof filename, "%s.script", string_DATAPTR(name));
+    snprintf(filename, sizeof(filename), "%s.bc", string_DATAPTR(name));
 
     /* ok we want to do this atomically so let's
        - make <activesieve>.NEW as a hard link
        - rename it to <activesieve>
     */
-    result = symlink(filename, "default.NEW");
+    result = symlink(filename, "defaultbc.NEW");
     if (result) {
-	syslog(LOG_ERR, "symlink(%s, default.NEW): %m", filename);
+	syslog(LOG_ERR, "symlink(%s, defaultbc.NEW): %m", filename);
 	prot_printf(conn, "NO \"Can't make link\"\r\n");    
 	return TIMSIEVE_FAIL;
     }
 
-    result = rename("default.NEW", "default");
+    result = rename("defaultbc.NEW", "defaultbc");
     if (result) {
-	unlink("default.NEW");
-	syslog(LOG_ERR, "rename(default.NEW, default): %m");
+	unlink("defaultbc.NEW");
+	syslog(LOG_ERR, "rename(defaultbc.NEW, defaultbc): %m");
 	prot_printf(conn,"NO \"Error renaming\"\r\n");
 	return TIMSIEVE_FAIL;
     }
@@ -562,7 +630,7 @@ int cmd_havespace(struct protstream *conn, mystring_t *sieve_name, unsigned long
     }
 
     /* see if the size of the script is too big */
-    maxscriptsize = config_getint("sieve_maxscriptsize", 32);
+    maxscriptsize = config_getint(IMAPOPT_SIEVE_MAXSCRIPTSIZE);
     maxscriptsize *= 1024;
 
     if (num > maxscriptsize)
@@ -575,7 +643,7 @@ int cmd_havespace(struct protstream *conn, mystring_t *sieve_name, unsigned long
     }
 
     /* see if this would put the user over quota */
-    maxscripts = config_getint("sieve_maxscripts",5);
+    maxscripts = config_getint(IMAPOPT_SIEVE_MAXSCRIPTS);
 
     if (countscripts(string_DATAPTR(sieve_name))+1 > maxscripts)
     {

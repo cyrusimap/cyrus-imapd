@@ -1,5 +1,5 @@
 # Makefile for the Cyrus controlling process
-# $Id: Makefile.in,v 1.15 2003/09/09 14:54:54 rjs3 Exp $
+# $Id: Makefile.in,v 1.16 2003/10/22 18:03:09 rjs3 Exp $
 # 
 # @configure_input@
 #
@@ -58,7 +58,7 @@ DEPLIBS = @DEPLIBS@
 
 CFLAGS = @CFLAGS@
 LDFLAGS = @LDFLAGS@ @COM_ERR_LDFLAGS@
-LIBS = @LIB_UCDSNMP@ @LIBS@ @COM_ERR_LIBS@
+LIBS = ../lib/libcyrus_min.a @LIB_UCDSNMP@ @LIBS@ @COM_ERR_LIBS@
 
 SHELL = /bin/sh
 MAKEDEPEND = @MAKEDEPEND@

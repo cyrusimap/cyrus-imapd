@@ -1,6 +1,6 @@
 /* mpool.c memory pool management
  *
- * $Id: mpool.c,v 1.12 2003/02/13 20:15:41 rjs3 Exp $
+ * $Id: mpool.c,v 1.13 2003/10/22 18:03:05 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,6 @@
 
 #include <config.h>
 
-#include <sys/time.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -51,7 +50,6 @@
 #include <string.h>
 #include <ctype.h>
 #include <signal.h>
-#include <time.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <syslog.h>

@@ -1,6 +1,8 @@
-/* test.c -- tester for libsieve
+/*NEW
+  
+ * test.c -- tester for libsieve
  * Larry Greenfield
- * $Id: test.c,v 1.19 2002/05/14 16:51:51 ken3 Exp $
+ * $Id: test.c,v 1.20 2003/10/22 18:03:25 rjs3 Exp $
  *
  * usage: "test message script"
  */
@@ -190,7 +192,6 @@ void fill_cache(message_data_t *m)
 	if (parseheader(m->data, &name, &body) < 0) {
 	    break;
 	}
-
 	/* put it in the hash table */
 	clinit = cl = hashheader(name);
 	while (m->cache[cl] != NULL && strcmp(name, m->cache[cl]->name)) {
@@ -277,7 +278,7 @@ int getheader(void *v, const char *phead, const char ***body)
     free(head);
 
     if (*body) {
-	return SIEVE_OK;
+  	return SIEVE_OK;
     } else {
 	return SIEVE_FAIL;
     }
@@ -382,7 +383,6 @@ int keep(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     int *force_fail = (int*) ic;
 
     printf("keeping message '%s'\n", m->name);
-
     if (kc->imapflags->flag) {
 	int n;
 	printf("\twith flags");
@@ -402,7 +402,7 @@ int notify(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 
     printf("notify ");
     if (nc->method) {
-	char **opts = nc->options;
+	const char **opts = nc->options;
 
 	printf("%s(", nc->method);
 	while (opts && *opts) {
@@ -458,8 +458,8 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     message_data_t *m = (message_data_t *) mc;
     int *force_fail = (int*) ic;
 
-    printf("echo '%s' | mail -s '%s' '%s' for message '%s'\n",
-	   src->msg, src->subj, src->addr, m->name);
+    printf("echo '%s' | mail -s '%s' '%s' for message '%s' (from: %s)\n",
+	   src->msg, src->subj, src->addr, m->name, src->fromaddr);
 
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
@@ -638,7 +638,7 @@ static int test_comparator(void)
     int didfail = 0;
 
     for (t = tc; t->comp != NULL; t++) {
-	comparator_t *c = lookup_comp(t->comp, t->mode, NULL, NULL);
+	comparator_t *c = lookup_comp(t->comp, t->mode, -1, NULL);
 	int res;
 	char *mode;
 
@@ -672,11 +672,12 @@ static int test_comparator(void)
 int main(int argc, char *argv[])
 {
     sieve_interp_t *i;
-    sieve_script_t *s;
+    sieve_bytecode_t *bc;
     message_data_t *m;
     char *script = NULL, *message = NULL;
     int c, force_fail = 0, usage_error = 0;
-    FILE *f;
+    /* (crom cvs update) FILE *f;
+    */
     int fd, res;
     struct stat sbuf;
 
@@ -792,21 +793,12 @@ int main(int argc, char *argv[])
     if (res != SIEVE_OK) {
 	printf("sieve_register_execute_error() returns %d\n", res);
         exit(1);
-    }
+    }   
 
-
-    f = fopen(script, "r");
-    if (!f) {
-	printf("can not open script '%s'\n", script);
-	exit(1);
-    }
-
-    res = sieve_script_parse(i, f, NULL, &s);
+    res = sieve_script_load(argv[2], &bc);
     if (res != SIEVE_OK) {
 	exit(1);
     }
-
-    fclose(f);
 
     if (message) {
 	fd = open(message, O_RDONLY);
@@ -815,24 +807,25 @@ int main(int argc, char *argv[])
 	    perror("fstat");
 	}
 
+
 	m = new_msg(fdopen(fd, "r"), sbuf.st_size, message);
 	if (res != SIEVE_OK) {
 	    printf("sieve_msg_parse() returns %d\n", res);
 	    exit(1);
 	}
 
-	res = sieve_execute_script(s, m);
+	res = sieve_execute_bytecode(bc, i, NULL, m);
 	if (res != SIEVE_OK) {
-	    printf("sieve_execute_script() returns %d\n", res);
+	    printf("sieve_execute_bytecode() returns %d\n", res);
 	    exit(1);
 	}
 	
 	close(fd);
     }
-
-    res = sieve_script_free(&s);
+    /*used to be sieve_script_free*/
+    res = sieve_script_unload(&bc);
     if (res != SIEVE_OK) {
-	printf("sieve_script_free() returns %d\n", res);
+	printf("sieve_script_unload() returns %d\n", res);
 	exit(1);
     }
     res = sieve_interp_free(&i);

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: mbexamine.c,v 1.3 2003/05/15 17:16:27 rjs3 Exp $ */
+/* $Id: mbexamine.c,v 1.4 2003/10/22 18:02:58 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -82,7 +82,7 @@
 #include "convert_code.h"
 #include "exitcodes.h"
 #include "index.h"
-#include "imapconf.h"
+#include "global.h"
 #include "imap_err.h"
 #include "imparse.h"
 #include "mailbox.h"
@@ -99,6 +99,9 @@ extern char *optarg;
 
 /* current namespace */
 static struct namespace recon_namespace;
+
+/* config.c stuff */
+const int config_need_data = 0;
 
 /* forward declarations */
 int do_examine(char *name, int matchlen, int maycreate, void *rock);
@@ -119,8 +122,8 @@ int main(int argc, char **argv)
 //    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
     /* Ensure we're up-to-date on the index file format */
-    assert(INDEX_HEADER_SIZE == (OFFSET_SPARE3+4));
-    assert(INDEX_RECORD_SIZE == (OFFSET_USER_FLAGS+MAX_USER_FLAGS/8));
+    assert(INDEX_HEADER_SIZE == (OFFSET_SPARE2+4));
+    assert(INDEX_RECORD_SIZE == (OFFSET_CACHE_VERSION+4));
 
     while ((opt = getopt(argc, argv, "C:u:s:")) != EOF) {
 	switch (opt) {
@@ -144,7 +147,7 @@ int main(int argc, char **argv)
 	}
     }
 
-    config_init(alt_config, "mbexamine");
+    cyrus_init(alt_config, "mbexamine");
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&recon_namespace, 1)) != 0) {
@@ -167,7 +170,7 @@ int main(int argc, char **argv)
     for (i = optind; i < argc; i++) {
 	strlcpy(buf, argv[i], sizeof(buf));
 	/* Translate any separators in mailboxname */
-	mboxname_hiersep_tointernal(&recon_namespace, buf);
+	mboxname_hiersep_tointernal(&recon_namespace, buf, 0);
 	(*recon_namespace.mboxlist_findall)(&recon_namespace, buf, 1, 0,
 					    0, do_examine, NULL);
     }
@@ -190,9 +193,9 @@ void usage(void)
  * mboxlist_findall() callback function to examine a mailbox
  */
 int do_examine(char *name,
-	       int matchlen,
+	       int matchlen __attribute__((unused)),
 	       int maycreate __attribute__((unused)),
-	       void *rock)
+	       void *rock __attribute__((unused)))
 {
     int i,r = 0;
     int flag = 0;
@@ -298,8 +301,16 @@ int do_examine(char *name,
 	printf("%06d> UID:%08d   INT_DATE:%d SENTDATE:%d SIZE:%-6d\n",
 	       i, UID(i), INTERNALDATE(i), SENTDATE(i),
 	       SIZE(i));
-	printf("      > HDRSIZE:%-6d LASTUPD :%ld SYSFLAGS:%08X\n",
+	printf("      > HDRSIZE:%-6d LASTUPD :%ld SYSFLAGS:%08X",
 	       HEADER_SIZE(i), LAST_UPDATED(i), SYSTEM_FLAGS(i));
+	if (mailbox.minor_version >= 5)
+	    printf("   LINES:%-6d", CONTENT_LINES(i));
+
+	if (mailbox.minor_version >= 6)
+	    printf(" CACHEVER:%-6d", CACHE_VERSION(i));
+
+	printf("\n");
+
 	printf("      > USERFLAGS:");
 	for(j=(MAX_USER_FLAGS/32)-1; j>=0; j--) {
 	    printf(" %08X", USER_FLAGS(i,j));
@@ -364,18 +375,4 @@ void shut_down(int code)
     mboxlist_close();
     mboxlist_done();
     exit(code);
-}
-
-void fatal(const char* s, int code)
-{
-    static int recurse_code = 0;
-    
-    if (recurse_code) {
-	/* We were called recursively. Just give up */
-	exit(recurse_code);
-    }
-    
-    recurse_code = code;
-    fprintf(stderr, "reconstruct: %s\n", s);
-    shut_down(code);
 }

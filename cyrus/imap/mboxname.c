@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- * $Id: mboxname.c,v 1.29 2003/04/25 17:32:33 ken3 Exp $
+ * $Id: mboxname.c,v 1.30 2003/10/22 18:02:58 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -50,7 +50,7 @@
 
 #include "assert.h"
 #include "glob.h"
-#include "imapconf.h"
+#include "global.h"
 #include "mailbox.h"
 #include "exitcodes.h"
 #include "imap_err.h"
@@ -108,39 +108,82 @@ static const char index_mod64[256] = {
 static int mboxname_tointernal(struct namespace *namespace, const char *name,
 			       const char *userid, char *result)
 {
+    char *cp;
+    int userlen, domainlen = 0, namelen;
+
     /* Blank the result, just in case */
     result[0] = '\0';
+
+    userlen = userid ? strlen(userid) : 0;
+    namelen = strlen(name);
+
+    if (config_virtdomains) {
+	if (userid && (cp = strrchr(userid, '@'))) {
+	    /* user logged in as user@domain */
+	    userlen = cp++ - userid;
+	    /* don't prepend default domain */
+	    if (!(config_defdomain && !strcasecmp(config_defdomain, cp))) {
+		sprintf(result, "%s!", cp);
+		domainlen = strlen(result);
+	    }
+	}
+	if ((cp = strrchr(name, '@'))) {
+	    /* mailbox specified as mbox@domain */
+	    namelen = cp - name;
+
+	    if (config_defdomain && !strcasecmp(config_defdomain, cp+1)) {
+		if (domainlen) {
+		    /* don't allow cross-domain access */
+		    return IMAP_MAILBOX_BADNAME;
+		}
+		/* don't prepend default domain */
+	    }
+	    else {
+		if ((!domainlen && !namespace->isadmin) ||
+		    (domainlen && strcasecmp(userid+userlen, cp))) {
+		    /* don't allow cross-domain access
+		       (except for global admin) */
+		    return IMAP_MAILBOX_BADNAME;
+		}
+		sprintf(result, "%s!", cp+1);
+		domainlen = strlen(result);
+	    }
+	}
+
+	/* if no domain specified, we're in the default domain */
+    }
+
+    result += domainlen;
 
     /* Personal (INBOX) namespace */
     if ((name[0] == 'i' || name[0] == 'I') &&
 	!strncasecmp(name, "inbox", 5) &&
-	(name[5] == '\0' || name[5] == namespace->hier_sep)) {
+	(namelen == 5 || name[5] == namespace->hier_sep)) {
 
-	if (!userid || strchr(userid, namespace->hier_sep)) {
+	if (!userid || ((cp = strchr(userid, namespace->hier_sep)) &&
+			(cp - userid < userlen))) {
 	    return IMAP_MAILBOX_BADNAME;
 	}
 
-	if (strlen(name+5)+strlen(userid)+5 > MAX_MAILBOX_NAME) {
+	if (domainlen+namelen+userlen > MAX_MAILBOX_NAME) {
 	    return IMAP_MAILBOX_BADNAME;
 	}
 
-	strcpy(result, "user.");
-	strcat(result, userid);
-	strcat(result, name+5);
+	sprintf(result, "user.%.*s%.*s", userlen, userid, namelen-5, name+5);
 
 	/* Translate any separators in userid+mailbox */
-	mboxname_hiersep_tointernal(namespace, result+5+strlen(userid));
+	mboxname_hiersep_tointernal(namespace, result+5+userlen, 0);
 	return 0;
     }
 
     /* Other Users & Shared namespace */
-    if (strlen(name) > MAX_MAILBOX_NAME) {
+    if (domainlen+namelen > MAX_MAILBOX_NAME) {
 	return IMAP_MAILBOX_BADNAME;
     }
-    strcpy(result, name);
+    sprintf(result, "%.*s", namelen, name);
 
     /* Translate any separators in mailboxname */
-    mboxname_hiersep_tointernal(namespace, result);
+    mboxname_hiersep_tointernal(namespace, result, 0);
     return 0;
 }
 
@@ -149,31 +192,74 @@ static int mboxname_tointernal_alt(struct namespace *namespace,
 				   const char *name,
 				   const char *userid, char *result)
 {
+    char *cp;
+    int userlen, domainlen = 0, namelen;
     int prefixlen;
 
     /* Blank the result, just in case */
     result[0] = '\0';
+
+    userlen = userid ? strlen(userid) : 0;
+    namelen = strlen(name);
+
+    if (config_virtdomains) {
+	if (userid && (cp = strchr(userid, '@'))) {
+	    /* user logged in as user@domain */
+	    userlen = cp++ - userid;
+	    if (!(config_defdomain && !strcasecmp(config_defdomain, cp))) {
+		/* don't prepend default domain */
+		sprintf(result, "%s!", cp);
+		domainlen = strlen(result);
+	    }
+	}
+	if ((cp = strrchr(name, '@'))) {
+	    /* mailbox specified as mbox@domain */
+	    namelen = cp - name;
+
+	    if (config_defdomain && !strcasecmp(config_defdomain, cp+1)) {
+		if (domainlen) {
+		    /* don't allow cross-domain access */
+		    return IMAP_MAILBOX_BADNAME;
+		}
+		/* don't prepend default domain */
+	    }
+	    else {
+		if ((!domainlen && !namespace->isadmin) ||
+		    (domainlen && strcasecmp(userid+userlen, cp))) {
+		    /* don't allow cross-domain access 
+		       (except for global admin) */
+		    return IMAP_MAILBOX_BADNAME;
+		}
+		sprintf(result, "%s!", cp+1);
+		domainlen = strlen(result);
+	    }
+	}
+
+	/* if no domain specified, we're in the default domain */
+    }
+
+    result += domainlen;
 
     /* Shared namespace */
     prefixlen = strlen(namespace->prefix[NAMESPACE_SHARED]);
     if(prefixlen == 0) return IMAP_MAILBOX_BADNAME;
 
     if (!strncmp(name, namespace->prefix[NAMESPACE_SHARED], prefixlen-1) &&
-	(name[prefixlen-1] == '\0' || name[prefixlen-1] == namespace->hier_sep)) {
+	(namelen == prefixlen-1 || name[prefixlen-1] == namespace->hier_sep)) {
 
-	if (name[prefixlen-1] == '\0') {
+	if (namelen ==  prefixlen-1) {
 	    /* can't create folders using undelimited prefix */
 	    return IMAP_MAILBOX_BADNAME;
 	}
 
-	if (strlen(name+prefixlen) > MAX_MAILBOX_NAME) {
+	if (domainlen+namelen-prefixlen > MAX_MAILBOX_NAME) {
 	    return IMAP_MAILBOX_BADNAME;
 	}
 
-	strcpy(result, name+prefixlen);
+	sprintf(result, "%.*s", namelen-prefixlen, name+prefixlen);
 
 	/* Translate any separators in mailboxname */
-	mboxname_hiersep_tointernal(namespace, result);
+	mboxname_hiersep_tointernal(namespace, result, 0);
 	return 0;
     }
 
@@ -182,41 +268,40 @@ static int mboxname_tointernal_alt(struct namespace *namespace,
     if(prefixlen == 0) return IMAP_MAILBOX_BADNAME;
 
     if (!strncmp(name, namespace->prefix[NAMESPACE_USER], prefixlen-1) &&
-	(name[prefixlen-1] == '\0' || name[prefixlen-1] == namespace->hier_sep)) {
+	(namelen == prefixlen-1 || name[prefixlen-1] == namespace->hier_sep)) {
 
-	if (name[prefixlen-1] == '\0') {
+	if (namelen == prefixlen-1) {
 	    /* can't create folders using undelimited prefix */
 	    return IMAP_MAILBOX_BADNAME;
 	}
 
-	if (strlen(name+prefixlen)+5 > MAX_MAILBOX_NAME) {
+	if (domainlen+namelen-prefixlen+5 > MAX_MAILBOX_NAME) {
 	    return IMAP_MAILBOX_BADNAME;
 	}
 
-	strcpy(result, "user.");
-	strcat(result, name+prefixlen);
+	sprintf(result, "user.%.*s", namelen-prefixlen, name+prefixlen);
 
 	/* Translate any separators in userid+mailbox */
-	mboxname_hiersep_tointernal(namespace, result+5);
+	mboxname_hiersep_tointernal(namespace, result+5, 0);
 	return 0;
     }
 
     /* Personal (INBOX) namespace */
-    if (!userid || strchr(userid, namespace->hier_sep)) {
+    if (!userid || ((cp = strchr(userid, namespace->hier_sep)) &&
+		    (cp - userid < userlen))) {
 	return IMAP_MAILBOX_BADNAME;
     }
 
-    if (strlen(userid)+5 > MAX_MAILBOX_NAME) {
+    if (domainlen+userlen+5 > MAX_MAILBOX_NAME) {
 	return IMAP_MAILBOX_BADNAME;
     }
 
-    strcpy(result, "user.");
-    strcat(result, userid);
+    sprintf(result, "user.%.*s", userlen, userid);
 
     /* INBOX */
     if ((name[0] == 'i' || name[0] == 'I') &&
-	!strncasecmp(name, "inbox", 5) &&
-	(name[5] == '\0' || name[5] == namespace->hier_sep)) {
+	!strncasecmp(name, "inbox", 5) && 
+	(namelen == 5 || name[5] == namespace->hier_sep)) {
 
 	if (name[5] == namespace->hier_sep) {
 	    /* can't create folders under INBOX */
@@ -227,14 +312,13 @@ static int mboxname_tointernal_alt(struct namespace *namespace,
     }
 
     /* other personal folder */
-    if (strlen(result)+6 > MAX_MAILBOX_NAME) {
+    if (domainlen+strlen(result)+6+namelen > MAX_MAILBOX_NAME) {
 	return IMAP_MAILBOX_BADNAME;
     }
-    strcat(result, ".");
-    strcat(result, name);
+    sprintf(result+strlen(result), ".%.*s", namelen, name);
 
     /* Translate any separators in mailboxname */
-    mboxname_hiersep_tointernal(namespace, result+6+strlen(userid));
+    mboxname_hiersep_tointernal(namespace, result+6+userlen, 0);
     return 0;
 }
 
@@ -249,15 +333,34 @@ static int mboxname_tointernal_alt(struct namespace *namespace,
 static int mboxname_toexternal(struct namespace *namespace, const char *name,
 			       const char *userid, char *result)
 {
+    char *domain = NULL, *cp;
+    int domainlen = 0;
+
     /* Blank the result, just in case */
     result[0] = '\0';
 
     if(strlen(name) > MAX_MAILBOX_NAME) return IMAP_MAILBOX_BADNAME;
     
+    if (config_virtdomains && (cp = strchr(name, '!'))) {
+	domain = (char*) name;
+	domainlen = cp++ - name;
+	name = cp;
+
+	/* don't use the domain if it matches the user's domain */
+	if (userid && (cp = strchr(userid, '@')) &&
+	    (strlen(++cp) == domainlen) && !strncmp(domain, cp, domainlen))
+	    domain = NULL;
+    }
+
     strcpy(result, name);
 
     /* Translate any separators in mailboxname */
-    mboxname_hiersep_toexternal(namespace, result);
+    mboxname_hiersep_toexternal(namespace, result, 0);
+
+    /* Append domain */
+    if (domain)
+	sprintf(result+strlen(result), "@%.*s", domainlen, domain);
+
     return 0;
 }
 
@@ -265,11 +368,20 @@ static int mboxname_toexternal(struct namespace *namespace, const char *name,
 static int mboxname_toexternal_alt(struct namespace *namespace, const char *name,
 				  const char *userid, char *result)
 {
+    char *domain;
+
     /* Blank the result, just in case */
     result[0] = '\0';
 
     if(strlen(name) > MAX_MAILBOX_NAME) return IMAP_MAILBOX_BADNAME;
     
+    if (!userid) return IMAP_MAILBOX_BADNAME;
+
+    if (config_virtdomains && (domain = strchr(userid, '@')) &&
+	!strncmp(name, domain+1, strlen(domain)-1) &&
+	name[strlen(domain)-1] == '!')
+	name += strlen(domain);
+
     /* Personal (INBOX) namespace */
     if (!strncasecmp(name, "inbox", 5) &&
 	(name[5] == '\0' || name[5] == '.')) {
@@ -315,27 +427,30 @@ static int mboxname_toexternal_alt(struct namespace *namespace, const char *name
     }
 
     /* Translate any separators in mailboxname */
-    mboxname_hiersep_toexternal(namespace, result);
+    mboxname_hiersep_toexternal(namespace, result, 0);
     return 0;
 }
 
 /*
  * Create namespace based on config options.
  */
-int mboxname_init_namespace(struct namespace *namespace, int force_std)
+int mboxname_init_namespace(struct namespace *namespace, int isadmin)
 {
     const char *prefix;
 
     assert(namespace != NULL);
 
-    namespace->hier_sep = config_getswitch("unixhierarchysep", 0) ? '/' : '.';
-    namespace->isalt = !force_std && config_getswitch("altnamespace", 0);
+    namespace->isadmin = isadmin;
+
+    namespace->hier_sep =
+	config_getswitch(IMAPOPT_UNIXHIERARCHYSEP) ? '/' : '.';
+    namespace->isalt = !isadmin && config_getswitch(IMAPOPT_ALTNAMESPACE);
 
     if (namespace->isalt) {
 	/* alternate namespace */
 	strcpy(namespace->prefix[NAMESPACE_INBOX], "");
 
-	prefix = config_getstring("userprefix", "Other Users");
+	prefix = config_getstring(IMAPOPT_USERPREFIX);
 	if (!prefix || strlen(prefix) == 0 ||
 	    strlen(prefix) >= MAX_NAMESPACE_PREFIX ||
 	    strchr(prefix,namespace->hier_sep) != NULL)
@@ -343,7 +458,7 @@ int mboxname_init_namespace(struct namespace *namespace, int force_std)
 	sprintf(namespace->prefix[NAMESPACE_USER], "%.*s%c",
 		MAX_NAMESPACE_PREFIX-1, prefix, namespace->hier_sep);
 
-	prefix = config_getstring("sharedprefix", "Shared Folders");
+	prefix = config_getstring(IMAPOPT_SHAREDPREFIX);
 	if (!prefix || strlen(prefix) == 0 ||
 	    strlen(prefix) >= MAX_NAMESPACE_PREFIX ||
 	    strchr(prefix, namespace->hier_sep) != NULL ||
@@ -380,16 +495,19 @@ int mboxname_init_namespace(struct namespace *namespace, int force_std)
  * representation to its internal representation '.'.
  * If using the unixhierarchysep '/', all '.'s get translated to DOTCHAR.
  */
-char *mboxname_hiersep_tointernal(struct namespace *namespace, char *name)
+char *mboxname_hiersep_tointernal(struct namespace *namespace, char *name,
+				  int length)
 {
     char *p;
 
     assert(namespace != NULL);
     assert(namespace->hier_sep == '.' || namespace->hier_sep == '/');
 
+    if (!length) length = strlen(name);
+
     if (namespace->hier_sep == '/') {
 	/* change all '/'s to '.' and all '.'s to DOTCHAR */
-	for (p = name; *p; p++) {
+	for (p = name; *p && length; p++, length--) {
 	    if (*p == '/') *p = '.';
 	    else if (*p == '.') *p = DOTCHAR;
 	}
@@ -403,16 +521,19 @@ char *mboxname_hiersep_tointernal(struct namespace *namespace, char *name)
  * representation '.' to its external representation.
  * If using the unixhierarchysep '/', all DOTCHAR get translated to '.'.
  */
-char *mboxname_hiersep_toexternal(struct namespace *namespace, char *name)
+char *mboxname_hiersep_toexternal(struct namespace *namespace, char *name,
+                                  int length)
 {
     char *p;
 
     assert(namespace != NULL);
     assert(namespace->hier_sep == '.' || namespace->hier_sep == '/');
 
+    if (!length) length=strlen(name);
+
     if (namespace->hier_sep == '/') {
 	/* change all '.'s to '/' and all DOTCHARs to '.' */
-	for (p = name; *p; p++) {
+	for (p = name; *p && length; p++, length--) {
 	    if (*p == '.') *p = '/';
 	    else if (*p == DOTCHAR) *p = '.';
 	}
@@ -426,12 +547,31 @@ char *mboxname_hiersep_toexternal(struct namespace *namespace, char *name)
  */
 int mboxname_userownsmailbox(const char *userid, const char *name)
 {
-    if (!strchr(userid, '.') && !strncmp(name, "user.", 5) &&
-	!strncmp(name+5, userid, strlen(userid)) &&
-	name[5+strlen(userid)] == '.') {
+    struct namespace internal = { '.' };
+    char inboxname[MAX_MAILBOX_NAME+1];
+
+    if (!mboxname_tointernal(&internal, "INBOX", userid, inboxname) &&
+	!strncmp(name, inboxname, strlen(inboxname)) &&
+	(name[strlen(inboxname)] == '\0' || name[strlen(inboxname)] == '.')) {
 	return 1;
     }
     return 0;
+}
+
+/*
+ * If (internal) mailbox 'name' is a user's mailbox (optionally INBOX),
+ * returns a pointer to the userid, otherwise returns NULL.
+ */
+char *mboxname_isusermailbox(const char *name, int isinbox)
+{
+    const char *p;
+
+    if (((!strncmp(name, "user.", 5) && (p = name+5)) ||
+	 ((p = strstr(name, "!user.")) && (p += 6))) &&
+	(!isinbox || !strchr(p, '.')))
+	return (char*) p;
+    else
+	return NULL;
 }
 
 /*
@@ -486,7 +626,7 @@ int mboxname_policycheck(char *name)
     int ucs4;
     int unixsep;
 
-    unixsep = config_getswitch("unixhierarchysep", 0);
+    unixsep = config_getswitch(IMAPOPT_UNIXHIERARCHYSEP);
 
     if (strlen(name) > MAX_MAILBOX_NAME) return IMAP_MAILBOX_BADNAME;
     for (i = 0; i < NUM_BADMBOXPATTERNS; i++) {

@@ -1,6 +1,6 @@
 /*
  * Mar  8, 2000 by Hajimu UMEMOTO <ume@mahoroba.org>
- * $Id: gai.h,v 1.4 2003/07/25 16:59:24 rjs3 Exp $
+ * $Id: gai.h,v 1.5 2003/10/22 18:03:04 rjs3 Exp $
  *
  * This module is besed on ssh-1.2.27-IPv6-1.5 written by
  * KIKUCHI Takahiro <kick@kyoto.wide.ad.jp>
@@ -62,10 +62,10 @@
 #endif
 
 /* for old netdb.h */
-#ifndef EAI_NODATA
-#define EAI_NODATA	1
+#ifndef EAI_SERVICE
 #define EAI_MEMORY	2
 #define EAI_FAMILY	5	/* ai_family not supported */
+#define EAI_NONAME      8       /* hostname nor servname provided, or not known */
 #define EAI_SERVICE	9	/* servname not supported for ai_socktype */
 #endif
 
@@ -89,15 +89,16 @@ struct addrinfo {
 };
 #endif
 
+#ifndef HAVE_GETNAMEINFO
+int	getnameinfo(const struct sockaddr *, socklen_t, char *,
+		    size_t, char *, size_t, int);
+#endif
+
 #ifndef HAVE_GETADDRINFO
 int	getaddrinfo(const char *, const char *,
 		    const struct addrinfo *, struct addrinfo **);
 void	freeaddrinfo(struct addrinfo *);
 char	*gai_strerror(int);
-#endif
-#ifndef HAVE_GETNAMEINFO
-int	getnameinfo(const struct sockaddr *, socklen_t, char *,
-		    size_t, char *, size_t, int);
 #endif
 
 #endif

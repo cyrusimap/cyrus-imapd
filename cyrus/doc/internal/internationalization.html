@@ -6,7 +6,7 @@
 <!-- warning this is a UTF-8 file. please don't pretend it's ISO-8859. -->
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 <meta name="revision" 
-content="$Id: internationalization.html,v 1.5 2003/10/10 17:38:40 rjs3 Exp $" />
+content="$Id: internationalization.html,v 1.6 2003/10/22 18:02:54 rjs3 Exp $" />
 <meta name="author" content="Larry Greenfield" />
 
 <title>internationalization</title>
@@ -36,7 +36,7 @@ Cyrus's known character sets (except for UTF-8) don't contain any
 characters off of the BMP this isn't seen to be a major problem.</p>
 
 <p>Throughout this text, Unicode and ISO 10646 will be used
-interchangeably to refer to the 16-bit character set of the BMP,
+interchangible to refer to the 16-bit character set of the BMP,
 regardless of encoding. "Character", unless otherwise specified,
 refers to a single Unicode character <tt>ffff</tt> or under. </p>
 
@@ -99,9 +99,9 @@ int bufsz)</tt></dt>
 canonical form in <i>buf</i>. <i>buf</i> must be reallocable and
 currently at least size <i>bufsz</i>.</dd>
 
-<dt><tt>char *charset_decode1522(const char *s, char *buf, int bufsz)</tt></dt>
-<dd> Given a string <i>s</i> containing possible RFC 1522 (revised as RFC
-2047) encoded substrings, decode into canonical form in
+<dt><tt>char *charset_decode_mimeheader(const char *s, char *buf, int
+bufsz)</tt></dt> <dd> Given a string <i>s</i> containing possible MIME
+encoded substrings (per RFC 2047), decode into canonical form in
 <i>buf</i>. <i>buf</i> must be reallocable and currently at least size
 <i>bufsz</i>.</dd>
 
@@ -143,6 +143,16 @@ dynamically unencode and canonicalize the search text looking for
 instead of <tt>\r\n</tt>, but the length assumes that each <tt>\n</tt>
 is dynamically converted to <tt>\r\n</tt>. This feature is deprecated.)
 </dd>
+
+<dt><tt>char *charset_decode_mimebody(const char *msg_base, int len,
+                                     int encoding, char **buf, int *bufsz,
+                                     int *outlen)</tt></dt>
+<dd>
+Decode the MIME body part (per RFC 2045) located in the large buffer
+starting at <i>msg_base</i> of length <i>len</i>. The large buffer is of
+encoding <i>encoding</i>. <tt>charset_decode_mimebody()</tt> will decode 
+into <i>buf</i>. <i>buf</i> must be reallocable and currently at least size
+<i>bufsz</i>.  The number of decoded bytes is returned in <i>outlen</i>.</dd>
 
 <dt><tt>charset_extractfile()</tt></dt>
 <dd> Used by <tt>squatter</tt> and possibly other text indexing engines,

@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: pop3test.1,v 1.7 2003/08/09 23:43:14 rjs3 Exp $
+.\" $Id: pop3test.1,v 1.8 2003/10/22 18:03:08 rjs3 Exp $
 .SH NAME
 pop3test \- interactive POP3 test program
 .SH SYNOPSIS
@@ -94,6 +94,10 @@ pop3test \- interactive POP3 test program
 ]
 .br
          [
+.B \-o
+\fIoption\fB=\fIvalue\fR
+]
+[
 .B \-v
 ]
 \fIhostname\fR
@@ -159,6 +163,9 @@ Enable POP3 over SSL (pop3s).
 Enable challenge prompt callbacks.  This will cause the OTP mechanism
 to ask for the the one-time password instead of the secret pass-phrase
 (library generates the correct response).
+.TP
+\fB-o \fIoption\fB=\fIvalue\fR
+Set the SASL \fIoption\fR to \fIvalue\fR.
 .TP
 .B -v
 Verbose. Print out more information than usual.

@@ -1,6 +1,6 @@
 /* masterconfig.c -- Configuration routines for master process
- $Id: masterconf.c,v 1.9 2003/02/13 20:15:45 rjs3 Exp $
- 
+ * $Id: masterconf.c,v 1.10 2003/10/22 18:03:09 rjs3 Exp $
+ * 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -52,13 +52,15 @@
 #include <sys/stat.h>
 #include <sysexits.h>
 
+#include "libconfig.c"
+
 #if HAVE_UNISTD_H
 # include <unistd.h>
 #endif
 
 #include "masterconf.h"
 
-#define CONFIG_FILENAME "/etc/cyrus.conf"
+extern const char *MASTER_CONFIG_FILENAME;
 
 struct configlist {
     char *key;
@@ -67,9 +69,30 @@ struct configlist {
 
 extern void fatal(const char *buf, int code);
 
-int masterconf_init(const char *ident)
+int masterconf_init(const char *ident, const char *alt_config)
 {
-    openlog(ident, LOG_PID, LOG_LOCAL6);
+    char *buf;
+    const char *prefix;
+
+    config_ident = ident;
+    
+    config_read(alt_config);
+
+    prefix = config_getstring(IMAPOPT_SYSLOG_PREFIX);
+    
+    if(prefix) {
+	int size = strlen(prefix) + 1 + strlen(ident) + 1;
+	buf = xmalloc(size);
+	strlcpy(buf, prefix, size);
+	strlcat(buf, "/", size);
+	strlcat(buf, ident, size);
+    } else {
+	buf = xstrdup(ident);
+    }
+
+    openlog(buf, LOG_PID, SYSLOG_FACILITY);
+
+    /* don't free the openlog() string! */
 
     return 0;
 }
@@ -101,7 +124,7 @@ const char *masterconf_getstring(struct entry *e, const char *key,
 	    }
 	    if (*p != '"') {
 		sprintf(k, "configuration file %s: missing \" on line %d",
-			CONFIG_FILENAME, e->lineno);
+			MASTER_CONFIG_FILENAME, e->lineno);
 		fatal(k, EX_CONFIG);
 	    }
 	} else {
@@ -197,10 +220,10 @@ void masterconf_getsection(const char *section, masterconf_process *f,
     int lineno = 0;
     char buf[4096];
 
-    infile = fopen(CONFIG_FILENAME, "r");
+    infile = fopen(MASTER_CONFIG_FILENAME, "r");
     if (!infile) {
 	snprintf(buf, sizeof(buf), "can't open configuration file %s: %s",
-		CONFIG_FILENAME, strerror(errno));
+		MASTER_CONFIG_FILENAME, strerror(errno));
 	fatal(buf, EX_CONFIG);
     }
 
