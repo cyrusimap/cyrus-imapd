@@ -1,10 +1,16 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
 "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
+
 <head>
-<meta name="revision" content="$Id: internationalization.html,v 1.1 2002/12/26 17:52:00 leg Exp $" />
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="revision" 
+content="$Id: internationalization.html,v 1.2 2002/12/31 07:29:52 leg Exp $" />
+<meta name="author" content="Larry Greenfield" />
+
 <title>internationalization</title>
 </head>
+
 <body>
 <h1>charset code</h1>
 
@@ -28,10 +34,42 @@ decoders, and the Unicode canonicalization table used by Cyrus. Since
 Cyrus's known character sets (except for UTF-8) don't contain any
 characters off of the BMP this isn't seen to be a major problem.</p>
 
+<p>Throughout this text, Unicode and ISO 10646 will be used
+interchangible to refer to the 16-bit character set, regardless of
+encoding. "Character", unless otherwise specified, refers to a single
+Unicode character <tt>ffff</tt> or under. </p>
+
 <h3>cyrus canonical form</h3>
 
-<p>fully decomposed. case mapped into lower case. whitespace
-eliminated.</p>
+<p>Since when users search e-mail messages it's much easier for them
+to eliminate false positives than realize there are hits that aren't
+displayed, the Cyrus searching algorithm errs on the side of more
+matches. Before comparing any two strings, Cyrus puts them in a
+canonical form. Logically, the process works as follows:</p>
+
+<ul>
+<li> the input string is translated into a sequence of Unicode
+characters. </li>
+
+<li> each character is transformed into lowercase. (For some
+characters, a single uppercase character may transform into multiple
+lowercase characters.) </li>
+
+<li> each character is fully decomposed. </li>
+
+<li> all whitespace (Unicode general categories starting with
+<tt>Z</tt>) is removed. </li>
+
+<li> combining diacritical marks, such as the accent on é, are
+removed. (These are Unicode characters <tt>0300</tt>-<tt>03ff</tt>.)
+</li>
+
+<li> certain characters are expanded to alternative spellings using
+ASCII characters, such as "æ" to "ae". </li>
+
+<li> the output characters are then encoded in UTF-8. </li>
+
+</ul>
 
 <h2>transcoding</h2>
 
@@ -41,7 +79,8 @@ transcoding routines in <tt>lib/charset.[ch]</tt>, and
 elegant and very compact, thus somewhat intimidating. During
 compilation, Cyrus builds up a large number of tables (see <a
 href="#mkchartable">mkchartable</a>) and uses them so that it never
-has to consider more than a single octet at a time.</p>
+has to consider more than a single octet at a time while outputing the
+Cyrus canonical form for an input string.</p>
 
 <h3>external interface</h3>
 
@@ -109,6 +148,13 @@ but not described here.</dd>
 
 </dl>
 
+<h3>the TRANSLATE macro: using the transcoding tables</h3>
+
+<p>implicit case mapping</p>
+
+<p>output characters or control codes. control codes are uppercase
+US-ASCII characters since those can never be output characters.</p>
+
 <h3 id="comp_pat">boyer-moore searching, compiled patterns</h3>
 
 <p>brief description of boyer-moore</p>
@@ -117,14 +163,7 @@ but not described here.</dd>
 
 <p>meta-data stored at the end</p>
 
-<h3>the TRANSLATE macro: using the transcoding tables</h3>
-
-<p>implicit case mapping</p>
-
-<p>output characters or control codes. control codes are uppercase
-US-ASCII characters since those can never be output characters.</p>
-
-<h2>generating tables: <tt>mkchartable</tt></h2>
+<h2>generating the tables: <tt>mkchartable</tt></h2>
 
 <p>unifix.txt: fixups for more generous matching. besides casemapping,
 and whitespace elimination, is the Cyrus normalization
@@ -141,6 +180,7 @@ file. (eliminates accents, etc.)</p>
 <h2>references</h2>
 
 <ul>
+<li>Unicode / ISO 10646</li>
 <li>utf-8 RFC</li>
 <li>boyer-moore</li>
 </ul>
