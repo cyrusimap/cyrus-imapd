@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.276 2000/11/06 21:15:41 ken3 Exp $ */
+/* $Id: imapd.c,v 1.277 2000/11/08 19:33:16 ken3 Exp $ */
 
 #include <config.h>
 
@@ -879,7 +879,6 @@ cmdloop()
 	    else if (!strcmp(cmd.s, "Idle")) {
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-		mboxlist_close();
 		cmd_idle(tag.s);
 	    }
 	    else goto badcmd;
@@ -1603,9 +1602,7 @@ void idle_poll(struct protstream *s, void *rock)
     prot_flush(imapd_out);
 }
 
-void
-cmd_idle(tag)
-char *tag;
+void cmd_idle(char *tag)
 {
     int c;
     static struct buf arg;
