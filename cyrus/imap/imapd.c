@@ -535,6 +535,7 @@ int usinguid;
     int inlist = 0;
     int fetchitems = 0;
     struct fetchargs fetchargs;
+    char *p, *section;
 
     fetchargs = zerofetchargs;
 
@@ -559,6 +560,20 @@ int usinguid;
 	    }
 	    else if (!strcmp(fetchatt.s, "bodystructure")) {
 		fetchitems |= FETCH_BODYSTRUCTURE;
+	    }
+	    else if (!strncmp(fetchatt.s, "body[", 5)) {
+		p = section = fetchatt.s + 5;
+		while (isdigit(*p) || *p == '.') {
+		    if (*p == '.' && (p == section || !isdigit(p[1]))) break;
+		    p++;
+		}
+		if (p == section || *p != ']' || p[1]) {
+		    printf("%s BAD Invalid body section\r\n", tag);
+		    if (c != '\n') eatline();
+		    goto freeargs;
+		}
+		*p = '\0';
+		appendstrlist(&fetchargs.bodysections, section);
 	    }
 	    else goto badatt;
 	    break;
@@ -617,7 +632,7 @@ int usinguid;
 	badatt:
 	    printf("%s BAD Invalid %s attribute %s\r\n", tag, cmd, fetchatt.s);
 	    if (c != '\n') eatline();
-	    return;
+	    goto freeargs;
 	}
 
 	if (inlist && c == ' ') c = getword(&fetchatt);
@@ -631,18 +646,19 @@ int usinguid;
     if (inlist) {
 	printf("%s BAD Missing close parenthesis in %s\r\n", tag, cmd);
 	if (c != '\n') eatline();
-	return;
+	goto freeargs;
     }
     if (c == '\r') c = getc(stdin);
     if (c != '\n') {
 	printf("%s BAD Unexpected extra arguments to %s\r\n", tag, cmd);
 	eatline();
-	return;
+	goto freeargs;
     }
 
-    if (!fetchitems) {
-	printf("%s BAD Missing required argument to %s", tag, cmd);
-	return;
+    if (!fetchitems && !fetchargs.bodysections &&
+	!fetchargs.headers && !fetchargs.headers_not) {
+	printf("%s BAD Missing required argument to %s\r\n", tag, cmd);
+	goto freeargs;
     }
 
     if (usinguid) {
@@ -654,6 +670,11 @@ int usinguid;
     index_fetch(imapd_mailbox, sequence, usinguid, &fetchargs);
 
     printf("%s OK %s completed\r\n", tag, cmd);
+
+ freeargs:
+    freestrlist(fetchargs.bodysections);
+    freestrlist(fetchargs.headers);
+    freestrlist(fetchargs.headers_not);
 }
 
 cmd_partial(tag, msgno, data, start, count)
@@ -666,6 +687,7 @@ char *count;
     char *p;
     struct fetchargs fetchargs;
     int r;
+    char *section;
 
     fetchargs = zerofetchargs;
 
@@ -687,9 +709,23 @@ char *count;
     else if (!strcmp(data, "rfc822.text")) {
 	fetchargs.fetchitems = FETCH_TEXT;
     }
-    /* XXX body[n] */
+    else if (!strncmp(data, "body[", 5)) {
+	p = section = data + 5;
+	while (isdigit(*p) || *p == '.') {
+	    if (*p == '.' && (p == section || !isdigit(p[1]))) break;
+	    p++;
+	}
+	if (p == section || *p != ']' || p[1]) {
+	    printf("%s BAD Invalid body section\r\n", tag);
+	    freestrlist(fetchargs.bodysections);
+	    return;
+	}
+	*p = '\0';
+	appendstrlist(&fetchargs.bodysections, section);
+    }
     else {
 	printf("%s BAD Invalid Partial item\r\n", tag);
+	freestrlist(fetchargs.bodysections);
 	return;
     }
 
@@ -699,6 +735,7 @@ char *count;
     }
     if (*p || !fetchargs.start_octet) {
 	printf("%s BAD Invalid starting octet\r\n", tag);
+	freestrlist(fetchargs.bodysections);
 	return;
     }
     
@@ -708,6 +745,7 @@ char *count;
     }
     if (*p || !*count) {
 	printf("%s BAD Invalid octet count\r\n", tag);
+	freestrlist(fetchargs.bodysections);
 	return;
     }
 
@@ -716,6 +754,7 @@ char *count;
     index_check(imapd_mailbox, 0, 0);
 
     printf("%s OK Partial completed\r\n", tag);
+    freestrlist(fetchargs.bodysections);
 }
 
 cmd_uidafter(tag, arg)
@@ -846,7 +885,7 @@ int usinguid;
     }
 
     if (!flagsparsed) {
-	printf("%s BAD Missing required argument to %s", tag, cmd);
+	printf("%s BAD Missing required argument to %s\r\n", tag, cmd);
 	return;
     }
 
@@ -1031,13 +1070,19 @@ char *tag;
 	}
     }
 
+    if (c == '\r') c = getc(stdin);
     if (c != '\n') {
 	printf("%s BAD Unexpected extra arguments to Search\r\n", tag);
 	eatline();
 	return;
     }
 
-    if (!nothing_found) index_search(imapd_mailbox, &searchargs);
+    if (nothing_found) {
+	printf("* SEARCH\r\n");
+    }
+    else {
+	index_search(imapd_mailbox, &searchargs);
+    }
 
     printf("%s OK Search completed\r\n", tag);
 
@@ -1294,8 +1339,6 @@ time_t *start, *end;
     return EOF;
 }
 	
-
-
 int isatom(buf)
 struct buf *buf;
 {
@@ -1315,6 +1358,32 @@ eatline()
     char c;
 
     while ((c = getc(stdin)) != EOF && c != '\n');
+}
+
+appendstrlist(l, s)
+struct strlist **l;
+char *s;
+{
+    struct strlist **tail = l;
+
+    while (*tail) tail = &(*tail)->next;
+
+    *tail = (struct strlist *)xmalloc(sizeof(struct strlist));
+    (*tail)->s = strsave(s);
+    (*tail)->next = 0;
+}
+
+freestrlist(l)
+struct strlist *l;
+{
+    struct strlist *n;
+
+    while (l) {
+	n = l->next;
+	free(l->s);
+	free((char *)l);
+	l = n;
+    }
 }
 
 shutdown(code)
