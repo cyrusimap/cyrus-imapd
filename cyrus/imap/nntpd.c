@@ -47,7 +47,7 @@
  */
 
 /*
- * $Id: nntpd.c,v 1.1.2.30 2002/10/22 19:48:12 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.31 2002/10/22 20:11:42 ken3 Exp $
  */
 #include <config.h>
 
@@ -750,7 +750,7 @@ static void cmdloop(void)
 		prot_printf(nntp_out, "%u Header follows:\r\n",
 			    cmd.s[0] == 'X' ? 221 : 225);
 
-		cmd_hdr(arg1.s, uid, last;
+		cmd_hdr(arg1.s, uid, last);
 
 		prot_printf(nntp_out, ".\r\n");
 	    }
@@ -1110,7 +1110,7 @@ static void cmd_starttls(int nntps)
 
     if (nntp_starttls_done == 1)
     {
-	prot_printf(nntp_out, "491 %s\r\n", 
+	prot_printf(nntp_out, "483 %s\r\n", 
 		    "Already successfully executed STLS");
 	return;
     }
@@ -1125,7 +1125,7 @@ static void cmd_starttls(int nntps)
 	syslog(LOG_ERR, "[nntpd] error initializing TLS");
 
 	if (nntps == 0)
-	    prot_printf(nntp_out, "490 %s\r\n", "Error initializing TLS");
+	    prot_printf(nntp_out, "580 %s\r\n", "Error initializing TLS");
 	else
 	    fatal("tls_init() failed",EC_TEMPFAIL);
 
@@ -1134,7 +1134,7 @@ static void cmd_starttls(int nntps)
 
     if (nntps == 0)
     {
-	prot_printf(nntp_out, "390 %s\r\n", "Begin TLS negotiation now");
+	prot_printf(nntp_out, "382 %s\r\n", "Begin TLS negotiation now");
 	/* must flush our buffers before starting tls */
 	prot_flush(nntp_out);
     }
@@ -1148,7 +1148,7 @@ static void cmd_starttls(int nntps)
     /* if error */
     if (result==-1) {
 	if (nntps == 0) {
-	    prot_printf(nntp_out, "490 Starttls failed\r\n");
+	    prot_printf(nntp_out, "580 Starttls failed\r\n");
 	    syslog(LOG_NOTICE, "[nntpd] STARTTLS failed: %s", nntp_clienthost);
 	} else {
 	    syslog(LOG_NOTICE, "nntps failed: %s", nntp_clienthost);
@@ -2058,7 +2058,7 @@ static void cmd_post(char *msgid, int mode)
     prot_flush(nntp_out);
 }
 
-static void cmd_hdr(char *hdr, unsigned long uid, unsigned long last;
+static void cmd_hdr(char *hdr, unsigned long uid, unsigned long last)
 {
     int msgno;
     char *body;
