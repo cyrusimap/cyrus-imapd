@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.184 1999/10/19 22:08:43 leg Exp $ */
+/* $Id: imapd.c,v 1.185 1999/10/24 23:39:31 leg Exp $ */
 
 #ifndef __GNUC__
 #define __attribute__(foo)
@@ -4383,7 +4383,7 @@ int c;
 	    else if (c == '\r') {
 		/* Got a non-synchronizing literal */
 		c = prot_getc(imapd_in);/* Eat newline */
-		while (size) {
+		while (size--) {
 		    c = prot_getc(imapd_in); /* Eat contents */
 		}
 		state = 0;	/* Go back to scanning for eol */
