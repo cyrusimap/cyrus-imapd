@@ -14,7 +14,7 @@ dnl
 dnl Additional macros for configure.in packaged up for easier theft.
 dnl tjs@andrew.cmu.edu 6-may-1998
 dnl
-dnl $Id: aclocal.m4,v 1.10 1999/06/30 18:34:36 leg Exp $
+dnl $Id: aclocal.m4,v 1.11 1999/07/01 20:14:51 leg Exp $
 dnl
 
 dnl It would be good if ANDREW_ADD_LIBPATH could detect if something was
@@ -56,6 +56,15 @@ AC_DEFUN(CMU_GUESS_RUNPATH_SWITCH, [
     ])
   LDFLAGS="${SAVE_LDFLAGS}"
   ])])
+
+
+dnl AM_PROG_LEX
+dnl Look for flex, lex or missing, then run AC_PROG_LEX and AC_DECL_YYTEXT
+AC_DEFUN(AM_PROG_LEX,
+[missing_dir=ifelse([$1],,`cd $ac_aux_dir && pwd`,$1)
+AC_CHECK_PROGS(LEX, flex lex, "$missing_dir/missing flex")
+AC_PROG_LEX
+AC_DECL_YYTEXT])
 
 dnl sasl.m4--sasl detection macro
 dnl Rob Earhart

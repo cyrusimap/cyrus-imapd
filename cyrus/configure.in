@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.135 1999/06/30 19:13:26 leg Exp $
+dnl $Id: configure.in,v 1.136 1999/07/01 20:14:51 leg Exp $
 dnl
 
 AC_INIT(imap/imapd.c)
@@ -25,16 +25,6 @@ AC_SUBST(cyrus_group)
 AC_ARG_WITH(statedir,[  --with-statedir=DIR     use DIR as state directory],
 	statedir="$withval",statedir="/var")
 AC_DEFINE_UNQUOTED(STATEDIR,"$statedir")
-
-AC_ARG_WITH(sieve,[  --with-sieve=SIEVEDIR use Sieve installed in SIEVEDIR],
-	sievedir="$withval",sievedir="")
-if test "$sievedir" != ""; then
-	SIEVE_LIBS="${sievedir}/libsieve.a"
-	AC_SUBST(SIEVE_LIBS)
-	SIEVE_CPPFLAGS="-I$sievedir"
-	AC_SUBST(SIEVE_CPPFLAGS)
-	AC_DEFINE(USE_SIEVE)
-fi
 
 AC_PROG_CC
 AC_PROG_RANLIB
@@ -68,6 +58,36 @@ AC_SUBST(EXTRA_SUBDIRS)
 AC_SUBST(DEPLIBS)
 AC_SUBST(LOCALDEFS)
 AC_FUNC_VPRINTF
+
+AC_ARG_WITH(sieve,[  --with-sieve=DIR        use Sieve sources in DIR],
+	sievedir="$withval",sievedir="no")
+if test "$sievedir" = "no"; then
+	dnl now let's try to find it ourselves
+	AC_MSG_CHECKING([for cmu-sieve sources])
+	for cmu_sd in "${srcdir}/*sieve*"; do
+		if test -d ${cmu_sd}; then
+			sievedir=`basename ${cmu_sd}`
+			break
+		fi
+	done
+	AC_MSG_RESULT(${sievedir})	
+fi
+
+if test "$sievedir" != "no"; then
+	SIEVE_LIBS="../${sievedir}/libsieve.a"
+	AC_SUBST(SIEVE_LIBS)
+	SIEVE_CPPFLAGS="-I${srcdir}/$sievedir"
+	AC_SUBST(SIEVE_CPPFLAGS)
+	AC_DEFINE(USE_SIEVE)
+
+	dnl Sieve configure stuff
+	AC_CHECK_PROGS(BISON, bison, :)
+	AM_PROG_LEX
+	AC_CHECK_LIB(fl,main)
+
+	PRE_SUBDIRS="${PRE_SUBDIRS} $sievedir"
+	EXTRA_OUTPUT="${EXTRA_OUTPUT} $sievedir/Makefile"
+fi
 
 dnl for et routines
 AC_FUNC_CHECK(strerror,AC_DEFINE(HAS_STRERROR),AC_DEFINE(NEED_SYS_ERRLIST))

@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.70 1999/06/30 18:43:17 leg Exp $ -->
+<!-- $Id: changes.html,v 1.71 1999/07/01 20:14:52 leg Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -12,6 +12,9 @@
       <li> imtest's interface has changed, to allow for SASL
         authentication.  Sorry, but it had to happen.  It now also
 	includes a timing test (-z) which we use to test the SASL layers.
+
+      <li> imtest no longer uses a non-synchronizing literal with
+	LOGIN, so it should work against all IMAP servers.
 
       <li> The prot layer now uses SASL for encryption and
         authentication.  This changed a large amount of code, and some

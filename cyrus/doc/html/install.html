@@ -1,4 +1,4 @@
-<!-- $Id: install.html,v 1.51 1999/06/30 18:34:38 leg Exp $ -->
+<!-- $Id: install.html,v 1.52 1999/07/01 20:14:53 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
@@ -48,6 +48,13 @@ have IMSP, or AFS, don't worry about it.)
 <li> If you are upgrading from 1.5.14 (or earlier) you should remove the
 delivered-db database and mkdir /var/imap/deliverdb.
 
+<li> Upgrading from the Cyrus IMAP server version 1.5 or earlier:
+libsasl is now required.  Configuring SASL to work may be a chore,
+especially if you use shadow passwords.  If you use shadow passwords,
+you must use PAM for authentication and configure PAM such that
+non-root users can verify passwords.  We believe pam_pwdb contains
+support for using a pwcheck-like program for checking shadow
+passwords.
 </ul>
 <p>
 See the file <a
@@ -75,6 +82,9 @@ FAQ</A>.  Other versions of Tcl might work, but it must be at least Tcl 7.5.
 <a
 href="ftp://ftp.andrew.cmu.edu/pub/cyrus-mail"><TT>ftp.andrew.cmu.edu</TT></a>.
 Earlier versions of SASL will not work; please get the latest one.
+Configure SASL so that it supports whatever authentication method your
+site uses.  It is recommended that if you have PAM, you configure SASL
+to use PAM.
 
 <LI> Note that Cyrus still depends on Kerberos and AFS if you use AFS
 PTS support for groups.  If you successfully compiled SASL with your
@@ -88,6 +98,11 @@ Sendmail distributions may be obtained from
 <LI> If you want to export netnews newsgroups using IMAP, the IMAP
 server must receive newsgroups with the INN news server.
 
+<LI> If you want Sieve support (a server-side mail filtering
+language), cmu-sieve version 1.4 or higher is required.  cmu-sieve
+releases will most likely be made in conjunction with imapd releases.
+Unpack cmu-sieve-xxx.tar.gz inside the cyrus directory; Sieve will
+bill built at the same time as imapd.
 </ul>
 <H2>Compiling the IMAP Server</H2>
 
@@ -196,11 +211,10 @@ authorization modules are:
 
 </dl>
 
-The selected authorization module should be compatible with the 
-login module.  By default, uses the authorization module with 
-the same name as the selected login module.  Since the login module is
-now SASL, this is much more confusing.  We are considering adding
-group support to libsasl, thus solving this ambiguity.
+Since the login module is now SASL, this is much more confusing.  We
+are considering adding group support to libsasl, thus solving this
+ambiguity.  Make sure you select an authorization module compatible
+with your system.
 
 <P>
 
@@ -271,6 +285,12 @@ methods are:
 
 By default, uses "<tt>flock</tt>" if the "<tt>flock()</tt>"
 function exists, "<tt>fcntl</tt>" otherwise. <P>
+
+<dt><tt>--with-sieve=DIR</tt>
+<dd>Specifies which version of Sieve is used, relative to the
+top level source directory.  By default, configure searches for a
+sieve directory under the top level source directory and uses it if it
+finds one.  Use <tt>--with-sieve=no</tt> to disable Sieve support<p>
 
 <dt><tt>--disable-cyradm</tt>
 <dd>Do not compile the <TT>cyradm</TT> administrative client.<P>
@@ -728,7 +748,7 @@ If your server is running, you'll get the following message:
    Trying 128.2.232.95...
    Connected to foobar.andrew.cmu.edu.
    Escape character is '^]'.
-   * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.5.14 server ready
+   * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.6.0 server ready
 </pre>
 
 Any message other than one starting with "<tt>* OK</tt>" means there
@@ -758,22 +778,27 @@ connection, type "<kbd>. logout</kbd>".
 <P>
 <li>If the server is compiled with Kerberos v4 authentication, test
 Kerberos authentication by using the imtest command.  Change
-to the "<tt>cyrus-v1.5.14</tt>" directory and type the following:
+to the "<tt>cyrus-v1.6.0</tt>" directory and type the following:
 
 <pre>
-   <kbd>/usr/local/bin/imtest foobar</kbd>
-   * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.5.14 server ready
-   . AUTHENTICATE KERBEROS_V4
-   + Ln8h6Q==
-   BAcBQU5EUkVXLkNNVS5FRFUAOCA+0y5YnrqIVikng46sam7RSObZXCVSA9xCx
-   BZSGgOy9ehHRj8NQjLjxDpib0D9uT0fo7QaXhLM6zCp9dQ1pX4FfNO2V39vBp
-   Q19QIK4S1410prvM2c45qeizecI7zAvA=
-   2cRhIC+aH70WHqYaW18YnQ==
-   . OK User logged in (no protection)
-   __No integrity protection__
+   <kbd>/usr/local/bin/imtest -l 0 foobar</kbd>
+   S: * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.6.0 server ready
+   S: * CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE
+   UIDPLUS X-NON-HIERARCHICAL-RENAME NO_ATOMIC_RENAME AUTH=PLAIN
+   AUTH=ANONYMOUS AUTH=KERBEROS_V4 AUTH=DIGEST-MD5 AUTH=CRAM-MD5
+   UNSELECT
+   S: C01 OK Completed
+   S: + Ln8h6Q==
+   C: BAcBQU5EUkVXLkNNVS5FRFUAOCA+0y5YnrqIVikng46sam7RSObZXCVSA9xCx
+   BZSGgOy9ehHRj8NQjLjxDpib0D9uT0fo7QaXhLM6zCp9dQ1pX4FfNO2V39vBpJ4
+   S: + bnjMDt4VXhw=
+   C: Qf7eymxrhqJ58IW/PzznVQ==
+   S: A01 OK User logged in (no protection)
+   Authenticated.
+   Security strength factor: 0
 </pre>
 
-Any message other than one starting with a "<tt>. OK</tt>" means there is
+Any message other than one starting with a "<tt>A01 OK</tt>" means there is
 a problem. If the test fails, a more specific error message is written
 through <TT>syslog</TT> to the server log.  To terminate the
 connection, type "<kbd>. logout</kbd>".
@@ -853,7 +878,7 @@ to work with the IMAP server.
 
 <P><HR><P>
 <!-- hhmts start -->
-last modified by tjs at Wed Feb 17 21:38:39 1999
+last modified by leg at Thu Jul  1 16:00:57 EDT 1999
 <!-- hhmts end -->
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page

@@ -1,5 +1,5 @@
 /* notify_zephyr.c -- Module to notify of new mail via zephyr
- $Id: notify_zephyr.c,v 1.14 1999/04/08 21:04:27 tjs Exp $
+ $Id: notify_zephyr.c,v 1.15 1999/07/01 20:14:53 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -31,7 +31,7 @@
 #include <string.h>
 #include <netdb.h>
 #include <sys/types.h>
-#ifdef HAVE_SASL_KRB
+#ifdef HAVE_LIBKRB
 #include <netinet/in.h>
 #include <krb.h>
 #endif
@@ -79,7 +79,7 @@ char *header;
     }
     myhost[sizeof(myhost)-1] = '\0';
   
-#ifdef HAVE_SASL_KRB
+#ifdef HAVE_LIBKRB
     mykrbhost = krb_get_phost(myhost);
 #endif
   
