@@ -1,5 +1,5 @@
 # Top-level Makefile for cyrus software
-# $Id: Makefile.in,v 1.32 2000/04/29 18:43:02 tmartin Exp $
+# $Id: Makefile.in,v 1.33 2000/05/03 17:10:41 leg Exp $
 #
 # @configure_input@
 # Copyright 1998 Carnegie Mellon University
@@ -27,7 +27,8 @@
 #  tech-transfer@andrew.cmu.edu
 # 
 
-SUBDIRS = man @PRE_SUBDIRS@ acap lib @SERVER_SUBDIRS@ imtest @SNMP_SUBDIRS@ @TCL_SUBDIRS@ SIEVE SIEVE/timsieved @EXTRA_SUBDIRS@
+SUBDIRS = man @PRE_SUBDIRS@ acap lib @SERVER_SUBDIRS@ \
+	imtest @SNMP_SUBDIRS@ @EXTRA_SUBDIRS@
 
 srcdir = @srcdir@
 VPATH = @srcdir@
@@ -77,7 +78,8 @@ distclean::
 			$(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) distclean ; \
 			echo "### Done with" `pwd`);		\
 	done
-	rm -f Makefile Makefile.bak config.status config.log config.cache
+	rm -f Makefile Makefile.bak \
+	   config.status config.log config.cache config.h
 
 depend::
 	@for d in  $(SUBDIRS); \
