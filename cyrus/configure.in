@@ -108,7 +108,8 @@ fi)
 AC_MSG_RESULT($cyrus_cv_lib_kerberos)
 
 AC_ARG_WITH(login,[  --with-login=METHOD     use login module METHOD
-                          METHOD is unix or krb], WITH_LOGIN="$withval",
+                          METHOD is unix, unix_shadow, or krb],
+	    WITH_LOGIN="$withval",
 	if test $cyrus_cv_lib_kerberos = yes; then
 		echo using Kerberos authentication
 		WITH_LOGIN=krb
@@ -119,8 +120,10 @@ AC_ARG_WITH(login,[  --with-login=METHOD     use login module METHOD
 AC_SUBST(WITH_LOGIN)
 AC_ARG_WITH(auth,[  --with-auth=METHOD      use authorization module METHOD
                           METHOD is unix or krb],[WITH_AUTH="$withval"
+	with_login_base=`echo ${WITH_LOGIN}|sed 's/_.*//'`
 	case "$withval" in
-	${WITH_LOGIN}*) true;;
+	${with_login_base}) true;;
+	${with_login_base}_*) true;;
 	*) AC_MSG_ERROR(Authorization module incompatibile with login module);;
 	esac],WITH_AUTH="$WITH_LOGIN")
 AC_SUBST(WITH_AUTH)
