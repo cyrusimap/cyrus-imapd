@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.192 1999/12/28 23:58:29 leg Exp $ */
+/* $Id: imapd.c,v 1.193 1999/12/29 19:05:33 leg Exp $ */
 
 #ifndef __GNUC__
 #define __attribute__(foo)
@@ -3249,7 +3249,8 @@ void cmd_starttls(char *tag)
     int *layerp;
     sasl_external_properties_t external;
 
-    layerp = &(external.ssf);
+    /* SASL and openssl have different ideas about whether ssf is signed */
+    layerp = (int *) &(external.ssf);
 
     if (imapd_sucessful_tls == 1)
     {
