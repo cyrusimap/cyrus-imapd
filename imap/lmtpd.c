@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.71 2001/09/04 21:36:55 leg Exp $
+ * $Id: lmtpd.c,v 1.72 2001/09/05 13:19:49 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.71 2001/09/04 21:36:55 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.72 2001/09/05 13:19:49 leg Exp $";*/
 
 #include <config.h>
 
@@ -581,7 +581,7 @@ int send_forward(char *forwardto, char *return_path, struct protstream *file)
     pid_t sm_pid;
 
     smbuf[0] = "sendmail";
-    smbuf[1] = "-";		/* ignore dots */
+    smbuf[1] = "-i";		/* ignore dots */
     if (return_path != NULL) {
 	smbuf[2] = "-f";
 	smbuf[3] = return_path;
@@ -822,7 +822,7 @@ int autorespond(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     FILE *sm;
-    const char *smbuf[6];
+    const char *smbuf[10];
     char outmsgid[8192], *sievedb;
     int i, sl, sm_stat;
     time_t t;
@@ -833,11 +833,12 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     script_data_t *sdata = (script_data_t *) sc;
 
     smbuf[0] = "sendmail";
-    smbuf[1] = "-f";
-    smbuf[2] = "<>";
-    smbuf[3] = "--";
-    smbuf[4] = src->addr;
-    smbuf[5] = NULL;
+    smbuf[1] = "-i";		/* ignore dots */
+    smbuf[2] = "-f";
+    smbuf[3] = "<>";
+    smbuf[4] = "--";
+    smbuf[5] = src->addr;
+    smbuf[6] = NULL;
     sm_pid = open_sendmail(smbuf, &sm);
     if (sm == NULL) {
 	*errmsg = "Could not spawn sendmail process";
