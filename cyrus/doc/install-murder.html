@@ -1,4 +1,4 @@
-<!-- $Id: install-murder.html,v 1.12 2002/03/07 20:08:21 leg Exp $ -->
+<!-- $Id: install-murder.html,v 1.13 2002/05/07 18:13:52 rjs3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing The Cyrus Murder
@@ -243,6 +243,10 @@ the desired backend server.
 their backend home server, they won't be able to, unless you set
 "<tt>allowallsubscribe: t</tt>" in the backend imapd.confs.  This essentially
 lets any string be subscribed to successfully.
+<li><b>Restarting the mupdate master</b> - Because <tt>ctl_cyrusdb -r</tt>
+clears reservations on mailbox, if you restart the mupdate master (and
+run recovery), then this could (we suspect, very rarely) lead to inconsistancies
+in the mupdate database.
 </ul>
 
 <h3>Troubleshooting &amp; when things go wrong</h3>
@@ -271,7 +275,7 @@ to ensure that the mupdate slave process is started, (is prefork=1)</li>
 </ul>
 
 <P><HR>
-last modified: $Date: 2002/03/07 20:08:21 $
+last modified: $Date: 2002/05/07 18:13:52 $
 </BODY></HTML>
 
 
