@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <netdb.h>
+#include <sys/types.h>
 #ifdef HAVE_SASL_KRB
 #include <krb.h>
 #endif
