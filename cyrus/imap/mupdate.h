@@ -1,6 +1,6 @@
 /* mupdate.h - private mupdate header file
  *
- * $Id: mupdate.h,v 1.10 2002/02/02 21:23:21 leg Exp $
+ * $Id: mupdate.h,v 1.11 2002/02/07 21:43:58 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -89,8 +89,8 @@ enum settype {
 /* mailbox name MUST be first, since it is the key */
 /* acl MUST be last, since it is what causes the variable size */
 struct mbent {
-    char mailbox[MAX_MAILBOX_NAME];
-    char server[MAX_MAILBOX_NAME];
+    char *mailbox;
+    char *server;
     enum settype t;
     struct mbent *next; /* used for queue */
     char acl[1];
@@ -102,6 +102,9 @@ struct mbent_queue
     struct mbent **tail;
 };
 
+/* Used to free malloc'd mbent's */
+void free_mbent(struct mbent *p);
+
 /* Used by the slave listener thread to update the local database */
 int cmd_change(struct mupdate_mailboxdata *mdata,
 	       const char *cmd, void *context);
@@ -112,6 +115,7 @@ int mupdate_synchronize(mupdate_handle *handle);
 /* Signal that we are ready to accept connections */
 void mupdate_ready(void);
 void mupdate_unready(void);
+void mupdate_signal_db_synced(void);
 
 /* --- internal client functions (mupdate-client.c) --- */
 /* these are used by the slave thread and by the client API */
