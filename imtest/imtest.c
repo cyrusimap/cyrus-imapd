@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.87 2002/09/25 20:58:00 ken3 Exp $
+ * $Id: imtest.c,v 1.88 2002/11/04 16:10:32 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -173,7 +173,6 @@ struct tls_cmd_t {
     char *cmd;		/* tls command string */
     char *ok;		/* start tls prompt */
     char *fail;		/* failure response */
-    int auto_capa;	/* capa response given automatically after TLS */
 };
 
 struct sasl_cmd_t {
@@ -2080,7 +2079,7 @@ static struct protocol_t protocols[] = {
     { "imap", "imaps", "imap",
       { 0, "* OK", NULL },
       { "C01 CAPABILITY", "C01 ", "STARTTLS", "AUTH=", &imap_parse_mechlist },
-      { "S01 STARTTLS", "S01 OK", "S01 NO", 0 },
+      { "S01 STARTTLS", "S01 OK", "S01 NO" },
       { "A01 AUTHENTICATE", 0, NULL, NULL, "A01 OK", "A01 NO", "+ ", "*" },
       &imap_do_auth, { "Q01 LOGOUT", "Q01 " },
       &imap_init_conn, &generic_pipe, &imap_reset
@@ -2088,14 +2087,14 @@ static struct protocol_t protocols[] = {
     { "pop3", "pop3s", "pop",
       { 0, "+OK ", &pop3_parse_banner },
       { "CAPA", ".", "STLS", "SASL ", NULL },
-      { "STLS", "+OK", "-ERR", 0 },
+      { "STLS", "+OK", "-ERR" },
       { "AUTH", 0, "=", NULL, "+OK", "-ERR", "+ ", "*" },
       &pop3_do_auth, { "QUIT", "+OK" }, NULL, NULL, NULL
     },
     { "lmtp", NULL, "lmtp",
       { 0, "220 ", NULL },
       { "LHLO example.com", "250 ", "STARTTLS", "AUTH ", NULL },
-      { "STARTTLS", "220", "454", 0 },
+      { "STARTTLS", "220", "454" },
       { "AUTH", 0, "=", NULL, "235", "5", "334 ", "*" },
       &xmtp_do_auth, { "QUIT", "221" },
       &xmtp_init_conn, &generic_pipe, &xmtp_reset
@@ -2103,7 +2102,7 @@ static struct protocol_t protocols[] = {
     { "smtp", "smtps", "smtp",
       { 0, "220 ", NULL },
       { "EHLO example.com", "250 ", "STARTTLS", "AUTH ", NULL },
-      { "STARTTLS", "220", "454", 0 },
+      { "STARTTLS", "220", "454" },
       { "AUTH", 0, "=", NULL, "235", "5", "334 ", "*" },
       &xmtp_do_auth, { "QUIT", "221" },
       &xmtp_init_conn, &generic_pipe, &xmtp_reset
@@ -2118,7 +2117,7 @@ static struct protocol_t protocols[] = {
     { "sieve", NULL, SIEVE_SERVICE_NAME,
       { 1, "OK", NULL },
       { "CAPABILITY", "OK", "\"STARTTLS\"", "\"SASL\" ", NULL },
-      { "STARTTLS", "OK", "NO", 1 },
+      { "STARTTLS", "OK", "NO" },
       { "AUTHENTICATE", 1, "=", &sieve_parse_success, "OK", "NO", NULL, "*" },
       NULL, { "LOGOUT", "OK" }, NULL, NULL, NULL
     },
@@ -2408,8 +2407,7 @@ int main(int argc, char **argv)
 			   "since they might have changed\n");
 		if (mechlist) free(mechlist);
 		mechlist = ask_capability(&protocol->capa_cmd,
-					  &server_supports_tls,
-					  protocol->tls_cmd.auto_capa);
+					  &server_supports_tls, 0);
 	    }
 	    
 	} else if ((dotls==1) && (server_supports_tls!=1)) {
