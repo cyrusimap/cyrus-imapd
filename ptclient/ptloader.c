@@ -42,7 +42,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ptloader.c,v 1.27 2002/11/04 17:32:10 rjs3 Exp $";
+      "$Id: ptloader.c,v 1.28 2002/12/12 16:46:05 rjs3 Exp $";
 
 #include <config.h>
 
@@ -117,8 +117,8 @@ main(argc, argv)
     user = AUTH_USER;
 
     /* normally LOCAL6, but do this while we're logging keys */
-    openlog(PTCLIENT, LOG_PID, LOG_LOCAL7);
-    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.27 2002/11/04 17:32:10 rjs3 Exp $");
+    openlog("ptloader", LOG_PID, LOG_LOCAL7);
+    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.28 2002/12/12 16:46:05 rjs3 Exp $");
 
     while ((opt = getopt(argc, argv, "Uspd:l:f:u:t:")) != EOF) {
 	switch (opt) {
@@ -569,4 +569,4 @@ void fatal(const char *msg, int exitcode)
     syslog(LOG_ERR, "%s", msg);
     exit(-1);
 }
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.27 2002/11/04 17:32:10 rjs3 Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.28 2002/12/12 16:46:05 rjs3 Exp $ */
