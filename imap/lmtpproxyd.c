@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.50 2003/03/10 19:00:20 rjs3 Exp $
+ * $Id: lmtpproxyd.c,v 1.51 2003/03/27 17:43:13 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -90,15 +90,15 @@ extern char *optarg;
 
 /* a final destination for a message */
 struct rcpt {
-    char mailbox[MAX_MAILBOX_NAME]; /* where? */
+    char mailbox[MAX_MAILBOX_NAME+1]; /* where? */
     int rcpt_num;		    /* credit this to who? */
     struct rcpt *next;
 };
 
 struct dest {
-    char server[MAX_MAILBOX_NAME];  /* where? */
-    char authas[MAX_MAILBOX_NAME];  /* as who? */
-    int rnum;			    /* number of rcpts */
+    char server[MAX_MAILBOX_NAME+1];  /* where? */
+    char authas[MAX_MAILBOX_NAME+1];  /* as who? */
+    int rnum;			      /* number of rcpts */
     struct rcpt *to;
     struct dest *next;
 };
@@ -385,7 +385,7 @@ static int adddest(struct mydata *mydata,
     struct mupdate_mailboxdata *mailboxdata;
     int sl = strlen(BB);
     int r;
-    char buf[MAX_MAILBOX_NAME];
+    char buf[MAX_MAILBOX_NAME+1];
 
     strlcpy(new_rcpt->mailbox, mailbox, sizeof(new_rcpt->mailbox));
     new_rcpt->rcpt_num = mydata->cur_rcpt;
@@ -691,7 +691,7 @@ static int verify_user(const char *user,
 		       long quotacheck __attribute__((unused)),
 		       struct auth_state *authstate)
 {
-    char buf[MAX_MAILBOX_PATH];
+    char buf[MAX_MAILBOX_PATH+1];
     int r = 0;
     int sl = strlen(BB);
 

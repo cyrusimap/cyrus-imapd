@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.154 2003/03/26 15:42:33 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.155 2003/03/27 17:43:14 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -1013,7 +1013,7 @@ static int mlookup(const char *name, char **pathp,
 
 static struct backend *proxyd_findinboxserver(void)
 {
-    char inbox[MAX_MAILBOX_NAME];
+    char inbox[MAX_MAILBOX_NAME+1];
     int r;
     char *server = NULL;
     struct backend *s = NULL;
@@ -4761,7 +4761,7 @@ char *name;
 int matchlen;
 int maycreate;
 {
-    static char lastname[MAX_MAILBOX_PATH];
+    static char lastname[MAX_MAILBOX_PATH+1];
     static int lastnamedelayed = 0;
     static int lastnamenoinferiors = 0;
     static int sawuser = 0;
