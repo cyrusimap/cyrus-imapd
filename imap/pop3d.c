@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.91 2001/04/26 17:18:10 leg Exp $
+ * $Id: pop3d.c,v 1.92 2001/05/29 20:34:14 leg Exp $
  */
 #include <config.h>
 
@@ -481,10 +481,13 @@ static void cmdloop(void)
 		else cmd_pass(arg);
 	    }
 	    else if (!strcmp(inputbuf, "apop") && apop_enabled()) {
-		char *user, *digest;
+		char *user = NULL, *digest = NULL;
 
 		/* Parse into user and digest */
-		if (arg) arg = strchr(user = arg, ' ');
+		if (arg) {
+		    user = arg;
+		    arg = strchr(arg, ' ');
+		}
 		if (!arg) prot_printf(popd_out, "-ERR Missing argument\r\n");
 		else {
 		    *arg++ = '\0';
@@ -789,6 +792,8 @@ static void cmd_apop(char *user, char *digest)
     char *p;
     char shutdownfilename[1024];
     char *reply = 0;
+
+    assert((user != NULL) && (digest != NULL));
 
     if (popd_userid) {
 	prot_printf(popd_out, "-ERR Must give PASS command\r\n");
