@@ -1,6 +1,6 @@
 /* htmlstrip.c -- HTML to text converter
  *
- * Copyright 1996, Carnegie Mellon University.  All Rights Reserved.
+ * Copyright 1998, Carnegie Mellon University.  All Rights Reserved.
  * 
  * This software is made available for academic and research
  * purposes only.  No commercial license is hereby granted.
@@ -45,6 +45,7 @@ struct tag {
 
 struct tag cmds[] = {
     { "!--",	FLAG_NOPUSH,	0,		0, },
+    { "!DOCTYPE", FLAG_NOPUSH,	0,		0, },
     { "link",   FLAG_NOPUSH,	0,		0, },
     { "html",	0,		0,		0, },
     { "head",	0,		MODE_IGNORETXT,	0, },
