@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.140 2003/06/25 03:34:01 ken3 Exp $
+ * $Id: pop3d.c,v 1.141 2003/07/22 19:17:16 rjs3 Exp $
  */
 #include <config.h>
 
@@ -1343,7 +1343,7 @@ int openinbox(void)
     proc_register("pop3d", popd_clienthost, popd_userid, popd_mailbox->name);
 
     /* Create telemetry log */
-    telemetry_log(popd_userid, popd_in, popd_out);
+    telemetry_log(popd_userid, popd_in, popd_out, 0);
 
     prot_printf(popd_out, "+OK Maildrop locked and ready\r\n");
     return 0;

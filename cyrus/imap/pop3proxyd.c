@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.61 2003/06/25 03:34:01 ken3 Exp $
+ * $Id: pop3proxyd.c,v 1.62 2003/07/22 19:17:17 rjs3 Exp $
  */
 #include <config.h>
 
@@ -746,7 +746,7 @@ static void cmd_apop(char *response)
     openproxy();
 
     /* Create telemetry log */
-    popd_logfd = telemetry_log(popd_userid, popd_in, popd_out);
+    popd_logfd = telemetry_log(popd_userid, popd_in, popd_out, 0);
 
     popd_auth_done = 1;
 }
@@ -815,7 +815,7 @@ void cmd_pass(char *pass)
 	syslog(LOG_NOTICE, "login: %s %s kpop", popd_clienthost, popd_userid);
 
 	/* Create telemetry log */
-	popd_logfd = telemetry_log(popd_userid, popd_in, popd_out);
+	popd_logfd = telemetry_log(popd_userid, popd_in, popd_out, 0);
 
 	popd_auth_done = 1;
 	return;
@@ -864,7 +864,7 @@ void cmd_pass(char *pass)
     openproxy();
 
     /* Create telemetry log */
-    popd_logfd = telemetry_log(popd_userid, popd_in, popd_out);
+    popd_logfd = telemetry_log(popd_userid, popd_in, popd_out, 0);
 
     popd_auth_done = 1;
 }
@@ -1027,7 +1027,7 @@ void cmd_auth(char *arg)
     prot_setsasl(popd_out, popd_saslconn);
 
     /* Create telemetry log */
-    popd_logfd = telemetry_log(popd_userid, popd_in, popd_out);
+    popd_logfd = telemetry_log(popd_userid, popd_in, popd_out, 0);
 
     popd_auth_done = 1;
 }

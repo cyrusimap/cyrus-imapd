@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.434 2003/06/25 03:33:59 ken3 Exp $ */
+/* $Id: imapd.c,v 1.435 2003/07/22 19:17:10 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -1812,7 +1812,7 @@ void cmd_login(char *tag, char *user)
     prot_printf(imapd_out, "%s OK %s\r\n", tag, reply);
 
     /* Create telemetry log */
-    imapd_logfd = telemetry_log(imapd_userid, imapd_in, imapd_out);
+    imapd_logfd = telemetry_log(imapd_userid, imapd_in, imapd_out, 0);
 
     /* Set namespace */
     if ((r = mboxname_init_namespace(&imapd_namespace, imapd_userisadmin)) != 0) {
@@ -1933,7 +1933,7 @@ cmd_authenticate(char *tag,char *authtype)
     prot_setsasl(imapd_out, imapd_saslconn);
 
     /* Create telemetry log */
-    imapd_logfd = telemetry_log(imapd_userid, imapd_in, imapd_out);
+    imapd_logfd = telemetry_log(imapd_userid, imapd_in, imapd_out, 0);
 
     /* Set namespace */
     if ((r = mboxname_init_namespace(&imapd_namespace, imapd_userisadmin)) != 0) {

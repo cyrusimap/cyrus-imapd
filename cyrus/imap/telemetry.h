@@ -1,5 +1,5 @@
 /* telemetry.h -- interface for telemetry
- * $Id: telemetry.h,v 1.2 2003/02/13 20:15:31 rjs3 Exp $
+ * $Id: telemetry.h,v 1.3 2003/07/22 19:17:20 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -45,6 +45,6 @@
 #define INCLUDED_TELEMETRY_H
 
 int telemetry_log(const char *userid, struct protstream *pin, 
-		  struct protstream *pout);
+		  struct protstream *pout, int usetimestamp);
 
 #endif

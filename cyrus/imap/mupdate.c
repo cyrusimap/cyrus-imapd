@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.74 2003/05/29 02:14:33 rjs3 Exp $
+ * $Id: mupdate.c,v 1.75 2003/07/22 19:17:15 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -68,17 +68,19 @@
 
 #include "mupdate.h"
 #include "mupdate-client.h"
-#include "xmalloc.h"
-#include "iptostring.h"
-#include "mailbox.h"
-#include "mboxlist.h"
+#include "telemetry.h"
+
 #include "exitcodes.h"
-#include "prot.h"
+#include "iptostring.h"
 #include "imapconf.h"
 #include "imap_err.h"
-#include "version.h"
+#include "mailbox.h"
+#include "mboxlist.h"
 #include "mpool.h"
+#include "prot.h"
 #include "util.h"
+#include "version.h"
+#include "xmalloc.h"
 
 static int masterp = 0;
 
@@ -899,6 +901,8 @@ void cmd_authenticate(struct conn *C,
 
     prot_setsasl(C->pin, C->saslconn);
     prot_setsasl(C->pout, C->saslconn);
+
+    telemetry_log(C->userid, C->pin, C->pout, 1);
 
     return;
 }
