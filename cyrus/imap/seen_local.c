@@ -144,7 +144,7 @@ char **seenuidsptr;
     }
     
     /* Find record for user */
-    seendb->offset = bsearch_mem(seendb->user, 0, seendb->base, seendb->size,
+    seendb->offset = bsearch_mem(seendb->user, 1, seendb->base, seendb->size,
 				 seendb->offset, &length);
 
     seendb->length = length;

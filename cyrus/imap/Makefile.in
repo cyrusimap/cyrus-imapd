@@ -56,7 +56,7 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
-LOBJS= append.o mailbox.o mboxlist.o message.o parseaddr.o \
+LOBJS= append.o mailbox.o mboxlist.o mboxname.o message.o parseaddr.o \
 	config.o imap_err.o proc.o drop.o setproctitle.o \
 	$(SEEN) $(NOTIFY) $(LOGIN)
 

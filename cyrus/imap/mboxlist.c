@@ -57,8 +57,6 @@ static void mboxlist_closesubs();
 static void mboxlist_reopen();
 static void mboxlist_badline();
 static void mboxlist_parseline();
-static int mboxlist_policycheck();
-static int mboxlist_userownsmailbox();
 static long ensureOwnerRights();
 static int mboxlist_deletesubmailbox();
 
@@ -70,11 +68,8 @@ static int mboxlist_changequota();
 #define FNAME_SUBSSUFFIX ".sub"
 
 /*
- * Maximum length of mailbox and partition names.  These together
- * must be at least 3 less than the size of the binary-search buffer
- * [512]
+ * Maximum length of partition name.  [xxx probably no longer needed]
  */
-#define MAX_NAME_LEN 490
 #define MAX_PARTITION_LEN 10
 
 /* Mailbox patterns which the design of the server prohibits */
@@ -86,8 +81,6 @@ static char *badmboxpatterns[] = {
     ".*",
     "*.",
     "*..*",
-    "inbox",
-    "inbox.*",
     "user",
 };
 #define NUM_BADMBOXPATTERNS (sizeof(badmboxpatterns)/sizeof(*badmboxpatterns))
@@ -114,9 +107,8 @@ char *name;
 char **pathp;
 char **aclp;
 {
-    int namelen = strlen(name);
     unsigned long offset, len, partitionlen, acllen;
-    char optionbuf[MAX_NAME_LEN+1];
+    char optionbuf[MAX_MAILBOX_NAME+1];
     char *p, *partition, *acl, *root;
     static char pathresult[MAX_MAILBOX_PATH];
     static char *aclresult;
@@ -125,14 +117,11 @@ char **aclp;
     mboxlist_reopen();
 
     /* Find mailbox */
-    offset = bsearch_mem(name, 0, list_base, list_size, 0, &len);
+    offset = bsearch_mem(name, 1, list_base, list_size, 0, &len);
     if (!len) {
 	return IMAP_MAILBOX_NONEXISTENT;
     }
 	
-    /* Canonicalize the case of the mailbox name */
-    strncpy(name, list_base + offset, namelen);
-
     /* Parse partition name, construct pathname if requested */
     mboxlist_parseline(offset, len, (char **)0, (unsigned long *)0,
 		       &partition, &partitionlen, &acl, &acllen);
@@ -192,32 +181,31 @@ char **newpartition;
     int r;
     char *p;
     unsigned long offset;
-    char *canon_user;
     char *acl;
     char *defaultacl, *identifier, *rights;
-    char parent[MAX_NAME_LEN+1];
+    char parent[MAX_MAILBOX_NAME+1];
     unsigned long parentlen;
     char *parentname, *parentpartition, *parentacl;
     unsigned long parentpartitionlen, parentacllen;
 
     /* Check for invalid name/partition */
-    if (strlen(name) > MAX_NAME_LEN) return IMAP_MAILBOX_BADNAME;
+    if (strlen(name) > MAX_MAILBOX_NAME) return IMAP_MAILBOX_BADNAME;
     if (partition && strlen(partition) > MAX_PARTITION_LEN) {
 	return IMAP_PARTITION_UNKNOWN;
     }
     for (i = 0; i < NUM_BADMBOXPATTERNS; i++) {
-	g = glob_init(badmboxpatterns[i], GLOB_ICASE);
+	g = glob_init(badmboxpatterns[i], 0);
 	if (GLOB_TEST(g, name) != -1) {
 	    glob_free(&g);
 	    return IMAP_MAILBOX_BADNAME;
 	}
 	glob_free(&g);
     }
-    r = mboxlist_policycheck(name);
+    r = mboxname_policycheck(name);
     if (r) return r;
 
     /* User has admin rights over their own mailbox namespace */
-    if (mboxlist_userownsmailbox(userid, name)) {
+    if (mboxname_userownsmailbox(userid, name)) {
 	isadmin = 1;
     }
 
@@ -242,7 +230,7 @@ char **newpartition;
     parentlen = 0;
     while (!parentlen && (p = strrchr(parent, '.'))) {
 	*p = '\0';
-	offset = bsearch_mem(parent, 0, list_base, list_size, 0, &parentlen);
+	offset = bsearch_mem(parent, 1, list_base, list_size, 0, &parentlen);
     }
     if (parentlen) {
 	mboxlist_parseline(offset, parentlen, &parentname, (unsigned long *)0,
@@ -279,7 +267,7 @@ char **newpartition;
 	}
 	
 	acl = strsave("");
-	if (!strncasecmp(name, "user.", 5)) {
+	if (!strncmp(name, "user.", 5)) {
 	    if (strchr(name+5, '.')) {
 		/* Disallow creating user.X.* when no user.X */
 		free(acl);
@@ -294,11 +282,6 @@ char **newpartition;
 	     */	     
 	    if (strchr(name, '*') || strchr(name, '%') || strchr(name, '?')) {
 		return IMAP_MAILBOX_BADNAME;
-	    }
-	    /* Canonicalize the case of the userid */
-	    canon_user = auth_canonifyid(name+5);
-	    if (canon_user && !strcasecmp(canon_user, name+5)) {
-		strcpy(name+5, canon_user);
 	    }
 	    /*
 	     * Users by default have all access to their personal mailbox(es),
@@ -379,7 +362,7 @@ char *userid;
     }
 
     /* Search for where the new entry goes */
-    offset = bsearch_mem(name, 0, list_base, list_size, 0, &len);
+    offset = bsearch_mem(name, 1, list_base, list_size, 0, &len);
     assert(len == 0);
 
     /* Get partition's path */
@@ -480,13 +463,13 @@ int checkacl;
     int n;
     struct mailbox mailbox;
 
-    /* Can't DELETE INBOX */
-    if (!strcasecmp(name, "inbox")) {
-	return IMAP_MAILBOX_NOTSUPPORTED;
-    }
-
     /* Check for request to delete a user */
-    if (!strncasecmp(name, "user.", 5) && !strchr(name+5, '.')) {
+    if (!strncmp(name, "user.", 5) && !strchr(name+5, '.')) {
+	/* Can't DELETE INBOX */
+	if (!strcmp(name+5, userid)) {
+	    return IMAP_MAILBOX_NOTSUPPORTED;
+	}
+
 	/* Only admins may delete user */
 	if (!isadmin) return IMAP_PERMISSION_DENIED;
 
@@ -534,7 +517,7 @@ int checkacl;
 	mboxlist_unlock();
 
 	/* User has admin rights over their own mailbox namespace */
-	if (mboxlist_userownsmailbox(userid, name)) {
+	if (mboxname_userownsmailbox(userid, name)) {
 	    isadmin = 1;
 	}
 
@@ -543,7 +526,7 @@ int checkacl;
 	  IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
     }
 
-    offset = bsearch_mem(name, 0, list_base, list_size, 0, &len);
+    offset = bsearch_mem(name, 1, list_base, list_size, 0, &len);
     assert(len > 0);
 
     /* Create new mailbox list */
@@ -602,7 +585,6 @@ char *userid;
     int r;
     long access;
     int isusermbox = 0;
-    char inboxname[MAX_NAME_LEN+1];
     char *oldpath;
     char *p;
     unsigned long oldoffset, oldlen;
@@ -620,30 +602,26 @@ char *userid;
     if (r) return r;
 
     /* Check ability to delete old mailbox */
-    if (strcasecmp(oldname, "inbox") == 0) {
-	/* Special case of renaming inbox */
-	if (strlen(userid)+6 > MAX_MAILBOX_PATH) {
-	    mboxlist_unlock();
-	    return IMAP_MAILBOX_NONEXISTENT;
+    if (!strncmp(oldname, "user.", 5) && !strchr(oldname+5, '.')) {
+	if (!strcmp(oldname+5, userid)) {
+	    /* Special case of renaming inbox */
+	    r = mboxlist_lookup(oldname, &oldpath, &acl);
+	    if (r) {
+		mboxlist_unlock();
+		return r;
+	    }
+	    access = acl_myrights(acl);
+	    if (!(access & ACL_DELETE)) {
+		mboxlist_unlock();
+		return IMAP_PERMISSION_DENIED;
+	    }
+	    isusermbox = 1;
 	}
-	strcpy(inboxname, "user.");
-	strcat(inboxname, userid);
-	r = mboxlist_lookup(inboxname, &oldpath, &acl);
-	if (r) {
-	    mboxlist_unlock();
-	    return r;
-	}
-	access = acl_myrights(acl);
-	if (!(access & ACL_DELETE)) {
+	else {
+	    /* Even admins can't rename users */
 	    mboxlist_unlock();
 	    return IMAP_PERMISSION_DENIED;
 	}
-	isusermbox = 1;
-    }
-    else if (!strncasecmp(oldname, "user.", 5) && !strchr(oldname+5, '.')) {
-	/* Even admins can't rename users */
-	mboxlist_unlock();
-	return IMAP_PERMISSION_DENIED;
     }
     else {
 	r = mboxlist_lookup(oldname, &oldpath, &acl);
@@ -661,7 +639,7 @@ char *userid;
     acl = strsave(acl);
 
     /* Check ability to create new mailbox */
-    if (!strncasecmp(newname, "user.", 5) && !strchr(newname+5, '.')) {
+    if (!strncmp(newname, "user.", 5) && !strchr(newname+5, '.')) {
 	/* Even admins can't rename to user's inboxes */
 	mboxlist_unlock();
 	free(acl);
@@ -680,12 +658,12 @@ char *userid;
 	oldoffset = oldlen = 0;
     }
     else {
-	oldoffset = bsearch_mem(oldname, 0, list_base, list_size, 0, &oldlen);
+	oldoffset = bsearch_mem(oldname, 1, list_base, list_size, 0, &oldlen);
 	assert(oldlen > 0);
     }
 
     /* Search for where the new entry goes */
-    newoffset = bsearch_mem(newname, 0, list_base, list_size, 0, &newlen);
+    newoffset = bsearch_mem(newname, 1, list_base, list_size, 0, &newlen);
 
     /* Get partition's path */
     sprintf(buf2, "partition-%s", partition);
@@ -762,8 +740,7 @@ char *userid;
 	if (isupper(*p)) *p = tolower(*p);
 	else if (*p == '.') *p = '/';
     }
-    r = mailbox_rename(isusermbox ? inboxname : oldname,
-		       newname, buf2, isusermbox);
+    r = mailbox_rename(oldname, newname, buf2, isusermbox);
     if (r) {
 	mboxlist_unlock();
 	return r;
@@ -793,10 +770,10 @@ char *rights;
 int isadmin;
 char *userid;
 {
+    int useridlen = strlen(userid);
     int r;
     long access;
     int isusermbox = 0;
-    char inboxname[MAX_NAME_LEN+1];
     struct mailbox mailbox;
     unsigned long offset, len;
     char *oldacl, *acl, *newacl;
@@ -809,19 +786,11 @@ char *userid;
     r = mboxlist_openlock();
     if (r) return r;
 
-    if (!strchr(userid, '.') &&
-	strlen(userid) + 6 <= MAX_MAILBOX_PATH) {
-	strcpy(inboxname, "user.");
-	strcat(inboxname, userid);
-	if (!strcasecmp(name, "inbox") ||
-	    !strcasecmp(name, inboxname)) {
-	    name = inboxname;
-	    isusermbox = 1;
-	}
-	else if (!strncasecmp(name, inboxname, strlen(inboxname)) &&
-		 name[strlen(inboxname)] == '.') {
-	    isusermbox = 1;
-	}
+    if (!strncmp(name, "user.", 5) &&
+	!strchr(userid, '.') &&
+	!strncmp(name+5, userid, useridlen) &&
+	(name[5+useridlen] == '\0' || name[5+useridlen] == '.')) {
+	isusermbox = 1;
     }
 
     /* Get old ACL */
@@ -882,7 +851,7 @@ char *userid;
     }
 
     /* Copy over mailbox list, making change */
-    offset = bsearch_mem(name, 0, list_base, list_size, 0, &len);
+    offset = bsearch_mem(name, 1, list_base, list_size, 0, &len);
     if (!len) {
 	mailbox_close(&mailbox);
 	mboxlist_unlock();
@@ -944,29 +913,50 @@ char *userid;
 int (*proc)();
 {
     struct glob *g;
-    char usermboxname[MAX_NAME_LEN+1];
+    char usermboxname[MAX_MAILBOX_NAME+1];
     int usermboxnamelen;
     unsigned long offset, len, namelen, prefixlen, acllen;
+    int inboxoffset;
     long matchlen, minmatch;
     char *name, *p, *acl, *aclcopy;
     char aclbuf[1024];
-    char namebuf[MAX_NAME_LEN+1];
+    char namebuf[MAX_MAILBOX_NAME+1];
     int rights;
     int r;
 
     mboxlist_reopen();
 
-    g = glob_init(pattern, GLOB_ICASE|GLOB_HIERARCHY);
+    g = glob_init(pattern, GLOB_HIERARCHY);
 
-    /* Check for INBOX first of all */
-    if (userid && !strchr(userid, '.') && strlen(userid)+5 < MAX_NAME_LEN) {
+    /* Build usermboxname */
+    if (userid && !strchr(userid, '.') &&
+	strlen(userid)+5 < MAX_MAILBOX_NAME) {
 	strcpy(usermboxname, "user.");
 	strcat(usermboxname, userid);
+	usermboxnamelen = strlen(usermboxname);
+    }
+    else {
+	userid = 0;
+    }
 
+    /* Check for INBOX first of all */
+    if (userid) {
 	if (GLOB_TEST(g, "inbox") != -1) {
-	    (void) bsearch_mem(usermboxname, 0, list_base, list_size, 0, &len);
+	    (void) bsearch_mem(usermboxname, 1, list_base, list_size, 0, &len);
 	    if (len) {
-		r = (*proc)("INBOX", 5, 0);
+		r = (*proc)("INBOX", 5, 1);
+		if (r) {
+		    glob_free(&g);
+		    return r;
+		}
+	    }
+	}
+	/* "user.X" matches patterns "user.X", "user.X*", "user.X%", etc */
+	else if (!strncmp(pattern, usermboxname, usermboxnamelen) &&
+		 GLOB_TEST(g, usermboxname) != -1) {
+	    (void) bsearch_mem(usermboxname, 1, list_base, list_size, 0, &len);
+	    if (len) {
+		r = (*proc)(usermboxname, strlen(usermboxname), 1);
 		if (r) {
 		    glob_free(&g);
 		    return r;
@@ -974,11 +964,8 @@ int (*proc)();
 	    }
 	}
 
-	strcat(usermboxname, ".");
-	usermboxnamelen = strlen(usermboxname);
-    }
-    else {
-	userid = 0;
+	strcpy(usermboxname+usermboxnamelen, ".");
+	usermboxnamelen++;
     }
 
     /* Find fixed-string pattern prefix */
@@ -988,11 +975,22 @@ int (*proc)();
     prefixlen = p - pattern;
     *p = '\0';
 
-    /* If user.X can match pattern, search for those mailboxes next */
-    if (userid && !strncasecmp(usermboxname, pattern,
-	    prefixlen < usermboxnamelen ? prefixlen : usermboxnamelen)) {
+    /*
+     * If user.X.* or INBOX.* can match pattern,
+     * search for those mailboxes next
+     */
+    if (userid &&
+	(!strncmp(usermboxname, pattern, usermboxnamelen-1) ||
+	 !strncasecmp("inbox.", pattern, prefixlen < 6 ? prefixlen : 6))) {
 
-	offset = bsearch_mem(usermboxname, 0, list_base, list_size, 0,
+	if (!strncmp(usermboxname, pattern, usermboxnamelen-1)) {
+	    inboxoffset = 0;
+	}
+	else {
+	    inboxoffset = strlen(userid);
+	}
+
+	offset = bsearch_mem(usermboxname, 1, list_base, list_size, 0,
 			     (unsigned long *)0);
 
 	while (offset < list_size) {
@@ -1006,17 +1004,26 @@ int (*proc)();
 			       (char **)0, (unsigned long *)0,
 			       (char **)0, (unsigned long *)0);
 		
-	    if (strncasecmp(list_base + offset,
+	    if (strncmp(list_base + offset,
 			    usermboxname, usermboxnamelen) != 0) break;
 	    minmatch = 0;
 	    while (minmatch >= 0) {
-		matchlen = glob_test(g, name, namelen, &minmatch);
-		if (matchlen == -1) break;
-
 		memcpy(namebuf, name, namelen);
 		namebuf[namelen] = '\0';
 
-		r = (*proc)(namebuf, matchlen, 1);
+		if (inboxoffset) {
+		    namebuf[inboxoffset] = 'I';
+		    namebuf[inboxoffset+1] = 'N';
+		    namebuf[inboxoffset+2] = 'B';
+		    namebuf[inboxoffset+3] = 'O';
+		    namebuf[inboxoffset+4] = 'X';
+		}
+
+		matchlen = glob_test(g, namebuf+inboxoffset,
+				     namelen-inboxoffset, &minmatch);
+		if (matchlen == -1) break;
+
+		r = (*proc)(namebuf+inboxoffset, matchlen, 1);
 		if (r) {
 		    glob_free(&g);
 		    return r;
@@ -1027,7 +1034,7 @@ int (*proc)();
     }
 
     /* Search for all remaining mailboxes.  Start at the pattern prefix */
-    offset = bsearch_mem(pattern, 0, list_base, list_size, 0,
+    offset = bsearch_mem(pattern, 1, list_base, list_size, 0,
 			 (unsigned long *)0);
 
     if (userid) usermboxname[--usermboxnamelen] = '\0';
@@ -1041,13 +1048,13 @@ int (*proc)();
 	mboxlist_parseline(offset, len, &name, &namelen,
 			   (char **)0, (unsigned long *)0, &acl, &acllen);
 		
-	if (strncasecmp(list_base + offset, pattern, prefixlen)) break;
+	if (strncmp(list_base + offset, pattern, prefixlen)) break;
 	minmatch = 0;
 	while (minmatch >= 0) {
 	    matchlen = glob_test(g, name, namelen, &minmatch);
 	    if (matchlen == -1 ||
 		(userid && namelen >= usermboxnamelen &&
-		 strncasecmp(name, usermboxname, usermboxnamelen) == 0 &&
+		 strncmp(name, usermboxname, usermboxnamelen) == 0 &&
 		 (namelen == usermboxnamelen || name[usermboxnamelen] == '.'))) {
 		break;
 	    }
@@ -1108,11 +1115,13 @@ int (*proc)();
     unsigned long subs_size;
     char *subsfname;
     struct glob *g;
-    char usermboxname[MAX_NAME_LEN+1];
+    char usermboxname[MAX_MAILBOX_NAME+1];
     int usermboxnamelen;
-    char namebuf[MAX_NAME_LEN+1];
+    char namebuf[MAX_MAILBOX_NAME+1];
+    char namematchbuf[MAX_MAILBOX_NAME+1];
     int r;
     unsigned long offset, len, prefixlen, listlinelen;
+    int inboxoffset;
     char *name, *endname, *p;
     unsigned long namelen;
     long matchlen, minmatch;
@@ -1125,17 +1134,37 @@ int (*proc)();
 
     mboxlist_reopen();
 
-    g = glob_init(pattern, GLOB_ICASE|GLOB_HIERARCHY);
+    g = glob_init(pattern, GLOB_HIERARCHY);
 
-    /* Check for INBOX first of all */
-    if (userid && !strchr(userid, '.') && strlen(userid)+5 < MAX_NAME_LEN) {
+    /* Build usermboxname */
+    if (userid && !strchr(userid, '.') &&
+	strlen(userid)+5 < MAX_MAILBOX_NAME) {
 	strcpy(usermboxname, "user.");
 	strcat(usermboxname, userid);
+	usermboxnamelen = strlen(usermboxname);
+    }
+    else {
+	userid = 0;
+    }
 
+    /* Check for INBOX first of all */
+    if (userid) {
 	if (GLOB_TEST(g, "inbox") != -1) {
-	    (void) bsearch_mem(usermboxname, 0, subs_base, subs_size, 0, &len);
+	    (void) bsearch_mem(usermboxname, 1, subs_base, subs_size, 0, &len);
 	    if (len) {
-		r = (*proc)("INBOX", 5, 0);
+		r = (*proc)("INBOX", 5, 1);
+		if (r) {
+		    mboxlist_closesubs(subsfd, subs_base, subs_size);
+		    glob_free(&g);
+		    return r;
+		}
+	    }
+	}
+	else if (!strncmp(pattern, usermboxname, usermboxnamelen) &&
+		 GLOB_TEST(g, usermboxname) != -1) {
+	    (void) bsearch_mem(usermboxname, 1, subs_base, subs_size, 0, &len);
+	    if (len) {
+		r = (*proc)("INBOX", 5, 1);
 		if (r) {
 		    mboxlist_closesubs(subsfd, subs_base, subs_size);
 		    glob_free(&g);
@@ -1144,11 +1173,8 @@ int (*proc)();
 	    }
 	}
 
-	strcat(usermboxname, ".");
-	usermboxnamelen = strlen(usermboxname);
-    }
-    else {
-	userid = 0;
+	strcpy(usermboxname+usermboxnamelen, ".");
+	usermboxnamelen++;
     }
 
     /* Find fixed-string pattern prefix */
@@ -1158,17 +1184,29 @@ int (*proc)();
     prefixlen = p - pattern;
     *p = '\0';
 
-    /* If user.X can match pattern, search for those mailboxes next */
-    if (userid && !strncasecmp(usermboxname, pattern,
-	    prefixlen < usermboxnamelen ? prefixlen : usermboxnamelen)) {
+    /*
+     * If user.X.* or INBOX.* can match pattern,
+     * search for those mailboxes next
+     */
+    if (userid &&
+	(!strncmp(usermboxname, pattern, usermboxnamelen-1) ||
+	 !strncasecmp("inbox.", pattern, prefixlen < 6 ? prefixlen : 6))) {
 
-	offset = bsearch_mem(usermboxname, 0, subs_base, subs_size, 0,
+	if (!strncmp(usermboxname, pattern, usermboxnamelen-1)) {
+	    inboxoffset = 0;
+	}
+	else {
+	    inboxoffset = strlen(userid);
+	}
+
+	offset = bsearch_mem(usermboxname, 1, subs_base, subs_size, 0,
 			     (unsigned long *)0);
+
 	while (offset < subs_size) {
 	    name = subs_base + offset;
 	    p = memchr(name, '\n', subs_size - offset);
 	    endname = memchr(name, '\t', subs_size - offset);
-	    if (!p || !endname || endname - name > MAX_NAME_LEN) {
+	    if (!p || !endname || endname - name > MAX_MAILBOX_NAME) {
 		syslog(LOG_ERR, "IOERROR: corrupted subscription file %s",
 		       subsfname);
 		fatal("corrupted subscription file", EX_OSFILE);
@@ -1177,20 +1215,30 @@ int (*proc)();
 	    len = p - name + 1;
 	    namelen = endname - name;
 
-	    if (strncasecmp(name, usermboxname, usermboxnamelen)) break;
+	    if (strncmp(name, usermboxname, usermboxnamelen)) break;
 	    minmatch = 0;
 	    while (minmatch >= 0) {
-		matchlen = glob_test(g, name, namelen, &minmatch);
-		if (matchlen == -1) break;
-
 		memcpy(namebuf, name, namelen);
 		namebuf[namelen] = '\0';
+		strcpy(namematchbuf, namebuf);
 
-		(void) bsearch_mem(namebuf, 0, list_base, list_size, 0,
+		if (inboxoffset) {
+		    namematchbuf[inboxoffset] = 'I';
+		    namematchbuf[inboxoffset+1] = 'N';
+		    namematchbuf[inboxoffset+2] = 'B';
+		    namematchbuf[inboxoffset+3] = 'O';
+		    namematchbuf[inboxoffset+4] = 'X';
+		}
+
+		matchlen = glob_test(g, namematchbuf+inboxoffset,
+				     namelen-inboxoffset, &minmatch);
+		if (matchlen == -1) break;
+
+		(void) bsearch_mem(namebuf, 1, list_base, list_size, 0,
 				   &listlinelen);
 
 		if (listlinelen) {
-		    r = (*proc)(namebuf, matchlen, 1);
+		    r = (*proc)(namematchbuf+inboxoffset, matchlen, 1);
 		    if (r) {
 			mboxlist_closesubs(subsfd, subs_base, subs_size);
 			glob_free(&g);
@@ -1207,7 +1255,7 @@ int (*proc)();
     }
 
     /* Search for all remaining mailboxes.  Start at the patten prefix */
-    offset = bsearch_mem(pattern, 0, subs_base, subs_size, 0,
+    offset = bsearch_mem(pattern, 1, subs_base, subs_size, 0,
 			 (unsigned long *)0);
 
     if (userid) usermboxname[--usermboxnamelen] = '\0';
@@ -1215,7 +1263,7 @@ int (*proc)();
 	name = subs_base + offset;
 	p = memchr(name, '\n', subs_size - offset);
 	endname = memchr(name, '\t', subs_size - offset);
-	if (!p || !endname || endname - name > MAX_NAME_LEN) {
+	if (!p || !endname || endname - name > MAX_MAILBOX_NAME) {
 	    syslog(LOG_ERR, "IOERROR: corrupted subscription file %s",
 		   subsfname);
 	    fatal("corrupted subscription file", EX_OSFILE);
@@ -1224,13 +1272,13 @@ int (*proc)();
 	len = p - name + 1;
 	namelen = endname - name;
 
-	if (strncasecmp(name, pattern, prefixlen)) break;
+	if (strncmp(name, pattern, prefixlen)) break;
 	minmatch = 0;
 	while (minmatch >= 0) {
 	    matchlen = glob_test(g, name, namelen, &minmatch);
 	    if (matchlen == -1 ||
 		(userid && namelen >= usermboxnamelen &&
-		 strncasecmp(name, usermboxname, usermboxnamelen) == 0 &&
+		 strncmp(name, usermboxname, usermboxnamelen) == 0 &&
 		 (namelen == usermboxnamelen || name[usermboxnamelen] == '.'))) {
 		break;
 	    }
@@ -1271,7 +1319,6 @@ char *name;
 char *userid;
 int add;
 {
-    char inbox[MAX_MAILBOX_PATH];
     int r;
     char *acl;
     int subsfd, newsubsfd;
@@ -1288,13 +1335,6 @@ int add;
 	return r;
     }
 
-    /* Convert "inbox" to user.USERID */
-    if (!strcasecmp(name, "inbox")) {
-	strcpy(inbox, "user.");
-	strcat(inbox, userid);
-	name = inbox;
-    }
-
     if (add) {
 	/* Ensure mailbox exists and can be either seen or read by user */
 	if (r = mboxlist_lookup(name, (char **)0, &acl)) {
@@ -1308,7 +1348,7 @@ int add;
     }
 
     /* Find where mailbox is/would go in subscription list */
-    offset = bsearch_mem(name, 0, subs_base, subs_size, 0, &len);
+    offset = bsearch_mem(name, 1, subs_base, subs_size, 0, &len);
     if (add) {
 	if (len) {
 	    mboxlist_closesubs(subsfd, subs_base, subs_size);
@@ -1387,7 +1427,6 @@ int newquota;
     strcat(quota_path, FNAME_QUOTADIR);
     quota.root = quota_path + strlen(quota_path);
     strcpy(quota.root, root);
-    lcase(quota.root);
 
     if (quota.file = fopen(quota_path, "r+")) {
 	/* Just lock and change it */
@@ -1408,11 +1447,11 @@ int newquota;
     if (r) return r;
 
     /* Ensure there is at least one mailbox under the quota root */
-    offset = bsearch_mem(quota.root, 0, list_base, list_size, 0, &len);
+    offset = bsearch_mem(quota.root, 1, list_base, list_size, 0, &len);
     if (!len) {
 	if (strlen(quota.root) >= list_size - offset ||
-	    strncasecmp(quota.root, list_base + offset,
-			strlen(quota.root)) != 0 ||
+	    strncmp(quota.root, list_base + offset,
+		    strlen(quota.root)) != 0 ||
 	    list_base[offset + strlen(quota.root)] != '.') {
 	    mboxlist_unlock();
 	    return IMAP_MAILBOX_NONEXISTENT;
@@ -1467,7 +1506,7 @@ int *seen;
     unsigned long namelen;
     char *partition;
     unsigned long partitionlen;
-    char namebuf[MAX_NAME_LEN+1];
+    char namebuf[MAX_MAILBOX_NAME+1];
     char *p;
     unsigned long len;
     int n;
@@ -1510,7 +1549,7 @@ int *seen;
 	    high = num;
 	    while (low <= high) {
 		mid = (high - low)/2 + low;
-		r = strcasecmp(namebuf, group[mid]);
+		r = strcmp(namebuf, group[mid]);
 		if (r == 0) {
 		    deletethis = 0;
 		    seen[mid] = 1;
@@ -1643,15 +1682,15 @@ char **newfname;
     int subsfd;
     struct stat sbuf;
     char *lockfailaction;
-    char buf[MAX_MAILBOX_PATH];
+    char inboxname[MAX_MAILBOX_NAME+1];
 
     /* Users without INBOXes may not keep subscriptions */
-    if (strchr(userid, '.') || strlen(userid) + 6 > MAX_MAILBOX_PATH) {
+    if (strchr(userid, '.') || strlen(userid) + 6 > MAX_MAILBOX_NAME) {
 	return IMAP_PERMISSION_DENIED;
     }
-    strcpy(buf, "user.");
-    strcat(buf, userid);
-    if (mboxlist_lookup(buf, (char **)0, (char **)0) != 0) {
+    strcpy(inboxname, "user.");
+    strcat(inboxname, userid);
+    if (mboxlist_lookup(inboxname, (char **)0, (char **)0) != 0) {
 	return IMAP_PERMISSION_DENIED;
     }
 
@@ -1808,7 +1847,7 @@ unsigned long *acllenp;
 	mboxlist_badline(line, "no tab separator");
     }
     fieldlen = p - line;
-    if (fieldlen > MAX_NAME_LEN) {
+    if (fieldlen > MAX_MAILBOX_NAME) {
 	mboxlist_badline(line, "mailbox name too long");
     }
 
@@ -1836,37 +1875,6 @@ unsigned long *acllenp;
     if (acllenp) *acllenp = len;
 }
 
-
-/*
- * Apply site policy restrictions on mailbox names.
- * Restrictions are hardwired for now.
- */
-#define GOODCHARS "+,-.0123456789:=@ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz~"
-static int mboxlist_policycheck(name)
-char *name;
-{
-    if (*name == '~') return IMAP_MAILBOX_BADNAME;
-    while (*name) {
-	if (!strchr(GOODCHARS, *name++)) return IMAP_MAILBOX_BADNAME;
-    }
-    return 0;
-}
-
-/*
- * Check whether user owns mailbox
- */
-static int mboxlist_userownsmailbox(userid, name)
-char *userid;
-char *name;
-{
-    if (!strchr(userid, '.') && !strncasecmp(name, "user.", 5) &&
-	!strncasecmp(name+5, userid, strlen(userid)) &&
-	name[5+strlen(userid)] == '.') {
-	return 1;
-    }
-    return 0;
-}
-
 /*
  * ACL access canonicalization routine which ensures that 'owner'
  * retains lookup, administer, and create rights over a mailbox.
@@ -1876,7 +1884,7 @@ char *owner;
 char *identifier;
 long access;
 {
-    if (strcasecmp(identifier, owner) != 0) return access;
+    if (strcmp(identifier, owner) != 0) return access;
     return access|ACL_LOOKUP|ACL_ADMIN|ACL_CREATE;
 }
 
