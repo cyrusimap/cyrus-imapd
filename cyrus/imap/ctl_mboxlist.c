@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.20 2002/01/25 19:51:54 rjs3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.21 2002/01/28 22:07:14 rjs3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -89,6 +89,43 @@ static int dump_p(void *rockp,
 		  const char *data, int datalen)
 {
     return 1;
+}
+
+struct mb_node 
+{
+    char mailbox[MAX_MAILBOX_NAME];
+    struct mb_node *next;
+};
+
+struct mb_node *mb_head = NULL;
+
+/* For each mailbox that this guy gets called for, check that
+ * it is a mailbox that:
+ * a) mupdate server thinks *we* host
+ * b) we do not actually host
+ *
+ * if that's the case, enqueue a delete
+ */
+static int mupdate_list_cb(struct mupdate_mailboxdata *mdata,
+			   const char *cmd, void *context) 
+{
+    const char *hostname = (const char *)context;
+    int ret;
+    
+    if(!strncmp(mdata->server, hostname, strlen(hostname))) {
+	/* the server thinks we have it, do we think we have it? */
+	ret = mboxlist_lookup(mdata->mailbox, NULL, NULL, NULL);
+	if(ret) {
+	    struct mb_node *next;
+
+	    next = xmalloc(sizeof(struct mb_node));
+	    strcpy(next->mailbox, mdata->mailbox);
+	    
+	    next->next = mb_head;
+	    mb_head = next;
+	} 
+    }
+    return 0;
 }
 
 static int dump_cb(void *rockp,
@@ -225,8 +262,29 @@ void do_dump(enum mboxop op)
 	    fprintf(stderr, "couldn't connect to mupdate server\n");
 	    exit(1);
 	}
+
+	/* Run pending deletes */
+	ret = mupdate_list(d.h, mupdate_list_cb, d.hostname);
+	if(ret) {
+	    fprintf(stderr, "couldn't do LIST command on mupdate server\n");
+	    exit(1);
+	}
+
+	while(mb_head) {
+	    struct mb_node *me = mb_head;
+	    mb_head = mb_head->next;
+
+	    ret = mupdate_delete(d.h, me->mailbox);
+	    if(ret) {
+		fprintf(stderr, "couldn't delete %s", me->mailbox);
+		exit(1);
+	    }
+		
+	    free(me);
+	}
     }
 
+    /* Dump Database */
     CONFIG_DB_MBOX->foreach(mbdb, "", 0, &dump_p, &dump_cb, &d, NULL);
 
     if(op == M_POPULATE) {

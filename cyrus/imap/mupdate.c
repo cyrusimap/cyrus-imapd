@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.34 2002/01/25 22:35:32 rjs3 Exp $
+ * $Id: mupdate.c,v 1.35 2002/01/28 22:07:14 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1283,7 +1283,7 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 }
 
 /* Read a series of MAILBOX and RESERVE commands and tack them onto a
- * skip-list */
+ * queue */
 int cmd_resync(struct mupdate_mailboxdata *mdata,
 	       const char *rock, void *context)
 {
