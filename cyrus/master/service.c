@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.30 2002/02/22 17:25:30 rjs3 Exp $ */
+/* $Id: service.c,v 1.31 2002/03/05 18:25:18 leg Exp $ */
 
 #include <config.h>
 
@@ -74,6 +74,7 @@ extern char *optarg;
 /* number of times this service has been used */
 static int use_count = 0;
 static int verbose = 0;
+static int gotalrm = 0;
 
 void notify_master(int fd, int msg)
 {
@@ -156,6 +157,36 @@ static int getlockfd(char *service)
     return fd;
 }
 
+static void sigalrm(int sig)
+{
+    /* syslog(LOG_DEBUG, "got signal %d", sig); */
+    if (sig == SIGALRM) {
+	gotalrm = 1;
+    }
+}
+
+int setsigalrm(void)
+{
+    struct sigaction action;
+    
+    sigemptyset(&action.sa_mask);
+
+    action.sa_flags = 0;
+#ifdef SA_RESETHAND
+    action.sa_flags |= SA_RESETHAND;
+#endif
+#ifdef SA_RESTART
+    action.sa_flags |= SA_RESTART;
+#endif
+    action.sa_handler = sigalrm;
+    if (sigaction(SIGALRM, &action, NULL) < 0) {
+	syslog(LOG_ERR, "installing SIGALRM handler: sigaction: %m");
+	return -1;
+    }
+
+    return 0;
+}
+
 int main(int argc, char **argv, char **envp)
 {
     int fdflags;
@@ -223,6 +254,14 @@ int main(int argc, char **argv, char **envp)
 	return 1;
     }
 
+    /* figure out what sort of socket this is */
+    if (getsockopt(LISTEN_FD, SOL_SOCKET, SO_TYPE,
+		   (char *) &soctype, &typelen) < 0) {
+	syslog(LOG_ERR, "getsockopt: SOL_SOCKET: failed to get type: %m");
+	notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+	return 1;
+    }
+
     if (service_init(argc, argv, envp) != 0) {
 	notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
 	return 1;
@@ -237,49 +276,36 @@ int main(int argc, char **argv, char **envp)
     for (;;) {
 	/* ok, listen to this socket until someone talks to us */
 
+	if (use_count > 0) {
+	    /* we want to time out after 60 seconds, set an alarm */
+	    if (setsigalrm() < 0) {
+		notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+		service_abort(EX_OSERR);
+	    }
+	    gotalrm = 0;
+	    alarm(REUSE_TIMEOUT);
+	}
+
 	/* lock */
 	if (lockfd != -1) {
 	    alockinfo.l_type = F_WRLCK;
 	    while ((rc = fcntl(lockfd, F_SETLKW, &alockinfo)) < 0 && 
-		   errno == EINTR)
+		   errno == EINTR &&
+		   !gotalrm)
 		/* noop */;
+
 	    if (rc < 0) {
-		syslog(LOG_ERR, 
-		       "fcntl: F_SETLKW: error getting accept lock: %m");
+		if (!gotalrm) {
+		    syslog(LOG_ERR, 
+			   "fcntl: F_SETLKW: error getting accept lock: %m");
+		}
 		notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
-		return 1;
+		service_abort(EX_OSERR);
 	    }
 	}
 
 	fd = -1;
 	while (fd < 0) { /* loop until we succeed */
-
-	    /* we should probably do a select() here and time out */
-	    if (use_count > 0) {
-		fd_set rfds;
-		struct timeval tv;
-		int r;
-
-		FD_ZERO(&rfds);
-		FD_SET(LISTEN_FD, &rfds);
-		tv.tv_sec = REUSE_TIMEOUT;
-		tv.tv_usec = 0;
-		r = select(LISTEN_FD + 1, &rfds, NULL, NULL, &tv);
-		if (!FD_ISSET(LISTEN_FD, &rfds)) {
-		    notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
-		    service_abort(0);
-		}
-	    }
-
-	    /* udp */
-	    if (getsockopt(LISTEN_FD, SOL_SOCKET, SO_TYPE,
-			   (char *) &soctype, &typelen) < 0) {
-		syslog(LOG_ERR,
-		       "getsockopt: SOL_SOCKET: failed to get type:
-%m");
-		notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
-		service_abort(EX_OSERR);
-	    }
 	    if (soctype == SOCK_STREAM) {
 		fd = accept(LISTEN_FD, NULL, NULL);
 		if (fd < 0) {
@@ -298,6 +324,14 @@ int main(int argc, char **argv, char **envp)
 		    case ENETUNREACH:
 		    case EAGAIN:
 			break;
+			
+		    case EINTR:
+			if (gotalrm) {
+			    notify_master(STATUS_FD, 
+					  MASTER_SERVICE_UNAVAILABLE);
+			    service_abort(EX_OSERR);
+			}
+			/* else, fall through */
 		    default:
 			syslog(LOG_ERR, "accept failed: %m");
 			notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
@@ -323,16 +357,22 @@ int main(int argc, char **argv, char **envp)
 	    }
 	}
 
+	/* cancel the alarm */
+	alarm(0);
+	gotalrm = 0;
+
 	/* unlock */
 	if (lockfd != -1) {
 	    alockinfo.l_type = F_UNLCK;
 	    while ((rc = fcntl(lockfd, F_SETLKW, &alockinfo)) < 0 && 
 		   errno == EINTR)
 		/* noop */;
+
 	    if (rc < 0) {
 		syslog(LOG_ERR, 
 		       "fcntl: F_SETLKW: error releasing accept lock: %m");
 		notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+		service_abort(EX_OSERR);
 		return 1;
 	    }
 	}
