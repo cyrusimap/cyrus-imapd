@@ -74,6 +74,25 @@ The pathname of the partition \fIname\fR.  At least one field, for the
 partition named in the \fBdefaultpartition\fR option, is required.
 For example, if the value of the \fBdefaultpartion\fR option is
 \fBdefault\fR, then the \fBpartition-default\fR field is required.
+.IP "\fBunixhierarchysep:\fR no" 5
+Use the UNIX separator character '/' for delimiting levels of mailbox
+hierarchy.  The default is to use the netnews separator character '.'. 
+.IP "\fBaltnamespace:\fR no" 5
+Use the alternate IMAP namespace, where personal folders reside at the
+same level in the hierarchy as INBOX.
+.br
+.sp
+This option ONLY applies where interaction takes place with the
+client/user.  Currently this is limited to the IMAP protocol (imapd)
+and Sieve scripts (lmtpd).  This option does NOT apply to admin tools
+such as cyradm (admins ONLY), reconstruct, quota, etc., NOR does it
+affect LMTP delivery of messages directly to mailboxes via plus-addressing.
+.IP "\fBuserprefix:\fR Other Users" 5
+If using the alternate IMAP namespace, the prefix for the other users
+namespace.  The hierarchy delimiter will be automatically appended.
+.IP "\fBsharedprefix:\fR Shared Folders" 5
+If using the alternate IMAP namespace, the prefix for the shared
+namespace.  The hierarchy delimiter will be automatically appended.
 .IP "\fBumask:\fR 077" 5
 The umask value used by various Cyrus IMAP programs.
 .IP "\fBservername:\fR <result returned by gethostname(2)>" 5

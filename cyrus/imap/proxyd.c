@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.70 2001/08/03 15:33:24 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.71 2001/08/03 21:18:08 ken3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -92,6 +92,7 @@
 #include "imapurl.h"
 #include "pushstats.h"
 #include "telemetry.h"
+#include "namespace.h"
 
 /* PROXY STUFF */
 /* we want a list of our outgoing connections here and which one we're
@@ -161,6 +162,9 @@ char proxyd_clienthost[250] = "[local]";
 struct protstream *proxyd_out, *proxyd_in;
 time_t proxyd_logtime;
 static char shutdownfilename[1024];
+
+/* current namespace */
+static struct namespace proxyd_namespace;
 
 void shutdown_file(int fd);
 void motd_file(int fd);
@@ -1985,10 +1989,17 @@ void cmd_login(char *tag, char *user, char *passwd)
 
     if (!reply) reply = "User logged in";
 
+    prot_printf(proxyd_out, "%s OK %s\r\n", tag, reply);
+
     /* Create telemetry log */
     telemetry_log(proxyd_userid, proxyd_in, proxyd_out);
 
-    prot_printf(proxyd_out, "%s OK %s\r\n", tag, reply);
+    /* Set namespace */
+    if (!namespace_init(&proxyd_namespace, proxyd_userisadmin)) {
+	syslog(LOG_ERR, "invalid namespace prefix in configuration file");
+	fatal("invalid namespace prefix in configuration file", EC_CONFIG);
+    }
+
     return;
 }
 
@@ -2107,6 +2118,12 @@ void cmd_authenticate(char *tag, char *authtype)
 
     /* Create telemetry log */
     telemetry_log(proxyd_userid, proxyd_in, proxyd_out);
+
+    /* Set namespace */
+    if (!namespace_init(&proxyd_namespace, proxyd_userisadmin)) {
+	syslog(LOG_ERR, "invalid namespace prefix in configuration file");
+	fatal("invalid namespace prefix in configuration file", EC_CONFIG);
+    }
 
     return;
 }
@@ -2650,7 +2667,8 @@ void cmd_append(char *tag, char *name)
 
     /* we want to pipeline this whole command through to the server that
        has name on it, and then do a noop on our current server */
-    r = mboxname_tointernal(name, proxyd_userid, mailboxname);
+    r = (*proxyd_namespace.mboxname_tointernal)(name, &proxyd_namespace,
+						proxyd_userid, mailboxname);
 
     if (!r) {
 	r = mlookup(mailboxname, &newserver, NULL, NULL);
@@ -2705,7 +2723,8 @@ void cmd_select(char *tag, char *cmd, char *name)
 	r = IMAP_MAILBOX_NONEXISTENT;
     }
     else {
-	r = mboxname_tointernal(name, proxyd_userid, mailboxname);
+	r = (*proxyd_namespace.mboxname_tointernal)(name, &proxyd_namespace,
+						    proxyd_userid, mailboxname);
     }
 
     if (!r) r = mlookup(mailboxname, &newserver, NULL, NULL);
@@ -2735,7 +2754,7 @@ void cmd_select(char *tag, char *cmd, char *name)
     }
 
     prot_printf(backend_current->out, "%s %s {%d+}\r\n%s\r\n", tag, cmd, 
-		strlen(mailboxname), mailboxname);
+		strlen(name), name);
     switch (pipe_including_tag(backend_current, tag)) {
     case PROXY_OK:
 	proc_register("proxyd", proxyd_clienthost, proxyd_userid, mailboxname);
@@ -2942,7 +2961,8 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 
     assert(backend_current != NULL);
 
-    r = mboxname_tointernal(name, proxyd_userid, mailboxname);
+    r = (*proxyd_namespace.mboxname_tointernal)(name, &proxyd_namespace,
+						proxyd_userid, mailboxname);
     if (!r) r = mlookup(mailboxname, &server, NULL, NULL);
     if (!r) s = proxyd_findserver(server);
 
@@ -2956,7 +2976,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
     } else if (s == backend_current) {
 	/* this is the easy case */
 	prot_printf(backend_current->out, "%s %s %s {%d+}\r\n%s\r\n",
-		    tag, cmd, sequence, strlen(mailboxname), mailboxname);
+		    tag, cmd, sequence, strlen(name), name);
 	pipe_including_tag(backend_current, tag);
     } else {
 	char mytag[128];
@@ -3305,12 +3325,14 @@ void cmd_create(char *tag, char *name, char *server)
 	r = IMAP_PERMISSION_DENIED;
     }
 
-    if (name[0] && name[strlen(name)-1] == '.') {
+    if (name[0] && name[strlen(name)-1] == proxyd_namespace.hier_sep) {
 	/* We don't care about trailing hierarchy delimiters. */
 	name[strlen(name)-1] = '\0';
     }
 
-    if (!r) r = mboxname_tointernal(name, proxyd_userid, mailboxname);
+    if (!r)
+	r = (*proxyd_namespace.mboxname_tointernal)(name, &proxyd_namespace,
+						    proxyd_userid, mailboxname);
 
     if (!r && !server) {
 	r = mboxlist_createmailboxcheck(mailboxname, 0, 0, proxyd_userisadmin,
@@ -3338,7 +3360,7 @@ void cmd_create(char *tag, char *name, char *server)
     if (!r) {
 	/* ok, send the create to that server */
 	prot_printf(s->out, "%s CREATE {%d+}\r\n%s\r\n", 
-		    tag, strlen(mailboxname), mailboxname);
+		    tag, strlen(name), name);
 	res = pipe_including_tag(s, tag);
 	tag = "*";		/* can't send another tagged response */
 	
@@ -3384,7 +3406,8 @@ void cmd_delete(char *tag, char *name)
     struct backend *s = NULL;
     char mailboxname[MAX_MAILBOX_NAME+1];
 
-    r = mboxname_tointernal(name, proxyd_userid, mailboxname);
+    r = (*proxyd_namespace.mboxname_tointernal)(name, &proxyd_namespace,
+						proxyd_userid, mailboxname);
 
     if (!r) r = mlookup(mailboxname, &server, NULL, NULL);
     if (!r && supports_referrals) { 
@@ -3399,7 +3422,7 @@ void cmd_delete(char *tag, char *name)
 
     if (!r) {
 	prot_printf(s->out, "%s DELETE {%d+}\r\n%s\r\n", 
-		    tag, strlen(mailboxname), mailboxname);
+		    tag, strlen(name), name);
 	res = pipe_including_tag(s, tag);
 	tag = "*";		/* can't send another tagged response */
 
@@ -3440,8 +3463,10 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	return;
     }
 
-    r = mboxname_tointernal(oldname, proxyd_userid, oldmailboxname);
-    if (!r) mboxname_tointernal(newname, proxyd_userid, newmailboxname);
+    r = (*proxyd_namespace.mboxname_tointernal)(oldname, &proxyd_namespace,
+						proxyd_userid, oldmailboxname);
+    if (!r) (*proxyd_namespace.mboxname_tointernal)(newname, &proxyd_namespace,
+						    proxyd_userid, newmailboxname);
     if (!r) r = mlookup(oldmailboxname, &server, &acl, NULL);
     if (!r) {
 	s = proxyd_findserver(server);
@@ -3461,8 +3486,8 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	}
 
 	prot_printf(s->out, "%s RENAME {%d+}\r\n%s {%d+}\r\n%s\r\n", 
-		    tag, strlen(oldmailboxname), oldmailboxname,
-		    strlen(newmailboxname), newmailboxname);
+		    tag, strlen(oldname), oldname,
+		    strlen(newname), newname);
 	res = pipe_including_tag(s, tag);
 	tag = "*";		/* can't send another tagged response */
 	
@@ -3515,12 +3540,25 @@ void cmd_find(char *tag, char *namespace, char *pattern)
 	if (*p == '%') *p = '?';
     }
 
+    /* Translate pattern */
+    hier_sep_tointernal(pattern, &proxyd_namespace);
+
     if (!strcmp(namespace, "mailboxes")) {
-	mboxlist_findsub(pattern, proxyd_userisadmin, proxyd_userid,
-			 proxyd_authstate, mailboxdata, NULL, 1);
+	if (proxyd_namespace.isalt)
+	    mboxlist_findsub_alt(pattern, &proxyd_namespace,
+				 proxyd_userisadmin, proxyd_userid,
+				 proxyd_authstate, mailboxdata, NULL, 1);
+	else
+	    mboxlist_findsub(pattern, proxyd_userisadmin, proxyd_userid,
+			     proxyd_authstate, mailboxdata, NULL, 1);
     } else if (!strcmp(namespace, "all.mailboxes")) {
-	mboxlist_findall(pattern, proxyd_userisadmin, proxyd_userid,
-			 proxyd_authstate, mailboxdata, NULL);
+	if (proxyd_namespace.isalt)
+	    mboxlist_findall_alt(pattern, &proxyd_namespace,
+				 proxyd_userisadmin, proxyd_userid,
+				 proxyd_authstate, mailboxdata, NULL);
+	else
+	    mboxlist_findall(pattern, proxyd_userisadmin, proxyd_userid,
+			     proxyd_authstate, mailboxdata, NULL);
     } else if (!strcmp(namespace, "bboards")
 	       || !strcmp(namespace, "all.bboards")) {
 	;
@@ -3565,7 +3603,8 @@ void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
     
     if (!pattern[0] && !subscribed) {
 	/* Special case: query top-level hierarchy separator */
-	prot_printf(proxyd_out, "* LIST (\\Noselect) \".\" \"\"\r\n");
+	prot_printf(proxyd_out, "* LIST (\\Noselect) \"%c\" \"\"\r\n",
+		    proxyd_namespace.hier_sep);
     } else if (subscribed) {	/* do an LSUB command; contact our INBOX */
 	if (!backend_inbox) {
 	    backend_inbox = proxyd_findinboxserver();
@@ -3582,7 +3621,7 @@ void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
 	}
     } else {			/* do a LIST locally */
 	/* Do we need to concatenate fields? */
-	if (!ignorereference || pattern[0] == '.') {
+	if (!ignorereference || pattern[0] == proxyd_namespace.hier_sep) {
 	    /* Either
 	     * - name begins with dot
 	     * - we're configured to honor the reference argument */
@@ -3597,7 +3636,8 @@ void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
 
 	    if (*reference) {
 		/* check for LIST A. .B, change to LIST "" A.B */
-		if (reference[reflen-1] == '.' && pattern[0] == '.') {
+		if (reference[reflen-1] == proxyd_namespace.hier_sep &&
+		    pattern[0] == proxyd_namespace.hier_sep) {
 		    reference[--reflen] = '\0';
 		}
 		strcpy(buf, reference);
@@ -3606,8 +3646,16 @@ void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
 	    pattern = buf;
 	}
 
-	mboxlist_findall(pattern, proxyd_userisadmin, proxyd_userid,
-			 proxyd_authstate, listdata, NULL);
+	/* Translate pattern */
+	hier_sep_tointernal(pattern, &proxyd_namespace);
+
+	if (proxyd_namespace.isalt)
+	    mboxlist_findall_alt(pattern, &proxyd_namespace,
+				 proxyd_userisadmin, proxyd_userid,
+				 proxyd_authstate, listdata, NULL);
+	else
+	    mboxlist_findall(pattern, proxyd_userisadmin, proxyd_userid,
+			     proxyd_authstate, listdata, NULL);
 	listdata((char *)0, 0, 0, 0);
 
 	if (buf) free(buf);
@@ -3671,7 +3719,8 @@ void cmd_getacl(char *tag, char *name, int oldform)
     char *acl;
     char *rights, *nextid;
 
-    r = mboxname_tointernal(name, proxyd_userid, mailboxname);
+    r = (*proxyd_namespace.mboxname_tointernal)(name, &proxyd_namespace,
+						proxyd_userid, mailboxname);
 
     if (!r) r = mlookup(mailboxname, (char **)0, &acl, NULL);
 
@@ -3747,7 +3796,8 @@ void cmd_listrights(char *tag, char *name, char *identifier)
     char *acl;
     char *rightsdesc;
 
-    r = mboxname_tointernal(name, proxyd_userid, mailboxname);
+    r = (*proxyd_namespace.mboxname_tointernal)(name, &proxyd_namespace,
+						proxyd_userid, mailboxname);
 
     if (!r) {
 	r = mlookup(mailboxname, (char **)0, &acl, NULL);
@@ -3804,7 +3854,8 @@ void cmd_myrights(char *tag, char *name, int oldform)
     char *acl;
     char str[ACL_MAXSTR];
 
-    r = mboxname_tointernal(name, proxyd_userid, mailboxname);
+    r = (*proxyd_namespace.mboxname_tointernal)(name, &proxyd_namespace,
+						proxyd_userid, mailboxname);
 
     if (!r) {
 	r = mlookup(mailboxname, (char **)0, &acl, NULL);
@@ -3848,7 +3899,8 @@ void cmd_setacl(char *tag, char *name, char *identifier, char *rights)
     struct backend *s = NULL;
     char *acl = NULL;
 
-    r = mboxname_tointernal(name, proxyd_userid, mailboxname);
+    r = (*proxyd_namespace.mboxname_tointernal)(name, &proxyd_namespace,
+						proxyd_userid, mailboxname);
     if (!r) r = mlookup(mailboxname, &server, &acl, NULL);
     if (!r) {
 	s = proxyd_findserver(server);
@@ -3926,7 +3978,8 @@ void cmd_getquotaroot(char *tag, char *name)
     int r;
     struct backend *s = NULL;
 
-    r = mboxname_tointernal(name, proxyd_userid, mailboxname);
+    r = (*proxyd_namespace.mboxname_tointernal)(name, &proxyd_namespace,
+						proxyd_userid, mailboxname);
     if (!r) r = mlookup(mailboxname, &server, NULL, NULL);
     if (!r) s = proxyd_findserver(server);
 
@@ -4078,7 +4131,8 @@ void cmd_status(char *tag, char *name)
     char *server;
     struct backend *s = NULL;
 
-    r = mboxname_tointernal(name, proxyd_userid, mailboxname);
+    r = (*proxyd_namespace.mboxname_tointernal)(name, &proxyd_namespace,
+						proxyd_userid, mailboxname);
 
     if (!r) r = mlookup(mailboxname, &server, NULL, NULL);
     if (!r && supports_referrals) { 
@@ -4145,10 +4199,6 @@ cmd_netscape(tag)
  * order to ensure the namespace response is correct on a server with
  * no shared namespace.
  */
-/* locations to set if the user can see a given namespace */
-#define NAMESPACE_INBOX  0
-#define NAMESPACE_USER   1
-#define NAMESPACE_SHARED 2
 static int namespacedata(name, matchlen, maycreate, rock)
     char* name;
     int matchlen;
@@ -4188,15 +4238,34 @@ void cmd_namespace(tag)
     /* now find all the exciting toplevel namespaces */
     mboxlist_findall(pattern, proxyd_userisadmin, proxyd_userid,
 		     proxyd_authstate, namespacedata, (void*) sawone);
+    free(pattern);
 
-    prot_printf(proxyd_out, "* NAMESPACE %s %s %s\r\n",
-		(sawone[NAMESPACE_INBOX]) ? "((\"INBOX.\" \".\"))" : "NIL",
-		(sawone[NAMESPACE_USER]) ? "((\"user.\" \".\"))" : "NIL",
-		(sawone[NAMESPACE_SHARED]) ? "((\"\" \".\"))" : "NIL");
+    prot_printf(proxyd_out, "* NAMESPACE");
+    if (sawone[NAMESPACE_INBOX]) {
+	prot_printf(proxyd_out, " ((\"%s\" \"%c\"))",
+		    proxyd_namespace.prefix[NAMESPACE_INBOX],
+		    proxyd_namespace.hier_sep);
+    } else {
+	prot_printf(proxyd_out, " NIL");
+    }
+    if (sawone[NAMESPACE_USER]) {
+	prot_printf(proxyd_out, " ((\"%s\" \"%c\"))",
+		    proxyd_namespace.prefix[NAMESPACE_USER],
+		    proxyd_namespace.hier_sep);
+    } else {
+	prot_printf(proxyd_out, " NIL");
+    }
+    if (sawone[NAMESPACE_SHARED]) {
+	prot_printf(proxyd_out, " ((\"%s\" \"%c\"))",
+		    proxyd_namespace.prefix[NAMESPACE_SHARED],
+		    proxyd_namespace.hier_sep);
+    } else {
+	prot_printf(proxyd_out, " NIL");
+    }
+    prot_printf(proxyd_out, "\r\n");
 
     prot_printf(proxyd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
-    free(pattern);
 }
 
 /*
@@ -4261,7 +4330,11 @@ int matchlen;
 int maycreate;
 void* rock;
 {
-    prot_printf(proxyd_out, "* MAILBOX %s\r\n", name);
+    char mboxname[MAX_MAILBOX_PATH+1];
+
+    (*proxyd_namespace.mboxname_toexternal)(name, &proxyd_namespace,
+					    proxyd_userid, mboxname);
+    prot_printf(proxyd_out, "* MAILBOX %s\r\n", mboxname);
     return 0;
 }
 
@@ -4275,10 +4348,12 @@ int matchlen;
 int maycreate;
 {
     static char lastname[MAX_MAILBOX_PATH];
-    static int lastnamedelayed;
+    static int lastnamedelayed = 0;
+    static int lastnamenoinferiors = 0;
     static int sawuser = 0;
     int lastnamehassub = 0;
     int c;
+    char mboxname[MAX_MAILBOX_PATH+1];
 
     /* We have to reset the sawuser flag before each list command.
      * Handle it as a dirty hack.
@@ -4293,11 +4368,15 @@ int maycreate;
 	    name[strlen(lastname)] == '.') {
 	    lastnamehassub = 1;
 	}
-	prot_printf(proxyd_out, "* %s (%s) \".\" ", cmd,
-	       lastnamehassub ? "" : "\\Noinferiors");
-	printastring(lastname);
+	prot_printf(proxyd_out, "* %s (%s) \"%c\" ", cmd,
+		    lastnamenoinferiors ? "\\Noinferiors" :
+		    lastnamehassub ? "\\HasChildren" : "\\HasNoChildren",
+		    proxyd_namespace.hier_sep);
+	(*proxyd_namespace.mboxname_toexternal)(lastname, &proxyd_namespace,
+						proxyd_userid, mboxname);
+	printstring(mboxname);
 	prot_printf(proxyd_out, "\r\n");
-	lastnamedelayed = 0;
+	lastnamedelayed = lastnamenoinferiors = 0;
     }
 
     /* Special-case to flush any final state */
@@ -4323,15 +4402,20 @@ int maycreate;
     strcpy(lastname, name);
     lastname[matchlen] = '\0';
 
-    if (!name[matchlen] && !maycreate) {
+    if (!name[matchlen]) {
 	lastnamedelayed = 1;
+	if (!maycreate) lastnamenoinferiors = 1;
 	return;
     }
 
     c = name[matchlen];
     if (c) name[matchlen] = '\0';
-    prot_printf(proxyd_out, "* %s (%s) \".\" ", cmd, c ? "\\Noselect" : "");
-    printstring(name);
+    prot_printf(proxyd_out, "* %s (%s) \"%c\" ", cmd,
+		c ? "\\HasChildren \\Noselect" : "",
+		proxyd_namespace.hier_sep);
+    (*proxyd_namespace.mboxname_toexternal)(name, &proxyd_namespace,
+					    proxyd_userid, mboxname);
+    printstring(mboxname);
     prot_printf(proxyd_out, "\r\n");
     if (c) name[matchlen] = c;
     return;

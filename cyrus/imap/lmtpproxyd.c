@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to sieve and proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.15 2001/02/22 19:27:18 ken3 Exp $
+ * $Id: lmtpproxyd.c,v 1.16 2001/08/03 21:18:07 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpproxyd.c,v 1.15 2001/02/22 19:27:18 ken3 Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpproxyd.c,v 1.16 2001/08/03 21:18:07 ken3 Exp $";*/
 
 #include <config.h>
 
@@ -95,6 +95,7 @@
 #include "append.h"
 #include "mboxlist.h"
 #include "notify.h"
+#include "namespace.h"
 
 #include "lmtpengine.h"
 #include "lmtpstats.h"
@@ -176,6 +177,9 @@ static sieve_interp_t *sieve_interp;
 static int sieve_usehomedir = 0;
 static const char *sieve_dir = NULL;
 #endif
+
+/* current namespace */
+static struct namespace lmtpd_namespace;
 
 /* should we allow users to proxy?  return SASL_OK if yes,
    SASL_BADAUTH otherwise */
@@ -292,6 +296,12 @@ int service_init(int argc, char **argv, char **envp)
     /* so we can do mboxlist operations */
     mboxlist_init(0);
     mboxlist_open(NULL);
+
+    /* Set namespace */
+    if (!namespace_init(&lmtpd_namespace, 0)) {
+	syslog(LOG_ERR, "invalid namespace prefix in configuration file");
+	fatal("invalid namespace prefix in configuration file", EC_CONFIG);
+    }
 
     /* create connection to the SNMP listener, if available. */
     snmp_connect(); /* ignore return code */
@@ -1425,7 +1435,10 @@ static int verify_user(const char *user)
     /* check to see if mailbox exists */
     if (!strncmp(user, BB, sl) && user[sl] == '+') {
 	/* special shared folder address */
-	r = mboxlist_lookup(user + sl + 1, NULL, NULL, NULL);
+	strcpy(buf, user + sl + 1);
+	/* Translate user */
+	hier_sep_tointernal(buf, &lmtpd_namespace);
+	r = mboxlist_lookup(buf, NULL, NULL, NULL);
     } else {			/* ordinary user */
 	int l;
 	char *plus = strchr(user, '+');
@@ -1441,6 +1454,8 @@ static int verify_user(const char *user)
 	    strcpy(buf, "user.");
 	    strncat(buf, user, l);
 	    buf[l + 5] = '\0';
+	    /* Translate user */
+	    hier_sep_tointernal(buf+5, &lmtpd_namespace);
 	    r = mboxlist_lookup(buf, NULL, NULL, NULL);
 	}
     }

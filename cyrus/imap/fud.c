@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.22 2001/02/22 19:27:16 ken3 Exp $ */
+/* $Id: fud.c,v 1.23 2001/08/03 21:18:06 ken3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -207,7 +207,7 @@ int handle_request(const char *who, const char *name,
     lastread = 0;
     lastarrived = 0;
 
-    r = mboxname_tointernal(name,who,mboxname);
+    r = mboxname_tointernal(name,NULL,who,mboxname);
     if (r) return r; 
 
     /*

@@ -1,6 +1,6 @@
 <HTML><HEAD>
     <TITLE>Cyrus IMAP Server Release Information</TITLE>
-    <!-- $Id: readme.html,v 1.10 2001/02/06 21:39:22 ken3 Exp $ -->
+    <!-- $Id: readme.html,v 1.11 2001/08/03 21:18:05 ken3 Exp $ -->
   </HEAD><BODY>
       <H1>                Cyrus IMAP Server Release Information</H1>
       
@@ -40,7 +40,9 @@ possible when an email message is addressed to multiple recipients.
 
 <p>We current support the following IMAP capabilities:
 <tt>
-IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ IDLE NAMESPACE UIDPLUS ID NO_ATOMIC_RENAME UNSELECT MULTIAPPEND SORT THREAD=ORDEREDSUBJECT THREAD=REFERENCES STARTTLS</tt>.
+IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE UIDPLUS ID
+NO_ATOMIC_RENAME UNSELECT CHILDREN MULTIAPPEND SORT
+THREAD=ORDEREDSUBJECT THREAD=REFERENCES IDLE STARTTLS</tt>.
 
 <p> The server supports SIEVE for server side email filtering.
 
@@ -177,7 +179,7 @@ href="http://www.oreilly.com/catalog/mimap/">Managing IMAP</a>. While
 	  setup that can be applied to the newer code. 
 
 <P><HR>
-last modified: $Date: 2001/02/06 21:39:22 $
+last modified: $Date: 2001/08/03 21:18:05 $
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>

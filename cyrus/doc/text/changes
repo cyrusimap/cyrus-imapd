@@ -1,6 +1,6 @@
                    Changes to the Cyrus IMAP Server
 
-Changes to the Cyrus IMAP Server since 2.0.14
+Changes to the Cyrus IMAP Server since 2.0.15
 
       * fixed a longstanding bug in quota that would affect people with
         unusual top-level hierarchy, fix by John Darrow,

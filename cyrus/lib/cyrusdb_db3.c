@@ -431,10 +431,18 @@ static int foreach(struct db *mydb,
 
 	    /* close the cursor, so we're not holding locks 
 	       during a callback */
-	    CLOSECURSOR();
+	    CLOSECURSOR(); cursor = NULL;
 
 	    r = cb(rock, k.data, k.size, d.data, d.size);
-	    if (r != 0) break;
+            if (r != 0) {
+                if (r < 0) {
+                    syslog(LOG_ERR, "DBERROR: foreach cb() failed");
+                }
+                /* don't mistake this for a db error */
+                r = 0;
+
+                break;
+            }
 
 	    /* restore the current location & advance */
 	    OPENCURSOR();
