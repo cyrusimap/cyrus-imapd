@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/NNTP/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.82.2.16 2003/04/19 02:01:45 ken3 Exp $
+ * $Id: imtest.c,v 1.82.2.17 2003/06/07 18:35:06 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -1287,8 +1287,9 @@ static void interactive(struct protocol_t *protocol, char *filename)
 		FD_CLR(0, &read_set);
 	    } else {
 		count = strlen(buf);
-		/* If we read a full line, translate the newline */
-		if (buf[count - 1] == '\n') {
+		/* If we read a full line, translate the newline
+		 * if necessary. */
+		if (buf[count - 1] == '\n' && (count < 2 || buf[count - 2] != '\r')) {
 		    buf[count - 1] = '\r';
 		    buf[count] = '\n';
 		    buf[count + 1] = '\0';
