@@ -8,41 +8,38 @@ MAKE=gmake
 AMSSYNC=--enable-amssync
 
 WITHAUTH="--with-auth=krb_pts"
-if test `sys` = pmax_ul4; then
-	WITHAUTH=""
-	AMSSYNC=""
-fi
-if test `sys` = sgi_62 -o `sys` = i386_linux2 ; then
-	AMSSYNC=""
-fi
-
-LNCOMMAND="${SRCDIR}/configure $WITHAUTH --with-inn=/usr/news $AMSSYNC --enable-experiment --enable-cmulocal --enable-debug --with-cyrus-user=cyrus --with-cyrus-group=staff"
 
 # Ryan's aggressive optimizations
 CC=cc
+VER=`smake -D | sed 's;^.*\/;;'`
+IDENT="-DEXTRA_IDENT=\\\"-${VER}\\\""
+
+CFLAGS="${IDENT}"
 case `uname` in
-  Linux) CFLAGS="-O3"
+   Linux) CFLAGS="${CFLAGS} -O3"
+	AMSSYNC=""
 	;;
-  IRIX) CFLAGS="-O2"
-        # LDFLAGS="-L/usr/local/lib -Wl,-rpath,/usr/local/lib"
-        export LDFLAGS
+  IRIX) CFLAGS="${CFLAGS} -O2"
+        #LDFLAGS="-L/usr/local/lib -Wl,-rpath,/usr/local/lib"
+        #export LDFLAGS
+	AMSSYNC=""
 	;;
-  HP-UX)   CFLAGS="-Ae +O3 +Oaggressive"
+  HP-UX)  
 	CC=gcc # cheat -- hp cc is miserable
-	CFLAGS="-O2"
+	CFLAGS="${CFLAGS} -O2"
 	;;
   SunOS)   
-         if test "`uname -r`" = "4.1.3_U1"; then 
-           CC=gcc
-           CFLAGS=-O3
-         else
-           CFLAGS="-xO4 -xdepend"
-         fi
-         ;;
-  ULTRIX)  CFLAGS="-O"
+        CFLAGS="${CFLAGS} -xO4 -xdepend"
+        ;;
+  ULTRIX)  CFLAGS="${CFLAGS} -O"
+	WITHAUTH=""
+	AMSSYNC=""
 	;;
-  *)       CFLAGS=-g
+  *)    
 	;;
 esac
+
+
+LNCOMMAND="${SRCDIR}/configure $WITHAUTH --with-inn=/usr/news $AMSSYNC --enable-experiment --enable-cmulocal --enable-debug --with-cyrus-user=cyrus --with-cyrus-group=staff"
 
 export CFLAGS CC CXXFLAGS
