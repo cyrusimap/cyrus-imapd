@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.21 2000/11/30 15:55:42 ken3 Exp $ */
+/* $Id: master.c,v 1.22 2000/12/07 22:39:24 leg Exp $ */
 
 #include <config.h>
 
@@ -696,7 +696,7 @@ void process_msg(struct service *s, int msg)
     case SERVICE_IMAP_IDLENOTIFY:
     case SERVICE_IMAP_IDLEDONE: {
 	imap_idledata_t idledata;
-	struct ientry *n, *t, *p;
+	struct ientry *n, *t;
 	struct centry *c;
 
 	read(s->stat[0], &idledata, IDLEDATA_BASE_SIZE);
