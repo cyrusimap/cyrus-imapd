@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.125 2000/01/14 02:12:15 leg Exp $
+ * $Id: deliver.c,v 1.126 2000/01/25 06:51:47 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.125 2000/01/14 02:12:15 leg Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.126 2000/01/25 06:51:47 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -42,11 +42,12 @@ static char _rcsid[] = "$Id: deliver.c,v 1.125 2000/01/14 02:12:15 leg Exp $";
 #include <com_err.h>
 #include <errno.h>
 #ifdef HAVE_LIBDB
-#ifdef HAVE_DB_185_H
-#include <db_185.h>
-#else
-#include <db.h>
-#endif
+#  ifdef HAVE_DB_185_H
+#    define DB_LIBRARY_COMPATIBILITY_API
+#    include <db_185.h>
+#  else
+#    include <db.h>
+#  endif
 #else
 #include <ndbm.h>
 #endif
@@ -1585,7 +1586,8 @@ deliver_opts_t *delopts;
 	break;
     }
 
-    prot_printf(deliver_out,"220 %s LMTP ready\r\n", myhostname);
+    prot_printf(deliver_out,"220 %s LMTP Cyrus %s ready\r\n", myhostname,
+		CYRUS_VERSION);
 
     for (;;) {
       if (!prot_fgets(buf, sizeof(buf)-1, deliver_in)) {
