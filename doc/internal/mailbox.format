@@ -123,7 +123,8 @@ Deleted, Answered, and Flagged (4 bytes each) -
   Counts of how many messages have each flag.
 
 POP3 New UIDL (4 bytes) -
-  ????
+  Flag signalling that we're using <uidvalidity>.<uid> instead of just
+  <uid> for the output of the POP3 UIDL command.
 
 There are also spare fields in the index header, to allow for future
 expansion without forcing an upgrade of the file.
@@ -142,13 +143,13 @@ INTERNALDATE (4 bytes) -
   INTERNALDATE of the message
 
 SENTDATE (4 bytes) -
-  ???
+  Contents of the Date: header.
 
 SIZE (4 bytes) -
-  Size of the message (in octets)
+  Size of the whole message (in octets)
 
 HEADER SIZE (4 bytes) -
-  ???
+  Size of the message header (in octets)
 
 CONTENT_OFFSET (4 bytes) -
   Offset into the message file where the message content begins.
@@ -158,7 +159,7 @@ CACHE_OFFSET (4 bytes) -
   cache entry.
 
 LAST UPDATED (4 bytes) -
-  ???
+  (time_t) of the last time this record was changed
 
 SYSTEM FLAGS (4 bytes) -
   Bitmask showing which system flags are set/unset
