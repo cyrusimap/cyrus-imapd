@@ -22,187 +22,91 @@
 # 
 DEFINES=-DSETPROCTITLE
 
-# Authentication (login) routines.  Two choices
-#
-# Kerberos.  Requires auth_krb.o and kerberos.o in libcyrus.a
-# Also requires linking against Kerberos libraries
-LOGIN=login_krb.o
-AUTHLIBS=/usr/local/lib/libkrb.a /usr/local/lib/libdes.a
-#
-# Unix passwd file.  Requires auth_unix.o in libcyrus.a
-#LOGIN=login_unix.o
+# Authentication (login) routines.
+LOGIN=login_@WITH_LOGIN@.o
 
 # \Seen state database.  Only one choice for now:
 SEEN=seen_local.o
 
-#
-# File mapping mechanism.  Two choices
-#
-# mmap()
-MAP=map_mmap.o
-#
-# mmap() nonexistent or nonfunctional on plain files
-# Performance will not be so good
-#MAP=map_nommap.o
+# File mapping mechanism.
+MAP=map_@WITH_MAP@.o
 
+srcdir = @srcdir@
+VPATH = @srcdir@
 
-COMPILE_ET=compile_et
-COM_ERR=/usr/local/lib/libcom_err.a
+CC = @CC@
+INSTALL = @INSTALL@
+RANLIB = @RANLIB@
 
-OPT=-g
+LEX = lex
+YACC = yacc
+
+DEFS = @DEFS@
+CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@ 
+LIBS = ../et/libcom_err.a ../lib/libcyrus.a @LIBS@ 
+
+CFLAGS = -g
+LDFLAGS = -g
+
+SHELL = /bin/sh
+
+COMPILE_ET=../et/compile_et
 
 LOBJS= append.o mailbox.o mboxlist.o message.o \
 	parsel.o parsey.o parseadd.o parseutl.o \
 	config.o imap_err.o proc.o setproctitle.o \
-	$(LOGIN) $(SEEN) $(MAP)
+	$(SEEN) $(MAP)
 
-IMAPDOBJS= imapd.o index.o
+IMAPDOBJS= imapd.o index.o $(LOGIN)
 
-CFLAGS= $(OPT) $(INCLUDES) $(DEFINES)
+PROGS = collectnews rmnews deliver imapd
 
-INCLUDES= -I../lib -I/usr/local/include -I/usr/local/include/afs
-LIBS=../lib/libcyrus.a $(COM_ERR) $(AUTHLIBS)
+all: $(PROGS)
 
-all: collectnews rmnews deliver imapd
+.c.o:
+	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
 
 collectnews: collectnews.o libimap.a $(LIBS)
-	$(CC) $(CFLAGS) -o collectnews collectnews.o libimap.a $(LIBS)
+	$(CC) $(LDFLAGS) -o collectnews collectnews.o libimap.a $(LIBS)
 
 rmnews: rmnews.o libimap.a $(LIBS)
-	$(CC) $(CFLAGS) -o rmnews rmnews.o libimap.a $(LIBS)
+	$(CC) $(LDFLAGS) -o rmnews rmnews.o libimap.a $(LIBS)
 
 deliver: deliver.o libimap.a $(LIBS)
-	$(CC) $(CFLAGS) -o deliver deliver.o libimap.a $(LIBS)
+	$(CC) $(LDFLAGS) -o deliver deliver.o libimap.a $(LIBS)
 
 imapd: $(IMAPDOBJS) libimap.a $(LIBS)
-	$(CC) $(CFLAGS) -o imapd $(IMAPDOBJS) libimap.a $(LIBS)
+	$(CC) $(LDFLAGS) -o imapd $(IMAPDOBJS) libimap.a $(LIBS)
 
 libimap.a: $(LOBJS)
 	ar cr libimap.a $(LOBJS)
-	ranlib libimap.a
+	$(RANLIB) libimap.a
 
-.y.o:
-	$(YACC) $*.y
-	rm -f $*.c
-	mv y.tab.c $*.c
-	$(CC) -c $(CFLAGS) $*.c
-	rm -f $*.c
-
-.l.o:
-	$(LEX) $*.l
+.l.c:
+	$(LEX) $<
 	rm -f $*.c
 	mv lex.yy.c $*.c
-	$(CC) -c $(CFLAGS) $*.c
-	rm -f $*.c
 
 parsel.o: parsel.c parsey.h
 
 parsey.c parsey.h: parsey.y
-	$(YACC) -d parsey.y
+	$(YACC) -d $(srcdir)/parsey.y
 	rm -f parsey.c parsey.h
 	mv y.tab.c parsey.c
 	mv y.tab.h parsey.h
 
 imap_err.h imap_err.c: imap_err.et
-	$(COMPILE_ET) imap_err.et
+	$(COMPILE_ET) $(srcdir)/imap_err.et
 
 clean:
-	rm -f *.o *.a Makefile.bak parsey.c parsey.h parsel.c imap_err.c imap_err.h deliver imapd
+	rm -f *.o *.a Makefile.bak parsey.c parsey.h parsel.c imap_err.c imap_err.h $(PROGS)
+
+distclean: clean
+	rm -f Makefile
 
 depend: parsel.c parsey.c imap_err.h
-	makedepend $(CFLAGS) *.c
+	makedepend $(CPPFLAGS) $(DEFS) $(CFLAGS) *.c $(srcdir)/*.c
 
 # DO NOT DELETE THIS LINE -- make depend depends on it.
 
-append.o: /usr/include/stdio.h /usr/include/ctype.h /usr/include/sys/types.h
-append.o: /usr/include/sys/stdtypes.h /usr/include/sys/sysmacros.h
-append.o: /usr/include/syslog.h ../lib/acl.h ../lib/assert.h imap_err.h
-append.o: mailbox.h append.h ../lib/xmalloc.h
-collectnews.o: /usr/include/stdio.h /usr/include/string.h
-collectnews.o: /usr/include/sys/stdtypes.h /usr/include/sysexits.h
-collectnews.o: /usr/include/syslog.h /usr/local/include/afs/com_err.h
-collectnews.o: config.h imap_err.h mailbox.h /usr/include/sys/types.h
-collectnews.o: /usr/include/sys/sysmacros.h ../lib/xmalloc.h
-config.o: /usr/include/stdio.h /usr/include/ctype.h /usr/include/sysexits.h
-config.o: /usr/include/syslog.h /usr/local/include/afs/com_err.h config.h
-config.o: ../lib/xmalloc.h
-deliver.o: /usr/include/stdio.h /usr/include/string.h
-deliver.o: /usr/include/sys/stdtypes.h /usr/include/sysexits.h
-deliver.o: /usr/local/include/afs/com_err.h /usr/include/ndbm.h
-deliver.o: /usr/include/sys/file.h /usr/include/sys/types.h
-deliver.o: /usr/include/sys/sysmacros.h /usr/include/sys/fcntlcom.h
-deliver.o: /usr/include/sys/stat.h ../lib/acl.h ../lib/util.h ../lib/auth.h
-deliver.o: config.h imap_err.h mailbox.h ../lib/xmalloc.h
-imapd.o: /usr/include/stdio.h /usr/include/string.h
-imapd.o: /usr/include/sys/stdtypes.h /usr/include/time.h
-imapd.o: /usr/include/sysexits.h /usr/include/signal.h
-imapd.o: /usr/include/sys/signal.h /usr/include/vm/faultcode.h
-imapd.o: /usr/include/sys/types.h /usr/include/sys/sysmacros.h
-imapd.o: /usr/include/sys/param.h /usr/include/machine/param.h
-imapd.o: /usr/include/machine/devaddr.h /usr/include/sys/stat.h
-imapd.o: /usr/include/syslog.h /usr/local/include/afs/com_err.h
-imapd.o: /usr/include/netdb.h /usr/include/sys/socket.h
-imapd.o: /usr/include/netinet/in.h ../lib/acl.h ../lib/util.h ../lib/auth.h
-imapd.o: imap_err.h mailbox.h imapd.h ../lib/charset.h ../lib/xmalloc.h
-index.o: /usr/include/stdio.h /usr/include/string.h
-index.o: /usr/include/sys/stdtypes.h /usr/include/time.h
-index.o: /usr/include/sysexits.h /usr/include/sys/types.h
-index.o: /usr/include/sys/sysmacros.h /usr/include/sys/stat.h
-index.o: /usr/include/netinet/in.h /usr/include/syslog.h
-index.o: /usr/local/include/afs/com_err.h ../lib/acl.h ../lib/util.h
-index.o: ../lib/assert.h imap_err.h mailbox.h imapd.h append.h
-index.o: ../lib/charset.h ../lib/xmalloc.h
-login_krb.o: /usr/include/stdio.h /usr/include/ctype.h
-login_krb.o: /usr/include/sysexits.h /usr/local/include/krb.h
-login_krb.o: /usr/local/include/mit-copyright.h /usr/local/include/des.h
-login_krb.o: /usr/local/include/mit-cpyright.h /usr/include/syslog.h
-login_krb.o: ../lib/kerberos.h config.h mailbox.h /usr/include/sys/types.h
-login_krb.o: /usr/include/sys/stdtypes.h /usr/include/sys/sysmacros.h imapd.h
-login_trivial.o: /usr/include/syslog.h
-login_unix.o: /usr/include/stdio.h /usr/include/sysexits.h /usr/include/pwd.h
-login_unix.o: /usr/include/sys/types.h /usr/include/sys/stdtypes.h
-login_unix.o: /usr/include/sys/sysmacros.h /usr/include/syslog.h config.h
-login_unix.o: mailbox.h imapd.h
-mailbox.o: /usr/include/stdio.h /usr/include/string.h
-mailbox.o: /usr/include/sys/stdtypes.h /usr/include/errno.h
-mailbox.o: /usr/include/sys/errno.h /usr/include/syslog.h
-mailbox.o: /usr/include/sys/types.h /usr/include/sys/sysmacros.h
-mailbox.o: /usr/include/netinet/in.h /usr/include/sys/stat.h
-mailbox.o: /usr/include/sys/file.h /usr/include/sys/fcntlcom.h
-mailbox.o: /usr/include/dirent.h /usr/include/sys/dirent.h ../lib/acl.h
-mailbox.o: ../lib/assert.h imap_err.h mailbox.h ../lib/xmalloc.h
-map_mmap.o: /usr/include/stdio.h /usr/include/sysexits.h
-map_mmap.o: /usr/include/sys/types.h /usr/include/sys/stdtypes.h
-map_mmap.o: /usr/include/sys/sysmacros.h /usr/include/sys/mman.h
-map_mmap.o: /usr/include/syslog.h
-map_nommap.o: /usr/include/stdio.h /usr/include/sysexits.h
-map_nommap.o: /usr/include/sys/types.h /usr/include/sys/stdtypes.h
-map_nommap.o: /usr/include/sys/sysmacros.h /usr/include/syslog.h
-map_nommap.o: ../lib/xmalloc.h
-mboxlist.o: /usr/include/stdio.h /usr/include/sysexits.h
-mboxlist.o: /usr/include/string.h /usr/include/sys/stdtypes.h
-mboxlist.o: /usr/include/errno.h /usr/include/sys/errno.h
-mboxlist.o: /usr/include/sys/types.h /usr/include/sys/sysmacros.h
-mboxlist.o: /usr/include/sys/stat.h /usr/include/sys/file.h
-mboxlist.o: /usr/include/sys/fcntlcom.h /usr/include/syslog.h ../lib/acl.h
-mboxlist.o: ../lib/glob.h ../lib/assert.h config.h mailbox.h imap_err.h
-mboxlist.o: ../lib/xmalloc.h
-message.o: /usr/include/stdio.h /usr/include/ctype.h /usr/include/string.h
-message.o: /usr/include/sys/stdtypes.h /usr/include/time.h
-message.o: /usr/include/syslog.h imap_err.h mailbox.h
-message.o: /usr/include/sys/types.h /usr/include/sys/sysmacros.h parseadd.h
-message.o: ../lib/charset.h ../lib/util.h ../lib/xmalloc.h
-parseadd.o: /usr/include/stdio.h /usr/include/ctype.h parseadd.h
-parsel.o: /usr/include/stdio.h parseadd.h parsey.h
-parseutl.o: /usr/include/stdio.h parseadd.h
-parsey.o: parseadd.h
-proc.o: /usr/include/stdio.h /usr/include/syslog.h /usr/include/sysexits.h
-proc.o: config.h ../lib/xmalloc.h
-seen_local.o: /usr/include/stdio.h /usr/include/errno.h
-seen_local.o: /usr/include/sys/errno.h /usr/include/ctype.h
-seen_local.o: /usr/include/strings.h /usr/include/sys/types.h
-seen_local.o: /usr/include/sys/stdtypes.h /usr/include/sys/sysmacros.h
-seen_local.o: /usr/include/sys/stat.h /usr/include/sys/file.h
-seen_local.o: /usr/include/sys/fcntlcom.h /usr/include/syslog.h
-seen_local.o: ../lib/assert.h mailbox.h imap_err.h ../lib/xmalloc.h
-setproctitle.o: /usr/include/stdio.h ../lib/xmalloc.h /usr/include/varargs.h
+
