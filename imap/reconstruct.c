@@ -1,35 +1,31 @@
-/*
- * THIS RECOSNTRUCT MIGHT MAKE THINGS WORSE
+/* reconstruct.c -- program to reconstruct a mailbox 
+ *
+ * Copyright 1998 Carnegie Mellon University
+ * 
+ * No warranties, either expressed or implied, are made regarding the
+ * operation, use, or results of the software.
+ *
+ * Permission to use, copy, modify and distribute this software and its
+ * documentation is hereby granted for non-commercial purposes only
+ * provided that this copyright notice appears in all copies and in
+ * supporting documentation.
+ *
+ * Permission is also granted to Internet Service Providers and others
+ * entities to use the software for internal purposes.
+ *
+ * The distribution, modification or sale of a product which uses or is
+ * based on the software, in whole or in part, for commercial purposes or
+ * benefits requires specific, additional permission from:
+ *
+ *  Office of Technology Transfer
+ *  Carnegie Mellon University
+ *  5000 Forbes Avenue
+ *  Pittsburgh, PA  15213-3890
+ *  (412) 268-4387, fax: (412) 268-7395
+ *  tech-transfer@andrew.cmu.edu
  */
 
-/* reconstruct.c -- program to reconstruct a mailbox 
- $Id: reconstruct.c,v 1.35 1998/05/15 21:49:47 neplokh Exp $
- 
- # Copyright 1998 Carnegie Mellon University
- # 
- # No warranties, either expressed or implied, are made regarding the
- # operation, use, or results of the software.
- #
- # Permission to use, copy, modify and distribute this software and its
- # documentation is hereby granted for non-commercial purposes only
- # provided that this copyright notice appears in all copies and in
- # supporting documentation.
- #
- # Permission is also granted to Internet Service Providers and others
- # entities to use the software for internal purposes.
- #
- # The distribution, modification or sale of a product which uses or is
- # based on the software, in whole or in part, for commercial purposes or
- # benefits requires specific, additional permission from:
- #
- #  Office of Technology Transfer
- #  Carnegie Mellon University
- #  5000 Forbes Avenue
- #  Pittsburgh, PA  15213-3890
- #  (412) 268-4387, fax: (412) 268-7395
- #  tech-transfer@andrew.cmu.edu
- *
- */
+/* $Id: reconstruct.c,v 1.36 1998/06/04 20:15:50 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -122,15 +118,15 @@ char **argv;
     if (optind == argc) {
 	if (!rflag) usage();
 	strcpy(buf, "*");
-	mboxlist_findall(buf, 1, 0, 0, do_reconstruct);
+	mboxlist_findall(buf, 1, 0, 0, do_reconstruct, NULL);
     }
 
     for (i = optind; i < argc; i++) {
 	if (rflag) {
 	    strcpy(buf, argv[i]);
 	    strcat(buf, ".*");
-	    mboxlist_findall(argv[i], 1, 0, 0, do_reconstruct);
-	    mboxlist_findall(buf, 1, 0, 0, do_reconstruct);
+	    mboxlist_findall(argv[i], 1, 0, 0, do_reconstruct, NULL);
+	    mboxlist_findall(buf, 1, 0, 0, do_reconstruct, NULL);
 	}
 	else {
 	    do_reconstruct(argv[i], 0, 0);
@@ -159,10 +155,11 @@ char *a, *b;
  * mboxlist_findall() callback function to reconstruct a mailbox
  */
 int
-do_reconstruct(name, matchlen, maycreate)
+do_reconstruct(name, matchlen, maycreate, rock)
 char *name;
 int matchlen;
 int maycreate;
+void* rock;
 {
     int r;
 
