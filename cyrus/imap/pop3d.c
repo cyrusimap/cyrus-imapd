@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.159 2004/06/29 15:53:19 ken3 Exp $
+ * $Id: pop3d.c,v 1.160 2004/06/29 16:22:31 ken3 Exp $
  */
 #include <config.h>
 
@@ -1417,6 +1417,7 @@ int openinbox(void)
 	    prot_printf(popd_out,
 			"-ERR [SYS/PERM] Unable to open maildrop: %s\r\n",
 			error_message(r));
+	    if (doclose) mailbox_close(&mboxstruct);
 	    goto fail;
 	}
 
