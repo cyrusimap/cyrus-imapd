@@ -1,4 +1,4 @@
-$Id: README,v 1.3 2000/05/28 19:21:37 wcw Exp $
+$Id: README,v 1.4 2000/05/28 19:23:25 wcw Exp $
 
 This is the Carnegie Mellon University Cyrus IMAP Server.
 
@@ -15,7 +15,8 @@ However, no further development work will progress on 1.6 so we
 encourage you to work with the Cyrus 2.0 code wherever possible. 
 
 If you continue to install this PLEASE be sure to read the
-documentation as a number of items have changed. 
+documentation as a number of items have changed.  Please also refer
+to docs/bugs.html for any outstanding bugs with the current release. 
 
 ----------------------------------------------------------------------
 * For the real README file, please see doc/readme.html.
