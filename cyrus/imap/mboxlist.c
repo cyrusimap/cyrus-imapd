@@ -1875,7 +1875,7 @@ mboxlist_reopen()
     if (listfd != -1) {
 	if (stat(listfname, &sbuf) == -1) {
 	    syslog(LOG_ERR, "IOERROR: stat on %s: %m", listfname);
-	    fatal("can't stat mailbox list", EX_OSFILE);
+	    fatal("can't stat mailboxes file", EX_OSFILE);
 	}
 	if (sbuf.st_ino == list_ino) return;
 	close(listfd);
@@ -1885,12 +1885,12 @@ mboxlist_reopen()
     listfd = open(listfname, O_RDWR, 0666);
     if (listfd == -1) {
 	syslog(LOG_ERR, "IOERROR: opening %s: %m", listfname);
-	fatal("can't read mailbox list", EX_OSFILE);
+	fatal("can't read mailboxes file", EX_OSFILE);
     }
 	
     if (fstat(listfd, &sbuf) == -1) {
 	syslog(LOG_ERR, "IOERROR: fstat on %s: %m", listfname);
-	fatal("can't fstat mailbox list", EX_OSFILE);
+	fatal("can't fstat mailboxes file", EX_OSFILE);
     }
     list_ino = sbuf.st_ino;
 
