@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.1.2.4 2005/03/04 02:59:56 ken3 Exp $
+ * $Id: sync_server.c,v 1.1.2.5 2005/03/04 19:26:49 ken3 Exp $
  */
 
 #include <config.h>
@@ -145,7 +145,7 @@ static void cmd_user(struct sync_user_lock *user_lock, char *user);
 static void cmd_enduser(struct sync_user_lock *user_lock,
 			struct mailbox **mailboxp, int restart);
 #endif
-static void cmd_select(struct mailbox **mailboxp, char *name);
+static void cmd_select(struct mailbox **mailboxp, char *name, int restart);
 static void cmd_reserve(char *mailbox_name,
 			struct sync_message_list *message_list);
 static void cmd_quota_work(char *quotaroot);
@@ -898,7 +898,20 @@ static void cmdloop(void)
 		if (c == EOF) goto missingargs;
 		if (c == '\r') c = prot_getc(sync_in);
 		if (c != '\n') goto extraargs;
-                cmd_select(&mailbox, arg1.s);
+
+                if (sync_message_list_need_restart(message_list)) {
+                    int hash_size = message_list->hash_size;
+                    int file_max  = message_list->file_max;
+
+                    /* Reset message list */
+                    sync_message_list_free(&message_list);
+                    message_list
+                        = sync_message_list_create(hash_size, file_max);
+
+		    cmd_select(&mailbox, arg1.s, 1);
+		} else {
+		    cmd_select(&mailbox, arg1.s, 0);
+		}
                 continue;
             } else if (!strcmp(cmd.s, "Status")) {
 		if (c == '\r') c = prot_getc(sync_in);
@@ -1348,11 +1361,16 @@ static void cmd_enduser(struct sync_user_lock *user_lock,
 #endif
 }
 #endif
-static void cmd_select(struct mailbox **mailboxp, char *name)
+static void cmd_select(struct mailbox **mailboxp, char *name, int restart)
 {
     static struct mailbox select_mailbox;
     struct mailbox *mailbox = *mailboxp;
     int r = 0;
+
+    if (restart) {
+	syslog(LOG_INFO, "[RESTART]");
+	prot_printf(sync_out, "* [RESTART]\r\n");
+    }
 
     if (mailbox) {
         mailbox_close(mailbox);

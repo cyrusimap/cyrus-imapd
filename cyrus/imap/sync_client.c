@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.6 2005/03/04 02:59:55 ken3 Exp $
+ * $Id: sync_client.c,v 1.1.2.7 2005/03/04 19:26:48 ken3 Exp $
  */
 
 #include <config.h>
@@ -585,7 +585,8 @@ static int user_reset(char *user)
 static int folder_select(char *name, char *myuniqueid,
 			 unsigned long *lastuidp)
 {
-    int r, c;
+    int r, c, unsolicited;
+    static struct buf token;
     static struct buf uniqueid;
     static struct buf lastuid;
 
@@ -594,7 +595,32 @@ static int folder_select(char *name, char *myuniqueid,
     prot_printf(toserver, "\r\n"); 
     prot_flush(toserver);
 
-    r = sync_parse_code("SELECT", fromserver, SYNC_PARSE_NOEAT_OKLINE, NULL);
+    r = sync_parse_code("SELECT", fromserver, SYNC_PARSE_NOEAT_OKLINE,
+			&unsolicited);
+
+    while (!r && unsolicited) {
+	if ((c = getword(fromserver, &token)) == EOF) {
+	    eatline(fromserver, c);
+	    syslog(LOG_ERR, "Garbage on unsolicited SELECT response");
+	    return(IMAP_PROTOCOL_ERROR);
+	}
+	eatline(fromserver, c);
+
+	/* Clear out msgid_on_server list if server restarted */
+	if (!strcmp(token.s, "[RESTART]")) {
+	    int hash_size = msgid_onserver->hash_size;
+
+	    sync_msgid_list_free(&msgid_onserver);
+	    msgid_onserver = sync_msgid_list_create(hash_size);
+	}
+	else {
+	    syslog(LOG_ERR, "Unknown unsolicited SELECT response");
+	    return(IMAP_PROTOCOL_ERROR);
+	}
+
+	r = sync_parse_code("SELECT", fromserver, SYNC_PARSE_NOEAT_OKLINE,
+			    &unsolicited);
+    }
     if (r) return(r);
     
     if ((c = getword(fromserver, &uniqueid)) != ' ') {
@@ -2785,7 +2811,8 @@ int do_daemon_work(const char *sync_log_file, const char *sync_shutdown_file,
 }
 
 void do_daemon(const char *sync_log_file, const char *sync_shutdown_file,
-	       unsigned long timeout, unsigned long min_delta)
+	       unsigned long timeout, unsigned long min_delta,
+	       struct backend *be, sasl_callback_t *cb)
 {
     int r = 0;
     pid_t pid;
@@ -2803,6 +2830,22 @@ void do_daemon(const char *sync_log_file, const char *sync_shutdown_file,
             fatal("fork failed", EC_SOFTWARE);
 
         if (pid == 0) {
+	    if (be->sock == -1) {
+		/* Reopen up connection to server */
+		be = backend_connect(be, be->hostname,
+				     &protocol[PROTOCOL_CSYNC],
+				     "", cb, NULL);
+		if (!be) {
+		    fprintf(stderr, "Can not connect to server '%s'\n",
+			    be->hostname);
+		    _exit(1);
+		}
+
+		/* XXX  hack.  should just pass 'be' around */
+		fromserver = be->in;
+		toserver = be->out;
+	    }
+
             r = do_daemon_work(sync_log_file, sync_shutdown_file,
                                timeout, min_delta, &restart);
 
@@ -2812,6 +2855,7 @@ void do_daemon(const char *sync_log_file, const char *sync_shutdown_file,
         }
         if (waitpid(pid, &status, 0) < 0)
             fatal("waitpid failed", EC_SOFTWARE);
+	backend_disconnect(be);
     } while (WIFEXITED(status) && (WEXITSTATUS(status) == EX_TEMPFAIL));
 }
 
@@ -3079,7 +3123,7 @@ int main(int argc, char **argv)
             }
         }
     } else if (repeat)
-        do_daemon(sync_log_file, sync_shutdown_file, timeout, min_delta);
+        do_daemon(sync_log_file, sync_shutdown_file, timeout, min_delta, be, cb);
     else if (verbose)
         fprintf(stderr, "Nothing to do!\n");
 
