@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.43 2001/12/12 02:20:58 rjs3 Exp $
+ * $Id: lmtpengine.c,v 1.44 2001/12/12 04:20:21 rjs3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1103,6 +1103,7 @@ void lmtpmode(struct lmtp_func *func,
 
     sasl_ssf_t ssf;
     char *auth_id;
+    int plaintext_result;
 
     int secflags = 0;
     sasl_security_properties_t *secprops = NULL;
@@ -1184,7 +1185,8 @@ void lmtpmode(struct lmtp_func *func,
     /* set my allowable security properties */
     /* ANONYMOUS is silly because we allow that anyway */
     secflags = SASL_SEC_NOANONYMOUS;
-    if (!config_getswitch("allowplaintext", 1)) {
+    plaintext_result = config_getswitch("allowplaintext",1);
+    if (!config_getswitch("lmtp_allowplaintext", plaintext_result)) {
 	secflags |= SASL_SEC_NOPLAINTEXT;
     }
     secprops = mysasl_secprops(secflags);
