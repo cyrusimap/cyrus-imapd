@@ -57,7 +57,7 @@ struct quotaentry {
     unsigned long newused;
 };
 
-#define QUOTAGROW 10 /* XXX 300 */
+#define QUOTAGROW 300
 
 struct quotaentry zeroquotaentry;
 struct quotaentry *quota;
@@ -118,8 +118,6 @@ char *a, *b;
 		      ((struct quotaentry *)b)->quota.root);
 }
 
-#define QUOTA_GROW 10 /* XXX 300 */
-
 /*
  * Build the list of quota roots in 'quota'
  */
@@ -161,7 +159,7 @@ int nroots;
 	if (i > 4 && !strcmp(dirent->d_name+i-4, ".NEW")) continue;
 
 	if (quota_num == quota_alloc) {
-	    quota_alloc += QUOTA_GROW;
+	    quota_alloc += QUOTAGROW;
 	    quota = (struct quotaentry *)
 	      xrealloc((char *)quota, quota_alloc * sizeof(struct quotaentry));
 	}

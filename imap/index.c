@@ -1941,7 +1941,7 @@ int size;
 /*
  * Helper function to set up arguments to append_copy()
  */
-#define COPYARGSGROW 5 /* XXX 30 */
+#define COPYARGSGROW 30
 static int
 index_copysetup(mailbox, msgno, rock)
 struct mailbox *mailbox;

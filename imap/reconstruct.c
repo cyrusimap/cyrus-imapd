@@ -106,7 +106,7 @@ char *a, *b;
     return *(unsigned long *)a - *(unsigned long *)b;
 }
 
-#define UID_GROW 10 /* XXX 300 */
+#define UIDGROW 300
 
 int
 do_reconstruct(name, matchlen, maycreate)
@@ -243,9 +243,9 @@ char *name;
     fwrite(buf, 1, sizeof(bit32), newcache);
 
     /* Find all message files in directory */
-    uid = (unsigned long *) xmalloc(UID_GROW * sizeof(unsigned long));
+    uid = (unsigned long *) xmalloc(UIDGROW * sizeof(unsigned long));
     uid_num = 0;
-    uid_alloc = UID_GROW;
+    uid_alloc = UIDGROW;
     dirp = opendir(".");
     if (!dirp) {
 	fclose(newindex);
@@ -257,7 +257,7 @@ char *name;
     while (dirent = readdir(dirp)) {
 	if (!isdigit(dirent->d_name[0]) || dirent->d_name[0] == '0') continue;
 	if (uid_num == uid_alloc) {
-	    uid_alloc += UID_GROW;
+	    uid_alloc += UIDGROW;
 	    uid = (unsigned long *)
 	      xrealloc((char *)uid, uid_alloc * sizeof(unsigned long));
 	}

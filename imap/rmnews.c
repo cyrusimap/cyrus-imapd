@@ -51,7 +51,7 @@ struct uidlist {
     unsigned int *list;
     int first, last, size;
 };
-#define GROWUID 10 /* XXX 500 */
+#define UIDGROW 500
 
 int expungeuidlist();
 int compuint();
@@ -122,7 +122,7 @@ char **argv;
 		uidlist.first = uidlist.last = 0;
 	    }
 	    if (uidlist.last == uidlist.size) {
-		uidlist.size += GROWUID;
+		uidlist.size += UIDGROW;
 		uidlist.list = (unsigned int *)
 		  xrealloc((char *)uidlist.list,
 			   uidlist.size * sizeof(unsigned int));
@@ -279,7 +279,6 @@ int r;
 	return EX_DATAERR;
 
     case IMAP_MAILBOX_NONEXISTENT:
-	/* XXX Might have been moved to other server */
 	return EX_UNAVAILABLE;
     }
 	
