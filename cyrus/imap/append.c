@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.97 2003/04/09 17:49:19 rjs3 Exp $
+ * $Id: append.c,v 1.98 2003/04/15 15:33:56 rjs3 Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -220,7 +220,7 @@ int append_setup(struct appendstate *as, const char *name,
     }
 
     if (userid) {
-	strcpy(as->userid, userid);
+	strlcpy(as->userid, userid, sizeof(as->userid));
     } else {
 	as->userid[0] = '\0';
     }
@@ -343,8 +343,8 @@ int append_abort(struct appendstate *as)
 	char fname[MAX_MAILBOX_PATH+1];
 
 	/* Create message file */
-	strcpy(fname, as->m.path);
-	strcat(fname, "/");
+	strlcpy(fname, as->m.path, sizeof(fname));
+	strlcat(fname, "/", sizeof(fname));
 	mailbox_message_get_fname(&as->m, uid, fname + strlen(fname),
 				  sizeof(fname) - strlen(fname));
 	if (unlink(fname) < 0) {
@@ -397,16 +397,16 @@ FILE *append_newstage(const char *mailboxname, time_t internaldate,
     assert(stagep != NULL);
 
     stage = xmalloc(sizeof(struct stagemsg));
-    stage->parts = xzmalloc(5 * MAX_MAILBOX_PATH * sizeof(char));
-    stage->partend = stage->parts + 5 * MAX_MAILBOX_PATH * sizeof(char);
+    stage->parts = xzmalloc(5 * (MAX_MAILBOX_PATH+1) * sizeof(char));
+    stage->partend = stage->parts + 5 * (MAX_MAILBOX_PATH+1) * sizeof(char);
 
     snprintf(stage->fname, sizeof(stage->fname), "%d-%d",
 	     (int) getpid(), (int) internaldate);
 
     /* xxx check errors */
     mboxlist_findstage(mailboxname, stagedir, sizeof(stagedir));
-    strcpy(stagefile, stagedir);
-    strcat(stagefile, stage->fname);
+    strlcpy(stagefile, stagedir, sizeof(stagefile));
+    strlcat(stagefile, stage->fname, sizeof(stagefile));
 
     /* create this file and put it into stage->parts[0] */
     f = fopen(stagefile, "w+");
@@ -427,7 +427,7 @@ FILE *append_newstage(const char *mailboxname, time_t internaldate,
 	return NULL;
     }
 
-    strcpy(stage->parts, stagefile);
+    strlcpy(stage->parts, stagefile, MAX_MAILBOX_PATH+1);
     /* make sure there's a NUL NUL at the end */
     stage->parts[strlen(stagefile) + 1] = '\0';
 
@@ -465,7 +465,7 @@ int append_fromstage(struct appendstate *as,
 
     /* xxx check errors */
     mboxlist_findstage(mailbox->name, stagefile, sizeof(stagefile));
-    strcat(stagefile, stage->fname);
+    strlcat(stagefile, stage->fname, sizeof(stagefile));
     sflen = strlen(stagefile);
 
     p = stage->parts;
@@ -539,8 +539,8 @@ int append_fromstage(struct appendstate *as,
 
     /* Create message file */
     as->nummsg++;
-    strcpy(fname, mailbox->path);
-    strcat(fname, "/");
+    strlcpy(fname, mailbox->path, sizeof(fname));
+    strlcat(fname, "/", sizeof(fname));
     mailbox_message_get_fname(mailbox, message_index.uid, 
 			      fname + strlen(fname),
 			      sizeof(fname) - strlen(fname));
@@ -687,8 +687,8 @@ int append_fromstream(struct appendstate *as,
     lseek(mailbox->cache_fd, 0L, SEEK_END);
 
     /* Create message file */
-    strcpy(fname, mailbox->path);
-    strcat(fname, "/");
+    strlcpy(fname, mailbox->path, sizeof(fname));
+    strlcat(fname, "/", sizeof(fname));
     mailbox_message_get_fname(mailbox, message_index.uid, 
 			      fname + strlen(fname),
 			      sizeof(fname) - strlen(fname));
@@ -822,8 +822,8 @@ int append_copy(struct mailbox *mailbox,
 	message_index[msg].internaldate = copymsg[msg].internaldate;
 	as->nummsg++;
 
-	strcpy(fname, append_mailbox->path);
-	strcat(fname, "/");
+	strlcpy(fname, append_mailbox->path, sizeof(fname));
+	strlcat(fname, "/", sizeof(fname));
 	mailbox_message_get_fname(append_mailbox, message_index[msg].uid, 
 				  fname + strlen(fname),
 				  sizeof(fname) - strlen(fname));
@@ -1025,7 +1025,7 @@ static int append_addseen(struct mailbox *mailbox,
     char *seenuids;
     int last_seen;
     char *tail, *p;
-    int oldlen;
+    int oldlen, newlen;
     int start;
     
     /* what's the first uid in our new list? */
@@ -1038,7 +1038,8 @@ static int append_addseen(struct mailbox *mailbox,
     if (r) return r;
     
     oldlen = strlen(seenuids);
-    seenuids = xrealloc(seenuids, oldlen + strlen(msgrange) + 10);
+    newlen = oldlen + strlen(msgrange) + 10;
+    seenuids = xrealloc(seenuids, newlen);
 
     tail = seenuids + oldlen;
     /* Scan back to last uid */
@@ -1051,7 +1052,7 @@ static int append_addseen(struct mailbox *mailbox,
     else {
 	if (p > seenuids) *p++ = ',';
     }
-    strcpy(p, msgrange);
+    strlcpy(p, msgrange, newlen-(p-seenuids+1));
 
     r = seen_write(seendb, last_read, last_uid, time(NULL), seenuids);
     seen_close(seendb);
