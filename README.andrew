@@ -33,7 +33,6 @@ To make a release:
 - make sure the version number is correct (Makefile.in, imap/version.h)
 - add upgrade notes to doc/install-upgrade.html
 - add changes to doc/changes.html
-- rebuild the doc/text directory (cd doc/text ; make all)
 - commit to repository
 - make dist
 
