@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.142 2003/03/11 21:40:59 rjs3 Exp $
+ $Id: mailbox.c,v 1.143 2003/05/06 20:59:48 rjs3 Exp $
  
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -1207,7 +1207,7 @@ int mailbox_write_index_header(struct mailbox *mailbox)
     }
 #endif
 
-    *((bit32 *)(buf+OFFSET_GENERATION_NO)) = mailbox->generation_no;
+    *((bit32 *)(buf+OFFSET_GENERATION_NO)) = htonl(mailbox->generation_no);
     *((bit32 *)(buf+OFFSET_FORMAT)) = htonl(mailbox->format);
     *((bit32 *)(buf+OFFSET_MINOR_VERSION)) = htonl(mailbox->minor_version);
     *((bit32 *)(buf+OFFSET_START_OFFSET)) = htonl(mailbox->start_offset);
@@ -1527,7 +1527,7 @@ static int mailbox_upgrade_index(struct mailbox *mailbox)
     mailbox->start_offset = INDEX_HEADER_SIZE;
 
     /* Write the new index header */ 
-    *((bit32 *)(buf+OFFSET_GENERATION_NO)) = mailbox->generation_no;
+    *((bit32 *)(buf+OFFSET_GENERATION_NO)) = htonl(mailbox->generation_no);
     *((bit32 *)(buf+OFFSET_FORMAT)) = htonl(mailbox->format);
     *((bit32 *)(buf+OFFSET_MINOR_VERSION)) = htonl(mailbox->minor_version);
     *((bit32 *)(buf+OFFSET_START_OFFSET)) = htonl(mailbox->start_offset);
