@@ -314,7 +314,7 @@ static int deliver_msg(char *return_path, char *authuser,
 
     /* connect */
     r = lmtp_connect(sockaddr, NULL, &conn);
-    if (!r) {
+    if (r) {
 	just_exit("couldn't connect to lmtpd");
     }
 
