@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.57 2002/05/07 18:27:43 rjs3 Exp $
+ * $Id: mupdate.c,v 1.58 2002/05/24 16:07:23 ken3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -925,7 +925,7 @@ void cmd_authenticate(struct conn *C,
 	}
 
 	len = strlen(buf);
-	in = xmalloc(len);
+	in = xmalloc(len+1);
 	r = sasl_decode64(buf, len, in, len, &inlen);
 	if(r != SASL_OK) {
 	    prot_printf(C->pout, "%s NO \"cannot base64 decode\"\r\n",tag);
