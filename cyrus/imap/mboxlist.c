@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.41 2003/04/24 23:31:18 ken3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.42 2003/04/30 20:30:25 ken3 Exp $
  */
 
 #include <config.h>
@@ -1163,7 +1163,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     } else {
 	DB->commit(mbdb, tid);
 	tid = NULL;
-	newreserved = 1;
+	if(!partitionmove) newreserved = 1;
     }
 
     /* 4. Open mupdate connection and reserve new name (if needed) */ 
