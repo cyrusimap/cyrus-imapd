@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.81.2.10 2004/08/09 18:51:21 ken3 Exp $ */
+/* $Id: reconstruct.c,v 1.81.2.11 2004/09/26 18:30:28 ken3 Exp $ */
 
 #include <config.h>
 
@@ -780,7 +780,7 @@ int reconstruct(char *name, struct discovered *found)
 #ifdef HAVE_LONG_LONG_INT
     *((bit64 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) = htonll(new_quota);
 #else
-    *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED32)) = htonl(new_quota);
+    *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) = htonl(new_quota);
 #endif
 
     *((bit32 *)(buf+OFFSET_POP3_LAST_LOGIN)) = htonl(mailbox.pop3_last_login);
