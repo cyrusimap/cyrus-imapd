@@ -215,6 +215,14 @@ if test "$WITH_AUTH" = krb_pts; then
 	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} ptclient"
 	EXTRA_OUTPUT="${EXTRA_OUTPUT} ptclient/Makefile"
 	AC_DEFINE_UNQUOTED(CYRUS_PATH,"$cyrus_prefix")
+	AFSLIBS="/usr/local/lib/afs/libkauth.a /usr/local/lib/afs/libprot.a  /usr/local/lib/afs/libauth.a /usr/local/lib/afs/libsys.a /usr/local/lib/librxkad.a /usr/local/lib/librx.a /usr/local/lib/libubik.a  /usr/local/lib/liblwp.a /usr/local/lib/afs/util.a"
+	if test -f /usr/local/lib/afs/libaudit.a; then
+		AFSLIBS="$AFSLIBS /usr/local/lib/afs/libaudit.a"
+	fi
+	if test -f /usr/ucblib/libucb.a; then
+		AFSLIBS="$AFSLIBS -R/usr/ucblib -L/usr/ucblib -lucb"
+	fi
+	AC_SUBST(AFSLIBS)	
 fi
 
 TCL_SUBDIRS="cyradm"

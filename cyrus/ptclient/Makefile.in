@@ -36,9 +36,9 @@ RANLIB = @RANLIB@
 
 DEFS = @DEFS@
 CPPFLAGS = -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@ 
-AFSLIBS =/usr/local/lib/afs/libprot.a /usr/local/lib/libubik.a /usr/local/lib/afs/libauth.a /usr/local/lib/afs/libsys.a /usr/local/lib/librxkad.a /usr/local/lib/librx.a /usr/local/lib/afs/libaudit.a /usr/local/lib/liblwp.a /usr/local/lib/afs/util.a /usr/local/lib/libcom_err.a
+AFSLIBS = @AFSLIBS@
 LIBS = @LIBS@ 
-DEPLIBS = ../lib/libcyrus.a @DEPLIBS@
+DEPLIBS = ../et/libcom_err.a ../lib/libcyrus.a @DEPLIBS@
 
 CFLAGS = @CFLAGS@
 LDFLAGS = @LDFLAGS@
@@ -52,15 +52,15 @@ cyrus_prefix = @cyrus_prefix@
 all: ptloader ptexpire # pttest
 
 install:
-	$(INSTALL) -s -m 755 ptloader  $(DESTDIR)$(cyrus_prefix)/etc
-	$(INSTALL) -s -m 755 ptexpire  $(DESTDIR)$(cyrus_prefix)/etc
+	$(INSTALL) -s -m 755 ptloader  $(DESTDIR)$(cyrus_prefix)/bin
+	$(INSTALL) -s -m 755 ptexpire  $(DESTDIR)$(cyrus_prefix)/bin
 
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
 
 ptloader: ptloader.o $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o $@ ptloader.o $(DEPLIBS) $(AFSLIBS) $(LIBS)
+	$(CC) $(LDFLAGS) -o $@ ptloader.o $(AFSLIBS) $(DEPLIBS) $(LIBS)
 
 ptexpire: ptexpire.o $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o $@ ptexpire.o $(DEPLIBS) $(LIBS)

@@ -4,4 +4,4 @@
 #
 
 MAKE=gmake
-LNCOMMAND="${SRCDIR}/configure --with-inn=/usr/news --enable-amssync --enable-cmulocal --with-cyrus-user=$USER --with-news-group=staff"
+LNCOMMAND="${SRCDIR}/configure --with-auth=krb_pts --with-inn=/usr/news --enable-amssync --enable-cmulocal --with-cyrus-user=$USER --with-news-group=staff"

@@ -25,7 +25,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
  * SOFTWARE.
  *
- */
+ */ 
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -40,12 +40,15 @@
 
 #define DBFIL "/var/ptclient/ptscache.db"
 #define DBLOCK "/var/ptclient/ptcache.lock"
+#define DBSOCKET "/var/ptclient/ptsock"
+
+
 #define PTCLIENT  "ptloader"
 
 typedef struct {
-  time_t cached;
-  char user[PR_MAXNAMELEN];
-  int ngroups;
+    time_t cached;
+    char user[PR_MAXNAMELEN];
+    int ngroups;
 } ptluser;
 
 
@@ -60,18 +63,21 @@ typedef struct {
 extern int errno;
 
 /* Do not make this unsigned. you'll lose! (db won't open the file) */
-static int32_t hashfn(const void *data, size_t size) {
-    int32_t ret,val;
+static int32_t hashfn(data, size)
+const void *data;
+size_t size;
+{
+    int32_t ret, val;
     int i;
     ret=0;
-    if (size %4) {
+    if (size % 4) {
         syslog(LOG_WARNING,
              "Database key size %d not multiple of 4; continuing anyway",
                size);
     }
-    for (i=0;i*4<size;i++) {
-        memcpy(&val,data+4*i,4);
-        ret=ret^val;
+    for (i=0; i*4<size; i++) {
+        memcpy(&val, data+4*i, 4);
+        ret = ret ^ val;
     }
     return ret;
 }

@@ -1,6 +1,6 @@
 /* auth_krb_pts.c -- Kerberos authorization with AFS PTServer groups
  *
- *	(C) Copyright 1994 by Carnegie Mellon University
+ *	(C) Copyright 1995 by Carnegie Mellon University
  *
  *                      All Rights Reserved
  *
@@ -28,9 +28,13 @@
  */
 
 #include <krb.h>
-#include <sys/wait.h>
+#include <stdio.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <sys/uio.h>
 #include "auth_krb_pts.h"
-
 #ifndef KRB_MAPNAME
 #define KRB_MAPNAME "/etc/krb.equiv"
 #endif
@@ -40,8 +44,6 @@ static char auth_name[PR_MAXNAMELEN] = "anonymous";
 static char auth_aname[ANAME_SZ] = "anonymous";
 static char auth_inst[INST_SZ] = ""; 
 static char auth_realm[REALM_SZ] = "";
-
-static char ptclient_path[4096];
 
 /*
   cdecl> declare x as pointer to array of array 64 of char
@@ -281,7 +283,10 @@ char *identifier;
  */
 
 
-int auth_setid(char *identifier, char *cacheid) {
+int auth_setid(identifier, cacheid)
+char *identifier;
+char *cacheid;
+{
     DBT key, dataheader,datalist;
     char keydata[PR_MAXNAMELEN + 4]; /* or 20, whichever is greater */
     int fd,rc,xpid;
@@ -289,12 +294,19 @@ int auth_setid(char *identifier, char *cacheid) {
     HASHINFO info;
     ptluser us;
     int forktries = 0;
-
+    int s;
+    struct sockaddr_un srvaddr;
+    int r;
+    struct iovec iov[10];
+    static char response[1024];
+    int start, n;
+    
     if (auth_ngroups) {
-      free(auth_groups);
-      auth_groups=NULL;
-      auth_ngroups=0;
+	free(auth_groups);
+	auth_groups=NULL;
+	auth_ngroups=0;
     }
+    
     identifier = auth_canonifyid(identifier);
     if (!identifier) return -1;
     auth_aname[0] = auth_inst[0] = auth_realm[0] = '\0';
@@ -318,68 +330,80 @@ int auth_setid(char *identifier, char *cacheid) {
         syslog(LOG_ERR, "IOERROR: locking lock file %s: %m", DBLOCK);
         return -1;
     }
-    ptdb=dbopen(DBFIL,O_RDONLY,0,DB_HASH,&info);
-    if (!ptdb)
-      if (errno == ENOENT) {
-          /* Hopefully, this should prevent two different processes from trying
-             to crete the database at the same time */
-          ptdb=dbopen(DBFIL,O_CREAT|O_RDWR|O_EXCL,0644,DB_HASH,&info);
-          if (!ptdb && errno == EEXIST) {
-              ptdb=dbopen(DBFIL,O_RDONLY,0,DB_HASH,&info);
-              if (!ptdb) {
-                  syslog(LOG_ERR, "IOERROR: opening database %s: %m", DBFIL);
-                  close(fd);
-                  return -1;
-              }
-          } else if (!ptdb) {
-              syslog(LOG_ERR, "IOERROR: creating database %s: %m", DBFIL);
-              return -1;
-          } else {
-              /* Write a record to the database, so that the database header
-                 will be written out */
-              memset(key.data,0,key.size);
-              strcpy(key.data,"DUMMYREC");
-              dataheader.size=5;
-              dataheader.data="NULL";
-              if (PUT(ptdb,&key,&dataheader,0) < 0) {
-                  syslog(LOG_ERR, "IOERROR: initializing database %s: %m",
-                         DBFIL); 
-                  return -1;
-              }
-              /* close and reopen the database in read-only mode */
-              if (CLOSE(ptdb) <0 ) {
-                  syslog(LOG_ERR, "IOERROR: initializing database %s: %m",
-                         DBFIL); 
-                  return -1;
-              }
-              ptdb=dbopen(DBFIL,O_RDONLY,0644,DB_HASH,&info);
-              if (!ptdb) {
-                  syslog(LOG_ERR, "IOERROR: reopening new database %s: %m",
-                         DBFIL); 
-                  return -1;
-              }
-          }          
-      } else {
-          syslog(LOG_ERR, "IOERROR: opening database %s: %m", DBFIL);
-          return -1;
-      }
+    ptdb=dbopen(DBFIL, O_RDONLY, 0, DB_HASH, &info);
+    if (!ptdb) {
+	if (errno == ENOENT) {
+	    /*
+	     * Hopefully, this should prevent two different processes from
+	     * trying to create the database at the same time
+	     */
+	    ptdb=dbopen(DBFIL, O_CREAT|O_RDWR|O_EXCL, 0644, DB_HASH, &info);
+	    if (!ptdb && errno == EEXIST) {
+		ptdb=dbopen(DBFIL,O_RDONLY,0,DB_HASH,&info);
+		if (!ptdb) {
+		    syslog(LOG_ERR, "IOERROR: opening database %s: %m", DBFIL);
+		    close(fd);
+		    return -1;
+		}
+	    }
+	    else if (!ptdb) {
+		syslog(LOG_ERR, "IOERROR: creating database %s: %m", DBFIL);
+		return -1;
+	    }
+	    else {
+		/*
+		 * Write a record to the database, so that the database
+		 * header will be written out
+		 */
+		memset(key.data, 0, key.size);
+		strcpy(key.data, "DUMMYREC");
+		dataheader.size = 5;
+		dataheader.data = "NULL";
+		if (PUT(ptdb, &key, &dataheader, 0) < 0) {
+		    syslog(LOG_ERR, "IOERROR: initializing database %s: %m",
+			   DBFIL); 
+		    return -1;
+		}
+		/* close and reopen the database in read-only mode */
+		if (CLOSE(ptdb) < 0) {
+		    syslog(LOG_ERR, "IOERROR: initializing database %s: %m",
+			   DBFIL); 
+		    return -1;
+		}
+		ptdb=dbopen(DBFIL, O_RDONLY, 0644, DB_HASH, &info);
+		if (!ptdb) {
+		    syslog(LOG_ERR, "IOERROR: reopening new database %s: %m",
+			   DBFIL); 
+		    return -1;
+		}
+	    }          
+	}
+	else {
+	    syslog(LOG_ERR, "IOERROR: opening database %s: %m", DBFIL);
+	    return -1;
+	}
+    }
     if (cacheid) {
-        memset(key.data,0,key.size);
-        memcpy(key.data,cacheid,16);
-        key.size=20;
-    } else {
-        key.size=PR_MAXNAMELEN + 4;
-        if ((strlen(identifier) + 5 )  < PR_MAXNAMELEN)
-            /* round length up to nearest multiple of 4
-               so that the the hash function works properly */
+        memset(key.data, 0, key.size);
+        memcpy(key.data, cacheid, 16);
+        key.size = 20;
+    }
+    else {
+        key.size = PR_MAXNAMELEN + 4;
+        if ((strlen(identifier) + 5 )  < PR_MAXNAMELEN) {
+            /*
+	     * round length up to nearest multiple of 4
+	     * so that the the hash function works properly
+	     */
             key.size=(((strlen(identifier) + 3) >> 2) << 2) + 4;
-        memset(key.data,0,key.size);
-        strncpy(key.data,identifier,key.size-4);
+	}
+        memset(key.data, 0, key.size);
+        strncpy(key.data, identifier, key.size-4);
     }
     /* Fetch and process the header record for the user, if any */
-    keydata[key.size-4]='H';
-    rc=GET(ptdb,&key,&dataheader,0);
-    keydata[key.size-4]=0;
+    keydata[key.size-4] = 'H';
+    rc=GET(ptdb, &key, &dataheader, 0);
+    keydata[key.size-4] = 0;
     if (rc < 0) {
         syslog(LOG_ERR, "IOERROR: reading database %s: %m", DBFIL);
         CLOSE(ptdb);
@@ -393,84 +417,68 @@ int auth_setid(char *identifier, char *cacheid) {
             close(fd);
             return -1;
         }
-        /* make sure the record is alignes */
-        memcpy(&us,dataheader.data,sizeof(ptluser));
+        /* make sure the record is aligned */
+        memcpy(&us, dataheader.data, sizeof(ptluser));
     }
     if (rc || (!cacheid && us.cached < time(0) - EXPIRE_TIME)) {
-        int pfd[2];
-        int pid;
-        /* There's no record for this user. close the database, and run the
-           external lookup client */
         CLOSE(ptdb);
         close(fd);
+        
+        s = socket(AF_UNIX, SOCK_STREAM, 0);
+        if (s == -1) return errno;
+        
+        memset((char *)&srvaddr, 0, sizeof(srvaddr));
+        srvaddr.sun_family = AF_UNIX;
+        strcpy(srvaddr.sun_path, DBSOCKET);
+        r = connect(s, (struct sockaddr *)&srvaddr, sizeof(srvaddr));
+        if (r == -1) {
+	    /* *reply = "cannot connect to ptloader server";*/
+            return errno;
+        }
+        
+        iov[0].iov_base = (char *)&key.size;
+        iov[0].iov_len = sizeof(key.size);
+        iov[1].iov_base = key.data;
+        iov[1].iov_len = key.size;
+        iov[2].iov_base = identifier;
+        iov[2].iov_len = PR_MAXNAMELEN;
+        retry_writev(s, &iov, 3);
+        
+        start = 0;
+        while (start < sizeof(response) - 1) {
+            n = read(s, response+start, sizeof(response) - 1 - start);
+            if (n < 1) break;
+            start += n;
+        }
+        
+        close(s);
+        
+        if (start <= 1 || strncmp(response, "OK", 2)) return -1;
+        /*  response[start] = '\0';
+         *reply = response; */
 
-	if (!ptclient_path[0]) {
-	    strcpy(ptclient_path, CYRUS_PATH);
-	    strcat(ptclient_path, "/bin/");
-	    strcat(ptclient_path, PTCLIENT);
-	}
-
-        if (pipe(pfd) < 0) {
-            syslog(LOG_ERR, "SYSERR: pipe: %m");
+        /* The database must be re-opened after external modifications, at
+           least in db 1.1.85 */
+        fd=open(DBLOCK, O_CREAT|O_TRUNC|O_RDWR, 0644);
+        if (fd == -1) {
+            syslog(LOG_ERR, "IOERROR: creating lock file %s: %m", DBLOCK);
+            return -1;
+        }
+        if (lock_shared(fd) < 0) {
+            syslog(LOG_ERR, "IOERROR: locking lock file %s: %m", DBLOCK);
+            return -1;
+        }
+        ptdb=dbopen(DBFIL, O_RDONLY, 0, DB_HASH, &info);
+        if (!ptdb) {
+            syslog(LOG_ERR, "IOERROR: opening database %s: %m", DBFIL);
+            close(fd);
             return -1;
         }
 
-	pid = -1;
-	while (pid == -1) {
-	    pid = vfork();
-	    if (pid < 0) {
-		if (errno == EAGAIN && ++forktries < 10) {
-		    sleep(1);
-		}
-		else {
-		    syslog(LOG_ERR, "SYSERR: vfork: %m");
-		    close(pfd[0]);
-		    close(pfd[1]);
-		    return -1;
-		}
-	    }
-	}
-
-        if (!pid) {
-            close(pfd[1]);
-            dup2(pfd[0],0);
-            execl(ptclient_path, PTCLIENT, 0);
-            syslog(LOG_ERR, "SYSERR: exec %s: %m", ptclient_path);
-            exit(-1);
-        } else {
-            /* The data passed along the pipe is as follows:
-               Size of the cache tag, followed by the tag itself (variable
-               length) then the username, in a fixed-length string */
-            write(pfd[1],&key.size,sizeof(size_t));
-            write(pfd[1],key.data,key.size);
-            write(pfd[1],identifier,PR_MAXNAMELEN);
-            close(pfd[1]);
-            xpid=waitpid(pid,&rc,0);
-            if (xpid==-1 || WEXITSTATUS(rc) != 0) {
-                return -1;
-            }
-            /* The database must be re-opened after external modifications, at
-               least in db 1.1.85 */
-            fd=open(DBLOCK, O_CREAT|O_TRUNC|O_RDWR, 0644);
-            if (fd == -1){
-                syslog(LOG_ERR, "IOERROR: creating lock file %s: %m", DBLOCK);
-                return -1;
-            }
-            if (lock_shared(fd) < 0) {
-                syslog(LOG_ERR, "IOERROR: locking lock file %s: %m", DBLOCK);
-                return -1;
-            }
-            ptdb=dbopen(DBFIL,O_RDONLY,0,DB_HASH,&info);
-            if (!ptdb) {
-                syslog(LOG_ERR, "IOERROR: opening database %s: %m", DBFIL);
-                close(fd);
-                return -1;
-            }
-        }
-        /* fetch the new header record and proces it */
-        keydata[key.size-4]='H';
-        rc=GET(ptdb,&key,&dataheader,0);
-        keydata[key.size-4]=0;
+        /* fetch the new header record and process it */
+        keydata[key.size-4] = 'H';
+        rc=GET(ptdb, &key, &dataheader, 0);
+        keydata[key.size-4] = 0;
         if (rc < 0) {
             syslog(LOG_ERR, "IOERROR: reading database: %m");             
             CLOSE(ptdb);
@@ -480,17 +488,19 @@ int auth_setid(char *identifier, char *cacheid) {
         /* The record still isn't there, even though the child claimed sucess
          */ 
         if (rc) {
-            syslog(LOG_ERR, "Sucessful %s run did not update database",
-                   PTCLIENT);
+            syslog(LOG_ERR, "ptloader did not add database record for %s",
+                   identifier);
             CLOSE(ptdb);
             close(fd);
             return -1;
         }
-        memcpy(&us,dataheader.data,dataheader.size);
+        memcpy(&us, dataheader.data, dataheader.size);
     }
-    /* We assume cache keys will be unique. This will catch duplicates if they
-       occur */
-    if (strcasecmp(identifier,us.user)) {
+    /*
+     * We assume cache keys will be unique. This will catch duplicates if they
+     * occur
+     */
+    if (strcasecmp(identifier, us.user)) {
         syslog(LOG_ERR,
                "Internal error: Fetched record for user %s was for user %s: key not unique",
                identifier, us.user);
@@ -498,10 +508,12 @@ int auth_setid(char *identifier, char *cacheid) {
         close(fd);      
         return -1;
     }
-    /* now get the actual data from the database. this will be a contiguous
-       char[][] of size PR_MAXNAMELEN * us.ngroups */
-    keydata[key.size-4]='D';
-    rc=GET(ptdb,&key,&datalist,0);
+    /*
+     * now get the actual data from the database. this will be a contiguous
+     * char[][] of size PR_MAXNAMELEN * us.ngroups
+     */
+    keydata[key.size-4] = 'D';
+    rc = GET(ptdb, &key, &datalist, 0);
     CLOSE(ptdb);    
     close(fd);
     if (rc < 0) {
@@ -513,11 +525,11 @@ int auth_setid(char *identifier, char *cacheid) {
                "Database %s inconsistent: header record found, data record missing", DBFIL);
         return -1;
     }
-    auth_ngroups=us.ngroups;
+    auth_ngroups = us.ngroups;
     if (auth_ngroups) {
         auth_groups=(char (*)[][PR_MAXNAMELEN])xmalloc(auth_ngroups *
                                                        PR_MAXNAMELEN); 
-        memcpy(auth_groups,datalist.data, auth_ngroups*PR_MAXNAMELEN);
+        memcpy(auth_groups, datalist.data, auth_ngroups*PR_MAXNAMELEN);
     }
     return 0;
 }
