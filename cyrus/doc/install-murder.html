@@ -1,4 +1,4 @@
-<!-- $Id: install-murder.html,v 1.13 2002/05/07 18:13:52 rjs3 Exp $ -->
+<!-- $Id: install-murder.html,v 1.13.4.1 2002/07/27 13:05:47 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing The Cyrus Murder
@@ -8,11 +8,13 @@
 </h1>
 <body>
 
-<b><i>Note that Cyrus Murder is still in the Beta stages of
-development, and if you choose to deploy you are doing so at your own risk.
+<b><i>Note that Cyrus Murder is still relatively young in the grand scheme of
+things, and if you choose to deploy you are doing so at your own risk.
 Many of the failure modes can be difficult to track without a detailed
 understanding of the mupdate protocol and IMAP in general, and thus even
-considering a deployment is not for the faint at heart.
+considering a deployment is not for the faint at heart.<p>
+At the same time, we are using it successfully in production at Carnegie
+Mellon.
 </i></b><br>
 
 <h3>Introduction &amp; Assumptions</h3>
@@ -52,7 +54,7 @@ mode.  Note that you can have the MUPDATE master be one of your frontend
 machines, just do not configure a slave mupdate process on this machine.<P>
 
 To configure an mupdate master, you will want a cyrus.conf that includes a
-line similar to the following in the SERVICES section:
+line similar to the following in the SERVICES section:<p>
 
 <pre>
   mupdate       cmd="/usr/cyrus/bin/mupdate -m" listen=2004 prefork=1
@@ -93,7 +95,21 @@ or all of the following:
 
 Once these settings are successfully made, any mailbox operation on the
 backend will be sent to the mupdate master for confirmation and entry into
-the mupdate database.
+the mupdate database.<p>
+
+You will also want to configure atleast one user/group using the
+<tt>proxyservers</tt> imapd.conf option.  This user <i>should not</i>
+be an administrator, since this means that anyone who can get ahold
+of your proxy servers now has full administrative control on your
+backend.  Example:<p>
+
+<pre>
+admins: cyrus
+proxyservers: murder
+</pre>
+
+Keep in mind that you will need to create the proxy user(s) and be sure
+that they can authenticate to the backend as well.
 
 <h3>Importing the database from the backend</h3>
 Importing the current mailboxes database is easy, as there is a ctl_mboxlist
@@ -110,7 +126,7 @@ an authenticated connection to the mupdate server, if it can).<p>
 It is also useful to have the backends automatically resync the state of
 their local mailboxes database with the master on start up.  You can
 configure this by adding the following to the <tt>START</tt> section
-of cyrus.conf on the backends:
+of cyrus.conf on the backends:<p>
 
 <pre>
   mupdatepush   cmd="ctl_mboxlist -m"
@@ -134,7 +150,7 @@ Configuring the frontends is a two step process.  First, you want to set
 <tt>mupdate_server</tt> (and friends) as you did for the backends above.
 However, because the frontends only talk to the mupdate master via a slave
 running on the local machine, you will also need to set up a slave on the
-same machine, in the <tt>SERVICES</tt> section of cyrus.conf, like so:
+same machine, in the <tt>SERVICES</tt> section of cyrus.conf, like so:<p>
 
 <pre>
   # mupdate database service - must prefork atleast 1
@@ -149,7 +165,7 @@ to the slave (which is not a recommended configuration at this point).<p>
 You will also want to change all of your <tt>imapd</tt> entries to be
 <tt>proxyd</tt>, and all of your <tt>pop3d</tt> entries to be
 <tt>pop3proxyd</tt>.  That is, you will probabally have a <tt>SERVICES</tt>
-section that looks more like this now:
+section that looks more like this now:<p>
 
 <pre>
   mupdate       cmd="/usr/cyrus/bin/mupdate" listen=2004 prefork=1 
@@ -165,6 +181,23 @@ section that looks more like this now:
 
 Note that timsieved does not need a proxy daemon, the managesieve protocol
 deals with the murder with referrals to the backends internally.<p>
+
+Additionally, you will need entries in imapd.conf to indicate the proxy
+auth name and passwords (if you are using a SASL mechanism that requires them)
+to the backends, for example, if your backends are
+<tt>mail1.andrew.cmu.edu</tt> and <tt>mail2.andrew.cmu.edu</tt> with passwords
+of <tt>foo</tt> and <tt>bar</tt>, and an auth name of <tt>murder</tt>:<p>
+
+<pre>
+mail1_password: foo
+mail2_password: bar
+proxy_authname: murder
+</pre>
+
+If your SASL mechanism does not require authnames or passwords (e.g.
+KERBEROS_V4), then this is not required.  Note that we used the same
+authname as the configured in the <tt>proxyservers</tt> line in the backend's
+<tt>imapd.conf</tt> above.<p>
 
 When you start master on the frontend, a local mailboxes database should
 automatically synchronize itself with the contents of the mupdate master,
@@ -195,8 +228,32 @@ to resync the mupdate master using <tt>ctl_mboxlist -m</tt>.  If two servers
 do have the same mailbox, this will need to be resolved before database
 consistancy can be guranteed.</p>
 <h3>Moving Mailboxes between backends</h3>
-<p>xxx Currently a non-trivial problem.  There is no in-protocol way to do
-this, and even doing it manually can result in a loss of seen state.</p>
+<p>There is currently no 100% foolproof way to do this, however, if you issue
+a rename command to a frontend (as you would to move a mailbox between partitions),
+and replace the partition name with the name of the new backend, it will move
+the mailbox to the indicated backend.  You can also use the format
+<tt>backend.domain.com!partition</tt> to move to a specific partition
+(otherwise the default partition will be used).  In cyradm, this looks
+like:<p>
+
+<pre>
+cyrus.andrew.cmu.edu> rename user.bcyrus user.bcyrus mail2.andrew.cmu.edu!u2
+</pre>
+
+Note that since seen state is stored per-user, it is possible that when
+moving a shared mailbox users will have strange effects.  The general rule
+is that moving an INBOX will move the entire user (including all sub-mailboxes
+to the INBOX, and seen state, and subscriptions, and sieve scripts, etc).
+The seen state is merged with the seen state on the new backend, so that
+no data is lost (seen state is also the only part left behind on the source
+backend).  In the case of any other mailbox, however, only that individual
+mailbox is moved.  If it is a quota root, the new quota root is instated
+on the new server, but otherwise quotas can appear to be violated,
+since each backend only takes care of its own quota.<p>
+
+In general, its better to leave trees of mailboxes on the same server, and
+not move submailboxes of inboxes between servers.
+</p>
 <h3>Adding additional backend servers</h3>
 <p>This is very easy to do, simply configure an empty backend server
 and set its <tt>mupdate_server</tt> parameter to point at the mupdate
@@ -275,7 +332,7 @@ to ensure that the mupdate slave process is started, (is prefork=1)</li>
 </ul>
 
 <P><HR>
-last modified: $Date: 2002/05/07 18:13:52 $
+last modified: $Date: 2002/07/27 13:05:47 $
 </BODY></HTML>
 
 

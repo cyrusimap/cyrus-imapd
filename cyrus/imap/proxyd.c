@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.5 2002/07/27 04:27:03 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.6 2002/07/27 13:05:49 ken3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -137,7 +137,8 @@ static sasl_ssf_t extprops_ssf = 0;
 /* per-user session state */
 struct protstream *proxyd_out = NULL;
 struct protstream *proxyd_in = NULL;
-char proxyd_clienthost[250] = "[local]";
+static char proxyd_clienthost[250] = "[local]";
+static int proxyd_logfd = -1;
 time_t proxyd_logtime;
 char *proxyd_userid = NULL;
 struct auth_state *proxyd_authstate = 0;
@@ -1232,6 +1233,11 @@ static void proxyd_reset(void)
 
     strcpy(proxyd_clienthost, "[local]");
 
+    if(proxyd_logfd != -1) {
+	close(proxyd_logfd);
+	proxyd_logfd = -1;
+    }
+
     if(proxyd_userid) {
 	free(proxyd_userid);
 	proxyd_userid = NULL;
@@ -2297,7 +2303,7 @@ void cmd_login(char *tag, char *user)
     prot_printf(proxyd_out, "%s OK %s\r\n", tag, reply);
 
     /* Create telemetry log */
-    telemetry_log(proxyd_userid, proxyd_in, proxyd_out);
+    proxyd_logfd = telemetry_log(proxyd_userid, proxyd_in, proxyd_out);
 
     /* Set namespace */
     if ((r = mboxname_init_namespace(&proxyd_namespace, proxyd_userisadmin)) != 0) {
@@ -2442,7 +2448,7 @@ void cmd_authenticate(char *tag, char *authtype)
     prot_setsasl(proxyd_out, proxyd_saslconn);
 
     /* Create telemetry log */
-    telemetry_log(proxyd_userid, proxyd_in, proxyd_out);
+    proxyd_logfd = telemetry_log(proxyd_userid, proxyd_in, proxyd_out);
 
     /* Set namespace */
     if ((r = mboxname_init_namespace(&proxyd_namespace, proxyd_userisadmin)) != 0) {
