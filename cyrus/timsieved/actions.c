@@ -1,6 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.19 2000/05/23 20:56:50 robeson Exp $
+ * $Id: actions.c,v 1.20 2000/07/15 19:57:12 ken3 Exp $
  * 
  */
 /*
@@ -478,6 +478,15 @@ int setactive(struct protstream *conn, mystring_t *name)
 {
   int result;
   char filename[1024];
+
+  /* if string name is empty, disable active script */
+  if (!strlen(string_DATAPTR(name))) {
+    if (deleteactive(conn) != TIMSIEVE_OK)
+      return TIMSIEVE_FAIL;
+
+    prot_printf(conn,"OK\r\n");
+    return TIMSIEVE_OK;
+  }
 
   result = scriptname_valid(name);
   if (result!=TIMSIEVE_OK)
