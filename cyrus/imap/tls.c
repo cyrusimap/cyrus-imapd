@@ -120,6 +120,17 @@
 #include "xmalloc.h"
 #include "tls.h"
 
+#ifdef TLS_REUSE
+#include "imapconf.h"
+#include "time.h"
+#include "cyrusdb.h"
+
+/* we MUST use db3 because the session data is binary */
+#define DB (&cyrusdb_db3)
+
+#define FNAME_SESSIONS "/tls_sessions.db"
+#endif
+
 /* We must keep some of the info available */
 static const char hexcodes[] = "0123456789ABCDEF";
 
@@ -346,7 +357,253 @@ static int set_cert_stuff(SSL_CTX * ctx, char *cert_file, char *key_file)
     return (1);
 }
 
+#ifdef TLS_REUSE
+/*
+ * The new_session_cb() is called, whenever a new session has been
+ * negotiated and session caching is enabled.  We save the session in
+ * a database so that we can share sessions between processes. 
+ */ 
+int new_session_cb(SSL *ssl, SSL_SESSION *sess)
+{
+    int len;
+    unsigned char *data = NULL, *asn;
+    time_t expire;
+    char dbname[1024];
+    struct db *sessdb;
+    int ret = -1;
 
+    assert(sess);
+
+    /* find the size of the ASN1 representation of the session */
+    len = i2d_SSL_SESSION(sess, NULL);
+
+    /*
+     * create the data buffer.  the data is stored as:
+     * <expire time><ASN1 data>
+     */
+    data = (unsigned char *) xmalloc(sizeof(time_t)+len*sizeof(unsigned char));
+
+    /* transform the session into its ASN1 representation */
+    if (data) {
+	asn = data + sizeof(time_t);
+	len = i2d_SSL_SESSION(sess, &asn);
+	if (!len) syslog(LOG_ERR, "i2d_SSL_SESSION failed");
+    }
+
+    /* set the expire time for the external cache, and prepend it to data */
+    expire = SSL_SESSION_get_time(sess) + SSL_SESSION_get_timeout(sess);
+    memcpy(data, &expire, sizeof(time_t));
+
+    /* create the name of the db file */
+    strcpy(dbname, config_dir);
+    strcat(dbname, FNAME_SESSIONS);
+
+    if (data && len) {
+	/* store the session in our database */
+	ret = DB->open(dbname, &sessdb);
+	if (ret != CYRUSDB_OK) {
+	    syslog(LOG_ERR, "DBERROR: opening %s: %s",
+		   dbname, cyrusdb_strerror(ret));
+	}
+	else {
+	    ret = DB->store(sessdb, sess->session_id, sess->session_id_length,
+			    data, len + sizeof(time_t), NULL);
+	    DB->close(sessdb);
+	}
+    }
+
+    if (data) free(data);
+
+    /* log this transaction */
+    if (var_imapd_tls_loglevel > 0) {
+	int i;
+	char idstr[SSL_MAX_SSL_SESSION_ID_LENGTH*2 + 1];
+	for (i = 0; i < sess->session_id_length; i++)
+	    sprintf(idstr+i*2, "%02X", sess->session_id[i]);
+
+	syslog(LOG_DEBUG, "new TLS session: id=%s, expire=%s, status=%s",
+	       idstr, ctime(&expire), ret ? "failed" : "ok");
+    }
+
+    return (ret == 0);
+}
+
+/*
+ * Function for removing session from our database.
+ */
+void remove_session(unsigned char *id, int idlen)
+{
+    char dbname[1024];
+    struct db *sessdb;
+    int ret;
+
+    assert(id);
+
+    /* create the name of the db file */
+    strcpy(dbname, config_dir);
+    strcat(dbname, FNAME_SESSIONS);
+
+    /* delete the session from our database */
+    ret = DB->open(dbname, &sessdb);
+    if (ret != CYRUSDB_OK) {
+	syslog(LOG_ERR, "DBERROR: opening %s: %s",
+	       dbname, cyrusdb_strerror(ret));
+    }
+    else {
+	DB->delete(sessdb, id, idlen, NULL);
+	DB->close(sessdb);
+    }
+
+    /* log this transaction */
+    if (var_imapd_tls_loglevel > 0) {
+	int i;
+	char idstr[SSL_MAX_SSL_SESSION_ID_LENGTH*2 + 1];
+	for (i = 0; i < idlen; i++)
+	    sprintf(idstr+i*2, "%02X", id[i]);
+
+	syslog(LOG_DEBUG, "remove TLS session: id=%s", idstr);
+    }
+}
+
+/*
+ * The remove_session_cb() is called, whenever the SSL engine removes
+ * a session from the internal cache. This happens if the session is
+ * removed because it is expired or when a connection was not shutdown
+ * cleanly.
+ */
+void remove_session_cb(SSL_CTX *ctx, SSL_SESSION *sess)
+ {
+    char dbname[1024];
+    struct db *sessdb;
+    int ret;
+
+    assert(sess);
+
+    remove_session(sess->session_id, sess->session_id_length);
+ }
+
+/*
+ * The get_session_cb() is only called on SSL/TLS servers with the
+ * session id proposed by the client. The get_session_cb() is always
+ * called, also when session caching was disabled.  We lookup the
+ * session in our database in case it was stored by another process.
+ */
+SSL_SESSION *get_session_cb(SSL *ssl, unsigned char *id, int idlen, int *copy)
+{
+    char dbname[1024];
+    struct db *sessdb = NULL;
+    int ret;
+    const char *data = NULL;
+    unsigned char *asn;
+    int len = 0;
+    time_t expire = 0, now = time(0);
+    SSL_SESSION *sess = NULL;
+
+    assert(id);
+
+    /* create the name of the db file */
+    strcpy(dbname, config_dir);
+    strcat(dbname, FNAME_SESSIONS);
+
+    /* fetch the session from our database */
+    ret = DB->open(dbname, &sessdb);
+    if (ret != CYRUSDB_OK) {
+	syslog(LOG_ERR, "DBERROR: opening %s: %s",
+	       dbname, cyrusdb_strerror(ret));
+    }
+    else {
+	DB->fetch(sessdb, id, idlen, &data, &len, NULL);
+	DB->close(sessdb);
+    }
+
+    if (data) {
+	/* grab the expire time */
+	memcpy(&expire, data, sizeof(time_t));
+
+	/* check if the session has expired */
+	if (expire < now) {
+	    remove_session(id, idlen);
+	}
+	else {
+	    /* transform the ASN1 representation of the session
+	       into an SSL_SESSION object */
+	    asn = (unsigned char*) data + sizeof(time_t);
+	    sess = d2i_SSL_SESSION(NULL, &asn, len - sizeof(time_t));
+	    if (!sess) syslog(LOG_ERR, "d2i_SSL_SESSION failed: %m");
+	}
+    }
+
+    /* log this transaction */
+    if (var_imapd_tls_loglevel > 0) {
+	int i;
+	char idstr[SSL_MAX_SSL_SESSION_ID_LENGTH*2 + 1];
+	for (i = 0; i < idlen; i++)
+	    sprintf(idstr+i*2, "%02X", id[i]);
+
+	syslog(LOG_DEBUG, "get TLS session: id=%s, status=%s",
+	       idstr, !data ? "not found" : expire < now ? "expired" : "ok");
+    }
+
+    *copy = 0;
+    return sess;
+}
+
+/*
+ * Delete expired sessions.
+ */
+int find_p(void *rock, const char *id, int idlen, const char *data, int len)
+{
+    time_t expire;
+
+    /* grab the expire time */
+    memcpy(&expire, data, sizeof(time_t));
+
+    /* check if the session has expired */
+    return (expire < time(0));
+}
+
+int find_cb(void *rock, const char *id, int idlen, const char *data, int len)
+{
+    DB->delete((struct db *) rock, id, idlen, NULL);
+
+    /* log this transaction */
+    if (var_imapd_tls_loglevel >= 0) {
+	int i;
+	char idstr[SSL_MAX_SSL_SESSION_ID_LENGTH*2 + 1];
+	for (i = 0; i < idlen; i++)
+	    sprintf(idstr+i*2, "%02X", id[i]);
+
+	syslog(LOG_DEBUG, "expiring TLS session: id=%s", idstr);
+    }
+
+    return 0;
+}
+
+int tls_expire_sessions(void)
+{
+    char dbname[1024];
+    struct db *sessdb = NULL;
+    int ret;
+
+   /* create the name of the db file */
+    strcpy(dbname, config_dir);
+    strcat(dbname, FNAME_SESSIONS);
+
+    /* fetch the session from our database */
+    ret = DB->open(dbname, &sessdb);
+    if (ret != CYRUSDB_OK) {
+	syslog(LOG_ERR, "DBERROR: opening %s: %s",
+	       dbname, cyrusdb_strerror(ret));
+	return 1;
+    }
+    else {
+	DB->foreach(sessdb, "", 0, &find_p, &find_cb, sessdb, NULL);
+	DB->close(sessdb);
+    }
+
+    return 0;
+}
+#endif /* TLS_REUSE */
 
  /*
   * This is the setup routine for the SSL server. As smtpd might be called
@@ -368,6 +625,7 @@ int     tls_init_serverengine(int verifydepth,
 {
     int     off = 0;
     int     verify_flags = SSL_VERIFY_NONE;
+    int     session_id_context = 1; /* anything will do */
     char   *CApath;
     char   *CAfile;
     char   *s_cert_file;
@@ -405,6 +663,15 @@ int     tls_init_serverengine(int verifydepth,
     SSL_CTX_set_options(ctx, off);
     SSL_CTX_set_info_callback(ctx, apps_ssl_info_callback);
     SSL_CTX_sess_set_cache_size(ctx, 128);
+#ifdef TLS_REUSE
+    SSL_CTX_set_session_id_context(ctx,(void*)&session_id_context,
+				   sizeof session_id_context);
+    /* set the timeout for the internal cache */
+    SSL_CTX_set_timeout(ctx, config_getint("tls_session_timeout", 300));
+    SSL_CTX_sess_set_new_cb(ctx, new_session_cb);
+    SSL_CTX_sess_set_remove_cb(ctx, remove_session_cb);
+    SSL_CTX_sess_set_get_cb(ctx, get_session_cb);
+#endif
 
     if (strlen(var_imapd_tls_CAfile) == 0)
 	CAfile = NULL;
@@ -623,14 +890,16 @@ int tls_start_servertls(int readfd, int writefd,
     }
 
     if (authid && *authid) {
-	syslog(LOG_NOTICE, "starttls: %s with cipher %s (%d/%d bits)"
+	syslog(LOG_NOTICE, "starttls: %s, %s with cipher %s (%d/%d bits)"
 	                   " authenticated as %s", 
+	       SSL_session_reused(tls_conn) ? "Reused" : "New",
 	       tls_protocol, tls_cipher_name,
 	       tls_cipher_usebits, tls_cipher_algbits, 
 	       *authid);
     } else {
-	syslog(LOG_NOTICE, "starttls: %s with cipher %s (%d/%d bits)"
+	syslog(LOG_NOTICE, "starttls: %s, %s with cipher %s (%d/%d bits)"
 	                   " no authentication", 
+	       SSL_session_reused(tls_conn) ? "Reused" : "New",
 	       tls_protocol, tls_cipher_name,
 	       tls_cipher_usebits, tls_cipher_algbits);
     }
