@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.52 2002/06/14 19:01:02 rjs3 Exp $ */
+/* $Id: config.c,v 1.53 2002/06/14 19:23:33 ken3 Exp $ */
 
 #include <config.h>
 
@@ -162,7 +162,7 @@ const char *config_getstring(const char *key, const char *def)
 {
     char *ret;
 
-    ret = hash_lookup(key, &confighash);
+    ret = hash_lookup((char*) key, &confighash);
 
     return ret ? ret : def;
 }
