@@ -1,8 +1,8 @@
 /* test.c -- tester for libsieve
  * Larry Greenfield
- * $Id: test.c,v 1.9 2000/02/10 05:10:50 tmartin Exp $
+ * $Id: test.c,v 1.10 2000/02/13 06:22:50 leg Exp $
  *
- * usage: "test message < script"
+ * usage: "test message script"
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -525,7 +525,7 @@ int main(int argc, char *argv[])
 
     f = fopen(argv[2], "r");
     if (!f) {
-	printf("can not open script '$s'\n", argv[2]);
+	printf("can not open script '%s'\n", argv[2]);
 	exit(1);
     }
 
