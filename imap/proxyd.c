@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.40 2000/07/03 20:16:09 leg Exp $ */
+/* $Id: proxyd.c,v 1.41 2000/09/30 01:16:50 leg Exp $ */
 
 #include <config.h>
 
@@ -261,6 +261,10 @@ static int pipe_until_tag(struct backend *s, char *tag)
 	}
 	if (!cont && buf[taglen] == ' ' && !strncmp(tag, buf, taglen)) {
 	    strncpy(s->last_result, buf + taglen + 1, LAST_RESULT_LEN);
+	    /* guarantee that 's->last_result' has \r\n\0 at the end */
+	    s->last_result[LAST_RESULT_LEN - 3] = '\r';
+	    s->last_result[LAST_RESULT_LEN - 2] = '\n';
+	    s->last_result[LAST_RESULT_LEN - 1] = '\0';
 	    switch (buf[taglen + 1]) {
 	    case 'O': case 'o':
 		r = OK;
@@ -3596,7 +3600,7 @@ void cmd_status(char *tag, char *name)
     }
 
     if (!r) {
-	prot_printf(proxyd_out, "%s %s\r\n", tag, s->last_result);
+	prot_printf(proxyd_out, "%s %s", tag, s->last_result);
     } else {
 	prot_printf(proxyd_out, "%s NO %s\r\n", error_message(r));
     }
