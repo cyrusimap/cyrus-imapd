@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.49 2002/02/15 20:09:32 rjs3 Exp $
+ * $Id: mupdate.c,v 1.50 2002/02/18 15:52:09 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -413,6 +413,7 @@ void cmdloop(struct conn *c)
     const char *mechs;
     int ret;
     unsigned int mechcount;
+    char slavebuf[4096];
 
     syslog(LOG_DEBUG, "starting cmdloop() on fd %d", c->fd);
         
@@ -429,11 +430,18 @@ void cmdloop(struct conn *c)
 		      &mechs, NULL, &mechcount);
 
     /* AUTH banner is mandatory */
+    if(!masterp) {
+	char *mupdate_server = config_getstring("mupdate_server", NULL);
+	if(!mupdate_server)
+	    fatal("mupdate server was not specified for slave", EC_TEMPFAIL);
+	snprintf(slavebuf, sizeof(slavebuf), "mupdate://%s", mupdate_server);
+    }
+		
     prot_printf(c->pout,
 	       "%s\r\n* OK MUPDATE \"%s\" \"Cyrus Murder\" \"%s\" \"%s\"\r\n",
     	       (ret == SASL_OK && mechcount > 0) ? mechs : "* AUTH",
 	       config_servername,
-	       CYRUS_VERSION, masterp ? "(master)" : "(slave)");
+	       CYRUS_VERSION, masterp ? "(master)" : slavebuf);
     for (;;) {
 	int ch;
 	char *p;
