@@ -1,21 +1,45 @@
 <HTML><HEAD>
     <TITLE>Cyrus IMAP Server FAQ</TITLE>
-    <!-- $Id: faq.html,v 1.7 2000/06/12 02:39:30 leg Exp $ -->
+    <!-- $Id: faq.html,v 1.8 2000/07/07 20:34:06 wcw Exp $ -->
   </HEAD><BODY>
       <H1>                Cyrus IMAP Server FAQ</H1>
 
 <ul>
-<li>Using PAM - Under Linux when using PAM and shadow passwords,
+<li><b>Using PAM</b> Under Linux when using PAM and shadow passwords,
 /etc/shadow needs to be readable by the Cyrus user. 
 
-<li>Using NFS - We don't recommend it. If you want to do it, it may 
-possibly work but you may also lose your email. You can look at the
-mailing list archives for more information. 
+<li><b>Using NFS</b> We don't recommend it. If you want to do it, it
+may possibly work but you may also lose your email or have corrupted
+<tt>cyrus.*</tt> files. You can look at the mailing list archives for
+more information.
 
-<li>Virtual hosting - We don't support it and don't plan to support it
+<li><b>Virtual hosting</b> - We don't support it and don't plan to support it
 unless we get a set of complete patches.  If you want it, you'll need
 to do it yourself or use a commercial product. Check the list archives
 for more information.
+
+<li><b>dots in userids</b> - no you can't have a '.' in your username.
+
+<li><b>Performance/Capacity/Scaling</b> - There is no good answer for
+this. It depends on your hardware, your operating system, and how your
+users use the system.  In general, an <tt>imapd</tt> process takes up
+anywhere from 256 Kbytes of memory to 512 Kbytes when it is first
+fired up. CPU has not been a big deal, but it may become more
+important as the imap sessions are encrypted and now that searching
+may be more frequent. Disk I/O is probably the most important and
+having a hardware RAID subsystem with an amount of write-back cache
+would be a good thing.
+
+<p>Finally, if you are talking about less than 100 interactive users
+it is likely that any relatively modern hardware can support it. If
+you are talking about having more than 1000 interactive users, you
+should know how to predict your utilization, go overboard on hardware,
+be willing to suffer growing pains, or be able to hire someone that
+can help. 
+
+<p>There are a number of good performance tuning articles out for
+Solaris by Adrian Cockcroft. Go to your favorite search engine and
+look for his name.
 </ul>
 
 <h2>Troubleshooting</h2>
@@ -32,7 +56,7 @@ http://www.sleepycat.com/update/3.0.55/patch.3.0.55.html</a>.</dd>
 </dl>
 
 <P><HR>
-last modified: $Date: 2000/06/12 02:39:30 $
+last modified: $Date: 2000/07/07 20:34:06 $
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>
