@@ -73,7 +73,7 @@ clean:
 	$(RM) libcom_err.a
 	$(RM) $(LIBOBJS)
 
-depend:: 
+depend: compile_et 
 
 #install:: com_err.h 
 #	$(INSTALLFILE) $(srcdir)/com_err.h  $(DESTDIR)$(INCLDIR)/com_err.h
