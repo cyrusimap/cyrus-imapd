@@ -1,5 +1,5 @@
 /* collectnews.c -- program to add news articles to relevant header files
- $Id: collectnews.c,v 1.14 1998/05/15 21:48:11 neplokh Exp $
+ $Id: collectnews.c,v 1.15 1999/03/01 20:12:02 tjs Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -271,7 +271,7 @@ fatal(s, code)
 char *s;
 int code;
 {
-    fprintf(stderr, "collectnews: %s\n", s);
+    syslog(LOG_CRIT, "collectnews: %s\n", s);
     exit(code);
 }
 
