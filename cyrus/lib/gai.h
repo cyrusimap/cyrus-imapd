@@ -1,6 +1,6 @@
 /*
  * Mar  8, 2000 by Hajimu UMEMOTO <ume@mahoroba.org>
- * $Id: gai.h,v 1.2 2001/11/27 02:25:02 ken3 Exp $
+ * $Id: gai.h,v 1.2.6.1 2003/02/12 19:12:42 rjs3 Exp $
  *
  * This module is besed on ssh-1.2.27-IPv6-1.5 written by
  * KIKUCHI Takahiro <kick@kyoto.wide.ad.jp>
@@ -62,10 +62,10 @@
 #endif
 
 /* for old netdb.h */
-#ifndef EAI_NODATA
-#define EAI_NODATA	1
+#ifndef EAI_SERVICE
 #define EAI_MEMORY	2
 #define EAI_FAMILY	5	/* ai_family not supported */
+#define EAI_NONAME      8       /* hostname nor servname provided, or not known */
 #define EAI_SERVICE	9	/* servname not supported for ai_socktype */
 #endif
 

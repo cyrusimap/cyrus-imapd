@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.32.4.13 2003/02/06 22:40:52 rjs3 Exp $ */
+/* $Id: fud.c,v 1.32.4.14 2003/02/12 19:12:36 rjs3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -92,10 +92,10 @@ const int config_need_data = 0;
 extern void setproctitle_init(int argc, char **argv, char **envp);
 
 int handle_request(const char *who, const char *name, 
-		   struct sockaddr_in sfrom);
+		   struct sockaddr_storage sfrom, socklen_t sfromsiz);
 
-void send_reply(struct sockaddr_in sfrom, int status,
-		const char *user, const char *mbox, 
+void send_reply(struct sockaddr_storage sfrom, socklen_t sfromsiz, int status,
+		const char *user, const char *mbox,
 		int numrecent, time_t lastread, time_t lastarrived);
 
 int soc = 0; /* inetd (master) has handed us the port as stdin */
@@ -107,7 +107,7 @@ char who[16];
 
 int begin_handling(void)
 {
-        struct sockaddr_in  sfrom;
+        struct sockaddr_storage sfrom;
         socklen_t sfromsiz = sizeof(sfrom);
         int r;
         char    buf[MAXLOGNAME + MAXDOMNAME+ MAX_MAILBOX_NAME + 1];
@@ -141,7 +141,7 @@ int begin_handling(void)
             q = buf + off + 1;
             strlcpy(mbox, q, sizeof(mbox));
 
-            handle_request(username,mbox,sfrom);
+            handle_request(username,mbox,sfrom,sfromsiz);
         }
 
 	/* never reached */
@@ -210,56 +210,94 @@ static void cyrus_timeout(int signo)
 /* Send a proxy request to the backend, send their reply to sfrom */
 int do_proxy_request(const char *who, const char *name,
 		     const char *backend_host,
-		     struct sockaddr_in sfrom) 
+		     struct sockaddr_storage sfrom, socklen_t sfromsiz) 
 {
     char tmpbuf[1024];
-    int x, rc;
+    int rc;
     int csoc = -1;
-    struct sockaddr_in cin, cout;
-    struct hostent *hp;
-    static int backend_port = 0; /* fud port in NETWORK BYTE ORDER */
+    int error;
+    struct sockaddr_storage cin, cout;
+    struct addrinfo hints, *res0, *res;
+    socklen_t cinsiz, coutsiz;
+    static char *backend_port = NULL; /* fud port */
 
     /* Open a UDP socket to the Cyrus mail server */
-    if(!backend_port) {
-	struct servent *sp = getservbyname("fud", "udp");
-	backend_port = sp ? sp->s_port : htons(4201); /* default fud port */
-    }
-
-    hp = gethostbyname (backend_host);
-    if (!hp) {
-	send_reply(sfrom, REQ_UNK, who, name, 0, 0, 0);
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = PF_UNSPEC;
+    hints.ai_socktype = SOCK_DGRAM;
+    if (!backend_port) {
+	backend_port = "fud";
+	error = getaddrinfo(backend_host, backend_port, &hints, &res0);
+	if (error == EAI_SERVICE) {
+	    backend_port = "4201"; /* default fud port */
+	    error = getaddrinfo(backend_host, backend_port, &hints, &res0);
+	}
+    } else
+	error = getaddrinfo(backend_host, backend_port, &hints, &res0);
+    if (error != 0) {
+	send_reply(sfrom, sfromsiz, REQ_UNK, who, name, 0, 0, 0);
 	rc = IMAP_SERVER_UNAVAILABLE;
 	goto done;
     }
+    
+    /*
+     * XXX: Since UDP is used, we cannot use an IPv6->IPv4 fallback
+     * strategy, here.  So, when we can use same address family with
+     * incoming packet, just try it.  When same address family is not
+     * found in DNS, we try another one.
+     */
+    csoc = -1;
+    for (res = res0; res; res = res->ai_next) {
+	if (res->ai_family == sfrom.ss_family) {
+	    csoc = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+	    break;
+	}
+    }
+    if (csoc < 0) {
+	for (res = res0; res; res = res->ai_next) {
+	    if (res->ai_family != sfrom.ss_family &&
+		(res->ai_family == AF_INET || res->ai_family == AF_INET6)) {
+		csoc = socket(res->ai_family, res->ai_socktype,
+			      res->ai_protocol);
+		break;
+	    }
+	}
+    }
+    if (csoc < 0) {
+	send_reply(sfrom, sfromsiz, REQ_UNK, who, name, 0, 0, 0);
+	rc = IMAP_SERVER_UNAVAILABLE;
+	freeaddrinfo(res0);	
+	goto done;
+    }
 
-    csoc = socket (PF_INET, SOCK_DGRAM, 0);
-    memcpy (&cin.sin_addr.s_addr, hp->h_addr, hp->h_length);
-    cin.sin_family = AF_INET;
-    cin.sin_port = backend_port;
+    memcpy(&cin, res->ai_addr, res->ai_addrlen);
+    cinsiz = res->ai_addrlen;
+    freeaddrinfo(res0);
 
     /* Write a Cyrus query into *tmpbuf */
     memset (tmpbuf, '\0', sizeof(tmpbuf));
     snprintf (tmpbuf, sizeof(tmpbuf), "%s|%s", who, name);
-    x = sizeof (cin);
 
     /* Send the query and wait for a reply */
-    sendto (csoc, tmpbuf, strlen (tmpbuf), 0, (struct sockaddr *) &cin, x);
+    sendto (csoc, tmpbuf, strlen (tmpbuf), 0,
+	    (struct sockaddr *) &cin, cinsiz);
     memset (tmpbuf, '\0', strlen (tmpbuf));
     signal (SIGALRM, cyrus_timeout);
     rc = 0;
+    coutsiz = sizeof(cout);
     alarm (1);
     rc = recvfrom (csoc, tmpbuf, sizeof(tmpbuf), 0,
-		   (struct sockaddr *) &cout, &x);
+		   (struct sockaddr *) &cout, &coutsiz);
     alarm (0);
     if (rc < 1) {
 	rc = IMAP_SERVER_UNAVAILABLE;
-	send_reply(sfrom, REQ_UNK, who, name, 0, 0, 0);
+	send_reply(sfrom, sfromsiz, REQ_UNK, who, name, 0, 0, 0);
 	goto done;
     }
 
     /* Send reply back */
     /* rc is size */
-    sendto(soc,tmpbuf,rc,0,(struct sockaddr *) &sfrom, sizeof(sfrom));
+    sendto(soc, tmpbuf, rc, 0, (struct sockaddr *) &sfrom, sfromsiz);
     rc = 0;
 
  done:
@@ -268,7 +306,7 @@ int do_proxy_request(const char *who, const char *name,
 }
 
 int handle_request(const char *who, const char *name,
-		   struct sockaddr_in sfrom)
+		   struct sockaddr_storage sfrom, socklen_t sfromsiz)
 {
     int r;
     struct mailbox mailbox;
@@ -291,7 +329,7 @@ int handle_request(const char *who, const char *name,
 
     r = mboxlist_detail(mboxname, &mbflag, &location, NULL, &acl, NULL);
     if(r || mbflag & MBTYPE_RESERVE) {
-	send_reply(sfrom, REQ_UNK, who, name, 0, 0, 0);
+	send_reply(sfrom, sfromsiz, REQ_UNK, who, name, 0, 0, 0);
 	return r;
     }
 
@@ -308,11 +346,11 @@ int handle_request(const char *who, const char *name,
 	if(cyrus_acl_myrights(mystate, acl) & ACL_USER0) {
 	    /* We want to proxy this one */
 	    auth_freestate(mystate);
-	    return do_proxy_request(who, name, location, sfrom);
+	    return do_proxy_request(who, name, location, sfrom, sfromsiz);
 	} else {
 	    /* Permission Denied */
 	    auth_freestate(mystate);
-	    send_reply(sfrom, REQ_DENY, who, name, 0, 0, 0);
+	    send_reply(sfrom, sfromsiz, REQ_DENY, who, name, 0, 0, 0);
 	    return 0;
 	}
     }
@@ -322,27 +360,27 @@ int handle_request(const char *who, const char *name,
      */
     r = mailbox_open_header(mboxname, NULL, &mailbox);
     if (r) {
-        send_reply(sfrom, REQ_UNK, who, name, 0, 0, 0);
+        send_reply(sfrom, sfromsiz, REQ_UNK, who, name, 0, 0, 0);
 	return r; 
     }
 
     r = mailbox_open_index(&mailbox);
     if (r) {
 	mailbox_close(&mailbox);
-        send_reply(sfrom, REQ_UNK, who, name, 0, 0, 0);
+        send_reply(sfrom, sfromsiz, REQ_UNK, who, name, 0, 0, 0);
 	return r;
     }
 
     if(!(strncmp(mboxname,"user.",5)) && !(mailbox.myrights & ACL_USER0)) {
 	mailbox_close(&mailbox);
-        send_reply(sfrom, REQ_DENY, who, name, 0, 0, 0);
+        send_reply(sfrom, sfromsiz, REQ_DENY, who, name, 0, 0, 0);
 	return 0;
     }
    
     r = seen_open(&mailbox, who, &seendb);
     if (r) {
 	mailbox_close(&mailbox);
-        send_reply(sfrom, REQ_UNK, who, name, 0, 0, 0);
+        send_reply(sfrom, sfromsiz, REQ_UNK, who, name, 0, 0, 0);
 	return r;
     }
 
@@ -352,7 +390,7 @@ int handle_request(const char *who, const char *name,
     seen_close(seendb);
     if (r) {
 	mailbox_close(&mailbox);
-        send_reply(sfrom, REQ_UNK, who, name, 0, 0, 0);
+        send_reply(sfrom, sfromsiz, REQ_UNK, who, name, 0, 0, 0);
 	return r;
     }
     
@@ -378,14 +416,15 @@ int handle_request(const char *who, const char *name,
 
     mailbox_close(&mailbox);
     
-    send_reply(sfrom, REQ_OK, who, name, numrecent, lastread, lastarrived);
+    send_reply(sfrom, sfromsiz, REQ_OK, who, name, numrecent,
+	       lastread, lastarrived);
     
     return(0);
 }
 
 void
-send_reply(struct sockaddr_in sfrom, int status, 
-	   const char *user, const char *mbox,
+send_reply(struct sockaddr_storage sfrom, socklen_t sfromsiz,
+	   int status, const char *user, const char *mbox,
 	   int numrecent, time_t lastread, time_t lastarrived)
 {
     char buf[MAX_MAILBOX_PATH + 16 + 9];
@@ -393,14 +432,16 @@ send_reply(struct sockaddr_in sfrom, int status,
 
     switch(status) {
         case REQ_DENY:
-            sendto(soc,"PERMDENY",9,0,(struct sockaddr *) &sfrom, sizeof(sfrom));       
+            sendto(soc,"PERMDENY",9,0,(struct sockaddr *) &sfrom, sfromsiz);       
             break;
         case REQ_OK:
-            siz = snprintf(buf, sizeof(buf), "%s|%s|%d|%d|%d",user,mbox,numrecent,(int) lastread,(int) lastarrived);
-            sendto(soc,buf,siz,0,(struct sockaddr *) &sfrom, sizeof(sfrom));       
+            siz = snprintf(buf, sizeof(buf), "%s|%s|%d|%d|%d",
+			   user,mbox,numrecent,(int) lastread,
+			   (int)lastarrived);
+            sendto(soc,buf,siz,0,(struct sockaddr *) &sfrom, sfromsiz);       
             break;
         case REQ_UNK:
-            sendto(soc,"UNKNOWN",8,0,(struct sockaddr *) &sfrom, sizeof(sfrom));       
+            sendto(soc,"UNKNOWN",8,0,(struct sockaddr *) &sfrom, sfromsiz);
             break;
     } 
 }

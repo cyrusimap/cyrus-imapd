@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: managesieve.xs,v 1.18.4.2 2002/12/03 15:01:09 ken3 Exp $ */
+/* $Id: managesieve.xs,v 1.18.4.3 2003/02/12 19:12:52 rjs3 Exp $ */
 
 #ifdef __cplusplus
 extern "C" {
@@ -249,8 +249,16 @@ sieve_get_handle(servername, username_cb, authname_cb, password_cb, realm_cb)
   callbacks[3].context = password_cb;
   callbacks[4].id = SASL_CB_LIST_END;
 
-  /* see if we have server:port */
-  if ((p = strchr(servername, ':'))) {
+  /* see if we have server:port (or IPv6, etc)*/
+  p = servername;
+  if (*servername == '[') {
+      if ((p = strrchr(servername + 1, ']')) != NULL) {
+	  *p++ = '\0';
+	  servername++;			/* skip first bracket */
+      } else
+	  p = servername;
+  }
+  if ((p = strchr(p, ':'))) {
       *p++ = '\0';
       port = atoi(p);
   } else {

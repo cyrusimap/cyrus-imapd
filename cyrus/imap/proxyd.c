@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.45 2003/02/11 15:47:14 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.46 2003/02/12 19:12:38 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -138,7 +138,7 @@ static sasl_ssf_t extprops_ssf = 0;
 /* per-user session state */
 struct protstream *proxyd_out = NULL;
 struct protstream *proxyd_in = NULL;
-static char proxyd_clienthost[250] = "[local]";
+static char proxyd_clienthost[NI_MAXHOST*2+1] = "[local]";
 static int proxyd_logfd = -1;
 time_t proxyd_logtime;
 char *proxyd_userid = NULL;
@@ -1225,8 +1225,8 @@ static void proxyd_reset(void)
 int service_main(int argc, char **argv, char **envp)
 {
     socklen_t salen;
-    struct hostent *hp;
-    struct sockaddr_in proxyd_localaddr, proxyd_remoteaddr;
+    char hbuf[NI_MAXHOST];
+    struct sockaddr_storage proxyd_localaddr, proxyd_remoteaddr;
     char localip[60], remoteip[60];
     int timeout;
     int proxyd_haveaddr = 0;
@@ -1245,25 +1245,27 @@ int service_main(int argc, char **argv, char **envp)
     /* Find out name of client host */
     salen = sizeof(proxyd_remoteaddr);
     if (getpeername(0, (struct sockaddr *)&proxyd_remoteaddr, &salen) == 0 &&
-	proxyd_remoteaddr.sin_family == AF_INET) {
-	hp = gethostbyaddr((char *)&proxyd_remoteaddr.sin_addr,
-			   sizeof(proxyd_remoteaddr.sin_addr), AF_INET);
-	if (hp != NULL) {
-	    strncpy(proxyd_clienthost,hp->h_name,sizeof(proxyd_clienthost)-30);
-	    proxyd_clienthost[sizeof(proxyd_clienthost)-30] = '\0';
+	(proxyd_remoteaddr.ss_family == AF_INET ||
+	 proxyd_remoteaddr.ss_family == AF_INET6)) {
+	if (getnameinfo((struct sockaddr *)&proxyd_remoteaddr, salen,
+			hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) == 0) {
+	    strncpy(proxyd_clienthost, hbuf, sizeof(hbuf));
+	    strlcat(proxyd_clienthost, " ", sizeof(proxyd_clienthost));
 	} else {
 	    proxyd_clienthost[0] = '\0';
 	}
-	strcat(proxyd_clienthost, "[");
-	strcat(proxyd_clienthost, inet_ntoa(proxyd_remoteaddr.sin_addr));
-	strcat(proxyd_clienthost, "]");
+	getnameinfo((struct sockaddr *)&proxyd_remoteaddr, salen, hbuf,
+		    sizeof(hbuf), NULL, 0, NI_NUMERICHOST | NI_WITHSCOPEID);
+	strlcat(proxyd_clienthost, "[", sizeof(proxyd_clienthost));
+	strlcat(proxyd_clienthost, hbuf, sizeof(proxyd_clienthost));
+	strlcat(proxyd_clienthost, "]", sizeof(proxyd_clienthost));
 	salen = sizeof(proxyd_localaddr);
 	if (getsockname(0, (struct sockaddr *)&proxyd_localaddr,
 			&salen) == 0) {
 	    if(iptostring((struct sockaddr *)&proxyd_remoteaddr,
-			  sizeof(struct sockaddr_in), remoteip, 60) == 0
+			  salen, remoteip, 60) == 0
 	       && iptostring((struct sockaddr *)&proxyd_localaddr,
-			     sizeof(struct sockaddr_in), localip, 60) == 0) {
+			     salen, localip, 60) == 0) {
 		proxyd_haveaddr = 1;
 	    }
 	}

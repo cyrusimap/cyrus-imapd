@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service-thread.c,v 1.6.4.5 2003/02/07 23:34:53 rjs3 Exp $ */
+/* $Id: service-thread.c,v 1.6.4.6 2003/02/12 19:12:45 rjs3 Exp $ */
 #include <config.h>
 
 #include <stdio.h>
@@ -97,12 +97,12 @@ static void libwrap_init(struct request_info *r, char *service)
 static int libwrap_ask(struct request_info *r, int fd)
 {
     int a;
-    struct sockaddr_in sin;
+    struct sockaddr_storage sin;
     socklen_t len = sizeof(sin);
     
     /* is this a connection from the local host? */
     if (getpeername(fd, (struct sockaddr *) &sin, &len) == 0) {
-	if (sin.sin_family == AF_UNIX) {
+	if (((struct sockaddr *)&sin)->sa_family == AF_UNIX) {
 	    return 1;
 	}
     }

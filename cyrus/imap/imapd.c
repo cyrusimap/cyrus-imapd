@@ -25,8 +25,8 @@
  *      tech-transfer@andrew.cmu.edu
  *
  * 4. Redistributions of any form whatsoever must retain the following
- *    acknowledgment:
  *    "This product includes software developed by Computing Services
+ *    acknowledgment:
  *     at Carnegie Mellon University (http://www.cmu.edu/computing/)."
  *
  * CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.65 2003/02/10 20:04:24 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.66 2003/02/12 19:12:36 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -108,7 +108,7 @@ static sasl_ssf_t extprops_ssf = 0;
 /* per-user/session state */
 struct protstream *imapd_out = NULL;
 struct protstream *imapd_in = NULL;
-static char imapd_clienthost[250] = "[local]";
+static char imapd_clienthost[NI_MAXHOST*2+1] = "[local]";
 static int imapd_logfd = -1;
 char *imapd_userid;
 struct auth_state *imapd_authstate = 0;
@@ -490,11 +490,11 @@ int service_main(int argc __attribute__((unused)),
 #endif
 {
     socklen_t salen;
-    struct hostent *hp;
     int timeout;
     sasl_security_properties_t *secprops = NULL;
-    struct sockaddr_in imapd_localaddr, imapd_remoteaddr;
+    struct sockaddr_storage imapd_localaddr, imapd_remoteaddr;
     char localip[60], remoteip[60];
+    char hbuf[NI_MAXHOST];
     int imapd_haveaddr = 0;
 
     signals_poll();
@@ -510,29 +510,29 @@ int service_main(int argc __attribute__((unused)),
     /* Find out name of client host */
     salen = sizeof(imapd_remoteaddr);
     if (getpeername(0, (struct sockaddr *)&imapd_remoteaddr, &salen) == 0 &&
-	imapd_remoteaddr.sin_family == AF_INET) {
-	hp = gethostbyaddr((char *)&imapd_remoteaddr.sin_addr,
-			   sizeof(imapd_remoteaddr.sin_addr), AF_INET);
-	if (hp != NULL) {
-	    strncpy(imapd_clienthost, hp->h_name, sizeof(imapd_clienthost)-30);
+	(imapd_remoteaddr.ss_family == AF_INET ||
+	 imapd_remoteaddr.ss_family == AF_INET6)) {
+	if (getnameinfo((struct sockaddr *)&imapd_remoteaddr, salen,
+			hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) == 0) {
+	    strncpy(imapd_clienthost, hbuf, sizeof(hbuf));
+	    strlcat(imapd_clienthost, " ", sizeof(imapd_clienthost));
 	    imapd_clienthost[sizeof(imapd_clienthost)-30] = '\0';
 	} else {
 	    imapd_clienthost[0] = '\0';
 	}
+	getnameinfo((struct sockaddr *)&imapd_remoteaddr, salen, hbuf,
+		    sizeof(hbuf), NULL, 0, NI_NUMERICHOST | NI_WITHSCOPEID);
 	strlcat(imapd_clienthost, "[", sizeof(imapd_clienthost));
-	strlcat(imapd_clienthost, inet_ntoa(imapd_remoteaddr.sin_addr),
-		sizeof(imapd_clienthost));
+	strlcat(imapd_clienthost, hbuf, sizeof(imapd_clienthost));
 	strlcat(imapd_clienthost, "]", sizeof(imapd_clienthost));
 	salen = sizeof(imapd_localaddr);
 	if (getsockname(0, (struct sockaddr *)&imapd_localaddr, &salen) == 0) {
-	      if(iptostring((struct sockaddr *)&imapd_remoteaddr,
-			    sizeof(struct sockaddr_in),
-			    remoteip, sizeof(remoteip)) == 0
-		 && iptostring((struct sockaddr *)&imapd_localaddr,
-			       sizeof(struct sockaddr_in),
-			       localip, sizeof(localip)) == 0) {
-		  imapd_haveaddr = 1;
-	      }
+	    if(iptostring((struct sockaddr *)&imapd_remoteaddr, salen,
+			  remoteip, sizeof(remoteip)) == 0
+	       && iptostring((struct sockaddr *)&imapd_localaddr, salen,
+			     localip, sizeof(localip)) == 0) {
+		imapd_haveaddr = 1;
+	    }
 	}
     }
 

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.67.4.13 2003/02/07 23:34:53 rjs3 Exp $ */
+/* $Id: master.c,v 1.67.4.14 2003/02/12 19:12:45 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -79,6 +79,10 @@
 
 #ifndef INADDR_ANY
 #define INADDR_ANY 0x00000000
+#endif
+
+#if !defined(IPV6_V6ONLY) && defined(IPV6_BINDV6ONLY)
+#define	IPV6_V6ONLY	IPV6_BINDV6ONLY
 #endif
 
 #ifdef HAVE_UCDSNMP
@@ -269,30 +273,8 @@ char *parse_listen(char *listen)
     return port;
 }
 
-/* set sin_port accordingly. return of 0 indicates failure. */
-int resolve_port(char *port, struct service *s, struct sockaddr_in *sin)
+char *parse_host(char *listen)
 {
-    struct servent *serv;
-    
-    serv = getservbyname(port, s->proto);
-    if (serv) {
-        sin->sin_port = serv->s_port;
-    } else {
-        sin->sin_port = htons(atoi(port));
-        if (sin->sin_port == 0) {
-            syslog(LOG_INFO, "no service '%s' in /etc/services, "
-                   "disabling %s", port, s->name);
-            s->exec = NULL;
-            return 0;
-        }
-    }
-    return 1;
-}
-
-/* set sin_addr accordingly. return of 0 indicates failure. */
-int resolve_host(char *listen, struct sockaddr_in *sin)
-{
-    struct hostent *hp;
     char *cp;
 
     /* do we have a hostname, or IP number? */
@@ -303,24 +285,7 @@ int resolve_host(char *listen, struct sockaddr_in *sin)
             *cp = '\0';
         }
     }
-    sin->sin_addr.s_addr = inet_addr(listen);
-    if ((sin->sin_addr.s_addr == INADDR_NONE) || (sin->sin_addr.s_addr == 0)) {
-        /* looks like it isn't an IP address, so look up the host */
-        if ((hp = gethostbyname(listen)) == 0) {
-            syslog(LOG_INFO, "host not found: %s", listen);
-            return 0;
-        }
-        if (hp->h_addrtype != AF_INET) {
-            syslog(LOG_INFO, "unexpected address family: %d", hp->h_addrtype);
-            return 0;
-        }
-        if (hp->h_length != sizeof(sin->sin_addr)) {
-            syslog(LOG_INFO, "unexpected address length %d", hp->h_length);
-            return 0;
-        }
-        memcpy((char *) &sin->sin_addr, hp->h_addr, hp->h_length);
-    }
-    return 1;
+    return listen;
 }
 
 int verify_service_file(char *const *filename)
@@ -336,32 +301,69 @@ int verify_service_file(char *const *filename)
 
 void service_create(struct service *s)
 {
-    struct sockaddr_in sin;
+    struct service service0, service;
+    struct addrinfo hints, *res0, *res;
+    int error, nsocket = 0;
     struct sockaddr_un sunsock;
-    struct sockaddr *sa;
     mode_t oldumask;
-    int on = 1, salen;
+    int on = 1;
     int r;
 
-    memset(&sin, 0, sizeof(sin));
-
+    if (s->associate > 0)
+	return;			/* service is already activated */
+    
     if (s->listen[0] == '/') { /* unix socket */
+	res0 = (struct addrinfo *)malloc(sizeof(struct addrinfo));
+	if (!res0)
+	    fatal("out of memory", EX_UNAVAILABLE);
+	memset(res0, 0, sizeof(struct addrinfo));
+	res0->ai_flags = AI_PASSIVE;
+	res0->ai_family = PF_UNIX;
+	if(!strcmp(s->proto, "tcp")) {
+	    res0->ai_socktype = SOCK_STREAM;
+	} else {
+	    /* udp */
+	    res0->ai_socktype = SOCK_DGRAM;
+	}
+ 	res0->ai_addr = (struct sockaddr *)&sunsock;
+ 	res0->ai_addrlen = sizeof(sunsock.sun_family) + strlen(s->listen) + 1;
+#ifdef SIN6_LEN
+ 	res0->ai_addrlen += sizeof(sunsock.sun_len);
+ 	sunsock.sun_len = res0->ai_addrlen;
+#endif
 	sunsock.sun_family = AF_UNIX;
 	strcpy(sunsock.sun_path, s->listen);
 	unlink(s->listen);
-	sa = (struct sockaddr *) &sunsock;
-	salen = sizeof(sunsock.sun_family) + strlen(sunsock.sun_path) + 1;
-
-	if(!strcmp(s->proto, "tcp")) {
-	    s->socket = socket(AF_UNIX, SOCK_STREAM, 0);
-	} else {
-	    /* udp */
-	    s->socket = socket(AF_UNIX, SOCK_DGRAM, 0);
-	}
     } else { /* inet socket */
 	char *listen, *port;
-
-	sin.sin_family = AF_INET;
+	char *listen_addr;
+	
+ 	memset(&hints, 0, sizeof(hints));
+ 	hints.ai_flags = AI_PASSIVE;
+ 	if (!strcmp(s->proto, "tcp")) {
+ 	    hints.ai_family = PF_UNSPEC;
+ 	    hints.ai_socktype = SOCK_STREAM;
+ 	} else if (!strcmp(s->proto, "tcp4")) {
+ 	    hints.ai_family = PF_INET;
+ 	    hints.ai_socktype = SOCK_STREAM;
+ 	} else if (!strcmp(s->proto, "tcp6")) {
+ 	    hints.ai_family = PF_INET6;
+ 	    hints.ai_socktype = SOCK_STREAM;
+ 	} else if (!strcmp(s->proto, "udp")) {
+ 	    hints.ai_family = PF_UNSPEC;
+ 	    hints.ai_socktype = SOCK_DGRAM;
+ 	} else if (!strcmp(s->proto, "udp4")) {
+ 	    hints.ai_family = PF_INET;
+ 	    hints.ai_socktype = SOCK_DGRAM;
+ 	} else if (!strcmp(s->proto, "udp6")) {
+ 	    hints.ai_family = PF_INET6;
+ 	    hints.ai_socktype = SOCK_DGRAM;
+ 	} else {
+  	    syslog(LOG_INFO, "invalid proto '%s', disabling %s",
+		   s->proto, s->name);
+ 	    s->exec = NULL;
+ 	    return;
+ 	}
 
 	/* parse_listen() and resolve_host() are destructive,
 	 * so make a work copy of s->listen
@@ -370,78 +372,106 @@ void service_create(struct service *s)
 
         if ((port = parse_listen(listen)) == NULL) {
             /* listen IS the port */
-            if (!resolve_port(listen, s, &sin)) {
-		free(listen);
-                return;
-            }
-            sin.sin_addr.s_addr = INADDR_ANY;
+	    port = listen;
+	    listen_addr = NULL;
         } else {
-            /* listen is now just the address */
-            if (!resolve_port(port, s, &sin)) {
-		free(listen);
-                return;
-            }
-            if (!resolve_host(listen, &sin)) {
-		s->exec = NULL;
-		free(listen);
-                return;
-            }
+            /* s->listen is now just the address */
+	    listen_addr = parse_host(listen);
+	    if (*listen_addr == '\0')
+		listen_addr = NULL;	    
         }
-	sa = (struct sockaddr *) &sin;
-	salen = sizeof(sin);
 
-	if(!strcmp(s->proto, "tcp")) {
-	    s->socket = socket(AF_INET, SOCK_STREAM, 0);
-	} else {
-	    /* udp */
-	    s->socket = socket(AF_INET, SOCK_DGRAM, 0);
-	}
-	
+	error = getaddrinfo(listen_addr, port, &hints, &res0);
+
 	free(listen);
+
+	if (error) {
+	    syslog(LOG_INFO, "%s, disabling %s", gai_strerror(error), s->name);
+	    s->exec = NULL;
+	    return;
+	}
     }
 
-    if (s->socket < 0) {
+    memcpy(&service0, s, sizeof(struct service));
+
+    for (res = res0; res; res = res->ai_next) {
+	if (s->socket > 0) {
+	    memcpy(&service, &service0, sizeof(struct service));
+	    s = &service;
+	}
+
+	s->socket = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+	if (s->socket < 0) {
+	    s->socket = 0;
+	    if (verbose > 2)
+		syslog(LOG_ERR, "unable to open %s socket: %m", s->name);
+	    continue;
+	}
+
+	/* allow reuse of address */
+	r = setsockopt(s->socket, SOL_SOCKET, SO_REUSEADDR, 
+		       (void *) &on, sizeof(on));
+	if (r < 0) {
+	    syslog(LOG_ERR, "unable to setsocketopt(SO_REUSEADDR): %m");
+	}
+#if defined(IPV6_V6ONLY) && !(defined(__FreeBSD__) && __FreeBSD__ < 3)
+	if (res->ai_family == AF_INET6) {
+	    r = setsockopt(s->socket, IPPROTO_IPV6, IPV6_V6ONLY,
+			   (void *) &on, sizeof(on));
+	    if (r < 0) {
+		syslog(LOG_ERR, "unable to setsocketopt(IPV6_V6ONLY): %m");
+	    }
+	}
+#endif
+
+	oldumask = umask((mode_t) 0); /* for linux */
+	r = bind(s->socket, res->ai_addr, res->ai_addrlen);
+	umask(oldumask);
+	if (r < 0) {
+	    close(s->socket);
+	    s->socket = 0;
+	    if (verbose > 2)
+		syslog(LOG_ERR, "unable to bind to %s socket: %m", s->name);
+	    continue;
+	}
+	
+	if (s->listen[0] == '/') { /* unix socket */
+	    /* for DUX, where this isn't the default.
+	       (harmlessly fails on some systems) */
+	    chmod(s->listen, (mode_t) 0777);
+	}
+	
+	if ((!strcmp(s->proto, "tcp") || !strcmp(s->proto, "tcp4")
+	     || !strcmp(s->proto, "tcp6"))
+	    && listen(s->socket, listen_queue_backlog) < 0) {
+	    syslog(LOG_ERR, "unable to listen to %s socket: %m", s->name);
+	    close(s->socket);
+	    s->socket = 0;
+	    continue;
+	}
+	
+	s->ready_workers = 0;
+	s->associate = nsocket;
+	
+	get_statsock(s->stat);
+	
+	if (s == &service) {
+	    if (nservices == allocservices) {
+		Services = xrealloc(Services, 
+				    (allocservices+=5) * sizeof(struct service));
+		if (!Services) fatal("out of memory", EX_UNAVAILABLE);
+	    }
+	    memcpy(&Services[nservices++], s, sizeof(struct service));
+	}
+	nsocket++;
+    }
+    if (res0)
+	freeaddrinfo(res0);
+    if (nsocket <= 0) {
 	syslog(LOG_ERR, "unable to create %s listener socket: %m", s->name);
 	s->exec = NULL;
 	return;
     }
-
-    /* allow reuse of address */
-    r = setsockopt(s->socket, SOL_SOCKET, SO_REUSEADDR, 
-		   (void *) &on, sizeof(on));
-    if (r < 0) {
-	syslog(LOG_ERR, "unable to setsocketopt(SO_REUSEADDR): %m");
-    }
-
-    oldumask = umask((mode_t) 0); /* for linux */
-    r = bind(s->socket, sa, salen);
-    umask(oldumask);
-    if (r < 0) {
-	syslog(LOG_ERR, "unable to bind socket for service %s: %m", s->name);
-	close(s->socket);
-	s->socket = 0;
-	s->exec = NULL;
-	return;
-    }
-
-    if (s->listen[0] == '/') { /* unix socket */
-	/* for DUX, where this isn't the default.
-	   (harmlessly fails on some systems) */
-	chmod(s->listen, (mode_t) 0777);
-    }
-
-    if (!strcmp(s->proto, "tcp")
-	&& listen(s->socket, listen_queue_backlog) < 0) {
-	syslog(LOG_ERR, "unable to listen to %s socket: %m", s->name);
-	close(s->socket);
-	s->socket = 0;
-	s->exec = NULL;
-	return;
-    }
-
-    s->ready_workers = 0;
-
-    get_statsock(s->stat);
 }
 
 void run_startup(char **cmd)
@@ -509,7 +539,7 @@ void spawn_service(struct service *s)
     pid_t p;
     int i;
     char path[PATH_MAX];
-    static char name_env[100];
+    static char name_env[100], name_env2[100];
     struct centry *c;
     time_t now = time(NULL);
     int msg;
@@ -594,6 +624,8 @@ void spawn_service(struct service *s)
 	/* add service name to environment */
 	snprintf(name_env, sizeof(name_env), "CYRUS_SERVICE=%s", s->name);
 	putenv(name_env);
+	snprintf(name_env2, sizeof(name_env2), "CYRUS_ID=%d", s->associate);
+	putenv(name_env2);
 
 	execv(path, s->exec);
 	syslog(LOG_ERR, "couldn't exec %s: %m", path);
@@ -933,7 +965,7 @@ void add_service(const char *name, struct entry *e, void *rock)
     char *listen = xstrdup(masterconf_getstring(e, "listen", NULL));
     char *proto = xstrdup(masterconf_getstring(e, "proto", "tcp"));
     char *max = xstrdup(masterconf_getstring(e, "maxchild", "-1"));
-    int i;
+    int i, j;
 
     if(babysit && prefork == 0) prefork = 1;
     if(babysit && maxforkrate == 0) maxforkrate = 10; /* reasonable safety */
@@ -953,6 +985,8 @@ void add_service(const char *name, struct entry *e, void *rock)
 
     /* see if we have an existing entry for this service */
     for (i = 0; i < nservices; i++) {
+	if (Services[i].associate > 0)
+	    continue;
 	if (Services[i].name && !strcmp(Services[i].name, name)) break;
     }
 
@@ -989,7 +1023,9 @@ void add_service(const char *name, struct entry *e, void *rock)
 
 	Services[i].maxforkrate = maxforkrate;
 
-	if (!strcmp(Services[i].proto, "tcp")) {
+	if (!strcmp(Services[i].proto, "tcp") ||
+	    !strcmp(Services[i].proto, "tcp4") ||
+	    !strcmp(Services[i].proto, "tcp6")) {
 	    Services[i].desired_workers = prefork;
 	    Services[i].babysit = babysit;
 	    Services[i].max_workers = atoi(max);
@@ -1001,6 +1037,17 @@ void add_service(const char *name, struct entry *e, void *rock)
 	    if (prefork > 1) prefork = 1;
 	    Services[i].desired_workers = prefork;
 	    Services[i].max_workers = 1;
+	}
+ 
+	for (j = 0; j < nservices; j++) {
+	    if (Services[j].associate > 0 &&
+		Services[j].name && !strcmp(Services[j].name, name)) {
+		Services[j].maxforkrate = Services[i].maxforkrate;
+		Services[j].exec = Services[i].exec;
+		Services[j].desired_workers = Services[i].desired_workers;
+		Services[j].babysit = Services[i].babysit;
+		Services[j].max_workers = Services[i].max_workers;
+	    }
 	}
 
 	if (verbose > 2)
@@ -1042,7 +1089,9 @@ void add_service(const char *name, struct entry *e, void *rock)
 
 	Services[nservices].maxforkrate = maxforkrate;
 
-	if(!strcmp(Services[nservices].proto, "tcp")) {
+	if(!strcmp(Services[nservices].proto, "tcp") ||
+	   !strcmp(Services[nservices].proto, "tcp4") ||
+	   !strcmp(Services[nservices].proto, "tcp6")) {
 	    Services[nservices].desired_workers = prefork;
 	    Services[nservices].babysit = babysit;
 	    Services[nservices].max_workers = atoi(max);
@@ -1064,7 +1113,8 @@ void add_service(const char *name, struct entry *e, void *rock)
 	Services[nservices].nforks = 0;
 	Services[nservices].nactive = 0;
 	Services[nservices].nconnections = 0;
-
+	Services[nservices].associate = 0;
+	
 	if (verbose > 2)
 	    syslog(LOG_DEBUG, "add: service '%s' (%s, %s:%s, %d, %d)",
 		   Services[nservices].name, cmd,
@@ -1192,16 +1242,24 @@ void reread_conf(void)
 		syslog(LOG_DEBUG, "disable: service %s socket %d pipe %d %d",
 		       Services[i].name, Services[i].socket,
 		       Services[i].stat[0], Services[i].stat[1]);
-	    free(Services[i].name); Services[i].name = NULL;
-	    free(Services[i].listen);
-	    free(Services[i].proto);
+
+	    /* Only free the service info once */
+	    if(Services[i].associate == 0) {
+		free(Services[i].name);
+		free(Services[i].listen);
+		free(Services[i].proto);
+	    }
+	    Services[i].name = NULL;
 	    Services[i].desired_workers = 0;
 	    Services[i].nforks = 0;
 	    Services[i].nactive = 0;
 	    Services[i].nconnections = 0;
 
 	    /* close all listeners */
-	    if (Services[i].socket > 0) close(Services[i].socket);
+	    if (Services[i].socket > 0) {
+		shutdown(Services[i].socket, SHUT_RDWR);
+		close(Services[i].socket);
+	    }
 	    Services[i].socket = 0;
 	    Services[i].saddr = NULL;
 

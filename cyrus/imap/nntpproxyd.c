@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpproxyd.c,v 1.1.2.4 2003/02/06 22:40:56 rjs3 Exp $
+ * $Id: nntpproxyd.c,v 1.1.2.5 2003/02/12 19:12:38 rjs3 Exp $
  */
 
 /*
@@ -120,9 +120,9 @@ static int have_newsdb = 1;	/* news db is initialized */
 char newsprefix[100] = "";
 char *nntp_userid = 0;
 struct auth_state *nntp_authstate = 0;
-struct sockaddr_in nntp_localaddr, nntp_remoteaddr;
+struct sockaddr_storage nntp_localaddr, nntp_remoteaddr;
 int nntp_haveaddr = 0;
-char nntp_clienthost[250] = "[local]";
+char nntp_clienthost[NI_MAXHOST*2+1] = "[local]";
 struct protstream *nntp_out = NULL;
 struct protstream *nntp_in = NULL;
 static int nntp_logfd = -1;
@@ -370,7 +370,7 @@ int service_init(int argc __attribute__((unused)),
 int service_main(int argc, char **argv, char **envp)
 {
     socklen_t salen;
-    struct hostent *hp;
+    char hbuf[NI_MAXHOST];
     char localip[60], remoteip[60];
     int timeout;
     sasl_security_properties_t *secprops=NULL;
@@ -383,18 +383,19 @@ int service_main(int argc, char **argv, char **envp)
     /* Find out name of client host */
     salen = sizeof(nntp_remoteaddr);
     if (getpeername(0, (struct sockaddr *)&nntp_remoteaddr, &salen) == 0 &&
-	nntp_remoteaddr.sin_family == AF_INET) {
-	hp = gethostbyaddr((char *)&nntp_remoteaddr.sin_addr,
-			   sizeof(nntp_remoteaddr.sin_addr), AF_INET);
-	if (hp != NULL) {
-	    strncpy(nntp_clienthost, hp->h_name, sizeof(nntp_clienthost)-30);
-	    nntp_clienthost[sizeof(nntp_clienthost)-30] = '\0';
+	(nntp_remoteaddr.ss_family == AF_INET ||
+	 nntp_remoteaddr.ss_family == AF_INET6)) {
+	if (getnameinfo((struct sockaddr *)&nntp_remoteaddr, salen,
+			hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) == 0) {
+	    strncpy(nntp_clienthost, hbuf, sizeof(hbuf));
 	} else {
 	    nntp_clienthost[0] = '\0';
 	}
-	strcat(nntp_clienthost, "[");
-	strcat(nntp_clienthost, inet_ntoa(nntp_remoteaddr.sin_addr));
-	strcat(nntp_clienthost, "]");
+	getnameinfo((struct sockaddr *)&nntp_remoteaddr, salen, hbuf,
+		    sizeof(hbuf), NULL, 0, NI_NUMERICHOST | NI_WITHSCOPEID);
+	strlcat(nntp_clienthost, "[", sizeof(nntp_clienthost));
+	strlcat(nntp_clienthost, hbuf, sizeof(nntp_clienthost));
+	strlcat(nntp_clienthost, "]", sizeof(nntp_clienthost));
 	salen = sizeof(nntp_localaddr);
 	if (getsockname(0, (struct sockaddr *)&nntp_localaddr, &salen) == 0) {
 	    nntp_haveaddr = 1;
@@ -411,13 +412,13 @@ int service_main(int argc, char **argv, char **envp)
     sasl_setprop(nntp_saslconn, SASL_SEC_PROPS, secprops);
     
     if(iptostring((struct sockaddr *)&nntp_localaddr,
-		  sizeof(struct sockaddr_in), localip, 60) == 0) {
+		  salen, localip, 60) == 0) {
 	sasl_setprop(nntp_saslconn, SASL_IPLOCALPORT, localip);
 	saslprops.iplocalport = xstrdup(localip);
     }
     
     if(iptostring((struct sockaddr *)&nntp_remoteaddr,
-		  sizeof(struct sockaddr_in), remoteip, 60) == 0) {
+		  salen, remoteip, 60) == 0) {
 	sasl_setprop(nntp_saslconn, SASL_IPREMOTEPORT, remoteip);  
 	saslprops.ipremoteport = xstrdup(remoteip);
     }
@@ -1868,7 +1869,7 @@ static int savemsg(message_data_t *m, FILE *f)
 	pid_t p = getpid();
 
 	m->id = xmalloc(40 + strlen(config_servername));
-	sprintf(m->id, "<cmu-nntpd-%d-%d-%d@%s>", p, (int) t, 
+	sprintf(m->id, "<cmu-nntpd-%d-%d-%d@%s>", (int)p, (int) t, 
 		post_count++, config_servername);
 	fprintf(f, "Message-ID: %s\r\n", m->id);
     }
@@ -2135,10 +2136,9 @@ static void feedpeer(message_data_t *msg)
 {
     const char *server;
     char *path, *s;
-    int len;
-    struct hostent *hp;
-    struct sockaddr_in sin;
-    int sock;
+    int len, err;
+    struct addrinfo hints, *res, *res0;
+    int sock = -1;
     struct protstream *pin, *pout;
     char buf[4096];
 
@@ -2154,21 +2154,28 @@ static void feedpeer(message_data_t *msg)
 	if ((s - path) == len && !strncmp(path, server, len)) return;
 	path = s + 1;
     }
-
-    if ((hp = gethostbyname(server)) == NULL) {
-	syslog(LOG_ERR, "gethostbyname(%s) failed: %m", server);
-	return;
-    }
-
-    sin.sin_family = AF_INET;
-    memcpy(&sin.sin_addr, hp->h_addr, hp->h_length);
-    sin.sin_port = htons(119);
     
-    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-	syslog(LOG_ERR, "socket() failed: %m");
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = 0;
+    if ((err = getaddrinfo(server, "119", &hints, &res0)) != 0) {
+       syslog(LOG_ERR, "getaddrinfo(%s, %s) failed: %m", server, "119");
 	return;
     }
-    if (connect(sock, (struct sockaddr *) &sin, sizeof(sin)) < 0) {
+
+    for (res = res0; res; res = res->ai_next) {
+	if ((sock = socket(res->ai_family, res->ai_socktype,
+			   res->ai_protocol)) < 0)
+	    continue;
+	if (connect(sock, res->ai_addr, res->ai_addrlen) < 0)
+	    break;
+	close(sock);
+	sock = -1;
+    }
+
+    freeaddrinfo(res0);
+    if(sock < 0) {
 	syslog(LOG_ERR, "connect() failed: %m");
 	return;
     }

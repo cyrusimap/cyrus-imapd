@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: isieve.c,v 1.24.4.2 2002/08/05 20:26:53 ken3 Exp $ */
+/* $Id: isieve.c,v 1.24.4.3 2003/02/12 19:12:47 rjs3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -111,25 +111,32 @@ void sieve_free_net(isieve_t *obj)
 /* initialize the network */
 int init_net(char *serverFQDN, int port, isieve_t **obj)
 {
-  struct sockaddr_in addr;
-  struct hostent *hp;
+  struct addrinfo hints, *res0, *res;
+  int err;
+  char portstr[6];
   int sock;
-
-  if ((hp = gethostbyname(serverFQDN)) == NULL) {
-    perror("gethostbyname");
-    return -1;
+    
+  snprintf(portstr, sizeof(portstr), "%d", port);
+  memset(&hints, 0, sizeof(hints));
+  hints.ai_family = PF_UNSPEC;
+  hints.ai_socktype = SOCK_STREAM;
+  if ((err = getaddrinfo(serverFQDN, portstr, &hints, &res0)) != 0) {
+      fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(err)); 
+      return -1;
+  }
+    
+  for (res = res0; res; res = res->ai_next) {
+      sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+      if (sock < 0)
+	  continue;
+      if (connect(sock, res->ai_addr, res->ai_addrlen) >= 0)
+	  break;
+      close(sock);
+      sock = -1;
   }
 
-  if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-    perror("socket");
-    return -1;
-  }
-
-  addr.sin_family = AF_INET;
-  memcpy(&addr.sin_addr, hp->h_addr, hp->h_length);
-  addr.sin_port = htons(port);
-
-  if (connect(sock, (struct sockaddr *) &addr, sizeof (addr)) < 0) {
+  freeaddrinfo(res0);
+  if (sock < 0) {
     perror("connect");
     return -1;
   }
@@ -177,8 +184,8 @@ int init_sasl(isieve_t *obj,
   static int sasl_started = 0;
   int saslresult = SASL_OK;
   sasl_security_properties_t *secprops=NULL;
-  socklen_t addrsize=sizeof(struct sockaddr_in);
-  struct sockaddr_in saddr_l, saddr_r;
+  socklen_t addrsize=sizeof(struct sockaddr_storage);
+  struct sockaddr_storage saddr_l, saddr_r;
   char localip[60], remoteip[60];
 
   /* attempt to start sasl */
@@ -193,23 +200,21 @@ int init_sasl(isieve_t *obj,
 
   if (saslresult!=SASL_OK) return -1;
 
-  addrsize=sizeof(struct sockaddr_in);
+  addrsize=sizeof(struct sockaddr_storage);
   if (getpeername(obj->sock,(struct sockaddr *)&saddr_r,&addrsize)!=0)
       return -1;
   
-  addrsize=sizeof(struct sockaddr_in);
+  addrsize=sizeof(struct sockaddr_storage);
   if (getsockname(obj->sock,(struct sockaddr *)&saddr_l,&addrsize)!=0)
       return -1;
 
   /* set the port manually since getsockname is stupid and doesn't */
-  saddr_l.sin_port = htons(obj->port);
+  ((struct sockaddr_in *)&saddr_l)->sin_port = htons(obj->port);
 
-  if (iptostring((struct sockaddr *)&saddr_r,
-		 sizeof(struct sockaddr_in), remoteip, 60))
+  if (iptostring((struct sockaddr *)&saddr_r, addrsize, remoteip, 60))
       return -1;
 
-  if (iptostring((struct sockaddr *)&saddr_l,
-		 sizeof(struct sockaddr_in), localip, 60))
+  if (iptostring((struct sockaddr *)&saddr_l, addrsize, localip, 60))
       return -1;
 
   if(obj->conn) sasl_dispose(&obj->conn);
@@ -550,7 +555,15 @@ int do_referral(isieve_t *obj, char *refer_to)
     }
 
     /* get port */
-    if ((p = strchr(host, ':'))) {
+    p = host;
+    if (*host == '[') {
+	if ((p = strrchr(host + 1, ']')) != NULL) {
+	    *p++ = '\0';
+	    host++;			/* skip first bracket */
+        } else
+	    p = host;
+    }
+    if ((p = strchr(p, ':'))) {
 	*p++ = '\0';
 	port = atoi(p);
     } else {

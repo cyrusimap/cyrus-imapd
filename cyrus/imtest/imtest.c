@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/NNTP/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.82.2.10 2002/12/17 16:15:31 ken3 Exp $
+ * $Id: imtest.c,v 1.82.2.11 2003/02/12 19:12:40 rjs3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -749,23 +749,21 @@ static int init_sasl(char *service, char *serverFQDN, int minssf, int maxssf,
     sasl_security_properties_t *secprops=NULL;
     socklen_t addrsize;
     char localip[60], remoteip[60];
-    struct sockaddr_in saddr_l;
-    struct sockaddr_in saddr_r;
+    struct sockaddr_storage saddr_l;
+    struct sockaddr_storage saddr_r;
     
-    addrsize=sizeof(struct sockaddr_in);
+    addrsize=sizeof(struct sockaddr_storage);
     if (getpeername(sock,(struct sockaddr *)&saddr_r,&addrsize)!=0)
 	return IMTEST_FAIL;
     
-    addrsize=sizeof(struct sockaddr_in);
+    addrsize=sizeof(struct sockaddr_storage);
     if (getsockname(sock,(struct sockaddr *)&saddr_l,&addrsize)!=0)
 	return IMTEST_FAIL;
     
-    if(iptostring((struct sockaddr *)&saddr_l, sizeof(struct sockaddr_in),
-		  localip, 60))
+    if(iptostring((struct sockaddr *)&saddr_l, addrsize, localip, 60))
 	return IMTEST_FAIL;
     
-    if(iptostring((struct sockaddr *)&saddr_r, sizeof(struct sockaddr_in),
-		  remoteip, 60))
+    if(iptostring((struct sockaddr *)&saddr_r, addrsize, remoteip, 60))
 	return IMTEST_FAIL;
     
     
@@ -1111,25 +1109,32 @@ int auth_sasl(struct sasl_cmd_t *sasl_cmd, char *mechlist)
 /* initialize the network */
 static int init_net(char *serverFQDN, int port)
 {
-    struct sockaddr_in addr;
-    struct hostent *hp;
-    
-    if ((hp = gethostbyname(serverFQDN)) == NULL) {
-	perror("gethostbyname");
+    struct addrinfo hints, *res0 = NULL, *res;
+    int err;
+
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = PF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_CANONNAME;
+    if ((err = getaddrinfo(serverFQDN, port, &hints, &res0)) != 0) {
+	fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(err));
 	return IMTEST_FAIL;
     }
-    strncpy(serverFQDN, hp->h_name, 1023);
-    
-    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-	perror("socket");
-	return IMTEST_FAIL;	
+
+    if (res0->ai_canonname)
+	strncpy(serverFQDN, res0->ai_canonname, 1023);
+    for (res = res0; res; res = res->ai_next) {
+	sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+	if (sock < 0)
+	    continue;
+	if (connect(sock, res->ai_addr, res->ai_addrlen) >= 0)
+	    break;
+	close(sock);
+	sock = -1;
     }
     
-    addr.sin_family = AF_INET;
-    memcpy(&addr.sin_addr, hp->h_addr, hp->h_length);
-    addr.sin_port = htons(port);
-    
-    if (connect(sock, (struct sockaddr *) &addr, sizeof (addr)) < 0) {
+    freeaddrinfo(res0);
+    if(sock < 0) {
 	perror("connect");
 	return IMTEST_FAIL;
     }
@@ -2232,8 +2237,6 @@ int main(int argc, char **argv)
     char *prog;
     char *tls_keyfile="";
     char *port = "", *prot = "";
-    struct servent *serv;
-    int servport;
     int run_stress_test=0;
     int dotls=0, dossl=0;
     int server_supports_tls;
@@ -2396,14 +2399,6 @@ int main(int argc, char **argv)
     /* last arg is server name */
     strncpy(servername, argv[optind], 1023);
     
-    /* map port -> num */
-    serv = getservbyname(port, "tcp");
-    if (serv == NULL) {
-	servport = atoi(port);
-    } else {
-	servport = ntohs(serv->s_port);
-    }
-
     if(pidfile) {
 	FILE *pf;
 	pf = fopen(pidfile, "w");  
@@ -2436,7 +2431,7 @@ int main(int argc, char **argv)
 	    sasl_dispose(&conn);
 	}
 
-	if (init_net(servername, servport) != IMTEST_OK) {
+	if (init_net(servername, port) != IMTEST_OK) {
 	    imtest_fatal("Network initialization");
 	}
     

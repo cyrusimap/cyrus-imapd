@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.60.4.27 2003/02/06 22:40:55 rjs3 Exp $
+ * $Id: mupdate.c,v 1.60.4.28 2003/02/12 19:12:37 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -111,7 +111,7 @@ struct conn {
 
     int idle;
     
-    char clienthost[250];
+    char clienthost[NI_MAXHOST*2+1];
 
     struct 
     {
@@ -214,12 +214,12 @@ const int config_need_data = 0;
 static struct conn *conn_new(int fd)
 {
     struct conn *C = xzmalloc(sizeof(struct conn));
-    struct sockaddr_in localaddr, remoteaddr;
+    struct sockaddr_storage localaddr, remoteaddr;
     int r;    
     int haveaddr = 0;
     int salen;
     int secflags;
-    struct hostent *hp;
+    char hbuf[NI_MAXHOST];
     
     C->fd = fd;
     
@@ -243,26 +243,22 @@ static struct conn *conn_new(int fd)
     /* Find out name of client host */
     salen = sizeof(remoteaddr);
     if (getpeername(C->fd, (struct sockaddr *)&remoteaddr, &salen) == 0 &&
-	remoteaddr.sin_family == AF_INET) {
-	hp = gethostbyaddr((char *)&remoteaddr.sin_addr,
-			   sizeof(remoteaddr.sin_addr), AF_INET);
-	if (hp != NULL) {
-	    strncpy(C->clienthost, hp->h_name, sizeof(C->clienthost)-30);
-	    C->clienthost[sizeof(C->clienthost)-30] = '\0';
-	} else {
-	    C->clienthost[0] = '\0';
-	}
-	strcat(C->clienthost, "[");
-	strcat(C->clienthost, inet_ntoa(remoteaddr.sin_addr));
-	strcat(C->clienthost, "]");
+	(remoteaddr.ss_family == AF_INET ||
+	 remoteaddr.ss_family == AF_INET6)) {
+	getnameinfo((struct sockaddr *)&remoteaddr, salen, hbuf, sizeof(hbuf),
+		    NULL, 0, NI_WITHSCOPEID);
+	strlcpy(C->clienthost, hbuf, sizeof(C->clienthost)-30);
+	strlcat(C->clienthost, " [", sizeof(C->clienthost));
+	getnameinfo((struct sockaddr *)&remoteaddr, salen, hbuf, sizeof(hbuf),
+		    NULL, 0, NI_NUMERICHOST | NI_WITHSCOPEID);
+	strlcat(C->clienthost, hbuf, sizeof(C->clienthost));
+	strlcat(C->clienthost, "]", sizeof(C->clienthost));
 	salen = sizeof(localaddr);
 	if (getsockname(C->fd, (struct sockaddr *)&localaddr, &salen) == 0
-	    && iptostring((struct sockaddr *)&remoteaddr,
-			  sizeof(struct sockaddr_in),
+	    && iptostring((struct sockaddr *)&remoteaddr, salen,
 			  C->saslprops.ipremoteport_buf,
 			  sizeof(C->saslprops.ipremoteport_buf)) == 0
-	    && iptostring((struct sockaddr *)&localaddr,
-			  sizeof(struct sockaddr_in),
+	    && iptostring((struct sockaddr *)&localaddr, salen,
 			  C->saslprops.iplocalport_buf,
 			  sizeof(C->saslprops.iplocalport_buf)) == 0) {
 	    haveaddr = 1;

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.37.4.6 2003/02/08 22:00:49 ken3 Exp $ */
+/* $Id: service.c,v 1.37.4.7 2003/02/12 19:12:45 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -100,12 +100,12 @@ static void libwrap_init(struct request_info *r, char *service)
 static int libwrap_ask(struct request_info *r, int fd)
 {
     int a;
-    struct sockaddr_in sin;
+    struct sockaddr_storage sin;
     socklen_t len = sizeof(sin);
     
     /* is this a connection from the local host? */
     if (getpeername(fd, (struct sockaddr *) &sin, &len) == 0) {
-	if (sin.sin_family == AF_UNIX) {
+	if (((struct sockaddr *)&sin)->sa_family == AF_UNIX) {
 	    return 1;
 	}
     }
@@ -142,13 +142,13 @@ extern void cyrus_init(const char *, const char *);
 extern const char *config_getstring(const char *key, const char *def);
 extern const char *config_dir;
 
-static int getlockfd(char *service)
+static int getlockfd(char *service, int id)
 {
     char lockfile[1024];
     int fd;
 
-    snprintf(lockfile, sizeof(lockfile), "%s/socket/%s.lock", 
-	     config_dir, service);
+    snprintf(lockfile, sizeof(lockfile), "%s/socket/%s-%d.lock", 
+	     config_dir, service, id);
     fd = open(lockfile, O_CREAT | O_RDWR, 0600);
     if (fd < 0) {
 	syslog(LOG_ERR, 
@@ -268,7 +268,8 @@ int main(int argc, char **argv, char **envp)
     int typelen = sizeof(soctype);
     int newargc = 0;
     char **newargv = (char **) xmalloc(ARGV_GROW * sizeof(char *));
-
+    int id;
+    
     opterr = 0; /* disable error reporting,
 		   since we don't know about service-specific options */
 
@@ -337,6 +338,14 @@ int main(int argc, char **argv, char **envp)
 	exit(EX_SOFTWARE);
     }
     service = xstrdup(p);
+
+    p = getenv("CYRUS_ID");
+    if (p == NULL) {
+	syslog(LOG_ERR, "could not getenv(CYRUS_ID); exiting");
+	exit(EX_SOFTWARE);
+    }
+    id = atoi(p);
+
     cyrus_init(alt_config, service);
 
     if (call_debugger) {
@@ -384,7 +393,7 @@ int main(int argc, char **argv, char **envp)
 	return 1;
     }
 
-    getlockfd(service);
+    getlockfd(service, id);
     for (;;) {
 	/* ok, listen to this socket until someone talks to us */
 
@@ -431,7 +440,7 @@ int main(int argc, char **argv, char **envp)
 		}
 	    } else {
 		/* udp */
-		struct sockaddr_in from;
+		struct sockaddr_storage from;
 		socklen_t fromlen;
 		char ch;
 		int r;

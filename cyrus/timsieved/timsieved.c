@@ -1,7 +1,7 @@
 /* timsieved.c -- main file for timsieved (sieve script accepting program)
  * Tim Martin
  * 9/21/99
- * $Id: timsieved.c,v 1.40.4.10 2003/02/06 22:41:07 rjs3 Exp $
+ * $Id: timsieved.c,v 1.40.4.11 2003/02/12 19:12:53 rjs3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -99,8 +99,8 @@ sasl_conn_t *sieved_saslconn; /* the sasl connection context */
 
 struct auth_state *sieved_authstate = 0;
 
-struct sockaddr_in sieved_localaddr;
-struct sockaddr_in sieved_remoteaddr;
+struct sockaddr_storage sieved_localaddr;
+struct sockaddr_storage sieved_remoteaddr;
 
 struct protstream *sieved_out;
 struct protstream *sieved_in;
@@ -108,7 +108,7 @@ struct protstream *sieved_in;
 int sieved_logfd = -1;
 
 int sieved_haveaddr = 0;
-char sieved_clienthost[250] = "[local]";
+char sieved_clienthost[NI_MAXHOST*2+1] = "[local]";
 
 int sieved_userisadmin;
 int sieved_domainfromip = 0;
@@ -210,11 +210,11 @@ void service_abort(int error)
 int service_main(int argc, char **argv, char **envp)
 {
     socklen_t salen;
-    struct hostent *hp;
     int timeout;
     int secflags = 0;
     char remoteip[60], localip[60];
     sasl_security_properties_t *secprops = NULL;
+    char hbuf[NI_MAXHOST];
 
     /* set up the prot streams */
     sieved_in = prot_new(0, 0);
@@ -232,21 +232,21 @@ int service_main(int argc, char **argv, char **envp)
     /* Find out name of client host */
     salen = sizeof(sieved_remoteaddr);
     if (getpeername(0, (struct sockaddr *)&sieved_remoteaddr, &salen) == 0 &&
-	sieved_remoteaddr.sin_family == AF_INET) {
-	if ((hp = gethostbyaddr((char *)&sieved_remoteaddr.sin_addr,
-			       sizeof(sieved_remoteaddr.sin_addr), AF_INET))!=NULL) {
-	    strncpy(sieved_clienthost, hp->h_name, sizeof(sieved_clienthost)-30);
-	    sieved_clienthost[sizeof(sieved_clienthost)-30] = '\0';
-	}
-	else {
+	(sieved_remoteaddr.ss_family == AF_INET ||
+	 sieved_remoteaddr.ss_family == AF_INET6)) {
+	if (getnameinfo((struct sockaddr *)&sieved_remoteaddr, salen,
+			hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) == 0) {
+	    strncpy(sieved_clienthost, hbuf, sizeof(hbuf));
+	} else {
 	    sieved_clienthost[0] = '\0';
 	}
-	strcat(sieved_clienthost, "[");
-	strcat(sieved_clienthost, inet_ntoa(sieved_remoteaddr.sin_addr));
-	strcat(sieved_clienthost, "]");
+	getnameinfo((struct sockaddr *)&sieved_remoteaddr, salen, hbuf,
+		    sizeof(hbuf), NULL, 0, NI_NUMERICHOST | NI_WITHSCOPEID);
+	strlcat(sieved_clienthost, "[", sizeof(sieved_clienthost));
+	strlcat(sieved_clienthost, hbuf, sizeof(sieved_clienthost));
+	strlcat(sieved_clienthost, "]", sizeof(sieved_clienthost));
 	salen = sizeof(sieved_localaddr);
-	if (getsockname(0, (struct sockaddr *)&sieved_localaddr, &salen) == 0)
-	{
+	if(getsockname(0, (struct sockaddr *)&sieved_localaddr, &salen) == 0) {
 	    sieved_haveaddr = 1;
 	}
     }
@@ -258,12 +258,12 @@ int service_main(int argc, char **argv, char **envp)
 	fatal("SASL failed initializing: sasl_server_new()", -1); 
 
     if(iptostring((struct sockaddr *)&sieved_remoteaddr,
-		  sizeof(struct sockaddr_in), remoteip, 60) == 0) {
+		  salen, remoteip, 60) == 0) {
 	sasl_setprop(sieved_saslconn, SASL_IPREMOTEPORT, remoteip);
 	saslprops.ipremoteport = xstrdup(remoteip);
     }
     if(iptostring((struct sockaddr *)&sieved_localaddr,
-		  sizeof(struct sockaddr_in), localip, 60) == 0) {
+		  salen, localip, 60) == 0) {
 	sasl_setprop(sieved_saslconn, SASL_IPLOCALPORT, localip);
 	saslprops.iplocalport = xstrdup(localip);
     }

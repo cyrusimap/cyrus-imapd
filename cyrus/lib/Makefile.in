@@ -40,7 +40,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-# $Id: Makefile.in,v 1.53.4.5 2003/02/07 23:34:51 rjs3 Exp $
+# $Id: Makefile.in,v 1.53.4.6 2003/02/12 19:12:42 rjs3 Exp $
 
 # Authorization namespace.
 AUTH=auth_@WITH_AUTH@.o
@@ -95,7 +95,7 @@ LIBCYRM_HDRS = $(srcdir)/hash.h $(srcdir)/mpool.h $(srcdir)/xmalloc.h \
 	$(srcdir)/strhash.o $(srcdir)/libconfig.h $(srcdir)/assert.h \
 	imapopts.h
 LIBCYRM_OBJS = libconfig.o imapopts.o hash.o mpool.o xmalloc.o strhash.o \
-	assert.o
+	assert.o @IPV6_OBJS@
 
 all: $(BUILTSOURCES) libcyrus_min.a libcyrus.a
 

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.h,v 1.3.6.7 2002/12/16 17:22:44 ken3 Exp $ */
+/* $Id: backend.h,v 1.3.6.8 2003/02/12 19:12:36 rjs3 Exp $ */
 
 #ifndef _INCLUDED_BACKEND_H
 #define _INCLUDED_BACKEND_H
@@ -55,7 +55,7 @@
 
 struct backend {
     char hostname[MAX_PARTITION_LEN];
-    struct sockaddr_in addr;
+    struct sockaddr_storage addr;
     int sock;
 
     /* only used by proxyd */

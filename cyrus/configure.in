@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.232.4.37 2003/02/05 21:05:06 ken3 Exp $
+dnl $Id: configure.in,v 1.232.4.38 2003/02/12 19:12:33 rjs3 Exp $
 dnl
 
 
@@ -113,14 +113,27 @@ LIBS="$LIBS ${LIB_SOCKET}"
 
 dnl check for IPv6 functions (fall back to sasl's if we don't have them)
 cyrus_cv_getaddrinfo=yes
-IPv6_CHECK_FUNC(getaddrinfo, [IPv6_CHECK_FUNC(gai_strerror,[
-	AC_DEFINE(HAVE_GETADDRINFO)
-	cyrus_cv_getaddrinfo=no])])
+IPv6_CHECK_FUNC(getaddrinfo, [IPv6_CHECK_FUNC(gai_strerror,
+	AC_DEFINE(HAVE_GETADDRINFO),
+	cyrus_cv_getaddrinfo=no)], cyrus_cv_getaddrinfo=no)
+
+if test $cyrus_cv_getaddrinfo = no; then
+	IPV6_OBJS="getaddrinfo.o"
+fi
 
 cyrus_cv_getnameinfo=yes
 IPv6_CHECK_FUNC(getnameinfo,
 	AC_DEFINE(HAVE_GETNAMEINFO),
 	cyrus_cv_getnameinfo=no)
+
+if test $cyrus_cv_getnameinfo = no; then
+	IPV6_OBJS="$IPV6_OBJS getnameinfo.o"
+fi
+
+IPv6_CHECK_SS_FAMILY()
+IPv6_CHECK_SA_LEN()
+
+AC_SUBST(IPV6_OBJS)
 
 dnl this is to check for time things
 AC_CHECK_HEADERS(sys/time.h)
@@ -279,6 +292,8 @@ dnl for turning off sockets
 AC_CHECK_FUNCS(shutdown)
 
 AC_EGREP_HEADER(socklen_t, sys/socket.h, AC_DEFINE(HAVE_SOCKLEN_T))
+AC_EGREP_HEADER(sockaddr_storage, sys/socket.h,
+		AC_DEFINE(HAVE_STRUCT_SOCKADDR_STORAGE))
 AC_EGREP_HEADER(rlim_t, sys/resource.h, AC_DEFINE(HAVE_RLIM_T))
 
 dnl Bunch of setproctitle stuff

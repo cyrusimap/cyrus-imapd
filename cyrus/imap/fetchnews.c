@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: fetchnews.c,v 1.1.2.8 2003/02/06 22:40:52 rjs3 Exp $
+ * $Id: fetchnews.c,v 1.1.2.9 2003/02/12 19:12:36 rjs3 Exp $
  */
 
 #include <config.h>
@@ -72,27 +72,32 @@ void usage(void)
     exit(-1);
 }
 
-int init_net(const char *host, int port,
+int init_net(const char *host, char *port,
 	     struct protstream **in, struct protstream **out)
 {
-    int sock;
-    struct hostent *hp;
-    struct sockaddr_in sin;
+    int sock = -1, err;
+    struct addrinfo hints, *res, *res0;
 
-    if ((hp = gethostbyname(host)) == NULL) {
-	syslog(LOG_ERR, "gethostbyname(%s) failed: %m", host);
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = PF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = 0;
+    if ((err = getaddrinfo(host, port, &hints, &res0)) != 0) {
+	syslog(LOG_ERR, "getaddrinfo(%s, %s) failed: %m", host, port);
 	return -1;
     }
 
-    sin.sin_family = AF_INET;
-    memcpy(&sin.sin_addr, hp->h_addr, hp->h_length);
-    sin.sin_port = htons(port);
-    
-    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-	syslog(LOG_ERR, "socket() failed: %m");
-	return -1;
+    for (res = res0; res; res = res->ai_next) {
+	if ((sock = socket(res->ai_family, res->ai_socktype,
+			   res->ai_protocol)) < 0)
+	    continue;
+	if (connect(sock, res->ai_addr, res->ai_addrlen) < 0)
+	    break;
+	close(sock);
+	sock = -1;
     }
-    if (connect(sock, (struct sockaddr *) &sin, sizeof(sin)) < 0) {
+    freeaddrinfo(res0);
+    if(sock < 0) {
 	syslog(LOG_ERR, "connect() failed: %m");
 	return -1;
     }
@@ -109,8 +114,8 @@ int init_net(const char *host, int port,
 int main(int argc, char *argv[])
 {
     extern char *optarg;
-    int opt, port = 119;
-    char *alt_config = NULL;
+    int opt;
+    char *alt_config = NULL, *port = "119";
     const char *peer = NULL, *server = "localhost", *wildmat = "*";
     int psock = -1, ssock = -1;
     struct protstream *pin, *pout, *sin, *sout;
@@ -134,7 +139,7 @@ int main(int argc, char *argv[])
 	    break;
 
 	case 'p': /* pot on server */
-	    port = atoi(optarg);
+	    port = optarg;
 	    break;
 
 	case 'w': /* wildmat */
@@ -160,7 +165,8 @@ int main(int argc, char *argv[])
     cyrus_init(alt_config, "fetchnews");
 
     /* connect to the peer */
-    if ((psock = init_net(peer, 119, &pin, &pout)) < 0) {
+    /* xxx configurable port number? */
+    if ((psock = init_net(peer, "119", &pin, &pout)) < 0) {
 	fprintf(stderr, "connection to %s failed\n", peer);
 	cyrus_done();
 	exit(-1);

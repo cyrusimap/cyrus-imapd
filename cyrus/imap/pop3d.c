@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122.4.22 2003/02/06 22:40:56 rjs3 Exp $
+ * $Id: pop3d.c,v 1.122.4.23 2003/02/12 19:12:38 rjs3 Exp $
  */
 #include <config.h>
 
@@ -109,9 +109,9 @@ sasl_conn_t *popd_saslconn; /* the sasl connection context */
 
 char *popd_userid = 0;
 struct mailbox *popd_mailbox = 0;
-struct sockaddr_in popd_localaddr, popd_remoteaddr;
+struct sockaddr_storage popd_localaddr, popd_remoteaddr;
 int popd_haveaddr = 0;
-char popd_clienthost[250] = "[local]";
+char popd_clienthost[NI_MAXHOST*2+1] = "[local]";
 struct protstream *popd_out = NULL;
 struct protstream *popd_in = NULL;
 unsigned popd_exists = 0;
@@ -312,7 +312,7 @@ int service_init(int argc __attribute__((unused)),
 int service_main(int argc, char **argv, char **envp)
 {
     socklen_t salen;
-    struct hostent *hp;
+    char hbuf[NI_MAXHOST];
     char localip[60], remoteip[60];
     int timeout;
     sasl_security_properties_t *secprops=NULL;
@@ -325,18 +325,19 @@ int service_main(int argc, char **argv, char **envp)
     /* Find out name of client host */
     salen = sizeof(popd_remoteaddr);
     if (getpeername(0, (struct sockaddr *)&popd_remoteaddr, &salen) == 0 &&
-	popd_remoteaddr.sin_family == AF_INET) {
-	hp = gethostbyaddr((char *)&popd_remoteaddr.sin_addr,
-			   sizeof(popd_remoteaddr.sin_addr), AF_INET);
-	if (hp != NULL) {
-	    strncpy(popd_clienthost, hp->h_name, sizeof(popd_clienthost)-30);
-	    popd_clienthost[sizeof(popd_clienthost)-30] = '\0';
+	(popd_remoteaddr.ss_family == AF_INET ||
+	 popd_remoteaddr.ss_family == AF_INET6)) {
+	if (getnameinfo((struct sockaddr *)&popd_remoteaddr, salen,
+			hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) == 0) {
+    	    strncpy(popd_clienthost, hbuf, sizeof(hbuf));
 	} else {
 	    popd_clienthost[0] = '\0';
 	}
-	strcat(popd_clienthost, "[");
-	strcat(popd_clienthost, inet_ntoa(popd_remoteaddr.sin_addr));
-	strcat(popd_clienthost, "]");
+	getnameinfo((struct sockaddr *)&popd_remoteaddr, salen, hbuf,
+		    sizeof(hbuf), NULL, 0, NI_NUMERICHOST | NI_WITHSCOPEID);
+	strlcat(popd_clienthost, "[", sizeof(popd_clienthost));
+	strlcat(popd_clienthost, hbuf, sizeof(popd_clienthost));
+	strlcat(popd_clienthost, "]", sizeof(popd_clienthost));
 	salen = sizeof(popd_localaddr);
 	if (getsockname(0, (struct sockaddr *)&popd_localaddr, &salen) == 0) {
 	    popd_haveaddr = 1;
@@ -353,13 +354,13 @@ int service_main(int argc, char **argv, char **envp)
     sasl_setprop(popd_saslconn, SASL_SEC_PROPS, secprops);
     
     if(iptostring((struct sockaddr *)&popd_localaddr,
-		  sizeof(struct sockaddr_in), localip, 60) == 0) {
+		  salen, localip, 60) == 0) {
 	sasl_setprop(popd_saslconn, SASL_IPLOCALPORT, localip);
 	saslprops.iplocalport = xstrdup(localip);
     }
     
     if(iptostring((struct sockaddr *)&popd_remoteaddr,
-		  sizeof(struct sockaddr_in), remoteip, 60) == 0) {
+		  salen, remoteip, 60) == 0) {
 	sasl_setprop(popd_saslconn, SASL_IPREMOTEPORT, remoteip);  
 	saslprops.ipremoteport = xstrdup(remoteip);
     }
@@ -463,6 +464,41 @@ void fatal(const char* s, int code)
 }
 
 #ifdef HAVE_KRB
+/* translate IPv4 mapped IPv6 address to IPv4 address */
+#ifdef IN6_IS_ADDR_V4MAPPED
+static void sockaddr_unmapped(struct sockaddr *sa, socklen_t *len)
+{
+    struct sockaddr_in6 *sin6;
+    struct sockaddr_in *sin4;
+    uint32_t addr;
+    int port;
+
+    if (sa->sa_family != AF_INET6)
+	return;
+    sin6 = (struct sockaddr_in6 *)sa;
+    if (!IN6_IS_ADDR_V4MAPPED((&sin6->sin6_addr)))
+	return;
+    sin4 = (struct sockaddr_in *)sa;
+    addr = *(uint32_t *)&sin6->sin6_addr.s6_addr[12];
+    port = sin6->sin6_port;
+    memset(sin4, 0, sizeof(struct sockaddr_in));
+    sin4->sin_addr.s_addr = addr;
+    sin4->sin_port = port;
+    sin4->sin_family = AF_INET;
+#ifdef HAVE_SOCKADDR_SA_LEN
+    sin4->sin_len = sizeof(struct sockaddr_in);
+#endif
+    *len = sizeof(struct sockaddr_in);
+}
+#else
+static void sockaddr_unmapped(struct sockaddr *sa __attribute__((unused)),
+			      socklen_t *len __attribute__((unused)))
+{
+    return;
+}
+#endif
+
+
 /*
  * MIT's kludge of a kpop protocol
  * Client does a krb_sendauth() first thing
@@ -475,16 +511,26 @@ void kpop(void)
     char version[9];
     const char *srvtab;
     int r;
-
+    socklen_t len;
+    
     if (!popd_haveaddr) {
 	fatal("Cannot get client's IP address", EC_OSERR);
     }
 
     srvtab = config_getstring(IMAPOPT_SRVTAB);
 
+    sockaddr_unmapped((struct sockaddr *)&popd_remoteaddr, &len);
+    if (popd_remoteaddr.ss_family != AF_INET) {
+	prot_printf(popd_out,
+		    "-ERR [AUTH] Kerberos authentication failure: %s\r\n",
+		    "not an IPv4 connection");
+	shut_down(0);
+    }
+
     strcpy(instance, "*");
     r = krb_recvauth(0L, 0, &ticket, "pop", instance,
-		     &popd_remoteaddr, (struct sockaddr_in *) NULL,
+		     (struct sockaddr_in *) &popd_remoteaddr,
+		     (struct sockaddr_in *) NULL,
 		     &kdata, (char*) srvtab, schedule, version);
     
     if (r) {

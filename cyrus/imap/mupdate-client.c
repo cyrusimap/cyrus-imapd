@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.32.4.9 2003/02/06 22:40:55 rjs3 Exp $
+ * $Id: mupdate-client.c,v 1.32.4.10 2003/02/12 19:12:37 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -94,19 +94,19 @@ int mupdate_connect(const char *server, const char *port,
 		    sasl_callback_t *cbs)
 {
     mupdate_handle *h = NULL;
+    struct addrinfo hints, *res0, *res;
+    int err;
     int local_cbs = 0;
-    struct hostent *hp;
-    struct servent *sp;
-    struct sockaddr_in addr;
     int s, saslresult;
     char buf[4096];
     char *mechlist = NULL;
     sasl_security_properties_t *secprops = NULL;
     socklen_t addrsize;
-    struct sockaddr_in saddr_l;
-    struct sockaddr_in saddr_r;
+    struct sockaddr_storage saddr_l;
+    struct sockaddr_storage saddr_r;
     char localip[60], remoteip[60];
     const char *sasl_status = NULL;
+    char portstr[NI_MAXSERV];
     
     if(!handle)
 	return MUPDATE_BADPARAM;
@@ -119,37 +119,39 @@ int mupdate_connect(const char *server, const char *port,
 	}
     }
     
-    hp = gethostbyname(server);
-    if (!hp) {
-	syslog(LOG_ERR, "mupdate-client: gethostbyname %s failed: %m", server);
-	return MUPDATE_NOCONN;
-    }
-    
-    s = socket(AF_INET, SOCK_STREAM, 0);
-    if (s == -1) {
-	syslog(LOG_ERR, "mupdate-client: socket(): %m");
-	return MUPDATE_NOCONN;
-    }
-    
-    addr.sin_family = AF_INET;
-    memcpy(&addr.sin_addr, hp->h_addr, sizeof(addr.sin_addr));
-
-    if (port && imparse_isnumber(port)) {
-	addr.sin_port = htons(atoi(port));
-    } else if (port) {
-	sp = getservbyname(port, "tcp");
-	if (!sp) {
-	    syslog(LOG_ERR, "mupdate-client: getservbyname(tcp, %s): %m",
-		   port);
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = PF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    if(port)
+	err = getaddrinfo(server, port, &hints, &res0);
+    if (!port || err == EAI_SERVICE) {
+	err = getaddrinfo(server, "mupdate", &hints, &res0);
+	if (err == EAI_SERVICE) {
+	    snprintf(portstr, sizeof(portstr), "%d",
+		     config_getint(IMAPOPT_MUPDATE_PORT));
+	    err = getaddrinfo(server, portstr, &hints, &res0);
 	}
-	addr.sin_port = sp->s_port;
-    } else if((sp = getservbyname("mupdate", "tcp")) != NULL) {
-	addr.sin_port = sp->s_port;
-    } else {
-	addr.sin_port = htons(config_getint(IMAPOPT_MUPDATE_PORT));
+    }
+    
+    if (err) {
+	syslog(LOG_ERR, "mupdate-client: getaddrinfo(%s, %s) failed: %s",
+	       server, port, gai_strerror(err));
+	return MUPDATE_NOCONN;
+    }
+    
+    s = -1;
+    for (res = res0; res; res = res->ai_next) {
+	s = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+	if (s < 0)
+	    continue;
+	if (connect(s, res->ai_addr, res->ai_addrlen) >= 0)
+	    break;
+	close(s);
+	s = -1;
     }
 
-    if (connect(s, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
+    freeaddrinfo(res0);
+    if (s < 0) {
 	syslog(LOG_ERR, "mupdate-client: connect(%s): %m", server);
 	return MUPDATE_NOCONN;
     }
@@ -167,19 +169,19 @@ int mupdate_connect(const char *server, const char *port,
     }
 
     /* set the IP addresses */
-    addrsize=sizeof(struct sockaddr_in);
+    addrsize=sizeof(struct sockaddr_storage);
     if (getpeername(h->sock,(struct sockaddr *)&saddr_r,&addrsize)!=0)
 	goto noconn;
 
-    addrsize=sizeof(struct sockaddr_in);
+    addrsize=sizeof(struct sockaddr_storage);
     if (getsockname(h->sock,(struct sockaddr *)&saddr_l,&addrsize)!=0)
 	goto noconn;
 
-    if(iptostring((const struct sockaddr *)&saddr_l, sizeof(struct sockaddr_in),
+    if(iptostring((const struct sockaddr *)&saddr_l, addrsize,
 		  localip, 60) != 0)
 	goto noconn;
     
-    if(iptostring((const struct sockaddr *)&saddr_r, sizeof(struct sockaddr_in),
+    if(iptostring((const struct sockaddr *)&saddr_r, addrsize,
 		  remoteip, 60) != 0)
 	goto noconn;
 

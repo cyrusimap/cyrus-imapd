@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.1.2.2 2003/02/07 23:34:49 rjs3 Exp $ */
+/* $Id: global.c,v 1.1.2.3 2003/02/12 19:12:36 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -323,19 +323,21 @@ char *canonify_userid(char *user, char *loginid, int *domain_from_ip)
 	}
 	else {
 	    socklen_t salen;
-	    struct hostent *hp;
-	    struct sockaddr_in localaddr;
-
+	    int error;
+	    struct sockaddr_storage localaddr;
+	    char hbuf[NI_MAXHOST];
+	    
 	    salen = sizeof(localaddr);
 	    if (getsockname(0, (struct sockaddr *)&localaddr, &salen) == 0) {
-		hp = gethostbyaddr((char *)&localaddr.sin_addr,
-				   sizeof(localaddr.sin_addr), AF_INET);
-		if (hp && (domain = strchr(hp->h_name, '.')) &&
+		error = getnameinfo((struct sockaddr *)&localaddr, salen,
+				    hbuf, sizeof(hbuf), NULL, 0,
+				    NI_NAMEREQD | NI_WITHSCOPEID);
+		if (error == 0 && (domain = strchr(hbuf, '.')) &&
 		    !(config_defdomain && !strcasecmp(config_defdomain, domain+1))) {
 		    /* append the domain from our IP */
 		    snprintf(buf, sizeof(buf), "%s@%s", user, domain+1);
 		    user = buf;
-
+		    
 		    if (domain_from_ip) *domain_from_ip = 1;
 		}
 	    }

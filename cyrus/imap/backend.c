@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.7.6.13 2003/02/06 22:40:51 rjs3 Exp $ */
+/* $Id: backend.c,v 1.7.6.14 2003/02/12 19:12:36 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -156,7 +156,7 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
 {
     int r;
     sasl_security_properties_t *secprops = NULL;
-    struct sockaddr_in saddr_l, saddr_r;
+    struct sockaddr_storage saddr_l, saddr_r;
     char remoteip[60], localip[60];
     socklen_t addrsize;
     sasl_callback_t *cb;
@@ -176,18 +176,16 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
 			  pass);
 
     /* set the IP addresses */
-    addrsize=sizeof(struct sockaddr_in);
+    addrsize=sizeof(struct sockaddr_storage);
     if (getpeername(s->sock, (struct sockaddr *)&saddr_r, &addrsize) != 0)
 	return SASL_FAIL;
-    if(iptostring((struct sockaddr *)&saddr_r, sizeof(struct sockaddr_in),
-		  remoteip, 60) != 0)
+    if(iptostring((struct sockaddr *)&saddr_r, addrsize, remoteip, 60) != 0)
 	return SASL_FAIL;
   
-    addrsize=sizeof(struct sockaddr_in);
+    addrsize=sizeof(struct sockaddr_storage);
     if (getsockname(s->sock, (struct sockaddr *)&saddr_l, &addrsize)!=0)
 	return SASL_FAIL;
-    if(iptostring((struct sockaddr *)&saddr_l, sizeof(struct sockaddr_in),
-		  localip, 60) != 0)
+    if(iptostring((struct sockaddr *)&saddr_l, addrsize, localip, 60) != 0)
 	return SASL_FAIL;
 
     /* Require proxying if we have an "interesting" userid (authzid) */
@@ -265,46 +263,54 @@ struct backend *backend_connect(struct backend *ret, const char *server,
 				const char **auth_status)
 {
     /* need to (re)establish connection to server or create one */
-    int sock;
+    int sock = -1;
     int r;
+    int err;
+    struct addrinfo hints, *res0 = NULL, *res;
 
     if (!ret) {
-	struct hostent *hp;
 	struct servent *serv;
 
 	ret = xmalloc(sizeof(struct backend));
 	memset(ret, 0, sizeof(struct backend));
 	strlcpy(ret->hostname, server, sizeof(ret->hostname));
-	if ((hp = gethostbyname(server)) == NULL) {
-	    syslog(LOG_ERR, "gethostbyname(%s) failed: %m", server);
-	    free(ret);
-	    return NULL;
-	}
 	if ((serv = getservbyname(prot->service, "tcp")) == NULL) {
 	    syslog(LOG_ERR, "getservbyname(%s) failed: %m", prot->service);
 	    free(ret);
 	    return NULL;
 	}
-	ret->addr.sin_family = AF_INET;
-	memcpy(&ret->addr.sin_addr, hp->h_addr, hp->h_length);
-	ret->addr.sin_port = serv->s_port;
-
 	ret->timeout = NULL;
     }
 
-    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-	syslog(LOG_ERR, "socket() failed: %m");
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = PF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    err = getaddrinfo(server, "143", &hints, &res0);
+    if (err) {
+	syslog(LOG_ERR, "getaddrinfo(%s) failed: %s",
+	       server, gai_strerror(err));
 	free(ret);
 	return NULL;
     }
-    if (connect(sock, (struct sockaddr *) &ret->addr, 
-		sizeof(ret->addr)) < 0) {
+    for (res = res0; res; res = res->ai_next) {
+	sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+	if (sock < 0)
+	    continue;
+	if (connect(sock, res->ai_addr, res->ai_addrlen) >= 0)
+	    break;
+	close(sock);
+	sock = -1;
+    }
+    if (sock < 0) {
+	freeaddrinfo(res0);
 	syslog(LOG_ERR, "connect(%s) failed: %m", server);
         close(sock);
 	free(ret);
 	return NULL;
     }
-    
+    memcpy(&ret->addr, res->ai_addr, res->ai_addrlen);
+    freeaddrinfo(res0);    
+
     ret->in = prot_new(sock, 0);
     ret->out = prot_new(sock, 1);
     ret->sock = sock;

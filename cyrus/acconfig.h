@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.35.4.11 2003/02/06 22:40:46 rjs3 Exp $ */
+/* $Id: acconfig.h,v 1.35.4.12 2003/02/12 19:12:33 rjs3 Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -158,6 +158,9 @@
 /* IPv6 */
 #undef HAVE_GETADDRINFO
 #undef HAVE_GETNAMEINFO
+#undef HAVE_STRUCT_SOCKADDR_STORAGE
+#undef HAVE_SS_FAMILY
+#undef HAVE_SOCKADDR_SA_LEN
 
 @BOTTOM@
 
@@ -198,7 +201,7 @@
 #endif
 
 #ifndef HAVE_SOCKLEN_T
-typedef int socklen_t;
+typedef unsigned int socklen_t;
 #endif
 
 #ifndef HAVE_RLIM_T
@@ -211,25 +214,42 @@ typedef int rlim_t;
 /* save the cmdlines for the ID command */
 #undef ID_SAVE_CMDLINE
 
-/* getaddrinfo things */
+/* IPv6 things */
 #include <netdb.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
 
-#ifndef HAVE_GETADDRINFO
-#define	getaddrinfo	sasl_getaddrinfo
-#define	freeaddrinfo	sasl_freeaddrinfo
-#define	gai_strerror	sasl_gai_strerror
-#include "gai.h"
+#ifndef HAVE_STRUCT_SOCKADDR_STORAGE
+#define	_SS_MAXSIZE	128	/* Implementation specific max size */
+#define	_SS_PADSIZE	(_SS_MAXSIZE - sizeof (struct sockaddr))
+
+struct sockaddr_storage {
+	struct	sockaddr ss_sa;
+	char		__ss_pad2[_SS_PADSIZE];
+};
+# define ss_family ss_sa.sa_family
+# define HAVE_SS_FAMILY
+#endif /* !HAVE_STRUCT_SOCKADDR_STORAGE */
+
+#ifndef HAVE_SS_FAMILY
+#define ss_family	__ss_family
 #endif
 
-#ifndef HAVE_GETNAMEINFO
-#define	getnameinfo	sasl_getnameinfo
+#ifndef AF_INET6
+/* Define it to something that should never appear */
+#define	AF_INET6	AF_MAX
+#endif
+
+#ifndef HAVE_GETADDRINFO
+#include "gai.h"
 #endif
 
 #ifndef	NI_WITHSCOPEID
 #define	NI_WITHSCOPEID	0
 #endif
+
+/* End IPv6 things */
 
 #ifdef OLD_SIEVE_SERVICE_NAME
 #define SIEVE_SERVICE_NAME "imap"

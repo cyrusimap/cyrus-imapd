@@ -1,5 +1,5 @@
 # SIEVE Makefile for cyrus software
-# $Id: Makefile.in,v 1.10.6.4 2003/01/14 17:34:50 ken3 Exp $
+# $Id: Makefile.in,v 1.10.6.5 2003/02/12 19:12:46 rjs3 Exp $
 #
 # @configure_input@
 # 
@@ -59,6 +59,8 @@ OPENSSL_INC=@OPENSSL_INC@
 BDB_LIB=@BDB_LIB@
 BDB_INC=@BDB_INC@
 
+LIB_RT=@LIB_RT@
+
 PERL=@PERL@
 
 SHELL = /bin/sh
@@ -76,6 +78,7 @@ all::
 	do \
 		(cd $$d; echo "### Making" all "in" `pwd`;	\
 			if [ -f Makefile.PL ]; then \
+			   LIB_RT="$(LIB_RT)" \
 			   BDB_LIB="$(BDB_LIB)" BDB_INC="$(BDB_INC)" \
 			   OPENSSL_LIB="$(OPENSSL_LIB)" OPENSSL_INC="$(OPENSSL_INC)" \
 			   SASL_LIB="$(SASL_LIB)" SASL_INC="$(SASL_INC)" CC="$(CC)" \

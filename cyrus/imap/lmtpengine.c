@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.75.4.16 2003/02/06 22:40:54 rjs3 Exp $
+ * $Id: lmtpengine.c,v 1.75.4.17 2003/02/12 19:12:37 rjs3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -110,7 +110,7 @@ struct clientdata {
     struct protstream *pout;
     int fd;
 
-    char clienthost[250];
+    char clienthost[NI_MAXHOST*2+1];
     char lhlo_param[250];
 
     sasl_conn_t *conn;
@@ -840,11 +840,12 @@ void lmtpmode(struct lmtp_func *func,
     int r;
     struct clientdata cd;
 
-    struct sockaddr_in localaddr, remoteaddr;
+    struct sockaddr_storage localaddr, remoteaddr;
     int havelocal = 0, haveremote = 0;
     char localip[60], remoteip[60];
     socklen_t salen;
-    char clienthost[250];
+    char clienthost[NI_MAXHOST*2+1];
+    char hbuf[NI_MAXHOST];
 
     sasl_ssf_t ssf;
     char *auth_id;
@@ -890,32 +891,34 @@ void lmtpmode(struct lmtp_func *func,
     /* determine who we're talking to */
     salen = sizeof(remoteaddr);
     r = getpeername(fd, (struct sockaddr *)&remoteaddr, &salen);
-    if (!r && remoteaddr.sin_family == AF_INET) {
+    if (!r &&
+	(remoteaddr.ss_family == AF_INET ||
+	 remoteaddr.ss_family == AF_INET6)) {
 	/* connected to an internet socket */
-	struct hostent *hp;
-	hp = gethostbyaddr((char *)&remoteaddr.sin_addr,
-			   sizeof(remoteaddr.sin_addr), AF_INET);
-	if (hp != NULL) {
-	    strlcpy(cd.clienthost, hp->h_name, sizeof(cd.clienthost) - 30);
+	if (getnameinfo((struct sockaddr *)&remoteaddr, salen,
+			hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) == 0) {
+	    strncpy(cd.clienthost, hbuf, sizeof(hbuf));
+	    strlcat(cd.clienthost, " ", sizeof(cd.clienthost));
+	    cd.clienthost[sizeof(cd.clienthost)-30] = '\0';
 	} else {
-	    strlcpy(cd.clienthost, inet_ntoa(remoteaddr.sin_addr), 
-		    sizeof(cd.clienthost) - 30);
+	    cd.clienthost[0] = '\0';
 	}
-	strlcat(cd.clienthost, " [", sizeof(cd.clienthost));
-	strlcat(cd.clienthost, inet_ntoa(remoteaddr.sin_addr), 
-		sizeof(cd.clienthost));
+	getnameinfo((struct sockaddr *)&remoteaddr, salen, hbuf, sizeof(hbuf),
+		    NULL, 0, NI_NUMERICHOST | NI_WITHSCOPEID);
+	strlcat(cd.clienthost, "[", sizeof(cd.clienthost));
+	strlcat(cd.clienthost, hbuf, sizeof(cd.clienthost));
 	strlcat(cd.clienthost, "]", sizeof(cd.clienthost));
-
+	
 	salen = sizeof(localaddr);
 	if (!getsockname(fd, (struct sockaddr *)&localaddr, &salen)) {
 	    /* set the ip addresses here */
-	    if(iptostring((struct sockaddr *)&localaddr,
-                          sizeof(struct sockaddr_in), localip, 60) == 0) {
+	    if(iptostring((struct sockaddr *)&localaddr, salen,
+			  localip, 60) == 0) {
 		havelocal = 1;
                 saslprops.iplocalport = xstrdup(localip);
             }
-            if(iptostring((struct sockaddr *)&remoteaddr,
-                          sizeof(struct sockaddr_in), remoteip, 60) == 0) {
+            if(iptostring((struct sockaddr *)&remoteaddr, salen,
+			  remoteip, 60) == 0) {
 		haveremote = 1;
                 saslprops.ipremoteport = xstrdup(remoteip);
             }
@@ -1058,13 +1061,16 @@ void lmtpmode(struct lmtp_func *func,
 		      }
 		      else {
 			  sleep(3);
-		  
+
+			  if (remoteaddr.ss_family == AF_INET ||
+			      remoteaddr.ss_family == AF_INET6)
+			      getnameinfo((struct sockaddr *)&remoteaddr,
+					  salen, hbuf, sizeof(hbuf), NULL, 0,
+					  NI_NUMERICHOST | NI_WITHSCOPEID);
+			  else
+			      strlcpy(hbuf, "[unix socket]", sizeof(hbuf));		  
 			  syslog(LOG_ERR, "badlogin: %s %s %s",
-				 remoteaddr.sin_family == AF_INET ?
-				 inet_ntoa(remoteaddr.sin_addr) :
-				 "[unix socket]",
-				 mech,
-				 sasl_errdetail(cd.conn));
+				 hbuf, mech, sasl_errdetail(cd.conn));
 		  
 			  snmp_increment_args(AUTHENTICATION_NO, 1,
 					      VARIABLE_AUTH, hash_simple(mech), 
@@ -1665,8 +1671,8 @@ static int do_auth(struct lmtp_conn *conn)
     int r;
     const int AUTH_ERROR = 420, AUTH_OK = 250;
     sasl_security_properties_t *secprops = NULL;
-    struct sockaddr_in saddr_l;
-    struct sockaddr_in saddr_r;
+    struct sockaddr_storage saddr_l;
+    struct sockaddr_storage saddr_r;
     socklen_t addrsize;
     char buf[2048];
     char *in;
@@ -1686,14 +1692,14 @@ static int do_auth(struct lmtp_conn *conn)
     }
 
     /* set the IP addresses */
-    addrsize=sizeof(struct sockaddr_in);
+    addrsize=sizeof(struct sockaddr_storage);
     if (getpeername(conn->sock, (struct sockaddr *)&saddr_r, &addrsize) != 0) {
 	syslog(LOG_ERR,
 	       "lmtpengine do_auth: getpeername() failed");
 	return AUTH_ERROR;
     }
     
-    addrsize=sizeof(struct sockaddr_in);
+    addrsize=sizeof(struct sockaddr_storage);
     if (getsockname(conn->sock, (struct sockaddr *)&saddr_l,&addrsize)!=0) {
 	syslog(LOG_ERR,
 	       "lmtpengine do_auth: getsockname() failed");
@@ -1701,15 +1707,13 @@ static int do_auth(struct lmtp_conn *conn)
     }
     
 
-    if (iptostring((struct sockaddr *)&saddr_r,
-		   sizeof(struct sockaddr_in), remoteip, 60) != 0) {
+    if (iptostring((struct sockaddr *)&saddr_r, addrsize, remoteip, 60) != 0) {
 	syslog(LOG_ERR,
 	       "lmtpengine do_auth: iptostring() (remote) failed");
 	return AUTH_ERROR;
     }
     
-    if (iptostring((struct sockaddr *)&saddr_l,
-		   sizeof(struct sockaddr_in), localip, 60) != 0) {
+    if (iptostring((struct sockaddr *)&saddr_l, addrsize, localip, 60) != 0) {
 	syslog(LOG_ERR,
 	       "lmtpengine do_auth: iptostring() (local) failed");	
 	return AUTH_ERROR;
@@ -1838,44 +1842,48 @@ int lmtp_connect(const char *phost,
 	free(host);
 	host = xstrdup(config_servername);
     } else {
-	struct hostent *hp;
-	struct sockaddr_in addr;
-	struct servent *service;
+	struct addrinfo hints, *res0 = NULL, *res;
+	int err;
 	char *p;
 
-	p = strchr(host, ':');
+	if (*host == '[' && (p = strchr(host + 1, ']')) != NULL &&
+	    (*++p == '\0' || *p == ':')) {
+	    host++;
+	    *(p - 1) = '\0';
+	    if (*p != ':')
+		p = NULL;
+	} else {
+    	    p = strchr(host, ':');
+	}
+ 
 	if (p) {
 	    *p++ = '\0';
 	} else {
 	    p = "lmtp";
 	}
 
-	if ((hp = gethostbyname(host)) == NULL) {
-	    syslog(LOG_ERR, "gethostbyname(%s) failed", host);
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = PF_UNSPEC;
+	hints.ai_socktype = SOCK_STREAM;
+	err = getaddrinfo(host, p, &hints, &res0);
+	if (err) {
+	    syslog(LOG_ERR, "getaddrinfo(%s, %s) failed: %s",
+		   host, p, gai_strerror(err));
 	    goto errsock;
 	}
 
-	/* open inet socket */
-	if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-	    syslog(LOG_ERR, "socket() failed: %m");
-	    goto errsock;
+	for (res = res0; res; res = res->ai_next) {
+	    sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+	    if (sock < 0)
+		continue;
+	    if (connect(sock, res->ai_addr, res->ai_addrlen) >= 0)
+		break;
+	    close(sock);
+	    sock = -1;
 	}
 
-	addr.sin_family = AF_INET;
-	memcpy(&addr.sin_addr, hp->h_addr, hp->h_length);
-	service = getservbyname(p, "tcp");
-	if (service) {
-	    addr.sin_port = service->s_port;
-	} else {
-	    int pn = atoi(p);
-	    if (pn == 0) {
-		syslog(LOG_ERR, "couldn't find valid lmtp port");
-		goto errsock;
-	    }
-	    addr.sin_port = htons(pn);
-	}
-
-	if (connect(sock, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
+	freeaddrinfo(res0);
+	if (sock < 0) {
 	    syslog(LOG_ERR, "connect(%s:%s) failed: %m", host, p);
 	    goto errsock;
 	}	    
