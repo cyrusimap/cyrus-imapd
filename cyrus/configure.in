@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.232.4.48 2003/05/12 22:41:46 ken3 Exp $
+dnl $Id: configure.in,v 1.232.4.49 2003/06/07 16:43:00 ken3 Exp $
 dnl
 
 
@@ -249,6 +249,12 @@ AC_ARG_WITH(news-db,
                           for the netnews article db (Default: berkeley) ],
 	DB="$withval", DB="berkeley")
 CYRUS_SET_BACKEND("netnews db", CONFIG_DB_NETNEWS, $DB)
+
+AC_ARG_WITH(annotation-db,
+	[  --with-annotation-db=DB use DB (berkeley, skiplist) as a backend
+                          for the mailbox annotations (Default: skiplist) ],
+	DB="$withval", DB="skiplist")
+CYRUS_SET_BACKEND_BINARY("annotation db", CONFIG_DB_ANNOTATION, $DB)
 
 SIEVE_SUBDIRS=""
 sievedir="sieve"

@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.30 2003/05/30 16:47:02 ken3 Exp $
+ * $Id: annotate.c,v 1.8.6.31 2003/06/07 16:43:01 ken3 Exp $
  */
 
 #include <config.h>
@@ -77,19 +77,21 @@
 
 #ifdef ENABLE_ANNOTATEMORE
 
-#define DB (&cyrusdb_skiplist) /* CONFIG_DB_ANNOTATION */
+#define DB CONFIG_DB_ANNOTATION
 
 extern void printstring(const char *s);
 extern void appendattvalue(struct attvaluelist **l, char *attrib,
 			   const char *value);
 extern void freeattvalues(struct attvaluelist *l);
-static void output_attlist(struct protstream *pout, struct attvaluelist *l);
 
 struct db *anndb;
 static int annotate_dbopen = 0;
-int (*proxy_func)(const char *server, const char *mbox_pat,
-		  struct strlist *entry_pat, struct strlist *attribute_pat) = NULL;
-#endif
+int (*proxy_fetch_func)(const char *server, const char *mbox_pat,
+			struct strlist *entry_pat,
+			struct strlist *attribute_pat) = NULL;
+int (*proxy_store_func)(const char *server, const char *mbox_pat,
+			struct entryattlist *entryatts) = NULL;
+#endif /* ENABLE_ANNOTATEMORE */
 
 /* String List Management */
 /*
@@ -213,8 +215,11 @@ void freeentryatts(struct entryattlist *l)
 }
 
 /* must be called after cyrus_init */
-void annotatemore_init(int myflags,int (*func)(const char *, const char *,
-					       struct strlist *, struct strlist *))
+void annotatemore_init(int myflags,
+		       int (*fetch_func)(const char *, const char *,
+					 struct strlist *, struct strlist *),
+		       int (*store_func)(const char *, const char *,
+					 struct entryattlist *))
 {
     int r;
 
@@ -222,8 +227,11 @@ void annotatemore_init(int myflags,int (*func)(const char *, const char *,
 	r = DB->sync();
     }
 
-    if (func) {
-	proxy_func = func;
+    if (fetch_func) {
+	proxy_fetch_func = fetch_func;
+    }
+    if (store_func) {
+	proxy_store_func = store_func;
     }
 }
 
@@ -252,22 +260,40 @@ void annotatemore_open(char *fname)
     annotate_dbopen = 1;
 }
 
-enum {
-    ENTRY_PARTITION =		(1<<0),
-    ENTRY_SERVER =		(1<<1),
-    ENTRY_SIZE =                (1<<2)
-};
+void annotatemore_close(void)
+{
+    int r;
 
-enum {
-    SRVENTRY_MOTD =             (1<<0),
-    SRVENTRY_COMMENT =          (1<<1),
-};
+    if (annotate_dbopen) {
+	r = DB->close(anndb);
+	if (r) {
+	    syslog(LOG_ERR, "DBERROR: error closing annotations: %s",
+		   cyrusdb_strerror(r));
+	}
+	annotate_dbopen = 0;
+    }
+}
+
+void annotatemore_done(void)
+{
+    int r;
+
+    r = DB->done();
+    if (r) {
+	syslog(LOG_ERR, "DBERROR: error exiting application: %s",
+	       cyrusdb_strerror(r));
+    }
+}
 
 enum {
     ATTRIB_VALUE_SHARED =		(1<<0),
-    ATTRIB_SIZE_SHARED =		(1<<1),
-    ATTRIB_MODIFIEDSINCE_SHARED =	(1<<2),
-    ATTRIB_CONTENTTYPE_SHARED = 	(1<<3)
+    ATTRIB_VALUE_PRIV =			(1<<1),
+    ATTRIB_SIZE_SHARED =		(1<<2),
+    ATTRIB_SIZE_PRIV =			(1<<3),
+    ATTRIB_MODIFIEDSINCE_SHARED =	(1<<4),
+    ATTRIB_MODIFIEDSINCE_PRIV =		(1<<5),
+    ATTRIB_CONTENTTYPE_SHARED = 	(1<<6),
+    ATTRIB_CONTENTTYPE_PRIV = 		(1<<7)
 };
 
 typedef enum {
@@ -278,17 +304,17 @@ typedef enum {
     PROXY_AND_BACKEND = 3
 } annotation_proxy_t;
 
-struct mailbox_annotation_rock 
-{
-    char *server, *partition, *acl, *path;
-};
-
-struct annotation_result 
+struct annotation_data 
 {
     const char *value;
     size_t size;
     time_t modifiedsince;
     const char *contenttype;
+};
+
+struct mailbox_annotation_rock
+{
+    char *server, *partition, *acl, *path;
 };
 
 /* To free values in the mailbox_annotation_rock as needed */
@@ -318,59 +344,257 @@ static void get_mb_data(const char *mboxname,
     }
 }
 
-static void annotation_get_server(const char *mboxname,
-				  int isadmin,
-				  struct auth_state *auth_state,
-				  struct annotation_result *result,
+/***************************  Annotation Fetching  ***************************/
+
+struct fetchdata {
+    struct namespace *namespace;
+    struct protstream *pout;
+    char *userid;
+    int isadmin;
+    struct auth_state *auth_state;
+     struct annotate_f_entry_list *entry_list;
+    unsigned attribs;
+    struct entryattlist **entryatts;
+    struct hash_table entry_table;
+
+    /* For proxies (a null entry_list indicates that we ONLY proxy) */
+    /* if these are NULL, we have had a local exact match, and we
+       DO NOT proxy */
+    struct hash_table server_table;
+    const char *orig_mailbox;
+    struct strlist *orig_entry;
+    struct strlist *orig_attribute;
+};
+
+static void output_attlist(struct protstream *pout, struct attvaluelist *l) 
+{
+    int flag = 0;
+    
+    assert(l);
+    
+    prot_putc('(',pout);
+    
+    while(l) {
+	if(flag) prot_putc(' ',pout);
+	else flag = 1;
+	
+	printstring(l->attrib);
+	prot_putc(' ',pout);
+	printstring(l->value);
+
+	l = l->next;
+    }
+
+    prot_putc(')',pout);
+}
+
+/* Output a single entry and attributes for a single mailbox.
+ * Shared and private annotations are output together by caching
+ * the attributes until the mailbox and/or entry changes.
+ *
+ * The cache is reset by calling with a NULL mboxname or entry.
+ * The last entry is flushed by calling with a NULL attrib.
+ */
+static void output_entryatt(const char *mboxname, const char *entry,
+			    struct annotation_data *attrib, int is_priv,
+			    struct fetchdata *fdata)
+{
+    static struct attvaluelist *attvalues = NULL;
+    static char lastname[MAX_MAILBOX_NAME+1];
+    static char lastentry[MAX_MAILBOX_NAME+1];
+    char key[MAX_MAILBOX_PATH+1]; /* XXX MAX_MAILBOX_NAME + entry + userid */
+    char buf[100];
+
+    /* We have to reset before each GETANNOTATION command.
+     * Handle it as a dirty hack.
+     */
+    if (!mboxname || !entry) {
+	attvalues = NULL;
+	lastname[0] = '\0';
+	lastentry[0] = '\0';
+	return;
+    }
+
+    /* Check if this is a new entry.
+     * If so, flush our current entry.  Otherwise append the entry.
+     *
+     * We also need a way to flush the last cached entry when we're done.
+     * Handle it as a dirty hack.
+     */
+    if ((!attrib || strcmp(mboxname, lastname) || strcmp(entry, lastentry))
+	&& attvalues) {
+	prot_printf(fdata->pout, "* ANNOTATION \"%s\" \"%s\" ",
+		    lastname, lastentry);
+	output_attlist(fdata->pout, attvalues);
+	prot_printf(fdata->pout, "\r\n");
+	
+	freeattvalues(attvalues);
+	attvalues = NULL;
+    }
+    if (!attrib) return;
+
+    strlcpy(lastname, mboxname, sizeof(lastname));
+    strlcpy(lastentry, entry, sizeof(lastentry));
+
+    /* check if we already returned this entry */
+    strlcpy(key, mboxname, sizeof(key));
+    strlcat(key, entry, sizeof(key));
+    strlcat(key, is_priv ? fdata->userid : "anyone", sizeof(key));
+    if (hash_lookup(key, &(fdata->entry_table))) return;
+    hash_insert(key, (void *)0xDEADBEEF, &(fdata->entry_table));
+
+    if (is_priv) { /* private annotation */
+	if ((fdata->attribs & ATTRIB_VALUE_PRIV) && attrib->value) {
+	    appendattvalue(&attvalues, "value.priv", attrib->value);
+	}
+
+	if ((fdata->attribs & ATTRIB_CONTENTTYPE_PRIV)
+	    && attrib->value && attrib->contenttype) {
+	    appendattvalue(&attvalues, "content-type.priv",
+			   attrib->contenttype);
+	}
+
+	/* Base the return of the size attribute on whether or not there is
+	 * an attribute, not whether size is nonzero. */
+	if ((fdata->attribs & ATTRIB_SIZE_PRIV) && attrib->value) {
+	    snprintf(buf, sizeof(buf), "%u", attrib->size);
+	    appendattvalue(&attvalues, "size.priv", buf);
+	}
+
+	/* For this one we need both a value for the entry *and* a nonzero
+	 * modifiedsince time */
+	if ((fdata->attribs & ATTRIB_MODIFIEDSINCE_PRIV)
+	    && attrib->value && attrib->modifiedsince) {
+	    snprintf(buf, sizeof(buf), "%ld", attrib->modifiedsince);
+	    appendattvalue(&attvalues, "modifiedsince.priv", buf);
+	}
+    }
+    else { /* shared annotation */
+	if ((fdata->attribs & ATTRIB_VALUE_SHARED) && attrib->value) {
+	    appendattvalue(&attvalues, "value.shared", attrib->value);
+	}
+
+	if ((fdata->attribs & ATTRIB_CONTENTTYPE_SHARED)
+	    && attrib->value && attrib->contenttype) {
+	    appendattvalue(&attvalues, "content-type.shared",
+			   attrib->contenttype);
+	}
+
+	/* Base the return of the size attribute on whether or not there is
+	 * an attribute, not whether size is nonzero. */
+	if ((fdata->attribs & ATTRIB_SIZE_SHARED) && attrib->value) {
+	    snprintf(buf, sizeof(buf), "%u", attrib->size);
+	    appendattvalue(&attvalues, "size.shared", buf);
+	}
+
+	/* For this one we need both a value for the entry *and* a nonzero
+	 * modifiedsince time */
+	if ((fdata->attribs & ATTRIB_MODIFIEDSINCE_SHARED)
+	    && attrib->value && attrib->modifiedsince) {
+	    snprintf(buf, sizeof(buf), "%ld", attrib->modifiedsince);
+	    appendattvalue(&attvalues, "modifiedsince.shared", buf);
+	}
+    }
+}
+
+static void annotation_get_fromfile(const char *int_mboxname __attribute__((unused)),
+				    const char *ext_mboxname,
+				    const char *entry,
+				    struct fetchdata *fdata,
+				    struct mailbox_annotation_rock *mbrock __attribute__((unused)),
+				    void *rock)
+{
+    const char *filename = (const char *) rock;
+    char path[1024], buf[1024], *p;
+    FILE *f;
+    struct stat statbuf;
+    struct annotation_data attrib;
+
+    snprintf(path, sizeof(path), "%s/msg/%s", config_dir, filename);
+    if ((f = fopen(path, "r")) && fgets(buf, sizeof(buf), f)) {
+	if ((p = strchr(buf, '\r'))!=NULL) *p = 0;
+	if ((p = strchr(buf, '\n'))!=NULL) *p = 0;
+
+	memset(&attrib, 0, sizeof(attrib));
+
+	attrib.value = buf;
+	attrib.size = strlen(buf);
+	attrib.contenttype = "text/plain";
+	if (!fstat(fileno(f), &statbuf))
+	    attrib.modifiedsince = statbuf.st_mtime;
+
+	output_entryatt(ext_mboxname, entry, &attrib, 0, fdata);
+    }
+    if (f) fclose(f);
+}
+
+static void annotation_get_server(const char *int_mboxname,
+				  const char *ext_mboxname,
+				  const char *entry,
+				  struct fetchdata *fdata,
 				  struct mailbox_annotation_rock *mbrock,
 				  void *rock __attribute__((unused))) 
 {
-    if(!mboxname || !result || !mbrock)
+    struct annotation_data attrib;
+
+    if(!int_mboxname || !ext_mboxname || !fdata || !mbrock)
 	fatal("annotation_get_server called with bad parameters", EC_TEMPFAIL);
     
-    get_mb_data(mboxname, mbrock);
+    get_mb_data(int_mboxname, mbrock);
 
     /* Check ACL */
-    if(!isadmin &&
+    if(!fdata->isadmin &&
        (!mbrock->acl ||
-        !(cyrus_acl_myrights(auth_state, mbrock->acl) & ACL_LOOKUP)))
+        !(cyrus_acl_myrights(fdata->auth_state, mbrock->acl) & ACL_LOOKUP)))
 	return;
 
-    result->value = mbrock->server;
+    memset(&attrib, 0, sizeof(attrib));
+
+    attrib.value = mbrock->server;
     if(mbrock->server) {
-	result->size = strlen(mbrock->server);
+	attrib.size = strlen(mbrock->server);
+	attrib.contenttype = "text/plain";
     }
+
+    output_entryatt(ext_mboxname, entry, &attrib, 0, fdata);
 }
 
-static void annotation_get_partition(const char *mboxname,
-				     int isadmin,
-				     struct auth_state *auth_state,
-				     struct annotation_result *result,
+static void annotation_get_partition(const char *int_mboxname,
+				     const char *ext_mboxname,
+				     const char *entry,
+				     struct fetchdata *fdata,
 				     struct mailbox_annotation_rock *mbrock,
 				     void *rock __attribute__((unused))) 
 {
-    if(!mboxname || !result || !mbrock)
+    struct annotation_data attrib;
+
+    if(!int_mboxname || !ext_mboxname || !fdata || !mbrock)
 	fatal("annotation_get_partition called with bad parameters",
 	      EC_TEMPFAIL);
     
-    get_mb_data(mboxname, mbrock);
+    get_mb_data(int_mboxname, mbrock);
 
     /* Check ACL */
-    if(!isadmin &&
+    if(!fdata->isadmin &&
        (!mbrock->acl ||
-        !(cyrus_acl_myrights(auth_state, mbrock->acl) & ACL_LOOKUP)))
+        !(cyrus_acl_myrights(fdata->auth_state, mbrock->acl) & ACL_LOOKUP)))
 	return;
 
-    result->value = mbrock->partition;
+    memset(&attrib, 0, sizeof(attrib));
+
+    attrib.value = mbrock->partition;
     if(mbrock->partition) {
-	result->size = strlen(mbrock->partition);
+	attrib.size = strlen(mbrock->partition);
+	attrib.contenttype = "text/plain";
     }
+
+    output_entryatt(ext_mboxname, entry, &attrib, 0, fdata);
 }
 
-static void annotation_get_size(const char *mboxname,
-				int isadmin,
-				struct auth_state *auth_state,
-				struct annotation_result *result,
+static void annotation_get_size(const char *int_mboxname,
+				const char *ext_mboxname,
+				const char *entry,
+				struct fetchdata *fdata,
 				struct mailbox_annotation_rock *mbrock,
 				void *rock __attribute__((unused))) 
 {
@@ -378,22 +602,23 @@ static void annotation_get_size(const char *mboxname,
     struct index_record record;
     int r = 0, msg;
     unsigned long totsize = 0;
-    static char value[21];
+    char value[21];
+    struct annotation_data attrib;
 
-    if(!mboxname || !result || !mbrock)
+    if(!int_mboxname || !ext_mboxname || !fdata || !mbrock)
 	fatal("annotation_get_size called with bad parameters",
 	      EC_TEMPFAIL);
     
-    get_mb_data(mboxname, mbrock);
+    get_mb_data(int_mboxname, mbrock);
 
     /* Check ACL */
-    if(!isadmin &&
+    if(!fdata->isadmin &&
        (!mbrock->acl ||
-        !(cyrus_acl_myrights(auth_state, mbrock->acl) & ACL_LOOKUP) ||
-        !(cyrus_acl_myrights(auth_state, mbrock->acl) & ACL_READ)))
+        !(cyrus_acl_myrights(fdata->auth_state, mbrock->acl) & ACL_LOOKUP) ||
+        !(cyrus_acl_myrights(fdata->auth_state, mbrock->acl) & ACL_READ)))
 	return;
 
-    if (mailbox_open_header(mboxname, 0, &mailbox) != 0)
+    if (mailbox_open_header(int_mboxname, 0, &mailbox) != 0)
 	return;
 
     if (!r) r = mailbox_open_index(&mailbox);
@@ -411,32 +636,38 @@ static void annotation_get_size(const char *mboxname,
     if (r || snprintf(value, sizeof(value), "%lu", totsize) == -1)
 	return;
 
-    result->value = value;
-    result->size = strlen(value);
+    memset(&attrib, 0, sizeof(attrib));
+
+    attrib.value = value;
+    attrib.size = strlen(value);
+    attrib.contenttype = "text/plain";
+
+    output_entryatt(ext_mboxname, entry, &attrib, 0, fdata);
 }
 
-static void annotation_get_lastupdate(const char *mboxname,
-				      int isadmin,
-				      struct auth_state *auth_state,
-				      struct annotation_result *result,
+static void annotation_get_lastupdate(const char *int_mboxname,
+				      const char *ext_mboxname,
+				      const char *entry,
+				      struct fetchdata *fdata,
 				      struct mailbox_annotation_rock *mbrock,
 				      void *rock __attribute__((unused))) 
 {
     time_t modtime = 0;
     struct stat header, index;
-    static char valuebuf[128];
-    
-    if(!mboxname || !result || !mbrock)
+    char valuebuf[128];
+    struct annotation_data attrib;
+
+    if(!int_mboxname || !ext_mboxname || !fdata || !mbrock)
 	fatal("annotation_get_lastupdate called with bad parameters",
 	      EC_TEMPFAIL);
     
-    get_mb_data(mboxname, mbrock);
+    get_mb_data(int_mboxname, mbrock);
 
     /* Check ACL */
-    if(!isadmin &&
+    if(!fdata->isadmin &&
        (!mbrock->acl ||
-        !(cyrus_acl_myrights(auth_state, mbrock->acl) & ACL_LOOKUP) ||
-        !(cyrus_acl_myrights(auth_state, mbrock->acl) & ACL_READ)))
+        !(cyrus_acl_myrights(fdata->auth_state, mbrock->acl) & ACL_LOOKUP) ||
+        !(cyrus_acl_myrights(fdata->auth_state, mbrock->acl) & ACL_READ)))
 	return;
 
     if (!mbrock->path) return;
@@ -447,49 +678,200 @@ static void annotation_get_lastupdate(const char *mboxname,
 
     cyrus_ctime(modtime, valuebuf);
     
-    result->value = valuebuf;
-    result->size = strlen(valuebuf);
+    memset(&attrib, 0, sizeof(attrib));
+
+    attrib.value = valuebuf;
+    attrib.size = strlen(valuebuf);
+    attrib.contenttype = "text/plain";
+
+    output_entryatt(ext_mboxname, entry, &attrib, 0, fdata);
 }
 
-struct annotate_entry
+static int make_key(const char *mboxname, const char *entry, char *userid,
+		    char *key, size_t keysize)
+{
+    int keylen = 0;
+
+    strlcpy(key+keylen, mboxname, keysize-keylen);
+    keylen += strlen(mboxname) + 1;
+    strlcpy(key+keylen, entry, keysize-keylen);
+    keylen += strlen(entry);
+    /* if we don't have a userid, we're doing a foreach() */
+    if (userid) {
+	keylen++;
+	strlcpy(key+keylen, userid, keysize-keylen);
+	keylen += strlen(userid) + 1;
+    }
+
+    return keylen;
+}
+
+static int split_attribs(const char *data, int datalen,
+			 struct annotation_data *attrib)
+{
+    /* XXX sanity check the data */
+    attrib->size = (size_t) ntohl(*(unsigned long *) data);
+    data += sizeof(unsigned long); /* skip to value */
+
+    attrib->value = data;
+    data += strlen(data) + 1; /* skip to contenttype */
+
+    attrib->contenttype = data;
+    data += strlen(data) + 1; /* skip to modifiedsince */
+
+    attrib->modifiedsince = (size_t) ntohl(*(unsigned long *) data);
+    data += sizeof(unsigned long); /* skip to optional attribs */
+
+    return 0;
+}
+
+struct rw_rock {
+    const char *ext_mboxname;
+    struct fetchdata *fdata;
+    struct glob *g;
+};
+
+static int rw_p(void *rock, const char *key,
+		int keylen __attribute__((unused)),
+		const char *data __attribute__((unused)),
+		int datalen __attribute__((unused)))
+{
+    struct rw_rock *rw_rock = (struct rw_rock *) rock;
+    const char *mboxname, *entry, *userid;
+
+    mboxname = key;
+    entry = mboxname + strlen(mboxname) + 1;
+    userid = entry + strlen(entry) + 1;
+
+    /* make sure that the entry matches our pattern and either the
+       userid matches the our user (priv) or the userid is "anyone" */
+    return ((GLOB_TEST(rw_rock->g, entry) != -1)
+	    && (!strcmp(userid, rw_rock->fdata->userid)
+		|| !strcmp(userid, "anyone")));
+}
+
+static int rw_cb(void *rock, const char *key,
+		 int keylen __attribute__((unused)),
+		 const char *data,
+		 int datalen)
+{
+    struct rw_rock *rw_rock = (struct rw_rock *) rock;
+    const char *mboxname, *entry, *userid;
+    struct annotation_data attrib;
+    int r;
+
+    mboxname = key;
+    entry = mboxname + strlen(mboxname) + 1;
+    userid = entry + strlen(entry) + 1;
+
+    r = split_attribs(data, datalen, &attrib);
+
+    if (!r) {
+	output_entryatt(rw_rock->ext_mboxname, entry, &attrib,
+			!strcmp(userid, rw_rock->fdata->userid),
+			rw_rock->fdata);
+    }
+
+    return r;
+}
+
+static void annotation_get_fromdb(const char *int_mboxname,
+				  const char *ext_mboxname,
+				  const char *entry  __attribute__((unused)),
+				  struct fetchdata *fdata,
+				  struct mailbox_annotation_rock *mbrock,
+				  void *rock)
+{
+    char key[MAX_MAILBOX_PATH+1], *p;
+    int keylen;
+    struct rw_rock rw_rock;
+    const char *entrypat = (const char *) rock;
+
+    if(!int_mboxname || !ext_mboxname || !entrypat || !fdata ||
+       (int_mboxname[0] && !mbrock)) {
+	fatal("annotation_get_fromdb called with bad parameters", EC_TEMPFAIL);
+    }
+
+    if (!int_mboxname[0]) {
+	/* server annotation */
+
+	/* XXX any kind of access controls for reading? */
+    }
+    else {
+	/* mailbox annotation */
+	get_mb_data(int_mboxname, mbrock);
+
+	/* Check ACL */
+	if(!fdata->isadmin &&
+	   (!mbrock->acl ||
+	    !(cyrus_acl_myrights(fdata->auth_state, mbrock->acl) & ACL_LOOKUP) ||
+	    !(cyrus_acl_myrights(fdata->auth_state, mbrock->acl) & ACL_READ)))
+	    return;
+    }
+
+    /* Find fixed-string pattern prefix */
+    keylen = make_key(int_mboxname, entrypat, NULL, key, sizeof(key));
+
+    for (p = key; keylen; p++, keylen--) {
+	if (*p == '*' || *p == '%') break;
+    }
+    keylen = p - key;
+    *p = '\0';
+
+    rw_rock.ext_mboxname = ext_mboxname;
+    rw_rock.fdata = fdata;
+    rw_rock.g = glob_init(entrypat, GLOB_HIERARCHY);
+    GLOB_SET_SEPARATOR(rw_rock.g, '/');
+
+    DB->foreach(anndb, key, keylen, &rw_p, &rw_cb, &rw_rock, NULL);
+
+    glob_free(&(rw_rock.g));
+}
+
+struct annotate_f_entry
 {
     const char *name;
-    void (*get)(const char *mboxname,
-		int isadmin,
-		struct auth_state *auth_state,
-		struct annotation_result *result,
+    void (*get)(const char *int_mboxname, const char *ext_mboxname,
+		const char *name, struct fetchdata *fdata,
 		struct mailbox_annotation_rock *mbrock,
 		void *rock);
     void *rock;
-    int entry;
     annotation_proxy_t proxytype;
 };
 
-struct annotate_entry_list
+struct annotate_f_entry_list
 {
-    const struct annotate_entry *entry;
-    struct annotate_entry_list *next;
+    const struct annotate_f_entry *entry;
+    const char *entrypat;
+    struct annotate_f_entry_list *next;
 };
 
-const struct annotate_entry mailbox_ro_entries[] =
+const struct annotate_f_entry mailbox_ro_entries[] =
 {
     { "/vendor/cmu/cyrus-imapd/partition", annotation_get_partition,
-	  NULL, ENTRY_PARTITION, BACKEND_ONLY },
+	  NULL, BACKEND_ONLY },
     { "/vendor/cmu/cyrus-imapd/server", annotation_get_server,
-	  NULL, ENTRY_SERVER, PROXY_ONLY },
+	  NULL, PROXY_ONLY },
     { "/vendor/cmu/cyrus-imapd/size", annotation_get_size,
-	  NULL, ENTRY_SIZE, BACKEND_ONLY },
+	  NULL, BACKEND_ONLY },
     { "/vendor/cmu/cyrus-imapd/lastupdate", annotation_get_lastupdate,
-	  NULL, ENTRY_SIZE, BACKEND_ONLY },
-    { NULL, NULL, NULL, 0, ANNOTATION_PROXY_T_INVALID }
+	  NULL, BACKEND_ONLY },
+    { NULL, NULL, NULL, ANNOTATION_PROXY_T_INVALID }
 };
 
-const struct annotate_entry server_entries[] =
+const struct annotate_f_entry mailbox_rw_entry =
+    { NULL, annotation_get_fromdb, NULL, BACKEND_ONLY };
+
+const struct annotate_f_entry server_legacy_entries[] =
 {
-    { "/motd", NULL, NULL, SRVENTRY_MOTD, PROXY_AND_BACKEND },
-    { "/comment", NULL, NULL, SRVENTRY_COMMENT, PROXY_AND_BACKEND },
-    { NULL, NULL, NULL, 0, ANNOTATION_PROXY_T_INVALID }
+    { "/motd", annotation_get_fromfile, "motd", PROXY_AND_BACKEND },
+    { "/vendor/cmu/cyrus-imapd/shutdown", annotation_get_fromfile,
+      "shutdown", PROXY_AND_BACKEND },
+    { NULL, NULL, NULL, ANNOTATION_PROXY_T_INVALID }
 };
+
+const struct annotate_f_entry server_entry =
+    { NULL, annotation_get_fromdb, NULL, PROXY_AND_BACKEND };
 
 /* Annotation attributes and their flags */
 struct annotate_attrib
@@ -500,53 +882,30 @@ struct annotate_attrib
 
 const struct annotate_attrib annotation_attributes[] = 
 {
-    { "value", ATTRIB_VALUE_SHARED },
+    { "value", ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV },
     { "value.shared", ATTRIB_VALUE_SHARED },
-    { "size", ATTRIB_SIZE_SHARED },
+    { "value.priv", ATTRIB_VALUE_PRIV },
+    { "size", ATTRIB_SIZE_SHARED | ATTRIB_SIZE_PRIV },
     { "size.shared", ATTRIB_SIZE_SHARED },
-    { "modifiedsince", ATTRIB_MODIFIEDSINCE_SHARED },
+    { "size.priv", ATTRIB_SIZE_PRIV },
+    { "modifiedsince", ATTRIB_MODIFIEDSINCE_SHARED | ATTRIB_MODIFIEDSINCE_PRIV },
     { "modifiedsince.shared", ATTRIB_MODIFIEDSINCE_SHARED },
-    { "content-type", ATTRIB_CONTENTTYPE_SHARED },
+    { "modifiedsince.priv", ATTRIB_MODIFIEDSINCE_PRIV },
+    { "content-type", ATTRIB_CONTENTTYPE_SHARED | ATTRIB_CONTENTTYPE_PRIV },
     { "content-type.shared", ATTRIB_CONTENTTYPE_SHARED },
+    { "content-type.priv", ATTRIB_CONTENTTYPE_PRIV },
     { NULL, 0 }
-};
-
-/* Mailbox Annotation Fetching */
-struct fetchdata {
-    struct namespace *namespace;
-    struct protstream *pout;
-    char *userid;
-    int isadmin;
-    struct auth_state *auth_state;
-    struct annotate_entry_list *entry_list;
-    unsigned entries; /* xxx used for server annotations, shouldn't be */
-    unsigned attribs;
-    struct entryattlist **entryatts;
-    struct hash_table entry_table;
-
-    /* For proxies (a null entry_list indicates that we ONLY proxy) */
-    /* if these are NULL, we have had a local exact match, and we
-       DO NOT proxy */
-    struct hash_table server_table;
-    const char *orig_mailbox;
-    struct strlist *orig_entry;
-    struct strlist *orig_attribute;
 };
 
 static int fetch_cb(char *name, int matchlen,
 		    int maycreate __attribute__((unused)), void* rock)
 {
     struct fetchdata *fdata = (struct fetchdata *) rock;
-    struct annotate_entry_list *entries_ptr;
+    struct annotate_f_entry_list *entries_ptr;
     static char lastname[MAX_MAILBOX_PATH];
     static int sawuser = 0;
     int c;
     char int_mboxname[MAX_MAILBOX_PATH+1], ext_mboxname[MAX_MAILBOX_PATH+1];
-
-    char size[100], modifiedsince[100];
-    struct attvaluelist *attvalues = NULL;
-
-    struct annotation_result result;
     struct mailbox_annotation_rock mbrock;
 
     /* We have to reset the sawuser flag before each fetch command.
@@ -590,108 +949,33 @@ static int fetch_cb(char *name, int matchlen,
 
     memset(&mbrock, 0, sizeof(struct mailbox_annotation_rock));
 
-    if(proxy_func && fdata->orig_entry) {
+    if (proxy_fetch_func && fdata->orig_entry) {
 	get_mb_data(int_mboxname, &mbrock);
     }
 
     /* Loop through the list of provided entries to get */
-    for(entries_ptr = fdata->entry_list;
-	entries_ptr;
-	entries_ptr = entries_ptr->next) {
-	int appended_one = 0;
-	char key[MAX_MAILBOX_PATH+1];
+    for (entries_ptr = fdata->entry_list;
+	 entries_ptr;
+	 entries_ptr = entries_ptr->next) {
 	
-	attvalues = NULL;
-	memset(&result,0,sizeof(struct annotation_result));
-
-	entries_ptr->entry->get(int_mboxname, fdata->isadmin,
-				fdata->auth_state,
-				&result, &mbrock, NULL);
-
-	/* check if we already returned this entry
-	 *
-	 * XXX we must do this after the fetch because we might not know
-	 * the entry name until after we search for the pattern in the db
-	 */
-	strlcpy(key, int_mboxname, sizeof(key));
-	strlcat(key, entries_ptr->entry->name, sizeof(key));
-	if (hash_lookup(key, &(fdata->entry_table))) continue;
-	hash_insert(key, (void *)0xDEADBEEF, &(fdata->entry_table));
-
-	if ((fdata->attribs & ATTRIB_VALUE_SHARED) && result.value) {
-	    appended_one = 1;
-	    appendattvalue(&attvalues, "value.shared", result.value);
-	}
-
-	if ((fdata->attribs & ATTRIB_CONTENTTYPE_SHARED)
-	    && result.value && result.contenttype) {
-	    appended_one = 1;
-	    appendattvalue(&attvalues, "contenttype.shared",
-			   result.contenttype);
-	}
-
-	/* Base the return of the size attribute on whether or not there is
-	 * an attribute, not whether size is nonzero. */
-	if ((fdata->attribs & ATTRIB_SIZE_SHARED) && result.value) {
-	    appended_one = 1;
-	    snprintf(size, sizeof(size), "%u", result.size);
-	    appendattvalue(&attvalues, "size.shared", size);
-	}
-
-	/* For this one we need both a value for the entry *and* a nonzero
-	 * modifiedsince time */
-	if ((fdata->attribs & ATTRIB_MODIFIEDSINCE_SHARED)
-	    && result.value && result.modifiedsince) {
-	    appended_one = 1;
-	    snprintf(modifiedsince, sizeof(modifiedsince),
-		     "%d", (int)result.modifiedsince);
-	    appendattvalue(&attvalues, "modifiedsince.shared", modifiedsince);
-	}
-
-	if(appended_one) {
-	    prot_printf(fdata->pout, "* ANNOTATION \"%s\" \"%s\" ",
-			ext_mboxname, entries_ptr->entry->name);
-	    output_attlist(fdata->pout, attvalues);
-	    prot_printf(fdata->pout, "\r\n");
-	    
-	    freeattvalues(attvalues);
-	    attvalues = NULL;
-	}
+	entries_ptr->entry->get(int_mboxname, ext_mboxname,
+				entries_ptr->entry->name, fdata,
+				&mbrock, (entries_ptr->entry->rock ?
+					  entries_ptr->entry->rock :
+					  entries_ptr->entrypat));
     }
 
-    if(proxy_func && fdata->orig_entry
-       && !hash_lookup(mbrock.server, &(fdata->server_table))) {
+    if (proxy_fetch_func && fdata->orig_entry
+	&& !hash_lookup(mbrock.server, &(fdata->server_table))) {
 	/* xxx ignoring result */
-	proxy_func(mbrock.server, fdata->orig_mailbox,
-		   fdata->orig_entry, fdata->orig_attribute);
+	proxy_fetch_func(mbrock.server, fdata->orig_mailbox,
+			 fdata->orig_entry, fdata->orig_attribute);
 	hash_insert(mbrock.server, (void *)0xDEADBEEF, &(fdata->server_table));
     }
 
     cleanup_mbrock(&mbrock);
 
     return 0;
-}
-
-static void output_attlist(struct protstream *pout, struct attvaluelist *l) 
-{
-    int flag = 0;
-    
-    assert(l);
-    
-    prot_putc('(',pout);
-    
-    while(l) {
-	if(flag) prot_putc(' ',pout);
-	else flag = 1;
-	
-	printstring(l->attrib);
-	prot_putc(' ',pout);
-	printstring(l->value);
-
-	l = l->next;
-    }
-
-    prot_putc(')',pout);
 }
 
 int annotatemore_fetch(char *mailbox,
@@ -702,18 +986,30 @@ int annotatemore_fetch(char *mailbox,
     struct strlist *e = entries;
     struct strlist *a = attribs;
     struct fetchdata fdata;
+    struct glob *g;
+    const struct annotate_f_entry *non_db_entries;
+    const struct annotate_f_entry *db_entry;
 
     memset(&fdata, 0, sizeof(struct fetchdata));
+    fdata.pout = pout;
+    fdata.namespace = namespace;
+    fdata.userid = userid;
+    fdata.isadmin = isadmin;
+    fdata.auth_state = auth_state;
 
-    /* we only do shared annotations right now */
+    /* Reset state in output_entryatt() */
+    output_entryatt(NULL, NULL, NULL, 0, NULL);
+
+    /* Build list of attributes to fetch */
     while (a) {
 	int attribcount;
-	struct glob *g = glob_init(a->s, GLOB_HIERARCHY);
+
+	g = glob_init(a->s, GLOB_HIERARCHY);
 	
-	for(attribcount = 0;
-	    annotation_attributes[attribcount].name;
-	    attribcount++) {
-	    if(GLOB_TEST(g, annotation_attributes[attribcount].name) != -1) {
+	for (attribcount = 0;
+	     annotation_attributes[attribcount].name;
+	     attribcount++) {
+	    if (GLOB_TEST(g, annotation_attributes[attribcount].name) != -1) {
 		fdata.attribs |= annotation_attributes[attribcount].entry;
 	    }
 	}
@@ -727,126 +1023,105 @@ int annotatemore_fetch(char *mailbox,
 
     if (!mailbox[0]) {
 	/* server annotation(s) */
-	FILE *f;
-	char filename[1024], buf[1024], size[100], *p;
-	struct attvaluelist *attvalues;
+	non_db_entries = server_legacy_entries;
+	db_entry = &server_entry;
+    }
+    else {
+	/* mailbox annotation(s) */
+	non_db_entries = mailbox_ro_entries;
+	db_entry = &mailbox_rw_entry;
+    }
 
-	while (e) {
-	    int entrycount;
-	    struct glob *g = glob_init(e->s, GLOB_HIERARCHY);
+    /* Build a list of callbacks for fetching the annotations */
+    while (e) {
+	int entrycount;
+	int check_db = 0; /* should we check the db for this entry? */
 
-	    GLOB_SET_SEPARATOR(g, '/');
+	g = glob_init(e->s, GLOB_HIERARCHY);
+	GLOB_SET_SEPARATOR(g, '/');
 
-	    for(entrycount = 0;
-		server_entries[entrycount].name;
-		entrycount++) {
-		if(GLOB_TEST(g, server_entries[entrycount].name) != -1) {
-		    fdata.entries |= server_entries[entrycount].entry;
+	for (entrycount = 0;
+	     non_db_entries[entrycount].name;
+	     entrycount++) {
+
+	    if (GLOB_TEST(g, non_db_entries[entrycount].name) != -1) {
+		if (strcmp(e->s, non_db_entries[entrycount].name)) {
+		    /* not an exact match */
+		    fdata.orig_entry = entries;  /* proxy it */
+		    check_db = 1;
+		}
+
+		/* Add this entry to our list only if it
+		   applies to our particular server type */
+		if (non_db_entries[entrycount].proxytype == PROXY_AND_BACKEND
+		    || (proxy_fetch_func &&
+			non_db_entries[entrycount].proxytype == PROXY_ONLY)
+		    || (!proxy_fetch_func &&
+			non_db_entries[entrycount].proxytype == BACKEND_ONLY)) {
+		    struct annotate_f_entry_list *nentry =
+			xmalloc(sizeof(struct annotate_f_entry_list));
+
+		    nentry->next = fdata.entry_list;
+		    nentry->entry = &(non_db_entries[entrycount]);
+		    fdata.entry_list = nentry;
 		}
 	    }
-
-	    glob_free(&g);
-
-	    e = e->next;
+	    else {
+		/* no match */
+		fdata.orig_entry = entries;  /* proxy it */
+		check_db = 1;
+	    }
 	}
+		
+	/* Add the db entry to our list if only if it
+	   applies to our particular server type */
+	if (check_db &&
+	    (db_entry->proxytype == PROXY_AND_BACKEND
+	     || (proxy_fetch_func && db_entry->proxytype == PROXY_ONLY)
+	     || (!proxy_fetch_func && db_entry->proxytype == BACKEND_ONLY))) {
+	    /* Add the db entry to our list */
+	    struct annotate_f_entry_list *nentry =
+		xmalloc(sizeof(struct annotate_f_entry_list));
 
-	if (fdata.entries & SRVENTRY_MOTD) {
-	    snprintf(filename, sizeof(filename), "%s/msg/motd", config_dir);
-	    if ((f = fopen(filename, "r")) != NULL) {
-		fgets(buf, sizeof(buf), f);
-		fclose(f);
-
-		if ((p = strchr(buf, '\r'))!=NULL) *p = 0;
-		if ((p = strchr(buf, '\n'))!=NULL) *p = 0;
-
-		attvalues = NULL;
-		if (fdata.attribs & ATTRIB_VALUE_SHARED)
-		    appendattvalue(&attvalues, "value.shared", buf);
-		if (fdata.attribs & ATTRIB_SIZE_SHARED) {
-		    snprintf(size, sizeof(size), "%u", strlen(buf));
-		    appendattvalue(&attvalues, "size.shared", size);
-		}
-
-		prot_printf(pout, "* ANNOTATION \"\" \"/motd\" ");
-		output_attlist(pout, attvalues);
-		prot_printf(pout, "\r\n");
-
-		freeattvalues(attvalues);
-		attvalues = NULL;
-	    }
+	    nentry->next = fdata.entry_list;
+	    nentry->entry = db_entry;
+	    nentry->entrypat = e->s;
+	    fdata.entry_list = nentry;
 	}
-	if (fdata.entries & SRVENTRY_COMMENT) {
-	    snprintf(filename, sizeof(filename), 
-		     "%s/msg/comment", config_dir);
-	    if ((f = fopen(filename, "r")) != NULL) {
-		fgets(buf, sizeof(buf), f);
-		fclose(f);
+	    
+	glob_free(&g);
 
-		if ((p = strchr(buf, '\r'))!=NULL) *p = 0;
-		if ((p = strchr(buf, '\n'))!=NULL) *p = 0;
+	e = e->next;
+    }
 
-		attvalues = NULL;
-		if (fdata.attribs & ATTRIB_VALUE_SHARED)
-		    appendattvalue(&attvalues, "value.shared", buf);
-		if (fdata.attribs & ATTRIB_SIZE_SHARED) {
-		    snprintf(size, sizeof(size), "%u", strlen(buf));
-		    appendattvalue(&attvalues, "size.shared", size);
-		}
+    if (!mailbox[0]) {
+	/* server annotation(s) */
 
-		prot_printf(pout, "* ANNOTATION \"\" \"/comment\" ");
-		output_attlist(pout, attvalues);
-		prot_printf(pout, "\r\n");
+	if (fdata.entry_list) {
+	    struct annotate_f_entry_list *entries_ptr;
 
-		freeattvalues(attvalues);
-		attvalues = NULL;
+	    /* xxx better way to determine a size for this table? */
+	    construct_hash_table(&fdata.entry_table, 100, 1);
+
+	    /* Loop through the list of provided entries to get */
+	    for (entries_ptr = fdata.entry_list;
+		 entries_ptr;
+		 entries_ptr = entries_ptr->next) {
+	
+		entries_ptr->entry->get("", "", entries_ptr->entry->name,
+					&fdata, NULL,
+					(entries_ptr->entry->rock ?
+					 entries_ptr->entry->rock :
+					 entries_ptr->entrypat));
 	    }
+
+	    free_hash_table(&fdata.entry_table, NULL);
 	}
     }
     else {
 	/* mailbox annotation(s) */
 
-	while (e) {
-	    int entrycount;
-	    struct glob *g = glob_init(e->s, GLOB_HIERARCHY);
-
-	    GLOB_SET_SEPARATOR(g, '/');
-
-	    for(entrycount = 0;
-		mailbox_ro_entries[entrycount].name;
-		entrycount++) {
-
-		if(GLOB_TEST(g, mailbox_ro_entries[entrycount].name) != -1) {
-		    if(strcmp(e->s, mailbox_ro_entries[entrycount].name)) {
-			/* not an exact match, we'll have to proxy it */
-			fdata.orig_entry = entries;
-		    }
-
-		    /* Add this entry to our list only if it
-		       applies to our particular server type */
-		    if(mailbox_ro_entries[entrycount].proxytype ==
-		       PROXY_AND_BACKEND
-		       || (proxy_func &&
-			   mailbox_ro_entries[entrycount].proxytype ==
-			   PROXY_ONLY)
-		       || (!proxy_func &&
-			   mailbox_ro_entries[entrycount].proxytype ==
-			   BACKEND_ONLY)) {
-			struct annotate_entry_list *nentry =
-			    xmalloc(sizeof(struct annotate_entry_list));
-
-			nentry->next = fdata.entry_list;
-			nentry->entry = &(mailbox_ro_entries[entrycount]);
-			fdata.entry_list = nentry;
-		    }
-		}
-	    }
-		
-	    glob_free(&g);
-
-	    e = e->next;
-	}
-	    
-	if (fdata.entry_list || proxy_func) {
+	if (fdata.entry_list || proxy_fetch_func) {
 	    char mboxpat[MAX_MAILBOX_NAME+1];
 
 	    /* Reset state in fetch_cb */
@@ -855,7 +1130,7 @@ int annotatemore_fetch(char *mailbox,
 	    /* xxx better way to determine a size for this table? */
 	    construct_hash_table(&fdata.entry_table, 100, 1);
 
-	    if(proxy_func && fdata.orig_entry) {
+	    if(proxy_fetch_func && fdata.orig_entry) {
 		fdata.orig_mailbox = mailbox;
 		fdata.orig_attribute = attribs;
 		/* xxx better way to determine a size for this table? */
@@ -868,137 +1143,527 @@ int annotatemore_fetch(char *mailbox,
 					config_virtdomains ?
 					strcspn(mboxpat, "@") : 0);
 
-	    fdata.pout = pout;
-	    fdata.namespace = namespace;
-	    fdata.userid = userid;
-	    fdata.isadmin = isadmin;
-	    fdata.auth_state = auth_state;
 	    (*namespace->mboxlist_findall)(namespace, mboxpat,
 					   isadmin, userid,
 					   auth_state, fetch_cb,
 					   &fdata);
-
 	    free_hash_table(&fdata.entry_table, NULL);
 
-	    if(proxy_func && fdata.orig_entry) {
+	    if(proxy_fetch_func && fdata.orig_entry) {
 		free_hash_table(&fdata.server_table, NULL);
 	    }
 	}
+    }
 
-	/* Free the entry list, if needed */
-	while(fdata.entry_list) {
-	    struct annotate_entry_list *freeme = fdata.entry_list;
-	    fdata.entry_list = fdata.entry_list->next;
-	    free(freeme);
+    /* Flush last cached entry in output_entryatt() */
+    output_entryatt("", "", NULL, 0, &fdata);
+
+    /* Free the entry list, if needed */
+    while(fdata.entry_list) {
+	struct annotate_f_entry_list *freeme = fdata.entry_list;
+	fdata.entry_list = fdata.entry_list->next;
+	free(freeme);
+    }
+
+    return 0;
+}
+
+/**************************  Annotation Storing  *****************************/
+
+static int read_entry(const char *mboxname, const char *entry, char *userid,
+		      struct annotation_data *attrib)
+{
+    char key[MAX_MAILBOX_PATH+1];
+    int keylen, datalen, r;
+    const char *data;
+
+    keylen = make_key(mboxname, entry, userid, key, sizeof(key));
+
+    do {
+	r = DB->fetch(anndb, key, keylen, &data, &datalen, NULL);
+    } while (r == CYRUSDB_AGAIN);
+
+    if (!r && data) {
+	r = split_attribs(data, datalen, attrib);
+    }
+
+    return r;
+}
+
+static int write_entry(const char *mboxname, const char *entry, char *userid,
+		       struct annotation_data *attrib, struct txn **tid)
+{
+    char key[MAX_MAILBOX_PATH+1];
+    int keylen, r;
+
+    keylen = make_key(mboxname, entry, userid, key, sizeof(key));
+
+    if (!strcmp(attrib->value, "NIL")) {
+	do {
+	    r = DB->delete(anndb, key, keylen, tid, 0);
+	} while (r == CYRUSDB_AGAIN);
+    }
+    else {
+	char data[MAX_MAILBOX_PATH+1];
+	int datalen = 0;
+	unsigned long l;
+
+	l = htonl(strlen(attrib->value));
+	memcpy(data+datalen, &l, sizeof(l));
+	datalen += sizeof(l);
+
+	strlcpy(data+datalen, attrib->value, sizeof(data)-datalen);
+	datalen += strlen(attrib->value) + 1;
+
+	if (!attrib->contenttype || !strcmp(attrib->contenttype, "NIL")) {
+	    attrib->contenttype = "text/plain";
+	}
+	strlcpy(data+datalen, attrib->contenttype, sizeof(data)-datalen);
+	datalen += strlen(attrib->contenttype) + 1;
+
+	l = htonl(attrib->modifiedsince);
+	memcpy(data+datalen, &l, sizeof(l));
+	datalen += sizeof(l);
+
+	do {
+	    r = DB->store(anndb, key, keylen, data, datalen, tid);
+	} while (r == CYRUSDB_AGAIN);
+    }
+
+    return r;
+}
+
+struct storedata {
+    struct namespace *namespace;
+    char *userid;
+    int isadmin;
+    struct auth_state *auth_state;
+    struct annotate_st_entry_list *entry_list;
+
+    /* number of mailboxes matching the pattern */
+    unsigned count;
+
+    /* for backends only */
+    struct txn *tid;
+
+    /* for proxies only */
+    struct hash_table server_table;
+};
+
+struct annotate_st_entry {
+    const char *name;
+    int attribs;
+    int (*set)(const char *int_mboxname, struct annotate_st_entry_list *entry,
+	       struct storedata *sdata, struct mailbox_annotation_rock *mbrock,
+	       void *rock);
+    void *rock;
+    annotation_proxy_t proxytype;
+};
+
+struct annotate_st_entry_list
+{
+    const struct annotate_st_entry *entry;
+    struct annotation_data shared;
+    struct annotation_data priv;
+
+    struct annotate_st_entry_list *next;
+};
+
+static int store_cb(char *name, int matchlen,
+		    int maycreate __attribute__((unused)), void *rock)
+{
+    struct storedata *sdata = (struct storedata *) rock;
+    struct annotate_st_entry_list *entries_ptr;
+    static char lastname[MAX_MAILBOX_PATH];
+    static int sawuser = 0;
+    char int_mboxname[MAX_MAILBOX_PATH+1];
+    struct mailbox_annotation_rock mbrock;
+    int r = 0;
+
+    /* We have to reset the sawuser flag before each fetch command.
+     * Handle it as a dirty hack.
+     */
+    if (name == NULL) {
+	sawuser = 0;
+	lastname[0] = '\0';
+	return 0;
+    }
+    /* Suppress any output of a partial match */
+    if (name[matchlen] && strncmp(lastname, name, matchlen) == 0) {
+	return 0;
+    }
+
+    /*
+     * We can get a partial match for "user" multiple times with
+     * other matches inbetween.  Handle it as a special case
+     */
+    if (matchlen == 4 && strncasecmp(name, "user", 4) == 0) {
+	if (sawuser) return 0;
+	sawuser = 1;
+    }
+
+    strcpy(lastname, name);
+    lastname[matchlen] = '\0';
+
+    if (!strncasecmp(lastname, "INBOX", 5)) {
+	(*sdata->namespace->mboxname_tointernal)(sdata->namespace, "INBOX",
+						 sdata->userid, int_mboxname);
+	strcat(int_mboxname, lastname+5);
+    }
+    else
+	strcpy(int_mboxname, lastname);
+
+    memset(&mbrock, 0, sizeof(struct mailbox_annotation_rock));
+    get_mb_data(int_mboxname, &mbrock);
+
+    for (entries_ptr = sdata->entry_list;
+	 entries_ptr;
+	 entries_ptr = entries_ptr->next) {
+
+	r = entries_ptr->entry->set(int_mboxname, entries_ptr, sdata, &mbrock,
+				    entries_ptr->entry->rock);
+	if (r) goto cleanup;
+    }
+
+    sdata->count++;
+
+    if (proxy_store_func &&
+	!hash_lookup(mbrock.server, &(sdata->server_table))) {
+	hash_insert(mbrock.server, (void *)0xDEADBEEF, &(sdata->server_table));
+    }
+
+  cleanup:
+    cleanup_mbrock(&mbrock);
+
+    return r;
+}
+
+struct proxy_rock {
+    char *mbox_pat;
+    struct entryattlist *entryatts;
+};
+
+static void store_proxy(char *server, void *data __attribute__((unused)),
+			void *rock)
+{
+    struct proxy_rock *prock = (struct proxy_rock *) rock;
+
+    proxy_store_func(server, prock->mbox_pat, prock->entryatts);
+}
+
+static int annotation_set_tofile(const char *int_mboxname __attribute__((unused)),
+				 struct annotate_st_entry_list *entry,
+				 struct storedata *sdata,
+				 struct mailbox_annotation_rock *mbrock __attribute__((unused)),
+				 void *rock)
+{
+    const char *filename = (const char *) rock;
+    char path[1024];
+    FILE *f;
+
+    /* Check ACL */
+    if (!sdata->isadmin) return IMAP_PERMISSION_DENIED;
+
+    snprintf(path, sizeof(path), "%s/msg/%s", config_dir, filename);
+
+    /* XXX how do we do this atomically with other annotations? */
+    if (!strcmp(entry->shared.value, "NIL"))
+	return unlink(path);
+    else if ((f = fopen(path, "w"))) {
+	fprintf(f, "%s\n", entry->shared.value);
+	return fclose(f);
+    }
+
+    return IMAP_IOERROR;
+}
+
+static int annotation_set_todb(const char *int_mboxname,
+			       struct annotate_st_entry_list *entry,
+			       struct storedata *sdata,
+			       struct mailbox_annotation_rock *mbrock,
+			       void *rock)
+{
+    int r = 0;
+
+    if (entry->shared.value || entry->shared.contenttype) {
+	/* Check ACL
+	 *
+	 * Must be any admin to set shared server annotations.
+	 */
+	if (!sdata->isadmin &&
+	    (!int_mboxname[0] || !mbrock->acl ||
+	     !(cyrus_acl_myrights(sdata->auth_state,
+				  mbrock->acl) & ACL_READ) ||
+	     !(cyrus_acl_myrights(sdata->auth_state,
+				  mbrock->acl) & ACL_WRITE))) {
+	    return IMAP_PERMISSION_DENIED;
+	}
+
+	if (!int_mboxname[0] || !proxy_store_func) {
+	    /* if we don't have a value, retrieve the existing entry */
+	    if (!entry->shared.value) {
+		struct annotation_data shared;
+
+		r = read_entry(int_mboxname, entry->entry->name, "anyone",
+			       &shared);
+		if (r) return r;
+
+		entry->shared.value = shared.value;
+	    }
+
+	    r = write_entry(int_mboxname, entry->entry->name, "anyone",
+			    &(entry->shared), &(sdata->tid));
+	}
+    }
+    if (entry->priv.value || entry->priv.contenttype) {
+	/* Check ACL
+	 *
+	 * XXX We don't actually need to check anything here,
+	 * since we don't have any access control for server annotations
+	 * and all we need for private mailbox annotations is ACL_LOOKUP,
+	 * and we wouldn't be in this callback without it.
+	 */
+
+	if (!int_mboxname[0] || !proxy_store_func) {
+	    /* if we don't have a value, retrieve the existing entry */
+	    if (!entry->priv.value) {
+		struct annotation_data priv;
+
+		r = read_entry(int_mboxname, entry->entry->name,
+			       sdata->userid, &priv);
+		if (r) return r;
+
+		entry->priv.value = priv.value;
+	    }
+
+	    r = write_entry(int_mboxname, entry->entry->name, sdata->userid,
+			    &(entry->priv), &(sdata->tid));
 	}
     }
 
-    return 0;
+    return r;
 }
 
-static int server_store(char *filename, char *value)
+const struct annotate_st_entry server_entries[] =
 {
-    FILE *f;
+    { "/comment", ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV
+      | ATTRIB_CONTENTTYPE_SHARED | ATTRIB_CONTENTTYPE_PRIV,
+      annotation_set_todb, NULL, PROXY_AND_BACKEND },
+    { "/motd", ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
+      annotation_set_tofile, "motd", PROXY_AND_BACKEND },
+    { "/admin", ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
+      annotation_set_todb, NULL, PROXY_AND_BACKEND },
+    { "/vendor/cmu/cyrus-imapd/shutdown",
+      ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
+      annotation_set_tofile, "shutdown", PROXY_AND_BACKEND },
+    { NULL, 0, NULL, ANNOTATION_PROXY_T_INVALID }
+};
 
-    /* XXX check for failures */
-    if (!strcmp(value, "NIL"))
-	unlink(filename);
-    else {
-	f = fopen(filename, "w");
-	fprintf(f, "%s\n", value);
-	fclose(f);
-    }
-
-    return 0;
-}
+const struct annotate_st_entry mailbox_rw_entries[] =
+{
+    { "/comment", ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV
+      | ATTRIB_CONTENTTYPE_SHARED | ATTRIB_CONTENTTYPE_PRIV,
+      annotation_set_todb, NULL, BACKEND_ONLY },
+    { "/sort", ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV
+      | ATTRIB_CONTENTTYPE_SHARED | ATTRIB_CONTENTTYPE_PRIV,
+      annotation_set_todb, NULL, BACKEND_ONLY },
+    { "/thread", ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV
+      | ATTRIB_CONTENTTYPE_SHARED | ATTRIB_CONTENTTYPE_PRIV,
+      annotation_set_todb, NULL, BACKEND_ONLY },
+    { "/check", ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV
+      | ATTRIB_CONTENTTYPE_SHARED | ATTRIB_CONTENTTYPE_PRIV,
+      annotation_set_todb, NULL, BACKEND_ONLY },
+    { "/checkperiod", ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV
+      | ATTRIB_CONTENTTYPE_SHARED | ATTRIB_CONTENTTYPE_PRIV,
+      annotation_set_todb, NULL, BACKEND_ONLY },
+    { "/vendor/cmu/cyrus-imapd/squat", ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV
+      | ATTRIB_CONTENTTYPE_SHARED | ATTRIB_CONTENTTYPE_PRIV,
+      annotation_set_todb, NULL, BACKEND_ONLY },
+    { "/vendor/cmu/cyrus-imapd/expire", ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV
+      | ATTRIB_CONTENTTYPE_SHARED | ATTRIB_CONTENTTYPE_PRIV,
+      annotation_set_todb, NULL, BACKEND_ONLY },
+    { NULL, 0, NULL, ANNOTATION_PROXY_T_INVALID }
+};
 
 int annotatemore_store(char *mailbox,
 		       struct entryattlist *l,
-		       struct namespace *namespace __attribute__((unused)),
-		       int isadmin __attribute__((unused)),
-		       char *userid __attribute__((unused)),
-		       struct auth_state *auth_state __attribute__((unused)))
+		       struct namespace *namespace,
+		       int isadmin,
+		       char *userid,
+		       struct auth_state *auth_state)
 {
-    syslog(LOG_INFO, "annotatemore_store");
+    int r = 0;
+    struct entryattlist *e = l;
+    struct attvaluelist *av;
+    struct storedata sdata;
+    const struct annotate_st_entry *entries;
+    time_t now = time(0);
+
+    memset(&sdata, 0, sizeof(struct storedata));
+    sdata.namespace = namespace;
+    sdata.userid = userid;
+    sdata.isadmin = isadmin;
+    sdata.auth_state = auth_state;
+
+    if (!mailbox[0]) {
+	/* server annotations */
+	entries = server_entries;
+    }
+    else {
+	/* mailbox annotation(s) */
+	entries = mailbox_rw_entries;
+    }
+
+    /* Build a list of callbacks for storing the annotations */
+    while (e) {
+	int entrycount, attribs;
+	struct annotate_st_entry_list *nentry = NULL;
+
+	/* See if we support this entry */
+	for (entrycount = 0;
+	     entries[entrycount].name;
+	     entrycount++) {
+	    if (!strcmp(e->entry, entries[entrycount].name)) {
+		break;
+	    }
+	}
+	if (!entries[entrycount].name) {
+	    /* unknown annotation */
+	    return IMAP_PERMISSION_DENIED;
+	}
+
+	/* Add this entry to our list only if it
+	   applies to our particular server type */
+	if (entries[entrycount].proxytype == PROXY_AND_BACKEND
+	    || (proxy_store_func &&
+		entries[entrycount].proxytype == PROXY_ONLY)
+	    || (!proxy_store_func &&
+		entries[entrycount].proxytype == BACKEND_ONLY)) {
+	    nentry = xzmalloc(sizeof(struct annotate_st_entry_list));
+	    nentry->next = sdata.entry_list;
+	    nentry->entry = &(entries[entrycount]);
+	    nentry->shared.modifiedsince = now;
+	    nentry->priv.modifiedsince = now;
+	    sdata.entry_list = nentry;
+	}
+
+	/* See if we are allowed to set the given attributes. */
+	attribs = entries[entrycount].attribs;
+	av = e->attvalues;
+	while (av) {
+	    if (!strcmp(av->attrib, "value.shared")) {
+		if (!(attribs & ATTRIB_VALUE_SHARED)) {
+		    r = IMAP_PERMISSION_DENIED;
+		    goto cleanup;
+		}
+		if (nentry) nentry->shared.value = av->value;
+	    }
+	    else if (!strcmp(av->attrib, "content-type.shared")) {
+		if (!(attribs & ATTRIB_CONTENTTYPE_SHARED)) {
+		    r = IMAP_PERMISSION_DENIED;
+		    goto cleanup;
+		}
+		if (nentry) nentry->shared.contenttype = av->value;
+	    }
+	    else if (!strcmp(av->attrib, "value.priv")) {
+		if (!(attribs & ATTRIB_VALUE_PRIV)) {
+		    r = IMAP_PERMISSION_DENIED;
+		    goto cleanup;
+		}
+		if (nentry) nentry->priv.value = av->value;
+	    }
+	    else if (!strcmp(av->attrib, "content-type.priv")) {
+		if (!(attribs & ATTRIB_CONTENTTYPE_PRIV)) {
+		    r = IMAP_PERMISSION_DENIED;
+		    goto cleanup;
+		}
+		if (nentry) nentry->priv.contenttype = av->value;
+	    }
+	    else {
+		r = IMAP_PERMISSION_DENIED;
+		goto cleanup;
+	    }
+
+	    av = av->next;
+	}
+
+	e = e->next;
+    }
 
     if (!mailbox[0]) {
 	/* server annotations */
 
-	struct entryattlist *e = l;
-	struct attvaluelist *av;
-	char *value = NULL, *motd = NULL, *comment = NULL;
-	char filename[1024];
+	if (sdata.entry_list) {
+	    struct annotate_st_entry_list *entries_ptr;
 
-	/* administrators only please */
-	if (!isadmin) {
-	    return IMAP_PERMISSION_DENIED;
-	}
-
-	while (e) {
-	    av = e->attvalues;
-	    while (av) {
-		if (!strcmp(av->attrib, "value.shared")) {
-		    value = av->value;
-		    break;
-		}
-		else
-		    return IMAP_PERMISSION_DENIED;
-
-		av = av->next;
+	    /* Loop through the list of provided entries to get */
+	    for (entries_ptr = sdata.entry_list;
+		 entries_ptr;
+		 entries_ptr = entries_ptr->next) {
+	
+		r = entries_ptr->entry->set("", entries_ptr, &sdata, NULL,
+					    entries_ptr->entry->rock);
+		if (r) break;
 	    }
-
-	    if (value && !strcmp(e->entry, "/motd"))
-		motd = value;
-	    else if (value && !strcmp(e->entry, "/comment"))
-		comment = value;
-	    else
-		return IMAP_PERMISSION_DENIED;
-
-	    e = e->next;
-	}
-
-	/* XXX check for failures -- how to do this atomic? */
-	if (motd) {
-	    snprintf(filename, sizeof(filename), "%s/msg/motd", config_dir);
-	    server_store(filename, motd);
-	}
-	if (comment) {
-	    snprintf(filename, sizeof(filename), "%s/msg/comment", config_dir);
-	    server_store(filename, comment);
 	}
     }
+
     else {
 	/* mailbox annotations */
 
-	return IMAP_PERMISSION_DENIED;
-    }
+	char mboxpat[MAX_MAILBOX_NAME+1];
 
-    return 0;
-}
+	/* Reset state in store_cb */
+	store_cb(NULL, 0, 0, 0);
 
-void annotatemore_close(void)
-{
-    int r;
-
-    if (annotate_dbopen) {
-	r = DB->close(anndb);
-	if (r) {
-	    syslog(LOG_ERR, "DBERROR: error closing annotations: %s",
-		   cyrusdb_strerror(r));
+	if (proxy_store_func) {
+	    /* xxx better way to determine a size for this table? */
+	    construct_hash_table(&sdata.server_table, 10, 1);
 	}
-	annotate_dbopen = 0;
-    }
-}
 
-void annotatemore_done(void)
-{
-    int r;
+	/* copy the pattern so we can change hiersep */
+	strlcpy(mboxpat, mailbox, sizeof(mboxpat));
+	mboxname_hiersep_tointernal(namespace, mboxpat,
+				    config_virtdomains ?
+				    strcspn(mboxpat, "@") : 0);
 
-    r = DB->done();
-    if (r) {
-	syslog(LOG_ERR, "DBERROR: error exiting application: %s",
-	       cyrusdb_strerror(r));
+	r = (*namespace->mboxlist_findall)(namespace, mboxpat,
+					   isadmin, userid,
+					   auth_state, store_cb,
+					   &sdata);
+
+	if (!r && !sdata.count) r = IMAP_MAILBOX_NONEXISTENT;
+
+	if (proxy_store_func) {
+	    if (!r) {
+		/* proxy command to backends */
+		struct proxy_rock prock = { mailbox, l };
+		hash_enumerate(&sdata.server_table, store_proxy, &prock);
+	    }
+	    free_hash_table(&sdata.server_table, NULL);
+	}
     }
+
+    if (sdata.tid) {
+	if (!r) {
+	    /* commit txn */
+	    DB->commit(anndb, sdata.tid);
+	}
+	else {
+	    /* abort txn */
+	    DB->abort(anndb, sdata.tid);
+	}
+    }
+
+  cleanup:
+    /* Free the entry list */
+    while (sdata.entry_list) {
+	struct annotate_st_entry_list *freeme = sdata.entry_list;
+	sdata.entry_list = sdata.entry_list->next;
+	free(freeme);
+    }
+
+    return r;
 }
 
 #endif /* ENABLE_ANNOTATEMORE */

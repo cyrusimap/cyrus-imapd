@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.81 2003/05/29 20:18:58 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.82 2003/06/07 16:43:02 ken3 Exp $ */
 
 #include <config.h>
 
@@ -471,7 +471,8 @@ int service_init(int argc, char **argv, char **envp)
 
 #ifdef ENABLE_ANNOTATEMORE
     /* Initialize the annotatemore extention */
-    annotatemore_init(0, NULL);
+    annotatemore_init(0, NULL, NULL);
+    annotatemore_open(NULL);
 #endif
 
     return 0;
@@ -623,6 +624,7 @@ void shut_down(int code)
     mboxlist_done();
 
 #ifdef ENABLE_ANNOTATEMORE
+    annotatemore_close();
     annotatemore_done();
 #endif
 

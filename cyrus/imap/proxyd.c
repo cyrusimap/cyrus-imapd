@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.63 2003/05/29 18:43:25 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.64 2003/06/07 16:43:03 ken3 Exp $ */
 
 #include <config.h>
 
@@ -231,8 +231,11 @@ int getannotatefetchdata(char *tag,
 int getannotatestoredata(char *tag, struct entryattlist **entryatts);
 
 void annotate_response(struct entryattlist *l);
-int annotate_proxy(const char *server, const char *mbox_pat,
-		   struct strlist *entry_pat, struct strlist *attribute_pat);
+int annotate_fetch_proxy(const char *server, const char *mbox_pat,
+			 struct strlist *entry_pat,
+			 struct strlist *attribute_pat);
+int annotate_store_proxy(const char *server, const char *mbox_pat,
+			 struct entryattlist *entryatts);
 #endif /* ENABLE_ANNOTATEMORE */
 
 void printstring (const char *s);
@@ -1138,7 +1141,8 @@ int service_init(int argc, char **argv, char **envp)
 
 #ifdef ENABLE_ANNOTATEMORE
     /* Initialize the annotatemore extention */
-    annotatemore_init(0,annotate_proxy);
+    annotatemore_init(0, annotate_fetch_proxy, annotate_store_proxy);
+    annotatemore_open(NULL);
 #endif 
 
     return 0;
@@ -1374,6 +1378,11 @@ void shut_down(int code)
 
     mboxlist_close();
     mboxlist_done();
+
+#ifdef ENABLE_ANNOTATEMORE
+    annotatemore_close();
+    annotatemore_done();
+#endif
 
     if (proxyd_in) {
 	prot_NONBLOCK(proxyd_in);
@@ -5064,9 +5073,10 @@ void cmd_setannotation(char *tag, char *mboxpat __attribute__((unused)))
     return;
 }
 
-/* Proxy annotation commands to backend */
-int annotate_proxy(const char *server, const char *mbox_pat,
-		   struct strlist *entry_pat, struct strlist *attribute_pat) 
+/* Proxy GETANNOTATION commands to backend */
+int annotate_fetch_proxy(const char *server, const char *mbox_pat,
+			 struct strlist *entry_pat,
+			 struct strlist *attribute_pat) 
 {
     struct backend *be;
     struct strlist *l;
@@ -5086,6 +5096,43 @@ int annotate_proxy(const char *server, const char *mbox_pat,
     prot_printf(be->out, ") (");
     for(l=attribute_pat;l;l=l->next) {
 	prot_printf(be->out, "\"%s\"%s", l->s, l->next ? " " : "");
+    }
+    prot_printf(be->out, ")\r\n");
+    prot_flush(be->out);
+
+    /* Pipe the results.  Note that backend-current may also pipe us other
+       messages. */
+    pipe_until_tag(be, mytag, 0);
+
+    return 0;
+}
+
+/* Proxy SETANNOTATION commands to backend */
+int annotate_store_proxy(const char *server, const char *mbox_pat,
+			 struct entryattlist *entryatts)
+{
+    struct backend *be;
+    struct entryattlist *e;
+    struct attvaluelist *av;
+    char mytag[128];
+    
+    assert(server && mbox_pat && entryatts);
+    
+    be = proxyd_findserver(server);    
+    if(!be) return IMAP_SERVER_UNAVAILABLE;
+
+    /* Send command to remote */
+    proxyd_gentag(mytag, sizeof(mytag));
+    prot_printf(be->out, "%s SETANNOTATION \"%s\" (", mytag, mbox_pat);
+    for (e = entryatts; e; e = e->next) {
+	prot_printf(be->out, "\"%s\" (", e->entry);
+
+	for (av = e->attvalues; av; av = av->next) {
+	    prot_printf(be->out, "\"%s\" \"%s\"%s", av->attrib, av->value,
+			av->next ? " " : "");
+	}
+	prot_printf(be->out, ")");
+	if (e->next) prot_printf(be->out, " ");
     }
     prot_printf(be->out, ")\r\n");
     prot_flush(be->out);
