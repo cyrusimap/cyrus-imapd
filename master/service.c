@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.27 2002/01/15 18:55:46 leg Exp $ */
+/* $Id: service.c,v 1.28 2002/01/15 20:24:48 leg Exp $ */
 
 #include <config.h>
 
@@ -145,24 +145,15 @@ static int getlockfd(char *service)
 
     snprintf(lockfile, sizeof(lockfile), "%s/socket/%s.lock", 
 	     config_dir, service);
-    fd = open(lockfile, O_CREAT, 0600);
+    fd = open(lockfile, O_CREAT | O_RDWR, 0600);
     if (fd < 0) {
 	syslog(LOG_ERR, 
 	       "locking disabled: couldn't open socket lockfile %s: %m",
 	       lockfile);
 	return -1;
-    } else {
-	/* dup it to LOCK_FD so we don't have to worry about whether
-	   this is 0, 1, or 2 */
-	if (dup2(fd, LOCK_FD) < 0) {
-	    syslog(LOG_ERR, 
-	       "locking disabled: can't duplicate lock file descriptor: %m");
-	    close(fd);
-	    return -1;
-	}
-	close(fd);
-	return LOCK_FD;
     }
+
+    return fd;
 }
 
 int main(int argc, char **argv, char **envp)
