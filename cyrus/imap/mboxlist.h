@@ -40,7 +40,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: mboxlist.h,v 1.33.4.2 2002/11/15 21:46:57 rjs3 Exp $
+ * $Id: mboxlist.h,v 1.33.4.3 2003/01/31 21:51:36 rjs3 Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -83,15 +83,19 @@ struct mbox_entry {
 };
 
 /* Lookup 'name' in the mailbox list. */
-int mboxlist_lookup(const char *name, char **pathp, char **aclp, void *tid);
+int mboxlist_lookup(const char *name, char **pathp, char **aclp,
+		    struct txn **tid);
 
 /* Lookup 'name' and get more detail */
 int mboxlist_detail(const char *name, int *typep, char **pathp, char **partp,
-		    char **aclp, struct txn *tid);
+		    char **aclp, struct txn **tid);
 
-/* insert a stub entry */
+/* insert/delete stub entries */
 int mboxlist_insertremote(const char *name, int mbtype, const char *host,
-			  const char *acl, void **rettid);
+			  const char *acl, struct txn **rettid);
+int mboxlist_deleteremote(const char *name, struct txn **in_tid);
+
+
 
 /* Update a mailbox's entry */
 int mboxlist_update(char *name, int flags, const char *part, const char *acl);

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.61 2003/01/22 03:37:10 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.62 2003/01/31 21:51:35 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -298,7 +298,7 @@ static void imapd_refer(const char *tag,
 /* you can avoid referring the client by setting tag or ext_name to NULL. */
 static int mlookup(const char *tag, const char *ext_name,
 		   const char *name, int *flags, char **pathp, char **partp,
-		   char **aclp, void *tid) 
+		   char **aclp, struct txn **tid) 
 {
     int r, mbtype;
     char *remote, *acl;

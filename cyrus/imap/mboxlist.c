@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.31 2003/01/22 03:37:12 ken3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.32 2003/01/31 21:51:35 rjs3 Exp $
  */
 
 #include <config.h>
@@ -247,15 +247,15 @@ static int mboxlist_mylookup(const char *name, int *typep,
  * to the mailbox ACL is placed in the char * pointed to by it.
  */
 int mboxlist_lookup(const char *name, char **pathp, char **aclp, 
-		    void *tid __attribute__((unused)))
+		    struct txn **tid)
 {
-    return mboxlist_mylookup(name, NULL, pathp, NULL, aclp, NULL, 0);
+    return mboxlist_mylookup(name, NULL, pathp, NULL, aclp, &tid, 0);
 }
 
 int mboxlist_detail(const char *name, int *typep, char **pathp, char **partp,
-		    char **aclp, struct txn *tid __attribute__((unused))) 
+		    char **aclp, struct txn **tid) 
 {
-    return mboxlist_mylookup(name, typep, pathp, partp, aclp, NULL, 0);
+    return mboxlist_mylookup(name, typep, pathp, partp, aclp, tid, 0);
 }
 
 int mboxlist_findstage(const char *name, char *stagedir) 
@@ -729,10 +729,9 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 }
 
 /* insert an entry for the proxy */
-/* xxx rettid needs usage? */
 int mboxlist_insertremote(const char *name, int mbtype,
 			  const char *host, const char *acl,
-			  void **rettid __attribute__((unused)))
+			  struct txn **tid)
 {
     char *mboxent;
     int r = 0;
@@ -742,7 +741,7 @@ int mboxlist_insertremote(const char *name, int mbtype,
     mboxent = mboxlist_makeentry(mbtype | MBTYPE_REMOTE, host, acl);
 
     /* database put */
-    r = DB->store(mbdb, name, strlen(name), mboxent, strlen(mboxent), NULL);
+    r = DB->store(mbdb, name, strlen(name), mboxent, strlen(mboxent), tid);
     switch (r) {
     case CYRUSDB_OK:
 	break;
@@ -758,6 +757,77 @@ int mboxlist_insertremote(const char *name, int mbtype,
 
     free(mboxent);
     
+    return r;
+}
+
+/* Special function to delete a remote mailbox.
+ * Only affects mboxlist.
+ * Assumes admin powers. */
+int mboxlist_deleteremote(const char *name, struct txn **in_tid) 
+{
+    int r;
+    struct txn **tid;
+    struct txn *lcl_tid = NULL;
+    int mbtype;
+
+    if(in_tid) {
+	tid = in_tid;
+    } else {
+	tid = &lcl_tid;
+    }
+
+ retry:
+    r = mboxlist_mylookup(name, &mbtype, NULL, NULL, NULL, tid, 1);
+    switch (r) {
+    case 0:
+	break;
+
+    case IMAP_AGAIN:
+	goto retry;
+	break;
+
+    default:
+	goto done;
+    }
+
+    if(!(mbtype & MBTYPE_REMOTE)) {
+	syslog(LOG_ERR,
+	       "mboxlist_deleteremote called on non-remote mailbox: %s",
+	       name);
+	goto done;
+    }
+
+ retry_del:
+    /* delete entry */
+    r = DB->delete(mbdb, name, strlen(name), tid, 0);
+    switch (r) {
+    case CYRUSDB_OK: /* success */
+	break;
+    case CYRUSDB_AGAIN:
+	goto retry_del;
+    default:
+	syslog(LOG_ERR, "DBERROR: error deleting %s: %s",
+	       name, cyrusdb_strerror(r));
+	r = IMAP_IOERROR;
+    }
+
+    /* commit db operations, but only if we weren't passed a transaction */
+    if (!in_tid) {
+	r = DB->commit(mbdb, *tid);
+	if (r) {
+	    syslog(LOG_ERR, "DBERROR: failed on commit: %s",
+		   cyrusdb_strerror(r));
+	    r = IMAP_IOERROR;
+	}
+	tid = NULL;
+    }
+
+ done:
+    if(r && !in_tid) {
+	/* Abort the transaction if it is still in progress */
+	DB->abort(mbdb, *tid);
+    }
+
     return r;
 }
 	

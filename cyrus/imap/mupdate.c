@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.60.4.22 2003/01/31 18:46:30 rjs3 Exp $
+ * $Id: mupdate.c,v 1.60.4.23 2003/01/31 21:51:36 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1109,20 +1109,20 @@ void database_init()
 }
 
 /* log change to database. database must be locked. */
-void database_log(const struct mbent *mb)
+void database_log(const struct mbent *mb, struct txn **mytid)
 {
     switch (mb->t) {
     case SET_ACTIVE:
-	mboxlist_insertremote(mb->mailbox, 0, mb->server, mb->acl, NULL);
+	mboxlist_insertremote(mb->mailbox, 0, mb->server, mb->acl, mytid);
 	break;
 
     case SET_RESERVE:
 	mboxlist_insertremote(mb->mailbox, MBTYPE_RESERVE, mb->server,
-			      "", NULL);
+			      "", mytid);
 	break;
 
     case SET_DELETE:
-	mboxlist_deletemailbox(mb->mailbox, 1, NULL, NULL, 0, 0, 0);
+	mboxlist_deleteremote(mb->mailbox, mytid);
 	break;
 
     case SET_DEACTIVATE:
@@ -1298,7 +1298,7 @@ void cmd_set(struct conn *C,
     }
 
     /* write to disk */
-    database_log(m);
+    database_log(m, NULL);
 
     /* post pending changes */
     for (upc = updatelist; upc != NULL; upc = upc->updatelist_next) {
@@ -1667,7 +1667,7 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
     }
 
     /* write to disk */
-    database_log(m);
+    database_log(m, NULL);
     
     /* post pending changes to anyone we are talking to */
     for (upc = updatelist; upc != NULL; upc = upc->updatelist_next) {
