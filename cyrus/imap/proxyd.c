@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.103 2002/03/07 21:59:29 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.104 2002/03/07 23:29:32 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -209,6 +209,7 @@ void cmd_status(char *tag, char *name);
 void cmd_getuids(char *tag, char *startuid);
 void cmd_unselect(char* tag);
 void cmd_namespace(char* tag);
+void cmd_reconstruct(char *tag, char *name);
 
 void cmd_id(char* tag);
 struct idparamlist {
@@ -1461,8 +1462,7 @@ void fatal(const char *s, int code)
 /*
  * Top-level command loop parsing
  */
-void
-cmdloop()
+void cmdloop()
 {
     int fd;
     char motdfilename[1024];
@@ -1887,6 +1887,21 @@ cmdloop()
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
 		cmd_list(tag.s, 1, arg1.s, arg2.s);
+	    } else if(!strcmp(cmd.s, "Reconstruct")) {
+		if (c != ' ') goto missingargs;
+		c = getastring(proxyd_in, proxyd_out, &arg1);
+		if(c == ' ') {
+		    /* Optional RECURSEIVE argument */
+		    c = getword(proxyd_in, &arg2);
+		    if(!imparse_isatom(arg2.s))
+			goto extraargs;
+		    else if(strcasecmp(arg2.s, "RECURSIVE"))
+			goto extraargs;
+		    /* we ignore the argument, because proxyd does not care */
+		}
+		if(c == '\r') c = prot_getc(proxyd_in);
+		if(c != '\n') goto extraargs;
+		cmd_reconstruct(tag.s, arg1.s);
 	    }
 	    else goto badcmd;
 	    break;
@@ -3650,6 +3665,35 @@ void cmd_delete(char *tag, char *name)
 
     if (r) prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
 }	
+
+/*
+ * Perform a RECONSTRUCT command
+ */
+void cmd_reconstruct(char *tag, char *name)
+{
+    int r = 0;
+    char mailboxname[MAX_MAILBOX_NAME+1];
+    char *server = NULL;
+
+    if(!proxyd_userisadmin) r = IMAP_PERMISSION_DENIED;
+    else if(!supports_referrals) r = IMAP_REQUIRE_REFERRALS;
+    else {
+	r = (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace,
+						    name,
+						    proxyd_userid,
+						    mailboxname);
+    }
+
+    if(!r)
+	r = mlookup(mailboxname, &server, NULL, NULL);
+
+    if(!r) {
+	proxyd_refer(tag, server, mailboxname);
+    } else {
+	prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
+    }
+}	
+
 
 /*
  * Perform a RENAME command
