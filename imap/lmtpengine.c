@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.65 2002/03/07 17:55:28 rjs3 Exp $
+ * $Id: lmtpengine.c,v 1.66 2002/03/07 20:57:36 ken3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -88,6 +88,7 @@
 #include "lmtpengine.h"
 #include "lmtpstats.h"
 #include "tls.h"
+#include "telemetry.h"
 
 #define RCPT_GROW 30
 
