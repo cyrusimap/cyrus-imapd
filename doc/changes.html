@@ -1,9 +1,17 @@
-<!-- $Id: changes.html,v 1.16 2001/07/27 23:49:53 leg Exp $ -->
+<!-- $Id: changes.html,v 1.16.4.1 2002/12/03 22:17:29 rjs3 Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
 </HEAD><BODY>
 <H1>                   Changes to the Cyrus IMAP Server</H1>
+
+<h2>Changes to the Cyrus IMAP Server since 2.0.16</h2>
+<ul>
+<li>Fixed some potential buffer overflows in the sieve code, as well
+as a pre-login buffer overflow in the IMAP parsing code.</li>
+<li>Backport of a fix for an (unrelated) problem with the
+strlcpy implementation</li>
+</ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.0.14</h2>
 <ul>
@@ -1284,7 +1292,7 @@ restore tab before breaking out of loop.
 
 
 <P><HR>
-last modified: $Date: 2001/07/27 23:49:53 $
+last modified: $Date: 2002/12/03 22:17:29 $
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>
