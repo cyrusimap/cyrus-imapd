@@ -58,7 +58,7 @@ hash_table *construct_hash_table(hash_table *table, size_t size)
 ** sufficient for most purposes.
 */
 
-unsigned hash(char *string)
+unsigned hash(const char *string)
 {
       unsigned ret_val = 0;
       int i;
