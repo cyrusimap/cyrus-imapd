@@ -8,6 +8,7 @@ int main(void)
 
     puts(mailbox);
     imapurl_toURL(url, server, mailbox, 0);
+    puts(url);
     imapurl_fromURL(server, mailbox, url);
     puts(mailbox);
 

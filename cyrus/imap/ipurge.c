@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.20.2.5 2004/04/08 21:13:03 ken3 Exp $
+ * $Id: ipurge.c,v 1.20.2.6 2004/05/25 01:28:08 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -56,7 +56,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <syslog.h>
-#include <com_err.h>
 #include <string.h>
 #include <netinet/in.h>
 

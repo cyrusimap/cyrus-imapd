@@ -1,7 +1,7 @@
 /* timsieved.c -- main file for timsieved (sieve script accepting program)
  * Tim Martin
  * 9/21/99
- * $Id: timsieved.c,v 1.48.2.4 2004/03/24 19:53:22 ken3 Exp $
+ * $Id: timsieved.c,v 1.48.2.5 2004/05/25 01:28:22 ken3 Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -60,7 +60,6 @@
 #include <syslog.h>
 #include <dirent.h>
 #include <ctype.h>
-#include <com_err.h>
 #include <netdb.h>
 #include <sys/socket.h>
 #include <netinet/in.h>

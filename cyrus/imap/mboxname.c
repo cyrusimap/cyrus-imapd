@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- * $Id: mboxname.c,v 1.31.2.1 2004/02/27 21:17:32 ken3 Exp $
+ * $Id: mboxname.c,v 1.31.2.2 2004/05/25 01:28:10 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -46,7 +46,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
-#include <com_err.h>
 
 #include "assert.h"
 #include "glob.h"

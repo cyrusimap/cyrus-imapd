@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squatter.c,v 1.12.2.3 2004/04/08 21:13:09 ken3 Exp $
+ * $Id: squatter.c,v 1.12.2.4 2004/05/25 01:28:13 ken3 Exp $
  */
 
 /*
@@ -77,7 +77,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <fcntl.h>
-#include <com_err.h>
 #include <syslog.h>
 #include <string.h>
 

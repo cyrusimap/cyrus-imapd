@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.2.2.9 2004/05/06 19:18:47 ken3 Exp $ */
+/* $Id: global.c,v 1.2.2.10 2004/05/25 01:28:04 ken3 Exp $ */
 
 #include <config.h>
 
@@ -48,7 +48,6 @@
 #include <string.h>
 #include <ctype.h>
 #include <syslog.h>
-#include <com_err.h>
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <sys/stat.h>

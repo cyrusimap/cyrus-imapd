@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.48.2.2 2004/04/08 21:12:57 ken3 Exp $ */
+/* $Id: fud.c,v 1.48.2.3 2004/05/25 01:28:04 ken3 Exp $ */
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -61,7 +61,6 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <errno.h>
-#include <com_err.h>
 #include <pwd.h>
 
 #include "assert.h"

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: chk_cyrus.c,v 1.11.2.2 2004/04/08 21:12:56 ken3 Exp $
+ * $Id: chk_cyrus.c,v 1.11.2.3 2004/05/25 01:28:02 ken3 Exp $
  */
 
 #include <config.h>
@@ -53,7 +53,6 @@
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <syslog.h>
-#include <com_err.h>
 #include <errno.h>
 #include <ctype.h>
 #include <limits.h>

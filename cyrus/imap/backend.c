@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.16.2.5 2004/04/29 17:31:56 ken3 Exp $ */
+/* $Id: backend.c,v 1.16.2.6 2004/05/25 01:28:02 ken3 Exp $ */
 
 #include <config.h>
 
@@ -55,7 +55,6 @@
 #include <sys/stat.h>
 #include <sys/un.h>
 #include <syslog.h>
-#include <com_err.h>
 #include <netdb.h>
 #include <sys/socket.h>
 #include <netinet/in.h>

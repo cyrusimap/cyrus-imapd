@@ -41,7 +41,7 @@
  *
  */
 
-/* $Id: deliver.c,v 1.169.2.5 2004/04/22 19:37:53 ken3 Exp $ */
+/* $Id: deliver.c,v 1.169.2.6 2004/05/25 01:28:03 ken3 Exp $ */
 
 #include <config.h>
 
@@ -56,7 +56,6 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <syslog.h>
-#include <com_err.h>
 #include <errno.h>
 #include <pwd.h>
 #include <sys/types.h>

@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.199.2.7 2004/04/22 15:04:51 ken3 Exp $
+ * $Id: index.c,v 1.199.2.8 2004/05/25 01:28:07 ken3 Exp $
  */
 #include <config.h>
 
@@ -52,7 +52,6 @@
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <syslog.h>
-#include <com_err.h>
 #include <errno.h>
 #include <ctype.h>
 
@@ -2411,7 +2410,10 @@ static int index_fetchreply(struct mailbox *mailbox,
 	sepchar = ' ';
 	index_fetchmsg(msg_base, msg_size, mailbox->format, 0,
 		       HEADER_SIZE(msgno),
-		       fetchargs->start_octet, fetchargs->octet_count,
+		       (fetchitems & FETCH_IS_PARTIAL) ?
+		         fetchargs->start_octet : 0,
+		       (fetchitems & FETCH_IS_PARTIAL) ?
+		         fetchargs->octet_count : 0,
 		       imapd_out);
     }
     else if (fetchargs->headers || fetchargs->headers_not) {
@@ -2431,14 +2433,20 @@ static int index_fetchreply(struct mailbox *mailbox,
 	sepchar = ' ';
 	index_fetchmsg(msg_base, msg_size, mailbox->format,
 		       CONTENT_OFFSET(msgno), SIZE(msgno) - HEADER_SIZE(msgno),
-		       fetchargs->start_octet, fetchargs->octet_count,
+		       (fetchitems & FETCH_IS_PARTIAL) ?
+		         fetchargs->start_octet : 0,
+		       (fetchitems & FETCH_IS_PARTIAL) ?
+		         fetchargs->octet_count : 0,
 		       imapd_out);
     }
     if (fetchitems & FETCH_RFC822) {
 	prot_printf(imapd_out, "%cRFC822 ", sepchar);
 	sepchar = ' ';
 	index_fetchmsg(msg_base, msg_size, mailbox->format, 0, SIZE(msgno),
-		       fetchargs->start_octet, fetchargs->octet_count,
+		       (fetchitems & FETCH_IS_PARTIAL) ?
+		         fetchargs->start_octet : 0,
+		       (fetchitems & FETCH_IS_PARTIAL) ?
+		         fetchargs->octet_count : 0,
 		       imapd_out);
     }
     for (fsection = fetchargs->fsections; fsection; fsection = fsection->next) {

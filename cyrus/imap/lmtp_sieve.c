@@ -1,6 +1,6 @@
 /* lmtp_sieve.c -- Sieve implementation for lmtpd
  *
- * $Id: lmtp_sieve.c,v 1.1.2.5 2004/05/17 00:46:01 ken3 Exp $
+ * $Id: lmtp_sieve.c,v 1.1.2.6 2004/05/25 01:28:08 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -48,7 +48,6 @@
 #include <unistd.h>
 #endif
 
-#include <com_err.h>
 #include <pwd.h>
 #include <stdlib.h>
 #include <string.h>

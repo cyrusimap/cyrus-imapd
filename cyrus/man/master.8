@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: master.8,v 1.10 2003/10/22 18:50:13 rjs3 Exp $
+.\" $Id: master.8,v 1.10.2.1 2004/05/25 01:28:17 ken3 Exp $
 .SH NAME
 master \- master Cyrus process
 .SH SYNOPSIS
@@ -61,6 +61,10 @@ master \- master Cyrus process
 .I pidfile
 ]
 [
+.B \-P
+.I snmp agentx ping interval
+]
+[
 .B \-j
 .I janitor period
 ]
@@ -69,6 +73,10 @@ master \- master Cyrus process
 ]
 [
 .B \-D
+]
+[
+.B \-x
+.I snmp agentx socket
 ]
 .SH DESCRIPTION
 .I Master
@@ -107,12 +115,21 @@ Use
 .I pidfile
 as the pidfile.  If not specified, defaults to /var/run/cyrus-master.pid
 .TP
+.BI \-P " snmp agentx ping interval"
+Sets the amount on time in seconds the subagent will try and reconnect to the
+master agent (snmpd) if it ever becomes (or starts) disconnected.  Requires
+net-snmp 5.0 or higher.
+.TP
 .BI \-d
 Start in daemon mode (run in background and disconnect from controlling
 terminal).
 .TP
 .BI \-D
 Don't close stdin/stdout/stderr. Primiarly useful for debugging.
+.TP
+.BI \-x " snmp agentx socket"
+Address the master agent (most likely snmpd) listens on.
+Requires net-snmp 5.0 or higher.
 .SH CONFIGURATION
 Upon execution,
 .I master

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.147.2.13 2004/05/02 01:09:45 ken3 Exp $
+ * $Id: mailbox.c,v 1.147.2.14 2004/05/25 01:28:09 ken3 Exp $
  *
  */
 
@@ -52,7 +52,6 @@
 #include <string.h>
 #include <errno.h>
 #include <syslog.h>
-#include <com_err.h>
 
 #ifdef HAVE_DIRENT_H
 # include <dirent.h>

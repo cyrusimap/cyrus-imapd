@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: cvt_cyrusdb.c,v 1.12.2.2 2004/03/24 19:53:00 ken3 Exp $
+ * $Id: cvt_cyrusdb.c,v 1.12.2.3 2004/05/25 01:28:03 ken3 Exp $
  */
 
 #include <config.h>
@@ -58,7 +58,6 @@
 #include <fcntl.h>
 #include <ctype.h>
 #include <syslog.h>
-#include <com_err.h>
 
 #include <sys/ipc.h>
 #include <sys/msg.h>

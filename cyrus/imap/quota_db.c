@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: quota_db.c,v 1.1.2.1 2004/01/27 23:13:50 ken3 Exp $
+ * $Id: quota_db.c,v 1.1.2.2 2004/05/25 01:28:13 ken3 Exp $
  *
  */
 
@@ -52,7 +52,6 @@
 #include <string.h>
 #include <errno.h>
 #include <syslog.h>
-#include <com_err.h>
 
 #include "assert.h"
 #include "cyrusdb.h"

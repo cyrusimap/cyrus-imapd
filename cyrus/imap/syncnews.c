@@ -42,7 +42,7 @@
  */
 
 /*
- * $Id: syncnews.c,v 1.24.2.1 2004/01/27 23:13:51 ken3 Exp $
+ * $Id: syncnews.c,v 1.24.2.2 2004/05/25 01:28:13 ken3 Exp $
  */
 #include <config.h>
 
@@ -58,7 +58,6 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <sys/stat.h>
-#include <com_err.h>
 
 #include "assert.h"
 #include "global.h"

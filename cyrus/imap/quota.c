@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: quota.c,v 1.48.2.3 2004/03/24 19:53:10 ken3 Exp $ */
+/* $Id: quota.c,v 1.48.2.4 2004/05/25 01:28:12 ken3 Exp $ */
 
 
 #include <config.h>
@@ -57,7 +57,6 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <sys/stat.h>
-#include <com_err.h>
 
 #if HAVE_DIRENT_H
 # include <dirent.h>

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: fetchnews.c,v 1.2.2.4 2004/02/27 21:17:26 ken3 Exp $
+ * $Id: fetchnews.c,v 1.2.2.5 2004/05/25 01:28:03 ken3 Exp $
  */
 
 #include <config.h>
@@ -345,32 +345,32 @@ int main(int argc, char *argv[])
     prot_printf(pout, "MODE READER\r\n");
     prot_fgets(buf, sizeof(buf), pin);
 
-    /* read the previous timestamp */
-    if (!sfile[0]) {
-	char oldfile[1024];
-
-	snprintf(sfile, sizeof(sfile), "%s/fetchnews.stamp", config_dir);
-
-	/* upgrade from the old stamp filename to the new */
-	snprintf(oldfile, sizeof(oldfile), "%s/newsstamp", config_dir);
-	rename(oldfile, sfile);
-    }
-
-    if ((fd = open(sfile, O_RDWR | O_CREAT, 0644)) == -1) {
-	syslog(LOG_ERR, "can not open %s", sfile);
-	goto quit;
-    }
-    if (lock_nonblocking(fd) == -1) {
-	syslog(LOG_ERR, "can not lock %s: %m", sfile);
-	goto quit;
-    }
-
-    if (read(fd, &stamp, sizeof(stamp)) < sizeof(stamp)) {
-	/* XXX do something better here */
-	stamp = 0;
-    }
-
     if (newnews) {
+	/* read the previous timestamp */
+	if (!sfile[0]) {
+	    char oldfile[1024];
+
+	    snprintf(sfile, sizeof(sfile), "%s/fetchnews.stamp", config_dir);
+
+	    /* upgrade from the old stamp filename to the new */
+	    snprintf(oldfile, sizeof(oldfile), "%s/newsstamp", config_dir);
+	    rename(oldfile, sfile);
+	}
+
+	if ((fd = open(sfile, O_RDWR | O_CREAT, 0644)) == -1) {
+	    syslog(LOG_ERR, "can not open %s", sfile);
+	    goto quit;
+	}
+	if (lock_nonblocking(fd) == -1) {
+	    syslog(LOG_ERR, "can not lock %s: %m", sfile);
+	    goto quit;
+	}
+
+	if (read(fd, &stamp, sizeof(stamp)) < sizeof(stamp)) {
+	    /* XXX do something better here */
+	    stamp = 0;
+	}
+
 	/* ask for new articles */
 	tm = gmtime(&stamp);
 	strftime(buf, sizeof(buf), "%Y%m%d %H%M%S", tm);
@@ -380,8 +380,9 @@ int main(int argc, char *argv[])
 	    syslog(LOG_ERR, "peer doesn't support NEWNEWS");
 	    newnews = 0;
 	}
+
+	stamp = time(NULL);
     }
-    stamp = time(NULL);
 
     if (!newnews) {
 	prot_printf(pout, "LIST ACTIVE %s\r\n", wildmat);
@@ -440,6 +441,13 @@ int main(int argc, char *argv[])
 		goto quit;
 	    }
 	}
+
+	/* write the current timestamp */
+	lseek(fd, 0, SEEK_SET);
+	if (write(fd, &stamp, sizeof(stamp)) < sizeof(stamp))
+	    syslog(LOG_ERR, "error writing %s", sfile);
+	lock_unlock(fd);
+	close(fd);
     }
     else {
 	char group[1024], msgid[1024], lastbuf[50];
@@ -506,16 +514,9 @@ int main(int argc, char *argv[])
 	newsrc_done();
     }
 
-    /* write the current timestamp */
-    lseek(fd, 0, SEEK_SET);
-    if (write(fd, &stamp, sizeof(stamp)) < sizeof(stamp))
-	syslog(LOG_ERR, "error writing %s", sfile);
-    lock_unlock(fd);
-    close(fd);
-
     syslog(LOG_NOTICE,
-	   "fetchnews: offered %d, rejected %d, accepted %d, failed %d",
-	   offered, rejected, accepted, failed);
+	   "fetchnews: %s offered %d; %s rejected %d, accepted %d, failed %d",
+	   peer, offered, server, rejected, accepted, failed);
 
   quit:
     if (psock >= 0) {

@@ -41,7 +41,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: afskrb.c,v 1.2.2.2 2004/04/29 17:31:58 ken3 Exp $";
+      "$Id: afskrb.c,v 1.2.2.3 2004/05/25 01:28:20 ken3 Exp $";
 
 #include <config.h>
 
@@ -56,7 +56,6 @@ static char rcsid[] __attribute__((unused)) =
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/uio.h>
-#include <com_err.h>
 
 #ifdef AFSPTS_USE_KRB5
 #include <krb5.h>

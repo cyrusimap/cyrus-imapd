@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.16.2.6 2004/04/08 21:12:56 ken3 Exp $
+ * $Id: annotate.c,v 1.16.2.7 2004/05/25 01:28:01 ken3 Exp $
  */
 
 #include <config.h>
@@ -58,7 +58,6 @@
 #include <fcntl.h>
 #include <ctype.h>
 #include <syslog.h>
-#include <com_err.h>
 
 #include "acl.h"
 #include "assert.h"

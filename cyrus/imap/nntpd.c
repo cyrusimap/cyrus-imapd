@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.18 2004/05/02 00:27:05 ken3 Exp $
+ * $Id: nntpd.c,v 1.2.2.19 2004/05/25 01:28:11 ken3 Exp $
  */
 
 /*
@@ -64,7 +64,6 @@
 #include <sys/wait.h>
 #include <sys/param.h>
 #include <syslog.h>
-#include <com_err.h>
 #include <netdb.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -3764,7 +3763,8 @@ static void cmd_post(char *msgid, int mode)
 			while (isspace(*cur_peer)) cur_peer++;
 
 			/* find end of peer */
-			if ((next_peer = strchr(cur_peer, ' ')))
+			if ((next_peer = strchr(cur_peer, ' ')) ||
+			    (next_peer = strchr(cur_peer, '\t')))
 			    *next_peer++ = '\0';
 
 			/* feed the article to this peer */

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: arbitron.c,v 1.31.2.3 2004/02/27 21:17:25 ken3 Exp $ */
+/* $Id: arbitron.c,v 1.31.2.4 2004/05/25 01:28:02 ken3 Exp $ */
 
 #include <config.h>
 
@@ -56,7 +56,6 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <sys/stat.h>
-#include <com_err.h>
 
 #include "assert.h"
 #include "global.h"

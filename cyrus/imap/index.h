@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.h,v 1.9 2003/10/22 18:50:07 rjs3 Exp $
+ * $Id: index.h,v 1.9.2.1 2004/05/25 01:28:08 ken3 Exp $
  */
 
 /* Header for internal usage of index.c + programs that make raw access
@@ -59,7 +59,6 @@
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <syslog.h>
-#include <com_err.h>
 #include <errno.h>
 #include <ctype.h>
 
