@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.117 2001/10/16 16:58:58 ken3 Exp $
+ $Id: mailbox.c,v 1.118 2002/02/13 22:09:03 rjs3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -247,12 +247,9 @@ int mailbox_map_message(struct mailbox *mailbox,
 /*
  * Releases the buffer obtained from mailbox_map_message()
  */
-void
-mailbox_unmap_message(mailbox, uid, basep, lenp)
-struct mailbox *mailbox;
-unsigned long uid;
-const char **basep;
-unsigned long *lenp;
+void mailbox_unmap_message(struct mailbox *mailbox __attribute__((unused)),
+			   unsigned long uid __attribute__((unused)),
+			   const char **basep, unsigned long *lenp)
 {
     map_free(basep, lenp);
 }
@@ -487,7 +484,7 @@ int mailbox_read_header(struct mailbox *mailbox)
     }
     if (mailbox->quota.root) {
 	/* check if this is the same as what's there */
-	if (strlen(mailbox->quota.root) != tab-p ||
+	if (strlen(mailbox->quota.root) != (size_t)(tab-p) ||
 	    strncmp(mailbox->quota.root, p, tab-p) != 0) {
 	    assert(mailbox->quota.lock_count == 0);
 	    if (mailbox->quota.fd != -1) {
@@ -1079,13 +1076,12 @@ int mailbox_write_header(struct mailbox *mailbox)
 /*
  * Write the index header for 'mailbox'
  */
-int
-mailbox_write_index_header(struct mailbox *mailbox)
+int mailbox_write_index_header(struct mailbox *mailbox)
 {
     char buf[INDEX_HEADER_SIZE];
-    int header_size = INDEX_HEADER_SIZE;
+    unsigned long header_size = INDEX_HEADER_SIZE;
     int n;
-
+    
     assert(mailbox->index_lock_count != 0);
 
     if (updatenotifier) updatenotifier(mailbox);
@@ -1124,11 +1120,12 @@ mailbox_write_index_header(struct mailbox *mailbox)
     *((bit32 *)(buf+OFFSET_ANSWERED)) = htonl(mailbox->answered);
     *((bit32 *)(buf+OFFSET_FLAGGED)) = htonl(mailbox->flagged);
 
-    if (mailbox->start_offset < header_size) header_size = mailbox->start_offset;
+    if (mailbox->start_offset < header_size)
+	header_size = mailbox->start_offset;
 
     lseek(mailbox->index_fd, 0, SEEK_SET);
     n = retry_write(mailbox->index_fd, buf, header_size);
-    if (n != header_size || fsync(mailbox->index_fd)) {
+    if ((unsigned long)n != header_size || fsync(mailbox->index_fd)) {
 	syslog(LOG_ERR, "IOERROR: writing index header for %s: %m",
 	       mailbox->name);
 	/* xxx can we unroll the acap send??? */
@@ -1193,7 +1190,8 @@ int mailbox_append_index(struct mailbox *mailbox,
 			 unsigned num,
 			 int sync)
 {
-    int i, j, len, n;
+    unsigned i;
+    int j, len, n;
     char *buf, *p;
     long last_offset;
 
@@ -1706,7 +1704,7 @@ void *deciderock;
     /* Fix up information in index header */
     rewind(newindex);
     n = fread(buf, 1, mailbox->start_offset, newindex);
-    if (n != mailbox->start_offset) {
+    if ((unsigned long)n != mailbox->start_offset) {
 	syslog(LOG_ERR, "IOERROR: reading index header for %s: got %d of %d",
 	       mailbox->name, n, mailbox->start_offset);
 	goto fail;
@@ -2064,9 +2062,9 @@ int mailbox_delete(struct mailbox *mailbox, int delete_quota_root)
  * Expunge decision proc used by mailbox_rename() to expunge all messages
  * in INBOX
  */
-static int expungeall(rock, indexbuf)
-void *rock;
-char *indexbuf;
+static int expungeall(struct mailbox *mailbox __attribute__((unused)),
+		      void *rock __attribute__((unused)),
+		      char *indexbuf __attribute__((unused)))
 {
     return 1;
 }
