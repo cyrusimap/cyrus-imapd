@@ -37,6 +37,18 @@ threadsafe.
 
 <li> during appendstage(), the message is parsed once per delivery,
 not once at the beginning.
+
+<li> <tt>master</tt> process should accept a SIGHUP and reread
+configuration file on the fly.
+
+<li> <tt>master</tt> should pay attention to processes that have told
+it they are listening, and make sure they don't die abnormally.
+likewise, it should be on the lookout for continually forking
+services.
+
+<li> <tt>master</tt> should probably have a babysitting service
+("always keep this process running").
+
 </ul>
 
 <h3>proxyd and Cyrus Murder</h3>
@@ -64,6 +76,8 @@ proxy_authenticate() and with backend servers overall.
 <li> <tt>target-acap</tt> doesn't work on ignoring zero-information
 updates.  it doesn't deal with the ACAP server dying and in general
 should be replaced with something more general.
+
+<li> is <tt>proxyd</tt> implementing idle timeouts correctly?
 </ul>
 
 <h3>lmtpd, deliver, and sieve</h3>
@@ -150,7 +164,7 @@ efficient and easier to use than Amanda on the filesystem.
 would like to submit a bug, feature request or (best of all) patch.
 
 <P><HR>
-Last update: $Date: 2000/05/29 06:59:40 $ 
+Last update: $Date: 2000/05/29 07:06:27 $ 
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>
