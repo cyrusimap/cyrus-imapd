@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.44 2002/02/05 02:20:57 rjs3 Exp $
+ * $Id: mupdate.c,v 1.45 2002/02/06 16:36:55 leg Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1146,9 +1146,6 @@ void cmd_startupdate(struct conn *C, const char *tag)
 void sendupdates(struct conn *C, int flushnow)
 {
     struct pending *p, *q;
-    struct timeval now;
-    struct timespec timeout;
-    int r;
 
     pthread_mutex_lock(&C->m);
 
