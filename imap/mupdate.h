@@ -1,6 +1,6 @@
 /* mupdate.h - private mupdate header file
  *
- * $Id: mupdate.h,v 1.11 2002/02/07 21:43:58 rjs3 Exp $
+ * $Id: mupdate.h,v 1.12 2002/03/06 20:50:11 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -83,7 +83,8 @@ struct mupdate_handle_s {
 enum settype {
     SET_ACTIVE,
     SET_RESERVE,
-    SET_DELETE
+    SET_DELETE,
+    SET_DEACTIVATE
 };
 
 /* mailbox name MUST be first, since it is the key */
