@@ -4,7 +4,7 @@
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
 <title>Cyrus IMAP Server FAQ</title>
-<!-- $Id: faq.html,v 1.16 2001/11/18 19:38:44 leg Exp $ -->
+<!-- $Id: faq.html,v 1.17 2001/12/06 18:01:35 leg Exp $ -->
 </head>
 <body>
 <h1>Cyrus IMAP Server FAQ</h1>
@@ -56,6 +56,24 @@ secrets, but imapd doesn't say <tt>AUTH=CRAM-MD5</tt>. Why?</dt>
 <dd>
 <p><b>A:</b> Make sure <tt>/etc/sasldb</tt> is readable by the
 Cyrus user.</p>
+</dd>
+
+<dt><b>Q:</b> I'm using "<tt>sasl_pwcheck_method: saslauthd</tt>", but
+authentication isn't working.
+
+<dd>
+<p><b>A:</b> Make sure that the <tt>saslauthd</tt> daemon is running
+(you'll want to start it when the system boots).  <tt>imapd</tt> is
+unable to connect to <tt>saslauthd</tt> if the following message
+appears in the logs:</p>
+
+<pre>
+Dec  6 12:58:57 mail3.andrew.cmu.edu imapd[1297]: cannot connect to saslauthd server
+</pre>
+
+<p>Make sure that <tt>saslauthd</tt> is running and that the cyrus
+user can access the unix domain socket (defaults to <tt>/var/run/mux</tt>).
+
 </dd>
 
 <dt><b>Q:</b> I'm getting messages about "duplicate_prune". What's
@@ -134,7 +152,7 @@ tls.c:</p>
 </dl>
 
 <hr />
-last modified: $Date: 2001/11/18 19:38:44 $ <br />
+last modified: $Date: 2001/12/06 18:01:35 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
