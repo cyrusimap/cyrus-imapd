@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.47 2000/03/02 21:25:44 leg Exp $
+ * $Id: imtest.c,v 1.48 2000/03/08 01:44:13 leg Exp $
  *
  * Copyright 1999 Carnegie Mellon University
  * 
@@ -715,17 +715,18 @@ static int waitfor(char *tag)
 
 static int auth_login(void)
 {
-  chat str[1024];
+  char str[1024];
   /* we need username and password to do "login" */
   char *username;
   unsigned int userlen;
   char *pass;
   unsigned int passlen;
+  char *tag = "L01 ";
 
   interaction(SASL_CB_AUTHNAME,"Authname",&username,&userlen);
   interaction(SASL_CB_PASS,"Password",&pass,&passlen);
 
-  prot_printf(pout,"L01 LOGIN %s {%d}\r\n",username,passlen);
+  prot_printf(pout,"%sLOGIN %s {%d}\r\n", tag, username, passlen);
   prot_flush(pout);
 
   waitfor("+");
@@ -737,7 +738,7 @@ static int auth_login(void)
 	  imtest_fatal("prot layer failure");
       }
       printf("%s", str);
-  } while (strncmp(str, "L01 ", strlen(tag)));
+  } while (strncmp(str, tag, strlen(tag)));
 
   if (!strncasecmp(str + 4, "OK", 2)) {
       return IMTEST_OK;
