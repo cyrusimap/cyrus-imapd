@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.9 2000/09/16 22:35:01 leg Exp $ */
+/* $Id: acconfig.h,v 1.10 2000/10/18 20:27:55 leg Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -124,4 +124,6 @@ enum {
      * 0 -> nothing; 1 -> some; higher -> even more */
     CONFIG_DB_VERBOSE = 1,
 
+    /* log timing information to LOG_DEBUG */
+    CONFIG_TIMING_VERBOSE = 0
 };
