@@ -94,7 +94,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.20 2001/08/18 00:46:48 ken3 Exp $ */
+/* $Id: tls.c,v 1.21 2001/08/22 01:34:27 ken3 Exp $ */
 
 #include <config.h>
 
@@ -145,6 +145,25 @@ static SSL_CTX *ctx = NULL;
 
 static int tls_serverengine = 0; /* server engine initialized? */
 static int do_dump = 0;		/* actively dumping protocol? */
+
+
+int tls_enabled(const char *ident)
+{
+    char buf[50];
+    const char *val;
+
+    sprintf(buf, "tls_%s_cert_file", ident);
+    val = config_getstring(buf,
+			   config_getstring("tls_cert_file", NULL));
+    if (!val || !strcasecmp(val, "disabled")) return 0;
+
+    sprintf(buf, "tls_%s_key_file", ident);
+    val = config_getstring(buf,
+			   config_getstring("tls_key_file", NULL));
+    if (!val || !strcasecmp(val, "disabled")) return 0;
+
+    return 1;
+}
 
 /* taken from OpenSSL apps/s_cb.c 
  * tim - this seems to just be giving logging messages
@@ -563,17 +582,15 @@ SSL_SESSION *get_session_cb(SSL *ssl, unsigned char *id, int idlen, int *copy)
   * returns -1 on error
   */
 
-int     tls_init_serverengine(int verifydepth,
+int     tls_init_serverengine(const char *ident,
+			      int verifydepth,
 			      int askcert,
 			      int requirecert,
-			      int tlsonly,
-			      char *var_imapd_tls_CAfile,
-			      char *var_imapd_tls_CApath,
-			      char *var_imapd_tls_cert_file,
-			      char *var_imapd_tls_key_file)
+			      int tlsonly)
 {
     int     off = 0;
     int     verify_flags = SSL_VERIFY_NONE;
+    char    buf[50];
     char   *CApath;
     char   *CAfile;
     char   *s_cert_file;
@@ -641,28 +658,22 @@ int     tls_init_serverengine(int verifydepth,
 	DB->init(dbdir, 0);
     }
 
-    if (strlen(var_imapd_tls_CAfile) == 0)
-	CAfile = NULL;
-    else
-	CAfile = var_imapd_tls_CAfile;
-    if (strlen(var_imapd_tls_CApath) == 0)
-	CApath = NULL;
-    else
-	CApath = var_imapd_tls_CApath;
+    CAfile = (char *) config_getstring("tls_ca_file", NULL);
+    CApath = (char *) config_getstring("tls_ca_path", NULL);
 
     if ((!SSL_CTX_load_verify_locations(ctx, CAfile, CApath)) ||
 	(!SSL_CTX_set_default_verify_paths(ctx))) {
 	/* just a warning since this is only necessary for client auth */
 	syslog(LOG_NOTICE,"TLS engine: cannot load CA data");	
     }
-    if (strlen(var_imapd_tls_cert_file) == 0)
-	s_cert_file = NULL;
-    else
-	s_cert_file = var_imapd_tls_cert_file;
-    if (strlen(var_imapd_tls_key_file) == 0)
-	s_key_file = NULL;
-    else
-	s_key_file = var_imapd_tls_key_file;
+
+    sprintf(buf, "tls_%s_cert_file", ident);
+    s_cert_file = (char *) config_getstring(buf,
+					    config_getstring("tls_cert_file", NULL));
+
+    sprintf(buf, "tls_%s_key_file", ident);
+    s_key_file = (char *) config_getstring(buf,
+					   config_getstring("tls_key_file", NULL));
 
     if (!set_cert_stuff(ctx, s_cert_file, s_key_file)) {
 	syslog(LOG_ERR,"TLS engine: cannot load cert/key data");
@@ -997,6 +1008,13 @@ int tls_prune_sessions(void)
 
     DB->done();
 
+    return 0;
+}
+
+#else
+
+int tls_enabled(const char *ident)
+{
     return 0;
 }
 

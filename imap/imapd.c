@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.316 2001/08/18 00:46:46 ken3 Exp $ */
+/* $Id: imapd.c,v 1.317 2001/08/22 01:34:25 ken3 Exp $ */
 
 #include <config.h>
 
@@ -69,6 +69,7 @@
 #include "util.h"
 #include "auth.h"
 #include "imapconf.h"
+#include "tls.h"
 #include "version.h"
 #include "charset.h"
 #include "imparse.h"
@@ -89,10 +90,6 @@
 #include "pushstats.h"		/* SNMP interface */
 
 extern void seen_done(void);
-
-#ifdef HAVE_SSL
-#include "tls.h"
-#endif /* HAVE_SSL */
 
 extern int optind;
 extern char *optarg;
@@ -186,7 +183,6 @@ void cmd_idle(char* tag);
 void idle_update(idle_flags_t flags);
 
 void cmd_starttls(char *tag, int imaps);
-int starttls_enabled(void);
 
 #ifdef ENABLE_X_NETSCAPE_HACK
 void cmd_netscrape(char* tag);
@@ -453,7 +449,7 @@ int service_init(int argc, char **argv, char **envp)
 	    break;
 	case 's': /* imaps (do starttls right away) */
 	    imaps = 1;
-	    if (!starttls_enabled()) {
+	    if (!tls_enabled("imap")) {
 		syslog(LOG_ERR, "imaps: required OpenSSL options not present");
 		fatal("imaps: required OpenSSL options not present",
 		      EC_CONFIG);
@@ -1144,7 +1140,7 @@ cmdloop()
 	    
 	case 'S':
 	    if (!strcmp(cmd.s, "Starttls")) {
-		if (!starttls_enabled()) {
+		if (!tls_enabled("imap")) {
 		    /* we don't support starttls */
 		    goto badcmd;
 		}
@@ -2042,7 +2038,7 @@ void cmd_capability(char *tag)
 	prot_printf(imapd_out, " IDLE");
     }
 
-    if (starttls_enabled()) {
+    if (tls_enabled("imap")) {
 	prot_printf(imapd_out, " STARTTLS");
     }
     if (!imapd_starttls_done && !config_getswitch("allowplaintext", 1)) {
@@ -4154,19 +4150,9 @@ char *quotaroot;
  * layer that was passed on the command line is disgarded. this should
  * be fixed.
  */
-int starttls_enabled(void)
-{
-    if (!config_getstring("tls_imap_cert_file",
-			 config_getstring("tls_cert_file", NULL))) return 0;
-    if (!config_getstring("tls_imap_key_file",
-			  config_getstring("tls_key_file", NULL))) return 0;
-    return 1;
-}
-
 /* imaps - whether this is an imaps transaction or not */
 void cmd_starttls(char *tag, int imaps)
 {
-    char *tls_cert, *tls_key;
     int result;
     int *layerp;
     sasl_external_properties_t external;
@@ -4180,26 +4166,15 @@ void cmd_starttls(char *tag, int imaps)
 	return;
     }
 
-    tls_cert = (char *)config_getstring("tls_imap_cert_file",
-					config_getstring("tls_cert_file", ""));
-    tls_key = (char *)config_getstring("tls_imap_key_file",
-				       config_getstring("tls_key_file", ""));
-
-    result=tls_init_serverengine(5,        /* depth to verify */
+    result=tls_init_serverengine("imap",
+				 5,        /* depth to verify */
 				 !imaps,   /* can client auth? */
 				 0,        /* require client to auth? */
-				 !imaps,   /* TLS only? */
-				 (char *)config_getstring("tls_ca_file", ""),
-				 (char *)config_getstring("tls_ca_path", ""),
-				 tls_cert, tls_key);
+				 !imaps);  /* TLS only? */
 
     if (result == -1) {
 
-	syslog(LOG_ERR, "error initializing TLS: "
-	       "[CA_file: %s] [CA_path: %s] [cert_file: %s] [key_file: %s]",
-	       (char *) config_getstring("tls_ca_file", ""),
-	       (char *) config_getstring("tls_ca_path", ""),
-	       tls_cert, tls_key);
+	syslog(LOG_ERR, "error initializing TLS");
 
 	if (imaps == 0) {
 	    prot_printf(imapd_out, "%s NO Error initializing TLS\r\n", tag);
@@ -4250,11 +4225,6 @@ void cmd_starttls(char *tag, int imaps)
     imapd_starttls_done = 1;
 }
 #else
-int starttls_enabled(void)
-{
-    return 0;
-}
-
 void cmd_starttls(char *tag, int imaps)
 {
     fatal("cmd_starttls() executed, but starttls isn't implemented!",

@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.29 2001/08/18 01:13:42 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.30 2001/08/22 01:34:26 ken3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -955,22 +955,6 @@ static char *process_recipient(char *addr,
     return NULL;
 }    
 
-#ifdef HAVE_SSL
-static int starttls_enabled(void)
-{
-    if (!config_getstring("tls_lmtp_cert_file",
-			 config_getstring("tls_cert_file", NULL))) return 0;
-    if (!config_getstring("tls_lmtp_key_file",
-			  config_getstring("tls_key_file", NULL))) return 0;
-    return 1;
-}
-#else
-static void starttls_enabled(void)
-{
-    return 0;
-}
-#endif /* HAVE_SSL */
-
 void lmtpmode(struct lmtp_func *func,
 	      struct protstream *pin, 
 	      struct protstream *pout,
@@ -984,7 +968,6 @@ void lmtpmode(struct lmtp_func *func,
 
     struct sockaddr_in localaddr, remoteaddr;
     socklen_t salen;
-    struct hostent *hp;
     char clienthost[250];
 
     sasl_conn_t *conn = NULL;
@@ -1021,18 +1004,20 @@ void lmtpmode(struct lmtp_func *func,
     r = getpeername(fd, (struct sockaddr *)&remoteaddr, &salen);
     if (!r && remoteaddr.sin_family == AF_INET) {
 	/* connected to an internet socket */
+	struct hostent *hp;
 
 	hp = gethostbyaddr((char *)&remoteaddr.sin_addr,
 			   sizeof(remoteaddr.sin_addr), AF_INET);
 	if (hp != NULL) {
-	    strncpy(clienthost, hp->h_name, sizeof(clienthost)-30);
-	    clienthost[sizeof(clienthost)-30] = '\0';
+	    strlcpy(clienthost, hp->h_name, sizeof(clienthost)-30);
 	} else {
-	    clienthost[0] = '\0';
+	    strlcpy(clienthost, inet_ntoa(remoteaddr.sin_addr),
+		    sizeof(clienthost)-30);
 	}
-	strcat(clienthost, "[");
-	strcat(clienthost, inet_ntoa(remoteaddr.sin_addr));
-	strcat(clienthost, "]");
+	strlcat(clienthost, " [", sizeof(clienthost));
+	strlcat(clienthost, inet_ntoa(remoteaddr.sin_addr),
+		sizeof(clienthost));
+	strlcat(clienthost, "]", sizeof(clienthost));
 
 	salen = sizeof(localaddr);
 	if (!getsockname(fd, (struct sockaddr *)&localaddr, &salen)) {
@@ -1043,13 +1028,13 @@ void lmtpmode(struct lmtp_func *func,
 	    fatal("can't get local addr", EC_SOFTWARE);
 	}
 
-	syslog(LOG_DEBUG, "connection from [%s]%s", 
-	       inet_ntoa(remoteaddr.sin_addr),
+	syslog(LOG_DEBUG, "connection from %s%s", 
+	       clienthost,
 	       func->preauth ? " preauth'd as postman" : "");
     } else {
 	/* we're not connected to a internet socket! */
 	func->preauth = 1;
-	strcpy(clienthost, "[local]");
+	strcpy(clienthost, "[unix socket]");
 	syslog(LOG_DEBUG, "lmtp connection preauth'd as postman");
     }
 
@@ -1179,18 +1164,14 @@ void lmtpmode(struct lmtp_func *func,
 	      if (out) { free(out); out = NULL; }
 	      if ((r != SASL_OK) && (r != SASL_CONTINUE)) {
 		  if (errstr) {
-		      syslog(LOG_ERR, "badlogin: %s %s %s [%s]",
-			     remoteaddr.sin_family == AF_INET ?
-			        inet_ntoa(remoteaddr.sin_addr) :
-			        "[unix socket]",
+		      syslog(LOG_ERR, "badlogin: %s %s %s %s",
+			     clienthost,
 			     mech,
 			     sasl_errstring(r, NULL, NULL), 
 			     errstr);
 		  } else {
 		      syslog(LOG_ERR, "badlogin: %s %s %s",
-			     remoteaddr.sin_family == AF_INET ?
-			        inet_ntoa(remoteaddr.sin_addr) :
-			        "[unix socket]",
+			     clienthost,
 			     mech,
 			     sasl_errstring(r, NULL, NULL));
 		  }
@@ -1211,9 +1192,7 @@ void lmtpmode(struct lmtp_func *func,
 				  VARIABLE_AUTH, hash_simple(mech), 
 				  VARIABLE_LISTEND);
 	      syslog(LOG_NOTICE, "login: %s %s %s%s %s",
-		     remoteaddr.sin_family == AF_INET ?
-		        inet_ntoa(remoteaddr.sin_addr) :
-		        "[unix socket]",
+		     clienthost,
 		     user, mech, starttls_done ? "+TLS" : "", "User logged in");
 
 	      authenticated += 2;
@@ -1270,7 +1249,7 @@ void lmtpmode(struct lmtp_func *func,
 			  "250-8BITMIME\r\n"
 			  "250-ENHANCEDSTATUSCODES\r\n",
 			  config_servername);
-	      if (starttls_enabled() && !func->preauth) {
+	      if (tls_enabled("lmtp") && !func->preauth) {
 		  prot_printf(pout, "250-STARTTLS\r\n");
 	      }
 	      if (sasl_listmech(conn, NULL, "AUTH ", " ", "", &mechs, 
@@ -1464,9 +1443,8 @@ void lmtpmode(struct lmtp_func *func,
       case 's':
       case 'S':
 #ifdef HAVE_SSL
-	    if (!strcasecmp(buf, "starttls") && starttls_enabled() &&
+	    if (!strcasecmp(buf, "starttls") && tls_enabled("lmtp") &&
 		!func->preauth) { /* don't need TLS for preauth'd connect */
-		char *tls_cert, *tls_key;
 		int *layerp;
 		sasl_external_properties_t external;
 
@@ -1486,26 +1464,15 @@ void lmtpmode(struct lmtp_func *func,
 		    continue;
 		}
 
-		tls_cert = (char *)config_getstring("tls_lmtp_cert_file",
-						    config_getstring("tls_cert_file", ""));
-		tls_key = (char *)config_getstring("tls_lmtp_key_file",
-						   config_getstring("tls_key_file", ""));
-
-		r=tls_init_serverengine(5,   /* depth to verify */
+		r=tls_init_serverengine("lmtp",
+					5,   /* depth to verify */
 					1,   /* can client auth? */
 					0,   /* require client to auth? */
-					1,   /* TLS only? */
-					(char *)config_getstring("tls_ca_file", ""),
-					(char *)config_getstring("tls_ca_path", ""),
-					tls_cert, tls_key);
+					1);   /* TLS only? */
 
 		if (r == -1) {
 
-		    syslog(LOG_ERR, "[lmtpd] error initializing TLS: "
-			   "[CA_file: %s] [CA_path: %s] [cert_file: %s] [key_file: %s]",
-			   (char *) config_getstring("tls_ca_file", ""),
-			   (char *) config_getstring("tls_ca_path", ""),
-			   tls_cert, tls_key);
+		    syslog(LOG_ERR, "[lmtpd] error initializing TLS");
 
 		    prot_printf(pout, "454 4.3.3 %s\r\n", "Error initializing TLS");
 		    continue;
