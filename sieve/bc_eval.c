@@ -1,5 +1,5 @@
 /* bc_eval.c - evaluate the bytecode
- * $Id: bc_eval.c,v 1.2.2.3 2004/06/25 15:08:07 ken3 Exp $
+ * $Id: bc_eval.c,v 1.2.2.4 2004/06/28 18:44:30 ken3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -35,6 +35,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "bytecode.h"
 
 #include "charset.h"
+#include "hash.h"
 #include "xmalloc.h"
 
 #include <string.h>
@@ -291,7 +292,8 @@ int shouldRespond(void * m, sieve_interp_t *interp,
 }
 
 /* Evaluate a bytecode test */
-int eval_bc_test(sieve_interp_t *interp, void* m,
+int eval_bc_test(sieve_interp_t *interp,
+		 struct hash_table *body_cache, void* m,
 		 bytecode_input_t * bc, int * ip)
 {
     int res=0; 
@@ -314,7 +316,7 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 
     case BC_NOT:/*2*/
 	i+=1;
-	res = eval_bc_test(interp,m, bc, &i);
+	res = eval_bc_test(interp, body_cache, m, bc, &i);
 	if(res >= 0) res = !res; /* Only invert in non-error case */
 	break;
 
@@ -373,7 +375,7 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 	 * in the right place */
 	for (x=0; x<list_len && !res; x++) { 
 	    int tmp;
-	    tmp = eval_bc_test(interp,m,bc,&i);
+	    tmp = eval_bc_test(interp,body_cache,m,bc,&i);
 	    if(tmp < 0) {
 		res = tmp;
 		break;
@@ -393,7 +395,7 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 	/* return 1 unless you find one that isn't true, then return 0 */
 	for (x=0; x<list_len && res; x++) {
 	    int tmp;
-	    tmp = eval_bc_test(interp,m,bc,&i);
+	    tmp = eval_bc_test(interp,body_cache,m,bc,&i);
 	    if(tmp < 0) {
 		res = tmp;
 		break;
@@ -704,8 +706,6 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
     {
 	sieve_bodypart_t ** val;
 	const char **content_types = NULL;
-	char *decbuf = NULL;
-	int alloced = 0;
 
 	int typesi=i+6;/* the i value for the begining of the content-types */
  	int datai=(ntohl(bc[typesi+1].value)/4);
@@ -762,14 +762,10 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 	    if (match == B_COUNT) {
 		count++;
 	    } else {
-		const char *content;
-		int size;
+		const char *content = val[y]->content;
+		int size = val[y]->size;
 
-		if (transform == B_RAW) {
-		    content = val[y]->content;
-		    size = val[y]->size;
-		}
-		else {
+		if (transform != B_RAW) {
 		    int encoding;
 
 		    /* XXX currently unknown encodings are processed as raw */
@@ -782,12 +778,22 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 		    else
 			encoding = ENCODING_NONE;
 
-		    content = charset_decode_mimebody(val[y]->content,
-						      val[y]->size, encoding,
-						      &decbuf, alloced, &size);
-		    if (content != val[y]->content && val[y]->size > alloced) {
-			/* (re)alloced decbuf, so adjust alloced */
-			alloced = val[y]->size;
+		    if (encoding != ENCODING_NONE) {
+			content = hash_lookup(val[y]->section, body_cache);
+			if (content) {
+			    /* already decoded this part */
+			    size = strlen(content);
+			}
+			else {
+			    /* decode this part and add it to the cache */
+			    char *decbuf = NULL;
+			    content = charset_decode_mimebody(val[y]->content,
+							      val[y]->size,
+							      encoding, &decbuf,
+							      0, &size);
+			    hash_insert(val[y]->section, (void *) content,
+					body_cache);
+			}
 		    }
 
 		    if (transform == B_BINARY) {
@@ -834,9 +840,6 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 	/* free the bodypart array */
 	if (val) free(val);
 
-	/* free the decode buffer */
-	if (decbuf) free(decbuf);
-     
 	if  (match == B_COUNT)
 	{
 	    sprintf(scount, "%u", count);
@@ -874,10 +877,9 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 
 /* The entrypoint for bytecode evaluation */
 int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
-		  void *m, sieve_imapflags_t * imapflags,
-		  action_list_t *actions,
-		  notify_list_t *notify_list,
-		  const char **errmsg) 
+		  struct hash_table *body_cache, void *m,
+		  sieve_imapflags_t * imapflags, action_list_t *actions,
+		  notify_list_t *notify_list, const char **errmsg) 
 {
     const char *data;
     unsigned int ip = 0, ip_max = (bc_len/sizeof(bytecode_input_t));
@@ -988,7 +990,7 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 	    int result;
 	   
 	    ip+=2;
-	    result=eval_bc_test(i, m, bc, &ip);
+	    result=eval_bc_test(i, body_cache, m, bc, &ip);
 	    
 	    if (result<0) {
 		*errmsg = "Invalid test";

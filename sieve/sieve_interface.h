@@ -1,5 +1,5 @@
 /* sieve_interface.h -- interface for deliver
- * $Id: sieve_interface.h,v 1.19.2.2 2004/06/23 20:15:19 ken3 Exp $
+ * $Id: sieve_interface.h,v 1.19.2.3 2004/06/28 18:44:30 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -53,7 +53,9 @@ typedef int sieve_get_envelope(void *message_context,
 			       const char *field,
 			       const char ***contents);
 
+/* MUST keep this struct sync'd with bodypart in imap/message.h */
 typedef struct sieve_bodypart {
+    char section[128];
     const char *content;
     const char *encoding;
     unsigned long size;

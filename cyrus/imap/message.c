@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: message.c,v 1.97.2.4 2004/06/23 20:15:15 ken3 Exp $
+ * $Id: message.c,v 1.97.2.5 2004/06/28 18:44:28 ken3 Exp $
  */
 
 #include <config.h>
@@ -374,12 +374,14 @@ int message_parse_mapped(const char *msg_base, unsigned long msg_len,
     return 0;
 }
 
-static void message_find_part(struct body *body, const char **content_types,
+static void message_find_part(struct body *body, const char *section,
+			      const char **content_types,
 			      const char *msg_base, unsigned long msg_len,
 			      struct bodypart ***parts, int *n)
 {
     int match;
     const char **type;
+    char nextsection[128];
 
     for (match = 0, type = content_types; !match && *type; type++) {
 	const char *subtype = strchr(*type, '/');
@@ -402,6 +404,7 @@ static void message_find_part(struct body *body, const char **content_types,
 	/* grow the array and add the new part */
 	*parts = xrealloc(*parts, (*n+2)*sizeof(struct bodypart *));
 	(*parts)[*n] = xmalloc(sizeof(struct bodypart));
+	strlcpy((*parts)[*n]->section, section, sizeof((*parts)[*n]->section));
 	(*parts)[*n]->content = msg_base + body->content_offset;
 	(*parts)[*n]->encoding = body->encoding;
 	(*parts)[*n]->size = body->content_size;
@@ -411,13 +414,15 @@ static void message_find_part(struct body *body, const char **content_types,
 	int i;
 
 	for (i = 0; i < body->numparts; i++) {
-	    message_find_part(&body->subpart[i], content_types,
+	    snprintf(nextsection, sizeof(nextsection), "%s.%d", section, i+1);
+	    message_find_part(&body->subpart[i], nextsection, content_types,
 			      msg_base, msg_len, parts, n);
 	}
     }
     else if (!strcmp(body->type, "MESSAGE") &&
 	     !strcmp(body->subtype, "RFC822")) {
-	message_find_part(body->subpart, content_types,
+	snprintf(nextsection, sizeof(nextsection), "%s.1", section);
+	message_find_part(body->subpart, nextsection, content_types,
 			  msg_base, msg_len, parts, n);
     }
 }
@@ -435,7 +440,8 @@ void message_fetch_part(struct message_content *msg,
     int n = 0;  /* running count of the number of matching parts */
 
     *parts = NULL;
-    message_find_part(msg->body, content_types, msg->base, msg->len, parts, &n);
+    message_find_part(msg->body, "1", content_types,
+		      msg->base, msg->len, parts, &n);
 }
 
 /*

@@ -1,5 +1,5 @@
 /* message.h -- Message parsing
- $Id: message.h,v 1.6.4.3 2004/06/23 20:15:16 ken3 Exp $
+ $Id: message.h,v 1.6.4.4 2004/06/28 18:44:29 ken3 Exp $
 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -76,7 +76,9 @@ struct message_content {
     struct body *body; /* parsed body structure */
 };
 
+/* MUST keep this struct sync'd with sieve_bodypart in sieve_interface.h */
 struct bodypart {
+    char section[128];
     const char *content;
     const char *encoding;
     unsigned long size;

@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.59.2.4 2004/06/23 20:15:18 ken3 Exp $
+ * $Id: script.c,v 1.59.2.5 2004/06/28 18:44:30 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -38,6 +38,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <unistd.h>
 #include <assert.h>
 
+#include "hash.h"
 #include "xmalloc.h"
 
 #include "md5global.h"
@@ -811,10 +812,9 @@ static int do_action_list(sieve_interp_t *interp,
 
 /* execute some bytecode */
 int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
-		  void *m, sieve_imapflags_t * imapflags,
-		  action_list_t *actions,
-		  notify_list_t *notify_list,
-		  const char **errmsg);
+		  struct hash_table *body_cache, void *m,
+		  sieve_imapflags_t * imapflags, action_list_t *actions,
+		  notify_list_t *notify_list, const char **errmsg);
 
 int sieve_execute_bytecode(sieve_bytecode_t *bc, sieve_interp_t *interp,
 			   void *script_context, void *message_context) 
@@ -827,6 +827,7 @@ int sieve_execute_bytecode(sieve_bytecode_t *bc, sieve_interp_t *interp,
     char actions_string[ACTIONS_STRING_LEN] = "";
     const char *errmsg = NULL;
     sieve_imapflags_t imapflags;
+    struct hash_table body_cache;
     
     if (!interp) return SIEVE_FAIL;
 
@@ -855,9 +856,17 @@ int sieve_execute_bytecode(sieve_bytecode_t *bc, sieve_interp_t *interp,
 			      actions, notify_list, lastaction, 0,
 			      actions_string, errmsg);
     }
+
+    /* build a hash table to cache decoded body parts */
+    construct_hash_table(&body_cache, 10, 1);
     
-    if (sieve_eval_bc(interp, bc->data, bc->len, message_context, 
-		      &imapflags, actions, notify_list, &errmsg) < 0)
+    ret = sieve_eval_bc(interp, bc->data, bc->len,
+			&body_cache, message_context,
+			&imapflags, actions, notify_list, &errmsg);
+
+    free_hash_table(&body_cache, free);
+
+    if (ret < 0)
     {
 	ret = SIEVE_RUN_ERROR;
 	return do_sieve_error(ret, interp, script_context,
