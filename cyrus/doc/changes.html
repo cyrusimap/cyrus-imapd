@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.7 2000/07/21 19:37:57 leg Exp $ -->
+<!-- $Id: changes.html,v 1.8 2000/08/08 17:54:44 leg Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -7,6 +7,8 @@
 
 <h2>Changes to the cyrus IMAP Server SINCE 2.0.5</h2>
 <ul>
+<li> APPEND now honors the \Seen flag.
+
 <li> mailboxes file can once again be a flat text file. (compile-time choice)
 
 <li> subscriptions file can be flat text or berkeley db.  likewise for
@@ -30,7 +32,7 @@ forthcoming THREAD=REFERENCES.
 
 <li> more descriptive lmtp errors.
 
-<li> finish implementation of LMTP 8BITMIME.
+<li> finished implementation of LMTP 8BITMIME.
 
 <li> fixed minor bugs in pop3d.
 
@@ -60,6 +62,8 @@ upgrade software yet).
 
 <li> Some fixes for possible race conditions in initializing services
 and database structures.
+
+<li> Some non-gcc compile fixes with structure initialization.
 
 <li> Some non gcc compile fixes with structure initialization.
 </ul>
@@ -1074,7 +1078,7 @@ restore tab before breaking out of loop.
 
 
 <P><HR>
-last modified: $Date: 2000/07/21 19:37:57 $
+last modified: $Date: 2000/08/08 17:54:44 $
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>
