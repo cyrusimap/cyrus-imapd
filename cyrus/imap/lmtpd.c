@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.98 2002/06/03 18:22:26 rjs3 Exp $
+ * $Id: lmtpd.c,v 1.99 2002/07/07 14:04:18 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -543,7 +543,8 @@ int send_rejection(const char *origid,
     if (origreceip)
 	fprintf(sm, "Original-Recipient: rfc822; %s\r\n", origreceip);
     fprintf(sm, "Final-Recipient: rfc822; %s\r\n", mailreceip);
-    fprintf(sm, "Original-Message-ID: %s\r\n", origid);
+    if (origid)
+	fprintf(sm, "Original-Message-ID: %s\r\n", origid);
     fprintf(sm, "Disposition: "
 	    "automatic-action/MDN-sent-automatically; deleted\r\n");
     fprintf(sm, "\r\n");
@@ -653,7 +654,7 @@ int sieve_discard(void *ac __attribute__((unused)),
     snmp_increment(SIEVE_DISCARD, 1);
 
     /* ok, we won't file it, but log it */
-    if (strlen(md->id) < 80) {
+    if (md->id && strlen(md->id) < 80) {
 	char pretty[160];
 
 	beautify_copy(pretty, md->id);
