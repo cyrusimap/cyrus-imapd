@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.45 2003/08/14 16:20:32 rjs3 Exp $ */
+/* $Id: fud.c,v 1.46 2003/09/24 16:37:41 rjs3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -196,11 +196,34 @@ int service_main(int argc __attribute__((unused)),
     shut_down(r);
 }
 
-static void cyrus_timeout(int signo)
+static void cyrus_timeout(int signo __attribute__((unused)))
 {
-  signo = 0;
-  return;
+    return;
 }
+
+static int setsigalrm(int enable)
+
+{
+    struct sigaction action;
+    
+    sigemptyset(&action.sa_mask);
+    
+    action.sa_flags = 0;
+
+    if(enable) {
+	action.sa_handler = cyrus_timeout;
+    } else {
+	action.sa_handler = SIG_IGN;
+    }
+    
+    if (sigaction(SIGALRM, &action, NULL) < 0) {
+	syslog(LOG_ERR, "installing SIGALRM handler: sigaction: %m");
+	return -1;
+    }
+    
+    return 0;
+}
+
 
 /* Send a proxy request to the backend, send their reply to sfrom */
 int do_proxy_request(const char *who, const char *name,
@@ -240,12 +263,21 @@ int do_proxy_request(const char *who, const char *name,
     /* Send the query and wait for a reply */
     sendto (csoc, tmpbuf, strlen (tmpbuf), 0, (struct sockaddr *) &cin, x);
     memset (tmpbuf, '\0', strlen (tmpbuf));
-    signal (SIGALRM, cyrus_timeout);
+    
+    if(setsigalrm(1) < 0) {
+	rc = IMAP_SERVER_UNAVAILABLE;
+	send_reply(sfrom, REQ_UNK, who, name, 0, 0, 0);
+	goto done;
+    }
+    
     rc = 0;
     alarm (1);
     rc = recvfrom (csoc, tmpbuf, sizeof(tmpbuf), 0,
 		   (struct sockaddr *) &cout, &x);
     alarm (0);
+
+    setsigalrm(0);  /* Failure isn't really terrible here */
+    
     if (rc < 1) {
 	rc = IMAP_SERVER_UNAVAILABLE;
 	send_reply(sfrom, REQ_UNK, who, name, 0, 0, 0);
