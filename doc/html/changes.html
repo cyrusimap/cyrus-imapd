@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.39 1998/06/07 23:36:51 tjs Exp $ -->
+<!-- $Id: changes.html,v 1.40 1998/06/10 22:04:00 tjs Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -9,8 +9,15 @@
 
 <ul>
 
-<li> The checks for Tcl in configure are much smarter.  If tclsh is in your
-	path, it should work.  (All the previous checks to look for Tcl
+<li> If ENABLE_EXPERIMENT is set, the server no longer claims to support
+OPTIMIZE-1; instead, it claims to support UIDPLUS.  The Getuids command has
+been removed since it is not in the UIDPLUS document
+(draft-myers-imap-optimize-03.txt).
+
+<li> The checks for Tcl in configure are much smarter.  The configure script
+asks tclsh where its configuration lives, then consults the shell scripts that 
+have that information.  This should work with 7.5 or better, which is what the 
+server requires anyway.  (All the previous checks to look for Tcl
 	libraries are gone; now, configure runs tclsh and asks it where
 	the Tcl libraries are, then runs the shell scripts that are in
 	that directory.)
@@ -527,7 +534,7 @@ restore tab before breaking out of loop.
 </ul>
 <P><HR><P>
 <!-- hhmts start -->
-last modified by tjs at Sun Jun  7 19:34:06 1998
+last modified by tjs at Wed Jun 10 18:03:47 1998
 <!-- hhmts end -->
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
