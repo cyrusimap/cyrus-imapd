@@ -858,7 +858,7 @@ int statusitems;
 
     if (mailbox->exists != 0 &&
 	(statusitems &
-	 (STATUS_RECENT | STATUS_UNSEEN | STATUS_UPDATE_NUMBER))) {
+	 (STATUS_RECENT | STATUS_UNSEEN))) {
 	r = seen_open(mailbox, imapd_userid, &status_seendb);
 	if (r) return r;
 
@@ -917,12 +917,6 @@ int statusitems;
     }
     if (statusitems & STATUS_UNSEEN) {
 	prot_printf(imapd_out, "%cUNSEEN %u", sepchar, num_unseen);
-	sepchar = ' ';
-    }
-    if (statusitems & STATUS_UPDATE_NUMBER) {
-	prot_printf(imapd_out, "%cUPDATE-NUMBER %u", sepchar,
-		    mailbox->index_mtime > last_change ?
-		    mailbox->index_mtime : last_change);
 	sepchar = ' ';
     }
     prot_printf(imapd_out, ")\r\n");

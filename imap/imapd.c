@@ -2335,9 +2335,6 @@ char *name;
 	else if (!strcmp(arg.s, "unseen")) {
 	    statusitems |= STATUS_UNSEEN;
 	}
-	else if (!strcmp(arg.s, "update-number")) {
-	    statusitems |= STATUS_UPDATE_NUMBER;
-	}
 	else {
 	    prot_printf(imapd_out, "%s BAD Invalid Status attribute %s\r\n",
 			tag, arg.s);
