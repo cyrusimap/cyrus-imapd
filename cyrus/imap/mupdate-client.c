@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.38.2.9 2004/07/12 20:20:50 ken3 Exp $
+ * $Id: mupdate-client.c,v 1.38.2.10 2004/09/02 19:43:34 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -211,6 +211,7 @@ int mupdate_connect(const char *server, const char *port,
     saslresult=sasl_setprop(h->saslconn, SASL_SEC_PROPS, secprops);
     if(saslresult != SASL_OK) goto noconn;
     free(secprops);
+    secprops = NULL;
 
     /* Read the mechlist & other capabilities */
     while(1) {
@@ -254,6 +255,7 @@ int mupdate_connect(const char *server, const char *port,
     }
 
     free(mechlist);
+    mechlist = NULL;
 
     /* xxx unclear that this is correct, but it prevents a memory leak */
     if(local_cbs) free_callbacks(cbs);
