@@ -1,112 +1,24 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.71 2003/10/22 18:50:04 rjs3 Exp $ -->
+<!-- $Id: changes.html,v 1.69.2.1 2003/11/19 16:44:29 rjs3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
 <title>Changes to the Cyrus IMAP Server</title>
 </head>
 <body>
+<h1>Changes to the Cyrus IMAP Server</h1>
 
-<h1>Changes to the Cyrus IMAP Server since 2.2.1</h1>
-
+<h2>Changes to the Cyrus IMAP Server since 2.1.15</h2>
 <ul>
-<li>Major bugfixes in murder altnamespace/unixhierarchysep/virtdomain
-support (Thanks in large part to work by Christian Schulte &lt;cs@schulte.it&gt;)</li>
-<li>Improved master process accounting (Henrique de Moraes Holschuh
-&lt;hmh@debian.org&gt;)</li>
-<li>Significantly improved message header caching (based in large part
-on code supplied by David Carter &lt;David.Carter@ucs.cam.ac.uk&gt; from
-the University of Cambridge)
-<li>The sieve bytecode format has been updated once more, to correctly
-handle short-circuiting of the allof and anyof operators</li>
-</ul>
-
-<h1>Changes to the Cyrus IMAP Server since 2.2.0</h1>
-
-<ul>
-<li>The improved directory hashing (fulldirhash) is now a runtime
-configuration option.</li>
-<li>The netnews.db has been integrated into deliver.db.</li>
-<li>Full r/w ANNOTATEMORE support, including more annotations that
-allow the control of operations such as message expiration.
-ANNOTATEMORE is also always enabled now.</li>
-<li><tt>expirenews</tt> has been replaced by <tt>cyr_expire</tt> which
-uses annotations for fine-grained mailbox expiration.</li>
-<li><tt>squatter</tt> can now use annotations for fine-grained mailbox
-indexing.</li> 
-<li>Many nntpd enhancements including: reader-only and feeder-only
-modes, support for LIST NEWSGROUPS (via mailbox annotations) and
-gatewaying news to mail (via mailbox annotations).</li>
-<li><tt>fetchnews</tt> can now authenticate to the remote server.</li>
-<li>Removed deprecated LAST command from pop3d.</li>
-<li>Sieve Bytecode is now stored in network byte order, meaning that
-bytecode files can be freely moved between different platforms</li>
-<li>Sieve relational extension now working again.</li>
-<li>Sieve vacation now uses the correct subject.</li>
-<li>A large number of bugs involving virtual domain support have been
-fixed, including issues with the Murder, and with Sieve.</li>
-</ul>
-
-<h1>Changes to the Cyrus IMAP Server since 2.1.x</h1>
-
-<ul>
-<li>There have been extensive performance and consistancy changes to
-the configuration subsystem.  This will both ensure greater consistancy
-between the documentation and the code, as well as a more standard format
-for specifing service-specific configuration options in imapd.conf.  Important
-changes are detailed here:
-<ul>
-  <li> The tls_[service]_* configuration options have been removed.  Now
-use [servicename]_tls_*, where servicename is the service identifier from
-cyrus.conf for that particular process.</li>
-  <li> Administrative groups (e.g. admins and lmtp_admins) no longer union,
-service groups completely override the generic group. </li>
-  <li> lmtp_allowplaintext is no longer a defined parameter and must
-be specified using the service name of your lmtp process if you
-require a specific value</li>
-</ul></li>
-
-<li> libcyrus has been split into libcyrus_min and libcyrus, so as to allow
-sensative applications (such as master) include the least amount of code
-necessary for operation </li>
-
-<li> Virtual domain support.  See the <a
-href="install-virtdomains.html">virtual domains</a> document for
-details.</li>
-
-<li> Users can now be renamed (even across domains).  Note that this
-is not atomic and weirdness may occur if the user is logged in during
-the rename.  See the <tt>allowusermoves</tt> option in
-<tt>imapd.conf(5)</tt> for details.</li>
-
-<li> The <tt>db3</tt> and <tt>db3-nosync</tt> database backends have
-been renamed to <tt>berkeley</tt> and <tt>berkeley-nosync</tt>
-respectively (to avoid confusion over whether or not db4 is supported).</li>
-
-<li> The default mailbox list and seen state database formats have changed
-to skiplist from Berkeley and Flat, respectively. </li>
-
-<li> ptloader is now a regular cyrus service.  This has several implications,
-see <a href=install-upgrade.html>install-upgrade.html</a> for more details.</li>
-
-<li> NNTP support.  Usenet news can now be fed to and read from Cyrus
-directly via NNTP, without the need for a local news server.  See <a
-href="install-netnews.html">netnews</a> document for details.</li>
-
-<li>IPv6 support, provided by Hajimu UMEMOTO &lt;ume@mahoroba.org&gt;</li>
-
-<li> Sieve scripts are now compiled to bytecode to allow for faster
-execution (and lmtpd no longer needs lex or yacc).  See
-<a href=install-upgrade.html>install-upgrade.html</a> for more details.</li>
-
-<li> The functionality of pop3proxyd has been merged into pop3d.  Be
-sure to update <tt>cyrus.conf</tt> on your frontend machines accordingly.</li>
-
-<li> The functionality of <tt>ctl_deliver -E</tt> has been moved to
-<tt>cyr_expire -E</tt>.  Be sure to update <tt>cyrus.conf</tt> on your
-machines accordingly.</li>
-
+<li>Clean up a timeout bug in fud proxy code.</li>
+<li>Fix a number of bugs with the murder and altnamespace handling.</li>
+<li>Detect fork() failures when launching sendmail in lmtpd</li>
+<li>Enable telemetry logging in lmtpd/lmtpproxyd</li>
+<li>Allow APOP to be disabled via an imap option</li>
+<li>Fix reconstruct to handle missing cyrus.header files</li>
+<li>Add the quotawarnkb option</li>
+<li>Update MUPDATE to look for IANA assigned port numbers.</li>
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.1.14</h2>
@@ -199,6 +111,15 @@ as a pre-login buffer overflow in the IMAP parsing code.</li>
 <li>more portable use of errno throughout
 <li>timsieved now does telemetry logging
 <li>libcyrus.a no longer supplies fs_get() and fs_give()
+<li>fixed use of errno on some platforms
+<li>fixed a bug in quota tracking across RENAMEs
+<li>fixed an off-by-one error in the prot layer
+<li>add support for character sets: iso-8859-15 and windows-1252
+<li>Add the "at" method of running EVENTs to master, also has the side
+effect of events running every period minutes, intead of every period +
+run time minutes.
+<li>timsieved version now tracks with IMAPd version
+<li>minor documentation updates
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.1.8</h2>
@@ -243,7 +164,6 @@ was being used incorrectly.</li>
 <h2>Changes to the Cyrus IMAP Server since 2.1.4</h2>
 
 <ul>
-
 <li> Sieve is no longer dependent on duplicate delivery suppression
 (it still uses the duplicate delivery database however). </li>
 
@@ -1870,7 +1790,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2003/10/22 18:50:04 $ <br />
+last modified: $Date: 2003/11/19 16:44:29 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
