@@ -1,7 +1,7 @@
 /* lex.c -- lexer for timsieved
  * Tim Martin
  * 9/21/99
- * $Id: lex.c,v 1.19.4.1 2002/07/10 20:45:40 rjs3 Exp $
+ * $Id: lex.c,v 1.19.4.2 2002/10/04 20:47:26 ken3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -322,6 +322,7 @@ int timlex(mystring_t **outstr, unsigned long *outnum,  struct protstream *strea
       if (isdigit((unsigned char) ch)) {
 	lexer_state=LEXER_STATE_NUMBER;
 	tmpnum = ch -'0';
+	break;
       }
       switch (ch) {
       case '(':
