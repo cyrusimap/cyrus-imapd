@@ -93,7 +93,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.38.4.7 2003/02/06 22:40:57 rjs3 Exp $ */
+/* $Id: tls.c,v 1.38.4.8 2003/02/11 15:31:16 ken3 Exp $ */
 
 #include <config.h>
 
@@ -203,8 +203,8 @@ static void apps_ssl_info_callback(SSL * s, int where, int ret)
     }
 }
 
-/* taken from OpenSSL apps/s_cb.c */
-
+/* taken from OpenSSL apps/s_cb.c
+   not thread safe! */
 static RSA *tmp_rsa_cb(SSL * s __attribute__((unused)),
 		       int export __attribute__((unused)),
 		       int keylength)
@@ -426,7 +426,7 @@ static int new_session_cb(SSL *ssl __attribute__((unused)),
 
     /* log this transaction */
     if (var_imapd_tls_loglevel > 0) {
-	int i;
+	unsigned int i;
 	char idstr[SSL_MAX_SSL_SESSION_ID_LENGTH*2 + 1];
 	for (i = 0; i < sess->session_id_length; i++)
 	    sprintf(idstr+i*2, "%02X", sess->session_id[i]);
@@ -485,8 +485,7 @@ static void remove_session_cb(SSL_CTX *ctx __attribute__((unused)),
  * session in our database in case it was stored by another process.
  */
 static SSL_SESSION *get_session_cb(SSL *ssl __attribute__((unused)),
-				   unsigned char *id, int idlen,
-				   int *copy)
+				   unsigned char *id, int idlen, int *copy)
 {
     int ret;
     const char *data = NULL;
@@ -504,7 +503,7 @@ static SSL_SESSION *get_session_cb(SSL *ssl __attribute__((unused)),
     } while (ret == CYRUSDB_AGAIN);
 
     if (data) {
-	assert(len >= sizeof(time_t));
+	assert(len >= (int) sizeof(time_t));
 
 	/* grab the expire time */
 	memcpy(&expire, data, sizeof(time_t));
@@ -705,7 +704,7 @@ int     tls_init_serverengine(const char *ident,
 /* taken from OpenSSL apps/s_cb.c */
 
 static long bio_dump_cb(BIO * bio, int cmd, const char *argp, int argi,
-			long argl, long ret)
+			long argl __attribute__((unused)), long ret)
 {
     if (!do_dump)
 	return (ret);
@@ -959,6 +958,8 @@ static int prune_p(void *rock, const char *id, int idlen,
 
     prock->count++;
 
+    assert(datalen >= (int) sizeof(time_t));
+
     /* grab the expire time */
     memcpy(&expire, data, sizeof(time_t));
 
@@ -978,7 +979,8 @@ static int prune_p(void *rock, const char *id, int idlen,
 }
 
 static int prune_cb(void *rock, const char *id, int idlen,
-		    const char *data, int datalen)
+		    const char *data __attribute__((unused)), 
+                    int datalen __attribute__((unused)))
 {
     struct prunerock *prock = (struct prunerock *) rock;
 
