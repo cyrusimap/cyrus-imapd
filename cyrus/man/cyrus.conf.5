@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: cyrus.conf.5,v 1.7.4.2 2003/02/22 14:10:28 ken3 Exp $
+.\" $Id: cyrus.conf.5,v 1.7.4.3 2003/06/20 16:06:22 ken3 Exp $
 .SH NAME
 cyrus.conf \- Cyrus configuration file
 .SH DESCRIPTION
@@ -154,7 +154,7 @@ SERVICES {
 
 EVENTS {
   checkpoint	cmd="ctl_cyrusdb -c" period=30
-  delprune	cmd="ctl_deliver -E 3" at=0400
+  delprune	cmd="cyr_expire -E 3" at=0400
   tlsprune	cmd="tls_prune" at=0400
 .br
 }
