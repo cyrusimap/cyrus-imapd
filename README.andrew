@@ -8,9 +8,7 @@
 #
 #
 
-smake -d init mf all
-
-echo run \"smake -d install\" as admin - suid binaries on AFS
+smake -d init mf all install
 
 exit 0
 
