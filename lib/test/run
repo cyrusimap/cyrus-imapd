@@ -18,17 +18,18 @@ sub mysys {
 }
 
 sub runone {
-    my ($t, $p, $d, $tname) = @_;
+    my ($t, $p, $d, $tname, $input) = @_;
     my $res;
 
     $p = "" if (!defined $p);
     $d = "" if (!defined $d);
     $tname = $t if (!defined $tname);
+    $input = "$t.INPUT" if (!defined $input);
     mkdir $tname, 0755;
     chdir $tname;
     $res = mysys("gcc $d -g -o $t ../$t.c -L../.. -lcyrus");
     if (!$res) {
-	$res = mysys("./$t $p < ../$t.INPUT > $t.TEMP");
+	$res = mysys("./$t $p < ../$input > $t.TEMP");
 	$res = mysys("cmp -s $t.TEMP ../$t.OUTPUT");
     }
     if ($res) {
@@ -42,3 +43,10 @@ sub runone {
 runone("cyrusdb", undef, "-DBACKEND=cyrusdb_flat");
 runone("cyrusdb", undef, "-DBACKEND=cyrusdb_skiplist", "cyrusdb_skiplist");
 runone("cyrusdb", undef, "-DBACKEND=cyrusdb_db3 -ldb", "cyrusdb_db3");
+
+runone("cyrusdb", undef, "-DBACKEND=cyrusdb_flat", 
+       "cyrusdbtxn_flat", "cyrusdbtxn.INPUT");
+runone("cyrusdb", undef, "-DBACKEND=cyrusdb_skiplist", 
+       "cyrusdbtxn_skiplist", "cyrusdbtxn.INPUT");
+runone("cyrusdb", undef, "-DBACKEND=cyrusdb_db3", 
+       "cyrusdbtxn_db3", "cyrusdbtxn.INPUT");

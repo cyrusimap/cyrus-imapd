@@ -54,6 +54,8 @@ int main(int argc, char *argv[])
 {
     char buf[1024];
     struct db *db = NULL;
+    struct txn *txn = NULL;
+    int txnp = 0;
     int r;
 
     TRY(DB->init(".", 0));
@@ -81,24 +83,24 @@ int main(int argc, char *argv[])
 	    char *data = strchr(key, ' ');
 	    if (!data) goto bad;
 	    *data++ = '\0';
-	    TRY(DB->store(db, key, strlen(key), data, strlen(data), NULL));
+	    TRY(DB->store(db, key, strlen(key), data, strlen(data), (txnp ? &txn : NULL)));
 	    printf("ok\n");
 	} else if (!strncasecmp(buf, "del ", 4)) {
 	    char *key = buf + 4;
-	    TRY(DB->delete(db, key, strlen(key), NULL));
+	    TRY(DB->delete(db, key, strlen(key), (txnp ? &txn : NULL)));
 	    printf("ok\n");
 	} else if (!strncasecmp(buf, "get ", 4)) {
 	    char *key = buf + 4;
 	    const char *data;
 	    int datalen;
-	    TRY(DB->fetch(db, key, strlen(key), &data, &datalen, NULL));
+	    TRY(DB->fetch(db, key, strlen(key), &data, &datalen, (txnp ? &txn : NULL)));
 	    printf("ok {%d} ", datalen);
 	    while (datalen--) printf("%c", *data++);
 	    printf("\n");
 	} else if (!strncasecmp(buf, "list", 4)) {
 	    char *keys = NULL;
 
-	    TRY(DB->foreach(db, NULL, 0, yes, appkey, &keys, NULL));
+	    TRY(DB->foreach(db, NULL, 0, yes, appkey, &keys, (txnp ? &txn : NULL)));
 	    if (keys) {
 		printf("ok {%d} %s", strlen(keys), keys);
 		free(keys);
@@ -108,11 +110,28 @@ int main(int argc, char *argv[])
 	    printf("\n");
 	} else if (!strncasecmp(buf, "dump", 4)) {
 	    if (DB->dump) {
-		DB->dump(db, 0);
+		TRY(DB->dump(db, 0));
 		printf("ok\n");
 	    } else {
 		printf("no\n");
 	    }
+	} else if (!strncasecmp(buf, "txn", 3)) {
+	    if (txnp) {
+		printf("no\n");
+	    } else {
+		printf("ok\n");
+		txnp = 1;
+	    }
+	} else if (!strncasecmp(buf, "commit", 6)) {
+	    TRY(DB->commit(db, txn));
+	    txnp = 0;
+	    txn = NULL;
+	    printf("ok\n");
+	} else if (!strncasecmp(buf, "abort", 5)) {
+	    TRY(DB->abort(db, txn));
+	    txnp = 0;
+	    txn = NULL;
+	    printf("ok\n");
 	} else {
 	bad:
 	    printf("?syntax error\n");
