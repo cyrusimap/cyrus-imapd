@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: message.c,v 1.98 2004/02/27 17:44:55 ken3 Exp $
+ * $Id: message.c,v 1.99 2004/09/16 17:58:54 ken3 Exp $
  */
 
 #include <config.h>
@@ -285,7 +285,9 @@ unsigned size;
     /* Go back and check headers */
     sawnl = 1;
     for (;;) {
-	if (!fgets(buf, sizeof(buf), to)) return IMAP_MESSAGE_NOBLANKLINE;
+	if (!fgets(buf, sizeof(buf), to)) {
+	    return sawnl ? 0 : IMAP_MESSAGE_BADHEADER;
+	}
 
 	/* End of header section */
 	if (sawnl && buf[0] == '\r') return 0;
