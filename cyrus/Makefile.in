@@ -1,5 +1,5 @@
 # Top-level Makefile for cyrus software
-# $Id: Makefile.in,v 1.44 2001/02/19 19:34:41 leg Exp $
+# $Id: Makefile.in,v 1.45 2001/02/19 19:47:23 leg Exp $
 #
 # @configure_input@
 # 
@@ -44,6 +44,7 @@
 
 SUBDIRS = man @PRE_SUBDIRS@ acap lib @SERVER_SUBDIRS@ \
 	imtest @SNMP_SUBDIRS@ @EXTRA_SUBDIRS@
+DISTSUBDIRS = doc
 
 srcdir = @srcdir@
 VPATH = @srcdir@
@@ -69,7 +70,7 @@ all::
 dist:: distcvs
 	@echo "creating configure"
 	@cd dist/cyrus-imapd-$(VERSION) ; sh SMakefile
-	@for d in $(SUBDIRS); \
+	@for d in $(SUBDIRS) $(DISTSUBDIRS); \
 	do \
 		(cd dist/cyrus-imapd-$(VERSION)/$$d; \
 		  if [ -f Makefile.dist ]; then \
