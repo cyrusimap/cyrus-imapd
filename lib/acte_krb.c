@@ -652,6 +652,15 @@ char *fname;
     return 0;
 }
 
+/*
+ * Kerberos get srvtab filename
+ * Returns: name of srvtab file to use in reading authenticators
+ */
+char *kerberos_get_srvtab()
+{
+    return srvtab;
+}
+
 static use_key(user, instance, realm, key, returned_key)
 char *user;
 char *instance;
