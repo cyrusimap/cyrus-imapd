@@ -28,7 +28,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <netinet/in.h>
-#include <sys/mman.h>
 #include <syslog.h>
 #include <com_err.h>
 
@@ -111,9 +110,9 @@ struct mailbox *mailbox;
     }
     index_listflags(mailbox);
     if (index_len) {
-	munmap(index_base, index_len);
-	munmap(cache_base, cache_len);
-	index_len = cache_len = 0;
+	map_free(&index_base, &index_len);
+	map_free(&cache_base, &cache_len);
+	cache_end = 0;
     }
     imapd_exists = -1;
 
@@ -121,7 +120,6 @@ struct mailbox *mailbox;
 }
 
 #define SLOP 50
-#define CACHESLOP (8*1024)
 
 /*
  * Check for and report updates
@@ -172,10 +170,10 @@ int checkseen;
 		}
 	    }
 
-	    /* Force re-mmap of index/cache files */
-	    if (index_len) munmap(index_base, index_len);
-	    if (cache_len) munmap(cache_base, cache_len);
-	    index_len = cache_len = 0;
+	    /* Force re-map of index/cache files */
+	    map_free(&index_base, &index_len);
+	    map_free(&cache_base, &cache_len);
+	    cache_end = 0;
 
 	    /* Force a * n EXISTS message */
 	    imapd_exists = -1;
@@ -190,38 +188,19 @@ int checkseen;
     record_size = mailbox->record_size;
     newexists = mailbox->exists;
 
-    /* Re-mmap the index file if necessary */
-    if (index_len < start_offset + newexists * record_size) {
-	if (index_len) munmap(index_base, index_len);
-	index_len =  start_offset + (newexists+SLOP) * record_size;
-	index_base = (char *)mmap((caddr_t)0, index_len, PROT_READ,
-				  MAP_SHARED, fileno(mailbox->index), 0L);
-    
-	if (index_base == (char *)-1) {
-	    syslog(LOG_ERR, "IOERROR: mapping index file for %s: %m",
-		   mailbox->name);
-	    fatal("failed to mmap index file", EX_IOERR);
-	}
-    }
-
-    /* Re-mmap the cache file if necessary */
+    /* Refresh the index and cache files */
+    map_refresh(fileno(mailbox->index), &index_base, &index_len,
+		start_offset + newexists * record_size,
+		"index", mailbox->name);
     if (fstat(fileno(mailbox->cache), &sbuf) == -1) {
 	syslog(LOG_ERR, "IOERROR: stating cache file for %s: %m",
 	       mailbox->name);
 	fatal("failed to stat cache file", EX_IOERR);
     }
-    if (cache_len <= sbuf.st_size) {
-	if (cache_len) munmap(cache_base, cache_len);
+    if (cache_end < sbuf.st_size) {
 	cache_end = sbuf.st_size;
-	cache_len = sbuf.st_size + CACHESLOP;
-	cache_base = (char *)mmap((caddr_t)0, cache_len, PROT_READ,
-				  MAP_SHARED, fileno(mailbox->cache), 0L);
-
-	if (cache_base == (char *)-1) {
-	    syslog(LOG_ERR, "IOERROR: mapping cache file for %s: %m",
-		   mailbox->name);
-	    fatal("failed to mmap cache file", EX_IOERR);
-	}
+	map_refresh(fileno(mailbox->cache), &cache_base, &cache_len,
+		    cache_end, "cache", mailbox->name);
     }
 
     /* If opening mailbox, get \Recent info */
