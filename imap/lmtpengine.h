@@ -1,5 +1,5 @@
 /* lmtpengine.h: lmtp protocol engine interface
- * $Id: lmtpengine.h,v 1.4 2000/11/11 04:12:46 ken3 Exp $
+ * $Id: lmtpengine.h,v 1.5 2001/01/31 00:59:58 ken3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -80,6 +80,9 @@ const char *msg_getrcpt(message_data_t *m, int rcpt_num);
 /* return entire recipient of 'rcpt_num' */
 const char *msg_getrcptall(message_data_t *m, int rcpt_num);
 
+/* return ignorequota flag of 'rcpt_num' */
+int msg_getrcpt_ignorequota(message_data_t *m, int rcpt_num);
+
 /* set a recipient status; 'r' should be an IMAP error code that will be
    translated into an LMTP status code */
 void msg_setrcpt_status(message_data_t *m, int rcpt_num, int r);
@@ -109,6 +112,7 @@ struct lmtp_conn;
 struct lmtp_txn {
     const char *from;
     const char *auth;
+    int ignorequota;
     int isdotstuffed;		/* 1 if 'data' is a dotstuffed stream
                                    (including end-of-file \r\n.\r\n) */
     struct protstream *data;

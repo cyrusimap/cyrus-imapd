@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.17 2001/01/30 22:01:38 leg Exp $
+ * $Id: lmtpengine.c,v 1.18 2001/01/31 00:59:57 ken3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -95,6 +95,7 @@ struct Header {
 struct address_data {
     char *user;
     char *all;
+    int ignorequota;
     int status;
 };
 
@@ -305,6 +306,12 @@ const char *msg_getrcptall(message_data_t *m, int rcpt_num)
 {
     assert(0 <= rcpt_num && rcpt_num < m->rcpt_num);
     return m->rcpt[rcpt_num]->all;
+}
+
+int msg_getrcpt_ignorequota(message_data_t *m, int rcpt_num)
+{
+    assert(0 <= rcpt_num && rcpt_num < m->rcpt_num);
+    return m->rcpt[rcpt_num]->ignorequota;
 }
 
 /* set a recipient status; 'r' should be an IMAP error code that will be
@@ -1216,6 +1223,7 @@ void lmtpmode(struct lmtp_func *func,
 	      
 	      prot_printf(pout, "250-%s\r\n"
 			  "250-8BITMIME\r\n"
+			  "250-IGNOREQUOTA\r\n"
 			  "250-ENHANCEDSTATUSCODES\r\n",
 			  config_servername);
 	      if (sasl_listmech(conn, NULL, "AUTH ", " ", "", &mechs, 
@@ -1329,6 +1337,8 @@ void lmtpmode(struct lmtp_func *func,
       case 'R':
 	    if (!strncasecmp(buf, "rcpt ", 5)) {
 		char *rcpt = NULL;
+		int ignorequota = 0;
+		char *tmp;
 
 		if (!msg->return_path) {
 		    prot_printf(pout, "503 5.5.1 Need MAIL command\r\n");
@@ -1345,6 +1355,32 @@ void lmtpmode(struct lmtp_func *func,
 				"501 5.5.4 Syntax error in parameters\r\n");
 		    continue;
 		}
+
+		tmp = buf+8+strlen(rcpt);
+		while (*tmp == ' ') {
+		    tmp++;
+		    switch (*tmp) {
+		    case 'i': case 'I':
+			if (strncasecmp(tmp, "ignorequota", 12) != 0) {
+			    goto badrparam;
+			}
+			tmp += 12;
+			ignorequota = 1;
+			break;
+
+		    default: 
+		    badrparam:
+			prot_printf(pout, 
+				    "501 5.5.4 Unrecognized parameters\r\n");
+			goto nextcmd;
+		    }
+		} 
+		if (*tmp != '\0') {
+		    prot_printf(pout, 
+				"501 5.5.4 Syntax error in parameters\r\n");  
+		    continue;
+		}
+
 		err = process_recipient(rcpt, 
 					func->verify_user,
 					&msg->rcpt[msg->rcpt_num]);
@@ -1353,6 +1389,7 @@ void lmtpmode(struct lmtp_func *func,
 		    prot_printf(pout, "%s\r\n", err);
 		    continue;
 		}
+		msg->rcpt[msg->rcpt_num]->ignorequota = ignorequota;
 		msg->rcpt_num++;
 		msg->rcpt[msg->rcpt_num] = NULL;
 		prot_printf(pout, "250 2.1.5 ok\r\n");
@@ -1402,8 +1439,9 @@ void lmtpmode(struct lmtp_func *func,
 /************** client-side LMTP ****************/
 
 enum {
-    CAPA_PIPELINING = 1 << 0,
-    CAPA_AUTH       = 1 << 1
+    CAPA_PIPELINING  = 1 << 0,
+    CAPA_AUTH        = 1 << 1,
+    CAPA_IGNOREQUOTA = 1 << 2
 };
 
 struct lmtp_conn {
@@ -1640,6 +1678,9 @@ int lmtp_connect(const char *phost,
 		    /* save mechanisms for later */
 		    conn->mechs = xstrdup(buf + 9);
 		}
+		if (!strcasecmp(buf + 4, "IGNOREQUOTA")) {
+		    conn->capability |= CAPA_IGNOREQUOTA;
+		}
 	    }
 
 	    if (ISCONT(buf) && ISGOOD(code)) {
@@ -1774,7 +1815,11 @@ int lmtp_runtxn(struct lmtp_conn *conn, struct lmtp_txn *txn)
     /* rcpt to */
     onegood = 0;
     for (j = 0; j < txn->rcpt_num; j++) {
-	prot_printf(conn->pout, "RCPT TO:<%s>\r\n", txn->rcpt[j].addr);
+	prot_printf(conn->pout, "RCPT TO:<%s>", txn->rcpt[j].addr);
+	if (txn->ignorequota && (conn->capability & CAPA_IGNOREQUOTA)) {
+	    prot_printf(conn->pout, " IGNOREQUOTA");
+	}
+	prot_printf(conn->pout, "\r\n");
 	if (!prot_fgets(buf, sizeof(buf)-1, conn->pin)) {
 	    code = 400;
 	    r = IMAP_SERVER_UNAVAILABLE;
