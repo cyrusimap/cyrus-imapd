@@ -87,6 +87,7 @@ static void mboxlist_closesubs();
 static void mboxlist_reopen();
 static void mboxlist_badline();
 static void mboxlist_parseline();
+static int mboxlist_safe_rename();
 
 static struct quota *mboxlist_newquota;
 static int mboxlist_changequota();
@@ -431,7 +432,6 @@ struct auth_state *auth_state;
 	free(acl);
 	return IMAP_IOERROR;
     }
-    close(newlistfd);
 
     /* Create new mailbox and move new mailbox list file into place */
     sprintf(buf2, "%s/%s", root, name);
@@ -440,13 +440,18 @@ struct auth_state *auth_state;
     }
     r = mailbox_create(name, buf2, acl, format, &newmailbox);
     free(acl);
-    if (r) return r;
-    if (rename(newlistfname, listfname) == -1) {
+    if (r) {
+	close(newlistfd); /* ECH */
+	return r;
+    }
+    if (mboxlist_safe_rename(newlistfname, listfname, newlistfd) == -1) {
 	syslog(LOG_ERR, "IOERROR: renaming %s: %m", listfname);
+	close(newlistfd); /* ECH */
 	mboxlist_unlock();
 	return IMAP_IOERROR;
     }
 
+    close(newlistfd);
     mboxlist_unlock();
 
     toimsp(name, newmailbox.uidvalidity,
@@ -600,7 +605,6 @@ int checkacl;
 	close(newlistfd);
 	return IMAP_IOERROR;
     }
-    close(newlistfd);
     
     r = mailbox_open_header(name, 0, &mailbox);
 
@@ -624,16 +628,20 @@ int checkacl;
     uidvalidity = mailbox.uidvalidity;
     if (!r) r = mailbox_delete(&mailbox, delete_quota_root);
     if (r) {
+	close(newlistfd);
 	mboxlist_unlock();
 	return r;
     }
-    if (rename(newlistfname, listfname) == -1) {
+
+    if (mboxlist_safe_rename(newlistfname, listfname, newlistfd) == -1) {
 	syslog(LOG_ERR, "IOERROR: renaming %s: %m", listfname);
+	close(newlistfd);
 	mboxlist_unlock();
 	/* XXX We're left in an inconsistent state here */
 	return IMAP_IOERROR;
     }
 
+    close(newlistfd);
     mboxlist_unlock();
 
     toimsp(name, uidvalidity, "RENsn", "", 0, 0);
@@ -823,7 +831,6 @@ struct auth_state *auth_state;
 	close(newlistfd);
 	return IMAP_IOERROR;
     }
-    close(newlistfd);
 
     /* Rename the mailbox and move new mailbox list file into place */
     sprintf(buf2, "%s/%s", root, newname);
@@ -833,16 +840,20 @@ struct auth_state *auth_state;
     r = mailbox_rename(oldname, newname, buf2, isusermbox,
 		       &olduidvalidity, &newuidvalidity);
     if (r) {
+	close(newlistfd);
 	mboxlist_unlock();
 	return r;
     }
-    if (rename(newlistfname, listfname) == -1) {
+
+    if (mboxlist_safe_rename(newlistfname, listfname, newlistfd) == -1) {
 	syslog(LOG_ERR, "IOERROR: renaming %s: %m", listfname);
+	close(newlistfd);
 	mboxlist_unlock();
 	/* XXX We're left in an inconsistent state here */
 	return IMAP_IOERROR;
     }
 
+    close(newlistfd);
     mboxlist_unlock();
 
     toimsp(oldname, olduidvalidity, "RENsn", newname, newuidvalidity, 0);
@@ -986,7 +997,8 @@ struct auth_state *auth_state;
 	free(newacl);
 	return IMAP_IOERROR;
     }
-    if (rename(newlistfname, listfname) == -1) {
+
+    if (mboxlist_safe_rename(newlistfname, listfname, newlistfd) == -1) {
 	syslog(LOG_ERR, "IOERROR: renaming %s: %m", listfname);
 	mboxlist_unlock();
 	close(newlistfd);
@@ -1780,12 +1792,14 @@ int *seen;
 	close(newlistfd);
 	return IMAP_IOERROR;
     }
-    if (rename(newlistfname, listfname) == -1) {
+
+    if (mboxlist_safe_rename(newlistfname, listfname, newlistfd) == -1) {
 	syslog(LOG_ERR, "IOERROR: renaming %s: %m", listfname);
 	mboxlist_unlock();
 	close(newlistfd);
 	return IMAP_IOERROR;
     }
+
     mboxlist_unlock();
     close(newlistfd);
     return 0;
@@ -2153,8 +2167,6 @@ int maycreate;
     return 0;
 }
 
-#ifdef ENABLE_EXPERIMENT
-#ifdef ENABLE_MBOXLIST_FREE
 /*
  * Experimental code to free mailboxes file when not in use.
  * Possibly more efficient in some cases.
@@ -2170,5 +2182,27 @@ mboxlist_close()
 	  listfd = -1;
      }
 }
-#endif /* ENABLE_MBOXLIST_FREE */
-#endif /* ENABLE_EXPERIMENT */
+
+/*
+ * Safe rename, for file being renamed to a file that might get locked
+ *
+ * Assumes oldfname has already been locked, and newfname's fd is 3rd
+ * arg to this function
+ *
+ */
+int mboxlist_safe_rename( newfname, oldfname, fd )
+const char *newfname, *oldfname;
+int fd;
+{
+
+    if (lock_blocking(fd) == -1) {
+        syslog(LOG_ERR, "IOERROR: locking %s: %m", newfname);
+        return -1;
+    }
+    if (rename(newfname, oldfname) == -1) {
+	lock_unlock(fd);
+	return -1;
+    }
+    lock_unlock(fd);
+    return 0;
+}
