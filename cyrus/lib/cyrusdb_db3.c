@@ -99,8 +99,20 @@ static int init(const char *dbdir, int myflags)
 {
     int r, do_retry = 1;
     int flags = 0;
+    int maj, min, patch;
+    char *vstr;
 
     if (dbinit++) return 0;
+
+    vstr = db_version(&maj, &min, &patch);
+    if (maj != DB_VERSION_MAJOR || min != DB_VERSION_MINOR ||
+	DB_VERSION_PATCH > patch) {
+	syslog(LOG_CRIT, "incorrect version of Berkeley db: "
+	       "compiled against %d.%d.%d, linked against %d.%d.%d",
+	       DB_VERSION_MAJOR, DB_VERSION_MINOR, DB_VERSION_PATCH,
+	       maj, min, patch);
+	fatal("wrong db version", EC_SOFTWARE);
+    }
 
     if (myflags & CYRUSDB_RECOVER) {
       flags |= DB_RECOVER | DB_CREATE;
