@@ -1,6 +1,6 @@
 /* message.c -- message parsing functions
  * Larry Greenfield
- * $Id: message.c,v 1.14 2000/05/28 22:45:59 leg Exp $
+ * $Id: message.c,v 1.15 2000/06/22 19:19:42 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -569,7 +569,7 @@ void free_action_list(action_list_t *a)
 	switch (a->a) {
 	case ACTION_VACATION:
 	    if (a->u.vac.send.addr) free(a->u.vac.send.addr);
-	    if (a->u.vac.send.fromaddr) free(a->u.vac.send.addr);
+	    if (a->u.vac.send.fromaddr) free(a->u.vac.send.fromaddr);
 	    if (a->u.vac.send.subj) free(a->u.vac.send.subj);
 	    break;
 
