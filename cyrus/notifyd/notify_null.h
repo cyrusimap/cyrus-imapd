@@ -1,4 +1,4 @@
-/* notify.h -- notification method definitions
+/* notify_null.h -- NULL notification method
  * Ken Murchison
  */
 /*
@@ -40,27 +40,8 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notify.h,v 1.2 2002/03/01 20:24:27 ken3 Exp $
+ * $Id: notify_null.h,v 1.1 2002/03/01 20:24:27 ken3 Exp $
  */
 
-#include "notify_null.h"
-#include "notify_log.h"
-#include "notify_mailto.h"
-
-/* Notify method dispatch table definition */
-typedef struct {
-    const char *name;				/* name of the method */
-    char *(*notify)(int nopt, char **options, const char *priority,
-		    const char *message);	/* notification function */
-} notifymethod_t;
-
-/* array of supported notification methods */
-notifymethod_t methods[] = {
-    { "null",	notify_null },		/* do nothing */
-    { "log",	notify_log },		/* use syslog (for testing) */
-    { "mailto",	notify_mailto },	/* send an email */
-#if 0
-    { "zephyr",	notify_zephyr },
-#endif
-    { NULL,	NULL }
-};
+char* notify_null(int nopt, char **options, const char *priority,
+		  const char *message);

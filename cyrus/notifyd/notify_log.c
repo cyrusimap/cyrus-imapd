@@ -40,19 +40,33 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notify_log.c,v 1.1 2002/02/22 22:59:39 ken3 Exp $
+ * $Id: notify_log.c,v 1.2 2002/03/01 20:24:27 ken3 Exp $
  */
 
 #include "notify_log.h"
 
 #include <syslog.h>
 #include <string.h>
+#include <stdio.h>
 
 char* notify_log(int nopt, char **options, const char *priority,
 		 const char *message)
 {
+    char opt_str[1024] = "";
+    char *sep = "";
+    int i;
+
+    if (nopt) {
+	strcpy(opt_str, "(");
+	for (i = 0; i < nopt; i++, sep = ", ") {
+	    snprintf(opt_str+strlen(opt_str), sizeof(opt_str) - 2, "%s%s",
+		     sep, options[i]);
+	}
+	strcat(opt_str, ") ");
+    }
+
     openlog("notifyd", LOG_PID, LOG_LOCAL6);
-    syslog(LOG_INFO, "[%s] %s", priority, message);
+    syslog(LOG_INFO, "[%s] %s\"%s\"", priority, opt_str, message);
     closelog();
 
     return strdup("OK log notification successful");

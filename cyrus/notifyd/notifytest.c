@@ -152,17 +152,16 @@ static int notify(const char *notifyd_path,
         fprintf(stderr,"read failed\n");
 	return -1;
     }
+    response[count] = '\0';
 
     close(s);
   
-    if (!strncmp(response, "OK", 2)) {
-	printf("OK \"Success.\"\n");
+    printf("\"%s\"\n", response);
+
+    if (!strncmp(response, "OK", 2))
 	return 0;
-    }
-  
-    response[count] = '\0';
-    printf("NO \"notification failed\"\n");
-    return -1;
+    else
+	return -1;
 }
 
 int

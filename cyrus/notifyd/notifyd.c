@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notifyd.c,v 1.1 2002/02/22 22:59:39 ken3 Exp $
+ * $Id: notifyd.c,v 1.2 2002/03/01 20:24:27 ken3 Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -76,7 +76,7 @@
 static int notifyd_out;
 static int notifyd_in;
 
-notifymethod_t *default_method = NULL;	/* default method daemon is using */
+notifymethod_t *default_method;	/* default method daemon is using */
 
 
 /* Reset for the next connection */
@@ -109,6 +109,7 @@ void do_notify()
     unsigned short count;
     struct iovec iov[2];
     int num_iov = 0;
+    notifymethod_t *nmethod;
 
     /*
      * read request of the form:
@@ -174,7 +175,23 @@ void do_notify()
 
     if (rc) syslog(LOG_ERR, "do_notify read failed: %m");
 
-    reply = methods[0].notify(nopt, options, priority, message);
+    if (!method[0])
+	nmethod = default_method;
+    else {
+	nmethod = methods;
+	while (nmethod->name) {
+	    if (!strcasecmp(nmethod->name, method)) break;
+	    nmethod++;
+	}
+    }
+
+    syslog(LOG_DEBUG, "do_notify using method '%s'",
+	   nmethod->name ? nmethod->name: "unknown");
+
+    if (nmethod->name)
+	reply = nmethod->notify(nopt, options, priority, message);
+    else
+	reply = strdup("NO unknown notification method");
 
     if (method) free(method);
     if (priority) free(priority);
@@ -223,6 +240,7 @@ void usage(void)
 int service_init(int argc, char **argv, char **envp)
 {
     int opt;
+    char *method = "null";
 
     config_changeident("notifyd");
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
@@ -230,15 +248,27 @@ int service_init(int argc, char **argv, char **envp)
     /* set signal handlers */
     signal(SIGPIPE, SIG_IGN);
 
-    while ((opt = getopt(argc, argv, "C:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:m:")) != EOF) {
 	switch(opt) {
 	case 'C': /* alt config file - handled by service::main() */
+	    break;
+
+	case 'm':
+	    method = optarg;
 	    break;
 
 	default:
 	    usage();
 	}
     }
+
+    default_method = methods;
+    while (default_method->name) {
+	if (!strcasecmp(default_method->name, method)) break;
+	default_method++;
+    }
+
+    if (!default_method) fatal("unknown notification method %s", EC_USAGE);
 
     return 0;
 }
@@ -258,7 +288,6 @@ int service_main(int argc, char **argv, char **envp)
 
     /* cleanup */
 /*    notifyd_reset();*/
-    shut_down(0);
 
     return 0;
 }
