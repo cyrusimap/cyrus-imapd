@@ -264,6 +264,7 @@ cmdloop()
     int usinguid, havepartition, havenamespace, oldform;
     static struct buf tag, cmd, arg1, arg2, arg3, arg4;
     char *p;
+    const char *err;
 
     for (;;) {
 	prot_flush(imapd_out);
@@ -271,9 +272,9 @@ cmdloop()
 	/* Parse tag */
 	c = getword(&tag);
 	if (c == EOF) {
-	    if (p = prot_error(imapd_in)) {
-		syslog(LOG_WARNING, "PROTERR: %s", p);
-		prot_printf(imapd_out, "* BYE %s\r\n", p);
+	    if (err = prot_error(imapd_in)) {
+		syslog(LOG_WARNING, "PROTERR: %s", err);
+		prot_printf(imapd_out, "* BYE %s\r\n", err);
 	    }
 	    shut_down(0);
 	}
