@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.75.4.14 2002/12/20 18:32:03 rjs3 Exp $
+ * $Id: lmtpengine.c,v 1.75.4.15 2003/01/28 18:52:45 ken3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -848,7 +848,6 @@ void lmtpmode(struct lmtp_func *func,
 
     sasl_ssf_t ssf;
     char *auth_id;
-    int plaintext_result;
 
     int secflags = 0;
     sasl_security_properties_t *secprops = NULL;
@@ -945,7 +944,9 @@ void lmtpmode(struct lmtp_func *func,
     /* set my allowable security properties */
     /* ANONYMOUS is silly because we allow that anyway */
     secflags = SASL_SEC_NOANONYMOUS;
-    plaintext_result = config_getswitch(IMAPOPT_ALLOWPLAINTEXT);
+    if (!config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
+	secflags |= SASL_SEC_NOPLAINTEXT;
+    }
 
     secprops = mysasl_secprops(secflags);
     sasl_setprop(cd.conn, SASL_SEC_PROPS, secprops);
@@ -2188,7 +2189,7 @@ int lmtp_disconnect(struct lmtp_conn *conn)
 /* Reset the given sasl_conn_t to a sane state */
 static int reset_saslconn(sasl_conn_t **conn) 
 {
-    int ret, secflags, plaintext_result;
+    int ret, secflags;
     sasl_security_properties_t *secprops = NULL;
 
     sasl_dispose(conn);
@@ -2209,8 +2210,10 @@ static int reset_saslconn(sasl_conn_t **conn)
     if(ret != SASL_OK) return ret;
     
     secflags = SASL_SEC_NOANONYMOUS;
+    if (!config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
+	secflags |= SASL_SEC_NOPLAINTEXT;
+    }
 
-    plaintext_result = config_getswitch(IMAPOPT_ALLOWPLAINTEXT);
     secprops = mysasl_secprops(secflags);
     ret = sasl_setprop(*conn, SASL_SEC_PROPS, secprops);
     if(ret != SASL_OK) return ret;
