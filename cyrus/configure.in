@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.232.4.44 2003/03/18 19:15:14 ken3 Exp $
+dnl $Id: configure.in,v 1.232.4.45 2003/03/27 16:52:49 ken3 Exp $
 dnl
 
 
@@ -153,7 +153,7 @@ dnl Berkeley DB Detection
 dnl support old-style
 AC_ARG_WITH(dbdir,
 	[  --with-dbdir=DIR        Berkeley DB files are in prefix DIR],
-	with_bdb_lib="$withval/lib"; with_db_inc="$withval/include",
+	with_bdb_lib="$withval/lib"; with_bdb_inc="$withval/include",
 	with_bdb_lib=none; with_bdb_inc=none)
 
 CYRUS_BERKELEY_DB_CHK()
