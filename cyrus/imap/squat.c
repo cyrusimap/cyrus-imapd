@@ -37,13 +37,15 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squat.c,v 1.5 2003/02/13 20:15:31 rjs3 Exp $
+ * $Id: squat.c,v 1.6 2003/02/27 15:59:39 rjs3 Exp $
  */
 
 /*
   SQUAT code for searching indexes.
   Robert O'Callahan
 */
+
+#include <config.h>
 
 #include <sys/stat.h>
 #include <sys/mman.h>
