@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.191 1999/12/23 18:33:12 leg Exp $ */
+/* $Id: imapd.c,v 1.192 1999/12/28 23:58:29 leg Exp $ */
 
 #ifndef __GNUC__
 #define __attribute__(foo)
@@ -412,8 +412,12 @@ char **envp;
     char hostname[MAXHOSTNAMELEN+1];
     sasl_security_properties_t *secprops = NULL;
 
-    if (gethostname(hostname, MAXHOSTNAMELEN)!=0)
-      fatal("gethostname failed\n",EC_USAGE);
+    if (gethostname(hostname, MAXHOSTNAMELEN) != 0) {
+	fatal("gethostname failed\n",EC_USAGE);
+    }
+
+    /* xxx look for command line options indicating external protection
+       and/or authentication */
 
     imapd_in = prot_new(0, 0);
     imapd_out = prot_new(1, 1);
@@ -468,7 +472,7 @@ char **envp;
 
 
     secprops = make_secprops(config_getint("sasl_minimum_layer", 0),
-			     config_getint("sasl_maximum_layer", 2000));
+			     config_getint("sasl_maximum_layer", 256));
 
     sasl_setprop(imapd_saslconn, SASL_SEC_PROPS, secprops);
     
