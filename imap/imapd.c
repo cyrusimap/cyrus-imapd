@@ -24,7 +24,7 @@
  *  (412) 268-4387, fax: (412) 268-7395
  *  tech-transfer@andrew.cmu.edu
  */
-/* $Id: imapd.c,v 1.151 1998/07/10 20:25:05 tjs Exp $ */
+/* d$Id: imapd.c,v 1.152 1998/07/10 20:25:29 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
