@@ -1,6 +1,6 @@
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
-<!-- Changed by: John Gardiner Myers,  6-Jun-1996 -->
+<!-- Changed by: John Gardiner Myers, 10-Jun-1996 -->
 </HEAD><BODY>
 <H1>                   Changes to the Cyrus IMAP Server</H1>
 
@@ -59,6 +59,8 @@ POP3 server to occasionally drop the connection during authentication.
 <LI> Bug fix: The COPY command wasn't issuing a [TRYCREATE] when
 appropriate for sub-mailboxes of INBOX.
 
+<LI> Update cyradm to use Tcl 7.5 instead of Tcl 7.4
+
 <LI> Re-implement large sections of the netnews support.  It no longer
 requires modifications to INN, as it now expunges the index entries
 for expired/canceled articles upon select of the newsgroup.
@@ -78,6 +80,8 @@ mmap() appears to crap out on that boundary condition.
 
 <LI> Bug fix: used append instead of lappend in cyradmin, preventing
 use of any port other than IMAP.
+
+<LI> Modify zephyr support to compile without Kerberos support.
 
 <LI> Add a bunch of prototype declararations to the code.
 
