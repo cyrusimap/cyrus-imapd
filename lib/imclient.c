@@ -1,6 +1,6 @@
 /* imclient.c -- Streaming IMxP client library
  *
- * $Id: imclient.c,v 1.70 2002/04/01 15:32:00 ken3 Exp $
+ * $Id: imclient.c,v 1.71 2002/04/23 20:47:44 rjs3 Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -195,11 +195,11 @@ static struct imclient_cmdcallback *cmdcallback_freelist;
 
 /* Forward declarations */
 void imclient_write(struct imclient *imclient,
-		    const char *s, unsigned len);
+		    const char *s, size_t len);
 static int imclient_writeastring P((struct imclient *imclient,
 				     const char *str));
 static void imclient_writebase64 P((struct imclient *imclient,
-				    const char *output, unsigned len));
+				    const char *output, size_t len));
 static void imclient_eof P((struct imclient *imclient));
 static int imclient_decodebase64 P((char *input));
 

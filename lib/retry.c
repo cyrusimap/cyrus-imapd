@@ -1,5 +1,5 @@
 /* retry.c -- keep trying write system calls
- $Id: retry.c,v 1.15 2002/04/02 17:16:15 leg Exp $
+ $Id: retry.c,v 1.16 2002/04/23 20:47:44 rjs3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -58,7 +58,7 @@ extern int errno;
  * Keep calling the read() system call with 'fd', 'buf', and 'nbyte'
  * until all the data is read in or an error occurs.
  */
-int retry_read(int fd, void *buf, unsigned nbyte)
+int retry_read(int fd, void *buf, size_t nbyte)
 {
     int n;
     int nread = 0;
@@ -79,7 +79,7 @@ int retry_read(int fd, void *buf, unsigned nbyte)
 
 	nread += n;
 
-	if (nread >= (int) nbyte) return nread;
+	if (((size_t) nread) >= nbyte) return nread;
 
 	buf += n;
 	nbyte -= n;
