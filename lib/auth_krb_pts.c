@@ -1,5 +1,5 @@
 /* auth_krb_pts.c -- Kerberos authorization with AFS PTServer groups
- $Id: auth_krb_pts.c,v 1.22 1998/08/15 14:53:43 wcw Exp $
+ $Id: auth_krb_pts.c,v 1.23 1998/08/16 10:48:03 wcw Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -418,13 +418,9 @@ const char *cacheid;
 	}
     } /* cacheid */
     else {
-      /* this is just the userid but we offset it by the length of the session key
-       * above just in case a user's userid ends up being the same value as a session
-       * key. Also note ptexpire MUST run and nuke this entry as there is no way for the 
-       * user to invalidate his cached entry.
-       */
+      /* this is just the userid */
         memset(keydata, 0, key.size);
-        strncpy(keydata+16, identifier, PR_MAXNAMELEN);
+        strncpy(keydata, identifier, PR_MAXNAMELEN);
     }
     /* Fetch and process the header record for the user, if any */
     keydata[PTS_DB_HOFFSET] = 'H';
@@ -438,7 +434,7 @@ const char *cacheid;
     }
     if (!rc) {
         if (dataheader.size != sizeof(ptluser)) {
-            syslog(LOG_ERR, "IOERROR: Database %s probably corrupt (%d != %d)", 
+            syslog(LOG_ERR, "IOERROR: Database %s probably corrupt (%d != %d) ", 
 		   fnamebuf, dataheader.size, sizeof(ptluser));
             CLOSE(ptdb);
             close(fd);
