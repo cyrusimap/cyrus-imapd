@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.144.2.13 2004/04/08 21:13:08 ken3 Exp $
+ * $Id: pop3d.c,v 1.144.2.14 2004/04/15 19:07:58 ken3 Exp $
  */
 #include <config.h>
 
@@ -108,7 +108,7 @@ static SSL *tls_conn;
 
 sasl_conn_t *popd_saslconn; /* the sasl connection context */
 
-char *popd_userid = 0;
+char *popd_userid = 0, *popd_subfolder = 0;
 struct mailbox *popd_mailbox = 0;
 struct sockaddr_storage popd_localaddr, popd_remoteaddr;
 int popd_haveaddr = 0;
@@ -244,6 +244,10 @@ static void popd_reset(void)
     if (popd_userid != NULL) {
 	free(popd_userid);
 	popd_userid = NULL;
+    }
+    if (popd_subfolder != NULL) {
+	free(popd_subfolder);
+	popd_subfolder = NULL;
     }
     if (popd_saslconn) {
 	sasl_dispose(&popd_saslconn);
@@ -1064,6 +1068,13 @@ void cmd_user(char *user)
 	return;
     }
 
+    /* See if we're trying to access a subfolder */
+    if (p = strchr(user, '+')) {
+	size_t n = strcspn(p, "@");
+	popd_subfolder = xstrndup(p, n);
+	memmove(p, p+n, strlen(p+n)+1);
+    }
+
     if (!(p = canonify_userid(user, NULL, NULL)) ||
 	     /* '.' isn't allowed if '.' is the hierarchy separator */
 	     (popd_namespace.hier_sep == '.' && (dot = strchr(p, '.')) &&
@@ -1136,13 +1147,17 @@ void cmd_pass(char *pass)
 	prot_printf(popd_out, "-ERR [AUTH] Invalid login\r\n");
 	free(popd_userid);
 	popd_userid = 0;
+	if (popd_subfolder) {
+	    free(popd_subfolder);
+	    popd_subfolder = 0;
+	}
 
 	return;
     }
     else {
-	syslog(LOG_NOTICE, "login: %s %s plaintext%s %s", popd_clienthost,
-	       popd_userid, popd_starttls_done ? "+TLS" : "", 
-	       "User logged in");
+	syslog(LOG_NOTICE, "login: %s %s%s plaintext%s %s", popd_clienthost,
+	       popd_userid, popd_subfolder ? popd_subfolder : "",
+	       popd_starttls_done ? "+TLS" : "", "User logged in");
 
 	if ((plaintextloginpause = config_getint(IMAPOPT_PLAINTEXTLOGINPAUSE))
 	     != 0) {
@@ -1326,6 +1341,7 @@ void cmd_auth(char *arg)
 int openinbox(void)
 {
     char userid[MAX_MAILBOX_NAME+1], inboxname[MAX_MAILBOX_PATH+1];
+    char extname[MAX_MAILBOX_NAME+1] = "INBOX";
     int type;
     char *server = NULL;
     int r;
@@ -1338,14 +1354,19 @@ int openinbox(void)
 				config_virtdomains ?
 				strcspn(userid, "@") : 0);
 
-    r = (*popd_namespace.mboxname_tointernal)(&popd_namespace, "INBOX",
+    /* Create the mailbox that we're trying to access */
+    if (popd_subfolder) {
+	snprintf(extname+5, sizeof(extname)-5, "%c%s",
+		 popd_namespace.hier_sep, popd_subfolder+1);
+    }
+    r = (*popd_namespace.mboxname_tointernal)(&popd_namespace, extname,
 					      userid, inboxname);
 
     if (!r) r = mboxlist_detail(inboxname, &type, NULL, NULL,
 				&server, NULL, NULL);
     if (r) {
 	sleep(3);
-	syslog(LOG_ERR, "Unable to locate maildrop for %s", popd_userid);
+	syslog(LOG_ERR, "Unable to locate maildrop %s", inboxname);
 	prot_printf(popd_out, "-ERR [SYS/PERM] Unable to locate maildrop\r\n");
 	goto fail;
     }
@@ -1384,7 +1405,7 @@ int openinbox(void)
 	r = mailbox_open_header(inboxname, 0, &mboxstruct);
 	if (r) {
 	    sleep(3);
-	    syslog(LOG_ERR, "Unable to open maildrop for %s", popd_userid);
+	    syslog(LOG_ERR, "Unable to open maildrop %s", inboxname);
 	    prot_printf(popd_out, "-ERR [SYS/PERM] Unable to open maildrop\r\n");
 	    goto fail;
 	}
@@ -1393,7 +1414,7 @@ int openinbox(void)
 	if (!r) r = mailbox_lock_pop(&mboxstruct);
 	if (r) {
 	    mailbox_close(&mboxstruct);
-	    syslog(LOG_ERR, "Unable to lock maildrop for %s", popd_userid);
+	    syslog(LOG_ERR, "Unable to lock maildrop %s", inboxname);
 	    prot_printf(popd_out, "-ERR [IN-USE] Unable to lock maildrop\r\n");
 	    goto fail;
 	}
@@ -1426,7 +1447,7 @@ int openinbox(void)
 	if (r) {
 	    mailbox_close(&mboxstruct);
 	    popd_exists = 0;
-	    syslog(LOG_ERR, "Unable to read maildrop for %s", popd_userid);
+	    syslog(LOG_ERR, "Unable to read maildrop %s", inboxname);
 	    prot_printf(popd_out,
 			"-ERR [SYS/PERM] Unable to read maildrop\r\n");
 	    goto fail;
@@ -1447,6 +1468,10 @@ int openinbox(void)
   fail:
     free(popd_userid);
     popd_userid = 0;
+    if (popd_subfolder) {
+	free(popd_subfolder);
+	popd_subfolder = 0;
+    }
     return 1;
 }
 
