@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.51 2003/01/05 14:13:06 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.52 2003/01/07 02:19:22 ken3 Exp $ */
 
 #include <config.h>
 
@@ -3943,7 +3943,7 @@ void cmd_list(char *tag, int listopts, char *reference, char *pattern)
 	if (!strcmp(pattern, "*")
 	    && config_getswitch(IMAPOPT_FOOLSTUPIDCLIENTS)) {
 	    if (buf) free(buf);
-	    buf = strdup("INBOX*");
+	    buf = xstrdup("INBOX*");
 	    pattern = buf;
 	    findsub = mboxlist_findsub;
 	    findall = mboxlist_findall;
@@ -6496,10 +6496,10 @@ int getsortcriteria(char *tag, struct sortcrit **sortcrit)
 	    if (c != ' ') goto missingarg;
 	    c = getstring(imapd_in, &arg);
 	    if (c != ' ') goto missingarg;
-	    (*sortcrit)[n].args.annot.entry = strdup(arg.s);
+	    (*sortcrit)[n].args.annot.entry = xstrdup(arg.s);
 	    c = getstring(imapd_in, &arg);
 	    if (c == EOF) goto missingarg;
-	    (*sortcrit)[n].args.annot.attrib = strdup(arg.s);
+	    (*sortcrit)[n].args.annot.attrib = xstrdup(arg.s);
 	}
 #endif
 	else {
