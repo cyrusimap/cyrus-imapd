@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: reconstruct.c,v 1.40 1999/08/09 21:07:52 leg Exp $ */
+/* $Id: reconstruct.c,v 1.41 1999/08/20 18:51:31 leg Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -645,6 +645,33 @@ char *partition;
     todo_tail = &newentry->next;
 }
 
+void
+todo_append(name, path, partition)
+char *name;
+char *path;
+char *partition;
+{
+    DIR *dirp;
+    struct dirent *dirent;
+
+    dirp = opendir(path);
+    if (!dirp) {
+	fprintf(stderr, "reconstruct: couldn't open partition %s\n", name);
+    } else while (dirent = readdir(dirp)) {
+	struct todo *newentry;
+
+	newentry = (struct todo *)xmalloc(sizeof(struct todo));
+	newentry->name = xstrdup(name);
+	newentry->path = xmalloc(strlen(path) +
+				 strlen(dirent->d_name) + 2);
+	sprintf(newentry->path, "%s/%s", path, dirent->d_name);
+	newentry->partition = partition;
+	newentry->next = 0;
+	*todo_tail = newentry;
+	todo_tail = &newentry->next;
+    }
+}
+
 char *cleanacl(acl, mboxname)
 char *acl;
 char *mboxname;
@@ -782,8 +809,12 @@ do_mboxlist()
     }
     
     /* Enqueue each partition directory for scanning */
-    config_scanpartition(todo_append);
-    
+    if (config_hashimapspool) {
+	config_scanpartition(todo_append_hashed);
+    } else {
+	config_scanpartition(todo_append);
+    }
+
     /* Process each directory in queue */
     while (todo_head) {
 	isnewspartition = (strcmp(todo_head->partition, "news") == 0);
