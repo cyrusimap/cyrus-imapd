@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: fetchnews.c,v 1.1.2.12 2003/02/28 16:30:23 ken3 Exp $
+ * $Id: fetchnews.c,v 1.1.2.13 2003/05/16 17:30:16 ken3 Exp $
  */
 
 #include <config.h>
@@ -139,7 +139,7 @@ int main(int argc, char *argv[])
 	    server = optarg;
 	    break;
 
-	case 'p': /* pot on server */
+	case 'p': /* port on server */
 	    port = optarg;
 	    break;
 
@@ -190,8 +190,19 @@ int main(int argc, char *argv[])
     }
 
     /* read the initial greeting */
-    if (!prot_fgets(buf, sizeof(buf), sin) || strncmp("200", buf, 3)) {
+    if (!prot_fgets(buf, sizeof(buf), sin) || strncmp("20", buf, 2)) {
 	syslog(LOG_ERR, "server not available");
+	goto quit;
+    }
+
+    /* tell the server we're going to do streaming */
+    prot_printf(sout, "MODE STREAM\r\n");
+    if (!prot_fgets(sbuf, sizeof(sbuf), sin)) {
+	syslog(LOG_ERR, "MODE STREAM terminated abnormally");
+	goto quit;
+    }
+    else if (strncmp("203", sbuf, 3)) {
+	/* server doesn't support STREAM */
 	goto quit;
     }
 
@@ -240,15 +251,17 @@ int main(int argc, char *argv[])
     }
 
     /* fetch and store articles */
+    /* XXX the output of NEWNEWS already contains the terminating \r\n
+       after the msgid, so we don't need to add it to CHECK/ARTICLE/TAKETHIS */
     for (i = 0; i < offered; i++) {
 
 	/* see if we want this article */
-	prot_printf(sout, "IHAVE %s", msgid[i]);
+	prot_printf(sout, "CHECK %s", msgid[i]);
 	if (!prot_fgets(sbuf, sizeof(sbuf), sin)) {
-	    syslog(LOG_ERR, "IHAVE terminated abnormally");
+	    syslog(LOG_ERR, "CHECK terminated abnormally");
 	    goto quit;
 	}
-	else if (strncmp("335", sbuf, 3)) {
+	else if (strncmp("238", sbuf, 3)) {
 	    /* don't want it */
 	    rejected++;
 	    continue;
@@ -261,11 +274,13 @@ int main(int argc, char *argv[])
 	    goto quit;
 	}
 	else if (strncmp("220", buf, 3)) {
-	    /* doh! the article doesn't exist, abort IHAVE */
-	    prot_printf(sout, ".\r\n");
+	    /* doh! the article doesn't exist */
+	    failed++;
+	    continue;
 	}
 	else {
 	    /* store the article */
+	    prot_printf(sout, "TAKETHIS %s", msgid[i]);
 	    while (prot_fgets(buf, sizeof(buf), pin)) {
 		prot_write(sout, buf, strlen(buf));
 		if (buf[0] == '.' && buf[1] != '.') break;
@@ -279,13 +294,11 @@ int main(int argc, char *argv[])
 
 	/* see how we did */
 	if (!prot_fgets(buf, sizeof(buf), sin)) {
-	    syslog(LOG_ERR, "IHAVE terminated abnormally");
+	    syslog(LOG_ERR, "TAKETHIS terminated abnormally");
 	    goto quit;
 	}
-	else if (!strncmp("235", buf, 3))
+	else if (!strncmp("239", buf, 3))
 	    accepted++;
-	else if (!strncmp("437", buf, 3))
-	    rejected++;
 	else
 	    failed++;
     }

@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: fetchnews.8,v 1.1.2.1 2002/10/09 20:58:30 ken3 Exp $
+.\" $Id: fetchnews.8,v 1.1.2.2 2003/05/16 17:30:17 ken3 Exp $
 .SH NAME
 fetchnews \- retrieve new articles from peer and feed to Cyrus
 .SH SYNOPSIS
@@ -51,6 +51,10 @@ fetchnews \- retrieve new articles from peer and feed to Cyrus
 [
 .B \-s
 .I servername
+]
+[
+.B \-p
+.I port
 ]
 .br
           [
@@ -84,8 +88,12 @@ file unless specified otherwise by \fB-C\fR.
 Read configuration options from \fIconfig-file\fR.
 .TP
 .BI \-s " servername"
-Hostname of server to which articles should be fed.  Defaults to
+Hostname of the Cyrus server to which articles should be fed.  Defaults to
 "localhost".
+.TP
+.BI \-p " port"
+Port on the Cyrus server to connect to when feeding articles.  Defaults to
+"nntp".
 .TP
 .BI \-w " wildmat"
 Wildmat pattern specifying which newsgroups to search for new
