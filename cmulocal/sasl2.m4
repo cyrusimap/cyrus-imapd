@@ -1,6 +1,6 @@
 dnl sasl2.m4--sasl2 libraries and includes
 dnl Rob Siemborski
-dnl $Id: sasl2.m4,v 1.20 2002/08/21 15:03:19 rjs3 Exp $
+dnl $Id: sasl2.m4,v 1.21 2002/09/24 15:12:33 rjs3 Exp $
 
 AC_DEFUN(SASL_GSSAPI_CHK,[
  AC_ARG_ENABLE(gssapi, [  --enable-gssapi=<DIR>   enable GSSAPI authentication [yes] ],
@@ -70,7 +70,6 @@ AC_DEFUN(SASL_GSSAPI_CHK,[
  AC_MSG_CHECKING(GSSAPI)
  if test "$gssapi" != no; then
   AC_MSG_RESULT(with implementation ${gss_impl})
-  AC_CHECK_LIB(ndbm,dbm_open,GSSAPIBASE_LIBS="$GSSAPIBASE_LIBS -lndbm")
   AC_CHECK_LIB(resolv,res_search,GSSAPIBASE_LIBS="$GSSAPIBASE_LIBS -lresolv")
   SASL_MECHS="$SASL_MECHS libgssapiv2.la"
   SASL_STATIC_OBJS="$SASL_STATIC_OBJS ../plugins/gssapi.o"
