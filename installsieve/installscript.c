@@ -428,35 +428,27 @@ char *read_capability(void)
   if (yylex(&state, pin)!=STRING)
     parseerror("STRING");
 
+  while (1) {
+    res = yylex(&state, pin);
 
-  while (1) 
-  {
-
-    res=yylex(&state, pin);
-
-    if (res==EOL)
-    {
-      return NULL;
-
+    if (res == EOL) {
+	break;
     } else if (res!=' ') {
-      parseerror("SPACE");
+	parseerror("SPACE");
     }
 
-    if (yylex(&state, pin)!=STRING)
-      parseerror("STRING");
+    if (yylex(&state, pin)!=STRING) {
+	parseerror("STRING");
+    }
 
     data=string_DATAPTR(state.str);
+    if (strncmp(data, "SASL=",5)==0) {
+	cap = (char *) malloc(strlen(data+6)+1);
 
-    if (strncmp(data, "SASL=",5)==0)
-    {
-	cap=(char *) malloc(strlen(data+6)+1);
 	strcpy(cap, data+6);
-	
 	/* eliminate trailing '}' */
 	cap[ strlen(cap) -1]='\0';
-	
     }
-
   }
 
 
