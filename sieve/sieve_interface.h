@@ -1,5 +1,5 @@
 /* sieve_interface.h -- interface for deliver
- * $Id: sieve_interface.h,v 1.2 1999/07/31 21:49:41 leg Exp $
+ * $Id: sieve_interface.h,v 1.3 1999/10/04 18:23:07 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -91,19 +91,15 @@ int sieve_register_size(sieve_interp_t *interp, sieve_get_size *f);
 int sieve_register_header(sieve_interp_t *interp, sieve_get_header *f);
 int sieve_register_envelope(sieve_interp_t *interp, sieve_get_envelope *f);
 
-struct sieve_errorlist {
-    char *msg;
-    int lineno;
-    struct sieve_errorlist *next;
-};
+typedef sieve_parse_error(int lineno, char *msg, void *interp_context,
+			  void *script_context);
+int sieve_register_parse_error(sieve_interp_t *interp, sieve_parse_error *f);
 
 /* given an interpretor and a script, produce an executable script */
 int sieve_script_parse(sieve_interp_t *interp, FILE *script,
 		       void *script_context, sieve_script_t **ret);
 
 int sieve_script_free(sieve_script_t **s);
-
-struct sieve_errorlist *sieve_script_errors(sieve_script_t *s);
 
 /* execute a script on a message, producing side effects via callbacks */
 int sieve_execute_script(sieve_script_t *script, 

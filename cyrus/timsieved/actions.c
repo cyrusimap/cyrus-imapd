@@ -1,6 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.6 1999/09/30 21:40:22 leg Exp $
+ * $Id: actions.c,v 1.7 1999/10/04 18:23:07 leg Exp $
  * 
  */
 /***********************************************************
@@ -149,7 +149,7 @@ int getscript(struct protstream *conn, string_t *name)
       return TIMSIEVE_NOEXIST;
   }
 
-  prot_printf(conn, "{%d+}\r\n", size);
+  prot_printf(conn, "{%d}\r\n", size);
 
   cnt = 0;
   while (cnt < size) {
@@ -249,7 +249,7 @@ int putscript(struct protstream *conn, string_t *name, string_t *data)
 
       fwrite(dataptr, 1, amount, stream);
       
-      dataptr+=amount;
+      dataptr += amount;
   }
 
   /* let's make sure this is a valid script
@@ -258,11 +258,16 @@ int putscript(struct protstream *conn, string_t *name, string_t *data)
   result = is_script_parsable(stream, &errstr);
 
   if (result != TIMSIEVE_OK) {
-    prot_printf(conn,"NO \"%s\"\r\n", errstr);
-    free(errstr);
-    fclose(stream);
-    unlink(path);
-    return result;
+      if (errstr && *errstr) { 
+	  prot_printf(conn, "NO {%d}\r\n%s\r\n", strlen(errstr), errstr);
+	  free(errstr);
+      } else {
+	  if (errstr) free(errstr);
+	  prot_printf(conn, "NO \"parse failed\"\r\n");
+      }
+      fclose(stream);
+      unlink(path);
+      return result;
   }
 
   fsync(stream);
@@ -423,7 +428,7 @@ int setactive(struct protstream *conn, string_t *name)
   result = link(filename, "default.NEW");
 
   if (result!=0) {
-    prot_printf(conn,"NO \"Can't make link\"\r\n");    
+    prot_printf(conn, "NO \"Can't make link\"\r\n");    
     return TIMSIEVE_FAIL;
   }
 
