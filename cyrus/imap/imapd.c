@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.243 2000/05/15 20:49:06 leg Exp $ */
+/* $Id: imapd.c,v 1.244 2000/05/16 21:51:13 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1602,16 +1602,16 @@ void cmd_id(char *tag)
 	    appendstrlist(&fields, field.s);
 	    appendstrlist(&values, arg.s);
 	}
-    }
 
-    if (c != ')') {
-	/* erp! */
-	eatline(c);
-	freestrlist(fields);
-	freestrlist(values);
-	return;
+	if (c != ')') {
+	    /* erp! */
+	    eatline(c);
+	    freestrlist(fields);
+	    freestrlist(values);
+	    return;
+	}
+	c = prot_getc(imapd_in);
     }
-    c = prot_getc(imapd_in);
 
     /* check for CRLF */
     if (c == '\r') c = prot_getc(imapd_in);
