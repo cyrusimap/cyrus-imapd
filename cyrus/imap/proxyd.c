@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.86 2002/02/01 19:43:37 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.87 2002/02/01 22:56:56 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -2676,6 +2676,8 @@ void cmd_append(char *tag, char *name)
     }
     if (!r && supports_referrals) { 
 	proxyd_refer(tag, newserver, mailboxname);
+	/* Eat the argument */
+	eatline(proxyd_in, prot_getc(proxyd_in));
 	return;
     }
     if (!r) {
