@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.34 2003/06/11 19:28:00 ken3 Exp $
+ * $Id: annotate.c,v 1.8.6.35 2003/06/12 22:26:22 ken3 Exp $
  */
 
 #include <config.h>
@@ -443,7 +443,7 @@ static void output_entryatt(const char *mboxname, const char *entry,
     if (hash_lookup(key, &(fdata->entry_table))) return;
     hash_insert(key, (void *)0xDEADBEEF, &(fdata->entry_table));
 
-    if (!strcmp(userid, "anyone")) { /* shared annotation */
+    if (!userid[0]) { /* shared annotation */
 	if ((fdata->attribs & ATTRIB_VALUE_SHARED) && attrib->value) {
 	    appendattvalue(&attvalues, "value.shared", attrib->value);
 	}
@@ -523,7 +523,7 @@ static void annotation_get_fromfile(const char *int_mboxname __attribute__((unus
 	if (!fstat(fileno(f), &statbuf))
 	    attrib.modifiedsince = statbuf.st_mtime;
 
-	output_entryatt(ext_mboxname, entry, "anyone", &attrib, fdata);
+	output_entryatt(ext_mboxname, entry, "", &attrib, fdata);
     }
     if (f) fclose(f);
 }
@@ -556,7 +556,7 @@ static void annotation_get_server(const char *int_mboxname,
 	attrib.contenttype = "text/plain";
     }
 
-    output_entryatt(ext_mboxname, entry, "anyone", &attrib, fdata);
+    output_entryatt(ext_mboxname, entry, "", &attrib, fdata);
 }
 
 static void annotation_get_partition(const char *int_mboxname,
@@ -588,7 +588,7 @@ static void annotation_get_partition(const char *int_mboxname,
 	attrib.contenttype = "text/plain";
     }
 
-    output_entryatt(ext_mboxname, entry, "anyone", &attrib, fdata);
+    output_entryatt(ext_mboxname, entry, "", &attrib, fdata);
 }
 
 static void annotation_get_size(const char *int_mboxname,
@@ -642,7 +642,7 @@ static void annotation_get_size(const char *int_mboxname,
     attrib.size = strlen(value);
     attrib.contenttype = "text/plain";
 
-    output_entryatt(ext_mboxname, entry, "anyone", &attrib, fdata);
+    output_entryatt(ext_mboxname, entry, "", &attrib, fdata);
 }
 
 static void annotation_get_lastupdate(const char *int_mboxname,
@@ -684,7 +684,7 @@ static void annotation_get_lastupdate(const char *int_mboxname,
     attrib.size = strlen(valuebuf);
     attrib.contenttype = "text/plain";
 
-    output_entryatt(ext_mboxname, entry, "anyone", &attrib, fdata);
+    output_entryatt(ext_mboxname, entry, "", &attrib, fdata);
 }
 
 static int make_key(const char *mboxname, const char *entry,
@@ -744,10 +744,9 @@ static int rw_p(void *rock, const char *key,
     userid = entry + strlen(entry) + 1;
 
     /* make sure that the entry matches our pattern and either the
-       userid matches the our user (priv) or the userid is "anyone" */
+       userid is "" (shared) or the userid matches our user (priv) */ 
     return ((GLOB_TEST(rw_rock->g, entry) != -1)
-	    && (!strcmp(userid, rw_rock->fdata->userid)
-		|| !strcmp(userid, "anyone")));
+	    && (!userid[0] || !strcmp(userid, rw_rock->fdata->userid)));
 }
 
 static int rw_cb(void *rock, const char *key,
@@ -1406,14 +1405,13 @@ static int annotation_set_todb(const char *int_mboxname,
 	    if (!entry->shared.value) {
 		struct annotation_data shared;
 
-		r = read_entry(int_mboxname, entry->entry->name, "anyone",
-			       &shared);
+		r = read_entry(int_mboxname, entry->entry->name, "", &shared);
 		if (r) return r;
 
 		entry->shared.value = shared.value;
 	    }
 
-	    r = write_entry(int_mboxname, entry->entry->name, "anyone",
+	    r = write_entry(int_mboxname, entry->entry->name, "",
 			    &(entry->shared), &(sdata->tid));
 	}
     }
