@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.135 2003/03/10 19:00:20 rjs3 Exp $
+ * $Id: pop3d.c,v 1.136 2003/03/11 21:41:06 rjs3 Exp $
  */
 #include <config.h>
 
@@ -1354,7 +1354,8 @@ static void blat(int msg,int lines)
     char fnamebuf[MAILBOX_FNAME_LEN];
     int thisline = -2;
 
-    mailbox_message_get_fname(popd_mailbox, popd_msg[msg].uid, fnamebuf);
+    mailbox_message_get_fname(popd_mailbox, popd_msg[msg].uid, fnamebuf,
+			      sizeof(fnamebuf));
     msgfile = fopen(fnamebuf, "r");
     if (!msgfile) {
 	prot_printf(popd_out, "-ERR [SYS/PERM] Could not read message file\r\n");

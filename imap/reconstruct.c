@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.71 2003/02/13 20:15:30 rjs3 Exp $ */
+/* $Id: reconstruct.c,v 1.72 2003/03/11 21:41:09 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -294,7 +294,7 @@ int reconstruct(char *name, struct discovered *found)
 {
     int r;
     struct mailbox mailbox;
-    char quota_root[MAX_MAILBOX_PATH];
+    char quota_root[MAX_MAILBOX_PATH+1];
     int hasquota;
     int i, flag;
     char *p;
@@ -337,7 +337,7 @@ int reconstruct(char *name, struct discovered *found)
     }
 
     /* Fix quota root */
-    hasquota = mailbox_findquota(quota_root, mailbox.name);
+    hasquota = mailbox_findquota(quota_root, sizeof(quota_root), mailbox.name);
     if (mailbox.quota.root) free(mailbox.quota.root);
     if (hasquota) {
 	mailbox.quota.root = xstrdup(quota_root);
@@ -449,7 +449,7 @@ int reconstruct(char *name, struct discovered *found)
 	message_index = zero_index;
 	message_index.uid = uid[msg];
 	
-	mailbox_message_get_fname(&mailbox, uid[msg], fnamebuf);
+	mailbox_message_get_fname(&mailbox, uid[msg], fnamebuf, sizeof(fnamebuf));
 	msgfile = fopen(fnamebuf, "r");
 	if (!msgfile) continue;
 	if (fstat(fileno(msgfile), &sbuf)) {
@@ -569,7 +569,8 @@ int reconstruct(char *name, struct discovered *found)
 
 	/* this may change uniqueid, but if it does, nothing we can do
            about it */
-	mailbox_make_uniqueid(mailbox.name, mailbox.uidvalidity, buf);
+	mailbox_make_uniqueid(mailbox.name, mailbox.uidvalidity, buf,
+			      sizeof(buf));
 	mailbox.uniqueid = xstrdup(buf);
     }
     
