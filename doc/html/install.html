@@ -1,4 +1,4 @@
-<!-- $Id: install.html,v 1.43 1998/08/04 05:46:22 tjs Exp $ -->
+<!-- $Id: install.html,v 1.44 1998/09/18 19:30:08 wcw Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
@@ -667,12 +667,14 @@ the "<TT>mail</TT>" group.  This will permit sendmail to run the
  <P>
 <li>The Cyrus IMAP server support in Sendmail defaults to enabling
 duplicate delivery suppression, by invoking the "<TT>deliver</TT>"
-program with the "<TT>-e</TT>" switch.
-This prevents two messages with the same <TT>Message-ID:</TT>
-(<TT>Resent-Message-ID:</TT> if it exits) from being delivered to the
-same mailbox.  Add a <TT>cron</TT> job to periodically prune the
-database of deliveries by running "<TT>/usr/cyrus/bin/deliver -E
-3</TT>" daily as the cyrus user.
+program with the "<TT>-e</TT>" switch.  This prevents two messages
+with the same <TT>Message-ID:</TT> (<TT>Resent-Message-ID:</TT> if it
+exits) from being delivered to the same mailbox.  Add a <TT>cron</TT>
+job to periodically prune the database of deliveries by running
+"<TT>/usr/cyrus/bin/deliver -E 3</TT>" daily as the cyrus user. You
+must also create the directory "<tt>deliverdb</tt>" to store the
+database files in the configuration directory, such as "<tt>mkdir
+/var/imap/deliverdb</tt>".
 
  <P>If you want to export netnews newsgroups using IMAP do the following:
 
@@ -875,7 +877,7 @@ to work with the IMAP server.
 
 <P><HR><P>
 <!-- hhmts start -->
-last modified by tjs at Tue Aug  4 00:36:47 1998
+Last modified: Tue Sep 15 17:30:29 EDT 1998
 <!-- hhmts end -->
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
