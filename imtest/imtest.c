@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/NNTP/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.93 2003/10/22 18:50:10 rjs3 Exp $
+ * $Id: imtest.c,v 1.94 2004/01/03 15:14:29 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -506,7 +506,7 @@ static int tls_init_clientengine(int verifydepth, char *var_tls_cert_file, char 
     
     off |= SSL_OP_ALL;		/* Work around all known bugs */
     SSL_CTX_set_options(tls_ctx, off);
-    SSL_CTX_set_info_callback(tls_ctx, apps_ssl_info_callback);
+    SSL_CTX_set_info_callback(tls_ctx, (void (*)()) apps_ssl_info_callback);
     
     if (strlen(var_tls_CAfile) == 0)
 	CAfile = NULL;
