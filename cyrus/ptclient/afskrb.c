@@ -41,7 +41,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: afskrb.c,v 1.1.2.1 2002/12/13 17:10:37 rjs3 Exp $";
+      "$Id: afskrb.c,v 1.1.2.2 2002/12/20 20:36:15 rjs3 Exp $";
 
 #include <config.h>
 
@@ -326,7 +326,8 @@ struct auth_state *ptsmodule_make_authstate(const char *identifier,
     /* store group list in contiguous array for easy storage in the database */
     memset(newstate->groups, 0, newstate->ngroups * sizeof(struct auth_ident));
     for (i = 0; i < newstate->ngroups; i++) {
-        strcpy(newstate->groups[i].id, groups.namelist_val[i]);
+        strlcpy(newstate->groups[i].id, groups.namelist_val[i],
+		sizeof(newstate->groups[i].id));
 	newstate->groups[i].hash = hash(groups.namelist_val[i]);
 	/* don't free groups.namelist_val[i]. Something else currently
 	 * takes care of that data. 
