@@ -28,19 +28,17 @@ char *acl;
 
     for (thisid = acl; *thisid; thisid = nextid) {
 	acl_ptr = &acl_positive;
-	nextid = strchr(thisid, '\n');
+	rights = strchr(thisid, '\t');
+	if (!rights) {
+	    break;
+	}
+	*rights++ = '\0';
+
+	nextid = strchr(rights, '\t');
 	if (!nextid) {
 	    break;
 	}
 	*nextid++ = '\0';
-
-	rights = strchr(thisid, '\t');
-	if (!rights) {
-	    strcpy(thisid, nextid ? nextid : "");
-	    nextid = thisid;
-	    continue;
-	}
-	*rights++ = '\0';
 
 	if (*thisid == '-') {
 	    acl_ptr = &acl_negative;
@@ -52,7 +50,7 @@ char *acl;
 
 	/* Put the delimiters back */
 	rights[-1] = '\t';
-	nextid[-1] = '\n';
+	nextid[-1] = '\t';
     }
 
     acl_positive &= ~acl_negative;
@@ -97,7 +95,16 @@ long access;
 
     /* Find any existing entry for 'identifier' in 'acl' */
     for (thisid = *acl; *thisid; thisid = nextid) {
-	nextid = strchr(thisid, '\n');
+	rights = strchr(thisid, '\t');
+	if (!rights) {
+	    /* ACK, nuke trailing garbage */
+	    *thisid = '\0';
+	    nextid = thisid;
+	    break;
+	}
+	*rights++ = '\0';
+
+	nextid = strchr(rights, '\t');
 	if (!nextid) {
 	    /* ACK, nuke trailing garbage */
 	    *thisid = '\0';
@@ -106,16 +113,9 @@ long access;
 	}
 	*nextid++ = '\0';
 
-	rights = strchr(thisid, '\t');
-	if (!rights) {
-	    strcpy(thisid, nextid ? nextid : "");
-	    nextid = thisid;
-	    continue;
-	}
-	*rights = '\0';
 	if (strcmp(identifier, thisid) == 0) break;
-	*rights = '\t';
-	nextid[-1] = '\n';
+	rights[-1] = '\t';
+	nextid[-1] = '\t';
     }
     if (access == 0L) {
 	/* Remove any existing entry for 'identifier' */
@@ -129,7 +129,7 @@ long access;
 	strcpy(newacl + (thisid - *acl), identifier);
 	strcat(newacl, "\t");
 	(void) acl_masktostr(access, newacl + strlen(newacl));
-	strcat(newacl, "\n");
+	strcat(newacl, "\t");
 	strcat(newacl, nextid);
 	free(*acl);
 	*acl = newacl;
