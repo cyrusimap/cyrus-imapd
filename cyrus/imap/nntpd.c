@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.84 2003/05/29 14:50:48 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.85 2003/06/04 16:00:42 ken3 Exp $
  */
 
 /*
@@ -2143,6 +2143,10 @@ static void cmd_list(char *arg1, char *arg2)
 
 	if (tls_enabled() && !nntp_starttls_done)
 	    prot_printf(nntp_out, "STARTTLS\r\n");
+
+	if (nntp_capa & MODE_STREAM) {
+	    prot_printf(nntp_out, "STREAMING\r\n");
+	}
 	prot_printf(nntp_out, ".\r\n");
 
 	did_extensions = 1;
