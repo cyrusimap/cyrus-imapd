@@ -4,7 +4,7 @@
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
 <title>Cyrus IMAP Server FAQ</title>
-<!-- $Id: faq.html,v 1.19.4.4 2003/02/27 18:10:19 rjs3 Exp $ -->
+<!-- $Id: faq.html,v 1.19.4.5 2003/06/07 18:36:17 ken3 Exp $ -->
 </head>
 <body>
 <h1>Cyrus IMAP Server FAQ</h1>
@@ -124,7 +124,7 @@ What's wrong?</dt>
 <dd>
 <p><b>A:</b> Remove all <tt>imap</tt>, <tt>pop</tt>, <tt>lmtp</tt>
 and <tt>sieve</tt> lines from <tt>[x]inetd.conf</tt> and restart
-<tt>[x]inetd</tt>.</p>
+<tt>[x]inetd</tt>.  Cyrus is run out of its own &quot;master&quot; process.</p>
 </dd>
 
 <dt><b>Q:</b> How do I use different SSL/TLS certificates for imap
@@ -193,10 +193,27 @@ volume of e-mail.</p>
 decremented properly, causing this number to be unreliable.</p>
 </dd>
 
+<dt><b>Q:</b> All of the 8bit characters in the headers of messages
+that I receive are being changed to 'X's.  What's going on?</dt>
+
+<dd>
+<p><b>A:</b> 8-bit characters are illegal in message headers.  Following
+the principal of &quot;be liberal in what you accept, and strict in what you
+send&quot; cyrus converts them to Xs.  (Without a character set, having
+the 8-bit characters replaced with Xs is just as good as having them be any
+other 8-bit character, especially for sorting and searching).
+Alternatively, you can set &quot;reject8bit: t&quot; in <tt>imapd.conf</tt> to
+reject the messages outright.  It might
+also be reasonable for cyrus to support the use of a default character set,
+however thus far no one has done the work to do so (it would also involve
+QP-encoding the corrupted headers).
+</p>
+</dd>
+
 </dl>
 
 <hr />
-last modified: $Date: 2003/02/27 18:10:19 $ <br />
+last modified: $Date: 2003/06/07 18:36:17 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
