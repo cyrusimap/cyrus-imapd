@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.81.2.2 2004/01/30 15:49:43 ken3 Exp $ */
+/* $Id: reconstruct.c,v 1.81.2.3 2004/04/02 20:59:31 ken3 Exp $ */
 
 #include <config.h>
 
@@ -444,6 +444,8 @@ int reconstruct(char *name, struct discovered *found)
     int mytype;
     char mbpath[MAX_MAILBOX_PATH+1];
     
+    int expunge_fd = -1;
+
     /* Start by looking up current data in mailbox list */
     r = mboxlist_detail(name, &mytype, &mypath, NULL, &myacl, NULL);
     if(r) return r;
@@ -549,6 +551,58 @@ int reconstruct(char *name, struct discovered *found)
     *((bit32 *)(buf+OFFSET_GENERATION_NO)) = htonl(mailbox.generation_no + 1);
     fwrite(buf, 1, INDEX_HEADER_SIZE, newindex);
     retry_write(newcache_fd, buf, sizeof(bit32));
+
+    /* Remove any previously expunged messages */
+    /* XXX  For two-phase we will need to keep the messages referenced
+       in cyrus.expunge and refresh its header and offsets */
+    if (stat(FNAME_EXPUNGE_INDEX+1, &sbuf) != -1 &&
+	sbuf.st_size > OFFSET_LEAKED_CACHE &&
+	(expunge_fd = open(FNAME_EXPUNGE_INDEX+1, O_RDONLY, 0666)) != -1) {
+	const char *index_base = NULL;
+	unsigned long index_len = 0;	/* mapped size */
+	int format, minor_version;
+	unsigned long start_offset, record_size, exists;
+
+	/* Map the file */
+	map_refresh(expunge_fd, 1, &index_base,
+		    &index_len, sbuf.st_size, "expunge", mailbox.name);
+
+	format = ntohl(*((bit32 *)(index_base+OFFSET_FORMAT)));
+	minor_version = ntohl(*((bit32 *)(index_base+OFFSET_MINOR_VERSION)));
+	start_offset = ntohl(*((bit32 *)(index_base+OFFSET_START_OFFSET)));
+	record_size = ntohl(*((bit32 *)(index_base+OFFSET_RECORD_SIZE)));
+	exists = ntohl(*((bit32 *)(index_base+OFFSET_EXISTS)));
+
+	/* Sanity check the header as best we can */
+	if (format == 0 && exists &&
+	    minor_version && minor_version <= MAILBOX_MINOR_VERSION &&
+	    start_offset && start_offset <= INDEX_HEADER_SIZE &&
+	    record_size && record_size <= INDEX_RECORD_SIZE &&
+	    sbuf.st_size >= (start_offset + exists * record_size)) {
+	    unsigned msgno;
+	    const char *p = index_base + start_offset;
+
+	    /* Delete message files */
+	    for (msgno = 1; msgno <= exists; msgno++, p += record_size) {
+		unsigned long uid = ntohl(*((bit32 *)(p + OFFSET_UID)));
+
+		/* Sanity check UID */
+		if (uid == 0) {
+		    syslog(LOG_ERR, "IOERROR: %s zero expunge record %u/%lu",
+			   mailbox.name, msgno, exists);
+		    break;
+		}
+
+		mailbox_message_get_fname(&mailbox, uid,
+					  fnamebuf, sizeof(fnamebuf));
+		unlink(fnamebuf);
+	    }
+	}
+
+	map_free(&index_base, &index_len);
+	close(expunge_fd);
+    }
+    unlink(FNAME_EXPUNGE_INDEX+1);
 
     /* Find all message files in directory */
     uid = (unsigned long *) xmalloc(UIDGROW * sizeof(unsigned long));
