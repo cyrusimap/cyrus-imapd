@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.32 2003/06/11 11:31:53 ken3 Exp $
+ * $Id: annotate.c,v 1.8.6.33 2003/06/11 15:40:48 ken3 Exp $
  */
 
 #include <config.h>
@@ -396,7 +396,7 @@ static void output_attlist(struct protstream *pout, struct attvaluelist *l)
  * The last entry is flushed by calling with a NULL attrib.
  */
 static void output_entryatt(const char *mboxname, const char *entry,
-			    struct annotation_data *attrib, int is_priv,
+			    const char *userid, struct annotation_data *attrib,
 			    struct fetchdata *fdata)
 {
     static struct attvaluelist *attvalues = NULL;
@@ -439,37 +439,11 @@ static void output_entryatt(const char *mboxname, const char *entry,
     /* check if we already returned this entry */
     strlcpy(key, mboxname, sizeof(key));
     strlcat(key, entry, sizeof(key));
-    strlcat(key, is_priv ? fdata->userid : "anyone", sizeof(key));
+    strlcat(key, userid, sizeof(key));
     if (hash_lookup(key, &(fdata->entry_table))) return;
     hash_insert(key, (void *)0xDEADBEEF, &(fdata->entry_table));
 
-    if (is_priv) { /* private annotation */
-	if ((fdata->attribs & ATTRIB_VALUE_PRIV) && attrib->value) {
-	    appendattvalue(&attvalues, "value.priv", attrib->value);
-	}
-
-	if ((fdata->attribs & ATTRIB_CONTENTTYPE_PRIV)
-	    && attrib->value && attrib->contenttype) {
-	    appendattvalue(&attvalues, "content-type.priv",
-			   attrib->contenttype);
-	}
-
-	/* Base the return of the size attribute on whether or not there is
-	 * an attribute, not whether size is nonzero. */
-	if ((fdata->attribs & ATTRIB_SIZE_PRIV) && attrib->value) {
-	    snprintf(buf, sizeof(buf), "%u", attrib->size);
-	    appendattvalue(&attvalues, "size.priv", buf);
-	}
-
-	/* For this one we need both a value for the entry *and* a nonzero
-	 * modifiedsince time */
-	if ((fdata->attribs & ATTRIB_MODIFIEDSINCE_PRIV)
-	    && attrib->value && attrib->modifiedsince) {
-	    snprintf(buf, sizeof(buf), "%ld", attrib->modifiedsince);
-	    appendattvalue(&attvalues, "modifiedsince.priv", buf);
-	}
-    }
-    else { /* shared annotation */
+    if (!strcmp(userid, "anyone")) { /* shared annotation */
 	if ((fdata->attribs & ATTRIB_VALUE_SHARED) && attrib->value) {
 	    appendattvalue(&attvalues, "value.shared", attrib->value);
 	}
@@ -493,6 +467,32 @@ static void output_entryatt(const char *mboxname, const char *entry,
 	    && attrib->value && attrib->modifiedsince) {
 	    snprintf(buf, sizeof(buf), "%ld", attrib->modifiedsince);
 	    appendattvalue(&attvalues, "modifiedsince.shared", buf);
+	}
+    }
+    else { /* private annotation */
+	if ((fdata->attribs & ATTRIB_VALUE_PRIV) && attrib->value) {
+	    appendattvalue(&attvalues, "value.priv", attrib->value);
+	}
+
+	if ((fdata->attribs & ATTRIB_CONTENTTYPE_PRIV)
+	    && attrib->value && attrib->contenttype) {
+	    appendattvalue(&attvalues, "content-type.priv",
+			   attrib->contenttype);
+	}
+
+	/* Base the return of the size attribute on whether or not there is
+	 * an attribute, not whether size is nonzero. */
+	if ((fdata->attribs & ATTRIB_SIZE_PRIV) && attrib->value) {
+	    snprintf(buf, sizeof(buf), "%u", attrib->size);
+	    appendattvalue(&attvalues, "size.priv", buf);
+	}
+
+	/* For this one we need both a value for the entry *and* a nonzero
+	 * modifiedsince time */
+	if ((fdata->attribs & ATTRIB_MODIFIEDSINCE_PRIV)
+	    && attrib->value && attrib->modifiedsince) {
+	    snprintf(buf, sizeof(buf), "%ld", attrib->modifiedsince);
+	    appendattvalue(&attvalues, "modifiedsince.priv", buf);
 	}
     }
 }
@@ -523,7 +523,7 @@ static void annotation_get_fromfile(const char *int_mboxname __attribute__((unus
 	if (!fstat(fileno(f), &statbuf))
 	    attrib.modifiedsince = statbuf.st_mtime;
 
-	output_entryatt(ext_mboxname, entry, &attrib, 0, fdata);
+	output_entryatt(ext_mboxname, entry, "anyone", &attrib, fdata);
     }
     if (f) fclose(f);
 }
@@ -556,7 +556,7 @@ static void annotation_get_server(const char *int_mboxname,
 	attrib.contenttype = "text/plain";
     }
 
-    output_entryatt(ext_mboxname, entry, &attrib, 0, fdata);
+    output_entryatt(ext_mboxname, entry, "anyone", &attrib, fdata);
 }
 
 static void annotation_get_partition(const char *int_mboxname,
@@ -588,7 +588,7 @@ static void annotation_get_partition(const char *int_mboxname,
 	attrib.contenttype = "text/plain";
     }
 
-    output_entryatt(ext_mboxname, entry, &attrib, 0, fdata);
+    output_entryatt(ext_mboxname, entry, "anyone", &attrib, fdata);
 }
 
 static void annotation_get_size(const char *int_mboxname,
@@ -642,7 +642,7 @@ static void annotation_get_size(const char *int_mboxname,
     attrib.size = strlen(value);
     attrib.contenttype = "text/plain";
 
-    output_entryatt(ext_mboxname, entry, &attrib, 0, fdata);
+    output_entryatt(ext_mboxname, entry, "anyone", &attrib, fdata);
 }
 
 static void annotation_get_lastupdate(const char *int_mboxname,
@@ -684,7 +684,7 @@ static void annotation_get_lastupdate(const char *int_mboxname,
     attrib.size = strlen(valuebuf);
     attrib.contenttype = "text/plain";
 
-    output_entryatt(ext_mboxname, entry, &attrib, 0, fdata);
+    output_entryatt(ext_mboxname, entry, "anyone", &attrib, fdata);
 }
 
 static int make_key(const char *mboxname, const char *entry,
@@ -767,8 +767,7 @@ static int rw_cb(void *rock, const char *key,
     r = split_attribs(data, datalen, &attrib);
 
     if (!r) {
-	output_entryatt(rw_rock->ext_mboxname, entry, &attrib,
-			!strcmp(userid, rw_rock->fdata->userid),
+	output_entryatt(rw_rock->ext_mboxname, entry, userid, &attrib,
 			rw_rock->fdata);
     }
 
@@ -998,7 +997,7 @@ int annotatemore_fetch(char *mailbox,
     fdata.auth_state = auth_state;
 
     /* Reset state in output_entryatt() */
-    output_entryatt(NULL, NULL, NULL, 0, NULL);
+    output_entryatt(NULL, NULL, NULL, NULL, NULL);
 
     /* Build list of attributes to fetch */
     while (a) {
@@ -1156,7 +1155,7 @@ int annotatemore_fetch(char *mailbox,
     }
 
     /* Flush last cached entry in output_entryatt() */
-    output_entryatt("", "", NULL, 0, &fdata);
+    output_entryatt("", "", "", NULL, &fdata);
 
     /* Free the entry list, if needed */
     while(fdata.entry_list) {
