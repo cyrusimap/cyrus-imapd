@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.18.6.2 2002/07/21 14:24:49 ken3 Exp $
+ * $Id: mbdump.c,v 1.18.6.3 2002/07/21 17:27:24 ken3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -73,6 +73,7 @@
 #include "prot.h"
 #include "seen.h"
 #include "xmalloc.h"
+#include "util.h"
 
 /* is this the active script? */
 static int sieve_isactive(char *sievepath, char *name)
@@ -136,11 +137,20 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
     const int SEEN_DB = 0;
     const int SUBS_DB = 1;
     char *user_data_files[3];
+    int domainlen = 0;
+    char *p = NULL, userbuf[81];
     
     assert(mbpath);
 
-    if(!strncmp(mbname, "user.", 5) && !strchr(mbname+5, '.')) {
-	userid = mbname+5;
+    if (config_virtdomains && (p = strchr(mbname, '!')))
+	domainlen = p - mbname + 1; /* include separator */
+
+    if(!strncmp(mbname+domainlen, "user.", 5) &&
+       !strchr(mbname+domainlen+5, '.')) {
+	strcpy(userbuf, mbname+5);
+	if (domainlen)
+	    sprintf(userbuf+strlen(userbuf), "@%.*s", domainlen-1, mbname);
+	userid = userbuf;
 	memset(user_data_files, 0, sizeof(user_data_files));
 	user_data_files[SEEN_DB] = seen_getpath(userid);
 	user_data_files[SUBS_DB] = mboxlist_hash_usersubs(userid);
@@ -378,9 +388,19 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
 	    if(mbdir) closedir(mbdir);
 	    mbdir = NULL;
 
-	    snprintf(sieve_path, sizeof(sieve_path), "%s/%c/%s",
-		     config_getstring(IMAPOPT_SIEVEDIR),
-		     userid[0], userid);
+	    if (domainlen) {
+		*p = '\0'; /* separate domain!mboxname */
+		snprintf(sieve_path, sizeof(sieve_path), "%s%s%c/%s/%c/%s",
+			 config_getstring(IMAPOPT_SIEVEDIR),
+			 FNAME_DOMAINDIR, (char) dir_hash_c(mbname), mbname, 
+			 (char) dir_hash_c(p+6), p+6); /* unqualified userid */
+		*p = '!'; /* reassemble domain!mboxname */
+	    }
+	    else {
+		snprintf(sieve_path, sizeof(sieve_path), "%s/%c/%s",
+			 config_getstring(IMAPOPT_SIEVEDIR),
+			 (char) dir_hash_c(userid), userid);
+	    }
 	    mbdir=opendir(sieve_path);
 	    
 	    if(mbdir) {
@@ -465,19 +485,39 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
     struct mailbox mb;
     char sieve_path[2048];
     int sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
+    int domainlen = 0;
+    char *p = NULL, userbuf[81];
     
     memset(&file, 0, sizeof(struct buf));
     memset(&data, 0, sizeof(struct buf));
 
     c = getword(pin, &data);
 
-    if(!strncmp(mbname, "user.", 5) && !strchr(mbname+5, '.')) {
-	userid = mbname+5;
+    if (config_virtdomains && (p = strchr(mbname, '!')))
+	domainlen = p - mbname + 1; /* include separator */
 
-	if(!sieve_usehomedir)
-	    snprintf(sieve_path, sizeof(sieve_path), "%s/%c/%s",
-		     config_getstring(IMAPOPT_SIEVEDIR),
-		     userid[0], userid);
+    if(!strncmp(mbname+domainlen, "user.", 5) &&
+       !strchr(mbname+domainlen+5, '.')) {
+	strcpy(userbuf, mbname+5);
+	if (domainlen)
+	    sprintf(userbuf+strlen(userbuf), "@%.*s", domainlen-1, mbname);
+	userid = userbuf;
+
+	if(!sieve_usehomedir) {
+	    if (domainlen) {
+		*p = '\0'; /* separate domain!mboxname */
+		snprintf(sieve_path, sizeof(sieve_path), "%s%s%c/%s/%c/%s",
+			 config_getstring(IMAPOPT_SIEVEDIR),
+			 FNAME_DOMAINDIR, (char) dir_hash_c(mbname), mbname, 
+			 (char) dir_hash_c(p+6), p+6); /* unqualified userid */
+		*p = '!'; /* reassemble domain!mboxname */
+	    }
+	    else {
+		snprintf(sieve_path, sizeof(sieve_path), "%s/%c/%s",
+			 config_getstring(IMAPOPT_SIEVEDIR),
+			 (char) dir_hash_c(userid), userid);
+	    }
+	}
     }
 
     /* we better be in a list now */

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.9 2002/07/20 01:17:55 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.10 2002/07/21 17:27:22 ken3 Exp $ */
 
 #include <config.h>
 
@@ -6288,6 +6288,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
     mupdate_handle *mupdate_h = NULL;
     char *inpath, *inpart, *inacl;
     char *path = NULL, *part = NULL, *acl = NULL;
+    char *p, *mbox = mailboxname;
     
     /* administrators only please */
     /* however, proxys can do this, if their authzid is an admin */
@@ -6307,8 +6308,14 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 						   mailboxname);
     }
 
-    if(!strncmp(mailboxname, "user.", 5) && !strchr(mailboxname+5, '.')) {
-	if (!strcmp(mailboxname+5, imapd_userid)) {
+    if (config_virtdomains && (p = strchr(mailboxname, '!'))) {
+	/* pointer to mailbox w/o domain prefix */
+	mbox = p + 1;
+    }
+
+    if(!strncmp(mbox, "user.", 5) && !strchr(mbox+5, '.')) {
+	if ((strlen(mbox+5) == (strlen(imapd_userid) - (mbox - mailboxname))) &&
+	    !strncmp(mbox+5, imapd_userid, strlen(mbox+5))) {
 	    /* don't move your own inbox, that could be troublesome */
 	    r = IMAP_MAILBOX_NOTSUPPORTED;
 	} else {
