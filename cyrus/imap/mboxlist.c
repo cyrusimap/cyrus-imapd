@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.118 2000/04/06 15:14:42 leg Exp $
+ * $Id: mboxlist.c,v 1.119 2000/04/11 03:35:31 leg Exp $
  */
 
 #include <config.h>
@@ -782,6 +782,7 @@ int real_mboxlist_deletemailbox(char *name, int isadmin, char *userid,
     DBT key, data;
     struct mbox_entry *mboxent = NULL;
     acapmbox_handle_t *acaphandle = NULL;
+    int isremote = 0;
 
     memset(&key, 0, sizeof(key));
     memset(&data, 0, sizeof(data));
@@ -847,6 +848,7 @@ int real_mboxlist_deletemailbox(char *name, int isadmin, char *userid,
 	int sz;
 
 	mboxent = data.data;
+	isremote = (mboxent->mbtype & MBTYPE_REMOTE);
 	sz = sizeof(struct mbox_entry) + strlen(mboxent->acls);
 	mboxent = (struct mbox_entry *) xmalloc(sz);
 	memcpy(mboxent, data.data, sz);
@@ -897,6 +899,8 @@ int real_mboxlist_deletemailbox(char *name, int isadmin, char *userid,
 	goto done;
 	break;
     }
+
+    if (isremote) goto done;
 
     r = mboxlist_getpath(mboxent->partition, mboxent->name, &path);
     if (!r) r = mailbox_open_header_path(mboxent->name, path, 
@@ -978,12 +982,8 @@ int real_mboxlist_deletemailbox(char *name, int isadmin, char *userid,
   done: /* ALL DATABASE OPERATIONS DONE; NEED TO DO FILESYSTEM OPERATIONS */
     /*
      * See if we have to remove mailbox's quota root
-     *
-     * NB: this doesn't catch all cases.  We don't handle removing
-     * orphaned quota roots on renaming or when inside the
-     * ``if (deleteuser)'' code above.
      */
-    if (!r && !(mboxent->mbtype & MBTYPE_REMOTE)) {
+    if (!r && !isremote) {
 	if (deleteuser) {
 	    /* Delete any subscription list file */
 	    char *fname = mboxlist_hash_usersubs(mboxent->name + 5);
@@ -1017,16 +1017,19 @@ int real_mboxlist_deletemailbox(char *name, int isadmin, char *userid,
 	/* commit now */
 	switch (r = txn_commit(tid, 0)) {
 	case 0: 
-	    /* open ACAP connection if necessary */
-	    acaphandle = acapmbox_get_handle();
+	    if (!isremote) {
+		/* open ACAP connection if necessary */
+		acaphandle = acapmbox_get_handle();
 	    
-	    /* delete from ACAP */
-	    r = acapmbox_delete(acaphandle, name);
-	    if (r) {
-		syslog(LOG_ERR, "ACAP: can't delete mailbox entry '%s': %s",
-		       name, error_message(r));
+		/* delete from ACAP */
+		r = acapmbox_delete(acaphandle, name);
+		if (r) {
+		    syslog(LOG_ERR, 
+			   "ACAP: can't delete mailbox entry '%s': %s",
+			   name, error_message(r));
+		}
+		acapmbox_release_handle(acaphandle);
 	    }
-	    acapmbox_release_handle(acaphandle);
 	    break;
 	default:
 	    syslog(LOG_ERR, "DBERROR: failed on commit: %s",
@@ -2657,7 +2660,7 @@ void mboxlist_getinternalstuff(const char **listfnamep,const char **newlistfname
 			       const char **basep,unsigned long * sizep)
 {
     printf("yikes! don't reconstruct me!\n");
-    exit(1);
+    abort();
 }
 
 /*
