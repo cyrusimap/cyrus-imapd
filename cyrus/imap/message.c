@@ -27,7 +27,7 @@
  */
 
 /*
- * $Id: message.c,v 1.62 1999/03/02 20:55:24 tjs Exp $
+ * $Id: message.c,v 1.63 1999/03/02 20:57:07 tjs Exp $
  */
 
 #ifdef HAVE_UNISTD_H
@@ -42,6 +42,7 @@
 #include <sys/uio.h>
 #include <sys/stat.h>
 #include <netinet/in.h>
+#include <stdlib.h>
 
 #include "sysexits.h"
 #include "imap_err.h"
@@ -53,6 +54,7 @@
 #include "charset.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "config.h"
 
 /* Message being parsed */
 struct msg {
