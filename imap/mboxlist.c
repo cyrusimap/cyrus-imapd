@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.178 2002/03/29 00:03:55 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.179 2002/04/01 17:52:50 rjs3 Exp $
  */
 
 #include <config.h>
@@ -964,8 +964,11 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     /* Check ability to delete old mailbox */
     if (!strcmp(oldname, newname) && !(mbtype & MBTYPE_REMOTE)) {
 	/* Attempt to move mailbox across partition */
-	if (!isadmin || !partition) {	  
-	    r = IMAP_MAILBOX_EXISTS;
+	if (!isadmin) {
+	    r = IMAP_PERMISSION_DENIED;
+	    goto done;
+	} else if (!partition) {	  
+	    r = IMAP_PARTITION_UNKNOWN;
 	    goto done;
 	}
 
