@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: user.c,v 1.5 2001/11/19 21:32:45 leg Exp $
+ * $Id: user.c,v 1.6 2002/01/08 21:15:38 leg Exp $
  */
 
 #include <config.h>
@@ -123,8 +123,12 @@ int user_delete(char *user, char *userid, struct auth_state *authstate)
     /* delete quotas */
     user_deletequotas(user);
 
+#if 0
+    /* deleting all references to the user is too slow right now */
+
     /* delete ACLs - we're using the internal names here */
     mboxlist_findall(NULL, pat, 1, userid, authstate, user_deleteacl, user);
+#endif
 
     return 0;
 }
