@@ -1,5 +1,5 @@
 /* +++Date last modified: 05-Jul-1997 */
-/* $Id: hash.h,v 1.6 2002/06/18 16:40:22 rjs3 Exp $ */
+/* $Id: hash.h,v 1.7 2003/08/06 19:14:17 rjs3 Exp $ */
 
 #ifndef HASH__H
 #define HASH__H
@@ -56,7 +56,7 @@ hash_table *construct_hash_table(hash_table *table, size_t size,
 ** associated data.
 */
 
-void *hash_insert(char *key,void *data,hash_table *table);
+void *hash_insert(const char *key,void *data,hash_table *table);
 
 /*
 ** Returns a pointer to the data associated with a key.  If the key has
