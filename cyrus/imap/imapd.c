@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.336 2002/01/30 19:57:14 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.337 2002/01/31 19:55:21 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -700,7 +700,7 @@ cmdloop()
 		syslog(LOG_WARNING, "%s, closing connection", err);
 		prot_printf(imapd_out, "* BYE %s\r\n", err);
 	    }
-	    shut_down(0);
+	    return;
 	}
 	if (c != ' ' || !imparse_isatom(tag.s) || (tag.s[0] == '*' && !tag.s[1])) {
 	    prot_printf(imapd_out, "* BAD Invalid tag\r\n");
