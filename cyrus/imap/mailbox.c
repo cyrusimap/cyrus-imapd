@@ -422,7 +422,8 @@ struct mailbox *mailbox;
     mailbox->pop3_last_login = ntohl(*((bit32 *)(buf+OFFSET_POP3_LAST_LOGIN)));
     mailbox->uidvalidity = ntohl(*((bit32 *)(buf+OFFSET_UIDVALIDITY)));
 
-    if (!reconstructmode && (mailbox->minor_version < MAILBOX_MINOR_VERSION)) {
+    if (!mailbox_doing_reconstruct &&
+	(mailbox->minor_version < MAILBOX_MINOR_VERSION)) {
 	return IMAP_MAILBOX_BADFORMAT;
     }
 
