@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.c,v 1.1.2.2 2005/02/28 20:45:16 ken3 Exp $
+ * $Id: sync_support.c,v 1.1.2.3 2005/03/01 18:04:56 ken3 Exp $
  */
 
 #include <config.h>
@@ -136,8 +136,7 @@ int sync_getline(struct protstream *in, struct buf *buf)
  *
  */
 
-int
-sync_eatlines_unsolicited(struct protstream *in, int c)
+int sync_eatlines_unsolicited(struct protstream *in, int c)
 {
     static struct buf response;   /* BSS */
     static struct buf line;       /* BSS */
@@ -171,8 +170,7 @@ sync_eatlines_unsolicited(struct protstream *in, int c)
 /*
  * Print 's' as a quoted-string or literal (but not an atom)
  */
-void
-sync_printstring(struct protstream *out, const char *s)
+void sync_printstring(struct protstream *out, const char *s)
 {
     const char *p;
     int len = 0;
@@ -195,8 +193,7 @@ sync_printstring(struct protstream *out, const char *s)
 /*
  * Print 's' as an atom, quoted-string, or literal
  */
-void
-sync_printastring(struct protstream *out, const char *s)
+void sync_printastring(struct protstream *out, const char *s)
 {
     const char *p;
     int len = 0;
@@ -226,8 +223,7 @@ sync_printastring(struct protstream *out, const char *s)
     }
 }
 
-void
-sync_flag_print(struct protstream *output, int *have_onep, char *value)
+void sync_flag_print(struct protstream *output, int *have_onep, char *value)
 {
     if (*have_onep)
         prot_putc(' ', output);
@@ -238,8 +234,8 @@ sync_flag_print(struct protstream *output, int *have_onep, char *value)
 
 /* ====================================================================== */
 
-int
-sync_parse_code(char *cmd, struct protstream *in, int eat, int *unsolicitedp)
+int sync_parse_code(char *cmd, struct protstream *in, int eat,
+		    int *unsolicitedp)
 {
     static struct buf response;   /* BSS */
     static struct buf errmsg;
@@ -291,20 +287,17 @@ sync_parse_code(char *cmd, struct protstream *in, int eat, int *unsolicitedp)
 
 /* ====================================================================== */
 
-void
-sync_flags_clear(struct sync_flags *flags)
+void sync_flags_clear(struct sync_flags *flags)
 {
     memset(flags, 0, sizeof(struct sync_flags));
 }
 
-void
-sync_flags_meta_clear(struct sync_flags_meta *meta)
+void sync_flags_meta_clear(struct sync_flags_meta *meta)
 {
     memset(meta, 0, sizeof(struct sync_flags_meta));
 }
 
-void
-sync_flags_meta_free(struct sync_flags_meta *meta)
+void sync_flags_meta_free(struct sync_flags_meta *meta)
 {
     int n;
 
@@ -314,8 +307,8 @@ sync_flags_meta_free(struct sync_flags_meta *meta)
     }
 }
 
-static void
-sync_flags_meta_from_list(struct sync_flags_meta *meta, char **flagname)
+static void sync_flags_meta_from_list(struct sync_flags_meta *meta,
+				      char **flagname)
 {
     int n;
 
@@ -329,8 +322,7 @@ sync_flags_meta_from_list(struct sync_flags_meta *meta, char **flagname)
     meta->newflags = 0;
 }
 
-void
-sync_flags_meta_to_list(struct sync_flags_meta *meta, char **flagname)
+void sync_flags_meta_to_list(struct sync_flags_meta *meta, char **flagname)
 {
     int n;
 
@@ -348,9 +340,8 @@ sync_flags_meta_to_list(struct sync_flags_meta *meta, char **flagname)
     meta->newflags = 0;
 }
 
-int
-sync_getflags(struct protstream *input,
-              struct sync_flags *flags, struct sync_flags_meta *meta)
+int sync_getflags(struct protstream *input,
+		  struct sync_flags *flags, struct sync_flags_meta *meta)
 {
     static struct buf flagtoken;            /* Relies on zeroed BSS */
     int inlist = 0;
@@ -425,9 +416,10 @@ sync_getflags(struct protstream *input,
 
 /* sync_msg stuff */
 
-struct sync_msg_list *
-sync_msg_list_create(char **flagname, unsigned long last_uid, 
-                     unsigned long lastseen, unsigned long last_recent_uid)
+struct sync_msg_list *sync_msg_list_create(char **flagname,
+					   unsigned long last_uid, 
+					   unsigned long lastseen,
+					   unsigned long last_recent_uid)
 {
     struct sync_msg_list *l = xzmalloc(sizeof (struct sync_msg_list));
 
@@ -446,8 +438,7 @@ sync_msg_list_create(char **flagname, unsigned long last_uid,
     return(l);
 }
 
-struct sync_msg *
-sync_msg_list_add(struct sync_msg_list *l)
+struct sync_msg *sync_msg_list_add(struct sync_msg_list *l)
 {
     struct sync_msg *result = xzmalloc(sizeof(struct sync_msg));
 
@@ -461,8 +452,7 @@ sync_msg_list_add(struct sync_msg_list *l)
     return(result);
 }
 
-void
-sync_msg_list_free(struct sync_msg_list **lp)
+void sync_msg_list_free(struct sync_msg_list **lp)
 {
     struct sync_msg_list *l = *lp;
     struct sync_msg *current, *next;
@@ -482,8 +472,7 @@ sync_msg_list_free(struct sync_msg_list **lp)
 
 /* ====================================================================== */
 
-struct sync_msgid_list *
-sync_msgid_list_create(int hash_size)
+struct sync_msgid_list *sync_msgid_list_create(int hash_size)
 {
     struct sync_msgid_list *l = xzmalloc(sizeof (struct sync_msgid_list));
 
@@ -501,8 +490,8 @@ sync_msgid_list_create(int hash_size)
     return(l);
 }
 
-struct sync_msgid *
-sync_msgid_add(struct sync_msgid_list *l, struct message_uuid *uuid)
+struct sync_msgid *sync_msgid_add(struct sync_msgid_list *l,
+				  struct message_uuid *uuid)
 {
     struct sync_msgid *result;
     int offset;
@@ -528,8 +517,7 @@ sync_msgid_add(struct sync_msgid_list *l, struct message_uuid *uuid)
     return(result);
 }
 
-void
-sync_msgid_list_free(struct sync_msgid_list **lp)
+void sync_msgid_list_free(struct sync_msgid_list **lp)
 {
     struct sync_msgid_list *l = *lp;
     struct sync_msgid *current, *next;
@@ -546,8 +534,8 @@ sync_msgid_list_free(struct sync_msgid_list **lp)
     *lp = NULL;
 }
 
-struct sync_msgid *
-sync_msgid_lookup(struct sync_msgid_list *l, struct message_uuid *uuid)
+struct sync_msgid *sync_msgid_lookup(struct sync_msgid_list *l,
+				     struct message_uuid *uuid)
 {
     int offset = message_uuid_hash(uuid, l->hash_size);
     struct sync_msgid *msgid;
@@ -564,8 +552,7 @@ sync_msgid_lookup(struct sync_msgid_list *l, struct message_uuid *uuid)
 
 /* ====================================================================== */
 
-struct sync_folder_list *
-sync_folder_list_create(void)
+struct sync_folder_list *sync_folder_list_create(void)
 {
     struct sync_folder_list *l = xzmalloc(sizeof (struct sync_folder_list));
 
@@ -576,9 +563,8 @@ sync_folder_list_create(void)
     return(l);
 }
 
-struct sync_folder *
-sync_folder_list_add(struct sync_folder_list *l,
-                     char *id, char *name, char *acl)
+struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
+					 char *id, char *name, char *acl)
 {
     struct sync_folder *result = xzmalloc(sizeof(struct sync_folder));
 
@@ -600,8 +586,7 @@ sync_folder_list_add(struct sync_folder_list *l,
     return(result);
 }
 
-struct sync_folder *
-sync_folder_lookup(struct sync_folder_list *l, char *id)
+struct sync_folder *sync_folder_lookup(struct sync_folder_list *l, char *id)
 {
     struct sync_folder *p;
 
@@ -612,8 +597,8 @@ sync_folder_lookup(struct sync_folder_list *l, char *id)
     return(NULL);
 }
 
-struct sync_folder *
-sync_folder_lookup_byname(struct sync_folder_list *l, char *name)
+struct sync_folder *sync_folder_lookup_byname(struct sync_folder_list *l,
+					      char *name)
 {
     struct sync_folder *p;
 
@@ -624,8 +609,7 @@ sync_folder_lookup_byname(struct sync_folder_list *l, char *name)
     return(NULL);
 }
 
-int
-sync_folder_mark(struct sync_folder_list *l, char *id)
+int sync_folder_mark(struct sync_folder_list *l, char *id)
 {
     struct sync_folder *p;
 
@@ -638,8 +622,7 @@ sync_folder_mark(struct sync_folder_list *l, char *id)
     return(0);
 }
 
-void
-sync_folder_list_free(struct sync_folder_list **lp)
+void sync_folder_list_free(struct sync_folder_list **lp)
 {
     struct sync_folder_list *l = *lp;
     struct sync_folder *current, *next;
@@ -664,8 +647,7 @@ sync_folder_list_free(struct sync_folder_list **lp)
 
 /* ====================================================================== */
 
-struct sync_rename_list *
-sync_rename_list_create(void)
+struct sync_rename_list *sync_rename_list_create(void)
 {
     struct sync_rename_list *l = xzmalloc(sizeof (struct sync_rename_list));
 
@@ -677,9 +659,9 @@ sync_rename_list_create(void)
     return(l);
 }
 
-struct sync_rename_item *
-sync_rename_list_add(struct sync_rename_list *l,
-                     char *id, char *oldname, char *newname)
+struct sync_rename_item *sync_rename_list_add(struct sync_rename_list *l,
+					      char *id, char *oldname,
+					      char *newname)
 {
     struct sync_rename_item *result
         = xzmalloc(sizeof(struct sync_rename_item));
@@ -700,8 +682,8 @@ sync_rename_list_add(struct sync_rename_list *l,
     return(result);
 }
 
-struct sync_rename_item *
-sync_rename_lookup(struct sync_rename_list *l, char *oldname)
+struct sync_rename_item *sync_rename_lookup(struct sync_rename_list *l,
+					    char *oldname)
 {
     struct sync_rename_item *p;
 
@@ -712,8 +694,7 @@ sync_rename_lookup(struct sync_rename_list *l, char *oldname)
     return(NULL);
 }
 
-void
-sync_rename_list_free(struct sync_rename_list **lp)
+void sync_rename_list_free(struct sync_rename_list **lp)
 {
     struct sync_rename_list *l = *lp;
     struct sync_rename_item *current, *next;
@@ -736,8 +717,7 @@ sync_rename_list_free(struct sync_rename_list **lp)
 
 /* ====================================================================== */
 
-struct sync_user_list *
-sync_user_list_create(void)
+struct sync_user_list *sync_user_list_create(void)
 {
     struct sync_user_list *l = xzmalloc(sizeof (struct sync_user_list));
 
@@ -748,8 +728,7 @@ sync_user_list_create(void)
     return(l);
 }
 
-struct sync_user *
-sync_user_list_add(struct sync_user_list *l, char *userid)
+struct sync_user *sync_user_list_add(struct sync_user_list *l, char *userid)
 {
     struct sync_user *result = xzmalloc(sizeof(struct sync_user));
 
@@ -767,8 +746,7 @@ sync_user_list_add(struct sync_user_list *l, char *userid)
     return(result);
 }
 
-struct sync_user *
-sync_user_list_lookup(struct sync_user_list *l, char *userid)
+struct sync_user *sync_user_list_lookup(struct sync_user_list *l, char *userid)
 {
     struct sync_user *p;
 
@@ -780,8 +758,7 @@ sync_user_list_lookup(struct sync_user_list *l, char *userid)
 }
 
 
-void
-sync_user_list_free(struct sync_user_list **lp)
+void sync_user_list_free(struct sync_user_list **lp)
 {
     struct sync_user_list *l = *lp;
     struct sync_user *current, *next;
@@ -804,8 +781,7 @@ sync_user_list_free(struct sync_user_list **lp)
 
 /* ====================================================================== */
 
-struct sync_message_list *
-sync_message_list_create(int hash_size, int file_max)
+struct sync_message_list *sync_message_list_create(int hash_size, int file_max)
 {
     struct sync_message_list *l = xzmalloc(sizeof (struct sync_message_list));
     const char *sync_dir;
@@ -853,8 +829,7 @@ sync_message_list_create(int hash_size, int file_max)
     return(l);
 }
 
-void
-sync_message_list_cache(struct sync_message_list *l, char *entry, int size)
+void sync_message_list_cache(struct sync_message_list *l, char *entry, int size)
 {
     if ((l->cache_buffer_size + size) > l->cache_buffer_alloc) {
         if (size > l->cache_buffer_alloc)
@@ -868,8 +843,7 @@ sync_message_list_cache(struct sync_message_list *l, char *entry, int size)
     l->cache_buffer_size += size;
 }
 
-int
-sync_message_list_cache_flush(struct sync_message_list *l)
+int sync_message_list_cache_flush(struct sync_message_list *l)
 {
     int n;
 
@@ -890,14 +864,12 @@ sync_message_list_cache_flush(struct sync_message_list *l)
     return(0);
 }
 
-unsigned long
-sync_message_list_cache_offset(struct sync_message_list *l)
+unsigned long sync_message_list_cache_offset(struct sync_message_list *l)
 {
     return(lseek(l->cache_fd, 0, SEEK_CUR) + l->cache_buffer_size);
 }
 
-char *
-sync_message_next_path(struct sync_message_list *l)
+char *sync_message_next_path(struct sync_message_list *l)
 {
     static char result[MAX_MAILBOX_PATH+1];
 
@@ -906,8 +878,8 @@ sync_message_next_path(struct sync_message_list *l)
     return(result);
 }
 
-struct sync_message *
-sync_message_add(struct sync_message_list *l, struct message_uuid *uuid)
+struct sync_message *sync_message_add(struct sync_message_list *l,
+				      struct message_uuid *uuid)
 {
     struct sync_message *result;
     int offset;
@@ -939,8 +911,7 @@ sync_message_add(struct sync_message_list *l, struct message_uuid *uuid)
     return(result);
 }
 
-void
-sync_message_fsync(struct sync_message_list *l)
+void sync_message_fsync(struct sync_message_list *l)
 {
     int i;
 
@@ -957,8 +928,8 @@ sync_message_fsync(struct sync_message_list *l)
     l->file_count = 0;
 }
 
-FILE *
-sync_message_open(struct sync_message_list *l, struct sync_message *message)
+FILE *sync_message_open(struct sync_message_list *l,
+			struct sync_message *message)
 {
     FILE *file;
 
@@ -977,8 +948,7 @@ sync_message_open(struct sync_message_list *l, struct sync_message *message)
     return(file);
 }
 
-void
-sync_message_list_free(struct sync_message_list **lp)
+void sync_message_list_free(struct sync_message_list **lp)
 {
     struct sync_message_list *l = *lp;
     struct sync_message *current, *next;
@@ -1008,8 +978,8 @@ sync_message_list_free(struct sync_message_list **lp)
     *lp = NULL;
 }
 
-struct sync_message *
-sync_message_find(struct sync_message_list *l, struct message_uuid *uuid)
+struct sync_message *sync_message_find(struct sync_message_list *l,
+				       struct message_uuid *uuid)
 {
     struct sync_message *current;
     int offset = message_uuid_hash(uuid, l->hash_size);
@@ -1024,17 +994,16 @@ sync_message_find(struct sync_message_list *l, struct message_uuid *uuid)
     return(NULL);
 }
 
-int
-sync_message_list_need_restart(struct sync_message_list *l)
+int sync_message_list_need_restart(struct sync_message_list *l)
 {
     return(lseek(l->cache_fd, 0, SEEK_CUR) >= SYNC_MESSAGE_LIST_MAX_CACHE);
 }
 
 /* ====================================================================== */
 
-static int
-sync_getliteral_size(struct protstream *input, struct protstream *output,
-                     unsigned long *sizep)
+static int sync_getliteral_size(struct protstream *input,
+				struct protstream *output,
+				unsigned long *sizep)
 {
     static struct buf arg;            /* Relies on zeroed BSS */
     int   size     = 0;
@@ -1072,9 +1041,8 @@ sync_getliteral_size(struct protstream *input, struct protstream *output,
     return(0);
 }
 
-int
-sync_getcache(struct protstream *input, struct protstream *output,
-              struct sync_message_list *list, struct sync_message *message)
+int sync_getcache(struct protstream *input, struct protstream *output,
+		  struct sync_message_list *list, struct sync_message *message)
 {
     static char          *cache_entry = NULL;
     static unsigned long  max_cache_size  = 0;
@@ -1111,9 +1079,9 @@ sync_getcache(struct protstream *input, struct protstream *output,
     return(0);
 }
 
-int
-sync_getmessage(struct protstream *input, struct protstream *output,
-                struct sync_message_list *list, struct sync_message *message)
+int sync_getmessage(struct protstream *input, struct protstream *output,
+		    struct sync_message_list *list,
+		    struct sync_message *message)
 {
     FILE *file;
     int   c, r = 0;
@@ -1139,10 +1107,9 @@ sync_getmessage(struct protstream *input, struct protstream *output,
     return(r);
 }
 
-int
-sync_getsimple(struct protstream *input, struct protstream *output,
-               struct sync_message_list *list,
-               struct sync_message *message)
+int sync_getsimple(struct protstream *input, struct protstream *output,
+		   struct sync_message_list *list,
+		   struct sync_message *message)
 {
     FILE         *file;
     int           c, r = 0;
@@ -1213,8 +1180,8 @@ sync_getsimple(struct protstream *input, struct protstream *output,
 
 /* ====================================================================== */
 
-struct sync_upload_list *
-sync_upload_list_create(unsigned long new_last_uid, char **flagname)
+struct sync_upload_list *sync_upload_list_create(unsigned long new_last_uid,
+						 char **flagname)
 {
     struct sync_upload_list *l = xzmalloc(sizeof (struct sync_upload_list));
 
@@ -1229,8 +1196,7 @@ sync_upload_list_create(unsigned long new_last_uid, char **flagname)
     return(l);
 }
 
-struct sync_upload_item *
-sync_upload_list_add(struct sync_upload_list *l)
+struct sync_upload_item *sync_upload_list_add(struct sync_upload_list *l)
 {
     struct sync_upload_item *result
         = xzmalloc(sizeof(struct sync_upload_item));
@@ -1245,8 +1211,7 @@ sync_upload_list_add(struct sync_upload_list *l)
     return(result);
 }
 
-void
-sync_upload_list_free(struct sync_upload_list **lp)
+void sync_upload_list_free(struct sync_upload_list **lp)
 {
     struct sync_upload_list *l = *lp;
     struct sync_upload_item *current, *next;
@@ -1264,8 +1229,7 @@ sync_upload_list_free(struct sync_upload_list **lp)
 
 /* ====================================================================== */
 
-struct sync_flag_list *
-sync_flag_list_create(char **flagname)
+struct sync_flag_list *sync_flag_list_create(char **flagname)
 {
     struct sync_flag_list *l = xzmalloc(sizeof (struct sync_flag_list));
 
@@ -1278,8 +1242,7 @@ sync_flag_list_create(char **flagname)
     return(l);
 }
 
-struct sync_flag_item *
-sync_flag_list_add(struct sync_flag_list *l)
+struct sync_flag_item *sync_flag_list_add(struct sync_flag_list *l)
 {
     struct sync_flag_item *result = xzmalloc(sizeof(struct sync_flag_item));
 
@@ -1292,8 +1255,7 @@ sync_flag_list_add(struct sync_flag_list *l)
     return(result);
 }
 
-void
-sync_flag_list_free(struct sync_flag_list **lp)
+void sync_flag_list_free(struct sync_flag_list **lp)
 {
     struct sync_flag_list *l = *lp;
     struct sync_flag_item *current, *next;
@@ -1311,8 +1273,7 @@ sync_flag_list_free(struct sync_flag_list **lp)
 
 /* ====================================================================== */
 
-struct sync_sieve_list *
-sync_sieve_list_create()
+struct sync_sieve_list *sync_sieve_list_create()
 {
     struct sync_sieve_list *l = xzmalloc(sizeof (struct sync_sieve_list));
 
@@ -1322,9 +1283,8 @@ sync_sieve_list_create()
     return(l);
 }
 
-void
-sync_sieve_list_add(struct sync_sieve_list *l,
-                    char *name, time_t last_update, int active)
+void sync_sieve_list_add(struct sync_sieve_list *l,
+			 char *name, time_t last_update, int active)
 {
     struct sync_sieve_item *item = xzmalloc(sizeof(struct sync_sieve_item));
 
@@ -1341,8 +1301,7 @@ sync_sieve_list_add(struct sync_sieve_list *l,
     l->count++;
 }
 
-struct sync_sieve_item *
-sync_sieve_lookup(struct sync_sieve_list *l, char *name)
+struct sync_sieve_item *sync_sieve_lookup(struct sync_sieve_list *l, char *name)
 {
     struct sync_sieve_item *p;
 
@@ -1353,8 +1312,7 @@ sync_sieve_lookup(struct sync_sieve_list *l, char *name)
     return(NULL);
 }
 
-void
-sync_sieve_list_set_active(struct sync_sieve_list *l, char *name)
+void sync_sieve_list_set_active(struct sync_sieve_list *l, char *name)
 {
     struct sync_sieve_item *item;
 
@@ -1366,8 +1324,7 @@ sync_sieve_list_set_active(struct sync_sieve_list *l, char *name)
     }
 }
 
-void
-sync_sieve_list_free(struct sync_sieve_list **lp)
+void sync_sieve_list_free(struct sync_sieve_list **lp)
 {
     struct sync_sieve_list *l = *lp;
     struct sync_sieve_item *current, *next;
@@ -1384,8 +1341,7 @@ sync_sieve_list_free(struct sync_sieve_list **lp)
     *lp = NULL;
 }
 
-struct sync_sieve_list *
-sync_sieve_list_generate(char *userid)
+struct sync_sieve_list *sync_sieve_list_generate(char *userid)
 {
     struct sync_sieve_list *list = sync_sieve_list_create();
     char sieve_path[2048];   /* Follows existing code... */
@@ -1437,8 +1393,7 @@ sync_sieve_list_generate(char *userid)
     return(list);
 }
 
-char *
-sync_sieve_read(char *userid, char *name, unsigned long *sizep)
+char *sync_sieve_read(char *userid, char *name, unsigned long *sizep)
 {
     char sieve_path[2048];
     char filename[2048];
@@ -1479,9 +1434,8 @@ sync_sieve_read(char *userid, char *name, unsigned long *sizep)
     return(result);
 }
 
-int
-sync_sieve_upload(struct protstream *input, struct protstream *output,
-                  char *userid, char *name, unsigned long last_update)
+int sync_sieve_upload(struct protstream *input, struct protstream *output,
+		      char *userid, char *name, unsigned long last_update)
 {
     char sieve_path[2048];
     char tmpname[2048];
@@ -1542,8 +1496,7 @@ sync_sieve_upload(struct protstream *input, struct protstream *output,
 }
 
 
-int
-sync_sieve_activate(char *userid, char *name)
+int sync_sieve_activate(char *userid, char *name)
 {
     char sieve_path[2048];
     char target[2048];
@@ -1562,8 +1515,7 @@ sync_sieve_activate(char *userid, char *name)
     return(0);
 }
 
-int
-sync_sieve_deactivate(char *userid)
+int sync_sieve_deactivate(char *userid)
 {
     char sieve_path[2048];
     char active[2048];
@@ -1577,8 +1529,7 @@ sync_sieve_deactivate(char *userid)
     return(0);
 }
 
-int
-sync_sieve_delete(char *userid, char *name)
+int sync_sieve_delete(char *userid, char *name)
 {
     char sieve_path[2048];
     char filename[2048];
@@ -1633,8 +1584,7 @@ sync_sieve_delete(char *userid, char *name)
 
 /* ====================================================================== */
 
-struct sync_action_list *
-sync_action_list_create(void)
+struct sync_action_list *sync_action_list_create(void)
 {
     struct sync_action_list *l = xzmalloc(sizeof (struct sync_action_list));
 
@@ -1645,8 +1595,7 @@ sync_action_list_create(void)
     return(l);
 }
 
-void
-sync_action_list_add(struct sync_action_list *l, char *name, char *user)
+void sync_action_list_add(struct sync_action_list *l, char *name, char *user)
 {
     struct sync_action *current;
 
@@ -1682,8 +1631,7 @@ sync_action_list_add(struct sync_action_list *l, char *name, char *user)
 
 }
 
-void
-sync_action_list_free(struct sync_action_list **lp)
+void sync_action_list_free(struct sync_action_list **lp)
 {
     struct sync_action_list *l = *lp;
     struct sync_action *current, *next;
@@ -1704,14 +1652,12 @@ sync_action_list_free(struct sync_action_list **lp)
 
 /* ====================================================================== */
 
-void
-sync_user_lock_reset(struct sync_user_lock *user_lock)
+void sync_user_lock_reset(struct sync_user_lock *user_lock)
 {
     user_lock->fd = -1;
 }
 
-int
-sync_user_unlock(struct sync_user_lock *user_lock)
+int sync_user_unlock(struct sync_user_lock *user_lock)
 {
     if (user_lock->fd >= 0) {
         lock_unlock(user_lock->fd);
@@ -1721,8 +1667,7 @@ sync_user_unlock(struct sync_user_lock *user_lock)
     return(0);
 }
 
-int
-sync_user_lock(struct sync_user_lock *user_lock, char *account)
+int sync_user_lock(struct sync_user_lock *user_lock, char *account)
 {
     char buf[MAX_MAILBOX_PATH];
     const char *dir = config_getstring(IMAPOPT_SYNC_DIR);
