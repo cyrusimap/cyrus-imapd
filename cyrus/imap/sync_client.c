@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.8 2005/03/04 20:51:08 ken3 Exp $
+ * $Id: sync_client.c,v 1.1.2.9 2005/03/13 00:41:55 ken3 Exp $
  */
 
 #include <config.h>
@@ -2974,7 +2974,7 @@ int main(int argc, char **argv)
         (user     && (interact || repeat         || mailbox || sieve)) ||
         (mailbox  && (interact || repeat || user)) ||
         (sieve    && (interact || repeat || user)))
-        fatal("Mutially exclusive options defined", EC_USAGE);
+        fatal("Mutually exclusive options defined", EC_USAGE);
 
     cyrus_init(alt_config, "sync_client", 0);
 
