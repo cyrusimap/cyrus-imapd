@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.26 2000/12/22 20:47:10 leg Exp $ */
+/* $Id: master.c,v 1.27 2000/12/27 19:18:10 ken3 Exp $ */
 
 #include <config.h>
 
@@ -776,7 +776,7 @@ void add_service(const char *name, struct entry *e, void *rock)
 		 name);
 	fatal(buf, EX_CONFIG);
     }
-    if (!(allocservices % 5)) {
+    if (nservices == allocservices) {
 	Services = realloc(Services, 
 			   (allocservices+=5) * sizeof(struct service));
 	if (!Services) fatal("out of memory", EX_UNAVAILABLE);
