@@ -227,14 +227,22 @@ int maycreate;
 
     if (thisquota == -1) {
 	if (mailbox.quota.root) {
-	    abort(); /* XXX */
+	    r = fixquota_fixroot(&mailbox, (char *)0);
+	    if (r) {
+		mailbox_close(&mailbox);
+		return r;
+	    }
 	}
 	return 0;
     }
 
     if (!mailbox.quota.root ||
 	strcmp(mailbox.quota.root, quota[thisquota].quota.root) != 0) {
-	abort(); /* XXX */
+	r = fixquota_fixroot(&mailbox, quota[thisquota].quota.root);
+	if (r) {
+	    mailbox_close(&mailbox);
+	    return r;
+	}
     }
     
     if (!quota[thisquota].quota.file) {
@@ -257,6 +265,51 @@ int maycreate;
     return 0;
 }
 	
+int
+fixquota_fixroot(mailbox, root)
+struct mailbox *mailbox;
+char *root;
+{
+    int i, r;
+
+    /*
+     * Locking order is to lock header before quota.  We therefore
+     * unlock all the quota roots we have locked in order to avoid a
+     * deadlock.  As releasing these locks can cause the quota use
+     * recalculation to screw up, we set the global variable 'redofix'
+     * to cause the quota use recalculation to be redone.
+     *
+     * We could optimize this by trying to get a nonblocking lock on
+     * the header and unlocking all the quota roots only when that fails.
+     */
+    for (i = firstquota; i < quota_num; i++) {
+	if (quota[i].quota.file) {
+	    fclose(quota[i].quota.file);
+	    quota[i].quota.file = 0;
+	}
+    }
+    redofix = 1;
+
+    r = mailbox_lock_header(mailbox);
+    if (r) return r;
+
+    printf("%s: quota root %s --> %s\n", mailbox->name,
+	   mailbox->quota.root ? mailbox->quota.root : "(none)",
+	   root ? root : "(none)");
+
+    if (mailbox->quota.root) free(mailbox->quota.root);
+    if (root) {
+	mailbox->quota.root = strsave(root);
+    }
+    else {
+	mailbox->quota.root = 0;
+    }
+
+    r = mailbox_write_header(mailbox);
+    (void) mailbox_unlock_header(mailbox);
+    return r;
+}
+
 /*
  * Finish fixing up a quota root
  */
@@ -333,11 +386,6 @@ fixquota()
 		fclose(listfile);
 		return r;
 	    }
-	}
-
-	if (redofix) {
-	    /* Allow time for any pending EXPUNGE operations to complete */
-	    sleep(60);
 	}
     }
     
