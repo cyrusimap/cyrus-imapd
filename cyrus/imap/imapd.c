@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.420 2003/01/08 17:40:16 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.421 2003/01/09 21:32:45 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -133,6 +133,11 @@ static const char *monthname[] = {
     "jul", "aug", "sep", "oct", "nov", "dec"
 };
 
+static const int max_monthdays[] = {
+    31, 29, 31, 30, 31, 30,
+    31, 31, 30, 31, 30, 31
+};
+
 void shutdown_file(int fd);
 void motd_file(int fd);
 void shut_down(int code);
@@ -147,8 +152,8 @@ void cmd_append(char *tag, char *name);
 void cmd_select(char *tag, char *cmd, char *name);
 void cmd_close(char *tag);
 void cmd_fetch(char *tag, char *sequence, int usinguid);
-void cmd_partial(char *tag, char *msgno, char *data,
-		 char *start, char *count);
+void cmd_partial(const char *tag, const char *msgno, const char *data,
+		 const char *start, const char *count);
 void cmd_store(char *tag, char *sequence, char *operation, int usinguid);
 void cmd_search(char *tag, int usinguid);
 void cmd_sort(char *tag, int usinguid);
@@ -1358,7 +1363,6 @@ void cmdloop()
 		if(c != '\n') goto extraargs;
 		cmd_reconstruct(tag.s, arg1.s, recursive);
 
-		/* xxx needed? */
 		/* snmp_increment(RECONSTRUCT_COUNT, 1); */
 	    } 
 	    else if (!strcmp(cmd.s, "Rlist")) {
@@ -2991,16 +2995,13 @@ int usinguid;
  * Perform a PARTIAL command
  */
 void
-cmd_partial(tag, msgno, data, start, count)
-char *tag;
-char *msgno;
-char *data;
-char *start;
-char *count;
+cmd_partial(const char *tag, const char *msgno, const char *data,
+	    const char *start, const char *count)
 {
     char *p;
     struct fetchargs fetchargs;
     char *section;
+    int prev;
     int fetchedsomething;
 
     memset(&fetchargs, 0, sizeof(struct fetchargs));
@@ -3058,8 +3059,12 @@ char *count;
 
     for (p = start; *p; p++) {
 	if (!isdigit((int) *p)) break;
+	prev = fetchargs.start_octet;
 	fetchargs.start_octet = fetchargs.start_octet*10 + *p - '0';
-        /* xxx overflow */
+	if(fetchargs.start_octet < prev) {
+	    fetchargs.start_octet = 0;
+	    break;
+	}
     }
     if (*p || !fetchargs.start_octet) {
 	prot_printf(imapd_out, "%s BAD Invalid starting octet\r\n", tag);
@@ -3069,10 +3074,14 @@ char *count;
     
     for (p = count; *p; p++) {
 	if (!isdigit((int) *p)) break;
+	prev = fetchargs.octet_count;
 	fetchargs.octet_count = fetchargs.octet_count*10 + *p - '0';
-        /* xxx overflow */
+	if(fetchargs.octet_count < prev) {
+	    prev = -1;
+	    break;
+	}
     }
-    if (*p || !*count) {
+    if (*p || !*count || prev == -1) {
 	prot_printf(imapd_out, "%s BAD Invalid octet count\r\n", tag);
 	freestrlist(fetchargs.bodysections);
 	return;
@@ -6508,7 +6517,8 @@ time_t *start, *end;
     if (isdigit(c)) {
 	tm.tm_mday = tm.tm_mday * 10 + c - '0';
 	c = prot_getc(imapd_in);
-        /* xxx overflow */
+	if(tm.tm_mday <= 0 || tm.tm_mday > 31)
+	    goto baddate;
     }
     
     if (c != '-') goto baddate;
@@ -6531,6 +6541,8 @@ time_t *start, *end;
 	if (!strcmp(month, monthname[tm.tm_mon])) break;
     }
     if (tm.tm_mon == 12) goto baddate;
+    /* xxx this doesn't quite work in leap years */
+    if (tm.tm_mday > max_monthdays[tm.tm_mon]) goto baddate;
 
     if (c != '-') goto baddate;
     c = prot_getc(imapd_in);
