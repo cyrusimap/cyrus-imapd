@@ -44,7 +44,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 # Create newsgroups on imap server
 # Based on the make_fromactive.pl script by Tim Martin
 #
-# $Id $
+# $Id: mknewsgroups,v 1.1.2.2 2003/03/12 20:19:33 ken3 Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
