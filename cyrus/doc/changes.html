@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.51 2002/11/06 20:45:12 rjs3 Exp $ -->
+<!-- $Id: changes.html,v 1.52 2002/11/11 22:12:45 rjs3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -15,6 +15,15 @@
 <li>more portable use of errno throughout
 <li>timsieved now does telemetry logging
 <li>libcyrus.a no longer supplies fs_get() and fs_give()
+<li>fixed use of errno on some platforms
+<li>fixed a bug in quota tracking across RENAMEs
+<li>fixed an off-by-one error in the prot layer
+<li>add support for character sets: iso-8859-15 and windows-1252
+<li>Add the "at" method of running EVENTs to master, also has the side
+effect of events running every period minutes, intead of every period +
+run time minutes.
+<li>timsieved version now tracks with IMAPd version
+<li>minor documentation updates
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.1.8</h2>
@@ -1685,7 +1694,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2002/11/06 20:45:12 $ <br />
+last modified: $Date: 2002/11/11 22:12:45 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
