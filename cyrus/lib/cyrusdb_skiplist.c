@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.9 2002/01/24 23:10:46 leg Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.10 2002/01/28 17:52:01 leg Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -443,13 +443,14 @@ static int dispose_db(struct db *db)
     return 0;
 }
 
-static int write_lock(struct db *db)
+static int write_lock(struct db *db, const char *altname)
 {
     struct stat sbuf;
     const char *lockfailaction;
+    const char *fname = altname ? altname : db->fname;
 
-    if (lock_reopen(db->fd, db->fname, &sbuf, &lockfailaction) < 0) {
-	syslog(LOG_ERR, "IOERROR: %s %s: %m", lockfailaction, db->fname);
+    if (lock_reopen(db->fd, fname, &sbuf, &lockfailaction) < 0) {
+	syslog(LOG_ERR, "IOERROR: %s %s: %m", lockfailaction, fname);
 	return CYRUSDB_IOERROR;
     }
     db->map_size = sbuf.st_size;
@@ -457,7 +458,7 @@ static int write_lock(struct db *db)
 	map_free(&db->map_base, &db->map_len);
     }
     map_refresh(db->fd, 0, &db->map_base, &db->map_len, sbuf.st_size,
-		db->fname, 0);
+		fname, 0);
     
     return 0;
 }
@@ -520,7 +521,7 @@ static int myopen(const char *fname, struct db **ret)
 
     if (new) {
 	/* lock the db */
-	if (write_lock(db) < 0) {
+	if (write_lock(db, NULL) < 0) {
 	    dispose_db(db);
 	    return CYRUSDB_IOERROR;
 	}
@@ -672,7 +673,7 @@ int myfetch(struct db *db,
 	tp = NULL;
     } else if (!*mytid) {
 	/* grab a r/w lock */
-	if ((r = write_lock(db)) < 0) {
+	if ((r = write_lock(db, NULL)) < 0) {
 	    return r;
 	}
 
@@ -752,7 +753,7 @@ int myforeach(struct db *db,
 	tp = NULL;
     } else if (!*tid) {
 	/* grab a r/w lock */
-	if ((r = write_lock(db)) < 0) {
+	if ((r = write_lock(db, NULL)) < 0) {
 	    return r;
 	}
 
@@ -847,7 +848,7 @@ int mystore(struct db *db,
 
     if (!tid || !*tid) {
 	/* grab a r/w lock */
-	if ((r = write_lock(db)) < 0) {
+	if ((r = write_lock(db, NULL)) < 0) {
 	    return r;
 	}
 
@@ -1001,7 +1002,7 @@ int mydelete(struct db *db,
 
     if (!tid || !*tid) {
 	/* grab a r/w lock */
-	if ((r = write_lock(db)) < 0) {
+	if ((r = write_lock(db, NULL)) < 0) {
 	    return r;
 	}
 
@@ -1214,7 +1215,7 @@ static int mycheckpoint(struct db *db, int locked)
 
     /* grab write lock (could be read but this prevents multiple checkpoints
      simultaneously) */
-    if (!locked && (r = write_lock(db)) < 0) {
+    if (!locked && (r = write_lock(db, NULL)) < 0) {
 	return r;
     }
 
@@ -1338,7 +1339,7 @@ static int mycheckpoint(struct db *db, int locked)
     
     if (!r) {
 	/* get new lock */
-	r = write_lock(db);
+	r = write_lock(db, fname);
     }
 
     /* move new file to original file name */
@@ -1454,7 +1455,7 @@ static int recovery(struct db *db)
     time_t start = time(NULL);
     int i;
 
-    if ((r = write_lock(db)) < 0) {
+    if ((r = write_lock(db, NULL)) < 0) {
 	return r;
     }
 
