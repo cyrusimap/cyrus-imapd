@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notifyd.c,v 1.4 2002/03/18 15:14:18 ken3 Exp $
+ * $Id: notifyd.c,v 1.5 2002/04/02 04:18:26 leg Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -109,7 +109,7 @@ void do_notify()
     unsigned short nopt;
     char **options = NULL;
     char *message = NULL;
-    char *reply;
+    char *reply = NULL;
     unsigned short count;
     struct iovec iov[2];
     int num_iov = 0;
@@ -126,7 +126,7 @@ void do_notify()
     if (!rc) {
 	count = ntohs(count);
 	if ((method = (char*) xmalloc(count+1)) == NULL)
-	    fatal("can not allocate method", EX_OSERR);
+	    fatal("xmalloc(): can't allocate method", EC_OSERR);
 	if (!rc) {
 	    rc = (retry_read(notifyd_in, method, count) < (int) count);
 	    method[count] = '\0';
@@ -138,7 +138,7 @@ void do_notify()
     if (!rc) {
 	count = ntohs(count);
 	if ((class = (char*) xmalloc(count+1)) == NULL)
-	    fatal("can not allocate class", EX_OSERR);
+	    fatal("xmalloc(): can't allocate class", EC_OSERR);
 	if (!rc) {
 	    rc = (retry_read(notifyd_in, class, count) < (int) count);
 	    class[count] = '\0';
@@ -150,7 +150,7 @@ void do_notify()
     if (!rc) {
 	count = ntohs(count);
 	if ((priority = (char*) xmalloc(count+1)) == NULL)
-	    fatal("can not allocate priority", EX_OSERR);
+	    fatal("xmalloc(): can't allocate priority", EC_OSERR);
 	if (!rc) {
 	    rc = (retry_read(notifyd_in, priority, count) < (int) count);
 	    priority[count] = '\0';
@@ -162,7 +162,7 @@ void do_notify()
     if (!rc) {
 	count = ntohs(count);
 	if ((user = (char*) xmalloc(count+1)) == NULL)
-	    fatal("can not allocate user", EX_OSERR);
+	    fatal("xmalloc(): can't allocate user", EC_OSERR);
 	if (!rc) {
 	    rc = (retry_read(notifyd_in, user, count) < (int) count);
 	    user[count] = '\0';
@@ -174,7 +174,7 @@ void do_notify()
     if (!rc) {
 	count = ntohs(count);
 	if ((mailbox = (char*) xmalloc(count+1)) == NULL)
-	    fatal("can not allocate mailbox", EX_OSERR);
+	    fatal("xmalloc(): can't allocate mailbox", EC_OSERR);
 	if (!rc) {
 	    rc = (retry_read(notifyd_in, mailbox, count) < (int) count);
 	    mailbox[count] = '\0';
@@ -186,14 +186,14 @@ void do_notify()
     if (!rc) {
 	nopt = ntohs(nopt);
 	if ((options = (char**) xmalloc(nopt * sizeof(char*))) == NULL)
-	    fatal("can not allocate options", EX_OSERR);
+	    fatal("xmalloc(): can't allocate options", EC_OSERR);
 
 	for (i = 0; !rc && i < nopt; i++) {
 	    rc = (retry_read(notifyd_in, &count, sizeof(count)) < (int) sizeof(count));
 	    if (!rc) {
 		count = ntohs(count);
 		if ((options[i] = (char*) xmalloc(count+1)) == NULL)
-		    fatal("can not allocate option[i]", EX_OSERR);
+		    fatal("xmalloc(): can't allocate option[i]", EC_OSERR);
 		if (!rc) {
 		    rc = (retry_read(notifyd_in, options[i], count) < (int) count);
 		    options[i][count] = '\0';
@@ -202,19 +202,23 @@ void do_notify()
 	}
     }
 
-    if (!rc)
+    if (!rc) {
 	rc = (retry_read(notifyd_in, &count, sizeof(count)) < (int) sizeof(count));
+    }
+
     if (!rc) {
 	count = ntohs(count);
 	if ((message = (char*) xmalloc(count+1)) == NULL)
-	    fatal("can not allocate message", EX_OSERR);
+	    fatal("xmalloc() failed: can't allocate message", EC_OSERR);
 	if (!rc) {
 	    rc = (retry_read(notifyd_in, message, count) < (int) count);
 	    message[count] = '\0';
 	}
     }
 
-    if (rc) syslog(LOG_ERR, "do_notify read failed: %m");
+    if (rc) {
+	syslog(LOG_ERR, "do_notify() read failed: %m");
+    }
 
     if (!*method)
 	nmethod = default_method;
@@ -229,11 +233,15 @@ void do_notify()
     syslog(LOG_DEBUG, "do_notify using method '%s'",
 	   nmethod->name ? nmethod->name: "unknown");
 
-    if (nmethod->name)
+    if (nmethod->name) {
 	reply = nmethod->notify(class, priority, user, mailbox,
 				nopt, options, message);
-    else
+    } else {
 	reply = strdup("NO unknown notification method");
+	if (!reply) {
+	    fatal("strdup failed", EC_OSERR);
+	}
+    }
 
     if (method) free(method);
     if (class) free(class);
@@ -258,6 +266,10 @@ void do_notify()
     rc = retry_writev(notifyd_out, iov, num_iov);
 
     if (rc == -1) syslog(LOG_ERR, "do_notify write failed: %m");
+
+    if (reply) {
+	free(reply);
+    }
 }
 
 
