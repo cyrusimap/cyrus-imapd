@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.285 2004/05/26 16:24:39 rjs3 Exp $
+dnl $Id: configure.in,v 1.286 2004/05/28 18:03:00 rjs3 Exp $
 dnl
 
 
@@ -822,7 +822,7 @@ case "$with_com_err" in
 	  COM_ERR_LIBS="../et/libcom_err.a"
 	  COMPILE_ET="../et/compile_et"
 	  COM_ERR_LDFLAGS=""
-	  COM_ERR_CPPFLAGS="-I\${srcdir}/../et"
+	  COM_ERR_CPPFLAGS="-I\${top_srcdir}/et"
 	  PRE_SUBDIRS="et ${PRE_SUBDIRS}"
 	  EXTRA_OUTPUT="${EXTRA_OUTPUT} et/Makefile"
 	  ;;
@@ -1012,7 +1012,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.285 2004/05/26 16:24:39 rjs3 Exp $ */
+/* $Id: configure.in,v 1.286 2004/05/28 18:03:00 rjs3 Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *

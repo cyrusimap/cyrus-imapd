@@ -40,9 +40,10 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.in,v 1.13 2004/05/26 16:01:29 rjs3 Exp $
+# $Id: Makefile.in,v 1.14 2004/05/28 18:03:07 rjs3 Exp $
 # 
 srcdir = @srcdir@
+top_srcdir = @top_srcdir@
 VPATH = @srcdir@
 
 CC = @CC@
