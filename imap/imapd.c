@@ -878,7 +878,8 @@ char *authtype;
     syslog(LOG_NOTICE, "login: %s %s %s %s", imapd_clienthost, canon_user,
 	   authtype, reply ? reply : "");
 
-    prot_printf(imapd_out, "%s OK %s\r\n", tag, reply);
+    prot_printf(imapd_out, "%s OK %s (%s)\r\n", tag, reply,
+		acte_prottostring(protlevel));
 
     if (encodefunc || decodefunc) {
 	prot_setfunc(imapd_in, decodefunc, state, 0);
