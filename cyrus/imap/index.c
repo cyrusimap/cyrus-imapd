@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.182 2002/07/24 19:30:34 rjs3 Exp $
+ * $Id: index.c,v 1.183 2002/08/15 15:59:55 ken3 Exp $
  */
 #include <config.h>
 
@@ -3491,8 +3491,8 @@ static char *find_msgid(char *str, char **rem)
     msgid = NULL;
     src = str;
 
-    /* find the start of a msgid */
-    while ((cp = src = strchr(src, '<')) != NULL) {
+    /* find the start of a msgid (don't go past the end of the header) */
+    while ((cp = src = strpbrk(src, "<\r\n")) && (*cp == '<')) {
 
 	/* see if we have (and skip) a quoted localpart */
 	if (*++cp == '\"') {
@@ -4115,7 +4115,7 @@ static void ref_prune_tree(Thread *parent)
 	    cur = prev;
 	}
 
-	/* if we have empty container with children, AND
+	/* if we have an empty container with children, AND
 	 * we're not at the root OR we only have one child,
 	 * then remove the container but promote its children to this level
 	 * (splice them into the current child list)
@@ -4445,7 +4445,7 @@ static void _index_thread_ref(unsigned *msgno_list, int nmsg,
      * - We also will need containers for references to non-existent messages.
      *   To make sure we have enough, we will take the worst case and
      *   use the sum of the number of references for all messages.
-     * - Finally, we will might need containers to group threads with the same
+     * - Finally, we will need containers to group threads with the same
      *   subject together.  To make sure we have enough, we will take the
      *   worst case which will be half of the number of messages.
      *
