@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.145 2000/11/17 17:05:57 ken3 Exp $
+ * $Id: index.c,v 1.146 2000/11/19 05:23:13 ken3 Exp $
  */
 #include <config.h>
 
@@ -182,6 +182,11 @@ typedef struct thread {
     struct thread *child;	/* first child message */
     struct thread *next;	/* next sibling message */
 } Thread;
+
+struct rootset {
+    Thread *root;
+    unsigned nroot;
+};
 
 struct thread_algorithm {
     char *alg_name;
@@ -3860,16 +3865,10 @@ static void ref_link_messages(MsgData *msgdata, Thread **newnode,
     }
 }
 
-/* Root node for all threads - all threads are children of this dummy node */
-static Thread *root;
-
-/* Number of children of the root node */
-static unsigned nroot;
-
 /*
  * Gather orphan messages under the root node.
  */
-static void ref_gather_orphans(char *key, Thread *node)
+static void ref_gather_orphans(char *key, Thread *node, struct rootset *rootset)
 {
     /* we only care about nodes without parents */
     if (!node->parent) {
@@ -3881,9 +3880,9 @@ static void ref_gather_orphans(char *key, Thread *node)
 	}
 
 	/* add this node to root's children */
-	node->next = root->child;
-	root->child = node;
-	nroot++;
+	node->next = rootset->root->child;
+	rootset->root->child = node;
+	rootset->nroot++;
     }
 }
 
@@ -4224,6 +4223,7 @@ static void _index_thread_ref(unsigned *msgno_list, int nmsg,
     int tref, nnode;
     Thread *newnode;
     struct hash_table id_table;
+    struct rootset rootset;
 
     /* Create/load the msgdata array */
     freeme = msgdata = index_msgdata_load(msgno_list, nmsg, loadcrit);
@@ -4250,11 +4250,11 @@ static void _index_thread_ref(unsigned *msgno_list, int nmsg,
      * (been there, done that).
      */
     nnode = (int) (1.5 * nmsg + 1 + tref);
-    root = (Thread *) xmalloc(nnode * sizeof(Thread));
-    memset(root, 0, nnode * sizeof(Thread));
+    rootset.root = (Thread *) xmalloc(nnode * sizeof(Thread));
+    memset(rootset.root, 0, nnode * sizeof(Thread));
 
-    newnode = root + 1;	/* set next newnode to the second
-			   one in the array (skip the root) */
+    newnode = rootset.root + 1;	/* set next newnode to the second
+				   one in the array (skip the root) */
 
     /* Step 0: create an id_table with one bucket for every possible
      * message-id and reference (nmsg + tref)
@@ -4265,32 +4265,33 @@ static void _index_thread_ref(unsigned *msgno_list, int nmsg,
     ref_link_messages(msgdata, &newnode, &id_table);
 
     /* Step 2: find the root set (gather all of the orphan messages) */
-    nroot = 0;
-    hash_enumerate(&id_table, (void (*)(char*,void*)) ref_gather_orphans);
+    rootset.nroot = 0;
+    hash_enumerate(&id_table, (void (*)(char*,void*,void*)) ref_gather_orphans,
+		   &rootset);
 
     /* discard id_table */
     free_hash_table(&id_table, NULL);
 
     /* Step 3: prune tree of empty containers - get our deposit back :^) */
-    ref_prune_tree(root);
+    ref_prune_tree(rootset.root);
 
     /* Step 4: sort the root set */
-    ref_sort_root(root);
+    ref_sort_root(rootset.root);
 
     /* Step 5: group root set by subject */
-    ref_group_subjects(root, nroot, &newnode);
+    ref_group_subjects(rootset.root, rootset.nroot, &newnode);
 
     /* Optionally search threads (to be used by REFERENCES derivatives) */
-    if (searchproc) index_thread_search(root, searchproc);
+    if (searchproc) index_thread_search(rootset.root, searchproc);
 
     /* Step 6: sort threads */
-    if (sortcrit) index_thread_sort(root, sortcrit);
+    if (sortcrit) index_thread_sort(rootset.root, sortcrit);
 
     /* Output the threaded messages */ 
-    index_thread_print(root, usinguid);
+    index_thread_print(rootset.root, usinguid);
 
     /* free the thread array */
-    free(root);
+    free(rootset.root);
 
     /* free the msgdata array */
     free(freeme);
