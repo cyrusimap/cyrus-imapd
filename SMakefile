@@ -40,7 +40,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.76 2001/12/11 06:22:26 rjs3 Exp $
+# $Id: SMakefile,v 1.77 2001/12/12 22:22:27 rjs3 Exp $
 #
 
 if test ! -x configure; then
@@ -56,10 +56,6 @@ if test ! -x configure; then
 fi
 
 MAKE=gmake
-
-# settings; we have to disable these on some platforms
-DEBUG=""
-WITHAUTH="--with-auth=krb_pts"
 
 if test "${CC-unset}" = "unset"; then
   CC=cc
@@ -127,10 +123,14 @@ if test "${WASH_CYRUS_DEBUG}" = "t"; then
   DEBUG="--enable-debug"
 fi
 
+# settings; we have to disable these on some platforms
+DEBUG=""
+WITHAUTH="--with-auth=krb_pts"
 SASL_CONFIG="--with-staticsasl=/usr/local --with-gssapi=/usr/local"
 SSL_CONFIG="--with-openssl=/usr/local/lib"]
+KRB_CONFIG="--enable-statickrb --with-krb=/usr/local"
 
-MFCOMMAND="./configure $WITHAUTH --with-inn=/usr/news --enable-experiment --enable-cmulocal --with-cyrus-group=staff --enable-thread-ref --with-ucdsnmp=/usr/local --enable-murder --enable-oldsievename $SASL_CONFIG $DEBUG"
+MFCOMMAND="./configure $WITHAUTH $KRB_CONFIG --with-inn=/usr/news --enable-experiment --enable-cmulocal --with-cyrus-group=staff --enable-thread-ref --with-ucdsnmp=/usr/local --enable-murder --enable-oldsievename $SASL_CONFIG $DEBUG"
 
 export CFLAGS CC VER LNCOMMAND LOCALDEFS LDFLAGS
 export LIBS

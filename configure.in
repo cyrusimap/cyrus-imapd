@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.207 2001/12/10 17:45:40 rjs3 Exp $
+dnl $Id: configure.in,v 1.208 2001/12/12 22:22:27 rjs3 Exp $
 dnl
 
 
@@ -438,14 +438,27 @@ dnl compile SASL, we might as well use the same checks.
 AC_ARG_WITH(krb,[  --with-krb=PATH         use Kerberos from PATH],
 	with_krb="$withval", with_krb="yes")
 
+AC_ARG_ENABLE(statickrb,
+		[  --enable-statickrb      link Kerberos statically],
+	with_statickrb="yes", with_statickrb="no")
+
 if test "$WITH_AUTH" = "krb" -o "$WITH_AUTH" = "krb_pts" ; then
   dnl In order to compile kerberos4, we need libkrb and libdes.
 
   dnl we might need -lresolv for kerberos
   AC_CHECK_LIB(resolv,res_search)
 
-  AC_CHECK_LIB(des,des_ecb_encrypt, LIBS="${LIBS} -ldes",
- AC_MSG_ERROR([The Kerberos DES library is required for Kerberos support.]))
+  if test "$with_statickrb" = "yes" -a ! -d "$with_krb"; then
+	AC_MSG_ERROR([--enable-statickrb specified but --with-krb did not specify a valid directory])
+  fi 
+
+  AC_CHECK_LIB(des,des_ecb_encrypt,
+	if test "$with_statickrb" = "yes"; then
+	    KRB_LIBS="$with_krb/lib/libdes.a"
+	else
+	    KRB_LIBS="-ldes"
+	fi,
+  AC_MSG_ERROR([The Kerberos DES library is required for Kerberos support.]))
 
   dnl if we were ambitious, we'd look more aggressively for the
   dnl krb4 install
@@ -468,9 +481,14 @@ if test "$WITH_AUTH" = "krb" -o "$WITH_AUTH" = "krb_pts" ; then
 
   if test "$with_des" != no; then
     AC_CHECK_HEADER(krb.h,
-      AC_CHECK_LIB(krb, krb_mk_priv,,
+      AC_CHECK_LIB(krb, krb_mk_priv,
+	if test "$with_statickrb" = "yes"; then
+	    KRB_LIBS="$KRB_LIBS $with_krb/lib/libkrb.a"
+	else
+	    KRB_LIBS="-lkrb"
+	fi,
                    AC_WARN(No Kerberos V4 found); krb4=no,
-		   -ldes),
+		   $KRB_LIBS),
       AC_WARN(No Kerberos V4 found); krb4=no)
   else
     AC_WARN(No DES library found for Kerberos V4 support)
@@ -483,6 +501,8 @@ if test "$WITH_AUTH" = "krb" -o "$WITH_AUTH" = "krb_pts" ; then
     AC_ERROR([Kerberos not found for authorization module])
   fi
 fi
+
+LIBS="$KRB_LIBS $LIBS"
 
 dnl
 dnl Test for OpenSSL
