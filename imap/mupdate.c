@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.32 2002/01/25 18:04:44 leg Exp $
+ * $Id: mupdate.c,v 1.33 2002/01/25 19:51:55 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1368,10 +1368,7 @@ int mupdate_synchronize(mupdate_handle *handle)
 	    if(l->t != r->t ||
 	       strcmp(l->server, r->server) ||
 	       strcmp(l->acl,r->acl)) {
-		/* Something didn't match, delete the current local entry
-		 * and replace it */
-		/* xxx can we do this in a single call? */
-		mboxlist_deletemailbox(l->mailbox, 1, "", NULL, 0);
+		/* Something didn't match, replace it */
 		mboxlist_insertremote(r->mailbox, 
 				     (r->t == SET_RESERVE ?
 				        MBTYPE_RESERVE : 0),

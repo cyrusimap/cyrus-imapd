@@ -1,6 +1,6 @@
 /* mupdate-slave.c -- cyrus murder database clients
  *
- * $Id: mupdate-slave.c,v 1.6 2002/01/25 16:45:49 rjs3 Exp $
+ * $Id: mupdate-slave.c,v 1.7 2002/01/25 19:51:55 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -143,7 +143,7 @@ void mupdate_listen(mupdate_handle *handle, int pingtimeout)
 
 void *mupdate_client_start(void *rock __attribute__((unused)))
 {
-    const char *server, *port, *num;
+    const char *server, *num;
     mupdate_handle *h = NULL;
     int connection_count = 0;
     int retries = 15;
@@ -154,8 +154,6 @@ void *mupdate_client_start(void *rock __attribute__((unused)))
     if(server == NULL) {
 	fatal("couldn't get mupdate server name", EC_UNAVAILABLE);
     }
-
-    port = config_getstring("mupdate_port",NULL);
 
     num = config_getstring("mupdate_retry_count",NULL);
     if(num && imparse_isnumber(num)) {
@@ -174,7 +172,7 @@ void *mupdate_client_start(void *rock __attribute__((unused)))
     }
     
     while(1) {
-	ret = mupdate_connect(server, port, &h, NULL);
+	ret = mupdate_connect(server, NULL, &h, NULL);
 	if(ret) {
 	    syslog(LOG_ERR,"couldn't connect to mupdate server");
 	    goto retry;

@@ -1,6 +1,6 @@
 /* mupdate.h - private mupdate header file
  *
- * $Id: mupdate.h,v 1.5 2002/01/25 16:45:49 rjs3 Exp $
+ * $Id: mupdate.h,v 1.6 2002/01/25 19:51:55 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -40,8 +40,8 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#ifndef MUPDATE_H
-#define MUPDATE_H
+#ifndef INCLUDED_MUPDATE_H
+#define INCLUDED_MUPDATE_H
 
 #include "mailbox.h"
 #include "mupdate-client.h"
@@ -112,4 +112,4 @@ int mupdate_synchronize(mupdate_handle *handle);
 void mupdate_ready(void);
 void mupdate_unready(void);
 
-#endif /* MUPDATE_H */
+#endif /* INCLUDED_MUPDATE_H */
