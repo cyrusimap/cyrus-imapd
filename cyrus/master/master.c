@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.30 2001/01/16 00:48:33 leg Exp $ */
+/* $Id: master.c,v 1.31 2001/01/29 21:53:26 leg Exp $ */
 
 #include <config.h>
 
@@ -100,7 +100,7 @@ enum {
 };
 
 static int verbose = 0;
-static int listen_queue_backlog = 10;
+static int listen_queue_backlog = 32;
 
 struct service *Services = NULL;
 int allocservices = 0;
@@ -129,6 +129,12 @@ static struct centry *ctable[child_table_size];
 static struct centry *cfreelist;
 
 void limit_fds(int);
+
+static char *mystrdup(const char *s)
+{
+    if (!s) return NULL;
+    return strdup(s);
+}
 
 void fatal(char *msg, int code)
 {
@@ -755,7 +761,7 @@ static char **tokenize(char *p)
 
 void add_start(const char *name, struct entry *e, void *rock)
 {
-    char *cmd = strdup(masterconf_getstring(e, "cmd", NULL));
+    char *cmd = mystrdup(masterconf_getstring(e, "cmd", NULL));
     char buf[256];
     char **tok;
 
@@ -773,10 +779,10 @@ void add_start(const char *name, struct entry *e, void *rock)
 
 void add_service(const char *name, struct entry *e, void *rock)
 {
-    char *cmd = strdup(masterconf_getstring(e, "cmd", NULL));
+    char *cmd = mystrdup(masterconf_getstring(e, "cmd", NULL));
     int prefork = masterconf_getint(e, "prefork", 0);
-    char *listen = strdup(masterconf_getstring(e, "listen", NULL));
-    char *proto = strdup(masterconf_getstring(e, "proto", "tcp"));
+    char *listen = mystrdup(masterconf_getstring(e, "listen", NULL));
+    char *proto = mystrdup(masterconf_getstring(e, "proto", "tcp"));
     int i;
 
     if (!cmd || !listen) {
@@ -832,7 +838,7 @@ void add_service(const char *name, struct entry *e, void *rock)
 
 void add_event(const char *name, struct entry *e, void *rock)
 {
-    char *cmd = strdup(masterconf_getstring(e, "cmd", NULL));
+    char *cmd = mystrdup(masterconf_getstring(e, "cmd", NULL));
     int period = 60 * masterconf_getint(e, "period", 0);
     struct event *evt;
 
