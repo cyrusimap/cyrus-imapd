@@ -93,10 +93,7 @@ void cmdloop()
 }
 
 
-void
-fatal(s, code)
-const char *s;
-int code;
+void fatal(const char *s, int code)
 {
     static int recurse_code = 0;
 
@@ -107,6 +104,7 @@ int code;
     recurse_code = code;
     prot_printf(sieved_out, "NO Fatal error: %s\r\n", s);
     prot_flush(sieved_out);
+    exit(1);
 }
 
 /* This creates a structure that defines the allowable
