@@ -460,6 +460,115 @@ char *userid;
 }
 
 /*
+ * Append the to 'mailbox' the index/cache entries for the netnews
+ * articles which have recently arrived.  Articles up to and including
+ * 'feeduid', as well as any existing consecutive articles after 'feeduid'
+ * are appended.
+ */
+#define COLLECTGROW 2 /* XXX 20 */
+int
+append_collectnews(mailbox, feeduid)
+struct mailbox *mailbox;
+unsigned long feeduid;
+{
+    time_t curtime, internaldate;
+    struct index_record *message_index;
+    int size_message_index;
+    static struct index_record zero_index;
+    unsigned long quota_usage = 0;
+    int msg = 0;
+    int uid = mailbox->last_uid;
+    FILE *f;
+    int r;
+    long last_cacheoffset;
+    
+    assert(mailbox->format == MAILBOX_FORMAT_NETNEWS);
+
+    if (feeduid < mailbox->last_uid) feeduid = mailbox->last_uid;
+    curtime = internaldate = time(0);
+    fseek(mailbox->cache, 0L, 2);
+    last_cacheoffset = ftell(mailbox->cache);
+
+    size_message_index = feeduid - mailbox->last_uid + COLLECTGROW;
+    message_index = (struct index_record *)
+      xmalloc(size_message_index * sizeof(struct index_record));
+
+    if (chdir(mailbox->path)) {
+	syslog(LOG_ERR, "IOERROR: changing dir to %s: %m", mailbox->path);
+	return IMAP_IOERROR;
+    }
+
+    /* Find and parse the new messages */
+    for (;;) {
+	uid++;
+	f = fopen(mailbox_message_fname(mailbox, uid), "r");
+	if (!f) {
+	    if (uid < feeduid) continue;
+	    break;
+	}
+	
+	if (msg == size_message_index) {
+	    size_message_index += COLLECTGROW;
+	    message_index = (struct index_record *)
+	      xrealloc((char *)message_index,
+		       size_message_index * sizeof(struct index_record));
+	}
+	    
+	message_index[msg] = zero_index;
+	message_index[msg].uid = uid;
+	message_index[msg].last_updated = curtime;
+	message_index[msg].internaldate = internaldate++;
+	r = message_parse(f, mailbox, &message_index[msg]);
+	fclose(f);
+	if (r) goto fail;
+	quota_usage += message_index[msg].size;
+	
+	msg++;
+    }
+
+    /* Didn't find anything to append */
+    if (msg == 0) {
+	free(message_index);
+	return 0;
+    }
+
+    /* Write out index file entries */
+    r = mailbox_append_index(mailbox, message_index, mailbox->exists, msg);
+    if (r) goto fail;
+
+    /* Calculate new index header information */
+    mailbox->exists += msg;
+    mailbox->last_uid = uid-1;
+    mailbox->last_appenddate = internaldate-1;
+    mailbox->quota_mailbox_used += quota_usage;
+    if (mailbox->minor_version > MAILBOX_MINOR_VERSION) {
+	mailbox->minor_version = MAILBOX_MINOR_VERSION;
+    }
+
+    /* Write out index header */
+    r = mailbox_write_index_header(mailbox);
+    if (r) goto fail;
+    
+    /* Write out quota file */
+    mailbox->quota_used += quota_usage;
+    r = mailbox_write_quota(mailbox);
+    if (r) {
+	syslog(LOG_ERR,
+	       "LOSTQUOTA: unable to record use of %d bytes in quota file %s",
+	       quota_usage, mailbox->quota_path);
+    }
+    
+    free(message_index);
+    return 0;
+
+ fail:
+    ftruncate(fileno(mailbox->cache), last_cacheoffset);
+    free(message_index);
+    return r;
+}
+
+
+/*
  * Set the \Seen flag for 'userid' in 'mailbox' for the messages from
  * 'start' to 'end', inclusively.
  */
