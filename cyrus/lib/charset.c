@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-/* $Id: charset.c,v 1.39.4.1 2002/12/27 14:00:33 ken3 Exp $
+/* $Id: charset.c,v 1.39.4.2 2002/12/27 14:07:13 ken3 Exp $
  */
 #include <config.h>
 #include <ctype.h>
@@ -134,7 +134,7 @@ static int writeutf8(unsigned utfcode, char *to);
  \
 	case XLT: \
 	    idx += xlate((_translation[0]<<8) + (_translation[1]), ptr+idx); \
-	    _translation += 2; \ /* next translation is a RET or END */
+	    _translation += 2; /* next translation is a RET or END */ \
 	    continue; \
  \
 	default: \
