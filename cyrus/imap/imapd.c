@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.80 2003/05/29 14:50:45 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.81 2003/05/29 20:18:58 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -1561,8 +1561,7 @@ void cmd_login(char *tag, char *user)
     char c;
     struct buf passwdbuf;
     char *passwd;
-    char *canon_user;
-    const char *reply = 0;
+    const char *reply = NULL;
     int plaintextloginpause;
     int r;
     
@@ -1572,20 +1571,10 @@ void cmd_login(char *tag, char *user)
 	return;
     }
 
-    canon_user = canonify_userid(user, NULL, NULL);
-
-    if (!canon_user) {
-	syslog(LOG_NOTICE, "badlogin: %s plaintext %s invalid user",
-	       imapd_clienthost, beautify_string(user));
-	prot_printf(imapd_out, "%s NO %s\r\n", tag, 
-		    error_message(IMAP_INVALID_USER));
-	return;
-    }
-
     /* possibly disallow login */
     if ((imapd_starttls_done == 0) &&
 	(config_getswitch(IMAPOPT_ALLOWPLAINTEXT) == 0) &&
-	strcmp(canon_user, "anonymous") != 0) {
+	!is_userid_anonymous(user)) {
 	eatline(imapd_in, ' ');
 	prot_printf(imapd_out, "%s NO Login only available under a layer\r\n",
 		    tag);
@@ -1607,7 +1596,7 @@ void cmd_login(char *tag, char *user)
 
     passwd = passwdbuf.s;
 
-    if (!strcmp(canon_user, "anonymous")) {
+    if (is_userid_anonymous(user)) {
 	if (config_getswitch(IMAPOPT_ALLOWANONYMOUSLOGIN)) {
 	    passwd = beautify_string(passwd);
 	    if (strlen(passwd) > 500) passwd[500] = '\0';
@@ -1626,22 +1615,21 @@ void cmd_login(char *tag, char *user)
 	}
     }
     else if ((r = sasl_checkpass(imapd_saslconn,
-				 canon_user,
-				 strlen(canon_user),
+				 user,
+				 strlen(user),
 				 passwd,
 				 strlen(passwd))) != SASL_OK) {
 	syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
-	       imapd_clienthost, canon_user, sasl_errdetail(imapd_saslconn));
+	       imapd_clienthost, user, sasl_errdetail(imapd_saslconn));
 
 	sleep(3);
 
-	if (reply) {
-	    prot_printf(imapd_out, "%s NO Login failed: %s\r\n", tag, reply);
-	} else if ((reply = sasl_errstring(r, NULL, NULL)) != NULL) {
+	if ((reply = sasl_errstring(r, NULL, NULL)) != NULL) {
 	    prot_printf(imapd_out, "%s NO Login failed: %s\r\n", tag, reply);
 	} else {
 	    prot_printf(imapd_out, "%s NO Login failed: %d\r\n", tag, r);
 	}
+
 	snmp_increment_args(AUTHENTICATION_NO, 1,
 			    VARIABLE_AUTH, 0 /* hash_simple("LOGIN") */,
 			    VARIABLE_LISTEND);
@@ -1649,6 +1637,26 @@ void cmd_login(char *tag, char *user)
 	return;
     }
     else {
+	const char *canon_user;
+	
+	r = sasl_getprop(imapd_saslconn, SASL_USERNAME,
+			 (const void **) &canon_user);
+
+	if(r != SASL_OK) {
+	    if ((reply = sasl_errstring(r, NULL, NULL)) != NULL) {
+		prot_printf(imapd_out, "%s NO Login failed: %s\r\n",
+			    tag, reply);
+	    } else {
+		prot_printf(imapd_out, "%s NO Login failed: %d\r\n", tag, r);
+	    }
+
+	    snmp_increment_args(AUTHENTICATION_NO, 1,
+				VARIABLE_AUTH, 0 /* hash_simple("LOGIN") */,
+				VARIABLE_LISTEND);
+	    freebuf(&passwdbuf);
+	    return;
+	}
+
 	imapd_userid = xstrdup(canon_user);
 	snmp_increment_args(AUTHENTICATION_YES, 1,
 			    VARIABLE_AUTH, 0 /*hash_simple("LOGIN") */, 
@@ -1753,7 +1761,6 @@ cmd_authenticate(char *tag,char *authtype)
      */
     sasl_result = sasl_getprop(imapd_saslconn, SASL_USERNAME,
 			       (const void **) &canon_user);
-    imapd_userid = xstrdup(canon_user);
     if (sasl_result != SASL_OK) {
 	prot_printf(imapd_out, "%s NO weird SASL error %d SASL_USERNAME\r\n", 
 		    tag, sasl_result);
@@ -1762,6 +1769,7 @@ cmd_authenticate(char *tag,char *authtype)
 	reset_saslconn(&imapd_saslconn);
 	return;
     }
+    imapd_userid = xstrdup(canon_user);
 
     proc_register("imapd", imapd_clienthost, imapd_userid, (char *)0);
 

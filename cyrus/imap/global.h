@@ -1,5 +1,5 @@
 /* global.h -- Header for global/shared variables & functions.
- * $Id: global.h,v 1.1.2.5 2003/03/05 18:32:05 ken3 Exp $
+ * $Id: global.h,v 1.1.2.6 2003/05/29 20:18:58 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -69,6 +69,8 @@ extern sasl_security_properties_t *mysasl_secprops(int flags);
 
 /* user canonification */
 extern char *canonify_userid(char *user, char *loginid, int *domain_from_ip);
+
+extern int is_userid_anonymous(const char *user);
 
 extern int mysasl_canon_user(sasl_conn_t *conn,
 		             void *context,

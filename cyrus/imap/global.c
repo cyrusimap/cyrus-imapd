@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.1.2.8 2003/04/15 16:08:35 ken3 Exp $ */
+/* $Id: global.c,v 1.1.2.9 2003/05/29 20:18:58 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -292,6 +292,8 @@ int global_authisa(struct auth_state *authstate, enum imapopt opt)
     return 0;
 }
 
+/* Note: This function is not idempotent! Only call it once for a given ID
+ * or you will be unhappy (think IP hosting). */
 char *canonify_userid(char *user, char *loginid, int *domain_from_ip)
 {
     char *domain = NULL;
@@ -306,7 +308,7 @@ char *canonify_userid(char *user, char *loginid, int *domain_from_ip)
     }
 
     /* check for global identifiers */
-    if (len == 9 && strncasecmp(user, "anonymous", len) == 0) {
+    if (is_userid_anonymous(user)) {
 	return "anonymous";
     }
     else if ((len == 7 && strncasecmp(user, "anybody", len) == 0) ||
@@ -384,6 +386,27 @@ int mysasl_canon_user(sasl_conn_t *conn,
     strncpy(out, canonuser, out_max);
 
     return SASL_OK;
+}
+
+int is_userid_anonymous(const char *user) 
+{
+    int len = strlen(user);
+    const char *domain;
+
+    assert(user);
+
+    /* check for domain */
+    if (config_virtdomains &&
+	((domain = strrchr(user, '@')) || (domain = strrchr(user, '%')))) {
+	len = domain - user;
+    }
+
+    /* check if we are anonymous */
+    if (len == 9 && strncasecmp(user, "anonymous", len) == 0) {
+	return 1;
+    } else {
+	return 0;
+    }
 }
 
 /*
