@@ -1,4 +1,4 @@
-<!-- $Id: install-murder.html,v 1.2 2002/02/07 15:52:20 rjs3 Exp $ -->
+<!-- $Id: install-murder.html,v 1.3 2002/02/14 19:06:50 rjs3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing The Cyrus Murder
@@ -7,6 +7,13 @@
 <h1>Installing The Cyrus Murder
 </h1>
 <body>
+
+<font size="+2"><b><i>Note that Cyrus Murder is still in the Beta stages of
+development, and if you choose to deploy you are doing so at your own risk.
+Many of the failure modes can be difficult to track without a detailed
+understanding of the mupdate protocol and IMAP in general, and thus even
+consdering a deplyoment is not for the faint at heart.
+</i></b></font><br>
 
 <h3>Introduction & Assumptions</h3>
 This document is intended to be a guide to the configuration of a Cyrus
@@ -19,9 +26,14 @@ one Cyrus IMAP server.  This server will become your first backend server.
 It also assumes that you are familliar with the administration and day
 to day operations of the Cyrus IMAP server and the SASL authentication library.
 If you feel uncomfortable with this, please refer to the rest of the
-documentation first.
+documentation first.<p>
+There is a <A HREF=murder.fig>xfig picture</A> that shows the interactions of
+the various components of the Cyrus Murder which may be helpful in
+understanding the &quot;big picture&quot;<p>
 
 <h2>Installation</h2>
+You will need to build Cyrus IMAPd with the <tt>--enable-murder</tt> configure
+option.  This builds the proxyds and the associated 
 
 <h3>Requirements</h3>
 <ul>
@@ -31,11 +43,135 @@ spaces must not conflict.  That is, all the mailbox names must be unique
 <li>Atleast one machine that will become the first Frontend Server.</li>
 <li>One machine to become the MUPDATE master server.  This can be the
 same as one of your frontend servers.</li>
+</ul>
 
 <h3>Configuring the MUPDATE Master</h3>
-<h3>Importing the database from the backend</h3>
+
+The mupdate master server needs to be running the mupdate service in master
+mode.  Note that you can have the MUPDATE master be one of your frontend
+machines, just do not configure a slave mupdate process on this machine.<P>
+
+To configure an mupdate master, you will want a cyrus.conf that includes a
+line similar to the following in the SERVICES section:
+
+<pre>
+  mupdate       cmd="/usr/cyrus/bin/mupdate -m" listen=2004 prefork=1
+</pre>
+
+Note the "-m" option to tell mupdate that it should start in master mode.<p>
+
+You will also need to configure atleast a skeleton imapd.conf that defines
+the <tt>configdirectory</tt>, a bogus <tt>partition-default</tt> and the
+<tt>admins</tt> that can authenticate to the server.  Note that slave
+mupdate servers as well as the backend servers will need to be able to
+authenticate as admins on the master.  Here is a very simple imapd.conf for
+a master server:<p>
+
+<pre>
+configdirectory: /imap/conf
+partition-default: /tmp
+
+admins: mupdateslave1 backend1
+</pre>
+
+You will also need to configure SASL to properly allow authentication in
+your enviornment.<p>
+
 <h3>Setting up the backends to push changes to the MUPDATE Master</h3>
+On the backends, configuration to be a part of a murder is easy.  You just 
+need to configure the backend to be a part of the murder.  To do this,
+set the <tt>mupdate_server</tt> option in imapd.conf.  Depending on what
+authentication mechanisms you are using, you may also want to set some
+or all of the following:
+
+<ul>
+<li><tt>mupdate_username</tt></li>
+<li><tt>mupdate_authname</tt></li>
+<li><tt>mupdate_realm</tt></li>
+<li><tt>mupdate_password</tt></li>
+</ul>
+
+Once these settings are successfully made, any mailbox operation on the
+backend will be sent to the mupdate master for confirmation and entry into
+the mupdate database.
+
+<h3>Importing the database from the backend</h3>
+Importing the current mailboxes database is easy, as there is a ctl_mboxlist
+option to do so.  To do the first synchronization, simply change to the
+cyrus user, and issue a <tt>ctl_mboxlist -m</tt>.<p>
+
+If everything is configured properly, the
+mailbox database of the current host will dump to the mupdate master.  If
+there are problems, the most likely cause is a misconfiguration of the
+authentication settings, or that mupdate might not be running on the master.
+Using <tt>mupdatetest</tt> may be helpful in this case (it establishes
+an authenticated connection to the mupdate server, if it can).<p>
+
+It is also useful to have the backends automatically resync the state of
+their local mailboxes database with the master on start up.  You can
+configure this by adding the following to the <tt>START</tt> section
+of cyrus.conf on the backends:
+
+<pre>
+  mupdatepush   cmd="ctl_mboxlist -m"
+</pre>
+
+This will perform synchronization with the mupdate master each time the backend
+restarts, bringing the mupdate database up to date with the contents of the
+backend (and performing ACTIVATE and DELETES as needed to do so).<p>
+
+<b>Warning</b>: If somehow a mailbox exists on two (or more) backend servers,
+each time one of them synchronizes its database that backend server will
+become authoritative.  Though this should not happen during normal operation
+of the murder (because of the consistancy guarantees of the MUPDATE protocol,
+and the fact that mailbox operations are denied if the mupdate master is down),
+it <b>is</b> possible when first creating the mupdate database or
+when bringing a new backend server into the murder.
+
 <h3>Configuring the Frontends</h3>
+
+Configuring the frontends is a two step process.  First, you want to set
+<tt>mupdate_server</tt> (and friends) as you did for the backends above.
+However, because the frontends only talk to the mupdate master via a slave
+running on the local machine, you will also need to set up a slave on the
+same machine, in the <tt>SERVICES</tt> section of cyrus.conf, like so:
+
+<pre>
+  # mupdate database service - must prefork atleast 1
+  mupdate       cmd="/usr/cyrus/bin/mupdate" listen=2004 prefork=1 
+</pre>
+
+Note that as this is a threaded service, you must prefork atleast 1 of them
+so that the database can be synchronized at startup.  Otherwise, the service
+will not start running until after you recieve an mupdate client connection
+to the slave (which is not a recommended configuration at this point).<p>
+
+You will also want to change all of your <tt>imapd</tt> entries to be
+<tt>proxyd</tt>, and all of your <tt>pop3d</tt> entries to be
+<tt>pop3proxyd</tt>.  That is, you will probabally have a <tt>SERVICES</tt>
+section that looks more like this now:
+
+<pre>
+  mupdate       cmd="/usr/cyrus/bin/mupdate" listen=2004 prefork=1 
+
+  imap          cmd="proxyd" listen="imap" prefork=5
+  imaps         cmd="proxyd -s" listen="imaps" prefork=1
+  pop3          cmd="pop3proxyd" listen="pop3" prefork=0
+  pop3s         cmd="pop3proxyd -s" listen="pop3s" prefork=0
+  kpop          cmd="pop3proxyd -k" listen="kpop" prefork=0
+  sieve         cmd="timsieved" listen="sieve" prefork=0
+</pre>
+
+Note that timsieved does not need a proxy daemon, the managesieve protocol
+deals with the murder with referrals to the backends internally.<p>
+
+When you start master on the frontend, a local mailboxes database should
+automatically synchronize itself with the contents of the mupdate master,
+and you should be ready to go.  Your clients should connect to the frontends,
+and the frontends will proxy or refer as applicable to the blackend servers.<p>
+
+<h3>Configuring lmtpproxyd</h3>
+xxx todo: Larry?
 
 <h2>Administration</h2>
 
@@ -46,21 +182,64 @@ same as one of your frontend servers.</li>
 
 <h3>&quot;Gotchyas&quot;</h3>
 <ul>
-<li>Clients dealing with a pool of frontend servers
-<ul><li>Kerberos issues</li></ul>
-<li>Clients dealing with referrals
-<li>Behavior of cyradm / some mailbox operations (Setquota, create of top
-level mailboxes, etc)
+<li><b>Clients dealing with a pool of frontend servers</b> - Some clients may
+not be terribly efficient cacheing connections to a pool of imap servers, this
+isn't a problem, per se, but it may mean that you will see many more
+authentications than you are used to.
+<ul><li><b>Kerberos issues</b> - If you are using kerberos authentication,
+you will want to ensure that all your machines are keyed properly, as we
+have seen problems with different clients trying to authenticate to
+different services (e.g. imap.imap-pool instead of imap.pool-frontend-1), so
+test the clients in use in your enviornment and be sure that they work with
+whatever keying scheme you use.</li></ul>
+<li><b>Clients dealing with referrals</b> - Some clients (we've had particuar
+trouble with pine, though most of these issues have now been resolved and
+new versions should be OK (that is, pine > 4.44), but as referrals have not
+been extensively used by any IMAP server until now, referrals are very likely
+to not work correctly or have surprising effects.
+<li><b>Clients dealing with getting a NO on LSUB commands</b> - Some clients
+(Outlook, for example) may behave poorly if an LSUB command returns a NO, which
+may be the case if the backend server with the user's inbox is down.  We
+have, for example, seen this result in the deletion of the disconnected
+message cache.
+<li><b>Behavior of cyradm / some mailbox operations</b> - The behavior
+of some administrative commands
+might be slightly unexpected.  For example, you can only issue a SETQUOTA
+to a frontend server if the entire mailbox tree underneath where you are
+setting the quota exists on the same backend server, otherwise you will need
+to connect directly to the backend servers to perform the needed changes.
+Similarally, mailboxes will be created on the same backend server
+that their parent is in.  In order to create them on a different server
+(or to create a new top level mailbox) you will need to connect directly to
+the desired backend server.
 </ul>
 
 <h3>Troubleshooting &amp; when things go wrong</h3>
+<ul>
+<li><b>Mailbox operations are being denied</b> - This is an indication
+that the mupdate master may be down.  Restart it.</li>
+<li><b>Mailbox operations are not being seen by one or more frontends</b> -
+This indicates that the mupdate process on a slave may have died,
+you may need to restart master.  Alternatively, mupdate will retry connections
+every 20 seconds or so for about 20 attempts if the master does go down.</li>
+<li><b>A frontend's mailboxes.db is corrupt / out of sync</b> - Restart master
+on the frontend, and have the mupdate process resynch the local database.
+You may need to remove the local mailboxes database if the corruption is
+extreme.</li>
+<li><b>A mailbox's location keeps switching between two (or more) backend
+hosts.</b> - It probabally actually exists on both hosts.  Delete the
+mailbox from all but one of the hosts, and run a ctl_mboxlist -m on the one
+where you want it to actually live.</li>
+<li><b>Databases are never created on the frontends/slaves</b> - Check
+to ensure that the mupdate slave process is started, (is prefork=1)</li>
+</ul>
 
 <p><h3>References</h3><ul>
 <li><A HREF=http://asg.web.cmu.edu/cyrus/ag.html>Aggregator Overview</A></li>
 <li><A HREF=http://asg.web.cmu.edu/cyrus/mupdate.html>MUPDATE Protocol Reference</A></li>
 
 <P><HR>
-last modified: $Date: 2002/02/07 15:52:20 $
+last modified: $Date: 2002/02/14 19:06:50 $
 </BODY></HTML>
 
 
