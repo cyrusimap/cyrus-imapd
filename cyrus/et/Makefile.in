@@ -35,14 +35,14 @@ SHELL = /bin/sh
 
 LIBOBJS= error_message.o et_name.o init_et.o com_err.o
 # for et_lex.lex.c include in error_table.y
-LOCALINCLUDE=-I. -I$(srcdir)
+LOCALINCLUDE=-I. -I.. -I$(srcdir)
 
 all: compile_et libcom_err.a
 
 install:
 
 .c.o:
-	$(CC) -c $(CPPFLAGS) $(DEFS) -I$(srcdir) -I. $(CFLAGS) $<
+	$(CC) -c $(CPPFLAGS) $(DEFS) -I$(srcdir) -I. -I.. $(CFLAGS) $<
 
 # solaris make loses on com_err.c but not on init_et.c, but this helps
 com_err.o: com_err.c

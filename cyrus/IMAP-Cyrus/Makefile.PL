@@ -7,7 +7,7 @@ END {if ($created) { unlink 'libcyrperl.a' }}
 # pre-work, grabs some vars we need
 use IO::File;
 $libs = '';
-$cyrus_lib = ($ENV{CYRUS_SRC} || <../cyrus-imapd-*>) . '/lib';
+$cyrus_lib = ($ENV{CYRUS_SRC} || '..') . '/lib';
 {
   if (! -f $cyrus_lib . '/Makefile') {
     die "A fully configured Cyrus IMAPD source tree was not found.

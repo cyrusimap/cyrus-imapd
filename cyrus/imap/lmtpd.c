@@ -1,6 +1,6 @@
-/* deliver.c -- Program to deliver mail to a mailbox
+/* lmtpd.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: lmtpd.c,v 1.21 2000/04/29 18:43:11 tmartin Exp $
+ * $Id: lmtpd.c,v 1.22 2000/05/03 17:10:44 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.21 2000/04/29 18:43:11 tmartin Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.22 2000/05/03 17:10:44 leg Exp $";*/
 
 #include <config.h>
 
@@ -73,6 +73,7 @@
 #include "util.h"
 #include "auth.h"
 #include "prot.h"
+#include "gmtoff.h"
 #include "imparse.h"
 #include "lock.h"
 #include "imapconf.h"
