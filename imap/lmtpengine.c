@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.66 2002/03/07 20:57:36 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.67 2002/03/13 21:39:17 ken3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -910,8 +910,8 @@ static int savemsg(struct clientdata *cd,
     time_t t;
     char datestr[80];
 
-    /* Copy to temp file */
-    f = tmpfile();
+    /* Copy to spool file */
+    f = func->spoolfile(m);
     if (!f) {
 	prot_printf(cd->pout, 
 		    "451 4.3.%c cannot create temporary file: %s\r\n",
