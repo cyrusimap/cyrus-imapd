@@ -653,8 +653,8 @@ struct quota *quota;
     map_refresh(quota->fd, 1, &quota_base, &quota_len,
 		MAP_UNKNOWN_LEN, buf, 0);
 
-    p = quota->base;
-    eol = memchr(p, '\n', quota->len - (p - quota->base));
+    p = quota_base;
+    eol = memchr(p, '\n', quota_len - (p - quota_base));
     if (!eol) {
 	map_free(&quota_base, &quota_len);
 	return IMAP_MAILBOX_BADFORMAT;
@@ -662,7 +662,7 @@ struct quota *quota;
     quota->used = atol(p);
 
     p = eol + 1;
-    eol = memchr(p, '\n', quota->len - (p - quota->base));
+    eol = memchr(p, '\n', quota_len - (p - quota_base));
     if (!eol) {
 	map_free(&quota_base, &quota_len);
 	return IMAP_MAILBOX_BADFORMAT;
