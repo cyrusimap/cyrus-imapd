@@ -128,7 +128,7 @@ struct cyrusdb_backend {
 
        'p' should be fast and should avoid blocking it should be safe
        to call other db routines inside of 'cb'.  however, the "flat"
-       and "skiplist" backends currently are not reentrant in this way
+       backend is currently are not reentrant in this way
        unless you're using transactions and pass the same transaction
        to all db calls during the life of foreach() */
     int (*foreach)(struct db *mydb,
