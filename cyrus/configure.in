@@ -213,6 +213,10 @@ AC_ARG_WITH(lock,[  --with-lock=METHOD      force use of METHOD for locking
 	AC_CHECK_FUNC(flock,WITH_LOCK="flock",WITH_LOCK="fcntl"))
 AC_SUBST(WITH_LOCK)
 
+AC_ARG_WITH(afs,[  --with-afs=PATH         use AFS libraries from PATH],
+	[with_afs="${withval}"
+	CFLAGS="${CFLAGS} -I${withval}/include"],with_afs="/usr/local")
+
 AC_MSG_CHECKING(for Kerberos)
 AC_CACHE_VAL(cyrus_cv_lib_kerberos, if test -f /etc/krb.conf; then
 	cyrus_cv_lib_kerberos=yes
@@ -268,9 +272,9 @@ if test "$WITH_AUTH" = krb_pts; then
 	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} ptclient"
 	EXTRA_OUTPUT="${EXTRA_OUTPUT} ptclient/Makefile"
 	AC_DEFINE_UNQUOTED(CYRUS_PATH,"$cyrus_prefix")
-	AFSLIBS="/usr/local/lib/afs/libkauth.a /usr/local/lib/afs/libprot.a  /usr/local/lib/afs/libauth.a /usr/local/lib/afs/libsys.a /usr/local/lib/librxkad.a /usr/local/lib/librx.a /usr/local/lib/libubik.a  /usr/local/lib/liblwp.a /usr/local/lib/afs/util.a"
-	if test -f /usr/local/lib/afs/libaudit.a; then
-		AFSLIBS="$AFSLIBS /usr/local/lib/afs/libaudit.a"
+	AFSLIBS="${with_afs}/lib/afs/libkauth.a ${with_afs}/lib/afs/libprot.a  ${with_afs}/lib/afs/libauth.a ${with_afs}/lib/afs/libsys.a ${with_afs}/lib/librxkad.a ${with_afs}/lib/librx.a ${with_afs}/lib/libubik.a  ${with_afs}/lib/liblwp.a ${with_afs}/lib/afs/util.a"
+	if test -f ${with_afs}/lib/afs/libaudit.a; then
+		AFSLIBS="$AFSLIBS ${with_afs}/lib/afs/libaudit.a"
 	fi
 	if test -f /usr/ucblib/libucb.a; then
 		AFSLIBS="$AFSLIBS -R/usr/ucblib -L/usr/ucblib -lucb"
@@ -357,7 +361,11 @@ if test -z "$with_krb"; then
 fi
 case "$with_krb" in
 	no) true;;
-	""|yes) AC_CHECK_LIB(krb,des_ecb_encrypt,LIBS="${LIBS} -lkrb -ldes",
+	""|yes) AC_CHECK_LIB(krb,des_ecb_encrypt,
+		[LIBS="${LIBS} -lkrb -ldes"
+		 if test -d /usr/include/kerberosIV; then
+			CFLAGS="${CFLAGS} -I/usr/include/kerberosIV"
+		 fi],
 		with_krb="no",-ldes);;
 	*)  if test -f ${with_krb}/lib/libdes.a; then
 		CPPFLAGS="${CPPFLAGS} -I${with_krb}/include"
