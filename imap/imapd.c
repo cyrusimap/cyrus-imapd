@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.235 2000/04/27 20:31:24 leg Exp $ */
+/* $Id: imapd.c,v 1.236 2000/04/29 18:43:09 tmartin Exp $ */
 
 #include <config.h>
 
@@ -1419,7 +1419,7 @@ cmd_authenticate(char *tag,char *authtype)
     if (sasl_result != SASL_OK)
     {
 	/* convert the sasl error code to a string */
-	errorstring = sasl_errstring(sasl_result, NULL, NULL);
+	errorstring = sasl_errstring(sasl_usererr(sasl_result), NULL, NULL);
       
 	syslog(LOG_NOTICE, "badlogin: %s %s %s",
 	       imapd_clienthost, authtype, errorstring);

@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: lmtpd.c,v 1.20 2000/04/21 21:10:50 tmartin Exp $
+ * $Id: lmtpd.c,v 1.21 2000/04/29 18:43:11 tmartin Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.20 2000/04/21 21:10:50 tmartin Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.21 2000/04/29 18:43:11 tmartin Exp $";*/
 
 #include <config.h>
 
@@ -85,6 +85,8 @@
 #include "append.h"
 #include "mboxlist.h"
 #include "notify.h"
+
+#include "lmtpstats.h"
 
 struct protstream *deliver_out, *deliver_in;
 
@@ -314,6 +316,10 @@ int service_init(int argc, char **argv, char **envp)
 	fatal("SASL failed initializing: sasl_server_init()", EC_TEMPFAIL);
     }
 
+    /* create connection to the SNMP listener, if available. */
+    snmp_connect(); /* ignore return code */
+    snmp_set_str(SERVER_NAME_VERSION,CYRUS_VERSION);
+
     return 0;
 }
 
@@ -358,6 +364,9 @@ int service_main(int argc, char **argv, char **envp)
     /* setup sieve support */
     setup_sieve(delopts, lmtpflag);
 #endif
+
+    snmp_increment(TOTAL_CONNECTIONS, 1);
+    snmp_increment(ACTIVE_CONNECTIONS,1);
 
     lmtpmode(delopts);
 
@@ -891,6 +900,9 @@ int sieve_redirect(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     int res;
 
     if ((res = send_forward(rc->addr, md->return_path, md->data)) == 0) {
+	
+	snmp_increment(SIEVE_REDIRECT, 1);
+	
 	return SIEVE_OK;
     } else {
 	if (res == -1)
@@ -904,6 +916,7 @@ int sieve_redirect(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 static
 int sieve_discard(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
+    snmp_increment(SIEVE_DISCARD, 1);
 
     /* ok, we won't file it */
     return SIEVE_OK;
@@ -935,6 +948,9 @@ int sieve_reject(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 
     if ((res = send_rejection(md->id, md->return_path, origreceip, sd->username,
 		       rc->msg, md->data)) == 0) {
+
+	snmp_increment(SIEVE_REJECT, 1);
+
 	return SIEVE_OK;
     } else {
 	if (res == -1)
@@ -965,6 +981,9 @@ int sieve_fileinto(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
                           fc->mailbox, dop->quotaoverride, 0);
 
     if (ret == 0) {
+
+	snmp_increment(SIEVE_FILEINTO, 1);
+
 	return SIEVE_OK;
     } else {
 	*errmsg = error_message(ret);
@@ -1007,6 +1026,7 @@ int sieve_keep(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     }
 
     if (ret == 0) {	
+	snmp_increment(SIEVE_KEEP, 1);
 	return SIEVE_OK;
     } else {
 	*errmsg = error_message(ret);
@@ -1022,6 +1042,8 @@ static int sieve_notify(void *ac,
 {
     sieve_notify_context_t *nc = (sieve_notify_context_t *) ac;
     script_data_t *sd = (script_data_t *) script_context;
+
+    snmp_increment(SIEVE_NOTIFY, 1);
 
     notify("SIEVE",
 	   nc->priority,
@@ -1039,6 +1061,8 @@ int autorespond(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     script_data_t *sd = (script_data_t *) sc;
     time_t t, now;
     int ret;
+
+    snmp_increment(SIEVE_VACATION_TOTAL, 1);
 
     now = time(NULL);
 
@@ -1146,6 +1170,9 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 
 	duplicate_mark(outmsgid, strlen(outmsgid), 
 		       sievedb, strlen(sievedb), t);
+
+	snmp_increment(SIEVE_VACATION_REPLIED, 1);
+
 	return SIEVE_OK;
     } else {
 	*errmsg = "Sendmail error";
@@ -1590,6 +1617,32 @@ void msg_free(message_data_t *m)
     free(m);
 }
 
+static int hash_simple (const char *str)
+{
+    int     value = 0;
+    int     i;
+
+    if (!str)
+	return 0;
+    for (i = 0; *str; i++)
+    {
+	value ^= (*str++ << ((i & 3)*8));
+    }
+    return value;
+}
+
+/* round to nearest 1024 bytes and return number of Kbytes */
+int    roundToK(int x)
+{
+    double rd = (x*1.0)/1024.0;
+    int ri = x/1024;
+    
+    if (rd-ri < 0.5)
+	return ri;
+    else
+	return ri+1;    
+}
+
 #define RCPT_GROW 5 /* XXX 30 */
 
 void lmtpmode(deliver_opts_t *delopts)
@@ -1601,6 +1654,7 @@ void lmtpmode(deliver_opts_t *delopts)
     int r;
     char *err;
     int i;
+    int delivered;
     unsigned int mechcount = 0;
     int salen;
     struct stat sbuf;
@@ -1783,6 +1837,9 @@ void lmtpmode(deliver_opts_t *delopts)
 		      else
 			  syslog(LOG_ERR, "sasl_server_step error: %s",
 				 sasl_errstring(r,NULL,NULL));		  
+		  
+		  snmp_increment_args(AUTHENTICATION_NO, 1,
+				      VARIABLE_AUTH, hash_simple(mech), VARIABLE_LISTEND);
 
 		  prot_printf(deliver_out, "501 5.5.4 %s\r\n",
 			      sasl_errstring(sasl_usererr(r), NULL, NULL));
@@ -1790,6 +1847,9 @@ void lmtpmode(deliver_opts_t *delopts)
 	      }
 	      
 	      /* authenticated successfully! */
+	      snmp_increment_args(AUTHENTICATION_YES,1,
+				  VARIABLE_AUTH, hash_simple(mech), VARIABLE_LISTEND);
+
 	      authenticated++;
 	      prot_printf(deliver_out, "235 Authenticated!\r\n");
 	      
@@ -1810,7 +1870,12 @@ void lmtpmode(deliver_opts_t *delopts)
 		savemsg(msg);
 		if (!msg->data) continue;
 
+		snmp_increment(mtaReceivedMessages, 1);
+		snmp_increment(mtaReceivedVolume, roundToK(msg->size));
+		snmp_increment(mtaReceivedRecipients, msg->rcpt_num);
+
 		i = msg->rcpt_num;
+		delivered = 0;
 		for (msg->rcpt_num = 0; msg->rcpt_num < i; msg->rcpt_num++) {
 		    int cur = msg->rcpt_num;
 
@@ -1818,8 +1883,23 @@ void lmtpmode(deliver_opts_t *delopts)
 				msg->rcpt[cur]->mailbox,
 				msg->rcpt[cur]->detail);
 
+		    if (r==0) delivered++;
+
 		    prot_printf(deliver_out,"%s\r\n", convert_lmtp(r));
 		}
+
+
+		if (singleinstance) {		    
+		    snmp_increment(mtaTransmittedMessages, append_stageparts(msg->stage));
+		    snmp_increment(mtaTransmittedVolume, 
+				   roundToK(append_stageparts(msg->stage) * msg->size));
+
+		} else {
+		    snmp_increment(mtaTransmittedMessages, delivered);
+		    snmp_increment(mtaTransmittedVolume, 
+				   roundToK(delivered * msg->size));
+		}		
+
 		goto rset;
 	    }
 	    goto syntaxerr;
@@ -2567,6 +2647,9 @@ void shut_down(int code)
     mboxlist_close();
     mboxlist_done();
     prot_flush(deliver_out);
+
+    snmp_increment(ACTIVE_CONNECTIONS, -1);
+
     exit(code);
 }
 
