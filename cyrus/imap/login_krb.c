@@ -4,9 +4,10 @@
 #include <krb.h>
 #include <syslog.h>
 
+#include <kerberos.h>
 #include "config.h"
+#include "mailbox.h"
 #include "imapd.h"
-#include "kerberos.h"
 
 /*
  * Kerberos-authenticated login

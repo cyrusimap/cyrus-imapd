@@ -3,6 +3,8 @@
  */
 
 #include <stdio.h>
+#include <ctype.h>
+#include <sys/types.h>
 #include <syslog.h>
 
 #include <acl.h>
@@ -91,23 +93,26 @@ long quotacheck;
  * If 'size', is nonzero it the expected size of the message.
  * If 'size' is zero, message may need LF to CRLF conversion.
  * 'flags' contains the names of the 'nflags' flags that the
- * user wants to set in the message.
+ * user wants to set in the message.  If the '\Seen' flag is
+ * in 'flags', then 'userid' contains the name of the user whose
+ * \Seen flag gets set.
  */
-int append_fromstream(mailbox, messagefile, size, flag, nflags)
+int append_fromstream(mailbox, messagefile, size, flag, nflags, userid)
 struct mailbox *mailbox;
 FILE *messagefile;
 unsigned size;
 char **flag;
 int nflags;
+char *userid;
 {
     struct index_record message_index;
     static struct index_record zero_index;
     char fname[MAX_MAILBOX_PATH];
     FILE *destfile;
-    int r;
+    int i, r;
     long last_cacheoffset;
     int setseen = 0, writeheader = 0;
-    int userflag, emptyflag = -1;
+    int userflag, emptyflag;
 
     assert(mailbox->format == MAILBOX_FORMAT_NORMAL);
 
@@ -142,27 +147,28 @@ int nflags;
 	return r;
     }
 
-    while (nflags--) {
-	if (!strcmp(flag[nflags], "\\seen")) setseen++;
-	else if (!strcmp(flag[nflags], "\\deleted")) {
+    for (i = 0; i < nflags; i++) {
+	if (!strcmp(flag[i], "\\seen")) setseen++;
+	else if (!strcmp(flag[i], "\\deleted")) {
 	    if (mailbox->my_acl & ACL_DELETE) {
 		message_index.system_flags |= FLAG_DELETED;
 	    }
 	}
-	else if (!strcmp(flag[nflags], "\\flagged")) {
+	else if (!strcmp(flag[i], "\\flagged")) {
 	    if (mailbox->my_acl & ACL_WRITE) {
 		message_index.system_flags |= FLAG_FLAGGED;
 	    }
 	}
-	else if (!strcmp(flag[nflags], "\\answered")) {
+	else if (!strcmp(flag[i], "\\answered")) {
 	    if (mailbox->my_acl & ACL_WRITE) {
 		message_index.system_flags |= FLAG_ANSWERED;
 	    }
 	}
 	else if (mailbox->my_acl & ACL_WRITE) {
+	    emptyflag = -1;
 	    for (userflag = 0; userflag < MAX_USER_FLAGS; userflag++) {
 		if (mailbox->flagname[userflag]) {
-		    if (!strcasecmp(flag[nflags], mailbox->flagname[userflag]))
+		    if (!strcasecmp(flag[i], mailbox->flagname[userflag]))
 		      break;
 		}
 		else if (emptyflag == -1) emptyflag = userflag;
@@ -170,7 +176,7 @@ int nflags;
 
 	    if (userflag == MAX_USER_FLAGS && emptyflag != -1) {
 		userflag = emptyflag;
-		mailbox->flagname[userflag] = strsave(flag[nflags]);
+		mailbox->flagname[userflag] = strsave(flag[i]);
 		writeheader++;
 	    }
 
@@ -221,7 +227,59 @@ int nflags;
 	       message_index.size, mailbox->quota_path);
     }
 
-    /* XXX handle setseen */
+    if (setseen && userid) {
+	append_addseen(mailbox, userid, message_index.uid, message_index.uid);
+    }
     
     return 0;
 }
+
+/*
+ * Set the \Seen flag for 'userid' in 'mailbox' for the messages from
+ * 'start' to 'end', inclusively.
+ */
+static int append_addseen(mailbox, userid, start, end)
+struct mailbox *mailbox;
+char *userid;
+int start;
+int end;
+{
+    int r;
+    struct seen *seendb;
+    time_t last_time;
+    unsigned last_uid;
+    char *seenuids;
+    int last_seen;
+    char *tail, *p;
+    
+    r = seen_open(mailbox, userid, &seendb);
+    if (r) return r;
+    
+    r = seen_lockread(seendb, &last_time, &last_uid, &seenuids);
+    if (r) return r;
+    
+    seenuids = xrealloc(seenuids, strlen(seenuids)+40);
+
+    tail = seenuids + strlen(seenuids);
+    /* Scan back to last uid */
+    while (tail > seenuids && isdigit(tail[-1])) tail--;
+    for (p = tail, last_seen=0; *p; p++) last_seen = last_seen * 10 + *p - '0';
+    if (last_seen == start-1) {
+	if (tail > seenuids && tail[-1] == ':') p = tail - 1;
+	*p++ = ':';
+    }
+    else {
+	if (p > seenuids) *p++ = ',';
+	if (start != end) {
+	    sprintf(p, "%d:", start);
+	    p += strlen(p);
+	}
+    }
+    sprintf(p, "%d", end);
+
+    r = seen_write(seendb, last_time, last_uid, seenuids);
+    seen_close(seendb);
+    free(seenuids);
+    return r;
+}
+	  

@@ -141,7 +141,7 @@ FILE *to;
     unsigned char *p;
     int r = 0;
     int n;
-    int inheader = 1, sawcr = 0, sawnl;
+    int sawcr = 0, sawnl;
 
     while (size) {
 	n = fread(buf, 1, size > 4096 ? 4096 : size, from);

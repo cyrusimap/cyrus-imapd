@@ -38,3 +38,22 @@ struct fetchargs {
 #define FETCH_FAST (FETCH_FLAGS|FETCH_INTERNALDATE|FETCH_SIZE)
 #define FETCH_ALL  (FETCH_FLAGS|FETCH_INTERNALDATE|FETCH_SIZE|FETCH_ENVELOPE)
 #define FETCH_FULL (FETCH_ALL|FETCH_BODY)
+
+struct storeargs {
+    int operation;
+    int seen;
+    bit32 system_flags;
+    /* private to index.c */
+    bit32 user_flags[MAX_USER_FLAGS/32];
+    time_t update_time;
+    int exists;
+    int usinguid;
+    /* private to index_storeflag() */
+    int last_msgno;
+    int last_found;
+};
+
+/* values for operation */
+#define STORE_ADD	1
+#define STORE_REMOVE	2
+#define STORE_REPLACE	3

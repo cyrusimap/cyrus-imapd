@@ -12,6 +12,7 @@
 #include <com_err.h>
 
 #include <acl.h>
+#include <util.h>
 #include "auth.h"
 #include "imap_err.h"
 #include "mailbox.h"
@@ -22,8 +23,6 @@ extern int optind;
 extern char *optarg;
 
 extern int errno;
-
-extern char *lcase();
 
 struct buf {
     char *s;
@@ -72,8 +71,14 @@ fatal(s, code)
 char *s;
 int code;
 {
+    static int recurse_code = 0;
+
+    if (recurse_code) {
+	exit(recurse_code);
+    }
+    recurse_code = code;
     printf("* BYE Fatal error: %s\r\n", s);
-    exit(code);
+    shutdown(code);
 }
 
 cmdloop()
@@ -88,7 +93,7 @@ cmdloop()
 
 	c = getword(&tag);
 	if (c == EOF) {
-	    shutdown();
+	    shutdown(0);
 	}
 	if (c != ' ' || !isatom(&tag) || (tag.s[0] == '*' && !tag.s[1])) {
 	    printf("* BAD Invalid tag\r\n");
@@ -192,7 +197,7 @@ cmdloop()
 		
 		printf("* BYE Server terminating connection\r\n");
 		printf("%s OK Logout completed\r\n", tag.s);
-		shutdown();
+		shutdown(0);
 	    }
 	    else if (!imapd_userid) goto nologin;
 	    else goto badcmd;
@@ -236,6 +241,17 @@ cmdloop()
 
 		cmd_select(tag.s, cmd.s, arg1.s);
 	    }
+	    else if (!strcmp(cmd.s, "Store")) {
+		if (!imapd_mailbox) goto nomailbox;
+		usinguid = 0;
+		if (c != ' ') goto missingargs;
+	    store:
+		c = getsequence(&arg1);
+		if (c != ' ') goto badsequence;
+		c = getword(&arg2);
+		if (c != ' ') goto badsequence;
+		cmd_store(tag.s, arg1.s, arg2.s, usinguid);
+	    }
 	    else goto badcmd;
 	    break;
 
@@ -250,13 +266,16 @@ cmdloop()
 		if (!strcmp(arg1.s, "fetch")) {
 		    goto fetch;
 		}
+		else if (!strcmp(arg1.s, "store")) {
+		    goto store;
+		}
+		/* XXX copy */
 		else if (!strcmp(arg1.s, "after")) {
 		    c = getword(&arg2);
 		    if (c == '\r') c = getc(stdin);
 		    if (c != '\n') goto extraargs;
 		    cmd_uidafter(tag.s, arg2.s);
 		}
-		/* XXX store copy */
 		else {
 		    printf("%s BAD Unrecognized UID subcommand\r\n", tag.s);
 		    if (c != '\n') eatline();
@@ -346,12 +365,12 @@ char *tag;
 char *cmd;
 {
     if (imapd_mailbox) {
-	index_check(imapd_mailbox);
+	index_check(imapd_mailbox, 0, 1);
     }
     printf("%s OK %s completed\r\n", tag, cmd);
 };
 
-#define FLAGGROW 1 /* XXX 10 */
+#define FLAGGROW 10
 cmd_append(tag, name)
 char *tag;
 char *name;
@@ -413,10 +432,10 @@ char *name;
     printf("+ go ahead\r\n");
     fflush(stdout);
 
-    r = append_fromstream(&mailbox, stdin, size, flag, nflags);
+    r = append_fromstream(&mailbox, stdin, size, flag, nflags, imapd_userid);
     mailbox_close(&mailbox);
 
-    if (imapd_mailbox) index_check(imapd_mailbox);
+    if (imapd_mailbox) index_check(imapd_mailbox, 0, 0);
 
     if (r) {
 	printf("%s NO Append to %s failed: %s\r\n",
@@ -464,20 +483,12 @@ char *name;
 	return;
     }
 
-    if (imapd_mailbox) mailbox_close(imapd_mailbox);
+    if (imapd_mailbox) {
+	index_checkseen(imapd_mailbox, 1, 0, imapd_exists);
+	mailbox_close(imapd_mailbox);
+    }
     mboxstruct = mailbox;
     imapd_mailbox = &mboxstruct;
-
-    printf("* FLAGS (\\Answered \\Flagged \\Deleted");
-    if (imapd_mailbox->my_acl & ACL_SEEN) {
-	printf(" \\Seen");
-    }
-    for (i = 0; i < MAX_USER_FLAGS; i++) {
-	if (imapd_mailbox->flagname[i]) {
-	    printf(" %s", imapd_mailbox->flagname[i]);
-	}
-    }
-    printf(")\r\n");
 
     index_newmailbox(imapd_mailbox);
 
@@ -492,10 +503,10 @@ char *name;
 	    usage = imapd_mailbox->quota_used * 100 /
 	      (imapd_mailbox->quota_limit * QUOTA_UNITS);
 	    if (usage >= 100) {
-		printf("* BAD Mailbox %s is over quota\r\n", name);
+		printf("* NO Mailbox %s is over quota\r\n", name);
 	    }
 	    else if (usage > config_getint("quotawarn", 90)) {
-		printf("* BAD Mailbox %s is at %d%% of quota\r\n",
+		printf("* NO Mailbox %s is at %d%% of quota\r\n",
 		       name, usage);
 	    }
 	}
@@ -598,7 +609,7 @@ int usinguid;
 
 	default:
 	badatt:
-	    printf("%s BAD Invalid %s item %s\r\n", tag, cmd, fetchatt.s);
+	    printf("%s BAD Invalid %s attribute %s\r\n", tag, cmd, fetchatt.s);
 	    if (c != '\n') eatline();
 	    return;
 	}
@@ -630,7 +641,7 @@ int usinguid;
 
     if (usinguid) {
 	fetchitems |= FETCH_UID;
-	index_check(imapd_mailbox);
+	index_check(imapd_mailbox, 1, 0);
     }
 
     fetchargs.fetchitems = fetchitems;
@@ -696,7 +707,7 @@ char *count;
 
     index_fetch(imapd_mailbox, msgno, 0, &fetchargs);
 
-    index_check(imapd_mailbox);
+    index_check(imapd_mailbox, 0, 0);
 
     printf("%s OK Partial completed\r\n", tag);
 }
@@ -717,7 +728,7 @@ char *arg;
 	num = num*10 + c - '0';
     }
     
-    index_check(imapd_mailbox);
+    index_check(imapd_mailbox, 1, 0);
 
     fetchargs = zerofetchargs;
     fetchargs.fetchitems = FETCH_UID;
@@ -730,6 +741,130 @@ char *arg;
 
     printf("%s OK UID After completed\r\n", tag);
 }
+
+cmd_store(tag, sequence, operation, usinguid)
+char *tag;
+char *sequence;
+char *operation;
+int usinguid;
+{
+    char *cmd = usinguid ? "UID Store" : "Store";
+    struct storeargs storeargs;
+    static struct storeargs zerostoreargs;
+    static struct buf flagname;
+    int c;
+    char **flag = 0;
+    int nflags = 0, flagalloc = 0;
+    int flagsparsed = 0, inlist = 0;
+    int r;
+
+    storeargs = zerostoreargs;
+
+    lcase(operation);
+    if (!strcmp(operation, "+flags")) {
+	storeargs.operation = STORE_ADD;
+    }
+    else if (!strcmp(operation, "-flags")) {
+	storeargs.operation = STORE_REMOVE;
+    }
+    else if (!strcmp(operation, "flags")) {
+	storeargs.operation = STORE_REPLACE;
+    }
+    else {
+	printf("%s BAD Invalid %s attribute\r\n", tag, cmd);
+	eatline();
+	return;
+    }
+
+    for (;;) {
+	c = getword(&flagname);
+	if (c == '(' && !flagname.s[0] && !flagsparsed && !inlist) {
+	    inlist = 1;
+	    continue;
+	}
+
+	if (flagname.s[0] == '\\') {
+	    lcase(flagname.s);
+	    if (!strcmp(flagname.s, "\\seen")) {
+		storeargs.seen = 1;
+	    }
+	    else if (!strcmp(flagname.s, "\\answered")) {
+		storeargs.system_flags |= FLAG_ANSWERED;
+	    }
+	    else if (!strcmp(flagname.s, "\\flagged")) {
+		storeargs.system_flags |= FLAG_FLAGGED;
+	    }
+	    else if (!strcmp(flagname.s, "\\deleted")) {
+		storeargs.system_flags |= FLAG_DELETED;
+	    }
+	    else {
+		printf("%s BAD Invalid system flag in %s command\r\n",
+		       tag, cmd);
+		if (c != '\n') eatline();
+		goto freeflags;
+	    }
+	}
+	else if (!isatom(&flagname)) {
+	    printf("%s BAD Invalid flag name %s in %s command\r\n",
+		   tag, flagname.s, cmd);
+	    if (c != '\n') eatline();
+	    goto freeflags;
+	}
+	else {
+	    if (nflags == flagalloc) {
+		flagalloc += FLAGGROW;
+		flag = (char **)xrealloc((char *)flag,
+					 flagalloc*sizeof(char *));
+	    }
+	    flag[nflags++] = strsave(flagname.s);
+	}
+
+	flagsparsed++;
+	if (c != ' ') break;
+    }
+
+    if (inlist && c == ')') {
+	inlist = 0;
+	c = getc(stdin);
+    }
+    if (inlist) {
+	printf("%s BAD Missing close parenthesis in %s\r\n", tag, cmd);
+	if (c != '\n') eatline();
+	return;
+    }
+    if (c == '\r') c = getc(stdin);
+    if (c != '\n') {
+	printf("%s BAD Unexpected extra arguments to %s\r\n", tag, cmd);
+	eatline();
+	return;
+    }
+
+    if (!flagsparsed) {
+	printf("%s BAD Missing required argument to %s", tag, cmd);
+	return;
+    }
+
+    r = index_store(imapd_mailbox, sequence, usinguid, &storeargs,
+		    flag, nflags);
+	
+    if (usinguid) {
+	index_check(imapd_mailbox, 1, 0);
+    }
+
+    if (r) {
+	printf("%s NO %s failed: %s\r\n", tag, cmd, error_message(r));
+    }
+    else {
+	printf("%s OK %s completed\r\n", tag, cmd);
+    }
+
+ freeflags:
+    while (nflags--) {
+	free(flag[nflags]);
+    }
+    if (flag) free((char *)flag);
+}
+
 
 #define BUFGROWSIZE 100
 int getword(buf)
@@ -903,8 +1038,13 @@ eatline()
     while ((c = getc(stdin)) != EOF && c != '\n');
 }
 
-shutdown()
+shutdown(code)
+int code;
 {
-    exit(0);
+    if (imapd_mailbox) {
+	index_checkseen(imapd_mailbox, 1, 0, imapd_exists);
+	mailbox_close(imapd_mailbox);
+    }
+    exit(code);
 }
 

@@ -1,13 +1,14 @@
 ACL=acl_afs.o
 AUTH=auth_krb.o
 LOGIN=login_krb.o
+SEEN=seen_local.o
 AUTHLIBS=/usr/local/lib/libkrb.a /usr/local/lib/libdes.a
 
 LOBJS= append.o mailbox.o mboxlist.o message.o \
 	parsel.o parsey.o parseadd.o parseutl.o \
 	config.o imap_err.o \
 	assert.o xmalloc.o \
-	$(ACL) $(AUTH) $(LOGIN)
+	$(ACL) $(AUTH) $(LOGIN) $(SEEN)
 
 IMAPDOBJS= imapd.o index.o
 
@@ -88,7 +89,7 @@ config.o:	config.h xmalloc.h
 deliver.o:	imap_err.h mailbox.h
 imapd.o:	auth.h imap_err.h mailbox.h imapd.h xmalloc.h
 index.o:	imap_err.h mailbox.h imapd.h message.h xmalloc.h
-login_krb.o:	config.h imapd.h kerberos.h
+login_krb.o:	config.h imapd.h
 mailbox.o:	assert.h imap_err.h mailbox.h xmalloc.h
 mboxlist.o:	config.h imap_err.h xmalloc.h
 message.o:	imap_err.h mailbox.h parseadd.h xmalloc.h
