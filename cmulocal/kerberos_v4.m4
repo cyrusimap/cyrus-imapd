@@ -1,8 +1,68 @@
 dnl kerberos_v4.m4--Kerberos 4 libraries and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
-dnl $Id: kerberos_v4.m4,v 1.1 1998/10/05 16:02:38 shadow Exp $
+dnl $Id: kerberos_v4.m4,v 1.2 1998/10/05 18:22:08 shadow Exp $
 
+AC_DEFUN(CMU_KRB_INC_WHERE1, [
+saved_CPPFLAGS=$CPPFLAGS
+CPPFLAGS="$saved_CPPFLAGS -I$1"
+AC_TRY_COMPILE([#include <krb.h>],
+[struct ktext foo;],
+ac_cv_found_krb_inc=yes,
+ac_cv_found_krb_inc=no)
+if test "$ac_cv_found_krb_inc" = "no"; then
+  CPPFLAGS="$saved_CPPFLAGS -I$1 -I$1/kerberosIV"
+  AC_TRY_COMPILE([#include <krb.h>],
+  [struct ktext foo;],
+  [ac_cv_found_krb_inc=yes],
+  ac_cv_found_krb_inc=no)
+fi
+CPPFLAGS=$saved_CPPFLAGS
+])
+
+AC_DEFUN(CMU_KRB_INC_WHERE, [
+   for i in $1; do
+      AC_MSG_CHECKING(for kerberos headers in $i)
+      CMU_KRB_INC_WHERE1($i)
+      if test "$ac_cv_found_krb_inc" = "yes"; then
+        ac_cv_krb_where_inc=$i
+        AC_MSG_RESULT(found)
+        break
+      else
+        AC_MSG_RESULT(no found)
+      fi
+    done
+])
+
+#
+# Test for kerberos lib files
+#
+
+AC_DEFUN(CMU_KRB_LIB_WHERE1, [
+saved_LIBS=$LIBS
+LIBS="$saved_LIBS -L$1 -lkrb -ldes"
+AC_TRY_LINK(,
+[dest_tkt();],
+[ac_cv_found_krb_lib=yes],
+ac_cv_found_krb_lib=no)
+LIBS=$saved_LIBS
+])
+
+AC_DEFUN(CMU_KRB_LIB_WHERE, [
+   for i in $1; do
+      AC_MSG_CHECKING(for kerberos libraries in $i)
+      CMU_KRB_LIB_WHERE1($i)
+      if test "$ac_cv_found_krb_lib" = "yes" ; then
+        ac_cv_krb_where_lib=$i
+        AC_MSG_RESULT(found)
+        break
+      else
+        AC_MSG_RESULT(no found)
+      fi
+    done
+])
+
+AC_DEFUN(CMU_KRB4, [
 AC_ARG_WITH(krb4,
 	[  --with-krb4=PREFIX      Compile with Kerberos 4 support],
 	[if test "X$with_krb4" = "X"; then
@@ -19,7 +79,6 @@ AC_ARG_WITH(krb4-include,
 		AC_MSG_ERROR([No argument for --with-krb4-include])
 	fi])
 
-AC_DEFUN(CMU_KRB4, [
 	if test "X$with_krb4" != "X"; then
 	  ac_cv_krb_where_lib=$with_krb4/lib
 	  ac_cv_krb_where_inc=$with_krb4/include
@@ -29,14 +88,14 @@ AC_DEFUN(CMU_KRB4, [
 	  ac_cv_krb_where_lib=$with_krb4_lib
 	fi
 	if test "X$ac_cv_krb_where_lib" = "X"; then
-	  AC_KRB_LIB_WHERE(/usr/athena/lib /usr/lib /usr/local/lib)
+	  CMU_KRB_LIB_WHERE(/usr/athena/lib /usr/lib /usr/local/lib)
 	fi
 
 	if test "X$with_krb4_include" != "X"; then
 	  ac_cv_krb_where_inc=$with_krb4_include
 	fi
 	if test "X$ac_cv_krb_where_inc" = "X"; then
-	  AC_KRB_INC_WHERE(/usr/athena/include /usr/include/kerberosIV /usr/include/kerberos /usr/local/include)
+	  CMU_KRB_INC_WHERE(/usr/athena/include /usr/include/kerberosIV /usr/include/kerberos /usr/local/include)
 	fi
 
 	AC_MSG_CHECKING(whether to include kerberos 4)
@@ -88,63 +147,4 @@ AC_DEFUN(CMU_KRB4, [
 	  esac
 	fi
 	])
-
-AC_DEFUN(AC_KRB_INC_WHERE1, [
-saved_CPPFLAGS=$CPPFLAGS
-CPPFLAGS="$saved_CPPFLAGS -I$1"
-AC_TRY_COMPILE([#include <krb.h>],
-[struct ktext foo;],
-ac_cv_found_krb_inc=yes,
-ac_cv_found_krb_inc=no)
-if test "$ac_cv_found_krb_inc" = "no"; then
-  CPPFLAGS="$saved_CPPFLAGS -I$1 -I$1/kerberosIV"
-  AC_TRY_COMPILE([#include <krb.h>],
-  [struct ktext foo;],
-  [ac_cv_found_krb_inc=yes],
-  ac_cv_found_krb_inc=no)
-fi
-CPPFLAGS=$saved_CPPFLAGS
-])
-
-AC_DEFUN(AC_KRB_INC_WHERE, [
-   for i in $1; do
-      AC_MSG_CHECKING(for kerberos headers in $i)
-      AC_KRB_INC_WHERE1($i)
-      if test "$ac_cv_found_krb_inc" = "yes"; then
-        ac_cv_krb_where_inc=$i
-        AC_MSG_RESULT(found)
-        break
-      else
-        AC_MSG_RESULT(no found)
-      fi
-    done
-])
-
-#
-# Test for kerberos lib files
-#
-
-AC_DEFUN(AC_KRB_LIB_WHERE1, [
-saved_LIBS=$LIBS
-LIBS="$saved_LIBS -L$1 -lkrb -ldes"
-AC_TRY_LINK(,
-[dest_tkt();],
-[ac_cv_found_krb_lib=yes],
-ac_cv_found_krb_lib=no)
-LIBS=$saved_LIBS
-])
-
-AC_DEFUN(AC_KRB_LIB_WHERE, [
-   for i in $1; do
-      AC_MSG_CHECKING(for kerberos libraries in $i)
-      AC_KRB_LIB_WHERE1($i)
-      if test "$ac_cv_found_krb_lib" = "yes" ; then
-        ac_cv_krb_where_lib=$i
-        AC_MSG_RESULT(found)
-        break
-      else
-        AC_MSG_RESULT(no found)
-      fi
-    done
-])
 
