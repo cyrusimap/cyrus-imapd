@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.31 2002/02/06 16:38:41 leg Exp $
+ * $Id: lmtpproxyd.c,v 1.32 2002/02/10 01:53:58 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -144,7 +144,7 @@ static int verify_user(const char *user, long quotacheck,
 void shut_down(int code);
 static void usage();
 
-struct lmtp_func mylmtp = { &deliver, &verify_user, 0, 0, 0 };
+struct lmtp_func mylmtp = { &deliver, &verify_user, &shut_down, 0, 0, 0 };
 
 /* globals */
 static int quotaoverride = 0;		/* should i override quota? */

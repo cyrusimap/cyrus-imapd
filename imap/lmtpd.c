@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.81 2002/02/06 16:38:18 leg Exp $
+ * $Id: lmtpd.c,v 1.82 2002/02/10 01:53:57 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -142,7 +142,7 @@ static char *generate_notify(message_data_t *m);
 
 void shut_down(int code);
 
-struct lmtp_func mylmtp = { &deliver, &verify_user, 0, 1, 0 };
+struct lmtp_func mylmtp = { &deliver, &verify_user, &shut_down, 0, 1, 0 };
 
 static void logdupelem();
 static void usage();
