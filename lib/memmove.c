@@ -1,4 +1,4 @@
-/* bcopy.c -- replacement bcopy() routine
+/* memmove.c -- replacement memmove() routine
  * Only handles overlapping strings when moving data upwards
  *
  *	(C) Copyright 1993 by Carnegie Mellon University
@@ -22,13 +22,24 @@
  * SOFTWARE.
  */
 
-void
-bcopy(b1, b2, length)
-char *b1, *b2;
-int length;
+void *memmove(s, ct, n)
+void *s;
+const void *ct;
+unsigned int n;
 {
-    while (length--) {
-	*b2++ = *b1++;
+    void *origs = s;
+
+    if (s <= ct) {
+	while (n--) {
+	    *s++ = *ct++;
+	}
     }
+    else {
+	while (n--) {
+	    s[n] = ct[n];
+	}
+    }
+
+    return origs;
 }
 
