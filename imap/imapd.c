@@ -1130,9 +1130,9 @@ char *name;
 	    c = getword(&arg);
 	    if (arg.s[0] == '\\') {
 		lcase(arg.s);
-		if (!strcmp(arg.s, "\\seen") && !strcmp(arg.s, "\\answered") &&
-		    !strcmp(arg.s, "\\flagged") && !strcmp(arg.s, "\\draft") &&
-		    !strcmp(arg.s, "\\deleted")) {
+		if (strcmp(arg.s, "\\seen") && strcmp(arg.s, "\\answered") &&
+		    strcmp(arg.s, "\\flagged") && strcmp(arg.s, "\\draft") &&
+		    strcmp(arg.s, "\\deleted")) {
 		    prot_printf(imapd_out, "%s BAD Invalid system flag in Append command\r\n",tag);
 		    eatline(c);
 		    goto freeflags;
