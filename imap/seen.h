@@ -1,5 +1,5 @@
 /* seen.h -- abstract interface for /Recent and /Seen information
-   $Id: seen.h,v 1.3 2000/04/11 03:41:15 leg Exp $
+   $Id: seen.h,v 1.4 2000/04/12 18:23:56 leg Exp $
  
  # Copyright 2000 Carnegie Mellon University
  # 
@@ -74,5 +74,8 @@ int seen_reconstruct(struct mailbox *mailbox,
 		     time_t prune_time,
 		     int (*report_proc)(),
 		     void *report_rock);
+
+/* done with all seen operations for this process */
+int seen_done(void);
 
 #endif /* SEEN_LOCAL_H */
