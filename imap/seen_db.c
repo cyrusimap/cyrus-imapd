@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.32 2002/05/15 18:30:58 rjs3 Exp $
+   $Id: seen_db.c,v 1.33 2002/06/09 14:10:38 ken3 Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -463,7 +463,11 @@ int seen_delete_user(const char *user)
 
     /* erp! */
     r = unlink(fname);
-    if (r < 0) {
+    if (r == ENOENT) {
+	syslog(LOG_WARNING, "can not unlink %s: %m", fname);
+	r = 0;
+    }
+    else if (r < 0) {
 	syslog(LOG_ERR, "error unlinking %s: %m", fname);
 	r = IMAP_IOERROR;
     }
