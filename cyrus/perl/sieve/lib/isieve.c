@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: isieve.c,v 1.24 2002/05/25 19:57:50 leg Exp $ */
+/* $Id: isieve.c,v 1.24.4.1 2002/08/05 20:22:59 ken3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -76,6 +76,9 @@ struct iseive_s {
     sasl_conn_t *conn;
     sasl_callback_t *callbacks;
 
+    char *refer_authinfo;
+    sasl_callback_t *refer_callbacks;
+
     int version;
 
     struct protstream *pin;
@@ -91,6 +94,10 @@ static void sieve_dispose(isieve_t *obj)
     if(!obj) return;
     sasl_dispose(&obj->conn);
     free(obj->serverFQDN);
+
+    if (obj->refer_authinfo) free(obj->refer_authinfo);
+    if (obj->refer_callbacks) free(obj->refer_callbacks);
+
     prot_free(obj->pin);
     prot_free(obj->pout);
 }
@@ -457,6 +464,30 @@ int auth_sasl(char *mechlist, isieve_t *obj, const char **mechusing,
   }
 }
 
+static int mysasl_simple_cb(void *context, int id, const char **result,
+			    unsigned int *len)
+{
+    if (!result) {
+	return SASL_BADPARAM;
+    }
+
+    switch (id) {
+    case SASL_CB_USER:
+	*result = (char *) context;
+	break;
+    case SASL_CB_AUTHNAME:
+	*result = (char *) context;
+	break;
+    default:
+	return SASL_BADPARAM;
+    }
+    if (len) {
+	*len = *result ? strlen(*result) : 0;
+    }
+
+    return SASL_OK;
+}
+
 int do_referral(isieve_t *obj, char *refer_to) 
 {
     int ret;
@@ -466,21 +497,76 @@ int do_referral(isieve_t *obj, char *refer_to)
     int port;
     char *errstr;
     const char *mtried;
-        
-    /* xxx we're not supporting port numbers here */
+    const char *scheme = "sieve://";
+    char *host, *p;
+    sasl_callback_t *callbacks;
 
-    serv = getservbyname("sieve", "tcp");
-    if (serv == NULL) {
-	port = 2000;
-    } else {
-	port = ntohs(serv->s_port);
+    /* check scheme */
+    if (strncasecmp(refer_to, scheme, strlen(scheme)))
+	return STAT_NO;
+
+    /* get host */
+    if ((host = strrchr(refer_to, '@'))) {
+	char *authid, *userid;
+	int n;
+
+	*host++ = '\0';
+
+	/* get authid - make a copy so it persists for the callbacks */
+	authid = obj->refer_authinfo = xstrdup(refer_to + strlen(scheme));
+
+	/* get userid */
+	if ((userid = strrchr(authid, ';')))
+	    *userid++ = '\0';
+
+	/* count the callbacks */
+	for (n = 0; obj->callbacks[n++].id != SASL_CB_LIST_END;);
+
+	/* copy the callbacks, substituting some of our own */
+	callbacks = obj->refer_callbacks = xmalloc(n*sizeof(sasl_callback_t));
+
+	while (--n >= 0) {
+	    callbacks[n].id = obj->callbacks[n].id;
+
+	    switch (callbacks[n].id) {
+	    case SASL_CB_USER:
+		callbacks[n].proc = &mysasl_simple_cb;
+		callbacks[n].context = userid ? userid : authid;
+		break;
+	    case SASL_CB_AUTHNAME:
+		callbacks[n].proc = &mysasl_simple_cb;
+		callbacks[n].context = authid;
+		break;
+	    default:
+		callbacks[n].proc = obj->callbacks[n].proc;
+		callbacks[n].context = obj->callbacks[n].context;
+		break;
+	    }
+	}
+    }
+    else {
+	host = refer_to + strlen(scheme);
+	callbacks = obj->callbacks;
     }
 
-    ret = init_net(refer_to, port, &obj_new);
+    /* get port */
+    if ((p = strchr(host, ':'))) {
+	*p++ = '\0';
+	port = atoi(p);
+    } else {
+	serv = getservbyname("sieve", "tcp");
+	if (serv == NULL) {
+	    port = 2000;
+	} else {
+	    port = ntohs(serv->s_port);
+	}
+    }
+
+    ret = init_net(host, port, &obj_new);
     if(ret) return STAT_NO;
 
     /* Start up SASL */
-    ret = init_sasl(obj_new, 128, obj->callbacks);
+    ret = init_sasl(obj_new, 128, callbacks);
     if(ret) return STAT_NO;
 
     /* Authenticate */
