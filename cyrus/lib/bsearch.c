@@ -108,12 +108,12 @@ unsigned long *lenp;
 		end = mid - 1;
 		continue;
 	    }
-	    offset = p - buffer;
+	    offset = p - buffer + 1;
 	}
 
 	p = memchr(buffer+offset, '\n', size-offset);
 	if (p) {
-	    len = p - (buffer+offset);
+	    len = p - (buffer+offset) + 1;
 	}
 	else {
 	    len = size-offset;
@@ -154,6 +154,7 @@ unsigned long *lenp;
 	}
 
 	if (cmp < 0) {
+	    if (mid == 0) break;
 	    end = mid - 1;
 	}
 	else {
@@ -162,6 +163,9 @@ unsigned long *lenp;
     }
 
     /* Word was not found.  Return offset where word should be inserted */
-    *lenp = 0;
-    return start;
+    if (lenp) *lenp = 0;
+    if (start > size) return size;
+    if (!start) return 0;
+    p = memchr(buffer+start, '\n', size-start);
+    return p - buffer + 1;
 }
