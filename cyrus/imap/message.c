@@ -145,13 +145,10 @@ FILE *to;
 		if (!sawcr) r = IMAP_MESSAGE_CONTAINSNL;
 		sawcr = 0;
 	    }
-	    else if (sawcr) {
-		r = IMAP_MESSAGE_CONTAINSCR;
-		sawcr = 0;
-	    }
 	    else if (*p == '\r') {
 		sawcr = 1;
 	    }
+	    else sawcr = 0;
 	}
 
 	fwrite(buf, 1, n, to);
@@ -480,7 +477,7 @@ PARSED_ADDRESS **addrp;
 	hdrend = strchr(hdrend+1, '\n');
     } while (hdrend && (hdrend[1] == ' ' || hdrend[1] == '\t'));
 
-    /* Drop NUL character at the end of header */
+    /* Put a NUL character at the end of header */
     if (hdrend) {
 	if (hdrend > hdr && hdrend[-1] == '\r') hdrend--;
 	hdrendchar = *hdrend;
