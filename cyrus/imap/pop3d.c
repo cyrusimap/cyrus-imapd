@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122.4.7 2002/07/30 16:49:04 ken3 Exp $
+ * $Id: pop3d.c,v 1.122.4.8 2002/07/30 19:40:12 ken3 Exp $
  */
 #include <config.h>
 
@@ -1061,7 +1061,7 @@ char *user;
 	prot_flush(popd_out);
 	shut_down(0);
     }
-    else if (!(p = canonify_userid(user, NULL)) ||
+    else if (!(p = canonify_userid(user, NULL, NULL)) ||
 	     /* '.' isn't allowed if '.' is the hierarchy separator */
 	     (popd_namespace.hier_sep == '.' && (dot = strchr(p, '.')) &&
 	      !(config_virtdomains &&  /* allow '.' in dom.ain */

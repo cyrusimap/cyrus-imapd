@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.16 2002/07/30 16:49:03 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.17 2002/07/30 19:40:11 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1689,7 +1689,7 @@ void cmd_login(char *tag, char *user)
 	return;
     }
 
-    canon_user = canonify_userid(user, NULL);
+    canon_user = canonify_userid(user, NULL, NULL);
 
     if (!canon_user) {
 	syslog(LOG_NOTICE, "badlogin: %s plaintext %s invalid user",
@@ -4238,7 +4238,7 @@ char *identifier;
 	if (config_authisa(authstate, IMAPOPT_ADMINS))
 	    canon_identifier = identifier; /* don't canonify global admins */
 	else
-	    canon_identifier = canonify_userid(identifier, imapd_userid);
+	    canon_identifier = canonify_userid(identifier, imapd_userid, NULL);
 	auth_freestate(authstate);
 
 	if (canon_identifier) canonidlen = strlen(canon_identifier);

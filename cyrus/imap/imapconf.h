@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- * $Id: imapconf.h,v 1.16.4.4 2002/07/20 01:47:17 ken3 Exp $
+ * $Id: imapconf.h,v 1.16.4.5 2002/07/30 19:40:11 ken3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -70,7 +70,7 @@ extern int mysasl_config(void *context,
 extern sasl_security_properties_t *mysasl_secprops(int flags);
 
 /* user canonification */
-extern char *canonify_userid(char *user, char *loginis);
+extern char *canonify_userid(char *user, char *loginid, int *domain_from_ip);
 
 extern int mysasl_canon_user(sasl_conn_t *conn,
 		             void *context,

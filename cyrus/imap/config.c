@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.55.4.6 2002/07/25 17:21:40 ken3 Exp $ */
+/* $Id: config.c,v 1.55.4.7 2002/07/30 19:40:10 ken3 Exp $ */
 
 #include <config.h>
 
@@ -550,7 +550,7 @@ int config_authisa(struct auth_state *authstate, enum imapopt opt)
     return 0;
 }
 
-char *canonify_userid(char *user, char *loginid)
+char *canonify_userid(char *user, char *loginid, int *domain_from_ip)
 {
     char *domain = NULL;
     int len = strlen(user);
@@ -599,6 +599,8 @@ char *canonify_userid(char *user, char *loginid)
 		    /* append the domain from our IP */
 		    snprintf(buf, sizeof(buf), "%s@%s", user, domain+1);
 		    user = buf;
+
+		    if (domain_from_ip) *domain_from_ip = 1;
 		}
 	    }
 	}
@@ -608,7 +610,7 @@ char *canonify_userid(char *user, char *loginid)
 }
 
 int mysasl_canon_user(sasl_conn_t *conn,
-		      void *context __attribute__((unused)),
+		      void *context,
 		      const char *user, unsigned ulen,
 		      unsigned flags __attribute__((unused)),
 		      const char *user_realm __attribute__((unused)),
@@ -624,7 +626,7 @@ int mysasl_canon_user(sasl_conn_t *conn,
     memcpy(out, user, ulen);
     out[ulen] = '\0';
 
-    canonuser = canonify_userid(out, NULL);
+    canonuser = canonify_userid(out, NULL, (int*) context);
     if (!canonuser) {
 	sasl_seterror(conn, 0, "bad userid authenticated");
 	return SASL_BADAUTH;

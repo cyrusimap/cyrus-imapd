@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.8 2002/07/30 16:49:04 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.9 2002/07/30 19:40:13 ken3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -118,6 +118,9 @@ struct backend *backend_current = NULL;
 
 /* our cached connections */
 struct backend **backend_cached = NULL;
+
+/* are we doing virtdomains with multiple IPs? */
+static int disable_referrals;
 
 /* has the client issued an RLIST or RLSUB? */
 static int supports_referrals;
@@ -1122,7 +1125,7 @@ static int mysasl_authproc(sasl_conn_t *conn,
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
     { SASL_CB_PROXY_POLICY, &mysasl_authproc, NULL },
-    { SASL_CB_CANON_USER, &mysasl_canon_user, NULL },   
+    { SASL_CB_CANON_USER, &mysasl_canon_user, (void*) &disable_referrals },
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
@@ -1226,6 +1229,7 @@ static void proxyd_reset(void)
     
     /* Cleanup Globals */
     proxyd_cmdcnt = 0;
+    disable_referrals = 0;
     supports_referrals = 0;
     proxyd_userisadmin = 0;
     proxyd_starttls_done = 0;
@@ -1890,7 +1894,7 @@ void cmdloop()
 		cmd_rename(tag.s, arg1.s, arg2.s, havepartition ? arg3.s : 0);
 	    }
 	    else if (!strcmp(cmd.s, "Rlist")) {
-		supports_referrals = 1;
+		supports_referrals = !disable_referrals;
 		c = getastring(proxyd_in, proxyd_out, &arg1);
 		if (c != ' ') goto missingargs;
 		c = getastring(proxyd_in, proxyd_out, &arg2);
@@ -1899,7 +1903,7 @@ void cmdloop()
 		cmd_list(tag.s, 0, arg1.s, arg2.s);
 	    }
 	    else if (!strcmp(cmd.s, "Rlsub")) {
-		supports_referrals = 1;
+		supports_referrals = !disable_referrals;
 		c = getastring(proxyd_in, proxyd_out, &arg1);
 		if (c != ' ') goto missingargs;
 		c = getastring(proxyd_in, proxyd_out, &arg2);
@@ -2191,7 +2195,7 @@ void cmd_login(char *tag, char *user)
 	return;
     }
 
-    canon_user = auth_canonifyid(user, 0);
+    canon_user = canonify_userid(user, NULL, &disable_referrals);
 
     if (!canon_user) {
 	syslog(LOG_NOTICE, "badlogin: %s plaintext %s invalid user",
@@ -4195,7 +4199,7 @@ void cmd_listrights(char *tag, char *name, char *identifier)
 	if (config_authisa(authstate, IMAPOPT_ADMINS))
 	    canon_identifier = identifier; /* don't canonify global admins */
 	else
-	    canon_identifier = canonify_userid(identifier, proxyd_userid);
+	    canon_identifier = canonify_userid(identifier, proxyd_userid, NULL);
 	auth_freestate(authstate);
 
 	if (canon_identifier) canonidlen = strlen(canon_identifier);
