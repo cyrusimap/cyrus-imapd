@@ -1127,7 +1127,12 @@ char *deciderock;
     /* Record quota release */
     r = mailbox_lock_quota(&mailbox->quota);
     if (r) goto fail;
-    mailbox->quota.used -= quotadeleted;
+    if (mailbox->quota.used >= quotadeleted) {
+	mailbox->quota.used -= quotadeleted;
+    }
+    else {
+	mailbox->quota.used = 0;
+    }
     r = mailbox_write_quota(&mailbox->quota);
     if (r) {
 	syslog(LOG_ERR,
@@ -1328,7 +1333,12 @@ struct mailbox *mailbox;
     seen_delete(mailbox);
 
     /* Free any quota being used by this mailbox */
-    mailbox->quota.used -= mailbox->quota_mailbox_used;
+    if (mailbox->quota.used >= mailbox->quota_mailbox_used) {
+	mailbox->quota.used -= mailbox->quota_mailbox_used;
+    }
+    else {
+	mailbox->quota.used = 0;
+    }
     r = mailbox_write_quota(&mailbox->quota);
     if (r) {
 	syslog(LOG_ERR,
