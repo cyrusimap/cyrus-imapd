@@ -2,12 +2,12 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.118 1998/09/29 03:29:04 tjs Exp $
+dnl $Id: configure.in,v 1.119 1998/09/29 04:16:24 tjs Exp $
 dnl
 
 AC_INIT(imap/imapd.c)
 
-AC_CHECK_PROG(MAKEDEPEND,makedepend,makedepend,[`cd ${srcdir};pwd`/not-mkdep])
+AC_CHECK_PROG(MAKEDEPEND,makedepend,makedepend,[`cd ${srcdir};pwd`/tools/not-mkdep])
 if test "$MAKEDEPEND" != "makedepend"; then
         AC_MSG_WARN([Makedepend is not installed on this system.  You should compile and install the version from the makedepend subdirectory.])
 fi
