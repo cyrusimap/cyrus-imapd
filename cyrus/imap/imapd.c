@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.164 1999/03/02 01:14:25 tjs Exp $ */
+/* $Id: imapd.c,v 1.165 1999/03/02 01:16:40 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -3436,7 +3436,6 @@ int parsecharset;
 	    else {
 		appendstrlistpat(&searchargs->bcc, str);
 	    }
-	    free(str);
 	}
 	else if (!strcmp(criteria.s, "body")) {
 	    if (c != ' ') goto missingarg;		
