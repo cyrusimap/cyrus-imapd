@@ -40,7 +40,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.87 2002/07/24 17:38:39 wcw Exp $
+# $Id: SMakefile,v 1.88 2002/07/25 17:06:32 rjs3 Exp $
 #
 
 if test ! -x configure; then
@@ -69,11 +69,10 @@ LOCALDEFS="-DEXTRA_IDENT=\\\"$VER\\\""
 # PERL CONFIGURATION
 PERL_MM_OPT="INSTALLPRIVLIB=${DESTDIR}/usr/local/lib/perl5 INSTALLARCHLIB=${DESTDIR}/usr/local/lib/perl5/5.6.1 INSTALLSITELIB=${DESTDIR}/usr/local/lib/perl5/site_perl/5.6.1 INSTALLSITEARCH=${DESTDIR}/usr/local/lib/perl5/site_perl/5.6.1 INSTALLBIN=${DESTDIR}/usr/local/bin INSTALLSCRIPT=${DESTDIR}/usr/local/bin INSTALLMAN1DIR=${DESTDIR}/usr/local/man/man1 INSTALLMAN3DIR=${DESTDIR}/usr/local/man/man3"
 export PERL_MM_OPT
-
 # end perl configuration
 
 # Let's just assume we are using gcc...
-if "${WASH_CYRUS_INSURE}" = "t"; then
+if test "${WASH_CYRUS_INSURE}" = "t"; then
   CC="insure"
   CFLAGS="-g"
 else
@@ -97,9 +96,9 @@ case `uname` in
         LDFLAGS="${LDFLAGS} -L/usr/local/lib -Wl,-R,/usr/local/lib"
 	LIBS="-lkstat -ldoor"
     ;;
-  *)    CC=cc
-
-  ;;
+    *)
+        CC=cc
+    ;;
 esac
 
 
