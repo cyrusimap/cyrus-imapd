@@ -98,7 +98,7 @@ action will run C<pwd> from a shell if invoked.
 
 =item C<create> [C<--partition> I<partition>] I<mailbox>
 
-=item C<create> I<mailbox I<partition>
+=item C<create> I<mailbox> I<partition>
 
 =item C<cm> [C<--partition> I<partition>] I<mailbox>
 
