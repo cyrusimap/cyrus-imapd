@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.18.6.8 2003/03/12 16:38:14 ken3 Exp $
+ * $Id: mbdump.c,v 1.18.6.9 2003/04/17 17:00:56 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -81,18 +81,19 @@ static int sieve_isactive(char *sievepath, char *name)
     char linkname[1024];
     char activelink[1024];
     char *file, *link;
+    int len;
 
-    snprintf(filename, 1023, "%s/%s", sievepath, name);
-    snprintf(linkname, 1023, "%s/default", sievepath);
+    snprintf(filename, sizeof(filename), "%s/%s", sievepath, name);
+    snprintf(linkname, sizeof(linkname), "%s/default", sievepath);
 
-    memset(activelink, 0, sizeof(activelink));
-    if ((readlink(linkname, activelink, sizeof(activelink)-1) < 0) && 
-	(errno != ENOENT)) 
-    {
-	syslog(LOG_ERR, "readlink(default): %m");
+    len = readlink(linkname, activelink, sizeof(activelink)-1);
+    if(len < 0) {
+	if(errno != ENOENT) syslog(LOG_ERR, "readlink(default): %m");
 	return 0;
     }
 
+    activelink[len] = '\0';
+    
     /* Only compare the part of the file after the last /,
      * since that is what timsieved does */
     file = strrchr(filename, '/');
@@ -133,8 +134,7 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
                                };
     /* non-null userid means we are moving the user */
     const char *userid = NULL;
-    const int SEEN_DB = 0;
-    const int SUBS_DB = 1;
+    enum { SEEN_DB = 0, SUBS_DB = 1 };
     char *user_data_files[3];
     int domainlen = 0;
     char *p = NULL, userbuf[81];
@@ -487,8 +487,8 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
     int domainlen = 0;
     char *p = NULL, userbuf[81];
     
-    memset(&file, 0, sizeof(struct buf));
-    memset(&data, 0, sizeof(struct buf));
+    memset(&file, 0, sizeof(file));
+    memset(&data, 0, sizeof(data));
 
     c = getword(pin, &data);
 
@@ -571,7 +571,7 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
 	if(userid && !strcmp(file.s, "SUBS")) {
 	    /* overwriting this outright is absolutely what we want to do */
 	    char *s = mboxlist_hash_usersubs(userid);
-	    strcpy(fnamebuf, s);
+	    strlcpy(fnamebuf, s, sizeof(fnamebuf));
 	    free(s);
 	} else if (userid && !strcmp(file.s, "SEEN")) {
 	    seen_file = seen_getpath(userid);
@@ -642,7 +642,7 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
 	}	
 
 	/* if we haven't opened it, do so */
-	curfile = open(fnamebuf, O_WRONLY|O_TRUNC|O_CREAT, 0666);
+	curfile = open(fnamebuf, O_WRONLY|O_TRUNC|O_CREAT, 0640);
 	if(curfile == -1) {
 	    syslog(LOG_ERR, "IOERROR: creating %s: %m", fnamebuf);
 	    r = IMAP_IOERROR;

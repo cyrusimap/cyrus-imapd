@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.36.2.6 2003/02/13 20:32:54 rjs3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.36.2.7 2003/04/17 17:00:55 ken3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -102,8 +102,8 @@ static int dump_p(void *rockp __attribute__((unused)),
 
 struct mb_node 
 {
-    char mailbox[MAX_MAILBOX_NAME];
-    char server[MAX_MAILBOX_NAME];
+    char mailbox[MAX_MAILBOX_NAME+1];
+    char server[MAX_MAILBOX_NAME+1];
     char *acl;
     struct mb_node *next;
 };
@@ -140,7 +140,7 @@ static int mupdate_list_cb(struct mupdate_mailboxdata *mdata,
 	struct mb_node *next;
 	
 	next = xzmalloc(sizeof(struct mb_node));
-	strcpy(next->mailbox, mdata->mailbox);
+	strlcpy(next->mailbox, mdata->mailbox, sizeof(next->mailbox));
 	
 	next->next = del_head;
 	del_head = next;
@@ -151,8 +151,8 @@ static int mupdate_list_cb(struct mupdate_mailboxdata *mdata,
 	struct mb_node *next;
 	
 	next = xzmalloc(sizeof(struct mb_node));
-	strcpy(next->mailbox, mdata->mailbox);
-	strcpy(next->server, mdata->server);
+	strlcpy(next->mailbox, mdata->mailbox, sizeof(next->mailbox));
+	strlcpy(next->server, mdata->server, sizeof(next->server));
 	if(!strncmp(cmd, "MAILBOX", 7))
 	    next->acl = xstrdup(mdata->acl);
 
@@ -235,7 +235,7 @@ static int dump_cb(void *rockp,
 		    printf("Remove remote flag on: %s\n", name);
 		} else {
 		    next = xzmalloc(sizeof(struct mb_node));
-		    strcpy(next->mailbox, name);
+		    strlcpy(next->mailbox, name, sizeof(next->mailbox));
 		    next->next = unflag_head;
 		    unflag_head = next;
 		}
@@ -277,7 +277,7 @@ static int dump_cb(void *rockp,
 		    printf("Remove Local Mailbox: %s\n", name);
 		} else {
 		    next = xzmalloc(sizeof(struct mb_node));
-		    strcpy(next->mailbox, name);
+		    strlcpy(next->mailbox, name, sizeof(next->mailbox));
 		    next->next = wipe_head;
 		    wipe_head = next;
 		}
@@ -294,7 +294,7 @@ static int dump_cb(void *rockp,
 			printf("Remove remote flag on: %s\n", name);
 		    } else {
 			next = xzmalloc(sizeof(struct mb_node));
-			strcpy(next->mailbox, name);
+			strlcpy(next->mailbox, name, sizeof(next->mailbox));
 			next->next = unflag_head;
 			unflag_head = next;
 		    }
@@ -523,7 +523,7 @@ void do_undump(void)
 	for (; *p && *p != '\r' && *p != '\n'; p++) ;
 	*p++ = '\0';
 
-	if (strlen(name) >= MAX_MAILBOX_NAME) {
+	if (strlen(name) > MAX_MAILBOX_NAME) {
 	    fprintf(stderr, "line %d: mailbox name too long\n", line);
 	    continue;
 	}
@@ -561,7 +561,7 @@ void do_undump(void)
 	    if(r) break;
 	    tid = NULL;
 	    untilCommit = PER_COMMIT;
-	    strncpy(last_commit,key,MAX_MAILBOX_NAME);
+	    strlcpy(last_commit,key,sizeof(last_commit));
 	}
 
 	if (r) break;
