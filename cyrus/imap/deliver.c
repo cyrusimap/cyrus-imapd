@@ -479,7 +479,6 @@ int quotaoverride;
     }
 }
 
-
 struct protstream *
 savemsg(return_path, idptr, notifyptr, sizeptr, lmtpmode)
 char *return_path;
@@ -488,6 +487,7 @@ char **notifyptr;
 unsigned *sizeptr;
 int lmtpmode;
 {
+    int r;
     FILE *f;
     char *hostname = 0;
     int scanheader = 1;
@@ -552,14 +552,22 @@ int lmtpmode;
 	    }
 	}
 	else if (*p == '\r') {
-	    /*
-	     * We were unlucky enough to get a CR just before we ran
-	     * out of buffer--put it back.
-	     */
-	    ungetc('\r', stdin);
-	    *p = '\0';
+	    if (p == (buf + sizeof(buf) - 1)) {
+		/*
+		 * We were unlucky enough to get a CR just before we ran
+		 * out of buffer--put it back.
+		 */
+		ungetc('\r', stdin);
+		*p = '\0';
+	    } else {
+		/* we saw a message with \r\0 in it, which we're not
+		   allowed to receive; we can't get a NULL.  XXX
+		   we keep processing until we get out of this loop which
+		   is a little lame, but this is a flag that we've got to
+		   bail out later. XXX */
+		r = IMAP_MESSAGE_CONTAINSNULL;
+	    }
 	}
-
 	/* Remove any lone CR characters */
 	while ((p = strchr(buf, '\r')) && p[1] != '\n') {
 	    strcpy(p, p+1);
@@ -631,6 +639,14 @@ int lmtpmode;
 	    }
 	}
 
+    }
+    if (r) {
+	if (lmtpmode) {
+	    printf("%s\r\n", convert_lmtp(r));
+	    return 0;
+	} else {
+	    exit(convert_sysexit(r));
+	}
     }
 
     if (lmtpmode) {
