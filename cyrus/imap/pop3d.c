@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122.4.36 2003/06/29 01:25:19 ken3 Exp $
+ * $Id: pop3d.c,v 1.122.4.37 2003/07/09 15:56:17 ken3 Exp $
  */
 #include <config.h>
 
@@ -1197,10 +1197,6 @@ void cmd_capa()
 }
 
 
-/* according to RFC 2449, since we advertise the "SASL" capability, we
- * must accept an optional second argument of the initial client
- * response (base64 encoded!).
- */ 
 void cmd_auth(char *arg)
 {
     int r, sasl_result;
@@ -1209,9 +1205,9 @@ void cmd_auth(char *arg)
 
     /* if client didn't specify an argument we give them the list
      *
-     * XXX This method of mechanism discovery, as well as the optional
-     * initial response, are undocumented features that appeared in
-     * draft-myers-sasl-pop3 and are still used by some clients.
+     * XXX This method of mechanism discovery ia an undocumented feature
+     * that appeared in draft-myers-sasl-pop3 and is still used by
+     * some clients.
      */
     if (!arg) {
 	const char *sasllist;
@@ -1234,6 +1230,11 @@ void cmd_auth(char *arg)
     }
 
     authtype = arg;
+
+    /* according to RFC 2449, since we advertise the "SASL" capability, we
+     * must accept an optional second argument as an initial client
+     * response (base64 encoded!).
+     */ 
     while (*arg && !isspace((int) *arg)) {
 	arg++;
     }
