@@ -42,7 +42,7 @@
  */
 
 /*
- * $Id: message.c,v 1.78 2000/05/30 21:02:05 ken3 Exp $
+ * $Id: message.c,v 1.79 2000/06/07 19:17:22 leg Exp $
  */
 
 #include <config.h>
@@ -1367,23 +1367,23 @@ unsigned flags;
     if (flags & PARSE_TIME) {
 	/* Parse hour */
 	message_parse_rfc822space(&hdr);
-	if (!hdr || !isdigit(*hdr)) goto baddate;
+	if (!hdr || !isdigit((int) *hdr)) goto baddate;
 	tm.tm_hour = *hdr++ - '0';
-	if (!isdigit(*hdr)) goto baddate;
+	if (!isdigit((int) *hdr)) goto baddate;
 	tm.tm_hour = tm.tm_hour * 10 + *hdr++ - '0';
 	if (!hdr || *hdr++ != ':') goto baddate;
 
 	/* Parse min */
-	if (!hdr || !isdigit(*hdr)) goto baddate;
+	if (!hdr || !isdigit((int) *hdr)) goto baddate;
 	tm.tm_min = *hdr++ - '0';
-	if (!isdigit(*hdr)) goto baddate;
+	if (!isdigit((int) *hdr)) goto baddate;
 	tm.tm_min = tm.tm_min * 10 + *hdr++ - '0';
 
 	if (*hdr == ':') {
 	    /* Parse sec */
-	    if (!++hdr || !isdigit(*hdr)) goto baddate;
+	    if (!++hdr || !isdigit((int) *hdr)) goto baddate;
 	    tm.tm_sec = *hdr++ - '0';
-	    if (!isdigit(*hdr)) goto baddate;
+	    if (!isdigit((int) *hdr)) goto baddate;
 	    tm.tm_sec = tm.tm_sec * 10 + *hdr++ - '0';
 	}
 
@@ -1399,13 +1399,13 @@ unsigned flags;
 
 		if (*hdr++ == '-')
 		    east = -1;
-		if (!hdr || !isdigit(*hdr)) goto baddate;
+		if (!hdr || !isdigit((int) *hdr)) goto baddate;
 		offset = 10 * (*hdr++ - '0');
-		if (!hdr || !isdigit(*hdr)) goto baddate;
+		if (!hdr || !isdigit((int) *hdr)) goto baddate;
 		offset = 60 * (offset + (*hdr++ - '0'));
-		if (!hdr || !isdigit(*hdr)) goto baddate;
+		if (!hdr || !isdigit((int) *hdr)) goto baddate;
 		offset = offset + 10 * (*hdr++ - '0');
-		if (!hdr || !isdigit(*hdr)) goto baddate;
+		if (!hdr || !isdigit((int) *hdr)) goto baddate;
 		offset = east * 60 * (offset + (*hdr++ - '0'));
 	    }
 	    else if (isalpha(*hdr)) {
