@@ -149,11 +149,7 @@ void printauthready P((int len, unsigned char *data));
 /* XXX fix when proto-izing mboxlist.c */
 static int mailboxdata(), listdata(), lsubdata();
 static int mstringdata P((char *cmd, char *name, int matchlen, int maycreate));
-#ifdef ENABLE_EXPERIMENT
-#ifdef ENABLE_MBOXLIST_FREE
-void mboxlist_close P((void))
-#endif
-#endif
+void mboxlist_close P((void));
 
 main(argc, argv, envp)
 int argc;
@@ -327,14 +323,6 @@ cmdloop()
 	    shutdown_file(fd);
 	}
 
-#ifdef ENABLE_EXPERIMENT
-#ifdef ENABLE_MBOXLIST_FREE
-	/* Try and reclaim some memory.
-	 */
-	mboxlist_close();	
-#endif
-#endif
-
 	/* Parse tag */
 	c = getword(&tag);
 	if (c == EOF) {
@@ -365,6 +353,9 @@ cmdloop()
 	/* Only Authenticate/Login/Logout/Noop allowed when not logged in */
 	if (!imapd_userid && !strchr("ALNC", cmd.s[0])) goto nologin;
     
+	/* note that about half the commands (the common ones that don't
+	   hit the mailboxes file) now close the mailboxes file just in
+	   case it was open. */
 	switch (cmd.s[0]) {
 	case 'A':
 	    if (!strcmp(cmd.s, "Authenticate")) {
@@ -419,6 +410,7 @@ cmdloop()
 		if (!imapd_mailbox) goto nomailbox;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
+		mboxlist_close();	
 		cmd_noop(tag.s, cmd.s);
 	    }
 	    else if (!strcmp(cmd.s, "Copy")) {
@@ -453,6 +445,7 @@ cmdloop()
 		if (!imapd_mailbox) goto nomailbox;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
+		mboxlist_close();	
 		cmd_close(tag.s);
 	    }
 	    else goto badcmd;
@@ -489,6 +482,7 @@ cmdloop()
 		if (!imapd_mailbox) goto nomailbox;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
+		mboxlist_close();	
 		cmd_expunge(tag.s, 0);
 	    }
 	    else if (!strcmp(cmd.s, "Examine")) {
@@ -511,6 +505,7 @@ cmdloop()
 	    fetch:
 		c = getword(&arg1);
 		if (c != ' ' || !imparse_issequence(arg1.s)) goto badsequence;
+		mboxlist_close();	
 		cmd_fetch(tag.s, arg1.s, usinguid);
 	    }
 	    else if (!strcmp(cmd.s, "Find")) {
@@ -643,6 +638,7 @@ cmdloop()
 	    if (!strcmp(cmd.s, "Noop")) {
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
+		mboxlist_close();	
 		cmd_noop(tag.s, cmd.s);
 	    }
 #ifdef ENABLE_EXPERIMENT
@@ -677,6 +673,7 @@ cmdloop()
 		c = getword(&arg4);
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
+		mboxlist_close();	
 		cmd_partial(tag.s, arg1.s, arg2.s, arg3.s, arg4.s);
 	    }
 	    else goto badcmd;
@@ -712,6 +709,7 @@ cmdloop()
 		if (c != ' ' || !imparse_issequence(arg1.s)) goto badsequence;
 		c = getword(&arg2);
 		if (c != ' ') goto badsequence;
+		mboxlist_close();	
 		cmd_store(tag.s, arg1.s, arg2.s, usinguid);
 	    }
 	    else if (!strcmp(cmd.s, "Select")) {
@@ -728,6 +726,7 @@ cmdloop()
 		usinguid = 0;
 		if (c != ' ') goto missingargs;
 	    search:
+		mboxlist_close();	
 		cmd_search(tag.s, usinguid);
 	    }
 	    else if (!strcmp(cmd.s, "Subscribe")) {
@@ -1026,7 +1025,7 @@ char *authtype;
     }
 
     while (r == 0) {
-	printauthready(outputlen, output);
+	printauthready(outputlen, (unsigned char *)output);
 	inputlen = getbase64string(&input);
 	if (inputlen == -1) {
 	    prot_printf(imapd_out, "%s BAD Invalid base64 string\r\n", tag);
@@ -1107,7 +1106,7 @@ char *authtype;
     }
 
     return;
-};
+}
 
 /*
  * Perform a NOOP command
@@ -1122,7 +1121,7 @@ char *cmd;
     }
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
-};
+}
 
 /*
  * Perform a CAPABILITY command
@@ -1148,7 +1147,7 @@ char *tag;
 #endif
     prot_printf(imapd_out, "\r\n%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
-};
+}
 
 /*
  * Parse and perform an APPEND command.
