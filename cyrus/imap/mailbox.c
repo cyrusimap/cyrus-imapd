@@ -1263,7 +1263,14 @@ void *deciderock;
     }
 
     /* Allocate temporary buffers */
-    deleted = (unsigned long *)xmalloc(mailbox->exists*sizeof(unsigned long));
+    if (mailbox->exists > 0) {
+        /* XXX kludge: not all mallocs return a valid pointer to 0 bytes;
+           some have the good sense to return 0 */
+        deleted = (unsigned long *)
+            xmalloc(mailbox->exists*sizeof(unsigned long));
+    } else {
+        deleted = 0;
+    }
     buf = xmalloc(mailbox->start_offset > mailbox->record_size ?
 		  mailbox->start_offset : mailbox->record_size);
 
@@ -1431,7 +1438,7 @@ void *deciderock;
     }
 
     free(buf);
-    free(deleted);
+    if (deleted) free(deleted);
 
     return 0;
 

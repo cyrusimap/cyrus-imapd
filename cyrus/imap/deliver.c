@@ -22,7 +22,11 @@
 #include <com_err.h>
 #include <errno.h>
 #ifdef HAVE_LIBDB
+#ifdef HAVE_DB_185_H
+#include <db_185.h>
+#else
 #include <db.h>
+#endif
 #else
 #include <ndbm.h>
 #endif
