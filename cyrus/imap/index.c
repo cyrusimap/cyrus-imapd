@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.170 2001/11/13 18:29:35 leg Exp $
+ * $Id: index.c,v 1.171 2002/02/13 21:53:35 rjs3 Exp $
  */
 #include <config.h>
 
@@ -3778,9 +3778,9 @@ static void index_thread_orderedsubj(unsigned *msgno_list, int nmsg,
 				     int usinguid)
 {
     MsgData *msgdata, *freeme;
-    struct sortcrit sortcrit[] = {{ SORT_SUBJECT,  0 },
-				  { SORT_DATE,     0 },
-				  { SORT_SEQUENCE, 0 }};
+    struct sortcrit sortcrit[] = {{ SORT_SUBJECT,  0, {{NULL, NULL}} },
+				  { SORT_DATE,     0, {{NULL, NULL}} },
+				  { SORT_SEQUENCE, 0, {{NULL, NULL}} }};
     unsigned psubj_hash = 0;
     char *psubj;
     Thread *head, *newnode, *cur, *parent;
@@ -4094,7 +4094,9 @@ static void ref_link_messages(MsgData *msgdata, Thread **newnode,
 /*
  * Gather orphan messages under the root node.
  */
-static void ref_gather_orphans(char *key, Thread *node, struct rootset *rootset)
+static void ref_gather_orphans(char *key __attribute__((unused)),
+			       Thread *node,
+			       struct rootset *rootset)
 {
     /* we only care about nodes without parents */
     if (!node->parent) {
@@ -4188,8 +4190,8 @@ static void ref_prune_tree(Thread *parent)
 static void ref_sort_root(Thread *root)
 {
     Thread *cur;
-    struct sortcrit sortcrit[] = {{ SORT_DATE,     0 },
-				  { SORT_SEQUENCE, 0 }};
+    struct sortcrit sortcrit[] = {{ SORT_DATE,     0, {{NULL, NULL}} },
+				  { SORT_SEQUENCE, 0, {{NULL, NULL}} }};
 
     cur = root->child;
     while (cur) {
@@ -4528,12 +4530,12 @@ static void _index_thread_ref(unsigned *msgno_list, int nmsg,
  */
 static void index_thread_ref(unsigned *msgno_list, int nmsg, int usinguid)
 {
-    struct sortcrit loadcrit[] = {{ LOAD_IDS,      0 },
-				  { SORT_SUBJECT,  0 },
-				  { SORT_DATE,     0 },
-				  { SORT_SEQUENCE, 0 }};
-    struct sortcrit sortcrit[] = {{ SORT_DATE,     0 },
-				  { SORT_SEQUENCE, 0 }};
+    struct sortcrit loadcrit[] = {{ LOAD_IDS,      0, {{NULL,NULL}} },
+				  { SORT_SUBJECT,  0, {{NULL,NULL}} },
+				  { SORT_DATE,     0, {{NULL,NULL}} },
+				  { SORT_SEQUENCE, 0, {{NULL,NULL}} }};
+    struct sortcrit sortcrit[] = {{ SORT_DATE,     0, {{NULL,NULL}} },
+				  { SORT_SEQUENCE, 0, {{NULL,NULL}} }};
 
     _index_thread_ref(msgno_list, nmsg, loadcrit, NULL, sortcrit, usinguid);
 }
