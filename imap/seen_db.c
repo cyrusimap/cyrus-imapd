@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.18 2000/12/26 03:31:41 leg Exp $
+   $Id: seen_db.c,v 1.19 2000/12/29 09:57:06 leg Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -80,6 +80,7 @@ struct seen {
     const char *path;		/* where is this mailbox? */
     struct db *db;
     struct txn *tid;		/* outstanding txn, if any */
+    int converting;
 };
 
 static struct seen *lastseen = NULL;
@@ -133,6 +134,7 @@ int seen_open(struct mailbox *mailbox,
     if (seendb && !strcmp(seendb->user, user)) {
 	abortcurrent(seendb);
 	seendb->uniqueid = mailbox->uniqueid;
+	seendb->path = mailbox->path;
 	*seendbptr = seendb;
 	return 0;
     }
@@ -253,7 +255,6 @@ static int seen_readit(struct seen *seendb,
     int uidlen;
 
     assert(seendb && seendb->uniqueid);
-
     if (rw) {
 	r = DB->fetchlock(seendb->db, 
 			  seendb->uniqueid, strlen(seendb->uniqueid),
@@ -277,8 +278,9 @@ static int seen_readit(struct seen *seendb,
 	break;
     }
     if (data == NULL) {
-	return seen_readold(seendb, lastreadptr, lastuidptr,
-			    lastchangeptr, seenuidsptr);
+	r = seen_readold(seendb, lastreadptr, lastuidptr,
+			 lastchangeptr, seenuidsptr);
+	return r;
     }
 
     /* remember that 'data' may not be null terminated ! */
@@ -384,6 +386,7 @@ int seen_close(struct seen *seendb)
     }
 
     seendb->uniqueid = NULL;
+    seendb->path = NULL;
 
     if (lastseen) {
 	int r;
@@ -475,7 +478,8 @@ int seen_unlock(struct seen *seendb)
 {
     int r;
 
-    assert(seendb && seendb->tid);
+    assert(seendb);
+    if (!seendb->tid) return 0;
 
     if (SEEN_DEBUG) {
 	syslog(LOG_DEBUG, "seen_db: seen_unlock(%s, %s)",
