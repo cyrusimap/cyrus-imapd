@@ -1,6 +1,6 @@
 /* lmtp_sieve.c -- Sieve implementation for lmtpd
  *
- * $Id: lmtp_sieve.c,v 1.7 2004/05/22 03:45:51 rjs3 Exp $
+ * $Id: lmtp_sieve.c,v 1.8 2004/06/01 13:47:16 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -830,6 +830,7 @@ int run_sieve(const char *user, const char *domain, const char *mailbox,
 	script_data_t *sdata = NULL;
 	sieve_bytecode_t *bc = NULL;
 	char userbuf[MAX_MAILBOX_NAME+1];
+	char authuserbuf[MAX_MAILBOX_NAME+1];
 
 	sdata = (script_data_t *) xmalloc(sizeof(script_data_t));
 
@@ -838,9 +839,14 @@ int run_sieve(const char *user, const char *domain, const char *mailbox,
 	    strlcat(userbuf, "@", sizeof(userbuf));
 	    strlcat(userbuf, domain, sizeof(userbuf));
 	}
+	strlcpy(authuserbuf, userbuf, sizeof(authuserbuf));
+	if (config_getswitch(IMAPOPT_UNIXHIERARCHYSEP)) {
+	    mboxname_hiersep_toexternal(msgdata->namespace, authuserbuf,
+					domain ? strcspn(authuserbuf, "@") : 0);
+	}
 	sdata->username = userbuf;
 	sdata->mailboxname = mailbox;
-	sdata->authstate = auth_newstate(userbuf);
+	sdata->authstate = auth_newstate(authuserbuf);
 
 	r = sieve_script_load(fname, &bc);
 	if (r == SIEVE_OK) {
