@@ -168,6 +168,12 @@ unsigned long feeduid;
 	fatal("cannot open mailbox for newsgroup", convert_code(r));
     }
 
+    /*
+     * Avoid O(n**2) behavior when we're indexing articles
+     * that have already expired.
+     */
+    if (mailbox.last_uid < ng->last_uid) mailbox.last_uid = ng.last_uid;
+
     r = append_collectnews(&mailbox, feeduid);
 
     if (r) {
@@ -178,6 +184,8 @@ unsigned long feeduid;
     }
 
     ng->last_uid = mailbox.last_uid; 
+    if (ng->last_uid < feeduid) ng->last_uid = feeduid;
+
     mailbox_close(&mailbox);
 }
 
