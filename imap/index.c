@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.143 2000/10/26 20:16:35 ken3 Exp $
+ * $Id: index.c,v 1.144 2000/11/14 15:54:55 ken3 Exp $
  */
 #include <config.h>
 
@@ -3676,31 +3676,6 @@ static void index_thread_print(Thread *thread, int usinguid)
     }
 
     prot_printf(imapd_out, "\r\n");
-
-    /* debug */
-#if 0
-    {
-	char *key_names[] = { "SEQUENCE", "ARRIVAL", "CC", "DATE", "FROM",
-			      "SIZE", "SUBJECT", "TO", "ANNOTATION" };
-	char buf[1024] = "";
-
-	while (sortcrit->key) {
-	    if (sortcrit->flags & SORT_REVERSE) strcat(buf, "REVERSE ");
-	    strcat(buf, key_names[sortcrit->key]);
-	    switch (sortcrit->key) {
-	    case SORT_ANNOTATION:
-		snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf) - 1,
-			 " \"%s\" \"%s\"",
-			sortcrit->args.annot.entry, sortcrit->args.annot.attrib);
-		break;
-	    }
-	    if ((++sortcrit)->key) strcat(buf, " ");
-	}
-
-	syslog(LOG_DEBUG, "SORT (%s) processing time: %d msg in %f sec",
-	       buf, nmsg, (clock() - start) / (double) CLOCKS_PER_SEC);
-    }
-#endif
 }
 
 /*
@@ -3805,7 +3780,7 @@ void ref_link_messages(MsgData *msgdata, Thread **newnode,
 
     /* for each message... */
     while (msgdata) {
-	/* Step 1A: fill the containers with msgdata
+	/* fill the containers with msgdata
 	 *
 	 * if we already have a container, use it
 	 */
@@ -3833,7 +3808,7 @@ void ref_link_messages(MsgData *msgdata, Thread **newnode,
 	    (*newnode)++;
 	}
 
-	/* Step 1B */
+	/* Step 1.A */
 	for (i = 0, parent = NULL; i < msgdata->nref; i++) {
 	    /* if we don't already have a container for the reference,
 	     * make and index a new (empty) container
@@ -3856,7 +3831,7 @@ void ref_link_messages(MsgData *msgdata, Thread **newnode,
 	    parent = ref;
 	}
 
-	/* Step 1C
+	/* Step 1.B
 	 *
 	 * if we have a parent already, it is probably bogus (the result
 	 * of a truncated references field), so unlink from it because
@@ -3980,29 +3955,32 @@ void ref_group_subjects(Thread *root, unsigned nroot, Thread **newnode)
     struct hash_table subj_table;
     char *subj;
 
-    /* Step 5A: create a subj_table with one bucket for every possible
+    /* Step 5.A: create a subj_table with one bucket for every possible
      * subject in the root set
      */
     construct_hash_table(&subj_table, nroot);
 
-    /* Step 5B: populate the table with a container for each subject
+    /* Step 5.B: populate the table with a container for each subject
      * at the root
      */
     for (cur = root->child; cur; cur = cur->next) {	
-	/* if the container is not empty, use it's subject */
+	/* Step 5.B.i: find subject of the thread
+	 *
+	 * if the container is not empty, use it's subject
+	 */
 	if (cur->msgdata)
 	    subj = cur->msgdata->xsubj;
 	/* otherwise, use the subject of it's first child */
 	else
 	    subj = cur->child->msgdata->xsubj;
 
-	/* if subject is empty, skip it */
+	/* Step 5.B.ii: if subject is empty, skip it */
 	if (!strlen(subj)) continue;
 
-	/* lookup this subject in the table */
+	/* Step 5.B.iii: lookup this subject in the table */
 	old = (Thread *) hash_lookup(subj, &subj_table);
 
-	/* insert the current container into the table iff:
+	/* Step 5.B.iv: insert the current container into the table iff:
 	 * - this subject is not in the table, OR
 	 * - this container is empty AND the one in the table is not
 	 *   (the empty one is more interesting as a root), OR
@@ -4017,24 +3995,27 @@ void ref_group_subjects(Thread *root, unsigned nroot, Thread **newnode)
 	}
     }
 
-    /* 5C - group containers with the same subject together */
+    /* 5.C - group containers with the same subject together */
     for (prev = NULL, cur = root->child, next = cur->next;
 	 cur;
 	 prev = cur, cur = next, next = (next ? next->next : NULL)) {	
-	/* if container is not empty, use it's subject */
+	/* Step 5.C.i: find subject of the thread
+	 *
+	 * if container is not empty, use it's subject
+	 */
 	if (cur->msgdata)
 	    subj = cur->msgdata->xsubj;
 	/* otherwise, use the subject of it's first child */
 	else
 	    subj = cur->child->msgdata->xsubj;
 
-	/* if subject is empty, skip it */
+	/* Step 5.C.ii: if subject is empty, skip it */
 	if (!strlen(subj)) continue;
 
-	/* lookup this subject in the table */
+	/* Step 5.C.iii: lookup this subject in the table */
 	old = (Thread *) hash_lookup(subj, &subj_table);
 
-	/* if we found ourselves, skip it */
+	/* Step 5.C.iv: if we found ourselves, skip it */
 	if (old == cur) continue;
 
 	/* ok, we already have a container which contains our current subject,
@@ -4069,7 +4050,7 @@ void ref_group_subjects(Thread *root, unsigned nroot, Thread **newnode)
 	 * make the current container a child of the old one
 	 *
 	 * Note: we don't have to worry about the reverse cases
-	 * because step 5B guarantees that they won't happen
+	 * because step 5.B guarantees that they won't happen
 	 */
 	else if (!old->msgdata ||
 		 (cur->msgdata && cur->msgdata->is_refwd &&
@@ -4202,6 +4183,8 @@ static void _index_thread_ref(unsigned *msgno_list, int nmsg,
     int tref, nnode;
     Thread *newnode;
     struct hash_table id_table;
+    struct sortcrit rootcrit[] = {{ SORT_DATE,     0 },
+				  { SORT_SEQUENCE, 0 }};
 
     /* Create/load the msgdata array */
     freeme = msgdata = index_msgdata_load(msgno_list, nmsg, loadcrit);
@@ -4246,19 +4229,26 @@ static void _index_thread_ref(unsigned *msgno_list, int nmsg,
     nroot = 0;
     hash_enumerate(&id_table, (void (*)(char*,void*)) ref_gather_orphans);
 
-    /* Step 3: discard id_table */
+    /* discard id_table */
     free_hash_table(&id_table, NULL);
 
-    /* Step 4: prune tree of empty containers - get our deposit back :^) */
+    /* Step 3: prune tree of empty containers - get our deposit back :^) */
     ref_prune_tree(root);
+
+    /* Step 4: sort the root set */
+    root->child = lsort(root->child,
+			(void * (*)(void*)) index_thread_getnext,
+			(void (*)(void*,void*)) index_thread_setnext,
+			(int (*)(void*,void*,void*)) index_thread_compare,
+			rootcrit);
 
     /* Step 5: group root set by subject */
     ref_group_subjects(root, nroot, &newnode);
 
-    /* Step 6: search threads */
+    /* Optionally search threads (to be used by REFERENCES derivatives) */
     if (searchproc) index_thread_search(root, searchproc);
 
-    /* Step 7: sort threads */
+    /* Step 6: sort threads */
     if (sortcrit) index_thread_sort(root, sortcrit);
 
     /* Output the threaded messages */ 
