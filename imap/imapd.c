@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.274 2000/10/26 20:13:45 ken3 Exp $ */
+/* $Id: imapd.c,v 1.275 2000/10/26 23:08:35 leg Exp $ */
 
 #include <config.h>
 
@@ -621,9 +621,10 @@ cmdloop()
 	    eatline(c);
 	    continue;
 	}
-	if (islower((int) cmd.s[0])) cmd.s[0] = toupper((int) cmd.s[0]);
+	if (islower((unsigned char) cmd.s[0])) 
+	    cmd.s[0] = toupper((unsigned char) cmd.s[0]);
 	for (p = &cmd.s[1]; *p; p++) {
-	    if (isupper((int) *p)) *p = tolower((int) *p);
+	    if (isupper((unsigned char) *p)) *p = tolower((unsigned char) *p);
 	}
 
 	/* Only Authenticate/Login/Logout/Noop/Capability/Id/Starttls
@@ -1524,17 +1525,27 @@ cmd_authenticate(char *tag,char *authtype)
 
     sasl_getprop(imapd_saslconn, SASL_SSF, (void **) &ssfp);
 
-    switch(*ssfp) {
-    case 0: ssfmsg="no protection";break;
-    case 1: ssfmsg="integrity protection";break;
-    default: ssfmsg="privacy protection";break;
+    /* really, we should be doing a sasl_getprop on SASL_SSF_EXTERNAL,
+       but the current libsasl doesn't allow that. */
+    if (imapd_starttls_done) {
+	switch(*ssfp) {
+	case 0: ssfmsg = "tls protection"; break;
+	case 1: ssfmsg = "tls plus integrity protection"; break;
+	default: ssfmsg = "tls plus privacy protection"; break;
+	}
+    } else {
+	switch(*ssfp) {
+	case 0: ssfmsg = "no protection"; break;
+	case 1: ssfmsg = "integrity protection"; break;
+	default: ssfmsg = "privacy protection"; break;
+	}
     }
 
     snmp_increment_args(AUTHENTICATION_YES, 1,
 			VARIABLE_AUTH, hash_simple(authtype), 
 			VARIABLE_LISTEND);
 
-    prot_printf(imapd_out, "%s OK Success (%s)\r\n", tag,ssfmsg);
+    prot_printf(imapd_out, "%s OK Success (%s)\r\n", tag, ssfmsg);
 
     prot_setsasl(imapd_in,  imapd_saslconn);
     prot_setsasl(imapd_out, imapd_saslconn);
