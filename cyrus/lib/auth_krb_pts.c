@@ -312,12 +312,9 @@ const char *cacheid;
     kname_parse(newstate->aname, newstate->inst, newstate->realm, identifier);
     if (strcmp(newstate->userid, "anyone") == 0) return newstate;
     strcpy(newstate->userid, identifier);
-    
-    info.hash = hashfn;
-    info.lorder = 0;
-    info.bsize = 2048;
-    info.cachesize = 20480;
-    info.ffactor = 8;
+
+    (void)memset(&info, 0, sizeof(info));
+    (void)memset(&key, 0, sizeof(key));
     key.data = keydata;
     key.size = 20;
     strcpy(fnamebuf, STATEDIR);
@@ -344,7 +341,7 @@ const char *cacheid;
 	    if (!ptdb && errno == EEXIST) {
 		ptdb = dbopen(fnamebuf, O_RDONLY, 0, DB_HASH, &info);
 		if (!ptdb) {
-		    syslog(LOG_ERR, "IOERROR: opening database %s: %m", fnamebuf);
+		    syslog(LOG_ERR, "IOERROR:(1) opening database %s: %m", fnamebuf);
 		    close(fd);
 		    return newstate;
 		}
@@ -388,7 +385,7 @@ const char *cacheid;
 	    }          
 	}
 	else {
-	    syslog(LOG_ERR, "IOERROR: opening database %s: %m", fnamebuf);
+	    syslog(LOG_ERR, "IOERROR:(2) opening database %s: %m", fnamebuf);
 	    close(fd);
 	    return newstate;
 	}
