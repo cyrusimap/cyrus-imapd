@@ -25,6 +25,7 @@
 #include <sysexits.h>
 #include <sys/types.h>
 #include <syslog.h>
+#include "xmalloc.h"
 
 #define SLOP (4*1024)
 
@@ -48,7 +49,7 @@ char *mboxname;
 	*base = xmalloc(*len);
     }
 
-    lseek(fd, 0L, SEEK_SET);
+    lseek(fd, 0L, 0);
     left = newlen;
     p = *base;
 
