@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.126 2004/01/20 01:10:58 ken3 Exp $
+ * $Id: lmtpd.c,v 1.127 2004/01/22 21:17:08 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1073,13 +1073,8 @@ int deliver_mailbox(struct protstream *msg,
 
     if (!r) {
 	prot_rewind(msg);
-	if (stage) {
-	    r = append_fromstage(&as, msg, size, now, 
-				 (const char **) flag, nflags, stage);
-	} else {
-	    r = append_fromstream(&as, msg, size, now, 
-				  (const char **) flag, nflags);
-	}
+	r = append_fromstage(&as, stage, now,
+			     (const char **) flag, nflags, !singleinstance);
 	if (!r) append_commit(&as, quotaoverride ? -1 : 0, NULL, &uid, NULL);
 	else append_abort(&as);
     }
@@ -1398,17 +1393,19 @@ char *generate_notify(message_data_t *m)
 
 FILE *spoolfile(message_data_t *msgdata)
 {
-    /* if we have a single recipient OR are using single-instance store,
-     * spool to the stage of the first recipient
-     */
-    if ((msg_getnumrcpt(msgdata) == 1) || singleinstance) {
+    int i, n;
+    time_t now = time(NULL);
+    FILE *f = NULL;
+
+    /* spool to the stage of one of the recipients */
+    n = msg_getnumrcpt(msgdata);
+    for (i = 0; !f && (i < n); i++) {
 	int r = 0;
 	char *rcpt, *plus, *user = NULL, *domain = NULL;
 	char namebuf[MAX_MAILBOX_PATH+1], mailboxname[MAX_MAILBOX_PATH+1];
-	time_t now = time(NULL);
 
 	/* build the mailboxname from the recipient address */
-	user = rcpt = xstrdup(msg_getrcpt(msgdata, 0));
+	user = rcpt = xstrdup(msg_getrcpt(msgdata, i));
 	if (config_virtdomains && (domain = strchr(rcpt, '@'))) {
 	    *domain = '\0';
 	}
@@ -1460,19 +1457,15 @@ FILE *spoolfile(message_data_t *msgdata)
 	free(rcpt);
 
 	if (!r) {
-	    FILE *f;
 	    struct stagemsg *stage = NULL;
 
 	    /* setup stage for later use by deliver() */
-	    f = append_newstage(mailboxname, now, &stage);
+	    f = append_newstage(mailboxname, now, 0, &stage);
 	    msg_setrock(msgdata, (void*) stage);
-
-	    return f;
 	}
     }
 
-    /* spool to /tmp (no single-instance store) */
-    return tmpfile();
+    return f;
 }
 
 void removespool(message_data_t *msgdata)

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.450 2004/01/20 01:10:56 ken3 Exp $ */
+/* $Id: imapd.c,v 1.451 2004/01/22 21:17:07 ken3 Exp $ */
 
 #include <config.h>
 
@@ -2150,23 +2150,26 @@ cmd_append(char *tag, char *name)
     int nflags = 0, flagalloc = 0;
     static struct buf arg;
     char *p;
-    time_t internaldate;
-    unsigned size = 0;
+    time_t internaldate, now = time(NULL);
+    unsigned size, totalsize = 0;
     int sawdigit = 0;
     int isnowait = 0;
-    int r;
+    int r, i;
     char mailboxname[MAX_MAILBOX_NAME+1];
     struct appendstate mailbox;
     unsigned long uidvalidity;
-    unsigned long firstuid, num;
+    unsigned long firstuid, num = 0;
     const char *parseerr = NULL;
+    FILE *f;
+    int numalloc = 5;
+    struct stagemsg **stage = xmalloc(numalloc * sizeof(struct stagemsg *));
 
-    /* Set up the append */
+    /* See if we can append */
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
 					       imapd_userid, mailboxname);
     if (!r) {
-	r = append_setup(&mailbox, mailboxname, MAILBOX_FORMAT_NORMAL,
-			 imapd_userid, imapd_authstate, ACL_INSERT, size);
+	r = append_check(mailboxname, MAILBOX_FORMAT_NORMAL,
+			 imapd_authstate, ACL_INSERT, totalsize);
     }
     if (r) {
 	eatline(imapd_in, ' ');
@@ -2287,10 +2290,22 @@ cmd_append(char *tag, char *name)
 	    prot_flush(imapd_out);
 	}
 	
-	/* Perform the rest of the append */
-	if (!r) r = append_fromstream(&mailbox, imapd_in, size, internaldate, 
-				      (const char **) flag, nflags);
-
+	/* Stage the message */
+	if (num == numalloc) {
+	    numalloc *= 2;
+	    stage = xrealloc(stage, numalloc * sizeof(struct stagemsg *));
+	}
+	stage[num] = NULL;
+	f = append_newstage(mailboxname, now, num, &stage[num]);
+	if (f) {
+	    num++;
+	    totalsize += size;
+	    r = message_copy_strict(imapd_in, f, size);
+	    fclose(f);
+	} else {
+	    r = IMAP_IOERROR;
+	}
+	
 	/* if we see a SP, we're trying to append more than one message */
 
 	/* Parse newline terminating command */
@@ -2310,11 +2325,27 @@ cmd_append(char *tag, char *name)
 	}
     }
 
+    /* Append from the stage(s) */
     if (!r) {
-	r = append_commit(&mailbox, size, &uidvalidity, &firstuid, &num);
-    } else {
-	append_abort(&mailbox);
+	r = append_setup(&mailbox, mailboxname, MAILBOX_FORMAT_NORMAL,
+			 imapd_userid, imapd_authstate, ACL_INSERT, totalsize);
+	for (i = 0; !r && i < num; i++) {
+	    r = append_fromstage(&mailbox, stage[i], internaldate, 
+				 (const char **) flag, nflags, 0);
+	}
+
+	if (!r) {
+	    r = append_commit(&mailbox, totalsize, &uidvalidity, &firstuid, &num);
+	} else {
+	    append_abort(&mailbox);
+	}
     }
+
+    /* Cleanup the stage(s) */
+    for (i = 0; i < num; i++) {
+	append_removestage(stage[i]);
+    }
+    free(stage);
 
     if (imapd_mailbox) {
 	index_check(imapd_mailbox, 0, 0);

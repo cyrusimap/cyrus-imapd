@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- * $Id: mailbox.h,v 1.80 2004/01/20 01:11:00 ken3 Exp $
+ * $Id: mailbox.h,v 1.81 2004/01/22 21:17:09 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -319,7 +319,7 @@ extern int mailbox_sync(const char *oldname, const char *oldpath,
 			bit32 *olduidvalidityp, bit32 *newuidvalidtyp,
 			struct mailbox *mailboxp);
 
-extern int mailbox_copyfile(const char *from, const char *to);
+extern int mailbox_copyfile(const char *from, const char *to, int nolink);
 extern void mailbox_hash_mbox(char *buf, size_t buf_len,
 			      const char *root, const char *name);
 

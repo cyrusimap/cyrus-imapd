@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- * $Id: mailbox.c,v 1.152 2004/01/20 01:10:58 ken3 Exp $
+ * $Id: mailbox.c,v 1.153 2004/01/22 21:17:09 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -2297,13 +2297,13 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     strlcpy(newfnametail, FNAME_INDEX, sizeof(newfname) - newfname_len);
     unlink(newfname);		/* Make link() possible */
 
-    r = mailbox_copyfile(oldfname, newfname);
+    r = mailbox_copyfile(oldfname, newfname, 0);
 
     strlcpy(oldfnametail, FNAME_CACHE, sizeof(oldfname) - oldfname_len);
     strlcpy(newfnametail, FNAME_CACHE, sizeof(newfname) - newfname_len);
     unlink(newfname);
 
-    if (!r) r = mailbox_copyfile(oldfname, newfname);
+    if (!r) r = mailbox_copyfile(oldfname, newfname, 0);
     if (r) {
 	mailbox_close(newmailbox);
 	return r;
@@ -2333,7 +2333,7 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
 
 	strcpy(newfnametail, oldfnametail);
 
-	r = mailbox_copyfile(oldfname, newfname);
+	r = mailbox_copyfile(oldfname, newfname, 0);
 	if (r) break;
     }
     if (!r) r = seen_copy(oldmailbox, newmailbox);
@@ -2524,7 +2524,7 @@ mailbox_sync(const char *oldname, const char *oldpath, const char *oldacl,
 				      oldfnametail,
 				      sizeof(oldfname) - strlen(oldfname));
 	    strcpy(newfnametail, oldfnametail);
-	    r = mailbox_copyfile(oldfname, newfname);
+	    r = mailbox_copyfile(oldfname, newfname, 0);
 	    if (r) break;
 	}
     }
@@ -2555,7 +2555,7 @@ mailbox_sync(const char *oldname, const char *oldpath, const char *oldacl,
 	        sizeof(newfname) - (newfname_len - 1));
 
 	unlink(newfname);		/* Make link() possible */
-	r = mailbox_copyfile(oldfname, newfname);
+	r = mailbox_copyfile(oldfname, newfname, 0);
 
 	fn_len = strlen(FNAME_CACHE);
 	if((oldfname_len - 1) + fn_len > sizeof(oldfname))
@@ -2577,7 +2577,7 @@ mailbox_sync(const char *oldname, const char *oldpath, const char *oldacl,
 	        sizeof(newfname) - (newfname_len - 1));
 
 	unlink(newfname);
-	if (!r) r = mailbox_copyfile(oldfname, newfname);
+	if (!r) r = mailbox_copyfile(oldfname, newfname, 0);
 
 	if (r) {
 	    mailbox_close(&newmailbox);
@@ -2644,9 +2644,7 @@ mailbox_sync(const char *oldname, const char *oldpath, const char *oldacl,
 /*
  * Copy (or link) the file 'from' to the file 'to'
  */
-int mailbox_copyfile(from, to)
-const char *from;
-const char *to;
+int mailbox_copyfile(const char *from, const char *to, int nolink)
 {
     int srcfd, destfd;
     struct stat sbuf;
@@ -2654,13 +2652,15 @@ const char *to;
     unsigned long src_size = 0;
     int n;
 
-    if (link(from, to) == 0) return 0;
-    if (errno == EEXIST) {
-	if (unlink(to) == -1) {
-	    syslog(LOG_ERR, "IOERROR: unlinking to recreate %s: %m", to);
-	    return IMAP_IOERROR;
-	}
+    if (!nolink) {
 	if (link(from, to) == 0) return 0;
+	if (errno == EEXIST) {
+	    if (unlink(to) == -1) {
+		syslog(LOG_ERR, "IOERROR: unlinking to recreate %s: %m", to);
+		return IMAP_IOERROR;
+	    }
+	    if (link(from, to) == 0) return 0;
+	}
     }
     
     destfd = open(to, O_RDWR|O_TRUNC|O_CREAT, 0666);
