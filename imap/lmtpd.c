@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: lmtpd.c,v 1.2 2000/02/17 03:04:29 leg Exp $
+ * $Id: lmtpd.c,v 1.3 2000/02/18 02:23:19 tmartin Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.2 2000/02/17 03:04:29 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.3 2000/02/18 02:23:19 tmartin Exp $";*/
 
 #include <config.h>
 
@@ -1273,8 +1273,7 @@ usage()
     exit(EC_USAGE);
 }
 
-char *parseaddr(s)
-char *s;
+char *parseaddr(char *s)
 {
     char *p;
     int len;
@@ -1311,6 +1310,9 @@ char *s;
 	if (!*p++) return 0;
     }
     else {
+	/* disallow plus addressing without giving a name */
+	if (*p == '+') return 0;
+	
 	while (*p && *p != '@' && *p != '>') {
 	    if (*p == '\\') {
 		if (!*++p) return 0;
@@ -1345,9 +1347,8 @@ char *s;
     return s;
 }
 
-char *process_recipient(addr, ad)
-char *addr;
-address_data_t **ad;
+char *process_recipient(char *addr,
+			address_data_t **ad)
 {
     char *dest = addr;
     char *user = addr;
@@ -1399,12 +1400,19 @@ address_data_t **ad;
 	if (strlen(user) > sizeof(buf)-10) {
 	    return convert_lmtp(IMAP_MAILBOX_NONEXISTENT);
 	}
-	strcpy(buf, "user.");
-	strcat(buf, user);
-	r = mboxlist_lookup(buf, (char **)0, (char **)0, NULL);
+
+	/* special case bb */
+	if (strcasecmp(user,"bb")==0)
+	{
+	    r = mboxlist_lookup(user+3, (char **)0, (char **)0, NULL);
+	} else {	    
+	    strcpy(buf, "user.");
+	    strcat(buf, user);
+	    r = mboxlist_lookup(buf, (char **)0, (char **)0, NULL);
+	}
     }
     else {
-	r = mboxlist_lookup(user+1, (char **)0, (char **)0, NULL);
+	r = IMAP_MAILBOX_NONEXISTENT;
     }
     if (r) {
 	return convert_lmtp(r);
@@ -2227,6 +2235,24 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
     FILE *f;
 
     if (user) {
+
+	/* this is a netnews delivery. special case */
+	if (strcasecmp(user,"bb")==0)
+	{
+	    r = deliver_mailbox(msgdata->data,
+				&msgdata->stage,
+				msgdata->size, 
+				flag, nflags,
+				delopts->authuser, delopts->authstate,
+				msgdata->id, NULL, msgdata->notifyheader,
+				mailboxname, delopts->quotaoverride, 0);
+	    return r;
+	}
+
+	prot_printf(deliver_out,"not in bb %s\r\n", user);
+	prot_flush(deliver_out);
+
+
 	if (strchr(user, '.') ||
 	    strlen(user) + 30 > MAX_MAILBOX_PATH) {
 	    return IMAP_MAILBOX_NONEXISTENT;

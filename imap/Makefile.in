@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.98 2000/02/17 03:04:29 leg Exp $
+# $Id: Makefile.in,v 1.99 2000/02/18 02:23:18 tmartin Exp $
 # 
 # @configure_input@
 #
@@ -89,7 +89,7 @@ IMAPDOBJS=imapd.o index.o tls.o
 SERVICE=../master/service.o
 
 PROGS = collectnews syncnews arbitron fud reconstruct quota \
-	mbpath ipurge \
+	mbpath ipurge deliver \
 	imapd proxyd lmtpd pop3d \
 	ctl_mboxlist ctl_deliver target-acap
 
@@ -118,6 +118,11 @@ collectnews: collectnews.o libimap.a $(DEPLIBS)
 syncnews: syncnews.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o syncnews  syncnews.o libimap.a $(DEPLIBS) \
 	 $(LIBS)
+
+deliver: deliver.o $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o deliver \
+	deliver.o $(DEPLIBS) $(LIBS)
+
 lmtpd: lmtpd.o libimap.a $(DEPLIBS) $(SIEVE_LIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o lmtpd \
 	 $(SERVICE) lmtpd.o libimap.a $(DEPLIBS) $(SIEVE_LIBS) $(LIBS)
