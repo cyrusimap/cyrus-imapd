@@ -53,6 +53,7 @@
 #include <pwd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
 #include <sys/un.h>
 #ifdef HAVE_UNISTD_H
 # include <unistd.h>
