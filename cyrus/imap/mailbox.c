@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.104 2000/11/30 15:55:43 ken3 Exp $
+ $Id: mailbox.c,v 1.105 2000/12/07 22:37:39 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1844,7 +1844,7 @@ char *
 mailbox_findquota(name)
 const char *name;
 {
-    static char quota_path[MAX_MAILBOX_PATH];
+    static char quota_path[MAX_MAILBOX_PATH]; /* XXX memory */
     static char start[MAX_MAILBOX_PATH];
     char *tail;
     struct stat sbuf;

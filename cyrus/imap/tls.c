@@ -127,7 +127,7 @@ static SSL_CTX *ctx = NULL;
 SSL *tls_conn = NULL;
 
 #define CCERT_BUFSIZ 256
-static char peer_subject[CCERT_BUFSIZ];
+static char peer_subject[CCERT_BUFSIZ];  /* XXX memory? */
 static char peer_issuer[CCERT_BUFSIZ];
 static char peer_CN[CCERT_BUFSIZ];
 static char issuer_CN[CCERT_BUFSIZ];
