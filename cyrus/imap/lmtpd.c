@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.99.2.3 2002/07/11 16:42:00 ken3 Exp $
+ * $Id: lmtpd.c,v 1.99.2.4 2002/07/12 15:35:35 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1082,7 +1082,7 @@ static FILE *sieve_find_script(const char *user)
 	    char d = (char) dir_hash_c(domain+1);
 	    *domain = '\0';  /* split user@domain */
 	    hash = (char) dir_hash_c(user);
-	    snprintf(buf, sizeof(buf), "%s%s%c/%s/%c/%s",
+	    snprintf(buf, sizeof(buf), "%s%s%c/%s/%c/%s/default",
 		     sieve_dir, FNAME_DOMAINDIR, d, domain+1,
 		     hash, user);
 	    *domain = '@';  /* reassemble user@domain */
@@ -1254,7 +1254,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 
 		sdata->username = user;
 		sdata->mailboxname = plus;
-		sdata->authstate = auth_newstate(rcpt, (char *)0);
+		sdata->authstate = auth_newstate(user, (char *)0);
 
 		/* slap the mailboxname back on so we hash the envelope & id
 		   when we figure out whether or not to keep the message */
