@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122.4.37 2003/07/09 15:56:17 ken3 Exp $
+ * $Id: pop3d.c,v 1.122.4.38 2003/07/09 15:58:25 ken3 Exp $
  */
 #include <config.h>
 
@@ -1205,7 +1205,7 @@ void cmd_auth(char *arg)
 
     /* if client didn't specify an argument we give them the list
      *
-     * XXX This method of mechanism discovery ia an undocumented feature
+     * XXX This method of mechanism discovery is an undocumented feature
      * that appeared in draft-myers-sasl-pop3 and is still used by
      * some clients.
      */
