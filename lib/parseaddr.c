@@ -1,5 +1,5 @@
 /* parseaddr.c -- RFC 822 address parser
- * $Id: parseaddr.c,v 1.12 1999/03/02 04:01:47 tjs Exp $
+ * $Id: parseaddr.c,v 1.13 1999/09/30 07:32:18 leg Exp $
  *
  *        Copyright 1998 by Carnegie Mellon University
  *
@@ -23,6 +23,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
 

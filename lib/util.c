@@ -23,7 +23,7 @@
  * Author: Chris Newman
  * Start Date: 4/6/93
  */
-/* $Id: util.c,v 1.10 1999/03/02 01:51:40 tjs Exp $
+/* $Id: util.c,v 1.11 1999/09/30 07:32:32 leg Exp $
  */
 
 #include <stdio.h>
@@ -197,7 +197,7 @@ char *beautify_string(const char* src)
 keyvalue *kv_bsearch(const char* key, keyvalue* kv, int nelem,
 		     int (*cmpf) (const char *s1, const char *s2))
 {
-    int top, mid, bot, cmp;
+    int top, mid = 0, bot, cmp = 0;
 
     cmp = 1;
     bot = 0;
