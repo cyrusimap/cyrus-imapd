@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: libcyr_cfg.h,v 1.4 2004/01/20 01:11:04 ken3 Exp $
+ * $Id: libcyr_cfg.h,v 1.5 2004/02/24 23:11:37 rjs3 Exp $
  */
 
 #ifndef INCLUDED_LIBCYR_CFG_H
@@ -87,6 +87,8 @@ enum cyrus_opt {
     CYRUSOPT_FULLDIRHASH,
     /* Database for use by AUTH_PTS */
     CYRUSOPT_PTSCACHE_DB,
+    /* ptloader socket for use by AUTH_PTS */
+    CYRUSOPT_PTLOADER_SOCK,
     /* Virtual Domains (OFF) */
     CYRUSOPT_VIRTDOMAINS,
 
