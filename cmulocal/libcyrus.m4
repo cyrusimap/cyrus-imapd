@@ -12,15 +12,6 @@ AC_TRY_COMPILE([
 [struct imclient_reply foo;],
 ac_cv_found_libcyrus_inc=yes,
 ac_cv_found_libcyrus_inc=no)
-if test "$ac_cv_found_libcyrus_inc" = "no"; then
-  CPPFLAGS="$saved_CPPFLAGS -I$1 -I$1/cyrus"
-  AC_TRY_COMPILE([
-#include <imclient.h>
-],
-  [struct imclient_reply foo;],
-  [ac_cv_found_libcyrus_inc=yes],
-  ac_cv_found_libcyrus_inc=no)
-fi
 CPPFLAGS=$saved_CPPFLAGS
 ])
 
