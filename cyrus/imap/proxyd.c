@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.184 2004/05/22 03:45:52 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.185 2004/05/29 05:18:23 ken3 Exp $ */
 
 #include <config.h>
 
@@ -244,7 +244,7 @@ static int mlookup(const char *name, char **pathp,
 
 extern int saslserver(sasl_conn_t *conn, const char *mech,
 		      const char *init_resp, const char *resp_prefix,
-		      const char *continuation,
+		      const char *continuation, const char *empty_chal,
 		      struct protstream *pin, struct protstream *pout,
 		      int *sasl_result, char **success_data);
 
@@ -2292,7 +2292,7 @@ void cmd_authenticate(char *tag, char *authtype, char *resp)
 
     int r;
 
-    r = saslserver(proxyd_saslconn, authtype, resp, "", "+ ",
+    r = saslserver(proxyd_saslconn, authtype, resp, "", "+ ", "",
 		   proxyd_in, proxyd_out, &sasl_result, NULL);
 
     if (r) {

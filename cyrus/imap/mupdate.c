@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.87 2004/03/19 14:49:17 ken3 Exp $
+ * $Id: mupdate.c,v 1.88 2004/05/29 05:18:21 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -220,10 +220,9 @@ void sendupdates(struct conn *C, int flushnow);
 
 extern int saslserver(sasl_conn_t *conn, const char *mech,
 		      const char *init_resp, const char *resp_prefix,
-		      const char *continuation,
+		      const char *continuation, const char *empty_chal,
 		      struct protstream *pin, struct protstream *pout,
-		      int *sasl_result,
-		      char **success_data);
+		      int *sasl_result, char **success_data);
 
 /* Functions for manipulating stringlists */
 static void stringlist_add(struct stringlist **list, const char *string);
@@ -1363,8 +1362,8 @@ void cmd_authenticate(struct conn *C,
 {
     int r, sasl_result;
 
-    r = saslserver(C->saslconn, mech, clientstart, "", "", C->pin, C->pout,
-		   &sasl_result, NULL);
+    r = saslserver(C->saslconn, mech, clientstart, "", "", "",
+		   C->pin, C->pout, &sasl_result, NULL);
 
     if (r) {
 	const char *errorstring = NULL;
