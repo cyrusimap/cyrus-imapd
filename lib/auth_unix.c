@@ -23,7 +23,7 @@
  */
 
 /*
- * $Id: auth_unix.c,v 1.23 1998/08/11 00:16:36 tjs Exp $
+ * $Id: auth_unix.c,v 1.24 1998/10/29 19:58:39 tjs Exp $
  */
 
 #include <pwd.h>
@@ -83,7 +83,6 @@ const char *identifier;
  * Here are the reasons for the restrictions:
  *
  * &	forbidden because of MUTF-7.  (This could be fixed.)
- * +    forbidden because of userid+detail subaddressing.
  * :    forbidden because it's special in /etc/passwd
  * /    forbidden because it can't be used in a mailbox name
  * * %  forbidden because they're IMAP magic in the LIST/LSUB commands
@@ -92,12 +91,18 @@ const char *identifier;
  *      can't send them as IMAP characters in plain folder names, I think
  * 80-FF forbidden because you can't send them in IMAP anyway
  *       (and they're forbidden as folder names). (This could be fixed.)
+ *
+ * + and - are *allowed* although '+' is probably used for userid+detail
+ * subaddressing and qmail users use '-' for subaddressing.
+ *
+ * Identifiers don't require a digit, really, so that should probably be
+ * relaxed, too.
  */
 static char allowedchars[256] = {
  /* 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 00-0F */
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 10-1F */
-    1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0, /* 20-2F */
+    1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1, 0, /* 20-2F */
     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, /* 30-3F */
 
     1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, /* 40-4F */
