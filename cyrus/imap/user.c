@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: user.c,v 1.10.4.3 2002/08/20 17:35:13 ken3 Exp $
+ * $Id: user.c,v 1.10.4.4 2002/08/20 19:04:47 ken3 Exp $
  */
 
 #include <config.h>
@@ -115,6 +115,7 @@ static int user_deleteacl(char *name, int matchlen, int maycreate, void* rock)
 
 int user_deletesieve(char *user) 
 {
+    char hash, *domain;
     char sieve_path[2048];
     char filename[2048];
     DIR *mbdir;
@@ -123,9 +124,22 @@ int user_deletesieve(char *user)
     /* oh well */
     if(config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR)) return 0;
     
-    snprintf(sieve_path, sizeof(sieve_path), "%s/%c/%s",
-	     config_getstring(IMAPOPT_SIEVEDIR),
-	     user[0], user);
+    if (config_virtdomains && (domain = strchr(user, '@'))) {
+	char d = (char) dir_hash_c(domain+1);
+	*domain = '\0';  /* split user@domain */
+	hash = (char) dir_hash_c(user);
+	snprintf(sieve_path, sizeof(sieve_path), "%s%s%c/%s/%c/%s",
+		 config_getstring(IMAPOPT_SIEVEDIR),
+		 FNAME_DOMAINDIR, d, domain+1, hash, user);
+	*domain = '@';  /* reassemble user@domain */
+    }
+    else {
+	hash = (char) dir_hash_c(user);
+
+	snprintf(sieve_path, sizeof(sieve_path), "%s/%c/%s",
+		 config_getstring(IMAPOPT_SIEVEDIR), hash, user);
+    }
+
     mbdir=opendir(sieve_path);
 
     if(mbdir) {
