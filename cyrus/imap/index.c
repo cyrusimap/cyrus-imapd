@@ -89,7 +89,7 @@ static char *seenuids;		/* Sequence of UID's from last seen checkpoint */
 #define CACHE_ITEM_NEXT(ptr) ((ptr)+4+((3+CACHE_ITEM_LEN(ptr))&~3))
 
 /* Forward declarations */
-static int index_forsequence();
+static int index_forsequence(), index_insequence();
 static int index_listflags();
 static int index_fetchflags(), index_fetchreply();
 static int index_storeseen(), index_storeflag();
@@ -817,6 +817,96 @@ char *name;
 
     return r;
 }
+
+/*
+ * Performs a STATUS commadn
+ */
+int
+index_status(mailbox, name, statusitems)
+struct mailbox *mailbox;
+char *name;
+int statusitems;
+{
+    int r;
+    struct seen *status_seendb;
+    time_t last_read, last_change;
+    unsigned last_uid;
+    char *last_seenuids;
+    int num_recent = 0;
+    int num_unseen = 0;
+    int sepchar;
+
+    if (statusitems & (STATUS_RECENT | STATUS_UNSEEN | STATUS_UPDATE_NUMBER)) {
+	r = seen_open(mailbox, imapd_userid, &status_seendb);
+	if (r) return r;
+
+	r = seen_lockread(status_seendb, &last_read, &last_uid,
+			  &last_change, &last_seenuids);
+	seen_close(status_seendb);
+	if (r) return r;
+
+	if (statusitems & (STATUS_RECENT | STATUS_UNSEEN)) {
+	    char *base;
+	    unsigned long len = 0;
+	    int msg;
+	    unsigned uid;
+
+	    map_refresh(fileno(mailbox->index), &base, &len,
+			mailbox->start_offset +
+			mailbox->exists * mailbox->record_size,
+			"index", mailbox->name);
+	    for (msg = 0; msg < mailbox->exists; msg++) {
+		uid = ntohl(*((bit32 *)(base + mailbox->start_offset +
+					msg * mailbox->record_size +
+					OFFSET_UID)));
+		if (uid > last_uid) num_recent++;
+		if ((statusitems & STATUS_UNSEEN) &&
+		    !index_insequence(uid, last_seenuids, 0)) num_unseen++;
+		/* NB: The value of the third argument to index_insequence()
+		 * above does not matter.
+		 */
+	    }
+	    map_free(&base, &len);
+	    free(last_seenuids);
+	}
+    }
+
+    prot_printf(imapd_out, "* STATUS ");
+    printastring(name);
+    prot_printf(imapd_out, " ");
+    sepchar = '(';
+
+    if (statusitems & STATUS_MESSAGES) {
+	prot_printf(imapd_out, "%cMESSAGES %u", sepchar, mailbox->exists);
+	sepchar = ' ';
+    }
+    if (statusitems & STATUS_RECENT) {
+	prot_printf(imapd_out, "%cRECENT %u", sepchar, num_recent);
+	sepchar = ' ';
+    }
+    if (statusitems & STATUS_UID_NEXT) {
+	prot_printf(imapd_out, "%cUID-NEXT %u", sepchar, mailbox->last_uid+1);
+	sepchar = ' ';
+    }
+    if (statusitems & STATUS_UID_VALIDITY) {
+	prot_printf(imapd_out, "%cUID-VALIDITY %u", sepchar,
+		    mailbox->uidvalidity);
+	sepchar = ' ';
+    }
+    if (statusitems & STATUS_UNSEEN) {
+	prot_printf(imapd_out, "%cUNSEEN %u", sepchar, num_unseen);
+	sepchar = ' ';
+    }
+    if (statusitems & STATUS_UPDATE_NUMBER) {
+	prot_printf(imapd_out, "%cUPDATE-NUMBER %u", sepchar,
+		    mailbox->index_mtime > last_change ?
+		    mailbox->index_mtime : last_change);
+	sepchar = ' ';
+    }
+    prot_printf(imapd_out, ")\r\n");
+    return 0;
+}
+
 
 /*
  * Returns the msgno of the message with UID 'uid'.
