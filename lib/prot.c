@@ -65,6 +65,8 @@ int write;
     newstream->state = 0;
     newstream->error = 0;
     newstream->read_timeout = 0;
+
+    return newstream;
 }
 
 /*
@@ -73,7 +75,7 @@ int write;
  * stream is for writing, 'maxplain' is the maximum number of plaintext
  * bytes that will be given to 'func' at one time.
  */
-int *prot_setfunc(s, func, state, maxplain)
+int prot_setfunc(s, func, state, maxplain)
 struct protstream *s;
 int (*func)();
 void *state;
