@@ -1,0 +1,1351 @@
+/* lmtpengine.c: LMTP protocol engine
+ * $Id: lmtpengine.c,v 1.1 2000/05/28 23:19:40 leg Exp $
+ *
+ * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer. 
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in
+ *    the documentation and/or other materials provided with the
+ *    distribution.
+ *
+ * 3. The name "Carnegie Mellon University" must not be used to
+ *    endorse or promote products derived from this software without
+ *    prior written permission. For permission or any other legal
+ *    details, please contact  
+ *      Office of Technology Transfer
+ *      Carnegie Mellon University
+ *      5000 Forbes Avenue
+ *      Pittsburgh, PA  15213-3890
+ *      (412) 268-4387, fax: (412) 268-7395
+ *      tech-transfer@andrew.cmu.edu
+ *
+ * 4. Redistributions of any form whatsoever must retain the following
+ *    acknowledgment:
+ *    "This product includes software developed by Computing Services
+ *     at Carnegie Mellon University (http://www.cmu.edu/computing/)."
+ *
+ * CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
+ * THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+ * AND FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE
+ * FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+ * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
+ * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+#include <config.h>
+
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <syslog.h>
+#include <com_err.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
+#include <netdb.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <sasl.h>
+#include <saslutil.h>
+
+#include "assert.h"
+#include "util.h"
+#include "auth.h"
+#include "prot.h"
+#include "imapconf.h"
+#include "exitcodes.h"
+#include "imap_err.h"
+#include "xmalloc.h"
+#include "version.h"
+
+#include "lmtpengine.h"
+#include "lmtpstats.h"
+
+#define RCPT_GROW 5 /* XXX 30 */
+
+/* data per message */
+struct Header {
+    char *name;
+    int ncontents;
+    char *contents[1];
+};
+
+struct address_data {
+    char *user;
+    char *all;
+    int status;
+};
+
+/* a simple hash function for sasl mechanisms */
+static int hash_simple (const char *str)
+{
+    int     value = 0;
+    int     i;
+
+    if (!str)
+	return 0;
+    for (i = 0; *str; i++)
+    {
+	value ^= (*str++ << ((i & 3)*8));
+    }
+    return value;
+}
+
+/* round to nearest 1024 bytes and return number of Kbytes.
+ used for SNMP updates. */
+static int roundToK(int x)
+{
+    double rd = (x*1.0)/1024.0;
+    int ri = x/1024;
+    
+    if (rd-ri < 0.5)
+	return ri;
+    else
+	return ri+1;    
+}
+
+static char *convert_lmtp(int r)
+{
+    switch (r) {
+    case 0:
+	return "250 2.1.5 Ok";
+	
+    case IMAP_IOERROR:
+	return "451 4.3.0 System I/O error";
+
+    case IMAP_NOSPACE:
+	return "451 4.3.1 cannot create file: out of space";
+	
+    case IMAP_PERMISSION_DENIED:
+	return "550 5.7.1 Permission denied";
+
+    case IMAP_QUOTA_EXCEEDED:
+	return "452 4.2.2 Over quota";
+
+    case IMAP_MAILBOX_BADFORMAT:
+    case IMAP_MAILBOX_NOTSUPPORTED:
+	return "451 4.2.0 Mailbox has an invalid format";
+
+    case IMAP_MESSAGE_CONTAINSNULL:
+	return "554 5.6.0 Message contains NUL characters";
+	
+    case IMAP_MESSAGE_CONTAINSNL:
+	return "554 5.6.0 Message contains bare newlines";
+
+    case IMAP_MESSAGE_CONTAINS8BIT:
+	return "554 5.6.0 Message contains non-ASCII characters in headers";
+
+    case IMAP_MESSAGE_BADHEADER:
+	return "554 5.6.0 Message contains invalid header";
+
+    case IMAP_MESSAGE_NOBLANKLINE:
+	return "554 5.6.0 Message has no header/body separator";
+
+    case IMAP_MAILBOX_NONEXISTENT:
+	/* XXX Might have been moved to other server */
+	return "550 5.1.1 User unknown";
+    }
+
+    /* Some error we're not expecting. */
+    return "554 5.0.0 Unexpected internal error";
+}
+
+/* ----- this section defines functions on message_data_t.
+   ----- access functions and the like, etc. */
+
+/* returns non-zero on failure */
+int msg_new(message_data_t **m)
+{
+    message_data_t *ret = (message_data_t *) xmalloc(sizeof(message_data_t));
+    int i;
+
+    ret->data = NULL;
+    ret->f = NULL;
+    ret->id = NULL;
+    ret->size = 0;
+    ret->return_path = NULL;
+    ret->rcpt = NULL;
+    ret->rcpt_num = 0;
+    for (i = 0; i < HEADERCACHESIZE; i++)
+	ret->cache[i] = NULL;
+
+    *m = ret;
+    return 0;
+}
+
+void msg_free(message_data_t *m)
+{
+    int i;
+
+    if (m->data) {
+	prot_free(m->data);
+    }
+    if (m->f) {
+	fclose(m->f);
+    }
+    if (m->id) {
+	free(m->id);
+    }
+
+    if (m->return_path) {
+	free(m->return_path);
+    }
+    if (m->rcpt) {
+	for (i = 0; i < m->rcpt_num; i++) {
+	    if (m->rcpt[i]->all) free(m->rcpt[i]->all);
+	    if (m->rcpt[i]->user) free(m->rcpt[i]->user);
+	    free(m->rcpt[i]);
+	}
+	free(m->rcpt);
+    }
+
+    for (i = 0; i < HEADERCACHESIZE; i++) {
+	if (m->cache[i]) {
+	    int j;
+
+	    free(m->cache[i]->name);
+	    for (j = 0; j < m->cache[i]->ncontents; j++) {
+		free(m->cache[i]->contents[j]);
+	    }
+
+	    free(m->cache[i]);
+	}
+    }
+
+    free(m);
+}
+
+/* hash function used for header cache in struct msg */
+static int hashheader(char *header)
+{
+    int x = 0;
+    /* any CHAR except ' ', :, or a ctrl char */
+    for (; !iscntrl((int) *header) && (*header != ' ') && (*header != ':'); 
+	 header++) {
+	x *= 256;
+	x += *header;
+	x %= HEADERCACHESIZE;
+    }
+    return x;
+}
+
+const char **msg_getheader(message_data_t *m, const char *phead)
+{
+    char *head;
+    const char **ret = NULL;
+    int clinit, cl;
+
+    assert(m && phead);
+
+    head = xstrdup(phead);
+    lcase(head);
+
+    /* check the cache */
+    clinit = cl = hashheader(head);
+    while (m->cache[cl] != NULL) {
+	if (!strcmp(head, m->cache[cl]->name)) {
+	    ret = (const char **) m->cache[cl]->contents;
+	    break;
+	}
+	cl++; /* try next hash bin */
+	cl %= HEADERCACHESIZE;
+	if (cl == clinit) break; /* gone all the way around */
+    }
+
+    free(head);
+
+    return ret;
+}
+
+int msg_getsize(message_data_t *m)
+{
+    return m->size;
+}
+
+int msg_getnumrcpt(message_data_t *m)
+{
+    return m->rcpt_num;
+}
+
+const char *msg_getrcpt(message_data_t *m, int rcpt_num)
+{
+    assert(0 <= rcpt_num && rcpt_num < m->rcpt_num);
+    return m->rcpt[rcpt_num]->user;
+}
+
+const char *msg_getrcptall(message_data_t *m, int rcpt_num)
+{
+    assert(0 <= rcpt_num && rcpt_num < m->rcpt_num);
+    return m->rcpt[rcpt_num]->all;
+}
+
+/* set a recipient status; 'r' should be an IMAP error code that will be
+   translated into an LMTP status code */
+void msg_setrcpt_status(message_data_t *m, int rcpt_num, int r)
+{
+    assert(0 <= rcpt_num && rcpt_num < m->rcpt_num);
+    m->rcpt[rcpt_num]->status = r;
+}
+
+/* return a malloc'd string representing the authorized user */
+static char *parseautheq(char *s)
+{
+    char *ret;
+    char *str;
+
+    if (!strcmp(s, "<>")) return NULL;
+
+    ret = (char *) xmalloc(strlen(s)+1);
+    ret[0]='\0';
+    str = ret;
+
+    if (*s == '<') s++; 	/* we'll be liberal and accept "<foo>" */
+    while (1)
+    {
+	/* hexchar */
+	if (*s == '+')
+	{
+	    int lup;
+	    *str = '\0';
+	    s++;
+	    
+	    for (lup=0;lup<2;lup++)
+	    {
+		if ((*s>='0') && (*s<='9'))
+		    (*str) = (*str) & (*s - '0');
+		else if ((*s>='A') && (*s<='F'))
+		    (*str) = (*str) & (*s - 'A' + 10);
+		else {
+		    free(ret);
+		    return NULL;
+		}
+		if (lup==0)
+		{
+		    (*str) = (*str) << 4;
+		    s++;
+		}		
+	    }
+	    str++;
+
+	} else if ((*s >= '!') && (*s <='~') && (*s!='+') && (*s!='=')) {
+	    /* ascii char */
+	    *str = *s;
+	    str++;
+	} else {
+	    /* bad char */
+	    free(ret);
+	    return NULL;
+	}
+	s++;
+    }
+
+    if (*s && (*s!=' ')) { free(ret); return NULL; }
+
+    *str = '\0';
+
+    /* take off trailing '>' */
+    if ((str!=ret) && ( *(str-1)=='>'))
+    {
+	*(str-1) = '\0';
+    }
+
+    return ret;
+}
+
+/* return malloc'd string containing the address */
+static char *parseaddr(char *s)
+{
+    char *p;
+    int len;
+
+    p = s;
+
+    if (*p++ != '<') return 0;
+
+    /* at-domain-list */
+    while (*p == '@') {
+	p++;
+	if (*p == '[') {
+	    p++;
+	    while (isdigit((int) *p) || *p == '.') p++;
+	    if (*p++ != ']') return 0;
+	}
+	else {
+	    while (isalnum((int) *p) || *p == '.' || *p == '-') p++;
+	}
+	if (*p == ',' && p[1] == '@') p++;
+	else if (*p == ':' && p[1] != '@') p++;
+	else return 0;
+    }
+    
+    /* local-part */
+    if (*p == '\"') {
+	p++;
+	while (*p && *p != '\"') {
+	    if (*p == '\\') {
+		if (!*++p) return 0;
+	    }
+	    p++;
+	}
+	if (!*p++) return 0;
+    }
+    else {
+	/* disallow plus addressing without giving a name */
+	if (*p == '+') return 0;
+	
+	while (*p && *p != '@' && *p != '>') {
+	    if (*p == '\\') {
+		if (!*++p) return 0;
+	    }
+	    else {
+		if (*p <= ' ' || (*p & 128) ||
+		    strchr("<>()[]\\,;:\"", *p)) return 0;
+	    }
+	    p++;
+	}
+    }
+
+    /* @domain */
+    if (*p == '@') {
+	p++;
+	if (*p == '[') {
+	    p++;
+	    while (isdigit((int) *p) || *p == '.') p++;
+	    if (*p++ != ']') return 0;
+	}
+	else {
+	    while (isalnum((int) *p) || *p == '.' || *p == '-') p++;
+	}
+    }
+    
+    if (*p++ != '>') return 0;
+    if (*p && *p != ' ') return 0;
+    len = p - s;
+
+    s = xstrdup(s);
+    s[len] = '\0';
+    return s;
+}
+
+/* clean off the <> from the return path */
+void clean_retpath(char *rpath)
+{
+    int i, sl;
+
+    /* Remove any angle brackets around return path */
+    if (*rpath == '<') {
+	sl = strlen(rpath);
+	for (i = 0; i < sl; i++) {
+	    rpath[i] = rpath[i+1];
+	}
+	sl--; /* string is one shorter now */
+	if (rpath[sl-1] == '>') {
+	    rpath[sl-1] = '\0';
+	}
+    }
+}
+
+/*
+ * Destructively remove any whitespace and 822 comments
+ * from string pointed to by 'buf'.  Does not handle continuation header
+ * lines.
+ */
+void
+clean822space(buf)
+char *buf;
+{
+    char *from=buf, *to=buf;
+    int c;
+    int commentlevel = 0;
+
+    while ((c = *from++)!=0) {
+	switch (c) {
+	case '\r':
+	case '\n':
+	case '\0':
+	    *to = '\0';
+	    return;
+
+	case ' ':
+	case '\t':
+	    continue;
+
+	case '(':
+	    commentlevel++;
+	    break;
+
+	case ')':
+	    if (commentlevel) commentlevel--;
+	    break;
+
+	case '\\':
+	    if (commentlevel && *from) from++;
+	    /* FALL THROUGH */
+
+	default:
+	    if (!commentlevel) *to++ = c;
+	    break;
+	}
+    }
+}
+
+/* copies the message from fin to fout, massaging accordingly: mostly
+ * newlines are fiddled. "." terminates */
+static int copy_msg(struct protstream *fin, FILE *fout)
+{
+    char buf[8192], *p;
+
+    while (prot_fgets(buf, sizeof(buf)-1, fin)) {
+	p = buf + strlen(buf) - 1;
+	if (p == buf || p[-1] != '\r') {
+	    p[0] = '\r';
+	    p[1] = '\n';
+	    p[2] = '\0';
+	} else if (*p == '\r') {
+	    if (buf[0] == '\r' && buf[1] == '\0') {
+		/* The message contained \r\0, and fgets is confusing us.
+		   XXX ignored
+		   */
+	    } else {
+		/*
+		 * We were unlucky enough to get a CR just before we ran
+		 * out of buffer--put it back.
+		 */
+		prot_ungetc('\r', fin);
+		*p = '\0';
+	    }
+	}
+	/* Remove any lone CR characters */
+	while ((p = strchr(buf, '\r')) && p[1] != '\n') {
+	    strcpy(p, p+1);
+	}
+	
+	if (buf[0] == '.') {
+	    if (buf[1] == '\r' && buf[2] == '\n') {
+		/* End of message */
+		goto lmtpdot;
+	    }
+	    /* Remove the dot-stuffing */
+	    fputs(buf+1, fout);
+	} else {
+	    fputs(buf, fout);
+	}
+    }
+
+    /* wow, serious error---got a premature EOF. */
+    return IMAP_IOERROR;
+
+ lmtpdot:
+    return 0;
+}
+
+/* take a list of headers, pull the first one out and return it in
+   name and contents.
+
+   copies fin to fout, massaging 
+
+   returns 0 on success, negative on failure */
+typedef enum {
+    NAME_START,
+    NAME,
+    COLON,
+    BODY_START,
+    BODY
+} state;
+
+enum {
+    NAMEINC = 128,
+    BODYINC = 1024
+};
+
+/* we don't have to worry about dotstuffing here, since it's illegal
+   for a header to begin with a dot! */
+static int parseheader(struct protstream *fin, FILE *fout, 
+		       char **headname, char **contents) {
+    int c;
+    static char *name = NULL, *body = NULL;
+    static int namelen = 0, bodylen = 0;
+    int off = 0;
+    state s = NAME_START;
+
+    if (namelen == 0) {
+	namelen += NAMEINC;
+	name = (char *) xrealloc(name, namelen * sizeof(char));
+    }
+    if (bodylen == 0) {
+	bodylen += BODYINC;
+	body = (char *) xrealloc(body, bodylen * sizeof(char));
+    }
+
+    /* there are two ways out of this loop, both via gotos:
+       either we successfully read a character (got_header)
+       or we hit an error (ph_error) */
+    while ((c = prot_getc(fin)) != EOF) { /* examine each character */
+	switch (s) {
+	case NAME_START:
+	    if (c == '\r' || c == '\n') {
+		/* no header here! */
+		goto ph_error;
+	    }
+	    if (!isalpha(c)) {
+		/* invalid header name */
+		goto ph_error;
+	    }
+	    name[0] = tolower(c);
+	    off = 1;
+	    s = NAME;
+	    break;
+
+	case NAME:
+	    if (c == ' ' || c == '\t' || c == ':') {
+		name[off] = '\0';
+		s = (c == ':' ? BODY_START : COLON);
+		break;
+	    }
+	    if (iscntrl(c)) {
+		goto ph_error;
+	    }
+	    name[off++] = tolower(c);
+	    if (off >= namelen - 3) {
+		namelen += NAMEINC;
+		name = (char *) xrealloc(name, namelen);
+	    }
+	    break;
+	
+	case COLON:
+	    if (c == ':') {
+		s = BODY_START;
+	    } else if (c != ' ' && c != '\t') {
+		/* i want to avoid confusing dot-stuffing later */
+		while (c == '.') {
+		    fputc(c, fout);
+		    c = prot_getc(fin);
+		}
+		goto ph_error;
+	    }
+	    break;
+
+	case BODY_START:
+	    if (c == ' ' || c == '\t') /* eat the whitespace */
+		break;
+	    off = 0;
+	    s = BODY;
+	    /* falls through! */
+	case BODY:
+	    /* now we want to convert all newlines into \r\n */
+	    if (c == '\r' || c == '\n') {
+		int peek;
+
+		peek = prot_getc(fin);
+		
+		fputc('\r', fout);
+		fputc('\n', fout);
+		/* we should peek ahead to see if it's folded whitespace */
+		if (c == '\r' && peek == '\n') {
+		    c = prot_getc(fin);
+		} else {
+		    c = peek; /* single newline seperator */
+		}
+		if (c != ' ' && c != '\t') {
+		    /* this is the end of the header */
+		    body[off] = '\0';
+		    prot_ungetc(c, fin);
+		    goto got_header;
+		}
+		/* ignore this whitespace, but we'll copy all the rest in */
+		break;
+	    } else {
+		/* just an ordinary character */
+		body[off++] = c;
+		if (off >= bodylen - 3) {
+		    bodylen += BODYINC;
+		    body = (char *) xrealloc(body, bodylen);
+		}
+	    }
+	}
+
+	/* copy this to the output */
+	fputc(c, fout);
+    }
+
+    /* if we fall off the end of the loop, we hit some sort of error
+       condition */
+
+ ph_error:
+    /* put the last character back; we'll copy it later */
+    prot_ungetc(c, fin);
+
+    /* and we didn't get a header */
+    if (headname != NULL) *headname = NULL;
+    if (contents != NULL) *contents = NULL;
+    return -1;
+
+ got_header:
+    if (headname != NULL) *headname = xstrdup(name);
+    if (contents != NULL) *contents = xstrdup(body);
+
+    return 0;
+}
+
+static int fill_cache(struct protstream *fin, FILE *fout, message_data_t *m)
+{
+    /* let's fill that header cache */
+    for (;;) {
+	char *name, *body;
+	int cl, clinit;
+
+	if (parseheader(fin, fout, &name, &body) < 0) {
+	    break;
+	}
+
+	/* put it in the hash table */
+	clinit = cl = hashheader(name);
+	while (m->cache[cl] != NULL && strcmp(name, m->cache[cl]->name)) {
+	    cl++;		/* resolve collisions linearly */
+	    cl %= HEADERCACHESIZE;
+	    if (cl == clinit) break; /* gone all the way around, so bail */
+	}
+
+	/* found where to put it, so insert it into a list */
+	if (m->cache[cl]) {
+	    /* add this body on */
+	    m->cache[cl]->contents[m->cache[cl]->ncontents++] = body;
+
+	    /* whoops, won't have room for the null at the end! */
+	    if (!(m->cache[cl]->ncontents % 8)) {
+		/* increase the size */
+		m->cache[cl] = (header_t *)
+		    xrealloc(m->cache[cl],sizeof(header_t) +
+			     ((8 + m->cache[cl]->ncontents) * sizeof(char *)));
+	    }
+
+	    /* have no need of this */
+	    free(name);
+	} else {
+	    /* create a new entry in the hash table */
+	    m->cache[cl] = (header_t *) xmalloc(sizeof(header_t) + 
+						8 * sizeof(char*));
+	    m->cache[cl]->name = name;
+	    m->cache[cl]->contents[0] = body;
+	    m->cache[cl]->ncontents = 1;
+	}
+
+	/* we always want a NULL at the end */
+	m->cache[cl]->contents[m->cache[cl]->ncontents] = NULL;
+    }
+
+    return copy_msg(fin, fout);
+}
+
+/*
+ * file in the message structure 'm' from 'pin', assuming a dot-stuffed
+ * stream a la lmtp.
+ *
+ * returns 0 on success, imap error code on failure
+ */
+static int savemsg(struct protstream *pin, 
+		   struct protstream *pout, 
+		   const char *addheaders,
+		   message_data_t *m)
+{
+    FILE *f;
+    struct stat sbuf;
+    char buf[128];
+    const char **body;
+    int sl, i;
+    int r;
+    int nrcpts = m->rcpt_num;
+
+    /* Copy to temp file */
+    f = tmpfile();
+    if (!f) {
+	prot_printf(pout, "451 4.3.%c cannot create temporary file: %s\r\n",
+		    (
+#ifdef EDQUOT
+			errno == EDQUOT ||
+#endif
+			errno == ENOSPC) ? '1' : '2',
+		    error_message(errno));
+	return IMAP_IOERROR;
+    }
+
+    prot_printf(pout, "354 go ahead\r\n");
+
+    if (m->return_path) { /* add the return path */
+	char *rpath = m->return_path;
+	const char *hostname = 0;
+
+	clean_retpath(rpath);
+	/* Append our hostname if there's no domain in address */
+	hostname = NULL;
+	if (!strchr(rpath, '@')) {
+	    hostname = config_servername;
+	}
+
+	fprintf(f, "Return-Path: <%s%s%s>\r\n",
+		rpath, hostname ? "@" : "", hostname ? hostname : "");
+    }
+
+    /* add any requested headers */
+    if (addheaders) {
+	fputs(addheaders, f);
+    }
+
+    /* fill the cache */
+    r = fill_cache(pin, f, m);
+    if (!r) {
+	fclose(f);
+	return r;
+    }
+
+    /* now, using our header cache, fill in the data that we want */
+
+    /* first check resent-message-id */
+    if (body = msg_getheader(m, "resent-message-id")) {
+	m->id = xstrdup(body[0]);
+    } else if (body = msg_getheader(m, "message-id")) {
+	m->id = xstrdup(body[0]);
+    } else {
+	m->id = NULL;		/* no message-id */
+    }
+
+    if (!m->return_path &&
+	(body = msg_getheader(m, "return-path"))) {
+	/* let's grab return_path */
+	m->return_path = xstrdup(body[0]);
+	clean822space(m->return_path);
+	clean_retpath(m->return_path);
+    }
+
+    fflush(f);
+    if (ferror(f)) {
+	while (nrcpts--) {
+	    prot_printf(pout,
+	       "451 4.3.%c cannot copy message to temporary file: %s\r\n",
+		   (
+#ifdef EDQUOT
+		    errno == EDQUOT ||
+#endif
+		    errno == ENOSPC) ? '1' : '2',
+		   error_message(errno));
+	}
+	fclose(f);
+	return;
+    }
+
+    if (fstat(fileno(f), &sbuf) == -1) {
+	while (nrcpts--) {
+	    prot_printf(pout,
+			"451 4.3.2 cannot stat message temporary file: %s\r\n",
+			error_message(errno));
+	}
+	fclose(f);
+	return IMAP_IOERROR;
+    }
+    m->size = sbuf.st_size;
+    m->f = f;
+    m->data = prot_new(fileno(f), 0);
+
+    return 0;
+}
+
+/* see if 'addr' exists. if so, fill in 'ad' appropriately.
+   on success, return NULL.
+   on failure, return an error message. */
+static char *process_recipient(char *addr,
+			       int (*verify_user)(const char *),
+			       address_data_t **ad)
+{
+    char *dest;
+    char *user;
+    int r, sl;
+    address_data_t *ret = (address_data_t *) xmalloc(sizeof(address_data_t));
+
+    assert(addr != NULL && ad != NULL);
+
+    if (*addr == '<') addr++;
+    dest = user = addr;
+    
+    /* preserve the entire address */
+    ret->all = xstrdup(addr);
+    sl = strlen(ret->all);
+    if (ret->all[sl-1] == '>')
+	ret->all[sl-1] = '\0';
+
+    /* now find just the user */
+    
+    /* Skip at-domain-list */
+    if (*addr == '@') {
+	addr = strchr(addr, ':');
+	if (!addr) {
+	    free(ret->all);
+	    free(ret);
+	    return "501 5.5.4 Syntax error in parameters";
+	}
+	addr++;
+    }
+    
+    if (*addr == '\"') {
+	addr++;
+	while (*addr && *addr != '\"') {
+	    if (*addr == '\\') addr++;
+	    *dest++ = *addr++;
+	}
+    }
+    else {
+	while (*addr != '@' && *addr != '>') {
+	    if (*addr == '\\') addr++;
+	    *dest++ = *addr++;
+	}
+    }
+    *dest = '\0';
+	
+    r = verify_user(user);
+    if (r) {
+	/* we lost */
+	free(ret->all);
+	free(ret);
+	return convert_lmtp(r);
+    }
+    ret->user = xstrdup(user);
+
+    *ad = ret;
+
+    return NULL;
+}    
+
+void lmtpmode(struct lmtp_func *func,
+	      struct protstream *pin, 
+	      struct protstream *pout,
+	      int fd)
+{
+    message_data_t *msg = NULL;
+    char buf[4096];
+    char *p;
+    int r;
+    char *err;
+    int i;
+
+    struct sockaddr_in localaddr, remoteaddr;
+    int salen;
+
+    sasl_conn_t *conn = NULL;
+    sasl_security_properties_t *secprops = NULL;
+    sasl_external_properties_t *extprops = NULL;
+    int authenticated = 0;	/* -1: external auth'd, but no AUTH issued
+				    0: no auth
+				    1: did AUTH */
+    char *authuser = NULL;
+    struct auth_state *authstate = NULL;
+
+    msg_new(&msg);
+    if (sasl_server_new("lmtp", NULL, NULL, NULL, 0, &conn) != SASL_OK) {
+	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL);
+    }
+
+    /* set my allowable security properties */
+    secprops = mysasl_secprops();
+    sasl_setprop(conn, SASL_SEC_PROPS, secprops);
+
+    /* determine who we're talking to */
+    salen = sizeof(remoteaddr);
+    r = getpeername(fd, (struct sockaddr *)&remoteaddr, &salen);
+    if (!r && remoteaddr.sin_family == AF_INET) {
+	/* connected to an internet socket */
+
+	salen = sizeof(localaddr);
+	if (!getsockname(fd, (struct sockaddr *)&localaddr, &salen)) {
+	    /* set the ip addresses here */
+	    sasl_setprop(conn, SASL_IP_REMOTE, &remoteaddr);  
+	    sasl_setprop(conn, SASL_IP_LOCAL,  &localaddr );
+	} else {
+	    fatal("can't get local addr", EC_SOFTWARE);
+	}
+
+	syslog(LOG_DEBUG, "connection from [%s]", 
+	       inet_ntoa(remoteaddr.sin_addr));
+    } else {
+	/* we're not connected to a internet socket! */
+	extprops = (sasl_external_properties_t *) 
+	    xmalloc(sizeof(sasl_external_properties_t));
+	extprops->ssf = 2;
+	extprops->auth_id = "postman";
+	sasl_setprop(conn, SASL_SSF_EXTERNAL, extprops);
+	authenticated = -1;	/* we'll allow commands, 
+				   but we still accept the AUTH command */
+
+	syslog(LOG_DEBUG, "lmtp connection preauth'd as postman");
+    }
+
+    prot_printf(pout, "220 %s LMTP Cyrus %s ready\r\n", 
+		config_servername,
+		CYRUS_VERSION);
+    for (;;) {
+    nextcmd:
+      signals_poll();
+
+      if (!prot_fgets(buf, sizeof(buf)-1, pin)) {
+	  goto cleanup;
+      }
+      p = buf + strlen(buf) - 1;
+      if (p >= buf && *p == '\n') *p-- = '\0';
+      if (p >= buf && *p == '\r') *p-- = '\0';
+
+      switch (buf[0]) {
+      case 'a':
+      case 'A':
+	  if (!strncasecmp(buf, "auth ", 5)) {
+	      char mech[128];
+	      char *in = NULL, *out = NULL;
+	      unsigned int inlen, outlen;
+	      const char *errstr;
+	      char *user;
+	      
+	      if (authenticated > 0) {
+		  prot_printf(pout,
+			      "503 5.5.0 already authenticated\r\n");
+		  continue;
+	      }
+	      if (msg->rcpt_num != 0) {
+		  prot_printf(pout,
+			      "503 5.5.0 AUTH not permitted now\r\n");
+		  continue;
+	      }
+	      
+	      /* ok, what mechanism ? */
+	      p = buf + 5;
+	      while ((*p != ' ') && (*p != '\0')) {
+		  p++;
+	      }
+	      if (*p == ' ') {
+		  *p = '\0';
+		  p++;
+	      } else {
+		  p = NULL;
+	      }
+	      strlcpy(mech, buf + 5, sizeof(mech));
+	      if (p != NULL) {
+		  in = xmalloc(strlen(p));
+		  r = sasl_decode64(p, strlen(p), in, &inlen);
+		  if (r != SASL_OK) {
+		      prot_printf(pout,
+				  "501 5.5.4 cannot base64 decode\r\n");
+		      if (in) { free(in); }
+		      continue;
+		  }
+	      } else {
+		  in = NULL;
+		  inlen = 0;
+	      }
+	      
+	      r = sasl_server_start(conn, mech,
+				    in, inlen,
+				    &out, &outlen,
+				    &errstr);
+	      if (in) { free(in); in = NULL; }
+	      if (r == SASL_NOMECH) {
+		  prot_printf(pout, 
+			      "504 Unrecognized authentication type.\r\n");
+		  continue;
+	      }
+	      
+	      while (r == SASL_CONTINUE) {
+		  char inbase64[4096];
+		  
+		  r = sasl_encode64(out, outlen, 
+				    inbase64, sizeof(inbase64), NULL);
+		  if (r != SASL_OK) break;
+
+		  /* send out */
+		  prot_printf(pout,"334 %s\r\n", inbase64);
+		  
+		  /* read a line */
+		  if (!prot_fgets(buf, sizeof(buf)-1, pin)) {
+		      goto cleanup;
+		  }
+		  p = buf + strlen(buf) - 1;
+		  if (p >= buf && *p == '\n') *p-- = '\0';
+		  if (p >= buf && *p == '\r') *p-- = '\0';
+		  
+		  in = xmalloc(strlen(buf));
+		  r = sasl_decode64(buf, strlen(buf), in, &inlen);
+		  if (r != SASL_OK) {
+		      prot_printf(pout,
+				  "501 5.5.4 cannot base64 decode\r\n");
+		      goto nextcmd; /* what's the state of our sasl_conn_t? */
+		  }
+
+		  if (out) { free(out); out = NULL; }
+		  r = sasl_server_step(conn,
+				       in, inlen,
+				       &out, &outlen,
+				       &errstr);
+		  if (in) { free(in); in = NULL; }
+	      }
+	      
+	      if (in) { free(in); in = NULL; }
+	      if (out) { free(out); out = NULL; }
+	      if ((r != SASL_OK) && (r != SASL_CONTINUE)) {
+		  if (errstr) {
+		      syslog(LOG_ERR, "badlogin: %s %s %s [%s]",
+			     remoteaddr.sin_family == AF_INET ?
+			        inet_ntoa(remoteaddr.sin_addr) :
+			        "[unix socket]",
+			     mech,
+			     sasl_errstring(r, NULL, NULL), 
+			     errstr);
+		  } else {
+		      syslog(LOG_ERR, "badlogin: %s %s %s",
+			     remoteaddr.sin_family == AF_INET ?
+			        inet_ntoa(remoteaddr.sin_addr) :
+			        "[unix socket]",
+			     mech,
+			     sasl_errstring(r, NULL, NULL));
+		  }
+		  
+		  snmp_increment_args(AUTHENTICATION_NO, 1,
+				      VARIABLE_AUTH, hash_simple(mech), 
+				      VARIABLE_LISTEND);
+
+		  prot_printf(pout, "501 5.5.4 %s\r\n",
+			      sasl_errstring(sasl_usererr(r), NULL, NULL));
+		  continue;
+	      }
+	      r = sasl_getprop(conn, SASL_USERNAME, (void **) &user);
+	      if (r != SASL_OK) user = "[sasl error]";
+
+	      /* authenticated successfully! */
+	      snmp_increment_args(AUTHENTICATION_YES,1,
+				  VARIABLE_AUTH, hash_simple(mech), 
+				  VARIABLE_LISTEND);
+	      syslog(LOG_NOTICE, "login: %s %s %s %s",
+		     remoteaddr.sin_family == AF_INET ?
+		        inet_ntoa(remoteaddr.sin_addr) :
+		        "[unix socket]",
+		     user, mech, "User logged in");
+
+	      authenticated += 2;
+	      prot_printf(pout, "235 Authenticated!\r\n");
+
+	      /* set protection layers */
+	      prot_setsasl(pin,  conn);
+	      prot_setsasl(pout, conn);
+	      continue;
+	  }
+	  goto syntaxerr;
+
+      case 'd':
+      case 'D':
+	    if (!strcasecmp(buf, "data")) {
+		int delivered = 0;
+		int j;
+
+		if (!msg->rcpt_num) {
+		    prot_printf(pout, "503 5.5.1 No recipients\r\n");
+		    continue;
+		}
+		/* copy message from input to msg structure */
+		r = savemsg(pin, pout, func->addheaders, msg);
+		if (!r) continue;
+
+		snmp_increment(mtaReceivedMessages, 1);
+		snmp_increment(mtaReceivedVolume, roundToK(msg->size));
+		snmp_increment(mtaReceivedRecipients, msg->rcpt_num);
+
+		/* do delivery, report status */
+		r = func->deliver(msg, authuser, authstate);
+		for (j = 0; j < msg->rcpt_num; j++) {
+		    if (!msg->rcpt[j]->status) delivered++;
+		    prot_printf(pout, "%s\r\n", 
+				convert_lmtp(msg->rcpt[j]->status));
+		}
+
+		snmp_increment(mtaTransmittedMessages, delivered);
+		snmp_increment(mtaTransmittedVolume, 
+			       roundToK(delivered * msg->size));
+		goto rset;
+	    }
+	    goto syntaxerr;
+
+      case 'l':
+      case 'L':
+	  if (!strncasecmp(buf, "lhlo ", 5)) {
+	      unsigned int mechcount;
+	      char *mechs;
+	      
+	      prot_printf(pout, "250-%s\r\n"
+			  "250-8BITMIME\r\n"
+			  "250-ENHANCEDSTATUSCODES\r\n",
+			  config_servername);
+	      if (sasl_listmech(conn, NULL, "AUTH ", " ", "", &mechs, 
+				NULL, &mechcount) == SASL_OK && 
+		  mechcount > 0) {
+		  prot_printf(pout,"250-%s\r\n", mechs);
+		  free(mechs);
+	      }
+	      prot_printf(pout, "250 PIPELINING\r\n");
+	      
+	      continue;
+	  }
+	  goto syntaxerr;
+    
+      case 'm':
+      case 'M':
+	    if (!authenticated) {
+		prot_printf(pout, 
+			    "530 Authentication required\r\n");
+		continue;
+	    }
+
+	    if (!strncasecmp(buf, "mail ", 5)) {
+		char *tmp;
+		if (msg->return_path) {
+		    prot_printf(pout, 
+				"503 5.5.1 Nested MAIL command\r\n");
+		    continue;
+		}
+		if (strncasecmp(buf+5, "from:", 5) != 0 ||
+		    !(msg->return_path = parseaddr(buf+10))) {
+		    prot_printf(pout, 
+				"501 5.5.4 Syntax error in parameters\r\n");
+		    continue;
+		}
+		tmp = buf+10+strlen(msg->return_path);
+
+		/* is any other whitespace allow seperating? */
+		if (*tmp == ' ') {
+		    tmp++;
+		    if (strncasecmp(tmp, "auth=", 5) != 0) {
+			prot_printf(pout, 
+				    "501 5.5.4 Unrecognized parameters\r\n");
+			continue;
+		    }
+		    tmp += 5;
+		    authuser = parseautheq(tmp);
+		    if (authuser) {
+			authstate = auth_newstate(authuser, NULL);
+		    } else {
+			/* do we want to bounce mail because of this? */
+			/* i guess not. accept with no auth user */
+			authstate = NULL;
+		    }
+		} else if (*tmp != '\0') {
+		    prot_printf(pout, 
+				"501 5.5.4 Syntax error in parameters\r\n");  
+		    continue;
+		}
+
+		prot_printf(pout, "250 2.1.0 ok\r\n");
+		continue;
+	    }
+	    goto syntaxerr;
+
+      case 'n':
+      case 'N':
+	    if (!strcasecmp(buf, "noop")) {
+		prot_printf(pout,"250 2.0.0 ok\r\n");
+		continue;
+	    }
+	    goto syntaxerr;
+
+      case 'q':
+      case 'Q':
+	    if (!strcasecmp(buf, "quit")) {
+		prot_printf(pout,"221 2.0.0 bye\r\n");
+		prot_flush(pout);
+		goto cleanup;
+	    }
+	    goto syntaxerr;
+	    
+      case 'r':
+      case 'R':
+	    if (!strncasecmp(buf, "rcpt ", 5)) {
+		char *rcpt;
+
+		if (!msg->return_path) {
+		    prot_printf(pout, "503 5.5.1 Need MAIL command\r\n");
+		    continue;
+		}
+		if (!(msg->rcpt_num % RCPT_GROW)) { /* time to alloc more */
+		    msg->rcpt = (address_data_t **)
+			xrealloc(msg->rcpt, (msg->rcpt_num + RCPT_GROW + 1) * 
+				 sizeof(address_data_t *));
+		}
+		if (strncasecmp(buf+5, "to:", 3) != 0 ||
+		    !(rcpt = parseaddr(buf+8))) {
+		    prot_printf(pout,
+				"501 5.5.4 Syntax error in parameters\r\n");
+		    continue;
+		}
+		err = process_recipient(rcpt, 
+					func->verify_user,
+					&msg->rcpt[msg->rcpt_num]);
+		free(rcpt); /* malloc'd in parseaddr() */
+		if (err != NULL) {
+		    prot_printf(pout, "%s\r\n", err);
+		    continue;
+		}
+		msg->rcpt_num++;
+		msg->rcpt[msg->rcpt_num] = NULL;
+		prot_printf(pout, "250 2.1.5 ok\r\n");
+		continue;
+	    }
+	    else if (!strcasecmp(buf, "rset")) {
+		prot_printf(pout, "250 2.0.0 ok\r\n");
+
+	      rset:
+		msg_free(msg);
+		msg_new(&msg);
+		if (authuser) free(authuser);
+		if (authstate) auth_freestate(authstate);
+		
+		continue;
+	    }
+	    goto syntaxerr;
+	    
+      case 'v':
+      case 'V':
+	    if (!strncasecmp(buf, "vrfy ", 5)) {
+		prot_printf(pout,
+			    "252 2.3.3 try RCPT to attempt delivery\r\n");
+		continue;
+	    }
+	    goto syntaxerr;
+
+      default:
+      syntaxerr:
+	    prot_printf(pout, "500 5.5.2 Syntax error\r\n");
+	    continue;
+      }
+    }
+
+ cleanup:
+    /* free resources and return; this connection has been closed */
+
+    if (msg) msg_free(msg);
+
+    /* security */
+    if (conn) sasl_dispose(&conn);
+    if (secprops) free(secprops);
+    if (extprops) free(extprops);
+    if (authuser) free(authuser);
+    if (authstate) auth_freestate(authstate);
+}
+

@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.28 2000/05/24 18:54:39 leg Exp $
+ * $Id: lmtpd.c,v 1.29 2000/05/28 23:19:39 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.28 2000/05/24 18:54:39 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.29 2000/05/28 23:19:39 leg Exp $";*/
 
 #include <config.h>
 
@@ -65,17 +65,9 @@
 #ifdef USE_SIEVE
 #include <sieve_interface.h>
 
-#define HEADERCACHESIZE 4009
-
-#ifdef TM_IN_SYS_TIME
-#include <sys/time.h>
-#else
-#include <time.h>
-#endif
-
 #include <pwd.h>
 #include <sys/types.h>
-#endif
+#endif /* USE_SIEVE */
 
 #include <netdb.h>
 #include <sys/socket.h>
@@ -103,6 +95,7 @@
 #include "mboxlist.h"
 #include "notify.h"
 
+#include "lmtpengine.h"
 #include "lmtpstats.h"
 
 struct protstream *deliver_out, *deliver_in;
@@ -112,48 +105,19 @@ extern char *optarg;
 
 extern int errno;
 
-typedef struct deliver_opts {
-    int quotaoverride;		/* should i override quota? */
-    char *authuser;		/* authenticated user submitting mail */
-    struct auth_state *authstate;
-} deliver_opts_t;
+typedef struct mydata {
+    message_data_t *m;
+    int cur_rcpt;
 
-#ifdef USE_SIEVE
-/* data per message */
-typedef struct Header {
-    char *name;
-    int ncontents;
-    char *contents[1];
-} header_t;
-#endif
-
-typedef struct address_data {
-    char *mailbox;
-    char *detail;
-    char *all;
-} address_data_t;
-
-typedef struct message_data {
-    struct protstream *data;	/* message in temp file */
     struct stagemsg *stage;	/* staging location for single instance
 				   store */
-
-    FILE *f;
     char *notifyheader;
-    char *id;			/* message id */
-    int size;			/* size of message */
-
-    /* msg envelope */
-    char *return_path;		/* where to return message */
-    address_data_t **rcpt;	/* to receipients of this message */
-    char *temp[2];		/* used to avoid extra indirection in
+    const char *temp[2];	/* used to avoid extra indirection in
 				   getenvelope() */
-    int rcpt_num;
-#ifdef USE_SIEVE
-    /* sieve related data */
-    header_t *cache[HEADERCACHESIZE];
-#endif
-} message_data_t;
+
+    char *authuser;		/* user who submitted message */
+    struct auth_state *authstate;
+} mydata_t;
 
 /* data per script */
 typedef struct script_data {
@@ -163,7 +127,6 @@ typedef struct script_data {
 } script_data_t;
 
 /* forward declarations */
-void lmtpmode(deliver_opts_t *delopts);
 int deliver_mailbox(struct protstream *msg,
 		    struct stagemsg **stage,
 		    unsigned size,
@@ -178,33 +141,28 @@ int deliver_mailbox(struct protstream *msg,
 		    int quotaoverride,
 		    int acloverride);
 int isvalidflag(char *f);
-int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
-	    char **flag, int nflags,
-	    char *user, char *mailboxname);
+static int deliver(message_data_t *msgdata, char *authuser,
+		   struct auth_state *authstate);
+static int verify_user(const char *user);
+
 void shut_down(int code);
 
+struct lmtp_func mylmtp = { &deliver, &verify_user, 0 };
+
+static int quotaoverride = 0;		/* should i override quota? */
 int dupelim = 0;
 int singleinstance = 1;
 const char *BB = "";
 
-void savemsg();
-char *convert_lmtp();
-void clean822space();
-
 static void logdupelem();
 static void usage();
 static void setup_sieve();
-
-int msg_new(message_data_t **m);
-void msg_free(message_data_t *m);
 
 #ifdef USE_SIEVE
 static sieve_interp_t *sieve_interp;
 static int sieve_usehomedir = 0;
 static const char *sieve_dir = NULL;
 #endif
-
-struct sockaddr_in deliver_localaddr, deliver_remoteaddr;
 
 /* should we allow users to proxy?  return SASL_OK if yes,
    SASL_BADAUTH otherwise */
@@ -275,7 +233,6 @@ static int mysasl_authproc(void *context __attribute__((unused)),
     return SASL_OK;
 }
 
-
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
     { SASL_CB_PROXY_POLICY, &mysasl_authproc, NULL },
@@ -288,13 +245,20 @@ int service_init(int argc, char **argv, char **envp)
     config_changeident("lmtpd");
     if (geteuid() == 0) return 1;
     
+    signals_set_shutdown(&shut_down);
+    signals_add_handlers();
+    signal(SIGPIPE, SIG_IGN);
+
     /* so we can do mboxlist operations */
     mboxlist_init(0);
     mboxlist_open(NULL);
 
-    signals_set_shutdown(&shut_down);
-    signals_add_handlers();
-    signal(SIGPIPE, SIG_IGN);
+    dupelim = 1;
+    if (duplicate_init(0) != 0) {
+	syslog(LOG_ERR, 
+	       "deliver: unable to init duplicate delivery database\n");
+	dupelim = 0;
+    }
 
 #ifdef USE_SIEVE
     sieve_usehomedir = config_getswitch("sieveusehomedir", 0);
@@ -303,7 +267,13 @@ int service_init(int argc, char **argv, char **envp)
     } else {
 	sieve_dir = NULL;
     }
-#endif USE_SIEVE
+
+    mylmtp.addheaders = xmalloc(80);
+    snprintf(mylmtp.addheaders, 80, "X-Sieve: %s\r\n", sieve_version);
+
+    /* setup sieve support */
+    setup_sieve();
+#endif /* USE_SIEVE */
 
     singleinstance = config_getswitch("singleinstancestore", 1);
     BB = config_getstring("postuser", BB);
@@ -314,7 +284,7 @@ int service_init(int argc, char **argv, char **envp)
 
     /* create connection to the SNMP listener, if available. */
     snmp_connect(); /* ignore return code */
-    snmp_set_str(SERVER_NAME_VERSION,CYRUS_VERSION);
+    snmp_set_str(SERVER_NAME_VERSION, CYRUS_VERSION);
 
     return 0;
 }
@@ -324,31 +294,18 @@ int service_init(int argc, char **argv, char **envp)
  */
 int service_main(int argc, char **argv, char **envp)
 {
-    deliver_opts_t *delopts =
-	(deliver_opts_t *) xmalloc(sizeof(deliver_opts_t));
-    message_data_t *msgdata;
     int lmtpflag = 0;
     int opt;
-
-    msg_new(&msgdata);
-    memset((void *) delopts, 0, sizeof(deliver_opts_t));
 
     deliver_in = prot_new(0, 0);
     deliver_out = prot_new(1, 1);
     prot_setflushonread(deliver_in, deliver_out);
     prot_settimeout(deliver_in, 300);
 
-    dupelim = 1;
-    if (duplicate_init(0) != 0) {
-	syslog(LOG_ERR, 
-	       "deliver: unable to init duplicate delivery database\n");
-	dupelim = 0;
-    }
-
     while ((opt = getopt(argc, argv, "uq")) != EOF) {
 	switch(opt) {
 	case 'q':
-	    delopts->quotaoverride = 1;
+	    quotaoverride = 1;
 	    break;
 
 	default:
@@ -356,22 +313,17 @@ int service_main(int argc, char **argv, char **envp)
 	}
     }
 
-#ifdef USE_SIEVE
-    /* setup sieve support */
-    setup_sieve(delopts, lmtpflag);
-#endif
-
     snmp_increment(TOTAL_CONNECTIONS, 1);
-    snmp_increment(ACTIVE_CONNECTIONS,1);
+    snmp_increment(ACTIVE_CONNECTIONS, 1);
 
-    lmtpmode(delopts);
+    lmtpmode(&mylmtp, deliver_in, deliver_out, 0);
+    shut_down(0);
 
     return 0;
 }
 
 #ifdef USE_SIEVE
-
-static char *make_sieve_db(char *user)
+static char *make_sieve_db(const char *user)
 {
     static char buf[MAX_MAILBOX_PATH];
 
@@ -383,302 +335,13 @@ static char *make_sieve_db(char *user)
     return buf;
 }
 
-static int hashheader(char *header)
-{
-    int x = 0;
-    /* any CHAR except ' ', :, or a ctrl char */
-    for (; !iscntrl((int) *header) && (*header != ' ') && (*header != ':'); 
-	 header++) {
-	x *= 256;
-	x += *header;
-	x %= HEADERCACHESIZE;
-    }
-    return x;
-}
-
-/* take a list of headers, pull the first one out and return it in
-   name and contents.
-
-   copies fin to fout, massaging 
-
-   returns 0 on success, negative on failure */
-typedef enum {
-    NAME_START,
-    NAME,
-    COLON,
-    BODY_START,
-    BODY
-} state;
-
-#define NAMEINC 128
-#define BODYINC 1024
-
-/* we don't have to worry about dotstuffing here, since it's illegal
-   for a header to begin with a dot! */
-static int parseheader(struct protstream *fin, FILE *fout, 
-		       char **headname, char **contents) {
-    int c;
-    static char *name = NULL, *body = NULL;
-    static int namelen = 0, bodylen = 0;
-    int off = 0;
-    state s = NAME_START;
-
-    if (namelen == 0) {
-	namelen += NAMEINC;
-	name = (char *) xrealloc(name, namelen * sizeof(char));
-    }
-    if (bodylen == 0) {
-	bodylen += BODYINC;
-	body = (char *) xrealloc(body, bodylen * sizeof(char));
-    }
-
-    /* there are two ways out of this loop, both via gotos:
-       either we successfully read a character (got_header)
-       or we hit an error (ph_error) */
-    while ((c = prot_getc(fin)) != EOF) { /* examine each character */
-	switch (s) {
-	case NAME_START:
-	    if (c == '\r' || c == '\n') {
-		/* no header here! */
-		goto ph_error;
-	    }
-	    if (!isalpha(c)) {
-		/* invalid header name */
-		goto ph_error;
-	    }
-	    name[0] = tolower(c);
-	    off = 1;
-	    s = NAME;
-	    break;
-
-	case NAME:
-	    if (c == ' ' || c == '\t' || c == ':') {
-		name[off] = '\0';
-		s = (c == ':' ? BODY_START : COLON);
-		break;
-	    }
-	    if (iscntrl(c)) {
-		goto ph_error;
-	    }
-	    name[off++] = tolower(c);
-	    if (off >= namelen - 3) {
-		namelen += NAMEINC;
-		name = (char *) xrealloc(name, namelen);
-	    }
-	    break;
-	
-	case COLON:
-	    if (c == ':') {
-		s = BODY_START;
-	    } else if (c != ' ' && c != '\t') {
-		/* i want to avoid confusing dot-stuffing later */
-		while (c == '.') {
-		    fputc(c, fout);
-		    c = prot_getc(fin);
-		}
-		goto ph_error;
-	    }
-	    break;
-
-	case BODY_START:
-	    if (c == ' ' || c == '\t') /* eat the whitespace */
-		break;
-	    off = 0;
-	    s = BODY;
-	    /* falls through! */
-	case BODY:
-	    /* now we want to convert all newlines into \r\n */
-	    if (c == '\r' || c == '\n') {
-		int peek;
-
-		peek = prot_getc(fin);
-		
-		fputc('\r', fout);
-		fputc('\n', fout);
-		/* we should peek ahead to see if it's folded whitespace */
-		if (c == '\r' && peek == '\n') {
-		    c = prot_getc(fin);
-		} else {
-		    c = peek; /* single newline seperator */
-		}
-		if (c != ' ' && c != '\t') {
-		    /* this is the end of the header */
-		    body[off] = '\0';
-		    prot_ungetc(c, fin);
-		    goto got_header;
-		}
-		/* ignore this whitespace, but we'll copy all the rest in */
-		break;
-	    } else {
-		/* just an ordinary character */
-		body[off++] = c;
-		if (off >= bodylen - 3) {
-		    bodylen += BODYINC;
-		    body = (char *) xrealloc(body, bodylen);
-		}
-	    }
-	}
-
-	/* copy this to the output */
-	fputc(c, fout);
-    }
-
-    /* if we fall off the end of the loop, we hit some sort of error
-       condition */
-
- ph_error:
-    /* put the last character back; we'll copy it later */
-    prot_ungetc(c, fin);
-
-    /* and we didn't get a header */
-    if (headname != NULL) *headname = NULL;
-    if (contents != NULL) *contents = NULL;
-    return -1;
-
- got_header:
-    if (headname != NULL) *headname = xstrdup(name);
-    if (contents != NULL) *contents = xstrdup(body);
-
-    return 0;
-}
-
-/* copies the message from fin to fout, massaging accordingly: mostly
- * newlines are fiddled. "." terminates */
-static void copy_msg(struct protstream *fin, FILE *fout)
-{
-    char buf[8192], *p;
-
-    while (prot_fgets(buf, sizeof(buf)-1, fin)) {
-	p = buf + strlen(buf) - 1;
-	if (p == buf || p[-1] != '\r') {
-	    p[0] = '\r';
-	    p[1] = '\n';
-	    p[2] = '\0';
-	} else if (*p == '\r') {
-	    if (buf[0] == '\r' && buf[1] == '\0') {
-		/* The message contained \r\0, and fgets is confusing us.
-		   XXX ignored
-		   */
-	    } else {
-		/*
-		 * We were unlucky enough to get a CR just before we ran
-		 * out of buffer--put it back.
-		 */
-		prot_ungetc('\r', fin);
-		*p = '\0';
-	    }
-	}
-	/* Remove any lone CR characters */
-	while ((p = strchr(buf, '\r')) && p[1] != '\n') {
-	    strcpy(p, p+1);
-	}
-	
-	if (buf[0] == '.') {
-	    if (buf[1] == '\r' && buf[2] == '\n') {
-		/* End of message */
-		goto lmtpdot;
-	    }
-	    /* Remove the dot-stuffing */
-	    fputs(buf+1, fout);
-	} else {
-	    fputs(buf, fout);
-	}
-    }
-
-    /* wow, serious error---got a premature EOF */
-    exit(EC_TEMPFAIL);
-
-lmtpdot:
-    return;
-}
-
-static void fill_cache(struct protstream *fin, FILE *fout, message_data_t *m)
-{
-    /* let's fill that header cache */
-    for (;;) {
-	char *name, *body;
-	int cl, clinit;
-
-	if (parseheader(fin, fout, &name, &body) < 0) {
-	    break;
-	}
-
-	/* put it in the hash table */
-	clinit = cl = hashheader(name);
-	while (m->cache[cl] != NULL && strcmp(name, m->cache[cl]->name)) {
-	    cl++;		/* resolve collisions linearly */
-	    cl %= HEADERCACHESIZE;
-	    if (cl == clinit) break; /* gone all the way around, so bail */
-	}
-
-	/* found where to put it, so insert it into a list */
-	if (m->cache[cl]) {
-	    /* add this body on */
-	    m->cache[cl]->contents[m->cache[cl]->ncontents++] = body;
-
-	    /* whoops, won't have room for the null at the end! */
-	    if (!(m->cache[cl]->ncontents % 8)) {
-		/* increase the size */
-		m->cache[cl] = (header_t *)
-		    xrealloc(m->cache[cl],sizeof(header_t) +
-			     ((8 + m->cache[cl]->ncontents) * sizeof(char *)));
-	    }
-
-	    /* have no need of this */
-	    free(name);
-	} else {
-	    /* create a new entry in the hash table */
-	    m->cache[cl] = (header_t *) xmalloc(sizeof(header_t) + 
-						8 * sizeof(char*));
-	    m->cache[cl]->name = name;
-	    m->cache[cl]->contents[0] = body;
-	    m->cache[cl]->ncontents = 1;
-	}
-
-	/* we always want a NULL at the end */
-	m->cache[cl]->contents[m->cache[cl]->ncontents] = NULL;
-    }
-
-    copy_msg(fin, fout);
-}
-
 /* gets the header "head" from msg. */
-static int getheader(void *v, char *phead, char ***body)
+static int getheader(void *v, const char *phead, const char ***body)
 {
-    message_data_t *m = (message_data_t *) v;
-    int cl, clinit;
-    char *h;
-    char *head;
+    message_data_t *m = ((mydata_t *) v)->m;
 
     if (phead==NULL) return SIEVE_FAIL;
-
-    *body = NULL;
-
-    /* copy header parameter so we can mangle it */
-    head = malloc(strlen(phead)+1);
-    if (!head) return SIEVE_FAIL;
-    strcpy(head, phead);
-
-    h = head;
-    while (*h != '\0') {
-	if (isupper((int) *h))
-	    *h = tolower((int) *h);
-	h++;
-    }
-
-    /* check the cache */
-    clinit = cl = hashheader(head);
-    while (m->cache[cl] != NULL) {
-	if (!strcmp(head, m->cache[cl]->name)) {
-	    *body = m->cache[cl]->contents;
-	    break;
-	}
-	cl++; /* try next hash bin */
-	cl %= HEADERCACHESIZE;
-	if (cl == clinit) break; /* gone all the way around */
-    }
-
-    free(head);
+    *body = msg_getheader(m, phead);
 
     if (*body) {
 	return SIEVE_OK;
@@ -689,27 +352,28 @@ static int getheader(void *v, char *phead, char ***body)
 
 static int getsize(void *mc, int *size)
 {
-    message_data_t *m = (message_data_t *) mc;
+    message_data_t *m = ((mydata_t *) mc)->m;
 
-    *size = m->size;
+    *size = msg_getsize(m);
     return SIEVE_OK;
 }
 
 /* we use the temp field in message_data to avoid having to malloc memory
    to return, and we also can't expose our the receipients to the message */
-int getenvelope(void *mc, char *field, char ***contents)
+int getenvelope(void *mc, const char *field, const char ***contents)
 {
-    message_data_t *m = (message_data_t *) mc;
+    mydata_t *mydata = (mydata_t *) mc;
+    message_data_t *m = mydata->m;
 
     if (!strcasecmp(field, "from")) {
-	*contents = m->temp;
-	m->temp[0] = m->return_path;
-	m->temp[1] = NULL;
+	*contents = mydata->temp;
+	mydata->temp[0] = m->return_path;
+	mydata->temp[1] = NULL;
 	return SIEVE_OK;
     } else if (!strcasecmp(field, "to")) {
-	m->temp[0] = m->rcpt[m->rcpt_num]->all;
-	m->temp[1] = NULL;
-	*contents = m->temp;
+	*contents = mydata->temp;
+	mydata->temp[0] = msg_getrcptall(m, mydata->cur_rcpt);
+	mydata->temp[1] = NULL;
 	return SIEVE_OK;
     } else {
 	*contents = NULL;
@@ -717,9 +381,10 @@ int getenvelope(void *mc, char *field, char ***contents)
     }
 }
 
-#define SENDMAIL "/usr/lib/sendmail"
+#define DEFAULT_SENDMAIL ("/usr/lib/sendmail")
 #define DEFAULT_POSTMASTER ("postmaster")
 
+#define SENDMAIL (config_getstring("sendmail", DEFAULT_SENDMAIL))
 #define POSTMASTER (config_getstring("postmaster", DEFAULT_POSTMASTER))
 
 static char *month[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -755,11 +420,11 @@ pid_t open_sendmail(const char *argv[], FILE **sm)
     return p;
 }
 
-int send_rejection(char *origid,
-		   char *rejto,
-		   char *origreceip, 
-		   char *mailreceip, 
-		   char *reason, 
+int send_rejection(const char *origid,
+		   const char *rejto,
+		   const char *origreceip, 
+		   const char *mailreceip, 
+		   const char *reason, 
 		   struct protstream *file)
 {
     FILE *sm;
@@ -892,19 +557,18 @@ static
 int sieve_redirect(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     sieve_redirect_context_t *rc = (sieve_redirect_context_t *) ac;
-    message_data_t *md = (message_data_t *) mc;
+    message_data_t *m = ((mydata_t *) mc)->m;
     int res;
 
-    if ((res = send_forward(rc->addr, md->return_path, md->data)) == 0) {
-	
+    if ((res = send_forward(rc->addr, m->return_path, m->data)) == 0) {
 	snmp_increment(SIEVE_REDIRECT, 1);
-	
 	return SIEVE_OK;
     } else {
-	if (res == -1)
+	if (res == -1) {
 	    *errmsg = "Could not spawn sendmail process";
-	else
+	} else {
 	    *errmsg = "Sendmail error";
+	}
 	return SIEVE_FAIL;
     }
 }
@@ -923,10 +587,10 @@ int sieve_reject(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     sieve_reject_context_t *rc = (sieve_reject_context_t *) ac;
     script_data_t *sd = (script_data_t *) sc;
-    message_data_t *md = (message_data_t *) mc;
+    message_data_t *md = ((mydata_t *) mc)->m;
     char buf[8192];
-    char **body;
-    char *origreceip;
+    const char **body;
+    const char *origreceip;
     int res;
 
     if (md->return_path == NULL) {
@@ -935,24 +599,19 @@ int sieve_reject(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 	return SIEVE_FAIL;
     }
     
-    if (strcpy(buf, "original-recipient"),
-	getheader((void *) md, buf, &body) == SIEVE_OK) {
-	origreceip = body[0];
-    } else {
-	origreceip = NULL;		/* no original-recipient */
-    }
-
-    if ((res = send_rejection(md->id, md->return_path, origreceip, sd->username,
-		       rc->msg, md->data)) == 0) {
-
+    body = msg_getheader(md, "original-recipient");
+    origreceip = body[0];
+    if ((res = send_rejection(md->id, md->return_path, 
+			      origreceip, sd->username,
+			      rc->msg, md->data)) == 0) {
 	snmp_increment(SIEVE_REJECT, 1);
-
 	return SIEVE_OK;
     } else {
-	if (res == -1)
+	if (res == -1) {
 	    *errmsg = "Could not spawn sendmail process";
-	else
+	} else {
 	    *errmsg = "Sendmail error";
+	}
 	return SIEVE_FAIL;
     }
 }
@@ -961,20 +620,20 @@ static
 int sieve_fileinto(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     sieve_fileinto_context_t *fc = (sieve_fileinto_context_t *) ac;
-    deliver_opts_t *dop = (deliver_opts_t *) ic;
     script_data_t *sd = (script_data_t *) sc;
-    message_data_t *md = (message_data_t *) mc;
+    mydata_t *md = (mydata_t *) mc;
+    message_data_t *m = (message_data_t *) md->m;
     int ret;
 
     /* we're now the user who owns the script */
     if (!sd->authstate)
 	return SIEVE_FAIL;
 
-    ret = deliver_mailbox(md->data, &md->stage, md->size,
+    ret = deliver_mailbox(m->data, &md->stage, m->size,
 			  fc->imapflags->flag, fc->imapflags->nflags,
-                          sd->username, sd->authstate, md->id,
+                          md->authuser, md->authstate, m->id,
                           sd->username, md->notifyheader,
-                          fc->mailbox, dop->quotaoverride, 0);
+                          fc->mailbox, quotaoverride, 0);
 
     if (ret == 0) {
 
@@ -991,9 +650,9 @@ static
 int sieve_keep(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     sieve_keep_context_t *kc = (sieve_keep_context_t *) ac;
-    deliver_opts_t *dop = (deliver_opts_t *) ic;
     script_data_t *sd = (script_data_t *) sc;
-    message_data_t *md = (message_data_t *) mc;
+    mydata_t *mydata = (mydata_t *) mc;
+    message_data_t *md = mydata->m;
     char namebuf[MAX_MAILBOX_PATH];
     int ret = 1;
 
@@ -1001,11 +660,11 @@ int sieve_keep(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 	strcpy(namebuf, "INBOX.");
 	strcat(namebuf, sd->mailboxname);
 
-	ret = deliver_mailbox(md->data, &md->stage, md->size,
+	ret = deliver_mailbox(md->data, &mydata->stage, md->size,
 			      kc->imapflags->flag, kc->imapflags->nflags,
-			      dop->authuser, dop->authstate, md->id,
-			      sd->username, md->notifyheader,
-			      namebuf, dop->quotaoverride, 0);
+			      mydata->authuser, mydata->authstate, md->id,
+			      sd->username, mydata->notifyheader,
+			      namebuf, quotaoverride, 0);
     }
     if (ret) {
 	/* we're now the user who owns the script */
@@ -1014,11 +673,11 @@ int sieve_keep(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 
 	strcpy(namebuf, "INBOX");
 
-	ret = deliver_mailbox(md->data, &md->stage, md->size,
+	ret = deliver_mailbox(md->data, &mydata->stage, md->size,
 			      kc->imapflags->flag, kc->imapflags->nflags,
 			      sd->username, sd->authstate, md->id,
-			      sd->username, md->notifyheader,
-			      namebuf, dop->quotaoverride, 1);
+			      sd->username, mydata->notifyheader,
+			      namebuf, quotaoverride, 1);
     }
 
     if (ret == 0) {	
@@ -1049,7 +708,6 @@ static int sieve_notify(void *ac,
     
     return SIEVE_OK;
 }
-
 
 int autorespond(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
@@ -1093,7 +751,8 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     char hostname[1024], outmsgid[8192], *sievedb;
     int i, sl;
     struct tm *tm;
-    int tz;
+    long tz;
+    int tznegative = 0;
     time_t t;
     pid_t p;
     sieve_send_response_context_t *src = (sieve_send_response_context_t *) ac;
@@ -1120,16 +779,17 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     fprintf(sm, "Message-ID: %s\r\n", outmsgid);
 
     tm = localtime(&t);
-#ifdef HAVE_TM_ZONE
-    tz = tm->tm_gmtoff / 60;
-#else
-    tz = timezone / 60;
-#endif
+    tz = gmtoff_of(tm, t);
+    if (tz < 0) {
+	tz = -tz;
+	tznegative = 1;
+    }
+    tz /= 60;
     fprintf(sm, "Date: %s, %02d %s %4d %02d:%02d:%02d %c%02d%02d\r\n",
 	    wday[tm->tm_wday], 
 	    tm->tm_mday, month[tm->tm_mon], tm->tm_year + 1900,
 	    tm->tm_hour, tm->tm_min, tm->tm_sec,
-            tz > 0 ? '-' : '+', tz / 60, tz % 60);
+            tznegative ? '-' : '+', tz / 60, tz % 60);
     
     fprintf(sm, "X-Sieve: %s\r\n", sieve_version);
     fprintf(sm, "From: <%s>\r\n", src->fromaddr);
@@ -1201,7 +861,7 @@ int sieve_parse_error_handler(int lineno, char *msg, void *ic, void *sc)
 int sieve_execute_error_handler(char *msg, void *ic, void *sc, void *mc)
 {
     script_data_t *sd = (script_data_t *) sc;
-    message_data_t *md = (message_data_t *) mc;
+    message_data_t *md = ((mydata_t *) mc)->m;
     
     syslog(LOG_INFO, "sieve runtime error for %s id %s: %s",
 	   sd->username, md->id ? md->id : "(null)", msg);
@@ -1209,14 +869,11 @@ int sieve_execute_error_handler(char *msg, void *ic, void *sc, void *mc)
     return SIEVE_OK;
 }
  
-
-
-static void
-setup_sieve(deliver_opts_t *delopts)
+static void setup_sieve(void)
 {
     int res;
 
-    res = sieve_interp_alloc(&sieve_interp, (void *) delopts);
+    res = sieve_interp_alloc(&sieve_interp, NULL);
     if (res != SIEVE_OK) {
 	syslog(LOG_ERR, "sieve_interp_alloc() returns %d\n", res);
 	fatal("sieve_interp_alloc()", EC_TEMPFAIL);
@@ -1293,10 +950,48 @@ setup_sieve(deliver_opts_t *delopts)
 	syslog(LOG_ERR, "sieve_register_execute_error() returns %d\n", res);
 	fatal("sieve_register_execute_error()", EC_TEMPFAIL);
     }
-
 }
 
-#endif
+/* returns true if user has a sieve file */
+static FILE *sieve_find_script(const char *user)
+{
+    char buf[1024];
+
+    if (strlen(user) > 900) {
+	return NULL;
+    }
+    
+    if (!dupelim) {
+	/* duplicate delivery suppression is needed for sieve */
+	return NULL;
+    }
+
+    if (sieve_usehomedir) { /* look in homedir */
+	struct passwd *pent = getpwnam(user);
+
+	if (pent == NULL) {
+	    return NULL;
+	}
+
+	/* check ~USERNAME/.sieve */
+	snprintf(buf, sizeof(buf), "%s/%s", pent->pw_dir, ".sieve");
+    } else { /* look in sieve_dir */
+	char hash;
+
+	hash = (char) tolower((int) *user);
+	if (!islower((int) hash)) { hash = 'q'; }
+
+	snprintf(buf, sizeof(buf), "%s/%c/%s/default", sieve_dir, hash, user);
+    }
+	
+    return (fopen(buf, "r"));
+}
+#else /* USE_SIEVE */
+static FILE *sieve_find_script(const char *user)
+{
+    return NULL;
+}
+#endif /* USE_SIEVE */
 
 static void
 usage()
@@ -1306,1051 +1001,6 @@ usage()
     exit(EC_USAGE);
 }
 
-/*
- * Parse auth= parameter
- *
- *   DIGIT           = %x30-39            ;; Digits 0-9
- *   HEXDIGIT        = %x41-46 / DIGIT    ;; hexidecimal digit (uppercase)
- *   hexchar         = "+" HEXDIGIT HEXDIGIT
- *   xchar           = %x21-2A / %x2C-3C / %x3E-7E
- *                     ;; US-ASCII except for "+", "=", SPACE and CTL
- *   xtext           = *(xchar / hexchar)
- */
-
-static char *parseautheq(char *s)
-{
-    char *ret;
-    char *str;
-
-    if (!strcmp(s, "<>")) return NULL;
-
-    ret = (char *) xmalloc(strlen(s)+1);
-    ret[0]='\0';
-    str = ret;
-
-    if (*s == '<') s++; 	/* we'll be liberal and accept "<foo>" */
-    while (1)
-    {
-	/* hexchar */
-	if (*s == '+')
-	{
-	    int lup;
-	    *str = '\0';
-	    s++;
-	    
-	    for (lup=0;lup<2;lup++)
-	    {
-		if ((*s>='0') && (*s<='9'))
-		    (*str) = (*str) & (*s - '0');
-		else if ((*s>='A') && (*s<='F'))
-		    (*str) = (*str) & (*s - 'A' + 10);
-		else {
-		    free(ret);
-		    return NULL;
-		}
-		if (lup==0)
-		{
-		    (*str) = (*str) << 4;
-		    s++;
-		}		
-	    }
-	    str++;
-
-	} else if ((*s >= '!') && (*s <='~') && (*s!='+') && (*s!='=')) {
-	    /* ascii char */
-	    *str = *s;
-	    str++;
-	} else {
-	    /* bad char */
-	    free(ret);
-	    return NULL;
-	}
-	s++;
-    }
-
-    if (*s && (*s!=' ')) { free(ret); return NULL; }
-
-    *str = '\0';
-
-    /* take off trailing '>' */
-    if ((str!=ret) && ( *(str-1)=='>'))
-    {
-	*(str-1) = '\0';
-    }
-
-    return ret;
-}
-
-char *parseaddr(char *s)
-{
-    char *p;
-    int len;
-
-    p = s;
-
-    if (*p++ != '<') return 0;
-
-    /* at-domain-list */
-    while (*p == '@') {
-	p++;
-	if (*p == '[') {
-	    p++;
-	    while (isdigit((int) *p) || *p == '.') p++;
-	    if (*p++ != ']') return 0;
-	}
-	else {
-	    while (isalnum((int) *p) || *p == '.' || *p == '-') p++;
-	}
-	if (*p == ',' && p[1] == '@') p++;
-	else if (*p == ':' && p[1] != '@') p++;
-	else return 0;
-    }
-    
-    /* local-part */
-    if (*p == '\"') {
-	p++;
-	while (*p && *p != '\"') {
-	    if (*p == '\\') {
-		if (!*++p) return 0;
-	    }
-	    p++;
-	}
-	if (!*p++) return 0;
-    }
-    else {
-	/* disallow plus addressing without giving a name */
-	if (*p == '+') return 0;
-	
-	while (*p && *p != '@' && *p != '>') {
-	    if (*p == '\\') {
-		if (!*++p) return 0;
-	    }
-	    else {
-		if (*p <= ' ' || (*p & 128) ||
-		    strchr("<>()[]\\,;:\"", *p)) return 0;
-	    }
-	    p++;
-	}
-    }
-
-    /* @domain */
-    if (*p == '@') {
-	p++;
-	if (*p == '[') {
-	    p++;
-	    while (isdigit((int) *p) || *p == '.') p++;
-	    if (*p++ != ']') return 0;
-	}
-	else {
-	    while (isalnum((int) *p) || *p == '.' || *p == '-') p++;
-	}
-    }
-    
-    if (*p++ != '>') return 0;
-    if (*p && *p != ' ') return 0;
-    len = p - s;
-
-    s = xstrdup(s);
-    s[len] = '\0';
-    return s;
-}
-
-char *process_recipient(char *addr,
-			address_data_t **ad)
-{
-    char *dest = addr;
-    char *user = addr;
-    char *plus, *dot;
-    char buf[1024];
-    int r, sl;
-    address_data_t *ret = (address_data_t *) malloc(sizeof(address_data_t));
-
-    if (ret == NULL) {
-	fatal("out of memory", EC_TEMPFAIL);
-    }
-
-    if (*addr == '<') addr++;
-
-    ret->all = xstrdup(addr);
-    sl = strlen(ret->all);
-    if (ret->all[sl-1] == '>')
-	ret->all[sl-1] = '\0';
-    
-    /* Skip at-domain-list */
-    if (*addr == '@') {
-	addr = strchr(addr, ':');
-	if (!addr) return "501 5.5.4 Syntax error in parameters";
-	addr++;
-    }
-    
-    if (*addr == '\"') {
-	addr++;
-	while (*addr && *addr != '\"') {
-	    if (*addr == '\\') addr++;
-	    *dest++ = *addr++;
-	}
-    }
-    else {
-	while (*addr != '@' && *addr != '>') {
-	    if (*addr == '\\') addr++;
-	    *dest++ = *addr++;
-	}
-    }
-    *dest = 0;
-	
-    dot = strchr(user, '.');
-    plus = strchr (user, '+');
-    if (plus && (!dot || plus < dot)) dot = plus;
-
-    if (dot) *dot = '\0';
-
-    /* check if folder exists */
-    if (!strcmp(user, BB)) {
-	/* special shared folder address */
-	if (!dot) {
-	    r = IMAP_MAILBOX_NONEXISTENT;
-        } else {
-	    user = NULL; /* no user */
-	    r = mboxlist_lookup(dot + 1, NULL, NULL, NULL);
-	}
-    } else {
-	/* ordinary user */
-	if (strlen(user) > sizeof(buf)-10) {
-	    return convert_lmtp(IMAP_MAILBOX_NONEXISTENT);
-	}
-
-	strcpy(buf, "user.");
-	strcat(buf, user);
-	r = mboxlist_lookup(buf, NULL, NULL, NULL);
-    }
-    
-    /* did we lose? */
-    if (r) return convert_lmtp(r);
-
-    /* setup address */
-    if (dot) *dot++ = '\0';
-    ret->mailbox = user;
-    ret->detail = dot;
-
-    *ad = ret;
-
-    return 0;
-}    
-
-/* returns non-zero on failure */
-int msg_new(message_data_t **m)
-{
-    message_data_t *ret = (message_data_t *)malloc(sizeof(message_data_t));
-    int i;
-
-    if (!ret) {
-	return -1;
-    }
-    ret->data = NULL;
-    ret->stage = NULL;
-    ret->f = NULL;
-    ret->notifyheader = NULL;
-    ret->id = NULL;
-    ret->size = 0;
-    ret->return_path = NULL;
-    ret->rcpt = NULL;
-    ret->rcpt_num = 0;
-
-#ifdef USE_SIEVE
-    for (i = 0; i < HEADERCACHESIZE; i++)
-	ret->cache[i] = NULL;
-#endif
-
-    *m = ret;
-    return 0;
-}
-
-void msg_free(message_data_t *m)
-{
-    int i;
-
-    if (m->data) {
-	prot_free(m->data);
-    }
-    if (m->f) {
-	fclose(m->f);
-    }
-    if (m->stage) {
-	append_removestage(m->stage);
-    }
-    if (m->notifyheader)
-	free(m->notifyheader);
-    if (m->id) {
-	free(m->id);
-    }
-
-    if (m->return_path) {
-	free(m->return_path);
-    }
-    if (m->rcpt) {
-	for (i = 0; i < m->rcpt_num; i++) {
-	    if (m->rcpt[i]->all) free(m->rcpt[i]->all);
-	    if (m->rcpt[i]->mailbox) free(m->rcpt[i]->mailbox);
-	    free(m->rcpt[i]);
-	}
-	free(m->rcpt);
-    }
-
-#ifdef USE_SIEVE
-    for (i = 0; i < HEADERCACHESIZE; i++)
-	if (m->cache[i]) {
-	    int j;
-
-	    free(m->cache[i]->name);
-	    for (j = 0; j < m->cache[i]->ncontents; j++) {
-		free(m->cache[i]->contents[j]);
-	    }
-
-	    free(m->cache[i]);
-	}
-#endif
-
-    free(m);
-}
-
-static int hash_simple (const char *str)
-{
-    int     value = 0;
-    int     i;
-
-    if (!str)
-	return 0;
-    for (i = 0; *str; i++)
-    {
-	value ^= (*str++ << ((i & 3)*8));
-    }
-    return value;
-}
-
-/* round to nearest 1024 bytes and return number of Kbytes */
-int    roundToK(int x)
-{
-    double rd = (x*1.0)/1024.0;
-    int ri = x/1024;
-    
-    if (rd-ri < 0.5)
-	return ri;
-    else
-	return ri+1;    
-}
-
-#define RCPT_GROW 5 /* XXX 30 */
-
-void lmtpmode(deliver_opts_t *delopts)
-{
-    message_data_t *msg;
-    char buf[4096];
-    char *p;
-    char myhostname[1024];
-    int r;
-    char *err;
-    int i;
-    int delivered;
-    unsigned int mechcount = 0;
-    int salen;
-    struct stat sbuf;
-    int authenticated = 0;
-
-    sasl_conn_t *conn;
-    sasl_security_properties_t *secprops = NULL;
-    sasl_external_properties_t *extprops = NULL;
-
-    delopts->authuser = 0;
-    delopts->authstate = 0;
-
-    signal(SIGPIPE, SIG_IGN);
-
-    gethostname(myhostname, sizeof(myhostname)-1);
-    r = msg_new(&msg);
-    if (r) {
-	/* damn */
-	fatal("out of memory", EC_TEMPFAIL);
-    }
-
-    if (sasl_server_new("lmtp", NULL, NULL, NULL, 0, &conn) != SASL_OK) {
-	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL);
-    }
-
-    secprops = mysasl_secprops();
-    sasl_setprop(conn, SASL_SEC_PROPS, secprops);
-
-    fstat(0, &sbuf);
-
-    salen = sizeof(deliver_remoteaddr);
-    r = getpeername(0, (struct sockaddr *)&deliver_remoteaddr, &salen);
-    if (!r && deliver_remoteaddr.sin_family == AF_INET) {
-	/* connected to an internet socket */
-
-	salen = sizeof(deliver_localaddr);
-	if (!getsockname(0, (struct sockaddr *)&deliver_localaddr, &salen)) {
-	    /* set the ip addresses here */
-	    sasl_setprop(conn, SASL_IP_REMOTE, &deliver_remoteaddr);  
-	    sasl_setprop(conn, SASL_IP_LOCAL,  &deliver_localaddr );
-
-	    syslog(LOG_DEBUG, "connection from [%s]", 
-		   inet_ntoa(deliver_remoteaddr.sin_addr));
-	} else {
-	    syslog(LOG_ERR, "can't get local addr");
-	}
-    } else {
-	/* we're not connected to a internet socket! */
-	extprops = (sasl_external_properties_t *) 
-	    xmalloc(sizeof(sasl_external_properties_t));
-	extprops->ssf = 2;
-	extprops->auth_id = "postman";
-	sasl_setprop(conn, SASL_SSF_EXTERNAL, extprops);
-	authenticated = 1;	/* we'll allow commands, 
-				   but we still accept the AUTH command */
-
-	syslog(LOG_DEBUG, "lmtp connection preauth'd as postman");
-    }
-
-    prot_printf(deliver_out,"220 %s LMTP Cyrus %s ready\r\n", myhostname,
-		CYRUS_VERSION);
-    for (;;) {
-    nextcmd:
-      signals_poll();
-
-      if (!prot_fgets(buf, sizeof(buf)-1, deliver_in)) {
-	  msg_free(msg);
-	  shut_down(0);
-      }
-      p = buf + strlen(buf) - 1;
-      if (p >= buf && *p == '\n') *p-- = '\0';
-      if (p >= buf && *p == '\r') *p-- = '\0';
-
-      switch (buf[0]) {
-      case 'a':
-      case 'A':
-	  if (!strncasecmp(buf, "auth ", 5)) {
-	      char mech[128];
-	      char *in, *out;
-	      unsigned int inlen, outlen;
-	      const char *errstr;
-	      char *user;
-	      
-	      if (delopts->authuser) {
-		  prot_printf(deliver_out,
-			      "503 5.5.0 already authenticated\r\n");
-		  continue;
-	      }
-	      if (msg->rcpt_num != 0) {
-		  prot_printf(deliver_out,
-			      "503 5.5.0 AUTH not permitted now\r\n");
-		  continue;
-	      }
-	      
-	      /* ok, what mechanism ? */
-	      p = buf + 5;
-	      while ((*p != ' ') && (*p != '\0')) {
-		  p++;
-	      }
-	      if (*p == ' ') {
-		  *p = '\0';
-		  p++;
-	      } else {
-		  p = NULL;
-	      }
-	      strlcpy(mech, buf + 5, sizeof(mech));
-	      if (p != NULL) {
-		  in = xmalloc(strlen(p));
-		  r = sasl_decode64(p, strlen(p), in, &inlen);
-		  if (r != SASL_OK) {
-		      prot_printf(deliver_out,
-				  "501 5.5.4 cannot base64 decode\r\n");
-		      if (in) { free(in); }
-		      continue;
-		  }
-	      } else {
-		  in = NULL;
-		  inlen = 0;
-	      }
-	      
-	      r = sasl_server_start(conn,
-				    mech,
-				    in,
-				    inlen,
-				    &out,
-				    &outlen,
-				    &errstr);
-	      if (r == SASL_NOMECH) {
-		  prot_printf(deliver_out, 
-			      "504 Unrecognized authentication type.\r\n");
-		  continue;
-	      }
-	      if (in) { free(in); }
-	      
-	      while (r == SASL_CONTINUE) {
-		  char inbase64[4096];
-		  
-		  r = sasl_encode64(out, outlen, 
-				    inbase64, sizeof(inbase64), NULL);
-		  
-		  if (r != SASL_OK) {
-		      break;
-		  }
-		  
-		  /* send out */
-		  prot_printf(deliver_out,"334 %s\r\n", inbase64);
-		  
-		  /* read a line */
-		  if (!prot_fgets(buf, sizeof(buf)-1, deliver_in)) {
-		      msg_free(msg);
-		      shut_down(0);
-		  }
-		  p = buf + strlen(buf) - 1;
-		  if (p >= buf && *p == '\n') *p-- = '\0';
-		  if (p >= buf && *p == '\r') *p-- = '\0';
-		  
-		  in = xmalloc(strlen(buf));
-		  r = sasl_decode64(buf, strlen(buf), in, &inlen);
-		  if (r != SASL_OK) {
-		      prot_printf(deliver_out,
-				  "501 5.5.4 cannot base64 decode\r\n");
-		      if (in) { free(in); }
-		      goto nextcmd; /* what's the state of our sasl_conn_t? */
-		  }
-		  
-		  r = sasl_server_step(conn,
-				       in,
-				       inlen,
-				       &out,
-				       &outlen,
-				       &errstr);
-		  
-	      }
-	      
-	      if ((r != SASL_OK) && (r != SASL_CONTINUE)) {
-		  if (errstr) {
-		      syslog(LOG_ERR, "badlogin: %s %s %s [%s]",
-			     deliver_remoteaddr.sin_family == AF_INET ?
-			        inet_ntoa(deliver_remoteaddr.sin_addr) :
-			        "[unix socket]",
-			     mech,
-			     sasl_errstring(r, NULL, NULL), 
-			     errstr);
-		  } else {
-		      syslog(LOG_ERR, "badlogin: %s %s %s",
-			     deliver_remoteaddr.sin_family == AF_INET ?
-			        inet_ntoa(deliver_remoteaddr.sin_addr) :
-			        "[unix socket]",
-			     mech,
-			     sasl_errstring(r, NULL, NULL));
-		  }
-		  
-		  snmp_increment_args(AUTHENTICATION_NO, 1,
-				      VARIABLE_AUTH, hash_simple(mech), 
-				      VARIABLE_LISTEND);
-
-		  prot_printf(deliver_out, "501 5.5.4 %s\r\n",
-			      sasl_errstring(sasl_usererr(r), NULL, NULL));
-		  continue;
-	      }
-	      r = sasl_getprop(conn, SASL_USERNAME, (void **) &user);
-	      if (r != SASL_OK) user = "[sasl error]";
-
-	      /* authenticated successfully! */
-	      snmp_increment_args(AUTHENTICATION_YES,1,
-				  VARIABLE_AUTH, hash_simple(mech), 
-				  VARIABLE_LISTEND);
-	      syslog(LOG_NOTICE, "login: %s %s %s %s",
-		     deliver_remoteaddr.sin_family == AF_INET ?
-		        inet_ntoa(deliver_remoteaddr.sin_addr) :
-		        "[unix socket]",
-		     user, mech, "User logged in");
-
-	      authenticated++;
-	      prot_printf(deliver_out, "235 Authenticated!\r\n");
-
-	      /* set protection layers */
-	      prot_setsasl(deliver_in,  conn);
-	      prot_setsasl(deliver_out, conn);
-	      continue;
-	  }
-	  goto syntaxerr;
-
-      case 'd':
-      case 'D':
-	    if (!strcasecmp(buf, "data")) {
-		if (!msg->rcpt_num) {
-		    prot_printf(deliver_out,"503 5.5.1 No recipients\r\n");
-		    continue;
-		}
-		savemsg(msg);
-		if (!msg->data) continue;
-
-		snmp_increment(mtaReceivedMessages, 1);
-		snmp_increment(mtaReceivedVolume, roundToK(msg->size));
-		snmp_increment(mtaReceivedRecipients, msg->rcpt_num);
-
-		i = msg->rcpt_num;
-		delivered = 0;
-		for (msg->rcpt_num = 0; msg->rcpt_num < i; msg->rcpt_num++) {
-		    int cur = msg->rcpt_num;
-
-		    r = deliver(delopts, msg, 0, 0,
-				msg->rcpt[cur]->mailbox,
-				msg->rcpt[cur]->detail);
-
-		    if (r==0) delivered++;
-
-		    prot_printf(deliver_out,"%s\r\n", convert_lmtp(r));
-		}
-
-		if (singleinstance) {		    
-		    snmp_increment(mtaTransmittedMessages, 
-				   append_stageparts(msg->stage));
-		    snmp_increment(mtaTransmittedVolume, 
-				   roundToK(append_stageparts(msg->stage) * 
-					    msg->size));
-
-		} else {
-		    snmp_increment(mtaTransmittedMessages, delivered);
-		    snmp_increment(mtaTransmittedVolume, 
-				   roundToK(delivered * msg->size));
-		}		
-
-		goto rset;
-	    }
-	    goto syntaxerr;
-
-      case 'l':
-      case 'L':
-	    if (!strncasecmp(buf, "lhlo ", 5)) {
-		char *mechs;
-
-		prot_printf(deliver_out,"250-%s\r\n250-8BITMIME\r\n"
-			    "250-ENHANCEDSTATUSCODES\r\n",
-			    myhostname);
-		if (sasl_listmech(conn, NULL, "AUTH ", " ", "", &mechs, 
-				  NULL, &mechcount) == SASL_OK && 
-		    mechcount > 0) {
-		  prot_printf(deliver_out,"250-%s\r\n", mechs);
-		  free(mechs);
-		}
-		prot_printf(deliver_out, "250 PIPELINING\r\n");
-
-		continue;
-	    }
-	    goto syntaxerr;
-	    
-      case 'm':
-      case 'M':
-	    if (!authenticated) {
-		prot_printf(deliver_out, 
-			    "530 Authentication required\r\n");
-		continue;
-	    }
-
-	    if (!strncasecmp(buf, "mail ", 5)) {
-		char *tmp;
-		if (msg->return_path) {
-		    prot_printf(deliver_out, 
-				"503 5.5.1 Nested MAIL command\r\n");
-		    continue;
-		}
-		if (strncasecmp(buf+5, "from:", 5) != 0 ||
-		    !(msg->return_path = parseaddr(buf+10))) {
-		    prot_printf(deliver_out, 
-				"501 5.5.4 Syntax error in parameters\r\n");
-		    continue;
-		}
-		tmp = buf+10+strlen(msg->return_path);
-
-		/* is any other whitespace allow seperating? */
-		if (*tmp == ' ') {
-		    tmp++;
-		    if (strncasecmp(tmp, "auth=", 5) != 0) {
-			prot_printf(deliver_out, 
-				    "501 5.5.4 Unrecognized parameters\r\n");
-			continue;
-		    }
-		    tmp += 5;
-		    delopts->authuser = parseautheq(tmp);
-		    if (delopts->authuser) {
-			delopts->authstate =
-			    auth_newstate(delopts->authuser, NULL);
-		    } else {
-			/* do we want to bounce mail because of this? */
-			/* i guess not. accept with no auth user */
-			delopts->authstate = NULL;
-		    }
-		} else if (*tmp != '\0') {
-		    prot_printf(deliver_out, 
-				"501 5.5.4 Syntax error in parameters\r\n");  
-		    continue;
-		}
-
-		prot_printf(deliver_out, "250 2.1.0 ok\r\n");
-		continue;
-	    }
-	    goto syntaxerr;
-
-      case 'n':
-      case 'N':
-	    if (!strcasecmp(buf, "noop")) {
-		prot_printf(deliver_out,"250 2.0.0 ok\r\n");
-		continue;
-	    }
-	    goto syntaxerr;
-
-      case 'q':
-      case 'Q':
-	    if (!strcasecmp(buf, "quit")) {
-		prot_printf(deliver_out,"221 2.0.0 bye\r\n");
-		prot_flush(deliver_out);
-		msg_free(msg);
-		shut_down(0);
-	    }
-	    goto syntaxerr;
-	    
-      case 'r':
-      case 'R':
-	    if (!strncasecmp(buf, "rcpt ", 5)) {
-		char *rcpt;
-
-		if (!msg->return_path) {
-		    prot_printf(deliver_out,\
-				"503 5.5.1 Need MAIL command\r\n");
-		    continue;
-		}
-		if (!(msg->rcpt_num % RCPT_GROW)) { /* time to alloc more */
-		    msg->rcpt = (address_data_t **)
-			xrealloc(msg->rcpt, (msg->rcpt_num + RCPT_GROW + 1) * 
-				 sizeof(address_data_t *));
-		}
-		if (strncasecmp(buf+5, "to:", 3) != 0 ||
-		    !(rcpt = parseaddr(buf+8))) {
-		    prot_printf(deliver_out,
-				"501 5.5.4 Syntax error in parameters\r\n");
-		    continue;
-		}
-		err = process_recipient(rcpt, &msg->rcpt[msg->rcpt_num]);
-		if (err) {
-		    prot_printf(deliver_out, "%s\r\n", err);
-		    continue;
-		}
-		msg->rcpt_num++;
-		msg->rcpt[msg->rcpt_num] = NULL;
-		prot_printf(deliver_out, "250 2.1.5 ok\r\n");
-		continue;
-	    }
-	    else if (!strcasecmp(buf, "rset")) {
-		prot_printf(deliver_out, "250 2.0.0 ok\r\n");
-
-	      rset:
-		msg_free(msg);
-		if (msg_new(&msg)) {
-		    fatal("out of memory", EC_TEMPFAIL);
-		}
-		continue;
-	    }
-	    goto syntaxerr;
-	    
-      case 'v':
-      case 'V':
-	    if (!strncasecmp(buf, "vrfy ", 5)) {
-		prot_printf(deliver_out,
-			    "252 2.3.3 try RCPT to attempt delivery\r\n");
-		continue;
-	    }
-	    goto syntaxerr;
-
-      default:
-      syntaxerr:
-	    prot_printf(deliver_out, "500 5.5.2 Syntax error\r\n");
-	    continue;
-      }
-    }
-}
-
-void clean_retpath(char *rpath)
-{
-    int i, sl;
-
-    /* Remove any angle brackets around return path */
-    if (*rpath == '<') {
-	sl = strlen(rpath);
-	for (i = 0; i < sl; i++) {
-	    rpath[i] = rpath[i+1];
-	}
-	sl--; /* string is one shorter now */
-	if (rpath[sl-1] == '>') {
-	    rpath[sl-1] = '\0';
-	}
-    }
-}
-
-void
-savemsg(message_data_t *m)
-{
-    FILE *f;
-    char *hostname = 0;
-#ifndef USE_SIEVE
-    int scanheader = 1;
-    int sawidhdr = 0, sawresentidhdr = 0;
-    int sawnotifyheader = 0;
-    int sawretpathhdr = 0;
-#endif /* USE_SIEVE */
-    int retpathclean = 0;
-    struct stat sbuf;
-    char buf[8192];
-    char **body, **frombody, **subjbody, **tobody;
-    int sl, i;
-    int nrcpts = m->rcpt_num;
-
-    /* Copy to temp file */
-    f = tmpfile();
-    if (!f) {
-	prot_printf(deliver_out,
-		    "451 4.3.%c cannot create temporary file: %s\r\n",
-		    (
-#ifdef EDQUOT
-			errno == EDQUOT ||
-#endif
-			errno == ENOSPC) ? '1' : '2',
-		    error_message(errno));
-	return;
-    }
-
-    prot_printf(deliver_out,"354 go ahead\r\n");
-
-    if (m->return_path) { /* add the return path */
-	char *rpath = m->return_path;
-
-	clean_retpath(rpath);
-	retpathclean = 1;
-
-	/* Append our hostname if there's no domain in address */
-	if (!strchr(rpath, '@')) {
-	    gethostname(buf, sizeof(buf)-1);
-	    hostname = buf;
-	}
-
-	fprintf(f, "Return-Path: <%s%s%s>\r\n",
-		rpath, hostname ? "@" : "", hostname ? hostname : "");
-    }
-
-#ifdef USE_SIEVE
-    /* add the Sieve header */
-    fprintf(f, "X-Sieve: %s\r\n", sieve_version);
-
-    /* fill the cache */
-    fill_cache(deliver_in, f, m);
-
-    /* now, using our header cache, fill in the data that we want */
-
-    /* first check resent-message-id */
-    if (strcpy(buf, "resent-message-id"),
-	getheader((void *) m, buf, &body) == SIEVE_OK) {
-	m->id = xstrdup(body[0]);
-    } else if (strcpy(buf, "message-id"), 
-	       getheader((void *) m, buf, &body) == SIEVE_OK) {
-	m->id = xstrdup(body[0]);
-    } else {
-	m->id = NULL;		/* no message-id */
-    }
-
-    /* figure out notifyheader */
-    strcpy(buf, "from"), getheader((void *) m, buf, &frombody);
-    strcpy(buf, "subject"), getheader((void *) m, buf, &subjbody);
-    strcpy(buf, "to"), getheader((void *) m, buf, &tobody);
-
-    sl = 0;
-    if (frombody) for (i = 0; frombody[i] != NULL; i++) {
-	sl += strlen(frombody[i]) + 10;
-    }
-    if (subjbody) for (i = 0; subjbody[i] != NULL; i++) {
-	sl += strlen(subjbody[i]) + 13;
-    }
-    if (tobody) for (i = 0; tobody[i] != NULL; i++) {
-	sl += strlen(tobody[i]) + 8;
-    }
-    m->notifyheader = (char *) malloc(sizeof(char) * (sl + 50));
-    m->notifyheader[0] = '\0';
-    if (frombody) for (i = 0; frombody[i] != NULL; i++) {
-	strcat(m->notifyheader, "From: ");
-	strcat(m->notifyheader, frombody[i]);
-	strcat(m->notifyheader, "\n");
-    }
-    if (subjbody) for (i = 0; subjbody[i] != NULL; i++) {
-	strcat(m->notifyheader, "Subject: ");
-	strcat(m->notifyheader, subjbody[i]);
-	strcat(m->notifyheader, "\n");
-    }
-    if (tobody) for (i = 0; tobody[i] != NULL; i++) {
-	strcat(m->notifyheader, "To: ");
-	strcat(m->notifyheader, tobody[i]);
-	strcat(m->notifyheader, "\n");
-    }
-
-    if (!m->return_path &&
-	(strcpy(buf, "return-path"),
-	 getheader((void *) m, buf, &body) == SIEVE_OK)) {
-	/* let's grab return_path */
-	m->return_path = xstrdup(body[0]);
-	clean822space(m->return_path);
-	clean_retpath(m->return_path);
-    }
-
-#else
-    while (prot_fgets(buf, sizeof(buf)-1, deliver_in)) {
-	p = buf + strlen(buf) - 1;
-	if (*p == '\n') {
-	    if (p == buf || p[-1] != '\r') {
-		p[0] = '\r';
-		p[1] = '\n';
-		p[2] = '\0';
-	    }
-	}
-	else if (*p == '\r') {
-	    if (buf[0] == '\r' && buf[1] == '\0') {
-		/* The message contained \r\0, and fgets is confusing us.
-		   XXX ignored
-		 */
-	    } else {
-		/*
-		 * We were unlucky enough to get a CR just before we ran
-		 * out of buffer--put it back.
-		 */
-		prot_ungetc('\r', deliver_in);
-		*p = '\0';
-	    }
-	}
-	/* Remove any lone CR characters */
-	while ((p = strchr(buf, '\r')) && p[1] != '\n') {
-	    strcpy(p, p+1);
-	}
-
-	if (buf[0] == '.') {
-	    if (buf[1] == '\r' && buf[2] == '\n') {
-		/* End of message */
-		goto lmtpdot;
-	    }
-	    /* Remove the dot-stuffing */
-	    fputs(buf+1, f);
-	} else {
-	    fputs(buf, f);
-	}
-
-	/* Look for message-id or resent-message-id headers */
-	if (scanheader) {
-	    p = 0;
-	    if (*buf == '\r') scanheader = 0;
-	    if (sawnotifyheader) {
-		if (*buf == ' ' || *buf == '\t') {
-		    m->notifyheader =
-			xrealloc(m->notifyheader,
-				 strlen(m->notifyheader) + strlen(buf) + 1);
-		    strcat(m->notifyheader, buf);
-		}
-		else sawnotifyheader = 0;
-	    }
-	    if (sawretpathhdr) {
-		if (*buf == ' ' || *buf == '\t') {
-		    m->return_path =
-			xrealloc(m->return_path,
-				 strlen(m->return_path) + strlen(buf) + 1);
-		    strcat(m->return_path, buf);
-		}
-		else sawretpathhdr = 0;
-	    }
-	    if (sawidhdr || sawresentidhdr) {
-		if (*buf == ' ' || *buf == '\t') p = buf+1;
-		else sawidhdr = sawresentidhdr = 0;
-	    }
-
-	    if (!m->id && !strncasecmp(buf, "message-id:", 11)) {
-		sawidhdr = 1;
-		p = buf + 11;
-	    }
-	    else if (!strncasecmp(buf, "resent-message-id:", 18)) {
-		sawresentidhdr = 1;
-		p = buf + 18;
-	    }
-	    else if (!strncasecmp(buf, "from:", 5) ||
-		      !strncasecmp(buf, "subject:", 8) ||
-		      !strncasecmp(buf, "to:", 3)) {
-		if (!m->notifyheader) m->notifyheader = xstrdup(buf);
-		else {
-		    m->notifyheader =
-			xrealloc(m->notifyheader,
-				 strlen(m->notifyheader) + strlen(buf) + 1);
-		    strcat(m->notifyheader, buf);
-		}
-		sawnotifyheader = 1;
-	    }
-	    else if (!m->return_path && 
-		     !strncasecmp(buf, "return-path:", 12)) {
-		sawretpathhdr = 1;
-		m->return_path = xstrdup(buf + 12);
-	    }
-
-	    if (p) {
-		clean822space(p);
-		if (*p) {
-		    m->id = xstrdup(p);
-		    /*
-		     * If we got a resent-message-id header,
-		     * we're done looking for *message-id headers.
-		     */
-		    if (sawresentidhdr) m->id = 0;
-		    sawresentidhdr = sawidhdr = 0;
-		}
-	    }
-	}
-
-    }
-
-    if (m->return_path && !retpathclean) {
-	clean822space(m->return_path);
-	clean_retpath(m->return_path);
-    }
-
-    /* Got a premature EOF -- toss message and exit */
-    shut_down(0);
-
-  lmtpdot:
-
-#endif /* USE_SIEVE */
-
-    fflush(f);
-    if (ferror(f)) {
-	while (nrcpts--) {
-	    prot_printf(deliver_out,
-	       "451 4.3.%c cannot copy message to temporary file: %s\r\n",
-		   (
-#ifdef EDQUOT
-		    errno == EDQUOT ||
-#endif
-		    errno == ENOSPC) ? '1' : '2',
-		   error_message(errno));
-	}
-	fclose(f);
-	return;
-    }
-
-    if (fstat(fileno(f), &sbuf) == -1) {
-	while (nrcpts--) {
-	    prot_printf(deliver_out,
-			"451 4.3.2 cannot stat message temporary file: %s\r\n",
-			error_message(errno));
-	}
-	fclose(f);
-	return;
-    }
-    m->size = sbuf.st_size;
-    m->f = f;
-    m->data = prot_new(fileno(f), 0);
-}
-
-
-/*"*/
 /* places msg in mailbox mailboxname.  
  * if you wish to use single instance store, pass stage as non-NULL
  * if you want to deliver message regardless of duplicates, pass id as NULL
@@ -2417,7 +1067,6 @@ int deliver_mailbox(struct protstream *msg,
 
     if (!r && user) {
 	/* do we want to replace user.XXX with INBOX? */
-
 	notify("MAIL", mailboxname, user, mailboxname, 
 	       notifyheader ? notifyheader : "");
     }
@@ -2428,160 +1077,140 @@ int deliver_mailbox(struct protstream *msg,
     return r;
 }
 
-#ifdef USE_SIEVE
-/* returns true if user has a sieve file */
-FILE *sieve_find_script(char *user)
-{
-    char buf[1024];
-
-    if (strlen(user) > 900) {
-	return NULL;
-    }
-    
-    if (!dupelim) {
-	/* duplicate delivery suppression is needed for sieve */
-	return NULL;
-    }
-
-    if (sieve_usehomedir) { /* look in homedir */
-	struct passwd *pent = getpwnam(user);
-
-	if (pent == NULL) {
-	    return NULL;
-	}
-
-	/* check ~USERNAME/.sieve */
-	snprintf(buf, sizeof(buf), "%s/%s", pent->pw_dir, ".sieve");
-    } else { /* look in sieve_dir */
-	char hash;
-
-	hash = (char) tolower((int) *user);
-	if (!islower((int) hash)) { hash = 'q'; }
-
-	snprintf(buf, sizeof(buf), "%s/%c/%s/default", sieve_dir, hash, user);
-    }
-	
-    return (fopen(buf, "r"));
-}
-#endif
-
-int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
-	    char **flag, int nflags, char *user, char *mailboxname)
+int deliver(message_data_t *msgdata, char *authuser,
+	    struct auth_state *authstate)
 {
     int r;
     char namebuf[MAX_MAILBOX_PATH];
     FILE *f;
+    int n, nrcpts;
+    mydata_t mydata;
+    
+    assert(msgdata);
+    nrcpts = msg_getnumrcpt(msgdata);
+    assert(nrcpts);
 
-    /* we're either delivery to a user or a mailbox */
-    assert(user || mailboxname);
+    /* create 'mydata', our per-delivery data */
+    mydata.m = msgdata;
+    mydata.stage = NULL;
+    mydata.notifyheader = "xxx";
+    mydata.authuser = authuser;
+    mydata.authstate = authstate;
+    
+    /* loop through each recipient, attempting delivery for each */
+    for (n = 0; n < nrcpts; n++) {
+	char *rcpt = xstrdup(msg_getrcpt(msgdata, n));
+	char *plus;
+	int r = 0;
 
-    if (user) {
-	if (strchr(user, '.') ||
-	    strlen(user) + 30 > MAX_MAILBOX_PATH) {
-	    return IMAP_MAILBOX_NONEXISTENT;
+	mydata.cur_rcpt = n;
+	plus = strchr(rcpt, '+');
+	if (plus) *plus++ = '\0';
+	/* case 1: shared mailbox request */
+	if (plus && !strcmp(rcpt, BB)) {
+	    r = deliver_mailbox(msgdata->data, 
+				&mydata.stage,
+				msgdata->size, 
+				NULL, 0,
+				mydata.authuser, mydata.authstate,
+				msgdata->id, NULL, mydata.notifyheader,
+				plus, quotaoverride, 0);
 	}
-#ifdef USE_SIEVE
-	f = sieve_find_script(user);
-	if (f != NULL) {
-	    script_data_t *sdata = NULL;
-	    sieve_script_t *s = NULL;
 
-	    sdata = (script_data_t *) xmalloc(sizeof(script_data_t));
+	/* case 2: ordinary user, might have Sieve script */
+	else if (!strchr(rcpt, '.') &&
+	         strlen(rcpt) + 30 <= MAX_MAILBOX_PATH) {
+	    FILE *f = sieve_find_script(rcpt);
+	    char namebuf[MAX_MAILBOX_PATH];
 
-	    sdata->username = user;
-	    sdata->mailboxname = mailboxname;
-	    sdata->authstate = auth_newstate(user, (char *)0);
-	    
-	    /* slap the mailboxname back on so we hash the envelope & id
-	       when we figure out whether or not to keep the message */
-	    strcpy(namebuf, user);
-	    if (mailboxname) {
-		strcat(namebuf, "+");
-		strcat(namebuf, mailboxname);
-	    }
+	    if (f != NULL) {
+		script_data_t *sdata = NULL;
+		sieve_script_t *s = NULL;
 
-	    /* is this the first time we've sieved the message? */
-	    if (msgdata->id) {
-		char *sdb = make_sieve_db(namebuf);
+		sdata = (script_data_t *) xmalloc(sizeof(script_data_t));
+
+		sdata->username = rcpt;
+		sdata->mailboxname = plus;
+		sdata->authstate = auth_newstate(rcpt, (char *)0);
+
+		/* slap the mailboxname back on so we hash the envelope & id
+		   when we figure out whether or not to keep the message */
+		snprintf(namebuf, sizeof(namebuf), "%s+%s", rcpt, plus);
 		
-		if (duplicate_check(msgdata->id, strlen(msgdata->id),
-				    sdb, strlen(sdb))) {
-		    logdupelem(msgdata->id, sdb);
-		    /* done it before ! */
-		    return 0;
+		/* is this the first time we've sieved the message? */
+		if (msgdata->id) {
+		    char *sdb = make_sieve_db(namebuf);
+		    
+		    if (duplicate_check(msgdata->id, strlen(msgdata->id),
+					sdb, strlen(sdb))) {
+			logdupelem(msgdata->id, sdb);
+			/* done it before ! */
+			r = 0;
+			goto donercpt;
+		    }
 		}
+		
+		r = sieve_script_parse(sieve_interp, f, (void *) sdata, &s);
+		fclose(f);
+		if (r == SIEVE_OK) {
+		    r = sieve_execute_script(s, (void *) &mydata);
+		}
+		if ((r == SIEVE_OK) && (msgdata->id)) {
+		    /* ok, we've run the script */
+		    char *sdb = make_sieve_db(namebuf);
+		    
+		    duplicate_mark(msgdata->id, strlen(msgdata->id), 
+				   sdb, strlen(sdb), time(NULL));
+		}
+		
+		/* free everything */
+		if (sdata->authstate) auth_freestate(sdata->authstate);
+		if (sdata) free(sdata);
+		sieve_script_free(&s);
+		
+		/* if there was an error, r is non-zero and 
+		   we'll do normal delivery */
 	    } else {
-		/* ah, screw it, we'll sieve it ! */
+		/* no sieve script */
+		r = 1; /* do normal delivery actions */
 	    }
 
-	    r = sieve_script_parse(sieve_interp, f, (void *) sdata, &s);
-	    fclose(f);
-	    if (r == SIEVE_OK) {
-		r = sieve_execute_script(s, (void *) msgdata);
-	    }
-	    if ((r == SIEVE_OK) && (msgdata->id)) {
-		/* ok, we've run the script */
-		char *sdb = make_sieve_db(namebuf);
-
-		duplicate_mark(msgdata->id, strlen(msgdata->id), 
-			       sdb, strlen(sdb), time(NULL));
-	    }
-
-	    /* free everything */
-	    if (sdata->authstate) auth_freestate(sdata->authstate);
-	    if (sdata) free(sdata);
-	    sieve_script_free(&s);
-	    
-	    /* if there was an error, r is non-zero and do normal delivery */
-	} else {
-	    /* no sieve script */
-	    r = 1; /* do normal delivery actions */
-	}
-#else
-	r = 1;
-#endif
-	if (r) {		/* normal delivery */
-	    if (!mailboxname ||
-		strlen(user) + strlen(mailboxname) + 30 > MAX_MAILBOX_PATH) {
-		r = IMAP_MAILBOX_NONEXISTENT;
-	    } else {
+	    if (r && plus &&
+		strlen(rcpt) + strlen(plus) + 30 <= MAX_MAILBOX_PATH) {
+		/* normal delivery to + mailbox */
 		strcpy(namebuf, "INBOX.");
-		strcat(namebuf, mailboxname);
+		strcat(namebuf, plus);
 		
 		r = deliver_mailbox(msgdata->data, 
-				    &msgdata->stage, 
+				    &mydata.stage, 
 				    msgdata->size, 
-				    flag, nflags, 
-				    delopts->authuser, delopts->authstate,
-				    msgdata->id, user, msgdata->notifyheader,
-				    namebuf, delopts->quotaoverride, 0);
+				    NULL, 0, 
+				    mydata.authuser, mydata.authstate,
+				    msgdata->id, rcpt, mydata.notifyheader,
+				    namebuf, quotaoverride, 0);
 	    }
+
 	    if (r) {
+		/* normal delivery to INBOX */
 		strcpy(namebuf, "INBOX");
 		
 		/* ignore ACL's trying to deliver to INBOX */
 		r = deliver_mailbox(msgdata->data, 
-				    &msgdata->stage,
+				    &mydata.stage,
 				    msgdata->size, 
-				    flag, nflags, 
-				    delopts->authuser, delopts->authstate,
-				    msgdata->id, user, msgdata->notifyheader,
-				    namebuf, delopts->quotaoverride, 1);
+				    NULL, 0, 
+				    mydata.authuser, mydata.authstate,
+				    msgdata->id, rcpt, mydata.notifyheader,
+				    namebuf, quotaoverride, 1);
 	    }
 	}
-    } else {
-	/* this is a shared folder delivery: special case. */
 
-	r = deliver_mailbox(msgdata->data, 
-			    &msgdata->stage,
-			    msgdata->size, 
-			    flag, nflags, 
-			    delopts->authuser, delopts->authstate,
-			    msgdata->id, user, msgdata->notifyheader,
-			    mailboxname, delopts->quotaoverride, 0);
+    donercpt:
+	free(rcpt);
+	msg_setrcpt_status(msgdata, n, r);
     }
 
-    return r;
+    return 0;
 }
 
 /*
@@ -2599,51 +1228,6 @@ char *name;
 	syslog(LOG_INFO, "dupelim: eliminated duplicate message to %s",
 	       name);
     }	
-}
-
-char 
-*convert_lmtp(r)
-     int r;
-{
-    switch (r) {
-    case 0:
-	return "250 2.1.5 Ok";
-	
-    case IMAP_IOERROR:
-	return "451 4.3.0 System I/O error";
-	
-    case IMAP_PERMISSION_DENIED:
-	return "550 5.7.1 Permission denied";
-
-    case IMAP_QUOTA_EXCEEDED:
-	return "452 4.2.2 Over quota";
-
-    case IMAP_MAILBOX_BADFORMAT:
-    case IMAP_MAILBOX_NOTSUPPORTED:
-	return "451 4.2.0 Mailbox has an invalid format";
-
-    case IMAP_MESSAGE_CONTAINSNULL:
-	return "554 5.6.0 Message contains NUL characters";
-	
-    case IMAP_MESSAGE_CONTAINSNL:
-	return "554 5.6.0 Message contains bare newlines";
-
-    case IMAP_MESSAGE_CONTAINS8BIT:
-	return "554 5.6.0 Message contains non-ASCII characters in headers";
-
-    case IMAP_MESSAGE_BADHEADER:
-	return "554 5.6.0 Message contains invalid header";
-
-    case IMAP_MESSAGE_NOBLANKLINE:
-	return "554 5.6.0 Message has no header/body separator";
-
-    case IMAP_MAILBOX_NONEXISTENT:
-	/* XXX Might have been moved to other server */
-	return "550 5.1.1 User unknown";
-    }
-
-    /* Some error we're not expecting. */
-    return "554 5.0.0 Unexpected internal error";
 }
 
 void fatal(const char* s, int code)
@@ -2683,46 +1267,29 @@ int isvalidflag(char *f)
     return 1;
 }
 
-/*
- * Destructively remove any whitespace and 822 comments
- * from string pointed to by 'buf'.  Does not handle continuation header
- * lines.
- */
-void
-clean822space(buf)
-char *buf;
+static int verify_user(const char *user)
 {
-    char *from=buf, *to=buf;
-    int c;
-    int commentlevel = 0;
+    char buf[MAX_MAILBOX_NAME];
+    char *plus;
+    int r;
+    int sl = strlen(BB);
 
-    while ((c = *from++)!=0) {
-	switch (c) {
-	case '\r':
-	case '\n':
-	case '\0':
-	    *to = '\0';
-	    return;
-
-	case ' ':
-	case '\t':
-	    continue;
-
-	case '(':
-	    commentlevel++;
-	    break;
-
-	case ')':
-	    if (commentlevel) commentlevel--;
-	    break;
-
-	case '\\':
-	    if (commentlevel && *from) from++;
-	    /* FALL THROUGH */
-
-	default:
-	    if (!commentlevel) *to++ = c;
-	    break;
+    /* check to see if mailbox exists */
+    if (!strncmp(user, BB, sl) && user[sl] == '+') {
+	/* special shared folder address */
+	r = mboxlist_lookup(user + sl + 1, NULL, NULL, NULL);
+    } else {
+	/* ordinary user */
+	if (strlen(user) > sizeof(buf)-10) {
+	    r = IMAP_MAILBOX_NONEXISTENT;
+	} else {
+	    strcpy(buf, "user.");
+	    strcat(buf, user);
+	    plus = strchr(buf, '+');
+	    if (plus) *plus = '\0';
+	    r = mboxlist_lookup(buf, NULL, NULL, NULL);
 	}
     }
+
+    return r;
 }
