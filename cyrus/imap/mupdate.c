@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.33 2002/01/25 19:51:55 rjs3 Exp $
+ * $Id: mupdate.c,v 1.34 2002/01/25 22:35:32 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -105,7 +105,7 @@ struct conn {
     } saslprops;
 
     /* pending changes to send, in reverse order */
-    char *streaming; /* tag */
+    const char *streaming; /* tag */
     pthread_mutex_t m;
     pthread_cond_t cond;
 
@@ -135,6 +135,7 @@ void cmd_set(struct conn *C,
 	     const char *server, const char *acl, enum settype t);
 void cmd_find(struct conn *C, const char *tag, const char *mailbox,
 	      int dook);
+void cmd_list(struct conn *C, const char *tag);
 void cmd_startupdate(struct conn *C, const char *tag);
 void shut_down(int code);
 static int reset_saslconn(struct conn *c);
@@ -385,6 +386,8 @@ void cmdloop(struct conn *c)
     syslog(LOG_DEBUG, "starting cmdloop() on fd %d", c->fd);
         
     /* zero out struct bufs */
+    /* Note that since they live on the stack for the duration of the
+     * connection we don't need to fill up the struct conn with them */
     memset(&tag, 0, sizeof(struct buf));
     memset(&cmd, 0, sizeof(struct buf));
     memset(&arg1, 0, sizeof(struct buf));
@@ -517,7 +520,15 @@ void cmdloop(struct conn *c)
 	    break;
 
 	case 'L':
-	    if (!strcmp(cmd.s, "Logout")) {
+	    if (!strcmp(cmd.s, "List")) {
+		CHECKNEWLINE(c, ch);
+
+		if (c->streaming) goto notwhenstreaming;
+
+		cmd_list(c, tag.s);
+		
+		prot_printf(c->pout, "%s OK \"list complete\"\r\n", tag.s);
+	    } else if (!strcmp(cmd.s, "Logout")) {
 		CHECKNEWLINE(c, ch);
 
 		prot_printf(c->pout, "%s OK \"bye-bye\"\r\n", tag.s);
@@ -1007,6 +1018,7 @@ void cmd_find(struct conn *C, const char *tag, const char *mailbox, int dook)
 }
 
 /* Callback for cmd_startupdate to be passed to mboxlist_findall. */
+/* Requires that C->streaming be set to the tag to respond with */
 static int sendupdate(char *name, int matchlen, int maycreate, void *rock)
 {
     struct conn *C = (struct conn *)rock;
@@ -1040,6 +1052,25 @@ static int sendupdate(char *name, int matchlen, int maycreate, void *rock)
     return 0;
 }
 
+void cmd_list(struct conn *C, const char *tag) 
+{
+    char pattern[2] = {'%','\0'};
+
+    /* indicate interest in updates */
+    pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
+
+    /* since this isn't valid when streaming, just use the same callback */
+    C->streaming = tag;
+    
+    mboxlist_findall(NULL, pattern, 1, NULL,
+		     NULL, sendupdate, (void*)C);
+
+    C->streaming = NULL;
+
+    pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
+}
+
+
 void cmd_startupdate(struct conn *C, const char *tag)
 {
     char pattern[2] = {'%','\0'};
@@ -1054,6 +1085,7 @@ void cmd_startupdate(struct conn *C, const char *tag)
     updatelist = C;
     C->streaming = xstrdup(tag);
 
+    /* dump initial list */
     mboxlist_findall(NULL, pattern, 1, NULL,
 		     NULL, sendupdate, (void*)C);
 
