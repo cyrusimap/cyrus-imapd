@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idled.c,v 1.5 2001/01/17 17:39:22 ken3 Exp $ */
+/* $Id: idled.c,v 1.6 2001/01/19 16:48:58 ken3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -160,9 +160,8 @@ void idle_done(char *mboxname, pid_t pid)
     }
 }
 
-void process_msg(char *str)
+void process_msg(idle_data_t *idledata)
 {
-    idle_data_t *idledata = (idle_data_t *) str;
     struct ientry *t, *n;
     int s;
     int fdflags;
@@ -248,7 +247,7 @@ int main(int argc, char **argv)
     int nmbox = 0;
     int s, len;
     struct sockaddr_un local;
-    char str[sizeof(idle_data_t)];
+    idle_data_t idledata;
     struct sockaddr_un from;
     socklen_t fromlen;
     mode_t oldumask;
@@ -373,12 +372,10 @@ int main(int argc, char **argv)
 	/* read on unix socket */
 	if (FD_ISSET(s, &rset)) {
 	    fromlen = sizeof(from);
-	    memset(str,'\0',sizeof(str));
-	    n = recvfrom(s, str, sizeof(str), 0, 
+	    n = recvfrom(s, (void*) &idledata, sizeof(idle_data_t), 0,
 			 (struct sockaddr *) &from, &fromlen);
-	    str[n]  = '\0';
 
-	    process_msg(str);
+	    if (n > 0) process_msg(&idledata);
 	} else {
 	    /* log some sort of error */	    
 	}

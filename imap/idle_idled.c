@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle_idled.c,v 1.3 2001/01/17 17:39:22 ken3 Exp $ */
+/* $Id: idle_idled.c,v 1.4 2001/01/19 16:48:58 ken3 Exp $ */
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -193,10 +193,9 @@ int idle_send_msg(int msg, struct mailbox *mailbox)
     strcpy(idledata.mboxname, mailbox ? mailbox->name : ".");
 
     /* send */
-    if (sendto(notify_sock, &idledata,
-	       IDLEDATA_BASE_SIZE+strlen(idledata.mboxname), 0,
-	       (struct sockaddr *) &idle_remote, 
-	       idle_remote_len) == -1) {
+    if (sendto(notify_sock, (void *) &idledata,
+	       IDLEDATA_BASE_SIZE+strlen(idledata.mboxname)+1, /* 1 for NULL */
+	       0, (struct sockaddr *) &idle_remote, idle_remote_len) == -1) {
       syslog(LOG_ERR, "error sending to idled: %x", msg);
       return 0;
     }
