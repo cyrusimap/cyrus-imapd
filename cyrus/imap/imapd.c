@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.326 2001/10/02 21:08:10 ken3 Exp $ */
+/* $Id: imapd.c,v 1.327 2001/10/10 20:01:34 ken3 Exp $ */
 
 #include <config.h>
 
@@ -4357,7 +4357,15 @@ void cmd_namespace(tag)
     char* pattern;
 
     if (SLEEZY_NAMESPACE) {
-	sawone[NAMESPACE_INBOX] = 1;
+	char inboxname[MAX_MAILBOX_NAME+1];
+
+	if (strlen(imapd_userid) + 5 > MAX_MAILBOX_NAME)
+	    sawone[NAMESPACE_INBOX] = 0;
+	else {
+	    sprintf(inboxname, "user.%s", imapd_userid);
+	    sawone[NAMESPACE_INBOX] = 
+		!mboxlist_lookup(inboxname, NULL, NULL, NULL);
+	}
 	sawone[NAMESPACE_USER] = 1;
 	sawone[NAMESPACE_SHARED] = 1;
     } else {
