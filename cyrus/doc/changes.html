@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.43.2.18 2003/03/12 16:38:11 ken3 Exp $ -->
+<!-- $Id: changes.html,v 1.43.2.19 2003/03/18 20:44:14 ken3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -36,7 +36,8 @@ details.</li>
 
 <li> Users can now be renamed (even across domains).  Note that this
 is not atomic and weirdness may occur if the user is logged in during
-the rename.  See ??? for details.</li>
+the rename.  See the <tt>allowusermoves</tt> option in
+<tt>imapd.conf(5)</tt> for details.</li>
 
 <li> The <tt>db3</tt> and <tt>db3-nosync</tt> database backends have
 been renamed to <tt>berkeley</tt> and <tt>berkeley-nosync</tt>
@@ -57,6 +58,9 @@ href="install-netnews.html">netnews</a> document for details.</li>
 <li> Sieve scripts are now compiled to bytecode to allow for faster
 execution (and lmtpd no longer needs lex or yacc).  See
 <a href=install-upgrade.html>install-upgrade.html</a> for more details.</li>
+
+<li> The functionality of pop3proxyd has been merged into pop3d.  Be
+sure to update <tt>cyrus.conf</tt> on your frontend machines accordingly.</li>
 
 </ul>
 
@@ -1771,7 +1775,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2003/03/12 16:38:11 $ <br />
+last modified: $Date: 2003/03/18 20:44:14 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
