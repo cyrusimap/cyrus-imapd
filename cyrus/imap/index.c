@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.199.2.18 2005/03/03 19:37:48 ken3 Exp $
+ * $Id: index.c,v 1.199.2.19 2005/03/31 21:46:01 ken3 Exp $
  */
 #include <config.h>
 
@@ -298,8 +298,15 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 	}
 	else if ((sbuf.st_ino != mailbox->index_ino) ||
 	    (index_ino != mailbox->index_ino)) {
+	    unsigned long olduidvalidity = mailbox->uidvalidity;
+
 	    if (mailbox_open_index(mailbox)) {
 		fatal("failed to reopen index file", EC_IOERR);
+	    }
+
+	    if (olduidvalidity != mailbox->uidvalidity) {
+		/* Force a * OK [UIDVALIDITY n] message */
+		oldexists = -1;
 	    }
 
 	    for (oldmsgno = msgno = 1; oldmsgno <= imapd_exists;
