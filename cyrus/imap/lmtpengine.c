@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.26.4.1 2001/08/16 21:38:20 leg Exp $
+ * $Id: lmtpengine.c,v 1.26.4.2 2001/08/17 21:04:17 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -75,7 +75,7 @@
 #include "util.h"
 #include "auth.h"
 #include "prot.h"
-#include "gmtoff.h"
+#include "rfc822date.h"
 #include "imapconf.h"
 #include "exitcodes.h"
 #include "imap_err.h"
@@ -86,11 +86,6 @@
 #include "lmtpstats.h"
 
 #define RCPT_GROW 30
-
-static char *month[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                         "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
-
-static char *wday[] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
 
 /* data per message */
 struct Header {
@@ -213,6 +208,10 @@ int msg_new(message_data_t **m)
     ret->return_path = NULL;
     ret->rcpt = NULL;
     ret->rcpt_num = 0;
+
+    ret->authuser = NULL;
+    ret->authstate = NULL;
+
     for (i = 0; i < HEADERCACHESIZE; i++)
 	ret->cache[i] = NULL;
 
@@ -244,6 +243,11 @@ void msg_free(message_data_t *m)
 	    free(m->rcpt[i]);
 	}
 	free(m->rcpt);
+    }
+
+    if (m->authuser) {
+	free(m->authuser);
+	if (m->authstate) auth_freestate(m->authstate);
     }
 
     for (i = 0; i < HEADERCACHESIZE; i++) {
@@ -810,9 +814,7 @@ static int savemsg(struct clientdata *cd,
     int r;
     int nrcpts = m->rcpt_num;
     time_t t;
-    struct tm *tm;
-    long gmtoff;
-    int gmtnegative = 0;
+    char datestr[80];
 
     /* Copy to temp file */
     f = tmpfile();
@@ -847,23 +849,18 @@ static int savemsg(struct clientdata *cd,
 
     /* add a received header */
     t = time(NULL);
-    tm = localtime(&t);
-    gmtoff = gmtoff_of(tm, t);
-    if (gmtoff < 0) {
-	gmtoff = -gmtoff;
-	gmtnegative = 1;
+    rfc822date_gen(datestr, t);
+    if (m->authuser) {
+	fprintf(f, "Received: from %s (%s) (user=%s)\r\n"
+		"\tby %s (Cyrus %s); %s\r\n",
+		cd->lhlo_param, cd->clienthost, m->authuser,
+		config_servername, CYRUS_VERSION, datestr);
+    } else {
+	fprintf(f, "Received: from %s (%s)\r\n"
+		"\tby %s (Cyrus %s); %s\r\n",
+		cd->lhlo_param, cd->clienthost, 
+		config_servername, CYRUS_VERSION, datestr);
     }
-    gmtoff /= 60;
-    fprintf(f, "Received: from %s (%s)\r\n"
-	    /* xxx "\t(user=%s author=%s mech=%s (%d bits))\r\n" */
-	       "\tby %s (%s); "
-	       "%s, %02d %s %4d %02d:%02d:%02d %c%.2lu%.2lu\r\n",
-	    cd->lhlo_param, cd->clienthost,
-	    config_servername, CYRUS_VERSION,
-	    wday[tm->tm_wday], 
-	    tm->tm_mday, month[tm->tm_mon], tm->tm_year + 1900,
-	    tm->tm_hour, tm->tm_min, tm->tm_sec,
-            gmtnegative ? '-' : '+', gmtoff / 60, gmtoff % 60);
 
     /* add any requested headers */
     if (addheaders) {
@@ -1019,9 +1016,6 @@ void lmtpmode(struct lmtp_func *func,
 	NOAUTH = 0,
 	DIDAUTH = 1
     } authenticated = NOAUTH;	
-
-    char *authuser = NULL;
-    struct auth_state *authstate = NULL;
 
     cd.pin = pin;
     cd.pout = pout;
@@ -1266,7 +1260,7 @@ void lmtpmode(struct lmtp_func *func,
 		snmp_increment(mtaReceivedRecipients, msg->rcpt_num);
 
 		/* do delivery, report status */
-		r = func->deliver(msg, authuser, authstate);
+		r = func->deliver(msg, msg->authuser, msg->authstate);
 		for (j = 0; j < msg->rcpt_num; j++) {
 		    if (!msg->rcpt[j]->status) delivered++;
 		    prot_printf(pout, "%s\r\n", 
@@ -1337,13 +1331,13 @@ void lmtpmode(struct lmtp_func *func,
 			    goto badparam;
 			}
 			tmp += 5;
-			authuser = parseautheq(&tmp);
-			if (authuser) {
-			    authstate = auth_newstate(authuser, NULL);
+			msg->authuser = parseautheq(&tmp);
+			if (msg->authuser) {
+			    msg->authstate = auth_newstate(msg->authuser, NULL);
 			} else {
 			    /* do we want to bounce mail because of this? */
 			    /* i guess not. accept with no auth user */
-			    authstate = NULL;
+			    msg->authstate = NULL;
 			}
 			break;
 
@@ -1468,14 +1462,6 @@ void lmtpmode(struct lmtp_func *func,
 	      rset:
 		if (msg) msg_free(msg);
 		msg_new(&msg);
-		if (authuser) {
-		    free(authuser);
-		    authuser = NULL;
-		}
-		if (authstate) {
-		    auth_freestate(authstate);
-		    authstate = NULL;
-		}
 		
 		continue;
 	    }
@@ -1505,8 +1491,6 @@ void lmtpmode(struct lmtp_func *func,
     /* security */
     if (cd.conn) sasl_dispose(&cd.conn);
     if (extprops) free(extprops);
-    if (authuser) free(authuser);
-    if (authstate) auth_freestate(authstate);
 }
 
 /************** client-side LMTP ****************/

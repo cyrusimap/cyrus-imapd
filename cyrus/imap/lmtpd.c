@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.67 2001/08/16 20:52:06 ken3 Exp $
+ * $Id: lmtpd.c,v 1.63.2.1 2001/08/17 21:04:16 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.67 2001/08/16 20:52:06 ken3 Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.63.2.1 2001/08/17 21:04:16 leg Exp $";*/
 
 #include <config.h>
 
@@ -82,7 +82,6 @@
 #include "util.h"
 #include "auth.h"
 #include "prot.h"
-#include "gmtoff.h"
 #include "imparse.h"
 #include "lock.h"
 #include "imapconf.h"
@@ -96,6 +95,7 @@
 #include "mboxlist.h"
 #include "notify.h"
 #include "idle.h"
+#include "rfc822date.h"
 
 #include "lmtpengine.h"
 #include "lmtpstats.h"
@@ -164,9 +164,6 @@ static const char *sieve_dir = NULL;
 
 /* per-user/session state */
 static struct protstream *deliver_out, *deliver_in;
-
-/* current namespace */
-static struct namespace lmtpd_namespace;
 
 /* should we allow users to proxy?  return SASL_OK if yes,
    SASL_BADAUTH otherwise */
@@ -295,12 +292,6 @@ int service_init(int argc, char **argv, char **envp)
     /* setup for sending IMAP IDLE notifications */
     idle_enabled();
 
-    /* Set namespace */
-    if ((r = mboxname_init_namespace(&lmtpd_namespace, 0)) != 0) {
-	syslog(LOG_ERR, error_message(r));
-	fatal(error_message(r), EC_CONFIG);
-    }
-
     /* create connection to the SNMP listener, if available. */
     snmp_connect(); /* ignore return code */
     snmp_set_str(SERVER_NAME_VERSION, CYRUS_VERSION);
@@ -426,11 +417,6 @@ int getenvelope(void *mc, const char *field, const char ***contents)
 #define SENDMAIL (config_getstring("sendmail", DEFAULT_SENDMAIL))
 #define POSTMASTER (config_getstring("postmaster", DEFAULT_POSTMASTER))
 
-static char *month[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                         "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
-
-static char *wday[] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
-
 static int global_outgoing_count = 0;
 
 pid_t open_sendmail(const char *argv[], FILE **sm)
@@ -502,9 +488,7 @@ int send_rejection(const char *origid,
     char buf[8192], *namebuf;
     int i, sm_stat;
     time_t t;
-    struct tm *tm;
-    long gmtoff;
-    int gmtnegative = 0;
+    char datestr[80];
     pid_t sm_pid, p;
 
     smbuf[0] = "sendmail";
@@ -527,18 +511,8 @@ int send_rejection(const char *origid,
     duplicate_mark(buf, strlen(buf), namebuf, strlen(namebuf), t);
     fprintf(sm, "Message-ID: %s\r\n", buf);
 
-    tm = localtime(&t);
-    gmtoff = gmtoff_of(tm, t);
-    if (gmtoff < 0) {
-	gmtoff = -gmtoff;
-	gmtnegative = 1;
-    }
-    gmtoff /= 60;
-    fprintf(sm, "Date: %s, %02d %s %4d %02d:%02d:%02d %c%.2lu%.2lu\r\n",
-	    wday[tm->tm_wday], 
-	    tm->tm_mday, month[tm->tm_mon], tm->tm_year + 1900,
-	    tm->tm_hour, tm->tm_min, tm->tm_sec,
-            gmtnegative ? '-' : '+', gmtoff / 60, gmtoff % 60);
+    rfc822date_gen(datestr, t);
+    fprintf(sm, "Date: %s\r\n", datestr);
 
     fprintf(sm, "X-Sieve: %s\r\n", sieve_version);
     fprintf(sm, "From: Mail Sieve Subsystem <%s>\r\n", POSTMASTER);
@@ -746,7 +720,7 @@ int sieve_keep(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     int ret = 1;
 
     if (sd->mailboxname) {
-	strcpy(namebuf, lmtpd_namespace.prefix[NAMESPACE_INBOX]);
+	strcpy(namebuf, "INBOX.");
 	strcat(namebuf, sd->mailboxname);
 
 	ret = deliver_mailbox(md->data, &mydata->stage, md->size,
@@ -839,10 +813,8 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     const char *smbuf[6];
     char outmsgid[8192], *sievedb;
     int i, sl, sm_stat;
-    struct tm *tm;
-    long tz;
-    int tznegative = 0;
     time_t t;
+    char datestr[80];
     pid_t sm_pid, p;
     sieve_send_response_context_t *src = (sieve_send_response_context_t *) ac;
     message_data_t *md = ((mydata_t *) mc)->m;
@@ -867,18 +839,8 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     
     fprintf(sm, "Message-ID: %s\r\n", outmsgid);
 
-    tm = localtime(&t);
-    tz = gmtoff_of(tm, t);
-    if (tz < 0) {
-	tz = -tz;
-	tznegative = 1;
-    }
-    tz /= 60;
-    fprintf(sm, "Date: %s, %02d %s %4d %02d:%02d:%02d %c%.2lu%.2lu\r\n",
-	    wday[tm->tm_wday], 
-	    tm->tm_mday, month[tm->tm_mon], tm->tm_year + 1900,
-	    tm->tm_hour, tm->tm_min, tm->tm_sec,
-            tznegative ? '-' : '+', tz / 60, tz % 60);
+    rfc822date_gen(datestr, t);
+    fprintf(sm, "Date: %s\r\n", datestr);
     
     fprintf(sm, "X-Sieve: %s\r\n", sieve_version);
     fprintf(sm, "From: <%s>\r\n", src->fromaddr);
@@ -1067,7 +1029,8 @@ static FILE *sieve_find_script(const char *user)
     } else { /* look in sieve_dir */
 	char hash;
 
-	hash = (char) dir_hash_c(user);
+	hash = (char) tolower((int) *user);
+	if (!islower((int) hash)) { hash = 'q'; }
 
 	snprintf(buf, sizeof(buf), "%s/%c/%s/default", sieve_dir, hash, user);
     }
@@ -1115,11 +1078,18 @@ int deliver_mailbox(struct protstream *msg,
     char namebuf[MAX_MAILBOX_PATH];
     time_t now = time(NULL);
 
-    /* Translate any separators in user */
-    if (user) mboxname_hiersep_tointernal(&lmtpd_namespace, user);
-
-    r = (*lmtpd_namespace.mboxname_tointernal)(&lmtpd_namespace, mailboxname,
-					       user, namebuf);
+    if (user && !strncasecmp(mailboxname, "INBOX", 5)) {
+	/* canonicalize mailbox */
+	if (strchr(user, '.') ||
+	    strlen(user) + 30 > MAX_MAILBOX_PATH) {
+	    return IMAP_MAILBOX_NONEXISTENT;
+	}
+	strcpy(namebuf, "user.");
+	strcat(namebuf, user);
+	strcat(namebuf, mailboxname + 5);
+    } else {
+	strcpy(namebuf, mailboxname);
+    }
 
     if (dupelim && id && 
 	duplicate_check(id, strlen(id), namebuf, strlen(namebuf))) {
@@ -1127,11 +1097,9 @@ int deliver_mailbox(struct protstream *msg,
 	logdupelem(id, namebuf);
 	return 0;
     }
-    if (!r) {
-	r = append_setup(&as, namebuf, MAILBOX_FORMAT_NORMAL,
-			 NULL, authstate, acloverride ? 0 : ACL_POST, 
-			 quotaoverride ? -1 : 0);
-    }
+    r = append_setup(&as, namebuf, MAILBOX_FORMAT_NORMAL,
+		     NULL, authstate, acloverride ? 0 : ACL_POST, 
+		     quotaoverride ? -1 : 0);
 
     if (!r) {
 	prot_rewind(msg);
@@ -1163,7 +1131,6 @@ int deliver(message_data_t *msgdata, char *authuser,
 {
     int n, nrcpts;
     mydata_t mydata;
-    char namebuf[MAX_MAILBOX_PATH];
     
     assert(msgdata);
     nrcpts = msg_getnumrcpt(msgdata);
@@ -1188,21 +1155,20 @@ int deliver(message_data_t *msgdata, char *authuser,
 	if (plus) *plus++ = '\0';
 	/* case 1: shared mailbox request */
 	if (plus && !strcmp(rcpt, BB)) {
-	    strcpy(namebuf, lmtpd_namespace.prefix[NAMESPACE_SHARED]);
-	    strcat(namebuf, plus);
 	    r = deliver_mailbox(msgdata->data, 
 				&mydata.stage,
 				msgdata->size, 
 				NULL, 0,
 				mydata.authuser, mydata.authstate,
 				msgdata->id, NULL, mydata.notifyheader,
-				namebuf, quotaoverride, 0);
+				plus, quotaoverride, 0);
 	}
 
 	/* case 2: ordinary user, might have Sieve script */
-	else if (!strchr(rcpt, lmtpd_namespace.hier_sep) &&
+	else if (!strchr(rcpt, '.') &&
 	         strlen(rcpt) + 30 <= MAX_MAILBOX_PATH) {
 	    FILE *f = sieve_find_script(rcpt);
+	    char namebuf[MAX_MAILBOX_PATH];
 
 #ifdef USE_SIEVE
 	    if (f != NULL) {
@@ -1264,7 +1230,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	    if (r && plus &&
 		strlen(rcpt) + strlen(plus) + 30 <= MAX_MAILBOX_PATH) {
 		/* normal delivery to + mailbox */
-		strcpy(namebuf, lmtpd_namespace.prefix[NAMESPACE_INBOX]);
+		strcpy(namebuf, "INBOX.");
 		strcat(namebuf, plus);
 		
 		r = deliver_mailbox(msgdata->data, 
@@ -1354,10 +1320,7 @@ static int verify_user(const char *user)
     /* check to see if mailbox exists */
     if (!strncmp(user, BB, sl) && user[sl] == '+') {
 	/* special shared folder address */
-	strcpy(buf, user + sl + 1);
-	/* Translate any separators in user */
-	mboxname_hiersep_tointernal(&lmtpd_namespace, buf);
-	r = mboxlist_lookup(buf, NULL, NULL, NULL);
+	r = mboxlist_lookup(user + sl + 1, NULL, NULL, NULL);
     } else {
 	/* ordinary user */
 	if (strlen(user) > sizeof(buf)-10) {
@@ -1367,8 +1330,6 @@ static int verify_user(const char *user)
 	    strcat(buf, user);
 	    plus = strchr(buf, '+');
 	    if (plus) *plus = '\0';
-	    /* Translate any separators in user */
-	    mboxname_hiersep_tointernal(&lmtpd_namespace, buf+5);
 	    r = mboxlist_lookup(buf, NULL, NULL, NULL);
 	}
     }
