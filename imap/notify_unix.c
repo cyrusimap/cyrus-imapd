@@ -1,6 +1,6 @@
-/* notify_unix.c -- Module to send notifications to socket-based server
-   Copyright (c) 2000, Jeremy Howard
-*/
+/* notify_unix.c -- Module to send notifications to Unix socket-based server
+ *    Copyright (c) 2000-2001, Jeremy Howard, j@howard.fm
+ */
 
 
 #include <stdio.h>
@@ -14,10 +14,7 @@
 #include <fcntl.h>
 #include "imapconf.h"
 
-extern const char *config_getstring(const char *key, const char *def);
-extern int config_getint(const char *key,int def);
-
-#define SOCKFILE config_getstring("notify_socket","/tmp/notify_unix")
+#define FNAME_NOTIFY_SOCK "/socket/notify"
 #define DIRSIZE 8192
 
 void notify(const char *class,
@@ -31,6 +28,7 @@ void notify(const char *class,
     char dir[DIRSIZE];
 
     char buf[80];
+    const char *notify_sock;
     struct sockaddr myname;
 
     int   sock, adrlen, cnt;
@@ -44,7 +42,14 @@ void notify(const char *class,
     }
 
     myname.sa_family = AF_UNIX;
-    strcpy(myname.sa_data, SOCKFILE);
+    notify_sock = config_getstring("notifysocket", NULL);
+    if (notify_sock) {	
+	strcpy(myname.sa_data, notify_sock);
+    }
+    else {
+	strcpy(myname.sa_data, config_dir);
+	strcat(myname.sa_data, FNAME_NOTIFY_SOCK);
+    }
     adrlen = strlen(myname.sa_data) +
 	sizeof(myname.sa_family);
 
