@@ -53,6 +53,30 @@ static char *badmboxpatterns[] = {
 };
 #define NUM_BADMBOXPATTERNS (sizeof(badmboxpatterns)/sizeof(*badmboxpatterns))
 
+#define XX 127
+/*
+ * Table for decoding modified base64 for IMAP UTF-7 mailbox names
+ */
+static const char index_mod64[256] = {
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,62, 63,XX,XX,XX,
+    52,53,54,55, 56,57,58,59, 60,61,XX,XX, XX,XX,XX,XX,
+    XX, 0, 1, 2,  3, 4, 5, 6,  7, 8, 9,10, 11,12,13,14,
+    15,16,17,18, 19,20,21,22, 23,24,25,XX, XX,XX,XX,XX,
+    XX,26,27,28, 29,30,31,32, 33,34,35,36, 37,38,39,40,
+    41,42,43,44, 45,46,47,48, 49,50,51,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+};
+#define CHARMOD64(c)  (index_mod64[(unsigned char)(c)])
+
 /*
  * Convert the external mailbox 'name' to an internal name.
  * If 'userid' is non-null, it is the name of the current user.
@@ -117,6 +141,9 @@ char *name;
 {
     int i;
     struct glob *g;
+    int sawutf7 = 0;
+    unsigned c1, c2, c3, c4, c5, c6, c7, c8;
+    int ucs4;
 
     if (strlen(name) > MAX_MAILBOX_NAME) return IMAP_MAILBOX_BADNAME;
     for (i = 0; i < NUM_BADMBOXPATTERNS; i++) {
@@ -130,7 +157,73 @@ char *name;
 
     if (*name == '~') return IMAP_MAILBOX_BADNAME;
     while (*name) {
-	if (!strchr(GOODCHARS, *name++)) return IMAP_MAILBOX_BADNAME;
+	if (*name == '&') {
+	    /* Modified UTF-7 */
+	    while (*++name != '-') {
+		if (sawutf7) {
+		    /* Two adjacent utf7 sequences */
+		    return IMAP_MAILBOX_BADNAME;
+		}
+
+		if ((c1 = CHARMOD64(*name++)) == XX ||
+		    (c2 = CHARMOD64(*name++)) == XX ||
+		    (c3 = CHARMOD64(*name++)) == XX) {
+		    /* Non-base64 character */
+		    return IMAP_MAILBOX_BADNAME;
+		}
+		ucs4 = (c1 << 10) | (c2 << 4) | (c3 >> 2);
+		if ((ucs4 & 0xff00) == 0 || (ucs4 & 0xf800) == 0xd800) {
+		    /* US-ASCII or multi-word character */
+		    return IMAP_MAILBOX_BADNAME;
+		}
+		if (*name == '-') {
+		    /* Trailing bits not zero */
+		    if (c3 && 0x03) return IMAP_MAILBOX_BADNAME;
+
+		    /* End of UTF-7 sequence */
+		    break;
+		}
+
+		if ((c4 = CHARMOD64(*name++)) == XX ||
+		    (c5 = CHARMOD64(*name++)) == XX ||
+		    (c6 = CHARMOD64(*name++)) == XX) {
+		    /* Non-base64 character */
+		    return IMAP_MAILBOX_BADNAME;
+		}
+		ucs4 = ((c3 & 0x03) << 14) | (c4 << 8) | (c5 << 2) | (c6 >> 4);
+		if ((ucs4 & 0xff00) == 0 || (ucs4 & 0xf800) == 0xd800) {
+		    /* US-ASCII or multi-word character */
+		    return IMAP_MAILBOX_BADNAME;
+		}
+		if (*name == '-') {
+		    /* Trailing bits not zero */
+		    if (c6 && 0x0f) return IMAP_MAILBOX_BADNAME;
+
+		    /* End of UTF-7 sequence */
+		    break;
+		}
+
+		if ((c7 = CHARMOD64(*name++)) == XX ||
+		    (c8 = CHARMOD64(*name++)) == XX) {
+		    /* Non-base64 character */
+		    return IMAP_MAILBOX_BADNAME;
+		}
+		ucs4 = ((c6 & 0x0f) << 12) | (c7 << 6) | c8;
+		if ((ucs4 & 0xff00) == 0 || (ucs4 & 0xf800) == 0xd800) {
+		    /* US-ASCII or multi-word character */
+		    return IMAP_MAILBOX_BADNAME;
+		}
+	    }
+
+	    if (name[-1] == '&') sawutf7 = 0; /* '&-' is sequence for '&' */
+	    else sawutf7 = 1;
+
+	    name++;		/* Skip over terminating '-' */
+	}
+	else {
+	    if (!strchr(GOODCHARS, *name++)) return IMAP_MAILBOX_BADNAME;
+	    sawutf7 = 0;
+	}
     }
     return 0;
 }
