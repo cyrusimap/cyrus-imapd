@@ -15,6 +15,11 @@
  * Start Date: 2/16/93
  */
 
+/* kludge: send a non-synchronizing literal with password instead of
+   unquoted password; should not do this, as it is not compatible with
+   base-line IMAP4rev1 servers.
+   */
+
 #include <stdio.h>
 #include <ctype.h>
 #include <pwd.h>
@@ -285,9 +290,14 @@ main(argc, argv)
 		if (dopass) {
 		    dologin = 0;
 		    pass = getpass("Password: ");
-		    printf(". LOGIN %s X\n", getpwuid(getuid())->pw_name);
-		    sprintf(buf, ". LOGIN %s %s\r\n",
-			    getpwuid(getuid())->pw_name, pass);
+		    /* XXX kludge!  we just send a non-synchronizing
+		       literal instead of dealing with this
+		       appropriately. */
+		    printf(". LOGIN %s {L+}\r\nX\r\n",
+			   getpwuid(getuid())->pw_name);
+		    sprintf(buf, ". LOGIN %s {%d+}\r\n%s\r\n",
+			    getpwuid(getuid())->pw_name, strlen(pass),
+			    pass);
 		    prot_write(pout, buf, strlen(buf));
 		    memset(buf, 0, sizeof (buf));
 		    memset(pass, 0, 8);
