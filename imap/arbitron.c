@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: arbitron.c,v 1.26 2003/07/31 02:57:13 rjs3 Exp $ */
+/* $Id: arbitron.c,v 1.27 2003/07/31 03:07:39 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -162,11 +162,11 @@ int main(int argc,char **argv)
     mboxname_hiersep_tointernal(&arb_namespace, pattern);
     
     /* Get the mailbox list */
-    fprintf(stderr, "Loading Mailboxes.\n");
+    fprintf(stderr, "Loading Mailboxes...");
     (*arb_namespace.mboxlist_findall)(&arb_namespace, pattern, 1, 0, 0,
 				      do_mailbox, NULL);
 
-    fprintf(stderr, "Loading Users");
+    fprintf(stderr, "Done\nLoading Users");
     
     /* Now do all the users */
     run_users();
@@ -277,7 +277,7 @@ static int process_user_cb(void *rockp,
 			   int tmpdatalen __attribute__((unused))) 
 {
     /* Only called to do deletes */
-    printf("pruning entry\n");
+/*    printf("pruning entry\n"); */
     
     DB->delete((struct db *)rockp, key, keylen, NULL, 0);    
 
