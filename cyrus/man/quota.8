@@ -1,0 +1,65 @@
+.\" -*- nroff -*-
+.TH QUOTA 8
+.\" 	(C) Copyright 1994 by Carnegie Mellon University
+.\" 
+.\"                      All Rights Reserved
+.\" 
+.\" Permission to use, copy, modify, and distribute this software and its 
+.\" documentation for any purpose and without fee is hereby granted, 
+.\" provided that the above copyright notice appear in all copies and that
+.\" both that copyright notice and this permission notice appear in 
+.\" supporting documentation, and that the name of CMU not be
+.\" used in advertising or publicity pertaining to distribution of the
+.\" software without specific, written prior permission.  
+.\" 
+.\" CMU DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING
+.\" ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL
+.\" CMU BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR
+.\" ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+.\" WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+.\" ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
+.\" SOFTWARE.
+.SH NAME
+quota \- report and optionally fix quota usage
+.SH SYNOPSIS
+.B quota
+[
+.B \-f
+]
+[
+.IR mailbox-prefix ...
+]
+.SH DESCRIPTION
+.I Quota
+generates a report listing quota roots, giving their limits and usage.
+If the
+.I \-f
+option is given, 
+.I quota
+first fixes any inconsistencies in the quota subsystem.
+If any optional
+.I mailbox-prefix
+arguments are given, the quota listing (and inconsistency fixing) is
+limited to quota roots with names that start with one of the given
+prefixes.
+.PP
+Running
+.I quota
+with both the 
+.I \-f
+option and
+.I mailbox-prefix
+arguments is not recommended.
+.PP
+.I Quota
+reads its configuration options out of the
+.IR imapd.conf (5)
+file.
+.SH OPTIONS
+.TP
+.B \-f
+Fix any inconsistencies in the quota subsystem before generating a
+report.
+.SH FILES
+.TP
+.B /etc/imapd.conf
