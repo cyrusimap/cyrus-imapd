@@ -55,18 +55,23 @@ disk in a format best suited to its needs.
 
 Each folder is represented by a directory in the filesystem.  Within
 the directory, each message is stored in its own file in RFC 822
-format.  As is the case with netnews systems, the filenames of the
-message files are sequentially-assigned internal numbers.  Once a
-message is appended to a folder, its internal sequence number never
-changes.  By default, lines are terminated by CRLF.  In order to allow
-the server to export netnews spool directories, message lines may be
-separated by just LF.
+format.  The filenames of the message files are sequentially-assigned
+internal numbers, with a period appended.  Once a message is appended
+to a folder, its internal sequence number never changes.  Lines are
+terminated by CRLF.
+
+In order to allow the server to export netnews spool directories,
+there is a per-folder netnews compatability mode.  Folders in this
+mode have message files named without an appended period.  Lines in
+message files are terminated by just LF.  Messages may not be appended
+to or copied into these folders in the normal manner.
 
 The directory contains the following additional files.  All binary
 values are in network byte order:
 
 cyrus.header	Contains variable-length information about the folder itself.
 
+- magic-number
 - Filename of cyrus.quota for this folder
 - The names of the user-defined flags
 - The folder's ACL
@@ -76,6 +81,8 @@ cyrus.index	Contains a header and a sequence of fixed-length
 		records, one record per message in the folder.  The
 		header contains:
 
+- magic-number	?
+- folder-format	4 bytes		nonzero if folder in netnews format
 - generation-no	4 bytes		incremented each time cyrus.index is
 				rewritten by an expunge operation
 - start-offset	4 bytes		offset of first per-message record
@@ -97,7 +104,6 @@ cyrus.index	Contains a header and a sequence of fixed-length
 				of flags
 - system-flags	4 bytes		bit-vector of system and internal flags:
 				\answered \flagged \deleted
-				lines-are-LF-separated
 - user-flags	16 bytes	User-defined flags
 
 
@@ -205,16 +211,24 @@ To expunge:
 
 update recent/seen info:
 	lock cyrus.seen
-	create cyrus.seen.NEW
-	copy data, updating record
-	rename cyrus.seen.NEW to cyrus.seen
+	find record
+	if user appears to have read everything and previously hadn't
+		check to make sure no new messages
+		mark as having read through last-seqno
+		dropoff request for IMSP SEEN command
+	else if user previously had read everything but no longer does
+		dropoff request for IMSP SEEN (0) command
+	if enough room to update in place
+		update record in place
+	else
+		create cyrus.seen.NEW
+		copy data, updating record
+		rename cyrus.seen.NEW to cyrus.seen
 	release lock
 
 [need to deal with backout on failure.]
 
 [dump/restore, to implement IMSP MOVE]
-
-[need to blow away other readers when bboard deleted or removed]
 
 * Reading semantics
 
@@ -270,7 +284,7 @@ Search:
 On each server, there is a directory which contains files specifiying
 the server configuration.  The files are:
 
-- cyrus.policy
+- policy
 
 Specifies site policy options, such as:
 
@@ -281,27 +295,38 @@ Specifies site policy options, such as:
 	Whether to allow logins based on system password file
 	Whether to allow anonymous logins
 
-- cyrus.partitions
+- bboard.partitions
 
-Lists the partition names and their corresponding directory roots.  If
-a bboard exists in a given partition, the path to the bboard is found
-by taking the bboard name, changing "." characters to "/", and
-prepending the partition's directory root.
+Lists the bboard partition names and their corresponding directory
+roots.  If a bboard exists in a given partition, the path to the
+bboard is found by taking the bboard name, changing "." characters to
+"/", and prepending the partition's directory root.
 
-[user mailboxes can be done using the reserved user.* bboard
-convention, or we can provide a separate indexing mechanism.]
+- mailbox.partitions	[or user.partitions]
+
+Lists the mailbox partition names and their corresponding directory
+roots.  If a mailbox exists in a given partition, the path to the
+bboard is found by taking the bboard name, changing "." characters to
+"/", and prepending the partition's directory root and the mailbox's
+user.
+
 
 When creating a new folder, the default partition is determined as
 follows: If there exists a folder or quota root in some higher part of
 the hierarchy, the default partition is that of the longest such
 folder or quota root.  Otherwise, the default partition is the one
-listed first in cyrus.partitions.
+listed first in the appropriate partiton file.
 
-- cyrus.bboard
+- bboard
 
 Lists the names and partitions of all the bboards.
 
-- [something to do duplicate delivery elimination]
+- delivered.dir & delivered.pag
+
+Database of delivered messages, for duplicate delivery elimination.
+Stores folder name (bboard or user/mailbox), message-id, and delivery
+time.  The delivery time is used for purging the database of old entries.
+
 
 * User directory:
 
@@ -321,7 +346,44 @@ filename, "USER" stands for the login name of the user.
 Contains one file for each SEEN or LAST command that needs to be sent
 to an IMSP server.
 
-[Need to design, dealing with locking issues.]
+Filename is one of:
+
+- last.mailbox.USER.MAILBOX-NAME.SEQUENCE-NO
+- last.bboard.BBOARD-NAME.SEQUENCE-NO
+- seen.mailbox.USER.MAILBOX-NAME.SEQUENCE-NO
+- seen.bboard.USER.BBOARD-NAME.SEQUENCE-NO
+
+With the following definitions:
+
+	USER - Name of user owning/reading
+	MAILBOX-NAME - Name of relevant mailbox
+	BBOARD-NAME - Name of relevant bboard
+	SEQUENCE-NO - Sequence-no of last message posted/read
+		A sequence-no of "0" for seen means user no longer
+		read everything in folder.
+
+The order of operations for the update daemon is:
+
+	list all files in directory
+	sort in following order
+		last before seen
+		larger sequence-no's take precedence, except
+			if have a sequence-no of 0, have to stat
+			and use the one which was written later
+	give IMSP SEEN and LAST commands
+	unlink files		
+	sleep, repeat
+
+
+* Reader registry directory
+
+Contains one file for each server process reading a folder.  Filename
+is process-id of server, contents of file is name of mailbox/bboard
+being read.
+
+When a folder is deleted or renamed, this directory is scanned for
+processes reading the folder.  Those processes are sent a signal
+causing them to shut down.
 
 
 * Programs:
@@ -355,7 +417,11 @@ The following programs will be written
 - cyrus-pop3d
 	Exports the POP2 or POP3 protocol to a connecting client.
 
-[probably also need a reconstruct-folder]
+- cyrus-reconstruct
+	Reconstructs/rebuilds a corrupted set of folder
+	header/index/cache/seen files.  Might be the same program as
+	cyrus-builddir.
+
 
 * Monitoring
 
@@ -389,19 +455,25 @@ On periodic basis:
 
 Implementation order is as follows:
 
-- append message, check quotas, check ACLs, minimal cyrus-deliver
+- append message (ex. cyrus.seen), check quotas, check ACLs
 
-- bboard/fetch/partial/noop/logout (ex. MIME fetch), minimal cyrus-imapd
+- append cyrus.seen, minimal cyrus-deliver
+
+- bboard/noop/logout, minimal cyrus-imapd
+
+- fetch/partial (ex. MIME parts)
 
 - store flags/recent/seen
 
-- subscribe/unsubscribe/find/acl
+- search internaldate/flags
 
 - create/rename/delete
 
-- search
+- search cyrus.seen/body
 
 - select/MIME fetch, full-fledged cyrus-deliver
+
+- subscribe/unsubscribe/find/acl
 
 - expunge
 
