@@ -27,7 +27,7 @@
  */
 
 /*
- * $Id: message.c,v 1.75 2000/04/06 22:53:36 tmartin Exp $
+ * $Id: message.c,v 1.76 2000/04/11 03:35:51 leg Exp $
  */
 
 #include <config.h>
@@ -1342,7 +1342,7 @@ char *hdr;
 	    tm.tm_year += 100;
 	}
     }
-    if (isdigit(*hdr)) {
+    if (isdigit((int) *hdr)) {
        /* five-digit date */
        goto baddate;
      }
