@@ -406,3 +406,19 @@ struct mailbox *mailbox;
     fclose(f);
     return 0;
 }
+
+int seen_copy(oldmailbox, newmailbox)
+struct mailbox *oldmailbox;
+struct mailbox *newmailbox;
+{
+    char oldfname[MAX_MAILBOX_PATH];
+    char newfname[MAX_MAILBOX_PATH];
+
+    strcpy(oldfname, oldmailbox->path);
+    strcat(oldfname, FNAME_SEEN);
+    strcpy(newfname, newmailbox->path);
+    strcat(newfname, FNAME_SEEN);
+    return mailbox_copyfile(oldfname, newfname);
+}
+
+    

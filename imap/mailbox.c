@@ -752,14 +752,15 @@ struct mailbox *mailbox;
 }
 
 /* XXX
- * Assumes that the current directory is set to the mailbox directory
  */
-mailbox_expunge(mailbox, decideproc, deciderock)
+mailbox_expunge(mailbox, iscurrentdir, decideproc, deciderock)
 struct mailbox *mailbox;
+int iscurrentdir;
 int (*decideproc)();
 char *deciderock;
 {
     int r, n;
+    char fnamebuf[MAX_MAILBOX_PATH], fnamebufnew[MAX_MAILBOX_PATH];
     FILE *newindex, *newcache;
     unsigned long *deleted;
     int numdeleted = 0, quotadeleted = 0;
@@ -771,6 +772,7 @@ char *deciderock;
     unsigned long cache_offset;
     long left;
     char cachebuf[4096];
+    char *fnametail;
 
     /* Lock files and open new index/cache files */
     r = mailbox_lock_header(mailbox);
@@ -780,8 +782,14 @@ char *deciderock;
 	mailbox_unlock_header(mailbox);
 	return r;
     }
-    newindex = fopen("cyrus.index.NEW", "w+");
-    newcache = fopen("cyrus.cache.NEW", "w+");
+    strcpy(fnamebuf, mailbox->path);
+    strcat(fnamebuf, FNAME_INDEX);
+    strcat(fnamebuf, ".NEW");
+    newindex = fopen(fnamebuf, "w+");
+    strcpy(fnamebuf, mailbox->path);
+    strcat(fnamebuf, FNAME_CACHE);
+    strcat(fnamebuf, ".NEW");
+    newcache = fopen(fnamebuf, "w+");
     if (!newindex || !newcache) {
 	if (newindex) fclose(newindex);
 	mailbox_unlock_index(mailbox);
@@ -888,8 +896,17 @@ char *deciderock;
     }
     mailbox_unlock_quota(mailbox);
 
-    rename("cyrus.index.NEW", FNAME_INDEX+1);
-    if (rename("cyrus.cache.NEW", FNAME_CACHE+1)) {
+    strcpy(fnamebuf, mailbox->path);
+    fnametail = fnamebuf + strlen(fnamebuf);
+    strcpy(fnametail, FNAME_INDEX);
+    strcpy(fnamebufnew, fnamebuf);
+    strcat(fnamebufnew, ".NEW");
+    rename(fnamebufnew, fnamebuf);
+
+    strcpy(fnametail, FNAME_CACHE);
+    strcpy(fnamebufnew, fnamebuf);
+    strcat(fnamebufnew, ".NEW");
+    if (rename(fnamebufnew, fnamebuf)) {
 	/* XXX in serious trouble */
     }
     mailbox_unlock_index(mailbox);
@@ -898,8 +915,15 @@ char *deciderock;
     fclose(newcache);
 
     /* Delete message files */
+    *fnametail++ = '/';
     for (msgno = 0; msgno < numdeleted; msgno++) {
-	unlink(mailbox_message_fname(mailbox, deleted[msgno]));
+	if (iscurrentdir) {
+	    unlink(mailbox_message_fname(mailbox, deleted[msgno]));
+	}
+	else {
+	    strcpy(fnametail, mailbox_message_fname(mailbox, deleted[msgno]));
+	    unlink(fnamebuf);
+	}
     }
 
     free(buf);
@@ -925,10 +949,11 @@ char *name;
 }
 
 int 
-mailbox_create(name, path, format)
+mailbox_create(name, path, format, mailboxp)
 char *name;
 char *path;
 int format;
+struct mailbox *mailboxp;
 {
     int r;
     char *p=path;
@@ -1000,49 +1025,55 @@ int format;
     }
     if (!r) r = seen_create(&mailbox);
 
-    mailbox_close(&mailbox);
+    if (mailboxp) {
+	*mailboxp = mailbox;
+    }
+    else {
+	mailbox_close(&mailbox);
+    }
     return r;
 }
 
-int mailbox_delete(name)
-char *name;
+/*
+ * Delete and close the mailbox 'mailbox'.  Closes 'mailbox' whether
+ * or not the deletion was successful.
+ */
+int mailbox_delete(mailbox)
+struct mailbox *mailbox;
 {
     int r;
-    struct mailbox mailbox;
     DIR *dirp;
     struct dirent *f;
     char buf[MAX_MAILBOX_PATH];
     char *tail;
 
     /* Lock everything in sight */
-    r = mailbox_open_header(name, &mailbox);
-    if (r) return r;
-    r =  mailbox_lock_header(&mailbox);
-    if (!r) r = mailbox_open_index(&mailbox);
-    if (!r) r = mailbox_lock_index(&mailbox);
-    if (!r) r = mailbox_lock_quota(&mailbox);
+    r =  mailbox_lock_header(mailbox);
+    if (!r && !mailbox->index) r = mailbox_open_index(mailbox);
+    if (!r) r = mailbox_lock_index(mailbox);
+    if (!r) r = mailbox_lock_quota(mailbox);
     if (r) {
-	mailbox_close(&mailbox);
+	mailbox_close(mailbox);
 	return r;
     }
 
-    seen_delete(&mailbox);
+    seen_delete(mailbox);
 
     /* Free any quota being used by this mailbox */
-    mailbox.quota_used -= mailbox.quota_mailbox_used;
-    r = mailbox_write_quota(&mailbox);
+    mailbox->quota_used -= mailbox->quota_mailbox_used;
+    r = mailbox_write_quota(mailbox);
     if (r) {
 	syslog(LOG_ERR,
 	       "LOSTQUOTA: unable to record free of %d bytes in quota file %s",
-	       mailbox.quota_mailbox_used, mailbox.quota_path);
+	       mailbox->quota_mailbox_used, mailbox->quota_path);
     }
-    mailbox_unlock_quota(&mailbox);
+    mailbox_unlock_quota(mailbox);
 
     /* remove all files in directory */
-    strcpy(buf, mailbox.path);
+    strcpy(buf, mailbox->path);
     tail = buf + strlen(buf);
     *tail++ = '/';
-    dirp = opendir(mailbox.path);
+    dirp = opendir(mailbox->path);
     if (dirp) {
 	while (f = readdir(dirp)) {
 	    strcpy(tail, f->d_name);
@@ -1057,6 +1088,196 @@ char *name;
 	*tail = '\0';
     } while (rmdir(buf) == 0 && (tail = strrchr(buf, '/')));
 
-    mailbox_close(&mailbox);
+    mailbox_close(mailbox);
+    return 0;
+}
+
+/*
+ * Expunge decision proc used by mailbox_rename() to expunge all messages
+ * in INBOX
+ */
+static int expungeall(name, rock)
+char *name;
+char *rock;
+{
+    return 1;
+}
+
+mailbox_rename(oldname, newname, newpath, isinbox)
+char *oldname;
+char *newname;
+char *newpath;
+int isinbox;
+{
+    int r, r2;
+    struct mailbox oldmailbox, newmailbox;
+    int flag, msgno;
+    struct index_record record;
+    char oldfname[MAX_MAILBOX_PATH], newfname[MAX_MAILBOX_PATH];
+    char *oldfnametail, *newfnametail;
+
+    /* Open old mailbox and lock */
+    r = mailbox_open_header(oldname, &oldmailbox);
+    if (r) {
+	return r;
+    }
+    r =  mailbox_lock_header(&oldmailbox);
+    if (!r) r = mailbox_open_index(&oldmailbox);
+    if (!r) r = mailbox_lock_index(&oldmailbox);
+    if (r) {
+	mailbox_close(&oldmailbox);
+	return r;
+    }
+
+    /* Create new mailbox */
+    r = mailbox_create(newname, newpath, oldmailbox.format, &newmailbox);
+    if (r) {
+	mailbox_close(&oldmailbox);
+	return r;
+    }
+
+    /* Copy flag names */
+    for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
+	if (oldmailbox.flagname[flag]) {
+	    newmailbox.flagname[flag] = strsave(oldmailbox.flagname[flag]);
+	}
+    }
+    r = mailbox_write_header(&newmailbox);
+    if (r) {
+	mailbox_close(&newmailbox);
+	mailbox_close(&oldmailbox);
+	return r;
+    }
+
+    /* Check quota if necessary */
+    if (newmailbox.quota_path) {
+	r = mailbox_lock_quota(&newmailbox);
+	if (!oldmailbox.quota_path ||
+	    strcmp(oldmailbox.quota_path, newmailbox.quota_path) != 0) {
+	    if (!r && newmailbox.quota_limit >= 0 &&
+		newmailbox.quota_used + oldmailbox.quota_mailbox_used >
+		newmailbox.quota_limit * QUOTA_UNITS) {
+		r = IMAP_QUOTA_EXCEEDED;
+	    }
+	}
+	if (r) {
+	    mailbox_close(&newmailbox);
+	    mailbox_close(&oldmailbox);
+	    return r;
+	}
+    }
+
+    strcpy(oldfname, oldmailbox.path);
+    oldfnametail = oldfname + strlen(oldfname);
+    strcpy(newfname, newmailbox.path);
+    newfnametail = newfname + strlen(newfname);
+
+    /* Copy over index/cache files */
+    strcpy(oldfnametail, FNAME_INDEX);
+    strcpy(newfnametail, FNAME_INDEX);
+    unlink(newfname);		/* Make link() possible */
+    r = mailbox_copyfile(oldfname, newfname);
+    strcpy(oldfnametail, FNAME_CACHE);
+    strcpy(newfnametail, FNAME_CACHE);
+    unlink(newfname);
+    if (!r) r = mailbox_copyfile(oldfname, newfname);
+    if (r) {
+	mailbox_close(&newmailbox);
+	mailbox_close(&oldmailbox);
+	return r;
+    }
+
+    /* Copy over message files */
+    oldfnametail++;
+    newfnametail++;
+    for (msgno = 1; msgno <= oldmailbox.exists; msgno++) {
+	r = mailbox_read_index_record(&oldmailbox, msgno, &record);
+	if (r) break;
+	strcpy(oldfnametail, mailbox_message_fname(&oldmailbox, record.uid));
+	strcpy(newfnametail, oldfnametail);
+	r = mailbox_copyfile(oldfname, newfname);
+	if (r) break;
+    }
+    if (!r) r = seen_copy(&oldmailbox, &newmailbox);
+
+    /* Record new quota usage */
+    if (!r && newmailbox.quota_path) {
+	newmailbox.quota_mailbox_used = oldmailbox.quota_mailbox_used;
+	newmailbox.quota_used += oldmailbox.quota_mailbox_used;
+	r = mailbox_write_quota(&newmailbox);
+	mailbox_unlock_quota(&newmailbox);
+    }
+    if (r) goto fail;
+
+    if (isinbox) {
+	/* Expunge old mailbox */
+	r = mailbox_expunge(&oldmailbox, 0, expungeall, (char *)0);
+	mailbox_close(&oldmailbox);
+    }
+    else {
+	r = mailbox_delete(&oldmailbox);
+    }
+
+    if (r && newmailbox.quota_path) {
+	r2 = mailbox_lock_quota(&newmailbox);
+	newmailbox.quota_used -= newmailbox.quota_mailbox_used;
+	if (!r2) {
+	    r2 = mailbox_write_quota(&newmailbox);
+	    mailbox_unlock_quota(&newmailbox);
+	}
+	if (r2) {
+	    syslog(LOG_ERR,
+	      "LOSTQUOTA: unable to record free of %d bytes in quota file %s",
+		   newmailbox.quota_mailbox_used, newmailbox.quota_path);
+	}
+    }
+    if (r) goto fail;
+
+    mailbox_close(&newmailbox);
+    return 0;
+
+ fail:
+    for (msgno = 1; msgno <= oldmailbox.exists; msgno++) {
+	if (mailbox_read_index_record(&oldmailbox, msgno, &record)) continue;
+	strcpy(newfnametail, mailbox_message_fname(&oldmailbox, record.uid));
+	(void) unlink(newfname);
+    }
+    mailbox_close(&newmailbox);
+    mailbox_close(&oldmailbox);
+    return r;
+}
+
+    
+/*
+ * Copy (or link) the file 'from' to the file 'to'
+ */
+int mailbox_copyfile(from, to)
+char *from;
+char *to;
+{
+    FILE *srcfile, *destfile;
+    char buf[4096];
+    int n;
+
+    if (link(from, to) == 0) return 0;
+    destfile = fopen(from, "w");
+    if (!destfile) return IMAP_IOERROR;
+    srcfile = fopen(to, "r");
+    if (!srcfile) {
+	fclose(destfile);
+	return IMAP_IOERROR;
+    }
+
+    while (n = fread(buf, 1, sizeof(buf), srcfile)) {
+	fwrite(buf, 1, n, destfile);
+    }
+    fflush(destfile);
+    if (ferror(destfile) || fsync(fileno(destfile))) {
+	fclose(srcfile);
+	fclose(destfile);
+	return IMAP_IOERROR;
+    }
+    fclose(srcfile);
+    fclose(destfile);
     return 0;
 }
