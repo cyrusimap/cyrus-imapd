@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.31 2002/10/21 18:07:55 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.32 2002/10/21 21:04:22 ken3 Exp $ */
 
 #include <config.h>
 
@@ -347,7 +347,8 @@ static int pipe_until_tag(struct backend *s, char *tag, int force_notfatal)
 	}
 	
 	sl = strlen(buf);
-	if (sl == (sizeof(buf) - 1)) { /* only got part of a line */
+	if (sl == (sizeof(buf) - 1) && buf[sl-1] != '\n') {
+            /* only got part of a line */
 	    /* we save the last 64 characters in case it has important
 	       literal information */
 	    strcpy(eol, buf + sl - 64);
@@ -460,7 +461,8 @@ static int pipe_to_end_of_response(struct backend *s, int force_notfatal)
 	}
 	
 	sl = strlen(buf);
-	if (sl == (sizeof(buf) - 1)) { /* only got part of a line */
+	if (sl == (sizeof(buf) - 1) && buf[sl-1] != '\n') {
+            /* only got part of a line */
 	    /* we save the last 64 characters in case it has important
 	       literal information */
 	    strcpy(eol, buf + sl - 64);
@@ -554,7 +556,9 @@ static int pipe_command(struct backend *s, int optimistic_literal)
 	}
 
 	sl = strlen(buf);
-	if (sl == (sizeof(buf) - 1)) { /* only got part of a line */
+
+	if (sl == (sizeof(buf) - 1) && buf[sl-1] != '\n') {
+            /* only got part of a line */
 	    strcpy(eol, buf + sl - 64);
 
 	    /* and write this out, except for what we've saved */
