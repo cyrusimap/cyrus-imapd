@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.277 2000/11/08 19:33:16 ken3 Exp $ */
+/* $Id: imapd.c,v 1.278 2000/11/11 04:11:42 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1652,10 +1652,6 @@ void cmd_idle(char *tag)
  * we only allow one ID in non-authenticated state from a given client.
  * we only allow MAXIDFAILED consecutive failed IDs from a given client.
  * we only record MAXIDLOG ID responses from a given client.
- *
- * the ID specification (draft-showalter-imap-id-03.txt) that i'm
- * working from says one thing and does another.  i'll do what i think
- * it means, which means that this is subject to change.  
  */
 #define MAXIDFAILED	3
 #define MAXIDLOG	5
