@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: version.c,v 1.9.2.3 2003/02/13 20:33:02 rjs3 Exp $
+ * $Id: version.c,v 1.9.2.4 2003/03/22 15:32:40 ken3 Exp $
  */
 
 #include <config.h>
@@ -133,7 +133,9 @@ void id_response(struct protstream *pout)
 #endif
 #ifdef HAVE_SSL
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
-	     "; %s", OPENSSL_VERSION_TEXT);
+	     "; Built w/%s", OPENSSL_VERSION_TEXT);
+    snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
+	     "; Running w/%s", SSLeay_version(SSLEAY_VERSION));
 #ifdef EGD_SOCKET
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
 	     " (with EGD)");
