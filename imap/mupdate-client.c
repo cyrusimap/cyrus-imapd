@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.5 2002/01/18 01:44:02 rjs3 Exp $
+ * $Id: mupdate-client.c,v 1.6 2002/01/18 17:27:46 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -65,13 +65,14 @@
 
 #include "prot.h"
 #include "xmalloc.h"
+#include "imapconf.h"
 #include "assert.h"
 #include "imparse.h"
 #include "iptostring.h"
 #include "mupdate_err.h"
 #include "exitcodes.h"
 
-const char service_name[] = "imap"; /* FIXME: Perhaps we could use something better */
+const char service_name[] = "mupdate";
 
 typedef struct mupdate_handle_s {
     int sock;
@@ -134,8 +135,10 @@ int mupdate_connect(const char *server, const char *port,
 	sp = getservbyname(port, "tcp");
 	if (!sp) return -2;
 	addr.sin_port = sp->s_port;
+    } else if((sp = getservbyname("mupdate", "tcp")) != NULL) {
+	addr.sin_port = sp->s_port;
     } else {
-	addr.sin_port = htons(1234); /* FIXME: how about a real port number?! */
+	addr.sin_port = htons(2004);
     }
 
     if (connect(s, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
@@ -188,6 +191,8 @@ int mupdate_authenticate(mupdate_handle *h,
     const char *out;
     unsigned int outlen;
     const char *mechusing;
+    struct buf tag;
+    int ch;
     char buf[4096];
 
     /* Why do this again? */
@@ -257,9 +262,18 @@ int mupdate_authenticate(mupdate_handle *h,
 	in = xmalloc(len);
 	saslresult = sasl_decode64(buf, len, in, len, &inlen);
 	if(saslresult != SASL_OK) {
+	    free(in);
+
 	    /* CANCEL */
 	    syslog(LOG_ERR, "couldn't base64 decode: aborted authentication");
-	    prot_printf(h->pout, "*");
+
+	    /* If we haven't already canceled due to bad authentication,
+	     * then we should */
+	    if(strncmp(buf, "A01 NO ", 7)) prot_printf(h->pout, "*");
+	    else {
+		syslog(LOG_ERR,
+		       "Authentication to master failed (%s)", buf+7);
+	    }
 	    return 1;
 	}
 
@@ -273,7 +287,6 @@ int mupdate_authenticate(mupdate_handle *h,
 	    if(r != SASL_OK) return 1;
 	    
 	    prot_printf(h->pout, "%s\r\n", buf);
-	    syslog(LOG_DEBUG, "sent: %s\n", buf);
 	}
     }
 
@@ -285,7 +298,19 @@ int mupdate_authenticate(mupdate_handle *h,
 	return 1;
     }
 
-	/* FIXME: Check server response */
+    /* Check Result */
+    memset(&tag, 0, sizeof(struct buf)) ;
+    
+    ch = getword(h->pin, &tag);
+    if(ch != ' ') return 1; /* need an OK or NO */
+
+    ch = getword(h->pin, &tag);
+    if(!strncmp(tag.s, "NO", 2)) {
+	if(ch != ' ') return 1; /* no reason really necessary, but we failed */
+	ch = getstring(h->pin, h->pout, &tag);
+	syslog(LOG_ERR, "authentication failed: %s", tag.s);
+	return 1;
+    }
 
     h->saslcompleted = 1;
 
@@ -400,7 +425,7 @@ void *mupdate_client_start(void *rock __attribute__((unused)))
     }
 
     /* A real port maybe? */
-    port = config_getstring("mupdate_port","1234");
+    port = config_getstring("mupdate_port",NULL);
     
     ret = mupdate_connect(server, port, &h, NULL);
     if(ret) {
