@@ -32,7 +32,10 @@
 #endif
 
 #include "prot.h"
-#include "xmalloc.h"
+
+/* from utilities: */
+extern void *fs_get( /* size_t */ );
+extern void fs_give( /* void ** */ );
 
 extern char *sys_errlist[];
 
@@ -54,7 +57,7 @@ int write;
 {
     struct protstream *newstream;
 
-    newstream = (struct protstream *)xmalloc(sizeof(struct protstream));
+    newstream = (struct protstream *) fs_get(sizeof(struct protstream));
     newstream->ptr = newstream->buf;
     newstream->cnt = write ? PROT_BUFSIZE : 0;
     newstream->leftcnt = 0;
@@ -76,7 +79,7 @@ int write;
 int prot_free(s)
 struct protstream *s;
 {
-    free((char *)s);
+    fs_free((char **)&s);
     return 0;
 }
 
