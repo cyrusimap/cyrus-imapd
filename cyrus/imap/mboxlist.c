@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.42 2003/04/30 20:30:25 ken3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.43 2003/04/30 20:31:33 ken3 Exp $
  */
 
 #include <config.h>
@@ -2858,7 +2858,8 @@ int mboxlist_findsub_alt(struct namespace *namespace,
      *
      * If "Other Users*" can match pattern, search for those subscriptions next
      */
-    len = strlen(namespace->prefix[NAMESPACE_USER])-1;
+    len = strlen(namespace->prefix[NAMESPACE_USER]);
+    if(len>0) len--; /* Remove Separator */
     if (!strncmp(namespace->prefix[NAMESPACE_USER], pattern,
 		 prefixlen < len ? prefixlen : len)) {
 
@@ -2893,7 +2894,7 @@ int mboxlist_findsub_alt(struct namespace *namespace,
      * just bother looking at the ones that have the same pattern prefix.
      */
     len = strlen(namespace->prefix[NAMESPACE_SHARED]);
-    if(len>0) len--;
+    if(len>0) len--; /* Remove Separator */
     if (!strncmp(namespace->prefix[NAMESPACE_SHARED], pattern,
 		 prefixlen < len ? prefixlen : len)) {
 
