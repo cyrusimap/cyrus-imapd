@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.54 2002/06/17 17:30:11 rjs3 Exp $ */
+/* $Id: config.c,v 1.55 2002/06/18 16:40:19 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -73,15 +73,13 @@ extern int errno;
 #define CONFIGHASHSIZE 200 /* > 2x # of options */
 static struct hash_table confighash;
 
-/* variables accessible to the external world */
+/* cached configuration variables accessible to the external world */
 const char *config_filename;     /* filename of configuration file */
-
 const char *config_dir;		           /* ie /var/imap */
 const char *config_defpartition;           /* /var/spool/imap */
 const char *config_newsspool;	           /* /var/spool/news */
 const char *config_servername;	           /* gethostname() */
-const char *config_mupdate_server = NULL;  /* NULL */
-
+const char *config_mupdate_server;         /* NULL */
 int config_hashimapspool;	           /* f */
 
 static void config_read(const char *alt_config);
@@ -98,7 +96,7 @@ int config_init(const char *alt_config, const char *ident)
 
     openlog(ident, LOG_PID, LOG_LOCAL6);
 
-    if(!construct_hash_table(&confighash, CONFIGHASHSIZE)) {
+    if(!construct_hash_table(&confighash, CONFIGHASHSIZE, 1)) {
 	fatal("could not construct configuration hash table", EC_CONFIG);
     }
 

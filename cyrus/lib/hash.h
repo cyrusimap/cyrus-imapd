@@ -1,10 +1,11 @@
 /* +++Date last modified: 05-Jul-1997 */
-/* $Id: hash.h,v 1.5 2002/06/17 17:29:32 rjs3 Exp $ */
+/* $Id: hash.h,v 1.6 2002/06/18 16:40:22 rjs3 Exp $ */
 
 #ifndef HASH__H
 #define HASH__H
 
 #include <stddef.h>           /* For size_t     */
+#include "mpool.h"
 
 /*
 ** A hash table consists of an array of these buckets.  Each bucket
@@ -31,6 +32,7 @@ typedef struct bucket {
 typedef struct hash_table {
     size_t size;
     bucket **table;
+    struct mpool *pool;
 } hash_table;
 
 /*
@@ -45,7 +47,8 @@ unsigned hash(const char *string);
 ** the table's size to 0, and the pointer to the table to NULL.
 */
 
-hash_table *construct_hash_table(hash_table *table,size_t size);
+hash_table *construct_hash_table(hash_table *table, size_t size,
+				 int use_mpool);
 
 /*
 ** Inserts a pointer to 'data' in the table, with a copy of 'key' as its
@@ -67,7 +70,8 @@ void *hash_lookup(const char *key,hash_table *table);
 ** was associated with the key so the calling code can dispose of it
 ** properly.
 */
-
+/* Warning: use this function judiciously if you are using memory pools,
+ * since it will leak memory until you get rid of the entire hash table */
 void *hash_del(char *key,hash_table *table);
 
 /*
