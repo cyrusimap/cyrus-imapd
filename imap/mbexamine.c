@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: mbexamine.c,v 1.8 2004/06/22 16:53:43 rjs3 Exp $ */
+/* $Id: mbexamine.c,v 1.9 2004/08/09 18:45:33 ken3 Exp $ */
 
 #include <config.h>
 
@@ -266,7 +266,8 @@ int do_examine(char *name,
     printf("  Minor Version: %d\n", mailbox.minor_version);
     printf("  Header Size: %ld bytes  Record Size: %ld bytes\n",
 	   mailbox.start_offset, mailbox.record_size);
-    printf("  Number of Messages: %ld\n", mailbox.exists);
+    printf("  Number of Messages: %lu  Mailbox Size: %lu bytes\n",
+	   mailbox.exists, mailbox.quota_mailbox_used);
     printf("  Last Append Date: (%ld) %s", mailbox.last_appenddate,
 	   ctime(&mailbox.last_appenddate));
     printf("  UIDValidity: %ld  Last UID: %ld\n", mailbox.uidvalidity,
