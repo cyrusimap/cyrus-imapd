@@ -157,6 +157,10 @@ unsigned long feeduid;
 	r = mboxlist_createmailbox(newsprefix ? namebuf : group,
 				   MAILBOX_FORMAT_NETNEWS, "news",
 				   1, "anonymous", 0);
+
+	/* Ignore bad mailbox names */
+	if (r == IMAP_MAILBOX_BADNAME) return;
+
 	if (r) {
 	    syslog(LOG_CRIT, "cannot create %s: %s",
 		   newsprefix ? namebuf : group,

@@ -1833,6 +1833,10 @@ bit32 *newuidvalidityp;
     if (r) {
 	return r;
     }
+    if (oldmailbox.format == MAILBOX_FORMAT_NETNEWS) {
+	mailbox_close(&oldmailbox);
+	return IMAP_MAILBOX_NOTSUPPORTED;
+    }
     r =  mailbox_lock_header(&oldmailbox);
     if (!r) r = mailbox_open_index(&oldmailbox);
     if (!r) r = mailbox_lock_index(&oldmailbox);
