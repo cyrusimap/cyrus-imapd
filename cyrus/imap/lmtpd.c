@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.118 2003/08/13 18:39:38 rjs3 Exp $
+ * $Id: lmtpd.c,v 1.119 2003/10/01 18:20:37 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -384,7 +384,14 @@ pid_t open_sendmail(const char *argv[], FILE **sm)
 	printf("451 lmtpd: didn't exec?!?\r\n");
 	fatal("couldn't exec", EC_OSERR);
     }
-    /* i'm the parent */
+
+    if(p < 0) {
+	/* failure */
+	*sm = NULL;
+	return p;
+    }
+
+    /* parent */
     close(fds[0]);
     ret = fdopen(fds[1], "w");
     *sm = ret;
