@@ -2,6 +2,7 @@
 #include <string.h>
 #include <syslog.h>
 #include <db.h>
+#include <assert.h>
 
 #include "imap_err.h"
 #include "config.h"
@@ -20,30 +21,30 @@ int duplicate_init()
     char buf[1024];
     int r;
 
-    if (!duplicate_dbinit) {
-	sprintf(buf, "%s/deliverdb/db", config_dir);
+    assert(!duplicate_dbinit);
 
-	if ((r = db_env_create(&duplicate_dbenv, 0)) != 0) {
-	    char err[1024];
-	    
-	    sprintf(err, "DBERROR: db_appinit failed: %s", strerror(r));
-	    syslog(LOG_ERR, err);
-	    return IMAP_IOERROR;
-	}
-
-	/* create the name of the db file */
-	r = duplicate_dbenv->open(duplicate_dbenv, buf, NULL, 
-				  DB_INIT_CDB, 0644);
-	if (r) {
-	    char err[1024];
-	    
-	    sprintf(err, "DBERROR: dbenv->open failed: %s", strerror(r));
-	    syslog(LOG_ERR, err);
-	    return IMAP_IOERROR;
-	}
+    sprintf(buf, "%s/deliverdb/db", config_dir);
+    
+    if ((r = db_env_create(&duplicate_dbenv, 0)) != 0) {
+	char err[1024];
+	
+	sprintf(err, "DBERROR: db_appinit failed: %s", strerror(r));
+	syslog(LOG_ERR, err);
+	return IMAP_IOERROR;
+    }
+    
+    /* create the name of the db file */
+    r = duplicate_dbenv->open(duplicate_dbenv, buf, NULL, 
+			      DB_INIT_CDB, 0644);
+    if (r) {
+	char err[1024];
+	
+	sprintf(err, "DBERROR: dbenv->open failed: %s", strerror(r));
+	syslog(LOG_ERR, err);
+	return IMAP_IOERROR;
     }
 
-    duplicate_dbinit++;
+    duplicate_dbinit = 1;
 }
 
 /* too many processes are contending for single locks on delivered.db 
@@ -84,6 +85,7 @@ time_t duplicate_check(char *id, int idlen, char *to, int tolen)
     int r;
     time_t mark;
 
+    assert(duplicate_dbinit);
     (void)memset(&date, 0, sizeof(date));
     (void)memset(&delivery, 0, sizeof(delivery));
 
@@ -137,6 +139,7 @@ void duplicate_mark(char *id, int idlen, char *to, int tolen, time_t mark)
     DBT date, delivery;
     int r;
 
+    assert(duplicate_dbinit);
     (void)memset(&date, 0, sizeof(date));
     (void)memset(&delivery, 0, sizeof(delivery));
 
@@ -189,13 +192,13 @@ int duplicate_done()
 {
     int r;
 
-    duplicate_dbinit--;
+    assert(duplicate_dbinit);
 
-    if (duplicate_dbinit == 0) {
-	r = duplicate_dbenv->close(duplicate_dbenv, 0);
-	if (r) {
-	    syslog(LOG_ERR, "DBERROR: error exiting application: %s",
-		   strerror(r));
-	}
+    r = duplicate_dbenv->close(duplicate_dbenv, 0);
+    if (r) {
+	syslog(LOG_ERR, "DBERROR: error exiting application: %s",
+	       strerror(r));
     }
+
+    duplicate_dbinit = 0;
 }

@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- $Id: append.c,v 1.59 2000/01/29 21:30:20 tmartin Exp $
+ $Id: append.c,v 1.60 2000/02/01 04:05:51 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -369,15 +369,11 @@ int append_fromstage(struct mailbox *mailbox,
 
 
     acaphandle = acapmbox_get_handle();
-
     acapmbox_setproperty(acaphandle,
 			 mailbox->name,
 			 ACAPMBOX_TOTAL,
 			 mailbox->exists);
-    /* xxx what to do about errors? */
-
-    toimsp(mailbox->name, mailbox->uidvalidity,
-	   "UIDNnn", message_index.uid, mailbox->exists, 0);
+    acapmbox_release_handle(acaphandle);
 
     mailbox_unlock_quota(&mailbox->quota);
     mailbox_unlock_index(mailbox);
@@ -593,15 +589,11 @@ const char *userid;
     }
 
     acaphandle = acapmbox_get_handle();
-
     acapmbox_setproperty(acaphandle,
 			 mailbox->name,
 			 ACAPMBOX_TOTAL,
 			 mailbox->exists);
-    /* xxx what to do about errors? */
-
-    toimsp(mailbox->name, mailbox->uidvalidity,
-	   "UIDNnn", message_index.uid, mailbox->exists, 0);
+    acapmbox_release_handle(acaphandle);
 
     mailbox_unlock_quota(&mailbox->quota);
     mailbox_unlock_index(mailbox);
@@ -841,15 +833,11 @@ const char *userid;
 
 
     acaphandle = acapmbox_get_handle();
-
     acapmbox_setproperty(acaphandle,
 			 mailbox->name,
 			 ACAPMBOX_TOTAL,
 			 mailbox->exists);
-    /* xxx what to do about errors? */
-
-    toimsp(mailbox->name, mailbox->uidvalidity,
-	   "UIDNnn", message_index[nummsg-1].uid, append_mailbox->exists, 0);
+    acapmbox_release_handle(acaphandle);
 
     free(message_index);
     mailbox_unlock_quota(&append_mailbox->quota);
@@ -1025,15 +1013,11 @@ unsigned long feeduid;
     free(message_index);
 
     acaphandle = acapmbox_get_handle();
-
     acapmbox_setproperty(acaphandle,
 			 mailbox->name,
 			 ACAPMBOX_TOTAL,
 			 mailbox->exists);
-    /* xxx what to do about errors? */
-
-    toimsp(mailbox->name, mailbox->uidvalidity,
-	   "UIDNnn", uid-1, mailbox->exists, 0);
+    acapmbox_release_handle(acaphandle);
 
     mailbox_unlock_quota(&mailbox->quota);
     mailbox_unlock_index(mailbox);

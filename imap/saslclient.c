@@ -3,6 +3,8 @@
 
 #include <sasl.h>
 
+#include "xmalloc.h"
+
 static int mysasl_simple_cb(void *context, int id, const char **result,
 			    unsigned int *len)
 {
@@ -67,10 +69,10 @@ static int mysasl_getsecret_cb(sasl_conn_t *conn,
     return SASL_OK;
 }
 
-sasl_callback_t *mysasl_callbacks(char *username,
-				  char *authname,
-				  char *realm,
-				  char *password)
+sasl_callback_t *mysasl_callbacks(const char *username,
+				  const char *authname,
+				  const char *realm,
+				  const char *password)
 {
     sasl_callback_t *ret = xmalloc(5 * sizeof(sasl_callback_t));
     int n = 0;
@@ -79,7 +81,7 @@ sasl_callback_t *mysasl_callbacks(char *username,
 	/* user callback */
 	ret[n].id = SASL_CB_USER;
 	ret[n].proc = &mysasl_simple_cb;
-	ret[n].context = username;
+	ret[n].context = (char *) username;
 	n++;
     }	
 
@@ -87,7 +89,7 @@ sasl_callback_t *mysasl_callbacks(char *username,
 	/* authname */
 	ret[n].id = SASL_CB_AUTHNAME;
 	ret[n].proc = &mysasl_simple_cb;
-	ret[n].context = authname;
+	ret[n].context = (char *) authname;
 	n++;
     }
 
@@ -95,7 +97,7 @@ sasl_callback_t *mysasl_callbacks(char *username,
 	/* realm */
 	ret[n].id = SASL_CB_GETREALM;
 	ret[n].proc = &mysasl_getrealm_cb;
-	ret[n].context = realm;
+	ret[n].context = (char *) realm;
 	n++;
     }
 
@@ -103,7 +105,7 @@ sasl_callback_t *mysasl_callbacks(char *username,
 	/* password */
 	ret[n].id = SASL_CB_PASS;
 	ret[n].proc = &mysasl_getsecret_cb;
-	ret[n].context = password;
+	ret[n].context = (char *) password;
 	n++;
     }
     

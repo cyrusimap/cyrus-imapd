@@ -26,7 +26,7 @@
  *  (412) 268-4387, fax: (412) 268-7395
  *  tech-transfer@andrew.cmu.edu
  *
- * $Id: target-acap.c,v 1.1 2000/01/28 23:28:00 leg Exp $
+ * $Id: target-acap.c,v 1.2 2000/02/01 04:05:56 leg Exp $
  */
 
 #include <stdio.h>
@@ -42,8 +42,44 @@
 #include "imap_err.h"
 #include "xmalloc.h"
 
-acap_conn_t *acap_conn;
-static 
+static acap_conn_t *acap_conn;
+
+static unsigned int getintattr(acap_entry_t *e, char *attrname)
+{
+    char *s = acap_entry_getattr_simple(e, attrname);
+    if (s) return atoi(s);
+    else return 0;
+}
+
+static char *getstrattr(acap_entry_t *e, char *attrname)
+{
+    return acap_entry_getattr_simple(e, attrname);
+}
+
+static int dissect_entry(acap_entry_t *e, acapmbox_data_t *data)
+{
+    acap_value_t *v;
+
+    if (!e || !data) return ACAP_BAD_PARAM;
+
+    data->name = acap_entry_getname(e);
+    data->uidvalidity = getintattr(e, "mailbox.uidvalidity");
+
+    v = acap_entry_getattr(e, "mailbox.status");
+    data->status = mboxdata_convert_status(v);
+
+    data->post = getstrattr(e, "mailbox.post");
+    data->haschildren = getintattr(e, "mailbox.haschildren");
+    data->url = getstrattr(e, "mailbox.url");
+    data->acl = getstrattr(e, "mailbox.acl");
+
+    data->answered = getintattr(e, "mailbox.answered");
+    data->flagged = getintattr(e, "mailbox.flagged");
+    data->deleted = getintattr(e, "mailbox.deleted");
+    data->total = getintattr(e, "mailbox.total");
+
+    return ACAP_OK;
+}
 
 void connect_acap(char *user, char *server)
 {
@@ -92,18 +128,24 @@ void myacap_addto(acap_entry_t *entry,
 		  void *rock)
 {
     acapmbox_data_t d;
+    char *name = acap_entry_getname(entry);
 
-    if (acapmbox_dissect(entry, &d) != ACAP_OK) return;
+    if (!name || !name[0]) return; /* null entry */
+    if (dissect_entry(entry, &d) != ACAP_OK) return;
+    if (d.status != ACAPMBOX_COMMITTED) return;
 
-    
+    mboxlist_insertremote(d.name, MBTYPE_REMOTE, d.url, d.acl, NULL);
 }
 
 void myacap_removefrom(acap_entry_t *entry,
 		       unsigned position,
 		       void *rock)
 {
+    char *name = acap_entry_getname(entry);
 
+    if (!name || !name[0]) return; /* null entry */
 
+    mboxlist_deletemailbox(name, 1, "", NULL, 0);
 
 }
 

@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.103 2000/01/29 21:30:22 tmartin Exp $
+ * $Id: mboxlist.c,v 1.104 2000/02/01 04:05:53 leg Exp $
  */
 
 #include <stdio.h>
@@ -73,40 +73,6 @@ extern int errno;
 #include "mboxlist.h"
 
 
-struct mbox_txn {
-    DB_TXN *tid;
-    enum {
-	TXN_CREATE,
-	TXN_DELETE,
-	TXN_RENAME,
-	TXN_SETACL
-    } txn_type;
-};
-
-struct mbox_txn_create {
-    struct mbox_txn a;
-    struct mbox_entry *mboxent;
-};
-
-struct mbox_txn_delete {
-    struct mbox_txn a;
-    struct mbox_entry *mboxent;
-    int deleteuser;
-    int deletequotaroot;
-};
-
-struct mbox_txn_rename {
-    struct mbox_txn a;
-    char *oldname;
-    char *oldpath;
-    struct mbox_entry *newent;
-};
-
-struct mbox_txn_setacl {
-    struct mbox_txn a;
-    struct mbox_entry *newent;
-};
-
 acl_canonproc_t mboxlist_ensureOwnerRights;
 
 static DB *mbdb;
@@ -127,98 +93,9 @@ static char *mboxlist_hash_usersubs(const char *userid);
 #define FNAME_USERDIR "/user/"
 #define FNAME_SUBSSUFFIX ".sub"
 
-
-
 const char *acap_authname = NULL;
 const char *acap_realm = NULL;
 const char *acap_password = NULL;
-
-/* callback to get userid or authid */
-static int mysasl_getsimple(void *context __attribute__((unused)),
-			    int id,
-			    const char **result,
-			    unsigned *len)
-{
-    char *username;
-    char *authid;
-
-    if (! result)
-	return SASL_BADPARAM;
-
-    switch (id) {
-    case SASL_CB_GETREALM:
-	if (acap_realm == NULL) return SASL_FAIL;
-
-	*result = acap_realm;
-	if (len)
-	    *len = acap_realm ? strlen(acap_realm) : 0;
-	return SASL_FAIL;
-	break;
-
-    case SASL_CB_USER:
-	*result = acap_authname;
-	if (len)
-	    *len = acap_authname ? strlen(acap_authname) : 0;
-	break;
-    case SASL_CB_AUTHNAME:
-	*result = acap_authname;
-	if (len)
-	    *len = acap_authname ? strlen(acap_authname) : 0;
-	break;
-    case SASL_CB_LANGUAGE:
-	*result = NULL;
-	if (len)
-	    *len = 0;
-	break;
-    default:
-	return SASL_BADPARAM;
-    }
-    return SASL_OK;
-}
-
-/* callback to get password */
-static int mysasl_getsecret(sasl_conn_t *conn,
-			    void *context __attribute__((unused)),
-			    int id,
-			    sasl_secret_t **psecret)
-{
-    if (! conn || ! psecret || id != SASL_CB_PASS)
-	return SASL_BADPARAM;
-
-    if (acap_password == NULL) {
-	syslog(LOG_ERR,"unable to find acap_password\n");      
-	return SASL_FAIL;
-    }
-
-    *psecret = (sasl_secret_t *) malloc(sizeof(sasl_secret_t)+strlen(acap_password)+1);
-    if (! *psecret)
-	return SASL_FAIL;
-
-    strcpy((*psecret)->data, acap_password);
-    (*psecret)->len=strlen(acap_password);
-
-    return SASL_OK;
-}
-
-/* callbacks we support */
-static sasl_callback_t mysasl_callbacks[] = {
-  {
-    SASL_CB_GETREALM, &mysasl_getsimple, NULL
-  }, {
-    SASL_CB_AUTHNAME, &mysasl_getsimple, NULL
-  }, {
-    SASL_CB_PASS, &mysasl_getsecret, NULL    
-  }, {
-    SASL_CB_LIST_END, NULL, NULL
-  }
-};
-
-/* initialize acap connection if necessary */
-int convert_acap_errorcode(int r)
-{
-    /* xxx */
-    return IMAP_IOERROR;
-}
 
 /*
  * Check our configuration for consistency, die if there's a problem
@@ -643,22 +520,9 @@ int real_mboxlist_createmailbox(char *name, int mbtype, char *partition,
     DB_TXN *tid;
     DBT key, keydel, data;
     struct mbox_entry *mboxent = NULL;
-    struct mbox_txn_create *mtxn = NULL;
     acapmbox_data_t mboxdata;
-    int madereserved = 0; /* if we made the acap entry (so we can know to roll back) */
+    int madereserved = 0; /* made reserved entry on ACAP server */
     acapmbox_handle_t *acaphandle = NULL;
-
-    if (rettid && *rettid) {
-	/* two phase commit */
-	mtxn = (struct mbox_txn_create *) *rettid;
-	assert(mtxn->a.txn_type == TXN_CREATE && mtxn->mboxent);
-
-	tid = mtxn->a.tid;
-	mboxent = mtxn->mboxent;
-	r = 0;
-
-	goto done;
-    }
 
     /* retry the transaction from here */
     if (0) {
@@ -690,9 +554,6 @@ int real_mboxlist_createmailbox(char *name, int mbtype, char *partition,
 	goto done;
     }
 
-    /* 3. open ACAP connection if necessary */
-    acaphandle = acapmbox_get_handle();
-
     if (!(mbtype & MBTYPE_REMOTE)) {
 	/* Get partition's path */
 	sprintf(buf2, "partition-%s", newpartition);
@@ -709,14 +570,23 @@ int real_mboxlist_createmailbox(char *name, int mbtype, char *partition,
 
     /* 5. create ACAP entry and set as reserved (CRASH: ACAP inconsistant) */
     {
-	char *postaddr = NULL;
-	char *url = NULL;
+	char postaddr[MAX_MAILBOX_PATH];
+	char url[MAX_MAILBOX_PATH];
+	const char *postspec;
 
-	postaddr = xmalloc(strlen(name)+50);
-	sprintf(postaddr,"post+%s@andrew.cmu.edu",name); /* xxx */
-
-	url = xmalloc(strlen(name)+50);
-	sprintf(url,"imap://%s/%s","polarbear.andrew.cmu.edu",name); /* xxx */
+	/* xxx
+	   this should probably vary depending on whether it's a private
+	   mailbox or a bboard, and it should default to 
+	   "bb+bboard.name@server.name" */
+	postspec = config_getstring("postspec", NULL);
+	if (postspec) {
+	    snprintf(postaddr, sizeof(postaddr), postspec, name);
+	} else {
+	    snprintf(postaddr, sizeof(postaddr), "bb+%s@%s", 
+		     name, config_servername);
+	}
+	snprintf(url, sizeof(postaddr), "imap://%s/%s",
+		 config_servername, name);
 
 	memset(&mboxdata, '\0', sizeof(acapmbox_data_t));
 
@@ -726,16 +596,15 @@ int real_mboxlist_createmailbox(char *name, int mbtype, char *partition,
 	mboxdata.url = url;
 	/* all other are initialized to zero */
 	
+	/* 3. open ACAP connection if necessary */
+	acaphandle = acapmbox_get_handle();
+
 	r = acapmbox_create(acaphandle,
 			    name,
 			    &mboxdata);
-
-	free(postaddr);
-	free(url);
-
-	if (r != ACAP_OK)
-	{
-	    r = convert_acap_errorcode(r);
+	if (r) {
+	    syslog(LOG_ERR, "ACAP: unable to reserve %s: %s\n", name,
+		   error_message(r));
 	    goto done;
 	}
 	madereserved = 1; /* so we can roll back on failure */
@@ -783,26 +652,6 @@ int real_mboxlist_createmailbox(char *name, int mbtype, char *partition,
 	/* ACAP: reserve mailbox name */
     }
 
-    if (!r && rettid) {
-	/* we just prepare the transaction; we'll finish it later */
-        switch (r = txn_prepare(tid)) {
-        case 0:
-	    mtxn = (struct mbox_txn_create *) 
-		xmalloc(sizeof(struct mbox_txn_create));
-	    mtxn->a.tid = tid;
-	    mtxn->a.txn_type = TXN_CREATE;
-	    mtxn->mboxent = mboxent;
-	    *rettid = (struct mbox_txn *) mtxn;
-	    break;
-	default:
-	    syslog(LOG_ERR, "DBERROR: failed on prepare: %s", db_strerror(r));
-	    *rettid = NULL;
-	    r = IMAP_IOERROR;
-	    break;
-	}
-	return r;
-    }
-
  done: /* ALL DATABASE OPERATIONS DONE; NEED TO DO FILESYSTEM OPERATIONS */
     if (!r && !(mboxent->mbtype & MBTYPE_REMOTE)) {
 	/* recalculate root */
@@ -824,7 +673,6 @@ int real_mboxlist_createmailbox(char *name, int mbtype, char *partition,
     if (acl) free(acl);
     if (newpartition) free(newpartition);
     if (mboxent) free(mboxent);
-    if (mtxn) free(mtxn);
 
     if (rettid) *rettid = NULL;
     
@@ -832,16 +680,15 @@ int real_mboxlist_createmailbox(char *name, int mbtype, char *partition,
 	int r2;
 
 	/* delete ACAP entry if we made it */
-	if (madereserved == 1)
-	{
-	    r = acapmbox_delete(acaphandle,
-				name);
-	    /* xxx Can we deal with this failure? */
+	if (madereserved == 1) {
+	    r2 = acapmbox_delete(acaphandle, name);
+	    if (r2) {
+		syslog(LOG_ERR, "ACAP: unable to unreserve %s: %s\n", name, 
+		       error_message(r2));
+	    }
 	}
 
-	r2 = txn_abort(tid);
-
-	switch (r2) {
+	switch (r2 = txn_abort(tid)) {
 	case 0:
 	    break;
 	default:
@@ -859,17 +706,15 @@ int real_mboxlist_createmailbox(char *name, int mbtype, char *partition,
     }
 
     /* 9. set ACAP entry as commited (CRASH: commited) */
-    if (r == 0)
+    if (!r)
     {
-	r = acapmbox_markactive(acaphandle,
-				name);
-	if (r!=0)
-	{
-	    syslog(LOG_ERR,"ACAP probably in inconsistant state for %s\n",name);
-	    r = convert_acap_errorcode(r);
+	r = acapmbox_markactive(acaphandle, name);
+	if (r) {
+	    syslog(LOG_ERR, "ACAP: unable to commit %s: %s\n", name, 
+		   error_message(r));
 	}
-
     }
+    acapmbox_release_handle(acaphandle);
    
     return r;
 }
@@ -938,18 +783,6 @@ int mboxlist_insertremote(char *name, int mbtype, char *host, char *acl,
     if (r) {
 	txn_abort(tid);
 	if (rettid) *rettid = NULL;
-    } else if (rettid) {
-	/* just get ready to commit */
-	switch (r = txn_prepare(tid)) {
-	case 0:
-	    *rettid = tid;
-	    break;
-	default:
-	    syslog(LOG_ERR, "DBERROR: failed on commit: %s",
-		   db_strerror(r));
-	    r = IMAP_IOERROR;
-	    break;
-	}
     } else {
 	/* commit now */
 	switch (r = txn_commit(tid, 0)) {
@@ -971,15 +804,13 @@ int mboxlist_insertremote(char *name, int mbtype, char *host, char *acl,
  * performed by an admin.  The operation removes the user "FOO"'s 
  * subscriptions and all sub-mailboxes of user.FOO
  *
- *
  * 1. Begin transaction
  * 2. Verify ACL's
- * 3. Open ACAP connection if necessary
- * 4. ACAP mark entry reserved
- * 5. remove from database
- * 6. remove from disk
- * 7. commit transaction
- * 8. delete from ACAP
+ * 3. remove from database
+ * 4. remove from disk
+ * 5. commit transaction
+ * 6. Open ACAP connection if necessary
+ * 7. delete from ACAP
  *
  */
 int real_mboxlist_deletemailbox(char *name, int isadmin, char *userid, 
@@ -1001,22 +832,7 @@ int real_mboxlist_deletemailbox(char *name, int isadmin, char *userid,
     DBT key, data;
     DBC *cursor = NULL;
     struct mbox_entry *mboxent = NULL;
-    struct mbox_txn_delete *mtxn = NULL;
     acapmbox_handle_t *acaphandle = NULL;
-
-    if (rettid && *rettid) {
-	/* two phase commit */
-	mtxn = (struct mbox_txn_delete *) *rettid;
-	assert(mtxn->a.txn_type == TXN_DELETE && mtxn->mboxent);
-
-	tid = mtxn->a.tid;
-	mboxent = mtxn->mboxent;
-	deleteuser = mtxn->deleteuser;
-	deletequotaroot = mtxn->deletequotaroot;
-	r = 0;
-
-	goto done;
-    }
 
     memset(&key, 0, sizeof(key));
     memset(&data, 0, sizeof(data));
@@ -1024,11 +840,10 @@ int real_mboxlist_deletemailbox(char *name, int isadmin, char *userid,
     /* restart transaction here */
     if (0) {
 	int r2;
-
       retry:
 	if ((r2 = txn_abort(tid)) != 0) {
-	    syslog(LOG_ERR, "DBERROR: error aborting txn: %s", db_strerror(r2));
-	    if (rettid) *rettid = NULL;
+	    syslog(LOG_ERR, "DBERROR: error aborting txn: %s", 
+		   db_strerror(r2));
 	    return IMAP_IOERROR;
 	}
     }
@@ -1036,7 +851,6 @@ int real_mboxlist_deletemailbox(char *name, int isadmin, char *userid,
     /* begin transaction */
     if ((r = txn_begin(dbenv, NULL, &tid, 0)) != 0) {
 	syslog(LOG_ERR, "DBERROR: error beginning txn: %s", db_strerror(r));
-	if (rettid) *rettid = NULL;
 	return IMAP_IOERROR;
     }
 
@@ -1068,27 +882,14 @@ int real_mboxlist_deletemailbox(char *name, int isadmin, char *userid,
 	 * We don't have to lie about the error code since we know
 	 * the user is an admin.
 	 */
-	if (!(acl_myrights(auth_state, acl) & ACL_DELETE)) {
+	if (checkacl &&
+	    (!(acl_myrights(auth_state, acl) & ACL_DELETE))) {
 	    r = IMAP_PERMISSION_DENIED;
 	    goto done;
 	}
 	
 	deleteuser = 1;
     }
-
-    /* 3. open ACAP connection if necessary */
-    acaphandle = acapmbox_get_handle();
-
-    /* 4. ACAP mark entry reserved */
-    r = acapmbox_markreserved(acaphandle,
-			      name);
-    if ( r != ACAP_OK)
-    {
-	r = convert_acap_errorcode(r);
-	goto done;
-    }
-
-
 
     key.data = name;
     key.size = strlen(name);
@@ -1162,7 +963,7 @@ int real_mboxlist_deletemailbox(char *name, int isadmin, char *userid,
 	
 	r = mbdb->cursor(mbdb, tid, &cursor, 0);
 	if (r) { 
-	    syslog(LOG_ERR, "unable to create cursor in delete");
+	    syslog(LOG_ERR, "DBERROR: unable to create cursor in delete");
 	    goto done;
 	}
 	
@@ -1219,30 +1020,6 @@ int real_mboxlist_deletemailbox(char *name, int isadmin, char *userid,
 	}
     }
 
-    if (!r && rettid) {
-	/* get ready to commit; we do the filesystem operations on commit */
-	switch (r = txn_prepare(tid)) {
-	case 0:
-	    mtxn = (struct mbox_txn_delete *) 
-		xmalloc(sizeof(struct mbox_txn_delete));
-	    mtxn->a.tid = tid;
-	    mtxn->a.txn_type = TXN_DELETE;
-	    mtxn->mboxent = mboxent;
-	    mtxn->deleteuser = deleteuser;
-	    mtxn->deletequotaroot = deletequotaroot;
-	    *rettid = (struct mbox_txn *) mtxn;
-	    break;
-	default:
-	    syslog(LOG_ERR, "DBERROR: failed on prepare: %s", db_strerror(r));
-	    *rettid = NULL;
-	    r = IMAP_IOERROR;
-	    break;
-	}
-
-	/* we'll finish on the second phase */
-	return r;
-    }
-
   done: /* ALL DATABASE OPERATIONS DONE; NEED TO DO FILESYSTEM OPERATIONS */
     /*
      * See if we have to remove mailbox's quota root
@@ -1251,11 +1028,6 @@ int real_mboxlist_deletemailbox(char *name, int isadmin, char *userid,
      * orphaned quota roots on renaming or when inside the
      * ``if (deleteuser)'' code above.
      */
-    if (!r) {
-	/* ACAP: delete mailbox now */
-
-    }
-
     if (!r && !(mboxent->mbtype & MBTYPE_REMOTE)) {
 	if (deleteuser) {
 	    /* Delete any subscription list file */
@@ -1274,29 +1046,32 @@ int real_mboxlist_deletemailbox(char *name, int isadmin, char *userid,
     } /* end !remote */
 
     if (mboxent) free(mboxent);
-    if (mtxn) free(mtxn);
 
     if (r != 0) {
+	int r2;
 
-	r = acapmbox_markactive(acaphandle,
-				name);
-	if ( r != ACAP_OK)
-	{
-	    r = convert_acap_errorcode(r);
-	}
-
-	switch (r = txn_abort(tid)) {
+	switch (r2 = txn_abort(tid)) {
 	case 0:
 	    break;
 	default:
 	    syslog(LOG_ERR, "DBERROR: failed on abort: %s",
-		   db_strerror(r));
+		   db_strerror(r2));
 	}
-	if (rettid) *rettid = NULL;
+	return r;
     } else {
 	/* commit now */
 	switch (r = txn_commit(tid, 0)) {
 	case 0: 
+	    /* open ACAP connection if necessary */
+	    acaphandle = acapmbox_get_handle();
+	    
+	    /* delete from ACAP */
+	    r = acapmbox_delete(acaphandle, name);
+	    if (!r) {
+		syslog(LOG_ERR, "ACAP: can't delete mailbox entry '%s': %s",
+		       name, error_message(r));
+	    }
+	    acapmbox_release_handle(acaphandle);
 	    break;
 	default:
 	    syslog(LOG_ERR, "DBERROR: failed on commit: %s",
@@ -1305,29 +1080,17 @@ int real_mboxlist_deletemailbox(char *name, int isadmin, char *userid,
 	}
     }
 
-    /* 8. delete from ACAP */
-    r = acapmbox_delete(acaphandle,
-			name);
-    if (r!=0)
-    {
-	syslog(LOG_ERR,"Error deleting mailbox entry on ACAP server for %s\n",name);
-	r = convert_acap_errorcode(r);
-    }
-
     return r;
 }
 
 /*
  * Rename/move a mailbox
  *
- *
- *
  * 1. start transaction
- * 2. verify acl's
+ * 2. verify acls
  * 3. open acap connection if needed
  * 4. Delete entry from berkeley db
  * 5. ACAP make the new entry
- * 6. set old ACAP entry as reserved
  * 7. delete from disk
  * 8. commit transaction
  * 9. set new ACAP entry commited
@@ -1353,28 +1116,12 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     DBT key, data;
     struct mbox_entry *mboxent = NULL, *newent = NULL;
     char *newpartition = NULL;
-    struct mbox_txn_rename *mtxn = NULL;
     int acap_madenew = 0;
-    int acap_markedold = 0;
     char *oldname_tofree = NULL;
     acapmbox_handle_t *acaphandle = NULL;
 
     memset(&key, 0, sizeof(key));
     memset(&data, 0, sizeof(data));
-
-    if (rettid && *rettid) {
-	/* two phase commit */
-	mtxn = (struct mbox_txn_rename *) *rettid;
-	assert(mtxn->a.txn_type == TXN_RENAME && mtxn->oldname);
-	
-	tid = mtxn->a.tid;
-	oldname = mtxn->oldname;
-	oldpath = mtxn->oldpath;
-	newent = mtxn->newent;
-	r = 0;
-
-	goto done;
-    }
 
     /* we just can't rename if there isn't enough info */
     if (partition && !strcmp(partition, "news")) {
@@ -1572,59 +1319,16 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	goto done;
     }
 
-    if (!r) {
-	/* ACAP: reserve new mailbox name */
-    }
-
-    if (!r && rettid) {
-	/* we just prepare the transaction; we'll finish it later */
-	switch (r = txn_prepare(tid)) {
-	case 0:
-	    mtxn = (struct mbox_txn_rename *)
-		xmalloc(sizeof(struct mbox_txn_rename));
-	    mtxn->a.tid = tid;
-	    mtxn->a.txn_type = TXN_RENAME;
-	    mtxn->oldname = oldname;
-	    mtxn->oldpath = oldpath;
-	    mtxn->newent = newent;
-	    *rettid = (struct mbox_txn *) mtxn;
-	    break;
-	default:
-	    syslog(LOG_ERR, "DBERROR: failed on prepare: %s", db_strerror(r));
-	    *rettid = NULL;
-	    r = IMAP_IOERROR;
-	    break;
-	}
-	return r;
-    }
-
     /* 5. ACAP make the new entry */
     r = acapmbox_copy(acaphandle,
 		      oldname,
 		      newname);
-    if (r != ACAP_OK)
-    {
-	r = convert_acap_errorcode(r);
+    if (r != ACAP_OK) {
 	goto done;
     }
     acap_madenew = 1;
 
-    /* 6. set old ACAP entry as reserved */
-    r =  acapmbox_markreserved(acaphandle,
-			       oldname);
-    if (r != ACAP_OK)
-    {
-	r = convert_acap_errorcode(r);
-	goto done;
-    }
-    acap_markedold = 1;
-
  done: /* ALL DATABASE OPERATIONS DONE; NEED TO DO FILESYSTEM OPERATIONS */
-    if (!r) {
-	/* ACAP: delete mailbox now */
-
-    }
-
     if (!r && !(newent->mbtype & MBTYPE_REMOTE)) {
 	/* Get partition's path */
 	sprintf(buf2, "partition-%s", newent->partition);
@@ -1641,20 +1345,15 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	int r2;
 	
 	/* unroll acap operations if necessary */
-	if (acap_madenew == 1)
-	{
+	if (acap_madenew == 1) {
 	    r2 = acapmbox_delete(acaphandle,
 				 newname);
-	    if (r2 != 0) syslog(LOG_ERR,"Error cleaning up %s\n",newname);
+	    if (r2 != 0) {
+		syslog(LOG_ERR, "ACAP: can't rollback %s: %s", newname, 
+		       error_message(r));
+	    }
 	}
 
-	if (acap_markedold == 1)
-	{
-	    r2 = acapmbox_markactive(acaphandle,
-				     oldname);
-	    if (r2 != 0) syslog(LOG_ERR,"Error setting %s as active in rollback\n",oldname);
-	}
-	
 	txn_abort(tid);
 	if (rettid) *rettid = NULL;
     } else {
@@ -1662,28 +1361,23 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	switch (r = txn_commit(tid, 0)) {
 	case 0: 
 	    /* 9. set new ACAP entry commited */
-	    r = acapmbox_markactive(acaphandle,
-				    newname);
+	    r = acapmbox_markactive(acaphandle, newname);
+	    if (!r) {
+		syslog(LOG_ERR, "ACAP: can't commit %s: %d", newname, r);
+	    }
 	    
-
 	    /* 10. delete old ACAP entry */
-	    if (r == ACAP_OK)
-	    {
-		r = acapmbox_delete(acaphandle,
-				    oldname);
+	    r = acapmbox_delete(acaphandle, oldname);
+	    if (!r) {
+		syslog(LOG_ERR, "ACAP: can't delete %s: %d", newname, r);
 	    }
-
-	    if (r != ACAP_OK)
-	    {
-		r = convert_acap_errorcode(r);
-		goto done;
-	    }
-
 	    break;
+
 	default:
 	    syslog(LOG_ERR, "DBERROR: failed on commit: %s",
 		   db_strerror(r));
 	    r = IMAP_IOERROR;
+	    break;
 	}
     }
 
@@ -1692,7 +1386,6 @@ int real_mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     if (oldpath_alloc) free(oldpath_alloc);
     if (oldname_tofree) free(oldname_tofree);
     if (newent) free(newent);
-    if (mtxn) free(mtxn);
     
     return r;
 }
@@ -1731,20 +1424,7 @@ int real_mboxlist_setacl(char *name, char *identifier, char *rights,
     DB_TXN *tid;
     DBT key, data;
     struct mbox_entry *oldent, *newent=NULL;
-    struct mbox_txn_setacl *mtxn = NULL;
     acapmbox_handle_t *acaphandle = NULL;
-
-    if (rettid && *rettid) {
-	/* two phase commit */
-	mtxn = (struct mbox_txn_setacl *) *rettid;
-	assert(mtxn->a.txn_type == TXN_SETACL && mtxn->newent);
-
-	tid = mtxn->a.tid;
-	newent = mtxn->newent;
-	r = 0;
-
-	goto done;
-    }
 
     if (!strncmp(name, "user.", 5) &&
 	!strchr(userid, '.') &&
@@ -1865,27 +1545,6 @@ int real_mboxlist_setacl(char *name, char *identifier, char *rights,
 	goto done;
     }
 
-    if (rettid) {
-	/* just get ready to commit */
-	switch (r = txn_prepare(tid)) {
-	case 0:
-	    mtxn = (struct mbox_txn_setacl *)
-		xmalloc(sizeof(struct mbox_txn_setacl));
-	    mtxn->a.tid = tid;
-	    mtxn->a.txn_type = TXN_SETACL;
-	    mtxn->newent = newent;
-
-	    *rettid = (struct mbox_txn *) mtxn;
-	    break;
-	default:
-	    syslog(LOG_ERR, "DBERROR: failed on prepare: %s", db_strerror(r));
-	    r = IMAP_IOERROR;
-	    *rettid = NULL;
-	    break;
-	}
-	return r;
-    }
-
   done:
     if (!(newent->mbtype & MBTYPE_REMOTE)) {
 	/* calculate path */
@@ -1907,7 +1566,6 @@ int real_mboxlist_setacl(char *name, char *identifier, char *rights,
     }
 
     if (newent) free(newent);
-    if (mtxn) free(mtxn);
 
     if (r) {
 	if ((r = txn_abort(tid)) != 0) {
@@ -1933,60 +1591,7 @@ int real_mboxlist_setacl(char *name, char *identifier, char *rights,
     r = acapmbox_setproperty_acl(acaphandle,
 				 name,
 				 newacl);
-    if (r != 0) r = convert_acap_errorcode(r);
-
-
-
     if (newacl) free(newacl);
-    
-    return r;
-}
-
-int mboxlist_abort(struct mbox_txn *mtid)
-{
-    int r;
-
-    assert(mtid);
-
-    switch (r = txn_abort(mtid->tid)) {
-    case 0: 
-	break;
-    default:
-	syslog(LOG_ERR, "DBERROR: failed on abort: %s", db_strerror(r));
-	r = IMAP_IOERROR;
-    }
-
-    /* MEMORY LEAK! */
-    free(mtid);
-    
-    return r;
-}
-
-int mboxlist_commit(struct mbox_txn *mtxn)
-{
-    int r;
-
-    assert(mtxn);
-
-    switch (mtxn->txn_type) {
-    case TXN_CREATE:
-	r = real_mboxlist_createmailbox(NULL, 0, NULL, 0, NULL, NULL, &mtxn);
-	break;
-    case TXN_DELETE:
-	r = real_mboxlist_deletemailbox(NULL, 0, NULL, NULL, 0, &mtxn);
-	break;
-    case TXN_RENAME:
-	r = real_mboxlist_renamemailbox(NULL, NULL, NULL, 0, NULL, NULL,
-					&mtxn);
-	break;
-    case TXN_SETACL:
-	r = real_mboxlist_setacl(NULL, NULL, NULL, 0, NULL, NULL, &mtxn);
-	break;
-    default:
-	syslog(LOG_ERR, "mbdb: invalid transaction type %d", mtxn->txn_type);
-	assert(0);
-	break;
-    }
     
     return r;
 }

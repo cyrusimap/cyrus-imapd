@@ -35,6 +35,8 @@ int acapmbox_init(void);
  */
 acapmbox_handle_t *acapmbox_get_handle(void);
 
+void acapmbox_release_handle(acapmbox_handle_t *handle);
+
 /*
  * Create a new entry for mailbox_name
  * 
@@ -49,21 +51,18 @@ int acapmbox_create(acapmbox_handle_t *AC,
 /*
  * Commit the entry 
  */
-
 int acapmbox_markactive(acapmbox_handle_t *AC,
 			char *mailbox_name);
 
 /*
  * Uncommit the entry 
  */
-
 int acapmbox_markreserved(acapmbox_handle_t *AC,
 			  char *mailbox_name);
 
 /*
  * Remove an entry
  */
-
 int acapmbox_delete(acapmbox_handle_t *AC,
 		    char *mailbox_name);
 
@@ -71,14 +70,12 @@ int acapmbox_delete(acapmbox_handle_t *AC,
 /*
  * Delete all entries (the whole dataset)
  */
-
 int acapmbox_deleteall(acapmbox_handle_t *AC);
 
 /* 
  * does a mailbox exist? 
  * return ACAP_OK if it does; ACAP_FAIL if it doesn't
  */
-
 int acapmbox_entryexists(acapmbox_handle_t *AC,
 			 char *mailbox_name);
 
@@ -86,7 +83,6 @@ int acapmbox_entryexists(acapmbox_handle_t *AC,
  * Copy a mailbox entry preserving all value except the new
  * entry's status will be "reserved"
  */
-
 int acapmbox_copy(acapmbox_handle_t *AC,
 		  char *old_mailbox,
 		  char *new_mailbox);
@@ -100,7 +96,7 @@ typedef enum {
 
 /*
  *
- *  change - change to make to property (i.e. +1,-1)
+ *  properties are hints that the ACAP server stores about various mailboxes
  *
  */
 int acapmbox_setproperty_acl(acapmbox_handle_t *AC,
