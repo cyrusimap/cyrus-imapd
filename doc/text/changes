@@ -1,5 +1,26 @@
                    Changes to the Cyrus IMAP Server
 
+Changes to the cyrus IMAP Server since 2.0.8
+
+      * remembered to update this file 
+      * bug in Cyrus::IMAP perl module affecting cyradm's setquota fixed 
+      * portability fix with socklen_t 
+
+Changes to the cyrus IMAP Server since 2.0.7
+
+      * preliminary implementation of the IDLE extension (Ken Murchison,
+        ken@oceana.com). 
+      * THREAD=REFERENCES now part of the normal build. 
+      * tweaks to the installation documentation and suggested Sendmail
+        configuration 
+      * portability fixes and other small bugfixes 
+      * added "-a" flag to lmtpd 
+      * master process can now export statistics about running processes
+        via UCD SNMP AgentX 
+      * many fixes to Cyrus Murder-related code 
+      * fixes to perl code, especially the Sieve interface. added an IMSP
+        interface to the perl code, but it still needs work. 
+
 Changes to the cyrus IMAP Server since 2.0.6
 
       * some number of random static variables eliminated, to save on
