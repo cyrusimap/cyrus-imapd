@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.3 2002/01/21 23:15:21 leg Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.4 2002/01/22 20:26:31 leg Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -58,6 +58,8 @@
 
 #include "cyrusdb.h"
 #include "xmalloc.h"
+#include "map.h"
+#include "lock.h"
 #include "retry.h"
 
 #define PROB (0.5)
@@ -130,7 +132,7 @@ struct db {
     char *fname;
     int fd;
 
-    char *map_base;
+    const char *map_base;
     unsigned long map_len;	/* mapped size */
     unsigned long map_size;	/* actual size */
     long map_ino;
@@ -220,8 +222,24 @@ enum {
     HEADER_SIZE = OFFSET_LASTRECOVERY + 4
 };
 
+static int mycommit(struct db *db, struct txn *tid);
+static int myabort(struct db *db, struct txn *tid);
+static int mycheckpoint(struct db *db, int locked);
+
+/* file looks like:
+   struct header {
+       ...
+   }
+   struct dummy {
+       bit32 t = htonl(DUMMY);
+       bit32 ks = 0;
+       bit32 ds = 0;
+       bit32 forward[db->maxlevel];
+       bit32 pad = -1;
+   } */
 #define DUMMY_OFFSET(db) (HEADER_SIZE)
 #define DUMMY_PTR(db) ((db)->map_base + HEADER_SIZE)
+#define DUMMY_SIZE(db) (4 * (3 + db->maxlevel + 1))
 
 /* bump to the next multiple of 4 bytes */
 #define ROUNDUP(num) (((num) + 3) & 0xFFFFFFFC)
@@ -449,19 +467,6 @@ static int myopen(const char *fname, struct db **ret)
     }
 
     if (new) {
-	/* file looks like:
-	   struct header {
-	     ...
-	   }
-	   struct dummy {
-	     bit32 t = htonl(DUMMY);
-	     bit32 ks = 0;
-	     bit32 ds = 0;
-	     bit32 forward[db->maxlevel];
-	     bit32 pad = -1;
-	   } */
-	int dsize = 4 * (3 + SKIPLIST_MAXLEVEL + 1); /* dummy size */
-
 	/* lock the db */
 	if (write_lock(db) < 0) {
 	    dispose_db(db);
@@ -474,8 +479,8 @@ static int myopen(const char *fname, struct db **ret)
 	db->maxlevel = SKIPLIST_MAXLEVEL;
 	db->curlevel = 0;
 	db->listsize = 0;
-	db->logstart = HEADER_SIZE + dsize;    /* where do we start writing
-						 new entries? */
+	/* where do we start writing new entries? */
+	db->logstart = HEADER_SIZE + DUMMY_SIZE(db);
 	db->last_recovery = time(NULL);
 
 	/* create the header */
@@ -483,9 +488,9 @@ static int myopen(const char *fname, struct db **ret)
 
 	if (!r) {
 	    int n;
-	    bit32 *buf = (bit32 *) xmalloc(dsize);
+	    int dsize = DUMMY_SIZE(db);
+	    bit32 *buf = (bit32 *) xzmalloc(dsize);
 
-	    memset(buf, 0, dsize);
 	    buf[0] = htonl(DUMMY);
 	    buf[(dsize / 4) - 1] = htonl(-1);
 
@@ -544,7 +549,8 @@ int myclose(struct db *db)
 static int compare(const char *s1, int l1, const char *s2, int l2)
 {
     int min = l1 < l2 ? l1 : l2;
-    int cmp;
+    int cmp = 0;
+
     while (min-- > 0 && (cmp = *s1 - *s2) == 0) {
 	s1++;
 	s2++;
@@ -740,6 +746,8 @@ int myforeach(struct db *db,
 	    return r;
 	}
     }
+
+    return 0;
 }
 
 int randlvl(struct db *db)
@@ -802,16 +810,16 @@ int mystore(struct db *db,
 	!compare(KEY(ptr), KEYLEN(ptr), key, keylen)) {
 	    
 	if (!overwrite) {
-	    myabort(tp);	/* releases lock */
+	    myabort(db, tp);	/* releases lock */
 	    return CYRUSDB_EXISTS;
 	} else {
 	    /* replace with an equal height node */
 	    lvl = LEVEL(ptr);
 
 	    /* log a removal */
-	    WRITEV_ADD_TO_IOVEC(iov, num_iov, &delrectype, 4);
+	    WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) &delrectype, 4);
 	    todelete = htonl(ptr - db->map_base);
-	    WRITEV_ADD_TO_IOVEC(iov, num_iov, &todelete, 4);
+	    WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) &todelete, 4);
 	    
 	    /* now we write at newoffset */
 	    newoffset += 8;
@@ -832,7 +840,7 @@ int mystore(struct db *db,
 	db->curlevel = lvl;
 
 	/* write out that change */
-	write_header(db);
+	write_header(db); /* xxx errors? */
     }
 
     newoffset = htonl(newoffset);
@@ -851,27 +859,27 @@ int mystore(struct db *db,
 	retry_write(db->fd, (char *) &newoffset, 4);
     }
 
-    WRITEV_ADD_TO_IOVEC(iov, num_iov, &addrectype, 4);
-    WRITEV_ADD_TO_IOVEC(iov, num_iov, &klen, 4);
+    WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) &addrectype, 4);
+    WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) &klen, 4);
     WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) key, keylen);
     if (ROUNDUP(keylen) - keylen > 0) {
 	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) zeropadding,
 			    ROUNDUP(keylen) - keylen);
     }
-    WRITEV_ADD_TO_IOVEC(iov, num_iov, &dlen, 4);
+    WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) &dlen, 4);
     WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) data, datalen);
     if (ROUNDUP(datalen) - datalen > 0) {
 	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) zeropadding,
 			    ROUNDUP(datalen) - datalen);
     }
-    WRITEV_ADD_TO_IOVEC(iov, num_iov, newoffsets, 4 * lvl);
-    WRITEV_ADD_TO_IOVEC(iov, num_iov, &endpadding, 4);
+    WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) newoffsets, 4 * lvl);
+    WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) &endpadding, 4);
 
     lseek(db->fd, tp->logend, SEEK_SET);
     r = retry_writev(db->fd, iov, num_iov);
     if (r < 0) {
 	syslog(LOG_ERR, "DBERROR: retry_writev(): %m");
-	myabort(tp);
+	myabort(db, tp);
 	return CYRUSDB_IOERROR;
     }
     tp->logend += r;		/* update where to write next */
@@ -1007,6 +1015,8 @@ int mycommit(struct db *db, struct txn *tid)
 	return CYRUSDB_IOERROR;
     }
 
+    /* xxx consider checkpointing */
+
     /* release the write lock */
     if ((r = unlock(db)) < 0) {
 	return r;
@@ -1016,6 +1026,8 @@ int mycommit(struct db *db, struct txn *tid)
     if (tid->ismalloc) {
 	free(tid);
     }
+
+    return 0;
 }
 
 int myabort(struct db *db, struct txn *tid) /* xxx */
@@ -1030,20 +1042,148 @@ int myabort(struct db *db, struct txn *tid) /* xxx */
 
     /* free the tid */
 
+    return 0;
 }
 
-static int mycheckpoint(struct db *db) /* xxx */
+/* compress 'db'. if 'locked != 0', the database is already R/W locked and
+   will be returned as such. */
+static int mycheckpoint(struct db *db, int locked)
 {
-    /* grab write lock (could be read but this prevents multiple checkpoints
-     simultaneously */
+    char fname[1024];
+    int fd;
+    struct iovec iov[50];
+    int num_iov;
+    int updateoffsets[SKIPLIST_MAXLEVEL];
+    const char *ptr;
+    int offset;
+    int r = 0;
+    int iorectype = htonl(INORDER);
+    int i;
 
-    /* write header, records to new file */
+    /* grab write lock (could be read but this prevents multiple checkpoints
+     simultaneously) */
+    if (!locked && (r = write_lock(db)) < 0) {
+	return r;
+    }
+
+    /* open fname.NEW */
+    snprintf(fname, sizeof(fname), "%s.NEW", db->fname);
+    fd = open(fname, O_RDWR | O_CREAT, 0666);
+    if (fd < 0) {
+	syslog(LOG_ERR, "DBERROR: skiplist checkpoint: open(%s): %m", fname);
+	if (!locked) unlock(db);
+	return CYRUSDB_IOERROR;
+    }
+
+    /* write header */
+    r = write_header(db);
+
+    /* write dummy record */
+    if (!r) {
+	int dsize = DUMMY_SIZE(db);
+	bit32 *buf = (bit32 *) xzmalloc(dsize);
+
+	buf[0] = htonl(DUMMY);
+	buf[(dsize / 4) - 1] = htonl(-1);
+
+	lseek(db->fd, HEADER_SIZE, SEEK_SET);
+	r = retry_write(db->fd, (char *) buf, dsize);
+	if (r != dsize) {
+	    r = CYRUSDB_IOERROR;
+	}
+	
+	/* initialize the updateoffsets array so when we append records
+	   we know where to set the pointers */
+	for (i = 0; i < db->maxlevel; i++) {
+	    /* header_size + 4 (rectype) + 4 (ksize) + 4 (dsize)
+	       + 4 * i */
+	    updateoffsets[i] = HEADER_SIZE + 12 + 4 * i;
+	}
+    }
+
+    /* write records to new file */
+    offset = FORWARD(db->map_base + DUMMY_OFFSET(db), 0);
+    while (!r && offset != 0) {
+	int lvl;
+	bit32 newoffset, newoffsetnet;
+
+	ptr = db->map_base + offset;
+	lvl = LEVEL(ptr);
+
+	num_iov = 0;
+	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) iorectype, 4);
+	/* copy all but the rectype from the record */
+	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) ptr + 4, RECSIZE(ptr) - 4);
+
+	newoffset = lseek(fd, 0, SEEK_END);
+	newoffsetnet = htonl(newoffset);
+	r = retry_writev(fd, iov, num_iov);
+	if (r < 0) {
+	    r = CYRUSDB_IOERROR;
+	}
+	for (i = 0; !r && i < lvl; i++) {
+	    /* update pointers */
+	    r = lseek(fd, updateoffsets[i], SEEK_SET);
+	    if (r < 0) {
+		r = CYRUSDB_IOERROR;
+		break;
+	    }
+		    
+	    r = retry_write(fd, (char *) newoffsetnet, 4);
+	    if (r < 0) {
+		r = CYRUSDB_IOERROR;
+		break;
+	    }
+
+	    /* PTR(ptr, i) - ptr is the offset relative to me
+	       to my ith pointer */
+	    updateoffsets[i] = newoffset + (PTR(ptr, i) - ptr);
+	}
+
+	offset = FORWARD(ptr, 0);
+    }
+
+    /* set any dangling pointers to zero */
+    for (i = 0; !r && i < db->maxlevel; i++) {
+	bit32 newoffset = htonl(0);
+
+	r = lseek(fd, updateoffsets[i], SEEK_SET);
+	if (r < 0) {
+	    r = CYRUSDB_IOERROR;
+	    break;
+	}
+
+	r = retry_write(fd, (char *) newoffset, 4);
+	if (r < 0) {
+	    r = CYRUSDB_IOERROR;
+	    break;
+	}
+    }
 
     /* sync new file */
+    if (!r && (fsync(fd) < 0)) {
+	syslog(LOG_ERR, "DBERROR: skiplist checkpoint: fsync(%s): %m", fname);
+	r = CYRUSDB_IOERROR;
+    }
     
     /* move new file to original file name */
+    if (!r && (rename(fname, db->fname) < 0)) {
+	syslog(LOG_ERR, "DBERROR: skiplist checkpoint: rename(%s, %s): %m", 
+	       fname, db->fname);
+	r = CYRUSDB_IOERROR;
+    }
 
-    /* release write lock */
+    if (r) {
+	/* clean up */
+	unlink(fname);
+    }
+
+    if (!locked) {
+	/* release write lock */
+	unlock(db);
+    }
+
+    return r;
 }
 
 /* dump the database.
@@ -1054,20 +1194,21 @@ static int mycheckpoint(struct db *db) /* xxx */
 static int mydbdump(struct db *db, int detail) /* xxx */
 {
 
+    return 0;
 }
 
 /* perform some basic consistency checks */
 static int consistent(struct db *db) /* xxx */
 {
 
-
+    return 0;
 }
 
 /* run recovery on this file */
 static int recovery(struct db *db) /* xxx */
 {
 
-
+    return 0;
 }
 
 struct cyrusdb_backend cyrusdb_skiplist = 
