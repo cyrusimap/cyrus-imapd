@@ -199,14 +199,14 @@ const char *config_partitiondir(const char *partition)
     return config_getstring(buf, (char *)0);
 }
 
-#define CONFIGLISTGROWSIZE 10 /* 100 */
+#define CONFIGLISTGROWSIZE 30 /* 100 */
 static void config_read(const char *alt_config)
 {
     FILE *infile;
     int lineno = 0;
     int alloced = 0;
     char buf[4096];
-    char *p, *key;
+    char *p, *q, *key;
 
     infile = fopen(alt_config ? alt_config : CONFIG_FILENAME, "r");
     if (!infile) {
@@ -242,6 +242,11 @@ static void config_read(const char *alt_config)
 	*p++ = '\0';
 
 	while (*p && isspace((int) *p)) p++;
+
+	/* remove trailing whitespace */
+	for (q = p + strlen(p) - 1; q > p && isspace((int) *q); q--) {
+	    *q = '\0';
+	}
 	
 	if (!*p) {
 	    sprintf(buf, "empty option value on line %d of configuration file",
