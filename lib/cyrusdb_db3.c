@@ -55,6 +55,7 @@
 #include "cyrusdb.h"
 #include "exitcodes.h"
 #include "xmalloc.h"
+#include "retry.h"
 
 /* --- cut here --- */
 /*

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idled.c,v 1.8 2001/03/14 18:26:35 ken3 Exp $ */
+/* $Id: idled.c,v 1.9 2002/02/19 18:50:11 ken3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -166,14 +166,11 @@ void idle_done(char *mboxname, pid_t pid)
 void process_msg(idle_data_t *idledata)
 {
     struct ientry *t, *n;
-    int s;
-    int fdflags;
-    struct stat sbuf;
 
     switch (idledata->msg) {
     case IDLE_INIT:
 	if (verbose || debugmode)
-	    syslog(LOG_DEBUG, "imapd[%d]: IDLE_INIT '%s'\n",
+	    syslog(LOG_DEBUG, "imapd[%ld]: IDLE_INIT '%s'\n",
 		   idledata->pid, idledata->mboxname);
 
 	/* add pid to list of those idling on mboxname */
@@ -215,7 +212,7 @@ void process_msg(idle_data_t *idledata)
 	
     case IDLE_DONE:
 	if (verbose || debugmode)
-	    syslog(LOG_DEBUG, "imapd[%d]: IDLE_DONE '%s'\n",
+	    syslog(LOG_DEBUG, "imapd[%ld]: IDLE_DONE '%s'\n",
 		   idledata->pid, idledata->mboxname);
 
 	/* remove pid from list of those idling on mboxname */
@@ -223,7 +220,7 @@ void process_msg(idle_data_t *idledata)
 	break;
 	
     default:
-	syslog(LOG_ERR, "unrecognized message: %x", idledata->msg);
+	syslog(LOG_ERR, "unrecognized message: %lx", idledata->msg);
 	break;
     }
 }

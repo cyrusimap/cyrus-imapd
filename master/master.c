@@ -39,13 +39,14 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.59 2002/02/18 20:05:00 rjs3 Exp $ */
+/* $Id: master.c,v 1.60 2002/02/19 18:50:15 ken3 Exp $ */
 
 #include <config.h>
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <sys/time.h>
 #include <grp.h>
 #include <sys/types.h>
@@ -580,7 +581,7 @@ void spawn_schedule(time_t now)
     while (a && a != schedule) {
 	switch (p = fork()) {
 	case -1:
-	    syslog(LOG_CRIT, "can't fork process to run event %s");
+	    syslog(LOG_CRIT, "can't fork process to run event %s", a->name);
 	    break;
 
 	case 0:
@@ -960,12 +961,12 @@ void limit_fds(rlim_t x)
     rl.rlim_cur = x;
     rl.rlim_max = x;
     if (setrlimit(RLIMIT_NUMFDS, &rl) < 0) {
-	syslog(LOG_ERR, "setrlimit: Unable to set file descriptors limit to %d: %m", x);
+	syslog(LOG_ERR, "setrlimit: Unable to set file descriptors limit to %ld: %m", x);
     }
 
     if (verbose > 1) {
 	r = getrlimit(RLIMIT_NUMFDS, &rl);
-	syslog(LOG_DEBUG, "set maximum file descriptors to %d/%d", rl.rlim_cur,
+	syslog(LOG_DEBUG, "set maximum file descriptors to %ld/%ld", rl.rlim_cur,
 	       rl.rlim_max);
     }
 }

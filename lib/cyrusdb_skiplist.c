@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.20 2002/02/12 20:26:20 rjs3 Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.21 2002/02/19 18:50:14 ken3 Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -46,6 +46,7 @@
 #include <config.h>
 
 #include <stdlib.h>
+#include <string.h>
 #include <limits.h>
 #include <assert.h>
 #include <syslog.h>
@@ -1828,7 +1829,7 @@ static int recovery(struct db *db)
 	int diff = time(NULL) - start;
 
 	syslog(LOG_NOTICE, 
-	       "skiplist: recovered %s (%d record%s, %d bytes) in %d second%s",
+	       "skiplist: recovered %s (%d record%s, %ld bytes) in %d second%s",
 	       db->fname, db->listsize, db->listsize == 1 ? "" : "s", 
 	       db->map_size, diff, diff == 1 ? "" : "s"); 
     }

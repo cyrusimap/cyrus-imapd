@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.82 2001/09/30 12:39:55 ken3 Exp $
+ * $Id: append.c,v 1.83 2002/02/19 18:50:11 ken3 Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -783,7 +783,7 @@ int append_copy(struct mailbox *mailbox,
 	    if (mailbox_map_message(mailbox, 0, copymsg[msg].uid,
 				    &src_base, &src_size) != 0) {
 		fclose(destfile);
-		syslog(LOG_ERR, "IOERROR: opening message file %u of %s: %m",
+		syslog(LOG_ERR, "IOERROR: opening message file %lu of %s: %m",
 		       copymsg[msg].uid, mailbox->name);
 		r = IMAP_IOERROR;
 		goto fail;

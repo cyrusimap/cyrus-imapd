@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: auth_unix.c,v 1.29 2001/11/27 02:25:02 ken3 Exp $
+ * $Id: auth_unix.c,v 1.30 2002/02/19 18:50:14 ken3 Exp $
  */
 
 #include <config.h>
@@ -73,7 +73,7 @@ static struct auth_state auth_anonymous = {
  *	2	User is in the group that is identifier
  *	3	User is identifer
  */
-auth_memberof(auth_state, identifier)
+int auth_memberof(auth_state, identifier)
 struct auth_state *auth_state;
 const char *identifier;
 {
@@ -241,7 +241,7 @@ const char *cacheid;
     newstate->group = (char **) 0;
 
     setgrent();
-    while (grp = getgrent()) {
+    while ((grp = getgrent())) {
 	for (mem = grp->gr_mem; *mem; mem++) {
 	    if (!strcmp(*mem, identifier)) break;
 	}

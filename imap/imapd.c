@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.341 2002/02/19 00:27:36 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.342 2002/02/19 18:50:11 ken3 Exp $ */
 
 #include <config.h>
 
@@ -188,6 +188,10 @@ void cmd_starttls(char *tag, int imaps);
 
 #ifdef ENABLE_X_NETSCAPE_HACK
 void cmd_netscrape(char* tag);
+#endif
+
+#ifdef ENABLE_LISTEXT
+int getlistopts(char *tag, int *listopts);
 #endif
 
 int getsearchprogram(char *tag, struct searchargs *searchargs,
@@ -2226,11 +2230,11 @@ cmd_append(char *tag, char *name)
 		    ? "[TRYCREATE] " : "", error_message(r));
     } else {
 	/* is this a space seperated list or sequence list? */
-	prot_printf(imapd_out, "%s OK [APPENDUID %u", tag, uidvalidity);
+	prot_printf(imapd_out, "%s OK [APPENDUID %lu", tag, uidvalidity);
 	if (num == 1) {
-	    prot_printf(imapd_out, " %u", firstuid);
+	    prot_printf(imapd_out, " %lu", firstuid);
 	} else {
-	    prot_printf(imapd_out, " %u:%u", firstuid, firstuid + num - 1);
+	    prot_printf(imapd_out, " %lu:%lu", firstuid, firstuid + num - 1);
 	}
 	prot_printf(imapd_out, "] %s\r\n", error_message(IMAP_OK_COMPLETED));
     }
@@ -4032,7 +4036,7 @@ char *name;
 	printastring(name);
 	prot_printf(imapd_out, " (");
 	if (quota.limit >= 0) {
-	    prot_printf(imapd_out, "STORAGE %u %d",
+	    prot_printf(imapd_out, "STORAGE %lu %d",
 			quota.used/QUOTA_UNITS, quota.limit);
 	}
 	prot_printf(imapd_out, ")\r\n");
@@ -4095,7 +4099,7 @@ char *name;
 		printastring(mailboxname);
 		prot_printf(imapd_out, " (");
 		if (mailbox.quota.limit >= 0) {
-		    prot_printf(imapd_out, "STORAGE %u %d",
+		    prot_printf(imapd_out, "STORAGE %lu %d",
 				mailbox.quota.used/QUOTA_UNITS,
 				mailbox.quota.limit);
 		}

@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.167 2002/02/12 20:35:52 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.168 2002/02/19 18:50:13 ken3 Exp $
  */
 
 #include <config.h>
@@ -1993,7 +1993,7 @@ static int mboxlist_changequota(const char *name, int matchlen, int maycreate,
 	r = mailbox_write_quota(&mailbox.quota);
 	if (r) {
 	    syslog(LOG_ERR,
-		   "LOSTQUOTA: unable to record free of %u bytes in quota %s",
+		   "LOSTQUOTA: unable to record free of %lu bytes in quota %s",
 		   mailbox.quota_mailbox_used, mailbox.quota.root);
 	}
 	mailbox_unlock_quota(&mailbox.quota);

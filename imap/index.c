@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.171 2002/02/13 21:53:35 rjs3 Exp $
+ * $Id: index.c,v 1.172 2002/02/19 18:50:12 ken3 Exp $
  */
 #include <config.h>
 
@@ -493,9 +493,9 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 	if (imapd_exists && i <= imapd_exists) {
 	    prot_printf(imapd_out, "* OK [UNSEEN %u]  \r\n", i);
 	}
-        prot_printf(imapd_out, "* OK [UIDVALIDITY %u]  \r\n",
+        prot_printf(imapd_out, "* OK [UIDVALIDITY %lu]  \r\n",
 		    mailbox->uidvalidity);
-	prot_printf(imapd_out, "* OK [UIDNEXT %u]  \r\n",
+	prot_printf(imapd_out, "* OK [UIDNEXT %lu]  \r\n",
 		    mailbox->last_uid + 1);
     }
 
@@ -1346,7 +1346,7 @@ int statusitems;
     sepchar = '(';
 
     if (statusitems & STATUS_MESSAGES) {
-	prot_printf(imapd_out, "%cMESSAGES %u", sepchar, mailbox->exists);
+	prot_printf(imapd_out, "%cMESSAGES %lu", sepchar, mailbox->exists);
 	sepchar = ' ';
     }
     if (statusitems & STATUS_RECENT) {
@@ -1354,11 +1354,11 @@ int statusitems;
 	sepchar = ' ';
     }
     if (statusitems & STATUS_UIDNEXT) {
-	prot_printf(imapd_out, "%cUIDNEXT %u", sepchar, mailbox->last_uid+1);
+	prot_printf(imapd_out, "%cUIDNEXT %lu", sepchar, mailbox->last_uid+1);
 	sepchar = ' ';
     }
     if (statusitems & STATUS_UIDVALIDITY) {
-	prot_printf(imapd_out, "%cUIDVALIDITY %u", sepchar,
+	prot_printf(imapd_out, "%cUIDVALIDITY %lu", sepchar,
 		    mailbox->uidvalidity);
 	sepchar = ' ';
     }
@@ -1417,7 +1417,7 @@ index_getstate(mailbox)
 struct mailbox *mailbox;
 {    
 
-    prot_printf(imapd_out, "* XSTATE %u %u\r\n", mailbox->index_mtime,
+    prot_printf(imapd_out, "* XSTATE %lu %lu\r\n", mailbox->index_mtime,
 		seen_last_change);
 
     return 0;
