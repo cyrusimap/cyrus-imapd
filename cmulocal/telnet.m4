@@ -180,8 +180,12 @@ AC_DEFUN(CMU_TELNET_PTYDIR, [
 	  	case "${host}" in
 		  *-*-irix*)
 		    ;;
+		  *-*-linux*)
+		    AC_DEFINE(PTYDIR)
+		    ;;
 		  *)
 		    AC_DEFINE(PTYDIR)
+		    AC_DEFINE(STREAMSPTY)
 		    ;;
 		esac
 	 fi
