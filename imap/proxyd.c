@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.91 2002/02/11 17:41:44 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.92 2002/02/11 20:12:54 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -1179,8 +1179,7 @@ int service_main(int argc, char **argv, char **envp)
     int timeout;
     int proxyd_haveaddr = 0;
     sasl_security_properties_t *secprops = NULL;
-    sasl_ssf_t ssf;
-    
+
     signals_poll();
 
 #ifdef ID_SAVE_CMDLINE
