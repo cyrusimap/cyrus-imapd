@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.57 2003/02/13 20:32:59 rjs3 Exp $
+ * $Id: nntpd.c,v 1.1.2.58 2003/02/14 19:47:08 ken3 Exp $
  */
 
 /*
@@ -2203,7 +2203,7 @@ static int cancel(message_data_t *msg)
 
 static void feedpeer(message_data_t *msg)
 {
-    const char *server;
+    const char *server, *port = "119";
     char *path, *s;
     int len, err;
     struct addrinfo hints, *res, *res0;
@@ -2228,8 +2228,8 @@ static void feedpeer(message_data_t *msg)
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = 0;
-    if ((err = getaddrinfo(server, "119", &hints, &res0)) != 0) {
-	syslog(LOG_ERR, "getaddrinfo(%s, %s) failed: %m", server, "119");
+    if ((err = getaddrinfo(server, port, &hints, &res0)) != 0) {
+	syslog(LOG_ERR, "getaddrinfo(%s, %s) failed: %m", server, port);
 	return;
     }
 
@@ -2237,14 +2237,14 @@ static void feedpeer(message_data_t *msg)
 	if ((sock = socket(res->ai_family, res->ai_socktype,
 			   res->ai_protocol)) < 0)
 	    continue;
-	if (connect(sock, res->ai_addr, res->ai_addrlen) < 0)
+	if (connect(sock, res->ai_addr, res->ai_addrlen) >= 0)
 	    break;
 	close(sock);
 	sock = -1;
     }
     freeaddrinfo(res0);
     if(sock < 0) {
-	syslog(LOG_ERR, "connect() failed: %m");
+	syslog(LOG_ERR, "connect(%s:%s) failed: %m", server, port);
 	return;
     }
     

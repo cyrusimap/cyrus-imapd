@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: fetchnews.c,v 1.1.2.10 2003/02/13 20:32:55 rjs3 Exp $
+ * $Id: fetchnews.c,v 1.1.2.11 2003/02/14 19:47:09 ken3 Exp $
  */
 
 #include <config.h>
@@ -91,14 +91,14 @@ int init_net(const char *host, char *port,
 	if ((sock = socket(res->ai_family, res->ai_socktype,
 			   res->ai_protocol)) < 0)
 	    continue;
-	if (connect(sock, res->ai_addr, res->ai_addrlen) < 0)
+	if (connect(sock, res->ai_addr, res->ai_addrlen) >= 0)
 	    break;
 	close(sock);
 	sock = -1;
     }
     freeaddrinfo(res0);
     if(sock < 0) {
-	syslog(LOG_ERR, "connect() failed: %m");
+	syslog(LOG_ERR, "connect(%s:%s) failed: %m", host, port);
 	return -1;
     }
     
