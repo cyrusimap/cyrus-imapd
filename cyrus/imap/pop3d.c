@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.144.2.4 2004/01/30 15:49:43 ken3 Exp $
+ * $Id: pop3d.c,v 1.144.2.5 2004/01/31 18:56:59 ken3 Exp $
  */
 #include <config.h>
 
@@ -1606,4 +1606,12 @@ static void bitpipe(void)
     /* ok, we're done. */
 
     return;
+}
+
+
+void printstring(const char *s __attribute__((unused)))
+{
+    /* needed to link against annotate.o */
+    fatal("printstring() executed, but its not used for POP3!",
+	  EC_SOFTWARE);
 }

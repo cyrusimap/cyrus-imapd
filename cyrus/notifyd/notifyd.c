@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notifyd.c,v 1.14 2003/10/22 18:50:16 rjs3 Exp $
+ * $Id: notifyd.c,v 1.14.2.1 2004/01/31 18:57:01 ken3 Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -204,6 +204,13 @@ void fatal(const char *s, int code)
     syslog(LOG_ERR, "Fatal error: %s", s);
 
     shut_down(code);
+}
+
+void printstring(const char *s __attribute__((unused)))
+{
+    /* needed to link against annotate.o */
+    fatal("printstring() executed, but its not used for notifyd!",
+	  EC_SOFTWARE);
 }
 
 void usage(void)

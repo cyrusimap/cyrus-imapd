@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.221.2.5 2004/01/27 23:13:47 ken3 Exp $
+ * $Id: mboxlist.c,v 1.221.2.6 2004/01/31 18:56:58 ken3 Exp $
  */
 
 #include <config.h>
@@ -64,6 +64,7 @@
 #include <sys/msg.h>
 
 #include "acl.h"
+#include "annotate.h"
 #include "auth.h"
 #include "glob.h"
 #include "assert.h"
@@ -1034,7 +1035,16 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 	/* Abort the transaction if it is still in progress */
 	DB->abort(mbdb, tid);
     } else if(tid && force) {
+	int delerr;
 	DB->commit(mbdb, tid);
+
+	/* Clean up annotations */
+	delerr = annotatemore_delete(name);
+	if(delerr) {
+	    syslog(LOG_ERR,
+		   "Failed to delete annotations with mailbox '%s': %s",
+		   name, error_message(delerr));
+	}
     }
 
     return r;

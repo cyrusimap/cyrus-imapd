@@ -41,7 +41,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.in,v 1.23.2.2 2004/01/27 23:13:54 ken3 Exp $
+# $Id: Makefile.in,v 1.23.2.3 2004/01/31 18:57:02 ken3 Exp $
 # 
 srcdir = @srcdir@
 VPATH = @srcdir@
@@ -60,6 +60,7 @@ LIBS = $(IMAP_LIBS) @COM_ERR_LIBS@
 LIB_SASL = @LIB_SASL@
 LIB_WRAP = @LIB_WRAP@
 DEPLIBS = ../imap/libimap.a ../lib/libcyrus.a ../lib/libcyrus_min.a @DEPLIBS@
+UTIL_LIBS = ../imap/mutex_fake.o ../imap/cli_fatal.o
 
 LDAP_LIBS=@LDAP_LIBS@
 LDAP_CPPFLAGS=@LDAP_CPPFLAGS@
@@ -103,20 +104,17 @@ ptloader.pure: ptloader.o @WITH_PTS@.o ../imap/mutex_fake.o $(DEPLIBS)
 ptexpire: ptexpire.o $(DEPLIBS) $(UTIL_LIBS)
 	$(CC) $(LDFLAGS) -o $@ ptexpire.o $(UTIL_LIBS) $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_RT)
 
-ptexpire.pure: ptexpire.o ../imap/mutex_fake.o $(DEPLIBS)
-	$(PURIFY) $(PUREARGS) $(CC) $(LDFLAGS) -o $@ ptexpire.o ../imap/mutex_fake.o $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT)
+ptexpire.pure: ptexpire.o $(DEPLIBS) $(UTIL_LIBS)
+	$(PURIFY) $(PUREARGS) $(CC) $(LDFLAGS) -o $@ ptexpire.o $(UTIL_LIBS) $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT)
 
 ptdump: ptdump.o $(DEPLIBS) $(UTIL_LIBS)
 	$(CC) $(LDFLAGS) -o $@ ptdump.o $(UTIL_LIBS) $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_RT)
 
-ptdump.pure: ptexpire.o ../imap/mutex_fake.o $(DEPLIBS)
-	$(PURIFY) $(PUREARGS) $(CC) $(LDFLAGS) -o $@ ptdump.o ../imap/mutex_fake.o $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT)
+ptdump.pure: ptexpire.o $(DEPLIBS) $(UTIL_LIBS)
+	$(PURIFY) $(PUREARGS) $(CC) $(LDFLAGS) -o $@ ptdump.o $(UTIL_LIBS) $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT)
 
-ptextract: ptextract.o $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o $@ ptextract.o $(DEPLIBS) $(LIBS)
-
-#pttest: pttest.o auth_krb_pts.o  $(DEPLIBS)
-#        $(CC) $(LDFLAGS) -o $@ pttest.o auth_krb_pts.o $(OBJS) $(DEPLIBS) $(LIBS)
+ptextract: ptextract.o $(DEPLIBS) $(UTIL_LIBS)
+	$(CC) $(LDFLAGS) -o $@ ptextract.o $(UTIL_LIBS) $(DEPLIBS) $(LIBS)
 
 clean:
 	rm -f *.o Makefile.bak $(PROGS) makedepend.log

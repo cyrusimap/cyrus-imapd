@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- * $Id: mailbox.h,v 1.77.2.2 2004/01/27 23:13:46 ken3 Exp $
+ * $Id: mailbox.h,v 1.77.2.3 2004/01/31 18:56:58 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -74,7 +74,7 @@ typedef unsigned short bit32;
 #define MAILBOX_FORMAT_NETNEWS	1
 
 #define MAILBOX_MINOR_VERSION	6
-#define MAILBOX_CACHE_MINOR_VERSION 1
+#define MAILBOX_CACHE_MINOR_VERSION 2
 
 #define FNAME_HEADER "/cyrus.header"
 #define FNAME_INDEX "/cyrus.index"

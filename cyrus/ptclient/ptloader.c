@@ -42,7 +42,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ptloader.c,v 1.32.2.3 2004/01/30 15:49:44 ken3 Exp $";
+      "$Id: ptloader.c,v 1.32.2.4 2004/01/31 18:57:02 ken3 Exp $";
 
 #include <config.h>
 
@@ -100,7 +100,7 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     signal(SIGPIPE, SIG_IGN);
 
     syslog(LOG_NOTICE,
-	   "starting: $Id: ptloader.c,v 1.32.2.3 2004/01/30 15:49:44 ken3 Exp $ (%s)",
+	   "starting: $Id: ptloader.c,v 1.32.2.4 2004/01/31 18:57:02 ken3 Exp $ (%s)",
 	   ptsmodule_name);
 
     while ((opt = getopt(argc, argv, "d:")) != EOF) {
@@ -218,4 +218,11 @@ void fatal(const char *msg, int exitcode)
 {
     syslog(LOG_ERR, "%s", msg);
     exit(exitcode);
+}
+
+void printstring(const char *s __attribute__((unused)))
+{
+    /* needed to link against annotate.o */
+    fatal("printstring() executed, but its not used for PTLOADER!",
+	  EC_SOFTWARE);
 }

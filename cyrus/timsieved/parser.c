@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.33 2003/10/22 18:50:31 rjs3 Exp $
+ * $Id: parser.c,v 1.33.2.1 2004/01/31 18:57:03 ken3 Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -208,7 +208,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
   case HAVESPACE:
       if (timlex(NULL, NULL, sieved_in)!=SPACE)
       {
-	  error_msg = "SPACE must occur after PUTSCRIPT";
+	  error_msg = "SPACE must occur after HAVESPACE";
 	  goto error;
       }
       

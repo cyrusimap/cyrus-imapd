@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.11 2004/01/30 15:49:39 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.12 2004/01/31 18:56:54 ken3 Exp $ */
 
 #include <config.h>
 
@@ -4096,10 +4096,6 @@ static int delmbox(char *name,
 	prot_printf(imapd_out, "* NO delete %s: %s\r\n",
 		    name, error_message(r));
     }
-    else {
-	/* Delete mailbox annotations */
-	annotatemore_delete(name);
-    }
     
     return 0;
 }
@@ -4171,11 +4167,6 @@ void cmd_delete(char *tag, char *name, int localonly)
 	r = mboxlist_deletemailbox(mailboxname, imapd_userisadmin,
 				   imapd_userid, imapd_authstate, 1,
 				   localonly, 0);
-    }
-
-    if (!r) {
-	/* Delete mailbox annotations */
-	annotatemore_delete(mailboxname);
     }
 
     /* was it a top-level user mailbox? */
@@ -7280,6 +7271,11 @@ static int do_xfer_single(char *toserver, char *topart,
 	if(r) syslog(LOG_ERR,
 		     "Could not delete local mailbox during move of %s",
 		     mailboxname);
+
+	if (!r) {
+	    /* Delete mailbox annotations */
+	    annotatemore_delete(mailboxname);
+	}
      }
 
 done:

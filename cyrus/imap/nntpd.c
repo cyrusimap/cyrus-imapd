@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.5 2004/01/30 15:49:43 ken3 Exp $
+ * $Id: nntpd.c,v 1.2.2.6 2004/01/31 18:56:59 ken3 Exp $
  */
 
 /*
@@ -578,6 +578,11 @@ int service_init(int argc __attribute__((unused)),
     /* open the quota db, we'll need it for expunge */
     quotadb_init(0);
     quotadb_open(NULL);
+
+    /* setup for sending IMAP IDLE notifications */
+    if (config_getint(IMAPOPT_IMAPIDLEPOLL) > 0) {
+	idle_init();
+    }
 
     while ((opt = getopt(argc, argv, "srf")) != EOF) {
 	switch(opt) {
@@ -1403,12 +1408,7 @@ static void cmdloop(void)
 	    break;
 
 	case 'S':
-	    if (!strcmp(cmd.s, "Starttls")) {
-		if (!tls_enabled()) {
-		    /* we don't support starttls */
-		    goto badcmd;
-		}
-
+	    if (!strcmp(cmd.s, "Starttls") && tls_enabled()) {
 		if (c == '\r') c = prot_getc(nntp_in);
 		if (c != '\n') goto extraargs;
 
@@ -3505,7 +3505,7 @@ static void feedpeer(char *peer, message_data_t *msg)
     return;
 }
 
-void printstring(const char *s)
+void printstring(const char *s __attribute__((unused)))
 {
     /* needed to link against annotate.o */
     fatal("printstring() executed, but its not used for nntpd!",

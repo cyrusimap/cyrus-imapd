@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- * $Id: mailbox.c,v 1.147.2.3 2004/01/27 23:13:45 ken3 Exp $
+ * $Id: mailbox.c,v 1.147.2.4 2004/01/31 18:56:57 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -119,6 +119,12 @@ const struct mailbox_header_cache mailbox_cache_headers[] = {
     /* x headers that we may want to cache anyway */
     { "x-mailer", 1 },
     { "x-trace", 1 },
+
+    /* outlook express seems to want these */
+    { "x-ref", 2  },
+    { "x-priority", 2 },
+    { "x-msmail-priority", 2 },
+    { "x-msoesrec", 2 },
 
     /* things to never cache */
     { "bcc", BIT32_MAX },

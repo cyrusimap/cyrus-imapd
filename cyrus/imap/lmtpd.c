@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.121.2.4 2004/01/27 23:13:43 ken3 Exp $
+ * $Id: lmtpd.c,v 1.121.2.5 2004/01/31 18:56:57 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1476,3 +1476,4 @@ void removespool(message_data_t *msgdata)
 
     append_removestage(stage);
 }
+

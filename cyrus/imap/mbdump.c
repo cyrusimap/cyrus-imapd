@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.26.2.1 2004/01/27 23:13:47 ken3 Exp $
+ * $Id: mbdump.c,v 1.26.2.2 2004/01/31 18:56:58 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -61,9 +61,10 @@
 #include <assert.h>
 #include <com_err.h>
 
+#include "annotate.h"
 #include "exitcodes.h"
-#include "imap_err.h"
 #include "global.h"
+#include "imap_err.h"
 #include "imparse.h"
 #include "mailbox.h"
 #include "map.h"
@@ -109,6 +110,38 @@ static int sieve_isactive(char *sievepath, char *name)
     } else {
 	return 0;
     }
+}
+
+struct dump_annotation_rock
+{
+    struct protstream *pout;
+    const char *tag;
+};
+
+static int dump_annotations(const char *mailbox __attribute__((unused)),
+			    const char *entry,
+			    const char *userid,
+			    struct annotation_data *attrib, void *rock) 
+{
+    struct dump_annotation_rock *ctx = (struct dump_annotation_rock *)rock;
+
+    /* "A-" userid entry */
+    /* entry is delimited by its leading / */
+    unsigned long ename_size = 2 + strlen(userid) +  strlen(entry);
+
+    /* Transfer all attributes for this annotation, don't transfer size
+     * separately since that can be implicitly determined */
+    prot_printf(ctx->pout,
+		" {%ld%s}\r\nA-%s%s (%ld {%d%s}\r\n%s {%d%s}\r\n%s)",
+		ename_size, (!ctx->tag ? "+" : ""),
+		userid, entry,
+		attrib->modifiedsince,
+		attrib->size, (!ctx->tag ? "+" : ""),
+		attrib->value,
+		strlen(attrib->contenttype), (!ctx->tag ? "+" : ""),
+		attrib->contenttype);
+
+    return 0;
 }
 
 int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
@@ -324,6 +357,14 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
 	map_free(&base, &len);
     }
 
+    /* now dump annotations */
+    {
+	struct dump_annotation_rock actx;
+	actx.tag = tag;
+	actx.pout = pout;
+	annotatemore_findall(mbname,"*",dump_annotations, (void *)&actx, NULL);
+    }
+
     if(userid) {
 	char sieve_path[MAX_MAILBOX_PATH];
 	int sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
@@ -475,7 +516,7 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
     int sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
     int domainlen = 0;
     char *p = NULL, userbuf[81];
-    
+
     memset(&file, 0, sizeof(file));
     memset(&data, 0, sizeof(data));
 
@@ -546,11 +587,96 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
 	char *seen_file = NULL;
 	
       	c = getastring(pin, pout, &file);
-
 	if(c != ' ') {
 	    r = IMAP_PROTOCOL_ERROR;
 	    goto done;
 	}
+
+	if(!strncmp(file.s, "A-", 2)) {
+	    /* Annotation */
+	    char *userid;
+	    char *annotation;
+	    char *contenttype;
+	    char *content;
+	    size_t contentsize;
+	    time_t modtime = 0;
+	    int i;
+	    
+	    for(i=2; file.s[i]; i++) {
+		if(file.s[i] == '/') break;
+	    }
+	    if(!file.s[i]) {
+		r = IMAP_PROTOCOL_ERROR;
+		goto done;
+	    }
+	    userid = xmalloc(i-2+1);
+	    
+	    memcpy(userid, &(file.s[2]), i-2);
+	    userid[i-2] = '\0';
+	    
+	    annotation = xstrdup(&(file.s[i]));
+
+	    if(prot_getc(pin) != '(') {
+		r = IMAP_PROTOCOL_ERROR;
+		goto done;
+	    }	    
+
+	    /* Parse the modtime */
+	    c = getword(pin, &data);
+	    if (c != ' ')  {
+		r = IMAP_PROTOCOL_ERROR;
+		goto done;
+	    }
+	    if (data.s[0] == '\0') {
+		r = IMAP_PROTOCOL_ERROR;
+		goto done;
+	    }
+	    for (p = data.s; *p; p++) {
+		if (!isdigit((int) *p)) {
+		    r = IMAP_PROTOCOL_ERROR;
+		    goto done;
+		}
+		modtime = modtime * 10 + *p - '0';
+		/* xxx - we won't catch overflow here, but we really
+		 * don't care *THAT* much, do we? */
+	    }
+	    
+	    c = getbastring(pin, pout, &data);
+	    /* xxx binary */
+	    content = xstrdup(data.s);
+	    contentsize = data.len;
+
+	    if(c != ' ') {
+		r = IMAP_PROTOCOL_ERROR;
+		goto done;
+	    }
+
+	    c = getastring(pin, pout, &data);
+	    contenttype = xstrdup(data.s);
+	    
+	    if(c != ')') {
+		r = IMAP_PROTOCOL_ERROR;
+		goto done;
+	    }
+
+	    annotatemore_write_entry(mbname, annotation, userid, content,
+				     contenttype, contentsize, modtime, NULL);
+	    
+	    free(userid);
+	    free(annotation);
+	    free(content);
+	    free(contenttype);
+
+	    c = prot_getc(pin);
+	    if(c == ')') break; /* that was the last item */
+	    else if(c != ' ') {
+		r = IMAP_PROTOCOL_ERROR;
+		goto done;
+	    }
+
+	    continue;
+	}
+	    
 	c = getbastring(pin, pout, &data);
 	if(c != ' ' && c != ')') {
 	    r = IMAP_PROTOCOL_ERROR;

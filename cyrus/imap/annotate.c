@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.16.2.3 2003/12/19 18:33:28 ken3 Exp $
+ * $Id: annotate.c,v 1.16.2.4 2004/01/31 18:56:53 ken3 Exp $
  */
 
 #include <config.h>
@@ -293,12 +293,13 @@ static int make_key(const char *mboxname, const char *entry,
     return keylen;
 }
 
-static int split_attribs(const char *data, int datalen,
+static int split_attribs(const char *data, int datalen __attribute__((unused)),
 			 struct annotation_data *attrib)
 {
     unsigned long tmp;
 
-    /* XXX sanity check the data */
+    /* xxx use datalen? */
+    /* xxx sanity check the data? */
     attrib->size = (size_t) ntohl(*(unsigned long *) data);
     data += sizeof(unsigned long); /* skip to value */
 
@@ -1259,6 +1260,22 @@ static int write_entry(const char *mboxname, const char *entry,
     return r;
 }
 
+int annotatemore_write_entry(const char *mboxname, const char *entry,
+			     const char *userid,
+			     const char *value, const char *contenttype,
+			     size_t size, time_t modifiedsince,
+			     struct txn **tid) 
+{
+    struct annotation_data theentry;
+    
+    theentry.size = size;
+    theentry.modifiedsince = modifiedsince ? modifiedsince : time(NULL);
+    theentry.contenttype = contenttype ? contenttype : "text/plain";
+    theentry.value = value ? value : "NIL";
+
+    return write_entry(mboxname, entry, userid, &theentry, tid);
+}
+
 struct storedata {
     struct namespace *namespace;
     char *userid;
@@ -1837,8 +1854,8 @@ static int rename_cb(const char *mailbox, const char *entry,
     return r;
 }
 
-int annotatemore_rename(char *oldmboxname, char *newmboxname,
-			char *olduserid, char *newuserid)
+int annotatemore_rename(const char *oldmboxname, const char *newmboxname,
+			const char *olduserid, const char *newuserid)
 {
     struct rename_rock rrock;
     int r;
@@ -1864,7 +1881,7 @@ int annotatemore_rename(char *oldmboxname, char *newmboxname,
     return r;
 }
 
-int annotatemore_delete(char *mboxname)
+int annotatemore_delete(const char *mboxname)
 {
     /* we treat a deleteion as a rename without a new name */
 
