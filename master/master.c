@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.41 2001/07/08 02:08:03 ken3 Exp $ */
+/* $Id: master.c,v 1.42 2001/07/16 18:23:11 leg Exp $ */
 
 #include <config.h>
 
@@ -357,7 +357,11 @@ void service_create(struct service *s)
     }
 
     /* allow reuse of address */
-    setsockopt(s->socket, SOL_SOCKET, SO_REUSEADDR, (void *) &on, sizeof(on));
+    r = setsockopt(s->socket, SOL_SOCKET, SO_REUSEADDR, 
+		   (void *) &on, sizeof(on));
+    if (r < 0) {
+	syslog(LOG_ERR, "unable to setsocketopt(SO_REUSEADDR): %m");
+    }
 
     oldumask = umask((mode_t) 0); /* for linux */
     r = bind(s->socket, sa, salen);
