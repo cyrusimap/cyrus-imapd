@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.59 2003/10/22 18:50:30 rjs3 Exp $
+ * $Id: script.c,v 1.60 2004/01/26 18:21:54 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -49,6 +49,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "map.h"
 #include "sieve.h"
 #include "message.h"
+#include "bytecode.h"
 
 /* does this interpretor support this requirement? */
 int script_require(sieve_script_t *s, char *req)
@@ -438,6 +439,13 @@ int sieve_script_load(const char *fname, sieve_bytecode_t **ret)
     r->fd = fd;
     
     map_refresh(fd, 1, &r->data, &r->len, sbuf.st_size, fname, "sievescript");
+
+    if ((r->len < (BYTECODE_MAGIC_LEN + 2*sizeof(bytecode_input_t))) ||
+	memcmp(r->data, BYTECODE_MAGIC, BYTECODE_MAGIC_LEN)) {
+	syslog(LOG_ERR, "IOERROR: not a sieve bytecode file %s", fname);
+	sieve_script_unload(&r);
+	return SIEVE_FAIL;
+    }
 
     *ret = r;
     return SIEVE_OK;
