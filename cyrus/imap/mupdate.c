@@ -73,6 +73,7 @@ void cmd_set(struct conn *C,
 	     const char *tag, const char *mailbox,
 	     const char *server, const char *acl, enum settype t);
 void cmd_find(struct conn *C, const char *tag, const char *mailbox);
+void cmd_update(struct conn *C, const char *tag);
 void shut_down(int code);
 void database_init();
 
