@@ -1,6 +1,6 @@
 /* mpool.h memory pool management
  *
- * $Id: mpool.h,v 1.6 2002/02/20 19:30:26 leg Exp $
+ * $Id: mpool.h,v 1.7 2002/06/18 16:07:51 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -57,18 +57,13 @@
 #include <syslog.h>
 #include <errno.h>
 
-/* xxx is there a reason struct mpool isn't opaque ? */
-struct mpool_blob;
-
-struct mpool 
-{
-    struct mpool_blob *blob;
-};
+/* Opaque mpool handle */
+struct mpool;
 
 #define DEFAULT_MPOOL_SIZE 32768
 
 /* Create a new pool -- pass zero for default */
-/* xxx 'size' is an estimate; maximum size for allocated object ? */
+/* 'size' is the size of the first blob of memory that will be allocated */
 struct mpool *new_mpool(size_t size);
 
 /* Free a pool */

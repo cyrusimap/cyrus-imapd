@@ -1,6 +1,6 @@
 /* mpool.c memory pool management
  *
- * $Id: mpool.c,v 1.6 2002/02/20 19:30:26 leg Exp $
+ * $Id: mpool.c,v 1.7 2002/06/18 16:07:51 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -60,6 +60,11 @@
 #include "mpool.h"
 #include "xmalloc.h"
 #include "exitcodes.h"
+
+struct mpool 
+{
+    struct mpool_blob *blob;
+};
 
 struct mpool_blob
 {
@@ -133,8 +138,8 @@ void *mpool_malloc(struct mpool *pool, size_t size)
 	fatal("mpool_malloc called without a valid pool", EC_TEMPFAIL);
     }
     if(!size) {
-	/* xxx legal under ANSI C */
-	fatal("mpool_malloc called with size = 0", EC_TEMPFAIL);
+	/* This is legal under ANSI C, so we should allow it too */
+	size = 1;
     }
 
     p = pool->blob;
