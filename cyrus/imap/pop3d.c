@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.94 2001/06/01 02:59:02 ken3 Exp $
+ * $Id: pop3d.c,v 1.95 2001/07/02 14:13:00 ken3 Exp $
  */
 #include <config.h>
 
@@ -123,6 +123,7 @@ struct msg {
     int deleted;
 } *popd_msg;
 
+static int pop3s = 0;
 int popd_starttls_done = 0;
 
 static struct mailbox mboxstruct;
@@ -158,6 +159,41 @@ static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
+static void popd_reset(void)
+{
+    proc_cleanup();
+
+    if (popd_mailbox) {
+	mailbox_close(popd_mailbox);
+	popd_mailbox = 0;
+    }
+
+    if (popd_in) prot_free(popd_in);
+    if (popd_out) prot_free(popd_out);
+    close(0);
+    close(1);
+    close(2);
+
+    strcpy(popd_clienthost, "[local]");
+    if (popd_userid != NULL) {
+	free(popd_userid);
+	popd_userid = NULL;
+    }
+    if (popd_saslconn) {
+	sasl_dispose(&popd_saslconn);
+	popd_saslconn = NULL;
+    }
+    popd_starttls_done = 0;
+#ifdef HAVE_SSL
+    if (tls_conn) {
+	tls_free(&tls_conn);
+	tls_conn = NULL;
+    }
+#endif
+
+    popd_exists = 0;
+}
+
 /*
  * run once when process is forked;
  * MUST NOT exit directly; must return with non-zero error code
@@ -165,6 +201,7 @@ static struct sasl_callback mysasl_cb[] = {
 int service_init(int argc, char **argv, char **envp)
 {
     int r;
+    int opt;
 
     config_changeident("pop3d");
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
@@ -195,26 +232,6 @@ int service_init(int argc, char **argv, char **envp)
     /* setup for sending IMAP IDLE notifications */
     idle_enabled();
 
-    return 0;
-}
-
-/*
- * run for each accepted connection
- */
-int service_main(int argc, char **argv, char **envp)
-{
-    int pop3s = 0;
-    int opt;
-    socklen_t salen;
-    struct hostent *hp;
-    int timeout;
-    sasl_security_properties_t *secprops=NULL;
-
-    signals_poll();
-
-    popd_in = prot_new(0, 0);
-    popd_out = prot_new(1, 1);
-
     while ((opt = getopt(argc, argv, "C:sk")) != EOF) {
 	switch(opt) {
 	case 'C': /* alt config file - handled by service::main() */
@@ -236,6 +253,24 @@ int service_main(int argc, char **argv, char **envp)
 	    usage();
 	}
     }
+
+    return 0;
+}
+
+/*
+ * run for each accepted connection
+ */
+int service_main(int argc, char **argv, char **envp)
+{
+    socklen_t salen;
+    struct hostent *hp;
+    int timeout;
+    sasl_security_properties_t *secprops=NULL;
+
+    signals_poll();
+
+    popd_in = prot_new(0, 0);
+    popd_out = prot_new(1, 1);
 
     /* Find out name of client host */
     salen = sizeof(popd_remoteaddr);
@@ -288,6 +323,12 @@ int service_main(int argc, char **argv, char **envp)
 		apop_enabled() ? popd_apop_chal : config_servername,
 		CYRUS_VERSION);
     cmdloop();
+
+    /* QUIT executed */
+    prot_flush(popd_out);
+
+    /* cleanup */
+    popd_reset();
 
     return 0;
 }
@@ -447,7 +488,7 @@ static void cmdloop(void)
 		    }
 		}
 		prot_printf(popd_out, "+OK\r\n");
-		shut_down(0);
+		return;
 	    }
 	    else prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");
 	}
