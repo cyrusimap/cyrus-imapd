@@ -1,7 +1,7 @@
 ACL=acl_afs.o
 AUTH=auth_krb.o
 
-LOBJS= append.o folder.o message.o xmalloc.o \
+LOBJS= append.o mailbox.o message.o xmalloc.o \
 	parsel.o parsey.o parseadd.o parseutl.o\
 	$(ACL) $(AUTH)
 
@@ -66,13 +66,13 @@ depend:
 
 
 acl_afs.o:	xmalloc.h
-append.o:	folder.h message.h
-deliver.o:	folder.h
-folder.o:	folder.h xmalloc.h
-message.o:	folder.h parseadd.h
+append.o:	mailbox.h message.h
+deliver.o:	mailbox.h
+mailbox.o:	mailbox.h xmalloc.h
+message.o:	mailbox.h parseadd.h
 parsel.o:	parsey.h
 parseutl.o:	parseadd.h
-testmkdir.o:	folder.h
+testmkdir.o:	mailbox.h
 
 # DEPENDENCIES MUST END AT END OF FILE
 # IF YOU PUT STUFF HERE IT WILL GO AWAY
