@@ -35,13 +35,13 @@ INSTALL = @INSTALL@
 RANLIB = @RANLIB@
 
 DEFS = @DEFS@
-CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et -I../../db/include @CPPFLAGS@ 
+CPPFLAGS = -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@ 
 AFSLIBS =/usr/local/lib/afs/libprot.a /usr/local/lib/libubik.a /usr/local/lib/afs/libauth.a /usr/local/lib/afs/libsys.a /usr/local/lib/librxkad.a /usr/local/lib/librx.a /usr/local/lib/afs/libaudit.a /usr/local/lib/liblwp.a /usr/local/lib/afs/util.a /usr/local/lib/libcom_err.a
-LIBS = -ldb @LIBS@ 
+LIBS = @LIBS@ 
 DEPLIBS = ../lib/libcyrus.a @DEPLIBS@
 
-CFLAGS = -g
-LDFLAGS = -g -L$(DB)
+CFLAGS = @CFLAGS@
+LDFLAGS = @LDFLAGS@
 
 SHELL = /bin/sh
 
@@ -49,11 +49,7 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
-#Fixme...
-AFS=/usr/local
-DB=../../db/PORT/sunos.4.1.3
-
-all: ptloader ptexpire pttest
+all: ptloader ptexpire # pttest
 
 install:
 	$(INSTALL) -s -m 755 ptloader  $(DESTDIR)$(cyrus_prefix)/etc
