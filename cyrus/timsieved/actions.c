@@ -1,6 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.30.4.10 2003/06/25 18:57:48 ken3 Exp $
+ * $Id: actions.c,v 1.30.4.11 2003/07/14 23:07:07 rjs3 Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -423,7 +423,7 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data,
 
 static int deleteactive(struct protstream *conn)
 {
-    if (unlink("default.bc") != 0) {
+    if (unlink("defaultbc") != 0) {
 	prot_printf(conn,"NO \"Unable to unlink active script\"\r\n");
 	return TIMSIEVE_FAIL;
     }
@@ -440,10 +440,10 @@ static int isactive(char *name)
 
     snprintf(filename, 1023, "%s.bc", name);
     memset(activelink, 0, sizeof(activelink));
-    if ((readlink("default.bc", activelink, sizeof(activelink)-1) < 0) && 
+    if ((readlink("defaultbc", activelink, sizeof(activelink)-1) < 0) && 
 	(errno != ENOENT)) 
     {
-	syslog(LOG_ERR, "readlink(default.bc): %m");
+	syslog(LOG_ERR, "readlink(defaultbc): %m");
 	return FALSE;
     }
 
@@ -597,17 +597,17 @@ int setactive(struct protstream *conn, mystring_t *name)
        - make <activesieve>.NEW as a hard link
        - rename it to <activesieve>
     */
-    result = symlink(filename, "default.bc.NEW");
+    result = symlink(filename, "defaultbc.NEW");
     if (result) {
-	syslog(LOG_ERR, "symlink(%s, default.bc.NEW): %m", filename);
+	syslog(LOG_ERR, "symlink(%s, defaultbc.NEW): %m", filename);
 	prot_printf(conn, "NO \"Can't make link\"\r\n");    
 	return TIMSIEVE_FAIL;
     }
 
-    result = rename("default.bc.NEW", "default.bc");
+    result = rename("defaultbc.NEW", "defaultbc");
     if (result) {
-	unlink("default.bc.NEW");
-	syslog(LOG_ERR, "rename(default.bc.NEW, default.bc): %m");
+	unlink("defaultbc.NEW");
+	syslog(LOG_ERR, "rename(defaultbc.NEW, defaultbc): %m");
 	prot_printf(conn,"NO \"Error renaming\"\r\n");
 	return TIMSIEVE_FAIL;
     }
