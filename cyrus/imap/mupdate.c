@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.17 2002/01/17 19:30:41 rjs3 Exp $
+ * $Id: mupdate.c,v 1.18 2002/01/17 21:30:24 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -372,6 +372,7 @@ void service_abort(int error)
 
 void fatal(const char *s, int code)
 {
+    syslog(LOG_ERR, "%s", s);
     exit(code);
 }
 
@@ -384,9 +385,9 @@ void cmdloop(struct conn *c)
     const char *mechs;
     int ret;
     unsigned int mechcount;
-    
+
     syslog(LOG_DEBUG, "starting cmdloop() on fd %d", c->fd);
-    
+        
     /* zero out struct bufs */
     memset(&tag, 0, sizeof(struct buf));
     memset(&cmd, 0, sizeof(struct buf));
