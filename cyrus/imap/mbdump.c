@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.13 2002/04/05 18:51:56 rjs3 Exp $
+ * $Id: mbdump.c,v 1.14 2002/04/11 23:46:42 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -583,7 +583,6 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
 	    } else {
 		/* xxx! - should we be less silent? */
 		if((d = opendir(sieve_path)) == NULL) {
-		    syslog(LOG_ERR, "creating %s", sieve_path);
 		    ret = mkdir(sieve_path, 0755);
 		    
 		    if(ret) {
