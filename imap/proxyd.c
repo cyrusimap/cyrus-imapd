@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.55 2000/12/18 22:01:58 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.56 2000/12/19 19:25:53 leg Exp $ */
 
 #define NEW_BACKEND_TIMEOUT
 
@@ -575,7 +575,7 @@ static int proxy_authenticate(struct backend *s)
 	return r;
     }
 
-    secprops = mysasl_secprops(SASL_SEC_NOPLAINTEXT);
+    secprops = mysasl_secprops(0);
     r = sasl_setprop(s->saslconn, SASL_SEC_PROPS, secprops);
     if (r != SASL_OK) {
 	return r;
@@ -1250,7 +1250,7 @@ int service_main(int argc, char **argv, char **envp)
 	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL); 
     }
 
-    secprops = mysasl_secprops(0);
+    secprops = mysasl_secprops(SASL_SEC_NOPLAINTEXT);
     sasl_setprop(proxyd_saslconn, SASL_SEC_PROPS, secprops);
     sasl_setprop(proxyd_saslconn, SASL_IP_REMOTE, &proxyd_remoteaddr);  
     sasl_setprop(proxyd_saslconn, SASL_IP_LOCAL, &proxyd_localaddr);  
@@ -2384,6 +2384,7 @@ void id_getcmdline(int argc, char **argv)
     }
 }
 
+#if 0
 void cmd_id(char *tag)
 {
     static int did_id = 0;
@@ -2577,6 +2578,18 @@ void cmd_id(char *tag)
     failed_id = 0;
     did_id = 1;
 }
+#else
+void cmd_id(char *tag)
+{
+    eatline('a');
+    prot_printf(proxyd_out, "* ID NIL\r\n");
+
+    prot_printf(proxyd_out, "%s OK %s\r\n", tag,
+		error_message(IMAP_OK_COMPLETED));
+
+}
+
+#endif
 
 /*
  * Perform a CAPABILITY command
@@ -2596,7 +2609,8 @@ void cmd_capability(char *tag)
     }
     prot_printf(proxyd_out, "* CAPABILITY ");
     prot_printf(proxyd_out, CAPABILITY_STRING);
-    prot_printf(proxyd_out, " IDLE MAILBOX-REFERRALS");
+    /* prot_printf(proxyd_out, " IDLE"); */
+    prot_printf(proxyd_out, " MAILBOX-REFERRALS");
 
     if (starttls_enabled())
 	prot_printf(proxyd_out, " STARTTLS");
