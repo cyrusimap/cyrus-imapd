@@ -536,10 +536,13 @@ struct mailbox *mailbox;
 {
     int r = -1;
 
+    if (mailbox->index_lock_count++) return 0;
+
     while (r != 0) {
 	r = flock(fileno(mailbox->cache), LOCK_EX|LOCK_NB);
 	if (r == -1) {
 	    if (errno == EINTR) continue;
+	    mailbox->pop_lock_count--;
 	    if (errno == EWOULDBLOCK || errno == EAGAIN) {
 		return IMAP_MAILBOX_POPLOCKED;
 	    }
@@ -645,7 +648,11 @@ struct mailbox *mailbox;
 mailbox_unlock_pop(mailbox)
 struct mailbox *mailbox;
 {
-    flock(fileno(mailbox->cache), LOCK_UN);
+    assert(mailbox->pop_lock_count != 0);
+
+    if (--mailbox->pop_lock_count == 0) {
+	flock(fileno(mailbox->cache), LOCK_UN);
+    }
     return 0;
 }
 
