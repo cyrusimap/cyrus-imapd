@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- * $Id: mailbox.c,v 1.147.2.1 2003/11/05 00:54:04 ken3 Exp $
+ * $Id: mailbox.c,v 1.147.2.2 2004/01/15 20:24:31 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -2006,11 +2006,9 @@ mailbox_expunge(struct mailbox *mailbox,
 		htonl(new_cache_total_size);
 	    fwrite(buf, 1, mailbox->record_size, newindex);
 
-	    /* Compute size of this record 
-	     * use <= NUM_CACHE_FIELDS to allow us to get to beginning
-	     * of next whole record */
+	    /* Compute size of this record */
 	    cacheitembegin = cacheitem = mailbox->cache_base + cache_offset;
-	    for(cache_ent = 0; cache_ent <= NUM_CACHE_FIELDS; cache_ent++) {
+	    for(cache_ent = 0; cache_ent < NUM_CACHE_FIELDS; cache_ent++) {
 		cacheitem = CACHE_ITEM_NEXT(cacheitem);
 	    }
 	    cache_record_size = (cacheitem - cacheitembegin);

@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Admin.pm,v 1.39 2003/10/22 18:50:19 rjs3 Exp $
+# $Id: Admin.pm,v 1.39.2.1 2004/01/15 20:24:42 ken3 Exp $
 
 package Cyrus::IMAP::Admin;
 use strict;
@@ -742,7 +742,9 @@ sub getinfo {
 sub mboxconfig {
   my ($self, $mailbox, $entry, $value) = @_;
 
-  my %values = ( "expire" => "/vendor/cmu/cyrus-imapd/expire",
+  my %values = ( "comment" => "/comment",
+		 "news2mail" => "/vendor/cmu/cyrus-imapd/news2mail",
+		 "expire" => "/vendor/cmu/cyrus-imapd/expire",
 		 "squat" => "/vendor/cmu/cyrus-imapd/squat" );
 
   if(!$self->{support_annotatemore}) {
@@ -808,8 +810,28 @@ sub setinfoserver {
     return undef;
   }
 
-  my ($rc, $msg) = $self->send('', '', "SETANNOTATION \"\" %q (\"value.shared\" %s)",
-			       $entry, $value);
+  my %values = ( "comment" => "/comment",
+		 "motd" => "/motd",
+		 "admin" => "/admin",
+		 "shutdown" => "/vendor/cmu/cyrus-imapd/shutdown",
+		 "expire" => "/vendor/cmu/cyrus-imapd/expire",
+		 "squat" => "/vendor/cmu/cyrus-imapd/squat" );
+
+  $entry = $values{$entry} if (exists($values{$entry}));
+
+  $value = undef if($value eq "none");
+
+  my ($rc, $msg);
+
+  if(defined($value)) {
+    ($rc, $msg) = $self->send('', '',
+			      "SETANNOTATION \"\" %q (\"value.shared\" %q)",
+		              $entry, $value);
+  } else {
+    ($rc, $msg) = $self->send('', '',
+                              "SETANNOTATION \"\" %q (\"value.shared\" NIL)",
+		              $entry);
+  }
 
   if ($rc eq 'OK') {
     $self->{error} = undef;

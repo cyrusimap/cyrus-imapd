@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.268.2.4 2003/12/19 18:33:22 ken3 Exp $
+dnl $Id: configure.in,v 1.268.2.5 2004/01/15 20:24:21 ken3 Exp $
 dnl
 
 
@@ -62,7 +62,7 @@ fi
 AC_ARG_WITH(login,,AC_ERROR([--with-login is no longer supported.
 Configure SASL appropriately instead.]))
 
-AC_ARG_WITH(cyrus-prefix,[  --with-cyrus-prefix=DIR    use DIR as cyrus install directory],
+AC_ARG_WITH(cyrus-prefix,[  --with-cyrus-prefix=DIR    use DIR as cyrus server install directory],
 	cyrus_prefix="$withval",cyrus_prefix="/usr/cyrus")
 AC_SUBST(cyrus_prefix)
 AC_DEFINE_UNQUOTED(CYRUS_PATH,"$cyrus_prefix",[Where will we be installed?])
@@ -214,7 +214,7 @@ if test "$use_berkeley" != "no"; then
   CPPFLAGS="${BDB_INCADD} ${CPPFLAGS}"
 
   CYRUSDB_OBJS="$CYRUSDB_OBJS cyrusdb_berkeley.o"
-  AC_DEFINE(WITH_BERKELEY,[],[Build in Berkeley DB support?])
+  AC_DEFINE(HAVE_BDB,[],[Build in Berkeley DB support?])
 fi
 
 dnl End Berkeley DB Detection
@@ -582,13 +582,18 @@ if test "$WITH_AUTH" = "krb" -o "$WITH_AUTH" = "krb_pts" -o "$with_krb" != "no";
 	AC_MSG_ERROR([--enable-statickrb specified but --with-krb did not specify a valid directory])
   fi 
 
-  AC_CHECK_LIB(des,des_ecb_encrypt,
+  dnl Do we need DES for kerberos?
+  AC_ARG_WITH(krbdes,[  --with-krbdes           use Kerberos DES implementation [[yes]]],
+	with_krbdes="$withval", with_krbdes="yes")
+  if test "$with_krbdes" = "yes"; then
+    AC_CHECK_LIB(des,des_ecb_encrypt,
 	if test "$with_statickrb" = "yes"; then
 	    KRB_LIBS="$with_krb/lib/libdes.a"
 	else
 	    KRB_LIBS="-ldes"
 	fi,
-  AC_MSG_ERROR([The Kerberos DES library is required for Kerberos support.  You might want --with-auth=unix.]))
+    AC_MSG_ERROR([The Kerberos DES library is required for Kerberos support.  You might want --with-auth=unix.]))
+  fi
 
   dnl if we were ambitious, we'd look more aggressively for the
   dnl krb4 install
@@ -999,7 +1004,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.268.2.4 2003/12/19 18:33:22 ken3 Exp $ */
+/* $Id: configure.in,v 1.268.2.5 2004/01/15 20:24:21 ken3 Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *

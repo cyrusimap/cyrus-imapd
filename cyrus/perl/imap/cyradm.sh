@@ -39,7 +39,7 @@
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 #
-# $Id: cyradm.sh,v 1.13.2.1 2003/12/19 18:33:50 ken3 Exp $
+# $Id: cyradm.sh,v 1.13.2.2 2004/01/15 20:24:41 ken3 Exp $
 case "x$BASH_VERSION" in
 x) exec perl -MCyrus::IMAP::Shell -e shell -- ${1+"$@"} ;;
 *) exec perl -MCyrus::IMAP::Shell -e shell -- "$@" ;;
@@ -199,6 +199,34 @@ find the quota root for a mailbox.
 
 show quota roots and quotas for mailbox
 
+=item C<mboxconfig> I<mailbox> I<attribute> I<value>
+
+=item C<mboxcfg> I<mailbox> I<attribute> I<value>
+
+Set mailbox metadata.  A value of "none" will remove the attribute.
+The currently supported attributes are:
+
+=over 4
+
+=item C<comment>
+
+Sets a comment or description associated with the mailbox.
+
+=item C<expire>
+
+Sets the number of days after which messages will be expired from the mailbox.
+
+=item C<squat>
+
+Indicates that the mailbox should have a squat index created for it.
+
+=item C<news2mail>
+
+Sets an email address to which messages injected into the server via NNTP 
+will be sent.
+
+=back 
+
 =item C<renamemailbox> [C<--partition> I<partition>] I<oldname> I<newname>
 
 =item C<rename> [C<--partition> I<partition>] I<oldname> I<newname>
@@ -279,6 +307,43 @@ Delete (STORE \DELETED, EXPUNGE)
 Administer (SETACL)
 
 =back
+
+=item C<setinfo> I<attribute> I<value>
+
+Set server metadata.  A value of "none" will remove the attribute.
+The currently supported attributes are:
+
+=over 4
+
+=item C<motd>
+
+Sets a "message of the day".  The message gets displayed as an ALERT after
+authentication.
+
+=item C<comment>
+
+Sets a comment or description associated with the server.
+
+=item C<admin>
+
+Sets the administrator email address for the server.
+
+=item C<shutdown>
+
+Sets a shutdown message.  The message gets displayed as an ALERT and
+all users are disconnected from the server (subsequent logins are disallowed).
+
+=item C<expire>
+
+Sets the number of days after which messages will be expired from the
+server (unless overridden by a mailbox annotation).
+
+=item C<squat>
+
+Indicates that all mailboxes should have a squat indexes created for
+them (unless overridden by a mailbox annotation).
+
+=back 
 
 =item C<setquota> I<root> I<resource> I<value> [I<resource> I<value> ...]
 

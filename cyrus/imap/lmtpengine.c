@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.93.2.1 2003/12/19 18:33:36 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.93.2.2 2004/01/15 20:24:30 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -652,9 +652,9 @@ static int savemsg(struct clientdata *cd,
     /* We are always atleast "with LMTPA" -- no unauth delivery */
     fprintf(f, "\r\n\tby %s (Cyrus %s) with LMTP%s%s",
 	    config_servername,
+	    CYRUS_VERSION,
 	    cd->starttls_done ? "S" : "",
-	    cd->authenticated == DIDAUTH ? "A" : "",
-	    CYRUS_VERSION);
+	    cd->authenticated == DIDAUTH ? "A" : "");
 
 #ifdef HAVE_SSL
     if (cd->tls_conn) {
@@ -756,6 +756,7 @@ static int process_recipient(char *addr,
     int r, sl;
     address_data_t *ret = (address_data_t *) xmalloc(sizeof(address_data_t));
     int forcedowncase = config_getswitch(IMAPOPT_LMTP_DOWNCASE_RCPT);
+    int quoted, detail;
 
     assert(addr != NULL && msg != NULL);
 
@@ -781,27 +782,34 @@ static int process_recipient(char *addr,
 	addr++;
     }
     
-    if (*addr == '\"') {
-	addr++;
-	while (*addr && *addr != '\"') {
-	    if (*addr == '\\') addr++;
-	    *dest++ = *addr++;
-	}
-    }
-    else {
-	if(forcedowncase) {
-	    /* We should downcase the localpart up to the first + */
-	    while(*addr != '@' && *addr != '>' && *addr != '+') {
-		if(*addr == '\\') addr++;
-		*dest++ = TOLOWER(*addr++);
-	    }
+    quoted = detail = 0;
+    while (*addr &&
+	   (quoted ||
+	    ((config_virtdomains || *addr != '@') && *addr != '>'))) {
+	/* start/end of quoted localpart, skip the quote */
+	if (*addr == '\"') {
+	    quoted = !quoted;
+	    addr++;
+	    continue;
 	}
 
-	/* Now finish the remainder of the localpart */
-	while ((config_virtdomains || *addr != '@') && *addr != '>') {
-	    if (*addr == '\\') addr++;
-	    *dest++ = *addr++;
+	/* escaped char, pass it through */
+	if (*addr == '\\') {
+	    addr++;
+	    if (!*addr) break;
+	} else {
+	    /* start of detail */
+	    if (*addr == '+') detail = 1;
+
+	    /* end of localpart (unless quoted) */
+	    if (*addr == '@' && !quoted) detail = 0;
 	}
+
+	/* downcase everything accept the detail */
+	if (forcedowncase && !detail)
+	    *dest++ = TOLOWER(*addr++);
+	else
+	    *dest++ = *addr++;
     }
     *dest = '\0';
 	

@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.23.2.2 2003/12/19 18:33:56 ken3 Exp $
+ * $Id: sieve.y,v 1.23.2.3 2004/01/15 20:24:44 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -899,7 +899,8 @@ static int verify_envelope(char *env)
     char errbuf[100];
 
     lcase(env);
-    if (!strcmp(env, "from") || !strcmp(env, "to")) return 1;
+    if (!config_getswitch(IMAPOPT_RFC3028_STRICT) ||
+	!strcmp(env, "from") || !strcmp(env, "to")) return 1;
 
     snprintf(errbuf, sizeof(errbuf),
 	     "env-part '%s': not a valid part for an envelope test", env);

@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.71.2.1 2003/12/19 18:33:26 ken3 Exp $ -->
+<!-- $Id: changes.html,v 1.71.2.2 2004/01/15 20:24:24 ken3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -18,6 +18,25 @@ Special care needs to be taken when berkley db is used for mboxlist.</li>
 used for each database can be specified with an <tt>imapd.conf</tt>
 option.  <b>NOTE:</b> You MUST convert the database using
 <tt>cvt_cyrusdb</tt> BEFORE changing the backend in <tt>imapd.conf</tt>.
+<li>Sendmail socket map support (<tt>smmapd</tt>) for verifying that
+mailboxes exist and are deliverable before accepting the message and
+sending it to Cyrus.</li>
+<li>New <tt>userid</tt> mode for virtual domains, which does NOT do
+reverse lookups of the IP address.</li>
+<li><tt>nntpd</tt> now supports the Xref header.</li>
+<li><tt>nntpd</tt> can now use the POST command to feed articles to
+upstream servers.</li>
+<li><tt>fetchnews</tt> can now be used with NNTP servers which don't support
+the NEWNEWS command.</li>
+<li><tt>lmtpd</tt> now initializes <tt>duplicate.db</tt> only when it
+is necessary (when using Sieve or <tt>duplicatesuppression</tt>).</li>
+<li>Sieve now verifies that text strings are valid UTF-8.</li>
+<li>Sieve now verifies that address tests and envelope tests are done
+on headers which contain addresses (can be disabled with
+<tt>rfc3028_strict: no</tt>).</li>
+<li>Services will now notice that a new binary has been installed and
+will restart using the new binary once the existing connection is
+closed.</li>
 </ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.2.1</h1>
@@ -1882,7 +1901,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2003/12/19 18:33:26 $ <br />
+last modified: $Date: 2004/01/15 20:24:24 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>

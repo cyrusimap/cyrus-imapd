@@ -1,4 +1,4 @@
-<!-- $Id: install-virtdomains.html,v 1.2 2003/10/22 18:02:53 rjs3 Exp $ -->
+<!-- $Id: install-virtdomains.html,v 1.2.2.1 2004/01/15 20:24:25 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Configuring Virtual Domains
@@ -28,9 +28,12 @@ address of the receiving interface (useful for servers with multiple
 NICs or using IP aliasing)</li>
 </ul>
 
-<p>Both of these methods are always active and can be used in conjunction
-with one another.  Note that a fully qualified userid takes precedence
-over a domain obtained from the IP address.</p>
+<p>Both of these methods are active if the <tt>virtdomains</tt> option
+is set to <tt>on</tt> (or <tt>yes</tt>, <tt>1</tt>, <tt>true</tt>) and
+can be used in conjunction with one another. If the
+<tt>virtdomains</tt> option is set to <tt>userid</tt>, then only the
+first method is used. Note that a fully qualified userid takes
+precedence over a domain obtained from the IP address.</p>
 
 <h3>Concepts</h3>
 <p>Perhaps the most important part of this process is to understand
@@ -217,5 +220,5 @@ To list all mailboxes in domain 'example.com':</p>
 </kbd></pre>
 
 <P><HR>
-last modified: $Date: 2003/10/22 18:02:53 $
+last modified: $Date: 2004/01/15 20:24:25 $
 </BODY></HTML>

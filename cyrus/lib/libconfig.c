@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: libconfig.c,v 1.2.2.3 2003/12/19 18:33:43 ken3 Exp $ */
+/* $Id: libconfig.c,v 1.2.2.4 2004/01/15 20:24:38 ken3 Exp $ */
 
 #include <config.h>
 
@@ -72,7 +72,7 @@ const char *config_mupdate_server = NULL;/* NULL */
 const char *config_defdomain = NULL;     /* NULL */
 const char *config_ident = NULL;         /* the service name */
 int config_hashimapspool;	  /* f */
-int config_virtdomains;	          /* f */
+enum enum_value config_virtdomains;	          /* f */
 enum enum_value config_mupdate_config;	/* IMAP_ENUM_MUPDATE_CONFIG_STANDARD */
 
 /* declared in each binary that uses libconfig */
@@ -327,15 +327,26 @@ void config_read(const char *alt_config)
 	    {
 		const struct enum_option_s *e = imapopts[opt].enum_options;
 
+		if (imapopts[opt].t == OPT_ENUM) {
+		    /* normalize on/off values */
+		    if (!strcmp(p, "1") || !strcmp(p, "yes") ||
+			!strcmp(p, "t") || !strcmp(p, "true")) {
+			p = "on";
+		    } else if (!strcmp(p, "0") || !strcmp(p, "no") ||
+			       !strcmp(p, "f") || !strcmp(p, "false")) {
+			p = "off";
+		    }
+		}
+
 		while (e->name) {
-		    if (!strcasecmp(e->name, p)) break;
+		    if (!strcmp(e->name, p)) break;
 		    e++;
 		}
 		if (e->name) {
-		    if (imapopts[opt].t == OPT_STRINGLIST)
-			imapopts[opt].val.s = e->name;
-		    else
+		    if (imapopts[opt].t == OPT_ENUM)
 			imapopts[opt].val.e = e->val;
+		    else
+			imapopts[opt].val.s = e->name;
 		} else {
 		    /* error during conversion */
 		    sprintf(errbuf, "invalid value for %s in line %d",
@@ -441,7 +452,7 @@ void config_read(const char *alt_config)
     config_hashimapspool = config_getswitch(IMAPOPT_HASHIMAPSPOOL);
 
     /* are we supporting virtual domains?  */
-    config_virtdomains = config_getswitch(IMAPOPT_VIRTDOMAINS);
+    config_virtdomains = config_getenum(IMAPOPT_VIRTDOMAINS);
     config_defdomain = config_getstring(IMAPOPT_DEFAULTDOMAIN);
 
     /* look up the hostname we should present to the user */

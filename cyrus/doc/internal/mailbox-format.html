@@ -4,7 +4,7 @@
 
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-<meta name="revision" content="$Id: mailbox-format.html,v 1.3 2003/10/22 18:50:05 rjs3 Exp $" />
+<meta name="revision" content="$Id: mailbox-format.html,v 1.3.2.1 2004/01/15 20:24:25 ken3 Exp $" />
 <meta name="author" content="Rob Siemborski" />
 
 <title>mailbox format</title>
@@ -147,10 +147,13 @@ Generation Number (4 bytes)</dt>
 <dd> (time_t) of the last time a message was appended</dd>
 
 <dt>Last UID (4 bytes)</dt>
-<dd>  ???  - (is this UIDNEXT - 1?)</dd>
+<dd> Highest UID of all messages in the mailbox (UIDNEXT - 1).</dd>
+
+<dt>Quota Reserved Field (4 bytes)</dt>
+<dd> Reserved for future 64-bit quotas.</dd>
 
 <dt>Quota Mailbox Used (4 bytes)</dt>
-<dd>  ???</dd>
+<dd> Total amount of storage used by all of the messages in the mailbox.</dd>
 
 <dt>POP3 Last Login (4 bytes)</dt>
 <dd>  (time_t) of the last pop3 login to this INBOX, used to enforce
@@ -168,6 +171,9 @@ the "poptimeout" <tt>imapd.conf</tt> option.</dd>
 <dd> Flag signalling that we're using
 "<em>uidvalidity</em>.<em>uid</em>" instead of just "<em>uid</em>" for
 the output of the POP3 UIDL command.</dd>
+
+<dt>Leaked Cache (4 bytes)</dt> 
+<dd> Number of leaked records in the cache file.</dd>
 </dl>
 
 <p>
@@ -214,6 +220,10 @@ of the message.</p>
 
 <dt>CONTENT_LINES (4 bytes)</dt>
 <dd>  Number of text lines contained in the message content (body).</dd>
+
+<dt>CACHE_VERSION (4 bytes)</dt>
+<dd>Indicates the version number of the cache record for the message
+(determines which headers are cached).</dd>
 </dl>
 
 <h3><tt>cyrus.cache</tt> file format detail</h3>

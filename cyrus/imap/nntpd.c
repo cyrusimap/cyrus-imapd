@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.2 2003/10/28 22:06:55 ken3 Exp $
+ * $Id: nntpd.c,v 1.2.2.3 2004/01/15 20:24:31 ken3 Exp $
  */
 
 /*
@@ -1750,8 +1750,8 @@ static time_t parse_datetime(char *datestr, char *timestr, char *gmt)
     return (gmt ? mkgmtime(&tm) : mktime(&tm));
 }
 
-static int open_group(char *name, int has_prefix,
-		      struct backend **ret, int *postable)
+static int open_group(char *name, int has_prefix, struct backend **ret,
+		      int *postable /* used for LIST ACTIVE only */)
 {
     char mailboxname[MAX_MAILBOX_NAME+1];
     int r = 0;
@@ -1775,7 +1775,8 @@ static int open_group(char *name, int has_prefix,
 	int myrights = cyrus_acl_myrights(nntp_authstate, acl);
 
 	if (postable) *postable = myrights & ACL_POST;
-	if (!(myrights & ACL_READ)) {
+	if (!postable && /* allow limited 'r' for LIST ACTIVE */
+	    !(myrights & ACL_READ)) {
 	    r = (myrights & ACL_LOOKUP) ?
 		IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
 	}
@@ -1818,12 +1819,49 @@ static int open_group(char *name, int has_prefix,
     return 0;
 }
 
+/*
+ * duplicate_find() callback function to build Xref content
+ */
+struct xref_rock {
+    char *buf;
+    size_t size;
+};
+
+static int xref_cb(const char *msgid __attribute__((unused)),
+		   const char *mailbox,
+		   time_t mark __attribute__((unused)),
+		   unsigned long uid, void *rock)
+{
+    struct xref_rock *xrock = (struct xref_rock *) rock;
+    size_t len = strlen(xrock->buf);
+
+    /* make sure its a message in a mailbox that we're serving via NNTP */
+    if (*mailbox && !strncmp(mailbox, newsprefix, strlen(newsprefix)) &&
+	strncmp(mailbox, "user.", 5)) {
+	snprintf(xrock->buf + len, xrock->size - len,
+		 " %s:%lu", mailbox + strlen(newsprefix), uid);
+    }
+
+    return 0;
+}
+
+/*
+ * Build an Xref header.  We have to do this on the fly because there is
+ * no way to store it in the article at delivery time.
+ */
+static void build_xref(char *msgid, char *buf, size_t size, int body_only)
+{
+    struct xref_rock xrock = { buf, size };
+
+    snprintf(buf, size, "%s%s", body_only ? "" : "Xref: ", config_servername);
+    duplicate_find(msgid, &xref_cb, &xrock);
+}
+
 static void cmd_article(int part, char *msgid, unsigned long uid)
 {
-    int msgno, by_msgid;
+    int msgno, by_msgid = (msgid != NULL);
     char fname[MAX_MAILBOX_PATH+1];
     FILE *msgfile;
-    char buf[4096];
 
     msgno = index_finduid(uid);
     if (!msgno || index_getuid(msgno) != uid) {
@@ -1842,31 +1880,40 @@ static void cmd_article(int part, char *msgid, unsigned long uid)
 	return;
     }
 
-    if (!(by_msgid = msgid != NULL))
-	msgid = index_get_msgid(nntp_group, msgno);
+    if (!by_msgid) msgid = index_get_msgid(nntp_group, msgno);
 
     prot_printf(nntp_out, "%u %lu %s\r\n",
 		220 + part, by_msgid ? 0 : uid, msgid ? msgid : "<0>");
 
-    if (!by_msgid) free(msgid);
-
     if (part != ARTICLE_STAT) {
+	char buf[4096];
+	int body = 0;
+	int output = (part != ARTICLE_BODY);
+
 	while (fgets(buf, sizeof(buf), msgfile)) {
 
-	    if (part != ARTICLE_ALL && buf[0] == '\r' && buf[1] == '\n') {
+	    if (!body && buf[0] == '\r' && buf[1] == '\n') {
 		/* blank line between header and body */
+		body = 1;
+		if (output) {
+		    /* add the Xref header */
+		    char xref[8192];
+
+		    build_xref(msgid, xref, sizeof(xref), 0);
+		    prot_printf(nntp_out, "%s\r\n", xref);
+		}
 		if (part == ARTICLE_HEAD) {
 		    /* we're done */
 		    break;
 		}
 		else if (part == ARTICLE_BODY) {
 		    /* start outputing text */
-		    part = ARTICLE_ALL;
+		    output = 1;
 		    continue;
 		}
 	    }
 
-	    if (part != ARTICLE_BODY) {
+	    if (output) {
 		if (buf[0] == '.') prot_putc('.', nntp_out);
 		do {
 		    prot_printf(nntp_out, "%s", buf);
@@ -1880,6 +1927,8 @@ static void cmd_article(int part, char *msgid, unsigned long uid)
 
 	prot_printf(nntp_out, ".\r\n");
     }
+
+    if (!by_msgid) free(msgid);
 
     fclose(msgfile);
 }
@@ -2113,24 +2162,42 @@ static void cmd_hdr(char *cmd, char *hdr, char *pat, char *msgid,
     for (; uid <= last; uid++) {
 	char *body;
 	int msgno = index_finduid(uid);
+	int by_msgid = (msgid != NULL);
 
 	if (!msgno || index_getuid(msgno) != uid) continue;
 
 	/* see if we're looking for metadata */
 	if (hdr[0] == ':') {
-	    if (!strcasecmp(":size", hdr))
-		prot_printf(nntp_out, "%lu %lu\r\n", msgid ? 0 : uid,
-			    index_getsize(nntp_group, msgno));
+	    if (!strcasecmp(":size", hdr)) {
+		char xref[8192];
+		unsigned long size = index_getsize(nntp_group, msgno);
+
+		if (!by_msgid) msgid = index_get_msgid(nntp_group, msgno);
+		build_xref(msgid, xref, sizeof(xref), 0);
+		if (!by_msgid) free(msgid);
+
+		prot_printf(nntp_out, "%lu %lu\r\n", by_msgid ? 0 : uid,
+			    size + strlen(xref) + 2); /* +2 for \r\n */
+	    }
 	    else if (!strcasecmp(":lines", hdr))
-		prot_printf(nntp_out, "%lu %lu\r\n", msgid ? 0 : uid,
+		prot_printf(nntp_out, "%lu %lu\r\n", by_msgid ? 0 : uid,
 			    index_getlines(nntp_group, msgno));
 	    else
-		prot_printf(nntp_out, "%lu \r\n", msgid ? 0 : uid);
+		prot_printf(nntp_out, "%lu \r\n", by_msgid ? 0 : uid);
+	}
+	else if (!strcmp(hdr, "xref") && !pat /* [X]HDR only */) {
+	    char xref[8192];
+
+	    if (!by_msgid) msgid = index_get_msgid(nntp_group, msgno);
+	    build_xref(msgid, xref, sizeof(xref), 1);
+	    if (!by_msgid) free(msgid);
+
+	    prot_printf(nntp_out, "%lu %s\r\n", by_msgid ? 0 : uid, xref);
 	}
 	else if ((body = index_getheader(nntp_group, msgno, hdr)) &&
 		 (!pat ||			/* [X]HDR */
 		  wildmat(body, pat))) {	/* XPAT with match */
-		prot_printf(nntp_out, "%lu %s\r\n", msgid ? 0 : uid, body);
+		prot_printf(nntp_out, "%lu %s\r\n", by_msgid ? 0 : uid, body);
 	}
     }
 
@@ -2315,7 +2382,7 @@ int do_newsgroups(char *name, void *rock)
 
     r = mlookup(name, &server, &acl, NULL);
 
-    if (r || !acl || !(cyrus_acl_myrights(nntp_authstate, acl) && ACL_READ))
+    if (r || !acl || !(cyrus_acl_myrights(nntp_authstate, acl) && ACL_LOOKUP))
 	return 0;
 
     if (server) {
@@ -2540,6 +2607,7 @@ static void cmd_list(char *arg1, char *arg2)
 	    prot_printf(nntp_out, "Bytes:\r\n");
 	    prot_printf(nntp_out, "Lines:\r\n");
 	}
+	prot_printf(nntp_out, "Xref:full\r\n");
 	prot_printf(nntp_out, ".\r\n");
     }
     else if (!strcmp(arg1, "active.times") || !strcmp(arg1, "distributions") ||
@@ -2658,17 +2726,22 @@ static void cmd_over(char *msgid, unsigned long uid, unsigned long last)
 	if (!msgno || index_getuid(msgno) != uid) continue;
 
 	if ((over = index_overview(nntp_group, msgno))) {
+	    char xref[8192];
+
+	    build_xref(over->msgid, xref, sizeof(xref), 0);
+
 	    if (!found++)
 		prot_printf(nntp_out, "224 Overview information follows:\r\n");
 
-	    prot_printf(nntp_out, "%lu\t%s\t%s\t%s\t%s\t%s\t%lu\t%lu\r\n",
+	    prot_printf(nntp_out, "%lu\t%s\t%s\t%s\t%s\t%s\t%lu\t%lu\t%s\r\n",
 			msgid ? 0 : over->uid,
 			over->subj ? over->subj : "",
 			over->from ? over->from : "",
 			over->date ? over->date : "",
 			over->msgid ? over->msgid : "",
 			over->ref ? over->ref : "",
-			over->bytes, over->lines);
+			over->bytes + strlen(xref) + 2, /* +2 for \r\n */
+			over->lines, xref);
 	}
     }
 
@@ -3215,43 +3288,57 @@ static int cancel(message_data_t *msg)
     return r;
 }
 
-static void feedpeer(const char *peer, message_data_t *msg)
+static void feedpeer(char *peer, message_data_t *msg)
 {
-    const char *port = "119";
-    char *server, *path, *s;
-    struct wildmat *wild = NULL, *w;
+    char *user, *pass, *host, *port, *wild, *path, *s;
+    int oldform = 0;
+    struct wildmat *wmat = NULL, *w;
     int len, err, n, feed = 1;
     struct addrinfo hints, *res, *res0;
     int sock = -1;
     struct protstream *pin, *pout;
     char buf[4096];
 
-    /* make a working copy of the peer */
-    server = xstrdup(peer);
+    /* parse the peer */
+    user = pass = host = port = wild = NULL;
+    if (wild = strrchr(peer, '/'))
+	*wild++ = '\0';
+    else if ((wild = strrchr(peer, ':')) &&
+	     strcspn(wild, "!*?,.") != strlen(wild)) {
+	*wild++ = '\0';
+	host = peer;
+	oldform = 1;
+    }
+    if (!oldform) {
+	if (host = strchr(peer, '@')) {
+	    *host++ = '\0';
+	    user = peer;
+	    if (pass = strchr(user, ':')) *pass++ = '\0';
+	}
+	else
+	    host = peer;
 
-    /* check for a wildmat pattern */
-    if ((s = strchr(server, ':'))) {
-	*s++ = '\0';
-	wild = split_wildmats(s);
+	if (port = strchr(host, ':')) *port++ = '\0';
     }
 
     /* check path to see if this message came through our peer */
-    len = strlen(server);
+    len = strlen(host);
     path = msg->path;
     while (path && (s = strchr(path, '!'))) {
-	if ((s - path) == len && !strncmp(path, server, len)) {
-	    free(server);
+	if ((s - path) == len && !strncmp(path, host, len)) {
 	    return;
 	}
 	path = s + 1;
     }
 
     /* check newsgroups against wildmat to see if we should feed it */
-    if (wild) {
+    if (wild && *wild) {
+	wmat = split_wildmats(wild);
+
 	feed = 0;
 	for (n = 0; n < msg->rcpt_num; n++) {
 	    /* see if the newsgroup matches one of our wildmats */
-	    w = wild;
+	    w = wmat;
 	    while (w->pat &&
 		   wildmat(msg->rcpt[n], w->pat) != 1) {
 		w++;
@@ -3277,21 +3364,18 @@ static void feedpeer(const char *peer, message_data_t *msg)
 	    }
 	}
 
-	free_wildmats(wild);
+	free_wildmats(wmat);
     }
 
-    if (!feed) {
-	free(server);
-	return;
-    }
+    if (!feed) return;
     
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = 0;
-    if ((err = getaddrinfo(server, port, &hints, &res0)) != 0) {
-	syslog(LOG_ERR, "getaddrinfo(%s, %s) failed: %m", server, port);
-	free(server);
+    if (!port || !*port) port = "119";
+    if ((err = getaddrinfo(host, port, &hints, &res0)) != 0) {
+	syslog(LOG_ERR, "getaddrinfo(%s, %s) failed: %m", host, port);
 	return;
     }
 
@@ -3306,11 +3390,9 @@ static void feedpeer(const char *peer, message_data_t *msg)
     }
     freeaddrinfo(res0);
     if(sock < 0) {
-	syslog(LOG_ERR, "connect(%s:%s) failed: %m", server, port);
-	free(server);
+	syslog(LOG_ERR, "connect(%s:%s) failed: %m", host, port);
 	return;
     }
-    free(server);
     
     pin = prot_new(sock, 0);
     pout = prot_new(sock, 1);
@@ -3322,13 +3404,59 @@ static void feedpeer(const char *peer, message_data_t *msg)
 	goto quit;
     }
 
-    /* tell the peer about our new article */
-    prot_printf(pout, "IHAVE %s\r\n", msg->id);
-    prot_flush(pout);
+    if (user) {
+	/* change to reader mode - not always necessary, so ignore result */
+	prot_printf(pout, "MODE READER\r\n");
+	prot_fgets(buf, sizeof(buf), pin);
 
-    if (!prot_fgets(buf, sizeof(buf), pin) || strncmp("335", buf, 3)) {
-	syslog(LOG_ERR, "peer doesn't want article %s", msg->id);
-	goto quit;
+	if (*user) {
+	    /* authenticate to peer */
+	    /* XXX this should be modified to support SASL and STARTTLS */
+
+	    prot_printf(pout, "AUTHINFO USER %s\r\n", user);
+	    if (!prot_fgets(buf, sizeof(buf), pin)) {
+		syslog(LOG_ERR, "AUTHINFO USER terminated abnormally");
+		goto quit;
+	    }
+	    else if (!strncmp("381", buf, 3)) {
+		/* password required */
+		if (!pass) {
+		    syslog(LOG_ERR, "need password for AUTHINFO PASS");
+		    goto quit;
+		}
+
+		prot_printf(pout, "AUTHINFO PASS %s\r\n", pass);
+		if (!prot_fgets(buf, sizeof(buf), pin)) {
+		    syslog(LOG_ERR, "AUTHINFO PASS terminated abnormally");
+		    goto quit;
+		}
+	    }
+
+	    if (strncmp("281", buf, 3)) {
+		/* auth failed */
+		syslog(LOG_ERR, "authentication failed");
+		goto quit;
+	    }
+	}
+
+	/* tell the peer we want to post */
+	prot_printf(pout, "POST\r\n");
+	prot_flush(pout);
+
+	if (!prot_fgets(buf, sizeof(buf), pin) || strncmp("340", buf, 3)) {
+	    syslog(LOG_ERR, "peer doesn't allow posting");
+	    goto quit;
+	}
+    }
+    else {
+	/* tell the peer about our new article */
+	prot_printf(pout, "IHAVE %s\r\n", msg->id);
+	prot_flush(pout);
+
+	if (!prot_fgets(buf, sizeof(buf), pin) || strncmp("335", buf, 3)) {
+	    syslog(LOG_ERR, "peer doesn't want article %s", msg->id);
+	    goto quit;
+	}
     }
 
     /* send the article */
@@ -3346,7 +3474,7 @@ static void feedpeer(const char *peer, message_data_t *msg)
 
     prot_printf(pout, ".\r\n");
 
-    if (!prot_fgets(buf, sizeof(buf), pin) || strncmp("235", buf, 3)) {
+    if (!prot_fgets(buf, sizeof(buf), pin) || strncmp("2", buf, 1)) {
 	syslog(LOG_ERR, "article %s transfer to peer failed", msg->id);
     }
 
@@ -3560,10 +3688,32 @@ static void cmd_post(char *msgid, int mode)
 	    }
 
 	    if (msg->id) {
-		const char *peer = config_getstring(IMAPOPT_NEWSPEER);
+		const char *peers = config_getstring(IMAPOPT_NEWSPEER);
 
 		/* send the article upstream */
-		if (peer) feedpeer(peer, msg);
+		if (peers) {
+		    char *tmpbuf, *cur_peer, *next_peer;
+
+		    /* make a working copy of the peers */
+		    cur_peer = tmpbuf = xstrdup(peers);
+
+		    while (cur_peer) {
+			/* eat any leading whitespace */
+			while (isspace(*cur_peer)) cur_peer++;
+
+			/* find end of peer */
+			if (next_peer = strchr(cur_peer, ' '))
+			    *next_peer++ = '\0';
+
+			/* feed the article to this peer */
+			feedpeer(cur_peer, msg);
+
+			/* move to next peer */
+			cur_peer = next_peer;
+		    }
+
+		    free(tmpbuf);
+		}
 
 		/* gateway news to mail */
 		news2mail(msg);

@@ -40,7 +40,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: sieveshell.pl,v 1.21 2003/10/22 18:50:28 rjs3 Exp $
+# $Id: sieveshell.pl,v 1.21.2.1 2004/01/15 20:24:44 ken3 Exp $
 #
 
 use Cyrus::SIEVE::managesieve;
@@ -159,11 +159,6 @@ sub show_help {
   print $deactivatehelp;
   print "quit             - quit\n";
 }
-#no longer used, replaced by readline module
-sub getline {
-    print "> " if ($interactive);
-    return <$filehandle>;
-}
 
 # main code
 
@@ -180,7 +175,7 @@ my $term = Term::ReadLine->new("sieveshell");
 
 $term->ornaments(0);
 
-while(defined($_  = $term->readline('> '))){
+while(defined($_  = ($interactive ? $term->readline('> ') : <$filehandle>))){
   
   $term->addhistory($_);
 

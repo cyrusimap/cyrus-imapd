@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: fetchnews.c,v 1.2 2003/10/22 18:02:57 rjs3 Exp $
+ * $Id: fetchnews.c,v 1.2.2.1 2004/01/15 20:24:26 ken3 Exp $
  */
 
 #include <config.h>
@@ -57,6 +57,7 @@
 #include <arpa/inet.h>
 #include <sys/un.h>
 
+#include "cyrusdb.h"
 #include "exitcodes.h"
 #include "global.h"
 #include "lock.h"
@@ -66,10 +67,66 @@
 /* global state */
 const int config_need_data = 0;
 
+#define FNAME_NEWSRCDB "/fetchnews.db"
+#define DB (&cyrusdb_flat)
+
+static struct db *newsrc_db = NULL;
+static int newsrc_dbopen = 0;
+
+/* must be called after cyrus_init */
+int newsrc_init(char *fname, int myflags)
+{
+    char buf[1024];
+    int r = 0;
+
+    if (r != 0)
+	syslog(LOG_ERR, "DBERROR: init %s: %s", buf,
+	       cyrusdb_strerror(r));
+    else {
+	char *tofree = NULL;
+
+	/* create db file name */
+	if (!fname) {
+	    fname = xmalloc(strlen(config_dir)+sizeof(FNAME_NEWSRCDB));
+	    tofree = fname;
+	    strcpy(fname, config_dir);
+	    strcat(fname, FNAME_NEWSRCDB);
+	}
+
+	r = DB->open(fname, CYRUSDB_CREATE, &newsrc_db);
+	if (r != 0)
+	    syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
+		   cyrusdb_strerror(r));
+	else
+	    newsrc_dbopen = 1;
+
+	if (tofree) free(tofree);
+    }
+
+    return r;
+}
+
+int newsrc_done(void)
+{
+    int r = 0;
+
+    if (newsrc_dbopen) {
+	r = DB->close(newsrc_db);
+	if (r) {
+	    syslog(LOG_ERR, "DBERROR: error closing fetchnews.db: %s",
+		   cyrusdb_strerror(r));
+	}
+	newsrc_dbopen = 0;
+    }
+
+    return r;
+}
+
 void usage(void)
 {
     fprintf(stderr,
-	    "fetchnews [-C <altconfig>] [-s <server>] [-w <wildmat>] [-f <tstamp file>] <peer>\n");
+	    "fetchnews [-C <altconfig>] [-s <server>] [-n] [-w <wildmat>] [-f <tstamp file>]\n"
+	    "          [-a <authname> [-p <password>]] <peer>\n");
     exit(-1);
 }
 
@@ -110,7 +167,66 @@ int init_net(const char *host, char *port,
     return sock;
 }
 
-#define MSGID_GROW 100
+int fetch(char *msgid, int bymsgid,
+	  struct protstream *pin, struct protstream *pout,
+	  struct protstream *sin, struct protstream *sout,
+	  int *rejected, int *accepted, int *failed)
+{
+    char buf[4096], sbuf[4096];
+
+    /* see if we want this article */
+    prot_printf(sout, "IHAVE %s\r\n", msgid);
+    if (!prot_fgets(sbuf, sizeof(sbuf), sin)) {
+	syslog(LOG_ERR, "IHAVE terminated abnormally");
+	return -1;
+    }
+    else if (strncmp("335", sbuf, 3)) {
+	/* don't want it */
+	(*rejected)++;
+	return 0;
+    }
+
+    /* fetch the article */
+    if (bymsgid)
+	prot_printf(pout, "ARTICLE %s\r\n", msgid);
+    else
+	prot_printf(pout, "ARTICLE\r\n");
+
+    if (!prot_fgets(buf, sizeof(buf), pin)) {
+	syslog(LOG_ERR, "ARTICLE terminated abnormally");
+	return -1;
+    }
+    else if (strncmp("220", buf, 3)) {
+	/* doh! the article doesn't exist, terminate IHAVE */
+	prot_printf(sout, ".\r\n");
+    }
+    else {
+	/* store the article */
+	while (prot_fgets(buf, sizeof(buf), pin)) {
+	    prot_write(sout, buf, strlen(buf));
+	    if (buf[0] == '.' && buf[1] != '.') break;
+	}
+
+	if (buf[0] != '.') {
+	    syslog(LOG_ERR, "ARTICLE terminated abnormally");
+	    return -1;
+	}
+    }
+
+    /* see how we did */
+    if (!prot_fgets(buf, sizeof(buf), sin)) {
+	syslog(LOG_ERR, "IHAVE terminated abnormally");
+	return -1;
+    }
+    else if (!strncmp("235", buf, 3))
+	(*accepted)++;
+    else
+	(*failed)++;
+
+    return 0;
+}
+
+#define RESP_GROW 100
 
 int main(int argc, char *argv[])
 {
@@ -123,14 +239,15 @@ int main(int argc, char *argv[])
     struct protstream *pin, *pout, *sin, *sout;
     char buf[4096], sbuf[4096];
     char sfile[1024] = "";
-    int fd, i, offered, rejected, accepted, failed;
+    int fd, i, n, offered, rejected, accepted, failed;
     time_t stamp;
     struct tm *tm;
-    char **msgid = NULL;
+    char **resp = NULL;
+    int newnews = 1;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
-    while ((opt = getopt(argc, argv, "C:s:w:f:a:p:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:s:w:f:a:p:n")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -158,6 +275,10 @@ int main(int argc, char *argv[])
 
 	case 'p': /* password */
 	    password = optarg;
+	    break;
+
+	case 'n': /* no newnews */
+	    newnews = 0;
 	    break;
 
 	default:
@@ -224,31 +345,16 @@ int main(int argc, char *argv[])
     prot_printf(pout, "MODE READER\r\n");
     prot_fgets(buf, sizeof(buf), pin);
 
-    /* connect to the server */
-    if ((ssock = init_net(server, port, &sin, &sout)) < 0) {
-	fprintf(stderr, "connection to %s failed\n", server);
-	goto quit;
-    }
-
-    /* read the initial greeting */
-    if (!prot_fgets(buf, sizeof(buf), sin) || strncmp("20", buf, 2)) {
-	syslog(LOG_ERR, "server not available");
-	goto quit;
-    }
-
-    /* tell the server we're going to do streaming */
-    prot_printf(sout, "MODE STREAM\r\n");
-    if (!prot_fgets(sbuf, sizeof(sbuf), sin)) {
-	syslog(LOG_ERR, "MODE STREAM terminated abnormally");
-	goto quit;
-    }
-    else if (strncmp("203", sbuf, 3)) {
-	/* server doesn't support STREAM */
-	goto quit;
-    }
-
     /* read the previous timestamp */
-    if (!sfile[0]) snprintf(sfile, sizeof(sfile), "%s/newsstamp", config_dir);
+    if (!sfile[0]) {
+	char oldfile[1024];
+
+	snprintf(sfile, sizeof(sfile), "%s/fetchnews.stamp", config_dir);
+
+	/* upgrade from the old stamp filename to the new */
+	snprintf(oldfile, sizeof(oldfile), "%s/newsstamp", config_dir);
+	rename(oldfile, sfile);
+    }
 
     if ((fd = open(sfile, O_RDWR | O_CREAT, 0644)) == -1) {
 	syslog(LOG_ERR, "can not open %s", sfile);
@@ -261,92 +367,144 @@ int main(int argc, char *argv[])
 
     if (read(fd, &stamp, sizeof(stamp)) < sizeof(stamp)) {
 	/* XXX do something better here */
-	stamp = time(NULL);
+	stamp = 0;
     }
 
-    /* ask for new articles */
-    tm = gmtime(&stamp);
-    strftime(buf, sizeof(buf), "%Y%m%d %H%M%S", tm);
-    prot_printf(pout, "NEWNEWS %s %s GMT\r\n", wildmat, buf);
-
-    if (!prot_fgets(buf, sizeof(buf), pin) || strncmp("23", buf, 2)) {
-	syslog(LOG_ERR, "peer doesn't support NEWNEWS");
-	goto quit;
+    if (newnews) {
+	/* ask for new articles */
+	tm = gmtime(&stamp);
+	strftime(buf, sizeof(buf), "%Y%m%d %H%M%S", tm);
+	prot_printf(pout, "NEWNEWS %s %s GMT\r\n", wildmat, buf);
+	
+	if (!prot_fgets(buf, sizeof(buf), pin) || strncmp("230", buf, 3)) {
+	    syslog(LOG_ERR, "peer doesn't support NEWNEWS");
+	    newnews = 0;
+	}
     }
-
-    /* process the list */
     stamp = time(NULL);
-    offered = rejected = accepted = failed = 0;
+
+    if (!newnews) {
+	prot_printf(pout, "LIST ACTIVE %s\r\n", wildmat);
+	
+	if (!prot_fgets(buf, sizeof(buf), pin) || strncmp("215", buf, 3)) {
+	    syslog(LOG_ERR, "peer doesn't support LIST ACTIVE");
+	    goto quit;
+	}
+    }
+
+    /* process the NEWNEWS/LIST ACTIVE list */
+    n = 0;
     while (prot_fgets(buf, sizeof(buf), pin)) {
 	if (buf[0] == '.') break;
 
-	if (!(offered % MSGID_GROW)) { /* time to alloc more */
-	    msgid = (char **)
-		xrealloc(msgid, (offered + MSGID_GROW) * sizeof(char *));
+	if (!(n % RESP_GROW)) { /* time to alloc more */
+	    resp = (char **)
+		xrealloc(resp, (n + RESP_GROW) * sizeof(char *));
 	}
-	msgid[offered++] = xstrdup(buf);
+	resp[n++] = xstrdup(buf);
     }
     if (buf[0] != '.') {
-	syslog(LOG_ERR, "NEWNEWS terminated abnormally");
+	syslog(LOG_ERR, "%s terminated abnormally",
+	       newnews ? "NEWNEWS" : "LIST ACTIVE");
+	goto quit;
+    }
+
+    if (!n) {
+	/* nothing matches our wildmat */
+	goto quit;
+    }
+
+    /* connect to the server */
+    if ((ssock = init_net(server, port, &sin, &sout)) < 0) {
+	fprintf(stderr, "connection to %s failed\n", server);
+	goto quit;
+    }
+
+    /* read the initial greeting */
+    if (!prot_fgets(buf, sizeof(buf), sin) || strncmp("20", buf, 2)) {
+	syslog(LOG_ERR, "server not available");
 	goto quit;
     }
 
     /* fetch and store articles */
-    /* XXX the output of NEWNEWS already contains the terminating \r\n
-       after the msgid, so we don't need to add it to CHECK/ARTICLE/TAKETHIS */
-    for (i = 0; i < offered; i++) {
+    offered = rejected = accepted = failed = 0;
+    if (newnews) {
+	/* response is a list of msgids */
+	for (i = 0; i < n; i++) {
+	    /* find the end of the msgid */
+	    *(strrchr(resp[i], '>') + 1) = '\0';
 
-	/* see if we want this article */
-	prot_printf(sout, "CHECK %s", msgid[i]);
-	if (!prot_fgets(sbuf, sizeof(sbuf), sin)) {
-	    syslog(LOG_ERR, "CHECK terminated abnormally");
-	    goto quit;
-	}
-	else if (strncmp("238", sbuf, 3)) {
-	    /* don't want it */
-	    rejected++;
-	    continue;
-	}
-
-	/* fetch the article */
-	prot_printf(pout, "ARTICLE %s", msgid[i]);
-	if (!prot_fgets(buf, sizeof(buf), pin)) {
-	    syslog(LOG_ERR, "ARTICLE terminated abnormally");
-	    goto quit;
-	}
-	else if (strncmp("220", buf, 3)) {
-	    /* doh! the article doesn't exist */
-	    failed++;
-	    continue;
-	}
-	else {
-	    /* store the article */
-	    prot_printf(sout, "TAKETHIS %s", msgid[i]);
-	    while (prot_fgets(buf, sizeof(buf), pin)) {
-		prot_write(sout, buf, strlen(buf));
-		if (buf[0] == '.' && buf[1] != '.') break;
-	    }
-
-	    if (buf[0] != '.') {
-		syslog(LOG_ERR, "ARTICLE terminated abnormally");
+	    offered++;
+	    if (fetch(resp[i], 1, pin, pout, sin, sout,
+		      &rejected, &accepted, &failed)) {
 		goto quit;
 	    }
 	}
-
-	/* see how we did */
-	if (!prot_fgets(buf, sizeof(buf), sin)) {
-	    syslog(LOG_ERR, "TAKETHIS terminated abnormally");
-	    goto quit;
-	}
-	else if (!strncmp("239", buf, 3))
-	    accepted++;
-	else
-	    failed++;
     }
+    else {
+	char group[1024], msgid[1024], lastbuf[50];
+	const char *data;
+	unsigned long low, high, last, cur;
+	int datalen;
+	struct txn *tid = NULL;
 
-    syslog(LOG_NOTICE,
-	   "fetchnews: offered %d, rejected %d, accepted %d, failed %d",
-	   offered, rejected, accepted, failed);
+	newsrc_init(NULL, 0);
+
+	/*
+	 * response is a list of groups.
+	 * select each group, and STAT each article we haven't seen yet.
+	 */
+	for (i = 0; i < n; i++) {
+	    /* parse the LIST ACTIVE response */
+	    sscanf(resp[i], "%s %lu %lu", group, &high, &low);
+
+	    last = 0;
+	    if (!DB->fetchlock(newsrc_db, group, strlen(group),
+			       &data, &datalen, &tid)) {
+		last = strtoul(data, NULL, 10);
+	    }
+	    if (high <= last) continue;
+
+	    /* select the group */
+	    prot_printf(pout, "GROUP %s\r\n", group);
+	    if (!prot_fgets(buf, sizeof(buf), pin)) {
+		syslog(LOG_ERR, "GROUP terminated abnormally");
+		goto quit;
+	    }
+	    else if (strncmp("211", buf, 3)) break;
+
+	    /* STAT the first article we haven't seen */
+	    cur = low > last ? low : ++last;
+	    prot_printf(pout, "STAT %lu\r\n", cur);
+	    do {
+		if (!prot_fgets(buf, sizeof(buf), pin)) {
+		    syslog(LOG_ERR, "STAT/NEXT terminated abnormally");
+		    goto quit;
+		}
+		if (!strncmp("223", buf, 3)) {
+		    /* parse the STAT/NEXT response */
+		    sscanf(buf, "223 %lu %s", &cur, msgid);
+
+		    /* find the end of the msgid */
+		    *(strrchr(msgid, '>') + 1) = '\0';
+
+		    offered++;
+		    if (fetch(msgid, 0, pin, pout, sin, sout,
+			      &rejected, &accepted, &failed)) {
+			goto quit;
+		    }
+		}
+		/* continue with the NEXT article until we reach the last */
+	    } while (cur++ < high && !prot_printf(pout, "NEXT\r\n"));
+
+	    snprintf(lastbuf, sizeof(lastbuf), "%lu", cur);
+	    DB->store(newsrc_db, group, strlen(group),
+		      lastbuf, strlen(lastbuf)+1, &tid);
+	}
+
+	if (tid) DB->commit(newsrc_db, tid);
+	newsrc_done();
+    }
 
     /* write the current timestamp */
     lseek(fd, 0, SEEK_SET);
@@ -354,6 +512,10 @@ int main(int argc, char *argv[])
 	syslog(LOG_ERR, "error writing %s", sfile);
     lock_unlock(fd);
     close(fd);
+
+    syslog(LOG_NOTICE,
+	   "fetchnews: offered %d, rejected %d, accepted %d, failed %d",
+	   offered, rejected, accepted, failed);
 
   quit:
     if (psock >= 0) {

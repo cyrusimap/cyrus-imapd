@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.2.2.1 2003/12/19 18:33:29 ken3 Exp $ */
+/* $Id: global.c,v 1.2.2.2 2004/01/15 20:24:26 ken3 Exp $ */
 
 #include <config.h>
 
@@ -361,7 +361,7 @@ char *canonify_userid(char *user, char *loginid, int *domain_from_ip)
 		user = buf;
 	    }
 	}
-	else {
+	else if (config_virtdomains != IMAP_ENUM_VIRTDOMAINS_USERID) {
 	    socklen_t salen;
 	    int error;
 	    struct sockaddr_storage localaddr;
@@ -627,7 +627,7 @@ int shutdown_file(char *buf, int size)
     if ((p = strchr(buf, '\r')) != NULL) *p = 0;
     if ((p = strchr(buf, '\n')) != NULL) *p = 0;
 
-    syslog(LOG_WARNING, "%s, closing connection", buf);
+    syslog(LOG_DEBUG, "Shutdown file: %s, closing connection", buf);
 
     return 1;
 }
