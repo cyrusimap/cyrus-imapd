@@ -67,7 +67,7 @@ amssync.pure: $(OBJS) $(DEPLIBS)
 	$(PURIFY) $(PUREARGS) $(CC) $(LDFLAGS) -o amssync $(OBJS) $(DEPLIBS) $(LIBS)
 
 clean:
-	rm -f *.o Makefile.bak amssync
+	rm -f *.o Makefile.bak amssync makedepend.log
 
 distclean: clean
 	rm -f Makefile
@@ -76,4 +76,3 @@ depend:
 	${MAKEDEPEND} $(CPPFLAGS) $(DEFS) $(CFLAGS) *.c $(srcdir)/*.c 1>makedepend.log 2>&1
 
 # DO NOT DELETE THIS LINE -- make depend depends on it.
-
