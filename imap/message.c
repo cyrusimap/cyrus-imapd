@@ -1,3 +1,7 @@
+/*
+ * Message manipulation/parsing routines
+ */
+
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
@@ -8,7 +12,11 @@
 
 extern PARSED_ADDRESS *AppendAddresses();
 
+/*
+ * Parsed form of a body-part
+ */
 struct body {
+    /* Content-* header information */
     char *type;
     char *subtype;
     struct param *params;
@@ -16,17 +24,23 @@ struct body {
     char *description;
     char *encoding;
     char *md5;
+
+    /* Location/size information */
     long header_offset;
-    long content_offset;
     long header_size;
+    long header_lines;
+    long content_offset;
     long content_size;
-    long linecount;
+    long content_lines;
     long boundary_size;		/* Size of terminating boundary */
+    long boundary_lines;
 
     int numparts;		/* For multipart types */
     struct body *subpart;	/* For message/rfc822 and multipart types */
 
-    /* Only meaningful for bodies at top level or
+    /*
+     * Other header information.
+     * Only meaningful for body-parts at top level or
      * enclosed in message/rfc-822
      */
     char *date;
@@ -41,6 +55,7 @@ struct body {
     char *message_id;
 };
 
+/* List of Content-type parameters */
 struct param {
     struct param *next;
     char *attribute;
@@ -54,7 +69,7 @@ struct boundary {
     int alloc;
 };
 
-/* Cache file item buffer */
+/* cyrus.cache file item buffer */
 struct ibuf {
     char *start, *end;
     int left;
@@ -63,6 +78,10 @@ struct ibuf {
 /* (draft standard) MIME tspecials */
 #define TSPECIALS "()<>@,;:\\\"/[]?="
 
+/*
+ * Calculate relative filename for the message with UID 'uid'
+ * in 'folder'.  Returns pointer to static buffer.
+ */
 char *message_fname(folder, uid)
 struct folder *folder;
 unsigned long uid;
@@ -73,6 +92,10 @@ unsigned long uid;
     return buf;
 }
 
+/*
+ * Copy a message from the stdio stream 'from' to the stdio stream 'to',
+ * converting bare LF characters to CRLF.
+ */
 message_copy_stream(from, to)
 FILE *from, *to;
 {
@@ -88,6 +111,10 @@ FILE *from, *to;
 	    }
 	}
 	else if (*p == '\r') {
+	    /*
+	     * We were unlucky enough to get a CR just before we ran
+	     * out of buffer--put it back.
+	     */
 	    ungetc('\r', from);
 	    *p = '\0';
 	}
@@ -97,12 +124,16 @@ FILE *from, *to;
     return 0;
 }
 
+/*
+ * Parse the message 'infile' in 'folder'.  Appends the message's
+ * cache information to the folder's cache file and fills in appropriate
+ * information in the index record pointed to by 'message_index'.
+ */
 message_parse(infile, folder, message_index)
 FILE *infile;
 struct folder *folder;
 struct index_record *message_index;
 {
-    int r;
     struct body body;
 
     rewind(infile);
@@ -113,14 +144,19 @@ struct index_record *message_index;
     message_index->size = body.header_size + body.content_size;
 
     message_index->cache_offset = ftell(folder->cache);
-    r = message_write_cache(folder, &body);
+    message_write_cache(folder->cache, &body);
 
     message_free_body(&body);
-    return r;
+
+    if (ferror(folder->cache)) {
+	return 1;		/* XXX write error */
+    }
+
+    return 0;
 }
 
 /*
- * Parse an RFC 822 message or MIME body-part
+ * Parse a body-part
  */
 static message_parse_body(infile, format, body, defaultContentType, boundaries)
 FILE *infile;
@@ -135,7 +171,7 @@ struct boundary *boundaries;
     *body = zerobody;
     newboundaries.id = 0;
 
-    /* No passed-in boundary structure, create a new one */
+    /* No passed-in boundary structure, create a new, empty one */
     if (!boundaries) {
 	boundaries = &newboundaries;
 	boundaries->alloc = boundaries->count = 0;
@@ -144,24 +180,38 @@ struct boundary *boundaries;
     message_parse_headers(infile, format, body,
 			  defaultContentType, boundaries);
 
+    /* Recurse according to type */
     if (strcmp(body->type, "MULTIPART") == 0) {
 	message_parse_multipart(infile, format, body, boundaries);
     }
     else if (strcmp(body->type, "MESSAGE") == 0 &&
 	strcmp(body->subtype, "RFC822") == 0) {
 	body->subpart = (struct body *)xmalloc(sizeof(struct body));
+
 	message_parse_body(infile, format, body->subpart,
 			   defaultContentType, boundaries);
+
+	/* Calculate our size/lines information */
 	body->content_size = body->subpart->header_size +
 	  body->subpart->content_size;
+	body->content_lines = body->subpart->header_lines +
+	  body->subpart->content_lines;
+
+	/* Move any enclosing boundary information up to our level */
+	body->boundary_size = body->subpart->boundary_size;
+	body->boundary_lines = body->subpart->boundary_lines;
     }
     else {
 	message_parse_content(infile, format, body, boundaries);
     }
 
+    /* Free up boundary storage if necessary */
     if (newboundaries.id) free(newboundaries.id);
 }
 
+/*
+ * Parse the headers of a body-part
+ */
 #define HEADGROWSIZE 1000
 static
 message_parse_headers(infile, format, body, defaultContentType, boundaries)
@@ -187,6 +237,7 @@ struct boundary *boundaries;
     left = alloced - 3;		/* Allow for leading newline, added CR */
 				/*  and trailing NUL */
 
+    /* Slurp up all of the headers into 'headers' */
     while (fgets(next, left, infile) &&
 	   (next[-1] != '\n' ||
 	    (format == FOLDER_FORMAT_NETNEWS ?
@@ -195,8 +246,10 @@ struct boundary *boundaries;
 	if (next[-1] == '\n' && *next == '-' &&
 	    PendingBoundary(next, boundaries->id, &boundaries->count)) {
 	    body->boundary_size = strlen(next)+(format==FOLDER_FORMAT_NETNEWS);
+	    body->boundary_lines++;
 	    if (next - 1 > headers) {
 		body->boundary_size += 2;
+		body->boundary_lines++;
 		next[-2] = '\0';
 	    }
 	    else {
@@ -209,16 +262,15 @@ struct boundary *boundaries;
 	left -= len;
 	next += len;
 
-	if (format == FOLDER_FORMAT_NETNEWS) {
-	    /* Convert LF to CRLF */
-	    if (next[-1] == '\n' && next[-2] != '\r') {
-		next[-1] = '\r';
-		*next++ = '\n';
-		*next = '\0';
-		left--;
-	    }
+	/* If reading netnews format, convert LF to CRLF */
+	if (format == FOLDER_FORMAT_NETNEWS && next[-1] == '\n') {
+	    next[-1] = '\r';
+	    *next++ = '\n';
+	    *next = '\0';
+	    left--;
 	}
 
+	/* Allocate more header space if necessary */
 	if (left < 100) {
 	    len = next - headers;
 	    alloced += HEADGROWSIZE;
@@ -231,8 +283,11 @@ struct boundary *boundaries;
     body->content_offset = ftell(infile);
     body->header_size = strlen(headers+1);
 
+    /* Scan over the slurped-up headers for interesting header information */
+    body->header_lines = -1;	/* Correct for leading newline */
     for (next = headers; *next; next++) {
 	if (*next == '\n') {
+	    body->header_lines++;
 	    switch (next[1]) {
 	    case 'b':
 	    case 'B':
@@ -336,11 +391,17 @@ struct boundary *boundaries;
 	    }
 	}
     }
+
+    /* If didn't find Content-Type: header, use the passed-in default type */
     if (!body->type) {
 	message_parse_type(defaultContentType, body);
     }
 }
 
+/*
+ * Parse a list of RFC-822 addresses from a header, appending them
+ * to the address list pointed to by 'addrp'.
+ */
 static message_parse_address(hdr, addrp)
 char *hdr;
 PARSED_ADDRESS **addrp;
@@ -349,11 +410,13 @@ PARSED_ADDRESS **addrp;
     PARSED_ADDRESS *hdrlist;
     int r;
 
+    /* Find end of header */
     hdrend = hdr;
     do {
 	hdrend = strchr(hdrend+1, '\n');
     } while (hdrend && (hdrend[1] == ' ' || hdrend[1] == '\t'));
 
+    /* Drop NUL character at the end of header */
     if (hdrend) {
 	if (hdrend > hdr && hdrend[-1] == '\r') hdrend--;
 	hdrendchar = *hdrend;
@@ -362,12 +425,17 @@ PARSED_ADDRESS **addrp;
 
     r = ParseAddressList(hdr, &hdrlist);
 
+    /* Put character at end of header back */
     if (hdrend) *hdrend = hdrendchar;
+
     if (r) return;
 
     *addrp = AppendAddresses(*addrp, hdrlist);
 }
 
+/*
+ * Parse a Content-Transfer-Encoding from a header.
+ */
 static message_parse_encoding(hdr, hdrp)
 char *hdr;
 char **hdrp;
@@ -375,12 +443,14 @@ char **hdrp;
     int len;
     char *p;
 
+    /* Ignore if we already saw one of these headers */
     if (*hdrp) return;
 
     /* Skip leading whitespace, ignore header if blank */
     message_parse_rfc822space(&hdr);
     if (!hdr) return;
 
+    /* Find end of encoding token */
     for (p = hdr; *p && !isspace(*p) && *p != '('; p++) {
 	if (*p < ' ' || strchr(TSPECIALS, *p)) return;
     }
@@ -390,6 +460,7 @@ char **hdrp;
     message_parse_rfc822space(&p);
     if (p) return;
 
+    /* Save encoding token */
     *hdrp = xmalloc(len + 1);
     strncpy(*hdrp, hdr, len);
     (*hdrp)[len] = '\0';
@@ -398,6 +469,9 @@ char **hdrp;
     }
 }
 	
+/*
+ * Parse an uninterpreted header
+ */
 static message_parse_string(hdr, hdrp)
 char *hdr;
 char **hdrp;
@@ -405,16 +479,17 @@ char **hdrp;
     int len;
     char *hdrend;
 
+    /* Ignore if we already saw one of these headers */
     if (*hdrp) return;
 
     /* Skip initial whitespace */
     while (*hdr == ' ' || *hdr == '\t') hdr++;
 
+    /* Find end of header */
     hdrend = hdr;
     do {
 	hdrend = strchr(hdrend+1, '\n');
     } while (hdrend && (hdrend[1] == ' ' || hdrend[1] == '\t'));
-
     if (hdrend) {
 	if (hdrend > hdr && hdrend[-1] == '\r') hdrend--;
     }
@@ -422,12 +497,16 @@ char **hdrp;
 	hdrend = hdr + strlen(hdr);
     }
 
+    /* Save header value */
     len = hdrend - hdr;
     *hdrp = xmalloc(len + 1);
     strncpy(*hdrp, hdr, len);
     (*hdrp)[len] = '\0';
 }
 
+/*
+ * Parse a Content-Type from a header.
+ */
 static message_parse_type(hdr, body)	    
 char *hdr;
 struct body *body;
@@ -438,13 +517,14 @@ struct body *body;
     int subtypelen;
     char *p;
 
+    /* Ignore if we already saw one of these headers */
     if (body->type) return;
 
     /* Skip leading whitespace, ignore header if blank */
     message_parse_rfc822space(&hdr);
     if (!hdr) return;
 
-    /* Skip over type token */
+    /* Find end of type token */
     type = hdr;
     for (; *hdr && !isspace(*hdr) && *hdr != '/' && *hdr != '('; hdr++) {
 	if (*hdr < ' ' || strchr(TSPECIALS, *hdr)) return;
@@ -462,7 +542,7 @@ struct body *body;
     message_parse_rfc822space(&hdr);
     if (!hdr) return;
 
-    /* Skip over subtype token */
+    /* Find end of subtype token */
     subtype = hdr;
     for (; *hdr && !isspace(*hdr) && *hdr != ';' && *hdr != '('; hdr++) {
 	if (*hdr < ' ' || strchr(TSPECIALS, *hdr)) return;
@@ -482,7 +562,6 @@ struct body *body;
     for (p = body->type; *p; p++) {
 	if (islower(*p)) *p = toupper(*p);
     }
-
     body->subtype = xmalloc(subtypelen + 1);
     strncpy(body->subtype, subtype, subtypelen);
     body->subtype[subtypelen] = '\0';
@@ -496,6 +575,9 @@ struct body *body;
     }
 }
 
+/*
+ * Parse a parameter list from a header
+ */
 static message_parse_params(hdr, paramp)
 char *hdr;
 struct param **paramp;
@@ -509,10 +591,11 @@ struct param **paramp;
     char *p;
 
     for (;;) {
+	/* Skip over leading whitespace
 	message_parse_rfc822space(&hdr);
 	if (!hdr) return;
 
-	/* Skip over attribute */
+	/* Find end of attribute */
 	attribute = hdr;
 	for (; *hdr && !isspace(*hdr) && *hdr != '=' && *hdr != '('; hdr++) {
 	    if (*hdr < ' ' || strchr(TSPECIALS, *hdr)) return;
@@ -530,6 +613,7 @@ struct param **paramp;
 	message_parse_rfc822space(&hdr);
 	if (!hdr) return;
 
+	/* Find end of value */
 	value = hdr;
 	if (*hdr == '\"') {
 	    hdr++;
@@ -558,6 +642,7 @@ struct param **paramp;
 	/* Ignore parameter if not at end of header or parameter delimiter */
 	if (hdr && *hdr != ';') return;
 		  
+	/* Save attribute/value pair */
 	*paramp = param = (struct param *)xmalloc(sizeof(struct param));
 	*param = zeroparam;
 	param->attribute = xmalloc(attributelen + 1);
@@ -581,10 +666,14 @@ struct param **paramp;
 	    param->value[valuelen] = '\0';
 	}
 
+	/* Get ready to parse the next parameter */
 	paramp = &param->next;
     }
 }
 
+/*
+ * Skip over RFC-822 whitespace and comments
+ *
 static message_parse_rfc822space(s)
 char **s;
 {
@@ -638,6 +727,9 @@ char **s;
     }
 }
 
+/*
+ * Parse the content of a MIME multipart body-part
+ */
 static message_parse_multipart(infile, format, body, boundaries)
 FILE *infile;
 int format;
@@ -655,12 +747,14 @@ struct boundary *boundaries;
 	defaultContentType = "MESSAGE/RFC822";
     }
 
+    /* Find boundary id */
     boundary = body->params;
     while(boundary && strcmp(boundary->attribute, "BOUNDARY") != 0) {
 	boundary = boundary->next;
     }
     
     if (!boundary) {
+	/* Invalid MIME--treat as zero-part multipart */
 	message_parse_content(infile, format, body, boundaries);
 	return;
     }
@@ -676,10 +770,10 @@ struct boundary *boundaries;
     boundaries->id[boundaries->count++] = boundary->value;
     depth = boundaries->count;
 
-    /* Skip over preamble */
+    /* Parse preamble */
     message_parse_content(infile, format, &preamble, boundaries);
 
-    /* Handle the component messages */
+    /* Parse the component body-parts */
     while (boundaries->count == depth) {
 	body->subpart = (struct body *)xrealloc((char *)body->subpart,
 				 (body->numparts+1)*sizeof(struct body));
@@ -687,29 +781,59 @@ struct boundary *boundaries;
 			   defaultContentType, boundaries);
     }
 
-    /* Skip over epilogue */
     if (boundaries->count == depth-1) {
+	/* Parse epilogue */
 	message_parse_content(infile, format, &epilogue, boundaries);
     }
     else if (body->numparts) {
+	/*
+	 * We hit the boundary of an enclosing multipart while parsing
+	 * a component body-part.  Move the enclosing boundary information
+	 * up to our level.
+	 */
 	body->boundary_size = body->subpart[body->numparts-1].boundary_size;
+	body->boundary_lines = body->subpart[body->numparts-1].boundary_lines;
 	body->subpart[body->numparts-1].boundary_size = 0;
+	body->subpart[body->numparts-1].boundary_lines = 0;
     }
     else {
+	/*
+	 * We hit the boundary of an enclosing multipart while parsing
+	 * the preamble.  Move the enclosing boundary information
+	 * up to our level.
+	 */
 	body->boundary_size = preamble.boundary_size;
+	body->boundary_lines = preamble.boundary_lines;
 	preamble.boundary_size = 0;
+	preamble.boundary_lines = 0;
     }
 
+    /*
+     * Calculate our size/lines information
+     */
     body->content_size = preamble.content_size + preamble.boundary_size;
+    body->content_lines = preamble.content_lines + preamble.boundary_lines;
     for (i=0; i< body->numparts; i++) {
-	body->content_size += body->subpart[i].content_size +
+	body->content_size += body->subpart[i].header_size +
+	  body->subpart[i].content_size +
 	  body->subpart[i].boundary_size;
+	body->content_lines += body->subpart[i].header_lines +
+	  body->subpart[i].content_lines +
+	  body->subpart[i].boundary_lines;
     }
     body->content_size += epilogue.content_size;
+    body->content_lines += epilogue.content_lines;
 
+    /*
+     * Move any enclosing boundary information up to our level.
+     */
     body->boundary_size += epilogue.boundary_size;
+    body->boundary_lines += epilogue.boundary_lines;
 }
 
+/*
+ * Parse the content of a generic body-part
+ */
 static message_parse_content(infile, format, body, boundaries)
 FILE *infile;
 int format;
@@ -723,7 +847,11 @@ struct boundary *boundaries;
 	if (line_boundary && *buf == '-' &&
 	    PendingBoundary(buf, boundaries->id, &boundaries->count)) {
 	    body->boundary_size = strlen(buf)+(format==FOLDER_FORMAT_NETNEWS);
-	    if (body->linecount) body->linecount--;
+	    body->boundary_lines++;
+	    if (body->content_lines) {
+		body->content_lines--;
+		body->boundary_lines++;
+	    }
 	    if (body->content_size) {
 		body->content_size -= 2;
 		body->boundary_size += 2;
@@ -735,12 +863,17 @@ struct boundary *boundaries;
 	body->content_size += len;
 
 	if (line_boundary = (buf[len-1] == '\n')) {
-	    body->linecount++;
+	    body->content_lines++;
 	    if (format == FOLDER_FORMAT_NETNEWS) body->content_size++;
 	}
     }
 }
 
+/*
+ * Return nonzero if s is an enclosing boundary delimiter.
+ * If we hit a terminating boundary, the integer pointed to by
+ * 'BoundaryCt' is modified appropriately.
+ */
 static PendingBoundary(s, Boundaries, BoundaryCt)
 char *s;
 char **Boundaries;
@@ -761,11 +894,14 @@ int *BoundaryCt;
     return(0);
 }
 
-static int message_write_cache(folder, body)
-struct folder *folder;
+/*
+ * Write the cache information for the message parsed to 'body'
+ * to 'outfile'.
+ */
+static int message_write_cache(outfile, body)
+FILE *outfile;
 struct body *body;
 {
-    int r = 0;
     struct ibuf section, envelope, bodystructure, oldbody;
 
     message_ibuf_init(&section);
@@ -780,25 +916,23 @@ struct body *body;
     message_ibuf_init(&oldbody);
     message_write_body(&oldbody, body, 0);
 
-    message_ibuf_write(folder->cache, &section);
-    message_ibuf_write(folder->cache, &envelope);
-    message_ibuf_write(folder->cache, &bodystructure);
-    message_ibuf_write(folder->cache, &oldbody);
+    message_ibuf_write(outfile, &section);
+    message_ibuf_write(outfile, &envelope);
+    message_ibuf_write(outfile, &bodystructure);
+    message_ibuf_write(outfile, &oldbody);
 
     message_ibuf_free(&section);
     message_ibuf_free(&envelope);
     message_ibuf_free(&bodystructure);
     message_ibuf_free(&oldbody);
-
-    if (ferror(folder->cache)) {
-	r = 1;			/* XXX Write error */
-    }
-
-    return r;
 }
 
+/* Append character 'c' to 'ibuf' */
 #define PUTIBUF(ibuf,c) (((ibuf)->left || message_ibuf_ensure((ibuf),1)),(*((ibuf)->end)++ = (c)))
 
+/*
+ * Write the IMAP envelope for 'body' to 'ibuf'
+ */
 static message_write_envelope(ibuf, body)
 struct ibuf *ibuf;
 struct body *body;
@@ -826,6 +960,10 @@ struct body *body;
     PUTIBUF(ibuf, ')');
 }
 
+/*
+ * Write the BODY (if 'newformat' is zero) or BODYSTRUCTURE
+ * (if 'newformat' is nonzero) for 'body' to 'ibuf'.
+ */
 static message_write_body(ibuf, body, newformat)
 struct ibuf *ibuf;
 struct body *body;
@@ -838,12 +976,14 @@ int newformat;
     if (strcmp(body->type, "MULTIPART") == 0) {
 	int i;
 
+	/* Multipart types get a body_multipart */
 	for (i = 0; i < body->numparts; i++) {
 	    message_write_body(ibuf, &body->subpart[i], newformat);
 	}
 	PUTIBUF(ibuf, ' ');
 	message_write_nstring(ibuf, body->subtype);
 	PUTIBUF(ibuf, ')');
+
 	return;
     }
 
@@ -876,18 +1016,23 @@ int newformat;
     message_write_number(ibuf, body->content_size);
 
     if (strcmp(body->type, "TEXT") == 0) {
+	/* Text types get a line count */
 	PUTIBUF(ibuf, ' ');
-	message_write_number(ibuf, body->linecount);
+	message_write_number(ibuf, body->content_lines);
     }
     else if (strcmp(body->type, "MESSAGE") == 0
 	     && strcmp(body->subtype, "RFC822") == 0) {
+	/* Message/rfc822 gets a body_msg */
 	PUTIBUF(ibuf, ' ');
 	message_write_envelope(ibuf, body->subpart);
 	PUTIBUF(ibuf, ' ');
 	message_write_body(ibuf, body->subpart, newformat);
+	PUTIBUF(ibuf, ' ');
+	message_write_number(ibuf, body->content_lines);
     }
 
     if (newformat) {
+	/* Add additional fields for BODYSTRUCTURE */
 	PUTIBUF(ibuf, ' ');
 	message_write_nstring(ibuf, body->md5);
     }
@@ -895,31 +1040,34 @@ int newformat;
     PUTIBUF(ibuf, ')');
 }
 
+/*
+ * Write the address list 'addrlist' to 'ibuf'
+ */
 static message_write_address(ibuf, addrlist)
 struct ibuf *ibuf;
 PARSED_ADDRESS *addrlist;
 {
     int len = 0;
 
+    /* If no addresses, write out NIL */
     if (!addrlist) {
 	message_write_nstring(ibuf, (char *)0);
 	return;
     }
-
     FOR_ALL_ADDRESSES(thisaddr, addrlist, len++;);
-    
     if (!len) {
 	message_write_nstring(ibuf, (char *)0);
 	return;
     }	
 
     PUTIBUF(ibuf, '(');
-
     FOR_ALL_ADDRESSES(thisaddr, addrlist, message_write_singleaddress(ibuf, thisaddr););
-
     PUTIBUF(ibuf, ')');
 }
 
+/*
+ * Write the single addres 'addr' to 'ibuf'.
+ */
 static message_write_singleaddress(ibuf, addr)
 struct ibuf *ibuf;
 PARSED_ADDRESS *addr;
@@ -928,6 +1076,7 @@ PARSED_ADDRESS *addr;
     char *name = 0, *adl = 0;
     static char myhostname[128];
 
+    /* Recursively handle RFC-822 group addresses */
     if (addr->Kind == GROUP_ADDRESS) {
 	PUTIBUF(ibuf, '(');
 	message_write_nstring(ibuf, (char *)0);
@@ -954,12 +1103,19 @@ PARSED_ADDRESS *addr;
 	return;
     }
     
+    /* If no route phrase, use first RFC-822 comment (without parens) */
     name = addr->RoutePhrase;
-    if (!name && addr->Comments) name = addr->Comments->Text;
+    if (!name && addr->Comments) {
+	name = addr->Comments->Text+1;
+	name[strlen(name)-1] = '\0';
+    }
+	
+    /* Fid out my hostname if necessary */
     if (!addr->Hosts->Next->Name && !myhostname[0]) {
 	gethostname(myhostname, sizeof(myhostname)-1);
     }
 
+    /* Count number of hosts and build any necessary at-domain-list */
     FOR_ALL_REVERSE_HOSTS(h, addr, { nhosts++; adllen += 2+strlen(h->Name);});
     if (nhosts > 1) {
 	adl = xmalloc(adllen);
@@ -982,15 +1138,24 @@ PARSED_ADDRESS *addr;
     message_write_nstring(ibuf, nhosts ? addr->Hosts->Next->Name : myhostname);
     PUTIBUF(ibuf, ')');
 
+    /* If we used a comment for a name, put back the close parenthesis */
+    if (!addr->RoutePhrase && addr->Comments) {
+	name[strlen(name)] = ')';
+    }
+
     if (adl) free(adl);
 }
 
+/*
+ * Write the nil-or-string 's' to 'ibuf'
+ */
 static message_write_nstring(ibuf, s)
 struct ibuf *ibuf;
 char *s;
 {
     char *p;
 
+    /* Write null pointer as NIL */
     if (!s) {
 	message_ibuf_ensure(ibuf, 3);
 	*(ibuf->end)++ = 'N';
@@ -999,11 +1164,14 @@ char *s;
 	return;
     }
 
+    /* Look for any non-QCHAR characters */
     for (p = s; *p; p++) {
 	if (*p & 0x80 || *p == '\r' || *p == '\n'
 	    || *p == '\"' || *p == '%' || *p == '\\') break;
     }
+
     if (*p) {
+	/* Write out as literal */
 	char buf[100];
 	sprintf(buf, "{%d}\r\n", strlen(s));
 	message_ibuf_ensure(ibuf, strlen(s)+strlen(buf));
@@ -1011,6 +1179,7 @@ char *s;
 	for (p = s; *p; p++) *(ibuf->end)++ = *p;
     }
     else {
+	/* Write out as quoted string */
 	message_ibuf_ensure(ibuf, strlen(s)+2);
 	*(ibuf->end)++ = '\"';
 	for (p = s; *p; p++) *(ibuf->end)++ = *p;
@@ -1018,6 +1187,9 @@ char *s;
     }
 }
 
+/*
+ * Write out the IMAP number 'n' to 'ibuf'
+ */
 static message_write_number(ibuf, n)
 struct ibuf *ibuf;
 int n;
@@ -1030,6 +1202,9 @@ int n;
     for (p = buf; *p; p++) *(ibuf->end)++ = *p;
 }
 
+/*
+ * Write out the FETCH BODY[section] location/size information to 'ibuf'.
+ */
 static message_write_section(ibuf, body)
 struct ibuf *ibuf;
 struct body *body;
@@ -1039,12 +1214,18 @@ struct body *body;
     if (strcmp(body->type, "MESSAGE") == 0
 	&& strcmp(body->subtype, "RFC822") == 0) {
 	if (strcmp(body->subpart->type, "MULTIPART") == 0) {
+	    /*
+	     * Part 0 of a message/rfc822 is the message header.
+	     * Nested parts of a message/rfc822 containing a multipart
+	     * are the sub-parts of the multipart.
+	     */
 	    message_write_bit32(ibuf, body->subpart->numparts+1);
 	    message_write_bit32(ibuf, body->subpart->header_offset);
 	    message_write_bit32(ibuf, body->subpart->header_size);
 	    for (part = 0; part < body->subpart->numparts; part++) {
 		message_write_bit32(ibuf, body->subpart->subpart[part].content_offset);
 		if (strcmp(body->subpart->subpart[part].type, "MULTIPART") == 0) {
+		    /* Cannot fetch a multipart itself */
 		    message_write_bit32(ibuf, -1);
 		}
 		else {
@@ -1056,6 +1237,11 @@ struct body *body;
 	    }
 	}
 	else {
+	    /*
+	     * Part 0 of a message/rfc822 is the message header.
+	     * Part 1 of a message/rfc822 containing a non-multipart
+	     * is the message body.
+	     */
 	    message_write_bit32(ibuf, 2);
 	    message_write_bit32(ibuf, body->subpart->header_offset);
 	    message_write_bit32(ibuf, body->subpart->header_size);
@@ -1065,6 +1251,10 @@ struct body *body;
 	}
     }
     else if (body->numparts) {
+	/*
+	 * Cannot fetch part 0 of a multipart.
+	 * Nested parts of a multipart are the sub-parts.
+	 */
 	message_write_bit32(ibuf, body->numparts+1);	
 	message_write_bit32(ibuf, 0);
 	message_write_bit32(ibuf, -1);
@@ -1082,10 +1272,16 @@ struct body *body;
 	}
     }
     else {
+	/*
+	 * Leaf section--no part 0 or nested parts
+	 */
 	message_write_bit32(ibuf, 0);
     }
 }
 
+/*
+ * Write the 32-bit integer quantitiy 'val' to 'ibuf'
+ */
 static message_write_bit32(ibuf, val)
 struct ibuf *ibuf;
 int val;
@@ -1102,6 +1298,9 @@ int val;
     }
 }
 
+/*
+ * Initialize 'ibuf'
+ */
 #define IBUFGROWSIZE 100 /* XXX 1000 */
 static message_ibuf_init(ibuf)
 struct ibuf *ibuf;
@@ -1112,6 +1311,9 @@ struct ibuf *ibuf;
     ibuf->left = IBUFGROWSIZE - sizeof(bit32);
 }
 
+/*
+ * Ensure 'ibuf' has enough free space to append 'len' bytes.
+ */
 static message_ibuf_ensure(ibuf, len)
 struct ibuf *ibuf;
 int len;
@@ -1129,6 +1331,9 @@ int len;
     ibuf->start = s;
 }
 
+/*
+ * Write 'ibuf' to the cache file 'outfile'
+ */
 static message_ibuf_write(outfile, ibuf)
 FILE *outfile;
 struct ibuf *ibuf;
@@ -1142,12 +1347,18 @@ struct ibuf *ibuf;
     fwrite(s, 1, len+sizeof(bit32), outfile);
 }
 
+/*
+ * Free the space used by 'ibuf'
+ */
 static message_ibuf_free(ibuf)
 struct ibuf *ibuf;
 {
     free(ibuf->start - sizeof(bit32));
 }
 
+/*
+ * Free the parsed body-part 'body'
+ */
 static message_free_body(body)
 struct body *body;
 {
