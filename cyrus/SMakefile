@@ -2,7 +2,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.40 1999/02/19 20:17:29 tjs Exp $
+# $Id: SMakefile,v 1.41 1999/03/01 20:08:05 tjs Exp $
 #
 
 MAKE=gmake
@@ -39,7 +39,7 @@ if test "${OVERRIDE-nil}" != "t" ; then
     SunOS)
       CFLAGS="${CFLAGS} -xs -xO3 -xdepend"
       LDFLAGS="${LDFLAGS} -xs -xO3 -xdepend"
-      STATIC="--enable-staric-libraries"
+      STATIC="--enable-static-libraries"
       ;;
     ULTRIX)
       CC=gcc # cheat -- Ultrix cc is aged
