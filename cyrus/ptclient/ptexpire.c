@@ -13,33 +13,32 @@ static int ndels,ndalloc;
    gathering/expunge phases is because DB's SEQ operator breaks if the database
    is modified while the database is being sequenced through.
    */
-int main(int argc, char *argv) {
+int main()
+{
     HASHINFO info;
     DB * ptdb;
-    char keydata[PR_MAXNAMELEN+4],*thekey;
+    char keydata[PR_MAXNAMELEN+4], *thekey;
     namelist groups;
-    int i,j,found,fd,rc;
-    DBT key,data;
+    int i, j, found, fd, rc;
+    DBT key, data;
     ptluser us;
     size_t size;    
     time_t timenow;
     dellist deletions;
+
+    openlog("ptexpire", LOG_PID, LOG_LOCAL6);
+
+    timenow = time(0);
+    ndels = 0;
+    ndalloc = 10;
+    deletions = (dellist)xmalloc((ndalloc + 1)*sizeof(delrec));
     
     
-    openlog("ptexpire",LOG_PID,LOG_LOCAL6);
-    
-    
-    timenow=time(0);
-    ndels=0;
-    ndalloc=10;
-    deletions=(dellist)xmalloc((ndalloc + 1)*sizeof(delrec));
-    
-    
-    info.hash=hashfn;
-    info.lorder=0;
-    info.bsize=2048;
-    info.cachesize=20480;
-    info.ffactor=8;
+    info.hash = hashfn;
+    info.lorder = 0;
+    info.bsize = 2048;
+    info.cachesize = 20480;
+    info.ffactor = 8;
     fd=open(DBLOCK, O_CREAT|O_TRUNC|O_RDWR, 0644);
     if (fd == -1) {
         syslog(LOG_ERR, "IOERROR: creating lock file %s: %m", DBLOCK);
@@ -49,26 +48,30 @@ int main(int argc, char *argv) {
         syslog(LOG_ERR, "IOERROR: locking lock file %s: %m", DBLOCK);
         return -1;
     }
-    ptdb=dbopen(DBFIL,O_RDWR,0,DB_HASH,&info);
+    ptdb = dbopen(DBFIL, O_RDWR, 0, DB_HASH, &info);
     if (!ptdb) {
         syslog(LOG_ERR, "IOERROR: opening database %s: %m", DBFIL);
         return -1;
     }
-    rc=SEQ(ptdb,&key,&data,R_FIRST);
+    rc = SEQ(ptdb, &key, &data, R_FIRST);
     if (rc < 0) {
         syslog(LOG_ERR, "IOERROR: reading database %s: %m", DBFIL);
         return -1;
     }
-    if (rc)
-      exit(0);
-    thekey=key.data;
+    if (rc) {
+	exit(0);
+    }
+    thekey = key.data;
 #ifdef DEBUG
     printf("Processing entry with key:");
-    for (i=0;i<key.size;i++)
-      if (isprint(thekey[i]))
-        printf("%c",thekey[i]);
-      else
-        printf("\\%.3o", thekey[i]);
+    for (i=0; i<key.size; i++) {
+	if (isprint(thekey[i])) {
+	    printf("%c",thekey[i]);
+	}
+	else {
+	    printf("\\%.3o", thekey[i]);
+	}
+    }
     printf("\n");
 #endif
     if (thekey[key.size-4] == 'H') {
@@ -77,7 +80,7 @@ int main(int argc, char *argv) {
             return -1;
         }
       
-        memcpy(&us,data.data,data.size);
+        memcpy(&us, data.data, data.size);
 #ifdef DEBUG
         printf("Found header record for user %s\n", us.user);
 #endif
@@ -90,31 +93,34 @@ int main(int argc, char *argv) {
                 deletions=(dellist)xrealloc(deletions,(ndalloc + 1)
                                             * sizeof(delrec));
             }
-            deletions[ndels].keysize=key.size;
-            memcpy(deletions[ndels].keydata,key.data,key.size);
-            strcpy(deletions[ndels].user,us.user);
-            ndels++;            
+            deletions[ndels].keysize = key.size;
+            memcpy(deletions[ndels].keydata, key.data, key.size);
+            strcpy(deletions[ndels].user, us.user);
+            ndels++;
         }
     }  
-    found=1;
+    found = 1;
     while (found) {
-        rc=SEQ(ptdb,&key,&data,R_NEXT);
-        found=(rc == 0);
+        rc = SEQ(ptdb, &key, &data, R_NEXT);
+        found = (rc == 0);
         if (rc < 0) {
             syslog(LOG_ERR, "IOERROR: reading database %s: %m", DBFIL);
             return -1;
         }
         
         if (rc == 0) {
-            thekey=key.data;
+            thekey = key.data;
 #ifdef DEBUG
             printf("Processing entry with key:");
-            thekey=key.data;
-            for (i=0;i<key.size;i++)
-              if (isprint(thekey[i]))
-                printf("%c",thekey[i]);
-              else
-                printf("\\%.3o", thekey[i]);
+            thekey = key.data;
+            for (i=0; i<key.size; i++) {
+		if (isprint(thekey[i])) {
+		    printf("%c",thekey[i]);
+		}
+		else {
+		    printf("\\%.3o", thekey[i]);
+		}
+	    }
             printf("\n");
 #endif
             if (thekey[key.size-4] == 'H') {
@@ -124,7 +130,7 @@ int main(int argc, char *argv) {
                     close(fd);
                     return -1;
                 }
-                memcpy(&us,data.data,data.size);
+                memcpy(&us, data.data, data.size);
 #ifdef DEBUG
                 printf("Found header record for user %s\n", us.user);
 #endif
@@ -133,35 +139,38 @@ int main(int argc, char *argv) {
                     printf("record expired, marking for deletion\n");
 #endif
                     if (ndels > ndalloc) {
-                        ndalloc *=2;
+                        ndalloc *= 2;
                         deletions=(dellist)xrealloc(deletions,(ndalloc + 1) *
                                                     sizeof(delrec)); 
                     }
-                    deletions[ndels].keysize=key.size;
-                    memcpy(deletions[ndels].keydata,key.data,key.size);
-                    strcpy(deletions[ndels].user,us.user);
+                    deletions[ndels].keysize = key.size;
+                    memcpy(deletions[ndels].keydata, key.data, key.size);
+                    strcpy(deletions[ndels].user, us.user);
                     ndels++;
                 }
             }
         }
     }
 
-    for (j=0;j<ndels;j++) {
-        key.size=deletions[j].keysize;
-        key.data=deletions[j].keydata;
-        thekey=key.data;
+    for (j=0; j<ndels; j++) {
+        key.size = deletions[j].keysize;
+        key.data = deletions[j].keydata;
+        thekey = key.data;
 #ifdef DEBUG
         printf("User %s: Key: ", deletions[j].user);
-        for (i=0;i<key.size;i++)
-          if (isprint(thekey[i]))
-            printf("%c",thekey[i]);
-          else
-            printf("\\%.3o", thekey[i]);
+        for (i=0; i<key.size; i++) {
+	    if (isprint(thekey[i])) {
+		printf("%c",thekey[i]);
+	    }
+	    else {
+		printf("\\%.3o", thekey[i]);
+	    }
+	}
         printf("\n");
         
         printf("Expunging header....");
 #endif
-        rc=DEL(ptdb,&key,0);
+        rc = DEL(ptdb, &key, 0);
         if (rc < 0) {
             syslog(LOG_ERR, "IOERROR: writing database %s: %m", DBFIL);
             CLOSE(ptdb);
@@ -177,8 +186,8 @@ int main(int argc, char *argv) {
 #ifdef DEBUG
         printf("data....");
 #endif
-        thekey[key.size-4]='D';
-        rc=DEL(ptdb,&key,0);
+        thekey[key.size-4] = 'D';
+        rc = DEL(ptdb, &key, 0);
         if (rc < 0) {
             syslog(LOG_ERR, "IOERROR: writing database %s: %m", DBFIL);
             CLOSE(ptdb);
@@ -198,7 +207,11 @@ int main(int argc, char *argv) {
     free(deletions);
     exit(0);
 }      
-int fatal(char *msg, int exitcode) {
+
+int fatal(msg, exitcode)
+char *msg;
+int exitcode;
+{
     syslog(LOG_ERR,"%s", msg);
     exit(-1);
 }
