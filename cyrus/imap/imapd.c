@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.411 2002/11/06 20:43:20 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.412 2002/11/12 16:41:52 leg Exp $ */
 
 #include <config.h>
 
@@ -2371,6 +2371,11 @@ cmd_append(char *tag, char *name)
 	for (p = arg.s + 1; *p && isdigit((int) *p); p++) {
 	    sawdigit++;
 	    size = size*10 + *p - '0';
+#if 0
+            if (size < 0) {
+                lose();
+            }
+#endif
 	}
 	if (*p == '+') {
 	    isnowait++;
@@ -3039,6 +3044,7 @@ char *count;
     for (p = start; *p; p++) {
 	if (!isdigit((int) *p)) break;
 	fetchargs.start_octet = fetchargs.start_octet*10 + *p - '0';
+        /* xxx overflow */
     }
     if (*p || !fetchargs.start_octet) {
 	prot_printf(imapd_out, "%s BAD Invalid starting octet\r\n", tag);
@@ -3049,6 +3055,7 @@ char *count;
     for (p = count; *p; p++) {
 	if (!isdigit((int) *p)) break;
 	fetchargs.octet_count = fetchargs.octet_count*10 + *p - '0';
+        /* xxx overflow */
     }
     if (*p || !*count) {
 	prot_printf(imapd_out, "%s BAD Invalid octet count\r\n", tag);
@@ -4465,6 +4472,7 @@ char *quotaroot;
 	    for (p = arg.s; *p; p++) {
 		if (!isdigit((int) *p)) goto badlist;
 		newquota = newquota * 10 + *p - '0';
+                if (newquota < 0) goto badlist; /* overflow */
 	    }
 	    if (c == ')') break;
 	}
@@ -5427,6 +5435,7 @@ int parsecharset;
 	    size = 0;
 	    for (p = arg.s; *p && isdigit((int) *p); p++) {
 		size = size * 10 + *p - '0';
+                /* if (size < 0) goto badnumber; */
 	    }
 	    if (!arg.s || *p) goto badnumber;
 	    if (size > searchargs->larger) searchargs->larger = size;
@@ -5540,6 +5549,7 @@ int parsecharset;
 	    size = 0;
 	    for (p = arg.s; *p && isdigit((int) *p); p++) {
 		size = size * 10 + *p - '0';
+                /* if (size < 0) goto badnumber; */
 	    }
 	    if (!arg.s || *p) goto badnumber;
 	    if (size == 0) size = 1;
@@ -6451,6 +6461,7 @@ time_t *start, *end;
     if (isdigit(c)) {
 	tm.tm_mday = tm.tm_mday * 10 + c - '0';
 	c = prot_getc(imapd_in);
+        /* xxx overflow */
     }
     
     if (c != '-') goto baddate;
