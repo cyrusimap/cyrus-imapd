@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.34 2000/06/06 21:10:44 ken3 Exp $
+ * $Id: lmtpd.c,v 1.35 2000/06/06 21:13:50 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.34 2000/06/06 21:10:44 ken3 Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.35 2000/06/06 21:13:50 ken3 Exp $";*/
 
 #include <config.h>
 
@@ -632,7 +632,7 @@ int sieve_fileinto(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 
     ret = deliver_mailbox(md->data, &mdata->stage, md->size,
 			  fc->imapflags->flag, fc->imapflags->nflags,
-                          sd->authuser, sd->authstate, md->id,
+                          sd->username, sd->authstate, md->id,
                           sd->username, mdata->notifyheader,
                           fc->mailbox, quotaoverride, 0);
 
