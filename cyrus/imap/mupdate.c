@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.77.2.4 2003/11/05 16:33:59 ken3 Exp $
+ * $Id: mupdate.c,v 1.77.2.5 2003/11/17 20:42:57 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -59,6 +59,12 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/types.h>
+#include <sys/ioctl.h>
+#if !defined(SIOCGIFCONF) && defined(HAVE_SYS_SOCKIO_H)
+# include <sys/sockio.h>
+#endif
+#include <net/if.h>
 
 #include <pthread.h>
 #include <sasl/sasl.h>
@@ -398,6 +404,62 @@ static struct sasl_callback mysasl_cb[] = {
 };
 
 /*
+ * Is the IP address of the given hostname local?
+ * Returns 1 if local, 0 otherwise.
+ */
+static int islocalip(const char *hostname)
+{
+    struct hostent *hp;
+    struct in_addr *haddr, *iaddr;
+    struct ifconf ifc;
+    struct ifreq *ifr;
+    char buf[8192]; /* XXX this limits us to 256 interfaces */
+    int sock, islocal = 0;
+
+    if ((hp = gethostbyname(hostname)) == NULL) {
+	fprintf(stderr, "unknown host: %s\n", hostname);
+	return 0;
+    }
+
+    haddr = (struct in_addr *) hp->h_addr;
+
+    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+	fprintf(stderr, "socket() failed\n");
+	return 0;
+    }
+
+    ifc.ifc_buf = buf;
+    ifc.ifc_len = sizeof(buf);
+    
+    if (ioctl(sock, SIOCGIFCONF, &ifc) != 0) {
+	fprintf(stderr, "ioctl(SIOCGIFCONF) failed: %d\n", errno);
+	close(sock);
+	return 0;
+    }
+
+    for (ifr = ifc.ifc_req; ifr - ifc.ifc_req < ifc.ifc_len; ifr++) {
+	if (ioctl(sock, SIOCGIFADDR, ifr) != 0) continue;
+	if (ioctl(sock, SIOCGIFFLAGS, ifr) != 0) continue;
+
+	/* skip any inactive or loopback interfaces */
+	if (!(ifr->ifr_flags & IFF_UP) || (ifr->ifr_flags & IFF_LOOPBACK))
+	    continue;
+
+	iaddr = &(((struct sockaddr_in *) &ifr->ifr_addr)->sin_addr);
+
+	/* compare the host address to the interface address */
+	if (!memcmp(haddr, iaddr, sizeof(struct in_addr))) {
+	    islocal = 1;
+	    break;
+	}
+    }
+
+    close(sock);
+
+    return islocal;
+}
+
+/*
  * run once when process is forked;
  * MUST NOT exit directly; must return with non-zero error code
  */
@@ -405,7 +467,7 @@ int service_init(int argc, char **argv,
 		 char **envp __attribute__((unused)))
 {
     int i, r, workers_to_start;
-    int opt;
+    int opt, autoselect = 0;
     pthread_t t;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
@@ -446,15 +508,20 @@ int service_init(int argc, char **argv,
     global_sasl_init(1, 1, mysasl_cb);
 
     /* see if we're the master or a slave */
-    while ((opt = getopt(argc, argv, "m")) != EOF) {
+    while ((opt = getopt(argc, argv, "ma")) != EOF) {
 	switch (opt) {
 	case 'm':
 	    masterp = 1;
+	    break;
+	case 'a':
+	    autoselect = 1;
 	    break;
 	default:
 	    break;
 	}
     }
+
+    if (!masterp && autoselect) masterp = islocalip(config_mupdate_server);
 
     if(pipe(conn_pipe) == -1) {
 	syslog(LOG_ERR, "could not setup connection signaling pipe %m");
