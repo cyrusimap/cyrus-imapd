@@ -382,20 +382,28 @@ report_error(struct protstream *conn, const char *msg)
   prot_printf(sieved_out, "NO \"%s\"\r\n",msg);
   result=prot_flush(sieved_out);
 
+  if (result!=0)
+  {
+    exit(1);
+  }
+
   lex_reset();
 
   /* wait until we get a newline */
-  while (timlex(&foo, conn)!=EOL)
-    {
-
-    }
-
-  if (result!=0)
+  do 
   {
-    exit(0);
-  }
+    result=timlex(&foo, conn);
+
+    if (result<0)
+      exit(1);
+
+  } while (result!=EOL);
+
+
  
 }
+
+
 
 static void
 report_error_code(struct protstream *conn, int code)
