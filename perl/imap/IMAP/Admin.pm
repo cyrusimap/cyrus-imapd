@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Admin.pm,v 1.34 2003/03/24 16:39:56 rjs3 Exp $
+# $Id: Admin.pm,v 1.35 2003/06/16 21:35:55 rjs3 Exp $
 
 package Cyrus::IMAP::Admin;
 use strict;
@@ -238,6 +238,7 @@ sub deletemailbox {
 	or die "cyradm: cannot authenticate to $refserver\n";
 
       my $ret = $cyradm->deletemailbox($box);
+      $self->{error} = $cyradm->error;
       $cyradm = undef;
       return $ret;
     }

@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Shell.pm,v 1.24 2003/03/27 14:48:10 rjs3 Exp $
+# $Id: Shell.pm,v 1.25 2003/06/16 21:35:55 rjs3 Exp $
 #
 # A shell framework for IMAP::Cyrus::Admin
 #
@@ -633,15 +633,41 @@ sub _sc_listacl {
   if (!$cyrref || !$$cyrref) {
     die "listaclmailbox: no connection to server\n";
   }
-  my %acl = $$cyrref->listaclmailbox(@nargv);
-  if (defined $$cyrref->error) {
-    $lfh->[2]->print($$cyrref->error, "\n");
-    return 1;
+
+  sub showacl($@) {
+    my $spaces = shift;
+    my @nargv = shift;
+    my %acl = $$cyrref->listaclmailbox(@nargv);
+    if (defined $$cyrref->error) {
+      $lfh->[2]->print($$cyrref->error, "\n");
+      return 1;
+    }
+    foreach my $acl (keys %acl) {
+      for(my $i = 0; $i < $spaces; $i++) {
+	$lfh->[1]->print(" ");
+      }
+      $lfh->[1]->print($acl, " ", $acl{$acl}, "\n");
+    }
+    return 0;
   }
-  foreach my $acl (keys %acl) {
-    $lfh->[1]->print($acl, " ", $acl{$acl}, "\n");
+  
+  if($nargv[0] =~ /(\*|%)/) {
+    # list operation
+    my @res = $$cyrref->listmailbox(($nargv[0]));
+    foreach my $mbx (@res) {
+      my $name = $mbx->[0];
+      my $flags = $mbx->[1];
+      next if($flags =~ /(\\noselect|\\nonexistent|\\placeholder)/i);
+      $lfh->[1]->print($name,":\n");
+      $nargv[0] = $name;
+      if(showacl(2,@nargv) != 0) {
+	return 1;
+      }
+    }
+  } else {
+    return showacl(0,@nargv);
   }
-  0;
+  return 0;
 }
 
 sub _sc_server {
@@ -921,7 +947,27 @@ sub _sc_delete {
   if (!$cyrref || !$$cyrref) {
     die "deletemailbox: no connection to server\n";
   }
-  $$cyrref->delete(@nargv) || die "deletemailbox: " . $$cyrref->error . "\n";
+
+  if($nargv[0] =~ /(\*|%)/) {
+    # list operation
+    my @res = $$cyrref->listmailbox(($nargv[0]));
+    foreach my $mbx (@res) {
+      my $name = $mbx->[0];
+      my $flags = $mbx->[1];
+      next if($flags =~ /(\\noselect|\\nonexistent|\\placeholder)/i);
+      print "Deleting mailbox $name...";
+      $nargv[0] = $name;
+      my $rc = $$cyrref->delete(@nargv);
+      if(!defined($rc)) {
+	print $$cyrref->error . "\n";
+	last;
+      } else {
+	print "OK.\n";
+      }
+    }
+  } else {
+    $$cyrref->delete(@nargv) || die "deletemailbox: " . $$cyrref->error . "\n";
+  }
   0;
 }
 
@@ -1014,8 +1060,29 @@ sub _sc_deleteacl {
   if (!$cyrref || !$$cyrref) {
     die "deleteaclmailbox: no connection to server\n";
   }
-  $$cyrref->deleteacl(@nargv) ||
-    die "deleteaclmailbox: " . $$cyrref->error . "\n";
+
+  if($nargv[0] =~ /(\*|%)/) {
+    # list operation
+    my @res = $$cyrref->listmailbox(($nargv[0]));
+    foreach my $mbx (@res) {
+      my $name = $mbx->[0];
+      my $flags = $mbx->[1];
+      next if($flags =~ /(\\noselect|\\nonexistent|\\placeholder)/i);
+      print "Deleting acl on $name...";
+      $nargv[0] = $name;
+      my $rc = $$cyrref->deleteacl(@nargv);
+      if(!defined($rc)) {
+	print $$cyrref->error . "\n";
+	last;
+      } else {
+	print "OK.\n";
+      }
+    }
+  } else {
+    $$cyrref->deleteacl(@nargv) ||
+      die "deleteaclmailbox: " . $$cyrref->error . "\n";
+  }
+
   0;
 }
 
@@ -1040,7 +1107,27 @@ sub _sc_setacl {
   if (!$cyrref || !$$cyrref) {
     die "setaclmailbox: no connection to server\n";
   }
-  $$cyrref->setacl(@nargv) || die "setaclmailbox: " . $$cyrref->error . "\n";
+
+  if($nargv[0] =~ /(\*|%)/) {
+    # list operation
+    my @res = $$cyrref->listmailbox(($nargv[0]));
+    foreach my $mbx (@res) {
+      my $name = $mbx->[0];
+      my $flags = $mbx->[1];
+      next if($flags =~ /(\\noselect|\\nonexistent|\\placeholder)/i);
+      print "Setting ACL on $name...";
+      $nargv[0] = $name;
+      my $rc = $$cyrref->setacl(@nargv);
+      if(!defined($rc)) {
+	print $$cyrref->error . "\n";
+	last;
+      } else {
+	print "OK.\n";
+      }
+    }
+  } else {
+    $$cyrref->setacl(@nargv) || die "setaclmailbox: " . $$cyrref->error . "\n";
+  }
   0;
 }
 
