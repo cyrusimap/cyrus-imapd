@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.47 2002/01/15 20:37:38 rjs3 Exp $
+ * $Id: lmtpengine.c,v 1.48 2002/01/25 19:26:07 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -187,9 +187,10 @@ static void send_lmtp_error(struct protstream *pout, int r)
 	    prot_printf(pout, 
 "550-You do not have permission to post a message to this mailbox.\r\n"
 "550-Please contact the owner of this mailbox in order to submit\r\n"
-"550-your message, or postmaster@andrew.cmu.edu if you believe you\r\n"
+"550-your message, or %s if you believe you\r\n"
 "550-received this message in error.\r\n"
-"550 5.7.1 Permission denied");
+"550 5.7.1 Permission denied\r\n", 
+			POSTMASTER);
 	} else {
 	    prot_printf(pout, "550 5.7.1 Permission denied\r\n");
 	}
