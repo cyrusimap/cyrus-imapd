@@ -536,7 +536,7 @@ struct mailbox *mailbox;
 {
     int r = -1;
 
-    if (mailbox->index_lock_count++) return 0;
+    if (mailbox->pop_lock_count++) return 0;
 
     while (r != 0) {
 	r = flock(fileno(mailbox->cache), LOCK_EX|LOCK_NB);
