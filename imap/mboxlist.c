@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.147 2001/01/17 21:21:19 leg Exp $
+ * $Id: mboxlist.c,v 1.148 2001/06/23 03:14:02 ken3 Exp $
  */
 
 #include <config.h>
@@ -99,22 +99,7 @@ static void mboxlist_closesubs();
 static struct quota *mboxlist_newquota;
 static int mboxlist_changequota();
 
-static char *mboxlist_hash_usersubs(const char *userid);
-
 #define FNAME_SUBSSUFFIX ".sub"
-
-static int delete_user(const char *user)
-{
-    /* delete seen state */
-
-    /* delete subscriptions */
-    char *fname = mboxlist_hash_usersubs(user);
-	
-    (void) unlink(fname);
-    free(fname);
-
-    return 0;
-}
 
 /*
  * Convert a partition into a path
@@ -813,12 +798,6 @@ int mboxlist_deletemailbox(char *name, int isadmin, char *userid,
      */
     if (!r && mailbox.quota.root != NULL) {
 	/* look for any other mailboxes in this quotaroot */
-    }
-
-    if (!r && deleteuser) {
-	/* call the delete user function */
-	
-	delete_user(name + 5);
     }
 
  done:
@@ -1760,7 +1739,7 @@ void mboxlist_done(void)
 }
 
 /* hash the userid to a file containing the subscriptions for that user */
-static char *mboxlist_hash_usersubs(const char *userid)
+char *mboxlist_hash_usersubs(const char *userid)
 {
     char *fname = xmalloc(strlen(config_dir) + sizeof(FNAME_USERDIR) +
 			  strlen(userid) + sizeof(FNAME_SUBSSUFFIX) + 10);

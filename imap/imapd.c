@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.307 2001/05/21 18:27:10 leg Exp $ */
+/* $Id: imapd.c,v 1.308 2001/06/23 03:14:02 ken3 Exp $ */
 
 #include <config.h>
 
@@ -84,6 +84,7 @@
 #include "acapmbox.h"
 #include "idle.h"
 #include "telemetry.h"
+#include "user.h"
 
 #include "pushstats.h"		/* SNMP interface */
 
@@ -3358,7 +3359,7 @@ char *name;
 	l->alloc = 0;
 	l->num = 0;
 
-	strcat(name, ".*");
+	strcat(mailboxname, ".*");
 	mboxlist_findall(mailboxname, imapd_userisadmin, imapd_userid,
 			 imapd_authstate, addmbox, &l);
 
@@ -3373,6 +3374,9 @@ char *name;
 	}
 	    
 	free(l);
+
+	/* take care of deleting ACLs, subscriptions, seen state and quotas */
+	user_delete(name+5, imapd_userid, imapd_authstate);
     }
 
     if (imapd_mailbox) {
