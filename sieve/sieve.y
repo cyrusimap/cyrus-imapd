@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.9 2000/02/10 00:39:14 leg Exp $
+ * $Id: sieve.y,v 1.10 2000/02/17 06:20:27 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -244,7 +244,8 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
 
 	;
 
-priority: LOW    { $$ = "low"; }
+priority: /* nothing */ { $$ = "medium"; }
+	| LOW    { $$ = "low"; }
         | MEDIUM { $$ = "medium"; }
         | HIGH { $$ = "high"; }
         ;
