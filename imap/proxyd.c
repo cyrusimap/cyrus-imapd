@@ -39,9 +39,9 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.56 2000/12/19 19:25:53 leg Exp $ */
+/* $Id: proxyd.c,v 1.57 2000/12/19 23:59:31 leg Exp $ */
 
-#define NEW_BACKEND_TIMEOUT
+#undef PROXY_IDLE
 
 #include <config.h>
 
@@ -103,11 +103,7 @@ struct backend {
     char *hostname;
     struct sockaddr_in addr;
     int sock;
-#ifdef NEW_BACKEND_TIMEOUT
     struct prot_waitevent *timeout;
-#else
-    time_t lastused;
-#endif
 
     sasl_conn_t *saslconn;
 
@@ -257,11 +253,7 @@ static int pipe_until_tag(struct backend *s, char *tag)
     int cont = 0, last = 0, r = -1;
     int taglen = strlen(tag);
 
-#ifdef NEW_BACKEND_TIMEOUT
     s->timeout->mark = time(NULL) + IDLE_TIMEOUT;
-#else
-    s->lastused = time(NULL);
-#endif
     
     /* the only complication here are literals */
     while (!last || cont) {
@@ -397,11 +389,7 @@ static int pipe_command(struct backend *s, int optimistic_literal)
     char eol[128];
     int sl;
 
-#ifdef NEW_BACKEND_TIMEOUT
     s->timeout->mark = time(NULL) + IDLE_TIMEOUT;
-#else
-    s->lastused = time(NULL);
-#endif
     
     eol[0] = '\0';
 
@@ -812,11 +800,7 @@ void proxyd_downserver(struct backend *s)
     int taglen;
     char buf[1024];
 
-#ifdef NEW_BACKEND_TIMEOUT
     if (!s->timeout) {
-#else
-    if (!s->lastused) {
-#endif
 	/* already disconnected */
 	return;
     }
@@ -834,16 +818,12 @@ void proxyd_downserver(struct backend *s)
     close(s->sock);
     prot_free(s->in);
     prot_free(s->out);
-#ifdef NEW_BACKEND_TIMEOUT
+
     /* remove the timeout */
     prot_removewaitevent(proxyd_in, s->timeout);
     s->timeout = NULL;
-#else
-    s->lastused = 0;
-#endif
 }
 
-#ifdef NEW_BACKEND_TIMEOUT
 struct prot_waitevent dummy_event;
 
 struct prot_waitevent *backend_timeout(struct protstream *s,
@@ -870,7 +850,6 @@ struct prot_waitevent *backend_timeout(struct protstream *s,
 	return ev;
     }
 }
-#endif
 
 /* return the connection to the server */
 struct backend *proxyd_findserver(char *server)
@@ -901,18 +880,10 @@ struct backend *proxyd_findserver(char *server)
 	memcpy(&ret->addr.sin_addr, hp->h_addr, hp->h_length);
 	ret->addr.sin_port = htons(143);
 
-#ifdef NEW_BACKEND_TIMEOUT
 	ret->timeout = NULL;
-#else
-	ret->lastused = 0;
-#endif
     }
  	
-#ifdef NEW_BACKEND_TIMEOUT
     if (!ret->timeout) {
-#else
-    if (!ret->lastused) {
-#endif
 	/* need to (re)establish connection to server or create one */
 	int sock;
 	int r;
@@ -945,18 +916,12 @@ struct backend *proxyd_findserver(char *server)
 	/* find the capabilities of the server */
 	proxyd_capability(ret);
 
-#ifdef NEW_BACKEND_TIMEOUT
 	/* add the timeout */
 	ret->timeout = prot_addwaitevent(proxyd_in, time(NULL) + IDLE_TIMEOUT,
 					 backend_timeout, ret);
-#endif
     }
 
-#ifdef NEW_BACKEND_TIMEOUT
     ret->timeout->mark = time(NULL) + IDLE_TIMEOUT;
-#else
-    ret->lastused = time(NULL);
-#endif
 
     if (!backend_cached[i]) {
 	/* insert server in list of cached connections */
@@ -1403,61 +1368,7 @@ cmdloop()
 	signals_poll();
 
 	/* Parse tag */
-#ifdef NEW_BACKEND_TIMEOUT
 	c = getword(&tag);
-#else
-	prot_NONBLOCK(proxyd_in);
-	c = getword(&tag);
-	if (c == EOF && errno == EAGAIN) {
-	    time_t now, mark;
-	    int i;
-	    fd_set rfds;
-	    struct timeval tv;
-
-	    /* no input from client */
-
-	    /* we may want to pause for less than our client idle timeout,
-	       if there's some server we're connected to */
-	    now = time(NULL);
-	    mark = IDLE_TIMEOUT + 1;
-	    i = 0;
-	    while (backend_cached[i]) {
-		if ((backend_cached[i]->lastused != 0) &&
-		    (backend_cached[i] != backend_current)) {
-		    /* server i is connected and not our current server */
-		    
-		    if (backend_cached[i]->lastused + IDLE_TIMEOUT < now) {
-			/* idle too long */
-			proxyd_downserver(backend_cached[i]);
-		    } else {
-			/* it will timeout in 'timeout' seconds */
-			int timeout = backend_cached[i]->lastused + 
-			    IDLE_TIMEOUT - now;
-			
-			mark = (timeout < mark ? timeout : mark);
-		    }
-		}
-		i++;
-	    }
-
-	    if (mark < IDLE_TIMEOUT + 1) {
-		/* 'mark' is the lowest of the timeouts */
-		tv.tv_sec = mark;
-		tv.tv_usec = 0;
-		
-		FD_ZERO(&rfds);
-		FD_SET(0, &rfds);
-		/* block until a server times out or we get input */
-		select(1, &rfds, NULL, NULL, &tv);
-		continue; /* resume the cmdloop at the top */
-	    } else {
-		/* just block on the client */
-		prot_BLOCK(proxyd_in);
-		c = getword(&tag);
-	    }
-	}
-	prot_BLOCK(proxyd_in);
-#endif
 	if (c == EOF) {
 	    err = prot_error(proxyd_in);
 	    if (err) {
@@ -1697,6 +1608,7 @@ cmdloop()
 		if (c == '\r') c = prot_getc(proxyd_in);
 		if (c != '\n') goto extraargs;
 
+#ifdef PROXY_IDLE
 		/* should we do something else here??? */
 		if (!backend_current) {
 		    prot_printf(proxyd_out,
@@ -1705,6 +1617,9 @@ cmdloop()
 		}
 
 		backend_current->cmd_idle(tag.s);
+#else
+		prot_printf(proxyd_out, "%s NO idle disabled\r\n", tag.s);
+#endif
 	    }
 	    else goto badcmd;
 	    break;
@@ -2609,7 +2524,9 @@ void cmd_capability(char *tag)
     }
     prot_printf(proxyd_out, "* CAPABILITY ");
     prot_printf(proxyd_out, CAPABILITY_STRING);
-    /* prot_printf(proxyd_out, " IDLE"); */
+#ifdef PROXY_IDLE
+    prot_printf(proxyd_out, " IDLE");
+#endif
     prot_printf(proxyd_out, " MAILBOX-REFERRALS");
 
     if (starttls_enabled())
