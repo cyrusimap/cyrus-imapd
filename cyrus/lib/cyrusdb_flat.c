@@ -88,15 +88,30 @@ static int abort_txn(struct db *db, struct txn *tid)
 
     assert(db && tid);
 
-    if (tid->fnamenew) unlink(tid->fnamenew);
-    r = lock_unlock(tid->fd);
-    if (r == -1) {
-	syslog(LOG_ERR, "IOERROR: unlocking db %s: %m", db->fname);
-	return CYRUSDB_IOERROR;
+    /* cleanup done while lock is held */
+    if (tid->fnamenew) {
+	unlink(tid->fnamenew);
+	free(tid->fnamenew);
     }
 
-    map_refresh(db->fd, 1, &db->base, &db->size, sbuf.st_size,
-		db->fname, 0);
+    /* release lock */
+    r = lock_unlock(db->fd);
+    if (r == -1) {
+	syslog(LOG_ERR, "IOERROR: unlocking db %s: %m", db->fname);
+	r = CYRUSDB_IOERROR;
+    }
+
+    /* return to our normally scheduled fd */
+    if (!r && fstat(db->fd, &sbuf) == -1) {
+	syslog(LOG_ERR, "IOERROR: fstat on %s: %m", db->fname);
+	r = CYRUSDB_IOERROR;
+    }
+    if (!r) {
+	map_refresh(db->fd, 1, &db->base, &db->size, sbuf.st_size,
+		    db->fname, 0);
+    }
+
+    free(tid);
     
     return 0;
 }
@@ -249,14 +264,16 @@ static int mystore(struct db *db,
     struct stat sbuf;
 
     /* lock file, if needed */
-    if (!*mytid) {
+    if (!mytid || !*mytid) {
 	r = lock_reopen(db->fd, db->fname, &sbuf, &lockfailaction);
 	if (r < 0) {
 	    syslog(LOG_ERR, "IOERROR: %s %s: %m", lockfailaction, db->fname);
 	    return CYRUSDB_IOERROR;
 	}
-	*mytid = (struct txn *) xmalloc(sizeof(struct txn));
-	(*mytid)->fnamenew = NULL;
+	if (mytid) {
+	    *mytid = (struct txn *) xmalloc(sizeof(struct txn));
+	    (*mytid)->fnamenew = NULL;
+	}
     }
 
     /* find entry, if it exists */
@@ -269,7 +286,7 @@ static int mystore(struct db *db,
     }
 
     /* write new file */
-    if ((*mytid)->fnamenew) {
+    if (mytid && (*mytid)->fnamenew) {
 	strcpy(fnamebuf, (*mytid)->fnamenew);
     } else {
 	strcpy(fnamebuf, db->fname);
@@ -306,6 +323,7 @@ static int mystore(struct db *db,
 	close(writefd);
 	if (mytid) abort_txn(db, *mytid);
     }
+    r = 0;
 
     if (mytid) {
 	/* setup so further accesses will be against fname.NEW */
@@ -363,20 +381,35 @@ static int commit_txn(struct db *db, struct txn *tid)
 
     assert(db && tid);
 
-    writefd = tid->fd;
-    if (fsync(writefd) ||
-	lock_blocking(writefd) == -1 ||
-	fstat(writefd, &sbuf) == -1 ||
-	rename(tid->fnamenew, db->fname) == -1) {
-	syslog(LOG_ERR, "IOERROR: writing %s: %m", tid->fnamenew);
-	close(writefd);
-	r = CYRUSDB_IOERROR;
+    if (tid->fnamenew) {
+	/* we wrote something */
+
+	writefd = tid->fd;
+	if (fsync(writefd) ||
+	    lock_blocking(writefd) == -1 ||
+	    fstat(writefd, &sbuf) == -1 ||
+	    rename(tid->fnamenew, db->fname) == -1) {
+	    syslog(LOG_ERR, "IOERROR: writing %s: %m", tid->fnamenew);
+	    close(writefd);
+	    r = CYRUSDB_IOERROR;
+	} else {
+	    /* successful */
+	    /* we now deal exclusively with our new fd */
+	    close(db->fd);
+	    db->fd = writefd;
+	}
+	free(tid->fnamenew);
     } else {
-	/* successful */
-	close(db->fd);
-	db->fd = writefd;
+	/* read-only txn */
     }
-    free(tid->fnamenew);
+
+    /* release lock */
+    r = lock_unlock(db->fd);
+    if (r == -1) {
+	syslog(LOG_ERR, "IOERROR: unlocking db %s: %m", db->fname);
+	r = CYRUSDB_IOERROR;
+    }
+
     free(tid);
 
     return r;
