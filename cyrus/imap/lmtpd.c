@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.46 2000/08/22 14:12:10 ken3 Exp $
+ * $Id: lmtpd.c,v 1.47 2000/09/05 04:05:49 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.46 2000/08/22 14:12:10 ken3 Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.47 2000/09/05 04:05:49 leg Exp $";*/
 
 #include <config.h>
 
@@ -427,7 +427,7 @@ pid_t open_sendmail(const char *argv[], FILE **sm)
 
 	/* if we're here we suck */
 	printf("451 deliver: didn't exec?!?\r\n");
-	fatal("couldn't exec", EC_TEMPFAIL);
+	fatal("couldn't exec", EC_OSERR);
     }
     /* i'm the parent */
     close(fds[0]);
@@ -923,78 +923,78 @@ static void setup_sieve(void)
     res = sieve_interp_alloc(&sieve_interp, NULL);
     if (res != SIEVE_OK) {
 	syslog(LOG_ERR, "sieve_interp_alloc() returns %d\n", res);
-	fatal("sieve_interp_alloc()", EC_TEMPFAIL);
+	fatal("sieve_interp_alloc()", EC_SOFTWARE);
     }
 
     res = sieve_register_redirect(sieve_interp, &sieve_redirect);
     if (res != SIEVE_OK) {
 	syslog(LOG_ERR, "sieve_register_redirect() returns %d\n", res);
-	fatal("sieve_register_redirect()", EC_TEMPFAIL);
+	fatal("sieve_register_redirect()", EC_SOFTWARE);
     }
     res = sieve_register_discard(sieve_interp, &sieve_discard);
     if (res != SIEVE_OK) {
 	syslog(LOG_ERR, "sieve_register_discard() returns %d\n", res);
-	fatal("sieve_register_discard()", EC_TEMPFAIL);
+	fatal("sieve_register_discard()", EC_SOFTWARE);
     }
     res = sieve_register_reject(sieve_interp, &sieve_reject);
     if (res != SIEVE_OK) {
 	syslog(LOG_ERR, "sieve_register_reject() returns %d\n", res);
-	fatal("sieve_register_reject()", EC_TEMPFAIL);
+	fatal("sieve_register_reject()", EC_SOFTWARE);
     }
     res = sieve_register_fileinto(sieve_interp, &sieve_fileinto);
     if (res != SIEVE_OK) {
 	syslog(LOG_ERR, "sieve_register_fileinto() returns %d\n", res);
-	fatal("sieve_register_fileinto()", EC_TEMPFAIL);
+	fatal("sieve_register_fileinto()", EC_SOFTWARE);
     }
     res = sieve_register_keep(sieve_interp, &sieve_keep);
     if (res != SIEVE_OK) {
 	syslog(LOG_ERR, "sieve_register_keep() returns %d\n", res);
-	fatal("sieve_register_keep()", EC_TEMPFAIL);
+	fatal("sieve_register_keep()", EC_SOFTWARE);
     }
     res = sieve_register_imapflags(sieve_interp, &mark);
     if (res != SIEVE_OK) {
 	syslog(LOG_ERR, "sieve_register_imapflags() returns %d\n", res);
-	fatal("sieve_register_imapflags()", EC_TEMPFAIL);
+	fatal("sieve_register_imapflags()", EC_SOFTWARE);
     }
     res = sieve_register_notify(sieve_interp, &sieve_notify);
     if (res != SIEVE_OK) {
 	syslog(LOG_ERR, "sieve_register_notify() returns %d\n", res);
-	fatal("sieve_register_notify()", EC_TEMPFAIL);
+	fatal("sieve_register_notify()", EC_SOFTWARE);
     }
     res = sieve_register_size(sieve_interp, &getsize);
     if (res != SIEVE_OK) {
 	syslog(LOG_ERR, "sieve_register_size() returns %d\n", res);
-	fatal("sieve_register_size()", EC_TEMPFAIL);
+	fatal("sieve_register_size()", EC_SOFTWARE);
     }
     res = sieve_register_header(sieve_interp, &getheader);
     if (res != SIEVE_OK) {
 	syslog(LOG_ERR, "sieve_register_header() returns %d\n", res);
-	fatal("sieve_register_header()", EC_TEMPFAIL);
+	fatal("sieve_register_header()", EC_SOFTWARE);
     }
 
     res = sieve_register_envelope(sieve_interp, &getenvelope);
     if (res != SIEVE_OK) {
 	syslog(LOG_ERR,"sieve_register_envelope() returns %d\n", res);
-	fatal("sieve_register_envelope()", EC_TEMPFAIL);
+	fatal("sieve_register_envelope()", EC_SOFTWARE);
     }
     
     res = sieve_register_vacation(sieve_interp, &vacation);
     if (res != SIEVE_OK) {
 	syslog(LOG_ERR, "sieve_register_vacation() returns %d\n", res);
-	fatal("sieve_register_vacation()", EC_TEMPFAIL);
+	fatal("sieve_register_vacation()", EC_SOFTWARE);
     }
 
     res = sieve_register_parse_error(sieve_interp, &sieve_parse_error_handler);
     if (res != SIEVE_OK) {
 	syslog(LOG_ERR, "sieve_register_parse_error() returns %d\n", res);
-	fatal("sieve_register_parse_error()", EC_TEMPFAIL);
+	fatal("sieve_register_parse_error()", EC_SOFTWARE);
     }
  
     res = sieve_register_execute_error(sieve_interp, 
 				       &sieve_execute_error_handler);
     if (res != SIEVE_OK) {
 	syslog(LOG_ERR, "sieve_register_execute_error() returns %d\n", res);
-	fatal("sieve_register_execute_error()", EC_TEMPFAIL);
+	fatal("sieve_register_execute_error()", EC_SOFTWARE);
     }
 }
 
