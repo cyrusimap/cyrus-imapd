@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.21 2004/06/15 14:20:16 ken3 Exp $
+ * $Id: nntpd.c,v 1.2.2.22 2004/06/15 17:13:31 ken3 Exp $
  */
 
 /*
@@ -3071,6 +3071,7 @@ static int deliver(message_data_t *msg)
     char *rcpt = NULL, *local_rcpt = NULL, *server, *acl;
     time_t now = time(NULL);
     unsigned long uid, backend_mask = 0;
+    struct body *body = NULL;
     struct dest *dlist = NULL;
 
     /* check ACLs of all mailboxes */
@@ -3106,11 +3107,11 @@ static int deliver(message_data_t *msg)
 	    if (!r) {
 		prot_rewind(msg->data);
 		if (msg->stage) {
-		    r = append_fromstage(&as, msg->stage, now,
+		    r = append_fromstage(&as, &body, msg->stage, now,
 					 (const char **) NULL, 0, !singleinstance);
 		} else {
 		    /* XXX should never get here */
-		    r = append_fromstream(&as, msg->data, msg->size, now,
+		    r = append_fromstream(&as, &body, msg->data, msg->size, now,
 					  (const char **) NULL, 0);
 		}
 		if (!r) append_commit(&as, 0, NULL, &uid, NULL);
@@ -3125,6 +3126,11 @@ static int deliver(message_data_t *msg)
 
 	    local_rcpt = rcpt;
 	}
+    }
+
+    if (body) {
+	message_free_body(body);
+	free(body);
     }
 
     if (dlist) {

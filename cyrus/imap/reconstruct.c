@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.81.2.5 2004/05/25 01:28:13 ken3 Exp $ */
+/* $Id: reconstruct.c,v 1.81.2.6 2004/06/15 17:13:32 ken3 Exp $ */
 
 #include <config.h>
 
@@ -444,6 +444,7 @@ int reconstruct(char *name, struct discovered *found)
 
     struct index_record message_index, old_index;
     static struct index_record zero_index;
+    struct body *body = NULL;
 
     char *mypath, *mympath, *mypart, *myacl;
     int mytype;
@@ -721,7 +722,8 @@ int reconstruct(char *name, struct discovered *found)
 	}
 	message_index.last_updated = time(0);
 	
-	if ((r = message_parse_file(msgfile, &mailbox, &message_index))!=0) {
+	if ((r = message_parse_file(msgfile, &body))!=0) {
+	    r = message_create_record(&mailbox, &message_index, body);
 	    fclose(msgfile);
 	    fclose(newindex);
 	    mailbox_close(&mailbox);
@@ -729,6 +731,7 @@ int reconstruct(char *name, struct discovered *found)
 	    return r;
 	}
 	fclose(msgfile);
+	if (body) message_free_body(body);
 	
 	/* Write out new entry in index file */
 	mailbox_index_record_to_buf(&message_index, buf);
@@ -747,6 +750,8 @@ int reconstruct(char *name, struct discovered *found)
 	if (message_index.system_flags & FLAG_DELETED) new_deleted++;
 	new_quota += message_index.size;
     }
+
+    if (body) free(body);
     
     /* Write out new index file header */
     rewind(newindex);

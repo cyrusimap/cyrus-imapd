@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.121.2.20 2004/05/25 01:28:08 ken3 Exp $
+ * $Id: lmtpd.c,v 1.121.2.21 2004/06/15 17:13:30 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -80,6 +80,7 @@
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "mboxname.h"
+#include "message.h"
 #include "mupdate-client.h"
 #include "notify.h"
 #include "prot.h"
@@ -442,6 +443,7 @@ static int mlookup(const char *name, char **server, char **aclp, void *tid)
  * pass acloverride
  */
 int deliver_mailbox(struct protstream *msg,
+		    struct body **body,
 		    struct stagemsg *stage,
 		    unsigned size __attribute__((unused)),
 		    char **flag,
@@ -474,7 +476,7 @@ int deliver_mailbox(struct protstream *msg,
 
     if (!r) {
 	prot_rewind(msg);
-	r = append_fromstage(&as, stage, now,
+	r = append_fromstage(&as, body, stage, now,
 			     (const char **) flag, nflags, !singleinstance);
 	if (!r) append_commit(&as, quotaoverride ? -1 : 0, NULL, &uid, NULL);
 	else append_abort(&as);
@@ -614,6 +616,7 @@ int deliver(message_data_t *msgdata, char *authuser,
     struct dest *dlist = NULL;
     enum rcpt_status *status;
     struct stagemsg *stage;
+    struct body *body = NULL;
     char *notifyheader;
 #ifdef USE_SIEVE
     sieve_msgdata_t mydata;
@@ -632,6 +635,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 #ifdef USE_SIEVE
     /* create 'mydata', our per-delivery data */
     mydata.m = msgdata;
+    mydata.body = &body;
     mydata.stage = stage;
     mydata.notifyheader = notifyheader;
     mydata.namespace = &lmtpd_namespace;
@@ -663,7 +667,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	    }
 	    else if (!r) {
 		/* local mailbox */
-		r = deliver_mailbox(msgdata->data, stage, msgdata->size, 
+		r = deliver_mailbox(msgdata->data, &body, stage, msgdata->size, 
 				    NULL, 0, authuser, authstate,
 				    msgdata->id, NULL, notifyheader,
 				    namebuf, quotaoverride, 0);
@@ -706,7 +710,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 		    strlcat(namebuf, ".", sizeof(namebuf));
 		    strlcat(namebuf, mailbox, sizeof(namebuf));
 		
-		    r = deliver_mailbox(msgdata->data, stage,  msgdata->size, 
+		    r = deliver_mailbox(msgdata->data, &body, stage,  msgdata->size, 
 					NULL, 0, authuser, authstate,
 					msgdata->id, userbuf, notifyheader,
 					namebuf, quotaoverride, 0);
@@ -716,7 +720,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 		    config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH) &&
 		    fuzzy_match(namebuf)) {
 		    /* try delivery to a fuzzy matched mailbox */
-		    r = deliver_mailbox(msgdata->data, stage,  msgdata->size, 
+		    r = deliver_mailbox(msgdata->data, &body, stage,  msgdata->size, 
 					NULL, 0, authuser, authstate,
 					msgdata->id, userbuf, notifyheader,
 					namebuf, quotaoverride, 0);
@@ -727,7 +731,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 		    *tail = '\0';
 		
 		    /* ignore ACL's trying to deliver to INBOX */
-		    r = deliver_mailbox(msgdata->data, stage, msgdata->size, 
+		    r = deliver_mailbox(msgdata->data, &body, stage, msgdata->size, 
 					NULL, 0, authuser, authstate,
 					msgdata->id, userbuf, notifyheader,
 					namebuf, quotaoverride, 1);
@@ -794,6 +798,10 @@ int deliver(message_data_t *msgdata, char *authuser,
    
     /* cleanup */
     free(status);
+    if (body) {
+	message_free_body(body);
+	free(body);
+    }
     append_removestage(stage);
     if (notifyheader) free(notifyheader);
 

@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: message.c,v 1.97.2.1 2004/02/27 21:17:32 ken3 Exp $
+ * $Id: message.c,v 1.97.2.2 2004/06/15 17:13:31 ken3 Exp $
  */
 
 #include <config.h>
@@ -155,6 +155,8 @@ struct boundary {
 /* Default MIME Content-type */
 #define DEFAULT_CONTENT_TYPE "TEXT/PLAIN; CHARSET=us-ascii"
 
+static int message_parse_mapped P((const char *msg_base, unsigned long msg_len,
+				   struct body *body));
 static int message_parse_body P((struct msg *msg,
 				 int format, struct body *body,
 				 char *defaultContentType,
@@ -206,7 +208,6 @@ static void message_ibuf_init P((struct ibuf *ibuf));
 static int message_ibuf_ensure P((struct ibuf *ibuf, unsigned len));
 static void message_ibuf_iov P((struct iovec *iov, struct ibuf *ibuf));
 static void message_ibuf_free P((struct ibuf *ibuf));
-static void message_free_body P((struct body *body));
 
 /*
  * Copy a message of 'size' bytes from 'from' to 'to',
@@ -314,24 +315,24 @@ unsigned size;
  * 'message_index'.
  */
 int
-message_parse_file(infile, mailbox, message_index)
+message_parse_file(infile, body)
 FILE *infile;
-struct mailbox *mailbox;
-struct index_record *message_index;
+struct body **body;
 {
     struct stat sbuf;
     const char *msg_base = 0;
     unsigned long msg_len = 0;
     int r;
 
+    if (!*body) *body = (struct body *) xmalloc(sizeof(struct body));
+
     if (fstat(fileno(infile), &sbuf) == -1) {
-	syslog(LOG_ERR, "IOERROR: fstat on new message in %s: %m",
-	       mailbox->name);
+	syslog(LOG_ERR, "IOERROR: fstat on new message in spool: %m");
 	fatal("can't fstat message file", EC_OSFILE);
     }
     map_refresh(fileno(infile), 1, &msg_base, &msg_len, sbuf.st_size,
-		"new message", mailbox->name);
-    r = message_parse_mapped(msg_base, msg_len, mailbox, message_index);
+		"new message", 0);
+    r = message_parse_mapped(msg_base, msg_len, *body);
     map_free(&msg_base, &msg_len);
     return r;
 }
@@ -344,13 +345,11 @@ struct index_record *message_index;
  * by 'message_index'.
  */
 int
-message_parse_mapped(msg_base, msg_len, mailbox, message_index)
+message_parse_mapped(msg_base, msg_len, body)
 const char *msg_base;
 unsigned long msg_len;
-struct mailbox *mailbox;
-struct index_record *message_index;
+struct body *body;
 {
-    struct body body;
     struct msg msg;
     int n;
 
@@ -358,21 +357,36 @@ struct index_record *message_index;
     msg.len = msg_len;
     msg.offset = 0;
 
-    message_parse_body(&msg, mailbox->format, &body,
+    message_parse_body(&msg, MAILBOX_FORMAT_NORMAL, body,
 		       DEFAULT_CONTENT_TYPE, (struct boundary *)0);
-    
-    message_index->sentdate = message_parse_date(body.date, 0);
-    message_index->size = body.header_size + body.content_size;
-    message_index->header_size = body.header_size;
-    message_index->content_offset = body.content_offset;
-    message_index->content_lines = body.content_lines;
+
+    return 0;
+}
+
+/*
+ * Appends the message's cache information to the mailbox's cache file
+ * and fills in appropriate information in the index record pointed to
+ * by 'message_index'.
+ */
+int
+message_create_record(mailbox, message_index, body)
+struct mailbox *mailbox;
+struct index_record *message_index;
+struct body *body;
+{
+    int n;
+
+    message_index->sentdate = message_parse_date(body->date, 0);
+    message_index->size = body->header_size + body->content_size;
+    message_index->header_size = body->header_size;
+    message_index->content_offset = body->content_offset;
+    message_index->content_lines = body->content_lines;
 
     message_index->cache_offset = lseek(mailbox->cache_fd, 0, SEEK_CUR);
 
     message_index->cache_version = MAILBOX_CACHE_MINOR_VERSION;
 
-    n = message_write_cache(mailbox->cache_fd, &body);
-    message_free_body(&body);
+    n = message_write_cache(mailbox->cache_fd, body);
 
     if (n == -1) {
 	syslog(LOG_ERR, "IOERROR: appending cache for %s: %m", mailbox->name);
@@ -2428,7 +2442,7 @@ struct ibuf *ibuf;
 /*
  * Free the parsed body-part 'body'
  */
-static void
+void
 message_free_body(body)
 struct body *body;
 {

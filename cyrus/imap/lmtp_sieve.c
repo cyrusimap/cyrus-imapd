@@ -1,6 +1,6 @@
 /* lmtp_sieve.c -- Sieve implementation for lmtpd
  *
- * $Id: lmtp_sieve.c,v 1.1.2.7 2004/06/01 13:49:01 ken3 Exp $
+ * $Id: lmtp_sieve.c,v 1.1.2.8 2004/06/15 17:13:29 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -86,6 +86,7 @@ typedef struct script_data {
 
 /* forward declarations */
 extern int deliver_mailbox(struct protstream *msg,
+			   struct body **body,
 			   struct stagemsg *stage,
 			   unsigned size,
 			   char **flag,
@@ -441,7 +442,7 @@ static int sieve_fileinto(void *ac,
 						   fc->mailbox,
 						   sd->username, namebuf);
     if (!ret) {
-	ret = deliver_mailbox(md->data, mdata->stage, md->size,
+	ret = deliver_mailbox(md->data, mdata->body, mdata->stage, md->size,
 			      fc->imapflags->flag, fc->imapflags->nflags,
 			      (char *) sd->username, sd->authstate, md->id,
 			      sd->username, mdata->notifyheader,
@@ -481,7 +482,7 @@ static int sieve_keep(void *ac,
 	    strlcat(namebuf, ".", sizeof(namebuf));
 	    strlcat(namebuf, sd->mailboxname, sizeof(namebuf));
 
-	    ret2 = deliver_mailbox(md->data, mydata->stage, md->size,
+	    ret2 = deliver_mailbox(md->data, mydata->body, mydata->stage, md->size,
 				   kc->imapflags->flag, kc->imapflags->nflags,
 				   mydata->authuser, mydata->authstate, md->id,
 				   sd->username, mydata->notifyheader,
@@ -491,7 +492,7 @@ static int sieve_keep(void *ac,
 	    config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH) &&
 	    fuzzy_match(namebuf)) {
 	    /* try delivery to a fuzzy matched mailbox */
-	    ret2 = deliver_mailbox(md->data, mydata->stage,  md->size,
+	    ret2 = deliver_mailbox(md->data, mydata->body, mydata->stage, md->size,
 				   kc->imapflags->flag, kc->imapflags->nflags,
 				   mydata->authuser, mydata->authstate, md->id,
 				   sd->username, mydata->notifyheader,
@@ -504,7 +505,7 @@ static int sieve_keep(void *ac,
 	    /* normal delivery to INBOX */
 	    *tail = '\0';
 
-	    ret = deliver_mailbox(md->data, mydata->stage, md->size,
+	    ret = deliver_mailbox(md->data, mydata->body, mydata->stage, md->size,
 				  kc->imapflags->flag, kc->imapflags->nflags,
 				  (char *) sd->username, sd->authstate, md->id,
 				  sd->username, mydata->notifyheader,

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.28 2004/06/09 19:42:40 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.29 2004/06/15 17:13:26 ken3 Exp $ */
 
 #include <config.h>
 
@@ -2723,10 +2723,14 @@ void cmd_append(char *tag, char *name)
 			 imapd_userid, imapd_authstate, ACL_INSERT, totalsize);
     }
     if (!r) {
+	struct body *body = NULL;
+
 	for (i = 0; !r && i < num; i++) {
-	    r = append_fromstage(&mailbox, stage[i], internaldate, 
+	    r = append_fromstage(&mailbox, &body, stage[i], internaldate, 
 				 (const char **) flag, nflags, 0);
+	    if (body) message_free_body(body);
 	}
+	if (body) free(body);
 
 	if (!r) {
 	    r = append_commit(&mailbox, totalsize, &uidvalidity, &firstuid, &num);

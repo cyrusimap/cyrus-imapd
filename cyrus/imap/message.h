@@ -1,5 +1,5 @@
 /* message.h -- Message parsing
- $Id: message.h,v 1.6 2003/02/13 20:15:28 rjs3 Exp $
+ $Id: message.h,v 1.6.4.1 2004/06/15 17:13:31 ken3 Exp $
 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -66,10 +66,15 @@ extern int message_copy_strict P((struct protstream *from, FILE *to,
 #define PARSE_ZONE	(1<<2)
 
 extern time_t message_parse_date P((char *hdr, unsigned flags));
-extern int message_parse_file P((FILE *infile, struct mailbox *mailbox,
-				 struct index_record *message_index));
-extern int message_parse_mapped P((const char *msg_base, unsigned long msg_len,
-				   struct mailbox *mailbox,
-				   struct index_record *message_index));
+
+/* declare this here so it can be used externally, but remain opaque */
+struct body;
+
+extern int message_parse_file P((FILE *infile,
+				 struct body **body));
+extern int message_create_record P((struct mailbox *mailbox,
+				    struct index_record *message_index,
+				    struct body *body));
+extern void message_free_body P((struct body *body));
 
 #endif /* INCLUDED_MESSAGE_H */

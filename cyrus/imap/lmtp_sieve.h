@@ -1,6 +1,6 @@
 /* lmtp_sieve.h -- Sieve implementation for lmtpd
  *
- * $Id: lmtp_sieve.h,v 1.1.2.2 2004/02/12 05:32:34 ken3 Exp $
+ * $Id: lmtp_sieve.h,v 1.1.2.3 2004/06/15 17:13:29 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -49,11 +49,14 @@
 #include "auth.h"
 #include "lmtpengine.h"
 #include "mboxname.h"
+#include "message.h"
 #include "sieve_interface.h"
 
 /* data per message */
 typedef struct sieve_msgdata {
     message_data_t *m;
+    struct body **body;
+
     int cur_rcpt;
 
     struct stagemsg *stage;	/* staging location for single instance

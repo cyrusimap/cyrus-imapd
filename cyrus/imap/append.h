@@ -1,5 +1,5 @@
 /* append.h -- Description of messages to be copied 
- * $Id: append.h,v 1.24.2.1 2004/01/27 23:13:37 ken3 Exp $ 
+ * $Id: append.h,v 1.24.2.2 2004/06/15 17:13:26 ken3 Exp $ 
  *
  * Copyright (c) 1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -46,6 +46,7 @@
 #define INCLUDED_APPEND_H
 
 #include "mailbox.h"
+#include "message.h"
 #include "prot.h"
 
 struct copymsg {
@@ -123,14 +124,14 @@ extern FILE *append_newstage(const char *mailboxname, time_t internaldate,
 			     int msgnum, struct stagemsg **stagep);
 
 /* adds a new mailbox to the stage initially created by append_newstage() */
-extern int append_fromstage(struct appendstate *mailbox,
+extern int append_fromstage(struct appendstate *mailbox, struct body **body,
 			    struct stagemsg *stage, time_t internaldate,
 			    const char **flag, int nflags, int nolink);
 
 /* removes the stage (frees memory, deletes the staging files) */
 extern int append_removestage(struct stagemsg *stage);
 
-extern int append_fromstream(struct appendstate *as,
+extern int append_fromstream(struct appendstate *as, struct body **body,
 			     struct protstream *messagefile,
 			     unsigned long size, time_t internaldate,
 			     const char **flag, int nflags);

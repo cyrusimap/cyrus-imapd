@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.102.2.5 2004/05/25 01:28:01 ken3 Exp $
+ * $Id: append.c,v 1.102.2.6 2004/06/15 17:13:26 ken3 Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -453,7 +453,7 @@ FILE *append_newstage(const char *mailboxname, time_t internaldate,
  * staging, to allow for single-instance store.  the complication here
  * is multiple partitions.
  */
-int append_fromstage(struct appendstate *as,
+int append_fromstage(struct appendstate *as, struct body **body,
 		     struct stagemsg *stage, time_t internaldate,
 		     const char **flag, int nflags, int nolink)
 {
@@ -560,7 +560,8 @@ int append_fromstage(struct appendstate *as,
     destfile = fopen(fname, "r");
     if (!r && destfile) {
 	/* ok, we've successfully created the file */
-	r = message_parse_file(destfile, mailbox, &message_index);
+	if (!*body || (as->nummsg - 1)) r = message_parse_file(destfile, body);
+	if (!r) r = message_create_record(mailbox, &message_index, *body);
     }
     if (destfile) {
 	/* this will hopefully ensure that the link() actually happened
@@ -673,7 +674,7 @@ int append_removestage(struct stagemsg *stage)
  * unlocked) until append_commit() is called.  multiple
  * append_onefromstream()s can be aborted by calling append_abort().
  */
-int append_fromstream(struct appendstate *as, 
+int append_fromstream(struct appendstate *as, struct body **body,
 		      struct protstream *messagefile,
 		      unsigned long size,
 		      time_t internaldate,
@@ -716,7 +717,8 @@ int append_fromstream(struct appendstate *as,
     /* Copy and parse message */
     r = message_copy_strict(messagefile, destfile, size);
     if (!r) {
-	r = message_parse_file(destfile, mailbox, &message_index);
+	if (!*body || (as->nummsg - 1)) r = message_parse_file(destfile, body);
+	if (!r) r = message_create_record(mailbox, &message_index, *body);
     }
     fclose(destfile);
     if (r) {
@@ -813,6 +815,7 @@ int append_copy(struct mailbox *mailbox,
     FILE *destfile;
     int r, n;
     int flag, userflag, emptyflag;
+    struct body *body = NULL;
     
     assert(append_mailbox->format == MAILBOX_FORMAT_NORMAL);
 
@@ -914,8 +917,10 @@ int append_copy(struct mailbox *mailbox,
 	    mailbox_unmap_message(mailbox, copymsg[msg].uid,
 				  &src_base, &src_size);
 
-	    if (!r) r = message_parse_file(destfile, append_mailbox,
-					   &message_index[msg]);
+	    if (!r) r = message_parse_file(destfile, &body);
+	    if (!r) r = message_create_record(append_mailbox,
+					      &message_index[msg], body);
+	    if (body) message_free_body(body);
 	    fclose(destfile);
 	    if (r) goto fail;
 	}
@@ -967,6 +972,8 @@ int append_copy(struct mailbox *mailbox,
 		  message_index[msg].uid);
 	}
     }
+
+    if (body) free(body);
 
     /* Write out index file entries */
     r = mailbox_append_index(append_mailbox, message_index,
