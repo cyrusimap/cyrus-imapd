@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.39 2000/06/23 19:24:17 ken3 Exp $
+ * $Id: lmtpd.c,v 1.40 2000/06/29 16:28:45 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.39 2000/06/23 19:24:17 ken3 Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.40 2000/06/29 16:28:45 leg Exp $";*/
 
 #include <config.h>
 
@@ -1150,6 +1150,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	    FILE *f = sieve_find_script(rcpt);
 	    char namebuf[MAX_MAILBOX_PATH];
 
+#ifdef USE_SIEVE
 	    if (f != NULL) {
 		script_data_t *sdata = NULL;
 		sieve_script_t *s = NULL;
@@ -1201,6 +1202,9 @@ int deliver(message_data_t *msgdata, char *authuser,
 		/* no sieve script */
 		r = 1; /* do normal delivery actions */
 	    }
+#else /* USE_SIEVE */
+	    r = 1;		/* normal delivery */
+#endif /* USE_SIEVE */
 
 	    if (r && plus &&
 		strlen(rcpt) + strlen(plus) + 30 <= MAX_MAILBOX_PATH) {
