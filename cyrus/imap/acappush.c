@@ -256,6 +256,7 @@ int main(int argc, char **argv)
     timeout.tv_usec = 0;
 
     config_init("acaplistener");
+    acap_init();
 
     /* initialize the hash table */
     hashtable.total_exists = 0;
