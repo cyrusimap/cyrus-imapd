@@ -1,7 +1,7 @@
-/* imtest.c -- IMAP/POP3/LMTP/SMTP test client
+/* imtest.c -- IMAP/POP3/LMTP/SMTP/MUPDATE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.69 2002/05/23 18:20:00 ken3 Exp $
+ * $Id: imtest.c,v 1.70 2002/05/23 19:11:45 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -156,8 +156,8 @@ struct cmd_t {
 struct capa_cmd_t {
     char *cmd;		/* capability command string */
     char *resp;		/* end of capability response */
-    char *tls;		/* tls capability string */
-    char *auth;		/* auth capability string */
+    char *tls;		/* [OPTIONAL] TLS capability string */
+    char *auth;		/* [OPTIONAL] AUTH capability string */
     char *(*parse_mechlist)(char *str);
 			/* [OPTIONAL] parse capability string,
 			   returns space-separated list of mechs */
@@ -1173,6 +1173,9 @@ static char *ask_capability(struct capa_cmd_t *capa_cmd,
     
     *supports_starttls = 0;
 
+    /* no capability command */
+    if (!capa_cmd->cmd) return NULL;
+
     /* request capabilities of server */
     printf("C: %s\r\n", capa_cmd->cmd);
     prot_printf(pout, "%s\r\n", capa_cmd->cmd);
@@ -1185,12 +1188,14 @@ static char *ask_capability(struct capa_cmd_t *capa_cmd,
 	printf("S: %s", str);
 
 	/* check for starttls */
-	if (strstr(str, capa_cmd->tls) != NULL) {
+	if (capa_cmd->tls &&
+	    strstr(str, capa_cmd->tls) != NULL) {
 	    *supports_starttls = 1;
 	}
 	
 	/* check for auth */
-	if ((tmp = strstr(str, capa_cmd->auth)) != NULL) {
+	if (capa_cmd->auth &&
+	    (tmp = strstr(str, capa_cmd->auth)) != NULL) {
 	    if (capa_cmd->parse_mechlist)
 		ret = capa_cmd->parse_mechlist(str);
 	    else
@@ -1528,6 +1533,37 @@ static int xmtp_do_auth(struct sasl_cmd_t *sasl_cmd,
     return result;
 }
 
+/*********************************** POP3 ************************************/
+
+static void *mupdate_parse_banner(char *str)
+{
+    char *mechlist = NULL;
+
+    if (!strncasecmp(str, "* AUTH ", 7)) {
+	mechlist = strdup(str+7);
+    }
+
+    return mechlist;
+}
+
+static int mupdate_do_auth(struct sasl_cmd_t *sasl_cmd,
+			   void *rock,
+			   char *mech, char *mechlist)
+{
+    int result = IMTEST_FAIL;
+
+    /* mechlist is actually 'rock' from the banner (no CAPA command) */
+    mechlist = (char *) rock;
+
+    if (mech) {
+	result = auth_sasl(sasl_cmd, mech);
+    } else if (mechlist) {
+	result = auth_sasl(sasl_cmd, mechlist);
+    }
+
+    return result;
+}
+
 /*****************************************************************************/
 
 /* didn't give correct parameters; let's exit */
@@ -1552,8 +1588,9 @@ void usage(char *prog, char *prot)
 #ifdef HAVE_SSL
     if (strcasecmp(prot, "lmtp"))
 	printf("  -s       : Enable %s over SSL (%ss)\n", prot, prot);
-    printf("  -t file  : Enable TLS. file has the TLS public and private keys\n"
-	   "             (specify \"\" to not use TLS for authentication)\n");
+    if (strcasecmp(prot, "mupdate"))
+	printf("  -t file  : Enable TLS. file has the TLS public and private keys\n"
+	       "             (specify \"\" to not use TLS for authentication)\n");
 #endif /* HAVE_SSL */
     printf("  -c       : enable challenge prompt callbacks\n"
 	   "             (enter one-time password instead of secret pass-phrase)\n");
@@ -1591,6 +1628,13 @@ static struct protocol_t protocols[] = {
       { "STARTTLS", "220" }, { "AUTH", "=", "235", "5", "334 ", "*" },
       &xmtp_do_auth,
       { "QUIT", "221" }
+    },
+    { "mupdate", NULL, "mupdate",
+      { "* OK", &mupdate_parse_banner },
+      { NULL },
+      { NULL },
+      { "A01 AUTHENTICATE", "=", "A01 OK", "A01 NO", "+ ", "*" },
+      &mupdate_do_auth, { "Q01 LOGOUT", "Q01 " }
     },
     { NULL }
 };
@@ -1711,6 +1755,8 @@ int main(int argc, char **argv)
 	    prot = "lmtp";
 	else if (!strcasecmp(prog, "smtptest"))
 	    prot = "smtp";
+	else if (!strcasecmp(prog, "mupdatetest"))
+	    prot = "mupdate";
 #if 0
 	else if (!strcasecmp(prog, "sivtest"))
 	    prot = "sieve";
