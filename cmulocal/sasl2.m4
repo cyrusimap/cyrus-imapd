@@ -1,32 +1,69 @@
 dnl sasl2.m4--sasl2 libraries and includes
 dnl Rob Siemborski
-dnl $Id: sasl2.m4,v 1.37 2003/11/06 21:55:52 rjs3 Exp $
+dnl $Id: sasl2.m4,v 1.38 2003/11/07 17:10:19 rjs3 Exp $
 
 AC_DEFUN([SASL_GSSAPI_CHK],[
  AC_ARG_ENABLE(gssapi, [  --enable-gssapi=<DIR>   enable GSSAPI authentication [yes] ],
     gssapi=$enableval,
     gssapi=yes)
+ AC_ARG_WITH(gss_impl, [  --with-gss_impl={heimdal|mit|cybersafe|seam|auto}                                                       choose specific GSSAPI implementation [[auto]] ],
+    gss_impl=$withval,
+    gss_impl=auto)
  AC_REQUIRE([SASL2_CRYPT_CHK])
  AC_REQUIRE([CMU_SOCKETS])
 
  if test "$gssapi" != no; then
+    platform=
+    case "${host}" in
+      *-*-linux*)
+        platform=__linux
+        ;;
+      *-*-hpux*)
+        platform=__hpux
+        ;;
+      *-*-irix*)
+        platform=__irix
+        ;;
+      *-*-solaris2*)
+# When should we use __sunos?
+        platform=__solaris
+        ;;
+      *-*-aix*)
+###_AIX
+        platform=__aix
+        ;;
+      *)
+        AC_WARN([The system type is not recognize. If you believe that CyberSafe GSSAPI works on this platform, please update the configure script])
+        ;;
+    esac
+
+
+    cmu_saved_CPPFLAGS=$CPPFLAGS
+
     if test -d ${gssapi}; then
        CPPFLAGS="$CPPFLAGS -I$gssapi/include"
        LDFLAGS="$LDFLAGS -L$gssapi/lib"
+
+       if test "$gss_impl" = "auto" -o "$gss_impl" = "cybersafe"; then
+         CPPFLAGS="$CPPFLAGS -D$platform"
+       fi
     fi
     AC_CHECK_HEADER(gssapi.h, AC_DEFINE(HAVE_GSSAPI_H,,[Define if you have the gssapi.h header file]), [
-      AC_CHECK_HEADER(gssapi/gssapi.h,, AC_WARN(Disabling GSSAPI); gssapi=no)])
+      AC_CHECK_HEADER(gssapi/gssapi.h,, AC_WARN(Disabling GSSAPI - no include files found); gssapi=no)])
+
+    CPPFLAGS=$cmu_saved_CPPFLAGS
+
  fi
 
  if test "$gssapi" != no; then
   dnl We need to find out which gssapi implementation we are
   dnl using. Supported alternatives are: MIT Kerberos 5,
   dnl Heimdal Kerberos 5 (http://www.pdc.kth.se/heimdal),
+  dnl CyberSafe Kerberos 5 (http://www.cybersafe.com/)
   dnl and Sun SEAM (http://wwws.sun.com/software/security/kerberos/)
   dnl
   dnl The choice is reflected in GSSAPIBASE_LIBS
 
-  gss_impl="no";
   AC_CHECK_LIB(resolv,res_search)
   if test -d ${gssapi}; then 
      CPPFLAGS="$CPPFLAGS -I$gssapi/include"
@@ -43,16 +80,31 @@ AC_DEFUN([SASL_GSSAPI_CHK],[
      gssapi_dir="/usr/local/lib"
   fi
 
-  # Check a full link against the heimdal libraries.
+  # Check a full link against the Cybersafe libraries.
+  # If this fails, check a full link against the heimdal libraries.
   # If this fails, check a full link against the MIT libraries.
   # If this fails, check a full link against the Solaris 8 and up libgss.
-  AC_CHECK_LIB(gssapi,gss_unwrap,gss_impl="heimdal",,$GSSAPIBASE_LIBS -lgssapi -lkrb5 -lasn1 -lroken ${LIB_CRYPT} ${LIB_DES} -lcom_err ${LIB_SOCKET})
 
-  if test "$gss_impl" = "no"; then
+
+  # For Cybersafe one has to set a platform define in order to make compilation work
+  if test "$gss_impl" = "auto" -o "$gss_impl" = "cybersafe"; then
+
+    cmu_saved_CPPFLAGS=$CPPFLAGS
+    CPPFLAGS="$CPPFLAGS -D$platform"
+
+    AC_CHECK_LIB(gss,gss_unwrap,gss_impl="cybersafe",CPPFLAGS=$cmu_saved_CPPFLAGS,$GSSAPIBASE_LIBS -lgss)
+
+  fi
+
+  if test "$gss_impl" = "auto" -o "$gss_impl" = "heimdal"; then
+    AC_CHECK_LIB(gssapi,gss_unwrap,gss_impl="heimdal",,$GSSAPIBASE_LIBS -lgssapi -lkrb5 -lasn1 -lroken ${LIB_CRYPT} ${LIB_DES} -lcom_err ${LIB_SOCKET})
+  fi
+
+  if test "$gss_impl" = "auto" -o "$gss_impl" = "mit"; then
     AC_CHECK_LIB(gssapi_krb5,gss_unwrap,gss_impl="mit",,$GSSAPIBASE_LIBS -lgssapi_krb5 -lkrb5 -lk5crypto -lcom_err ${LIB_SOCKET})
   fi
 
-  if test "$gss_impl" = "no"; then
+  if test "$gss_impl" = "auto" -o "$gss_impl" = "seam"; then
     AC_CHECK_LIB(gss,gss_unwrap,gss_impl="seam",,-lgss)
   fi
 
@@ -62,25 +114,51 @@ AC_DEFUN([SASL_GSSAPI_CHK],[
   elif test "$gss_impl" = "heimdal"; then
      GSSAPIBASE_LIBS="$GSSAPIBASE_LIBS -lgssapi -lkrb5 -lasn1 -lroken ${LIB_CRYPT} ${LIB_DES} -lcom_err"
      GSSAPIBASE_STATIC_LIBS="$GSSAPIBASE_STATIC_LIBS $gssapi_dir/libgssapi.a $gssapi_dir/libkrb5.a $gssapi_dir/libasn1.a $gssapi_dir/libroken.a $gssapi_dir/libcom_err.a ${LIB_CRYPT}"
+  elif test "$gss_impl" = "cybersafe"; then
+     CPPFLAGS="$CPPFLAGS -D$platform"
+     GSSAPIBASE_LIBS="$GSSAPIBASE_LIBS -lgss"
+     # there is no static libgss for CyberSafe
+     GSSAPIBASE_STATIC_LIBS=none
   elif test "$gss_impl" = "seam"; then
      GSSAPIBASE_LIBS=-lgss
      # there is no static libgss on Solaris 8 and up
      GSSAPIBASE_STATIC_LIBS=none
   else
      gssapi="no"
-     AC_WARN(Disabling GSSAPI)
+     AC_WARN(Disabling GSSAPI - no library)
   fi
  fi
 
- if test "$ac_cv_header_gssapi_h" = "yes"; then
+#
+# Cybersafe defines both GSS_C_NT_HOSTBASED_SERVICE and GSS_C_NT_USER_NAME in gssapi\rfckrb5.h
+#
+
+ if test "$gss_impl" = "cybersafe"; then
+
+  AC_EGREP_CPP(hostbased_service_gss_nt_yes,
+   [#include <gssapi/gssapi.h>
+    #ifdef GSS_C_NT_HOSTBASED_SERVICE
+     hostbased_service_gss_nt_yes
+    #endif
+   ], AC_DEFINE(HAVE_GSS_C_NT_HOSTBASED_SERVICE,,[Define if your GSSAPI implimentation defines GSS_C_NT_HOSTBASED_SERVICE]), AC_WARN(Cybersafe define not found))
+
+
+ elif test "$ac_cv_header_gssapi_h" = "yes"; then
   AC_EGREP_HEADER(GSS_C_NT_HOSTBASED_SERVICE, gssapi.h,
     AC_DEFINE(HAVE_GSS_C_NT_HOSTBASED_SERVICE,,[Define if your GSSAPI implimentation defines GSS_C_NT_HOSTBASED_SERVICE]))
  elif test "$ac_cv_header_gssapi_gssapi_h"; then
   AC_EGREP_HEADER(GSS_C_NT_HOSTBASED_SERVICE, gssapi/gssapi.h,
-    AC_DEFINE(HAVE_GSS_C_NT_HOSTBASED_SERVICE,,[Define if your GSSAPI implimentation defines GSS_C_NT_HOSTBASED_SERVICE]))
+      AC_DEFINE(HAVE_GSS_C_NT_HOSTBASED_SERVICE,,[Define if your GSSAPI implimentation defines GSS_C_NT_HOSTBASED_SERVICE]))
  fi
 
- if test "$ac_cv_header_gssapi_h" = "yes"; then
+ if test "$gss_impl" = "cybersafe"; then
+  AC_EGREP_CPP(user_name_yes_gss_nt,
+   [#include <gssapi/gssapi.h>
+    #ifdef GSS_C_NT_USER_NAME
+     user_name_yes_gss_nt
+    #endif
+   ], AC_DEFINE(HAVE_GSS_C_NT_USER_NAME,,[Define if your GSSAPI implimentation defines GSS_C_NT_USER_NAME]), AC_WARN(Cybersafe define not found))
+ elif test "$ac_cv_header_gssapi_h" = "yes"; then
   AC_EGREP_HEADER(GSS_C_NT_USER_NAME, gssapi.h,
     AC_DEFINE(HAVE_GSS_C_NT_USER_NAME,,[Define if your GSSAPI implimentation defines GSS_C_NT_USER_NAME]))
  elif test "$ac_cv_header_gssapi_gssapi_h"; then
