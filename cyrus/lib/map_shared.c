@@ -40,7 +40,7 @@ char *name;
 char *mboxname;
 {
     /* Already mapped in */
-    if (*len >= newlen) return 0;
+    if (*len >= newlen) return;
 
     if (*len) munmap(*base, *len);
     newlen = (newlen + 2*SLOP - 1) & ~(SLOP-1);
