@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Admin.pm,v 1.44 2004/02/19 21:31:20 rjs3 Exp $
+# $Id: Admin.pm,v 1.45 2004/02/19 22:50:12 rjs3 Exp $
 
 package Cyrus::IMAP::Admin;
 use strict;
@@ -258,6 +258,32 @@ sub deleteaclmailbox {
     if ($rc eq 'OK') {
       $cnt++;
     } else {
+      if($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
+	my ($refserver, $box) = $self->fromURL($1);
+	my $port = 143;
+	
+	if($refserver =~ /:/) {
+	  $refserver =~ /([^:]+):(\d+)/;
+	  $refserver = $1; $port = $2;
+	}
+	
+	my $cyradm = Cyrus::IMAP::Admin->new($refserver, $port)
+	  or die "cyradm: cannot connect to $refserver\n";
+	$cyradm->addcallback({-trigger => 'EOF',
+			      -callback => \&_cb_ref_eof,
+			      -rock => \$cyradm});
+	$cyradm->authenticate(@{$self->_getauthopts()})
+	  or die "cyradm: cannot authenticate to $refserver\n";
+	
+	$cnt += $cyradm->deleteaclmailbox($mbx,$acl);
+
+	$res .= "\n" if $res ne '';
+	$res .= $acl . ': ' . $cyradm->{error};
+
+	$cyradm = undef;
+      } else {
+	$rc = 0;
+      }
       $res .= "\n" if $res ne '';
       $res .= $acl . ': ' . $msg;
     }
