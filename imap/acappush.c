@@ -116,6 +116,19 @@ char *local_create_full_dataset_name(char *mailbox_name)
     return fullname;
 }
 
+void send_completed_cb(acap_result_t res, void *rock)
+{
+    acapmbdata_t *item = (acapmbdata_t *)rock;
+
+    if (res == ACAP_RESULT_OK) {
+	free(item);
+	return;
+    }
+    
+    /* otherwise */
+    queueitem(item);
+}
+
 int senditem(acap_conn_t *acapconn, acapmbdata_t *item)
 {
     int result;
@@ -150,8 +163,8 @@ int senditem(acap_conn_t *acapconn, acapmbdata_t *item)
     /* store data to server */
     result = acap_store_entry(acapconn,
 			      newentry,
-			      NULL,
-			      NULL,
+			      &send_completed_cb,
+			      item,
 			      0,
 			      &cmd);
 
@@ -167,15 +180,17 @@ void sendsomequeued(acap_conn_t *acapconn, int num)
     hashentry_t *e, *next;
     int result;
     int lup;
-	    
+
     if (num > hashtable.total_exists)
 	num = hashtable.total_exists;
 
     for (lup=0;lup<num;lup++)
     {
 	/* find an entry */
-	while (hashtable.items[spot]==NULL)
+	while (hashtable.items[spot]==NULL) {
 	    spot++;
+	    if (spot >= HASHSIZE) spot = 0;
+	}
 
 	/* pop it */
 	next = hashtable.items[spot]->next;
@@ -218,6 +233,11 @@ acap_conn_t *connect_acap(void)
     return acap_conn;
 }
 
+void disconnect_acap(void)
+{
+    acapmbox_disconnect(handle);
+}
+
 int main(int argc, char **argv)
 {
     int s, len;
@@ -237,7 +257,7 @@ int main(int argc, char **argv)
     time_t when_disconnected = 0;
     pid_t pid;
     int opt;
-
+    
     while ((opt = getopt(argc, argv, "d")) != EOF) {
 	switch (opt) {
 	case 'd': /* don't fork. debugging mode */
@@ -248,6 +268,10 @@ int main(int argc, char **argv)
 	    exit(1);
 	    break;
 	}
+    }
+
+    if (debugmode) {
+	openlog("acappush", LOG_PID, LOG_LOCAL6);
     }
 
     /* timeout for select is 1 minute */
@@ -282,10 +306,11 @@ int main(int argc, char **argv)
 	exit(1);
     }
     umask(oldumask); /* for Linux */
-    chmod(ACAPPUSH_PATH, 0777); /* for DUX */
+    chmod(local.sun_path, 0777); /* for DUX */
 
     /* fork unless we were given the -d option */    
     if (debugmode == 0) {
+	
 	pid = fork();
 	
 	if (pid == -1) {
@@ -319,11 +344,12 @@ int main(int argc, char **argv)
 		{
 		    if (debugmode) 
 			fprintf(stderr, "Acap connection dropped\n");
+		    disconnect_acap();
 		    connected = DISCONNECTED;
 		    acap_conn = NULL;
 		    FD_CLR(acapsock, &read_set);
 		    nfds = s+1;
-		}
+		} 
 		break;
 	    case DISCONNECTED:
 
@@ -398,9 +424,12 @@ int main(int argc, char **argv)
 		queueitem((acapmbdata_t *)str);
 		break;
 	    }
+	} else if ((connected == CONNECTED) && (hashtable.total_exists > 0)) {
+	    sendsomequeued(acap_conn, 5);
 	} else {
 	    /* log some sort of error */	    
 	}
+
     }
 
     /* never gets here */      
