@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_quotalegacy.c,v 1.1.2.3 2004/03/24 19:53:14 ken3 Exp $ */
+/* $Id: cyrusdb_quotalegacy.c,v 1.1.2.4 2004/06/02 01:15:26 ken3 Exp $ */
 
 #include <config.h>
 
@@ -600,35 +600,37 @@ static int mystore(struct db *db,
 	    return CYRUSDB_EXISTS;
 	}
 
-	strlcpy(new_quota_path, quota_path, sizeof(new_quota_path));
-	strlcat(new_quota_path, ".NEW", sizeof(new_quota_path));
+	if (mytid->fdnew == -1) {
+	    strlcpy(new_quota_path, quota_path, sizeof(new_quota_path));
+	    strlcat(new_quota_path, ".NEW", sizeof(new_quota_path));
 
-	unlink(new_quota_path);
-	newfd = open(new_quota_path, O_CREAT | O_TRUNC | O_RDWR, 0666);
-	if (newfd == -1 && errno == ENOENT) {
-	    if (cyrus_mkdir(new_quota_path, 0755) != -1)
-		newfd = open(new_quota_path, O_CREAT | O_TRUNC | O_RDWR, 0666);
-	}
-	if (newfd == -1) {
-	    syslog(LOG_ERR, "IOERROR: creating quota file %s: %m",
-		   new_quota_path);
-	    if (tid)
-		abort_txn(db, *tid);
-	    else
-		abort_subtxn(quota_path, mytid);
-	    return CYRUSDB_IOERROR;
-	}
+	    unlink(new_quota_path);
+	    newfd = open(new_quota_path, O_CREAT | O_TRUNC | O_RDWR, 0666);
+	    if (newfd == -1 && errno == ENOENT) {
+		if (cyrus_mkdir(new_quota_path, 0755) != -1)
+		    newfd = open(new_quota_path, O_CREAT | O_TRUNC | O_RDWR, 0666);
+	    }
+	    if (newfd == -1) {
+		syslog(LOG_ERR, "IOERROR: creating quota file %s: %m",
+		       new_quota_path);
+		if (tid)
+		    abort_txn(db, *tid);
+		else
+		    abort_subtxn(quota_path, mytid);
+		return CYRUSDB_IOERROR;
+	    }
 
-	mytid->fdnew = newfd;
-	r = lock_blocking(newfd);
-	if (r) {
-	    syslog(LOG_ERR, "IOERROR: locking quota file %s: %m",
-		   new_quota_path);
-	    if (tid)
-		abort_txn(db, *tid);
-	    else
-		abort_subtxn(quota_path, mytid);
-	    return CYRUSDB_IOERROR;
+	    mytid->fdnew = newfd;
+	    r = lock_blocking(newfd);
+	    if (r) {
+		syslog(LOG_ERR, "IOERROR: locking quota file %s: %m",
+		       new_quota_path);
+		if (tid)
+		    abort_txn(db, *tid);
+		else
+		    abort_subtxn(quota_path, mytid);
+		return CYRUSDB_IOERROR;
+	    }
 	}
 
 	buf = xmalloc(datalen+1);
@@ -639,7 +641,8 @@ static int mystore(struct db *db,
 	/* add a terminating \n */
 	buf[datalen] = '\n';
 
-	r1 = write(newfd, buf, datalen+1);
+	lseek(mytid->fdnew, 0, SEEK_SET);
+	r1 = write(mytid->fdnew, buf, datalen+1);
 	free(buf);
 
 	if (r1 == -1) {
