@@ -190,6 +190,11 @@ char *userid;
 		message_index.system_flags |= FLAG_DELETED;
 	    }
 	}
+	else if (!strcmp(flag[i], "\\draft")) {
+	    if (mailbox->myrights & ACL_WRITE) {
+		message_index.system_flags |= FLAG_DRAFT;
+	    }
+	}
 	else if (!strcmp(flag[i], "\\flagged")) {
 	    if (mailbox->myrights & ACL_WRITE) {
 		message_index.system_flags |= FLAG_FLAGGED;
@@ -198,11 +203,6 @@ char *userid;
 	else if (!strcmp(flag[i], "\\answered")) {
 	    if (mailbox->myrights & ACL_WRITE) {
 		message_index.system_flags |= FLAG_ANSWERED;
-	    }
-	}
-	else if (!strcmp(flag[i], "\\draft")) {
-	    if (mailbox->myrights & ACL_WRITE) {
-		message_index.system_flags |= FLAG_DRAFT;
 	    }
 	}
 	else if (mailbox->myrights & ACL_WRITE) {
