@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.202 2002/08/23 17:59:26 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.203 2002/08/26 16:47:58 rjs3 Exp $
  */
 
 #include <config.h>
@@ -651,6 +651,14 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 
     if (r) { /* CREATE failed */ 
 	int r2 = 0;
+
+	if (tid) {
+	    r2 = DB->abort(mbdb, tid);
+	    tid = NULL;
+	}
+	if (r2) {
+	    syslog(LOG_ERR, "DBERROR: can't abort: %s", cyrusdb_strerror(r2));
+	}
 
 	if(newreserved) {
 	    /* remove the RESERVED mailbox entry if we failed */
