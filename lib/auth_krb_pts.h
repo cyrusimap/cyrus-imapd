@@ -1,5 +1,5 @@
 /* auth_krb_pts.h -- Kerberos authorization with AFS PTServer groups
-	$Id: auth_krb_pts.h,v 1.12 1998/07/30 21:30:50 wcw Exp $
+	$Id: auth_krb_pts.h,v 1.13 1998/11/03 22:12:36 tjs Exp $
 	
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -50,6 +50,7 @@
 #endif
 #include <syslog.h>
 #include <ctype.h>
+#include <afs/stds.h>
 #include <afs/ptserver.h>
 #include <afs/cellconfig.h>
 
