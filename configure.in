@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.153 2000/02/11 19:49:38 tmartin Exp $
+dnl $Id: configure.in,v 1.154 2000/02/15 22:19:59 leg Exp $
 dnl
 
 AC_INIT(imap/imapd.c)
@@ -477,7 +477,7 @@ if test -n "$TCL_SUBDIRS"; then
 fi
 AC_SUBST(TCL_SUBDIRS)
 
-SERVER_SUBDIRS="imap"
+SERVER_SUBDIRS="master imap"
 AC_ARG_ENABLE(server,
 	[  --disable-server        disable compiling servers],
 	if test "$enableval" = no; then
@@ -1134,4 +1134,4 @@ fi
 AC_SUBST(IMAP_COM_ERR_LIBS)
 AC_SUBST(IMAP_LIBS)
 
-AC_OUTPUT(Makefile man/Makefile lib/Makefile acap/Makefile imap/Makefile imap/feedcyrus imtest/Makefile netnews/Makefile $EXTRA_OUTPUT)
+AC_OUTPUT(Makefile man/Makefile master/Makefile lib/Makefile acap/Makefile imap/Makefile imap/feedcyrus imtest/Makefile netnews/Makefile $EXTRA_OUTPUT)
