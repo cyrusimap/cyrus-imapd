@@ -4,7 +4,7 @@ Upgrading from 1.6.22
 
     Warning: Cyrus imapd 2.0 will automatically convert on-disk file
     formats as the server is used. It is not possible to run 1.6 after 2.0
-    has been used on a mail spool. 
+    has been used on a mail spool without reconstructing every mailbox. 
 
       * Convert mailboxes file to Berkeley DB: 
 

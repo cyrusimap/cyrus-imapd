@@ -13,10 +13,12 @@ imapd and core utilities
       * MULTIAPPEND: does it do the right thing with an aborted APPEND
         (literal length {0})? 
       * reconstruct doesn't deal with the mailboxes.db file. 
-      * deliver (wrapper) should fill in a more useful Return-Path when
-        none is given. (not important) 
       * DELETE and deleting user mailboxes. 
       * we should deal with having to reset UIDs 
+      * the algorithm used for naming stage files is fragile and not
+        threadsafe. 
+      * during appendstage(), the message is parsed once per delivery, not
+        once at the beginning. 
 
 proxyd and Cyrus Murder
 
@@ -30,7 +32,9 @@ proxyd and Cyrus Murder
         any concerns speed-wise? what about out-of-memory situations? 
       * proxyd should deal with errors more cleanly in proxy_authenticate()
         and with backend servers overall. 
-      * target-acap doesn't act on ACL changes. 
+      * target-acap doesn't work on ignoring zero-information updates. it
+        doesn't deal with the ACAP server dying and in general should be
+        replaced with something more general. 
 
 lmtpd, deliver, and sieve
 
@@ -44,7 +48,6 @@ lmtpd, deliver, and sieve
       * duplicate.c could be much more efficient than repeatedly opening
         and closing databases. (Cache last N databases used?) 
       * Should duplicate.c use transactions? A single file? 
-      * does lmtpd correctly authenticate and authorize people? 
 
 authentication and authorization
 
@@ -58,13 +61,16 @@ other utilities
 
       * cyradm may need to change authname/username stuff. Something to
         check. 
-      * imtest doesn't properly default to using the LOGIN command. also,
-        it would be nice for the authorization name to default to the
-        authentication name, except when specifically overridden. 
+      * imtest: it would be nice for the authorization name to default to
+        the authentication name, except when specifically overridden. 
       * collectnews's routines in append.c are broken. either remove
         collectnews or fix it. 
       * any utilities doing db operations should catch signals and poll for
         them to see if it should exit. 
+      * it would be nice if cyradm had a version command (would do an ID
+        against the server). 
+      * deliver: should look for AUTH capability instead of just assuming
+        it. possibly do LMTP over TCP? full SASL authentication? 
 
                      Things we want to do
 
@@ -77,7 +83,8 @@ other utilities
       * Add mailbox version numbers. 
       * Add mailbox tombstones (gives NEWNAME support). 
       * Design and implement ALIST, the advanced list command. 
-      * Change from the prot layer to using sfio. 
+      * Investigate changing from the prot layer to using sfio. 
+      * Write a test module for lmtp-parse. 
 
     Please refer to Sending Feedback if you would like to submit a bug,
     feature request or (best of all) patch. 
