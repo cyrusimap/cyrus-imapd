@@ -1,6 +1,6 @@
 /* test.c -- tester for libsieve
  * Larry Greenfield
- * $Id: test.c,v 1.15 2000/12/18 15:17:57 ken3 Exp $
+ * $Id: test.c,v 1.16 2002/01/07 04:56:55 leg Exp $
  *
  * usage: "test message script"
  */
@@ -42,6 +42,9 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <stdlib.h>
 
 #include "sieve_interface.h"
+#include "comparator.h"
+#include "tree.h"
+#include "sieve.h"
 
 #define HEADERCACHESIZE 1019
 
@@ -442,6 +445,201 @@ sieve_vacation_t vacation = {
 char *markflags[] = { "\\flagged" };
 sieve_imapflags_t mark = { markflags, 1 };
 
+struct testcase {
+    const char *comp; 
+    int mode;
+    const char *pat;
+    const char *text;
+    int result;
+};
+
+struct testcase tc[] =
+{ { "i;octet", IS, "", "", 1 },
+  { "i;octet", IS, "a", "", 0 },
+  { "i;octet", IS, "", "a", 0 },
+  { "i;octet", IS, "a", "a", 1 },
+  { "i;octet", IS, "a", "A", 0 },
+
+  { "i;ascii-casemap", IS, "", "", 1 },
+  { "i;ascii-casemap", IS, "a", "", 0 },
+  { "i;ascii-casemap", IS, "", "a", 0 },
+  { "i;ascii-casemap", IS, "a", "a", 1 },
+  { "i;ascii-casemap", IS, "a", "A", 1 },
+
+  { "i;octet", CONTAINS, "", "", 1 },
+  { "i;octet", CONTAINS, "", "a", 1 },
+  { "i;octet", CONTAINS, "a", "", 0 },
+  { "i;octet", CONTAINS, "a", "a", 1 },
+  { "i;octet", CONTAINS, "a", "ab", 1 },
+  { "i;octet", CONTAINS, "a", "ba", 1 },
+  { "i;octet", CONTAINS, "a", "aba", 1 },
+  { "i;octet", CONTAINS, "a", "bab", 1 },
+  { "i;octet", CONTAINS, "a", "bb", 0 },
+  { "i;octet", CONTAINS, "a", "bbb", 0 },
+
+  { "i;octet", MATCHES, "", "", 1 },
+  { "i;octet", MATCHES, "", "a", 0 },
+  { "i;octet", MATCHES, "a", "", 0 },
+  { "i;octet", MATCHES, "a", "a", 1 },
+  { "i;octet", MATCHES, "a", "ab", 0 },
+  { "i;octet", MATCHES, "a", "ba", 0 },
+  { "i;octet", MATCHES, "a", "aba", 0 },
+  { "i;octet", MATCHES, "a", "bab", 0 },
+  { "i;octet", MATCHES, "a", "bb", 0 },
+  { "i;octet", MATCHES, "a", "bbb", 0 },
+
+  { "i;octet", MATCHES, "*", "", 1 },
+  { "i;octet", MATCHES, "*", "a", 1 },
+  { "i;octet", MATCHES, "*a*", "", 0 },
+  { "i;octet", MATCHES, "*a*", "a", 1 },
+  { "i;octet", MATCHES, "*a*", "ab", 1 },
+  { "i;octet", MATCHES, "*a*", "ba", 1 },
+  { "i;octet", MATCHES, "*a*", "aba", 1 },
+  { "i;octet", MATCHES, "*a*", "bab", 1 },
+  { "i;octet", MATCHES, "*a*", "bb", 0 },
+  { "i;octet", MATCHES, "*a*", "bbb", 0 },
+
+  { "i;octet", MATCHES, "*a", "", 0 },
+  { "i;octet", MATCHES, "*a", "a", 1 },
+  { "i;octet", MATCHES, "*a", "ab", 0 },
+  { "i;octet", MATCHES, "*a", "ba", 1 },
+  { "i;octet", MATCHES, "*a", "aba", 1 },
+  { "i;octet", MATCHES, "*a", "bab", 0 },
+  { "i;octet", MATCHES, "*a", "bb", 0 },
+  { "i;octet", MATCHES, "*a", "bbb", 0 },
+
+  { "i;octet", MATCHES, "a*", "", 0 },
+  { "i;octet", MATCHES, "a*", "a", 1 },
+  { "i;octet", MATCHES, "a*", "ab", 1 },
+  { "i;octet", MATCHES, "a*", "ba", 0 },
+  { "i;octet", MATCHES, "a*", "aba", 1 },
+  { "i;octet", MATCHES, "a*", "bab", 0 },
+  { "i;octet", MATCHES, "a*", "bb", 0 },
+  { "i;octet", MATCHES, "a*", "bbb", 0 },
+
+  { "i;octet", MATCHES, "a*b", "", 0 },
+  { "i;octet", MATCHES, "a*b", "a", 0 },
+  { "i;octet", MATCHES, "a*b", "ab", 1 },
+  { "i;octet", MATCHES, "a*b", "ba", 0 },
+  { "i;octet", MATCHES, "a*b", "aba", 0 },
+  { "i;octet", MATCHES, "a*b", "bab", 0 },
+  { "i;octet", MATCHES, "a*b", "bb", 0 },
+  { "i;octet", MATCHES, "a*b", "bbb", 0 },
+  { "i;octet", MATCHES, "a*b", "abbb", 1 },
+  { "i;octet", MATCHES, "a*b", "acb", 1 },
+  { "i;octet", MATCHES, "a*b", "acbc", 0 },
+
+  { "i;octet", MATCHES, "a?b", "", 0 },
+  { "i;octet", MATCHES, "a?b", "a", 0 },
+  { "i;octet", MATCHES, "a?b", "ab", 0 },
+  { "i;octet", MATCHES, "a?b", "ba", 0 },
+  { "i;octet", MATCHES, "a?b", "aba", 0 },
+  { "i;octet", MATCHES, "a?b", "bab", 0 },
+  { "i;octet", MATCHES, "a?b", "bb", 0 },
+  { "i;octet", MATCHES, "a?b", "bbb", 0 },
+  { "i;octet", MATCHES, "a?b", "abbb", 0 },
+  { "i;octet", MATCHES, "a?b", "acb", 1 },
+  { "i;octet", MATCHES, "a?b", "acbc", 0 },
+
+  { "i;octet", MATCHES, "a*?b", "", 0 },
+  { "i;octet", MATCHES, "a*?b", "a", 0 },
+  { "i;octet", MATCHES, "a*?b", "ab", 0 },
+  { "i;octet", MATCHES, "a*?b", "ba", 0 },
+  { "i;octet", MATCHES, "a*?b", "aba", 0 },
+  { "i;octet", MATCHES, "a*?b", "bab", 0 },
+  { "i;octet", MATCHES, "a*?b", "bb", 0 },
+  { "i;octet", MATCHES, "a*?b", "bbb", 0 },
+  { "i;octet", MATCHES, "a*?b", "abbb", 1 },
+  { "i;octet", MATCHES, "a*?b", "acb", 1 },
+  { "i;octet", MATCHES, "a*?b", "acbc", 0 },
+
+  { "i;octet", MATCHES, "a?*b", "", 0 },
+  { "i;octet", MATCHES, "a?*b", "a", 0 },
+  { "i;octet", MATCHES, "a?*b", "ab", 0 },
+  { "i;octet", MATCHES, "a?*b", "ba", 0 },
+  { "i;octet", MATCHES, "a?*b", "aba", 0 },
+  { "i;octet", MATCHES, "a?*b", "bab", 0 },
+  { "i;octet", MATCHES, "a?*b", "bb", 0 },
+  { "i;octet", MATCHES, "a?*b", "bbb", 0 },
+  { "i;octet", MATCHES, "a?*b", "abbb", 1 },
+  { "i;octet", MATCHES, "a?*b", "acb", 1 },
+  { "i;octet", MATCHES, "a?*b", "acbc", 0 },
+
+  { "i;octet", MATCHES, "a*?*b", "", 0 },
+  { "i;octet", MATCHES, "a*?*b", "a", 0 },
+  { "i;octet", MATCHES, "a*?*b", "ab", 0 },
+  { "i;octet", MATCHES, "a*?*b", "ba", 0 },
+  { "i;octet", MATCHES, "a*?*b", "aba", 0 },
+  { "i;octet", MATCHES, "a*?*b", "bab", 0 },
+  { "i;octet", MATCHES, "a*?*b", "bb", 0 },
+  { "i;octet", MATCHES, "a*?*b", "bbb", 0 },
+  { "i;octet", MATCHES, "a*?*b", "abbb", 1 },
+  { "i;octet", MATCHES, "a*?*b", "acb", 1 },
+  { "i;octet", MATCHES, "a*?*b?", "acbc", 1 },
+
+  { "i;ascii-casemap", MATCHES, "a*b", "", 0 },
+  { "i;ascii-casemap", MATCHES, "a*b", "a", 0 },
+  { "i;ascii-casemap", MATCHES, "a*b", "ab", 1 },
+  { "i;ascii-casemap", MATCHES, "a*b", "ba", 0 },
+  { "i;ascii-casemap", MATCHES, "a*b", "aba", 0 },
+  { "i;ascii-casemap", MATCHES, "a*b", "bab", 0 },
+  { "i;ascii-casemap", MATCHES, "a*b", "bb", 0 },
+  { "i;ascii-casemap", MATCHES, "a*b", "bbb", 0 },
+  { "i;ascii-casemap", MATCHES, "a*b", "abbb", 1 },
+  { "i;ascii-casemap", MATCHES, "a*b", "acb", 1 },
+  { "i;ascii-casemap", MATCHES, "a*b", "acbc", 0 },
+
+  { "i;ascii-casemap", MATCHES, "a*b", "", 0 },
+  { "i;ascii-casemap", MATCHES, "a*b", "A", 0 },
+  { "i;ascii-casemap", MATCHES, "a*b", "Ab", 1 },
+  { "i;ascii-casemap", MATCHES, "a*b", "BA", 0 },
+  { "i;ascii-casemap", MATCHES, "a*b", "ABA", 0 },
+  { "i;ascii-casemap", MATCHES, "a*b", "BAb", 0 },
+  { "i;ascii-casemap", MATCHES, "a*b", "BB", 0 },
+  { "i;ascii-casemap", MATCHES, "a*b", "BBB", 0 },
+  { "i;ascii-casemap", MATCHES, "a*b", "aBBB", 1 },
+  { "i;ascii-casemap", MATCHES, "a*b", "ACB", 1 },
+  { "i;ascii-casemap", MATCHES, "a*b", "ACBC", 0 },
+
+  { NULL, 0, NULL, NULL, 0 } };
+
+static int test_comparator(void)
+{
+    struct testcase *t;
+    int didfail = 0;
+
+    for (t = tc; t->comp != NULL; t++) {
+	comparator_t *c = lookup_comp(t->comp, t->mode);
+	int res;
+	char *mode;
+
+	if (t->mode == IS) mode = "IS";
+	else if (t->mode == CONTAINS) mode = "CONTAINS";
+	else if (t->mode == MATCHES) mode = "MATCHES";
+	else if (t->mode == REGEX) mode = "REGEX";
+	else mode = "<unknown mode>";
+	
+	if (!c) {
+	    printf("FAIL: can't find a comparator %s/%s\n", 
+		   t->comp, mode);
+	    didfail++;
+	    continue;
+	}
+	res = c(t->pat, t->text);
+	if (res != t->result) {
+	    printf("FAIL: %s/%s(%s, %s) = %d, not %d\n", 
+		   t->comp, mode, t->pat, t->text, res, t->result);
+	    didfail++;
+	}
+    }
+    if (didfail) {
+	fprintf(stderr, "failed %d tests\n", didfail);
+	exit(1);
+    } else {
+	exit(0);
+    }
+}
+
 int main(int argc, char *argv[])
 {
     sieve_interp_t *i;
@@ -450,6 +648,8 @@ int main(int argc, char *argv[])
     FILE *f;
     int fd, res;
     struct stat sbuf;
+
+    if (argc == 2 && !strcmp(argv[1], "-c")) test_comparator();
 
     if (argc != 3) {
 	fprintf(stderr, "usage:\n");
