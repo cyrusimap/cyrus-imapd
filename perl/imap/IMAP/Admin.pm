@@ -436,9 +436,9 @@ sub listquotaroot {
       $cyradm->authenticate()
 	or die "cyradm: cannot authenticate to $refserver\n";
       
-      my $ret = $cyradm->listquotaroot($root);
+      my @ret = $cyradm->listquotaroot($root);
       $cyradm = undef;
-      return $ret;
+      return @ret;
     } else {
       $self->{error} = $msg;
       ();
