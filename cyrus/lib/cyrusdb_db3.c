@@ -272,7 +272,8 @@ static int close(struct db *db)
 
     assert(dbinit && db);
 
-    r = a->close(a, 0);
+    /* since we're using txns, we can supply DB_NOSYNC */
+    r = a->close(a, DB_NOSYNC);
     if (r != 0) {
 	syslog(LOG_ERR, "DBERROR: error closing: %s", db_strerror(r));
 	r = CYRUSDB_IOERROR;
