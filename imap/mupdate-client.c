@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.16 2002/01/29 18:13:20 leg Exp $
+ * $Id: mupdate-client.c,v 1.17 2002/01/29 18:22:51 leg Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -328,7 +328,7 @@ int mupdate_connect(const char *server, const char *port,
     if(strncmp(buf, "* OK MUPDATE", 12)) {
 	syslog(LOG_ERR, 
 	       "mupdate-client: invalid banner from remote server: %s", buf);
-	/* xxx free memory? close connection? */
+	mupdate_disconnect(handle);
 	return MUPDATE_PROTOCOL_ERROR;
     }
 
@@ -341,7 +341,7 @@ int mupdate_connect(const char *server, const char *port,
 	syslog(LOG_ERR, 
 	       "mupdate-client: remote server did not send AUTH banner: %s",
 	       buf);
-	/* xxx free memory? close connection? */
+	mupdate_disconnect(handle);
 	return MUPDATE_PROTOCOL_ERROR;
     }
 
@@ -349,6 +349,7 @@ int mupdate_connect(const char *server, const char *port,
     
     if (mupdate_authenticate(h, mechlist)) {
 	syslog(LOG_ERR, "authentication to remote mupdate server failed");
+	mupdate_disconnect(handle);
 	return MUPDATE_NOAUTH;
     }
 
@@ -358,31 +359,36 @@ int mupdate_connect(const char *server, const char *port,
  noconn:
     syslog(LOG_ERR, "mupdate-client: connection to server closed: %s",
 	   prot_error(h->pin));
-    /* xxx free memory? close connection? */
+    mupdate_disconnect(handle);
+
     return MUPDATE_NOCONN;
 }
 
-void mupdate_disconnect(mupdate_handle **h) 
+void mupdate_disconnect(mupdate_handle **hp)
 {
-    if(!h || !(*h)) return;
+    mupdate_handle *h;
+
+    if(!hp || !(*hp)) return;
+    h = *hp;
+
+    prot_printf(h->pout, "L01 LOGOUT\r\n");
+    prot_flush(h->pout);
+
+    freebuf(&(h->tag));
+    freebuf(&(h->cmd));
+    freebuf(&(h->arg1));
+    freebuf(&(h->arg2));
+    freebuf(&(h->arg3));
     
-    prot_printf((*h)->pout, "L01 LOGOUT\r\n");
-    prot_flush((*h)->pout);
+    prot_free(h->pin);
+    prot_free(h->pout);
+    sasl_dispose(&(h->saslconn));
+    close(h->sock);
 
-    freebuf(&((*h)->tag));
-    freebuf(&((*h)->cmd));
-    freebuf(&((*h)->arg1));
-    freebuf(&((*h)->arg2));
-    freebuf(&((*h)->arg3));
-    
-    prot_free((*h)->pin);
-    prot_free((*h)->pout);
-    sasl_dispose(&((*h)->saslconn));
-    close((*h)->sock);
+    if(h->acl_buf) free(h->acl_buf);
 
-    if((*h)->acl_buf) free((*h)->acl_buf);
-
-    free(*h); *h=NULL;
+    free(h); 
+    *hp = NULL;
 }
 
 /* We're really only looking for an OK or NO or BAD here */
