@@ -365,12 +365,12 @@ void dump2(bytecode_input_t *d, int bc_len)
 
 	case B_ADDFLAG: /*9*/
 	    printf("%d: ADDFLAG  {%d}\n",i,ntohl(d[i+1].len));
-	    i=write_list(d[i+1].len,i+2,d);
+	    i=write_list(ntohl(d[i+1].len),i+2,d);
 	    break;
 
 	case B_SETFLAG: /*10*/
 	    printf("%d: SETFLAG  {%d}\n",i,ntohl(d[i+1].len));
-	    i=write_list(d[i+1].len,i+2,d);
+	    i=write_list(ntohl(d[i+1].len),i+2,d);
 	    break;
 	    
 	case B_REMOVEFLAG: /*11*/
