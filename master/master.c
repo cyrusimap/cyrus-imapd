@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: master.c,v 1.9 2000/05/04 03:10:50 leg Exp $ */
+/* $Id: master.c,v 1.10 2000/05/07 00:36:23 wcw Exp $ */
 
 #include <config.h>
 
@@ -63,6 +63,7 @@
 static const int become_cyrus_early = 1;
 
 static int verbose = 0;
+static int listen_queue_backlog = 10;
 
 struct service {
     char *name;
@@ -203,7 +204,7 @@ void service_create(struct service *s)
 	return;
     }
 
-    if (listen(s->socket, 10) < 0) {
+    if (listen(s->socket, listen_queue_backlog) < 0) {
 	syslog(LOG_ERR, "unable to listen to %s socket: %m", s->name);
 	close(s->socket);
 	s->socket = 0;
@@ -602,14 +603,24 @@ void add_event(const char *name, struct entry *e, void *rock)
 
 int main(int argc, char **argv, char **envp)
 {
-    int i;
+    int i, opt;
+    extern int optind;
+    extern char *optarg;
     int fd;
     fd_set rfds;
     char *p = NULL;
 
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
-
+    while ((opt = getopt(argc, argv, "l:")) != EOF) {
+	switch (opt) {
+	case 'l': /* user defined listen queue backlog */
+	    listen_queue_backlog = atoi(optarg);
+	    break;
+	default:
+	    break;
+	}
+    }
     /* close stdin/out/err */
     for (fd = 0; fd < 3; fd++) {
 	close(fd);
