@@ -41,7 +41,7 @@
  *
  */
 
-/* $Id: deliver.c,v 1.169.2.7 2004/09/05 19:58:56 ken3 Exp $ */
+/* $Id: deliver.c,v 1.169.2.8 2004/09/05 20:03:11 ken3 Exp $ */
 
 #include <config.h>
 
@@ -239,6 +239,7 @@ int main(int argc, char **argv)
 	pipe_through(conn);
 
 	backend_disconnect(conn);
+	free(conn);
     }
     else {
 	if (return_path == NULL) {
@@ -359,6 +360,7 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
 
     /* disconnect */
     backend_disconnect(conn);
+    free(conn);
 
     /* examine txn for error state */
     r = 0;
