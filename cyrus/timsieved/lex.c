@@ -1,7 +1,7 @@
 /* lex.c -- lexer for timsieved
  * Tim Martin
  * 9/21/99
- * $Id: lex.c,v 1.18 2001/10/14 13:58:17 ken3 Exp $
+ * $Id: lex.c,v 1.19 2002/02/16 20:56:56 rjs3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -174,10 +174,10 @@ int timlex(mystring_t **outstr, unsigned long *outnum,  struct protstream *strea
 
     ch=prot_getc(stream);
 
-    if (ch==-1) {
-      fatal("Error reading character", ch);
+    if (ch==EOF) {
+	/* Lost conenction -- treat like a logout */
+	return LOGOUT;
     }
-
 
     switch (lexer_state)
     {
