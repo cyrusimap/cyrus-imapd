@@ -1,4 +1,5 @@
-YACC = bison
+YACC = bison -y
+YFLAGS = -d
 LEX = flex
 
 BUILT_SOURCES = addr.c addr.h addr-lex.c \
