@@ -31,6 +31,7 @@
 #include <netdb.h>
 #include <sys/types.h>
 #include <sys/param.h>
+#include <ctype.h>
 #include <netinet/in.h>
 #include <krb.h>
 
