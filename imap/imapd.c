@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.454 2004/01/31 17:09:34 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.455 2004/01/31 17:12:04 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -182,9 +182,9 @@ void cmd_listrights(char *tag, char *name, char *identifier);
 void cmd_myrights(const char *tag, const char *name);
 void cmd_setacl(const char *tag, const char *name,
 		const char *identifier, const char *rights);
-void cmd_getquota(char *tag, char *name);
-void cmd_getquotaroot(char *tag, char *name);
-void cmd_setquota(char *tag, char *quotaroot);
+void cmd_getquota(const char *tag, const char *name);
+void cmd_getquotaroot(const char *tag, const char *name);
+void cmd_setquota(const char *tag, const char *quotaroot);
 void cmd_status(char *tag, char *name);
 void cmd_getuids(char *tag, char *startuid);
 void cmd_unselect(char* tag);
@@ -4464,9 +4464,7 @@ cmd_getquota(const char *tag, const char *name)
  * Perform a GETQUOTAROOT command
  */
 void
-cmd_getquotaroot(tag, name)
-char *tag;
-char *name;
+cmd_getquotaroot(const char *tag, const char *name)
 {
     char mailboxname[MAX_MAILBOX_NAME+1];
     struct mailbox mailbox;
@@ -4534,9 +4532,7 @@ char *name;
  * The command has been parsed up to the resource list
  */
 void
-cmd_setquota(tag, quotaroot)
-char *tag;
-char *quotaroot;
+cmd_setquota(const char *tag, const char *quotaroot)
 {
     int newquota = -1;
     int badresource = 0;
