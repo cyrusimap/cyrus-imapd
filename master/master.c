@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.47 2001/08/24 14:19:16 wcw Exp $ */
+/* $Id: master.c,v 1.48 2001/09/04 22:26:19 leg Exp $ */
 
 #include <config.h>
 
@@ -69,6 +69,7 @@
 #include <arpa/inet.h>
 #include <sysexits.h>
 #include <errno.h>
+#include <limits.h>
 
 #ifndef INADDR_NONE
 #define INADDR_NONE 0xffffffff
@@ -843,7 +844,10 @@ void add_service(const char *name, struct entry *e, void *rock)
 	Services[i].exec = tokenize(cmd);
 	if (!Services[i].exec) fatal("out of memory", EX_UNAVAILABLE);
 	Services[i].desired_workers = prefork;
-	Services[i].max_workers = (unsigned int) atoi(max);
+	Services[i].max_workers = atoi(max);
+	if (Services[i].max_workers == -1) {
+	    Services[i].max_workers = INT_MAX;
+	}
 
 	if (verbose > 2)
 	    syslog(LOG_DEBUG, "reconfig: service %s (%s, %s/%s, %d, %d)",
