@@ -1,5 +1,5 @@
 /* ctl_deliver.c -- Program to perform operations on duplicate delivery db
- $Id: ctl_deliver.c,v 1.11 2001/09/07 19:47:23 leg Exp $
+ $Id: ctl_deliver.c,v 1.12 2001/09/07 20:59:59 ken3 Exp $
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -54,7 +54,6 @@
 #include <syslog.h>
 #include <com_err.h>
 #include <errno.h>
-#include <cyrusdb.h>
 #include <time.h>
 
 #include "util.h"
@@ -62,90 +61,6 @@
 #include "exitcodes.h"
 #include "duplicate.h"
 
-
-static int dump_p(void *rockp,
-		  const char *key, int keylen,
-		  const char *data, int datalen)
-{
-    return 1;
-}
-
-static const char hexcodes[] = "0123456789ABCDEF";
-
-static int dump_cb(void *rockp,
-		   const char *key, int keylen,
-		   const char *data, int datalen)
-{
-    int *count = (int *) rockp;
-    time_t mark;
-    char *id, *to, *freeme;
-    int idlen, i;
-
-    (*count)++;
-
-    memcpy(&mark, data, sizeof(time_t));
-    to = (char*) key + strlen(key) + 1;
-    id = (char *) key;
-    idlen = strlen(id);
-
-    for (i = 0; i < idlen; i++) {
-	if (!isprint((unsigned char) id[i])) break;
-    }
-
-    if (i != idlen) {
-	/* change to hexadecimal */
-	freeme = (char *) xmalloc(sizeof(char) * idlen * 2 + 1);
-	for (i = 0; i < idlen; i++) {
-	    freeme[2 * i] = hexcodes[(id[i] >> 4) & 0xf];
-	    freeme[2 * i + 1] = hexcodes[id[i] & 0xf];
-	}
-	freeme[2 * idlen] = '\0';
-	id = freeme;
-    } else {
-	freeme = NULL;
-    }
-
-    printf("id: %-40s\tto: %-20s\tat: %d\n", id, to, mark);
-
-    if (freeme) free(freeme);
-
-    return 0;
-}
-
-int
-dump_deliver(fname)
-    char *fname;
-{
-    char *tofree = NULL;
-    struct db *db;
-    int count = 0, r;
-
-   /* create the name of the db file */
-    if (!fname) {
-	fname = (char *) xmalloc(strlen(config_dir)+sizeof(FNAME_DELIVERDB)+1);
-	tofree = fname;
-	strcpy(fname, config_dir);
-	strcat(fname, FNAME_DELIVERDB);
-    }
-
-    r = CONFIG_DB_DELIVER->open(fname, &db);
-    if (r != CYRUSDB_OK) {
-	syslog(LOG_ERR, "DBERROR: opening %s: %s",
-	       fname, cyrusdb_strerror(r));
-	return 1;
-    }
-    else {
-	/* check each entry in our database */
-	CONFIG_DB_DELIVER->foreach(db, "", 0, &dump_p, &dump_cb, &count, NULL);
-	printf("got %d entries\n", count);
-
-	CONFIG_DB_DELIVER->close(db);
-    }
-
-    if (tofree) free(tofree);
-
-    return 0;
-}
 
 void fatal(const char *message, int code)
 {
@@ -212,7 +127,7 @@ main(argc, argv)
 
     config_init(alt_config, "ctl_deliver");
 
-    if (duplicate_init(flag) != 0) {
+    if (duplicate_init(alt_file, flag) != 0) {
 	fprintf(stderr, 
 		"ctl_deliver: unable to init duplicate delivery database\n");
 	exit(1);
@@ -224,8 +139,7 @@ main(argc, argv)
 
     case DUMP:
 	printf("it is NOW: %d\n", (int) time(NULL));
-  
-	dump_deliver(alt_file);
+	printf("got %d entries\n", duplicate_dump(stdout));
 
 	r = 0;
 	break;
@@ -243,4 +157,4 @@ main(argc, argv)
     return r;
 }
 
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/ctl_deliver.c,v 1.11 2001/09/07 19:47:23 leg Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/ctl_deliver.c,v 1.12 2001/09/07 20:59:59 ken3 Exp $ */

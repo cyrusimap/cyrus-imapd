@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to sieve and proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.19 2001/09/07 18:31:58 ken3 Exp $
+ * $Id: lmtpproxyd.c,v 1.20 2001/09/07 21:00:00 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpproxyd.c,v 1.19 2001/09/07 18:31:58 ken3 Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpproxyd.c,v 1.20 2001/09/07 21:00:00 ken3 Exp $";*/
 
 #include <config.h>
 
@@ -286,7 +286,7 @@ int service_init(int argc, char **argv, char **envp)
 
     /* initialize duplicate delivery database */
     dupelim = 1;
-    if (duplicate_init(0) != 0) {
+    if (duplicate_init(NULL, 0) != 0) {
 	syslog(LOG_ERR, 
 	       "deliver: unable to init duplicate delivery database\n");
 	dupelim = 0;
