@@ -87,7 +87,7 @@ if (!$crit eq "from") {
 }
 
 my $cyrus = Cyrus::IMAP->new($server);
-$cyrus->authenticate(-user => $user, -maxssf => 0); #to debug -maxsff => 0
+$cyrus->authenticate(-user => $user, -maxssf => 0); #xxx hangs when have a security layer
 
 #list mailboxes in inbox.*
 my @info = ();
@@ -195,25 +195,11 @@ sub coll {
 
   ($rc, $msg) = $cyrus->send('', '', 'FETCH 1:* (BODY[HEADER.FIELDS (FROM)])');
   $cyrus->addcallback({-trigger => 'FETCH'});
+  if ($rc eq 'OK') {
+  } else {
+    die "Fetch in $mb failed with $msg";
+  }
 
   (%dat);
 } 
 
-sub showsize {
-
-  my ($size,$msgs, $name) = @_;
-
-  if ($size < 1024) {
-    printf "%9.2f bytes\t", $size;
-  } elsif ($size < 1024*1024) {
-    $size = $size/1024;
-    printf "%9.2f KB\t", $size;
-  } else {
-    $size = $size/ (1024 *1024);
-    printf "%9.2f MB\t", $size;
-  }
-
-  printf "%6d msgs\t", $msgs;
-
-  print "\t$name\n";
-}
