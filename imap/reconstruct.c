@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.82 2004/01/20 01:11:02 ken3 Exp $ */
+/* $Id: reconstruct.c,v 1.83 2004/01/21 21:15:45 ken3 Exp $ */
 
 #include <config.h>
 
@@ -199,6 +199,9 @@ int main(int argc, char **argv)
     mboxlist_init(0);
     mboxlist_open(NULL);
 
+    quotadb_init(0);
+    quotadb_open(NULL);
+
     mailbox_reconstructmode();
 
     /* Deal with nonexistent mailboxes */
@@ -330,6 +333,9 @@ int main(int argc, char **argv)
 
     mboxlist_close();
     mboxlist_done();
+
+    quotadb_close();
+    quotadb_done();
 
     cyrus_done();
 
