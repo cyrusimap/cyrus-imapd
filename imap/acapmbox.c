@@ -22,6 +22,35 @@ struct acapmbox_handle_s {
     acap_conn_t *conn;
 };
 
+char *acapmbox_get_url(char *name)
+{
+    static char url[MAX_MAILBOX_PATH];
+
+    snprintf(url, sizeof(url), "imap://%s/%s", config_servername, name);
+
+    return url;
+}
+
+/* xxx
+   this should probably vary depending on whether it's a private
+   mailbox or a bboard, and it should default to 
+   "bb+bboard.name@server.name" */
+char *acapmbox_get_postaddr(char *name)
+{
+    const char *postspec = config_getstring("postspec", NULL);
+    static char postaddr[MAX_MAILBOX_PATH];
+
+    if (postspec) {
+	snprintf(postaddr, sizeof(postaddr), postspec, name);
+    } else {
+	snprintf(postaddr, sizeof(postaddr), "bb+%s@%s", 
+		 name, config_servername);
+    }
+
+    return postaddr;
+}
+
+
 acapmbox_handle_t *acapmbox_get_handle(void)
 {
     int r;
@@ -110,143 +139,88 @@ int add_attr(skiplist *sl, char *name, char *value)
     return ACAP_OK;
 }
 
-int acapmbox_create(acapmbox_handle_t *AC,
-		    char *mailbox_name,
-		    acapmbox_data_t *mboxdata_p)
+static int acapmbox_store(acapmbox_handle_t *AC,
+			  acapmbox_data_t *mboxdata,
+			  int commit)
 {
     int result;
     acap_entry_t *newentry;
+    acap_result_t acapres;
 
     acap_cmd_t *cmd;
     char *fullname;
     char tmpstr[30];
-    acapmbox_data_t mboxdata;
 
     if (AC == NULL) return 0;
-    assert(mailbox_name != NULL);
+    assert(mboxdata);
     if (AC->conn == NULL) {
 	return IMAP_SERVER_UNAVAILABLE;
     }
 
-    if (mboxdata_p == NULL) {
-	memset(&mboxdata, '\0', sizeof(acapmbox_data_t));
-    } else {
-	memcpy(&mboxdata, mboxdata_p, sizeof(acapmbox_data_t));
-    }
-
     /* create the new entry */
-    fullname = create_full_dataset_name(mailbox_name);
+    fullname = create_full_dataset_name(mboxdata->name);
     if (fullname == NULL) return ACAP_NOMEM;
 
-    newentry = acap_entry_new(fullname);    
-    if (newentry==NULL) return ACAP_NOMEM;
+    newentry = acap_entry_new(fullname);
+    if (newentry == NULL) return ACAP_NOMEM;
 
     /* make and insert all our initial attributes */
-    snprintf(tmpstr, sizeof(tmpstr), "%d", mboxdata.uidvalidity);
+    snprintf(tmpstr, sizeof(tmpstr), "%d", mboxdata->uidvalidity);
     add_attr(newentry->attrs, "mailbox.uidvalidity", tmpstr);
 
-    add_attr(newentry->attrs, "mailbox.status", "reserved");
+    add_attr(newentry->attrs, "mailbox.status", 
+	     commit ? "committed" : "reserved");
 
-    add_attr(newentry->attrs, "mailbox.post", mboxdata.post);
+    add_attr(newentry->attrs, "mailbox.post", mboxdata->post);
 
-    if (mboxdata.haschildren)
-	add_attr(newentry->attrs, "mailbox.haschildren", "yes");
-    else
-	add_attr(newentry->attrs, "mailbox.haschildren", "no");
+    add_attr(newentry->attrs, "mailbox.haschildren", 
+	     mboxdata->haschildren ? "yes" : "no");
 
-    add_attr(newentry->attrs, "mailbox.url", mboxdata.url);
+    add_attr(newentry->attrs, "mailbox.url", mboxdata->url);
 
-    snprintf(tmpstr, sizeof(tmpstr), "%d", mboxdata.answered);
+    add_attr(newentry->attrs, "mailbox.acl", mboxdata->acl);
+
+    snprintf(tmpstr, sizeof(tmpstr), "%d", mboxdata->answered);
     add_attr(newentry->attrs, "mailbox.answered", tmpstr);
 
-    snprintf(tmpstr, sizeof(tmpstr), "%d", mboxdata.flagged);
+    snprintf(tmpstr, sizeof(tmpstr), "%d", mboxdata->flagged);
     add_attr(newentry->attrs, "mailbox.flagged", tmpstr);
 
-    snprintf(tmpstr, sizeof(tmpstr), "%d", mboxdata.deleted);
+    snprintf(tmpstr, sizeof(tmpstr), "%d", mboxdata->deleted);
     add_attr(newentry->attrs, "mailbox.deleted", tmpstr);
 
-    snprintf(tmpstr, sizeof(tmpstr), "%d", mboxdata.total);
+    snprintf(tmpstr, sizeof(tmpstr), "%d", mboxdata->total);
     add_attr(newentry->attrs, "mailbox.total", tmpstr);
 
-    /* create the cmd */
+    /* create the cmd; if it's the first time through, we ACAP_STORE_INITIAL */
     result = acap_store_entry(AC->conn,
 			      newentry,
 			      &acapmbox_cb,
 			      NULL,
-			      ACAP_STORE_INITIAL,
+			      commit ? 0 : ACAP_STORE_INITIAL,
 			      &cmd);
     if (result == ACAP_OK) {
-	result = acap_process_on_command(AC->conn, cmd, NULL);
+	result = acap_process_on_command(AC->conn, cmd, &acapres);
+	if (acapres != ACAP_RESULT_OK) {
+	    /* this is a likely but not certain error */
+	    result = IMAP_MAILBOX_EXISTS;
+	}
     }
 
     /* xxx free memory */
     return result;
 }
 
-int set_commit(acap_conn_t *conn,
-	       char *mailbox_name,
-	       int commit) /* 0 or 1 */
+int acapmbox_create(acapmbox_handle_t *AC,
+		    acapmbox_data_t *mboxdata)
 {
-    int result;
-    char *fullname;
-    acap_cmd_t *cmd;
-    acap_attribute_t *tmpattr;
-
-    /* get the entry path */
-    fullname = create_full_dataset_name(mailbox_name);
-    if (fullname == NULL) return ACAP_NOMEM;
-
-    /* create the attribute */
-    if (commit == 1) {
-	tmpattr = acap_attribute_new_simple ("mailbox.status", "commited");
-    } else {
-	tmpattr = acap_attribute_new_simple ("mailbox.status", "reserved");
-    }
-
-    if (tmpattr==NULL) return ACAP_NOMEM;
-
-    /* issue store command */
-    result = acap_store_attribute(conn,
-				  fullname,
-				  tmpattr,
-				  NULL, /* don't care about unchangedsince */
-				  &acapmbox_cb,
-				  NULL,
-				  &cmd);
-
-    /* get result of command */
-    result = acap_process_on_command(conn, cmd, NULL);
-    if (result != ACAP_OK) {
-	printf("failure on command\n");
-    }
-
-    /* xxx free memory */
-
-    return result;
+    return acapmbox_store(AC, mboxdata, 0);
 }
-
+		
 int acapmbox_markactive(acapmbox_handle_t *AC,
-			char *mailbox_name)
+			acapmbox_data_t *mboxdata)
 {
-    if (AC == NULL) return 0;
-    assert(mailbox_name != NULL);
-    if (AC->conn == NULL) {
-	return IMAP_SERVER_UNAVAILABLE;
-    }
-
-    return set_commit(AC->conn, mailbox_name, 1);
-}
-
-int acapmbox_markreserved(acapmbox_handle_t *AC,
-			  char *mailbox_name)
-{
-    if (AC == NULL) return 0;
-    assert(mailbox_name != NULL);
-    if (AC->conn == NULL) {
-	return IMAP_SERVER_UNAVAILABLE;
-    }
-
-    return set_commit(AC->conn, mailbox_name, 0);
+    return acapmbox_store(AC, mboxdata, 1);
 }
 
 static void myacap_entry(acap_entry_t *entry, void *rock)
@@ -489,40 +463,6 @@ static struct acap_search_callback myacap_search_copy_cb = {
 static struct acap_requested myacap_copy_request = {
     1, { "*" }
 };
-
-int acapmbox_copy(acapmbox_handle_t *AC,
-		  char *old_mailbox,
-		  char *new_mailbox)
-{
-    acap_cmd_t *cmd;
-    int r;
-    char *search_crit;
-    acapmbox_data_t mboxdata;
-
-    if (AC==NULL) return ACAP_OK;
-
-    /* create search criteria */
-    search_crit = (char *) malloc(strlen(old_mailbox)+30);
-    if (search_crit==NULL) return ACAP_NOMEM;
-
-    sprintf(search_crit,"EQUAL \"entry\" \"i;octet\" \"%s\"",old_mailbox);
-
-    r = acap_search_dataset(AC->conn, global_dataset,
-			    search_crit, 1,
-			    &myacap_copy_request, NULL,
-			    NULL,
-			    &myacap_search_copy_cb,
-			    NULL, NULL, 
-			    &mboxdata, 
-			    &cmd);
-    if (!r) r = acap_process_on_command(AC->conn, cmd, NULL);
-
-    /* ok now we hopefully have all the data from the old entry.
-       let's create the new entry now */
-    if (!r) r = acapmbox_create(AC,new_mailbox,&mboxdata);
-
-    return r;
-}
 
 int acapmbox_delete(acapmbox_handle_t *AC,
 		    char *mailbox_name)
