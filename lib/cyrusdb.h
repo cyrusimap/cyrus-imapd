@@ -117,6 +117,15 @@ struct cyrusdb_backend {
 		     const char *key, int keylen,
  		     const char **data, int *datalen,
 		     struct txn **mytid);
+
+    /* foreach: iterate through entries that start with 'prefix'
+       if 'p' returns true, call 'cb'
+
+       'p' should be fast and should avoid blocking it should be safe
+       to call other db routines inside of 'cb'.  however, the "flat"
+       and "skiplist" backends currently are not reentrant in this way
+       unless you're using transactions and pass the same transaction
+       to all db calls during the life of foreach() */
     int (*foreach)(struct db *mydb,
 		   char *prefix, int prefixlen,
 		   foreach_p *p,
