@@ -51,7 +51,6 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "prot.h"
 #include "lex.h"
 #include "request.h"
-#include "acapsieve.h"
 
 #define IMTEST_OK    0
 #define IMTEST_FAIL -1
@@ -544,7 +543,6 @@ void usage(void)
   printf("  -u <user>    Userid/Authname to use\n");
   printf("  -t <user>    Userid to use (for proxying)\n");
   printf("  -w <passwd>  Specify password (Should only be used for automated scripts)\n");
-  printf("  -z           Use ACAP\n");
   exit(1);
 }
 
@@ -573,7 +571,7 @@ int main(int argc, char **argv)
   int result;
 
   /* look at all the extra args */
-  while ((c = getopt(argc, argv, "a:d:g:lv:p:i:m:u:w:t:z")) != EOF)
+  while ((c = getopt(argc, argv, "a:d:g:lv:p:i:m:u:w:t:")) != EOF)
     switch (c) 
     {
     case 'a':
@@ -614,10 +612,6 @@ int main(int argc, char **argv)
     case 'w':
       password = optarg;
       break;
-    case 'z':
-	portstr = "acap";
-	version = ACAP_VERSION;
-	break;
     default:
       usage();
       break;
@@ -638,105 +632,61 @@ int main(int argc, char **argv)
       port = ntohs(serv->s_port);
   }
 
-  if (version == ACAP_VERSION) {
-      acapsieve_handle_t *handle;
-
-      handle = acapsieve_get_handle(servername, callbacks);
-
-      if (viewfile!=NULL)
-      {
-	  acapsieve_get(handle, viewfile, stdout);
-      }
-      
-      if (installfile!=NULL)
-      {
-	  result = acapsieve_put_file(handle,
-				      installfile);
-
-	  printf("put result = %d\n",result);
-
-	  acapsieve_activate(handle, getsievename(installfile));
-			     
-      }
-
-      if (setactive!=NULL)
-      {
-	  acapsieve_activate(handle,setactive);
-      }
-
-      if (deletescript!=NULL)
-      {
-	  acapsieve_delete(handle,deletescript);
-      }
-
-      if (getscriptname!=NULL)
-      {
-	  getscript(version,pout,pin, getscriptname,1);
-      }
-      
-      if (dolist || deflist) {
-	  acapsieve_list(handle,
-			 &list_cb);
-      }      
-      
-  } else {
-
-      if (init_net(servername, port) != IMTEST_OK) {
-	  imtest_fatal("Network initialization");
-      }
+  if (init_net(servername, port) != IMTEST_OK) {
+      imtest_fatal("Network initialization");
+  }
   
-      if (init_sasl(servername, port, ssf) != IMTEST_OK) {
-	  imtest_fatal("SASL initialization");
-      }
-   
-      /* set up the prot layer */
-      pin = prot_new(sock, 0);
-      pout = prot_new(sock, 1); 
-
-      mechlist=read_capability(&version);
-      
-      if (mechanism!=NULL) {
-	  result=auth_sasl(version,mechanism);
-      } else if (mechlist==NULL) {
-	  printf("Error reading mechanism list from server\n");
-	  exit(1);
-      } else {
-	  result=auth_sasl(version,mechlist);
-      }
-
-      if (result!=IMTEST_OK) {
-	  printf("Authentication failed.\n");
-	  exit(1);
-      }
-
-      if (viewfile!=NULL)
-      {
-	  getscript(version,pout,pin, viewfile,0);
-      }
-      
-      if (installfile!=NULL)
-      {
-	  installafile(version,pout,pin,installfile);
-      }
-
-      if (setactive!=NULL)
-      {
-	  setscriptactive(version,pout,pin,setactive);
-      }
-
-      if (deletescript!=NULL)
-      {
-	  deleteascript(version,pout, pin, deletescript);
-      }
-
-      if (getscriptname!=NULL)
-      {
-	  getscript(version,pout,pin, getscriptname,1);
-      }
-      
-      if (dolist || deflist) {
-	  showlist(version,pout,pin);
-      }
+  if (init_sasl(servername, port, ssf) != IMTEST_OK) {
+      imtest_fatal("SASL initialization");
+  }
+  
+  /* set up the prot layer */
+  pin = prot_new(sock, 0);
+  pout = prot_new(sock, 1); 
+  
+  mechlist=read_capability(&version);
+  
+  if (mechanism!=NULL) {
+      result=auth_sasl(version,mechanism);
+  } else if (mechlist==NULL) {
+      printf("Error reading mechanism list from server\n");
+      exit(1);
+  } else {
+      result=auth_sasl(version,mechlist);
+  }
+  
+  if (result!=IMTEST_OK) {
+      printf("Authentication failed.\n");
+      exit(1);
+  }
+  
+  if (viewfile!=NULL)
+  {
+      getscript(version,pout,pin, viewfile,0);
+  }
+  
+  if (installfile!=NULL)
+  {
+      installafile(version,pout,pin,installfile);
+  }
+  
+  if (setactive!=NULL)
+  {
+      setscriptactive(version,pout,pin,setactive);
+  }
+  
+  if (deletescript!=NULL)
+  {
+      deleteascript(version,pout, pin, deletescript);
+  }
+  
+  if (getscriptname!=NULL)
+  {
+      getscript(version,pout,pin, getscriptname,1);
+  }
+  
+  if (dolist || deflist) {
+      showlist(version,pout,pin);
   }
 
   return 0;
