@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.47 2002/08/13 21:39:15 rjs3 Exp $
+ * $Id: pop3proxyd.c,v 1.48 2002/08/27 19:43:43 leg Exp $
  */
 #include <config.h>
 
@@ -299,6 +299,7 @@ int service_main(int argc, char **argv, char **envp __attribute__((unused)))
 		fatal("pop3s: required OpenSSL options not present",
 		      EC_CONFIG);
 	    }
+            break;
 	case 'k':
 	    kflag++;
 	    break;
