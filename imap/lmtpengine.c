@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.42 2001/12/11 20:52:15 rjs3 Exp $
+ * $Id: lmtpengine.c,v 1.43 2001/12/12 02:20:58 rjs3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1057,6 +1057,32 @@ static int process_recipient(char *addr,
     return 0;
 }
 
+static int localauth_mechlist_override(
+    void *context __attribute__((unused)), 
+    const char *plugin_name __attribute__((unused)),
+    const char *option,
+    const char **result,
+    unsigned *len)
+{
+    /* If we are doing local auth, we only support EXTERNAL */
+    if (strcmp(option,"mech_list")==0)
+    {
+	*result = "EXTERNAL";
+	if (len)
+	    *len = strlen(*result);
+	return SASL_OK;
+    }
+
+    /* if we don't find the option,
+       this should percolate to the global getopt */
+    return SASL_FAIL;
+}
+
+static struct sasl_callback localauth_override_cb[] = {
+    { SASL_CB_GETOPT, &localauth_mechlist_override, NULL },
+    { SASL_CB_LIST_END, NULL, NULL },
+};
+
 void lmtpmode(struct lmtp_func *func,
 	      struct protstream *pin, 
 	      struct protstream *pout,
@@ -1070,6 +1096,7 @@ void lmtpmode(struct lmtp_func *func,
     struct clientdata cd;
 
     struct sockaddr_in localaddr, remoteaddr;
+    int havelocal = 0, haveremote = 0;
     char localip[60], remoteip[60];
     socklen_t salen;
     char clienthost[250];
@@ -1100,20 +1127,6 @@ void lmtpmode(struct lmtp_func *func,
 
     msg_new(&msg);
 
-    if (sasl_server_new("lmtp", NULL, NULL, NULL,
-			NULL, NULL, 0, &cd.conn) != SASL_OK) {
-	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL);
-    }
-
-    /* set my allowable security properties */
-    /* ANONYMOUS is silly because we allow that anyway */
-    secflags = SASL_SEC_NOANONYMOUS;
-    if (!config_getswitch("allowplaintext", 1)) {
-	secflags |= SASL_SEC_NOPLAINTEXT;
-    }
-    secprops = mysasl_secprops(secflags);
-    sasl_setprop(cd.conn, SASL_SEC_PROPS, secprops);
-
     /* determine who we're talking to */
     salen = sizeof(remoteaddr);
     r = getpeername(fd, (struct sockaddr *)&remoteaddr, &salen);
@@ -1138,13 +1151,13 @@ void lmtpmode(struct lmtp_func *func,
 	    /* set the ip addresses here */
 	    if(iptostring((struct sockaddr *)&localaddr,
                           sizeof(struct sockaddr_in), localip, 60) == 0) {
-                sasl_setprop(cd.conn, SASL_IPLOCALPORT,  &localip );
+		havelocal = 1;
                 saslprops.iplocalport = xstrdup(localip);
             }
             if(iptostring((struct sockaddr *)&remoteaddr,
                           sizeof(struct sockaddr_in), remoteip, 60) == 0) {
+		haveremote = 1;
                 saslprops.ipremoteport = xstrdup(remoteip);
-                sasl_setprop(cd.conn, SASL_IPREMOTEPORT, &remoteip);  
             }
 	} else {
 	    fatal("can't get local addr", EC_SOFTWARE);
@@ -1160,6 +1173,23 @@ void lmtpmode(struct lmtp_func *func,
 	syslog(LOG_DEBUG, "lmtp connection preauth'd as postman");
     }
 
+    /* Setup SASL to go.  We need to do this *after* we decide if
+     *  we are preauthed or not. */
+    if (sasl_server_new("lmtp", NULL, NULL, NULL,
+			NULL, (func->preauth ? localauth_override_cb : NULL),
+			0, &cd.conn) != SASL_OK) {
+	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL);
+    }
+
+    /* set my allowable security properties */
+    /* ANONYMOUS is silly because we allow that anyway */
+    secflags = SASL_SEC_NOANONYMOUS;
+    if (!config_getswitch("allowplaintext", 1)) {
+	secflags |= SASL_SEC_NOPLAINTEXT;
+    }
+    secprops = mysasl_secprops(secflags);
+    sasl_setprop(cd.conn, SASL_SEC_PROPS, secprops);
+
     if (func->preauth) {
 	authenticated = EXTERNAL_AUTHED;	/* we'll allow commands, 
 						   but we still accept
@@ -1168,6 +1198,9 @@ void lmtpmode(struct lmtp_func *func,
 	auth_id = "postman";
 	sasl_setprop(cd.conn, SASL_SSF_EXTERNAL, &ssf);
 	sasl_setprop(cd.conn, SASL_AUTH_EXTERNAL, auth_id);
+    } else {
+	if(havelocal) sasl_setprop(cd.conn, SASL_IPLOCALPORT,  &localip );
+	if(haveremote) sasl_setprop(cd.conn, SASL_IPREMOTEPORT, &remoteip);  
     }
 
     prot_printf(pout, "220 %s LMTP Cyrus %s ready\r\n", 
