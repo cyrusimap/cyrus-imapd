@@ -1019,9 +1019,15 @@ sub _sc_setquota {
   push(@nargv, @argv);
   if (@nargv == 2) {
       my ($mbox, $limit) = @nargv;
-      @nargv = ($mbox, "STORAGE", $limit);
+      if ($limit eq 'none') {
+	  @nargv = ($mbox);
+	  print "remove quota\n";
+      } else {
+	  @nargv = ($mbox, "STORAGE", $limit);
+	  print "quota:", $limit, "\n";
+      }
   }
-  if (@nargv < 3 || (@nargv - 1) % 2) {
+  if ((@nargv - 1) % 2) {
     die ("usage: setquota mailbox limit num [limit num ...]\n" .
 	 "       setquota mailbox num\n");
   }
@@ -1345,7 +1351,8 @@ Administer (SETACL)
 =item C<sq> I<root> I<resource> I<value> [I<resource> I<value> ...]
 
 Set a quota on the specified root, which may or may not be an actual mailbox.
-The only I<resource> understood by B<Cyrus> is C<STORAGE>.
+The only I<resource> understood by B<Cyrus> is C<STORAGE>.  The I<value> may
+be the special string C<none> which will remove the quota.
 
 =item C<version>
 
