@@ -157,6 +157,13 @@ submission by timsieved(8).
 .IP "\fBsieve_maxscripts:\fR 5" 5
 Maximum number of sieve scripts any user may have, enforced at
 submission by timsieved(8).
+.IP "\fBsasl_maximum_layer:\fR 256" 5
+Maximum SSF (security strength factor) that the server will allow a
+client to negotiate.
+.IP "\fBsasl_minimum_layer:\fR 0" 5
+The minimum SSF that the server will allow a client to negotiate.  A
+value of 1 requires integrity protection; any higher value requires
+some amount of encryption.
 .IP "\fBsasl_pwcheck_method:\fR PAM" 5
 The mechanism used by the server to verify plaintext passwords.
 Possible values also include "kerberos_v4", "passwd", and "shadow".
