@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.155 2000/02/16 19:46:53 tmartin Exp $
+dnl $Id: configure.in,v 1.156 2000/02/16 20:40:32 tmartin Exp $
 dnl
 
 AC_INIT(imap/imapd.c)
@@ -1020,6 +1020,10 @@ AC_ARG_ENABLE(netscapehack,
 
 AC_CHECK_FUNC(dlopen,,AC_CHECK_LIB(dl,dlopen))
 CMU_SASL
+
+CMU_AGENTX
+
+CMU_PTHREADS
 
 AC_DEFUN(CMU_STATICALLY_LINK_WHAT_YOU_CAN, [
 
