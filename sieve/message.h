@@ -1,6 +1,6 @@
 /* message.h
  * Larry Greenfield
- * $Id: message.h,v 1.10 2000/05/28 22:45:59 leg Exp $
+ * $Id: message.h,v 1.11 2000/11/17 19:31:35 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -101,7 +101,8 @@ typedef enum {
 } address_part_t;
 
 int parse_address(const char *header, void **data, void **marker);
-char *get_address(address_part_t addrpart, void **data, void **marker);
+char *get_address(address_part_t addrpart, void **data, void **marker,
+		  int canon_domain);
 int free_address(void **data, void **marker);
 notify_action_t *default_notify_action(void);
 

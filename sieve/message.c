@@ -1,6 +1,6 @@
 /* message.c -- message parsing functions
  * Larry Greenfield
- * $Id: message.c,v 1.18 2000/10/31 20:36:58 leg Exp $
+ * $Id: message.c,v 1.19 2000/11/17 19:31:35 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -444,7 +444,8 @@ int parse_address(const char *header, void **data, void **marker)
     return SIEVE_OK;
 }
 
-char *get_address(address_part_t addrpart, void **data, void **marker)
+char *get_address(address_part_t addrpart, void **data, void **marker,
+		  int canon_domain)
 {
     char *ret = NULL;
     struct address *a;
@@ -459,6 +460,9 @@ char *get_address(address_part_t addrpart, void **data, void **marker)
     if (a == NULL) {
 	ret = NULL;
     } else {
+	if (canon_domain && a->domain)
+	    lcase(a->domain);
+
 	switch (addrpart) { 
 	case ADDRESS_ALL:
 #define U_DOMAIN "unspecified-domain"
