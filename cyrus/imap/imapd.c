@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.357 2002/03/18 22:30:49 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.358 2002/03/18 22:41:00 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -5839,7 +5839,8 @@ void cmd_xfer(char *tag, char *toserver, char *name)
     struct backend *be = NULL;
     mupdate_handle *mupdate_h = NULL;
     int backout_mupdate = 0;
-    
+    int backout_remotebox = 0;
+
     /* administrators only please */
     if (!imapd_userisadmin) {
 	r = IMAP_PERMISSION_DENIED;
@@ -5898,6 +5899,7 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 	r = getresult(be->in, "LC1");
 	if(r) syslog(LOG_ERR, "Could not move mailbox: %s, LOCALCREATE failed",
 		     mailboxname);
+	else backout_remotebox = 1;
     }
    
     /* xxx Step 2.5: Set mailbox as REMOTE on local server */
@@ -5966,6 +5968,10 @@ void cmd_xfer(char *tag, char *toserver, char *name)
     }
     
     /* MAILBOX NOW LIVES ON REMOTE */
+    if(!r) {
+	backout_remotebox = 0;
+	backout_mupdate = 0;
+    }
 
     /* 7) local delete of mailbox */
     if(!r) {
@@ -5984,10 +5990,27 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 
  done:
     if(r && backout_mupdate) {
+	int rerr = 0;
 	/* xxx if the mupdate server is what failed, then this won't
 	   help any! */
 	snprintf(buf, sizeof(buf), "%s!%s", config_servername, part);
-	mupdate_activate(mupdate_h, name, buf, acl);
+	rerr = mupdate_activate(mupdate_h, name, buf, acl);
+	if(rerr) {
+	    syslog(LOG_ERR,
+		   "Could not back out mupdate during move of %s (%s)",
+		   name, error_message(rerr));
+	}
+    }
+    if(r && backout_remotebox) {
+	int rerr = 0;
+	prot_printf(be->out, "LD1 LOCALDELETE {%d+}\r\n%s\r\n",
+		    strlen(name), name);
+	rerr = getresult(be->in, "LD1");
+ 	if(rerr) {
+	    syslog(LOG_ERR,
+		   "Could not back out remote mailbox during move of %s (%s)",
+		   name, error_message(rerr));
+	}   
     }
     if(mupdate_h) mupdate_disconnect(&mupdate_h);
     if(be) downserver(be);
