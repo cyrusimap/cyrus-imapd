@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.5 2003/10/24 18:24:06 rjs3 Exp $
+ * $Id: nntpd.c,v 1.6 2003/10/25 14:38:22 ken3 Exp $
  */
 
 /*
@@ -1395,12 +1395,7 @@ static void cmdloop(void)
 	    break;
 
 	case 'S':
-	    if (!strcmp(cmd.s, "Starttls")) {
-		if (!tls_enabled()) {
-		    /* we don't support starttls */
-		    goto badcmd;
-		}
-
+	    if (!strcmp(cmd.s, "Starttls") && tls_enabled()) {
 		if (c == '\r') c = prot_getc(nntp_in);
 		if (c != '\n') goto extraargs;
 
