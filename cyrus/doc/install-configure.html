@@ -1,4 +1,4 @@
-<!-- $Id: install-configure.html,v 1.23.4.6 2003/03/01 20:48:03 ken3 Exp $ -->
+<!-- $Id: install-configure.html,v 1.23.4.7 2003/03/06 17:22:52 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and configuring the IMAP Server
@@ -129,8 +129,7 @@ cyrus user and group and should not permit access to other users.
 The partition directory is similar in concept to
 <tt>/var/spool/news</tt>.  It is where the mailboxes are stored.
 Unlike most netnews systems, Cyrus allows you to have more
-than one partition.  Do not use the string "<tt>news</tt>" as a
-partition name, as it is reserved for netnews.
+than one partition.
 
 <li>If you wish to use Sieve, and you didn't configure deliver to look
 in home directories (see the <tt>imapd.conf</tt> man page), create the
@@ -400,7 +399,8 @@ consult the Exim documentation and sample configurations.
 
 <h3>Exporting Netnews via IMAP</h3>
 
-TODO: Explain setup of nntpd and lmtp2nntp.
+If you wish to use export Netnews via IMAP, consult <a
+href=install-netnews.html>install-netnews.html</a>.
 
 <a name="openssl"><h2>SSL, TLS, and OpenSSL</h2></a>
 
@@ -537,5 +537,5 @@ convention, consult <a
 href=altnamespace.html#altnameconfig>altnamespace.html</a>.
 
 <P><HR>
-last modified: $Date: 2003/03/01 20:48:03 $
+last modified: $Date: 2003/03/06 17:22:52 $
 </BODY></HTML>
