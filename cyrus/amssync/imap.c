@@ -552,8 +552,8 @@ int UploadAMS(struct imclient *imclient, char *name, char *amsdir, message
 	perror(amsfile);
         return 1;        
     }
-    allmsg=xmalloc(statbuf.st_size+1);
-    memset(allmsg, 0, statbuf.st_size+1);
+    allmsg=xmalloc(statbuf.st_size+4);
+    memset(allmsg, 0, statbuf.st_size+4);
     allmsg[0]='\0';
     done=0;
     unscribe=0;
