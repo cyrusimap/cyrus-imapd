@@ -589,10 +589,8 @@ char **argv;
 				  "imap", user, minssf, maxssf);
 
 	if (r == SASL_NOMECH) {
-	  r = cmd_login(conn, user, NULL, 0, tls_layer, capabilitylist->logindisabled);
-	  printf("r=%i\n",r);
+	    r = cmd_login(conn, user, NULL, 0, tls_layer, capabilitylist->logindisabled);
 	}
-
     }
     
     if (pwcommand) {
