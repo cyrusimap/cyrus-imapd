@@ -1,9 +1,28 @@
-<!-- $Id: changes.html,v 1.15 2001/07/07 19:54:14 leg Exp $ -->
+<!-- $Id: changes.html,v 1.16 2001/07/27 23:49:53 leg Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
 </HEAD><BODY>
 <H1>                   Changes to the Cyrus IMAP Server</H1>
+
+<h2>Changes to the Cyrus IMAP Server since 2.0.14</h2>
+<ul>
+<li> fixed a longstanding bug in <tt>quota</tt> that would affect
+people with unusual top-level hierarchy, fix by John Darrow,
+<tt>John.P.Darrow@wheaton.edu</tt>.
+
+<li> some important fixes to db3 interface code, by Walter Wong,
+<tt>wcw@cmu.edu</tt>, prompted by complaints from Scott Adkins,
+<tt>adkinss@ohio.edu</tt>.
+
+<li> fixed some memory leaks in imclient and in the Perl IMAP module,
+prompted by Toni Andjelkovic, <tt>toni@soth.at</tt>.
+
+<li> fixed a longstanding authentication error in the Perl IMAP
+module, should remove pesky extra Password: prompt.
+
+<li> fixed some allocation bugs in the managesieve perl module.
+</ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.0.14</h2>
 <ul>
@@ -1265,7 +1284,7 @@ restore tab before breaking out of loop.
 
 
 <P><HR>
-last modified: $Date: 2001/07/07 19:54:14 $
+last modified: $Date: 2001/07/27 23:49:53 $
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>

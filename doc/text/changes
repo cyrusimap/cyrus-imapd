@@ -2,6 +2,20 @@
 
 Changes to the Cyrus IMAP Server since 2.0.14
 
+      * fixed a longstanding bug in quota that would affect people with
+        unusual top-level hierarchy, fix by John Darrow,
+        John.P.Darrow@wheaton.edu. 
+      * some important fixes to db3 interface code, by Walter Wong,
+        wcw@cmu.edu, prompted by complaints from Scott Adkins,
+        adkinss@ohio.edu. 
+      * fixed some memory leaks in imclient and in the Perl IMAP module,
+        prompted by Toni Andjelkovic, toni@soth.at. 
+      * fixed a longstanding authentication error in the Perl IMAP module,
+        should remove pesky extra Password: prompt. 
+      * fixed some allocation bugs in the managesieve perl module. 
+
+Changes to the Cyrus IMAP Server since 2.0.14
+
       * fixed memory management bugs in imapd, lmtpd that were being hit
         due to the connection reuse code and causing subtle and annoying
         problems. 
