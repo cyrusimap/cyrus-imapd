@@ -1,6 +1,6 @@
 /* tree.c -- abstract syntax tree handling
  * Larry Greenfield
- * $Id: tree.c,v 1.1 1999/07/02 18:55:35 leg Exp $
+ * $Id: tree.c,v 1.2 1999/07/02 23:24:02 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -27,7 +27,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #include <stdlib.h>
 #include "tree.h"
-#include "sieve.tab.h"
+#include "y.tab.h"
 
 stringlist_t *new_sl(char *s, stringlist_t *n)
 {

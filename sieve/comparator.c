@@ -1,6 +1,6 @@
 /* comparator.c -- comparator functions
  * Larry Greenfield
- * $Id: comparator.c,v 1.1 1999/07/02 18:55:35 leg Exp $
+ * $Id: comparator.c,v 1.2 1999/07/02 23:24:01 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -32,7 +32,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #include "comparator.h"
 #include "tree.h"
-#include "sieve.tab.h"
+#include "y.tab.h"
 
 /* --- i;octet comparators --- */
 

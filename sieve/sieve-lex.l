@@ -27,7 +27,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #include <string.h> /* for strdup */
 #include "tree.h"
-#include "sieve.tab.h"
+#include "y.tab.h"
 
 static int tonum(char *c);
 static char *fixstr(char *);
@@ -96,9 +96,9 @@ static int tonum(char *c)
 {
   int val = atoi(c);
   switch (c[strlen(c)-1]) {
-  case 'K': val *= (2 << 10); break;
-  case 'M': val *= (2 << 20); break;
-  case 'G': val *= (2 << 30); break;
+  case 'K': val *= (1 << 10); break;
+  case 'M': val *= (1 << 20); break;
+  case 'G': val *= (1 << 30); break;
   default: break;
   }
   return val;
