@@ -148,9 +148,9 @@ int from64(out, in)
 void usage()
 {
 #ifdef HAVE_SASL_KRB
-    fprintf(stderr, "usage: imtest [-k[p/i] / -p] <server> <port>\n");
+    fprintf(stderr, "usage: imtest [-k[p/i] / -p] <server> <port> [input file]\n");
 #else
-    fprintf(stderr, "usage: imtest [-p] <server> <port>\n");
+    fprintf(stderr, "usage: imtest [-p] <server> <port> [input file]\n");
 #endif
     exit(1);
 }
@@ -166,12 +166,13 @@ void fatal(str, level)
     exit(1);
 }
 
+int
 main(argc, argv)
     int argc;
     char **argv;
 {
     int sock, nfds, nfound, count, dologin, dopass;
-    int len, done, maxplain;
+    int len, done, maxplain, file_start = 0;
     int prot_req, protlevel;
     
     sasl_encodefunc_t *encodefunc;
@@ -183,8 +184,13 @@ main(argc, argv)
     struct servent *serv;
     struct protstream *pout, *pin;
     char buf[4096];
+    char *filename = NULL; 
+    /* NOTE: we use filename to determine whether or not we are 
+     *       reading from a file or stdin. If filename == NULL then stdin 
+     */
+    FILE *fp;
     
-    if (argc < 2) usage();
+    if (argc < 3) usage();
     dologin = dopass = 0;
     encodefunc = 0;
     decodefunc = 0;
@@ -192,6 +198,7 @@ main(argc, argv)
     done = 0;
     host = argv[1];
     port = argv[2];
+    filename = argv[3];
     if (*argv[1] == '-') {
 	dologin = 1;
 	prot_req = SASL_PROT_NONE;
@@ -208,7 +215,17 @@ main(argc, argv)
 	else usage();
 	host = argv[2];
 	port = argv[3];
+	filename = argv[4];
     }
+
+    if (filename != NULL) {
+      if ((fp = fopen(filename, "r")) == NULL) {
+	fprintf(stderr,"Unable to open file: %s:", filename);
+	perror("");
+	exit(1);
+      }
+    }
+
     if (!port) usage();
     if ((hp = gethostbyname(host)) == NULL) {
 	herror("gethostbyname");
@@ -234,19 +251,44 @@ main(argc, argv)
 	exit(1);
     }
     FD_ZERO(&read_set);
-    FD_SET(0, &read_set);
+    if (filename == NULL) {
+      FD_SET(0, &read_set);
+    }
     FD_SET(sock, &read_set);
     nfds = getdtablesize();
     pin = prot_new(sock, 0);
     pout = prot_new(sock, 1);
+
+
     for (;;) {
+
+      if ((filename != NULL) && (file_start)) {
+	/* rather than iterating here and waiting for the write
+	 * we could just pipeline all the commands and shove it to the
+	 * imapd. However, this is marginally easier and cleaner to do it
+	 * this way -- especially the way authentication is handled below
+	 */
+	if (fgets(buf, sizeof (buf) - 1, fp) == NULL) {
+	  printf(logout);
+	  prot_write(pout, logout, sizeof (logout));
+	} else {
+	  count = strlen(buf);
+	  buf[count - 1] = '\r';
+	  buf[count] = '\n';
+	  buf[count + 1] = '\0';
+	  printf("%s", buf);
+	  prot_write(pout, buf, count + 1);
+	}
+	prot_flush(pout);
+      }
+	
 	rset = read_set;
 	nfound = select(nfds, &rset, NULL, NULL, NULL);
 	if (nfound < 0) {
 	    perror("select");
 	    fatal(NULL, 0);
 	}
-	if (FD_ISSET(0, &rset)) {
+	if ((filename == NULL) && FD_ISSET(0, &rset)) {
 	    if (fgets(buf, sizeof (buf) - 1, stdin) == NULL) {
 		printf(logout);
 		prot_write(pout, logout, sizeof (logout));
@@ -297,6 +339,7 @@ main(argc, argv)
 		    prot_setfunc(pin, decodefunc, authstate, 0);
 		    prot_setfunc(pout, encodefunc, authstate, maxplain);
 		}
+		file_start=1;
 	    }
 #endif
 	    if (dologin) {
@@ -314,6 +357,7 @@ main(argc, argv)
 		    prot_write(pout, buf, strlen(buf));
 		    memset(buf, 0, sizeof (buf));
 		    memset(pass, 0, 8);
+		    file_start = 1;
 		} else if (dologin == 1) {
 #ifdef HAVE_SASL_KRB
 		    ++dologin;
@@ -356,6 +400,8 @@ main(argc, argv)
 #ifdef HAVE_SASL_KRB
     if (authstate) client_free(authstate);
 #endif
-
+    if (filename != NULL) {
+      fclose(fp);
+    }
     exit(0);
 }
