@@ -43,8 +43,8 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#ifndef TLS_H
-#define TLS_H
+#ifndef INCLUDED_TLS_H
+#define INCLUDED_TLS_H
 
 /* is tls enabled? */
 int tls_enabled(const char *ident);
@@ -78,4 +78,4 @@ int tls_get_info(SSL *conn, char *buf, size_t len);
 
 #endif /* HAVE_SSL */
 
-#endif /* TLS_H */
+#endif /* INCLUDED_TLS_H */
