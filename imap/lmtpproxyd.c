@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.28 2002/01/29 20:45:08 rjs3 Exp $
+ * $Id: lmtpproxyd.c,v 1.29 2002/02/05 05:04:15 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -546,9 +546,11 @@ int deliver(message_data_t *msgdata, char *authuser,
     assert(nrcpts);
 
     /* create 'mydata', our per-delivery data */
+    mydata.temp[0] = mydata.temp[1] = NULL;
     mydata.authuser = authuser;
-    mydata.pend = xmalloc(sizeof(enum pending) * nrcpts);
-    
+    mydata.dlist = NULL;
+    mydata.pend = xzmalloc(sizeof(enum pending) * nrcpts);
+
     /* loop through each recipient, compiling list of destinations */
     for (n = 0; n < nrcpts; n++) {
 	char *rcpt = xstrdup(msg_getrcpt(msgdata, n));
