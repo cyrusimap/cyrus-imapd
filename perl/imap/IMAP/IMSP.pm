@@ -119,8 +119,6 @@ sub next_word {
 sub get {
   my ($self, $option) = @_;
   my %info = ();
-  my($save) = $*;
-  $* = 1;
   $self->addcallback({-trigger => 'OPTION',
 		      -callback => sub {
 			my %d = @_;
@@ -136,7 +134,6 @@ sub get {
 		      -rock => \%info});
   my ($rc, $msg) = $self->send('', '', 'GET %s', $option);
   $self->addcallback({-trigger => 'OPTION'});
-  $* = $save;
   if ($rc eq 'OK') {
     $self->{error} = undef;
     %info;
