@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.25 2002/08/30 14:33:35 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.26 2002/08/31 01:46:00 ken3 Exp $ */
 
 #include <config.h>
 
@@ -2174,10 +2174,11 @@ void cmd_login(char *tag, char *user)
 
     proxyd_authstate = auth_newstate(proxyd_userid, (char *)0);
 
+    /* xxx why aren't we using authisa() */
     val = config_getstring(IMAPOPT_ADMINS);
     while (*val) {
 	for (p = (char *)val; *p && !isspace((int) *p); p++);
-	strlcpy(buf, val, p - val);
+	strncpy(buf, val, p - val);
 	buf[p-val] = 0;
 	if (auth_memberof(proxyd_authstate, buf)) {
 	    proxyd_userisadmin = 1;
