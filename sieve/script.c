@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.32 2000/07/06 19:16:06 ken3 Exp $
+ * $Id: script.c,v 1.33 2000/07/15 14:12:09 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -498,6 +498,10 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 			found = look_for_me(myaddr, c->u.v.addresses, body);
 
 		    if (!found && (strcpy(buf, "cc"),
+				   (i->getheader(m, buf, &body) == SIEVE_OK)))
+			found = look_for_me(myaddr, c->u.v.addresses, body);
+
+		    if (!found && (strcpy(buf, "bcc"),
 				   (i->getheader(m, buf, &body) == SIEVE_OK)))
 			found = look_for_me(myaddr, c->u.v.addresses, body);
 
