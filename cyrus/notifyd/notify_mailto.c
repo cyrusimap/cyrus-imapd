@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notify_mailto.c,v 1.1 2002/03/01 20:24:27 ken3 Exp $
+ * $Id: notify_mailto.c,v 1.2 2002/03/01 20:32:38 ken3 Exp $
  */
 
 #include "notify_mailto.h"
@@ -65,7 +65,8 @@
 
 static int global_outgoing_count = 0;
 
-char* notify_mailto(int nopt, char **options, const char *priority,
+char* notify_mailto(int nopt, char **options,
+		    const char *priority __attribute__((unused)),
 		    const char *message)
 {
     FILE *sm;
@@ -78,6 +79,8 @@ char* notify_mailto(int nopt, char **options, const char *priority,
     int fds[2];
 
     /* XXX check/parse options (mailto URI) */
+    if (nopt < 1)
+	return strdup("NO mailto URI not specified");
 
     smbuf[0] = "sendmail";
     smbuf[1] = "-i";		/* ignore dots */
