@@ -4,12 +4,50 @@
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
 <title>Cyrus IMAP Server FAQ</title>
-<!-- $Id: faq.html,v 1.31 2003/07/30 20:24:29 rjs3 Exp $ -->
+<!-- $Id: faq.html,v 1.32 2003/10/16 15:33:31 rjs3 Exp $ -->
 </head>
 <body>
 <h1>Cyrus IMAP Server FAQ</h1>
 
 <ul>
+<li><b>What is the difference between authentication and authorization?</b>
+
+<p>Say you have an exclusive ticket to get into a private party.  You go to
+the party, hand over the ticket, and you get in.  The ticket authorized
+you to get in (though had you lost the ticket, anyone who found it would
+also have been authorized to get into the party).</p>
+
+<p>Ok, now, next week, you get another ticket to get into another private
+party, but the ticket is only good to let you into the party.  You go to
+the party and show the ticket, and the person at the door says "prove to
+me you're the person whose name is on this party ticket".  Your proof is
+authentication, the ticket is authorization.</p>
+
+<p>The authentication in the above example depends upon some authority
+trusted by the person at the door.  For example, you may have shown a
+passport or a drivers license.  The person at the door would have to trust
+that the passport or license was real and accurate (though even if it
+were, you might coincidentally have the same name as the name on the
+ticket, but be a different person, hence we have not 100% authenticated
+you if only your name was on the ticket; e.g. a picture on the ticket
+would have been better).</p>
+
+<p>When you log in to your email with a user name and password, you are
+providing your authorization.  Think of your name/password as a ticket -
+anyone who finds the name/password combination will be authorized to use
+the email system - it is not authenticating that it is _you_ who is
+using the name/password.  We can attempt to add some authenticity to your
+login by making you look into a retina scanner to authenticate yourself
+(that could also be used to authorize your usage).
+However, what is your trust that you are actually logging into the correct
+mail server?  If the server used a public/private key authentication
+mechanism, that might help.  You trust the mechanism and you trust that
+you have the correct public key of the server (however it may have come
+into your possesion, you trust that it is real).  Now when you log in,
+you could have a certain confidence that you have logged in to the
+correct email server, when it's private key works with the public key you
+have (i.e. the server would be authenticated to you).</p></li>
+
 <li><b>Using PAM</b> Under Linux when using PAM and shadow
 passwords, /etc/shadow needs to be readable by the Cyrus user.</li>
 
@@ -267,7 +305,7 @@ only the mechanisms that you require.</p>
 </dl>
 
 <hr />
-last modified: $Date: 2003/07/30 20:24:29 $ <br />
+last modified: $Date: 2003/10/16 15:33:31 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
