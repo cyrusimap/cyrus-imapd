@@ -69,6 +69,7 @@ static time_t *flagreport;	/* Array for each msgno of last_updated when
 				 * FLAGS data reported to client.
 				 * Zero if FLAGS data never reported */
 static char *seenflag;		/* Array for each msgno, nonzero if \Seen */
+static time_t seen_last_change;	/* Last mod time of \Seen state change */
 static int flagalloced = -1;	/* Allocated size of above two arrays */
 static int examining;		/* Nonzero if opened with EXAMINE command */
 static int keepingseen;		/* Nonzero if /Seen is meaningful */
@@ -165,7 +166,7 @@ int checkseen;
     struct stat sbuf;
     int newexists, oldexists, oldmsgno, msgno, nexpunge, i, r;
     struct index_record record;
-    time_t last_read, last_change;
+    time_t last_read;
     bit32 user_flags[MAX_USER_FLAGS/32];
 
     oldexists = imapd_exists;
@@ -254,8 +255,8 @@ int checkseen;
     if (oldexists == -1 && keepingseen) {
 	r = seen_open(mailbox, imapd_userid, &seendb);
 	if (!r) {
-	    r = seen_lockread(seendb, &last_read, &recentuid, &last_change,
-			      &seenuids);
+	    r = seen_lockread(seendb, &last_read, &recentuid,
+			      &seen_last_change, &seenuids);
 	    if (r) seen_close(seendb);
 	}
 	if (r) {
@@ -337,7 +338,7 @@ int usinguid;
 int oldexists;
 {
     int r;
-    time_t last_read, last_change;
+    time_t last_read;
     unsigned last_uid;
     char *newseenuids;
     char *old, *new;
@@ -358,7 +359,7 @@ int oldexists;
     }
 
     /* Lock \Seen database and read current values */
-    r = seen_lockread(seendb, &last_read, &last_uid, &last_change,
+    r = seen_lockread(seendb, &last_read, &last_uid, &seen_last_change,
 		      &newseenuids);
     if (r) {
 	prot_printf(imapd_out, "* OK %s: %s\r\n",
@@ -429,7 +430,7 @@ int oldexists;
     }
 
     if (dirty) {
-	last_change = time((time_t *)0);
+	seen_last_change = time((time_t *)0);
     }
 
     if (!examining && oldexists != imapd_exists) {
@@ -454,7 +455,7 @@ int oldexists;
 	    if (msgno == imapd_exists + 1) {
 		toimsp(mailbox->name, mailbox->uidvalidity,
 		       "SEENsnn", imapd_userid, mailbox->last_uid,
-		       last_change, 0);
+		       seen_last_change, 0);
 	    }
 	}
 	return;
@@ -589,7 +590,7 @@ int oldexists;
     }
 
     /* Write the changes, clean up, and return */
-    r = seen_write(seendb, last_read, last_uid, last_change, saveseenuids);
+    r = seen_write(seendb, last_read, last_uid, seen_last_change, saveseenuids);
     seen_unlock(seendb);
     free(seenuids);
     if (r) {
@@ -602,11 +603,11 @@ int oldexists;
 
     if (newallseen) {
 	toimsp(mailbox->name, mailbox->uidvalidity, "SEENsnn", imapd_userid,
-	       mailbox->last_uid, last_change, 0);
+	       mailbox->last_uid, seen_last_change, 0);
     }
     else if (allseen == mailbox->last_uid) {
 	toimsp(mailbox->name, mailbox->uidvalidity, "SEENsnn", imapd_userid,
-	       0, last_change, 0);
+	       0, seen_last_change, 0);
     }
     
     free(newseenuids);
@@ -976,10 +977,72 @@ struct mailbox *mailbox;
 {
     int r;
     int msgno;
-    unsigned firstuid, lastuid;
 
-    prot_printf(imapd_out, "* XSTATE %u %u\r\n", mailbox->index_mtime, 0);
+    prot_printf(imapd_out, "* XSTATE %u %u\r\n", mailbox->index_mtime,
+		seen_last_change);
 
+    return 0;
+}
+
+/*
+ * Performs a XCHECKSTATE command
+ */
+int
+index_checkstate(mailbox, indexdate, seendate)
+struct mailbox *mailbox;
+unsigned indexdate;
+unsigned seendate;
+{
+    int r;
+    int msgno;
+    unsigned int startmsgno = 0;
+    int sepchar = ' ';
+
+    /* No messages == everything OK */
+    if (imapd_exists < 1) {
+	prot_printf(imapd_out, "* XCHECKSTATE\r\n");
+	return 0;
+    }
+	
+    /* If \Seen data changed, we don't know anything */
+    if (seendate != seen_last_change) {
+	if (imapd_exists == 1) {
+	    prot_printf(imapd_out,
+			"* XCHECKSTATE %u\r\n", UID(1));
+	}
+	else {
+	    prot_printf(imapd_out,
+			"* XCHECKSTATE %u:%u\r\n", UID(1), UID(imapd_exists));
+	}
+	return;
+    }
+
+    prot_printf(imapd_out, "* XCHECKSTATE");
+    for (msgno = 1; msgno <= imapd_exists; msgno++) {
+	/*
+	 * Below is >= instead of > because we can get
+	 * two STORE commands within the same second.
+	 */
+	if (LAST_UPDATED(msgno) >= indexdate) {
+	    if (startmsgno == 0) {
+		prot_printf(imapd_out, "%c%u", sepchar, UID(msgno));
+		sepchar = ',';
+		startmsgno = msgno;
+	    }
+	}
+	else {
+	    if (startmsgno != 0 && startmsgno < msgno - 1) {
+		prot_printf(imapd_out, ":%u", UID(msgno-1));
+	    }
+	    startmsgno = 0;
+	}
+    }
+
+    if (startmsgno != 0 && startmsgno < imapd_exists) {
+	prot_printf(imapd_out, ":%u", UID(imapd_exists));
+    }
+
+    prot_printf(imapd_out, "\r\n");
     return 0;
 }
 
