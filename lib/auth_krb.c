@@ -1,5 +1,5 @@
 /* auth_krb.c -- Kerberos authorization
- * $Id: auth_krb.c,v 1.39 2003/10/22 18:50:12 rjs3 Exp $
+ * $Id: auth_krb.c,v 1.40 2003/11/11 03:26:00 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -66,7 +66,7 @@
 const char *auth_method_desc = "krb";
 
 #ifndef KRB_MAPNAME
-#define KRB_MAPNAME "/etc/krb.equiv"
+#define KRB_MAPNAME (SYSCONFDIR "/krb.equiv")
 #endif
 
 struct auth_state {
