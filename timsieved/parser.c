@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.20 2002/06/02 15:25:44 ken3 Exp $
+ * $Id: parser.c,v 1.21 2002/09/19 18:16:53 rjs3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -81,6 +81,7 @@ static SSL *tls_conn = NULL;
 
 /* from elsewhere */
 void fatal(const char *s, int code);
+extern int sieved_logfd;
 
 /* forward declarations */
 static void cmd_logout(struct protstream *sieved_out,
@@ -646,7 +647,8 @@ static int cmd_authenticate(struct protstream *sieved_out,
   prot_setsasl(sieved_in, sieved_saslconn);
   prot_setsasl(sieved_out, sieved_saslconn);
 
-  /* free memory */
+  /* Create telemetry log */
+  sieved_logfd = telemetry_log(username, sieved_in, sieved_out);
 
   return TRUE;
 }
