@@ -42,16 +42,23 @@
 #ifndef SERVICE_H
 #define SERVICE_H
 
-#define STATUS_FD (3)
-#define LISTEN_FD (4)
+enum {
+    STATUS_FD = 3,
+    LISTEN_FD = 4,
+};
 
-#define MASTER_SERVICE_AVAILABLE 0x01
-#define MASTER_SERVICE_UNAVAILABLE 0x02
+enum {
+    MASTER_SERVICE_AVAILABLE = 0x01,
+    MASTER_SERVICE_UNAVAILABLE = 0x02
+};
 
 extern int service_init(int argc, char **argv, char **envp);
 extern int service_main(int argc, char **argv, char **envp);
 extern int service_abort(void);
 
-#define MAX_USE 100
+enum {
+    MAX_USE = 100,
+    REUSE_TIMEOUT = 60
+};
 
 #endif
