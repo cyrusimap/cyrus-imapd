@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.28 2002/01/29 20:45:09 rjs3 Exp $
+ * $Id: pop3proxyd.c,v 1.29 2002/02/06 22:46:39 rjs3 Exp $
  */
 #include <config.h>
 
@@ -1192,7 +1192,7 @@ static void openproxy(void)
     struct sockaddr_in sin;
     char inboxname[MAX_MAILBOX_PATH];
     int r;
-    char *server;
+    char *server = NULL;
 
     /* have to figure out what server to connect to */
     strcpy(inboxname, "user.");
