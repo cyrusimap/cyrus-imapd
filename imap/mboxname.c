@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- $Id: mboxname.c,v 1.16 2000/02/10 21:25:30 leg Exp $
+ $Id: mboxname.c,v 1.17 2000/02/15 08:03:17 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -243,7 +243,7 @@ int mboxname_policycheck(char *name)
 		    return IMAP_MAILBOX_BADNAME;
 		}
 		ucs4 = ((c6 & 0x0f) << 12) | (c7 << 6) | c8;
-		if ((ucs4 & 0xff00) == 0 || (ucs4 & 0xf800) == 0xd800) {
+		if ((ucs4 & 0xff80) == 0 || (ucs4 & 0xf800) == 0xd800) {
 		    /* US-ASCII or multi-word character */
 		    return IMAP_MAILBOX_BADNAME;
 		}
