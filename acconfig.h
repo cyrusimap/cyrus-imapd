@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.25 2001/12/04 02:44:24 rjs3 Exp $ */
+/* $Id: acconfig.h,v 1.26 2001/12/04 17:07:46 rjs3 Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -56,6 +56,9 @@
 
 /* do we have gssapi.h? */
 #undef HAVE_GSSAPI_H
+
+/* And what sort of GSS_C_NT_HOSTBASED_SERVICE do we use? */
+#undef HAVE_GSS_C_NT_HOSTBASED_SERVICE
 
 /* do we already have sys_errlist? */
 #undef NEED_SYS_ERRLIST
