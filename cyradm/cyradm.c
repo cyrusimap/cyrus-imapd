@@ -681,7 +681,7 @@ char **argv;
 	else if (!strcasecmp(rights, "post")) rights = "lrsp";
 	else if (!strcasecmp(rights, "append")) rights = "lrsip";
 	else if (!strcasecmp(rights, "write")) rights = "lrswipcd";
-	else if (!strcasecmp(rights, "read")) rights = "lrswipcda";
+	else if (!strcasecmp(rights, "all")) rights = "lrswipcda";
 
 	imclient_send(conn->imclient, callback_finish, (void *)conn,
 		      "SETACL MAILBOX %s %s %s", mailbox, argv[0], rights);
