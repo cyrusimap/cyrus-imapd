@@ -59,6 +59,8 @@ extern char *optarg;
 
 extern int errno;
 
+extern char *login_capabilities();
+
 struct buf {
     char *s;
     int alloc;
@@ -937,9 +939,9 @@ char *tag;
     if (imapd_mailbox) {
 	index_check(imapd_mailbox, 0, 0);
     }
-    prot_printf(imapd_out,
-		"* CAPABILITY IMAP4\r\n%s OK Capability completed\r\n",
-		tag);
+    prot_printf(imapd_out, "* CAPABILITY IMAP4 IMAP4rev1");
+    prot_printf(imapd_out, "%s", login_capabilities());
+    prot_printf(imapd_out, "\r\n%s OK Capability completed\r\n", tag);
 };
 
 /*
