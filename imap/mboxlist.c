@@ -106,7 +106,7 @@ mboxlist_checkconfig()
     /* Open mailbox list file */
     listfile = fopen(listfname, "r");
     if (!listfile) {
-	msg = malloc(strlen(listfname)+300);
+	msg = xmalloc(strlen(listfname)+300);
 	sprintf(msg, "cannot open %s: %s", listfname, error_message(errno));
 	syslog(LOG_ERR, "IOERROR: opening %s: %m", listfname);
 	fatal(msg, EX_OSFILE);
@@ -1217,7 +1217,7 @@ int add;
     FILE *subsfile, *newsubsfile;
     char *subsfname, *newsubsfname;
     unsigned offset, len;
-    char *buf = 0;
+    char *buf = 0, *p;
     int n;
     char copybuf[4096];
     
@@ -1286,6 +1286,10 @@ int add;
 	fprintf(newsubsfile, "%s\t\n", name);
     }
     else {
+	/* Calculate real length of entry */
+	p = strchr(buf, '\n');
+	if (p) len = p - buf + 1;
+
 	fseek(subsfile, len, 1);
     }
 
