@@ -152,11 +152,11 @@
 24 :ESC-$
 28 :ESC-(
 
-:ESC-$ <
+:ESC-( <
 42 :US-ASCII
 4A :JIS-0201
 
-:ESC-( <
+:ESC-$ <
 40 :JIS-0208
 42 :JIS-0208
 
