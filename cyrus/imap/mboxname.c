@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- * $Id: mboxname.c,v 1.24 2001/11/27 02:24:59 ken3 Exp $
+ * $Id: mboxname.c,v 1.25 2002/01/24 16:39:28 rjs3 Exp $
  * Copyright (c)1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -403,7 +403,7 @@ char *mboxname_hiersep_toexternal(struct namespace *namespace, char *name)
 /*
  * Return nonzero if 'userid' owns the (internal) mailbox 'name'.
  */
-int mboxname_userownsmailbox(char *userid, char *name)
+int mboxname_userownsmailbox(const char *userid, const char *name)
 {
     if (!strchr(userid, '.') && !strncmp(name, "user.", 5) &&
 	!strncmp(name+5, userid, strlen(userid)) &&

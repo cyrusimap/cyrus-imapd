@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.157 2002/01/18 22:58:47 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.158 2002/01/24 16:39:27 rjs3 Exp $
  */
 
 #include <config.h>
@@ -133,7 +133,7 @@ static int mboxlist_getpath(const char *partition, const char *name,
     return 0;
 }
 
-char *mboxlist_makeentry(int mbtype, char *part, char *acl)
+char *mboxlist_makeentry(int mbtype, const char *part, const char *acl)
 {
     char *mboxent = (char *) xmalloc(sizeof(char) * 
 				     (30 + strlen(acl) + strlen(part)));
@@ -257,6 +257,12 @@ int mboxlist_lookup(const char *name, char **pathp, char **aclp,
 		    void *tid __attribute__((unused)))
 {
     return mboxlist_mylookup(name, NULL, pathp, NULL, aclp, NULL, 0);
+}
+
+int mboxlist_detail(const char *name, int *typep, char **pathp, char **partp,
+		    char **aclp, struct txn *tid __attribute__((unused))) 
+{
+    return mboxlist_mylookup(name, typep, pathp, partp, aclp, NULL, 0);
 }
 
 int mboxlist_findstage(const char *name, char *stagedir) 
@@ -640,8 +646,8 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 }
 
 /* insert an entry for the proxy */
-int mboxlist_insertremote(char *name, int mbtype, char *host, char *acl,
-			  void **rettid)
+int mboxlist_insertremote(const char *name, int mbtype, const char *host,
+			  const char *acl, void **rettid)
 {
     char *mboxent;
     int r = 0;
@@ -685,8 +691,8 @@ int mboxlist_insertremote(char *name, int mbtype, char *host, char *acl,
  * 7. delete from ACAP
  *
  */
-int mboxlist_deletemailbox(char *name, int isadmin, char *userid, 
-				struct auth_state *auth_state, int checkacl)
+int mboxlist_deletemailbox(const char *name, int isadmin, char *userid, 
+			   struct auth_state *auth_state, int checkacl)
 {
     int r;
     char *acl;
@@ -757,18 +763,20 @@ int mboxlist_deletemailbox(char *name, int isadmin, char *userid,
     isremote = mbtype & MBTYPE_REMOTE;
 
     /* check if user has Delete right */
-    access = cyrus_acl_myrights(auth_state, acl);
-    if (checkacl && !(access & deleteright)) {
-	/* User has admin rights over their own mailbox namespace */
-	if (mboxname_userownsmailbox(userid, name)) {
-	    isadmin = 1;
+    if(checkacl) {
+	access = cyrus_acl_myrights(auth_state, acl);
+	if(!(access & deleteright)) {
+	    /* User has admin rights over their own mailbox namespace */
+	    if (mboxname_userownsmailbox(userid, name)) {
+		isadmin = 1;
+	    }
+	    
+	    /* Lie about error if privacy demands */
+	    r = (isadmin || (access & ACL_LOOKUP)) ?
+		IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+	    DB->abort(mbdb, tid);
+	    goto done;
 	}
-
-	/* Lie about error if privacy demands */
-	r = (isadmin || (access & ACL_LOOKUP)) ?
-	  IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
-	DB->abort(mbdb, tid);
-	goto done;
     }
 
     /* delete entry */
@@ -1465,7 +1473,7 @@ int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
 	usermboxnamelen = strlen(usermboxname);
     }
     else {
-	userid = 0;
+	userid = NULL;
     }
 
     /* Check for INBOX first of all */

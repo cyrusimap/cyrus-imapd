@@ -747,7 +747,7 @@ acapmbox_status mboxdata_convert_status(acap_value_t *v)
 }
 
 int acapmbox_delete(acapmbox_handle_t *AC,
-		    char *mailbox_name)
+		    const char *mailbox_name)
 {
     acap_cmd_t *cmd;
     int r;

@@ -1,5 +1,5 @@
 /* mboxname.h -- Mailbox list manipulation routines
- * $Id: mboxname.h,v 1.8 2001/11/19 21:32:44 leg Exp $
+ * $Id: mboxname.h,v 1.9 2002/01/24 16:39:28 rjs3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -93,7 +93,7 @@ char *mboxname_hiersep_tointernal(struct namespace *namespace, char *name);
 char *mboxname_hiersep_toexternal(struct namespace *namespace, char *name);
 
 /* Return nonzero if 'userid' owns the (internal) mailbox 'name'. */
-int mboxname_userownsmailbox(char *userid, char *name);
+int mboxname_userownsmailbox(const char *userid, const char *name);
 
 /*
  * Return nonzero if (internal) mailbox 'name' consists of legal characters.
