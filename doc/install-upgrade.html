@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.8 2000/06/01 20:34:15 wcw Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.9 2000/08/08 17:53:06 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -9,7 +9,33 @@
 
 <body>
 
-<h3>Upgrading from 1.6.22</h3>
+<h3>Upgrading from a previous 2.0 version</h3>
+
+<b>Warning:</b> You do not need to follow these instructions if you're
+upgrading from version 1.6.
+
+<ul>
+<li><p>You can now pick whether to use Berkeley db to store seen state,
+the subscription files, and the mailboxes file or a flat text file, at
+compile time only.  (Look in <tt>imap/seen_db.c</tt> and
+<tt>imap/mboxlist.h</tt>.)
+
+<li><p>The format of the mailboxes file and seen state has changed.  It is
+not possible to preserve seen state, but upgrade the mailboxes file as
+follows:
+<ol>
+<li> Run <tt>ctl_mboxlist -d > mboxlist.temp</tt> to dump existing
+mailboxes.
+
+<li> Remove old database files: <tt>rm mailboxes.db db/*
+user/*/*.seen</tt>
+
+<li>With the new version of ctl_mboxlist, run <tt>ctl_mboxlist -u <
+mboxlist.temp</tt>.
+</ol>
+</ul>
+
+<h3>Upgrading from 1.6.22 or 1.6.24</h3>
 
 <b>Warning:</b> Cyrus imapd 2.0 will automatically convert on-disk
 file formats as the server is used.  <b>It is not possible to run 1.6
@@ -116,7 +142,7 @@ worry about it.)
 </ul>
 
 <P><HR><P>
-last modified: $Date: 2000/06/01 20:34:15 $
+last modified: $Date: 2000/08/08 17:53:06 $
 </BODY></HTML>
 
 
