@@ -1,5 +1,5 @@
 /*
- * imap_proxy.c - proxy support functions
+ * imap_proxy.c - IMAP proxy support functions
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.c,v 1.1.2.3 2004/02/04 20:26:28 ken3 Exp $
+ * $Id: imap_proxy.c,v 1.1.2.4 2004/02/14 16:15:12 ken3 Exp $
  */
 
 #include <config.h>

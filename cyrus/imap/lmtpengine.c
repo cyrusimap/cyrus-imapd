@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.93.2.6 2004/02/12 05:32:35 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.93.2.7 2004/02/14 16:15:19 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -617,6 +617,11 @@ static int savemsg(struct clientdata *cd,
     int nrcpts = m->rcpt_num;
     time_t t;
     char datestr[80];
+    const char *skipheaders[] = {
+	"Return-Path",	/* need to remove (we add our own) */
+	"X-Sieve",	/* need to remove (we add our own) */
+	NULL
+    };
 
     /* Copy to spool file */
     f = func->spoolfile(m);
@@ -685,7 +690,7 @@ static int savemsg(struct clientdata *cd,
     }
 
     /* fill the cache */
-    r = spool_fill_hdrcache(cd->pin, f, m->hdrcache, NULL);
+    r = spool_fill_hdrcache(cd->pin, f, m->hdrcache, skipheaders);
     r |= spool_copy_msg(cd->pin, f);
     if (r) {
 	fclose(f);

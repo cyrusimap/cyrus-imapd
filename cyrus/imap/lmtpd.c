@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.121.2.7 2004/02/12 05:32:34 ken3 Exp $
+ * $Id: lmtpd.c,v 1.121.2.8 2004/02/14 16:15:16 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -67,28 +67,32 @@
 #include <sasl/saslutil.h>
 
 #include "acl.h"
+#include "append.h"
 #include "assert.h"
-#include "util.h"
 #include "auth.h"
-#include "prot.h"
+#include "backend.h"
+#include "duplicate.h"
+#include "exitcodes.h"
+#include "global.h"
+#include "idle.h"
+#include "imap_err.h"
 #include "imparse.h"
 #include "lock.h"
-#include "global.h"
-#include "exitcodes.h"
-#include "imap_err.h"
 #include "mailbox.h"
-#include "xmalloc.h"
-#include "version.h"
-#include "duplicate.h"
-#include "append.h"
 #include "mboxlist.h"
+#include "mboxname.h"
+#include "mupdate-client.h"
 #include "notify.h"
-#include "idle.h"
+#include "prot.h"
 #include "tls.h"
+#include "util.h"
+#include "version.h"
+#include "xmalloc.h"
 
 #include "lmtpengine.h"
 #include "lmtpstats.h"
 #include "lmtp_sieve.h"
+#include "lmtp_proxy.h"
 
 /* forward declarations */
 static int deliver(message_data_t *msgdata, char *authuser,
@@ -120,7 +124,6 @@ extern char *optarg;
 static int dupelim = 1;		/* eliminate duplicate messages with
 				   same message-id */
 static int singleinstance = 1;	/* attempt single instance store */
-const char *BB = "";
 
 #ifdef USE_SIEVE
 static sieve_interp_t *sieve_interp = NULL;
@@ -129,6 +132,10 @@ static sieve_interp_t *sieve_interp = NULL;
 /* per-user/session state */
 static struct protstream *deliver_out, *deliver_in;
 int deliver_logfd = -1; /* used in lmtpengine.c */
+
+/* our cached connections */
+mupdate_handle *mhandle = NULL;
+struct backend **backend_cached = NULL;
 
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
@@ -151,40 +158,52 @@ int service_init(int argc __attribute__((unused)),
     signal(SIGPIPE, SIG_IGN);
 
     singleinstance = config_getswitch(IMAPOPT_SINGLEINSTANCESTORE);
-    BB = config_getstring(IMAPOPT_POSTUSER);
 
-    global_sasl_init(0, 1, mysasl_cb);
+    global_sasl_init(1, 1, mysasl_cb);
 
-    dupelim = config_getswitch(IMAPOPT_DUPLICATESUPPRESSION);
-
-#ifdef USE_SIEVE
-    mylmtp.addheaders = xmalloc(80);
-    snprintf(mylmtp.addheaders, 80, "X-Sieve: %s\r\n", SIEVE_VERSION);
-
-    /* setup sieve support */
-    sieve_interp = setup_sieve();
-#else
-    if (dupelim)
-#endif
-    {
-	/* initialize duplicate delivery database */
-	if (duplicate_init(NULL, 0) != 0) {
-	    fatal("lmtpd: unable to init duplicate delivery database",
-		  EC_SOFTWARE);
+    if (config_mupdate_server &&
+	(config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD) &&
+	!config_getstring(IMAPOPT_PROXYSERVERS)) {
+	/* proxy only -- talk directly to mupdate master */
+	r = mupdate_connect(config_mupdate_server, NULL, &mhandle, NULL);
+	if (r) {
+	    syslog(LOG_ERR, "couldn't connect to MUPDATE server %s: %s",
+		   config_mupdate_server, error_message(r));
+	    fatal("error connecting with MUPDATE server", EC_TEMPFAIL);
 	}
     }
+    else {
+	dupelim = config_getswitch(IMAPOPT_DUPLICATESUPPRESSION);
 
-    /* so we can do mboxlist operations */
-    mboxlist_init(0);
-    mboxlist_open(NULL);
+#ifdef USE_SIEVE
+	mylmtp.addheaders = xmalloc(80);
+	snprintf(mylmtp.addheaders, 80, "X-Sieve: %s\r\n", SIEVE_VERSION);
 
-    /* so we can do quota operations */
-    quotadb_init(0);
-    quotadb_open(NULL);
+	/* setup sieve support */
+	sieve_interp = setup_sieve();
+#else
+	if (dupelim)
+#endif
+	{
+	    /* initialize duplicate delivery database */
+	    if (duplicate_init(NULL, 0) != 0) {
+		fatal("lmtpd: unable to init duplicate delivery database",
+		      EC_SOFTWARE);
+	    }
+	}
 
-    /* setup for sending IMAP IDLE notifications */
-    if (config_getint(IMAPOPT_IMAPIDLEPOLL) > 0) {
-	idle_init();
+	/* so we can do mboxlist operations */
+	mboxlist_init(0);
+	mboxlist_open(NULL);
+
+	/* so we can do quota operations */
+	quotadb_init(0);
+	quotadb_open(NULL);
+
+	/* setup for sending IMAP IDLE notifications */
+	if (config_getint(IMAPOPT_IMAPIDLEPOLL) > 0) {
+	    idle_init();
+	}
     }
 
     /* Set namespace */
@@ -193,11 +212,24 @@ int service_init(int argc __attribute__((unused)),
 	fatal(error_message(r), EC_CONFIG);
     }
 
+    /* setup the cache */
+    backend_cached = xmalloc(sizeof(struct backend *));
+    backend_cached[0] = NULL;
+
     /* create connection to the SNMP listener, if available. */
     snmp_connect(); /* ignore return code */
     snmp_set_str(SERVER_NAME_VERSION, CYRUS_VERSION);
 
     return 0;
+}
+
+static int mupdate_ignore_cb(struct mupdate_mailboxdata *mdata __attribute__((unused)),
+			     const char *cmd __attribute__((unused)),
+			     void *context __attribute__((unused))) 
+{
+    /* If we get called, we've recieved something other than an OK in
+     * response to the NOOP, so we want to hang up this connection anyway */
+    return MUPDATE_FAIL;
 }
 
 /*
@@ -206,7 +238,7 @@ int service_init(int argc __attribute__((unused)),
 int service_main(int argc, char **argv, 
 		 char **envp __attribute__((unused)))
 {
-    int opt;
+    int opt, r;
 
     deliver_in = prot_new(0, 0);
     deliver_out = prot_new(1, 1);
@@ -227,7 +259,27 @@ int service_main(int argc, char **argv,
     snmp_increment(TOTAL_CONNECTIONS, 1);
     snmp_increment(ACTIVE_CONNECTIONS, 1);
 
-    lmtpmode(&mylmtp, deliver_in, deliver_out, 0);
+    /* get a connection to the mupdate server */
+    r = 0;
+    if (mhandle) {
+	/* we have one already, test it */
+	r = mupdate_noop(mhandle, mupdate_ignore_cb, NULL);
+	if (r) {
+	    /* will NULL mhandle for us */
+	    mupdate_disconnect(&mhandle);
+
+	    /* connect to the mupdate server */
+	    r = mupdate_connect(config_mupdate_server, NULL, &mhandle, NULL);
+	}
+    }
+    if (!r) {
+	lmtpmode(&mylmtp, deliver_in, deliver_out, 0);
+    } else {
+	syslog(LOG_ERR, "couldn't connect to %s: %s", config_mupdate_server,
+	       error_message(r));
+	prot_printf(deliver_out, "451 %s LMTP Cyrus %s %s\r\n",
+		    config_servername, CYRUS_VERSION, error_message(r));
+    }
 
     /* free session state */
     if (deliver_in) prot_free(deliver_in);
@@ -258,6 +310,57 @@ usage()
     fprintf(stderr, "421-4.3.0 usage: lmtpd [-C <alt_config>] [-a]\r\n");
     fprintf(stderr, "421 4.3.0 %s\n", CYRUS_VERSION);
     exit(EC_USAGE);
+}
+
+/* proxy mboxlist_lookup; on misses, it asks the listener for this
+   machine to make a roundtrip to the master mailbox server to make
+   sure it's up to date */
+static int mlookup(const char *name, char **server, char **aclp, void *tid)
+{
+    int r, type;
+
+    if (server) *server = NULL;
+
+    if (mhandle) {
+	/* proxy only, so check the mupdate master */
+	struct mupdate_mailboxdata *mailboxdata;
+
+	/* find what server we're sending this to */
+	r = mupdate_find(mhandle, name, &mailboxdata);
+
+	if (r == MUPDATE_MAILBOX_UNKNOWN) {
+	    r = IMAP_MAILBOX_NONEXISTENT;
+	} else if (r) {
+	    /* xxx -- yuck: our error handling for now will be to exit;
+	       this txn will be retried later -- to do otherwise means
+	       that we may have to restart this transaction from scratch */
+	    fatal("error communicating with MUPDATE server", EC_TEMPFAIL);
+	}
+
+	type |= MBTYPE_REMOTE;
+	if (server) *server = (char *) mailboxdata->server;
+    }
+    else {
+	/* do a local lookup and kick the slave if necessary */
+	r = mboxlist_detail(name, &type, NULL, server, aclp, tid);
+	if (r == IMAP_MAILBOX_NONEXISTENT && config_mupdate_server) {
+	    kick_mupdate();
+	    r = mboxlist_detail(name, &type, NULL, server, aclp, tid);
+	}
+    }
+
+    if (type & MBTYPE_REMOTE) {
+	/* xxx hide the fact that we are storing partitions */
+	if (server && *server) {
+	    char *c;
+	    c = strchr(*server, '!');
+	    if (c) *c = '\0';
+	}
+    }
+    else if (server)
+	*server = NULL;
+
+    return r;
 }
 
 /* places msg in mailbox mailboxname.  
@@ -336,29 +439,37 @@ int deliver(message_data_t *msgdata, char *authuser,
 	    struct auth_state *authstate)
 {
     int n, nrcpts;
-    sieve_msgdata_t mydata;
+    sieve_msgdata_t localdata;
+    remote_msgdata_t remotedata;
+    struct dest *d;
     
     assert(msgdata);
     nrcpts = msg_getnumrcpt(msgdata);
     assert(nrcpts);
 
-    /* create 'mydata', our per-delivery data */
-    mydata.m = msgdata;
-    mydata.stage = (struct stagemsg *) msg_getrock(msgdata);
-    mydata.notifyheader = generate_notify(msgdata);
-    mydata.namespace = &lmtpd_namespace;
-    mydata.authuser = authuser;
-    mydata.authstate = authstate;
+    /* create 'localdata', our per-delivery local data */
+    localdata.m = msgdata;
+    localdata.stage = (struct stagemsg *) msg_getrock(msgdata);
+    localdata.notifyheader = generate_notify(msgdata);
+    localdata.namespace = &lmtpd_namespace;
+    localdata.authuser = authuser;
+    localdata.authstate = authstate;
     
+    /* create 'remotedata', our per-delivery remote data */
+    remotedata.authuser = authuser;
+    remotedata.dlist = NULL;
+    remotedata.pend = xzmalloc(sizeof(enum pending) * nrcpts);
+
     /* loop through each recipient, attempting delivery for each */
     for (n = 0; n < nrcpts; n++) {
-	char namebuf[MAX_MAILBOX_NAME+1] = "";
-	const char *user, *domain, *mailbox;
+	char namebuf[MAX_MAILBOX_NAME+1] = "", *server;
+	const char *rcpt, *user, *domain, *mailbox;
 	int quotaoverride = msg_getrcpt_ignorequota(msgdata, n);
 	int r = 0;
 
+	rcpt = msg_getrcptall(msgdata, n);
 	msg_getrcpt(msgdata, n, &user, &domain, &mailbox);
-	mydata.cur_rcpt = n;
+	localdata.cur_rcpt = remotedata.cur_rcpt = n;
 
 	if (domain) snprintf(namebuf, sizeof(namebuf), "%s!", domain);
 
@@ -366,72 +477,150 @@ int deliver(message_data_t *msgdata, char *authuser,
 	if (!user) {
 	    strlcat(namebuf, mailbox, sizeof(namebuf));
 
-	    r = deliver_mailbox(msgdata->data, 
-				mydata.stage,
-				msgdata->size, 
-				NULL, 0,
-				mydata.authuser, mydata.authstate,
-				msgdata->id, NULL, mydata.notifyheader,
-				namebuf, quotaoverride, 0);
+	    r = mlookup(namebuf, &server, NULL, NULL);
+	    if (!r && server) {
+		/* remote mailbox */
+		adddest(&remotedata, rcpt, server, namebuf,
+			    remotedata.authuser);
+		remotedata.pend[n] = nosieve;
+	    }
+	    else if (!r) {
+		/* local mailbox */
+		r = deliver_mailbox(msgdata->data, 
+				    localdata.stage,
+				    msgdata->size, 
+				    NULL, 0,
+				    localdata.authuser, localdata.authstate,
+				    msgdata->id, NULL, localdata.notifyheader,
+				    namebuf, quotaoverride, 0);
+	    }
 	}
 
 	/* case 2: ordinary user, might have Sieve script */
 	else {
-	    char userbuf[MAX_MAILBOX_NAME+1];
-	    char *tail;
-
 	    strlcat(namebuf, "user.", sizeof(namebuf));
 	    strlcat(namebuf, user, sizeof(namebuf));
-	    tail = namebuf + strlen(namebuf);
 
-	    strlcpy(userbuf, user, sizeof(userbuf));
-	    if (domain) {
-		strlcat(userbuf, "@", sizeof(userbuf));
-		strlcat(userbuf, domain, sizeof(userbuf));
+	    r = mlookup(namebuf, &server, NULL, NULL);
+	    if (!r && server) {
+		/* remote mailbox */
+		adddest(&remotedata, rcpt, server, namebuf, authuser);
+		remotedata.pend[n] = nosieve;
 	    }
+	    else if (!r) {
+		/* local mailbox */
+		char userbuf[MAX_MAILBOX_NAME+1];
+		char *tail = namebuf + strlen(namebuf);
+
+		strlcpy(userbuf, user, sizeof(userbuf));
+		if (domain) {
+		    strlcat(userbuf, "@", sizeof(userbuf));
+		    strlcat(userbuf, domain, sizeof(userbuf));
+		}
 
 #ifdef USE_SIEVE
-	    r = run_sieve(user, domain, mailbox, sieve_interp, &mydata);
-	    /* if there was no sieve script, or an error during execution,
-	       r is non-zero and we'll do normal delivery */
+		r = run_sieve(user, domain, mailbox, sieve_interp, &localdata);
+		/* if there was no sieve script, or an error during execution,
+		   r is non-zero and we'll do normal delivery */
 #else
-	    r = 1;		/* normal delivery */
+		r = 1;		/* normal delivery */
 #endif
 
-	    if (r && mailbox) {
-		/* normal delivery to + mailbox */
-		strlcat(namebuf, ".", sizeof(namebuf));
-		strlcat(namebuf, mailbox, sizeof(namebuf));
+		if (r && mailbox) {
+		    /* normal delivery to + mailbox */
+		    strlcat(namebuf, ".", sizeof(namebuf));
+		    strlcat(namebuf, mailbox, sizeof(namebuf));
 		
-		r = deliver_mailbox(msgdata->data, 
-				    mydata.stage, 
-				    msgdata->size, 
-				    NULL, 0, 
-				    mydata.authuser, mydata.authstate,
-				    msgdata->id, userbuf, mydata.notifyheader,
-				    namebuf, quotaoverride, 0);
-	    }
+		    r = deliver_mailbox(msgdata->data, 
+					localdata.stage, 
+					msgdata->size, 
+					NULL, 0, 
+					localdata.authuser,
+					localdata.authstate,
+					msgdata->id, userbuf,
+					localdata.notifyheader,
+					namebuf, quotaoverride, 0);
+		}
 
-	    if (r) {
-		/* normal delivery to INBOX */
-		*tail = '\0';
+		if (r) {
+		    /* normal delivery to INBOX */
+		    *tail = '\0';
 		
-		/* ignore ACL's trying to deliver to INBOX */
-		r = deliver_mailbox(msgdata->data, 
-				    mydata.stage,
-				    msgdata->size, 
-				    NULL, 0, 
-				    mydata.authuser, mydata.authstate,
-				    msgdata->id, userbuf, mydata.notifyheader,
-				    namebuf, quotaoverride, 1);
+		    /* ignore ACL's trying to deliver to INBOX */
+		    r = deliver_mailbox(msgdata->data, 
+					localdata.stage,
+					msgdata->size, 
+					NULL, 0, 
+					localdata.authuser,
+					localdata.authstate,
+					msgdata->id, userbuf,
+					localdata.notifyheader,
+					namebuf, quotaoverride, 1);
+		}
 	    }
 	}
 
 	msg_setrcpt_status(msgdata, n, r);
     }
 
-    append_removestage(mydata.stage);
-    if (mydata.notifyheader) free(mydata.notifyheader);
+    if (remotedata.dlist) {
+	/* run the txns */
+	runme(&remotedata, msgdata);
+
+	/* free the recipient/destination lists */
+	d = remotedata.dlist;
+	while (d) {
+	    struct dest *nextd = d->next;
+	    struct rcpt *rc = d->to;
+   
+	    while (rc) {
+		struct rcpt *nextrc = rc->next;
+		free(rc);
+		rc = nextrc;
+	    }
+	    free(d);
+	    d = nextd;
+	}
+	remotedata.dlist = NULL;
+
+	/* do any sieve error recovery, if needed */
+	for (n = 0; n < nrcpts; n++) {
+	    switch (remotedata.pend[n]) {
+	    case s_wait:
+	    case s_err:
+	    case s_done:
+		/* yikes, we haven't implemented sieve ! */
+		syslog(LOG_CRIT, 
+		       "sieve states reached, but we don't implement sieve");
+		abort();
+	    break;
+	    case nosieve:
+		/* yikes, we never got an answer on this one */
+		syslog(LOG_CRIT, "still waiting for response to rcpt %d",
+		       n);
+		abort();
+		break;
+	    case done:
+		/* good */
+		break;
+	    }
+	}
+
+	/* run the error recovery txns */
+	runme(&remotedata, msgdata);
+
+	/* everything should be in the 'done' state now, verify this */
+	for (n = 0; n < nrcpts; n++) {
+	    assert(remotedata.pend[n] == done || remotedata.pend[n] == s_done);
+	}
+    }
+   
+    /* free remote data */
+    free(remotedata.pend);
+
+    /* free local data */
+    append_removestage(localdata.stage);
+    if (localdata.notifyheader) free(localdata.notifyheader);
 
     return 0;
 }
@@ -465,18 +654,34 @@ void fatal(const char* s, int code)
 void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
+    int i;
+
+    /* close backend connections */
+    i = 0;
+    while (backend_cached && backend_cached[i]) {
+	backend_disconnect(backend_cached[i], &protocol[PROTOCOL_LMTP]);
+	free(backend_cached[i]);
+	i++;
+    }
+    if (backend_cached) free(backend_cached);
+
+    if (mhandle) {
+	mupdate_disconnect(&mhandle);
+    } else {
 #ifdef USE_SIEVE
-    sieve_interp_free(&sieve_interp);
+	sieve_interp_free(&sieve_interp);
 #else
-    if (dupelim)
+	if (dupelim)
 #endif
-	duplicate_done();
+	    duplicate_done();
 
-    mboxlist_close();
-    mboxlist_done();
+	mboxlist_close();
+	mboxlist_done();
 
-    quotadb_close();
-    quotadb_done();
+	quotadb_close();
+	quotadb_done();
+    }
+
 #ifdef HAVE_SSL
     tls_shutdown_serverengine();
 #endif
@@ -495,7 +700,7 @@ void shut_down(int code)
 static int verify_user(const char *user, const char *domain, const char *mailbox,
 		       long quotacheck, struct auth_state *authstate)
 {
-    char namebuf[MAX_MAILBOX_NAME+1] = "";
+    char namebuf[MAX_MAILBOX_NAME+1] = "", *server;
     int r = 0;
 
     if ((!user && !mailbox) ||
@@ -523,9 +728,11 @@ static int verify_user(const char *user, const char *domain, const char *mailbox
 	}
     }
 
-    if (!r) {
+    if (!r) r = mlookup(namebuf, &server, NULL, NULL);
+
+    if (!r && !server) {
 	/*
-	 * check to see if mailbox exists and we can append to it:
+	 * local mailbox, check to see if we can append to it:
 	 *
 	 * - must have posting privileges on shared folders
 	 * - don't care about ACL on INBOX (always allow post)
@@ -534,6 +741,7 @@ static int verify_user(const char *user, const char *domain, const char *mailbox
 	r = append_check(namebuf, MAILBOX_FORMAT_NORMAL, authstate,
 			 !user ? ACL_POST : 0, quotacheck > 0 ? 0 : quotacheck);
     }
+    /* for a remote mailbox, we worry about it later */
 
     if (r) syslog(LOG_DEBUG, "verify_user(%s) failed: %s", namebuf,
 		  error_message(r));
@@ -585,13 +793,15 @@ FILE *spoolfile(message_data_t *msgdata)
     int i, n;
     time_t now = time(NULL);
     FILE *f = NULL;
+    struct stagemsg *stage = NULL;
 
-    /* spool to the stage of one of the recipients */
-    n = msg_getnumrcpt(msgdata);
+    /* spool to the stage of one of the recipients
+       (don't bother if we're only a proxy) */
+    n = mhandle ? 0 : msg_getnumrcpt(msgdata);
     for (i = 0; !f && (i < n); i++) {
-	int r = 0;
-	char namebuf[MAX_MAILBOX_NAME+1] = "";
+	char namebuf[MAX_MAILBOX_NAME+1] = "", *server;
 	const char *user, *domain, *mailbox;
+	int r;
 
 	/* build the mailboxname from the recipient address */
 	msg_getrcpt(msgdata, i, &user, &domain, &mailbox);
@@ -609,20 +819,20 @@ FILE *spoolfile(message_data_t *msgdata)
 	    strlcat(namebuf, "user.", sizeof(namebuf));
 	    strlcat(namebuf, user, sizeof(namebuf));
 	}
-#if 0
-	/* case 3: unable to handle rcpt */
-	else {
-	    /* force error and we'll fallback to using /tmp */
-	    r = 1;
-	}
-#endif
-	if (!r) {
-	    struct stagemsg *stage = NULL;
 
-	    /* setup stage for later use by deliver() */
-	    f = append_newstage(namebuf, now, 0, &stage);
-	    msg_setrock(msgdata, (void*) stage);
+	r = mlookup(namebuf, &server, NULL, NULL);
+	if (!r && !server) {
+	  /* local mailbox -- setup stage for later use by deliver() */
+	  f = append_newstage(namebuf, now, 0, &stage);
 	}
+    }
+
+    if (f) {
+	/* found a stage */
+	msg_setrock(msgdata, (void*) stage);
+    } else {
+	/* we only have remote mailboxes, so use a tmpfile */
+	f = tmpfile();
     }
 
     return f;

@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.175.2.8 2004/02/08 20:47:30 ken3 Exp $
+# $Id: Makefile.in,v 1.175.2.9 2004/02/14 16:15:11 ken3 Exp $
 # 
 # @configure_input@
 # 
@@ -104,7 +104,7 @@ LOBJS= append.o mailbox.o mboxlist.o mupdate-client.o mboxname.o message.o \
 
 IMAPDOBJS=pushstats.o backend.o imapd.o imap_proxy.o index.o tls.o version.o
 
-LMTPOBJS=lmtpstats.o lmtpengine.o spool.o tls.o
+LMTPOBJS=lmtpstats.o lmtpengine.o backend.o spool.o tls.o
 
 # Your typical objects for the command line utilities
 CLIOBJS=cli_fatal.o mutex_fake.o
@@ -124,7 +124,7 @@ BUILTSOURCES = imap_err.c imap_err.h pushstats.c pushstats.h \
 
 all: $(BUILTSOURCES) $(PROGS) $(SUIDPROGS)
 
-pure: imapd.pure lmtpd.pure mupdate.pure lmtpproxyd.pure
+pure: imapd.pure lmtpd.pure mupdate.pure
 
 
 install:
@@ -185,29 +185,17 @@ idled: idled.o mutex_fake.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o idled \
 	 idled.o mutex_fake.o libimap.a $(DEPLIBS) $(LIBS)
 
-lmtpd: lmtpd.o $(LMTPOBJS) $(SIEVE_OBJS) mutex_fake.o libimap.a $(SIEVE_LIBS) \
-	$(DEPLIBS) $(SERVICE)
+lmtpd: lmtpd.o lmtp_proxy.o $(LMTPOBJS) $(SIEVE_OBJS) mutex_fake.o \
+	 libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o lmtpd \
-	 $(SERVICE) lmtpd.o $(LMTPOBJS) $(SIEVE_OBJS) mutex_fake.o \
-	 libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(LIBS) $(LIB_WRAP)
+	 $(SERVICE) lmtpd.o lmtp_proxy.o $(LMTPOBJS) $(SIEVE_OBJS) \
+	 mutex_fake.o libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
-lmtpd.pure: lmtpd.o $(LMTPOBJS) $(SIEVE_OBJS) mutex_fake.o \
-	libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(SERVICE)
+lmtpd.pure: lmtpd.o lmtp_proxy.o $(LMTPOBJS) $(SIEVE_OBJS) mutex_fake.o \
+	 libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(SERVICE)
 	$(PURIFY) $(PUREOPT) $(CC) $(LDFLAGS) -o lmtpd.pure \
-	 $(SERVICE) lmtpd.o $(LMTPOBJS) $(SIEVE_OBJS) mutex_fake.o \
-	 libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(LIBS) $(LIB_WRAP)
-
-lmtpproxyd: lmtpproxyd.o backend.o $(LMTPOBJS) mutex_fake.o \
-	libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(SERVICE)
-	$(CC) $(LDFLAGS) -o lmtpproxyd \
-	 $(SERVICE) lmtpproxyd.o backend.o $(LMTPOBJS) mutex_fake.o \
-	 libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(LIBS) $(LIB_WRAP)
-
-lmtpproxyd.pure: lmtpproxyd.o backend.o $(LMTPOBJS) mutex_fake.o \
-	libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(SERVICE)
-	$(PURIFY) $(PUREOPT) $(CC) $(LDFLAGS) -o lmtpproxyd.pure \
-	 $(SERVICE) lmtpproxyd.o backend.o $(LMTPOBJS) mutex_fake.o \
-	 libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(LIBS) $(LIB_WRAP)
+	 $(SERVICE) lmtpd.o lmtp_proxy.o $(LMTPOBJS) $(SIEVE_OBJS) \
+	 mutex_fake.o libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
 imapd: xversion $(IMAPDOBJS) mutex_fake.o libimap.a $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o imapd \
@@ -268,8 +256,8 @@ chk_cyrus: chk_cyrus.o mutex_fake.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o chk_cyrus chk_cyrus.o $(CLIOBJS) \
 	libimap.a $(DEPLIBS) $(LIBS)
 
-deliver: deliver.o backend.o $(LMTPOBJS) mutex_fake.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o deliver deliver.o backend.o $(LMTPOBJS) \
+deliver: deliver.o $(LMTPOBJS) mutex_fake.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o deliver deliver.o $(LMTPOBJS) \
 	mutex_fake.o libimap.a $(DEPLIBS) $(LIBS)
 
 ctl_deliver: ctl_deliver.o $(CLIOBJS) libimap.a $(DEPLIBS)
