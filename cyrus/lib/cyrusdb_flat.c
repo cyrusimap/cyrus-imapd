@@ -154,6 +154,11 @@ static int mysync(void)
     return 0;
 }
 
+static int myarchive(const char *dirname)
+{
+    return 0;
+}
+
 static int myopen(const char *fname, struct db **ret)
 {
     struct db *db = (struct db *) xmalloc(sizeof(struct db));
@@ -565,6 +570,7 @@ struct cyrusdb_backend cyrusdb_flat =
     &init,
     &done,
     &mysync,
+    &myarchive,
 
     &myopen,
     &myclose,

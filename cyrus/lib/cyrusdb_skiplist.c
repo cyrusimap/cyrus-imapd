@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.14 2002/02/02 01:06:38 leg Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.15 2002/02/05 21:34:18 ken3 Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -223,6 +223,11 @@ static int mydone(void)
 }
 
 static int mysync(void)
+{
+    return 0;
+}
+
+static int myarchive(const char *dirname)
 {
     return 0;
 }
@@ -1829,6 +1834,7 @@ struct cyrusdb_backend cyrusdb_skiplist =
     &myinit,
     &mydone,
     &mysync,
+    &myarchive,
 
     &myopen,
     &myclose,

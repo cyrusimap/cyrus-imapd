@@ -76,8 +76,10 @@ Read configuration options from \fIconfig-file\fR.
 Recover the databases after an application or system failure.
 .TP
 .B \-c
-Checkpoint the databases.  Changes to the database which are part of
-committed transactions are written to disk. 
+Checkpoint and archive the databases.  Changes to the database which
+are part of committed transactions are written to disk.  Also, a
+\fIhot\fR backup of the databases is made and inactive log files are
+removed.
 .SH FILES
 .TP
 .B /etc/imapd.conf

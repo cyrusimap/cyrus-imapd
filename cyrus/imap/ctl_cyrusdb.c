@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ctl_cyrusdb.c,v 1.6 2002/01/25 19:26:54 leg Exp $
+ * $Id: ctl_cyrusdb.c,v 1.7 2002/02/05 21:34:17 ken3 Exp $
  */
 
 #include <config.h>
@@ -56,6 +56,23 @@
 #include <com_err.h>
 #include <errno.h>
 #include <time.h>
+
+#if HAVE_DIRENT_H
+# include <dirent.h>
+# define NAMLEN(dirent) strlen((dirent)->d_name)
+#else
+# define dirent direct
+# define NAMLEN(dirent) (dirent)->d_namlen
+# if HAVE_SYS_NDIR_H
+#  include <sys/ndir.h>
+# endif
+# if HAVE_SYS_DIR_H
+#  include <sys/dir.h>
+# endif
+# if HAVE_NDIR_H
+#  include <ndir.h>
+# endif
+#endif
 
 #include "util.h"
 #include "imapconf.h"
@@ -102,7 +119,7 @@ main(argc, argv)
     char *alt_config = NULL;
     int flag = 0;
     enum { RECOVER, CHECKPOINT, NONE } op = NONE;
-    char dirname[1024];
+    char dirname[1024], backup1[1024], backup2[1024];
     char *msg = "";
     int i;
 
@@ -145,6 +162,12 @@ main(argc, argv)
     strcpy(dirname, config_dir);
     strcat(dirname, FNAME_DBDIR);
 
+    /* create the names of the backup directories */
+    strcpy(backup1, dirname);
+    strcat(backup1, ".backup1/");
+    strcpy(backup2, dirname);
+    strcat(backup2, ".backup2/");
+
     syslog(LOG_NOTICE, "%s", msg);
     for (i = 0; dbenvs[i] != NULL; i++) {
 	r = (dbenvs[i])->init(dirname, flag);
@@ -171,6 +194,53 @@ main(argc, argv)
 		fprintf(stderr, 
 			"ctl_cyrusdb: unable to sync environment\n");
 	    }
+
+	    /* ARCHIVE */
+	    r2 = 0;
+
+	    /* only rotate the backup the first time through */
+	    if (i == 0) {
+		char *tail;
+		DIR *dirp;
+		struct dirent *dirent;
+
+		tail = backup2 + strlen(backup2);
+
+		/* remove db.backup2 */
+		dirp = opendir(backup2);
+		if (dirp) {
+		    while ((dirent = readdir(dirp)) != NULL) {
+			if (dirent->d_name[0] == '.') continue;
+
+			strcpy(tail, dirent->d_name);
+			unlink(backup2);
+		    }
+
+		    closedir(dirp);
+		}
+		*tail = '\0';
+		r2 = rmdir(backup2);
+
+		/* move db.backup1 to db.backup2 */
+		if (r2 == 0 || errno == ENOENT)
+		    r2 = rename(backup1, backup2);
+
+		/* make a new db.backup1 */
+		if (r2 == 0 || errno == ENOENT)
+		    r2 = mkdir(backup1, 0755);
+	    }
+
+	    /* do the archive */
+	    if (r2 == 0)
+		r2 = (dbenvs[i])->archive(backup1);
+
+	    if (r2) {
+		syslog(LOG_ERR, "DBERROR: archive %s: %s", dirname,
+		       cyrusdb_strerror(r));
+		fprintf(stderr, 
+			"ctl_cyrusdb: unable to archive environment\n");
+	    }
+
 	    break;
 	    
 	default:
