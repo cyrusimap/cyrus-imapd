@@ -1534,8 +1534,8 @@ char *to;
 {
     int srcfd, destfd;
     struct stat sbuf;
-    char *src_base;
-    unsigned long src_size;
+    char *src_base = 0;
+    unsigned long src_size = 0;
     int n;
 
     if (link(from, to) == 0) return 0;
