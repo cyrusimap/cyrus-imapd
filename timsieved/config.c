@@ -29,6 +29,11 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <ctype.h>
 #include <syslog.h>
 #include <com_err.h>
+#include <string.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+
 
 #include "config.h"
 #include "exitcodes.h"
@@ -54,8 +59,7 @@ int config_hashimapspool;
 
 static void config_read P((void));
 
-config_init(ident)
-const char *ident;
+int config_init(const char *ident)
 {
     char buf[100];
     char *p;
@@ -80,10 +84,10 @@ const char *ident;
     /* Look up default partition */
     config_defpartition = config_getstring("defaultpartition", "default");
     for (p = (char *)config_defpartition; *p; p++) {
-	if (!isalnum(*p))
+	if (!isalnum((int) *p))
 	  fatal("defaultpartition option contains non-alphanumeric character",
 		EC_CONFIG);
-	if (isupper(*p)) *p = tolower(*p);
+	if (isupper((int) *p)) *p = tolower((int) *p);
     }
     if (!config_partitiondir(config_defpartition)) {
 	sprintf(buf, "partition-%s option not specified in configuration file",
@@ -122,20 +126,16 @@ const char *def;
     return def;
 }
 
-config_getint(key, def)
-const char *key;
-int def;
+int config_getint(const char *key, int def)
 {
     const char *val = config_getstring(key, (char *)0);
 
     if (!val) return def;
-    if (!isdigit(*val) && (*val != '-' || !isdigit(val[1]))) return def;
+    if (!isdigit((int) *val) && (*val != '-' || !isdigit((int) val[1]))) return def;
     return atoi(val);
 }
 
-config_getswitch(key, def)
-const char *key;
-int def;
+int config_getswitch(const char *key, int def)
 {
     const char *val = config_getstring(key, (char *)0);
 
@@ -152,8 +152,7 @@ int def;
     return def;
 }
 
-const char *config_partitiondir(partition)
-const char *partition;
+const char *config_partitiondir(const char *partition)
 {
     char buf[80];
 
@@ -185,12 +184,12 @@ config_read()
 	lineno++;
 
 	if (buf[strlen(buf)-1] == '\n') buf[strlen(buf)-1] = '\0';
-	for (p = buf; *p && isspace(*p); p++);
+	for (p = buf; *p && isspace((int) *p); p++);
 	if (!*p || *p == '#') continue;
 
 	key = p;
-	while (*p && (isalnum(*p) || *p == '-' || *p == '_')) {
-	    if (isupper(*p)) *p = tolower(*p);
+	while (*p && (isalnum((int) *p) || *p == '-' || *p == '_')) {
+	    if (isupper((int) *p)) *p = tolower((int) *p);
 	    p++;
 	}
 	if (*p != ':') {
@@ -201,7 +200,7 @@ config_read()
 	}
 	*p++ = '\0';
 
-	while (*p && isspace(*p)) p++;
+	while (*p && isspace((int) *p)) p++;
 	
 	if (!*p) {
 	    sprintf(buf, "empty option value on line %d of configuration file",

@@ -42,14 +42,20 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <unistd.h>
+#include <ctype.h>
 
+#include "config.h"
+#include "actions.h"
+#include "parser.h"
+#include "lex.h"
+#include "mystring.h"
+#include "codes.h"
+
+#include "auth.h"
 #include "prot.h"
 #include "xmalloc.h"
 
-#include "lex.h"
-#include "mystring.h"
-
-#include "codes.h"
 
 sasl_conn_t *sieved_saslconn; /* the sasl connection context */
 
@@ -88,7 +94,7 @@ void cmdloop()
 
   while (1)
   {
-    timparse(sieved_in);
+    parser(sieved_out, sieved_in);
   }
 }
 
@@ -104,7 +110,9 @@ void fatal(const char *s, int code)
     recurse_code = code;
     prot_printf(sieved_out, "NO Fatal error: %s\r\n", s);
     prot_flush(sieved_out);
+
     exit(1);
+
 }
 
 /* This creates a structure that defines the allowable
@@ -164,6 +172,8 @@ static int mysasl_config(void *context,
     return SASL_FAIL;
 }
 
+#if 0
+
 /* returns true if imapd_authstate is in "item";
    expected: item = admins or proxyservers */
 static int authisa(const char *item)
@@ -172,18 +182,18 @@ static int authisa(const char *item)
     return 0;
 }
 
+
 /* should we allow users to proxy?  return SASL_OK if yes,
    SASL_BADAUTH otherwise */
-static mysasl_authproc(void *context,
+static int mysasl_authproc(void *context,
 		       const char *auth_identity,
 		       const char *requested_user,
 		       const char **user,
 		       const char **errstr)
 {
-    char *p;
     const char *val;
     char *canon_authuser, *canon_requser;
-    char *username=NULL, *realm;
+    char *realm;
     static char replybuf[100];
 
     canon_authuser = (char *) auth_canonifyid(auth_identity);
@@ -201,17 +211,17 @@ static mysasl_authproc(void *context,
     canon_requser = xstrdup(canon_requser);
 
     /* check if remote realm */
-    if (realm = strchr(canon_authuser, '@')) {
+    if ((realm = strchr(canon_authuser, '@'))!=NULL) {
 	realm++;
 	val = (const char *) config_getstring("loginrealms", "");
 	while (*val) {
 	    if (!strncasecmp(val, realm, strlen(realm)) &&
-		(!val[strlen(realm)] || isspace(val[strlen(realm)]))) {
+		(!val[strlen(realm)] || isspace((int) val[strlen(realm)]))) {
 		break;
 	    }
 	    /* not this realm, try next one */
-	    while (*val && !isspace(*val)) val++;
-	    while (*val && isspace(*val)) val++;
+	    while (*val && !isspace((int) *val)) val++;
+	    while (*val && isspace((int) *val)) val++;
 	}
 	if (!*val) {
 	    snprintf(replybuf, 100, "cross-realm login %s denied", 
@@ -225,23 +235,9 @@ static mysasl_authproc(void *context,
     sieved_userisadmin = authisa("admins");
 
     if (strcmp(canon_authuser, canon_requser)) {
-	/* we want to authenticate as a different user; we'll allow this
-	   if we're an admin or if we've allowed ACL proxy logins */
-	int use_acl = config_getswitch("loginuseacl", 0);
+      /* we want to authenticate as a different user; we'll NEVER allow this */
 
-	if (sieved_userisadmin)
-	{	    
-	    /* proxy ok! */
-
-	    sieved_userisadmin = 0;	/* no longer admin */
-	} else {
-	    *errstr = "user is not allowed to proxy";
-	    
-	    free(canon_authuser);
-	    free(canon_requser);
-	    
-	    return SASL_BADAUTH;
-	}
+      return SASL_BADAUTH;
     }
 
     free(canon_authuser);
@@ -249,6 +245,7 @@ static mysasl_authproc(void *context,
     *errstr = NULL;
     return SASL_OK;
 }
+#endif /* 0 */
 
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
@@ -258,10 +255,7 @@ static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
-main(argc, argv, envp)
-int argc;
-char **argv;
-char **envp;
+int main(int argc, char **argv, char **envp)
 {
     int salen;
     struct hostent *hp;
@@ -290,8 +284,8 @@ char **envp;
     salen = sizeof(sieved_remoteaddr);
     if (getpeername(0, (struct sockaddr *)&sieved_remoteaddr, &salen) == 0 &&
 	sieved_remoteaddr.sin_family == AF_INET) {
-	if (hp = gethostbyaddr((char *)&sieved_remoteaddr.sin_addr,
-			       sizeof(sieved_remoteaddr.sin_addr), AF_INET)) {
+	if ((hp = gethostbyaddr((char *)&sieved_remoteaddr.sin_addr,
+			       sizeof(sieved_remoteaddr.sin_addr), AF_INET))!=NULL) {
 	    strncpy(sieved_clienthost, hp->h_name, sizeof(sieved_clienthost)-30);
 	    sieved_clienthost[sizeof(sieved_clienthost)-30] = '\0';
 	}
@@ -335,6 +329,9 @@ char **envp;
       fatal("Error initializing actions",-1);
 
     cmdloop();
+
+    /* never reaches */
+    return -99;
 }
 
 
