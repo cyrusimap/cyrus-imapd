@@ -22,8 +22,14 @@
  *
  */
 
+#include <limits.h>
+#include <stdio.h>
 #include <ctype.h>
 #include <krb.h>
+
+#ifndef KRB_MAPNAME
+#define KRB_MAPNAME "/etc/krb.equiv"
+#endif
 
 static char auth_userid[MAX_K_NAME_SZ+1] = "anonymous";
 static char auth_aname[ANAME_SZ] = "anonymous";
@@ -70,6 +76,119 @@ char *identifier;
 }
 
 /*
+ * Parse a line 'src' from an /etc/krb.equiv file.
+ * Sets the buffer pointed to by 'principal' to be the kerberos
+ * identity and sets the buffer pointed to by 'localuser' to
+ * be the local user.  Both buffers must be of size one larger than
+ * MAX_K_NAME_SZ.  Returns 1 on success, 0 on failure.
+ */
+static int
+parse_krbequiv_line(src, principal, localuser)
+char *src;
+char *principal;
+char *localuser;
+{
+    int i;
+    char *identifier, *p;
+    char aname[ANAME_SZ];
+    char inst[INST_SZ];
+    char realm[REALM_SZ];
+    char lrealm[REALM_SZ];
+    char krbhst[MAX_HSTNM];
+
+    while (isspace(*src)) src++;
+    if (!*src) return 0;
+
+    for (i = 0; *src && !isspace(*src); i++) {
+	if (i >= MAX_K_NAME_SZ) return 0;
+	*principal++ = *src++;
+    }
+    *principal = 0;
+
+    if (!isspace(*src)) return 0; /* Need at least one separator */
+    while (isspace(*src)) src++;
+    if (!*src) return 0;
+  
+    identifier = src;
+    while (*src && !isspace(*src)) src++;
+    *src = '\0';
+    aname[0] = inst[0] = realm[0] = '\0';
+    if (kname_parse(aname, inst, realm, identifier) != 0) {
+	return 0;
+    }
+
+    /* Upcase realm name */
+    for (p = realm; *p; p++) {
+	if (islower(*p)) *p = toupper(*p);
+    }
+
+    if (*realm) {
+	if (krb_get_lrealm(lrealm,1)) {
+	    return 0;		/* configuration error */
+	}
+	if (strcmp(lrealm, realm) == 0) {
+	    *realm = 0;
+	}
+	else if (krb_get_krbhst(krbhst, realm, 0)) {
+	    return 0;		/* Unknown realm */
+	}
+    }
+
+    strcpy(localuser, aname);
+    if (*inst) {
+	strcat(localuser, ".");
+	strcat(localuser, inst);
+    }
+    if (*realm) {
+	strcat(localuser, "@");
+	strcat(localuser, realm);
+    }
+    return 1;
+}
+
+/*
+ * Map a remote kerberos principal to a local username.  If a mapping
+ * is found, a pointer to the local username is returned.  Otherwise,
+ * a NULL pointer is returned.
+ * Eventually, this may be more sophisticated than a simple file scan.
+ */
+char *auth_map_krbid(real_aname, real_inst, real_realm)
+char *real_aname;
+char *real_inst;
+char *real_realm;
+{
+    static char localuser[MAX_K_NAME_SZ + 1];
+    char principal[MAX_K_NAME_SZ + 1];
+    char aname[ANAME_SZ];
+    char inst[INST_SZ];
+    char realm[REALM_SZ];
+    char buf[1024];
+    FILE *mapfile;
+
+    if (!(mapfile = fopen(KRB_MAPNAME, "r"))) {
+	/* If the file can't be opened, don't do mappings */
+	return 0;
+    }
+
+    for (;;) {
+	if (!fgets(buf, sizeof(buf), mapfile)) break;
+	if (parse_krbequiv_line(buf, principal, localuser) == 0 ||
+	    kname_parse(aname, inst, realm, principal) != 0) {
+	    /* Ignore badly formed lines */
+	    continue;
+	}
+	if (!strcmp(aname, real_aname) && !strcmp(inst, real_inst) &&
+	    !strcmp(realm, real_realm)) {
+	    fclose(mapfile);
+	    return localuser;
+	}
+    }
+
+    fclose(mapfile);
+    return 0;
+}
+
+/*
  * Convert 'identifier' into canonical form.
  * Returns a pointer to a static buffer containing the canonical form
  * or NULL if 'identifier' is invalid.
@@ -112,6 +231,12 @@ char *identifier;
 	else if (krb_get_krbhst(krbhst, realm, 0)) {
 	    return 0;		/* Unknown realm */
 	}
+    }
+
+    /* Check for krb.equiv remappings. */
+    if (p = auth_map_krbid(aname, inst, realm)) {
+        strcpy(retbuf, p);
+        return retbuf;
     }
 
     strcpy(retbuf, aname);
