@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.35 1998/05/12 01:10:13 tjs Exp $ -->
+<!-- $Id: changes.html,v 1.36 1998/05/13 15:34:10 wcw Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -13,14 +13,19 @@
 	  the existing <tt>delivered.db</tt> and <tt>ptscache.db</tt>
 	  is <b>NOT</b> compatible with this release. 
 
+<li> Provide two debugging programs that dump the databases:
+	  <tt>ptdump</tt> and <tt>dump_deliverdb</tt>.
+
+<li> Multiple changes to ptloader. added a bunch of flags; let it
+	  reauthenticate on its own; added support perl wrapper; added
+	  bunch of debugging information/output; bunch of other cleanups
+
 <li> The mailboxes file is now closed if it isn't likely to be referenced,
 	  hopefully preventing old mailboxes files from hanging around in
 	  memory as frequently.
 
 <li> Added a patch from Eric Haberg to work around a possible deadlock
 	  condition in mboxlist.c where rename isn't atomic.
-
-<li> Fixes to ptloader including the removal of some core leaks.
 
 <li> Patch from John Myers to get rid of cyrus.seen corruption in
 	  bsearch_mem.
@@ -498,7 +503,7 @@ restore tab before breaking out of loop.
 </ul>
 <P><HR><P>
 <!-- hhmts start -->
-Last modified: Mon May 11 19:45:43 EDT 
+Last modified: Wed May 13 11:31:34 EDT 
 <!-- hhmts end -->
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
