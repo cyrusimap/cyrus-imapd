@@ -49,7 +49,7 @@
  */
 
 /*
- * $Id: nntpd.c,v 1.1.2.2 2002/09/23 20:32:53 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.3 2002/09/24 16:24:51 ken3 Exp $
  */
 #include <config.h>
 
@@ -458,7 +458,7 @@ void fatal(const char* s, int code)
     }
     recurse_code = code;
     if (nntp_out) {
-	prot_printf(nntp_out, "503 Fatal error: %s\r\n", s);
+	prot_printf(nntp_out, "400 Fatal error: %s\r\n", s);
 	prot_flush(nntp_out);
     }
     shut_down(code);
@@ -481,7 +481,7 @@ static void cmdloop(void)
 	if (c == EOF) {
 	    if ((err = prot_error(nntp_in))!=NULL) {
 		syslog(LOG_WARNING, "%s, closing connection", err);
-		prot_printf(nntp_out, "205 %s\r\n", err);
+		prot_printf(nntp_out, "400 %s\r\n", err);
 	    }
 	    return;
 	}
@@ -497,7 +497,7 @@ static void cmdloop(void)
 	    if (c == '\r') c = prot_getc(nntp_in);
 	    if (c != '\n') goto extraargs;
 
-	    prot_printf(nntp_out, "205\r\n");
+	    prot_printf(nntp_out, "205 Bye\r\n");
 	    return;
 	}
 	else if (!strcmp(cmd.s, "date")) {
@@ -670,7 +670,7 @@ static void cmdloop(void)
 	continue;
 
       missingargs:
-	prot_printf(nntp_out, "501 missing argument\r\n");
+	prot_printf(nntp_out, "501 Missing argument\r\n");
 	eatline(nntp_in, c);
 	continue;
 
@@ -888,7 +888,7 @@ void cmd_mode(char *arg)
 	prot_printf(nntp_out, "200 Cyrus NNTP ready, posting allowed\r\n");
     }
     else {
-	prot_printf(nntp_out, "501 Unrecognized MODE\r\n");
+	prot_printf(nntp_out, "500 Unrecognized MODE\r\n");
     }
     prot_flush(nntp_out);
 }
@@ -967,7 +967,7 @@ void cmd_list(char *arg1, char *arg2)
 	prot_printf(nntp_out, ".\r\n");
     }
     else {
-	prot_printf(nntp_out, "501 Unrecognized LIST command\r\n");
+	prot_printf(nntp_out, "500 Unrecognized LIST command\r\n");
     }
     prot_flush(nntp_out);
 }
@@ -1064,9 +1064,8 @@ static void cmd_article(unsigned long uid, int part)
 		if (buf[0] == '.') prot_putc('.', nntp_out);
 		do {
 		    prot_printf(nntp_out, "%s", buf);
-		}
-		while (buf[strlen(buf)-1] != '\n' &&
-		       fgets(buf, sizeof(buf), msgfile));
+		} while (buf[strlen(buf)-1] != '\n' &&
+			 fgets(buf, sizeof(buf), msgfile));
 	    }
 	}
 
