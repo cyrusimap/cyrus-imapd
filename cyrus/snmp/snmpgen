@@ -40,7 +40,7 @@
 #
 exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #!perl -w
-# $Id: snmpgen,v 1.15.4.1 2004/06/24 15:16:34 ken3 Exp $
+# $Id: snmpgen,v 1.15.4.2 2004/11/26 21:49:44 ken3 Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -227,7 +227,11 @@ print OUTPUT_H <<EOF
 #define snmp_connect()
 #define snmp_close()
 #define snmp_increment(a, b)
+#ifdef __GNUC__
 #define snmp_increment_args(args...)
+#else
+#define snmp_increment_args(args)
+#endif
 #define snmp_set(a, b)
 #define snmp_set_str(a, b)
 #define snmp_set_oid(a, b)
