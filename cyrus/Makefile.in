@@ -62,7 +62,7 @@ YACC = @YACC@
 LEX = @LEX@
 COMPILE_ET = @COMPILE_ET@
 
-VERSION = 2.2.3-UNIFIED
+VERSION = 2.3-prealpha
 
 all:: 
 	@for d in  $(SUBDIRS); \
@@ -93,7 +93,7 @@ distcvs:
 	if [ \! -d dist ]; then mkdir dist ; fi
 	@echo "checking out the distribution"
 	@cd dist ; cvs -Q -d :pserver:anoncvs@cvs.andrew.cmu.edu:/cvs \
-		co -r unified-imapd -d cyrus-imapd-$(VERSION) cyrus
+		co -r cyrus-imapd-2_3 -d cyrus-imapd-$(VERSION) cyrus
 	touch distcvs
 
 install::
