@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.48 2002/02/12 16:37:02 rjs3 Exp $
+ * $Id: mupdate.c,v 1.49 2002/02/15 20:09:32 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -425,15 +425,15 @@ void cmdloop(struct conn *c)
     memset(&arg2, 0, sizeof(struct buf));
     memset(&arg3, 0, sizeof(struct buf));
 
-    ret=sasl_listmech(c->saslconn, NULL, "\r\n* AUTH ", " ", "", &mechs,
-		      NULL, &mechcount);
+    ret=sasl_listmech(c->saslconn, NULL, "* AUTH \"", "\" \"", "\"",
+		      &mechs, NULL, &mechcount);
 
-    /* AUTH banner is mandatory, even if empty */
+    /* AUTH banner is mandatory */
     prot_printf(c->pout,
-		"* OK MUPDATE \"%s\" \"Cyrus Murder\" \"%s\" \"%s\"%s\r\n", 
-		config_servername,
-		CYRUS_VERSION, masterp ? "(master)" : "(slave)",
-		(ret == SASL_OK && mechcount > 0) ? mechs : "* AUTH");
+	       "%s\r\n* OK MUPDATE \"%s\" \"Cyrus Murder\" \"%s\" \"%s\"\r\n",
+    	       (ret == SASL_OK && mechcount > 0) ? mechs : "* AUTH",
+	       config_servername,
+	       CYRUS_VERSION, masterp ? "(master)" : "(slave)");
     for (;;) {
 	int ch;
 	char *p;
