@@ -47,7 +47,7 @@ cyradm: cyradmapp.o cyradm.o cyrinit.o cyrmain.o $(DEPLIBS)
 		$(DEPLIBS) $(LIBS)
 
 cyrinit.c: cyrinit.tcl cyrinit.sed
-	sed -f $(srcdir)/cyrinit.sed $< >,cyrinit.c
+	sed -f $(srcdir)/cyrinit.sed $(srcdir)/cyrinit.tcl >,cyrinit.c
 	mv ,cyrinit.c cyrinit.c
 
 clean:
