@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.36 2002/07/24 19:30:39 rjs3 Exp $
+   $Id: seen_db.c,v 1.37 2002/08/13 16:46:33 rjs3 Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -239,8 +239,7 @@ static int seen_readold(struct seen *seendb,
     while (p < base + offset + linelen && !isspace((int) *p)) p++;
 
     *seenuidsptr = xmalloc(p - buf + 1);
-    strlcpy(*seenuidsptr, buf, p - buf);
-    (*seenuidsptr)[p - buf] = '\0';
+    strlcpy(*seenuidsptr, buf, p - buf + 1);
 
     map_free(&base, &len);
     close(fd);

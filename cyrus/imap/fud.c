@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.33 2002/07/24 19:30:32 rjs3 Exp $ */
+/* $Id: fud.c,v 1.34 2002/08/13 16:46:32 rjs3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -124,14 +124,16 @@ int begin_handling(void)
 		return(errno);
 	    }
             for(off = 0; buf[off] != '|' && off < MAXLOGNAME; off++);
-            if(off < MAXLOGNAME) {
-		strlcpy(username,buf,off);
+            if(off > 0 && off < MAXLOGNAME) {
+		strncpy(username,buf,off);
+		username[off] = '\0';
             } else {
 		continue;
             }
+
+	    /* Copy what is past the | to the mailbox name */
             q = buf + off + 1;
-            strlcpy(mbox,q,(r - (off + 1)  < MAX_MAILBOX_NAME) ? 
-		    r - (off + 1) : MAX_MAILBOX_NAME);
+            strlcpy(mbox, q, sizeof(mbox));
 
             handle_request(username,mbox,sfrom);
         }

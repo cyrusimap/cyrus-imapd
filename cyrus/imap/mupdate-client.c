@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.32 2002/04/05 19:52:27 rjs3 Exp $
+ * $Id: mupdate-client.c,v 1.33 2002/08/13 16:46:33 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -535,8 +535,8 @@ static int mupdate_find_cb(struct mupdate_mailboxdata *mdata,
 
     /* coyp the data to the handle storage */
     /* xxx why can't we just point to the 'mdata' buffers? */
-    strlcpy(h->mailbox_buf, mdata->mailbox, MAX_MAILBOX_NAME);
-    strlcpy(h->server_buf, mdata->server, MAX_MAILBOX_NAME);
+    strlcpy(h->mailbox_buf, mdata->mailbox, sizeof(h->mailbox_buf));
+    strlcpy(h->server_buf, mdata->server, sizeof(h->server_buf));
 
     if(!strncmp(cmd, "MAILBOX", 7)) {
 	int len = strlen(mdata->acl) + 1;

@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squatter.c,v 1.6 2002/07/24 19:30:39 rjs3 Exp $
+ * $Id: squatter.c,v 1.7 2002/08/13 16:46:33 rjs3 Exp $
  */
 
 /*
@@ -462,12 +462,12 @@ int main(int argc, char **argv)
     }
 
     for (i = optind; i < argc; i++) {
-        strlcpy(buf, argv[i], MAX_MAILBOX_NAME);
+        strlcpy(buf, argv[i], sizeof(buf));
 	/* Translate any separators in mailboxname */
 	mboxname_hiersep_tointernal(&squat_namespace, buf);
 	index_me(buf, 0, 0, NULL);
 	if (rflag) {
-	    strlcat(buf, ".*", MAX_MAILBOX_NAME);
+	    strlcat(buf, ".*", sizeof(buf));
 	    (*squat_namespace.mboxlist_findall)(&squat_namespace, buf, 1,
 						0, 0, index_me, NULL);
 	}
