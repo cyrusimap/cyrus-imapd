@@ -1,9 +1,9 @@
 #!/bin/sh
 #
-# xversion.sh: extract the timestamp from the $Id: xversion.sh,v 1.2 2001/10/22 16:35:16 ken3 Exp $ string
+# xversion.sh: extract the timestamp from the Id: string
 # in every source file and use the most recent as the CVSDATE
 #
-# $Id: xversion.sh,v 1.2 2001/10/22 16:35:16 ken3 Exp $
+# $Id: xversion.sh,v 1.3 2001/10/22 16:36:05 ken3 Exp $
 
 DATEPAT=[1-2][0-9][0-9][0-9]/[0-1][0-9]/[0-3][0-9]
 TIMEPAT=[0-2][0-9]:[0-5][0-9]:[0-5][0-9]
@@ -14,7 +14,7 @@ echo >> xversion.h
 echo -n "#define CVSDATE " >> xversion.h
 
 find .. -name '*.[chly]' -print | \
-	xargs egrep '\$Id: xversion.sh,v 1.2 2001/10/22 16:35:16 ken3 Exp $' | \
+	xargs egrep '\$Id: xversion.sh,v 1.3 2001/10/22 16:36:05 ken3 Exp $' | \
 	awk ' # extract timestamp and surround with quotes
 	match ($0, pattern) {
 	    printf "\"%s\"\n", substr($0, RSTART, RLENGTH)
