@@ -162,6 +162,8 @@ AC_ARG_WITH(krb4-include,
 	  AC_CHECK_LIB(resolv, dns_lookup, KRB_LIB_FLAGS="${KRB_LIB_FLAGS} -lresolv",,"${KRB_LIB_FLAGS}")
 	  AC_CHECK_LIB(crypt, crypt, KRB_LIB_FLAGS="${KRB_LIB_FLAGS} -lcrypt",,"${KRB_LIB_FLAGS}")
 	  AC_CHECK_FUNCS(krb_get_int krb_life_to_time)
+          AC_SUBST(KRB_INC_FLAGS)
+          AC_SUBST(KRB_LIB_FLAGS)
 	  LIBS="${cmu_save_LIBS}"
 	  AC_DEFINE(KERBEROS)
 	  if test "X$RPATH" = "X"; then

@@ -7,19 +7,7 @@ dnl from KTH krb and Arla
 AC_DEFUN(CMU_AFS_INC_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
 saved_CPPFLAGS=$CPPFLAGS
-if test "$ac_cv_prog_gcc" = "yes" ; then
-  cmu_gcc_inc_dir=`gcc --print-file-name=include`
-  if test "$cmu_gcc_inc_dir" = "include"  ; then
-     cmu_gcc_inc_dir=""
-  fi
-  if test "$cmu_gcc_inc_dir" != ""  ; then
-     CPPFLAGS="$saved_CPPFLAGS -nostdinc -I$1 -I${cmu_gcc_inc_dir} -I/usr/include"
-  else
-     CPPFLAGS="$saved_CPPFLAGS -nostdinc -I$1 -I/usr/include"
-  fi
-else
-  CPPFLAGS="$saved_CPPFLAGS -I$1"
-fi
+CPPFLAGS="$CPPFLAGS -I$1"
 AC_TRY_COMPILE([#include <afs/param.h>],
 [#ifndef SYS_NAME
 choke me
@@ -30,14 +18,34 @@ ac_cv_found_afs_inc=no)
 CPPFLAGS=$saved_CPPFLAGS
 ])
 
+AC_DEFUN(CMU_AFS_LIB_WHERE1, [
+save_LIBS="$LIBS"
+save_LDFLAGS="$LDFLAGS"
+
+LIBS="-lauth $1/afs/util.a $LIBS"
+LDFLAGS="-L$1 -L$1/afs $LDFLAGS"
+dnl suppress caching
+AC_TRY_LINK([],[afsconf_Open();], ac_cv_found_afs_lib=yes, ac_cv_found_afs_lib=no)
+LIBS="$save_LIBS"
+LDFLAGS="$save_LDFLAGS"
+])
+
 AC_DEFUN(CMU_AFS_WHERE, [
    for i in $1; do
       AC_MSG_CHECKING(for AFS in $i)
       CMU_AFS_INC_WHERE1("$i/include")
+      ac_cv_found_lwp_inc=$ac_cv_found_afs_inc
+      CMU_TEST_INCPATH($i/include, lwp) 
+      ac_cv_found_afs_inc=$ac_cv_found_lwp_inc
       if test "$ac_cv_found_afs_inc" = "yes"; then
-        ac_cv_afs_where=$i
-        AC_MSG_RESULT(found)
-        break
+        CMU_AFS_LIB_WHERE1("$i/lib")
+        if test "$ac_cv_found_afs_lib" = "yes"; then
+          ac_cv_afs_where=$i
+          AC_MSG_RESULT(found)
+          break
+        else
+          AC_MSG_RESULT(not found)
+        fi
       else
         AC_MSG_RESULT(not found)
       fi
@@ -78,8 +86,8 @@ AC_ARG_WITH(AFS,
  	  LDFLAGS="$cmu_save_LDFLAGS ${AFS_LIB_FLAGS}"
                         
           AC_CHECK_HEADER(afs/stds.h)
-	  AFS_CLIENT_LIBS="-lvolser -lvldb -lkauth -lprot -lubik -lauth -lrxkad -lrx -lsys -llwp -ldes -lcmd -lcom_err ${AFS_LIB_DIR}/afs/util.a"
-          AFS_KTC_LIBS="-lauth -lsys -lrx -llwp -ldes -lcom_err ${AFS_LIB_DIR}/afs/util.a"
+	  AFS_CLIENT_LIBS="-lvolser -lvldb -lkauth -lprot -lubik -lauth -lrxkad -lrx ${AFS_LIB_DIR}/afs/libsys.a -lrx -llwp -ldes -lcmd -lcom_err ${AFS_LIB_DIR}/afs/util.a"
+          AFS_KTC_LIBS="-lauth ${AFS_LIB_DIR}/afs/libsys.a -lrx -llwp -ldes -lcom_err ${AFS_LIB_DIR}/afs/util.a"
           LIBS="$cmu_save_LIBS"
           AC_CHECK_FUNC(flock)
           LIBS="$cmu_save_LIBS ${AFS_CLIENT_LIBS} ${LIB_SOCKET}"
@@ -149,6 +157,12 @@ extern int UV_SetSecurity();],
           LIBS="$cmu_save_LIBS $AFS_CLIENT_LIBS ${LIB_SOCKET}"
           AC_CHECK_FUNC(des_pcbc_init)
           if test "X$ac_cv_func_des_pcbc_init" != "Xyes"; then
+           AC_CHECK_LIB(descompat, des_pcbc_init, AFS_DESCOMPAT_LIB="-ldescompat")
+           if test "X$AFS_DESCOMPAT_LIB" != "X" ; then
+                AFS_CLIENT_LIBS="$AFS_CLIENT_LIBS $AFS_DESCOMPAT_LIB"
+                AFS_KTC_LIBS="$AFS_KTC_LIBS $AFS_DESCOMPAT_LIB"
+           else
+
            AC_MSG_CHECKING([if rxkad needs des_pcbc_init])
            AC_TRY_LINK(,[tkt_DecodeTicket();],RXKAD_PROBLEM=no,RXKAD_PROBLEM=maybe)
             if test "$RXKAD_PROBLEM" = "maybe"; then
@@ -164,6 +178,7 @@ extern int UV_SetSecurity();],
             else
               AC_MSG_RESULT([no])
             fi
+           fi
           fi
           AC_MSG_CHECKING([if libaudit is needed])
           LIBS="$cmu_save_LIBS $AFS_CLIENT_LIBS ${LIB_SOCKET}"
@@ -175,7 +190,7 @@ extern int UV_SetSecurity();],
 #include <afs/auth.h>],
           [afsconf_SuperUser();],AFS_AUDIT_LIB="",AFS_AUDIT_LIB="maybe")
           if test "X$AFS_AUDIT_LIB" != "X"; then
-          LIBS="$cmu_save_LIBS -lvolser -lvldb -lkauth -lprot -lubik -lauth -laudit -lrxkad -lrx -lsys -llwp -ldes -lcmd -lcom_err ${AFS_LIB_DIR}/afs/util.a $AFS_BSD_LIB $LIB_SOCKET"
+          LIBS="$cmu_save_LIBS -lvolser -lvldb -lkauth -lprot -lubik -lauth -laudit -lrxkad -lrx ${AFS_LIB_DIR}/afs/libsys.a -lrx -llwp -ldes -lcmd -lcom_err ${AFS_LIB_DIR}/afs/util.a $AFS_BSD_LIB $AFS_DESCOMPAT_LIB $LIB_SOCKET"
              AC_TRY_LINK([#include <afs/param.h>
 #ifdef HAVE_AFS_STDS_H
 #include <afs/stds.h>
@@ -185,7 +200,7 @@ extern int UV_SetSecurity();],
              [afsconf_SuperUser();],AFS_AUDIT_LIB="yes")
              if test "X$AFS_AUDIT_LIB" = "Xyes"; then
                  AC_MSG_RESULT([yes])
-                 AFS_CLIENT_LIBS="-lvolser -lvldb -lkauth -lprot -lubik -lauth -laudit -lrxkad -lrx -lsys -llwp -ldes -lcmd -lcom_err ${AFS_LIB_DIR}/afs/util.a $AFS_BSD_LIB"
+                 AFS_CLIENT_LIBS="-lvolser -lvldb -lkauth -lprot -lubik -lauth -laudit -lrxkad -lrx ${AFS_LIB_DIR}/afs/libsys.a -lrx -llwp -ldes -lcmd -lcom_err ${AFS_LIB_DIR}/afs/util.a $AFS_BSD_LIB $AFS_DESCOMPAT_LIB"
              else
                  AC_MSG_RESULT([unknown])
                  AC_MSG_ERROR([Could not use -lauth while testing for -laudit])
