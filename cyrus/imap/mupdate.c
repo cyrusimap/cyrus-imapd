@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.82 2004/03/05 16:37:37 rjs3 Exp $
+ * $Id: mupdate.c,v 1.83 2004/03/08 17:31:05 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -763,6 +763,12 @@ mupdate_docmd_result_t docmd(struct conn *c)
 	if (!c->userid) goto nologin;
 	else if (!strcmp(c->cmd.s, "Noop")) {
 	    CHECKNEWLINE(c, ch);
+	    
+	    /* Make *very* sure we are up-to-date */
+	    kick_mupdate();
+	    if (c->streaming) {
+		sendupdates(c, 0); /* don't flush pout though */
+	    }
 	    
 	    prot_printf(c->pout, "%s OK \"Noop done\"\r\n", c->tag.s);
 	}
