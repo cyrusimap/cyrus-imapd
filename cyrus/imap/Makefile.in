@@ -40,6 +40,9 @@ CC = @CC@
 INSTALL = @INSTALL@
 RANLIB = @RANLIB@
 
+CYRUS_USER=@cyrus_user@
+NEWS_GROUP=@news_group@
+
 DEFS = @DEFS@
 CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@ 
 LIBS = @LIBS@ 
@@ -64,15 +67,17 @@ IMAPDOBJS= imapd.o index.o
 
 PROGS = collectnews syncnews imapd pop3d \
 	arbitron reconstruct quota updateimsp
-SUIDPROGS = deliver rmnews
+SUIDPROGS = deliver
+SUGIDPROGS = rmnews
 
 
-all: $(PROGS) $(SUIDPROGS)
+all: $(PROGS) $(SUIDPROGS) $(SUGIDPROGS)
 
 install:
-	$(INSTALL) -s -m 755 $(PROGS) $(DESTDIR)$(cyrus_prefix)/bin
-	$(INSTALL) -s -m 4750 $(SUIDPROGS) $(DESTDIR)$(cyrus_prefix)/bin
-	$(INSTALL) -m 755 feedcyrus $(DESTDIR)$(cyrus_prefix)/bin
+	$(INSTALL) -s -o $(CYRUS_USER) -m 755 $(PROGS) $(DESTDIR)$(cyrus_prefix)/bin
+	$(INSTALL) -s -o $(CYRUS_USER) -m 4750 $(SUIDPROGS) $(DESTDIR)$(cyrus_prefix)/bin
+	$(INSTALL) -s -o $(CYRUS_USER) -g $(NEWS_GROUP) -m 6750 $(SUGIDPROGS) $(DESTDIR)$(cyrus_prefix)/bin
+	$(INSTALL) -o $(CYRUS_USER) -m 755 feedcyrus $(DESTDIR)$(cyrus_prefix)/bin
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
