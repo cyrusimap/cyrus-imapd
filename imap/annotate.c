@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.18 2003/10/22 20:05:10 ken3 Exp $
+ * $Id: annotate.c,v 1.19 2003/10/24 17:31:48 rjs3 Exp $
  */
 
 #include <config.h>
@@ -293,12 +293,13 @@ static int make_key(const char *mboxname, const char *entry,
     return keylen;
 }
 
-static int split_attribs(const char *data, int datalen,
+static int split_attribs(const char *data, int datalen __attribute__((unused)),
 			 struct annotation_data *attrib)
 {
     unsigned long tmp;
 
-    /* XXX sanity check the data */
+    /* xxx use datalen? */
+    /* xxx sanity check the data? */
     attrib->size = (size_t) ntohl(*(unsigned long *) data);
     data += sizeof(unsigned long); /* skip to value */
 
@@ -1243,6 +1244,22 @@ static int write_entry(const char *mboxname, const char *entry,
     }
 
     return r;
+}
+
+int annotatemore_write_entry(const char *mboxname, const char *entry,
+			     const char *userid,
+			     const char *value, const char *contenttype,
+			     size_t size, time_t modifiedsince,
+			     struct txn **tid) 
+{
+    struct annotation_data theentry;
+    
+    theentry.size = size;
+    theentry.modifiedsince = modifiedsince ? modifiedsince : time(NULL);
+    theentry.contenttype = contenttype ? contenttype : "text/plain";
+    theentry.value = value ? value : "NIL";
+
+    return write_entry(mboxname, entry, userid, &theentry, tid);
 }
 
 struct storedata {
