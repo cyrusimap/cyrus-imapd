@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.39 2002/11/03 04:19:51 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.40 2002/11/05 20:26:50 ken3 Exp $
  */
 
 /*
@@ -1926,34 +1926,43 @@ static int savemsg(message_data_t *m, FILE *f)
 
     /* get control */
     if ((body = spool_getheader(m->hdrcache, "control")) != NULL) {
+	int len;
+
 	m->control = xstrdup(body[0]);
+
+	/* create a recipient for the appropriate pseudo newsgroup */
+	m->rcpt_num = 1;
+	m->rcpt = (char **) xmalloc(sizeof(char *));
+	len = strcspn(m->control, " \t\r\n");
+	m->rcpt[0] = xmalloc(strlen(newsprefix) + 8 + len + 1);
+	sprintf(m->rcpt[0], "%scontrol.%.*s", newsprefix, len, m->control);
     } else {
 	m->control = NULL;	/* no control */
-    }
 
-    /* get newsgroups */
-    if ((body = spool_getheader(m->hdrcache, "newsgroups")) != NULL) {
-	/* parse newsgroups */
-	if (!m->control && (r = parse_groups(body[0], m)) == 0) {
-	    char buf[1024] = "";
-	    const char *sep = "";
-	    int n;
+	/* get newsgroups */
+	if ((body = spool_getheader(m->hdrcache, "newsgroups")) != NULL) {
+	    /* parse newsgroups and create recipients */
+	    if (!m->control && (r = parse_groups(body[0], m)) == 0) {
+		char buf[1024] = "";
+		const char *sep = "";
+		int n;
 
-	    /* build a To: header */
-	    for (n = 0; n < m->rcpt_num; n++) {
-		snprintf(buf+strlen(buf), sizeof(buf)-strlen(buf),
-			 "%s%s+%s@%s", sep,
-			 config_getstring(IMAPOPT_NEWSPOSTUSER),
-			 m->rcpt[n]+strlen(newsprefix),
-			 config_servername);
-		sep = ", ";
+		/* build a To: header */
+		for (n = 0; n < m->rcpt_num; n++) {
+		    snprintf(buf+strlen(buf), sizeof(buf)-strlen(buf),
+			     "%s%s+%s@%s", sep,
+			     config_getstring(IMAPOPT_NEWSPOSTUSER),
+			     m->rcpt[n]+strlen(newsprefix),
+			     config_servername);
+		    sep = ", ";
+		}
+
+		/* add To: header */
+		fprintf(f, "To: %s\r\n", buf);
 	    }
-
-	    /* add To: header */
-	    fprintf(f, "To: %s\r\n", buf);
+	} else {
+	    r = NNTP_NO_NEWSGROUPS;		/* no newsgroups */
 	}
-    } else {
-	r = NNTP_NO_NEWSGROUPS;		/* no newsgroups */
     }
 
     r |= spool_copy_msg(nntp_in, f, &m->lines);
@@ -2025,7 +2034,7 @@ static int newgroup(message_data_t *msg)
     char mailboxname[MAX_MAILBOX_NAME+1];
 
     /* isolate newsgroup */
-    group = msg->control + 9; /* skip "newgroup " */
+    group = msg->control + 8; /* skip "newgroup" */
     while (isspace((int) *group)) group++;
 
     snprintf(mailboxname, sizeof(mailboxname), "%s%.*s",
@@ -2037,7 +2046,7 @@ static int newgroup(message_data_t *msg)
 
     /* XXX check body of message for useful MIME parts */
 
-    return 0;
+    return r;
 }
 
 static int rmgroup(message_data_t *msg)
@@ -2047,7 +2056,7 @@ static int rmgroup(message_data_t *msg)
     char mailboxname[MAX_MAILBOX_NAME+1];
 
     /* isolate newsgroup */
-    group = msg->control + 8; /* skip "rmgroup " */
+    group = msg->control + 7; /* skip "rmgroup" */
     while (isspace((int) *group)) group++;
 
     snprintf(mailboxname, sizeof(mailboxname), "%s%.*s",
@@ -2059,7 +2068,7 @@ static int rmgroup(message_data_t *msg)
     r = mboxlist_deletemailbox(mailboxname, 1,
 			       nntp_userid, nntp_authstate, 0, 0, 0);
 
-    return 0;
+    return r;
 }
 
 static int mvgroup(message_data_t *msg)
@@ -2070,7 +2079,7 @@ static int mvgroup(message_data_t *msg)
     char newmailboxname[MAX_MAILBOX_NAME+1];
 
     /* isolate old newsgroup */
-    group = msg->control + 8; /* skip "mvgroup " */
+    group = msg->control + 7; /* skip "mvgroup" */
     while (isspace((int) *group)) group++;
 
     len = (int) strcspn(group, " \t\r\n");
@@ -2091,7 +2100,7 @@ static int mvgroup(message_data_t *msg)
 
     /* XXX check body of message for useful MIME parts */
 
-    return 0;
+    return r;
 }
 
 static int expunge_cancelled(struct mailbox *mailbox, void *rock, char *index)
@@ -2103,7 +2112,7 @@ static int expunge_cancelled(struct mailbox *mailbox, void *rock, char *index)
 
 static int cancel(message_data_t *msg)
 {
-    int r;
+    int r = 0;
     char *msgid, *p, *mailbox;
     time_t now = time(NULL);
     unsigned long uid;
@@ -2138,10 +2147,12 @@ static int cancel(message_data_t *msg)
 	if (doclose) mailbox_close(&mbox);
     }
 
-    /* store msgid of cancelled message for IHAVE/CHECK/TAKETHIS */
+    /* store msgid of cancelled message for IHAVE/CHECK/TAKETHIS
+     * (in case we haven't received the message yet)
+     */
     if (have_newsdb) netnews_store(msgid, "", uid, 0, now);
 
-    return  0;
+    return r;
 }
 
 static void feedpeer(message_data_t *msg)
@@ -2282,8 +2293,10 @@ static void cmd_post(char *msgid, int mode)
 	r = savemsg(msg, f);
 
 	if (!r) {
+	    /* deliver the article */
+	    r = deliver(msg);
+
 	    if (msg->control) {
-		/* XXX should we deliver control messages somewhere? */
 		if (!strncmp(msg->control, "newgroup", 8))
 		    r = newgroup(msg);
 		else if (!strncmp(msg->control, "rmgroup", 7))
@@ -2295,10 +2308,6 @@ static void cmd_post(char *msgid, int mode)
 		else
 		    syslog(LOG_ERR, "unknown control message: %s",
 			   msg->control);
-	    }
-	    else {
-		/* deliver the article */
-		r = deliver(msg);
 	    }
 	}
 
