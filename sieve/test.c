@@ -1,6 +1,6 @@
 /* test.c -- tester for libsieve
  * Larry Greenfield
- * $Id: test.c,v 1.12 2000/06/24 13:15:24 ken3 Exp $
+ * $Id: test.c,v 1.13 2000/10/17 05:28:06 ken3 Exp $
  *
  * usage: "test message script"
  */
@@ -385,15 +385,14 @@ int notify(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     return SIEVE_OK;
 }
  
-int mysieve_error(int lineno, char *msg,
-		  void *i, void *s)
+int mysieve_error(int lineno, const char *msg, void *i, void *s)
 {
     fprintf(stderr, "line %d: %s\r\n", lineno, msg);
 
     return SIEVE_OK;
 }
 
-int mysieve_execute_error(char *msg, void *i, void *s, void *m)
+int mysieve_execute_error(const char *msg, void *i, void *s, void *m)
 {
     fprintf(stderr, "%s\r\n", msg);
  
