@@ -18,6 +18,9 @@ response. (can't reproduce?)
 
 <li> RENAMEing INBOX doesn't work correctly. (important!)
 
+<li> In general, renaming an mailbox to be a subset of itself should
+be checked for and disallowed.
+
 <li> append.c: doesn't set the \Seen flag if the client requests it.
 
 <li> MULTIAPPEND: does it do the right thing with an aborted APPEND
@@ -75,6 +78,8 @@ Well, ok, it hangs.
 opening and closing databases.  (Cache last N databases used?)
 
 <li> Should <tt>duplicate.c</tt> use transactions?  A single file?
+
+<li> does <tt>lmtpd</tt> correctly authenticate and authorize people?
 </ul>
 
 <h3>authentication and authorization</h3>
@@ -129,7 +134,7 @@ efficient and easier to use than Amanda on the filesystem.
 would like to submit a bug, feature request or (best of all) patch.
 
 <P><HR>
-Last update: $Date: 2000/05/13 03:39:59 $ 
+Last update: $Date: 2000/05/22 23:30:09 $ 
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>

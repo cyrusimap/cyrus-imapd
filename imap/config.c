@@ -1,5 +1,5 @@
 /* config.c -- Configuration routines
- $Id: config.c,v 1.32 2000/04/12 18:12:48 leg Exp $
+ $Id: config.c,v 1.33 2000/05/22 23:30:10 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -60,18 +60,16 @@ struct configlist {
 static struct configlist *configlist;
 static int nconfiglist;
 
-const char *config_dir;
-const char *config_defpartition;
-const char *config_newsspool;
-
-const char *config_servername;
-
-int config_hashimapspool;
+/* variables accessible to the external world */
+const char *config_dir;		 /* ie /var/imap */
+const char *config_defpartition; /* /var/spool/imap */
+const char *config_newsspool;	 /* /var/spool/news */
+const char *config_servername;	 /* gethostname() */
+int config_hashimapspool;	 /* f */
 
 static void config_read(void);
 
-int config_init(ident)
-const char *ident;
+int config_init(const char *ident)
 {
     char buf[100];
     char *p;
@@ -136,9 +134,7 @@ int config_changeident(const char *ident)
     return 0;
 }
 
-const char *config_getstring(key, def)
-const char *key;
-const char *def;
+const char *config_getstring(const char *key, const char *def)
 {
     int opt;
 
@@ -150,20 +146,17 @@ const char *def;
     return def;
 }
 
-int config_getint(key, def)
-const char *key;
-int def;
+int config_getint(const char *key, int def)
 {
     const char *val = config_getstring(key, (char *)0);
 
     if (!val) return def;
-    if (!isdigit((int) *val) && (*val != '-' || !isdigit((int) val[1]))) return def;
+    if (!isdigit((int) *val) && (*val != '-' || !isdigit((int) val[1]))) 
+	return def;
     return atoi(val);
 }
 
-int config_getswitch(key, def)
-const char *key;
-int def;
+int config_getswitch(const char *key, int def)
 {
     const char *val = config_getstring(key, (char *)0);
 
@@ -180,8 +173,7 @@ int def;
     return def;
 }
 
-const char *config_partitiondir(partition)
-const char *partition;
+const char *config_partitiondir(const char *partition)
 {
     char buf[80];
 
@@ -193,8 +185,7 @@ const char *partition;
 }
 
 #define CONFIGLISTGROWSIZE 10 /* 100 */
-static void
-config_read()
+static void config_read(void)
 {
     FILE *infile;
     int lineno = 0;
@@ -330,4 +321,53 @@ sasl_security_properties_t *mysasl_secprops(void)
     ret.property_values = NULL;
 
     return &ret;
+}
+
+/* true if 'authstate' is in 'val' */
+static int isa(struct auth_state *authstate, const char *val)
+{
+    char buf[1024];
+
+    while (*val) {
+	char *p;
+	
+	for (p = (char *) val; *p && !isspace((int) *p); p++);
+	strncpy(buf, val, p-val);
+	buf[p-val] = 0;
+
+	if (auth_memberof(authstate, buf)) {
+	    return 1;
+	}
+	val = p;
+	while (*val && isspace((int) *val)) val++;
+    }
+    return 0;
+}
+
+/* 
+ * check 'service_class' and 'class'
+ */
+int authisa(struct auth_state *authstate, 
+	    const char *service, 
+	    const char *class)
+{
+    char buf[512];
+
+    if (!authstate) {
+	/* not authenticated? */
+	return 0;
+    }
+
+    /* 'class' */
+    if (isa(authstate, class)) {
+	return 1;
+    }
+
+    /* 'service_class' */
+    snprintf(buf, sizeof(buf), "%s_%s", service, class);
+    if (isa(authstate, buf)) {
+	return 1;
+    }
+    
+    return 0;
 }

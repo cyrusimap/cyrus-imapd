@@ -22,6 +22,7 @@
 #include "imapconf.h"
 #include "acapmbox.h"
 #include "acappush.h"
+#include "exitcodes.h"
 
 /* if disconnected and can't reconnect right away how long to wait
    until retrying */
@@ -255,7 +256,7 @@ int main(int argc, char **argv)
 	    break;
 	default:
 	    fprintf(stderr, "invalid argument\n");
-	    exit(1);
+	    exit(EC_USAGE);
 	    break;
 	}
     }

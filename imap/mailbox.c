@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.96 2000/04/10 00:35:39 leg Exp $
+ $Id: mailbox.c,v 1.97 2000/05/22 23:30:12 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -667,9 +667,9 @@ int mailbox_read_index_header(struct mailbox *mailbox)
     if (mailbox->start_offset < OFFSET_FLAGGED+sizeof(bit32)) {
 	/* calculate them now */
 	if (mailbox_calculate_flagcounts(mailbox))
-	    return IMAP_IOERROR;	
+	    return IMAP_IOERROR;
 	
-	/* things might have been changed out form under us. reread */
+	/* things might have been changed out from under us. reread */
 	mailbox_open_index(mailbox); 
     } else {
 	mailbox->deleted = 

@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.244 2000/05/16 21:51:13 ken3 Exp $ */
+/* $Id: imapd.c,v 1.245 2000/05/22 23:30:10 leg Exp $ */
 
 #include <config.h>
 
@@ -217,29 +217,6 @@ const char *auth_identity;
     return r;
 }
 
-/* returns true if imapd_authstate is in "item";
-   expected: item = admins or proxyservers */
-static int authisa(const char *item)
-{
-    const char *val = config_getstring(item, "");
-    char buf[MAX_MAILBOX_PATH];
-
-    while (*val) {
-	char *p;
-	
-	for (p = (char *) val; *p && !isspace((int) *p); p++);
-	strncpy(buf, val, p-val);
-	buf[p-val] = 0;
-
-	if (auth_memberof(imapd_authstate, buf)) {
-	    return 1;
-	}
-	val = p;
-	while (*val && isspace((int) *val)) val++;
-    }
-    return 0;
-}
-
 /* should we allow users to proxy?  return SASL_OK if yes,
    SASL_BADAUTH otherwise */
 static int mysasl_authproc(void *context __attribute__((unused)),
@@ -255,14 +232,14 @@ static int mysasl_authproc(void *context __attribute__((unused)),
 
     canon_authuser = auth_canonifyid(auth_identity);
     if (!canon_authuser) {
-	*errstr = "bad userid authenticated";
+	if (errstr) *errstr = "bad userid authenticated";
 	return SASL_BADAUTH;
     }
     canon_authuser = xstrdup(canon_authuser);
 
     canon_requser = auth_canonifyid(requested_user);
     if (!canon_requser) {
-	*errstr = "bad userid requested";
+	if (errstr) *errstr = "bad userid requested";
 	return SASL_BADAUTH;
     }
     canon_requser = xstrdup(canon_requser);
@@ -283,7 +260,7 @@ static int mysasl_authproc(void *context __attribute__((unused)),
 	if (!*val) {
 	    snprintf(replybuf, 100, "cross-realm login %s denied", 
 		     canon_authuser);
-	    *errstr = replybuf;
+	    if (errstr) *errstr = replybuf;
 	    return SASL_BADAUTH;
 	}
     }
@@ -291,7 +268,7 @@ static int mysasl_authproc(void *context __attribute__((unused)),
     imapd_authstate = auth_newstate(canon_authuser, NULL);
 
     /* ok, is auth_identity an admin? */
-    imapd_userisadmin = authisa("admins");
+    imapd_userisadmin = authisa(imapd_authstate, "imap", "admins");
 
     if (strcmp(canon_authuser, canon_requser)) {
 	/* we want to authenticate as a different user; we'll allow this
@@ -300,7 +277,7 @@ static int mysasl_authproc(void *context __attribute__((unused)),
 
 	if (imapd_userisadmin ||
 	    (use_acl && acl_ok(canon_requser, canon_authuser)) ||
-	    authisa("proxyservers")) {
+	    authisa(imapd_authstate, "imap", "proxyservers")) {
 	    /* proxy ok! */
 
 	    imapd_userisadmin = 0;	/* no longer admin */
@@ -308,7 +285,7 @@ static int mysasl_authproc(void *context __attribute__((unused)),
 	    
 	    imapd_authstate = auth_newstate(canon_requser, NULL);
 	} else {
-	    *errstr = "user is not allowed to proxy";
+	    if (errstr) *errstr = "user is not allowed to proxy";
 	    
 	    free(canon_authuser);
 	    free(canon_requser);
@@ -320,7 +297,7 @@ static int mysasl_authproc(void *context __attribute__((unused)),
 
     free(canon_authuser);
     *user = canon_requser;
-    *errstr = NULL;
+    if (errstr) *errstr = NULL;
     return SASL_OK;
 }
 
@@ -588,7 +565,7 @@ cmdloop()
 	c = getword(&tag);
 	if (c == EOF) {
 	    if ((err = prot_error(imapd_in))!=NULL) {
-		syslog(LOG_WARNING, "PROTERR: %s", err);
+		syslog(LOG_WARNING, "%s, closing connection", err);
 		prot_printf(imapd_out, "* BYE %s\r\n", err);
 	    }
 	    shut_down(0);

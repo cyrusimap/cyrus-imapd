@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- $Id: imapconf.h,v 1.1 2000/04/06 15:14:35 leg Exp $
+ $Id: imapconf.h,v 1.2 2000/05/22 23:30:10 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -31,6 +31,7 @@
 #define INCLUDED_CONFIG_H
 
 #include <sasl.h>
+#include "auth.h"
 
 extern int config_init(const char *ident);
 extern const char *config_getstring(const char *key, const char *def);
@@ -46,6 +47,10 @@ extern int mysasl_config(void *context,
 			 const char **result,
 			 unsigned *len);
 extern sasl_security_properties_t *mysasl_secprops(void);
+
+/* check if `authstate' is a valid member of class */
+extern int authisa(struct auth_state *authstate, 
+		   const char *service, const char *class);
 
 /* Values of mandatory options */
 extern const char *config_dir;
