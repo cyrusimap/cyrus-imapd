@@ -1,6 +1,6 @@
 dnl sasl2.m4--sasl2 libraries and includes
 dnl Rob Siemborski
-dnl $Id: sasl2.m4,v 1.17.4.7 2003/02/24 17:19:03 rjs3 Exp $
+dnl $Id: sasl2.m4,v 1.17.4.8 2003/06/25 23:57:00 ken3 Exp $
 
 AC_DEFUN(SASL_GSSAPI_CHK,[
  AC_ARG_ENABLE(gssapi, [  --enable-gssapi=<DIR>   enable GSSAPI authentication [yes] ],
@@ -19,8 +19,9 @@ AC_DEFUN(SASL_GSSAPI_CHK,[
 
  if test "$gssapi" != no; then
   dnl We need to find out which gssapi implementation we are
-  dnl using. Supported alternatives are: MIT Kerberos 5 and
-  dnl Heimdal Kerberos 5 (http://www.pdc.kth.se/heimdal)
+  dnl using. Supported alternatives are: MIT Kerberos 5,
+  dnl Heimdal Kerberos 5 (http://www.pdc.kth.se/heimdal),
+  dnl and Sun SEAM (http://wwws.sun.com/software/security/kerberos/)
   dnl
   dnl The choice is reflected in GSSAPIBASE_LIBS
   dnl we might need libdb
@@ -43,9 +44,14 @@ AC_DEFUN(SASL_GSSAPI_CHK,[
      gssapi_dir="/usr/local/lib"
   fi
 
-  # Check a full link against the heimdal libraries.  If this fails, assume
-  # MIT.
+  # Check a full link against the heimdal libraries.
+  # If this fails, check a full link against the Solaris 8 and up libgss.
+  # If this fails, assume MIT.
   AC_CHECK_LIB(gssapi,gss_unwrap,gss_impl="heimdal",,$GSSAPIBASE_LIBS -lgssapi -lkrb5 -lasn1 -lroken ${LIB_CRYPT} -lcom_err)
+
+  if test "$gss_impl" = "mit"; then
+    AC_CHECK_LIB(gss,gss_unwrap,gss_impl="seam",,-lgss)
+  fi
 
   if test "$gss_impl" = "mit"; then
      GSSAPIBASE_LIBS="$GSSAPIBASE_LIBS -lgssapi_krb5 -lkrb5 -lk5crypto -lcom_err"
@@ -53,6 +59,10 @@ AC_DEFUN(SASL_GSSAPI_CHK,[
   elif test "$gss_impl" = "heimdal"; then
      GSSAPIBASE_LIBS="$GSSAPIBASE_LIBS -lgssapi -lkrb5 -lasn1 -lroken ${LIB_CRYPT} -lcom_err"
      GSSAPIBASE_STATIC_LIBS="$GSSAPIBASE_STATIC_LIBS $gssapi_dir/libgssapi.a $gssapi_dir/libkrb5.a $gssapi_dir/libasn1.a $gssapi_dir/libroken.a $gssapi_dir/libcom_err.a ${LIB_CRYPT}"
+  elif test "$gss_impl" = "seam"; then
+     GSSAPIBASE_LIBS=-lgss
+     # there is no static libgss on Solaris 8 and up
+     GSSAPIBASE_STATIC_LIBS=none
   else
      gssapi="no"
      AC_WARN(Disabling GSSAPI)

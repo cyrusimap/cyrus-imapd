@@ -1,5 +1,5 @@
 dnl afs.m4--AFS libraries, includes, and dependencies
-dnl $Id: afs.m4,v 1.20.4.2 2003/02/14 16:14:46 ken3 Exp $
+dnl $Id: afs.m4,v 1.20.4.3 2003/06/25 23:56:59 ken3 Exp $
 dnl Chaskiel Grundman
 dnl based on kerberos_v4.m4
 dnl Derrick Brashear
@@ -86,7 +86,7 @@ AC_ARG_WITH(AFS,
 	  cmu_save_LDFLAGS="$LDFLAGS"
  	  LDFLAGS="$cmu_save_LDFLAGS ${AFS_LIB_FLAGS}"
                         
-          AC_CHECK_HEADER(afs/stds.h)
+          AC_CHECK_HEADERS(afs/stds.h)
 
           AC_MSG_CHECKING([if libdes is needed])
           AC_TRY_LINK([],[des_quad_cksum();],AFS_DES_LIB="",AFS_DES_LIB="maybe")
