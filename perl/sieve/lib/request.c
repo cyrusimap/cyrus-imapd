@@ -185,7 +185,7 @@ int installdata(int version,struct protstream *pout, struct protstream *pin,
     return -1;
   }
 
-  return setscriptactive(version,pout,pin,scriptname);
+  return 0;
 }
 
 static char *getsievename(char *filename)
@@ -282,7 +282,7 @@ int installafile(int version,struct protstream *pout, struct protstream *pin,cha
     return -1;
   }
 
-  return setscriptactive(version,pout,pin,sievename);
+  return 0;
 }
 
 
