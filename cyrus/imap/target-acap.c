@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: target-acap.c,v 1.22 2000/12/07 22:38:24 leg Exp $
+ * $Id: target-acap.c,v 1.23 2000/12/12 21:56:43 leg Exp $
  */
 
 #include <config.h>
@@ -126,38 +126,50 @@ int connect_acap(const char *server)
     char acapurl[1024];
     int r;
     sasl_callback_t *cb;
+    static int firsttime = 1;
 
     user = config_getstring("acap_username", NULL);
     if (user == NULL) {
-	syslog(LOG_ERR, "unable to find option acap_username");
+        syslog(LOG_ERR, "unable to find option acap_username");
 	fatal("couldn't connect to acap server", EC_UNAVAILABLE);
     }
 
-    cb = mysasl_callbacks(user,
-			  config_getstring("acap_authname", user),
-			  config_getstring("acap_realm", NULL),
-			  config_getstring("acap_password", NULL));
+    if (firsttime) {
+	cb = mysasl_callbacks(user,
+			      config_getstring("acap_authname", user),
+			      config_getstring("acap_realm", NULL),
+			      config_getstring("acap_password", NULL));
 
-    authprog = config_getstring("acap_getauth", NULL);
-    if (authprog) {
-	system(authprog);
+	authprog = config_getstring("acap_getauth", NULL);
+	if (authprog) {
+            system(authprog);
+	}
+
+	/* probably should setup callbacks here if configured to! */
+	r = sasl_client_init(cb);
+	if (r != SASL_OK) {
+  	    syslog(LOG_ERR, "sasl_client_init() failed: %s",
+		   sasl_errstring(r, NULL, NULL));
+	    fatal("couldn't connect to acap server", EC_UNAVAILABLE);
+	}
+
+	firsttime = 0;
     }
 
-    /* probably should setup callbacks here if configured to! */
-    r = sasl_client_init(cb);
-    if (r != SASL_OK) {
-	syslog(LOG_ERR, "sasl_client_init() failed: %s",
-	       sasl_errstring(r, NULL, NULL));
-	fatal("couldn't connect to acap server", EC_UNAVAILABLE);
-    }
-
+ loop:
     snprintf(acapurl, sizeof(acapurl), "acap://%s@%s/", user, server);
     r = ACAP_NO_CONNECTION;
 
     r = acap_conn_connect(acapurl, NULL, &acap_conn);
     if (r != ACAP_OK) {
-	syslog(LOG_ERR, "couldn't connect to ACAP server: %s",
-	       error_message(r));
+	int t = config_getint("acap_retry_timeout", 60);
+	
+	acap_conn_close(acap_conn);
+        syslog(LOG_WARNING, "couldn't connect to ACAP server: %s;"
+	                    " will retry in %d sec",
+	       error_message(r), t);
+	sleep(t);
+	goto loop;
     }
     return r;
 }
@@ -504,7 +516,7 @@ void listen_for_kicks()
 	    len = sizeof(clientaddr);
 	    c = accept(s, (struct sockaddr *)&clientaddr, &len);
 	    if (c == -1) {
-		syslog(LOG_WARNING, "erg, accept(): %m");
+		syslog(LOG_WARNING, "accept(): %m");
 		continue;
 	    }
 	    
@@ -583,7 +595,6 @@ int main(int argc, char *argv[], char *envp[])
     }
     while (r) {
 	acap_conn_close(acap_conn);
-	sleep(config_getint("acap_retry_timeout", 60));
 	
 	r = connect_acap(server);
 	if (!r) r = synchronize_mboxlist();
@@ -610,14 +621,10 @@ int main(int argc, char *argv[], char *envp[])
 	/* if this returns, we have a problem.  we should probably try
 	   to reestablish the connection with the ACAP server and
 	   resynchronize */
-	r = ACAP_NO_CONNECTION;
-	while (r) {
-	    acap_conn_close(acap_conn);
-	    sleep(config_getint("acap_retry_timeout", 60));
+	acap_conn_close(acap_conn);
 
-	    r = connect_acap(server);
-	    if (!r) r = synchronize_mboxlist();
-	}
+	r = connect_acap(server);
+	if (!r) r = synchronize_mboxlist();
     }
 
     mboxlist_close();
