@@ -27,7 +27,7 @@
  */
 
 /*
- * $Id: message.c,v 1.73 2000/02/10 21:25:30 leg Exp $
+ * $Id: message.c,v 1.74 2000/04/06 15:14:45 leg Exp $
  */
 
 #include <config.h>
@@ -56,7 +56,7 @@
 #include "charset.h"
 #include "util.h"
 #include "xmalloc.h"
-#include "config.h"
+#include "imapconf.h"
 #include "retry.h"
 
 /* Message being parsed */

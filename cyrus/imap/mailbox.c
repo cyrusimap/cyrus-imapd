@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.92 2000/03/15 10:31:12 leg Exp $
+ $Id: mailbox.c,v 1.93 2000/04/06 15:14:41 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -47,7 +47,7 @@
 #include <ctype.h>
 #include <time.h>
 
-#if HAVE_DIRENT_H
+#ifdef HAVE_DIRENT_H
 # include <dirent.h>
 # define NAMLEN(dirent) strlen((dirent)->d_name)
 #else
@@ -65,7 +65,7 @@
 #endif
 
 #include "assert.h"
-#include "config.h"
+#include "imapconf.h"
 #include "acl.h"
 #include "map.h"
 #include "retry.h"
@@ -136,20 +136,47 @@ int mailbox_initialize(void)
     return 0;
 }
 
+/* create the unique identifier for a mailbox named 'name' with
+ * uidvalidity 'uidvalidity'.  'uniqueid' should be at least 17 bytes
+ * long.  the unique identifier is just the mailbox name hashed to 32
+ * bits followed by the uid, both converted to hex. 
+ */
+#define PRIME (2147484043UL)
+
+void mailbox_make_uniqueid(char *name, unsigned long uidvalidity,
+			   char *uniqueid)
+{
+    unsigned long hash = 0;
+
+    while (*name) {
+	hash *= 251;
+	hash += *name++;
+	hash %= PRIME;
+    }
+    sprintf(uniqueid, "%08x%08x", hash, uidvalidity);
+}
+
+/*
+ * Calculate relative filename for the message with UID 'uid'
+ * in 'mailbox'.
+ */
+void mailbox_message_get_fname(struct mailbox *mailbox, unsigned long uid,
+			       char *out)
+{
+    assert(mailbox->format != MAILBOX_FORMAT_NETNEWS);
+
+    sprintf(out, "%lu.", uid);
+}
+
 /*
  * Calculate relative filename for the message with UID 'uid'
  * in 'mailbox'. Returns pointer to static buffer.
  */
-char *mailbox_message_fname(mailbox, uid)
-struct mailbox *mailbox;
-unsigned long uid;
+char *mailbox_message_fname(struct mailbox *mailbox, unsigned long uid)
 {
     static char buf[256];
-    char *p = buf;
-    
-    assert(mailbox->format != MAILBOX_FORMAT_NETNEWS);
 
-    sprintf(p, "%lu.", uid);
+    mailbox_message_get_fname(mailbox, uid, buf);
     return buf;
 }
 
@@ -157,16 +184,14 @@ unsigned long uid;
  * Maps in the content for the message with UID 'uid' in 'mailbox'.
  * Returns map in 'basep' and 'lenp'
  */
-int
-mailbox_map_message(mailbox, iscurrentdir, uid, basep, lenp)
-struct mailbox *mailbox;
-int iscurrentdir;
-unsigned long uid;
-const char **basep;
-unsigned long *lenp;
+int mailbox_map_message(struct mailbox *mailbox,
+			int iscurrentdir,
+			unsigned long uid,
+			const char **basep,
+			unsigned long *lenp)
 {
     int msgfd;
-    static char buf[4096];
+    char buf[4096];
     char *p = buf;
     struct stat sbuf;
     static int newsprefixlen = -1;
@@ -242,11 +267,9 @@ mailbox_reconstructmode()
  * Open and read the header of the mailbox with name 'name'
  * The structure pointed to by 'mailbox' is initialized.
  */
-int
-mailbox_open_header(name, auth_state, mailbox)
-const char *name;
-struct auth_state *auth_state;
-struct mailbox *mailbox;
+int mailbox_open_header(const char *name, 
+			struct auth_state *auth_state,
+			struct mailbox *mailbox)
 {
     char *path, *acl;
     int r;
@@ -262,14 +285,12 @@ struct mailbox *mailbox;
  * path 'path', and ACL 'acl'.
  * The structure pointed to by 'mailbox' is initialized.
  */
-int
-mailbox_open_header_path (name, path, acl, auth_state, mailbox, suppresslog)
-const char *name;
-const char *path;
-const char *acl;
-struct auth_state *auth_state;
-struct mailbox *mailbox;
-int suppresslog;
+int mailbox_open_header_path(const char *name,
+			     const char *path,
+			     const char *acl,
+			     struct auth_state *auth_state,
+			     struct mailbox *mailbox,
+			     int suppresslog)
 {
     char fnamebuf[MAX_MAILBOX_PATH];
     struct stat sbuf;
@@ -321,9 +342,7 @@ int suppresslog;
  * Open the index and cache files for 'mailbox'.  Also 
  * read the index header.
  */
-int 
-mailbox_open_index(mailbox)
-struct mailbox *mailbox;
+int mailbox_open_index(struct mailbox *mailbox)
 {
     char fnamebuf[MAX_MAILBOX_PATH];
     bit32 index_gen = 0, cache_gen = 0;
@@ -392,9 +411,7 @@ struct mailbox *mailbox;
 /*
  * Close the mailbox 'mailbox', freeing all associated resources.
  */
-void
-mailbox_close(mailbox)
-struct mailbox *mailbox;
+void mailbox_close(struct mailbox *mailbox)
 {
     int flag;
 
@@ -418,6 +435,7 @@ struct mailbox *mailbox;
     free(mailbox->name);
     free(mailbox->path);
     free(mailbox->acl);
+    free(mailbox->uniqueid);
     if (mailbox->quota.root) free(mailbox->quota.root);
 
     for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
@@ -431,12 +449,11 @@ struct mailbox *mailbox;
 /*
  * Read the header of 'mailbox'
  */
-int
-mailbox_read_header(mailbox)
-struct mailbox *mailbox;
+int mailbox_read_header(struct mailbox *mailbox)
 {
     int flag;
     const char *name, *p, *eol;
+    int oldformat = 0;
 
     /* Check magic number */
     if (mailbox->header_len < sizeof(MAILBOX_HEADER_MAGIC)-1 ||
@@ -447,9 +464,16 @@ struct mailbox *mailbox;
 
     /* Read quota file pathname */
     p = mailbox->header_base + sizeof(MAILBOX_HEADER_MAGIC)-1;
-    eol = memchr(p, '\n', mailbox->header_len - (p - mailbox->header_base));
+    eol = memchr(p, '\t', mailbox->header_len - (p - mailbox->header_base));
     if (!eol) {
-	return IMAP_MAILBOX_BADFORMAT;
+	eol = memchr(p, '\n', 
+		     mailbox->header_len - (p - mailbox->header_base));
+	if (!eol) return IMAP_MAILBOX_BADFORMAT;
+	else {
+	    syslog(LOG_DEBUG, "mailbox '%s' has old cyrus.header",
+		   mailbox->name);
+	    oldformat = 1;
+	}
     }
     if (mailbox->quota.root) {
 	if (strlen(mailbox->quota.root) != eol-p ||
@@ -464,9 +488,20 @@ struct mailbox *mailbox;
     }
     if (p < eol) {
 	mailbox->quota.root = xstrndup(p, eol - p);
+    } else {
+	mailbox->quota.root = NULL;
     }
-    else {
-	mailbox->quota.root = 0;
+
+    if (!oldformat) {
+	/* read uniqueid */
+	p = eol + 1;
+	eol = memchr(p, '\n', 
+		     mailbox->header_len - (p - mailbox->header_base));
+	if (!eol || p == eol) return IMAP_MAILBOX_BADFORMAT;
+	mailbox->uniqueid = xstrndup(p, eol - p);
+    } else {
+	/* uniqueid needs to be generated when we know the uidvalidity */
+	mailbox->uniqueid = NULL;
     }
 
     /* Read names of user flags */
@@ -495,15 +530,25 @@ struct mailbox *mailbox;
 	mailbox->flagname[flag++] = NULL;
     }
 
+    if (!mailbox->uniqueid) {
+	char buf[32];
+
+	/* generate uniqueid */
+	mailbox_open_index(mailbox);
+	mailbox_make_uniqueid(mailbox->name, mailbox->uidvalidity, buf);
+	mailbox->uniqueid = xstrdup(buf);
+	mailbox_lock_header(mailbox);
+	mailbox_write_header(mailbox);
+	mailbox_unlock_header(mailbox);
+    }
+
     return 0;
 }
 
 /*
  * Read the acl out of the header of 'mailbox'
  */
-int
-mailbox_read_header_acl(mailbox)
-struct mailbox *mailbox;
+int mailbox_read_header_acl(struct mailbox *mailbox)
 {
     const char *p, *eol;
 
@@ -544,10 +589,8 @@ struct mailbox *mailbox;
 /*
  * Read the the ACL for 'mailbox'.
  */
-int 
-mailbox_read_acl(mailbox, auth_state)
-struct mailbox *mailbox;
-struct auth_state *auth_state;
+int mailbox_read_acl(struct mailbox *mailbox,
+		     struct auth_state *auth_state)
 {
     int r;
     char *acl;
@@ -565,9 +608,7 @@ struct auth_state *auth_state;
 /*
  * Read the header of the index file for mailbox
  */
-int 
-mailbox_read_index_header(mailbox)
-struct mailbox *mailbox;
+int mailbox_read_index_header(struct mailbox *mailbox)
 {
     struct stat sbuf;
 
@@ -906,9 +947,7 @@ struct quota *quota;
 /*
  * Release lock on the header for 'mailbox'
  */
-void
-mailbox_unlock_header(mailbox)
-struct mailbox *mailbox;
+void mailbox_unlock_header(struct mailbox *mailbox)
 {
     assert(mailbox->header_lock_count != 0);
 
@@ -962,9 +1001,7 @@ struct quota *quota;
 /*
  * Write the header file for 'mailbox'
  */
-int
-mailbox_write_header(mailbox)
-struct mailbox *mailbox;
+int mailbox_write_header(struct mailbox *mailbox)
 {
     int flag;
     FILE *newheader;
@@ -987,7 +1024,9 @@ struct mailbox *mailbox;
     }
 
     fputs(MAILBOX_HEADER_MAGIC, newheader);
-    fprintf(newheader, "%s\n", mailbox->quota.root ? mailbox->quota.root : "");
+    fprintf(newheader, "%s\t%s\n", 
+	    mailbox->quota.root ? mailbox->quota.root : "",
+	    mailbox->uniqueid);
     for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
 	if (mailbox->flagname[flag]) {
 	    fprintf(newheader, "%s ", mailbox->flagname[flag]);
@@ -1133,13 +1172,13 @@ struct index_record *record;
 
 /*
  * Append a new record to the index file
+ * call fsync() on index_fd if 'sync' is true
  */
-int
-mailbox_append_index(mailbox, record, start, num)
-struct mailbox *mailbox;
-struct index_record *record;
-unsigned start;
-unsigned num;
+int mailbox_append_index(struct mailbox *mailbox,
+			 struct index_record *record,
+			 unsigned start,
+			 unsigned num,
+			 int sync)
 {
     int i, j, len, n;
     char *buf, *p;
@@ -1176,7 +1215,7 @@ unsigned num;
     lseek(mailbox->index_fd, last_offset, SEEK_SET);
     n = retry_write(mailbox->index_fd, buf, len);
     free(buf);
-    if (n != len || fsync(mailbox->index_fd)) {
+    if (n != len || (sync && fsync(mailbox->index_fd))) {
 	syslog(LOG_ERR, "IOERROR: appending index records for %s: %m",
 	       mailbox->name);
 	ftruncate(mailbox->index_fd, last_offset);
@@ -1808,9 +1847,7 @@ char *indexbuf;
 /*
  * Expunge the expired news articles out of the netnews mailbox 'mailbox'
  */
-int
-mailbox_expungenews(mailbox)
-struct mailbox *mailbox;
+int mailbox_expungenews(struct mailbox *mailbox)
 {
     int r;
     struct newsexpunge newsexpunge;
@@ -1949,13 +1986,11 @@ const char *name;
 }
 
 
-int 
-mailbox_create(name, path, acl, format, mailboxp)
-const char *name;
-char *path;
-const char *acl;
-int format;
-struct mailbox *mailboxp;
+int mailbox_create(const char *name,
+		   char *path,
+		   const char *acl,
+		   int format,
+		   struct mailbox *mailboxp)
 {
     int r;
     char *p=path;
@@ -2040,6 +2075,9 @@ struct mailbox *mailboxp;
     mailbox.answered = 0;
     mailbox.flagged = 0;
 
+    mailbox.uniqueid = xmalloc(sizeof(char) * 32);
+    mailbox_make_uniqueid(mailbox.name, mailbox.uidvalidity, mailbox.uniqueid);
+
     r = mailbox_write_header(&mailbox);
     if (!r) r = mailbox_write_index_header(&mailbox);
     if (!r) {
@@ -2050,7 +2088,7 @@ struct mailbox *mailboxp;
 	    r = IMAP_IOERROR;
 	}
     }
-    if (!r) r = seen_create(&mailbox);
+    if (!r) r = seen_create_mailbox(&mailbox);
 
     if (mailboxp) {
 	*mailboxp = mailbox;
@@ -2083,7 +2121,7 @@ int mailbox_delete(struct mailbox *mailbox, int delete_quota_root)
 	return r;
     }
 
-    seen_delete(mailbox);
+    seen_delete_mailbox(mailbox);
 
     if (delete_quota_root) {
 	mailbox_delete_quota(&mailbox->quota);

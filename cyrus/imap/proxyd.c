@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: proxyd.c,v 1.12 2000/03/15 10:31:14 leg Exp $ */
+/* $Id: proxyd.c,v 1.13 2000/04/06 15:14:49 leg Exp $ */
 
 #include <config.h>
 
@@ -58,7 +58,7 @@
 #include "util.h"
 #include "auth.h"
 #include "map.h"
-#include "config.h"
+#include "imapconf.h"
 #include "version.h"
 #include "charset.h"
 #include "imparse.h"
@@ -175,60 +175,69 @@ void printastring (const char *s);
 static int mailboxdata(), listdata(), lsubdata();
 static void mstringdata(char *cmd, char *name, int matchlen, int maycreate);
 
+#define BUFGROWSIZE 100
+
 /* proxy support functions */
-#define OK 0
-#define NO 1
-#define BAD 2
+enum {
+    OK = 0,
+    NO = 1,
+    BAD = 2
+};
 
 static void proxyd_gentag(char *tag)
 {
     sprintf(tag, "PROXY%d", proxyd_cmdcnt++);
 }
 
+/* pipe_until_tag() reads from 's->in' until the tagged response
+   starting with 'tag' appears.  it returns the result of the
+   tagged command, and sets 's->last_result' with the tagged line. */
+
+/* 's->last_result' assumes that tagged responses are:
+   a) short
+   b) don't contain literals
+   
+   IMAP grammar allows both, unfortunately */
 static int pipe_until_tag(struct backend *s, char *tag)
 {
     char buf[2048];
     char eol[128];
     int sl;
-    int cont = 0, r = -1;
+    int cont = 0, last = 0, r = -1;
     int taglen = strlen(tag);
 
     s->lastused = time(NULL);
     
     /* the only complication here are literals */
-    for (;;) {
-	/* if "cont" is set, we're looking at the continuation to a very
-	   long line */
+    while (!last || cont) {
+	/* if 'cont' is set, we're looking at the continuation to a very
+	   long line.
+	   if 'last' is set, we've seen the tag we're looking for, we're
+	   just reading the end of the line, and we shouldn't echo it. */
 	if (!cont) eol[0] = '\0';
 
 	if (!prot_fgets(buf, sizeof(buf), s->in)) {
 	    /* uh oh */
 	    return -1;
 	}
-	if (!cont && !strncmp(tag, buf, taglen)) {
-	    if (buf[taglen] == ' ') {
-		strncpy(s->last_result, buf + taglen + 1, LAST_RESULT_LEN);
-		switch (buf[taglen + 1]) {
-		case 'O': case 'o':
-		    r = OK;
-		    break;
-		case 'N': case 'n':
-		    r = NO;
-		    break;
-		case 'B': case 'b':
-		    r = BAD;
-		    break;
-		default: /* huh? no result? */
-		    r = -1;
-		    break;
-		}
+	if (!cont && buf[taglen] == ' ' && !strncmp(tag, buf, taglen)) {
+	    strncpy(s->last_result, buf + taglen + 1, LAST_RESULT_LEN);
+	    switch (buf[taglen + 1]) {
+	    case 'O': case 'o':
+		r = OK;
+		break;
+	    case 'N': case 'n':
+		r = NO;
+		break;
+	    case 'B': case 'b':
+		r = BAD;
+		break;
+	    default: /* huh? no result? */
+		r = -1;
+		break;
 	    }
-	    /* we currently assume that tagged responses are:
-	       a) short
-	       b) don't contain literals
 
-	       IMAP grammar allows both, unfortunately */
-	    return r;
+	    last = 1;
 	}
 	
 	sl = strlen(buf);
@@ -239,14 +248,14 @@ static int pipe_until_tag(struct backend *s, char *tag)
 
 	    /* write out this part, but we have to keep reading until we
 	       hit the end of the line */
-	    prot_write(proxyd_out, buf, sl);
+	    if (!last) prot_write(proxyd_out, buf, sl);
 	    cont = 1;
 	    continue;
 	} else {		/* we got the end of the line */
 	    int i;
 	    int litlen = 0, islit = 0;
 
-	    prot_write(proxyd_out, buf, sl);
+	    if (!last) prot_write(proxyd_out, buf, sl);
 
 	    /* now we have to see if this line ends with a literal */
 	    if (sl < 64) {
@@ -276,7 +285,7 @@ static int pipe_until_tag(struct backend *s, char *tag)
 		    int j = (litlen > sizeof(buf) ? sizeof(buf) : litlen);
 		    
 		    j = prot_read(s->in, buf, j);
-		    prot_write(proxyd_out, buf, j);
+		    if (!last) prot_write(proxyd_out, buf, j);
 		    litlen -= j;
 		}
 
@@ -313,9 +322,9 @@ static int pipe_including_tag(struct backend *s, char *tag)
     return r;
 }
 
-/* copy our current input to s until we hit a true EOL.
+/* copy our current input to 's' until we hit a true EOL.
 
-   the optimistic literal parameter is how happy we should be about assuming
+   'optimistic_literal' is how happy we should be about assuming
    that a command will go through by converting synchronizing literals of
    size less than optimistic_literal to nonsync
 
@@ -704,10 +713,14 @@ static struct backend *proxyd_findinboxserver(void)
     return s;
 }
 
+/* proxyd_refer() issues a referral to the client. */
 static proxyd_refer(char *tag, char *server, char *mailbox)
 {
-    prot_printf(proxyd_out, "%s NO [REFERRAL imap://;AUTH=*@%s/%s] "
-		"Remote mailbox.\r\n", tag, server, mailbox);
+    char url[4 * MAX_MAILBOX_NAME];
+
+    imapurl_toURL(url, server, mailbox);
+    prot_printf(proxyd_out, "%s NO [REFERRAL %s] Remote mailbox.\r\n", 
+		tag, url);
 }
 
 /*
@@ -1027,10 +1040,7 @@ void shut_down(int code)
     exit(code);
 }
 
-void
-fatal(s, code)
-const char *s;
-int code;
+void fatal(const char *s, int code)
 {
     static int recurse_code = 0;
 
@@ -1152,11 +1162,7 @@ cmdloop()
 
 	/* Only Authenticate/Login/Logout/Noop allowed when not logged in */
 	if (!proxyd_userid && !strchr("ALNC", cmd.s[0])) goto nologin;
-    
-	/* note that about half the commands (the common ones that don't
-	   hit the mailboxes file) now close the mailboxes file just in
-	   case it was open. */
-	switch (cmd.s[0]) {
+    	switch (cmd.s[0]) {
 	case 'A':
 	    if (!strcmp(cmd.s, "Authenticate")) {
 		if (c != ' ') goto missingargs;
@@ -1692,11 +1698,7 @@ cmdloop()
 /*
  * Perform a LOGIN command
  */
-void
-cmd_login(tag, user, passwd)
-char *tag;
-char *user;
-char *passwd;
+void cmd_login(char *tag, char *user, char *passwd)
 {
     char *canon_user;
     char *reply = 0;
@@ -1801,10 +1803,7 @@ char *passwd;
 /*
  * Perform an AUTHENTICATE command
  */
-void
-cmd_authenticate(tag, authtype)
-char *tag;
-char *authtype;
+void cmd_authenticate(char *tag, char *authtype)
 {
     int sasl_result;
     static struct buf clientin;
@@ -1929,10 +1928,7 @@ char *authtype;
 /*
  * Perform a NOOP command
  */
-void
-cmd_noop(tag, cmd)
-char *tag;
-char *cmd;
+void cmd_noop(char *tag, char *cmd)
 {
     if (backend_current) {
 	prot_printf(backend_current->out, "%s %s\r\n", tag, cmd);
@@ -1946,9 +1942,7 @@ char *cmd;
 /*
  * Perform a CAPABILITY command
  */
-void
-cmd_capability(tag)
-char *tag;
+void cmd_capability(char *tag)
 {
     char *sasllist; /* the list of SASL mechanisms */
     unsigned mechcount;
@@ -2174,6 +2168,44 @@ void cmd_search(char *tag, int usinguid)
     }
 }
 
+static int chomp(struct protstream *p, char *s)
+{
+    int c = prot_getc(p);
+
+    while (*s) {
+	if (tolower(c) != tolower(*s)) { break; }
+	s++;
+	c = prot_getc(p);
+    }
+    if (*s) {
+	if (c != EOF) prot_ungetc(c, p);
+	c = EOF;
+    }
+    return c;
+}
+
+/* read characters from 'p' until 'end' is seen */
+static char *grab(struct protstream *p, char end)
+{
+    int alloc = BUFGROWSIZE, cur = 0;
+    int c = -1;
+    char *ret = (char *) xmalloc(alloc);
+
+    ret[0] = '\0';
+    while ((c = prot_getc(p)) != end) {
+	if (c == EOF) break;
+	if (cur == alloc - 1) {
+	    alloc += BUFGROWSIZE;
+	    ret = xrealloc(ret, alloc);
+
+	}
+	ret[cur++] = c;
+    }
+    if (cur) ret[cur - 1] = '\0';
+
+    return ret;
+}
+
 /*
  * Perform a COPY/UID COPY command
  */    
@@ -2204,8 +2236,15 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 		    tag, cmd, sequence, strlen(mailboxname), mailboxname);
 	pipe_including_tag(backend_current, tag);
     } else {
-#if NEEDS_PROXY
 	char mytag[128];
+	int r = 0;
+	struct d {
+	    char *idate;
+	    char *flags;
+	    int seqno, uid;
+	    struct d *next;
+	} *head, *p, *q;
+	int c;
 
 	/* this is the hard case; we have to fetch the messages and append
 	   them to the other mailbox */
@@ -2213,17 +2252,294 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 	/* find out what the flags & internaldate for this message are */
 	proxyd_gentag(mytag);
 	prot_printf(backend_current->out, 
-		    "%s %s %s (FLAGS INTERNALDATE RFC822.SIZE)\r\n", 
+		    "%s %s %s (Flags Internaldate)\r\n", 
 		    tag, usinguid ? "Uid Fetch" : "Fetch", sequence);
+	head = (struct d *) xmalloc(sizeof(struct d));
+	head->flags = NULL;
+	head->seqno = head->uid = 0;
+	head->next = NULL;
+	p = head;
+	/* read all the responses into the linked list */
+	for (/* each FETCH response */;;) {
+	    int seqno = 0, uidno = 0;
+	    char *flags = NULL, *idate = NULL;
+
+	    /* read a line */
+	    c = prot_getc(backend_current->in);
+	    if (c != '*') break;
+	    c = prot_getc(backend_current->in);
+	    if (c != ' ') { /* protocol error */ c = EOF; break; }
+	    
+	    /* read seqno */
+	    seqno = 0;
+	    while (isdigit(c = prot_getc(backend_current->in))) {
+		seqno *= 10;
+		seqno += c - '0';
+	    }
+	    if (seqno == 0 || c != ' ') {
+		/* we suck and won't handle this case */
+		c = EOF; break;
+	    }
+	    c = chomp(backend_current->in, "fetch (");
+	    if (c == EOF) {
+		c = chomp(backend_current->in, "exists\r");
+		if (c == '\n') { /* got EXISTS response */
+		    prot_printf(proxyd_out, "* %d EXISTS\r\n", seqno);
+		    continue;
+		}
+	    }
+	    if (c == EOF) {
+		c = chomp(backend_current->in, "recent\r");
+		if (c == '\n') { /* got RECENT response */
+		    prot_printf(proxyd_out, "* %d RECENT\r\n", seqno);
+		    continue;
+		}
+	    }
+	    /* huh, don't get this response */
+	    if (c == EOF) break;
+	    for (/* each fetch item */;;) {
+		/* looking at the first character in an item */
+		switch (c) {
+		case 'f': case 'F': /* flags? */
+		    c = chomp(backend_current->in, "lags");
+		    if (c == ' ') { c = EOF; }
+		    else c = prot_getc(backend_current->in);
+		    if (c != '(') { c = EOF; }
+		    else {
+			flags = grab(backend_current->in, ')');
+			c = prot_getc(backend_current->in);
+		    }
+		    break;
+		case 'i': case 'I': /* internaldate? */
+		    c = chomp(backend_current->in, "nternaldate");
+		    if (c != ' ') { c = EOF; }
+		    else c = prot_getc(backend_current->in);
+		    if (c != '"') { c = EOF; }
+		    else {
+			idate = grab(backend_current->in, '"');
+			c = prot_getc(backend_current->in);
+		    }
+		    break;
+		case 'u': case 'U': /* uid */
+		    c = chomp(backend_current->in, "id");
+		    if (c != ' ') { c = EOF; }
+		    else {
+			uidno = 0;
+			while (isdigit(c = prot_getc(backend_current->in))) {
+			    uidno *= 10;
+			    uidno += c - '0';
+			}
+		    }
+		    break;
+		default: /* hmm, don't like the smell of it */
+		    c = EOF;
+		    break;
+		}
+		/* looking at either SP seperating items or a RPAREN */
+		if (c == ' ') { c = prot_getc(backend_current->in); }
+		else if (c == ')') break;
+		else { c = EOF; break; }
+	    }
+	    /* if c == EOF we have either a protocol error or a situation
+	       we can't handle, and we should die. */
+	    if (c == ')') c = prot_getc(backend_current->in);
+	    if (c == '\r') c = prot_getc(backend_current->in);
+	    if (c != '\n') { c = EOF; break; }
+
+	    /* if we're missing something, we should echo */
+	    if (!flags || !idate) {
+		char sep = '(';
+		prot_printf(proxyd_out, "* %d FETCH ", seqno);
+		if (uidno) {
+		    prot_printf(proxyd_out, "%cUID %d", sep, uidno);
+		    sep = ' ';
+		}
+		if (flags) {
+		    prot_printf(proxyd_out, "%cFLAGS %s", sep, flags);
+		    sep = ' ';
+		}
+		if (idate) {
+		    prot_printf(proxyd_out, "%cINTERNALDATE %s", sep, flags);
+		    sep = ' ';
+		}
+		prot_printf(proxyd_out, ")\r\n");
+		continue;
+	    }
+
+	    /* add to p->next */
+	    p->next = xmalloc(sizeof(struct d));
+	    p = p->next;
+	    p->idate = idate;
+	    p->flags = flags;
+	    p->uid = uidno;
+	    p->seqno = seqno;
+	}
+	if (c != EOF) {
+	    prot_ungetc(c, backend_current->in);
+
+	    /* we should be looking at the tag now */
+	    pipe_until_tag(backend_current, tag);
+	}
+	if (c == EOF) {
+	    /* uh oh, we're not happy */
+	    fatal("inter-server COPY failed", EC_TEMPFAIL);
+	}
 
 	/* start the append */
-	prot_printf(s->out, "%s Append %s %s {%d+}\r\n"
+	prot_printf(s->out, "%s Append %s", tag, name);
+	prot_printf(backend_current->out, "%s %s %s (Rfc822)\r\n",
+		    mytag, usinguid ? "Uid Fetch" : "Fetch", sequence);
+	for (/* each FETCH response */;;) {
+	    int seqno = 0, uidno = 0;
+	    char *flags = NULL, *idate = NULL;
 
-	/* ok, finish the append; we need the UIDVALIDITY and UIDs to return
-	   as part of our COPYUID response code */
+	    /* read a line */
+	    c = prot_getc(backend_current->in);
+	    if (c != '*') break;
+	    c = prot_getc(backend_current->in);
+	    if (c != ' ') { /* protocol error */ c = EOF; break; }
+	    
+	    /* read seqno */
+	    seqno = 0;
+	    while (isdigit(c = prot_getc(backend_current->in))) {
+		seqno *= 10;
+		seqno += c - '0';
+	    }
+	    if (seqno == 0 || c != ' ') {
+		/* we suck and won't handle this case */
+		c = EOF; break;
+	    }
+	    c = chomp(backend_current->in, "fetch (");
+	    if (c == EOF) {
+		c = chomp(backend_current->in, "exists\r");
+		if (c == '\n') { /* got EXISTS response */
+		    prot_printf(proxyd_out, "* %d EXISTS\r\n", seqno);
+		    continue;
+		}
+	    }
+	    if (c == EOF) {
+		c = chomp(backend_current->in, "recent\r");
+		if (c == '\n') { /* got RECENT response */
+		    prot_printf(proxyd_out, "* %d RECENT\r\n", seqno);
+		    continue;
+		}
+	    }
+	    /* huh, don't get this response */
+	    if (c == EOF) break;
+	    /* find seqno in the list */
+	    p = head;
+	    while (p->next && seqno != p->next->seqno) p = p->next;
+	    if (!p->next) break;
+	    q = p->next;
+	    p->next = q->next;
+	    for (/* each fetch item */;;) {
+		int sz;
 
-#endif
-	prot_printf(proxyd_out, "%s NO you make my life hard.\r\n");
+		switch (c) {
+		case 'u': case 'U':
+		    c = chomp(backend_current->in, "id");
+		    if (c != ' ') { c = EOF; }
+		    else {
+			uidno = 0;
+			while (isdigit(c = prot_getc(backend_current->in))) {
+			    uidno *= 10;
+			    uidno += c - '0';
+			}
+		    }
+		    break;
+
+		case 'r': case 'R':
+		    c = chomp(backend_current->in, "fc822");
+		    if (c == ' ') c = prot_getc(backend_current->in);
+		    if (c != '{') c = EOF;
+		    else {
+			sz = 0;
+			while (isdigit(c = prot_getc(backend_current->in))) {
+			    sz *= 10;
+			    sz += c - '0';
+			}
+		    }
+		    if (c == '}') c = prot_getc(backend_current->in);
+		    if (c == '\r') c = prot_getc(backend_current->in);
+		    if (c != '\n') c = EOF;
+
+		    if (c != EOF) {
+			/* append p to s->out */
+			prot_printf(s->out, " (%s) \"%s\" {%d+}\r\n", 
+				    q->flags, q->idate, sz);
+			while (sz) {
+			    char buf[2048];
+			    int j = (sz > sizeof(buf) ? sizeof(buf) : sz);
+
+			    j = prot_read(backend_current->in, buf, j);
+			    prot_write(s->out, buf, j);
+			    sz -= j;
+			}
+		    }
+
+		    break; /* end of case */
+		default:
+		    c = EOF;
+		    break;
+		}
+		/* looking at either SP seperating items or a RPAREN */
+		if (c == ' ') { c = prot_getc(backend_current->in); }
+		else if (c == ')') break;
+		else { c = EOF; break; }
+	    }
+
+	    /* if c == EOF we have either a protocol error or a situation
+	       we can't handle, and we should die. */
+	    if (c == ')') c = prot_getc(backend_current->in);
+	    if (c == '\r') c = prot_getc(backend_current->in);
+	    if (c != '\n') { c = EOF; break; }
+
+	    /* free q */
+	    free(q->idate);
+	    free(q->flags);
+	    free(q);
+	}
+
+	if (c != EOF) {
+	    char *appenduid, *b;
+
+	    /* nothing should be left in the linked list */
+	    assert(head->next == NULL);
+
+	    /* ok, finish the append; we need the UIDVALIDITY and UIDs
+	       to return as part of our COPYUID response code */
+	    prot_printf(s->out, "\r\n");
+
+	    /* should be looking at 'mytag' on 'backend_current', 
+	       'tag' on 's' */
+	    pipe_until_tag(backend_current, mytag);
+	    pipe_until_tag(s, tag);
+
+	    appenduid = strchr(s->last_result, '[');
+	    /* skip over APPENDUID */
+	    appenduid += strlen("appenduid ");
+	    b = strchr(appenduid, ']');
+	    *b = '\0';
+	    prot_printf(proxyd_out, "OK [COPYUID %s] %s\r\n", tag,
+			appenduid, error_message(IMAP_OK_COMPLETED));
+	} else {
+	    /* abort the append */
+	    prot_printf(s->out, " {0}\r\n");
+	    pipe_until_tag(backend_current, mytag);
+	    pipe_until_tag(s, tag);
+	    
+	    /* report failure */
+	    prot_printf(proxyd_out, "%s NO inter-server COPY failed\r\n", tag);
+	}
+
+	/* free dynamic memory */
+	while (head) {
+	    p = head;
+	    head = head->next;
+	    free(p->idate);
+	    free(p->flags);
+	    free(p);
+	}
     }
 }    
 
@@ -2908,9 +3224,7 @@ void cmd_namespace(tag)
  * Parse a word
  * (token not containing whitespace, parens, or double quotes)
  */
-#define BUFGROWSIZE 100
-int getword(buf)
-struct buf *buf;
+int getword(struct buf *buf)
 {
     int c;
     int len = 0;

@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- $Id: config.h,v 1.15 2000/03/15 10:31:11 leg Exp $
+ $Id: imapconf.h,v 1.1 2000/04/06 15:14:35 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -76,5 +76,8 @@ struct buf {
 void printauthready(struct protstream *out, int len, unsigned char *data);
 int getbase64string(struct protstream *in, struct buf *buf);
 int parsebase64string(char **ptr, const char *s);
+
+#define FNAME_DBDIR "/db"
+#define FNAME_USERDIR "/user/"
 
 #endif /* INCLUDED_CONFIG_H */

@@ -29,7 +29,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.12 2000/02/10 21:25:25 leg Exp $ */
+/* $Id: fud.c,v 1.13 2000/04/06 15:14:34 leg Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -50,7 +50,7 @@
 #include <pwd.h>
 
 #include "assert.h"
-#include "config.h"
+#include "imapconf.h"
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"
@@ -69,11 +69,11 @@ extern int optind;
 extern char *optarg;
 
 /* forward decls */
-int handle_request(char *who,char *name,struct sockaddr_in sfrom);
+int handle_request(char *who, char *name, struct sockaddr_in sfrom);
 
-void send_reply P((struct sockaddr_in sfrom, int status,
-		   char *user, char *mbox, int numrecent, time_t lastread,
-		   time_t lastarrived));
+void send_reply(struct sockaddr_in sfrom, int status,
+		char *user, char *mbox, int numrecent, time_t lastread,
+		time_t lastarrived);
 
 int code = 0;
 int soc;
@@ -115,7 +115,8 @@ int begin_handling(void)
                     continue;
             }
             q = buf + off + 1;
-            strncpy(mbox,q,(r - (off + 1)  < MAX_MAILBOX_NAME) ? r - (off + 1) : MAX_MAILBOX_NAME);
+            strncpy(mbox,q,(r - (off + 1)  < MAX_MAILBOX_NAME) ? 
+		             r - (off + 1) : MAX_MAILBOX_NAME);
 
             handle_request(username,mbox,sfrom);
         }

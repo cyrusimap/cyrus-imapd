@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- $Id: mailbox.h,v 1.51 2000/03/14 21:34:56 tmartin Exp $
+ $Id: mailbox.h,v 1.52 2000/04/06 15:14:42 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -29,37 +29,21 @@
 #ifndef INCLUDED_MAILBOX_H
 #define INCLUDED_MAILBOX_H
 
-#ifndef P
-#ifdef __STDC__
-#define P(x) x
-#else
-#define P(x) ()
-#endif
-#endif
-
 #include <sys/types.h>
 #include <limits.h>
 
 #include "auth.h"
 
-#ifdef __STDC__
 #define BIT32_MAX 4294967295U
-#else
-#define BIT32_MAX 4294967295
-#endif
 
 #if UINT_MAX == BIT32_MAX
 typedef unsigned int bit32;
-#else
-#if ULONG_MAX == BIT32_MAX
+#elif ULONG_MAX == BIT32_MAX
 typedef unsigned long bit32;
-#else
-#if USHRT_MAX == BIT32_MAX
+#elif USHRT_MAX == BIT32_MAX
 typedef unsigned short bit32;
 #else
 dont know what to use for bit32
-#endif
-#endif
 #endif
 
 #define MAX_MAILBOX_NAME 490
@@ -67,7 +51,9 @@ dont know what to use for bit32
 
 #define MAX_USER_FLAGS (16*8)
 
-#define MAILBOX_HEADER_MAGIC "\241\002\213\015Cyrus mailbox header\n\"The best thing about this system was that it had lots of goals.\"\n\t--Jim Morris on Andrew\n"
+#define MAILBOX_HEADER_MAGIC ("\241\002\213\015Cyrus mailbox header\n" \
+     "\"The best thing about this system was that it had lots of goals.\"\n" \
+     "\t--Jim Morris on Andrew\n")
 
 #define MAILBOX_FORMAT_NORMAL	0
 #define MAILBOX_FORMAT_NETNEWS	1
@@ -122,6 +108,7 @@ struct mailbox {
 
     /* Information in header */
     /* quota.root */
+    char *uniqueid;
     char *flagname[MAX_USER_FLAGS];
 
     /* Information in index file */
@@ -170,9 +157,7 @@ struct index_record {
 #define OFFSET_QUOTA_MAILBOX_USED 32
 #define OFFSET_POP3_LAST_LOGIN 36
 #define OFFSET_UIDVALIDITY 40
-
-/* added for ACAP */
-#define OFFSET_DELETED 44
+#define OFFSET_DELETED 44	/* added for ACAP */
 #define OFFSET_ANSWERED 48
 #define OFFSET_FLAGGED 52
 
@@ -199,73 +184,78 @@ struct index_record {
 extern char *mailbox_cache_header_name[];
 extern int mailbox_num_cache_header;
 
-typedef int mailbox_decideproc_t P((void *rock, char *indexbuf));
+typedef int mailbox_decideproc_t(void *rock, char *indexbuf);
 
-extern int P(mailbox_initialize(void));
+extern int mailbox_initialize(void);
 
-extern char *mailbox_message_fname P((struct mailbox *mailbox,
-				      unsigned long uid));
-extern int mailbox_map_message P((struct mailbox *mailbox,
+extern char *mailbox_message_fname(struct mailbox *mailbox,
+				   unsigned long uid);
+extern void mailbox_message_get_fname(struct mailbox *mailbox,
+				      unsigned long uid,
+				      char *out);
+extern int mailbox_map_message(struct mailbox *mailbox,
 				  int iscurrentdir,
 				  unsigned long uid,
-				  const char **basep, unsigned long *lenp));
-extern void mailbox_unmap_message P((struct mailbox *mailbox,
-				    unsigned long uid,
-				    const char **basep, unsigned long *lenp));
+				  const char **basep, unsigned long *lenp);
+extern void mailbox_unmap_message(struct mailbox *mailbox,
+				  unsigned long uid,
+				  const char **basep, unsigned long *lenp);
 
-extern void mailbox_reconstructmode P((void));
-extern int mailbox_open_header P((const char *name, struct auth_state *auth_state,
-				  struct mailbox *mailbox));
-extern int mailbox_open_header_path P((const char *name, const char *path,
-				       const char *acl, struct auth_state *auth_state,
-				       struct mailbox *mailbox,
-				       int suppresslog));
-extern int mailbox_open_index P((struct mailbox *mailbox));
-extern void mailbox_close P((struct mailbox *mailbox));
+extern void mailbox_reconstructmode(void);
+extern int mailbox_open_header(const char *name, struct auth_state *auth_state,
+			       struct mailbox *mailbox);
+extern int mailbox_open_header_path(const char *name, const char *path,
+				    const char *acl, 
+				    struct auth_state *auth_state,
+				    struct mailbox *mailbox,
+				    int suppresslog);
+extern int mailbox_open_index(struct mailbox *mailbox);
+extern void mailbox_close(struct mailbox *mailbox);
 
-extern int mailbox_read_header P((struct mailbox *mailbox));
-extern int mailbox_read_header_acl P((struct mailbox *mailbox));
-extern int mailbox_read_acl P((struct mailbox *mailbox, struct auth_state *auth_state));
-extern int mailbox_read_index_header P((struct mailbox *mailbox));
-extern int mailbox_read_index_record P((struct mailbox *mailbox,
-					unsigned msgno,
-					struct index_record *record));
+extern int mailbox_read_header(struct mailbox *mailbox);
+extern int mailbox_read_header_acl(struct mailbox *mailbox);
+extern int mailbox_read_acl(struct mailbox *mailbox, 
+			    struct auth_state *auth_state);
+extern int mailbox_read_index_header(struct mailbox *mailbox);
+extern int mailbox_read_index_record(struct mailbox *mailbox,
+				     unsigned msgno,
+				     struct index_record *record);
 extern int mailbox_read_quota(struct quota *quota);
 extern void mailbox_hash_quota(char *buf, const char *quotaroot);
 
-extern int mailbox_lock_header P((struct mailbox *mailbox));
-extern int mailbox_lock_index P((struct mailbox *mailbox));
-extern int mailbox_lock_pop P((struct mailbox *mailbox));
-extern int mailbox_lock_quota P((struct quota *quota));
+extern int mailbox_lock_header(struct mailbox *mailbox);
+extern int mailbox_lock_index(struct mailbox *mailbox);
+extern int mailbox_lock_pop(struct mailbox *mailbox);
+extern int mailbox_lock_quota(struct quota *quota);
 
-extern void mailbox_unlock_header P((struct mailbox *mailbox));
-extern void mailbox_unlock_index P((struct mailbox *mailbox));
-extern void mailbox_unlock_pop P((struct mailbox *mailbox));
-extern void mailbox_unlock_quota P((struct quota *quota));
+extern void mailbox_unlock_header(struct mailbox *mailbox);
+extern void mailbox_unlock_index(struct mailbox *mailbox);
+extern void mailbox_unlock_pop(struct mailbox *mailbox);
+extern void mailbox_unlock_quota(struct quota *quota);
 
-extern int mailbox_write_header P((struct mailbox *mailbox));
-extern int mailbox_write_index_header P((struct mailbox *mailbox));
-extern int mailbox_write_index_record P((struct mailbox *mailbox,
-					 unsigned msgno,
-					 struct index_record *record));
-extern int mailbox_append_index P((struct mailbox *mailbox,
-				   struct index_record *record,
-				   unsigned start, unsigned num));
-extern int mailbox_write_quota P((struct quota *quota));
+extern int mailbox_write_header(struct mailbox *mailbox);
+extern int mailbox_write_index_header(struct mailbox *mailbox);
+extern int mailbox_write_index_record(struct mailbox *mailbox,
+				      unsigned msgno,
+				      struct index_record *record);
+extern int mailbox_append_index(struct mailbox *mailbox,
+				struct index_record *record,
+				unsigned start, unsigned num, int sync);
+extern int mailbox_write_quota(struct quota *quota);
 
-extern int mailbox_delete_quota P((struct quota *quota));
+extern int mailbox_delete_quota(struct quota *quota);
 
-extern int mailbox_expunge P((struct mailbox *mailbox,
-			      int iscurrentdir,
-			      mailbox_decideproc_t *decideproc,
-			      void *deciderock));
-extern int mailbox_expungenews P((struct mailbox *mailbox));
+extern int mailbox_expunge(struct mailbox *mailbox,
+			   int iscurrentdir,
+			   mailbox_decideproc_t *decideproc,
+			   void *deciderock);
+extern int mailbox_expungenews(struct mailbox *mailbox);
 
-extern char *mailbox_findquota P((const char *name));
+extern char *mailbox_findquota(const char *name);
 
-extern int mailbox_create P((const char *name, char *path,
-			     const char *acl, int format,
-			     struct mailbox *mailboxp));
+extern int mailbox_create(const char *name, char *path,
+			  const char *acl, int format,
+			  struct mailbox *mailboxp);
 extern int mailbox_delete(struct mailbox *mailbox, int delete_quota_root);
 extern int mailbox_rename(const char *oldname, const char *oldpath, 
 			  const char *oldacl, 
@@ -274,7 +264,7 @@ extern int mailbox_rename(const char *oldname, const char *oldpath,
 			  bit32 *olduidvalidityp, bit32 *newuidvalidtyp,
 			  struct mailbox *mailboxp);
 
-extern int mailbox_copyfile P((const char *from, const char *to));
+extern int mailbox_copyfile(const char *from, const char *to);
 extern void mailbox_hash_mbox(char *buf, const char *root, const char *name);
 
 #endif /* INCLUDED_MAILBOX_H */

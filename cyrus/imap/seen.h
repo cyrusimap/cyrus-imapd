@@ -1,5 +1,5 @@
 /* seen.h -- abstract interface for /Recent and /Seen information
-   $Id: seen.h,v 1.1 2000/02/10 08:00:27 leg Exp $
+   $Id: seen.h,v 1.2 2000/04/06 15:14:51 leg Exp $
  
  # Copyright 2000 Carnegie Mellon University
  # 
@@ -33,7 +33,8 @@
 
 struct seen;
 
-int seen_open(struct mailbox *mailbox, const char *user, 
+int seen_open(struct mailbox *mailbox, 
+	      const char *user, 
 	      struct seen **seendbptr);
 
 int seen_lockread(struct seen *seendb, 
@@ -45,9 +46,11 @@ int seen_write(struct seen *seendb, time_t lastread, unsigned int lastuid,
 
 int seen_close(struct seen *seendb);
 
-int seen_create(struct mailbox *mailbox);
+int seen_create_mailbox(struct mailbox *mailbox);
+int seen_delete_mailbox(struct mailbox *mailbox);
 
-int seen_delete(struct mailbox *mailbox);
+int seen_create_user(const char *user);
+int seen_delete_user(const char *user);
 
 int seen_copy(struct mailbox *oldmailbox,struct mailbox *newmailbox);
 

@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: ctl_mboxlist.c,v 1.4 2000/03/08 01:42:12 leg Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.5 2000/04/06 15:14:32 leg Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -41,10 +41,7 @@
 #include "exitcodes.h"
 #include "mboxlist.h"
 #include "acapmbox.h"
-#include "config.h"
-
-/* xxx copied from imapd.h. shouldn't all that index_*() crap be in a index.h??? */
-extern void index_closemailbox(struct mailbox *mailbox);
+#include "imapconf.h"
 
 extern int optind;
 extern char *optarg;

@@ -19,7 +19,7 @@
 
 
 #include "xmalloc.h"
-#include "config.h"
+#include "imapconf.h"
 #include "acapmbox.h"
 #include "acappush.h"
 #include <acap.h>

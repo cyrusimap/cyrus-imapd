@@ -1,6 +1,6 @@
 /* append.c -- Routines for appending messages to a mailbox
- $Id: append.c,v 1.66 2000/03/15 10:31:10 leg Exp $
- 
+ * $Id: append.c,v 1.67 2000/04/06 15:14:29 leg Exp $
+ *
  # Copyright 1998 Carnegie Mellon University
  # 
  # No warranties, either expressed or implied, are made regarding the
@@ -44,7 +44,7 @@
 #include "mailbox.h"
 #include "message.h"
 #include "append.h"
-#include "config.h"
+#include "imapconf.h"
 #include "prot.h"
 #include "xmalloc.h"
 #include "mboxlist.h"
@@ -63,6 +63,7 @@ struct stagemsg {
 
 static int append_addseen(struct mailbox *mailbox, const char *userid,
 			  unsigned start, unsigned end);
+static struct index_record zero_index;
 
 /*
  * Open a mailbox for appending
@@ -74,81 +75,203 @@ static int append_addseen(struct mailbox *mailbox, const char *userid,
  *	quotacheck - mailbox must have this much quota left
  *		     (-1 means don't care about quota)
  *
- * On success, the struct pointed to by 'mailbox' is set up.
+ * On success, the struct pointed to by 'as' is set up.
  *
  */
-int append_setup(struct mailbox *mailbox, const char *name,
+int append_setup(struct appendstate *as, const char *name,
 		 int format, struct auth_state *auth_state,
 		 long aclcheck, long quotacheck)
 {
     int r;
 
-    r = mailbox_open_header(name, auth_state, mailbox);
+    r = mailbox_open_header(name, auth_state, &as->m);
     if (r) return r;
 
-    if ((mailbox->myrights & aclcheck) != aclcheck) {
-	r = (mailbox->myrights & ACL_LOOKUP) ?
+    if ((as->m.myrights & aclcheck) != aclcheck) {
+	r = (as->m.myrights & ACL_LOOKUP) ?
 	  IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
-	mailbox_close(mailbox);
+	mailbox_close(&as->m);
 	return r;
     }
 
-    r = mailbox_lock_header(mailbox);
+    r = mailbox_lock_header(&as->m);
     if (r) {
-	mailbox_close(mailbox);
+	mailbox_close(&as->m);
 	return r;
     }
 
-    r = mailbox_open_index(mailbox);
+    r = mailbox_open_index(&as->m);
     if (r) {
-	mailbox_close(mailbox);
+	mailbox_close(&as->m);
 	return r;
     }
 
-    if (mailbox->format != format) {
-	mailbox_close(mailbox);
+    if (as->m.format != format) {
+	mailbox_close(&as->m);
 	return IMAP_MAILBOX_NOTSUPPORTED;
     }
 
-    r = mailbox_lock_index(mailbox);
+    r = mailbox_lock_index(&as->m);
     if (r) {
-	mailbox_close(mailbox);
+	mailbox_close(&as->m);
 	return r;
     }
 
-    r = mailbox_lock_quota(&mailbox->quota);
+    r = mailbox_lock_quota(&as->m.quota);
     if (r) {
-	mailbox_close(mailbox);
+	mailbox_close(&as->m);
 	return r;
     }
 
-    if (mailbox->quota.limit >= 0 && quotacheck >= 0  &&
-	mailbox->quota.used + quotacheck > mailbox->quota.limit * QUOTA_UNITS) {
-	mailbox_close(mailbox);
+    if (as->m.quota.limit >= 0 && quotacheck >= 0 &&
+	as->m.quota.used + quotacheck > 
+	         as->m.quota.limit * QUOTA_UNITS) {
+	mailbox_close(&as->m);
 	return IMAP_QUOTA_EXCEEDED;
     }
 
+    /* zero out metadata */
+    as->orig_cache_len = as->m.cache_len;
+    as->nummsg = as->numanswered = 
+	as->numdeleted = as->numflagged = 0;
+    as->quota_used = 0;
+    as->writeheader = 0;
+
+    as->s = APPEND_READY;
+    
     return 0;
+}
+
+/* may return non-zero, indicating that the entire append has failed
+ and the mailbox is probably in an inconsistent state. */
+int append_commit(struct appendstate *as, int *uidvalidity, int *start,
+		  int *num)
+{
+    int r = 0;
+    
+    if (as->s == APPEND_DONE) return;
+    as->s = APPEND_DONE;
+
+    if (start) *start = as->m.last_uid + 1;
+    if (num) *num = as->nummsg;
+    if (uidvalidity) *uidvalidity = as->m.uidvalidity;
+
+    /* write out the header if we created new user flags */
+    if (as->writeheader && (r = mailbox_write_header(&as->m))) {
+	append_abort(as);
+	return r;
+    }
+
+    /* flush the new index records */
+    if (fsync(as->m.index_fd)) {
+	syslog(LOG_ERR, "IOERROR: writing index records for %s: %m",
+	       as->m.name);
+	append_abort(as);
+	return IMAP_IOERROR;
+    }
+
+    /* Flush out the cache file data */
+    if (fsync(as->m.cache_fd)) {
+	syslog(LOG_ERR, "IOERROR: writing cache file for %s: %m",
+	       as->m.name);
+	append_abort(as);
+	return IMAP_IOERROR;
+    }
+
+    /* Calculate new index header information */
+    as->m.exists += as->nummsg;
+    as->m.last_uid += as->nummsg;
+    
+    as->m.answered += as->numanswered;
+    as->m.deleted += as->numdeleted;
+    as->m.flagged += as->numflagged;
+    
+    as->m.last_appenddate = time(0);
+    as->m.quota_mailbox_used += as->quota_used;
+    if (as->m.minor_version > MAILBOX_MINOR_VERSION) {
+	as->m.minor_version = MAILBOX_MINOR_VERSION;
+    }
+    
+    /* Write out index header & synchronize to disk.
+       this writes to acappush too. */
+    r = mailbox_write_index_header(&as->m);
+    if (r) {
+	append_abort(as);
+	return r;
+    }
+
+    /* Write out quota file */
+    as->m.quota.used += as->quota_used;
+    r = mailbox_write_quota(&as->m.quota);
+    if (r) {
+	syslog(LOG_ERR,
+	       "LOSTQUOTA: unable to record use of %u bytes in quota file %s",
+	       as->quota_used, as->m.quota.root);
+    }
+
+    /* set seen state */
+    /* erg, non-trivial */
+
+    mailbox_unlock_quota(&as->m.quota);
+    mailbox_unlock_index(&as->m);
+    mailbox_unlock_header(&as->m);
+    mailbox_close(&as->m);
+
+    return 0;
+}
+
+/* may return non-zero, indicating an internal error of some sort. */
+int append_abort(struct appendstate *as)
+{
+    int r = 0;
+    int uid;
+
+    if (as->s == APPEND_DONE) return;
+    as->s = APPEND_DONE;
+
+    /* unlink message files that were created */
+    for (uid = as->m.last_uid + 1; uid <= as->m.last_uid + as->nummsg; uid++) {
+	char fname[MAX_MAILBOX_PATH];
+
+	/* Create message file */
+	strcpy(fname, as->m.path);
+	strcat(fname, "/");
+	mailbox_message_get_fname(&as->m, uid, fname + strlen(fname));
+	if (unlink(fname) < 0) {
+	    /* hmmm, never got appended? */
+	    /* r = IMAP_IOERROR; */
+	}
+    }
+
+    /* truncate the cache */
+    ftruncate(as->m.cache_fd, as->orig_cache_len);
+
+    /* unlock mailbox */
+    mailbox_unlock_quota(&as->m.quota);
+    mailbox_unlock_index(&as->m);
+    mailbox_unlock_header(&as->m);
+    mailbox_close(&as->m);
+
+    return r;
 }
 
 /*
  * staging, to allow for single-instance store.  the complication here
  * is multiple partitions.
  */
-int append_fromstage(struct mailbox *mailbox,
+int append_fromstage(struct appendstate *as,
 		     struct protstream *messagefile,
 		     unsigned long size, time_t internaldate,
 		     const char **flag, int nflags,
 		     const char *userid,
 		     struct stagemsg **stagep)
 {
-    struct index_record message_index;
-    static struct index_record zero_index;
+    struct mailbox *mailbox = &as->m;
+    struct index_record message_index = zero_index;
     char fname[MAX_MAILBOX_PATH];
     FILE *destfile;
     int i, r;
-    long last_cacheoffset;
-    int setseen = 0, writeheader = 0;
+    int setseen = 0;
     int userflag, emptyflag;
 
     /* for staging */
@@ -209,7 +332,7 @@ int append_fromstage(struct mailbox *mailbox,
 	fclose(f);
 	if (r) {
 	    unlink(stagefile);
-	return r;
+	    return r;
 	}
 	
 	if (sp == stage->num_parts) {
@@ -227,37 +350,27 @@ int append_fromstage(struct mailbox *mailbox,
        as the mailbox we're looking at */
 
     /* Setup */
-    last_cacheoffset= lseek(mailbox->cache_fd, 0L, SEEK_END);
-    message_index = zero_index;
-    message_index.uid = mailbox->last_uid + 1;
+    message_index.uid = mailbox->last_uid + as->nummsg + 1;
     message_index.last_updated = time(0);
     message_index.internaldate = internaldate;
+    lseek(mailbox->cache_fd, 0L, SEEK_END);
 
     /* Create message file */
+    as->nummsg++;
     strcpy(fname, mailbox->path);
     strcat(fname, "/");
-    strcat(fname, mailbox_message_fname(mailbox, message_index.uid));
+    mailbox_message_get_fname(mailbox, message_index.uid, 
+			      fname + strlen(fname));
 
     r = mailbox_copyfile(stage->parts[sp], fname);
     destfile = fopen(fname, "r");
     if (!r && destfile) {
+	/* ok, we've successfully created the file */
 	r = message_parse_file(destfile, mailbox, &message_index);
     }
     if (destfile) fclose(destfile);
-    if (!r) {
-	/* Flush out the cache file data */
-	if (fsync(mailbox->cache_fd)) {
-	    syslog(LOG_ERR, "IOERROR: writing cache file for %s: %m",
-		   mailbox->name);
-	    r = IMAP_IOERROR;
-	}
-    }
     if (r) {
-	unlink(fname);
-	ftruncate(mailbox->cache_fd, last_cacheoffset);
-	mailbox_unlock_quota(&mailbox->quota);
-	mailbox_unlock_index(mailbox);
-	mailbox_unlock_header(mailbox);
+	append_abort(as);
 	return r;
     }
 
@@ -267,7 +380,7 @@ int append_fromstage(struct mailbox *mailbox,
 	else if (!strcmp(flag[i], "\\deleted")) {
 	    if (mailbox->myrights & ACL_DELETE) {
 		message_index.system_flags |= FLAG_DELETED;
-		mailbox->deleted++;
+		as->numdeleted++;
 	    }
 	}
 	else if (!strcmp(flag[i], "\\draft")) {
@@ -278,13 +391,13 @@ int append_fromstage(struct mailbox *mailbox,
 	else if (!strcmp(flag[i], "\\flagged")) {
 	    if (mailbox->myrights & ACL_WRITE) {
 		message_index.system_flags |= FLAG_FLAGGED;
-		mailbox->flagged++;
+		as->numflagged++;
 	    }
 	}
 	else if (!strcmp(flag[i], "\\answered")) {
 	    if (mailbox->myrights & ACL_WRITE) {
 		message_index.system_flags |= FLAG_ANSWERED;
-		mailbox->answered++;
+		as->numanswered++;
 	    }
 	}
 	else if (mailbox->myrights & ACL_WRITE) {
@@ -302,7 +415,7 @@ int append_fromstage(struct mailbox *mailbox,
 	    if (userflag == MAX_USER_FLAGS && emptyflag != -1) {
 		userflag = emptyflag;
 		mailbox->flagname[userflag] = xstrdup(flag[i]);
-		writeheader++;
+		as->writeheader++;
 	    }
 
 	    if (userflag != MAX_USER_FLAGS) {
@@ -311,76 +424,18 @@ int append_fromstage(struct mailbox *mailbox,
 	}
     }
 
-    /* Write out the header if we created a new user flag */
-    if (writeheader) {
-	r = mailbox_write_header(mailbox);
-	if (r) {
-	    unlink(fname);
-	    ftruncate(mailbox->cache_fd, last_cacheoffset);
-	    mailbox_unlock_quota(&mailbox->quota);
-	    mailbox_unlock_index(mailbox);
-	    mailbox_unlock_header(mailbox);
-	    return r;
-	}
-    }
-
     /* Write out index file entry */
-    r = mailbox_append_index(mailbox, &message_index, mailbox->exists, 1);
+    r = mailbox_append_index(mailbox, &message_index, 
+			     mailbox->exists + as->nummsg - 1, 1, 0);
     if (r) {
-	unlink(fname);
-	ftruncate(mailbox->cache_fd, last_cacheoffset);
-	mailbox_unlock_quota(&mailbox->quota);
-	mailbox_unlock_index(mailbox);
-	mailbox_unlock_header(mailbox);
+	append_abort(as);
 	return r;
     }
-    
-    /* Calculate new index header information */
-    mailbox->exists++;
-    mailbox->last_uid = message_index.uid;
-    mailbox->last_appenddate = time(0);
-    mailbox->quota_mailbox_used += message_index.size;
-    if (mailbox->minor_version > MAILBOX_MINOR_VERSION) {
-	mailbox->minor_version = MAILBOX_MINOR_VERSION;
-    }
 
-    /* Write out index header; this writes to acappush too */
-    r = mailbox_write_index_header(mailbox);
-    if (r) {
-	unlink(fname);
-	ftruncate(mailbox->cache_fd, last_cacheoffset);
-	/* We don't ftruncate index file.  It doesn't matter */
-	mailbox_unlock_quota(&mailbox->quota);
-	mailbox_unlock_index(mailbox);
-	mailbox_unlock_header(mailbox);
-	return r;
-    }
-    
-    /* Write out quota file */
-    mailbox->quota.used += message_index.size;
-    r = mailbox_write_quota(&mailbox->quota);
-    if (r) {
-	syslog(LOG_ERR,
-	       "LOSTQUOTA: unable to record use of %u bytes in quota file %s",
-	       message_index.size, mailbox->quota.root);
-    }
-
-    /* Set \Seen flag if necessary */
-    if (setseen && userid && (mailbox->myrights & ACL_SEEN)) {
-	append_addseen(mailbox, userid, message_index.uid, message_index.uid);
-    }
-
-    
-
-        
-    
-
-    mailbox_unlock_quota(&mailbox->quota);
-    mailbox_unlock_index(mailbox);
-    mailbox_unlock_header(mailbox);
+    /* ok, we've successfully added a message */
+    as->quota_used += message_index.size;
 
     *stagep = stage;
-
     return 0;
 }
 
@@ -407,55 +462,53 @@ int append_removestage(struct stagemsg *stage)
 /*
  * Append to 'mailbox' from the prot stream 'messagefile'.
  * 'mailbox' must have been opened with append_setup().
- * If 'size', is nonzero it the expected size of the message.
- * If 'size' is zero, message may need LF to CRLF conversion.
+ * 'size' is the expected size of the message.
  * 'internaldate' specifies the internaldate for the new message.
  * 'flags' contains the names of the 'nflags' flags that the
  * user wants to set in the message.  If the '\Seen' flag is
  * in 'flags', then 'userid' contains the name of the user whose
  * \Seen flag gets set.
+ * 
+ * The message is not committed to the mailbox (nor is the mailbox
+ * unlocked) until append_commit() is called.  multiple
+ * append_onefromstream()s can be aborted by calling append_abort().
  */
-int
-append_fromstream(mailbox, messagefile, size, internaldate, flag, nflags,
-		  userid)
-struct mailbox *mailbox;
-struct protstream *messagefile;
-unsigned long size;
-time_t internaldate;
-const char **flag;
-int nflags;
-const char *userid;
+int append_fromstream(struct appendstate *as, 
+		      struct protstream *messagefile,
+		      unsigned long size,
+		      time_t internaldate,
+		      const char **flag,
+		      int nflags,
+		      const char *userid)
 {
-    struct index_record message_index;
-    static struct index_record zero_index;
+    struct mailbox *mailbox = &as->m;
+    struct index_record message_index = zero_index;
     char fname[MAX_MAILBOX_PATH];
     FILE *destfile;
     int i, r;
-    long last_cacheoffset;
-    int setseen = 0, writeheader = 0;
+    int setseen = 0;
     int userflag, emptyflag;
-    acapmbox_handle_t *acaphandle = NULL;
 
     assert(mailbox->format == MAILBOX_FORMAT_NORMAL);
     assert(size != 0);
 
     /* Setup */
-    last_cacheoffset= lseek(mailbox->cache_fd, 0L, SEEK_END);
-    message_index = zero_index;
-    message_index.uid = mailbox->last_uid + 1;
+    message_index.uid = mailbox->last_uid + as->nummsg + 1;
     message_index.last_updated = time(0);
     message_index.internaldate = internaldate;
+    lseek(mailbox->cache_fd, 0L, SEEK_END);
 
     /* Create message file */
     strcpy(fname, mailbox->path);
     strcat(fname, "/");
-    strcat(fname, mailbox_message_fname(mailbox, message_index.uid));
+    mailbox_message_get_fname(mailbox, message_index.uid, 
+			      fname + strlen(fname));
+    as->nummsg++;
+
     destfile = fopen(fname, "w+");
     if (!destfile) {
 	syslog(LOG_ERR, "IOERROR: creating message file %s: %m", fname);
-	mailbox_unlock_quota(&mailbox->quota);
-	mailbox_unlock_index(mailbox);
-	mailbox_unlock_header(mailbox);
+	append_abort(as);
 	return IMAP_IOERROR;
     }
 
@@ -465,20 +518,8 @@ const char *userid;
 	r = message_parse_file(destfile, mailbox, &message_index);
     }
     fclose(destfile);
-    if (!r) {
-	/* Flush out the cache file data */
-	if (fsync(mailbox->cache_fd)) {
-	    syslog(LOG_ERR, "IOERROR: writing cache file for %s: %m",
-		   mailbox->name);
-	    r = IMAP_IOERROR;
-	}
-    }
     if (r) {
-	unlink(fname);
-	ftruncate(mailbox->cache_fd, last_cacheoffset);
-	mailbox_unlock_quota(&mailbox->quota);
-	mailbox_unlock_index(mailbox);
-	mailbox_unlock_header(mailbox);
+	append_abort(as);
 	return r;
     }
 
@@ -488,7 +529,7 @@ const char *userid;
 	else if (!strcmp(flag[i], "\\deleted")) {
 	    if (mailbox->myrights & ACL_DELETE) {
 		message_index.system_flags |= FLAG_DELETED;
-		mailbox->deleted++;
+		as->numdeleted++;
 	    }
 	}
 	else if (!strcmp(flag[i], "\\draft")) {
@@ -499,13 +540,13 @@ const char *userid;
 	else if (!strcmp(flag[i], "\\flagged")) {
 	    if (mailbox->myrights & ACL_WRITE) {
 		message_index.system_flags |= FLAG_FLAGGED;
-		mailbox->flagged++;
+		as->numflagged++;
 	    }
 	}
 	else if (!strcmp(flag[i], "\\answered")) {
 	    if (mailbox->myrights & ACL_WRITE) {
 		message_index.system_flags |= FLAG_ANSWERED;
-		mailbox->answered++;
+		as->numanswered++;
 	    }
 	}
 	else if (mailbox->myrights & ACL_WRITE) {
@@ -523,7 +564,7 @@ const char *userid;
 	    if (userflag == MAX_USER_FLAGS && emptyflag != -1) {
 		userflag = emptyflag;
 		mailbox->flagname[userflag] = xstrdup(flag[i]);
-		writeheader++;
+		as->writeheader++;
 	    }
 
 	    if (userflag != MAX_USER_FLAGS) {
@@ -532,134 +573,69 @@ const char *userid;
 	}
     }
 
-    /* Write out the header if we created a new user flag */
-    if (writeheader) {
-	r = mailbox_write_header(mailbox);
-	if (r) {
-	    unlink(fname);
-	    ftruncate(mailbox->cache_fd, last_cacheoffset);
-	    mailbox_unlock_quota(&mailbox->quota);
-	    mailbox_unlock_index(mailbox);
-	    mailbox_unlock_header(mailbox);
-	    return r;
-	}
-    }
-
-    /* Write out index file entry */
-    r = mailbox_append_index(mailbox, &message_index, mailbox->exists, 1);
+    /* Write out index file entry; if we abort later, it's not
+       important */
+    r = mailbox_append_index(mailbox, &message_index, 
+			     mailbox->exists + as->nummsg - 1, 1, 0);
     if (r) {
-	unlink(fname);
-	ftruncate(mailbox->cache_fd, last_cacheoffset);
-	mailbox_unlock_quota(&mailbox->quota);
-	mailbox_unlock_index(mailbox);
-	mailbox_unlock_header(mailbox);
+	append_abort(as);
 	return r;
     }
     
-    /* Calculate new index header information */
-    mailbox->exists++;
-    mailbox->last_uid = message_index.uid;
-    mailbox->last_appenddate = time(0);
-    mailbox->quota_mailbox_used += message_index.size;
-    if (mailbox->minor_version > MAILBOX_MINOR_VERSION) {
-	mailbox->minor_version = MAILBOX_MINOR_VERSION;
-    }
+    /* ok, we've successfully added a message */
+    as->quota_used += message_index.size;
 
-    /* Write out index header; this writes to acappush */
-    r = mailbox_write_index_header(mailbox);
-    if (r) {
-	unlink(fname);
-	ftruncate(mailbox->cache_fd, last_cacheoffset);
-	/* We don't ftruncate index file.  It doesn't matter */
-	mailbox_unlock_quota(&mailbox->quota);
-	mailbox_unlock_index(mailbox);
-	mailbox_unlock_header(mailbox);
-	return r;
-    }
-    
-    /* Write out quota file */
-    mailbox->quota.used += message_index.size;
-    r = mailbox_write_quota(&mailbox->quota);
-    if (r) {
-	syslog(LOG_ERR,
-	       "LOSTQUOTA: unable to record use of %u bytes in quota file %s",
-	       message_index.size, mailbox->quota.root);
-    }
-
-    /* Set \Seen flag if necessary */
-    if (setseen && userid && (mailbox->myrights & ACL_SEEN)) {
-	append_addseen(mailbox, userid, message_index.uid, message_index.uid);
-    }
-
-    acaphandle = acapmbox_get_handle();
-    acapmbox_setproperty(acaphandle,
-			 mailbox->name,
-			 ACAPMBOX_TOTAL,
-			 mailbox->exists);
-    acapmbox_release_handle(acaphandle);
-
-    mailbox_unlock_quota(&mailbox->quota);
-    mailbox_unlock_index(mailbox);
-    mailbox_unlock_header(mailbox);
     return 0;
 }
 
 /*
- * Append to 'append_mailbox' the 'nummsg' messages from the mailbox
- * 'mailbox' listed in the array pointed to by 'copymsg'.  'mailbox'
+ * Append to 'append_mailbox' ('as') the 'nummsg' messages from the mailbox
+ * 'mailbox' listed in the array pointed to by 'copymsg'.  'as'
  * must have been opened with append_setup().  If the '\Seen' flag is
  * to be set anywhere then 'userid' contains the name of the user
  * whose \Seen flag gets set.
  */
-int
-append_copy(mailbox, append_mailbox, nummsg, copymsg, userid)
-struct mailbox *mailbox;
-struct mailbox *append_mailbox;
-int nummsg;
-struct copymsg *copymsg;
-const char *userid;
+int append_copy(struct mailbox *mailbox, 
+		struct appendstate *as,
+		int nummsg, 
+		struct copymsg *copymsg, 
+		const char *userid)
 {
+    struct mailbox *append_mailbox = &as->m;
     int msg;
     struct index_record *message_index;
-    static struct index_record zero_index;
-    unsigned long quota_usage = 0;
     char fname[MAX_MAILBOX_PATH];
     const char *src_base;
     unsigned long src_size;
     const char *startline, *endline;
     FILE *destfile;
     int r, n;
-    long last_cacheoffset;
-    int writeheader = 0;
     int flag, userflag, emptyflag;
     int seenbegin;
-    acapmbox_handle_t *acaphandle = NULL;
     
     assert(append_mailbox->format == MAILBOX_FORMAT_NORMAL);
 
     if (!nummsg) {
-	mailbox_unlock_quota(&append_mailbox->quota);
-	mailbox_unlock_index(append_mailbox);
-	mailbox_unlock_header(append_mailbox);
+	append_abort(as);
 	return 0;
     }
 
-    
-    last_cacheoffset = lseek(append_mailbox->cache_fd, 0L, SEEK_END);
+    lseek(append_mailbox->cache_fd, 0L, SEEK_END);
     message_index = (struct index_record *)
       xmalloc(nummsg * sizeof(struct index_record));
 
     /* Copy/link all files and cache info */
     for (msg = 0; msg < nummsg; msg++) {
 	message_index[msg] = zero_index;
-	message_index[msg].uid = append_mailbox->last_uid + 1 + msg;
+	message_index[msg].uid = append_mailbox->last_uid + 1 + as->nummsg;
 	message_index[msg].last_updated = time(0);
 	message_index[msg].internaldate = copymsg[msg].internaldate;
+	as->nummsg++;
 
 	strcpy(fname, append_mailbox->path);
 	strcat(fname, "/");
-	strcat(fname, mailbox_message_fname(append_mailbox,
-					    message_index[msg].uid));
+	mailbox_message_get_fname(append_mailbox, message_index[msg].uid, 
+				  fname + strlen(fname));
 
 	if (copymsg[msg].cache_len) {
 	    /* Link/copy message file */
@@ -684,8 +660,7 @@ const char *userid;
 		r = IMAP_IOERROR;
 		goto fail;
 	    }
-	}
-	else {
+	} else {
 	    /*
 	     * Have to copy the message, possibly converting LF to CR LF
 	     * Then, we have to parse the message.
@@ -733,7 +708,7 @@ const char *userid;
 	    if (r) goto fail;
 	}
 
-	quota_usage += message_index[msg].size;
+	as->quota_used += message_index[msg].size;
 	
 	/* Handle any flags that need to be copied */
 	if (append_mailbox->myrights & ACL_WRITE) {
@@ -756,7 +731,7 @@ const char *userid;
 		    userflag = emptyflag;
 		    append_mailbox->flagname[userflag] =
 		      xstrdup(copymsg[msg].flag[flag]);
-		    writeheader++;
+		    as->writeheader++;
 		}
 
 		if (userflag != MAX_USER_FLAGS) {
@@ -770,107 +745,19 @@ const char *userid;
 	      copymsg[msg].system_flags & FLAG_DELETED;
 	}
 
-	if (message_index[msg].system_flags & FLAG_DELETED)
-	    append_mailbox->deleted++;
-	if (message_index[msg].system_flags & FLAG_ANSWERED)
-	    append_mailbox->answered++;
-	if (message_index[msg].system_flags & FLAG_FLAGGED)
-	    append_mailbox->flagged++;
-
-    }
-
-    /* Flush out the cache file data */
-    if (fsync(append_mailbox->cache_fd)) {
-	syslog(LOG_ERR, "IOERROR: writing cache file for %s: %m",
-	       append_mailbox->name);
-	r = IMAP_IOERROR;
-	goto fail;
-    }
-
-    /* Write out the header if we created a new user flag */
-    if (writeheader) {
-	r = mailbox_write_header(append_mailbox);
-	if (r) goto fail;
+	if (message_index[msg].system_flags & FLAG_DELETED) as->numdeleted++;
+	if (message_index[msg].system_flags & FLAG_ANSWERED) as->numanswered++;
+	if (message_index[msg].system_flags & FLAG_FLAGGED) as->numflagged++;
     }
 
     /* Write out index file entries */
     r = mailbox_append_index(append_mailbox, message_index,
-			     append_mailbox->exists, nummsg);
-    if (r) goto fail;
-
-    /* Calculate new index header information */
-    append_mailbox->exists += nummsg;
-    append_mailbox->last_uid += nummsg;
-    append_mailbox->last_appenddate = time(0);
-    append_mailbox->quota_mailbox_used += quota_usage;
-    if (append_mailbox->minor_version > MAILBOX_MINOR_VERSION) {
-	append_mailbox->minor_version = MAILBOX_MINOR_VERSION;
-    }
-
-    /* Write out index header */
-    r = mailbox_write_index_header(append_mailbox);
-    if (r) goto fail;
-    
-    /* Write out quota file */
-    append_mailbox->quota.used += quota_usage;
-    r = mailbox_write_quota(&append_mailbox->quota);
-    if (r) {
-	syslog(LOG_ERR,
-	       "LOSTQUOTA: unable to record use of %u bytes in quota file %s",
-	       quota_usage, append_mailbox->quota.root);
-    }
-    
-    /* Set \Seen flags if necessary */
-    for (msg = seenbegin = 0; msg < nummsg; msg++) {
-	if (!seenbegin && !copymsg[msg].seen) continue;
-	if (seenbegin && copymsg[msg].seen) continue;
-
-	if (!seenbegin) {
-	    if (append_mailbox->myrights & ACL_SEEN) {
-		seenbegin = msg+1;
-	    }
-	}
-	else {
-	    append_addseen(append_mailbox, userid,
-			   message_index[seenbegin-1].uid,
-			   message_index[msg-1].uid);
-	    seenbegin = 0;
-	}
-    }
-    if (seenbegin) {
-	append_addseen(append_mailbox, userid, message_index[seenbegin-1].uid,
-		       message_index[nummsg-1].uid);
-    }
-
-
-    acaphandle = acapmbox_get_handle();
-    acapmbox_setproperty(acaphandle,
-			 mailbox->name,
-			 ACAPMBOX_TOTAL,
-			 mailbox->exists);
-    acapmbox_release_handle(acaphandle);
-
-    free(message_index);
-    mailbox_unlock_quota(&append_mailbox->quota);
-    mailbox_unlock_index(append_mailbox);
-    mailbox_unlock_header(append_mailbox);
-    return 0;
-
+			     append_mailbox->exists + as->nummsg - nummsg, 
+			     nummsg, 0);
  fail:
-    /* Remove all new message files */
-    for (msg = 0; msg < nummsg; msg++) {
-	strcpy(fname, append_mailbox->path);
-	strcat(fname, "/");
-	strcat(fname, mailbox_message_fname(append_mailbox,
-					 append_mailbox->last_uid + 1 + msg));
-	unlink(fname);
-    }
-
-    ftruncate(append_mailbox->cache_fd, last_cacheoffset);
+    if (r) append_abort(as);
     free(message_index);
-    mailbox_unlock_quota(&append_mailbox->quota);
-    mailbox_unlock_index(append_mailbox);
-    mailbox_unlock_header(append_mailbox);
+
     return r;
 }
 
@@ -881,17 +768,14 @@ const char *userid;
  * are appended.
  */
 #define COLLECTGROW 50
-int
-append_collectnews(mailbox, group, feeduid)
-struct mailbox *mailbox;
-const char *group;
-unsigned long feeduid;
+int append_collectnews(struct appendstate *as, const char *group, 
+		       unsigned long feeduid)
 {
+#if 0
     char newspath[4096], *end_newspath;
     time_t curtime, internaldate;
     struct index_record *message_index;
     int size_message_index;
-    static struct index_record zero_index;
     unsigned long quota_usage = 0;
     int msg = 0;
     int uid = mailbox->last_uid;
@@ -899,7 +783,6 @@ unsigned long feeduid;
     int r;
     long last_cacheoffset;
     struct stat sbuf;
-    acapmbox_handle_t *acaphandle = NULL;
     
     assert(mailbox->format == MAILBOX_FORMAT_NETNEWS);
 
@@ -1023,13 +906,6 @@ unsigned long feeduid;
     
     free(message_index);
 
-    acaphandle = acapmbox_get_handle();
-    acapmbox_setproperty(acaphandle,
-			 mailbox->name,
-			 ACAPMBOX_TOTAL,
-			 mailbox->exists);
-    acapmbox_release_handle(acaphandle);
-
     mailbox_unlock_quota(&mailbox->quota);
     mailbox_unlock_index(mailbox);
     mailbox_unlock_header(mailbox);
@@ -1042,6 +918,8 @@ unsigned long feeduid;
     mailbox_unlock_index(mailbox);
     mailbox_unlock_header(mailbox);
     return r;
+#endif
+    return 0;
 }
 
 
@@ -1049,11 +927,10 @@ unsigned long feeduid;
  * Set the \Seen flag for 'userid' in 'mailbox' for the messages from
  * 'start' to 'end', inclusively.
  */
-static int append_addseen(mailbox, userid, start, end)
-struct mailbox *mailbox;
-const char *userid;
-unsigned start;
-unsigned end;
+static int append_addseen(struct mailbox *mailbox,
+			  const char *userid,
+			  unsigned start,
+			  unsigned end)
 {
     int r;
     struct seen *seendb;

@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.107 2000/03/15 10:31:09 leg Exp $
+# $Id: Makefile.in,v 1.108 2000/04/06 15:14:27 leg Exp $
 # 
 # @configure_input@
 #
@@ -29,8 +29,9 @@
 # 
 DEFINES=-DSETPROCTITLE
 
-# \Seen state database.  Only one choice for now:
-SEEN=seen_local.o
+# \Seen state database.  Either 'db' (berkeley db) or 
+# 'local' (legacy flat file).
+SEEN=seen_db.o
 
 # New mail notification mechanism
 NOTIFY=notify_@WITH_NOTIFY@.o

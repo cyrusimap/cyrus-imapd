@@ -27,7 +27,7 @@
  */
 
 /*
- * $Id: syncnews.c,v 1.16 2000/02/10 21:25:35 leg Exp $
+ * $Id: syncnews.c,v 1.17 2000/04/06 15:14:52 leg Exp $
  */
 #include <config.h>
 
@@ -45,7 +45,7 @@
 #include <com_err.h>
 
 #include "assert.h"
-#include "config.h"
+#include "imapconf.h"
 #include "xmalloc.h"
 #include "exitcodes.h"
 #include "imap_err.h"

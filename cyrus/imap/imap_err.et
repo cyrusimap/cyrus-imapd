@@ -80,6 +80,9 @@ ec IMAP_MESSAGE_NOBLANKLINE,
 ec IMAP_QUOTAROOT_NONEXISTENT,
    "Quota root does not exist"
 
+ec IMAP_PROTOCOL_ERROR,
+   "Bad protocol"
+
 # following used only proxy/db operations
 
 ec IMAP_SERVER_UNAVAILABLE,

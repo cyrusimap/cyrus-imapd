@@ -2,7 +2,7 @@
 
    insert copyright */
 
-/* $Id: signals.c,v 1.2 2000/02/17 05:24:22 leg Exp $ */
+/* $Id: signals.c,v 1.3 2000/04/06 15:14:51 leg Exp $ */
 
 #include <config.h>
 
@@ -10,7 +10,7 @@
 #include <signal.h>
 #include <syslog.h>
 
-#include "config.h"
+#include "imapconf.h"
 #include "xmalloc.h"
 #include "exitcodes.h"
 

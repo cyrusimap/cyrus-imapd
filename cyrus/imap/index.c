@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.97 2000/03/07 00:56:07 tmartin Exp $
+ * $Id: index.c,v 1.98 2000/04/06 15:14:37 leg Exp $
  */
 #include <config.h>
 
@@ -896,10 +896,12 @@ char **copyuidp;
     int i;
     unsigned long totalsize = 0;
     int r;
-    struct mailbox append_mailbox;
+    struct appendstate append_mailbox;
     char *copyuid;
     int copyuid_len, copyuid_size;
     int sepchar;
+    int uidvalidity;
+    int startuid, num;
 
     copyargs.nummsg = 0;
     index_forsequence(mailbox, sequence, usinguid, index_copysetup,
@@ -920,11 +922,12 @@ char **copyuidp;
 
     r = append_copy(mailbox, &append_mailbox, copyargs.nummsg,
 		    copyargs.copymsg, imapd_userid);
-
+    if (!r) append_commit(&append_mailbox, &uidvalidity, &startuid,
+			  &num);
     if (!r) {
 	copyuid_size = 1024;
 	copyuid = xmalloc(copyuid_size);
-	sprintf(copyuid, "%lu", append_mailbox.uidvalidity);
+	sprintf(copyuid, "%lu", uidvalidity);
 	copyuid_len = strlen(copyuid);
 	sepchar = ' ';
 
@@ -948,18 +951,14 @@ char **copyuidp;
 	    }
 	    sepchar = ',';
 	}
-	if (copyargs.nummsg == 1) {
-	    sprintf(copyuid+copyuid_len, " %lu", append_mailbox.last_uid);
-	}
-	else {
+	if (num == 1) {
+	    sprintf(copyuid+copyuid_len, " %lu", startuid);
+	} else {
 	    sprintf(copyuid+copyuid_len, " %lu:%lu",
-		    append_mailbox.last_uid - copyargs.nummsg + 1,
-		    append_mailbox.last_uid);
+		    startuid, startuid + num - 1);
 	}
 	*copyuidp = copyuid;
     }
-
-    mailbox_close(&append_mailbox);
 
     return r;
 }

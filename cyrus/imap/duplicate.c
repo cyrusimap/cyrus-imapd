@@ -30,7 +30,7 @@
 #include <db.h>
 
 #include "imap_err.h"
-#include "config.h"
+#include "imapconf.h"
 #include "exitcodes.h"
 #include "xmalloc.h"
 

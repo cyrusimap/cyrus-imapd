@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: lmtpd.c,v 1.17 2000/02/25 06:16:08 leg Exp $
+ * $Id: lmtpd.c,v 1.18 2000/04/06 15:14:40 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.17 2000/02/25 06:16:08 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.18 2000/04/06 15:14:40 leg Exp $";*/
 
 #include <config.h>
 
@@ -75,7 +75,7 @@
 #include "prot.h"
 #include "imparse.h"
 #include "lock.h"
-#include "config.h"
+#include "imapconf.h"
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"
@@ -711,7 +711,9 @@ int getenvelope(void *mc, char *field, char ***contents)
 }
 
 #define SENDMAIL "/usr/lib/sendmail"
-#define POSTMASTER "postmaster"
+#define DEFAULT_POSTMASTER ("postmaster")
+
+#define POSTMASTER (config_getstring("postmaster", DEFAULT_POSTMASTER))
 
 static char *month[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
                          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
@@ -720,7 +722,7 @@ static char *wday[] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
 
 static int global_outgoing_count = 0;
 
-pid_t open_sendmail(char *argv[], FILE **sm)
+pid_t open_sendmail(const char *argv[], FILE **sm)
 {
     int fds[2];
     FILE *ret;
@@ -732,7 +734,7 @@ pid_t open_sendmail(char *argv[], FILE **sm)
 	close(fds[1]);
 	/* make the pipe be stdin */
 	dup2(fds[0], 0);
-	execv(SENDMAIL, argv);
+	execv(SENDMAIL, (char **) argv);
 
 	/* if we're here we suck */
 	printf("451 deliver: didn't exec?!?\r\n");
@@ -754,7 +756,7 @@ int send_rejection(char *origid,
 		   struct protstream *file)
 {
     FILE *sm;
-    char *smbuf[3];
+    const char *smbuf[3];
     char hostname[1024], buf[8192], *namebuf;
     int i;
     struct tm *tm;
@@ -842,7 +844,7 @@ int send_rejection(char *origid,
 int send_forward(char *forwardto, char *return_path, struct protstream *file)
 {
     FILE *sm;
-    char *smbuf[6];
+    const char *smbuf[6];
     int i;
     char buf[1024];
     pid_t p;
@@ -853,7 +855,7 @@ int send_forward(char *forwardto, char *return_path, struct protstream *file)
 	smbuf[2] = return_path;
     } else {
 	smbuf[1] = "-f";
-	smbuf[2] = "postmaster"; /* how do i represent <>? */
+	smbuf[2] = POSTMASTER;
     }
     smbuf[3] = "--";
     smbuf[4] = forwardto;
@@ -1063,7 +1065,7 @@ int autorespond(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     FILE *sm;
-    char *smbuf[3];
+    const char *smbuf[6];
     char hostname[1024], outmsgid[8192], *sievedb;
     int i, sl;
     struct tm *tm;
@@ -1074,8 +1076,11 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     script_data_t *sdata = (script_data_t *) sc;
 
     smbuf[0] = "sendmail";
-    smbuf[1] = src->addr;
-    smbuf[2] = NULL;
+    smbuf[1] = "-f";
+    smbuf[2] = POSTMASTER;
+    smbuf[3] = "--";
+    smbuf[4] = src->addr;
+    smbuf[5] = NULL;
     p = open_sendmail(smbuf, &sm);
     if (sm == NULL) {
 	*errmsg = "Could not spawn sendmail process";
@@ -2261,7 +2266,7 @@ int deliver_mailbox(struct protstream *msg,
 		    int acloverride)
 {
     int r;
-    struct mailbox mailbox;
+    struct appendstate as;
     char namebuf[MAX_MAILBOX_PATH];
     time_t now = time(NULL);
 
@@ -2284,22 +2289,23 @@ int deliver_mailbox(struct protstream *msg,
 	logdupelem(id, namebuf);
 	return 0;
     }
-    r = append_setup(&mailbox, namebuf, MAILBOX_FORMAT_NORMAL,
+    r = append_setup(&as, namebuf, MAILBOX_FORMAT_NORMAL,
 		     authstate, acloverride ? 0 : ACL_POST, 
 		     quotaoverride ? -1 : 0);
 
     if (!r) {
 	prot_rewind(msg);
 	if (singleinstance && stage) {
-	    r = append_fromstage(&mailbox, msg, size, now, 
+	    r = append_fromstage(&as, msg, size, now, 
 				 (const char **) flag, nflags,
 				 user, stage);
 	} else {
-	    r = append_fromstream(&mailbox, msg, size, now, 
+	    r = append_fromstream(&as, msg, size, now, 
 				  (const char **) flag, nflags,
 				  user);
 	}
-	mailbox_close(&mailbox);
+	if (!r) append_commit(&as, NULL, NULL, NULL);
+	else append_abort(&as);
     }
 
     if (!r && user) {
@@ -2316,7 +2322,7 @@ int deliver_mailbox(struct protstream *msg,
 }
 
 #ifdef USE_SIEVE
-/* returns true if user has a sieve file in afs */
+/* returns true if user has a sieve file */
 FILE *sieve_find_script(char *user)
 {
     char buf[1024];

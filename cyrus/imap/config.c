@@ -1,5 +1,5 @@
 /* config.c -- Configuration routines
- $Id: config.c,v 1.29 2000/02/19 04:46:03 leg Exp $
+ $Id: config.c,v 1.30 2000/04/06 15:14:31 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -41,7 +41,7 @@
 # include <unistd.h>
 #endif
 
-#include "config.h"
+#include "imapconf.h"
 #include "exitcodes.h"
 #include "xmalloc.h"
 #include "mboxlist.h"
@@ -68,7 +68,7 @@ const char *config_servername;
 
 int config_hashimapspool;
 
-static void config_read P((void));
+static void config_read(void);
 
 int config_init(ident)
 const char *ident;
