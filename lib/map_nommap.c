@@ -52,7 +52,7 @@ const char *mboxname;
 {
     char *p;
     int n, left;
-    struct sbuf *sbuf;
+    struct stat sbuf;
     char buf[80];
 
     if (newlen == MAP_UNKNOWN_LEN) {
