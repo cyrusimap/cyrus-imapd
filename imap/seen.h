@@ -1,5 +1,5 @@
 /* seen.h -- abstract interface for /Recent and /Seen information
-   $Id: seen.h,v 1.2 2000/04/06 15:14:51 leg Exp $
+   $Id: seen.h,v 1.3 2000/04/11 03:41:15 leg Exp $
  
  # Copyright 2000 Carnegie Mellon University
  # 
@@ -33,28 +33,41 @@
 
 struct seen;
 
+/* get a database handle corresponding to (mailbox, user) pair */
 int seen_open(struct mailbox *mailbox, 
 	      const char *user, 
 	      struct seen **seendbptr);
 
+/* read an entry from 'seendb' */
+int seen_read(struct seen *seendb, 
+	      time_t *lastreadptr, unsigned int *lastuidptr, 
+	      time_t *lastchangeptr, char **seenuidsptr);
+
+/* read an entry from 'seendb' and leave that record (or some superset
+   of it) locked for update */
 int seen_lockread(struct seen *seendb, 
 		  time_t *lastreadptr, unsigned int *lastuidptr, 
 		  time_t *lastchangeptr, char **seenuidsptr);
 
+/* write an entry to 'seendb'; should have been already locked by
+   seen_lockread() */
 int seen_write(struct seen *seendb, time_t lastread, unsigned int lastuid, 
 	       time_t lastchange, char *seenuids);
 
+/* close this handle */
 int seen_close(struct seen *seendb);
 
+/* discard lock on handle */
+int seen_unlock(struct seen *seendb);
+
+/* called on mailbox operations */
 int seen_create_mailbox(struct mailbox *mailbox);
 int seen_delete_mailbox(struct mailbox *mailbox);
-
-int seen_create_user(const char *user);
-int seen_delete_user(const char *user);
-
 int seen_copy(struct mailbox *oldmailbox,struct mailbox *newmailbox);
 
-int seen_unlock(struct seen *seendb);
+/* called on user operations */
+int seen_create_user(const char *user);
+int seen_delete_user(const char *user);
 
 int seen_reconstruct(struct mailbox *mailbox,
 		     time_t report_time,
