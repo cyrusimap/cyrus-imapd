@@ -696,6 +696,7 @@ char *passwd;
     char buf[MAX_MAILBOX_PATH];
     char *p;
     FILE *logfile;
+    int plaintextloginpause;
 
     canon_user = auth_canonifyid(user);
     if (!canon_user) {
@@ -733,6 +734,9 @@ char *passwd;
     else {
 	syslog(LOG_NOTICE, "login: %s %s plaintext %s", imapd_clienthost,
 	       canon_user, reply ? reply : "");
+	if (plaintextloginpause = config_getint("plaintextloginpause", 0)) {
+	    sleep(plaintextloginpause);
+	}
     }
     
 
