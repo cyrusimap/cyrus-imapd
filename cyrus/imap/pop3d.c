@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.154 2004/03/09 18:08:41 rjs3 Exp $
+ * $Id: pop3d.c,v 1.155 2004/03/12 19:16:09 ken3 Exp $
  */
 #include <config.h>
 
@@ -1573,6 +1573,7 @@ static void bitpipe(void)
 {
     struct protgroup *protin = protgroup_new(2);
     struct protgroup *protout = NULL;
+    struct timeval timeout;
     int n, shutdown = 0;
     char buf[4096];
 
@@ -1592,7 +1593,10 @@ static void bitpipe(void)
 	protgroup_free(protout);
 	protout = NULL;
 
-	n = prot_select(protin, PROT_NO_FD, &protout, NULL, NULL);
+	timeout.tv_sec = 60;
+	timeout.tv_usec = 0;
+
+	n = prot_select(protin, PROT_NO_FD, &protout, NULL, &timeout);
 	if (n == -1) {
 	    syslog(LOG_ERR, "prot_select() failed in bitpipe(): %m");
 	    fatal("prot_select() failed in bitpipe()", EC_TEMPFAIL);
