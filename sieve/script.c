@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.48 2002/02/25 02:52:08 leg Exp $
+ * $Id: script.c,v 1.49 2002/02/25 03:17:28 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -34,6 +34,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <md5global.h>
 #include <md5.h>
 #include <ctype.h>
+#include <assert.h>
 
 #include "xmalloc.h"
 
@@ -143,7 +144,7 @@ int sieve_script_parse(sieve_interp_t *interp, FILE *script,
 char **stringlist_to_chararray(stringlist_t **list)
 {
     int size = 0;
-    stringlist_t *tmp = *list;
+    stringlist_t *tmp; 
     stringlist_t *tofree;
     char **ret;
     int lup;
