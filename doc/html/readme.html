@@ -1,5 +1,6 @@
 <HTML><HEAD>
 <TITLE>Cyrus IMAP Server Release Information</TITLE>
+<!-- Changed by: John Gardiner Myers, 18-Oct-1995 -->
 </HEAD><BODY>
 <H1>                Cyrus IMAP Server Release Information</H1>
 
@@ -43,11 +44,6 @@ have the option of managing quotas and access control lists.
 <LI> NeXTStep 3.2, gcc, Kerberos
 
 </ul>
-
-The server compiles under Linux, but does not run because of a bug in
-the Linux kernel (as of 1.2.0).  The system call "<TT>mkdir("/usr",
-0777)</TT>" incorrectly sets <TT>errno</TT> to <TT>EACCES</TT> instead
-of <TT>EEXIST</TT>.
 
 Send problems/questions/suggestions to
 "<TT>cyrus-bugs@andrew.cmu.edu</TT>".
