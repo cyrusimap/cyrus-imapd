@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: annotate.h,v 1.2.6.7 2003/05/28 19:21:05 ken3 Exp $
+ * $Id: annotate.h,v 1.2.6.8 2003/05/29 18:43:25 ken3 Exp $
  */
 
 #ifndef ANNOTATE_H
@@ -90,7 +90,7 @@ void freeentryatts(struct entryattlist *l);
 /* initialize database structures */
 #define ANNOTATE_SYNC (1 << 1)
 void annotatemore_init(int flags, int (*func)(const char *, const char *,
-					      const char *, struct strlist *));
+					      struct strlist *, struct strlist *));
 
 /* open the annotation db */
 void annotatemore_open(char *name);

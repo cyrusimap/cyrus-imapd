@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.28 2003/05/28 19:54:00 ken3 Exp $
+ * $Id: annotate.c,v 1.8.6.29 2003/05/29 18:43:25 ken3 Exp $
  */
 
 #include <config.h>
@@ -88,7 +88,7 @@ static void output_attlist(struct protstream *pout, struct attvaluelist *l);
 struct db *anndb;
 static int annotate_dbopen = 0;
 int (*proxy_func)(const char *server, const char *mbox_pat,
-		  const char *entry_pat, struct strlist *attribute_pat) = NULL;
+		  struct strlist *entry_pat, struct strlist *attribute_pat) = NULL;
 #endif
 
 /* String List Management */
@@ -214,7 +214,7 @@ void freeentryatts(struct entryattlist *l)
 
 /* must be called after cyrus_init */
 void annotatemore_init(int myflags,int (*func)(const char *, const char *,
-					       const char *, struct strlist *))
+					       struct strlist *, struct strlist *))
 {
     int r;
 
@@ -528,7 +528,7 @@ struct fetchdata {
        DO NOT proxy */
     struct hash_table server_table;
     const char *orig_mailbox;
-    const char *orig_entry;
+    struct strlist *orig_entry;
     struct strlist *orig_attribute;
 };
 
@@ -690,15 +690,13 @@ int annotatemore_fetch(char *mailbox,
     struct strlist *e = entries;
     struct strlist *a = attribs;
     struct fetchdata fdata;
-    struct glob *g;
 
     memset(&fdata, 0, sizeof(struct fetchdata));
 
     /* we only do shared annotations right now */
     while (a) {
 	int attribcount;
-
-	g = glob_init(a->s, GLOB_HIERARCHY);
+	struct glob *g = glob_init(a->s, GLOB_HIERARCHY);
 	
 	for(attribcount = 0;
 	    annotation_attributes[attribcount].name;
@@ -720,10 +718,11 @@ int annotatemore_fetch(char *mailbox,
 	FILE *f;
 	char filename[1024], buf[1024], size[100], *p;
 	struct attvaluelist *attvalues;
-	int entrycount;
 
 	while (e) {
-	    g = glob_init(e->s, GLOB_HIERARCHY);
+	    int entrycount;
+	    struct glob *g = glob_init(e->s, GLOB_HIERARCHY);
+
 	    GLOB_SET_SEPARATOR(g, '/');
 
 	    for(entrycount = 0;
@@ -793,93 +792,87 @@ int annotatemore_fetch(char *mailbox,
     }
     else {
 	/* mailbox annotation(s) */
-	int entrycount, exact_match;
-	char mboxpat[MAX_MAILBOX_NAME];
 
 	while (e) {
-	    exact_match = 0;
+	    int entrycount;
+	    struct glob *g = glob_init(e->s, GLOB_HIERARCHY);
 
-	    g = glob_init(e->s, GLOB_HIERARCHY);
 	    GLOB_SET_SEPARATOR(g, '/');
 
 	    for(entrycount = 0;
 		mailbox_ro_entries[entrycount].name;
 		entrycount++) {
 
-		/* Skip this entry if it doesn't apply to our particular
-		   server type */
-		if(mailbox_ro_entries[entrycount].proxytype !=
-		   PROXY_AND_BACKEND) {
-		    if((proxy_func &&
-			mailbox_ro_entries[entrycount].proxytype != PROXY_ONLY)
-		       ||(!proxy_func &&
-			  mailbox_ro_entries[entrycount].proxytype !=
-			  BACKEND_ONLY))
-			continue;
-		}
-		
 		if(GLOB_TEST(g, mailbox_ro_entries[entrycount].name) != -1) {
-		    struct annotate_entry_list *nentry =
-			xmalloc(sizeof(struct annotate_entry_list));
+		    if(strcmp(e->s, mailbox_ro_entries[entrycount].name)) {
+			/* not an exact match, we'll have to proxy it */
+			fdata.orig_entry = entries;
+		    }
 
-		    nentry->next = fdata.entry_list;
-		    nentry->entry = &(mailbox_ro_entries[entrycount]);
-		    fdata.entry_list = nentry;
-		    if(!strcmp(e->s, mailbox_ro_entries[entrycount].name)) {
-			exact_match = 1;
-			break;
+		    /* Add this entry to our list only if it
+		       applies to our particular server type */
+		    if(mailbox_ro_entries[entrycount].proxytype ==
+		       PROXY_AND_BACKEND
+		       || (proxy_func &&
+			   mailbox_ro_entries[entrycount].proxytype ==
+			   PROXY_ONLY)
+		       || (!proxy_func &&
+			   mailbox_ro_entries[entrycount].proxytype ==
+			   BACKEND_ONLY)) {
+			struct annotate_entry_list *nentry =
+			    xmalloc(sizeof(struct annotate_entry_list));
+
+			nentry->next = fdata.entry_list;
+			nentry->entry = &(mailbox_ro_entries[entrycount]);
+			fdata.entry_list = nentry;
 		    }
 		}
 	    }
 		
 	    glob_free(&g);
-	    
-	    if (fdata.entry_list || proxy_func) {
-		/* Reset state in fetch_cb */
-		fetch_cb(NULL, 0, 0, 0);
-
-		if(proxy_func && !exact_match) {
-		    fdata.orig_mailbox = mailbox;
-		    fdata.orig_entry = e->s;
-		    fdata.orig_attribute = attribs;
-		    /* xxx better way to determine a size for this table? */
-		    construct_hash_table(&fdata.server_table, 10, 1);
-		} else if (proxy_func) {
-		    fdata.orig_mailbox = NULL;
-		    fdata.orig_entry = NULL;
-		    fdata.orig_attribute = NULL;
-		}
-
-		/* copy the pattern because findall is destructive */
-		strlcpy(mboxpat, mailbox, sizeof(mboxpat));
-		mboxname_hiersep_tointernal(namespace, mboxpat,
-					    config_virtdomains ?
-					    strcspn(mboxpat, "@") : 0);
-
-		fdata.pout = pout;
-		fdata.namespace = namespace;
-		fdata.userid = userid;
-		fdata.isadmin = isadmin;
-		fdata.auth_state = auth_state;
-		(*namespace->mboxlist_findall)(namespace, mboxpat,
-					       isadmin, userid,
-					       auth_state, fetch_cb,
-					       &fdata);
-
-		if(proxy_func && !exact_match) {
-		    free_hash_table(&fdata.server_table, NULL);
-		}
-	    }
-
-	    /* Free the entry list, if needed */
-	    while(fdata.entry_list) {
-		struct annotate_entry_list *freeme = fdata.entry_list;
-		fdata.entry_list = fdata.entry_list->next;
-		free(freeme);
-	    }
-	    fdata.entry_list = NULL;
 
 	    e = e->next;
+	}
+	    
+	if (fdata.entry_list || proxy_func) {
+	    char mboxpat[MAX_MAILBOX_NAME+1];
+
+	    /* Reset state in fetch_cb */
+	    fetch_cb(NULL, 0, 0, 0);
+
+	    if(proxy_func && fdata.orig_entry) {
+		fdata.orig_mailbox = mailbox;
+		fdata.orig_attribute = attribs;
+		/* xxx better way to determine a size for this table? */
+		construct_hash_table(&fdata.server_table, 10, 1);
+	    }
+
+	    /* copy the pattern so we can change hiersep */
+	    strlcpy(mboxpat, mailbox, sizeof(mboxpat));
+	    mboxname_hiersep_tointernal(namespace, mboxpat,
+					config_virtdomains ?
+					strcspn(mboxpat, "@") : 0);
+
+	    fdata.pout = pout;
+	    fdata.namespace = namespace;
+	    fdata.userid = userid;
+	    fdata.isadmin = isadmin;
+	    fdata.auth_state = auth_state;
+	    (*namespace->mboxlist_findall)(namespace, mboxpat,
+					   isadmin, userid,
+					   auth_state, fetch_cb,
+					   &fdata);
+
+	    if(proxy_func && fdata.orig_entry) {
+		free_hash_table(&fdata.server_table, NULL);
+	    }
+	}
+
+	/* Free the entry list, if needed */
+	while(fdata.entry_list) {
+	    struct annotate_entry_list *freeme = fdata.entry_list;
+	    fdata.entry_list = fdata.entry_list->next;
+	    free(freeme);
 	}
     }
 

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.62 2003/05/29 14:50:49 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.63 2003/05/29 18:43:25 ken3 Exp $ */
 
 #include <config.h>
 
@@ -232,7 +232,7 @@ int getannotatestoredata(char *tag, struct entryattlist **entryatts);
 
 void annotate_response(struct entryattlist *l);
 int annotate_proxy(const char *server, const char *mbox_pat,
-		   const char *entry_pat, struct strlist *attribute_pat);
+		   struct strlist *entry_pat, struct strlist *attribute_pat);
 #endif /* ENABLE_ANNOTATEMORE */
 
 void printstring (const char *s);
@@ -5066,7 +5066,7 @@ void cmd_setannotation(char *tag, char *mboxpat __attribute__((unused)))
 
 /* Proxy annotation commands to backend */
 int annotate_proxy(const char *server, const char *mbox_pat,
-		   const char *entry_pat, struct strlist *attribute_pat) 
+		   struct strlist *entry_pat, struct strlist *attribute_pat) 
 {
     struct backend *be;
     struct strlist *l;
@@ -5079,10 +5079,13 @@ int annotate_proxy(const char *server, const char *mbox_pat,
 
     /* Send command to remote */
     proxyd_gentag(mytag, sizeof(mytag));
-    prot_printf(be->out, "%s GETANNOTATION \"%s\" \"%s\" (",
-		mytag, mbox_pat, entry_pat);
+    prot_printf(be->out, "%s GETANNOTATION \"%s\" (", mytag, mbox_pat);
+    for(l=entry_pat;l;l=l->next) {
+	prot_printf(be->out, "\"%s\"%s", l->s, l->next ? " " : "");
+    }
+    prot_printf(be->out, ") (");
     for(l=attribute_pat;l;l=l->next) {
-	prot_printf(be->out, "\"%s\"", l->s);
+	prot_printf(be->out, "\"%s\"%s", l->s, l->next ? " " : "");
     }
     prot_printf(be->out, ")\r\n");
     prot_flush(be->out);
