@@ -6,6 +6,7 @@
 #include <ctype.h>
 #include <string.h>
 
+#include "imap_err.h"
 #include "mailbox.h"
 #include "parseadd.h"
 #include "xmalloc.h"
@@ -96,10 +97,10 @@ unsigned long uid;
 }
 
 /*
- * Copy a message from the stdio stream 'from' to the stdio stream 'to',
- * converting bare LF characters to CRLF.
+ * Copy a message from 'from' to 'to', converting bare LF characters to CRLF.
  */
-message_copy_stream(from, to)
+int
+message_copy_byline(from, to)
 FILE *from, *to;
 {
     char buf[4096], *p;
@@ -123,8 +124,78 @@ FILE *from, *to;
 	}
 	fputs(buf, to);
     }
-    if (ferror(from) || ferror(to)) return 1; /* XXX copy error */
+    if (ferror(from) || ferror(to)) return IMAP_IOERROR;
     return 0;
+}
+
+/*
+ * Copy a message of 'size' bytes from 'from' to 'to',
+ * ensuring minimal RFC-822 compliance.
+ */
+int
+message_copy_strict(from, to, size)
+FILE *from;
+FILE *to;
+{
+    char buf[4096+1];
+    unsigned char *p;
+    int r = 0;
+    int n;
+    int inheader = 1, sawcr = 0, sawnl;
+
+    while (size) {
+	n = fread(buf, 1, size > 4096 ? 4096 : size, from);
+	if (!n) return IMAP_IOERROR;
+
+	buf[n] = '\0';
+	if (n != strlen(buf)) r = IMAP_MESSAGE_CONTAINSNULL;
+
+	size -= n;
+	if (r) continue;
+
+	for (p = buf; *p; p++) {
+	    if (*p == '\n') {
+		if (!sawcr) r = IMAP_MESSAGE_CONTAINSNL;
+		sawcr = 0;
+	    }
+	    else if (sawcr) {
+		r = IMAP_MESSAGE_CONTAINSCR;
+		sawcr = 0;
+	    }
+	    else if (*p == '\r') {
+		sawcr = 1;
+	    }
+	}
+
+	fwrite(buf, 1, n, to);
+    }
+
+    if (r) return r;
+    rewind(to);
+
+    /* Go back and check headers */
+    sawnl = 1;
+    for (;;) {
+	if (!fgets(buf, sizeof(buf), to)) return IMAP_MESSAGE_NOBLANKLINE;
+
+	/* End of header section */
+	if (sawnl && buf[0] == '\r') return 0;
+
+	/* Check for valid header name */
+	if (sawnl && buf[0] != ' ' && buf[0] != '\t') {
+	    if (buf[0] == ':') return IMAP_MESSAGE_BADHEADER;
+	    for (p = buf; *p != ':'; p++) {
+		if (*p <= ' ') return IMAP_MESSAGE_BADHEADER;
+	    }
+	}
+
+	/* Check for non-ASCII character */ 
+	for (p = buf; *p; p++) {
+	    if (*p >= 0x80) return IMAP_MESSAGE_CONTAINS8BIT;
+	}
+
+	sawnl = (p[-1] == '\n');
+    }
 }
 
 /*
@@ -153,7 +224,7 @@ struct index_record *message_index;
     message_free_body(&body);
 
     if (ferror(mailbox->cache)) {
-	return 1;		/* XXX write error */
+	return IMAP_IOERROR;
     }
 
     return 0;

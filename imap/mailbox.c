@@ -464,8 +464,53 @@ struct mailbox *mailbox;
 }
 
 /*
+ * Write the header file for 'mailbox'
+ */
+int
+mailbox_write_header(mailbox)
+struct mailbox *mailbox;
+{
+    int flag;
+    FILE *newheader;
+    char fnamebuf[MAX_MAILBOX_PATH];
+    char newfnamebuf[MAX_MAILBOX_PATH];
+
+    assert(mailbox->header_lock_count != 0);
+
+    strcpy(fnamebuf, mailbox->path);
+    strcat(fnamebuf, FNAME_HEADER);
+    strcpy(newfnamebuf, fnamebuf);
+    strcat(newfnamebuf, ".NEW");
+
+    newheader = fopen(newfnamebuf, "w+");
+    if (!newheader) return IMAP_IOERROR;
+
+    fputs(MAILBOX_HEADER_MAGIC, newheader);
+    fprintf(newheader, "%s\n", mailbox->quota_path);
+    for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
+	if (mailbox->flagname[flag]) {
+	    fprintf(newheader, "%s ", mailbox->flagname[flag]);
+	}
+    }
+    fprintf(newheader, "\n%s\n", mailbox->acl);
+
+    fflush(newheader);
+    if (ferror(newheader) || fsync(fileno(newheader)) ||
+	flock(fileno(newheader), LOCK_EX) == -1 ||
+	rename(newfnamebuf, fnamebuf) == -1) {
+	fclose(newheader);
+	unlink(newfnamebuf);
+	return IMAP_IOERROR;
+    }
+    fclose(mailbox->header);
+    mailbox->header = newheader;
+    return 0;
+}
+
+/*
  * Write the index header for 'mailbox'
  */
+int
 mailbox_write_index_header(mailbox)
 struct mailbox *mailbox;
 {

@@ -58,12 +58,14 @@ char *name;
     r = append_setup(&mailbox, name, MAILBOX_FORMAT_NORMAL, ACL_POST, 0);
 
     if (!r) {
-	r = append_fromstream(&mailbox, stdin);
+	r = append_fromstream(&mailbox, stdin, 0, (char **)0, 0);
     }
 
     if (r) {
 	com_err("deliver", r, (r == EX_IOERR) ? error_message(errno) : NULL);
     }
+
+    mailbox_close(&mailbox);
 
     exit(convert_code(r));
 }
