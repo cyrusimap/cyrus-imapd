@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.30 2002/03/20 21:53:17 rjs3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.31 2002/03/20 23:54:43 rjs3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -95,8 +95,14 @@ struct mb_node
     struct mb_node *next;
 };
 
-struct mb_node *del_head = NULL, *act_head = NULL, **act_tail = &act_head;
-struct mb_node *wipe_head = NULL, *unflag_head = NULL;
+static struct mb_node *act_head = NULL, **act_tail = &act_head;
+static struct mb_node *del_head = NULL;
+static struct mb_node *wipe_head = NULL, *unflag_head = NULL;
+
+/* assume the local copy is authoritative and that it should just overwrite
+ * mupdate */
+static int local_authoritative = 0;
+static int warn_only = 0;
 
 /* For each mailbox that this guy gets called for, check that
  * it is a mailbox that:
@@ -185,7 +191,7 @@ static int dump_cb(void *rockp,
 				 + strlen(part) + 1);
 	int skip_flag;
 
-	/* xxx If it is marked MBTYPE_REMOTE, and it DOES match the entry,
+	/* If it is marked MBTYPE_REMOTE, and it DOES match the entry,
 	 * we need to unmark it.  If it does not match the entry in our
 	 * list, then we assume that it successfully made the move and
 	 * we delete it from the local disk */
@@ -206,12 +212,16 @@ static int dump_cb(void *rockp,
 	    /* (and later also force an mupdate push) */
 	    if(mbtype & MBTYPE_REMOTE) {
 		struct mb_node *next;
-		
-		next = xzmalloc(sizeof(struct mb_node));
-		strcpy(next->mailbox, name);
-		next->next = unflag_head;
-		unflag_head = next;
 
+		if(warn_only) {
+		    printf("Remove remote flag on: %s\n", name);
+		} else {
+		    next = xzmalloc(sizeof(struct mb_node));
+		    strcpy(next->mailbox, name);
+		    next->next = unflag_head;
+		    unflag_head = next;
+		}
+		
 		/* No need to update mupdate NOW, we'll get it when we
 		 * untag the mailbox */
 		skip_flag = 1;
@@ -232,7 +242,7 @@ static int dump_cb(void *rockp,
 	    act_head = act_head->next;
 	    free(tmp);
 	} else {
-	    /* xxx if they do not match, do an explicit MUPDATE find on the
+	    /* if they do not match, do an explicit MUPDATE find on the
 	     * mailbox, and if it is living somewhere else, delete the local
 	     * data, if it is NOT living somewhere else, recreate it in
 	     * mupdate */
@@ -240,24 +250,56 @@ static int dump_cb(void *rockp,
 
 	    /* if this is okay, we found it (so it is on another host, since
 	     * it wasn't in our list in this position) */
-	    if(!mupdate_find(d->h, name, &unused_mbdata)) {
+	    if(!local_authoritative &&
+	       !mupdate_find(d->h, name, &unused_mbdata)) {
 		/* since it lives on another server, schedule it for a wipe */
 		struct mb_node *next;
 		
-		next = xzmalloc(sizeof(struct mb_node));
-		strcpy(next->mailbox, name);
-		next->next = wipe_head;
-		wipe_head = next;
+		if(warn_only) {
+		    printf("Remove Local Mailbox: %s\n", name);
+		} else {
+		    next = xzmalloc(sizeof(struct mb_node));
+		    strcpy(next->mailbox, name);
+		    next->next = wipe_head;
+		    wipe_head = next;
+		}
 		
 		skip_flag = 1;		
 	    } else {
-		/* we need to push it to mupdate */
-		skip_flag = 0;
+		/* Check that it isn't flagged remote */
+		if(mbtype & MBTYPE_REMOTE) {
+		    /* it's flagged remote, we'll fix it later (and
+		     * push it then too) */
+		    struct mb_node *next;
+		    
+		    if(warn_only) {
+			printf("Remove remote flag on: %s\n", name);
+		    } else {
+			next = xzmalloc(sizeof(struct mb_node));
+			strcpy(next->mailbox, name);
+			next->next = unflag_head;
+			unflag_head = next;
+		    }
+		    
+		    /* No need to update mupdate now, we'll get it when we
+		     * untag the mailbox */
+		    skip_flag = 1;
+		} else {
+		    /* we should just push the change to mupdate now */
+		    skip_flag = 0;
+		}
 	    }
 	}
 
-	if(skip_flag) break;
-
+	if(skip_flag) {
+	    free(realpart);
+	    break;
+	}
+	if(warn_only) {
+	    printf("Force Activate: %s\n", name);
+	    free(realpart);
+	    break;
+	}
 	r = mupdate_activate(d->h,name,realpart,acl);
 
 	free(realpart);
@@ -330,10 +372,15 @@ void do_dump(enum mboxop op)
 	    struct mb_node *me = del_head;
 	    del_head = del_head->next;
 
-	    ret = mupdate_delete(d.h, me->mailbox);
-	    if(ret) {
-		fprintf(stderr, "couldn't mupdate delete %s\n", me->mailbox);
-		exit(1);
+	    if(warn_only) {
+		printf("Remove from MUPDATE: %s\n", me->mailbox);
+	    } else {
+		ret = mupdate_delete(d.h, me->mailbox);
+		if(ret) {
+		    fprintf(stderr,
+			    "couldn't mupdate delete %s\n", me->mailbox);
+		    exit(1);
+		}
 	    }
 		
 	    free(me);
@@ -517,7 +564,7 @@ void usage(void)
 	    "  ctl_mboxlist [-C <alt_config>] -u [-f filename]"
 	    "    [< mboxlist.dump]\n");
     fprintf(stderr, "MUPDATE populate:\n");
-    fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -m [-f filename]\n");
+    fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -m [-a] [-w] [-f filename]\n");
     exit(1);
 }
 
@@ -530,12 +577,7 @@ int main(int argc, char *argv[])
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
-    /* xxx need options with -m:
-     *     - warn only (don't delete anything)
-     *     - force authoritative (assume mupdate to be incorrect)
-     */
-
-    while ((opt = getopt(argc, argv, "C:amdurcf:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:awmdurcf:")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -584,11 +626,21 @@ int main(int argc, char *argv[])
 	    else usage();
 	    break;
 
+	case 'a':
+	    local_authoritative = 1;
+	    break;
+
+	case 'w':
+	    warn_only = 1;
+	    break;
+
 	default:
 	    usage();
 	    break;
 	}
     }
+
+    if(op != M_POPULATE && (local_authoritative || warn_only)) usage();
 
     config_init(alt_config, "ctl_mboxlist");
 
