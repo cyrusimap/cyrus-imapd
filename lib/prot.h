@@ -36,6 +36,7 @@ struct protstream {
     void *state;
     int maxplain;
     char *error;
+    int eof;
     int read_timeout;
 };
 
