@@ -1,5 +1,5 @@
 /* xmalloc.h -- Allocation package that calls fatal() when out of memory
- * $Id: xmalloc.h,v 1.12 1999/03/02 01:56:51 tjs Exp $
+ * $Id: xmalloc.h,v 1.13 1999/09/30 07:33:05 leg Exp $
  *
  *        Copyright 1998 by Carnegie Mellon University
  *
@@ -25,6 +25,12 @@
 #ifndef INCLUDED_XMALLOC_H
 #define INCLUDED_XMALLOC_H
 
+#ifndef __GNUC__
+/* can't use attributes... */
+#define __attribute__(foo)
+#endif
+
+
 extern void *xmalloc (unsigned size);
 extern void *xrealloc (void *ptr, unsigned size);
 extern char *xstrdup (const char *str);
@@ -34,6 +40,7 @@ extern void fs_give (void **ptr);
 
 /* Functions using xmalloc.h must provide a function called fatal() conforming
    to the following: */
-extern void fatal(const char *fatal_message, int fatal_code);
+extern void fatal(const char *fatal_message, int fatal_code)
+   __attribute__ ((noreturn));
 
 #endif /* INCLUDED_XMALLOC_H */
