@@ -3,7 +3,7 @@
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
 </HEAD>
 <BODY>
-<h1>Installing and Configuring the Cyrus IMAP Server</h1>
+<h1>           Installing and Configuring the Cyrus IMAP Server</h1>
 
 <P>The Internet Message Access Protocol (IMAP) is an Internet
 standards-track protocol for accessing messages (mail, news, etc).
@@ -81,7 +81,7 @@ implemented authentication modules are:
 </dl>
 
 By default, configure uses "<tt>krb</tt>" if the file <TT>/etc/krb.conf</TT>
-exists, "<tt>unix</tt>" otherwise.
+exists, "<tt>unix</tt>" otherwise. <P>
 
 <dt><tt>--with-auth=METHOD</tt>
 <dd>Specifies the authorization module to use.  Currently implemented
@@ -99,12 +99,12 @@ authorization modules are:
 
 The selected authorization module must be compatible with the 
 login module.  By default, uses the authorization module with 
-the same name as the selected login module.
+the same name as the selected login module. <P>
 
 <dt><tt>--with-inn=PATH</tt>
 <dd>Specifies the location of INN's <TT>NEWSLIB</TT> directory.  By
 default, looks for INN in a few common places.  It is not necessary
-for "<tt>configure</tt>" to find INN.
+for "<tt>configure</tt>" to find INN. <P>
 
 <dt><tt>--with-krb=PATH</tt>
 <dt><tt>--without-krb</tt>
@@ -113,7 +113,7 @@ for "<tt>configure</tt>" to find INN.
 compiler's default link path.
 
 <p>Either "<tt>--without-krb</tt>" or "<tt>--with-krb=no</tt>" prevents
-Kerberos support from being compiled in.
+Kerberos support from being compiled in. <P>
 
 <dt><tt>--with-tcl=PATH</tt>
 <dt><tt>--without-tcl</tt>
@@ -122,7 +122,7 @@ By default, looks in "<tt>/usr/local</tt>" and then in the compiler's
 default link path.  The Tcl libraries are needed to compile
 "<tt>cyradm</tt>", the administrative client.  Either
 "<tt>--without-tcl</tt>" or "<tt>--with-tcl=no</tt>" prevents cyradm from
-being compiled.
+being compiled. <P>
 
 <dt><tt>--with-lock=METHOD</tt>
 <dd>Specifies the locking method to use.  Currently implemented locking
@@ -188,7 +188,7 @@ following commands:
 <pre>
 <kbd>   make depend
    make all CFLAGS=-O
-<kbd></pre>
+</kbd></pre>
 
 If you want, you can override the "<tt>make</tt>" variables
 <tt>CFLAGS</tt> and <tt>LDFLAGS</tt> by entering the following:
@@ -206,6 +206,7 @@ files to modify once "<tt>configure</tt>" and "<tt>make</tt>" have run.
 <li>Create a user and group for the Cyrus subsystem.  The
 examples in this document assume a user of "<tt>cyrus</tt>" and
 a group of "<tt>mail</tt>", though any user and group name can be used.
+ <P>
 
 <li>After you've logged in as "<tt>root</tt>", install the "<A
 HREF="deliver.8.html"><tt>deliver</tt></A>", "<A
@@ -262,6 +263,7 @@ Create the <TT>imapd.log</TT> file:
 
 For a description of all the fields in this file, see the <A
 HREF="imapd.conf.5.html"><tt>imapd.conf</tt>(5)</A> man page.
+ <P>
 
 <li>Create the configuration directory specified by the
 "<tt>configdirectory</tt>" option in "<tt>imapd.conf.</tt>" The
@@ -313,6 +315,8 @@ Unlike most netnews systems, Cyrus allows you to have more
 than one partition.  Do not use the string "<tt>news</tt>" as a
 partition name as it is reserved for netnews.
 
+ <P>
+
 <li>If the Cyrus IMAP server was compiled with Kerberos authentication,
 create a Kerberos identity for the server and add the server's key to
 the "<tt>srvtab</tt>" file.  The file must be readable by the cyrus
@@ -349,6 +353,7 @@ If you plan to install Kerberized POP, create the Kerberos
 identity "<tt>pop.HOST@REALM</tt>" and add the key to the "<tt>srvtab</tt>"
 file.
 
+<P>
 <li>Add the following lines to the "<tt>/etc/services</tt>" file if they 
 aren't already there.
 
@@ -380,6 +385,8 @@ protocol, add the following line
 
 "<tt>cyrus</tt>" is the Cyrus user and "<tt>/usr/etc/</tt>" is the
 path name to the executable.
+
+ <P>
 
 <li>Modify the "<tt>sendmail.cf</tt>" file to have the local mailer call
 "<tt>/usr/etc/deliver</tt>" instead of "<tt>/bin/mail</tt>".  On the line
@@ -413,8 +420,9 @@ If your server is running, you'll get the following message:
 </pre>
 
 Any message other than one starting with "<tt>* OK</tt>" means there
-is a problem.  To terminate the connection, type "</kbd>. logout</kbd>".
+is a problem.  To terminate the connection, type "<kbd>. logout</kbd>".
 
+<P>
 <li>Use "<tt>imtest</tt>" to test logging in with plaintext passwords.  Change
 to the "<tt>cyrus-1.2</tt>" directory and type the following.
 
@@ -426,7 +434,7 @@ If your server is running, you'll get the following message:
 
 <pre>
    * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.2-Beta server ready
-   Password: <kbd>&lt;enter your password, imtest does not echo it&gt;</kbd>
+   Password: <var>&lt;enter your password, imtest does not echo it&gt;</var>
    . LOGIN smith X
    . OK User logged in
 </pre>
@@ -436,6 +444,7 @@ a problem.  If the test fails, a more specific error message is written
 through <tt>syslog</tt> to the server log.  To terminate the
 connection, type "<kbd>. logout</kbd>".
 
+<P>
 <li>If the server is compiled with Kerberos authentication, test
 Kerberos authentication by using the imtest command.  Change
 to the "<tt>cyrus-v1.2</tt>" directory and type the following:
@@ -465,7 +474,7 @@ connection, type "<kbd>. logout</kbd>".
 The "<tt>cyradm</tt>" command (see the <tt>cyradm</tt>(8) man page for
 complete documentation) manages the creation of, deletion of, ACLs on,
 and quotas on mailboxes.  To get an overview of the command, type
-"<kbd>cyradm &lt;host&gt;</kbd>".  Once "<tt>cyradm</tt>" has started,
+"<kbd>cyradm <var>&lt;host&gt;</var></kbd>".  Once "<tt>cyradm</tt>" has started,
 the user prompt is replaced with the name of the host followed by a
 "<tt>&gt;</tt>".  Type "<kbd>help</kbd>" at the new prompt.  The
 following information is displayed:
@@ -490,11 +499,11 @@ not running, you are prompted for your user name an password before
 you can issue any "<tt>cyradm</tt>" commands.
 
 <p>The mailbox naming convention requires that the primary mailbox (inbox)
-for anyone must be named "<tt>user.&lt;userid&gt;</tt>".
+for anyone must be named "<tt>user.<var>&lt;userid&gt;</var></tt>".
 To create a mailbox, type:
 
 <pre>
-<kbd>   createmailbox user.&lt;userid&gt;
+<kbd>   createmailbox user.<var>&lt;userid&gt;</var>
 </kbd></pre>
 
 For example, to create a mailbox for the userid "<tt>smith</tt>", type:
@@ -523,8 +532,8 @@ Note that the administrator must grant herself delete access
 explicitly before she can delete a mailbox:
 
 <pre>
-<kbd>   setaclmailbox &lt;mail_box&gt; &lt;admin_userid&gt; d
-   deletemailbox &lt;mail_box&gt;
+<kbd>   setaclmailbox <var>&lt;mail_box&gt;</var> <var>&lt;admin_userid&gt;</var> d
+   deletemailbox <var>&lt;mail_box&gt;</var>
 </kbd></pre>
 
 Once you have created mailboxes, your IMAP server installation
