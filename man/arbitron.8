@@ -1,0 +1,67 @@
+.\" -*- nroff -*-
+.TH RECONSTRUCT 8
+.\" 	(C) Copyright 1994 by Carnegie Mellon University
+.\" 
+.\"                      All Rights Reserved
+.\" 
+.\" Permission to use, copy, modify, and distribute this software and its 
+.\" documentation for any purpose and without fee is hereby granted, 
+.\" provided that the above copyright notice appear in all copies and that
+.\" both that copyright notice and this permission notice appear in 
+.\" supporting documentation, and that the name of CMU not be
+.\" used in advertising or publicity pertaining to distribution of the
+.\" software without specific, written prior permission.  
+.\" 
+.\" CMU DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING
+.\" ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL
+.\" CMU BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR
+.\" ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+.\" WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+.\" ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
+.\" SOFTWARE.
+.SH NAME
+arbitron \- arbitron mailboxes
+.SH SYNOPSIS
+.B arbitron
+[
+.B \-d
+days
+] [
+.B \-p
+months
+]
+.IR mailbox ...
+.SH DESCRIPTION
+.I Arbitron
+collects and reports readership statistics for mailboxes on the
+server.  It also optionally prunes the mailboxes of \\Seen state for
+dormant users.
+.PP
+.I Arbitron
+produces one line of output per mailbox, reporting the number of
+readers followed by a space and the name of the mailbox.
+\fBIMPORTANT: This format is subject to change in future versions.\fR
+.PP
+Each "reader" is a distinct authentication identity which has
+"s" rights to the mailbox and which has SELECTed the mailbox within
+the past
+.I days
+days.
+Users are not counted as reading their own personal mailboxes.
+Personal mailboxes are not reported unless there is at least one
+reader other than the mailboxes owner.
+.SH OPTIONS
+.TP
+.BI "\-d " days
+Count as a reader an authentication identity which has SELECTed the
+mailbox within
+.I days
+days.  Default is 30.
+.TP
+.BI "\-p " months
+Prune \\Seen state for users who have not SELECTed the mailbox within
+.I months
+months.  Default is infinity.
+.SH FILES
+.TP
+.B /etc/imapd.conf
