@@ -1,9 +1,10 @@
 ACL=acl_afs.o
-AUTH=auth_krb.o
+AUTH=auth_krb.o kerberos.o
 
 OPT=-g
 
-OBJS= acl.o glob.o kerberos.o util.o n_binsearch.o $(ACL) $(AUTH)
+OBJS= acl.o assert.o glob.o util.o n_binsearch.o xmalloc.o \
+	$(ACL) $(AUTH)
 
 CFLAGS=$(OPT) $(DEFINES) -I/usr/local/include
 
@@ -22,6 +23,15 @@ depend:
 # DO NOT DELETE THIS LINE -- make depend depends on it.
 
 acl.o: /usr/include/stdio.h acl.h
+acl_afs.o: /usr/include/stdio.h /usr/include/string.h
+acl_afs.o: /usr/include/sys/stdtypes.h acl.h auth.h xmalloc.h
+assert.o: /usr/include/stdio.h /usr/include/sysexits.h
+auth_krb.o: /usr/include/ctype.h /usr/local/include/krb.h
+auth_krb.o: /usr/local/include/mit-copyright.h /usr/local/include/des.h
+auth_krb.o: /usr/local/include/mit-cpyright.h
+auth_unix.o: /usr/include/pwd.h /usr/include/sys/types.h
+auth_unix.o: /usr/include/sys/stdtypes.h /usr/include/sys/sysmacros.h
+auth_unix.o: /usr/include/grp.h xmalloc.h
 glob.o: /usr/include/stdio.h /usr/include/ctype.h util.h glob.h
 kerberos.o: /usr/include/stdio.h /usr/include/string.h
 kerberos.o: /usr/include/sys/stdtypes.h /usr/include/netdb.h
@@ -39,3 +49,4 @@ n_binsearch.o: /usr/include/sys/types.h /usr/include/sys/stdtypes.h
 n_binsearch.o: /usr/include/sys/sysmacros.h /usr/include/sys/fcntlcom.h
 n_binsearch.o: /usr/include/sys/stat.h /usr/include/ctype.h util.h
 util.o: /usr/include/stdio.h /usr/include/ctype.h util.h
+xmalloc.o: /usr/include/stdio.h /usr/include/sysexits.h
