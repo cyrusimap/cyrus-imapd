@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.35 2002/05/29 16:49:14 rjs3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.36 2002/06/24 16:29:04 rjs3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -67,7 +67,14 @@ extern int optind;
 extern char *optarg;
 extern int errno;
 
-enum mboxop { DUMP, M_POPULATE, RECOVER, CHECKPOINT, UNDUMP, NONE };
+const int PER_COMMIT = 1000;
+
+enum mboxop { DUMP,
+	      M_POPULATE,
+	      RECOVER,
+	      CHECKPOINT,
+	      UNDUMP,
+	      NONE };
 
 void fatal(const char *message, int code)
 {
@@ -77,6 +84,12 @@ void fatal(const char *message, int code)
 
 struct dumprock {
     enum mboxop op;
+
+    struct txn *tid;
+
+    const char *partition;
+    int purge;
+
     mupdate_handle *h;
 };
 
@@ -184,9 +197,13 @@ static int dump_cb(void *rockp,
 
     switch (d->op) {
     case DUMP:
-	printf("%s\t%s\t%s\n", name, part, acl);
+	if(!d->partition || !strcmp(d->partition, part)) {
+	    printf("%s\t%s\t%s\n", name, part, acl);
+	    if(d->purge) {
+		CONFIG_DB_MBOX->delete(mbdb, key, keylen, &(d->tid), 0);
+	    }
+	}
 	break;
-
     case M_POPULATE: 
     {
 	char *realpart = xmalloc(strlen(config_servername) + 1
@@ -340,16 +357,21 @@ static int dump_cb(void *rockp,
  *    mupdate.
  */
 
-void do_dump(enum mboxop op)
+void do_dump(enum mboxop op, const char *part, int purge)
 {
     struct dumprock d;
     int ret;
     char buf[8192];
 
     assert(op == DUMP || op == M_POPULATE);
-
+    assert(op == DUMP || !purge);
+    assert(op == DUMP || !part);
+    
     d.op = op;
-
+    d.partition = part;
+    d.purge = purge;
+    d.tid = NULL;
+    
     if(op == M_POPULATE) {
 	sasl_client_init(NULL);
 
@@ -391,6 +413,11 @@ void do_dump(enum mboxop op)
 
     /* Dump Database */
     CONFIG_DB_MBOX->foreach(mbdb, "", 0, &dump_p, &dump_cb, &d, NULL);
+
+    if(d.tid) {
+	CONFIG_DB_MBOX->commit(mbdb, d.tid);
+	d.tid = NULL;
+    }
 
     if(op == M_POPULATE) {
 	/* Remove MBTYPE_MOVING flags (unflag_head) */
@@ -468,7 +495,6 @@ void do_undump(void)
     char last_commit[MAX_MAILBOX_NAME];
     char *key=NULL, *data=NULL;
     int keylen, datalen;
-    const int PER_COMMIT = 1000;
     int untilCommit = PER_COMMIT;
     struct txn *tid = NULL;
     
@@ -565,7 +591,7 @@ void do_undump(void)
 void usage(void)
 {
     fprintf(stderr, "DUMP:\n");
-    fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -d [-f filename]\n");
+    fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -d [-x] [-f filename] [-p partition]\n");
     fprintf(stderr, "UNDUMP:\n");
     fprintf(stderr,
 	    "  ctl_mboxlist [-C <alt_config>] -u [-f filename]"
@@ -577,14 +603,16 @@ void usage(void)
 
 int main(int argc, char *argv[])
 {
+    const char *partition = NULL;
     char *mboxdb_fname = NULL;
+    int dopurge = 0;
     int opt;
     enum mboxop op = NONE;
     char *alt_config = NULL;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
-    while ((opt = getopt(argc, argv, "C:awmdurcf:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:awmdurcxf:p:")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -633,6 +661,14 @@ int main(int argc, char *argv[])
 	    else usage();
 	    break;
 
+	case 'p':
+	    partition = optarg;
+	    break;
+
+	case 'x':
+	    dopurge = 1;
+	    break;
+
 	case 'a':
 	    local_authoritative = 1;
 	    break;
@@ -648,6 +684,8 @@ int main(int argc, char *argv[])
     }
 
     if(op != M_POPULATE && (local_authoritative || warn_only)) usage();
+    if(op != DUMP && partition) usage();
+    if(op != DUMP && dopurge) usage();
 
     config_init(alt_config, "ctl_mboxlist");
 
@@ -670,7 +708,7 @@ int main(int argc, char *argv[])
 	mboxlist_init(0);
 	mboxlist_open(mboxdb_fname);
 	
-	do_dump(op);
+	do_dump(op, partition, dopurge);
 	
 	mboxlist_close();
 	mboxlist_done();
