@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.68.4.15 2003/05/20 14:56:45 rjs3 Exp $ */
+/* $Id: reconstruct.c,v 1.68.4.16 2003/05/28 00:33:59 ken3 Exp $ */
 
 #include <config.h>
 
@@ -193,14 +193,30 @@ int main(int argc, char **argv)
     }
 
     for (i = optind; i < argc; i++) {
+	char *domain = NULL;
+
+	/* save domain */
+	if (config_virtdomains) domain = strchr(argv[i], '@');
+
 	strlcpy(buf, argv[i], sizeof(buf));
 	/* Translate any separators in mailboxname */
-	mboxname_hiersep_tointernal(&recon_namespace, buf, 0);
+	mboxname_hiersep_tointernal(&recon_namespace, buf,
+				    config_virtdomains ?
+				    strcspn(buf, "@") : 0);
+
+	/* reconstruct the first mailbox/pattern */
 	(*recon_namespace.mboxlist_findall)(&recon_namespace, buf, 1, 0,
 					    0, do_reconstruct, 
 					    fflag ? &head : NULL);
 	if (rflag) {
+	    /* build a pattern for submailboxes */
+	    /* XXX mboxlist_findall() is destructive and removes domain */
 	    strlcat(buf, ".*", sizeof(buf));
+
+	    /* append the domain */
+	    if (domain) strlcat(buf, domain, sizeof(buf));
+
+	    /* reconstruct the submailboxes */
 	    (*recon_namespace.mboxlist_findall)(&recon_namespace, buf, 1, 0,
 						0, do_reconstruct, 
 						fflag ? &head : NULL);
