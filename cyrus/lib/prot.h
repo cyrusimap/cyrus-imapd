@@ -1,5 +1,5 @@
 /* prot.h -- stdio-like module that handles IMAP protection mechanisms
- * $Id: prot.h,v 1.28 2000/05/23 20:56:19 robeson Exp $
+ * $Id: prot.h,v 1.29 2000/11/06 21:12:38 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -60,6 +60,8 @@
 struct protstream;
 
 typedef void prot_readcallback_t(struct protstream *s, void *rock);
+typedef void prot_waiteventcallback_t(struct protstream *s, void *rock);
+typedef struct prot_waitevent *prot_waitevent_t;
 
 struct protstream {
     unsigned char *ptr;
@@ -78,6 +80,7 @@ struct protstream {
     struct protstream *flushonread;
     prot_readcallback_t *readcallback_proc;
     void *readcallback_rock;
+    prot_waitevent_t waitevent;
     int buf_size;
     unsigned char *buf;
 
@@ -109,6 +112,10 @@ extern int prot_setflushonread(struct protstream *s,
 			       struct protstream *flushs);
 extern int prot_setreadcallback(struct protstream *s,
 				prot_readcallback_t *proc, void *rock);
+extern prot_waitevent_t prot_addwaitevent(struct protstream *s, time_t period,
+					  prot_waiteventcallback_t *proc,
+					  void *rock);
+extern void prot_removewaitevent(struct protstream *s, prot_waitevent_t event);
 extern const char *prot_error(struct protstream *s);
 extern int prot_rewind(struct protstream *s);
 extern int prot_fill(struct protstream *s);

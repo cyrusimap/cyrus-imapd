@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.53 2000/06/06 21:31:44 leg Exp $
+ * $Id: prot.c,v 1.54 2000/11/06 21:12:38 ken3 Exp $
  */
 
 #include <config.h>
@@ -67,6 +67,14 @@
 #include "prot.h"
 #include "xmalloc.h"
 #include "assert.h"
+
+struct prot_waitevent {
+    time_t mark;
+    time_t period;
+    prot_waiteventcallback_t *proc;
+    void *rock;
+    prot_waitevent_t next;
+};
 
 /*
  * Create a new protection stream for file descriptor 'fd'.  Stream
@@ -96,6 +104,7 @@ int write;
     newstream->flushonread = 0;
     newstream->readcallback_proc = 0;
     newstream->readcallback_rock = 0;
+    newstream->waitevent = 0;
     newstream->conn = NULL;
     newstream->saslssf=0;
 
@@ -241,6 +250,65 @@ int prot_setreadcallback(struct protstream *s,
 }
 
 /*
+ * Add an event on stream 's' so that the callback 'proc' taking
+ * argument 'rock' will be called each 'period' seconds while
+ * waiting for input.
+ */
+prot_waitevent_t prot_addwaitevent(struct protstream *s, time_t period,
+				   prot_waiteventcallback_t *proc,
+				   void *rock)
+{
+    prot_waitevent_t new, cur;
+
+    /* if we aren't passed a callback function, don't bother */
+    if (!proc) return s->waitevent;
+
+    /* create new timer struct */
+    new = (prot_waitevent_t) xmalloc(sizeof(struct prot_waitevent));
+    new->mark = time(0) + period;
+    new->period = period;
+    new->proc = proc;
+    new->rock = rock;
+    new->next = NULL;
+
+    /* add the new event to the end of the list */
+    if (!s->waitevent)
+	s->waitevent = new;
+    else {
+	cur = s->waitevent;
+	while (cur && cur->next) cur = cur->next;
+	cur->next = new;
+    }
+
+    return new;
+}
+
+/*
+ * Remove 'event' from stream 's'.
+ */
+void prot_removewaitevent(struct protstream *s, prot_waitevent_t event)
+{
+    prot_waitevent_t prev, cur;
+
+    prev = NULL;
+    cur = s->waitevent;
+
+    while (cur && cur != event) {
+	prev = cur;
+	cur = cur->next;
+    }
+
+    if (!cur) return;
+
+    if (!prev)
+	s->waitevent = cur->next;
+    else
+	prev->next = cur->next;
+
+    free(cur);
+}
+
+/*
  * Return a pointer to a statically-allocated string describing the
  * error encountered on 's'.  If there is no error condition, return a
  * null pointer.
@@ -280,6 +348,8 @@ int prot_fill(struct protstream *s)
     struct timeval timeout;
     fd_set rfds;
     int haveinput; 
+    time_t read_timeout;
+    prot_waitevent_t event;
    
     assert(!s->write);
 
@@ -308,14 +378,27 @@ int prot_fill(struct protstream *s)
 	}
 
 	if (!haveinput && (s->read_timeout || s->dontblock)) {
-	    timeout.tv_sec = s->read_timeout;
-	    timeout.tv_usec = 0;
-	    FD_ZERO(&rfds);
-	    FD_SET(s->fd, &rfds);
+	    read_timeout = time(0) + s->read_timeout;
 	    do {
+		/* execute each callback that has timed out */
+		event = s->waitevent;
+		while (event) {
+		    if (time(0) >= event->mark) {
+			(*event->proc)(s, event->rock);
+			event->mark = time(0) + event->period;
+		    }
+		    event = event->next;
+		}
+
+		/* check for input */
+		timeout.tv_sec = 0;
+		timeout.tv_usec = 0;
+		FD_ZERO(&rfds);
+		FD_SET(s->fd, &rfds);
 		r = select(s->fd + 1, &rfds, (fd_set *)0, (fd_set *)0,
 			   &timeout);
-	    } while (r == -1 && errno == EINTR);
+	    } while ((r == 0 || (r == -1 && errno == EINTR)) &&
+		     time(0) < read_timeout);
 	    if (r == 0) {
 		if (!s->dontblock) {
 		    s->error = "idle for too long";
