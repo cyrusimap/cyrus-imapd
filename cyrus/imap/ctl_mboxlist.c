@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.46 2004/03/11 18:36:42 ken3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.47 2004/03/17 15:12:54 rjs3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -699,8 +699,14 @@ int main(int argc, char *argv[])
     case M_POPULATE:
 	mboxlist_init(0);
 	mboxlist_open(mboxdb_fname);
+
+ 	quotadb_init(0);
+ 	quotadb_open(NULL);
 	
 	do_dump(op, partition, dopurge);
+
+	quotadb_close();
+	quotadb_done();
 	
 	mboxlist_close();
 	mboxlist_done();
@@ -710,8 +716,14 @@ int main(int argc, char *argv[])
 	mboxlist_init(0);
 	mboxlist_open(mboxdb_fname);
 
+ 	quotadb_init(0);
+ 	quotadb_open(NULL);
+
 	do_undump();
 
+	quotadb_close();
+	quotadb_done();
+	
 	mboxlist_close();
 	mboxlist_done();
 	break;
