@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.88 2002/03/26 19:24:54 rjs3 Exp $
+ * $Id: append.c,v 1.89 2002/04/02 00:04:30 leg Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -385,6 +385,7 @@ FILE *append_newstage(const char *mailboxname, time_t internaldate,
     sprintf(stage->fname, "%d-%d",(int) getpid(), (int) internaldate);
     stage->num_parts = 5; /* room for 5 paths */
 
+    /* xxx check errors */
     mboxlist_findstage(mailboxname, stagedir);
     strcpy(stagefile, stagedir);
     strcat(stagefile, stage->fname);
@@ -442,6 +443,7 @@ int append_fromstage(struct appendstate *as,
 
     zero_index(message_index);
 
+    /* xxx check errors */
     mboxlist_findstage(mailbox->name, stagefile);
     strcat(stagefile, stage->fname);
 
@@ -460,6 +462,7 @@ int append_fromstage(struct appendstate *as,
 	    /* maybe the directory doesn't exist? */
 	    char stagedir[1024];
 
+	    /* xxx check errors */
 	    mboxlist_findstage(mailbox->name, stagedir);
 	    if (mkdir(stagedir, 0755) != 0) {
 		syslog(LOG_ERR, "couldn't create stage directory: %s: %m",
