@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/NNTP/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.93.2.5 2004/05/02 00:27:06 ken3 Exp $
+ * $Id: imtest.c,v 1.93.2.6 2004/05/31 18:22:57 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -181,7 +181,7 @@ struct capa_cmd_t {
     char *resp;		/* end of capability response */
     char *tls;		/* [OPTIONAL] TLS capability string */
     char *auth;		/* [OPTIONAL] AUTH capability string */
-    char *(*parse_mechlist)(char *str, struct protocol_t *prot);
+    char *(*parse_mechlist)(const char *str, struct protocol_t *prot);
 			/* [OPTIONAL] parse capability string,
 			   returns space-separated list of mechs */
 };
@@ -1554,38 +1554,28 @@ static int generic_pipe(char *buf, int len, void *rock)
  *
  */
 
-static char *imap_parse_mechlist(char *str, struct protocol_t *prot)
+static char *imap_parse_mechlist(const char *str, struct protocol_t *prot)
 {
+    char *ret = xzmalloc(strlen(str)+1);
     char *tmp;
     int num = 0;
-    char *ret = malloc(strlen(str)+1);
-
-    if (ret == NULL) return NULL;
-    
-    strcpy(ret, "");
     
     if (strstr(str, "SASL-IR")) {
 	/* server supports initial response in AUTHENTICATE command */
 	prot->sasl_cmd.maxlen = INT_MAX;
     }
     
-    while ((tmp = strstr(str,"AUTH=")) != NULL) {
-	char *end = tmp+5;
-	tmp += 5;
+    while ((tmp = strstr(str, " AUTH="))) {
+	char *end = (tmp += 6);
 	
-	while(((*end) != ' ') && ((*end) != '\0'))
-	    end++;
-	
-	(*end)='\0';
+	while((*end != ' ') && (*end != '\0')) end++;
 	
 	/* add entry to list */
-	if (num > 0)
-	    strcat(ret, " ");
-	strcat(ret, tmp);
-	num++;
+	if (num++ > 0) strcat(ret, " ");
+	strlcat(ret, tmp, strlen(ret) + (end - tmp) + 1);
 	
 	/* reset the string */
-	str = end+1;
+	str = end + 1;
     }
     
     return ret;
@@ -1966,6 +1956,38 @@ static int pop3_do_auth(struct sasl_cmd_t *sasl_cmd, void *rock,
 
 /********************************** NNTP *************************************/
 
+/*
+ * Parse a mech list of the form: ... SASL:foo,bar ...
+ *
+ * Return: string with mechs separated by spaces
+ *
+ */
+
+static char *nntp_parse_mechlist(const char *str, struct protocol_t *prot)
+{
+    char *ret = xzmalloc(strlen(str)+1);
+    char *tmp;
+    int num = 0;
+    
+    tmp = strstr(str, " SASL:") + 6;
+
+    do {
+	char *end = tmp;
+	
+	while ((*end != ',') && (*end != ' ') && (*end != '\0')) end++;
+	
+	/* add entry to list */
+	if (num++ > 0) strcat(ret, " ");
+	strlcat(ret, tmp, strlen(ret) + (end - tmp) + 1);
+
+	/* reset the string */
+	tmp = end;
+
+    } while (*tmp++ != '\0');
+    
+    return ret;
+}
+
 static int auth_nntp(void)
 {
     char str[1024];
@@ -2034,10 +2056,12 @@ static int nntp_do_auth(struct sasl_cmd_t *sasl_cmd,
 
 static char *nntp_parse_success(char *str)
 {
-    char *success = NULL;
+    char *success = NULL, *tmp;
 
     if (!strncmp(str, "283 ", 4)) {
 	success = str+4;
+	if ((tmp = strchr(success, ' ')))
+	    *tmp = '\0'; /* clip trailing comment */
     }
 
     return success;
@@ -2187,7 +2211,7 @@ void usage(char *prog, char *prot)
 static struct protocol_t protocols[] = {
     { "imap", "imaps", "imap",
       { 0, "* OK", NULL },
-      { "C01 CAPABILITY", "C01 ", "STARTTLS", "AUTH=", &imap_parse_mechlist },
+      { "C01 CAPABILITY", "C01 ", " STARTTLS", " AUTH=", &imap_parse_mechlist },
       { "S01 STARTTLS", "S01 OK", "S01 NO", 0 },
       { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*", NULL },
       &imap_do_auth, { "Q01 LOGOUT", "Q01 " },
@@ -2200,11 +2224,11 @@ static struct protocol_t protocols[] = {
       { "AUTH", 255, 0, "+OK", "-ERR", "+ ", "*", NULL },
       &pop3_do_auth, { "QUIT", "+OK" }, NULL, NULL, NULL
     },
-    { "nntp", "nntps", "news",
+    { "nntp", "nntps", "nntp",
       { 0, "20", NULL },
-      { "LIST EXTENSIONS", ".", "STARTTLS", "SASL ", NULL },
+      { "LIST EXTENSIONS", ".", "STARTTLS", " SASL:", &nntp_parse_mechlist },
       { "STARTTLS", "382", "580", 0 },
-      { "AUTHINFO SASL", 512, 0, "28", "5", "383 ", "*", &nntp_parse_success },
+      { "AUTHINFO SASL", 512, 0, "28", "48", "383 ", "*", &nntp_parse_success },
       &nntp_do_auth, { "QUIT", "205" }, NULL, NULL, NULL
     },
     { "lmtp", NULL, "lmtp",

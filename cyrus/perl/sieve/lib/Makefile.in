@@ -40,9 +40,10 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.in,v 1.9.2.2 2004/05/25 01:28:20 ken3 Exp $
+# $Id: Makefile.in,v 1.9.2.3 2004/05/31 18:23:00 ken3 Exp $
 # 
 srcdir = @srcdir@
+top_srcdir = @top_srcdir@
 VPATH = @srcdir@
 
 CC = @CC@
@@ -55,8 +56,9 @@ LIBS = ../../../lib/libcyrus.a ../../../lib/libcyrus_min.a @LIB_DYN_SASL@ @LIBS@
 IMAP_LIBS = @IMAP_LIBS@
 DEPLIBS = ../../../lib/libcyrus.a ../../../lib/libcyrus_min.a @DEPLIBS@
 
-CFLAGS = -g
-LDFLAGS = -g @LDFLAGS@
+MAKEDEPEND_CFLAGS = @CFLAGS@
+CFLAGS = @CFLAGS@ @PERL_CCCDLFLAGS@
+LDFLAGS = @LDFLAGS@
 
 SHELL = /bin/sh
 MAKEDEPEND = @MAKEDEPEND@
@@ -86,6 +88,6 @@ distclean: clean
 	rm -f Makefile
 
 depend: 
-	${MAKEDEPEND} $(CPPFLAGS) $(DEFS) $(CFLAGS) *.c $(srcdir)/*.c 1> makedepend.log 2>&1
+	${MAKEDEPEND} $(CPPFLAGS) $(DEFS) $(MAKEDEPEND_CFLAGS) *.c $(srcdir)/*.c 1> makedepend.log 2>&1
 
 # DO NOT DELETE THIS LINE -- make depend depends on it.

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ctl_cyrusdb.c,v 1.18.2.4 2004/05/25 01:28:02 ken3 Exp $
+ * $Id: ctl_cyrusdb.c,v 1.18.2.5 2004/05/31 18:22:49 ken3 Exp $
  */
 
 #include <config.h>
@@ -225,9 +225,9 @@ int main(int argc, char *argv[])
 
     /* create the names of the backup directories */
     strcpy(backup1, dirname);
-    strcat(backup1, ".backup1/");
+    strcat(backup1, ".backup1");
     strcpy(backup2, dirname);
-    strcat(backup2, ".backup2/");
+    strcat(backup2, ".backup2");
 
     syslog(LOG_NOTICE, "%s", msg);
 
@@ -275,6 +275,8 @@ int main(int argc, char *argv[])
 
 		/* remove db.backup2 */
 		dirp = opendir(backup2);
+		strcat(tail++, "/");
+
 		if (dirp) {
 		    while ((dirent = readdir(dirp)) != NULL) {
 			if (dirent->d_name[0] == '.') continue;
@@ -285,7 +287,7 @@ int main(int argc, char *argv[])
 
 		    closedir(dirp);
 		}
-		*tail = '\0';
+		tail[-1] = '\0';
 		r2 = rmdir(backup2);
 
 		/* move db.backup1 to db.backup2 */

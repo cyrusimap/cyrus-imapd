@@ -1,5 +1,5 @@
 # Makefile.in - timsieved makefile
-# $Id: Makefile.in,v 1.20.2.2 2004/03/24 19:53:21 ken3 Exp $
+# $Id: Makefile.in,v 1.20.2.3 2004/05/31 18:23:02 ken3 Exp $
 # @configure_input@
 # 
 # Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
@@ -42,6 +42,7 @@
 #
 
 srcdir = @srcdir@
+top_srcdir = @top_srcdir@
 VPATH = @srcdir@
 
 CC = @CC@

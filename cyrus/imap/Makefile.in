@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.175.2.12 2004/03/24 19:52:59 ken3 Exp $
+# $Id: Makefile.in,v 1.175.2.13 2004/05/31 18:22:49 ken3 Exp $
 # 
 # @configure_input@
 # 
@@ -48,6 +48,7 @@ DEFINES=-DSETPROCTITLE
 SEEN=seen_db.o
 
 srcdir = @srcdir@
+top_srcdir = @top_srcdir@
 VPATH = @srcdir@
 
 CC = @CC@

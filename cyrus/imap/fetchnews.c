@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: fetchnews.c,v 1.2.2.5 2004/05/25 01:28:03 ken3 Exp $
+ * $Id: fetchnews.c,v 1.2.2.6 2004/05/31 18:22:49 ken3 Exp $
  */
 
 #include <config.h>
@@ -203,8 +203,22 @@ int fetch(char *msgid, int bymsgid,
     else {
 	/* store the article */
 	while (prot_fgets(buf, sizeof(buf), pin)) {
-	    prot_write(sout, buf, strlen(buf));
-	    if (buf[0] == '.' && buf[1] != '.') break;
+	    if (buf[0] == '.') {
+		if (buf[1] == '\r' && buf[2] == '\n') {
+		    /* End of message */
+		    prot_printf(sout, ".\r\n");
+		    break;
+		}
+		else if (buf[1] != '.') {
+		    /* Add missing dot-stuffing */
+		    prot_putc('.', sout);
+		}
+	    }
+
+	    do {
+		prot_printf(sout, "%s", buf);
+	    } while (buf[strlen(buf)-1] != '\n' &&
+		     prot_fgets(buf, sizeof(buf), pin));
 	}
 
 	if (buf[0] != '.') {
@@ -453,6 +467,7 @@ int main(int argc, char *argv[])
 	char group[1024], msgid[1024], lastbuf[50];
 	const char *data;
 	unsigned long low, high, last, cur;
+	int start;
 	int datalen;
 	struct txn *tid = NULL;
 
@@ -477,17 +492,23 @@ int main(int argc, char *argv[])
 	    prot_printf(pout, "GROUP %s\r\n", group);
 	    if (!prot_fgets(buf, sizeof(buf), pin)) {
 		syslog(LOG_ERR, "GROUP terminated abnormally");
-		goto quit;
+		continue;
 	    }
 	    else if (strncmp("211", buf, 3)) break;
 
-	    /* STAT the first article we haven't seen */
-	    cur = low > last ? low : ++last;
-	    prot_printf(pout, "STAT %lu\r\n", cur);
-	    do {
+	    for (start = 1, cur = low > last ? low : ++last;; cur++) {
+		if (start) {
+		    /* STAT the first article we haven't seen */
+		    prot_printf(pout, "STAT %lu\r\n", cur);
+		} else {
+		    /* continue with the NEXT article */
+		    prot_printf(pout, "NEXT\r\n");
+		}
+
 		if (!prot_fgets(buf, sizeof(buf), pin)) {
 		    syslog(LOG_ERR, "STAT/NEXT terminated abnormally");
-		    goto quit;
+		    cur--;
+		    break;
 		}
 		if (!strncmp("223", buf, 3)) {
 		    /* parse the STAT/NEXT response */
@@ -496,16 +517,20 @@ int main(int argc, char *argv[])
 		    /* find the end of the msgid */
 		    *(strrchr(msgid, '>') + 1) = '\0';
 
-		    offered++;
 		    if (fetch(msgid, 0, pin, pout, sin, sout,
 			      &rejected, &accepted, &failed)) {
-			goto quit;
+			cur--;
+			break;
 		    }
+		    offered++;
+		    start = 0;
 		}
-		/* continue with the NEXT article until we reach the last */
-	    } while (++cur <= high && !prot_printf(pout, "NEXT\r\n"));
 
-	    snprintf(lastbuf, sizeof(lastbuf), "%lu", high);
+		/* have we reached the highwater mark? */
+		if (cur >= high) break;
+	    }
+
+	    snprintf(lastbuf, sizeof(lastbuf), "%lu", cur);
 	    DB->store(newsrc_db, group, strlen(group),
 		      lastbuf, strlen(lastbuf)+1, &tid);
 	}

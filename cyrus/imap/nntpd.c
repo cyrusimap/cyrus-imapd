@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.19 2004/05/25 01:28:11 ken3 Exp $
+ * $Id: nntpd.c,v 1.2.2.20 2004/05/31 18:22:54 ken3 Exp $
  */
 
 /*
@@ -242,7 +242,7 @@ extern void proc_cleanup(void);
 
 extern int saslserver(sasl_conn_t *conn, const char *mech,
 		      const char *init_resp, const char *resp_prefix,
-		      const char *continuation,
+		      const char *continuation, const char *empty_resp,
 		      struct protstream *pin, struct protstream *pout,
 		      int *sasl_result, char **success_data);
 
@@ -550,7 +550,7 @@ int service_main(int argc __attribute__((unused)),
     }
 
     /* other params should be filled in */
-    if (sasl_server_new("news", config_servername, NULL, NULL, NULL,
+    if (sasl_server_new("nntp", config_servername, NULL, NULL, NULL,
 			NULL, SASL_SUCCESS_DATA, &nntp_saslconn) != SASL_OK)
 	fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL); 
 
@@ -1946,29 +1946,44 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
 	}
 
 	r = saslserver(nntp_saslconn, mech, resp, "AUTHINFO GENERIC ", "381 ",
-		       nntp_in, nntp_out, &sasl_result, &success_data);
+		       "", nntp_in, nntp_out, &sasl_result, &success_data);
     }
     else
-	r = saslserver(nntp_saslconn, mech, resp, "", "383 ",
+	r = saslserver(nntp_saslconn, mech, resp, "", "383 ", "=",
 		       nntp_in, nntp_out, &sasl_result, &success_data);
 
     if (r) {
+	int code;
 	const char *errorstring = NULL;
 
 	switch (r) {
 	case IMAP_SASL_CANCEL:
 	    prot_printf(nntp_out,
-			"501 Client canceled authentication\r\n");
+			"481 Client canceled authentication\r\n");
 	    break;
 	case IMAP_SASL_PROTERR:
 	    errorstring = prot_error(nntp_in);
 
 	    prot_printf(nntp_out,
-			"501 Error reading client response: %s\r\n",
+			"482 Error reading client response: %s\r\n",
 			errorstring ? errorstring : "");
 	    break;
 	default: 
 	    /* failed authentication */
+	    switch (sasl_result) {
+	    case SASL_NOMECH:
+	    case SASL_TOOWEAK:
+		code = 501;
+		break;
+	    case SASL_ENCRYPT:
+		code = 483;
+		break;
+	    case SASL_BADPROT:
+		code = 482;
+		break;
+	    default:
+		code = 481;
+	    }
 	    errorstring = sasl_errstring(sasl_result, NULL, NULL);
 
 	    syslog(LOG_NOTICE, "badlogin: %s %s [%s]",
@@ -1977,9 +1992,9 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
 	    sleep(3);
 
 	    if (errorstring) {
-		prot_printf(nntp_out, "502 %s\r\n", errorstring);
+		prot_printf(nntp_out, "%d %s\r\n", code, errorstring);
 	    } else {
-		prot_printf(nntp_out, "502 Error authenticating\r\n");
+		prot_printf(nntp_out, "%d Error authenticating\r\n", code);
 	    }
 	}
 
@@ -1996,7 +2011,7 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
 			       (const void **) &canon_user);
     nntp_userid = xstrdup(canon_user);
     if (sasl_result != SASL_OK) {
-	prot_printf(nntp_out, "502 weird SASL error %d SASL_USERNAME\r\n", 
+	prot_printf(nntp_out, "481 weird SASL error %d SASL_USERNAME\r\n", 
 		    sasl_result);
 	syslog(LOG_ERR, "weird SASL error %d getting SASL_USERNAME", 
 	       sasl_result);
@@ -2380,7 +2395,7 @@ static void cmd_list(char *arg1, char *arg2)
 	prot_printf(nntp_out, "202 Extension list follows:\r\n");
 
 	/* check for SASL mechs */
-	sasl_listmech(nntp_saslconn, NULL, "SASL ", " ", "\r\n",
+	sasl_listmech(nntp_saslconn, NULL, " SASL:", ",", "",
 		      &mechlist, NULL, &mechcount);
 
 	if (mechcount || nntp_starttls_done ||
@@ -2390,11 +2405,7 @@ static void cmd_list(char *arg1, char *arg2)
 			(nntp_starttls_done ||
 			 config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) ?
 			" USER" : "",
-			!nntp_authstate && mechcount ? " SASL" : "");
-
-	    /* add the SASL mechs */
-	    if (mechcount)
-		prot_write(nntp_out, mechlist, strlen(mechlist));
+			mechcount ? mechlist : "");
 	}
 
 	if ((nntp_capa & MODE_READ) &&

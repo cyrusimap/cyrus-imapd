@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.268.2.10 2004/05/25 01:27:57 ken3 Exp $
+dnl $Id: configure.in,v 1.268.2.11 2004/05/31 18:22:46 ken3 Exp $
 dnl
 
 
@@ -825,7 +825,7 @@ case "$with_com_err" in
 	  COM_ERR_LIBS="../et/libcom_err.a"
 	  COMPILE_ET="../et/compile_et"
 	  COM_ERR_LDFLAGS=""
-	  COM_ERR_CPPFLAGS="-I\${srcdir}/../et"
+	  COM_ERR_CPPFLAGS="-I\${top_srcdir}/et"
 	  PRE_SUBDIRS="et ${PRE_SUBDIRS}"
 	  EXTRA_OUTPUT="${EXTRA_OUTPUT} et/Makefile"
 	  ;;
@@ -933,6 +933,12 @@ dnl compile perl stuff
 dnl and compile perl/cyradm
     PERL_SUBDIRS="imap"
     PERL="${with_perl}"
+dnl add perl cccdlflags when building libraries -- this ensures that the
+dnl libraries will be compiled as PIC if perl requires PIC objects
+dnl -- this is needed on NetBSD, but seems to cause problems on atleast Solaris --
+dnl    eval `${PERL} -V:cccdlflags`
+    PERL_CCCDLFLAGS="$cccdlflags"
+    AC_SUBST(PERL_CCCDLFLAGS)
 fi
 
 dnl for timsieved
@@ -1009,7 +1015,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.268.2.10 2004/05/25 01:27:57 ken3 Exp $ */
+/* $Id: configure.in,v 1.268.2.11 2004/05/31 18:22:46 ken3 Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *

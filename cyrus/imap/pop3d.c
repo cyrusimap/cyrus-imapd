@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.144.2.23 2004/05/25 01:28:12 ken3 Exp $
+ * $Id: pop3d.c,v 1.144.2.24 2004/05/31 18:22:55 ken3 Exp $
  */
 #include <config.h>
 
@@ -171,7 +171,7 @@ extern void proc_cleanup(void);
 
 extern int saslserver(sasl_conn_t *conn, const char *mech,
 		      const char *init_resp, const char *resp_prefix,
-		      const char *continuation,
+		      const char *continuation, const char *empty_chal,
 		      struct protstream *pin, struct protstream *pout,
 		      int *sasl_result, char **success_data);
 
@@ -1360,8 +1360,8 @@ void cmd_auth(char *arg)
 	arg = NULL;
     }
 
-    r = saslserver(popd_saslconn, authtype, arg, "", "+ ", popd_in, popd_out,
-		   &sasl_result, NULL);
+    r = saslserver(popd_saslconn, authtype, arg, "", "+ ", "",
+		   popd_in, popd_out, &sasl_result, NULL);
 
     if (r) {
 	const char *errorstring = NULL;

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.26 2004/05/31 17:48:17 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.27 2004/05/31 18:22:49 ken3 Exp $ */
 
 #include <config.h>
 
@@ -279,7 +279,7 @@ extern void proc_cleanup(void);
 
 extern int saslserver(sasl_conn_t *conn, const char *mech,
 		      const char *init_resp, const char *resp_prefix,
-		      const char *continuation,
+		      const char *continuation, const char *empty_resp,
 		      struct protstream *pin, struct protstream *pout,
 		      int *sasl_result, char **success_data);
 
@@ -1925,7 +1925,7 @@ cmd_authenticate(char *tag, char *authtype, char *resp)
 
     int r;
 
-    r = saslserver(imapd_saslconn, authtype, resp, "", "+ ",
+    r = saslserver(imapd_saslconn, authtype, resp, "", "+ ", "",
 		   imapd_in, imapd_out, &sasl_result, NULL);
 
     if (r) {
@@ -2722,7 +2722,7 @@ void cmd_append(char *tag, char *name)
 	r = append_setup(&mailbox, mailboxname, MAILBOX_FORMAT_NORMAL,
 			 imapd_userid, imapd_authstate, ACL_INSERT, totalsize);
     }
-    if (!r)
+    if (!r) {
 	for (i = 0; !r && i < num; i++) {
 	    r = append_fromstage(&mailbox, stage[i], internaldate, 
 				 (const char **) flag, nflags, 0);
@@ -7113,7 +7113,7 @@ static int trashacl(struct protstream *pin, struct protstream *pout,
 {
     int i=0, j=0;
     char tagbuf[128];
-    char c;
+    int c;		/* getword() returns an int */
     struct buf tag, cmd, tmp, user;
     int r = 0;
 
@@ -7228,7 +7228,7 @@ static int dumpacl(struct protstream *pin, struct protstream *pout,
 		   char *mailbox, char *acl_in) 
 {
     int r = 0;
-    char c;
+    int c;		/* getword() returns an int */
     char tag[128];
     int tagnum = 1;
     char *rights, *nextid;

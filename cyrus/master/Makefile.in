@@ -1,5 +1,5 @@
 # Makefile for the Cyrus controlling process
-# $Id: Makefile.in,v 1.17.2.2 2004/03/24 19:53:17 ken3 Exp $
+# $Id: Makefile.in,v 1.17.2.3 2004/05/31 18:22:58 ken3 Exp $
 # 
 # @configure_input@
 #
@@ -43,6 +43,7 @@
 #
 
 srcdir = @srcdir@
+top_srcdir = @top_srcdir@
 VPATH = @srcdir@
 
 CC = @CC@

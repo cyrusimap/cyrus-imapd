@@ -40,7 +40,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-# $Id: Makefile.in,v 1.55.2.4 2004/03/24 19:53:13 ken3 Exp $
+# $Id: Makefile.in,v 1.55.2.5 2004/05/31 18:22:58 ken3 Exp $
 
 # Authorization namespace.
 AUTH=auth_@WITH_AUTH@.o
@@ -49,6 +49,7 @@ AUTH=auth_@WITH_AUTH@.o
 ACL=acl_afs.o
 
 srcdir = @srcdir@
+top_srcdir = @top_srcdir@
 VPATH = @srcdir@
 
 CC = @CC@
@@ -60,7 +61,8 @@ DEFS = @DEFS@ @LOCALDEFS@
 CPPFLAGS = -I.. @CPPFLAGS@ @COM_ERR_CPPFLAGS@ @SASLFLAGS@
 LIBS = @LIBS@
 
-CFLAGS = @CFLAGS@
+MAKEDEPEND_CFLAGS = @CFLAGS@
+CFLAGS = @CFLAGS@ @PERL_CCCDLFLAGS@
 LDFLAGS = @LDFLAGS@
 
 SHELL = /bin/sh
@@ -158,6 +160,6 @@ distclean: clean
 	rm -f Makefile
 
 depend:
-	${MAKEDEPEND} $(CPPFLAGS) $(DEFS) -I$(srcdir) $(CFLAGS) *.c $(srcdir)/*.c 1>makedepend.log 2>&1
+	${MAKEDEPEND} $(CPPFLAGS) $(DEFS) -I$(srcdir) $(MAKEDEPEND_CFLAGS) *.c $(srcdir)/*.c 1>makedepend.log 2>&1
 
 # DO NOT DELETE THIS LINE -- make depend depends on it.
