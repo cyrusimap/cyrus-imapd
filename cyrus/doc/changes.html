@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.43.2.22 2003/06/19 21:18:00 ken3 Exp $ -->
+<!-- $Id: changes.html,v 1.43.2.23 2003/06/19 21:20:08 ken3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -72,6 +72,8 @@ operations.</li>
     recipient addresses (Henrique de Moraes Holschuh &lt;hmh@debian.org&gt;).</li>
 <li>Include more MIME headers in sieve rejection notices</li>
 <li>Add an mbexamine command for debugging purposes</li>
+<li>LMTP will now fatal error if we cannot initialize the duplicate
+    delivery database.</li>
 <li>Continued audit by Security Appraisers and Bynari</li>
 <li>Correctly terminate the processes by calling service_abort even on
     successful exit (helps to fix a db3 lockers problem)</li>
@@ -1803,7 +1805,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2003/06/19 21:18:00 $ <br />
+last modified: $Date: 2003/06/19 21:20:08 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
