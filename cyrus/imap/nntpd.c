@@ -38,13 +38,14 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.68 2003/03/05 18:32:06 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.69 2003/03/06 17:30:39 ken3 Exp $
  */
 
 /*
  * TODO:
  *
  * - remove Xref header from articles
+ * - add PGP verification code and ACLs for control messages
  * - figure out what to do with control messages when proxying
  * - figure out how to do singleinstancestore
  */
@@ -2491,7 +2492,7 @@ static int deliver(message_data_t *msg)
 
     return  0;
 }
-
+#if 0 /* XXX don't process control messages until we implement PGP and ACLs */
 static int newgroup(message_data_t *msg)
 {
     int r;
@@ -2619,7 +2620,7 @@ static int cancel(message_data_t *msg)
 
     return r;
 }
-
+#endif
 static void feedpeer(message_data_t *msg)
 {
     const char *peer, *port = "119";
@@ -2820,7 +2821,7 @@ static void cmd_post(char *msgid, int mode)
 	if (!r) {
 	    /* deliver the article */
 	    r = deliver(msg);
-
+#if 0 /* XXX don't process control messages until we implement PGP and ACLs */
 	    if (msg->control && !config_mupdate_server) {
 		if (!strncmp(msg->control, "newgroup", 8))
 		    r = newgroup(msg);
@@ -2834,6 +2835,7 @@ static void cmd_post(char *msgid, int mode)
 		    syslog(LOG_ERR, "unknown control message: %s",
 			   msg->control);
 	    }
+#endif
 	}
 
 	if (!r) {
