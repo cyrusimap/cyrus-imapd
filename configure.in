@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.231 2002/05/26 00:59:44 ken3 Exp $
+dnl $Id: configure.in,v 1.232 2002/06/14 19:46:06 rjs3 Exp $
 dnl
 
 
@@ -237,6 +237,9 @@ AC_FUNC_CHECK(strerror,AC_DEFINE(HAS_STRERROR),AC_DEFINE(NEED_SYS_ERRLIST))
 dnl for master fd limits
 AC_CHECK_HEADERS(sys/resource.h)
 AC_CHECK_FUNCS(setrlimit)
+
+dnl for detaching terminal
+AC_CHECK_FUNCS(daemon setsid)
 
 AC_EGREP_HEADER(socklen_t, sys/socket.h, AC_DEFINE(HAVE_SOCKLEN_T))
 AC_EGREP_HEADER(rlim_t, sys/resource.h, AC_DEFINE(HAVE_RLIM_T))
