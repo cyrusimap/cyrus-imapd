@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.65 2003/03/10 19:00:19 rjs3 Exp $ */
+/* $Id: config.c,v 1.66 2003/04/14 20:31:36 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -197,9 +197,10 @@ const char *config_partitiondir(const char *partition)
 {
     char buf[80];
 
-    if (strlen(partition) > 70) return 0;
-    strcpy(buf, "partition-");
-    strcat(buf, partition);
+    if(strlcpy(buf, "partition-", sizeof(buf)) >= sizeof(buf))
+	return 0;
+    if(strlcat(buf, partition, sizeof(buf)) >= sizeof(buf))
+	return 0;
 
     return config_getstring(buf, (char *)0);
 }
@@ -211,13 +212,14 @@ static void config_read(const char *alt_config)
     char buf[4096];
     char *p, *q, *key, *val, *newval;
 
+    /* xxx this is leaked, this may be able to be better in 2.2 (cyrus_done) */
     if(alt_config) config_filename = xstrdup(alt_config);
     else config_filename = xstrdup(CONFIG_FILENAME);
 
-    infile = fopen(alt_config ? alt_config : CONFIG_FILENAME, "r");
+    infile = fopen(config_filename, "r");
     if (!infile) {
-	strcpy(buf, CYRUS_PATH);
-	strcat(buf, alt_config ? alt_config : CONFIG_FILENAME);
+	strlcpy(buf, CYRUS_PATH, sizeof(buf));
+	strlcat(buf, config_filename, sizeof(buf));
 	infile = fopen(buf, "r");
     }
     if (!infile) {
@@ -230,7 +232,7 @@ static void config_read(const char *alt_config)
     while (fgets(buf, sizeof(buf), infile)) {
 	lineno++;
 
-	if (buf[strlen(buf)-1] == '\n') buf[strlen(buf)-1] = '\0';
+	if (buf[0] && buf[strlen(buf)-1] == '\n') buf[strlen(buf)-1] = '\0';
 	for (p = buf; *p && isspace((int) *p); p++);
 	if (!*p || *p == '#') continue;
 
@@ -342,13 +344,17 @@ static int isa(struct auth_state *authstate, const char *opt)
 {
     char buf[1024];
     const char *val = config_getstring(opt, "");
-
+    int len;
+    
     while (*val) {
 	char *p;
 	
 	for (p = (char *) val; *p && !isspace((int) *p); p++);
-	memcpy(buf, val, p-val);
-	buf[p-val] = 0;
+	len = p-val;
+	if(len >= sizeof(buf))
+	    len = sizeof(buf) - 1;
+	memcpy(buf, val, len);
+	buf[len] = '\0';
 
 	if (auth_memberof(authstate, buf)) {
 	    return 1;
