@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.153 2004/03/03 16:22:27 ken3 Exp $
+ * $Id: pop3d.c,v 1.154 2004/03/09 18:08:41 rjs3 Exp $
  */
 #include <config.h>
 
@@ -356,18 +356,21 @@ int service_main(int argc __attribute__((unused)),
 	if (getnameinfo((struct sockaddr *)&popd_remoteaddr, salen,
 			hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) == 0) {
     	    strncpy(popd_clienthost, hbuf, sizeof(hbuf));
+	    strlcat(popd_clienthost, " ", sizeof(popd_clienthost));
 	} else {
 	    popd_clienthost[0] = '\0';
 	}
-
-	niflags = NI_NUMERICHOST |
-		(popd_remoteaddr.ss_family == AF_INET6 ? NI_WITHSCOPEID : 0);
+	niflags = NI_NUMERICHOST;
+#ifdef NI_WITHSCOPEID
+	if (((struct sockaddr *)&popd_remoteaddr)->sa_family == AF_INET6)
+	    niflags |= NI_WITHSCOPEID;
+#endif
 	if (getnameinfo((struct sockaddr *)&popd_remoteaddr, salen, hbuf,
-			sizeof(hbuf), NULL, 0, niflags) == 0) {
-	    strlcat(popd_clienthost, "[", sizeof(popd_clienthost));
-	    strlcat(popd_clienthost, hbuf, sizeof(popd_clienthost));
-	    strlcat(popd_clienthost, "]", sizeof(popd_clienthost));
-	}
+			sizeof(hbuf), NULL, 0, niflags) != 0)
+	    strlcpy(hbuf, "unknown", sizeof(hbuf));
+	strlcat(popd_clienthost, "[", sizeof(popd_clienthost));
+	strlcat(popd_clienthost, hbuf, sizeof(popd_clienthost));
+	strlcat(popd_clienthost, "]", sizeof(popd_clienthost));
 	salen = sizeof(popd_localaddr);
 	if (getsockname(0, (struct sockaddr *)&popd_localaddr, &salen) == 0) {
 	    popd_haveaddr = 1;

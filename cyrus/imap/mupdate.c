@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.84 2004/03/08 19:30:43 rjs3 Exp $
+ * $Id: mupdate.c,v 1.85 2004/03/09 18:08:40 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -249,7 +249,8 @@ static struct conn *conn_new(int fd)
     int salen;
     int secflags;
     char hbuf[NI_MAXHOST];
-    
+    int niflags;
+
     C->fd = fd;
     C->logfd = -1;
 
@@ -275,21 +276,27 @@ static struct conn *conn_new(int fd)
     if (getpeername(C->fd, (struct sockaddr *)&remoteaddr, &salen) == 0 &&
 	(remoteaddr.ss_family == AF_INET ||
 	 remoteaddr.ss_family == AF_INET6)) {
-	int niflags = (remoteaddr.ss_family == AF_INET6) ? NI_WITHSCOPEID : 0;
-	if (getnameinfo((struct sockaddr *)&remoteaddr, salen, hbuf, sizeof(hbuf),
-		    NULL, 0, niflags) == 0) {
-		strlcpy(C->clienthost, hbuf, sizeof(C->clienthost)-30);
-	} else
-		strlcpy(C->clienthost, "Unknown", sizeof(C->clienthost)-30);
-
-	niflags = NI_NUMERICHOST |
-		(remoteaddr.ss_family == AF_INET6 ? NI_WITHSCOPEID : 0);
-	if (getnameinfo((struct sockaddr *)&remoteaddr, salen, hbuf, sizeof(hbuf),
-		    NULL, 0, niflags) == 0) {
-		strlcat(C->clienthost, " [", sizeof(C->clienthost));
-		strlcat(C->clienthost, hbuf, sizeof(C->clienthost));
-		strlcat(C->clienthost, "]", sizeof(C->clienthost));
-	}
+	niflags = 0;
+#ifdef NI_WITHSCOPEID
+	if (remoteaddr.ss_family == AF_INET6)
+	    niflags |= NI_WITHSCOPEID;
+#endif
+	if (getnameinfo((struct sockaddr *)&remoteaddr, salen,
+			hbuf, sizeof(hbuf), NULL, 0, niflags) == 0)
+	    strlcpy(C->clienthost, hbuf, sizeof(C->clienthost)-30);
+	else
+	    strlcpy(C->clienthost, "Unknown", sizeof(C->clienthost)-30);
+	niflags = NI_NUMERICHOST;
+#ifdef NI_WITHSCOPEID
+	if (((struct sockaddr *)&remoteaddr)->sa_family == AF_INET6)
+	    niflags |= NI_WITHSCOPEID;
+#endif
+	if (getnameinfo((struct sockaddr *)&remoteaddr, salen,
+			hbuf, sizeof(hbuf), NULL, 0, niflags) != 0)
+	    strlcpy(hbuf, "unknown", sizeof(hbuf));
+	strlcat(C->clienthost, " [", sizeof(C->clienthost));
+	strlcat(C->clienthost, hbuf, sizeof(C->clienthost));
+	strlcat(C->clienthost, "]", sizeof(C->clienthost));
 	salen = sizeof(localaddr);
 	if (getsockname(C->fd, (struct sockaddr *)&localaddr, &salen) == 0
 	    && iptostring((struct sockaddr *)&remoteaddr, salen,

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.23 2004/03/08 17:31:05 rjs3 Exp $
+ * $Id: nntpd.c,v 1.24 2004/03/09 18:08:40 rjs3 Exp $
  */
 
 /*
@@ -603,19 +603,22 @@ int service_main(int argc __attribute__((unused)),
 	if (getnameinfo((struct sockaddr *)&nntp_remoteaddr, salen,
 			hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) == 0) {
 	    strncpy(nntp_clienthost, hbuf, sizeof(hbuf));
+	    strlcat(nntp_clienthost, " ", sizeof(nntp_clienthost));
 	    nntp_clienthost[sizeof(nntp_clienthost)-30] = '\0';
 	} else {
 	    nntp_clienthost[0] = '\0';
 	}
-
-	niflags = NI_NUMERICHOST |
-		(nntp_remoteaddr.ss_family == AF_INET6 ? NI_WITHSCOPEID : 0);
+	niflags = NI_NUMERICHOST;
+#ifdef NI_WITHSCOPEID
+	if (((struct sockaddr *)&nntp_remoteaddr)->sa_family == AF_INET6)
+	    niflags |= NI_WITHSCOPEID;
+#endif
 	if (getnameinfo((struct sockaddr *)&nntp_remoteaddr, salen, hbuf,
-			sizeof(hbuf), NULL, 0, niflags) == 0) {
-	    strlcat(nntp_clienthost, "[", sizeof(nntp_clienthost));
-	    strlcat(nntp_clienthost, hbuf, sizeof(nntp_clienthost));
-	    strlcat(nntp_clienthost, "]", sizeof(nntp_clienthost));
-	}
+			sizeof(hbuf), NULL, 0, niflags) != 0)
+	    strlcpy(hbuf, "unknown", sizeof(hbuf));
+	strlcat(nntp_clienthost, "[", sizeof(nntp_clienthost));
+	strlcat(nntp_clienthost, hbuf, sizeof(nntp_clienthost));
+	strlcat(nntp_clienthost, "]", sizeof(nntp_clienthost));
 	salen = sizeof(nntp_localaddr);
 	if (getsockname(0, (struct sockaddr *)&nntp_localaddr, &salen) == 0) {
 	    nntp_haveaddr = 1;

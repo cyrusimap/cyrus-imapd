@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.177 2004/03/08 17:31:05 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.178 2004/03/09 18:08:41 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -1175,6 +1175,7 @@ int service_main(int argc __attribute__((unused)),
     char hbuf[NI_MAXHOST];
     struct sockaddr_storage proxyd_localaddr, proxyd_remoteaddr;
     char localip[60], remoteip[60];
+    int niflags;
     int timeout;
     int proxyd_haveaddr = 0;
     sasl_security_properties_t *secprops = NULL;
@@ -1201,8 +1202,14 @@ int service_main(int argc __attribute__((unused)),
 	} else {
 	    proxyd_clienthost[0] = '\0';
 	}
-	getnameinfo((struct sockaddr *)&proxyd_remoteaddr, salen, hbuf,
-		    sizeof(hbuf), NULL, 0, NI_NUMERICHOST | NI_WITHSCOPEID);
+	niflags = NI_NUMERICHOST;
+#ifdef NI_WITHSCOPEID
+	if (((struct sockaddr *)&proxyd_remoteaddr)->sa_family == AF_INET6)
+	    niflags |= NI_WITHSCOPEID;
+#endif
+	if (getnameinfo((struct sockaddr *)&proxyd_remoteaddr, salen, hbuf,
+			sizeof(hbuf), NULL, 0, niflags) != 0)
+	    strlcpy(hbuf, "unknown", sizeof(hbuf));
 	strlcat(proxyd_clienthost, "[", sizeof(proxyd_clienthost));
 	strlcat(proxyd_clienthost, hbuf, sizeof(proxyd_clienthost));
 	strlcat(proxyd_clienthost, "]", sizeof(proxyd_clienthost));

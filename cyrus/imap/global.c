@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.12 2004/03/09 15:05:57 ken3 Exp $ */
+/* $Id: global.c,v 1.13 2004/03/09 18:08:39 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -388,10 +388,8 @@ char *canonify_userid(char *user, char *loginid, int *domain_from_ip)
 	    
 	    salen = sizeof(localaddr);
 	    if (getsockname(0, (struct sockaddr *)&localaddr, &salen) == 0) {
-		int niflags = NI_NAMEREQD |
-			(localaddr.ss_family == AF_INET6 ? NI_WITHSCOPEID : 0);
 		error = getnameinfo((struct sockaddr *)&localaddr, salen,
-				    hbuf, sizeof(hbuf), NULL, 0, niflags);
+				    hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD);
 		if (error == 0 && (domain = strchr(hbuf, '.')) &&
 		    !(config_defdomain && !strcasecmp(config_defdomain, domain+1))) {
 		    /* append the domain from our IP */

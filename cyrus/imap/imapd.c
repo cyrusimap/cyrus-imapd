@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.458 2004/02/27 17:44:49 ken3 Exp $ */
+/* $Id: imapd.c,v 1.459 2004/03/09 18:08:39 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -524,15 +524,17 @@ int service_main(int argc __attribute__((unused)),
 	} else {
 	    imapd_clienthost[0] = '\0';
 	}
-
-	niflags = NI_NUMERICHOST |
-		(imapd_remoteaddr.ss_family == AF_INET6 ? NI_WITHSCOPEID : 0);
+	niflags = NI_NUMERICHOST;
+#ifdef NI_WITHSCOPEID
+	if (((struct sockaddr *)&imapd_remoteaddr)->sa_family == AF_INET6)
+	    niflags |= NI_WITHSCOPEID;
+#endif
 	if (getnameinfo((struct sockaddr *)&imapd_remoteaddr, salen, hbuf,
-		    sizeof(hbuf), NULL, 0, niflags) == 0) {
-		strlcat(imapd_clienthost, "[", sizeof(imapd_clienthost));
-		strlcat(imapd_clienthost, hbuf, sizeof(imapd_clienthost));
-		strlcat(imapd_clienthost, "]", sizeof(imapd_clienthost));
-	}
+			sizeof(hbuf), NULL, 0, niflags) != 0)
+	    strlcpy(hbuf, "unknown", sizeof(hbuf));
+	strlcat(imapd_clienthost, "[", sizeof(imapd_clienthost));
+	strlcat(imapd_clienthost, hbuf, sizeof(imapd_clienthost));
+	strlcat(imapd_clienthost, "]", sizeof(imapd_clienthost));
 	salen = sizeof(imapd_localaddr);
 	if (getsockname(0, (struct sockaddr *)&imapd_localaddr, &salen) == 0) {
 	    if(iptostring((struct sockaddr *)&imapd_remoteaddr, salen,
