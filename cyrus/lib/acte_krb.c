@@ -130,6 +130,25 @@ int *maxplain;
 }
 
 /*
+ * Get the cacheid for 'state'
+ */
+static char *
+krb_get_cacheid(state)
+void *state;
+{
+    char *cacheid;
+
+    struct krb_state *kstate = (struct krb_state *)state;
+
+    cacheid = malloc(16);
+    if (!cacheid) return 0;
+
+    memset(cacheid, 0, sizeof(cacheid));
+    memcpy(cacheid, kstate->session, sizeof(kstate->session));
+    return cacheid;
+}
+
+/*
  * Start the client side of an authentication exchange.
  */
 static int krb_client_start(service, host, user, protallowed, maxbufsize,
@@ -381,7 +400,7 @@ struct acte_client krb_acte_client = {
     krb_query_state,
     krb_free_state,
     krb_new_cred,
-    krb_free_cred
+    krb_free_cred,
 };
 
 /*
@@ -599,7 +618,8 @@ struct acte_server krb_acte_server = {
     krb_server_start,
     krb_server_auth,
     krb_query_state,
-    krb_free_state
+    krb_free_state,
+    krb_get_cacheid,
 };
 
 /*
