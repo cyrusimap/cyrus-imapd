@@ -19,7 +19,7 @@ discussion of this server and other Cyrus software.  Send mail to
 
 Once you have unpacked the files (see the <A
 HREF="readme.html"><TT>README</TT></A> file for more information),
-"<TT>cd</TT>" to the "<tt>cyrus-1.2</tt>" directory (This document
+"<TT>cd</TT>" to the "<tt>imapd-1.2</tt>" directory (This document
 assumes that the version number is 1.2.). The configuration files and
 various subdirectories are stored there.  In the directory that the
 <TT>configure</TT> file is in, type "<kbd>./configure</kbd>" to
@@ -248,7 +248,7 @@ HREF="deliver.8.html"><tt>deliver</tt></A>", "<A
 HREF="imapd.8.html"><tt>imapd</tt></A>", and "<A
 HREF="pop3d.8.html"><tt>pop3d</tt></A>" programs. We recommend
 installing them in the "<tt>/usr/etc</tt>" directory.  Change directory
-to "<tt>imap</tt>", a subdirectory of <tt>cyrus-1.2</tt>.  Make "<A
+to "<tt>imap</tt>", a subdirectory of <tt>imapd-1.2</tt>.  Make "<A
 NAME="deliver"><tt>deliver</tt></A>" setuid to the Cyrus user:
 
 <pre>
@@ -265,7 +265,7 @@ messages into both levels and categories.  Invoke "<kbd>man
 syslog</kbd>" to see if "<tt>openlog()</tt>" takes three arguments. If
 it does not, replace the system "<tt>syslogd</tt>" and
 "<tt>syslog.conf</tt>" with the files provided in the <A
-NAME="syslog"><tt>cyrus-1.2/syslog</tt></A> directory.
+NAME="syslog"><tt>imapd-1.2/syslog</tt></A> directory.
 
 <pre>
 <kbd>   mv syslogd /etc/syslogd
@@ -466,7 +466,7 @@ is a problem.  To terminate the connection, type "<kbd>. logout</kbd>".
 
 <P>
 <li>Use "<tt>imtest</tt>" to test logging in with plaintext passwords.  Change
-to the "<tt>cyrus-1.2</tt>" directory and type the following.
+to the "<tt>imapd-1.2</tt>" directory and type the following.
 
 <pre>
 <kbd>   imtest/imtest -p foobar imap
