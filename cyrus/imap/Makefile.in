@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.118 2000/06/06 21:59:01 leg Exp $
+# $Id: Makefile.in,v 1.119 2000/06/09 19:12:51 leg Exp $
 # 
 # @configure_input@
 #
@@ -62,11 +62,11 @@ CYRUS_USER=@cyrus_user@
 CYRUS_GROUP=@cyrus_group@
 
 DEFS = @DEFS@ @LOCALDEFS@
-CPPFLAGS = -I. -I.. -I../sieve -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../acap @COM_ERR_CPPFLAGS@ @SIEVE_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@
+CPPFLAGS = -I. -I.. -I../sieve -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../acap @COM_ERR_CPPFLAGS@ @SIEVE_CPPFLAGS@ @CPPFLAGS@ @ZEPHYR_CPPFLAGS@ @SASLFLAGS@
 IMAP_LIBS = @IMAP_LIBS@
 SIEVE_LIBS = @SIEVE_LIBS@
 IMAP_COM_ERR_LIBS = @IMAP_COM_ERR_LIBS@
-LIBS = $(IMAP_LIBS) $(IMAP_COM_ERR_LIBS)
+LIBS = $(IMAP_LIBS) @ZEPHYR_LIBS@ $(IMAP_COM_ERR_LIBS)
 DEPLIBS = ../acap/libacap.a ../lib/libcyrus.a @DEPLIBS@
 
 CFLAGS = @CFLAGS@
