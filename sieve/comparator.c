@@ -1,7 +1,7 @@
 /* comparator.c -- comparator functions
  * Larry Greenfield
  * Ken Murchison (rewritten to handle relational ops and non-terminated text)
- * $Id: comparator.c,v 1.15.2.2 2004/08/05 16:23:51 ken3 Exp $
+ * $Id: comparator.c,v 1.15.2.3 2005/03/15 15:04:07 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -295,21 +295,77 @@ static int ascii_casemap_matches(const char *text, size_t tlen,
  *  number   A ? B    A < B 
  *  not-num  A > B    A == B
  */
+
+/* From RFC 2244:
+ *
+ * The i;ascii-numeric comparator interprets strings as decimal
+ * positive integers represented as US-ASCII digits.  All values
+ * which do not begin with a US-ASCII digit are considered equal
+ * with an ordinal value higher than all non-NIL single-valued
+ * attributes.  Otherwise, all US-ASCII digits (octet values
+ * 0x30 to 0x39) are interpreted starting from the beginning of
+ * the string to the first non-digit or the end of the string.
+ */
+
 static int ascii_numeric_cmp(const char *text, size_t tlen, const char *pat)
 {
-    if (!isdigit((int) *text) && !isdigit((int) *pat)) return 0;
-    else if (!isdigit((int) *text)) return 1;
-    else if (!isdigit((int) *pat)) return -1;
-    else {
-	unsigned long t = 0;
-	size_t i;
+    unsigned text_digit_len;
+    unsigned pat_digit_len;
 
-	/* convert text to a number */
-	for (i = 0; i < tlen && isdigit((int) text[i]); i++) {
-	    t = (10 * t) + (text[i] - '0');
+    if (isdigit((int) *pat)) {
+	if (isdigit((int) *text)) {
+	    /* Count how many digits each string has */
+	    for (text_digit_len = 0;
+		 tlen-- && isdigit((int) text[text_digit_len]);
+		 text_digit_len++);
+	    for (pat_digit_len = 0;
+		 isdigit((int) pat[pat_digit_len]);
+		 pat_digit_len++);
+
+	    if (text_digit_len < pat_digit_len) {
+		/* Pad "text" with leading 0s */
+		while (pat_digit_len > text_digit_len) {
+		    /* "text" can only be less or equal to "pat" */
+		    if ('0' < *pat) {
+			return (-1); 
+		    }
+		    pat++;
+		    pat_digit_len--;
+		}
+	    } else if (text_digit_len > pat_digit_len) {
+		/* Pad "pad" with leading 0s */
+		while (text_digit_len > pat_digit_len) {
+		    /* "pad" can only be less or equal to "text" */
+		    if (*text > '0') {
+			return 1;
+		    }
+		    text++;
+		    text_digit_len--;
+		}
+	    }
+
+	    /* CLAIM: If we here, we have two non-empty digital suffixes
+	       of equal length */
+	    while (text_digit_len > 0) {
+		if (*text < *pat) {
+		    return -1;
+		} else if (*text > *pat) {
+		    return -1;
+		}
+		/* Characters are equal, carry on */
+		text++;
+		pat++;
+		text_digit_len--;
+	    }
+
+	    return (0);
+	} else {
+	    return 1;
 	}
-
-	return (t - strtoul(pat, NULL, 10));
+    } else if (isdigit((int) *text)) {
+	return -1;
+    } else {
+	return 0; /* both not digits */
     }
 }
 
