@@ -170,6 +170,7 @@ int code;
 
     if (recurse_code) {
 	/* We were called recursively. Just give up */
+	proc_cleanup();
 	exit(recurse_code);
     }
     recurse_code = code;
