@@ -144,14 +144,7 @@ int     tls_clientactive = 0;	/* available or not */
 char   *tls_peer_CN = NULL;
 char   *tls_issuer_CN = NULL;
 
-char   *tls_protocol = NULL;
-const char   *tls_cipher_name = NULL;
-int	tls_cipher_usebits = 0;
-int	tls_cipher_algbits = 0;
-
-
 int var_imapd_tls_loglevel = 0;
-
 
 /* taken from OpenSSL apps/s_cb.c 
  * tim - this seems to just be giving logging messages
@@ -498,6 +491,10 @@ int tls_start_servertls(int readfd, int writefd, int *layerbits, char **authid)
     SSL_SESSION *session;
     SSL_CIPHER *cipher;
     X509   *peer;
+    const char *tls_protocol = NULL;
+    const char *tls_cipher_name = NULL;
+    int tls_cipher_usebits = 0;
+    int tls_cipher_algbits = 0;
 
     if (!tls_serverengine)
     {		
@@ -629,13 +626,18 @@ int tls_start_servertls(int readfd, int writefd, int *layerbits, char **authid)
     }
 
 
-    if ((*authid)!=NULL)
-      syslog(LOG_NOTICE, "starttls: %s with cipher %s (%d/%d bits) authenticated as %s", tls_protocol, tls_cipher_name,
-	     tls_cipher_usebits, tls_cipher_algbits, *authid);
-    else
-      syslog(LOG_NOTICE, "starttls: %s with cipher %s (%d/%d bits) no authentication", tls_protocol, tls_cipher_name,
-	     tls_cipher_usebits, tls_cipher_algbits);
-
+    if ((*authid)!=NULL) {
+	syslog(LOG_NOTICE, "starttls: %s with cipher %s (%d/%d bits)"
+	                   " authenticated as %s", 
+	       tls_protocol, tls_cipher_name,
+	       tls_cipher_usebits, tls_cipher_algbits, 
+	       *authid);
+    } else {
+	syslog(LOG_NOTICE, "starttls: %s with cipher %s (%d/%d bits)"
+	                   " no authentication", 
+	       tls_protocol, tls_cipher_name,
+	       tls_cipher_usebits, tls_cipher_algbits);
+    }
 
     return (0);
 }
