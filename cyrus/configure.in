@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.268.2.20 2005/02/21 19:25:12 ken3 Exp $
+dnl $Id: configure.in,v 1.268.2.21 2005/02/22 05:50:46 shadow Exp $
 dnl
 
 
@@ -99,6 +99,8 @@ if test $ac_cv_sys_long_file_names = no; then
 	AC_MSG_ERROR(The Cyrus IMAPD requires support for long file names)
 fi
 AC_C_INLINE
+
+AC_CHECK_SIZEOF(long)
 
 dnl Check if `long long int' is available
 AC_CHECK_SIZEOF(long long int)
@@ -1043,7 +1045,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.268.2.20 2005/02/21 19:25:12 ken3 Exp $ */
+/* $Id: configure.in,v 1.268.2.21 2005/02/22 05:50:46 shadow Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
