@@ -60,7 +60,7 @@ main(argc, argv)
 int argc;
 char **argv;
 {
-    int ruid;
+    int ruid, rgid;
     char lastgroup[4096];
     char buf[4096], *group, *nextgroup, *uid, *p;
     static struct uidlist uidlist;
@@ -77,13 +77,15 @@ char **argv;
 	      EX_CONFIG);
     }
 
-    /* only allow setuid from news user */
+    /* only allow setuid/setgid from news user */
     ruid = getuid();
-    if (ruid != geteuid()) {
+    rgid = getgid()
+    if (ruid != geteuid() || rgid != getegid()) {
 	struct stat sbuf;
 	if (stat(newspartition, &sbuf) || sbuf.st_uid != ruid) {
-	    fprintf(stderr, "rmnews: renouncing set-uid\n");
+	    fprintf(stderr, "rmnews: renouncing set-uid/set-gid\n");
 	    setuid(ruid);
+	    setgid(rgid);
 	}
     }
 
