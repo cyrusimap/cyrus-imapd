@@ -5,7 +5,7 @@
 #	This sample mc file is for a site that uses the Cyrus IMAP server
 #	exclusively for local mail. This requires Sendmail 8.10 or later.
 #
-# $Id: cyrusv2.mc,v 1.3 2000/09/09 04:02:11 leg Exp $
+# $Id: cyrusv2.mc,v 1.4 2001/08/23 23:26:56 leg Exp $
 
 divert(0)dnl
 VERSIONID(`cyrus v2 sample configuartion')
@@ -20,6 +20,10 @@ dnl "cyrus" password could easily become root.
 dnl define(`confTRUSTED_USER', `cyrus')
 
 define(`confLOCAL_MAILER', `cyrus')
+
+dnl if you aren't using Sendmail 8.12, you might need to remove
+dnl the following feature.
+FEATURE(`preserve_local_plus_detail')
 
 FEATURE(`nocanonify')
 FEATURE(`always_add_domain')
