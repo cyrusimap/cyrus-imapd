@@ -1,6 +1,6 @@
 /* interp.h -- interpretor definition
  * Larry Greenfield
- * $Id: interp.h,v 1.5 2000/02/10 00:39:14 leg Exp $
+ * $Id: interp.h,v 1.6 2000/02/22 07:56:40 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -23,7 +23,7 @@ ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
 WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
 ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
 OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-******************************************************************/
+*****************************************************************/
 
 #ifndef SIEVE_INTERP_H
 #define SIEVE_INTERP_H
@@ -47,6 +47,8 @@ struct sieve_interp {
 
     /* site-specific imapflags for mark/unmark */
     sieve_imapflags_t *markflags;
+
+    sieve_execute_error *execute_err;
 
     /* context to pass along */
     void *interp_context;

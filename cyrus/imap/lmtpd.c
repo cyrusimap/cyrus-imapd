@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: lmtpd.c,v 1.7 2000/02/19 04:46:05 leg Exp $
+ * $Id: lmtpd.c,v 1.8 2000/02/22 07:56:39 tmartin Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.7 2000/02/19 04:46:05 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.8 2000/02/22 07:56:39 tmartin Exp $";*/
 
 #include <config.h>
 
@@ -876,20 +876,25 @@ int send_forward(char *forwardto, char *return_path, struct protstream *file)
 
 
 static
-int sieve_redirect(void *ac, void *ic, void *sc, void *mc)
+int sieve_redirect(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     sieve_redirect_context_t *rc = (sieve_redirect_context_t *) ac;
     message_data_t *md = (message_data_t *) mc;
+    int res;
 
-    if (send_forward(rc->addr, md->return_path, md->data) == 0) {
+    if ((res = send_forward(rc->addr, md->return_path, md->data)) == 0) {
 	return SIEVE_OK;
     } else {
+	if (res == -1)
+	    *errmsg = "Could not spawn sendmail process";
+	else
+	    *errmsg = "Sendmail error";
 	return SIEVE_FAIL;
     }
 }
 
 static
-int sieve_discard(void *ac, void *ic, void *sc, void *mc)
+int sieve_discard(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
 
     /* ok, we won't file it */
@@ -897,7 +902,7 @@ int sieve_discard(void *ac, void *ic, void *sc, void *mc)
 }
 
 static
-int sieve_reject(void *ac, void *ic, void *sc, void *mc)
+int sieve_reject(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     sieve_reject_context_t *rc = (sieve_reject_context_t *) ac;
     script_data_t *sd = (script_data_t *) sc;
@@ -905,9 +910,11 @@ int sieve_reject(void *ac, void *ic, void *sc, void *mc)
     char buf[8192];
     char **body;
     char *origreceip;
+    int res;
 
     if (md->return_path == NULL) {
 	/* return message to who?!? */
+	*errmsg = "No return-path for reply";
 	return SIEVE_FAIL;
     }
     
@@ -918,16 +925,20 @@ int sieve_reject(void *ac, void *ic, void *sc, void *mc)
 	origreceip = NULL;		/* no original-recipient */
     }
 
-    if (send_rejection(md->id, md->return_path, origreceip, sd->username,
-		       rc->msg, md->data) == 0) {
+    if ((res = send_rejection(md->id, md->return_path, origreceip, sd->username,
+		       rc->msg, md->data)) == 0) {
 	return SIEVE_OK;
     } else {
+	if (res == -1)
+	    *errmsg = "Could not spawn sendmail process";
+	else
+	    *errmsg = "Sendmail error";
 	return SIEVE_FAIL;
     }
 }
 
 static
-int sieve_fileinto(void *ac, void *ic, void *sc, void *mc)
+int sieve_fileinto(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     sieve_fileinto_context_t *fc = (sieve_fileinto_context_t *) ac;
     deliver_opts_t *dop = (deliver_opts_t *) ic;
@@ -948,12 +959,13 @@ int sieve_fileinto(void *ac, void *ic, void *sc, void *mc)
     if (ret == 0) {
 	return SIEVE_OK;
     } else {
+	*errmsg = error_message(ret);
 	return SIEVE_FAIL;
     }
 }
 
 static
-int sieve_keep(void *ac, void *ic, void *sc, void *mc)
+int sieve_keep(void *ac, void *ic, void *sc, void *mc, char **errmsg)
 {
     sieve_keep_context_t *kc = (sieve_keep_context_t *) ac;
     deliver_opts_t *dop = (deliver_opts_t *) ic;
@@ -989,6 +1001,7 @@ int sieve_keep(void *ac, void *ic, void *sc, void *mc)
     if (ret == 0) {	
 	return SIEVE_OK;
     } else {
+	*errmsg = error_message(ret);
 	return SIEVE_FAIL;
     }
 }
@@ -996,7 +1009,8 @@ int sieve_keep(void *ac, void *ic, void *sc, void *mc)
 static int sieve_notify(void *ac,
 			void *interp_context, 
 			void *script_context,
-			void *mc)
+			void *mc,
+			char **errmsg)
 {
     sieve_notify_context_t *nc = (sieve_notify_context_t *) ac;
     script_data_t *sd = (script_data_t *) script_context;
@@ -1011,7 +1025,7 @@ static int sieve_notify(void *ac,
 }
 
 
-int autorespond(void *ac, void *ic, void *sc, void *mc)
+int autorespond(void *ac, void *ic, void *sc, void *mc, char **errmsg)
 {
     sieve_autorespond_context_t *arc = (sieve_autorespond_context_t *) ac;
     script_data_t *sd = (script_data_t *) sc;
@@ -1044,7 +1058,7 @@ int autorespond(void *ac, void *ic, void *sc, void *mc)
     return ret;
 }
 
-int send_response(void *ac, void *ic, void *sc, void *mc)
+int send_response(void *ac, void *ic, void *sc, void *mc, char **errmsg)
 {
     FILE *sm;
     char *smbuf[3];
@@ -1062,6 +1076,7 @@ int send_response(void *ac, void *ic, void *sc, void *mc)
     smbuf[2] = NULL;
     p = open_sendmail(smbuf, &sm);
     if (sm == NULL) {
+	*errmsg = "Could not spawn sendmail process";
 	return -1;
     }
 
@@ -1122,6 +1137,7 @@ int send_response(void *ac, void *ic, void *sc, void *mc)
 		       sievedb, strlen(sievedb), t);
 	return SIEVE_OK;
     } else {
+	*errmsg = "Sendmail error";
 	return SIEVE_FAIL;
     }
 }
@@ -1137,6 +1153,29 @@ sieve_vacation_t vacation = {
 /* imapflags support */
 static char *markflags[] = { "\\flagged" };
 static sieve_imapflags_t mark = { markflags, 1 };
+
+int sieve_parse_error_handler(int lineno, char *msg, void *ic, void *sc)
+{
+    script_data_t *sd = (script_data_t *) sc;
+    
+    syslog(LOG_INFO, "sieve parse error for %s: line %d: %s",
+	   sd->username, lineno, msg);
+    
+    return SIEVE_OK;
+}
+
+int sieve_execute_error_handler(char *msg, void *ic, void *sc, void *mc)
+{
+    script_data_t *sd = (script_data_t *) sc;
+    message_data_t *md = (message_data_t *) mc;
+    
+    syslog(LOG_INFO, "sieve runtime error for %s id %s: %s",
+	   sd->username, md->id ? md->id : "(null)", msg);
+    
+    return SIEVE_OK;
+}
+ 
+
 
 static void
 setup_sieve(deliver_opts_t *delopts)
@@ -1207,6 +1246,19 @@ setup_sieve(deliver_opts_t *delopts)
 	syslog(LOG_ERR, "sieve_register_vacation() returns %d\n", res);
 	fatal("sieve_register_vacation()", EC_TEMPFAIL);
     }
+
+    res = sieve_register_parse_error(sieve_interp, &sieve_parse_error_handler);
+    if (res != SIEVE_OK) {
+	syslog(LOG_ERR, "sieve_register_parse_error() returns %d\n", res);
+	fatal("sieve_register_parse_error()", EC_TEMPFAIL);
+    }
+ 
+    res = sieve_register_execute_error(sieve_interp, &sieve_execute_error_handler);
+    if (res != SIEVE_OK) {
+	syslog(LOG_ERR, "sieve_register_execute_error() returns %d\n", res);
+	fatal("sieve_register_execute_error()", EC_TEMPFAIL);
+    }
+
 }
 
 #endif
@@ -2234,18 +2286,9 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 
 	    r = sieve_script_parse(sieve_interp, f, (void *) sdata, &s);
 	    fclose(f);
-	    if (r != SIEVE_OK) {
-		syslog(LOG_INFO, "sieve parse error for %s",
-		       user);
-	    } else {
+	    if (r == SIEVE_OK) {
 		r = sieve_execute_script(s, (void *) msgdata);
-
-		if (r != SIEVE_OK) {
-		    syslog(LOG_INFO, "sieve runtime error for %s id %s",
-			   user, msgdata->id ? msgdata->id : "(null)");
-		}
 	    }
-
 	    if ((r == SIEVE_OK) && (msgdata->id)) {
 		/* ok, we've run the script */
 		char *sdb = make_sieve_db(namebuf);
@@ -2258,7 +2301,7 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 	    if (sdata->authstate) auth_freestate(sdata->authstate);
 	    if (sdata) free(sdata);
 	    sieve_script_free(&s);
-
+	    
 	    /* if there was an error, r is non-zero and do normal delivery */
 	} else {
 	    /* no sieve script */
