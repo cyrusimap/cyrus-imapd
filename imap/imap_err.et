@@ -38,6 +38,9 @@ ec IMAP_MAILBOX_UNSUBSCRIBED,
 ec IMAP_PARTITION_UNKNOWN,
    "unknown/invalid partition"
 
+ec IMAP_INVALID_IDENTIFIER,
+   "invalid identifier"
+
 ec IMAP_MESSAGE_CONTAINSNULL,
    "message contains NUL characters"
 
