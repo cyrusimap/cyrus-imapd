@@ -22,7 +22,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.49 2000/02/10 21:25:42 leg Exp $
+ * $Id: prot.c,v 1.50 2000/05/10 18:03:19 leg Exp $
  */
 
 #include <config.h>
@@ -236,8 +236,7 @@ void *rock;
  * error encountered on 's'.  If there is no error condition, return a
  * null pointer.
  */
-const char *prot_error(s)
-struct protstream *s;
+const char *prot_error(struct protstream *s)
 {
     return s->error;
 }
@@ -245,9 +244,7 @@ struct protstream *s;
 /*
  * Rewind the stream 's'.  's' must have been created for reading.
  */
-int 
-prot_rewind(s)
-struct protstream *s;
+int prot_rewind(struct protstream *s)
 {
     assert(!s->write);
 
@@ -265,9 +262,7 @@ struct protstream *s;
  * Read data into the empty buffer for the stream 's' and return the
  * first character.  Returns EOF on EOF or error.
  */
-int 
-prot_fill(s)
-struct protstream *s;
+int prot_fill(struct protstream *s)
 {
     int n;
     unsigned char *ptr;
@@ -408,16 +403,13 @@ struct protstream *s;
 	    s->cnt--;		/* we return the first char */
 	    return *s->buf;
 	}
-
     } while (1);
-
 }
 
 /*
  * Write out any buffered data in the stream 's'
  */
-int prot_flush(s)
-struct protstream *s;
+int prot_flush(struct protstream *s)
 {
     unsigned char *ptr = s->buf;
     int left = s->ptr - s->buf;
@@ -515,10 +507,7 @@ struct protstream *s;
 /*
  * Write to the output stream 's' the 'len' bytes of data at 'buf'
  */
-int prot_write(s, buf, len)
-struct protstream *s;
-const char *buf;
-unsigned len;
+int prot_write(struct protstream *s, const char *buf, unsigned len)
 {
     assert(len >= 0);
     assert(s->write);
@@ -599,11 +588,7 @@ int prot_printf(struct protstream *s, const char *fmt, ...)
  * Read from the protections stream 's' up to 'size' bytes into the buffer
  * 'buf'.  Returns the number of bytes read, or 0 for some error.
  */
-int
-prot_read(s, buf, size)
-struct protstream *s;
-char *buf;
-unsigned size;
+int prot_read(struct protstream *s, char *buf, unsigned size)
 {
     int c;
 
@@ -633,11 +618,7 @@ unsigned size;
 /*
  * Version of fgets() that works with protection streams.
  */
-char *
-prot_fgets(buf, size, s)
-char *buf;
-unsigned size;
-struct protstream *s;
+char *prot_fgets(char *buf, unsigned size, struct protstream *s)
 {
     char *p = buf;
     int c;
