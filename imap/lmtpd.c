@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: lmtpd.c,v 1.18 2000/04/06 15:14:40 leg Exp $
+ * $Id: lmtpd.c,v 1.19 2000/04/20 16:57:52 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.18 2000/04/06 15:14:40 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.19 2000/04/20 16:57:52 leg Exp $";*/
 
 #include <config.h>
 
@@ -759,9 +759,10 @@ int send_rejection(char *origid,
     const char *smbuf[3];
     char hostname[1024], buf[8192], *namebuf;
     int i;
-    struct tm *tm;
-    int tz;
     time_t t;
+    struct tm *tm;
+    long gmtoff;
+    int gmtnegative = 0;
     pid_t p;
 
     smbuf[0] = "sendmail";
@@ -783,16 +784,17 @@ int send_rejection(char *origid,
     fprintf(sm, "Message-ID: %s\r\n", buf);
 
     tm = localtime(&t);
-#ifdef HAVE_TM_ZONE
-    tz = tm->tm_gmtoff / 60;
-#else
-    tz = timezone / 60;
-#endif
-    fprintf(sm, "Date: %s, %02d %s %4d %02d:%02d:%02d %c%02d%02d\r\n",
+    gmtoff = gmtoff_of(tm, t);
+    if (gmtoff < 0) {
+	gmtoff = -gmtoff;
+	gmtnegative = 1;
+    }
+    gmtoff /= 60;
+    fprintf(sm, "Date: %s, %02d %s %4d %02d:%02d:%02d %c%.2lu%.2lu\r\n",
 	    wday[tm->tm_wday], 
 	    tm->tm_mday, month[tm->tm_mon], tm->tm_year + 1900,
 	    tm->tm_hour, tm->tm_min, tm->tm_sec,
-            tz > 0 ? '-' : '+', tz / 60, tz % 60);
+            gmtnegative ? '-' : '+', gmtoff / 60, gmtoff % 60);
 
     fprintf(sm, "X-Sieve: %s\r\n", sieve_version);
     fprintf(sm, "From: Mail Sieve Subsystem <%s>\r\n", POSTMASTER);
