@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle_idled.c,v 1.5 2001/02/22 19:27:17 ken3 Exp $ */
+/* $Id: idle_idled.c,v 1.6 2001/06/16 02:28:50 ken3 Exp $ */
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -83,6 +83,11 @@ int idle_enabled(void)
     struct stat sbuf;
     const char *idle_sock;
 
+    /* if the socket is already open, return */
+    if (notify_sock != -1) {
+	return 1;
+    }
+
     /* get polling period in case we can't connect to idled
      * NOTE: if used, a period of zero disables IDLE
      */
@@ -113,7 +118,7 @@ int idle_enabled(void)
     /* check that the socket exists */
     if (stat(idle_remote.sun_path, &sbuf) < 0) {
 	close(s);
-	return idle_period;
+vv	return idle_period;
     }
 
     /* put us in non-blocking mode */
