@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.194 2002/05/29 16:49:15 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.195 2002/06/03 17:52:28 rjs3 Exp $
  */
 
 #include <config.h>
@@ -934,7 +934,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     int mbtype;
     char *oldpath = NULL;
     char newpath[MAX_MAILBOX_PATH];
-    int oldopen = 0;
+    int oldopen = 0, newreserved = 0;
     struct mailbox oldmailbox;
     struct mailbox newmailbox;
     char *oldacl = NULL, *newacl = NULL;
@@ -1097,6 +1097,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     } else {
 	DB->commit(mbdb, tid);
 	tid = NULL;
+	newreserved = 1;
     }
 
     if(!r) {
@@ -1168,9 +1169,22 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     if (r != 0) {
 	int r2 = 0;
 	
-	if (tid) r2 = DB->abort(mbdb, tid);
+	if (tid) {
+	    r2 = DB->abort(mbdb, tid);
+	    tid = NULL;
+	}
 	if (r2) {
 	    syslog(LOG_ERR, "DBERROR: can't abort: %s", cyrusdb_strerror(r2));
+	}
+	
+	if(newreserved) {
+	    /* remove the RESERVED mailbox entry if we failed */
+	    r2 = DB->delete(mbdb, newname, strlen(newname), NULL, 0);
+	    if(r2) {
+		syslog(LOG_ERR,
+		       "DBERROR: can't remove RESERVE entry for %s (%s)",
+		       newname, cyrusdb_strerror(r2));
+	    }
 	}
 	
 	/* unroll mupdate operations if necessary */
