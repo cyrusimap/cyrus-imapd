@@ -108,7 +108,7 @@ static void index_fetchmsg P((const char *msg_base, unsigned long msg_size,
 			      unsigned start_octet, unsigned octet_count));
 static void index_fetchsection P((const char *msg_base, unsigned long msg_size,
 				  int format, char *section,
-				  const char *cacheitem,
+				  const char *cacheitem, unsigned size,
 				  unsigned start_octet, unsigned octet_count));
 static void index_fetchfsection P((const char *msg_base,
 				   unsigned long msg_size,
@@ -1309,7 +1309,8 @@ const char *msg_base;
 unsigned long msg_size;
 int format;
 unsigned offset;
-unsigned size;
+unsigned size;     /* this is the correct size for a news message after
+		      having LF translated to CRLF */
 unsigned start_octet;
 unsigned octet_count;
 {
@@ -1401,13 +1402,14 @@ unsigned octet_count;
  * Helper function to fetch a body section
  */
 static void
-index_fetchsection(msg_base, msg_size, format, section, cacheitem,
+index_fetchsection(msg_base, msg_size, format, section, cacheitem, size,
 		   start_octet, octet_count)
 const char *msg_base;
 unsigned long msg_size;
 int format;
 char *section;
 const char *cacheitem;
+unsigned size;
 unsigned start_octet;
 unsigned octet_count;
 {
@@ -1430,7 +1432,7 @@ unsigned octet_count;
 	    start_octet++;	/* Make 1-based */
 	}
 
-	index_fetchmsg(msg_base, msg_size, format, 0, msg_size,
+	index_fetchmsg(msg_base, msg_size, format, 0, size,
 		       start_octet, octet_count);
 	return;
     }
@@ -2157,7 +2159,7 @@ void *rock;
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body */
 
 	index_fetchsection(msg_base, msg_size, mailbox->format, section->s,
-			   cacheitem,
+			   cacheitem, SIZE(msgno),
 			   fetchargs->start_octet, fetchargs->octet_count);
     }
     prot_printf(imapd_out, ")\r\n");
