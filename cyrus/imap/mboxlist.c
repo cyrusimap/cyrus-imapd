@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.144 2001/01/02 20:32:50 leg Exp $
+ * $Id: mboxlist.c,v 1.145 2001/01/09 00:18:36 leg Exp $
  */
 
 #include <config.h>
@@ -573,7 +573,7 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 
 	/* Create new mailbox and move new mailbox list file into place */
 	mailbox_hash_mbox(buf, root, name);
-	r = mailbox_create(name, buf, acl, 
+	r = mailbox_create(name, buf, acl, NULL,
 			   ((mbtype & MBTYPE_NETNEWS) ?
 			    MAILBOX_FORMAT_NETNEWS :
 			    MAILBOX_FORMAT_NORMAL), 
