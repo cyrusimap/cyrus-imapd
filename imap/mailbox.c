@@ -1208,9 +1208,10 @@ char *name;
 
 
 int 
-mailbox_create(name, path, format, mailboxp)
+mailbox_create(name, path, acl, format, mailboxp)
 char *name;
 char *path;
+char *acl;
 int format;
 struct mailbox *mailboxp;
 {
@@ -1248,7 +1249,7 @@ struct mailbox *mailboxp;
 
     mailbox.name = strsave(name);
     mailbox.path = strsave(path);
-    mailbox.acl = strsave("");
+    mailbox.acl = strsave(acl);
 
     strcpy(p, FNAME_INDEX);
     mailbox.index = fopen(fnamebuf, "w");
@@ -1405,7 +1406,8 @@ int isinbox;
     }
 
     /* Create new mailbox */
-    r = mailbox_create(newname, newpath, oldmailbox.format, &newmailbox);
+    r = mailbox_create(newname, newpath, oldmailbox.acl, oldmailbox.format,
+		       &newmailbox);
     if (r) {
 	mailbox_close(&oldmailbox);
 	return r;
