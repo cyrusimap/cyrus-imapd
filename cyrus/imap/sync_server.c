@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.1.2.5 2005/03/04 19:26:49 ken3 Exp $
+ * $Id: sync_server.c,v 1.1.2.6 2005/03/04 20:44:37 ken3 Exp $
  */
 
 #include <config.h>
@@ -819,6 +819,15 @@ static void cmdloop(void)
 	    if (!strcmp(cmd.s, "Mailboxes")) {
 		if (c != ' ') goto missingargs;
                 cmd_mailboxes();
+                continue;
+	    }
+	    break;
+	case 'N':
+	    if (!strcmp(cmd.s, "Noop")) {
+		if (c == '\r') c = prot_getc(sync_in);
+		if (c != '\n') goto extraargs;
+
+		prot_printf(sync_out, "OK Noop completed\r\n");
                 continue;
 	    }
 	    break;
