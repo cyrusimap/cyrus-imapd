@@ -67,7 +67,7 @@
 #include "ptloader.h"
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ptloader.c,v 1.32.2.8 2005/02/16 21:07:09 shadow Exp $";
+      "$Id: ptloader.c,v 1.32.2.9 2005/02/25 07:19:06 shadow Exp $";
 
 struct pts_module *pts_modules[] = {
 #ifdef HAVE_LDAP
@@ -142,9 +142,7 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     /* set signal handlers */
     signal(SIGPIPE, SIG_IGN);
 
-    syslog(LOG_NOTICE,
-	   "starting: $Id: ptloader.c,v 1.32.2.8 2005/02/16 21:07:09 shadow Exp $ (%s)",
-	   ptsmodule_name);
+    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.32.2.9 2005/02/25 07:19:06 shadow Exp $");
 
     while ((opt = getopt(argc, argv, "d:")) != EOF) {
 	switch (opt) {
