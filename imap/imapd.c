@@ -675,6 +675,8 @@ char *passwd;
     char *canon_user;
     char *reply = 0;
     char *val;
+    char buf[MAX_MAILBOX_PATH];
+    FILE *logfile;
 
     canon_user = auth_canonifyid(user);
     if (!canon_user) {
@@ -732,6 +734,15 @@ char *passwd;
 
     if (!reply) reply = "User logged in";
 
+    /* Create telemetry log */
+    sprintf(buf, "%s%s%s/%d", config_dir, FNAME_LOGDIR, imapd_userid,
+	    getpid());
+    logfile = fopen(buf, "w");
+    if (logfile) {
+	prot_setlog(imapd_in, fileno(logfile));
+	prot_setlog(imapd_out, fileno(logfile));
+    }
+
     prot_printf(imapd_out, "%s OK %s\r\n", tag, reply);
     return;
 };
@@ -759,6 +770,8 @@ char *authtype;
     char *(*decodefunc)();
     int maxplain;
     char *val;
+    char buf[MAX_MAILBOX_PATH];
+    FILE *logfile;
 
     lcase(authtype);
     r = login_authenticate(authtype, &mech, &authproc);
@@ -840,6 +853,15 @@ char *authtype;
     }
     else {
 	mech->free_state(state);
+    }
+
+    /* Create telemetry log */
+    sprintf(buf, "%s%s%s/%d", config_dir, FNAME_LOGDIR, imapd_userid,
+	    getpid());
+    logfile = fopen(buf, "w");
+    if (logfile) {
+	prot_setlog(imapd_in, fileno(logfile));
+	prot_setlog(imapd_out, fileno(logfile));
     }
 
     return;
