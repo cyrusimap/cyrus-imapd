@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.88 2003/06/19 20:49:48 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.89 2003/06/24 20:33:12 ken3 Exp $
  */
 
 /*
@@ -63,6 +63,7 @@
 #include <signal.h>
 #include <assert.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <sys/param.h>
 #include <syslog.h>
 #include <com_err.h>
@@ -77,6 +78,7 @@
 #include <sasl/saslutil.h>
 
 #include "acl.h"
+#include "annotate.h"
 #include "append.h"
 #include "auth.h"
 #include "backend.h"
@@ -93,6 +95,7 @@
 #include "nntp_err.h"
 #include "prot.h"
 #include "rfc822date.h"
+#include "smtpclient.h"
 #include "spool.h"
 #include "telemetry.h"
 #include "tls.h"
@@ -587,6 +590,10 @@ int service_init(int argc __attribute__((unused)),
 	}
     }
 
+    /* Initialize the annotatemore extention */
+    annotatemore_init(0, NULL, NULL);
+    annotatemore_open(NULL);
+
     return 0;
 }
 
@@ -734,6 +741,9 @@ void shut_down(int code)
 
     mboxlist_close();
     mboxlist_done();
+
+    annotatemore_close();
+    annotatemore_done();
 
     if (nntp_in) {
 	prot_NONBLOCK(nntp_in);
@@ -2805,9 +2815,9 @@ static int cancel(message_data_t *msg)
     return r;
 }
 #endif
-static void feedpeer(message_data_t *msg)
+static void feedpeer(const char *peer, message_data_t *msg)
 {
-    const char *peer, *port = "119";
+    const char *port = "119";
     char *server, *path, *s;
     struct wildmat *wild = NULL, *w;
     int len, err, n, feed = 1;
@@ -2815,11 +2825,6 @@ static void feedpeer(message_data_t *msg)
     int sock = -1;
     struct protstream *pin, *pout;
     char buf[4096];
-
-    if ((peer = config_getstring(IMAPOPT_NEWSPEER)) == NULL) {
-	syslog(LOG_ERR, "no newspeer defined");
-	return;
-    }
 
     /* make a working copy of the peer */
     server = xstrdup(peer);
@@ -2964,6 +2969,111 @@ static void feedpeer(message_data_t *msg)
     return;
 }
 
+void printstring(const char *s)
+{
+    /* needed to link against annotate.o */
+    fatal("printstring() executed, but its not used for nntpd!",
+	  EC_SOFTWARE);
+}
+
+#define ALLOC_SIZE 10
+
+static void news2mail(message_data_t *msg)
+{
+    struct annotation_data attrib;
+    int n, i, r;
+    FILE *sm;
+    static const char **smbuf = NULL;
+    static int allocsize = 0;
+    int sm_stat;
+    pid_t sm_pid;
+    char buf[4096];
+
+    if (!smbuf) {
+	allocsize += ALLOC_SIZE;
+	smbuf = xzmalloc(allocsize * sizeof(const char *));
+
+	smbuf[0] = "sendmail";
+	smbuf[1] = "-i";		/* ignore dots */
+	smbuf[2] = "-f";
+	smbuf[3] = "<>";
+	smbuf[4] = "--";
+    }
+
+    for (i = 5, n = 0; n < msg->rcpt_num; n++) {
+	/* see if we want to send this to a mailing list */
+	r = annotatemore_lookup(msg->rcpt[n],
+				"/vendor/cmu/cyrus-imapd/news2mail", "",
+				&attrib);
+	if (r) continue;
+
+	/* add the email address as a RCPT */
+	if (attrib.value) {
+	    if (i >= allocsize - 1) {
+		allocsize += ALLOC_SIZE;
+		smbuf = xrealloc(smbuf, allocsize * sizeof(const char *));
+	    }
+
+	    smbuf[i++] = xstrdup(attrib.value);
+	    smbuf[i] = NULL;
+	}
+    }
+
+    /* send the message */
+    if (i > 5) {
+	sm_pid = open_sendmail(smbuf, &sm);
+
+	if (!sm)
+	    syslog(LOG_ERR, "news2mail: could not spawn sendmail process");
+	else {
+	    int body = 0, skip;
+
+	    rewind(msg->f);
+
+	    while (fgets(buf, sizeof(buf), msg->f)) {
+		if (buf[0] == '\r' && buf[1] == '\n') {
+		    /* blank line between header and body */
+		    body = 1;
+		}
+
+		skip = 0;
+		if (!body) {
+		    /* munge various news-specific headers */
+		    if (!strncasecmp(buf, "Newsgroups:", 11))
+			fprintf(sm, "X-");
+		    else if (!strncasecmp(buf, "Xref:", 5) ||
+			     !strncasecmp(buf, "Path:", 5) ||
+			     !strncasecmp(buf, "NNTP-Posting-", 13))
+			skip = 1;
+		}
+
+		do {
+		    if (!skip) fprintf(sm, "%s", buf);
+		} while (buf[strlen(buf)-1] != '\n' &&
+			 fgets(buf, sizeof(buf), msg->f));
+	    }
+
+	    /* Protect against messages not ending in CRLF */
+	    if (buf[strlen(buf)-1] != '\n') fprintf(sm, "\r\n");
+
+	    fclose(sm);
+	    while (waitpid(sm_pid, &sm_stat, 0) < 0);
+
+	    if (sm_stat) /* sendmail exit value */
+		syslog(LOG_ERR, "news2mail failed: %s",
+		       sendmail_errstr(sm_stat));
+	}
+
+	/* free the RCPTs */
+	for (i = 5; smbuf[i]; i++) {
+	    free((char *) smbuf[i]);
+	    smbuf[i] = NULL;
+	}
+    }
+
+    return;
+}
+
 static void cmd_post(char *msgid, int mode)
 {
     FILE *f = NULL;
@@ -3026,8 +3136,13 @@ static void cmd_post(char *msgid, int mode)
 			post_codes[mode].ok, msg->id ? msg->id : "");
 
 	    if (msg->id) {
+		const char *peer = config_getstring(IMAPOPT_NEWSPEER);
+
 		/* send the article upstream */
-		feedpeer(msg);
+		if (peer) feedpeer(peer, msg);
+
+		/* gateway news to mail */
+		news2mail(msg);
 	    }
 	}
 

@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.99.2.36 2003/06/19 21:20:09 ken3 Exp $
+ * $Id: lmtpd.c,v 1.99.2.37 2003/06/24 20:33:12 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -94,6 +94,7 @@
 #include "notify.h"
 #include "idle.h"
 #include "rfc822date.h"
+#include "smtpclient.h"
 #include "tls.h"
 
 #include "lmtpengine.h"
@@ -357,63 +358,6 @@ int getenvelope(void *mc, const char *field, const char ***contents)
 }
 
 static int global_outgoing_count = 0;
-
-pid_t open_sendmail(const char *argv[], FILE **sm)
-{
-    int fds[2];
-    FILE *ret;
-    pid_t p;
-
-    pipe(fds);
-    if ((p = fork()) == 0) {
-	/* i'm the child! run sendmail! */
-	close(fds[1]);
-	/* make the pipe be stdin */
-	dup2(fds[0], 0);
-	execv(config_getstring(IMAPOPT_SENDMAIL), (char **) argv);
-
-	/* if we're here we suck */
-	printf("451 lmtpd: didn't exec?!?\r\n");
-	fatal("couldn't exec", EC_OSERR);
-    }
-    /* i'm the parent */
-    close(fds[0]);
-    ret = fdopen(fds[1], "w");
-    *sm = ret;
-
-    return p;
-}
-
-/* sendmail_errstr.  create a descriptive message given 'sm_stat': 
-   the exit code from wait() from sendmail.
-
-   not thread safe, but probably ok */
-static char *sendmail_errstr(int sm_stat)
-{
-    static char errstr[200];
-
-    if (WIFEXITED(sm_stat)) {
-	snprintf(errstr, sizeof errstr,
-		 "Sendmail process terminated normally, exit status %d\n",
-		 WEXITSTATUS(sm_stat));
-    } else if (WIFSIGNALED(sm_stat)) {
-	snprintf(errstr, sizeof errstr,
-		"Sendmail process terminated abnormally, signal = %d %s\n",
-		WTERMSIG(sm_stat),
-#ifdef WCOREDUMP
-		WCOREDUMP(sm_stat) ? " -- core file generated" :
-#endif
-		"");
-    } else if (WIFSTOPPED(sm_stat)) {
-	snprintf(errstr, sizeof errstr,
-		 "Sendmail process stopped, signal = %d\n",
-		WTERMSIG(sm_stat));
-    } else {
-	return NULL;
-    }
-    
-    return errstr;
-}
 
 int send_rejection(const char *origid,
 		   const char *rejto,
