@@ -200,7 +200,7 @@ void sendsomequeued(acap_conn_t *acapconn, int num)
 
 void fatal(const char *msg, int err)
 {
-    if (debugmode) printf("dieing with %s %d\n",msg,err);
+    if (debugmode) printf("dying with %s %d\n",msg,err);
     syslog(LOG_CRIT, msg);
     syslog(LOG_NOTICE, "exiting");
     exit(err);
@@ -255,7 +255,7 @@ int main(int argc, char **argv)
     timeout.tv_sec = 60;
     timeout.tv_usec = 0;
 
-    config_init("acaplistener");
+    config_init("acappush");
     acap_init();
 
     /* initialize the hash table */
@@ -319,6 +319,7 @@ int main(int argc, char **argv)
 		{
 		    if (debugmode) printf("Acap connection dropped\n");
 		    connected = DISCONNECTED;
+		    acap_conn = NULL;
 		    FD_CLR(acapsock, &read_set);
 		    nfds = s+1;
 		}
