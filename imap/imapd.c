@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.272 2000/10/23 20:32:42 leg Exp $ */
+/* $Id: imapd.c,v 1.273 2000/10/24 02:12:06 leg Exp $ */
 
 #include <config.h>
 
@@ -3136,37 +3136,7 @@ char *partition;
     }
 }	
 
-/*
- * Perform a DELETE command
- */
-void
-cmd_delete(tag, name)
-char *tag;
-char *name;
-{
-    int r;
-    char mailboxname[MAX_MAILBOX_NAME+1];
-
-    r = mboxname_tointernal(name, imapd_userid, mailboxname);
-
-    if (!r) {
-	r = mboxlist_deletemailbox(mailboxname, imapd_userisadmin,
-				   imapd_userid, imapd_authstate, 1);
-    }
-
-    if (imapd_mailbox) {
-	index_check(imapd_mailbox, 0, 0);
-    }
-
-    if (r) {
-	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
-    }
-    else {
-	prot_printf(imapd_out, "%s OK %s\r\n", tag,
-		    error_message(IMAP_OK_COMPLETED));
-    }
-}	
-
+/* 'tmplist' is used for recursive means in cmd_delete() and cmd_rename() */
 struct tmplist {
     int alloc;
     int num;
@@ -3191,6 +3161,62 @@ static int addmbox(char *name, int matchlen, int maycreate, void *rock)
     
     return 0;
 }
+
+/*
+ * Perform a DELETE command
+ */
+void
+cmd_delete(tag, name)
+char *tag;
+char *name;
+{
+    int r;
+    char mailboxname[MAX_MAILBOX_NAME+1];
+
+    r = mboxname_tointernal(name, imapd_userid, mailboxname);
+
+    if (!r) {
+	r = mboxlist_deletemailbox(mailboxname, imapd_userisadmin,
+				   imapd_userid, imapd_authstate, 1);
+    }
+
+    /* was it a top-level user mailbox? */
+    if (!r && !strncmp(name, "user.", 5) && !strchr(name+5, '.')) {
+	struct tmplist *l = xmalloc(sizeof(struct tmplist));
+	int r2, i;
+
+	l->alloc = 0;
+	l->num = 0;
+
+	strcat(name, ".*");
+	mboxlist_findall(mailboxname, imapd_userisadmin, imapd_userid,
+			 imapd_authstate, addmbox, &l);
+
+	/* foreach mailbox in list, remove it */
+	for (i = 0; i < l->num; i++) {
+	    r2 = mboxlist_deletemailbox(l->mb[i], imapd_userisadmin,
+					imapd_userid, imapd_authstate, 0);
+	    if (r2) {
+		prot_printf(imapd_out, "* NO delete %s: %s\r\n",
+			    l->mb[i], error_message(r2));
+	    }
+	}
+	    
+	free(l);
+    }
+
+    if (imapd_mailbox) {
+	index_check(imapd_mailbox, 0, 0);
+    }
+
+    if (r) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+    }
+    else {
+	prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED));
+    }
+}	
 
 /*
  * Perform a RENAME command
