@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.54 1998/10/29 20:39:17 tjs Exp $ -->
+<!-- $Id: changes.html,v 1.55 1998/11/03 21:14:24 tjs Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -8,6 +8,14 @@
 <h2> Changes to the Cyrus IMAP Server Since Version 1.5.14</h2>
 
     <ul>
+      <li>
+	Added --disable-server switch to optionally prevent compilation of
+	server to help sites that just want client libraries (so cyradm and
+	libcyrus can be compiled on remote systems without installing stuff
+	into /usr/cyrus/bin, etc.)  For now, the server is still configured in
+	this case, and a Makefile is generated.  This could change in future
+	versions.
+
       <li> Fixed a mmap leak in index.c in index_search_evaluate
 	that caused problems on complex searches.  Thanks to Jeff Schiller
 	for pointing this out.  Fixed a potential leak in mboxlist.c that
@@ -611,7 +619,7 @@ restore tab before breaking out of loop.
 </ul>
 <P><HR><P>
 <!-- hhmts start -->
-last modified by tjs at Thu Oct 29 15:37:58 1998
+last modified by tjs at Tue Nov  3 16:14:03 1998
 <!-- hhmts end -->
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
