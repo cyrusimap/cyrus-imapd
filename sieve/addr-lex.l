@@ -9,6 +9,8 @@
 #undef YY_INPUT
 #define YY_INPUT(b, r, ms) (r = addrinput(b, ms))
 
+int addrinput(char *buf, int max_size);
+
 static int ncom;	/* number of open comments */
 %}
 
