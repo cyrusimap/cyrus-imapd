@@ -39,6 +39,8 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <config.h>
+
 #include <db.h>
 #include <syslog.h>
 #include <assert.h>
@@ -63,7 +65,6 @@
  */
 
 #define CONFIG_DEADLOCK_DETECTION DB_LOCK_YOUNGEST
-#define CONFIG_DB_VERBOSE 1
 #define FNAME_DBDIR "/db"
 
 /* --- cut here --- */
