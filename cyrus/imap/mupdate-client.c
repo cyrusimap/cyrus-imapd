@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.32.4.2 2002/08/13 19:50:24 ken3 Exp $
+ * $Id: mupdate-client.c,v 1.32.4.3 2002/08/14 16:32:02 ken3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -286,7 +286,7 @@ int mupdate_connect(const char *server, const char *port,
     } else if((sp = getservbyname("mupdate", "tcp")) != NULL) {
 	addr.sin_port = sp->s_port;
     } else {
-	addr.sin_port = config_getint(IMAPOPT_MUPDATE_PORT);
+	addr.sin_port = htons(config_getint(IMAPOPT_MUPDATE_PORT));
     }
 
     if (connect(s, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
