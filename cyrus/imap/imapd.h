@@ -1,5 +1,5 @@
 /* imapd.h -- Common state for IMAP daemon
- * $Id: imapd.h,v 1.57 2004/06/22 16:57:22 rjs3 Exp $
+ * $Id: imapd.h,v 1.58 2004/06/22 17:04:49 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -55,17 +55,11 @@ extern char *imapd_userid;
 /* Authorization state for logged in userid */
 extern struct auth_state *imapd_authstate;
 
-/* True if user is an admin */
-extern int imapd_userisadmin;
-
 /* Currently open mailbox */
 extern struct mailbox *imapd_mailbox;
 
 /* Number of messages in currently open mailbox */
 extern int imapd_exists;
-
-/* Name of client host */
-extern char imapd_clienthost[];
 
 /* List of HEADER.FIELDS[.NOT] fetch specifications */
 struct fieldlist {
