@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.209 2004/06/22 19:42:56 rjs3 Exp $
+ * $Id: index.c,v 1.210 2004/06/22 21:36:18 rjs3 Exp $
  */
 #include <config.h>
 
@@ -2222,6 +2222,7 @@ static int index_fetchreply(struct mailbox *mailbox,
     int fetchitems = fetchargs->fetchitems;
     const char *msg_base = 0;
     unsigned long msg_size = 0;
+    struct octetinfo *oi = NULL;
     int sepchar = '(';
     int started = 0;
     int i;
@@ -2361,6 +2362,8 @@ static int index_fetchreply(struct mailbox *mailbox,
 	prot_putc(')', imapd_out);
 	sepchar = ' ';
 
+	oi = (struct octetinfo *)fsection->rock;
+
 	prot_printf(imapd_out, "%s ", fsection->trail);
 
 	if(fetchargs->cache_atleast > CACHE_VERSION(msgno)) {
@@ -2371,11 +2374,17 @@ static int index_fetchreply(struct mailbox *mailbox,
 	    
 	    index_fetchfsection(msg_base, msg_size, mailbox->format, fsection,
 				cacheitem,
-				fetchargs->start_octet, fetchargs->octet_count);
+				(fetchitems & FETCH_IS_PARTIAL) ?
+				  fetchargs->start_octet : oi->start_octet,
+				(fetchitems & FETCH_IS_PARTIAL) ?
+				  fetchargs->octet_count : oi->octet_count);
 	}
 	else {
 	    index_fetchcacheheader(msgno, fsection->fields,
-				   fetchargs->start_octet, fetchargs->octet_count);
+				   (fetchitems & FETCH_IS_PARTIAL) ?
+				     fetchargs->start_octet : oi->start_octet,
+				   (fetchitems & FETCH_IS_PARTIAL) ?
+				     fetchargs->octet_count : oi->octet_count);
 	}
     }
     for (section = fetchargs->bodysections; section; section = section->next) {
@@ -2392,9 +2401,14 @@ static int index_fetchreply(struct mailbox *mailbox,
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bodystructure */
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body */
 
+	oi = section->rock;
+
 	r = index_fetchsection(respbuf, msg_base, msg_size, mailbox->format,
 			       section->s, cacheitem, SIZE(msgno),
-			       fetchargs->start_octet, fetchargs->octet_count);
+			       (fetchitems & FETCH_IS_PARTIAL) ?
+				 fetchargs->start_octet : oi->start_octet,
+			       (fetchitems & FETCH_IS_PARTIAL) ?
+			         fetchargs->octet_count : oi->octet_count);
 	if (!r)	sepchar = ' ';
     }
     for (section = fetchargs->binsections; section; section = section->next) {
@@ -2411,9 +2425,14 @@ static int index_fetchreply(struct mailbox *mailbox,
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bodystructure */
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body */
 
+	oi = section->rock;
+
 	r = index_fetchsection(respbuf, msg_base, msg_size, mailbox->format,
 			       section->s, cacheitem, SIZE(msgno),
-			       fetchargs->start_octet, fetchargs->octet_count);
+			       (fetchitems & FETCH_IS_PARTIAL) ?
+				 fetchargs->start_octet : oi->start_octet,
+			       (fetchitems & FETCH_IS_PARTIAL) ?
+			         fetchargs->octet_count : oi->octet_count);
 	if (!r)	sepchar = ' ';
     }
     for (section = fetchargs->sizesections; section; section = section->next) {
