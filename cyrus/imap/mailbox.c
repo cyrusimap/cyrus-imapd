@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.102 2000/10/12 19:15:08 leg Exp $
+ $Id: mailbox.c,v 1.103 2000/11/17 02:12:18 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -97,7 +97,10 @@
 #include "acappush.h"
 
 static int mailbox_doing_reconstruct = 0;
-static struct mailbox zeromailbox = {-1, -1, -1};
+#define zeromailbox(m) { memset(&m, 0, sizeof(struct mailbox)); \
+                         (m).header_fd = -1; \
+                         (m).index_fd = -1; \
+                         (m).cache_fd = -1; }
 
 static int mailbox_calculate_flagcounts(struct mailbox *mailbox);
 
@@ -296,7 +299,7 @@ int mailbox_open_header_path(const char *name,
     struct stat sbuf;
     int r;
 
-    *mailbox = zeromailbox;
+    zeromailbox(*mailbox);
     mailbox->quota.fd = -1;
 
     strcpy(fnamebuf, path);
@@ -442,7 +445,7 @@ void mailbox_close(struct mailbox *mailbox)
 	if (mailbox->flagname[flag]) free(mailbox->flagname[flag]);
     }
 
-    *mailbox = zeromailbox;
+    zeromailbox(*mailbox);
     mailbox->quota.fd = -1;
 }
 
@@ -1881,7 +1884,7 @@ int mailbox_create(const char *name,
 	}
     }
 
-    mailbox = zeromailbox;
+    zeromailbox(mailbox);
     mailbox.quota.fd = -1;
 
     quota_root = mailbox_findquota(name);
