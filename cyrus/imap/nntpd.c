@@ -47,7 +47,7 @@
  */
 
 /*
- * $Id: nntpd.c,v 1.1.2.27 2002/10/21 18:07:54 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.28 2002/10/21 18:28:09 ken3 Exp $
  */
 #include <config.h>
 
@@ -386,7 +386,7 @@ int service_main(int argc, char **argv, char **envp)
     }
 
     /* other params should be filled in */
-    if (sasl_server_new("nntp", config_servername, NULL, NULL, NULL,
+    if (sasl_server_new("news", config_servername, NULL, NULL, NULL,
 			NULL, SASL_SUCCESS_DATA, &nntp_saslconn) != SASL_OK)
 	fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL); 
 
