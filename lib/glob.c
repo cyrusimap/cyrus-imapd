@@ -15,18 +15,17 @@
  * Start Date: 4/5/93
  */
 
-#include <stdio.h>
 #include <ctype.h>
+#include <stdio.h>
 #include "util.h"
 #include "glob.h"
+#include "xmalloc.h"
+
+#define SEPCHAR '.'
 
 /* name of "INBOX" -- must have no repeated substrings */
 static char inbox[] = "INBOX";
 #define INBOXLEN (sizeof (inbox) - 1)
-
-/* from utilities: */
-extern void *fs_get( /* size_t */ );
-extern void fs_give( /* void ** */ );
 
 /* initialize globbing structure
  *  This makes the following changes to the input string:
@@ -36,10 +35,7 @@ extern void fs_give( /* void ** */ );
  *   4) '*' eats all '*'s and '%'s connected by any wildcard
  *   5) '%' eats all adjacent '%'s
  */
-glob *glob_init_suppress(str, flags, suppress)
-const char *str;
-int flags;
-const char *suppress;
+glob *glob_init_suppress P((const char *str, int flags, const char *suppress))
 {
     glob *g;
     char *dst;
@@ -48,8 +44,8 @@ const char *suppress;
     newglob = flags & GLOB_HIERARCHY;
     if (suppress) slen = strlen(suppress);
     g = (glob *) fs_get(sizeof (glob) + slen + strlen(str) + 1);
-    strcpy(g->inbox, inbox);
-    if (g != NULL) {
+    if (g != 0) {
+        strcpy(g->inbox, inbox);
 	g->sep_char = '.';
 	dst = g->str;
 	/* if we're doing a substring match, put a '*' prefix (1) */
@@ -73,7 +69,7 @@ const char *suppress;
 		    }
 		    *dst++ = '*';
 		} else {
-		    *dst++ = (*str == '%') ? '?' : *str;
+		    *dst++ = (char)((*str == '%') ? '?' : *str);
 		    ++str;
 		}
 	    }
@@ -117,7 +113,7 @@ const char *suppress;
 		while (*dst && TOLOWER(*str) == TOLOWER(*dst)) {
 		    *dst++ = *str++;
 		}
-		if (*str == '*') g->gstar = ++str, g->ghier = NULL;
+		if (*str == '*') g->gstar = ++str, g->ghier = 0;
 		else if (*str == '%') g->ghier = ++str;
 		else break;
 		if (*str != '%') {
@@ -133,7 +129,7 @@ const char *suppress;
 	 *  2) the suppress string prefix matches the glob pattern
 	 *     or GLOB_INBOXCASE is set
 	 */
-	g->suppress = NULL;
+	g->suppress = 0;
 	if (suppress) {
 	    dst = g->str + strlen(g->str) + 1;
 	    strcpy(dst, suppress);
@@ -156,8 +152,7 @@ const char *suppress;
 
 /* free a glob structure
  */
-void glob_free(g)
-glob **g;
+void glob_free P((glob **g))
 {
     fs_give((void **) g);
 }
@@ -170,11 +165,7 @@ glob **g;
  *            set to return value + 1 on partial match, otherwise -1
  *            if NULL, partial matches not allowed
  */
-int glob_test(g, ptr, len, min)
-glob *g;
-const char *ptr;
-long len;
-long *min;
+int glob_test P((glob *g, const char *ptr, long int len, long int *min))
 {
     const char *gptr, *pend;	/* glob pointer, end of ptr string */
     const char *gstar, *pstar;	/* pointers for '*' patterns */
@@ -194,6 +185,7 @@ long *min;
     pend = ptr + len;
     gstar = ghier = NULL;
     newglob = g->flags & GLOB_HIERARCHY;
+    phier = pstar = NULL;	/* initialize to eliminate warnings */
 
     /* check for INBOX prefix */
     if ((g->flags & GLOB_INBOXCASE) && !strncmp(ptr, inbox, INBOXLEN)) {
@@ -227,6 +219,7 @@ long *min;
 		   && (*gptr == *ptr || (!newglob && *gptr == '?'))) {
 		++ptr, ++gptr;
 	    }
+	    if (*gptr == '\0' && ptr == pend) break;
 	    if (*gptr == '*') {
 		ghier = NULL;
 		gstar = ++gptr;
@@ -251,8 +244,11 @@ long *min;
 		    gptr = ghier;
 		    break;
 		}
-                if (*ptr == g->sep_char && *ptr != *ghier) {
-		    if (!*ghier && min) {
+		if (*ptr == g->sep_char && *ptr != *ghier) {
+		    if (!*ghier && min
+			&& *min < ptr - start && ptr != pend
+			&& *ptr == g->sep_char
+			) {
 			*min = gstar ? ptr - start + 1 : -1;
 			return (ptr - start);
 		    }
@@ -277,15 +273,12 @@ long *min;
 		ptr = ++pstar;
 		gptr = gstar + 1;
 	    }
-
-           if (*gptr == '\0' && min && *min < ptr - start
-	       && ptr != pend && *ptr == g->sep_char) {
-               /* The pattern ended on a hierarchy separator
-                * return a partial match */
-               *min = ptr - start + 1;
-               return ptr - start;
-           }
- 
+	    if (*gptr == '\0' && min && *min < ptr - start && ptr != pend && *ptr == g->sep_char) {
+		/* The pattern ended on a hierarchy separator
+		 * return a partial match */
+		*min = ptr - start + 1;
+		return ptr - start;
+	    }
 
 	    /* continue if at wildcard or we passed an asterisk */
 	} while (*gptr == '*' || *gptr == '%' ||
@@ -300,6 +293,7 @@ long *min;
 		   && (*gptr == TOLOWER(*ptr) || (!newglob && *gptr == '?'))) {
 		++ptr, ++gptr;
 	    }
+	    if (*gptr == '\0' && ptr == pend) break;
 	    if (*gptr == '*') {
 		ghier = NULL;
 		gstar = ++gptr;
@@ -325,7 +319,10 @@ long *min;
 		    break;
 		}
 		if (*ptr == g->sep_char) {
-		    if (!*ghier && min) {
+		    if (!*ghier && min
+			&& *min < ptr - start && ptr != pend
+			&& *ptr == g->sep_char
+			) {
 			*min = gstar ? ptr - start + 1 : -1;
 			return (ptr - start);
 		    }
@@ -343,20 +340,19 @@ long *min;
 		/* look for a match with first char following '*' */
 		while (pstar != pend && *gstar != TOLOWER(*pstar)) ++pstar;
 		if (pstar == pend) {
-		   gptr = gstar;
+		    gptr = gstar;
 		    break;
 		}
 		ptr = ++pstar;
 		gptr = gstar + 1;
 	    }
-           if (*gptr == '\0' && min && *min < ptr - start &&
-	       ptr != pend && *ptr == g->sep_char) {
-               /* The pattern ended on a hierarchy separator
-                * return a partial match */
-               *min = ptr - start + 1;
-               return ptr - start;
-           }
- 
+	    if (*gptr == '\0' && min && *min < ptr - start && ptr != pend && *ptr == g->sep_char) {
+		/* The pattern ended on a hierarchy separator
+		 * return a partial match */
+		*min = ptr - start + 1;
+		return ptr - start;
+	    }
+
 	    /* continue if at wildcard or we passed an asterisk */
 	} while (*gptr == '*' || *gptr == '%' ||
 		 ((gstar || ghier) && (*gptr || ptr != pend)));
@@ -367,17 +363,7 @@ long *min;
 }
 
 #ifdef TEST_GLOB
-fatal(str, val)
-    char *str;
-    int val;
-{
-    fprintf(stderr, "%s\n", str);
-    exit(1);
-}
-
-main(argc, argv)
-    int argc;
-    char **argv;
+int main P((int argc, char **argv))
 {
     glob *g = glob_init_suppress(argv[1], GLOB_INBOXCASE|GLOB_HIERARCHY,
 				 "user.nifty");
@@ -397,4 +383,4 @@ main(argc, argv)
 	}
     }
 }
-#endif
+#endif /* TEST_GLOB */
