@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.135 2000/08/06 20:36:20 leg Exp $
+ * $Id: mboxlist.c,v 1.136 2000/09/05 04:07:07 leg Exp $
  */
 
 #include <config.h>
@@ -713,6 +713,7 @@ int mboxlist_deletemailbox(char *name, int isadmin, char *userid,
 	    goto retry;	  
 	    break;
 	default:
+	    DB->abort(mbdb, tid);
 	    goto done;
 	    break;
 	}
@@ -741,6 +742,7 @@ int mboxlist_deletemailbox(char *name, int isadmin, char *userid,
 	break;
 
     default:
+	DB->abort(mbdb, tid);
 	goto done;
     }
 
@@ -757,6 +759,7 @@ int mboxlist_deletemailbox(char *name, int isadmin, char *userid,
 	/* Lie about error if privacy demands */
 	r = (isadmin || (access & ACL_LOOKUP)) ?
 	  IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+	DB->abort(mbdb, tid);
 	goto done;
     }
 
