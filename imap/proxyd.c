@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.45 2000/10/26 23:08:56 leg Exp $ */
+/* $Id: proxyd.c,v 1.46 2000/11/13 00:56:21 leg Exp $ */
 
 #include <config.h>
 
@@ -2207,6 +2207,8 @@ void cmd_append(char *tag, char *name)
 	if (!pipe_command(s, 16384)) {
 	    pipe_until_tag(s, tag);
 	}
+    } else {
+	eatline(prot_getc(proxyd_in));
     }
 
     if (backend_current && backend_current != s) {
@@ -3485,7 +3487,7 @@ void cmd_getquotaroot(char *tag, char *name)
  */
 void cmd_setquota(char *tag, char *quotaroot)
 {
-    prot_printf(proxyd_out, "%s NO not supported from proxy server\r\n");
+    prot_printf(proxyd_out, "%s NO not supported from proxy server\r\n", tag);
     eatline(prot_getc(proxyd_in));
 }
 
@@ -3640,12 +3642,14 @@ void cmd_status(char *tag, char *name)
 	    prot_printf(backend_current->out, "%s Noop\r\n", mytag);
 	    pipe_until_tag(backend_current, mytag);
 	}
+    } else {
+	eatline(prot_getc(proxyd_in));
     }
 
     if (!r) {
 	prot_printf(proxyd_out, "%s %s", tag, s->last_result);
     } else {
-	prot_printf(proxyd_out, "%s NO %s\r\n", error_message(r));
+	prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
     }
 }
 
