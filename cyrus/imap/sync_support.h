@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.h,v 1.1.2.5 2005/03/15 18:24:24 ken3 Exp $
+ * $Id: sync_support.h,v 1.1.2.6 2005/03/27 17:56:20 ken3 Exp $
  */
 
 #ifndef INCLUDED_SYNC_SUPPORT_H
@@ -256,14 +256,13 @@ struct sync_message_list {
     struct sync_message **hash;
     int hash_size;
     unsigned long  count;
-    char *stage_dir;
-    int   stage_dir_len;
+    char stage_dir[MAX_MAILBOX_PATH+1];
     FILE **file;
     int file_count;
     int file_max;
 
     /* Cache structure associated with messages */
-    char *cache_name;
+    char cache_name[MAX_MAILBOX_PATH+1];
     int   cache_fd;
     const char *cache_base;
     unsigned long cache_len;

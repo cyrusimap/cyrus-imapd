@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.1.2.8 2005/03/27 14:44:53 ken3 Exp $
+ * $Id: sync_server.c,v 1.1.2.9 2005/03/27 17:56:19 ken3 Exp $
  */
 
 #include <config.h>
@@ -307,12 +307,6 @@ int service_init(int argc __attribute__((unused)),
 	    usage();
 	}
     }
-
-    if (!config_getstring(IMAPOPT_SYNC_DIR))
-        fatal("sync_dir not defined", EC_SOFTWARE);
-
-    if (!config_getstring(IMAPOPT_SYNC_LOG_FILE))
-        fatal("sync_log_file not defined", EC_SOFTWARE);
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(sync_namespacep, 1)) != 0) {
@@ -1066,15 +1060,7 @@ static void cmdloop(void)
         mailbox_close(mailbox);
         mailbox = 0;
     }
-#if 0
-    sync_unlock(&sync_lock);
 
-    if (sync_userid) free(sync_userid);
-    if (sync_authstate) auth_freestate(sync_authstate);
-
-    sync_userid    = NULL;
-    sync_authstate = NULL;
-#endif
     sync_message_list_free(&message_list);
 }
 
@@ -1370,13 +1356,12 @@ static void cmd_reserve(char *mailbox_name,
     struct sync_message *message = NULL;
     struct message_uuid tmp_uuid;
 
-#if 0
-    if (!sync_userid) {
-        eatline(sync_in, ' ');
-        prot_printf(sync_out, "NO No user selected\r\n");
-        return;
+    if ((r = sync_message_list_newstage(message_list, mailbox_name))) {
+	eatline(sync_in,c);
+	prot_printf(sync_out, "NO %s\r\n", error_message(r));
+	return;
     }
-#endif
+
     /* Parse list of MessageIDs (must appear in same order as folder) */
     do {
         c = getastring(sync_in, sync_out, &arg);
@@ -1787,12 +1772,6 @@ static void cmd_contents(struct mailbox *mailbox, char *user)
     int flag;
     int flags_printed = 0;
 
-#if 0
-    if (!sync_userid) {
-        prot_printf(sync_out, "NO No user selected\r\n");
-        return;
-    }
-#endif
     if (!mailbox) {
         prot_printf(sync_out, "NO Mailbox not open\r\n");
         return;
@@ -1922,8 +1901,15 @@ static void cmd_upload(struct mailbox *mailbox,
     char *err;
 
     if (!mailbox) {
+	eatline(sync_in,c);
         prot_printf(sync_out, "NO Mailbox not selected\r\n");
         return;
+    }
+
+    if ((r = sync_message_list_newstage(message_list, mailbox->name))) {
+	eatline(sync_in,c);
+	prot_printf(sync_out, "NO %s\r\n", error_message(r));
+	return;
     }
 
     upload_list = sync_upload_list_create(new_last_uid, mailbox->flagname);
@@ -2436,12 +2422,6 @@ static void cmd_list()
     char buf[MAX_MAILBOX_PATH];
     int r;
     
-#if 0
-    if (sync_userid == NULL) {
-        prot_printf(sync_out, "NO User not selected\r\n");
-        return;
-    }
-#endif
     /* Count inbox */
     snprintf(buf, sizeof(buf)-1, "user.%s", sync_userid);
     cmd_list_single(buf, 0, 0, NULL);
@@ -2483,30 +2463,14 @@ static int do_mailbox_single(char *name, int matchlen, int maycreate, void *rock
         sync_printastring(sync_out, m.uniqueid);
         prot_printf(sync_out, " ");
         sync_printastring(sync_out, m.name);
-#if 0
-	prot_printf(sync_out, " (");
-	if (m.quota.root) {
-	    sync_printastring(sync_out, m.quota.root);
-	    if (!strcmp(name, m.quota.root) &&
-		!quota_read(&m.quota, NULL, 0)) {
-		prot_printf(sync_out, " %d", m.quota.limit);
-	    }
-	}
-	prot_printf(sync_out, ") ");
-#else
 	prot_printf(sync_out, " ");
-#endif
         sync_printastring(sync_out, m.acl);
-#if 0
-        prot_printf(sync_out, " %lu\r\n", m.last_uid);
-#else
         prot_printf(sync_out, " %lu", m.last_uid);
 	if (m.quota.root && !strcmp(name, m.quota.root) &&
 	    !quota_read(&m.quota, NULL, 0)) {
 	    prot_printf(sync_out, " %d", m.quota.limit);
 	}
         prot_printf(sync_out, "\r\n");
-#endif
         cmd_status_work(&m);
     } else
         cmd_status_work_preload(&m);
@@ -2692,12 +2656,6 @@ static void cmd_create(char *mailboxname, char *uniqueid, char *acl,
     char aclbuf[128];
     int size;
 
-#if 0
-    if (sync_userid == NULL) {
-        prot_printf(sync_out, "NO User not selected\r\n");
-        return;
-    }
-#endif
     if (uniqueid && !strcasecmp(uniqueid, "NIL"))
         uniqueid = NULL;
 
@@ -2716,13 +2674,7 @@ static void cmd_create(char *mailboxname, char *uniqueid, char *acl,
         sprintf(aclbuf, "%s\tlrswipcda\tanonymous\t0\t", sync_userid);
         acl = aclbuf;
     }
-/* XXX need to fix this so its not required */
-#if 0
-    if (!quota_findroot(buf, sizeof(buf), mailboxname)) {
-        prot_printf(sync_out, "NO Create %s failed: No quota root defined\r\n");
-        return;
-    }
-#endif
+
     r = sync_create_commit(mailboxname, uniqueid, acl, mbtype, uidvalidity,
                            1,  sync_userid, sync_authstate);
 
@@ -2737,12 +2689,6 @@ static void cmd_delete(char *name)
 {
     int r;
 
-#if 0
-    if (sync_userid == NULL) {
-        prot_printf(sync_out, "NO User not selected\r\n");
-        return;
-    }
-#endif
     /* Delete with admin priveleges */
     r = mboxlist_deletemailbox(name, sync_userisadmin, sync_userid,
 			       sync_authstate, 0, 0, 1);
@@ -2758,12 +2704,6 @@ static void cmd_rename(char *oldmailboxname, char *newmailboxname)
 {
     int r;
 
-#if 0
-    if (sync_userid == NULL) {
-        prot_printf(sync_out, "NO User not selected\r\n");
-        return;
-    }
-#endif
     r = mboxlist_renamemailbox(oldmailboxname, newmailboxname, NULL,
                                1,sync_userid, sync_authstate);
 

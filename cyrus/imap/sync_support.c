@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.c,v 1.1.2.6 2005/03/15 18:24:24 ken3 Exp $
+ * $Id: sync_support.c,v 1.1.2.7 2005/03/27 17:56:20 ken3 Exp $
  */
 
 #include <config.h>
@@ -784,8 +784,7 @@ void sync_user_list_free(struct sync_user_list **lp)
 struct sync_message_list *sync_message_list_create(int hash_size, int file_max)
 {
     struct sync_message_list *l = xzmalloc(sizeof (struct sync_message_list));
-    const char *sync_dir;
-    char  tmp[10];
+    const char *root;
 
     /* Pick a sensible default if no size given */
     if (hash_size == 0)
@@ -797,25 +796,22 @@ struct sync_message_list *sync_message_list_create(int hash_size, int file_max)
     l->hash_size = hash_size;
     l->count = 0;
 
-    /* Set up working directory */
-    sync_dir = config_getstring(IMAPOPT_SYNC_DIR);
-    sprintf(tmp, "%lu", (unsigned long)getpid());
-
-    l->stage_dir_len = strlen(sync_dir)+strlen(tmp)+2;
-    l->stage_dir     = xmalloc(l->stage_dir_len);
-    sprintf(l->stage_dir, "%s/%s", sync_dir, tmp);
-
-    /* Don't worry about failure */
-    mkdir(l->stage_dir, 0777); 
-
     l->file       = xzmalloc(file_max * sizeof(FILE *));
     l->file_count = 0;
     l->file_max   = file_max;  
 
-    l->cache_name = xmalloc(l->stage_dir_len+strlen("/cache")+1);
-    sprintf(l->cache_name, "%s/cache", l->stage_dir);
+    /* Set up cache file */
+    root = config_partitiondir("default");
+
+    snprintf(l->cache_name, sizeof(l->cache_name), "%s/sync./%lu.cache",
+	     root, (unsigned long) getpid());
 
     l->cache_fd = open(l->cache_name, O_RDWR|O_CREAT|O_TRUNC, 0666);
+    if (l->cache_fd < 0 && errno == ENOENT) {
+	if (!cyrus_mkdir(l->cache_name, 0755)) {
+	    l->cache_fd = open(l->cache_name, O_RDWR|O_CREAT|O_TRUNC, 0666);
+	}
+    }
     if (l->cache_fd < 0) {
         syslog(LOG_ERR, "Failed to open %s: %m", l->cache_name);
         return(NULL);
@@ -827,6 +823,37 @@ struct sync_message_list *sync_message_list_create(int hash_size, int file_max)
     l->cache_buffer_alloc = SYNC_MESSAGE_INIT_CACHE;
     l->cache_buffer       = xmalloc(l->cache_buffer_alloc);
     return(l);
+}
+
+int sync_message_list_newstage(struct sync_message_list *l, char *mboxname)
+{
+    int r;
+    const char *root;
+    char *partition;
+    struct stat sbuf;
+
+    /* Find mailbox partition */
+    r = mboxlist_detail(mboxname, NULL, NULL, NULL, &partition, NULL, NULL);
+    if (!r) {
+	root = config_partitiondir(partition);
+	if (!root) r = IMAP_PARTITION_UNKNOWN;
+    }
+    if (r) {
+	syslog(LOG_ERR, "couldn't find sync stage directory for mbox: '%s': %s",
+	       mboxname, error_message(r));
+	return r;
+    }
+
+    snprintf(l->stage_dir, sizeof(l->stage_dir), "%s/sync./%lu/",
+	     root, (unsigned long) getpid());
+
+    if (cyrus_mkdir(l->stage_dir, 0755) == -1) return IMAP_IOERROR;
+    if (mkdir(l->stage_dir, 0755) == -1 && errno != EEXIST) {
+	syslog(LOG_ERR, "Failed to create %s:%m", l->stage_dir);
+	return IMAP_IOERROR;
+    }
+
+    return 0;
 }
 
 void sync_message_list_cache(struct sync_message_list *l, char *entry, int size)
@@ -890,7 +917,7 @@ struct sync_message *sync_message_add(struct sync_message_list *l,
     result = xzmalloc(sizeof(struct sync_message));
     message_uuid_set_null(&result->uuid);
     
-    result->msg_path   = xmalloc(l->stage_dir_len+strlen(tmp)+2);
+    result->msg_path   = xmalloc(strlen(l->stage_dir)+strlen(tmp)+2);
     sprintf(result->msg_path, "%s/%s", l->stage_dir, tmp);
 
     l->count++;
@@ -964,14 +991,11 @@ void sync_message_list_free(struct sync_message_list **lp)
     }
     if (l->cache_base && (l->cache_len > 0))
         map_free(&l->cache_base, &l->cache_len);
-    if (l->cache_fd)
+    if (l->cache_fd) {
         close(l->cache_fd);
-    if (l->cache_name) {
         unlink(l->cache_name);
-        free(l->cache_name);
     }
     rmdir(l->stage_dir);
-    free(l->stage_dir);
     free(l->cache_buffer);
     free(l->hash);
     free(l);
@@ -1006,7 +1030,7 @@ static int sync_getliteral_size(struct protstream *input,
 				unsigned long *sizep)
 {
     static struct buf arg;            /* Relies on zeroed BSS */
-    int   size     = 0;
+    unsigned long   size     = 0;
     int   sawdigit = 0;
     int   isnowait = 0;
     int   c        = getword(input, &arg);
@@ -1060,11 +1084,7 @@ int sync_getcache(struct protstream *input, struct protstream *output,
         return(r);
 
     if (cache_size > max_cache_size) {
-        if (max_cache_size == 0)
-            cache_entry = xmalloc(cache_size);
-        else
-            cache_entry = xrealloc(cache_entry, cache_size);
-
+	cache_entry = xrealloc(cache_entry, cache_size);
         max_cache_size = cache_size;
     }
         
@@ -1674,23 +1694,39 @@ int sync_unlock(struct sync_lock *lock)
 
 int sync_lock(struct sync_lock *lock)
 {
-    char buf[MAX_MAILBOX_PATH];
-    const char *dir = config_getstring(IMAPOPT_SYNC_DIR);
+    static char lockfile[MAX_MAILBOX_PATH] = "";
     int r = 0;
 
     if (lock->count++) return 0;
 
-    snprintf(buf, sizeof(buf), "%s/lock", dir);
+    if (!*lockfile) {
+	const char *sync_dir = config_getstring(IMAPOPT_SYNC_DIR);
 
-    if ((lock->fd = open(buf, O_WRONLY|O_CREAT, 0640)) < 0) {
-        syslog(LOG_ERR, "Unable to create file %s: %s", buf, strerror(errno));
+	if (sync_dir) {
+	    strlcpy(lockfile, sync_dir, sizeof(lockfile));
+	} else {
+	    strlcpy(lockfile, config_dir, sizeof(lockfile));
+	    strlcat(lockfile, "/sync", sizeof(lockfile));
+	}
+	strlcat(lockfile, "/lock", sizeof(lockfile));
+    }
+
+    lock->fd = open(lockfile, O_WRONLY|O_CREAT, 0640);
+    if (lock->fd < 0 && errno == ENOENT) {
+	if (!cyrus_mkdir(lockfile, 0755)) {
+	    lock->fd = open(lockfile, O_WRONLY|O_CREAT, 0640);
+	}
+    }
+    if (lock->fd < 0) {
+        syslog(LOG_ERR, "Unable to create file %s: %s",
+	       lockfile, strerror(errno));
         return(IMAP_IOERROR);
     }
 
     r = lock_blocking(lock->fd);
     if (r) {
 	lock->count--;
-	syslog(LOG_ERR, "Unable to lock %s: %s", buf, strerror(errno));
+	syslog(LOG_ERR, "Unable to lock %s: %s", lockfile, strerror(errno));
     }
 
     return(r);

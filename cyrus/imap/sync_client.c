@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.14 2005/03/27 14:44:52 ken3 Exp $
+ * $Id: sync_client.c,v 1.1.2.15 2005/03/27 17:56:19 ken3 Exp $
  */
 
 #include <config.h>
@@ -2649,16 +2649,29 @@ static int do_sync(const char *filename)
 
     for (action = seen_list->head ; action ; action = action->next) {
         if (action->active && do_seen(action->user, action->name)) {
-            sync_action_list_add(meta_list, NULL, action->user);
-            if (verbose) {
-                printf("  Promoting: SEEN %s %s -> META %s\n",
-                       action->user, action->name, action->user);
-            }
-            if (verbose_logging) {
-                syslog(LOG_INFO, "  Promoting: SEEN %s %s -> META %s",
-                       action->user, action->name, action->user);
-            }
-        }
+	    char *userid = mboxname_isusermailbox(action->name, 1);
+	    if (!strcmp(userid, action->user)) {
+		sync_action_list_add(user_list, NULL, action->user);
+		if (verbose) {
+		    printf("  Promoting: SEEN %s %s -> USER %s\n",
+			   action->user, action->name, action->user);
+		}
+		if (verbose_logging) {
+		    syslog(LOG_INFO, "  Promoting: SEEN %s %s -> USER %s",
+			   action->user, action->name, action->user);
+		}
+	    } else {
+		sync_action_list_add(meta_list, NULL, action->user);
+		if (verbose) {
+		    printf("  Promoting: SEEN %s %s -> META %s\n",
+			   action->user, action->name, action->user);
+		}
+		if (verbose_logging) {
+		    syslog(LOG_INFO, "  Promoting: SEEN %s %s -> META %s",
+			   action->user, action->name, action->user);
+		}
+	    }
+	}
     }
 
     for (action = sub_list->head ; action ; action = action->next) {
@@ -2902,7 +2915,7 @@ int main(int argc, char **argv)
     int   opt, i = 0;
     char *alt_config     = NULL;
     char *input_filename = NULL;
-    char *servername     = NULL;
+    const char *servername = NULL;
     int   r = 0;
     int   exit_rc = 0;
     int   interact = 0;
@@ -2913,7 +2926,8 @@ int main(int argc, char **argv)
     int   wait     = 0;
     int   timeout  = 600;
     int   min_delta = 0;
-    const char *sync_log_file = NULL;
+    const char *sync_host = NULL;
+    char sync_log_file[MAX_MAILBOX_PATH+1] = "";
     const char *sync_shutdown_file = NULL;
     char buf[512];
     FILE *file;
@@ -2953,7 +2967,8 @@ int main(int argc, char **argv)
 
         case 'f': /* Input file (sync_log_file used by rolling replication,
                    * input_filename used by user and mailbox modes). */
-            sync_log_file = input_filename = optarg;
+            input_filename = optarg;
+	    strlcpy(sync_log_file, optarg, sizeof(sync_log_file));
             break;
 
         case 'w':
@@ -2973,7 +2988,7 @@ int main(int argc, char **argv)
             break;
 
         case 'R': /* alt input file for rolling replication */
-            sync_log_file = optarg;
+	    strlcpy(sync_log_file, optarg, sizeof(sync_log_file));
             break;
 
         case 'u':
@@ -2993,12 +3008,6 @@ int main(int argc, char **argv)
         }
     }
 
-    /* last arg is server name */
-    if (!servername) {
-        fprintf(stderr, "No server name specified\n");
-        exit(1);
-    }
-
     if ((interact && (            repeat || user || mailbox || sieve)) ||
         (repeat   && (interact           || user || mailbox || sieve)) ||
         (user     && (interact || repeat         || mailbox || sieve)) ||
@@ -3008,21 +3017,28 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "sync_client", 0);
 
-    if (!config_getstring(IMAPOPT_SYNC_DIR))
-        fatal("sync_dir not defined", EC_SOFTWARE);
+    if (!servername &&
+	!(servername = config_getstring(IMAPOPT_SYNC_HOST))) {
+        fatal("sync_host not defined", EC_SOFTWARE);
+    }
 
-    if (!config_getstring(IMAPOPT_SYNC_LOG_FILE))
-        fatal("sync_log_file not defined", EC_SOFTWARE);
+    if (!*sync_log_file) {
+	const char *sync_dir = config_getstring(IMAPOPT_SYNC_DIR);
+
+	if (sync_dir) {
+	    strlcpy(sync_log_file, sync_dir, sizeof(sync_log_file));
+	} else {
+	    strlcpy(sync_log_file, config_dir, sizeof(sync_log_file));
+	    strlcat(sync_log_file, "/sync", sizeof(sync_log_file));
+	}
+	strlcat(sync_log_file, "/log", sizeof(sync_log_file));
+    }
 
     if (!sync_shutdown_file)
         sync_shutdown_file = config_getstring(IMAPOPT_SYNC_SHUTDOWN_FILE);
 
     if (!min_delta)
         min_delta = config_getint(IMAPOPT_SYNC_REPEAT_INTERVAL);
-
-    if (!sync_log_file &&
-        !(sync_log_file = config_getstring(IMAPOPT_SYNC_LOG_FILE)))
-        fatal("sync_log_file not defined", EC_CONFIG);
 
     /* Just to help with debugging, so we have time to attach debugger */
     if (wait > 0) {
