@@ -516,7 +516,11 @@ int smtpmode;
     if (!f) {
 	if (smtpmode) {
 	    printf("451 4.3.%c cannot create temporary file: %s\r\n",
-		   (errno == EDQUOT || errno == ENOSPC) ? '1' : '2',
+		   (
+#ifdef EDQUOT
+		    errno == EDQUOT ||
+#endif
+		    errno == ENOSPC) ? '1' : '2',
 		   error_message(errno));
 	    return 0;
 	}
@@ -649,7 +653,11 @@ int smtpmode;
 	}
 	while (smtpmode--) {
 	    printf("451 4.3.%c cannot copy message to temporary file: %s\r\n",
-		   (errno == EDQUOT || errno == ENOSPC) ? '1' : '2',
+		   (
+#ifdef EDQUOT
+		    errno == EDQUOT ||
+#endif
+		    errno == ENOSPC) ? '1' : '2',
 		   error_message(errno));
 	}
 	fclose(f);
