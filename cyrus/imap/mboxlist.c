@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.195 2002/06/03 17:52:28 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.196 2002/06/03 19:39:29 rjs3 Exp $
  */
 
 #include <config.h>
@@ -1282,19 +1282,13 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
  * pointer, removes the ACL entry for 'identifier'.   'isadmin' is
  * nonzero if user is a mailbox admin.  'userid' is the user's login id.
  *
- *
  * 1. Start transaction
  * 2. Check rights
- * 3. Open mupdate connection if necessary
- * 4. Set db entry
- * 5. Change on disk
- * 6. Commit transaction
- * 7. Change mupdate entry 
+ * 3. Set db entry
+ * 4. Change backup copy (cyrus.header)
+ * 5. Commit transaction
+ * 6. Change mupdate entry 
  *
- * xxx i'm not happy with this function.  the "goto done" bit has made it
- * more confusing, not less.  we should probably just nuke the gotos
- * and it'll be more clear or make "goto done" really jump to the
- * very end. -leg
  */
 int mboxlist_setacl(char *name, char *identifier, char *rights, 
 		    int isadmin, char *userid, 
@@ -1320,28 +1314,21 @@ int mboxlist_setacl(char *name, char *identifier, char *rights,
 	isusermbox = 1;
     }
 
- retry:
+    /* 1. Start Transaction */
     /* lookup the mailbox to make sure it exists and get its acl */
-    r = mboxlist_mylookup(name, &mbtype, &path, &partition, &acl, &tid, 1);
-    switch (r) {
-    case 0:
-	break;
-    case IMAP_AGAIN:
-	goto retry;
-    default:
-	goto done;
-    }
+    do {
+	r = mboxlist_mylookup(name, &mbtype, &path, &partition, &acl, &tid, 1);
+    } while(r == IMAP_AGAIN);    
 
     /* Can't do this to an in-transit or reserved mailbox */
-    if(mbtype & (MBTYPE_MOVING | MBTYPE_RESERVE)) {
+    if(!r && mbtype & (MBTYPE_MOVING | MBTYPE_RESERVE)) {
 	r = IMAP_MAILBOX_NOTSUPPORTED;
-	goto done;
     }
 
     /* if it is not a remote mailbox, we need to unlock the mailbox list,
      * lock the mailbox, and re-lock the mailboxes list */
     /* we must do this to obey our locking rules */
-    if (!(mbtype & MBTYPE_REMOTE)) {
+    if (!r && !(mbtype & MBTYPE_REMOTE)) {
 	DB->abort(mbdb, tid);
 	tid = NULL;
 
@@ -1350,115 +1337,94 @@ int mboxlist_setacl(char *name, char *identifier, char *rights,
 	if (!r) {
 	    mailbox_open = 1;
 	    r = mailbox_lock_header(&mailbox);
-	}
+	} 
 
 	if(!r) {
-	relock_retry:
-	    /* lookup the mailbox to make sure it exists and get its acl */
-	    r = mboxlist_mylookup(name, &mbtype, &path,
-				  &partition, &acl, &tid, 1);
-	    switch (r) {
-	    case 0:
-		break;
-	    case IMAP_AGAIN:
-		goto relock_retry;
-	    default:
-		goto done;
-	    }
-	} else goto done;
+	    do {
+		/* lookup the mailbox to make sure it exists and get its acl */
+		r = mboxlist_mylookup(name, &mbtype, &path,
+				      &partition, &acl, &tid, 1);
+	    } while( r == IMAP_AGAIN );
+	}
+
+	if(r) goto done;
     }
 
+    /* 2. Check Rights */
     if (!r && !isadmin && !isusermbox) {
 	access = cyrus_acl_myrights(auth_state, acl);
 	if (!(access & ACL_ADMIN)) {
 	    r = (access & ACL_LOOKUP) ?
-	      IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+		IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
 	    goto done;
 	}
     }
 
-    /* Make change to ACL */
-    newacl = xstrdup(acl);
-    if (rights) {
-	mode = ACL_MODE_SET;
-	if (*rights == '+') {
-	    rights++;
-	    mode = ACL_MODE_ADD;
-	}
-	else if (*rights == '-') {
-	    rights++;
-	    mode = ACL_MODE_REMOVE;
-	}
-	
-	if (cyrus_acl_set(&newacl, identifier, mode, cyrus_acl_strtomask(rights),
-		    isusermbox ? mboxlist_ensureOwnerRights : 0,
-		    (void *)userid))
-	{
-	    r = IMAP_INVALID_IDENTIFIER;
-	    goto done;
+    /* 3. Set DB Entry */
+    if(!r) {
+	/* Make change to ACL */
+	newacl = xstrdup(acl);
+	if (rights) {
+	    mode = ACL_MODE_SET;
+	    if (*rights == '+') {
+		rights++;
+		mode = ACL_MODE_ADD;
+	    }
+	    else if (*rights == '-') {
+		rights++;
+		mode = ACL_MODE_REMOVE;
+	    }
+	    
+	    if (cyrus_acl_set(&newacl, identifier, mode,
+			      cyrus_acl_strtomask(rights),
+			      isusermbox ? mboxlist_ensureOwnerRights : 0,
+			      (void *)userid)) {
+		r = IMAP_INVALID_IDENTIFIER;
+	    }
+	} else {
+	    if (cyrus_acl_remove(&newacl, identifier,
+				 isusermbox ? mboxlist_ensureOwnerRights : 0,
+				 (void *)userid)) {
+		r = IMAP_INVALID_IDENTIFIER;
+	    }
 	}
     }
-    else {
-	if (cyrus_acl_remove(&newacl, identifier,
-		       isusermbox ? mboxlist_ensureOwnerRights : 0,
-		       (void *)userid)) {
-	  r = IMAP_INVALID_IDENTIFIER;
-	  goto done;
+
+    if(!r) {
+	/* ok, change the database */
+	mboxent = mboxlist_makeentry(mbtype, partition, newacl);
+
+	do {
+	    r = DB->store(mbdb, name, strlen(name),
+			  mboxent, strlen(mboxent), &tid);
+	} while(r == CYRUSDB_AGAIN);
+    
+	if(r) {
+	    syslog(LOG_ERR, "DBERROR: error updating acl %s: %s",
+		   name, cyrusdb_strerror(r));
+	    r = IMAP_IOERROR;
 	}
     }
 
-    /* ok, make the change */
-    mboxent = mboxlist_makeentry(mbtype, partition, newacl);
-
-    r = DB->store(mbdb, name, strlen(name), mboxent, strlen(mboxent), &tid);
-    switch (r) {
-    case 0:
-	break;
-    case CYRUSDB_AGAIN:
-	goto retry;
-    default:
-	syslog(LOG_ERR, "DBERROR: error updating acl %s: %s",
-	       name, cyrusdb_strerror(r));
-	r = IMAP_IOERROR;
-	goto done;
-    }
-
-    /* Do change to mailbox header file; we already have 
-       it locked from above */
+    /* 4. Change backup copy (cyrus.header) */
+    /* we already have it locked from above */
     if (!r && !(mbtype & MBTYPE_REMOTE)) {
 	if(mailbox.acl) free(mailbox.acl);
 	mailbox.acl = xstrdup(newacl);
 	r = mailbox_write_header(&mailbox);
     }
 
-  done:
-    if (mailbox_open) {
-	mailbox_close(&mailbox);
-    }
-
-    if (mboxent) free(mboxent);
-
-    if (r) {
-	int r2;
-
-	if (tid && (r2 = DB->abort(mbdb, tid)) != 0) {
-	    syslog(LOG_ERR, "DBERROR: error aborting txn: %s",
-		   cyrusdb_strerror(r2));
-	    r2 = IMAP_IOERROR;
-	}
-    } else {
-	/* commit now */
-	switch (r = DB->commit(mbdb, tid)) {
-	case 0: 
-	    break;
-	default:
+    /* 5. Commit transaction */
+    if (!r) {
+	if((r = DB->commit(mbdb, tid)) != 0) {
 	    syslog(LOG_ERR, "DBERROR: failed on commit: %s",
 		   cyrusdb_strerror(r));
 	    r = IMAP_IOERROR;
 	}
+	tid = NULL;
     }
 
-    /* 7. Change mupdate entry  */
+    /* 6. Change mupdate entry  */
     if (!r && config_mupdate_server) {
         mupdate_handle *mupdate_h = NULL;
 	/* commit the update to MUPDATE */
@@ -1480,6 +1446,19 @@ int mboxlist_setacl(char *name, char *identifier, char *rights,
 	}
 	mupdate_disconnect(&mupdate_h);
     }
+
+  done:
+    if (r && tid) {
+	/* if we are mid-transaction, abort it! */
+	int r2 = DB->abort(mbdb, tid);
+	if(r2) {
+	    syslog(LOG_ERR,
+		   "DBERROR: error aborting txn in mboxlist_setacl: %s",
+		   cyrusdb_strerror(r2));
+	}
+    }
+    if (mailbox_open) mailbox_close(&mailbox);
+    if (mboxent) free(mboxent);
     if (newacl) free(newacl);
     
     return r;
