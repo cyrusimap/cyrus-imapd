@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.28.4.6 2003/01/08 21:08:12 rjs3 Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.28.4.7 2003/02/10 21:26:00 rjs3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -84,6 +84,9 @@ when using managesieve clients and servers from different cyrus versions.</li>
 <li>Clients that use old-style ACL commands that include the
 &quot;MAILBOX&quot; directive will no longer function.
 We do not know of any clients that have this problem currently.</li>
+
+<li>Any applications that link libcyrus.a now need to link libcyrus_min.a
+as well.</li>
 
 </ul>
 
@@ -308,7 +311,7 @@ worry about it.)
 </ul>
 
 <HR><P>
-last modified: $Date: 2003/01/08 21:08:12 $
+last modified: $Date: 2003/02/10 21:26:00 $
 </BODY></HTML>
 
 
