@@ -76,9 +76,9 @@ et_h.awk: $(srcdir)/et_h.awk
 	$(CP) $(srcdir)/et_h.awk et_h.awk
 
 clean:
-	$(RM) compile_et compile_et.o error_table.o 
-	$(RM) libcom_err.a
-	$(RM) $(LIBOBJS)
+	rm -f compile_et compile_et.o error_table.o 
+	rm -f libcom_err.a
+	rm -f $(LIBOBJS)
 
 depend: compile_et 
 
