@@ -1,7 +1,7 @@
 dnl kerberos_v4.m4--Kerberos 4 libraries and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
-dnl $Id: kerberos_v4.m4,v 1.2 1998/10/05 18:22:08 shadow Exp $
+dnl $Id: kerberos_v4.m4,v 1.3 1998/10/26 19:09:27 shadow Exp $
 
 AC_DEFUN(CMU_KRB_INC_WHERE1, [
 saved_CPPFLAGS=$CPPFLAGS
@@ -145,6 +145,7 @@ AC_ARG_WITH(krb4-include,
 	      fi
 	      ;;
 	  esac
+	  AC_SUBST(RPATH)
 	fi
 	])
 
