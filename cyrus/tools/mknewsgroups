@@ -44,7 +44,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 # Create newsgroups on imap server
 # Based on the make_fromactive.pl script by Tim Martin
 #
-# $Id: mknewsgroups,v 1.1.2.2 2003/03/12 20:19:33 ken3 Exp $
+# $Id: mknewsgroups,v 1.1.2.3 2003/03/12 21:47:52 ken3 Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -69,22 +69,23 @@ use Cyrus::IMAP::Admin;
 
 $| = 1;
 
-my ($config, $active, $noop, $user, $acl, $wild, $pause, $help) = 
-    ("/etc/imapd.conf", "./active", 0, $ENV{USER}, "", "*", 0, 0);
+my ($help, $noop, $config, $active, $user, $wild, $part, $acl, $pause) = 
+    (0, 0, "/etc/imapd.conf", "./active", $ENV{USER}, "*", undef, "", 0);
 
-GetOptions("C|config=s" => \$config,
-	   "f|active=s" => \$active,
+GetOptions("h|help!" => \$help,
 	   "n|noop!" => \$noop,
+	   "C|config=s" => \$config,
+	   "f|active=s" => \$active,
 	   "u|user=s" => \$user,
-	   "a|acl=s" => \$acl,
 	   "w|wild=s" => \$wild,
-	   "p|pause=s" => \$pause,
-	   "h|help!" => \$help);
+	   "p|part=s" => \$part,
+	   "a|acl=s" => \$acl,
+	   "pause=s" => \$pause);
 
 if ($help || !($server = shift)) {
     print "\n";
     print "mknewsgroups [-h] [-n] [-C <config-file>] [-f <active-file>] [-u <user>]\n";
-    print "             [-a <acls>] [-w <wildmats>] <server>\n";
+    print "             [-w <wildmats>] [-p <part>] [-a <acls>] <server>\n";
     print "\n";
     print "\t-h  print this help message\n";
     print "\t-n  print the IMAP commands, but don't execute them\n";
@@ -92,10 +93,11 @@ if ($help || !($server = shift)) {
     print "\t-f  use the newsgroups in <active-file> instead of ./active\n";
     print "\t    (get current file from ftp://ftp.isc.org/usenet/CONFIG/active)\n";
     print "\t-u  authenticate as <user> instead of the current shell user\n";
-    print "\t-a  set <acls> on the newsgroup.  <acls> is a whitespace-separated list\n";
-    print "\t    of cyradm-style userid/rights pairs (eg, \"anyone +p  news write\")\n";
     print "\t-w  only create the newsgroups specified by <wildmats>.  <wildmats>\n";
     print "\t    is a comma-separated list of wildmat pattern (eg, \"*,!alt.*\")\n";
+    print "\t-p  create the newsgroup mailboxes on partition <part>\n";
+    print "\t-a  set <acls> on the newsgroup.  <acls> is a whitespace-separated list\n";
+    print "\t    of cyradm-style userid/rights pairs (eg, \"anyone +p  news write\")\n";
     print "\n";
     exit;
 }
@@ -154,7 +156,7 @@ while( <INPUT> )
 	foreach my $w (split(/,/, $wild)) {
 	    my $not = substr($w, 0, 1) eq "!";
 	    $w = substr($w, 1) if ($not);
-	    $match = !$not if ($mbox=~ /^$w$/);
+	    $match = !$not if ($mbox =~ /^$w$/);
 	}
 
 	if ($match) {
@@ -165,7 +167,8 @@ while( <INPUT> )
 	    $mbox =~ s^\.^/^g if ($unixhiersep);
 
 	    if ($noop) {
-		print "C01 CREATE \"$mbox\"\n";
+		$part = "" if (!defined($part));
+		print "C01 CREATE \"$mbox\" $part\n";
 		my $n = 1;
 		while (($id,$rights) = each(%aclhash)) {
 		    printf "S%02d SETACL \"$mbox\" $id $rights\n", $n++;
@@ -173,7 +176,7 @@ while( <INPUT> )
 	    } else {
 		$g = 0;
 		print "creating $mbox... ";
-		if ($client->create($mbox)) {
+		if ($client->create($mbox, $part)) {
 		    while (($id,$rights) = each(%aclhash)) {
 			$client->setacl($mbox, $id => $rights);
 		    }
