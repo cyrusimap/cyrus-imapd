@@ -77,7 +77,7 @@ install:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
 
 imtest: $(OBJS) $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o imtest $(OBJS) $(DEPLIBS) $(LIBS) $(IMAP_LIBS)
+	$(CC) $(LDFLAGS) -o imtest $(OBJS) $(DEPLIBS) $(IMAP_LIBS)
 
 imtest.pure: $(OBJS) $(DEPLIBS)
 	$(PURIFY) $(PUREOPT) $(CC) $(LDFLAGS) -o imtest $(OBJS) $(DEPLIBS) $(LIBS) $(IMAP_LIBS)

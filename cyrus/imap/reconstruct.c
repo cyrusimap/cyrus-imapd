@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.53 2000/05/23 20:52:31 robeson Exp $ */
+/* $Id: reconstruct.c,v 1.54 2000/07/11 17:55:01 leg Exp $ */
 
 #include <config.h>
 
@@ -257,7 +257,6 @@ int reconstruct(char *name, struct discovered *found)
     char *quota_root;
     int i, flag;
     char *p;
-    const char *val;
     int format = MAILBOX_FORMAT_NORMAL;
     bit32 valid_user_flags[MAX_USER_FLAGS/32];
     char fnamebuf[MAX_MAILBOX_PATH];
@@ -278,8 +277,6 @@ int reconstruct(char *name, struct discovered *found)
     struct index_record message_index, old_index;
     static struct index_record zero_index;
     char newspath[4096], *end_newspath;
-    const char *group;
-    int newsprefixlen;
     FILE *msgfile;
     struct stat sbuf;
     int n;
@@ -293,12 +290,6 @@ int reconstruct(char *name, struct discovered *found)
 	(void) mailbox_lock_header(&mailbox);
     }
     mailbox.header_lock_count = 1;
-
-    if ((val = config_getstring("partition-news", 0)) &&
-	!strncmp(val, mailbox.path, strlen(val)) &&
-	mailbox.path[strlen(val)] == '/') {
-	format = MAILBOX_FORMAT_NETNEWS;
-    }
 
     if (chdir(mailbox.path) == -1) {
 	return IMAP_IOERROR;
@@ -376,47 +367,14 @@ int reconstruct(char *name, struct discovered *found)
     uid = (unsigned long *) xmalloc(UIDGROW * sizeof(unsigned long));
     uid_num = 0;
     uid_alloc = UIDGROW;
-    if (format == MAILBOX_FORMAT_NETNEWS && config_newsspool) {
-	/* Articles are over in the news spool directory, open it */
-	strcpy(newspath, config_newsspool);
-	end_newspath = newspath + strlen(newspath);
-	if (end_newspath == newspath || end_newspath[-1] != '/') {
-	    *end_newspath++ = '/';
-	}
-
-	group = mailbox.name;
-	if ((newsprefixlen = strlen(config_getstring("newsprefix", "")))!=0) {
-	    group += newsprefixlen;
-	    if ((*group) == '.') group++;
-	}
-	strcpy(end_newspath, group);
-
-	while (*end_newspath) {
-	    if (*end_newspath == '.') *end_newspath = '/';
-	    end_newspath++;
-	}
-	dirp = opendir(newspath);
-	*end_newspath++ = '/';
-    }
-    else {
-	dirp = opendir(".");
-	end_newspath = newspath;
-    }
+    dirp = opendir(".");
+    end_newspath = newspath;
     if (!dirp) {
-	if (format == MAILBOX_FORMAT_NETNEWS)  {
-	    /* If this is true, we might be looking at a newsgroup
-	       with no entries, which INN is happy to just have a
-	       nonexistant directory.  We don't want to give up,
-	       because the index files that we're keeping in
-	       partition-news might be invalid, and we need to check
-	       them.  So we just find nothing.  */
-	} else {
-	    fclose(newindex);
-	    close(newcache_fd);
-	    mailbox_close(&mailbox);
-	    free(uid);
-	    return IMAP_IOERROR;
-	}
+	fclose(newindex);
+	close(newcache_fd);
+	mailbox_close(&mailbox);
+	free(uid);
+	return IMAP_IOERROR;
     } else {
 	while ((dirent = readdir(dirp))!=NULL) {
 	    if (!isdigit((int) (dirent->d_name[0])) || dirent->d_name[0] ==
@@ -432,9 +390,7 @@ int reconstruct(char *name, struct discovered *found)
 	    while (isdigit((int) *p)) {
 		uid[uid_num] = uid[uid_num] * 10 + *p++ - '0';
 	    }
-	    if (format != MAILBOX_FORMAT_NETNEWS) {
-		if (*p++ != '.') continue;
-	    }
+	    if (*p++ != '.') continue;
 	    if (*p) continue;
 	    
 	    uid_num++;
@@ -454,30 +410,16 @@ int reconstruct(char *name, struct discovered *found)
 	message_index = zero_index;
 	message_index.uid = uid[msg];
 	
-	if (format == MAILBOX_FORMAT_NETNEWS) {
-	    sprintf(end_newspath, "%u", (unsigned int) uid[msg]);
-	    msgfile = fopen(newspath, "r");
-	}
-	else {
-	    msgfile = fopen(mailbox_message_fname(&mailbox, uid[msg]), "r");
-	}
+	msgfile = fopen(mailbox_message_fname(&mailbox, uid[msg]), "r");
 	if (!msgfile) continue;
 	if (fstat(fileno(msgfile), &sbuf)) {
 	    fclose(msgfile);
 	    continue;
 	}
-	if (((sbuf.st_mode & S_IFMT) == S_IFDIR) && 
-	    (format == MAILBOX_FORMAT_NETNEWS)) {
-	  /* This is in theory a subnewsgroup and should be left alone. */
-	  fclose(msgfile);
-	  continue;
-	}
 	if (sbuf.st_size == 0) {
 	    /* Zero-length message file--blow it away */
 	    fclose(msgfile);
-	    if (format != MAILBOX_FORMAT_NETNEWS) {
-		unlink(mailbox_message_fname(&mailbox, uid[msg]));
-	    }
+	    unlink(mailbox_message_fname(&mailbox, uid[msg]));
 	    continue;
 	}
 
@@ -544,8 +486,7 @@ int reconstruct(char *name, struct discovered *found)
     /* Write out new index file header */
     rewind(newindex);
     if (uid_num && mailbox.last_uid < uid[uid_num-1]) {
-	mailbox.last_uid = uid[uid_num-1] +
-	    ((format == MAILBOX_FORMAT_NETNEWS) ? 0 : 100);
+	mailbox.last_uid = uid[uid_num-1] + 100;
     }
     if (mailbox.last_appenddate == 0 || mailbox.last_appenddate > time(0)) {
 	mailbox.last_appenddate = time(0);

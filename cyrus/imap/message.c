@@ -42,7 +42,7 @@
  */
 
 /*
- * $Id: message.c,v 1.80 2000/06/20 18:11:37 leg Exp $
+ * $Id: message.c,v 1.81 2000/07/11 17:55:00 leg Exp $
  */
 
 #include <config.h>
@@ -483,12 +483,11 @@ struct boundary *boundaries;
     /* Slurp up all of the headers into 'headers' */
     while (message_getline(next, left, msg) &&
 	   (next[-1] != '\n' ||
-	    (format == MAILBOX_FORMAT_NETNEWS ?
-	     (*next != '\n') : (*next != '\r' || next[1] != '\n')))) {
+	    (*next != '\r' || next[1] != '\n'))) {
 
 	if (next[-1] == '\n' && *next == '-' &&
 	    message_pendingboundary(next, boundaries->id, &boundaries->count)) {
-	    body->boundary_size = strlen(next)+(format==MAILBOX_FORMAT_NETNEWS);
+	    body->boundary_size = strlen(next);
 	    body->boundary_lines++;
 	    if (next - 1 > headers) {
 		body->boundary_size += 2;
@@ -506,14 +505,6 @@ struct boundary *boundaries;
 	left -= len;
 	next += len;
 
-	/* If reading netnews format, convert LF to CRLF */
-	if (format == MAILBOX_FORMAT_NETNEWS && next[-1] == '\n') {
-	    next[-1] = '\r';
-	    *next++ = '\n';
-	    *next = '\0';
-	    left--;
-	}
-
 	/* Allocate more header space if necessary */
 	if (left < 100) {
 	    len = next - headers;
@@ -524,14 +515,6 @@ struct boundary *boundaries;
 	}
     }
 
-    /* If reading netnews format, convert terminating LF to CRLF */
-    if (format == MAILBOX_FORMAT_NETNEWS) {
-	next = headers + strlen(headers);
-	next[-1] = '\r';
-	*next++ = '\n';
-	*next = '\0';
-    }
-    
     body->content_offset = msg->offset;
     body->header_size = strlen(headers+1);
 
@@ -1656,8 +1639,6 @@ struct boundary *boundaries;
 
 	if (line[0] == '-' && line[1] == '-' &&
 	    message_pendingboundary(line, boundaries->id, &boundaries->count)) {
-	    body->boundary_size = len +
-		(format == MAILBOX_FORMAT_NETNEWS && endline[-1] == '\n');
 	    body->boundary_lines++;
 	    if (body->content_lines) {
 		body->content_lines--;
@@ -1674,7 +1655,6 @@ struct boundary *boundaries;
 
 	if (endline[-1] == '\n') {
 	    body->content_lines++;
-	    if (format == MAILBOX_FORMAT_NETNEWS) body->content_size++;
 	}
     }
 }

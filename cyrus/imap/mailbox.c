@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.100 2000/07/03 22:45:54 leg Exp $
+ $Id: mailbox.c,v 1.101 2000/07/11 17:54:58 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -211,37 +211,13 @@ int mailbox_map_message(struct mailbox *mailbox,
     char buf[4096];
     char *p = buf;
     struct stat sbuf;
-    static int newsprefixlen = -1;
 
-    if (newsprefixlen == -1) {
-	const char *newsprefix;
-
-	newsprefix = config_getstring("newsprefix", 0);
-	if (newsprefix) {
-	    newsprefixlen = strlen(newsprefix);
-	    if (newsprefix[newsprefixlen-1] != '.') newsprefixlen++;
-	}
-	else newsprefixlen = 0;
-    }
-
-    if (mailbox->format == MAILBOX_FORMAT_NETNEWS && config_newsspool) {
-	strcpy(buf, config_newsspool);
-	p = buf + strlen(buf);
-	if (p[-1] != '/') *p++ = '/';
-	strcpy(p, mailbox->name + newsprefixlen);
-	while (*p) {
-	    if (*p == '.') *p = '/';
-	    p++;
-	}
-	*p++ = '/';
-    }
-    else if (!iscurrentdir) {
+    if (!iscurrentdir) {
 	strcpy(buf, mailbox->path);
 	p = buf + strlen(buf);
     }
 
-    sprintf(p, "%lu%s", uid,
-	    mailbox->format == MAILBOX_FORMAT_NETNEWS ? "" : ".");
+    sprintf(p, "%lu.", uid);
 
     msgfd = open(buf, O_RDONLY, 0666);
     if (msgfd == -1) return errno;
@@ -1814,16 +1790,14 @@ void *deciderock;
     fclose(newcache);
 
     /* Delete message files */
-    if (mailbox->format != MAILBOX_FORMAT_NETNEWS) {
-	*fnametail++ = '/';
-	for (msgno = 0; msgno < numdeleted; msgno++) {
-	    if (iscurrentdir) {
-		unlink(mailbox_message_fname(mailbox, deleted[msgno]));
-	    }
-	    else {
-		strcpy(fnametail, mailbox_message_fname(mailbox, deleted[msgno]));
-		unlink(fnamebuf);
-	    }
+    *fnametail++ = '/';
+    for (msgno = 0; msgno < numdeleted; msgno++) {
+	if (iscurrentdir) {
+	    unlink(mailbox_message_fname(mailbox, deleted[msgno]));
+	}
+	else {
+	    strcpy(fnametail, mailbox_message_fname(mailbox, deleted[msgno]));
+	    unlink(fnamebuf);
 	}
     }
 
@@ -1841,143 +1815,6 @@ void *deciderock;
     mailbox_unlock_index(mailbox);
     mailbox_unlock_header(mailbox);
     return IMAP_IOERROR;
-}
-
-struct newsexpunge {
-    int ctr;
-    char *msg_seen;
-};
-
-/*
- * Expunge decision proc which removes news articles not in msg_seen array
- */
-static int
-expunge_expired(rock, indexbuf)
-void *rock;
-char *indexbuf;
-{
-    struct newsexpunge *newsexpunge = (struct newsexpunge *)rock;
-
-    return !newsexpunge->msg_seen[newsexpunge->ctr++];
-}
-
-/*
- * Expunge the expired news articles out of the netnews mailbox 'mailbox'
- */
-int mailbox_expungenews(struct mailbox *mailbox)
-{
-    int r;
-    struct newsexpunge newsexpunge;
-    DIR *dirp;
-    struct dirent *dirent;
-    char newspath[4096], *end_newspath;
-    const char *group;
-    int newsprefixlen;
-    unsigned long uid, miduid;
-    char *p;
-    int i;
-    int low, high, mid = 0;
-
-    assert(mailbox->format == MAILBOX_FORMAT_NETNEWS);
-    assert(mailbox->index_lock_count == 0);
-
-    /* Lock files and open new index/cache files */
-    r = mailbox_lock_header(mailbox);
-    if (r) return r;
-    r = mailbox_lock_index(mailbox);
-    if (r) {
-	mailbox_unlock_header(mailbox);
-	return r;
-    }
-
-    newsexpunge.msg_seen = xmalloc(mailbox->exists);
-    memset(newsexpunge.msg_seen, 0, mailbox->exists);
-
-    if (config_newsspool) {
-	strcpy(newspath, config_newsspool);
-	end_newspath = newspath + strlen(newspath);
-	if (end_newspath == newspath || end_newspath[-1] != '/') {
-	    *end_newspath++ = '/';
-	}
-
-	group = mailbox->name;
-	if ((newsprefixlen = strlen(config_getstring("newsprefix", "")))) {
-	    group += newsprefixlen;
-	    if (*group == '.') group++;
-	}
-	strcpy(end_newspath, group);
-
-	while (*end_newspath) {
-	    if (*end_newspath == '.') *end_newspath = '/';
-	    end_newspath++;
-	}
-	dirp = opendir(newspath);
-    }
-    else {
-	dirp = opendir(mailbox->path);
-    }
-    if (!dirp) {
-	free(newsexpunge.msg_seen);
-	mailbox_unlock_index(mailbox);
-	mailbox_unlock_header(mailbox);
-	return IMAP_IOERROR;
-    }
-    
-    /* For each article in directory, mark it in msg_seen */
-    while ((dirent = readdir(dirp))) {
-	if (!isdigit((int) (dirent->d_name[0])) || dirent->d_name[0] == '0') continue;
-	uid = 0;
-	p = dirent->d_name;
-	while (isdigit((int) *p)) {
-	    uid = uid * 10 + *p++ - '0';
-	}
-	if (*p) continue;
-
-	/* Search for uid in index file */
-	low = 0;
-	high = mailbox->exists-1;
-	while (low <= high) {
-	    mid = (high - low)/2 + low;
-	    miduid = ntohl(*((bit32 *)(mailbox->index_base +
-				       mailbox->start_offset + 
-				       (mid * mailbox->record_size) +
-				       OFFSET_UID)));
-
-	    if (uid == miduid) break;
-
-	    if (uid < miduid) {
-		high = mid - 1;
-	    }
-	    else {
-		low = mid + 1;
-	    }
-	}
-
-	if (low <= high) {
-	    newsexpunge.msg_seen[mid] = 1;
-	}
-    }
-    closedir(dirp);
-
-    /* see if there's anything to expunge */
-    for (i = 0; i < mailbox->exists; i++) {
-	if (!newsexpunge.msg_seen[i]) break;
-    }
-    if (i == mailbox->exists) {
-	free(newsexpunge.msg_seen);
-	mailbox_unlock_index(mailbox);
-	mailbox_unlock_header(mailbox);
-	return 0;
-    }
-
-    newsexpunge.ctr = 0;
-    r = mailbox_expunge(mailbox, 0, expunge_expired, &newsexpunge);
-
-    free(newsexpunge.msg_seen);
-    mailbox_unlock_index(mailbox);
-    mailbox_unlock_header(mailbox);
-    (void) mailbox_open_index(mailbox);
-    return r;
 }
 
 char *
