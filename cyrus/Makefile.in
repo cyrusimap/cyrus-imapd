@@ -1,5 +1,5 @@
 # Top-level Makefile for cyrus software
-# $Id: Makefile.in,v 1.45.2.1 2001/04/28 00:53:56 ken3 Exp $
+# $Id: Makefile.in,v 1.45.2.2 2001/05/31 14:46:14 ken3 Exp $
 #
 # @configure_input@
 # 
@@ -58,7 +58,7 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
-VERSION = 2.0.13
+VERSION = 2.0.14-NAMESPACE
 
 all:: 
 	@for d in  $(SUBDIRS); \
@@ -88,7 +88,7 @@ distcvs:
 	if [ \! -d dist ]; then mkdir dist ; fi
 	@echo "checking out the distribution"
 	@cd dist ; cvs -Q -d :pserver:anoncvs@cvs.andrew.cmu.edu:/cvs \
-		co -d cyrus-imapd-$(VERSION) cyrus
+		co -d cyrus-imapd-$(VERSION) -r alt-namespace cyrus
 	touch distcvs
 
 install::

@@ -1,5 +1,5 @@
 /* assert.c -- handle assertion failures
- $Id: assert.c,v 1.13 2000/05/23 20:52:39 robeson Exp $
+ $Id: assert.c,v 1.13.4.1 2001/05/31 14:46:29 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -48,7 +48,8 @@
 #include "exitcodes.h"
 #include "assert.h"
 
-int assertionfailed(file, line, expr)
+void
+assertionfailed(file, line, expr)
 const char *file;
 int line;
 const char *expr;

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.35.2.1 2001/04/28 00:54:09 ken3 Exp $ */
+/* $Id: master.c,v 1.35.2.2 2001/05/31 14:46:31 ken3 Exp $ */
 
 #include <config.h>
 
@@ -963,7 +963,7 @@ void reread_conf(void)
 
 int main(int argc, char **argv, char **envp)
 {
-    int i, opt;
+    int i, opt, close_std = 1;
     extern int optind;
     extern char *optarg;
     int fd;
@@ -972,10 +972,13 @@ int main(int argc, char **argv, char **envp)
 
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
-    while ((opt = getopt(argc, argv, "l:")) != EOF) {
+    while ((opt = getopt(argc, argv, "l:D")) != EOF) {
 	switch (opt) {
 	case 'l': /* user defined listen queue backlog */
 	    listen_queue_backlog = atoi(optarg);
+	    break;
+	case 'D':
+	    close_std = 0;
 	    break;
 	default:
 	    break;
@@ -985,11 +988,13 @@ int main(int argc, char **argv, char **envp)
     /* zero out the children table */
     memset(&ctable, 0, sizeof(struct centry *) * child_table_size);
 
-    /* close stdin/out/err */
-    for (fd = 0; fd < 3; fd++) {
+    if (close_std) {
+      /* close stdin/out/err */
+      for (fd = 0; fd < 3; fd++) {
 	close(fd);
 	if (open("/dev/null", O_RDWR, 0) != fd)
-	    fatal("couldn't open /dev/null: %m", 2);
+	  fatal("couldn't open /dev/null: %m", 2);
+      }
     }
 
     /* we reserve fds 3 and 4 for children to communicate with us, so they

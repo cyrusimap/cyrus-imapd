@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.21 2001/03/14 22:39:35 leg Exp $ */
+/* $Id: service.c,v 1.21.2.1 2001/05/31 14:46:32 ken3 Exp $ */
 #include <config.h>
 
 #include <stdio.h>
@@ -164,7 +164,13 @@ int main(int argc, char **argv, char **envp)
 	sleep(15);
     }
 
-    snprintf(name, sizeof(name) - 1, "service-%s", getenv("CYRUS_SERVICE"));
+    p = getenv("CYRUS_SERVICE");
+    if (p == NULL) {
+	syslog(LOG_ERR, "could not getenv(CYRUS_SERVICE); exiting");
+	exit(EX_SOFTWARE);
+    }
+    
+    snprintf(name, sizeof(name) - 1, "service-%s", p);
     config_init(alt_config, name);
 
     syslog(LOG_DEBUG, "executed");
@@ -239,8 +245,14 @@ int main(int argc, char **argv, char **envp)
 		}
 	    }
 	}
-	
-	libwrap_init(&request, getenv("CYRUS_SERVICE"));
+
+	p = getenv("CYRUS_SERVICE");
+	if (p == NULL) {
+	    syslog(LOG_ERR, "could not getenv(CYRUS_SERVICE) (2); exiting");
+	    exit(EX_SOFTWARE);
+	}
+
+	libwrap_init(&request, p);
 
 	if (!libwrap_ask(&request, fd)) {
 	    /* connection denied! */

@@ -1,5 +1,5 @@
 /* assert.h -- assert() macro that can exit cleanly
- $Id: assert.h,v 1.8 2000/05/23 20:52:39 robeson Exp $
+ $Id: assert.h,v 1.8.4.1 2001/05/31 14:46:30 ken3 Exp $
 
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -46,7 +46,7 @@
 
 #ifdef __STDC__
 #define assert(ex)	{if (!(ex))assertionfailed(__FILE__, __LINE__, #ex);}
-int assertionfailed(const char *file, int line, const char *expr);
+void assertionfailed(const char *file, int line, const char *expr);
 #else
 #define assert(ex)	{if (!(ex))assertionfailed(__FILE__, __LINE__, (char*)0);}
 #endif

@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.61 2001/02/22 19:27:18 ken3 Exp $
+ * $Id: lmtpd.c,v 1.61.2.1 2001/05/31 14:46:25 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.61 2001/02/22 19:27:18 ken3 Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.61.2.1 2001/05/31 14:46:25 ken3 Exp $";*/
 
 #include <config.h>
 
@@ -100,13 +100,6 @@
 #include "lmtpengine.h"
 #include "lmtpstats.h"
 
-struct protstream *deliver_out, *deliver_in;
-
-extern int optind;
-extern char *optarg;
-
-extern int errno;
-
 typedef struct mydata {
     message_data_t *m;
     int cur_rcpt;
@@ -151,19 +144,26 @@ void shut_down(int code);
 
 struct lmtp_func mylmtp = { &deliver, &verify_user, 0, 0 };
 
-int dupelim = 0;
-int singleinstance = 1;
-const char *BB = "";
-
 static void logdupelem();
 static void usage();
 static void setup_sieve();
 
+/* global state */
+extern int optind;
+extern char *optarg;
+extern int errno;
+static int dupelim = 0;		/* eliminate duplicate messages with
+				   same message-id */
+static int singleinstance = 1;	/* attempt single instance store */
+const char *BB = "";
 #ifdef USE_SIEVE
 static sieve_interp_t *sieve_interp;
 static int sieve_usehomedir = 0;
 static const char *sieve_dir = NULL;
 #endif
+
+/* per-user/session state */
+static struct protstream *deliver_out, *deliver_in;
 
 /* should we allow users to proxy?  return SASL_OK if yes,
    SASL_BADAUTH otherwise */
@@ -329,7 +329,13 @@ int service_main(int argc, char **argv, char **envp)
     snmp_increment(ACTIVE_CONNECTIONS, 1);
 
     lmtpmode(&mylmtp, deliver_in, deliver_out, 0);
-    shut_down(0);
+
+    /* free session state */
+    if (deliver_in) prot_free(deliver_in);
+    if (deliver_out) prot_free(deliver_out);
+    close(0);
+    close(1);
+    close(2);
 
     return 0;
 }

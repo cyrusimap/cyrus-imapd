@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.112 2001/03/14 06:02:38 leg Exp $
+ $Id: mailbox.c,v 1.112.2.1 2001/05/31 14:46:26 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -626,6 +626,7 @@ int mailbox_read_index_header(struct mailbox *mailbox)
     fstat(mailbox->index_fd, &sbuf);
     mailbox->index_ino = sbuf.st_ino;
     mailbox->index_mtime = sbuf.st_mtime;
+    mailbox->index_size = sbuf.st_size;
     map_refresh(mailbox->index_fd, 0, &mailbox->index_base,
 		&mailbox->index_len, sbuf.st_size, "index",
 		mailbox->name);
@@ -1883,7 +1884,7 @@ int mailbox_create(const char *name,
 
     while ((p = strchr(p+1, '/'))) {
 	*p = '\0';
-	if (mkdir(path, 0777) == -1 && errno != EEXIST) {
+	if (mkdir(path, 0755) == -1 && errno != EEXIST) {
 	    save_errno = errno;
 	    if (stat(path, &sbuf) == -1) {
 		errno = save_errno;
@@ -1893,7 +1894,7 @@ int mailbox_create(const char *name,
 	}
 	*p = '/';
     }
-    if (mkdir(path, 0777) == -1 && errno != EEXIST) {
+    if (mkdir(path, 0755) == -1 && errno != EEXIST) {
 	save_errno = errno;
 	if (stat(path, &sbuf) == -1) {
 	    errno = save_errno;

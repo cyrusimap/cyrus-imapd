@@ -91,12 +91,14 @@ static void db_err(const char *db_prfx, char *buffer)
 
 static int init(const char *dbdir, int myflags)
 {
-    int r;
+    int r, do_retry = 1;
     int flags = 0;
 
     assert(!dbinit);
 
-    if (myflags & CYRUSDB_RECOVER) flags |= DB_RECOVER;
+    if (myflags & CYRUSDB_RECOVER) {
+      flags |= DB_RECOVER | DB_CREATE;
+    }
 
     if ((r = db_env_create(&dbenv, 0)) != 0) {
 	syslog(LOG_ERR, "DBERROR: db_appinit failed: %s", db_strerror(r));
@@ -130,7 +132,8 @@ static int init(const char *dbdir, int myflags)
 #endif
 
     /* what directory are we in? */
-    flags |= DB_CREATE | DB_INIT_LOCK | DB_INIT_MPOOL | 
+ retry:
+    flags |= DB_INIT_LOCK | DB_INIT_MPOOL | 
 	     DB_INIT_LOG | DB_INIT_TXN;
 #if DB_VERSION_MINOR > 0
     r = dbenv->open(dbenv, dbdir, flags, 0644); 
@@ -138,6 +141,26 @@ static int init(const char *dbdir, int myflags)
     r = dbenv->open(dbenv, dbdir, NULL, flags, 0644); 
 #endif
     if (r) {
+        if (do_retry && (r == ENOENT)) {
+	  /* Per sleepycat Support Request #3838 reporting a performance problem: 
+
+	        Berkeley DB only transactionally protects the open if you're
+	        doing a DB_CREATE.  Even if the Cyrus application is opening
+  	        the file read/write, we don't need a transaction.  I see
+	        from their source that they are always specifying DB_CREATE.
+	        I bet if they changed it to not specifying CREATE and only
+	        creating if necessary, the problem would probably go away.
+
+	     Given that in general the file should exist, we optimize the most 
+	     often case: the file exists.  So, we add DB_CREATE only if we fail 
+	     to open the file and thereby avoid doing a stat(2) needlessly. Sure, it 
+	     should be cached by why waste the cycles anyway?
+	  */
+	  flags |= DB_CREATE;
+	  do_retry = 0;
+	  goto retry;
+        }
+	
 	syslog(LOG_ERR, "DBERROR: dbenv->open '%s' failed: %s", dbdir,
 	       db_strerror(r));
 	return CYRUSDB_IOERROR;

@@ -95,7 +95,7 @@ static int nuke_dir(char *dir)
     struct dirent *dirent;
 
     if (chdir(dir) == -1) {
-	if (!mkdir(dir, 0664)) return 0;
+	if (!mkdir(dir, 0755)) return 0;
 	else return IMAP_IOERROR;
     }
     dirp = opendir(".");
@@ -114,6 +114,7 @@ int duplicate_init(int myflags)
     char buf[1024];
     int r = 0;
     int flags = 0;
+    int do_retry = 1;
 
     assert(!duplicate_dbinit);
 
@@ -127,8 +128,9 @@ int duplicate_init(int myflags)
 	syslog(LOG_ERR, "DBERROR: db_appinit failed: %s", strerror(r));
 	return IMAP_IOERROR;
     }
-    
-    flags |= DB_INIT_CDB | DB_INIT_MPOOL | DB_CREATE;
+
+ retry:
+    flags |= DB_INIT_CDB | DB_INIT_MPOOL;
     /* create the name of the db file */
 #if (DB_VERSION_MINOR > 0)
     r = duplicate_dbenv->open(duplicate_dbenv, buf, flags, 0644);
@@ -136,6 +138,14 @@ int duplicate_init(int myflags)
     r = duplicate_dbenv->open(duplicate_dbenv, buf, NULL, flags, 0644);
 #endif
     if (r) {
+        if (do_retry && (r == ENOENT)) {
+	  /* Don't pass in DB_CREATE unless necessary. See comment in 
+	     cyrusdb_db3.c for details 
+	  */
+	  flags |= DB_CREATE;
+	  do_retry = 0;
+	  goto retry;
+        }
 	syslog(LOG_ERR, "DBERROR: dbenv->open failed: %s", strerror(r));
 	return IMAP_IOERROR;
     }
@@ -181,9 +191,10 @@ time_t duplicate_check(char *id, int idlen, char *to, int tolen)
 {
     char buf[1024];
     char fname[1024];
+    int flags = 0;
     DB *d;
     DBT date, delivery;
-    int r;
+    int r, do_retry = 1;
     time_t mark;
 
     assert(duplicate_dbinit);
@@ -207,8 +218,15 @@ time_t duplicate_check(char *id, int idlen, char *to, int tolen)
 	       db_strerror(r));
 	return 0;
     }
-    r = d->open(d, fname, NULL, DB_HASH, DB_CREATE, 0664);
+
+ retry:
+    r = d->open(d, fname, NULL, DB_HASH, flags, 0664);
     if (r != 0) {
+        if (do_retry && (r == ENOENT)) {
+	  flags |= DB_CREATE;
+ 	  do_retry = 0;
+	  goto retry;
+        }
 	syslog(LOG_ERR, "duplicate_check: opening %s: %s", fname,
 	       db_strerror(r));
 	return 0;
@@ -243,6 +261,8 @@ void duplicate_mark(char *id, int idlen, char *to, int tolen, time_t mark)
     DB *d;
     DBT date, delivery;
     int r;
+    int flags = 0;
+    int do_retry = 1;
 
     assert(duplicate_dbinit);
     (void)memset(&date, 0, sizeof(date));
@@ -268,8 +288,14 @@ void duplicate_mark(char *id, int idlen, char *to, int tolen, time_t mark)
 	       db_strerror(r));
 	return;
     }
-    r = d->open(d, fname, NULL, DB_HASH, DB_CREATE, 0664);
+ retry:
+    r = d->open(d, fname, NULL, DB_HASH, flags, 0664);
     if (r != 0) {
+        if (do_retry && (r == ENOENT)) {
+	  flags |= DB_CREATE;
+	  do_retry = 0;
+	  goto retry;
+        }
 	syslog(LOG_ERR, "duplicate_mark: opening %s: %s", fname,
 	       db_strerror(r));
 	return;

@@ -43,7 +43,6 @@
  *   variable below.
  */
 
-
 oid cyrusMasterMIB_variables_oid[] = { 1,3,6,1,4,1,3,6,1 };
 
 

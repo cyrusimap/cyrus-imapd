@@ -121,6 +121,14 @@ static int abort_txn(struct db *db, struct txn *tid)
     return 0;
 }
 
+static void free_db(struct db *db)
+{
+    if (db) {
+	if (db->fname) free(db->fname);
+	free(db);
+    }
+}
+
 static struct txn *new_txn(void)
 {
     struct txn *ret = (struct txn *) xmalloc(sizeof(struct txn));
@@ -154,14 +162,14 @@ static int myopen(const char *fname, struct db **ret)
     db->fd = open(fname, O_RDWR | O_CREAT, 0666);
     if (db->fd == -1) {
 	syslog(LOG_ERR, "IOERROR: opening %s: %m", fname);
-	free(db);
+	free_db(db);
 	return CYRUSDB_IOERROR;
     }
 
     if (fstat(db->fd, &sbuf) == -1) {
 	syslog(LOG_ERR, "IOERROR: fstat on %s: %m", fname);
 	close(db->fd);
-	free(db);
+	free_db(db);
 	return CYRUSDB_IOERROR;
     }
     db->ino = sbuf.st_ino;
@@ -183,7 +191,7 @@ static int myclose(struct db *db)
 
     map_free(&db->base, &db->size);
     close(db->fd);
-    free(db);
+    free_db(db);
 
     return 0;
 }

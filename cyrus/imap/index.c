@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.161 2001/03/15 22:56:18 leg Exp $
+ * $Id: index.c,v 1.161.2.1 2001/05/31 14:46:22 ken3 Exp $
  */
 #include <config.h>
 
@@ -405,7 +405,8 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 	    /* Force a * n EXISTS message */
 	    imapd_exists = -1;
 	}
-	else if (sbuf.st_mtime != mailbox->index_mtime) {
+	else if (sbuf.st_mtime != mailbox->index_mtime
+		 || sbuf.st_size != mailbox->index_size) {
 	    mailbox_read_index_header(mailbox);
 	}
     }
@@ -1003,6 +1004,8 @@ struct searchargs *searchargs;
     struct mapfile msgfile;
     int n = 0;
 
+    if (imapd_exists <= 0) return 0;
+
     *msgno_list = (unsigned *) xmalloc(imapd_exists * sizeof(unsigned));
 
     for (msgno = 1; msgno <= imapd_exists; msgno++) {
@@ -1019,7 +1022,7 @@ struct searchargs *searchargs;
     }
 
     /* if we didn't find any matches, free msgno_list */
-    if (!n) {
+    if (!n && *msgno_list) {
 	free(*msgno_list);
 	*msgno_list = NULL;
     }

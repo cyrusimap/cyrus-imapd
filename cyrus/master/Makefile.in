@@ -1,5 +1,5 @@
 # Makefile for the Cyrus controlling process
-# $Id: Makefile.in,v 1.10 2000/12/14 19:26:50 ken3 Exp $
+# $Id: Makefile.in,v 1.10.4.1 2001/05/31 14:46:31 ken3 Exp $
 # 
 # @configure_input@
 #
@@ -67,7 +67,7 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
-LOBJS=service.o
+LOBJS=service.o service-thread.o
 
 PROGS=master
 
