@@ -182,7 +182,7 @@ char *port;
     else if (port) {
 	sp = getservbyname(port, "tcp");
 	if (!sp) return -2;
-	addr.sin_port = htons(sp->s_port);
+	addr.sin_port = sp->s_port;
     }
     else {
 	addr.sin_port = htons(143);
