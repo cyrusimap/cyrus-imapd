@@ -329,6 +329,9 @@ set_acl(char *bbd, char *user, char *acl, int neg)
 {
     char *p;
 
+    /* Don't set ACL if no rights */
+    if (!*acl) return;
+
     if (neg) {
 	p = (char *) malloc(strlen(user) + 2);
 	if (!p) { exit(9); }
@@ -348,7 +351,7 @@ set_acl(char *bbd, char *user, char *acl, int neg)
 int
 do_acl(char *amsdir, char *bbd)
 {
-    char space[MAXSIZE], *p, *q;
+    char space[MAXSIZE], *p, *q, *at;
     struct ViceIoctl blob;
     struct AclEntry *te;
     struct Acl *ta;
@@ -408,6 +411,7 @@ do_acl(char *amsdir, char *bbd)
 	q = strchr(posacl[i],'\t') + 1;
 	posval[i] = atoi(q);
 	*(q - 1) = 0;
+	if (at = strchr(posacl[i], '@')) ucase(at);
     }
     for (i = 0; i < neg; i++) {
 	*(q = strchr(p,'\n')) = 0;
@@ -416,6 +420,7 @@ do_acl(char *amsdir, char *bbd)
 	q = strchr(negacl[i],'\t') + 1;
 	negval[i] = atoi(q);
 	*(q - 1) = 0;
+	if (at = strchr(negacl[i], '@')) ucase(at);
     }
     negacl[neg] = "anonymous";
     negval[neg] = 127;
