@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.12 2000/06/20 18:11:37 leg Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.13 2000/07/17 04:31:52 leg Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -52,21 +52,19 @@
 #include <syslog.h>
 #include <com_err.h>
 #include <stdlib.h>
+#include <string.h>
 
-#include <db.h>
 #include "exitcodes.h"
 #include "mboxlist.h"
 #include "acapmbox.h"
 #include "imapconf.h"
 #include "assert.h"
 #include "xmalloc.h"
+#include "imap_err.h"
 
 extern int optind;
 extern char *optarg;
 extern int errno;
-
-extern DB *mbdb;
-extern DB_ENV *dbenv;
 
 enum mboxop { DUMP, POPULATE, RECOVER, CHECKPOINT, UNDUMP, NONE };
 
@@ -76,110 +74,107 @@ void fatal(const char *message, int code)
     exit(code);
 }
 
+struct dumprock {
+    enum mboxop op;
+};
+
+static int dump_cb(void *rockp,
+		   const char *key, int keylen,
+		   const char *data, int datalen)
+{
+    struct dumprock *d = (struct dumprock *) rockp;
+    int r;
+    struct mailbox mailbox;
+    char *p;
+    char *name, *part, *acl;
+
+    /* \0 terminate 'name' */
+    name = xstrndup(key, keylen);
+
+    p = strchr(data, ' ');
+    if (p == NULL) {
+	abort();
+    }
+    p++;
+    acl = strchr(p, ' ');
+    if (acl == NULL) {
+	abort();
+    }
+    /* grab 'part', \0 terminate */
+    part = xstrndup(p, acl - p);
+
+    /* \0 terminate 'acl' */
+    p = acl + 1;
+    acl = xstrndup(p, datalen - (p - data) - 1);
+
+    switch (d->op) {
+    case DUMP:
+	printf("%s\t%s\t%s\n", name, part, acl);
+	break;
+
+    case POPULATE:
+    {
+	acapmbox_handle_t *handle = acapmbox_get_handle();
+	acapmbox_data_t mboxdata;
+
+	if (!handle) {
+	    fprintf(stderr, "can't contact ACAP server\n");
+	    return IMAP_SERVER_UNAVAILABLE;
+	}
+	acapmbox_new(&mboxdata, NULL, name);
+	mboxdata.status = ACAPMBOX_COMMITTED;
+	mboxdata.acl = acl;
+
+	/* open index file for mailbox */
+	r = mailbox_open_header(name, NULL, &mailbox);
+	if (!r) {
+	    r = mailbox_open_index(&mailbox);
+	    if (r) {
+		fprintf(stderr, "Error opening index for %s\n", name);
+		return IMAP_SERVER_UNAVAILABLE;
+	    }
+		
+	    mboxdata.uidvalidity = mailbox.uidvalidity;
+	    mboxdata.answered = mailbox.answered;
+	    mboxdata.flagged = mailbox.flagged;
+	    mboxdata.deleted = mailbox.deleted;
+	    mboxdata.total = mailbox.exists;
+		
+	    /* close index file for mailbox */
+	    mailbox_close(&mailbox);
+	}
+
+	r = acapmbox_store(handle, &mboxdata, 1);
+	if (r) {
+	    fprintf(stderr, "problem storing '%s': %s\n", name,
+		    error_message(r));
+	    r = 0; /* not a database error, though */
+	    return IMAP_IOERROR;
+	}
+	break;
+    }
+
+    default: /* yikes ! */
+	abort();
+	break;
+    }
+
+    free(name);
+    free(part);
+    free(acl);
+
+    return 0;
+}
+
 void do_dump(enum mboxop op)
 {
-    int r;
-    DBC *cursor = NULL;
-    DBT key, data;
-    int buf[16384];
-    int bufkey[MAX_MAILBOX_NAME * 2];
-    struct mbox_entry *mboxent;
-    struct mailbox mailbox;
+    struct dumprock d;
 
     assert(op == DUMP || op == POPULATE);
 
-    memset(&key, 0, sizeof(key));
-    key.flags = DB_DBT_USERMEM;
-    key.data = bufkey;
-    key.ulen = sizeof(bufkey);
+    d.op = op;
 
-    memset(&data, 0, sizeof(data));
-    data.flags = DB_DBT_USERMEM;
-    data.data = buf;
-    data.ulen = sizeof(buf);
-
-    r = mbdb->cursor(mbdb, NULL, &cursor, 0);
-    if (r != 0) { 
-	fprintf(stderr, "DBERROR: Unable to create cursor: %s\n",
-		db_strerror(r));
-	goto error;
-    }
-
-    r = cursor->c_get(cursor, &key, &data, DB_FIRST);
-    while (r != DB_NOTFOUND) {
-	switch (r) {
-	case 0:
-	    break;
-	default:
-	    fprintf(stderr, "DBERROR: error advancing: %s\n", db_strerror(r));
-	    goto error;
-	}
-
-	mboxent = (struct mbox_entry *) data.data;
-	switch (op) {
-	case DUMP:
-	    printf("%s\t%s\t%s\n", mboxent->name, 
-		   mboxent->partition, mboxent->acls);
-	    break;
-
-	case POPULATE:
-	{
-	    acapmbox_handle_t *handle = acapmbox_get_handle();
-	    acapmbox_data_t mboxdata;
-
-	    if (!handle) {
-		fprintf(stderr, "can't contact ACAP server\n");
-		goto error;
-	    }
-	    acapmbox_new(&mboxdata, NULL, mboxent->name);
-	    mboxdata.status = ACAPMBOX_COMMITTED;
-	    mboxdata.acl = mboxent->acls;
-
-	    /* open index file for mailbox */
-	    r = mailbox_open_header(mboxent->name,NULL,&mailbox);
-	    if (!r) {
-		r = mailbox_open_index(&mailbox);
-		if (r) {
-		    fprintf(stderr, "Error opening index for %s\n",
-			    mboxent->name);
-		    goto error;
-		}
-		
-		mboxdata.uidvalidity = mailbox.uidvalidity;
-		mboxdata.answered = mailbox.answered;
-		mboxdata.flagged = mailbox.flagged;
-		mboxdata.deleted = mailbox.deleted;
-		mboxdata.total = mailbox.exists;
-		
-		/* close index file for mailbox */
-		mailbox_close(&mailbox);
-	    }
-
-	    r = acapmbox_store(handle, &mboxdata, 1);
-	    if (r) {
-		fprintf(stderr, "problem storing '%s': %s\n", mboxent->name,
-			error_message(r));
-		r = 0; /* not a database error, though */
-		goto error;
-	    }
-	    break;
-	}
-
-	default: /* yikes ! */
-	    abort();
-	    break;
-	}
-	r = cursor->c_get(cursor, &key, &data, DB_NEXT);
-    }
-
- error:
-    switch (r = cursor->c_close(cursor)) {
-    case 0:
-	break;
-    default:
-	fprintf(stderr, "DBERROR: error closing cursor: %s\n", db_strerror(r));
-	return;
-    }
+    CONFIG_DB_MBOX->foreach(mbdb, "", 0, &dump_cb, &d, NULL);
 
     return;
 }
@@ -188,13 +183,10 @@ void do_undump(void)
 {
     int r = 0;
     char buf[16384];
-    DBT key, data;
     int line = 0;
-    struct mbox_entry *mboxent = NULL;
+    char *key, *data;
+    int keylen, datalen;
     
-    memset(&key, 0, sizeof(key));
-    memset(&data, 0, sizeof(data));
-
     while (fgets(buf, sizeof(buf), stdin)) {
 	char *name, *partition, *acl;
 	char *p;
@@ -229,26 +221,17 @@ void do_undump(void)
 	    fprintf(stderr, "line %d: partition name too long\n", line);
 	    continue;
 	}
+
+	key = name; keylen = strlen(key);
+	data = mboxlist_makeentry(0, partition, acl); datalen = strlen(data);
 	
-	mboxent = (struct mbox_entry *) 
-	    xrealloc(mboxent, sizeof(struct mbox_entry) + strlen(acl));
-	strcpy(mboxent->name, name);
-	strcpy(mboxent->partition, partition);
-	strcpy(mboxent->acls, acl);
-
-	key.data = name;
-	key.size = strlen(name);
-
-	data.data = mboxent;
-	data.size = sizeof(struct mbox_entry) + strlen(mboxent->acls);
-
 	tries = 0;
     retry:
-	r = mbdb->put(mbdb, NULL, &key, &data, 0);
+	r = CONFIG_DB_MBOX->store(mbdb, key, keylen, data, datalen, NULL);
 	switch (r) {
 	case 0:
 	    break;
-	case DB_LOCK_DEADLOCK:
+	case CYRUSDB_AGAIN:
 	    if (tries++ < 5) {
 		fprintf(stderr, "warning: DB_LOCK_DEADLOCK; retrying\n");
 		goto retry;
@@ -256,16 +239,18 @@ void do_undump(void)
 	    fprintf(stderr, "error: too many deadlocks, aborting\n");
 	    break;
 	default:
+	    r = IMAP_IOERROR;
 	    break;
 	}
+
+	free(data);
 
 	if (r) break;
     }
 
     if (r) {
-	fprintf(stderr, "db error: %s\n", db_strerror(r));
+	fprintf(stderr, "db error: %s\n", cyrusdb_strerror(r));
     }
-    if (mboxent) free(mboxent);
 
     return;
 }
