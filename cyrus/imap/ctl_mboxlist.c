@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.29 2002/03/19 21:19:44 rjs3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.30 2002/03/20 21:53:17 rjs3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -96,6 +96,7 @@ struct mb_node
 };
 
 struct mb_node *del_head = NULL, *act_head = NULL, **act_tail = &act_head;
+struct mb_node *wipe_head = NULL, *unflag_head = NULL;
 
 /* For each mailbox that this guy gets called for, check that
  * it is a mailbox that:
@@ -149,9 +150,13 @@ static int dump_cb(void *rockp,
     int r;
     char *p;
     char *name, *part, *acl;
+    int mbtype;
 
     /* \0 terminate 'name' */
     name = xstrndup(key, keylen);
+
+    /* Get mailbox type */
+    mbtype = strtol(data, &p, 10);
 
     p = strchr(data, ' ');
     if (p == NULL) {
@@ -195,11 +200,27 @@ static int dump_cb(void *rockp,
 	 * is a condition of being in the act_head list */
 	if(act_head && !strcmp(name, act_head->mailbox)) {
 	    struct mb_node *tmp;
-	    /* Do not update if location does match, and there is an acl,
-	     * and the acl matches */
-	    if(act_head->acl &&
+	    
+	    /* If this mailbox is remote, we want to unmark the remoteness,
+	     * since the MUPDATE server agreed that it lives here. */
+	    /* (and later also force an mupdate push) */
+	    if(mbtype & MBTYPE_REMOTE) {
+		struct mb_node *next;
+		
+		next = xzmalloc(sizeof(struct mb_node));
+		strcpy(next->mailbox, name);
+		next->next = unflag_head;
+		unflag_head = next;
+
+		/* No need to update mupdate NOW, we'll get it when we
+		 * untag the mailbox */
+		skip_flag = 1;
+	    } else if(act_head->acl &&
 	       !strcmp(realpart, act_head->server) &&
 	       !strcmp(acl, act_head->acl)) {
+		/* Do not update if location does match, and there is an acl,
+		 * and the acl matches */
+
 		skip_flag = 1;
 	    } else {
 		skip_flag = 0;
@@ -211,7 +232,28 @@ static int dump_cb(void *rockp,
 	    act_head = act_head->next;
 	    free(tmp);
 	} else {
-	    skip_flag = 0;
+	    /* xxx if they do not match, do an explicit MUPDATE find on the
+	     * mailbox, and if it is living somewhere else, delete the local
+	     * data, if it is NOT living somewhere else, recreate it in
+	     * mupdate */
+	    struct mupdate_mailboxdata *unused_mbdata;
+
+	    /* if this is okay, we found it (so it is on another host, since
+	     * it wasn't in our list in this position) */
+	    if(!mupdate_find(d->h, name, &unused_mbdata)) {
+		/* since it lives on another server, schedule it for a wipe */
+		struct mb_node *next;
+		
+		next = xzmalloc(sizeof(struct mb_node));
+		strcpy(next->mailbox, name);
+		next->next = wipe_head;
+		wipe_head = next;
+		
+		skip_flag = 1;		
+	    } else {
+		/* we need to push it to mupdate */
+		skip_flag = 0;
+	    }
 	}
 
 	if(skip_flag) break;
@@ -244,18 +286,27 @@ static int dump_cb(void *rockp,
     return 0;
 }
 
+/* Resyncing with mupdate:
+ *
+ * If it is local and not present on mupdate at all, push to mupdate.
+ * If it is local and present on mupdate for another host, delete local mailbox
+ * If it is local and present on mupdate but with incorrect partition/acl,
+ *    update mupdate.
+ * If it is not local and present on mupdate for this host, delete it from
+ *    mupdate.
+ */
+
 void do_dump(enum mboxop op)
 {
     struct dumprock d;
+    int ret;
+    char buf[8192];
 
     assert(op == DUMP || op == M_POPULATE);
 
     d.op = op;
 
     if(op == M_POPULATE) {
-	int ret;
-	char buf[1024];
-
 	sasl_client_init(NULL);
 
 	ret = mupdate_connect(NULL, NULL, &(d.h), NULL);
@@ -273,15 +324,15 @@ void do_dump(enum mboxop op)
 	    fprintf(stderr, "couldn't do LIST command on mupdate server\n");
 	    exit(1);
 	}
-
-	/* Run pending deletes */
+	
+	/* Run pending mupdate deletes */
 	while(del_head) {
 	    struct mb_node *me = del_head;
 	    del_head = del_head->next;
 
 	    ret = mupdate_delete(d.h, me->mailbox);
 	    if(ret) {
-		fprintf(stderr, "couldn't delete %s", me->mailbox);
+		fprintf(stderr, "couldn't mupdate delete %s\n", me->mailbox);
 		exit(1);
 	    }
 		
@@ -293,6 +344,61 @@ void do_dump(enum mboxop op)
     CONFIG_DB_MBOX->foreach(mbdb, "", 0, &dump_p, &dump_cb, &d, NULL);
 
     if(op == M_POPULATE) {
+	/* Remove MBTYPE_REMOTE flags (unflag_head) */
+	while(unflag_head) {
+	    struct mb_node *me = unflag_head;
+	    int type;
+	    char *part, *acl;
+	    
+	    unflag_head = unflag_head->next;
+	    
+	    ret = mboxlist_detail(me->mailbox, &type, NULL, &part, &acl, NULL);
+	    if(ret) {
+		fprintf(stderr,
+			"couldn't perform lookup to un-remote-flag %s\n",
+			me->mailbox);
+		exit(1);
+	    }
+	    
+	    ret = mboxlist_update(me->mailbox, type & ~MBTYPE_REMOTE,
+				  part, acl);
+	    if(ret) {
+		fprintf(stderr,
+			"couldn't perform update to un-remote-flag %s\n",
+			me->mailbox);
+		exit(1);
+	    } 
+	    
+	    /* force a push to mupdate */
+	    snprintf(buf, sizeof(buf), "%s!%s", config_servername, part);
+	    ret = mupdate_activate(d.h, me->mailbox, buf, acl);
+	    if(ret) {
+		fprintf(stderr,
+			"couldn't perform mupdatepush to un-remote-flag %s\n",
+			me->mailbox);
+		exit(1);
+	    }
+	    
+	    free(me);
+	}
+
+	/* Delete local mailboxes where needed (wipe_head) */
+	while(wipe_head) {
+	    struct mb_node *me = wipe_head;
+	    
+	    wipe_head = wipe_head->next;
+	    
+	    ret = mboxlist_deletemailbox(me->mailbox, 1, "", NULL, 0, 1);
+	    if(ret) {
+		fprintf(stderr, "couldn't delete defunct mailbox %s\n",
+			me->mailbox);
+		exit(1);
+	    }
+
+	    free(me);
+	}
+    
+	/* Done with mupdate */
 	mupdate_disconnect(&(d.h));
 	sasl_done();
     }
@@ -423,6 +529,11 @@ int main(int argc, char *argv[])
     char *alt_config = NULL;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+
+    /* xxx need options with -m:
+     *     - warn only (don't delete anything)
+     *     - force authoritative (assume mupdate to be incorrect)
+     */
 
     while ((opt = getopt(argc, argv, "C:amdurcf:")) != EOF) {
 	switch (opt) {
