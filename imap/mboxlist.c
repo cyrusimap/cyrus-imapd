@@ -62,6 +62,7 @@ static long list_ino;
 static const char *list_base;
 static unsigned long list_size = 0;
 static int list_locked = 0;
+static int list_doingfind = 0;
 
 static int mboxlist_opensubs();
 static void mboxlist_closesubs();
@@ -1005,6 +1006,7 @@ int (*proc)();
     char *inboxcase;
 
     mboxlist_reopen();
+    list_doingfind++;
 
     g = glob_init(pattern, GLOB_HIERARCHY|GLOB_INBOXCASE);
     inboxcase = glob_inboxcase(g);
@@ -1028,6 +1030,7 @@ int (*proc)();
 		r = (*proc)(inboxcase, 5, 1);
 		if (r) {
 		    glob_free(&g);
+		    list_doingfind--;
 		    return r;
 		}
 	    }
@@ -1040,6 +1043,7 @@ int (*proc)();
 		r = (*proc)(usermboxname, strlen(usermboxname), 1);
 		if (r) {
 		    glob_free(&g);
+		    list_doingfind--;
 		    return r;
 		}
 	    }
@@ -1107,6 +1111,7 @@ int (*proc)();
 		r = (*proc)(namebuf+inboxoffset, matchlen, 1);
 		if (r) {
 		    glob_free(&g);
+		    list_doingfind--;
 		    return r;
 		}
 	    }
@@ -1147,6 +1152,7 @@ int (*proc)();
 		r = (*proc)(namebuf, matchlen, 1);
 		if (r) {
 		    glob_free(&g);
+		    list_doingfind--;
 		    return r;
 		}
 	    }
@@ -1167,6 +1173,7 @@ int (*proc)();
 		    r = (*proc)(namebuf, matchlen, (rights & ACL_CREATE));
 		    if (r) {
 			glob_free(&g);
+			list_doingfind--;
 			return r;
 		    }
 		}
@@ -1176,6 +1183,7 @@ int (*proc)();
     }
 	
     glob_free(&g);
+    list_doingfind--;
     return 0;
 }
 
@@ -1217,6 +1225,7 @@ int (*proc)();
     }
 
     mboxlist_reopen();
+    list_doingfind++;
 
     g = glob_init(pattern, GLOB_HIERARCHY|GLOB_INBOXCASE);
     inboxcase = glob_inboxcase(g);
@@ -1241,6 +1250,7 @@ int (*proc)();
 		if (r) {
 		    mboxlist_closesubs(subsfd, subs_base, subs_size);
 		    glob_free(&g);
+		    list_doingfind--;
 		    return r;
 		}
 	    }
@@ -1253,6 +1263,7 @@ int (*proc)();
 		if (r) {
 		    mboxlist_closesubs(subsfd, subs_base, subs_size);
 		    glob_free(&g);
+		    list_doingfind--;
 		    return r;
 		}
 	    }
@@ -1327,6 +1338,7 @@ int (*proc)();
 		    if (r) {
 			mboxlist_closesubs(subsfd, subs_base, subs_size);
 			glob_free(&g);
+			list_doingfind--;
 			return r;
 		    }
 		}
@@ -1378,6 +1390,7 @@ int (*proc)();
 		if (r) {
 		    mboxlist_closesubs(subsfd, subs_base, subs_size);
 		    glob_free(&g);
+		    list_doingfind--;
 		    return r;
 		}
 	    }
@@ -1391,6 +1404,7 @@ int (*proc)();
 	
     mboxlist_closesubs(subsfd, subs_base, subs_size);
     glob_free(&g);
+    list_doingfind--;
     return 0;
 }
 
@@ -1725,6 +1739,7 @@ mboxlist_openlock()
     int r;
 
     assert(list_locked == 0);
+    assert(list_doingfind == 0);
 
     if (listfd == -1) mboxlist_reopen();
 
@@ -1893,7 +1908,7 @@ mboxlist_reopen()
 	strcat(newlistfname, ".NEW");
     }
 
-    if (list_locked) return;
+    if (list_locked || list_doingfind) return;
 
     if (listfd != -1) {
 	if (stat(listfname, &sbuf) == -1) {
