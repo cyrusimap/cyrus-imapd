@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.295 2001/01/19 16:37:28 ken3 Exp $ */
+/* $Id: imapd.c,v 1.296 2001/02/12 04:26:58 leg Exp $ */
 
 #include <config.h>
 
@@ -2994,7 +2994,7 @@ char *tag;
 int usinguid;
 {
     int c;
-    struct sortcrit *sortcrit;
+    struct sortcrit *sortcrit = NULL;
     static struct buf arg;
     int charset = 0;
     struct searchargs *searchargs;
@@ -5060,13 +5060,14 @@ int getsortcriteria(char *tag, struct sortcrit **sortcrit)
     static struct buf criteria;
     int nsort, n;
 
+    *sortcrit = NULL;
+
     c = prot_getc(imapd_in);
     if (c != '(') goto missingcrit;
 
     c = getword(&criteria);
     if (criteria.s[0] == '\0') goto missingcrit;
 
-    *sortcrit = NULL;
     nsort = 0;
     n = 0;
     for (;;) {
