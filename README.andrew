@@ -1,11 +1,12 @@
-you need to run autoconf, if you check this out elsewhere as 
-configure isn't part of the CVS colllection.
+You need to run autoconf before building.  "configure" is no longer in the
+repository because it's built from "configure.in", and it's really annoying
+to keep checking it in only to realize that you don't understand the changes
+because they're all autoconf spew.
 
 to build:
    smake init all 
 
-then as admin
+then, as admin (suid binaries on AFS)
    smake -d install
 
-NOTE: if you get weird 'can not find sources' make sure imap/imap.c 
-      a+r
+If you get the error 'can not find sources', make sure imap/imap.c is mode a+r.
