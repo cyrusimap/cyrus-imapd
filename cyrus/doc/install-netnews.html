@@ -1,4 +1,4 @@
-<!-- $Id: install-netnews.html,v 1.1.2.2 2003/03/01 22:58:12 ken3 Exp $ -->
+<!-- $Id: install-netnews.html,v 1.1.2.3 2003/03/02 19:59:15 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Cyrus and Netnews
@@ -91,7 +91,9 @@ TODO: Discuss ACLs and PGP verification.
 In order to have articles posted by your local users propagate to the
 outside world, you must specify the name of your usenet peer with the
 <tt>newspeer</tt> option in <tt>imapd.conf</tt>.  This is the host
-that <tt>nntpd</tt> contacts to feed outgoing articles.
+that <tt>nntpd</tt> contacts to feed outgoing articles.  Also note
+that you may specify an optional wildmat to filter which groups will
+be fed (see <tt>imapd.conf(5)</tt> for details).
 
 <h4>News clients</h4>
 
@@ -134,5 +136,5 @@ use its "feed" operation mode.
 To expire usenet articles on a regular basis, you should use the <tt>expirenews</tt> utility.  This utility both expunges articles from their mailboxes and prunes message-ids from <tt>netnews.db</tt>.  The <tt>master/conf/normal.conf</tt> and <tt>master/conf/prefork.conf</tt> sample configs both include EVENT entries for <tt>expirenews</tt> (disabled by default).
 
 <P><HR>
-last modified: $Date: 2003/03/01 22:58:12 $
+last modified: $Date: 2003/03/02 19:59:15 $
 </BODY></HTML>

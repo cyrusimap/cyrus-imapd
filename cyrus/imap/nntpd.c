@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.64 2003/02/27 16:32:22 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.65 2003/03/02 19:59:17 ken3 Exp $
  */
 
 /*
@@ -2611,25 +2611,79 @@ static int cancel(message_data_t *msg)
 
 static void feedpeer(message_data_t *msg)
 {
-    const char *server, *port = "119";
-    char *path, *s;
-    int len, err;
+    const char *peer, *port = "119";
+    char *server, *path, *s;
+    struct wildmat *wild = NULL, *w;
+    int len, err, n, feed = 1;
     struct addrinfo hints, *res, *res0;
     int sock = -1;
     struct protstream *pin, *pout;
     char buf[4096];
 
-    if ((server = config_getstring(IMAPOPT_NEWSPEER)) == NULL) {
+    if ((peer = config_getstring(IMAPOPT_NEWSPEER)) == NULL) {
 	syslog(LOG_ERR, "no newspeer defined");
 	return;
     }
+
+    /* make a working copy of the peer */
+    server = xstrdup(peer);
+
+    /* check for a wildmat pattern */
+    if ((s = strchr(server, ':'))) {
+	*s++ = '\0';
+	wild = split_wildmats(s);
+    }
+prot_printf(nntp_out, "%s\t%s\n", server, wild->pat);
 
     /* check path to see if this message came through our peer */
     len = strlen(server);
     path = msg->path;
     while (path && (s = strchr(path, '!'))) {
-	if ((s - path) == len && !strncmp(path, server, len)) return;
+	if ((s - path) == len && !strncmp(path, server, len)) {
+	    free(server);
+	    return;
+	}
 	path = s + 1;
+    }
+
+    /* check newsgroups against wildmat to see if we should feed it */
+    if (wild) {
+	feed = 0;
+	for (n = 0; n < msg->rcpt_num; n++) {
+	    /* see if the newsgroup matches one of our wildmats */
+	    w = wild;
+	    while (w->pat &&
+		   wildmat(msg->rcpt[n], w->pat) != 1) {
+		w++;
+	    }
+
+prot_printf(nntp_out, "%s\t%s\n", msg->rcpt[n], w->pat ? w->pat : "");
+	    if (w->pat) {
+		/* we have a match, check to see what kind of match */
+		if (!w->not) {
+		    /* positive match, ok to feed, keep checking */
+		    feed = 1;
+		}
+		else if (w->not < 0) {
+		    /* absolute negative match, do not feed */
+		    feed = 0;
+		    break;
+		}
+		else {
+		    /* negative match, keep checking */
+		}
+	    }
+	    else {
+		/* no match, keep checking */
+	    }
+	}
+
+	free_wildmats(wild);
+    }
+
+    if (!feed) {
+	free(server);
+	return;
     }
     
     memset(&hints, 0, sizeof(hints));
@@ -2638,6 +2692,7 @@ static void feedpeer(message_data_t *msg)
     hints.ai_protocol = 0;
     if ((err = getaddrinfo(server, port, &hints, &res0)) != 0) {
 	syslog(LOG_ERR, "getaddrinfo(%s, %s) failed: %m", server, port);
+	free(server);
 	return;
     }
 
@@ -2653,8 +2708,10 @@ static void feedpeer(message_data_t *msg)
     freeaddrinfo(res0);
     if(sock < 0) {
 	syslog(LOG_ERR, "connect(%s:%s) failed: %m", server, port);
+	free(server);
 	return;
     }
+    free(server);
     
     pin = prot_new(sock, 0);
     pout = prot_new(sock, 1);

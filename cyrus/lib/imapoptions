@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.1.2.2 2003/02/07 23:34:51 rjs3 Exp $
+.\" $Id: imapoptions,v 1.1.2.3 2003/03/02 19:59:18 ken3 Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -319,8 +319,20 @@ are listed with ``<none>''.
    some information of greater use. */
 
 { "newspeer", NULL, STRING }
-/* The fully qualified hostname of the upstream news server to which
-   articles should be fed. */
+/* A string of the form peer[:wildmat] where 'peer' is the fully
+   qualified hostname of the upstream news server to which articles
+   should be fed and 'wildmat' is an optional wildmat which specifies
+   which groups should be fed.  If no wildmat is specified, all groups
+   are fed.
+.br
+.sp
+   A '@' may be used in place of '!' to prevent feeding articles
+   cross-posted to the given group, otherwise cross-posted are fed if
+   any part of the wildmat matches.  For example, the string
+   "peer.example.com:*,!control.*,@local.*" would feed all groups
+   except control messages and local groups to peer.example.com.  In
+   the case of cross-posting to local groups, these articles would not
+   be fed */
 
 { "newspostuser", "post", STRING }
 /* Userid used to deliver usenet articles to newsgroup folders.  For

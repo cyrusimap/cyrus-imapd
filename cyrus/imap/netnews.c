@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: netnews.c,v 1.1.2.9 2003/02/13 20:32:59 rjs3 Exp $ */
+/* $Id: netnews.c,v 1.1.2.10 2003/03/02 19:59:16 ken3 Exp $ */
 
 #include <config.h>
 
@@ -328,7 +328,10 @@ struct wildmat *split_wildmats(char *str)
 	if (!(n % 10)) /* alloc some more */
 	    wild = xrealloc(wild, (n + 11) * sizeof(struct wildmat));
 
-	wild[n].not = (*c == '!');
+	if (*c == '!') wild[n].not = 1;		/* not */
+	else if (*c == '@') wild[n].not = -1;	/* absolute not (feeding) */
+	else wild[n].not = 0;
+
 	strcpy(p, wild[n].not ? c + 1 : c);
 	wild[n++].pat = xstrdup(pattern);
     } while (c != str);
