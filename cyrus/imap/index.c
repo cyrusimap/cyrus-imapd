@@ -958,6 +958,24 @@ int uid;
 }
 
 /*
+ * Expunge decision procedure to get rid of articles
+ * both \Deleted and listed in the sequence under 'rock'.
+ */
+int index_expungeuidlist(rock, index)
+char *rock;
+char *index;
+{
+    char *sequence = rock;
+    unsigned uid = ntohl(*((bit32 *)(index+OFFSET_UID)));
+
+    /* Don't expunge if not \Deleted */
+    if (!(ntohl(*((bit32 *)(index+OFFSET_SYSTEM_FLAGS))) & FLAG_DELETED))
+	return 0;
+
+    return index_insequence(uid, sequence, 1);
+}
+
+/*
  * Call a function 'proc' on each message in 'sequence'.  If 'usinguid'
  * is nonzero, 'sequence' is interpreted as a sequence of UIDs instead
  * of a sequence of msgnos.  'proc' is called with arguments 'mailbox',
