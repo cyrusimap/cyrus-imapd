@@ -189,49 +189,6 @@ static int mysasl_authproc(sasl_conn_t *conn,
     return SASL_OK;
 }
 
-int mysasl_canon_user(sasl_conn_t *conn,
-		      void *context,
-		      const char *user, unsigned ulen,
-		      const char *authid, unsigned alen,
-		      unsigned flags,
-		      const char *user_realm,
-		      char *out_user,
-		      unsigned out_max, unsigned *out_ulen,
-		      char *out_authid,
-		      unsigned out_amax, unsigned *out_alen) 
-{
-    char *canon_authuser = NULL, *canon_requser = NULL;
-
-    canon_authuser = auth_canonifyid(authid, alen);
-    if (!canon_authuser) {
-	sasl_seterror(conn, 0, "bad userid %s authenticated", canon_authuser);
-	return SASL_BADAUTH;
-    }
-    *out_alen = strlen(canon_authuser);
-    if(*out_alen > strlen(canon_authuser) > out_amax+1) {
-	sasl_seterror(conn, 0, "buffer overflow while canonicalizing");
-	return SASL_BUFOVER;
-    }
-    
-    strncpy(out_authid, canon_authuser, out_amax);
-    
-    if (!user) user = authid;
-    canon_requser = auth_canonifyid(user, ulen);
-    if (!canon_requser) {
-	sasl_seterror(conn, 0, "bad userid requested");
-	return SASL_BADAUTH;
-    }
-    *out_ulen = strlen(canon_requser);
-    if(*out_ulen > out_max+1) {
-	sasl_seterror(conn, 0, "buffer overflow while canonicalizing");
-	return SASL_BUFOVER;
-    }
-    
-    strncpy(out_user, canon_requser, out_max);
-
-    return SASL_OK;
-}
-
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
     { SASL_CB_PROXY_POLICY, &mysasl_authproc, NULL },
