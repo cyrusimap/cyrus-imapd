@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.119 2000/06/09 18:41:33 ken3 Exp $
+ * $Id: index.c,v 1.120 2000/06/12 01:30:41 leg Exp $
  */
 #include <config.h>
 
@@ -997,7 +997,7 @@ index_sort(struct mailbox *mailbox,
 	   int usinguid)
 {
     unsigned *msgno_list;
-    MsgData *msgdata, *freeme, *cur;
+    MsgData *msgdata = NULL, *freeme = NULL, *cur;
     int n;
 
     /* Search for messages based on the given criteria */
@@ -1044,7 +1044,6 @@ index_sort(struct mailbox *mailbox,
 void index_thread(struct mailbox *mailbox, int algorithm,
 		  struct searchargs *searchargs, int usinguid)
 {
-    Thread *threads;
     unsigned *msgno_list;
     int nmsg;
 
@@ -3289,14 +3288,16 @@ static void index_thread_orderedsubj(unsigned *msgno_list, int nmsg,
      * we will be building threads under a dummy head,
      * so we need (nmsg + 1) nodes
      */
-    head = (Thread *) memset(xmalloc((nmsg + 1) * sizeof(Thread)), 0,
-			     (nmsg + 1) * sizeof(Thread));
+    head = (Thread *) xmalloc((nmsg + 1) * sizeof(Thread));
+    memset(head, 0, (nmsg + 1) * sizeof(Thread));
 
     cur = head;		/* set current thread to the dummy head */
     newnode = head + 1;	/* set next newnode to the second one in the array */
 
     /* guarantee psubj != first subj so that we start a new thread */
     psubj_hash = msgdata->xsubj_hash + 1;
+    psubj = NULL;
+    parent = NULL;
 
     while (msgdata) {
 	/* if current subj = prev subj (subjs have same hash, and
