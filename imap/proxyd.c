@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.80 2002/01/24 16:39:28 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.81 2002/01/28 23:32:57 leg Exp $ */
 
 #undef PROXY_IDLE
 
@@ -89,7 +89,6 @@
 #include "mailbox.h"
 #include "xmalloc.h"
 #include "mboxlist.h"
-#include "acapmbox.h"
 #include "imapurl.h"
 #include "pushstats.h"
 #include "telemetry.h"
@@ -111,8 +110,9 @@ struct backend {
     sasl_conn_t *saslconn;
 
     enum {
-	ACAP = 0x1,
-	IDLE = 0x2
+	ACAP = 0x1, /* not used */
+	IDLE = 0x2,
+	MUPDATE = 0x4
     } capability;
 
     char last_result[LAST_RESULT_LEN];
@@ -679,8 +679,8 @@ void proxyd_capability(struct backend *s)
 	if (!prot_fgets(resp, sizeof(resp), s->in)) return;
 	if (!strncasecmp(resp, "* Capability ", 13)) {
 	    st++; /* increment state */
-	    if (strstr(resp, "ACAP=")) s->capability |= ACAP;
 	    if (strstr(resp, "IDLE")) s->capability |= IDLE;
+	    if (strstr(resp, "MUPDATE")) s->capability |= MUPDATE;
 	} else {
 	    /* line we weren't expecting. hmmm. */
 	}
@@ -827,8 +827,14 @@ struct backend *proxyd_findserver(char *server)
     return ret;
 }
 
-/* proxy mboxlist_lookup; on misses, it issues an UPDATECONTEXT to the
-   ACAP server */
+static void kick_mupdate(void)
+{
+    return;
+}
+
+/* proxy mboxlist_lookup; on misses, it asks the listener for this
+   machine to make a roundtrip to the master mailbox server to make
+   sure it's up to date */
 static int mlookup(const char *name, char **pathp, 
 		   char **aclp, void *tid)
 {
@@ -836,7 +842,9 @@ static int mlookup(const char *name, char **pathp,
 
     r = mboxlist_lookup(name, pathp, aclp, tid);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-	acapmbox_kick_target();
+	/* xxx stub function for requiring a round-trip to the mupdate
+	   server */
+	kick_mupdate();
 	r = mboxlist_lookup(name, pathp, aclp, tid);
     }
 
@@ -2370,12 +2378,13 @@ void cmd_idle(char *tag)
       if (idle_period < 1) idle_period = 1;
     }
 
-    if (!backend_current)
+    if (!backend_current) {
 	c = idle_nomailbox(tag, idle_period, &arg);
-    else if (CAPA(backend_current, IDLE))
+    } else if (CAPA(backend_current, IDLE)) {
 	c = idle_passthrough(tag, idle_period, &arg);
-    else
+    } else {
 	c = idle_simulate(tag, idle_period, &arg);
+    }
 
     if (c != EOF) {
 	if (!strcasecmp(arg.s, "Done") &&
@@ -2567,10 +2576,12 @@ void cmd_capability(char *tag)
 #endif
     prot_printf(proxyd_out, " MAILBOX-REFERRALS");
 
-    if (tls_enabled("imap"))
+    if (tls_enabled("imap")) {
 	prot_printf(proxyd_out, " STARTTLS");
-    if (!proxyd_starttls_done && !config_getswitch("allowplaintext", 1))
+    }
+    if (!proxyd_starttls_done && !config_getswitch("allowplaintext", 1)) {
 	prot_printf(proxyd_out, " LOGINDISABLED");	
+    }
 
     if (sasl_listmech(proxyd_saslconn, NULL, 
 		      "AUTH=", " AUTH=", "",
@@ -3255,7 +3266,6 @@ void cmd_create(char *tag, char *name, char *server)
     struct backend *s = NULL;
     char mailboxname[MAX_MAILBOX_NAME+1];
     int r = 0, res;
-    acapmbox_data_t mboxdata;
     char *acl = NULL;
 
     if (server && !proxyd_userisadmin) {
@@ -3281,7 +3291,8 @@ void cmd_create(char *tag, char *name, char *server)
 	if (!s) r = IMAP_SERVER_UNAVAILABLE;
     }
     if (!r) {
-	if (!CAPA(s, ACAP)) {
+	if (!CAPA(s, MUPDATE)) {
+#if 0
 	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
 	    
 	    /* reserve mailbox on ACAP */
@@ -3291,6 +3302,7 @@ void cmd_create(char *tag, char *name, char *server)
 		syslog(LOG_ERR, "ACAP: unable to reserve %s: %s\n",
 		       name, error_message(r));
 	    }
+#endif
 	}
     }
 
@@ -3301,7 +3313,8 @@ void cmd_create(char *tag, char *name, char *server)
 	res = pipe_including_tag(s, tag);
 	tag = "*";		/* can't send another tagged response */
 	
-	if (!CAPA(s, ACAP)) {
+	if (!CAPA(s, MUPDATE)) {
+#if 0
 	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
 	    
 	    switch (res) {
@@ -3326,8 +3339,10 @@ void cmd_create(char *tag, char *name, char *server)
 		}
 		break;
 	    }
+#endif
 	}
-	if (ultraparanoid && res == PROXY_OK) acapmbox_kick_target();
+	/* xxx */
+	if (ultraparanoid && res == PROXY_OK) kick_mupdate();
     }
     
     if (r) prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
@@ -3363,7 +3378,8 @@ void cmd_delete(char *tag, char *name)
 	res = pipe_including_tag(s, tag);
 	tag = "*";		/* can't send another tagged response */
 
-	if (!CAPA(s, ACAP) && res == PROXY_OK) {
+	if (!CAPA(s, MUPDATE) && res == PROXY_OK) {
+#if 0
 	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
 	    
 	    /* delete mailbox from acap server */
@@ -3373,9 +3389,11 @@ void cmd_delete(char *tag, char *name)
 		       "ACAP: can't delete mailbox entry %s: %s",
 		       name, error_message(r));
 	    }
+#endif
 	}
 
-	if (ultraparanoid && res == PROXY_OK) acapmbox_kick_target();
+	/* xxx */
+	if (ultraparanoid && res == PROXY_OK) kick_mupdate();
     }
 
     if (r) prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
@@ -3391,7 +3409,6 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
     char oldmailboxname[MAX_MAILBOX_NAME+1];
     char newmailboxname[MAX_MAILBOX_NAME+1];
     struct backend *s = NULL;
-    acapmbox_data_t mboxdata;
     char *acl = NULL;
 
     if (partition) {
@@ -3410,7 +3427,8 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	if (!s) r = IMAP_SERVER_UNAVAILABLE;
     }
     if (!r) {
-	if (!CAPA(s, ACAP)) {
+	if (!CAPA(s, MUPDATE)) {
+#if 0
 	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
 	    
 	    /* reserve new mailbox */
@@ -3420,6 +3438,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 		syslog(LOG_ERR, "ACAP: unable to reserve %s: %s\n",
 		       newmailboxname, error_message(r));
 	    }
+#endif
 	}
 
 	prot_printf(s->out, "%s RENAME {%d+}\r\n%s {%d+}\r\n%s\r\n", 
@@ -3428,7 +3447,8 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	res = pipe_including_tag(s, tag);
 	tag = "*";		/* can't send another tagged response */
 	
-	if (!CAPA(s, ACAP)) {
+	if (!CAPA(s, MUPDATE)) {
+#if 0
 	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
 	    
 	    switch (res) {
@@ -3458,8 +3478,10 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 		}
 		break;
 	    }
+#endif
 	}
-	if (res == PROXY_OK) acapmbox_kick_target();
+	/* xxx */
+	if (res == PROXY_OK) kick_mupdate();
     }
 
     if (r) prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
@@ -3849,7 +3871,8 @@ void cmd_setacl(char *tag, char *name, char *identifier, char *rights)
 	}	    
 	res = pipe_including_tag(s, tag);
 	tag = "*";		/* can't send another tagged response */
-	if (!CAPA(s, ACAP) && res == PROXY_OK) {
+	if (!CAPA(s, MUPDATE) && res == PROXY_OK) {
+#if 0
 	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
 	    int mode;
 	    
@@ -3880,8 +3903,10 @@ void cmd_setacl(char *tag, char *name, char *identifier, char *rights)
 		syslog(LOG_ERR, "ACAP: unable to change ACL on %s: %s\n", 
 		       mailboxname, error_message(r));
 	    }
+#endif
 	}
-	if (res == PROXY_OK) acapmbox_kick_target();
+	/* xxx */
+	if (res == PROXY_OK) kick_mupdate();
     }
 
     if (r) prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
