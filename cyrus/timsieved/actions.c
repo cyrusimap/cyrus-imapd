@@ -1,6 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.30.4.7 2003/03/06 01:17:52 ken3 Exp $
+ * $Id: actions.c,v 1.30.4.8 2003/03/06 01:38:40 ken3 Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -322,9 +322,6 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data,
       snprintf(path, 1023, "%s.script.NEW", string_DATAPTR(name));
 
       stream = fopen(path, "w+");
-      if (stream == NULL && errno == ENOENT) {
-	  if (cyrus_mkdir(path, 0755) == 0) stream = fopen(path, "w+");
-      }
   }
 
 
