@@ -1,8 +1,85 @@
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
-<!-- Changed by: John Gardiner Myers, 20-Nov-1995 -->
+<!-- Changed by: John Gardiner Myers, 16-May-1996 -->
 </HEAD><BODY>
 <H1>                   Changes to the Cyrus IMAP Server</H1>
+
+<h2>Changes to the Cyrus IMAP Server Since Version 1.4</h2>
+
+<ul>
+
+<LI> Implemented the <TT>IMAP4rev1</TT>" protocol commands.  Changes
+the minor version number of the cyrus mailbox database format to 1.
+<B>IMPORTANT:</B> it is necessary to run the command "<TT>reconstruct
+-r</TT>" as the cyrus user after upgrading the Cyrus IMAP software
+from version 1.4 or earlier.
+
+<LI> Permit SPACE in mailbox names.
+
+<LI> AUTHENTICATE command now reports the protection mechanism in use
+in the text of the tagged OK response
+
+<LI> Make MAILBOX_BADFORMAT and MAILBOX_NOTSUPPORTED temporary errors.
+
+<LI> Use the header cache for SEARCH HEADER
+
+<LI> Use "unspecified-domain" instead of server's hostname to fill out
+RFC 822 addresses without the "@domain" part.
+
+<LI> Make "reconstruct -r" with no args reconstruct every mailbox.
+
+<LI> Bug fix: un-fold header lines when parsing for the ENVELOPE.
+
+<LI> Delete quota roots when deleting the last mailbox that uses them.
+Doesn't catch all cases, but should get over 99% of them.
+
+<LI> Implement plaintextloginpause configuration option, imposes
+artificial delay on plaintext password logins.
+
+<LI> Implement popminpoll configuration option, limits frequency of
+POP3 logins.
+
+<LI> Implement AFS PT server group support.
+
+<LI> Remove persistence of POP3 LAST value and remove Status: hack
+
+<LI> Support the new ACL command set in the IMAP server.
+
+<LI> Bug fix: Have to initialize reply to 0 in pop3d.  Was causing
+POP3 server to occasionally drop the connection during authentication.
+
+<LI> Bug fix: permit empty flag list in APPEND command
+
+<LI> Bug fix: deal with truncated Date: header values.
+
+<LI> Bug fix: memory mapping code, deal better with 0-length maps, since
+mmap() appears to crap out on that boundary condition.
+
+<LI> Portability fix: if no strerror, have to define NEED_SYS_ERRLIST.
+
+<LI> Bug fix: used append instead of lappend in cyradmin, preventing
+use of any port other than IMAP.
+
+<LI> In deliver, change the MULT support to instead use the MRSMTP syntax.
+
+<LI> Implement some experimental protocol extensions for optimizing
+disconnected use resynchronization.  Most extensions are disabled by
+default.  Client authors should contact info-cyrus@andrew.cmu.edu if
+they wish to experiment with these.
+
+<LI> In Makefiles, change $(AR) to ar -- HPUX make is defective.
+
+<LI> In deliver, use HAVE_LIBDB to select use of db over dbm
+
+<LI> Add map_stupidshared mapping module for Digital Unix.  It's not
+quite as bad as HPUX, but...
+
+<LI> Bug fix: in imclient.c, don't free NULL pointers
+
+<LI> Solaris mktime() is buggy in some releases.  Create and use
+mkgmtime() for parsing date strings.
+
+</ul>
 
 <h2>Changes to the Cyrus IMAP Server Since Version 1.3</h2>
 
