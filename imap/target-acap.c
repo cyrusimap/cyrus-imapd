@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: target-acap.c,v 1.16 2000/05/23 21:30:47 leg Exp $
+ * $Id: target-acap.c,v 1.17 2000/06/04 22:48:05 leg Exp $
  */
 
 #include <config.h>
@@ -152,7 +152,7 @@ void connect_acap(const char *server)
     }
 
     snprintf(acapurl, sizeof(acapurl), "acap://%s@%s/", user, server);
-    r = acap_conn_connect(acapurl, &acap_conn);
+    r = acap_conn_connect(acapurl, NULL, &acap_conn);
     if (r != ACAP_OK) {
 	syslog(LOG_ERR, "couldn't connect to ACAP server: %s",
 	       error_message(r));
