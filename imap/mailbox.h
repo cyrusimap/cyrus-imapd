@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- $Id: mailbox.h,v 1.61 2001/03/14 22:38:40 leg Exp $
+ $Id: mailbox.h,v 1.62 2001/05/29 19:24:01 leg Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -114,6 +114,7 @@ struct mailbox {
     long header_ino;
     time_t index_mtime;
     long index_ino;
+    off_t index_size;
 
     /* Information in mailbox list */
     char *name;

@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.113 2001/05/01 18:39:12 wcw Exp $
+ $Id: mailbox.c,v 1.114 2001/05/29 19:24:01 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -626,6 +626,7 @@ int mailbox_read_index_header(struct mailbox *mailbox)
     fstat(mailbox->index_fd, &sbuf);
     mailbox->index_ino = sbuf.st_ino;
     mailbox->index_mtime = sbuf.st_mtime;
+    mailbox->index_size = sbuf.st_size;
     map_refresh(mailbox->index_fd, 0, &mailbox->index_base,
 		&mailbox->index_len, sbuf.st_size, "index",
 		mailbox->name);

@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.163 2001/05/02 19:52:45 leg Exp $
+ * $Id: index.c,v 1.164 2001/05/29 19:24:01 leg Exp $
  */
 #include <config.h>
 
@@ -405,7 +405,8 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 	    /* Force a * n EXISTS message */
 	    imapd_exists = -1;
 	}
-	else if (sbuf.st_mtime != mailbox->index_mtime) {
+	else if (sbuf.st_mtime != mailbox->index_mtime
+		 || sbuf.st_size != mailbox->index_size) {
 	    mailbox_read_index_header(mailbox);
 	}
     }
