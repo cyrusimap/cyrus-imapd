@@ -199,8 +199,6 @@ char * read_capability(isieve_t *obj)
       char *attr = string_DATAPTR(state.str);
       char *val = NULL;
 
-      printf("attr = %s\n",attr);
-
       if (yylex(&state,obj->pin)==' ')
       {
 	  if (yylex(&state,obj->pin)!=STRING)
