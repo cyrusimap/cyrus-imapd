@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.289 2001/01/02 06:06:50 leg Exp $ */
+/* $Id: imapd.c,v 1.290 2001/01/05 03:22:18 wcw Exp $ */
 
 #include <config.h>
 
@@ -612,8 +612,8 @@ cmdloop()
     }
 
     for (;;) {
-	if (! imapd_userisadmin &&
-	    (fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
+	if ( !imapd_userisadmin && imapd_user 
+	     && (fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
 	    shutdown_file(fd);
 	}
 
@@ -1406,8 +1406,9 @@ char *passwd;
 	snmp_increment_args(AUTHENTICATION_YES, 1,
 			    VARIABLE_AUTH, hash_simple("LOGIN"), 
 			    VARIABLE_LISTEND);
-	syslog(LOG_NOTICE, "login: %s %s plaintext %s", imapd_clienthost,
-	       canon_user, reply ? reply : "");
+	syslog(LOG_NOTICE, "login: %s %s plaintext%s %s", imapd_clienthost,
+	       canon_user, imapd_starttls_done ? "+TLS" : "", 
+	       reply ? reply : "");
 
 	plaintextloginpause = config_getint("plaintextloginpause", 0);
 	if (plaintextloginpause != 0 && !imapd_starttls_done) {
@@ -1559,8 +1560,8 @@ cmd_authenticate(char *tag,char *authtype)
 
     proc_register("imapd", imapd_clienthost, imapd_userid, (char *)0);
 
-    syslog(LOG_NOTICE, "login: %s %s %s %s", imapd_clienthost, imapd_userid,
-	   authtype, "User logged in");
+    syslog(LOG_NOTICE, "login: %s %s %s%s %s", imapd_clienthost, imapd_userid,
+	   authtype, imapd_starttls_done ? "+TLS" : "", "User logged in");
 
     sasl_getprop(imapd_saslconn, SASL_SSF, (void **) &ssfp);
 
@@ -4022,7 +4023,7 @@ int starttls_enabled(void)
     return 1;
 }
 
-/* imaps - weather this is an imaps transaction or not */
+/* imaps - whether this is an imaps transaction or not */
 void cmd_starttls(char *tag, int imaps)
 {
     int result;
