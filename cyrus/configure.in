@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.167 2000/05/04 03:29:09 leg Exp $
+dnl $Id: configure.in,v 1.168 2000/05/05 19:58:49 leg Exp $
 dnl
 
 
@@ -104,12 +104,23 @@ if test "$sievedir" != "no"; then
 	EXTRA_OUTPUT="${EXTRA_OUTPUT} $sievedir/Makefile"
 fi
 
+AC_ARG_WITH(perl,       [  --with-perl=PERL           use PERL for perl],
+	with_perl="$withval", with_perl="perl5")
+if test "${with_perl}" != no; then
+    AC_CHECK_PROGS(PERL, ${with_perl} perl, with_perl=no)
+fi
+if test "$with_perl" = "no"; then
+    AC_MSG_WARN(No Perl found: administrative tools won't be available)
+else
+    PERL_SUBDIRS="imap"
+fi
+
 dnl for timsieved
 if test "$sievedir" != "no"; then
 	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} timsieved"
 	EXTRA_OUTPUT="${EXTRA_OUTPUT} timsieved/Makefile"
 
-	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} perl/sieve/ perl/sieve/lib"
+	PERL_SUBDIRS="${PERL_SUBDIRS} sieve"
 	EXTRA_OUTPUT="${EXTRA_OUTPUT} perl/sieve/Makefile perl/sieve/lib/Makefile"
 fi
 
@@ -736,9 +747,6 @@ fi
 
 AC_SUBST(SNMP_SUBDIRS)
 
-
-
-
 CMU_SOCKETS
 LIBS="$LIBS ${LIB_SOCKET}"
 
@@ -771,49 +779,6 @@ for flag in ${ldflags} ${default_ldflags}; do
       fi
   esac
 done
-#echo "debug libpath: << $libpath >>"
-
-#echo "debug libraries: $libraries"
-
-for lib in $libraries ; do
-  # aieeeee
-  libmatches=`echo ${lib} | sed -e 's:^-l.*$:/:'`
-  libfilename=`echo ${lib}.a | sed -e 's/^-l/lib/'`
-
-  #echo -n "debug looking at $lib ($libmatches) ($libfilename)..."
-
-  if test "$libmatches" = "/" ; then
-    #echo "searching [$libpath]"
-    found=""
-    for libdir in $libpath ; do
-      if test -z "$found"; then
-        # See if a static version of the library exists.
-	#echo -n "checking for ${libdir}/${libfilename}... "
-        if test -f ${libdir}/${libfilename}; then
- 	  #echo "yes"
-	  found="${libdir}/${libfilename}"
-        else
-	  #echo "no"
-	  true
-        fi
-      fi
-    done
-  else 
-    found="$lib"
-  fi
-      
-  # Sanity check this library: XXX
-
-  if test "${found}" != "" ; then
-    lib="$found"
-  fi
-  
-  outlibs="${outlibs} ${lib}"
-
-done
-
-# canonicalize excess whitespace: all spaces/tabs become one single space
-outlibs=`echo $outlibs | sed -e 's/[ 	][ 	]*/ /g'`
 
 IMAP_COM_ERR_LIBS="${COM_ERR_LIBS}"
 IMAP_LIBS="${LIB_SASL} ${LIBS}"
@@ -821,9 +786,14 @@ IMAP_LIBS="${LIB_SASL} ${LIBS}"
 AC_SUBST(IMAP_COM_ERR_LIBS)
 AC_SUBST(IMAP_LIBS)
 
+AC_OUTPUT_COMMANDS([
+  if test "$with_perl" != "no"; then
+    (cd perl/sieve/acap; $perl Makefile.PL)
+    (cd perl/sieve/managesieve; $perl Makefile.PL)
+    (cd perl/imap; $perl Makefile.PL)
+  fi
+], perl=$PERL; with_perl=$with_perl)
+AC_SUBST(PERL_SUBDIRS)
 
-AC_OUTPUT_COMMANDS([cd perl/sieve/acap; perl Makefile.PL; cd ../../../])
-AC_OUTPUT_COMMANDS([cd perl/sieve/managesieve; perl Makefile.PL; cd ../../../])
-AC_OUTPUT_COMMANDS([cd perl/imap; perl Makefile.PL; cd ../../])
-
+dnl make sure that Makefile is the last thing output
 AC_OUTPUT(man/Makefile master/Makefile lib/Makefile acap/Makefile imap/Makefile imap/feedcyrus imtest/Makefile netnews/Makefile snmp/Makefile perl/Makefile $EXTRA_OUTPUT Makefile)

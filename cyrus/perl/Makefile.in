@@ -1,5 +1,5 @@
 # SIEVE Makefile for cyrus software
-# $Id: Makefile.in,v 1.2 2000/05/03 22:19:10 leg Exp $
+# $Id: Makefile.in,v 1.3 2000/05/05 19:58:50 leg Exp $
 #
 # @configure_input@
 # Copyright 1998 Carnegie Mellon University
@@ -27,9 +27,8 @@
 #  tech-transfer@andrew.cmu.edu
 # 
 
-SUBDIRS = imap sieve
+SUBDIRS = @PERL_SUBDIRS@
 
-#perl is stupid. see comment in sieve/Makefile.in
 DEPSUBDIRS = sieve
 
 srcdir = @srcdir@
