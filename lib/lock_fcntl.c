@@ -1,5 +1,5 @@
 /* lock_fcntl.c -- Lock files using fcntl()
- $Id: lock_fcntl.c,v 1.11 2000/05/23 20:56:17 robeson Exp $
+ $Id: lock_fcntl.c,v 1.12 2000/06/27 21:47:53 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -192,8 +192,7 @@ int fd;
 /*
  * Release any lock on 'fd'.  Always returns success.
  */
-lock_unlock(fd)
-int fd;
+int lock_unlock(int fd)
 { 
     struct flock fl;
 

@@ -39,7 +39,7 @@
  *
  * derived from chris newman's code */
 
-/* $Id: imapurl.c,v 1.3 2000/05/23 20:56:15 robeson Exp $ */
+/* $Id: imapurl.c,v 1.4 2000/06/27 21:47:59 leg Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -177,7 +177,7 @@ static void URLtoMailbox(char *dst, char *src)
     memset(hextab, 0, sizeof (hextab));
     for (i = 0; i < sizeof (hex); ++i) {
         hextab[(int) hex[i]] = i;
-        if (isupper(hex[i])) hextab[tolower(hex[i])] = i;
+        if (isupper((int) hex[i])) hextab[tolower(hex[i])] = i;
     }
     
     utf7mode = 0;
