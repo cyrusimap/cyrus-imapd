@@ -41,7 +41,7 @@
  * Author: Chris Newman
  * Start Date: 4/6/93
  */
-/* $Id: util.c,v 1.19.6.4 2003/02/05 01:31:10 ken3 Exp $
+/* $Id: util.c,v 1.19.6.5 2003/02/06 21:27:24 ken3 Exp $
  */
 
 #include <config.h>
@@ -271,7 +271,7 @@ int cyrus_close_sock(int fd)
 {
     int r = shutdown(fd, SHUT_RD);
     if(r) {
-	syslog(LOG_ERR, "Could not shut down filedescriptor %d: %m", fd);
+	syslog(LOG_DEBUG, "Could not shut down filedescriptor %d: %m", fd);
     }
     
     return close(fd);
