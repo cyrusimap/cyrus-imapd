@@ -1,5 +1,5 @@
 # SIEVE Makefile for cyrus software
-# $Id: Makefile.in,v 1.9 2000/12/18 04:53:42 leg Exp $
+# $Id: Makefile.in,v 1.10 2000/12/26 23:07:25 leg Exp $
 #
 # @configure_input@
 # 
@@ -44,6 +44,7 @@
 # 
 
 SUBDIRS = lib acap managesieve
+SCRIPTS = installsieve sieveshell
 
 # Makefile.PL doesn't make a depend rule. just make depend in these dirs
 DEPSUBDIRS = lib
@@ -77,6 +78,10 @@ all::
 	done
 
 install::
+	for s in $(SCRIPTS); \
+	do \
+		$(INSTALL) -m 755 scripts/$$s.pl $(DESTDIR)$(exec_prefix)/bin/$$s ; \
+	done
 #xxx install scripts/*
 	@for d in  $(SUBDIRS); \
 	do \
