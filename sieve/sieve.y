@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.17 2002/03/05 16:15:01 ken3 Exp $
+ * $Id: sieve.y,v 1.18 2002/04/12 16:59:37 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -460,6 +460,7 @@ comptag: IS			 { $$ = IS; }
 
 sizetag: OVER			 { $$ = OVER; }
 	| UNDER			 { $$ = UNDER; }
+	;
 
 testlist: '(' tests ')'		 { $$ = $2; }
 	;
