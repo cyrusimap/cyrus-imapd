@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.64 2003/02/06 22:40:52 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.65 2003/02/10 20:04:24 ken3 Exp $ */
 
 #include <config.h>
 
@@ -2017,7 +2017,7 @@ void cmd_idle(char *tag)
     }
 
     /* Tell client we are idling and waiting for end of command */
-    prot_printf(imapd_out, "+ go ahead\r\n");
+    prot_printf(imapd_out, "+ idling\r\n");
     prot_flush(imapd_out);
 
     /* Get continuation data */
