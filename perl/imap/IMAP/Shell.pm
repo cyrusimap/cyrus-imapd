@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Shell.pm,v 1.21 2002/09/19 17:18:28 rjs3 Exp $
+# $Id: Shell.pm,v 1.22 2002/10/10 17:03:38 rjs3 Exp $
 #
 # A shell framework for IMAP::Cyrus::Admin
 #
@@ -192,7 +192,7 @@ sub _nexttoken {
   # characters (in this case, /&<>;/) and break "words" there.
   while ($$lr ne '' && ($quoted || $$lr !~ /^\s/)) {
     $tok[1] ||= 0;
-    if ($$lr =~ /^([&<>;])/) {
+    if ($q eq '' && $$lr =~ /^([&<>;])/) {
       last if $tok[0] ne '';
       $tok[0] = $1;
       $coll_command .= $1;
