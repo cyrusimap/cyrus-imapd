@@ -1,0 +1,54 @@
+/* config.h -- Configuration routines
+ $Id: config.h,v 1.1 1999/09/13 00:07:41 tmartin Exp $
+ 
+ # Copyright 1998 Carnegie Mellon University
+ # 
+ # No warranties, either expressed or implied, are made regarding the
+ # operation, use, or results of the software.
+ #
+ # Permission to use, copy, modify and distribute this software and its
+ # documentation is hereby granted for non-commercial purposes only
+ # provided that this copyright notice appears in all copies and in
+ # supporting documentation.
+ #
+ # Permission is also granted to Internet Service Providers and others
+ # entities to use the software for internal purposes.
+ #
+ # The distribution, modification or sale of a product which uses or is
+ # based on the software, in whole or in part, for commercial purposes or
+ # benefits requires specific, additional permission from:
+ #
+ #  Office of Technology Transfer
+ #  Carnegie Mellon University
+ #  5000 Forbes Avenue
+ #  Pittsburgh, PA  15213-3890
+ #  (412) 268-4387, fax: (412) 268-7395
+ #  tech-transfer@andrew.cmu.edu
+ *
+ */
+
+#ifndef INCLUDED_CONFIG_H
+#define INCLUDED_CONFIG_H
+
+#ifndef P
+#ifdef __STDC__
+#define P(x) x
+#else
+#define P(x) ()
+#endif
+#endif
+
+extern int config_init P((const char *ident));
+extern const char *config_getstring P((const char *key, const char *def));
+extern int config_getint P((const char *key, int def));
+extern int config_getswitch P((const char *key, int def));
+extern const char *config_partitiondir P((const char *partition));
+
+/* Values of mandatory options */
+extern const char *config_dir;
+extern const char *config_defpartition;
+extern const char *config_newsspool;
+
+extern int config_hashimapspool;
+
+#endif /* INCLUDED_CONFIG_H */

@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.31 1999/08/17 22:21:16 leg Exp $
+ * $Id: imtest.c,v 1.32 1999/09/13 00:07:34 tmartin Exp $
  *
  * Copyright 1999 Carnegie Mellon University
  * 
@@ -363,6 +363,9 @@ int auth_sasl(char *mechlist)
       if (saslresult==SASL_INTERACT)
 	fillin_interactions(client_interact); /* fill in prompts */      	
     }
+
+    /* check if sasl suceeded */
+    if (saslresult!=SASL_OK) return saslresult;
 
 
 
@@ -777,7 +780,7 @@ int main(int argc, char **argv)
       prot_setsasl(pin,  conn);
       prot_setsasl(pout, conn);
   } else {
-      printf("Authentication failed.\n");
+      printf("Authentication failed. (Code = %i)\n",result);
   }
 
   result = sasl_getprop(conn, SASL_SSF, (void **)&ssfp);
