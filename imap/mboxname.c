@@ -199,7 +199,7 @@ char *name;
 		    return IMAP_MAILBOX_BADNAME;
 		}
 		ucs4 = (c1 << 10) | (c2 << 4) | (c3 >> 2);
-		if ((ucs4 & 0xff00) == 0 || (ucs4 & 0xf800) == 0xd800) {
+		if ((ucs4 & 0xff80) == 0 || (ucs4 & 0xf800) == 0xd800) {
 		    /* US-ASCII or multi-word character */
 		    return IMAP_MAILBOX_BADNAME;
 		}
