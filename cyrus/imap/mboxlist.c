@@ -668,7 +668,7 @@ struct auth_state *auth_state;
 	else {
 	    /* Even admins can't rename users */
 	    mboxlist_unlock();
-	    return IMAP_PERMISSION_DENIED;
+	    return IMAP_MAILBOX_NOTSUPPORTED;
 	}
     }
     else {
