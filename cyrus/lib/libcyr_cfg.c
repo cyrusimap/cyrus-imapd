@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: libcyr_cfg.c,v 1.7 2004/02/25 16:05:05 rjs3 Exp $
+ * $Id: libcyr_cfg.c,v 1.8 2004/02/26 18:03:07 ken3 Exp $
  */
 
 #include <config.h>
@@ -103,8 +103,12 @@ struct cyrusopt_s cyrus_options[] = {
       CYRUS_OPT_STRING },
 
     { CYRUSOPT_VIRTDOMAINS,
-      CFGVAL(int,0),
+      CFGVAL(int, 0),
       CYRUS_OPT_SWITCH },
+
+    { CYRUSOPT_BERKELEY_CACHESIZE,
+      CFGVAL(int, 512 * 1024), /* 512KB */
+      CYRUS_OPT_INT },
 
     { CYRUSOPT_LAST, { NULL }, CYRUS_OPT_NOTOPT }
 };
