@@ -1,5 +1,5 @@
 # SIEVE Makefile for cyrus software
-# $Id: Makefile.in,v 1.13.4.2 2002/12/05 19:15:51 rjs3 Exp $
+# $Id: Makefile.in,v 1.13.4.3 2003/02/11 16:27:45 rjs3 Exp $
 #
 # @configure_input@
 # 
@@ -41,7 +41,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.in,v 1.13.4.2 2002/12/05 19:15:51 rjs3 Exp $
+# $Id: Makefile.in,v 1.13.4.3 2003/02/11 16:27:45 rjs3 Exp $
 # 
 
 SUBDIRS = lib managesieve
@@ -70,6 +70,8 @@ OPENSSL_INC=@OPENSSL_INC@
 BDB_LIB=@BDB_LIB@
 BDB_INC=@BDB_INC@
 
+LIB_RT=@LIB_RT@
+
 CC=@CC@
 PERL=@PERL@
 
@@ -78,6 +80,7 @@ all::
 	do \
 		(cd $$d; echo "### Making" all "in" `pwd`;	\
 			if [ -f Makefile.PL ]; then \
+			   LIB_RT="$(LIB_RT)" \
 			   BDB_LIB="$(BDB_LIB)" BDB_INC="$(BDB_INC)" \
 			   OPENSSL_LIB="$(OPENSSL_LIB)" OPENSSL_INC="$(OPENSSL_INC)" \
 			   SASL_LIB="$(SASL_LIB)" SASL_INC="$(SASL_INC)" CC="$(CC)" \

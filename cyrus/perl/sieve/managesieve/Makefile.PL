@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.PL,v 1.9.4.3 2003/02/11 14:17:41 rjs3 Exp $
+# $Id: Makefile.PL,v 1.9.4.4 2003/02/11 16:27:48 rjs3 Exp $
 #
 use ExtUtils::MakeMaker;
 use Config;
@@ -49,6 +49,8 @@ my $OPENSSL_LIB = $ENV{OPENSSL_LIB};
 my $BDB_INC = $ENV{BDB_INC};
 my $BDB_LIB = $ENV{BDB_LIB};
 
+my $LIB_RT = $ENV{LIB_RT};
+
 $libs = "-lcyrus";
 
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
@@ -58,7 +60,7 @@ WriteMakefile(
     'ABSTRACT'  => 'Cyurs Sieve management interface',
     'VERSION_FROM' => 'managesieve.pm', # finds $VERSION
     'MYEXTLIB'  => '../lib/isieve.o ../lib/lex.o ../lib/mystring.o ../lib/request.o ../../../lib/libcyrus.a ../../../lib/libcyrus_min.a',
-    'LIBS'	=> ["$BDB_LIB $SASL_LIB $OPENSSL_LIB -lssl -lcrypto"], 
+    'LIBS'	=> ["$BDB_LIB $SASL_LIB $OPENSSL_LIB $LIB_RT -lssl -lcrypto"], 
     'DEFINE'	=> '-DPERL_POLLUTE',     # e.g., '-DHAVE_SOMETHING' 
     'INC'	=> "-I../lib/ -I../../../lib/ $SASL_INC $OPENSSL_INC",
 );
