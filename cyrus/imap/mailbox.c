@@ -311,18 +311,25 @@ struct mailbox *mailbox;
 
     rewind(mailbox->index);
     n = fread(buf, 1, INDEX_HEADER_SIZE, mailbox->index);
-    if (n != INDEX_HEADER_SIZE) {
+    if (n != INDEX_HEADER_SIZE &&
+	(n < OFFSET_POP3_LAST_UID || n < ntohl(*((bit32 *)(buf+OFFSET_START_OFFSET))))) {
 	return IMAP_MAILBOX_BADFORMAT;
     }
 
-    mailbox->format = ntohl(*((bit32 *)(buf+4)));
-    mailbox->minor_version = ntohl(*((bit32 *)(buf+8)));
-    mailbox->start_offset = ntohl(*((bit32 *)(buf+12)));
-    mailbox->record_size = ntohl(*((bit32 *)(buf+16)));
-    mailbox->exists = ntohl(*((bit32 *)(buf+20)));
-    mailbox->last_appenddate = ntohl(*((bit32 *)(buf+24)));
-    mailbox->last_uid = ntohl(*((bit32 *)(buf+28)));
-    mailbox->quota_mailbox_used = ntohl(*((bit32 *)(buf+32)));
+    mailbox->format = ntohl(*((bit32 *)(buf+OFFSET_FORMAT)));
+    mailbox->minor_version = ntohl(*((bit32 *)(buf+OFFSET_MINOR_VERSION)));
+    mailbox->start_offset = ntohl(*((bit32 *)(buf+OFFSET_START_OFFSET)));
+    mailbox->record_size = ntohl(*((bit32 *)(buf+OFFSET_RECORD_SIZE)));
+    mailbox->exists = ntohl(*((bit32 *)(buf+OFFSET_EXISTS)));
+    mailbox->last_appenddate = ntohl(*((bit32 *)(buf+OFFSET_LAST_APPENDDATE)));
+    mailbox->last_uid = ntohl(*((bit32 *)(buf+OFFSET_LAST_UID)));
+    mailbox->quota_mailbox_used = ntohl(*((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)));
+
+    for (n = mailbox->start_offset; n < INDEX_HEADER_SIZE; n++) {
+	buf[n] = 0;
+    }
+
+    mailbox->pop3_last_uid = ntohl(*((bit32 *)(buf+OFFSET_POP3_LAST_UID)));
 
     return 0;
 }
@@ -726,24 +733,28 @@ mailbox_write_index_header(mailbox)
 struct mailbox *mailbox;
 {
     char buf[INDEX_HEADER_SIZE];
+    int header_size = INDEX_HEADER_SIZE;
     int n;
 
     assert(mailbox->index_lock_count != 0);
 
     rewind(mailbox->index);
     
-    *((bit32 *)buf) = mailbox->generation_no;
-    *((bit32 *)(buf+4)) = htonl(mailbox->format);
-    *((bit32 *)(buf+8)) = htonl(mailbox->minor_version);
-    *((bit32 *)(buf+12)) = htonl(mailbox->start_offset);
-    *((bit32 *)(buf+16)) = htonl(mailbox->record_size);
-    *((bit32 *)(buf+20)) = htonl(mailbox->exists);
-    *((bit32 *)(buf+24)) = htonl(mailbox->last_appenddate);
-    *((bit32 *)(buf+28)) = htonl(mailbox->last_uid);
-    *((bit32 *)(buf+32)) = htonl(mailbox->quota_mailbox_used);
+    *((bit32 *)(buf+OFFSET_GENERATION_NO)) = mailbox->generation_no;
+    *((bit32 *)(buf+OFFSET_FORMAT)) = htonl(mailbox->format);
+    *((bit32 *)(buf+OFFSET_MINOR_VERISION)) = htonl(mailbox->minor_version);
+    *((bit32 *)(buf+OFFSET_START_OFFSET)) = htonl(mailbox->start_offset);
+    *((bit32 *)(buf+OFFSET_RECORD_SIZE)) = htonl(mailbox->record_size);
+    *((bit32 *)(buf+OFFSET_EXISTS)) = htonl(mailbox->exists);
+    *((bit32 *)(buf+OFFSET_LAST_APPENDDATE)) = htonl(mailbox->last_appenddate);
+    *((bit32 *)(buf+OFFSET_LAST_UID)) = htonl(mailbox->last_uid);
+    *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) = htonl(mailbox->quota_mailbox_used);
+    *((bit32 *)(buf+OFFSET_POP3_LAST_UID)) = htonl(mailbox->pop3_last_uid);
 
-    n = fwrite(buf, 1, INDEX_HEADER_SIZE, mailbox->index);
-    if (n != INDEX_HEADER_SIZE) {
+    if (mailbox->start_offset < header_size) header_size = mailbox->start_offset;
+
+    n = fwrite(buf, 1, header_size, mailbox->index);
+    if (n != header_size) {
 	syslog(LOG_ERR, "IOERROR: writing index header for %s: %m",
 	       mailbox->name);
 	return IMAP_IOERROR;
@@ -998,6 +1009,10 @@ char *deciderock;
     }
     (*(bit32 *)buf)++;    /* Increment generation number */
     fwrite(buf, 1, mailbox->start_offset, newindex);
+    /* Grow the index header if necessary */
+    for (n = mailbox->start_offset; n < INDEX_HEADER_SIZE; n++) {
+	putc(0, newindex);
+    }
     fwrite(buf, 1, sizeof(bit32), newcache);
 
     /* Copy over records for nondeleted messages */
@@ -1065,9 +1080,15 @@ char *deciderock;
 	goto fail;
     }
     /* Fix up exists */
-    *((bit32 *)(buf+20)) = htonl(ntohl(*((bit32 *)(buf+20)))-numdeleted);
+    *((bit32 *)(buf+OFFSET_EXISTS)) = htonl(ntohl(*((bit32 *)(buf+20)))-numdeleted);
     /* Fix up quota_mailbox_used */
-    *((bit32 *)(buf+32)) = htonl(ntohl(*((bit32 *)(buf+32)))-quotadeleted);
+    *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) =
+      htonl(ntohl(*((bit32 *)(buf+32)))-quotadeleted);
+    /* Fix up start offset if necessary */
+    if (mailbox->start_offset < INDEX_HEADER_SIZE) {
+	*((bit32 *)(buf+OFFSET_START_OFFSET)) = htonl(ntohl(INDEX_HEADER_SIZE));
+    }
+	
     rewind(newindex);
     fwrite(buf, 1, mailbox->start_offset, newindex);
     
@@ -1235,6 +1256,7 @@ struct mailbox *mailboxp;
     mailbox.last_appenddate = 0;
     mailbox.last_uid = 0;
     mailbox.quota_mailbox_used = 0;
+    mailbox.pop3_last_uid = 0;
 
     r = mailbox_write_header(&mailbox);
     if (!r) r = mailbox_write_index_header(&mailbox);
