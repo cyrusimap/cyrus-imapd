@@ -76,6 +76,8 @@ static int nconfiglist;
 
 
 /* variables accessible to the external world */
+const char *config_filename;     /* filename of configuration file */
+
 const char *config_dir;		 /* ie /var/imap */
 const char *config_defpartition; /* /var/spool/imap */
 const char *config_newsspool;	 /* /var/spool/news */
@@ -209,6 +211,9 @@ static void config_read(const char *alt_config)
     int alloced = 0;
     char buf[4096];
     char *p, *q, *key;
+
+    if(alt_config) config_filename = xstrdup(alt_config);
+    else config_filename = xstrdup(CONFIG_FILENAME);
 
     infile = fopen(alt_config ? alt_config : CONFIG_FILENAME, "r");
     if (!infile) {

@@ -1,5 +1,5 @@
 /* seen.h -- abstract interface for /Recent and /Seen information
-   $Id: seen.h,v 1.6 2002/01/25 19:26:55 leg Exp $
+   $Id: seen.h,v 1.7 2002/02/20 19:29:06 rjs3 Exp $
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -44,7 +44,9 @@
 #ifndef SEEN_H
 #define SEEN_H
 
+#ifndef CONFIG_DB_SEEN
 #define CONFIG_DB_SEEN (&cyrusdb_flat)
+#endif
 
 struct seen;
 

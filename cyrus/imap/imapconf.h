@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- * $Id: imapconf.h,v 1.11 2001/12/09 16:52:57 rjs3 Exp $
+ * $Id: imapconf.h,v 1.12 2002/02/20 19:29:05 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -90,6 +90,8 @@ extern int authisa(struct auth_state *authstate,
 		   const char *service, const char *class);
 
 /* Values of mandatory options */
+extern const char *config_filename;
+
 extern const char *config_dir;
 extern const char *config_defpartition;
 extern const char *config_newsspool;
