@@ -43,8 +43,8 @@ YACC = @YACC@
 
 DEFS = @DEFS@
 CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@ 
-LIBS = ../et/libcom_err.a ../lib/libcyrus.a @LIBS@ 
-NODEP_LIBS = @NODEP_LIBS@
+LIBS = @LIBS@ 
+DEPLIBS = ../et/libcom_err.a ../lib/libcyrus.a @DEPLIBS@
 
 CFLAGS = -g
 LDFLAGS = -g
@@ -68,33 +68,33 @@ all: $(PROGS)
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
 
-collectnews: collectnews.o libimap.a $(LIBS)
+collectnews: collectnews.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o collectnews collectnews.o libimap.a \
-		$(LIBS) $(NODEP_LIBS)
+		$(DEPLIBS) $(LIBS)
 
-rmnews: rmnews.o libimap.a $(LIBS)
+rmnews: rmnews.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o rmnews rmnews.o libimap.a \
-		$(LIBS) $(NODEP_LIBS)
+		$(DEPLIBS) $(LIBS)
 
-deliver: deliver.o libimap.a $(LIBS)
+deliver: deliver.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o deliver deliver.o libimap.a \
-		$(LIBS) $(NODEP_LIBS) -ldbm
+		$(DEPLIBS) $(LIBS) -ldbm
 
-imapd: $(IMAPDOBJS) libimap.a $(LIBS)
+imapd: $(IMAPDOBJS) libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o imapd $(IMAPDOBJS) libimap.a \
-		$(LIBS) $(NODEP_LIBS)
+		$(DEPLIBS) $(LIBS)
 
-pop3d: pop3d.o libimap.a $(LIBS)
+pop3d: pop3d.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o pop3d pop3d.o libimap.a \
-		$(LIBS) $(NODEP_LIBS)
+		$(DEPLIBS) $(LIBS)
 
-reconstruct: reconstruct.o libimap.a $(LIBS)
+reconstruct: reconstruct.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o reconstruct reconstruct.o libimap.a \
-		$(LIBS) $(NODEP_LIBS)
+		$(DEPLIBS) $(LIBS)
 
-quota: quota.o libimap.a $(LIBS)
+quota: quota.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o quota quota.o libimap.a \
-		$(LIBS) $(NODEP_LIBS)
+		$(DEPLIBS) $(LIBS)
 
 libimap.a: $(LOBJS)
 	ar cr libimap.a $(LOBJS)
