@@ -12,6 +12,7 @@
 #include <com_err.h>
 
 #include <acl.h>
+#include <glob.h>
 #include "assert.h"
 #include "imap_err.h"
 #include "mailbox.h"
@@ -636,6 +637,9 @@ struct searchargs *searchargs;
     int seen_matters = (searchargs->seen_state != SEARCH_DONTCARE);
     int seenstate = (searchargs->seen_state == SEARCH_SET);
     int i;
+    struct strlist *l;
+    char *cacheitem;
+    int cachelen;
 
     if (searchargs->recent_state == SEARCH_SET) {
 	start = lastnotrecent+1;
@@ -664,6 +668,90 @@ struct searchargs *searchargs;
 	      break;
 	}
 	if (i != MAX_USER_FLAGS/32) continue;
+
+	if (searchargs->from || searchargs->to ||
+	    searchargs->cc || searchargs->bcc) {
+	    cacheitem = cache_base + CACHE_OFFSET(msgno);
+	    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip envelope */
+	    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bodystructure */
+	    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body */
+	    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip section */
+	    cachelen = CACHE_ITEM_LEN(cacheitem);
+	    
+	    for (l = searchargs->from; l; l = l->next) {
+		if (!l->glob) l->glob = glob_init(l->s, GLOB_ICASE|GLOB_SUBSTRING);
+		if (!glob_test(l->glob, cacheitem+4, cachelen)) break;
+	    }
+	    if (l) continue;
+
+	    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip from */
+	    cachelen = CACHE_ITEM_LEN(cacheitem);
+
+	    for (l = searchargs->to; l; l = l->next) {
+		if (!l->glob) l->glob = glob_init(l->s, GLOB_ICASE|GLOB_SUBSTRING);
+		if (!glob_test(l->glob, cacheitem+4, cachelen)) break;
+	    }
+	    if (l) continue;
+
+	    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip to */
+	    cachelen = CACHE_ITEM_LEN(cacheitem);
+
+	    for (l = searchargs->cc; l; l = l->next) {
+		if (!l->glob) l->glob = glob_init(l->s, GLOB_ICASE|GLOB_SUBSTRING);
+		if (!glob_test(l->glob, cacheitem+4, cachelen)) break;
+	    }
+	    if (l) continue;
+
+	    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip cc */
+	    cachelen = CACHE_ITEM_LEN(cacheitem);
+
+	    for (l = searchargs->bcc; l; l = l->next) {
+		if (!l->glob) l->glob = glob_init(l->s, GLOB_ICASE|GLOB_SUBSTRING);
+		if (!glob_test(l->glob, cacheitem+4, cachelen)) break;
+	    }
+	    if (l) continue;
+	}
+	if (searchargs->subject) {
+	    cacheitem = cache_base + CACHE_OFFSET(msgno) + 5;
+
+	    /* Skip over date */
+	    if (*cacheitem == '\"') {
+		cacheitem = strchr(cacheitem+1, '\"') + 2;
+	    }
+	    else if (*cacheitem == 'N') {
+		cacheitem += 4;
+	    }
+	    else {
+		cacheitem++;
+		cachelen = 0;
+		while (isdigit(*cacheitem)) {
+		    cachelen = cachelen*10 + *cacheitem++ - '0';
+		}
+		cacheitem += cachelen + 4;
+	    }
+	    
+	    if (*cacheitem == '\"') {
+		cacheitem++;
+		cachelen = strchr(cacheitem+1, '\"') - cacheitem;
+	    }
+	    else if (*cacheitem == 'N') {
+		cachelen = 0;
+	    }
+	    else {
+		cacheitem++;
+		cachelen = 0;
+		while (isdigit(*cacheitem)) {
+		    cachelen = cachelen*10 + *cacheitem++ - '0';
+		}
+		cacheitem += 3;
+	    }
+
+	    for (l = searchargs->subject; l; l = l->next) {
+		if (!l->glob) l->glob = glob_init(l->s, GLOB_ICASE|GLOB_SUBSTRING);
+		if (!glob_test(l->glob, cacheitem, cachelen)) break;
+	    }
+	    if (l) continue;
+	}
 
 	printf(" %d", msgno);
     }

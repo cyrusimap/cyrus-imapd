@@ -978,6 +978,7 @@ FILE *outfile;
 struct body *body;
 {
     struct ibuf section, envelope, bodystructure, oldbody;
+    struct ibuf from, to, cc, bcc;
     struct body toplevel;
 
     toplevel.type = "MESSAGE";
@@ -996,15 +997,36 @@ struct body *body;
     message_ibuf_init(&section);
     message_write_section(&section, &toplevel);
 
+    message_ibuf_init(&from);
+    message_write_searchaddr(&from, body->from);
+
+    message_ibuf_init(&to);
+    message_write_searchaddr(&to, body->to);
+
+    message_ibuf_init(&cc);
+    message_write_searchaddr(&cc, body->cc);
+
+    message_ibuf_init(&bcc);
+    message_write_searchaddr(&bcc, body->bcc);
+
+
     message_ibuf_write(outfile, &envelope);
     message_ibuf_write(outfile, &bodystructure);
     message_ibuf_write(outfile, &oldbody);
     message_ibuf_write(outfile, &section);
+    message_ibuf_write(outfile, &from);
+    message_ibuf_write(outfile, &to);
+    message_ibuf_write(outfile, &cc);
+    message_ibuf_write(outfile, &bcc);
 
     message_ibuf_free(&envelope);
     message_ibuf_free(&bodystructure);
     message_ibuf_free(&oldbody);
     message_ibuf_free(&section);
+    message_ibuf_free(&from);
+    message_ibuf_free(&to);
+    message_ibuf_free(&cc);
+    message_ibuf_free(&bcc);
 }
 
 /* Append character 'c' to 'ibuf' */
@@ -1157,7 +1179,7 @@ PARSED_ADDRESS *addrlist;
 }
 
 /*
- * Write the single addres 'addr' to 'ibuf'.
+ * Write the single address 'addr' to 'ibuf'.
  */
 static message_write_singleaddress(ibuf, addr)
 struct ibuf *ibuf;
@@ -1276,6 +1298,19 @@ char *s;
 	for (p = s; *p; p++) *(ibuf->end)++ = *p;
 	*(ibuf->end)++ = '\"';
     }
+}
+
+/*
+ * Write the text 's' to 'ibuf'
+ */
+static message_write_text(ibuf, s)
+struct ibuf *ibuf;
+char *s;
+{
+    char *p;
+
+    message_ibuf_ensure(ibuf, strlen(s));
+    for (p = s; *p; p++) *(ibuf->end)++ = *p;
 }
 
 /*
@@ -1404,6 +1439,94 @@ int val;
     for (i=0; i < sizeof(bit32); i++) {
 	*(ibuf->end)++ = *p++;
     }
+}
+
+/*
+ * Unparse the address list 'addrlist' to 'ibuf'
+ */
+static message_write_searchaddr(ibuf, addrlist)
+struct ibuf *ibuf;
+PARSED_ADDRESS *addrlist;
+{
+    if (!addrlist) return;
+    
+    FOR_ALL_ADDRESSES(thisaddr, addrlist,
+		      message_write_singlesearchaddr(ibuf, thisaddr,
+				     thisaddr->Next->Kind == DUMMY_ADDRESS););
+}
+
+/*
+ * Unparse the single addres 'addr' to 'ibuf'.
+ */
+static message_write_singlesearchaddr(ibuf, addr, last)
+struct ibuf *ibuf;
+PARSED_ADDRESS *addr;
+int last;
+{
+    int nhosts=0, adllen=0;
+    char *name = 0, *adl = 0;
+    static char myhostname[128];
+
+    /* Recursively handle RFC-822 group addresses */
+    if (addr->Kind == GROUP_ADDRESS) {
+	message_write_text(ibuf, addr->LocalPart);
+	PUTIBUF(ibuf, ':');
+	
+	FOR_ALL_GROUP_MEMBERS(thisaddr, addr,
+			      message_write_singlesearchaddr(ibuf, thisaddr,
+				     thisaddr->Next->Kind == DUMMY_ADDRESS););
+	PUTIBUF(ibuf, ';');
+	if (!last) PUTIBUF(ibuf, ',');
+	return;
+    }
+    
+    /* If no route phrase, use first RFC-822 comment (without parens) */
+    name = addr->RoutePhrase;
+    if (!name && addr->Comments) {
+	name = addr->Comments->Text+1;
+	name[strlen(name)-1] = '\0';
+    }
+	
+    /* Fid out my hostname if necessary */
+    if (!addr->Hosts->Next->Name && !myhostname[0]) {
+	gethostname(myhostname, sizeof(myhostname)-1);
+    }
+
+    /* Count number of hosts and build any necessary at-domain-list */
+    FOR_ALL_REVERSE_HOSTS(h, addr, { nhosts++; adllen += 2+strlen(h->Name);});
+    if (nhosts > 1) {
+	adl = xmalloc(adllen);
+	*adl = '\0';
+	FOR_ALL_REVERSE_HOSTS(h, addr, {
+	      if (--nhosts) {
+		  if (*adl) strcat(adl, ",");
+		  strcat(adl, "@");
+		  strcat(adl, h->Name); }});
+	nhosts = 1;
+    }
+
+    if (name) {
+	message_write_text(ibuf, name);
+	PUTIBUF(ibuf, ' ');
+    }
+    PUTIBUF(ibuf, '<');
+    if (adl) {
+	message_write_text(ibuf, adl);
+	PUTIBUF(ibuf, ':');
+    }
+    message_write_text(ibuf, addr->LocalPart);
+    PUTIBUF(ibuf, '@');
+    message_write_text(ibuf, nhosts ? addr->Hosts->Next->Name : myhostname);
+    PUTIBUF(ibuf, '>');
+    if (!last) PUTIBUF(ibuf, ',');
+
+
+    /* If we used a comment for a name, put back the close parenthesis */
+    if (!addr->RoutePhrase && addr->Comments) {
+	name[strlen(name)] = ')';
+    }
+
+    if (adl) free(adl);
 }
 
 /*
