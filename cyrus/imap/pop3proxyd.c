@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.17 2001/06/01 02:59:03 ken3 Exp $
+ * $Id: pop3proxyd.c,v 1.18 2001/08/02 17:16:22 ken3 Exp $
  */
 #include <config.h>
 
@@ -119,7 +119,7 @@ sasl_conn_t *backend_saslconn;
 
 static void cmd_apop(char *user, char *digest);
 static int apop_enabled(void);
-static char popd_apop_chal[300]; /* timestamp (44) + config_servername (256) */
+static char popd_apop_chal[45 + MAXHOSTNAMELEN + 1]; /* <rand.time@hostname> */
 
 static void cmd_auth();
 static void cmd_capa();
@@ -264,6 +264,12 @@ int service_main(int argc, char **argv, char **envp)
     /* we were connected on pop3s port so we should do 
        TLS negotiation immediatly */
     if (pop3s == 1) cmd_starttls(1);
+
+    /* Create APOP challenge for banner */
+    if (!sasl_mkchal(popd_saslconn, popd_apop_chal, sizeof(popd_apop_chal), 1)) {
+	syslog(LOG_ERROR, "APOP disabled: can't create challenge");
+	*popd_apop_chal = 0;
+    }
 
     prot_printf(popd_out, "+OK %s Cyrus POP3 Murder %s server ready\r\n",
 		apop_enabled() ? popd_apop_chal : config_servername,
@@ -473,19 +479,25 @@ static void cmdloop(void)
 	    else cmd_pass(arg);
 	}
 	else if (!strcmp(inputbuf, "apop") && apop_enabled()) {
-	    char *user, *digest;
+	    char *user = NULL, *digest = NULL;
 
-	    /* Parse into user and digest */
-	    if (arg) arg = strchr(user = arg, ' ');
+	    /* Parse out username and digest.
+	     *
+	     * Per RFC 1939, response must be "<user> <digest>", where
+	     * <digest> is a 16-octet value which is sent in hexadecimal
+	     * format, using lower-case ASCII characters.
+	     */
+	    if (arg) {
+		user = arg;
+		arg = strrchr(arg, ' ');
+	    }
 	    if (!arg) prot_printf(popd_out, "-ERR Missing argument\r\n");
+	    else if (strspn(arg + 1, "0123456789abcdef") != 32)
+		prot_printf(popd_out, "-ERR Invalid digest string\r\n");
 	    else {
 		*arg++ = '\0';
 		digest = arg;
-		/* per RFC 1939, digest must be 32 hex digits */
-		while (*arg && isxdigit((int) *arg)) arg++;
-		if ((arg - digest) != 32)
-		    prot_printf(popd_out, "-ERR Invalid digest string\r\n");
-		else cmd_apop(user, digest);
+		cmd_apop(user, digest);
 	    }
 	}
 	else if (!strcmp(inputbuf, "auth")) {
@@ -614,18 +626,9 @@ static void cmd_starttls(int pop3s)
 #ifdef HAVE_APOP
 static int apop_enabled(void)
 {
-    static int chal_done = 0;
-
-    /* Create APOP challenge string for banner */
-    if (!chal_done &&
-	!sasl_mkchal(popd_saslconn, popd_apop_chal, sizeof(popd_apop_chal), 1)) {
-	syslog(LOG_WARNING,
-	       "can't create APOP challenge string - APOP disabled");
-	popd_apop_chal[0] = '\0';
-    }
-
-    chal_done = 1;
-    return *popd_apop_chal;
+    /* Check if we have a challenge string */
+    if (!*popd_apop_chal) return 0;
+    return 1;
 }
 
 static void cmd_apop(char *user, char *digest)
