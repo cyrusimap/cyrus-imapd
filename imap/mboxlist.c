@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.210 2003/04/17 18:25:04 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.211 2003/04/24 23:20:33 ken3 Exp $
  */
 
 #include <config.h>
@@ -1646,17 +1646,22 @@ static int find_cb(void *rockp,
 	    /* found the entry; output it */
 	    if (rock->find_namespace == NAMESPACE_SHARED &&
 		rock->checkshared && rock->namespace) {
-		/* special case:  LIST "" % -- output prefix only */
+		/* special case:  LIST "" *% -- output prefix */
 		r = (*rock->proc)(rock->namespace->prefix[NAMESPACE_SHARED],
 				  strlen(rock->namespace->prefix[NAMESPACE_SHARED])-1,
 				  1, rock->procrock);
-		/* short-circuit the foreach - one mailbox is sufficient */
-		r = CYRUSDB_DONE;
+
+		if (rock->checkshared > 1) {
+		    /* special case:  LIST "" % -- output prefix only */
+		    /* short-circuit the foreach - one mailbox is sufficient */
+		    return CYRUSDB_DONE;
+		}
 	    }
-	    else {
-		r = (*rock->proc)(namebuf+rock->inboxoffset, matchlen, 
-				  1, rock->procrock);
-	    }
+
+	    rock->checkshared = 0;
+	    r = (*rock->proc)(namebuf+rock->inboxoffset, matchlen, 
+			      1, rock->procrock);
+
 	    break;
 	    
 	case IMAP_MAILBOX_NONEXISTENT:
@@ -1939,22 +1944,29 @@ int mboxlist_findall_alt(struct namespace *namespace,
 	cbrock.inboxoffset = 0;
 
 	if (prefixlen <= len) {
-	    /* Find pattern which matches shared namespace prefix */
+	    /* Skip pattern which matches shared namespace prefix */
 	    for (p = pattern+prefixlen; *p; p++) {
 		if (*p == '%') continue;
 		else if (*p == '.') p++;
 		break;
 	    }
 
-	    if (!*p) {
-		/* special case:  LIST "" % -- see if we have a shared mbox */
-		cbrock.g = glob_init("*", GLOB_HIERARCHY);
+	    if (*pattern && !strchr(pattern, '.') &&
+		pattern[strlen(pattern)-1] == '%') {
+		/* special case:  LIST "" *% -- output prefix */
 		cbrock.checkshared = 1;
+	    }
+
+	    if (cbrock.checkshared && !*p) {
+		/* special case:  LIST "" % -- output prefix
+		   (if we have a shared mbox) and quit */
+		cbrock.g = glob_init("*", GLOB_HIERARCHY);
+		cbrock.checkshared = 2;
 	    }
 	    else {
 		cbrock.g = glob_init(p, GLOB_HIERARCHY);
 	    }
-		
+
 	    DB->foreach(mbdb,
 			"", 0,
 			&find_p, &find_cb, &cbrock,
@@ -2653,17 +2665,24 @@ int mboxlist_findsub_alt(struct namespace *namespace,
 	cbrock.inboxoffset = 0;
 
 	if (prefixlen <= len) {
-	    /* Find pattern which matches shared namespace prefix */
+	    /* Skip pattern which matches shared namespace prefix */
 	    for (p = pattern+prefixlen; *p; p++) {
 		if (*p == '%') continue;
 		else if (*p == '.') p++;
 		break;
 	    }
 
-	    if (!*p) {
-		/* special case:  LSUB "" % -- see if we have a shared mbox */
-		cbrock.g = glob_init("*", GLOB_HIERARCHY);
+	    if (*pattern && !strchr(pattern, '.') &&
+		pattern[strlen(pattern)-1] == '%') {
+		/* special case:  LSUB "" *% -- output prefix */
 		cbrock.checkshared = 1;
+	    }
+
+	    if (cbrock.checkshared && !*p) {
+		/* special case:  LSUB "" % -- output prefix
+		   (if we have a shared mbox) and quit */
+		cbrock.g = glob_init("*", GLOB_HIERARCHY);
+		cbrock.checkshared = 2;
 	    }
 	    else {
 		cbrock.g = glob_init(p, GLOB_HIERARCHY);
