@@ -45,7 +45,7 @@ libcyrus.a: $(OBJS)
 	ranlib libcyrus.a
 
 clean:
-	rm -f *.o *.a
+	rm -f *.o *.a Makefile.bak
 
 depend:
 	makedepend $(CFLAGS) *.c
