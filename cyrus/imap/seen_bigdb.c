@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_bigdb.c,v 1.1 2000/12/26 06:26:24 leg Exp $
+   $Id: seen_bigdb.c,v 1.2 2002/03/29 00:03:57 rjs3 Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -87,6 +87,12 @@ struct seen {
 
 static int seen_inited = 0;
 static struct db *bigdb;
+
+/* Stub */
+char *seen_getpath(const char *userid) 
+{
+    return NULL;
+}
 
 static void seen_init(void)
 {

@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.32 2002/03/26 19:24:54 rjs3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.33 2002/03/29 00:03:53 rjs3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -395,7 +395,7 @@ void do_dump(enum mboxop op)
 	while(unflag_head) {
 	    struct mb_node *me = unflag_head;
 	    int type;
-	    char *part, *acl;
+	    char *part, *acl, *newpart;
 	    
 	    unflag_head = unflag_head->next;
 	    
@@ -406,9 +406,14 @@ void do_dump(enum mboxop op)
 			me->mailbox);
 		exit(1);
 	    }
-	    
+
+	    /* Reset the partition! */
+	    newpart = strchr(part, '!');
+	    if(!newpart) newpart = part;
+	    else newpart++;
+
 	    ret = mboxlist_update(me->mailbox, type & ~MBTYPE_MOVING,
-				  part, acl);
+				  newpart, acl);
 	    if(ret) {
 		fprintf(stderr,
 			"couldn't perform update to un-remote-flag %s\n",

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.369 2002/03/27 23:40:04 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.370 2002/03/29 00:03:53 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -2220,6 +2220,8 @@ void cmd_capability(char *tag)
     if(mupdate_server) {
 	prot_printf(imapd_out, " MUPDATE=mupdate://%s/", mupdate_server);
     }
+
+    prot_printf(imapd_out, " MAILBOX-REFERRALS");
     
     /* add the SASL mechs */
     if (sasl_listmech(imapd_saslconn, NULL, 
@@ -3513,10 +3515,12 @@ cmd_create(char *tag, char *name, char *partition, int localonly)
     }
 
     if (!r) {
+	/* xxx we do forced user creates on LOCALCREATE to facilitate
+	 * mailbox moves */
 	r = mboxlist_createmailbox(mailboxname, 0, partition,
 				   imapd_userisadmin, 
 				   imapd_userid, imapd_authstate,
-				   localonly);
+				   localonly, localonly);
 
 	if (r == IMAP_PERMISSION_DENIED && !strcasecmp(name, "INBOX") &&
 	    (autocreatequota = config_getint("autocreatequota", 0))) {
@@ -3524,7 +3528,7 @@ cmd_create(char *tag, char *name, char *partition, int localonly)
 	    /* Auto create */
 	    r = mboxlist_createmailbox(mailboxname, 0,
 				       partition, 1, imapd_userid,
-				       imapd_authstate, 0);
+				       imapd_authstate, 0, 0);
 	    
 	    if (!r && autocreatequota > 0) {
 		(void) mboxlist_setquota(mailboxname, autocreatequota);
@@ -5864,7 +5868,6 @@ static int dumpacl(struct protstream *pin, struct protstream *pout,
     return r;
 }
 
-/* xxx need to handle prereserved case */
 static int do_xfer_single(char *toserver, char *name, char *mailboxname,
 			  int mbflags, 
 			  char *path, char *part, char *acl,
@@ -5941,7 +5944,8 @@ static int do_xfer_single(char *toserver, char *name, char *mailboxname,
     }
 
     /* Step 3: mupdate.DEACTIVATE(mailbox, newserver) */
-    if(!r) {
+    /* (only if mailbox has not been already deactivated by our caller) */
+    if(!r && !prereserved) {
 	backout_remoteflag = 1;
 
 	/* Note we are making the reservation on OUR host so that recovery
@@ -6077,6 +6081,59 @@ done:
     return r;
 }
 
+struct xfer_user_rock 
+{
+    char *toserver;
+    mupdate_handle *h;
+};
+
+static int xfer_user_cb(char *name,
+			int matchlen __attribute__((unused)),
+			int maycreate __attribute__((unused)),
+			void *rock) 
+{
+    mupdate_handle *mupdate_h = ((struct xfer_user_rock *)rock)->h;
+    char *toserver = ((struct xfer_user_rock *)rock)->toserver;
+    char externalname[MAX_MAILBOX_NAME];
+    int mbflags;
+    int r = 0;
+    char *inpath, *inpart, *inacl;
+    char *path = NULL, *part = NULL, *acl = NULL;
+
+    if (!r) {
+	/* NOTE: NOT mlookup() because we don't want to issue a referral */
+	/* xxx but what happens if they are remote
+	 * mailboxes? */
+	r = mboxlist_detail(name, &mbflags,
+			    &inpath, &inpart, &inacl, NULL);
+    }
+    
+    if (!r) {
+	path = xstrdup(inpath);
+	part = xstrdup(inpart);
+	acl = xstrdup(inacl);
+    }
+
+    if(!r) {
+	r = (*imapd_namespace.mboxname_toexternal)(&imapd_namespace,
+						   name,
+						   imapd_userid,
+						   externalname);
+    }
+
+    if(!r) {
+	r = do_xfer_single(toserver, externalname, name, mbflags,
+			   path, part, acl, 0, mupdate_h);
+    }
+
+    if(path) free(path);
+    if(part) free(part);
+    if(acl) free(acl);
+
+    return r;
+}
+
+
 void cmd_xfer(char *tag, char *toserver, char *name) 
 {
     int r = 0;
@@ -6100,6 +6157,13 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 	r = IMAP_SERVER_UNAVAILABLE;
     }
 
+    if (!r) {
+	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace,
+						   name,
+						   imapd_userid,
+						   mailboxname);
+    }
+
     if(!strncmp(mailboxname, "user.", 5) && !strchr(mailboxname+5, '.')) {
 	if (!strcmp(mailboxname+5, imapd_userid)) {
 	    /* don't move your own inbox, that could be troublesome */
@@ -6107,13 +6171,6 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 	} else {
 	    moving_user = 1;
 	}
-    }
-
-    if (!r) {
-	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace,
-						   name,
-						   imapd_userid,
-						   mailboxname);
     }
     
     if (!r) {
@@ -6156,16 +6213,27 @@ void cmd_xfer(char *tag, char *toserver, char *name)
 	    else backout_mupdate = 1;
 	}
 
-	/* recursively move all sub-mailboxes */
+	/* recursively move all sub-mailboxes, using internal names */
+	if(!r) {
+	    struct xfer_user_rock rock;
 
+	    rock.toserver = toserver;
+	    rock.h = mupdate_h;
+	    
+	    snprintf(buf, sizeof(buf), "%s.*", mailboxname);
+	    r = mboxlist_findall(NULL, buf, 1, imapd_userid,
+				 imapd_authstate, xfer_user_cb,
+				 &rock);
+	}
+
+	/* xxx how do you back out if one of the above moves fails? */
+	    
 	/* move this mailbox */
-	r = do_xfer_single(toserver, name, mailboxname, mbflags,
-			   path, part, acl, 0, mupdate_h);
-
-	/* also need to: */
-	/* move seen state */
-	/* move subscriptions */
-	/* move sieve script */
+	/* and seen file, and subs file, and sieve scripts... */
+	if(!r) {
+	    r = do_xfer_single(toserver, name, mailboxname, mbflags,
+			       path, part, acl, 1, mupdate_h);
+	}
 
 	if(r && backout_mupdate) {
 	    int rerr = 0;

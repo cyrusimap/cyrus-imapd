@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.27 2002/02/24 23:40:45 leg Exp $
+   $Id: seen_db.c,v 1.28 2002/03/29 00:03:57 rjs3 Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -102,7 +102,7 @@ static void abortcurrent(struct seen *s)
     }
 }
 
-static char *getpath(const char *userid)
+char *seen_getpath(const char *userid)
 {
     char *fname = xmalloc(strlen(config_dir) + sizeof(FNAME_USERDIR) +
 		    strlen(userid) + sizeof(FNAME_SEENSUFFIX) + 10);
@@ -156,7 +156,7 @@ int seen_open(struct mailbox *mailbox,
     }
 
     /* open the seendb corresponding to user */
-    fname = getpath(user);
+    fname = seen_getpath(user);
     r = DB->open(fname, &seendb->db);
     if (r != 0) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname, 
@@ -453,7 +453,7 @@ int seen_create_user(const char *user)
 
 int seen_delete_user(const char *user)
 {
-    char *fname = getpath(user);
+    char *fname = seen_getpath(user);
     int r = 0;
 
     if (SEEN_DEBUG) {

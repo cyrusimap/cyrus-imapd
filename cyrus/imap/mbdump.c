@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.6 2002/03/21 17:26:21 rjs3 Exp $
+ * $Id: mbdump.c,v 1.7 2002/03/29 00:03:55 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -67,7 +67,9 @@
 #include "mailbox.h"
 #include "map.h"
 #include "mbdump.h"
+#include "mboxlist.h"
 #include "prot.h"
+#include "seen.h"
 #include "xmalloc.h"
 
 static int lock_mailbox_ctl_files(const char *mbname,
@@ -94,6 +96,41 @@ static int lock_mailbox_ctl_files(const char *mbname,
     return r;
 }
 
+/* is this the active script? */
+static int sieve_isactive(char *sievepath, char *name)
+{
+    char filename[1024];
+    char linkname[1024];
+    char activelink[1024];
+    char *file, *link;
+
+    snprintf(filename, 1023, "%s/%s", sievepath, name);
+    snprintf(linkname, 1023, "%s/default", sievepath);
+
+    memset(activelink, 0, sizeof(activelink));
+    if ((readlink(linkname, activelink, sizeof(activelink)-1) < 0) && 
+	(errno != ENOENT)) 
+    {
+	syslog(LOG_ERR, "readlink(default): %m");
+	return 0;
+    }
+
+    /* Only compare the part of the file after the last /,
+     * since that is what timsieved does */
+    file = strrchr(filename, '/');
+    link = strrchr(activelink, '/');
+    if(!file) file = filename;
+    else file++;
+    if(!link) link = activelink;
+    else link++;
+
+    if (!strcmp(file, link)) {
+	return 1;
+    } else {
+	return 0;
+    }
+}
+
 int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
 		 const char *mbacl, int uid_start,
 		 struct protstream *pin, struct protstream *pout,
@@ -116,8 +153,20 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
 				 "cyrus.index",
 				 NULL 
                                };
-
+    /* non-null userid means we are moving the user */
+    const char *userid = NULL;
+    const int SEEN_DB = 0;
+    const int SUBS_DB = 1;
+    char *user_data_files[3];
+    
     assert(mbpath);
+
+    if(!strncmp(mbname, "user.", 5) && !strchr(mbname+5, '.')) {
+	userid = mbname+5;
+	memset(user_data_files, 0, sizeof(user_data_files));
+	user_data_files[SEEN_DB] = seen_getpath(userid);
+	user_data_files[SUBS_DB] = mboxlist_hash_usersubs(userid);
+    }
 
     mbdir = opendir(mbpath);
     if(!mbdir && errno == EACCES) {
@@ -269,6 +318,124 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
 	map_free(&base, &len);
     }
 
+    if(userid) {
+	char sieve_path[MAX_MAILBOX_PATH];
+	int sieve_usehomedir = config_getswitch("sieveusehomedir", 0);
+
+	/* need to transfer seen, subs, and sieve files */
+	for(i=0;i<3;i++) {
+	    if(!user_data_files[i]) continue;
+	    
+	    /* map file */
+	    filefd = open(user_data_files[i], O_RDONLY, 0666);
+	    if (filefd == -1) {
+		syslog(LOG_ERR, "IOERROR: open on %s: %m (continuing)",
+		       user_data_files[i]);
+		/* but it is allowed to not exist, so... */
+		continue;
+	    }
+    
+	    if (fstat(filefd, &sbuf) == -1) {
+		syslog(LOG_ERR, "IOERROR: fstat on %s: %m",
+		       user_data_files[i]);
+		fatal("can't fstat message file", EC_OSFILE);
+	    }	
+	    
+	    base = NULL;
+	    len = 0;
+	    
+	    map_refresh(filefd, 1, &base, &len, sbuf.st_size,
+			user_data_files[i], NULL);
+	    
+	    close(filefd);
+	    
+	    /* send user data file type, size, and contents */
+	    /* No need to test synchronization, all mailboxes should have
+	     * sent a file by this point! */
+	    if(i == SEEN_DB) prot_printf(pout, " {4%s}\r\nSEEN",
+					 (!tag ? "+" : ""));
+	    else if(i == SUBS_DB) prot_printf(pout, " {4%s}\r\nSUBS",
+					      (!tag ? "+" : ""));
+	    else fatal("unknown user_data_file", EC_OSFILE);
+	    prot_printf(pout, " {%lu%s}\r\n",
+			len, (!tag ? "+" : ""));
+	    prot_write(pout, base, len);
+	    map_free(&base, &len);
+	}
+
+	/* xxx can't use home directories currently
+	 * (it makes almost no sense in the conext of a murder) */
+	/* xxx will need to be update for bytecode */
+	if(!sieve_usehomedir) {
+	    char ext_fname[2048];
+	    
+	    if(mbdir) closedir(mbdir);
+	    mbdir = NULL;
+
+	    snprintf(sieve_path, sizeof(sieve_path), "%s/%c/%s",
+		     config_getstring("sievedir", "/usr/sieve"),
+		     userid[0], userid);
+	    mbdir=opendir(sieve_path);
+	    
+	    if(mbdir) {
+		while((next = readdir(mbdir)) != NULL) {
+		    int length=strlen(next->d_name);
+		    if (length >= strlen(".script")) /* if ends in .script */
+		    {
+			if (strcmp(next->d_name + (length - 7), ".script")==0)
+			{
+			    /* map file */
+			    snprintf(filename, sizeof(filename), "%s/%s",
+				     sieve_path, next->d_name);
+			    syslog(LOG_ERR, "wanting to dump %s", filename);
+			    filefd = open(filename, O_RDONLY, 0666);
+			    if (filefd == -1) {
+				/* non-fatal */
+				syslog(LOG_ERR,
+				       "IOERROR: open on %s: %m", filename);
+				continue;
+			    }
+
+			    if (fstat(filefd, &sbuf) == -1) {
+				syslog(LOG_ERR,
+				       "IOERROR: fstat on %s: %m", filename);
+				fatal("can't fstat message file", EC_OSFILE);
+			    }	
+			    
+			    base = NULL;
+			    len = 0;
+			    
+			    map_refresh(filefd, 1, &base, &len, sbuf.st_size,
+					filename, NULL);
+
+			    close(filefd);
+
+			    /* send filename w/tag + contents */
+			    if(sieve_isactive(sieve_path, next->d_name)) {
+				snprintf(ext_fname, sizeof(ext_fname),
+					 "SIEVED-%s", next->d_name);
+			    } else {
+				snprintf(ext_fname, sizeof(ext_fname),
+					 "SIEVE-%s", next->d_name);
+			    }
+			    prot_printf(pout, " {%d%s}\r\n%s {%lu%s}\r\n",
+					strlen(ext_fname), 
+					(!tag ? "+" : ""),
+					ext_fname,
+					len,
+					(!tag ? "+" : ""));
+			    prot_write(pout, base, len);
+			    map_free(&base, &len);
+			}
+		    }
+		}
+	    }
+	}
+	    
+	/* transmit sieve script(s) */
+	/* free strings for user_data_files */
+    } /* end if user */
+
  done:
     prot_printf(pout,")\r\n");
     prot_flush(pout);
@@ -287,12 +454,24 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
     char c;
     int r = 0;
     int curfile = -1;
+    const char *userid = NULL;
     struct mailbox mb;
+    char sieve_path[2048];
+    int sieve_usehomedir = config_getswitch("sieveusehomedir", 0);
     
     memset(&file, 0, sizeof(struct buf));
     memset(&data, 0, sizeof(struct buf));
 
     c = getword(pin, &data);
+
+    if(!strncmp(mbname, "user.", 5) && !strchr(mbname+5, '.')) {
+	userid = mbname+5;
+
+	if(!sieve_usehomedir)
+	    snprintf(sieve_path, sizeof(sieve_path), "%s/%c/%s",
+		     config_getstring("sievedir", "/usr/sieve"),
+		     userid[0], userid);
+    }
 
     /* we better be in a list now */
     if(c != '(' || data.s[0]) {
@@ -306,8 +485,9 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
 
     while(1) {
 	char fnamebuf[MAX_MAILBOX_PATH + 1024];
-	
-	c = getastring(pin, pout, &file);
+
+      	c = getastring(pin, pout, &file);
+
 	if(c != ' ') {
 	    r = IMAP_PROTOCOL_ERROR;
 	    goto done;
@@ -318,11 +498,75 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
 	    goto done;
 	}
 
-	if(snprintf(fnamebuf, sizeof(fnamebuf),
-		    "%s/%s", mbpath, file.s) == -1) {
-	    r = IMAP_PROTOCOL_ERROR;
-	    goto done;
-	}
+	if(userid && !strcmp(file.s, "SUBS")) {
+	    /* overwriting this outright is absolutely what we want to do */
+	    char *s = mboxlist_hash_usersubs(userid);
+	    strcpy(fnamebuf, s);
+	    free(s);
+	} else if (userid && !strcmp(file.s, "SEEN")) {
+	    /* xxx we want to merge this one, in an ideal world... */
+	    char *s = seen_getpath(userid);
+	    strcpy(fnamebuf, s);
+	    free(s);
+	} else if (userid && !strncmp(file.s, "SIEVE", 5)) {
+	    int isdefault = !strncmp(file.s, "SIEVED", 6);
+	    char *realname;
+	    int ret;
+	    DIR *d;
+	    
+	    /* skip prefixes */
+	    if(isdefault) realname = file.s + 7;
+	    else realname = file.s + 6;
+
+	    if(sieve_usehomedir) {
+		/* xxx! */
+		syslog(LOG_ERR,
+		       "dropping sieve file %s since this host is " \
+		       "configured for sieve_usehomedir",
+		       realname);
+		continue;
+	    } else {
+		/* xxx! - should we be less silent? */
+		if((d = opendir(sieve_path)) == NULL) {
+		    syslog(LOG_ERR, "creating %s", sieve_path);
+		    ret = mkdir(sieve_path, 0755);
+		    
+		    if(ret) {
+			syslog(LOG_ERR, "dropping sieve file %s because " \
+			       "we could not create %s: %m",
+			       realname, sieve_path);
+			continue;
+		    }
+		} else {
+		    closedir(d);
+		}
+
+		if(snprintf(fnamebuf, sizeof(fnamebuf),
+			    "%s/%s", sieve_path, realname) == -1) {
+		    r = IMAP_PROTOCOL_ERROR;
+		    goto done;
+		} else if(isdefault) {
+		    char linkbuf[2048];
+		    		    
+		    snprintf(linkbuf, sizeof(linkbuf), "%s/default",
+			     sieve_path);
+		    ret = symlink(realname, linkbuf);
+		    if(ret) {
+			syslog(LOG_ERR, "symlink(%s, %s): %m", realname,
+			       linkbuf);
+			/* Non-fatal,
+			   let's get the file transferred if we can */
+		    }
+		    
+		}
+	    }
+	} else {
+	    if(snprintf(fnamebuf, sizeof(fnamebuf),
+			 "%s/%s", mbpath, file.s) == -1) {
+		r = IMAP_PROTOCOL_ERROR;
+		goto done;
+	    }
+	}	
 
 	curfile = open(fnamebuf, O_WRONLY|O_TRUNC|O_CREAT, 0666);
 	if(curfile == -1) {
