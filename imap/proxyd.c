@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.101 2002/03/02 03:28:20 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.102 2002/03/05 20:06:40 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -156,7 +156,7 @@ struct protstream *proxyd_out = NULL;
 struct protstream *proxyd_in = NULL;
 char proxyd_clienthost[250] = "[local]";
 time_t proxyd_logtime;
-char *proxyd_userid;
+char *proxyd_userid = NULL;
 struct auth_state *proxyd_authstate = 0;
 int proxyd_userisadmin;
 sasl_conn_t *proxyd_saslconn; /* the sasl connection context to the client */
@@ -415,6 +415,95 @@ static int pipe_including_tag(struct backend *s, char *tag, int force_notfatal)
     }
     return r;
 }
+
+static int pipe_to_end_of_response(struct backend *s, int force_notfatal)
+{
+    char buf[2048];
+    char eol[128];
+    int sl;
+    int cont = 1, r = PROXY_OK;
+
+    s->timeout->mark = time(NULL) + IDLE_TIMEOUT;
+    
+    eol[0]='\0';
+
+    /* the only complication here are literals */
+    while (cont) {
+	/* if 'cont' is set, we're looking at the continuation to a very
+	   long line. */
+	if (!prot_fgets(buf, sizeof(buf), s->in)) {
+	    /* uh oh */
+	    if(s == backend_current && !force_notfatal)
+		fatal("Lost connection to selected backend", EC_UNAVAILABLE);
+	    proxyd_downserver(s);
+	    return PROXY_NOCONNECTION;
+	}
+	
+	sl = strlen(buf);
+	if (sl == (sizeof(buf) - 1)) { /* only got part of a line */
+	    /* we save the last 64 characters in case it has important
+	       literal information */
+	    strcpy(eol, buf + sl - 64);
+
+	    /* write out this part, but we have to keep reading until we
+	       hit the end of the line */
+	    prot_write(proxyd_out, buf, sl);
+	    cont = 1;
+	    continue;
+	} else {		/* we got the end of the line */
+	    int i;
+	    int litlen = 0, islit = 0;
+
+	    prot_write(proxyd_out, buf, sl);
+
+	    /* now we have to see if this line ends with a literal */
+	    if (sl < 64) {
+		strcat(eol, buf);
+	    } else {
+		strcat(eol, buf + sl - 63);
+	    }
+
+	    /* eol now contains the last characters from the line; we want
+	       to see if we've hit a literal */
+	    i = strlen(eol);
+	    if (eol[i-1] == '\n' && eol[i-2] == '\r' && eol[i-3] == '}') {
+		/* possible literal */
+		i -= 4;
+		while (i > 0 && eol[i] != '{' && isdigit((int) eol[i])) {
+		    i--;
+		}
+		if (eol[i] == '{') {
+		    islit = 1;
+		    litlen = atoi(eol + i + 1);
+		}
+	    }
+
+	    /* copy the literal over */
+	    if (islit) {
+		while (litlen > 0) {
+		    int j = (litlen > sizeof(buf) ? sizeof(buf) : litlen);
+		    
+		    j = prot_read(s->in, buf, j);
+		    prot_write(proxyd_out, buf, j);
+		    litlen -= j;
+		}
+
+		/* none of our saved information has any relevance now */
+		eol[0] = '\0';
+		
+		/* have to keep going for the end of the line */
+		cont = 1;
+		continue;
+	    }
+	}
+
+	/* ok, if we're here, we're done */
+	cont = 0;
+    }
+
+    return r;
+}
+
 
 /* copy our current input to 's' until we hit a true EOL.
 
@@ -736,6 +825,9 @@ void proxyd_downserver(struct backend *s)
     close(s->sock);
     prot_free(s->in);
     prot_free(s->out);
+
+    if(s == backend_inbox) backend_inbox = NULL;
+    if(s == backend_current) backend_current = NULL;
 
     /* remove the timeout */
     prot_removewaitevent(proxyd_in, s->timeout);
@@ -2162,7 +2254,8 @@ void cmd_authenticate(char *tag, char *authtype)
     unsigned int serveroutlen;
     
     const char *errorstring = NULL;
-
+    const char *userid_buf;
+    
     const int *ssfp;
     char *ssfmsg=NULL;
 
@@ -2177,7 +2270,6 @@ void cmd_authenticate(char *tag, char *authtype)
     while (sasl_result == SASL_CONTINUE)
     {
       char c;
-	
 
       /* print the message to the user */
       printauthready(proxyd_out, serveroutlen, (unsigned char *)serverout);
@@ -2234,9 +2326,10 @@ void cmd_authenticate(char *tag, char *authtype)
     /* get the userid from SASL --- already canonicalized from
      * mysasl_authproc()
      */
-    /* FIXME / XXX: proxyd_userid is *not* const */
     sasl_result = sasl_getprop(proxyd_saslconn, SASL_USERNAME,
-			     (const void **) &proxyd_userid);
+			       (const void **)&userid_buf);
+    proxyd_userid = xstrdup(userid_buf);
+
     if (sasl_result!=SASL_OK)
     {
 	prot_printf(proxyd_out, "%s NO weird SASL error %d SASL_USERNAME\r\n", 
@@ -3690,6 +3783,183 @@ void cmd_find(char *tag, char *namespace, char *pattern)
 		error_message(IMAP_OK_COMPLETED));
 }
 
+static int pipe_lsub(struct backend *s, char *tag, int force_notfatal) 
+{
+    int taglen = strlen(tag);
+    int c;
+    int r = PROXY_OK;
+    int exist_r;
+    char mailboxname[MAX_MAILBOX_PATH + 1];
+    static struct buf tagb, cmd, sep, name;
+    int cur_flags_size = 64;
+    char *flags = xmalloc(cur_flags_size);
+    
+    assert(s);
+    assert(s->timeout);
+    
+    s->timeout->mark = time(NULL) + IDLE_TIMEOUT;
+
+    while(1) {
+	c = getword(s->in, &tagb);
+
+	if(c == EOF) {
+	    if(s == backend_current && !force_notfatal)
+		fatal("Lost connection to selected backend", EC_UNAVAILABLE);
+	    proxyd_downserver(s);
+	    free(flags);
+	    return PROXY_NOCONNECTION;
+	}
+
+	if(!strncmp(tag, tagb.s, taglen)) {
+	    char buf[2048];
+	    if(!prot_fgets(buf, sizeof(buf), s->in)) {
+		if(s == backend_current && !force_notfatal)
+		    fatal("Lost connection to selected backend",
+			  EC_UNAVAILABLE);
+		proxyd_downserver(s);
+		free(flags);
+		return PROXY_NOCONNECTION;
+	    }	
+	    /* Got the end of the response */
+	    strlcpy(s->last_result, buf, LAST_RESULT_LEN);
+	    /* guarantee that 's->last_result' has \r\n\0 at the end */
+	    s->last_result[LAST_RESULT_LEN - 3] = '\r';
+	    s->last_result[LAST_RESULT_LEN - 2] = '\n';
+	    s->last_result[LAST_RESULT_LEN - 1] = '\0';
+	    switch (buf[0]) {
+	    case 'O': case 'o':
+		r = PROXY_OK;
+		break;
+	    case 'N': case 'n':
+		r = PROXY_NO;
+		break;
+	    case 'B': case 'b':
+		r = PROXY_BAD;
+		break;
+	    default: /* huh? no result? */
+		if(s == backend_current && !force_notfatal)
+		    fatal("Lost connection to selected backend",
+			  EC_UNAVAILABLE);
+		proxyd_downserver(s);
+		r = PROXY_NOCONNECTION;
+		break;
+	    }
+	    break; /* we're done */
+	}
+
+	c = getword(s->in, &cmd);
+
+	if(c == EOF) {
+	    if(s == backend_current && !force_notfatal)
+		fatal("Lost connection to selected backend", EC_UNAVAILABLE);
+	    proxyd_downserver(s);
+	    free(flags);
+	    return PROXY_NOCONNECTION;
+	}
+
+	if(strncmp("LSUB", cmd.s, 4)) {
+	    prot_printf(proxyd_out, "%s %s ", tagb.s, cmd.s);
+	    r = pipe_to_end_of_response(s, force_notfatal);
+	    if(r != PROXY_OK) {
+		free(flags);
+		return r;
+	    }
+	} else {
+	    /* build up the response bit by bit */
+	    int i = 0;
+
+	    c = prot_getc(s->in);
+	    while(c != ')' && c != EOF) {
+		flags[i++] = c;
+		if(i == cur_flags_size) {
+		    /* expand our buffer */
+		    cur_flags_size *= 2;
+		    flags = xrealloc(flags, cur_flags_size);
+		}
+		c = prot_getc(s->in);
+	    }
+
+	    if(c != EOF) {
+		/* terminate string */
+		flags[i++] = ')';
+		if(i == cur_flags_size) {
+		    /* expand our buffer */
+		    cur_flags_size *= 2;
+		    flags = xrealloc(flags, cur_flags_size);
+		}
+		flags[i] = '\0';
+		/* get the next character */
+ 		c = prot_getc(s->in);
+	    }
+	    
+	    if(c != ' ') {
+		if(s == backend_current && !force_notfatal)
+		    fatal("Bad LSUB response from  selected backend",
+			  EC_UNAVAILABLE);
+		proxyd_downserver(s);
+		free(flags);
+		return PROXY_NOCONNECTION;
+	    }
+
+	    /* Get separator */
+	    c = getastring(s->in, s->out, &sep);
+
+	    if(c != ' ') {
+		if(s == backend_current && !force_notfatal)
+		    fatal("Bad LSUB response from selected backend",
+			  EC_UNAVAILABLE);
+		proxyd_downserver(s);
+		free(flags);
+		return PROXY_NOCONNECTION;
+	    }
+
+	    /* Get name */
+	    c = getastring(s->in, s->out, &name);
+
+	    if(c == '\r') c = prot_getc(s->in);
+	    if(c != '\n') {
+		if(s == backend_current && !force_notfatal)
+		    fatal("Bad LSUB response from selected backend",
+			  EC_UNAVAILABLE);
+		proxyd_downserver(s);
+		free(flags);
+		return PROXY_NOCONNECTION;
+	    }
+
+	    /* lookup name */
+	    exist_r = 1;
+	    r = (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace,
+							name.s,
+							proxyd_userid,
+							mailboxname);
+	    if (!r) {
+		exist_r = mlookup(mailboxname, NULL, NULL, NULL);
+	    } else {
+		/* skip this one */
+		syslog(LOG_ERR, "could not convert %s to internal form",
+		       name.s);
+		continue;
+	    }
+
+	    /* send our response */
+	    /* we need to set \Noselect if it's not in our mailboxes.db */
+	    if(!exist_r) {
+		prot_printf(proxyd_out, "* LSUB %s \"%s\" ",
+			    flags, sep.s);
+	    } else {
+		prot_printf(proxyd_out, "* LSUB (\\Noselect) \"%s\" ",
+			    sep.s);
+	    }
+
+	    printstring(name.s);
+	    prot_printf(proxyd_out, "\r\n");
+	}
+    } /* while(1) */
+
+    free(flags);
+    return r;
+}
+
 /*
  * Perform a LIST or LSUB command
  * LISTs we do locally
@@ -3725,7 +3995,7 @@ void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
 			"%s Lsub {%d+}\r\n%s {%d+}\r\n%s\r\n",
 			tag, strlen(reference), reference,
 			strlen(pattern), pattern);
-	    pipe_until_tag(backend_inbox, tag, 0);
+	    pipe_lsub(backend_inbox, tag, 0);
 	} else {		/* user doesn't have an INBOX */
 	    /* noop */
 	}
