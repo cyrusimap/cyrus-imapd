@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.104 2003/02/04 17:46:06 rjs3 Exp $
+ * $Id: lmtpd.c,v 1.105 2003/02/04 19:17:44 rjs3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1079,10 +1079,15 @@ static FILE *sieve_find_script(const char *user)
 	snprintf(buf, sizeof(buf), "%s/%s", pent->pw_dir, ".sieve");
     } else { /* look in sieve_dir */
 	char hash;
+	char bufuser[MAX_MAILBOX_NAME];
+	
+	strlcpy(bufuser, user, sizeof(bufuser));
+	
+	mboxname_hiersep_tointernal(&lmtpd_namespace, bufuser);
+	hash = (char) dir_hash_c(bufuser);
 
-	hash = (char) dir_hash_c(user);
-
-	snprintf(buf, sizeof(buf), "%s/%c/%s/default", sieve_dir, hash, user);
+	snprintf(buf, sizeof(buf), "%s/%c/%s/default", sieve_dir, hash,
+		 bufuser);
     }
 	
     return (fopen(buf, "r"));
