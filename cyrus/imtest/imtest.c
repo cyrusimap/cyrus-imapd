@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.20 1999/06/24 18:52:44 leg Exp $
+ * $Id: imtest.c,v 1.21 1999/06/29 06:38:58 tmartin Exp $
  *
  * Copyright 1999 Carnegie Mellon University
  * 
@@ -193,9 +193,6 @@ void interaction (sasl_interact_t *t)
 {
   char result[1024];
 
-  if (authname!=NULL)
-    printf("authname=%s\n",authname);
-
   if (((t->id==SASL_CB_USER) || (t->id==SASL_CB_AUTHNAME)) && (authname!=NULL))
   {
     strcpy(result,authname);
@@ -247,8 +244,6 @@ int auth_sasl(char *mechlist)
   }
 
   if ((saslresult!=SASL_OK) && (saslresult!=SASL_CONTINUE)) return saslresult;
-
-  printf("mechusing: %s\n",mechusing);
 
   prot_printf(pout,"A01 AUTHENTICATE %s\r\n",mechusing);
   prot_flush(pout);
@@ -695,7 +690,7 @@ int main(int argc, char **argv)
   if (result != SASL_OK) {
       printf("SSF: unable to determine (SASL ERROR %d!)\n", result);
   } else {
-      printf("SSF: %d\n", *ssfp);
+      printf("Security strength factor: %d\n", *ssfp);
   }
 
   /* turn on layer if need be */
@@ -706,6 +701,8 @@ int main(int argc, char **argv)
   {
     send_recv_test();
   } else {
+    /* else run in interactive mode or 
+       pipe in a filename if applicable */
     interactive(filename);
   }
 
