@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.62 2001/11/27 02:25:03 ken3 Exp $
+ * $Id: prot.c,v 1.63 2002/02/19 17:09:40 rjs3 Exp $
  */
 
 #include <config.h>
@@ -339,6 +339,9 @@ int prot_fill(struct protstream *s)
     do {
 	/* wait until get input */
 	haveinput = 0;
+
+	/* if we've promised to call something before blocking or
+	   flush an output stream, check to see if we're going to block */
 	if (s->readcallback_proc ||
 	    (s->flushonread && s->flushonread->ptr != s->flushonread->buf)) {
 	    timeout.tv_sec = timeout.tv_usec = 0;
