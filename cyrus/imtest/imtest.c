@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.42 2000/01/04 20:52:02 leg Exp $
+ * $Id: imtest.c,v 1.43 2000/01/14 02:10:20 leg Exp $
  *
  * Copyright 1999 Carnegie Mellon University
  * 
@@ -749,7 +749,7 @@ int auth_sasl(char *mechlist)
   char *in;
   int inlen;
   const char *mechusing;
-  char inbase64[2048];
+  char inbase64[4096];
   int inbase64len;
 
   imt_stat status = STAT_CONT;
@@ -1003,7 +1003,7 @@ static void send_recv_test(void)
 
 void interactive(char *filename)
 {
-  char buf[64];
+  char buf[2048];
   fd_set read_set, rset;
   fd_set write_set, wset;
   int nfds;
