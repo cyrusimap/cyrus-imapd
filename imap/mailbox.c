@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.120 2002/03/30 19:46:54 ken3 Exp $
+ $Id: mailbox.c,v 1.121 2002/04/01 21:07:16 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -94,7 +94,9 @@
 #include "mboxlist.h"
 #include "acapmbox.h"
 #include "seen.h"
+#if 0
 #include "acappush.h"
+#endif
 
 static int mailbox_doing_reconstruct = 0;
 #define zeromailbox(m) { memset(&m, 0, sizeof(struct mailbox)); \
@@ -121,10 +123,12 @@ char *mailbox_cache_header_name[] = {
 int mailbox_num_cache_header =
   sizeof(mailbox_cache_header_name)/sizeof(char *);
 
+#if 0
 /* acappush variables */
 static int acappush_sock = -1;
 static struct sockaddr_un acappush_remote;
 static int acappush_remote_len = 0;
+#endif
 
 /* function to be used for notification of mailbox changes/updates */
 static mailbox_notifyproc_t *updatenotifier = NULL;
@@ -142,6 +146,7 @@ void mailbox_set_updatenotifier(mailbox_notifyproc_t *notifyproc)
  */
 int mailbox_initialize(void)
 {
+#if 0
     int s;
     int fdflags;
     struct stat sbuf;
@@ -171,6 +176,7 @@ int mailbox_initialize(void)
     if (fdflags == -1) { close(s); return IMAP_IOERROR; }
 
     acappush_sock = s;
+#endif
 
     return 0;
 }
@@ -1104,6 +1110,7 @@ int mailbox_write_index_header(struct mailbox *mailbox)
 
     if (updatenotifier) updatenotifier(mailbox);
 
+#if 0
     if (acappush_sock != -1) {
 	acapmbdata_t acapdata;
 
@@ -1122,6 +1129,7 @@ int mailbox_write_index_header(struct mailbox *mailbox)
 	    syslog(LOG_ERR, "sending to acappush: %m");
 	}
     }
+#endif
 
     *((bit32 *)(buf+OFFSET_GENERATION_NO)) = mailbox->generation_no;
     *((bit32 *)(buf+OFFSET_FORMAT)) = htonl(mailbox->format);
@@ -1835,6 +1843,7 @@ void *deciderock;
     if (numdeleted) {
 	if (updatenotifier) updatenotifier(mailbox);
 
+#if 0
 	if (acappush_sock != -1) {
 	    acapmbdata_t acapdata;
 	    
@@ -1853,6 +1862,7 @@ void *deciderock;
 		syslog(LOG_ERR, "Error sending to acappush: %m");
 	    }
 	}
+#endif
     }
 
     mailbox_unlock_pop(mailbox);
@@ -2131,7 +2141,7 @@ mailbox_rename(const char *oldname, const char *oldpath, const char *oldacl,
 {
     int r, r2;
     struct mailbox oldmailbox, newmailbox;
-    int flag, msgno;
+    unsigned int flag, msgno;
     struct index_record record;
     char oldfname[MAX_MAILBOX_PATH], newfname[MAX_MAILBOX_PATH];
     char *oldfnametail, *newfnametail;
@@ -2188,7 +2198,7 @@ mailbox_rename(const char *oldname, const char *oldpath, const char *oldacl,
 	    strcmp(oldmailbox.quota.root, newmailbox.quota.root) != 0) {
 	    if (!r && newmailbox.quota.limit >= 0 &&
 		newmailbox.quota.used + oldmailbox.quota_mailbox_used >
-		newmailbox.quota.limit * QUOTA_UNITS) {
+		((unsigned) newmailbox.quota.limit * QUOTA_UNITS)) {
 		r = IMAP_QUOTA_EXCEEDED;
 	    }
 	}
@@ -2300,7 +2310,7 @@ mailbox_sync(const char *oldname, const char *oldpath, const char *oldacl,
 {
     int r, r2;
     struct mailbox oldmailbox, newmailbox;
-    int flag, oldmsgno, newmsgno;
+    unsigned int flag, oldmsgno, newmsgno;
     struct index_record oldrecord, newrecord;
     char oldfname[MAX_MAILBOX_PATH], newfname[MAX_MAILBOX_PATH];
     char *oldfnametail, *newfnametail;
@@ -2366,7 +2376,7 @@ mailbox_sync(const char *oldname, const char *oldpath, const char *oldacl,
 	    strcmp(oldmailbox.quota.root, newmailbox.quota.root) != 0) {
 	    if (!r && newmailbox.quota.limit >= 0 &&
 		newmailbox.quota.used + oldmailbox.quota_mailbox_used >
-		newmailbox.quota.limit * QUOTA_UNITS) {
+		((unsigned) newmailbox.quota.limit * QUOTA_UNITS)) {
 		r = IMAP_QUOTA_EXCEEDED;
 	    }
 	}
