@@ -54,7 +54,7 @@ char **reply;
   
 int
 login_authenticate(authtype, mech, authproc)
-char *user;
+char *authtype;
 struct acte_server **mech;
 int (**authproc)();
 {

@@ -104,7 +104,7 @@ char *identifier;
 
     identifier = auth_canonifyid(identifier);
     if (!identifier) return -1;
-    if (!strcmp(identifier, "group:", 6)) return -1;
+    if (!strncmp(identifier, "group:", 6)) return -1;
     
     pwd = getpwnam(identifier);
     if (!pwd) return -1;
