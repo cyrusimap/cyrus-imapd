@@ -40,7 +40,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-# $Id: Makefile.in,v 1.53.4.7 2003/06/19 17:57:37 ken3 Exp $
+# $Id: Makefile.in,v 1.53.4.8 2003/07/14 16:01:55 ken3 Exp $
 
 # Authorization namespace.
 AUTH=auth_@WITH_AUTH@.o
@@ -127,8 +127,10 @@ libcyrus_min.a: $(LIBCYRM_OBJS)
 	ar cr libcyrus_min.a $(LIBCYRM_OBJS)
 	$(RANLIB) libcyrus_min.a
 
-imapopts.c imapopts.h: imapoptions $(srcdir)/../tools/config2header
+imapopts.c: imapoptions $(srcdir)/../tools/config2header
 	$(srcdir)/../tools/config2header $(srcdir)/imapopts.c $(srcdir)/imapopts.h < $(srcdir)/imapoptions
+
+imapopts.h: imapopts.c
 
 chartable.c: mkchartable 
 	@echo "### Building chartables..."
