@@ -2,7 +2,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.39 1999/02/19 03:08:29 tjs Exp $
+# $Id: SMakefile,v 1.40 1999/02/19 20:17:29 tjs Exp $
 #
 
 MAKE=gmake
@@ -37,7 +37,7 @@ if test "${OVERRIDE-nil}" != "t" ; then
       CFLAGS="${CFLAGS} -O2"
       ;;
     SunOS)
-      CFLAGS="${CFLAGS} -xO3 -xdepend"
+      CFLAGS="${CFLAGS} -xs -xO3 -xdepend"
       LDFLAGS="${LDFLAGS} -xs -xO3 -xdepend"
       STATIC="--enable-staric-libraries"
       ;;
@@ -57,7 +57,6 @@ if test "${WASH_CYRUS_DEBUG}" = "t"; then
    LDFLAGS="-L/usr/local/lib -R/usr/local/lib -xs -g"
 fi
 
-LNCOMMAND="${SRCDIR}/configure $WITHAUTH --with-inn=/usr/news $AMSSYNC --enable-experiment --enable-cmulocal --enable-debug --with-cyrus-group=staff --enable-static-libraries"
+LNCOMMAND="${SRCDIR}/configure $WITHAUTH --with-inn=/usr/news $AMSSYNC --enable-experiment --enable-cmulocal --with-cyrus-group=staff $STATIC"
 
 export CFLAGS CC VER LNCOMMAND LOCALDEFS LDFLAGS
-
