@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.131 1999/06/19 02:18:41 leg Exp $
+dnl $Id: configure.in,v 1.132 1999/06/19 02:40:31 leg Exp $
 dnl
 
 AC_INIT(imap/imapd.c)
@@ -807,7 +807,7 @@ case "$with_krb" in
  AC_MSG_ERROR([The Kerberos DES library is required for Kerberos support.]))
       
     dnl We've replaced your regular Kerberos libraries with K5 compatibility
-    dnl verrsions.  Let's see if configure can tell the difference.
+    dnl versions.  Let's see if configure can tell the difference.
     dnl on second thought, let's not do that just until we can be
     dnl sure what we're doing.
     AC_CHECK_LIB(krb, krb_get_phost,,
@@ -837,12 +837,8 @@ if test "$with_krb" = "no"; then
      if test "$WITH_LOGIN" = "krb"; then
 	AC_MSG_ERROR(Unable to find Kerberos libraries)
      fi
-else
-dnl LARRY FIX ME YOU IDIOT!!!
-dnl     AC_DEFINE(HAVE_SASL_KRB)
-dnl     LIBOBJS="${LIBOBJS} sasl_krb.o sasl_krb_client.o sasl_krb_server.o";
-  echo hi there larry you idiot -tim
 fi     
+
 dnl
 dnl Test for Zephyr
 dnl
