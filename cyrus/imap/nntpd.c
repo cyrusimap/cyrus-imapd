@@ -38,12 +38,13 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.34 2002/10/26 03:34:10 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.35 2002/10/28 18:13:31 ken3 Exp $
  */
 
 /*
  * TODO:
  *
+ * - remove Xref header from articles
  * - support for control messages?
  */
 
@@ -94,6 +95,7 @@
 #include "telemetry.h"
 #include "index.h"
 #include "mkgmtime.h"
+#include "rfc822date.h"
 
 extern int optind;
 extern char *optarg;
@@ -1820,6 +1822,16 @@ static int savemsg(message_data_t *m, FILE *f)
 	sprintf(m->id, "<cmu-nntpd-%d-%d-%d@%s>", p, (int) t, 
 		post_count++, config_servername);
 	fprintf(f, "Message-ID: %s\r\n", m->id);
+    }
+
+    /* get date */
+    if ((body = spool_getheader(m->hdrcache, "date")) == NULL) {
+	/* date, create one */
+	time_t t = time(NULL);
+	char datestr[80];
+
+	rfc822date_gen(datestr, sizeof(datestr), t);
+	fprintf(f, "Date: %s\r\n", datestr);
     }
 
     /* get control */
