@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.141 2000/12/18 04:53:39 leg Exp $
+ * $Id: mboxlist.c,v 1.142 2001/01/02 05:54:42 leg Exp $
  */
 
 #include <config.h>
@@ -1247,48 +1247,83 @@ struct find_rock {
 
 /* return non-zero if we like this one */
 static int find_p(void *rockp, 
-		   const char *key, int keylen)
+		  const char *key, int keylen,
+		  const char *data, int datalen)
 {
-    char namebuf[MAX_MAILBOX_NAME+1];
-    char namematchbuf[MAX_MAILBOX_NAME+1];
     struct find_rock *rock = (struct find_rock *) rockp;
     long minmatch;
     struct glob *g = rock->g;
+    long matchlen;
 
-    /* foreach match, do this test */
     minmatch = 0;
-    while (minmatch >= 0) {
-	long matchlen;
+    if (rock->inboxoffset) {
+	char namebuf[MAX_MAILBOX_NAME+1];
 
 	memcpy(namebuf, key, keylen);
 	namebuf[keylen] = '\0';
-	strcpy(namematchbuf, namebuf);
 	
-	if (!rock->inbox && rock->usermboxname &&
-	    !strncmp(namebuf, rock->usermboxname, rock->usermboxnamelen)
-	    && (keylen == rock->usermboxnamelen || 
-		namebuf[rock->usermboxnamelen] == '.')) {
-	    /* this would've been output with the inbox stuff, so skip it */
+	if (rock->inboxoffset) {
+	    namebuf[rock->inboxoffset] = rock->inboxcase[0];
+	    namebuf[rock->inboxoffset+1] = rock->inboxcase[1];
+	    namebuf[rock->inboxoffset+2] = rock->inboxcase[2];
+	    namebuf[rock->inboxoffset+3] = rock->inboxcase[3];
+	    namebuf[rock->inboxoffset+4] = rock->inboxcase[4];
+	}
+	
+	matchlen = glob_test(g, namebuf+rock->inboxoffset,
+			     keylen-rock->inboxoffset, &minmatch);
+    } else {
+	matchlen = glob_test(g, key, keylen, &minmatch);
+    }
+    if (matchlen == -1) return 0;
+
+    if (!rock->inbox && rock->usermboxname &&
+	keylen >= rock->usermboxnamelen &&
+	(keylen == rock->usermboxnamelen || 
+	 key[rock->usermboxnamelen] == '.') &&
+	!strncmp(key, rock->usermboxname, rock->usermboxnamelen)) {
+	/* this would've been output with the inbox stuff, so skip it */
+	return 0;
+    }
+    
+    /* check acl */
+    if (!rock->isadmin) {
+	/* check the acls */
+	const char *p, *acl;
+	int rights;
+	int acllen;
+	static char *aclbuf = NULL;
+	static int aclbufsz = 0;
+
+	p = strchr(data, ' ');
+	if (!p) {
+	    syslog(LOG_ERR, "%s: can't find partition", key);
 	    return 0;
 	}
-	if (rock->inboxoffset) {
-	    namematchbuf[rock->inboxoffset] = rock->inboxcase[0];
-	    namematchbuf[rock->inboxoffset+1] = rock->inboxcase[1];
-	    namematchbuf[rock->inboxoffset+2] = rock->inboxcase[2];
-	    namematchbuf[rock->inboxoffset+3] = rock->inboxcase[3];
-	    namematchbuf[rock->inboxoffset+4] = rock->inboxcase[4];
+	p++;
+	acl = strchr(p, ' ');
+	if (!acl) {
+	    syslog(LOG_ERR, "%s: can't find acl", key);
+	    return 0;
 	}
-	
-	matchlen = glob_test(g, namematchbuf+rock->inboxoffset,
-			     keylen-rock->inboxoffset, &minmatch);
-	if (matchlen == -1) break;
+	acl++;
+	acllen = datalen - (acl - data);
+	if (acllen > aclbufsz) {
+	    aclbufsz = acllen + 500;
+	    aclbuf = xrealloc(aclbuf, aclbufsz);
+	}
+	memcpy(aclbuf, acl, acllen);
+	aclbuf[acllen] = '\0';
 
-	/* if we get here, close enough for us to spend the time
-           acting interested */
-	return 1;
+	rights = cyrus_acl_myrights(rock->auth_state, aclbuf);
+	if (!(rights & ACL_LOOKUP)) {
+	    return 0;
+	}
     }
-
-    return 0;
+    
+    /* if we get here, close enough for us to spend the time
+       acting interested */
+    return 1;
 }
 
 static int find_cb(void *rockp, 
@@ -1296,7 +1331,6 @@ static int find_cb(void *rockp,
 		   const char *data, int datalen)
 {
     char namebuf[MAX_MAILBOX_NAME+1];
-    char namematchbuf[MAX_MAILBOX_NAME+1];
     struct find_rock *rock = (struct find_rock *) rockp;
     int r = 0;
     long minmatch;
@@ -1309,7 +1343,6 @@ static int find_cb(void *rockp,
 
 	memcpy(namebuf, key, keylen);
 	namebuf[keylen] = '\0';
-	strcpy(namematchbuf, namebuf);
 	
 	if (!rock->inbox && rock->usermboxname &&
 	    !strncmp(namebuf, rock->usermboxname, rock->usermboxnamelen)
@@ -1319,62 +1352,29 @@ static int find_cb(void *rockp,
 	    return 0;
 	}
 
-	if (rock->inboxoffset) {
-	    namematchbuf[rock->inboxoffset] = rock->inboxcase[0];
-	    namematchbuf[rock->inboxoffset+1] = rock->inboxcase[1];
-	    namematchbuf[rock->inboxoffset+2] = rock->inboxcase[2];
-	    namematchbuf[rock->inboxoffset+3] = rock->inboxcase[3];
-	    namematchbuf[rock->inboxoffset+4] = rock->inboxcase[4];
-	}
-	
-	matchlen = glob_test(g, namematchbuf+rock->inboxoffset,
-			     keylen-rock->inboxoffset, &minmatch);
-	if (matchlen == -1) break;
-	
       	/* make sure it's in the mailboxes db */
 	if (rock->checkmboxlist) {
 	    r = mboxlist_lookup(namebuf, NULL, NULL, NULL);
 	} else {
 	    r = 0;		/* don't bother checking */
 	}
-	if (!r && !rock->isadmin) {
-	    /* check the acls */
-	    const char *p, *acl;
-	    char aclbuf[1024];
-	    int rights;
-	    int acllen;
 
-	    p = strchr(data, ' ');
-	    if (!p) {
-		syslog(LOG_ERR, "%s: can't find partition", namebuf);
-		return IMAP_IOERROR;
-	    }
-	    p++;
-	    acl = strchr(p, ' ');
-	    if (!acl) {
-		syslog(LOG_ERR, "%s: can't find acl", namebuf);
-		return IMAP_IOERROR;
-	    }
-	    acl++;
-	    acllen = datalen - (acl - data);
-	    if (acllen < sizeof(aclbuf) - 1) {
-		memcpy(aclbuf, acl, acllen);
-		aclbuf[acllen] = '\0';
-		rights = cyrus_acl_myrights(rock->auth_state, aclbuf);
-	    } else {
-		char *a = xstrndup(acl, datalen - (acl - data));
-		rights = cyrus_acl_myrights(rock->auth_state, a);
-		free(a);
-	    }
-	    if (!(rights & ACL_LOOKUP)) {
-		r = IMAP_MAILBOX_NONEXISTENT;
-	    }
+	if (!r && rock->inboxoffset) {
+	    namebuf[rock->inboxoffset] = rock->inboxcase[0];
+	    namebuf[rock->inboxoffset+1] = rock->inboxcase[1];
+	    namebuf[rock->inboxoffset+2] = rock->inboxcase[2];
+	    namebuf[rock->inboxoffset+3] = rock->inboxcase[3];
+	    namebuf[rock->inboxoffset+4] = rock->inboxcase[4];
 	}
-
+	
+	matchlen = glob_test(g, namebuf+rock->inboxoffset,
+			     keylen-rock->inboxoffset, &minmatch);
+	if (matchlen == -1) break;
+	
 	switch (r) {
 	case 0:
 	    /* found the entry; output it */
-	    r = (*rock->proc)(namematchbuf+rock->inboxoffset, matchlen, 
+	    r = (*rock->proc)(namebuf+rock->inboxoffset, matchlen, 
 			      1, rock->procrock);
 	    break;
 	    
