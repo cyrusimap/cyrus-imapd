@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.67 2002/04/02 03:40:57 leg Exp $
+ * $Id: prot.c,v 1.68 2002/04/02 17:16:15 leg Exp $
  */
 
 #include <config.h>
@@ -593,7 +593,6 @@ int prot_flush(struct protstream *s)
  */
 int prot_write(struct protstream *s, const char *buf, unsigned len)
 {
-    assert(len >= 0);
     assert(s->write);
 
     while (len >= s->cnt) {

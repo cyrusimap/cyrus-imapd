@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.89 2002/04/02 00:04:30 leg Exp $
+ * $Id: append.c,v 1.90 2002/04/02 17:16:13 leg Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -134,7 +134,8 @@ int append_check(const char *name, int format,
     }
 
     if (m.quota.limit >= 0 && quotacheck >= 0 &&
-	m.quota.used + quotacheck > m.quota.limit * QUOTA_UNITS) {
+	m.quota.used + quotacheck > 
+	    ((unsigned) m.quota.limit * QUOTA_UNITS)) {
 	mailbox_close(&m);
 	return IMAP_QUOTA_EXCEEDED;
     }
@@ -204,7 +205,7 @@ int append_setup(struct appendstate *as, const char *name,
 
     if (as->m.quota.limit >= 0 && quotacheck >= 0 &&
 	as->m.quota.used + quotacheck > 
-	         as->m.quota.limit * QUOTA_UNITS) {
+	    ((unsigned) as->m.quota.limit * QUOTA_UNITS)) {
 	mailbox_close(&as->m);
 	return IMAP_QUOTA_EXCEEDED;
     }
