@@ -1,3 +1,30 @@
+This file aims to be a guild to Cyrus coding style/conventions/useful utilities
+for people trying to approach the code in a sane way.  It's not well organized
+right now but hopefully that will improve with time ;)
+
+- Memory Allocation:
+  - All cyrus memory allocation should be done through the libcyrus functions.
+    These are all written to correctly call fatal() in the event of an
+    out-of-memory condition.
+  - In addition to xmalloc and xrealloc, we provide replacements for
+    strdup, strndup, and a malloc that will guarantee zeroed block of memory
+    (xzmalloc).
+  - If you are going to need to do a large number of small allocations, and
+    then free them all at once, you should look at the memory pool routines,
+    which are much faster, but will leak memory until you free the entire
+    pool at once.
+
+- (ToDo) mmap and map_refresh, etc.
+
+- Network Functions
+  - Cyrus abstracts socket stream access to a concept we refer to as
+    "prot streams"  Prot Streams take care of all of the necessary 
+    SASL and TLS/SSL encrpytion that may need to happen before data
+    goes out/comes in from the network.  The API is documented in
+    lib/prot.h
+
+- (todo) Authorization Modules
+
 Some general hints that all made it into my 11/15 16:47 commit that I
 think may be generally useful to people hacking on the cyrus source:
 
