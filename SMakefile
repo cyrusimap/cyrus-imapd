@@ -40,7 +40,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.77 2001/12/12 22:22:27 rjs3 Exp $
+# $Id: SMakefile,v 1.78 2001/12/13 16:55:06 rjs3 Exp $
 #
 
 if test ! -x configure; then
@@ -126,8 +126,10 @@ fi
 # settings; we have to disable these on some platforms
 DEBUG=""
 WITHAUTH="--with-auth=krb_pts"
+SSL_CONFIG="--with-openssl=/usr/local/lib"
+
+# the following is for staticly linking SASL only
 SASL_CONFIG="--with-staticsasl=/usr/local --with-gssapi=/usr/local"
-SSL_CONFIG="--with-openssl=/usr/local/lib"]
 KRB_CONFIG="--enable-statickrb --with-krb=/usr/local"
 
 MFCOMMAND="./configure $WITHAUTH $KRB_CONFIG --with-inn=/usr/news --enable-experiment --enable-cmulocal --with-cyrus-group=staff --enable-thread-ref --with-ucdsnmp=/usr/local --enable-murder --enable-oldsievename $SASL_CONFIG $DEBUG"
