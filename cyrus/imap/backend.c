@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.4 2002/04/02 19:29:35 rjs3 Exp $ */
+/* $Id: backend.c,v 1.5 2002/04/03 21:16:48 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -148,6 +148,64 @@ static int mysasl_getauthline(struct protstream *p, char *tag,
     }
 }
 
+static char *parsemechlist(char *str)
+{
+    char *tmp;
+    int num=0;
+    char *ret=xmalloc(strlen(str)+1);
+    
+    ret[0] = '\0';
+    
+    while ((tmp=strstr(str,"AUTH="))!=NULL)
+    {
+	char *end=tmp+5;
+	tmp+=5;
+	
+	while(((*end)!=' ') && ((*end)!='\0'))
+	    end++;
+	
+	(*end)='\0';
+	
+	/* add entry to list */
+	if (num>0)
+	    strcat(ret," ");
+	strcat(ret, tmp);
+	num++;
+	
+	/* reset the string */
+	str=end+1;
+    }
+    
+    return ret;
+}
+
+static char *ask_capability(struct protstream *pout, struct protstream *pin)
+{
+    char str[4096];
+    char *ret;
+    
+    /* request capabilities of server */
+    prot_printf(pout, "C01 CAPABILITY\r\n");
+    prot_flush(pout);
+    
+    do { /* look for the * CAPABILITY response */
+	if (prot_fgets(str,sizeof(str),pin) == NULL) {
+	    return NULL;
+	}
+    } while (strncasecmp(str, "* CAPABILITY", 12));
+    
+    ret=parsemechlist(str);
+    
+    do { /* look for TAG */
+	if (prot_fgets(str, sizeof(str), pin) == NULL) {
+	    free(ret);
+	    return NULL;
+	}
+    } while (strncmp(str, "C01", strlen("C01")));
+    
+    return ret;
+}
+
 extern sasl_callback_t *mysasl_callbacks(const char *username,
 					 const char *authname,
 					 const char *realm,
@@ -167,6 +225,7 @@ static int backend_authenticate(struct backend *s, const char *userid)
     char *in, *p;
     const char *out;
     unsigned int inlen, outlen;
+    char *mech_conf, *mechlist;
     const char *mechusing;
     unsigned b64len;
     const char *pass;
@@ -216,14 +275,29 @@ static int backend_authenticate(struct backend *s, const char *userid)
 	return SASL_FAIL;
     }
 
+    /* Get SASL mechanism list */
+    /* We can force a particular mechanism using a <shorthost>_mechs option */
     strcpy(buf, s->hostname);
     p = strchr(buf, '.');
     *p = '\0';
     strcat(buf, "_mechs");
+    mech_conf = config_getstring(buf, NULL);
+    
+    /* If we don't have a mech_conf, ask the server what it can do */
+    if(!mech_conf) {
+	mechlist = ask_capability(s->out, s->in);
+    } else {
+	mechlist = xstrdup(mech_conf);
+    }
 
     /* we now do the actual SASL exchange */
-    r = sasl_client_start(s->saslconn, config_getstring(buf, "KERBEROS_V4"),
+    r = sasl_client_start(s->saslconn, mechlist,
 			  NULL, NULL, NULL, &mechusing);
+
+    /* garbage collect */
+    free(mechlist);
+    mechlist = NULL;
+
     if ((r != SASL_OK) && (r != SASL_CONTINUE)) {
 	return r;
     }
