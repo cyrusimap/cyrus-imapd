@@ -277,7 +277,7 @@ int service_main(int argc, char **argv, char **envp)
 	fatal("SASL failed initializing: sasl_server_init()", -1); 
 
     /* other params should be filled in */
-    if (sasl_server_new("imap", NULL, NULL, 
+    if (sasl_server_new("imap", config_servername, NULL, 
 			NULL, SASL_SECURITY_LAYER, &sieved_saslconn)
 	   != SASL_OK)
 	fatal("SASL failed initializing: sasl_server_new()", -1); 
