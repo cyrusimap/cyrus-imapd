@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notifyd.c,v 1.5 2002/04/02 04:18:26 leg Exp $
+ * $Id: notifyd.c,v 1.6 2002/04/07 04:58:10 ken3 Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -49,227 +49,140 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <sys/stat.h>
 #include <errno.h>
-#include <stdlib.h>
-#include <limits.h>
-#include <sys/param.h>
 #include <syslog.h>
-#include <dirent.h>
-#include <ctype.h>
 #include <com_err.h>
-#include <netdb.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h>
+#include <sys/un.h>
+#ifdef HAVE_UNISTD_H
+# include <unistd.h>
+#endif
 #include <signal.h>
 #include <string.h>
 
 #include "notifyd.h"
-#include "retry.h"
 #include "imapconf.h"
 #include "xmalloc.h"
 #include "exitcodes.h"
 
 
-static int notifyd_out;
-static int notifyd_in;
+static int soc = 0; /* master has handed us the port as stdin */
 
-notifymethod_t *default_method;	/* default method daemon is using */
+static notifymethod_t *default_method;	/* default method daemon is using */
 
-
-/* Reset for the next connection */
-static void notifyd_reset(void)
-{
-    close(0);
-    close(1);
-    close(2);
-}
 
 /* Cleanly shut down and exit */
 void shut_down(int code) __attribute__ ((noreturn));
 void shut_down(int code)
 {
-    /* cleanup */
-    notifyd_reset();
-
     /* done */
     exit(code);
 }
 
-void do_notify()
+char *fetch_arg(char *head, char* tail)
 {
-    int rc, i;
-    char *method = NULL;
-    char *class = NULL;
-    char *priority = NULL;
-    char *user = NULL;
-    char *mailbox = NULL;
-    unsigned short nopt;
+    char *cp;
+
+    for (cp = head; *cp && cp < tail; cp++);
+    return (cp == tail ? NULL : cp + 1);
+}
+
+#define NOTIFY_MAXSIZE 8192
+
+int do_notify()
+{
+    struct sockaddr_un sun;
+    socklen_t sunlen = sizeof(sun);
+    char buf[NOTIFY_MAXSIZE+1], *cp, *tail;
+    int r, i;
+    char *method, *class, *priority, *user, *mailbox, *message;
     char **options = NULL;
-    char *message = NULL;
+    unsigned long nopt = 0;
     char *reply = NULL;
-    unsigned short count;
-    struct iovec iov[2];
-    int num_iov = 0;
     notifymethod_t *nmethod;
 
-    /*
-     * read request of the form:
-     *
-     * count method count class count priority count user count mailbox
-     *   nopt N(count option) count message
-     */
+    while (1) {
+	method = class = priority = user = mailbox = message = NULL;
 
-    rc = (retry_read(notifyd_in, &count, sizeof(count)) < (int) sizeof(count));
-    if (!rc) {
-	count = ntohs(count);
-	if ((method = (char*) xmalloc(count+1)) == NULL)
-	    fatal("xmalloc(): can't allocate method", EC_OSERR);
-	if (!rc) {
-	    rc = (retry_read(notifyd_in, method, count) < (int) count);
-	    method[count] = '\0';
+	signals_poll();
+	r = recvfrom(soc, buf, NOTIFY_MAXSIZE, 0,
+		     (struct sockaddr *) &sun, &sunlen);
+	if (r == -1) {
+	    return (errno);
 	}
-    }
+	buf[r] = '\0';
 
-    if (!rc)
-	rc = (retry_read(notifyd_in, &count, sizeof(count)) < (int) sizeof(count));
-    if (!rc) {
-	count = ntohs(count);
-	if ((class = (char*) xmalloc(count+1)) == NULL)
-	    fatal("xmalloc(): can't allocate class", EC_OSERR);
-	if (!rc) {
-	    rc = (retry_read(notifyd_in, class, count) < (int) count);
-	    class[count] = '\0';
-	}
-    }
+	tail = buf + r - 1;
 
-    if (!rc)
-	rc = (retry_read(notifyd_in, &count, sizeof(count)) < (int) sizeof(count));
-    if (!rc) {
-	count = ntohs(count);
-	if ((priority = (char*) xmalloc(count+1)) == NULL)
-	    fatal("xmalloc(): can't allocate priority", EC_OSERR);
-	if (!rc) {
-	    rc = (retry_read(notifyd_in, priority, count) < (int) count);
-	    priority[count] = '\0';
-	}
-    }
+	/*
+	 * parse request of the form:
+	 *
+	 * method NUL class NUL priority NUL user NUL mailbox NUL
+	 *   nopt NUL N(option NUL) message NUL
+	 */
+	method = (cp = buf);
 
-    if (!rc)
-	rc = (retry_read(notifyd_in, &count, sizeof(count)) < (int) sizeof(count));
-    if (!rc) {
-	count = ntohs(count);
-	if ((user = (char*) xmalloc(count+1)) == NULL)
-	    fatal("xmalloc(): can't allocate user", EC_OSERR);
-	if (!rc) {
-	    rc = (retry_read(notifyd_in, user, count) < (int) count);
-	    user[count] = '\0';
-	}
-    }
+	if (cp) class = (cp = fetch_arg(cp, tail));
+	if (cp) priority = (cp = fetch_arg(cp, tail));
+	if (cp) user = (cp = fetch_arg(cp, tail));
+	if (cp) mailbox = (cp = fetch_arg(cp, tail));
 
-    if (!rc)
-	rc = (retry_read(notifyd_in, &count, sizeof(count)) < (int) sizeof(count));
-    if (!rc) {
-	count = ntohs(count);
-	if ((mailbox = (char*) xmalloc(count+1)) == NULL)
-	    fatal("xmalloc(): can't allocate mailbox", EC_OSERR);
-	if (!rc) {
-	    rc = (retry_read(notifyd_in, mailbox, count) < (int) count);
-	    mailbox[count] = '\0';
-	}
-    }
+	if (cp) cp = fetch_arg(cp, tail); /* skip to nopt */
+	if (cp) nopt = strtol(cp, NULL, 10);
+	if (nopt < 0) cp = NULL;
 
-    if (!rc)
-	rc = (retry_read(notifyd_in, &nopt, sizeof(nopt)) < (int) sizeof(nopt));
-    if (!rc) {
-	nopt = ntohs(nopt);
-	if ((options = (char**) xmalloc(nopt * sizeof(char*))) == NULL)
+	if (cp &&
+	    !(options = (char**) xrealloc(options, nopt * sizeof(char*)))) {
 	    fatal("xmalloc(): can't allocate options", EC_OSERR);
+	}
 
-	for (i = 0; !rc && i < nopt; i++) {
-	    rc = (retry_read(notifyd_in, &count, sizeof(count)) < (int) sizeof(count));
-	    if (!rc) {
-		count = ntohs(count);
-		if ((options[i] = (char*) xmalloc(count+1)) == NULL)
-		    fatal("xmalloc(): can't allocate option[i]", EC_OSERR);
-		if (!rc) {
-		    rc = (retry_read(notifyd_in, options[i], count) < (int) count);
-		    options[i][count] = '\0';
-		}
+	for (i = 0; cp && i < nopt; i++) {
+	    options[i] = (cp = fetch_arg(cp, tail));
+	}
+
+	if (cp) message = (cp = fetch_arg(cp, tail));
+
+	if (!message) {
+	    syslog(LOG_ERR, "malformed notify request");
+	    return 0;
+	}
+
+	if (!*method)
+	    nmethod = default_method;
+	else {
+	    nmethod = methods;
+	    while (nmethod->name) {
+		if (!strcasecmp(nmethod->name, method)) break;
+		nmethod++;
 	    }
 	}
-    }
 
-    if (!rc) {
-	rc = (retry_read(notifyd_in, &count, sizeof(count)) < (int) sizeof(count));
-    }
+	syslog(LOG_DEBUG, "do_notify using method '%s'",
+	       nmethod->name ? nmethod->name: "unknown");
 
-    if (!rc) {
-	count = ntohs(count);
-	if ((message = (char*) xmalloc(count+1)) == NULL)
-	    fatal("xmalloc() failed: can't allocate message", EC_OSERR);
-	if (!rc) {
-	    rc = (retry_read(notifyd_in, message, count) < (int) count);
-	    message[count] = '\0';
+	if (nmethod->name) {
+	    reply = nmethod->notify(class, priority, user, mailbox,
+				    nopt, options, message);
+	}
+#if 0  /* we don't care about responses right now */
+	else {
+	    reply = strdup("NO unknown notification method");
+	    if (!reply) {
+		fatal("strdup failed", EC_OSERR);
+	    }
+	}
+#endif
+
+	if (reply) {
+	    free(reply);
+	    reply = NULL;
 	}
     }
 
-    if (rc) {
-	syslog(LOG_ERR, "do_notify() read failed: %m");
-    }
-
-    if (!*method)
-	nmethod = default_method;
-    else {
-	nmethod = methods;
-	while (nmethod->name) {
-	    if (!strcasecmp(nmethod->name, method)) break;
-	    nmethod++;
-	}
-    }
-
-    syslog(LOG_DEBUG, "do_notify using method '%s'",
-	   nmethod->name ? nmethod->name: "unknown");
-
-    if (nmethod->name) {
-	reply = nmethod->notify(class, priority, user, mailbox,
-				nopt, options, message);
-    } else {
-	reply = strdup("NO unknown notification method");
-	if (!reply) {
-	    fatal("strdup failed", EC_OSERR);
-	}
-    }
-
-    if (method) free(method);
-    if (class) free(class);
-    if (priority) free(priority);
-    if (user) free(user);
-    if (mailbox) free(mailbox);
-    if (message) free(message);
-    for (i = 0; i < nopt; i++) {
-	if (options[i]) free(options[i]);
-    }
-    if (options) free(options);
-
-    /*
-     * send response of the form:
-     *
-     * count result
-     */
-    count = htons(strlen(reply));
-
-    WRITEV_ADD_TO_IOVEC(iov, num_iov, (char*) &count, sizeof(count));
-    WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, reply);
-    rc = retry_writev(notifyd_out, iov, num_iov);
-
-    if (rc == -1) syslog(LOG_ERR, "do_notify write failed: %m");
-
-    if (reply) {
-	free(reply);
-    }
+    /* never reached */
+    return 0;
 }
 
 
@@ -302,9 +215,6 @@ int service_init(int argc, char **argv, char **envp)
     config_changeident("notifyd");
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
-    /* set signal handlers */
-    signal(SIGPIPE, SIG_IGN);
-
     while ((opt = getopt(argc, argv, "C:m:")) != EOF) {
 	switch(opt) {
 	case 'C': /* alt config file - handled by service::main() */
@@ -327,6 +237,9 @@ int service_init(int argc, char **argv, char **envp)
 
     if (!default_method) fatal("unknown notification method %s", EC_USAGE);
 
+    signals_set_shutdown(&shut_down);
+    signals_add_handlers();
+
     return 0;
 }
 
@@ -337,14 +250,9 @@ void service_abort(int error)
 
 int service_main(int argc, char **argv, char **envp)
 {
-    /* set up the prot streams */
-    notifyd_in = 0;
-    notifyd_out = 1;
+    int r = 0;
 
-    do_notify();
+    r = do_notify();
 
-    /* cleanup */
-/*    notifyd_reset();*/
-
-    return 0;
+    shut_down(r);
 }

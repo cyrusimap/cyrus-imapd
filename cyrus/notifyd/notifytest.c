@@ -59,11 +59,23 @@
 # include <unistd.h>
 #endif
 
-#include "retry.h"
-
 extern int errno;
 
 #define MAX_OPT 10
+#define MAXSIZE 8192
+
+static int add_arg(char *buf, int max_size, const char *arg, int *buflen)
+{
+    const char *myarg = (arg ? arg : "");
+    int len = strlen(myarg) + 1;
+
+    if (*buflen + len > max_size) return -1;
+
+    strcat(buf+*buflen, myarg);
+    *buflen += len;
+
+    return 0;
+}
 
 static int notify(const char *notifyd_path, const char *method,
 		  const char *class, const char *priority,
@@ -71,116 +83,63 @@ static int notify(const char *notifyd_path, const char *method,
 		  int nopt, char **options,
 		  const char *message)
 {
-    static char response[1024];
-    int s;
-    struct sockaddr_un srvaddr;
-    int r;
-    unsigned short count;
+    int soc;
+    struct sockaddr_un sun;
+    char buf[MAXSIZE] = "", noptstr[20];
+    int buflen = 0;
+    int i, r = 0;
 
-    s = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (s == -1) {
+    soc = socket(AF_UNIX, SOCK_DGRAM, 0);
+    if (soc == -1) {
 	perror("socket() ");
 	return -1;
     }
 
-    memset((char *)&srvaddr, 0, sizeof(srvaddr));
-    srvaddr.sun_family = AF_UNIX;
-    strncpy(srvaddr.sun_path, notifyd_path, sizeof(srvaddr.sun_path));
-
-    r = connect(s, (struct sockaddr *) &srvaddr, sizeof(srvaddr));
-    if (r == -1) {
-        perror("connect() ");
-	return -1;
-    }
+    memset((char *)&sun, 0, sizeof(sun));
+    sun.sun_family = AF_UNIX;
+    strncpy(sun.sun_path, notifyd_path, sizeof(sun.sun_path));
 
     /*
      * build request of the form:
      *
-     * count method count class count priority count user count mailbox
-     *   nopt N(count option) count message
+     * method NUL class NUL priority NUL user NUL mailbox NUL
+     *   nopt NUL N(option NUL) NUL message NUL
      */
-    {
-	unsigned short n_len, c_len, p_len, u_len, m_len, o_len[MAX_OPT], t_len;
- 	struct iovec iov[13 + 2*MAX_OPT];
-	int num_iov = 0;
-	int i;
 
- 	n_len = htons(strlen(method));
- 	c_len = htons(strlen(class));
- 	p_len = htons(strlen(priority));
- 	u_len = htons(strlen(user));
- 	m_len = htons(strlen(mailbox));
-	count = htons((unsigned short) nopt);
-	t_len = htons(strlen(message));
+    r = add_arg(buf, MAXSIZE, method, &buflen);
+    if (!r) r = add_arg(buf, MAXSIZE, class, &buflen);
+    if (!r) r = add_arg(buf, MAXSIZE, priority, &buflen);
+    if (!r) r = add_arg(buf, MAXSIZE, user, &buflen);
+    if (!r) r = add_arg(buf, MAXSIZE, mailbox, &buflen);
 
-	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char*) &n_len, sizeof(n_len));
-	WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, (char*) method);
-	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char*) &c_len, sizeof(c_len));
-	WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, (char*) class);
-	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char*) &p_len, sizeof(p_len));
-	WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, (char*) priority);
-	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char*) &u_len, sizeof(u_len));
-	WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, (char*) user);
-	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char*) &m_len, sizeof(m_len));
-	WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, (char*) mailbox);
+    sprintf(noptstr, "%d", nopt);
+    if (!r) r = add_arg(buf, MAXSIZE, noptstr, &buflen);
 
-	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char*) &count, sizeof(count));
-
-	for (i = 0; i < nopt; i++) {
-	    o_len[i] = htons(strlen(options[i]));
-	    WRITEV_ADD_TO_IOVEC(iov, num_iov, (char*) &o_len[i], sizeof(o_len[i]));
-	    WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, options[i]);
-	}	    
-
-	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char*) &t_len, sizeof(t_len));
-	WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, (char*) message);
-
-	if (retry_writev(s, iov, num_iov) == -1) {
-            fprintf(stderr,"write failed\n");
-  	    return -1;
-  	}
+    for (i = 0; !r && i < nopt; i++) {
+	r = add_arg(buf, MAXSIZE, options[i], &buflen);
     }
 
-    /*
-     * read response of the form:
-     *
-     * count result
-     */
-    if (retry_read(s, &count, sizeof(count)) < (int) sizeof(count)) {
-        fprintf(stderr,"size read failed\n");
-	return -1;
-    }
-  
-    count = ntohs(count);
-    if (count < 2) { /* MUST have at least "OK" or "NO" */
-	close(s);
-        fprintf(stderr,"bad response from notifyd\n");
-	return -1;
-    }
-  
-    count = (int)sizeof(response) < count ? sizeof(response) : count;
-    if (retry_read(s, response, count) < count) {
-	close(s);
-        fprintf(stderr,"read failed\n");
-	return -1;
-    }
-    response[count] = '\0';
+    if (!r) r = add_arg(buf, MAXSIZE, message, &buflen);
 
-    close(s);
-  
-    printf("\"%s\"\n", response);
-
-    if (!strncmp(response, "OK", 2))
-	return 0;
-    else
+    if (r) {
+        perror("dgram too big");
 	return -1;
+    }
+
+    r = sendto(soc, buf, buflen, 0, (struct sockaddr *) &sun, sizeof(sun));
+    if (r < buflen) {
+        perror("sendto() ");
+	return -1;
+    }
+
+    return 0;
 }
 
 int
 main(int argc, char *argv[])
 {
   const char *method = "", *priority = "normal";
-  const char *class = "MESSAGE", *user = "", *mailbox = "";
+  const char *class = "MESSAGE", *user = "", *mailbox = NULL;
   const char *message = NULL, *path = NULL;
   int c;
   int flag_error = 0;
@@ -236,4 +195,3 @@ main(int argc, char *argv[])
   return notify(path, method, class, priority, user, mailbox,
 		argc - optind, argv+optind, message);
 }
-

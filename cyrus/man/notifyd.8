@@ -55,6 +55,11 @@ behalf of lmtpd(8).
 accepts the request and performs the notification using the method
 specified in the request.
 .PP
+Note that for
+.B notifyd
+to run properly you must set proto=udp in its cyrus.conf
+services entry.  prefork=1 is also recommended.
+.PP
 .B Notifyd
 reads its configuration options out of the
 .IR imapd.conf (5)
