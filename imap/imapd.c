@@ -355,15 +355,19 @@ cmdloop()
 	    else if (!imapd_userid) goto nologin;
 	    else if (!strcmp(cmd.s, "List")) {
 		c = getastring(&arg1);
+		if (c != ' ') goto missingargs;
+		c = getastring(&arg2);
 		if (c == '\r') c = getc(stdin);
 		if (c != '\n') goto extraargs;
-		cmd_list(tag.s, 0, arg1.s);
+		cmd_list(tag.s, 0, arg1.s, arg2.s);
 	    }
 	    else if (!strcmp(cmd.s, "Lsub")) {
 		c = getastring(&arg1);
+		if (c != ' ') goto missingargs;
+		c = getastring(&arg2);
 		if (c == '\r') c = getc(stdin);
 		if (c != '\n') goto extraargs;
-		cmd_list(tag.s, 1, arg1.s);
+		cmd_list(tag.s, 1, arg1.s, arg2.s);
 	    }
 	    else goto badcmd;
 	    break;
@@ -1545,11 +1549,24 @@ char *pattern;
 /*
  * Perform a LIST or LSUB command
  */
-cmd_list(tag, subscribed, pattern)
+cmd_list(tag, subscribed, reference, pattern)
 char *tag;
 int subscribed;
+char *reference;
 char *pattern;
 {
+    char buf[MAX_MAILBOX_PATH];
+
+    /* Handle name-in-reference */
+    if (pattern[0] == '.') {
+	strcpy(buf, reference);
+	if (*reference && reference[strlen(reference)-1] == '.') {
+	    reference[strlen(reference)-1] = '\0';
+	}
+	strcat(buf, pattern);
+	pattern = buf;
+    }
+
     if (subscribed) {
 	mboxlist_findsub(pattern, imapd_userisadmin, imapd_userid,
 			 lsubdata);
