@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.38 1999/10/18 02:21:42 leg Exp $
+ $Id: imclient.c,v 1.39 1999/10/30 23:14:53 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -1162,12 +1162,17 @@ int imclient_authenticate(struct imclient *imclient,
 	inlen = imclient_decodebase64(imclient->readytxt);
     }
 
+    if (inlen == -1) {
+	/* bad base64 string */
+	return replytype_bad;
+    }
+
     if (inlen == 0 && outlen > 0) {
 	/* we have something from the initial thing to send */
     } else {
 	/* perform a step */
-	saslresult=SASL_INTERACT;
-	while (saslresult==SASL_INTERACT) {
+	saslresult = SASL_INTERACT;
+	while (saslresult == SASL_INTERACT) {
 	    saslresult=sasl_client_step(imclient->saslconn,
 					imclient->readytxt,
 					inlen, 
@@ -1175,7 +1180,7 @@ int imclient_authenticate(struct imclient *imclient,
 					&out,
 					&outlen);
 	    
-	    if (saslresult==SASL_INTERACT) {
+	    if (saslresult == SASL_INTERACT) {
 		/* fill in prompts */
 		fillin_interactions(client_interact, user); 
 	    }
@@ -1185,7 +1190,7 @@ int imclient_authenticate(struct imclient *imclient,
     /* send to server */
     /* Send our reply to the server */
     if ((saslresult==SASL_OK) || (saslresult==SASL_CONTINUE)) {
-      imclient_writebase64(imclient, out, outlen);
+	imclient_writebase64(imclient, out, outlen);
     } else {
 	return saslresult;
     }
