@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squat_build.c,v 1.6 2003/02/13 20:15:31 rjs3 Exp $
+ * $Id: squat_build.c,v 1.7 2003/02/27 15:59:39 rjs3 Exp $
  */
 
 /*
@@ -88,6 +88,8 @@
   therefore is only of depth 3. The leaves store the list of document
   IDs containing the word.
 */
+
+#include <config.h>
 
 #include <stdlib.h>
 #include <string.h>
