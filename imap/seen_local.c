@@ -147,9 +147,10 @@ char **seenuidsptr;
 
 	if (seendb->ino != sbuf.st_ino) {
 	    map_free(&seendb->base, &seendb->size);
-	    map_refresh(seendb->fd, 1, &seendb->base, &seendb->size,
-			sbuf.st_size, fnamebuf, 0);
 	}
+	map_refresh(seendb->fd, 0, &seendb->base, &seendb->size,
+		    sbuf.st_size, fnamebuf, 0);
+
     }
     
     /* Find record for user */
