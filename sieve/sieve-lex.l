@@ -48,10 +48,12 @@ CRLF		(\r\n|\r|\n)
 %state MULTILINE
 
 %%
-<MULTILINE>^\.{CRLF}	{ BEGIN INITIAL; yylval.sval = mlbuf; return STRING; }
+<MULTILINE>^\.{CRLF}	{ BEGIN INITIAL; 
+                          mlbuf[mlcur] = '\0';
+                          yylval.sval = mlbuf; return STRING; }
 <MULTILINE>^\.\.  { /* dot stuffing! we want one . */ yyless(1); }
 <MULTILINE>(.|\n) { if (mlcur == mlbufsz) 
-			mlbuf = xrealloc(mlbuf, mlbufsz+=1024);
+			mlbuf = xrealloc(mlbuf, 1+mlbufsz+=1024);
 		    mlbuf[mlcur++] = yytext[0]; }
 <MULTILINE><<EOF>> { yyerror("unexpected end of file in string"); 
 		     yyterminate(); }
