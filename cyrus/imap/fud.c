@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.32.4.2 2002/07/25 17:21:40 ken3 Exp $ */
+/* $Id: fud.c,v 1.32.4.3 2002/08/09 13:22:21 ken3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -99,21 +99,23 @@ int soc = 0; /* inetd (master) has handed us the port as stdin */
 char who[16];
 
 #define MAXLOGNAME 16		/* should find out for real */
+#define MAXDOMNAME 20		/* should find out for real */
 
 int begin_handling(void)
 {
         struct sockaddr_in  sfrom;
         socklen_t sfromsiz = sizeof(sfrom);
         int r;
-        char    buf[MAXLOGNAME + MAX_MAILBOX_NAME + 1];
-        char    username[MAXLOGNAME];
+        char    buf[MAXLOGNAME + MAXDOMNAME+ MAX_MAILBOX_NAME + 1];
+        char    username[MAXLOGNAME + MAXDOMNAME];
         char    mbox[MAX_MAILBOX_NAME+1];
         char    *q;
         int     off;
+	int     maxuserlen = MAXLOGNAME + config_virtdomains ? MAXDOMNAME : 0;
 
         while(1) {
             /* For safety */
-            memset(username,'\0',MAXLOGNAME);	
+            memset(username,'\0',MAXLOGNAME + MAXDOMNAME);	
             memset(mbox,'\0',MAX_MAILBOX_NAME+1);
             memset(buf, '\0', MAXLOGNAME + MAX_MAILBOX_NAME + 1);
 
@@ -123,8 +125,8 @@ int begin_handling(void)
             if (r == -1) {
 		return(errno);
 	    }
-            for(off = 0; buf[off] != '|' && off < MAXLOGNAME; off++);
-            if(off < MAXLOGNAME) {
+            for(off = 0; buf[off] != '|' && off < maxuserlen; off++);
+            if(off < maxuserlen) {
 		strlcpy(username,buf,off);
             } else {
 		continue;
