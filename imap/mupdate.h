@@ -1,6 +1,6 @@
 /* mupdate.h - private mupdate header file
  *
- * $Id: mupdate.h,v 1.1 2002/01/22 22:31:52 rjs3 Exp $
+ * $Id: mupdate.h,v 1.2 2002/01/24 21:03:22 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -40,6 +40,10 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#ifndef MUPDATE_H
+#define MUPDATE_H
+
+#include "mailbox.h"
 #include "mupdate-client.h"
 #include "mupdate_err.h"
 
@@ -53,6 +57,28 @@ struct mupdate_handle_s {
 
     sasl_conn_t *saslconn;
     int saslcompleted;
+};
+
+enum settype {
+    SET_ACTIVE,
+    SET_RESERVE,
+    SET_DELETE
+};
+
+/* mailbox name MUST be first, since it is the key */
+/* acl MUST be last, since it is what causes the variable size */
+struct mbent {
+    char mailbox[MAX_MAILBOX_NAME];
+    char server[MAX_MAILBOX_NAME];
+    enum settype t;
+    struct mbent *next; /* used for queue */
+    char acl[1];
+};
+
+struct mbent_queue 
+{
+    struct mbent *head;
+    struct mbent **tail;
 };
 
 /* Callbacks for mupdate_scarf */
@@ -73,3 +99,8 @@ int mupdate_scarf(mupdate_handle *handle,
 /* Used by the slave listener thread to update the local database */
 int cmd_change(struct mupdate_mailboxdata *mdata,
 	       const char *cmd, void *context);
+
+/* Given an mbent_queue, will synchronize the local database to it */
+int mupdate_synchronize(mupdate_handle *handle);
+
+#endif /* MUPDATE_H */

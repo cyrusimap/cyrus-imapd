@@ -1,6 +1,6 @@
 /* mupdate-slave.c -- cyrus murder database clients
  *
- * $Id: mupdate-slave.c,v 1.2 2002/01/23 21:53:04 rjs3 Exp $
+ * $Id: mupdate-slave.c,v 1.3 2002/01/24 21:03:22 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -76,18 +76,18 @@
 
 void mupdate_listen(mupdate_handle *handle, int pingtimeout)
 {
-    int gotdata = 0, firsttime = 1;
+    int gotdata = 0;
     fd_set read_set;
     int highest_fd;
-    
+
     if (!handle || !handle->saslcompleted) return;
 
     highest_fd = handle->sock + 1;
-    
-    /* ask for updates and set nonblocking */
-    prot_printf(handle->pout, "U01 UPDATE\r\n");
-    prot_NONBLOCK(handle->pin);
 
+    /* First, resync the database */
+    if(mupdate_synchronize(handle)) return;
+
+    /* Now just listen to the rest of the updates */
     while(1) {
 	struct timeval tv;
 
@@ -103,11 +103,8 @@ void mupdate_listen(mupdate_handle *handle, int pingtimeout)
 
 	if (gotdata > 0) {
 	    /* If there is a fatal error, die, other errors ignore */
-	    if(mupdate_scarf(handle, cmd_change, NULL, firsttime) > 0) return;
-	    else {
-		firsttime = 0;
-		continue;
-	    }
+	    if(mupdate_scarf(handle, cmd_change, NULL, 0)) return;
+	    continue;
 	} else if(gotdata == 0) {
 	    /* timed out, send a NOOP */
 	    prot_printf(handle->pout, "N%u NOOP\r\n", handle->tag++);
