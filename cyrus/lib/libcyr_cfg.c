@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: libcyr_cfg.c,v 1.2.2.9 2005/02/20 05:22:29 shadow Exp $
+ * $Id: libcyr_cfg.c,v 1.2.2.10 2005/02/20 05:24:41 shadow Exp $
  */
 
 #include <config.h>
@@ -63,15 +63,15 @@ struct cyrusopt_s cyrus_options[] = {
     { CYRUSOPT_ZERO, { NULL }, CYRUS_OPT_NOTOPT },
 
     { CYRUSOPT_AUTH_UNIX_GROUP_ENABLE,
-      CFGVAL(int, 1),
+      CFGVAL(long, 1),
       CYRUS_OPT_SWITCH },
 
     { CYRUSOPT_USERNAME_TOLOWER,
-      CFGVAL(int, 0),
+      CFGVAL(long, 0),
       CYRUS_OPT_SWITCH },
 
     { CYRUSOPT_SKIPLIST_UNSAFE,
-      CFGVAL(int, 0),
+      CFGVAL(long, 0),
       CYRUS_OPT_SWITCH },
 
     { CYRUSOPT_TEMP_PATH,
@@ -79,7 +79,7 @@ struct cyrusopt_s cyrus_options[] = {
       CYRUS_OPT_STRING },
 
     { CYRUSOPT_PTS_CACHE_TIMEOUT,
-      CFGVAL(int, 3 * 60 * 60), /* 3 hours */
+      CFGVAL(long, 3 * 60 * 60), /* 3 hours */
       CYRUS_OPT_INT },
 
     { CYRUSOPT_CONFIG_DIR,
@@ -87,11 +87,11 @@ struct cyrusopt_s cyrus_options[] = {
       CYRUS_OPT_STRING },
 
     { CYRUSOPT_DB_INIT_FLAGS,
-      CFGVAL(int, 0),
+      CFGVAL(long, 0),
       CYRUS_OPT_INT },
    
     { CYRUSOPT_FULLDIRHASH,
-      CFGVAL(int, 0),
+      CFGVAL(long, 0),
       CYRUS_OPT_SWITCH },
 
     { CYRUSOPT_PTSCACHE_DB,
@@ -103,11 +103,11 @@ struct cyrusopt_s cyrus_options[] = {
       CYRUS_OPT_STRING },
 
     { CYRUSOPT_VIRTDOMAINS,
-      CFGVAL(int, 0),
+      CFGVAL(long, 0),
       CYRUS_OPT_SWITCH },
 
     { CYRUSOPT_BERKELEY_CACHESIZE,
-      CFGVAL(int, 512 * 1024), /* 512KB */
+      CFGVAL(long, 512 * 1024), /* 512KB */
       CYRUS_OPT_INT },
 
     { CYRUSOPT_AUTH_MECH,
@@ -115,11 +115,11 @@ struct cyrusopt_s cyrus_options[] = {
       CYRUS_OPT_STRING },
 
     { CYRUSOPT_BERKELEY_LOCKS_MAX,
-      CFGVAL(int, 50000),
+      CFGVAL(long, 50000),
       CYRUS_OPT_INT },
 
     { CYRUSOPT_BERKELEY_TXNS_MAX,
-      CFGVAL(int, 100),
+      CFGVAL(long, 100),
       CYRUS_OPT_INT },
 
     { CYRUSOPT_LAST, { NULL }, CYRUS_OPT_NOTOPT }

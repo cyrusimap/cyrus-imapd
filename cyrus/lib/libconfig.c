@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: libconfig.c,v 1.2.2.14 2005/02/20 03:23:45 shadow Exp $ */
+/* $Id: libconfig.c,v 1.2.2.15 2005/02/20 05:22:29 shadow Exp $ */
 
 #include <config.h>
 
@@ -97,7 +97,13 @@ int config_getint(enum imapopt opt)
 {
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
     assert(imapopts[opt].t == OPT_INT);
-
+#if (SIZEOF_LONG != 4)
+    if ((imapopts[opt].val.i > 0x7fffffff)||
+	(imapopts[opt].val.i < -0x7fffffff)) {
+	syslog(LOG_ERR, "config_getint: %s: %lld too large for type",
+	       imapopts[opt].optname, imapopts[opt].val.i);
+    }
+#endif    
     return imapopts[opt].val.i;
 }
 
@@ -105,7 +111,13 @@ int config_getswitch(enum imapopt opt)
 {
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
     assert(imapopts[opt].t == OPT_SWITCH);
-    
+#if (SIZEOF_LONG != 4)
+    if ((imapopts[opt].val.b > 0x7fffffff)||
+	(imapopts[opt].val.b < -0x7fffffff)) {
+	syslog(LOG_ERR, "config_getswitch: %s: %lld too large for type", 
+	       imapopts[opt].optname, imapopts[opt].val.b);
+    }
+#endif    
     return imapopts[opt].val.b;
 }
 
