@@ -24,11 +24,12 @@
  * Start Date: 4/5/93
  */
 /*
- * $Id: glob.c,v 1.17 1998/06/10 22:18:37 tjs Exp $
+ * $Id: glob.c,v 1.18 1999/03/01 21:13:19 tjs Exp $
  */
 
 #include <ctype.h>
 #include <stdio.h>
+#include <string.h>
 #include "util.h"
 #include "glob.h"
 #include "xmalloc.h"
