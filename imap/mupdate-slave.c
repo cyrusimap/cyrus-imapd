@@ -1,6 +1,6 @@
 /* mupdate-slave.c -- cyrus murder database clients
  *
- * $Id: mupdate-slave.c,v 1.8 2002/01/29 17:31:45 leg Exp $
+ * $Id: mupdate-slave.c,v 1.9 2002/01/30 19:57:14 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -191,8 +191,8 @@ void *mupdate_client_start(void *rock __attribute__((unused)))
 	/* Cleanup */
 	if(h && h->pin) prot_free(h->pin);
 	if(h && h->pout) prot_free(h->pout);
-	close(h->sock);
-	if(h->saslconn) sasl_dispose(&h->saslconn);
+	if(h) close(h->sock);
+	if(h && h->saslconn) sasl_dispose(&h->saslconn);
 	free(h); h = NULL;
 	
 	/* Should we retry? */

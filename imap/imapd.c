@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.335 2002/01/29 19:25:53 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.336 2002/01/30 19:57:14 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -99,7 +99,8 @@ static int imaps = 0;
 static sasl_ssf_t extprops_ssf = 0;
 
 /* per-user/session state */
-struct protstream *imapd_out, *imapd_in;
+struct protstream *imapd_out = NULL;
+struct protstream *imapd_in = NULL;
 static char imapd_clienthost[250] = "[local]";
 static time_t imapd_logtime;
 static int imapd_logfd = -1;
@@ -209,7 +210,9 @@ void appendsearchargs(struct searchargs *s, struct searchargs *s1,
 void freesearchargs(struct searchargs *s);
 static void freesortcrit(struct sortcrit *s);
 
-static int mailboxdata(), listdata(), lsubdata();
+static int mailboxdata(char *name, int matchlen, int maycreate, void *rock);
+static int listdata(char *name, int matchlen, int maycreate, void *rock);
+static int lsubdata(char *name, int matchlen, int maycreate, void *rock);
 static void mstringdata(char *cmd, char *name, int matchlen, int maycreate,
 			int listopts);
 
@@ -341,6 +344,7 @@ static void imapd_reset(void)
 
     if (imapd_in) prot_free(imapd_in);
     if (imapd_out) prot_free(imapd_out);
+    imapd_in = imapd_out = NULL;
     close(0);
     close(1);
     close(2);
@@ -649,8 +653,10 @@ void fatal(const char *s, int code)
 	exit(recurse_code);
     }
     recurse_code = code;
-    prot_printf(imapd_out, "* BYE Fatal error: %s\r\n", s);
-    prot_flush(imapd_out);
+    if (imapd_out) {
+	prot_printf(imapd_out, "* BYE Fatal error: %s\r\n", s);
+	prot_flush(imapd_out);
+    }
     shut_down(code);
 
 }
@@ -5563,11 +5569,7 @@ static void freesortcrit(struct sortcrit *s)
 /*
  * Issue a MAILBOX untagged response
  */
-static int mailboxdata(name, matchlen, maycreate, rock)
-char *name;
-int matchlen;
-int maycreate;
-void* rock;
+static int mailboxdata(char *name, int matchlen, int maycreate, void *rock)
 {
     char mboxname[MAX_MAILBOX_PATH+1];
 
@@ -5708,11 +5710,7 @@ static void mstringdata(char *cmd, char *name, int matchlen, int maycreate,
 /*
  * Issue a LIST untagged response
  */
-static int listdata(name, matchlen, maycreate, rock)
-char *name;
-int matchlen;
-int maycreate;
-void* rock;
+static int listdata(char *name, int matchlen, int maycreate, void *rock)
 {
     mstringdata("LIST", name, matchlen, maycreate, *((int*) rock));
     return 0;
@@ -5721,11 +5719,7 @@ void* rock;
 /*
  * Issue a LSUB untagged response
  */
-static int lsubdata(name, matchlen, maycreate, rock)
-char *name;
-int matchlen;
-int maycreate;
-void* rock;
+static int lsubdata(char *name, int matchlen, int maycreate, void *rock)
 {
     mstringdata("LSUB", name, matchlen, maycreate, *((int*) rock));
     return 0;
