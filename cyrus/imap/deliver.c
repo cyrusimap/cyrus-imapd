@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.123.2.2 2000/05/16 14:50:41 ken3 Exp $
+ * $Id: deliver.c,v 1.123.2.3 2000/05/16 20:18:18 ken3 Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.123.2.2 2000/05/16 14:50:41 ken3 Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.123.2.3 2000/05/16 20:18:18 ken3 Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -148,6 +148,7 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 
 int dupelim = 0;
 int logdebug = 0;
+int singleinstance = 1;
 
 void savemsg();
 char *convert_lmtp();
@@ -355,6 +356,8 @@ char **argv;
 	sieve_dir = NULL;
     }
 #endif USE_SIEVE
+
+    singleinstance = config_getswitch("singleinstancestore", 1);
 
     msg_new(&msgdata);
     memset((void *) delopts, 0, sizeof(deliver_opts_t));
@@ -2297,7 +2300,7 @@ deliver_mailbox(struct protstream *msg,
 
     if (!r) {
 	prot_rewind(msg);
-	if (stage) {
+	if (singleinstance && stage) {
 	    r = append_fromstage(&mailbox, msg, size, now, flag, nflags,
 				 user, stage);
 	} else {
