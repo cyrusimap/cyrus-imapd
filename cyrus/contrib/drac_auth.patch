@@ -1,4 +1,4 @@
-drac_auth.patch,v 1.8 2001/06/02 02:41:43 ken3 Exp
+$Id: drac_auth.patch,v 1.10 2001/08/10 18:32:16 ken3 Exp $
 
 Patch to add support for Dynamic Relay Authorization Control
 
