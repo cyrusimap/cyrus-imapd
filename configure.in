@@ -240,7 +240,15 @@ case "$WITH_LOGIN" in
 esac
 case "$WITH_LOGIN" in
 	*_pwcheck) EXTRA_SUBDIRS="${EXTRA_SUBDIRS} pwcheck"
-		EXTRA_OUTPUT="${EXTRA_OUTPUT} pwcheck/Makefile";;
+		EXTRA_OUTPUT="${EXTRA_OUTPUT} pwcheck/Makefile"
+		AC_ARG_WITH(pwcheck,
+			[  --with-pwcheck=METHOD   use pwcheck module METHOD
+                          METHOD is getspnam or getpwname],
+			WITH_PWCHECK="$withval",
+			AC_CHECK_FUNC(getspnam,WITH_PWCHECK="getspnam",
+					WITH_PWCHECK="getpwname"))
+		AC_SUBST(WITH_PWCHECK)
+		;;
 esac
 AC_ARG_WITH(auth,[  --with-auth=METHOD      use authorization module METHOD
                           METHOD is unix or krb],[WITH_AUTH="$withval"
