@@ -142,7 +142,7 @@ cyrusMasterInfo OBJECT IDENTIFIER ::= { cyrusMasterMIB 1 }
 
                          SYNTAX     INTEGER 
 
-                         ACCESS     read-only 
+                         ACCESS     not-accessible
 
                          STATUS     mandatory 
 
