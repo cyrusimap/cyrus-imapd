@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.13 2000/07/30 15:37:26 leg Exp $
+   $Id: seen_db.c,v 1.14 2000/08/06 20:35:47 leg Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -81,6 +81,7 @@ struct seen {
 
 static struct seen *lastseen = NULL;
 
+/* choose "flat" or "db3" here */
 #define DB (&cyrusdb_flat)
 
 static void abortcurrent(struct seen *s)
@@ -89,7 +90,7 @@ static void abortcurrent(struct seen *s)
 	int r = DB->abort(s->db, s->tid);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: error aborting txn: %s", 
-		   strerror(r));
+		   cyrusdb_strerror(r));
 	}
 	s->tid = NULL;
     }
@@ -124,12 +125,14 @@ int seen_open(struct mailbox *mailbox,
 	return 0;
     }
 
+    *seendbptr = NULL;
     /* otherwise, close the existing database */
     if (seendb) {
 	abortcurrent(seendb);
 	r = DB->close(seendb->db);
 	if (r) {
-	    syslog(LOG_ERR, "DBERROR: error closing seendb: %s", strerror(r));
+	    syslog(LOG_ERR, "DBERROR: error closing seendb: %s", 
+		   cyrusdb_strerror(r));
 	}
     } else {
 	/* create seendb */
@@ -140,8 +143,12 @@ int seen_open(struct mailbox *mailbox,
     fname = getpath(user);
     r = DB->open(fname, &seendb->db);
     if (r != 0) {
-	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname, strerror(r));
+	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname, 
+	       cyrusdb_strerror(r));
 	r = IMAP_IOERROR;
+	free(seendb);
+	free(fname);
+	return r;
     }
     syslog(LOG_DEBUG, "seen_db: user %s opened %s", user, fname);
     free(fname);
@@ -249,7 +256,7 @@ static int seen_readit(struct seen *seendb,
 	return IMAP_AGAIN;
 	break;
     case CYRUSDB_IOERROR:
-	syslog(LOG_ERR, "DBERROR: error fetching txn", strerror(r));
+	syslog(LOG_ERR, "DBERROR: error fetching txn", cyrusdb_strerror(r));
 	return IMAP_IOERROR;
 	break;
     }
@@ -316,7 +323,8 @@ int seen_write(struct seen *seendb, time_t lastread, unsigned int lastuid,
 	r = IMAP_AGAIN;
 	break;
     default:
-	syslog(LOG_ERR, "DBERROR: error updating database: %s", strerror(r));
+	syslog(LOG_ERR, "DBERROR: error updating database: %s", 
+	       cyrusdb_strerror(r));
 	r = IMAP_IOERROR;
 	break;
     }
@@ -391,7 +399,7 @@ int seen_done(void)
 	r = DB->close(seendb->db);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: error closing seendb: %s",
-		   strerror(r));
+		   cyrusdb_strerror(r));
 	    r = IMAP_IOERROR;
 	}
     }
