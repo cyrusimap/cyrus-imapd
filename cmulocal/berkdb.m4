@@ -1,4 +1,4 @@
-dnl $Id: berkdb.m4,v 1.7 2003/01/28 17:19:12 rjs3 Exp $
+dnl $Id: berkdb.m4,v 1.8 2003/02/03 17:51:12 rjs3 Exp $
 
 AC_DEFUN(CMU_DB_INC_WHERE1, [
 saved_CPPFLAGS=$CPPFLAGS
@@ -241,7 +241,10 @@ AC_DEFUN(CYRUS_BERKELEY_DB_CHK,
 [
 	AC_REQUIRE([CYRUS_BERKELEY_DB_OPTS])
 
+	cmu_save_CPPFLAGS=$CPPFLAGS
+
 	if test -d $with_bdb_inc; then
+	    CPPFLAGS="$CPPFLAGS -I$with_bdb_inc"
 	    BDB_INCADD="-I$with_bdb_inc"
 	else
 	    BDB_INCADD=""
@@ -252,4 +255,6 @@ AC_DEFUN(CYRUS_BERKELEY_DB_CHK,
         AC_CHECK_HEADER(db.h,
                         CYRUS_BERKELEY_DB_CHK_LIB(),
                         dblib="no")
+
+	CPPFLAGS=$cmu_save_CPPFLAGS
 ])
