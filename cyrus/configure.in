@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.232.4.22 2002/12/11 17:50:14 rjs3 Exp $
+dnl $Id: configure.in,v 1.232.4.23 2002/12/11 21:04:19 rjs3 Exp $
 dnl
 
 
@@ -138,6 +138,12 @@ fi
 if test "$with_bdb_lib" != "none"; then
   CMU_ADD_LIBPATH($with_bdb_lib)
 fi
+
+BDB_INC=${BDB_INCADD}
+BDB_LIB=${BDB_LIBADD}
+AC_SUBST(BDB_INC)
+AC_SUBST(BDB_LIB)
+
 LIBS="${LIBS} ${BDB_LIBADD}"
 CPPFLAGS="${BDB_INCADD} ${CPPFLAGS}"
 
