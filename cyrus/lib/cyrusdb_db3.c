@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_db3.c,v 1.46 2002/09/19 19:25:35 rjs3 Exp $ */
+/* $Id: cyrusdb_db3.c,v 1.47 2002/11/04 17:32:07 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -352,7 +352,7 @@ static int myopen(const char *fname, struct db **ret)
     /* xxx set comparator! */
 
 #if DB_VERSION_MAJOR == 4 && DB_VERSION_MINOR >= 1
-    r = db->open(db, NULL, fname, NULL, DB_BTREE, DB_CREATE, 0664);
+    r = db->open(db, NULL, fname, NULL, DB_BTREE, DB_CREATE | DB_AUTO_COMMIT, 0664);
 #else
     r = db->open(db, fname, NULL, DB_BTREE, DB_CREATE, 0664);
 #endif

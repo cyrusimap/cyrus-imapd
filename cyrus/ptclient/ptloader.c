@@ -42,7 +42,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ptloader.c,v 1.26 2002/09/26 17:18:28 rjs3 Exp $";
+      "$Id: ptloader.c,v 1.27 2002/11/04 17:32:10 rjs3 Exp $";
 
 #include <config.h>
 
@@ -118,7 +118,7 @@ main(argc, argv)
 
     /* normally LOCAL6, but do this while we're logging keys */
     openlog(PTCLIENT, LOG_PID, LOG_LOCAL7);
-    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.26 2002/09/26 17:18:28 rjs3 Exp $");
+    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.27 2002/11/04 17:32:10 rjs3 Exp $");
 
     while ((opt = getopt(argc, argv, "Uspd:l:f:u:t:")) != EOF) {
 	switch (opt) {
@@ -372,7 +372,7 @@ int c;
     rc = db_create(&ptdb, NULL, 0);
     if (!rc) {
 #if DB_VERSION_MAJOR == 4 && DB_VERSION_MINOR >= 1
-	rc = ptdb->open(ptdb, NULL, fnamebuf, NULL, DB_HASH, 0, 0664);
+	rc = ptdb->open(ptdb, NULL, fnamebuf, NULL, DB_HASH, DB_AUTO_COMMIT, 0664);
 #else
 	rc = ptdb->open(ptdb, fnamebuf, NULL, DB_HASH, 0, 0664);
 #endif
@@ -381,7 +381,7 @@ int c;
 	rc = db_create(&ptdb, NULL, 0);
 	if (!rc) {
 #if DB_VERSION_MAJOR == 4 && DB_VERSION_MINOR >= 1
-	    rc = ptdb->open(ptdb, NULL, fnamebuf, NULL, DB_HASH, DB_CREATE, 0664);
+	    rc = ptdb->open(ptdb, NULL, fnamebuf, NULL, DB_HASH, DB_CREATE | DB_AUTO_COMMIT, 0664);
 #else
 	    rc = ptdb->open(ptdb, fnamebuf, NULL, DB_HASH, DB_CREATE, 0664);
 #endif
@@ -569,4 +569,4 @@ void fatal(const char *msg, int exitcode)
     syslog(LOG_ERR, "%s", msg);
     exit(-1);
 }
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.26 2002/09/26 17:18:28 rjs3 Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.27 2002/11/04 17:32:10 rjs3 Exp $ */
