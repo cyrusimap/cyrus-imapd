@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.1 2002/07/10 19:59:57 ken3 Exp $
+ * $Id: annotate.c,v 1.8.6.2 2002/07/11 20:14:35 rjs3 Exp $
  */
 
 #include <config.h>
@@ -68,6 +68,7 @@ extern int errno;
 #include "imapd.h"
 #include "imapconf.h"
 #include "cyrusdb.h"
+#include "glob.h"
 #include "util.h"
 #include "exitcodes.h"
 #include "imap_err.h"
@@ -170,18 +171,54 @@ struct fetchdata {
 };
 
 enum {
-    ENTRY_SERVER =		(1<<0),
-    ENTRY_PARTITION =		(1<<1)
+    ENTRY_PARTITION =		(1<<0),
+    ENTRY_SERVER =		(1<<1),
 };
 
 enum {
-    ATTRIB_VALUE =		(1<<0),
-    ATTRIB_SIZE =		(1<<1),
-    ATTRIB_MODIFIEDSINCE =	(1<<2),
-    ATTRIB_CONTENTTYPE = 	(1<<3)
+    SRVENTRY_MOTD =             (1<<0),
+    SRVENTRY_COMMENT =          (1<<1),
 };
 
-static int fetch_cb(char *name, int matchlen, int maycreate, void* rock)
+enum {
+    ATTRIB_VALUE_SHARED =		(1<<0),
+    ATTRIB_SIZE_SHARED =		(1<<1),
+    ATTRIB_MODIFIEDSINCE_SHARED =	(1<<2),
+    ATTRIB_CONTENTTYPE_SHARED = 	(1<<3)
+};
+
+
+struct annotate_entry 
+{
+    const char *name;
+    int entry;
+};
+
+const struct annotate_entry mailbox_ro_entries[] =
+{
+    { "/vendor/cmu/cyrus-imapd/partition", ENTRY_PARTITION },
+    { "/vendor/cmu/cyrus-imapd/server", ENTRY_SERVER },
+    { NULL, 0 }
+};
+
+const struct annotate_entry server_entries[] =
+{
+    { "motd", SRVENTRY_MOTD },
+    { "comment", SRVENTRY_COMMENT },
+    { NULL, 0 }
+};
+
+const struct annotate_entry annotation_attributes[] = 
+{
+    { "value.shared", ATTRIB_VALUE_SHARED },
+    { "size.shared", ATTRIB_SIZE_SHARED },
+    { "modifiedsince.shared", ATTRIB_MODIFIEDSINCE_SHARED },
+    { "content-type.shared", ATTRIB_CONTENTTYPE_SHARED },
+    { NULL, 0 }
+};
+
+static int fetch_cb(char *name, int matchlen,
+		    int maycreate __attribute__((unused)), void* rock)
 {
     struct fetchdata *fdata = (struct fetchdata *) rock;
     static char lastname[MAX_MAILBOX_PATH];
@@ -247,9 +284,9 @@ static int fetch_cb(char *name, int matchlen, int maycreate, void* rock)
 		mboxname);
 
 	attvalues = NULL;
-	if (fdata->attribs & ATTRIB_VALUE)
+	if (fdata->attribs & ATTRIB_VALUE_SHARED)
 	    appendattvalue(&attvalues, "value.shared", server);
-	if (fdata->attribs & ATTRIB_SIZE) {
+	if (fdata->attribs & ATTRIB_SIZE_SHARED) {
 	    sprintf(size, "%u", strlen(server));
 	    appendattvalue(&attvalues, "size.shared", size);
 	}
@@ -262,9 +299,9 @@ static int fetch_cb(char *name, int matchlen, int maycreate, void* rock)
 		mboxname);
 
 	attvalues = NULL;
-	if (fdata->attribs & ATTRIB_VALUE)
+	if (fdata->attribs & ATTRIB_VALUE_SHARED)
 	    appendattvalue(&attvalues, "value.shared", partition);
-	if (fdata->attribs & ATTRIB_SIZE) {
+	if (fdata->attribs & ATTRIB_SIZE_SHARED) {
 	    sprintf(size, "%u", strlen(partition));
 	    appendattvalue(&attvalues, "size.shared", size);
 	}
@@ -281,7 +318,7 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 {
     struct strlist *e = entries;
     struct strlist *a = attribs;
-    char *mailbox, *cp, *wildcard;
+    char *mailbox, *cp;
     struct fetchdata fdata;
 
     *l = NULL;
@@ -289,14 +326,20 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
     /* we only do shared annotations right now */
     fdata.attribs = 0;
     while (a) {
-	if (!strcmp(a->s, "*") || !strcmp(a->s, "%"))
-	    fdata.attribs |= ATTRIB_VALUE | ATTRIB_SIZE;
-	else if (!strcmp(a->s, "value.*") || !strcmp(a->s, "value.%") ||
-		 !strcmp(a->s, "value") || !strcmp(a->s, "value.shared"))
-	    fdata.attribs |= ATTRIB_VALUE;
-	else if (!strcmp(a->s, "size.*") || !strcmp(a->s, "size.%") ||
-		 !strcmp(a->s, "size") || !strcmp(a->s, "size.shared"))
-	    fdata.attribs |= ATTRIB_SIZE;
+	int attribcount;
+	struct glob *g;
+
+	g = glob_init(a->s, GLOB_HIERARCHY);
+	
+	for(attribcount = 0;
+	    annotation_attributes[attribcount].name;
+	    attribcount++) {
+	    if(GLOB_TEST(g, annotation_attributes[attribcount].name) != -1) {
+		fdata.attribs |= annotation_attributes[attribcount].entry;
+	    }
+	}
+	
+	glob_free(&g);
 
 	a = a->next;
     }
@@ -306,26 +349,28 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
     while (e) {
 	fdata.entries = 0;
 
-	/* XXX fix this cheesy matching stuff so we support wildcards */
+	/* XXX fix this matching stuff so we completely support wildcards */
 	if (!strncmp(e->s, "/mailbox/{", 10) &&
 	    ((cp = strchr(e->s + 10, '}')) != NULL)) {
-	    mailbox = e->s + 10;
-	    *cp++ = '\0';
+	    int entrycount;
+	    struct glob *g;
 
-	    /* we only support "/mailbox/{mbox}/vendor/cmu/cyrus-imapd/server"
-	       and ".../vendor/cmu/cyrus-imapd/partition" right now */
-	    if (!strncmp(cp, "/vendor/cmu/cyrus-imapd/server",
-			 (wildcard = strchr(cp, '*')) ? wildcard - cp : 20)) {
-		fdata.entries |= ENTRY_SERVER;
-	    }
-	    if (!strncmp(cp, "/vendor/cmu/cyrus-imapd/partition",
-			 (wildcard = strchr(cp, '*')) ? wildcard - cp : 23)) {
-		fdata.entries |= ENTRY_PARTITION;
-	    }
-	    if (!strcmp(cp, "/vendor/cmu/cyrus-imapd/%")) {
-		fdata.entries |= (ENTRY_SERVER | ENTRY_PARTITION);
+	    mailbox = e->s + 10;
+	    *cp++ = '\0'; /* just after mailbox w/leading slash */
+
+	    g = glob_init(cp, GLOB_HIERARCHY);
+	    GLOB_SET_SEPARATOR(g, '/');
+
+	    for(entrycount = 0;
+		mailbox_ro_entries[entrycount].name;
+		entrycount++) {
+		if(GLOB_TEST(g, mailbox_ro_entries[entrycount].name) != -1) {
+		    fdata.entries |= mailbox_ro_entries[entrycount].entry;
+		}
 	    }
 		
+	    glob_free(&g);
+	    
 	    if (fdata.entries) {
 		/* Reset state in fetch_cb */
 		fetch_cb(NULL, 0, 0, 0);
@@ -341,14 +386,30 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 	    }
 	}
 
+	fdata.entries = 0;
+
 	if (!strncmp(e->s, "/server/", 8)) {
 	    FILE *f;
 	    char filename[1024], buf[1024], size[100], *p;
 	    struct attvaluelist *attvalues;
+	    int entrycount;
+	    struct glob *g;
 
 	    cp = e->s + 8;
 
-	    if (!strncmp(cp, "motd", strcspn(cp, "*%"))) {
+	    g = glob_init(cp, GLOB_HIERARCHY);
+	    GLOB_SET_SEPARATOR(g, '/');
+	    for(entrycount = 0;
+		server_entries[entrycount].name;
+		entrycount++) {
+		if(GLOB_TEST(g, server_entries[entrycount].name) != -1) {
+		    fdata.entries |= server_entries[entrycount].entry;
+		}
+	    }
+
+	    glob_free(&g);
+
+	    if (fdata.entries & SRVENTRY_MOTD) {
 		sprintf(filename, "%s/msg/motd", config_dir);
 		if ((f = fopen(filename, "r")) != NULL) {
 		    fgets(buf, sizeof(buf), f);
@@ -360,9 +421,9 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 		    for(p = buf; *p == '['; p++);
 
 		    attvalues = NULL;
-		    if (fdata.attribs & ATTRIB_VALUE)
+		    if (fdata.attribs & ATTRIB_VALUE_SHARED)
 			appendattvalue(&attvalues, "value.shared", buf);
-		    if (fdata.attribs & ATTRIB_SIZE) {
+		    if (fdata.attribs & ATTRIB_SIZE_SHARED) {
 			sprintf(size, "%u", strlen(buf));
 			appendattvalue(&attvalues, "size.shared", size);
 		    }
@@ -370,7 +431,7 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 		    appendentryatt(l, "/server/motd", attvalues);
 		}
 	    }
-	    if (!strncmp(cp, "comment", strcspn(cp, "*%"))) {
+	    if (fdata.entries & SRVENTRY_COMMENT) {
 		sprintf(filename, "%s/msg/comment", config_dir);
 		if ((f = fopen(filename, "r")) != NULL) {
 		    fgets(buf, sizeof(buf), f);
@@ -380,9 +441,9 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 		    if ((p = strchr(buf, '\n'))!=NULL) *p = 0;
 
 		    attvalues = NULL;
-		    if (fdata.attribs & ATTRIB_VALUE)
+		    if (fdata.attribs & ATTRIB_VALUE_SHARED)
 			appendattvalue(&attvalues, "value.shared", buf);
-		    if (fdata.attribs & ATTRIB_SIZE) {
+		    if (fdata.attribs & ATTRIB_SIZE_SHARED) {
 			sprintf(size, "%u", strlen(buf));
 			appendattvalue(&attvalues, "size.shared", size);
 		    }
@@ -414,9 +475,11 @@ static int server_store(char *filename, char *value)
     return 0;
 }
 
-int annotatemore_store(struct entryattlist *l, struct namespace *namespace,
-		       int isadmin, char *userid,
-		       struct auth_state *auth_state)
+int annotatemore_store(struct entryattlist *l,
+		       struct namespace *namespace __attribute__((unused)),
+		       int isadmin __attribute__((unused)),
+		       char *userid __attribute__((unused)),
+		       struct auth_state *auth_state __attribute__((unused)))
 {
     struct entryattlist *e = l;
     struct attvaluelist *av;
