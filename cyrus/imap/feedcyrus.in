@@ -32,7 +32,7 @@ echo "${PROGNAME}: [${PPID}] start"
 export BATCH PROGNAME PPID CYRUS_DIR
 
 ##  Loop over all sites.
-for PROG in collectnews rmnews; do
+for PROG in collectnews; do
 
     ##  Start sending this site in the background.
     export PROG LOCKS BATCHFILE PROGNAME PPID TMPDIR
