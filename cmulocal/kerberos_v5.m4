@@ -1,7 +1,7 @@
 dnl kerberos_v5.m4--Kerberos 5 libraries and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
-dnl $Id: kerberos_v5.m4,v 1.7 2003/10/08 20:35:25 rjs3 Exp $
+dnl $Id: kerberos_v5.m4,v 1.8 2004/04/07 06:34:36 shadow Exp $
 
 AC_DEFUN([CMU_KRB5_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS
@@ -42,16 +42,6 @@ ac_cv_found_krb5_lib=no)
 LIBS=$saved_LIBS
 ])
 
-AC_DEFUN([CMU_KRB5_HLIB_WHERE1], [
-saved_LIBS=$LIBS
-LIBS="$saved_LIBS -L$1 -lkrb5 -ldes -lasn1"
-AC_TRY_LINK(,
-[krb5_get_in_tkt();],
-[ac_cv_found_krb5_lib=yes],
-ac_cv_found_krb5_lib=no)
-LIBS=$saved_LIBS
-])
-
 AC_DEFUN([CMU_KRB5_LIB_WHERE], [
    for i in $1; do
       AC_MSG_CHECKING(for krb5 libraries in $i)
@@ -59,21 +49,6 @@ AC_DEFUN([CMU_KRB5_LIB_WHERE], [
       CMU_TEST_LIBPATH($i, krb5)
       if test "$ac_cv_found_krb5_lib" = "yes" ; then
         ac_cv_krb5_where_lib=$i
-        AC_MSG_RESULT(found)
-        break
-      else
-        AC_MSG_RESULT(not found)
-      fi
-    done
-])
-
-AC_DEFUN([CMU_KRB5_HLIB_WHERE], [
-   for i in $1; do
-      AC_MSG_CHECKING(for heimdal krb5 libraries in $i)
-      CMU_KRB5_HLIB_WHERE1($i)
-      CMU_TEST_LIBPATH($i, krb5)
-      if test "$ac_cv_found_krb5_lib" = "yes" ; then
-        ac_cv_krb5_where_hlib=$i
         AC_MSG_RESULT(found)
         break
       else
@@ -100,23 +75,41 @@ AC_ARG_WITH(krb5-include,
 	[if test "$withval" = "yes" -o "$withval" = "no"; then
 		AC_MSG_ERROR([No argument for --with-krb5-include])
 	fi])
+AC_ARG_WITH(krb5-impl,
+	[  --with-krb5-impl=heimdal use heimdal kerberos 5 libraries
+  --with-krb5-impl=mit     use MIT kerberos 5 libraries],
+	[if test "$withval" != "heimdal" -a "$withval" != "mit"; then
+		AC_MSG_ERROR([Invalid argument for --with-krb5-impl])
+	fi])
 
 	if test "X$with_krb5" != "X"; then
 	  if test "$with_krb5" != "yes" -a "$with_krb5" != "no"; then
 	    ac_cv_krb5_where_lib=$with_krb5/lib
 	    ac_cv_krb5_where_inc=$with_krb5/include
+	    ac_cv_krb5_impl=mit
 	  fi
 	fi
 
 	if test "$with_krb5" != "no"; then
 	  if test "X$with_krb5_lib" != "X"; then
 	    ac_cv_krb5_where_lib=$with_krb5_lib
+	    ac_cv_krb5_impl=mit
 	  fi
-	  if test "X$ac_cv_krb5_where_lib" = "X"; then
+	  if test "X$with_krb5_impl" != "X"; then
+	    ac_cv_krb5_impl=$with_krb5_impl
+	  fi
+	  if test "X$ac_cv_krb5_where_lib" = "X" -a "X$with_krb5_impl" != "Xheimdal"; then
 	    CMU_KRB5_LIB_WHERE(/usr/athena/lib /usr/lib /usr/local/lib)
+	    if test "X$ac_cv_krb5_where_lib" != "X"; then
+              ac_cv_krb5_impl=mit
+	    fi
 	  fi
-	  if test "X$ac_cv_krb5_where_lib" = "X"; then
-	    CMU_KRB5_HLIB_WHERE(/usr/athena/lib /usr/lib /usr/local/lib)
+	  if test "X$ac_cv_krb5_where_lib" = "X" -a "X$with_krb5_impl" != "Xmit"; then
+	    CMU_LIBHEIMDAL_LIB_WHERE(/usr/athena/lib /usr/lib /usr/heimdal/lib /usr/local/lib)
+	    if test "X$ac_cv_libheimdal_where_lib" != "X"; then
+	      ac_cv_krb5_where_lib=$ac_cv_libheimdal_where_lib
+	      ac_cv_krb5_impl=heimdal
+	    fi
 	  fi
 
 	  if test "X$with_krb5_include" != "X"; then
@@ -128,24 +121,24 @@ AC_ARG_WITH(krb5-include,
 	fi
 
 	AC_MSG_CHECKING(whether to include kerberos 5)
-	if test "X$ac_cv_krb5_where_lib" = "X" -a "X$ac_cv_krb5_where_hlib" = "X" -o "X$ac_cv_krb5_where_inc" = "X"; then
+	if test "X$ac_cv_krb5_where_lib" = "X" -o "X$ac_cv_krb5_where_inc" = "X"; then
 	  ac_cv_found_krb5=no
 	  AC_MSG_RESULT(no)
 	else
 	  ac_cv_found_krb5=yes
 	  AC_MSG_RESULT(yes)
 	  KRB5_INC_DIR=$ac_cv_krb5_where_inc
-	  if test "X$ac_cv_krb5_where_hlib" = "X"; then
-  	    KRB5_LIB_DIR=$ac_cv_krb5_where_lib
+	  KRB5_LIB_DIR=$ac_cv_krb5_where_lib
+	  if test "X$ac_cv_krb5_impl" != "Xheimdal"; then
 	    KRB5_LIB_FLAGS="-L${KRB5_LIB_DIR} -lkrb5 -lk5crypto"
-          else
-	    KRB5_LIB_DIR=$ac_cv_krb5_where_hlib
-     	    KRB5_LIB_FLAGS="-L${KRB5_LIB_DIR} -lkrb5 -ldes -lasn1"
+	  else
+	    CMU_LIBHEIMDAL_LIBDES($KRB5_LIB_DIR)
+	    KRB5_LIB_FLAGS="-L${KRB5_LIB_DIR} -lkadm5clnt -lkrb5 -lasn1 ${HEIM_LIBDES} -lroken $LIB_SOCKET"
 	    AC_DEFINE(HEIMDAL,,[we found heimdal krb5 and not MIT krb5])
-          fi
+	  fi
 	  KRB5_INC_FLAGS="-I${KRB5_INC_DIR}"
-          AC_SUBST(KRB5_INC_FLAGS)
-          AC_SUBST(KRB5_LIB_FLAGS)
+	  AC_SUBST(KRB5_INC_FLAGS)
+	  AC_SUBST(KRB5_LIB_FLAGS)
 	  AC_DEFINE(KRB5,,[Use Kerberos 5. (maybe find what needs this and nuke it)])
 	  if test "X$RPATH" = "X"; then
 		RPATH=""
