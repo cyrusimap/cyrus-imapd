@@ -96,6 +96,31 @@ chgrp cyrus /etc/krb5.keytab
 chmod g+r /etc/krb5.keytab
 - Generate an SSL key for the machine and install to /imap/conf/server.pem
   (preferrably signed correctly)
+
+Something like:
+mail-fe3:sun4x_58:/imap/conf# openssl req -new -x509 -nodes -out /imap/conf/serv
+er.pem -keyout /imap/conf/server.pem
+Using configuration from /usr/local/lib/openssl/openssl.cnf
+Generating a 1024 bit RSA private key
+............++++++
+..........++++++
+writing new private key to '/imap/conf/server.pem'
+-----
+You are about to be asked to enter information that will be incorporated
+into your certificate request.
+What you are about to enter is what is called a Distinguished Name or a DN.
+There are quite a few fields but you can leave some blank
+For some fields there will be a default value,
+If you enter '.', the field will be left blank.
+-----
+Country Name (2 letter code) [AU]:US
+State or Province Name (full name) [Some-State]:Pennsylvania
+Locality Name (eg, city) []:Pittsburgh
+Organization Name (eg, company) [Internet Widgits Pty Ltd]:Carnegie Mellon University
+Organizational Unit Name (eg, section) []:Andrew Systems Group
+Common Name (eg, YOUR name) []:mail-fe3.andrew.cmu.edu
+Email Address []:advisor@andrew.cmu.edu 
+
 - run tools/mkimap (as cyrus!)
 
 ----------------------------------------------------------------------
