@@ -1,6 +1,6 @@
 /*
  * Mar  8, 2000 by Hajimu UMEMOTO <ume@mahoroba.org>
- * $Id: gai.h,v 1.3 2003/02/13 20:15:39 rjs3 Exp $
+ * $Id: gai.h,v 1.4 2003/07/25 16:59:24 rjs3 Exp $
  *
  * This module is besed on ssh-1.2.27-IPv6-1.5 written by
  * KIKUCHI Takahiro <kick@kyoto.wide.ad.jp>
@@ -89,11 +89,15 @@ struct addrinfo {
 };
 #endif
 
+#ifndef HAVE_GETADDRINFO
 int	getaddrinfo(const char *, const char *,
 		    const struct addrinfo *, struct addrinfo **);
-int	getnameinfo(const struct sockaddr *, socklen_t, char *,
-		    size_t, char *, size_t, int);
 void	freeaddrinfo(struct addrinfo *);
 char	*gai_strerror(int);
+#endif
+#ifndef HAVE_GETNAMEINFO
+int	getnameinfo(const struct sockaddr *, socklen_t, char *,
+		    size_t, char *, size_t, int);
+#endif
 
 #endif
