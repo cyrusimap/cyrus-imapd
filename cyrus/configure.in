@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.108 1998/06/05 17:52:22 tjs Exp $
+dnl $Id: configure.in,v 1.109 1998/06/07 23:27:43 tjs Exp $
 dnl
 
 AC_INIT(imap/imapd.c)
@@ -250,10 +250,12 @@ AC_CACHE_VAL(cyrus_sigveclib,[
     AC_CHECK_LIB(ucb, sigvec, [
       dnl more solaris flavor
       cyrus_sigveclib="-lc -L/usr/ucblib -R/usr/ucblib -lucb"],
-      [ AC_MSG_WARN(Can't find a sigvec() -- makedepend will not build.)
-	AC_MSG_WARN(Some AFS dependant programs (ptloader) may fail to build.)
-	AC_MSG_WARN(If you're not using AFS and have makedepend already,)
-	AC_MSG_WARN(then this isn't a problem.)
+      [ AC_MSG_WARN([Can't find a sigvec() -- makedepend will not build.])
+	AC_MSG_WARN([This is probably okay because most systems already have])
+	AC_MSG_WARN([makedepend.])
+	AC_MSG_WARN([AFS libraries may require sigvec.  If ptloader fails])
+	AC_MSG_WARN([to build, you need to find a replacement for sigvec.])
+	AC_MSG_WARN([If you don't care about AFS, then there is no problem.])
 	])
     LDFLAGS="$SAVE_LDFLAGS"])
   ])
@@ -386,6 +388,9 @@ if test -n "$TCL_SUBDIRS"; then
 fi
 AC_SUBST(TCL_SUBDIRS)
 
+dnl Rob Earhart's alternative Tcl checks
+dnl note this requires tclsh to be in the path, which isn't too bad
+dnl Ask Tcl where it lives.
 dnl
 dnl XXX MUST CHECK FOR TCL BEFORE KERBEROS V4 XXX
 dnl This is because some genius at MIT named one of the Kerberos v4
@@ -394,57 +399,48 @@ dnl logarithm function in the standard math library, used by Tcl.
 dnl
 dnl Checking for Tcl first puts -lm before -lkrb on the library list.
 dnl
+dnl Check for some information from the user
 AC_ARG_WITH(tcl,[  --with-tcl=PATH         use Tcl from PATH],
-	with_tcl="${withval}")
-tcllib=tcl
-if test -z "$with_tcl"; then
-     if test -f /usr/local/lib/libtcl.a; then
-	with_tcl="/usr/local"
-     elif test -f /usr/local/lib/libtcl8.0.a; then
-       dnl sigh
-       with_tcl="/usr/local"
-       tcllib="tcl8.0"
-     fi
-fi
-case "$with_tcl" in
-  no)
-      if test "$TCL_SUBDIRS" != ""; then
-	AC_MSG_ERROR(Tcl is required for cyradm.  Please re-configure with with --disable-cyradm)
-      fi;;
-  
-  dnl do bizarro tcl hunt, but only if we have to --
-  dnl that is, if TCL_SUBDIRS is set, we're building cyradm and have to do
-  dnl this.
-  ""|yes) if test "$TCL_SUBDIRS" != ""; then
-    AC_CHECK_LIB(tcl,Tcl_Init,TCL_LIBS="-ltcl -lm",
-        dnl not here -- maybe they hid it.
-        [
-	SAVE_LIBS="$LIBS"
-	AC_CHECK_LIB(tcl, Tcl_Init, TCL_LIBS="-ltcl -lm",
-	    dnl not there -- maybe we want a different name.
-	    AC_CHECK_LIB(tcl8.0,
-	       Tcl_Init,
-	       TCL_LIBS="-ltcl8.0 -lm",
-	       AC_MSG_ERROR(Could not find Tcl libraries.  You must either install Tcl or configure with --disable-cyradm),
-	       "-lm"), "-lm")
-	LIBS="$SAVE_LIBS"
-	],
-	"-lm")
+	TclLibBase="${withval}")
+dnl $TCL_SUBDIRS is nonempty if we are using Tcl.
+if test "$TCL_SUBDIRS" != ""; then
+  if test -z "$TclLibBase"; then
+    AC_MSG_CHECKING([where Tcl says it lives])
+    [TclLibBase=`echo puts \\\$tcl_library | tclsh | sed -e 's,[^/]*$,,'`]
+    AC_MSG_RESULT($TclLibBase)
   fi
-  ;;
 
-  dnl hey, the user told us where it is, do the completely obvious thing!
-  *) TCL_CPPFLAGS="-I${with_tcl}/include"
-     ANDREW_ADD_LIBPATH_TO(${with_tcl}/lib, TCL_LDFLAGS)
-     TCL_LIBS="-l${tcllib} -lm"
-     ;;
-esac
-AC_SUBST(TCL_LIBS)
-AC_SUBST(TCL_CPPFLAGS)
-AC_SUBST(TCL_LDFLAGS)
+  if test "$TclLibBase" != ""; then
+    AC_MSG_CHECKING([with Tcl on how it says it should be compiled])
+    . ${TclLibBase}tclConfig.sh
+    dnl no TK stuff for us.
+    dnl . ${TclLibBase}tkConfig.sh
+
+    TCL_CPPFLAGS="-I${TCL_PREFIX}/include"
+    dnl TCL_LIBS="${TK_LIB_SPEC} ${TK_XLIBSW} ${TCL_LD_SEARCH_FLAGS} ${TCL_LIB_SPEC}"
+    TCL_LIBS="${TCL_LD_SEARCH_FLAGS} ${TCL_LIB_SPEC} ${TCL_LIBS}"
+
+    AC_SUBST(TCL_DEFS)dnl
+    AC_SUBST(TCL_LIBS)dnl
+    AC_SUBST(TCL_CPPFLAGS)dnl
+
+    AC_MSG_RESULT([ok])
+  else
+   AC_MSG_RESULT([can't find tclsh])
+
+   AC_MSG_WARN([The tclsh program could not be found.  You must either put])
+   AC_MSG_WARN([your path (by installing Tcl, then adding it to your PATH,])
+   AC_MSG_WARN([by using the --with-tcl variable to provide the location of])
+   AC_MSG_WARN([Tcl configuration (perhaps /usr/local or /opt/tcl8.0),])
+   AC_MSG_WARN([or by disabling cyradm by adding --disable-cyradm when])
+   AC_MSG_WARN([running configure.])
+
+   AC_MSG_ERROR([Use --with-tcl, put tclsh in your path, or --disable-cyradm.])
+  fi
+fi
 
 dnl
-dnl thanks to snprintf problems, we have to do this before kerberos checks,
+dnl because of snprintf problems, we have to do this before kerberos checks,
 dnl then put krb libs at front of line
 dnl
 AC_CHECK_LIB(db,dbopen,[AC_DEFINE(HAVE_LIBDB)
@@ -555,10 +551,10 @@ if test "${with_com_err}" = "no"; then
 	AC_MSG_WARN([com_err is required; included version will be used.])
 	with_com_err="yes"
 fi
-if test "${compile_et}" = "${no_compile_et}"; then
+if test "${compile_et}" = "no_compile_et"; then
 	AC_MSG_WARN([Parts of com_err were found, but not compile_et.])
 	AC_MSG_WARN([Included version will be used.])
-	with_com_err="no"
+	with_com_err="yes"
 fi
 
 case "$with_com_err" in
