@@ -1,0 +1,94 @@
+<HTML><HEAD>
+<title>Cyrus IMAP Server:  Altername Namespace</title>
+<!-- $Id: altnamespace.html,v 1.1 2001/08/29 14:10:45 ken3 Exp $ -->
+</HEAD><BODY>
+<H1>              Cyrus IMAP Server:  Alternate Namespace</H1>
+
+<p>This document describes the alternatives to the <a
+href=overview.html#mboxname> standard</a> mailbox presentation
+method.  These alternatives may be used together or independently.
+
+<p>The namespace options do NOT change the rules governing the behavior of
+mailboxes (as described in <a href=overview.html#mboxname>
+overview.html</a>) or how mailboxes are stored on the filesystem.  The
+mailboxes are ALWAYS stored using the <a href=overview.html#mboxname>
+<tt>netnews</tt> convention</a> and <a href=overview.html#mboxnamestd>
+internal namespace</a>.  When configured to use one (or both) of the
+options below, the server simply translates mailbox names between the
+internal  names and the external names when used by the client in the
+IMAP protocol and in Sieve scripts.
+
+<p>This design allows the namespace to be changed at runtime (even on
+a running server) without having to reconfigure the server.  This also
+means that one mailstore can support multiple namespaces if configured
+correctly.
+
+<p><b>NOTE:</b>  If you are upgrading an existing server which
+uses <tt>timsieved</tt> to manage Sieve scripts and choose to enable
+one of the namespace options, you should run the script
+"<tt>tools/translatesieve</tt>" after configuring the namespace
+option(s).  This script will translate the folder names in
+<tt>fileinto</tt> actions.
+
+<H2><a name="altname">Alternate Mailbox Namespace</a></H2>
+
+<p>The alternate namespace allows a user's personal mailboxes to
+appear as if they reside at the same level as that user's
+<TT>INBOX</TT> as opposed to children of it. For example, if user
+"<TT>bovik</TT>" had a personal "<TT>work</TT>" mailbox, it would
+appear to user "<TT>bovik</TT>" as "<TT>work</TT>" instead of
+"<TT>INBOX.work</TT>" as it would in the <a
+href=overview.html#mboxnamestd> standard namespace</a>.
+
+<p>This configuration requires that a special prefix be used for
+shared folders (to distibguish them from personal folders) and for
+accessing other users folders.   By default, the prefix for shared
+folders is "<tt>Shared Folders</tt>" and the prefix for other users
+folders is "<tt>Other Users</tt>".  For example, a shared folder
+"<tt>foo</tt>" in the <a href=overview.html#mboxnamestd> standard
+namespace</a> would be presented as "<tt>Shared Folders.foo</tt>" in
+the alternate namespace.
+
+<p><b>NOTE:</b> All tools for administering the server, including
+admins using cyradm, always use the <a href=overview.html#mboxnamestd>
+internal namespace</a>.
+
+<H3><a name="altnameconfig">Configuring the Alternate
+Namespace</a></H3>
+
+<p>To use the alternate namespace, turn on the <tt>altnamespace</tt>
+option in <tt>/etc/imapd.conf</tt>.  The prefixes used for shared
+folders and other users folders can be changed from the defaults by
+setting the <tt>sharedrefix</tt> and <tt>userprefix</tt> options
+respectively.
+
+<H2><a name="unixhiersep">UNIX Hierarchy Convention</a></H2>
+
+<p>The UNIX hierarchy convention uses the traditional UNIX separator
+character ("/") to delimit levels of the mailbox hierarchy instead of
+the <tt>netnews</tt> character (".").  For example, if user
+"<tt>bovik</tt>" had a personal "<tt>work</tt>" mailbox, it would
+appear to user "<tt>bovik</tt>" as "<tt>INBOX/work</tt>" in the
+<a href=overview.html#mboxnamestd>standard namespace</a>.
+
+<p> When the UNIX hierarchy convention is used, the "." character MAY
+be used in mailbox names, including user names.  In order to maintain
+backwards compatibility with the <a
+href=overview.html#mboxnamestd>internal namespace</a>, all "."
+characters are translated to a benign character (currently
+"^") before any data is stored to disk.  For example, if user
+"<tt>elmer.fudd</tt>" had a personal "<tt>rabbit.holes</tt>" mailbox,
+it would be stored as "<tt>user.elmer^fud.rabbit^holes</tt>" in the <a
+href=overview.html#mboxnamestd>internal namespace</a>.  It is
+important to remember this phenomenon if/when reverting back to the
+<tt>netnews</tt> hierarchy convention.
+
+<H3><a name="unixhiersepconfig">Configuring the UNIX Hierarchy
+Convention</a></H3>
+
+<p>To use the UNIX hierarchy separator, turn on the
+<tt>unixhierarchysep</tt> option in <tt>/etc/imapd.conf</tt>.
+
+<P><HR><P>
+<A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
+</BODY></HTML>
