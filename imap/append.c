@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.76 2000/09/19 23:08:09 leg Exp $
+ * $Id: append.c,v 1.77 2000/10/23 20:40:17 leg Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -799,12 +799,19 @@ int append_copy(struct mailbox *mailbox,
 	if (message_index[msg].system_flags & FLAG_DELETED) as->numdeleted++;
 	if (message_index[msg].system_flags & FLAG_ANSWERED) as->numanswered++;
 	if (message_index[msg].system_flags & FLAG_FLAGGED) as->numflagged++;
+
+	/* should this message be marked \Seen? */
+	if (copymsg[msg].seen) {
+	    addme(&as->seen_msgrange, &as->seen_alloced, 
+		  message_index[msg].uid);
+	}
     }
 
     /* Write out index file entries */
     r = mailbox_append_index(append_mailbox, message_index,
 			     append_mailbox->exists + as->nummsg - nummsg, 
 			     nummsg, 0);
+
  fail:
     if (r) append_abort(as);
     free(message_index);
