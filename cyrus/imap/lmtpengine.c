@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.19 2001/02/09 20:41:58 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.20 2001/02/16 04:03:34 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -83,7 +83,7 @@
 #include "lmtpengine.h"
 #include "lmtpstats.h"
 
-#define RCPT_GROW 5 /* XXX 30 */
+#define RCPT_GROW 30
 
 /* data per message */
 struct Header {
@@ -1538,9 +1538,14 @@ static void chop(char *s)
     }
 }
 
+/* xxx fill in this function 
+
+   perform authentication against connection 'conn'
+   returns the SMTP error code from the AUTH attempt */
 static int do_auth(struct lmtp_conn *conn)
 {
-    return 0;
+    /* pretend success for now */
+    return 250;
 }
 
 /* establish connection, LHLO, and AUTH if possible */
@@ -1673,7 +1678,7 @@ int lmtp_connect(const char *phost,
 		if (!strcasecmp(buf + 4, "PIPELINING")) {
 		    conn->capability |= CAPA_PIPELINING;
 		}
-		if (!strcasecmp(buf + 4, "AUTH ")) {
+		if (!strncasecmp(buf + 4, "AUTH ", 5)) {
 		    conn->capability |= CAPA_AUTH;
 		    /* save mechanisms for later */
 		    conn->mechs = xstrdup(buf + 9);
