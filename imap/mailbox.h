@@ -66,7 +66,7 @@ struct mailbox {
     long myrights;
 
     /* Information in header */
-    char *quota_path;
+    char *quota_root;
     char *flagname[MAX_USER_FLAGS];
 
     /* Information in index file */
