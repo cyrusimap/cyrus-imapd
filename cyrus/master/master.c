@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.96 2004/02/27 18:21:24 ken3 Exp $ */
+/* $Id: master.c,v 1.97 2004/05/18 19:16:50 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -85,16 +85,19 @@
 #define	IPV6_V6ONLY	IPV6_BINDV6ONLY
 #endif
 
-#ifdef HAVE_UCDSNMP
-#include <ucd-snmp/ucd-snmp-config.h>
-#include <ucd-snmp/ucd-snmp-includes.h>
-#include <ucd-snmp/ucd-snmp-agent-includes.h>
+#if defined(HAVE_NETSNMP)
+  #include <net-snmp/net-snmp-config.h>
+  #include <net-snmp/net-snmp-includes.h>
+  #include <net-snmp/agent/net-snmp-agent-includes.h>
+#elif defined(HAVE_UCDSNMP)
+  #include <ucd-snmp/ucd-snmp-config.h>
+  #include <ucd-snmp/ucd-snmp-includes.h>
+  #include <ucd-snmp/ucd-snmp-agent-includes.h>
 
-#include "cyrusMasterMIB.h"
+  #include "cyrusMasterMIB.h"
 
-int allow_severity = LOG_DEBUG;
-int deny_severity = LOG_ERR;
-
+  int allow_severity = LOG_DEBUG;
+  int deny_severity = LOG_ERR;
 #endif
 
 #include "masterconf.h"
@@ -994,7 +997,7 @@ void sigterm_handler(int sig __attribute__((unused)))
 	syslog(LOG_ERR, "sigterm_handler: kill(0, SIGTERM): %m");
     }
 
-#ifdef HAVE_UCDSNMP
+#if defined(HAVE_UCDSNMP) || defined(HAVE_NETSNMP)
     /* tell master agent we're exiting */
     snmp_shutdown("cyrusMaster");
 #endif
@@ -1657,11 +1660,20 @@ int main(int argc, char **argv)
     fd_set rfds;
     char *p = NULL;
 
+#ifdef HAVE_NETSNMP
+    char *agentxsocket = NULL;
+    int agentxpinginterval = -1;
+#endif
+
     time_t now;
 
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
+#ifdef HAVE_NETSNMP
+    while ((opt = getopt(argc, argv, "C:M:p:l:Ddj:P:x:")) != EOF) {
+#else
     while ((opt = getopt(argc, argv, "C:M:p:l:Ddj:")) != EOF) {
+#endif
 	switch (opt) {
 	case 'C': /* alt imapd.conf file */
 	    alt_config = optarg;
@@ -1695,6 +1707,14 @@ int main(int argc, char **argv)
 	    if(janitor_frequency < 1)
 		fatal("The janitor period must be at least 1 second", EX_CONFIG);
 	    break;   
+#ifdef HAVE_NETSNMP
+	case 'P': /* snmp AgentXPingInterval */
+	    agentxpinginterval = atoi(optarg);
+	    break;
+	case 'x': /* snmp AgentXSocket */
+	    agentxsocket = optarg;
+	    break;
+#endif
 	default:
 	    break;
 	}
@@ -1874,11 +1894,25 @@ int main(int argc, char **argv)
 
     syslog(LOG_NOTICE, "process started");
 
-#ifdef HAVE_UCDSNMP
+#if defined(HAVE_UCDSNMP) || defined(HAVE_NETSNMP)
     /* initialize SNMP agent */
     
     /* make us a agentx client. */
+#ifdef HAVE_NETSNMP
+    netsnmp_enable_subagent();
+
+    netsnmp_ds_set_boolean(NETSNMP_DS_LIBRARY_ID,
+                           NETSNMP_DS_LIB_ALARM_DONT_USE_SIG, 1);
+    if (agentxpinginterval >= 0)
+        netsnmp_ds_set_int(NETSNMP_DS_APPLICATION_ID,
+                           NETSNMP_DS_AGENT_AGENTX_PING_INTERVAL, agentxpinginterval);
+
+    if (agentxsocket != NULL)
+        netsnmp_ds_set_string(NETSNMP_DS_APPLICATION_ID, 
+                              NETSNMP_DS_AGENT_X_SOCKET, agentxsocket);
+#else
     ds_set_boolean(DS_APPLICATION_ID, DS_AGENT_ROLE, 1);
+#endif
 
     /* initialize the agent library */
     init_agent("cyrusMaster");
@@ -1922,7 +1956,7 @@ int main(int argc, char **argv)
 	int r, i, maxfd;
 	struct timeval tv, *tvptr;
 	struct notify_message msg;
-#if HAVE_UCDSNMP
+#if defined(HAVE_UCDSNMP) || defined(HAVE_NETSNMP)
 	int blockp = 0;
 #endif
 
@@ -2003,7 +2037,7 @@ int main(int argc, char **argv)
 	    tvptr = &tv;
 	}
 
-#ifdef HAVE_UCDSNMP
+#if defined(HAVE_UCDSNMP) || defined(HAVE_NETSNMP)
 	if (tvptr == NULL) blockp = 1;
 	snmp_select_info(&maxfd, &rfds, tvptr, &blockp);
 #endif
@@ -2016,7 +2050,7 @@ int main(int argc, char **argv)
 	    fatal("select failed: %m", 1);
 	}
 
-#ifdef HAVE_UCDSNMP
+#if defined(HAVE_UCDSNMP) || defined(HAVE_NETSNMP)
 	/* check for SNMP queries */
 	snmp_read(&rfds);
 	snmp_timeout();
@@ -2055,5 +2089,9 @@ int main(int argc, char **argv)
 	}
 	now = time(NULL);
 	child_janitor(now);
+
+#ifdef HAVE_NETSNMP
+	run_alarms();
+#endif
     }
 }
