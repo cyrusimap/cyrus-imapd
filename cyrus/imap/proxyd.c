@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.38 2000/06/09 02:44:54 leg Exp $ */
+/* $Id: proxyd.c,v 1.39 2000/06/20 18:10:36 leg Exp $ */
 
 #include <config.h>
 
@@ -173,6 +173,8 @@ void cmd_partial(char *tag, char *msgno, char *data,
 		 char *start, char *count);
 void cmd_store(char *tag, char *sequence, char *operation, int usinguid);
 void cmd_search(char *tag, int usinguid);
+void cmd_sort(char *tag, int usinguid);
+void cmd_thread(char *tag, int usinguid);
 void cmd_copy(char *tag, char *sequence, char *name, int usinguid);
 void cmd_expunge(char *tag, char *sequence);
 void cmd_create(char *tag, char *name, char *partition);
@@ -1721,11 +1723,29 @@ cmdloop()
 		if (c != ' ') goto missingargs;
 		cmd_setquota(tag.s, arg1.s);
 	    }
+	    else if (!strcmp(cmd.s, "Sort")) {
+		if (!backend_current) goto nomailbox;
+		usinguid = 0;
+		if (c != ' ') goto missingargs;
+	    sort:
+		cmd_sort(tag.s, usinguid);
+	    }
 	    else if (!strcmp(cmd.s, "Status")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(&arg1);
 		if (c != ' ') goto missingargs;
 		cmd_status(tag.s, arg1.s);
+	    }
+	    else goto badcmd;
+	    break;
+
+	case 'T':
+	    if (!strcmp(cmd.s, "Thread")) {
+		if (!backend_current) goto nomailbox;
+		usinguid = 0;
+		if (c != ' ') goto missingargs;
+	    thread:
+		cmd_thread(tag.s, usinguid);
 	    }
 	    else goto badcmd;
 	    break;
@@ -1746,6 +1766,12 @@ cmdloop()
 		}
 		else if (!strcmp(arg1.s, "search")) {
 		    goto search;
+		}
+		else if (!strcmp(arg1.s, "sort")) {
+		    goto sort;
+		}
+		else if (!strcmp(arg1.s, "thread")) {
+		    goto thread;
 		}
 		else if (!strcmp(arg1.s, "copy")) {
 		    goto copy;
@@ -2114,6 +2140,11 @@ void cmd_capability(char *tag)
     prot_printf(proxyd_out, CAPABILITY_STRING);
     prot_printf(proxyd_out, " MAILBOX-REFERRALS");
 
+#if 0
+    /* add the thread algorithms */
+    list_thread_algorithms();
+#endif
+
     if (starttls_enabled())
 	prot_printf(proxyd_out, " STARTTLS");
     if (!proxyd_starttls_done && !config_getswitch("allowplaintext", 1))
@@ -2324,6 +2355,30 @@ void cmd_store(char *tag, char *sequence, char *operation, int usinguid)
 void cmd_search(char *tag, int usinguid)
 {
     char *cmd = usinguid ? "UID Search" : "Search";
+
+    assert(backend_current != NULL);
+
+    prot_printf(backend_current->out, "%s %s ", tag, cmd);
+    if (!pipe_command(backend_current, 65536)) {
+	pipe_including_tag(backend_current, tag);
+    }
+}
+
+void cmd_sort(char *tag, int usinguid)
+{
+    char *cmd = usinguid ? "UID Sort" : "Sort";
+
+    assert(backend_current != NULL);
+
+    prot_printf(backend_current->out, "%s %s ", tag, cmd);
+    if (!pipe_command(backend_current, 65536)) {
+	pipe_including_tag(backend_current, tag);
+    }
+}
+
+void cmd_thread(char *tag, int usinguid)
+{
+    char *cmd = usinguid ? "UID Thread" : "Thread";
 
     assert(backend_current != NULL);
 
