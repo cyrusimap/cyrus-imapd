@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ctl_cyrusdb.c,v 1.25 2004/05/28 14:03:24 rjs3 Exp $
+ * $Id: ctl_cyrusdb.c,v 1.26 2004/07/13 02:34:20 ken3 Exp $
  */
 
 #include <config.h>
@@ -159,9 +159,16 @@ void recover_reserved()
     mboxlist_init(0);
     mboxlist_open(NULL);
 
+    /* Need annotations.db for mboxlist_deletemailbox() */
+    annotatemore_init(0, NULL, NULL);
+    annotatemore_open(NULL);
+
     /* build a list of mailboxes - we're using internal names here */
     mboxlist_findall(NULL, pattern, 1, NULL,
 		     NULL, fixmbox, NULL);
+
+    annotatemore_close();
+    annotatemore_done();
 
     mboxlist_close();
     mboxlist_done();
