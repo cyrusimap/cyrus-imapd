@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: lmtpd.c,v 1.15 2000/02/24 21:28:08 tmartin Exp $
+ * $Id: lmtpd.c,v 1.16 2000/02/24 23:31:52 tmartin Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.15 2000/02/24 21:28:08 tmartin Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.16 2000/02/24 23:31:52 tmartin Exp $";*/
 
 #include <config.h>
 
@@ -1289,6 +1289,9 @@ static char *parseautheq(char *s)
 {
     char *ret = (char *) xmalloc(strlen(s)+1);    
     char *str = ret;
+    int first = 1;
+
+    ret[0]='\0';
 
     while (1)
     {
@@ -1319,8 +1322,15 @@ static char *parseautheq(char *s)
 
 	} else if ((*s >= '!') && (*s <='~') && (*s!='+') && (*s!='=')) {
 	    /* ascii char */
-	    *str = *s;
-	    str++;
+	    if ( (*s == '<') && (first==1))
+	    {
+		/* ignore this character */
+	    } else {
+		*str = *s;
+		str++;
+	    }
+	    first = 0;
+
 	} else {
 	    /* bad char */
 	    free(ret);
@@ -1332,6 +1342,13 @@ static char *parseautheq(char *s)
     if (*s && (*s!=' ')) { free(ret); return NULL; }
 
     *str = '\0';
+
+    /* take off trailing '>' */
+    if ((str!=ret) && ( *(str-1)=='>'))
+    {
+	*(str-1) = '\0';
+    }
+
     return ret;
 }
 
@@ -1844,13 +1861,16 @@ void lmtpmode(deliver_opts_t *delopts)
 			continue;
 		    }
 		    tmp += 5;
-		    if (!(delopts->authstate = auth_newstate(tmp, NULL))) {
+		    delopts->authuser = parseautheq(tmp);
+
+		    if ((delopts->authuser == NULL) || !(delopts->authstate = auth_newstate(tmp, NULL))) {
 			/* do we want to bounce mail because of this? */
 			/* i guess not. accept with no auth user */
 			prot_printf(deliver_out, "250 2.1.0 ok\r\n");
 			continue;			
 		    }
-		    delopts->authuser = parseautheq(tmp);
+
+
 		} else if (*tmp != '\0') {
 		    prot_printf(deliver_out, 
 				"501 5.5.4 Syntax error in parameters\r\n");  
