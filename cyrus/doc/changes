@@ -1,5 +1,14 @@
                    Changes to the Cyrus IMAP Server
 
+Changes to the Cyrus IMAP Server Since Version 1.5.11
+
+      * The CREATE command now ignores a trailing hierarchy delimiter
+        instead of ignoring the CREATE command. 
+      * UIDPLUS is now always advertised in CAPABILITY and is always
+        availible. The UIDPLUS extension is a set of optimizations using
+        UID values instead of sequence numbers and is described in RFC
+        2359. 
+
 Changes to the Cyrus IMAP Server Since Version 1.5.10
 
       * If ENABLE_EXPERIMENT is set, the server no longer claims to support
@@ -12,7 +21,8 @@ Changes to the Cyrus IMAP Server Since Version 1.5.10
         or better, which is what the server requires anyway. (All the
         previous checks to look for Tcl libraries are gone; now, configure
         runs tclsh and asks it where the Tcl libraries are, then runs the
-        shell scripts that are in that directory.) 
+        shell scripts that are in that directory. Since the tclConfig.sh
+        script may not be in that directory, it looks in .. as well.) 
       * The checks for com_err in configure are a little smarter and look
         to see if all the pieces are there before trying to use them. 
       * Added support for the NAMESPACE extension (if --enable-experiment
@@ -27,6 +37,7 @@ Changes to the Cyrus IMAP Server Since Version 1.5.10
         experimental and it is not recommend that services be built arround
         this feature, since it is likely to be removed in a future release
         of the IMAP server. 
+      * Bug fix: User defined flags now work properly. 
 
 Changes to the Cyrus IMAP Server Since Version 1.5.2
 
