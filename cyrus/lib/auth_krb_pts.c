@@ -13,13 +13,19 @@
  *
  */
 
-#include <krb.h>
 #include <stdio.h>
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/uio.h>
+
+#ifdef HAVE_DB_185_H
+#include <db_185.h>
+#else
+#include <db.h>
+#endif
+#include <krb.h>
 
 #include "auth.h"
 #include "auth_krb_pts.h"

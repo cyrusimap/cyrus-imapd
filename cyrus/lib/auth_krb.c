@@ -18,6 +18,13 @@
 #include <ctype.h>
 #include <string.h>
 #include <sys/types.h>
+
+#include <krb.h>
+#ifdef HAVE_DB_185_H
+#include <db_185.h>
+#else
+#include <db.h>
+#endif
 #include <krb.h>
 
 #include "auth.h"
