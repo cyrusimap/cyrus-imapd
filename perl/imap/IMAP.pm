@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: IMAP.pm,v 1.15 2002/09/06 15:49:39 rjs3 Exp $
+# $Id: IMAP.pm,v 1.16 2002/09/13 16:28:28 rjs3 Exp $
 
 package Cyrus::IMAP;
 
@@ -201,7 +201,7 @@ sub authenticate {
   $opts{-user} = $ENV{USER} || $ENV{LOGNAME} || (getpwuid($<))[0]
     if !defined($opts{-user});
   $opts{-password} = "" if(!defined($opts{-password}));
-  $opts{-authz} = $opts{-user} if (!defined($opts{-authz}));
+  $opts{-authz} = "" if (!defined($opts{-authz}));
   $rc = 0;
   if (defined($opts{-mechanism}) && lc($opts{-mechanism}) ne 'login') {
     $rc = $self->_authenticate($opts{-mechanism}, $opts{-service},
