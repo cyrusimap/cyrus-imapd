@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: unexpunge.c,v 1.1.2.1 2005/03/30 03:16:04 ken3 Exp $
+ * $Id: unexpunge.c,v 1.1.2.2 2005/03/30 21:15:52 ken3 Exp $
  */
 
 #include <config.h>
@@ -91,7 +91,7 @@ enum {
 };
 
 struct msg {
-    unsigned position;
+    unsigned recno;
     unsigned long uid;
     int restore;
 };
@@ -119,7 +119,7 @@ void list_expunged(struct mailbox *mailbox,
     for (msgno = 0; msgno < exists; msgno++) {
 	/* Jump to index record for this message */
 	rec = expunge_index_base + mailbox->start_offset +
-	    msgs[msgno].position * mailbox->record_size;
+	    msgs[msgno].recno * mailbox->record_size;
 
 	uid = ntohl(*((bit32 *)(rec+OFFSET_UID)));
 	internaldate = ntohl(*((bit32 *)(rec+OFFSET_INTERNALDATE)));
@@ -158,10 +158,9 @@ int restore_expunged(struct mailbox *mailbox,
 		     const char *expunge_index_base)
 {
     int r = 0;
-    char ebuf[INDEX_HEADER_SIZE > INDEX_RECORD_SIZE ?
+    const char *irec;
+    char buf[INDEX_HEADER_SIZE > INDEX_RECORD_SIZE ?
 	     INDEX_HEADER_SIZE : INDEX_RECORD_SIZE];
-    char ibuf[INDEX_HEADER_SIZE > INDEX_RECORD_SIZE ?
-	      INDEX_HEADER_SIZE : INDEX_RECORD_SIZE];
     char *path, fnamebuf[MAX_MAILBOX_PATH+1], fnamebufnew[MAX_MAILBOX_PATH+1];
     FILE *newindex = NULL, *newexpungeindex = NULL;
     unsigned emsgno, imsgno;
@@ -171,7 +170,6 @@ int restore_expunged(struct mailbox *mailbox,
     unsigned numansweredflag = 0, numdeletedflag = 0, numflaggedflag = 0;
     unsigned newexists, newexpunged, newdeleted, newanswered, newflagged;
     time_t now = time(NULL);
-    size_t n;
     struct txn *tid = NULL;
 
     /* Open new index/expunge files */
@@ -206,151 +204,141 @@ int restore_expunged(struct mailbox *mailbox,
 
     /* Copy over index/expunge headers */
     /* XXX do we want/need to bump the generation number? */
-    memcpy(ibuf, mailbox->index_base, mailbox->start_offset);
-    fwrite(ibuf, 1, mailbox->start_offset, newindex);
+    fwrite(mailbox->index_base, 1, mailbox->start_offset, newindex);
+    fwrite(expunge_index_base, 1, mailbox->start_offset, newexpungeindex);
 
-    memcpy(ebuf, expunge_index_base, mailbox->start_offset);
-    fwrite(ebuf, 1, mailbox->start_offset, newexpungeindex);
+    iexists = ntohl(*((bit32 *)(mailbox->index_base+OFFSET_EXISTS)));
 
-    imsgno = 0;
-    iexists = ntohl(*((bit32 *)(ibuf+OFFSET_EXISTS)));
-
-    for (emsgno = 0; emsgno < eexists; emsgno++) {
+    for (imsgno = 0, emsgno = 0; emsgno < eexists; emsgno++) {
 	/* Copy expunge index record for this message */
-	memcpy(ebuf,
+	memcpy(buf,
 	       expunge_index_base + mailbox->start_offset +
-	       emsgno * mailbox->record_size,
+	       msgs[emsgno].recno * mailbox->record_size,
 	       mailbox->record_size);
 
-	euid = ntohl(*((bit32 *)(ebuf+OFFSET_UID)));
+	euid = ntohl(*((bit32 *)(buf+OFFSET_UID)));
 
-	/* Write all cyrus.index records w/ uid < euid to cyrus.index */
+	/* Write all cyrus.index records w/ iuid < euid to cyrus.index */
 	for (; imsgno < iexists; imsgno++) {
-	    /* Copy index record for this message */
-	    memcpy(ibuf,
-		   mailbox->index_base + mailbox->start_offset +
-		   imsgno * mailbox->record_size,
-		   mailbox->record_size);
+	    /* Jump to index record for this message */
+	    irec = mailbox->index_base + mailbox->start_offset +
+		imsgno * mailbox->record_size;
 
-	    iuid = ntohl(*((bit32 *)(ibuf+OFFSET_UID)));
+	    iuid = ntohl(*((bit32 *)(irec+OFFSET_UID)));
 
 	    if (iuid > euid) break;
 
-	    fwrite(ibuf, 1, mailbox->record_size, newindex);
+	    fwrite(irec, 1, mailbox->record_size, newindex);
 	}
 
 	if (msgs[emsgno].restore) {
-	    bit32 sysflags = ntohl(*((bit32 *)(ebuf+OFFSET_SYSTEM_FLAGS)));
+	    bit32 sysflags = ntohl(*((bit32 *)(buf+OFFSET_SYSTEM_FLAGS)));
 
 	    /* Update counts */
 	    numrestored++;
-	    quotarestored += ntohl(*((bit32 *)(ebuf+OFFSET_SIZE)));
+	    quotarestored += ntohl(*((bit32 *)(buf+OFFSET_SIZE)));
 	    if (sysflags & FLAG_ANSWERED) numansweredflag++;
 	    if (sysflags & FLAG_DELETED) numdeletedflag++;
 	    if (sysflags & FLAG_FLAGGED) numflaggedflag++;
 
 	    /* Write record to cyrus.index */
-	    *((bit32 *)(ebuf+OFFSET_LAST_UPDATED)) = htonl(now);
-	    fwrite(ebuf, 1, mailbox->record_size, newindex);
+	    *((bit32 *)(buf+OFFSET_LAST_UPDATED)) = htonl(now);
+	    fwrite(buf, 1, mailbox->record_size, newindex);
 	}
 	else {
 	    /* Write record to cyrus.expunge */
-	    fwrite(ebuf, 1, mailbox->record_size, newexpungeindex);
+	    fwrite(buf, 1, mailbox->record_size, newexpungeindex);
 	}
     }
 
     /* Write all remaining cyrus.index records to cyrus.index */
-    for (; imsgno < iexists; imsgno++) {
-	/* Copy index record for this message */
-	memcpy(ibuf,
-	       mailbox->index_base + mailbox->start_offset +
-	       imsgno * mailbox->record_size,
-	       mailbox->record_size);
+    if (imsgno < iexists) {
+	/* Jump to index record for next message */
+	irec = mailbox->index_base + mailbox->start_offset +
+	    imsgno * mailbox->record_size;
 
-	fwrite(ibuf, 1, mailbox->record_size, newindex);
+	fwrite(irec, 1, (iexists - imsgno) * mailbox->record_size, newindex);
     }
 
-    /* Fix up information in index/expunge headers */
-    rewind(newindex);
-    n = fread(ibuf, 1, mailbox->start_offset, newindex);
-    if ((unsigned long) n != mailbox->start_offset) {
-	syslog(LOG_ERR,
-	       "IOERROR: reading index header for %s: got %d of %ld",
-	       mailbox->name, n, mailbox->start_offset);
-	return IMAP_IOERROR;
-    }
-
-    rewind(newexpungeindex);
-    n = fread(ebuf, 1, mailbox->start_offset, newindex);
-    if ((unsigned long) n != mailbox->start_offset) {
-	syslog(LOG_ERR,
-	       "IOERROR: reading expunge index header for %s: got %d of %ld",
-	       mailbox->name, n, mailbox->start_offset);
-	return IMAP_IOERROR;
-    }
+    /* Fix up information in index header */
+    memcpy(buf, mailbox->index_base, mailbox->start_offset);
 
     /* Update uidvalidity */
-    *((bit32 *)(ibuf+OFFSET_UIDVALIDITY)) = now;
-    *((bit32 *)(ebuf+OFFSET_UIDVALIDITY)) = now;
+    *((bit32 *)(buf+OFFSET_UIDVALIDITY)) = now;
 
     /* Fix up exists */
-    newexists = ntohl(*((bit32 *)(ibuf+OFFSET_EXISTS))) + numrestored;
-    *((bit32 *)(ibuf+OFFSET_EXISTS)) = htonl(newexists);
-
-    newexists = ntohl(*((bit32 *)(ebuf+OFFSET_EXISTS))) - numrestored;
-    *((bit32 *)(ebuf+OFFSET_EXISTS)) = htonl(newexists);
+    newexists = ntohl(*((bit32 *)(buf+OFFSET_EXISTS))) + numrestored;
+    *((bit32 *)(buf+OFFSET_EXISTS)) = htonl(newexists);
 
     /* Fix up expunged count */
-    newexpunged = ntohl(*((bit32 *)(ibuf+OFFSET_LEAKED_CACHE))) - numrestored;
-    *((bit32 *)(ibuf+OFFSET_LEAKED_CACHE)) = htonl(newexpunged);
+    newexpunged = ntohl(*((bit32 *)(buf+OFFSET_LEAKED_CACHE))) - numrestored;
+    *((bit32 *)(buf+OFFSET_LEAKED_CACHE)) = htonl(newexpunged);
 	    
     /* Fix up other counts */
-    newanswered = ntohl(*((bit32 *)(ibuf+OFFSET_ANSWERED))) + numansweredflag;
-    *((bit32 *)(ibuf+OFFSET_ANSWERED)) = htonl(newanswered);
-    newdeleted = ntohl(*((bit32 *)(ibuf+OFFSET_DELETED))) + numdeletedflag;
-    *((bit32 *)(ibuf+OFFSET_DELETED)) = htonl(newdeleted);
-    newflagged = ntohl(*((bit32 *)(ibuf+OFFSET_FLAGGED))) + numflaggedflag;
-    *((bit32 *)(ibuf+OFFSET_FLAGGED)) = htonl(newflagged);
-
-    newanswered = ntohl(*((bit32 *)(ebuf+OFFSET_ANSWERED))) - numansweredflag;
-    *((bit32 *)(ebuf+OFFSET_ANSWERED)) = htonl(newanswered);
-    newdeleted = ntohl(*((bit32 *)(ebuf+OFFSET_DELETED))) - numdeletedflag;
-    *((bit32 *)(ebuf+OFFSET_DELETED)) = htonl(newdeleted);
-    newflagged = ntohl(*((bit32 *)(ebuf+OFFSET_FLAGGED))) - numflaggedflag;
-    *((bit32 *)(ebuf+OFFSET_FLAGGED)) = htonl(newflagged);
+    newanswered = ntohl(*((bit32 *)(buf+OFFSET_ANSWERED))) + numansweredflag;
+    *((bit32 *)(buf+OFFSET_ANSWERED)) = htonl(newanswered);
+    newdeleted = ntohl(*((bit32 *)(buf+OFFSET_DELETED))) + numdeletedflag;
+    *((bit32 *)(buf+OFFSET_DELETED)) = htonl(newdeleted);
+    newflagged = ntohl(*((bit32 *)(buf+OFFSET_FLAGGED))) + numflaggedflag;
+    *((bit32 *)(buf+OFFSET_FLAGGED)) = htonl(newflagged);
 
     /* Fix up quota_mailbox_used */
 #ifdef HAVE_LONG_LONG_INT
     newquotaused =
-	ntohll(*((bit64 *)(ibuf+OFFSET_QUOTA_MAILBOX_USED64))) + quotarestored;
-    *((bit64 *)(ibuf+OFFSET_QUOTA_MAILBOX_USED64)) = htonll(newquotaused);
-
-    newquotaused =
-	ntohll(*((bit64 *)(ebuf+OFFSET_QUOTA_MAILBOX_USED64))) - quotarestored;
-    *((bit64 *)(ebuf+OFFSET_QUOTA_MAILBOX_USED64)) = htonll(newquotaused);
+	ntohll(*((bit64 *)(buf+OFFSET_QUOTA_MAILBOX_USED64))) + quotarestored;
+    *((bit64 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) = htonll(newquotaused);
 #else
     /* Zero the unused 32bits */
-    *((bit32 *)(ibuf+OFFSET_QUOTA_MAILBOX_USED64)) = htonl(0);
+    *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) = htonl(0);
     newquotaused =
-	ntohl(*((bit32 *)(ibuf+OFFSET_QUOTA_MAILBOX_USED))) + quotarestored;
-    *((bit32 *)(ibuf+OFFSET_QUOTA_MAILBOX_USED)) = htonl(newquotaused);
-
-    *((bit32 *)(ebuf+OFFSET_QUOTA_MAILBOX_USED64)) = htonl(0);
-    newquotaused =
-	ntohl(*((bit32 *)(ebuf+OFFSET_QUOTA_MAILBOX_USED))) - quotarestored;
-    *((bit32 *)(ebuf+OFFSET_QUOTA_MAILBOX_USED)) = htonl(newquotaused);
+	ntohl(*((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED))) + quotarestored;
+    *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) = htonl(newquotaused);
 #endif
 
-    /* Write out new expunge/index headers */
+    /* Write out new index header */
     rewind(newindex);
-    fwrite(ibuf, 1, mailbox->start_offset, newindex);
-
-    rewind(newexpungeindex);
-    fwrite(ebuf, 1, mailbox->start_offset, newindex);
+    fwrite(buf, 1, mailbox->start_offset, newindex);
 
     /* Ensure everything made it to disk */
     fflush(newindex);
     fclose(newindex);
+
+    /* Fix up information in expunge index header */
+    memcpy(buf, expunge_index_base, mailbox->start_offset);
+
+    /* Update uidvalidity */
+    *((bit32 *)(buf+OFFSET_UIDVALIDITY)) = now;
+
+    /* Fix up exists */
+    newexists = ntohl(*((bit32 *)(buf+OFFSET_EXISTS))) - numrestored;
+    *((bit32 *)(buf+OFFSET_EXISTS)) = htonl(newexists);
+
+    /* Fix up other counts */
+    newanswered = ntohl(*((bit32 *)(buf+OFFSET_ANSWERED))) - numansweredflag;
+    *((bit32 *)(buf+OFFSET_ANSWERED)) = htonl(newanswered);
+    newdeleted = ntohl(*((bit32 *)(buf+OFFSET_DELETED))) - numdeletedflag;
+    *((bit32 *)(buf+OFFSET_DELETED)) = htonl(newdeleted);
+    newflagged = ntohl(*((bit32 *)(buf+OFFSET_FLAGGED))) - numflaggedflag;
+    *((bit32 *)(buf+OFFSET_FLAGGED)) = htonl(newflagged);
+
+    /* Fix up quota_mailbox_used */
+#ifdef HAVE_LONG_LONG_INT
+    newquotaused =
+	ntohll(*((bit64 *)(buf+OFFSET_QUOTA_MAILBOX_USED64))) - quotarestored;
+    *((bit64 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) = htonll(newquotaused);
+#else
+    /* Zero the unused 32bits */
+    *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) = htonl(0);
+    newquotaused =
+	ntohl(*((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED))) - quotarestored;
+    *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) = htonl(newquotaused);
+#endif
+
+    /* Write out new expunge index header */
+    rewind(newexpungeindex);
+    fwrite(buf, 1, mailbox->start_offset, newexpungeindex);
+
+    /* Ensure everything made it to disk */
     fflush(newexpungeindex);
     fclose(newexpungeindex);
 
@@ -537,7 +525,7 @@ int main(int argc, char *argv[])
 
 	    uid = ntohl(*((bit32 *)(rec+OFFSET_UID)));
 
-	    msgs[msgno].position = msgno;
+	    msgs[msgno].recno = msgno;
 	    msgs[msgno].uid = uid;
 	    switch (mode) {
 	    case MODE_LIST: msgs[msgno].restore = 0; break;
