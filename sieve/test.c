@@ -1,6 +1,6 @@
 /* test.c -- tester for libsieve
  * Larry Greenfield
- * $Id: test.c,v 1.1 1999/07/02 18:55:35 leg Exp $
+ * $Id: test.c,v 1.2 1999/09/06 02:52:12 leg Exp $
  *
  * usage: "test message < script"
  */
@@ -390,6 +390,7 @@ int main(int argc, char *argv[])
     if (argc != 2) {
 	fprintf(stderr, "usage:\n");
 	fprintf(stderr, "%s message < script\n", argv[0]);
+	fprintf(stderr, "%s -v < script\n", argv[0]);
 	exit(1);
     }
 
@@ -451,30 +452,39 @@ int main(int argc, char *argv[])
 
     res = sieve_script_parse(i, stdin, NULL, &s);
     if (res != SIEVE_OK) {
+	struct sieve_errorlist *el = sieve_script_errors(s);
+
 	printf("sieve_script_parse() returns %d\n", res);
+	while (el != NULL) {
+	    printf("%d: %s\n", el->lineno, el->msg);
+	    el = el->next;
+	}
+
 	exit(1);
     }
 
-    fd = open(argv[1], O_RDONLY);
-    res = fstat(fd, &sbuf);
-    if (res != 0) {
-	perror("fstat");
+    if (strcmp(argv[1], "-v") != 0) {
+	fd = open(argv[1], O_RDONLY);
+	res = fstat(fd, &sbuf);
+	if (res != 0) {
+	    perror("fstat");
+	}
+
+	m = new_msg(fdopen(fd, "r"), sbuf.st_size, argv[1]);
+	if (res != SIEVE_OK) {
+	    printf("sieve_msg_parse() returns %d\n", res);
+	    exit(1);
+	}
+	
+	res = sieve_execute_script(s, m);
+	if (res != SIEVE_OK) {
+	    printf("sieve_execute_script() returns %d\n", res);
+	    exit(1);
+	}
+	
+	close(fd);
     }
-
-    m = new_msg(fdopen(fd, "r"), sbuf.st_size, argv[1]);
-    if (res != SIEVE_OK) {
-	printf("sieve_msg_parse() returns %d\n", res);
-	exit(1);
-    }
-
-    res = sieve_execute_script(s, m);
-    if (res != SIEVE_OK) {
-	printf("sieve_execute_script() returns %d\n", res);
-	exit(1);
-    }
-
-    close(fd);
-
+	
     res = sieve_script_free(&s);
     if (res != SIEVE_OK) {
 	printf("sieve_script_free() returns %d\n", res);
