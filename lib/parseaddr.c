@@ -36,19 +36,23 @@
 
 static char parseaddr_unspecified_domain[] = "unspecified-domain";
 
-static void parseaddr_append();
-static int parseaddr_phrase();
-static int parseaddr_domain();
-static int parseaddr_route();
+static void parseaddr_append P((struct address ***addrpp, char *name,
+				char *route, char *mailbox, char *domain,
+				char **freemep));
+static int parseaddr_phrase P((char **inp, char **phrasep, char *specials));
+static int parseaddr_domain P((char **inp, char **domainp, char **commmentp));
+static int parseaddr_route P((char **inp, char **routep));
 
 /*
  * Parse an address list in 's', appending address structures to
  * the list pointed to by 'addrp'.
  */
-parseaddr_list(s, addrp)
-char *s;
+void
+parseaddr_list(str, addrp)
+const char *str;
 struct address **addrp;
 {
+    char *s;
     int ingroup = 0;
     char *freeme;
     int tok = ' ';
@@ -59,7 +63,7 @@ struct address **addrp;
 	addrp = &(*addrp)->next;
     }
 
-    s = freeme = strsave(s);
+    s = freeme = xstrdup(str);
 
     while (tok) {
 	tok = parseaddr_phrase(&s, &phrase, ingroup ? ",@<;" : ",@<:");
@@ -124,6 +128,7 @@ struct address **addrp;
 /*
  * Free the address list 'addr'
  */
+void
 parseaddr_free(addr)
 struct address *addr;
 {

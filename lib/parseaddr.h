@@ -1,6 +1,6 @@
 /* parseaddr.h -- RFC 822 address parser
  *
- *	(C) Copyright 1995 by Carnegie Mellon University
+ *	(C) Copyright 1995-1996 by Carnegie Mellon University
  *
  *                      All Rights Reserved
  *
@@ -27,6 +27,17 @@
  *
  */
 
+#ifndef INCLUDED_PARSEADDR_H
+#define INCLUDED_PARSEADDR_H
+
+#ifndef P
+#ifdef __STDC__
+#define P(x) x
+#else
+#define P(x) ()
+#endif
+#endif
+
 struct address {
     char *name;
     char *route;
@@ -36,4 +47,8 @@ struct address {
     char *freeme;		/* If non-nil, free */
 };
 
+extern void parseaddr_list P((const char *s, struct address **addrp));
+extern void parseaddr_free P((struct address *addr));
 
+
+#endif /* INCLUDED_PARSEADDR_H */
