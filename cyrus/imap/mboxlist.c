@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.151 2001/08/16 20:52:06 ken3 Exp $
+ * $Id: mboxlist.c,v 1.152 2001/08/30 15:41:44 ken3 Exp $
  */
 
 #include <config.h>
@@ -1011,6 +1011,9 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	    mailbox_close(&newmailbox);
 	}
     }
+
+    /* we're done with the new ACL */
+    if (newacl) free(newacl);
 
     if (r != 0) {
 	int r2 = 0;
