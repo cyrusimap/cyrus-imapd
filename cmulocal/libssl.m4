@@ -33,8 +33,8 @@ saved_LIBS=$LIBS
 LIBS="$saved_LIBS -L$1 -lssl -lcrypto $LIB_SOCKET"
 AC_TRY_LINK(,
 [SSL_write();],
-[ac_cv_found_libssl_lib=yes],
-ac_cv_found_libssl_lib=no)
+[ac_cv_found_ssl_lib=yes],
+ac_cv_found_ssl_lib=no)
 LIBS=$saved_LIBS
 ])
 
@@ -44,7 +44,7 @@ AC_DEFUN(CMU_LIBSSL_LIB_WHERE, [
       CMU_LIBSSL_LIB_WHERE1($i)
       dnl deal with false positives from implicit link paths
       CMU_TEST_LIBPATH($i, ssl)
-      if test "$ac_cv_found_libssl_lib" = "yes" ; then
+      if test "$ac_cv_found_ssl_lib" = "yes" ; then
         ac_cv_libssl_where_lib=$i
         AC_MSG_RESULT(found)
         break
