@@ -31,11 +31,6 @@ AC_DEFUN(SASL_GSSAPI_CHK,[
      LDFLAGS="$LDFLAGS -L$gssapi/lib"
   fi
 
-  # the base64_decode check fails because libroken has dependencies
-  # FIXME: this is probabally non-optimal as well
-  AC_CHECK_LIB(krb5,krb5_vlog,gss_impl="heimdal",,)
-  #  AC_CHECK_LIB(roken,base64_decode,gss_impl="heimdal",, $LIB_CRYPT)
-
   if test -d ${gssapi}; then
      gssapi_dir="${gssapi}/lib"
      GSSAPIBASE_LIBS="-L$gssapi_dir"
@@ -45,6 +40,10 @@ AC_DEFUN(SASL_GSSAPI_CHK,[
      dnl a real hack.  it needs to be fixed.
      gssapi_dir="/usr/local/lib"
   fi
+
+  # Check a full link against the heimdal libraries.  If this fails, assume
+  # MIT.
+  AC_CHECK_LIB(gssapi,gss_unwrap,gss_impl="heimdal",,$GSSAPIBASE_LIBS -lgssapi -lkrb5 -ldes -lasn1 -lroken ${LIB_CRYPT} -lcom_err)
 
   if test "$gss_impl" = "mit"; then
      GSSAPIBASE_LIBS="$GSSAPIBASE_LIBS -lgssapi_krb5 -lkrb5 -lk5crypto -lcom_err"
