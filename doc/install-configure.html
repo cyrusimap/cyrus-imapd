@@ -1,4 +1,4 @@
-<!-- $Id: install-configure.html,v 1.14 2001/08/18 00:46:46 ken3 Exp $ -->
+<!-- $Id: install-configure.html,v 1.15 2001/08/23 13:16:18 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Configuring the IMAP Server
@@ -394,7 +394,8 @@ tls_lmtp_key_file: /var/imap/lmtp-server.pem
 This is useful if you want to use different hostnames for each service
 (e.g. via virtual host interfaces or DNS CNAMEs). In the absence of
 any of the service specific options, the value of the global option is
-used.
+used. A value of <b>disabled</b> for the certificate or key file for
+a particular service will disable SSL/TLS for that service.
 
 <p>If you have a Certificate Authority (CA), you may wish to generate
 a certificate request and send it to be signed by your CA.
@@ -433,5 +434,5 @@ authenticate DN (distinguished name) to a SASL authentication
 name.</p>
 
 <P><HR>
-last modified: $Date: 2001/08/18 00:46:46 $
+last modified: $Date: 2001/08/23 13:16:18 $
 </BODY></HTML>
