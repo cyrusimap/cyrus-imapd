@@ -131,9 +131,10 @@ static sasl_security_properties_t *make_secprops(int min,int max)
   if (!config_getswitch("allowplaintext", 1)) {
       ret->security_flags |= SASL_SEC_NOPLAINTEXT;
   }
-  if (!config_getswitch("allowanonymouslogin", 0)) {
-      ret->security_flags |= SASL_SEC_NOANONYMOUS;
-  }
+
+  /* never allow anonymous */
+  ret->security_flags |= SASL_SEC_NOANONYMOUS;
+
   ret->property_names = NULL;
   ret->property_values = NULL;
 
