@@ -282,7 +282,7 @@ int len;
 
 /*
  * Stripped-down version of printf() that works on protection streams
- * Only understands '%d', '%s', and '%%' in the format string.
+ * Only understands '%d', '%s', '%c', and '%%' in the format string.
  */
 #ifdef __STDC__
 int prot_printf(struct protstream *s, const char *fmt, ...)
@@ -322,6 +322,11 @@ va_dcl
 	case 's':
 	    p = va_arg(pvar, char *);
 	    prot_write(s, p, strlen(p));
+	    break;
+
+	case 'c':
+	    i = va_arg(pvar, int);
+	    prot_putc(i, s);
 	    break;
 
 	default:
