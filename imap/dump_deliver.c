@@ -13,7 +13,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: dump_deliver.c,v 1.2 1998/05/12 01:10:28 tjs Exp $";
+static char _rcsid[] = "$Id: dump_deliver.c,v 1.3 1998/05/12 22:35:07 wcw Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -70,7 +70,7 @@ dump_deliver(fname)
   (void)memset(&info, 0, sizeof(info));
   DeliveredDBptr = dbopen(fname, O_RDONLY, 0666, DB_HASH, &info);
   if (!DeliveredDBptr) {
-    fprintf(stderr, "Unable to open db file: %s", fname);
+    fprintf(stderr, "Unable to open db file: %s\n", fname);
     return -1;
   }
     
@@ -80,11 +80,11 @@ dump_deliver(fname)
     mode = R_NEXT;
     (void)memcpy(datebuf, date.data, date.size);
     datebuf[date.size] = '\0';
-    to += strlen(delivery.data) + 1;
-    printf("from: %s\tto: %s\tat: %s\n", delivery.data, to, datebuf);
+    to = ((char *)delivery.data + (strlen(delivery.data) + 1));
+    printf("id: %-40s\tto: %-20s\tat: %s\n", delivery.data, to, datebuf);
   }
   if (rc < 0) {
-    fprintf(stderr, "error detected looking up entry %d: %m");
+    fprintf(stderr, "error detected looking up entry: %d\n");
   }
     
 #else /* HAVE_LIBDB */
@@ -121,6 +121,8 @@ main(argc, argv)
     }
   }
 
+  config_init("dump_deliverdb");
+
   if (alt_file == NULL) {
     char fname[MAX_MAILBOX_PATH];
     
@@ -142,5 +144,5 @@ int code;
     exit(code);
 }
 
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/Attic/dump_deliver.c,v 1.2 1998/05/12 01:10:28 tjs Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/Attic/dump_deliver.c,v 1.3 1998/05/12 22:35:07 wcw Exp $ */
 
