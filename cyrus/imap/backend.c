@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.7 2002/05/06 17:18:49 rjs3 Exp $ */
+/* $Id: backend.c,v 1.8 2002/07/16 19:58:21 leg Exp $ */
 
 #include <config.h>
 
@@ -371,6 +371,7 @@ struct backend *findserver(struct backend *ret, const char *server,
     if (connect(sock, (struct sockaddr *) &ret->addr, 
 		sizeof(ret->addr)) < 0) {
 	syslog(LOG_ERR, "connect(%s) failed: %m", server);
+        close(sock);
 	free(ret);
 	return NULL;
     }
@@ -385,6 +386,7 @@ struct backend *findserver(struct backend *ret, const char *server,
 	syslog(LOG_ERR, "couldn't authenticate to backend server: %s",
 	       sasl_errstring(r, NULL, NULL));
 	free(ret);
+        close(sock);
 	return NULL;
     }
     
