@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.43 1999/12/23 18:58:52 leg Exp $
+ $Id: imclient.c,v 1.44 1999/12/23 19:58:42 tmartin Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -1439,20 +1439,20 @@ static int set_cert_stuff(SSL_CTX * ctx, char *cert_file, char *key_file)
     if (cert_file != NULL) {
 	if (SSL_CTX_use_certificate_file(ctx, cert_file,
 					 SSL_FILETYPE_PEM) <= 0) {
-	  printf("unable to get certificate from '%s'\n", cert_file);
+	  printf("[ unable to get certificate from '%s' ]\n", cert_file);
 	  return (0);
 	}
 	if (key_file == NULL)
 	    key_file = cert_file;
 	if (SSL_CTX_use_PrivateKey_file(ctx, key_file,
 					SSL_FILETYPE_PEM) <= 0) {
-	  printf("unable to get private key from '%s'\n", key_file);
+	  printf("[ unable to get private key from '%s' ]\n", key_file);
 	  return (0);
 	}
 	/* Now we know that a key and cert have been set against
          * the SSL context */
 	if (!SSL_CTX_check_private_key(ctx)) {
-	  printf("Private key does not match the certificate public key\n");
+	  printf("[ Private key does not match the certificate public key ]\n");
 	  return (0);
 	}
     }
@@ -1606,7 +1606,7 @@ static int tls_init_clientengine(struct imclient *imclient,
     if (CAfile || CApath)
 	if ((!SSL_CTX_load_verify_locations(imclient->tls_ctx, CAfile, CApath)) ||
 	    (!SSL_CTX_set_default_verify_paths(imclient->tls_ctx))) {
-	    printf("TLS engine: cannot load CA data\n");
+	    printf("[ TLS engine: cannot load CA data ]\n");
 	    return -1;
 	}
     if (strlen(var_tls_cert_file) == 0)
@@ -1620,7 +1620,7 @@ static int tls_init_clientengine(struct imclient *imclient,
 
     if (c_cert_file || c_key_file)
 	if (!set_cert_stuff(imclient->tls_ctx, c_cert_file, c_key_file)) {
-	    printf("TLS engine: cannot load cert/key data\n");
+	    printf("[ TLS engine: cannot load cert/key data ]\n");
 	    return -1;
 	}
     SSL_CTX_set_tmp_rsa_callback(imclient->tls_ctx, tmp_rsa_cb);
@@ -1770,11 +1770,11 @@ int tls_start_clienttls(struct imclient *imclient,
     /* Dump the negotiation for loglevels 3 and 4 */
 
     if ((sts = SSL_connect(imclient->tls_conn)) <= 0) {
-	printf("SSL_connect error %d\n", sts);
+	printf("[ SSL_connect error %d ]\n", sts); /* xxx get string error? */
 	session = SSL_get_session(imclient->tls_conn);
 	if (session) {
 	    SSL_CTX_remove_session(imclient->tls_ctx, session);
-	    printf("SSL session removed\n");
+	    printf("[ SSL session removed ]\n");
 	}
 	if (imclient->tls_conn!=NULL)
 	    SSL_free(imclient->tls_conn);
@@ -1839,13 +1839,13 @@ int imclient_starttls(struct imclient *imclient,
   result=tls_init_clientengine(imclient, 10, var_tls_cert_file, var_tls_key_file);
   if (result!=0)
   {
-    printf("Start TLS engine failed\n");
+    printf("[ Start TLS engine failed ]\n");
     return 1;
   } else {
     result=tls_start_clienttls(imclient, &externalprop.ssf, &externalprop.auth_id, imclient->fd);
     
     if (result!=0) {
-      printf("Warning: TLS negotiation did not succeed\n");
+      printf("[ TLS negotiation did not succeed ]\n");
       return 1;
     }
   }
@@ -1857,7 +1857,8 @@ int imclient_starttls(struct imclient *imclient,
 
   imclient->tls_on = 1;
 
-  externalprop.auth_id="foo";
+  externalprop.auth_id=""; /* xxx this really should be peer_CN or
+  issuer_CN but I can't figure out which is which at the moment */
 
   /* tell SASL about the negotiated layer */
   result=sasl_setprop(imclient->saslconn,
