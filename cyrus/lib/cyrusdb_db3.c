@@ -150,6 +150,7 @@ static int init(const char *dbdir, int myflags)
     dbenv->set_errpfx(dbenv, "db3");
 
 #if 0
+    /* XXX should make this value runtime configurable */
     if ((r = dbenv->set_cachesize(dbenv, 0, 64 * 1024, 0)) != 0) {
 	dbenv->err(dbenv, r, "set_cachesize");
 	dbenv->close(dbenv, 0);
