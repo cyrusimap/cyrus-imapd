@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.30 1999/08/17 20:50:30 tmartin Exp $
+ * $Id: imtest.c,v 1.31 1999/08/17 22:21:16 leg Exp $
  *
  * Copyright 1999 Carnegie Mellon University
  * 
@@ -76,8 +76,7 @@ extern char *optarg;
 /* callbacks we support */
 static sasl_callback_t callbacks[] = {
   {
-
-#ifdef SASL_CB_GETREAM
+#ifdef SASL_CB_GETREALM
     SASL_CB_GETREALM, NULL, NULL
   }, {
 #endif
