@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.39 1999/12/08 05:05:40 leg Exp $
+ * $Id: imtest.c,v 1.40 1999/12/16 17:35:18 tmartin Exp $
  *
  * Copyright 1999 Carnegie Mellon University
  * 
@@ -614,8 +614,8 @@ imt_stat getauthline(char **line, int *linelen)
   int saslresult;
   char *str=(char *) buf;
   
-  str = prot_fgets(str, BUFSIZE, pin);
-  if (str == NULL) imtest_fatal("prot layer failure");
+  str=prot_fgets(str, BUFSIZE, pin);
+  if (str==NULL) imtest_fatal("prot layer failure");
   printf("S: %s",str);
 
   if (!strncasecmp(str, "A01 OK ", 7)) { return STAT_OK; }
@@ -889,26 +889,32 @@ static char *parsemechlist(char *str)
   return ret;
 }
 
-#define CAPATAG "C01"
 #define CAPABILITY "C01 CAPABILITY\r\n"
 
-static char *ask_capability(int *supports_starttls)
+static char *ask_capability(int *supports_starttls, int getuntaged)
 {
   char *str=malloc(301);
   char *ret;
 
+  if (getuntaged==1)
+  {
+    str=prot_fgets(str,300,pin);
+    if (str == NULL) {
+      imtest_fatal("prot layer failure");
+    }
+    printf("S: %s",str);
+  }
+
   /* request capabilities of server */
-  prot_printf(pout, CAPATAG " CAPABILITY\r\n");
+  prot_printf(pout, CAPABILITY);
   prot_flush(pout);
 
-  printf("C: " CAPATAG " CAPABILITY\r\n", CAPABILITY);
+  printf("C: %s", CAPABILITY);
 
-  do { /* look for the * CAPABILITY response */
-      str = prot_fgets(str,300,pin);
-      if (str == NULL) imtest_fatal("prot layer failure");
+  str=prot_fgets(str,300,pin);
+  if (str==NULL) imtest_fatal("prot layer failure");
 
-      printf("S: %s", str);
-  } while (strncasecmp(str, "* CAPABILITY", 12));
+  printf("S: %s", str);
 
   /* check for starttls */
   if (strstr(str,"STARTTLS")!=NULL)
@@ -918,12 +924,8 @@ static char *ask_capability(int *supports_starttls)
 
   ret=parsemechlist(str);
 
-  do { /* look for TAG */
-      str = prot_fgets(str,300,pin);
-      if (str == NULL) imtest_fatal("prot layer failure");
-
-      printf("S: %s",str);
-  } while (strncmp(str, CAPATAG, strlen(CAPATAG)));
+  str=prot_fgets(str,300,pin);
+  printf("S: %s",str);
 
   free(str);
 
@@ -1003,7 +1005,7 @@ static void send_recv_test(void)
 
 void interactive(char *filename)
 {
-  char buf[1024];
+  char buf[64];
   fd_set read_set, rset;
   fd_set write_set, wset;
   int nfds;
@@ -1029,37 +1031,15 @@ void interactive(char *filename)
   FD_SET(sock, &read_set);
 
   FD_ZERO(&write_set);
+  FD_SET(sock, &write_set);
   if (filename != NULL) 
-      FD_SET(fd, &write_set);  
+      FD_SET(fd, &read_set);  
 
   nfds = getdtablesize();
 
   if (filename != NULL)
       donewritingfile = 0;
   
-  /* let's send the whole file. IMAP is smart. it'll handle everything
-     in order*/
-  /*  if (filename!=NULL)
-  {
-
-    while (atend==0)
-    {
-      if (fgets(buf, sizeof (buf) - 1, fp) == NULL) {
-	printf(LOGOUT);
-	prot_write(pout, LOGOUT, sizeof (LOGOUT));
-	atend=1;
-      } else {
-	count = strlen(buf);
-	buf[count - 1] = '\r';
-	buf[count] = '\n';
-	buf[count + 1] = '\0';
-	printf("%s", buf);
-	prot_write(pout, buf, count + 1);
-      }
-      prot_flush(pout);
-    }
-    }*/
-
   /* loop reading from network and from stdin if applicable */
   while(1) {
       rset = read_set;
@@ -1070,7 +1050,7 @@ void interactive(char *filename)
 	  imtest_fatal("select");
       }
 
-      if (FD_ISSET(0, &rset)) {
+      if ((FD_ISSET(0, &rset)) && (FD_ISSET(sock, &wset)))  {
 	  
 	  if (fgets(buf, sizeof (buf) - 1, stdin) == NULL) {
 	      printf(LOGOUT);
@@ -1102,16 +1082,20 @@ void interactive(char *filename)
 	      buf[count] = '\0';
 	      printf("%s", buf); 
 	  } while (pin->cnt > 0);
-      } else if ((FD_ISSET(fd, &wset)) && (donewritingfile == 0)) {
+      } else if ((FD_ISSET(fd, &rset)) && (FD_ISSET(sock, &wset))
+		 && (donewritingfile == 0)) {
 	  /* read from disk */	
 	  int numr = read(fd, buf, sizeof(buf));
 
+	  /* and send out over wire */
 	  if (numr < 0)
 	  {
 	      perror("read");
 	      imtest_fatal("read");
 	  } else if (numr==0) {
 	      donewritingfile = 1;
+
+	      FD_CLR(fd,&read_set);
 
 	      /* send LOGOUT */
 	      printf(LOGOUT);
@@ -1121,7 +1105,9 @@ void interactive(char *filename)
 	      prot_write(pout, buf, numr);
 	      prot_flush(pout);
 	  }
-
+      } else {
+	  /* if can't do anything else sleep */
+	  usleep(1000);
       }
 
 
@@ -1154,12 +1140,11 @@ int main(int argc, char **argv)
 {
   char *mechanism=NULL;
   char servername[1024];
-  char buf[1024];
   char *filename=NULL;
 
   char *mechlist;
   int *ssfp;
-  int maxssf = 128;
+  int maxssf = 10000;
   int minssf = 0;
   char c;
   int result;
@@ -1247,13 +1232,7 @@ int main(int argc, char **argv)
   pin = prot_new(sock, 0);
   pout = prot_new(sock, 1); 
 
-  /* get the greeting line */
-  if (prot_fgets(buf, sizeof(buf) - 1, pin) == NULL) {
-      imtest_fatal("prot layer failure");
-  }
-  printf("S: %s", buf);
-
-  mechlist = ask_capability(&server_supports_tls);
+  mechlist=ask_capability(&server_supports_tls,1);   /* get the * line also */
 
 #ifdef HAVE_SSL
   if ((dotls==1) && (server_supports_tls==1))
@@ -1289,10 +1268,8 @@ int main(int argc, char **argv)
     prot_settls (pout, tls_conn);
 
     /* ask for the capabilities again */
-    if (verbose==1) {
-	printf("Asking for capabilities again (they might have changed)\n");
-    }
-    mechlist=ask_capability(&server_supports_tls);
+    if (verbose==1) printf("Asking for capabilities again since they might have changed\n");
+    mechlist=ask_capability(&server_supports_tls, 0);
 
   } else if ((dotls==1) && (server_supports_tls!=1)) {
     imtest_fatal("STARTTLS not supported by the server!\n");
