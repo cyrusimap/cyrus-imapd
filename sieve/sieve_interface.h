@@ -1,5 +1,5 @@
 /* sieve_interface.h -- interface for deliver
- * $Id: sieve_interface.h,v 1.3 1999/10/04 18:23:07 leg Exp $
+ * $Id: sieve_interface.h,v 1.4 1999/10/27 21:20:20 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -67,7 +67,7 @@ typedef struct sieve_vacation {
 		       void *message_context); 
 
     /* mail the response */
-    int (*send_response)(char *addr, char *subj, char *msg, int mime, int days,
+    int (*send_response)(char *addr, char *subj, char *msg, int mime,
 			 void *interp_context, void *script_context,
 			 void *message_context);
 } sieve_vacation_t;
