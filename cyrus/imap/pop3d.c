@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.90.2.3 2001/06/19 14:47:12 ken3 Exp $
+ * $Id: pop3d.c,v 1.90.2.3.2.1 2001/07/04 16:02:23 ken3 Exp $
  */
 #include <config.h>
 
@@ -82,6 +82,7 @@
 #include "mboxlist.h"
 #include "idle.h"
 #include "telemetry.h"
+#include "namespace.h"
 
 #ifdef HAVE_KRB
 /* kerberos des is purported to conflict with OpenSSL DES */
@@ -128,6 +129,9 @@ int popd_starttls_done = 0;
 static struct mailbox mboxstruct;
 
 static mailbox_decideproc_t expungedeleted;
+
+/* current namespace */
+static struct namespace popd_namespace;
 
 static void cmd_apop(char *user, char *digest);
 static int apop_enabled(void);
@@ -194,6 +198,12 @@ int service_init(int argc, char **argv, char **envp)
 
     /* setup for sending IMAP IDLE notifications */
     idle_enabled();
+
+    /* Set namespace */
+    if (!namespace_init(&popd_namespace, 0)) {
+	syslog(LOG_ERR, "invalid namespace prefix in configuration file");
+	fatal("invalid namespace prefix in configuration file", EC_CONFIG);
+    }
 
     return 0;
 }
@@ -844,6 +854,10 @@ static void cmd_apop(char *user, char *digest)
 	syslog(LOG_NOTICE, "login: %s %s APOP %s",
 	       popd_clienthost, popd_userid, reply ? reply : "");
     }
+
+    /* Translate userid */
+    hier_sep_tointernal(popd_userid, &popd_namespace);
+
     openinbox();
 }
 #else
@@ -887,7 +901,8 @@ char *user;
 	shut_down(0);
     }
     else if (!(p = auth_canonifyid(user)) ||
-	       strchr(p, '.') || strlen(p) + 6 > MAX_MAILBOX_PATH) {
+	     (popd_namespace.hier_sep == '.' && strchr(p, '.')) ||
+	     strlen(p) + 6 > MAX_MAILBOX_PATH) {
 	prot_printf(popd_out, "-ERR Invalid user\r\n");
 	syslog(LOG_NOTICE,
 	       "badlogin: %s plaintext %s invalid user",
@@ -925,6 +940,9 @@ char *pass;
 	}
 
 	syslog(LOG_NOTICE, "login: %s %s kpop", popd_clienthost, popd_userid);
+
+	/* Translate userid */
+	hier_sep_tointernal(popd_userid, &popd_namespace);
 
 	openinbox();
 	return;
@@ -969,6 +987,9 @@ char *pass;
 	    sleep(plaintextloginpause);
 	}
     }
+    /* Translate userid */
+    hier_sep_tointernal(popd_userid, &popd_namespace);
+
     openinbox();
 }
 
@@ -1144,6 +1165,9 @@ void cmd_auth(char *arg)
 	return;
     }
     
+    /* Translate userid */
+    hier_sep_tointernal(popd_userid, &popd_namespace);
+
     if (openinbox()==0) {
 	proc_register("pop3d", popd_clienthost, 
 		      popd_userid, popd_mailbox->name);    
