@@ -1,11 +1,11 @@
-<!-- $Id: changes.html,v 1.40 1998/06/10 22:04:00 tjs Exp $ -->
+<!-- $Id: changes.html,v 1.41 1998/06/24 15:39:12 dar Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
 </HEAD><BODY>
 <H1>                   Changes to the Cyrus IMAP Server</H1>
 
-<h2> Changes to the Cyrus IMAP Server Since Version 1.5.2</h2>
+<h2> Changes to the Cyrus IMAP Server Since Version 1.5.10</h2>
 
 <ul>
 
@@ -33,6 +33,14 @@ server requires anyway.  (All the previous checks to look for Tcl
 	previous behavior); if set to "false" or left to the default value,
 	messages containing 8-bit-set characters have these characters changed 
 	to a constant character ('X').
+
+<li> Added the "fud" program.   This is an interm hack designed to allow
+	allow finger information to be retrieved for cyrus users.  This
+	is experimental and it is not recommend that services be built
+	arround this feature, since it is likely to be removed in a
+	future release of the IMAP server.
+
+</ul>
 
 <h2>Changes to the Cyrus IMAP Server Since Version 1.5.2</h2>
 
