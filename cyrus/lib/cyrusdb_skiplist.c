@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.29 2002/02/27 21:20:41 ken3 Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.30 2002/02/28 19:50:36 leg Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -1193,6 +1193,8 @@ int mycommit(struct db *db, struct txn *tid)
     int r;
 
     assert(db && tid);
+
+    update_lock(db, tid);
 
     if (be_paranoid) {
 	assert(myconsistent(db, tid, 1) == 0);
