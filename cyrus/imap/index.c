@@ -1950,7 +1950,7 @@ void *rock;
     /* Open the message file if we're going to need it */
     if ((fetchitems & (FETCH_HEADER|FETCH_TEXT|FETCH_RFC822|FETCH_UNCACHEDHEADER)) ||
 	fetchargs->bodysections) {
-	if (mailbox_map_message(mailbox, UID(msgno), &msg_base, &msg_size)) {
+	if (mailbox_map_message(mailbox, 1, UID(msgno), &msg_base, &msg_size)) {
 	    prot_printf(imapd_out, "* OK ");
 	    prot_printf(imapd_out, error_message(IMAP_NO_MSGGONE), msgno);
 	    prot_printf(imapd_out, "\r\n");
@@ -2410,7 +2410,7 @@ struct mapfile *msgfile;
 
     if (searchargs->body || searchargs->text ||
 	(searchargs->flags & SEARCH_UNCACHEDHEADER)) {
-	if (mailbox_map_message(mailbox, UID(msgno),
+	if (mailbox_map_message(mailbox, 1, UID(msgno),
 				&msgfile->base, &msgfile->size)) {
 	    return 0;
 	}

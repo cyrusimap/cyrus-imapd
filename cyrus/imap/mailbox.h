@@ -180,6 +180,7 @@ typedef int mailbox_decideproc_t P((void *rock, char *indexbuf));
 extern char *mailbox_message_fname P((struct mailbox *mailbox,
 				      unsigned long uid));
 extern int mailbox_map_message P((struct mailbox *mailbox,
+				  int iscurrentdir,
 				  unsigned long uid,
 				  const char **basep, unsigned long *lenp));
 extern void mailbox_unmap_message P((struct mailbox *mailbox,
