@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.6 2002/05/17 19:21:22 ken3 Exp $
+ * $Id: annotate.c,v 1.7 2002/05/17 20:48:04 ken3 Exp $
  */
 
 #include <config.h>
@@ -396,17 +396,69 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
     return 0;
 }
 
-int annotatemore_store(struct entryattlist *l, int isadmin, char *userid,
+static int server_store(char *filename, char *value)
+{
+    FILE *f;
+
+    /* XXX check for failures */
+    if (!strcmp(value, "NIL"))
+	unlink(filename);
+    else {
+	f = fopen(filename, "w");
+	fprintf(f, "%s\n", value);
+	fclose(f);
+    }
+
+    return 0;
+}
+
+int annotatemore_store(struct entryattlist *l, struct namespace *namespace,
+		       int isadmin, char *userid,
 		       struct auth_state *auth_state)
 {
     struct entryattlist *e = l;
+    struct attvaluelist *av;
+    char *value = NULL, *motd = NULL, *comment = NULL;
+    char filename[1024];
+
+    syslog(LOG_INFO, "annotatemore_store");
 
     while (e) {
 	if (strncmp(e->entry, "/server/", 8) &&
 	    strncmp(e->entry, "/mailbox/", 9)) {
 	    return IMAP_ANNOTATION_BADENTRY;
 	}
+
+	av = e->attvalues;
+	while (av) {
+	    if (!strcmp(av->attrib, "value.shared")) {
+		value = av->value;
+		break;
+	    }
+	    else
+		return IMAP_PERMISSION_DENIED;
+
+	    av = av->next;
+	}
+
+	if (value && !strcmp(e->entry, "/server/motd"))
+	    motd = value;
+	else if (value && !strcmp(e->entry, "/server/comment"))
+	    comment = value;
+	else
+	    return IMAP_PERMISSION_DENIED;
+
 	e = e->next;
+    }
+
+    /* XXX check for failures -- how to do this atomic? */
+    if (motd) {
+	sprintf(filename, "%s/msg/motd", config_dir);
+	server_store(filename, value);
+    }
+    if (comment) {
+	sprintf(filename, "%s/msg/comment", config_dir);
+	server_store(filename, value);
     }
 
     return 0;
