@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.118 2000/06/09 02:44:44 leg Exp $
+ * $Id: index.c,v 1.119 2000/06/09 18:41:33 ken3 Exp $
  */
 #include <config.h>
 
@@ -134,10 +134,11 @@ struct mapfile {
     unsigned long size;
 };
 
-struct msgdata {
+typedef struct msgdata {
     unsigned msgno;		/* message number */
-    unsigned msgid;		/* hash of message ID */
-    unsigned *ref;		/* hash of references */
+    char *msgid;		/* message ID */
+    char **ref;			/* array of references */
+    int nref;			/* number of references */
     time_t arrival;		/* internal arrival date & time of message */
     time_t date;		/* sent date & time of message
 				   from Date: header (adjusted by time zone) */
@@ -148,18 +149,18 @@ struct msgdata {
     unsigned xsubj_hash;	/* hash of extracted subject text */
     unsigned size;		/* size of message */
     struct msgdata *next;
-};
+} MsgData;
 
-struct thread {
-    struct msgdata *msgdata;	/* message data */
+typedef struct thread {
+    MsgData *msgdata;		/* message data */
     struct thread *parent;	/* parent message */
     struct thread *child;	/* first child message */
     struct thread *next;	/* next sibling message */
-};
+} Thread;
 
 struct thread_algorithm {
     char *alg_name;
-    struct thread *(*threader)(unsigned *msgno_list, int nmsg);
+    void (*threader)(unsigned *msgno_list, int nmsg, int usinguid);
 };
 
 /* Forward declarations */
@@ -215,25 +216,23 @@ static index_sequenceproc_t index_copysetup;
 static int _index_search P((unsigned **msgno_list, struct mailbox *mailbox,
 			    struct searchargs *searchargs));
 
-static char *index_extract_subject(const char *subj);
-static struct msgdata *index_msgdata_load P((unsigned *msgno_list, int n,
-					     signed char *sortcrit));
+static char *index_extract_subject P((const char *subj));
+static MsgData *index_msgdata_load P((unsigned *msgno_list, int n,
+				      signed char *sortcrit));
 
-static void *index_sort_getnext P((struct msgdata *node));
-static void index_sort_setnext P((struct msgdata *node, struct msgdata *next));
-static int index_sort_compare P((struct msgdata *md1, struct msgdata *md2,
+static void *index_sort_getnext P((MsgData *node));
+static void index_sort_setnext P((MsgData *node, MsgData *next));
+static int index_sort_compare P((MsgData *md1, MsgData *md2,
 				 signed char *call_data));
-static void index_sort_free P((struct msgdata *list));
+static void index_msgdata_free P((MsgData *md));
 
-static void *index_thread_getnext P((struct thread *thread));
-static void index_thread_setnext P((struct thread *thread,
-				    struct thread *next));
-static int index_thread_compare P((struct thread *t1, struct thread *t2,
+static void *index_thread_getnext P((Thread *thread));
+static void index_thread_setnext P((Thread *thread, Thread *next));
+static int index_thread_compare P((Thread *t1, Thread *t2,
 				   signed char *call_data));
-static struct thread *index_thread_orderedsubj P((unsigned *msgno_list,
-						  int nmsg));
-static void index_thread_print P((struct thread *threads, int usinguid));
-static void index_thread_free P((struct thread *threads));
+static void index_thread_orderedsubj P((unsigned *msgno_list, int nmsg,
+					int usinguid));
+static void index_thread_print P((Thread *threads, int usinguid));
 
 static struct thread_algorithm thread_algs[] = {
     { "ORDEREDSUBJECT", index_thread_orderedsubj },
@@ -998,7 +997,7 @@ index_sort(struct mailbox *mailbox,
 	   int usinguid)
 {
     unsigned *msgno_list;
-    struct msgdata *msgdata = NULL, *cur;
+    MsgData *msgdata, *freeme, *cur;
     int n;
 
     /* Search for messages based on the given criteria */
@@ -1006,7 +1005,7 @@ index_sort(struct mailbox *mailbox,
 
     if (n) {
 	/* Create/load the msgdata array */
-	msgdata = index_msgdata_load(msgno_list, n, sortcrit);
+	freeme = msgdata = index_msgdata_load(msgno_list, n, sortcrit);
 	free(msgno_list);
     }
 
@@ -1019,14 +1018,21 @@ index_sort(struct mailbox *mailbox,
 			(void (*)(void*,void*)) index_sort_setnext,
 			(int (*)(void*,void*,void*)) index_sort_compare,
 			sortcrit);
+
 	/* Output the sorted messages */ 
 	cur = msgdata;
 	while (cur) {
 	    prot_printf(imapd_out, " %u",
 			usinguid ? UID(cur->msgno) : cur->msgno);
+
+	    /* free contents of the current node */
+	    index_msgdata_free(cur);
+
 	    cur = cur->next;
 	}
-	index_sort_free(msgdata);
+
+	/* free the msgdata array */
+	free(freeme);
     }
 
     prot_printf(imapd_out, "\r\n");
@@ -1038,7 +1044,7 @@ index_sort(struct mailbox *mailbox,
 void index_thread(struct mailbox *mailbox, int algorithm,
 		  struct searchargs *searchargs, int usinguid)
 {
-    struct thread *threads;
+    Thread *threads;
     unsigned *msgno_list;
     int nmsg;
 
@@ -1046,19 +1052,10 @@ void index_thread(struct mailbox *mailbox, int algorithm,
     nmsg = _index_search(&msgno_list, mailbox, searchargs);
 
     if (nmsg) {
-	/* Thread messages using given algorithm. */
-	threads = (*thread_algs[algorithm].threader)(msgno_list, nmsg);
-
-	/* Output the threaded messages */ 
-	prot_printf(imapd_out, "* THREAD ");
-
-	index_thread_print(threads, usinguid);
-
-	prot_printf(imapd_out, "\r\n");
+	/* Thread messages using given algorithm */
+	(*thread_algs[algorithm].threader)(msgno_list, nmsg, usinguid);
 
 	free(msgno_list);
-
-	index_thread_free(threads);
     }
 }
 
@@ -2983,20 +2980,16 @@ static unsigned hash(char *string)
  * by the specified sort criteria.
  */
 
-#define NEWMSGDATA \
-    (struct msgdata *) memset(xmalloc(sizeof(struct msgdata)), 0, \
-			      sizeof(struct msgdata))
-
 #define GETADDR(header)							\
     parseaddr_list((header)+4, &addr);					\
     cur->header = xstrdup(addr && addr->mailbox ? addr->mailbox : "");	\
     parseaddr_free(addr);						\
     addr=NULL
 
-static struct msgdata *index_msgdata_load(unsigned *msgno_list, int n,
-					  signed char *sortcrit)
+static MsgData *index_msgdata_load(unsigned *msgno_list, int n,
+				   signed char *sortcrit)
 {
-    struct msgdata *md, *cur;
+    MsgData *md, *cur;
     const char *cacheitem, *env, *from, *to, *cc, *subj;
     struct address *addr;
     int i, j;
@@ -3004,12 +2997,16 @@ static struct msgdata *index_msgdata_load(unsigned *msgno_list, int n,
     if (!n)
 	return NULL;
 
-    cur = md = NEWMSGDATA;
+    /* create an array of MsgData to use as nodes of linked list */
+    md = (MsgData *) memset(xmalloc(n * sizeof(MsgData)), 0,
+			    n * sizeof(MsgData));
 
-    i = 0;
-    do {
+    for (i = 0, cur = md; i < n; i++, cur = cur->next) {
 	/* set msgno */
-	cur->msgno = msgno_list[i++];
+	cur->msgno = msgno_list[i];
+
+	/* set pointer to next node */
+	cur->next = (i+1 < n ? cur+1 : NULL);
 
 	/* fetch cached info */
 	env = cache_base + CACHE_OFFSET(cur->msgno);
@@ -3034,8 +3031,8 @@ static struct msgdata *index_msgdata_load(unsigned *msgno_list, int n,
 		break;
 	    case SORT_DATE:
 		/* skip open paren and double-quote */
-		cur->date = message_parse_date((char*) env+6,
-					      PARSE_TIME | PARSE_ZONE);
+		cur->date = message_parse_date((char *) env+6,
+					       PARSE_TIME | PARSE_ZONE);
 		break;
 	    case SORT_FROM:
 		GETADDR(from);
@@ -3052,7 +3049,7 @@ static struct msgdata *index_msgdata_load(unsigned *msgno_list, int n,
 		break;
 	    }
 	}
-    } while (i < n && (cur = cur->next = NEWMSGDATA));
+    }
 
     return md;
 }
@@ -3065,7 +3062,7 @@ char *index_extract_subject(const char *subj)
     if (!strcmp(subj, "NIL"))				/* "NIL"? */
 	return xstrdup("");				/* yes, return empty */
 
-    /* make a working copy of subj - remove "'s if they exist */
+    /* make a working copy of subj -- remove double-quotes, if they exist */
     if (*subj == '"')
 	s = xstrndup(subj+1, strlen(subj) - 2);
     else
@@ -3160,7 +3157,7 @@ char *index_extract_subject(const char *subj)
 /*
  * Getnext function for sorting message lists.
  */
-static void *index_sort_getnext(struct msgdata *node)
+static void *index_sort_getnext(MsgData *node)
 {
     return node->next;
 }
@@ -3168,7 +3165,7 @@ static void *index_sort_getnext(struct msgdata *node)
 /*
  * Setnext function for sorting message lists.
  */
-static void index_sort_setnext(struct msgdata *node, struct msgdata *next)
+static void index_sort_setnext(MsgData *node, MsgData *next)
 {
     node->next = next;
 }
@@ -3181,7 +3178,7 @@ static int numcmp(int x, int y)
     return ((x < y) ? -1 : (x > y) ? 1 : 0);
 }
 
-static int index_sort_compare(struct msgdata *md1, struct msgdata *md2,
+static int index_sort_compare(MsgData *md1, MsgData *md2,
 			      signed char *sortcrit)
 {
     int reverse, ret = 0, i = 0;
@@ -3231,35 +3228,19 @@ static int index_sort_compare(struct msgdata *md1, struct msgdata *md2,
 /*
  * Free a msgdata node.
  */
-static void index_msgdata_free(struct msgdata *md)
+static void index_msgdata_free(MsgData *md)
 {
 #define FREE(x)	if (x) free(x)
     FREE(md->cc);
     FREE(md->from);
     FREE(md->to);
     FREE(md->xsubj);
-    free(md);
-}
-
-/*
- * Free a list of sorted messages.
- */
-static void index_sort_free(struct msgdata *list)
-{
-
-    struct msgdata *tmp;
-
-    while (list) {
-	tmp = list;
-	list = list->next;
-	index_msgdata_free(tmp);
-    }
 }
 
 /*
  * Getnext function for sorting thread lists.
  */
-static void *index_thread_getnext(struct thread *thread)
+static void *index_thread_getnext(Thread *thread)
 {
     return thread->next;
 }
@@ -3267,7 +3248,7 @@ static void *index_thread_getnext(struct thread *thread)
 /*
  * Setnext function for sorting thread lists.
  */
-static void index_thread_setnext(struct thread *thread, struct thread *next)
+static void index_thread_setnext(Thread *thread, Thread *next)
 {
     thread->next = next;
 }
@@ -3275,7 +3256,7 @@ static void index_thread_setnext(struct thread *thread, struct thread *next)
 /*
  * Comparison function for sorting threads.
  */
-static int index_thread_compare(struct thread *t1, struct thread *t2,
+static int index_thread_compare(Thread *t1, Thread *t2,
 				signed char *call_data)
 {
   return index_sort_compare(t1->msgdata, t2->msgdata, call_data);
@@ -3284,20 +3265,17 @@ static int index_thread_compare(struct thread *t1, struct thread *t2,
 /*
  * Thread a list of messages using the ORDEREDSUBJECT algorithm.
  */
-#define NEWTHREAD \
-    (struct thread *) memset(xmalloc(sizeof(struct thread)), 0, \
-			     sizeof(struct thread))
-
-static struct thread *index_thread_orderedsubj(unsigned *msgno_list, int nmsg)
+static void index_thread_orderedsubj(unsigned *msgno_list, int nmsg,
+				     int usinguid)
 {
-    struct msgdata *msgdata;
+    MsgData *msgdata, *freeme;
     signed char sortcrit[] = { SORT_SUBJECT, SORT_DATE, SORT_SEQUENCE };
     unsigned psubj_hash;
     char *psubj;
-    struct thread *threads, *tmp, *cur, *parent;
+    Thread *head, *newnode, *cur, *parent, *threads;
 
     /* Create/load the msgdata array */
-    msgdata = index_msgdata_load(msgno_list, nmsg, sortcrit);
+    freeme = msgdata = index_msgdata_load(msgno_list, nmsg, sortcrit);
 
     /* Sort messages by subject and date */
     msgdata = lsort(msgdata,
@@ -3306,53 +3284,68 @@ static struct thread *index_thread_orderedsubj(unsigned *msgno_list, int nmsg)
 		    (int (*)(void*,void*,void*)) index_sort_compare,
 		    sortcrit);
 
-    /* build threads under a dummy head */
-    tmp = cur = NEWTHREAD;
-    parent = NULL;
-    psubj_hash = msgdata->xsubj_hash + 1; /* guarantee psubj != first subj */
-    psubj = NULL;
-    while (msgdata) {
-	/* if current subj == prev subj, then add message to current thread */
-	if (msgdata->xsubj_hash == psubj_hash &&
-	    !strcmp(msgdata->xsubj, psubj)) { /* if 2 subjs have same key */
-	    parent->child = NEWTHREAD;
-	    parent = parent->child; /* this'll be the parent 
-				       next time around */
-	    parent->msgdata = msgdata;
-	}
+    /* create an array of Thread to use as nodes of thread tree
+     *
+     * we will be building threads under a dummy head,
+     * so we need (nmsg + 1) nodes
+     */
+    head = (Thread *) memset(xmalloc((nmsg + 1) * sizeof(Thread)), 0,
+			     (nmsg + 1) * sizeof(Thread));
 
+    cur = head;		/* set current thread to the dummy head */
+    newnode = head + 1;	/* set next newnode to the second one in the array */
+
+    /* guarantee psubj != first subj so that we start a new thread */
+    psubj_hash = msgdata->xsubj_hash + 1;
+
+    while (msgdata) {
+	/* if current subj = prev subj (subjs have same hash, and
+	   the strings are equal), then add message to current thread */
+	if (msgdata->xsubj_hash == psubj_hash &&
+	    !strcmp(msgdata->xsubj, psubj)) {
+	    parent->child = newnode;	/* create a new child */
+	    parent->child->msgdata = msgdata;
+	    parent = parent->child;	/* this'll be the parent 
+					   next time around */
+	}
 	/* otherwise, create a new thread */
 	else {
-	    cur->next = NEWTHREAD; /* create a new entry */
-	    parent = cur = cur->next; /* now work with the new entry */
-	    cur->msgdata = msgdata;
+	    cur->next = newnode;	/* create and start a new thread */
+	    cur->next->msgdata = msgdata;
+	    parent = cur = cur->next;	/* now work with the new thread */
 	}
 
 	psubj_hash = msgdata->xsubj_hash;
 	psubj = msgdata->xsubj;
 	msgdata = msgdata->next;
+	newnode++;
     }
 
     /* Sort threads by date */
-    threads = lsort(tmp->next,
+    threads = lsort(head->next,
 		    (void * (*)(void*)) index_thread_getnext,
 		    (void (*)(void*,void*)) index_thread_setnext,
 		    (int (*)(void*,void*,void*)) index_thread_compare,
 		    sortcrit+1);
 
-    /* free the dummy head */
-    free(tmp);
+    /* Output the threaded messages */ 
+    index_thread_print(threads, usinguid);
 
-    return threads;
+    /* free the thread array */
+    free(head);
 
+    /* free the msgdata array */
+    free(freeme);
 }
 
 /*
- * Print a list of threads.
+ * Guts of thread printing.  Recurses over children when necessary.
+ *
+ * Frees contents of msgdata as a side effect.
  */
-static void index_thread_print(struct thread *thread, int usinguid)
+static void _index_thread_print(Thread *thread, int usinguid)
 {
-    struct thread *child;
+    Thread *child;
 
     /* for each thread... */
     while (thread) {
@@ -3361,6 +3354,9 @@ static void index_thread_print(struct thread *thread, int usinguid)
 	prot_printf(imapd_out, "%u",
 		    usinguid ? UID(thread->msgdata->msgno) :
 		    thread->msgdata->msgno);
+
+	/* free contents of the current node */
+	index_msgdata_free(thread->msgdata);
 
 	/* for each child, grandchild, etc... */
 	child = thread->child;
@@ -3377,6 +3373,10 @@ static void index_thread_print(struct thread *thread, int usinguid)
 		prot_printf(imapd_out, "%u",
 			    usinguid ? UID(child->msgdata->msgno) :
 			    child->msgdata->msgno);
+
+		/* free contents of the current node */
+		index_msgdata_free(child->msgdata);
+
 		child = child->child;
 	    }
 	}
@@ -3387,37 +3387,18 @@ static void index_thread_print(struct thread *thread, int usinguid)
 }
 
 /*
- * Free a list of threads.
+ * Print a list of threads.
+ *
+ * This is a wrapper around _index_thread_print() which simply prints the
+ * start and end of the untagged thread response.
  */
-static void index_thread_free(struct thread *threads)
+static void index_thread_print(Thread *thread, int usinguid)
 {
-    struct thread *child, *tmp;
+    prot_printf(imapd_out, "* THREAD ");
 
-    /* for each thread... */
-    while (threads) {
+    _index_thread_print(thread, usinguid);
 
-	/* for each child, grandchild, etc... */
-	child = threads->child;
-	while (child) {
-
-	    /* if the child has siblings, free new branch and break */
-	    if (child->next) {
-		index_thread_free(child);
-		break;
-	    }
-	    /* otherwise free the only child */
-	    else {
-		tmp = child;
-		child = child->child;
-		index_msgdata_free(tmp->msgdata);
-		free(tmp);
-	    }
-	}
-	tmp = threads;
-	threads = threads->next;
-	index_msgdata_free(tmp->msgdata);
-	free(tmp);
-    }
+    prot_printf(imapd_out, "\r\n");
 }
 
 /*
