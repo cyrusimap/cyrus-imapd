@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 /*
- * $Id: xmalloc.c,v 1.23.16.3 2002/08/30 13:16:01 ken3 Exp $
+ * $Id: xmalloc.c,v 1.23.16.4 2002/08/31 01:41:20 ken3 Exp $
  */
 #include <config.h>
 #include <stdio.h>
@@ -127,9 +127,12 @@ size_t strlcpy(char *dst, const char *src, size_t len)
 {
     size_t n;
 
-    /* Avoid problems if size_t is unsigned */
-    if(len == 0) return strlen(src);
-    
+    if (len <= 0) {
+        /* we can't do anything ! */
+        return strlen(src);
+    }
+
+    /* assert(len >= 1); */
     for (n = 0; n < len-1; n++) {
 	if ((dst[n] = src[n]) == '\0') break;
     }
