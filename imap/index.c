@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.130 2000/06/30 19:32:47 ken3 Exp $
+ * $Id: index.c,v 1.131 2000/07/02 04:59:21 ken3 Exp $
  */
 #include <config.h>
 
@@ -3259,26 +3259,12 @@ static char *index_extract_subject(const char *subj, int *is_refwd)
 		base = x;				/* no, skip blob */
 #else
 	else if (*base == '[' &&			/* start of blob? */
-		 (x = strchr(base, ']'))) {		/* yes, end of blob? */
+		 (x = strpbrk(base+1, "[]")) &&		/* yes, end of blob */
+		 *x == ']') {				/*  (w/o nesting)? */
+
 	    if (*(x+1))					/* yes, end of subj? */
 		base = x + 1;				/* no, skip blob */
 #endif
-
-	    /* Hack to catch Netscape's wacky "[Fwd: message]" notation. */
-	    else if (!strncasecmp(base+1, "fwd:", 4)) {
-		char *blob;
-
-		/* make a working copy of blob contents */
-		blob = xstrndup(base+1, strlen(base) - 2);
-
-		/* extract blob-base */
-		ret = index_extract_subject(blob, is_refwd);
-
-		free(blob);
-		free(s);
-
-		return ret;				/* return blob-base */
-	    }
 	    else
 		break;					/* yes, return blob */
 	}
@@ -3286,8 +3272,20 @@ static char *index_extract_subject(const char *subj, int *is_refwd)
 	    break;					/* we're done */
     }
 
+    /* Hack to catch Netscape's wacky "[Fwd: ...]" notation. */
+    if (!strncasecmp(base, "[fwd:", 5) &&
+	base[strlen(base) - 1]  == ']') {
+
+	/* trim ']' */
+	base[strlen(base) - 1] = '\0';
+
+	/* extract contents */
+	ret = index_extract_subject(base+1, is_refwd);
+    }
+
     /* make a copy of the extracted base */
-    ret = xstrdup(base);
+    else
+	ret = xstrdup(base);
 
     free(s);
 
@@ -3334,7 +3332,7 @@ void index_get_ids(MsgData *msgdata, char *envtokens[], const char *headers)
 	msgdata->msgid = xstrndup(msgid, len);
     /* otherwise, create one */
     else {
-	sprintf(buf, "<Empty-ID: %lu>", msgdata->msgno);
+	sprintf(buf, "<Empty-ID: %u>", msgdata->msgno);
 	msgdata->msgid = xstrdup(buf);
     }
 
