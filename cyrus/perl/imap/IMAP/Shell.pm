@@ -142,7 +142,6 @@ my %builtins = (exit =>
 		  [\&_sc_version, '',
 		   'display version info of current server'],
 		ver => 'version',
-		info => 'version',
 		#? alias
 		#? unalias
 		#? load
@@ -1389,8 +1388,6 @@ be the special string C<none> which will remove the quota.
 =item C<version>
 
 =item C<ver>
-
-=item C<info>
 
 Display the version info of the current server.
 
