@@ -44,6 +44,7 @@
 #include "amssync.h"
 
 extern int debug,verbose, imap_bboard_error;
+extern FILE *logfile;
 
 
 
@@ -469,7 +470,7 @@ int getimap( struct imclient *imclient, char *bbd,bboard *imapbbd)
 	       imapbbd->inuse+1, bbd, imapbbd->alloced);
     }
     else if (verbose) {
-	fprintf(stderr,"There are %d messages in %s\n",
+	fprintf(logfile,"There are %d messages in %s\n",
 	       imapbbd->inuse+1, bbd);
     }
     if (imapbbd->inuse >= 0) {
@@ -493,7 +494,7 @@ int getimap( struct imclient *imclient, char *bbd,bboard *imapbbd)
 void DeleteIMAP(struct imclient * imclient, char *name, message *msg)
 {
     char *buf;
-    if (verbose) fprintf(stderr,"D");
+    if (verbose) fprintf(logfile,"Delete\n");
   
     buf=xmalloc(256);
     sprintf(buf, "Delete %s in %s", msg->name,name);
@@ -527,7 +528,7 @@ int UploadAMS(struct imclient *imclient, char *name, char *amsdir, message
     scribeval=0;
     tmpfil=NULL;
     len=0; 
-    if (verbose) fprintf(stderr,"A");
+    if (verbose) fprintf(logfile,"Add\n");
 
     /* First, allocate a buffer large enough to hold the entire message */
     

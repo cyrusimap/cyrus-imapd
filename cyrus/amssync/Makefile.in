@@ -36,7 +36,7 @@ RANLIB = @RANLIB@
 
 DEFS = @DEFS@
 CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@ 
-LIBS = -lutil @LIBS@ 
+LIBS = -lutil @LIBS@ /usr/local/lib/afs/libsys.a
 DEPLIBS = ../lib/libcyrus.a @DEPLIBS@
 
 CFLAGS = -g
@@ -50,46 +50,25 @@ cyrus_prefix = @cyrus_prefix@
 
 AFS=/usr/local
 
-OBJS = amssync.o ams.o imap.o
-MISCPH = $(srcdir)/prs_fs.ph $(srcdir)/afs_sysnames.ph \
-	$(srcdir)/venus.ph $(srcdir)/vice.ph
-MISCPERL = $(srcdir)/getacl.pl $(srcdir)/pioctl.pl 
+OBJS = amssync.o ams.o imap.o pioctl.o
 
-all: amssync afs.ph param.ph
+all: amssync
 
 install:
-	$(srcdir)/../install-sh -d ${DESTDIR}$(cyrus_prefix)/perllib/afs
 	$(INSTALL) -s -m 755 amssync $(DESTDIR)$(cyrus_prefix)/bin
-	$(INSTALL) -m 755 amssynctree $(DESTDIR)$(cyrus_prefix)/bin
-	for file in afs.ph param.ph $(MISCPH); \
-	do \
-		$(INSTALL) -m 644 $$file $(DESTDIR)$(cyrus_prefix)/perllib/afs || exit 1; \
-	done
-	for file in $(MISCPERL); \
-	do \
-		$(INSTALL) -m 644 $$file $(DESTDIR)$(cyrus_prefix)/perllib || exit 1; \
-	done
+	$(INSTALL) -s -m 755 amssync $(DESTDIR)$(cyrus_prefix)/bin/amssynctree
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
 
-amssynctree: $(srcdir)/amssynctree.in ../config.status
-	(cd ..;./config.status)
-
 amssync: $(OBJS) $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o amssync $(OBJS) $(DEPLIBS) $(LIBS)
 
-afs.ph: ${AFS}/include/afs/afs.h
-	h2ph < $< > $@
-
-param.ph: ${AFS}/include/afs/param.h
-	h2ph < $< > $@
-
 clean:
-	rm -f *.o Makefile.bak amssync afs.ph param.ph
+	rm -f *.o Makefile.bak amssync
 
 distclean: clean
-	rm -f Makefile syncamstree
+	rm -f Makefile
 
 depend: 
 	makedepend $(CPPFLAGS) $(DEFS) $(CFLAGS) *.c $(srcdir)/*.c
