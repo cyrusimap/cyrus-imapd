@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.27 2001/08/15 17:00:48 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.26.4.1 2001/08/16 21:38:20 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -62,6 +62,7 @@
 #include <sys/un.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <time.h>
 
 #include <netdb.h>
 #include <sys/socket.h>
@@ -74,6 +75,7 @@
 #include "util.h"
 #include "auth.h"
 #include "prot.h"
+#include "gmtoff.h"
 #include "imapconf.h"
 #include "exitcodes.h"
 #include "imap_err.h"
@@ -82,9 +84,13 @@
 
 #include "lmtpengine.h"
 #include "lmtpstats.h"
-#include "tls.h"
 
 #define RCPT_GROW 30
+
+static char *month[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                         "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+
+static char *wday[] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
 
 /* data per message */
 struct Header {
@@ -98,6 +104,17 @@ struct address_data {
     char *all;
     int ignorequota;
     int status;
+};
+
+struct clientdata {
+    struct protstream *pin;
+    struct protstream *pout;
+    int fd;
+
+    char clienthost[250];
+    char lhlo_param[250];
+
+    sasl_conn_t *conn;
 };
 
 /* a simple hash function for sasl mechanisms */
@@ -783,8 +800,7 @@ static int fill_cache(struct protstream *fin, FILE *fout, message_data_t *m)
  *
  * returns 0 on success, imap error code on failure
  */
-static int savemsg(struct protstream *pin, 
-		   struct protstream *pout, 
+static int savemsg(struct clientdata *cd,
 		   const char *addheaders,
 		   message_data_t *m)
 {
@@ -793,11 +809,16 @@ static int savemsg(struct protstream *pin,
     const char **body;
     int r;
     int nrcpts = m->rcpt_num;
+    time_t t;
+    struct tm *tm;
+    long gmtoff;
+    int gmtnegative = 0;
 
     /* Copy to temp file */
     f = tmpfile();
     if (!f) {
-	prot_printf(pout, "451 4.3.%c cannot create temporary file: %s\r\n",
+	prot_printf(cd->pout, 
+		    "451 4.3.%c cannot create temporary file: %s\r\n",
 		    (
 #ifdef EDQUOT
 			errno == EDQUOT ||
@@ -807,7 +828,7 @@ static int savemsg(struct protstream *pin,
 	return IMAP_IOERROR;
     }
 
-    prot_printf(pout, "354 go ahead\r\n");
+    prot_printf(cd->pout, "354 go ahead\r\n");
 
     if (m->return_path) { /* add the return path */
 	char *rpath = m->return_path;
@@ -824,17 +845,37 @@ static int savemsg(struct protstream *pin,
 		rpath, hostname ? "@" : "", hostname ? hostname : "");
     }
 
+    /* add a received header */
+    t = time(NULL);
+    tm = localtime(&t);
+    gmtoff = gmtoff_of(tm, t);
+    if (gmtoff < 0) {
+	gmtoff = -gmtoff;
+	gmtnegative = 1;
+    }
+    gmtoff /= 60;
+    fprintf(f, "Received: from %s (%s)\r\n"
+	    /* xxx "\t(user=%s author=%s mech=%s (%d bits))\r\n" */
+	       "\tby %s (%s); "
+	       "%s, %02d %s %4d %02d:%02d:%02d %c%.2lu%.2lu\r\n",
+	    cd->lhlo_param, cd->clienthost,
+	    config_servername, CYRUS_VERSION,
+	    wday[tm->tm_wday], 
+	    tm->tm_mday, month[tm->tm_mon], tm->tm_year + 1900,
+	    tm->tm_hour, tm->tm_min, tm->tm_sec,
+            gmtnegative ? '-' : '+', gmtoff / 60, gmtoff % 60);
+
     /* add any requested headers */
     if (addheaders) {
 	fputs(addheaders, f);
     }
 
     /* fill the cache */
-    r = fill_cache(pin, f, m);
+    r = fill_cache(cd->pin, f, m);
     if (r) {
 	fclose(f);
 	while (nrcpts--) {
-	    prot_printf(pout, "%s\r\n", convert_lmtp(r));
+	    prot_printf(cd->pout, "%s\r\n", convert_lmtp(r));
 	}
 	return r;
     }
@@ -861,7 +902,7 @@ static int savemsg(struct protstream *pin,
     fflush(f);
     if (ferror(f)) {
 	while (nrcpts--) {
-	    prot_printf(pout,
+	    prot_printf(cd->pout,
 	       "451 4.3.%c cannot copy message to temporary file: %s\r\n",
 		   (
 #ifdef EDQUOT
@@ -876,7 +917,7 @@ static int savemsg(struct protstream *pin,
 
     if (fstat(fileno(f), &sbuf) == -1) {
 	while (nrcpts--) {
-	    prot_printf(pout,
+	    prot_printf(cd->pout,
 			"451 4.3.2 cannot stat message temporary file: %s\r\n",
 			error_message(errno));
 	}
@@ -955,22 +996,6 @@ static char *process_recipient(char *addr,
     return NULL;
 }    
 
-#ifdef HAVE_SSL
-static int starttls_enabled(void)
-{
-    if (!config_getstring("tls_lmtp_cert_file",
-			 config_getstring("tls_cert_file", NULL))) return 0;
-    if (!config_getstring("tls_lmtp_key_file",
-			  config_getstring("tls_key_file", NULL))) return 0;
-    return 1;
-}
-#else
-static void starttls_enabled(void)
-{
-    return 0;
-}
-#endif /* HAVE_SSL */
-
 void lmtpmode(struct lmtp_func *func,
 	      struct protstream *pin, 
 	      struct protstream *pout,
@@ -981,30 +1006,30 @@ void lmtpmode(struct lmtp_func *func,
     char *p;
     int r;
     char *err;
+    struct clientdata cd;
 
     struct sockaddr_in localaddr, remoteaddr;
     socklen_t salen;
-    struct hostent *hp;
-    char clienthost[250];
 
-    sasl_conn_t *conn = NULL;
     int secflags = 0;
     sasl_security_properties_t *secprops = NULL;
     sasl_external_properties_t *extprops = NULL;
-    int authenticated = 0;	/* -1: external auth'd, but no AUTH issued
-				    0: no auth
-				    1: did AUTH */
+    enum {
+	EXTERNAL_AUTHED = -1, /* -1: external auth'd, but no AUTH issued */
+	NOAUTH = 0,
+	DIDAUTH = 1
+    } authenticated = NOAUTH;	
+
     char *authuser = NULL;
     struct auth_state *authstate = NULL;
 
-#ifdef HAVE_SSL
-    static SSL *tls_conn = NULL;
-#endif /* HAVE_SSL */
-    int starttls_done = 0;
-
+    cd.pin = pin;
+    cd.pout = pout;
+    cd.clienthost[0] = '\0';
+    cd.lhlo_param[0] = '\0';
 
     msg_new(&msg);
-    if (sasl_server_new("lmtp", NULL, NULL, NULL, 0, &conn) != SASL_OK) {
+    if (sasl_server_new("lmtp", NULL, NULL, NULL, 0, &cd.conn) != SASL_OK) {
 	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL);
     }
 
@@ -1014,53 +1039,55 @@ void lmtpmode(struct lmtp_func *func,
 	secflags |= SASL_SEC_NOPLAINTEXT;
     }
     secprops = mysasl_secprops(secflags);
-    sasl_setprop(conn, SASL_SEC_PROPS, secprops);
+    sasl_setprop(cd.conn, SASL_SEC_PROPS, secprops);
 
     /* determine who we're talking to */
     salen = sizeof(remoteaddr);
     r = getpeername(fd, (struct sockaddr *)&remoteaddr, &salen);
     if (!r && remoteaddr.sin_family == AF_INET) {
 	/* connected to an internet socket */
-
+	struct hostent *hp;
 	hp = gethostbyaddr((char *)&remoteaddr.sin_addr,
 			   sizeof(remoteaddr.sin_addr), AF_INET);
 	if (hp != NULL) {
-	    strncpy(clienthost, hp->h_name, sizeof(clienthost)-30);
-	    clienthost[sizeof(clienthost)-30] = '\0';
+	    strlcpy(cd.clienthost, hp->h_name, sizeof(cd.clienthost) - 30);
 	} else {
-	    clienthost[0] = '\0';
+	    strlcpy(cd.clienthost, inet_ntoa(remoteaddr.sin_addr), 
+		    sizeof(cd.clienthost) - 30);
 	}
-	strcat(clienthost, "[");
-	strcat(clienthost, inet_ntoa(remoteaddr.sin_addr));
-	strcat(clienthost, "]");
+	strlcat(cd.clienthost, " [", sizeof(cd.clienthost));
+	strlcat(cd.clienthost, inet_ntoa(remoteaddr.sin_addr), 
+		sizeof(cd.clienthost));
+	strlcat(cd.clienthost, "]", sizeof(cd.clienthost));
 
 	salen = sizeof(localaddr);
 	if (!getsockname(fd, (struct sockaddr *)&localaddr, &salen)) {
 	    /* set the ip addresses here */
-	    sasl_setprop(conn, SASL_IP_REMOTE, &remoteaddr);  
-	    sasl_setprop(conn, SASL_IP_LOCAL,  &localaddr );
+	    sasl_setprop(cd.conn, SASL_IP_REMOTE, &remoteaddr);  
+	    sasl_setprop(cd.conn, SASL_IP_LOCAL,  &localaddr );
 	} else {
 	    fatal("can't get local addr", EC_SOFTWARE);
 	}
 
-	syslog(LOG_DEBUG, "connection from [%s]%s", 
-	       inet_ntoa(remoteaddr.sin_addr),
+	syslog(LOG_DEBUG, "connection from %s%s", 
+	       cd.clienthost, 
 	       func->preauth ? " preauth'd as postman" : "");
     } else {
 	/* we're not connected to a internet socket! */
 	func->preauth = 1;
-	strcpy(clienthost, "[local]");
+	strcpy(cd.clienthost, "[unix socket]");
 	syslog(LOG_DEBUG, "lmtp connection preauth'd as postman");
     }
 
     if (func->preauth) {
-	authenticated = -1;	/* we'll allow commands, 
-				   but we still accept the AUTH command */
+	authenticated = EXTERNAL_AUTHED; /* we'll allow commands, 
+					    but we still accept the 
+					    AUTH command */
 	extprops = (sasl_external_properties_t *) 
 	    xmalloc(sizeof(sasl_external_properties_t));
 	extprops->ssf = 2;
 	extprops->auth_id = "postman";
-	sasl_setprop(conn, SASL_SSF_EXTERNAL, extprops);
+	sasl_setprop(cd.conn, SASL_SSF_EXTERNAL, extprops);
     }
 
     prot_printf(pout, "220 %s LMTP Cyrus %s ready\r\n", 
@@ -1130,7 +1157,7 @@ void lmtpmode(struct lmtp_func *func,
 		  inlen = 0;
 	      }
 	      
-	      r = sasl_server_start(conn, mech,
+	      r = sasl_server_start(cd.conn, mech,
 				    in, inlen,
 				    &out, &outlen,
 				    &errstr);
@@ -1168,7 +1195,7 @@ void lmtpmode(struct lmtp_func *func,
 		  }
 
 		  if (out) { free(out); out = NULL; }
-		  r = sasl_server_step(conn,
+		  r = sasl_server_step(cd.conn,
 				       in, inlen,
 				       &out, &outlen,
 				       &errstr);
@@ -1179,18 +1206,14 @@ void lmtpmode(struct lmtp_func *func,
 	      if (out) { free(out); out = NULL; }
 	      if ((r != SASL_OK) && (r != SASL_CONTINUE)) {
 		  if (errstr) {
-		      syslog(LOG_ERR, "badlogin: %s %s %s [%s]",
-			     remoteaddr.sin_family == AF_INET ?
-			        inet_ntoa(remoteaddr.sin_addr) :
-			        "[unix socket]",
+		      syslog(LOG_ERR, "badlogin: %s %s %s %s",
+			     cd.clienthost,
 			     mech,
 			     sasl_errstring(r, NULL, NULL), 
 			     errstr);
 		  } else {
 		      syslog(LOG_ERR, "badlogin: %s %s %s",
-			     remoteaddr.sin_family == AF_INET ?
-			        inet_ntoa(remoteaddr.sin_addr) :
-			        "[unix socket]",
+			     cd.clienthost,
 			     mech,
 			     sasl_errstring(r, NULL, NULL));
 		  }
@@ -1203,25 +1226,23 @@ void lmtpmode(struct lmtp_func *func,
 			      sasl_errstring(sasl_usererr(r), NULL, NULL));
 		  continue;
 	      }
-	      r = sasl_getprop(conn, SASL_USERNAME, (void **) &user);
+	      r = sasl_getprop(cd.conn, SASL_USERNAME, (void **) &user);
 	      if (r != SASL_OK) user = "[sasl error]";
 
 	      /* authenticated successfully! */
 	      snmp_increment_args(AUTHENTICATION_YES,1,
 				  VARIABLE_AUTH, hash_simple(mech), 
 				  VARIABLE_LISTEND);
-	      syslog(LOG_NOTICE, "login: %s %s %s%s %s",
-		     remoteaddr.sin_family == AF_INET ?
-		        inet_ntoa(remoteaddr.sin_addr) :
-		        "[unix socket]",
-		     user, mech, starttls_done ? "+TLS" : "", "User logged in");
+	      syslog(LOG_NOTICE, "login: %s %s %s %s",
+		     cd.clienthost,
+		     user, mech, "User logged in");
 
 	      authenticated += 2;
 	      prot_printf(pout, "235 Authenticated!\r\n");
 
 	      /* set protection layers */
-	      prot_setsasl(pin,  conn);
-	      prot_setsasl(pout, conn);
+	      prot_setsasl(pin,  cd.conn);
+	      prot_setsasl(pout, cd.conn);
 	      continue;
 	  }
 	  goto syntaxerr;
@@ -1237,7 +1258,7 @@ void lmtpmode(struct lmtp_func *func,
 		    continue;
 		}
 		/* copy message from input to msg structure */
-		r = savemsg(pin, pout, func->addheaders, msg);
+		r = savemsg(&cd, func->addheaders, msg);
 		if (r) continue;
 
 		snmp_increment(mtaReceivedMessages, 1);
@@ -1270,16 +1291,15 @@ void lmtpmode(struct lmtp_func *func,
 			  "250-8BITMIME\r\n"
 			  "250-ENHANCEDSTATUSCODES\r\n",
 			  config_servername);
-	      if (starttls_enabled()) {
-		  prot_printf(pout, "250-STARTTLS\r\n");
-	      }
-	      if (sasl_listmech(conn, NULL, "AUTH ", " ", "", &mechs, 
+	      if (sasl_listmech(cd.conn, NULL, "AUTH ", " ", "", &mechs, 
 				NULL, &mechcount) == SASL_OK && 
 		  mechcount > 0) {
 		  prot_printf(pout,"250-%s\r\n", mechs);
 		  free(mechs);
 	      }
 	      prot_printf(pout, "250 PIPELINING\r\n");
+
+	      strlcpy(cd.lhlo_param, buf + 5, sizeof(cd.lhlo_param));
 	      
 	      continue;
 	  }
@@ -1460,91 +1480,7 @@ void lmtpmode(struct lmtp_func *func,
 		continue;
 	    }
 	    goto syntaxerr;
-
-      case 's':
-      case 'S':
-#ifdef HAVE_SSL
-	    if (!strcasecmp(buf, "starttls") && starttls_enabled()) {
-		char *tls_cert, *tls_key;
-		int *layerp;
-		sasl_external_properties_t external;
-
-
-		/* SASL and openssl have different ideas
-		   about whether ssf is signed */
-		layerp = (int *) &(external.ssf);
-
-		if (starttls_done == 1) {
-		    prot_printf(pout, "454 4.3.3 %s\r\n", 
-				"Already successfully executed STARTTLS");
-		    continue;
-		}
-		if (msg->rcpt_num != 0) {
-		    prot_printf(pout,
-				"503 5.5.0 STARTTLS not permitted now\r\n");
-		    continue;
-		}
-
-		tls_cert = (char *)config_getstring("tls_lmtp_cert_file",
-						    config_getstring("tls_cert_file", ""));
-		tls_key = (char *)config_getstring("tls_lmtp_key_file",
-						   config_getstring("tls_key_file", ""));
-
-		r=tls_init_serverengine(5,   /* depth to verify */
-					1,   /* can client auth? */
-					0,   /* require client to auth? */
-					1,   /* TLS only? */
-					(char *)config_getstring("tls_ca_file", ""),
-					(char *)config_getstring("tls_ca_path", ""),
-					tls_cert, tls_key);
-
-		if (r == -1) {
-
-		    syslog(LOG_ERR, "[lmtpd] error initializing TLS: "
-			   "[CA_file: %s] [CA_path: %s] [cert_file: %s] [key_file: %s]",
-			   (char *) config_getstring("tls_ca_file", ""),
-			   (char *) config_getstring("tls_ca_path", ""),
-			   tls_cert, tls_key);
-
-		    prot_printf(pout, "454 4.3.3 %s\r\n", "Error initializing TLS");
-		    continue;
-		}
-
-		prot_printf(pout, "220 %s\r\n", "Begin TLS negotiation now");
-		/* must flush our buffers before starting tls */
-		prot_flush(pout);
-  
-		r=tls_start_servertls(0, /* read */
-				      1, /* write */
-				      layerp,
-				      &(external.auth_id),
-				      &tls_conn);
-
-		/* if error */
-		if (r==-1) {
-		    prot_printf(pout, "454 4.3.3 STARTTLS failed\r\n");
-		    syslog(LOG_NOTICE, "[lmtpd] STARTTLS failed: %s", clienthost);
-		    continue;
-		}
-
-		/* tell SASL about the negotiated layer */
-		r = sasl_setprop(conn, SASL_SSF_EXTERNAL, &external);
-
-		if (r != SASL_OK) {
-		    fatal("sasl_setprop() failed: STARTTLS", EC_TEMPFAIL);
-		}
-
-		/* tell the prot layer about our new layers */
-		prot_settls(pin, tls_conn);
-		prot_settls(pout, tls_conn);
-
-		starttls_done = 1;
-
-		continue;
-	    }
-#endif /* HAVE_SSL*/
-	    goto syntaxerr;
-
+	    
       case 'v':
       case 'V':
 	    if (!strncasecmp(buf, "vrfy ", 5)) {
@@ -1567,23 +1503,10 @@ void lmtpmode(struct lmtp_func *func,
     if (msg) msg_free(msg);
 
     /* security */
-    if (conn) sasl_dispose(&conn);
+    if (cd.conn) sasl_dispose(&cd.conn);
     if (extprops) free(extprops);
     if (authuser) free(authuser);
     if (authstate) auth_freestate(authstate);
-
-    starttls_done = 0;
-#ifdef HAVE_SSL
-    if (tls_conn) {
-#ifdef TLS_REUSE
-	/* make sure we re-use sessions */
-	tls_reuse_sessions(&tls_conn);
-#else
-	tls_free(&tls_conn);
-	tls_conn = NULL;
-#endif /* TLS_REUSE */
-    }
-#endif
 }
 
 /************** client-side LMTP ****************/
