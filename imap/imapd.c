@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.205 2000/02/11 02:15:34 tmartin Exp $ */
+/* $Id: imapd.c,v 1.206 2000/02/11 04:43:40 leg Exp $ */
 
 #include <config.h>
 
@@ -472,9 +472,9 @@ int main(int argc, char **argv, char **envp)
 	fatal("SASL failed initializing: sasl_server_init()", EC_TEMPFAIL); 
 
     /* other params should be filled in */
-    if (sasl_server_new("imap", hostname, NULL, NULL, SASL_SECURITY_LAYER, 
-			&imapd_saslconn)
-	   != SASL_OK)
+    if (sasl_server_new("imap", config_servername, 
+			NULL, NULL, SASL_SECURITY_LAYER, 
+			&imapd_saslconn) != SASL_OK)
 	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL); 
 
     secprops = make_secprops(config_getint("sasl_minimum_layer", 0),
@@ -496,7 +496,7 @@ int main(int argc, char **argv, char **envp)
     prot_settimeout(imapd_in, timeout*60);
     prot_setflushonread(imapd_in, imapd_out);
 
-    pushstats_connect();
+    snmp_connect();
 
     cmdloop();
 
@@ -676,7 +676,7 @@ cmdloop()
 		}
 		cmd_authenticate(tag.s, arg1.s);
 
-		pushstats_log(AUTHENTICATE_COUNT);
+		snmp_increment(AUTHENTICATE_COUNT, 1);
 	    }
 	    else if (!imapd_userid) goto nologin;
 	    else if (!strcmp(cmd.s, "Append")) {
@@ -686,7 +686,7 @@ cmdloop()
 
 		cmd_append(tag.s, arg1.s);
 
-		pushstats_log(APPEND_COUNT);
+		snmp_increment(APPEND_COUNT, 1);
 	    }
 	    else goto badcmd;
 	    break;
@@ -701,7 +701,7 @@ cmdloop()
 
 		cmd_select(tag.s, cmd.s, arg1.s);
 
-		pushstats_log(BBOARD_COUNT);
+		snmp_increment(BBOARD_COUNT, 1);
 	    }
 	    else goto badcmd;
 	    break;
@@ -712,7 +712,7 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_capability(tag.s);
 
-		pushstats_log(CAPABILITY_COUNT);
+		snmp_increment(CAPABILITY_COUNT, 1);
 	    }
 	    else if (!imapd_userid) goto nologin;
 	    else if (!strcmp(cmd.s, "Check")) {
@@ -722,7 +722,7 @@ cmdloop()
 
 		cmd_noop(tag.s, cmd.s);
 
-		pushstats_log(CHECK_COUNT);
+		snmp_increment(CHECK_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Copy")) {
 		if (!imapd_mailbox) goto nomailbox;
@@ -739,7 +739,7 @@ cmdloop()
 
 		cmd_copy(tag.s, arg1.s, arg2.s, usinguid);
 
-		pushstats_log(COPY_COUNT);
+		snmp_increment(COPY_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Create")) {
 		havepartition = 0;
@@ -755,7 +755,7 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_create(tag.s, arg1.s, havepartition ? arg2.s : 0);
 
-		pushstats_log(CREATE_COUNT);
+		snmp_increment(CREATE_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Close")) {
 		if (!imapd_mailbox) goto nomailbox;
@@ -764,7 +764,7 @@ cmdloop()
 
 		cmd_close(tag.s);
 
-		pushstats_log(CLOSE_COUNT);
+		snmp_increment(CLOSE_COUNT, 1);
 	    }
 	    else goto badcmd;
 	    break;
@@ -778,7 +778,7 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_delete(tag.s, arg1.s);
 
-		pushstats_log(DELETE_COUNT);
+		snmp_increment(DELETE_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Deleteacl")) {
 		if (c != ' ') goto missingargs;
@@ -794,7 +794,7 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_setacl(tag.s, arg1.s, arg2.s, (char *)0);
 
-		pushstats_log(DELETEACL_COUNT);
+		snmp_increment(DELETEACL_COUNT, 1);
 	    }
 	    else goto badcmd;
 	    break;
@@ -807,7 +807,7 @@ cmdloop()
 
 		cmd_expunge(tag.s, 0);
 
-		pushstats_log(EXPUNGE_COUNT);
+		snmp_increment(EXPUNGE_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Examine")) {
 		if (c != ' ') goto missingargs;
@@ -818,7 +818,7 @@ cmdloop()
 
 		cmd_select(tag.s, cmd.s, arg1.s);
 
-		pushstats_log(EXAMINE_COUNT);
+		snmp_increment(EXAMINE_COUNT, 1);
 	    }
 	    else goto badcmd;
 	    break;
@@ -835,7 +835,7 @@ cmdloop()
 
 		cmd_fetch(tag.s, arg1.s, usinguid);
 
-		pushstats_log(FETCH_COUNT);
+		snmp_increment(FETCH_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Find")) {
 		c = getword(&arg1);
@@ -846,7 +846,7 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_find(tag.s, arg1.s, arg2.s);
 
-		pushstats_log(FIND_COUNT);
+		snmp_increment(FIND_COUNT, 1);
 	    }
 	    else goto badcmd;
 	    break;
@@ -866,7 +866,7 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_getacl(tag.s, arg1.s, oldform);
 
-		pushstats_log(GETACL_COUNT);
+		snmp_increment(GETACL_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Getquota")) {
 		if (c != ' ') goto missingargs;
@@ -876,7 +876,7 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_getquota(tag.s, arg1.s);
 
-		pushstats_log(GETQUOTA_COUNT);
+		snmp_increment(GETQUOTA_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Getquotaroot")) {
 		if (c != ' ') goto missingargs;
@@ -886,7 +886,7 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_getquotaroot(tag.s, arg1.s);
 
-		pushstats_log(GETQUOTAROOT_COUNT);
+		snmp_increment(GETQUOTAROOT_COUNT, 1);
 	    }
 #ifdef ENABLE_EXPERIMENT_OPTIMIZE_1
 	    /* This command is disabled because it was removed from the
@@ -899,7 +899,7 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_getuids(tag.s, arg1.s);
 
-		pushstats_log(GETUIDS_COUNT);
+		snmp_increment(GETUIDS_COUNT, 1);
 	    }
 #endif /* ENABLE_EXPERIMENT_OPTIMIZE_1 */
 	    else goto badcmd;
@@ -921,13 +921,13 @@ cmdloop()
 		}
 		cmd_login(tag.s, arg1.s, arg2.s);
 
-		pushstats_log(LOGIN_COUNT);
+		snmp_increment(LOGIN_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Logout")) {
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 
-		pushstats_log(LOGOUT_COUNT);		
+		snmp_increment(LOGOUT_COUNT, 1);		
 
 		prot_printf(imapd_out, "* BYE %s\r\n", error_message(IMAP_BYE_LOGOUT));
 		prot_printf(imapd_out, "%s OK %s\r\n", tag.s, error_message(IMAP_OK_COMPLETED));
@@ -942,7 +942,7 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_list(tag.s, 0, arg1.s, arg2.s);
 
-		pushstats_log(LIST_COUNT);
+		snmp_increment(LIST_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Lsub")) {
 		c = getastring(&arg1);
@@ -952,7 +952,7 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_list(tag.s, 1, arg1.s, arg2.s);
 
-		pushstats_log(LSUB_COUNT);
+		snmp_increment(LSUB_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Listrights")) {
 		c = getastring(&arg1);
@@ -962,7 +962,7 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_listrights(tag.s, arg1.s, arg2.s);
 
-		pushstats_log(LISTRIGHTS_COUNT);
+		snmp_increment(LISTRIGHTS_COUNT, 1);
 	    }
 	    else goto badcmd;
 	    break;
@@ -982,7 +982,7 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_myrights(tag.s, arg1.s, oldform);
 
-		pushstats_log(MYRIGHTS_COUNT);
+		snmp_increment(MYRIGHTS_COUNT, 1);
 	    }
 	    else goto badcmd;
 	    break;
@@ -994,7 +994,7 @@ cmdloop()
 
 		cmd_noop(tag.s, cmd.s);
 
-		pushstats_log(NOOP_COUNT);
+		snmp_increment(NOOP_COUNT, 1);
 	    }
 #ifdef ENABLE_X_NETSCAPE_HACK
 	    else if (!strcmp(cmd.s, "Netscape")) {
@@ -1009,7 +1009,7 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_namespace(tag.s);
 
-		pushstats_log(NAMESPACE_COUNT);
+		snmp_increment(NAMESPACE_COUNT, 1);
 	    }
 	    else goto badcmd;
 	    break;
@@ -1030,7 +1030,7 @@ cmdloop()
 
 		cmd_partial(tag.s, arg1.s, arg2.s, arg3.s, arg4.s);
 
-		pushstats_log(PARTIAL_COUNT);
+		snmp_increment(PARTIAL_COUNT, 1);
 	    }
 	    else goto badcmd;
 	    break;
@@ -1052,7 +1052,7 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_rename(tag.s, arg1.s, arg2.s, havepartition ? arg3.s : 0);
 
-		pushstats_log(RENAME_COUNT);
+		snmp_increment(RENAME_COUNT, 1);
 	    }
 	    else goto badcmd;
 	    break;
@@ -1083,7 +1083,7 @@ cmdloop()
 		}
 		cmd_starttls(tag.s);	
 
-		pushstats_log(STARTTLS_COUNT);      
+		snmp_increment(STARTTLS_COUNT, 1);      
 		continue;
 	    } else if (!imapd_userid) {
 		goto nologin;
@@ -1102,7 +1102,7 @@ cmdloop()
 
 		cmd_store(tag.s, arg1.s, arg2.s, usinguid);
 
-		pushstats_log(STORE_COUNT);
+		snmp_increment(STORE_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Select")) {
 		if (c != ' ') goto missingargs;
@@ -1113,7 +1113,7 @@ cmdloop()
 
 		cmd_select(tag.s, cmd.s, arg1.s);
 
-		pushstats_log(SELECT_COUNT);
+		snmp_increment(SELECT_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Search")) {
 		if (!imapd_mailbox) goto nomailbox;
@@ -1123,7 +1123,7 @@ cmdloop()
 
 		cmd_search(tag.s, usinguid);
 
-		pushstats_log(SEARCH_COUNT);
+		snmp_increment(SEARCH_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Subscribe")) {
 		if (c != ' ') goto missingargs;
@@ -1142,7 +1142,7 @@ cmdloop()
 		else {
 		    cmd_changesub(tag.s, (char *)0, arg1.s, 1);
 		}
-		pushstats_log(SUBSCRIBE_COUNT);
+		snmp_increment(SUBSCRIBE_COUNT, 1);
 	    }		
 	    else if (!strcmp(cmd.s, "Setacl")) {
 		if (c != ' ') goto missingargs;
@@ -1160,7 +1160,7 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_setacl(tag.s, arg1.s, arg2.s, arg3.s);
 
-		pushstats_log(SETACL_COUNT);
+		snmp_increment(SETACL_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Setquota")) {
 		if (c != ' ') goto missingargs;
@@ -1168,7 +1168,7 @@ cmdloop()
 		if (c != ' ') goto missingargs;
 		cmd_setquota(tag.s, arg1.s);
 
-		pushstats_log(SETQUOTA_COUNT);
+		snmp_increment(SETQUOTA_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Status")) {
 		if (c != ' ') goto missingargs;
@@ -1176,7 +1176,7 @@ cmdloop()
 		if (c != ' ') goto missingargs;
 		cmd_status(tag.s, arg1.s);
 
-		pushstats_log(STATUS_COUNT);
+		snmp_increment(STATUS_COUNT, 1);
 	    }
 	    else goto badcmd;
 	    break;
@@ -1208,7 +1208,7 @@ cmdloop()
 		    if (c != '\n') goto extraargs;
 		    cmd_expunge(tag.s, arg1.s);
 
-		    pushstats_log(EXPUNGE_COUNT);
+		    snmp_increment(EXPUNGE_COUNT, 1);
 		}
 		else {
 		    prot_printf(imapd_out, "%s BAD Unrecognized UID subcommand\r\n", tag.s);
@@ -1233,7 +1233,7 @@ cmdloop()
 		    cmd_changesub(tag.s, (char *)0, arg1.s, 0);
 		}
 
-		pushstats_log(UNSUBSCRIBE_COUNT);
+		snmp_increment(UNSUBSCRIBE_COUNT, 1);
 	    }		
 	    else if (!strcmp(cmd.s, "Unselect")) {
 		if (!imapd_mailbox) goto nomailbox;
@@ -1241,7 +1241,7 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_unselect(tag.s);
 
-		pushstats_log(UNSELECT_COUNT);
+		snmp_increment(UNSELECT_COUNT, 1);
 	    }
 	    else goto badcmd;
 	    break;
