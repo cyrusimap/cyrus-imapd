@@ -31,6 +31,7 @@
 #include <string.h>
 #include <time.h>
 #include <signal.h>
+#include <fcntl.h>
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/stat.h>
@@ -89,6 +90,7 @@ static char *monthname[] = {
 };
 
 void usage P((void));
+void shutdown_file P((int fd));
 void shut_down P((int code));
 void fatal P((const char *s, int code));
 
@@ -122,8 +124,6 @@ void cmd_getquotaroot P((char *tag, char *name));
 void cmd_setquota P((char *tag, char *quotaroot));
 void cmd_status P((char *tag, char *name));
 void cmd_getuids P((char *tag, char *startuid));
-void cmd_getstate P((char *tag));
-void cmd_checkstate P((char *tag, char *state1, char *state2));
 
 int getword P((struct buf *buf));
 int getastring P((struct buf *buf));
@@ -160,7 +160,6 @@ int argc;
 char **argv;
 char **envp;
 {
-    char hostname[MAXHOSTNAMELEN+1];
     int salen;
     struct hostent *hp;
     int timeout;
@@ -172,7 +171,6 @@ char **envp;
     config_init("imapd");
 
     signal(SIGPIPE, SIG_IGN);
-    gethostname(hostname, sizeof(hostname));
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
 
@@ -207,9 +205,6 @@ char **envp;
     prot_settimeout(imapd_in, timeout*60);
     prot_setflushonread(imapd_in, imapd_out);
 
-    prot_printf(imapd_out,
-		"* OK %s Cyrus IMAP4 %s server ready\r\n", hostname,
-		CYRUS_VERSION);
     cmdloop();
 }
 
@@ -219,6 +214,26 @@ usage()
     prot_printf(imapd_out, "* BYE usage: imapd\r\n");
     prot_flush(imapd_out);
     exit(EX_USAGE);
+}
+
+/*
+ * Found a shutdown file: Spit out an untagged BYE and shut down
+ */
+void shutdown_file(fd)
+int fd;
+{
+    struct protstream *shutdown_in;
+    char buf[1024];
+    char *p;
+
+    shutdown_in = prot_new(fd, 0);
+
+    prot_fgets(buf, sizeof(buf), shutdown_in);
+    if (p = strchr(buf, '\r')) *p = 0;
+    if (p = strchr(buf, '\n')) *p = 0;
+
+    prot_printf(imapd_out, "* BYE [ALERT] %s\r\n", buf);
+    shut_down(0);
 }
 
 /*
@@ -261,13 +276,30 @@ int code;
 void
 cmdloop()
 {
+    int fd;
+    char shutdownfilename[1024];
+    char hostname[MAXHOSTNAMELEN+1];
     int c;
     int usinguid, havepartition, havenamespace, oldform;
     static struct buf tag, cmd, arg1, arg2, arg3, arg4;
     char *p;
     const char *err;
 
+    sprintf(shutdownfilename, "%s/msg/shutdown", config_dir);
+    if ((fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
+	shutdown_file(fd);
+    }
+
+    gethostname(hostname, sizeof(hostname));
+    prot_printf(imapd_out,
+		"* OK %s Cyrus IMAP4 %s server ready\r\n", hostname,
+		CYRUS_VERSION);
+
     for (;;) {
+	if ((fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
+	    shutdown_file(fd);
+	}
+
 	/* Parse tag */
 	c = getword(&tag);
 	if (c == EOF) {
@@ -489,6 +521,16 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_getquotaroot(tag.s, arg1.s);
 	    }
+#ifdef ENABLE_EXPERIMENT
+	    else if (!strcmp(cmd.s, "Getuids")) {
+		if (!imapd_mailbox) goto nomailbox;
+		if (c != ' ') goto missingargs;
+		c = getword(&arg1);
+		if (c == '\r') c = prot_getc(imapd_in);
+		if (c != '\n') goto extraargs;
+		cmd_getuids(tag.s, arg1.s);
+	    }
+#endif /* ENABLE_EXPERIMENT */
 	    else goto badcmd;
 	    break;
 
@@ -512,8 +554,8 @@ cmdloop()
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 		
-		prot_printf(imapd_out, "* BYE Server terminating connection\r\n");
-		prot_printf(imapd_out, "%s OK Logout completed\r\n", tag.s);
+		prot_printf(imapd_out, "* BYE %s\r\n", error_message(IMAP_BYE_LOGOUT));
+		prot_printf(imapd_out, "%s OK %s\r\n", tag.s, error_message(IMAP_OK_COMPLETED));
 		shut_down(0);
 	    }
 	    else if (!imapd_userid) goto nologin;
@@ -741,36 +783,6 @@ cmdloop()
 	    }		
 	    else goto badcmd;
 	    break;
-
-#ifdef ENABLE_EXPERIMENT
-	case 'X':
-	    if (!strcmp(cmd.s, "Xgetuids")) {
-		if (!imapd_mailbox) goto nomailbox;
-		if (c != ' ') goto missingargs;
-		c = getword(&arg1);
-		if (c == '\r') c = prot_getc(imapd_in);
-		if (c != '\n') goto extraargs;
-		cmd_getuids(tag.s, arg1.s);
-	    }
-	    else if (!strcmp(cmd.s, "Xgetstate")) {
-		if (!imapd_mailbox) goto nomailbox;
-		if (c == '\r') c = prot_getc(imapd_in);
-		if (c != '\n') goto extraargs;
-		cmd_getstate(tag.s);
-	    }
-	    else if (!strcmp(cmd.s, "Xcheckstate")) {
-		if (!imapd_mailbox) goto nomailbox;
-		if (c != ' ') goto missingargs;
-		c = getword(&arg1);
-		if (c != ' ') goto missingargs;
-		c = getword(&arg2);
-		if (c == '\r') c = prot_getc(imapd_in);
-		if (c != '\n') goto extraargs;
-		cmd_checkstate(tag.s, arg1.s, arg2.s);
-	    }
-	    else goto badcmd;
-	    break;
-#endif /* ENABLE_EXPERIMENT */
 
 	default:
 	badcmd:
@@ -1049,7 +1061,8 @@ char *cmd;
     if (imapd_mailbox) {
 	index_check(imapd_mailbox, 0, 1);
     }
-    prot_printf(imapd_out, "%s OK %s completed\r\n", tag, cmd);
+    prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		error_message(IMAP_OK_COMPLETED));
 };
 
 /*
@@ -1067,7 +1080,8 @@ char *tag;
 #ifdef ENABLE_EXPERIMENT
     prot_printf(imapd_out, " OPTIMIZE-1");
 #endif
-    prot_printf(imapd_out, "\r\n%s OK Capability completed\r\n", tag);
+    prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		error_message(IMAP_OK_COMPLETED));
 };
 
 /*
@@ -1240,7 +1254,8 @@ char *name;
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
     }
     else {
-	prot_printf(imapd_out, "%s OK Append completed\r\n", tag);
+	prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED));
     }
 
  freeflags:
@@ -1335,9 +1350,9 @@ char *name;
 	}
     }
 
-    prot_printf(imapd_out, "%s OK [READ-%s] %s completed\r\n", tag,
+    prot_printf(imapd_out, "%s OK [READ-%s] %s\r\n", tag,
 	   (imapd_mailbox->myrights & (ACL_WRITE|ACL_DELETE)) ?
-		"WRITE" : "ONLY", cmd);
+		"WRITE" : "ONLY", error_message(IMAP_OK_COMPLETED));
 
     proc_register("imapd", imapd_clienthost, imapd_userid, mailboxname);
     syslog(LOG_DEBUG, "open: user %s opened %s", imapd_userid, name);
@@ -1365,7 +1380,8 @@ char *tag;
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
     }
     else {
-	prot_printf(imapd_out, "%s OK Close completed\r\n", tag);
+	prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED));
     }
 }    
 
@@ -1719,7 +1735,8 @@ int usinguid;
     fetchargs.fetchitems = fetchitems;
     index_fetch(imapd_mailbox, sequence, usinguid, &fetchargs);
 
-    prot_printf(imapd_out, "%s OK %s completed\r\n", tag, cmd);
+    prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		error_message(IMAP_OK_COMPLETED));
 
  freeargs:
     freestrlist(newfields);
@@ -1821,7 +1838,8 @@ char *count;
 
     index_check(imapd_mailbox, 0, 0);
 
-    prot_printf(imapd_out, "%s OK Partial completed\r\n", tag);
+    prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		error_message(IMAP_OK_COMPLETED));
     freestrlist(fetchargs.bodysections);
 }
 
@@ -1954,7 +1972,8 @@ int usinguid;
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
     }
     else {
-	prot_printf(imapd_out, "%s OK %s completed\r\n", tag, cmd);
+	prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED));
     }
 
  freeflags:
@@ -1998,7 +2017,8 @@ int usinguid;
     }
     else {
 	index_search(imapd_mailbox, searchargs, usinguid);
-	prot_printf(imapd_out, "%s OK Search completed\r\n", tag);
+	prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED));
     }
 
     freesearchargs(searchargs);
@@ -2034,7 +2054,8 @@ int usinguid;
 		    ? "[TRYCREATE] " : "", error_message(r));
     }
     else {
-	prot_printf(imapd_out, "%s OK %s completed\r\n", tag, cmd);
+	prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED));
     }
 }    
 
@@ -2063,8 +2084,8 @@ char *sequence;
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
     }
     else {
-	prot_printf(imapd_out, "%s OK %sExpunge completed\r\n", tag,
-		    sequence ? "UID " : "");
+	prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED));
     }
 }    
 
@@ -2085,7 +2106,8 @@ char *partition;
 	r = IMAP_PERMISSION_DENIED;
     }
     else if (name[0] && name[strlen(name)-1] == '.') {
-	prot_printf(imapd_out, "%s OK Create of non-terminal names is unnecessary\r\n", tag);
+	prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED));
 	return;
     }
     else {
@@ -2117,7 +2139,8 @@ char *partition;
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
     }
     else {
-	prot_printf(imapd_out, "%s OK Create completed\r\n", tag);
+	prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED));
     }
 }	
 
@@ -2147,7 +2170,8 @@ char *name;
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
     }
     else {
-	prot_printf(imapd_out, "%s OK Delete completed\r\n", tag);
+	prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED));
     }
 }	
 
@@ -2190,7 +2214,8 @@ char *partition;
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
     }
     else {
-	prot_printf(imapd_out, "%s OK Rename completed\r\n", tag);
+	prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED));
     }
 }	
 
@@ -2226,7 +2251,8 @@ char *pattern;
 	prot_printf(imapd_out, "%s BAD Invalid FIND subcommand\r\n", tag);
 	return;
     }
-    prot_printf(imapd_out, "%s OK Find completed\r\n", tag);
+    prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		error_message(IMAP_OK_COMPLETED));
 }
 
 /*
@@ -2265,7 +2291,8 @@ char *pattern;
 			 listdata);
 	listdata((char *)0, 0, 0);
     }
-    prot_printf(imapd_out, "%s OK %s completed\r\n", tag, subscribed ? "LSUB" : "LIST");
+    prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		error_message(IMAP_OK_COMPLETED));
 }
   
 /*
@@ -2303,8 +2330,8 @@ int add;
 	       add ? "Subscribe" : "Unsubscribe", error_message(r));
     }
     else {
-	prot_printf(imapd_out, "%s OK %s completed\r\n", tag,
-	       add ? "Subscribe" : "Unsubscribe");
+	prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED));
     }
 }
 
@@ -2384,7 +2411,8 @@ int oldform;
 	}
 	prot_printf(imapd_out, "\r\n");
     }
-    prot_printf(imapd_out, "%s OK Getacl completed\r\n", tag);
+    prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		error_message(IMAP_OK_COMPLETED));
 }
 
 /*
@@ -2440,7 +2468,8 @@ char *identifier;
 			name, identifier);
 	}
 
-	prot_printf(imapd_out, "\r\n%s OK Listrights completed\r\n", tag);
+	prot_printf(imapd_out, "\r\n%s OK %s\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED));
 	return;
     }
 
@@ -2490,7 +2519,8 @@ int oldform;
     printastring(name);
     prot_printf(imapd_out, " ");
     printastring(acl_masktostr(rights, str));
-    prot_printf(imapd_out, "\r\n%s OK Myrights completed\r\n", tag);
+    prot_printf(imapd_out, "\r\n%s OK %s\r\n", tag,
+		error_message(IMAP_OK_COMPLETED));
 }
 
 /*
@@ -2519,7 +2549,8 @@ char *rights;
 	return;
     }
     
-    prot_printf(imapd_out, "%s OK %s completed\r\n", tag, cmd);
+    prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		error_message(IMAP_OK_COMPLETED));
 }
 
 /*
@@ -2565,7 +2596,8 @@ char *name;
 	return;
     }
     
-    prot_printf(imapd_out, "%s OK Getquotaroot completed\r\n", tag);
+    prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		error_message(IMAP_OK_COMPLETED));
 }
 
 
@@ -2625,7 +2657,8 @@ char *name;
 	return;
     }
     
-    prot_printf(imapd_out, "%s OK Getquotaroot completed\r\n", tag);
+    prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		error_message(IMAP_OK_COMPLETED));
 }
 
 /*
@@ -2682,7 +2715,8 @@ char *quotaroot;
 	return;
     }
     
-    prot_printf(imapd_out, "%s OK Setquota completed\r\n", tag);
+    prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		error_message(IMAP_OK_COMPLETED));
     return;
 
  badlist:
@@ -2790,7 +2824,8 @@ char *name;
 	return;
     }
     
-    prot_printf(imapd_out, "%s OK Status completed\r\n", tag);
+    prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		error_message(IMAP_OK_COMPLETED));
     return;
 
  badlist:
@@ -2799,7 +2834,7 @@ char *name;
 }
 
 /*
- * Perform a XGETUIDS command
+ * Perform a GETUIDS command
  */
 void
 cmd_getuids(tag, startuid)
@@ -2822,61 +2857,8 @@ char *startuid;
 
     index_getuids(imapd_mailbox, uid);
 
-    prot_printf(imapd_out, "%s OK Getuids completed\r\n", tag);
-}
-
-/*
- * Perform a XGETSTATE command
- */
-void
-cmd_getstate(tag)
-char *tag;
-{
-    int r;
-
-    index_check(imapd_mailbox, 0, 1);
-
-    index_getstate(imapd_mailbox);
-
-    prot_printf(imapd_out, "%s OK Getstate completed\r\n", tag);
-}
-
-/*
- * Perform a XCHECKSTATE command
- */
-void
-cmd_checkstate(tag, state1, state2)
-char *tag;
-char *state1;
-char *state2;
-{
-    int r;
-    unsigned indexdate = 0, seendate = 0;
-    char *p;
-
-    for (p = state1; *p; p++) {
-	if (!isdigit(*p)) break;
-	indexdate = indexdate * 10 + *p - '0';
-    }
-    if (*p) {
-	prot_printf(imapd_out, "%s BAD Invalid number\r\n", tag);
-	return;
-    }
-
-    for (p = state2; *p; p++) {
-	if (!isdigit(*p)) break;
-	seendate = seendate * 10 + *p - '0';
-    }
-    if (*p) {
-	prot_printf(imapd_out, "%s BAD Invalid number\r\n", tag);
-	return;
-    }
-
-    index_check(imapd_mailbox, 0, 1);
-
-    index_checkstate(imapd_mailbox, indexdate, seendate);
-
-    prot_printf(imapd_out, "%s OK Checkstate completed\r\n", tag);
+    prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		error_message(IMAP_OK_COMPLETED));
 }
 
 /*
