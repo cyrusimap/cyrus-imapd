@@ -1,6 +1,6 @@
 <HTML><HEAD>
 <title>Cyrus IMAP Server:  Overview and Concepts</title>
-<!-- $Id: overview.html,v 1.17 2003/07/26 15:56:52 rjs3 Exp $ -->
+<!-- $Id: overview.html,v 1.18 2003/07/28 02:47:09 rjs3 Exp $ -->
 </HEAD><BODY>
 <H1>Cyrus IMAP Server:  Overview and Concepts</H1>
 
@@ -262,9 +262,9 @@ anonymous user.
 
 <H3><A NAME="aclauth">Kerberos vs. Unix Authorization</A></H3>
 
-The Cyrus IMAP server comes with three authorization mechanisms, one for
-use with Unix "<tt>/etc/passwd</tt>" files, one for use with Kerberos,
-and one for use with Kerberos and AFS pts groups.
+The Cyrus IMAP server comes with three authorization mechanisms, one is
+compatible with Unix-style ("<tt>/etc/passwd</tt>") authorization, one for
+use with Kerberos, and one for use with Kerberos and AFS pts groups.
 
 <p>Note that authorization is <b>not</b> authentication.  Authentication
 is the act of proving who you are.  Authorization is the act of determining
@@ -281,10 +281,9 @@ followed by a group listed in "<tt>/etc/group</tt>".  Thus:
 </pre>
 
 <p>It is also possible to use unix groups with users authenticated
-through a non-/etc/passwd backend.  Doing so doesn't make a lot of sense
-in the long run, however, non-kerberos sites should probably still choose
-"unix" as their authoriation method.
-    
+through a non-/etc/passwd backend.  Note that using unix groups
+in this way (without associated /etc/passwd entries) is not recommended.
+
 <p>Using the Kerberos authorization mechanism, identifiers are of the
 form:
 
@@ -325,8 +324,8 @@ it were the local identity "<TT>bovik</TT>".
 
 <p>A site may wish to write their own authorization mechanism, perhaps
 to implement a local group mechanism.  If it does so (by implementing an
-<tt>auth_(whatever)</tt> module, it will dictate its own form and meaning
-of identifiers).
+<tt>auth_[whatever]</tt> module), it will dictate its own form and meaning
+of identifiers.
 
 <H3><A name="aclneg">Negative Rights</A></H3> 
 
@@ -369,12 +368,16 @@ of its closest parent mailbox.  When a user is created, the ACL on the
 user's <TT>INBOX</TT> starts off with a single entry granting all
 rights to the user.  When a non-user mailbox is created and does not
 have a parent, its ACL is initialized to the value of the
-"<TT>defaultacl</TT>" option in "<tt>/etc/imapd.conf</tt>"
+"<TT>defaultacl</TT>" option in "<tt>/etc/imapd.conf</tt>"<p>
+
+Note that some rights are available implicitly, for example
+'anonymous' always has 'p' on user INBOXes, and users always
+have rights on mailboxes within their INBOX hierarchy.
 
 <h2><a name="login">Login Authentication</A></H2>
 
-This section discusses different types of logins that can be used
-with IMAP.
+This section discusses different types of authentication (ways of logging
+in) that can be used with Cyrus IMAP.
 
 <p>The Cyrus IMAP server uses the Cyrus SASL library for
 authentication.  This section describes how to configure SASL with use
@@ -860,35 +863,27 @@ client.
 
 <h3>Local Mail Transfer Protocol</h3><a name="lmtp"></a>
 
-<p>LMTP, the Local Mail Transfer Protocol, is a variant of SMTP design
-for transferring mail to the final message store.  The Cyrus server
-implements LMTP via the <tt>lmtpd</tt> daemon.  LMTP can either be
-used over a network via TCP or local via a UNIX domain socket.
-There are security differnces between these two alternatives,
-read more below</p>
+<p>LMTP, the Local Mail Transfer Protocol, is a variant of SMTP design for
+transferring mail to the final message store.  LMTP allows MTAs to deliver
+"local" mail over a network.  This is an easy optimization so that the
+IMAP server doesn't need to maintain a queue of messages or run an
+MTA.</p>
 
-<p>Many MTAs can deliver "local" mail over a network.  This is an easy
-optimization so that the IMAP server doesn't need to maintain a queue of
-messages or run an MTA.</p>
+<p>The Cyrus server implements LMTP via the <tt>lmtpd</tt> daemon.  LMTP
+can either be used over a network via TCP or local via a UNIX domain
+socket. There are security differnces between these two alternatives; read
+more below</p>
 
-<p>Authenticated final delivery is also supported in the form of LMTP
-AUTH.  This is accomplished using SASL to authenticate the delivering
-user.  If your mail server is performing delivery via
-LMTP AUTH (that is, using a SASL mechanism), you will
-want their authentication id to be an LMTP admins
-(either via the <tt>admins</tt> imapd.conf option or via the
+<p>For final delivery via LMTP over a TCP socket, it is necessary to use
+LMTP AUTH.  This is accomplished using SASL to authenticate the delivering
+user.  If your mail server is performing delivery via LMTP AUTH (that is,
+using a SASL mechanism), you will want their authentication id to be an
+LMTP admins (either via the <tt>admins</tt> imapd.conf option or via the
 <tt>lmtp_admins</tt> option).</p>
 
-<p>Alternatively you may deliver via
-LMTP to a unix domain socket, and the connection will be preauthenticated
-as an administrative user (and access control is accomplished
-by controlling access to the socket).
-
-<p>If the final delivery isn't authenticated, it is treated (for
-the purposes of checking ACLs) as if the "anonymous" user is
-attempting delivery.  This will result in mail being delivered to user's
-INBOXes (which have an implicit anyone 'p' right), but to no other mailboxes.
-</p>
+<p>Alternatively you may deliver via LMTP to a unix domain socket, and the
+connection will be preauthenticated as an administrative user (and access
+control is accomplished by controlling access to the socket).</p>
 
 <p>Note that if a user has a sieve script, the sieve script runs authorized
 as *that* user, and the rights of the posting user are ignored for the purposes
