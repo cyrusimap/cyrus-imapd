@@ -26,7 +26,7 @@
  *
  */
 
-/* $Id: arbitron.c,v 1.19 2000/02/10 21:25:24 leg Exp $ */
+/* $Id: arbitron.c,v 1.20 2000/04/06 15:14:30 leg Exp $ */
 
 #include <config.h>
 
@@ -45,7 +45,7 @@
 #include <time.h>
 
 #include "assert.h"
-#include "config.h"
+#include "imapconf.h"
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"

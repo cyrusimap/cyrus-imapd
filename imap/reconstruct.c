@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: reconstruct.c,v 1.49 2000/02/17 08:24:22 leg Exp $ */
+/* $Id: reconstruct.c,v 1.50 2000/04/06 15:14:50 leg Exp $ */
 
 #include <config.h>
 
@@ -65,13 +65,13 @@
 #include "assert.h"
 #include "bsearch.h"
 #include "imparse.h"
-#include "config.h"
+#include "imapconf.h"
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "message.h"
 #include "xmalloc.h"
-#include "config.h"
+#include "imapconf.h"
 #include "mboxname.h"
 #include "mboxlist.h"
 #include "seen.h"

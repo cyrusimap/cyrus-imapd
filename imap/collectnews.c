@@ -1,5 +1,5 @@
 /* collectnews.c -- program to add news articles to relevant header files
- $Id: collectnews.c,v 1.22 2000/02/10 21:25:24 leg Exp $
+ $Id: collectnews.c,v 1.23 2000/04/06 15:14:30 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -38,7 +38,7 @@
 #include <unistd.h>
 #endif
 
-#include "config.h"
+#include "imapconf.h"
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"
@@ -152,7 +152,7 @@ int main(int argc, char **argv)
 void collect(char *group, unsigned long feeduid)
 {
     int r;
-    struct mailbox mailbox;
+    struct appendstate as;
     char namebuf[MAX_MAILBOX_PATH];
     struct newsgroup *ng;
     
@@ -175,7 +175,7 @@ void collect(char *group, unsigned long feeduid)
 	}
     }
 
-    r = append_setup(&mailbox, newsprefix ? namebuf : group,
+    r = append_setup(&as, newsprefix ? namebuf : group,
 		     MAILBOX_FORMAT_NETNEWS, 0, 0, 0);
 
     if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -193,7 +193,7 @@ void collect(char *group, unsigned long feeduid)
 	    fatal("cannot create mailbox for new newsgroup", convert_code(r));
 	}
 
-	r = append_setup(&mailbox, newsprefix ? namebuf : group,
+	r = append_setup(&as, newsprefix ? namebuf : group,
 			 MAILBOX_FORMAT_NETNEWS, 0, 0, 0);
     }
 
@@ -208,22 +208,31 @@ void collect(char *group, unsigned long feeduid)
      * Avoid O(n**2) behavior when we're indexing articles
      * that have already expired.
      */
-    if (mailbox.last_uid < ng->last_uid) mailbox.last_uid = ng->last_uid;
+    if (as.m.last_uid < ng->last_uid) as.m.last_uid = ng->last_uid;
 
-    r = append_collectnews(&mailbox, group, feeduid);
+    r = append_collectnews(&as, group, feeduid);
 
     if (r) {
+	append_abort(&as);
 	syslog(LOG_CRIT, "cannot append to %s: %s",
 	       newsprefix ? namebuf : group,
 	       error_message(r));
 	fatal("cannot append to mailbox for newsgroup", convert_code(r));
     }
 
-    ng->last_uid = mailbox.last_uid; 
+    append_commit(&as, NULL, NULL, NULL);
+    ng->last_uid = as.m.last_uid; 
     if (ng->last_uid < feeduid) ng->last_uid = feeduid;
 
-    mailbox_expungenews(&mailbox);
-    mailbox_close(&mailbox);
+    /* now expunge old messages */
+    {
+	struct mailbox mailbox;
+
+	mailbox_open_header(newsprefix ? namebuf : group, NULL,
+			    &mailbox);
+	mailbox_expungenews(&mailbox);
+	mailbox_close(&mailbox);
+    }
 }
 
 #define GROW 1000

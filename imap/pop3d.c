@@ -26,7 +26,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.67 2000/03/15 10:31:13 leg Exp $
+ * $Id: pop3d.c,v 1.68 2000/04/06 15:14:47 leg Exp $
  */
 #include <config.h>
 
@@ -55,7 +55,7 @@
 #include "acl.h"
 #include "util.h"
 #include "auth.h"
-#include "config.h"
+#include "imapconf.h"
 #include "tls.h"
 
 
@@ -697,7 +697,7 @@ static int starttls_enabled(void)
     return 0;
 }
 
-static void cmd_starttls(void)
+static void cmd_starttls(int pop3s __attribute__((unused)))
 {
     fatal("cmd_starttls() called, but no OpenSSL", EC_SOFTWARE);
 }

@@ -57,7 +57,7 @@
 #include "prot.h"
 #include "imparse.h"
 #include "lock.h"
-#include "config.h"
+#include "imapconf.h"
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"

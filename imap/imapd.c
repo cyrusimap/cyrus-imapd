@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.222 2000/03/15 10:31:11 leg Exp $ */
+/* $Id: imapd.c,v 1.223 2000/04/06 15:14:35 leg Exp $ */
 
 #include <config.h>
 
@@ -54,7 +54,7 @@
 #include "util.h"
 #include "auth.h"
 #include "map.h"
-#include "config.h"
+#include "imapconf.h"
 #include "version.h"
 #include "charset.h"
 #include "imparse.h"
@@ -68,12 +68,12 @@
 #include "append.h"
 #include "mboxlist.h"
 
-/* snmp foo */
-#include "pushstats.h"
-
+#include "pushstats.h"		/* SNMP interface */
 
 #ifdef HAVE_SSL
 #include "tls.h"
+
+extern SSL *tls_conn;
 #endif /* HAVE_SSL */
 
 extern int optind;
@@ -81,7 +81,7 @@ extern char *optarg;
 extern int errno;
 
 sasl_conn_t *imapd_saslconn; /* the sasl connection context */
-int imapd_starttls_done = 0; /* have we done a sucessful starttls yet? */
+int imapd_starttls_done = 0; /* have we done a successful starttls yet? */
 
 char *imapd_userid;
 struct auth_state *imapd_authstate = 0;
@@ -94,12 +94,7 @@ char imapd_clienthost[250] = "[local]";
 struct protstream *imapd_out, *imapd_in;
 time_t imapd_logtime;
 
-#ifdef HAVE_SSL
-extern SSL *tls_conn;
-#endif /* HAVE_SSL */
-
 static struct mailbox mboxstruct;
-
 static struct fetchargs zerofetchargs;
 
 static char *monthname[] = {
@@ -362,6 +357,8 @@ int service_init(int argc, char **argv, char **envp)
 	       sasl_errstring(r, NULL, NULL));
 	return 2;
     }
+
+    /* syslog(LOG_DEBUG, "finished initializiting libsasl"); */
 
     /* create connection to the SNMP listener, if available. */
     snmp_connect(); /* ignore return code */
@@ -1510,11 +1507,42 @@ char *cmd;
 }
 
 /*
+ * Perform an ID command.  
+ *
+ * we only record one ID response from a given client.
+ *
+ * the ID specification (draft-showalter-imap-id-03.txt) that i'm
+ * working from says one thing and does another.  i'll do what i think
+ * it means, which means that this is subject to change.  
+ */
+void cmd_id(char *tag)
+{
+    static int did_id = 0;
+    int c;
+
+    did_id = 1;
+    c = prot_getc(imapd_in);
+    if ((c = prot_getc(imapd_in)) != ' ') {
+	/* we lose */
+	eatline(c);
+	return;
+    }
+
+    /* now is either a list of nstrings or NIL */
+
+    /* spit out our ID string.
+       eventually this might be configurable. */
+    prot_printf(imapd_out, "* ID ("
+		"\"name\" \"Cyrus\" "
+		"\"version\" \"%s\" "
+	   "\"vendor\" \"Project Cyrus <http://asg.web.cmu.edu/cyrus>\")\r\n",
+		CYRUS_VERSION
+}
+
+/*
  * Perform a CAPABILITY command
  */
-void
-cmd_capability(tag)
-char *tag;
+void cmd_capability(char *tag)
 {
     char *sasllist; /* the list of SASL mechanisms */
     unsigned mechcount;
@@ -1524,10 +1552,10 @@ char *tag;
     }
     prot_printf(imapd_out,
      "* CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE UIDPLUS"
-     " NO_ATOMIC_RENAME UNSELECT");
+     " NO_ATOMIC_RENAME UNSELECT MULTIAPPEND");
     if (starttls_enabled())
 	prot_printf(imapd_out, " STARTTLS");
-    if ((imapd_starttls_done == 0) && !config_getswitch("allowplaintext", 1))
+    if (!imapd_starttls_done && !config_getswitch("allowplaintext", 1))
 	prot_printf(imapd_out, " LOGINDISABLED");	
 
     /* add the SASL mechs */
@@ -1553,6 +1581,24 @@ char *tag;
  * The command has been parsed up to and including
  * the mailbox name.
  */
+static int isokflag(char *s)
+{
+    if (s[0] == '\\') {
+	lcase(s);
+	if (!strcmp(s, "\\seen")) return 0;
+	if (!strcmp(s, "\\answered")) return 0;
+	if (!strcmp(s, "\\flagged")) return 0;
+	if (!strcmp(s, "\\draft")) return 0;
+	if (!strcmp(s, "\\deleted")) return 0;
+	
+	/* uh oh, system flag i don't recognize */
+	return 1;
+    } else {
+	/* valid user flag? */
+	return imparse_isatom(s);
+    }
+}
+
 #define FLAGGROW 10
 void
 cmd_append(char *tag, char *name)
@@ -1563,109 +1609,18 @@ cmd_append(char *tag, char *name)
     int nflags = 0, flagalloc = 0;
     static struct buf arg;
     char *p;
-    time_t internaldate = time(0);
+    time_t internaldate;
     unsigned size = 0;
     int sawdigit = 0;
     int isnowait = 0;
     int r;
     char mailboxname[MAX_MAILBOX_NAME+1];
-    struct mailbox mailbox;
-    unsigned long uidvalidity, newuid;
+    struct appendstate mailbox;
+    unsigned uidvalidity;
+    int firstuid, num;
+    const char *parseerr = NULL;
 
-    /* Parse flags */
-    c = getword(&arg);
-    if  (c == '(' && !arg.s[0]) {
-	do {
-	    c = getword(&arg);
-	    if (arg.s[0] == '\\') {
-		lcase(arg.s);
-		if (strcmp(arg.s, "\\seen") && strcmp(arg.s, "\\answered") &&
-		    strcmp(arg.s, "\\flagged") && strcmp(arg.s, "\\draft") &&
-		    strcmp(arg.s, "\\deleted")) {
-		    prot_printf(imapd_out, "%s BAD Invalid system flag in Append command\r\n",tag);
-		    eatline(c);
-		    goto freeflags;
-		}
-	    }
-	    else if (!imparse_isatom(arg.s)) {
-		if (!nflags && !arg.s[0] && c == ')') break; /* empty list */
-		prot_printf(imapd_out, "%s BAD Invalid flag name %s in Append command\r\n",
-			    tag, arg.s);
-		eatline(c);
-		goto freeflags;
-	    }
-	    if (nflags == flagalloc) {
-		flagalloc += FLAGGROW;
-		flag = (char **)xrealloc((char *)flag, flagalloc*sizeof(char *));
-	    }
-	    flag[nflags++] = xstrdup(arg.s);
-	} while (c == ' ');
-	if (c != ')') {
-	    prot_printf(imapd_out,
-	    "%s BAD Missing space or ) after flag name in Append command\r\n",
-			tag);
-	    eatline(c);
-	    goto freeflags;
-	}
-	c = prot_getc(imapd_in);
-	if (c != ' ') {
-	    prot_printf(imapd_out,
-		  "%s BAD Missing space after flag list in Append command\r\n",
-			tag);
-	    eatline(c);
-	    goto freeflags;
-	}
-	c = getword(&arg);
-    }
-
-    /* Parse internaldate */
-    if (c == '\"' && !arg.s[0]) {
-	prot_ungetc(c, imapd_in);
-	c = getdatetime(&internaldate);
-	if (c != ' ') {
-	    prot_printf(imapd_out, "%s BAD Invalid date-time in Append command\r\n", tag);
-	    eatline(c);
-	    goto freeflags;
-	}
-	c = getword(&arg);
-    }
-
-    if (arg.s[0] != '{') {
-	prot_printf(imapd_out, "%s BAD Missing required argument to Append command\r\n",
-	       tag);
-	eatline(c);
-	goto freeflags;
-    }
-
-    /* Read size from literal */
-    for (p = arg.s + 1; *p && isdigit((int) *p); p++) {
-	sawdigit++;
-	size = size*10 + *p - '0';
-    }
-    if (*p == '+') {
-	isnowait++;
-	p++;
-    }
-
-    if (c == '\r') {
-	c = prot_getc(imapd_in);
-    }
-    else {
-	prot_ungetc(c, imapd_in);
-	c = ' ';		/* Force a syntax error */
-    }
-
-    if (*p != '}' || p[1] || c != '\n' || !sawdigit) {
-	prot_printf(imapd_out, "%s BAD Invalid literal in Append command\r\n", tag);
-	eatline(c);
-	goto freeflags;
-    }
-    if (size < 2) {
-	prot_printf(imapd_out, "%s NO %s\r\n", tag,
-		    error_message(IMAP_MESSAGE_NOBLANKLINE));
-	eatline(c);
-	goto freeflags;
-    }
+    c = ' '; /* just parsed a space */
 
     /* Set up the append */
     r = mboxname_tointernal(name, imapd_userid, mailboxname);
@@ -1673,65 +1628,156 @@ cmd_append(char *tag, char *name)
 	r = append_setup(&mailbox, mailboxname, MAILBOX_FORMAT_NORMAL,
 			 imapd_authstate, ACL_INSERT, size);
     }
-    if (r) {
-	if (isnowait) {
-	    /* Eat message and trailing newline */
-	    while (size--) c = prot_getc(imapd_in);
-	    eatline(' ');
+
+    /* we loop, to support MULTIAPPEND */
+    while (!r && c == ' ') {
+	/* Parse flags */
+	c = getword(&arg);
+	if  (c == '(' && !arg.s[0]) {
+	    do {
+		c = getword(&arg);
+		if (!nflags && !arg.s[0] && c == ')') break; /* empty list */
+		if (!isokflag(arg.s)) {
+		    parseerr = "Invalid flag in Append command";
+		    r = IMAP_PROTOCOL_ERROR;
+		    goto done;
+		}
+		if (nflags == flagalloc) {
+		    flagalloc += FLAGGROW;
+		    flag = (char **)xrealloc((char *)flag, 
+					     flagalloc * sizeof(char *));
+		}
+		flag[nflags++] = xstrdup(arg.s);
+	    } while (c == ' ');
+	    if (c != ')') {
+		parseerr = 
+		    "Missing space or ) after flag name in Append command";
+		r = IMAP_PROTOCOL_ERROR;
+		goto done;
+	    }
+	    c = prot_getc(imapd_in);
+	    if (c != ' ') {
+		parseerr = "Missing space after flag list in Append command";
+		r = IMAP_PROTOCOL_ERROR;
+		goto done;
+	    }
+	    c = getword(&arg);
 	}
-	    
-	prot_printf(imapd_out, "%s NO %s%s\r\n",
-	       tag,
-	       (r == IMAP_MAILBOX_NONEXISTENT &&
-		mboxlist_createmailboxcheck(mailboxname, 0, 0,
-					    imapd_userisadmin,
-					    imapd_userid, imapd_authstate,
-					    (char **)0, (char **)0) == 0)
-	       ? "[TRYCREATE] " : "", error_message(r));
-	goto freeflags;
+
+	/* Parse internaldate */
+	if (c == '\"' && !arg.s[0]) {
+	    prot_ungetc(c, imapd_in);
+	    c = getdatetime(&internaldate);
+	    if (c != ' ') {
+		parseerr = "Invalid date-time in Append command";
+		r = IMAP_PROTOCOL_ERROR;
+		goto done;
+	    }
+	    c = getword(&arg);
+	} else {
+	    internaldate = time(NULL);
+	}
+
+	if (arg.s[0] != '{') {
+	    parseerr = "Missing required argument to Append command";
+	    r = IMAP_PROTOCOL_ERROR;
+	    goto done;
+	}
+	
+	/* Read size from literal */
+	size = 0;
+	for (p = arg.s + 1; *p && isdigit((int) *p); p++) {
+	    sawdigit++;
+	    size = size*10 + *p - '0';
+	}
+	if (*p == '+') {
+	    isnowait++;
+	    p++;
+	}
+	
+	if (c == '\r') {
+	    c = prot_getc(imapd_in);
+	}
+	else {
+	    prot_ungetc(c, imapd_in);
+	    c = ' ';		/* Force a syntax error */
+	}
+	
+	if (*p != '}' || p[1] || c != '\n' || !sawdigit) {
+	    parseerr = "Invalid literal in Append command";
+	    r = IMAP_PROTOCOL_ERROR;
+	    goto done;
+	}
+	if (size < 2) {
+	    r = IMAP_MESSAGE_NOBLANKLINE;
+	    goto done;
+	}
+
+	if (!isnowait) {
+	    /* Tell client to send the message */
+	    prot_printf(imapd_out, "+ go ahead\r\n");
+	    prot_flush(imapd_out);
+	}
+	
+	/* Perform the rest of the append */
+	if (!r) r = append_fromstream(&mailbox, imapd_in, size, internaldate, 
+				      (const char **) flag, nflags,
+				      imapd_userid);
+
+	/* if we see a SP, we're trying to append more than one message */
+
+	/* Parse newline terminating command */
+	c = prot_getc(imapd_in);
     }
 
-    if (!isnowait) {
-	/* Tell client to send the message */
-	prot_printf(imapd_out, "+ go ahead\r\n");
-	prot_flush(imapd_out);
-    }
-
-    /* Perform the rest of the append */
-    r = append_fromstream(&mailbox, imapd_in, size, internaldate, 
-			  (const char **) flag, nflags,
-			  imapd_userid);
-    uidvalidity = mailbox.uidvalidity;
-    newuid = mailbox.last_uid;
-
-    /* MULTIAPPEND: if we see a SP, we're trying to append more than one
-       message */
-
-    mailbox_close(&mailbox);
-
-    /* Parse newline terminating command */
-    c = prot_getc(imapd_in);
-    if (c == '\r') c = prot_getc(imapd_in);
-    if (c != '\n') {
-	if (c == EOF) return;
-	prot_printf(imapd_out, "* BAD Junk after literal in APPEND command\r\n");
+ done:
+    if (r) {
 	eatline(c);
+    } else {
+	/* we should be looking at the end of the line */
+	if (c == '\r') c = prot_getc(imapd_in);
+	if (c != '\n') {
+	    parseerr = "junk after literal";
+	    r = IMAP_PROTOCOL_ERROR;
+	    eatline(c);
+	}
+    }
+
+    if (!r) {
+	r = append_commit(&mailbox, &uidvalidity, &firstuid, &num);
+    } else {
+	append_abort(&mailbox);
     }
 
     if (imapd_mailbox) {
 	index_check(imapd_mailbox, 0, 0);
     }
 
-    if (r) {
-	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
-    }
-    else {
-	prot_printf(imapd_out, "%s OK [APPENDUID %u %u] %s\r\n", tag,
-		    uidvalidity, newuid,
-		    error_message(IMAP_OK_COMPLETED));
+    if (r == IMAP_PROTOCOL_ERROR && parseerr) {
+	prot_printf(imapd_out, "%s BAD %s\r\n", tag, parseerr);
+    } else if (r) {
+	prot_printf(imapd_out, "%s NO %s%s\r\n",
+		    tag,
+		    (r == IMAP_MAILBOX_NONEXISTENT &&
+		     mboxlist_createmailboxcheck(mailboxname, 0, 0,
+						 imapd_userisadmin,
+						 imapd_userid, imapd_authstate,
+						 (char **)0, (char **)0) == 0)
+		    ? "[TRYCREATE] " : "", error_message(r));
+    } else {
+	int a;
+
+	/* is this a space seperated list or sequence list? */
+	prot_printf(imapd_out, "%s OK [APPENDUID %u", tag, uidvalidity);
+	if (num == 1) {
+	    prot_printf(imapd_out, " %u", firstuid);
+	} else {
+	    prot_printf(imapd_out, " %u:%u", firstuid, firstuid + num - 1);
+	}
+	prot_printf(imapd_out, "] %s\r\n", error_message(IMAP_OK_COMPLETED));
     }
 
- freeflags:
+    /* free memory */
     while (nflags--) {
 	free(flag[nflags]);
     }

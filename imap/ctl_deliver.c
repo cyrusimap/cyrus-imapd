@@ -1,5 +1,5 @@
 /* ctl_deliver.c -- Program to perform operations on duplicate delivery db
- $Id: ctl_deliver.c,v 1.3 2000/02/18 03:27:29 leg Exp $
+ $Id: ctl_deliver.c,v 1.4 2000/04/06 15:14:32 leg Exp $
  
  # Copyright 2000 Carnegie Mellon University
  # 
@@ -28,7 +28,7 @@
  */
 
 static char _rcsid[] __attribute__ ((unused)) = 
-        "$Id: ctl_deliver.c,v 1.3 2000/02/18 03:27:29 leg Exp $";
+        "$Id: ctl_deliver.c,v 1.4 2000/04/06 15:14:32 leg Exp $";
 
 #include <config.h>
 
@@ -48,7 +48,7 @@ static char _rcsid[] __attribute__ ((unused)) =
 #include <time.h>
 
 #include "util.h"
-#include "config.h"
+#include "imapconf.h"
 #include "mailbox.h"
 #include "exitcodes.h"
 #include "mboxlist.h"
@@ -200,4 +200,4 @@ main(argc, argv)
     return r;
 }
 
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/ctl_deliver.c,v 1.3 2000/02/18 03:27:29 leg Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/ctl_deliver.c,v 1.4 2000/04/06 15:14:32 leg Exp $ */

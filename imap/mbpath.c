@@ -1,6 +1,6 @@
 /* mbpath.c -- help the sysadmin to find the path matching the mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: mbpath.c,v 1.4 2000/02/10 21:25:30 leg Exp $
+ * $Id: mbpath.c,v 1.5 2000/04/06 15:14:45 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-/* static char _rcsid[] = "$Id: mbpath.c,v 1.4 2000/02/10 21:25:30 leg Exp $"; */
+/* static char _rcsid[] = "$Id: mbpath.c,v 1.5 2000/04/06 15:14:45 leg Exp $"; */
 
 #include <config.h>
 
@@ -47,7 +47,7 @@
 #include "prot.h"
 #include "imparse.h"
 #include "lock.h"
-#include "config.h"
+#include "imapconf.h"
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"
@@ -123,5 +123,5 @@ main(int argc, char **argv)
   exit(0);
 }
 
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/mbpath.c,v 1.4 2000/02/10 21:25:30 leg Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/mbpath.c,v 1.5 2000/04/06 15:14:45 leg Exp $ */
 

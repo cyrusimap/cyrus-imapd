@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.117 2000/02/22 22:12:27 leg Exp $
+ * $Id: mboxlist.c,v 1.118 2000/04/06 15:14:42 leg Exp $
  */
 
 #include <config.h>
@@ -58,7 +58,7 @@ extern int errno;
 #include "auth.h"
 #include "glob.h"
 #include "assert.h"
-#include "config.h"
+#include "imapconf.h"
 #include "map.h"
 #include "bsearch.h"
 #include "lock.h"
@@ -92,8 +92,6 @@ static int mboxlist_changequota();
 
 static char *mboxlist_hash_usersubs(const char *userid);
 
-#define FNAME_DBDIR "/db"
-#define FNAME_USERDIR "/user/"
 #define FNAME_SUBSSUFFIX ".sub"
 
 const char *acap_authname = NULL;

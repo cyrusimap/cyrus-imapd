@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  *
  */
-/* $Id: quota.c,v 1.32 2000/02/10 21:25:33 leg Exp $ */
+/* $Id: quota.c,v 1.33 2000/04/06 15:14:50 leg Exp $ */
 
 
 #include <config.h>
@@ -61,7 +61,7 @@
 #endif
 
 #include "assert.h"
-#include "config.h"
+#include "imapconf.h"
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"

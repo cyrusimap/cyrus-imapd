@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- $Id: mboxname.c,v 1.17 2000/02/15 08:03:17 leg Exp $
+ $Id: mboxname.c,v 1.18 2000/04/06 15:14:45 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -36,7 +36,7 @@
 
 #include "assert.h"
 #include "glob.h"
-#include "config.h"
+#include "imapconf.h"
 #include "mailbox.h"
 #include "exitcodes.h"
 #include "imap_err.h"
@@ -85,7 +85,7 @@ static const char index_mod64[256] = {
  * Convert the external mailbox 'name' to an internal name.
  * If 'userid' is non-null, it is the name of the current user.
  * On success, results are placed in the buffer pointed to by
- * 'result', the buffer must be of size MAX_MAILBOX_LEN+1.
+ * 'result', the buffer must be of size MAX_MAILBOX_NAME+1.
  */
 int mboxname_tointernal(char *name, char *userid, char *result)
 {
@@ -97,7 +97,7 @@ int mboxname_tointernal(char *name, char *userid, char *result)
 	    return IMAP_MAILBOX_BADNAME;
 	}
 
-	if (strlen(name)+strlen(userid) > MAX_MAILBOX_NAME) {
+	if (strlen(name)+strlen(userid)+5 > MAX_MAILBOX_NAME) {
 	    return IMAP_MAILBOX_BADNAME;
 	}
 

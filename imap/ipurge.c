@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.3 2000/02/17 02:48:27 leg Exp $
+ * $Id: ipurge.c,v 1.4 2000/04/06 15:14:39 leg Exp $
  *
  */
 
@@ -23,7 +23,7 @@
 #include <time.h>
 
 /* cyrus includes */
-#include "config.h"
+#include "imapconf.h"
 #include "sysexits.h"
 #include "imap_err.h"
 #include "mailbox.h"

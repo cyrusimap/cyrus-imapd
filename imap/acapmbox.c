@@ -20,7 +20,7 @@
 #include "assert.h"
 #include "imapurl.h"
 
-#include "config.h"
+#include "imapconf.h"
 #include "imap_err.h"
 #include "xmalloc.h"
 

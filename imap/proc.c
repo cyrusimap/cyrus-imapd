@@ -1,5 +1,5 @@
 /* proc.c -- Server process registry
- $Id: proc.c,v 1.18 2000/02/10 21:25:32 leg Exp $
+ $Id: proc.c,v 1.19 2000/04/06 15:14:48 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -35,7 +35,7 @@
 #endif
 #include <syslog.h>
 
-#include "config.h"
+#include "imapconf.h"
 #include "exitcodes.h"
 #include "xmalloc.h"
 
