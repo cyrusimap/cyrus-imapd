@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.125 1998/11/09 20:47:00 tjs Exp $
+dnl $Id: configure.in,v 1.126 1998/12/04 17:34:53 tjs Exp $
 dnl
 
 AC_INIT(imap/imapd.c)
@@ -370,7 +370,7 @@ AC_SUBST(WITH_LOGIN)
 
 case "$WITH_LOGIN" in
   unix|unix_*)
-    ANDREW_CRYPT
+    AC_CHECK_FUNC(crypt,,AC_CHECK_LIB(crypt, crypt))
     ;;
   krb|krb_*)
     login_progs=krbck
@@ -386,11 +386,13 @@ case "$WITH_LOGIN" in
   AC_MSG_WARN([script has selected it as the login method, but maybe that])
   AC_MSG_WARN([isn't what you want.  This machine has no "srvtab" file,])
   AC_MSG_WARN([which may mean you don't want Kerberos and want plain])
-  AC_MSG_WARN([Unix authentication.  (The two are incompatible.)])
-  AC_MSG_WARN([If this is the case, re-configure with "--with-krb=no"])
-  AC_MSG_WARN([to disable Kerberos support.])
+  AC_MSG_WARN([Unix authentication to be used in the server.])
+  AC_MSG_WARN([(You must choose only one.)])
+  AC_MSG_WARN([If this is the case, re-configure with "--with-login=unix"])
+  AC_MSG_WARN([to disable the Kerberos login module, or])
+  AC_MSG_WARN(["--with-login=unix_pwcheck" if you have shadow passwords.])
   AC_MSG_WARN([If you don't know what this message means, you should])
-  AC_MSG_WARN([*definitely* reconfigure with "--with-krb=no".])
+  AC_MSG_WARN([*definitely* reconfigure as described above.])
 
       fi
       ;;
@@ -692,11 +694,13 @@ fi
 case "$with_krb" in
   no) true;;
   *)
+    ANDREW_ADD_LIBPATH(${with_krb}/lib)
+
     dnl Kerberos wants this so we might as well check on it first
-    ANDREW_RESOLV
+    AC_CHECK_FUNC(res_search,,AC_CHECK_LIB(resolv,res_search))
 
     dnl gotta do this: crypt is used by sasl_krb_server.c
-    ANDREW_CRYPT
+    AC_CHECK_FUNC(crypt,,AC_CHECK_LIB(crypt, crypt))
 
     AC_CHECK_LIB(des,des_ecb_encrypt, LIBS="${LIBS} -ldes",
  AC_MSG_ERROR([The Kerberos DES library is required for Kerberos support.]))
@@ -722,7 +726,6 @@ case "$with_krb" in
       AC_MSG_ERROR([Can't find Kerberos include files.])
     fi
 
-    ANDREW_ADD_LIBPATH(${with_krb}/lib)
     CPPFLAGS="${CPPFLAGS} -I${cyrus_krbinclude}"
 
     AC_CHECK_FUNC(basename,,AC_CHECK_LIB(iberty,basename))
