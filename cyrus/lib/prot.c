@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.72.4.5 2002/07/31 20:01:48 rjs3 Exp $
+ * $Id: prot.c,v 1.72.4.6 2002/08/01 22:09:45 rjs3 Exp $
  */
 
 #include <config.h>
@@ -69,10 +69,10 @@
 #include "assert.h"
 #include "exitcodes.h"
 #include "map.h"
+#include "nonblock.h"
 #include "prot.h"
 #include "util.h"
 #include "xmalloc.h"
-
 
 /* Transparant protgroup structure */
 struct protgroup
@@ -116,6 +116,12 @@ int prot_free(struct protstream *s)
     if (s->error) free(s->error);
     free(s->buf);
     free((char*)s);
+
+    if(s->big_buffer != PROT_NO_FD) {
+	map_free(&(s->bigbuf_base), &(s->bigbuf_siz));
+	close(s->big_buffer);
+    }
+
     return 0;
 }
 
@@ -138,6 +144,11 @@ int prot_settls(struct protstream *s, SSL *tlsconn)
 {
     s->tls_conn = tlsconn;
 
+    /* Make nonblocking stuff to work similar to write() */
+    SSL_set_mode(tlsconn,
+		 SSL_MODE_ENABLE_PARTIAL_WRITE
+		 | SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
+
     return 0;
 }
 
@@ -156,7 +167,7 @@ sasl_conn_t *conn;
 
     if (s->write && s->ptr != s->buf) {
 	/* flush any pending output */
-	prot_flush(s);
+	prot_flush_internal(s,0);
     }
    
     s->conn = conn;
@@ -369,7 +380,9 @@ int prot_fill(struct protstream *s)
 		    s->readcallback_proc = 0;
 		    s->readcallback_rock = 0;
 		}
-		if (s->flushonread) prot_flush(s->flushonread);
+		/* XXX should this force the flush, since we're now
+		 * waiting for a read? */
+		if (s->flushonread) prot_flush_internal(s->flushonread, 0);
 	    }
 	    else {
 		haveinput = 1;
@@ -516,50 +529,21 @@ int prot_fill(struct protstream *s)
 /*
  * Write out any buffered data in the stream 's'
  */
-int prot_flush(struct protstream *s)
+int prot_flush(struct protstream *s) 
 {
-    unsigned char *ptr = s->buf;
-    int left = s->ptr - s->buf;
-    int n;
-    const char *encoded_output;
+    return prot_flush_internal(s, 1);
+}
 
-    assert(s->write);
-    assert(s->cnt >= 0);
-
-    if (s->eof || s->error) {
-	s->ptr = s->buf;
-	s->cnt = 1;
-	return EOF;
-    }
-    if (!left) return 0;
-
-    /* If we're streaming to a big buffer, do that instead */
-    if (s->big_buffer != PROT_NO_FD) {
-	do {
-	    n = write(s->big_buffer, ptr, left);
-	    if (n == -1 && errno != EINTR) {
-		syslog(LOG_ERR, "write to protstream big buffer failed: %m",
-		       strerror(errno));
-
-		fatal("write to big buffer failed", EC_OSFILE);
-	    }
-	    if (n > 0) {
-		ptr += n;
-		left -= n;
-	    }
-	} while (left);
-
-	/* Reset the output buffer */
-	s->ptr = s->buf;
-	s->cnt = s->maxplain;
-	
-	return 0;
-    }
-
-    if (s->logfd != PROT_NO_FD) {
+/* Do the logging part of prot_flush */
+static void prot_flush_log(struct protstream *s) 
+{
+    if(s->logfd != PROT_NO_FD) {
+	unsigned char *ptr = s->buf;
+	int left = s->ptr - s->buf;
+	int n;
 	time_t newtime;
 	char timebuf[20];
-
+	
 	time(&newtime);
 	snprintf(timebuf, sizeof(timebuf), ">%ld>", newtime);
 	write(s->logfd, timebuf, strlen(timebuf));
@@ -574,17 +558,21 @@ int prot_flush(struct protstream *s)
 		left -= n;
 	    }
 	} while (left);
-	left = s->ptr - s->buf;
-	ptr = s->buf;
     }
+}
+
+/* Do the encoding part of prot_flush */
+static int prot_flush_encode(struct protstream *s,
+			     const char **output_buf,
+			     int *output_len) 
+{
+    unsigned char *ptr = s->buf;
+    int left = s->ptr - s->buf;
 
     if (s->saslssf != 0) {
 	/* encode the data */
-	unsigned int outlen;
-	int result;
-	
-	result = sasl_encode(s->conn, (char *) ptr, left, 
-			     &encoded_output, &outlen);
+	int result = sasl_encode(s->conn, (char *) ptr, left, 
+				 output_buf, output_len);
 	if (result != SASL_OK) {
 	    char errbuf[256];
 	    const char *ed = sasl_errdetail(s->conn);
@@ -593,39 +581,251 @@ int prot_flush(struct protstream *s)
 		     sasl_errstring(result, NULL, NULL),
 		     ed ? ed : "no detail");
 	    s->error = xstrdup(errbuf);
+	    
 	    return EOF;
 	}
-	
-	ptr = (unsigned char *) encoded_output;
-	left = outlen;
+    } else {
+	*output_buf = ptr;
+	*output_len = left;
     }
+    return 0;
+}
 
-    /* Write out the data */
+/* A wrapper for write() that handles SSL and EINTR */
+static int prot_flush_writebuffer(struct protstream *s,
+				  const char *buf, size_t len) 
+{
+    int n;
+    
     do {
 #ifdef HAVE_SSL
 	if (s->tls_conn != NULL) {
-	    n = SSL_write(s->tls_conn, (char *) ptr, left);
+	    n = SSL_write(s->tls_conn, (char *)buf, len);
 	} else {
-	    n = write(s->fd, ptr, left);
+	    n = write(s->fd, buf, len);
 	}
 #else  /* HAVE_SSL */
-	n = write(s->fd, ptr, left);
+	n = write(s->fd, buf, len);
 #endif /* HAVE_SSL */
-	if (n == -1 && errno != EINTR) {
-	    s->error = xstrdup(strerror(errno));
-	    return EOF;
+    } while (n == -1 && errno == EINTR);
+
+    return n;
+}
+
+int prot_flush_internal(struct protstream *s, int force)
+{
+    int n, ret = 0;
+    int save_dontblock = s->dontblock;
+
+    const char *ptr = s->buf; /* Memory buffer info */
+    int left = s->ptr - s->buf;
+
+    assert(s->write);
+    assert(s->cnt >= 0);
+
+    /* Is this protstream finished? */
+    if (s->eof || s->error) {
+	s->ptr = s->buf;
+	s->cnt = 1;
+	return EOF;
+    }
+
+    /* make sure that the main file descriptor is set up to
+     * be blocking or nonblocking based on the configuration of the
+     * protstream and the force flag */
+    if(force)
+	s->dontblock = 0;
+    
+    if(s->dontblock != s->dontblock_isset) {
+	nonblock(s->fd,s->dontblock);
+	s->dontblock_isset = s->dontblock;
+    }
+    
+    /* end protstream setup */
+
+    /* If we're doing a blocking write, flush the buffers, bigbuffer first */
+    if(!s->dontblock) {
+	if(s->big_buffer != PROT_NO_FD) {
+	    /* Write the bigbuffer */
+	    do {
+		n = prot_flush_writebuffer(s, s->bigbuf_base + s->bigbuf_pos,
+					   s->bigbuf_len - s->bigbuf_pos);
+		if(n == -1) {
+		    s->error = xstrdup(strerror(errno));
+		    ret = EOF;
+		    goto done;
+		} else if (n > 0) {
+		    s->bigbuf_pos += n;
+		}
+	    } while(s->bigbuf_len != s->bigbuf_pos);
+
+	    /* Free the bigbuffer */
+	    map_free(&(s->bigbuf_base), &(s->bigbuf_siz));
+	    close(s->big_buffer);
+	    s->bigbuf_len = s->bigbuf_pos = 0;
+	    s->big_buffer = PROT_NO_FD;
 	}
 
-	if (n > 0) {
-	    ptr += n;
-	    left -= n;
+	/* Is there anything in the memory buffer? */
+	if(!left) {
+	    ret = 0;
+	    goto done;
 	}
-    } while (left);
 
-    /* Reset the output buffer */
+	/* Do a regular write of whatever is left */
+
+	/* Log and Encode it */
+	prot_flush_log(s);
+
+	if(prot_flush_encode(s, &ptr, &left) == EOF) {
+	    ret = EOF;
+	    goto done;
+	}
+
+	/* Write it to descriptor */
+	do {
+	    n = prot_flush_writebuffer(s, ptr, left);
+	    if(n == -1) {
+		s->error = xstrdup(strerror(errno));
+		ret = EOF;
+		goto done;
+	    } else if (n > 0) {
+		ptr += n;
+		left -= n;
+	    }
+	} while(left);
+    } else { /* Nonblocking */
+	/* If we've been feeding a bigbuffer, write out from the current
+	 * position as much as we can */
+	if (s->big_buffer != PROT_NO_FD) {
+	    /* Write what we can. */
+	    n = prot_flush_writebuffer(s, s->bigbuf_base + s->bigbuf_pos,
+				       s->bigbuf_len - s->bigbuf_pos);
+
+	    if(n == -1 && errno == EAGAIN) {
+		/* No room in the pipe, but we don't care */
+		n = 0;
+	    } else if(n == -1) {
+		s->error = xstrdup(strerror(errno));
+		ret = EOF;
+		goto done;
+	    }
+
+	    if (n > 0) {
+		s->bigbuf_pos += n;
+	    }
+
+	    /* are we done with the big buffer? */
+	    /* Free the bigbuffer */
+	    if(s->bigbuf_pos == s->bigbuf_len) {
+		map_free(&(s->bigbuf_base), &(s->bigbuf_siz));
+		close(s->big_buffer);
+		s->bigbuf_len = s->bigbuf_pos = 0;
+		s->big_buffer = PROT_NO_FD;
+	    }
+	}
+
+	/* If there isn't anything in the memory buffer, we're done now */
+	if(!left) {
+	    ret = 0;
+	    goto done;
+	}
+
+	/* Prepare the data in the memory buffer */
+	prot_flush_log(s);
+	
+	/* Encode it */
+	if(prot_flush_encode(s, &ptr, &left) == EOF) {
+	    ret = EOF;
+	    goto done;
+	}
+
+	if(s->big_buffer == PROT_NO_FD) {
+	    /* No bigbuffer currently open, write what we can from memory */
+
+	    n = prot_flush_writebuffer(s, ptr, left);
+
+	    if(n == -1 && errno == EAGAIN) {
+		/* No room in the pipe, but we don't care */
+		n = 0;
+	    } else if(n == -1) {
+		s->error = xstrdup(strerror(errno));
+		ret = EOF;
+		goto done;
+	    }
+
+	    if(n > 0) {
+		ptr += n;
+		left -= n;
+	    }
+	}
+
+	/* if there is data still to send, it needs to go to the bigbuffer */
+	if(left) {
+	    struct stat sbuf;
+	    
+	    if(s->big_buffer == PROT_NO_FD) {
+		/* open new bigbuffer */
+		const char *path = "/tmp"; /* XXX don't always use /tmp */
+		const char *filename = "cyrus_protstream_XXXXXX";
+		char path_buf[2048];
+		int fd;
+		
+		if(snprintf(path_buf, sizeof(path_buf), "%s/%s",
+			    path, filename) >= sizeof(path_buf)){
+		    fatal("temporary file pathname is too long in prot_flush",
+			  EC_TEMPFAIL);
+		}
+
+		fd = create_tempfile(path_buf);
+		if(fd == -1) {
+		    s->error = xstrdup(strerror(errno));
+		    ret = EOF;
+		    goto done;
+		}
+
+		s->big_buffer = fd;
+	    }
+
+	    do {
+		n = write(s->big_buffer, ptr, left);
+		if (n == -1 && errno != EINTR) {
+		    syslog(LOG_ERR, "write to protstream buffer failed: %m",
+			   strerror(errno));
+		    
+		    fatal("write to big buffer failed", EC_OSFILE);
+		}
+		if (n > 0) {
+		    ptr += n;
+		    left -= n;
+		}
+	    } while (left);
+
+	    /* We did a write to the bigbuffer, refresh the memory map */
+	    if (fstat(s->big_buffer, &sbuf) == -1) {
+		syslog(LOG_ERR, "IOERROR: fstating temp protlayer buffer: %m");
+		fatal("failed to fstat protlayer buffer", EC_IOERR);
+	    }
+	    
+	    s->bigbuf_len = sbuf.st_size;
+
+	    map_refresh(s->big_buffer, 0, &(s->bigbuf_base), &(s->bigbuf_siz),
+			s->bigbuf_len, "temp protlayer buffer", NULL);
+	}
+	
+    } /* end of blocking/nonblocking if statment */
+    
+    /* Reset the memory buffer */
     s->ptr = s->buf;
     s->cnt = s->maxplain;
-
+    
+ done:
+    if(force) {
+	/* we don't need to call nonblock() again, because it will be
+	 * set correctly on the next prot_flush_internal() anyway */
+	s->dontblock = save_dontblock;
+    }
+    
     return 0;
 }
 
@@ -646,7 +846,7 @@ int prot_write(struct protstream *s, const char *buf, unsigned len)
 	buf += s->cnt;
 	len -= s->cnt;
 	s->cnt = 0;
-	if (prot_flush(s) == EOF) return EOF;
+	if (prot_flush_internal(s,0) == EOF) return EOF;
     }
     memcpy(s->ptr, buf, len);
     s->ptr += len;
@@ -770,6 +970,8 @@ int prot_read(struct protstream *s, char *buf, unsigned size)
  * Also supports selecting on an extra file descriptor
  *
  * returns # of protstreams with pending data (including the extra fd)
+ *
+ * Only works for readable protstreams
  */ 
 /* xxx what about waitevents and idle timeouts */
 int prot_select(struct protgroup *readstreams, int extra_read_fd,
@@ -823,8 +1025,18 @@ int prot_select(struct protgroup *readstreams, int extra_read_fd,
 	if(s->fd > max_fd)
 	    max_fd = s->fd;
 
+	/* Is something currently pending in our protstream's buffer? */
+	if(s->cnt > 0) {
+	    found_fds++;
+
+	    if(!retval)
+		retval = protgroup_new(readstreams->next_element + 1);
+
+	    protgroup_insert(retval, s);
+	    
+	}
 #ifdef HAVE_SSL
-	if(s->tls_conn != NULL && SSL_pending(s->tls_conn)) {
+	else if(s->tls_conn != NULL && SSL_pending(s->tls_conn)) {
 	    found_fds++;
 
 	    if(!retval)
@@ -923,70 +1135,6 @@ char *prot_fgets(char *buf, unsigned size, struct protstream *s)
     return buf;
 }
 
-int prot_bigbuffer_start(struct protstream *p, const char *path) 
-{
-    const char *filename = "cyrus_protstream_XXXXXX";
-    char path_buf[2048];
-    int fd;
-    
-    assert(p->big_buffer == PROT_NO_FD);
-    assert(p->write);
-
-    if(snprintf(path_buf, sizeof(path_buf), "%s/%s", path, filename)
-       >= sizeof(path_buf)){
-	fatal("temporary file pathname is too long in prot_bigbuffer_start",
-	      EC_TEMPFAIL);
-    }
-
-    fd = create_tempfile(path_buf);
-    if(fd == -1) return -1;
-
-    p->big_buffer = fd;
-
-    return 0;
-}
-
-int prot_bigbuffer_flush(struct protstream *p) 
-{
-    int fd;
-    const char *base = NULL;
-    unsigned long len = 0;
-    struct stat sbuf;
-
-    assert(p->big_buffer != PROT_NO_FD);
-
-    /* Flush any pending writes into the big_buffer, before
-     * we turn it off */
-    prot_flush(p);
-
-    /* Save big_buffer file descriptor to a temporary variable, and
-     * reenable standard operation of prot_flush */
-    fd = p->big_buffer;
-    p->big_buffer = PROT_NO_FD;
-
-    /* mmap the file */
-    if (fstat(fd, &sbuf) == -1) {
-	syslog(LOG_ERR,
-	       "IOERROR: fstat on temporary file in prot_bigbuffer_flush: %m");
-	fatal("can't fstat temp file", EC_OSFILE);
-    }	
-    
-    map_refresh(fd, 1, &base, &len, sbuf.st_size, "temp protlayer file", NULL);
-
-    /* prot_write the buffer */
-    /* XXX Ideally, we could just prot_flush directly from this buffer */
-    prot_write(p, base, len);
-
-    /* free the mmap */
-    map_free(&base, &len);
-
-    /* close the buffer's file descriptor */
-    close(fd);
-
-    return prot_flush(p);
-}
-
-
 /* Handle protgroups */
 /* Create a new protgroup of the given size, or 32 if size is 0 */
 struct protgroup *protgroup_new(size_t size) 
@@ -1046,7 +1194,8 @@ void protgroup_insert(struct protgroup *group, struct protstream *item)
     group->group[group->next_element++] = item;
 }
 
-struct protstream *protgroup_getelement(struct protgroup *group, int element) 
+struct protstream *protgroup_getelement(struct protgroup *group,
+					size_t element) 
 {
     assert(group);
     if(element >= group->next_element) return NULL;
@@ -1086,7 +1235,7 @@ int prot_putc(int c, struct protstream *s)
 
     *s->ptr++ = c;
     if (--s->cnt == 0) {
-	return prot_flush(s);
+	return prot_flush_internal(s,0);
     } else {
 	return 0;
     }

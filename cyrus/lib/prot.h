@@ -1,5 +1,5 @@
 /* prot.h -- stdio-like module that handles IMAP protection mechanisms
- * $Id: prot.h,v 1.35.4.2 2002/07/31 17:32:33 rjs3 Exp $
+ * $Id: prot.h,v 1.35.4.3 2002/08/01 22:09:45 rjs3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -85,13 +85,20 @@ struct protstream {
     SSL *tls_conn;
 #endif /* HAVE_SSL */
 
+    /* Big Buffer Information */
+    const char *bigbuf_base;  /* Base Pointer */
+    unsigned long bigbuf_siz; /* Overall Size of Buffer */
+    unsigned long bigbuf_len; /* Length of mapped file */
+    unsigned long bigbuf_pos; /* Current Position */
+
     /* Status Flags */
     int eof;
     char *error;
 
     /* Parameters */
     int write;
-    int dontblock;
+    int dontblock; /* Application requested nonblocking */
+    int dontblock_isset; /* write only, we've fcntl(O_NONBLOCK)'d */
     int read_timeout;
     struct protstream *flushonread;
 
@@ -114,6 +121,9 @@ struct prot_waitevent {
     void *rock;
     struct prot_waitevent *next;
 };
+
+/* Not for use by applications directly (but needed by macros) */
+int prot_flush_internal(struct protstream *s, int force);
 
 #define PROTGROUP_SIZE_DEFAULT 32
 struct protgroup; /* Opaque protgroup structure */
@@ -156,10 +166,6 @@ extern int prot_printf(struct protstream *, const char *, ...)
 extern int prot_read(struct protstream *s, char *buf, unsigned size);
 extern char *prot_fgets(char *buf, unsigned size, struct protstream *s);
 
-/* For large write operations that we don't want to block on network I/O for */
-int prot_bigbuffer_start(struct protstream *p, const char *path);
-int prot_bigbuffer_flush(struct protstream *p);
-
 /* select() for protstreams */
 extern int prot_select(struct protgroup *readstreams, int extra_read_fd,
 		       struct protgroup **out, int *extra_read_flag,
@@ -183,6 +189,7 @@ void protgroup_insert(struct protgroup *group, struct protstream *item);
 
 /* Returns the protstream at that position in the protgroup, or NULL if
  * an invalid element is requested */
-struct protstream *protgroup_getelement(struct protgroup *group, int element);
+struct protstream *protgroup_getelement(struct protgroup *group,
+					size_t element);
 
 #endif /* INCLUDED_PROT_H */
