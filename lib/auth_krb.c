@@ -89,12 +89,6 @@ char *principal;
 char *localuser;
 {
     int i;
-    char *identifier, *p;
-    char aname[ANAME_SZ];
-    char inst[INST_SZ];
-    char realm[REALM_SZ];
-    char lrealm[REALM_SZ];
-    char krbhst[MAX_HSTNM];
 
     while (isspace(*src)) src++;
     if (!*src) return 0;
@@ -109,40 +103,11 @@ char *localuser;
     while (isspace(*src)) src++;
     if (!*src) return 0;
   
-    identifier = src;
-    while (*src && !isspace(*src)) src++;
-    *src = '\0';
-    aname[0] = inst[0] = realm[0] = '\0';
-    if (kname_parse(aname, inst, realm, identifier) != 0) {
-	return 0;
+    for (i = 0; *src && !isspace(*src); i++) {
+	if (i >= MAX_K_NAME_SZ) return 0;
+	*localuser++ = *src++;
     }
-
-    /* Upcase realm name */
-    for (p = realm; *p; p++) {
-	if (islower(*p)) *p = toupper(*p);
-    }
-
-    if (*realm) {
-	if (krb_get_lrealm(lrealm,1)) {
-	    return 0;		/* configuration error */
-	}
-	if (strcmp(lrealm, realm) == 0) {
-	    *realm = 0;
-	}
-	else if (krb_get_krbhst(krbhst, realm, 0)) {
-	    return 0;		/* Unknown realm */
-	}
-    }
-
-    strcpy(localuser, aname);
-    if (*inst) {
-	strcat(localuser, ".");
-	strcat(localuser, inst);
-    }
-    if (*realm) {
-	strcat(localuser, "@");
-	strcat(localuser, realm);
-    }
+    *localuser = 0;
     return 1;
 }
 
@@ -162,6 +127,9 @@ char *real_realm;
     char aname[ANAME_SZ];
     char inst[INST_SZ];
     char realm[REALM_SZ];
+    char lrealm[REALM_SZ];
+    char krbhst[MAX_HSTNM];
+    char *p;
     char buf[1024];
     FILE *mapfile;
 
@@ -180,6 +148,39 @@ char *real_realm;
 	if (!strcmp(aname, real_aname) && !strcmp(inst, real_inst) &&
 	    !strcmp(realm, real_realm)) {
 	    fclose(mapfile);
+
+	    aname[0] = inst[0] = realm[0] = '\0';
+	    if (kname_parse(aname, inst, realm, localuser) != 0) {
+		return 0;
+	    }
+
+	    /* Upcase realm name */
+	    for (p = realm; *p; p++) {
+		if (islower(*p)) *p = toupper(*p);
+	    }
+
+	    if (*realm) {
+		if (krb_get_lrealm(lrealm,1)) {
+		    return 0;		/* configuration error */
+		}
+		if (strcmp(lrealm, realm) == 0) {
+		    *realm = 0;
+		}
+		else if (krb_get_krbhst(krbhst, realm, 0)) {
+		    return 0;		/* Unknown realm */
+		}
+	    }
+
+	    strcpy(localuser, aname);
+	    if (*inst) {
+		strcat(localuser, ".");
+		strcat(localuser, inst);
+	    }
+	    if (*realm) {
+		strcat(localuser, "@");
+		strcat(localuser, realm);
+	    }
+	    
 	    return localuser;
 	}
     }
