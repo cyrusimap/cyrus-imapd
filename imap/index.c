@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.142 2000/10/12 19:38:55 leg Exp $
+ * $Id: index.c,v 1.143 2000/10/26 20:16:35 ken3 Exp $
  */
 #include <config.h>
 
@@ -56,6 +56,7 @@
 #include <com_err.h>
 #include <errno.h>
 #include <ctype.h>
+#include <time.h>
 
 #include "acl.h"
 #include "util.h"
@@ -144,7 +145,6 @@ enum {
  * into msgdata array for threaders that need them.
  */
 #define LOAD_IDS	256
-#define SORT_KEY_MASK	0xfff	/* we're using the high 4 bits for flags */
 
 struct copyargs {
     struct copymsg *copymsg;
@@ -162,7 +162,6 @@ typedef struct msgdata {
     char *msgid;		/* message ID */
     char **ref;			/* array of references */
     int nref;			/* number of references */
-    time_t arrival;		/* internal arrival date & time of message */
     time_t date;		/* sent date & time of message
 				   from Date: header (adjusted by time zone) */
     char *cc;			/* local-part of first "cc" address */
@@ -171,7 +170,9 @@ typedef struct msgdata {
     char *xsubj;		/* extracted subject text */
     unsigned xsubj_hash;	/* hash of extracted subject text */
     int is_refwd;		/* is message a reply or forward? */
-    unsigned size;		/* size of message */
+    char **annot;		/* array of annotation attribute values
+				   (stored in order of sortcrit) */
+    int nannot;			/* number of annotation values */
     struct msgdata *next;
 } MsgData;
 
@@ -263,16 +264,11 @@ static void index_thread_orderedsubj P((unsigned *msgno_list, int nmsg,
 					int usinguid));
 static void index_thread_sort P((Thread *root, struct sortcrit *sortcrit));
 static void index_thread_print P((Thread *threads, int usinguid));
-#ifdef ENABLE_THREAD_REF
-static void index_thread_ref P((unsigned *msgno_list, int nmsg,
-				int usinguid));
-#endif
+static void index_thread_ref P((unsigned *msgno_list, int nmsg, int usinguid));
 
 static struct thread_algorithm thread_algs[] = {
     { "ORDEREDSUBJECT", index_thread_orderedsubj },
-#ifdef ENABLE_THREAD_REF
     { "REFERENCES", index_thread_ref },
-#endif
     { NULL, NULL }
 };
 
@@ -1086,8 +1082,15 @@ index_sort(struct mailbox *mailbox,
 	char buf[1024] = "";
 
 	while (sortcrit->key) {
-	    if (sortcrit->key & SORT_REVERSE) strcat(buf, "REVERSE ");
-	    strcat(buf, key_names[sortcrit->key & SORT_KEY_MASK]);
+	    if (sortcrit->flags & SORT_REVERSE) strcat(buf, "REVERSE ");
+	    strcat(buf, key_names[sortcrit->key]);
+	    switch (sortcrit->key) {
+	    case SORT_ANNOTATION:
+		snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf) - 1,
+			 " \"%s\" \"%s\"",
+			 sortcrit->args.annot.entry, sortcrit->args.annot.attrib);
+		break;
+	    }
 	    if ((++sortcrit)->key) strcat(buf, " ");
 	}
 
@@ -2951,9 +2954,11 @@ void *rock;
 /*
  * Creates a list of msgdata.
  *
- * We fill these structs with the info that will be needed
+ * We fill these structs with the processed info that will be needed
  * by the specified sort criteria.
  */
+#define ANNOTGROWSIZE	10
+
 static MsgData *index_msgdata_load(unsigned *msgno_list, int n,
 				   struct sortcrit *sortcrit)
 {
@@ -2965,6 +2970,7 @@ static MsgData *index_msgdata_load(unsigned *msgno_list, int n,
     char *envtokens[NUMENVTOKENS];
     int did_cache, did_env;
     int label;
+    int annotsize;
 
     if (!n)
 	return NULL;
@@ -2982,10 +2988,10 @@ static MsgData *index_msgdata_load(unsigned *msgno_list, int n,
 
 	did_cache = did_env = 0;
 	tmpenv = NULL;
+	annotsize = 0;
 
-	j = 0;
-	while (sortcrit[j].key) {
-	    label = sortcrit[j++].key & SORT_KEY_MASK;
+	for (j = 0; sortcrit[j].key; j++) {
+	    label = sortcrit[j].key;
 
 	    if ((label == SORT_CC || label == SORT_DATE ||
 		 label == SORT_FROM || label == SORT_SUBJECT ||
@@ -3020,9 +3026,6 @@ static MsgData *index_msgdata_load(unsigned *msgno_list, int n,
 	    }
 
 	    switch (label) {
-	    case SORT_ARRIVAL:
-		cur->arrival = INTERNALDATE(cur->msgno);
-		break;
 	    case SORT_CC:
 		cur->cc = get_localpart_addr(cc+4);
 		break;
@@ -3033,9 +3036,6 @@ static MsgData *index_msgdata_load(unsigned *msgno_list, int n,
 	    case SORT_FROM:
 		cur->from = get_localpart_addr(from+4);
 		break;
-	    case SORT_SIZE:
-		cur->size = SIZE(cur->msgno);
-		break;
 	    case SORT_SUBJECT:
 		cur->xsubj = index_extract_subject(subj+4, &cur->is_refwd);
 		cur->xsubj_hash = hash(cur->xsubj);
@@ -3043,6 +3043,18 @@ static MsgData *index_msgdata_load(unsigned *msgno_list, int n,
 	    case SORT_TO:
 		cur->to = get_localpart_addr(to+4);
 		break;
+ 	    case SORT_ANNOTATION:
+ 		/* reallocate space for the annotation values if necessary */
+ 		if (cur->nannot == annotsize) {
+ 		    annotsize += ANNOTGROWSIZE;
+ 		    cur->annot = (char **)
+ 			xrealloc(cur->annot, annotsize * sizeof(char *));
+ 		}
+
+ 		/* fetch attribute value - we fake it for now */
+ 		cur->annot[cur->nannot] = xstrdup(sortcrit[j].args.annot.attrib);
+ 		cur->nannot++;
+ 		break;
 	    case LOAD_IDS:
 		index_get_ids(cur, envtokens, headers+4);
 		break;
@@ -3294,7 +3306,7 @@ static char *_index_extract_subject(char *s, int *is_refwd)
  * any string having the format "< ... @ ... >" and assume that the mail
  * client created a properly formatted message-id.
  */
-char *find_msgid(char *str, int *len)
+static char *find_msgid(char *str, int *len)
 {
     char *start, *at, *end;
 
@@ -3381,9 +3393,9 @@ static void index_sort_setnext(MsgData *node, MsgData *next)
 /*
  * Function for comparing two integers.
  */
-static int numcmp(int x, int y)
+static int numcmp(int i1, int i2)
 {
-    return ((x < y) ? -1 : (x > y) ? 1 : 0);
+    return ((i1 < i2) ? -1 : (i1 > i2) ? 1 : 0);
 }
 
 /*
@@ -3392,20 +3404,18 @@ static int numcmp(int x, int y)
 static int index_sort_compare(MsgData *md1, MsgData *md2,
 			      struct sortcrit *sortcrit)
 {
-    int reverse, ret = 0, i = 0;
-    int label;
+    int reverse, ret = 0, i = 0, ann = 0;
 
     do {
 	/* determine sort order from reverse flag bit */
-	reverse = sortcrit[i].key & SORT_REVERSE;
-	label = sortcrit[i].key & SORT_KEY_MASK;
+	reverse = sortcrit[i].flags & SORT_REVERSE;
 
-	switch (label) {
+	switch (sortcrit[i].key) {
 	case SORT_SEQUENCE:
 	    ret = numcmp(md1->msgno, md2->msgno);
 	    break;
 	case SORT_ARRIVAL:
-	    ret = numcmp(md1->arrival, md2->arrival);
+	    ret = numcmp(INTERNALDATE(md1->msgno), INTERNALDATE(md2->msgno));
 	    break;
 	case SORT_CC:
 	    ret = strcmp(md1->cc, md2->cc);
@@ -3417,13 +3427,17 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
 	    ret = strcmp(md1->from, md2->from);
 	    break;
 	case SORT_SIZE:
-	    ret = numcmp(md1->size, md2->size);
+	    ret = numcmp(SIZE(md1->msgno), SIZE(md2->msgno));
 	    break;
 	case SORT_SUBJECT:
 	    ret = strcmp(md1->xsubj, md2->xsubj);
 	    break;
 	case SORT_TO:
 	    ret = strcmp(md1->to, md2->to);
+	    break;
+	case SORT_ANNOTATION:
+	    ret = strcmp(md1->annot[ann], md2->annot[ann]);
+	    ann++;
 	    break;
 	}
     } while (!ret && sortcrit[i++].key != SORT_SEQUENCE);
@@ -3449,6 +3463,9 @@ static void index_msgdata_free(MsgData *md)
     for (i = 0; i < md->nref; i++)
 	free(md->ref[i]);
     FREE(md->ref);
+    for (i = 0; i < md->nannot; i++)
+	free(md->annot[i]);
+    FREE(md->annot);
 }
 
 /*
@@ -3512,9 +3529,9 @@ static void index_thread_orderedsubj(unsigned *msgno_list, int nmsg,
 				     int usinguid)
 {
     MsgData *msgdata, *freeme;
-    struct sortcrit sortcrit[] = {{ SORT_SUBJECT,  {0,0} },
-				  { SORT_DATE,     {0,0} },
-				  { SORT_SEQUENCE, {0,0} }};
+    struct sortcrit sortcrit[] = {{ SORT_SUBJECT,  0 },
+				  { SORT_DATE,     0 },
+				  { SORT_SEQUENCE, 0 }};
     unsigned psubj_hash = 0;
     char *psubj;
     Thread *head, *newnode, *cur, *parent;
@@ -3659,6 +3676,31 @@ static void index_thread_print(Thread *thread, int usinguid)
     }
 
     prot_printf(imapd_out, "\r\n");
+
+    /* debug */
+#if 0
+    {
+	char *key_names[] = { "SEQUENCE", "ARRIVAL", "CC", "DATE", "FROM",
+			      "SIZE", "SUBJECT", "TO", "ANNOTATION" };
+	char buf[1024] = "";
+
+	while (sortcrit->key) {
+	    if (sortcrit->flags & SORT_REVERSE) strcat(buf, "REVERSE ");
+	    strcat(buf, key_names[sortcrit->key]);
+	    switch (sortcrit->key) {
+	    case SORT_ANNOTATION:
+		snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf) - 1,
+			 " \"%s\" \"%s\"",
+			sortcrit->args.annot.entry, sortcrit->args.annot.attrib);
+		break;
+	    }
+	    if ((++sortcrit)->key) strcat(buf, " ");
+	}
+
+	syslog(LOG_DEBUG, "SORT (%s) processing time: %d msg in %f sec",
+	       buf, nmsg, (clock() - start) / (double) CLOCKS_PER_SEC);
+    }
+#endif
 }
 
 /*
@@ -3688,7 +3730,6 @@ int find_thread_algorithm(char *arg)
     return -1;
 }
 
-#ifdef ENABLE_THREAD_REF
 /*
  * The following code is an interpretation of JWZ's description
  * and pseudo-code in http://www.jwz.org/doc/threading.html.
@@ -3930,6 +3971,9 @@ static void ref_prune_tree(Thread *parent)
     }
 }
 
+/*
+ * Group threads with same subject.
+ */
 void ref_group_subjects(Thread *root, unsigned nroot, Thread **newnode)
 {
     Thread *cur, *old, *prev, *next, *child;
@@ -4076,21 +4120,91 @@ void ref_group_subjects(Thread *root, unsigned nroot, Thread **newnode)
 }
 
 /*
- * Thread a list of messages using the REFERENCES algorithm.
+ * Free an entire thread.
  */
-void index_thread_ref(unsigned *msgno_list, int nmsg, int usinguid)
+static void index_thread_free(Thread *thread)
+{
+    Thread *child;
+
+    /* free the head node */
+    if (thread->msgdata) index_msgdata_free(thread->msgdata);
+
+    /* free the children recursively */
+    child = thread->child;
+    while (child) {
+	index_thread_free(child);
+	child = child->next;
+    }
+}
+
+/*
+ * Guts of thread searching.  Recurses over children when necessary.
+ */
+static int _index_thread_search(Thread *thread, int (*searchproc) (MsgData *))
+{
+    Thread *child;
+
+    /* test the head node */
+    if (thread->msgdata && searchproc(thread->msgdata)) return 1;
+
+    /* test the children recursively */
+    child = thread->child;
+    while (child) {
+	if (_index_thread_search(child, searchproc)) return 1;
+	child = child->next;
+    }
+
+    /* if we get here, we struck out */
+    return 0;
+}
+
+/*
+ * Search a thread to see if it contains a message which matches searchproc().
+ *
+ * This is a wrapper around _index_thread_search() which iterates through
+ * each thread and removes any which fail the searchproc().
+ */
+static void index_thread_search(Thread *root, int (*searchproc) (MsgData *))
+{
+    Thread *cur, *prev, *next;
+
+    for (prev = NULL, cur = root->child, next = cur->next;
+	 cur;
+	 prev = cur, cur= next, next = (cur ? cur->next : NULL)) {
+	if (!_index_thread_search(cur, searchproc)) {
+	    /* unlink the thread from the list */
+	    if (!prev)	/* first thread */
+		root->child = cur->next;
+	    else
+		prev->next = cur->next;
+
+	    /* free all nodes in the thread */
+	    index_thread_free(cur);
+
+	    /* we just removed cur from our list,
+	     * so we need to keep the same prev for the next pass
+	     */
+	    cur = prev;
+	}
+    }
+}
+
+/*
+ * Guts of the REFERENCES algorithms.  Behavior is tweaked with loadcrit[],
+ * searchproc() and sortcrit[].
+ */
+static void _index_thread_ref(unsigned *msgno_list, int nmsg,
+			      struct sortcrit loadcrit[],
+			      int (*searchproc) (MsgData *),
+			      struct sortcrit sortcrit[], int usinguid)
 {
     MsgData *msgdata, *freeme, *md;
-    struct sortcrit sortcrit[] = {{ LOAD_IDS,      {0,0} },
-				  { SORT_SUBJECT,  {0,0} },
-				  { SORT_DATE,     {0,0} },
-				  { SORT_SEQUENCE, {0,0} }};
     int tref, nnode;
     Thread *newnode;
     struct hash_table id_table;
 
     /* Create/load the msgdata array */
-    freeme = msgdata = index_msgdata_load(msgno_list, nmsg, sortcrit);
+    freeme = msgdata = index_msgdata_load(msgno_list, nmsg, loadcrit);
 
     /* calculate the sum of the number of references for all messages */
     for (md = msgdata, tref = 0; md; md = md->next)
@@ -4141,10 +4255,11 @@ void index_thread_ref(unsigned *msgno_list, int nmsg, int usinguid)
     /* Step 5: group root set by subject */
     ref_group_subjects(root, nroot, &newnode);
 
-    /* Step 6: done threading */
+    /* Step 6: search threads */
+    if (searchproc) index_thread_search(root, searchproc);
 
-    /* Step 7: sort threads by date */
-    index_thread_sort(root, sortcrit+2);
+    /* Step 7: sort threads */
+    if (sortcrit) index_thread_sort(root, sortcrit);
 
     /* Output the threaded messages */ 
     index_thread_print(root, usinguid);
@@ -4155,4 +4270,18 @@ void index_thread_ref(unsigned *msgno_list, int nmsg, int usinguid)
     /* free the msgdata array */
     free(freeme);
 }
-#endif /* ENABLE_THREAD_REF */
+
+/*
+ * Thread a list of messages using the REFERENCES algorithm.
+ */
+static void index_thread_ref(unsigned *msgno_list, int nmsg, int usinguid)
+{
+    struct sortcrit loadcrit[] = {{ LOAD_IDS,      0 },
+				  { SORT_SUBJECT,  0 },
+				  { SORT_DATE,     0 },
+				  { SORT_SEQUENCE, 0 }};
+    struct sortcrit sortcrit[] = {{ SORT_DATE,     0 },
+				  { SORT_SEQUENCE, 0 }};
+
+    _index_thread_ref(msgno_list, nmsg, loadcrit, NULL, sortcrit, usinguid);
+}
