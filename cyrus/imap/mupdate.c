@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.60.4.23 2003/01/31 21:51:36 rjs3 Exp $
+ * $Id: mupdate.c,v 1.60.4.24 2003/02/04 20:28:51 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -514,24 +514,29 @@ mupdate_docmd_result_t docmd(struct conn *c)
 {
     mupdate_docmd_result_t ret = DOCMD_OK;
     int ch;
+    int was_blocking = prot_IS_BLOCKING(c->pin);
     char *p;
 
-    ch = getword(c->pin, &(c->tag));
+ nextcmd:
+    /* First we do a check for input */
+    prot_NONBLOCK(c->pin);
+    ch = prot_getc(c->pin);
+        
     if (ch == EOF && errno == EAGAIN) {
-	/* streaming and no input from client */
+	/* no input from client */
 	goto done;
+    } else if (ch == EOF) {
+	goto lost_conn;
+    } else {
+	/* there's input waiting, put back our character */
+	prot_ungetc(ch, c->pin);
     }
-    if (ch == EOF) {
-	const char *err;
-	
-	if ((err = prot_error(c->pin)) != NULL) {
-	    syslog(LOG_WARNING, "%s, closing connection", err);
-	    prot_printf(c->pout, "* BYE \"%s\"\r\n", err);
-	}
-	
-	ret = DOCMD_CONN_FINISHED;
-	goto done;
-    }
+
+    /* Set it back to blocking so we don't get half a word */
+    prot_BLOCK(c->pin);
+
+    ch = getword(c->pin, &(c->tag));
+    if (ch == EOF) goto lost_conn;
     
     /* send out any updates we have pending */
     if (c->streaming) {
@@ -541,15 +546,17 @@ mupdate_docmd_result_t docmd(struct conn *c)
     if (ch != ' ') {
 	prot_printf(c->pout, "* BAD \"Need command\"\r\n");
 	eatline(c->pin, ch);
-	goto done;
+	goto nextcmd;
     }
     
     /* parse command name */
     ch = getword(c->pin, &(c->cmd));
-    if (!c->cmd.s[0]) {
+    if(ch == EOF) {
+	goto lost_conn;
+    } else if (!c->cmd.s[0]) {
 	prot_printf(c->pout, "%s BAD \"Null command\"\r\n", c->tag.s);
 	eatline(c->pin, ch);
-	goto done;
+	goto nextcmd;
     }
     
     if (islower((unsigned char) c->cmd.s[0])) {
@@ -576,7 +583,7 @@ mupdate_docmd_result_t docmd(struct conn *c)
 		prot_printf(c->pout,
 			    "%s BAD \"already authenticated\"\r\n",
 			    c->tag.s);
-		goto done;
+		goto nextcmd;
 	    }
 	    
 	    cmd_authenticate(c, c->tag.s, c->arg1.s,
@@ -744,12 +751,33 @@ mupdate_docmd_result_t docmd(struct conn *c)
 	eatline(c->pin, ch);
 	break;
     }
+
+    /* Check for more input */
+    goto nextcmd;
+
+ lost_conn:
+    {
+	const char *err;
+	
+	if ((err = prot_error(c->pin)) != NULL) {
+	    syslog(LOG_WARNING, "%s, closing connection", err);
+	    prot_printf(c->pout, "* BYE \"%s\"\r\n", err);
+	}
+	
+	ret = DOCMD_CONN_FINISHED;
+    }
     
  done:
+    /* Restore the state of the input stream */
+    if(was_blocking)
+	prot_BLOCK(c->pin);
+    else
+	prot_NONBLOCK(c->pin);    
 
     /* Necessary since we don't ever do a prot_read on an idle connection
      * in mupdate */
     prot_flush(c->pout);
+    
     return ret;
 }
 
