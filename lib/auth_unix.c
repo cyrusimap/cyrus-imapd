@@ -93,7 +93,7 @@ char *identifier;
     auth_ngroups = 0;
 
     setgrent();
-    while (getgrent()) {
+    while (grp = getgrent()) {
 	for (mem = grp->gr_mem; *mem; mem++) {
 	    if (!strcmp(*mem, identifier)) break;
 	}
