@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.69 2002/04/02 00:46:49 leg Exp $
+ * $Id: lmtpengine.c,v 1.70 2002/04/02 22:25:43 ken3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -758,6 +758,18 @@ static int parseheader(struct protstream *fin, FILE *fout,
     while ((c = prot_getc(fin)) != EOF) { /* examine each character */
 	switch (s) {
 	case NAME_START:
+	    if (c == '.') {
+		int peek;
+
+		peek = prot_getc(fin);
+		prot_ungetc(peek, fin);
+		
+		if (peek == '\r' || peek == '\n') {
+		    /* just reached the end of message */
+		    r = IMAP_MESSAGE_NOBLANKLINE;
+		    goto ph_error;
+		}
+	    }
 	    if (c == '\r' || c == '\n') {
 		/* just reached the end of headers */
 		r = 0;
