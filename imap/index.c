@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.172 2002/02/19 18:50:12 ken3 Exp $
+ * $Id: index.c,v 1.173 2002/03/15 22:00:15 ken3 Exp $
  */
 #include <config.h>
 
@@ -248,7 +248,7 @@ static int _index_search(unsigned **msgno_list, struct mailbox *mailbox,
 			 struct searchargs *searchargs);
 
 static void parse_cached_envelope(char *env, char *tokens[]);
-static char *find_msgid(char *str, int *len);
+static char *find_msgid(char *str, char **rem);
 static char *get_localpart_addr(const char *header);
 static char *index_extract_subject(const char *subj, int *is_refwd);
 static char *_index_extract_subject(char *s, int *is_refwd);
@@ -3545,29 +3545,71 @@ static char *_index_extract_subject(char *s, int *is_refwd)
 }
 
 /* Find a message-id looking thingy in a string.  Returns a pointer to the
- * id and the length is returned in the *len parameter.
+ * alloc'd id and the remaining string is returned in the **loc parameter.
  *
  * This is a poor-man's way of finding the message-id.  We simply look for
  * any string having the format "< ... @ ... >" and assume that the mail
  * client created a properly formatted message-id.
  */
-static char *find_msgid(char *str, int *len)
-{
-    char *s, *p;
+#define MSGID_SPECIALS "<> @\\"
 
-    *len = 0;
-    p = str;
-    while (p && (s = strchr(p, '<'))) {
-	p = s + 1;
-	while (*p && *p != '@' && *p != '<' && *p != '>') p++;
-	if (*p != '@') continue;
-	while (*p && *p != '<' && *p != '>') p++;
-	if (*p == '>') {
-	    *len = p - s + 1;
-	    return s;
-	}	    
+static char *find_msgid(char *str, char **rem)
+{
+    char *msgid, *src, *dst, *cp;
+
+    if (!str) return NULL;
+
+    msgid = NULL;
+    src = str;
+
+    /* find the start of a msgid */
+    while ((src = strchr(src, '<')) != NULL) {
+
+	/* find the end of the msgid */
+	if ((cp = strchr(src, '>')) == NULL)
+	    return NULL;
+
+	/* alloc space for the msgid */
+	dst = msgid = (char*) xrealloc(msgid, cp - src + 2);
+
+	*dst++ = *src++;
+
+	/* quoted string */
+	if (*src == '\"') {
+	    src++;
+	    while (*src) {
+		if (*src == '\"') break;
+		if (*src == '\\') {
+		    src++;
+		    if (!*src) break;
+		}
+		*dst++ = *src++;
+	    }
+	    if (*src != '\"') continue;
+	    src++;
+	}
+	/* atom */
+	else {
+	    while (!strchr(MSGID_SPECIALS, *src))
+		*dst++ = *src++;
+	}
+
+	if (*src != '@' || *(dst-1) == '<') continue;
+	*dst++ = *src++;
+
+	/* domain atom */
+	while (!strchr(MSGID_SPECIALS, *src))
+	    *dst++ = *src++;
+
+	if (*src != '>' || *(dst-1) == '@') continue;
+	*dst++ = *src++;
+	*dst = '\0';
+
+	if (rem) *rem = src;
+	return msgid;
     }
 
+    free(msgid);
     return NULL;
 }
 
@@ -3576,17 +3618,14 @@ static char *find_msgid(char *str, int *len)
 
 void index_get_ids(MsgData *msgdata, char *envtokens[], const char *headers)
 {
-    char *msgid, *refstr, *ref, *in_reply_to;
-    int len, refsize = REFGROWSIZE;
+    char *refstr, *ref, *in_reply_to;
+    int refsize = REFGROWSIZE;
     char buf[100];
 
     /* get msgid */
-    msgid = find_msgid(envtokens[ENV_MSGID], &len);
-    /* if we have one, make a copy of it */
-    if (msgid)
-	msgdata->msgid = xstrndup(msgid, len);
-    /* otherwise, create one */
-    else {
+    msgdata->msgid = find_msgid(envtokens[ENV_MSGID], NULL);
+     /* if we don't have one, create one */
+    if (!msgdata->msgid) {
 	sprintf(buf, "<Empty-ID: %u>", msgdata->msgno);
 	msgdata->msgid = xstrdup(buf);
     }
@@ -3596,7 +3635,7 @@ void index_get_ids(MsgData *msgdata, char *envtokens[], const char *headers)
 	/* allocate some space for refs */
 	msgdata->ref = (char **) xmalloc(refsize * sizeof(char *));
 	/* find references */
-	while ((ref = find_msgid(refstr, &len)) != NULL) {
+	while ((ref = find_msgid(refstr, &refstr)) != NULL) {
 	    /* reallocate space for this msgid if necessary */
 	    if (msgdata->nref == refsize) {
 		refsize += REFGROWSIZE;
@@ -3604,20 +3643,18 @@ void index_get_ids(MsgData *msgdata, char *envtokens[], const char *headers)
 		    xrealloc(msgdata->ref, refsize * sizeof(char *));
 	    }
 	    /* store this msgid in the array */
-	    msgdata->ref[msgdata->nref++] = xstrndup(ref, len);
-	    /* skip past this msgid */
-	    refstr = ref + len;
+	    msgdata->ref[msgdata->nref++] = ref;
 	}
     }
 
     /* if we have no references, try in-reply-to */
     if (!msgdata->nref) {
 	/* get in-reply-to id */
-	in_reply_to = find_msgid(envtokens[ENV_INREPLYTO], &len);
+	in_reply_to = find_msgid(envtokens[ENV_INREPLYTO], NULL);
 	/* if we have an in-reply-to id, make it the ref */
 	if (in_reply_to) {
 	    msgdata->ref = (char **) xmalloc(sizeof(char *));
-	    msgdata->ref[msgdata->nref++] = xstrndup(in_reply_to, len);
+	    msgdata->ref[msgdata->nref++] = in_reply_to;
 	}
     }
 }
