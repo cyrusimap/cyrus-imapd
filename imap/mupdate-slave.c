@@ -1,6 +1,6 @@
 /* mupdate-slave.c -- cyrus murder database clients
  *
- * $Id: mupdate-slave.c,v 1.5 2002/01/24 23:53:44 rjs3 Exp $
+ * $Id: mupdate-slave.c,v 1.6 2002/01/25 16:45:49 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -114,7 +114,7 @@ void mupdate_listen(mupdate_handle *handle, int pingtimeout)
 	    continue;
 	} else if(gotdata == 0) {
 	    /* timed out, send a NOOP */
-	    prot_printf(handle->pout, "N%u NOOP\r\n", handle->tag++);
+	    prot_printf(handle->pout, "N%u NOOP\r\n", handle->tagn++);
 	    prot_flush(handle->pout);
 
 	    /* wait 'pingtimeout' seconds for response */

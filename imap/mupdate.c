@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.30 2002/01/24 23:53:44 rjs3 Exp $
+ * $Id: mupdate.c,v 1.31 2002/01/25 16:45:49 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -714,12 +714,6 @@ int service_main_fd(int fd, int argc, char **argv, char **envp)
     return 0;
 }
 
-/* this depends on mailbox name being first */
-static int mycmp(const void *v1, const void *v2)
-{
-    return strcmp((const char *) v1, (const char *) v2);
-}
-
 /* read from disk database must be unlocked. */
 void database_init()
 {
@@ -1184,7 +1178,7 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 	    /* change what's already there */
 	    strcpy(m->server, mdata->server);
 	    if (mdata->acl) strcpy(m->acl, mdata->acl);
-	    else mdata->acl[0] = '\0';
+	    else m->acl[0] = '\0';
 
 	    if(!strncmp(rock, "MAILBOX", 6)) {
 		m->t = t = SET_ACTIVE;
