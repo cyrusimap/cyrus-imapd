@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.82 2002/02/10 01:53:57 ken3 Exp $
+ * $Id: lmtpd.c,v 1.83 2002/02/11 16:25:02 rjs3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1276,8 +1276,21 @@ char *name;
 
 void fatal(const char* s, int code)
 {
-    prot_printf(deliver_out,"421 4.3.0 lmtpd: %s\r\n", s);
-    prot_flush(deliver_out);
+    static int recurse_code = 0;
+    
+    if(recurse_code) {
+	/* We were called recursively. Just give up */
+	snmp_increment(ACTIVE_CONNECTIONS, -1);
+	exit(recurse_code);
+    }
+    recurse_code = code;
+    if(deliver_out) {
+	prot_printf(deliver_out,"421 4.3.0 lmtpd: %s\r\n", s);
+	prot_flush(deliver_out);
+    }
+    /* shouldn't return */
+    shut_down(code);
+
     exit(code);
 }
 
