@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.38.2.1 2003/10/28 21:09:37 ken3 Exp $
+ * $Id: mupdate-client.c,v 1.38.2.2 2003/10/29 20:19:18 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -326,7 +326,7 @@ int mupdate_activate(mupdate_handle *handle,
     if (!mailbox || !server || !acl) return MUPDATE_BADPARAM;
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
-    if (config_mupdate_config == MUPDATE_CONFIG_REPLICATED) {
+    if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_REPLICATED) {
 	/* we don't care about the server part, everything is local */
 	const char *part = strchr(server, '!');
 
@@ -359,7 +359,7 @@ int mupdate_reserve(mupdate_handle *handle,
     if (!mailbox || !server) return MUPDATE_BADPARAM;
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
-    if (config_mupdate_config == MUPDATE_CONFIG_REPLICATED) {
+    if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_REPLICATED) {
 	/* we don't care about the server part, everything is local */
 	const char *part = strchr(server, '!');
 
@@ -392,7 +392,7 @@ int mupdate_deactivate(mupdate_handle *handle,
     if (!mailbox || !server) return MUPDATE_BADPARAM;
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
-    if (config_mupdate_config == MUPDATE_CONFIG_REPLICATED) {
+    if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_REPLICATED) {
 	/* we don't care about the server part, everything is local */
 	const char *part = strchr(server, '!');
 

@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: libconfig.c,v 1.2.2.1 2003/10/28 21:09:40 ken3 Exp $ */
+/* $Id: libconfig.c,v 1.2.2.2 2003/10/29 20:19:20 ken3 Exp $ */
 
 #include <config.h>
 
@@ -73,7 +73,7 @@ const char *config_defdomain = NULL;     /* NULL */
 const char *config_ident = NULL;         /* the service name */
 int config_hashimapspool;	  /* f */
 int config_virtdomains;	          /* f */
-int config_mupdate_config;	  /* MUPDATE_CONFIG_STANDARD */
+enum enum_value config_mupdate_config;	/* IMAP_ENUM_MUPDATE_CONFIG_STANDARD */
 
 /* declared in each binary that uses libconfig */
 extern const int config_need_data;
@@ -102,6 +102,14 @@ int config_getswitch(enum imapopt opt)
     assert(imapopts[opt].t == OPT_SWITCH);
     
     return imapopts[opt].val.b;
+}
+
+enum enum_value config_getenum(enum imapopt opt)
+{
+    assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
+    assert(imapopts[opt].t == OPT_ENUM);
+    
+    return imapopts[opt].val.e;
 }
 
 const char *config_getoverflowstring(const char *key, const char *def)
@@ -313,6 +321,24 @@ void config_read(const char *alt_config)
 		}
 		break;
 	    }
+	    case OPT_ENUM:
+	    {
+		const struct enum_option_s *e = imapopts[opt].enum_options;
+
+		while (e->name) {
+		    if (!strcasecmp(e->name, p)) break;
+		    e++;
+		}
+		if (e->name)
+		    imapopts[opt].val.e = e->val;
+		else {
+		    /* error during conversion */
+		    sprintf(errbuf, "invalid value for %s in line %d",
+			    imapopts[opt].optname, lineno);
+		    fatal(buf, EC_CONFIG);
+		}
+		break;
+	    }
 	    case OPT_NOTOPT:
 	    default:
 		abort();
@@ -423,18 +449,6 @@ void config_read(const char *alt_config)
     config_mupdate_server = config_getstring(IMAPOPT_MUPDATE_SERVER);
 
     if (config_mupdate_server) {
-	const char *mconfig = config_getstring(IMAPOPT_MUPDATE_CONFIG);
-
-	if (!strcasecmp(mconfig, "standard"))
-	    config_mupdate_config = MUPDATE_CONFIG_STANDARD;
-	else if (!strcasecmp(mconfig, "unified"))
-	    config_mupdate_config = MUPDATE_CONFIG_UNIFIED;
-	else if (!strcasecmp(mconfig, "replicated"))
-	    config_mupdate_config = MUPDATE_CONFIG_REPLICATED;
-	else {
-	    snprintf(errbuf, sizeof(errbuf),
-		     "invalid mupdate_config: %s", mconfig);
-	    fatal(errbuf, EC_CONFIG);
-	}
+	config_mupdate_config = config_getenum(IMAPOPT_MUPDATE_CONFIG);
     }
 }

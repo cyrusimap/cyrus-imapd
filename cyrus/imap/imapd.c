@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.6 2003/10/28 22:06:49 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.7 2003/10/29 20:19:14 ken3 Exp $ */
 
 #include <config.h>
 
@@ -4033,7 +4033,9 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
     }
     else {
 	if (config_mupdate_server &&
-	    (config_mupdate_config != MUPDATE_CONFIG_STANDARD)) kick_mupdate();
+	    (config_mupdate_config != IMAP_ENUM_MUPDATE_CONFIG_STANDARD)) {
+	    kick_mupdate();
+	}
 
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
@@ -4172,7 +4174,9 @@ void cmd_delete(char *tag, char *name, int localonly)
     }
     else {
 	if (config_mupdate_server &&
-	    (config_mupdate_config != MUPDATE_CONFIG_STANDARD)) kick_mupdate();
+	    (config_mupdate_config != IMAP_ENUM_MUPDATE_CONFIG_STANDARD)) {
+	    kick_mupdate();
+	}
 
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
@@ -4530,7 +4534,9 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
     } else {
 	if (config_mupdate_server &&
-	    (config_mupdate_config != MUPDATE_CONFIG_STANDARD)) kick_mupdate();
+	    (config_mupdate_config != IMAP_ENUM_MUPDATE_CONFIG_STANDARD)) {
+	    kick_mupdate();
+	}
 
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
@@ -5234,7 +5240,9 @@ void cmd_setacl(char *tag, const char *name,
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
     } else {
 	if (config_mupdate_server &&
-	    (config_mupdate_config != MUPDATE_CONFIG_STANDARD)) kick_mupdate();
+	    (config_mupdate_config != IMAP_ENUM_MUPDATE_CONFIG_STANDARD)) {
+	    kick_mupdate();
+	}
 
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
