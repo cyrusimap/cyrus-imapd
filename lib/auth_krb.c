@@ -5,10 +5,10 @@
 #include <ctype.h>
 #include <krb.h>
 
-char auth_userid[MAX_K_NAME_SZ+1] = "anonymous";
-char auth_aname[ANAME_SZ] = "anonymous";
-char auth_inst[INST_SZ];
-char auth_realm[REALM_SZ];
+static char auth_userid[MAX_K_NAME_SZ+1] = "anonymous";
+static char auth_aname[ANAME_SZ] = "anonymous";
+static char auth_inst[INST_SZ];
+static char auth_realm[REALM_SZ];
 
 /*
  * Determine if the user is a member of 'identifier'
