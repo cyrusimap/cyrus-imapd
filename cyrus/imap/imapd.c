@@ -2987,7 +2987,7 @@ cmd_netscrape(tag)
     /* so tempting, and yet ... */
     /* url = "http://random.yahoo.com/ryl/"; */
     url = config_getstring("netscapeurl",
-			   "http://andrew2.andrew.cmu.edu/cyrus/netscape-admin.html");
+			   "http://andrew2.andrew.cmu.edu/cyrus/imapd/netscape-admin.html");
 
     /* I only know of three things to reply with: */
     prot_printf(imapd_out,
