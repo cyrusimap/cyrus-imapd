@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb.c,v 1.1 2002/02/19 22:33:46 rjs3 Exp $ */
+/* $Id: cyrusdb.c,v 1.2 2002/02/24 04:42:17 ken3 Exp $ */
 
 #include <config.h>
 #include <stdlib.h>
@@ -49,7 +49,14 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <errno.h>
+#include <syslog.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include "cyrusdb.h"
+#include "xmalloc.h"
+#include "retry.h"
 
 struct cyrusdb_backend *cyrusdb_backends[] = {
     &cyrusdb_db3,
@@ -57,3 +64,67 @@ struct cyrusdb_backend *cyrusdb_backends[] = {
     &cyrusdb_flat,
     &cyrusdb_skiplist,
     NULL };
+
+int cyrusdb_copyfile(const char *srcname, const char *dstname)
+{
+    int srcfd, dstfd;
+    struct stat sbuf;
+    char *buf;
+    int bufsize, n;
+
+    if ((srcfd = open(srcname, O_RDONLY)) < 0) {
+	syslog(LOG_DEBUG, "error opening %s for reading", srcname);
+	return -1;
+    }
+
+    if (fstat(srcfd, &sbuf) < 0) {
+	syslog(LOG_DEBUG, "error fstating %s", srcname);
+	close(srcfd);
+	return -1;
+    }
+
+    if ((dstfd = open(dstname, O_WRONLY | O_CREAT, sbuf.st_mode)) < 0) {
+	syslog(LOG_DEBUG, "error opening %s for writing (%d)",
+	       dstname, sbuf.st_mode);
+	close(srcfd);
+	return -1;
+    }
+
+    bufsize = sbuf.st_blksize;
+    if ((buf = (char*) xmalloc(bufsize)) == NULL) {
+	syslog(LOG_DEBUG, "error allocing buf (%d)", bufsize);
+	close(srcfd);
+	close(dstfd);
+	return -1;
+    }
+
+    for (;;) {
+	n = read(srcfd, buf, bufsize);
+
+	if (n < 0) {
+	    if (errno == EINTR)
+		continue;
+
+	    syslog(LOG_DEBUG, "error reading buf (%d)", bufsize);
+	    close(srcfd);
+	    close(dstfd);
+	    unlink(dstname);
+	    return -1;
+	}
+
+	if (n == 0)
+	    break;
+
+	if (retry_write(dstfd, buf, n) != n) {
+	    syslog(LOG_DEBUG, "error writing buf (%d)", n);
+	    close(srcfd);
+	    close(dstfd);
+	    unlink(dstname);
+	    return -1;
+	}
+    }
+
+    close(srcfd);
+    close(dstfd);
+    return 0;
+}

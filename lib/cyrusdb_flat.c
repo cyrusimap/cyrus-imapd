@@ -154,8 +154,27 @@ static int mysync(void)
     return 0;
 }
 
-static int myarchive(const char *dirname)
+static int myarchive(const char **fnames, const char *dirname)
 {
+    int r;
+    const char **fname;
+    char dstname[1024], *dp;
+
+    strcpy(dstname, dirname);
+    dp = dstname + strlen(dstname);
+
+    /* archive those files specified by the app */
+    for (fname = fnames; *fname != NULL; ++fname) {
+	syslog(LOG_DEBUG, "archiving database file: %s", *fname);
+	strcpy(dp, strrchr(*fname, '/'));
+	r = cyrusdb_copyfile(*fname, dstname);
+	if (r) {
+	    syslog(LOG_ERR,
+		   "DBERROR: error archiving database file: %s", *fname);
+	    return CYRUSDB_IOERROR;
+	}
+    }
+
     return 0;
 }
 

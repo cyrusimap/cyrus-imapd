@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.22 2002/02/20 19:32:11 leg Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.23 2002/02/24 04:42:17 ken3 Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -228,8 +228,27 @@ static int mysync(void)
     return 0;
 }
 
-static int myarchive(const char *dirname __attribute__((unused)))
+static int myarchive(const char **fnames, const char *dirname)
 {
+    int r;
+    const char **fname;
+    char dstname[1024], *dp;
+
+    strcpy(dstname, dirname);
+    dp = dstname + strlen(dstname);
+
+    /* archive those files specified by the app */
+    for (fname = fnames; *fname != NULL; ++fname) {
+	syslog(LOG_DEBUG, "archiving database file: %s", *fname);
+	strcpy(dp, strrchr(*fname, '/'));
+	r = cyrusdb_copyfile(*fname, dstname);
+	if (r) {
+	    syslog(LOG_ERR,
+		   "DBERROR: error archiving database file: %s", *fname);
+	    return CYRUSDB_IOERROR;
+	}
+    }
+
     return 0;
 }
 

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ctl_cyrusdb.c,v 1.8 2002/02/15 20:32:10 leg Exp $
+ * $Id: ctl_cyrusdb.c,v 1.9 2002/02/24 04:42:15 ken3 Exp $
  */
 
 #include <config.h>
@@ -77,6 +77,7 @@
 #include "util.h"
 #include "imapconf.h"
 #include "exitcodes.h"
+#include "xmalloc.h"
 #include "cyrusdb.h"
 
 /* find out what things are using... */
@@ -85,19 +86,25 @@
 #include "duplicate.h"
 #include "tls.h"
 
-struct cyrusdb_backend *dbenvs[] =
-{
-    CONFIG_DB_MBOX,
-    CONFIG_DB_SUBS,
-    CONFIG_DB_SEEN,
-    CONFIG_DB_DUPLICATE,
-    CONFIG_DB_TLS,
-    NULL
+#define N(a) (sizeof(a) / sizeof(a[0]))
+
+struct cyrusdb {
+    const char *name;
+    struct cyrusdb_backend *env;
+    int archive;
+} dblist[] = {
+    { FNAME_MBOXLIST,		CONFIG_DB_MBOX,		1 },
+    { FNAME_DELIVERDB,		CONFIG_DB_DUPLICATE,	0 },
+    { FNAME_TLSSESSIONS,	CONFIG_DB_TLS,		0 },
+    { NULL,			NULL,			0 }
 };
 
-static int compptr(const void *v1, const void *v2)
+static int compdb(const void *v1, const void *v2)
 {
-    return (v1 - v2);
+    struct cyrusdb *db1 = (struct cyrusdb *) v1;
+    struct cyrusdb *db2 = (struct cyrusdb *) v2;
+
+    return (db1->env - db2->env);
 }
 
 void fatal(const char *message, int code)
@@ -114,10 +121,7 @@ void usage(void)
 }
 
 
-int
-main(argc, argv)
-     int argc;
-     char *argv[];
+int main(int argc, char *argv[])
 {
     extern char *optarg;
     int opt, r, r2;
@@ -125,8 +129,9 @@ main(argc, argv)
     int flag = 0;
     enum { RECOVER, CHECKPOINT, NONE } op = NONE;
     char dirname[1024], backup1[1024], backup2[1024];
+    char *archive_files[N(dblist)];
     char *msg = "";
-    int i;
+    int i, j, rotated = 0;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
     r = r2 = 0;
@@ -176,20 +181,29 @@ main(argc, argv)
     syslog(LOG_NOTICE, "%s", msg);
 
     /* sort dbenvs */
-    for (i = 0; dbenvs[i] != NULL; i++) ;
-    qsort(dbenvs, i, sizeof(struct db *), &compptr);
-    
-    for (i = 0; dbenvs[i] != NULL; i++) {
-	/* deal with each dbenv once */
-	if (dbenvs[i] == dbenvs[i+1]) continue;
+    qsort(dblist, N(dblist)-1, sizeof(struct cyrusdb), &compdb);
 
-	r = (dbenvs[i])->init(dirname, flag);
+    memset(archive_files, 0, N(dblist) * sizeof(char*));
+    for (i = 0, j = 0; dblist[i].name != NULL; i++) {
+
+	/* if we need to archive this db, add it to the list */
+	if (dblist[i].archive) {
+	    archive_files[j] = (char*) xmalloc(strlen(config_dir) +
+					       strlen(dblist[i].name) + 1);
+	    strcpy(archive_files[j], config_dir);
+	    strcat(archive_files[j++], dblist[i].name);
+	}
+
+	/* deal with each dbenv once */
+	if (dblist[i].env == dblist[i+1].env) continue;
+
+	r = (dblist[i].env)->init(dirname, flag);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: init %s: %s", dirname,
 		   cyrusdb_strerror(r));
 	    fprintf(stderr, 
 		    "ctl_cyrusdb: unable to init environment\n");
-	    dbenvs[i] = NULL;
+	    dblist[i].env = NULL;
 	    /* stop here, but we need to close all existing ones */
 	    break;
 	}
@@ -200,7 +214,7 @@ main(argc, argv)
 	    break;
 	    
 	case CHECKPOINT:
-	    r2 = (dbenvs[i])->sync();
+	    r2 = (dblist[i].env)->sync();
 	    if (r2) {
 		syslog(LOG_ERR, "DBERROR: sync %s: %s", dirname,
 		       cyrusdb_strerror(r));
@@ -208,11 +222,11 @@ main(argc, argv)
 			"ctl_cyrusdb: unable to sync environment\n");
 	    }
 
-#if 0
 	    /* ARCHIVE */
 	    r2 = 0;
 
-	    {
+	    if (!rotated) {
+		/* rotate the backup directories -- ONE time only */
 		char *tail;
 		DIR *dirp;
 		struct dirent *dirent;
@@ -241,11 +255,14 @@ main(argc, argv)
 		/* make a new db.backup1 */
 		if (r2 == 0 || errno == ENOENT)
 		    r2 = mkdir(backup1, 0755);
+
+		rotated = 1;
 	    }
 
 	    /* do the archive */
 	    if (r2 == 0)
-		r2 = (dbenvs[i])->archive(backup1);
+		r2 = (dblist[i].env)->archive((const char**) archive_files,
+					      backup1);
 
 	    if (r2) {
 		syslog(LOG_ERR, "DBERROR: archive %s: %s", dirname,
@@ -253,7 +270,6 @@ main(argc, argv)
 		fprintf(stderr, 
 			"ctl_cyrusdb: unable to archive environment\n");
 	    }
-#endif
 
 	    break;
 	    
@@ -261,7 +277,13 @@ main(argc, argv)
 	    break;
 	}
 
-	r2 = (dbenvs[i])->done();
+	/* free the archive_list */
+	while (j > 0) {
+	    free(archive_files[--j]);
+	    archive_files[j] = NULL;
+	}
+
+	r2 = (dblist[i].env)->done();
 	if (r2) {
 	    syslog(LOG_ERR, "DBERROR: done: %s", cyrusdb_strerror(r));
 	}

@@ -47,15 +47,12 @@
 #include <string.h>
 #include <errno.h>
 #include <stdlib.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <unistd.h>
-#include <fcntl.h>
 
 #include "cyrusdb.h"
 #include "exitcodes.h"
-#include "xmalloc.h"
-#include "retry.h"
+
+extern void fatal(const char *, int);
 
 /* --- cut here --- */
 /*
@@ -246,74 +243,11 @@ static int mysync(void)
     return 0;
 }
 
-static int copyfile(const char *srcname, const char *dstname)
-{
-    int srcfd, dstfd;
-    struct stat sbuf;
-    char *buf;
-    int bufsize, n;
-
-    if ((srcfd = open(srcname, O_RDONLY)) < 0) {
-	syslog(LOG_DEBUG, "error opening %s for reading", srcname);
-	return -1;
-    }
-
-    if (fstat(srcfd, &sbuf) < 0) {
-	syslog(LOG_DEBUG, "error fstating %s", srcname);
-	close(srcfd);
-	return -1;
-    }
-
-    if ((dstfd = open(dstname, O_WRONLY | O_CREAT, sbuf.st_mode)) < 0) {
-	syslog(LOG_DEBUG, "error opening %s for writing (%d)",
-	       dstname, sbuf.st_mode);
-	close(srcfd);
-	return -1;
-    }
-
-    bufsize = sbuf.st_blksize;
-    if ((buf = (char*) xmalloc(bufsize)) == NULL) {
-	syslog(LOG_DEBUG, "error allocing buf (%d)", bufsize);
-	close(srcfd);
-	close(dstfd);
-	return -1;
-    }
-
-    for (;;) {
-	n = read(srcfd, buf, bufsize);
-
-	if (n < 0) {
-	    if (errno == EINTR)
-		continue;
-
-	    syslog(LOG_DEBUG, "error reading buf (%d)", bufsize);
-	    close(srcfd);
-	    close(dstfd);
-	    unlink(dstname);
-	    return -1;
-	}
-
-	if (n == 0)
-	    break;
-
-	if (retry_write(dstfd, buf, n) != n) {
-	    syslog(LOG_DEBUG, "error writing buf (%d)", n);
-	    close(srcfd);
-	    close(dstfd);
-	    unlink(dstname);
-	    return -1;
-	}
-    }
-
-    close(srcfd);
-    close(dstfd);
-    return 0;
-}
-
-static int myarchive(const char *dirname)
+static int myarchive(const char **fnames, const char *dirname)
 {
     int r;
     char **begin, **list;
+    const char **fname;
     char dstname[1024], *dp;
 
     strcpy(dstname, dirname);
@@ -340,6 +274,7 @@ static int myarchive(const char *dirname)
     }
 
     /* Get the list of database files to archive. */
+    /* XXX  Should we do this, or just use the list given to us? */
     r = log_archive(dbenv, &list, DB_ARCH_ABS | DB_ARCH_DATA, NULL);
     if (r) {
 	syslog(LOG_ERR, "DBERROR: error listing database files: %s",
@@ -348,13 +283,20 @@ static int myarchive(const char *dirname)
     }
     if (list != NULL) {
 	for (begin = list; *list != NULL; ++list) {
-	    syslog(LOG_DEBUG, "archiving database file: %s", *list);
-	    strcpy(dp, strrchr(*list, '/'));
-	    r = copyfile(*list, dstname);
-	    if (r) {
-		syslog(LOG_ERR, "DBERROR: error archiving database file: %s",
-		       *list);
-		return CYRUSDB_IOERROR;
+	    /* only archive those files specified by the app */
+	    for (fname = fnames; *fname != NULL; ++fname) {
+		if (!strcmp(*list, *fname)) break;
+	    }
+	    if (*fname) {
+		syslog(LOG_DEBUG, "archiving database file: %s", *fname);
+		strcpy(dp, strrchr(*fname, '/'));
+		r = cyrusdb_copyfile(*fname, dstname);
+		if (r) {
+		    syslog(LOG_ERR,
+			   "DBERROR: error archiving database file: %s",
+			   *fname);
+		    return CYRUSDB_IOERROR;
+		}
 	    }
 	}
 	free (begin);
@@ -371,7 +313,7 @@ static int myarchive(const char *dirname)
 	for (begin = list; *list != NULL; ++list) {
 	    syslog(LOG_DEBUG, "archiving log file: %s", *list);
 	    strcpy(dp, strrchr(*list, '/'));
-	    r = copyfile(*list, dstname);
+	    r = cyrusdb_copyfile(*list, dstname);
 	    if (r) {
 		syslog(LOG_ERR, "DBERROR: error archiving log file: %s",
 		       *list);
@@ -437,7 +379,8 @@ static int gettid(struct txn **mytid, DB_TXN **tid, char *where)
   	    assert((txn_id((DB_TXN *)*mytid) != 0));
 	    *tid = (DB_TXN *) *mytid;
 	    if (CONFIG_DB_VERBOSE)
-		syslog(LOG_DEBUG, "%s: reusing txn %lu", where, txn_id(*tid));
+		syslog(LOG_DEBUG, "%s: reusing txn %lu", where,
+		       (unsigned long) txn_id(*tid));
 	} else {
 	    r = txn_begin(dbenv, NULL, tid, 0);
 	    if (r != 0) {
@@ -446,7 +389,8 @@ static int gettid(struct txn **mytid, DB_TXN **tid, char *where)
 		return CYRUSDB_IOERROR;
 	    }
 	    if (CONFIG_DB_VERBOSE)
-		syslog(LOG_DEBUG, "%s: starting txn %lu", where, txn_id(*tid));
+		syslog(LOG_DEBUG, "%s: starting txn %lu", where,
+		       (unsigned long) txn_id(*tid));
 	}
 	*mytid = (struct txn *) *tid;
     }
@@ -724,7 +668,8 @@ static int mystore(struct db *mydb,
 	    return CYRUSDB_IOERROR;
 	}
 	if (CONFIG_DB_VERBOSE)
-	    syslog(LOG_DEBUG, "mystore: starting txn %lu", txn_id(tid));
+	    syslog(LOG_DEBUG, "mystore: starting txn %lu",
+		   (unsigned long) txn_id(tid));
     }
     r = db->put(db, tid, &k, &d, putflags);
     if (!mytid) {
@@ -733,7 +678,8 @@ static int mystore(struct db *mydb,
 	    int r2;
 
 	    if (CONFIG_DB_VERBOSE)
-		syslog(LOG_DEBUG, "mystore: aborting txn %lu", txn_id(tid));
+		syslog(LOG_DEBUG, "mystore: aborting txn %lu",
+		       (unsigned long) txn_id(tid));
 	    r2 = txn_abort(tid);
 	    if (r2) {
 		syslog(LOG_ERR, "DBERROR: mystore: error aborting txn: %s", 
@@ -746,7 +692,8 @@ static int mystore(struct db *mydb,
 	    }
 	} else {
 	    if (CONFIG_DB_VERBOSE)
-		syslog(LOG_DEBUG, "mystore: committing txn %lu", txn_id(tid));
+		syslog(LOG_DEBUG, "mystore: committing txn %lu",
+		       (unsigned long) txn_id(tid));
 	    r = txn_commit(tid, txnflags);
 	}
     }
@@ -831,7 +778,8 @@ static int mydelete(struct db *mydb,
 	    return CYRUSDB_IOERROR;
 	}
 	if (CONFIG_DB_VERBOSE)
-	    syslog(LOG_DEBUG, "mydelete: starting txn %lu", txn_id(tid));
+	    syslog(LOG_DEBUG, "mydelete: starting txn %lu",
+		   (unsigned long) txn_id(tid));
     }
     r = db->del(db, tid, &k, 0);
     if (!mytid) {
@@ -839,7 +787,8 @@ static int mydelete(struct db *mydb,
 	if (r) {
 	    int r2;
 	    if (CONFIG_DB_VERBOSE)
-		syslog(LOG_DEBUG, "mydelete: aborting txn %lu", txn_id(tid));
+		syslog(LOG_DEBUG, "mydelete: aborting txn %lu",
+		       (unsigned long) txn_id(tid));
 	    r2 = txn_abort(tid);
 	    if (r2) {
 		syslog(LOG_ERR, "DBERROR: mydelete: error aborting txn: %s", 
@@ -852,7 +801,8 @@ static int mydelete(struct db *mydb,
 	    }
 	} else {
 	    if (CONFIG_DB_VERBOSE)
-		syslog(LOG_DEBUG, "mydelete: committing txn %lu", txn_id(tid));
+		syslog(LOG_DEBUG, "mydelete: committing txn %lu",
+		       (unsigned long) txn_id(tid));
 	    r = txn_commit(tid, txnflags);
 	}
     }
@@ -896,7 +846,8 @@ static int mycommit(struct db *db, struct txn *tid, int txnflags)
     assert(dbinit && tid);
 
     if (CONFIG_DB_VERBOSE)
-	syslog(LOG_DEBUG, "mycommit: committing txn %lu", txn_id(t));
+	syslog(LOG_DEBUG, "mycommit: committing txn %lu",
+	       (unsigned long) txn_id(t));
     r = txn_commit(t, txnflags);
     switch (r) {
     case 0:
@@ -933,10 +884,12 @@ static int abort_txn(struct db *db, struct txn *tid)
     assert(dbinit && tid);
 
     if (CONFIG_DB_VERBOSE)
-	syslog(LOG_DEBUG, "abort_txn: aborting txn %lu", txn_id(t));
+	syslog(LOG_DEBUG, "abort_txn: aborting txn %lu",
+	       (unsigned long) txn_id(t));
     r = txn_abort(t);
     if (r != 0) {
-	syslog(LOG_ERR, "DBERROR: abort_txn: error aborting txn: %s", db_strerror(r));
+	syslog(LOG_ERR, "DBERROR: abort_txn: error aborting txn: %s",
+	       db_strerror(r));
 	return CYRUSDB_IOERROR;
     }
 
