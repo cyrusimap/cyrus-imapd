@@ -254,6 +254,8 @@ named \fImailbox\fR.  The optional \fIpartition\fR argument
 specifies the partition name on which to create the mailbox.
 .IP "\fBdeletemailbox \fImailbox\fR" 5
 The \fBdeletemailbox\fR (or \fBdm\fR) command deletes the named mailbox.
+Since administrators don't have explicit delete rights use \fBsetaclmailbox\fR 
+to give delete rights before trying to delete a user's mailbox.
 .IP "\fBrenamemailbox \fImailbox newmailbox\fR [\fIpartition\fR]" 5
 The \fBrenamemailbox\fR (or \fBrenm\fR) command renames the named
 mailbox to \fInewmailbox\fR.  The optional
@@ -267,18 +269,22 @@ reference name relative to which \fIpattern\fR is then interpreted.
 .IP
 Two wildcard characters are defined in \fIpattern\fR.  The ``*''
 wildcard matches zero or more characters.  The ``%'' wildcard is like
-the ``*'' wildcard except that it will not match the hierarchy
-separator, ``.''.  In some cases, where ``%'' is used as the last
+the ``*'' wildcard except that it treats each string delimited by
+the ``.'' as a separate unit.  If ``listmailbox user.foo.%'' is specified,
+and the mailboxes ``user.foo.bar.'' and ``user.foo.bar.old'' both exist,
+then ``user.foo.bar'' is listed, but ``user.foo.bar.old'' is not. When you
+use the ``%'' wildcard, be aware that related mailboxes with differing numbers
+of delimited strings may not appear in the list.
+.IP
+In some cases, where ``%'' is used as the last
 character of a pattern, non-mailbox names are listed in parentheses.
 This indicates that the name is not actually a mailbox, yet there
-exist sub-mailboxes underneath that name.
+are sub-mailboxes underneath that name.
 .IP "\fBsetaclmailbox \fImailbox identifier rights\fR [\fIidentifier rights\fR]..." 5
 The \fBsetaclmailbox\fR (or \fBsam\fR) command modifies the access
 control list of the mailbox \fImailbox\fR.  One or more
 \fIidentifier\fR-\fIrights\fR pairs may be given after
 \fImailbox\fR, each sets the ACL for \fIidentifier\fR to \fIrights\fR.
-Since administrators don't have explicit delete rights use \fBsetaclmailbox\fR 
-to give delete rights before trying to delete a user's mailbox.
 .IP
 \fIRights\fR may be a set of access right letters:
 .RS 4 
