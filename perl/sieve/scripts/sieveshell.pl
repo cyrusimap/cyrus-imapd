@@ -111,17 +111,30 @@ sub prompt {
   return $b;
 }
 
+my $puthelp =        "put <filename>   - upload script to server\n";
+my $gethelp =        "get <name> [<filename>]\n" .
+                     "                 - get script. if no filename display to stdout\n";
+my $activatehelp =   "activate <name>  - set a script as the active script\n";
+my $deactivatehelp = "deactivate       - deactivate all scripts\n";
+my $deletehelp =     "delete <name>    - delete script.\n";
+
 sub show_help {
   print "Usage:\n";
   print "  sieveshell [-u username] [-a authname] [-r realm] <server>\n";
   print "\n";
   print "help             - this screen\n";
   print "list             - list scripts on server\n";
-  print "put <filename>   - upload script to server (implicitly set active if no active script)\n";
-  print "get <name> [<filename>] - get script. if no filename display to stdout\n";
-  print "delete <name>    - delete script.\n";
-  print "activate <name>  - set a script as the active script\n";
-  print "quit             - Quit\n";
+  print $puthelp;
+  print $gethelp;
+  print $deletehelp;
+  print $activatehelp;
+  print $deactivatehelp;
+  print "quit             - quit\n";
+}
+
+sub getline {
+    print "> " if ($interactive);
+    return <$filehandle>;
 }
 
 # main code
@@ -136,18 +149,19 @@ if (!defined $obj) {
     die "unable to connect to server: $err";
 }
 
-print "> " if ($interactive);
-
-while(<$filehandle>) {
+while($_ = getline()) {
     my @words = split ' ',$_;
     my $str;
     if ($#words < 0) {
-	print "> " if ($interactive);
 	next;
     }
 
     if (($words[0] eq "put") || 
 	($words[0] eq "p")) {
+	if ($#words != 1) {
+	    print $puthelp;
+	    next;
+	}
 	$ret = sieve_put_file($obj, $words[1]);
 	if ($ret != 0) { 
 	    my $errstr = sieve_get_error($obj);
@@ -163,13 +177,32 @@ while(<$filehandle>) {
 	}
     } elsif (($words[0] eq "activate") || 
 	     ($words[0] eq "a")) {
+	if ($#words != 1) {
+	    print $activatehelp;
+	    next;
+	}
 	$ret = sieve_activate($obj, $words[1]);
 	if ($ret != 0) { 
 	    my $errstr = sieve_get_error($obj);
 	    print "activate failed: $errstr\n";
 	}
+    } elsif (($words[0] eq "deactivate") || 
+	     ($words[0] eq "da")) {
+	if ($#words != 0) {
+	    print $deactivatehelp;
+	    next;
+	}
+	$ret = sieve_activate($obj, "");
+	if ($ret != 0) { 
+	    my $errstr = sieve_get_error($obj);
+	    print "deactivate failed: $errstr\n";
+	}
     } elsif (($words[0] eq "delete") || 
 	     ($words[0] eq "d")) {    
+	if ($#words != 1) {
+	    print $deletehelp;
+	    next;
+	}
 	$ret = sieve_delete($obj, $words[1]);
 	if ($ret != 0) { 
 	    my $errstr = sieve_get_error($obj);
@@ -177,6 +210,10 @@ while(<$filehandle>) {
 	}
     } elsif (($words[0] eq "get") || 
 	     ($words[0] eq "g")) {
+	if ($#words != 1 && $#words != 2) {
+	    print $gethelp;
+	    next;
+	}
 	$str = "";
 	$ret = sieve_get($obj, $words[1], $str);
 	if ($ret != 0) { 
@@ -198,6 +235,4 @@ while(<$filehandle>) {
     } else {
 	print "Invalid command: $words[0]\n";
     } 
-    
-    print "> " if ($interactive);
 }
