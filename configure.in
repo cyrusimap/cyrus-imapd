@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.263 2003/05/08 14:47:55 rjs3 Exp $
+dnl $Id: configure.in,v 1.264 2003/05/12 14:17:54 rjs3 Exp $
 dnl
 
 
@@ -792,7 +792,7 @@ case "$with_com_err" in
      COM_ERR_CPPFLAGS="-I${with_com_err}/include"
      # Ever get the feeling people hide this stuff on purpose?
      if test -d "${with_com_err}/include/et" ; then
-       COM_ERR_CPPFLAGS="-I${with_com_err}/include"
+       COM_ERR_CPPFLAGS="-I${with_com_err}/include/et"
      fi
 dnl     CMU_ADD_LIBPATH_TO(${with_com_err}/lib, COM_ERR_LDFLAGS)
      COMPILE_ET="${with_com_err}/bin/compile_et"
