@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.75 2001/10/02 21:08:10 ken3 Exp $
+ * $Id: lmtpd.c,v 1.76 2001/11/13 19:59:18 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.75 2001/10/02 21:08:10 ken3 Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.76 2001/11/13 19:59:18 leg Exp $";*/
 
 #include <config.h>
 
@@ -96,6 +96,7 @@
 #include "notify.h"
 #include "idle.h"
 #include "rfc822date.h"
+#include "tls.h"
 
 #include "lmtpengine.h"
 #include "lmtpstats.h"
