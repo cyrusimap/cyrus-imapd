@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.251 2000/06/04 22:28:15 leg Exp $ */
+/* $Id: imapd.c,v 1.252 2000/06/06 00:52:59 leg Exp $ */
 
 #include <config.h>
 
@@ -4812,10 +4812,13 @@ signed char **sortcrit;
 
 	/* If we haven't seen this criterion before, set it's mask bit
 	   so we ignore it the next time, and increment the counter */
-	if (!(sortcrit_mask & (1 << abs((*sortcrit)[n]))))
-	    sortcrit_mask |= (1 << abs((*sortcrit)[n++]));
-	else  /* otherwise ignore it and reset the order to forward */
+	if (!(sortcrit_mask & (1 << abs((*sortcrit)[n])))) {
+	    sortcrit_mask |= (1 << abs((*sortcrit)[n]));
+	    n++;
+	} else {
+	    /* otherwise ignore it and reset the order to forward */
 	    (*sortcrit)[n] = 1;
+	}
 
 nextcrit:
 	if (c == ' ') c = getword(&arg);
