@@ -2,7 +2,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.32 1998/09/18 19:27:13 wcw Exp $
+# $Id: SMakefile,v 1.33 1999/01/11 00:03:38 tjs Exp $
 #
 
 MAKE=gmake
@@ -21,35 +21,37 @@ VER=`smake -D | sed 's;^.*\/;;'`
 LOCALDEFS="-DEXTRA_IDENT=\\\"$VER\\\""
 
 # Ryan's aggressive optimizations
-case `uname` in
-  Linux) CFLAGS="${CFLAGS} -O3 -g"
-	 LDFLAGS="${LDFLAGS}"
-	 AMSSYNC="" # this might actually build now, but we don't need it
-	 ;;
+if test "${OVERIDE-no}" != "no" ; then
+  case `uname` in	
+    Linux) CFLAGS="${CFLAGS} -O3 -g"
+	   LDFLAGS="${LDFLAGS}"
+	   AMSSYNC="" # this might actually build now, but we don't need it
+	   ;;
   IRIX) CFLAGS="${CFLAGS} -O2"
 	LDFLAGS="${LDFLAGS}"
         #LDFLAGS="-L/usr/local/lib -Wl,-rpath,/usr/local/lib"
         #export LDFLAGS
 	AMSSYNC=""
 	;;
-  HP-UX)  
-	CC=gcc # hp cc can't handle Cyrus
-	CFLAGS="${CFLAGS} -O2"
-	;;
-  SunOS) # these flags are only for solaris
-	 # -xs: generate debugging information that gdb likes
-	 CFLAGS="${CFLAGS} -xO3 "
-	 LDFLAGS="${LDFLAGS} -xs -xO3"
-	 ;;
-  ULTRIX)  
-	CC=gcc # cheat -- Ultrix cc is aged
-	CFLAGS="${CFLAGS} -O"
-	WITHAUTH=""
-	AMSSYNC=""
-	;;
-  *)    
-	;;
-esac
+  HP-UX)
+    CC=gcc # hp cc can't handle Cyrus
+    CFLAGS="${CFLAGS} -O2"
+    ;;
+    SunOS) # these flags are only for solaris
+	   # -xs: generate debugging information that gdb likes
+	   CFLAGS="${CFLAGS} -xO3 "
+	   LDFLAGS="${LDFLAGS} -xs -xO3"
+	   ;;
+    ULTRIX)  
+      CC=gcc # cheat -- Ultrix cc is aged
+      CFLAGS="${CFLAGS} -O"
+      WITHAUTH=""
+      AMSSYNC=""
+      ;;
+    *)    
+      ;;
+  esac
+fi;
 
 
 LNCOMMAND="${SRCDIR}/configure $WITHAUTH --with-inn=/usr/news $AMSSYNC --enable-experiment --enable-cmulocal --enable-debug --with-cyrus-group=staff"
