@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.85 2002/03/13 21:39:16 ken3 Exp $
+ * $Id: append.c,v 1.86 2002/03/14 22:02:59 leg Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -437,7 +437,7 @@ int append_fromstage(struct appendstate *as,
     FILE *f;
     int sp;
 
-    assert(stage != NULL);
+    assert(stage != NULL && stage->parts[0][0] != '\0');
     assert(mailbox->format == MAILBOX_FORMAT_NORMAL);
     assert(size != 0);
 
@@ -454,8 +454,11 @@ int append_fromstage(struct appendstate *as,
     }
     if (stage->parts[sp][0] == '\0') {
 	/* ok, create this file and add put it into stage->parts[sp] */
-	f = fopen(stagefile, "w+");
-	if (!f) {
+
+	/* create the new staging file */
+	r = mailbox_copyfile(stage->parts[0], stagefile);
+	if (r) {
+	    /* maybe the directory doesn't exist? */
 	    char stagedir[1024];
 
 	    mboxlist_findstage(mailbox->name, stagedir);
@@ -465,18 +468,14 @@ int append_fromstage(struct appendstate *as,
 	    } else {
 		syslog(LOG_NOTICE, "created stage directory %s",
 		       stagedir);
-		f = fopen(stagefile, "w+");
+		r = mailbox_copyfile(stage->parts[0], stagefile);
 	    }
-	} 
-	if (!f) {
+	}
+	if (r) {
+	    /* oh well, we tried */
+
 	    syslog(LOG_ERR, "IOERROR: creating message file %s: %m", 
 		   stagefile);
-	    return IMAP_IOERROR;
-	}
-	
-	r = message_copy_strict(messagefile, f, size);
-	fclose(f);
-	if (r) {
 	    unlink(stagefile);
 	    return r;
 	}
@@ -515,8 +514,9 @@ int append_fromstage(struct appendstate *as,
 	r = message_parse_file(destfile, mailbox, &message_index);
     }
     if (destfile) {
-	/* this will hopefully ensure that the link() actually happened */
-	if (APPEND_ULTRA_PARANOID) fsync(fileno(destfile));
+	/* this will hopefully ensure that the link() actually happened
+	   and makes sure that the file actually hits disk */
+	fsync(fileno(destfile));
 	fclose(destfile);
     }
     if (r) {
