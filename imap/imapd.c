@@ -3510,8 +3510,7 @@ int maycreate;
 
     c = name[matchlen];
     name[matchlen] = '\0';
-    prot_printf(imapd_out, "* %s (%s) \".\" ", cmd,
-	   name[matchlen] ? "\\Noselect" : "");
+    prot_printf(imapd_out, "* %s (%s) \".\" ", cmd, c ? "\\Noselect" : "");
     printastring(name);
     prot_printf(imapd_out, "\r\n");
     name[matchlen] = c;
