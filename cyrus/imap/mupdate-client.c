@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.33 2002/08/13 16:46:33 rjs3 Exp $
+ * $Id: mupdate-client.c,v 1.34 2002/11/19 19:32:31 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -198,7 +198,7 @@ static int mupdate_authenticate(mupdate_handle *h,
 				      &out, &outlen);
 	free(in);
 
-	if((saslresult == SASL_OK || saslresult == SASL_CONTINUE) && out) {
+	if((saslresult == SASL_OK || saslresult == SASL_CONTINUE)) {
 	    int r = sasl_encode64(out, outlen,
 				  buf, sizeof(buf), NULL);
 	    if(r != SASL_OK) return 1;
