@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.55 2002/04/08 20:10:12 rjs3 Exp $
+ * $Id: mupdate.c,v 1.56 2002/04/11 16:05:00 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -248,19 +248,26 @@ static void conn_free(struct conn *C)
 /* should we allow users to proxy?  return SASL_OK if yes,
    SASL_BADAUTH otherwise */
 static int mysasl_authproc(sasl_conn_t *conn,
-			   void *context,
-			   const char *requested_user, unsigned rlen,
+			   void *context __attribute__((unused)),
+			   const char *requested_user __attribute__((unused)),
+			   unsigned rlen __attribute__((unused)),
 			   const char *auth_identity, unsigned alen,
-			   const char *def_realm, unsigned urlen,
-			   struct propctx *propctx)
+			   const char *def_realm __attribute__((unused)),
+			   unsigned urlen __attribute__((unused)),
+			   struct propctx *propctx __attribute__((unused)))
 {
     const char *val;
     char *realm;
     int allowed=0;
     struct auth_state *authstate;
+    char auth_id_buf[4096];
+    
+    if(alen > sizeof(auth_id_buf)-1) return SASL_BUFOVER;
+    memcpy(auth_id_buf, auth_identity, alen);
+    auth_id_buf[alen] = '\0';
 
     /* check if remote realm */
-    if ((realm = strchr(auth_identity, '@'))!=NULL) {
+    if ((realm = strchr(auth_id_buf, '@'))!=NULL) {
 	realm++;
 	val = config_getstring("loginrealms", "");
 	while (*val) {
@@ -274,7 +281,7 @@ static int mysasl_authproc(sasl_conn_t *conn,
 	}
 	if (!*val) {
 	    sasl_seterror(conn, 0, "cross-realm login %s denied",
-			  auth_identity);
+			  auth_id_buf);
 	    return SASL_BADAUTH;
 	}
     }
@@ -282,7 +289,7 @@ static int mysasl_authproc(sasl_conn_t *conn,
     /* ok, is auth_identity an admin? 
      * for now only admins can do mupdate from another machine
      */
-    authstate = auth_newstate(auth_identity, NULL);
+    authstate = auth_newstate(auth_id_buf, NULL);
     allowed = authisa(authstate, "mupdate", "admins");
     auth_freestate(authstate);
     
@@ -304,7 +311,8 @@ static struct sasl_callback mysasl_cb[] = {
  * run once when process is forked;
  * MUST NOT exit directly; must return with non-zero error code
  */
-int service_init(int argc, char **argv, char **envp)
+int service_init(int argc, char **argv,
+		 char **envp __attribute__((unused)))
 {
     int r;
     int opt;
@@ -771,7 +779,10 @@ void *start(void *rock)
 /*
  * run for each accepted connection
  */
-int service_main_fd(int fd, int argc, char **argv, char **envp)
+int service_main_fd(int fd,
+		    int argc __attribute__((unused)),
+		    char **argv __attribute__((unused)),
+		    char **envp __attribute__((unused)))
 {
     /* spawn off a thread to handle this connection */
     pthread_t t;
@@ -1089,7 +1100,10 @@ void cmd_find(struct conn *C, const char *tag, const char *mailbox, int dook)
 
 /* Callback for cmd_startupdate to be passed to mboxlist_findall. */
 /* Requires that C->streaming be set to the tag to respond with */
-static int sendupdate(char *name, int matchlen, int maycreate, void *rock)
+static int sendupdate(char *name,
+		      int matchlen __attribute__((unused)),
+		      int maycreate __attribute__((unused)),
+		      void *rock)
 {
     struct conn *C = (struct conn *)rock;
     struct mbent *m;
@@ -1157,7 +1171,7 @@ void cmd_list(struct conn *C, const char *tag, const char *host_prefix)
  * we've registered this connection for streaming, and every X seconds
  * this will be invoked.  note that we always send out updates as soon
  * as we get a noop: that resets this counter back */
-struct prot_waitevent *sendupdates_evt(struct protstream *s, 
+struct prot_waitevent *sendupdates_evt(struct protstream *s __attribute__((unused)), 
 				       struct prot_waitevent *ev,
 				       void *rock)
 {
@@ -1275,7 +1289,7 @@ static int reset_saslconn(struct conn *c)
 }
 
 int cmd_change(struct mupdate_mailboxdata *mdata,
-	       const char *rock, void *context)
+	       const char *rock, void *context __attribute__((unused)))
 {
     struct mbent *m = NULL;
     struct conn *upc = NULL;
@@ -1438,7 +1452,10 @@ int cmd_resync(struct mupdate_mailboxdata *mdata,
 }
 
 /* Callback for mupdate_synchronize to be passed to mboxlist_findall. */
-static int sync_findall_cb(char *name, int matchlen, int maycreate, void *rock)
+static int sync_findall_cb(char *name,
+			   int matchlen __attribute((unused)),
+			   int maycreate __attribute__((unused)),
+			   void *rock)
 {
     struct sync_rock *r = (struct sync_rock *)rock;
     struct mbent_queue *local_boxes = (struct mbent_queue *)r->boxes;
