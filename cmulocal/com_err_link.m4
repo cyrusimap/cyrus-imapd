@@ -109,6 +109,10 @@ AC_ARG_WITH(comerr-include,
 	  COMERR_LIB_DIR=$ac_cv_comerr_where_lib
 	  COMERR_INC_FLAGS="-I${COMERR_INC_DIR}"
 	  COMERR_LIB_FLAGS="-L${COMERR_LIB_DIR} -lcom_err"
+          dnl Do not force configure.in to put these in CFLAGS and LIBS unconditionally
+          dnl Allow makefile substitutions....
+          AC_SUBST(COMERR_INC_FLAGS)
+          AC_SUBST(COMERR_LIB_FLAGS)
 	  if test "X$RPATH" = "X"; then
 		RPATH=""
 	  fi
