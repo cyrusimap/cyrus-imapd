@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.75 2000/08/21 21:40:38 leg Exp $
+ * $Id: append.c,v 1.76 2000/09/19 23:08:09 leg Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -80,10 +80,6 @@ static int append_addseen(struct mailbox *mailbox, const char *userid,
 static void addme(char **msgrange, int *alloced, long uid);
 
 #define zero_index(i) { memset(&i, 0, sizeof(struct index_record)); }
-
-enum {
-    ULTRA_PARANOID = 1
-};
 
 /*
  * Open a mailbox for appending
@@ -420,7 +416,7 @@ int append_fromstage(struct appendstate *as,
     }
     if (destfile) {
 	/* this will hopefully ensure that the link() actually happened */
-	if (ULTRA_PARANOID) fsync(fileno(destfile));
+	if (APPEND_ULTRA_PARANOID) fsync(fileno(destfile));
 	fclose(destfile);
     }
     if (r) {
