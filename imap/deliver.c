@@ -35,7 +35,7 @@
 #include <syslog.h>
 #include <com_err.h>
 #include <errno.h>
-#ifdef NEWDB
+#ifdef HAVE_LIBDB
 #include <db.h>
 #else
 #include <ndbm.h>
@@ -905,7 +905,7 @@ char *buf;
     }
 }
 
-#ifdef NEWDB
+#ifdef HAVE_LIBDB
 static DB	*DeliveredDBptr;
 #else
 static DBM	*DeliveredDBptr;
@@ -914,7 +914,7 @@ static DBM	*DeliveredDBptr;
 checkdelivered(id, to)
 char *id, *to;
 {
-#ifdef NEWDB
+#ifdef HAVE_LIBDB
     static int initialized = 0;
     char buf[MAX_MAILBOX_PATH];
     DBT date, delivery;
@@ -939,7 +939,7 @@ char *id, *to;
     delivery.size = strlen(id) + strlen(to) + 1;
     i = DeliveredDBptr->get(DeliveredDBptr, &delivery, &date, 0);
     return (i == 0);
-#else /* NEWDB */
+#else /* HAVE_LIBDB */
     static int initialized = 0;
     char buf[MAX_MAILBOX_PATH];
     datum date, delivery;
@@ -962,7 +962,7 @@ char *id, *to;
     delivery.dsize = strlen(id) + strlen(to) + 1;
     date = dbm_fetch(DeliveredDBptr, delivery);
     return (date.dptr != 0);
-#endif /* NEWDB */
+#endif /* HAVE_LIBDB */
 }
 
 markdelivered(id, to)
@@ -971,9 +971,9 @@ char *id, *to;
     char buf[MAX_MAILBOX_PATH];
     int lockfd;
     char datebuf[40];
-#ifdef NEWDB
+#ifdef HAVE_LIBDB
     DBT date, delivery;
-#else /* NEWDB */
+#else /* HAVE_LIBDB */
     datum date, delivery;
 #endif
 
@@ -996,7 +996,7 @@ char *id, *to;
 	return;
     }
 
-#ifdef NEWDB
+#ifdef HAVE_LIBDB
     sprintf(buf, "%s%c%s", id, '\0', to);
     delivery.data = buf;
     delivery.size = strlen(id) + strlen(to) + 1;
@@ -1006,7 +1006,7 @@ char *id, *to;
     date.size = strlen(datebuf);
 
     (void) DeliveredDBptr->put(DeliveredDBptr, delivery, date, R_OVERWRITE);
-#else /* NEWDB */
+#else /* HAVE_LIBDB */
     sprintf(buf, "%s%c%s", id, '\0', to);
     delivery.dptr = buf;
     delivery.dsize = strlen(id) + strlen(to) + 1;
@@ -1016,7 +1016,7 @@ char *id, *to;
     date.dsize = strlen(datebuf);
 
     (void) dbm_store(DeliveredDBptr, delivery, date, DBM_REPLACE);
-#endif /* NEWDB */
+#endif /* HAVE_LIBDB */
 
     close(lockfd);
 }
@@ -1027,9 +1027,9 @@ int age;
     char buf[MAX_MAILBOX_PATH];
     int lockfd;
     int rcode = 0;
-#ifdef NEWDB
+#ifdef HAVE_LIBDB
 not written
-#else /* NEWDB */
+#else /* HAVE_LIBDB */
     char datebuf[40];
     int len;
     datum date, delivery;
@@ -1063,9 +1063,9 @@ not written
 	return 1;
     }
 
-#ifdef NEWDB
+#ifdef HAVE_LIBDB
 not written
-#else /* NEWDB */
+#else /* HAVE_LIBDB */
     sprintf(datebuf, "%d", time(0) - age*60*60*24);
     len = strlen(datebuf);
 
@@ -1082,7 +1082,7 @@ not written
     }
     dbm_close(DeliveredDBptr);
 
-#endif /* NEWDB */
+#endif /* HAVE_LIBDB */
     close(lockfd);
 
     return rcode;
