@@ -13,7 +13,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.78 1998/05/12 01:10:26 tjs Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.79 1998/05/12 22:37:02 wcw Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -191,8 +191,8 @@ usage()
 {
     fprintf(stderr, 
 "421-4.3.0 usage: deliver [-m mailbox] [-a auth] [-i] [-F flag]... [user]...\r\n");
-    fprintf(stderr, "421 4.3.0        deliver -I age\n");
-    fprintf(stderr, "421 4.3.0 %s", CYRUS_VERSION);
+    fprintf(stderr, "421 4.3.0        deliver -E age\n");
+    fprintf(stderr, "421 4.3.0 %s\n", CYRUS_VERSION);
     exit(EX_USAGE);
 }
 
@@ -1155,8 +1155,10 @@ int age;
   datum date, delivery;
 #endif
 
-  if (age < 1)
+  if (age < 0)
     fatal("must specify positive number of days", EX_USAGE);
+
+  /* we allow age == 0 to nuke all current entries */
 
   sprintf(datebuf, "%d", time(0) - age*60*60*24);
   len = strlen(datebuf);
@@ -1196,12 +1198,12 @@ int age;
       (void)memcpy(deletions[num_deletions].data, delivery.data, delivery.size);
       num_deletions++;
       if (logdebug) {
-	/* delivery.data should be a string the form of  "<from>\0<to>\0" 
+	/* delivery.data should be a string the form of  "<msgid>\0<to>\0" 
 	 */
 	char *ptr;
 	char *datebuf[40];
 	      
-	ptr += (strlen(delivery.data) + 1); 
+	ptr = ((char *)delivery.data + (strlen(delivery.data) + 1)); 
 	(void)memcpy(datebuf, date.data, date.size);
 	datebuf[date.size] = '\0';
 	syslog(LOG_DEBUG, "prunedelivered: marking %s/%s at %s for deletion\n",
