@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.43 2002/02/04 04:53:32 leg Exp $
+ * $Id: mupdate.c,v 1.44 2002/02/05 02:20:57 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -427,7 +427,7 @@ void cmdloop(struct conn *c)
 	    
 	    if ((err = prot_error(c->pin)) != NULL) {
 		syslog(LOG_WARNING, "%s, closing connection", err);
-		prot_printf(c->pout, "* BYE %s\r\n", err);
+		prot_printf(c->pout, "* BYE \"%s\"\r\n", err);
 	    }
 	    goto done;
 	}

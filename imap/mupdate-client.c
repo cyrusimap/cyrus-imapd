@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.20 2002/02/02 21:24:04 leg Exp $
+ * $Id: mupdate-client.c,v 1.21 2002/02/05 02:20:57 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -614,11 +614,12 @@ int mupdate_scarf(mupdate_handle *handle,
 	} else {
 	    prot_NONBLOCK(handle->pin);
 	}
+
 	ch = getword(handle->pin, &(handle->tag));
 	if (ch == EOF && errno == EAGAIN) {
 	    /* this was just "no input" we return 0 */
 	    goto done;
-	} else {
+	} else if (ch == EOF) {
 	    /* this was a fatal error */
 	    r = MUPDATE_NOCONN;
 	    goto done;
