@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.24 2002/01/22 22:31:52 rjs3 Exp $
+ * $Id: mupdate.c,v 1.25 2002/01/23 17:06:51 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -858,16 +858,18 @@ void database_log(const struct mbent *new)
 }
 
 /* probabilistically compress database log.
- database must be locked. */
+   database must be locked. */
 void database_compress()
 {
+    char dbname[1024];
+    int items = skiplist_items(mailboxes);
+    FILE *db;
+
     /* 2 chances in # of items */
-    if ((rand() % skiplist_items(mailboxes)) < 2) {
+    if (items && (rand() % items) < 2) {
 	/* do the compression */
 
 	char dbnamenew[1024];
-	char dbname[1024];
-	FILE *db;
 	skipnode *ptr;
 	struct mbent *m;
 
@@ -913,6 +915,16 @@ void database_compress()
 	    syslog(LOG_CRIT, "unable to open logfile %s: %m", dbname);
 	    abort();
 	}
+    } else if (!items) {
+	/* No items, truncate the file */
+	snprintf(dbname, sizeof dbname, "%s/%s", config_dir, "mupdate.log");
+	db = fopen(dbname, "w");
+	if (db == NULL) {
+	    syslog(LOG_ERR, "can't compress database: open(%s): %m", 
+		   dbname);
+	    return;
+	}
+	fclose(db);
     }
 }
 
