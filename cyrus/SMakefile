@@ -2,7 +2,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.28 1998/07/07 19:00:23 tjs Exp $
+# $Id: SMakefile,v 1.29 1998/07/10 19:39:09 tjs Exp $
 #
 
 MAKE=gmake
@@ -22,23 +22,25 @@ LOCALDEFS="-DEXTRA_IDENT=\\\"$VER\\\""
 
 # Ryan's aggressive optimizations
 case `uname` in
-   Linux) CFLAGS="${CFLAGS} -O3"
-	AMSSYNC=""
-	;;
+  Linux) CFLAGS="${CFLAGS} -O3"
+	 LDFLAGS="${LDFLAGS}"
+	 AMSSYNC="" # this might actually build now, but we don't need it
+	 ;;
   IRIX) CFLAGS="${CFLAGS} -O2"
+	LDFLAGS="${LDFLAGS}"
         #LDFLAGS="-L/usr/local/lib -Wl,-rpath,/usr/local/lib"
         #export LDFLAGS
 	AMSSYNC=""
 	;;
   HP-UX)  
-	CC=gcc # cheat -- hp cc is miserable
+	CC=gcc # hp cc can't handle Cyrus
 	CFLAGS="${CFLAGS} -O2"
 	;;
-  SunOS)   
-    # -xs: generate debugging information that gdb likes
-#        CFLAGS="${CFLAGS} -xO4 -xdepend"
-	LDFLAGS="${LDFLAGS} -xs"
-        ;;
+  SunOS) # these flags are only for solaris
+	 # -xs: generate debugging information that gdb likes
+	 CFLAGS="${CFLAGS}"
+	 LDFLAGS="${LDFLAGS} -xs"
+	 ;;
   ULTRIX)  
 	CC=gcc # cheat -- Ultrix cc is aged
 	CFLAGS="${CFLAGS} -O"
