@@ -360,7 +360,6 @@ int isadmin;
 char *userid;
 {
     FILE *listfile = 0;
-    struct stat sbuffd, sbuffile;
     int r;
     char *buf, *p;
     unsigned offset, len, size;
@@ -370,36 +369,9 @@ char *userid;
     FILE *newlistfile;
     int n, left;
 
-    if (!listfname) mboxlist_getfname();
-
     /* Open and lock mailbox list file */
-    listfile = fopen(listfname, "r+");
-    for (;;) {
-	if (!listfile) {
-	    syslog(LOG_ERR, "IOERROR: opening %s: %m", listfname);
-	    fatal("can't read mailbox list", EX_OSFILE);
-	}
-
-	r = flock(fileno(listfile), LOCK_EX);
-	if (r == -1) {
-	    if (errno == EINTR) continue;
-	    syslog(LOG_ERR, "IOERROR: locking %s: %m", listfname);
-	    return IMAP_IOERROR;
-	}
-	
-	fstat(fileno(listfile), &sbuffd);
-	r = stat(listfname, &sbuffile);
-	if (r == -1) {
-	    syslog(LOG_ERR, "IOERROR: stating %s: %m", listfname);
-	    return IMAP_IOERROR;
-	}
-
-	size = sbuffd.st_size;
-	if (sbuffd.st_ino == sbuffile.st_ino) break;
-
-	fclose(listfile);
-	listfile = fopen(listfname, "r+");
-    }
+    r = mboxlist_openlock(&listfile, &size);
+    if (r) return r;
 
     /* Check ability to create mailbox */
     r = mboxlist_createmailboxcheck(name, partition, isadmin, userid,
@@ -501,7 +473,6 @@ int isadmin;
 char *userid;
 {
     FILE *listfile = 0;
-    struct stat sbuffd, sbuffile;
     int r;
     char *acl;
     long access;
@@ -554,35 +525,8 @@ char *userid;
     if (!listfname) mboxlist_getfname();
 
     /* Open and lock mailbox list file */
-    listfile = fopen(listfname, "r+");
-    for (;;) {
-	if (!listfile) {
-	    syslog(LOG_ERR, "IOERROR: opening %s: %m", listfname);
-	    fatal("can't read mailbox list", EX_OSFILE);
-	}
-
-	r = flock(fileno(listfile), LOCK_EX);
-	if (r == -1) {
-	    if (errno == EINTR) continue;
-	    syslog(LOG_ERR, "IOERROR: locking %s: %m", listfname);
-	    fclose(listfile);
-	    return IMAP_IOERROR;
-	}
-	
-	fstat(fileno(listfile), &sbuffd);
-	r = stat(listfname, &sbuffile);
-	if (r == -1) {
-	    syslog(LOG_ERR, "IOERROR: stating %s: %m", listfname);
-	    fclose(listfile);
-	    return IMAP_IOERROR;
-	}
-
-	size = sbuffd.st_size;
-	if (sbuffd.st_ino == sbuffile.st_ino) break;
-
-	fclose(listfile);
-	listfile = fopen(listfname, "r+");
-    }
+    r = mboxlist_openlock(&listfile, &size);
+    if (r) return r;
 
     r = mboxlist_lookup(name, (char **)0, &acl);
     if (r) {
@@ -677,7 +621,6 @@ int isadmin;
 char *userid;
 {
     FILE *listfile = 0;
-    struct stat sbuffd, sbuffile;
     int r;
     long access;
     int isusermbox = 0;
@@ -696,33 +639,8 @@ char *userid;
     if (!listfname) mboxlist_getfname();
 
     /* Open and lock mailbox list file */
-    listfile = fopen(listfname, "r+");
-    for (;;) {
-	if (!listfile) {
-	    syslog(LOG_ERR, "IOERROR: opening %s: %m", listfname);
-	    fatal("can't read mailbox list", EX_OSFILE);
-	}
-
-	r = flock(fileno(listfile), LOCK_EX);
-	if (r == -1) {
-	    if (errno == EINTR) continue;
-	    syslog(LOG_ERR, "IOERROR: locking %s: %m", listfname);
-	    return IMAP_IOERROR;
-	}
-	
-	fstat(fileno(listfile), &sbuffd);
-	r = stat(listfname, &sbuffile);
-	if (r == -1) {
-	    syslog(LOG_ERR, "IOERROR: stating %s: %m", listfname);
-	    return IMAP_IOERROR;
-	}
-
-	size = sbuffd.st_size;
-	if (sbuffd.st_ino == sbuffile.st_ino) break;
-
-	fclose(listfile);
-	listfile = fopen(listfname, "r+");
-    }
+    r = mboxlist_openlock(&listfile, &size);
+    if (r) return r;
 
     /* Check ability to delete old mailbox */
     if (strcasecmp(oldname, "inbox") == 0) {
@@ -1358,7 +1276,6 @@ int isadmin;
 char *userid;
 {
     FILE *listfile = 0;
-    struct stat sbuffd, sbuffile;
     int r;
     long access;
     int isusermbox = 0;
@@ -1373,33 +1290,8 @@ char *userid;
     if (!listfname) mboxlist_getfname();
 
     /* Open and lock mailbox list file */
-    listfile = fopen(listfname, "r+");
-    for (;;) {
-	if (!listfile) {
-	    syslog(LOG_ERR, "IOERROR: opening %s: %m", listfname);
-	    fatal("can't read mailbox list", EX_OSFILE);
-	}
-
-	r = flock(fileno(listfile), LOCK_EX);
-	if (r == -1) {
-	    if (errno == EINTR) continue;
-	    syslog(LOG_ERR, "IOERROR: locking %s: %m", listfname);
-	    return IMAP_IOERROR;
-	}
-	
-	fstat(fileno(listfile), &sbuffd);
-	r = stat(listfname, &sbuffile);
-	if (r == -1) {
-	    syslog(LOG_ERR, "IOERROR: stating %s: %m", listfname);
-	    return IMAP_IOERROR;
-	}
-
-	size = sbuffd.st_size;
-	if (sbuffd.st_ino == sbuffile.st_ino) break;
-
-	fclose(listfile);
-	listfile = fopen(listfname, "r+");
-    }
+    r = mboxlist_openlock(&listfile, &size);
+    if (r) return r;
 
     if (!strchr(userid, '.') &&
 	strlen(userid) + 6 <= MAX_MAILBOX_PATH) {
@@ -1524,7 +1416,6 @@ int newquota;
     static struct quota zeroquota;
     int r;
     FILE *listfile = 0;
-    struct stat sbuffd, sbuffile;
     char *p;
     unsigned offset, len, size;
     char buf[MAX_MAILBOX_PATH];
@@ -1557,34 +1448,8 @@ int newquota;
      * Have to create a new quota root
      * Open and lock mailbox list file
      */
-    if (!listfname) mboxlist_getfname();
-    listfile = fopen(listfname, "r+");
-    for (;;) {
-	if (!listfile) {
-	    syslog(LOG_ERR, "IOERROR: opening %s: %m", listfname);
-	    fatal("can't read mailbox list", EX_OSFILE);
-	}
-
-	r = flock(fileno(listfile), LOCK_EX);
-	if (r == -1) {
-	    if (errno == EINTR) continue;
-	    syslog(LOG_ERR, "IOERROR: locking %s: %m", listfname);
-	    return IMAP_IOERROR;
-	}
-	
-	fstat(fileno(listfile), &sbuffd);
-	r = stat(listfname, &sbuffile);
-	if (r == -1) {
-	    syslog(LOG_ERR, "IOERROR: stating %s: %m", listfname);
-	    return IMAP_IOERROR;
-	}
-
-	size = sbuffd.st_size;
-	if (sbuffd.st_ino == sbuffile.st_ino) break;
-
-	fclose(listfile);
-	listfile = fopen(listfname, "r+");
-    }
+    r = mboxlist_openlock(&listfile, &size);
+    if (r) return r;
 
     /* Ensure there is at least one mailbox under the quota root */
     p = 0;
@@ -1623,6 +1488,53 @@ int newquota;
     if (quota.file) fclose(quota.file);
     fclose(listfile);
     return r;
+}
+
+/*
+ * Open and lock the mailbox list file
+ */
+int
+mboxlist_openlock(lfile, sizep)
+FILE **lfile;
+unsigned *sizep;
+{
+    FILE *listfile = 0;
+    struct stat sbuffd, sbuffile;
+    int r;
+
+    if (!listfname) mboxlist_getfname();
+
+    listfile = fopen(listfname, "r+");
+    for (;;) {
+	if (!listfile) {
+	    syslog(LOG_ERR, "IOERROR: opening %s: %m", listfname);
+	    fatal("can't read mailbox list", EX_OSFILE);
+	}
+
+	r = flock(fileno(listfile), LOCK_EX);
+	if (r == -1) {
+	    if (errno == EINTR) continue;
+	    syslog(LOG_ERR, "IOERROR: locking %s: %m", listfname);
+	    fclose(listfile);
+	    return IMAP_IOERROR;
+	}
+	
+	fstat(fileno(listfile), &sbuffd);
+	r = stat(listfname, &sbuffile);
+	if (r == -1) {
+	    syslog(LOG_ERR, "IOERROR: stating %s: %m", listfname);
+	    fclose(listfile);
+	    return IMAP_IOERROR;
+	}
+
+	if (sizep) *sizep = sbuffd.st_size;
+	if (sbuffd.st_ino == sbuffile.st_ino) break;
+
+	fclose(listfile);
+	listfile = fopen(listfname, "r+");
+    }
+    *lfile = listfile;
+    return 0;
 }
 
 
