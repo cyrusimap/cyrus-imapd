@@ -1,5 +1,5 @@
 /* auth_krb_pts.c -- Kerberos authorization with AFS PTServer groups
- $Id: auth_krb_pts.c,v 1.33 2000/02/10 21:25:38 leg Exp $
+ $Id: auth_krb_pts.c,v 1.34 2000/02/11 05:18:18 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -361,7 +361,7 @@ struct auth_state *auth_newstate(const char *identifier,
 	return newstate;
     }
     
-    r = ptdb->open(ptdb, fnamebuf, NULL, DB_HASH, DB_CREATE | DB_EXCL, 0664);
+    r = ptdb->open(ptdb, fnamebuf, NULL, DB_HASH, DB_CREATE, 0664);
     if (r != 0) {
 	syslog(LOG_ERR, "auth_newstate: opening %s: %s", fnamebuf, 
 	       db_strerror(r));
@@ -458,7 +458,7 @@ struct auth_state *auth_newstate(const char *identifier,
 	return newstate;
     }
     
-    r = ptdb->open(ptdb, fnamebuf, NULL, DB_HASH, DB_CREATE | DB_EXCL, 0664);
+    r = ptdb->open(ptdb, fnamebuf, NULL, DB_HASH, DB_CREATE, 0664);
     if (r != 0) {
 	syslog(LOG_ERR, "auth_newstate: opening %s: %s", fnamebuf, 
 	       db_strerror(r));
