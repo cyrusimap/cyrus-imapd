@@ -19,6 +19,7 @@ Changes to the Cyrus IMAP Server Since Version 1.5
       * Bug fix: reconstruct now considers a nonexistant INN news directory
         to be empty; this makes reconstruct fix the cyrus.* files in the
         imap news partition.
+      * Added a manpage for imclient.
       * Fixed a few other minor bugs.
 
 Changes to the Cyrus IMAP Server Since Version 1.4
