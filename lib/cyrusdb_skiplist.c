@@ -1,4 +1,5 @@
 /* skip-list.c -- generic skip list routines
+ * $Id: cyrusdb_skiplist.c,v 1.3 2002/01/21 23:15:21 leg Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -1017,7 +1018,7 @@ int mycommit(struct db *db, struct txn *tid)
     }
 }
 
-int myabort(struct db *db, struct txn *tid)
+int myabort(struct db *db, struct txn *tid) /* xxx */
 {
     assert(db && tid);
     
@@ -1031,7 +1032,7 @@ int myabort(struct db *db, struct txn *tid)
 
 }
 
-static int mycheckpoint(struct db *db)
+static int mycheckpoint(struct db *db) /* xxx */
 {
     /* grab write lock (could be read but this prevents multiple checkpoints
      simultaneously */
@@ -1050,20 +1051,20 @@ static int mycheckpoint(struct db *db)
    if detail == 2, also dump pointers for active records.
    if detail == 3, dump all records/all pointers.
 */
-static int mydbdumb(struct db *db, int detail)
+static int mydbdump(struct db *db, int detail) /* xxx */
 {
 
 }
 
 /* perform some basic consistency checks */
-static int consistent(struct db *db)
+static int consistent(struct db *db) /* xxx */
 {
 
 
 }
 
 /* run recovery on this file */
-static int recovery(struct db *db)
+static int recovery(struct db *db) /* xxx */
 {
 
 
