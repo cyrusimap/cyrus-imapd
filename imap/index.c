@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.121 2000/06/14 15:54:04 ken3 Exp $
+ * $Id: index.c,v 1.122 2000/06/16 03:32:03 ken3 Exp $
  */
 #include <config.h>
 
@@ -143,7 +143,7 @@ enum {
 /* Special "sort criteria" to load message-id and references/in-reply-to
  * into msgdata array for threaders that need them.
  */
-#define LOAD_IDS	127
+#define LOAD_IDS	256
 
 struct copyargs {
     struct copymsg *copymsg;
@@ -245,21 +245,21 @@ static char *index_extract_subject P((const char *subj, int *is_refwd));
 static void index_get_ids P((MsgData *msgdata,
 			     char *envtokens[], const char *headers));
 static MsgData *index_msgdata_load P((unsigned *msgno_list, int n,
-				      signed char *sortcrit));
+				      struct sortcrit *sortcrit));
 
 static void *index_sort_getnext P((MsgData *node));
 static void index_sort_setnext P((MsgData *node, MsgData *next));
 static int index_sort_compare P((MsgData *md1, MsgData *md2,
-				 signed char *call_data));
+				 struct sortcrit *call_data));
 static void index_msgdata_free P((MsgData *md));
 
 static void *index_thread_getnext P((Thread *thread));
 static void index_thread_setnext P((Thread *thread, Thread *next));
 static int index_thread_compare P((Thread *t1, Thread *t2,
-				   signed char *call_data));
+				   struct sortcrit *call_data));
 static void index_thread_orderedsubj P((unsigned *msgno_list, int nmsg,
 					int usinguid));
-static void index_thread_sort P((Thread *root, signed char *sortcrit));
+static void index_thread_sort P((Thread *root, struct sortcrit *sortcrit));
 static void index_thread_print P((Thread *threads, int usinguid));
 #ifdef ENABLE_THREAD_JWZ
 static void index_thread_jwz P((unsigned *msgno_list, int nmsg,
@@ -1027,7 +1027,7 @@ int usinguid;
  */
 void
 index_sort(struct mailbox *mailbox,
-	   signed char *sortcrit,
+	   struct sortcrit *sortcrit,
 	   struct searchargs *searchargs,
 	   int usinguid)
 {
@@ -2990,7 +2990,7 @@ void *rock;
  * by the specified sort criteria.
  */
 static MsgData *index_msgdata_load(unsigned *msgno_list, int n,
-				   signed char *sortcrit)
+				   struct sortcrit *sortcrit)
 {
     MsgData *md, *cur;
     const char *cacheitem, *env, *headers, *from, *to, *cc, *subj;
@@ -3031,8 +3031,8 @@ static MsgData *index_msgdata_load(unsigned *msgno_list, int n,
 	parse_cached_envelope(tmpenv, envtokens);
 
 	j = 0;
-	while (sortcrit[j]) {
-	    switch (abs(sortcrit[j++])) {
+	while (sortcrit[j].key) {
+	    switch (sortcrit[j++].key & SORT_KEY_MASK) {
 	    case SORT_ARRIVAL:
 		cur->arrival = INTERNALDATE(cur->msgno);
 		break;
@@ -3340,20 +3340,15 @@ static int numcmp(int x, int y)
  * Comparison function for sorting message lists.
  */
 static int index_sort_compare(MsgData *md1, MsgData *md2,
-			      signed char *sortcrit)
+			      struct sortcrit *sortcrit)
 {
     int reverse, ret = 0, i = 0;
     int label;
 
     do {
-	/* determine sort order from sign of criterion */
-	if (sortcrit[i] < 0) {
-	    label = -sortcrit[i];
-	    reverse = 1;
-	} else {
-	    label = sortcrit[i];
-	    reverse = 0;
-	}
+	/* determine sort order from reverse flag bit */
+	reverse = sortcrit[i].key & SORT_REVERSE;
+	label = sortcrit[i].key & SORT_KEY_MASK;
 
 	switch (label) {
 	case SORT_SEQUENCE:
@@ -3381,7 +3376,7 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
 	    ret = strcmp(md1->to, md2->to);
 	    break;
 	}
-    } while (!ret && sortcrit[i++] != SORT_SEQUENCE);
+    } while (!ret && sortcrit[i++].key != SORT_SEQUENCE);
 
     return (reverse ? -ret : ret);
 }
@@ -3426,7 +3421,7 @@ static void index_thread_setnext(Thread *thread, Thread *next)
  * Comparison function for sorting threads.
  */
 static int index_thread_compare(Thread *t1, Thread *t2,
-				signed char *call_data)
+				struct sortcrit *call_data)
 {
     MsgData *md1, *md2;
 
@@ -3439,7 +3434,7 @@ static int index_thread_compare(Thread *t1, Thread *t2,
 /*
  * Sort a list of threads.
  */
-static void index_thread_sort(Thread *root, signed char *sortcrit)
+static void index_thread_sort(Thread *root, struct sortcrit *sortcrit)
 {
     Thread *child;
 
@@ -3467,7 +3462,9 @@ static void index_thread_orderedsubj(unsigned *msgno_list, int nmsg,
 				     int usinguid)
 {
     MsgData *msgdata, *freeme;
-    signed char sortcrit[] = { SORT_SUBJECT, SORT_DATE, SORT_SEQUENCE };
+    struct sortcrit sortcrit[] = {{ SORT_SUBJECT, 0 },
+				  { SORT_DATE, 0 },
+				  { SORT_SEQUENCE, 0 }};
     unsigned psubj_hash = 0;
     char *psubj;
     Thread *head, *newnode, *cur, *parent;
@@ -3776,8 +3773,10 @@ static void jwz_prune_empty(Thread *parent)
 void index_thread_jwz(unsigned *msgno_list, int nmsg, int usinguid)
 {
     MsgData *msgdata, *freeme, *md;
-    signed char sortcrit[] = { LOAD_IDS, SORT_SUBJECT,
-			       SORT_DATE, SORT_SEQUENCE };
+    struct sortcrit sortcrit[] = {{ LOAD_IDS, 0 },
+				  { SORT_SUBJECT, 0 },
+				  { SORT_DATE, 0 },
+				  { SORT_SEQUENCE, 0 }};
     int i;
     Thread *newnode, *ref, *cur, *parent;
     Thread *old, *prev, *rest, *tail;

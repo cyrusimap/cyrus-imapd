@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.257 2000/06/16 01:37:27 ken3 Exp $ */
+/* $Id: imapd.c,v 1.258 2000/06/16 03:32:02 ken3 Exp $ */
 
 #include <config.h>
 
@@ -177,7 +177,7 @@ int getsearchprogram(char *tag, struct searchargs *searchargs,
 int getsearchcriteria(char *tag, struct searchargs *searchargs,
 			 int *charset, int parsecharset);
 int getsearchdate(time_t *start, time_t *end);
-int getsortcriteria(char *tag, signed char **sortcrit);
+int getsortcriteria(char *tag, struct sortcrit **sortcrit);
 int getdatetime(time_t *date);
 
 void eatline(int c);
@@ -193,6 +193,7 @@ void freestrlist(struct strlist *l);
 void appendsearchargs(struct searchargs *s, struct searchargs *s1,
 			 struct searchargs *s2);
 void freesearchargs(struct searchargs *s);
+void freesortcrit(struct sortcrit *s);
 
 static int mailboxdata(), listdata(), lsubdata();
 static void mstringdata(char *cmd, char *name, int matchlen, int maycreate);
@@ -2769,7 +2770,7 @@ char *tag;
 int usinguid;
 {
     int c;
-    signed char *sortcrit;
+    struct sortcrit *sortcrit;
     static struct buf arg;
     int charset = 0;
     struct searchargs *searchargs;
@@ -2778,7 +2779,7 @@ int usinguid;
     c = getsortcriteria(tag, &sortcrit);
     if (c == EOF) {
 	eatline(' ');
-	free(sortcrit);
+	freesortcrit(sortcrit);
 	return;
     }
 
@@ -2787,7 +2788,7 @@ int usinguid;
 	prot_printf(imapd_out, "%s BAD Missing charset in Sort\r\n",
 		    tag);
 	eatline(c);
-	free(sortcrit);
+	freesortcrit(sortcrit);
 	return;
     }
 
@@ -2796,7 +2797,7 @@ int usinguid;
 	prot_printf(imapd_out, "%s BAD Missing search criteria in Sort\r\n",
 		    tag);
 	eatline(c);
-	free(sortcrit);
+	freesortcrit(sortcrit);
 	return;
     }
     lcase(arg.s);
@@ -2806,7 +2807,7 @@ int usinguid;
 	prot_printf(imapd_out, "%s NO %s\r\n", tag,
 	       error_message(IMAP_UNRECOGNIZED_CHARSET));
 	eatline(c);
-	free(sortcrit);
+	freesortcrit(sortcrit);
 	return;
     }
 
@@ -2817,7 +2818,7 @@ int usinguid;
     if (c == EOF) {
 	eatline(' ');
 	freesearchargs(searchargs);
-	free(sortcrit);
+	freesortcrit(sortcrit);
 	return;
     }
 
@@ -2826,7 +2827,7 @@ int usinguid;
 	prot_printf(imapd_out, "%s BAD Unexpected extra arguments to Sort\r\n", tag);
 	eatline(c);
 	freesearchargs(searchargs);
-	free(sortcrit);
+	freesortcrit(sortcrit);
 	return;
     }
 
@@ -2834,7 +2835,7 @@ int usinguid;
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
 
-    free(sortcrit);
+    freesortcrit(sortcrit);
     freesearchargs(searchargs);
     return;
 }
@@ -4757,20 +4758,16 @@ time_t *start, *end;
     return EOF;
 }
 
+#define SORTGROWSIZE	10
+
 /*
  * Parse a sort criteria
  */
-int getsortcriteria(tag, sortcrit)
-char *tag;
-signed char **sortcrit;
+int getsortcriteria(char *tag, struct sortcrit **sortcrit)
 {
     int c;
     static struct buf arg;
-    unsigned long sortcrit_mask = 0;
-    int n = 0;
-
-    /* Allocate and set the sort order for all sort criteria to forward */
-    *sortcrit = memset(xmalloc(NUMSORTCRIT), 1, NUMSORTCRIT);
+    int nsort, n;
 
     c = prot_getc(imapd_in);
     if (c != '(') goto missingcrit;
@@ -4778,49 +4775,50 @@ signed char **sortcrit;
     c = getword(&arg);
     if (arg.s[0] == '\0') goto missingcrit;
 
-    for (;;) {
+    for (*sortcrit = NULL, nsort = 0, n = 0;;) {
+	if (n == nsort) {
+	    /* (Re)allocate an array for sort criteria */
+	    nsort += SORTGROWSIZE;
+	    *sortcrit =
+		(struct sortcrit *) xrealloc(*sortcrit,
+					     nsort * sizeof(struct sortcrit));
+	    /* Zero out the newly added sortcrit */
+	    memset((*sortcrit)+n, 0, SORTGROWSIZE * sizeof(struct sortcrit));
+	}
+
 	lcase(arg.s);
 	if (!strcmp(arg.s, "reverse")) {
-	    (*sortcrit)[n] = SORT_REVERSE;
+	    (*sortcrit)[n].key = SORT_REVERSE;
 	    goto nextcrit;
 	}
 	else if (!strcmp(arg.s, "arrival"))
-	    (*sortcrit)[n] *= SORT_ARRIVAL;
+	    (*sortcrit)[n].key |= SORT_ARRIVAL;
 	else if (!strcmp(arg.s, "cc"))
-	    (*sortcrit)[n] *= SORT_CC;
+	    (*sortcrit)[n].key |= SORT_CC;
 	else if (!strcmp(arg.s, "date"))
-	    (*sortcrit)[n] *= SORT_DATE;
+	    (*sortcrit)[n].key |= SORT_DATE;
 	else if (!strcmp(arg.s, "from"))
-	    (*sortcrit)[n] *= SORT_FROM;
+	    (*sortcrit)[n].key |= SORT_FROM;
 	else if (!strcmp(arg.s, "size"))
-	    (*sortcrit)[n] *= SORT_SIZE;
+	    (*sortcrit)[n].key |= SORT_SIZE;
 	else if (!strcmp(arg.s, "subject"))
-	    (*sortcrit)[n] *= SORT_SUBJECT;
+	    (*sortcrit)[n].key |= SORT_SUBJECT;
 	else if (!strcmp(arg.s, "to"))
-	    (*sortcrit)[n] *= SORT_TO;
+	    (*sortcrit)[n].key |= SORT_TO;
 	else {
 	    prot_printf(imapd_out, "%s BAD Invalid Sort criterion %s\r\n",
 			tag, arg.s);
 	    if (c != EOF) prot_ungetc(c, imapd_in);
 	    return EOF;
 	}
-
-	/* If we haven't seen this criterion before, set it's mask bit
-	   so we ignore it the next time, and increment the counter */
-	if (!(sortcrit_mask & (1 << abs((*sortcrit)[n])))) {
-	    sortcrit_mask |= (1 << abs((*sortcrit)[n]));
-	    n++;
-	} else {
-	    /* otherwise ignore it and reset the order to forward */
-	    (*sortcrit)[n] = 1;
-	}
+	n++;
 
 nextcrit:
 	if (c == ' ') c = getword(&arg);
 	else break;
     }
 
-    if ((*sortcrit)[n] == SORT_REVERSE) {
+    if ((*sortcrit)[n].key == SORT_REVERSE) {
 	prot_printf(imapd_out,
 		    "%s BAD Missing Sort criterion to reverse\r\n", tag);
 	if (c != EOF) prot_ungetc(c, imapd_in);
@@ -4835,7 +4833,7 @@ nextcrit:
     }
 
     /* Terminate the list with the implicit sort criterion */
-    (*sortcrit)[n++] = SORT_SEQUENCE;
+    (*sortcrit)[n++].key = SORT_SEQUENCE;
 
     c = prot_getc(imapd_in);
 
@@ -5268,6 +5266,21 @@ struct searchargs *s;
 	freesearchargs(sub->sub2);
 	free(sub);
     }
+    free(s);
+}
+
+/*
+ * Free an array of sortcrit
+ */
+void freesortcrit(struct sortcrit *s)
+{
+    int i = 0;
+
+    do {
+	if (s[i].args[0]) s[i].args[0];
+	if (s[i].args[1]) s[i].args[1];
+	i++;
+    } while (s[i].key != SORT_SEQUENCE);
     free(s);
 }
 
