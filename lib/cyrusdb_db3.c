@@ -79,6 +79,8 @@
 #define txn_checkpoint(xx1,xx2,xx3,xx4) (xx1)->txn_checkpoint(xx1,xx2,xx3,xx4)
 #define txn_id(xx1) (xx1)->id(xx1)
 #define log_archive(xx1,xx2,xx3,xx4) (xx1)->log_archive(xx1,xx2,xx3)
+#elsif DB_VERSION_MINOR == 3
+#define log_archive(xx1,xx2,xx3,xx4) log_archive(xx1,xx2,xx3)
 #endif
 
 static int dbinit = 0;
