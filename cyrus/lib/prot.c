@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.72.4.4 2002/07/31 17:32:33 rjs3 Exp $
+ * $Id: prot.c,v 1.72.4.5 2002/07/31 20:01:48 rjs3 Exp $
  */
 
 #include <config.h>
@@ -776,11 +776,15 @@ int prot_select(struct protgroup *readstreams, int extra_read_fd,
 		struct protgroup **out, int *extra_read_flag,
 		struct timeval *timeout) 
 {
-    struct protstream *s;
+    struct protstream *s, *timeout_prot = NULL;
     struct protgroup *retval = NULL;
     int max_fd, found_fds = 0;
     int i;
     fd_set rfds;
+    int have_readtimeout = 0;
+    struct timeval my_timeout;
+    time_t now = time(NULL);
+    time_t read_timeout = 0;
     
     assert(readstreams || extra_read_fd != PROT_NO_FD);
     assert(extra_read_fd == PROT_NO_FD || extra_read_flag);
@@ -800,6 +804,21 @@ int prot_select(struct protgroup *readstreams, int extra_read_fd,
 
 	assert(!s->write);
 
+	if(!have_readtimeout && !s->dontblock) {
+	    read_timeout = now + s->read_timeout;
+	    have_readtimeout = 1;
+	    if(!timeout || read_timeout <= timeout->tv_sec)
+		timeout_prot = s;
+	} else if(!s->dontblock) {
+	    time_t new_timeout;
+	    new_timeout = now + s->read_timeout;
+	    if(new_timeout < read_timeout) {
+		read_timeout = new_timeout;
+		if(!timeout || read_timeout <= timeout->tv_sec)
+		    timeout_prot = s;
+	    }
+	}
+	    
 	FD_SET(s->fd, &rfds);
 	if(s->fd > max_fd)
 	    max_fd = s->fd;
@@ -819,14 +838,35 @@ int prot_select(struct protgroup *readstreams, int extra_read_fd,
     /* xxx we should probably do a nonblocking select on the remaining
      * protstreams instead of skipping this part entirely */
     if(!retval) {
+	time_t sleepfor;
+
 	/* do a select */
 	if(extra_read_fd != PROT_NO_FD) {
 	    /* max_fd started with atleast extra_read_fd */
 	    FD_SET(extra_read_fd, &rfds);
 	}
 
+	if(read_timeout < now)
+	    sleepfor = 0;
+	else
+	    sleepfor = read_timeout - now;
+
+	/* If we don't have a timeout structure, and we need one, use
+	 * a local version.  Otherwise, make sure that we are timing out
+	 * for the right reason */
+	if((!timeout && have_readtimeout)
+	   || (timeout && read_timeout < timeout->tv_sec)) {
+	    if(!timeout)
+		timeout = &my_timeout;
+	    timeout->tv_sec = sleepfor;
+	    timeout->tv_usec = 0;
+	}
+
 	if(select(max_fd + 1, &rfds, NULL, NULL, timeout) == -1)
 	    return -1;
+
+	/* Reset now */
+	now = time(NULL);
 
 	if(extra_read_fd != PROT_NO_FD && FD_ISSET(extra_read_fd, &rfds)) {
 	    *extra_read_flag = 1;
@@ -841,6 +881,13 @@ int prot_select(struct protgroup *readstreams, int extra_read_fd,
 	    if(FD_ISSET(s->fd, &rfds)) {
 		found_fds++;
 
+		if(!retval)
+		    retval = protgroup_new(readstreams->next_element + 1);
+
+		protgroup_insert(retval, s);
+	    } else if(s == timeout_prot && now >= read_timeout) {
+		/* If we timed out, be sure to add the protstream we were
+		 * waiting for, even if it didn't show up */
 		if(!retval)
 		    retval = protgroup_new(readstreams->next_element + 1);
 
