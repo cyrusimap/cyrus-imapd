@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: service.c,v 1.3 2000/05/04 03:10:50 leg Exp $ */
+/* $Id: service.c,v 1.4 2000/05/09 17:54:45 leg Exp $ */
 #include <config.h>
 
 #include <stdio.h>
@@ -61,6 +61,44 @@ void notify_master(int fd, int msg)
     }
 }
 
+#ifdef HAVE_LIBWRAP
+#include <tcpd.h>
+
+int allow_severity = LOG_DEBUG;
+int deny_severity = LOG_ERR;
+
+static void libwrap_init(struct request_info *r, char *service)
+{
+    request_init(r, RQ_DAEMON, service, 0);
+}
+
+static int libwrap_ask(struct request_info *r, int fd)
+{
+    int a;
+
+    /* i hope using the sock_* functions are legal; it certainly makes
+       this code very easy! */
+    request_set(r, RQ_FILE, fd, 0);
+    sock_host(r);
+
+    return hosts_access(r);
+}
+
+#else
+struct request_info { int x; };
+
+static void libwrap_init(struct request_info *r, char *service)
+{
+
+}
+
+static int libwrap_ask(struct request_info *r, int fd)
+{
+    return 1;
+}
+
+#endif
+
 extern void config_init(const char *);
 
 int main(int argc, char **argv, char **envp)
@@ -69,11 +107,15 @@ int main(int argc, char **argv, char **envp)
     int fdflags;
     int fd;
     char *p = NULL;
+    struct request_info request;
 
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
 
-    if (verbose > 30) sleep(15);
+    if (verbose > 30) {
+	syslog(LOG_DEBUG, "waiting 15 seconds for debugger");
+	sleep(15);
+    }
 
     snprintf(name, sizeof(name) - 1, "service-%s", argv[0]);
     config_init(name);
@@ -97,6 +139,8 @@ int main(int argc, char **argv, char **envp)
 	notify_master(STATUS_FD, SERVICE_UNAVAILABLE);
 	return 1;
     }
+
+    libwrap_init(&request, argv[0]);
 
     if (service_init(argc, argv, envp) != 0) {
 	notify_master(STATUS_FD, SERVICE_UNAVAILABLE);
@@ -128,6 +172,12 @@ int main(int argc, char **argv, char **envp)
 		    return 1;
 		}
 	    }
+	}
+	
+	if (!libwrap_ask(&request, fd)) {
+	    /* connection denied! */
+	    close(fd);
+	    continue;
 	}
 	
 	syslog(LOG_DEBUG, "accepted connection");

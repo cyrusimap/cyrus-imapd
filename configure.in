@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.169 2000/05/07 19:53:36 leg Exp $
+dnl $Id: configure.in,v 1.170 2000/05/09 17:54:41 leg Exp $
 dnl
 
 
@@ -751,7 +751,8 @@ fi
 AC_SUBST(SNMP_SUBDIRS)
 
 CMU_SOCKETS
-LIBS="$LIBS ${LIB_SOCKET}"
+CMU_LIBWRAP
+LIBS="$LIBS ${LIB_WRAP} ${LIB_SOCKET}"
 
 # Figure out what directories we're linking against.
 # Lots of fun for the whole family.

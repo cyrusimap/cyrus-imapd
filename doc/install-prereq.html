@@ -1,4 +1,4 @@
-<!-- $Id: install-prereq.html,v 1.4 2000/05/04 03:11:03 leg Exp $ -->
+<!-- $Id: install-prereq.html,v 1.5 2000/05/09 17:54:42 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Prerequisites and other notes
@@ -54,7 +54,14 @@ make your life easier.  We recommend at least version 5.00502.
 
 <li> <b>OpenSSL</b>, version 0.9.4 or higher.  Required for STARTTLS
 support and eventually for IMAP wrapped in SSL (the imaps port).
-Available from <a href="http://www.openssl.org/">http://www.openssl.org/</a>.
+Available from <a
+href="http://www.openssl.org/">http://www.openssl.org/</a>.
+
+<li> <b>libwrap</b>, from Wietse Venema.  This will allow one to
+control who is accessing what service, based on IP address.  Available
+from <a
+href="ftp://ftp.porcupine.org/pub/security/">ftp://ftp.porcupine.org/pub/security/</a>
+in the <tt>tcp_wrappers</tt> package..
 
 <LI> If you use AFS PTS support for groups, Cyrus still depends on
 Kerberos and AFS.  If you successfully compiled SASL with your
@@ -83,7 +90,7 @@ href="http://asg.web.cmu.edu/asg/">Cyrus project</a>.
 </ul>
 
 <P><HR>
-last modified: $Date: 2000/05/04 03:11:03 $
+last modified: $Date: 2000/05/09 17:54:42 $
 </BODY></HTML>
 
 
