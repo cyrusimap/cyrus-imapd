@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.98 1999/10/13 21:08:59 tmartin Exp $
+ * $Id: mboxlist.c,v 1.99 1999/10/18 02:21:40 leg Exp $
  */
 
 #include <stdio.h>
@@ -1163,7 +1163,10 @@ void* rock;
 	mboxlist_parseline(offset, len, &name, &namelen,
 			   (char **)0, (unsigned long *)0, &acl, &acllen);
 		
-	if (strncmp(list_base + offset, pattern, prefixlen)) break;
+	if (strncmp(list_base + offset, pattern, prefixlen)) {
+	    /* doesn't match the constant prefix */
+	    break;
+	}
 	minmatch = 0;
 	while (minmatch >= 0) {
 	    matchlen = glob_test(g, name, namelen, &minmatch);
@@ -1173,6 +1176,10 @@ void* rock;
 		 strncmp(name, usermboxname, usermboxnamelen) == 0 &&
 		 (namelen == usermboxnamelen ||
 		  name[usermboxnamelen] == '.'))) {
+		/* we didn't match
+		        OR
+		   this is one of my personal mailboxes & 
+		   we already listed it */
 		break;
 	    }
 
@@ -1211,6 +1218,7 @@ void* rock;
 		}
 	    }
 	}
+	/* go to the next record in the mailboxes file */
 	offset += len;
     }
 	

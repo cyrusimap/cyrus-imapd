@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.87 1999/10/13 16:42:31 leg Exp $ -->
+<!-- $Id: changes.html,v 1.88 1999/10/18 02:21:35 leg Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -7,8 +7,12 @@
 
     <h2> Changes to the Cyrus IMAP Server Since Version 1.6.13 </h2>
     <ul>
+      <li> An annoying memory management bug in imclient was fixed and
+      it's efficiency was improved somewhat.
+
       <li> Added the sieve client (<tt>installsieve</tt>) and server
-      (<tt>timsieved</tt>) for getting sieve scripts onto the server.
+      (<tt>timsieved</tt>) for getting sieve scripts onto the server
+      and managing them once they are there.
 
       <li> The default Sieve script layout has changed to
       sievedir/u/user/default; this supports multiple Sieve scripts

@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.37 1999/10/17 20:00:10 leg Exp $
+ $Id: imclient.c,v 1.38 1999/10/18 02:21:42 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -593,16 +593,19 @@ int len;
     struct imclient_cmdcallback **cmdcb, *cmdcbtemp;
     char *plainbuf;
     int plainlen;
-
+    int freeplain;
+    
     if (imclient->saslcompleted == 1) {
-      /* decrypt what we have */
-      if (sasl_decode(imclient->saslconn, buf, len,
-		      &plainbuf, &plainlen) != SASL_OK) {
-	(void) shutdown(imclient->fd, 0);
-      }
+	/* decrypt what we have */
+	if (sasl_decode(imclient->saslconn, buf, len,
+			&plainbuf, &plainlen) != SASL_OK) {
+	    (void) shutdown(imclient->fd, 0);
+	}
+	freeplain = 1;
     } else {
-      plainbuf = buf;
-      plainlen = len;
+	plainbuf = buf;
+	plainlen = len;
+	freeplain = 0;
     }
 
     /* Ensure replybuf has enough space to take the input */
@@ -642,6 +645,10 @@ int len;
     /* Copy the data to the buffer and NUL-terminate it */
     memcpy(imclient->replybuf + imclient->replylen, plainbuf, plainlen);
     imclient->replylen += plainlen;
+
+    if (freeplain && plainlen) {
+	free(plainbuf);
+    }
 
     /* Process the new data */
     while (parsed < imclient->replylen) {
