@@ -6,19 +6,19 @@ dnl from KTH krb and Arla
 
 AC_DEFUN(CMU_AFS_INC_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
-saved_CPPFLAGS=$CPPFLAGS
+cmu_save_CPPFLAGS=$CPPFLAGS
 if test "$ac_cv_prog_gcc" = "yes" ; then
   cmu_gcc_inc_dir=`gcc --print-file-name=include`
   if test "$cmu_gcc_inc_dir" = "include"  ; then
      cmu_gcc_inc_dir=""
   fi
   if test "$cmu_gcc_inc_dir" != ""  ; then
-     CPPFLAGS="$saved_CPPFLAGS -nostdinc -I$1 -I${cmu_gcc_inc_dir} -I/usr/include"
+     CPPFLAGS="$cmu_save_CPPFLAGS -nostdinc -I$1 -I${cmu_gcc_inc_dir} -I/usr/include"
   else
-     CPPFLAGS="$saved_CPPFLAGS -nostdinc -I$1 -I/usr/include"
+     CPPFLAGS="$cmu_save_CPPFLAGS -nostdinc -I$1 -I/usr/include"
   fi
 else
-  CPPFLAGS="$saved_CPPFLAGS -I$1"
+  CPPFLAGS="$cmu_save_CPPFLAGS -I$1"
 fi
 AC_TRY_COMPILE([#include <afs/param.h>],
 [#ifndef SYS_NAME
@@ -27,14 +27,14 @@ choke me
 int foo;],
 ac_cv_found_afs_inc=yes,
 ac_cv_found_afs_inc=no)
-CPPFLAGS=$saved_CPPFLAGS
+CPPFLAGS=$cmu_save_CPPFLAGS
 ])
 
 AC_DEFUN(CMU_AFS_LIB_WHERE1, [
 save_LIBS="$LIBS"
 save_LDFLAGS="$LDFLAGS"
 
-LIBS="-lauth $1/afs/util.a $LIBS"
+LIBS="-lauth $1/afs/util.a $LIB_SOCKET $LIBS"
 LDFLAGS="-L$1 -L$1/afs $LDFLAGS"
 dnl suppress caching
 AC_TRY_LINK([],[afsconf_Open();], ac_cv_found_afs_lib=yes, ac_cv_found_afs_lib=no)
