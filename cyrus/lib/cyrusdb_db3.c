@@ -95,7 +95,7 @@ static int init(const char *dbdir, int myflags)
     int r, do_retry = 1;
     int flags = 0;
 
-    assert(!dbinit);
+    if (dbinit++) return;
 
     if (myflags & CYRUSDB_RECOVER) {
       flags |= DB_RECOVER | DB_CREATE;
@@ -185,7 +185,7 @@ static int done(void)
 {
     int r;
 
-    assert(dbinit);
+    if (--dbinit) return;
 
     r = dbenv->close(dbenv, 0);
     dbinit = 0;
