@@ -174,14 +174,14 @@ sub authenticate {
   my ($self, $first) = @_;
   my (%opts, $rc);
   if (defined $first &&
-      $first =~ /^-\w+|Mechanism|Service|User|Minssf|Maxssf|Password$/) {
+      $first =~ /^-\w+|Mechanism|Service|Authz|User|Minssf|Maxssf|Password$/) {
     (undef, %opts) = @_;
-    foreach (qw(mechanism service user minssf maxssf password)) {
+    foreach (qw(mechanism service authz user minssf maxssf password)) {
       $opts{'-' . $_} = $opts{ucfirst($_)} if !defined($opts{'-' . $_});
     }
   } else {
-    (undef, $opts{-mechanism}, $opts{-service}, $opts{-user}, $opts{-minssf},
-     $opts{-maxssf}, $opts{-password}) = @_;
+    (undef, $opts{-mechanism}, $opts{-service}, $opts{-authz}, $opts{-user},
+     $opts{-minssf}, $opts{-maxssf}, $opts{-password}) = @_;
   }
   if (!defined($opts{-mechanism})) {
     $opts{-mechanism} = '';
@@ -201,7 +201,8 @@ sub authenticate {
   $rc = 0;
   if (defined($opts{-mechanism}) && lc($opts{-mechanism}) ne 'login') {
     $rc = $self->_authenticate($opts{-mechanism}, $opts{-service},
-			       $opts{-user}, $opts{-minssf}, $opts{-maxssf});
+			       $opts{-authz}, $opts{-user}, $opts{-minssf},
+			       $opts{-maxssf});
   }
   $opts{-mechanism} ||= 'plain';
   if (!$rc && $opts{-mechanism} =~ /(\b|^)(plain|login)($|\b)/i) {
