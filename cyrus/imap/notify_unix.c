@@ -63,7 +63,9 @@ void notify(const char *class,
     /*  . . . . .  */
 
     memset( messageToSend, 0, sizeof(messageToSend));
-    sprintf (messageToSend,"%s\n%s\n%s\n%s\n%s\n",class,instance,user,mailbox,message);
+    sprintf (messageToSend,"%s\n%s\n%s\n%s\n%s\n",class,instance,user,mailbox);
+    sprintf (messageToSend+strlen(messageToSend),"%.*s\n",
+	     sizeof(messageToSend) - strlen(messageToSend) - 2, mailbox);
     cnt = write(sock, messageToSend, strlen(messageToSend));
 
     close(sock);
