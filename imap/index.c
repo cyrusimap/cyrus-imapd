@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.140 2000/09/20 19:17:48 ken3 Exp $
+ * $Id: index.c,v 1.141 2000/09/30 01:42:43 ken3 Exp $
  */
 #include <config.h>
 
@@ -2827,7 +2827,9 @@ int size;
 
     p = index_readheader(msgfile->base, msgfile->size, format, 0, size);
     index_pruneheader(p, &header, 0);
-    q = charset_decode1522(p, NULL, 0);
+    if (!*p) return 0;		/* Header not present, fail */
+    if (!*substr) return 1;	/* Only checking existence, succeed */
+    q = charset_decode1522(strchr(p, ':') + 1, NULL, 0);
     r = charset_searchstring(substr, pat, q, strlen(q));
     free(q);
     return r;
@@ -2872,7 +2874,7 @@ comp_pat *pat;
     index_pruneheader(buf, &header, 0);
     if (!*buf) return 0;	/* Header not present, fail */
     if (!*substr) return 1;	/* Only checking existence, succeed */
-    q = charset_decode1522(buf, NULL, 0);
+    q = charset_decode1522(strchr(buf, ':') + 1, NULL, 0);
     r = charset_searchstring(substr, pat, q, strlen(q));
     free(q);
     return r;
