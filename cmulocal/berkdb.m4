@@ -37,7 +37,11 @@ AC_REQUIRE([AC_PROG_CC_GNU])
 AC_REQUIRE([CMU_AFS])
 AC_REQUIRE([CMU_KRB4])
 saved_LIBS=$LIBS
-LIBS="$saved_LIBS -L$1 -ldb-3"
+if test "$enable_db4" = "yes"; then
+  LIBS="$saved_LIBS -L$1 -ldb-4"
+else
+  LIBS="$saved_LIBS -L$1 -ldb-3"
+fi
 AC_TRY_LINK(,
 [db_env_create();],
 [ac_cv_found_db_lib=yes],
@@ -76,7 +80,9 @@ AC_ARG_WITH(db-include,
 	[if test "$withval" = "yes" -o "$withval" = "no"; then
 		AC_MSG_ERROR([No argument for --with-db-include])
 	fi])
-
+AC_ARG_ENABLE(db4,
+	[  --enable-db4          use db 4.x libraries])
+	
 	if test "X$with_db" != "X"; then
 	  if test "$with_db" != "yes"; then
 	    ac_cv_db_where_lib=$with_db/lib
@@ -99,7 +105,7 @@ AC_ARG_WITH(db-include,
 	fi
 
 	AC_MSG_CHECKING(whether to include db)
-	if test "X$ac_cv_db_where_lib" = "X" -a "X$ac_cv_db_where_inc" = "X"; then
+	if test "X$ac_cv_db_where_lib" = "X" -o "X$ac_cv_db_where_inc" = "X"; then
 	  ac_cv_found_db=no
 	  AC_MSG_RESULT(no)
 	else
@@ -108,7 +114,11 @@ AC_ARG_WITH(db-include,
 	  DB_INC_DIR=$ac_cv_db_where_inc
 	  DB_LIB_DIR=$ac_cv_db_where_lib
 	  DB_INC_FLAGS="-I${DB_INC_DIR}"
-	  DB_LIB_FLAGS="-L${DB_LIB_DIR} -ldb-3"
+          if test "$enable_db4" = "yes"; then
+	     DB_LIB_FLAGS="-L${DB_LIB_DIR} -ldb-4"
+          else
+	     DB_LIB_FLAGS="-L${DB_LIB_DIR} -ldb-3"
+          fi
           dnl Do not force configure.in to put these in CFLAGS and LIBS unconditionally
           dnl Allow makefile substitutions....
           AC_SUBST(DB_INC_FLAGS)
