@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.56 2001/02/17 20:19:40 ken3 Exp $
+ $Id: imclient.c,v 1.56.2.1 2001/06/19 14:47:13 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -80,6 +80,7 @@
 #include "imparse.h"
 #include "imclient.h"
 #include "nonblock.h"
+#include "util.h"
 
 extern int errno;
 
@@ -1337,11 +1338,9 @@ imclient_authenticate(struct imclient *imclient,
     const char *mtried;
 
     mlist = xstrdup(mechlist);
+    ucase(mlist);
 
     do {
-	char *newlist;
-	char *tmp;
-	
 	mtried = NULL;
 
 	r = imclient_authenticate_sub(imclient,
@@ -1354,9 +1353,12 @@ imclient_authenticate(struct imclient *imclient,
 
 	/* eliminate mtried (mechanism tried) from mlist */
 	if (mtried) {
-	    newlist = xmalloc(strlen(mlist)+1);
-	    
-	    tmp = strstr(mlist,mtried);
+	    char *newlist = xmalloc(strlen(mlist)+1);
+	    char *mtr = xstrdup(mtried);
+	    char *tmp;
+
+	    ucase(mtr);
+	    tmp = strstr(mlist,mtr);
 	    *tmp = '\0';
 	    strcpy(newlist,mlist);
 	    
@@ -1366,6 +1368,7 @@ imclient_authenticate(struct imclient *imclient,
 		strcat(newlist,tmp);
 	    }
 
+	    free(mtr);
 	    free(mlist);
 	    mlist = newlist;
 	}

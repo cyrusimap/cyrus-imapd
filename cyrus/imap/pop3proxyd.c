@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.15.2.1 2001/04/28 00:54:05 ken3 Exp $
+ * $Id: pop3proxyd.c,v 1.15.2.2 2001/06/19 14:47:13 ken3 Exp $
  */
 #include <config.h>
 
@@ -457,7 +457,8 @@ static void cmdloop(void)
 	    }
 	}
 	else if (!strcmp(inputbuf, "user") &&
-		 (popd_starttls_done || config_getswitch("allowplaintext", 1))) {
+		 (kflag || popd_starttls_done ||
+		  config_getswitch("allowplaintext", 1))) {
 	    if (!arg) {
 		prot_printf(popd_out, "-ERR Missing argument\r\n");
 	    }
@@ -466,7 +467,8 @@ static void cmdloop(void)
 	    }
 	}
 	else if (!strcmp(inputbuf, "pass") &&
-		 (popd_starttls_done || config_getswitch("allowplaintext", 1))) {
+		 (kflag || popd_starttls_done ||
+		  config_getswitch("allowplaintext", 1))) {
 	    if (!arg) prot_printf(popd_out, "-ERR Missing argument\r\n");
 	    else cmd_pass(arg);
 	}
@@ -831,7 +833,7 @@ cmd_capa()
     prot_printf(popd_out, "UIDL\r\n");
     prot_printf(popd_out, "PIPELINING\r\n");
 
-    if (popd_starttls_done || config_getswitch("allowplaintext", 1)) {
+    if (kflag || popd_starttls_done || config_getswitch("allowplaintext", 1)) {
 	prot_printf(popd_out, "USER\r\n");
     }
     
