@@ -19,20 +19,26 @@ char *user;
 char *pass;
 char **reply;
 {
+    static char lrealm[REALM_SZ];
     AUTH_DAT kdata;
     char aname[ANAME_SZ];
     char inst[INST_SZ];
     char realm[REALM_SZ];
-    char lrealm[REALM_SZ];
     char *val;
+
+
+    if (!lrealm[0]) {
+	if (krb_get_lrealm(lrealm,1)) {
+	    fatal("can't find local Kerberos realm", EX_OSFILE);
+	}
+	if (val = config_getstring("srvtab", 0)) {
+	    kerberos_set_srvtab(val);
+	}
+    }
 
     aname[0] = inst[0] = realm[0] = '\0';
     if (kname_parse(aname, inst, realm, user) != 0) {
 	return 1;
-    }
-
-    if (krb_get_lrealm(lrealm,1)) {
-	fatal("can't find local Kerberos realm", EX_OSFILE);
     }
 
     if (strncmp(pass, KERBEROS_IDENT, strlen(KERBEROS_IDENT)) == 0) {
