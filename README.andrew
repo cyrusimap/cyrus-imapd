@@ -90,6 +90,7 @@ c) smtp server
 Repackage, Reboot, (and redepot/repackage again)
 
 - Key the machine (imap, lmtp, smtp, pop, and put them in /imap/conf/srvtab)
+- frontends also need mupdate key
 - k5 keys:
 /usr/local/etc/ktutil srv2key
 chgrp cyrus /etc/krb5.keytab
