@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.84 2002/02/11 17:41:43 ken3 Exp $
+ * $Id: lmtpd.c,v 1.85 2002/02/21 15:20:05 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -624,9 +624,24 @@ int sieve_redirect(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 static
 int sieve_discard(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
+    script_data_t *sd = (script_data_t *) sc;
+    message_data_t *md = ((mydata_t *) mc)->m;
+
     snmp_increment(SIEVE_DISCARD, 1);
 
-    /* ok, we won't file it */
+    /* ok, we won't file it, but log it */
+    if (strlen(md->id) < 80) {
+	char pretty[160];
+
+	beautify_copy(pretty, md->id);
+	syslog(LOG_INFO, "sieve: discarded message to %s id %s",
+	       sd->username, md->id);
+    }
+    else {
+	syslog(LOG_INFO, "sieve: discarded message to %s",
+	       sd->username);
+    }	
+
     return SIEVE_OK;
 }
 
