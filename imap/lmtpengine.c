@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.81 2002/10/10 20:14:54 rjs3 Exp $
+ * $Id: lmtpengine.c,v 1.82 2002/10/21 15:29:25 rjs3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -124,6 +124,11 @@ struct clientdata {
 
 /* defined in lmtpd.c or lmtpproxyd.c */
 extern int deliver_logfd;
+
+extern int saslserver(sasl_conn_t *conn, const char *mech,
+		      const char *init_resp, const char *continuation,
+		      struct protstream *pin, struct protstream *pout,
+		      int *sasl_result, char **success_data);
 
 /* Enable the resetting of a sasl_conn_t */
 static int reset_saslconn(sasl_conn_t **conn);
@@ -1364,9 +1369,7 @@ void lmtpmode(struct lmtp_func *func,
       case 'A':
 	  if (!strncasecmp(buf, "auth ", 5)) {
 	      char mech[128];
-	      char *in = NULL;
-	      const char *out = NULL;
-	      unsigned int inlen, outlen;
+	      int sasl_result;
 	      const char *user;
 	      
 	      if (authenticated > 0) {
@@ -1392,98 +1395,52 @@ void lmtpmode(struct lmtp_func *func,
 		  p = NULL;
 	      }
 	      strlcpy(mech, buf + 5, sizeof(mech));
-	      if (p == NULL) {
-		  in = NULL;
-		  inlen = 0;
-	      } else if (!strcmp(p, "=")) {
-		  /* zero-length initial response */
-		  in = xstrdup("");
-		  inlen = 0;
-	      } else {
-		  unsigned len = strlen(p);
-		  in = xmalloc(len+1);
-		  r = sasl_decode64(p, len, in, len, &inlen);
-		  if (r != SASL_OK) {
-		      prot_printf(pout,
-				  "501 5.5.4 cannot base64 decode\r\n");
-		      if (in) { free(in); in = NULL; }
-		      continue;
-		  }
-	      }
-	      
-	      r = sasl_server_start(cd.conn, mech,
-				    in, inlen,
-				    &out, &outlen);
-	      if (in) { free(in); in = NULL; }
-	      if (r == SASL_NOMECH) {
-		  prot_printf(pout, 
-			      "504 Unrecognized authentication type.\r\n");
-		  continue;
-	      }
-	      
-	      while (r == SASL_CONTINUE) {
-		  char inbase64[4096];
-		  unsigned len;
 
-		  if(out) {
-		    r = sasl_encode64(out, outlen, 
-				    inbase64, sizeof(inbase64), NULL);
-		    if (r != SASL_OK) break;
-	  
-		    /* send out */
-		    prot_printf(pout,"334 %s\r\n", inbase64);
-		  }
-		  
-		  /* read a line */
-		  if (!prot_fgets(buf, sizeof(buf)-1, pin)) {
-		      goto cleanup;
-		  }
-		  p = buf + strlen(buf) - 1;
-		  if (p >= buf && *p == '\n') *p-- = '\0';
-		  if (p >= buf && *p == '\r') *p-- = '\0';
+	      r = saslserver(cd.conn, mech, p, "334 ",
+			     pin, pout, &sasl_result, NULL);
 
-		  if(buf[0] == '*') {
+	      if (r != IMAP_SASL_OK) {
+		  const char *errorstring = NULL;
+
+		  switch (r) {
+		  case IMAP_SASL_CANCEL:
 		      prot_printf(pout,
 				  "501 5.5.4 client canceled authentication\r\n");
-		      reset_saslconn(&cd.conn);
-		      goto nextcmd;
-		  }
-		  
-		  len = strlen(buf);
-		  in = xmalloc(len+1);
-		  r = sasl_decode64(buf, len, in, len, &inlen);
-		  if (r != SASL_OK) {
+		      break;
+		  case IMAP_SASL_PROTERR:
+		      errorstring = prot_error(pin);
+
 		      prot_printf(pout,
-				  "501 5.5.4 cannot base64 decode\r\n");
-		      reset_saslconn(&cd.conn);
-		      goto nextcmd;
+				  "501 5.5.4 Error reading client response: %s\r\n",
+				  errorstring ? errorstring : "");
+		      break;
+		  default:
+		      if (sasl_result == SASL_NOMECH) {
+			  prot_printf(pout, 
+				      "504 Unrecognized authentication type.\r\n");
+			  continue;
+		      }
+		      else {
+			  sleep(3);
+		  
+			  syslog(LOG_ERR, "badlogin: %s %s %s",
+				 remoteaddr.sin_family == AF_INET ?
+				 inet_ntoa(remoteaddr.sin_addr) :
+				 "[unix socket]",
+				 mech,
+				 sasl_errdetail(cd.conn));
+		  
+			  snmp_increment_args(AUTHENTICATION_NO, 1,
+					      VARIABLE_AUTH, hash_simple(mech), 
+					      VARIABLE_LISTEND);
+
+			  prot_printf(pout, "501 5.5.4 %s\r\n",
+				      sasl_errstring((r == SASL_NOUSER ?
+						      SASL_BADAUTH : r),
+						     NULL, NULL));
+		      }
 		  }
 
-		  r = sasl_server_step(cd.conn,
-				       in, inlen,
-				       &out, &outlen);
-		  if (in) { free(in); in = NULL; }
-	      }
-	      
-	      if (in) { free(in); in = NULL; }
-	      if ((r != SASL_OK) && (r != SASL_CONTINUE)) {
-		  sleep(3);
-		  
-		  syslog(LOG_ERR, "badlogin: %s %s %s",
-			 remoteaddr.sin_family == AF_INET ?
-			 inet_ntoa(remoteaddr.sin_addr) :
-			 "[unix socket]",
-			 mech,
-			 sasl_errdetail(cd.conn));
-		  
-		  snmp_increment_args(AUTHENTICATION_NO, 1,
-				      VARIABLE_AUTH, hash_simple(mech), 
-				      VARIABLE_LISTEND);
-
-		  prot_printf(pout, "501 5.5.4 %s\r\n",
-		       sasl_errstring((r == SASL_NOUSER ? SASL_BADAUTH : r),
-				      NULL, NULL));
-		  
 		  reset_saslconn(&cd.conn);
 		  continue;
 	      }

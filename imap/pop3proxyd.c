@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.49 2002/10/03 19:02:39 ken3 Exp $
+ * $Id: pop3proxyd.c,v 1.50 2002/10/21 15:29:25 rjs3 Exp $
  */
 #include <config.h>
 
@@ -145,6 +145,11 @@ extern int proc_register(const char *progname, const char *clienthost,
 			 const char *userid, const char *mailbox);
 extern void proc_cleanup(void);
 void shut_down(int code) __attribute__ ((noreturn));
+
+extern int saslserver(sasl_conn_t *conn, const char *mech,
+		      const char *init_resp, const char *continuation,
+		      struct protstream *pin, struct protstream *pout,
+		      int *sasl_result, char **success_data);
 
 /* Enable the resetting of a sasl_conn_t */
 static int reset_saslconn(sasl_conn_t **conn);
@@ -978,13 +983,8 @@ cmd_capa()
  */ 
 void cmd_auth(char *arg)
 {
-    int sasl_result;
-    static struct buf clientin;
-    int clientinlen=0;
+    int r, sasl_result;
     char *authtype;
-    const char *serverout;
-    unsigned int serveroutlen;
-    char *cin;
 
     /* if client didn't specify an argument we give them the list */
     if (!arg) {
@@ -1019,76 +1019,42 @@ void cmd_auth(char *arg)
 	arg = NULL;
     }
 
-    /* if arg != NULL, it's an initial client response */
-    if (arg) {
-	int arglen = strlen(arg);
+    r = saslserver(popd_saslconn, authtype, arg, "+ ", popd_in, popd_out,
+		   &sasl_result, NULL);
 
-	clientin.alloc = arglen + 1;
-	cin = clientin.s = xmalloc(clientin.alloc);
-	sasl_result = sasl_decode64(arg, arglen, clientin.s,
-				    clientin.alloc, &clientinlen);
-    } else {
-	sasl_result = SASL_OK;
-	cin = NULL;
-	clientinlen = 0;
-    }
+    if (r != IMAP_SASL_OK) {
+	const char *errorstring = NULL;
 
-    /* server did specify a command, so let's try to authenticate */
-    if (sasl_result == SASL_OK || sasl_result == SASL_CONTINUE)
-	sasl_result = sasl_server_start(popd_saslconn, authtype,
-					cin, clientinlen,
-					&serverout, &serveroutlen);
-    /* sasl_server_start will return SASL_OK or SASL_CONTINUE on success */
-    while (sasl_result == SASL_CONTINUE)
-    {
-	char c;
+	switch (r) {
+	case IMAP_SASL_CANCEL:
+	    prot_printf(popd_out,
+			"-ERR [AUTH] Client canceled authentication\r\n");
+	    break;
+	case IMAP_SASL_PROTERR:
+	    errorstring = prot_error(popd_in);
+
+	    prot_printf(popd_out,
+			"-ERR [AUTH] Error reading client response: %s\r\n",
+			errorstring ? errorstring : "");
+	    break;
+	default:
+	    /* failed authentication */
+	    sleep(3);
+		
+	    prot_printf(popd_out, "-ERR [AUTH] authenticating: %s\r\n",
+			sasl_errstring(sasl_result, NULL, NULL));
+
+	    if (authtype) {
+		syslog(LOG_NOTICE, "badlogin: %s %s %s",
+		       popd_clienthost, authtype,
+		       sasl_errstring(sasl_result, NULL, NULL));
+	    } else {
+		syslog(LOG_NOTICE, "badlogin: %s %s",
+		       popd_clienthost, authtype);
+	    }
+	}
 	
-	/* print the message to the user */
-	printauthready(popd_out, serveroutlen, (unsigned char *)serverout);
-
-        c = prot_getc(popd_in);
-        if(c == '*') {
-            eatline(popd_in,c);
-            prot_printf(popd_out,
-                        "-ERR [AUTH] Client canceled authentication\r\n");
-            reset_saslconn(&popd_saslconn);
-            return;
-        } else {
-            prot_ungetc(c, popd_in);
-        }
-
-	/* get string from user */
-	clientinlen = getbase64string(popd_in, &clientin);
-	if (clientinlen == -1) {
-	    prot_printf(popd_out, "-ERR [AUTH] Invalid base64 string\r\n");
-	    return;
-	}
-
-	sasl_result = sasl_server_step(popd_saslconn,
-				       clientin.s,
-				       clientinlen,
-				       &serverout, &serveroutlen);
-    }
-
-    /* failed authentication */
-    if (sasl_result != SASL_OK)
-    {
-	sleep(3);      
-
-	/* convert the sasl error code to a string */
-	prot_printf(popd_out, "-ERR [AUTH] authenticating: %s\r\n",
-		    sasl_errstring(sasl_result, NULL, NULL));
-
-	if (authtype) {
-	    syslog(LOG_NOTICE, "badlogin: %s %s %s",
-		   popd_clienthost, authtype, sasl_errdetail(popd_saslconn));
-	} else {
-	    syslog(LOG_NOTICE, "badlogin: %s %s",
-		   popd_clienthost, sasl_errdetail(popd_saslconn));
-	}
-
 	reset_saslconn(&popd_saslconn);
-	
 	return;
     }
 

@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- * $Id: imapconf.h,v 1.16 2002/06/14 18:18:49 rjs3 Exp $
+ * $Id: imapconf.h,v 1.17 2002/10/21 15:29:24 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -115,11 +115,6 @@ struct buf {
     int len;
     int alloc;
 };
-
-/* base64 authentication functions (base64.c) */
-void printauthready(struct protstream *out, int len, unsigned char *data);
-int getbase64string(struct protstream *in, struct buf *buf);
-int parsebase64string(char **ptr, const char *s);
 
 /* imap parsing functions (imapparse.c) */
 int getword(struct protstream *in, struct buf *buf);
