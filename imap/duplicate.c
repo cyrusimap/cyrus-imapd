@@ -334,7 +334,7 @@ int duplicate_prune(int days)
 	if (r != 0) { 
 	    syslog(LOG_ERR, "duplicate_prune: unable to create cursor: %s",
 		    db_strerror(r));
-	    continue;
+	    goto closedb;
 	}
 
 	r = cursor->c_get(cursor, &delivery, &date, DB_FIRST);
@@ -364,6 +364,7 @@ int duplicate_prune(int days)
 		   db_strerror(r));
 	}
 
+    closedb:
 	r = d->close(d, 0);
 	if (r != 0) {
 	    syslog(LOG_ERR, "duplicate_prune: closing %s: %s", fname,
