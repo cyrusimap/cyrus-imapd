@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.173 2002/03/15 22:00:15 ken3 Exp $
+ * $Id: index.c,v 1.174 2002/04/02 15:40:24 rjs3 Exp $
  */
 #include <config.h>
 
@@ -443,7 +443,7 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 	}
 	if (r) {
 	    seendb = 0;
-	    prot_printf(imapd_out, "* OK %s: %s\r\n",
+	    prot_printf(imapd_out, "* OK (seen state failure) %s: %s\r\n",
 		   error_message(IMAP_NO_CHECKPRESERVE), error_message(r));
 	}
 	else {
