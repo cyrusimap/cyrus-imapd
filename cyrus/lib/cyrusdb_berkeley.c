@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_berkeley.c,v 1.1.2.5 2003/02/13 20:33:11 rjs3 Exp $ */
+/* $Id: cyrusdb_berkeley.c,v 1.1.2.6 2003/06/17 20:40:43 ken3 Exp $ */
 
 #include <config.h>
 
@@ -53,6 +53,7 @@
 
 #include "cyrusdb.h"
 #include "exitcodes.h"
+#include "xmalloc.h"
 
 extern void fatal(const char *, int);
 
@@ -257,9 +258,12 @@ static int myarchive(const char **fnames, const char *dirname)
     char **begin, **list;
     const char **fname;
     char dstname[1024], *dp;
+    int length, rest;
 
-    strcpy(dstname, dirname);
-    dp = dstname + strlen(dstname);
+    strlcpy(dstname, dirname, sizeof(dstname));
+    length = strlen(dstname);
+    dp = dstname + length;
+    rest = sizeof(dstname) - length;
 
     /* Get the list of log files to remove. */
     r = log_archive(dbenv, &list, DB_ARCH_ABS, NULL);
@@ -297,7 +301,7 @@ static int myarchive(const char **fnames, const char *dirname)
 	    }
 	    if (*fname) {
 		syslog(LOG_DEBUG, "archiving database file: %s", *fname);
-		strcpy(dp, strrchr(*fname, '/'));
+		strlcpy(dp, strrchr(*fname, '/'), rest);
 		r = cyrusdb_copyfile(*fname, dstname);
 		if (r) {
 		    syslog(LOG_ERR,
