@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.85.2.13 2005/03/07 04:56:27 shadow Exp $ */
+/* $Id: master.c,v 1.85.2.14 2005/03/07 15:45:28 shadow Exp $ */
 
 #include <config.h>
 
@@ -1311,11 +1311,11 @@ static char **tokenize(char *p)
 void add_start(const char *name, struct entry *e,
 	       void *rock __attribute__((unused)))
 {
-    char *cmd = xstrdup(masterconf_getstring(e, "cmd", NULL));
+    char *cmd = xstrdup(masterconf_getstring(e, "cmd", ""));
     char buf[256];
     char **tok;
 
-    if (!cmd) {
+    if (!strcmp(cmd,"")) {
 	snprintf(buf, sizeof(buf), "unable to find command for %s", name);
 	fatal(buf, EX_CONFIG);
     }
