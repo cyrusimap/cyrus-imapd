@@ -16,7 +16,7 @@ if test `sys` = sgi_62 -o `sys` = i386_linux2 ; then
 	AMSSYNC=""
 fi
 
-LNCOMMAND="${SRCDIR}/configure $WITHAUTH --with-inn=/usr/news $AMSSYNC --enable-experiment --enable-cmulocal --enable-debug --enable-netscapehack --with-cyrus-user=cyrus --with-cyrus-group=staff"
+LNCOMMAND="${SRCDIR}/configure $WITHAUTH --with-inn=/usr/news $AMSSYNC --enable-experiment --enable-cmulocal --enable-debug --with-cyrus-user=cyrus --with-cyrus-group=staff"
 
 # Ryan's aggressive optimizations
 CC=cc

@@ -33,6 +33,9 @@ fi
 dnl get this over with; important if we're not using gcc
 CPPFLAGS="-I/usr/local/include ${CPPFLAGS}"
 LDFLAGS="-L/usr/local/lib ${CFLAGS}"
+dnl if db_185.h is present, we're using db2.0 and should include db_185.h
+dnl instead of db.h; otherwise, include db.h.  this is handled in the code
+dnl itself.
 AC_CHECK_HEADERS(unistd.h sys/select.h db_185.h)
 AC_REPLACE_FUNCS(memmove strcasecmp ftruncate strerror)
 AC_HEADER_DIRENT
