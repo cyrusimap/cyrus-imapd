@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.190 2004/09/09 16:21:26 shadow Exp $ */
+/* $Id: proxyd.c,v 1.191 2004/11/23 17:40:15 shadow Exp $ */
 
 #include <config.h>
 
@@ -1033,6 +1033,11 @@ static int proxyd_canon_user(sasl_conn_t *conn, void *context,
 
     if (config_getswitch(IMAPOPT_IMAPMAGICPLUS)) {
 	/* make a working copy of the auth[z]id */
+	if (ulen > MAX_MAILBOX_NAME) {
+	    sasl_seterror(conn, 0, "buffer overflow while canonicalizing");
+	    return SASL_BUFOVER;
+	}
+	/* make a working copy of the auth[z]id */
 	memcpy(userbuf, user, ulen);
 	userbuf[ulen] = '\0';
 	user = userbuf;
@@ -1091,6 +1096,10 @@ static int proxyd_proxy_policy(sasl_conn_t *conn,
 
 	/* make a working copy of the authzid */
 	if (!rlen) rlen = strlen(requested_user);
+	if (rlen > MAX_MAILBOX_NAME) {
+	    sasl_seterror(conn, 0, "buffer overflow while canonicalizing");
+	    return SASL_BUFOVER;
+	}
 	memcpy(userbuf, requested_user, rlen);
 	userbuf[rlen] = '\0';
 	requested_user = userbuf;
