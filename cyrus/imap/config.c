@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.55.4.19 2002/10/08 20:50:09 rjs3 Exp $ */
+/* $Id: config.c,v 1.55.4.20 2002/11/07 15:11:15 ken3 Exp $ */
 
 #include <config.h>
 
@@ -56,6 +56,7 @@
 #if HAVE_UNISTD_H
 # include <unistd.h>
 #endif
+#include <errno.h>
 
 #include "acl.h"
 #include "exitcodes.h"
@@ -71,8 +72,6 @@
 #include "prot.h" /* for PROT_BUFSIZE */
 #include "util.h"
 #include "xmalloc.h"
-
-extern int errno;
 
 #define CONFIG_FILENAME "/etc/imapd.conf"
 

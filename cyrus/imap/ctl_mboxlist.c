@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.36.2.2 2002/10/08 20:50:10 rjs3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.36.2.3 2002/11/07 15:11:15 ken3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -49,6 +49,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <errno.h>
 #include <syslog.h>
 #include <com_err.h>
 #include <stdlib.h>
@@ -68,7 +69,6 @@ const int config_need_data = 0;
 
 extern int optind;
 extern char *optarg;
-extern int errno;
 
 const int PER_COMMIT = 1000;
 

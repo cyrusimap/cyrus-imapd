@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.32 2002/10/21 21:04:22 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.33 2002/11/07 15:11:19 ken3 Exp $ */
 
 #include <config.h>
 
@@ -130,8 +130,6 @@ static int supports_referrals;
 
 extern int optind;
 extern char *optarg;
-
-extern int errno;
 
 /* global state */
 static char shutdownfilename[1024];

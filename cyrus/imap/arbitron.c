@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: arbitron.c,v 1.23.6.1 2002/07/10 19:59:57 ken3 Exp $ */
+/* $Id: arbitron.c,v 1.23.6.2 2002/11/07 15:11:15 ken3 Exp $ */
 
 #include <config.h>
 
@@ -50,6 +50,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+#include <errno.h>
 #include <syslog.h>
 #include <sys/types.h>
 #include <netinet/in.h>
@@ -67,7 +68,6 @@
 #include "convert_code.h"
 #include "seen.h"
 
-extern int errno;
 extern int optind;
 extern char *optarg;
 

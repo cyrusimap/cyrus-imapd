@@ -61,7 +61,7 @@
  * PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
  */
 
-/* $Id: cyrmain.c,v 1.11 2002/05/25 19:57:43 leg Exp $ */
+/* $Id: cyrmain.c,v 1.11.4.1 2002/11/07 15:11:13 ken3 Exp $ */
 
 #include <stdio.h>
 #include <tcl.h>
@@ -73,7 +73,6 @@
  * the Tcl source directory to make their own modified versions).
  */
 
-extern int		errno;
 extern void		exit _ANSI_ARGS_((int status));
 extern int		isatty _ANSI_ARGS_((int fd));
 extern char *		strcpy _ANSI_ARGS_((char *dst, CONST char *src));

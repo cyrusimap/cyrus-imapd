@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.99.2.14 2002/10/08 20:50:11 rjs3 Exp $
+ * $Id: lmtpd.c,v 1.99.2.15 2002/11/07 15:11:17 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -156,7 +156,6 @@ const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
 extern int optind;
 extern char *optarg;
-extern int errno;
 static int have_dupdb = 1;	/* duplicate delivery db is initialized */
 static int dupelim = 1;		/* eliminate duplicate messages with
 				   same message-id */

@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122.4.14 2002/10/21 18:07:54 ken3 Exp $
+ * $Id: pop3d.c,v 1.122.4.15 2002/11/07 15:11:19 ken3 Exp $
  */
 #include <config.h>
 
@@ -49,6 +49,7 @@
 #include <unistd.h>
 #endif
 #include <stdio.h>
+#include <errno.h>
 #include <string.h>
 #include <fcntl.h>
 #include <time.h>
@@ -98,8 +99,6 @@ static int kflag = 0;
 extern int optind;
 extern char *optarg;
 extern int opterr;
-
-extern int errno;
 
 
 

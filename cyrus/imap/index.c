@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.180.4.16 2002/10/25 19:56:37 ken3 Exp $
+ * $Id: index.c,v 1.180.4.17 2002/11/07 15:11:16 ken3 Exp $
  */
 #include <config.h>
 
@@ -80,8 +80,6 @@
 #include "xmalloc.h"
 
 #include "index.h"
-
-extern int errno;
 
 extern void printastring (const char *s);
 

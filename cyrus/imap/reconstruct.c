@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.68.4.6 2002/10/08 20:50:13 rjs3 Exp $ */
+/* $Id: reconstruct.c,v 1.68.4.7 2002/11/07 15:11:20 ken3 Exp $ */
 
 #include <config.h>
 
@@ -48,6 +48,7 @@
 #endif
 #include <stdlib.h>
 #include <stdio.h>
+#include <errno.h>
 #include <string.h>
 #include <fcntl.h>
 #include <ctype.h>
@@ -93,7 +94,6 @@
 #include "convert_code.h"
 #include "util.h"
 
-extern int errno;
 extern int optind;
 extern char *optarg;
 

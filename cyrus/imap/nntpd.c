@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.40 2002/11/05 20:26:50 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.41 2002/11/07 15:11:19 ken3 Exp $
  */
 
 /*
@@ -54,6 +54,7 @@
 #include <unistd.h>
 #endif
 #include <stdio.h>
+#include <errno.h>
 #include <string.h>
 #include <fcntl.h>
 #include <time.h>
@@ -99,8 +100,6 @@
 extern int optind;
 extern char *optarg;
 extern int opterr;
-
-extern int errno;
 
 /* Stuff to make index.c link */
 int imapd_exists;

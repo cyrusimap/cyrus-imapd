@@ -1,6 +1,6 @@
 /* ftruncate -- Replacement ftruncate() function
  * Does nothing
- $Id: ftruncate.c,v 1.6 2000/05/23 20:56:14 robeson Exp $
+ $Id: ftruncate.c,v 1.6.16.1 2002/11/07 15:11:21 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -43,7 +43,6 @@
 
 #include <config.h>
 #include <errno.h>
-extern int errno;
 
 int
 ftruncate(fd, length)

@@ -1,5 +1,5 @@
 /* retry.c -- keep trying write system calls
- $Id: retry.c,v 1.16.4.1 2002/11/04 20:48:05 ken3 Exp $
+ $Id: retry.c,v 1.16.4.2 2002/11/07 15:11:22 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -51,8 +51,6 @@
 #endif
 
 #include "retry.h"
-
-extern int errno;
 
 /*
  * Keep calling the read() system call with 'fd', 'buf', and 'nbyte'

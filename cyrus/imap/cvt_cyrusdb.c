@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: cvt_cyrusdb.c,v 1.6.6.3 2002/10/08 20:50:10 rjs3 Exp $
+ * $Id: cvt_cyrusdb.c,v 1.6.6.4 2002/11/07 15:11:16 ken3 Exp $
  */
 
 #include <config.h>
@@ -63,8 +63,6 @@
 
 #include <sys/ipc.h>
 #include <sys/msg.h>
-
-extern int errno;
 
 #include "acl.h"
 #include "assert.h"

@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.42.4.16 2002/10/21 18:07:54 ken3 Exp $
+ * $Id: pop3proxyd.c,v 1.42.4.17 2002/11/07 15:11:19 ken3 Exp $
  */
 #include <config.h>
 
@@ -49,6 +49,7 @@
 #include <unistd.h>
 #endif
 #include <stdio.h>
+#include <errno.h>
 #include <string.h>
 #include <fcntl.h>
 #include <time.h>
@@ -97,8 +98,6 @@ static int kflag = 0;
 extern int optind;
 extern char *optarg;
 extern int opterr;
-
-extern int errno;
 
 /* config.c stuff */
 const int config_need_data = 0;

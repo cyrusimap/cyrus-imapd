@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.41 2002/10/21 18:07:51 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.42 2002/11/07 15:11:16 ken3 Exp $ */
 
 #include <config.h>
 
@@ -48,6 +48,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+#include <errno.h>
 #include <time.h>
 #include <signal.h>
 #include <fcntl.h>
@@ -97,7 +98,6 @@ extern void seen_done(void);
 
 extern int optind;
 extern char *optarg;
-extern int errno;
 
 /* global state */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;

@@ -1,7 +1,7 @@
 /* notifytest.c: notifyd test utility
  * Ken Murchison
  * Rob Siemborski
- * $Id: notifytest.c,v 1.7.4.1 2002/07/25 17:21:50 ken3 Exp $
+ * $Id: notifytest.c,v 1.7.4.2 2002/11/07 15:11:23 ken3 Exp $
  */
 /* 
  * Copyright (c) 2002 Carnegie Mellon University.  All rights reserved.
@@ -59,8 +59,6 @@
 #ifdef HAVE_UNISTD_H
 # include <unistd.h>
 #endif
-
-extern int errno;
 
 #define MAX_OPT 10
 #define MAXSIZE 8192

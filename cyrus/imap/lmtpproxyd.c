@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.42.4.10 2002/10/08 20:50:11 rjs3 Exp $
+ * $Id: lmtpproxyd.c,v 1.42.4.11 2002/11/07 15:11:18 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -90,8 +90,6 @@ struct protstream *deliver_out = NULL, *deliver_in = NULL;
 
 extern int optind;
 extern char *optarg;
-
-extern int errno;
 
 /* a final destination for a message */
 struct rcpt {
