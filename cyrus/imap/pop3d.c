@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.92 2001/05/29 20:34:14 leg Exp $
+ * $Id: pop3d.c,v 1.93 2001/05/30 23:12:01 ken3 Exp $
  */
 #include <config.h>
 
@@ -53,6 +53,7 @@
 #include <fcntl.h>
 #include <time.h>
 #include <signal.h>
+#include <assert.h>
 #include <sys/types.h>
 #include <sys/param.h>
 #include <syslog.h>
