@@ -116,7 +116,8 @@ unsigned long *lenp;
 	    len = p - (buffer+offset) + 1;
 	}
 	else {
-	    len = size-offset;
+		end = mid - 1;
+		continue;
 	}
 
 	n = len;
