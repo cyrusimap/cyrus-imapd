@@ -78,6 +78,8 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 *
 */
 
+#include <config.h>
+
 #ifdef HAVE_SSL
 
 /* System library. */
@@ -623,8 +625,5 @@ int tls_start_servertls(int readfd, int writefd, int *layerbits, char **authid)
 
     return (0);
 }
-
-
-
 
 #endif /* HAVE_SSL */

@@ -1,5 +1,5 @@
 /* setproctitle -- set process title shown by ps(1)
- $Id: setproctitle.c,v 1.12 2000/01/28 22:09:52 leg Exp $
+ $Id: setproctitle.c,v 1.13 2000/02/10 21:25:34 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -60,9 +60,11 @@
  * SUCH DAMAGE.
  */
 
+#include <config.h>
+
 #include <stdio.h>
+#include <stdarg.h>
 #include "xmalloc.h"
-# include <stdarg.h>
 
 # define VA_LOCAL_DECL	va_list ap;
 # define VA_START(f)	va_start(ap, f)

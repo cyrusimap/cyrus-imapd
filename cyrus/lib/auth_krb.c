@@ -1,5 +1,5 @@
 /* auth_krb.c -- Kerberos authorization
- $Id: auth_krb.c,v 1.31 2000/02/10 05:10:48 tmartin Exp $
+ $Id: auth_krb.c,v 1.32 2000/02/10 21:25:38 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -23,6 +23,7 @@
  *
  */
 
+#include <config.h>
 #include <stdlib.h>
 #include <limits.h>
 #include <stdio.h>

@@ -24,9 +24,10 @@
  * Start Date: 4/5/93
  */
 /*
- * $Id: glob.c,v 1.18 1999/03/01 21:13:19 tjs Exp $
+ * $Id: glob.c,v 1.19 2000/02/10 21:25:39 leg Exp $
  */
 
+#include <config.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>

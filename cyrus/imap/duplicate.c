@@ -1,9 +1,13 @@
+#include <config.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <syslog.h>
-#include <db.h>
 #include <assert.h>
 #include <ctype.h>
+#include <time.h>
+
+#include <db.h>
 
 #include "imap_err.h"
 #include "config.h"
@@ -218,7 +222,7 @@ int duplicate_prune(int days)
     memset(&delivery, 0, sizeof(delivery));
     memset(&date, 0, sizeof(date));
 
-    expmark = time(0) - (days * 60 * 60 * 24);
+    expmark = time(NULL) - (days * 60 * 60 * 24);
     syslog(LOG_NOTICE, "duplicate_prune: pruning back %d days", days);
     
     c[1] = '\0';

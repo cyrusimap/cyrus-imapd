@@ -8,7 +8,7 @@
  *
  */
 /* 
- $Id: acl_afs.c,v 1.17 1999/09/30 07:29:59 leg Exp $
+ $Id: acl_afs.c,v 1.18 2000/02/10 21:25:37 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -32,6 +32,7 @@
  *
  */
 
+#include <config.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>

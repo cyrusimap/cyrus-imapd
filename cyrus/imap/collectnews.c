@@ -1,5 +1,5 @@
 /* collectnews.c -- program to add news articles to relevant header files
- $Id: collectnews.c,v 1.21 2000/02/10 05:10:32 tmartin Exp $
+ $Id: collectnews.c,v 1.22 2000/02/10 21:25:24 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -26,6 +26,8 @@
  #  tech-transfer@andrew.cmu.edu
  *
  */
+
+#include <config.h>
 
 #include <stdlib.h>
 #include <stdio.h>

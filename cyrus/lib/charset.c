@@ -20,8 +20,9 @@
  * ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
  * SOFTWARE.
  */
-/* $Id: charset.c,v 1.33 2000/02/10 05:10:48 tmartin Exp $
+/* $Id: charset.c,v 1.34 2000/02/10 21:25:39 leg Exp $
  */
+#include <config.h>
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>

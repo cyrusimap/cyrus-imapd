@@ -26,13 +26,10 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.57 2000/02/10 08:00:26 leg Exp $
+ * $Id: pop3d.c,v 1.58 2000/02/10 21:25:31 leg Exp $
  */
 
-#ifndef __GNUC__
-/* can't use attributes... */
-#define __attribute__(foo)
-#endif
+#include <config.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>

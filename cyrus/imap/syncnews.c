@@ -27,8 +27,10 @@
  */
 
 /*
- * $Id: syncnews.c,v 1.15 2000/02/10 05:10:46 tmartin Exp $
+ * $Id: syncnews.c,v 1.16 2000/02/10 21:25:35 leg Exp $
  */
+#include <config.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif

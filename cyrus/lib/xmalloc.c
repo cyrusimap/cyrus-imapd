@@ -21,8 +21,9 @@
  * SOFTWARE.
  */
 /*
- * $Id: xmalloc.c,v 1.18 1999/09/30 07:32:43 leg Exp $
+ * $Id: xmalloc.c,v 1.19 2000/02/10 21:25:42 leg Exp $
  */
+#include <config.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

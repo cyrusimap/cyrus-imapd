@@ -23,9 +23,10 @@
  */
 
 /*
- * $Id: auth_unix.c,v 1.25 1999/01/09 08:32:59 tjs Exp $
+ * $Id: auth_unix.c,v 1.26 2000/02/10 21:25:38 leg Exp $
  */
 
+#include <config.h>
 #include <pwd.h>
 #include <grp.h>
 #include <ctype.h>

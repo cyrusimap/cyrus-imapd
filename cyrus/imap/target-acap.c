@@ -26,8 +26,10 @@
  *  (412) 268-4387, fax: (412) 268-7395
  *  tech-transfer@andrew.cmu.edu
  *
- * $Id: target-acap.c,v 1.2 2000/02/01 04:05:56 leg Exp $
+ * $Id: target-acap.c,v 1.3 2000/02/10 21:25:35 leg Exp $
  */
+
+#include <config.h>
 
 #include <stdio.h>
 #include <stdlib.h>

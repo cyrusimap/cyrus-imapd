@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.87 2000/02/10 08:00:22 leg Exp $
+ $Id: mailbox.c,v 1.88 2000/02/10 21:25:28 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -26,6 +26,8 @@
  #  tech-transfer@andrew.cmu.edu
  *
  */
+
+#include <config.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>

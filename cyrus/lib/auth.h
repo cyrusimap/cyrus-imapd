@@ -1,5 +1,5 @@
 /* auth.h -- Site authorization module
-	$Id: auth.h,v 1.8 1998/05/15 21:50:40 neplokh Exp $
+	$Id: auth.h,v 1.9 2000/02/10 21:25:38 leg Exp $
 
 #        Copyright 1998 by Carnegie Mellon University
 #
@@ -27,20 +27,13 @@
 #ifndef INCLUDED_AUTH_H
 #define INCLUDED_AUTH_H
 
-#ifndef P
-#ifdef __STDC__
-#define P(x) x
-#else
-#define P(x) ()
-#endif
-#endif
-
 struct auth_state;
 
-extern int auth_memberof P((struct auth_state *auth_state, const char *identifier));
-extern char *auth_canonifyid P((const char *identifier));
-extern struct auth_state *auth_newstate P((const char *identifier,
-					   const char *cacheid));
-extern void auth_freestate P((struct auth_state *auth_state));
+extern int auth_memberof(struct auth_state *auth_state, 
+			 const char *identifier);
+extern char *auth_canonifyid(const char *identifier);
+extern struct auth_state *auth_newstate(const char *identifier,
+					const char *cacheid);
+extern void auth_freestate(struct auth_state *auth_state);
 
 #endif /* INCLUDED_AUTH_H */

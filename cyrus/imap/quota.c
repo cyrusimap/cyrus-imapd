@@ -25,8 +25,10 @@
  *  tech-transfer@andrew.cmu.edu
  *
  */
-/* $Id: quota.c,v 1.31 2000/02/10 05:10:44 tmartin Exp $ */
+/* $Id: quota.c,v 1.32 2000/02/10 21:25:33 leg Exp $ */
 
+
+#include <config.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>

@@ -1,5 +1,5 @@
 /* seen_local.c -- Storage for /Recent and /Seen state on local filesystem
- $Id: seen_local.c,v 1.29 2000/02/10 08:00:27 leg Exp $
+ $Id: seen_local.c,v 1.30 2000/02/10 21:25:34 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -26,6 +26,8 @@
  #  tech-transfer@andrew.cmu.edu
  *
  */
+
+#include <config.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>

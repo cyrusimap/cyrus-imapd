@@ -1,4 +1,4 @@
-/* proxyd.c -- IMAP server proxy
+/* proxyd.c -- IMAP server proxy for Cyrus Murder
  *
  * Copyright 1998 Carnegie Mellon University
  * 
@@ -25,11 +25,9 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: proxyd.c,v 1.4 2000/02/01 04:05:55 leg Exp $ */
+/* $Id: proxyd.c,v 1.5 2000/02/10 21:25:32 leg Exp $ */
 
-#ifndef __GNUC__
-#define __attribute__(foo)
-#endif
+#include <config.h>
 
 #include <stdio.h>
 #include <string.h>

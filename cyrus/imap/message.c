@@ -27,8 +27,10 @@
  */
 
 /*
- * $Id: message.c,v 1.72 2000/02/10 05:10:42 tmartin Exp $
+ * $Id: message.c,v 1.73 2000/02/10 21:25:30 leg Exp $
  */
+
+#include <config.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>

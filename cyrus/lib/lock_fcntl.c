@@ -1,5 +1,5 @@
 /* lock_fcntl.c -- Lock files using fcntl()
- $Id: lock_fcntl.c,v 1.9 1998/05/15 21:51:53 neplokh Exp $
+ $Id: lock_fcntl.c,v 1.10 2000/02/10 21:25:40 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -22,6 +22,7 @@
  # SOFTWARE.
  *
  */
+#include <config.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>

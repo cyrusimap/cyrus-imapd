@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.90 2000/02/10 07:59:32 leg Exp $
+# $Id: Makefile.in,v 1.91 2000/02/10 21:25:23 leg Exp $
 # 
 # @configure_input@
 #
@@ -46,7 +46,7 @@ CYRUS_USER=@cyrus_user@
 CYRUS_GROUP=@cyrus_group@
 
 DEFS = @DEFS@ @LOCALDEFS@
-CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../acap @COM_ERR_CPPFLAGS@ @SIEVE_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@
+CPPFLAGS = -I. -I.. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../acap @COM_ERR_CPPFLAGS@ @SIEVE_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@
 IMAP_LIBS = @IMAP_LIBS@
 SIEVE_LIBS = @SIEVE_LIBS@
 IMAP_COM_ERR_LIBS = @IMAP_COM_ERR_LIBS@
@@ -80,7 +80,7 @@ exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
 LOBJS= append.o mailbox.o mboxlist.o mboxname.o message.o \
-	config.o imap_err.o proc.o toimsp.o setproctitle.o convert_code.o \
+	config.o imap_err.o proc.o setproctitle.o convert_code.o \
 	duplicate.o saslclient.o acapmbox.o\
 	$(SEEN) $(NOTIFY)
 
@@ -193,10 +193,6 @@ reconstruct: reconstruct.o libimap.a $(DEPLIBS)
 
 quota: quota.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o quota quota.o libimap.a $(DEPLIBS) $(LIBS)
-
-updateimsp: updateimsp.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o \
-	 updateimsp updateimsp.o libimap.a $(DEPLIBS) $(LIBS)
 
 krbck: krbck.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o krbck krbck.o $(DEPLIBS) $(LIBS)

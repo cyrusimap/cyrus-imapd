@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- $Id: mboxname.c,v 1.15 2000/02/10 05:10:41 tmartin Exp $
+ $Id: mboxname.c,v 1.16 2000/02/10 21:25:30 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -26,6 +26,8 @@
  #  tech-transfer@andrew.cmu.edu
  *
  */
+
+#include <config.h>
 
 #include <stdio.h>
 #include <string.h>

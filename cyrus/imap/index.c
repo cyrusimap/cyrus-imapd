@@ -26,8 +26,10 @@
  *
  */
 /*
- * $Id: index.c,v 1.94 2000/02/10 08:00:21 leg Exp $
+ * $Id: index.c,v 1.95 2000/02/10 21:25:27 leg Exp $
  */
+#include <config.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -506,11 +508,13 @@ int oldexists;
 	    for (msgno = 1; msgno <= imapd_exists; msgno++) {
 		if (!seenflag[msgno]) break;
 	    }
+#if TOIMSP
 	    if (msgno == imapd_exists + 1) {
-/*		toimsp(mailbox->name, mailbox->uidvalidity,
+		toimsp(mailbox->name, mailbox->uidvalidity,
 		       "SEENsnn", imapd_userid, mailbox->last_uid,
-		       seen_last_change, 0); */
+		       seen_last_change, 0);
 	    }
+#endif
 	}
 	return;
     }
@@ -655,6 +659,7 @@ int oldexists;
 	return;
     }
 
+#if TOIMSP
     if (newallseen) {
 	toimsp(mailbox->name, mailbox->uidvalidity, "SEENsnn", imapd_userid,
 	       mailbox->last_uid, seen_last_change, 0);
@@ -663,7 +668,8 @@ int oldexists;
 	toimsp(mailbox->name, mailbox->uidvalidity, "SEENsnn", imapd_userid,
 	       0, seen_last_change, 0);
     }
-    
+#endif    
+
     free(newseenuids);
     seenuids = saveseenuids;
 }

@@ -1,5 +1,5 @@
 /* config.c -- Configuration routines
- $Id: config.c,v 1.24 2000/02/10 05:10:33 tmartin Exp $
+ $Id: config.c,v 1.25 2000/02/10 21:25:24 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -26,6 +26,8 @@
  #  tech-transfer@andrew.cmu.edu
  *
  */
+#include <config.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

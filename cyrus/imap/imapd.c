@@ -25,11 +25,9 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.203 2000/02/10 08:00:20 leg Exp $ */
+/* $Id: imapd.c,v 1.204 2000/02/10 21:25:26 leg Exp $ */
 
-#ifndef __GNUC__
-#define __attribute__(foo)
-#endif
+#include <config.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
