@@ -1,5 +1,5 @@
 /* bc_eval.c - evaluate the bytecode
- * $Id: bc_eval.c,v 1.1.4.4 2003/03/05 18:15:09 rjs3 Exp $
+ * $Id: bc_eval.c,v 1.1.4.5 2003/03/26 18:16:31 rjs3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -696,7 +696,7 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
     }
 
 #if VERBOSE
-    printf("version number %d\n",bc[0].op); 
+    printf("version number %d\n",bc[ip].op); 
 #endif
 
     for(ip++; ip<=bc_len; ) { 
