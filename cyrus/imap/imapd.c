@@ -1817,11 +1817,14 @@ struct buf *buf;
 	 */
 	for (;;) {
 	    c = getc(stdin);
-	    if (c == '\"') {
+	    if (c == '\\') {
+		c = getc(stdin);
+	    }
+	    else if (c == '\"') {
 		buf->s[len] = '\0';
 		return getc(stdin);
 	    }
-	    if (c == EOF || c == '\r' || c == '\n') {
+	    else if (c == EOF || c == '\r' || c == '\n') {
 		buf->s[len] = '\0';
 		if (c != EOF) ungetc(c, stdin);
 		return EOF;
