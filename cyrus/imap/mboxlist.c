@@ -1536,7 +1536,7 @@ unsigned *sizep;
 	fatal("can't read mailbox list", EX_OSFILE);
     }
 
-    r = lock_reopen(listfile, listfname, &sbuf, &lockfailaction);
+    r = lock_reopen(fileno(listfile), listfname, &sbuf, &lockfailaction);
     if (r == -1) {
 	syslog(LOG_ERR, "IOERROR: %s %s: %m", lockfailaction, listfname);
 	fclose(listfile);
