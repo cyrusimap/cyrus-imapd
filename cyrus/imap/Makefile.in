@@ -115,6 +115,11 @@ append.o: /usr/include/stdio.h /usr/include/ctype.h /usr/include/sys/types.h
 append.o: /usr/include/sys/stdtypes.h /usr/include/sys/sysmacros.h
 append.o: /usr/include/syslog.h ../lib/acl.h ../lib/assert.h imap_err.h
 append.o: mailbox.h append.h ../lib/xmalloc.h
+collectnews.o: /usr/include/stdio.h /usr/include/string.h
+collectnews.o: /usr/include/sys/stdtypes.h /usr/include/sysexits.h
+collectnews.o: /usr/include/syslog.h /usr/local/include/afs/com_err.h
+collectnews.o: config.h imap_err.h mailbox.h /usr/include/sys/types.h
+collectnews.o: /usr/include/sys/sysmacros.h ../lib/xmalloc.h
 config.o: /usr/include/stdio.h /usr/include/ctype.h /usr/include/sysexits.h
 config.o: /usr/include/syslog.h /usr/local/include/afs/com_err.h config.h
 config.o: ../lib/xmalloc.h
@@ -140,10 +145,10 @@ index.o: /usr/include/stdio.h /usr/include/string.h
 index.o: /usr/include/sys/stdtypes.h /usr/include/time.h
 index.o: /usr/include/sysexits.h /usr/include/sys/types.h
 index.o: /usr/include/sys/sysmacros.h /usr/include/sys/stat.h
-index.o: /usr/include/netinet/in.h /usr/include/sys/mman.h
+index.o: /usr/include/netinet/in.h /usr/include/syslog.h
 index.o: /usr/local/include/afs/com_err.h ../lib/acl.h ../lib/util.h
 index.o: ../lib/assert.h imap_err.h mailbox.h imapd.h append.h
-index.o: ../lib/xmalloc.h
+index.o: ../lib/charset.h ../lib/xmalloc.h
 login_krb.o: /usr/include/stdio.h /usr/include/ctype.h
 login_krb.o: /usr/include/sysexits.h /usr/local/include/krb.h
 login_krb.o: /usr/local/include/mit-copyright.h /usr/local/include/des.h
@@ -163,28 +168,38 @@ mailbox.o: /usr/include/netinet/in.h /usr/include/sys/stat.h
 mailbox.o: /usr/include/sys/file.h /usr/include/sys/fcntlcom.h
 mailbox.o: /usr/include/dirent.h /usr/include/sys/dirent.h ../lib/acl.h
 mailbox.o: ../lib/assert.h imap_err.h mailbox.h ../lib/xmalloc.h
+map_mmap.o: /usr/include/stdio.h /usr/include/sysexits.h
+map_mmap.o: /usr/include/sys/types.h /usr/include/sys/stdtypes.h
+map_mmap.o: /usr/include/sys/sysmacros.h /usr/include/sys/mman.h
+map_mmap.o: /usr/include/syslog.h
+map_nommap.o: /usr/include/stdio.h /usr/include/sysexits.h
+map_nommap.o: /usr/include/sys/types.h /usr/include/sys/stdtypes.h
+map_nommap.o: /usr/include/sys/sysmacros.h /usr/include/syslog.h
+map_nommap.o: ../lib/xmalloc.h
 mboxlist.o: /usr/include/stdio.h /usr/include/sysexits.h
 mboxlist.o: /usr/include/string.h /usr/include/sys/stdtypes.h
 mboxlist.o: /usr/include/errno.h /usr/include/sys/errno.h
 mboxlist.o: /usr/include/sys/types.h /usr/include/sys/sysmacros.h
 mboxlist.o: /usr/include/sys/stat.h /usr/include/sys/file.h
-mboxlist.o: /usr/include/sys/fcntlcom.h ../lib/acl.h ../lib/glob.h
-mboxlist.o: ../lib/assert.h config.h mailbox.h imap_err.h ../lib/xmalloc.h
+mboxlist.o: /usr/include/sys/fcntlcom.h /usr/include/syslog.h ../lib/acl.h
+mboxlist.o: ../lib/glob.h ../lib/assert.h config.h mailbox.h imap_err.h
+mboxlist.o: ../lib/xmalloc.h
 message.o: /usr/include/stdio.h /usr/include/ctype.h /usr/include/string.h
-message.o: /usr/include/sys/stdtypes.h /usr/include/time.h imap_err.h
-message.o: mailbox.h /usr/include/sys/types.h /usr/include/sys/sysmacros.h
-message.o: parseadd.h ../lib/charset.h ../lib/util.h ../lib/xmalloc.h
+message.o: /usr/include/sys/stdtypes.h /usr/include/time.h
+message.o: /usr/include/syslog.h imap_err.h mailbox.h
+message.o: /usr/include/sys/types.h /usr/include/sys/sysmacros.h parseadd.h
+message.o: ../lib/charset.h ../lib/util.h ../lib/xmalloc.h
 parseadd.o: /usr/include/stdio.h /usr/include/ctype.h parseadd.h
 parsel.o: /usr/include/stdio.h parseadd.h parsey.h
 parseutl.o: /usr/include/stdio.h parseadd.h
 parsey.o: parseadd.h
-proc.o: /usr/include/stdio.h /usr/include/sysexits.h config.h
-proc.o: ../lib/xmalloc.h
+proc.o: /usr/include/stdio.h /usr/include/syslog.h /usr/include/sysexits.h
+proc.o: config.h ../lib/xmalloc.h
 seen_local.o: /usr/include/stdio.h /usr/include/errno.h
 seen_local.o: /usr/include/sys/errno.h /usr/include/ctype.h
 seen_local.o: /usr/include/strings.h /usr/include/sys/types.h
 seen_local.o: /usr/include/sys/stdtypes.h /usr/include/sys/sysmacros.h
 seen_local.o: /usr/include/sys/stat.h /usr/include/sys/file.h
-seen_local.o: /usr/include/sys/fcntlcom.h ../lib/assert.h mailbox.h
-seen_local.o: imap_err.h ../lib/xmalloc.h
+seen_local.o: /usr/include/sys/fcntlcom.h /usr/include/syslog.h
+seen_local.o: ../lib/assert.h mailbox.h imap_err.h ../lib/xmalloc.h
 setproctitle.o: /usr/include/stdio.h ../lib/xmalloc.h /usr/include/varargs.h
