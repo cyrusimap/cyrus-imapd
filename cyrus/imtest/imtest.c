@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.76 2002/05/27 12:43:37 ken3 Exp $
+ * $Id: imtest.c,v 1.77 2002/05/30 19:50:02 rjs3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1108,7 +1108,9 @@ static void logout(struct logout_cmd_t *logout_cmd)
     prot_printf(pout, "%s\r\n", logout_cmd->cmd);
     prot_flush(pout);
 
-    waitfor(logout_cmd->resp, NULL);
+    /* we're not going to wait for this, because we could be in a spot where
+     * the remote will never send it (e.g. in the middle of a literal) */
+    /* waitfor(logout_cmd->resp, NULL); */
 }
 
 static int gotsigint = 0;
