@@ -20,21 +20,23 @@
 .\" ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
 .\" SOFTWARE.
 .SH NAME
-/etc/krb.equiv \- Kerberos equivalences
+\fB/etc/krb.equiv\fR \- Kerberos equivalences
 .SH DESCRIPTION
 .I krb.equiv
 contains zero or more lines, each of which describes a mapping of a kerberos
-principal to a local user.  Each line of the file consists of two tokens,
-separated by at least one whitespace character and optionally preceeded or
-followed by whitespace.  The first token is the kerberos principal name to
+principal (\fIuserid@host\fR) to a local user (\fIuserid\fR or alias).  
+Each line of the file consists of two tokens,
+separated by at least one whitespace character; other blanks are
+ignored.  The first token is the kerberos principal name to
 remap, and the second is the name of the corresponding local user.
-For example:
+.SH SAMPLE FILE
 .PP
 .nf
-cg2v@ANDREW.CMU.EDU cg2v
-cg2v@DEMENTIA.ORG cg2v
-cg347@ECE.CMU.EDU cg2v
-db74@ANDREW.CMU.EDU shadow
-shadow@DEMENTIA.ORG shadow
-jh4o@ANDREW.CMU.EDU jhutz
-jhutz@CS.CMU.EDU jhutz
+tyq4@ANDY.CMU.EDU tyq4
+tyq4@DEANNA.ORG tyq4
+ty347@ECE.CMU.EDU tyq4
+jj12@ANDY.CMU.EDU tick
+tick@DEANNA.ORG tick
+jy9o@ANDY.CMU.EDU jyager
+jyager@CS.CMU.EDU jyager
+
