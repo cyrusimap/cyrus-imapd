@@ -22,8 +22,14 @@
  *
  */
 
-notify(user, mailbox)
+notify_wantheader()
+{
+    return 0;
+}
+
+notify(user, mailbox, header)
 char *user;
 char *mailbox;
+char *header;
 {
 }
