@@ -1,5 +1,5 @@
 /* pop3test.c -- pop3 test client
- * $Id: pop3test.c,v 1.6 2002/03/19 15:56:09 ken3 Exp $
+ * $Id: pop3test.c,v 1.7 2002/04/12 18:09:30 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -828,6 +828,8 @@ static int auth_user(void)
   if(prot_fgets(str, 1024, pin) == NULL) {
       imtest_fatal("prot layer failure");
   }
+
+  printf("S: %s", str);
 
   if (!strncasecmp(str, "+OK ", 4)) {
       return IMTEST_OK;
