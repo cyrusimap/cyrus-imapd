@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.180.4.4 2002/08/18 01:08:51 ken3 Exp $
+ * $Id: index.c,v 1.180.4.5 2002/08/19 15:42:05 ken3 Exp $
  */
 #include <config.h>
 
@@ -3498,11 +3498,11 @@ static char *find_msgid(char *str, char **rem)
 	/* check for fold or end of header
 	 *
 	 * Per RFC 2822 section 2.2.3, a long header may be folded by
-	 * inserting CRLF before any WSP.  Any other CRLF is the end
-	 * of the header.
+	 * inserting CRLF before any WSP (SP and HTAB, per section 2.2.2).
+	 * Any other CRLF is the end of the header.
 	 */
 	if (*cp++ == '\r') {
-	    if (*cp++ == '\n' && !isspace((int) *cp)) {
+	    if (*cp++ == '\n' && !(*cp == ' ' || *cp == '\t')) {
 		/* end of header, we're done */
 		break;
 	    }
