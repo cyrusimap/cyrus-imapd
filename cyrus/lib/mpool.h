@@ -1,6 +1,6 @@
 /* mpool.h memory pool management
  *
- * $Id: mpool.h,v 1.3 2002/02/07 20:15:54 rjs3 Exp $
+ * $Id: mpool.h,v 1.4 2002/02/07 20:16:34 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -66,7 +66,7 @@ struct mpool
 
 #define DEFAULT_MPOOL_SIZE 32000
 
-/* Create a new pool */
+/* Create a new pool -- pass zero for default */
 struct mpool *new_mpool(size_t size);
 
 /* Free a pool */
