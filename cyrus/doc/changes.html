@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.71 2003/10/22 18:50:04 rjs3 Exp $ -->
+<!-- $Id: changes.html,v 1.72 2003/10/27 22:08:17 rjs3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -20,6 +20,11 @@ on code supplied by David Carter &lt;David.Carter@ucs.cam.ac.uk&gt; from
 the University of Cambridge)
 <li>The sieve bytecode format has been updated once more, to correctly
 handle short-circuiting of the allof and anyof operators</li>
+<li>Support for warning quota based on absolute mailbox size</li>
+<li>Correct handling of annotations during XFER operations</li>
+<li>Simple support for IMAP BINARY extension</li>
+<li>Support for Automake 1.7 and Autoconf 2.57</li>
+<li>Support for IMAP initial SASL response (the SASL-IR extension)</li>
 </ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.2.0</h1>
@@ -1870,7 +1875,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2003/10/22 18:50:04 $ <br />
+last modified: $Date: 2003/10/27 22:08:17 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
