@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: duplicate.c,v 1.31.4.7 2003/06/18 20:22:06 ken3 Exp $ */
+/* $Id: duplicate.c,v 1.31.4.8 2003/06/19 02:16:19 ken3 Exp $ */
 
 #include <config.h>
 
@@ -144,7 +144,7 @@ time_t duplicate_check(char *id, int idlen, char *to, int tolen)
     } while (r == CYRUSDB_AGAIN);
 
     if (data) {
-	assert(len == sizeof(time_t));
+	assert(len >= sizeof(time_t));
 
 	/* found the record */
 	memcpy(&mark, data, sizeof(time_t));
@@ -176,9 +176,10 @@ void duplicate_log(char *msgid, char *name)
     }	
 }
 
-void duplicate_mark(char *id, int idlen, char *to, int tolen, time_t mark)
+void duplicate_mark(char *id, int idlen, char *to, int tolen, time_t mark,
+		    unsigned long uid)
 {
-    char buf[1024];
+    char buf[1024], data[100];
     int r;
 
     if (!duplicate_dbopen) return;
@@ -189,15 +190,18 @@ void duplicate_mark(char *id, int idlen, char *to, int tolen, time_t mark)
     memcpy(buf + idlen + 1, to, tolen);
     buf[idlen + tolen + 1] = '\0';
 
+    memcpy(data, &mark, sizeof(mark));
+    memcpy(data + sizeof(mark), &uid, sizeof(uid));
+
     do {
 	r = DB->store(dupdb, buf,
 		      idlen + tolen + 2, /* +2 b/c 1 for the center null;
 					    +1 for the terminating null */
-		      (char *) &mark, sizeof(mark), NULL);
+		      data, sizeof(mark)+sizeof(uid), NULL);
     } while (r == CYRUSDB_AGAIN);
 
-    syslog(LOG_DEBUG, "duplicate_mark: %-40s %-20s %ld",
-	   buf, buf+idlen+1, mark);
+    syslog(LOG_DEBUG, "duplicate_mark: %-40s %-20s %ld %lu",
+	   buf, buf+idlen+1, mark, uid);
 
     return;
 }
@@ -295,10 +299,13 @@ static int dump_cb(void *rock,
     time_t mark;
     char *id, *to, *freeme;
     int idlen, i;
+    unsigned long uid = 0;
 
-    assert(datalen == sizeof(time_t));
+    assert(datalen >= sizeof(time_t));
 
     memcpy(&mark, data, sizeof(time_t));
+    if (datalen > sizeof(mark))
+	memcpy(&uid, data + sizeof(mark), sizeof(unsigned long));
     to = (char*) key + strlen(key) + 1;
     id = (char *) key;
     idlen = strlen(id);
@@ -320,7 +327,8 @@ static int dump_cb(void *rock,
 	freeme = NULL;
     }
 
-    fprintf(drock->f, "id: %-40s\tto: %-20s\tat: %ld\n", id, to, (long) mark);
+    fprintf(drock->f, "id: %-40s\tto: %-20s\tat: %ld\tuid: %lu\n",
+	    id, to, (long) mark, uid);
 
     if (freeme) free(freeme);
 

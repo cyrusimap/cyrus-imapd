@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.99.2.33 2003/06/13 15:46:18 ken3 Exp $
+ * $Id: lmtpd.c,v 1.99.2.34 2003/06/19 02:16:19 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -450,7 +450,7 @@ int send_rejection(const char *origid,
 	     global_outgoing_count++, config_servername);
     
     namebuf = make_sieve_db(mailreceip);
-    duplicate_mark(buf, strlen(buf), namebuf, strlen(namebuf), t);
+    duplicate_mark(buf, strlen(buf), namebuf, strlen(namebuf), t, 0);
     fprintf(sm, "Message-ID: %s\r\n", buf);
 
     rfc822date_gen(datestr, sizeof(datestr), t);
@@ -573,7 +573,7 @@ int sieve_redirect(void *ac,
     if ((res = send_forward(rc->addr, m->return_path, m->data)) == 0) {
 	/* mark this message as redirected */
 	if (sievedb) duplicate_mark(buf, strlen(buf), 
-				    sievedb, strlen(sievedb), time(NULL));
+				    sievedb, strlen(sievedb), time(NULL), 0);
 
 	snmp_increment(SIEVE_REDIRECT, 1);
 	return SIEVE_OK;
@@ -797,7 +797,7 @@ int autorespond(void *ac,
     if (ret == SIEVE_OK) {
 	duplicate_mark((char *) arc->hash, arc->len, 
 		       sd->username, strlen(sd->username), 
-		       now + arc->days * (24 * 60 * 60));
+		       now + arc->days * (24 * 60 * 60), 0);
     }
 
     return ret;
@@ -878,7 +878,7 @@ int send_response(void *ac,
 	sievedb = make_sieve_db(sdata->username);
 
 	duplicate_mark(outmsgid, strlen(outmsgid), 
-		       sievedb, strlen(sievedb), t);
+		       sievedb, strlen(sievedb), t, 0);
 
 	snmp_increment(SIEVE_VACATION_REPLIED, 1);
 
@@ -1099,6 +1099,7 @@ int deliver_mailbox(struct protstream *msg,
     struct appendstate as;
     char namebuf[MAX_MAILBOX_PATH+1];
     time_t now = time(NULL);
+    unsigned long uid;
 
     /* Translate any separators in user */
     if (user && *user != '@')
@@ -1131,7 +1132,7 @@ int deliver_mailbox(struct protstream *msg,
 	    r = append_fromstream(&as, msg, size, now, 
 				  (const char **) flag, nflags);
 	}
-	if (!r) append_commit(&as, NULL, NULL, NULL);
+	if (!r) append_commit(&as, NULL, &uid, NULL);
 	else append_abort(&as);
     }
 
@@ -1147,7 +1148,7 @@ int deliver_mailbox(struct protstream *msg,
 
     if (!r && dupelim && id) duplicate_mark(id, strlen(id), 
 					    namebuf, strlen(namebuf),
-					    now);
+					    now, uid);
     return r;
 }
 
@@ -1235,7 +1236,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 		    char *sdb = make_sieve_db(namebuf);
 		    
 		    duplicate_mark(msgdata->id, strlen(msgdata->id), 
-				   sdb, strlen(sdb), time(NULL));
+				   sdb, strlen(sdb), time(NULL), 0);
 		}
 		
 		/* free everything */

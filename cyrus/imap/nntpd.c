@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.86 2003/06/09 02:40:34 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.87 2003/06/19 02:16:20 ken3 Exp $
  */
 
 /*
@@ -2528,7 +2528,7 @@ static int deliver(message_data_t *msg)
 	    }
 
 	    if (!r && dupelim && msg->id)
-		duplicate_mark(msg->id, strlen(msg->id), rcpt, strlen(rcpt), now);
+		duplicate_mark(msg->id, strlen(msg->id), rcpt, strlen(rcpt), now, uid);
 
 	    if (r) return r;
 
