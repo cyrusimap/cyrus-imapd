@@ -124,7 +124,7 @@ char **argv;
     }
 
     /* Copy message to temp file */
-    prot_f = savemsg(return_path, dupelim ? &id : (char *)0, &size);
+    prot_f = savemsg(return_path, dupelim ? &id : (char **)0, &size);
 
     if (optind == argc) {
 	/* Deliver to global mailbox */
