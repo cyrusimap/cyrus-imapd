@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.35 2000/06/06 21:13:50 ken3 Exp $
+ * $Id: lmtpd.c,v 1.36 2000/06/09 02:44:50 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.35 2000/06/06 21:13:50 ken3 Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.36 2000/06/09 02:44:50 leg Exp $";*/
 
 #include <config.h>
 
@@ -251,17 +251,6 @@ int service_init(int argc, char **argv, char **envp)
     signals_add_handlers();
     signal(SIGPIPE, SIG_IGN);
 
-    /* so we can do mboxlist operations */
-    mboxlist_init(0);
-    mboxlist_open(NULL);
-
-    dupelim = 1;
-    if (duplicate_init(0) != 0) {
-	syslog(LOG_ERR, 
-	       "deliver: unable to init duplicate delivery database\n");
-	dupelim = 0;
-    }
-
 #ifdef USE_SIEVE
     sieve_usehomedir = config_getswitch("sieveusehomedir", 0);
     if (!sieve_usehomedir) {
@@ -285,6 +274,18 @@ int service_init(int argc, char **argv, char **envp)
 	       sasl_errstring(r, NULL, NULL));
 	return EC_SOFTWARE;
     }
+
+    /* initialize duplicate delivery database */
+    dupelim = 1;
+    if (duplicate_init(0) != 0) {
+	syslog(LOG_ERR, 
+	       "deliver: unable to init duplicate delivery database\n");
+	dupelim = 0;
+    }
+
+    /* so we can do mboxlist operations */
+    mboxlist_init(0);
+    mboxlist_open(NULL);
 
     /* create connection to the SNMP listener, if available. */
     snmp_connect(); /* ignore return code */
@@ -323,6 +324,13 @@ int service_main(int argc, char **argv, char **envp)
     shut_down(0);
 
     return 0;
+}
+
+/* called if 'service_init()' was called but not 'service_main()' */
+void service_abort(void)
+{
+    mboxlist_close();
+    mboxlist_done();
 }
 
 #ifdef USE_SIEVE
@@ -1221,7 +1229,7 @@ char *msgid;
 char *name;
 {
     if (strlen(msgid) < 80) {
-	char *pretty;
+	char pretty[160];
 
 	beautify_copy(pretty, msgid);
 	syslog(LOG_INFO, "dupelim: eliminated duplicate message to %s id %s",

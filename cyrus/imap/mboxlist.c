@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.124 2000/05/28 23:19:03 leg Exp $
+ * $Id: mboxlist.c,v 1.125 2000/06/09 02:44:51 leg Exp $
  */
 
 #include <config.h>
@@ -2907,8 +2907,12 @@ void mboxlist_init(int myflags)
     }
 
     dbenv->set_paniccall(dbenv, (void (*)(DB_ENV *, int)) &db_panic);
-    /* dbenv->set_verbose(dbenv, DB_VERB_DEADLOCK, 1); */
-    /* dbenv->set_verbose(dbenv, DB_VERB_WAITSFOR, 1); */
+
+    
+    dbenv->set_verbose(dbenv, DB_VERB_DEADLOCK, 1);
+    dbenv->set_verbose(dbenv, DB_VERB_WAITSFOR, 1);
+    dbenv->set_verbose(dbenv, DB_VERB_CHKPOINT, 1);
+    dbenv->set_verbose(dbenv, DB_VERB_WAITSFOR, 1);
     dbenv->set_errpfx(dbenv, "mbdb");
     dbenv->set_lk_detect(dbenv, DB_LOCK_DEFAULT);
     dbenv->set_lk_max(dbenv, 10000);

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.7 2000/06/03 01:08:10 leg Exp $ */
+/* $Id: service.c,v 1.8 2000/06/09 02:45:10 leg Exp $ */
 #include <config.h>
 
 #include <stdio.h>
@@ -60,6 +60,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <sysexits.h>
 
 #include "service.h"
 
@@ -185,7 +186,8 @@ int main(int argc, char **argv, char **envp)
 		default:
 		    syslog(LOG_ERR, "accept failed: %m");
 		    notify_master(STATUS_FD, SERVICE_UNAVAILABLE);
-		    return 1;
+		    service_abort();
+		    exit(EX_OSERR);
 		}
 	    }
 	}
@@ -201,15 +203,18 @@ int main(int argc, char **argv, char **envp)
 
 	if (dup2(fd, 0) < 0) {
 	    syslog(LOG_ERR, "can't duplicate accepted socket: %m");
-	    exit(1);
+	    service_abort();
+	    exit(EX_OSERR);
 	}
 	if (dup2(fd, 1) < 0) {
 	    syslog(LOG_ERR, "can't duplicate accepted socket: %m");
-	    exit(1);
+	    service_abort();
+	    exit(EX_OSERR);
 	}
 	if (dup2(fd, 2) < 0) {
 	    syslog(LOG_ERR, "can't duplicate accepted socket: %m");
-	    exit(1);
+	    service_abort();
+	    exit(EX_OSERR);
 	}
 
 	close(fd);

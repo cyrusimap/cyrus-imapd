@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.7 2000/06/04 22:28:18 leg Exp $
+ * $Id: pop3proxyd.c,v 1.8 2000/06/09 02:44:53 leg Exp $
  */
 #include <config.h>
 
@@ -134,6 +134,7 @@ extern void setproctitle_init(int argc, char **argv, char **envp);
 extern int proc_register(char *progname, char *clienthost, 
 			 char *userid, char *mailbox);
 extern void proc_cleanup(void);
+void shut_down(int code) __attribute__ ((noreturn));
 
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
@@ -152,6 +153,9 @@ int service_init(int argc, char **argv, char **envp)
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
     setproctitle_init(argc, argv, envp);
 
+    /* set signal handlers */
+    signals_set_shutdown(&shut_down);
+    signals_add_handlers();
     signal(SIGPIPE, SIG_IGN);
 
     /* set the SASL allocation functions */
@@ -185,6 +189,8 @@ int service_main(int argc, char **argv, char **envp)
     struct hostent *hp;
     int timeout;
     sasl_security_properties_t *secprops=NULL;
+
+    signals_poll();
 
     popd_in = prot_new(0, 0);
     popd_out = prot_new(1, 1);
@@ -260,6 +266,13 @@ int service_main(int argc, char **argv, char **envp)
     return 0;
 }
 
+/* called if 'service_init()' was called but not 'service_main()' */
+void service_abort(int error)
+{
+    mboxlist_close();
+    mboxlist_done();
+}
+
 void usage(void)
 {
     prot_printf(popd_out, "-ERR usage: pop3d [-k] [-s]\r\n");
@@ -270,8 +283,6 @@ void usage(void)
 /*
  * Cleanly shut down and exit
  */
-void shut_down(int code) __attribute__ ((noreturn));
-
 void shut_down(int code)
 {
     proc_cleanup();
@@ -384,6 +395,8 @@ static void cmdloop(void)
     char *p, *arg;
 
     for (;;) {
+	signals_poll();
+
 	if (popd_auth_done) {
 	    bitpipe();
 	    return;

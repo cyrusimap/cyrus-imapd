@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.254 2000/06/08 19:46:45 leg Exp $ */
+/* $Id: imapd.c,v 1.255 2000/06/09 02:44:49 leg Exp $ */
 
 #include <config.h>
 
@@ -336,11 +336,7 @@ int service_init(int argc, char **argv, char **envp)
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
     setproctitle_init(argc, argv, envp);
 
-    /* open the mboxlist, we'll need it for real work */
-    mboxlist_init(0);
-    mboxlist_open(NULL);
-    mailbox_initialize();
-
+    /* set signal handlers */
     signals_set_shutdown(&shut_down);
     signals_add_handlers();
     signal(SIGPIPE, SIG_IGN);
@@ -364,7 +360,10 @@ int service_init(int argc, char **argv, char **envp)
 	return EC_SOFTWARE;
     }
 
-    /* syslog(LOG_DEBUG, "finished initializiting libsasl"); */
+    /* open the mboxlist, we'll need it for real work */
+    mboxlist_init(0);
+    mboxlist_open(NULL);
+    mailbox_initialize();
 
     /* create connection to the SNMP listener, if available. */
     snmp_connect(); /* ignore return code */
@@ -385,6 +384,8 @@ int service_main(int argc, char **argv, char **envp)
     int timeout;
     sasl_security_properties_t *secprops = NULL;
     sasl_external_properties_t extprops;
+
+    signals_poll();
 
     memset(&extprops, 0, sizeof(sasl_external_properties_t));
     while ((opt = getopt(argc, argv, "sp:")) != EOF) {
@@ -465,6 +466,13 @@ int service_main(int argc, char **argv, char **envp)
 
     /* never reaches! */
     return 1;
+}
+
+/* called if 'service_init()' was called but not 'service_main()' */
+void service_abort(int error)
+{
+    mboxlist_close();
+    mboxlist_done();
 }
 
 /*
