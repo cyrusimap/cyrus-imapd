@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.116 2001/08/13 16:36:56 ken3 Exp $
+ $Id: mailbox.c,v 1.117 2001/10/16 16:58:58 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -2231,6 +2231,218 @@ mailbox_rename(const char *oldname, const char *oldpath, const char *oldacl,
 	mailbox_message_get_fname(&oldmailbox, record.uid, newfnametail);
 	(void) unlink(newfname);
     }
+    mailbox_close(&newmailbox);
+    mailbox_close(&oldmailbox);
+    return r;
+}
+
+
+/*
+ * Synchronize 'new' mailbox to 'old' mailbox.
+ */
+int
+mailbox_sync(const char *oldname, const char *oldpath, const char *oldacl, 
+	     const char *newname, char *newpath, int docreate, 
+	     bit32 *olduidvalidityp, bit32 *newuidvalidityp,
+	     struct mailbox *mailboxp)
+{
+    int r, r2;
+    struct mailbox oldmailbox, newmailbox;
+    int flag, oldmsgno, newmsgno;
+    struct index_record oldrecord, newrecord;
+    char oldfname[MAX_MAILBOX_PATH], newfname[MAX_MAILBOX_PATH];
+    char *oldfnametail, *newfnametail;
+
+    /* Open old mailbox and lock */
+    mailbox_open_header_path(oldname, oldpath, oldacl, 0, &oldmailbox, 0);
+
+    if (oldmailbox.format == MAILBOX_FORMAT_NETNEWS) {
+	mailbox_close(&oldmailbox);
+	return IMAP_MAILBOX_NOTSUPPORTED;
+    }
+
+    r =  mailbox_lock_header(&oldmailbox);
+    if (!r) r = mailbox_open_index(&oldmailbox);
+    if (!r) r = mailbox_lock_index(&oldmailbox);
+    if (r) {
+	mailbox_close(&oldmailbox);
+	return r;
+    }
+
+    if (docreate) {
+	/* Create new mailbox */
+	r = mailbox_create(newname, newpath, 
+			   oldmailbox.acl, oldmailbox.uniqueid, oldmailbox.format,
+			   &newmailbox);
+    }
+    else {
+	/* Open new mailbox and lock */
+	r = mailbox_open_header_path(newname, newpath, oldacl, 0, &newmailbox, 0);
+	r =  mailbox_lock_header(&newmailbox);
+	if (!r) r = mailbox_open_index(&newmailbox);
+	if (!r) r = mailbox_lock_index(&newmailbox);
+	if (r) {
+	    mailbox_close(&newmailbox);
+	}
+    }
+    if (r) {
+	mailbox_close(&oldmailbox);
+	return r;
+    }
+
+    newmailbox.uidvalidity = oldmailbox.uidvalidity;
+    if (olduidvalidityp) *olduidvalidityp = oldmailbox.uidvalidity;
+    if (newuidvalidityp) *newuidvalidityp = newmailbox.uidvalidity;
+
+    /* Copy flag names */
+    for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
+	if (oldmailbox.flagname[flag]) {
+	    newmailbox.flagname[flag] = xstrdup(oldmailbox.flagname[flag]);
+	}
+    }
+    r = mailbox_write_header(&newmailbox);
+    if (r) {
+	mailbox_close(&newmailbox);
+	mailbox_close(&oldmailbox);
+	return r;
+    }
+
+    /* Check quota if necessary */
+    if (newmailbox.quota.root) {
+	r = mailbox_lock_quota(&newmailbox.quota);
+	if (!oldmailbox.quota.root ||
+	    strcmp(oldmailbox.quota.root, newmailbox.quota.root) != 0) {
+	    if (!r && newmailbox.quota.limit >= 0 &&
+		newmailbox.quota.used + oldmailbox.quota_mailbox_used >
+		newmailbox.quota.limit * QUOTA_UNITS) {
+		r = IMAP_QUOTA_EXCEEDED;
+	    }
+	}
+	if (r) {
+	    mailbox_close(&newmailbox);
+	    mailbox_close(&oldmailbox);
+	    return r;
+	}
+    }
+
+    strcpy(oldfname, oldmailbox.path);
+    strcat(oldfname, "/");
+    oldfnametail = oldfname + strlen(oldfname);
+    strcpy(newfname, newmailbox.path);
+    strcat(newfname, "/");
+    newfnametail = newfname + strlen(newfname);
+
+    /*
+     * Copy over new message files and delete expunged ones.
+     *
+     * We use the fact that UIDs are monotonically increasing to our
+     * advantage; we compare the UIDs from each mailbox in order, and:
+     *
+     *  - if UID in "slave" mailbox < UID in "master" mailbox,
+     *    then the message has been deleted from "master" since last sync,
+     *    so delete it from "slave" and move on to next "slave" UID
+     *  - if UID in "slave" mailbox == UID in "master" mailbox,
+     *    then message is still current and we already have a copy,
+     *    so move on to next UID in each mailbox
+     *  - if UID in "master" mailbox > last UID in "slave" mailbox, 
+     *    then this is a new arrival in "master" since last sync,
+     *    so copy it to "slave" and move on to next "master" UID
+     */
+    newmsgno = 1;
+    for (oldmsgno = 1; oldmsgno <= oldmailbox.exists; oldmsgno++) {
+	r = mailbox_read_index_record(&oldmailbox, oldmsgno, &oldrecord);
+	if (r) break;
+	if (newmsgno <= newmailbox.exists) {
+	    do {
+		r = mailbox_read_index_record(&newmailbox, newmsgno,
+					      &newrecord);
+		if (r) goto fail;
+		newmsgno++;
+
+		if (newrecord.uid < oldrecord.uid) {
+		    /* message expunged since last sync - delete message file */
+		    mailbox_message_get_fname(&newmailbox, newrecord.uid,
+					      newfnametail);
+		    unlink(newfname);
+		}
+	    } while ((newrecord.uid < oldrecord.uid) &&
+		     (newmsgno <= newmailbox.exists));
+	}
+	/* we check 'exists' instead of last UID in case of empty mailbox */
+	if (newmsgno > newmailbox.exists) {
+	    /* message arrived since last sync - copy message file */
+	    mailbox_message_get_fname(&oldmailbox, oldrecord.uid, oldfnametail);
+	    strcpy(newfnametail, oldfnametail);
+	    r = mailbox_copyfile(oldfname, newfname);
+	    if (r) break;
+	}
+    }
+    if (!r) r = seen_copy(&oldmailbox, &newmailbox);
+
+    if (!r) {
+	/* Copy over index/cache files */
+	oldfnametail--;
+	newfnametail--;
+	strcpy(oldfnametail, FNAME_INDEX);
+	strcpy(newfnametail, FNAME_INDEX);
+	unlink(newfname);		/* Make link() possible */
+	r = mailbox_copyfile(oldfname, newfname);
+	strcpy(oldfnametail, FNAME_CACHE);
+	strcpy(newfnametail, FNAME_CACHE);
+	unlink(newfname);
+	if (!r) r = mailbox_copyfile(oldfname, newfname);
+	if (r) {
+	    mailbox_close(&newmailbox);
+	    mailbox_close(&oldmailbox);
+	    return r;
+	}
+
+	/* Re-open index file and store new uidvalidity  */
+	close(newmailbox.index_fd);
+	newmailbox.index_fd = dup(oldmailbox.index_fd);
+	(void) mailbox_read_index_header(&newmailbox);
+	newmailbox.generation_no = oldmailbox.generation_no;
+	(void) mailbox_write_index_header(&newmailbox);
+    }
+
+    /* Record new quota usage */
+    if (!r && newmailbox.quota.root) {
+	newmailbox.quota.used += oldmailbox.quota_mailbox_used;
+	r = mailbox_write_quota(&newmailbox.quota);
+	mailbox_unlock_quota(&newmailbox.quota);
+    }
+    if (r) goto fail;
+
+    if (r && newmailbox.quota.root) {
+	r2 = mailbox_lock_quota(&newmailbox.quota);
+	newmailbox.quota.used += newmailbox.quota_mailbox_used;
+	if (!r2) {
+	    r2 = mailbox_write_quota(&newmailbox.quota);
+	    mailbox_unlock_quota(&newmailbox.quota);
+	}
+	if (r2) {
+	    syslog(LOG_ERR,
+	      "LOSTQUOTA: unable to record use of %u bytes in quota %s",
+		   newmailbox.quota_mailbox_used, newmailbox.quota.root);
+	}
+    }
+    if (r) goto fail;
+
+    if (mailboxp) {
+	*mailboxp = newmailbox;
+    } else {
+	mailbox_close(&newmailbox);
+    }
+    return 0;
+
+ fail:
+#if 0
+    for (msgno = 1; msgno <= oldmailbox.exists; msgno++) {
+	if (mailbox_read_index_record(&oldmailbox, msgno, &record)) continue;
+	mailbox_message_get_fname(&oldmailbox, record.uid, newfnametail);
+	(void) unlink(newfname);
+    }
+#endif
     mailbox_close(&newmailbox);
     mailbox_close(&oldmailbox);
     return r;
