@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.29 2002/01/24 22:42:03 rjs3 Exp $
+ * $Id: mupdate.c,v 1.30 2002/01/24 23:53:44 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -222,6 +222,7 @@ static void conn_free(struct conn *C)
 
     if (C->pin) prot_free(C->pin);
     if (C->pout) prot_free(C->pout);
+    close(C->fd);
     if (C->saslconn) sasl_dispose(&C->saslconn);
 
     /* free update list */
@@ -623,15 +624,13 @@ void *start(void *rock)
     char clienthost[250];
     struct hostent *hp;
 
-    if(!ready_for_connections) {
-	pthread_mutex_lock(&ready_for_connections_mutex);
-	/* did we get ready while getting this mutex? */
-	while(!ready_for_connections) {
-	    pthread_cond_wait(&ready_for_connections_cond,
-			      &ready_for_connections_mutex);
-	}
-	pthread_mutex_unlock(&ready_for_connections_mutex);
+    pthread_mutex_lock(&ready_for_connections_mutex);
+    /* are we ready to take connections? */
+    while(!ready_for_connections) {
+	pthread_cond_wait(&ready_for_connections_cond,
+			  &ready_for_connections_mutex);
     }
+    pthread_mutex_unlock(&ready_for_connections_mutex);
 
     c->pin = prot_new(c->fd, 0);
     c->pout = prot_new(c->fd, 1);
@@ -903,7 +902,6 @@ void cmd_set(struct conn *C,
 	     const char *server, const char *acl, enum settype t)
 {
     struct mbent *m;
-    struct mbent *newm;
     struct conn *upc;
 
     syslog(LOG_DEBUG, "cmd_set(fd:%d, %s)", C->fd, mailbox);
@@ -926,16 +924,17 @@ void cmd_set(struct conn *C,
 
 	/* do the deletion */
 	m->t = SET_DELETE;
-
-	/* write to disk */
-	database_log(m);
     } else {
 	if (m && (!acl || strlen(acl) < strlen(m->acl))) {
 	    /* change what's already there */
 	    strcpy(m->server, server);
 	    if (acl) strcpy(m->acl, acl);
+	    else m->acl[0] = '\0';
+
 	    m->t = t;
 	} else {
+	    struct mbent *newm;
+	    
 	    /* allocate new mailbox */
 	    if (acl) {
 		newm = xrealloc(m, sizeof(struct mbent) + strlen(acl));
@@ -949,12 +948,16 @@ void cmd_set(struct conn *C,
 	    } else {
 		newm->acl[0] = '\0';
 	    }
+
 	    newm->t = t;
 
-	    /* write to disk */
-	    database_log(newm);
+	    /* re-scope */
+	    m = newm;
 	}
     }
+
+    /* write to disk */
+    database_log(m);
 
     /* post pending changes */
     for (upc = updatelist; upc != NULL; upc = upc->updatelist_next) {
@@ -1174,9 +1177,6 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 	    goto done;
 	}
 	m->t = t = SET_DELETE;
-
-	/* write to disk */
-	database_log(m);
     } else {
 	m = database_lookup(mdata->mailbox);
 	
@@ -1184,6 +1184,7 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 	    /* change what's already there */
 	    strcpy(m->server, mdata->server);
 	    if (mdata->acl) strcpy(m->acl, mdata->acl);
+	    else mdata->acl[0] = '\0';
 
 	    if(!strncmp(rock, "MAILBOX", 6)) {
 		m->t = t = SET_ACTIVE;
@@ -1195,8 +1196,6 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 		ret = 1;
 		goto done;
 	    }
-
-	    database_log(m);
 	} else {
 	    struct mbent *newm;
 
@@ -1225,13 +1224,14 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 		goto done;
 	    }
 	    
-	    /* write to disk */
-	    database_log(newm);
-
 	    /* Bring it back into scope */
 	    m = newm;
+	
 	}
     }
+
+    /* write to disk */
+    database_log(m);
     
     /* post pending changes to anyone we are talking to */
     for (upc = updatelist; upc != NULL; upc = upc->updatelist_next) {
@@ -1432,12 +1432,25 @@ int mupdate_synchronize(mupdate_handle *handle)
 void mupdate_ready(void) 
 {
     if(ready_for_connections) {
-	syslog(LOG_ERR, "mupdate_ready called twice!");
-	fatal("mupdate_ready called twice", EC_TEMPFAIL);
+	syslog(LOG_NOTICE, "mupdate_ready called when already ready");
+	fatal("mupdate_ready called when already ready", EC_TEMPFAIL);
     }
 
     pthread_mutex_lock(&ready_for_connections_mutex);
     ready_for_connections = 1;
     pthread_cond_broadcast(&ready_for_connections_cond);
+    pthread_mutex_unlock(&ready_for_connections_mutex);
+}
+
+void mupdate_unready(void)
+{
+    pthread_mutex_lock(&ready_for_connections_mutex);
+
+    syslog(LOG_NOTICE, "unready for connections");
+
+    /* close all connections to us */
+    while(connlist) conn_free(connlist);
+    ready_for_connections = 0;
+
     pthread_mutex_unlock(&ready_for_connections_mutex);
 }

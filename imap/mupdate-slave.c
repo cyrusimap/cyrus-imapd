@@ -1,6 +1,6 @@
 /* mupdate-slave.c -- cyrus murder database clients
  *
- * $Id: mupdate-slave.c,v 1.4 2002/01/24 22:42:03 rjs3 Exp $
+ * $Id: mupdate-slave.c,v 1.5 2002/01/24 23:53:44 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -83,6 +83,10 @@ void mupdate_listen(mupdate_handle *handle, int pingtimeout)
     if (!handle || !handle->saslcompleted) return;
 
     highest_fd = handle->sock + 1;
+
+    /* don't handle connections (and drop current connections)
+     * while we sync */
+    mupdate_unready();
 
     /* First, resync the database */
     if(mupdate_synchronize(handle)) return;

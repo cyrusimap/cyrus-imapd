@@ -1,6 +1,6 @@
 /* mupdate.h - private mupdate header file
  *
- * $Id: mupdate.h,v 1.3 2002/01/24 22:42:03 rjs3 Exp $
+ * $Id: mupdate.h,v 1.4 2002/01/24 23:53:44 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -105,5 +105,6 @@ int mupdate_synchronize(mupdate_handle *handle);
 
 /* Signal that we are ready to accept connections */
 void mupdate_ready(void);
+void mupdate_unready(void);
 
 #endif /* MUPDATE_H */
