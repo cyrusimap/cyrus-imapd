@@ -1,4 +1,4 @@
-$Id: drac_auth.patch,v 1.5 2001/04/01 18:20:48 ken3 Exp $
+$Id: drac_auth.patch,v 1.6 2001/05/31 20:17:29 ken3 Exp $
 
 Patch to add support for Dynamic Relay Authorization Control
 
@@ -65,7 +65,7 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
 
 
 *** acconfig.h.orig	Wed Mar 28 11:11:49 2001
---- acconfig.h	Sun Apr  1 14:05:59 2001
+--- acconfig.h	Thu May 31 16:06:28 2001
 ***************
 *** 81,86 ****
 --- 81,89 ----
@@ -78,11 +78,11 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
   /* do we have OpenSSL? */
   #undef HAVE_SSL
   
-*** configure.in.orig	Wed Mar 28 11:11:49 2001
---- configure.in	Sun Apr  1 14:05:59 2001
+*** configure.in.orig	Thu May 17 13:33:29 2001
+--- configure.in	Thu May 31 16:06:29 2001
 ***************
-*** 719,724 ****
---- 719,739 ----
+*** 730,735 ****
+--- 730,750 ----
   SNMP_SUBDIRS=""
   AC_SUBST(SNMP_SUBDIRS)
   
@@ -104,11 +104,11 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
   CMU_SOCKETS
   CMU_LIBWRAP
   CMU_UCDSNMP
-*** imap/imapd.c.orig	Fri Mar 16 16:05:03 2001
---- imap/imapd.c	Sun Apr  1 14:08:49 2001
+*** imap/imapd.c.orig	Mon May 21 14:27:10 2001
+--- imap/imapd.c	Thu May 31 16:06:29 2001
 ***************
-*** 115,120 ****
---- 115,124 ----
+*** 117,122 ****
+--- 117,126 ----
   static SSL *tls_conn = NULL;
   #endif /* HAVE_SSL */
   
@@ -120,8 +120,8 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
   static struct mailbox mboxstruct;
   static struct mailbox *imapd_mailbox;
 ***************
-*** 541,546 ****
---- 545,565 ----
+*** 539,544 ****
+--- 543,563 ----
          TLS negotiation immediately */
       if (imaps == 1) cmd_starttls(NULL, 1);
   
@@ -144,8 +144,8 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
       snmp_increment(ACTIVE_CONNECTIONS, 1);
   
 ***************
-*** 622,627 ****
---- 641,651 ----
+*** 620,625 ****
+--- 639,649 ----
       prot_flush(imapd_out);
       /* one less active connection */
       snmp_increment(ACTIVE_CONNECTIONS, -1);
@@ -158,8 +158,8 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
   }
   
 ***************
-*** 642,647 ****
---- 666,693 ----
+*** 640,645 ****
+--- 664,691 ----
   
   }
   
@@ -189,8 +189,8 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
    * Top-level command loop parsing
    */
 ***************
-*** 1487,1492 ****
---- 1533,1543 ----
+*** 1485,1490 ****
+--- 1531,1541 ----
   
       if (!reply) reply = "User logged in";
   
@@ -203,8 +203,8 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
       imapd_logfd = telemetry_log(imapd_userid, imapd_in, imapd_out);
   
 ***************
-*** 1630,1635 ****
---- 1681,1691 ----
+*** 1628,1633 ****
+--- 1679,1689 ----
   
       prot_setsasl(imapd_in,  imapd_saslconn);
       prot_setsasl(imapd_out, imapd_saslconn);
@@ -216,10 +216,10 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
   
       /* Create telemetry log */
       imapd_logfd = telemetry_log(imapd_userid, imapd_in, imapd_out);
-*** imap/pop3d.c.orig	Wed Mar 28 20:20:29 2001
---- imap/pop3d.c	Sun Apr  1 14:05:59 2001
+*** imap/pop3d.c.orig	Wed May 30 19:12:01 2001
+--- imap/pop3d.c	Thu May 31 16:06:29 2001
 ***************
-*** 99,105 ****
+*** 100,106 ****
   
   extern int errno;
   
@@ -227,7 +227,7 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
   
   #ifdef HAVE_SSL
   static SSL *tls_conn;
---- 99,107 ----
+--- 100,108 ----
   
   extern int errno;
   
@@ -251,8 +251,8 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
   		apop_enabled() ? popd_apop_chal : config_servername,
   		CYRUS_VERSION);
 ***************
-*** 1221,1226 ****
---- 1227,1245 ----
+*** 1231,1236 ****
+--- 1237,1255 ----
       }
       popd_mailbox = &mboxstruct;
       proc_register("pop3d", popd_clienthost, popd_userid, popd_mailbox->name);
@@ -272,8 +272,8 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
   
       /* Create telemetry log */
       telemetry_log(popd_userid, popd_in, popd_out);
-*** man/imapd.conf.5.orig	Wed Mar  7 11:00:51 2001
---- man/imapd.conf.5	Sun Apr  1 14:05:59 2001
+*** man/imapd.conf.5.orig	Wed Mar  7 10:52:59 2001
+--- man/imapd.conf.5	Thu May 31 16:06:29 2001
 ***************
 *** 224,230 ****
   Unix domain socket that lmtpd listens on.
