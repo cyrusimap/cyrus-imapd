@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: chk_cyrus.c,v 1.13 2004/05/22 03:45:48 rjs3 Exp $
+ * $Id: chk_cyrus.c,v 1.14 2004/06/02 16:29:24 rjs3 Exp $
  */
 
 #include <config.h>
@@ -157,18 +157,23 @@ static int chkmbox(char *name,
 
     fprintf(stderr, " -> %d records\n", exists);
 
-    for(i=1;i<=exists;i++) {
-	char filebuf[1024];
-
-	/* xxx check for monotonic increasing UIDs in the index file */
-
-	snprintf(filebuf, sizeof(filebuf), "%s/%d.", path, UID(i));
-	if(stat(filebuf, &sbuf) == -1) {
-	    fprintf(stderr, " -> %s missing\n", filebuf);
-	    printf("%s\n",filebuf);
-	    fflush(stdout);
+    if(real_len < (exists * record_size + start_offset)) {
+	fprintf(stderr, " -> Oversized Exists Value\n", exists);
+	printf("%s\n",path);
+	fflush(stdout);
+    } else {
+	for(i=1;i<=exists;i++) {
+	    char filebuf[1024];
+	    
+	    /* xxx check for monotonic increasing UIDs in the index file */
+	    
+	    snprintf(filebuf, sizeof(filebuf), "%s/%d.", path, UID(i));
+	    if(stat(filebuf, &sbuf) == -1) {
+		fprintf(stderr, " -> %s missing\n", filebuf);
+		printf("%s\n",filebuf);
+		fflush(stdout);
+	    }
 	}
-	
     }
 
  done:
