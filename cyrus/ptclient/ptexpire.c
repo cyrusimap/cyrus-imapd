@@ -15,6 +15,7 @@ static int ndels,ndalloc;
    */
 int main()
 {
+    char fnamebuf[1024];
     HASHINFO info;
     DB * ptdb;
     char keydata[PR_MAXNAMELEN+4], *thekey;
@@ -39,23 +40,27 @@ int main()
     info.bsize = 2048;
     info.cachesize = 20480;
     info.ffactor = 8;
-    fd=open(DBLOCK, O_CREAT|O_TRUNC|O_RDWR, 0644);
+    strcpy(fnamebuf, STATEDIR);
+    strcat(fnamebuf, PTS_DBLOCK);
+    fd=open(fnamebuf, O_CREAT|O_TRUNC|O_RDWR, 0644);
     if (fd == -1) {
-        syslog(LOG_ERR, "IOERROR: creating lock file %s: %m", DBLOCK);
+        syslog(LOG_ERR, "IOERROR: creating lock file %s: %m", fnamebuf);
         return -1;
     }
     if (lock_blocking(fd) < 0) {
-        syslog(LOG_ERR, "IOERROR: locking lock file %s: %m", DBLOCK);
+        syslog(LOG_ERR, "IOERROR: locking lock file %s: %m", fnamebuf);
         return -1;
     }
-    ptdb = dbopen(DBFIL, O_RDWR, 0, DB_HASH, &info);
+    strcpy(fnamebuf, STATEDIR);
+    strcat(fnamebuf, PTS_DBFIL);
+    ptdb = dbopen(fnamebuf, O_RDWR, 0, DB_HASH, &info);
     if (!ptdb) {
-        syslog(LOG_ERR, "IOERROR: opening database %s: %m", DBFIL);
+        syslog(LOG_ERR, "IOERROR: opening database %s: %m", fnamebuf);
         return -1;
     }
     rc = SEQ(ptdb, &key, &data, R_FIRST);
     if (rc < 0) {
-        syslog(LOG_ERR, "IOERROR: reading database %s: %m", DBFIL);
+        syslog(LOG_ERR, "IOERROR: reading database %s: %m", fnamebuf);
         return -1;
     }
     if (rc) {
@@ -104,7 +109,7 @@ int main()
         rc = SEQ(ptdb, &key, &data, R_NEXT);
         found = (rc == 0);
         if (rc < 0) {
-            syslog(LOG_ERR, "IOERROR: reading database %s: %m", DBFIL);
+            syslog(LOG_ERR, "IOERROR: reading database %s: %m", fnamebuf);
             return -1;
         }
         
@@ -172,7 +177,7 @@ int main()
 #endif
         rc = DEL(ptdb, &key, 0);
         if (rc < 0) {
-            syslog(LOG_ERR, "IOERROR: writing database %s: %m", DBFIL);
+            syslog(LOG_ERR, "IOERROR: writing database %s: %m", fnamebuf);
             CLOSE(ptdb);
             close(fd);
             return -1;
@@ -189,7 +194,7 @@ int main()
         thekey[key.size-4] = 'D';
         rc = DEL(ptdb, &key, 0);
         if (rc < 0) {
-            syslog(LOG_ERR, "IOERROR: writing database %s: %m", DBFIL);
+            syslog(LOG_ERR, "IOERROR: writing database %s: %m", fnamebuf);
             CLOSE(ptdb);
             return -1;
         }
