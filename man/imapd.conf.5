@@ -105,6 +105,11 @@ compiled with Kerberos authentication.
 If enabled, any authentication identity which has \fBa\fR rights on a
 user's INBOX may log in as that user.  This option is only used when
 the server is compiled with Kerberos authentication.
+.IP "\fBnetscapeurl:\fR http://andrew2.andrew.cmu.edu/cyrus/imapd/netscape-admin.html" 5
+If enabled at compile time, this specifies a URL to reply when Netscape
+asks the server where the mail administration HTTP server is.  The default
+is a site at CMU with a hopefully informative message; administrators
+should set this to a local resource with some information of greater use.
 .SH SEE ALSO
 .PP
 \fBimapd(8)\fR
