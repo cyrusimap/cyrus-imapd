@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.45.2.1 2004/01/15 20:24:40 ken3 Exp $ */
+/* $Id: service.c,v 1.45.2.2 2004/01/28 19:36:23 ken3 Exp $ */
 
 #include <config.h>
 
@@ -142,7 +142,7 @@ static int libwrap_ask(struct request_info *r, int fd)
 
 #endif
 
-extern void cyrus_init(const char *, const char *);
+extern void cyrus_init(const char *, const char *, unsigned);
 extern const char *config_getstring(const char *key, const char *def);
 extern const char *config_dir;
 
@@ -358,7 +358,7 @@ int main(int argc, char **argv, char **envp)
     }
     id = atoi(p);
 
-    cyrus_init(alt_config, service);
+    cyrus_init(alt_config, service, 0);
 
     if (call_debugger) {
 	char debugbuf[1024];

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service-thread.c,v 1.14 2003/10/22 18:50:14 rjs3 Exp $ */
+/* $Id: service-thread.c,v 1.14.2.1 2004/01/28 19:36:23 ken3 Exp $ */
 #include <config.h>
 
 #include <stdio.h>
@@ -138,7 +138,7 @@ static int libwrap_ask(struct request_info *r, int fd)
 
 #endif
 
-extern void cyrus_init(const char *, const char *);
+extern void cyrus_init(const char *, const char *, unsigned);
 extern const char *config_getstring(const char *key, const char *def);
 
 #define ARGV_GROW 10
@@ -209,7 +209,7 @@ int main(int argc, char **argv, char **envp)
     }
     service = xstrdup(p);
 
-    cyrus_init(alt_config, service);
+    cyrus_init(alt_config, service, 0);
 
     if (call_debugger) {
 	char debugbuf[1024];
