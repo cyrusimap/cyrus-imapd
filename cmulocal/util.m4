@@ -1,6 +1,5 @@
 dnl util.m4--robutil macro
 dnl Rob Earhart
-dnl $Id: util.m4,v 1.7 1998/11/10 20:36:11 rob Exp $
 
 dnl robutil is a collection of stuff I (Rob Earhart) have found useful
 dnl to have around when writing code; it's the stuff I wind up rewriting

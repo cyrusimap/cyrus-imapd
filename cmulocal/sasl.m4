@@ -1,6 +1,5 @@
 dnl sasl.m4--sasl detection macro
 dnl Rob Earhart
-dnl $Id: sasl.m4,v 1.3 1998/11/18 01:22:21 rob Exp $
 
 AC_DEFUN(CMU_SASL, [
 	cmu_need_sasl=no
