@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.99.2.28 2003/03/29 01:26:43 ken3 Exp $
+ * $Id: lmtpd.c,v 1.99.2.29 2003/03/31 01:19:31 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1054,7 +1054,7 @@ static int sieve_find_script(const char *user, char *fname, size_t size)
     return 0;
 }
 #else /* USE_SIEVE */
-static int sieve_find_script(const char *user)
+static int sieve_find_script(const char *user, char *fname, size_t size)
 {
     return -1;
 }
