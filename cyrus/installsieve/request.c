@@ -330,7 +330,63 @@ int showlist(int version, struct protstream *pout, struct protstream *pin)
   return ret;
 }
 
+int list_wcb(int version, struct protstream *pout, struct protstream *pin,isieve_listcb_t *cb ,void *rock)
+{
+  lexstate_t state;
+  int end=0;
+  int res;
+  int ret = 0;
 
+  printf("You have the following scripts on the server:\n");
+
+  prot_printf(pout, "LISTSCRIPTS\r\n");
+  prot_flush(pout);
+
+  do {
+
+    if ((res=yylex(&state, pin))==STRING)
+    {
+      char *str=string_DATAPTR(state.str);
+
+      if (yylex(&state, pin)==' ')
+      {
+	  if (yylex(&state, pin)!=TOKEN_ACTIVE)
+	      printf("Expected ACTIVE\n");
+	  if (yylex(&state, pin)!=EOL)
+	      printf("Expected EOL\n");
+
+	  cb(str, 1, rock);
+      } else {
+
+	  /* in old version we had that '*' means active script thing */
+	  if (version == OLD_VERSION) {
+
+	      if (str[strlen(str)-1]=='*') {
+		  str[strlen(str)-1]='\0';
+		  cb(str, 1, rock);
+	      } else {
+		  cb(str, 0, rock);
+	      }
+
+	  } else { /* NEW_VERSION */
+	      /* assume it's a EOL */
+	      cb(str, 0, rock);
+	  }
+      }
+
+    } else {
+
+	ret = handle_response(res,version,pin,NULL);
+	
+	end=1;
+    }
+
+
+    
+  } while (end==0);
+
+  return ret;
+}
 
 int setscriptactive(int version, struct protstream *pout, struct protstream *pin,char *name)
 {
