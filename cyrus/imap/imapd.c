@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.304.2.8.2.4 2001/07/05 16:38:21 ken3 Exp $ */
+/* $Id: imapd.c,v 1.304.2.8.2.5 2001/07/05 19:45:34 ken3 Exp $ */
 
 #include <config.h>
 
@@ -3962,7 +3962,7 @@ char *name;
     
     if (!r) {
 	prot_printf(imapd_out, "* QUOTA ");
-	printastring(quota.root);
+	printastring(name);
 	prot_printf(imapd_out, " (");
 	if (quota.limit >= 0) {
 	    prot_printf(imapd_out, "STORAGE %u %d",
@@ -4017,12 +4017,15 @@ char *name;
 	prot_printf(imapd_out, "* QUOTAROOT ");
 	printastring(name);
 	if (mailbox.quota.root) {
+	    (*imapd_namespace.mboxname_toexternal)(mailbox.quota.root,
+						   &imapd_namespace,
+						   imapd_userid, mailboxname);
 	    prot_printf(imapd_out, " ");
-	    printastring(mailbox.quota.root);
+	    printastring(mailboxname);
 	    r = mailbox_read_quota(&mailbox.quota);
 	    if (!r) {
 		prot_printf(imapd_out, "\r\n* QUOTA ");
-		printastring(mailbox.quota.root);
+		printastring(mailboxname);
 		prot_printf(imapd_out, " (");
 		if (mailbox.quota.limit >= 0) {
 		    prot_printf(imapd_out, "STORAGE %u %d",
