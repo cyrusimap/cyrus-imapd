@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.66 2002/04/01 02:06:01 leg Exp $
+ * $Id: prot.c,v 1.67 2002/04/02 03:40:57 leg Exp $
  */
 
 #include <config.h>
@@ -111,6 +111,7 @@ int write;
  */
 int prot_free(struct protstream *s)
 {
+    if (s->error) free(s->error);
     free(s->buf);
     free((char*)s);
     return 0;
@@ -307,7 +308,7 @@ int prot_rewind(struct protstream *s)
     assert(!s->write);
 
     if (lseek(s->fd, 0L, 0) == -1) {
-	s->error = strerror(errno);
+	s->error = xstrdup(strerror(errno));
 	return EOF;
     }
     s->cnt = 0;
@@ -396,7 +397,7 @@ int prot_fill(struct protstream *s)
 		     (now < read_timeout));
 	    if (r == 0) {
 		if (!s->dontblock) {
-		    s->error = "idle for too long";
+		    s->error = xstrdup("idle for too long");
 		    return EOF;
 		} else {
 		    errno = EAGAIN;
@@ -419,7 +420,7 @@ int prot_fill(struct protstream *s)
 	} while (n == -1 && errno == EINTR);
 		
 	if (n <= 0) {
-	    if (n) s->error = strerror(errno);
+	    if (n) s->error = xstrdup(strerror(errno));
 	    else s->eof = 1;
 	    return EOF;
 	}
@@ -428,17 +429,19 @@ int prot_fill(struct protstream *s)
 	    int result;
 	    const char *out;
 	    unsigned outlen;
-	    static char errbuf[256]; /* XXX not thread-safe */
 	    
 	    /* Decode the input token */
 	    result = sasl_decode(s->conn, (const char *) s->buf, n, 
 				 &out, &outlen);
 	    
 	    if (result != SASL_OK) {
-		/* XX why not sasl_errdetail ? */
-		snprintf(errbuf, 256, "Decoding error: %s (%i)",
-			 sasl_errstring(result, NULL, NULL), result);
-		s->error = errbuf;
+		char errbuf[256];
+		const char *ed = sasl_errdetail(s->conn);
+
+		snprintf(errbuf, 256, "decoding error: %s; %s",
+			 sasl_errstring(result, NULL, NULL),
+			 ed ? ed : "no detail");
+		s->error = xstrdup(errbuf);
 		return EOF;
 	    }
 	    
@@ -535,14 +538,20 @@ int prot_flush(struct protstream *s)
     }
 
     if (s->saslssf != 0) {
-	/* Encode the data */  /* xxx handle left */
+	/* encode the data */
 	unsigned int outlen;
 	int result;
 	
 	result = sasl_encode(s->conn, (char *) ptr, left, 
 			     &encoded_output, &outlen);
 	if (result != SASL_OK) {
-	    s->error = "Encoding error";
+	    char errbuf[256];
+	    const char *ed = sasl_errdetail(s->conn);
+	    
+	    snprintf(errbuf, 256, "encoding error: %s; %s",
+		     sasl_errstring(result, NULL, NULL),
+		     ed ? ed : "no detail");
+	    s->error = xstrdup(errbuf);
 	    return EOF;
 	}
 	
@@ -562,7 +571,7 @@ int prot_flush(struct protstream *s)
 	n = write(s->fd, ptr, left);
 #endif /* HAVE_SSL */
 	if (n == -1 && errno != EINTR) {
-	    s->error = strerror(errno);
+	    s->error = xstrdup(strerror(errno));
 	    return EOF;
 	}
 
