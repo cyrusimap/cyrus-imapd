@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.65 1999/03/02 01:00:38 tjs Exp $ -->
+<!-- $Id: changes.html,v 1.66 1999/03/10 20:11:00 tjs Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -12,7 +12,10 @@
       <li> Most of the charset.c code (and mkchartable.c code) has been
 	replaced thanks to John Myers).
 
-      <li> A little code cleanup in imapd.c (thanks to Bruce Balden).
+      <li> Bug fix in message.c to look up headers in the cache when they're
+	in the cache correctly; thanks to Chris Newman for the fix.	
+
+      <li> Code cleanup here and there (thanks to Bruce Balden).
 
       <li> Annoying (and confusing) lines in syslog every time a message was
 	delivered if deliver was compiled using dbm saying that deliver was
@@ -694,7 +697,7 @@ restore tab before breaking out of loop.
 </ul>
 <P><HR><P>
 <!-- hhmts start -->
-last modified by tjs at Mon Mar  1 19:28:14 1999
+last modified by tjs at Wed Mar  3 16:18:25 1999
 <!-- hhmts end -->
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
