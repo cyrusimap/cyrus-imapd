@@ -1,6 +1,6 @@
-/* retry.h -- Keep retrying write system calls
- $Id: retry.h,v 1.6 2002/02/22 22:58:33 ken3 Exp $
- 
+/* version.h: the version number
+ *
+ * $Id: version.h,v 1.1 2002/02/22 22:59:39 ken3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,30 +41,12 @@
  *
  */
 
-#ifndef INCLUDED_RETRY_H
-#define INCLUDED_RETRY_H
+#define _NOTIFYD_VERSION "0.9"
 
-#ifndef P
-#ifdef __STDC__
-#define P(x) x
+#ifdef EXTRA_IDENT
+#define NOTIFYD_VERSION _NOTIFYD_VERSION "-" EXTRA_IDENT
 #else
-#define P(x) ()
+#define NOTIFYD_VERSION _NOTIFYD_VERSION
 #endif
-#endif
 
-#include <sys/uio.h>
-
-extern int retry_read P((int fd, void *buf, unsigned nbyte));
-extern int retry_write P((int fd, const char *buf, unsigned nbyte));
-extern int retry_writev P((int fd, struct iovec *iov, int iovcnt));
-
-/* add a buffer 's' of length 'len' to iovec 'iov' */
-#define WRITEV_ADD_TO_IOVEC(iov, num_iov, s, len) \
-    do { iov[num_iov].iov_base = s; \
-         iov[num_iov++].iov_len = len; } while (0)
-
-/* add a string 's' to iovec 'iov' */
-#define WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, s) WRITEV_ADD_TO_IOVEC(iov, num_iov, s, strlen(s))
-                
-
-#endif /* INCLUDED_RETRY_H */
+#define NOTIFYD_IDENT "Cyrus notifyd"

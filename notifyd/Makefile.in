@@ -1,0 +1,111 @@
+# Makefile.in - notifyd makefile
+# $Id: Makefile.in,v 1.1 2002/02/22 22:59:39 ken3 Exp $
+# @configure_input@
+# 
+# Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer. 
+#
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in
+#    the documentation and/or other materials provided with the
+#    distribution.
+#
+# 3. The name "Carnegie Mellon University" must not be used to
+#    endorse or promote products derived from this software without
+#    prior written permission. For permission or any other legal
+#    details, please contact  
+#      Office of Technology Transfer
+#      Carnegie Mellon University
+#      5000 Forbes Avenue
+#      Pittsburgh, PA  15213-3890
+#      (412) 268-4387, fax: (412) 268-7395
+#      tech-transfer@andrew.cmu.edu
+#
+# 4. Redistributions of any form whatsoever must retain the following
+#    acknowledgment:
+#    "This product includes software developed by Computing Services
+#     at Carnegie Mellon University (http://www.cmu.edu/computing/)."
+#
+# CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
+# THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+# AND FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE
+# FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+# AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
+# OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+#
+
+srcdir = @srcdir@
+VPATH = @srcdir@
+
+CC = @CC@
+RANLIB = @RANLIB@
+
+INSTALL = @INSTALL@
+CYRUS_USER=@cyrus_user@
+CYRUS_GROUP=@cyrus_group@
+
+DEFS = @DEFS@ @LOCALDEFS@
+CPPFLAGS = -I. -I.. -I../sieve/ -I$(srcdir) -I$(srcdir)/../sieve -I$(srcdir)/../imap -I$(srcdir)/../acap -I$(srcdir)/../lib @COM_ERR_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@
+CFLAGS = @CFLAGS@
+LDFLAGS = @LDFLAGS@
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+cyrus_prefix = @cyrus_prefix@
+
+MAKEDEPEND = @MAKEDEPEND@
+
+NOTIFYD_LIBS = @NOTIFYD_LIBS@
+
+SERVICE=../master/service.o
+
+IMAP_LIBS = @IMAP_LIBS@
+IMAP_COM_ERR_LIBS = @IMAP_COM_ERR_LIBS@
+LIB_WRAP = @LIB_WRAP@
+LIBS = $(IMAP_COM_ERR_LIBS)
+DEPLIBS=../imap/libimap.a ../lib/libcyrus.a @DEPLIBS@
+
+PURIFY=/usr/local/bin/purify
+PUREOPT=-best-effort
+
+all: notifyd
+
+install:
+	$(INSTALL) -m 755 notifyd $(DESTDIR)$(cyrus_prefix)/bin
+
+OBJS= notifyd.o notify_log.o
+
+notifytest: notifytest.o
+	$(CC) $(LDFLAGS) -o notifytest \
+	 notifytest.o $(DEPLIBS) $(IMAP_LIBS) $(LIBS) $(LIB_WRAP)
+
+notifyd: $(OBJS) $(SERVICE)
+	$(CC) $(LDFLAGS) -o notifyd \
+	 $(SERVICE) $(OBJS) $(DEPLIBS) $(IMAP_LIBS) $(LIBS) $(LIB_WRAP)
+
+notifyd.pure: $(OBJS) $(SERVICE)
+	$(PURIFY) $(PUREOPT) \
+	$(CC) $(LDFLAGS) -o notifyd.pure \
+	 $(SERVICE) $(OBJS) $(DEPLIBS) $(IMAP_LIBS) $(LIBS) $(LIB_WRAP)
+
+clean:
+	rm -f notifyd *.o *.a *~ Makefile.bak makedepend.log
+
+distclean: clean
+	rm -f Makefile notifyd
+
+depend:
+	${MAKEDEPEND} $(CPPFLAGS) $(DEFS) -I$(srcdir) $(CFLAGS) *.c $(srcdir)/*.c 1>makedepend.log 2>&1
+
+.c.o:
+	$(CC) -c $(CPPFLAGS) $(DEFS) -I$(srcdir) -I. $(CFLAGS) \
+	$<
+
+# DO NOT DELETE THIS LINE -- make depend depends on it.

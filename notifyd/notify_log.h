@@ -1,7 +1,8 @@
-/* retry.h -- Keep retrying write system calls
- $Id: retry.h,v 1.6 2002/02/22 22:58:33 ken3 Exp $
- 
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+/* notify_log.h -- syslog notification method
+ * Ken Murchison
+ */
+/*
+ * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -39,32 +40,8 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
+ * $Id: notify_log.h,v 1.1 2002/02/22 22:59:39 ken3 Exp $
  */
 
-#ifndef INCLUDED_RETRY_H
-#define INCLUDED_RETRY_H
-
-#ifndef P
-#ifdef __STDC__
-#define P(x) x
-#else
-#define P(x) ()
-#endif
-#endif
-
-#include <sys/uio.h>
-
-extern int retry_read P((int fd, void *buf, unsigned nbyte));
-extern int retry_write P((int fd, const char *buf, unsigned nbyte));
-extern int retry_writev P((int fd, struct iovec *iov, int iovcnt));
-
-/* add a buffer 's' of length 'len' to iovec 'iov' */
-#define WRITEV_ADD_TO_IOVEC(iov, num_iov, s, len) \
-    do { iov[num_iov].iov_base = s; \
-         iov[num_iov++].iov_len = len; } while (0)
-
-/* add a string 's' to iovec 'iov' */
-#define WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, s) WRITEV_ADD_TO_IOVEC(iov, num_iov, s, strlen(s))
-                
-
-#endif /* INCLUDED_RETRY_H */
+char* notify_log(int nopt, char **options, const char *priority,
+		 const char *message);

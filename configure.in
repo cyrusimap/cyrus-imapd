@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.219 2002/02/19 19:52:46 rjs3 Exp $
+dnl $Id: configure.in,v 1.220 2002/02/22 22:58:32 ken3 Exp $
 dnl
 
 
@@ -781,8 +781,8 @@ fi
 
 dnl for timsieved
 if test "$sievedir" != "no"; then
-	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} timsieved"
-	EXTRA_OUTPUT="${EXTRA_OUTPUT} timsieved/Makefile"
+	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} timsieved notifyd"
+	EXTRA_OUTPUT="${EXTRA_OUTPUT} timsieved/Makefile notifyd/Makefile"
 
 	PERL_SUBDIRS="${PERL_SUBDIRS} sieve"
 	EXTRA_OUTPUT="${EXTRA_OUTPUT} perl/sieve/Makefile perl/sieve/lib/Makefile"
