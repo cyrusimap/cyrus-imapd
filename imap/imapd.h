@@ -1,5 +1,5 @@
 /* imapd.h -- Common state for IMAP daemon
- * $Id: imapd.h,v 1.31 1999/03/02 06:34:41 tjs Exp $
+ * $Id: imapd.h,v 1.32 2000/02/22 05:02:41 leg Exp $
  *
  * Copyright 1999 Carnegie Mellon University
  * 
@@ -79,21 +79,26 @@ struct fetchargs {
 };
 
 /* Bitmasks for fetchitems */
-#define FETCH_UID		(1<<0)
-#define FETCH_INTERNALDATE	(1<<1)
-#define FETCH_SIZE		(1<<2)
-#define FETCH_FLAGS		(1<<3)
-#define FETCH_ENVELOPE		(1<<4)
-#define FETCH_BODYSTRUCTURE	(1<<5)
-#define FETCH_BODY		(1<<6)
-#define FETCH_HEADER		(1<<7)
-#define FETCH_TEXT		(1<<8)
-#define FETCH_RFC822		(1<<9)
-#define FETCH_SETSEEN		(1<<10)
-#define FETCH_UNCACHEDHEADER	(1<<11)
-#define FETCH_FAST (FETCH_FLAGS|FETCH_INTERNALDATE|FETCH_SIZE)
-#define FETCH_ALL  (FETCH_FLAGS|FETCH_INTERNALDATE|FETCH_SIZE|FETCH_ENVELOPE)
-#define FETCH_FULL (FETCH_ALL|FETCH_BODY)
+enum {
+    FETCH_UID =                 (1<<0),
+    FETCH_INTERNALDATE =        (1<<1),
+    FETCH_SIZE =                (1<<2),
+    FETCH_FLAGS =               (1<<3),
+    FETCH_ENVELOPE =	        (1<<4),
+    FETCH_BODYSTRUCTURE =	(1<<5),
+    FETCH_BODY =                (1<<6),
+    FETCH_HEADER =	        (1<<7),
+    FETCH_TEXT =                (1<<8),
+    FETCH_RFC822 =              (1<<9),
+    FETCH_SETSEEN =             (1<<10),
+    FETCH_UNCACHEDHEADER =      (1<<11)
+};
+
+enum {
+    FETCH_FAST = (FETCH_FLAGS|FETCH_INTERNALDATE|FETCH_SIZE),
+    FETCH_ALL = (FETCH_FLAGS|FETCH_INTERNALDATE|FETCH_SIZE|FETCH_ENVELOPE),
+    FETCH_FULL = (FETCH_ALL|FETCH_BODY)
+};
 
 /* Arguments to Store functions */
 struct storeargs {
