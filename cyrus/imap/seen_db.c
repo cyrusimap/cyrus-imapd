@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.22 2001/08/12 18:22:13 ken3 Exp $
+   $Id: seen_db.c,v 1.23 2001/11/13 18:30:44 leg Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -284,6 +284,9 @@ static int seen_readit(struct seen *seendb,
     if (data == NULL) {
 	r = seen_readold(seendb, lastreadptr, lastuidptr,
 			 lastchangeptr, seenuidsptr);
+	if (r) {
+	    DB->abort(seendb->db, seendb->tid);
+	}
 	return r;
     }
 
@@ -398,7 +401,7 @@ int seen_close(struct seen *seendb)
 	/* free the old database hanging around */
 	abortcurrent(lastseen);
 	r = DB->close(lastseen->db);
-	if (r) {
+	if (r != CYRUSDB_OK) {
 	    syslog(LOG_ERR, "DBERROR: error closing lastseen: %s",
 		   cyrusdb_strerror(r));
 	    r = IMAP_IOERROR;
