@@ -12,15 +12,6 @@ AC_TRY_COMPILE([
 [sasl_secret_t foo;],
 ac_cv_found_sasl_inc=yes,
 ac_cv_found_sasl_inc=no)
-if test "$ac_cv_found_sasl_inc" = "no"; then
-  CPPFLAGS="$saved_CPPFLAGS -I$1 -I$1/sasl"
-  AC_TRY_COMPILE([
-#include <sasl.h>
-],
-  [sasl_secret_t foo;],
-  [ac_cv_found_sasl_inc=yes],
-  ac_cv_found_sasl_inc=no)
-fi
 CPPFLAGS=$saved_CPPFLAGS
 ])
 
