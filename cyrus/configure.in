@@ -305,7 +305,7 @@ if test "$WITH_AUTH" = krb_pts; then
 	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} ptclient"
 	EXTRA_OUTPUT="${EXTRA_OUTPUT} ptclient/Makefile"
 	AC_DEFINE_UNQUOTED(CYRUS_PATH,"$cyrus_prefix")
-	AFSLIBS="${with_afs}/lib/afs/libkauth.a ${with_afs}/lib/afs/libprot.a  ${with_afs}/lib/afs/libauth.a ${with_afs}/lib/afs/libsys.a ${with_afs}/lib/librxkad.a ${with_afs}/lib/librx.a ${with_afs}/lib/libubik.a  ${with_afs}/lib/liblwp.a ${with_afs}/lib/afs/util.a"
+	AFSLIBS="${with_afs}/lib/afs/libkauth.a ${with_afs}/lib/afs/libprot.a  ${with_afs}/lib/afs/libauth.a ${with_afs}/lib/afs/libsys.a ${with_afs}/lib/librxkad.a ${with_afs}/lib/librx.a ${with_afs}/lib/afs/libsys.a ${with_afs}/lib/libubik.a  ${with_afs}/lib/liblwp.a ${with_afs}/lib/afs/util.a"
 	if test -f ${with_afs}/lib/afs/libaudit.a; then
 		AFSLIBS="$AFSLIBS ${with_afs}/lib/afs/libaudit.a"
 	fi
