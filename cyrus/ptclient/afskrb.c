@@ -41,7 +41,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: afskrb.c,v 1.2.2.1 2003/12/19 18:33:53 ken3 Exp $";
+      "$Id: afskrb.c,v 1.2.2.2 2004/04/29 17:31:58 ken3 Exp $";
 
 #include <config.h>
 
@@ -88,6 +88,35 @@ static char rcsid[] __attribute__((unused)) =
 #error PTS_DB_KEYSIZE is smaller than PR_MAXNAMELEN
 #endif
 
+static const char *localrealms = NULL;
+
+int is_local_realm(const char *realm) 
+{
+    const char *val = localrealms;
+    
+    if(!val || !realm) return 0;
+
+    while (*val) {
+	char buf[1024];
+	size_t len;
+	char *p;
+	
+	for (p = (char *) val; *p && !isspace((int) *p); p++);
+	len = p-val;
+	if(len >= sizeof(buf))
+	    len = sizeof(buf) - 1;
+	memcpy(buf, val, len);
+	buf[len] = '\0';
+
+	if (!strcasecmp(realm,buf)) {
+	    return 1;
+	}
+	val = p;
+	while (*val && isspace((int) *val)) val++;
+    }
+
+    return 0;
+}
 
 #ifdef AFSPTS_USE_KRB5
 
@@ -102,6 +131,7 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
     krb5_context context;
     krb5_principal princ, princ_dummy;
     char *realm;
+    char *realmbegin;
     int striprealm = 0;
 
     if(retbuf) free(retbuf);
@@ -153,26 +183,46 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
     krb5_free_principal(context,princ_dummy);
     free(realm);
 
-    /* get the text version of princ */
-    if (krb5_unparse_name(context,princ,&retbuf))
-    {
-	krb5_free_principal(context,princ);
-	krb5_free_context(context);
-	return NULL;
+    if (config_getswitch(IMAPOPT_PTSKRB5_CONVERT524)) {
+	char nbuf[64], ibuf[64], rbuf[64];
+
+	if (krb5_524_conv_principal(context, princ, nbuf, ibuf, rbuf)) {
+	    krb5_free_principal(context,princ);
+	    krb5_free_context(context);
+	    return NULL;
+	}
+
+	retbuf = xmalloc(3*64 + 3);
+	sprintf(retbuf, "%s%s%s%s%s", nbuf,
+		ibuf[0] ? "." : "", ibuf,
+		rbuf[0] ? "@" : "", rbuf);
+    } else {
+	/* get the text version of princ */
+	if (krb5_unparse_name(context,princ,&retbuf))
+	{
+	    krb5_free_principal(context,princ);
+	    krb5_free_context(context);
+	    return NULL;
+        }
     }
 
     /* we have the canonical name pointed to by p -- strip realm if local */
-    if (striprealm)
-    {
-	char *realmbegin = strrchr(retbuf, '@');
-	if(realmbegin) *realmbegin = '\0';
-    }
-
-    if (config_getswitch(IMAPOPT_PTSKRB5_SLASHTODOT)) {
-	char *slash;
-	while((slash = strchr(retbuf, '/')) != NULL) {
-	    *slash = '.';
+    realmbegin = strrchr(retbuf, '@');
+    if(realmbegin) {
+	if(!striprealm) {
+	    realm = realmbegin+1;
+	    if(is_local_realm(realm))
+		striprealm = 1;
 	}
+	
+	if(striprealm) {
+	    *realmbegin = '\0';
+	} else {
+	    /* Force realm to uppercase */
+	    while(*(++realmbegin)) {
+		*realmbegin = toupper(*realmbegin);
+	    }
+	}	
     }
     
     krb5_free_principal(context,princ);
@@ -359,7 +409,7 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
         strcat(retbuf, ".");
         strcat(retbuf, inst);
     }
-    if (*realm) {
+    if (*realm && !is_local_realm(realm)) {
         strcat(retbuf, "@");
         strcat(retbuf, realm);
     }
@@ -373,11 +423,14 @@ const char *ptsmodule_name = "afskrb";
 
 void ptsmodule_init(void) 
 {
-    int r = pr_Initialize (1L, AFSCONF_CLIENTNAME, 0);
+    int r = pr_Initialize (1L, AFSCONF_CLIENTNAME, config_getstring(IMAPOPT_AFSPTS_MYCELL));
     if (r) {
 	syslog(LOG_DEBUG, "pr_Initialize failed: %d", r);
 	fatal("pr_initialize failed", EC_TEMPFAIL);
     }
+
+    localrealms = config_getstring(IMAPOPT_AFSPTS_LOCALREALMS);
+
     return;
 }
 

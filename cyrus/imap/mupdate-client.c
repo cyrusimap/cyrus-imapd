@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.38.2.7 2004/04/03 19:53:44 ken3 Exp $
+ * $Id: mupdate-client.c,v 1.38.2.8 2004/04/29 17:31:56 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -111,6 +111,7 @@ int mupdate_connect(const char *server, const char *port,
     char localip[60], remoteip[60];
     const char *sasl_status = NULL;
     char portstr[NI_MAXSERV];
+    const char *forcemech;
     
     if(!handle)
 	return MUPDATE_BADPARAM;
@@ -231,6 +232,12 @@ int mupdate_connect(const char *server, const char *port,
 	return MUPDATE_NOAUTH;
     }
     
+    forcemech = config_getstring(IMAPOPT_FORCE_SASL_CLIENT_MECH);
+    if(forcemech) {
+	free(mechlist);
+	mechlist = xstrdup(forcemech);
+    }
+
     if (h->saslcompleted || 
 	saslclient(h->saslconn, &protocol[PROTOCOL_MUPDATE].sasl_cmd,
 		   mechlist, h->pin, h->pout, NULL, &sasl_status) != SASL_OK) {

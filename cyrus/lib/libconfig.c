@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: libconfig.c,v 1.2.2.7 2004/04/08 21:13:11 ken3 Exp $ */
+/* $Id: libconfig.c,v 1.2.2.8 2004/04/29 17:31:57 ken3 Exp $ */
 
 #include <config.h>
 
@@ -61,7 +61,9 @@
 
 #define CONFIGHASHSIZE 30 /* relatively small,
 			   * because it is for overflow only */
-static struct hash_table confighash;
+#define INCLUDEHASHSIZE 5 /* relatively small,
+			    * but how many includes are reasonable? */
+static struct hash_table confighash, includehash;
 
 /* cached configuration variables accessible to the external world */
 const char *config_filename= NULL;       /* filename of configuration file */
@@ -79,6 +81,9 @@ enum enum_value config_mupdate_config;	/* IMAP_ENUM_MUPDATE_CONFIG_STANDARD */
 extern const int config_need_data;
 extern void fatal(const char *fatal_message, int fatal_code)
    __attribute__ ((noreturn));
+
+/* prototype to allow for sane function ordering */
+void config_read_file(const char *filename);
 
 const char *config_getstring(enum imapopt opt)
 {
@@ -170,6 +175,104 @@ const char *config_metapartitiondir(const char *partition)
 
 void config_read(const char *alt_config)
 {
+    enum opttype opt = IMAPOPT_ZERO;
+    char buf[4096];
+    char *p;
+
+    /* xxx this is leaked, this may be able to be better in 2.2 (cyrus_done) */
+    if(alt_config) config_filename = xstrdup(alt_config);
+    else config_filename = xstrdup(CONFIG_FILENAME);
+
+    if(!construct_hash_table(&confighash, CONFIGHASHSIZE, 1)) {
+	fatal("could not construct configuration hash table", EC_CONFIG);
+    }
+
+    if(!construct_hash_table(&includehash, INCLUDEHASHSIZE, 1)) {
+	fatal("could not construct include file  hash table", EC_CONFIG);
+    }
+
+    config_read_file(config_filename);
+
+    free_hash_table(&includehash, NULL);
+
+    /* Check configdirectory config option */
+    if (!config_dir) {
+	fatal("configdirectory option not specified in configuration file",
+	      EC_CONFIG);
+    }
+
+    /* Scan options to see if we need to replace {configdirectory} */
+    /* xxx need to scan overflow options as well! */
+    for(opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
+	if(!imapopts[opt].val.s ||
+	   imapopts[opt].t != OPT_STRING ||
+	   opt == IMAPOPT_CONFIGDIRECTORY) {
+	    /* Skip options that have a NULL value, aren't strings, or
+	     * are the configdirectory option */
+	    continue;
+	}
+	
+	/* We use some magic numbers here,
+	 * 17 is the length of "{configdirectory}",
+	 * 16 is one less than that length, so that the replacement string
+	 *    that is malloced has room for the '\0' */
+	if(!strncasecmp(imapopts[opt].val.s,"{configdirectory}",17)) {
+	    const char *str = imapopts[opt].val.s;
+	    char *newstring =
+		xmalloc(strlen(config_dir) + strlen(str) - 16);
+	    char *freeme = NULL;
+	    
+	    /* we need to replace this string, will we need to free
+	     * the current value?  -- only if we've actually seen it in
+	     * the config file. */
+	    if(imapopts[opt].seen)
+		freeme = (char *)str;
+
+	    /* Build replacement string from configdirectory option */
+	    strcpy(newstring, config_dir);
+	    strcat(newstring, str + 17);
+
+	    imapopts[opt].val.s = newstring;
+
+	    if(freeme) free(freeme);
+	}
+    }
+
+    /* Look up default partition */
+    config_defpartition = config_getstring(IMAPOPT_DEFAULTPARTITION);
+    for (p = (char *)config_defpartition; *p; p++) {
+	if (!isalnum((unsigned char) *p))
+	  fatal("defaultpartition option contains non-alphanumeric character",
+		EC_CONFIG);
+	if (isupper((unsigned char) *p)) *p = tolower((unsigned char) *p);
+    }
+    if ((config_need_data & CONFIG_NEED_PARTITION_DATA) &&
+	(!config_defpartition || !config_partitiondir(config_defpartition))) {
+	snprintf(buf, sizeof(buf),
+		"partition-%s option not specified in configuration file",
+		config_defpartition);
+	fatal(buf, EC_CONFIG);
+    }
+
+    /* look up mailbox hashing */
+    config_hashimapspool = config_getswitch(IMAPOPT_HASHIMAPSPOOL);
+
+    /* are we supporting virtual domains?  */
+    config_virtdomains = config_getenum(IMAPOPT_VIRTDOMAINS);
+    config_defdomain = config_getstring(IMAPOPT_DEFAULTDOMAIN);
+
+    /* look up the hostname we should present to the user */
+    config_servername = config_getstring(IMAPOPT_SERVERNAME);
+    if (!config_servername) {
+	config_servername = xmalloc(sizeof(char) * 256);
+	gethostname((char *) config_servername, 256);
+    }
+
+    config_mupdate_server = config_getstring(IMAPOPT_MUPDATE_SERVER);
+}
+
+void config_read_file(const char *filename)
+{
     FILE *infile;
     enum opttype opt = IMAPOPT_ZERO;
     int lineno = 0;
@@ -178,25 +281,28 @@ void config_read(const char *alt_config)
     int service_specific;
     int idlen = (config_ident ? strlen(config_ident) : 0);
 
-    if(!construct_hash_table(&confighash, CONFIGHASHSIZE, 1)) {
-	fatal("could not construct configuration hash table", EC_CONFIG);
-    }
-
-    /* xxx this is leaked, this may be able to be better in 2.2 (cyrus_done) */
-    if(alt_config) config_filename = xstrdup(alt_config);
-    else config_filename = xstrdup(CONFIG_FILENAME);
-
     /* read in config file */
-    infile = fopen(config_filename, "r");
+    infile = fopen(filename, "r");
     if (!infile) {
 	strlcpy(buf, CYRUS_PATH, sizeof(buf));
-	strlcat(buf, config_filename, sizeof(buf));
+	strlcat(buf, filename, sizeof(buf));
 	infile = fopen(buf, "r");
     }
     if (!infile) {
 	snprintf(buf, sizeof(buf), "can't open configuration file %s: %s",
-		 config_filename, error_message(errno));
+		 filename, error_message(errno));
 	fatal(buf, EC_CONFIG);
+    }
+
+    /* check to see if we've already read this file */
+    if (hash_lookup(filename, &includehash)) {
+	snprintf(buf, sizeof(buf), "configuration file %s included twice",
+		 filename);
+	fatal(buf, EC_CONFIG);
+	return;
+    }
+    else {
+	hash_insert(filename, (void*) 0xDEADBEEF, &includehash);
     }
     
     while (fgets(buf, sizeof(buf), infile)) {
@@ -209,14 +315,15 @@ void config_read(const char *alt_config)
 	if (!*p || *p == '#') continue;
 
 	fullkey = key = p;
+	if (*p == '@') p++;  /* allow @ as the first char (for directives) */
 	while (*p && (isalnum((int) *p) || *p == '-' || *p == '_')) {
 	    if (isupper((unsigned char) *p)) *p = tolower((unsigned char) *p);
 	    p++;
 	}
 	if (*p != ':') {
 	    snprintf(errbuf, sizeof(errbuf),
-		    "invalid option name on line %d of configuration file",
-		    lineno);
+		    "invalid option name on line %d of configuration file %s",
+		    lineno, filename);
 	    fatal(errbuf, EC_CONFIG);
 	}
 	*p++ = '\0';
@@ -236,6 +343,20 @@ void config_read(const char *alt_config)
 	}
 	
 	srvkey = NULL;
+
+	/* Look for directives */
+	if (key[0] == '@') {
+	    if (!strcasecmp(key, "@include")) {
+		config_read_file(p);
+		continue;
+	    }
+	    else {
+		snprintf(errbuf, sizeof(errbuf),
+			 "invalid directive on line %d of configuration file %s",
+			 lineno, filename);
+		fatal(errbuf, EC_CONFIG);
+	    }
+	}
 
 	/* Find if there is a <service>_ prefix */
 	if(config_ident && !strncasecmp(key, config_ident, idlen) 
@@ -429,83 +550,4 @@ void config_read(const char *alt_config)
 	}
     }
     fclose(infile);
-
-    /* Check configdirectory config option */
-    if (!config_dir) {
-	fatal("configdirectory option not specified in configuration file",
-	      EC_CONFIG);
-    }
-
-    /* Scan options to see if we need to replace {configdirectory} */
-    /* xxx need to scan overflow options as well! */
-    for(opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
-	if(!imapopts[opt].val.s ||
-	   imapopts[opt].t != OPT_STRING ||
-	   opt == IMAPOPT_CONFIGDIRECTORY) {
-	    /* Skip options that have a NULL value, aren't strings, or
-	     * are the configdirectory option */
-	    continue;
-	}
-	
-	/* We use some magic numbers here,
-	 * 17 is the length of "{configdirectory}",
-	 * 16 is one less than that length, so that the replacement string
-	 *    that is malloced has room for the '\0' */
-	if(!strncasecmp(imapopts[opt].val.s,"{configdirectory}",17)) {
-	    const char *str = imapopts[opt].val.s;
-	    char *newstring =
-		xmalloc(strlen(config_dir) + strlen(str) - 16);
-	    char *freeme = NULL;
-	    
-	    /* we need to replace this string, will we need to free
-	     * the current value?  -- only if we've actually seen it in
-	     * the config file. */
-	    if(imapopts[opt].seen)
-		freeme = (char *)str;
-
-	    /* Build replacement string from configdirectory option */
-	    strcpy(newstring, config_dir);
-	    strcat(newstring, str + 17);
-
-	    imapopts[opt].val.s = newstring;
-
-	    if(freeme) free(freeme);
-	}
-    }
-
-    /* Look up default partition */
-    config_defpartition = config_getstring(IMAPOPT_DEFAULTPARTITION);
-    for (p = (char *)config_defpartition; *p; p++) {
-	if (!isalnum((unsigned char) *p))
-	  fatal("defaultpartition option contains non-alphanumeric character",
-		EC_CONFIG);
-	if (isupper((unsigned char) *p)) *p = tolower((unsigned char) *p);
-    }
-    if ((config_need_data & CONFIG_NEED_PARTITION_DATA) &&
-	(!config_defpartition || !config_partitiondir(config_defpartition))) {
-	snprintf(buf, sizeof(buf),
-		"partition-%s option not specified in configuration file",
-		config_defpartition);
-	fatal(buf, EC_CONFIG);
-    }
-
-    /* look up mailbox hashing */
-    config_hashimapspool = config_getswitch(IMAPOPT_HASHIMAPSPOOL);
-
-    /* are we supporting virtual domains?  */
-    config_virtdomains = config_getenum(IMAPOPT_VIRTDOMAINS);
-    config_defdomain = config_getstring(IMAPOPT_DEFAULTDOMAIN);
-
-    /* look up the hostname we should present to the user */
-    config_servername = config_getstring(IMAPOPT_SERVERNAME);
-    if (!config_servername) {
-	config_servername = xmalloc(sizeof(char) * 256);
-	gethostname((char *) config_servername, 256);
-    }
-
-    config_mupdate_server = config_getstring(IMAPOPT_MUPDATE_SERVER);
-
-    if (config_mupdate_server) {
-	config_mupdate_config = config_getenum(IMAPOPT_MUPDATE_CONFIG);
-    }
 }
