@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.425 2003/02/13 20:15:24 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.426 2003/03/27 17:43:09 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -369,7 +369,7 @@ static void imapd_refer(const char *tag,
 			const char *server,
 			const char *mailbox)
 {
-    char url[MAX_MAILBOX_PATH];
+    char url[MAX_MAILBOX_PATH+1];
 
     if(!strcmp(imapd_userid, "anonymous")) {
 	imapurl_toURL(url, server, mailbox, "ANONYMOUS");
@@ -6755,6 +6755,7 @@ time_t *date;
     struct tm tm;
     int old_format = 0;
     char month[4], zone[4], *p;
+    time_t tmp_gmtime;
     int zone_off;
 
     memset(&tm, 0, sizeof tm);
@@ -6924,7 +6925,11 @@ time_t *date;
     c = prot_getc(imapd_in);
 
     tm.tm_isdst = -1;
-    *date = mkgmtime(&tm) - zone_off*60;
+
+    tmp_gmtime = mkgmtime(&tm);
+    if(tmp_gmtime == -1) goto baddate;
+
+    *date = tmp_gmtime - zone_off*60;
 
     return c;
 
