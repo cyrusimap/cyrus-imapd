@@ -112,7 +112,7 @@ time_t duplicate_check(char *id, int idlen, char *to, int tolen)
 
     r = db_create(&d, duplicate_dbenv, 0);
     if (r != 0) {
-	syslog(LOG_ERR, "duplicate_check: opening %s: %s", fname,
+	syslog(LOG_ERR, "duplicate_check: db_create %s: %s", fname,
 	       db_strerror(r));
 	return 0;
     }
@@ -173,7 +173,7 @@ void duplicate_mark(char *id, int idlen, char *to, int tolen, time_t mark)
 
     r = db_create(&d, duplicate_dbenv, 0);
     if (r != 0) {
-	syslog(LOG_ERR, "duplicate_mark: opening %s: %s", fname,
+	syslog(LOG_ERR, "duplicate_mark: db_create %s: %s", fname,
 	       db_strerror(r));
 	return;
     }
@@ -201,9 +201,88 @@ void duplicate_mark(char *id, int idlen, char *to, int tolen, time_t mark)
     return;
 }
 
-int duplicate_prune()
+int duplicate_prune(int days)
 {
-    fatal("pruning not yet implemented", EC_TEMPFAIL);
+    int r;
+    DB *d;
+    DBC *cursor = NULL;
+    DBT key, data;
+    time_t mark, expmark;
+    char c[2];
+
+    if (days < 0) fatal("must specify positive number of days", EC_USAGE);
+
+    memset(&delivery, 0, sizeof(key));
+    memset(&date, 0, sizeof(data));
+
+    expmark = time(0) - (days * 60 * 60 * 24);
+    syslog(LOG_NOTICE, "duplicate_prune: pruning back %d days", days);
+    
+    r = db_create(&d, duplicate_dbenv, 0);
+    if (r != 0) {
+	syslog(LOG_ERR, "duplicate_prune: db_create %s: %s", fname,
+	       db_strerror(r));
+	return;
+    }
+
+    c[1] = '\0';
+    for (c[0] = 'a'; c[0] <= 'z'; c[0]++) {
+	char *fname = get_db_name;
+	int count = 0, deletions = 0;
+
+	r = d->open(d, fname, NULL, DB_HASH, 0, 0664);
+	if (r != 0) {
+	    /* might just not exist */
+	    syslog(LOG_NOTICE, "duplicate_prune: opening %s: %s", fname,
+		   db_strerror(r));
+	    continue;
+	}
+	
+	r = mbdb->cursor(mbdb, NULL, &cursor, 0);
+	if (r != 0) { 
+	    syslog(LOG_ERR, "duplicate_prune: unable to create cursor: %s",
+		    db_strerror(r));
+	    continue;
+	}
+
+	r = cursor->c_get(cursor, &delivery, &date, DB_FIRST);
+	while (r != DB_NOTFOUND) {
+	    if (r != 0) {
+		syslog(LOG_ERR, "duplicate_prune: error advancing: %s", 
+		       db_strerror(r));
+		break;
+	    }
+
+	    count++;
+	    memcpy(&mark, date.data, sizeof(time_t));
+	    if (mark < expmark) {
+		deletions++;
+		r = cursor->c_del(cursor, 0);
+		if (r != 0) {
+		    syslog(LOG_ERR, "duplicate_prune: error deleting: %s",
+			   db_strerror(r));
+		}
+	    }
+
+	    r = cursor->c_get(cursor, &delivery, &date, DB_NEXT);
+	}
+	r = cursor->c_close(c);
+	if (r != 0) {
+	    syslog(LOG_ERR, "duplicate_prune: error closing cursor: %s",
+		   db_strerror(r));
+	}
+
+	r = d->close(d, 0);
+	if (r != 0) {
+	    syslog(LOG_ERR, "duplicate_prune: closing %s: %s", fname,
+		   db_strerror);
+	}
+
+	syslog(LOG_NOTICE, "duplicate_prune: %s: purged %d out of %d entries",
+	       fname, deletions, count);
+    }
+
+    return 0;
 }
 
 int duplicate_done()
