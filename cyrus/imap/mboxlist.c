@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.123 2000/05/24 03:09:29 leg Exp $
+ * $Id: mboxlist.c,v 1.124 2000/05/28 23:19:03 leg Exp $
  */
 
 #include <config.h>
@@ -89,6 +89,8 @@ extern int errno;
 
 #include "mboxlist.h"
 
+/* this is a transitional thing to avoid warnings */
+struct mbox_txn;
 
 acl_canonproc_t mboxlist_ensureOwnerRights;
 
@@ -2139,41 +2141,24 @@ int mboxlist_foreach(foreach_proc *p, void *rock, int rw)
 {
     /* iterate through all mailboxes, calling p on each one;
        continue as above if we deadlock */
-    DB_TXN *tid;
+    DB_TXN *tid = NULL;
     DBT key, data;
     DBC *cursor;
     int r, r2;
     struct mbox_entry *mboxent;
-    int flags;
+    int flags = 0;
 
     assert(mboxlist_dbinit && mboxlist_dbopen);
     assert(rw == 0 || rw == 1);
 
+#if 0
     if (rw) {
-	flags = DB_RMW;
-    } else {
-	flags = 0;
+	flags |= DB_RMW;
     }
+#endif
     
     memset(&data, 0, sizeof(data));
     memset(&key, 0, sizeof(key));
-
-    if (0) {
-      retry:
-	cursor->c_close(cursor);
-
-	if ((r = txn_abort(tid)) != 0) {
-	    syslog(LOG_ERR, "DBERROR: error aborting txn: %s",
-		   db_strerror(r));
-	    return IMAP_IOERROR;
-	}
-    }
-
-    /* begin the transaction */
-    if ((r = txn_begin(dbenv, NULL, &tid, 0)) != 0) {
-	syslog(LOG_ERR, "DBERROR: error beginning txn: %s", db_strerror(r));
-	return IMAP_IOERROR;
-    }
 
     r = mbdb->cursor(mbdb, tid, &cursor, 0);
     if (r != 0) { 
@@ -2181,14 +2166,14 @@ int mboxlist_foreach(foreach_proc *p, void *rock, int rw)
 	goto done;
     }
 
-    r = cursor->c_get(cursor, &key, &data, DB_FIRST | flags);
+    do {
+	r = cursor->c_get(cursor, &key, &data, DB_FIRST | flags);
+    } while (r == DB_LOCK_DEADLOCK);
+
     while (r != DB_NOTFOUND) {
 	switch (r) {
 	case 0:
 	    mboxent = (struct mbox_entry *) data.data;
-	    break;
-	case DB_LOCK_DEADLOCK:
-	    goto retry;
 	    break;
 	default:
 	    syslog(LOG_ERR, "DBERROR: error advancing: %s", db_strerror(r));
@@ -2215,7 +2200,10 @@ int mboxlist_foreach(foreach_proc *p, void *rock, int rw)
 	case MB_UPDATE:
 	    if (rw) {
 		data.data = (char *) mboxent;
-		r = cursor->c_put(cursor, &key, &data, DB_CURRENT);
+		data.size = sizeof(struct mbox_entry) + strlen(mboxent->acls);
+		do {
+		    r = cursor->c_put(cursor, &key, &data, DB_CURRENT);
+		} while (r == DB_LOCK_DEADLOCK);
 	    } else {
 		r = IMAP_IOERROR;
 		goto done;
@@ -2227,27 +2215,19 @@ int mboxlist_foreach(foreach_proc *p, void *rock, int rw)
 	    break;
 	}
 
-	if (mboxent) {
-	    free(mboxent);
-	}
-
 	switch (r) {
 	case 0:
-	    break;
-	case DB_LOCK_DEADLOCK:
-	    goto retry;
 	    break;
 	default:
 	    syslog(LOG_ERR, "DBERROR: error advancing: %s", db_strerror(r));
 	    r = IMAP_IOERROR;
 	    break;
 	}
+	if (r) goto done;
 
-	if (r) {
-	    break;
-	}
-
-	r = cursor->c_get(cursor, &key, &data, DB_NEXT | flags);
+	do {
+	    r = cursor->c_get(cursor, &key, &data, DB_NEXT | flags);
+	} while (r == DB_LOCK_DEADLOCK);
     }
     if (r == DB_NOTFOUND) {
 	r = 0;
@@ -2258,44 +2238,14 @@ int mboxlist_foreach(foreach_proc *p, void *rock, int rw)
     switch (r2) {
     case 0:
 	break;
-    case DB_LOCK_DEADLOCK:
-	goto retry;
-	break;
     default:
 	syslog(LOG_ERR, "DBERROR: couldn't close cursor: %s",
 	       db_strerror(r2));
 	break;
     }
 
-    if (r) {
-	if ((r = txn_abort(tid)) != 0) {
-	    syslog(LOG_ERR, "DBERROR: error aborting txn: %s",
-		   db_strerror(r));
-	    r = IMAP_IOERROR;
-	}
-    } else {
-	r = txn_commit(tid, 0);
-	
-	switch (r) {
-	case 0:
-	    break;
-	case EINVAL:
-	    syslog(LOG_WARNING,
-		   "tried to commit an already aborted transaction");
-	    r = IMAP_IOERROR;
-	    break;
-	default:
-	    syslog(LOG_ERR, "DBERROR: failed on commit: %s",
-		   db_strerror(r));
-	    r = IMAP_IOERROR;
-	    break;
-	}
-    }	    
-
     return r;
 }
-
-
 
 /*
  * Change 'user's subscription status for mailbox 'name'.
