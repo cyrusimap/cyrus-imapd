@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.97 2001/07/06 01:51:21 ken3 Exp $
+ * $Id: pop3d.c,v 1.98 2001/07/06 23:26:10 ken3 Exp $
  */
 #include <config.h>
 
@@ -168,6 +168,7 @@ static void popd_reset(void)
 	popd_mailbox = 0;
     }
 
+    prot_flush(popd_out);
     if (popd_in) prot_free(popd_in);
     if (popd_out) prot_free(popd_out);
     close(0);
@@ -325,7 +326,9 @@ int service_main(int argc, char **argv, char **envp)
     cmdloop();
 
     /* QUIT executed */
-    prot_flush(popd_out);
+
+    /* don't bother reusing KPOP connections */
+    if (kflag) shut_down(0);
 
     /* cleanup */
     popd_reset();
