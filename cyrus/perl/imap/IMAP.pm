@@ -77,13 +77,92 @@ use IO::File;
 # implementation, or a vector-based interface to imclient_send.
 #
 sub send {
-  my ($self, $cb, $rock, $fmt, $arg1, $arg2, $arg3, $arg4, 
-      $arg5, $arg6, $arg7, $arg8, @rest) = @_;
-  if (defined @rest) {
-    die "Too many format arguments (more than 8) given to send!";
+  my ($self, $cb, $rock, $fmt, @rest) = @_;
+  my $res = '';
+  while ($fmt =~ /^([^%]*)%(.)(.*)$/s) {
+    $res .= $1;
+    if ($2 eq 'a') {
+      # atom
+      $res .= scalar shift(@rest);
+    }
+    elsif ($2 eq 's') {
+      # astring
+      $res .= $self->_stringize(shift(@rest));
+    }
+    elsif ($2 eq 'd') {
+      # decimal
+      $res .= (0 + scalar shift(@rest));
+    }
+    elsif ($2 eq 'u') {
+      # unsigned decimal; perl cares not for C lossage...
+      $res .= (0 + scalar shift(@rest));
+    }
+    elsif ($2 eq 'v') {
+      # #astring
+      my $spc = '';
+      if (ref($rest[0]) =~ /(^|=)HASH($|\()/) {
+	my %vals = %{shift(@rest)};
+	foreach (keys %vals) {
+	  $res .= $self->_stringize($_) . ' ' .
+	          $self->_stringize($vals{$_}) . $spc;
+	  $spc = ' ';
+	}
+      } else {
+	foreach (@{shift(@rest)}) {
+	  $res .= $self->_stringize($_) . $spc;
+	  $spc = ' ';
+	}
+      }
+    }
+    else {
+      # anything else (NB: we respect %B being labeled "internal only")
+      # NB: unlike the C version, we do not fail when handed an unknown escape
+      $res .= $2;
+    }
+    $fmt = $3;
   }
-  $self->_send($cb, $rock, $fmt,
-	       $arg1, $arg2, $arg3, $arg4, $arg5, $arg6, $arg7, $arg8);
+  $res .= $fmt;
+  $self->_send($cb, $rock, $res);
+}
+
+sub _cc {
+  my $res = 2;
+  local($^W) = 0;
+  if (length($_[0]) >= 1024) {
+    0;
+  } else {
+    foreach (map {unpack 'C', $_} split(//, $_[0])) {
+      if ($_==0 || $_==10 || $_==13 || $_==34 || $_==92 || $_>=128) {
+	$res = 0;
+      }
+      elsif ($_<33 || $_==37 || $_==40 || $_==41 || $_==42 || $_==123) {
+	$res = 1 if $res == 2;
+      }
+    }
+    $res;
+  }
+}
+
+sub _stringize {
+  my ($self, $str) = @_;
+  my $res;
+  my $cc = _cc($str);
+  my $nz = ($str ne '');
+
+  if ($nz && $cc == 2) {
+      $str;
+  }
+  elsif ($cc) {
+      # would be needed except imclient devolves to a LITERAL in this case.
+      #$str =~ s/([\\\"])/\\$1/g;
+      '"' . $str . '"';
+  }
+  else {
+      # right now we assume LITERAL+ on the part of the server, since
+      # we have no better way of dealing with literals.
+      # sorry!
+      "{" . length($str) . "+}\r\n" . $str;
+  }
 }
 
 #
