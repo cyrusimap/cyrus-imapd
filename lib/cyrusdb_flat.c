@@ -180,14 +180,9 @@ static int myclose(struct db *db)
     return 0;
 }
 
-static int myfetch(struct db *db, 
-		   const char *key, int keylen,
-		   const char **data, int *datalen,
-		   struct txn **mytid)
+static int starttxn_or_refetch(struct db *db, struct txn **mytid)
 {
     int r = 0;
-    int offset;
-    unsigned long len;
     struct stat sbuf;
 
     assert(db);
@@ -243,6 +238,23 @@ static int myfetch(struct db *db,
 	}
     }
 
+    return 0;
+}
+
+static int myfetch(struct db *db, 
+		   const char *key, int keylen,
+		   const char **data, int *datalen,
+		   struct txn **mytid)
+{
+    int r = 0;
+    int offset;
+    unsigned long len;
+
+    assert(db);
+
+    r = starttxn_or_refetch(db, mytid);
+    if (r) return r;
+
     offset = bsearch_mem(key, 1, db->base, db->size, 0, &len);
     if (len) {
 	*data = db->base + offset + keylen + 1;
@@ -279,6 +291,48 @@ static int foreach(struct db *db,
 		   struct txn **mytid)
 {
     int r = CYRUSDB_OK;
+    int offset;
+    unsigned long len;
+    const char *p, *pend;
+
+    r = starttxn_or_refetch(db, mytid);
+    if (r) return r;
+
+    offset = bsearch_mem(prefix, 1, db->base, db->size, 0, &len);
+    p = db->base + offset;
+    pend = db->base + db->size;
+    while (p < pend) {
+	const char *key = p;
+	int keylen;
+	const char *data = strchr(key, '\t'), *dataend;
+	int datalen;
+
+	if (!data) {
+	    /* huh, might be corrupted? */
+	    r = CYRUSDB_IOERROR;
+	    break;
+	}
+	keylen = data - key;
+	data++; /* skip of the \t */
+       
+	dataend = strchr(data, '\n');
+	if (!dataend) {
+	    /* huh, might be corrupted? */
+	    r = CYRUSDB_IOERROR;
+	    break;
+	}
+	datalen = dataend - data;
+
+	/* does it still match prefix? */
+	if (keylen < prefixlen) break;
+	if (prefixlen && memcmp(key, prefix, prefixlen)) break;
+
+	/* make callback */
+	r = cb(rock, key, keylen, data, datalen);
+	if (r) break;
+
+	p = dataend + 1;
+    }
 
     return r;
 }
@@ -402,7 +456,7 @@ static int mystore(struct db *db,
 	db->ino = sbuf.st_ino;
 	map_free(&db->base, &db->size);
 	map_refresh(writefd, 1, &db->base, &db->size, sbuf.st_size,
-		    db->fname, 0);
+	    db->fname, 0);
     }
 
     return r;
