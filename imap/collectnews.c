@@ -186,7 +186,7 @@ unsigned long feeduid;
     mailbox_close(&mailbox);
 }
 
-#define GROW 10 /* 1000 */
+#define GROW 1000
 struct newsgroup *
 getnewsgroup(group)
 char *group;
