@@ -1,0 +1,53 @@
+# Before `make install' is performed this script should be runnable with
+# `make test'. After `make install' it should work as `perl test.pl'
+
+######################### We start with some black magic to print on failure.
+
+# Change 1..1 below to 1..last_test_to_print .
+# (It may become useful if the test is moved to ./t subdirectory.)
+
+END {print "not ok 1\n" unless $loaded;}
+use IMAP::Cyrus::Admin;
+$loaded = 1;
+print "ok 1\n";
+
+######################### End of black magic.
+
+# find a server
+$old = select(STDERR); $| = 1; select($old);
+$server = $ENV{IMAPSERVER} || $ENV{BATISERVER};
+while (!defined($server) || $server eq '') {
+  print STDERR "enter an IMAP server to use for testing: ";
+  chomp($server = scalar(<STDIN>));
+  # needed so ->servername test will work; imclient does this internally
+  $server = (gethostbyname($server))[0];
+}
+
+# somewhat lame test of IMAP::Cyrus::Admin; can't really test it without
+# test accounts and maybe even a test server...
+
+print "not " unless defined ($client = IMAP::Cyrus::Admin->new($server));
+print "ok 2\n";
+print "not " unless $client->authenticate;
+print "ok 3\n";
+@mb = $client->list('INBOX', '*');
+print "not " unless @mb;
+foreach (@mb) {
+  print STDERR "> $_->[0] ($_->[1])\n";
+}
+print "ok 4\n";
+
+# list ACL on INBOX
+print "not " unless %acl = $client->listacl('INBOX');
+foreach (keys %acl) {
+  print STDERR ">> $_: $acl{$_}\n";
+}
+print "ok 5\n";
+
+# quota and quotaroot
+print "not " unless defined ($qroot = $client->quotaroot('INBOX'));
+print "ok 6\n";
+print "not " if !defined (@quota = $client->quota($qroot));
+print "ok 7\n";
+
+BEGIN { $| = 1; print "1..7\n"; }
