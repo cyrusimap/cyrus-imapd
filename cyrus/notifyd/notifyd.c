@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notifyd.c,v 1.9 2002/06/19 14:45:35 ken3 Exp $
+ * $Id: notifyd.c,v 1.10 2002/07/01 14:30:11 ken3 Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -99,12 +99,13 @@ int do_notify()
     int r, i;
     char *method, *class, *priority, *user, *mailbox, *message;
     char **options = NULL;
-    long nopt = 0;
-    char *reply = NULL;
+    long nopt;
+    char *reply;
     notifymethod_t *nmethod;
 
     while (1) {
-	method = class = priority = user = mailbox = message = NULL;
+	method = class = priority = user = mailbox = message = reply = NULL;
+	nopt = 0;
 
 	signals_poll();
 	r = recvfrom(soc, buf, NOTIFY_MAXSIZE, 0,
@@ -133,7 +134,7 @@ int do_notify()
 	if (cp) nopt = strtol(cp, NULL, 10);
 	if (nopt < 0 || errno == ERANGE) cp = NULL;
 
-	if (cp &&
+	if (cp && nopt &&
 	    !(options = (char**) xrealloc(options, nopt * sizeof(char*)))) {
 	    fatal("xmalloc(): can't allocate options", EC_OSERR);
 	}
@@ -175,10 +176,7 @@ int do_notify()
 	}
 #endif
 
-	if (reply) {
-	    free(reply);
-	    reply = NULL;
-	}
+	if (reply) free(reply);
     }
 
     /* never reached */
