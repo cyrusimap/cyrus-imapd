@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.22 2002/01/19 21:09:00 rjs3 Exp $
+ * $Id: mupdate.c,v 1.23 2002/01/22 01:27:40 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -73,6 +73,7 @@
 
 #include <skip-list.h>
 
+#include "mupdate-client.h"
 #include "xmalloc.h"
 #include "iptostring.h"
 #include "mailbox.h"
@@ -1115,37 +1116,32 @@ void cmd_set(struct conn *C,
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 }
 
-#if 0
 void cmd_change(struct mupdate_mailboxdata *mdata,
 		const char *rock)
 {
+    struct mbent *m = NULL;
+    struct conn *upc = NULL;
+    enum settype t = 0;
+
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
 
-
-    switch (*rock) {
-    CREATE:
+    if(!strncmp(rock, "CREATE", 6)) {
 	/* write to disk */
 	database_log(m);
-
-    RESERVE:
+    } else if(!strncmp(rock, "RESERVE", 7)) {
 	/* write to disk */
 	database_log(m);
-
-    DELETE:
+    } else if(!strncmp(rock, "DELETE", 6)) {
 	/* write to disk */
 	database_log(m);
-	
-    NOOP:
-
-
     }
-
+    
     /* post pending changes */
     for (upc = updatelist; upc != NULL; upc = upc->updatelist_next) {
 	/* for each connection, add to pending list */
 
 	struct pending *p = (struct pending *) xmalloc(sizeof(struct pending));
-	strcpy(p->mailbox, mailbox);
+	strcpy(p->mailbox, mdata->mailbox);
 	p->t = t;
 	
 	pthread_mutex_lock(&upc->m);
@@ -1159,8 +1155,6 @@ void cmd_change(struct mupdate_mailboxdata *mdata,
     database_compress();
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 }
-
-#endif
 
 void cmd_find(struct conn *C, const char *tag, const char *mailbox, int dook)
 {
@@ -1319,3 +1313,5 @@ static int reset_saslconn(struct conn *c)
 
     return SASL_OK;
 }
+
+

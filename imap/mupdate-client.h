@@ -1,6 +1,6 @@
-/* mupdate-client.c -- cyrus murder database clients
+/* mupdate-client.h -- cyrus murder database clients
  *
- * $Id: mupdate-client.h,v 1.1 2001/10/23 20:17:21 leg Exp $
+ * $Id: mupdate-client.h,v 1.2 2002/01/22 01:27:40 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -45,11 +45,8 @@
 
 typedef struct mupdate_handle_s mupdate_handle;
 
-/* connect to a mupdate server */
+/* connect & authenticate to an mupdate server */
 int mupdate_connect(const char *server, mupdate_handle **handle);
-
-/* authenticate to the server */
-int mupdate_authenticate(mupdate_handle *handle);
 
 /* activate a mailbox */
 int mupdate_activate(mupdate_handle *handle, 
@@ -64,18 +61,10 @@ int mupdate_reserve(mupdate_handle *handle,
 int mupdate_delete(mupdate_handle *handle,
 		   const char *mailbox);
 
+/* mailbox data structure */
 struct mupdate_mailboxdata {
     const char *mailbox;
     const char *server;
     const char *acl;
 };
-typedef int (*mupdate_callback)(struct mupdate_mailboxdata *mdata, 
-				const char *rock);
-int mupdate_listen(mupdate_handle *handle,
-		   mupdate_callback *create,
-		   mupdate_callback *reserve,
-		   mupdate_callback *delete,
-		   mupdate_callback *noop,
-		   int pingtime);
-
 #endif

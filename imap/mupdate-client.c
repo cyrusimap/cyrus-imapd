@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.7 2002/01/18 22:41:49 rjs3 Exp $
+ * $Id: mupdate-client.c,v 1.8 2002/01/22 01:27:40 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -87,6 +87,9 @@ typedef struct mupdate_handle_s {
     int saslcompleted;
 } mupdate_handle;
 
+/* Scarf up the incoming data and perform the requested operations */
+static int mupdate_scarf(mupdate_handle *handle, int wait_for_ok);
+
 /* We're only going to supply SASL_CB_USER, other people can supply
  * more if they feel like it */
 /* FIXME: this basically means we only get kerberos.  should be fixed */
@@ -107,6 +110,9 @@ static const sasl_callback_t callbacks[] = {
   { SASL_CB_LIST_END, NULL, NULL }
 };
 
+static int mupdate_authenticate(mupdate_handle *h,
+				const char *mechlist);
+
 int mupdate_connect(const char *server, const char *port,
 		    mupdate_handle **handle,
 		    sasl_callback_t *cbs)
@@ -116,6 +122,8 @@ int mupdate_connect(const char *server, const char *port,
     struct servent *sp;
     struct sockaddr_in addr;
     int s, saslresult;
+    char buf[4096];
+    char *mechlist;
     
     if(!server || !handle)
 	return MUPDATE_BADPARAM;
@@ -164,9 +172,53 @@ int mupdate_connect(const char *server, const char *port,
     prot_settimeout(h->pin, 30*60);
 
     *handle = h;
+
+    /* Read the banner */
+    if(!prot_fgets(buf, sizeof(buf)-1, h->pin)) {
+	syslog(LOG_ERR,"connection to master dropped");
+	return -3;
+    }
+
+    if(strncmp(buf, "* OK MUPDATE", 12)) {
+	syslog(LOG_ERR,"invalid banner from remote mupdate server");
+	return -4;
+    }
+
+    /* Read the mechlist */
+    if(!prot_fgets(buf, sizeof(buf)-1, h->pin)) {
+	syslog(LOG_ERR,"connection to master dropped");
+	return -5;
+    }
+
+    if(strncmp(buf, "* AUTH", 6)) {
+	syslog(LOG_ERR,"remote server did not send AUTH banner");
+	return -6;
+    }
+
+    mechlist = buf + 6;
+    
+    if(mupdate_authenticate(h, mechlist)) {
+	syslog(LOG_ERR, "authentication to remote mupdate failed");
+	return -7;
+    }
+
     return 0; /* SUCCESS */
 }
 
+void mupdate_disconnect(mupdate_handle *h) 
+{
+    if(!h) return;
+    
+    prot_printf(h->pout, "L01 LOGOUT\r\n");
+    prot_flush(h->pout);
+
+    prot_free(h->pin);
+    prot_free(h->pout);
+    sasl_dispose(&h->saslconn);
+    close(h->sock);
+
+    free(h);
+}
 
 static sasl_security_properties_t *make_secprops(int min, int max)
 {
@@ -180,8 +232,8 @@ static sasl_security_properties_t *make_secprops(int min, int max)
   return ret;
 }
 
-int mupdate_authenticate(mupdate_handle *h,
-			 const char *mechlist)
+static int mupdate_authenticate(mupdate_handle *h,
+				const char *mechlist)
 {
     int saslresult;
     sasl_security_properties_t *secprops=NULL;
@@ -329,7 +381,14 @@ int mupdate_activate(mupdate_handle *handle,
     if (!mailbox || !server || !acl) return MUPDATE_BADPARAM;
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
-    return 0;
+    prot_printf(handle->pout,
+		"X%u ACTIVATE %s %s %s\r\n", handle->tag++,
+		mailbox, server, acl);
+
+    if(mupdate_scarf(handle, 1))
+	return MUPDATE_FAIL;
+    else
+	return 0;
 }
 
 int mupdate_reserve(mupdate_handle *handle,
@@ -339,7 +398,13 @@ int mupdate_reserve(mupdate_handle *handle,
     if (!mailbox || !server) return MUPDATE_BADPARAM;
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
-    return 0;
+    prot_printf(handle->pout,
+		"X%u RESERVE %s %s\r\n", handle->tag++, mailbox, server);
+
+    if(mupdate_scarf(handle, 1))
+	return MUPDATE_FAIL;
+    else
+	return 0;
 }
 
 int mupdate_delete(mupdate_handle *handle,
@@ -349,25 +414,168 @@ int mupdate_delete(mupdate_handle *handle,
     if (!mailbox) return MUPDATE_BADPARAM;
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
-    return 0;
-}
+    prot_printf(handle->pout,
+		"X%u DELETE %s\r\n", handle->tag++, mailbox);
 
-struct mupdate_mailboxdata {
-    const char *mailbox;
-    const char *server;
-    const char *acl;
-};
-typedef int (*mupdate_callback)(struct mupdate_mailboxdata *mdata, 
-				const char *rock);
+    if(mupdate_scarf(handle, 1))
+	return MUPDATE_FAIL;
+    else
+	return 0;    
+}
 
 #define CHECKNEWLINE(c, ch) do { if ((ch) == '\r') (ch)=prot_getc((c)->pin); \
                                  if ((ch) != '\n') { syslog(LOG_ERR, \
                              "extra arguments recieved, aborting connection");\
-                                 return; }} while(0);
+                                 return 1; }} while(0);
+
+/* Scarf up the incoming data and perform the requested operations */
+static int mupdate_scarf(mupdate_handle *handle, int wait_for_ok)
+{
+    fd_set read_set;
+    int highest_fd, select_result;
+    struct timeval tv;
+
+    if(!handle) return 1;
+
+    highest_fd = handle->sock + 1;
+
+    do {
+	int ch;
+	struct buf tag, cmd, arg1, arg2, arg3;
+	unsigned char *p;
+    
+	memset(&tag, 0, sizeof(tag));
+	memset(&cmd, 0, sizeof(cmd));
+	memset(&arg1,0, sizeof(arg1));
+    
+	ch = getword(handle->pin, &tag);
+	if(ch != ' ') {
+	    /* We always have a command */
+	    syslog(LOG_ERR, "Protocol error from master: no command",
+		   tag.s, ch);
+	    return 1;
+	}
+	ch = getword(handle->pin, &cmd);
+	if(ch != ' ') {
+	    /* We always have an arguement */
+	    syslog(LOG_ERR, "Protocol error from master: no argument");
+	    return 1;
+	}
+	
+	if (islower((unsigned char) cmd.s[0])) {
+	    cmd.s[0] = toupper((unsigned char) cmd.s[0]);
+	}
+	for (p = &cmd.s[1]; *p; p++) {
+	    if (islower((unsigned char) *p))
+		*p = toupper((unsigned char) *p);
+	}
+	
+	switch(cmd.s[0]) {
+	case 'D':
+	    if(!strncmp(cmd.s, "DELETE", 6)) {
+		ch = getstring(handle->pin, handle->pout, &arg1);
+		
+		CHECKNEWLINE(handle, ch);
+		
+		/* Handle delete command */
+		if(mupdate_delete(handle, arg1.s)) {
+		    syslog(LOG_ERR, "Error in mupdate_delete");
+		    return 1;
+		}
+		break;
+	    }
+	    syslog(LOG_ERR, "bad command from master: %s", cmd.s);
+	    return 1;
+	case 'M':
+	    if(!strncmp(cmd.s, "MAILBOX", 7)) {
+		memset(&arg2, 0, sizeof(arg2));
+		memset(&arg3, 0, sizeof(arg2));
+		
+		/* Mailbox Name */
+		ch = getstring(handle->pin, handle->pout, &arg1);
+		if(ch != ' ') return 1;
+		
+		/* Server */
+		ch = getstring(handle->pin, handle->pout, &arg2);
+		if(ch != ' ') return 1;
+		
+		/* ACL */
+		getstring(handle->pin, handle->pout, &arg3);
+		
+		CHECKNEWLINE(handle, ch);
+		
+		/* Handle mailbox command */
+		if(mupdate_activate(handle, arg1.s, arg2.s, arg3.s)) {
+		    /* Was there an error? */
+		    syslog(LOG_ERR, "Error in mupdate_activate");
+		    return 1;
+		}
+		break;
+	    }
+	    syslog(LOG_ERR, "bad command from master: %s", cmd.s);
+	    return 1;
+	case 'O':
+	    if(!strncmp(cmd.s, "OK", 2)) {
+		/* It's all good, grab the attached string and move on */
+		ch = getstring(handle->pin, handle->pout, &arg1);
+		
+		CHECKNEWLINE(handle, ch);
+		
+		if(wait_for_ok) return 0;
+		break;
+	    }
+	    syslog(LOG_ERR, "bad command from master: %s", cmd.s);
+	    return 1;
+	case 'R':
+	    if(!strncmp(cmd.s, "RESERVE", 7)) {
+		memset(&arg2, 0, sizeof(arg2));
+		
+		/* Mailbox Name */
+		ch = getstring(handle->pin, handle->pout, &arg1);
+		if(ch != ' ') return 1;
+		
+		/* Server */
+		ch = getstring(handle->pin, handle->pout, &arg2);
+		
+		CHECKNEWLINE(handle, ch);
+		
+		/* Handle reserve command */
+		if(mupdate_reserve(handle,arg1.s,arg2.s)) 
+		{
+		    /* Was there an error? */
+		    syslog(LOG_ERR, "Error in mupdate_reserve");
+		    return 1;
+		}
+		
+		break;
+	    }
+	    syslog(LOG_ERR, "bad command from master: %s", cmd.s);
+	    return 1;
+	default:
+	    /* Bad Data */
+	    syslog(LOG_ERR, "bad command from master: %s", cmd.s);
+	    return 1;
+	}
+
+	FD_ZERO(&read_set);
+	FD_SET(handle->sock, &read_set);
+
+	tv.tv_sec = 0;
+	tv.tv_usec = 0;
+
+	/* If we are waiting for an OK message, block, otherwise, drop
+	   throug immediately */
+	select_result = select(highest_fd, &read_set, NULL, NULL, 
+			       (wait_for_ok ? NULL : &tv));
+    } while((!wait_for_ok && select_result > 0) || (select_result > 0));
+
+    if(select_result != 0) return 1;
+    else return 0;
+}
 
 void mupdate_listen(mupdate_handle *handle, int pingtimeout)
 {
-    int gotdata = 0;
+    int gotdata = 0, firsttime = 1;
     fd_set read_set;
     int highest_fd;
     
@@ -393,126 +601,11 @@ void mupdate_listen(mupdate_handle *handle, int pingtimeout)
 	gotdata = select(highest_fd, &read_set, NULL, NULL, &tv);
 
 	if (gotdata > 0) {
-	    int ch;
-	    struct buf tag, cmd, arg1, arg2, arg3;
-	    unsigned char *p;
-
-	    memset(&tag, 0, sizeof(tag));
-	    memset(&cmd, 0, sizeof(cmd));
-	    memset(&arg1,0, sizeof(arg1));
-	    
-	    ch = getword(handle->pin, &tag);
-	    if(ch != ' ') {
-		/* We always have a command */
-		syslog(LOG_ERR, "Protocol error from master: no command",
-		       tag.s, ch);
-		return;
+	    if(mupdate_scarf(handle, firsttime)) return;
+	    else {
+		firsttime = 0;
+		continue;
 	    }
-	    ch = getword(handle->pin, &cmd);
-	    if(ch != ' ') {
-                /* We always have an arguement */
-		syslog(LOG_ERR, "Protocol error from master: no argument");
-		return;
-	    }
-
-	    if (islower((unsigned char) cmd.s[0])) {
-		cmd.s[0] = toupper((unsigned char) cmd.s[0]);
-	    }
-	    for (p = &cmd.s[1]; *p; p++) {
-		if (islower((unsigned char) *p))
-		    *p = toupper((unsigned char) *p);
-	    }
-
-	    switch(cmd.s[0]) {
-	    case 'D':
-		if(!strncmp(cmd.s, "DELETE", 6)) {
-		    ch = getstring(handle->pin, handle->pout, &arg1);
-
-		    CHECKNEWLINE(handle, ch);
-		    
-		    /* Handle delete command */
-		    if(mupdate_delete(handle, arg1.s)) {
-			syslog(LOG_ERR, "Error in mupdate_delete");
-			return;
-		    }
-		    break;
-		}
-		syslog(LOG_ERR, "bad command from master: %s", cmd.s);
-		return;
-	    case 'M':
-		if(!strncmp(cmd.s, "MAILBOX", 7)) {
-		    memset(&arg2, 0, sizeof(arg2));
-		    memset(&arg3, 0, sizeof(arg2));
-
-		    /* Mailbox Name */
-		    ch = getstring(handle->pin, handle->pout, &arg1);
-		    if(ch != ' ') return;
-
-		    /* Server */
-		    ch = getstring(handle->pin, handle->pout, &arg2);
-		    if(ch != ' ') return;
-
-		    /* ACL */
-		    getstring(handle->pin, handle->pout, &arg3);
-
-		    CHECKNEWLINE(handle, ch);
-
-		    /* Handle mailbox command */
-		    if(mupdate_activate(handle, arg1.s, arg2.s, arg3.s)) {
-			/* Was there an error? */
-			syslog(LOG_ERR, "Error in mupdate_activate");
-			return;
-		    }
-		    break;
-		}
-		syslog(LOG_ERR, "bad command from master: %s", cmd.s);
-		return;
-	    case 'O':
-		if(!strncmp(cmd.s, "OK", 2)) {
-		    /* It's all good, grab the attached string and move on */
-		    ch = getstring(handle->pin, handle->pout, &arg1);
-
-		    CHECKNEWLINE(handle, ch);
-
-		    break;
-		}
-		syslog(LOG_ERR, "bad command from master: %s", cmd.s);
-		return;
-	    case 'R':
-		if(!strncmp(cmd.s, "RESERVE", 7)) {
-		    memset(&arg2, 0, sizeof(arg2));
-
-		    /* Mailbox Name */
-		    ch = getstring(handle->pin, handle->pout, &arg1);
-		    if(ch != ' ') return;
-
-		    /* Server */
-		    ch = getstring(handle->pin, handle->pout, &arg2);
-
-		    CHECKNEWLINE(handle, ch);
-		    
-		    /* Handle reserve command */
-		    if(mupdate_reserve(handle,arg1.s,arg2.s)) 
-		    {
-			/* Was there an error? */
-			syslog(LOG_ERR, "Error in mupdate_reserve");
-			return;
-		    }
-		    
-		    break;
-		}
-		syslog(LOG_ERR, "bad command from master: %s", cmd.s);
-		return;
-	    default:
-		/* Bad Data */
-		syslog(LOG_ERR, "bad command from master: %s", cmd.s);
-		return;
-	    }
-
-	    /* make the callbacks, if requested */
-	    /* if any callbacks fail, return */
-
-	    continue;
 	} else if(gotdata == 0) {
 	    /* timed out, send a NOOP */
 	    prot_printf(handle->pout, "N%u NOOP\r\n", handle->tag++);
@@ -542,9 +635,7 @@ void mupdate_listen(mupdate_handle *handle, int pingtimeout)
 void *mupdate_client_start(void *rock __attribute__((unused)))
 {
     const char *server, *port, *num;
-    char buf[4096];
     mupdate_handle *h;
-    char *mechlist;
     int connection_count = 0;
     int retries = 15;
     int retry_delay = 20;
@@ -577,36 +668,6 @@ void *mupdate_client_start(void *rock __attribute__((unused)))
 	ret = mupdate_connect(server, port, &h, NULL);
 	if(ret) {
 	    syslog(LOG_ERR,"couldn't connect to mupdate server");
-	    goto retry;
-	}
-
-	/* Read the banner */
-	if(!prot_fgets(buf, sizeof(buf)-1, h->pin)) {
-	    syslog(LOG_ERR,"connection to master dropped");
-	    goto retry;
-	}
-
-	if(strncmp(buf, "* OK MUPDATE", 12)) {
-	    syslog(LOG_ERR,"invalid banner from remote mupdate server");
-	    goto retry;
-	}
-
-	/* Read the mechlist */
-	if(!prot_fgets(buf, sizeof(buf)-1, h->pin)) {
-	    syslog(LOG_ERR,"connection to master dropped");
-	    goto retry;
-	}
-
-	if(strncmp(buf, "* AUTH", 6)) {
-	    syslog(LOG_ERR,"remote server did not send AUTH banner");
-	    goto retry;
-	}
-
-	mechlist = buf + 6;
-	
-	ret = mupdate_authenticate(h, mechlist);
-	if(ret) {
-	    syslog(LOG_ERR, "authentication to remote mupdate failed");
 	    goto retry;
 	}
    
