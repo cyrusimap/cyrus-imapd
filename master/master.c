@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.75 2002/12/19 16:58:38 rjs3 Exp $ */
+/* $Id: master.c,v 1.76 2002/12/26 17:50:42 leg Exp $ */
 
 #include <config.h>
 
@@ -404,7 +404,7 @@ void service_create(struct service *s)
     r = bind(s->socket, sa, salen);
     umask(oldumask);
     if (r < 0) {
-	syslog(LOG_ERR, "unable to bind %s socket: %m", s->name);
+	syslog(LOG_ERR, "unable to bind socket for service %s: %m", s->name);
 	close(s->socket);
 	s->socket = 0;
 	s->exec = NULL;
