@@ -2632,7 +2632,7 @@ int parsecharset;
 	if (!strcmp(criteria.s, "deleted")) {
 	    searchargs->system_flags_set |= FLAG_DELETED;
 	}
-	if (!strcmp(criteria.s, "draft")) {
+	else if (!strcmp(criteria.s, "draft")) {
 	    searchargs->system_flags_set |= FLAG_DRAFT;
 	}
 	else goto badcri;
