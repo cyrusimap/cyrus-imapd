@@ -3,6 +3,7 @@
  */
 
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 #include <sysexits.h>
 #include <signal.h>
@@ -111,7 +112,7 @@ cmdloop()
 	if (c == EOF) {
 	    shutdown(0);
 	}
-	if (c != ' ' || !isatom(&tag) || (tag.s[0] == '*' && !tag.s[1])) {
+	if (c != ' ' || !isatom(tag.s) || (tag.s[0] == '*' && !tag.s[1])) {
 	    printf("* BAD Invalid tag\r\n");
 	    if (c != '\n') eatline();
 	    continue;
@@ -170,11 +171,27 @@ cmdloop()
 		if (c == ' ') {
 		    havepartition = 1;
 		    c = getword(&arg2);
-		    if (!isatom(&arg2)) goto badpartition;
+		    if (!isatom(arg2.s)) goto badpartition;
 		}
 		if (c == '\r') c = getc(stdin);
 		if (c != '\n') goto extraargs;
 		cmd_create(tag.s, arg1.s, havepartition ? arg2.s : 0);
+	    }
+	    else goto badcmd;
+	    break;
+
+	case 'D':
+	    if (!strcmp(cmd.s, "Deleteacl")) {
+		if (c != ' ') goto missingargs;
+		c = getword(&arg1);
+		if (c != ' ') goto missingargs;
+		c = getastring(&arg2);
+		if (c != ' ') goto missingargs;
+		c = getastring(&arg3);
+		if (c == EOF) goto missingargs;
+		if (c == '\r') c = getc(stdin);
+		if (c != '\n') goto extraargs;
+		cmd_setacl(tag.s, arg1.s, arg2.s, arg3.s, (char *)0);
 	    }
 	    else goto badcmd;
 	    break;
@@ -214,6 +231,20 @@ cmdloop()
 	    else goto badcmd;
 	    break;
 
+	case 'G':
+	    if (!strcmp(cmd.s, "Getacl")) {
+		if (c != ' ') goto missingargs;
+		c = getword(&arg1);
+		if (c != ' ') goto missingargs;
+		c = getastring(&arg2);
+		if (c == EOF) goto missingargs;
+		if (c == '\r') c = getc(stdin);
+		if (c != '\n') goto extraargs;
+		cmd_getacl(tag.s, arg1.s, arg2.s);
+	    }
+	    else goto badcmd;
+	    break;
+
 	case 'L':
 	    if (!strcmp(cmd.s, "Login")) {
 		if (c != ' ' || (c = getastring(&arg1)) != ' ') {
@@ -239,6 +270,20 @@ cmdloop()
 		shutdown(0);
 	    }
 	    else if (!imapd_userid) goto nologin;
+	    else goto badcmd;
+	    break;
+
+	case 'M':
+	    if (!strcmp(cmd.s, "Myrights")) {
+		if (c != ' ') goto missingargs;
+		c = getword(&arg1);
+		if (c != ' ') goto missingargs;
+		c = getastring(&arg2);
+		if (c == EOF) goto missingargs;
+		if (c == '\r') c = getc(stdin);
+		if (c != '\n') goto extraargs;
+		cmd_myrights(tag.s, arg1.s, arg2.s);
+	    }
 	    else goto badcmd;
 	    break;
 
@@ -308,6 +353,20 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_changesub(tag.s, arg1.s, arg2.s, 1);
 	    }		
+	    else if (!strcmp(cmd.s, "Setacl")) {
+		if (c != ' ') goto missingargs;
+		c = getword(&arg1);
+		if (c != ' ') goto missingargs;
+		c = getastring(&arg2);
+		if (c != ' ') goto missingargs;
+		c = getastring(&arg3);
+		if (c != ' ') goto missingargs;
+		c = getastring(&arg4);
+		if (c == EOF) goto missingargs;
+		if (c == '\r') c = getc(stdin);
+		if (c != '\n') goto extraargs;
+		cmd_setacl(tag.s, arg1.s, arg2.s, arg3.s, arg4.s);
+	    }
 	    else goto badcmd;
 	    break;
 
@@ -470,7 +529,7 @@ char *name;
 		goto freeflags;
 	    }
 	}
-	else if (!isatom(&arg)) {
+	else if (!isatom(arg.s)) {
 	    printf("%s BAD Invalid flag name %s in Append command\r\n",
 		   tag, arg.s);
 	    if (c != '\n') eatline();
@@ -978,7 +1037,7 @@ int usinguid;
 		goto freeflags;
 	    }
 	}
-	else if (!isatom(&flagname)) {
+	else if (!isatom(flagname.s)) {
 	    printf("%s BAD Invalid flag name %s in %s command\r\n",
 		   tag, flagname.s, cmd);
 	    if (c != '\n') eatline();
@@ -1125,7 +1184,7 @@ int usinguid;
 	    if (!strcmp(criteria.s, "keyword")) {
 		if (c != ' ') goto missingarg;		
 		c = getword(&arg);
-		if (!isatom(&arg)) goto badflag;
+		if (!isatom(arg.s)) goto badflag;
 		lcase(arg.s);
 		for (flag=0; flag < MAX_USER_FLAGS; flag++) {
 		    if (imapd_mailbox->flagname[flag] &&
@@ -1232,7 +1291,7 @@ int usinguid;
 	    else if (!strcmp(criteria.s, "unkeyword")) {
 		if (c != ' ') goto missingarg;		
 		c = getword(&arg);
-		if (!isatom(&arg)) goto badflag;
+		if (!isatom(arg.s)) goto badflag;
 		lcase(arg.s);
 		for (flag=0; flag < MAX_USER_FLAGS; flag++) {
 		    if (imapd_mailbox->flagname[flag] &&
@@ -1373,6 +1432,162 @@ int add;
 	printf("%s OK %s completed\r\n", tag,
 	       add ? "Subscribe" : "Unsubscribe");
     }
+}
+
+cmd_getacl(tag, namespace, name)
+char *tag;
+char *namespace;
+char *name;
+{
+    char inboxname[MAX_MAILBOX_PATH];
+    int r, access;
+    char *acl;
+    char *rights, *nextid;
+
+    lcase(namespace);
+    if (!strcmp(namespace, "bboard")) {
+	r = IMAP_MAILBOX_NONEXISTENT;
+    }
+    else if (!strcmp(namespace, "mailbox")) {
+	if (strcasecmp(name, "inbox") == 0 &&
+	    !strchr(imapd_userid, '.') &&
+	    strlen(imapd_userid) + 6 <= MAX_MAILBOX_PATH) {
+	    strcpy(inboxname, "user.");
+	    strcat(inboxname, imapd_userid);
+	    r = mboxlist_lookup(inboxname, (char **)0, &acl);
+	}
+	else {
+	    r = mboxlist_lookup(name, (char **)0, &acl);
+	}
+    }
+    else {
+	printf("%s BAD Invalid Getacl subcommand\r\n", tag);
+	return;
+    }
+
+    if (!r) {
+	access = acl_myrights(acl);
+	if (!(access&(ACL_READ|ACL_ADMIN))) {
+	    r = (access&ACL_LOOKUP) ?
+	      IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+	}
+    }
+    if (r) {
+	printf("%s NO Getacl failed: %s\r\n", tag, error_message(r));
+	return;
+    }
+    
+    while (acl) {
+	rights = strchr(acl, '\t');
+	if (!rights) break;
+	*rights++ = '\0';
+
+	nextid = strchr(rights, '\t');
+	if (!nextid) break;
+	*nextid++ = '\0';
+
+	printf("* ACL MAILBOX ");
+	printastring(name);
+	printf(" ");
+	printastring(acl);
+	printf(" ");
+	printastring(rights);
+	printf("\r\n");
+	acl = nextid;
+    }
+    printf("%s OK Getacl completed\r\n", tag);
+}
+
+cmd_myrights(tag, namespace, name)
+char *tag;
+char *namespace;
+char *name;
+{
+    char inboxname[MAX_MAILBOX_PATH];
+    int r, rights;
+    char *acl;
+    char str[ACL_MAXSTR];
+
+    lcase(namespace);
+    if (!strcmp(namespace, "bboard")) {
+	r = IMAP_MAILBOX_NONEXISTENT;
+    }
+    else if (!strcmp(namespace, "mailbox")) {
+	if (strcasecmp(name, "inbox") == 0 &&
+	    !strchr(imapd_userid, '.') &&
+	    strlen(imapd_userid) + 6 <= MAX_MAILBOX_PATH) {
+	    strcpy(inboxname, "user.");
+	    strcat(inboxname, imapd_userid);
+	    r = mboxlist_lookup(inboxname, (char **)0, &acl);
+	}
+	else {
+	    r = mboxlist_lookup(name, (char **)0, &acl);
+	}
+    }
+    else {
+	printf("%s BAD Invalid Myrights subcommand\r\n", tag);
+	return;
+    }
+
+    if (!r) {
+	rights = acl_myrights(acl);
+
+	/* Add in implicit rights */
+	if (imapd_userisadmin || strcasecmp(name, "inbox")) {
+	    rights |= ACL_LOOKUP|ACL_ADMIN;
+	}
+	if (!strchr(imapd_userid, '.') &&
+	    !strncasecmp(name, "user.", 5) &&
+	    !strncasecmp(name+5, imapd_userid, strlen(imapd_userid)) &&
+	    name[5+strlen(imapd_userid)] == '.') {
+	    rights |= ACL_LOOKUP|ACL_ADMIN;
+	}
+
+	if (!rights) {
+	    r = IMAP_MAILBOX_NONEXISTENT;
+	}
+    }
+    if (r) {
+	printf("%s NO Myrights failed: %s\r\n", tag, error_message(r));
+	return;
+    }
+    
+    printf("* MYRIGHTS MAILBOX ");
+    printastring(name);
+    printf(" ");
+    printastring(acl_masktostr(rights, str));
+    printf("\r\n%s OK Myrights completed\r\n", tag);
+}
+
+cmd_setacl(tag, namespace, name, identifier, rights)
+char *tag;
+char *namespace;
+char *name;
+char *identifier;
+char *rights;
+{
+    int r;
+    char *cmd = rights ? "Setacl" : "Deleteacl";
+
+    lcase(namespace);
+    if (!strcmp(namespace, "bboard")) {
+	r = IMAP_MAILBOX_NONEXISTENT;
+    }
+    else if (!strcmp(namespace, "mailbox")) {
+	r = mboxlist_setacl(name, identifier, rights,
+			    imapd_userisadmin, imapd_userid);
+    }
+    else {
+	printf("%s BAD Invalid %s subcommand\r\n", tag, cmd);
+	return;
+    }
+
+    if (r) {
+	printf("%s NO %s failed: %s\r\n", tag, cmd, error_message(r));
+	return;
+    }
+    
+    printf("%s OK %s completed\r\n", tag, cmd);
 }
 
 #define BUFGROWSIZE 100
@@ -1613,16 +1828,14 @@ time_t *start, *end;
     return EOF;
 }
 	
-int isatom(buf)
-struct buf *buf;
+int isatom(s)
+char *s;
 {
-    char *p;
-
-    if (!buf->s[0]) return 0;
-    for (p = buf->s; *p; p++) {
-	if (*p & 0x80 || *p < 0x1f || *p == 0x7f ||
-	    *p == ' ' || *p == '{' || *p == '(' || *p == ')' ||
-	    *p == '\"' || *p == '%' || *p == '\\') return 0;
+    if (!*s) return 0;
+    for (; *s; s++) {
+	if (*s & 0x80 || *s < 0x1f || *s == 0x7f ||
+	    *s == ' ' || *s == '{' || *s == '(' || *s == ')' ||
+	    *s == '\"' || *s == '%' || *s == '\\') return 0;
     }
     return 1;
 }
@@ -1632,6 +1845,30 @@ eatline()
     char c;
 
     while ((c = getc(stdin)) != EOF && c != '\n');
+}
+
+printastring(s)
+char *s;
+{
+    char *p;
+
+    if (isatom(s)) {
+	printf("%s", s);
+	return;
+    }
+
+    /* Look for any non-QCHAR characters */
+    for (p = s; *p; p++) {
+	if (*p & 0x80 || *p == '\r' || *p == '\n'
+	    || *p == '\"' || *p == '%' || *p == '\\') break;
+    }
+
+    if (*p) {
+	printf("{%d}\r\n%s", strlen(s), s);
+    }
+    else {
+	printf("\"%s\"", s);
+    }
 }
 
 appendstrlist(l, s)
