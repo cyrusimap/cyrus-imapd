@@ -832,14 +832,16 @@ int statusitems;
 {
     int r;
     struct seen *status_seendb;
-    time_t last_read, last_change;
+    time_t last_read, last_change = 0;
     unsigned last_uid;
     char *last_seenuids;
     int num_recent = 0;
     int num_unseen = 0;
     int sepchar;
 
-    if (statusitems & (STATUS_RECENT | STATUS_UNSEEN | STATUS_UPDATE_NUMBER)) {
+    if (mailbox->exists != 0 &&
+	(statusitems &
+	 (STATUS_RECENT | STATUS_UNSEEN | STATUS_UPDATE_NUMBER))) {
 	r = seen_open(mailbox, imapd_userid, &status_seendb);
 	if (r) return r;
 
