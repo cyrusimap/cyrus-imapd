@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.124 2002/04/08 02:19:26 leg Exp $
+ $Id: mailbox.c,v 1.125 2002/04/29 20:00:23 rjs3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -341,6 +341,32 @@ int mailbox_open_header_path(const char *name,
     }
 
     return 0;
+}
+
+int mailbox_open_locked(const char *mbname,
+			const char *mbpath,
+			const char *mbacl,
+			struct auth_state *auth_state,
+			struct mailbox *mb,
+			int suppresslog) 
+{
+    int r;
+    
+    r = mailbox_open_header_path(mbname, mbpath, mbacl, auth_state,
+				 mb, suppresslog);
+    if(r) return r;
+
+    /* now we have to close the mailbox if we fail */
+
+    r = mailbox_lock_header(mb);
+    if(!r)
+	r = mailbox_open_index(mb);
+    if(!r) 
+	r = mailbox_lock_index(mb);
+
+    if(r) mailbox_close(mb);
+
+    return r;
 }
 
 #define MAXTRIES 60

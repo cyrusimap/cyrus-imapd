@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.14 2002/04/11 23:46:42 rjs3 Exp $
+ * $Id: mbdump.c,v 1.15 2002/04/29 20:00:24 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -72,30 +72,6 @@
 #include "prot.h"
 #include "seen.h"
 #include "xmalloc.h"
-
-static int lock_mailbox_ctl_files(const char *mbname,
-				  const char *mbpath,
-				  const char *mbacl,
-				  struct auth_state *auth_state,
-				  struct mailbox *mb) 
-{
-    int r;
-    
-    r = mailbox_open_header_path(mbname, mbpath, mbacl, auth_state, mb, 0);
-    if(r) return r;
-
-    /* now we have to close the mailbox if we fail */
-
-    r = mailbox_lock_header(mb);
-    if(!r)
-	r = mailbox_open_index(mb);
-    if(!r) 
-	r = mailbox_lock_index(mb);
-
-    if(r) mailbox_close(mb);
-
-    return r;
-}
 
 /* is this the active script? */
 static int sieve_isactive(char *sievepath, char *name)
@@ -180,7 +156,7 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
 	return IMAP_SYS_ERROR;
     }
 
-    r = lock_mailbox_ctl_files(mbname, mbpath, mbacl, auth_state, &mb);
+    r = mailbox_open_locked(mbname, mbpath, mbacl, auth_state, &mb, 0);
     if(r) {
 	closedir(mbdir);
 	return r;
@@ -532,7 +508,7 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
 	goto done;
     }
     
-    r = lock_mailbox_ctl_files(mbname, mbpath, mbacl, auth_state, &mb);
+    r = mailbox_open_locked(mbname, mbpath, mbacl, auth_state, &mb, 0);
     if(r) goto done;
 
     while(1) {

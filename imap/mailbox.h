@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- $Id: mailbox.h,v 1.66 2002/03/30 19:46:56 ken3 Exp $
+ $Id: mailbox.h,v 1.67 2002/04/29 20:00:24 rjs3 Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -244,6 +244,12 @@ extern int mailbox_open_header_path(const char *name, const char *path,
 				    struct auth_state *auth_state,
 				    struct mailbox *mailbox,
 				    int suppresslog);
+extern int mailbox_open_locked(const char *mbname,
+			       const char *mbpath,
+			       const char *mbacl,
+			       struct auth_state *auth_state,
+			       struct mailbox *mb,
+			       int suppresslog);
 extern int mailbox_open_index(struct mailbox *mailbox);
 extern void mailbox_close(struct mailbox *mailbox);
 
