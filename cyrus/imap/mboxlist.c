@@ -91,6 +91,7 @@ static int mboxlist_safe_rename();
 
 static struct quota *mboxlist_newquota;
 static int mboxlist_changequota();
+static int mboxlist_safe_rename();
 
 #define FNAME_MBOXLIST "/mailboxes"
 #define FNAME_USERDIR "/user/"
@@ -2168,28 +2169,34 @@ int maycreate;
     return 0;
 }
 
-/*
- * Experimental code to free mailboxes file when not in use.
- * Possibly more efficient in some cases.
- */
+/* Free the mailboxes file.  In older versions, we just kept this open, and
+   reopened if we needed to.  imapd.c calls this frequently to get rid of
+   this, based on a sligtly educated guess of when it is likely to be
+   needed again.  Because of the constant renaming and rewriting of
+   mailboxes files, servers got to keep some large number of mailboxes
+   files in memory, increasingly inaccurate, that would simply be thrown
+   out at some future time.  */
 void
 mboxlist_close()
 {
-     if (*list_base && list_size) {
-	  map_free(&list_base, &list_size);
-     }
-     if (listfd != -1) {
-	  close(listfd);
-	  listfd = -1;
-     }
+    if (*list_base && list_size) {
+	map_free(&list_base, &list_size);
+    }
+    if (listfd != -1) {
+	close(listfd);
+	listfd = -1;
+    }
 }
 
-/*
- * Safe rename, for file being renamed to a file that might get locked
+/* Safe rename, for file being renamed to a file that might get locked
  *
  * Assumes oldfname has already been locked, and newfname's fd is 3rd
  * arg to this function
  *
+ * This is to work around the race condition that happens when we have a
+ * whole bunch of imapds attacking the mailboxes file at the same time.
+ *
+ * Compliments of Eric Haberg.
  */
 int mboxlist_safe_rename( newfname, oldfname, fd )
 const char *newfname, *oldfname;
