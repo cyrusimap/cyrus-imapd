@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.90 1999/10/24 23:40:30 leg Exp $ -->
+<!-- $Id: changes.html,v 1.91 1999/10/30 23:36:33 leg Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -11,6 +11,30 @@
 
       <li> When trying to skip over non-synchronizing literals during
       error recovery, the IMAP server never stopped eating.  Fixed.
+
+      <li> Added <tt>with-sasldir</tt> as a configure option.
+
+      <li> Fixed a bug in cyradm when it got the CAPABILITY list.
+
+      <li> Fixed bugs relating to the incomplete SASLfication of
+      deliver.
+
+      <li> Fixed bugs in deliver relating to duplicate delivery
+      suppression and Sieve vacation functionality.
+
+      <li> Fixed a memory leak in deliver.
+
+      <li> When looking for SASL options, imapd wasn't defaulting to
+      the option without the plugin name requesting it.  This caused
+      PLAIN authentications to incorrectly fail.
+
+      <li> Changed the expiration time of pts entries to 3 hours; only
+      affects sites using krb_pts as the authentication method.
+
+      <li> Fixed some bugs in imclient; mostly affects cyradm.
+
+      <li> Fixed a bug in the Sieve lexer and improved the usefulness
+      of the Sieve test program.
     </ul>
 
     <h2> Changes to the Cyrus IMAP Server Since Version 1.6.13 </h2>
