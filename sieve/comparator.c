@@ -1,6 +1,6 @@
 /* comparator.c -- comparator functions
  * Larry Greenfield
- * $Id: comparator.c,v 1.11 2002/07/01 13:27:13 ken3 Exp $
+ * $Id: comparator.c,v 1.12 2002/07/01 15:54:30 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -37,48 +37,50 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "tree.h"
 #include "sieve.h"
 
+typedef int (*compare_t)(const void *, const void *);
+
 /* --- relational comparators --- */
 
 /* these are generic wrappers in which 'rock' is the compare function */
 
 static int rel_eq(const char *text, const char *pat, void *rock)
 {
-    int (*compar)(const void *, const void *) = rock;
+    compare_t compar = (compare_t) rock;
 
     return (compar(text, pat) == 0);
 }
 
 static int rel_ne(const char *text, const char *pat, void *rock)
 {
-    int (*compar)(const void *, const void *) = rock;
+    compare_t compar = (compare_t) rock;
 
     return (compar(text, pat) != 0);
 }
 
 static int rel_gt(const char *text, const char *pat, void *rock)
 {
-    int (*compar)(const void *, const void *) = rock;
+    compare_t compar = (compare_t) rock;
 
     return (compar(text, pat) > 0);
 }
 
 static int rel_ge(const char *text, const char *pat, void *rock)
 {
-    int (*compar)(const void *, const void *) = rock;
+    compare_t compar = (compare_t) rock;
 
     return (compar(text, pat) >= 0);
 }
 
 static int rel_lt(const char *text, const char *pat, void *rock)
 {
-    int (*compar)(const void *, const void *) = rock;
+    compare_t compar = (compare_t) rock;
 
     return (compar(text, pat) < 0);
 }
 
 static int rel_le(const char *text, const char *pat, void *rock)
 {
-    int (*compar)(const void *, const void *) = rock;
+    compare_t compar = (compare_t) rock;
 
     return (compar(text, pat) <= 0);
 }
@@ -290,7 +292,7 @@ comparator_t *lookup_comp(const char *comp, int mode, const char *relation,
 	switch (mode) {
 	case IS:
 	    ret = &rel_eq;
-	    *comprock = &octet_cmp;
+	    *comprock = (void **) &octet_cmp;
 	    break;
 	case CONTAINS:
 	    ret = &octet_contains;
@@ -305,14 +307,14 @@ comparator_t *lookup_comp(const char *comp, int mode, const char *relation,
 #endif
 	case VALUE:
 	    ret = lookup_rel(relation);
-	    *comprock = &octet_cmp;
+	    *comprock = (void **) &octet_cmp;
 	    break;
 	}
     } else if (!strcmp(comp, "i;ascii-casemap")) {
 	switch (mode) {
 	case IS:
 	    ret = &rel_eq;
-	    *comprock = &strcasecmp;
+	    *comprock = (void **) &strcasecmp;
 	    break;
 	case CONTAINS:
 	    ret = &ascii_casemap_contains;
@@ -336,12 +338,12 @@ comparator_t *lookup_comp(const char *comp, int mode, const char *relation,
 	switch (mode) {
 	case IS:
 	    ret = &rel_eq;
-	    *comprock = &ascii_numeric_cmp;
+	    *comprock = (void **) &ascii_numeric_cmp;
 	    break;
 	case COUNT:
 	case VALUE:
 	    ret = lookup_rel(relation);
-	    *comprock = &ascii_numeric_cmp;
+	    *comprock = (void **) &ascii_numeric_cmp;
 	    break;
 	}
     }
