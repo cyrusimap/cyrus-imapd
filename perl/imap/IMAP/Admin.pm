@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Admin.pm,v 1.29 2002/07/22 15:54:57 rjs3 Exp $
+# $Id: Admin.pm,v 1.30 2002/08/21 20:14:03 rjs3 Exp $
 
 package Cyrus::IMAP::Admin;
 use strict;
@@ -703,7 +703,7 @@ sub setinfoserver {
     return undef;
   }
 
-  my ($rc, $msg) = $self->send('', '', "SETANNOTATION \"/server/%s\" (\"value.shared\" \"%s\")",
+  my ($rc, $msg) = $self->send('', '', "SETANNOTATION \"/server/%s\" (\"value.shared\" %s)",
 			       $entry, $value);
 
   if ($rc eq 'OK') {
