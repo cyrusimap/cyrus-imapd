@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.10 2002/07/13 19:01:12 rjs3 Exp $
+ * $Id: annotate.c,v 1.11 2002/07/24 19:30:31 rjs3 Exp $
  */
 
 #include <config.h>
@@ -222,7 +222,8 @@ static int fetch_cb(char *name, int matchlen, int maycreate, void* rock)
     lastname[matchlen] = '\0';
 
     if (!strncasecmp(lastname, "INBOX", 5))
-	sprintf(mboxname, "user.%s%s", fdata->userid, lastname+5);
+	snprintf(mboxname, sizeof(mboxname), "user.%s%s", 
+		 fdata->userid, lastname+5);
     else
 	strcpy(mboxname, name);
 
@@ -257,14 +258,15 @@ static int fetch_cb(char *name, int matchlen, int maycreate, void* rock)
     if (c) name[matchlen] = c;
 
     if (server && (fdata->entries & ENTRY_SERVER)) {
-	sprintf(entry, "/mailbox/{%s}/vendor/cmu/cyrus-imapd/server",
+	snprintf(entry, sizeof(entry), 
+		"/mailbox/{%s}/vendor/cmu/cyrus-imapd/server",
 		mboxname);
 
 	attvalues = NULL;
 	if (fdata->attribs & ATTRIB_VALUE)
 	    appendattvalue(&attvalues, "value.shared", server);
 	if (fdata->attribs & ATTRIB_SIZE) {
-	    sprintf(size, "%u", strlen(server));
+	    snprintf(size, sizeof(size), "%u", strlen(server));
 	    appendattvalue(&attvalues, "size.shared", size);
 	}
 
@@ -272,14 +274,15 @@ static int fetch_cb(char *name, int matchlen, int maycreate, void* rock)
     }
 
     if (fdata->entries & ENTRY_PARTITION) {
-	sprintf(entry, "/mailbox/{%s}/vendor/cmu/cyrus-imapd/partition",
+	snprintf(entry, sizeof(entry),
+		"/mailbox/{%s}/vendor/cmu/cyrus-imapd/partition",
 		mboxname);
 
 	attvalues = NULL;
 	if (fdata->attribs & ATTRIB_VALUE)
 	    appendattvalue(&attvalues, "value.shared", partition);
 	if (fdata->attribs & ATTRIB_SIZE) {
-	    sprintf(size, "%u", strlen(partition));
+	    snprintf(size, sizeof(size), "%u", strlen(partition));
 	    appendattvalue(&attvalues, "size.shared", size);
 	}
 
@@ -365,7 +368,7 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 	    cp = e->s + 8;
 
 	    if (!strncmp(cp, "motd", strcspn(cp, "*%"))) {
-		sprintf(filename, "%s/msg/motd", config_dir);
+		snprintf(filename, sizeof(filename), "%s/msg/motd", config_dir);
 		if ((f = fopen(filename, "r")) != NULL) {
 		    fgets(buf, sizeof(buf), f);
 		    fclose(f);
@@ -379,7 +382,7 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 		    if (fdata.attribs & ATTRIB_VALUE)
 			appendattvalue(&attvalues, "value.shared", buf);
 		    if (fdata.attribs & ATTRIB_SIZE) {
-			sprintf(size, "%u", strlen(buf));
+			snprintf(size, sizeof(size), "%u", strlen(buf));
 			appendattvalue(&attvalues, "size.shared", size);
 		    }
 
@@ -387,7 +390,8 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 		}
 	    }
 	    if (!strncmp(cp, "comment", strcspn(cp, "*%"))) {
-		sprintf(filename, "%s/msg/comment", config_dir);
+		snprintf(filename, sizeof(filename), 
+			 "%s/msg/comment", config_dir);
 		if ((f = fopen(filename, "r")) != NULL) {
 		    fgets(buf, sizeof(buf), f);
 		    fclose(f);
@@ -399,7 +403,7 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 		    if (fdata.attribs & ATTRIB_VALUE)
 			appendattvalue(&attvalues, "value.shared", buf);
 		    if (fdata.attribs & ATTRIB_SIZE) {
-			sprintf(size, "%u", strlen(buf));
+			snprintf(size, sizeof(size), "%u", strlen(buf));
 			appendattvalue(&attvalues, "size.shared", size);
 		    }
 
@@ -471,11 +475,11 @@ int annotatemore_store(struct entryattlist *l, struct namespace *namespace,
 
     /* XXX check for failures -- how to do this atomic? */
     if (motd) {
-	sprintf(filename, "%s/msg/motd", config_dir);
+	snprintf(filename, sizeof(filename), "%s/msg/motd", config_dir);
 	server_store(filename, value);
     }
     if (comment) {
-	sprintf(filename, "%s/msg/comment", config_dir);
+	snprintf(filename, sizeof(filename), "%s/msg/comment", config_dir);
 	server_store(filename, value);
     }
 

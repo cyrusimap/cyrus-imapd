@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131 2002/07/09 14:58:47 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.132 2002/07/24 19:30:37 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -1488,14 +1488,15 @@ void cmdloop()
     char *p;
     const char *err;
 
-    sprintf(shutdownfilename, "%s/msg/shutdown", config_dir);
+    snprintf(shutdownfilename, sizeof(shutdownfilename), 
+	     "%s/msg/shutdown", config_dir);
 
     gethostname(hostname, sizeof(hostname));
     prot_printf(proxyd_out,
 		"* OK %s Cyrus IMAP4 Murder %s server ready\r\n", hostname,
 		CYRUS_VERSION);
 
-    sprintf(motdfilename, "%s/msg/motd", config_dir);
+    snprintf(motdfilename, sizeof(motdfilename), "%s/msg/motd", config_dir);
     if ((fd = open(motdfilename, O_RDONLY, 0)) != -1) {
 	motd_file(fd);
 	close(fd);

@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.35 2002/07/24 18:10:31 rjs3 Exp $
+   $Id: seen_db.c,v 1.36 2002/07/24 19:30:39 rjs3 Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -353,7 +353,7 @@ int seen_write(struct seen *seendb, time_t lastread, unsigned int lastuid,
 	       seendb->uniqueid, seendb->user);
     }
 
-    sprintf(data, "%d %d %d %d %s", SEEN_VERSION, 
+    snprintf(data, sz, "%d %d %d %d %s", SEEN_VERSION, 
 	    (int) lastread, lastuid, (int) lastchange, seenuids);
     datalen = strlen(data);
 

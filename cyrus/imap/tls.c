@@ -93,7 +93,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.38 2002/06/03 16:59:57 ken3 Exp $ */
+/* $Id: tls.c,v 1.39 2002/07/24 19:30:40 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -153,12 +153,12 @@ int tls_enabled(const char *ident)
     char buf[50];
     const char *val;
 
-    sprintf(buf, "tls_%s_cert_file", ident);
+    snprintf(buf, sizeof(buf), "tls_%s_cert_file", ident);
     val = config_getstring(buf,
 			   config_getstring("tls_cert_file", NULL));
     if (!val || !strcasecmp(val, "disabled")) return 0;
 
-    sprintf(buf, "tls_%s_key_file", ident);
+    snprintf(buf, sizeof(buf), "tls_%s_key_file", ident);
     val = config_getstring(buf,
 			   config_getstring("tls_key_file", NULL));
     if (!val || !strcasecmp(val, "disabled")) return 0;
@@ -677,11 +677,11 @@ int     tls_init_serverengine(const char *ident,
 	syslog(LOG_NOTICE,"TLS engine: cannot load CA data");	
     }
 
-    sprintf(buf, "tls_%s_cert_file", ident);
+    snprintf(buf, sizeof(buf), "tls_%s_cert_file", ident);
     s_cert_file = config_getstring(buf,
 				   config_getstring("tls_cert_file", NULL));
 
-    sprintf(buf, "tls_%s_key_file", ident);
+    snprintf(buf, sizeof(buf), "tls_%s_key_file", ident);
     s_key_file = config_getstring(buf,
 				  config_getstring("tls_key_file", NULL));
 
@@ -695,7 +695,7 @@ int     tls_init_serverengine(const char *ident,
     if (askcert!=0)
 	verify_flags |= SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE;
 
-    sprintf(buf, "tls_%s_require_cert", ident);
+    snprintf(buf, sizeof(buf), "tls_%s_require_cert", ident);
     requirecert = config_getswitch(buf,
 				   config_getswitch("tls_require_cert", 0));
     if (requirecert)
