@@ -857,11 +857,10 @@ int octet_count;
  * Helper function to fetch a body section
  */
 static
-index_fetchsection(msgfile, format, msgno, section, cacheitem,
+index_fetchsection(msgfile, format, section, cacheitem,
 		   start_octet, octet_count)
 FILE *msgfile;
 int format;
-int msgno;
 char *section;
 char *cacheitem;
 int start_octet;
@@ -1124,8 +1123,7 @@ char *rock;
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bodystructure */
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body */
 
-	index_fetchsection(msgfile, mailbox->format, msgno, section->s,
-			   cacheitem,
+	index_fetchsection(msgfile, mailbox->format, section->s, cacheitem,
 			   fetchargs->start_octet, fetchargs->octet_count);
     }
     printf(")\r\n");
