@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.53 2001/09/14 16:46:52 ken3 Exp $ */
+/* $Id: master.c,v 1.54 2001/10/12 19:36:09 ken3 Exp $ */
 
 #include <config.h>
 
@@ -552,6 +552,7 @@ void schedule_event(struct event *a)
 void spawn_schedule(time_t now)
 {
     struct event *a, *b;
+    int i;
     char path[1024];
     pid_t p;
     struct centry *c;
@@ -581,6 +582,13 @@ void spawn_schedule(time_t now)
 	    if (become_cyrus() != 0) {
 		syslog(LOG_ERR, "can't change to the cyrus user");
 		exit(1);
+	    }
+
+	    /* close all listeners */
+	    for (i = 0; i < nservices; i++) {
+		if (Services[i].socket > 0) close(Services[i].socket);
+		if (Services[i].stat[0] > 0) close(Services[i].stat[0]);
+		if (Services[i].stat[1] > 0) close(Services[i].stat[1]);
 	    }
 	    limit_fds(256);
 
