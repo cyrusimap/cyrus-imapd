@@ -250,12 +250,12 @@ int main(int argc, char **argv)
 	}
     }
 
-    config_init(alt_config, "deliver");
-
     deliver_in = prot_new(0, 0);
     deliver_out = prot_new(1, 1);
     prot_setflushonread(deliver_in, deliver_out);
     prot_settimeout(deliver_in, 300);
+
+    config_init(alt_config, "deliver");
 
     sockaddr = config_getstring("lmtpsocket", NULL);
     if (!sockaddr) {	
