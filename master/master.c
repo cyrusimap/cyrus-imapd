@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.69 2002/10/01 20:46:01 ken3 Exp $ */
+/* $Id: master.c,v 1.70 2002/11/01 16:44:33 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -1103,19 +1103,33 @@ void limit_fds(rlim_t x)
     rl.rlim_max = x;
     if (setrlimit(RLIMIT_NUMFDS, &rl) < 0) {
 	syslog(LOG_ERR, "setrlimit: Unable to set file descriptors limit to %ld: %m", x);
+
+#ifdef HAVE_GETRLIMIT
+
+	if (!getrlimit(RLIMIT_NUMFDS, &rl)) {
+	    syslog(LOG_ERR, "retrying with %ld (current max)", rl.rlim_max);
+	    rl.rlim_cur = rl.rlim_max;
+	    if (setrlimit(RLIMIT_NUMFDS, &rl) < 0) {
+		syslog(LOG_ERR, "setrlimit: Unable to set file descriptors limit to %ld: %m", x);
+	    }
+	}
     }
+
 
     if (verbose > 1) {
 	r = getrlimit(RLIMIT_NUMFDS, &rl);
 	syslog(LOG_DEBUG, "set maximum file descriptors to %ld/%ld", rl.rlim_cur,
 	       rl.rlim_max);
     }
+#else
+    }
+#endif /* HAVE_GETRLIMIT */
 }
 #else
 void limit_fds(rlim_t x)
 {
 }
-#endif
+#endif /* HAVE_SETRLIMIT */
 
 void reread_conf(void)
 {
