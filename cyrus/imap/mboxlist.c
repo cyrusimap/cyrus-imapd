@@ -38,6 +38,7 @@
 #include <com_err.h>
 
 #include "acl.h"
+#include "auth.h"
 #include "glob.h"
 #include "assert.h"
 #include "config.h"
@@ -129,7 +130,7 @@ char **acl;
 	return IMAP_MAILBOX_NONEXISTENT;
     }
 	
-    /* Canonify the case of the mailbox name */
+    /* Canonicalize the case of the mailbox name */
     strncpy(name, buf, namelen);
 
     /* Parse partition name, construct pathname if requested */
@@ -212,6 +213,7 @@ char **newpartition;
     struct glob *g;
     int r;
     char *buf, *p;
+    char *canon_user;
     char *acl;
     char parent[MAX_NAME_LEN+1];
     unsigned parentlen;
@@ -288,7 +290,7 @@ char **newpartition;
 	    free(partition);
 	    return IMAP_PERMISSION_DENIED;
 	}
-	/* Copy acl, canonify case of parent prefix */
+	/* Copy acl, canonicalize case of parent prefix */
 	acl = strsave(acl);
 	strncpy(name, parent, strlen(parent));
     }
@@ -300,7 +302,6 @@ char **newpartition;
 	
 	acl = strsave("");
 	if (!strncasecmp(name, "user.", 5)) {
-	    /* XXX canonify case */
 	    if (strchr(name+5, '.')) {
 		/* Disallow creating user.X.* when no user.X */
 		fclose(listfile);
@@ -316,6 +317,11 @@ char **newpartition;
 	     */	     
 	    if (strchr(name, '*') || strchr(name, '%') || strchr(name, '?')) {
 		return IMAP_MAILBOX_BADNAME;
+	    }
+	    /* Canonicalize the case of the userid */
+	    canon_user = auth_canonifyid(name+5);
+	    if (canon_user && !strcasecmp(canon_user, name+5)) {
+		strcpy(name+5, canon_user);
 	    }
 	    /*
 	     * Users by default have all access to their personal mailbox(es),
@@ -1668,7 +1674,7 @@ char *name;
 }
 
 /*
- * ACL access canonification routine which ensures that 'owner'
+ * ACL access canonicalization routine which ensures that 'owner'
  * retains lookup, administer, and create rights over a mailbox.
  */
 static long ensureOwnerRights(owner, identifier, access)
