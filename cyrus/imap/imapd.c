@@ -649,7 +649,7 @@ cmdloop()
 	    else if (!strcmp(cmd.s, "Namespace")) {
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-		cmd_namespace(tag.s, cmd.s);
+		cmd_namespace(tag.s);
 	    }
 #endif
 #ifdef ENABLE_X_NETSCAPE_HACK
@@ -976,7 +976,7 @@ char *passwd;
 
     prot_printf(imapd_out, "%s OK %s\r\n", tag, reply);
     return;
-};
+}
 
 /*
  * Perform an AUTHENTICATE command
@@ -2980,6 +2980,7 @@ char *startuid;
 /*
  * Netscape's crock hack with a crock  of my own
  */
+void
 cmd_netscrape(tag)
     char *tag;
 {
@@ -3005,6 +3006,7 @@ cmd_netscrape(tag)
  * draft-gahrns-imap-namespace-03.txt.  Cyrus' responses are hardcoded;
  * I can't think of anything that needs to be configurable.
  */
+void
 cmd_namespace(tag)
     char* tag;
 {
