@@ -930,7 +930,7 @@ char *name;
     time_t internaldate = time(0);
     unsigned size = 0;
     int r;
-    char inboxname[MAX_MAILBOX_PATH];
+    char mailboxname[MAX_MAILBOX_NAME+1];
     struct mailbox mailbox;
 
     /* Parse flags */
@@ -1013,24 +1013,18 @@ char *name;
 	if (c != '\n') eatline();
 	goto freeflags;
     }
+
     /* Set up the append */
-    if (strcasecmp(name, "inbox") == 0 &&
-	!strchr(imapd_userid, '.') &&
-	strlen(imapd_userid) + 6 <= MAX_MAILBOX_PATH) {
-	strcpy(inboxname, "user.");
-	strcat(inboxname, imapd_userid);
-	r = append_setup(&mailbox, inboxname, MAILBOX_FORMAT_NORMAL,
-			 ACL_INSERT, size);
-    }
-    else {
-	r = append_setup(&mailbox, name, MAILBOX_FORMAT_NORMAL,
+    r = mboxname_tointernal(name, imapd_userid, mailboxname);
+    if (!r) {
+	r = append_setup(&mailbox, mailboxname, MAILBOX_FORMAT_NORMAL,
 			 ACL_INSERT, size);
     }
     if (r) {
 	prot_printf(imapd_out, "%s NO %s%s\r\n",
 	       tag,
 	       (r == IMAP_MAILBOX_NONEXISTENT &&
-		mboxlist_createmailboxcheck(name, 0, imapd_userisadmin,
+		mboxlist_createmailboxcheck(mailboxname, 0, imapd_userisadmin,
 					    imapd_userid, (char **)0,
 					    (char **)0) == 0)
 	       ? "[TRYCREATE] " : "", error_message(r));
@@ -1081,13 +1075,11 @@ char *cmd;
 char *name;
 {
     struct mailbox mailbox;
-    char inboxname[MAX_MAILBOX_PATH];
+    char mailboxname[MAX_MAILBOX_NAME+1];
     int r = 0;
     int i;
     int usage;
     int doclose = 0;
-
-    inboxname[0] = '\0';
 
     if (imapd_mailbox) {
 	index_closemailbox(imapd_mailbox);
@@ -1099,15 +1091,12 @@ char *name;
 	/* BBoard namespace is empty */
 	r = IMAP_MAILBOX_NONEXISTENT;
     }
-    else if (strcasecmp(name, "inbox") == 0 &&
-	     !strchr(imapd_userid, '.') &&
-	     strlen(imapd_userid) + 6 <= MAX_MAILBOX_PATH) {
-	strcpy(inboxname, "user.");
-	strcat(inboxname, imapd_userid);
-	r = mailbox_open_header(inboxname, &mailbox);
-    }
     else {
-	r = mailbox_open_header(name, &mailbox);
+	r = mboxname_tointernal(name, imapd_userid, mailboxname);
+    }
+
+    if (!r) {
+	r = mailbox_open_header(mailboxname, &mailbox);
     }
 
     if (!r) {
@@ -1162,8 +1151,7 @@ char *name;
 	   (imapd_mailbox->myrights & (ACL_WRITE|ACL_DELETE)) ?
 		"WRITE" : "ONLY", cmd);
 
-    proc_register("imapd", imapd_clienthost, imapd_userid,
-		  inboxname[0] ? inboxname : name);
+    proc_register("imapd", imapd_clienthost, imapd_userid, mailboxname);
     syslog(LOG_INFO, "open: user %s opened %s", imapd_userid, name);
 }
 	  
@@ -1695,17 +1683,11 @@ int usinguid;
 {
     char *cmd = usinguid ? "UID Copy" : "Copy";
     int r;
-    char inboxname[MAX_MAILBOX_PATH];
+    char mailboxname[MAX_MAILBOX_NAME+1];
 
-    if (strcasecmp(name, "inbox") == 0 &&
-	!strchr(imapd_userid, '.') &&
-	strlen(imapd_userid) + 6 <= MAX_MAILBOX_PATH) {
-	strcpy(inboxname, "user.");
-	strcat(inboxname, imapd_userid);
-	r = index_copy(imapd_mailbox, sequence, usinguid, inboxname);
-    }
-    else {
-	r = index_copy(imapd_mailbox, sequence, usinguid, name);	
+    r = mboxname_tointernal(name, imapd_userid, mailboxname);
+    if (!r) {
+	r = index_copy(imapd_mailbox, sequence, usinguid, mailboxname);
     }
 
     index_check(imapd_mailbox, usinguid, 0);
@@ -1755,6 +1737,7 @@ char *name;
 char *partition;
 {
     int r;
+    char mailboxname[MAX_MAILBOX_NAME+1];
 
     if (partition && !imapd_userisadmin) {
 	r = IMAP_PERMISSION_DENIED;
@@ -1764,8 +1747,12 @@ char *partition;
 	return;
     }
     else {
-	r = mboxlist_createmailbox(name, MAILBOX_FORMAT_NORMAL, partition,
-				   imapd_userisadmin, imapd_userid);
+	r = mboxname_tointernal(name, imapd_userid, mailboxname);
+    }
+
+    if (!r) {
+	r = mboxlist_createmailbox(mailboxname, MAILBOX_FORMAT_NORMAL,
+				   partition, imapd_userisadmin, imapd_userid);
     }
 
     if (imapd_mailbox) {
@@ -1788,8 +1775,14 @@ char *tag;
 char *name;
 {
     int r;
+    char mailboxname[MAX_MAILBOX_NAME+1];
 
-    r = mboxlist_deletemailbox(name, imapd_userisadmin, imapd_userid, 1);
+    r = mboxname_tointernal(name, imapd_userid, mailboxname);
+
+    if (!r) {
+	r = mboxlist_deletemailbox(mailboxname, imapd_userisadmin,
+				   imapd_userid, 1);
+    }
 
     if (imapd_mailbox) {
 	index_check(imapd_mailbox, 0, 0);
@@ -1813,12 +1806,23 @@ char *newname;
 char *partition;
 {
     int r;
+    char oldmailboxname[MAX_MAILBOX_NAME+1];
+    char newmailboxname[MAX_MAILBOX_NAME+1];
+
 
     if (partition && !imapd_userisadmin) {
 	r = IMAP_PERMISSION_DENIED;
     }
     else {
-	r = mboxlist_renamemailbox(oldname, newname, partition,
+	r = mboxname_tointernal(oldname, imapd_userid, oldmailboxname);
+    }
+
+    if (!r) {
+	r = mboxname_tointernal(newname, imapd_userid, newmailboxname);
+    }
+
+    if (!r) {
+	r = mboxlist_renamemailbox(oldmailboxname, newmailboxname, partition,
 				   imapd_userisadmin, imapd_userid);
     }
 
@@ -1913,10 +1917,14 @@ char *name;
 int add;
 {
     int r;
+    char mailboxname[MAX_MAILBOX_NAME+1];
 
     if (namespace) lcase(namespace);
     if (!namespace || !strcmp(namespace, "mailbox")) {
-	r = mboxlist_changesub(name, imapd_userid, add);
+	r = mboxname_tointernal(name, imapd_userid, mailboxname);
+	if (!r) {
+	    r = mboxlist_changesub(mailboxname, imapd_userid, add);
+	}
     }
     else if (!strcmp(namespace, "bboard")) {
 	r = add ? IMAP_MAILBOX_NONEXISTENT : 0;
@@ -1945,7 +1953,7 @@ char *tag;
 char *namespace;
 char *name;
 {
-    char inboxname[MAX_MAILBOX_PATH];
+    char mailboxname[MAX_MAILBOX_NAME+1];
     int r, access;
     char *acl;
     char *rights, *nextid;
@@ -1955,16 +1963,7 @@ char *name;
 	r = IMAP_MAILBOX_NONEXISTENT;
     }
     else if (!strcmp(namespace, "mailbox")) {
-	if (strcasecmp(name, "inbox") == 0 &&
-	    !strchr(imapd_userid, '.') &&
-	    strlen(imapd_userid) + 6 <= MAX_MAILBOX_PATH) {
-	    strcpy(inboxname, "user.");
-	    strcat(inboxname, imapd_userid);
-	    r = mboxlist_lookup(inboxname, (char **)0, &acl);
-	}
-	else {
-	    r = mboxlist_lookup(name, (char **)0, &acl);
-	}
+	r = mboxname_tointernal(name, imapd_userid, mailboxname);
     }
     else {
 	prot_printf(imapd_out, "%s BAD Invalid Getacl subcommand\r\n", tag);
@@ -1972,18 +1971,15 @@ char *name;
     }
 
     if (!r) {
-	access = acl_myrights(acl);
-	if (imapd_userisadmin) {
-	    access |= ACL_ADMIN;
-	}
-	else if (!strchr(imapd_userid, '.') &&
-		 !strncasecmp(name, "user.", 5) &&
-		 !strncasecmp(name+5, imapd_userid, strlen(imapd_userid)) &&
-		 name[5+strlen(imapd_userid)] == '.') {
-	    access |= ACL_ADMIN;
-	}
+	r = mboxlist_lookup(mailboxname, (char **)0, &acl);
+    }
 
-	if (!(access&(ACL_READ|ACL_ADMIN))) {
+    if (!r) {
+	access = acl_myrights(acl);
+
+	if (!(access & (ACL_READ|ACL_ADMIN)) &&
+	    !imapd_userisadmin &&
+	    !mboxname_userownsmailbox(imapd_userid, mailboxname)) {
 	    r = (access&ACL_LOOKUP) ?
 	      IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
 	}
@@ -2022,7 +2018,7 @@ char *tag;
 char *namespace;
 char *name;
 {
-    char inboxname[MAX_MAILBOX_PATH];
+    char mailboxname[MAX_MAILBOX_NAME+1];
     int r, rights;
     char *acl;
     char str[ACL_MAXSTR];
@@ -2032,16 +2028,7 @@ char *name;
 	r = IMAP_MAILBOX_NONEXISTENT;
     }
     else if (!strcmp(namespace, "mailbox")) {
-	if (strcasecmp(name, "inbox") == 0 &&
-	    !strchr(imapd_userid, '.') &&
-	    strlen(imapd_userid) + 6 <= MAX_MAILBOX_PATH) {
-	    strcpy(inboxname, "user.");
-	    strcat(inboxname, imapd_userid);
-	    r = mboxlist_lookup(inboxname, (char **)0, &acl);
-	}
-	else {
-	    r = mboxlist_lookup(name, (char **)0, &acl);
-	}
+	r = mboxname_tointernal(name, imapd_userid, mailboxname);
     }
     else {
 	prot_printf(imapd_out, "%s BAD Invalid Myrights subcommand\r\n", tag);
@@ -2049,16 +2036,15 @@ char *name;
     }
 
     if (!r) {
+	r = mboxlist_lookup(mailboxname, (char **)0, &acl);
+    }
+
+    if (!r) {
 	rights = acl_myrights(acl);
 
 	/* Add in implicit rights */
-	if (imapd_userisadmin || !strcasecmp(name, "inbox")) {
-	    rights |= ACL_LOOKUP|ACL_ADMIN;
-	}
-	if (!strchr(imapd_userid, '.') &&
-	    !strncasecmp(name, "user.", 5) &&
-	    !strncasecmp(name+5, imapd_userid, strlen(imapd_userid)) &&
-	    name[5+strlen(imapd_userid)] == '.') {
+	if (imapd_userisadmin ||
+	    mboxname_userownsmailbox(imapd_userid, mailboxname)) {
 	    rights |= ACL_LOOKUP|ACL_ADMIN;
 	}
 
@@ -2090,18 +2076,23 @@ char *rights;
 {
     int r;
     char *cmd = rights ? "Setacl" : "Deleteacl";
+    char mailboxname[MAX_MAILBOX_NAME+1];
 
     lcase(namespace);
     if (!strcmp(namespace, "bboard")) {
 	r = IMAP_MAILBOX_NONEXISTENT;
     }
     else if (!strcmp(namespace, "mailbox")) {
-	r = mboxlist_setacl(name, identifier, rights,
-			    imapd_userisadmin, imapd_userid);
+	r = mboxname_tointernal(name, imapd_userid, mailboxname);
     }
     else {
 	prot_printf(imapd_out, "%s BAD Invalid %s subcommand\r\n", tag, cmd);
 	return;
+    }
+
+    if (!r) {
+	r = mboxlist_setacl(mailboxname, identifier, rights,
+			    imapd_userisadmin, imapd_userid);
     }
 
     if (r) {
@@ -2123,7 +2114,6 @@ char *name;
     struct quota quota;
     char buf[MAX_MAILBOX_PATH];
 
-    lcase(name);
     quota.root = name;
     quota.file = 0;
 
@@ -2166,20 +2156,15 @@ cmd_getquotaroot(tag, name)
 char *tag;
 char *name;
 {
-    char inboxname[MAX_MAILBOX_PATH];
+    char mailboxname[MAX_MAILBOX_NAME+1];
     struct mailbox mailbox;
     int r;
     int doclose = 0;
 
-    if (strcasecmp(name, "inbox") == 0 &&
-	     !strchr(imapd_userid, '.') &&
-	     strlen(imapd_userid) + 6 <= MAX_MAILBOX_PATH) {
-	strcpy(inboxname, "user.");
-	strcat(inboxname, imapd_userid);
-	r = mailbox_open_header(inboxname, &mailbox);
-    }
-    else {
-	r = mailbox_open_header(name, &mailbox);
+    r = mboxname_tointernal(name, imapd_userid, mailboxname);
+
+    if (!r) {
+	r = mailbox_open_header(mailboxname, &mailbox);
     }
 
     if (!r) {
@@ -2295,7 +2280,7 @@ char *name;
     int statusitems = 0;
     static struct buf arg;
     struct mailbox mailbox;
-    char inboxname[MAX_MAILBOX_PATH];
+    char mailboxname[MAX_MAILBOX_NAME+1];
     int r = 0;
     int doclose = 0;
 
@@ -2362,15 +2347,10 @@ char *name;
 	index_check(imapd_mailbox, 0, 1);
     }
 
-    if (strcasecmp(name, "inbox") == 0 &&
-	!strchr(imapd_userid, '.') &&
-	strlen(imapd_userid) + 6 <= MAX_MAILBOX_PATH) {
-	strcpy(inboxname, "user.");
-	strcat(inboxname, imapd_userid);
-	r = mailbox_open_header(inboxname, &mailbox);
-    }
-    else {
-	r = mailbox_open_header(name, &mailbox);
+    r = mboxname_tointernal(name, imapd_userid, mailboxname);
+
+    if (!r) {
+	r = mailbox_open_header(mailboxname, &mailbox);
     }
 
     if (!r) {
@@ -3652,11 +3632,11 @@ int maycreate;
     }
 
     c = name[matchlen];
-    name[matchlen] = '\0';
+    if (c) name[matchlen] = '\0';
     prot_printf(imapd_out, "* %s (%s) \".\" ", cmd, c ? "\\Noselect" : "");
     printastring(name);
     prot_printf(imapd_out, "\r\n");
-    name[matchlen] = c;
+    if (c) name[matchlen] = c;
     return 0;
 }
 
