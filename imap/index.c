@@ -17,7 +17,6 @@
 #include "imap_err.h"
 #include "mailbox.h"
 #include "imapd.h"
-#include "message.h"
 #include "append.h"
 #include "xmalloc.h"
 
@@ -1004,18 +1003,18 @@ int octet_count;
 	if (skip >= CACHE_ITEM_BIT32(cacheitem)) goto badpart;
 
 	if (*p) {
-	    cacheitem += CACHE_ITEM_BIT32(cacheitem) * 2 * 4 + 4;
+	    cacheitem += CACHE_ITEM_BIT32(cacheitem) * 3 * 4 + 4;
 	    while (--skip) {
 		if (CACHE_ITEM_BIT32(cacheitem) > 0) {
 		    skip += CACHE_ITEM_BIT32(cacheitem)-1;
-		    cacheitem += CACHE_ITEM_BIT32(cacheitem) * 2 * 4;
+		    cacheitem += CACHE_ITEM_BIT32(cacheitem) * 3 * 4;
 		}
 		cacheitem += 4;
 	    }
 	}
     }
 
-    cacheitem += skip * 2 * 4 + 4;
+    cacheitem += skip * 3 * 4 + 4;
     if (CACHE_ITEM_BIT32(cacheitem+4) == -1) goto badpart;
 	
     index_fetchmsg(msgfile, format, CACHE_ITEM_BIT32(cacheitem),

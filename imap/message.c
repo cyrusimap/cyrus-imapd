@@ -1453,6 +1453,7 @@ struct body *body;
 	    message_write_bit32(ibuf, body->subpart->numparts+1);
 	    message_write_bit32(ibuf, body->subpart->header_offset);
 	    message_write_bit32(ibuf, body->subpart->header_size);
+	    message_write_bit32(ibuf, (-1<<16)|ENCODING_NONE);
 	    for (part = 0; part < body->subpart->numparts; part++) {
 		message_write_bit32(ibuf, body->subpart->subpart[part].content_offset);
 		if (strcmp(body->subpart->subpart[part].type, "MULTIPART") == 0) {
@@ -1464,9 +1465,11 @@ struct body *body;
 			/* Treat 0-part multipart as 0-length text */
 			message_write_bit32(ibuf, 0);
 		    }
+		    message_write_bit32(ibuf, (-1<<16)|ENCODING_NONE);
 		}
 		else {
 		    message_write_bit32(ibuf, body->subpart->subpart[part].content_size);
+		    message_write_charset(ibuf, &body->subpart->subpart[part]);
 		}
 	    }
 	    for (part = 0; part < body->subpart->numparts; part++) {
@@ -1482,13 +1485,16 @@ struct body *body;
 	    message_write_bit32(ibuf, 2);
 	    message_write_bit32(ibuf, body->subpart->header_offset);
 	    message_write_bit32(ibuf, body->subpart->header_size);
+	    message_write_bit32(ibuf, (-1<<16)|ENCODING_NONE);
 	    message_write_bit32(ibuf, body->subpart->content_offset);
 	    if (strcmp(body->subpart->type, "MULTIPART") == 0) {
 		/* Treat 0-part multipart as 0-length text */
 		message_write_bit32(ibuf, 0);
+		message_write_bit32(ibuf, (-1<<16)|ENCODING_NONE);
 	    }
 	    else {
 		message_write_bit32(ibuf, body->subpart->content_size);
+		message_write_charset(ibuf, body->subpart);
 	    }
 	    message_write_section(ibuf, body->subpart);
 	}
@@ -1501,18 +1507,22 @@ struct body *body;
 	message_write_bit32(ibuf, body->numparts+1);	
 	message_write_bit32(ibuf, 0);
 	message_write_bit32(ibuf, -1);
+	message_write_bit32(ibuf, (-1<<16)|ENCODING_NONE);
 	for (part = 0; part < body->numparts; part++) {
 	    message_write_bit32(ibuf, body->subpart[part].content_offset);
 	    if (body->subpart[part].numparts) {
 		/* Cannot fetch a multipart itself */
 		message_write_bit32(ibuf, -1);
+		message_write_bit32(ibuf, (-1<<16)|ENCODING_NONE);
 	    }
 	    else if (strcmp(body->subpart[part].type, "MULTIPART") == 0) {
 		/* Treat 0-part multipart as 0-length text */
 		message_write_bit32(ibuf, 0);
+		message_write_bit32(ibuf, (-1<<16)|ENCODING_NONE);
 	    }
 	    else {
 		message_write_bit32(ibuf, body->subpart[part].content_size);
+		message_write_charset(ibuf, &body->subpart[part]);
 	    }
 	}
 	for (part = 0; part < body->numparts; part++) {
@@ -1524,6 +1534,67 @@ struct body *body;
 	 * Leaf section--no part 0 or nested parts
 	 */
 	message_write_bit32(ibuf, 0);
+    }
+}
+
+/*
+ * Write the 32-bit charset/encoding value for section 'body' to 'ibuf'
+ */
+static
+message_write_charset(ibuf, body)
+struct ibuf *ibuf;
+struct body *body;
+{
+    int encoding, charset;
+    struct param *param;
+
+    if (!body->encoding) encoding = ENCODING_NONE;
+    else {
+	switch (body->encoding[0]) {
+	case '7':
+	case '8':
+	    if (!strcmp(body->encoding+1, "BIT")) encoding = ENCODING_NONE;
+	    else encoding = ENCODING_UNKNOWN;
+	    break;
+
+	case 'B':
+	    if (!strcmp(body->encoding, "BASE64")) encoding = ENCODING_BASE64;
+	    else if (!strcmp(body->encoding, "BINARY"))
+	      encoding = ENCODING_NONE;
+	    else encoding = ENCODING_UNKNOWN;
+	    break;
+
+	case 'Q':
+	    if (!strcmp(body->encoding, "QUOTED-PRINTABLE"))
+	      encoding = ENCODING_QP;
+	    else encoding = ENCODING_UNKNOWN;
+	    break;
+
+	default:
+	    encoding = ENCODING_UNKNOWN;
+	}
+    }
+	
+    if (!body->type || !strcmp(body->type, "TEXT")) {
+	charset = 0;		/* Default is us-ascii */
+	for (param = body->params; param; param = param->next) {
+	    if (!strcasecmp(param->attribute, "charset")) {
+		charset = charset_lookupname(param->value);
+		break;
+	    }
+	}
+	message_write_bit32(ibuf, (charset<<16)|encoding);
+    }
+    else if (!strcmp(body->type, "MESSAGE")) {
+	if (!strcmp(body->subtype, "RFC822")) {
+	    message_write_bit32(ibuf, (-1<<16)|ENCODING_NONE);
+	}
+	else {
+	    message_write_bit32(ibuf, (0<<16)|ENCODING_NONE);
+	}
+    }
+    else {
+	message_write_bit32(ibuf, (-1<<16)|encoding);
     }
 }
 
