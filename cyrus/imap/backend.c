@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.17 2004/02/03 20:59:55 ken3 Exp $ */
+/* $Id: backend.c,v 1.18 2004/02/04 01:42:38 ken3 Exp $ */
 
 #include <config.h>
 
@@ -75,14 +75,14 @@
 #include "util.h"
 
 static char *ask_capability(struct protstream *pout, struct protstream *pin,
-			    struct protocol_t *prot,
-			    int *supports_starttls)
+			    struct protocol_t *prot, unsigned long *capa)
 {
     char str[4096];
     char *ret = NULL, *tmp;
-    
-    if (supports_starttls) *supports_starttls = 0;
+    struct capa_t *c;
 
+    *capa = 0;
+    
     if (prot->capa_cmd.cmd) {
 	/* request capabilities of server */
 	prot_printf(pout, "%s\r\n", prot->capa_cmd.cmd);
@@ -94,19 +94,18 @@ static char *ask_capability(struct protstream *pout, struct protstream *pin,
 	    return NULL;
 	}
 
-	/* check for starttls */
-	if (prot->capa_cmd.tls &&
-	    strstr(str, prot->capa_cmd.tls) != NULL) {
-	    if (supports_starttls) *supports_starttls = 1;
-	}
-	
-	/* check for auth */
-	if (prot->capa_cmd.auth &&
-	    (tmp = strstr(str, prot->capa_cmd.auth)) != NULL) {
-	    if (prot->capa_cmd.parse_mechlist)
-		ret = prot->capa_cmd.parse_mechlist(str, prot);
-	    else
-		ret = strdup(tmp+strlen(prot->capa_cmd.auth));
+	/* look for capabilities in the string */
+	for (c = prot->capa_cmd.capa; c->str; c++) {
+	    if (tmp = strstr(str, c->str)) {
+		*capa = *capa | c->flag;
+
+		if (c->flag == CAPA_AUTH) {
+		    if (prot->capa_cmd.parse_mechlist)
+			ret = prot->capa_cmd.parse_mechlist(str, prot);
+		    else
+			ret = strdup(tmp+strlen(c->str));
+		}
+	    }
 	}
     } while (strncasecmp(str, prot->capa_cmd.resp, strlen(prot->capa_cmd.resp)));
     
@@ -228,17 +227,16 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
     
     do {
 	/* If we don't have a mech_conf, ask the server what it can do */
-	if(!mech_conf) {
-	    mechlist = ask_capability(s->out, s->in, prot,
-				      have_starttls ? &have_starttls : NULL);
-	} else {
+	mechlist = ask_capability(s->out, s->in, prot, &s->capability);
+	if (mech_conf) {
+	    free(mechlist);
 	    mechlist = xstrdup(mech_conf);
 	}
 
 	if (mechlist) {
 	    /* we now do the actual SASL exchange */
 	    saslclient(s->saslconn, &prot->sasl_cmd, mechlist,
-			   s->in, s->out, &r, status);
+		       s->in, s->out, &r, status);
 
 	    /* garbage collect */
 	    free(mechlist);
@@ -247,7 +245,7 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
 	else
 	    r = SASL_NOMECH;
 
-    } while (r == SASL_NOMECH && have_starttls-- &&
+    } while (r == SASL_NOMECH && CAPA(s, CAPA_STARTTLS) &&
 	     do_starttls(s, &prot->tls_cmd) != -1);
 
     /* xxx unclear that this is correct */

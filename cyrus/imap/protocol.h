@@ -39,12 +39,34 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: protocol.h,v 1.3 2004/02/03 20:59:55 ken3 Exp $ */
+/* $Id: protocol.h,v 1.4 2004/02/04 01:42:39 ken3 Exp $ */
 
 #ifndef _INCLUDED_PROTOCOL_H
 #define _INCLUDED_PROTOCOL_H
 
 #include "saslclient.h"
+
+enum {
+    /* generic capabilities */
+    CAPA_AUTH		= (1 << 0),
+    CAPA_STARTTLS	= (1 << 1),
+
+    /* IMAP capabilities */
+    CAPA_IDLE		= (1 << 2),
+    CAPA_MUPDATE	= (1 << 3),
+    CAPA_MULTIAPPEND	= (1 << 4),
+
+    /* LMTP capabilities */
+    CAPA_PIPELINING	= (1 << 2),
+    CAPA_IGNOREQUOTA	= (1 << 3)
+};
+
+#define MAX_CAPA 5
+
+struct capa_t {
+    const char *str;
+    unsigned long flag;
+};
 
 struct protocol_t;
 
@@ -52,11 +74,11 @@ struct capa_cmd_t {
     const char *cmd;		/* [OPTIONAL] capability command string
 				   (NULL = capabilities in banner) */
     const char *resp;		/* end of capability response */
-    const char *tls;		/* [OPTIONAL] TLS capability string */
-    const char *auth;		/* AUTH capability string */
     char *(*parse_mechlist)(char *str, struct protocol_t *prot);
 				/* [OPTIONAL] parse capability string,
 				   returns space-separated list of mechs */
+    struct capa_t capa[MAX_CAPA+1];/* capabilities to parse for
+				      (MUST end with NULL entry) */
 };
 
 struct tls_cmd_t {
