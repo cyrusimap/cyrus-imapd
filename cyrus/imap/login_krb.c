@@ -54,7 +54,8 @@ static acte_authproc_t login_authproc;
 
 extern struct acte_server krb_acte_server;
 
-extern char *auth_map_krbid();
+extern char *auth_map_krbid P((const char *real_aname, const char *real_inst,
+			       const char *real_realm));
 
 static char lrealm[REALM_SZ];
 static int use_acl = 0;
