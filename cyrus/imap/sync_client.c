@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.2 2005/02/28 20:45:14 ken3 Exp $
+ * $Id: sync_client.c,v 1.1.2.3 2005/03/01 18:12:03 ken3 Exp $
  */
 
 #include <config.h>
@@ -1448,10 +1448,9 @@ static int do_quota(char *name)
  * gives us readonly snapshot of mailbox for duration of upload
  */
 
-static int
-do_mailbox_work(struct mailbox *mailbox, 
-                struct sync_msg_list *list, int just_created,
-                char *uniqueid, char *seen_user)
+static int do_mailbox_work(struct mailbox *mailbox, 
+			   struct sync_msg_list *list, int just_created,
+			   char *uniqueid)
 {
     unsigned int last_recent_uid;
     time_t lastread, lastchange;
@@ -1502,59 +1501,17 @@ do_mailbox_work(struct mailbox *mailbox,
         if ((r=update_uidlast(mailbox)))
             goto bail;
     }
-#if 0
-    if (seen_user) {
-        r = seen_open(mailbox, seen_user, 0, &seendb);
-        if (!r) {
-            r = seen_read(seendb, &lastread, &last_recent_uid,
-                          &lastchange, &seenuid);
-            seen_close(seendb);
-        }
-        if (r) {
-            /* Fake empty seendb entry if no info */
-            lastread = last_recent_uid = 0;
-            seenuid  = strdup("");
-            r = 0;
-        }
 
-        if (just_created ||
-            (lastchange > list->lastseen) ||
-            (last_recent_uid > list->last_recent_uid)) {
-            if (!selected) {
-                r=folder_select(mailbox->name, mailbox->uniqueid, NULL);
-                if (r) goto bail;
-            }
-            selected = 1;
-#if 0
-            prot_printf(toserver, "SETSEEN %s %lu %lu %lu ",
-                     seen_user, lastread, last_recent_uid, lastchange);
-#else
-            prot_printf(toserver, "SETSEEN %s %s %lu %lu %lu ",
-                     seen_user, mailbox->name,
-			lastread, last_recent_uid, lastchange);
-#endif
-            sync_printastring(toserver, seenuid);
-            prot_printf(toserver, "\r\n");
-            prot_flush(toserver);
-
-            r=sync_parse_code("SETSEEN",fromserver,SYNC_PARSE_EAT_OKLINE,NULL);
-        }
-
-        free(seenuid);
-    }
-#endif
  bail:
     return(r);
 }
 
 /* ====================================================================== */
 
-int
-do_folders(char *user,
-           struct sync_folder_list *client_list,
-           struct sync_folder_list *server_list,
-           int *vanishedp,
-           int do_contents)
+int do_folders(struct sync_folder_list *client_list,
+	       struct sync_folder_list *server_list,
+	       int *vanishedp,
+	       int do_contents)
 {
     struct mailbox m;
     int r = 0, mailbox_open = 0;
@@ -1687,8 +1644,7 @@ do_folders(char *user,
 
                     /* 0L, 0L Forces last_uid and seendb push as well */
                     folder_msglist = sync_msg_list_create(m.flagname, 0, 0, 0);
-                    r = do_mailbox_work(&m, folder_msglist, 1,
-                                        m.uniqueid, user);
+                    r = do_mailbox_work(&m, folder_msglist, 1, m.uniqueid);
                     sync_msg_list_free(&folder_msglist);
                 }
             } else {
@@ -1700,8 +1656,7 @@ do_folders(char *user,
 		    r = update_quota_work(&m.quota, NULL);
 
                 if (!r && do_contents)
-                    r = do_mailbox_work(&m, folder2->msglist, 0,
-                                        m.uniqueid, user);
+                    r = do_mailbox_work(&m, folder2->msglist, 0, m.uniqueid);
             }
         } else {
             /* Need to create fresh folder on server */
@@ -1716,7 +1671,7 @@ do_folders(char *user,
 
                 /* 0L, 0L Forces last_uid and seendb push as well */
                 folder_msglist = sync_msg_list_create(m.flagname, 0, 0, 0);
-                r = do_mailbox_work(&m, folder_msglist, 1, m.uniqueid, user);
+                r = do_mailbox_work(&m, folder_msglist, 1, m.uniqueid);
                 sync_msg_list_free(&folder_msglist);
             }
         }
@@ -1737,10 +1692,8 @@ do_folders(char *user,
 /* Generate sync_folder_list including all msg information from
    list of client folders */
 
-int
-do_mailboxes_work(char *userid,
-             struct sync_folder_list *client_list,
-             struct sync_folder_list *server_list)
+int do_mailboxes_work(struct sync_folder_list *client_list,
+		      struct sync_folder_list *server_list)
 {
     struct sync_folder *folder = NULL;
     int               c = ' ', r = 0;
@@ -1834,8 +1787,7 @@ do_mailboxes_work(char *userid,
 
 /* ====================================================================== */
 
-static int
-do_mailboxes(char *userid, struct sync_folder_list *client_folder_list)
+static int do_mailboxes(struct sync_folder_list *client_folder_list)
 {
     struct sync_folder_list *server_folder_list = sync_folder_list_create();
     int r = 0;
@@ -1855,23 +1807,19 @@ do_mailboxes(char *userid, struct sync_folder_list *client_folder_list)
         for (folder = client_folder_list->head; folder ; folder = folder->next)
             syslog(LOG_INFO, "MAILBOX %s", folder->name);
     }
-#if 0
-    sync_authstate = auth_newstate(userid);
-#endif
+
     /* Worthwhile doing mailboxes even in case of single mailbox:
      * catches duplicate messages in single folder. Only cost is that
      * mailbox at server end is opened twice: once for user_some(),
      * once for do_folders() */
 
-    if (!r) r = do_mailboxes_work(userid, client_folder_list,
+    if (!r) r = do_mailboxes_work(client_folder_list,
 				  server_folder_list);
-    if (!r) r = do_folders(userid, client_folder_list, server_folder_list,
+    if (!r) r = do_folders(client_folder_list, server_folder_list,
                            &vanished, 1);
 
     send_enduser();
-#if 0
-    auth_freestate(sync_authstate);
-#endif
+
     sync_folder_list_free(&server_folder_list);
     return(r);
 }
@@ -1932,8 +1880,7 @@ do_mailbox_preload(struct sync_folder *folder)
     return r;
 }
 
-int
-do_user_preload(char *user)
+int do_user_preload(char *user)
 {
     char buf[MAX_MAILBOX_NAME+1];
     int r = 0;
@@ -1941,10 +1888,11 @@ do_user_preload(char *user)
     struct sync_folder *folder;
 
     /* Generate full list of folders on client side */
-    snprintf(buf, sizeof(buf)-1, "user.%s", user);
+    (sync_namespace.mboxname_tointernal)(&sync_namespace, "INBOX",
+					  user, buf);
     addmbox(buf, 0, 0, (void *)client_list);
 
-    snprintf(buf, sizeof(buf)-1, "user.%s.*", user);
+    strlcat(buf, ".*", sizeof(buf));
     r = (sync_namespace.mboxlist_findall)(&sync_namespace, buf, 1,
                                           user, NULL, addmbox,
                                           (void *)client_list);
@@ -1973,10 +1921,11 @@ int do_user_main(char *user, struct sync_folder_list *server_list,
     struct sync_folder_list *client_list = sync_folder_list_create();
 
     /* Generate full list of folders on client side */
-    snprintf(buf, sizeof(buf)-1, "user.%s", user);
+    (sync_namespace.mboxname_tointernal)(&sync_namespace, "INBOX",
+					  user, buf);
     addmbox(buf, 0, 0, (void *)client_list);
 
-    snprintf(buf, sizeof(buf)-1, "user.%s.*", user);
+    strlcat(buf, ".*", sizeof(buf));
     r = (sync_namespace.mboxlist_findall)(&sync_namespace, buf, 1,
                                           user, NULL, addmbox,
                                           (void *)client_list);
@@ -1986,20 +1935,16 @@ int do_user_main(char *user, struct sync_folder_list *server_list,
         return(r);
     }
 
-    return(do_folders(user, client_list, server_list, vanishedp, 1));
+    return(do_folders(client_list, server_list, vanishedp, 1));
 }
 
 int do_user_sub(char *user, struct sync_folder_list *server_list)
 {
-    char buf[MAX_MAILBOX_NAME+1];
     int r = 0;
     struct sync_folder_list *client_list = sync_folder_list_create();
     struct sync_folder *folder, *folder2;
 
     /* Includes subsiduary nodes automatically */
-#if 0
-    snprintf(buf, sizeof(buf)-1, "user.%s", user);
-#endif
     r = (sync_namespace.mboxlist_findsub)(&sync_namespace, "*", 1,
                                           user, NULL, addmbox_sub,
                                           (void *)client_list, 1);
@@ -2275,8 +2220,7 @@ do_user_all_parse(char *user,
     return(IMAP_PROTOCOL_ERROR);
 }
 
-int
-do_user_work(char *user, int *vanishedp)
+int do_user_work(char *user, int *vanishedp)
 {
     char buf[MAX_MAILBOX_NAME+1];
     int r = 0, mailbox_open = 0;
@@ -2294,9 +2238,7 @@ do_user_work(char *user, int *vanishedp)
         syslog(LOG_INFO, "USER %s", user);
 
     memset(&server_quota, 0, sizeof(struct quota));
-#if 0
-    sync_authstate = auth_newstate(user);
-#endif
+
     /* Get server started */
     do_user_all_start(user);
 
@@ -2313,7 +2255,8 @@ do_user_work(char *user, int *vanishedp)
         return(r);
     }
 
-    snprintf(buf, sizeof(buf)-1, "user.%s", user);
+    (sync_namespace.mboxname_tointernal)(&sync_namespace, "INBOX",
+					  user, buf);
     r = mailbox_open_header(buf, 0, &m);
     if (!r) mailbox_open = 1;
     if (!r) r = mailbox_open_index(&m);
@@ -2341,10 +2284,7 @@ do_user_work(char *user, int *vanishedp)
         server_sub_list = sync_folder_list_create();
         memset(&server_quota, 0, sizeof(struct quota));
     }
-#if 0
-    /* Update/Create quota */
-    if (!r) r = update_quota_work(&m.quota, &server_quota);
-#endif
+
     mailbox_close(&m);
 
     if (!r) r = do_user_main(user, server_list, vanishedp);
@@ -2354,9 +2294,7 @@ do_user_work(char *user, int *vanishedp)
 
  bail:
     send_enduser();
-#if 0
-    auth_freestate(sync_authstate);
-#endif
+
     sync_folder_list_free(&server_list);
     sync_folder_list_free(&server_sub_list);
     sync_sieve_list_free(&server_sieve_list);
@@ -2443,55 +2381,6 @@ static int do_meta_sub(char *user)
     return(r);
 }
 
-static int do_meta_quota(char *user)
-{
-    char buf[MAX_MAILBOX_NAME+1];
-    static struct buf token;
-    int c, r = 0, mailbox_open = 0;
-    struct quota quota;
-    struct mailbox m;
-
-    snprintf(buf, sizeof(buf)-1, "user.%s", user);
-    r = mailbox_open_header(buf, 0, &m);
-    if (!r) mailbox_open = 1;
-    if (!r) r = mailbox_open_index(&m);
-
-    if (r) {
-        if (mailbox_open) mailbox_close(&m);
-        syslog(LOG_ERR, "IOERROR: Failed to open %s: %s",
-               m.name, error_message(r));
-        r = IMAP_IOERROR;
-        goto fail;
-    }
-
-    sprintf(buf, "user.%s", user);
-    prot_printf(toserver, "QUOTA ");
-    sync_printastring(toserver, buf);
-    prot_printf(toserver, "\r\n");
-    prot_flush(toserver);
-    if ((r=sync_parse_code("QUOTA",fromserver,SYNC_PARSE_NOEAT_OKLINE,NULL)))
-        return(r);
-
-    c = getword(fromserver, &token);
-    quota.limit = atoi(token.s);
-
-    if (c == '\r') c = prot_getc(fromserver);
-    if (c != '\n') goto parse_err;
-
-    r = update_quota_work(&m.quota, &quota);
-    mailbox_close(&m);
-    return(r);
-
- parse_err:
-    syslog(LOG_ERR, "Invalid response to QUOTA command: %s", token.s);
-    eatline(fromserver, c);
-    r = IMAP_PROTOCOL_ERROR;
-
- fail:
-    if (mailbox_open) mailbox_close(&m);
-    return(r);
-}
-
 int do_meta_sieve(char *user)
 {
     int unsolicited, c, r = 0;
@@ -2553,29 +2442,17 @@ int do_meta_sieve(char *user)
     return(r);
 }
 
-static int
-do_sieve(char *user)   
+static int do_sieve(char *user)   
 {
     int r = 0;
-#if 0
-    if (sync_authstate) auth_freestate(sync_authstate);
-    sync_authstate = auth_newstate(user);
 
-    if ((r = send_user(user)))
-        goto bail;
-#endif
     r = do_meta_sieve(user);
 
  bail:
-#if 0
-    send_enduser();
-    auth_freestate(sync_authstate);
-#endif
     return(r);
 }
 
-int
-do_meta(char *user)   
+int do_meta(char *user)   
 {
     int r = 0;
 
@@ -2584,21 +2461,12 @@ do_meta(char *user)
 
     if (verbose_logging)
         syslog(LOG_INFO, "META %s", user);
-#if 0
-    sync_authstate = auth_newstate(user);
 
-    if ((r = send_user(user)))
-        goto bail;
-#endif
     if (!r) r = do_meta_sub(user);
     if (!r) r = do_user_seen(user);
     if (!r) r = do_meta_sieve(user);
 
  bail:
-#if 0
-    send_enduser();
-    auth_freestate(sync_authstate);
-#endif
     return(r);
 }
 
@@ -2615,13 +2483,12 @@ do_meta(char *user)
  */
 
 /* XXX Replace params with single structure? */
-
-static void
-remove_small(char *user,
-             struct sync_action_list *meta_list,
-             struct sync_action_list *folder_list,
-             struct sync_action_list *append_list,
-             struct sync_action_list *seen_list)
+#if 0
+static void remove_small(char *user,
+			 struct sync_action_list *meta_list,
+			 struct sync_action_list *folder_list,
+			 struct sync_action_list *append_list,
+			 struct sync_action_list *seen_list)
 {
     struct sync_action *action;
     int len= (user) ? strlen(user) : 0;
@@ -2654,55 +2521,28 @@ remove_small(char *user,
             action->active = 0;
     }
 }
-
-static void
-remove_seen(char *name, char *user, struct sync_action_list *seen_list)
+#endif
+static void remove_meta(char *user, struct sync_action_list *list)
 {
     struct sync_action *action;
 
-    for (action = seen_list->head ; action ; action = action->next) {
-        if (action->user && user) {
-            if (!strcmp(name, action->name) &&
-                !strcmp(user, action->user)) {
-                action->active = 0;
-            }
-        } else if (!strcmp(name, action->name)) {
-            action->active = 0;
-        }
+    for (action = list->head ; action ; action = action->next) {
+	if (!strcmp(user, action->user)) {
+	    action->active = 0;
+	}
     }
 }
 
-static void
-remove_append(char *name, struct sync_action_list *append_list)
+static void remove_folder(char *name, struct sync_action_list *list,
+			  int chk_child)
 {
     struct sync_action *action;
+    size_t len = strlen(name);
 
-    for (action = append_list->head ; action ; action = action->next) {
-        if (!strcmp(name, action->name)) {
-            action->active = 0;
-        }
-    }
-}
-
-static void
-remove_acl(char *name, struct sync_action_list *acl_list)
-{
-    struct sync_action *action;
-
-    for (action = acl_list->head ; action ; action = action->next) {
-        if (!strcmp(name, action->name)) {
-            action->active = 0;
-        }
-    }
-}
-
-static void
-remove_quota(char *name, struct sync_action_list *quota_list)
-{
-    struct sync_action *action;
-
-    for (action = quota_list->head ; action ; action = action->next) {
-        if (!strcmp(name, action->name)) {
+    for (action = list->head ; action ; action = action->next) {
+	if (!strncmp(name, action->name, len) &&
+	    ((action->name[len] == '\0') ||
+	     (chk_child && (action->name[len] == '.')))) {
             action->active = 0;
         }
     }
@@ -2710,42 +2550,20 @@ remove_quota(char *name, struct sync_action_list *quota_list)
 
 /* ====================================================================== */
 
-char *
-do_sync_getuserid(char *s)
-{
-    static char result[64];
-    char *t;
-    int len;
-
-    if (strncmp(s, "user.", 5) != 0)
-        return(NULL);
-
-    s += 5;
-    len = ((t = strchr(s, '.'))) ? (t-s) : strlen(s);
-
-    if ((len+1) > sizeof(result))
-        return(NULL);
-
-    memcpy(result, s, len);
-    result[len] = '\0';
-
-    return(result);
-}
-
-int
-do_sync(const char *filename)
+int do_sync(const char *filename)
 {
     struct sync_user_list   *user_folder_list = sync_user_list_create();
     struct sync_user        *user;
     struct sync_action_list *user_list   = sync_action_list_create();
     struct sync_action_list *meta_list   = sync_action_list_create();
-    struct sync_action_list *folder_list = sync_action_list_create();
+    struct sync_action_list *mailbox_list= sync_action_list_create();
     struct sync_action_list *append_list = sync_action_list_create();
     struct sync_action_list *acl_list    = sync_action_list_create();
     struct sync_action_list *quota_list  = sync_action_list_create();
     struct sync_action_list *seen_list   = sync_action_list_create();
     struct sync_action_list *sub_list    = sync_action_list_create();
     struct sync_action_list *unsub_list  = sync_action_list_create();
+    struct sync_folder_list *folder_list = sync_folder_list_create();
     static struct buf type, arg1, arg2;
     char *arg1s, *arg2s;
     char *userid;
@@ -2808,11 +2626,11 @@ do_sync(const char *filename)
         ucase(type.s);
 
         if (!strcmp(type.s, "USER"))
-            sync_action_list_add(user_list, arg1s, NULL);
+            sync_action_list_add(user_list, NULL, arg1s);
         else if (!strcmp(type.s, "META"))
             sync_action_list_add(meta_list, NULL, arg1s);
         else if (!strcmp(type.s, "MAILBOX"))
-            sync_action_list_add(folder_list, arg1s, NULL);
+            sync_action_list_add(mailbox_list, arg1s, NULL);
         else if (!strcmp(type.s, "APPEND"))
             sync_action_list_add(append_list, arg1s, NULL);
         else if (!strcmp(type.s, "ACL"))
@@ -2831,21 +2649,43 @@ do_sync(const char *filename)
 
     /* Optimise out redundant clauses */
 
-    for (action = user_list->head ; action ; action = action->next)
+    for (action = user_list->head ; action ; action = action->next) {
+#if 0
         remove_small(action->name,
                      meta_list, folder_list, append_list, seen_list);
+#else
+	char inboxname[MAX_MAILBOX_NAME+1];
+
+	/* USER action overrides any APPEND, ACL, QUOTA action on
+	   any of the user's mailboxes or any META, SEEN, SUB, UNSUB action 
+	   for same user */
+	(sync_namespace.mboxname_tointernal)(&sync_namespace, "INBOX",
+					      action->user, inboxname);
+        remove_folder(inboxname, append_list, 1);
+        remove_folder(inboxname, acl_list, 1);
+        remove_folder(inboxname, quota_list, 1);
+        remove_meta(action->user, meta_list);
+        remove_meta(action->user, seen_list);
+        remove_meta(action->user, sub_list);
+        remove_meta(action->user, unsub_list);
+#endif
+    }
     
-    for (action = meta_list->head ; action ; action = action->next)
-        remove_seen(action->name, action->user, seen_list);
+    for (action = meta_list->head ; action ; action = action->next) {
+	/* META action overrides any user SEEN, SUB, UNSUB action
+	   for same user */
+        remove_meta(action->user, seen_list);
+        remove_meta(action->user, sub_list);
+        remove_meta(action->user, unsub_list);
+    }
 
-    for (action = folder_list->head ; action ; action = action->next)
-        remove_append(action->name, append_list);
-
-    for (action = folder_list->head ; action ; action = action->next)
-        remove_acl(action->name, acl_list);
-
-    for (action = folder_list->head ; action ; action = action->next)
-        remove_quota(action->name, quota_list);
+    for (action = mailbox_list->head ; action ; action = action->next) {
+	/* MAILBOX action overrides any APPEND, ACL, QUOTA action
+	   on same mailbox */
+        remove_folder(action->name, append_list, 0);
+        remove_folder(action->name, acl_list, 0);
+        remove_folder(action->name, quota_list, 0);
+    }
 
     /* And then run tasks. Folder mismatch => fall through to
      * do_user to try and clean things up */
@@ -2853,17 +2693,9 @@ do_sync(const char *filename)
     for (action = append_list->head ; action ; action = action->next) {
         if (!action->active)
             continue;
-#if 0
-        if (!(userid = do_sync_getuserid(action->name))) {
-            syslog(LOG_ERR, "Ignoring invalid mailbox name: %s", action->name);
-            continue;
-        }
 
-        if (do_append(action->name, userid)) {
-#else
         if (do_append(action->name)) {
-#endif
-            sync_action_list_add(folder_list, action->name, NULL);
+            sync_action_list_add(mailbox_list, action->name, NULL);
             if (verbose) {
                 printf("  Promoting: APPEND %s -> MAILBOX %s\n",
                        action->name, action->name);
@@ -2877,7 +2709,7 @@ do_sync(const char *filename)
 
     for (action = acl_list->head ; action ; action = action->next) {
         if (action->active && do_acl(action->name)) {
-            sync_action_list_add(folder_list, action->name, NULL);
+            sync_action_list_add(mailbox_list, action->name, NULL);
             if (verbose) {
                 printf("  Promoting: ACL %s -> MAILBOX %s\n",
                        action->name, action->name);
@@ -2891,7 +2723,7 @@ do_sync(const char *filename)
 
     for (action = quota_list->head ; action ; action = action->next) {
         if (action->active && do_quota(action->name)) {
-            sync_action_list_add(folder_list, action->name, NULL);
+            sync_action_list_add(mailbox_list, action->name, NULL);
             if (verbose) {
                 printf("  Promoting: QUOTA %s -> MAILBOX %s\n",
                        action->name, action->name);
@@ -2944,7 +2776,7 @@ do_sync(const char *filename)
             }
         }
     }
-
+#if 0
     /* Group folder actions by userid for do_mailboxes() */
     for (action = folder_list->head ; action ; action = action->next) {
         if (!action->active)
@@ -2963,7 +2795,7 @@ do_sync(const char *filename)
     }
 
     for (user = user_folder_list->head ; user ; user = user->next) {
-        if ((r=do_mailboxes(user->userid, user->folder_list))) {
+        if ((r=do_mailboxes(user->folder_list))) {
             if (r == IMAP_INVALID_USER)
                 goto bail;
 
@@ -2980,43 +2812,59 @@ do_sync(const char *filename)
             }
         }
     }
+#else
+    for (action = mailbox_list->head ; action ; action = action->next) {
+        if (!action->active)
+            continue;
 
+	sync_folder_list_add(folder_list, NULL, action->name, NULL);
+    }
+
+    if (folder_list->count && (r=do_mailboxes(folder_list)))
+	goto bail;
+#endif
     for (action = meta_list->head ; action ; action = action->next) {
-        if (action->active && (r=do_meta(action->name))) {
+        if (action->active && (r=do_meta(action->user))) {
             if (r == IMAP_INVALID_USER)
                 goto bail;
 
-            remove_small(action->name,
-                         meta_list, folder_list, append_list, seen_list);
-            sync_action_list_add(user_list, action->name, NULL);
+            sync_action_list_add(user_list, action->user, NULL);
             if (verbose) {
                 printf("  Promoting: META %s -> USER %s\n",
-                       action->name, action->name);
+                       action->user, action->user);
             }
             if (verbose_logging) {
                 syslog(LOG_INFO, "  Promoting: META %s -> USER %s",
-                       action->name, action->name);
+                       action->user, action->user);
             }
         }
     }
 
     for (action = user_list->head ; action ; action = action->next) {
-        if ((r=do_user(action->name)))
+        if ((r=do_user(action->user)))
             goto bail;
     }
 
-    sync_user_list_free(&user_folder_list);
-    prot_free(input);
-    return(0);
-
  bail:
-    if (verbose)
-        fprintf(stderr, "Error in do_sync(): bailing out!\n");
+    if (r) {
+	if (verbose)
+	    fprintf(stderr, "Error in do_sync(): bailing out!\n");
 
-    syslog(LOG_ERR, "Error in do_sync(): bailing out!");
+	syslog(LOG_ERR, "Error in do_sync(): bailing out!");
+    }
 
     sync_user_list_free(&user_folder_list);
-    prot_free(input);
+    sync_action_list_free(&user_list);
+    sync_action_list_free(&meta_list);
+    sync_action_list_free(&mailbox_list);
+    sync_action_list_free(&append_list);
+    sync_action_list_free(&acl_list);
+    sync_action_list_free(&quota_list);
+    sync_action_list_free(&seen_list);
+    sync_action_list_free(&sub_list);
+    sync_action_list_free(&unsub_list);
+    sync_folder_list_free(&folder_list);
+/*    prot_free(input);*/
     return(r);
 }
 
@@ -3408,7 +3256,7 @@ main(int argc, char **argv)
 #if 0
         for (user = user_list->head ; user ; user = user->next) {
 #endif
-            if (do_mailboxes(NULL, folder_list)) {
+            if (do_mailboxes(folder_list)) {
                 if (verbose) {
                     fprintf(stderr,
                             "Error from do_mailboxes(): bailing out!\n");
