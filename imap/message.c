@@ -27,7 +27,7 @@
  */
 
 /*
- * $Id: message.c,v 1.54 1998/06/04 20:08:29 tjs Exp $
+ * $Id: message.c,v 1.55 1998/06/22 01:28:23 tjs Exp $
  */
 
 #ifdef HAVE_UNISTD_H
@@ -209,7 +209,7 @@ unsigned size;
     int r = 0;
     int n;
     int sawcr = 0, sawnl;
-    int reject8bit = config_getswitch(reject8bit, 0);
+    int reject8bit = config_getswitch("reject8bit", 0);
 
     while (size) {
 	n = prot_read(from, buf, size > 4096 ? 4096 : size);
