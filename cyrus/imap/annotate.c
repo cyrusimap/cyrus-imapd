@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.42 2003/06/24 20:33:11 ken3 Exp $
+ * $Id: annotate.c,v 1.8.6.43 2003/06/26 15:31:54 ken3 Exp $
  */
 
 #include <config.h>
@@ -1503,13 +1503,13 @@ const struct annotate_st_entry mailbox_rw_entries[] =
       0, annotation_set_todb, NULL },
     { "/vendor/cmu/cyrus-imapd/squat", BACKEND_ONLY,
       ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
-      0, annotation_set_todb, NULL },
+      ACL_ADMIN, annotation_set_todb, NULL },
     { "/vendor/cmu/cyrus-imapd/expire", BACKEND_ONLY,
       ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
-      0, annotation_set_todb, NULL },
+      ACL_ADMIN, annotation_set_todb, NULL },
     { "/vendor/cmu/cyrus-imapd/news2mail", BACKEND_ONLY,
       ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
-      0, annotation_set_todb, NULL },
+      ACL_ADMIN, annotation_set_todb, NULL },
     { NULL, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL }
 };
 
