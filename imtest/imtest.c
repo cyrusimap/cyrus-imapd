@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.77 2002/05/30 19:50:02 rjs3 Exp $
+ * $Id: imtest.c,v 1.78 2002/05/31 18:32:23 rjs3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -44,6 +44,7 @@
 
 #include <config.h>
 
+#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
@@ -58,6 +59,7 @@
 #include <unistd.h>
 
 #include <netinet/in.h>
+#include <sys/un.h>
 #include <netdb.h>
 #include <sys/socket.h>
 #include <sys/file.h>
@@ -70,6 +72,7 @@
 #include <pwd.h>
 
 #include "prot.h"
+#include "imparse.h"
 #include "iptostring.h"
 
 #ifdef HAVE_SSL
@@ -91,6 +94,7 @@ static SSL_SESSION *tls_sess = NULL;
 
 #define IMTEST_OK    0
 #define IMTEST_FAIL -1
+#define IMTEST_CLOSEME -2
 
 typedef enum {
     STAT_CONT = 0,
@@ -109,9 +113,11 @@ struct protstream *pout, *pin;
 static char *authname = NULL;
 static char *username = NULL;
 static char *realm = NULL;
+static char *cmdline_password = NULL;
+
+static char *output_socket = NULL;
 
 extern int _sasl_debug;
-
 extern char *optarg;
 
 struct stringlist 
@@ -198,11 +204,26 @@ struct protocol_t {
 			/* [OPTIONAL] perform protocol-specific
 			   authentication; based on rock, mech, mechlist */
     struct logout_cmd_t logout_cmd;
+
+    /* these 3 are used for maintaining connection state */
+    void *(*init_conn)(void); /* generate a context (if needed). This context
+			       * must be malloc()ed and will be freed by
+			       * interactive() as each connection is reused */
+    int (*pipe)(char *buf, int len, void *rock); /* pipe a buffer to pout
+						  * may be necessary to keep
+						  * connection state */
+    int (*reset)(void *rock); /* perform any protocol-specific reset when we
+			       * lose connection on a unix domain socket
+			       * during interactive mode.  If this is NULL we
+			       * assume that we should not attempt to reuse
+			       * connections (and just die at the end of one)
+			       */
 };
 
 
 void imtest_fatal(char *msg)
 {
+    if (output_socket) unlink(output_socket);
     if (msg != NULL) {
 	printf("failure: %s\n",msg);
     }
@@ -210,9 +231,9 @@ void imtest_fatal(char *msg)
 }
 
 /* libcyrus makes us define this */
-void fatal(void)
+void fatal(char *msg, int code)
 {
-    exit(1);
+    imtest_fatal(msg);
 }
 
 #ifdef HAVE_SSL
@@ -847,12 +868,14 @@ void interaction (int id, const char *challenge, const char *prompt,
     cur->next = strlist_head;
     strlist_head = cur;
     
-    if (id==SASL_CB_PASS) {
+    if (id==SASL_CB_PASS && !cmdline_password) {
 	printf("%s: ", prompt);
 	cur->str=strdup(getpass(""));
 	*tlen=strlen(cur->str);
 	*tresult = cur->str;
 	return;
+    } else if (id==SASL_CB_PASS && cmdline_password) {
+	strcpy(result, cmdline_password);
     } else if (id==SASL_CB_USER) {
 	if (username != NULL) {
 	    strcpy(result, username);
@@ -909,7 +932,7 @@ void fillin_interactions(sasl_interact_t *tlist)
     
 }
 
-static char *waitfor(char *tag, char *tag2)
+static char *waitfor(char *tag, char *tag2, int echo)
 {
     static char str[1024];
     
@@ -917,7 +940,7 @@ static char *waitfor(char *tag, char *tag2)
 	if (prot_fgets(str, sizeof(str), pin) == NULL) {
 	    imtest_fatal("prot layer failure");
 	}
-	printf("S: %s", str);
+	if(echo) printf("S: %s", str);
     } while (strncmp(str, tag, strlen(tag)) &&
 	     (tag2 ? strncmp(str, tag2, strlen(tag2)) : 1));
     
@@ -1102,15 +1125,14 @@ static int init_net(char *serverFQDN, int port)
     return IMTEST_OK;
 }
 
-static void logout(struct logout_cmd_t *logout_cmd)
+static void logout(struct logout_cmd_t *logout_cmd, int wait)
 {
     printf("C: %s\r\n", logout_cmd->cmd);
     prot_printf(pout, "%s\r\n", logout_cmd->cmd);
     prot_flush(pout);
 
-    /* we're not going to wait for this, because we could be in a spot where
-     * the remote will never send it (e.g. in the middle of a literal) */
-    /* waitfor(logout_cmd->resp, NULL); */
+    /* only wait if we are explicitly told to */
+    if(wait) waitfor(logout_cmd->resp, NULL, 1);
 }
 
 static int gotsigint = 0;
@@ -1120,17 +1142,32 @@ static void sigint_handler(int sig __attribute__((unused)))
     gotsigint = 1;
 }
 
+/* This needs to support 3 modes:
+ *
+ * 1. Terminal Interface Only
+ * 2. File input
+ * 3. Redirect to a unix socket - This mode needs to be sure that the
+ *    IMAP session is in an unselected state whenever the unix socket is
+ *    disconnected.
+ *
+ */
 static void interactive(struct protocol_t *protocol, char *filename)
 {
     char buf[2048];
     fd_set read_set, rset;
     fd_set write_set, wset;
+    fd_set accept_set, aset;
     int nfds;
     int nfound;
     int count;
-    int fd = 0;
+    int r;
+    int fd = 0, fd_out = 1, listen_sock = -1;
+    void *rock = NULL;
     int donewritingfile = 0;
-    
+
+    struct sockaddr_un sunsock;
+    int salen;
+
     /* open the file if available */
     if (filename != NULL) {
 	if ((fd = open(filename, O_RDONLY)) == -1) {
@@ -1138,13 +1175,60 @@ static void interactive(struct protocol_t *protocol, char *filename)
 	    perror("");
 	    exit(1);
 	}
+    } else if(output_socket) {
+	struct timeval tv;
+
+	/* can't have this and a file for input */
+	sunsock.sun_family = AF_UNIX;
+	strcpy(sunsock.sun_path, output_socket);
+	unlink(output_socket);
+
+	listen_sock = socket(AF_UNIX, SOCK_STREAM, 0);
+	if(listen_sock < 0) imtest_fatal("could not create output socket");
+
+	salen = sizeof(sunsock.sun_family) + strlen(sunsock.sun_path) + 1;
+
+	if((bind(listen_sock, (struct sockaddr *)&sunsock, salen)) < 0) {
+	    imtest_fatal("could not bind output socket");
+	}
+
+	if((listen(listen_sock, 5)) < 0) {
+	    imtest_fatal("could not listen to output socket");
+	}
+
+	FD_ZERO(&accept_set);
+	FD_SET(listen_sock, &accept_set);
+
+    accept_again:
+	if(rock) {
+	    free(rock);
+	    rock = NULL;
+	}
+
+	tv.tv_sec = 600; /* 10 minute timeout - xxx protocol specific? */
+	tv.tv_usec = 0;
+
+	aset = accept_set;
+	
+	/* Have the separate select so that signals will wake us up
+	 * and we get a timeout to use on our own imap connection */
+	if(select(listen_sock + 1, &aset, NULL, NULL, &tv) <= 0) {
+	    /* either we timed out or had an error */
+	    goto cleanup;
+	}
+
+	fd = fd_out = accept(listen_sock, NULL, NULL);
+	if(fd < 0) imtest_fatal("accept failure");
+	    
+	if(protocol->init_conn) rock = protocol->init_conn();
     }
     
     FD_ZERO(&read_set);
-    FD_SET(fd, &read_set);  
+    FD_SET(fd, &read_set);  /* In the terminal case fd == 0 */
     FD_SET(sock, &read_set);
     
     FD_ZERO(&write_set);
+    FD_SET(fd_out, &write_set);
     FD_SET(sock, &write_set);
     
     nfds = getdtablesize();
@@ -1156,7 +1240,7 @@ static void interactive(struct protocol_t *protocol, char *filename)
     /* add handler for SIGINT */
     signal(SIGINT, sigint_handler);
 
-    /* loop reading from network and from stdin if applicable */
+    /* loop reading from network and from stdin as applicable */
     while (1) {
 	rset = read_set;
 	wset = write_set;
@@ -1166,9 +1250,14 @@ static void interactive(struct protocol_t *protocol, char *filename)
 	    imtest_fatal("select");
 	}
 	
-	if ((FD_ISSET(0, &rset)) && (FD_ISSET(sock, &wset)))  {
+	if (!output_socket &&
+	    (FD_ISSET(0, &rset)) && (FD_ISSET(sock, &wset)))  {
+	    /* There is explicit terminal input -- note this is only possible
+	     * if fd is 0 (and we are in terminal mode!).
+	     * We need to use stream API for this, which is why it
+	     * is different */
 	    if (fgets(buf, sizeof (buf) - 1, stdin) == NULL) {
-		logout(&protocol->logout_cmd);
+		logout(&protocol->logout_cmd, 0);
 		FD_CLR(0, &read_set);
 	    } else {
 		count = strlen(buf);
@@ -1182,7 +1271,8 @@ static void interactive(struct protocol_t *protocol, char *filename)
 		prot_write(pout, buf, count);
 	    }
 	    prot_flush(pout);
-	} else if (FD_ISSET(sock, &rset)) {
+	} else if (FD_ISSET(sock, &rset) && (FD_ISSET(fd_out, &wset))) {
+	    /* This does input from remote for all modes */
 	    do {
 		count = prot_read(pin, buf, sizeof (buf) - 1);
 		if (count == 0) {
@@ -1197,49 +1287,98 @@ static void interactive(struct protocol_t *protocol, char *filename)
 		    perror("read");
 		    imtest_fatal("prot_read");
 		}
-		buf[count] = '\0';
-		printf("%s", buf); 
+		if(output_socket)
+		    write(fd_out, buf, count);
+		else {
+		    /* use the stream API */
+		    buf[count] = '\0';
+		    printf("%s", buf); 
+		}
 	    } while (pin->cnt > 0);
 	} else if ((FD_ISSET(fd, &rset)) && (FD_ISSET(sock, &wset))
 		   && (donewritingfile == 0)) {
-	    /* read from disk */	
+	    /* This does input for both socket and file modes */
 	    int numr = read(fd, buf, sizeof(buf));
-	    
 	    
 	    /* and send out over wire */
 	    if (numr < 0)
-		{
-		    perror("read");
-		    imtest_fatal("read");
-		} else if (numr==0) {
+	    {
+		perror("read");
+		imtest_fatal("read");
+	    } else if (numr==0) {
+		if(output_socket) {
+		    if(protocol->reset) {
+			if(protocol->reset(rock) != IMTEST_OK)
+			    goto cleanup;
+		    } else
+			/* no protocol->reset, we're done */
+			goto cleanup;
+		    
+		    close(fd);
+		    fd = 0;
+		    fd_out = 1;
+		    goto accept_again;
+		} else {
+		    /* we're done, cleanup */
 		    donewritingfile = 1;
 		    
 		    FD_CLR(fd,&read_set);
-		    
+			
 		    /* send LOGOUT */
-		    logout(&protocol->logout_cmd);
-		} else {
-		    /* echo for the user */
+		    logout(&protocol->logout_cmd, 0);
+		}
+	    } else {
+		if (!output_socket) {
+		    /* echo for the user - if not in socket mode */
 		    write(1, buf, numr);
+		} 
+
+		if (output_socket && protocol->pipe) {
+		    if(protocol->pipe(buf, numr, rock) == IMTEST_CLOSEME) {
+			if(protocol->reset) {
+			    if(protocol->reset(rock) != IMTEST_OK)
+				goto cleanup;
+			} else
+			    /* no protocol->reset, we're done */
+			    goto cleanup;
+			
+			close(fd);
+			fd = 0;
+			fd_out = 1;
+			goto accept_again;
+		    }
+		} else {
+		    /* echo to remote */
 		    prot_write(pout, buf, numr);
 		    prot_flush(pout);
 		}
+	    }
 	} else {
 	    /* if can't do anything else sleep */
 	    usleep(1000);
 	}
 	
 	/* received interrupt signal, logout */
-	if (gotsigint) {
-	    logout(&protocol->logout_cmd);
-	    close(sock);
-	    printf("Connection closed.\n");
-
-	    /* remove handler for SIGINT */
-	    signal(SIGINT, SIG_DFL);
-	    return;
-	}
+	if (gotsigint) goto cleanup;
     }
+
+ cleanup:
+    if(rock) free(rock);
+
+    if(output_socket) {
+	close(fd);
+	close(listen_sock);
+	unlink(output_socket);
+    }
+    
+    logout(&protocol->logout_cmd, 0);
+    close(sock);
+    
+    printf("Connection closed.\n");
+    
+    /* remove handler for SIGINT */
+    signal(SIGINT, SIG_DFL);
+    return;
 }
 
 static char *ask_capability(struct capa_cmd_t *capa_cmd,
@@ -1282,6 +1421,80 @@ static char *ask_capability(struct capa_cmd_t *capa_cmd,
 	}
     } while (strncasecmp(str, capa_cmd->resp, strlen(capa_cmd->resp)));
     
+    return ret;
+}
+
+/* generic pipe functionality - break it into one line at a time, and
+ * pass that into a per-protocol pipe function. */
+struct generic_context_t 
+{
+    int (*pipe_oneline)(char *buf, int len, void *rock);
+    void *rock;
+    
+    /* Deal with half-finished lines */
+    char *midLine;
+    size_t midLineLen;
+};
+
+static int generic_pipe(char *buf, int len, void *rock) 
+{
+    struct generic_context_t *text = (struct generic_context_t *)rock;
+    char *toWrite = NULL, *toSend = NULL;
+    int toWriteLen = 0;
+    char *lineEnd = NULL;
+    int ret;
+
+    /* do we have leftovers? -- if so, we append the new stuff */
+    if(text->midLine) {
+	text->midLine =
+	    (char *)xrealloc(text->midLine, text->midLineLen+len+1);
+	memcpy(text->midLine+text->midLineLen, buf, len);
+	text->midLineLen += len;
+	text->midLine[text->midLineLen] = '\0';
+	
+	toWrite = text->midLine;
+	toWriteLen = text->midLineLen;
+    } else {
+	toWrite = buf;
+	toWriteLen = len;
+    }
+
+    /* one line at a time now */
+    while(toWrite && (lineEnd = memchr(toWrite, '\n', toWriteLen)) != NULL) {
+	size_t len_todo;
+
+	len_todo = lineEnd - toWrite + 1; /* +1 is to include the newline! */
+	
+	toSend = (char *)xrealloc(toSend, len_todo + 1);
+
+	memcpy(toSend, toWrite, len_todo);
+	toSend[len_todo] = '\0';
+
+	ret = text->pipe_oneline(toSend, len_todo, text->rock);
+	if(ret != IMTEST_OK) break;
+
+	toWrite = lineEnd+1; /* +1 is to skip the newline! */
+	toWriteLen -= len_todo; 
+
+	if(toWriteLen <= 0) toWrite = NULL;
+
+    }
+
+    if(toWrite && ret == IMTEST_OK) {
+	char *newMidLine;
+	/* we need to save the leftover for next time */
+	newMidLine = (char *)xmalloc(toWriteLen);
+	memcpy(newMidLine, toWrite, toWriteLen);
+	if(text->midLine) free(text->midLine);
+	text->midLine = newMidLine;
+	text->midLineLen = toWriteLen;
+    } else if (text->midLine || ret != IMTEST_OK) {
+	free(text->midLine);
+	text->midLine = NULL;
+	text->midLineLen = 0;
+    }
+
+    free(toSend);
     return ret;
 }
 
@@ -1344,7 +1557,7 @@ static int auth_login(void)
     prot_printf(pout,"%sLOGIN %s {%d}\r\n", tag, username, passlen);
     prot_flush(pout);
     
-    if (!strncmp(waitfor("+", tag), "+", 1)) {
+    if (!strncmp(waitfor("+", tag, 1), "+", 1)) {
 	printf("C: <omitted>\r\n");
 	prot_printf(pout,"%s\r\n", pass);
 	prot_flush(pout);
@@ -1386,6 +1599,106 @@ static int imap_do_auth(struct sasl_cmd_t *sasl_cmd,
 
     return result;
 }
+
+struct imap_context_t 
+{
+    int inLiteral;
+};
+
+static int imap_pipe_oneline(char *buf, int len, void *rock) {
+    struct imap_context_t *text = (struct imap_context_t *)rock;
+    int add_crlf = 0; /* hack for terminals */
+
+    if(text->inLiteral) {
+	if(len <= text->inLiteral) {
+	    text->inLiteral -= len;
+	} else {
+	    prot_write(pout, buf, text->inLiteral);
+	    buf += text->inLiteral;
+	    len -= text->inLiteral;
+	    text->inLiteral = 0;
+	}
+    }
+
+    if(!text->inLiteral) {
+	char c, *tag, *cmd, *tmp, *sparebuf = (char *)xstrdup(buf);
+	int i;
+	tmp = sparebuf;
+
+	if(len > 4 &&
+	   buf[len-1] == '\n' && buf[len-1] == '\r' && buf[len-2] == '}') {
+	    /* possible literal, with \r */
+	    i = len-4;
+	    while(i > 0 && buf[i] != '{' && isdigit((int)buf[i])) i--;
+	    if(buf[i] == '{') text->inLiteral = atoi(buf + i + 1);
+	} else if(len > 3 && buf[len-1] == '\n' && buf[len-2] == '}') {
+	    /* possible literal, no \r -- hack for terminals*/
+	    i = len-3;
+	    while(i > 0 && buf[i] != '{' && isdigit((int)buf[i])) i--;
+	    if(buf[i] == '{') text->inLiteral = atoi(buf + i + 1);
+	}
+
+	/* We could still have another special case! */
+	c = imparse_word(&tmp, &tag);
+	if(c == ' ') {
+	    c = imparse_word(&tmp, &cmd);
+	    if(c == '\n' || (c == '\r' && *tmp == '\n')){
+		/* Are we logging out? */
+		if(!strncasecmp(cmd, "LOGOUT", 6)) {
+		    free(sparebuf);
+		    return IMTEST_CLOSEME;
+		}
+	    }
+	}
+
+	free(sparebuf);
+
+	/* If the remote is sending only \n, clean it up for them */
+	if((len == 1 && buf[0] == '\n') ||
+	   (len >= 2 && buf[len-2] != '\r')) {
+	    len -= 1; /* truncate \n */
+	    add_crlf = 1;
+	}
+    }
+
+    prot_write(pout, buf, len);
+    if(add_crlf) prot_write(pout, "\r\n", 2);
+    prot_flush(pout);
+}
+
+static void * imap_init_conn(void) 
+{
+    struct generic_context_t *ret;
+    
+    ret =
+	(void *)xmalloc(sizeof(struct generic_context_t));
+    memset(ret, 0, sizeof(struct generic_context_t));
+
+    ret->rock =
+	(void *)xmalloc(sizeof(struct imap_context_t));
+    memset(ret->rock, 0, sizeof(struct imap_context_t));
+
+    ret->pipe_oneline = &imap_pipe_oneline;
+
+    return ret;
+}
+
+static int imap_reset(void *rock) 
+{
+    struct generic_context_t *gentext = (struct generic_context_t *)rock;
+    struct imap_context_t *text = (struct imap_context_t *)gentext->rock;
+    char tag[64];
+    static int i=0;
+
+    if(text->inLiteral || gentext->midLine) return IMTEST_FAIL;
+
+    snprintf(tag, sizeof(tag-1), "UN%d", i);
+    prot_printf(pout, "%s UNSELECT\r\n", tag);
+    prot_flush(pout);
+    waitfor(tag, NULL, 0);
+
+    return IMTEST_OK;
+}
     
 #define HEADERS "Date: Mon, 7 Feb 1994 21:52:25 -0800 (PST)\r\n \
 From: Fred Foobar <foobar@Blurdybloop.COM>\r\n \
@@ -1409,7 +1722,7 @@ static int append_msg(char *mbox, int size)
     
     prot_flush(pout);
     
-    waitfor("A003", NULL);
+    waitfor("A003", NULL, 1);
     
     return IMTEST_OK;
 }
@@ -1438,7 +1751,7 @@ static void send_recv_test(void)
 	{
 	    prot_printf(pout,"C01 CREATE %s\r\n",mboxname);
 	    prot_flush(pout);  
-	    waitfor("C01", NULL);
+	    waitfor("C01", NULL, 1);
 	    
 	    append_msg(mboxname,200);
 	    append_msg(mboxname,2000);
@@ -1448,7 +1761,7 @@ static void send_recv_test(void)
 	    
 	    prot_printf(pout,"D01 DELETE %s\r\n",mboxname);
 	    prot_flush(pout);  
-	    waitfor("D01", NULL);
+	    waitfor("D01", NULL, 1);
 	}
     
     end=time(NULL);
@@ -1612,6 +1925,68 @@ static int xmtp_do_auth(struct sasl_cmd_t *sasl_cmd,
     return result;
 }
 
+struct xmtp_context_t 
+{
+    int inData;
+};
+
+/* This takes a NUL-terminated full line (including any trailing \r\n) */
+static int xmtp_pipe_oneline(char *buf, int len, void *rock) {
+    struct xmtp_context_t *text = (struct xmtp_context_t *)rock;
+
+    if(text->inData && len <= 3) {
+	if(buf[0] == '.' &&
+	   (buf[1] == '\n' || (buf[1] == '\r' && buf[2] == '\n'))) {
+	    text->inData = 0;
+	}
+    } else if(!text->inData && len > 4 && len <= 6) {
+	if(!strncasecmp(buf, "DATA", 4) &&
+	   (buf[4] == '\n' || (buf[4] == '\r' && buf[5] == '\n'))) {
+	    text->inData = 1;
+	} else if(!strncasecmp(buf, "QUIT", 4) &&
+	   (buf[4] == '\n' || (buf[4] == '\r' && buf[5] == '\n'))) {
+	    return IMTEST_CLOSEME;
+	}
+    }
+        
+    prot_write(pout, buf, len);
+    prot_flush(pout);
+
+    return IMTEST_OK;
+}
+
+static void *xmtp_init_conn(void) 
+{
+    struct generic_context_t *ret;
+    
+    ret =
+	(void *)xmalloc(sizeof(struct generic_context_t));
+    memset(ret, 0, sizeof(struct generic_context_t));
+
+    ret->rock =
+	(void *)xmalloc(sizeof(struct xmtp_context_t));
+    memset(ret->rock, 0, sizeof(struct xmtp_context_t));
+    
+    ret->pipe_oneline = &xmtp_pipe_oneline;
+
+    return ret;
+}
+
+static int xmtp_reset(void *rock) 
+{
+    struct generic_context_t *gentext = (struct generic_context_t *)rock;
+    struct xmtp_context_t *text = (struct xmtp_context_t *)gentext->rock;
+
+    if(text->inData || gentext->midLine) return IMTEST_FAIL;
+
+    prot_printf(pout, "RSET\r\n");
+    prot_flush(pout);
+    waitfor("250", NULL, 1);
+
+    return IMTEST_OK;
+}
+
+
 /******************************** MUPDATE ************************************/
 
 
@@ -1644,6 +2019,7 @@ void usage(char *prog, char *prot)
     printf("  -l #     : max protection layer (0=none; 1=integrity; etc)\n");
     printf("  -u user  : authorization name to use\n");
     printf("  -a user  : authentication name to use\n");
+    printf("  -w pass  : password to use (if not supplied, we will prompt)\n");
     printf("  -v       : verbose\n");
     printf("  -m mech  : SASL mechanism to use\n");
     if (!strcasecmp(prot, "imap"))
@@ -1663,6 +2039,7 @@ void usage(char *prog, char *prot)
     printf("  -c       : enable challenge prompt callbacks\n"
 	   "             (enter one-time password instead of secret pass-phrase)\n");
     printf("  -n       : number of auth attempts (default=1)\n");
+    printf("  -x file  : open the named socket for the interactive portion\n");
     
     exit(1);
 }
@@ -1674,46 +2051,45 @@ static struct protocol_t protocols[] = {
       { "C01 CAPABILITY", "C01 ", "STARTTLS", "AUTH=", &imap_parse_mechlist },
       { "S01 STARTTLS", "S01 ", 0 },
       { "A01 AUTHENTICATE", 0, NULL, NULL, "A01 OK", "A01 NO", "+ ", "*" },
-      &imap_do_auth, { "Q01 LOGOUT", "Q01 " }
+      &imap_do_auth, { "Q01 LOGOUT", "Q01 " },
+      &imap_init_conn, &generic_pipe, &imap_reset
     },
     { "pop3", "pop3s", "pop",
       { 0, "+OK ", &pop3_parse_banner },
       { "CAPA", ".", "STLS", "SASL ", NULL },
       { "STLS", "+OK", 0 },
       { "AUTH", 0, NULL, NULL, "+OK", "-ERR", "+ ", "*" },
-      &pop3_do_auth, { "QUIT", "+OK" }
+      &pop3_do_auth, { "QUIT", "+OK" }, NULL, NULL, NULL
     },
     { "lmtp", NULL, "lmtp",
       { 0, "220 ", NULL },
       { "LHLO example.com", "250 ", "STARTTLS", "AUTH ", NULL },
       { "STARTTLS", "220", 0 },
       { "AUTH", 0, "=", NULL, "235", "5", "334 ", "*" },
-      &xmtp_do_auth,
-      { "QUIT", "221" }
+      &xmtp_do_auth, { "QUIT", "221" },
+      &xmtp_init_conn, &generic_pipe, &xmtp_reset
     },
     { "smtp", "smtps", "smtp",
       { 0, "220 ", NULL },
       { "EHLO example.com", "250 ", "STARTTLS", "AUTH ", NULL },
       { "STARTTLS", "220", 0 },
       { "AUTH", 0, "=", NULL, "235", "5", "334 ", "*" },
-      &xmtp_do_auth,
-      { "QUIT", "221" }
+      &xmtp_do_auth, { "QUIT", "221" },
+      &xmtp_init_conn, &generic_pipe, &xmtp_reset
     },
     { "mupdate", NULL, "mupdate",
       { 1, "* OK", NULL },
-      { NULL , "* OK", NULL, "* AUTH ", NULL},
+      { NULL , "* OK", NULL, "* AUTH ", NULL },
       { NULL },
       { "A01 AUTHENTICATE", 1, "=", NULL, "A01 OK", "A01 NO", "", "*" },
-      NULL,
-      { "Q01 LOGOUT", "Q01 " }
+      NULL, { "Q01 LOGOUT", "Q01 " }, NULL, NULL, NULL
     },
     { "sieve", NULL, SIEVE_SERVICE_NAME,
       { 1, "OK", NULL },
       { "CAPABILITY", "OK", "\"STARTTLS\"", "\"SASL\" ", NULL },
       { "STARTTLS", "OK", 1 },
       { "AUTHENTICATE", 1, "=", &sieve_parse_success, "OK", "NO", NULL, "*" },
-      NULL,
-      { "LOGOUT", "OK" }
+      NULL, { "LOGOUT", "OK" }, NULL, NULL, NULL
     },
     { NULL }
 };
@@ -1757,7 +2133,7 @@ int main(int argc, char **argv)
     prog = strrchr(argv[0], '/') ? strrchr(argv[0], '/')+1 : argv[0];
 
     /* look at all the extra args */
-    while ((c = getopt(argc, argv, "P:sczvk:l:p:u:a:m:f:r:t:n:?")) != EOF)
+    while ((c = getopt(argc, argv, "P:sczvk:l:p:u:a:m:f:r:t:n:x:w:?")) != EOF)
 	switch (c) {
 	case 'P':
 	    prot = optarg;
@@ -1793,10 +2169,15 @@ int main(int argc, char **argv)
 	case 'a':
 	    authname = optarg;
 	    break;
+	case 'w':
+	    cmdline_password = optarg;
+	    break;
 	case 'm':
 	    mechanism=optarg;
 	    break;
 	case 'f':
+	    if(output_socket)
+		imtest_fatal("cannot pipe a file when using unix domain socket output");
 	    filename=optarg;
 	    break;
 	case 'r':
@@ -1814,6 +2195,11 @@ int main(int argc, char **argv)
 	    reauth = atoi(optarg);
 	    if (reauth <= 0)
 		imtest_fatal("number of auth attempts must be > 0\n");
+	    break;
+	case 'x':
+	    if(filename)
+		imtest_fatal("cannot pipe a file when using unix domain socket output");
+	    output_socket = optarg;
 	    break;
 	case '?':
 	default:
@@ -1885,7 +2271,7 @@ int main(int argc, char **argv)
     do {
 	if (conn) {
 	    /* send LOGOUT */
-	    logout(&protocol->logout_cmd);
+	    logout(&protocol->logout_cmd, 1);
 	    printf("Connection closed.\n\n");
 	    
 	    prot_free(pin);
@@ -1943,7 +2329,7 @@ int main(int argc, char **argv)
 	    prot_printf(pout, "%s\r\n", protocol->tls_cmd.cmd);
 	    prot_flush(pout);
 	    
-	    waitfor(protocol->tls_cmd.start, NULL);
+	    waitfor(protocol->tls_cmd.start, NULL, 1);
 	    
 	    do_starttls(0, tls_keyfile, &ext_ssf);
 	    
