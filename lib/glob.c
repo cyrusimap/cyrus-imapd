@@ -42,7 +42,7 @@
  * Start Date: 4/5/93
  */
 /*
- * $Id: glob.c,v 1.23 2002/09/20 16:57:29 rjs3 Exp $
+ * $Id: glob.c,v 1.24 2002/09/22 13:51:37 ken3 Exp $
  */
 
 #include <config.h>
@@ -190,7 +190,8 @@ glob *glob_init_suppress (str, flags, suppress)
 void glob_free (g)
     glob **g;
 {
-    free((void **) g);
+    if (*g) free((void *) *g);
+    *g = NULL;
 }
 
 /* returns -1 if no match, otherwise length of match or partial-match
