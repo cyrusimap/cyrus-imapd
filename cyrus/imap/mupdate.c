@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.9 2001/07/16 17:06:44 leg Exp $
+ * $Id: mupdate.c,v 1.10 2001/07/27 23:09:34 leg Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -581,8 +581,12 @@ int service_main_fd(int fd, int argc, char **argv, char **envp)
     /* spawn off a thread to handle this connection */
     pthread_t t;
     struct conn *c = conn_new(fd);
+    int r;
 
-    return pthread_create(&t, NULL, &start, c);
+    r = pthread_create(&t, NULL, &start, c);
+    if (r == 0) {
+	pthread_detach(t);
+    }
 }
 
 /* mailbox name MUST be first, since it is the key */
