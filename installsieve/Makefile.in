@@ -32,15 +32,22 @@ CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib @CPPFLAGS@
 CFLAGS = @CFLAGS@
 LDFLAGS = @LDFLAGS@
 
+INSTALL = @INSTALL@
+
 MAKEDEPEND = @MAKEDEPEND@
 
 IMAP_LIBS = @IMAP_LIBS@
 LIBS = 
 DEPLIBS=../lib/libcyrus.a @DEPLIBS@
 
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+cyrus_prefix = @cyrus_prefix@
+
 all: installsieve
 
 install:
+	$(INSTALL) -s -m 755 imtest $(DESTDIR)$(exec_prefix)/bin
 
 OBJS=installscript.o lex.o mystring.o request.o
 

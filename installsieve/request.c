@@ -103,6 +103,8 @@ int installafile(char *filename)
   int size;     /* size of the file */
   int result;
   int cnt;
+  int res;
+  string_t *str;
   lexstate_t state;
 
   result=stat(filename,&filestats);
@@ -149,23 +151,31 @@ int installafile(char *filename)
   prot_flush(pout);
 
   /* now let's see what the server said */
-  if (yylex(&state,pin)!=STRING)
-    printf("expected xxxxxx\n");  
+  res=yylex(&state,pin);
+
+  if ((res!=TOKEN_OK) && (res!=TOKEN_NO))    
+    parseerror("STRING");
 
   if (yylex(&state,pin)!=' ')
-    printf("expected sp\n");
+    parseerror("SPACE");
 
   if (yylex(&state,pin)!=STRING)
-    printf("expected string\n");  
+    parseerror("STRING");
 
-  printf("got status: %s\n",string_DATAPTR(state.str));
+  str=state.str;
 
   if (yylex(&state,pin)!=EOL)
-    printf("expected eol\n");  
+    parseerror("EOL");
 
-  setscriptactive(filename);
+  /* if command failed */
+  if (res==TOKEN_NO)
+  {
+    printf("Putting script failed with message: %s\n",string_DATAPTR(str));
+    
+    return -1;
+  }
 
-  return 0;
+  return setscriptactive(filename);
 }
 
 
@@ -215,26 +225,13 @@ int showlist(void)
   return 0;
 }
 
-int viewafile(char *name)
-{
-  lexstate_t state;
 
-  prot_printf(pout,"GETSCRIPT \"%s\"\r\n",name);
-  prot_flush(pout);
-
-  if (yylex(&state,pin)!=STRING)
-    printf("expected string\n");
-
-  printf("-----------script (%s)-----\n",name);
-  printf("%s\r\n",string_DATAPTR(state.str));
-  printf("----------------------------------\n");
-  
-  return 0;
-}
 
 int setscriptactive(char *name)
 {
   lexstate_t state;
+  int res;
+  string_t *str;
 
   /* tell server we want "name" to be the active script */
   prot_printf(pout, "SETACTIVE \"%s\"\r\n",name);
@@ -242,22 +239,38 @@ int setscriptactive(char *name)
 
 
   /* now let's see what the server said */
-  if (yylex(&state, pin)!=TOKEN_OK)
-    printf("expected xxxxxxx\n");
+  res=yylex(&state, pin);
+
+  if ((res!=TOKEN_OK) && (res!=TOKEN_NO))
+    parseerror("TOKEN");
   
   if (yylex(&state, pin)!=' ')
-    printf("expected space\n");
+    parseerror("SPACE");
 
   if (yylex(&state, pin)!=STRING)
-    printf("expected string\n");
+    parseerror("STRING");
 
-  printf("result= %s\n",string_DATAPTR(state.str));
+  str=state.str;
 
   if (yylex(&state, pin)!=EOL)
-    printf("expected eol\n");
+    parseerror("EOL");
 
-  printf("Set script active \n");
+  /* if command failed */
+  if (res==TOKEN_NO)
+  {
+    printf("Setting script %s active failed with message: %s\n",name, string_DATAPTR(str));
+    return -1;
+  }
 
+  return 0;
+}
+
+static int viewafile(string_t *data, char *name)
+{
+  printf("-----------script (%s)-----\n",name);
+  printf("%s\r\n",string_DATAPTR(data));
+  printf("----------------------------------\n");
+  
   return 0;
 }
 
@@ -286,31 +299,52 @@ static int writefile(string_t *data, char *name)
   return 0;
 }
 
-int getscript(char *name)
+int getscript(char *name, int save)
 {
-  int type;
+  int res;
+  string_t *str;
   lexstate_t state;
 
   prot_printf(pout,"GETSCRIPT \"%s\"\r\n",name);
   prot_flush(pout);
 
-  type=yylex(&state,pin);
+  res=yylex(&state,pin);
 
-  if (type!=STRING)
+  if (res==STRING)
   {
-    printf("type: %i\n",type);
 
-    yylex(&state,pin); /* space */
-    yylex(&state,pin); /* string */
+    if (save==1)
+      writefile(state.str, name);
+    else
+      viewafile(state.str, name);
 
-    printf("Error: %s\n",string_DATAPTR(state.str));
+    if (yylex(&state, pin)!=EOL)
+      parseerror("EOL");
 
-    yylex(&state,pin);
+    res=yylex(&state,pin);
+  }
 
+  if ((res!=TOKEN_OK) && (res!=TOKEN_NO))
+    parseerror("TOKEN");
+  
+  if (yylex(&state, pin)!=' ')
+    parseerror("SPACE");
+
+  if (yylex(&state, pin)!=STRING)
+    parseerror("STRING");
+
+  str=state.str;
+
+  if (yylex(&state, pin)!=EOL)
+    parseerror("EOL");
+
+  /* if command failed */
+  if (res==TOKEN_NO)
+  {
+    printf("Getting script %s active failed with message: %s\n",name, string_DATAPTR(str));
     return -1;
   }
- 
-  writefile(state.str, name);
-  
+
   return 0;
+
 }
