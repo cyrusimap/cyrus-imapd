@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.15 2002/04/29 20:00:24 rjs3 Exp $
+ * $Id: mbdump.c,v 1.16 2002/05/14 16:18:40 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -513,7 +513,8 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
 
     while(1) {
 	char fnamebuf[MAX_MAILBOX_PATH + 1024];
-
+	char *seen_file = NULL;
+	
       	c = getastring(pin, pout, &file);
 
 	if(c != ' ') {
@@ -532,13 +533,9 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
 	    strcpy(fnamebuf, s);
 	    free(s);
 	} else if (userid && !strcmp(file.s, "SEEN")) {
-	    char *s = seen_getpath(userid);
+	    seen_file = seen_getpath(userid);
 
-	    /* xxx lock current seen state */
-	    /* xxx set fname buf to <seen state>.NEW */
-
-	    strcpy(fnamebuf, s);
-	    free(s);
+	    snprintf(fnamebuf,sizeof(fnamebuf),"%s.%d",seen_file,getpid());
 	} else if (userid && !strncmp(file.s, "SIEVE", 5)) {
 	    int isdefault = !strncmp(file.s, "SIEVED", 6);
 	    char *realname;
@@ -598,6 +595,7 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
 	    }
 	}	
 
+	/* if we haven't opened it, do so */
 	curfile = open(fnamebuf, O_WRONLY|O_TRUNC|O_CREAT, 0666);
 	if(curfile == -1) {
 	    syslog(LOG_ERR, "IOERROR: creating %s: %m", fnamebuf);
@@ -613,9 +611,14 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
 
 	close(curfile);
 
-	/* xxx if this was seen state, perform a merge,
-	   and remove the <seen state>.new file,
-	   and unlock the seen state */
+	/* we were operating on the seen state, so merge it and cleanup */
+	if(seen_file) {
+	    seen_merge(fnamebuf, seen_file);
+	    free(seen_file);
+	    seen_file = NULL;
+
+	    unlink(fnamebuf);
+	}
 	
 	if(c == ')') break;
     }
@@ -625,6 +628,7 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
     eatline(pin, c);
     freebuf(&file);
     freebuf(&data);
+
     if(curfile >= 0) close(curfile);
     mailbox_close(&mb);
     
