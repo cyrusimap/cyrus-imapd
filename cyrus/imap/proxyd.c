@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: proxyd.c,v 1.18 2000/04/18 03:07:00 leg Exp $ */
+/* $Id: proxyd.c,v 1.19 2000/04/20 16:29:34 leg Exp $ */
 
 #include <config.h>
 
@@ -530,15 +530,16 @@ static int proxy_authenticate(struct backend *s)
     if (getpeername(s->sock, (struct sockaddr *)saddr_r, &addrsize) != 0)
 	return SASL_FAIL;
     r = sasl_setprop(s->saslconn, SASL_IP_REMOTE, saddr_r);
-    if (r != SASL_OK) return r;
   
-    addrsize=sizeof(struct sockaddr_in);
-    if (getsockname(s->sock, (struct sockaddr *)saddr_l,&addrsize)!=0)
-	return SASL_FAIL;
-    r = sasl_setprop(s->saslconn, SASL_IP_LOCAL, saddr_l);
-    if (r != SASL_OK) return r;
+    if (r == SASL_OK) {
+	addrsize=sizeof(struct sockaddr_in);
+	if (getsockname(s->sock, (struct sockaddr *)saddr_l,&addrsize)!=0)
+	    return SASL_FAIL;
+	r = sasl_setprop(s->saslconn, SASL_IP_LOCAL, saddr_l);
+    }
     free(saddr_l);
     free(saddr_r);
+    if (r != SASL_OK) return r;
 
     /* read the initial greeting */
     if (!prot_fgets(buf, sizeof(buf), s->in)) {
@@ -646,7 +647,9 @@ struct backend *proxyd_findserver(char *server)
 	ret = xmalloc(sizeof(struct backend));
 	ret->hostname = xstrdup(server);
 	if ((hp = gethostbyname(server)) == NULL) {
-	    fatal("gethostbyname failed", 1);
+	    syslog(LOG_ERR, "gethostbyname(%s) failed: %m", server);
+	    free(ret);
+	    return NULL;
 	}
 	ret->addr.sin_family = AF_INET;
 	memcpy(&ret->addr.sin_addr, hp->h_addr, hp->h_length);
@@ -662,12 +665,14 @@ struct backend *proxyd_findserver(char *server)
 
 	if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
 	    syslog(LOG_ERR, "socket() failed: %m");
-	    fatal("socket failed", 1);
+	    free(ret);
+	    return NULL;
 	}
 	if (connect(sock, (struct sockaddr *) &ret->addr, 
 		    sizeof(ret->addr)) < 0) {
-	    syslog(LOG_ERR, "connect() failed: %m");
-	    fatal("connect failed", 1);
+	    syslog(LOG_ERR, "connect(%s) failed: %m", server);
+	    free(ret);
+	    return NULL;
 	}
 	
 	ret->in = prot_new(sock, 0);
@@ -680,7 +685,8 @@ struct backend *proxyd_findserver(char *server)
 	    syslog(LOG_ERR, "couldn't authenticate to backend server: %s",
 		   sasl_errstring(r,NULL,NULL));
 		   
-	    fatal("couldn't authenticate to backend server", EC_CONFIG);
+	    free(ret);
+	    return NULL;
 	}
     }
 
@@ -2661,7 +2667,11 @@ void cmd_create(char *tag, char *name, char *server)
     char mailboxname[MAX_MAILBOX_NAME+1];
     int r;
 
-    r = mboxname_tointernal(name, proxyd_userid, mailboxname);
+    if (server && !imapd_userisadmin) {
+	r = IMAP_PERMISSION_DENIED;
+    }
+
+    if (!r) r = mboxname_tointernal(name, proxyd_userid, mailboxname);
 
     if (!r && !server) {
 	r = mboxlist_createmailboxcheck(mailboxname, 0, 0, proxyd_userisadmin,
