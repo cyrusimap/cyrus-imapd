@@ -40,14 +40,14 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.66 2000/12/18 20:28:20 leg Exp $
+# $Id: SMakefile,v 1.67 2000/12/25 01:30:56 leg Exp $
 #
 
 if test ! -x configure; then
-  echo autoheader
-  autoheader
   echo aclocal -I cmulocal
   aclocal -I cmulocal
+  echo autoheader
+  autoheader
   echo autoconf
   autoconf
 fi
