@@ -93,7 +93,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.40 2003/01/17 16:43:23 ken3 Exp $ */
+/* $Id: tls.c,v 1.41 2003/02/10 21:00:19 leg Exp $ */
 
 #include <config.h>
 
@@ -207,9 +207,11 @@ static void apps_ssl_info_callback(SSL * s, int where, int ret)
     }
 }
 
-/* taken from OpenSSL apps/s_cb.c */
-
-static RSA *tmp_rsa_cb(SSL * s, int export, int keylength)
+/* taken from OpenSSL apps/s_cb.c
+   not thread safe! */
+static RSA *tmp_rsa_cb(SSL *s __attribute__((unused)), 
+                       int export __attribute__((unused)), 
+                       int keylength)
 {
     static RSA *rsa_tmp = NULL;
 
@@ -383,7 +385,8 @@ static int set_cert_stuff(SSL_CTX * ctx,
  * negotiated and session caching is enabled.  We save the session in
  * a database so that we can share sessions between processes. 
  */ 
-static int new_session_cb(SSL *ssl, SSL_SESSION *sess)
+static int new_session_cb(SSL *ssl __attribute__((unused)), 
+                          SSL_SESSION *sess)
 {
     int len;
     unsigned char *data = NULL, *asn;
@@ -427,7 +430,7 @@ static int new_session_cb(SSL *ssl, SSL_SESSION *sess)
 
     /* log this transaction */
     if (var_imapd_tls_loglevel > 0) {
-	int i;
+	unsigned int i;
 	char idstr[SSL_MAX_SSL_SESSION_ID_LENGTH*2 + 1];
 	for (i = 0; i < sess->session_id_length; i++)
 	    sprintf(idstr+i*2, "%02X", sess->session_id[i]);
@@ -471,7 +474,8 @@ static void remove_session(unsigned char *id, int idlen)
  * removed because it is expired or when a connection was not shutdown
  * cleanly.
  */
-static void remove_session_cb(SSL_CTX *ctx, SSL_SESSION *sess)
+static void remove_session_cb(SSL_CTX *ctx __attribute__((unused)), 
+                              SSL_SESSION *sess)
 {
     assert(sess);
 
@@ -484,8 +488,8 @@ static void remove_session_cb(SSL_CTX *ctx, SSL_SESSION *sess)
  * called, also when session caching was disabled.  We lookup the
  * session in our database in case it was stored by another process.
  */
-static SSL_SESSION *get_session_cb(SSL *ssl, unsigned char *id, int idlen,
-				   int *copy)
+static SSL_SESSION *get_session_cb(SSL *ssl __attribute__((unused)), 
+                                   unsigned char *id, int idlen, int *copy)
 {
     int ret;
     const char *data = NULL;
@@ -503,7 +507,7 @@ static SSL_SESSION *get_session_cb(SSL *ssl, unsigned char *id, int idlen,
     } while (ret == CYRUSDB_AGAIN);
 
     if (data) {
-	assert(len >= sizeof(time_t));
+	assert(len >= (int) sizeof(time_t));
 
 	/* grab the expire time */
 	memcpy(&expire, data, sizeof(time_t));
@@ -721,7 +725,7 @@ int     tls_init_serverengine(const char *ident,
 /* taken from OpenSSL apps/s_cb.c */
 
 static long bio_dump_cb(BIO * bio, int cmd, const char *argp, int argi,
-			long argl, long ret)
+			long argl __attribute__((unused)), long ret)
 {
     if (!do_dump)
 	return (ret);
@@ -975,6 +979,8 @@ static int prune_p(void *rock, const char *id, int idlen,
 
     prock->count++;
 
+    assert(datalen >= (int) sizeof(time_t));
+
     /* grab the expire time */
     memcpy(&expire, data, sizeof(time_t));
 
@@ -994,7 +1000,8 @@ static int prune_p(void *rock, const char *id, int idlen,
 }
 
 static int prune_cb(void *rock, const char *id, int idlen,
-		    const char *data, int datalen)
+		    const char *data __attribute__((unused)), 
+                    int datalen __attribute__((unused)))
 {
     struct prunerock *prock = (struct prunerock *) rock;
 
