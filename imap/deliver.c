@@ -32,7 +32,6 @@ char *id = 0;
 char **flag = 0;
 int nflags = 0;
 
-char tmpfname[] = "/usr/tmp/deliverXXXXXX";
 FILE *f;
 
 main(argc, argv)
@@ -41,7 +40,7 @@ char **argv;
 {
     int opt;
     int exitval = 0, code;
-    int fd, n;
+    int n;
     char buf[4096];
 
     config_init("deliver");
@@ -99,13 +98,10 @@ char **argv;
     }
 
     /* Copy to temp file */
-    fd = mkstemp(tmpfname);
-    if (fd == -1) {
-	perror(tmpfname);
+    f = tmpfile();
+    if (!f) {
 	exit(EX_TEMPFAIL);
     }
-    unlink(tmpfname);
-    f = fdopen(fd, "w+");
     while (n = fread(buf, 1, sizeof(buf), stdin)) {
 	fwrite(buf, 1, n, f);
     }
