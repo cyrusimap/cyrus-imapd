@@ -1,5 +1,5 @@
 /* ptloader.c -- AFS group loader daemon
- *
+ */
 /*
  * Copyright (c) 1996-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -40,11 +40,9 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
- *
- */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ptloader.c,v 1.20 2000/05/23 20:56:46 robeson Exp $";
+      "$Id: ptloader.c,v 1.21 2000/05/24 05:33:24 leg Exp $";
 
 #include <config.h>
 
@@ -119,7 +117,7 @@ main(argc, argv)
 
     /* normally LOCAL6, but do this while we're logging keys */
     openlog(PTCLIENT, LOG_PID, LOG_LOCAL7);
-    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.20 2000/05/23 20:56:46 robeson Exp $");
+    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.21 2000/05/24 05:33:24 leg Exp $");
 
     while ((opt = getopt(argc, argv, "Uspd:l:f:u:t:")) != EOF) {
 	switch (opt) {
@@ -548,4 +546,4 @@ void fatal(const char *msg, int exitcode)
     syslog(LOG_ERR, "%s", msg);
     exit(-1);
 }
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.20 2000/05/23 20:56:46 robeson Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.21 2000/05/24 05:33:24 leg Exp $ */
