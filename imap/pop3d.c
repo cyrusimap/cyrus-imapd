@@ -26,7 +26,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.36 1998/08/07 06:47:24 tjs Exp $
+ * $Id: pop3d.c,v 1.37 1998/08/15 22:15:02 tjs Exp $
  */
 
 #include <stdio.h>
@@ -579,15 +579,21 @@ char *pass;
     openinbox();
 }
 
+/* Handle the POP3 Extension extension.
+ */
 void
 cmd_capa()
 {
     int i;
     int minpoll = config_getint("popminpoll", 0) * 60;
+    int expire = config_getint("popexpiretime", -1);
     const char *capabilities, *next_capabilities;
 
     prot_printf(popd_out, "+OK List of capabilities follows\r\n");
 
+    /* SASL special case: print SASL, then a list of supported capabilities
+       (parsed from the IMAP-style login_capabilities function, then a CRLF */
+    prot_printf(popd_out, "SASL"); /* no \r\n */
     next_capabilities = login_capabilities();
     while (next_capabilities[0]) {
 	capabilities = next_capabilities;
@@ -597,13 +603,19 @@ cmd_capa()
 	}
 	if (!strncmp(capabilities, " AUTH=", 6)) {
 	    capabilities += 6;
+	    prot_putc(' ', popd_out);
 	    prot_write(popd_out, capabilities,
 		       next_capabilities - capabilities);
-	    if (next_capabilities[0]) prot_putc(' ', popd_out);
 	}
     }
     prot_printf(popd_out, "\r\n");
-    
+
+    if (expire < 0) {
+	prot_printf(popd_out, "EXPIRE NEVER\r\n");
+    } else {
+	prot_printf(popd_out, "EXPIRE %d\r\n", expire);
+    }
+
     prot_printf(popd_out, "LOGIN-DELAY %d\r\n", minpoll);
     prot_printf(popd_out, "TOP\r\n");
     prot_printf(popd_out, "UIDL\r\n");

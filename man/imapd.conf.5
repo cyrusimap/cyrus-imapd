@@ -75,6 +75,14 @@ in minutes.  The minimum value is 10, the default.
 Set the minimum amount of time the server forces users to wait between
 successive POP logins,
 in minutes.  The default is 0.
+.IP "\fBpopexpiretime:\fR 0" 5
+The number of days advertised as being the minimum a message may be left on
+the POP server before it is deleted (via the CAPA command, defined in the POP3
+Extension Mechanism, which some clients may support).  "NEVER", the default,
+may be specified with a negative number.  The Cyrus POP3 server never deletes
+mail, no matter what the value of this parameter is.  However, if a site
+implements a less liberal policy, it needs to change this parameter
+accordingly.
 .IP "\fBadmins:\fR <none>" 5
 The list of userids with administrative rights.  Separate each userid
 with a space. We recommend that administrator userids be separate from
