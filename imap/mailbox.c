@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.127 2002/05/22 20:58:02 rjs3 Exp $
+ $Id: mailbox.c,v 1.128 2002/05/23 03:10:50 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -900,6 +900,7 @@ struct mailbox *mailbox;
     strcpy(fnamebuf, mailbox->path);
     strcat(fnamebuf, FNAME_INDEX);
 
+    /* xxx why is this not a lock_reopen() ? */
     for (;;) {
 	r = lock_blocking(mailbox->index_fd);
 	if (r == -1) {
@@ -1120,6 +1121,8 @@ int mailbox_write_header(struct mailbox *mailbox)
     map_refresh(mailbox->header_fd, 1, &mailbox->header_base,
 		&mailbox->header_len, sbuf.st_size, "header", mailbox->name);
     mailbox->header_ino = sbuf.st_ino;
+
+    /* xxx how do we know that we have a lock on the new header ? */
     
     return 0;
 }
@@ -1352,6 +1355,8 @@ struct quota *quota;
 
     quota->fd = newfd;
 
+    /* xxx how do we know that we have a lock on the new quota file ? */
+    
     return 0;
 }
 
