@@ -34,8 +34,6 @@
 #include "parseaddr.h"
 #include "xmalloc.h"
 
-static char parseaddr_myhostname[128];
-
 static void parseaddr_append();
 static int parseaddr_phrase();
 static int parseaddr_domain();
@@ -169,10 +167,7 @@ char **freemep;
     newaddr->mailbox = mailbox;
 
     if (domain && !*domain) {
-	if (!parseaddr_myhostname[0]) {
-	    gethostname(parseaddr_myhostname, sizeof(parseaddr_myhostname)-1);
-	}
-	domain = parseaddr_myhostname;
+	domain = "unspecified-domain";
     }
     newaddr->domain = domain;
 
