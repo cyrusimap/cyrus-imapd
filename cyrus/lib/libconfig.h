@@ -1,5 +1,5 @@
 /* libconfig.h -- Header for imapd.conf processing
- * $Id: libconfig.h,v 1.2 2003/10/22 18:03:04 rjs3 Exp $
+ * $Id: libconfig.h,v 1.2.2.1 2003/10/28 21:09:40 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -69,8 +69,15 @@ extern const char *config_ident;
 extern int config_hashimapspool;
 extern int config_implicitrights;
 extern int config_virtdomains;
+extern int config_mupdate_config;
 
 /* config requirement flags */
 #define CONFIG_NEED_PARTITION_DATA (1<<0)
+
+enum mupdate_config_type {
+    MUPDATE_CONFIG_STANDARD,
+    MUPDATE_CONFIG_UNIFIED,
+    MUPDATE_CONFIG_REPLICATED
+};
 
 #endif /* INCLUDED_LIBCONFIG_H */

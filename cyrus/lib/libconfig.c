@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: libconfig.c,v 1.2 2003/10/22 18:03:04 rjs3 Exp $ */
+/* $Id: libconfig.c,v 1.2.2.1 2003/10/28 21:09:40 ken3 Exp $ */
 
 #include <config.h>
 
@@ -73,6 +73,7 @@ const char *config_defdomain = NULL;     /* NULL */
 const char *config_ident = NULL;         /* the service name */
 int config_hashimapspool;	  /* f */
 int config_virtdomains;	          /* f */
+int config_mupdate_config;	  /* MUPDATE_CONFIG_STANDARD */
 
 /* declared in each binary that uses libconfig */
 extern const int config_need_data;
@@ -420,4 +421,20 @@ void config_read(const char *alt_config)
     }
 
     config_mupdate_server = config_getstring(IMAPOPT_MUPDATE_SERVER);
+
+    if (config_mupdate_server) {
+	const char *mconfig = config_getstring(IMAPOPT_MUPDATE_CONFIG);
+
+	if (!strcasecmp(mconfig, "standard"))
+	    config_mupdate_config = MUPDATE_CONFIG_STANDARD;
+	else if (!strcasecmp(mconfig, "unified"))
+	    config_mupdate_config = MUPDATE_CONFIG_UNIFIED;
+	else if (!strcasecmp(mconfig, "replicated"))
+	    config_mupdate_config = MUPDATE_CONFIG_REPLICATED;
+	else {
+	    snprintf(errbuf, sizeof(errbuf),
+		     "invalid mupdate_config: %s", mconfig);
+	    fatal(errbuf, EC_CONFIG);
+	}
+    }
 }
