@@ -49,9 +49,9 @@
 #include <afs/ptserver.h>
 #include <afs/cellconfig.h>
 
-#define DBFIL "/var/ptclient/ptscache.db"
-#define DBLOCK "/var/ptclient/ptcache.lock"
-#define DBSOCKET "/var/ptclient/ptsock"
+#define PTS_DBFIL "/ptclient/ptscache.db"
+#define PTS_DBLOCK "/ptclient/ptscache.lock"
+#define PTS_DBSOCKET "/ptclient/ptsock"
 
 
 #define PTCLIENT  "ptloader"
