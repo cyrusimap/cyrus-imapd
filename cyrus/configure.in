@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.132 1999/06/19 02:40:31 leg Exp $
+dnl $Id: configure.in,v 1.133 1999/06/23 02:17:38 leg Exp $
 dnl
 
 AC_INIT(imap/imapd.c)
@@ -1115,7 +1115,7 @@ STATIC_LIBS="$outlibs"
 ### staticify
 
 IMAP_COM_ERR_LIBS="${COM_ERR_LIBS}"
-IMAP_LIBS="${LIBS} ${LIB_SASL}"
+IMAP_LIBS="${LIB_SASL} ${LIBS}"
 
 if test "$cmu_compile_with_static_libs" = yes ; then
 

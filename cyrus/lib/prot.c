@@ -22,7 +22,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.36 1999/06/19 06:30:10 leg Exp $
+ * $Id: prot.c,v 1.37 1999/06/23 02:17:41 leg Exp $
  */
 
 #include <stdio.h>
@@ -54,10 +54,11 @@ int write;
 {
     struct protstream *newstream;
 
-    newstream = (struct protstream *)xmalloc(sizeof(struct protstream));
+    newstream = (struct protstream *) xmalloc(sizeof(struct protstream));
+    newstream->buf = (char *) xmalloc(sizeof(char) * (PROT_BUFSIZE + 4));
+    newstream->buf_size = PROT_BUFSIZE;
     newstream->ptr = newstream->buf;
     newstream->cnt = write ? PROT_BUFSIZE : 0;
-    newstream->leftcnt = 0;
     newstream->maxplain = PROT_BUFSIZE;
     newstream->fd = fd;
     newstream->write = write;
@@ -153,8 +154,6 @@ sasl_conn_t *conn;
     s->cnt=max;
   }
   else if (s->cnt) {  /* XXX what does this do? */
-    s->leftptr = s->ptr;
-    s->leftcnt = s->cnt;
     s->cnt = 0;
   }
 
@@ -222,7 +221,7 @@ struct protstream *s;
 	s->error = strerror(errno);
 	return EOF;
     }
-    s->cnt = s->leftcnt = 0;
+    s->cnt = 0;
     s->error = 0;
     s->eof = 0;
     return 0;
@@ -236,7 +235,7 @@ int
 prot_fill(s)
 struct protstream *s;
 {
-    int n, cnt = 0;
+    int n;
     unsigned inputlen = 0;
     char *ptr;
     const char *err;
@@ -250,92 +249,93 @@ struct protstream *s;
 
     do {
 
-      /* wait until get input */
-	    haveinput = 0;
-	    if (s->readcallback_proc ||
-		(s->flushonread && s->flushonread->ptr != s->flushonread->buf)) {
-		timeout.tv_sec = timeout.tv_usec = 0;
-		FD_ZERO(&rfds);
-		FD_SET(s->fd, &rfds);
-		if (select(s->fd + 1, &rfds, (fd_set *)0, (fd_set *)0,
-			   &timeout) <= 0) {
-		    if (s->readcallback_proc) {
-			(*s->readcallback_proc)(s, s->readcallback_rock);
-			s->readcallback_proc = 0;
-			s->readcallback_rock = 0;
-		    }
-		    if (s->flushonread) prot_flush(s->flushonread);
+	/* wait until get input */
+	haveinput = 0;
+	if (s->readcallback_proc ||
+	    (s->flushonread && s->flushonread->ptr != s->flushonread->buf)) {
+	    timeout.tv_sec = timeout.tv_usec = 0;
+	    FD_ZERO(&rfds);
+	    FD_SET(s->fd, &rfds);
+	    if (select(s->fd + 1, &rfds, (fd_set *)0, (fd_set *)0,
+		       &timeout) <= 0) {
+		if (s->readcallback_proc) {
+		    (*s->readcallback_proc)(s, s->readcallback_rock);
+		    s->readcallback_proc = 0;
+		    s->readcallback_rock = 0;
 		}
-		else {
-		    haveinput = 1;
-		}
+		if (s->flushonread) prot_flush(s->flushonread);
 	    }
-
-	    if (!haveinput && s->read_timeout) {
-		timeout.tv_sec = s->read_timeout;
-		timeout.tv_usec = 0;
-		FD_ZERO(&rfds);
-		FD_SET(s->fd, &rfds);
-		do {
-		    r = select(s->fd + 1, &rfds, (fd_set *)0, (fd_set *)0,
-			       &timeout);
-		} while (r == -1 && errno == EINTR);
-		if (r == 0) {
-		    s->error = "idle for too long";
-		    return EOF;
-		}
+	    else {
+		haveinput = 1;
 	    }
+	}
 
+	if (!haveinput && s->read_timeout) {
+	    timeout.tv_sec = s->read_timeout;
+	    timeout.tv_usec = 0;
+	    FD_ZERO(&rfds);
+	    FD_SET(s->fd, &rfds);
 	    do {
-		n = read(s->fd, s->buf+cnt, sizeof(s->buf)-cnt);
-	    } while (n == -1 && errno == EINTR);
-
-    
+		r = select(s->fd + 1, &rfds, (fd_set *)0, (fd_set *)0,
+			   &timeout);
+	    } while (r == -1 && errno == EINTR);
+	    if (r == 0) {
+		s->error = "idle for too long";
+		return EOF;
+	    }
+	}
+	
+	do {
+	    n = read(s->fd, s->buf, PROT_BUFSIZE);
+	} while (n == -1 && errno == EINTR);
+	
+	
 	if (n <= 0) {
 	    if (n) s->error = strerror(errno);
 	    else s->eof = 1;
 	    return EOF;
 	}
-
-	if (s->saslssf!=0) { /* decode it */
-	  int result;
-	  char *out;
-	  int outlen;
-
-	  /* Decode the input token */
-	  result= sasl_decode(s->conn,
-			      s->buf,
-			      n,
-			      &out,
-			      &outlen);
-
-	  if (result!=SASL_OK) {
-	    snprintf(s->buf,200,"Decoding error: %s (%i)",sasl_errstring(result,NULL,NULL),result);
-	    s->error = s->buf;
-	    printf("%i\n",result);
-	    printf("error %s\n",s->error);
-	    return EOF;
-	  }
-
-	  s->cnt=0;
-	  if (outlen>0)
-	  {
-	    memcpy(s->buf,out,outlen);
-	    s->ptr=s->buf+1;
-	    s->cnt=outlen-1;
-	    free(out);
-	  }
-
+	
+	if (s->saslssf) { /* decode it */
+	    int result;
+	    char *out;
+	    int outlen;
+	    
+	    /* Decode the input token */
+	    result = sasl_decode(s->conn, s->buf, n, &out, &outlen);
+	    
+	    if (result != SASL_OK) {
+		snprintf(s->buf, 200, "Decoding error: %s (%i)",
+			 sasl_errstring(result, NULL, NULL), result);
+		s->error = s->buf;
+		printf("%i\n",result);
+		printf("error %s\n",s->error);
+		return EOF;
+	    }
+	    
+	    if (outlen > 0) {
+		if (outlen > s->buf_size) {
+		    s->buf = (char *) xrealloc(s->buf, 
+					       sizeof(char) * (outlen + 4));
+		    s->buf_size = outlen;
+		}
+		memcpy(s->buf, out, outlen);
+		s->ptr = s->buf + 1;
+		s->cnt = outlen - 1;
+		free(out);
+	    } else {		/* didn't decode anything */
+		s->cnt = 0;
+	    }
+	    
 	} else {
-	  /* No protection function, just use the raw data */
-	  s->ptr = s->buf+cnt+1;
-	  s->cnt = n-1;
+	    /* No protection function, just use the raw data */
+	    s->ptr = s->buf+1;
+	    s->cnt = n-1;
 	}
-
+	
 	  
 
-	if (s->cnt>0)
-	{
+	if (s->cnt > 0) {
 	    if (s->logfd != -1) {
 		time_t newtime;
 		char timebuf[20];
@@ -362,9 +362,6 @@ struct protstream *s;
 	    }
 	    return *s->buf;
 	}
-
-	cnt += n;
-
 
     } while (1);
 

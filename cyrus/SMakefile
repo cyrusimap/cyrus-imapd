@@ -2,7 +2,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.43 1999/04/02 19:51:52 wcw Exp $
+# $Id: SMakefile,v 1.44 1999/06/23 02:17:37 leg Exp $
 #
 
 MAKE=gmake
@@ -25,6 +25,8 @@ if test "${OVERRIDE-nil}" != "t" ; then
   case `uname` in	
     Linux) CFLAGS="${CFLAGS} -O3 -g"
 	   LDFLAGS="${LDFLAGS}"
+	   LIBS="-ldbm"
+	   export LIBS
            AMSSYNC=""
 	   ;;
     IRIX) CFLAGS="${CFLAGS} -O2"
@@ -54,11 +56,11 @@ if test "${OVERRIDE-nil}" != "t" ; then
 fi;
 
 if test "${WASH_CYRUS_DEBUG}" = "t"; then
-   CFLAGS="-g"
+   CFLAGS="-g -xs"
    LDFLAGS="-L/usr/local/lib -R/usr/local/lib -xs -g"
    STATIC="--enable-static-libraries"
 fi
 
-LNCOMMAND="${SRCDIR}/configure $WITHAUTH --with-inn=/usr/news $AMSSYNC --enable-experiment --enable-cmulocal --with-cyrus-group=staff $STATIC"
+LNCOMMAND="${SRCDIR}/configure $WITHAUTH --with-inn=/usr/news $AMSSYNC --enable-experiment --enable-cmulocal --with-cyrus-group=staff"
 
 export CFLAGS CC VER LNCOMMAND LOCALDEFS LDFLAGS
