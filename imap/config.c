@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.51 2002/06/14 18:18:49 rjs3 Exp $ */
+/* $Id: config.c,v 1.52 2002/06/14 19:01:02 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -264,9 +264,10 @@ static void config_read(const char *alt_config)
 	newval = xstrdup(p);
 	val = hash_insert(key, newval, &confighash);
 	if(val != newval) {
-	    sprintf(buf, "option %s was specified twice in config file",
+	    char errbuf[4096];
+	    sprintf(errbuf, "option '%s' was specified twice in config file",
 		    key);
-	    fatal(buf, EC_CONFIG);
+	    fatal(errbuf, EC_CONFIG);
 	}
     }
     fclose(infile);
