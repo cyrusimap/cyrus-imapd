@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idled.c,v 1.2 2000/12/18 04:53:38 leg Exp $ */
+/* $Id: idled.c,v 1.3 2000/12/18 22:07:14 ken3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -117,6 +117,8 @@ static struct ientry *get_ientry(void)
 	for (i = 0; i < itable_inc - 1; i++) {
 	    n[i].next = n + (i + 1);
 	}
+	/* i == child_table_inc - 1, last item in block */
+	n[i].next = NULL;
     }
 
     t = ifreelist;
