@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.264 2000/07/17 04:32:42 leg Exp $ */
+/* $Id: imapd.c,v 1.265 2000/07/19 01:53:04 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1585,6 +1585,7 @@ char *cmd;
  */
 #define MAXIDFAILED	3
 #define MAXIDLOG	5
+#define MAXIDLOGLEN	(11 + MAXIDPAIRS * (MAXIDFIELDLEN + MAXIDVALUELEN + 6))
 #define MAXIDFIELDLEN	30
 #define MAXIDVALUELEN	1024
 #define MAXIDPAIRS	30
@@ -1722,20 +1723,20 @@ void cmd_id(char *tag)
     /* log the client's ID string.
        eventually this should be a callback or something. */
     if (npair && logged_id < MAXIDLOG) {
-#define LOGSTR	"client id:"
-	char logbuf[strlen(LOGSTR) +
-		   MAXIDPAIRS * (MAXIDFIELDLEN + MAXIDVALUELEN + 6)];
+	char logbuf[MAXIDLOGLEN] = "client id:";
 	struct strlist *fptr, *vptr;
 
-	strcpy(logbuf, LOGSTR);
 	for (fptr = fields, vptr = values; fptr;
 	     fptr = fptr->next, vptr = vptr->next) {
 	    /* should we check for and format literals here ??? */
-	    sprintf(logbuf+strlen(logbuf), " \"%s\" ", fptr->s);
+	    snprintf(logbuf + strlen(logbuf), MAXIDLOGLEN - strlen(logbuf),
+		     " \"%s\" ", fptr->s);
 	    if (!strcmp(vptr->s, "NIL"))
-		sprintf(logbuf+strlen(logbuf), "NIL");
+		snprintf(logbuf + strlen(logbuf), MAXIDLOGLEN - strlen(logbuf),
+			 "NIL");
 	    else
-		sprintf(logbuf+strlen(logbuf), "\"%s\"", vptr->s);
+		snprintf(logbuf + strlen(logbuf), MAXIDLOGLEN - strlen(logbuf),
+			"\"%s\"", vptr->s);
 	}
 
 	syslog(LOG_INFO, "%s", logbuf);
