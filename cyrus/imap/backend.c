@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.23 2004/03/04 17:34:42 rjs3 Exp $ */
+/* $Id: backend.c,v 1.24 2004/03/04 18:42:31 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -168,10 +168,10 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
     char buf[2048], optstr[128], *p;
     const char *mech_conf, *pass;
 
-    strlcpy(optstr, sizeof(optstr), s->hostname);
+    strlcpy(optstr, s->hostname, sizeof(optstr));
     p = strchr(optstr, '.');
     if (p) *p = '\0';
-    strlcat(optstr, sizeof(optstr), "_password");
+    strlcat(optstr, "_password", sizeof(optstr));
     pass = config_getoverflowstring(optstr, NULL);
     if(!pass) pass = config_getstring(IMAPOPT_PROXY_PASSWORD);
     cb = mysasl_callbacks(userid, 
