@@ -1,5 +1,5 @@
 # Makefile.in - notifyd makefile
-# $Id: Makefile.in,v 1.4 2002/03/22 17:58:21 rjs3 Exp $
+# $Id: Makefile.in,v 1.5 2002/09/13 16:04:16 rjs3 Exp $
 # @configure_input@
 # 
 # Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
@@ -66,10 +66,8 @@ NOTIFYD_LIBS = @NOTIFYD_LIBS@
 
 SERVICE=../master/service.o
 
-IMAP_LIBS = @IMAP_LIBS@
-IMAP_COM_ERR_LIBS = @IMAP_COM_ERR_LIBS@
 LIB_WRAP = @LIB_WRAP@
-LIBS = @ZEPHYR_LIBS@ @LIBS@ $(IMAP_COM_ERR_LIBS)
+LIBS = @ZEPHYR_LIBS@ @IMAP_LIBS@ @LIBS@ @IMAP_COM_ERR_LIBS@
 DEPLIBS=../imap/libimap.a ../lib/libcyrus.a @DEPLIBS@
 
 PURIFY=/usr/local/bin/purify
@@ -84,16 +82,16 @@ OBJS= notifyd.o notify_null.o notify_log.o notify_mailto.o notify_zephyr.o
 
 notifytest: notifytest.o
 	$(CC) $(LDFLAGS) -o notifytest \
-	 notifytest.o $(DEPLIBS) $(IMAP_LIBS) $(LIBS) $(LIB_WRAP)
+	 notifytest.o $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
 notifyd: $(OBJS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o notifyd \
-	 $(SERVICE) $(OBJS) $(DEPLIBS) $(IMAP_LIBS) $(LIBS) $(LIB_WRAP)
+	 $(SERVICE) $(OBJS) $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
 notifyd.pure: $(OBJS) $(SERVICE)
 	$(PURIFY) $(PUREOPT) \
 	$(CC) $(LDFLAGS) -o notifyd.pure \
-	 $(SERVICE) $(OBJS) $(DEPLIBS) $(IMAP_LIBS) $(LIBS) $(LIB_WRAP)
+	 $(SERVICE) $(OBJS) $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
 clean:
 	rm -f notifyd notifytest *.o *.a *~ Makefile.bak makedepend.log
