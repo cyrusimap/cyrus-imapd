@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.304.2.6 2001/06/12 20:41:55 ken3 Exp $ */
+/* $Id: imapd.c,v 1.304.2.7 2001/06/20 02:08:28 ken3 Exp $ */
 
 #include <config.h>
 
@@ -542,12 +542,6 @@ int service_main(int argc, char **argv, char **envp)
     /* we were connected on imaps port so we should do 
        TLS negotiation immediately */
     if (imaps == 1) cmd_starttls(NULL, 1);
-
-    /* Set namespace */
-    if (!namespace_init(&imapd_namespace)) {
-	syslog(LOG_ERR, "invalid namespace prefix in configuration file");
-	fatal("invalid namespace prefix in configuration file", EC_CONFIG);
-    }
 
     snmp_increment(TOTAL_CONNECTIONS, 1);
     snmp_increment(ACTIVE_CONNECTIONS, 1);
@@ -1495,10 +1489,17 @@ char *passwd;
 
     if (!reply) reply = "User logged in";
 
+    prot_printf(imapd_out, "%s OK %s\r\n", tag, reply);
+
     /* Create telemetry log */
     imapd_logfd = telemetry_log(imapd_userid, imapd_in, imapd_out);
 
-    prot_printf(imapd_out, "%s OK %s\r\n", tag, reply);
+    /* Set namespace */
+    if (!namespace_init(&imapd_namespace, imapd_userisadmin)) {
+	syslog(LOG_ERR, "invalid namespace prefix in configuration file");
+	fatal("invalid namespace prefix in configuration file", EC_CONFIG);
+    }
+
     return;
 }
 
@@ -1641,6 +1642,12 @@ cmd_authenticate(char *tag,char *authtype)
 
     /* Create telemetry log */
     imapd_logfd = telemetry_log(imapd_userid, imapd_in, imapd_out);
+
+    /* Set namespace */
+    if (!namespace_init(&imapd_namespace, imapd_userisadmin)) {
+	syslog(LOG_ERR, "invalid namespace prefix in configuration file");
+	fatal("invalid namespace prefix in configuration file", EC_CONFIG);
+    }
 
     return;
 }

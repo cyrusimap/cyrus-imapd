@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.61.2.2 2001/06/05 03:00:37 ken3 Exp $
+ * $Id: lmtpd.c,v 1.61.2.3 2001/06/20 02:08:29 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.61.2.2 2001/06/05 03:00:37 ken3 Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.61.2.3 2001/06/20 02:08:29 ken3 Exp $";*/
 
 #include <config.h>
 
@@ -330,7 +330,7 @@ int service_main(int argc, char **argv, char **envp)
     }
 
     /* Set namespace */
-    if (!namespace_init(&lmtpd_namespace)) {
+    if (!namespace_init(&lmtpd_namespace, 0)) {
 	syslog(LOG_ERR, "invalid namespace prefix in configuration file");
 	fatal("invalid namespace prefix in configuration file", EC_CONFIG);
     }

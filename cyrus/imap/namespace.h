@@ -1,5 +1,5 @@
 /* namespace.h -- Namespace manipulation routines
- * $Id: namespace.h,v 1.1.2.2 2001/05/31 04:40:48 ken3 Exp $
+ * $Id: namespace.h,v 1.1.2.3 2001/06/20 02:08:30 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -59,6 +59,6 @@ struct namespace {
 };
 
 /* Initialize namespace (prefixes & hierarchy separator from imapd.conf) */
-int namespace_init(struct namespace *namespace);
+int namespace_init(struct namespace *namespace, int force_std);
 
 #endif
