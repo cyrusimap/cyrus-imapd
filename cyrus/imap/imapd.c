@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.44 2002/11/17 03:51:13 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.45 2002/11/18 15:46:55 ken3 Exp $ */
 
 #include <config.h>
 
@@ -3990,11 +3990,21 @@ void cmd_changesub(char *tag, char *namespace,
 
     if (namespace) lcase(namespace);
     if (!namespace || !strcmp(namespace, "mailbox")) {
-	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
-						   imapd_userid, mailboxname);
-	if (!r) {
-	    r = mboxlist_changesub(mailboxname, imapd_userid, 
-				   imapd_authstate, add, force);
+	int len = strlen(name);
+	if (force && imapd_namespace.isalt &&
+	    (((len == strlen(imapd_namespace.prefix[NAMESPACE_USER]) - 1) &&
+	      !strncmp(name, imapd_namespace.prefix[NAMESPACE_USER], len)) ||
+	     ((len == strlen(imapd_namespace.prefix[NAMESPACE_SHARED]) - 1) &&
+	      !strncmp(name, imapd_namespace.prefix[NAMESPACE_SHARED], len)))) {
+	    r = 0;
+	}
+	else {
+	    r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
+						       imapd_userid, mailboxname);
+	    if (!r) {
+		r = mboxlist_changesub(mailboxname, imapd_userid, 
+				       imapd_authstate, add, force);
+	    }
 	}
     }
     else if (!strcmp(namespace, "bboard")) {
