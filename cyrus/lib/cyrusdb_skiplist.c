@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.17 2002/02/06 18:23:41 leg Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.18 2002/02/06 22:40:47 rjs3 Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -357,7 +357,7 @@ static int read_header(struct db *db)
     const char *dptr;
     int r;
     
-    assert(db && db->map_len && db->fname);
+    assert(db && db->map_len && db->fname && db->map_base);
     if (db->map_len < HEADER_SIZE) {
 	syslog(LOG_ERR, 
 	       "skiplist: file not large enough for header: %s", db->fname);
@@ -615,7 +615,7 @@ static int myopen(const char *fname, struct db **ret)
     db->map_size = sbuf.st_size;
 
     db->map_base = 0;
-    db->map_size = 0;
+    db->map_len = 0;
     map_refresh(db->fd, 0, &db->map_base, &db->map_len, sbuf.st_size, 
 		fname, 0);
 
