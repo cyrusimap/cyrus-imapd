@@ -42,7 +42,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ptloader.c,v 1.24 2001/07/15 18:08:16 leg Exp $";
+      "$Id: ptloader.c,v 1.25 2002/05/15 16:42:02 rjs3 Exp $";
 
 #include <config.h>
 
@@ -118,7 +118,7 @@ main(argc, argv)
 
     /* normally LOCAL6, but do this while we're logging keys */
     openlog(PTCLIENT, LOG_PID, LOG_LOCAL7);
-    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.24 2001/07/15 18:08:16 leg Exp $");
+    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.25 2002/05/15 16:42:02 rjs3 Exp $");
 
     while ((opt = getopt(argc, argv, "Uspd:l:f:u:t:")) != EOF) {
 	switch (opt) {
@@ -370,8 +370,11 @@ int c;
     strcpy(fnamebuf, STATEDIR);
     strcat(fnamebuf, PTS_DBFIL);
     rc = db_create(&ptdb, NULL, 0);
-    if (!rc) rc = ptdb->open(ptdb, fnamebuf, NULL, DB_HASH, DB_CREATE, 0664);
-    rc = ptdb->open(ptdb, fnamebuf, NULL, DB_HASH, 0, 0664);
+    if (!rc) rc = ptdb->open(ptdb, fnamebuf, NULL, DB_HASH, 0, 0664);
+    if (rc == ENOENT) {
+	rc = db_create(&ptdb, NULL, 0);
+	if (!rc) rc = ptdb->open(ptdb, fnamebuf, NULL, DB_HASH, DB_CREATE, 0664);
+    }
     if (rc != 0) {
         syslog(LOG_ERR, "IOERROR: opening database %s: %s", fnamebuf,
 	       db_strerror(rc));
@@ -554,4 +557,4 @@ void fatal(const char *msg, int exitcode)
     syslog(LOG_ERR, "%s", msg);
     exit(-1);
 }
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.24 2001/07/15 18:08:16 leg Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.25 2002/05/15 16:42:02 rjs3 Exp $ */
