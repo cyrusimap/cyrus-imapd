@@ -112,7 +112,12 @@ void cmd_getquotaroot P((char *tag, char *name));
 void cmd_setquota P((char *tag, char *quotaroot));
 void cmd_status P((char *tag, char *name));
 void cmd_getuids P((char *tag, char *startuid));
+
+#ifdef ENABLE_X_NETSCAPE_HACK
+void cmd_netscrape P((char* tag));
+#endif
 #ifdef ENABLE_EXPERIMENT
+void cmd_namespace P((char* tag));
 void cmd_unselect P((char* tag));
 #endif
 
@@ -225,7 +230,8 @@ int fd;
     if (p = strchr(buf, '\r')) *p = 0;
     if (p = strchr(buf, '\n')) *p = 0;
 
-    prot_printf(imapd_out, "* OK [ALERT] %s\r\n", buf);
+    for(p = buf; *p == '['; p++); /* can't have [ be first char, sigh */
+    prot_printf(imapd_out, "* OK [ALERT] %s\r\n", p);
 }
 
 /*
@@ -244,7 +250,9 @@ int fd;
     if (p = strchr(buf, '\r')) *p = 0;
     if (p = strchr(buf, '\n')) *p = 0;
 
-    prot_printf(imapd_out, "* BYE [ALERT] %s\r\n", buf);
+    for(p = buf; *p == '['; p++); /* can't have [ be first char, sigh */
+    prot_printf(imapd_out, "* BYE [ALERT] %s\r\n", p);
+
     shut_down(0);
 }
 
@@ -637,6 +645,21 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_noop(tag.s, cmd.s);
 	    }
+#ifdef ENABLE_EXPERIMENT
+	    else if (!strcmp(cmd.s, "Namespace")) {
+		if (c == '\r') c = prot_getc(imapd_in);
+		if (c != '\n') goto extraargs;
+		cmd_namespace(tag.s, cmd.s);
+	    }
+#endif
+#ifdef ENABLE_X_NETSCAPE_HACK
+	    else if (!strcmp(cmd.s, "Netscape")) {
+		/* Cretins. */
+		if (c == '\r') c = prot_getc(imapd_in);
+		if (c != '\n') goto extraargs;
+		cmd_netscrape(tag.s);
+	    }
+#endif
 	    else if (!imapd_userid) goto nologin;
 	    else goto badcmd;
 	    break;
@@ -1112,13 +1135,16 @@ char *tag;
 	index_check(imapd_mailbox, 0, 0);
     }
     prot_printf(imapd_out,
-		"* CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+");
+"* CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+");
     /* XXX */
     prot_printf(imapd_out,
 		" X-NON-HIERARCHICAL-RENAME NO_ATOMIC_RENAME");
     prot_printf(imapd_out, "%s", login_capabilities());
 #ifdef ENABLE_EXPERIMENT
-    prot_printf(imapd_out, " OPTIMIZE-1 UNSELECT");
+    prot_printf(imapd_out, " OPTIMIZE-1 UNSELECT NAMESPACE");
+#endif
+#ifdef ENABLE_X_NETSCAPE_HACK
+    prot_printf(imapd_out, " X-NETSCAPE");
 #endif
     prot_printf(imapd_out, "\r\n%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
@@ -2949,6 +2975,50 @@ char *startuid;
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
 }
+
+#ifdef ENABLE_X_NETSCAPE_HACK
+/*
+ * Netscape's crock hack with a crock  of my own
+ */
+cmd_netscrape(tag)
+    char *tag;
+{
+    char *url;
+    /* so tempting, and yet ... */
+    /* url = "http://random.yahoo.com/ryl/"; */
+    url = config_getstring("netscapeurl",
+			   "http://andrew2.andrew.cmu.edu/cyrus/netscape-admin.html");
+
+    /* I only know of three things to reply with: */
+    prot_printf(imapd_out,
+		"* OK [NETSCAPE] Carnegie Mellon Cyrus IMAP\r\n");
+    prot_printf(imapd_out,
+		"* VERSION " CYRUS_VERSION "\r\n");
+    if (url) {
+	prot_printf(imapd_out,
+		    "* ACCOUNT-URL %s\r\n", url);
+    }
+
+    prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		error_message(IMAP_OK_COMPLETED));
+}
+#endif
+
+#ifdef ENABLE_EXPERIMENT
+/*
+ * Print out a response to the NAMESPACE command defined by
+ * draft-gahrns-imap-namespace-03.txt.  Cyrus' responses are hardcoded;
+ * I can't think of anything that needs to be configurable.
+ */
+cmd_namespace(tag)
+    char* tag;
+{
+    prot_printf(imapd_out,
+  "* NAMESPACE ((\"INBOX.\" \".\")) ((\"user.\" \".\")) ((\"\" \".\"))\r\n");
+    prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		error_message(IMAP_OK_COMPLETED));
+}
+#endif /* ENABLE_EXPERIMENT */
 
 /*
  * Parse a word
