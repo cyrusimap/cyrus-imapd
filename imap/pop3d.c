@@ -121,7 +121,7 @@ char **envp;
 
     /* Find out name of client host */
     salen = sizeof(popd_remoteaddr);
-    if (getpeername(0, &popd_remoteaddr, &salen) == 0 &&
+    if (getpeername(0, (struct sockaddr *)&popd_remoteaddr, &salen) == 0 &&
 	popd_remoteaddr.sin_family == AF_INET) {
 	if (hp = gethostbyaddr((char *)&popd_remoteaddr.sin_addr,
 			       sizeof(popd_remoteaddr.sin_addr), AF_INET)) {
@@ -137,7 +137,7 @@ char **envp;
 	strcat(popd_clienthost, inet_ntoa(popd_remoteaddr.sin_addr));
 	strcat(popd_clienthost, "]");
 	salen = sizeof(popd_localaddr);
-	if (getsockname(0, &popd_localaddr, &salen) == 0) {
+	if (getsockname(0, (struct sockaddr *)&popd_localaddr, &salen) == 0) {
 	    popd_haveaddr = 1;
 	}
     }
