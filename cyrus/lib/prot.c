@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.72.4.3 2002/07/30 16:20:00 rjs3 Exp $
+ * $Id: prot.c,v 1.72.4.4 2002/07/31 17:32:33 rjs3 Exp $
  */
 
 #include <config.h>
@@ -60,14 +60,19 @@
 #endif
 #include <sys/types.h>
 #include <sys/time.h>
+#include <sys/stat.h>
 #include <netinet/in.h>
 #ifdef HAVE_SYS_SELECT_H
 #include <sys/select.h>
 #endif
 
-#include "prot.h"
-#include "xmalloc.h"
 #include "assert.h"
+#include "exitcodes.h"
+#include "map.h"
+#include "prot.h"
+#include "util.h"
+#include "xmalloc.h"
+
 
 /* Transparant protgroup structure */
 struct protgroup
@@ -95,7 +100,8 @@ int write;
     newstream->maxplain = PROT_BUFSIZE;
     newstream->fd = fd;
     newstream->write = write;
-    newstream->logfd = -1;
+    newstream->logfd = PROT_NO_FD;
+    newstream->big_buffer = PROT_NO_FD;
     if(write)
 	newstream->cnt = PROT_BUFSIZE;
 
@@ -527,7 +533,30 @@ int prot_flush(struct protstream *s)
     }
     if (!left) return 0;
 
-    if (s->logfd != -1) {
+    /* If we're streaming to a big buffer, do that instead */
+    if (s->big_buffer != PROT_NO_FD) {
+	do {
+	    n = write(s->big_buffer, ptr, left);
+	    if (n == -1 && errno != EINTR) {
+		syslog(LOG_ERR, "write to protstream big buffer failed: %m",
+		       strerror(errno));
+
+		fatal("write to big buffer failed", EC_OSFILE);
+	    }
+	    if (n > 0) {
+		ptr += n;
+		left -= n;
+	    }
+	} while (left);
+
+	/* Reset the output buffer */
+	s->ptr = s->buf;
+	s->cnt = s->maxplain;
+	
+	return 0;
+    }
+
+    if (s->logfd != PROT_NO_FD) {
 	time_t newtime;
 	char timebuf[20];
 
@@ -847,44 +876,69 @@ char *prot_fgets(char *buf, unsigned size, struct protstream *s)
     return buf;
 }
 
-/* function versions of the macros */
-#undef prot_getc
-#undef prot_ungetc
-#undef prot_putc
-
-int prot_getc(struct protstream *s)
+int prot_bigbuffer_start(struct protstream *p, const char *path) 
 {
-    assert(!s->write);
+    const char *filename = "cyrus_protstream_XXXXXX";
+    char path_buf[2048];
+    int fd;
+    
+    assert(p->big_buffer == PROT_NO_FD);
+    assert(p->write);
 
-    if (s->cnt-- > 0) {
-	return *(s->ptr)++;
-    } else {
-	return prot_fill(s);
+    if(snprintf(path_buf, sizeof(path_buf), "%s/%s", path, filename)
+       >= sizeof(path_buf)){
+	fatal("temporary file pathname is too long in prot_bigbuffer_start",
+	      EC_TEMPFAIL);
     }
+
+    fd = create_tempfile(path_buf);
+    if(fd == -1) return -1;
+
+    p->big_buffer = fd;
+
+    return 0;
 }
 
-int prot_ungetc(int c, struct protstream *s)
+int prot_bigbuffer_flush(struct protstream *p) 
 {
-    assert(!s->write);
+    int fd;
+    const char *base = NULL;
+    unsigned long len = 0;
+    struct stat sbuf;
 
-    s->cnt++;
-    *--(s->ptr) = c;
+    assert(p->big_buffer != PROT_NO_FD);
 
-    return c;
+    /* Flush any pending writes into the big_buffer, before
+     * we turn it off */
+    prot_flush(p);
+
+    /* Save big_buffer file descriptor to a temporary variable, and
+     * reenable standard operation of prot_flush */
+    fd = p->big_buffer;
+    p->big_buffer = PROT_NO_FD;
+
+    /* mmap the file */
+    if (fstat(fd, &sbuf) == -1) {
+	syslog(LOG_ERR,
+	       "IOERROR: fstat on temporary file in prot_bigbuffer_flush: %m");
+	fatal("can't fstat temp file", EC_OSFILE);
+    }	
+    
+    map_refresh(fd, 1, &base, &len, sbuf.st_size, "temp protlayer file", NULL);
+
+    /* prot_write the buffer */
+    /* XXX Ideally, we could just prot_flush directly from this buffer */
+    prot_write(p, base, len);
+
+    /* free the mmap */
+    map_free(&base, &len);
+
+    /* close the buffer's file descriptor */
+    close(fd);
+
+    return prot_flush(p);
 }
 
-int prot_putc(int c, struct protstream *s)
-{
-    assert(s->write);
-    assert(s->cnt > 0);
-
-    *s->ptr++ = c;
-    if (--s->cnt == 0) {
-	return prot_flush(s);
-    } else {
-	return 0;
-    }
-}
 
 /* Handle protgroups */
 /* Create a new protgroup of the given size, or 32 if size is 0 */
@@ -950,4 +1004,43 @@ struct protstream *protgroup_getelement(struct protgroup *group, int element)
     assert(group);
     if(element >= group->next_element) return NULL;
     else return group->group[element];
+}
+
+/* function versions of the macros */
+#undef prot_getc
+#undef prot_ungetc
+#undef prot_putc
+
+int prot_getc(struct protstream *s)
+{
+    assert(!s->write);
+
+    if (s->cnt-- > 0) {
+	return *(s->ptr)++;
+    } else {
+	return prot_fill(s);
+    }
+}
+
+int prot_ungetc(int c, struct protstream *s)
+{
+    assert(!s->write);
+
+    s->cnt++;
+    *--(s->ptr) = c;
+
+    return c;
+}
+
+int prot_putc(int c, struct protstream *s)
+{
+    assert(s->write);
+    assert(s->cnt > 0);
+
+    *s->ptr++ = c;
+    if (--s->cnt == 0) {
+	return prot_flush(s);
+    } else {
+	return 0;
+    }
 }

@@ -1,5 +1,5 @@
 /* prot.h -- stdio-like module that handles IMAP protection mechanisms
- * $Id: prot.h,v 1.35.4.1 2002/07/30 16:20:00 rjs3 Exp $
+ * $Id: prot.h,v 1.35.4.2 2002/07/31 17:32:33 rjs3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -65,28 +65,40 @@ struct prot_waitevent;
 typedef void prot_readcallback_t(struct protstream *s, void *rock);
 
 struct protstream {
-    unsigned char *ptr;
-    int cnt;
+    /* The Buffer */
+    unsigned char *buf;
+    int buf_size;
+    unsigned char *ptr; /* The end of data in the buffer */
+    int cnt; /* Space Remaining in buffer */
+
+    /* File Descriptors */
     int fd;
-    int write;
     int logfd;
+    int big_buffer;
+
+    /* SASL / TLS */
     sasl_conn_t *conn;
     int saslssf;
     int maxplain;
-    char *error;
-    int eof;
-    int dontblock;
-    int read_timeout;
-    struct protstream *flushonread;
-    prot_readcallback_t *readcallback_proc;
-    void *readcallback_rock;
-    struct prot_waitevent *waitevent;
-    int buf_size;
-    unsigned char *buf;
 
 #ifdef HAVE_SSL
     SSL *tls_conn;
 #endif /* HAVE_SSL */
+
+    /* Status Flags */
+    int eof;
+    char *error;
+
+    /* Parameters */
+    int write;
+    int dontblock;
+    int read_timeout;
+    struct protstream *flushonread;
+
+    /* Events */
+    prot_readcallback_t *readcallback_proc;
+    void *readcallback_rock;
+    struct prot_waitevent *waitevent;
 
     /* For use by applications */
     void *userdata;
@@ -144,18 +156,33 @@ extern int prot_printf(struct protstream *, const char *, ...)
 extern int prot_read(struct protstream *s, char *buf, unsigned size);
 extern char *prot_fgets(char *buf, unsigned size, struct protstream *s);
 
+/* For large write operations that we don't want to block on network I/O for */
+int prot_bigbuffer_start(struct protstream *p, const char *path);
+int prot_bigbuffer_flush(struct protstream *p);
+
+/* select() for protstreams */
 extern int prot_select(struct protgroup *readstreams, int extra_read_fd,
 		       struct protgroup **out, int *extra_read_flag,
 		       struct timeval *timeout);
 
-
 /* Protgroup manipulations */
+/* Create a new protgroup of a certain size or as a copy of another
+ * protgroup */
 struct protgroup *protgroup_new(size_t size);
 struct protgroup *protgroup_copy(struct protgroup *src);
+
+/* Cleanup a protgroup but don't release the allocated memory (so it can
+ * be reused) */
 void protgroup_reset(struct protgroup *group);
+
+/* Release memory for a protgroup */
 void protgroup_free(struct protgroup *group);
 
+/* Insert an element into a protgroup */
 void protgroup_insert(struct protgroup *group, struct protstream *item);
+
+/* Returns the protstream at that position in the protgroup, or NULL if
+ * an invalid element is requested */
 struct protstream *protgroup_getelement(struct protgroup *group, int element);
 
 #endif /* INCLUDED_PROT_H */
