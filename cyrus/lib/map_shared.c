@@ -44,7 +44,14 @@ char *mboxname;
 
     if (*len) munmap(*base, *len);
     newlen = (newlen + 2*SLOP - 1) & ~(SLOP-1);
-    *base = (char *)mmap((caddr_t)0, newlen, PROT_READ, MAP_SHARED, fd, 0L);
+    *base = (char *)mmap((caddr_t)0, newlen, PROT_READ, MAP_SHARED
+#ifdef MAP_FILE
+| MAP_FILE
+#endif
+#ifdef MAP_VARIABLE
+| MAP_VARIABLE
+#endif
+			 , fd, 0L);
     if (*base == (char *)-1) {
 	char buf[80];
 	syslog(LOG_ERR, "IOERROR: mapping %s file for %s: %m", name, mboxname);
