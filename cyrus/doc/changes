@@ -2,6 +2,12 @@
 
 Changes to the Cyrus IMAP Server Since Version 1.5.14
 
+      * LIST now honors the reference argument. This behavior can be turned
+        off by a configuration option imapd.conf--which may be desirable
+        because of certain clients that ask for a "mail directory" setting
+        for IMAP which will now cause problems when it was ignored before. 
+      * The arbitron program now takes a mailbox pattern argument for the
+        mailbox to run on. The manpage always said it did anyway. 
       * Added --disable-server switch to optionally prevent compilation of
         server to help sites that just want client libraries (so cyradm and
         libcyrus can be compiled on remote systems without installing stuff
@@ -12,14 +18,15 @@ Changes to the Cyrus IMAP Server Since Version 1.5.14
         problems on complex searches. Thanks to Jeff Schiller for pointing
         this out. Fixed a potential leak in mboxlist.c that happened if a
         rename went awry. Thanks to Chris Newman for pointing this out. 
-      * Implemented the POP3 Extension Mechanism specified by the
-        Internet-Draft draft-gellens-pop3ext-09.txt. 
+      * Implemented the POP3 Extension Mechanism, RFC 2449, in order to
+        advertise the capabilities already supported. 
       * Fixed a bug in mailbox.c that disallowed MUTF-7 representations of
         ASCII characters when it shouldn't have. (Thanks to John Myers for
         providing a fix and to Per Steinar Iversen for telling me that I
         didn't do it before.) 
       * More cleanup the ptloader/auth_krb_pts code. If you use Kerberos
         and IMSP, you *MUST* pick up cyrus-imspd-v1.5a6 (or newer). 
+      * A few configure tweaks. 
       * Duplicate delivery changes: 
 
           * Split out duplicate delivery elimination to multiple files.
