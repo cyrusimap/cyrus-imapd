@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.13 2000/07/17 04:31:52 leg Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.14 2000/07/18 23:27:03 leg Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -105,7 +105,7 @@ static int dump_cb(void *rockp,
 
     /* \0 terminate 'acl' */
     p = acl + 1;
-    acl = xstrndup(p, datalen - (p - data) - 1);
+    acl = xstrndup(p, datalen - (p - data));
 
     switch (d->op) {
     case DUMP:
