@@ -1,7 +1,7 @@
-/* imtest.c -- IMAP/POP3/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
+/* imtest.c -- IMAP/POP3/NNTP/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.82.2.4 2002/09/25 21:00:14 ken3 Exp $
+ * $Id: imtest.c,v 1.82.2.5 2002/09/26 13:51:20 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -972,6 +972,8 @@ int auth_sasl(struct sasl_cmd_t *sasl_cmd, char *mechlist)
     
     imt_stat status = STAT_CONT;
     
+    if (!sasl_cmd || !sasl_cmd->cmd) return IMTEST_FAIL;
+    
     /* call sasl client start */
     while (saslresult==SASL_INTERACT) {
 	if (sasl_cmd->empty_init) {
@@ -1937,6 +1939,73 @@ static int pop3_do_auth(struct sasl_cmd_t *sasl_cmd, void *rock,
     return result;
 }
 
+/********************************** NNTP *************************************/
+
+static int auth_nntp(void)
+{
+    char str[1024];
+    /* we need username and password to do AUTHINFO USER/PASS */
+    char *username;
+    unsigned int userlen;
+    char *pass;
+    unsigned int passlen;
+    
+    interaction(SASL_CB_AUTHNAME, NULL, "Authname", &username, &userlen);
+    interaction(SASL_CB_PASS, NULL, "Please enter your password",
+		&pass, &passlen);
+    
+    printf("C: AUTHINFO USER %s\r\n", username);
+    prot_printf(pout,"AUTHINFO USER %s\r\n", username);
+    prot_flush(pout);
+    
+    if (prot_fgets(str, 1024, pin) == NULL) {
+	imtest_fatal("prot layer failure");
+    }
+    
+    printf("S: %s", str);
+    
+    if (strncmp(str, "381", 3)) return IMTEST_FAIL;
+    
+    printf("C: AUTHINFO PASS <omitted>\r\n");
+    prot_printf(pout,"AUTHINFO PASS %s\r\n",pass);
+    prot_flush(pout);
+    
+    if (prot_fgets(str, 1024, pin) == NULL) {
+	imtest_fatal("prot layer failure");
+    }
+    
+    printf("S: %s", str);
+    
+    if (!strncmp(str, "281", 3)) {
+	return IMTEST_OK;
+    } else {
+	return IMTEST_FAIL;
+    }
+}
+
+static int nntp_do_auth(struct sasl_cmd_t *sasl_cmd,
+			void *rock __attribute__((unused)),
+			char *mech, char *mechlist)
+{
+    int result = IMTEST_OK;
+
+    if (mech) {
+	if (!strcasecmp(mech, "user")) {
+	    result = auth_nntp();
+	} else {
+	    result = auth_sasl(sasl_cmd, mech);
+	}
+    } else {
+	if (mechlist) {
+	    result = auth_sasl(sasl_cmd, mechlist);
+	} else {
+	    result = auth_nntp();
+	}
+    }
+
+    return result;
+}
+
 /******************************** LMTP/SMTP **********************************/
 
 static int xmtp_do_auth(struct sasl_cmd_t *sasl_cmd,
@@ -2053,15 +2122,17 @@ void usage(char *prog, char *prot)
     printf("  -m mech  : SASL mechanism to use\n");
     if (!strcasecmp(prot, "imap"))
 	printf("             (\"login\" for IMAP LOGIN)\n");
-    if (!strcasecmp(prot, "pop3"))
+    else if (!strcasecmp(prot, "pop3"))
 	printf("             (\"user\" for USER/PASS, \"apop\" for APOP)\n");
+    else if (!strcasecmp(prot, "nntp"))
+	printf("             (\"user\" for AUTHINFO USER/PASS\n");
     printf("  -f file  : pipe file into connection after authentication\n");
     printf("  -r realm : realm\n");
 #ifdef HAVE_SSL
     if (!strcasecmp(prot, "imap") || !strcasecmp(prot, "pop3") ||
-	!strcasecmp(prot, "smtp"))
+	!strcasecmp(prot, "nntp") || !strcasecmp(prot, "smtp"))
 	printf("  -s       : Enable %s over SSL (%ss)\n", prot, prot);
-    if (strcasecmp(prot, "mupdate"))
+    if (strcasecmp(prot, "nntp") || strcasecmp(prot, "mupdate"))
 	printf("  -t file  : Enable TLS. file has the TLS public and private keys\n"
 	       "             (specify \"\" to not use TLS for authentication)\n");
 #endif /* HAVE_SSL */
@@ -2091,6 +2162,13 @@ static struct protocol_t protocols[] = {
       { "STLS", "+OK", "-ERR", 0 },
       { "AUTH", 0, "=", NULL, "+OK", "-ERR", "+ ", "*" },
       &pop3_do_auth, { "QUIT", "+OK" }, NULL, NULL, NULL
+    },
+    { "nntp", "nntps", "nntp",
+      { 0, "20", NULL },
+      { "LIST EXTENSIONS", ".", NULL, NULL, NULL },
+      { NULL },
+      { NULL },
+      &nntp_do_auth, { "QUIT", "205" }, NULL, NULL, NULL
     },
     { "lmtp", NULL, "lmtp",
       { 0, "220 ", NULL },
@@ -2268,6 +2346,8 @@ int main(int argc, char **argv)
 	    prot = "imap";
 	else if (!strcasecmp(prog, "pop3test"))
 	    prot = "pop3";
+	else if (!strcasecmp(prog, "nntptest"))
+	    prot = "nntp";
 	else if (!strcasecmp(prog, "lmtptest"))
 	    prot = "lmtp";
 	else if (!strcasecmp(prog, "smtptest"))
