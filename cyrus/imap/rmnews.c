@@ -64,7 +64,7 @@ char **argv;
     static struct uidlist uidlist;
     int c;
 
-    config_init("collectnews");
+    config_init("rmnews");
 
     newsprefix = config_getstring("newsprefix", 0);
     if (newsprefix) newsprefixlen = strlen(newsprefix);
