@@ -1,4 +1,4 @@
-/* map_mmap.c -- memory-mapping routines.
+/* map_nommap.c -- dummy memory-mapping routines.
  *
  * Copyright 1996, Carnegie Mellon University.  All Rights Reserved.
  * 
