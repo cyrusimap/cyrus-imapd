@@ -33,6 +33,8 @@ Upgrading From Previous Versions
         ACLs, IMSPd, and IMAPd on the same machine, make sure you have
         version 1.5a5 of the IMSP server for this version of the IMAP
         server. (If you don't have IMSP, or AFS, don't worry about it.) 
+      * If you are upgrading from 1.5.14 (or earlier) you should remove the
+        delivered-db database and mkdir /var/imap/deliverdb. 
 
     See the file doc/changes in the distribution for more information. 
 
