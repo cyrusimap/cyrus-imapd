@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/NNTP/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.100 2004/06/11 18:15:53 ken3 Exp $
+ * $Id: imtest.c,v 1.101 2004/06/17 16:15:29 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -1077,10 +1077,15 @@ int auth_sasl(struct sasl_cmd_t *sasl_cmd, char *mechlist)
 		prot_printf(pout, "{%d+}\r\n", inbase64len);
 		prot_flush(pout);
 	    }
-	    printf("%s", inbase64);
+	    printf("C: %s", inbase64);
 	    prot_write(pout, inbase64, inbase64len);
 
 	    out = NULL;
+	} else if(sendliteral) {
+	    /* If we had no response, we still need to send the
+	       empty literal in this case */
+	    printf("{0+}\r\nC: ");
+	    prot_printf(pout, "{0+}\r\n");
 	}
       noinitresp:
 	printf("\r\n");
