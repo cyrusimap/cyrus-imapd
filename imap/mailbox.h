@@ -24,6 +24,9 @@
 #include <sys/types.h>
 #include <limits.h>
 
+#if UINT_MAX == 4294967295
+typedef unsigned int bit32;
+#else
 #if ULONG_MAX == 4294967295
 typedef unsigned long bit32;
 #else
@@ -33,7 +36,7 @@ typedef unsigned short bit32;
 dont know what to use for bit32
 #endif
 #endif
-
+#endif
 
 #define MAX_MAILBOX_NAME 490
 #define MAX_MAILBOX_PATH 4096
