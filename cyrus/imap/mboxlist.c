@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.137 2000/09/28 19:07:24 leg Exp $
+ * $Id: mboxlist.c,v 1.138 2000/10/12 19:02:29 leg Exp $
  */
 
 #include <config.h>
@@ -401,7 +401,7 @@ mboxlist_mycreatemailboxcheck(char *name, int mbtype, char *partition,
 	acl[parentacllen] = '\0';
 
 	/* Canonicalize case of parent prefix */
-	strncpy(name, parent, strlen(parent));
+	strlcpy(name, parent, strlen(parent));
     } else { /* parentlen == 0, no parent mailbox */
 	if (!isadmin) {
 	    return IMAP_PERMISSION_DENIED;
@@ -1518,7 +1518,6 @@ int mboxlist_setquota(const char *root, int newquota)
     char quota_path[MAX_MAILBOX_PATH];
     char pattern[MAX_MAILBOX_PATH];
     struct quota quota;
-    static struct quota zeroquota;
     int r;
     unsigned long len = 0;
 
@@ -1527,7 +1526,7 @@ int mboxlist_setquota(const char *root, int newquota)
 	return IMAP_MAILBOX_BADNAME;
     }
     
-    quota = zeroquota;
+    memset(&quota, 0, sizeof(struct quota));
 
     quota.root = (char *) root;
     mailbox_hash_quota(quota_path, root);
@@ -1548,10 +1547,10 @@ int mboxlist_setquota(const char *root, int newquota)
     /*
      * Have to create a new quota root
      */
-
-    {
-	/* look for a mailbox in the proposed quotaroot */
-
+    /* look for a top-level mailbox in the proposed quotaroot */
+    r = mboxlist_lookup(quota.root, NULL, NULL, NULL);
+    if (r) {
+	return r;
     }
 
     /* perhaps create .NEW, lock, check if it got recreated, move in place */
@@ -1568,9 +1567,9 @@ int mboxlist_setquota(const char *root, int newquota)
     strcat(pattern, ".*");
     mboxlist_newquota = &quota;
     
-    if (len) {
-	mboxlist_changequota(quota.root, 0, 0);
-    }
+    /* top level mailbox */
+    mboxlist_changequota(quota.root, 0, 0);
+    /* submailboxes */
     mboxlist_findall(pattern, 1, 0, 0, mboxlist_changequota, NULL);
     
     r = mailbox_write_quota(&quota);
