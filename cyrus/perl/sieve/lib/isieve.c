@@ -321,7 +321,8 @@ static int getauthline(isieve_t *obj, char **line, unsigned int *linelen,
 }
 
 
-int auth_sasl(char *mechlist, isieve_t *obj, char **errstr)
+int auth_sasl(char *mechlist, isieve_t *obj, const char **mechusing,
+	      char **errstr)
 {
   sasl_interact_t *client_interact=NULL;
   int saslresult=SASL_INTERACT;
@@ -329,11 +330,12 @@ int auth_sasl(char *mechlist, isieve_t *obj, char **errstr)
   unsigned int outlen;
   char *in;
   unsigned int inlen;
-  const char *mechusing;
   char inbase64[2048];
   unsigned int inbase64len;
 
   imt_stat status = STAT_CONT;
+
+  if(!mechlist || !obj || !mechusing) return -1;
 
   /* call sasl client start */
   while (saslresult==SASL_INTERACT)
@@ -341,17 +343,16 @@ int auth_sasl(char *mechlist, isieve_t *obj, char **errstr)
     saslresult=sasl_client_start(obj->conn, mechlist,
 				 &client_interact,
 				 &out, &outlen,
-				 &mechusing);
+				 mechusing);
     if (saslresult==SASL_INTERACT)
       fillin_interactions(client_interact); /* fill in prompts */      
-
   }
 
   if ((saslresult!=SASL_OK) && (saslresult!=SASL_CONTINUE)) return saslresult;
 
   if (out!=NULL)
   {
-    prot_printf(obj->pout,"AUTHENTICATE \"%s\" ",mechusing);
+    prot_printf(obj->pout,"AUTHENTICATE \"%s\" ",*mechusing);
 
     sasl_encode64(out, outlen,
 		  inbase64, sizeof(inbase64), &inbase64len);
@@ -360,12 +361,14 @@ int auth_sasl(char *mechlist, isieve_t *obj, char **errstr)
     prot_write(obj->pout,inbase64,inbase64len);
     prot_printf(obj->pout,"\r\n");
   } else {
-    prot_printf(obj->pout,"AUTHENTICATE \"%s\"\r\n",mechusing);
+    prot_printf(obj->pout,"AUTHENTICATE \"%s\"\r\n",*mechusing);
   }
   prot_flush(obj->pout);
 
   inlen = 0;
-  status = getauthline(obj,&in,&inlen, errstr);
+
+  /* get reply */
+  status=getauthline(obj,&in,&inlen, errstr);
 
   while (status==STAT_CONT)
   {
@@ -385,7 +388,17 @@ int auth_sasl(char *mechlist, isieve_t *obj, char **errstr)
     /* check if sasl suceeded */
     if (saslresult<SASL_OK)
     {
-	*errstr = strdup(sasl_errstring(saslresult,NULL,NULL));
+	/* send cancel notice */
+	prot_printf(obj->pout, "*\r\n");
+	prot_flush(obj->pout);
+
+	/* eat the auth line that confirms that we canceled */
+	if(getauthline(obj,&in,&inlen,errstr) != STAT_NO) {
+	    *errstr = strdup("protocol error");
+	} else {
+	    *errstr = strdup(sasl_errstring(saslresult,NULL,NULL));
+	}
+	
 	return saslresult;
     }
 
@@ -434,7 +447,8 @@ int do_referral(isieve_t *obj, char *refer_to)
     char *mechlist;
     int port;
     char *errstr;
-    
+    const char *mtried;
+        
     /* xxx we're not supporting port numbers here */
 
     serv = getservbyname("sieve", "tcp");
@@ -454,7 +468,7 @@ int do_referral(isieve_t *obj, char *refer_to)
     /* Authenticate */
     mechlist = read_capability(obj_new);
 
-    ret = auth_sasl(mechlist, obj_new, &errstr);
+    ret = auth_sasl(mechlist, obj_new, &mtried, &errstr);
     if(ret) return STAT_NO;
 
     /* free old isieve_t */

@@ -219,11 +219,12 @@ sieve_get_handle(servername, username_cb, authname_cb, password_cb, realm_cb)
   PREINIT:
   Sieveobj ret = NULL;
   sasl_callback_t *callbacks;
-  int sock;
+  int sock,port;
   sasl_conn_t *saslconn;
-  int port;
+  int r;
   struct servent *serv;
-  char *mechlist=NULL;
+  char *mechlist=NULL,*mlist=NULL;
+  const char *mtried;
   isieve_t *obj;
 
   CODE:
@@ -271,7 +272,38 @@ sieve_get_handle(servername, username_cb, authname_cb, password_cb, realm_cb)
   
   mechlist=read_capability(obj);
 
-  if (auth_sasl(mechlist, obj, &globalerr)) {
+  mlist = xstrdup(mechlist);
+  if(!mlist) XSRETURN_UNDEF;
+
+  /* loop through all the mechanisms */
+  do {
+    mtried = NULL;
+    r = auth_sasl(mlist, obj, &mtried, &globalerr);
+
+    if(mtried) {
+	char *newlist = xmalloc(strlen(mlist)+1);
+	char *mtr = xstrdup(mtried);
+	char *tmp;
+
+	ucase(mtr);
+	tmp = strstr(mlist,mtr);
+	*tmp ='\0';
+	strcpy(newlist, mlist);
+	tmp++;
+
+	tmp = strchr(tmp,' ');
+        if (tmp) {
+	    strcat(newlist,tmp);
+	}
+
+	free(mtr);
+	free(mlist);
+	mlist = newlist;
+    }
+  } while (r && mtried);
+
+  if(r) {
+	/* we failed */
 	free(ret->class);
 	free(ret);
 	XSRETURN_UNDEF;
