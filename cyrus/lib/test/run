@@ -44,20 +44,23 @@ sub runone {
     chdir "..";
 }
 
-runone("cyrusdb", undef, "-DBACKEND=cyrusdb_flat");
-runone("cyrusdb", undef, "-DBACKEND=cyrusdb_skiplist", "cyrusdb_skiplist");
+runone("cyrusdb", undef, "-DBACKEND=cyrusdb_flat -ldb");
+runone("cyrusdb", undef, "-DBACKEND=cyrusdb_skiplist -ldb", "cyrusdb_skiplist");
 runone("cyrusdb", undef, "-DBACKEND=cyrusdb_db3 -ldb", "cyrusdb_db3");
 
-runone("cyrusdb", undef, "-DBACKEND=cyrusdb_flat", 
+runone("cyrusdb", undef, "-DBACKEND=cyrusdb_flat -ldb", 
        "cyrusdbtxn_flat", "cyrusdbtxn");
-runone("cyrusdb", undef, "-DBACKEND=cyrusdb_skiplist", 
+runone("cyrusdb", undef, "-DBACKEND=cyrusdb_skiplist -ldb", 
        "cyrusdbtxn_skiplist", "cyrusdbtxn");
 runone("cyrusdb", undef, "-DBACKEND=cyrusdb_db3 -ldb", 
        "cyrusdbtxn_db3", "cyrusdbtxn");
 
-runone("cyrusdb", undef, "-DBACKEND=cyrusdb_flat", 
+runone("cyrusdb", undef, "-DBACKEND=cyrusdb_flat -ldb", 
        "cyrusdblong_flat", "cyrusdblong");
-runone("cyrusdb", undef, "-DBACKEND=cyrusdb_skiplist", 
+runone("cyrusdb", undef, "-DBACKEND=cyrusdb_skiplist -ldb", 
        "cyrusdblong_skiplist", "cyrusdblong");
 runone("cyrusdb", undef, "-DBACKEND=cyrusdb_db3 -ldb", 
        "cyrusdblong_db3", "cyrusdblong");
+
+runone("rnddb", undef, "-DBACKEND=cyrusdb_skiplist -ldb",
+       "rndskip", "rnddb");

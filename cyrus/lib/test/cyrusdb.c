@@ -115,6 +115,13 @@ int main(int argc, char *argv[])
 	    } else {
 		printf("no\n");
 	    }
+	} else if (!strncasecmp(buf, "check", 4)) {
+	    if (DB->consistent) {
+		TRY(DB->consistent(db));
+		printf("ok\n");
+	    } else {
+		printf("no\n");
+	    }
 	} else if (!strncasecmp(buf, "txn", 3)) {
 	    if (txnp) {
 		printf("no\n");
