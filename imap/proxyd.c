@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.41 2000/09/30 01:16:50 leg Exp $ */
+/* $Id: proxyd.c,v 1.42 2000/09/30 01:17:54 leg Exp $ */
 
 #include <config.h>
 
@@ -260,7 +260,7 @@ static int pipe_until_tag(struct backend *s, char *tag)
 	    return NOCONNECTION;
 	}
 	if (!cont && buf[taglen] == ' ' && !strncmp(tag, buf, taglen)) {
-	    strncpy(s->last_result, buf + taglen + 1, LAST_RESULT_LEN);
+	    strlcpy(s->last_result, buf + taglen + 1, LAST_RESULT_LEN);
 	    /* guarantee that 's->last_result' has \r\n\0 at the end */
 	    s->last_result[LAST_RESULT_LEN - 3] = '\r';
 	    s->last_result[LAST_RESULT_LEN - 2] = '\n';
@@ -1957,7 +1957,7 @@ void cmd_login(char *tag, char *user, char *passwd)
     val = config_getstring("admins", "");
     while (*val) {
 	for (p = (char *)val; *p && !isspace((int) *p); p++);
-	strncpy(buf, val, p - val);
+	strlcpy(buf, val, p - val);
 	buf[p-val] = 0;
 	if (auth_memberof(proxyd_authstate, buf)) {
 	    proxyd_userisadmin = 1;
