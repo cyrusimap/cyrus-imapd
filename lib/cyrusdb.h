@@ -145,6 +145,8 @@ struct cyrusdb_backend {
     
     int (*commit)(struct db *db, struct txn *tid);
     int (*abort)(struct db *db, struct txn *tid);
+
+    int (*dump)(struct db *db, int detail);
 };
 
 extern struct cyrusdb_backend cyrusdb_db3;
