@@ -59,7 +59,7 @@ static struct charset charset_table[] = {
 
 #define NUM_CHARSETS (sizeof(charset_table)/sizeof(*charset_table))
 
-#define GROWSIZE 10 /* 100 */
+#define GROWSIZE 100
 
 static char index_hex[128] = {
     -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
