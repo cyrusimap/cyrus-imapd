@@ -667,7 +667,7 @@ PPCODE:
 	out_buf = safemalloc(4*len);
 
 	out_buf[0] = '\0';
-	imapurl_toURL(out_buf, server, box);
+	imapurl_toURL(out_buf, server, box, NULL);
 
 	if(!out_buf[0]) {
 		safefree(out_buf);

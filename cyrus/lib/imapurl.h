@@ -53,7 +53,10 @@ void imapurl_fromURL(char *server, char *mailbox, const char *src);
  *    Hex encoding can triple the size of the input
  *    UTF-7 can be slightly denser than UTF-8
  *     (worst case: 8 octets UTF-7 becomes 9 octets UTF-8)
+ *
+ *  it is valid for mechname to be NULL (implies anonymous mech)
  */
-void imapurl_toURL(char *dst, const char *server, const char *mailbox);
+void imapurl_toURL(char *dst, const char *server, const char *mailbox,
+		   const char *mechname);
 
 #endif

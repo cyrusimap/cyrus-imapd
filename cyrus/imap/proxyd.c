@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.85 2002/01/31 17:46:49 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.86 2002/02/01 19:43:37 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -919,7 +919,12 @@ static void proxyd_refer(char *tag, char *server, char *mailbox)
 {
     char url[MAX_MAILBOX_PATH];
 
-    imapurl_toURL(url, server, mailbox);
+    if(!strcmp(proxyd_userid, "anonymous")) {
+	imapurl_toURL(url, server, mailbox, "ANONYMOUS");
+    } else {
+	imapurl_toURL(url, server, mailbox, "*");
+    }
+    
     prot_printf(proxyd_out, "%s NO [REFERRAL %s] Remote mailbox.\r\n", 
 		tag, url);
 }
@@ -4138,6 +4143,8 @@ void cmd_status(char *tag, char *name)
     if (!r) r = mlookup(mailboxname, &server, NULL, NULL);
     if (!r && supports_referrals) { 
 	proxyd_refer(tag, server, mailboxname);
+	/* Eat the argument */
+	eatline(proxyd_in, prot_getc(proxyd_in));
 	return;
     }
 

@@ -39,7 +39,7 @@
  *
  * derived from chris newman's code */
 
-/* $Id: imapurl.c,v 1.6 2000/12/26 21:35:42 leg Exp $ */
+/* $Id: imapurl.c,v 1.7 2002/02/01 19:43:36 rjs3 Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -297,7 +297,7 @@ void imapurl_fromURL(char *server, char *mailbox, const char *src)
 	at = strchr(src, '@');
 	
 	if (at) {
-	    /* we discard the username for now */
+	    /* xxx we discard the username for now */
 	    src = at + 1; 
 	}
 	*se = '\0';
@@ -310,8 +310,10 @@ void imapurl_fromURL(char *server, char *mailbox, const char *src)
     }
 }
 
-void imapurl_toURL(char *dst, const char *server, const char *mailbox)
+void imapurl_toURL(char *dst, const char *server, const char *mailbox,
+		   const char *mechname)
 {
-    sprintf(dst, "imap://%s/", server);
+    if(mechname) sprintf(dst, "imap://;AUTH=%s@%s/",mechname,server);
+    else sprintf(dst, "imap://%s/", server);
     MailboxToURL(dst + strlen(dst), mailbox);
 }
