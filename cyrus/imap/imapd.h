@@ -14,6 +14,8 @@ extern struct mailbox *imapd_mailbox;
 /* Number of messages in currently open mailbox */
 extern int imapd_exists;
 
+/* Name of client host */
+extern char imapd_clienthost[];
 
 /* List of strings, for fetch and search argument blocks */
 struct strlist {
