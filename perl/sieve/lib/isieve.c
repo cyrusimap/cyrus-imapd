@@ -435,7 +435,7 @@ int do_referral(isieve_t *obj, char *refer_to)
     int port;
     char *errstr;
     
-    /* xxx we're not supporting port numbers here here */
+    /* xxx we're not supporting port numbers here */
 
     serv = getservbyname("sieve", "tcp");
     if (serv == NULL) {
