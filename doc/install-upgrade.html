@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.2 2000/05/16 14:47:20 wcw Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.3 2000/05/18 21:29:26 wcw Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -10,16 +10,27 @@
 <body>
 
 <h3>Upgrading from 1.6.22</h3>
+
 <ul>
-<li>Convert mailboxes file to Berkeley DB.
+<li>Convert mailboxes file to Berkeley DB. This will be done
+automatically. Please be sure to have a backup of your mailboxes file
+as we do not have an uncovert option.
 
-<li>cyrus.seen conversion
+<li>cyrus.seen conversion. The cyrus.seen file will be automatically
+	  upgraded <b>when?</b>.
 
-<li>Netnews conversion
+<li>Netnews conversion. The netnews programs are no longer built. If
+you are using netnews, you will need to apply the diff in the
+<tt>netnews/</tt> directory to INN or see if INN is now distributing
+those changes.  You will also want to run <tt>remotepurge</tt> on a
+regular basis to purge old netnews posts.
 
-<li>remove inetd.conf entries
+<li>remove inetd.conf entries. The <tt>imap</tt> and <tt>popd3d</tt>
+lines need to be removed from inetd.conf and inetd.conf needs to be
+restarted.
 
-<li>sendmail configuration
+<li>sendmail configuration. You need to use a new cyrus mc file. See
+<tt>doc/cyrusv2.mc</tt> for a sample mc file. 
 
 </ul>
 
@@ -87,7 +98,7 @@ worry about it.)
 </ul>
 
 <P><HR><P>
-last modified: $Date: 2000/05/16 14:47:20 $
+last modified: $Date: 2000/05/18 21:29:26 $
 </BODY></HTML>
 
 
