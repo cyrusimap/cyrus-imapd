@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.53 2000/05/29 02:56:19 leg Exp $
+ * $Id: imtest.c,v 1.54 2000/06/06 21:18:37 leg Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -150,8 +150,8 @@ static char fingerprint[EVP_MAX_MD_SIZE * 3];
 char   *tls_peer_CN = NULL;
 char   *tls_issuer_CN = NULL;
 
-char   *tls_protocol = NULL;
-const char   *tls_cipher_name = NULL;
+const char *tls_protocol = NULL;
+const char *tls_cipher_name = NULL;
 int	tls_cipher_usebits = 0;
 int	tls_cipher_algbits = 0;
 
