@@ -1,5 +1,5 @@
 /* nonblock_fcntl.c -- Set nonblocking mode using fcntl()
- $Id: nonblock_fcntl.c,v 1.11 2000/05/23 20:56:18 robeson Exp $
+ $Id: nonblock_fcntl.c,v 1.12 2002/07/09 18:50:22 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -59,6 +59,8 @@
 #else
 #define NON_BLOCKING_MODE FNDELAY
 #endif
+
+const char *nonblock_method_desc = "fcntl";
 
 /*
  * Modifies the non-blocking mode on the file descriptor 'fd'.  If

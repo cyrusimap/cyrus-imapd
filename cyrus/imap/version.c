@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: version.c,v 1.8 2002/07/09 18:41:15 ken3 Exp $
+ * $Id: version.c,v 1.9 2002/07/09 18:50:24 ken3 Exp $
  */
 
 #include <config.h>
@@ -59,6 +59,7 @@
 #include "cyrusdb.h"
 #include "map.h"
 #include "lock.h"
+#include "nonblock.h"
 #include "idle.h"
 #include "sieve_interface.h"
 
@@ -143,6 +144,8 @@ void id_response(struct protstream *pout)
 	     "; mmap = %s", map_method_desc);
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
 	     "; lock = %s", lock_method_desc);
+    snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
+	     "; nonblock = %s", nonblock_method_desc);
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
 	     "; auth = %s", auth_method_desc);
 #ifdef HAVE_KRB
