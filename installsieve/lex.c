@@ -1,6 +1,6 @@
 /* lex.c -- lexers for command line script installer
  * Tim Martin
- * $Id: lex.c,v 1.3 1999/09/30 07:35:33 leg Exp $
+ * $Id: lex.c,v 1.4 1999/09/30 21:36:30 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -119,8 +119,6 @@ int yylex(lexstate_t * lvalp, void * client)
 	return STRING;
       }
       if (ch == '\0'
-	  || ch == '\r'
-	  || ch == '\n'
 	  || 0x7F < ((unsigned char)ch))
 	ERR_PUSHBACK();
       /* Otherwise, we're appending a character */
