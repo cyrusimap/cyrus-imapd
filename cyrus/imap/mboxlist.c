@@ -795,7 +795,7 @@ char *userid;
     long access;
     int isusermbox = 0;
     char inboxname[MAX_NAME_LEN+1];
-    struct mailbox *mailbox;
+    struct mailbox mailbox;
     unsigned long offset, len;
     char *oldacl, *acl, *newacl;
     unsigned long oldacllen;
@@ -834,7 +834,7 @@ char *userid;
 
     /* Open & lock  mailbox header */
     if (!r) {
-	r = maibox_open_header(name, &mailbox);
+	r = mailbox_open_header(name, &mailbox);
     }
     if (r) {
 	mboxlist_unlock();
