@@ -2179,13 +2179,13 @@ int maycreate;
 void
 mboxlist_close()
 {
-    if (*list_base && list_size) {
-	map_free(&list_base, &list_size);
-    }
-    if (listfd != -1) {
-	close(listfd);
-	listfd = -1;
-    }
+  if (list_size && list_base && *list_base) {
+    map_free(&list_base, &list_size);
+  }
+  if (listfd != -1) {
+    close(listfd);
+    listfd = -1;
+  }
 }
 
 /* Safe rename, for file being renamed to a file that might get locked
