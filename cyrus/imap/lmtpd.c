@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: lmtpd.c,v 1.16 2000/02/24 23:31:52 tmartin Exp $
+ * $Id: lmtpd.c,v 1.17 2000/02/25 06:16:08 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.16 2000/02/24 23:31:52 tmartin Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.17 2000/02/25 06:16:08 leg Exp $";*/
 
 #include <config.h>
 
@@ -1287,12 +1287,16 @@ usage()
 
 static char *parseautheq(char *s)
 {
-    char *ret = (char *) xmalloc(strlen(s)+1);    
-    char *str = ret;
-    int first = 1;
+    char *ret;
+    char *str;
 
+    if (!strcmp(s, "<>")) return NULL;
+
+    ret = (char *) xmalloc(strlen(s)+1);
     ret[0]='\0';
+    str = ret;
 
+    if (*s == '<') s++; 	/* we'll be liberal and accept "<foo>" */
     while (1)
     {
 	/* hexchar */
@@ -1322,15 +1326,8 @@ static char *parseautheq(char *s)
 
 	} else if ((*s >= '!') && (*s <='~') && (*s!='+') && (*s!='=')) {
 	    /* ascii char */
-	    if ( (*s == '<') && (first==1))
-	    {
-		/* ignore this character */
-	    } else {
-		*str = *s;
-		str++;
-	    }
-	    first = 0;
-
+	    *str = *s;
+	    str++;
 	} else {
 	    /* bad char */
 	    free(ret);
@@ -1649,7 +1646,7 @@ void lmtpmode(deliver_opts_t *delopts)
 	extprops->auth_id = "postman";
 	sasl_setprop(conn, SASL_SSF_EXTERNAL, extprops);
 	authenticated = 1;	/* we'll allow commands, 
-				   but we still accept AUTH */
+				   but we still accept the AUTH command */
 
 	syslog(LOG_DEBUG, "lmtp connection preauth'd as postman");
     }
@@ -1853,6 +1850,7 @@ void lmtpmode(deliver_opts_t *delopts)
 		}
 		tmp = buf+10+strlen(msg->return_path);
 
+		/* is any other whitespace allow seperating? */
 		if (*tmp == ' ') {
 		    tmp++;
 		    if (strncasecmp(tmp, "auth=", 5) != 0) {
@@ -1863,14 +1861,13 @@ void lmtpmode(deliver_opts_t *delopts)
 		    tmp += 5;
 		    delopts->authuser = parseautheq(tmp);
 
-		    if ((delopts->authuser == NULL) || !(delopts->authstate = auth_newstate(tmp, NULL))) {
+		    if ((delopts->authuser == NULL) || 
+			!(delopts->authstate = auth_newstate(tmp, NULL))) {
 			/* do we want to bounce mail because of this? */
 			/* i guess not. accept with no auth user */
 			prot_printf(deliver_out, "250 2.1.0 ok\r\n");
 			continue;			
 		    }
-
-
 		} else if (*tmp != '\0') {
 		    prot_printf(deliver_out, 
 				"501 5.5.4 Syntax error in parameters\r\n");  
