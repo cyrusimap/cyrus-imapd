@@ -1,0 +1,17 @@
+file cyrusdb.TEST
+put foo aaaaaa
+get foo
+put foo bbb
+get foo
+put bar 1234
+put baz 2345
+put duck quack
+put cow moo
+put xan scratch
+put zebra neigh
+get xan
+get zebra
+get zebra
+get baz
+get duck
+close
