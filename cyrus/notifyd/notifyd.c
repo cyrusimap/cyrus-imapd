@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notifyd.c,v 1.10.2.6 2003/02/13 20:33:23 rjs3 Exp $
+ * $Id: notifyd.c,v 1.10.2.7 2003/05/29 14:50:51 ken3 Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -243,6 +243,7 @@ int service_init(int argc, char **argv, char **envp)
     return 0;
 }
 
+/* Called by service API to shut down the service */
 void service_abort(int error)
 {
     shut_down(error);

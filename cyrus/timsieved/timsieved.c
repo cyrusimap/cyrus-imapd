@@ -1,7 +1,7 @@
 /* timsieved.c -- main file for timsieved (sieve script accepting program)
  * Tim Martin
  * 9/21/99
- * $Id: timsieved.c,v 1.40.4.12 2003/02/13 20:33:36 rjs3 Exp $
+ * $Id: timsieved.c,v 1.40.4.13 2003/05/29 14:50:53 ken3 Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -202,6 +202,7 @@ int service_init(int argc, char **argv, char **envp)
     return 0;
 }
 
+/* Called by service API to shut down the service */
 void service_abort(int error)
 {
     shut_down(error);

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.61 2003/05/28 19:21:05 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.62 2003/05/29 14:50:49 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1330,7 +1330,7 @@ int service_main(int argc __attribute__((unused)),
     return 0;
 }
 
-/* called if 'service_init()' was called but not 'service_main()' */
+/* Called by service API to shut down the service */
 void service_abort(int error)
 {
     shut_down(error);

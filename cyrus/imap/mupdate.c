@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.60.4.32 2003/04/22 15:55:14 ken3 Exp $
+ * $Id: mupdate.c,v 1.60.4.33 2003/05/29 14:50:47 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -502,7 +502,7 @@ int service_init(int argc, char **argv,
     return 0;
 }
 
-/* called if 'service_init()' was called but not 'service_main()' */
+/* Called by service API to shut down the service */
 void service_abort(int error)
 {
     shut_down(error);

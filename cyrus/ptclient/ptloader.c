@@ -42,7 +42,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ptloader.c,v 1.25.4.10 2003/02/27 18:13:49 rjs3 Exp $";
+      "$Id: ptloader.c,v 1.25.4.11 2003/05/29 14:50:52 ken3 Exp $";
 
 #include <config.h>
 
@@ -100,7 +100,7 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     signal(SIGPIPE, SIG_IGN);
 
     syslog(LOG_NOTICE,
-	   "starting: $Id: ptloader.c,v 1.25.4.10 2003/02/27 18:13:49 rjs3 Exp $ (%s)",
+	   "starting: $Id: ptloader.c,v 1.25.4.11 2003/05/29 14:50:52 ken3 Exp $ (%s)",
 	   ptsmodule_name);
 
     while ((opt = getopt(argc, argv, "d:")) != EOF) {
@@ -132,7 +132,7 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     return 0;
 }
 
-/* called if 'service_init()' was called but not 'service_main()' */
+/* Called by service API to shut down the service */
 void service_abort(int error)
 {
     int r;

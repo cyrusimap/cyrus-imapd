@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122.4.31 2003/05/20 15:45:50 rjs3 Exp $
+ * $Id: pop3d.c,v 1.122.4.32 2003/05/29 14:50:49 ken3 Exp $
  */
 #include <config.h>
 
@@ -425,7 +425,7 @@ int service_main(int argc __attribute__((unused)),
     return 0;
 }
 
-/* called if 'service_init()' was called but not 'service_main()' */
+/* Called by service API to shut down the service */
 void service_abort(int error)
 {
     shut_down(error);

@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.32.4.16 2003/02/27 18:10:34 rjs3 Exp $ */
+/* $Id: fud.c,v 1.32.4.17 2003/05/29 14:50:45 ken3 Exp $ */
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -180,6 +180,7 @@ int service_init(int argc, char **argv, char **envp)
     return 0;
 }
 
+/* Called by service API to shut down the service */
 void service_abort(int error)
 {
     shut_down(error);

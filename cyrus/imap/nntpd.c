@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.83 2003/05/16 14:29:14 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.84 2003/05/29 14:50:48 ken3 Exp $
  */
 
 /*
@@ -697,7 +697,7 @@ int service_main(int argc, char **argv, char **envp)
     return 0;
 }
 
-/* called if 'service_init()' was called but not 'service_main()' */
+/* Called by service API to shut down the service */
 void service_abort(int error)
 {
     shut_down(error);

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.79 2003/05/27 00:36:47 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.80 2003/05/29 14:50:45 ken3 Exp $ */
 
 #include <config.h>
 
@@ -581,7 +581,7 @@ int service_main(int argc __attribute__((unused)),
     return 0;
 }
 
-/* called if 'service_init()' was called but not 'service_main()' */
+/* Called by service API to shut down the service */
 void service_abort(int error)
 {
     shut_down(error);
