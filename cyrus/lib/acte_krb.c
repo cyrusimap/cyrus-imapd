@@ -557,7 +557,7 @@ int *outputlen;
     MSG_DAT m_data;
 
     code = krb_rd_safe(input, inputlen, kstate->session,
-		       kstate->remoteaddr, kstate->localaddr, &m_data);
+		       &kstate->remoteaddr, &kstate->localaddr, &m_data);
     if (code) return code;
     if (m_data.time_sec < kstate->prot_time_sec ||
 	(m_data.time_sec == kstate->prot_time_sec &&
@@ -610,7 +610,7 @@ int *outputlen;
     MSG_DAT m_data;
 
     code = krb_rd_priv(input, inputlen, kstate->schedule, kstate->session,
-		       kstate->remoteaddr, kstate->localaddr, &m_data);
+		       &kstate->remoteaddr, &kstate->localaddr, &m_data);
     if (code) return code;
     if (m_data.time_sec < kstate->prot_time_sec ||
 	(m_data.time_sec == kstate->prot_time_sec &&
