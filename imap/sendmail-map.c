@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sendmail-map.c,v 1.5 2003/02/13 20:15:30 rjs3 Exp $
+ * $Id: sendmail-map.c,v 1.6 2003/04/01 19:13:54 rjs3 Exp $
  */
 
 #include <config.h>
@@ -236,7 +236,7 @@ void myacap_removefrom(acap_entry_t *entry,
 		       void *rock)
 {
     char *ename = acap_entry_getname(entry);
-    char mailbox[MAX_MAILBOX_NAME];
+    char mailbox[MAX_MAILBOX_NAME+1];
     int r;
 
     if (!ename || !ename[0]) return; /* null entry */
