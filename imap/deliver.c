@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.98 1999/08/12 19:27:36 leg Exp $
+ * $Id: deliver.c,v 1.99 1999/08/13 21:19:09 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.98 1999/08/12 19:27:36 leg Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.99 1999/08/13 21:19:09 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -541,7 +541,6 @@ static void fill_cache(FILE *fin, FILE *fout, int lmtpmode, message_data_t *m)
 	/* found where to put it, so insert it into a list */
 	if (m->cache[cl]) {
 	    /* add this body on */
-
 	    m->cache[cl]->contents[m->cache[cl]->ncontents++] = body;
 
 	    /* whoops, won't have room for the null at the end! */
@@ -550,20 +549,14 @@ static void fill_cache(FILE *fin, FILE *fout, int lmtpmode, message_data_t *m)
 		m->cache[cl] = (header_t *)
 		    xrealloc(m->cache[cl],sizeof(header_t) +
 			     (8 + m->cache[cl]->ncontents * sizeof(char *)));
-		if (m->cache[cl] == NULL) {
-		    fprintf(stderr, "realloc() returned NULL\n");
-		    exit(1);
-		}
 	    }
 
+	    /* have no need of this */
+	    free(name);
 	} else {
 	    /* create a new entry in the hash table */
-	    m->cache[cl] = (header_t *) malloc(sizeof(header_t) + 
-					       8 * sizeof(char*));
-	    if (m->cache[cl] == NULL) {
-		fprintf(stderr, "malloc() returned NULL\n");
-		exit(1);
-	    }
+	    m->cache[cl] = (header_t *) xmalloc(sizeof(header_t) + 
+						8 * sizeof(char*));
 	    m->cache[cl]->name = name;
 	    m->cache[cl]->contents[0] = body;
 	    m->cache[cl]->ncontents = 1;
@@ -666,7 +659,7 @@ int open_sendmail(char *argv[], FILE **sm)
 
 	/* if we're here we suck */
 	printf("451 deliver: didn't exec?!?\r\n");
-	exit(1);
+	fatal("couldn't exec", EC_TEMPFAIL);
     }
     /* i'm the parent */
     close(fds[0]);
@@ -1276,7 +1269,16 @@ void msg_free(message_data_t *m)
 
 #ifdef USE_SIEVE
     for (i = 0; i < HEADERCACHESIZE; i++)
-	if (m->cache[i]) free(m->cache[i]);
+	if (m->cache[i]) {
+	    int j;
+
+	    free(m->cache[i]->name);
+	    for (j = 0; j < m->cache[i]->ncontents; j++) {
+		free(m->cache[i]->contents[j]);
+	    }
+
+	    free(m->cache[i]);
+	}
 #endif
 }
 
@@ -1299,7 +1301,7 @@ deliver_opts_t *delopts;
     r = msg_new(&msg);
     if (r) {
 	/* damn */
-	exit(1);
+	fatal("out of memory", EC_TEMPFAIL);
     }
     
     printf("220 %s LMTP ready\r\n", myhostname);
@@ -1416,7 +1418,9 @@ deliver_opts_t *delopts;
 
 	      rset:
 		msg_free(msg);
-		msg_new(&msg);
+		if (msg_new(&msg)) {
+		    fatal("out of memory", EC_TEMPFAIL);
+		}
 		continue;
 	    }
 	    goto syntaxerr;
@@ -2220,11 +2224,6 @@ int idlen, tolen;
       syslog(LOG_ERR, "checkdelivered: error looking up %s/%d: %m", id, to);
     }
 
-    if (DeliveredDBptr->close(DeliveredDBptr) < 0) {
-      syslog(LOG_ERR, "checkdelivered: error closing db: %m");
-    }
-    close(lockfd);
-
     if (logdebug) 
       syslog(LOG_DEBUG, "checkdelivered: checking %s %s - result = %d", id, to, i);
     
@@ -2234,6 +2233,11 @@ int idlen, tolen;
     } else {
 	mark = 0;
     }
+
+    if (DeliveredDBptr->close(DeliveredDBptr) < 0) {
+      syslog(LOG_ERR, "checkdelivered: error closing db: %m");
+    }
+    close(lockfd);
 
     return mark;
 #else /* HAVE_LIBDB */
@@ -2287,10 +2291,11 @@ int idlen, tolen;
     }
     close(lockfd);
     if (date.dptr != 0) {
-	return *(time_t *)date.dptr;
+	mark = *(time_t *)date.dptr;
     } else {
-	return (time_t)0;
+	mark = (time_t)0;
     }
+    dbm_close(DeliveredDBptr);
 #endif /* HAVE_LIBDB */
 }
 

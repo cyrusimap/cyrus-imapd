@@ -1,15 +1,19 @@
-#!/usr/local/bin/perl5
+#!/bin/sh -- # -*- perl -*-
 # script to downgrade from cyrus imapd 1.6.2+ to earlier.
 # this is a very expensive script and also COPIES data
 # so it is extremely slow; it can be rewritten to speed it up immensely
 # do NOT run this script while imapd's are running
+eval 'exec perl5 $0 ${1+"$@"}'
+    if $running_under_some_shell;
+
+require 5;
 
 $| = 1;
 
 $imapdconf = shift || "/etc/imapd.conf";
 $hashispool = 0;
 
-open CONF, $imapdconf;
+open CONF, $imapdconf or die "can't open $imapdconf";
 while (<CONF>) {
     print;
     if (/^configdirectory:\s(.*)$/) {

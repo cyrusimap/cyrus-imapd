@@ -22,7 +22,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.39 1999/08/12 19:27:44 leg Exp $
+ * $Id: prot.c,v 1.40 1999/08/13 21:19:11 leg Exp $
  */
 
 #include <stdio.h>
@@ -83,6 +83,7 @@ int write;
 int prot_free(s)
 struct protstream *s;
 {
+    free(s->buf);
     free((char*)s);
     return 0;
 }
@@ -322,7 +323,7 @@ struct protstream *s;
 		}
 		memcpy(s->buf, out, outlen);
 		s->ptr = s->buf + 1;
-		s->cnt = outlen - 1;
+		s->cnt = outlen;
 		free(out);
 	    } else {		/* didn't decode anything */
 		s->cnt = 0;
@@ -331,7 +332,7 @@ struct protstream *s;
 	} else {
 	    /* No protection function, just use the raw data */
 	    s->ptr = s->buf+1;
-	    s->cnt = n-1;
+	    s->cnt = n;
 	}
 	
 	  
@@ -361,6 +362,7 @@ struct protstream *s;
 		    }
 		} while (left);
 	    }
+	    s->cnt--;		/* we return the first char */
 	    return *s->buf;
 	}
 

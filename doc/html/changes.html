@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.77 1999/08/12 19:27:35 leg Exp $ -->
+<!-- $Id: changes.html,v 1.78 1999/08/13 21:19:05 leg Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -40,6 +40,11 @@
 
       <li> clarified an error message in message.c when an unexpected
       end of file is encountered
+
+      <li> fixed some random memory leaks in deliver
+
+      <li> fixed a fairly major bug in prot_fill.  it was performing
+      correctly when reading only a single character.
     </ul>
 
     <h2> Changes to the Cyrus IMAP Server Since Version 1.6.0-BETA </h2>
