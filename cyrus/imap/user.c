@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: user.c,v 1.3 2001/08/16 20:52:08 ken3 Exp $
+ * $Id: user.c,v 1.4 2001/11/13 18:07:25 leg Exp $
  */
 
 #include <config.h>
@@ -232,8 +232,8 @@ int user_deletequotas(const char *user)
     DIR *dirp;
     struct dirent *f;
 
-    c = (char) tolower((int) *user);
-    if (!islower((int) c)) c = 'q';
+    /* this violates the quota abstraction layer; oh well */
+    c = dir_hash_c(user);
     sprintf(qpath, "%s%s%c/", config_dir, FNAME_QUOTADIR, c);
     tail = qpath + strlen(qpath);
 
@@ -251,4 +251,6 @@ int user_deletequotas(const char *user)
 	}
 	closedir(dirp);
     }
+
+    return 0;
 }
