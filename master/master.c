@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.40 2001/06/23 00:59:48 ken3 Exp $ */
+/* $Id: master.c,v 1.41 2001/07/08 02:08:03 ken3 Exp $ */
 
 #include <config.h>
 
@@ -326,16 +326,19 @@ void service_create(struct service *s)
         if ((port = parse_listen(listen)) == NULL) {
             /* listen IS the port */
             if (!resolve_port(listen, s, &sin)) {
+		free(listen);
                 return;
             }
             sin.sin_addr.s_addr = INADDR_ANY;
         } else {
             /* listen is now just the address */
             if (!resolve_port(port, s, &sin)) {
+		free(listen);
                 return;
             }
             if (!resolve_host(listen, &sin)) {
 		s->exec = NULL;
+		free(listen);
                 return;
             }
         }
