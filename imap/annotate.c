@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.26 2004/06/22 21:36:17 rjs3 Exp $
+ * $Id: annotate.c,v 1.27 2004/06/23 02:55:23 rjs3 Exp $
  */
 
 #include <config.h>
@@ -131,6 +131,7 @@ void appendstrlistpat(struct strlist **l, char *s)
 
     *tail = (struct strlist *)xmalloc(sizeof(struct strlist));
     (*tail)->s = s;
+    (*tail)->rock = NULL;
     (*tail)->p = charset_compilepat(s);
     (*tail)->next = 0;
 }
