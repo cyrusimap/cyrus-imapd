@@ -38,7 +38,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-# $Id: Makefile.in,v 1.11 2002/05/25 19:57:46 leg Exp $
+# $Id: Makefile.in,v 1.11.4.1 2002/08/28 19:22:54 rjs3 Exp $
 
 srcdir = @srcdir@
 VPATH = @srcdir@
@@ -47,7 +47,7 @@ CC = @CC@
 RANLIB = @RANLIB@
 
 DEFS = @DEFS@
-CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../acap @CPPFLAGS@ @SASLFLAGS@
+CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib @CPPFLAGS@ @SASLFLAGS@
 CFLAGS = @CFLAGS@
 LDFLAGS = @LDFLAGS@
 

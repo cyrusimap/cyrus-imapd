@@ -1,5 +1,5 @@
 # Top-level Makefile for cyrus software
-# $Id: Makefile.in,v 1.56 2002/06/24 19:13:20 rjs3 Exp $
+# $Id: Makefile.in,v 1.56.2.1 2002/08/28 19:22:44 rjs3 Exp $
 #
 # @configure_input@
 # 
@@ -42,7 +42,7 @@
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 # 
 
-SUBDIRS = man @PRE_SUBDIRS@ acap lib @SERVER_SUBDIRS@ \
+SUBDIRS = man @PRE_SUBDIRS@ lib @SERVER_SUBDIRS@ \
 	imtest @SNMP_SUBDIRS@ @EXTRA_SUBDIRS@
 DISTSUBDIRS = doc
 

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.h,v 1.3.6.1 2002/07/27 13:05:49 ken3 Exp $ */
+/* $Id: backend.h,v 1.3.6.2 2002/08/28 19:22:52 rjs3 Exp $ */
 
 #ifndef _INCLUDED_BACKEND_H
 #define _INCLUDED_BACKEND_H
@@ -62,7 +62,7 @@ struct backend {
     sasl_conn_t *saslconn;
 
     enum {
-	ACAP = 0x1, /* not used */
+	ACAP = 0x1, /* obsolete */
 	IDLE = 0x2,
 	MUPDATE = 0x4
     } capability;
