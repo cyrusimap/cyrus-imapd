@@ -4,7 +4,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 # script to upgrade sievedir from imapd 1.6.13
 # make sure you run it as the cyrus user
 #!/usr/bin/perl
-# $Id: upgradesieve,v 1.3 2000/05/23 20:56:53 robeson Exp $
+# $Id: upgradesieve,v 1.4 2001/01/31 19:12:02 leg Exp $
 # 
 # Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
 #
@@ -64,11 +64,11 @@ require 5;
 
 $| = 1;
 
-if ("-f" eq $ARGV[0]) {
+if (($#ARGV > -1) && ("-f" eq $ARGV[0])) {
     $force = 1;
     shift @ARGV;
 }
-if ("-h" eq $ARGV[0] || $#ARGV > 0) {
+if ((($#ARGV > -1) && ($ARGV[0] eq "-h")) || ($#ARGV > 0)) {
     print "usage: upgradesieve [-f] [imapd.conf]\n";
     print "       -f keep going on errors\n";
     exit;
@@ -102,13 +102,16 @@ print "upgrading sievedir $sievedir...";
 chdir $sievedir or die "couldn't change to $sievedir";
 foreach $i ("a".."z") {
     print "$i ";
-    if (chdir $i) {
-	ouch "couldn't move to $i";
+    if (! chdir $i) {
+	ouch "couldn't chdir to $i";
 	next;
     }
+
+    # upgrade single file to directory
     opendir (D, ".");
     while ($f = readdir D) {
-	if ($f =~ /^\./s) { next; }
+	next if ($f =~ /^\./s);
+	next if (-d $f);
 
 	rename($f, ".$f")
 	    or ouch "couldn't move $f to .$f";
@@ -124,6 +127,39 @@ foreach $i ("a".."z") {
     }
     closedir D;
 
+    # upgrade hard links to symlinks
+    opendir (D, ".");
+    while ($d = readdir D) {
+	next if ($d =~ /^\./s);
+	if (! -d $d) {
+	    ouch "expected $d to be a directory";
+	    next;
+	}
+
+	if (! chdir $d) {
+	    ouch "couldn't chdir to $d";
+	    next;
+	}
+	
+	opendir DIR, ".";
+	while ($file = readdir DIR) {
+	    next if (!($file =~ /\.script$/));
+	    
+	    # print "considering $file... ";
+	    ($dev, $ino, $mode, $nlink, @rest) = stat $file;
+	    if ($nlink == 2) {
+		# print "making active... ";
+		symlink $file, "default.NEW";
+		rename "default.NEW", "default";
+	    }
+	    # print "\n";
+	}
+	
+	closedir DIR;
+	chdir "..";
+    }
+
+    # back to "/usr/sieve"
     chdir "..";
 }
 
