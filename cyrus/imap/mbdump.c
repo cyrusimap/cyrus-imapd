@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.19 2002/07/17 17:24:37 rjs3 Exp $
+ * $Id: mbdump.c,v 1.20 2002/07/21 17:20:26 ken3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -73,6 +73,7 @@
 #include "prot.h"
 #include "seen.h"
 #include "xmalloc.h"
+#include "util.h"
 
 /* is this the active script? */
 static int sieve_isactive(char *sievepath, char *name)
@@ -380,7 +381,7 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
 
 	    snprintf(sieve_path, sizeof(sieve_path), "%s/%c/%s",
 		     config_getstring("sievedir", "/usr/sieve"),
-		     userid[0], userid);
+		     (char) dir_hash_c(userid), userid);
 	    mbdir=opendir(sieve_path);
 	    
 	    if(mbdir) {
@@ -477,7 +478,7 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
 	if(!sieve_usehomedir)
 	    snprintf(sieve_path, sizeof(sieve_path), "%s/%c/%s",
 		     config_getstring("sievedir", "/usr/sieve"),
-		     userid[0], userid);
+		     (char) dir_hash_c(userid), userid);
     }
 
     /* we better be in a list now */
