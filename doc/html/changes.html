@@ -1,9 +1,26 @@
-<!-- $Id: changes.html,v 1.91 1999/10/30 23:36:33 leg Exp $ -->
+<!-- $Id: changes.html,v 1.92 1999/12/08 05:05:39 leg Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
 </HEAD><BODY>
 <H1>                   Changes to the Cyrus IMAP Server</H1>
+
+    <h2> Changes to the Cyrus IMAP Server Since Version 1.6.19 </h2>
+    <ul>
+    <li> Added STARTTLS support; requires OpenSSL.
+
+    <li> Sieve now uses MDNs to reject messages instead of DSNs,
+    conforming to the latest Sieve specification.
+
+    <li> The duplicate delivery database expiration (deliver -E) was
+    deleting all entries; fixed.
+
+    <li> imtest is now a little smarter about parsing the protocol to
+    avoid synchronization errors prior to authentication.
+
+    <li> timsieved's parser is now written in C; should be no
+    noticeable changes, but should make compiling it much easier.
+    </ul>
 
     <h2> Changes to the Cyrus IMAP Server Since Version 1.6.16 </h2>
     <ul>
