@@ -3,6 +3,7 @@
  */
 
 #include <stdio.h>
+#include <sysexits.h>
 
 #include <acl.h>
 #include "folder.h"
@@ -45,6 +46,7 @@ usage()
 deliver(path)
 char *path;
 {
+    int r;
     struct folder folder;
     
     r = append_setup(&folder, path, FOLDER_FORMAT_NORMAL, ACL_POST, 0);
