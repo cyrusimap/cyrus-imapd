@@ -38,7 +38,7 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
-all: ptloader ptexpire ptdump # pttest
+all: ptloader ptexpire ptdump # ptextract pttest
 
 install:
 	$(INSTALL) @STRIP@ -m 755 ptloader $(DESTDIR)$(cyrus_prefix)/bin
@@ -61,6 +61,8 @@ ptexpire: ptexpire.o $(DEPLIBS)
 ptdump: ptdump.o $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o $@ ptdump.o $(DEPLIBS) $(LIBS)
 
+ptextract: ptextract.o $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o $@ ptextract.o $(DEPLIBS) $(LIBS)
 
 ptexpire.pure: ptexpire.o $(DEPLIBS)
 	$(PURIFY) $(PUREARGS) $(CC) $(LDFLAGS) -o $@ ptexpire.o $(DEPLIBS) $(LIBS)
