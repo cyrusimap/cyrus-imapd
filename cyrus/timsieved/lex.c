@@ -52,8 +52,8 @@ int token_lookup (char *str, int len)
 	break;
 
     case 'l':
-	if (strcmp(str, "logout")==0) return LOGOUT;
 	if (strcmp(str, "listscripts")==0) return LISTSCRIPTS;
+	if (strcmp(str, "logout")==0) return LOGOUT;
 	break;
 
     case 'n':
@@ -81,7 +81,6 @@ extern struct protstream *sieved_out;
 #define ERR() {								\
 		lexer_state=LEXER_STATE_RECOVER;                        \
 		return TIMSIEVE_FAIL;                                   \
-                /*  (result == DAEMON_ERR_EOF ? EOF : ERROR);*/	        \
   	      }
 
 #define ERR_PUSHBACK() {				\
@@ -102,7 +101,7 @@ char *buffer;
 
 int lex_init(void)
 {
-  maxscriptsize = config_getint("maxscriptsize",32000);
+  maxscriptsize = config_getint("sieve_maxscriptsize", 32000);
 
   buffer = (char *) xmalloc(maxscriptsize);
 
@@ -128,7 +127,7 @@ int timlex(YYSTYPE * lvalp, void * client)
   struct protstream *stream=(struct protstream *) client;
 
   buff_ptr = buffer; /* ptr into the buffer */
-  buff_end = buffer + maxscriptsize -1; /* ptr to end of buffer */
+  buff_end = buffer + maxscriptsize - 10; /* ptr to end of buffer */
 
   
   while (1)
@@ -140,10 +139,8 @@ int timlex(YYSTYPE * lvalp, void * client)
 
     ch=prot_getc(stream);
 
-    if (ch==-1)
-    {
-      fatal("Error reading character",0);
-      return TIMSIEVE_FAIL;
+    if (ch==-1) {
+      fatal("Error reading character", ch);
     }
 
 
