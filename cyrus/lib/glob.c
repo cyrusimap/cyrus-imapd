@@ -248,7 +248,7 @@ long *min;
 		    ++ptr;
 		}
 		if (ptr == pend) break;
-		if (*ptr == g->sep_char) {
+                if (*ptr == g->sep_char && *ptr != *ghier) {
 		    if (!*ghier && min) {
 			*min = gstar ? ptr - start + 1 : -1;
 			return (ptr - start);
