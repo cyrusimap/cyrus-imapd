@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.43 2000/10/09 03:28:50 leg Exp $ */
+/* $Id: proxyd.c,v 1.44 2000/10/23 20:32:09 leg Exp $ */
 
 #include <config.h>
 
@@ -2427,9 +2427,41 @@ static char *grab(struct protstream *p, char end)
 	}
 	ret[cur++] = c;
     }
-    if (cur) ret[cur - 1] = '\0';
+    if (cur) ret[cur] = '\0';
 
     return ret;
+}
+
+/* remove \Recent from the flags */
+static char *editflags(char *flags)
+{
+    char *p;
+
+    p = flags;
+    while ((p = strchr(p, '\\')) != NULL) {
+	if (!strncasecmp(p + 1, "recent", 6)) {
+	    if (p[7] == ' ') {
+		/* shift everything over so that \recent vanishes */
+		char *q;
+		
+		q = p + 8;
+		while (*q) {
+		    *p++ = *q++;
+		}
+		*p = '\0';
+	    } else if (p[7] == '\0') {
+		/* last flag in line */
+		*p = '\0';
+	    } else {
+		/* not really \recent, i guess */
+		p++;
+	    }
+	} else {
+	    p++;
+	}
+    }
+
+    return flags;
 }
 
 /*
@@ -2480,7 +2512,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 		    "%s %s %s (Flags Internaldate)\r\n", 
 		    tag, usinguid ? "Uid Fetch" : "Fetch", sequence);
 	head = (struct d *) xmalloc(sizeof(struct d));
-	head->flags = NULL;
+	head->flags = NULL; head->idate = NULL;
 	head->seqno = head->uid = 0;
 	head->next = NULL;
 	p = head;
@@ -2527,7 +2559,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 		switch (c) {
 		case 'f': case 'F': /* flags? */
 		    c = chomp(backend_current->in, "lags");
-		    if (c == ' ') { c = EOF; }
+		    if (c != ' ') { c = EOF; }
 		    else c = prot_getc(backend_current->in);
 		    if (c != '(') { c = EOF; }
 		    else {
@@ -2595,9 +2627,10 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 	    p->next = xmalloc(sizeof(struct d));
 	    p = p->next;
 	    p->idate = idate;
-	    p->flags = flags;
+	    p->flags = editflags(flags);
 	    p->uid = uidno;
 	    p->seqno = seqno;
+	    p->next = NULL;
 	}
 	if (c != EOF) {
 	    prot_ungetc(c, backend_current->in);
@@ -2612,7 +2645,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 
 	/* start the append */
 	prot_printf(s->out, "%s Append %s", tag, name);
-	prot_printf(backend_current->out, "%s %s %s (Rfc822)\r\n",
+	prot_printf(backend_current->out, "%s %s %s (Rfc822.peek)\r\n",
 		    mytag, usinguid ? "Uid Fetch" : "Fetch", sequence);
 	for (/* each FETCH response */;;) {
 	    int seqno = 0, uidno = 0;
@@ -2699,6 +2732,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 			    prot_write(s->out, buf, j);
 			    sz -= j;
 			}
+			c = prot_getc(backend_current->in);
 		    }
 
 		    break; /* end of case */
@@ -2723,9 +2757,12 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 	    free(q->flags);
 	    free(q);
 	}
-
 	if (c != EOF) {
 	    char *appenduid, *b;
+	    int res;
+
+	    /* pushback the first character of the tag we're looking at */
+	    prot_ungetc(c, backend_current->in);
 
 	    /* nothing should be left in the linked list */
 	    assert(head->next == NULL);
@@ -2737,15 +2774,19 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 	    /* should be looking at 'mytag' on 'backend_current', 
 	       'tag' on 's' */
 	    pipe_until_tag(backend_current, mytag);
-	    pipe_until_tag(s, tag);
+	    res = pipe_until_tag(s, tag);
 
-	    appenduid = strchr(s->last_result, '[');
-	    /* skip over APPENDUID */
-	    appenduid += strlen("appenduid ");
-	    b = strchr(appenduid, ']');
-	    *b = '\0';
-	    prot_printf(proxyd_out, "OK [COPYUID %s] %s\r\n", tag,
-			appenduid, error_message(IMAP_OK_COMPLETED));
+	    if (res == OK) {
+		appenduid = strchr(s->last_result, '[');
+		/* skip over APPENDUID */
+		appenduid += strlen("[appenduid ");
+		b = strchr(appenduid, ']');
+		*b = '\0';
+		prot_printf(proxyd_out, "%s OK [COPYUID %s] %s\r\n", tag,
+			    appenduid, error_message(IMAP_OK_COMPLETED));
+	    } else {
+		prot_printf(proxyd_out, "%s %s", tag, s->last_result);
+	    }
 	} else {
 	    /* abort the append */
 	    prot_printf(s->out, " {0}\r\n");
@@ -2760,8 +2801,8 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 	while (head) {
 	    p = head;
 	    head = head->next;
-	    free(p->idate);
-	    free(p->flags);
+	    if (p->idate) free(p->idate);
+	    if (p->flags) free(p->flags);
 	    free(p);
 	}
     }
