@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.16 2002/08/21 19:52:40 ken3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.17 2002/08/21 20:43:48 ken3 Exp $
  */
 
 #include <config.h>
@@ -791,9 +791,7 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
  retry:
     /* Check for request to delete a user:
        user.<x> with no dots after it */
-    if (((!strncmp(name, "user.", 5) && (p = name+5)) ||
-		  ((p = strstr(name, "!user.")) && (p += 6))) &&
-		  !strchr(p, '.')) { 
+    if ((p = mboxname_isusermailbox(name, 1))) {
 	/* Can't DELETE INBOX (your own inbox) */
 	if (userid && !strncmp(p, userid,
 			       config_virtdomains ? strcspn(userid, "@") :
@@ -991,9 +989,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	    r = IMAP_MAILBOX_EXISTS;
 	    goto done;
 	}
-    } else if (((!strncmp(oldname, "user.", 5) && (p = oldname+5)) ||
-		  ((p = strstr(oldname, "!user.")) && (p += 6))) &&
-		  !strchr(p, '.')) {
+    } else if ((p = mboxname_isusermailbox(oldname, 1))) {
 	if (!strncmp(p, userid, config_virtdomains ? strcspn(userid, "@") :
 		     strlen(userid))) {
 	    /* Special case of renaming inbox */
@@ -1003,9 +999,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	      goto done;
 	    }
 	    isusermbox = 1;
-	} else if (((!strncmp(newname, "user.", 5) && (p = newname+5)) ||
-		    ((p = strstr(newname, "!user.")) && (p += 6))) &&
-		   !strchr(p, '.')) {
+	} else if (mboxname_isusermailbox(newname, 1)) {
 	    /* Special case of renaming a user */
 	    access = cyrus_acl_myrights(auth_state, oldacl);
 	    if (!(access & deleteright) && !isadmin) {
@@ -1035,12 +1029,8 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 
     /* Check ability to create new mailbox */
     if (!partitionmove) {
-	if (((!strncmp(newname, "user.", 5) && (p = newname+5)) ||
-	     ((p = strstr(newname, "!user.")) && (p += 6))) &&
-	    !strchr(p, '.')) {
-	    if (((!strncmp(oldname, "user.", 5) && (p = oldname+5)) ||
-		 ((p = strstr(oldname, "!user.")) && (p += 6))) &&
-		!strchr(p, '.')) {
+	if (mboxname_isusermailbox(newname, 1)) {
+	    if (mboxname_isusermailbox(oldname, 1)) {
 		if (!isadmin) {
 		    /* Only admins can rename users (INBOX to INBOX) */
 		    r = IMAP_MAILBOX_NOTSUPPORTED;

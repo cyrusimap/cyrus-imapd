@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.21 2002/08/21 18:53:52 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.22 2002/08/21 20:43:50 ken3 Exp $ */
 
 #include <config.h>
 
@@ -4096,7 +4096,6 @@ void cmd_listrights(char *tag, char *name, char *identifier)
     int canonidlen = 0;
     char *acl;
     char *rightsdesc;
-    char *p;
 
     r = (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace, name,
 						proxyd_userid, mailboxname);
@@ -4132,9 +4131,7 @@ void cmd_listrights(char *tag, char *name, char *identifier)
 	    /* identifier's personal mailbox */
 	    rightsdesc = "lca r s w i p d 0 1 2 3 4 5 6 7 8 9";
 	}
-	else if (((!strncmp(mailboxname, "user.", 5) && (p = mailboxname+5)) ||
-		  ((p = strstr(mailboxname, "!user.")) && (p += 6))) &&
-		  !strchr(p, '.')) { 
+	else if (mboxname_isusermailbox(mailboxname, 1)) {
 	    /* anyone can post to an INBOX */
 	    rightsdesc = "p l r s w i c d a 0 1 2 3 4 5 6 7 8 9";
 	}
@@ -4661,7 +4658,7 @@ static int namespacedata(name, matchlen, maycreate, rock)
     if (!(strncmp(name, "INBOX.", 6))) {
 	/* The user has a "personal" namespace. */
 	sawone[NAMESPACE_INBOX] = 1;
-    } else if (!(strncmp(name, "user.", 5)) || strstr(name, "!user.")) {
+    } else if (mboxname_isusermailbox(name, 0)) {
 	/* The user can see the "other users" namespace. */
 	sawone[NAMESPACE_USER] = 1;
     } else {

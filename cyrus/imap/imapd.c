@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.28 2002/08/21 19:52:40 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.29 2002/08/21 20:43:47 ken3 Exp $ */
 
 #include <config.h>
 
@@ -3588,12 +3588,9 @@ void cmd_rename(const char *tag,
 	recursive_rename = 0;
     }
     /* check if we're an admin renaming a user */
-    else if (((!strncmp(oldmailboxname, "user.", 5) && (p = oldmailboxname+5)) ||
-	      ((p = strstr(oldmailboxname, "!user.")) && (p += 6))) &&
-	     !strchr(p, '.') &&
-	     ((!strncmp(newmailboxname, "user.", 5) && (p = newmailboxname+5)) ||
-	      ((p = strstr(newmailboxname, "!user.")) && (p += 6))) &&
-	     !strchr(p, '.') && imapd_userisadmin) {
+    else if (mboxname_isusermailbox(oldmailboxname, 1) &&
+	     mboxname_isusermailbox(newmailboxname, 1) &&
+	     imapd_userisadmin) {
 	rename_user = 1;
     }
 
@@ -4124,7 +4121,6 @@ char *identifier;
     int canonidlen = 0;
     char *acl;
     char *rightsdesc;
-    char *p;
 
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
 					       imapd_userid, mailboxname);
@@ -4161,9 +4157,7 @@ char *identifier;
 	    /* identifier's personal mailbox */
 	    rightsdesc = "lca r s w i p d 0 1 2 3 4 5 6 7 8 9";
 	}
-	else if (((!strncmp(mailboxname, "user.", 5) && (p = mailboxname+5)) ||
-		  ((p = strstr(mailboxname, "!user.")) && (p += 6))) &&
-		  !strchr(p, '.')) { 
+	else if (mboxname_isusermailbox(mailboxname, 1)) {
 	    /* anyone can post to an INBOX */
 	    rightsdesc = "p l r s w i c d a 0 1 2 3 4 5 6 7 8 9";
 	}
@@ -4736,7 +4730,7 @@ static int namespacedata(char *name,
     if (!(strncmp(name, "INBOX.", 6))) {
 	/* The user has a "personal" namespace. */
 	sawone[NAMESPACE_INBOX] = 1;
-    } else if (!(strncmp(name, "user.", 5)) || strstr(name, "!user.")) {
+    } else if (mboxname_isusermailbox(name, 0)) {
 	/* The user can see the "other users" namespace. */
 	sawone[NAMESPACE_USER] = 1;
     } else {

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.68.4.3 2002/08/02 20:51:13 ken3 Exp $ */
+/* $Id: reconstruct.c,v 1.68.4.4 2002/08/21 20:43:50 ken3 Exp $ */
 
 #include <config.h>
 
@@ -709,8 +709,7 @@ char *cleanacl(char *acl, char *mboxname)
     char *rights;
 
     /* Rebuild ACL */
-    if ((!strncmp(mboxname, "user.", 5) && (p = mboxname+5)) ||
-	((p = strstr(mboxname, "!user.")) && (p += 6))) {
+    if ((p = mboxname_isusermailbox(mboxname, 0))) {
 	strcpy(owner, p);
 	p = strchr(owner, '.');
 	if (p) *p = '\0';

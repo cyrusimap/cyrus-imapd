@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- * $Id: mboxname.c,v 1.25.4.9 2002/08/09 13:24:41 ken3 Exp $
+ * $Id: mboxname.c,v 1.25.4.10 2002/08/21 20:43:49 ken3 Exp $
  * Copyright (c)1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -500,6 +500,22 @@ int mboxname_userownsmailbox(const char *userid, const char *name)
 	return 1;
     }
     return 0;
+}
+
+/*
+ * If (internal) mailbox 'name' is a user's mailbox (optionally INBOX),
+ * returns a pointer to the userid, otherwise returns NULL.
+ */
+char *mboxname_isusermailbox(const char *name, int isinbox)
+{
+    const char *p;
+
+    if (((!strncmp(name, "user.", 5) && (p = name+5)) ||
+	 ((p = strstr(name, "!user.")) && (p += 6))) &&
+	(!isinbox || !strchr(p, '.')))
+	return (char*) p;
+    else
+	return NULL;
 }
 
 /*

@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.15.2.2 2002/08/02 20:57:20 ken3 Exp $
+ * $Id: ipurge.c,v 1.15.2.3 2002/08/21 20:43:48 ken3 Exp $
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -209,8 +209,7 @@ purge_me(char *name, int matchlen, int maycreate) {
 
   if( ! forceall ) {
       /* DON'T purge INBOX* and user.* */
-      if ((strncasecmp(name,"INBOX",5)==0) || (strncmp(name,"user.",5)==0) ||
-	  strstr(name, "!user."))
+      if (!strncasecmp(name,"INBOX",5) || mboxname_isusermailbox(name, 0))
 	  return 0;
   }
 
