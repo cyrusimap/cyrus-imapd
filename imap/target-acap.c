@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: target-acap.c,v 1.21 2000/11/07 19:36:56 leg Exp $
+ * $Id: target-acap.c,v 1.22 2000/12/07 22:38:24 leg Exp $
  */
 
 #include <config.h>
@@ -191,7 +191,7 @@ void myacap_addto(acap_entry_t *entry,
     if (!debugmode) {
 	r = mboxlist_insertremote(mailbox, MBTYPE_REMOTE, server, d.acl, NULL);
 	if (r) {
-	    syslog(LOG_ERR, "couldn't insert %s into mailbox list: %s\n",
+	    syslog(LOG_ERR, "couldn't insert %s into mailbox list: %s",
 		   d.name, error_message(r));
 	}
     }
@@ -204,15 +204,26 @@ void myacap_removefrom(acap_entry_t *entry,
 		       unsigned position,
 		       void *rock)
 {
-    char *name = acap_entry_getname(entry);
+    char *ename = acap_entry_getname(entry);
+    char name[MAX_MAILBOX_NAME];
+    int r;
 
-    if (!name || !name[0]) return; /* null entry */
+    if (!ename || !ename[0]) return; /* null entry */
 
     /* need to reencode UTF-8 name into a UTF-7 IMAP name */
+    r = acapmbox_decode_entry(ename, name);
+    if (r) {
+	syslog(LOG_ERR, "invalid entry name '%s': %s", ename,
+	       error_message(r));
+    }
 
     syslog(LOG_DEBUG, "deleting mailbox %s", name);
     if (!debugmode) {
-	mboxlist_deletemailbox(name, 1, "", NULL, 0);
+	r = mboxlist_deletemailbox(name, 1, "", NULL, 0);
+	if (r) {
+	    syslog(LOG_ERR, "couldn't delete %s from mailbox list: %s",
+		   name, error_message(r));
+	}
     }
 }
 
@@ -366,6 +377,7 @@ int synchronize_mboxlist(void)
     strcpy(s, "*");
     r = mboxlist_findall(s, 1, "", NULL, &mboxadd, mailboxes);
     if (r) {
+	skiplist_free(mailboxes);
 	return r;
     }
 
@@ -379,24 +391,27 @@ int synchronize_mboxlist(void)
     if (r != ACAP_OK) {
 	syslog(LOG_ERR, "acap_search_dataset() failed: %s\n", 
 	       error_message(r));
-	return r;
+	goto ret;
     }
 	
     r = acap_process_on_command(acap_conn, cmd, NULL);
     if (r != ACAP_OK) {
 	syslog(LOG_ERR, "acap_process_on_command() failed: %s\n", 
 	       error_message(r));
-	return r;
+	goto ret;
     }
 
     /* anything left over has been deleted */
     sforeach(mailboxes, &mboxdel);
+
+    syslog(LOG_NOTICE, "done synchronizing mailbox database: %d entries", num);
+    r = 0;
+
+ ret:
     skiplist_freeeach(mailboxes, (void (*)(const void *))&free);
     skiplist_free(mailboxes);
 
-    syslog(LOG_NOTICE, "done synchronizing mailbox database: %d entries", num);
-
-    return 0;
+    return r;
 }
 
 void fatal(const char *s, int code)
@@ -564,7 +579,7 @@ int main(int argc, char *argv[], char *envp[])
     if (!r) r = synchronize_mboxlist();
 
     if (r && debugmode) {
-	fatal("can't download list of datasets\n", EC_UNAVAILABLE);
+	fatal("can't download list of mailboxes\n", EC_UNAVAILABLE);
     }
     while (r) {
 	acap_conn_close(acap_conn);
