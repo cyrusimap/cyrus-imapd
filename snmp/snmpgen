@@ -40,7 +40,7 @@
 #
 exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #!perl -w
-# $Id: snmpgen,v 1.13 2002/02/13 21:00:12 rjs3 Exp $
+# $Id: snmpgen,v 1.14 2002/05/31 14:38:40 wcw Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -212,7 +212,6 @@ print OUTPUT_H <<EOF
 #ifndef ${basename}_H    
 #define ${basename}_H
 
-
 EOF
 ;
 
@@ -222,6 +221,24 @@ foreach my $a (keys %Definelist)
 }
 
 print OUTPUT_H <<EOF
+
+#ifndef USING_SNMPGEN
+
+#define snmp_connect()
+#define snmp_close()
+#define snmp_increment(a, b)
+#define snmp_increment_args(...)
+#define snmp_set(a, b)
+#define snmp_set_str(a, b)
+#define snmp_set_oid(a, b)
+#define snmp_set_time(a, b)
+#define snmp_getdescription(a)
+#define snmp_getoid(a, b, c, d)
+#define snmp_setvariable(a, b)
+
+typedef void ${basename}_t;
+
+#else
 
 typedef enum {
 EOF
@@ -277,6 +294,8 @@ const char *snmp_getdescription(${basename}_t cmd);
 const char *snmp_getoid(const char *name, ${basename}_t cmd, char* buf, int buflen); 
 
 void snmp_setvariable(${basename}_variable_t, int);
+
+#endif /* USING_SNMPGEN */
  
 #endif /* ${basename}_H */ 
 
@@ -289,6 +308,15 @@ open (OUTPUT_C,">$outprog");
 
 print OUTPUT_C <<EOF
 /* $outprog -- automatically generated from $infile by snmpgen */
+
+#ifdef USING_SNMPGEN
+
+/* We disable this code for now since it doesn't actually work and wastes
+ * resources.  At some point in time, we'll make it work again as it would 
+ * be useful to gather aggregate statistics on what commands are being used 
+ * so we can better tune the server.  This change closes bug #1191. 
+ * New bug 1267 opened to re-enable the feature.
+ */
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -548,6 +576,9 @@ void snmp_setvariable(${basename}_variable_t name, int value)
     variable_value[name] = value;
 }
 
+#endif
+
+
 EOF
 ;
 
@@ -561,3 +592,4 @@ if (defined $opt_extra) {
 } 
 
 close OUTPUT_C;
+
