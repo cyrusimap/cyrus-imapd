@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service-thread.c,v 1.10 2003/05/09 19:43:37 rjs3 Exp $ */
+/* $Id: service-thread.c,v 1.11 2003/05/29 02:10:55 rjs3 Exp $ */
 #include <config.h>
 
 #include <stdio.h>
@@ -297,5 +297,6 @@ int main(int argc, char **argv, char **envp)
     }
 
     notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+    service_abort(0);
     return 0;
 }
