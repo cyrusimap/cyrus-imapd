@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.25 2002/01/14 20:08:46 leg Exp $ -->
+<!-- $Id: changes.html,v 1.26 2002/01/15 21:18:28 ken3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -8,6 +8,19 @@
 </head>
 <body>
 <h1>Changes to the Cyrus IMAP Server</h1>
+
+<h2>Changes to the Cyrus IMAP Server since 2.1.1</h2>
+
+<ul>
+<li> now compatible with Berkeley DB4 (Larry M. Rosenbaum,
+<tt>lmr@ornl.gov</tt>) </li>
+
+<li> timsieved now supports proxying via <tt>loginuseacl</tt> (Amos
+Gouaux, <tt>amos@utdallas.edu</tt>) </li>
+
+<li> Sieve <tt>vacation</tt> now does a case-insensitive comparison of
+<tt>:addresses</tt> </li>
+</ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.1.0</h2>
 
@@ -1467,7 +1480,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2002/01/14 20:08:46 $ <br />
+last modified: $Date: 2002/01/15 21:18:28 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
