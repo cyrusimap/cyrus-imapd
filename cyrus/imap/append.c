@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.93.4.2 2002/08/23 19:52:03 rjs3 Exp $
+ * $Id: append.c,v 1.93.4.3 2002/12/03 15:05:26 ken3 Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -332,7 +332,7 @@ int append_commit(struct appendstate *as,
 int append_abort(struct appendstate *as)
 {
     int r = 0;
-    int uid;
+    unsigned long uid;
 
     if (as->s == APPEND_DONE) return 0;
     as->s = APPEND_DONE;
