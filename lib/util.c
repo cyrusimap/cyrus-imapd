@@ -23,7 +23,7 @@
  * Author: Chris Newman
  * Start Date: 4/6/93
  */
-/* $Id: util.c,v 1.9 1999/03/02 01:31:15 tjs Exp $
+/* $Id: util.c,v 1.10 1999/03/02 01:51:40 tjs Exp $
  */
 
 #include <stdio.h>
@@ -195,7 +195,7 @@ char *beautify_string(const char* src)
  *  returns NULL if not found, or key/value pair if found.
  */
 keyvalue *kv_bsearch(const char* key, keyvalue* kv, int nelem,
-		     int (*cmpf) P((const char *s1, const char *s2)))
+		     int (*cmpf) (const char *s1, const char *s2))
 {
     int top, mid, bot, cmp;
 
