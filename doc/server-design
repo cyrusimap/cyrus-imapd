@@ -420,6 +420,15 @@ The subdirectory "quota" under the configuration directory contains
 one file per quota root.  The filename is the (lowercase) name of the
 quota root.  Each file contains the quota root's limit and usage.
 
+* Telemetry log directory:
+
+The subdirectory "log" under the configuration directory may contain
+zero or more subdirectories, each named after a user.  If a
+subdirectory exists for a user, the server will keep a telemetry log
+of protocol sessions authenticating as that user.  The telemetry log
+is stored in the subdirectory with a filename of the server
+process-id.
+
 
 * IMSP dropoff directory:
 
