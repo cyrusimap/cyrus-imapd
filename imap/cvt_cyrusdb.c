@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: cvt_cyrusdb.c,v 1.8 2003/02/13 20:15:24 rjs3 Exp $
+ * $Id: cvt_cyrusdb.c,v 1.9 2003/04/14 20:15:12 rjs3 Exp $
  */
 
 #include <config.h>
@@ -190,8 +190,8 @@ int main(int argc, char *argv[])
 	   new_db, DB_NEW->name);
 
     /* create the name of the db file */
-    strcpy(dbdir, config_dir);
-    strcat(dbdir, FNAME_DBDIR);
+    strlcpy(dbdir, config_dir, sizeof(dbdir));
+    strlcat(dbdir, FNAME_DBDIR, sizeof(dbdir));
 
     r = DB_OLD->init(dbdir, 0);
     if(r != CYRUSDB_OK)
