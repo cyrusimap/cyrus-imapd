@@ -1,6 +1,6 @@
 #include "auth_krb_pts.h"
 
-static char rcsid[] = "$Id: ptdump.c,v 1.2 1998/07/30 21:31:01 wcw Exp $";
+static char rcsid[] = "$Id: ptdump.c,v 1.3 1999/02/16 01:59:03 wcw Exp $";
 
 int 
 main(argc, argv)
@@ -12,7 +12,7 @@ main(argc, argv)
   HASHINFO info;
   DB * ptdb;
   char *thekey;
-  int i, found, fd, rc;
+  int i, j, found, fd, rc;
   DBT key, data;
   ptluser us;
   size_t size;    
@@ -80,7 +80,8 @@ main(argc, argv)
 	      data.size, sizeof(ptluser));
     }
     (void)memcpy(&us, data.data, data.size);
-    printf("user: %s\t time: %d\n", us.user, us.cached);
+    printf("user: %s\ttime: %d\tngroups: %d\n",
+	   us.user, us.cached, us.ngroups);
     thekey[PTS_DB_HOFFSET] = 'D';
     for (i=0; i<size; i++) 
       sprintf(keyinhex+(2*i), "%.2x", thekey[i]);
@@ -131,7 +132,8 @@ main(argc, argv)
 		data.size, sizeof(ptluser));
       }
       (void)memcpy(&us, data.data, data.size);
-      printf("user: %s\t time: %d\n", us.user, us.cached);
+      printf("user: %s\ttime: %d\tngroups: %d\n",
+	     us.user, us.cached, us.ngroups);
       thekey[PTS_DB_HOFFSET] = 'D';
       for (i=0; i<size; i++) 
 	sprintf(keyinhex+(2*i), "%.2x", thekey[i]);
@@ -148,7 +150,10 @@ main(argc, argv)
     } else if (thekey[PTS_DB_HOFFSET] == 'D') {
       for (i=0; i<size; i++) 
 	sprintf(keyinhex+(2*i), "%.2x", thekey[i]);
-      printf("DATA key: %s\n", keyinhex);
+      printf("DATA key: %s\n  Group data is:\n", keyinhex);
+      for(j=0; j < (data.size / PR_MAXNAMELEN); j++) {
+	  printf("    %s\n", ((char (*)[PR_MAXNAMELEN])(data.data))[j]);
+      }
     } else {
       printf("OTHER key: %s\n", keyinhex);
     }
