@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.27 2001/12/05 15:23:22 ken3 Exp $ */
+/* $Id: acconfig.h,v 1.28 2002/02/18 20:04:16 rjs3 Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -78,6 +78,9 @@
 /* do we support XNETSCAPE */
 #undef ENABLE_X_NETSCAPE_HACK
 
+/* define if your compile has __attribute__ */
+#undef HAVE___ATTRIBUTE__
+
 /* are we using the old sieve service name (imap) */
 #undef OLD_SIEVE_SERVICE_NAME
 
@@ -131,7 +134,11 @@
 
 @BOTTOM@
 
-#ifndef __GNUC__
+/* where are our binaries? */
+#define SERVICE_PATH (CYRUS_PATH "/bin")
+
+#ifndef HAVE___ATTRIBUTE__
+/* Can't use attributes... */
 #define __attribute__(foo)
 #endif
 
