@@ -1,6 +1,6 @@
 /* test.c -- tester for libsieve
  * Larry Greenfield
- * $Id: test.c,v 1.11 2000/02/22 07:56:41 tmartin Exp $
+ * $Id: test.c,v 1.12 2000/06/24 13:15:24 ken3 Exp $
  *
  * usage: "test message script"
  */
@@ -231,7 +231,7 @@ void fill_cache(message_data_t *m)
 }
 
 /* gets the header "head" from msg. */
-int getheader(void *v, char *phead, char ***body)
+int getheader(void *v, const char *phead, const char ***body)
 {
     message_data_t *m = (message_data_t *) v;
     int cl, clinit;
@@ -259,7 +259,7 @@ int getheader(void *v, char *phead, char ***body)
     clinit = cl = hashheader(head);
     while (m->cache[cl] != NULL) {
 	if (!strcmp(head, m->cache[cl]->name)) {
-	    *body = m->cache[cl]->contents;
+	    *body = (const char **) m->cache[cl]->contents;
 	    break;
 	}
 	cl++; /* try next hash bin */
@@ -305,9 +305,9 @@ int getsize(void *mc, int *size)
     return SIEVE_OK;
 }
 
-int getenvelope(void *v, char *head, char ***body)
+int getenvelope(void *v, const char *head, const char ***body)
 {
-    static char *buf[2];
+    static const char *buf[2];
 
     if (buf[0] == NULL) { buf[0] = malloc(sizeof(char) * 256); buf[1] = NULL; }
     printf("Envelope body of '%s'? ", head);
