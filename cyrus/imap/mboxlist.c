@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.226 2003/12/15 16:04:33 ken3 Exp $
+ * $Id: mboxlist.c,v 1.227 2003/12/15 20:00:40 ken3 Exp $
  */
 
 #include <config.h>
@@ -81,8 +81,8 @@
 
 #include "mboxlist.h"
 
-#define DB CONFIG_DB_MBOX
-#define SUBDB CONFIG_DB_SUBS
+#define DB config_mboxlist_db
+#define SUBDB config_subscription_db
 
 cyrus_acl_canonproc_t mboxlist_ensureOwnerRights;
 

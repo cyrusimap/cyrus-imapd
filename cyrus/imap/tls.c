@@ -93,7 +93,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.48 2003/12/15 16:04:33 ken3 Exp $ */
+/* $Id: tls.c,v 1.49 2003/12/15 20:00:41 ken3 Exp $ */
 
 #include <config.h>
 
@@ -125,7 +125,7 @@
 #include "global.h"
 #include "cyrusdb.h"
 
-#define DB (CONFIG_DB_TLS) /* sessions are binary -> MUST use DB3 */
+#define DB (config_tlscache_db) /* sessions are binary -> MUST use DB3 */
 
 static struct db *sessdb = NULL;
 static int sess_dbopen = 0;

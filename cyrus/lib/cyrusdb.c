@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb.c,v 1.5 2003/10/22 18:50:12 rjs3 Exp $ */
+/* $Id: cyrusdb.c,v 1.6 2003/12/15 20:00:42 ken3 Exp $ */
 
 #include <config.h>
 #include <stdlib.h>
@@ -60,7 +60,7 @@
 #include "xmalloc.h"
 
 struct cyrusdb_backend *cyrusdb_backends[] = {
-#ifdef CONFIG_DB_BERKELEY
+#ifdef WITH_BERKELEY
     &cyrusdb_berkeley,
     &cyrusdb_berkeley_nosync,
 #endif

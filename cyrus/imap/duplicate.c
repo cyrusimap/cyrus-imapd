@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: duplicate.c,v 1.36 2003/12/15 16:04:32 ken3 Exp $ */
+/* $Id: duplicate.c,v 1.37 2003/12/15 20:00:39 ken3 Exp $ */
 
 #include <config.h>
 
@@ -82,7 +82,7 @@
 
 #include "duplicate.h"
 
-#define DB (CONFIG_DB_DUPLICATE)
+#define DB (config_duplicate_db)
 
 static struct db *dupdb = NULL;
 static int duplicate_dbopen = 0;

@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.2 2003/10/22 18:02:57 rjs3 Exp $ */
+/* $Id: global.c,v 1.3 2003/12/15 20:00:39 ken3 Exp $ */
 
 #include <config.h>
 
@@ -59,6 +59,7 @@
 #include <errno.h>
 
 #include "acl.h"
+#include "cyrusdb.h"
 #include "exitcodes.h"
 #include "gmtoff.h"
 #include "hash.h"
@@ -80,6 +81,35 @@ static enum {
 } cyrus_init_run = NOT_RUNNING;
 
 int config_implicitrights;        /* "lca" */
+struct cyrusdb_backend *config_mboxlist_db;
+struct cyrusdb_backend *config_subscription_db;
+struct cyrusdb_backend *config_annotation_db;
+struct cyrusdb_backend *config_seenstate_db;
+struct cyrusdb_backend *config_duplicate_db;
+struct cyrusdb_backend *config_tlscache_db;
+#ifdef WITH_PTS
+struct cyrusdb_backend *config_ptscache_db;
+#endif
+
+static struct cyrusdb_backend *config_getcyrusdb(enum imapopt opt)
+{
+    int i;
+    struct cyrusdb_backend *db = NULL;
+    const char *name = config_getstring(opt);
+
+    for (i = 0; cyrusdb_backends[i]; i++) {
+	if (!strcmp(cyrusdb_backends[i]->name, name)) {
+	    db = cyrusdb_backends[i]; break;
+	}
+    }
+    if (!db) {
+	char errbuf[1024];
+	sprintf(errbuf, "cyrusdb backend %s not supported", name);
+	fatal(errbuf, EC_CONFIG);
+    }
+
+    return db;
+}
 
 /* Called before a cyrus application starts (but after command line parameters
  * are read) */
@@ -148,6 +178,17 @@ int cyrus_init(const char *alt_config, const char *ident)
     /* look up and canonify the implicit rights of mailbox owners */
     config_implicitrights =
 	cyrus_acl_strtomask(config_getstring(IMAPOPT_IMPLICIT_OWNER_RIGHTS));
+
+    /* lookup the database backends */
+    config_mboxlist_db = config_getcyrusdb(IMAPOPT_MBOXLIST_DB);
+    config_subscription_db = config_getcyrusdb(IMAPOPT_SUBSCRIPTION_DB);
+    config_annotation_db = config_getcyrusdb(IMAPOPT_ANNOTATION_DB);
+    config_seenstate_db = config_getcyrusdb(IMAPOPT_SEENSTATE_DB);
+    config_duplicate_db = config_getcyrusdb(IMAPOPT_DUPLICATE_DB);
+    config_tlscache_db = config_getcyrusdb(IMAPOPT_TLSCACHE_DB);
+#ifdef WITH_PTS
+    config_ptscache_db = config_getcyrusdb(IMAPOPT_PTSCACHE_DB);
+#endif
 
     /* configure libcyrus as needed */
     libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, config_dir);
