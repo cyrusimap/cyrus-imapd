@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.15 2000/12/18 04:53:39 leg Exp $
+ * $Id: lmtpengine.c,v 1.16 2001/01/30 21:57:16 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1020,6 +1020,12 @@ void lmtpmode(struct lmtp_func *func,
       signals_poll();
 
       if (!prot_fgets(buf, sizeof(buf)-1, pin)) {
+	  const char *err = prot_error(pin);
+	  
+	  if (err != NULL) {
+	      prot_printf(pout, "421 4.4.1 bye %s\r\n", );
+	      prot_flush(pout);
+	  }
 	  goto cleanup;
       }
       p = buf + strlen(buf) - 1;
