@@ -1,0 +1,79 @@
+dnl Process this file with autoconf to produce a configure script.
+AC_INIT(imap/imapd.c)
+AC_PROG_CC
+AC_AIX
+dnl AC_MINIX Don't think MINIX handles long file names
+AC_ISC_POSIX
+AC_PROG_INSTALL
+AC_PROG_RANLIB
+AC_LONG_FILE_NAMES
+if test -z "HAVE_LONG_FILE_NAMES"; then
+	echo "The Cyrus IMAPD requires support for long file names"
+	exit 1
+fi
+AC_HAVE_HEADERS(unistd.h)
+AC_REPLACE_FUNCS(bcopy strcasecmp ftruncate)
+AC_DIR_HEADER
+dnl AC_XENIX_DIR  Don't think Xenix handles long file names
+AC_SUBST(CPPFLAGS)
+AC_SUBST(EXTRA_SUBDIRS)
+echo checking for modern syslog
+AC_TEST_CPP([#include <syslog.h>
+#ifndef LOG_LOCAL4
+#include </nonexistent>
+#endif], ,EXTRA_SUBDIRS="${EXTRA_SUBDIRS} syslog" LIBS="${LIBS} ../syslog/libsyslog.a" CPPFLAGS="$CPPFLAGS -I\$(srcdir)/../syslog")
+echo checking setproctitle
+AC_TEST_CPP([#if defined(_AIX3) || defined(DGUX) || defined(_SEQUENT_) || defined(apollo)
+#include </nonexistent>
+#endif],AC_DEFINE(SETPROCTITLE))
+echo checking for mmap
+AC_TEST_PROGRAM([#include <sys/types.h>
+#include <sys/mman.h>
+#include <fcntl.h>
+main() {int fd = open("conftestmmap", O_RDWR|O_CREAT, 666);
+if (fd == -1) exit(1);
+if (mmap((caddr_t)0, 100, PROT_READ, MAP_SHARED, fd, 0L) == (caddr_t)-1)
+ exit(1);exit(0);}],WITH_MAP=mmap,WITH_MAP=nommap)
+AC_SUBST(WITH_MAP)
+echo checking for Kerberos
+if test -f /etc/krb.conf; then have_kerberos=1; fi
+AC_WITH(login,WITH_LOGIN="$withval",
+	if test -n "$have_kerberos"; then
+		echo using Kerberos authentication
+		WITH_LOGIN=krb
+	else
+		echo using unix /etc/passwd authentication
+		WITH_LOGIN=unix
+	fi)
+AC_SUBST(WITH_LOGIN)
+AC_WITH(auth,[WITH_AUTH="$withval"
+	case "$withval" in
+	${WITH_LOGIN}*) true;;
+	*) echo Authorization module incompatibile with login module; exit 1;;
+	esac],WITH_AUTH="$WITH_LOGIN")
+AC_SUBST(WITH_AUTH)
+if test "$WITH_LOGIN" = "krb"; then
+if test -f /usr/local/include/krb.h; then
+     CPPFLAGS="${CPPFLAGS} -I/usr/local/include"
+     LIBS="${LIBS} /usr/local/lib/libkrb.a /usr/local/lib/libdes.a"
+     LIBOBJS="${LIBOBJS} kerberos.o";
+else
+AC_HAVE_LIBRARY(krb,
+     LIBS="${LIBS} -lkrb -ldes" LIBOBJS="${LIBOBJS} kerberos.o",
+     echo Unable to find Kerberos libraries; exit 1)
+fi
+fi
+AC_WITH(inn,INNSHELLVARS="$withval/innshellvars",[
+echo checking for inn
+if test -f /usr/local/news/innshellvars; then
+	INNSHELLVARS=/usr/local/news/innshellvars
+elif test -f /usr/lib/news/innshellvars; then
+	INNSHELLVARS=/usr/lib/news/innshellvars
+elif test -f /usr/news/innshellvars; then
+	INNSHELLVARS=/usr/news/innshellvars
+else
+	echo did not find inn
+	INNSHELLVARS=/did/not/find/innshellvars
+fi])
+AC_SUBST(INNSHELLVARS)
+AC_OUTPUT(Makefile syslog/Makefile et/Makefile lib/Makefile imap/Makefile glue/feedcyrus)
