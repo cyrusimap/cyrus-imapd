@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squat_build.c,v 1.9 2003/06/15 22:14:13 rjs3 Exp $
+ * $Id: squat_build.c,v 1.9.4.1 2004/12/15 16:42:50 ken3 Exp $
  */
 
 /*
@@ -133,7 +133,7 @@ static char* prepare_buffered_write(SquatWriteBuffer* b, int len) {
       return NULL;
     }
     if (b->buf_size < len) {
-      b->buf = (char*)realloc(b->buf, len);
+      b->buf = (char*)xrealloc(b->buf, len);
       if (b->buf == NULL) {
         squat_set_last_error(SQUAT_ERR_OUT_OF_MEMORY);
         return NULL;
@@ -429,7 +429,7 @@ int squat_index_open_document(SquatIndex* index, char const* name) {
   if (index->current_doc_ID >= index->doc_ID_list_size) {
     index->doc_ID_list_size *= 2;
     index->doc_ID_list =
-      (char*)realloc(index->doc_ID_list, index->doc_ID_list_size*sizeof(SquatInt32));
+      (char*)xrealloc(index->doc_ID_list, index->doc_ID_list_size*sizeof(SquatInt32));
 
     if (index->doc_ID_list == NULL) {
       squat_set_last_error(SQUAT_ERR_OUT_OF_MEMORY);
