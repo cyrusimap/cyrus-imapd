@@ -2,8 +2,12 @@
 
 Changes to the Cyrus IMAP Server Since Version 1.5.14
 
-      * Implemented the POP3 Extension Mechanism specified by
-        draft-gellens-pop3ext-06.txt. 
+      * Fixed a mmap leak in index.c in index_search_evaluate that caused
+        problems on complex searches. Thanks to Jeff Schiller for pointing
+        this out. Fixed a potential leak in mboxlist.c that happened if a
+        rename went awry. Thanks to Chris Newman for pointing this out. 
+      * Implemented the POP3 Extension Mechanism specified by the
+        Internet-Draft draft-gellens-pop3ext-09.txt. 
       * Fixed a bug in mailbox.c that disallowed MUTF-7 representations of
         ASCII characters when it shouldn't have. (Thanks to John Myers for
         providing a fix and to Per Steinar Iversen for telling me that I
