@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.31 2000/06/01 05:23:31 leg Exp $ */
+/* $Id: proxyd.c,v 1.32 2000/06/01 05:44:22 leg Exp $ */
 
 #include <config.h>
 
@@ -94,6 +94,8 @@
    currently piping */
 #define LAST_RESULT_LEN 1024
 #define IDLE_TIMEOUT (5 * 60)
+
+static const int ultraparanoid = 1; /* should we kick after every operation? */
 
 struct backend {
     char *hostname;
@@ -2786,6 +2788,7 @@ void cmd_create(char *tag, char *name, char *server)
 		break;
 	    }
 	}
+	if (ultraparanoid && res == OK) acapmbox_kick_target();
     }
     
     if (r) prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
@@ -2832,6 +2835,8 @@ void cmd_delete(char *tag, char *name)
 		       name, error_message(r));
 	    }
 	}
+
+	if (ultraparanoid && res == OK) acapmbox_kick_target();
     }
 
     if (r) prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
@@ -2913,6 +2918,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 		break;
 	    }
 	}
+	if (res == OK) acapmbox_kick_target();
     }
 
     if (r) prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
@@ -3318,6 +3324,7 @@ void cmd_setacl(char *tag, char *name, char *identifier, char *rights)
 		       mailboxname, error_message(r));
 	    }
 	}
+	if (res == OK) acapmbox_kick_target();
     }
 
     if (r) prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
