@@ -43,7 +43,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #
 # Script for mass compilation of sieve scripts.
 #
-# $Id: masssievec,v 1.1.4.1 2003/02/27 18:14:20 rjs3 Exp $
+# $Id: masssievec,v 1.1.4.2 2003/02/27 18:34:59 rjs3 Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -126,7 +126,23 @@ while (defined($s = readdir TOP)) {
 		next unless($u =~ m/\.script$/);
 		$out = $u;
 		$out =~ s/\.script$//;
-		`$SIEVEC $u $out.bc`;
+
+	FORK: {
+		if($pid = fork()) {
+		    #parent, do nothing
+		    waitpid $pid, 0;
+		} elsif (defined $pid) {
+		    # child
+		    exec $SIEVEC, $u, "$out.bc";
+		    die "souldn't be here";
+		} elsif ($! =~ /No more process/) {
+		    # EAGAIN
+		    sleep 5; redo FORK;
+		} else {
+		    die "cant fork: $!";
+		}
+	      }
+
 		$rc = $? & 0xff00;
 		$rc >>= 8;
 		if($rc) {
