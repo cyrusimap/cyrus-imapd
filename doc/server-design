@@ -27,11 +27,16 @@ metacharacters, and "/" are not permitted in mailbox names.  Later
 versions of the server may make the set of permissible characters
 site-policy configurable.
 
-The personal mailboxes for user "bovik" are named with "user.bovik."
-prepended.  The mailbox "user.bovik" is presented to the user "bovik"
-as if it were named "INBOX", and mailboxes with names starting
-"user.bovik." are presented to the user "bovik" as if they instead
-started with "INBOX.".
+All personal mailboxes for user "bovik" begin with the string
+"user.bovik.". For example, if user "bovik" had a personal "work"
+mailbox, it would be called "user.bovik.work". To user "bovik",
+however, the prefix "user.bovik." normally appears as "INBOX.". The
+mailbox "user.bovik.work" would therefore appear as "INBOX.work". If
+the access control list of the mailbox permitted other users to see
+that mailbox, it would appear to them as "user.bovik.work".
+
+The mailbox "user.bovik" is where the user "bovik" normally receives
+new mail, and normally appears to user "bovik" as "INBOX".
 
 * IMAP protocol extensions and implementation decisions
 
