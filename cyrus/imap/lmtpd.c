@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.99.2.2 2002/07/10 20:45:05 rjs3 Exp $
+ * $Id: lmtpd.c,v 1.99.2.3 2002/07/11 16:42:00 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1076,11 +1076,23 @@ static FILE *sieve_find_script(const char *user)
 	/* check ~USERNAME/.sieve */
 	snprintf(buf, sizeof(buf), "%s/%s", pent->pw_dir, ".sieve");
     } else { /* look in sieve_dir */
-	char hash;
+	char hash, *domain;
 
-	hash = (char) dir_hash_c(user);
+	if (config_virtdomains && (domain = strchr(user, '@'))) {
+	    char d = (char) dir_hash_c(domain+1);
+	    *domain = '\0';  /* split user@domain */
+	    hash = (char) dir_hash_c(user);
+	    snprintf(buf, sizeof(buf), "%s%s%c/%s/%c/%s",
+		     sieve_dir, FNAME_DOMAINDIR, d, domain+1,
+		     hash, user);
+	    *domain = '@';  /* reassemble user@domain */
+	}
+	else {
+	    hash = (char) dir_hash_c(user);
 
-	snprintf(buf, sizeof(buf), "%s/%c/%s/default", sieve_dir, hash, user);
+	    snprintf(buf, sizeof(buf), "%s/%c/%s/default",
+		     sieve_dir, hash, user);
+	}
     }
 	
     return (fopen(buf, "r"));
@@ -1226,10 +1238,12 @@ int deliver(message_data_t *msgdata, char *authuser,
 	/* case 2: ordinary user, might have Sieve script */
 	else if (!strchr(rcpt, lmtpd_namespace.hier_sep) &&
 	         strlen(rcpt) + 30 <= MAX_MAILBOX_PATH) {
-	    FILE *f = sieve_find_script(rcpt);
+	    FILE *f;
 
 	    strcpy(user, rcpt);
 	    if (domain) sprintf(user+strlen(user), "@%s", domain);
+
+	    f = sieve_find_script(user);
 
 #ifdef USE_SIEVE
 	    if (f != NULL) {
