@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.5 2003/12/29 20:22:54 ken3 Exp $ */
+/* $Id: global.c,v 1.6 2004/01/08 14:51:02 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -627,7 +627,7 @@ int shutdown_file(char *buf, int size)
     if ((p = strchr(buf, '\r')) != NULL) *p = 0;
     if ((p = strchr(buf, '\n')) != NULL) *p = 0;
 
-    syslog(LOG_WARNING, "%s, closing connection", buf);
+    syslog(LOG_DEBUG, "Shutdown file: %s, closing connection", buf);
 
     return 1;
 }
