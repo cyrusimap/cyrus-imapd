@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.41 1999/12/02 05:22:47 tmartin Exp $
+ $Id: imclient.c,v 1.42 1999/12/10 02:58:06 tmartin Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -1840,11 +1840,14 @@ int imclient_starttls(struct imclient *imclient,
   if (result!=0)
   {
     printf("Start TLS engine failed\n");
+    return 1;
   } else {
     result=tls_start_clienttls(imclient, &externalprop.ssf, &externalprop.auth_id, imclient->fd);
     
-    if (result!=0)
-      printf("TLS negotiation failed!\n");
+    if (result!=0) {
+      printf("Warning: TLS negotiation did not succeed\n");
+      return 1;
+    }
   }
 
   /* turn non-blocking i/o back on */
