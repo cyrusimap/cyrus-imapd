@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.430 2003/05/29 02:14:28 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.431 2003/06/24 14:28:39 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -7248,7 +7248,8 @@ static void mstringdata(char *cmd, char *name, int matchlen, int maycreate,
     }
 
     /* Suppress any output of a partial match */
-    if (name[matchlen] && strncmp(lastname, name, matchlen) == 0) {
+    if (name[matchlen] && strncmp(lastname, name, matchlen) == 0
+	&& lastname[matchlen] == '\0') {
 	return;
     }
 	
@@ -7271,7 +7272,7 @@ static void mstringdata(char *cmd, char *name, int matchlen, int maycreate,
 	snprintf(mboxname, sizeof(mboxname), "user.%s%s", imapd_userid,
 		 lastname+5);
     else
-	strcpy(mboxname, lastname);
+	strlcpy(mboxname, lastname, sizeof(mboxname));
 
     /* Look it up */
     nonexistent = mboxlist_detail(mboxname, &mbtype,
