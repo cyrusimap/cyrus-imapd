@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.2.2.32 2005/03/31 18:51:29 ken3 Exp $
+.\" $Id: imapoptions,v 1.2.2.33 2005/04/06 20:36:58 ken3 Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -861,7 +861,12 @@ are listed with ``<none>''.
 { "sync_log", 0, SWITCH }
 /* Enable replication action logging by lmtpd(8), imapd(8), pop3d(8),
    and nntpd(8).  The log {configdirectory}/sync/log is used by
-   sync_client(8) for "rolling" replication. */ 
+   sync_client(8) for "rolling" replication. */
+
+{ "sync_machineid", -1, INT }
+/* Machine ID of this server which must be unique within a cluster.
+   Any negative number, the default, will disable the use of UUIDs for
+   replication. *./
 
 { "sync_password", NULL, STRING }
 /* The default password to use when authenticating to a sync server. */

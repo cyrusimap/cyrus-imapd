@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.85.2.14 2005/03/07 15:45:28 shadow Exp $ */
+/* $Id: master.c,v 1.85.2.15 2005/04/06 20:37:00 ken3 Exp $ */
 
 #include <config.h>
 
@@ -120,6 +120,7 @@ enum {
 static int verbose = 0;
 static int listen_queue_backlog = 32;
 static int pidfd = -1;
+static int have_uuid = 0;
 
 const char *MASTER_CONFIG_FILENAME = DEFAULT_MASTER_CONFIG_FILENAME;
 
@@ -704,9 +705,11 @@ void spawn_service(const int si)
 	putenv(name_env2);
 
 	/* add UUID prefix to environment */
-	snprintf(uuid_env, sizeof(uuid_env), "CYRUS_UUID_PREFIX=%s",
-                 uuid_prefix_text);
-	putenv(uuid_env);
+	if (s->provide_uuid) {
+	    snprintf(uuid_env, sizeof(uuid_env), "CYRUS_UUID_PREFIX=%s",
+		     uuid_prefix_text);
+	    putenv(uuid_env);
+	}
 
 	execv(path, s->exec);
 	syslog(LOG_ERR, "couldn't exec %s: %m", path);
@@ -1340,7 +1343,7 @@ void add_service(const char *name, struct entry *e, void *rock)
     rlim_t maxfds = (rlim_t) masterconf_getint(e, "maxfds", 256);
     int reconfig = 0;
     int i, j;
-    int provide_uuid = masterconf_getswitch(e, "provide_uuid", 0);
+    int provide_uuid = have_uuid && masterconf_getswitch(e, "provide_uuid", 0);
 
     if(babysit && prefork == 0) prefork = 1;
     if(babysit && maxforkrate == 0) maxforkrate = 10; /* reasonable safety */
@@ -1947,7 +1950,8 @@ int main(int argc, char **argv)
 	}
     }
 
-    if (!message_uuid_master_init()) {
+    have_uuid = (config_getint(IMAPOPT_SYNC_MACHINEID) >= 0);
+    if (have_uuid && !message_uuid_master_init()) {
         syslog(LOG_ERR, "Couldn't initialise UUID subsystem");
         exit(EX_OSERR);
     }

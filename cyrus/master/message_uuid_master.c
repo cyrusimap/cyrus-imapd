@@ -186,43 +186,6 @@ master_chomp(char *s)
 
 /* ====================================================================== */
 
-/* Utility function to read MASTER_MACHINE_FILE */
-
-#define MASTER_MACHINE_MAX_LINE (512)
-
-static int
-master_machine_read(unsigned long *machinep, char *filename)
-{
-    FILE *file;
-    char buf[MASTER_MACHINE_MAX_LINE], *s;
-
-    if ((file=fopen(filename, "r")) == NULL) {
-        syslog(LOG_ERR, "Failed to open %s: %m", filename);
-        return(0);
-    }
-
-    if (fgets(buf, MASTER_MACHINE_MAX_LINE, file) == NULL) {
-        syslog(LOG_ERR, "Unexpected end of file in %s", filename);
-        fclose(file);
-        return(0);
-    }
-    fclose(file);
-
-    master_chomp(buf);
-
-    if ((s=strchr(buf, '=')) &&
-        !strncmp(buf, "machine", s-buf) &&
-        master_value_isnumeric(s+1)) {
-        *machinep = strtoul(s+1, NULL, 10);
-        return(1);
-    }
-
-    syslog(LOG_ERR, "Invalid line in %s: %s", filename, buf);
-    return(0);
-}
-
-/* ====================================================================== */
-
 /* Utility functions to read/write UUID master file */
 
 #define MASTER_UUID_MAX_LINE (512)
@@ -396,42 +359,53 @@ master_uuid_write_and_test(struct uuid_info *uuid_info)
 int
 message_uuid_master_init()
 {
-    struct uuid_info uuid_tmp;
-    unsigned long machine = 0;
+    unsigned long machine = config_getint(IMAPOPT_SYNC_MACHINEID);
+    char *ufname;
+    struct stat sbuf;
+    int r;
 
-    char *ufname = (char *)xmalloc(strlen(config_dir) + strlen(MASTER_UUID_FILE)+2);
-    char *fname = (char *)xmalloc(strlen(config_dir) + strlen(MASTER_MACHINE_FILE)+2);
-
-    sprintf(fname, "%s/%s", config_dir, MASTER_MACHINE_FILE);
-    sprintf(ufname, "%s/%s", config_dir, MASTER_UUID_FILE);
+    if (machine < 0) return (0);
 
     uuid_info_clear(&uuid_private);
-    uuid_info_clear(&uuid_tmp);
 
-    if ((master_machine_read(&machine, fname) == 0) ||
-	(master_uuid_read(&uuid_private, ufname) == 0)) {
-	free(fname);
+    ufname = (char *) xmalloc(strlen(config_dir) + strlen(MASTER_UUID_FILE)+2);
+    sprintf(ufname, "%s/%s", config_dir, MASTER_UUID_FILE);
+
+    r = stat(ufname, &sbuf);
+    if (r == 0) {
+	r = master_uuid_read(&uuid_private, ufname);
+	free(ufname);
+
+	if (r == 0) return(0);
+
+	if (uuid_private.machine != machine) {
+	    syslog(LOG_ERR, "Machine mismatch: %lu |= %lu",
+		   (unsigned long)machine, 
+		   (unsigned long)uuid_private.machine);
+	    return(0);
+	}
+
+	if (uuid_private.master_start_time >= time(NULL))
+	    return(0);
+    }
+    else if (errno == ENOENT) {
+	uuid_private.schema = 1;
+	uuid_private.machine = machine;
+	free(ufname);
+    }
+    else {
+        syslog(LOG_ERR, "Failed to stat %s: %m", ufname);
 	free(ufname);
         return(0);
     }
-
-    if (uuid_private.machine != machine) {
-        syslog(LOG_ERR, "Machine mismatch: %lu |= %lu",
-               (unsigned long)machine, 
-               (unsigned long)uuid_private.machine);
-        return(0);
-    }
-
-    if (uuid_private.master_start_time >= time(NULL))
-        return(0);
 
     uuid_private.master_start_time = time(NULL);
     uuid_private.child_counter = 0;
     uuid_private.count = 0;
 
     if (!master_uuid_write_and_test(&uuid_private)) {
-        uuid_info_clear(&uuid_private);
-        return(0);
+	uuid_info_clear(&uuid_private);
+	return(0);
     }
 
     return(1);

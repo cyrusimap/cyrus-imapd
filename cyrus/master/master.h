@@ -1,10 +1,12 @@
 #ifndef HAVE_MASTER_H
 #define HAVE_MASTER_H
 
-/* $Id: master.h,v 1.9.2.5 2005/02/28 20:16:40 shadow Exp $ */
+/* $Id: master.h,v 1.9.2.6 2005/04/06 20:37:01 ken3 Exp $ */
 
 #include <config.h>
 #include <sys/resource.h> /* for rlim_t */
+
+#include "libconfig.h" /* for config_dir and IMAPOPT_SYNC_MACHINEID */
 
 /* needed for possible SNMP monitoring */
 struct service {
@@ -44,8 +46,6 @@ struct service {
 extern struct service *Services;
 extern int allocservices;
 extern int nservices;
-
-extern const char *config_dir;
 
 /*
  * Description of multiple address family support from
