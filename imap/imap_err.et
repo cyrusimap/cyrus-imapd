@@ -1,0 +1,32 @@
+# Error codes for Cyrus IMAP server programs
+#
+error_table imap
+
+ec IMAP_IOERROR,
+   "system I/O error"
+
+ec IMAP_PERMISSION_DENIED,
+   "permission denied"
+
+ec IMAP_QUOTA_EXCEEDED,
+   "over quota"
+
+ec IMAP_MAILBOX_BADFORMAT,
+   "mailbox has an invalid format"
+
+ec IMAP_MAILBOX_NOTSUPPORTED,
+   "operation not supported on mailbox"
+
+ec IMAP_MAILBOX_NONEXISTENT,
+   "mailbox does not exist"
+
+ec IMAP_PARTITION_UNKNOWN,
+   "unknown/invalid partition"
+
+ec IMAP_MESSAGE_BADFORMAT,
+   "message has an invalid format"
+
+ec IMAP_MESSAGE_NONEXISTENT,
+   "message text no longer exists"
+
+end
