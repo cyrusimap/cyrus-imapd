@@ -36,10 +36,10 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- * $Id: version.h,v 1.107 2001/08/03 21:18:08 ken3 Exp $
+ * $Id: version.h,v 1.106.4.1 2002/12/03 22:21:11 rjs3 Exp $
  */
 
-#define _CYRUS_VERSION "v2.1.0pre"
+#define _CYRUS_VERSION "v2.0.17"
 
 /* EXTRA_IDENT is a hack to add some version information for which compile
  * was used to build this version (at CMU, but we don't care what you do with
@@ -52,7 +52,7 @@
 #define CYRUS_VERSION _CYRUS_VERSION
 #endif
 
-/* CAPABILITIES are now defined here, not including sasl ones */
+/* CAPABILITIES are now defined here, not including thread and sasl ones */
 #define CAPABILITY_STRING "IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE " \
-	"UIDPLUS ID NO_ATOMIC_RENAME UNSELECT CHILDREN MULTIAPPEND SORT " \
+	"UIDPLUS ID NO_ATOMIC_RENAME UNSELECT MULTIAPPEND SORT " \
 	"THREAD=ORDEREDSUBJECT THREAD=REFERENCES"
