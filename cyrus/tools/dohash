@@ -30,7 +30,7 @@ while (<CONF>) {
 }
 close CONF;
 
-$conf = shift || "/var/imap";
+if (! $conf) { $conf = "/var/imap"; }
 
 print "upgrading configuration directory $conf...";
 chdir $conf or die "couldn't change to $conf";
