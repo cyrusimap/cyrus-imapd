@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.28.4.14 2003/06/20 16:47:37 ken3 Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.28.4.15 2003/06/24 03:57:49 rjs3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -23,6 +23,17 @@ appropriate <tt>EVENTS</tt> entry in <tt>cyrus.conf</tt> with one of
 those in the sample configurations in the <tt>master/conf</tt>
 directory.</li>
 </ul>
+
+<li>The sieve bytecode format has changed.  The new format is encoded in
+network byte order, and will be transferable between architechures.  To
+upgrade existing scripts (outside of home directories), you can run the
+<tt>tools/masssievec</tt> perl script included with the distribution. It
+requires a path to your <tt>sievec</tt> binary.  This should also upgrade
+scripts that have already been compiled to bytecode.  For example:
+
+<pre>
+masssievec /usr/src/cyrus/sieve/sievec
+</pre>
 
 
 <h2>Upgrading from 2.1.x or earlier</h2>
@@ -68,7 +79,7 @@ We believe that skiplist offers considerable performance advantages
 for these two databases over the previous defaults.  </li>
 
 <li>Sieve scripts are now compiled into bytecode.  The program
-<tt>sievec</tt> is provide to do this process manually (timsieved will
+<tt>sievec</tt> is provided to do this process manually (timsieved will
 compile submitted sieve scripts as they are uploaded).  To upgrade
 existing scripts (outside of home directories), you can run the
 <tt>tools/masssievec</tt> perl script included with the distribution.
@@ -368,7 +379,7 @@ worry about it.)
 </ul>
 
 <HR><P>
-last modified: $Date: 2003/06/20 16:47:37 $
+last modified: $Date: 2003/06/24 03:57:49 $
 </BODY></HTML>
 
 
