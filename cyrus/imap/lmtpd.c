@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.128 2004/02/08 18:31:14 ken3 Exp $
+ * $Id: lmtpd.c,v 1.129 2004/02/08 18:44:28 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -383,7 +383,6 @@ int deliver(message_data_t *msgdata, char *authuser,
 	/* case 2: ordinary user, might have Sieve script */
 	else if (!strchr(rcpt, lmtpd_namespace.hier_sep) &&
 	         strlen(rcpt) + 30 <= MAX_MAILBOX_PATH) {
-	    char fname[MAX_MAILBOX_PATH+1];
 
 	    strlcpy(user, rcpt, sizeof(user));
 	    if (domain) sprintf(user+strlen(user), "@%s", domain);
