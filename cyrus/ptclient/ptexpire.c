@@ -18,7 +18,7 @@
 
 #include "auth_krb_pts.h"
 
-static char rcsid[] = "$Id: ptexpire.c,v 1.6 1998/07/30 21:31:02 wcw Exp $";
+static char rcsid[] = "$Id: ptexpire.c,v 1.7 1999/02/16 01:56:08 wcw Exp $";
 
 typedef struct {
   char keydata[PR_MAXNAMELEN + 4];
@@ -81,7 +81,7 @@ main(argc, argv)
   }
 
   timenow = time(0);
-  syslog(LOG_DEBUG, "start (%d): %s", timenow, rcsid);
+  syslog(LOG_NOTICE, "start (%d): %s", timenow, rcsid);
   syslog(LOG_DEBUG, "Expiring entries older than %d seconds", expire_time);
 
   ndels = 0;
@@ -125,7 +125,7 @@ main(argc, argv)
     exit(-1);
   }
   if (rc) {
-    syslog(LOG_DEBUG, "No entries found. Exiting");
+    syslog(LOG_NOTICE, "No entries found. Exiting");
     exit(0);
   }
   thekey = key.data;
@@ -268,7 +268,7 @@ main(argc, argv)
     close(fd);
   }
   free(deletions);
-  syslog(LOG_DEBUG, "finished");
+  syslog(LOG_NOTICE, "finished");
   exit(0);
 }      
 
