@@ -23,10 +23,22 @@ ec IMAP_MAILBOX_NONEXISTENT,
 ec IMAP_PARTITION_UNKNOWN,
    "unknown/invalid partition"
 
-ec IMAP_MESSAGE_BADFORMAT,
-   "message has an invalid format"
+ec IMAP_MESSAGE_CONTAINSNULL,
+   "message contains NUL characters"
 
-ec IMAP_MESSAGE_NONEXISTENT,
-   "message text no longer exists"
+ec IMAP_MESSAGE_CONTAINSCR,
+   "message contains bare carriage returns"
+
+ec IMAP_MESSAGE_CONTAINSNL,
+   "message contains bare newlines"
+
+ec IMAP_MESSAGE_CONTAINS8BIT,
+   "message contains non-ASCII characters in headers"
+
+ec IMAP_MESSAGE_BADHEADER,
+   "message contains invalid header"
+
+ec IMAP_MESSAGE_NOBLANKLINE,
+   "message has no header/body separator"
 
 end

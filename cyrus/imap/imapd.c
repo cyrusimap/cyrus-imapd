@@ -110,6 +110,17 @@ cmdloop()
 	if (!imapd_userid && cmd.s[0] != 'L' && cmd.s[0] != 'N') goto nologin;
     
 	switch (cmd.s[0]) {
+	case 'A':
+	    if (!strcmp(cmd.s, "Append")) {
+		if (c != ' ') goto missingargs;
+		c = getastring(&arg1);
+		if (c != ' ') goto missingargs;
+
+		cmd_append(tag.s, arg1.s);
+	    }
+	    else goto badcmd;
+	    break;
+
 	case 'B':
 	    if (!strcmp(cmd.s, "Bboard")) {
 		if (c != ' ') goto missingargs;
@@ -208,6 +219,7 @@ cmdloop()
 		c = getword(&arg3);
 		if (c != ' ') goto missingargs;
 		c = getword(&arg4);
+		if (c == '\r') c = getc(stdin);
 		if (c != '\n') goto extraargs;
 		cmd_partial(tag.s, arg1.s, arg2.s, arg3.s, arg4.s);
 	    }
@@ -240,6 +252,7 @@ cmdloop()
 		}
 		else if (!strcmp(arg1.s, "after")) {
 		    c = getword(&arg2);
+		    if (c == '\r') c = getc(stdin);
 		    if (c != '\n') goto extraargs;
 		    cmd_uidafter(tag.s, arg2.s);
 		}
@@ -330,12 +343,97 @@ char *passwd;
 
 cmd_noop(tag, cmd)
 char *tag;
+char *cmd;
 {
     if (imapd_mailbox) {
 	index_check(imapd_mailbox);
     }
     printf("%s OK %s completed\r\n", tag, cmd);
 };
+
+#define FLAGGROW 1 /* XXX 10 */
+cmd_append(tag, name)
+char *tag;
+char *name;
+{
+    int c;
+    char **flag = 0;
+    int nflags = 0, flagalloc = 0;
+    static struct buf arg;
+    char *p;
+    unsigned size = 0;
+    int r;
+    struct mailbox mailbox;
+
+    /* Get flags */
+    for (c = getword(&arg); arg.s[0] != '{'; c = getword(&arg)) {
+	if (arg.s[0] == '\\') {
+	    lcase(arg.s);
+	    if (!strcmp(arg.s, "\\seen") && !strcmp(arg.s, "\\answered") &&
+		!strcmp(arg.s, "\\flagged") && !strcmp(arg.s, "\\deleted")) {
+		printf("%s BAD Invalid system flag in Append command\r\n",tag);
+		if (c != '\n') eatline();
+		goto freeflags;
+	    }
+	}
+	else if (!isatom(&arg)) {
+	    printf("%s BAD Invalid flag name %s in Append command\r\n",
+		   tag, arg.s);
+	    if (c != '\n') eatline();
+	    goto freeflags;
+	}
+	if (nflags == flagalloc) {
+	    flagalloc += FLAGGROW;
+	    flag = (char **)xrealloc((char *)flag, flagalloc*sizeof(char *));
+	}
+	flag[nflags++] = strsave(arg.s);
+    }
+
+    /* Read size from literal */
+    for (p = arg.s + 1; *p && isdigit(*p); p++) {
+	size = size*10 + *p - '0';
+    }
+    if (c == '\r') c = getc(stdin);
+    if (*p != '}' || p[1] || c != '\n' || size < 2) {
+	printf("%s BAD Invalid literal in Append command\r\n", tag);
+	if (c != '\n') eatline();
+	goto freeflags;
+    }
+    
+    r = append_setup(&mailbox, name, MAILBOX_FORMAT_NORMAL, ACL_INSERT, size);
+    if (r) {
+	printf("%s NO %sAppend to %s failed: %s\r\n",
+	       tag, r == IMAP_MAILBOX_NONEXISTENT ? "[TRYCREATE] " : "",
+	       name, error_message(r));
+	/* XXX clean name */
+	/* XXX check create permissions for [TRYCREATE] */
+	goto freeflags;
+    }
+
+    printf("+ go ahead\r\n");
+    fflush(stdout);
+
+    r = append_fromstream(&mailbox, stdin, size, flag, nflags);
+    mailbox_close(&mailbox);
+
+    if (imapd_mailbox) index_check(imapd_mailbox);
+
+    if (r) {
+	printf("%s NO Append to %s failed: %s\r\n",
+	       tag, name, error_message(r));
+	/* XXX clean name */
+    }
+    else {
+	printf("%s OK Append completed\r\n", tag);
+    }
+
+ freeflags:
+    while (nflags--) {
+	free(flag[nflags]);
+    }
+    if (flag) free((char *)flag);
+}
+
 
 cmd_select(tag, cmd, name)
 char *tag;
@@ -420,7 +518,6 @@ int usinguid;
     int inlist = 0;
     int fetchitems = 0;
     struct fetchargs fetchargs;
-    int r;
 
     fetchargs = zerofetchargs;
 
@@ -519,6 +616,7 @@ int usinguid;
 	if (c != '\n') eatline();
 	return;
     }
+    if (c == '\r') c = getc(stdin);
     if (c != '\n') {
 	printf("%s BAD Unexpected extra arguments to %s\r\n", tag, cmd);
 	eatline();
@@ -536,14 +634,9 @@ int usinguid;
     }
 
     fetchargs.fetchitems = fetchitems;
-    r = index_fetch(imapd_mailbox, sequence, usinguid, &fetchargs);
+    index_fetch(imapd_mailbox, sequence, usinguid, &fetchargs);
 
-    if (r) {
-	printf("%s NO %s failed: %s\r\n", tag, cmd, error_message(r));
-    }
-    else {
-	printf("%s OK %s completed\r\n", tag, cmd);
-    }
+    printf("%s OK %s completed\r\n", tag, cmd);
 }
 
 cmd_partial(tag, msgno, data, start, count)
@@ -601,16 +694,11 @@ char *count;
 	return;
     }
 
-    r = index_fetch(imapd_mailbox, msgno, 0, &fetchargs);
+    index_fetch(imapd_mailbox, msgno, 0, &fetchargs);
 
     index_check(imapd_mailbox);
 
-    if (r) {
-	printf("%s NO Partial failed: %s\r\n", tag, error_message(r));
-    }
-    else {
-	printf("%s OK Partial completed\r\n", tag);
-    }
+    printf("%s OK Partial completed\r\n", tag);
 }
 
 cmd_uidafter(tag, arg)
@@ -619,7 +707,6 @@ char *arg;
 {
     int c, num = 0;
     struct fetchargs fetchargs;
-    int r = 0;
     char sequence[60];
 
     while (c = *arg++) {
@@ -638,15 +725,10 @@ char *arg;
     num = index_finduid(num)+1;
     if (num <= imapd_exists) {
 	sprintf(sequence, "%d:%d", num, imapd_exists);
-	r = index_fetch(imapd_mailbox, sequence, 0, &fetchargs);
+	index_fetch(imapd_mailbox, sequence, 0, &fetchargs);
     }
 
-    if (r) {
-	printf("%s NO UID After failed: %s\r\n", tag, error_message(r));
-    }
-    else {
-	printf("%s OK UID After completed\r\n", tag);
-    }
+    printf("%s OK UID After completed\r\n", tag);
 }
 
 #define BUFGROWSIZE 100

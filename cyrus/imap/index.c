@@ -1,32 +1,42 @@
+/*
+ * Routines for dealing with the index file in the imapd
+ */
 #include <stdio.h>
 #include <time.h>
+#include <sysexits.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <netinet/in.h>
 #include <sys/mman.h>
 
+#include <acl.h>
+#include "imap_err.h"
 #include "mailbox.h"
 #include "imapd.h"
 #include "message.h"
-#include "imap_err.h"
 #include "xmalloc.h"
 
+/* The index and cache files, mapped into memory */
 static char *index_base;
 static long index_len;
 static char *cache_base;
 static long cache_len;
 
+/* Attributes of memory-mapped index file */
 static time_t index_ino;
 static int start_offset;
 static int record_size;
 
-static int recentuid;
-static int lastnotrecent;
+static int recentuid;		/* UID of last non-\Recent message */
+static int lastnotrecent;	/* Msgno of last non-\Recent message */
 
-static time_t *flagreport;
-static char *seenflag;
-static int flagalloced;
+static time_t *flagreport;	/* Array for each msgno of last_updated when
+				 * FLAGS data reported to client.
+				 * Zero if FLAGS data never reported */
+static char *seenflag;		/* Array for each msgno, nonzero if \Seen */
+static int flagalloced;		/* Allocated size of above two arrays */
 
+/* Access macros for the memory-mapped index file data */
 #define INDEX_OFFSET(msgno) (index_base+start_offset+(((msgno)-1)*record_size))
 #define UID(msgno) ntohl(*((bit32 *)(INDEX_OFFSET(msgno))))
 #define INTERNALDATE(msgno) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+4)))
@@ -38,10 +48,14 @@ static int flagalloced;
 #define SYSTEM_FLAGS(msgno) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+28)))
 #define USER_FLAGS(msgno,i) ntohl(*((bit32 *)(INDEX_OFFSET(msgno)+32+((i)*4))))
 
-#define CACHE_ITEM_DATA(ptr) ((ptr)+4)
+/* Access assistance macros for memory-mapped cache file data */
 #define CACHE_ITEM_LEN(ptr) (ntohl(*((bit32 *)(ptr))))
 #define CACHE_ITEM_NEXT(ptr) ((ptr)+4+((3+CACHE_ITEM_LEN(ptr))&~3))
 
+/*
+ * A new mailbox has been selected, map it into memory and do the
+ * initial CHECK.
+ */
 index_newmailbox(mailbox)
 struct mailbox *mailbox;
 {
@@ -52,19 +66,22 @@ struct mailbox *mailbox;
     }
     imapd_exists = -1;
 
-    return index_check(mailbox);
+    index_check(mailbox);
 }
 
 #define SLOP 10 /* XXX 200 */
 #define CACHESLOP 100 /* XXX 16*1024 */
 
+/*
+ * Check for and report updates
+ */
 index_check(mailbox)
 struct mailbox *mailbox;
 {
     struct stat sbuf;
     int newexists, i;
 
-#if 0
+#if 0	/* XXX implement when doing EXPUNGE */
     if (index_len && mailbox_new_index_header(mailbox)) {
 	/* XXX send EXPUNGE */
 	imapd_exists = -1;
@@ -78,6 +95,7 @@ struct mailbox *mailbox;
     start_offset = mailbox->start_offset;
     record_size = mailbox->record_size;
 
+    /* Re-mmap the index file if necessary */
     if (mailbox->index_size > index_len) {
 	if (index_len) munmap(index_base, index_len);
 	index_len =  mailbox->index_size + (SLOP*record_size);
@@ -86,14 +104,14 @@ struct mailbox *mailbox;
     
 	if (index_base == (char *)-1) {
 	    index_len = 0;
-	    return IMAP_IOERROR;
+	    fatal("failed to mmap index file", EX_IOERR);
 	}
     }
 
+    /* Re-mmap the cache file if necessary */
     if (fstat(fileno(mailbox->cache), &sbuf) == -1) {
-	return IMAP_IOERROR;
+	fatal("failed to stat cache file", EX_IOERR);
     }
-
     if (cache_len <= sbuf.st_size) {
 	if (cache_len) munmap(cache_base, cache_len);
 	cache_len = sbuf.st_size + CACHESLOP;
@@ -102,12 +120,14 @@ struct mailbox *mailbox;
 
 	if (cache_base == (char *)-1) {
 	    cache_len = 0;
-	    return IMAP_IOERROR;
+	    fatal("failed to mmap cache file", EX_IOERR);
 	}
     }
 
+    /* Calculate the new number of messages */
     newexists = (mailbox->index_size - start_offset) / record_size;
 
+    /* If opening mailbox or had an EXPUNGE, find where \Recent starts */
     if (imapd_exists == -1) {
 	imapd_exists = newexists;
 	lastnotrecent = index_finduid(recentuid);
@@ -117,7 +137,9 @@ struct mailbox *mailbox;
     
     /* XXX check Flags */
 
+    /* If EXISTS changed, report it */
     if (newexists != imapd_exists) {
+	/* Re-size flagreport and seenflag arrays if necessary */
 	if (newexists > flagalloced) {
 	    flagalloced = newexists + SLOP;
 	    flagreport = (time_t *)
@@ -129,13 +151,15 @@ struct mailbox *mailbox;
 		seenflag[i] = 0;
 	    }
 	}
+
 	imapd_exists = newexists;
 	printf("* %d EXISTS\r\n* %d RECENT\r\n", imapd_exists, imapd_exists-lastnotrecent);
     }
-
-    return 0;
 }
 
+/*
+ * Helper function to send requested * FETCH data for a message
+ */
 static int
 index_fetchreply(mailbox, msgno, rock)
 struct mailbox *mailbox;
@@ -152,12 +176,12 @@ char *rock;
     if ((fetchitems & (FETCH_HEADER|FETCH_TEXT|FETCH_RFC822)) ||
 	fetchargs->bodyparts || fetchargs->headers || fetchargs->headers_not) {
 	msgfile = fopen(message_fname(mailbox, UID(msgno)), "r");
-	if (!msgfile) return IMAP_MESSAGE_NONEXISTENT;
+	if (!msgfile) printf("* NO Message %d no longer exists\r\n", msgno);
     }
 
-    /* Implied setting \Seen flag */
+    /* set the \Seen flag if necessary */
     if ((fetchitems & (FETCH_TEXT|FETCH_RFC822)) || fetchargs->bodyparts) {
-	if (!seenflag[msgno]) {
+	if (!seenflag[msgno] && (mailbox->my_acl & ACL_SEEN)) {
 	    seenflag[msgno] = 1;
 	    fetchitems |= FETCH_FLAGS;
 	}
@@ -179,7 +203,7 @@ char *rock;
 
 	if (gmtoff < 0) gmtoff = -gmtoff;
 	gmtoff /= 60;
-	printf("%cINTERNALDATE \"%.2d-%s-%d %0.2d:%0.2d:%0.2d %c%0.2d%0.2d\"",
+	printf("%cINTERNALDATE \"%2d-%s-%d %.2d:%.2d:%.2d %c%.2d%.2d\"",
 	       sepchar, tm->tm_mday, monthname[tm->tm_mon], tm->tm_year+1900,
 	       tm->tm_hour, tm->tm_min, tm->tm_sec,
 	       tm->tm_gmtoff < 0 ? '-' : '+', gmtoff/60, gmtoff%60);
@@ -223,7 +247,7 @@ char *rock;
 		flagmask = USER_FLAGS(msgno,flag/32);
 	    }
 	    if (mailbox->flagname[flag] && (flagmask & (1<<(flag & 31)))) {
-		printf("%c%s", mailbox->flagname[flag]);
+		printf("%c%s", flagsepchar, mailbox->flagname[flag]);
 		flagsepchar = ' ';
 	    }
 	}
@@ -285,17 +309,52 @@ char *rock;
     return 0;
 }
 
-int
+/*
+ * Perform a FETCH-related command on a sequence.
+ */
 index_fetch(mailbox, sequence, usinguid, fetchargs)
 struct mailbox *mailbox;
 char *sequence;
 int usinguid;
 struct fetchargs *fetchargs;
 {
-    return index_forsequence(mailbox, sequence, usinguid,
-			     index_fetchreply, (char *)fetchargs);
+    index_forsequence(mailbox, sequence, usinguid,
+		      index_fetchreply, (char *)fetchargs);
 }
 
+/*
+ * Returns the msgno of the message with UID 'uid'.
+ */
+int
+index_finduid(uid)
+int uid;
+{
+    int low=1, high=imapd_exists;
+    int mid, miduid;
+
+    while (low <= high) {
+	mid = (high - low)/2 + low;
+	miduid = UID(mid);
+	if (miduid == uid) {
+	    return mid;
+	}
+	else if (miduid > uid) {
+	    high = mid - 1;
+	}
+	else {
+	    low = mid + 1;
+	}
+    }
+    return high;
+}
+
+/*
+ * Call a function 'proc' on each message in 'sequence'.  If 'usinguid'
+ * is nonzero, 'sequence' is interpreted as a sequence of UIDs instead
+ * of a sequence of msgnos.  'proc' is called with arguments 'mailbox',
+ * the msgno, and 'rock'.  If any invocation of 'proc' returns nonzero,
+ * returns the first such returned value.  Otherwise, returns zero.
+ */
 static int
 index_forsequence(mailbox, sequence, usinguid, proc, rock)
 struct mailbox *mailbox;
@@ -353,29 +412,15 @@ char *rock;
     }
 }
 
-int
-index_finduid(uid)
-int uid;
-{
-    int low=1, high=imapd_exists;
-    int mid, miduid;
-
-    while (low <= high) {
-	mid = (high - low)/2 + low;
-	miduid = UID(mid);
-	if (miduid == uid) {
-	    return mid;
-	}
-	else if (miduid > uid) {
-	    high = mid - 1;
-	}
-	else {
-	    low = mid + 1;
-	}
-    }
-    return high;
-}
-
+/*
+ * Helper function to fetch data from a message file.
+ * Writes a quoted-string or literal containing data from
+ * 'msgfile', which is of format 'format', starting at 'offset'
+ * and containing 'size' octets.  If 'start_octet' is nonzero, the data
+ * is further constrained by 'start_octet' and 'octet_count' as per
+ * the IMAP command PARTIAL.
+ */
+static
 index_fetchmsg(msgfile, format, offset, size, start_octet, octet_count)
 FILE *msgfile;
 int format;
@@ -387,6 +432,7 @@ int octet_count;
     char buf[4096], *p;
     int n;
 
+    /* partial fetch: adjust 'size', normalize 'start_octet' to be 0-based */
     if (start_octet) {
 	if (size < start_octet) {
 	    size = 0;
@@ -398,16 +444,21 @@ int octet_count;
 	start_octet--;
     }
 
-    if (size == 0) {
+    /* If no data, output null quoted string */
+    if (!msgfile || size == 0) {
 	printf("\"\"");
 	return;
     }
+
+    /* Write size of literal */
     printf("{%d}\r\n", size);
 
     if (format == MAILBOX_FORMAT_NETNEWS) {
+	/* Have to fetch line-by-line, converting LF to CRLF */
 	fseek(msgfile, offset, 0);
 	while (size) {
 	    if (!fgets(buf, sizeof(buf)-1, msgfile)) {
+		/* Read error, resynch client */
 		while (size--) putc(' ', stdout);
 		return;
 	    }
@@ -419,9 +470,11 @@ int octet_count;
 	    }
 	    n = p - buf;
 	    if (start_octet >= n) {
+		/* Skip over entire line */
 		start_octet -= n;
 	    }
 	    else {
+		/* Skip over (possibly zero) first part of line */
 		n -= start_octet;
 		fwrite(buf + start_octet, 1, n, stdout);
 		start_octet = 0;
@@ -430,11 +483,13 @@ int octet_count;
 	}
     }
     else {
+	/* Seek over PARTIAL constraint, do fetch in buf-size chunks */
 	offset += start_octet;
 	fseek(msgfile, offset, 0);
 	while (size) {
 	    n = fread(buf, 1, size>sizeof(buf) ? sizeof(buf) : size, msgfile);
 	    if (n == 0) {
+		/* Read error, resynch client */
 		while (size--) putc(' ', stdout);
 		return;
 	    }

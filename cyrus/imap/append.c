@@ -3,12 +3,14 @@
  */
 
 #include <stdio.h>
+#include <syslog.h>
 
 #include <acl.h>
 #include "assert.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "message.h"
+#include "xmalloc.h"
 
 /*
  * Open a mailbox for appending
@@ -84,12 +86,19 @@ long quotacheck;
 }
 
 /*
- * Append to 'mailbox' from the stdio stream 'messagefile'
- * 'mailbox' must have been opened with append_setup()
+ * Append to 'mailbox' from the stdio stream 'messagefile'.
+ * 'mailbox' must have been opened with append_setup().
+ * If 'size', is nonzero it the expected size of the message.
+ * If 'size' is zero, message may need LF to CRLF conversion.
+ * 'flags' contains the names of the 'nflags' flags that the
+ * user wants to set in the message.
  */
-int append_fromstream(mailbox, messagefile)
+int append_fromstream(mailbox, messagefile, size, flag, nflags)
 struct mailbox *mailbox;
 FILE *messagefile;
+unsigned size;
+char **flag;
+int nflags;
 {
     struct index_record message_index;
     static struct index_record zero_index;
@@ -97,6 +106,8 @@ FILE *messagefile;
     FILE *destfile;
     int r;
     long last_cacheoffset;
+    int setseen = 0, writeheader = 0;
+    int userflag, emptyflag = -1;
 
     assert(mailbox->format == MAILBOX_FORMAT_NORMAL);
 
@@ -104,7 +115,7 @@ FILE *messagefile;
     message_index.uid = mailbox->last_uid + 1;
     message_index.last_updated = message_index.internaldate = time(0);
     if (message_index.internaldate <= mailbox->last_internaldate) {
-	message_index.internaldate = mailbox->last_internaldate + 1; /* XXX needed? */
+	message_index.internaldate = mailbox->last_internaldate + 1;
     }
 
     strcpy(fname, mailbox->path);
@@ -118,12 +129,63 @@ FILE *messagefile;
     fseek(mailbox->cache, 0L, 2);
     last_cacheoffset = ftell(mailbox->cache);
 
-    r = message_copy_stream(messagefile, destfile);
+    if (size) {
+	r = message_copy_strict(messagefile, destfile, size);
+    }
+    else {
+	r = message_copy_byline(messagefile, destfile);
+    }
     if (!r) r = message_parse(destfile, mailbox, &message_index);
     fclose(destfile);
     if (r) {
 	unlink(fname);
 	return r;
+    }
+
+    while (nflags--) {
+	if (!strcmp(flag[nflags], "\\seen")) setseen++;
+	else if (!strcmp(flag[nflags], "\\deleted")) {
+	    if (mailbox->my_acl & ACL_DELETE) {
+		message_index.system_flags |= FLAG_DELETED;
+	    }
+	}
+	else if (!strcmp(flag[nflags], "\\flagged")) {
+	    if (mailbox->my_acl & ACL_WRITE) {
+		message_index.system_flags |= FLAG_FLAGGED;
+	    }
+	}
+	else if (!strcmp(flag[nflags], "\\answered")) {
+	    if (mailbox->my_acl & ACL_WRITE) {
+		message_index.system_flags |= FLAG_ANSWERED;
+	    }
+	}
+	else if (mailbox->my_acl & ACL_WRITE) {
+	    for (userflag = 0; userflag < MAX_USER_FLAGS; userflag++) {
+		if (mailbox->flagname[userflag]) {
+		    if (!strcasecmp(flag[nflags], mailbox->flagname[userflag]))
+		      break;
+		}
+		else if (emptyflag == -1) emptyflag = userflag;
+	    }
+
+	    if (userflag == MAX_USER_FLAGS && emptyflag != -1) {
+		userflag = emptyflag;
+		mailbox->flagname[userflag] = strsave(flag[nflags]);
+		writeheader++;
+	    }
+
+	    if (userflag != MAX_USER_FLAGS) {
+		message_index.user_flags[userflag/32] |= 1<<(userflag&31);
+	    }
+	}
+    }
+    if (writeheader) {
+	r = mailbox_write_header(mailbox);
+	if (r) {
+	    unlink(fname);
+	    ftruncate(fileno(mailbox->cache), last_cacheoffset);
+	    return r;
+	}
     }
 
     mailbox->last_uid = message_index.uid;
@@ -154,8 +216,12 @@ FILE *messagefile;
     mailbox->quota_used += message_index.size;
     r = mailbox_write_quota(mailbox);
     if (r) {
-	/* XXX syslog it */
+	syslog(LOG_ERR,
+	       "LOSTQUOTA: unable to record use of %d bytes in quota file %s",
+	       message_index.size, mailbox->quota_path);
     }
+
+    /* XXX handle setseen */
     
     return 0;
 }
