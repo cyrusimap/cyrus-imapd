@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.172 1999/06/29 18:30:20 leg Exp $ */
+/* $Id: imapd.c,v 1.173 1999/06/29 21:19:27 leg Exp $ */
 
 #ifndef __GNUC__
 /* can't use attributes... */
@@ -231,7 +231,7 @@ static int mysasl_config(void *context __attribute__((unused)),
 
 /* should we allow users to proxy?  return SASL_OK if yes,
    SASL_BADAUTH otherwise */
-static mysasl_authproc(void *context __attribute__((unusued)),
+static mysasl_authproc(void *context __attribute__((unused)),
 		       const char *auth_identity,
 		       const char *requested_user,
 		       const char **user,
@@ -2009,13 +2009,8 @@ int usinguid;
     index_fetch(imapd_mailbox, sequence, usinguid, &fetchargs,
 		&fetchedsomething);
 
-    if (fetchedsomething) {
-	prot_printf(imapd_out, "%s OK %s\r\n", tag,
-		    error_message(IMAP_OK_COMPLETED));
-    } else {
-	prot_printf(imapd_out, "%s BAD Invalid sequence in %s\r\n",
-		    tag, cmd);
-    }
+    prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		error_message(IMAP_OK_COMPLETED));
 
  freeargs:
     freestrlist(newfields);
