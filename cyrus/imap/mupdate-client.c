@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.27 2002/03/12 18:10:49 ken3 Exp $
+ * $Id: mupdate-client.c,v 1.28 2002/03/12 18:55:34 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -459,7 +459,7 @@ int mupdate_reserve(mupdate_handle *handle,
     if (ret) {
 	return ret;
     } else if (response != MUPDATE_OK) {
-	return MUPDATE_FAIL;
+	return MUPDATE_FAIL_RESERVE;
     } else {
 	return 0;
     }
