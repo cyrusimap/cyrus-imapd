@@ -29,6 +29,8 @@
 
 #include <string.h>
 
+#include "bsearch.h"
+
 /* Case-dependent comparison converter.
  * Treats \r and \t as end-of-string and treats '.' lower than
  * everything else.
@@ -111,29 +113,30 @@ static char convert_to_lowercase[256] = {
 
 /*
  * Search for a line starting with 'word'.  The search ignores case if
- * 'caseSensitive' is nonzero.  The search is performed in 'buffer',
- * which is of length 'size'.  'hint' gives a idea of where to start
+ * 'caseSensitive' is nonzero.  The search is performed in 'base',
+ * which is of length 'len'.  'hint' gives a idea of where to start
  * looking.
  *
- * On success, the offset in 'buffer' of the found line is returned and
+ * On success, the offset in 'base' of the found line is returned and
  * the length of the found line is put in the unsigned long pointed to
- * by 'lenp'.  On failure, the offset in 'buffer' of where a new line should
+ * by 'linelenp'.  On failure, the offset in 'base' of where a new line should
  * be inserted is returned and zero is put in the unsigned long pointed to
- * by 'lenp'.
+ * by 'linelenp'.
  */
-bsearch_mem(word, caseSensitive, buffer, size, hint, lenp)
-char *word;
+int
+bsearch_mem(word, caseSensitive, base, len, hint, linelenp)
+const char *word;
 int caseSensitive;
-unsigned char *buffer;
+const char *base;
+unsigned long len;
 unsigned long hint;
-unsigned long size;
-unsigned long *lenp;
+unsigned long *linelenp;
 {
     int firstsearch = 1;
-    unsigned long start = 0, end = size - 1, mid, offset;
-    unsigned long len, n;
+    unsigned long start = 0, end = len - 1, mid, offset;
+    unsigned long linelen, n;
     int cmp;
-    unsigned char *wordp, *p;
+    const char *wordp, *p;
 
     while (start < end + 1) {
 	if (firstsearch) {
@@ -148,26 +151,26 @@ unsigned long *lenp;
 	}
 
 	if (mid) {
-	    p = memchr(buffer+mid, '\n', (end + 1) - mid);
+	    p = memchr(base+mid, '\n', (end + 1) - mid);
 	    if (!p) {
 		end = mid - 1;
 		continue;
 	    }
-	    offset = p - buffer + 1;
+	    offset = p - base + 1;
 	}
 
-	p = memchr(buffer+offset, '\n', size-offset);
+	p = memchr(base+offset, '\n', len-offset);
 	if (p) {
-	    len = p - (buffer+offset) + 1;
+	    linelen = p - (base+offset) + 1;
 	}
 	else {
-		end = mid - 1;
-		continue;
+	    end = mid - 1;
+	    continue;
 	}
 
-	n = len;
+	n = linelen;
 	wordp = word;
-	p = buffer+offset;
+	p = base+offset;
 
 	if (caseSensitive) {
 	    while (n-- > 0 && (cmp = TOCOMPARE(*wordp) - TOCOMPARE(*p)) == 0) {
@@ -195,7 +198,7 @@ unsigned long *lenp;
 	}
 
 	if (!cmp) {
-	    if (lenp) *lenp = len;
+	    if (linelenp) *linelenp = linelen;
 	    return offset;
 	}
 
@@ -209,9 +212,28 @@ unsigned long *lenp;
     }
 
     /* Word was not found.  Return offset where word should be inserted */
-    if (lenp) *lenp = 0;
-    if (start > size) return size;
+    if (linelenp) *linelenp = 0;
+    if (start > len) return len;
     if (!start) return 0;
-    p = memchr(buffer+start, '\n', size-start);
-    return p - buffer + 1;
+    p = memchr(base+start, '\n', len-start);
+    return p - base + 1;
+}
+
+int
+bsearch_compare(s1, s2)
+const char *s1;
+const char *s2;
+{
+    int cmp;
+    char c2;
+
+    for (;;) {
+	if ((c2 = *s2) == 0) {
+	    return (unsigned char)*s1;
+	}
+	cmp = TOCOMPARE(*s1) - TOCOMPARE(c2);
+	if (cmp) return cmp;
+	s1++;
+	s2++;
+    }
 }
