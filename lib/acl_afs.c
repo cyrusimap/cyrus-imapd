@@ -61,10 +61,12 @@ char *acl;
  * 'identifier' the set specified in the mask 'access'.  The pointer
  * pointed to by 'acl' must have been obtained from malloc().
  */
-acl_set(acl, identifier, access)
+acl_set(acl, identifier, access, canonproc, canonrock)
 char **acl;
 char *identifier;
 long access;
+long (*canonproc)();
+char *canonrock;
 {
     char *newacl;
     char *thisid, *nextid;
@@ -79,15 +81,19 @@ long access;
 	identifier = xmalloc(strlen(canonid)+2);
 	identifier[0] = '-';
 	strcpy(identifier+1, canonid);
+	if (canonproc) {
+	    access = ~(canonproc(canonrock, canonid, ~access));
+	}
     }
     else {
 	identifier = auth_canonifyid(identifier);
 	if (!identifier) {
 	    return -1;
 	}
+	if (canonproc) {
+	    access = canonproc(canonrock, identifier, access);
+	}
     }
-
-    /* XXX also canonify access bits.  Something clever for neg. acl */
 
     /* Find any existing entry for 'identifier' in 'acl' */
     for (thisid = nextid = *acl; *thisid; thisid = nextid) {
@@ -139,9 +145,11 @@ long access;
  * Remove any entry for 'identifier' in the ACL pointed to by 'acl'.
  * The pointer pointed to by 'acl' must have been obtained from malloc().
  */
-acl_delete(acl, identifier)
+acl_delete(acl, identifier, canonproc, canonrock)
 char **acl;
 char *identifier;
+long (*canonproc)();
+char *canonrock;
 {
-    return acl_set(acl, identifier, 0L);
+    return acl_set(acl, identifier, 0L, canonproc, canonrock);
 }
