@@ -106,7 +106,7 @@ struct protstream *s;
 int timeout;
 {
     s->read_timeout = timeout;
-    signal(SIGALARM, alarmhandler);
+    signal(SIGALRM, alarmhandler);
     return 0;
 }
 
@@ -187,7 +187,7 @@ struct protstream *s;
 	/* First 4 bytes contain length of crypttext token */
 	if (!inputlen && cnt >= 4) {
 	    inputlen = ntohl(*(int *)s->buf);
-	    if (inputlen > sizeof(buf) - 4) {
+	    if (inputlen > sizeof(s->buf) - 4) {
 		s->error = "Input crypttext token too long";
 		return EOF;
 	    }
