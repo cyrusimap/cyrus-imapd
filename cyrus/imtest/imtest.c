@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.75 2002/05/25 03:25:46 ken3 Exp $
+ * $Id: imtest.c,v 1.76 2002/05/27 12:43:37 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -769,6 +769,9 @@ imt_stat getauthline(struct sasl_cmd_t *sasl_cmd, char **line, int *linelen)
     unsigned len;
     char *str=(char *) buf;
     int ret = STAT_CONT;
+
+    *line = NULL;
+    *linelen = 0;
     
     do {
 	str = prot_fgets(str, BUFSIZE, pin);
@@ -803,13 +806,13 @@ imt_stat getauthline(struct sasl_cmd_t *sasl_cmd, char **line, int *linelen)
 	printf("S: %s", str);
     }
     
-    len = strlen(str) + 1;
-    *line = malloc(len);
-    if ((*line) == NULL) {
-	return STAT_NO;
-    }
-    
     if (*str != '\r') {
+	len = strlen(str) + 1;
+	*line = malloc(len);
+	if ((*line) == NULL) {
+	    return STAT_NO;
+	}
+    
 	/* decode this line */
 	saslresult = sasl_decode64(str, strlen(str), 
 				   *line, len, (unsigned *) linelen);
@@ -1002,7 +1005,6 @@ int auth_sasl(struct sasl_cmd_t *sasl_cmd, char *mechlist)
     }
     prot_flush(pout);
 
-    inlen = 0;
     status = getauthline(sasl_cmd, &in, &inlen);
     
     while (status==STAT_CONT) {
@@ -1034,7 +1036,7 @@ int auth_sasl(struct sasl_cmd_t *sasl_cmd, char *mechlist)
 				   inbase64, 2048, (unsigned *) &inbase64len);
 	if (saslresult != SASL_OK) return saslresult;
 	
-	free(in); in = NULL;
+	free(in);
 	
 	/* send to server */
 	if (!sasl_cmd->cont) {
