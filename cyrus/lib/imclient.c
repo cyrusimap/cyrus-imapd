@@ -1,6 +1,6 @@
 /* imclient.c -- Streaming IMxP client library
  *
- * $Id: imclient.c,v 1.67 2002/02/22 21:56:17 rjs3 Exp $
+ * $Id: imclient.c,v 1.68 2002/03/31 06:00:54 leg Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -996,7 +996,7 @@ void imclient_getselectinfo(struct imclient *imclient, int *fd,
  */
 void imclient_processoneevent(struct imclient *imclient)
 {
-    char buf[4+IMCLIENT_BUFSIZE];
+    char buf[IMCLIENT_BUFSIZE];
     int n;
     int writelen;
     fd_set rfds, wfds;
@@ -1150,9 +1150,9 @@ static sasl_security_properties_t *make_secprops(int min,int max)
   sasl_security_properties_t *ret=
       (sasl_security_properties_t *)xzmalloc(sizeof(sasl_security_properties_t));
 
-  ret->maxbufsize=1024;
-  ret->min_ssf=min;
-  ret->max_ssf=max;
+  ret->maxbufsize = IMCLIENT_BUFSIZE;
+  ret->min_ssf = min;
+  ret->max_ssf = max;
 
   return ret;
 }
@@ -1408,6 +1408,13 @@ int imclient_authenticate(struct imclient *imclient,
 	    mlist = newlist;
 	}
     } while ((r != 0) && (mtried));
+
+    if (r == 0) {
+	const int *ptr;
+
+	sasl_getprop(imclient->saslconn, SASL_MAXOUTBUF, &ptr);
+	imclient->maxplain = *ptr;
+    }
 
     free(mlist);
 
