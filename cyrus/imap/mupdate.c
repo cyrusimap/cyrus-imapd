@@ -879,7 +879,7 @@ void cmd_update(struct conn *C, const char *tag)
 	/* just grab the update list and release the lock */
 	p = C->plist;
 	C->plist = NULL;
-	pthread_mutex_unlock(&C-m);
+	pthread_mutex_unlock(&C->m);
 
 	while (p != NULL) {
 	    /* send update */
