@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.34 2002/08/13 16:46:32 rjs3 Exp $ */
+/* $Id: fud.c,v 1.35 2002/08/13 17:51:29 rjs3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -242,7 +242,7 @@ int do_proxy_request(const char *who, const char *name,
     csoc = socket (PF_INET, SOCK_DGRAM, 0);
     memcpy (&cin.sin_addr.s_addr, hp->h_addr, hp->h_length);
     cin.sin_family = AF_INET;
-    cin.sin_port = backend_port;
+    cin.sin_port = htons(backend_port);
 
     /* Write a Cyrus query into *tmpbuf */
     memset (tmpbuf, '\0', sizeof(tmpbuf));
