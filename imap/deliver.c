@@ -25,13 +25,13 @@
 #include <stdio.h>
 #include <string.h>
 #include <sysexits.h>
+#include <fcntl.h>
 #include <com_err.h>
 #ifdef NEWDB
 #include <db.h>
 #else
 #include <ndbm.h>
 #endif
-#include <sys/file.h>
 
 #include "acl.h"
 #include "util.h"
@@ -344,13 +344,13 @@ char *id, *to;
     date.data = datebuf;
     date.size = strlen(datebuf);
 
-    if (flock(DeliveredDBptr->dont_know, LOCK_EX)) {
+    if (lock_blocking(DeliveredDBptr->dont_know)) {
 	fprintf(stderr, "deliver: can't lock DBM file: %s",
 		error_message(errno));
 	return;
     }
     (void) DeliveredDBptr->put(DeliveredDBptr, delivery, date, R_OVERWRITE);
-    (void) flock(DeliveredDBptr->dont_know, LOCK_UN);
+    (void) lock_unlock(DeliveredDBptr->dont_know);
 #else /* NEWDB */
     char buf[MAX_MAILBOX_PATH];
     char datebuf[40];
@@ -366,13 +366,13 @@ char *id, *to;
     date.dptr = datebuf;
     date.dsize = strlen(datebuf);
 
-    if (flock(DeliveredDBptr->dbm_pagf, LOCK_EX)) {
+    if (lock_blocking(DeliveredDBptr->dbm_pagf)) {
 	fprintf(stderr, "deliver: can't lock DBM file: %s",
 		error_message(errno));
 	return;
     }
     (void) dbm_store(DeliveredDBptr, delivery, date, DBM_REPLACE);
-    (void) flock(DeliveredDBptr->dbm_pagf, LOCK_UN);
+    (void) lock_unlock(DeliveredDBptr->dbm_pagf);
 #endif /* NEWDB */
 }
 
@@ -398,7 +398,7 @@ not written
 	return 1;
     }
 
-    if (flock(DeliveredDBptr->dbm_pagf, LOCK_EX)) {
+    if (lock_blocking(DeliveredDBptr->dbm_pagf)) {
 	fprintf(stderr, "delivered: can't lock DBM file: %s",
 		error_message(errno));
 	return 1;

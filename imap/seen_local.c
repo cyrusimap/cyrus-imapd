@@ -28,7 +28,6 @@
 #include <strings.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/file.h>
 #include <syslog.h>
 
 #include "assert.h"
@@ -96,7 +95,8 @@ char **seenuidsptr;
 {
     int r;
     char fnamebuf[MAX_MAILBOX_PATH];
-    struct stat sbuffd, sbuffile;
+    struct stat sbuf;
+    char *lockfailaction;
     char *buf = 0, *p;
     unsigned long left;
     int length;
@@ -104,35 +104,17 @@ char **seenuidsptr;
     strcpy(fnamebuf, seendb->mailbox->path);
     strcat(fnamebuf, FNAME_SEEN);
 
-    /* Lock the database, reopening it if it got replaced */
-    while (!seendb->mailbox->seen_lock_count) {
-	r = flock(fileno(seendb->file), LOCK_EX);
+    /* Lock the database */
+    if (!seendb->mailbox->seen_lock_count) {
+	r = lock_reopen(fileno(seendb->file), fnamebuf, &sbuf,
+			&lockfailaction);
 	if (r == -1) {
-	    if (errno == EINTR) continue;
-	    syslog(LOG_ERR, "IOERROR: locking %s: %m", fnamebuf);
+	    syslog(LOG_ERR, "IOERROR: %s %s: %m", lockfailaction, fnamebuf);
 	    return IMAP_IOERROR;
 	}
 
-	fstat(fileno(seendb->file), &sbuffd);
-	r = stat(fnamebuf, &sbuffile);
-	if (r == -1) {
-	    syslog(LOG_ERR, "IOERROR: stating %s: %m", fnamebuf);
-	    seen_unlock(seendb);
-	    return IMAP_IOERROR;
-	}
-
-	if (sbuffd.st_ino == sbuffile.st_ino) {
-	    seendb->mailbox->seen_lock_count = 1;
-	    seendb->size = sbuffd.st_size;
-	}
-	else {
-	    fclose(seendb->file);
-	    seendb->file = fopen(fnamebuf, "r+");
-	    if (!seendb->file) {
-		syslog(LOG_ERR, "IOERROR: opening %s: %m", fnamebuf);
-		return IMAP_IOERROR;
-	    }
-	}
+	seendb->mailbox->seen_lock_count = 1;
+	seendb->size = sbuf.st_size;
     }
     
     /* Find record for user */
@@ -320,7 +302,7 @@ char *seenuids;
 	/* Flush and swap in the new file */
 	fflush(writefile);
 	if (ferror(writefile) || fsync(fileno(writefile)) ||
-	    flock(fileno(writefile), LOCK_EX) == -1 ||
+	    lock_blocking(fileno(writefile)) == -1 ||
 	    rename(newfnamebuf, fnamebuf) == -1) {
 	    syslog(LOG_ERR, "IOERROR: writing %s: %m", newfnamebuf);
 	    fclose(writefile);
@@ -356,7 +338,7 @@ struct seen *seendb;
     if (seendb->mailbox->seen_lock_count == 0) return 0;
 
     seendb->mailbox->seen_lock_count = 0;
-    r = flock(fileno(seendb->file), LOCK_UN);
+    r = lock_unlock(fileno(seendb->file));
 
     if (r == -1) {
 	syslog(LOG_ERR, "IOERROR: unlocking seen db for %s: %m",
@@ -410,7 +392,7 @@ struct mailbox *mailbox;
     char fnamebuf[MAX_MAILBOX_PATH];
     FILE *f;
     int r;
-    struct stat sbuffd, sbuffile;
+    char *lockfailaction;
 
     strcpy(fnamebuf, mailbox->path);
     strcat(fnamebuf, FNAME_SEEN);
@@ -421,34 +403,11 @@ struct mailbox *mailbox;
 	return IMAP_IOERROR;
     }
 
-    for (;;) {
-	r = flock(fileno(f), LOCK_EX);
-	if (r == -1) {
-	    if (errno == EINTR) continue;
-	    syslog(LOG_ERR, "IOERROR: locking %s: %m", fnamebuf);
-	    fclose(f);
-	    return IMAP_IOERROR;
-	}
-
-	fstat(fileno(f), &sbuffd);
-	r = stat(fnamebuf, &sbuffile);
-	if (r == -1) {
-	    syslog(LOG_ERR, "IOERROR: stating %s: %m", fnamebuf);
-	    fclose(f);
-	    return IMAP_IOERROR;
-	}
-
-	if (sbuffd.st_ino == sbuffile.st_ino) {
-	    break;
-	}
-	else {
-	    fclose(f);
-	    f = fopen(fnamebuf, "r+");
-	    if (!f) {
-		syslog(LOG_ERR, "IOERROR: opening %s: %m", fnamebuf);
-		return IMAP_IOERROR;
-	    }
-	}
+    r = lock_reopen(fileno(f), fnamebuf, 0, lockfailaction);
+    if (r == -1) {
+	syslog(LOG_ERR, "IOERROR: %s %s: %m", lockfailaction, fnamebuf);
+	fclose(f);
+	return IMAP_IOERROR;
     }
 
     unlink(fnamebuf);
