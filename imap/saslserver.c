@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: saslserver.c,v 1.6 2004/05/29 05:18:24 ken3 Exp $ */
+/* $Id: saslserver.c,v 1.7 2004/07/15 22:42:45 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -52,14 +52,14 @@
 
 #define BASE64_BUF_SIZE 21848	/* per RFC 2222bis: ((16K / 3) + 1) * 4  */
 
-
+/* NOTE: success_data will need to be free()d by the caller */
 int saslserver(sasl_conn_t *conn, const char *mech,
 	       const char *init_resp, const char *resp_prefix,
 	       const char *continuation, const char *empty_chal,
                struct protstream *pin, struct protstream *pout,
 	       int *sasl_result, char **success_data)
 {
-    static char base64[BASE64_BUF_SIZE+1];
+    char base64[BASE64_BUF_SIZE+1];
     char *clientin = NULL;
     unsigned int clientinlen = 0;
     const char *serverout;
@@ -139,7 +139,7 @@ int saslserver(sasl_conn_t *conn, const char *mech,
 	r = sasl_encode64(serverout, serveroutlen,
 			  base64, BASE64_BUF_SIZE, NULL);
 	if (r == SASL_OK)
-	    *success_data = base64;
+	    *success_data = xstrdup(base64);
     }
 
     if(sasl_result) *sasl_result = r;
