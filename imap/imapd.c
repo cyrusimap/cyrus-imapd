@@ -1087,11 +1087,11 @@ char *name;
 	    usage = imapd_mailbox->quota.used * 100 /
 	      (imapd_mailbox->quota.limit * QUOTA_UNITS);
 	    if (usage >= 100) {
-		prot_printf(imapd_out, "* NO %s\r\n",
+		prot_printf(imapd_out, "* NO [ALERT] %s\r\n",
 			    error_message(IMAP_NO_OVERQUOTA));
 	    }
 	    else if (usage > config_getint("quotawarn", 90)) {
-		prot_printf(imapd_out, "* NO ");
+		prot_printf(imapd_out, "* NO [ALERT] ");
 		prot_printf(imapd_out, error_message(IMAP_NO_CLOSEQUOTA),
 			    usage);
 		prot_printf(imapd_out, "\r\n");
