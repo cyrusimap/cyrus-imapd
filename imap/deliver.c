@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.114 1999/11/12 02:19:14 leg Exp $
+ * $Id: deliver.c,v 1.115 1999/11/17 20:02:23 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.114 1999/11/12 02:19:14 leg Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.115 1999/11/17 20:02:23 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -2693,6 +2693,8 @@ int idlen, tolen;
 	mark = (time_t)0;
     }
     dbm_close(DeliveredDBptr);
+
+    return mark;
 #endif /* HAVE_LIBDB */
 }
 
