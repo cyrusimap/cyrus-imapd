@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.23.2.8 2004/06/29 20:30:33 ken3 Exp $
+ * $Id: sieve.y,v 1.23.2.9 2004/07/16 14:37:44 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -170,11 +170,12 @@ extern void yyrestart(FILE *f);
 %token RAW TEXT CONTENT BINARY OFFSET
 %token DAYS ADDRESSES SUBJECT MIME
 %token METHOD ID OPTIONS LOW NORMAL HIGH ANY MESSAGE
+%token INCLUDE PERSONAL GLOBAL RETURN
 
 %type <cl> commands command action elsif block
 %type <sl> stringlist strings
 %type <test> test
-%type <nval> comptag relcomp sizetag addrparttag addrorenv offset
+%type <nval> comptag relcomp sizetag addrparttag addrorenv offset location
 %type <testl> testlist tests
 %type <htag> htags
 %type <aetag> aetags
@@ -304,6 +305,24 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
 					if ($$ == NULL) { 
 			yyerror("unable to find a compatible comparator");
 			YYERROR; } } }
+
+	 | INCLUDE location STRING { if (!parse_script->support.include) {
+				     yyerror("include not required");
+	                             YYERROR;
+                                   }
+	                           $$ = new_command(INCLUDE);
+				   $$->u.inc.location = $2;
+				   $$->u.inc.script = $3; }
+         | RETURN		 { if (!parse_script->support.include) {
+                                    yyerror("include not required");
+                                    YYERROR;
+                                  }
+                                   $$ = new_command(RETURN); }
+	;
+
+location: /* empty */		 { $$ = PERSONAL; }
+	| PERSONAL		 { $$ = PERSONAL; }
+	| GLOBAL		 { $$ = GLOBAL; }
 	;
 
 ntags: /* empty */		 { $$ = new_ntags(); }

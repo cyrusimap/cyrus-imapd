@@ -1,6 +1,6 @@
 /* lmtp_sieve.c -- Sieve implementation for lmtpd
  *
- * $Id: lmtp_sieve.c,v 1.1.2.10 2004/06/24 15:16:27 ken3 Exp $
+ * $Id: lmtp_sieve.c,v 1.1.2.11 2004/07/16 14:37:40 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -185,6 +185,43 @@ static int getbody(void *mc, const char **content_types,
     return (!r ? SIEVE_OK : SIEVE_FAIL);
 }
 
+
+static int sieve_find_script(const char *user, const char *domain,
+			     const char *script, char *fname, size_t size);
+
+static int getinclude(void *sc, const char *script, int isglobal,
+		      char *fname, size_t size)
+{
+    script_data_t *sdata = (script_data_t *) sc;
+    char userbuf[MAX_MAILBOX_NAME+1], *user, *domain = NULL;
+    struct stat sbuf;
+    int r;
+
+    if (strstr(script, "../")) {
+	syslog(LOG_NOTICE, "Illegal script name '%s' for user '%s'",
+	       script, sdata->username);
+	return SIEVE_FAIL;
+    }
+
+    user = (char *) sdata->username;
+    if (config_virtdomains && strchr(user, '@')) {
+	/* split the user and domain */
+	strlcpy(userbuf, sdata->username, sizeof(userbuf));
+	user = userbuf;
+	if ((domain = strrchr(user, '@'))) *domain++ = '\0';
+    }
+
+    r = sieve_find_script(isglobal ? NULL : user, domain, script,
+			  fname, size);
+
+    if (!r && isglobal && domain && stat(fname, &sbuf) != 0) {
+	/* if the domain-specific global script doesn't exist,
+	   try a server-wide global script */
+	r = sieve_find_script(NULL, NULL, script, fname, size);
+    }
+
+    return r;
+}
 
 static int global_outgoing_count = 0;
 
@@ -808,6 +845,12 @@ sieve_interp_t *setup_sieve(void)
 	fatal("sieve_register_body()", EC_SOFTWARE);
     }
     
+    res = sieve_register_include(interp, &getinclude);
+    if (res != SIEVE_OK) {
+	syslog(LOG_ERR,"sieve_register_include() returns %d\n", res);
+	fatal("sieve_register_include()", EC_SOFTWARE);
+    }
+
     res = sieve_register_vacation(interp, &vacation);
     if (res != SIEVE_OK) {
 	syslog(LOG_ERR, "sieve_register_vacation() returns %d\n", res);
@@ -831,13 +874,17 @@ sieve_interp_t *setup_sieve(void)
 }
 
 static int sieve_find_script(const char *user, const char *domain,
-			     char *fname, size_t size)
+			     const char *script, char *fname, size_t size)
 {
-    if (strlen(user) > 900) {
+    if (!user && !script) {
+	return -1;
+    }
+
+    if (user && strlen(user) > 900) {
 	return -1;
     }
     
-    if (sieve_usehomedir) { /* look in homedir */
+    if (sieve_usehomedir && user) { /* look in homedir */
 	struct passwd *pent = getpwnam(user);
 
 	if (pent == NULL) {
@@ -845,17 +892,30 @@ static int sieve_find_script(const char *user, const char *domain,
 	}
 
 	/* check ~USERNAME/.sieve */
-	snprintf(fname, size, "%s/%s", pent->pw_dir, ".sieve");
+	snprintf(fname, size, "%s/%s", pent->pw_dir, script ? script : ".sieve");
     } else { /* look in sieve_dir */
-	char hash = (char) dir_hash_c(user);
+	size_t len = strlcpy(fname, sieve_dir, size);
 
 	if (domain) {
 	    char dhash = (char) dir_hash_c(domain);
-	    snprintf(fname, size, "%s%s%c/%s/%c/%s/defaultbc",
-		     sieve_dir, FNAME_DOMAINDIR, dhash, domain, hash, user);
-	} else {
-	    snprintf(fname, size, "%s/%c/%s/defaultbc", sieve_dir, hash, user);
+	    len += snprintf(fname+len, size-len, "%s%c/%s",
+			    FNAME_DOMAINDIR, dhash, domain);
 	}
+
+	if (!user) { /* global script */
+	    len = strlcat(fname, "/global/", size);
+	}
+	else {
+	    char hash = (char) dir_hash_c(user);
+	    len += snprintf(fname+len, size-len, "/%c/%s/", hash, user);
+
+	    if (!script) { /* default script */
+		strlcat(fname, "defaultbc", size);
+		return 0;
+	    }
+	}
+
+	snprintf(fname+len, size-len, "%s.bc", script);
     }
 	
     return 0;
@@ -867,9 +927,9 @@ int run_sieve(const char *user, const char *domain, const char *mailbox,
     char fname[MAX_MAILBOX_PATH+1];
     int r = 0;
 
-    if (sieve_find_script(user, domain, fname, sizeof(fname)) != -1) {
+    if (sieve_find_script(user, domain, NULL, fname, sizeof(fname)) != -1) {
 	script_data_t *sdata = NULL;
-	sieve_bytecode_t *bc = NULL;
+	sieve_execute_t *bc = NULL;
 	char userbuf[MAX_MAILBOX_NAME+1];
 	char authuserbuf[MAX_MAILBOX_NAME+1];
 

@@ -103,7 +103,10 @@ enum bytecode {
 
     B_VACATION,		/* require vacation */
     B_NULL,
-    B_JUMP
+    B_JUMP,
+
+    B_INCLUDE,		/* require include */
+    B_RETURN		/* require include */
 };
 
 enum bytecode_comps {
@@ -196,7 +199,16 @@ enum bytecode_tags {
     B_TRANSFORM_PLACEHOLDER_1,
     B_TRANSFORM_PLACEHOLDER_2,
     B_TRANSFORM_PLACEHOLDER_3,
-    B_TRANSFORM_PLACEHOLDER_4
+    B_TRANSFORM_PLACEHOLDER_4,
+
+    /* Script locations */
+    B_PERSONAL,		/* require include */
+    B_GLOBAL,		/* require include */
+
+    B_LOCATION_PLACEHOLDER_1,
+    B_LOCATION_PLACEHOLDER_2,
+    B_LOCATION_PLACEHOLDER_3,
+    B_LOCATION_PLACEHOLDER_4
   
 };
 

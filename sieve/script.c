@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.59.2.7 2004/07/15 15:00:50 ken3 Exp $
+ * $Id: script.c,v 1.59.2.8 2004/07/16 14:37:43 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -125,6 +125,13 @@ int script_require(sieve_script_t *s, char *req)
     } else if (!strcmp("comparator-i;ascii-numeric", req)) {
 	s->support.i_ascii_numeric = 1;
 	return 1;
+    } else if (!strcmp("include", req)) {
+	if (s->interp.getinclude) {
+	    s->support.include = 1;
+	    return 1;
+	} else {
+	    return 0;
+	}
     }
     return 0;
 }
@@ -492,11 +499,11 @@ static int makehash(unsigned char hash[HASHSIZE],
  *****************************************************************************/
 
 /* Load a compiled script */
-int sieve_script_load(const char *fname, sieve_bytecode_t **ret) 
+int sieve_script_load(const char *fname, sieve_execute_t **ret) 
 {
     struct stat sbuf;
-    sieve_bytecode_t *r;
-    int fd;
+    sieve_execute_t *r;
+    sieve_bytecode_t *bc;
    
     if (!fname || !ret) return SIEVE_FAIL;
     
@@ -505,36 +512,62 @@ int sieve_script_load(const char *fname, sieve_bytecode_t **ret)
 	return SIEVE_FAIL;
     }
 
-    fd = open(fname, O_RDONLY);
-    if (fd == -1) {
-	syslog(LOG_ERR, "IOERROR: can not open sieve script %s: %m", fname);
-	return SIEVE_FAIL;
+    if (!*ret) {
+	/* new sieve_bytecode_t */
+	r = (sieve_execute_t *) xzmalloc(sizeof(sieve_execute_t));
+    } else {
+	/* existing sieve_execute_t (INCLUDE) */
+	r = *ret;
     }
 
-    r = (sieve_bytecode_t *) xzmalloc(sizeof(sieve_bytecode_t));
-
-    r->fd = fd;
-    
-    map_refresh(fd, 1, &r->data, &r->len, sbuf.st_size, fname, "sievescript");
-
-    if ((r->len < (BYTECODE_MAGIC_LEN + 2*sizeof(bytecode_input_t))) ||
-	memcmp(r->data, BYTECODE_MAGIC, BYTECODE_MAGIC_LEN)) {
-	syslog(LOG_ERR, "IOERROR: not a sieve bytecode file %s", fname);
-	sieve_script_unload(&r);
-	return SIEVE_FAIL;
+    /* see if we already have this script loaded */
+    bc = r->bc_list;
+    while (bc) {
+	if (sbuf.st_ino == bc->inode) break;
+	bc = bc->next;
     }
 
+    if (!bc) {
+	int fd;
+
+	/* new script -- load it */
+	fd = open(fname, O_RDONLY);
+	if (fd == -1) {
+	    syslog(LOG_ERR, "IOERROR: can not open sieve script %s: %m", fname);
+	    return SIEVE_FAIL;
+	}
+
+	bc = (sieve_bytecode_t *) xzmalloc(sizeof(sieve_bytecode_t));
+
+	bc->fd = fd;
+	bc->inode = sbuf.st_ino;
+
+	map_refresh(fd, 1, &bc->data, &bc->len, sbuf.st_size,
+		    fname, "sievescript");
+
+	/* add buffer to list */
+	bc->next = r->bc_list;
+	r->bc_list = bc;
+    }
+
+    r->bc_cur = bc;
     *ret = r;
     return SIEVE_OK;
 }
 
 
 
-int sieve_script_unload(sieve_bytecode_t **s) 
+int sieve_script_unload(sieve_execute_t **s) 
 {
     if(s && *s) {
-	map_free(&((*s)->data), &((*s)->len));
-	close((*s)->fd);
+	sieve_bytecode_t *bc = (*s)->bc_list;
+
+	/* free each bytecode buffer in the linked list */
+	while (bc) {
+	    map_free(&(bc->data), &(bc->len));
+	    close(bc->fd);
+	    bc = bc->next;
+	}
 	free(*s);
 	*s = NULL;
     } 
@@ -848,12 +881,12 @@ static int do_action_list(sieve_interp_t *interp,
 
 
 /* execute some bytecode */
-int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
-		  struct hash_table *body_cache, void *m,
+int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
+		  struct hash_table *body_cache, void *sc, void *m,
 		  sieve_imapflags_t * imapflags, action_list_t *actions,
 		  notify_list_t *notify_list, const char **errmsg);
 
-int sieve_execute_bytecode(sieve_bytecode_t *bc, sieve_interp_t *interp,
+int sieve_execute_bytecode(sieve_execute_t *exe, sieve_interp_t *interp,
 			   void *script_context, void *message_context) 
 {
     action_list_t *actions = NULL;
@@ -892,8 +925,8 @@ int sieve_execute_bytecode(sieve_bytecode_t *bc, sieve_interp_t *interp,
 			     actions_string, errmsg);
     }
     else {
-	ret = sieve_eval_bc(interp, bc->data, bc->len,
-			    &body_cache, message_context,
+	ret = sieve_eval_bc(exe, 0, interp, &body_cache,
+			    script_context, message_context,
 			    &imapflags, actions, notify_list, &errmsg);
 
 	if (ret < 0) {

@@ -2,7 +2,7 @@
   
  * test.c -- tester for libsieve
  * Larry Greenfield
- * $Id: test.c,v 1.21.2.3 2004/06/23 20:15:19 ken3 Exp $
+ * $Id: test.c,v 1.21.2.4 2004/07/16 14:37:45 ken3 Exp $
  *
  * usage: "test message script"
  */
@@ -350,6 +350,15 @@ int getbody(void *mc, const char **content_types, sieve_bodypart_t ***parts)
     if (!r) message_fetch_part(&m->content, content_types,
 			       (struct bodypart ***) parts);
     return (!r ? SIEVE_OK : SIEVE_FAIL);
+}
+
+int getinclude(void *sc, const char *script, int isglobal,
+	       char *fpath, size_t size)
+{
+    strlcpy(fpath, script, size);
+    strlcat(fpath, ".bc", size);
+
+    return SIEVE_OK;
 }
 
 int redirect(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
@@ -714,7 +723,7 @@ int config_need_data = 0;
 int main(int argc, char *argv[])
 {
     sieve_interp_t *i;
-    sieve_bytecode_t *bc;
+    sieve_execute_t *exe = NULL;
     message_data_t *m;
     char *script = NULL, *message = NULL;
     int c, force_fail = 0, usage_error = 0;
@@ -812,6 +821,12 @@ int main(int argc, char *argv[])
 	exit(1);
     }
 
+    res = sieve_register_include(i, &getinclude);
+    if (res != SIEVE_OK) {
+	printf("sieve_register_include() returns %d\n", res);
+	exit(1);
+    }
+
     res = sieve_register_vacation(i, &vacation);
     if (res != SIEVE_OK) {
 	printf("sieve_register_vacation() returns %d\n", res);
@@ -843,7 +858,7 @@ int main(int argc, char *argv[])
         exit(1);
     }   
 
-    res = sieve_script_load(argv[2], &bc);
+    res = sieve_script_load(argv[2], &exe);
     if (res != SIEVE_OK) {
 	printf("sieve_script_load() returns %d\n", res);
 	exit(1);
@@ -863,7 +878,7 @@ int main(int argc, char *argv[])
 	    exit(1);
 	}
 
-	res = sieve_execute_bytecode(bc, i, NULL, m);
+	res = sieve_execute_bytecode(exe, i, NULL, m);
 	if (res != SIEVE_OK) {
 	    printf("sieve_execute_bytecode() returns %d\n", res);
 	    exit(1);
@@ -872,7 +887,7 @@ int main(int argc, char *argv[])
 	close(fd);
     }
     /*used to be sieve_script_free*/
-    res = sieve_script_unload(&bc);
+    res = sieve_script_unload(&exe);
     if (res != SIEVE_OK) {
 	printf("sieve_script_unload() returns %d\n", res);
 	exit(1);

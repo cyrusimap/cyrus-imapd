@@ -1,5 +1,5 @@
 /* sieve_interface.h -- interface for deliver
- * $Id: sieve_interface.h,v 1.19.2.3 2004/06/28 18:44:30 ken3 Exp $
+ * $Id: sieve_interface.h,v 1.19.2.4 2004/07/16 14:37:44 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -39,7 +39,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 /* external sieve types */
 typedef struct sieve_interp sieve_interp_t;
 typedef struct sieve_script sieve_script_t;
-typedef struct sieve_bytecode sieve_bytecode_t;
+typedef struct sieve_execute sieve_execute_t;
 typedef struct bytecode_info bytecode_info_t;
 
 typedef int sieve_callback(void *action_context, void *interp_context, 
@@ -52,6 +52,8 @@ typedef int sieve_get_header(void *message_context,
 typedef int sieve_get_envelope(void *message_context, 
 			       const char *field,
 			       const char ***contents);
+typedef int sieve_get_include(void *script_context, const char *script,
+			      int isglobal, char *fpath, size_t size);
 
 /* MUST keep this struct sync'd with bodypart in imap/message.h */
 typedef struct sieve_bodypart {
@@ -134,6 +136,7 @@ int sieve_register_keep(sieve_interp_t *interp, sieve_callback *f);
 int sieve_register_vacation(sieve_interp_t *interp, sieve_vacation_t *v);
 int sieve_register_imapflags(sieve_interp_t *interp, sieve_imapflags_t *mark);
 int sieve_register_notify(sieve_interp_t *interp, sieve_callback *f);
+int sieve_register_include(sieve_interp_t *interp, sieve_get_include *f);
 
 /* add the callbacks for messages. again, undefined if used after
    sieve_script_parse */
@@ -156,17 +159,17 @@ int sieve_register_execute_error(sieve_interp_t *interp,
 int sieve_script_parse(sieve_interp_t *interp, FILE *script,
 		       void *script_context, sieve_script_t **ret);
 
-/* given a bytecode file descriptor, setup the sieve_bytecode_t */
-int sieve_script_load(const char *fname, sieve_bytecode_t **ret);
+/* given a path to a bytecode file, load it into the sieve_execute_t */
+int sieve_script_load(const char *fpath, sieve_execute_t **ret);
 
 /* Unload a sieve_bytecode_t */
-int sieve_script_unload(sieve_bytecode_t **s);
+int sieve_script_unload(sieve_execute_t **s);
 
 /* Free a sieve_script_t */
 int sieve_script_free(sieve_script_t **s);
 
 /* execute bytecode on a message */
-int sieve_execute_bytecode(sieve_bytecode_t *script, sieve_interp_t *interp,
+int sieve_execute_bytecode(sieve_execute_t *script, sieve_interp_t *interp,
 			   void *script_context, void *message_context);
 
 /* Get space separated list of extensions supported by the implementation */

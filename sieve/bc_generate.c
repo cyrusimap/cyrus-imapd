@@ -1,6 +1,6 @@
 /* bc_generate.c -- sieve bytecode- almost flattened bytecode
  * Rob Siemborski
- * $Id: bc_generate.c,v 1.2.2.1 2004/06/23 20:15:17 ken3 Exp $
+ * $Id: bc_generate.c,v 1.2.2.2 2004/07/16 14:37:43 ken3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -454,6 +454,13 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
 		if(!atleast(retval,codep+1)) return -1;
 		retval->data[codep++].op = B_UNMARK;
 		break;
+
+	    case RETURN:
+		/* RETURN (no arguments) */
+		if(!atleast(retval,codep+1)) return -1;
+		retval->data[codep++].op = B_RETURN;
+		break;
+
 	    case DENOTIFY:
 		/* DENOTIFY  */
 		if(!atleast(retval,codep+6)) return -1;
@@ -643,6 +650,27 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
 	    
 
 		if(codep == -1) return -1;
+		break;
+	    case INCLUDE:
+		/* INCLUDE
+		   VALUE location
+		   STRING filename */
+		if(!atleast(retval,codep+4)) return -1;
+		retval->data[codep++].op = B_INCLUDE;
+
+		switch(c->u.inc.location) {
+		case PERSONAL:
+		    retval->data[codep++].value = B_PERSONAL;
+		    break;
+		case GLOBAL:
+		    retval->data[codep++].value = B_GLOBAL;
+		    break;
+		default:
+		    return -1;
+		}
+		
+		retval->data[codep++].len = strlen(c->u.inc.script);
+		retval->data[codep++].str = c->u.inc.script;
 		break;
 	    case IF:
 	    {

@@ -1,5 +1,5 @@
 /* bc_eval.c - evaluate the bytecode
- * $Id: bc_eval.c,v 1.2.2.6 2004/07/12 20:25:28 ken3 Exp $
+ * $Id: bc_eval.c,v 1.2.2.7 2004/07/16 14:37:42 ken3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -31,6 +31,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "sieve_interface.h"
 #include "interp.h"
 #include "message.h"
+#include "script.h"
 
 #include "bytecode.h"
 
@@ -889,25 +890,32 @@ int eval_bc_test(sieve_interp_t *interp,
 }
 
 /* The entrypoint for bytecode evaluation */
-int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
-		  struct hash_table *body_cache, void *m,
+int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
+		  struct hash_table *body_cache, void *sc, void *m,
 		  sieve_imapflags_t * imapflags, action_list_t *actions,
 		  notify_list_t *notify_list, const char **errmsg) 
 {
     const char *data;
-    unsigned int ip = 0, ip_max = (bc_len/sizeof(bytecode_input_t));
     int res=0;
     int op;
     int version;
-    
-    bytecode_input_t *bc = (bytecode_input_t *)bc_in;
+  
+    sieve_bytecode_t *bc_cur = exe->bc_cur;
+    bytecode_input_t *bc = (bytecode_input_t *) bc_cur->data;
+    unsigned int ip = 0, ip_max = (bc_cur->len/sizeof(bytecode_input_t));
+
+    if (bc_cur->is_executing) {
+	*errmsg = "Recursive Include";
+	return SIEVE_RUN_ERROR;
+    }
+    bc_cur->is_executing = 1;
     
     /* Check that we
      * a) have bytecode
      * b) it is atleast long enough for the magic number, the version
      *    and one opcode */
     if(!bc) return SIEVE_FAIL;
-    if(bc_len < (BYTECODE_MAGIC_LEN + 2*sizeof(bytecode_input_t)))
+    if(bc_cur->len < (BYTECODE_MAGIC_LEN + 2*sizeof(bytecode_input_t)))
        return SIEVE_FAIL;
 
     if(memcmp(bc, BYTECODE_MAGIC, BYTECODE_MAGIC_LEN)) {
@@ -1296,6 +1304,38 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 	    ip= ntohl(bc[ip+1].jump);
 	    break;
 	    
+	case B_INCLUDE:/*17*/
+	{
+	    int isglobal = (ntohl(bc[ip+1].value) == B_GLOBAL);
+	    char fpath[4096];
+
+	    ip = unwrap_string(bc, ip+2, &data, NULL);
+
+	    res = i->getinclude(sc, data, isglobal, fpath, sizeof(fpath));
+	    if (res != SIEVE_OK)
+		*errmsg = "Include can not find script";
+
+	    if (!res) {
+		res = sieve_script_load(fpath, &exe);
+		if (res != SIEVE_OK)
+		*errmsg = "Include can not load script";
+	    }
+
+	    if (!res)
+		res = sieve_eval_bc(exe, 1, i, body_cache,
+				    sc, m, imapflags, actions,
+				    notify_list, errmsg);
+
+	    break;
+	}
+
+	case B_RETURN:/*18*/
+	    if (is_incl)
+		goto done;
+	    else
+		res=1;
+	    break;
+
 	default:
 	    if(errmsg) *errmsg = "Invalid sieve bytecode";
 	    return SIEVE_FAIL;
@@ -1304,5 +1344,9 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 	if (res) /* we've either encountered an error or a stop */
 	    break;
     }
+
+  done:
+    bc_cur->is_executing = 0;
+
     return res;      
 }

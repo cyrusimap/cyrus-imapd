@@ -1,6 +1,6 @@
 /* interp.c -- sieve script interpretor builder
  * Larry Greenfield
- * $Id: interp.c,v 1.22.8.2 2004/06/23 20:15:18 ken3 Exp $
+ * $Id: interp.c,v 1.22.8.3 2004/07/16 14:37:43 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -59,6 +59,7 @@ int sieve_interp_alloc(sieve_interp_t **interp, void *interp_context)
     i->getheader = NULL;
     i->getenvelope = NULL;
     i->getbody = NULL;
+    i->getinclude = NULL;
     i->vacation = NULL;
     i->notify = NULL;
 
@@ -81,6 +82,8 @@ const char *sieve_listextensions(sieve_interp_t *i)
 	strlcat(extensions, "comparator-i;ascii-numeric", sizeof(extensions));
 
 	/* add actions */
+	if (i->getinclude)
+	    strlcat(extensions, " include", sizeof(extensions));
 	if (i->fileinto)
 	    strlcat(extensions, " fileinto", sizeof(extensions));
 	if (i->reject)
@@ -190,6 +193,12 @@ int sieve_register_header(sieve_interp_t *interp, sieve_get_header *f)
 int sieve_register_envelope(sieve_interp_t *interp, sieve_get_envelope *f)
 {
     interp->getenvelope = f;
+    return SIEVE_OK;
+}
+
+int sieve_register_include(sieve_interp_t *interp, sieve_get_include *f)
+{
+    interp->getinclude = f;
     return SIEVE_OK;
 }
 

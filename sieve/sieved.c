@@ -42,6 +42,9 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #include "map.h"
 
+/* config.c stuff */
+const int config_need_data = 0;
+
 void dump2(bytecode_input_t *d, int len);
 int dump2_test(bytecode_input_t * d, int i);
  
@@ -454,6 +457,22 @@ void dump2(bytecode_input_t *d, int bc_len)
 	    printf("%d:JUMP %d\n",i, ntohl(d[i+1].jump));
 	    i+=2;
 	    break;		  
+
+	case B_INCLUDE:/*17*/
+	    printf("%d: INCLUDE ", i);
+	    switch (ntohl(d[i+1].value)) {
+	    case B_PERSONAL: printf("Personal"); break;
+	    case B_GLOBAL: printf("Global"); break;
+	    }
+	    i = unwrap_string(d, i+2, &data, &len);
+	    printf(" {%d}%s\n", len, data);
+	    break;
+
+	case B_RETURN:/*18*/
+	    printf("%d: RETURN\n",i);
+	    i++;
+	    break;
+	    
 	default:
 	    printf("%d: %d (NOT AN OP)\n",i,ntohl(d[i].op));
 	    exit(1);

@@ -1,6 +1,6 @@
 /* tree.h -- abstract syntax tree
  * Larry Greenfield
- * $Id: tree.h,v 1.8.2.1 2004/06/23 20:15:20 ken3 Exp $
+ * $Id: tree.h,v 1.8.2.2 2004/07/16 14:37:45 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -109,6 +109,10 @@ struct Commandlist {
 	    commandlist_t *do_then;
 	    commandlist_t *do_else;
 	} i;
+	struct { /* it's an include action */
+	    int location;
+	    char *script;
+	} inc;
 	struct { /* it's a vacation action */
 	    char *subject;
 	    int days;

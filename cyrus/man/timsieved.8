@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: timsieved.8,v 1.6 2002/05/25 19:57:48 leg Exp $
+.\" $Id: timsieved.8,v 1.6.8.1 2004/07/16 14:37:41 ken3 Exp $
 .SH NAME
 timsieved \- CMU hack for getting sieve scripts onto the server
 .SH SYNOPSIS
@@ -50,11 +50,14 @@ timsieved \- CMU hack for getting sieve scripts onto the server
 ]
 .SH DESCRIPTION
 .I timsieved
-is a server that allows users to remotly manage their sieve scripts kept on the server.
-It accepts commands on its standard input and responds on its standard output.
-It MUST be invoked by
+is a server that allows users to remotely manage their sieve scripts
+kept on the server.  It accepts commands on its standard input and
+responds on its standard output. It MUST be invoked by
 .IR master (8)
 with those descriptors attached to a remote client connection.
+.PP
+Cyrus admins that authenticate and authorize as themselves (e.g. don't
+proxy) manage global scripts.
 .PP
 .I Timsieved
 reads its configuration options out of the

@@ -1,7 +1,7 @@
 /* bc_emit.c -- sieve bytecode - pass 2 of the compiler
  * Rob Siemborski
  * Jen Smith
- * $Id: bc_emit.c,v 1.2.2.1 2004/06/23 20:15:17 ken3 Exp $
+ * $Id: bc_emit.c,v 1.2.2.2 2004/07/16 14:37:42 ken3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -673,12 +673,36 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 	    filelen += sizeof(int);
 	    
 	    break;
+	case B_INCLUDE:
+	    /* Location (word), Filename String */ 
+
+	    /* Location */
+	    if(write_int(fd, bc->data[codep].value) == -1)
+		return -1;
+	    filelen += sizeof(int);
+	    codep++;
+	    /* Filename */
+	    len = bc->data[codep++].len;
+	    if(write_int(fd,len) == -1)
+		return -1;
+
+	    filelen += sizeof(int);
+	    
+	    if(write(fd,bc->data[codep++].str,len) == -1)
+		return -1;
+		
+	    ret = align_string(fd, len);
+	    if(ret == -1) return -1;
+		
+	    filelen += len + ret;
+	    break;
 	case B_NULL:
 	case B_STOP:
 	case B_DISCARD:
 	case B_KEEP:
 	case B_MARK:
 	case B_UNMARK:
+	case B_RETURN:
 	    /* No Parameters! */
 	    break;
 

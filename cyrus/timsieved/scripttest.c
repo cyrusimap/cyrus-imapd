@@ -1,6 +1,6 @@
 /* scripttest.c -- test wheather the sieve script is valid
  * Tim Martin
- * $Id: scripttest.c,v 1.21.2.3 2004/06/23 20:15:20 ken3 Exp $
+ * $Id: scripttest.c,v 1.21.2.4 2004/07/16 14:37:47 ken3 Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -162,6 +162,12 @@ int build_sieve_interp(void)
     res = sieve_register_body(interp, (sieve_get_body *) &foo);
     if (res != SIEVE_OK) {
 	syslog(LOG_ERR, "sieve_register_body() returns %d\n", res);
+	return TIMSIEVE_FAIL;
+    }
+  
+    res = sieve_register_include(interp, (sieve_get_include *) &foo);
+    if (res != SIEVE_OK) {
+	syslog(LOG_ERR, "sieve_register_include() returns %d\n", res);
 	return TIMSIEVE_FAIL;
     }
   

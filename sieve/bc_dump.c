@@ -1,6 +1,6 @@
 /* bc_generate.c -- sieve bytecode- almost flattened bytecode
  * Rob Siemborski
- * $Id: bc_dump.c,v 1.2.2.1 2004/06/23 20:15:17 ken3 Exp $
+ * $Id: bc_dump.c,v 1.2.2.2 2004/07/16 14:37:42 ken3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -313,6 +313,17 @@ void dump(bytecode_info_t *d, int level)
 	case B_NULL:
 	    printf("%d: NULL\n",i);
 	    break;
+
+	case B_INCLUDE:
+	    printf("%d: INCLUDE LOCATION:%d {%d}%s\n",i,
+		   d->data[i+1].value,d->data[i+2].len,d->data[i+3].str);
+	    i+=3;
+	    break;
+
+	case B_RETURN:
+	    printf("%d: RETURN\n",i);
+	    break;
+
 	default:
 	    printf("%d: %d\n",i,d->data[i].op);
 	    break;

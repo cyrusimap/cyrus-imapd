@@ -1,6 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.36.2.1 2004/06/23 20:15:20 ken3 Exp $
+ * $Id: actions.c,v 1.36.2.2 2004/07/16 14:37:46 ken3 Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -77,6 +77,7 @@
 /* after a user has authentication, our current directory is their Sieve 
    directory! */
 
+extern int sieved_userisadmin;
 char *sieve_dir = NULL;
 
 int actions_init(void)
@@ -99,25 +100,35 @@ int actions_init(void)
 
 int actions_setuser(const char *userid)
 {
-  char hash, *domain;
-  char *foo=sieve_dir;
+  char userbuf[1024], *user, *domain = NULL;
+  char *foo = sieve_dir;
+  size_t size = 1024, len;
   int result;  
 
-  sieve_dir=(char *) xmalloc(1024);
+  sieve_dir = (char *) xzmalloc(size+1);
   
-  if (config_virtdomains && (domain = strchr(userid, '@'))) {
-      char d = (char) dir_hash_c(domain+1);
-      *domain = '\0';  /* split user@domain */
-      hash = (char) dir_hash_c(userid);
-      snprintf(sieve_dir, 1023, "%s%s%c/%s/%c/%s",
-	       foo, FNAME_DOMAINDIR, d, domain+1,
-	       hash, userid);
-      *domain = '@';  /* reassemble user@domain */
+  user = (char *) userid;
+  if (config_virtdomains && strchr(user, '@')) {
+      /* split the user and domain */
+      strlcpy(userbuf, userid, sizeof(userbuf));
+      user = userbuf;
+      if ((domain = strrchr(user, '@'))) *domain++ = '\0';
+  }
+
+  len = strlcpy(sieve_dir, foo, size);
+
+  if (domain) {
+      char dhash = (char) dir_hash_c(domain);
+      len += snprintf(sieve_dir+len, size-len, "%s%c/%s",
+		      FNAME_DOMAINDIR, dhash, domain);
+  }
+
+  if (sieved_userisadmin) {
+      strlcat(sieve_dir, "/global", size);
   }
   else {
-      hash = (char) dir_hash_c(userid);
-    
-      snprintf(sieve_dir, 1023, "%s/%c/%s", foo, hash,userid);
+      char hash = (char) dir_hash_c(user);
+      snprintf(sieve_dir+len, size-len, "/%c/%s", hash, user);
   }
 
   result = chdir(sieve_dir);
