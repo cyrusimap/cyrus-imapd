@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.7 2002/07/15 01:14:15 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.8 2002/07/17 18:43:29 ken3 Exp $ */
 
 #include <config.h>
 
@@ -3670,7 +3670,11 @@ void cmd_delete(char *tag, char *name, int localonly)
 
 	/* take care of deleting ACLs, subscriptions, seen state and quotas */
 	*p = '\0'; /* clip off pattern */
-	user_delete(mailboxname+5, imapd_userid, imapd_authstate, 1);
+	if (domainlen) {
+	    /* fully qualify the userid */
+	    sprintf(p, "@%.*s", domainlen-1, mailboxname);
+	}
+	user_delete(mailboxname+domainlen+5, imapd_userid, imapd_authstate, 1);
     }
 
     if (imapd_mailbox) {
