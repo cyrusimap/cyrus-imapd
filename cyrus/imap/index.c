@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.167 2001/09/14 01:23:33 ken3 Exp $
+ * $Id: index.c,v 1.168 2001/09/24 18:27:35 ken3 Exp $
  */
 #include <config.h>
 
@@ -1057,7 +1057,7 @@ int index_getuidsequence(struct mailbox *mailbox,
  * Performs a SEARCH command.
  * This is a wrapper around _index_search() which simply prints the results.
  */
-void
+int
 index_search(mailbox, searchargs, usinguid)
 struct mailbox *mailbox;
 struct searchargs *searchargs;
@@ -1077,12 +1077,14 @@ int usinguid;
     if (n) free(msgno_list);
 
     prot_printf(imapd_out, "\r\n");
+
+    return n;
 }
 
 /*
  * Performs a SORT command
  */
-void
+int
 index_sort(struct mailbox *mailbox,
 	   struct sortcrit *sortcrit,
 	   struct searchargs *searchargs,
@@ -1149,13 +1151,15 @@ index_sort(struct mailbox *mailbox,
 	syslog(LOG_DEBUG, "SORT (%s) processing time: %d msg in %f sec",
 	       buf, nmsg, (clock() - start) / (double) CLOCKS_PER_SEC);
     }
+
+    return nmsg;
 }
 
 /*
  * Performs a THREAD command
  */
-void index_thread(struct mailbox *mailbox, int algorithm,
-		  struct searchargs *searchargs, int usinguid)
+int index_thread(struct mailbox *mailbox, int algorithm,
+		 struct searchargs *searchargs, int usinguid)
 {
     unsigned *msgno_list;
     int nmsg;
@@ -1181,6 +1185,8 @@ void index_thread(struct mailbox *mailbox, int algorithm,
 	       thread_algs[algorithm].alg_name, nmsg,
 	       (clock() - start) / (double) CLOCKS_PER_SEC);
     }
+
+    return nmsg;
 }
 
 /*

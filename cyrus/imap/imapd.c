@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.323 2001/09/21 16:02:32 ken3 Exp $ */
+/* $Id: imapd.c,v 1.324 2001/09/24 18:27:35 ken3 Exp $ */
 
 #include <config.h>
 
@@ -3041,6 +3041,7 @@ int usinguid;
     struct searchargs *searchargs;
     clock_t start = clock();
     char mytime[100];
+    int n;
 
     searchargs = (struct searchargs *)xzmalloc(sizeof(struct searchargs));
 
@@ -3064,10 +3065,10 @@ int usinguid;
 	       error_message(IMAP_UNRECOGNIZED_CHARSET));
     }
     else {
-	index_search(imapd_mailbox, searchargs, usinguid);
+	n = index_search(imapd_mailbox, searchargs, usinguid);
 	sprintf(mytime, "%2.3f", (clock() - start) / (double) CLOCKS_PER_SEC);
-	prot_printf(imapd_out, "%s OK %s (%s secs)\r\n", tag,
-		    error_message(IMAP_OK_COMPLETED), mytime);
+	prot_printf(imapd_out, "%s OK %s (%d msgs in %s secs)\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED), n, mytime);
     }
 
     freesearchargs(searchargs);
@@ -3086,6 +3087,9 @@ int usinguid;
     static struct buf arg;
     int charset = 0;
     struct searchargs *searchargs;
+    clock_t start = clock();
+    char mytime[100];
+    int n;
 
     c = getsortcriteria(tag, &sortcrit);
     if (c == EOF) {
@@ -3142,9 +3146,10 @@ int usinguid;
 	return;
     }
 
-    index_sort(imapd_mailbox, sortcrit, searchargs, usinguid);
-    prot_printf(imapd_out, "%s OK %s\r\n", tag,
-		error_message(IMAP_OK_COMPLETED));
+    n = index_sort(imapd_mailbox, sortcrit, searchargs, usinguid);
+    sprintf(mytime, "%2.3f", (clock() - start) / (double) CLOCKS_PER_SEC);
+    prot_printf(imapd_out, "%s OK %s (%d msgs in %s secs)\r\n", tag,
+		error_message(IMAP_OK_COMPLETED), n, mytime);
 
     freesortcrit(sortcrit);
     freesearchargs(searchargs);
@@ -3164,6 +3169,9 @@ int usinguid;
     int charset = 0;
     int alg;
     struct searchargs *searchargs;
+    clock_t start = clock();
+    char mytime[100];
+    int n;
 
     /* get algorithm */
     c = getword(imapd_in, &arg);
@@ -3216,9 +3224,10 @@ int usinguid;
 	return;
     }
 
-    index_thread(imapd_mailbox, alg, searchargs, usinguid);
-    prot_printf(imapd_out, "%s OK %s\r\n", tag,
-		error_message(IMAP_OK_COMPLETED));
+    n = index_thread(imapd_mailbox, alg, searchargs, usinguid);
+    sprintf(mytime, "%2.3f", (clock() - start) / (double) CLOCKS_PER_SEC);
+    prot_printf(imapd_out, "%s OK %s (%d msgs in %s secs)\r\n", tag,
+		error_message(IMAP_OK_COMPLETED), n, mytime);
 
     freesearchargs(searchargs);
     return;
