@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- $Id: config.h,v 1.11 2000/02/15 22:21:18 leg Exp $
+ $Id: config.h,v 1.12 2000/02/17 03:04:29 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -47,5 +47,13 @@ extern const char *config_servername;
 extern int config_hashimapspool;
 
 void config_scanpartition( void (*proc)() );
+
+/* signal handling (signals.c) */
+
+typedef void shutdownfn(int);
+
+void signals_add_handlers(void);
+void signals_set_shutdown(shutdownfn *s);
+void signals_poll(void);
 
 #endif /* INCLUDED_CONFIG_H */
