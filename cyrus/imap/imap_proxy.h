@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.h,v 1.1.2.1 2003/10/23 19:16:17 ken3 Exp $
+ * $Id: imap_proxy.h,v 1.1.2.2 2004/01/31 20:46:53 ken3 Exp $
  */
 
 #ifndef _IMAP_PROXY_H
@@ -61,12 +61,13 @@ void proxy_downserver(struct backend *s);
 struct backend *proxy_findserver(const char *server);
 struct backend *proxy_findinboxserver(void);
 
-int pipe_until_tag(struct backend *s, char *tag, int force_notfatal);
-int pipe_including_tag(struct backend *s, char *tag, int force_notfatal);
+int pipe_until_tag(struct backend *s, const char *tag, int force_notfatal);
+int pipe_including_tag(struct backend *s, const char *tag, int force_notfatal);
 int pipe_command(struct backend *s, int optimistic_literal);
-int pipe_lsub(struct backend *s, char *tag, int force_notfatal, int for_find);
+int pipe_lsub(struct backend *s, const char *tag,
+	      int force_notfatal, int for_find);
 
-void proxy_copy(char *tag, char *sequence, char *name, int usinguid,
+void proxy_copy(const char *tag, char *sequence, char *name, int usinguid,
 		struct backend *s);
 
 int annotate_fetch_proxy(const char *server, const char *mbox_pat,

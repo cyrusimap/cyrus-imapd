@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.c,v 1.1.2.1 2003/10/23 19:16:17 ken3 Exp $
+ * $Id: imap_proxy.c,v 1.1.2.2 2004/01/31 20:46:53 ken3 Exp $
  */
 
 #include <config.h>
@@ -225,7 +225,7 @@ struct backend *proxy_findinboxserver(void)
 
 /* force_notfatal says to not fatal() if we lose connection to backend_current
  * even though it is in 95% of the cases, a good idea... */
-int pipe_until_tag(struct backend *s, char *tag, int force_notfatal)
+int pipe_until_tag(struct backend *s, const char *tag, int force_notfatal)
 {
     char buf[2048];
     char eol[128];
@@ -353,7 +353,7 @@ int pipe_until_tag(struct backend *s, char *tag, int force_notfatal)
     return r;
 }
 
-int pipe_including_tag(struct backend *s, char *tag, int force_notfatal)
+int pipe_including_tag(struct backend *s, const char *tag, int force_notfatal)
 {
     int r;
 
@@ -592,7 +592,8 @@ int pipe_command(struct backend *s, int optimistic_literal)
  * it to return nonexistant mailboxes (RFC1176), but we need to really dumb
  * down the response when this is the case.
  */
-int pipe_lsub(struct backend *s, char *tag, int force_notfatal, int for_find) 
+int pipe_lsub(struct backend *s, const char *tag,
+	      int force_notfatal, int for_find) 
 {
     int taglen = strlen(tag);
     int c;
@@ -881,7 +882,7 @@ static char *editflags(char *flags)
     return flags;
 }
 
-void proxy_copy(char *tag, char *sequence, char *name, int usinguid,
+void proxy_copy(const char *tag, char *sequence, char *name, int usinguid,
 		struct backend *s)
 {
     char mytag[128];

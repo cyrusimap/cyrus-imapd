@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.12 2004/01/31 18:56:54 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.13 2004/01/31 20:46:53 ken3 Exp $ */
 
 #include <config.h>
 
@@ -211,9 +211,9 @@ void cmd_listrights(char *tag, char *name, char *identifier);
 void cmd_myrights(const char *tag, const char *name);
 void cmd_setacl(char *tag, const char *name,
 		const char *identifier, const char *rights);
-void cmd_getquota(char *tag, char *name);
-void cmd_getquotaroot(char *tag, char *name);
-void cmd_setquota(char *tag, char *quotaroot);
+void cmd_getquota(const char *tag, const char *name);
+void cmd_getquotaroot(const char *tag, const char *name);
+void cmd_setquota(const char *tag, const char *quotaroot);
 void cmd_status(char *tag, char *name);
 void cmd_unselect(char* tag);
 void cmd_namespace(char* tag);
@@ -5303,7 +5303,7 @@ static int quota_cb(char *name, int matchlen __attribute__((unused)),
 /*
  * Perform a GETQUOTA command
  */
-void cmd_getquota(char *tag, char *name)
+void cmd_getquota(const char *tag, const char *name)
 {
     int r;
     struct quota quota;
@@ -5378,7 +5378,7 @@ void cmd_getquota(char *tag, char *name)
 /*
  * Perform a GETQUOTAROOT command
  */
-void cmd_getquotaroot(char *tag, char *name)
+void cmd_getquotaroot(const char *tag, const char *name)
 {
     char mailboxname[MAX_MAILBOX_NAME+1];
     char *server;
@@ -5484,7 +5484,7 @@ void cmd_getquotaroot(char *tag, char *name)
  * Parse and perform a SETQUOTA command
  * The command has been parsed up to the resource list
  */
-void cmd_setquota(char *tag, char *quotaroot)
+void cmd_setquota(const char *tag, const char *quotaroot)
 {
     int newquota = -1;
     int badresource = 0;
@@ -7481,7 +7481,6 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 
 	/* If needed, set an uppermost quota root */
 	if(!r) {
-	    char buf[MAX_MAILBOX_PATH+1];
 	    struct quota quota;
 	    
 	    quota.root = mailboxname;
@@ -8292,7 +8291,7 @@ static void mstringdata(char *cmd, char *name, int matchlen, int maycreate,
     if (!strncasecmp(lastname, "inbox", 5)) {
 	(*imapd_namespace.mboxname_tointernal)(&imapd_namespace, "INBOX",
 					       imapd_userid, mboxname);
-	strcat(mboxname, lastname+5);
+	strlcat(mboxname, lastname+5, sizeof(mboxname));
     }
     else
 	strlcpy(mboxname, lastname, sizeof(mboxname));
