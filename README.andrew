@@ -44,6 +44,8 @@ To make a release:
     comp.os.linux.announce
     freshmeat.net
 
+- update asg.web links to new version
+
 ---
 to bring up a new Andrew Cyrus server:
 
