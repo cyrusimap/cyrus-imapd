@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: target-acap.c,v 1.24 2000/12/18 04:53:41 leg Exp $
+ * $Id: target-acap.c,v 1.25 2000/12/26 03:31:04 leg Exp $
  */
 
 #include <config.h>
@@ -393,6 +393,7 @@ int synchronize_mboxlist(void)
 	return r;
     }
 
+    num = 0;			/* reset mailbox count */
     r = acap_search_dataset(acap_conn, global_dataset "/", 
 		      "EQUAL \"mailbox.status\" \"i;octet\" \"committed\"", 0,
 			    &myacap_request, NULL,
