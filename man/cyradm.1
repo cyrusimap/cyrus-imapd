@@ -218,28 +218,28 @@ Execute commands from \fIscript\fR.
 .IP "\fB\-user \fIuser\fR" 15
 Log in to the server as \fIuser\fR.
 .IP "\fB\-u \fIuser\fR" 15
-Same as \fB-user\fI user\fR.
+Short form of \fB-user\fI user\fR.
 .IP "\fB\-protection \fIprot\fR" 15
 Specify allowable protection mechanisms for the connection.
 \fIprot\fR is one or more of the letters \fBn\fR (no protection),
 \fBi\fR (integrity protection), or \fBp\fR (privacy protection).
 The best available protection mechanism is used.
-Default is "\fBnip\fR", allowing any available protection mechanism.
+Default is \fBnip\fR, allowing any available protection mechanism.
 .IP "\fB\-p \fIprot\fR" 15
-Same as \fB-protection\fI prot\fR.
+Short form of \fB-protection\fI prot\fR.
 .SH DESCRIPTION
 .PP
 \fBCyradm\fR is a simple Tcl-based administrative client for the Cyrus IMAP
-server.  If invoked using the first form, \fBcyradm\fR reads Tcl commands
+server.  If invoked with a script, \fBcyradm\fR reads Tcl commands
 from the file \fIscript\fR and evaluates them.
 .PP
-If invoked using the second form, \fBcyradm\fR runs in interactive
+If invoked with \fIhost\fR, \fBcyradm\fR runs in interactive
 mode, connecting to \fIhost\fR on port \fIport\fR, authenticating, and
 then reading commands from the standard input and evaluating
 them. \fIPort\fR defaults to the standard IMAP port.  \fBCyradm\fR
 runs until the \fBexit\fR command is invoked or until it reaches
-end-of-file on its standard input.  If there exists a
-file \fB.cyradmrc\fR in the home directory of the user, \fBcyradm\fR
+end-of-file on its standard input.  If 
+f \fB.cyradmrc\fR in the home directory of the user, \fBcyradm\fR
 evaluates the file as a Tcl script just before reading the first
 command from standard input, after connecting and authenticating to
 \fIserver\fR.
@@ -250,20 +250,18 @@ In all commands, a \fImailbox\fR or \fIroot\fR of ``.'' specifies the
 same mailbox used previously in that connection.
 .IP "\fBcreatemailbox \fImailbox\fR [\fIpartition\fR]" 5
 The \fBcreatemailbox\fR (or \fBcm\fR) command creates a new mailbox
-with the name \fImailbox\fR.  The optional \fIpartition\fR argument
+named \fImailbox\fR.  The optional \fIpartition\fR argument
 specifies the partition name on which to create the mailbox.
 .IP "\fBdeletemailbox \fImailbox\fR" 5
-The \fBdeletemailbox\fR (or \fBdm\fR) command deletes the mailbox
-with the name \fImailbox\fR.
+The \fBdeletemailbox\fR (or \fBdm\fR) command deletes the named mailbox.
 .IP "\fBrenamemailbox \fImailbox newmailbox\fR [\fIpartition\fR]" 5
-The \fBrenamemailbox\fR (or \fBrenm\fR) command renames the mailbox
-with the name \fImailbox\fR to \fInewmailbox\fR.  The optional
+The \fBrenamemailbox\fR (or \fBrenm\fR) command renames the named
+mailbox to \fInewmailbox\fR.  The optional
 \fIpartition\fR argument specifies the partition name on which to move
 the mailbox.
 .IP "\fBlistmailbox [\fI-subscribed\fR] \fIpattern\fR [\fIreference\fR]" 5
-The \fBlistmailbox\fR (or \fBlm\fR) command returns a string
-containing a tabular list of mailboxes matching
-\fIpattern\fR.  The optional \fIreference\fR argument specifies the
+The \fBlistmailbox\fR (or \fBlm\fR) command returns a list of mailboxe namess matching
+the string \fIpattern\fR.  The optional \fIreference\fR argument specifies the
 reference name relative to which \fIpattern\fR is then interpreted.
 .IP
 The \fB-subscribed\fR (or \fB-s\fR) switch limits the returned
