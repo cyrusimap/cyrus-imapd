@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122.4.27 2003/02/27 14:42:08 ken3 Exp $
+ * $Id: pop3d.c,v 1.122.4.28 2003/03/05 18:32:07 ken3 Exp $
  */
 #include <config.h>
 
@@ -618,8 +618,8 @@ static void cmdloop(void)
 	}
 
 	/* check for shutdown file */
-	if ((arg = shutdown_file()) != NULL) {
-	    for (p = arg; *p == '['; p++); /* can't have [ be first char */
+	if (shutdown_file(inputbuf, sizeof(inputbuf))) {
+	    for (p = inputbuf; *p == '['; p++); /* can't have [ be first char */
 	    prot_printf(popd_out, "-ERR [SYS/TEMP] %s\r\n", p);
 	    shut_down(0);
 	}
@@ -1571,7 +1571,7 @@ static void bitpipe(void)
 {
     fd_set read_set, rset;
     int nfds, r;
-    char buf[4096], *shut;
+    char buf[4096];
     
     FD_ZERO(&read_set);
     FD_SET(0, &read_set);  
@@ -1580,9 +1580,9 @@ static void bitpipe(void)
     
     for (;;) {
 	/* check for shutdown file */
-	if ((shut = shutdown_file()) != NULL) {
+	if (shutdown_file(buf, sizeof(buf))) {
 	    char *p;
-	    for (p = shut; *p == '['; p++); /* can't have [ be first char */
+	    for (p = buf; *p == '['; p++); /* can't have [ be first char */
 	    prot_printf(popd_out, "-ERR [SYS/TEMP] %s\r\n", p);
 	    shut_down(0);
 	}

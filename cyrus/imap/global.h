@@ -1,5 +1,5 @@
 /* global.h -- Header for global/shared variables & functions.
- * $Id: global.h,v 1.1.2.4 2003/02/27 14:42:06 ken3 Exp $
+ * $Id: global.h,v 1.1.2.5 2003/03/05 18:32:05 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -137,7 +137,7 @@ void eatline(struct protstream *pin, int c);
 
 /* Misc utils */
 extern void cyrus_ctime(time_t date, char *datebuf);
-extern char *shutdown_file(void);
+extern int shutdown_file(char *buf, int size);
 
 /* Misc globals */
 extern int config_implicitrights;

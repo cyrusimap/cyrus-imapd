@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.67 2003/03/03 18:13:46 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.68 2003/03/05 18:32:06 ken3 Exp $
  */
 
 /*
@@ -581,7 +581,7 @@ int service_main(int argc, char **argv, char **envp)
     char hbuf[NI_MAXHOST];
     int timeout;
     sasl_security_properties_t *secprops=NULL;
-    char *unavail;
+    char unavail[1024];
 
     signals_poll();
 
@@ -649,7 +649,7 @@ int service_main(int argc, char **argv, char **envp)
        TLS negotiation immediatly */
     if (nntps == 1) cmd_starttls(1);
 
-    if ((unavail = shutdown_file()) != NULL) {
+    if (shutdown_file(unavail, sizeof(unavail))) {
 	prot_printf(nntp_out,
 		    "400 %s Cyrus NNTP%s %s server unavailable, %s\r\n",
 		    config_servername, config_mupdate_server ? " Murder" : "",
@@ -802,10 +802,9 @@ static void cmdloop(void)
 {
     int c, r = 0, mode;
     static struct buf cmd, arg1, arg2, arg3, arg4;
-    char *p;
+    char *p, *result, buf[1024];
     const char *err;
     unsigned long uid;
-    char *result;
     struct backend *be;
 
     config_allowanonymous = config_getswitch(IMAPOPT_ALLOWANONYMOUSLOGIN);
@@ -822,8 +821,8 @@ static void cmdloop(void)
 	    }
 	    return;
 	}
-	if ((result = shutdown_file()) != NULL) {
-	    prot_printf(nntp_out, "400 %s\r\n", result);
+	if (shutdown_file(buf, sizeof(buf))) {
+	    prot_printf(nntp_out, "400 %s\r\n", buf);
 	    shut_down(0);
 	}
 	if (!cmd.s[0]) {

@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.75.4.18 2003/02/13 20:32:57 rjs3 Exp $
+ * $Id: lmtpengine.c,v 1.75.4.19 2003/03/05 18:32:06 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -832,8 +832,6 @@ void lmtpmode(struct lmtp_func *func,
 	      int fd)
 {
     message_data_t *msg = NULL;
-    char shutdownfilename[1024];
-    int shutdown_fd = -1;
     int max_msgsize;
     char buf[4096];
     char *p;
@@ -869,8 +867,6 @@ void lmtpmode(struct lmtp_func *func,
 #endif
     cd.starttls_done = 0;
 
-    snprintf(shutdownfilename, sizeof(shutdownfilename), 
-	     "%s/msg/shutdown", config_dir);
     max_msgsize = config_getint(IMAPOPT_MAXMESSAGESIZE);
 
     /* If max_msgsize is 0, allow any size */
@@ -990,12 +986,7 @@ void lmtpmode(struct lmtp_func *func,
 
       /* Only allow LHLO/NOOP/QUIT when there is a shutdown file */
       if (!strchr("LlNnQq", buf[0]) &&
-	  (shutdown_fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
-	  struct protstream *shutdown_in = prot_new(shutdown_fd, 0);
-
-	  prot_fgets(buf, sizeof(buf), shutdown_in);
-	  if ((p = strchr(buf, '\r'))!=NULL) *p = 0;
-	  if ((p = strchr(buf, '\n'))!=NULL) *p = 0;
+	  shutdown_file(buf, sizeof(buf))) {
 
 	  prot_printf(pout, "421 4.3.2 %s\r\n", buf);
 	  prot_flush(pout);

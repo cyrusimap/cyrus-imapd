@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.68 2003/02/27 14:42:06 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.69 2003/03/05 18:32:05 ken3 Exp $ */
 
 #include <config.h>
 
@@ -678,7 +678,7 @@ void cmdloop()
     int ret;
     int usinguid, havepartition, havenamespace, recursive;
     static struct buf tag, cmd, arg1, arg2, arg3, arg4;
-    char *p, *shut;
+    char *p, shut[1024];
     const char *err;
 
     prot_printf(imapd_out,
@@ -700,7 +700,7 @@ void cmdloop()
 
     for (;;) {
 	if ( !imapd_userisadmin && imapd_userid
-	     && (shut = shutdown_file()) != NULL) {
+	     && shutdown_file(shut, sizeof(shut))) {
 	    for (p = shut; *p == '['; p++); /* can't have [ be first char */
 	    prot_printf(imapd_out, "* BYE [ALERT] %s\r\n", p);
 	    shut_down(0);
@@ -2028,8 +2028,8 @@ void idle_update(idle_flags_t flags)
 	index_check(imapd_mailbox, 0, 1);
 
     if (flags & IDLE_ALERT) {
-	char *shut;
-	if (! imapd_userisadmin && (shut = shutdown_file()) != NULL) {
+	char shut[1024];
+	if (! imapd_userisadmin && shutdown_file(shut, sizeof(shut))) {
 	    char *p;
 	    for (p = shut; *p == '['; p++); /* can't have [ be first char */
 	    prot_printf(imapd_out, "* BYE [ALERT] %s\r\n", p);

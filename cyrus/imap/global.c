@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.1.2.5 2003/02/27 14:42:06 ken3 Exp $ */
+/* $Id: global.c,v 1.1.2.6 2003/03/05 18:32:05 ken3 Exp $ */
 
 #include <config.h>
 
@@ -548,27 +548,25 @@ void cyrus_done()
 }
 
 /*
- * Return contents of the shutdown file.  NULL = no file.
+ * Returns 1 if we have a shutdown file, with the first line in buf.
+ * Otherwise returns 0, and the contents of buf is undefined.
  */
-char *shutdown_file(void)
+int shutdown_file(char *buf, int size)
 {
-    int fd;
-    struct protstream *shutdown_in;
+    FILE *f;
     static char shutdownfilename[1024] = "";
-    static char buf[1024];
     char *p;
     
     if (!shutdownfilename[0])
 	snprintf(shutdownfilename, sizeof(shutdownfilename), 
 		 "%s/msg/shutdown", config_dir);
-    if ((fd = open(shutdownfilename, O_RDONLY, 0)) == -1) return NULL;
+    if ((f = fopen(shutdownfilename, "r")) == NULL) return 0;
 
-    shutdown_in = prot_new(fd, 0);
-    prot_fgets(buf, sizeof(buf), shutdown_in);
+    fgets(buf, size, f);
     if ((p = strchr(buf, '\r')) != NULL) *p = 0;
     if ((p = strchr(buf, '\n')) != NULL) *p = 0;
 
     syslog(LOG_WARNING, "%s, closing connection", buf);
 
-    return buf;
+    return 1;
 }

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.50 2003/02/27 21:31:29 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.51 2003/03/05 18:32:08 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1419,7 +1419,7 @@ void cmdloop()
     int c;
     int usinguid, havepartition, havenamespace;
     static struct buf tag, cmd, arg1, arg2, arg3, arg4;
-    char *p, *shut;
+    char *p, shut[1024];
     const char *err;
 
     snprintf(shutdownfilename, sizeof(shutdownfilename), 
@@ -1437,7 +1437,7 @@ void cmdloop()
     }
 
     for (;;) {
-	if (! proxyd_userisadmin && (shut = shutdown_file()) != NULL) {
+	if (! proxyd_userisadmin && shutdown_file(shut, sizeof(shut))) {
 	    for (p = shut; *p == '['; p++); /* can't have [ be first char */
 	    prot_printf(proxyd_out, "* BYE [ALERT] %s\r\n", p);
 	    shut_down(0);
@@ -2601,11 +2601,11 @@ struct prot_waitevent *idle_getalerts(struct protstream *s,
 				      struct prot_waitevent *ev, void *rock)
 {
     int idle_period = *((int *) rock);
-    char *shut;
+    char shut[1024];
 
     ev->mark = time(NULL) + idle_period;
 
-    if (! proxyd_userisadmin && (shut = shutdown_file()) != NULL) {
+    if (! proxyd_userisadmin && shutdown_file(shut, sizeof(shut))) {
 	char *p;
 
 	/* if we're actually running IDLE on the be, terminate it */
