@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.14 2000/07/18 23:27:03 leg Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.15 2000/10/07 19:04:45 leg Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -77,6 +77,12 @@ void fatal(const char *message, int code)
 struct dumprock {
     enum mboxop op;
 };
+
+static int dump_p(void *rockp,
+		  const char *key, int keylen)
+{
+    return 1;
+}
 
 static int dump_cb(void *rockp,
 		   const char *key, int keylen,
@@ -174,7 +180,7 @@ void do_dump(enum mboxop op)
 
     d.op = op;
 
-    CONFIG_DB_MBOX->foreach(mbdb, "", 0, &dump_cb, &d, NULL);
+    CONFIG_DB_MBOX->foreach(mbdb, "", 0, &dump_p, &dump_cb, &d, NULL);
 
     return;
 }
