@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.56 2002/04/11 16:05:00 rjs3 Exp $
+ * $Id: mupdate.c,v 1.57 2002/05/07 18:27:43 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -86,7 +86,6 @@ enum {
 };
 
 struct pending {
-    enum settype t;
     struct pending *next;
 
     char mailbox[MAX_MAILBOX_NAME];
@@ -147,7 +146,7 @@ void cmd_set(struct conn *C,
 	     const char *tag, const char *mailbox,
 	     const char *server, const char *acl, enum settype t);
 void cmd_find(struct conn *C, const char *tag, const char *mailbox,
-	      int dook);
+	      int dook, int send_delete);
 void cmd_list(struct conn *C, const char *tag, const char *host_prefix);
 void cmd_startupdate(struct conn *C, const char *tag);
 void shut_down(int code);
@@ -573,7 +572,7 @@ void cmdloop(struct conn *c)
 
 		if (c->streaming) goto notwhenstreaming;
 		
-		cmd_find(c, tag.s, arg1.s, 1);
+		cmd_find(c, tag.s, arg1.s, 1, 0);
 	    }
 	    else goto badcmd;
 	    break;
@@ -1050,7 +1049,6 @@ void cmd_set(struct conn *C,
 	/* for each connection, add to pending list */
 	struct pending *p = (struct pending *) xmalloc(sizeof(struct pending));
 	strcpy(p->mailbox, mailbox);
-	p->t = t;
 	
 	pthread_mutex_lock(&upc->m);
 	p->next = upc->plist;
@@ -1066,7 +1064,8 @@ void cmd_set(struct conn *C,
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 }
 
-void cmd_find(struct conn *C, const char *tag, const char *mailbox, int dook)
+void cmd_find(struct conn *C, const char *tag, const char *mailbox, int dook,
+              int send_delete)
 {
     struct mbent *m;
 
@@ -1086,8 +1085,10 @@ void cmd_find(struct conn *C, const char *tag, const char *mailbox, int dook)
 		    tag,
 		    strlen(m->mailbox), m->mailbox,
 		    strlen(m->server), m->server);
-    } else {
-	/* no output: not found */
+    } else if (send_delete) {
+	/* not found, if needed, send a delete */
+	prot_printf(C->pout, "%s DELETE {%d+}\r\n%s\r\n",
+		    tag, strlen(mailbox), mailbox);
     }
 
     free_mbent(m);
@@ -1228,13 +1229,10 @@ void sendupdates(struct conn *C, int flushnow)
 	q = p;
 	p = p->next;
 
-	if (q->t == SET_DELETE) {
-	    prot_printf(C->pout, "%s DELETE {%d+}\r\n%s\r\n",
-			C->streaming, strlen(q->mailbox), q->mailbox);
-	} else {
-	    /* notify just like a FIND */
-	    cmd_find(C, C->streaming, q->mailbox, 0);
-	}
+	/* notify just like a FIND - except enable sending of DELETE
+	 * notifications */
+	cmd_find(C, C->streaming, q->mailbox, 0, 1);
+
 	free(q);
     }
 
@@ -1383,7 +1381,6 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 
 	struct pending *p = (struct pending *) xmalloc(sizeof(struct pending));
 	strcpy(p->mailbox, mdata->mailbox);
-	p->t = t;
 	
 	pthread_mutex_lock(&upc->m);
 	p->next = upc->plist;
