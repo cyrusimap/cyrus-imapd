@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.15.2.10 2003/04/23 00:12:06 ken3 Exp $
+ * $Id: ipurge.c,v 1.15.2.11 2003/04/30 17:27:57 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -219,8 +219,14 @@ purge_me(char *name, int matchlen, int maycreate) {
 
   memset(&stats, '\0', sizeof(mbox_stats_t));
 
-  if (verbose)
-      printf("Working on %s...\n",name);
+  if (verbose) {
+      char mboxname[MAX_MAILBOX_NAME+1];
+
+      /* Convert internal name to external */
+      (*purge_namespace.mboxname_toexternal)(&purge_namespace, name,
+					     "cyrus", mboxname);
+      printf("Working on %s...\n", mboxname);
+  }
 
   error = mailbox_open_header(name, 0, &the_box);
   if (error != 0) { /* did we find it? */
