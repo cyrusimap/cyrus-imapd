@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: libconfig.c,v 1.3 2003/12/07 01:00:58 ken3 Exp $ */
+/* $Id: libconfig.c,v 1.4 2003/12/07 15:26:13 ken3 Exp $ */
 
 #include <config.h>
 
@@ -195,7 +195,7 @@ void config_read(const char *alt_config)
 	    snprintf(errbuf, sizeof(errbuf),
 		    "invalid option name on line %d of configuration file",
 		    lineno);
-	    fatal(buf, EC_CONFIG);
+	    fatal(errbuf, EC_CONFIG);
 	}
 	*p++ = '\0';
 	
@@ -210,7 +210,7 @@ void config_read(const char *alt_config)
 	    snprintf(errbuf, sizeof(errbuf),
 		    "empty option value on line %d of configuration file",
 		    lineno);
-	    fatal(buf, EC_CONFIG);
+	    fatal(errbuf, EC_CONFIG);
 	}
 	
 	srvkey = NULL;
@@ -296,7 +296,7 @@ void config_read(const char *alt_config)
 		    /* error during conversion */
 		    sprintf(errbuf, "non-integer value for %s in line %d",
 			    imapopts[opt].optname, lineno);
-		    fatal(buf, EC_CONFIG);
+		    fatal(errbuf, EC_CONFIG);
 		}
 
 		imapopts[opt].val.i = val;
@@ -316,7 +316,7 @@ void config_read(const char *alt_config)
 		    /* error during conversion */
 		    sprintf(errbuf, "non-switch value for %s in line %d",
 			    imapopts[opt].optname, lineno);
-		    fatal(buf, EC_CONFIG);
+		    fatal(errbuf, EC_CONFIG);
 		}
 		break;
 	    }
@@ -334,7 +334,7 @@ void config_read(const char *alt_config)
 		    /* error during conversion */
 		    sprintf(errbuf, "invalid value for %s in line %d",
 			    imapopts[opt].optname, lineno);
-		    fatal(buf, EC_CONFIG);
+		    fatal(errbuf, EC_CONFIG);
 		}
 		break;
 	    }
