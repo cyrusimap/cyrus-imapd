@@ -368,7 +368,7 @@ char *username;
     int usermboxnamelen;
     char buf[512], *bufp = buf;
     unsigned offset, buflen, prefixlen;
-    char *p, *acl;
+    char *endname, *p, *acl;
     int r;
 
     if (!listfname) mboxlist_getfname();
@@ -435,8 +435,8 @@ char *username;
     for (;;) {
 	if (!fgets(buf, sizeof(buf), listfile)) break;
 	/* XXX assuming \t before running past sizeof(buf) */
-	p = strchr(buf, '\t');
-	*p = '\0';
+	endname = strchr(buf, '\t');
+	*endname = '\0';
 	if (strncasecmp(buf, pattern, prefixlen)) break;
 	if (glob_test(g, buf, -1) &&
 	    (strncasecmp(buf, usermboxname, usermboxnamelen) ||
@@ -458,9 +458,12 @@ char *username;
 		if (acl_myrights(acl) & ACL_LOOKUP) {
 		    printf("* MAILBOX %s\r\n", buf);
 		}
+		if (p) {
+		    *p = '\n';
+		}
 	    }
 	}
-	*p = '\t';
+	*endname = '\t';
 	while (buf[strlen(buf)-1] != '\n') {
 	    if (!fgets(buf, sizeof(buf), listfile)) break;
 	}
