@@ -14,15 +14,16 @@ if (!$ret || $#ARGV != 0) {
 
 $infile = $ARGV[0];
 
-if ($infile =~ /(.*)\.snmp/) {
+if ($infile =~ m|.*/(.*)\.snmp|) {
     $basename = $1;
-    $outheader = "$1.h";
-    $outprog = "$1.c";
+} elsif ($infile =~ m|(.*)\.snmp|) {
+    $basename = $1;
 } else {
     $basename = $infile;
-    $outheader = "$infile.h";
-    $outprog = "$infile.c";
 }
+print "basename $basename\n";
+$outheader = "$basename.h";
+$outprog = "$basename.c";
 
 open (INPUT,"<$infile");
 
@@ -177,7 +178,7 @@ print OUTPUT_C <<EOF
 
 #define SOCK_PATH "/tmp/.snmp_door"
 
-static int socket = -1;
+static int mysock = -1;
 static struct sockaddr_un remote;
 
 
@@ -199,15 +200,15 @@ int snmp_connect(void)
     if (fdflags != -1) fdflags = fcntl(s, F_SETFL, O_NONBLOCK | fdflags);
     if (fdflags != -1) { close(s); return -1; }
 
-    socket = s;
+    mysock = s;
 
     return 0;
 }
 
 int snmp_close(void)
 {
-    if (socket > -1)
-	close(socket);
+    if (mysock > -1)
+	close(mysock);
 
     return 0;
 }
@@ -217,14 +218,14 @@ int snmp_increment(${basename}_t cmd, int incr)
     int len;
     char tosend[100];
 
-    if (socket == -1) return 1;
+    if (mysock == -1) return 1;
 
     strcpy(tosend, snmp_getoid(cmd));
     strcat(tosend,"\n");
 
     len = strlen(remote.sun_path) + sizeof(remote.sun_family);
 
-    if (sendto(socket, tosend, strlen(tosend), 0, &remote, len) == -1) {
+    if (sendto(mysock, tosend, strlen(tosend), 0, &remote, len) == -1) {
 	return 1;
     }
 
