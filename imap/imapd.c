@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.182 1999/10/13 21:08:58 tmartin Exp $ */
+/* $Id: imapd.c,v 1.183 1999/10/18 02:21:36 leg Exp $ */
 
 #ifndef __GNUC__
 #define __attribute__(foo)
@@ -505,9 +505,8 @@ int fd;
 /*
  * Cleanly shut down and exit
  */
-void
-shut_down(code)
-int code;
+void shut_down(int code) __attribute__((noreturn));
+void shut_down(int code)
 {
     proc_cleanup();
     if (imapd_mailbox) {
