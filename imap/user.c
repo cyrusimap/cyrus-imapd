@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: user.c,v 1.8 2002/03/12 18:10:49 ken3 Exp $
+ * $Id: user.c,v 1.9 2002/03/29 21:52:15 rjs3 Exp $
  */
 
 #include <config.h>
@@ -113,13 +113,50 @@ static int user_deleteacl(char *name, int matchlen, int maycreate, void* rock)
     return 0;
 }
 
-int user_delete(char *user, char *userid, struct auth_state *authstate)
+int user_deletesieve(char *user) 
+{
+    char sieve_path[2048];
+    char filename[2048];
+    DIR *mbdir;
+    struct dirent *next = NULL;
+    
+    /* oh well */
+    if(config_getswitch("sieveusehomedir", 0)) return 0;
+    
+    snprintf(sieve_path, sizeof(sieve_path), "%s/%c/%s",
+	     config_getstring("sievedir", "/usr/sieve"),
+	     user[0], user);
+    mbdir=opendir(sieve_path);
+
+    if(mbdir) {
+	while((next = readdir(mbdir)) != NULL) {
+	    if(!strcmp(next->d_name, ".")
+	       || !strcmp(next->d_name, "..")) continue;
+
+	    snprintf(filename, sizeof(filename), "%s/%s",
+		     sieve_path, next->d_name);
+
+	    unlink(filename);
+	}
+	
+	closedir(mbdir);
+
+	/* remove mbdir */
+	rmdir(sieve_path);
+    }
+
+    return 0;
+}
+
+int user_delete(char *user, char *userid, struct auth_state *authstate,
+		int wipe_user)
 {
     char *fname;
     char pat[] = "*";
 
     /* delete seen state */
-    seen_delete_user(user);
+    if(wipe_user)
+	seen_delete_user(user);
 
     /* delete subscriptions */
     fname = mboxlist_hash_usersubs(user);
@@ -130,8 +167,13 @@ int user_delete(char *user, char *userid, struct auth_state *authstate)
     user_deletequotas(user);
 
     /* delete ACLs - we're using the internal names here */
-    mboxlist_findall(NULL, pat, 1, userid, authstate, user_deleteacl, user);
+    if(wipe_user)
+	mboxlist_findall(NULL, pat, 1, userid, authstate, user_deleteacl,
+			 user);
 
+    /* delete sieve scripts */
+    user_deletesieve(user);
+    
     return 0;
 }
 #if 0
