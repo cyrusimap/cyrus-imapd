@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.226 2000/04/11 03:34:37 leg Exp $ */
+/* $Id: imapd.c,v 1.227 2000/04/12 18:24:29 leg Exp $ */
 
 #include <config.h>
 
@@ -514,6 +514,7 @@ void shut_down(int code)
 	index_closemailbox(imapd_mailbox);
 	mailbox_close(imapd_mailbox);
     }
+    seen_done();
     mboxlist_close();
     mboxlist_done();
     prot_flush(imapd_out);
