@@ -41,13 +41,14 @@
  *
  */
 /*
- * $Id: prot.c,v 1.71 2002/06/05 23:37:17 leg Exp $
+ * $Id: prot.c,v 1.72 2002/06/06 00:11:56 rjs3 Exp $
  */
 
 #include <config.h>
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
+#include <syslog.h>
 #include <signal.h>
 #ifdef __STDC__
 #include <stdarg.h>
@@ -415,7 +416,7 @@ int prot_fill(struct protstream *s)
 	    }
 	    else if (r == -1) {
 		syslog(LOG_ERR, "select() failed: %m");
-		s->error = xstrdup("select failed");
+		s->error = xstrdup(strerror(errno));
 		return EOF;
 	    }
 	}
