@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.232.4.25 2002/12/13 17:10:31 rjs3 Exp $
+dnl $Id: configure.in,v 1.232.4.26 2002/12/19 18:36:19 ken3 Exp $
 dnl
 
 
@@ -657,7 +657,7 @@ fi
 dnl
 dnl Test for Zephyr
 dnl
-AC_ARG_WITH(zephyr,[  --with-zephyr=PATH      use Zephyr from PATH],
+AC_ARG_WITH(zephyr,[  --with-zephyr[=PATH]    enable Zephyr notification (installed on PATH)],
 	with_zephyr="${withval}")
 if test -z "$with_zephyr"; then
      if test -f /usr/local/lib/libzephyr.a; then
@@ -679,13 +679,20 @@ case "$with_zephyr" in
            fi
            ZEPHYR_LIBS="-lzephyr";;
 esac
+AC_SUBST(ZEPHYR_LIBS)
+AC_SUBST(ZEPHYR_CPPFLAGS)
 if test "$with_zephyr" != "no"; then
 	AC_DEFINE(HAVE_ZEPHYR)
-	AC_SUBST(ZEPHYR_LIBS)
-	AC_SUBST(ZEPHYR_CPPFLAGS)
 fi
 
-
+dnl
+dnl Set pidfile location
+dnl
+AC_ARG_WITH(pidfile,[  --with-pidfile[=PATH]     pidfile in PATH (/var/run/cyrus-master.pid)],
+	[MASTERPIDFILE="$withval"],
+	[MASTERPIDFILE="/var/run/cyrus-master.pid"])
+MASTERPIDFILE="\"$MASTERPIDFILE\""
+AC_DEFINE_UNQUOTED(MASTER_PIDFILE, $MASTERPIDFILE)
 
 dnl
 dnl Select a method for IMAP IDLE
@@ -699,21 +706,26 @@ if test "$WITH_IDLE" = "idled"; then
 fi
 
 dnl
+dnl see if we're compiling with NNTP support
+dnl
+ENABLE_NNTP=no
+AC_ARG_ENABLE(nntp,
+        [  --enable-nntp           enable NNTP support (experimental)],
+	ENABLE_NNTP=$enableval
+        if test "$ENABLE_NNTP" != no; then
+	  IMAP_PROGS="$IMAP_PROGS nntpd fetchnews expirenews"
+        fi) 
+
+dnl
 dnl see if we're compiling the Murder support programs
 dnl
 AC_ARG_ENABLE(murder,
         [  --enable-murder         enable IMAP Murder support],
         if test "$enableval" != no; then
 	  IMAP_PROGS="$IMAP_PROGS proxyd pop3proxyd lmtpproxyd mupdate"
-        fi) 
-
-dnl
-dnl see if we're compiling with NNTP support
-dnl
-AC_ARG_ENABLE(nntp,
-        [  --enable-nntp           enable NNTP support (experimental)],
-        if test "$enableval" != no; then
-	  IMAP_PROGS="$IMAP_PROGS nntpd fetchnews expirenews"
+	  if test "$ENABLE_NNTP" != no; then
+	    IMAP_PROGS="$IMAP_PROGS nntpproxyd"
+	  fi
         fi) 
 
 AC_SUBST(IMAP_PROGS)

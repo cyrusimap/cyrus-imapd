@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.67.4.8 2002/12/17 18:35:33 ken3 Exp $ */
+/* $Id: master.c,v 1.67.4.9 2002/12/19 18:37:06 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1207,7 +1207,7 @@ void reread_conf(void)
 
 int main(int argc, char **argv)
 {
-    const char *default_pidfile = "/var/run/cyrus-master.pid";
+    const char *default_pidfile = MASTER_PIDFILE;
     const char *lock_suffix = ".lock";
 
     const char *pidfile = default_pidfile;
@@ -1215,7 +1215,7 @@ int main(int argc, char **argv)
 
     int startup_pipe[2] = { -1, -1 };
     int pidlock_fd = -1;
-    
+
     int i, opt, close_std = 1, daemon_mode = 0;
     extern int optind;
     extern char *optarg;
@@ -1252,6 +1252,8 @@ int main(int argc, char **argv)
 	}
     }
 
+    masterconf_init("master");
+
     /* zero out the children table */
     memset(&ctable, 0, sizeof(struct centry *) * child_table_size);
 
@@ -1283,7 +1285,7 @@ int main(int argc, char **argv)
      *     exit(failure)
      * [B] write pid to pidfile
      * [B] write success code to pipe & finish starting up
-     * [A] exit(code read from pipe)
+     * [A] unlink pidfile.lock and exit(code read from pipe)
      *
      */
     if(daemon_mode) {
@@ -1313,8 +1315,6 @@ int main(int argc, char **argv)
 	    exit(EX_OSERR);
 	}
 
-	free(pidfile_lock);
-
 	do {
 	    pid = fork();
 	    	    
@@ -1332,14 +1332,18 @@ int main(int argc, char **argv)
 	    /* Parent, wait for child */
 	    if(read(startup_pipe[0], &exit_code, sizeof(exit_code)) == -1) {
 		syslog(LOG_ERR, "could not read from startup_pipe (%m)");
+		unlink(pidfile_lock);
 		exit(EX_OSERR);
 	    } else {
+		unlink(pidfile_lock);
 		exit(exit_code);
 	    }
 	}
 
 	/* Child! */
 	close(startup_pipe[0]);
+
+	free(pidfile_lock);
 
 	/*
 	 * We're now running in the child. Lose our controlling terminal
@@ -1412,7 +1416,6 @@ int main(int argc, char **argv)
 	if(pidlock_fd != -1) close(pidlock_fd);
     }
 
-    masterconf_init("master");
     syslog(LOG_NOTICE, "process started");
 
 #ifdef HAVE_UCDSNMP
