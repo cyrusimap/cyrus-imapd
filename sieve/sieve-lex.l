@@ -36,7 +36,6 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "sieve.h"
 
 static int tonum(char *c);
-static char *fixstr(char *);
 static char *chkstr(char *);
 static char *mlbuf;
 static int mlbufsz, mlcur;
@@ -147,19 +146,4 @@ static char *chkstr(char *str)
 {
     if (!str) return xstrdup("");
     else return str;
-}
-
-static char *fixstr(char *str)
-{
-    char *r, *s = (char *) xmalloc(sizeof(char) * strlen(str));
-
-    r = s;
-    str++; /* skip open " */
-    while (*str != '"') {
-	if (*str == '\\')
-	    str++;
-	*s++ = *str++;
-    }
-    *s = '\0';
-    return r;
 }
