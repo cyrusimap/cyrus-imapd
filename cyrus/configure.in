@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.140 1999/08/20 18:50:33 leg Exp $
+dnl $Id: configure.in,v 1.141 1999/08/24 18:09:13 leg Exp $
 dnl
 
 AC_INIT(imap/imapd.c)
@@ -11,6 +11,9 @@ AC_CHECK_PROG(MAKEDEPEND,makedepend,makedepend,[`cd ${srcdir};pwd`/tools/not-mkd
 if test "$MAKEDEPEND" != "makedepend"; then
         AC_MSG_WARN([Makedepend is not installed on this system.  You should compile and install the version from the makedepend subdirectory.])
 fi
+
+AC_ARG_WITH(login,,AC_ERROR([--with-login is no longer supported.
+Configure SASL appropriately instead.]))
 
 AC_ARG_WITH(cyrus-prefix,[  --with-cyrus-prefix=DIR    use DIR as cyrus install directory],
 	cyrus_prefix="$withval",cyrus_prefix="/usr/cyrus")
@@ -52,6 +55,10 @@ AC_CHECK_HEADERS(unistd.h sys/select.h db_185.h sys/param.h)
 AC_REPLACE_FUNCS(memmove strcasecmp ftruncate strerror)
 AC_HEADER_DIRENT
 
+dnl this is to check for time things for sieve
+AC_STRUCT_TM
+AC_STRUCT_TIMEZONE
+
 AC_SUBST(CPPFLAGS)
 AC_SUBST(PRE_SUBDIRS)
 AC_SUBST(EXTRA_SUBDIRS)
@@ -61,7 +68,7 @@ AC_FUNC_VPRINTF
 
 sievedir="sieve"
 AC_ARG_ENABLE(sieve,
-        [  --disable-sieve          disable Sieve support],
+        [  --disable-sieve         disable Sieve support],
 	if test "$enableval" = no; then
  		sievedir="no"
 	fi)
