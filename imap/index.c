@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.136 2000/08/25 14:42:44 ken3 Exp $
+ * $Id: index.c,v 1.137 2000/09/08 14:16:10 ken3 Exp $
  */
 #include <config.h>
 
@@ -1098,10 +1098,9 @@ void index_thread(struct mailbox *mailbox, int algorithm,
 	free(msgno_list);
     }
 
-#if 0 /* enable this if/when empty untagged responses are allowed */
+    /* print an empty untagged response */
     else
 	index_thread_print(NULL, usinguid);
-#endif
 }
 
 /*
@@ -3603,9 +3602,12 @@ static void _index_thread_print(Thread *thread, int usinguid)
  */
 static void index_thread_print(Thread *thread, int usinguid)
 {
-    prot_printf(imapd_out, "* THREAD ");
+    prot_printf(imapd_out, "* THREAD");
 
-    if (thread) _index_thread_print(thread->child, usinguid);
+    if (thread) {
+	prot_printf(imapd_out, " ");
+	_index_thread_print(thread->child, usinguid);
+    }
 
     prot_printf(imapd_out, "\r\n");
 }
