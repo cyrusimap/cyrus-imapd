@@ -243,9 +243,9 @@ struct protstream *s;
     /* Decode the input token */
     ptr = s->func(s->state, s->buf+4, inputlen, &s->ptr, &s->cnt);
     if (ptr) {
-	strcpy(buf, "Decoding error: ");
-	strcat(buf, ptr);
-	s->error = buf;
+	strcpy(s->buf, "Decoding error: ");
+	strcat(s->buf, ptr);
+	s->error = s->buf;
 	return EOF;
     }
 
