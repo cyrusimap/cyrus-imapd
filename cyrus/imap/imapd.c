@@ -699,6 +699,11 @@ char *passwd;
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(IMAP_INVALID_LOGIN));
 	return;
     }
+    else {
+	syslog(LOG_NOTICE, "login: %s %s plaintext %s", imapd_clienthost,
+	       canon_user, reply ? reply : "");
+    }
+    
 
     auth_setid(canon_user);
     imapd_userid = strsave(canon_user);
@@ -716,9 +721,7 @@ char *passwd;
     if (*val != '\0') imapd_userisadmin = 1;
 
     if (!reply) reply = "User logged in";
-    syslog(LOG_NOTICE, "login: %s %s plaintext %s", imapd_clienthost,
-	   canon_user, reply ? reply : "");
-    
+
     prot_printf(imapd_out, "%s OK %s\r\n", tag, reply);
     return;
 };
