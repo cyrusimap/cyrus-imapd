@@ -17,14 +17,14 @@ right now but hopefully that will improve with time ;)
 - strlcpy vs strncpy
   - use strlcpy when you know the size of the buffer, e.g.:
     char buf[50];
-    strlcpy(src, buf, sizeof(buf));
+    strlcpy(buf, src, sizeof(buf));
 
   - use strncpy to truncate a string into a buffer you know is large enough
-    strncpy(src, buf, 4);
+    strncpy(buf, src, 4);
 
   - Use of the functions in this way will reduce the confusion involved in
     their various behaviors. In other words, this avoids things that look like:
-    strncpy(src, buf, sizeof(buf)-1);
+    strncpy(buf, src, sizeof(buf)-1);
 
 - map_refresh and map_free
 
