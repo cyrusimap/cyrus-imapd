@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.14 2002/08/29 20:19:02 rjs3 Exp $
+ * $Id: annotate.c,v 1.8.6.15 2002/08/29 20:27:57 rjs3 Exp $
  */
 
 #include <config.h>
@@ -316,18 +316,17 @@ static void get_mb_data(const char *mboxname,
 			struct mailbox_annotation_rock *mbrock) 
 {
     if(!mbrock->server && !mbrock->partition) {
-	int r = mboxlist_detail(mboxname, NULL, NULL,
+	int r = mboxlist_detail(mboxname, NULL, &(mbrock->path),
 				&(mbrock->server), &(mbrock->acl), NULL);
 	if (r) return;
 
 	mbrock->partition = strchr(mbrock->server, '!');
 	if (mbrock->partition) {
 	    *(mbrock->partition)++ = '\0';
+	    mbrock->path = NULL;
 	} else {
 	    mbrock->partition = mbrock->server;
 	    mbrock->server = NULL;
-
-	    mbrock->path = config_partitiondir(mbrock->partition);
 	}
     }
 }
@@ -454,7 +453,6 @@ static void annotation_get_lastupdate(const char *mboxname,
 	return;
 
     if (!mbrock->path) return;
-    
     if (mailbox_stat(mbrock->path, &header, &index, NULL)) return;
 
     modtime = (header.st_mtime > index.st_mtime) ?
