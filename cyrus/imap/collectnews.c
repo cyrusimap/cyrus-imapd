@@ -1,5 +1,5 @@
 /* collectnews.c -- program to add news articles to relevant header files
- $Id: collectnews.c,v 1.17 1999/04/08 21:04:22 tjs Exp $
+ $Id: collectnews.c,v 1.18 1999/08/26 21:00:30 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -97,6 +97,7 @@ char **argv;
 	    }
 	}
 
+#ifdef OLD_INN_FORMAT
 	/* Nuke out overview junk */
 	if (p = strchr(buf, '\t')) {
 	    *p = '\0';
@@ -117,7 +118,25 @@ char **argv;
 
 	    collect(group, atol(uid));
 	} while ((group = nextgroup) != 0);
+#else
+	/* this is the new INN format that uses the replication data */
+
+	/* we see "group.foo.A/#,group.bar.B/#,group.baz.C/#" */
+	group = buf;
+	while (group) {
+	    nextgroup = strchr(group, ',');
+	    if (nextgroup) *nextgroup++ = '\0';
+
+	    uid = strrchr(group, '/');
+	    if (!uid) continue;
+	    *uid++ = '\0';
+	    
+	    collect(group, atol(uid));
+	    
+	    group = nextgroup;
+	}
     }
+#endif
     exit(0);
 }
 
