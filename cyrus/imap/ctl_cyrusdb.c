@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ctl_cyrusdb.c,v 1.24 2004/05/26 15:36:45 rjs3 Exp $
+ * $Id: ctl_cyrusdb.c,v 1.25 2004/05/28 14:03:24 rjs3 Exp $
  */
 
 #include <config.h>
@@ -273,10 +273,11 @@ int main(int argc, char *argv[])
 		struct dirent *dirent;
 
 		tail = backup2 + strlen(backup2);
-		*tail++ = '/';
 
 		/* remove db.backup2 */
 		dirp = opendir(backup2);
+		strcat(tail++, "/");
+
 		if (dirp) {
 		    while ((dirent = readdir(dirp)) != NULL) {
 			if (dirent->d_name[0] == '.') continue;
