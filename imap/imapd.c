@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.271 2000/10/18 21:00:27 leg Exp $ */
+/* $Id: imapd.c,v 1.272 2000/10/23 20:32:42 leg Exp $ */
 
 #include <config.h>
 
@@ -1912,6 +1912,7 @@ cmd_append(char *tag, char *name)
 	/* Parse flags */
 	c = getword(&arg);
 	if  (c == '(' && !arg.s[0]) {
+	    nflags = 0;
 	    do {
 		c = getword(&arg);
 		if (!nflags && !arg.s[0] && c == ')') break; /* empty list */
