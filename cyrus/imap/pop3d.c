@@ -154,6 +154,7 @@ char **envp;
     timeout = config_getint("poptimeout", 10);
     if (timeout < 10) timeout = 10;
     prot_settimeout(popd_in, timeout*60);
+    prot_setflushonread(popd_in, popd_out);
 
 #ifdef HAVE_ACTE_KRB
     if (kflag) kpop();
@@ -269,7 +270,6 @@ cmdloop()
     unsigned msg;
 
     for (;;) {
-	prot_flush(popd_out);
 	if (!prot_fgets(inputbuf, sizeof(inputbuf), popd_in)) {
 	    shut_down(0);
 	}
