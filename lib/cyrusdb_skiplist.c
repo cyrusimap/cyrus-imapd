@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.31 2002/04/02 00:15:49 leg Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.32 2002/04/02 00:48:02 leg Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -841,6 +841,9 @@ static int fetchlock(struct db *db,
     return myfetch(db, key, keylen, data, datalen, mytid);
 }
 
+/* foreach allows for subsidary mailbox operations in 'cb'.
+   if there is a txn, 'cb' must make use of it.
+*/
 int myforeach(struct db *db,
 	      char *prefix, int prefixlen,
 	      foreach_p *goodp,
@@ -848,6 +851,9 @@ int myforeach(struct db *db,
 	      struct txn **tid)
 {
     const char *ptr;
+    char *savebuf = NULL;
+    int savebuflen = 0;
+    int savebufsize;
     struct txn t, *tp;
     int r = 0, cb_r = 0;
 
@@ -887,16 +893,61 @@ int myforeach(struct db *db,
 	if (prefixlen && compare(KEY(ptr), prefixlen, prefix, prefixlen)) break;
 
 	if (goodp(rock, KEY(ptr), KEYLEN(ptr), DATA(ptr), DATALEN(ptr))) {
-	    /* xxx need to unlock */
+	    unsigned long ino = db->map_ino;
+	    unsigned long sz = db->map_size;
+
+	    if (!tid) {
+		/* release read lock */
+		if ((r = unlock(db)) < 0) {
+		    return r;
+		}
+	    }
+
+	    /* save KEY, KEYLEN */
+	    if (KEYLEN(ptr) > savebuflen) {
+		savebuflen = KEYLEN(ptr) + 1024;
+		savebuf = xrealloc(savebuf, savebuflen);
+	    }
+	    memcpy(savebuf, KEY(ptr), KEYLEN(ptr));
+	    savebufsize = KEYLEN(ptr);
 
 	    /* make callback */
 	    cb_r = cb(rock, KEY(ptr), KEYLEN(ptr), DATA(ptr), DATALEN(ptr));
 	    if (cb_r) break;
 
-	    /* xxx relock, reposition */
+	    if (!tid) {
+		/* grab a r lock */
+		if ((r = read_lock(db)) < 0) {
+		    return r;
+		}
+	    } else {
+		/* make sure we're up to date */
+		update_lock(db, tp);
+	    }
+
+	    /* reposition */
+	    if (!(ino == db->map_ino && sz == db->map_size)) {
+		/* something changed in the file; reseek */
+		ptr = find_node(db, savebuf, savebufsize, 0);
+
+		/* 'ptr' might not equal 'savebuf'.  if it's different,
+		   we want to stay where we are.  if it's the same, we
+		   should move on to the next one */
+		if (savebufsize == KEYLEN(ptr) &&
+		    !memcmp(savebuf, KEY(ptr), savebufsize)) {
+		    ptr = db->map_base + FORWARD(ptr, 0);
+		} else {
+		    /* 'savebuf' got deleted, so we're now pointing at the
+		       right thing */
+		}
+	    } else {
+		/* move to the next one */
+		ptr = db->map_base + FORWARD(ptr, 0);
+	    }
+	} else {
+	    /* we didn't make the callback; keep going */
+	    ptr = db->map_base + FORWARD(ptr, 0);
 	}
-	
-	ptr = db->map_base + FORWARD(ptr, 0);
     }
 
     if (tid) {
@@ -912,6 +963,10 @@ int myforeach(struct db *db,
 	if ((r = unlock(db)) < 0) {
 	    return r;
 	}
+    }
+
+    if (savebuf) {
+	free(savebuf);
     }
 
     return r ? r : cb_r;
