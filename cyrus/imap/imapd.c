@@ -901,7 +901,13 @@ char *tag;
     if (imapd_mailbox) {
 	index_check(imapd_mailbox, 0, 0);
     }
-    prot_printf(imapd_out, "* CAPABILITY IMAP4 STATUS\r\n%s OK Capability completed\r\n", tag);
+    prot_printf(imapd_out,
+#if 0 /* Not yet ready for prime time */
+		"* CAPABILITY IMAP4 STATUS\r\n%s OK Capability completed\r\n",
+#else
+		"* CAPABILITY IMAP4\r\n%s OK Capability completed\r\n",
+#endif
+		tag);
 };
 
 /*
