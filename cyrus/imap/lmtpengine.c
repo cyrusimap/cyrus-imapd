@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.68 2002/04/01 22:22:04 leg Exp $
+ * $Id: lmtpengine.c,v 1.69 2002/04/02 00:46:49 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -647,16 +647,19 @@ char *buf;
 static int copy_msg(struct protstream *fin, FILE *fout)
 {
     char buf[8192], *p;
+    int r = 0;
 
     while (prot_fgets(buf, sizeof(buf)-1, fin)) {
 	p = buf + strlen(buf) - 1;
 	if (p < buf) {
 	    /* buffer start with a \0 */
-	    return IMAP_MESSAGE_CONTAINSNULL;
+	    r = IMAP_MESSAGE_CONTAINSNULL;
+	    continue; /* need to eat the rest of the message */
 	}
 	else if (buf[0] == '\r' && buf[1] == '\0') {
 	    /* The message contained \r\0, and fgets is confusing us. */
-	    return IMAP_MESSAGE_CONTAINSNULL;
+	    r = IMAP_MESSAGE_CONTAINSNULL;
+	    continue; /* need to eat the rest of the message */
 	}
 	else if (p[0] == '\r') {
 	    /*
@@ -674,7 +677,8 @@ static int copy_msg(struct protstream *fin, FILE *fout)
 	}
 	else if (p[0] != '\n') {
 	    /* line contained a \0 not at the end */
-	    return IMAP_MESSAGE_CONTAINSNULL;
+	    r = IMAP_MESSAGE_CONTAINSNULL;
+	    continue;
 	}
 
 	/* Remove any lone CR characters */
@@ -698,7 +702,7 @@ static int copy_msg(struct protstream *fin, FILE *fout)
     return IMAP_IOERROR;
 
  lmtpdot:
-    return 0;
+    return r;
 }
 
 /* take a list of headers, pull the first one out and return it in
@@ -721,7 +725,14 @@ enum {
 };
 
 /* we don't have to worry about dotstuffing here, since it's illegal
-   for a header to begin with a dot! */
+   for a header to begin with a dot!
+
+   returns 0 on success, filling in 'headname' and 'contents' with a static
+   pointer (blech).
+   on end of headers, returns 0 with NULL 'headname' and NULL 'contents'
+
+   on error, returns < 0
+*/
 static int parseheader(struct protstream *fin, FILE *fout, 
 		       char **headname, char **contents) {
     int c;
@@ -748,8 +759,8 @@ static int parseheader(struct protstream *fin, FILE *fout,
 	switch (s) {
 	case NAME_START:
 	    if (c == '\r' || c == '\n') {
-		/* no header here! */
-		r = IMAP_MESSAGE_BADHEADER;
+		/* just reached the end of headers */
+		r = 0;
 		goto ph_error;
 	    }
 	    /* field-name      =       1*ftext
@@ -884,6 +895,10 @@ static int fill_cache(struct protstream *fin, FILE *fout, message_data_t *m)
 	if ((r = parseheader(fin, fout, &name, &body)) < 0) {
 	    break;
 	}
+	if (!name) {
+	    /* reached the end of headers */
+	    break;
+	}
 
 	/* put it in the hash table */
 	clinit = cl = hashheader(name);
@@ -922,7 +937,11 @@ static int fill_cache(struct protstream *fin, FILE *fout, message_data_t *m)
     }
 
     if (r) {
-	/* bad header */
+	/* got a bad header */
+
+	/* flush the remaining output */
+	copy_msg(fin, fout);
+	/* and return the error */
 	return r;
     } else {
 	return copy_msg(fin, fout);
@@ -1504,7 +1523,9 @@ void lmtpmode(struct lmtp_func *func,
 		}
 		/* copy message from input to msg structure */
 		r = savemsg(&cd, func, msg);
-		if (r) continue;
+		if (r) {
+		    goto rset;
+		}
 
 		if (msg->size > max_msgsize) {
 		    prot_printf(pout, 
