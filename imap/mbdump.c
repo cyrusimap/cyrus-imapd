@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.1 2002/03/12 21:00:11 rjs3 Exp $
+ * $Id: mbdump.c,v 1.2 2002/03/13 21:51:20 ken3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -193,13 +193,13 @@ int dump_mailbox(const char *tag, const char *path, const char *mbname,
 		}
 	    }
 
-	    prot_printf(pout, "%s {%d%s}\n\r",
+	    prot_printf(pout, "%s {%lu%s}\n\r",
 			name, len,
 			(!tag ? "+" : ""));
 
 	    first = 0;
 	} else {
-	    prot_printf(pout, " {%d%s}\n\r%s {%d%s}\n\r",
+	    prot_printf(pout, " {%d%s}\n\r%s {%lu%s}\n\r",
 			strlen(name),
 			(!tag ? "+" : ""),
 			name, len,
@@ -249,12 +249,12 @@ int dump_mailbox(const char *tag, const char *path, const char *mbname,
 		}
 	    }
 
-	    prot_printf(pout, "%s {%d%s}\n\r",
+	    prot_printf(pout, "%s {%lu%s}\n\r",
 			data_files[i], len,
 			(!tag ? "+" : ""));
 	    first = 0;
 	} else {
-	    prot_printf(pout, " {%d%s}\n\r%s {%d%s}\n\r",
+	    prot_printf(pout, " {%d%s}\n\r%s {%lu%s}\n\r",
 			strlen(data_files[i]),
 			(!tag ? "+" : ""),
 			data_files[i], len,
