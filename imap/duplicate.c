@@ -95,7 +95,7 @@ static int nuke_dir(char *dir)
     struct dirent *dirent;
 
     if (chdir(dir) == -1) {
-	if (!mkdir(dir, 0664)) return 0;
+	if (!mkdir(dir, 0755)) return 0;
 	else return IMAP_IOERROR;
     }
     dirp = opendir(".");
