@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.95 2003/10/28 17:14:07 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.96 2003/11/10 16:42:14 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -114,6 +114,12 @@ struct clientdata {
     char lhlo_param[250];
 
     sasl_conn_t *conn;
+
+    enum {
+	EXTERNAL_AUTHED = -1, /* -1: external auth'd, but no AUTH issued */
+	NOAUTH = 0,
+	DIDAUTH = 1
+    } authenticated;
 
 #ifdef HAVE_SSL
     SSL *tls_conn;
@@ -643,8 +649,12 @@ static int savemsg(struct clientdata *cd,
 	sasl_getprop(cd->conn, SASL_SSF, (const void **) &ssfp);
 	fprintf(f, " (authenticated user=%s bits=%d)", m->authuser, *ssfp);
     }
-    fprintf(f, "\r\n\tby %s (Cyrus %s) with LMTP",
-		config_servername, CYRUS_VERSION);
+    /* We are always atleast "with LMTPA" -- no unauth delivery */
+    fprintf(f, "\r\n\tby %s (Cyrus %s) with LMTP%s%s",
+	    config_servername,
+	    cd->starttls_done ? "S" : "",
+	    cd->authenticated == DIDAUTH ? "A" : "",
+	    CYRUS_VERSION);
 
 #ifdef HAVE_SSL
     if (cd->tls_conn) {
@@ -870,11 +880,6 @@ void lmtpmode(struct lmtp_func *func,
 
     int secflags = 0;
     sasl_security_properties_t *secprops = NULL;
-    enum {
-	EXTERNAL_AUTHED = -1, /* -1: external auth'd, but no AUTH issued */
-	NOAUTH = 0,
-	DIDAUTH = 1
-    } authenticated = NOAUTH;	
 
     /* setup the clientdata structure */
     cd.pin = pin;
@@ -882,6 +887,7 @@ void lmtpmode(struct lmtp_func *func,
     cd.fd = fd;
     cd.clienthost[0] = '\0';
     cd.lhlo_param[0] = '\0';
+    cd.authenticated =  NOAUTH;
 #ifdef HAVE_SSL
     cd.tls_conn = NULL;
 #endif
@@ -971,7 +977,7 @@ void lmtpmode(struct lmtp_func *func,
     sasl_setprop(cd.conn, SASL_SEC_PROPS, secprops);
 
     if (func->preauth) {
-	authenticated = EXTERNAL_AUTHED;	/* we'll allow commands, 
+	cd.authenticated = EXTERNAL_AUTHED;	/* we'll allow commands, 
 						   but we still accept
 						   the AUTH command */
 	ssf = 2;
@@ -1024,7 +1030,7 @@ void lmtpmode(struct lmtp_func *func,
 	      int sasl_result;
 	      const char *user;
 	      
-	      if (authenticated > 0) {
+	      if (cd.authenticated > 0) {
 		  prot_printf(pout,
 			      "503 5.5.0 already authenticated\r\n");
 		  continue;
@@ -1117,7 +1123,7 @@ void lmtpmode(struct lmtp_func *func,
 		     cd.clienthost, user, mech,
 		     cd.starttls_done ? "+TLS" : "", "User logged in");
 
-	      authenticated += 2;
+	      cd.authenticated = DIDAUTH;
 	      prot_printf(pout, "235 Authenticated!\r\n");
 
 	      /* set protection layers */
@@ -1184,10 +1190,10 @@ void lmtpmode(struct lmtp_func *func,
 		  prot_printf(pout, "250-SIZE %d\r\n", max_msgsize);
 	      else
 		  prot_printf(pout, "250-SIZE\r\n");
-	      if (tls_enabled() && !cd.starttls_done && !!authenticated) {
+	      if (tls_enabled() && !cd.starttls_done && !!cd.authenticated) {
 		  prot_printf(pout, "250-STARTTLS\r\n");
 	      }
-	      if (authenticated <= NOAUTH &&
+	      if (cd.authenticated <= NOAUTH &&
 		  sasl_listmech(cd.conn, NULL, "AUTH ", " ", "", &mechs, 
 				NULL, &mechcount) == SASL_OK && 
 		  mechcount > 0) {
@@ -1203,7 +1209,7 @@ void lmtpmode(struct lmtp_func *func,
     
       case 'm':
       case 'M':
-	    if (!authenticated) {
+	    if (!cd.authenticated) {
 		if (config_getswitch(IMAPOPT_SOFT_NOAUTH)) {
 		    prot_printf(pout, "430 Authentication required\r\n");
 		} else {
