@@ -42,6 +42,7 @@
 /*
  * TODO:
  *
+ * - support for control messages
  * - OVER/XOVER (will this fix problems with Netscape & Outlook?)
  * - wildmat support
  * - support for msgid in commands
@@ -49,7 +50,7 @@
  */
 
 /*
- * $Id: nntpd.c,v 1.1.2.3 2002/09/24 16:24:51 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.4 2002/09/24 19:53:50 ken3 Exp $
  */
 #include <config.h>
 
@@ -86,6 +87,7 @@
 
 #include "exitcodes.h"
 #include "imap_err.h"
+#include "nntp_err.h"
 #include "index.h"
 #include "mailbox.h"
 #include "append.h"
@@ -147,6 +149,22 @@ enum {
     ARTICLE_STAT = 3
 };
 
+/* values for post modes */
+enum {
+    POST_POST     = 0,
+    POST_IHAVE    = 1,
+    POST_CHECK    = 2,
+    POST_TAKETHIS = 3,
+};
+
+/* response codes for each stage of posting */
+struct {
+    int ok, cont, no, fail;
+} post_codes[] = { { 240, 340, 440, 441 },
+		   { 235, 335, 435, 436 },
+		   {  -1, 238, 438,  -1 },
+		   { 239,  -1,  -1, 439 } };
+
 static void cmd_starttls();
 static void cmd_user();
 static void cmd_pass();
@@ -154,7 +172,6 @@ static void cmd_mode();
 static void cmd_list();
 static void cmd_article();
 static void cmd_post();
-static void cmd_ihave();
 static void cmdloop(void);
 static struct mailbox *open_group();
 static int parsenum(char *ptr);
@@ -267,6 +284,8 @@ int service_init(int argc __attribute__((unused)),
 {
     int opt;
     const char *prefix;
+
+    initialize_nntp_error_table();
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
     setproctitle_init(argc, argv, envp);
@@ -646,16 +665,25 @@ static void cmdloop(void)
 	    if (c == '\r') c = prot_getc(nntp_in);
 	    if (c != '\n') goto extraargs;
 
-	    cmd_post();
+	    cmd_post(NULL, POST_POST);
 	}
-	else if (!strcmp(cmd.s, "ihave")) {
+	else if (!strcmp(cmd.s, "ihave") ||
+		 !strcmp(cmd.s, "check") || !strcmp(cmd.s, "takethis")) {
+	    int mode = 0;
+
 	    if (c != ' ') goto missingargs;
 	    c = getword(nntp_in, &arg1);
 	    if (c == EOF) goto missingargs;
 	    if (c == '\r') c = prot_getc(nntp_in);
 	    if (c != '\n') goto extraargs;
 
-	    cmd_ihave(arg1.s);
+	    switch (cmd.s[0]) {
+	    case 'i': mode = POST_IHAVE;    break;
+	    case 'c': mode = POST_CHECK;    break;
+	    case 't': mode = POST_TAKETHIS; break;
+	    }
+
+	    cmd_post(arg1.s, mode);
 	}
 	else {
 	    prot_printf(nntp_out, "500 Unrecognized command\r\n");
@@ -886,6 +914,9 @@ void cmd_mode(char *arg)
 
     if (!strcmp(arg, "reader")) {
 	prot_printf(nntp_out, "200 Cyrus NNTP ready, posting allowed\r\n");
+    }
+    else if (!strcmp(arg, "stream")) {
+	prot_printf(nntp_out, "203 Streaming is OK\r\n");
     }
     else {
 	prot_printf(nntp_out, "500 Unrecognized MODE\r\n");
@@ -1272,9 +1303,9 @@ static int copy_msg(struct protstream *fin, FILE *fout)
 		goto nntpdot;
 	    }
 	    /* Remove the dot-stuffing */
-	    fputs(buf+1, fout);
+	    if (fout) fputs(buf+1, fout);
 	} else {
-	    fputs(buf, fout);
+	    if (fout) fputs(buf, fout);
 	}
     }
 
@@ -1560,6 +1591,8 @@ static int parse_groups(const char *groups, message_data_t *msg)
 
 	p += n;
     }
+
+    return NNTP_FAIL_NEWSGROUPS;
 }
 
 /*
@@ -1568,24 +1601,11 @@ static int parse_groups(const char *groups, message_data_t *msg)
  *
  * returns 0 on success, imap error code on failure
  */
-static int savemsg(message_data_t *m, int resp_code)
+static int savemsg(message_data_t *m, FILE *f)
 {
-    FILE *f;
     struct stat sbuf;
     const char **body;
     int r;
-    unsigned err_code = resp_code + 101;
-
-    /* Copy to spool file */
-    f = tmpfile();
-    if (!f) {
-	prot_printf(nntp_out,
-		    "%u cannot create temporary file: %s\r\n",
-		    resp_code + 100, error_message(errno));
-	return IMAP_IOERROR;
-    }
-
-    prot_printf(nntp_out, "%u go ahead\r\n", resp_code);
 
     /* fill the cache */
     r = fill_cache(nntp_in, f, m);
@@ -1594,13 +1614,12 @@ static int savemsg(message_data_t *m, int resp_code)
 
 	/* flush the remaining output */
 	copy_msg(nntp_in, f);
-
-	fclose(f);
-	prot_printf(nntp_out, "%u bad header in article\r\n", err_code);
 	return r;
     }
 
     /* now, using our header cache, fill in the data that we want */
+
+    /* XXX check for control messages */
 
     /* get message-id */
     if ((body = msg_getheader(m, "message-id")) != NULL) {
@@ -1634,39 +1653,20 @@ static int savemsg(message_data_t *m, int resp_code)
 	    /* add To: header */
 	    fprintf(f, "To: %s\r\n", buf);
 	}
-	else {
-	    prot_printf(nntp_out, "%u error parsing newsgroups\r\n", err_code);
-	}
     } else {
-	r = -1;		/* no newsgroups */
-	prot_printf(nntp_out, "%u no newsgroups header in article\r\n",
-		    err_code);
+	r = NNTP_NO_NEWSGROUPS;		/* no newsgroups */
     }
 
-    if (copy_msg(nntp_in, f)) {
-	prot_printf(nntp_out, "%u bad article body\r\n", err_code);
-	r |= -1;
-    }
+    r |= copy_msg(nntp_in, f);
 
-    if (r) {
-	fclose(f);
-	return r;
-    }
+    if (r) return r;
 
     fflush(f);
     if (ferror(f)) {
-	prot_printf(nntp_out,
-		    "%u cannot copy message to temporary file: %s\r\n",
-		    err_code, error_message(errno));
-	fclose(f);
 	return IMAP_IOERROR;
     }
 
     if (fstat(fileno(f), &sbuf) == -1) {
-	prot_printf(nntp_out,
-		    "%u cannot stat message temporary file: %s\r\n",
-		    err_code, error_message(errno));
-	fclose(f);
 	return IMAP_IOERROR;
     }
     m->size = sbuf.st_size;
@@ -1691,7 +1691,7 @@ static void logdupelem(char *msgid, char *name)
     }	
 }
 
-static int deliver(message_data_t *msg, unsigned err_code)
+static int deliver(message_data_t *msg)
 {
     int n, r;
     char *rcpt;
@@ -1701,6 +1701,7 @@ static int deliver(message_data_t *msg, unsigned err_code)
     for (n = 0; n < msg->rcpt_num; n++) {
 	rcpt = msg->rcpt[n];
 
+	/* XXX is this necessary? */
 	if (dupelim && msg->id && 
 	    duplicate_check(msg->id, strlen(msg->id), rcpt, strlen(rcpt))) {
 	    /* duplicate message */
@@ -1719,72 +1720,80 @@ static int deliver(message_data_t *msg, unsigned err_code)
 	    else append_abort(&as);
 	}
 
+	/* XXX is this necessary? */
 	if (!r && dupelim && msg->id) duplicate_mark(msg->id, strlen(msg->id),
 						     rcpt, strlen(rcpt),
 						     now);
 
-	if (r) {
-	    prot_printf(nntp_out, "%u Posting failed\r\n", err_code);
-	    return r;
-	}
+	if (r) return r;
     }
 
     return  0;
 }
 
-static void cmd_post()
+static void cmd_post(char *msgid, int mode)
 {
+    int want = 1;
+    FILE *f = NULL;
     message_data_t *msg;
     int r;
 
-    msg_new(&msg);
-
-    r = savemsg(msg, 340);
-
-    if (!r) r = deliver(msg, 441);
-
-    if (!r) {
-	/* mark for IHAVE */
-	if (dupelim && msg->id) duplicate_mark(msg->id, strlen(msg->id),
-					       "", 0, time(NULL));
-
-	prot_printf(nntp_out, "240 Article received ok\r\n");
-
-	/* XXX send the article to Sendmail/lmtp2nntp */
-    }
-
-    prot_flush(nntp_out);
-
-    msg_free(msg);
-}
-
-static void cmd_ihave(char *msgid)
-{
-    message_data_t *msg;
-    int r;
-
+    /* check if we want this article */
     if (dupelim && msgid && 
 	duplicate_check(msgid, strlen(msgid), "", 0)) {
 	/* duplicate message */
-	prot_printf(nntp_out, "435 Article not wanted\r\n");
-	return;
+	want = 0;
     }
 
-    msg_new(&msg);
+    if (mode != POST_TAKETHIS) {
+	if (want) {
+	    prot_printf(nntp_out, "%u Send article\r\n",
+			post_codes[mode].cont);
+	} else {
+	    prot_printf(nntp_out, "%u Article not wanted\r\n",
+			post_codes[mode].no);
+	    return;
+	}
+    }
 
-    r = savemsg(msg, 335);
+    /* get a spool file if needed */
+    if (want) f = tmpfile();
 
-    if (!r) r = deliver(msg, 446);
+    if (f) {
+	/* spool the article */
+	msg_new(&msg);
 
-    if (!r) {
-	/* mark for IHAVE */
-	if (dupelim && msg->id) duplicate_mark(msg->id, strlen(msg->id),
-					       "", 0, time(NULL));
+	r = savemsg(msg, f);
 
-	prot_printf(nntp_out, "235 Article transferred ok\r\n");
+	/* deliver the article */
+	if (!r) r = deliver(msg);
+
+	if (!r) {
+	    /* mark for IHAVE */
+	    if (dupelim && msg->id) duplicate_mark(msg->id, strlen(msg->id),
+						   "", 0, time(NULL));
+
+	    prot_printf(nntp_out, "%u Article received ok\r\n",
+			post_codes[mode].ok);
+
+	    if (mode == POST_POST) {
+		/* XXX send the article upstream */
+	    }
+	} else {
+	    prot_printf(nntp_out, "%u %s\r\n",
+			post_codes[mode].fail, error_message(r));
+	}
+
+	msg_free(msg);
+
+	fclose(f);
+    } else {
+	/* flush the article from the stream */
+	copy_msg(nntp_in, NULL);
+
+	prot_printf(nntp_out, "%u Failed receiving article\r\n",
+		    post_codes[mode].fail);
     }
 
     prot_flush(nntp_out);
-
-    msg_free(msg);
 }

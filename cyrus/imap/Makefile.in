@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.164.4.5 2002/09/23 20:31:27 ken3 Exp $
+# $Id: Makefile.in,v 1.164.4.6 2002/09/24 19:53:50 ken3 Exp $
 # 
 # @configure_input@
 # 
@@ -120,7 +120,7 @@ PROGS = imapd lmtpd pop3d \
 
 BUILTSOURCES = imap_err.c imap_err.h pushstats.c pushstats.h \
 	lmtpstats.c lmtpstats.h xversion.h mupdate_err.c mupdate_err.h \
-	imapopts.h imapopts.c
+	imapopts.h imapopts.c nntp_err.c nntp_err.h
 
 all: $(BUILTSOURCES) $(PROGS) $(SUIDPROGS)
 
@@ -260,9 +260,9 @@ pop3proxyd: pop3proxyd.o tls.o mutex_fake.o libimap.a $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o pop3proxyd pop3proxyd.o tls.o $(SERVICE) \
 	 mutex_fake.o libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
-nntpd: nntpd.o tls.o mutex_fake.o libimap.a $(DEPLIBS) $(SERVICE)
+nntpd: nntpd.o tls.o mutex_fake.o nntp_err.o libimap.a $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o nntpd nntpd.o tls.o $(SERVICE) \
-	 mutex_fake.o libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP)
+	 mutex_fake.o nntp_err.o libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
 arbitron: arbitron.o mutex_fake.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o arbitron arbitron.o mutex_fake.o \
@@ -307,6 +307,9 @@ libimap.a: $(LOBJS)
 
 imap_err.h imap_err.c: imap_err.et
 	$(COMPILE_ET) $(srcdir)/imap_err.et
+
+nntp_err.h nntp_err.c: nntp_err.et
+	$(COMPILE_ET) $(srcdir)/nntp_err.et
 
 mupdate_err.h mupdate_err.c: mupdate_err.et
 	$(COMPILE_ET) $(srcdir)/mupdate_err.et
