@@ -1,6 +1,6 @@
 # Makefile.in - sieve makefile
 # @configure_input@
-# $Id: Makefile.in,v 1.32 2004/02/16 21:59:46 rjs3 Exp $
+# $Id: Makefile.in,v 1.33 2004/02/16 22:05:41 rjs3 Exp $
 ################################################################
 #        Copyright 1998 by Carnegie Mellon University
 #
@@ -59,7 +59,7 @@ dist: $(BUILT_SOURCES)
 
 install: sievec
 	$(srcdir)/../install-sh -d ${DESTDIR}$(service_path)
-	$(srcdir)/../install-sh -c 755 sievec $(DESTDIR)$(service_path) || exit
+	$(srcdir)/../install-sh -c -m 755 sievec $(DESTDIR)$(service_path) || exit
 
 test: $(DEPLIBS) libsieve.a test.o
 	$(CC) $(LDFLAGS) -o test test.o libsieve.a $(DEPLIBS) $(LIBS)
