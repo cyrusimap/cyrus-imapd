@@ -1,3 +1,7 @@
+/*
+ * THIS RECOSNTRUCT MIGHT MAKE THINGS WORSE
+ */
+
 /* reconstruct.c -- program to reconstruct a mailbox 
  *
  * Copyright 1996, Carnegie Mellon University.  All Rights Reserved.
@@ -314,33 +318,45 @@ char *name;
 	end_newspath = newspath;
     }
     if (!dirp) {
-	fclose(newindex);
-	close(newcache_fd);
-	mailbox_close(&mailbox);
-	free(uid);
-	return IMAP_IOERROR;
+	if (format == MAILBOX_FORMAT_NETNEWS)  {
+	    /* If this is true, we might be looking at a newsgroup
+	       with no entries, which INN is happy to just have a
+	       nonexistant directory.  We don't want to give up,
+	       because the index files that we're keeping in
+	       partition-news might be invalid, and we need to check
+	       them.  So we just find nothing.  */
+	} else {
+	    fclose(newindex);
+	    close(newcache_fd);
+	    mailbox_close(&mailbox);
+	    free(uid);
+	    return IMAP_IOERROR;
+	}
+    } else {
+	while (dirent = readdir(dirp)) {
+	    if (!isdigit(dirent->d_name[0]) || dirent->d_name[0] ==
+		'0')
+		continue;
+	    if (uid_num == uid_alloc) {
+		uid_alloc += UIDGROW;
+		uid = (unsigned long *)
+		    xrealloc((char *)uid, uid_alloc * sizeof(unsigned long));
+	    }
+	    uid[uid_num] = 0;
+	    p = dirent->d_name;
+	    while (isdigit(*p)) {
+		uid[uid_num] = uid[uid_num] * 10 + *p++ - '0';
+	    }
+	    if (format != MAILBOX_FORMAT_NETNEWS) {
+		if (*p++ != '.') continue;
+	    }
+	    if (*p) continue;
+	    
+	    uid_num++;
+	}
+	closedir(dirp);
+	qsort((char *)uid, uid_num, sizeof(*uid), compare_uid);
     }
-    while (dirent = readdir(dirp)) {
-	if (!isdigit(dirent->d_name[0]) || dirent->d_name[0] == '0') continue;
-	if (uid_num == uid_alloc) {
-	    uid_alloc += UIDGROW;
-	    uid = (unsigned long *)
-	      xrealloc((char *)uid, uid_alloc * sizeof(unsigned long));
-	}
-	uid[uid_num] = 0;
-	p = dirent->d_name;
-	while (isdigit(*p)) {
-	    uid[uid_num] = uid[uid_num] * 10 + *p++ - '0';
-	}
-	if (format != MAILBOX_FORMAT_NETNEWS) {
-	    if (*p++ != '.') continue;
-	}
-	if (*p) continue;
-
-	uid_num++;
-    }
-    closedir(dirp);
-    qsort((char *)uid, uid_num, sizeof(*uid), compare_uid);
 
     /* Put each message file in the new index/cache */
     old_msg = 0;
