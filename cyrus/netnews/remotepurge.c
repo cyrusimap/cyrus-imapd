@@ -9,7 +9,7 @@
 #include <sys/msg.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-
+#include <ctype.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -31,6 +31,7 @@
 
 #include "prot.h"
 
+#include "imparse.h"
 #include "imclient.h"
 #include "xmalloc.h"
 
@@ -41,14 +42,6 @@
 #define IMAP_NO 2
 #define IMAP_BAD 3
 #define IMAP_EOF 4
-
-typedef struct mbox_list_s {
-    
-    char *name;
-
-    struct mbox_list_s *next;
-
-} mbox_list_t;
 
 /* for statistical purposes */
 typedef struct mbox_stats_s {
@@ -75,8 +68,6 @@ int exact = -1;
 int pattern = -1;
 
 int current_mbox_exists = 0;
-mbox_list_t *mb_list_tail = NULL;
-mbox_list_t *mb_list = NULL;
 
 int verbose = 0;
 char *username = NULL;
@@ -86,6 +77,8 @@ char *realm = NULL;
 struct imclient *imclient_conn;
 
 int cmd_done;
+
+FILE *configstream;
 
 /* libcyrus makes us define this */
 void fatal(const char *s, int code)
@@ -209,75 +202,17 @@ callback_finish(struct imclient *imclient,
 /*
  * Callback to deal with untagged LIST/LSUB data
  */
-static void
+extern void
 callback_list(struct imclient *imclient,
 	      void *rock,
-	      struct imclient_reply *reply)
-{
-    char *s, *end;
-    char *mailbox, *attributes, *separator;
-    int c;
-    mbox_list_t *item;
+	      struct imclient_reply *reply);
 
-    s = reply->text;
-    
-    if (*s++ != '(') return;
-    end = strchr(s, ')');
-    if (!end) return;
-    attributes = s;
-    s = end;
-    *s++ = '\0';
-
-    if (*s++ != ' ') return;
-    if (*s == 'N') {
-	if (s[1] != 'I' || s[2] != 'L') return;
-	separator = "";
-    	s += 3;
-    }
-    else if (*s == '\"') {
-	s++;
-	if (*s == '\\') s++;
-	separator = s++;
-	if (*s != '\"') return;
-	*s++ = '\0';
-    }
-
-    if (*s++ != ' ') return;
-    c = imparse_astring(&s, &mailbox);
-    if (c != '\0') return;
-
-    if ((strncasecmp(mailbox,"INBOX",5)!=0) && (strncasecmp(mailbox,"user.",5)!=0))
-    {
-
-	item = (mbox_list_t *) malloc (sizeof(mbox_list_t));
-	if (item == NULL) return;
-
-	item->name = malloc( strlen(mailbox)+1);
-	strcpy(item->name, mailbox);
-	item->next = NULL;
-    
-	if (mb_list == NULL)
-	{
-	    mb_list = item;
-	    mb_list_tail = item;
-	} else {
-	    mb_list_tail->next = item;
-	    mb_list_tail = item;
-	}
-    }
-
-    for (s = attributes; end = strchr(s, ' '); s = end+1) {
-	*s = '\0';
-
-    }
-
-}
 
 void print_stats(mbox_stats_t *stats)
 {
     printf("total messages    \t\t %d\n",stats->total);
     printf("Deleted messages  \t\t %d\n",stats->deleted);
-    printf("Remaining messages\t\t %d\n",stats->total - stats->deleted);
+    printf("Remaining messages\t\t %d\n\n",stats->total - stats->deleted);
 }
 
 static void
@@ -372,9 +307,8 @@ static char *month_string(int mon)
 }
 
 /* we don't check what comes in on matchlen and maycreate, should we? */
-int purge_me(char *name)
+int purge_me(char *name, time_t when)
 {
-    int            error;
     mbox_stats_t   stats;
     char search_string[200];
     uid_list_t *uidlist;
@@ -413,22 +347,20 @@ int purge_me(char *name)
     uidlist->list = malloc (sizeof(unsigned long) * 500);
     uidlist->allocsize = 500;
     uidlist->size = 0;
-	
 
-    if (days >= 0) {
+    {
 	struct tm *my_tm;
 	
 	my_time = time(NULL);
-	my_time -= (days*(SECS_IN_DAY));
-	my_tm = gmtime(&my_time);
+	my_time = my_time + when;
+	my_tm = gmtime(&when);
 	
 	snprintf(search_string,sizeof(search_string),
 		 "BEFORE %d-%s-%d",
 		 my_tm->tm_mday,month_string(my_tm->tm_mon),1900+my_tm->tm_year);
-	
-    } else if (size >= 0) {
-	sprintf(search_string,"LARGER %d",size);
-    }
+    }	
+
+    if (verbose) printf("Searching for messages %s\n",search_string);
 
     imclient_addcallback(imclient_conn,
 			 "SEARCH", 0, callback_search,
@@ -451,8 +383,11 @@ int purge_me(char *name)
 
 	mark_all_deleted(uidlist, &stats);
             	
-	print_stats(&stats);
     }
+    
+    if (verbose)
+	print_stats(&stats);
+
  
     /* close mailbox */   
     imclient_send(imclient_conn, callback_finish, (void *)imclient_conn,
@@ -474,23 +409,28 @@ int purge_me(char *name)
 
 int purge_all(void)
 {
-    int r;
-    mbox_list_t *item = mb_list;
+    int num = 0;
+    int ret = 0;
 
-    while (item != NULL)
+    while (ret == 0)
     {
-	printf("Purging %s...\n",item->name);
+	ret = ExpireExists(num);
+	
+	if (ret == 0)
+	    purge_me(GetExpireName(num), GetExpireTime(num));
 
-	purge_me(item->name);
-       
-	item = item->next;
+	num++;
     }
 
     return 0;
 }
 
-void do_list(void)
+void do_list(char *matchstr)
 {
+    imclient_send(imclient_conn, callback_finish, (void *)imclient_conn,
+		  "%a %s %s", "LIST", "*",
+		  matchstr);
+
     cmd_done = NOTFINISHED;
 
     while (cmd_done == NOTFINISHED) {
@@ -500,8 +440,32 @@ void do_list(void)
     if (cmd_done!=IMAP_OK) fatal("List failed",0);
 }
 
-void remote_purge(char **matches)
+/*
+ *  What we were given on the command line might just be a path or might not have an extension etc...
+ */
+
+static char *parseconfigpath(char *str)
 {
+    char *ret;
+
+    /* if it ends with a '/' add expire.ctl */
+    
+    if (str[strlen(str)-1] == '/')
+    {
+	ret = (char *) xmalloc(strlen(str)+strlen("expire.ctl")+1);
+	strcpy(ret,str);
+	strcat(ret,"expire.ctl");
+
+	return ret;
+    }
+
+    return str;
+}
+
+void remote_purge(char *configpath, char **matches)
+{
+    char *name;
+
     imclient_addcallback(imclient_conn,
 			 "LIST", 0, callback_list,
 			 (void *)0, (char *)0);
@@ -511,11 +475,7 @@ void remote_purge(char **matches)
 	if (verbose)
 	    printf("Matching all\n");
 
-	/* if nothing match all */
-	imclient_send(imclient_conn, callback_finish, (void *)imclient_conn,
-		      "%a %s %s", "LIST", "*",
-		      "*");
-	do_list();
+	do_list("*");
 	
     } else {
 	while (matches[0]!=NULL)
@@ -523,15 +483,30 @@ void remote_purge(char **matches)
 	    if (verbose)
 		printf("Matching %s\n",matches[0]);
 
-	    imclient_send(imclient_conn, callback_finish, (void *)imclient_conn,
-			  "%a %a %a", "LIST", "\"\"",
-			  matches[0]);
-	    do_list();
+	    do_list(matches[0]);
 	    matches++;
 	}
     }
 
     if (verbose) printf("Completed list command\n");
+
+
+
+    if (configpath!=NULL)
+    {
+	name = parseconfigpath(configpath);
+
+	configstream = fopen(name,"r");
+
+	if (configstream == NULL) fatal("Unable to open config file\n",0);
+
+	EXPreadfile(configstream);
+	/* ret val */
+    } else {
+
+	artificial_matchall(days);
+
+    }
 
     purge_all();
 }
@@ -559,8 +534,9 @@ void usage(void)
   printf("  -m mech  : SASL mechanism to use (\"login\" for LOGIN)\n");
   printf("  -r realm : realm\n");
 
+  printf("  -e expire.ctl : use expire.ctl file (specify full path)\n");
+
   printf("  -d days  : purge all message <days> old\n");
-  printf("  -b bytes : purge all messages larger than <bytes>\n");
 
   exit(1);
 }
@@ -572,34 +548,26 @@ int main(int argc, char **argv)
 {
   char *mechanism=NULL;
   char servername[1024];
-  char *filename=NULL;
+  char *expirectlfile = NULL;
 
-  char *mechlist;
-  int *ssfp;
   int maxssf = 0;
   int minssf = 0;
   char c;
-  int result;
-  int errflg = 0;
 
   char *tls_keyfile="";
   char *port = "imap";
-  struct servent *serv;
-  int servport;
-  int run_stress_test=0;
   int dotls=0;
-  int server_supports_tls;
   int r;
   capabilities_t *capabilitylist;
 
   /* look at all the extra args */
-  while ((c = getopt(argc, argv, "b:d:vk:l:p:u:a:m:t:")) != EOF)
+  while ((c = getopt(argc, argv, "d:ve:k:l:p:u:a:m:t:")) != EOF)
     switch (c) {
-    case 'b':
-	size = atoi(optarg);
-	break;
     case 'd':
 	days = atoi(optarg);
+	break;
+    case 'e':
+	expirectlfile = optarg;
 	break;
     case 'v':
 	verbose=1;
@@ -634,6 +602,15 @@ int main(int argc, char **argv)
 	usage();
 	break;
     }
+
+  if (optind >= argc) usage();
+
+
+  if ((days==-1) && (expirectlfile == NULL))
+  {
+      printf("Must specify expire.ctl file OR days old OR bytes large\n\n");
+      usage();
+  }
 
   /* next to last arg is server name */
   strncpy(servername, argv[optind], 1023);
@@ -678,7 +655,9 @@ int main(int argc, char **argv)
   if (verbose)
       printf("Authenticated\n");
 
-  remote_purge(argv+(optind+1));
+  readconfig_init();
+
+  remote_purge(expirectlfile, argv+(optind+1));
 
   exit(0);
 }
