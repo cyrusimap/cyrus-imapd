@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.34 1999/09/30 21:44:50 leg Exp $
+ * $Id: imtest.c,v 1.35 1999/10/12 03:19:35 leg Exp $
  *
  * Copyright 1999 Carnegie Mellon University
  * 
@@ -93,9 +93,10 @@ static sasl_callback_t callbacks[] = {
 
 void imtest_fatal(char *msg)
 {
-  if (msg!=NULL)
-    printf("failure: %s\n",msg);
-  exit(1);
+    if (msg != NULL) {
+	printf("failure: %s\n",msg);
+    }
+    exit(1);
 }
 
 /* libcyrus makes us define this */
@@ -119,17 +120,6 @@ static sasl_security_properties_t *make_secprops(int min,int max)
 
   return ret;
 }
-
-static char *getrealname(char *name)
-{
-    static char ret[1024];
-    struct hostent *he;
-
-    he = gethostbyname(name);
-    strncpy(ret, he->h_name, 1023);
-    return ret;
-}
-
 
 /*
  * Initialize SASL and set necessary options
@@ -410,6 +400,7 @@ int init_net(char *serverFQDN, int port)
     perror("gethostbyname");
     return IMTEST_FAIL;
   }
+  strncpy(serverFQDN, hp->h_name, 1023);
 
   if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
     perror("socket");
@@ -690,7 +681,7 @@ void usage(void)
 int main(int argc, char **argv)
 {
   char *mechanism=NULL;
-  char *servername=NULL;
+  char servername[1024];
   char *filename=NULL;
 
   char *mechlist;
@@ -751,10 +742,7 @@ int main(int argc, char **argv)
   }
 
   /* last arg is server name */
-  servername = argv[optind];
-
-  /* sigh, find the real name of this guy */
-  servername = getrealname(servername);
+  strncpy(servername, argv[optind], 1023);
 
   /* map port -> num */
   serv = getservbyname(port, "tcp");
@@ -764,12 +752,13 @@ int main(int argc, char **argv)
       servport = ntohs(serv->s_port);
   }
 
-  if (init_net(servername, servport) != IMTEST_OK)
-    imtest_fatal("Network initializion");
+  if (init_net(servername, servport) != IMTEST_OK) {
+      imtest_fatal("Network initialization");
+  }
   
-  if (init_sasl(servername, servport, ssf) != IMTEST_OK)
-    imtest_fatal("SASL initialization");
-
+  if (init_sasl(servername, servport, ssf) != IMTEST_OK) {
+      imtest_fatal("SASL initialization");
+  }
 
   /* set up the prot layer */
   pin = prot_new(sock, 0);
