@@ -6,7 +6,7 @@
 #include <ctype.h>
 #include <string.h>
 
-#include "folder.h"
+#include "mailbox.h"
 #include "parseadd.h"
 #include "xmalloc.h"
 
@@ -80,15 +80,15 @@ struct ibuf {
 
 /*
  * Calculate relative filename for the message with UID 'uid'
- * in 'folder'.  Returns pointer to static buffer.
+ * in 'mailbox'.  Returns pointer to static buffer.
  */
-char *message_fname(folder, uid)
-struct folder *folder;
+char *message_fname(mailbox, uid)
+struct mailbox *mailbox;
 unsigned long uid;
 {
     static char buf[64];
 
-    sprintf(buf, "%lu%s", uid, folder->format == FOLDER_FORMAT_NETNEWS ? "" : ".");
+    sprintf(buf, "%lu%s", uid, mailbox->format == MAILBOX_FORMAT_NETNEWS ? "" : ".");
     return buf;
 }
 
@@ -125,30 +125,30 @@ FILE *from, *to;
 }
 
 /*
- * Parse the message 'infile' in 'folder'.  Appends the message's
- * cache information to the folder's cache file and fills in appropriate
+ * Parse the message 'infile' in 'mailbox'.  Appends the message's
+ * cache information to the mailbox's cache file and fills in appropriate
  * information in the index record pointed to by 'message_index'.
  */
-message_parse(infile, folder, message_index)
+message_parse(infile, mailbox, message_index)
 FILE *infile;
-struct folder *folder;
+struct mailbox *mailbox;
 struct index_record *message_index;
 {
     struct body body;
 
     rewind(infile);
-    message_parse_body(infile, folder->format, &body,
+    message_parse_body(infile, mailbox->format, &body,
 		       "TEXT/PLAIN; CHARSET=us-ascii", (struct boundary *)0);
     
     message_index->content_offset = body.content_offset;
     message_index->size = body.header_size + body.content_size;
 
-    message_index->cache_offset = ftell(folder->cache);
-    message_write_cache(folder->cache, &body);
+    message_index->cache_offset = ftell(mailbox->cache);
+    message_write_cache(mailbox->cache, &body);
 
     message_free_body(&body);
 
-    if (ferror(folder->cache)) {
+    if (ferror(mailbox->cache)) {
 	return 1;		/* XXX write error */
     }
 
@@ -240,12 +240,12 @@ struct boundary *boundaries;
     /* Slurp up all of the headers into 'headers' */
     while (fgets(next, left, infile) &&
 	   (next[-1] != '\n' ||
-	    (format == FOLDER_FORMAT_NETNEWS ?
+	    (format == MAILBOX_FORMAT_NETNEWS ?
 	     (*next != '\n') : (*next != '\r' || next[1] != '\n')))) {
 
 	if (next[-1] == '\n' && *next == '-' &&
 	    PendingBoundary(next, boundaries->id, &boundaries->count)) {
-	    body->boundary_size = strlen(next)+(format==FOLDER_FORMAT_NETNEWS);
+	    body->boundary_size = strlen(next)+(format==MAILBOX_FORMAT_NETNEWS);
 	    body->boundary_lines++;
 	    if (next - 1 > headers) {
 		body->boundary_size += 2;
@@ -263,7 +263,7 @@ struct boundary *boundaries;
 	next += len;
 
 	/* If reading netnews format, convert LF to CRLF */
-	if (format == FOLDER_FORMAT_NETNEWS && next[-1] == '\n') {
+	if (format == MAILBOX_FORMAT_NETNEWS && next[-1] == '\n') {
 	    next[-1] = '\r';
 	    *next++ = '\n';
 	    *next = '\0';
@@ -846,7 +846,7 @@ struct boundary *boundaries;
     while (fgets(buf, sizeof(buf), infile)) {
 	if (line_boundary && *buf == '-' &&
 	    PendingBoundary(buf, boundaries->id, &boundaries->count)) {
-	    body->boundary_size = strlen(buf)+(format==FOLDER_FORMAT_NETNEWS);
+	    body->boundary_size = strlen(buf)+(format==MAILBOX_FORMAT_NETNEWS);
 	    body->boundary_lines++;
 	    if (body->content_lines) {
 		body->content_lines--;
@@ -864,7 +864,7 @@ struct boundary *boundaries;
 
 	if (line_boundary = (buf[len-1] == '\n')) {
 	    body->content_lines++;
-	    if (format == FOLDER_FORMAT_NETNEWS) body->content_size++;
+	    if (format == MAILBOX_FORMAT_NETNEWS) body->content_size++;
 	}
     }
 }

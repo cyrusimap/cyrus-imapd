@@ -1,5 +1,5 @@
 /*
- * Folder manipulation routines
+ * Mailbox manipulation routines
  */
 
 #include <stdio.h>
@@ -12,36 +12,36 @@
 #include <sys/file.h>
 
 #include <acl.h>
-#include "folder.h"
+#include "mailbox.h"
 #include "xmalloc.h"
 
 /*
- * Open and read the header of the folder with pathname 'path'.
- * The structure pointed to by 'folder' is initialized.
+ * Open and read the header of the mailbox with pathname 'path'.
+ * The structure pointed to by 'mailbox' is initialized.
  */
-folder_open_header(path, folder)
+mailbox_open_header(path, mailbox)
 char *path;
-struct folder *folder;
+struct mailbox *mailbox;
 {
-    char fnamebuf[MAX_FOLDER_PATH];
+    char fnamebuf[MAX_MAILBOX_PATH];
     int r;
-    static struct folder zerofolder;
+    static struct mailbox zeromailbox;
 
-    *folder = zerofolder;
+    *mailbox = zeromailbox;
 
     strcpy(fnamebuf, path);
     strcat(fnamebuf, FNAME_HEADER);
-    folder->header = fopen(fnamebuf, "r+");
+    mailbox->header = fopen(fnamebuf, "r+");
     
-    if (!folder->header) {
-	return 1;		/* XXX can't open folder */
+    if (!mailbox->header) {
+	return 1;		/* XXX can't open mailbox */
     }
 
-    folder->path = strsave(path);
+    mailbox->path = strsave(path);
 
-    r = folder_read_header(folder);
+    r = mailbox_read_header(mailbox);
     if (r) {
-	folder_close(folder);
+	mailbox_close(mailbox);
 	return r;
     }
 
@@ -51,84 +51,84 @@ struct folder *folder;
 #define MAXTRIES 60
 
 /*
- * Open the index and cache files for 'folder'.  Also 
+ * Open the index and cache files for 'mailbox'.  Also 
  * read the index header.
  */
-folder_open_index(folder)
-struct folder *folder;
+mailbox_open_index(mailbox)
+struct mailbox *mailbox;
 {
-    char fnamebuf[MAX_FOLDER_PATH];
+    char fnamebuf[MAX_MAILBOX_PATH];
     bit32 index_gen, cache_gen;
     int tries = 0;
 
     do {
-	strcpy(fnamebuf, folder->path);
+	strcpy(fnamebuf, mailbox->path);
 	strcat(fnamebuf, FNAME_INDEX);
-	folder->index = fopen(fnamebuf, "r+");
+	mailbox->index = fopen(fnamebuf, "r+");
     
-	strcpy(fnamebuf, folder->path);
+	strcpy(fnamebuf, mailbox->path);
 	strcat(fnamebuf, FNAME_CACHE);
-	folder->cache = fopen(fnamebuf, "r+");
+	mailbox->cache = fopen(fnamebuf, "r+");
     
-	if (!folder->index || !folder->cache) {
+	if (!mailbox->index || !mailbox->cache) {
 	    return 1;		/* XXX can't open */
 	}
 
 	if (fread((char *)&index_gen, sizeof(index_gen), 1,
-		  folder->index) != 1 ||
+		  mailbox->index) != 1 ||
 	    fread((char *)&cache_gen, sizeof(cache_gen), 1,
-		  folder->cache) != 1) {
+		  mailbox->cache) != 1) {
 	    return 1;		/* XXX bad format */
 	}
 	
 	if (index_gen != cache_gen) {
-	    fclose(folder->index);
-	    fclose(folder->cache);
+	    fclose(mailbox->index);
+	    fclose(mailbox->cache);
 	    sleep(1);
 	}
     } while (index_gen != cache_gen && tries++ < MAXTRIES);
 
     if (index_gen != cache_gen) {
-	folder->index = folder->cache = NULL;
+	mailbox->index = mailbox->cache = NULL;
 	return 1;		/* XXX bad format/out of synch */
     }
-    folder->generation_no = index_gen;
+    mailbox->generation_no = index_gen;
 
-    return folder_read_index_header(folder);
+    return mailbox_read_index_header(mailbox);
 }
 
 /*
- * Close the folder 'folder', freeing all associated resources.
+ * Close the mailbox 'mailbox', freeing all associated resources.
  */
-folder_close(folder)
-struct folder *folder;
+mailbox_close(mailbox)
+struct mailbox *mailbox;
 {
-    static struct folder zerofolder;
+    static struct mailbox zeromailbox;
     int flag;
 
-    fclose(folder->header);
-    if (folder->index) fclose(folder->index);
-    if (folder->cache) fclose(folder->cache);
-    if (folder->seen) fclose(folder->seen);
-    if (folder->quota) fclose(folder->quota);
-    free(folder->path);
-    if (folder->quota_path) free(folder->quota_path);
+    fclose(mailbox->header);
+    if (mailbox->index) fclose(mailbox->index);
+    if (mailbox->cache) fclose(mailbox->cache);
+    if (mailbox->seen) fclose(mailbox->seen);
+    if (mailbox->quota) fclose(mailbox->quota);
+    free(mailbox->path);
+    if (mailbox->quota_path) free(mailbox->quota_path);
 
     for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
-	if (folder->flagname[flag]) free(folder->flagname[flag]);
+	if (mailbox->flagname[flag]) free(mailbox->flagname[flag]);
     }
 
-    if (folder->acl) free(folder->acl);
+    if (mailbox->acl) free(mailbox->acl);
     
-    *folder = zerofolder;
+    *mailbox = zeromailbox;
     return 0;
 }
 
 /*
- * Read the header of 'folder'
+ * Read the header of 'mailbox'
  */
-folder_read_header(folder)
-struct folder *folder;
+mailbox_read_header(mailbox)
+struct mailbox *mailbox;
 {
     char buf[4096];
     int flag;
@@ -137,32 +137,32 @@ struct folder *folder;
     int aclbufsize, n;
 
     /* Check magic number */
-    n = fread(buf, 1, strlen(FOLDER_HEADER_MAGIC), folder->header);
+    n = fread(buf, 1, strlen(MAILBOX_HEADER_MAGIC), mailbox->header);
     buf[n] = '\0';
-    if (n != strlen(FOLDER_HEADER_MAGIC) || strcmp(buf, FOLDER_HEADER_MAGIC)) {
+    if (n != strlen(MAILBOX_HEADER_MAGIC) || strcmp(buf, MAILBOX_HEADER_MAGIC)) {
 	return 1;		/* XXX bad magic no */
     }
 
-    fstat(fileno(folder->header), &sbuf);
-    folder->header_mtime = sbuf.st_mtime;
+    fstat(fileno(mailbox->header), &sbuf);
+    mailbox->header_mtime = sbuf.st_mtime;
 
     /* Read quota file pathname */
-    if (!fgets(buf, sizeof(buf), folder->header)) {
+    if (!fgets(buf, sizeof(buf), mailbox->header)) {
 	return 1;		/* XXX bad format */
     }
     buf[strlen(buf)-1] = '\0';
-    if (folder->quota_path) {
-	if (strcmp(folder->quota_path, buf) != 0) {
-	    assert(folder->quota_lock_count != 0);
-	    if (folder->quota) fclose(folder->quota);
-	    folder->quota = NULL;
+    if (mailbox->quota_path) {
+	if (strcmp(mailbox->quota_path, buf) != 0) {
+	    assert(mailbox->quota_lock_count != 0);
+	    if (mailbox->quota) fclose(mailbox->quota);
+	    mailbox->quota = NULL;
 	}
-	free(folder->quota_path);
+	free(mailbox->quota_path);
     }
-    folder->quota_path = strsave(buf);
+    mailbox->quota_path = strsave(buf);
 
     /* Read names of user flags */
-    if (!fgets(buf, sizeof(buf), folder->header)) {
+    if (!fgets(buf, sizeof(buf), mailbox->header)) {
 	return 1;		/* XXX bad format */
     }
     buf[strlen(buf)-1] = '\0';
@@ -171,143 +171,143 @@ struct folder *folder;
     while (name && flag < MAX_USER_FLAGS) {
 	p = strchr(name, ' ');
 	if (p) *p++ = '\0';
-	if (folder->flagname[flag]) free(folder->flagname[flag]);
-	folder->flagname[flag++] = *name ? strsave(name) : NULL;
+	if (mailbox->flagname[flag]) free(mailbox->flagname[flag]);
+	mailbox->flagname[flag++] = *name ? strsave(name) : NULL;
 	name = p;
     }
     while (flag < MAX_USER_FLAGS) {
-	if (folder->flagname[flag]) free(folder->flagname[flag]);
-	folder->flagname[flag++] = NULL;
+	if (mailbox->flagname[flag]) free(mailbox->flagname[flag]);
+	mailbox->flagname[flag++] = NULL;
     }
 
     /* Read and interpret ACL */
-    if (folder->acl) free(folder->acl);
+    if (mailbox->acl) free(mailbox->acl);
     aclbufsize = 128;
-    p = folder->acl = xmalloc(aclbufsize);
-    while (fgets(p, aclbufsize - (p - folder->acl), folder->header)) {
-	if (*p == '\n' && (p == folder->acl || p[-1] == '\n')) {
+    p = mailbox->acl = xmalloc(aclbufsize);
+    while (fgets(p, aclbufsize - (p - mailbox->acl), mailbox->header)) {
+	if (*p == '\n' && (p == mailbox->acl || p[-1] == '\n')) {
 	    *p = '\0';
 	    break;
 	}
 	p += strlen(p);
-	if (p - folder->acl + 1 >= aclbufsize) {
-	    n = p - folder->acl;
+	if (p - mailbox->acl + 1 >= aclbufsize) {
+	    n = p - mailbox->acl;
 	    aclbufsize *= 2;
-	    folder->acl = xrealloc(folder->acl, aclbufsize);
-	    p = folder->acl + n;
+	    mailbox->acl = xrealloc(mailbox->acl, aclbufsize);
+	    p = mailbox->acl + n;
 	}
     }
-    folder->my_acl = acl_myacl(folder->acl);
+    mailbox->my_acl = acl_myacl(mailbox->acl);
 
     return 0;
 }
 
 /*
- * Read the header of the index file for folder
+ * Read the header of the index file for mailbox
  */
-folder_read_index_header(folder)
-struct folder *folder;
+mailbox_read_index_header(mailbox)
+struct mailbox *mailbox;
 {
     struct stat sbuf;
     char buf[1024];
     int n;
 
-    fstat(fileno(folder->index), &sbuf);
-    folder->index_mtime = sbuf.st_mtime;
-    folder->index_blksize = sbuf.st_blksize;
+    fstat(fileno(mailbox->index), &sbuf);
+    mailbox->index_mtime = sbuf.st_mtime;
+    mailbox->index_blksize = sbuf.st_blksize;
 
-    rewind(folder->index);
-    n = fread(buf, sizeof(bit32), 7, folder->index);
+    rewind(mailbox->index);
+    n = fread(buf, sizeof(bit32), 7, mailbox->index);
     if (n != 7) {
 	return 1;		/* XXX short file */
     }
 
-    folder->format = ntohl(*((bit32 *)(buf+4)));
-    folder->start_offset = ntohl(*((bit32 *)(buf+8)));
-    folder->record_size = ntohl(*((bit32 *)(buf+12)));
-    folder->last_internaldate = ntohl(*((bit32 *)(buf+16)));
-    folder->last_uid = ntohl(*((bit32 *)(buf+20)));
-    folder->quota_folder_used = ntohl(*((bit32 *)(buf+24)));
+    mailbox->format = ntohl(*((bit32 *)(buf+4)));
+    mailbox->start_offset = ntohl(*((bit32 *)(buf+8)));
+    mailbox->record_size = ntohl(*((bit32 *)(buf+12)));
+    mailbox->last_internaldate = ntohl(*((bit32 *)(buf+16)));
+    mailbox->last_uid = ntohl(*((bit32 *)(buf+20)));
+    mailbox->quota_mailbox_used = ntohl(*((bit32 *)(buf+24)));
 
     return 0;
 }
 
 /*
- * Open and read the quota file for 'folder'
+ * Open and read the quota file for 'mailbox'
  */
-folder_read_quota(folder)
-struct folder *folder;
+mailbox_read_quota(mailbox)
+struct mailbox *mailbox;
 {
     char buf[4096];
 
-    assert(folder->quota_path);
+    assert(mailbox->quota_path);
 
-    if (!folder->quota) {
-	folder->quota = fopen(folder->quota_path, "r+");
-	if (!folder->quota) return 1; /* XXX no quota file */
+    if (!mailbox->quota) {
+	mailbox->quota = fopen(mailbox->quota_path, "r+");
+	if (!mailbox->quota) return 1; /* XXX no quota file */
     }
     
-    rewind(folder->quota);
-    if (!fgets(buf, sizeof(buf), folder->quota)) {
+    rewind(mailbox->quota);
+    if (!fgets(buf, sizeof(buf), mailbox->quota)) {
 	return 1;		/* XXX bad format */
     }
-    folder->quota_used = atol(buf);
-    if (!fgets(buf, sizeof(buf), folder->quota)) {
+    mailbox->quota_used = atol(buf);
+    if (!fgets(buf, sizeof(buf), mailbox->quota)) {
 	return 1;		/* XXX bad format */
     }
-    folder->quota_limit = atoi(buf);
+    mailbox->quota_limit = atoi(buf);
 
     return 0;
 }
 
 /*
- * Lock the header for 'folder'.  Reread header if necessary.
+ * Lock the header for 'mailbox'.  Reread header if necessary.
  */
-folder_lock_header(folder)
-struct folder *folder;
+mailbox_lock_header(mailbox)
+struct mailbox *mailbox;
 {
-    char fnamebuf[MAX_FOLDER_PATH];
+    char fnamebuf[MAX_MAILBOX_PATH];
     struct stat sbuffd, sbuffile;
     int r;
 
-    if (folder->header_lock_count++) return 0;
+    if (mailbox->header_lock_count++) return 0;
 
-    assert(folder->index_lock_count == 0);
-    assert(folder->seen_lock_count == 0);
-    assert(folder->quota_lock_count == 0);
+    assert(mailbox->index_lock_count == 0);
+    assert(mailbox->seen_lock_count == 0);
+    assert(mailbox->quota_lock_count == 0);
 
-    strcpy(fnamebuf, folder->path);
+    strcpy(fnamebuf, mailbox->path);
     strcat(fnamebuf, FNAME_HEADER);
 
     for (;;) {
-	r = flock(fileno(folder->header), LOCK_EX);
+	r = flock(fileno(mailbox->header), LOCK_EX);
 	if (r == -1) {
 	    if (errno == EINTR) continue;
-	    folder->header_lock_count--;
+	    mailbox->header_lock_count--;
 	    return 1;		/* XXX os error */
 	}
 
-	fstat(fileno(folder->header), &sbuffd);
+	fstat(fileno(mailbox->header), &sbuffd);
 	r = stat(fnamebuf, &sbuffile);
 	if (r == -1) {
-	    folder_unlock_header(folder);
+	    mailbox_unlock_header(mailbox);
 	    return 1;		/* XXX os error */
 	}
 
 	if (sbuffd.st_ino == sbuffile.st_ino) break;
 
-	fclose(folder->header);
-	folder->header = fopen(fnamebuf, "r+");
-	if (!folder->header) {
+	fclose(mailbox->header);
+	mailbox->header = fopen(fnamebuf, "r+");
+	if (!mailbox->header) {
 	    return 1;		/* XXX where it go? */
 	}
     }
 
-    if (sbuffd.st_mtime != folder->header_mtime) {
-	rewind(folder->header);
-	r = folder_read_header(folder);
+    if (sbuffd.st_mtime != mailbox->header_mtime) {
+	rewind(mailbox->header);
+	r = mailbox_read_header(mailbox);
 	if (r) {
-	    folder_unlock_header(folder);
+	    mailbox_unlock_header(mailbox);
 	    return r;		/* XXX read screwup */
 	}
     }
@@ -316,52 +316,52 @@ struct folder *folder;
 }
 
 /*
- * Lock the index file for 'folder'.  Reread index file header if necessary.
+ * Lock the index file for 'mailbox'.  Reread index file header if necessary.
  */
-folder_lock_index(folder)
-struct folder *folder;
+mailbox_lock_index(mailbox)
+struct mailbox *mailbox;
 {
-    char fnamebuf[MAX_FOLDER_PATH];
+    char fnamebuf[MAX_MAILBOX_PATH];
     struct stat sbuffd, sbuffile;
     int r;
 
-    if (folder->index_lock_count++) return 0;
+    if (mailbox->index_lock_count++) return 0;
 
-    assert(folder->seen_lock_count == 0);
-    assert(folder->quota_lock_count == 0);
+    assert(mailbox->seen_lock_count == 0);
+    assert(mailbox->quota_lock_count == 0);
 
-    strcpy(fnamebuf, folder->path);
+    strcpy(fnamebuf, mailbox->path);
     strcat(fnamebuf, FNAME_INDEX);
 
     for (;;) {
-	r = flock(fileno(folder->index), LOCK_EX);
+	r = flock(fileno(mailbox->index), LOCK_EX);
 	if (r == -1) {
 	    if (errno == EINTR) continue;
-	    folder->index_lock_count--;
+	    mailbox->index_lock_count--;
 	    return 1;		/* XXX os error */
 	}
 
-	fstat(fileno(folder->index), &sbuffd);
+	fstat(fileno(mailbox->index), &sbuffd);
 	r = stat(fnamebuf, &sbuffile);
 	if (r == -1) {
-	    folder_unlock_index(folder);
+	    mailbox_unlock_index(mailbox);
 	    return 1;		/* XXX os error */
 	}
 
 	if (sbuffd.st_ino == sbuffile.st_ino) break;
 
-	fclose(folder->index);
-	fclose(folder->cache);
-	if (r = folder_open_index(folder)) {
+	fclose(mailbox->index);
+	fclose(mailbox->cache);
+	if (r = mailbox_open_index(mailbox)) {
 	    return 1;		/* XXX where it go? */
 	}
     }
 
-    if (sbuffd.st_mtime != folder->index_mtime) {
-	rewind(folder->index);
-	r = folder_read_index_header(folder);
+    if (sbuffd.st_mtime != mailbox->index_mtime) {
+	rewind(mailbox->index);
+	r = mailbox_read_index_header(mailbox);
 	if (r) {
-	    folder_unlock_index(folder);
+	    mailbox_unlock_index(mailbox);
 	    return r;		/* XXX read screwup */
 	}
     }
@@ -370,117 +370,117 @@ struct folder *folder;
 }
 
 /*
- * Lock the quota file for 'folder'.  Reread quota file if necessary.
+ * Lock the quota file for 'mailbox'.  Reread quota file if necessary.
  */
-folder_lock_quota(folder)
-struct folder *folder;
+mailbox_lock_quota(mailbox)
+struct mailbox *mailbox;
 {
     struct stat sbuffd, sbuffile;
     int r;
 
-    assert(folder->header_lock_count != 0);
+    assert(mailbox->header_lock_count != 0);
 
-    if (folder->quota_lock_count++) return 0;
+    if (mailbox->quota_lock_count++) return 0;
 
-    if (!folder->quota) {
-	folder->quota = fopen(folder->quota_path, "r+");
-	if (!folder->quota) return 1; /* XXX no quota file */
+    if (!mailbox->quota) {
+	mailbox->quota = fopen(mailbox->quota_path, "r+");
+	if (!mailbox->quota) return 1; /* XXX no quota file */
     }
 
     for (;;) {
-	r = flock(fileno(folder->quota), LOCK_EX);
+	r = flock(fileno(mailbox->quota), LOCK_EX);
 	if (r == -1) {
 	    if (errno == EINTR) continue;
-	    folder->quota_lock_count--;
+	    mailbox->quota_lock_count--;
 	    return 1;		/* XXX os error */
 	}
-	fstat(fileno(folder->quota), &sbuffd);
-	r = stat(folder->quota_path, &sbuffile);
+	fstat(fileno(mailbox->quota), &sbuffd);
+	r = stat(mailbox->quota_path, &sbuffile);
 	if (r == -1) {
-	    folder_unlock_quota(folder);
+	    mailbox_unlock_quota(mailbox);
 	    return 1;		/* XXX os error */
 	}
 
 	if (sbuffd.st_ino == sbuffile.st_ino) break;
 
-	fclose(folder->quota);
-	folder->quota = fopen(folder->quota_path, "r+");
-	if (!folder->quota) {
+	fclose(mailbox->quota);
+	mailbox->quota = fopen(mailbox->quota_path, "r+");
+	if (!mailbox->quota) {
 	    return 1;		/* XXX where it go? */
 	}
     }
-    return folder_read_quota(folder);
+    return mailbox_read_quota(mailbox);
 }
 
 /*
- * Release lock on the header for 'folder'
+ * Release lock on the header for 'mailbox'
  */
-folder_unlock_header(folder)
-struct folder *folder;
+mailbox_unlock_header(mailbox)
+struct mailbox *mailbox;
 {
-    assert(folder->header_lock_count != 0);
+    assert(mailbox->header_lock_count != 0);
 
-    if (--folder->header_lock_count == 0) {
-	flock(fileno(folder->header), LOCK_UN);
+    if (--mailbox->header_lock_count == 0) {
+	flock(fileno(mailbox->header), LOCK_UN);
     }
     return 0;
 }
 
 /*
- * Release lock on the index file for 'folder'
+ * Release lock on the index file for 'mailbox'
  */
-folder_unlock_index(folder)
-struct folder *folder;
+mailbox_unlock_index(mailbox)
+struct mailbox *mailbox;
 {
-    assert(folder->index_lock_count != 0);
+    assert(mailbox->index_lock_count != 0);
 
-    if (--folder->index_lock_count == 0) {
-	flock(fileno(folder->index), LOCK_UN);
+    if (--mailbox->index_lock_count == 0) {
+	flock(fileno(mailbox->index), LOCK_UN);
     }
     return 0;
 }
 
 /*
- * Release lock on the quota file for 'folder'
+ * Release lock on the quota file for 'mailbox'
  */
-folder_unlock_quota(folder)
-struct folder *folder;
+mailbox_unlock_quota(mailbox)
+struct mailbox *mailbox;
 {
-    assert(folder->quota_lock_count != 0);
+    assert(mailbox->quota_lock_count != 0);
 
-    if (--folder->quota_lock_count == 0) {
-	flock(fileno(folder->quota), LOCK_UN);
+    if (--mailbox->quota_lock_count == 0) {
+	flock(fileno(mailbox->quota), LOCK_UN);
     }
     return 0;
 }
 
 /*
- * Write the index header for 'folder'
+ * Write the index header for 'mailbox'
  */
-folder_write_index_header(folder)
-struct folder *folder;
+mailbox_write_index_header(mailbox)
+struct mailbox *mailbox;
 {
     char buf[1024];
     int n;
 
-    assert(folder->index_lock_count != 0);
+    assert(mailbox->index_lock_count != 0);
 
-    rewind(folder->index);
+    rewind(mailbox->index);
     
-    *((bit32 *)buf) = folder->generation_no;
-    *((bit32 *)(buf+4)) = htonl(folder->format);
-    *((bit32 *)(buf+8)) = htonl(folder->start_offset);
-    *((bit32 *)(buf+12)) = htonl(folder->record_size);
-    *((bit32 *)(buf+16)) = htonl(folder->last_internaldate);
-    *((bit32 *)(buf+20)) = htonl(folder->last_uid);
-    *((bit32 *)(buf+24)) = htonl(folder->quota_folder_used);
+    *((bit32 *)buf) = mailbox->generation_no;
+    *((bit32 *)(buf+4)) = htonl(mailbox->format);
+    *((bit32 *)(buf+8)) = htonl(mailbox->start_offset);
+    *((bit32 *)(buf+12)) = htonl(mailbox->record_size);
+    *((bit32 *)(buf+16)) = htonl(mailbox->last_internaldate);
+    *((bit32 *)(buf+20)) = htonl(mailbox->last_uid);
+    *((bit32 *)(buf+24)) = htonl(mailbox->quota_mailbox_used);
 
-    n = fwrite(buf, sizeof(bit32), 7, folder->index);
+    n = fwrite(buf, sizeof(bit32), 7, mailbox->index);
     if (n != 7) {
 	return 1;		/* XXX write error */
     }
-    fflush(folder->index);
-    if (ferror(folder->index) || fsync(fileno(folder->index))) {
+    fflush(mailbox->index);
+    if (ferror(mailbox->index) || fsync(fileno(mailbox->index))) {
 	return 1;		/* XXX write error */
     }
     return 0;
@@ -489,8 +489,8 @@ struct folder *folder;
 /*
  * Append a new record to the index file
  */
-folder_append_index(folder, record, num)
-struct folder *folder;
+mailbox_append_index(mailbox, record, num)
+struct mailbox *mailbox;
 struct index_record *record;
 int num;
 {
@@ -498,18 +498,18 @@ int num;
     char *buf, *p;
     long last_offset;
 
-    assert(folder->index_lock_count != 0);
+    assert(mailbox->index_lock_count != 0);
 
-    if (folder->record_size < (7 + (MAX_USER_FLAGS/32)) * 4) {
+    if (mailbox->record_size < (7 + (MAX_USER_FLAGS/32)) * 4) {
 	return 1;		/* XXX bad format--too small */
     }
 
-    len = num * folder->record_size;
+    len = num * mailbox->record_size;
     buf = xmalloc(len);
     bzero(buf, len);
 
     for (i = 0; i < num; i++) {
-	p = buf + i*folder->record_size;
+	p = buf + i*mailbox->record_size;
 	*((bit32 *)p) = htonl(record[i].uid);
 	*((bit32 *)(p+4)) = htonl(record[i].internaldate);
 	*((bit32 *)(p+8)) = htonl(record[i].size);
@@ -523,10 +523,10 @@ int num;
 	}
     }
 
-    last_offset = fseek(folder->index, 0L, 2);
-    fwrite(buf, len, 1, folder->index);
-    if (ferror(folder->index) || fsync(fileno(folder->index))) {
-	ftruncate(fileno(folder->index), last_offset);
+    last_offset = fseek(mailbox->index, 0L, 2);
+    fwrite(buf, len, 1, mailbox->index);
+    if (ferror(mailbox->index) || fsync(fileno(mailbox->index))) {
+	ftruncate(fileno(mailbox->index), last_offset);
 	return 1;		/* XXX os error */
     }
 
@@ -535,18 +535,18 @@ int num;
 }
 
 /*
- * Write out the quota file for 'folder'
+ * Write out the quota file for 'mailbox'
  */
-folder_write_quota(folder)
-struct folder *folder;
+mailbox_write_quota(mailbox)
+struct mailbox *mailbox;
 {
     int r;
-    char buf[MAX_FOLDER_PATH];
+    char buf[MAX_MAILBOX_PATH];
     FILE *newfile;
 
-    assert(folder->quota_lock_count != 0);
+    assert(mailbox->quota_lock_count != 0);
 
-    strcpy(buf, folder->quota_path);
+    strcpy(buf, mailbox->quota_path);
     strcat(buf, ".NEW");
 
     newfile = fopen(buf, "w+");
@@ -558,17 +558,17 @@ struct folder *folder;
 	return 1;		/* XXX os error */
     }
 
-    fprintf(newfile, "%lu\n%d\n", folder->quota_used, folder->quota_limit);
+    fprintf(newfile, "%lu\n%d\n", mailbox->quota_used, mailbox->quota_limit);
     fflush(newfile);
     if (ferror(newfile) || fsync(fileno(newfile))) {
 	return 1;		/* XXX os error */
     }
 
-    if (rename(buf, folder->quota_path)) {
+    if (rename(buf, mailbox->quota_path)) {
 	return 1;		/* XXX os error */
     }
-    fclose(folder->quota);
-    folder->quota = newfile;
+    fclose(mailbox->quota);
+    mailbox->quota = newfile;
 
     return 0;
 }

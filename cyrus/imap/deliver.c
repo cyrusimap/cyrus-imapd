@@ -1,12 +1,12 @@
 /*
- * Program to deliver mail to a folder
+ * Program to deliver mail to a mailbox
  */
 
 #include <stdio.h>
 #include <sysexits.h>
 
 #include <acl.h>
-#include "folder.h"
+#include "mailbox.h"
 
 extern int optind;
 extern char *optarg;
@@ -47,11 +47,11 @@ deliver(path)
 char *path;
 {
     int r;
-    struct folder folder;
+    struct mailbox mailbox;
     
-    r = append_setup(&folder, path, FOLDER_FORMAT_NORMAL, ACL_POST, 0);
+    r = append_setup(&mailbox, path, MAILBOX_FORMAT_NORMAL, ACL_POST, 0);
     if (r) exit(1);
     
-    r = append_fromstream(&folder, stdin);
+    r = append_fromstream(&mailbox, stdin);
     exit(r);
 }
