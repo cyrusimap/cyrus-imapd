@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.263 2000/07/14 20:03:25 ken3 Exp $ */
+/* $Id: imapd.c,v 1.264 2000/07/17 04:32:42 leg Exp $ */
 
 #include <config.h>
 
@@ -1608,7 +1608,7 @@ void cmd_id(char *tag)
     static int failed_id = 0;
     static int logged_id = 0;
     int error = 0;
-    int c, npair = 0;
+    int c = EOF, npair = 0;
     static struct buf arg, field;
     struct strlist *fields = 0, *values = 0;
     struct utsname os;
