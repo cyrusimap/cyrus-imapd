@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.7 2002/05/06 17:18:49 rjs3 Exp $ */
+/* $Id: backend.c,v 1.7.6.1 2002/07/10 20:45:01 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -234,10 +234,11 @@ static int backend_authenticate(struct backend *s, const char *userid)
     p = strchr(optstr, '.');
     if (p) *p = '\0';
     strcat(optstr, "_password");
-    pass = config_getstring(optstr, NULL);
+    pass = config_getoverflowstring(optstr, NULL);
+    if(!pass) pass = config_getstring(IMAPOPT_PROXY_PASSWORD);
     cb = mysasl_callbacks(userid, 
-			  config_getstring("proxy_authname", "proxy"),
-			  config_getstring("proxy_realm", NULL),
+			  config_getstring(IMAPOPT_PROXY_AUTHNAME),
+			  config_getstring(IMAPOPT_PROXY_REALM),
 			  pass);
 
     /* set the IP addresses */
@@ -281,7 +282,7 @@ static int backend_authenticate(struct backend *s, const char *userid)
     p = strchr(buf, '.');
     *p = '\0';
     strcat(buf, "_mechs");
-    mech_conf = config_getstring(buf, NULL);
+    mech_conf = config_getoverflowstring(buf, NULL);
     
     /* If we don't have a mech_conf, ask the server what it can do */
     if(!mech_conf) {

@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- * $Id: mboxname.c,v 1.25.4.1 2002/07/10 20:00:04 ken3 Exp $
+ * $Id: mboxname.c,v 1.25.4.2 2002/07/10 20:45:09 rjs3 Exp $
  * Copyright (c)1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -304,7 +304,8 @@ static int mboxname_tointernal_alt(struct namespace *namespace, const char *name
 
 /* Handle conversion from the internal namespace to the standard namespace */
 static int mboxname_toexternal(struct namespace *namespace, const char *name,
-			       const char *userid, char *result)
+			       const char *userid __attribute__((unused)),
+			       char *result)
 {
 #if 0
     char *domain;
@@ -384,14 +385,15 @@ int mboxname_init_namespace(struct namespace *namespace, int force_std)
 
     assert(namespace != NULL);
 
-    namespace->hier_sep = config_getswitch("unixhierarchysep", 0) ? '/' : '.';
-    namespace->isalt = !force_std && config_getswitch("altnamespace", 0);
+    namespace->hier_sep =
+	config_getswitch(IMAPOPT_UNIXHIERARCHYSEP) ? '/' : '.';
+    namespace->isalt = !force_std && config_getswitch(IMAPOPT_ALTNAMESPACE);
 
     if (namespace->isalt) {
 	/* alternate namespace */
 	strcpy(namespace->prefix[NAMESPACE_INBOX], "");
 
-	prefix = config_getstring("userprefix", "Other Users");
+	prefix = config_getstring(IMAPOPT_USERPREFIX);
 	if (!prefix || strlen(prefix) == 0 ||
 	    strlen(prefix) >= MAX_NAMESPACE_PREFIX ||
 	    strchr(prefix,namespace->hier_sep) != NULL)
@@ -399,7 +401,7 @@ int mboxname_init_namespace(struct namespace *namespace, int force_std)
 	sprintf(namespace->prefix[NAMESPACE_USER], "%.*s%c",
 		MAX_NAMESPACE_PREFIX-1, prefix, namespace->hier_sep);
 
-	prefix = config_getstring("sharedprefix", "Shared Folders");
+	prefix = config_getstring(IMAPOPT_SHAREDPREFIX);
 	if (!prefix || strlen(prefix) == 0 ||
 	    strlen(prefix) >= MAX_NAMESPACE_PREFIX ||
 	    strchr(prefix, namespace->hier_sep) != NULL ||
@@ -545,7 +547,7 @@ int mboxname_policycheck(char *name)
     int ucs4;
     int unixsep;
 
-    unixsep = config_getswitch("unixhierarchysep", 0);
+    unixsep = config_getswitch(IMAPOPT_UNIXHIERARCHYSEP);
 
     if (strlen(name) > MAX_MAILBOX_NAME) return IMAP_MAILBOX_BADNAME;
     for (i = 0; i < NUM_BADMBOXPATTERNS; i++) {

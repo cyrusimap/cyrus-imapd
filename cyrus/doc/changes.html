@@ -1,17 +1,39 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.43 2002/07/01 20:47:15 ken3 Exp $ -->
+<!-- $Id: changes.html,v 1.43.2.1 2002/07/10 20:44:57 rjs3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
 <title>Changes to the Cyrus IMAP Server</title>
 </head>
 <body>
-<h1>Changes to the Cyrus IMAP Server</h1>
+<h1>Changes to the Cyrus IMAP Server since 2.1.x</h1>
+
+<ul>
+<li>There have been extensive performance and consistancy changes to
+the configuration subsystem.  This will both ensure greater consistancy
+between the documentation and the code, as well as a more standard format
+for specifing service-specific configuration options in imapd.conf.  Important
+changes are detailed here:
+<ul>
+  <li> The tls_[service]_* configuration options have been removed.  Now
+use [servicename]_tls_*, where servicename is the service identifier from
+cyrus.conf for that particular process.</li>
+  <li> Administrative groups (e.g. admins and lmtp_admins) no longer union,
+service groups completely override the generic group. </li>
+  <li> lmtp_allowplaintext is no longer a defined parameter and must
+be specified using the service name of your lmtp process if you
+require a specific value</li>
+</ul></li>
+
+<li> Virtual domain support
+
+</ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.1.4</h2>
 
 <ul>
+
 <li> Sieve is no longer dependent on duplicate delivery suppression
 (it still uses the duplicate delivery database however). </li>
 
@@ -1638,7 +1660,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2002/07/01 20:47:15 $ <br />
+last modified: $Date: 2002/07/10 20:44:57 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>

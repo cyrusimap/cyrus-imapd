@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.32 2002/06/03 18:22:24 rjs3 Exp $ */
+/* $Id: fud.c,v 1.32.4.1 2002/07/10 20:45:02 rjs3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -158,8 +158,6 @@ int service_init(int argc, char **argv, char **envp)
 {
     int opt;
    
-    config_changeident("fud");
-
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
     setproctitle_init(argc, argv, envp);

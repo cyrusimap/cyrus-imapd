@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.55.4.1 2002/07/10 19:59:57 ken3 Exp $ */
+/* $Id: config.c,v 1.55.4.2 2002/07/10 20:45:02 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -57,6 +57,7 @@
 #endif
 
 #include "imapconf.h"
+#include "imapopts.h"
 #include "exitcodes.h"
 #include "xmalloc.h"
 #include "mboxlist.h"
@@ -70,19 +71,21 @@ extern int errno;
 
 #define CONFIG_FILENAME "/etc/imapd.conf"
 
-#define CONFIGHASHSIZE 200 /* > 2x # of options */
+#define CONFIGHASHSIZE 30 /* relatively small,
+			   * because it is for overflow only */
 static struct hash_table confighash;
 
 /* cached configuration variables accessible to the external world */
 const char *config_filename;     /* filename of configuration file */
 const char *config_dir;		           /* ie /var/imap */
 const char *config_defpartition;           /* /var/spool/imap */
-const char *config_newsspool;	           /* /var/spool/news */
 const char *config_servername;	           /* gethostname() */
 const char *config_mupdate_server;         /* NULL */
 int config_hashimapspool;	           /* f */
 int config_virtdomains;	                   /* f */
 const char *config_defdomain;              /* NULL */
+
+const char *config_ident;                  /* the service name */
 
 static void config_read(const char *alt_config);
 
@@ -96,23 +99,22 @@ int config_init(const char *alt_config, const char *ident)
     initialize_imap_error_table();
     initialize_mupd_error_table();
 
-    openlog(ident, LOG_PID, LOG_LOCAL6);
+    if(!ident)
+	fatal("service name was not specified to config_init", EC_CONFIG);
+
+    config_ident = ident;
+    
+    openlog(config_ident, LOG_PID, LOG_LOCAL6);
 
     if(!construct_hash_table(&confighash, CONFIGHASHSIZE, 1)) {
 	fatal("could not construct configuration hash table", EC_CONFIG);
     }
 
+    /* Load configuration file.  This will set config_dir when it finds it */
     config_read(alt_config);
 
-    /* Look up configdirectory config option */
-    config_dir = config_getstring("configdirectory", (char *)0);
-    if (!config_dir) {
-	fatal("configdirectory option not specified in configuration file",
-	      EC_CONFIG);
-    }
-
     /* Look up default partition */
-    config_defpartition = config_getstring("defaultpartition", "default");
+    config_defpartition = config_getstring(IMAPOPT_DEFAULTPARTITION);
     for (p = (char *)config_defpartition; *p; p++) {
 	if (!isalnum((unsigned char) *p))
 	  fatal("defaultpartition option contains non-alphanumeric character",
@@ -126,76 +128,75 @@ int config_init(const char *alt_config, const char *ident)
     }
 
     /* Look up umask */
-    val = config_getstring("umask", "077");
+    val = config_getstring(IMAPOPT_UMASK);
     while (*val) {
 	if (*val >= '0' && *val <= '7') umaskval = umaskval*8 + *val - '0';
 	val++;
     }
     umask(umaskval);
 
-    /* Look up news spool */
-    config_newsspool = config_getstring("newsspool", 0);
-
     /* look up mailbox hashing */
-    config_hashimapspool = config_getswitch("hashimapspool", 0);
+    config_hashimapspool = config_getswitch(IMAPOPT_HASHIMAPSPOOL);
 
     /* are we supporting virtual domains?  */
-    config_virtdomains = config_getswitch("virtdomains", 0);
-    config_defdomain = config_getstring("defaultdomain", 0);
+    config_virtdomains = config_getswitch(IMAPOPT_VIRTDOMAINS);
+    config_defdomain = config_getstring(IMAPOPT_DEFAULTDOMAIN);
 
     /* look up the hostname we should present to the user */
-    config_servername = config_getstring("servername", 0);
+    config_servername = config_getstring(IMAPOPT_SERVERNAME);
     if (!config_servername) {
 	config_servername = xmalloc(sizeof(char) * 256);
 	gethostname((char *) config_servername, 256);
     }
 
-    config_mupdate_server = config_getstring("mupdate_server", NULL);
+    config_mupdate_server = config_getstring(IMAPOPT_MUPDATE_SERVER);
 
     return 0;
 }
 
-int config_changeident(const char *ident)
+const char *config_getstring(enum imapopt opt)
 {
-    closelog();
-    openlog(ident, LOG_PID, LOG_LOCAL6);
-    return 0;
+    assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
+    assert(imapopts[opt].t == OPT_STRING);
+    
+    return imapopts[opt].val.s;
 }
 
-const char *config_getstring(const char *key, const char *def)
+int config_getint(enum imapopt opt)
 {
+    assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
+    assert(imapopts[opt].t == OPT_INT);
+
+    return imapopts[opt].val.i;
+}
+
+int config_getswitch(enum imapopt opt)
+{
+    assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
+    assert(imapopts[opt].t == OPT_SWITCH);
+    
+    return imapopts[opt].val.b;
+}
+
+const char *config_getoverflowstring(const char *key, const char *def)
+{
+    char buf[256];
     char *ret;
 
-    ret = hash_lookup(key, &confighash);
+    /* First lookup <ident>_key, to see if we have a service-specific
+     * override */
 
+    if(snprintf(buf,sizeof(buf),"%s_%s",config_ident,key) == -1)
+	fatal("key too long in config_getoverflowstring", EC_TEMPFAIL);
+    
+    ret = hash_lookup(buf, &confighash);
+    
+    /* No service-specific override, check the actual key */
+    if(!ret)
+	ret = hash_lookup(key, &confighash);
+
+    /* Return what we got or the default */
     return ret ? ret : def;
-}
-
-int config_getint(const char *key, int def)
-{
-    const char *val = config_getstring(key, (char *)0);
-
-    if (!val) return def;
-    if (!isdigit((int) *val) && (*val != '-' || !isdigit((int) val[1]))) 
-	return def;
-    return atoi(val);
-}
-
-int config_getswitch(const char *key, int def)
-{
-    const char *val = config_getstring(key, (char *)0);
-
-    if (!val) return def;
-
-    if (*val == '0' || *val == 'n' ||
-	(*val == 'o' && val[1] == 'f') || *val == 'f') {
-	return 0;
-    }
-    else if (*val == '1' || *val == 'y' ||
-	     (*val == 'o' && val[1] == 'n') || *val == 't') {
-	return 1;
-    }
-    return def;
 }
 
 const char *config_partitiondir(const char *partition)
@@ -206,75 +207,254 @@ const char *config_partitiondir(const char *partition)
     strcpy(buf, "partition-");
     strcat(buf, partition);
 
-    return config_getstring(buf, (char *)0);
+    return config_getoverflowstring(buf, NULL);
 }
 
 static void config_read(const char *alt_config)
 {
     FILE *infile;
+    enum opttype opt;
     int lineno = 0;
-    char buf[4096];
-    char *p, *q, *key, *val, *newval;
+    char buf[4096], errbuf[1024];
+    char *p, *q, *key, *fullkey, *srvkey, *val, *newval;
+    int service_specific;
+    int idlen = strlen(config_ident);
 
     if(alt_config) config_filename = xstrdup(alt_config);
     else config_filename = xstrdup(CONFIG_FILENAME);
 
-    infile = fopen(alt_config ? alt_config : CONFIG_FILENAME, "r");
+    /* read in config file */
+    infile = fopen(config_filename, "r");
     if (!infile) {
 	strcpy(buf, CYRUS_PATH);
-	strcat(buf, alt_config ? alt_config : CONFIG_FILENAME);
+	strcat(buf, config_filename);
 	infile = fopen(buf, "r");
     }
     if (!infile) {
-	sprintf(buf, "can't open configuration file %s: %s",
-		alt_config ? alt_config : CONFIG_FILENAME,
-		error_message(errno));
+	sprintf(errbuf, "can't open configuration file %s: %s",
+		config_filename, error_message(errno));
 	fatal(buf, EC_CONFIG);
     }
     
     while (fgets(buf, sizeof(buf), infile)) {
 	lineno++;
 
+	service_specific = 0;
+	
 	if (buf[strlen(buf)-1] == '\n') buf[strlen(buf)-1] = '\0';
 	for (p = buf; *p && isspace((int) *p); p++);
 	if (!*p || *p == '#') continue;
 
-	key = p;
+	fullkey = key = p;
 	while (*p && (isalnum((int) *p) || *p == '-' || *p == '_')) {
 	    if (isupper((unsigned char) *p)) *p = tolower((unsigned char) *p);
 	    p++;
 	}
 	if (*p != ':') {
-	    sprintf(buf,
+	    sprintf(errbuf,
 		    "invalid option name on line %d of configuration file",
 		    lineno);
 	    fatal(buf, EC_CONFIG);
 	}
 	*p++ = '\0';
-
+	
 	while (*p && isspace((int) *p)) p++;
-
+	
 	/* remove trailing whitespace */
 	for (q = p + strlen(p) - 1; q > p && isspace((int) *q); q--) {
 	    *q = '\0';
 	}
 	
 	if (!*p) {
-	    sprintf(buf, "empty option value on line %d of configuration file",
+	    sprintf(errbuf,
+		    "empty option value on line %d of configuration file",
 		    lineno);
 	    fatal(buf, EC_CONFIG);
 	}
+	
+	srvkey = NULL;
 
-	newval = xstrdup(p);
-	val = hash_insert(key, newval, &confighash);
-	if(val != newval) {
-	    char errbuf[4096];
-	    sprintf(errbuf, "option '%s' was specified twice in config file",
-		    key);
-	    fatal(errbuf, EC_CONFIG);
+	/* Find if there is a service_ prefix */
+	if(!strncasecmp(key, config_ident, idlen) 
+	   && key[idlen] == '_') {
+	    /* skip service_ prefix */
+	    srvkey = key + idlen + 1;
+	}
+	
+	/* look for a service_ prefix match in imapopts */
+	if(srvkey) {
+	    for (opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
+		if (!strcasecmp(imapopts[opt].optname, srvkey)) {
+		    key = srvkey;
+		    service_specific = 1;
+		    break;
+		}
+	    }
+	}
+	
+	/* Did not find a service_ specific match, try looking for an
+	 * exact match */
+	if(!service_specific) {
+	    for (opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
+		if (!strcasecmp(imapopts[opt].optname, key)) {
+		    break;
+		}
+	    }
+	}
+
+	/* If both of those loops failed, it goes verbatim into the
+	 * overflow hash table. */
+	
+	if (opt < IMAPOPT_LAST) {
+	    /* Okay, we know about this configure option.
+	     * So first check that we have either
+	     *  1. not seen it
+	     *  2. seen its generic form, but this is a service specific form
+	     *
+	     *  If we have already seen a service-specific form, and this is
+	     *  a generic form, just skip it and don't moan.
+	     */
+	    if((imapopts[opt].seen == 1 && !service_specific) 
+	     ||(imapopts[opt].seen == 2 && service_specific)) {
+		sprintf(errbuf,
+			"option '%s' was specified twice in config file (second occurance on line %d)",
+			fullkey, lineno);
+		fatal(errbuf, EC_CONFIG);
+	    } else if(imapopts[opt].seen == 2 && !service_specific) {
+		continue;
+	    }
+
+	    /* If we've seen it already, we're replacing it, so we need
+	     * to free the current string if there is one */
+	    if(imapopts[opt].seen && imapopts[opt].t == OPT_STRING)
+		free((char *)imapopts[opt].val.s);
+
+            if(service_specific)
+		imapopts[opt].seen = 2;
+	    else
+		imapopts[opt].seen = 1;
+	    
+	    /* this is a known option */
+	    switch (imapopts[opt].t) {
+	    case OPT_STRING: 
+	    {		    
+		imapopts[opt].val.s = xstrdup(p);
+
+		if(opt == IMAPOPT_CONFIGDIRECTORY)
+		    config_dir = imapopts[opt].val.s;
+
+		break;
+	    }
+	    case OPT_INT:
+	    {
+		long val;
+		char *ptr;
+		
+		val = strtol(p, &ptr, 0);
+		if (!ptr || *ptr != '\0') {
+		    /* error during conversion */
+		    sprintf(errbuf, "non-integer value for %s in line %d",
+			    imapopts[opt].optname, lineno);
+		    fatal(buf, EC_CONFIG);
+		}
+
+		imapopts[opt].val.i = val;
+		break;
+	    }
+	    case OPT_SWITCH:
+	    {
+		if (*p == '0' || *p == 'n' ||
+		    (*p == 'o' && p[1] == 'f') || *p == 'f') {
+		    imapopts[opt].val.b = 0;
+		}
+		else if (*p == '1' || *p == 'y' ||
+			 (*p == 'o' && p[1] == 'n') || *p == 't') {
+		    imapopts[opt].val.b = 1;
+		}
+		else {
+		    /* error during conversion */
+		    sprintf(errbuf, "non-switch value for %s in line %d",
+			    imapopts[opt].optname, lineno);
+		    fatal(buf, EC_CONFIG);
+		}
+		break;
+	    }
+	    case OPT_NOTOPT:
+	    default:
+		abort();
+	    }
+	} else {
+	    /* check to make sure it's valid for overflow */
+	    /* that is, partition names and anything that might be
+	     * used by SASL */
+/*
+  xxx this would be nice if it wasn't for other services who might be
+      sharing this config file and whose names we cannot predict
+
+	    if(strncasecmp(key,"sasl_",5)
+	    && strncasecmp(key,"partition-",10)) {
+		sprintf(errbuf,
+			"option '%s' is unknown on line %d of config file",
+			fullkey, lineno);
+		fatal(errbuf, EC_CONFIG);
+	    }
+*/
+
+	    /* Put it in the overflow hash table */
+	    newval = xstrdup(p);
+	    val = hash_insert(key, newval, &confighash);
+	    if(val != newval) {
+		sprintf(errbuf,
+			"option '%s' was specified twice in config file (second occurance on line %d)",
+			fullkey, lineno);
+		fatal(errbuf, EC_CONFIG);
+	    }
 	}
     }
     fclose(infile);
+
+    /* Check configdirectory config option */
+    if (!config_dir) {
+	fatal("configdirectory option not specified in configuration file",
+	      EC_CONFIG);
+    }
+
+    /* Scan options to see if we need to replace {configdirectory} */
+    /* xxx need to scan overflow options as well! */
+    for(opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
+	if(!imapopts[opt].val.s ||
+	   imapopts[opt].t != OPT_STRING ||
+	   opt == IMAPOPT_CONFIGDIRECTORY) {
+	    /* Skip options that have a NULL value, aren't strings, or
+	     * are the configdirectory option */
+	    continue;
+	}
+	
+	/* We use some magic numbers here,
+	 * 17 is the length of "{configdirectory}",
+	 * 16 is one less than that length, so that the replacement string
+	 *    that is malloced has room for the '\0' */
+	if(!strncasecmp(imapopts[opt].val.s,"{configdirectory}",17)) {
+	    const char *str = imapopts[opt].val.s;
+	    char *newstring =
+		xmalloc(strlen(config_dir) + strlen(str) - 16);
+	    char *freeme = NULL;
+	    
+	    /* we need to replace this string, will we need to free
+	     * the current value?  -- only if we've actually seen it in
+	     * the config file. */
+	    if(imapopts[opt].seen)
+		freeme = (char *)str;
+
+	    /* Build replacement string from configdirectory option */
+	    strcpy(newstring, config_dir);
+	    strcat(newstring, str + 17);
+
+	    imapopts[opt].val.s = newstring;
+
+	    if(freeme) free(freeme);
+	}
+    }
 }
 
 /* this is a wrapper to call the cyrus configuration from SASL */
@@ -289,7 +469,7 @@ int mysasl_config(void *context __attribute__((unused)),
 
     if (!strcmp(option, "srvtab")) { 
 	/* we don't transform srvtab! */
-	*result = config_getstring(option, NULL);
+	*result = config_getstring(IMAPOPT_SRVTAB);
     } else {
 	*result = NULL;
 
@@ -299,14 +479,14 @@ int mysasl_config(void *context __attribute__((unused)),
 	    strlcat(opt, plugin_name, sl);
 	    strlcat(opt, "_", sl);
 	    strlcat(opt, option, sl);
-	    *result = config_getstring(opt, NULL);
+	    *result = config_getoverflowstring(opt, NULL);
 	}
 
 	if (*result == NULL) {
 	    /* try without the plugin name */
 	    strlcpy(opt, "sasl_", sl);
 	    strlcat(opt, option, sl);
-	    *result = config_getstring(opt, NULL);
+	    *result = config_getoverflowstring(opt, NULL);
 	}
     }
 
@@ -326,14 +506,14 @@ sasl_security_properties_t *mysasl_secprops(int flags)
     static sasl_security_properties_t ret;
 
     ret.maxbufsize = PROT_BUFSIZE;
-    ret.min_ssf = config_getint("sasl_minimum_layer", 0);	
+    ret.min_ssf = config_getint(IMAPOPT_SASL_MINIMUM_LAYER);	
 				/* minimum allowable security strength */
-    ret.max_ssf = config_getint("sasl_maximum_layer", 256);
+    ret.max_ssf = config_getint(IMAPOPT_SASL_MAXIMUM_LAYER);
 				/* maximum allowable security strength */
 
     ret.security_flags = flags;
     /* ret.security_flags |= SASL_SEC_NOPLAINTEXT; */
-    if (!config_getswitch("allowanonymouslogin", 0)) {
+    if (!config_getswitch(IMAPOPT_ALLOWANONYMOUSLOGIN)) {
 	ret.security_flags |= SASL_SEC_NOANONYMOUS;
     }
     ret.property_names = NULL;
@@ -342,11 +522,14 @@ sasl_security_properties_t *mysasl_secprops(int flags)
     return &ret;
 }
 
-/* true if 'authstate' is in 'val' */
-static int isa(struct auth_state *authstate, const char *opt)
+/* true if 'authstate' is in 'opt' */
+int config_authisa(struct auth_state *authstate, enum imapopt opt)
 {
     char buf[1024];
-    const char *val = config_getstring(opt, "");
+    const char *val = config_getstring(opt);
+
+    /* Is the option defined? */
+    if(!val) return 0;
 
     while (*val) {
 	char *p;
@@ -361,34 +544,7 @@ static int isa(struct auth_state *authstate, const char *opt)
 	val = p;
 	while (*val && isspace((int) *val)) val++;
     }
-    return 0;
-}
 
-/* 
- * check 'service_class' and 'class'
- */
-int authisa(struct auth_state *authstate, 
-	    const char *service, 
-	    const char *class)
-{
-    char buf[512];
-
-    if (!authstate) {
-	/* not authenticated? */
-	return 0;
-    }
-
-    /* 'class' */
-    if (isa(authstate, class)) {
-	return 1;
-    }
-
-    /* 'service_class' */
-    snprintf(buf, sizeof(buf), "%s_%s", service, class);
-    if (isa(authstate, buf)) {
-	return 1;
-    }
-    
     return 0;
 }
 

@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.32 2002/04/05 19:52:27 rjs3 Exp $
+ * $Id: mupdate-client.c,v 1.32.4.1 2002/07/10 20:45:09 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -82,14 +82,14 @@ extern sasl_callback_t *mysasl_callbacks(const char *username,
                                          const char *password);
 extern void free_callbacks(sasl_callback_t *in);
 
-static sasl_security_properties_t *make_secprops(int min, int max)
+static sasl_security_properties_t *make_secprops(void)
 {
   sasl_security_properties_t *ret =
       (sasl_security_properties_t *) xzmalloc(sizeof(sasl_security_properties_t));
 
   ret->maxbufsize = PROT_BUFSIZE;
-  ret->min_ssf = config_getint("sasl_minimum_layer", min);	
-  ret->max_ssf = config_getint("sasl_maximum_layer", max);
+  ret->min_ssf = config_getint(IMAPOPT_SASL_MINIMUM_LAYER);	
+  ret->max_ssf = config_getint(IMAPOPT_SASL_MAXIMUM_LAYER);
 
   return ret;
 }
@@ -114,7 +114,7 @@ static int mupdate_authenticate(mupdate_handle *h,
 	return 1;
     }
 
-    secprops = make_secprops(0, 256);
+    secprops = make_secprops();
     if(!secprops) return 1;
     
     saslresult=sasl_setprop(h->saslconn, SASL_SEC_PROPS, secprops);
@@ -253,13 +253,10 @@ int mupdate_connect(const char *server, const char *port,
 
     /* open connection to 'server' */
     if(!server) {
-	server = config_getstring("mupdate_server", NULL);
+	server = config_mupdate_server;
 	if (server == NULL) {
 	    fatal("couldn't get mupdate server name", EC_UNAVAILABLE);
 	}
-    }
-    if(!port) {
-	port = config_getstring("mupdate_port",NULL);
     }
     
     hp = gethostbyname(server);
@@ -289,7 +286,7 @@ int mupdate_connect(const char *server, const char *port,
     } else if((sp = getservbyname("mupdate", "tcp")) != NULL) {
 	addr.sin_port = sp->s_port;
     } else {
-	addr.sin_port = htons(2004);
+	addr.sin_port = config_getint(IMAPOPT_MUPDATE_PORT);
     }
 
     if (connect(s, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
@@ -303,10 +300,10 @@ int mupdate_connect(const char *server, const char *port,
 
     if(!cbs) {
 	local_cbs = 1;
-	cbs = mysasl_callbacks(config_getstring("mupdate_username",""),
-			       config_getstring("mupdate_authname",NULL),
-			       config_getstring("mupdate_realm",NULL),
-			       config_getstring("mupdate_password",NULL));
+	cbs = mysasl_callbacks(config_getstring(IMAPOPT_MUPDATE_USERNAME),
+			       config_getstring(IMAPOPT_MUPDATE_AUTHNAME),
+			       config_getstring(IMAPOPT_MUPDATE_REALM),
+			       config_getstring(IMAPOPT_MUPDATE_PASSWORD));
     }
 
     saslresult = sasl_client_new(service_name,

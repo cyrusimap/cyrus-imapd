@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: user.c,v 1.10 2002/05/23 21:12:39 rjs3 Exp $
+ * $Id: user.c,v 1.10.4.1 2002/07/10 20:45:14 rjs3 Exp $
  */
 
 #include <config.h>
@@ -121,10 +121,10 @@ int user_deletesieve(char *user)
     struct dirent *next = NULL;
     
     /* oh well */
-    if(config_getswitch("sieveusehomedir", 0)) return 0;
+    if(config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR)) return 0;
     
     snprintf(sieve_path, sizeof(sieve_path), "%s/%c/%s",
-	     config_getstring("sievedir", "/usr/sieve"),
+	     config_getstring(IMAPOPT_SIEVEDIR),
 	     user[0], user);
     mbdir=opendir(sieve_path);
 

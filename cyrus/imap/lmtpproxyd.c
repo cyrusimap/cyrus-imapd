@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.42.4.1 2002/07/10 20:00:02 ken3 Exp $
+ * $Id: lmtpproxyd.c,v 1.42.4.2 2002/07/10 20:45:06 rjs3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -152,7 +152,6 @@ struct lmtp_func mylmtp = { &deliver, &verify_user, &shut_down,
 static int quotaoverride = 0;		/* should i override quota? */
 const char *BB = "";
 static mupdate_handle *mhandle = NULL;
-static const char *mupdate_server = NULL;
 int deliver_logfd = -1; /* used in lmtpengine.c */
 
 /* current namespace */
@@ -175,7 +174,7 @@ static int mysasl_authproc(sasl_conn_t *conn,
     /* check if remote realm */
     if ((realm = strchr(auth_identity, '@'))!=NULL) {
 	realm++;
-	val = config_getstring("loginrealms", "");
+	val = config_getstring(IMAPOPT_LOGINREALMS);
 	while (*val) {
 	    if (!strncasecmp(val, realm, strlen(realm)) &&
 		(!val[strlen(realm)] || isspace((int) val[strlen(realm)]))) {
@@ -196,7 +195,7 @@ static int mysasl_authproc(sasl_conn_t *conn,
      * for now only admins can do lmtp from another machine
      */
     authstate = auth_newstate(auth_identity, NULL);
-    allowed = authisa(authstate, "lmtp", "admins");
+    allowed = config_authisa(authstate, IMAPOPT_ADMINS);
     auth_freestate(authstate);
     
     if (!allowed) {
@@ -218,14 +217,13 @@ int service_init(int argc, char **argv, char **envp)
 {
     int r;
 
-    config_changeident("lmtpproxyd");
     if (geteuid() == 0) return 1;
     
     signals_set_shutdown(&shut_down);
     signals_add_handlers();
     signal(SIGPIPE, SIG_IGN);
 
-    BB = config_getstring("postuser", BB);
+    BB = config_getstring(IMAPOPT_POSTUSER);
 
     if ((r = sasl_server_init(mysasl_cb, "Cyrus")) != SASL_OK) {
 	syslog(LOG_ERR, "SASL failed initializing: sasl_server_init(): %s", 
@@ -246,8 +244,7 @@ int service_init(int argc, char **argv, char **envp)
 	fatal(error_message(r), EC_CONFIG);
     }
 
-    mupdate_server = config_getstring("mupdate_server", NULL);
-    if (!mupdate_server) {
+    if (!config_mupdate_server) {
 	syslog(LOG_ERR, "no mupdate_server defined");
 	return EC_CONFIG;
     }
@@ -306,13 +303,13 @@ int service_main(int argc, char **argv, char **envp)
     }
     /* connect to the mupdate server */
     if (!mhandle) {
-	r = mupdate_connect(mupdate_server, NULL, &mhandle, NULL);
+	r = mupdate_connect(config_mupdate_server, NULL, &mhandle, NULL);
     }	
     if (!r) {
 	lmtpmode(&mylmtp, deliver_in, deliver_out, 0);
     } else {
 	mhandle = NULL;
-	syslog(LOG_ERR, "couldn't connect to %s: %s", mupdate_server,
+	syslog(LOG_ERR, "couldn't connect to %s: %s", config_mupdate_server,
 	       error_message(r));
 	prot_printf(deliver_out, "451 %s LMTP Cyrus %s %s\r\n",
 		    config_servername, CYRUS_VERSION, error_message(r));
@@ -381,11 +378,14 @@ static struct lmtp_conn *getconn(const char *server)
 	cp = strchr(optstr, '.');
 	if (cp) *cp = '\0';
 	strcat(optstr, "_password");
-	pass = config_getstring(optstr, NULL);
+	pass = config_getoverflowstring(optstr, NULL);
+	if(!pass) pass = config_getstring(IMAPOPT_PROXY_PASSWORD);
 
-	cb = mysasl_callbacks(config_getstring("lmtpproxy_username", ""),
-			      config_getstring("lmtpproxy_authname", "proxy"),
-			      config_getstring("lmtpproxy_realm", NULL),
+	/* Authorization does not matter for LMTP, so we'll just pass
+	 * the empty string. */
+	cb = mysasl_callbacks("",
+			      config_getstring(IMAPOPT_PROXY_AUTHNAME),
+			      config_getstring(IMAPOPT_PROXY_REALM),
 			      pass);
 	
 	r = lmtp_connect(p->host, cb, &p->conn);

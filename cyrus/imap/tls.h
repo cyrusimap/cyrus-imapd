@@ -43,13 +43,13 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: tls.h,v 1.15 2002/06/02 15:25:43 ken3 Exp $ */
+/* $Id: tls.h,v 1.15.4.1 2002/07/10 20:45:13 rjs3 Exp $ */
 
 #ifndef INCLUDED_TLS_H
 #define INCLUDED_TLS_H
 
 /* is tls enabled? */
-int tls_enabled(const char *ident);
+int tls_enabled(void);
 
 /* name of the SSL/TLS sessions database */
 #define FNAME_TLSSESSIONS "/tls_sessions.db"

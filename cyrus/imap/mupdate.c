@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.60 2002/06/03 18:22:26 rjs3 Exp $
+ * $Id: mupdate.c,v 1.60.4.1 2002/07/10 20:45:10 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -268,7 +268,7 @@ static int mysasl_authproc(sasl_conn_t *conn,
     /* check if remote realm */
     if ((realm = strchr(auth_id_buf, '@'))!=NULL) {
 	realm++;
-	val = config_getstring("loginrealms", "");
+	val = config_getstring(IMAPOPT_LOGINREALMS);
 	while (*val) {
 	    if (!strncasecmp(val, realm, strlen(realm)) &&
 		(!val[strlen(realm)] || isspace((int) val[strlen(realm)]))) {
@@ -289,7 +289,7 @@ static int mysasl_authproc(sasl_conn_t *conn,
      * for now only admins can do mupdate from another machine
      */
     authstate = auth_newstate(auth_id_buf, NULL);
-    allowed = authisa(authstate, "mupdate", "admins");
+    allowed = config_authisa(authstate, IMAPOPT_ADMINS);
     auth_freestate(authstate);
     
     if (!allowed) {
@@ -316,8 +316,6 @@ int service_init(int argc, char **argv,
     int r;
     int opt;
 
-    config_changeident("mupdate");
-    
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
     /* set signal handlers */
@@ -363,17 +361,6 @@ int service_init(int argc, char **argv,
 	default:
 	    break;
 	}
-    }
-
-    /* Slave Skiplist Fast Resync? */
-    if(!masterp && config_getswitch("mupdate_slave_fast_resync",0)) {
-	char fname[4096];
-	
-	if(snprintf(fname,4096,"%s%s",config_dir,FNAME_MBOXLIST) == -1)
-	    fatal("mboxlist database filename too large",EC_TEMPFAIL);
-
-	putenv("CYRUS_SKIPLIST_UNSAFE=1");
- 	unlink(fname);
     }
 
     database_init();
@@ -440,10 +427,11 @@ void cmdloop(struct conn *c)
 
     /* AUTH banner is mandatory */
     if(!masterp) {
-	const char *mupdate_server = config_getstring("mupdate_server", NULL);
-	if(!mupdate_server)
+	if(!config_mupdate_server)
 	    fatal("mupdate server was not specified for slave", EC_TEMPFAIL);
-	snprintf(slavebuf, sizeof(slavebuf), "mupdate://%s", mupdate_server);
+
+	snprintf(slavebuf, sizeof(slavebuf), "mupdate://%s",
+		 config_mupdate_server);
     }
 		
     prot_printf(c->pout,
@@ -699,7 +687,7 @@ void *start(void *rock)
     struct sockaddr_in localaddr, remoteaddr;
     int haveaddr = 0;
     int salen;
-    int secflags, plaintext_result;
+    int secflags;
     sasl_security_properties_t *secprops = NULL;
     char localip[60], remoteip[60];
     char clienthost[250];
@@ -762,8 +750,7 @@ void *start(void *rock)
 
     /* set my allowable security properties */
     secflags = SASL_SEC_NOANONYMOUS;
-    plaintext_result = config_getswitch("allowplaintext",1);
-    if (!config_getswitch("mupdate_allowplaintext", plaintext_result)) {
+    if (!config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
 	secflags |= SASL_SEC_NOPLAINTEXT;
     }
     secprops = mysasl_secprops(secflags);
@@ -1255,7 +1242,7 @@ void shut_down(int code)
 /* Reset the given sasl_conn_t to a sane state */
 static int reset_saslconn(struct conn *c)
 {
-    int ret, secflags, plaintext_result;
+    int ret, secflags;
     sasl_security_properties_t *secprops = NULL;
 
     sasl_dispose(&c->saslconn);
@@ -1276,8 +1263,7 @@ static int reset_saslconn(struct conn *c)
     if(ret != SASL_OK) return ret;
     
     secflags = SASL_SEC_NOANONYMOUS;
-    plaintext_result = config_getswitch("allowplaintext",1);
-    if (!config_getswitch("mupdate_allowplaintext", plaintext_result)) {
+    if (!config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
 	secflags |= SASL_SEC_NOPLAINTEXT;
     }
     secprops = mysasl_secprops(secflags);

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.1 2002/07/10 20:00:05 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.2 2002/07/10 20:45:11 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -1070,7 +1070,7 @@ static int mysasl_authproc(sasl_conn_t *conn,
     /* check if remote realm */
     if ((realm = strchr(auth_identity, '@'))!=NULL) {
 	realm++;
-	val = config_getstring("loginrealms", "");
+	val = config_getstring(IMAPOPT_LOGINREALMS);
 	while (*val) {
 	    if (!strncasecmp(val, realm, strlen(realm)) &&
 		(!val[strlen(realm)] || isspace((int) val[strlen(realm)]))) {
@@ -1090,16 +1090,16 @@ static int mysasl_authproc(sasl_conn_t *conn,
     proxyd_authstate = auth_newstate(auth_identity, NULL);
 
     /* ok, is auth_identity an admin? */
-    proxyd_userisadmin = authisa(proxyd_authstate, "imap", "admins");
+    proxyd_userisadmin = config_authisa(proxyd_authstate, IMAPOPT_ADMINS);
 
     if (strcmp(auth_identity, requested_user)) {
 	/* we want to authenticate as a different user; we'll allow this
 	   if we're an admin or if we've allowed ACL proxy logins */
-	int use_acl = config_getswitch("loginuseacl", 0);
+	int use_acl = config_getswitch(IMAPOPT_LOGINUSEACL);
 
 	if (proxyd_userisadmin ||
 	    (use_acl && acl_ok(requested_user, auth_identity)) ||
-	    authisa(proxyd_authstate, "imap", "proxyservers")) {
+	    config_authisa(proxyd_authstate, IMAPOPT_PROXYSERVERS)) {
 	    /* proxy ok! */
 
 	    proxyd_userisadmin = 0;	/* no longer admin */
@@ -1139,7 +1139,6 @@ int service_init(int argc, char **argv, char **envp)
     int opt;
     int r;
 
-    config_changeident("proxyd");
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
     setproctitle_init(argc, argv, envp);
 
@@ -1179,7 +1178,7 @@ int service_init(int argc, char **argv, char **envp)
  	    break;
 	case 's': /* imaps (do starttls right away) */
 	    imaps = 1;
-	    if (!tls_enabled("imap")) {
+	    if (!tls_enabled()) {
 		syslog(LOG_ERR, "imaps: required OpenSSL options not present");
 		fatal("imaps: required OpenSSL options not present",
 		      EC_CONFIG);
@@ -1348,7 +1347,7 @@ int service_main(int argc, char **argv, char **envp)
     proc_register("proxyd", proxyd_clienthost, (char *)0, (char *)0);
 
     /* Set inactivity timer */
-    timeout = config_getint("timeout", 30);
+    timeout = config_getint(IMAPOPT_TIMEOUT);
     if (timeout < 30) timeout = 30;
     prot_settimeout(proxyd_in, timeout*60);
     prot_setflushonread(proxyd_in, proxyd_out);
@@ -1927,7 +1926,7 @@ void cmdloop()
 	    
 	case 'S':
 	    if (!strcmp(cmd.s, "Starttls")) {
-		if (!tls_enabled("imap")) {
+		if (!tls_enabled()) {
 		    /* we don't support starttls */
 		    goto badcmd;
 		}
@@ -2203,7 +2202,7 @@ void cmd_login(char *tag, char *user)
 
     /* possibly disallow login */
     if ((proxyd_starttls_done == 0) &&
-	(config_getswitch("allowplaintext", 1) == 0) &&
+	(config_getswitch(IMAPOPT_ALLOWPLAINTEXT) == 0) &&
 	strcmp(canon_user, "anonymous") != 0) {
 	eatline(proxyd_in, ' ');
 	prot_printf(proxyd_out, "%s NO Login only available under a layer\r\n",
@@ -2227,7 +2226,7 @@ void cmd_login(char *tag, char *user)
     passwd = passwdbuf.s;
 
     if (!strcmp(canon_user, "anonymous")) {
-	if (config_getswitch("allowanonymouslogin", 0)) {
+	if (config_getswitch(IMAPOPT_ALLOWANONYMOUSLOGIN)) {
 	    passwd = beautify_string(passwd);
 	    if (strlen(passwd) > 500) passwd[500] = '\0';
 	    syslog(LOG_NOTICE, "login: %s anonymous %s",
@@ -2273,7 +2272,7 @@ void cmd_login(char *tag, char *user)
 	       canon_user, proxyd_starttls_done ? "+TLS" : "", 
 	       reply ? reply : "");
 
-	plaintextloginpause = config_getint("plaintextloginpause", 0);
+	plaintextloginpause = config_getint(IMAPOPT_PLAINTEXTLOGINPAUSE);
 	if (plaintextloginpause) {
 
 	    /* Apply penalty only if not under layer */
@@ -2285,7 +2284,7 @@ void cmd_login(char *tag, char *user)
 
     proxyd_authstate = auth_newstate(canon_user, (char *)0);
 
-    val = config_getstring("admins", "");
+    val = config_getstring(IMAPOPT_ADMINS);
     while (*val) {
 	for (p = (char *)val; *p && !isspace((int) *p); p++);
 	strlcpy(buf, val, p - val);
@@ -2617,7 +2616,7 @@ void cmd_id(char *tag)
 
     /* spit out our ID string.
        eventually this might be configurable. */
-    if (config_getswitch("imapidresponse", 1)) {
+    if (config_getswitch(IMAPOPT_IMAPIDRESPONSE)) {
 	id_response(proxyd_out);
 
 	/* add info about the backend */
@@ -2681,7 +2680,7 @@ void cmd_idle(char *tag)
 
     /* get polling period */
     if (idle_period == -1) {
-      idle_period = config_getint("imapidlepoll", 60);
+      idle_period = config_getint(IMAPOPT_IMAPIDLEPOLL));
       if (idle_period < 1) idle_period = 1;
     }
 
@@ -2883,10 +2882,10 @@ void cmd_capability(char *tag)
     prot_printf(proxyd_out, " IDLE");
 #endif
 
-    if (tls_enabled("imap")) {
+    if (tls_enabled()) {
 	prot_printf(proxyd_out, " STARTTLS");
     }
-    if (!proxyd_starttls_done && !config_getswitch("allowplaintext", 1)) {
+    if (!proxyd_starttls_done && !config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
 	prot_printf(proxyd_out, " LOGINDISABLED");	
     }
 
@@ -3949,7 +3948,7 @@ void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
     /* Ignore the reference argument?
        (the behavior in 1.5.10 & older) */
     if (ignorereference == -1) {
-	ignorereference = config_getswitch("ignorereference", 0);
+	ignorereference = config_getswitch(IMAPOPT_IGNOREREFERENCE);
     }
 
     /* Reset state in mstringdata */
@@ -4635,7 +4634,7 @@ void cmd_status(char *tag, char *name)
 
     if (!r) r = mlookup(mailboxname, &server, NULL, NULL);
     if (!r && supports_referrals
-	&& config_getswitch("proxyd_allow_status_referral",0)) { 
+	&& config_getswitch(IMAPOPT_PROXYD_ALLOW_STATUS_REFERRAL)) { 
 	proxyd_refer(tag, server, mailboxname);
 	/* Eat the argument */
 	eatline(proxyd_in, prot_getc(proxyd_in));
@@ -4680,8 +4679,7 @@ cmd_netscape(tag)
     const char *url;
     /* so tempting, and yet ... */
     /* url = "http://random.yahoo.com/ryl/"; */
-    url = config_getstring("netscapeurl",
-			   "http://andrew2.andrew.cmu.edu/cyrus/imapd/netscape-admin.html");
+    url = config_getstring(IMAPOPT_NETSCAPEURL);
 
     /* I only know of three things to reply with: */
     prot_printf(proxyd_out,

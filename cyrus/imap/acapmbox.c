@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: acapmbox.c,v 1.31 2002/05/25 19:57:43 leg Exp $ */
+/* $Id: acapmbox.c,v 1.31.4.1 2002/07/10 20:45:01 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -105,8 +105,8 @@ char *acapmbox_get_postaddr(char *postaddr,
 	strcat(postaddr, "@");
 	strcat(postaddr, server);
     } else {
-	const char *postspec = config_getstring("postspec", NULL);
-	const char *BB = config_getstring("postuser", "bb");
+	const char *postspec = config_getstring(IMAPOPT_POSTSPEC);
+	const char *BB = config_getstring(IMAPOPT_POSTUSER);
 
 	if (postspec) {
 	    snprintf(postaddr, sizeof(postaddr), postspec, name);
@@ -176,7 +176,7 @@ acapmbox_handle_t *acapmbox_get_handle(void)
     const char *authprog;
     sasl_callback_t *cb;
     
-    acapserver = config_getstring("acap_server", NULL);
+    acapserver = config_getstring(IMAPOPT_ACAP_SERVER);
     if (!acapserver) return NULL;
 
     if (cached_conn) {
@@ -197,21 +197,21 @@ acapmbox_handle_t *acapmbox_get_handle(void)
     cached_conn = (acapmbox_handle_t *) xmalloc(sizeof(acapmbox_handle_t));
     cached_conn->conn = NULL;
     
-    user = config_getstring("acap_username", NULL);
+    user = config_getstring(IMAPOPT_ACAP_USERNAME);
     if (user == NULL) {
 	syslog(LOG_ERR, "unable to find option acap_username");
 	return cached_conn;
     }
 
-    authprog = config_getstring("acap_getauth", NULL);
+    authprog = config_getstring(IMAPOPT_ACAP_GETAUTH);
     if (authprog) {
 	system(authprog);
     }
 
     cb = mysasl_callbacks(user,
-			  config_getstring("acap_authname", user),
-			  config_getstring("acap_realm", NULL),
-			  config_getstring("acap_password", NULL));
+			  config_getstring(IMAPOPT_ACAP_AUTHNAME),
+			  config_getstring(IMAPOPT_ACAP_REALM),
+			  config_getstring(IMAPOPT_ACAP_PASSWORD));
     snprintf(str, sizeof(str), "acap://%s@%s/", user, acapserver);
     r = acap_conn_connect(str, cb, &(cached_conn->conn));
     free_callbacks(cb);

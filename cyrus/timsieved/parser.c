@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.20 2002/06/02 15:25:44 ken3 Exp $
+ * $Id: parser.c,v 1.20.4.1 2002/07/10 20:45:40 rjs3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -126,7 +126,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 
   if (!authenticated && (token > 255) && (token!=AUTHENTICATE) &&
       (token!=LOGOUT) && (token!=CAPABILITY) &&
-      (!tls_enabled("sieve") || (token!=STARTTLS)))
+      (!tls_enabled() || (token!=STARTTLS)))
   {
     error_msg = "Authenticate first";
     if (token!=EOL)

@@ -41,7 +41,7 @@
  *
  */
 
-/* $Id: deliver.c,v 1.164 2002/05/25 19:57:44 leg Exp $ */
+/* $Id: deliver.c,v 1.164.4.1 2002/07/10 20:45:02 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -261,7 +261,7 @@ int main(int argc, char **argv)
 
     config_init(alt_config, "deliver");
 
-    sockaddr = config_getstring("lmtpsocket", NULL);
+    sockaddr = config_getstring(IMAPOPT_LMTPSOCKET);
     if (!sockaddr) {	
 	strcpy(buf, config_dir);
 	strcat(buf, "/socket/lmtp");
@@ -344,8 +344,8 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
     if (mailbox) ml = strlen(mailbox);
     if (numusers == 0) {
 	/* just deliver to mailbox 'mailbox' */
-	const char *BB = config_getstring("postuser", "");
-	txn->rcpt[0].addr = (char *) xmalloc(ml + strlen(BB) + 2); /* leaks! */
+	const char *BB = config_getstring(IMAPOPT_POSTUSER);
+	txn->rcpt[0].addr = (char *) xmalloc(ml + strlen(BB) + 2); /* xxx leaks! */
 	sprintf(txn->rcpt[0].addr, "%s+%s", BB, mailbox);
     } else {
 	/* setup each recipient */

@@ -1,7 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.30 2002/02/19 18:50:15 ken3 Exp $
- * 
+ * $Id: actions.c,v 1.30.4.1 2002/07/10 20:45:40 rjs3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -81,10 +80,10 @@ int actions_init(void)
 {
   int sieve_usehomedir = 0;
 
-  sieve_usehomedir = config_getswitch("sieveusehomedir", 0);
+  sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
   
   if (!sieve_usehomedir) {
-      sieve_dir = (char *) config_getstring("sievedir", "/usr/sieve");
+      sieve_dir = (char *) config_getstring(IMAPOPT_SIEVEDIR);
   } else {
       /* can't use home directories with timsieved */
       syslog(LOG_ERR, "can't use home directories");
@@ -165,7 +164,7 @@ int capabilities(struct protstream *conn, sasl_conn_t *saslconn)
     /* Sieve capabilities */
     prot_printf(conn,"\"SIEVE\" \"%s\"\r\n",sieve_listextensions());
 
-    if (tls_enabled("sieve")) {
+    if (tls_enabled()) {
 	prot_printf(conn, "\"STARTTLS\"\r\n");
     }
 
@@ -292,7 +291,7 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data,
 
   else {
       /* see if this would put the user over quota */
-      maxscripts = config_getint("sieve_maxscripts",5);
+      maxscripts = config_getint(IMAPOPT_SIEVE_MAXSCRIPTS);
 
       if (countscripts(string_DATAPTR(name))+1 > maxscripts)
       {
@@ -559,7 +558,7 @@ int cmd_havespace(struct protstream *conn, mystring_t *sieve_name, unsigned long
     }
 
     /* see if the size of the script is too big */
-    maxscriptsize = config_getint("sieve_maxscriptsize", 32);
+    maxscriptsize = config_getint(IMAPOPT_SIEVE_MAXSCRIPTSIZE);
     maxscriptsize *= 1024;
 
     if (num > maxscriptsize)
@@ -572,7 +571,7 @@ int cmd_havespace(struct protstream *conn, mystring_t *sieve_name, unsigned long
     }
 
     /* see if this would put the user over quota */
-    maxscripts = config_getint("sieve_maxscripts",5);
+    maxscripts = config_getint(IMAPOPT_SIEVE_MAXSCRIPTS);
 
     if (countscripts(string_DATAPTR(sieve_name))+1 > maxscripts)
     {

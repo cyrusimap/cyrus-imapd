@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.18 2002/05/24 18:05:15 rjs3 Exp $
+ * $Id: mbdump.c,v 1.18.6.1 2002/07/10 20:45:06 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -326,7 +326,7 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
 
     if(userid) {
 	char sieve_path[MAX_MAILBOX_PATH];
-	int sieve_usehomedir = config_getswitch("sieveusehomedir", 0);
+	int sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
 
 	/* need to transfer seen, subs, and sieve files */
 	for(i=0;i<3;i++) {
@@ -379,7 +379,7 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
 	    mbdir = NULL;
 
 	    snprintf(sieve_path, sizeof(sieve_path), "%s/%c/%s",
-		     config_getstring("sievedir", "/usr/sieve"),
+		     config_getstring(IMAPOPT_SIEVEDIR),
 		     userid[0], userid);
 	    mbdir=opendir(sieve_path);
 	    
@@ -464,7 +464,7 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
     const char *userid = NULL;
     struct mailbox mb;
     char sieve_path[2048];
-    int sieve_usehomedir = config_getswitch("sieveusehomedir", 0);
+    int sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
     
     memset(&file, 0, sizeof(struct buf));
     memset(&data, 0, sizeof(struct buf));
@@ -476,7 +476,7 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
 
 	if(!sieve_usehomedir)
 	    snprintf(sieve_path, sizeof(sieve_path), "%s/%c/%s",
-		     config_getstring("sievedir", "/usr/sieve"),
+		     config_getstring(IMAPOPT_SIEVEDIR),
 		     userid[0], userid);
     }
 

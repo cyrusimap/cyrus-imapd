@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- * $Id: imapconf.h,v 1.16.4.1 2002/07/10 19:59:58 ken3 Exp $
+ * $Id: imapconf.h,v 1.16.4.2 2002/07/10 20:45:03 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -44,14 +44,22 @@
 #define INCLUDED_IMAPCONF_H
 
 #include <sasl/sasl.h>
+#include "imapopts.h"
 #include "auth.h"
 
+/* Startup the configuration subsystem */
 extern int config_init(const char *alt_config, const char *ident);
-extern const char *config_getstring(const char *key, const char *def);
-extern int config_getint(const char *key, int def);
-extern int config_getswitch(const char *key, int def);
+
+/* these will assert() if they're called on the wrong type of
+   option (imapopt.c) */
+extern const char *config_getstring(enum imapopt opt);
+extern int config_getint(enum imapopt opt);
+extern int config_getswitch(enum imapopt opt);
+
+/* these work on additional strings that are not defined in the
+ * imapoptions table */
+extern const char *config_getoverflowstring(const char *key, const char *def);
 extern const char *config_partitiondir(const char *partition);
-extern int config_changeident(const char *ident);
 
 /* sasl configuration */
 extern int mysasl_config(void *context,
@@ -86,19 +94,15 @@ extern int mysasl_canon_user(sasl_conn_t *conn,
 #endif
 
 /* check if `authstate' is a valid member of class */
-extern int authisa(struct auth_state *authstate, 
-		   const char *service, const char *class);
+extern int config_authisa(struct auth_state *authstate, 
+			  enum imapopt opt);
 
 /* Values of mandatory options */
 extern const char *config_filename;
-
 extern const char *config_dir;
 extern const char *config_defpartition;
-extern const char *config_newsspool;
-
 extern const char *config_servername;
 extern const char *config_mupdate_server;
-
 extern int config_hashimapspool;
 
 extern int config_virtdomains;

@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.99.2.1 2002/07/10 19:59:59 ken3 Exp $
+ * $Id: lmtpd.c,v 1.99.2.2 2002/07/10 20:45:05 rjs3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -194,7 +194,7 @@ static int mysasl_authproc(sasl_conn_t *conn,
     /* check if remote realm */
     if ((realm = strchr(auth_identity, '@'))!=NULL) {
 	realm++;
-	val = config_getstring("loginrealms", "");
+	val = config_getstring(IMAPOPT_LOGINREALMS);
 	while (*val) {
 	    if (!strncasecmp(val, realm, strlen(realm)) &&
 		(!val[strlen(realm)] || isspace((int) val[strlen(realm)]))) {
@@ -215,7 +215,7 @@ static int mysasl_authproc(sasl_conn_t *conn,
      * for now only admins can do lmtp from another machine
      */
     authstate = auth_newstate(auth_identity, NULL);
-    allowed = authisa(authstate, "lmtp", "admins");
+    allowed = config_authisa(authstate, IMAPOPT_ADMINS);
     auth_freestate(authstate);
     
     if (!allowed) {
@@ -240,7 +240,6 @@ int service_init(int argc __attribute__((unused)),
 {
     int r;
 
-    config_changeident("lmtpd");
     if (geteuid() == 0) return 1;
     
     signals_set_shutdown(&shut_down);
@@ -248,9 +247,9 @@ int service_init(int argc __attribute__((unused)),
     signal(SIGPIPE, SIG_IGN);
 
 #ifdef USE_SIEVE
-    sieve_usehomedir = config_getswitch("sieveusehomedir", 0);
+    sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
     if (!sieve_usehomedir) {
-	sieve_dir = config_getstring("sievedir", "/usr/sieve");
+	sieve_dir = config_getstring(IMAPOPT_SIEVEDIR);
     } else {
 	sieve_dir = NULL;
     }
@@ -262,8 +261,8 @@ int service_init(int argc __attribute__((unused)),
     setup_sieve();
 #endif /* USE_SIEVE */
 
-    singleinstance = config_getswitch("singleinstancestore", 1);
-    BB = config_getstring("postuser", BB);
+    singleinstance = config_getswitch(IMAPOPT_SINGLEINSTANCESTORE);
+    BB = config_getstring(IMAPOPT_POSTUSER);
 
     if ((r = sasl_server_init(mysasl_cb, "Cyrus")) != SASL_OK) {
 	syslog(LOG_ERR, "SASL failed initializing: sasl_server_init(): %s", 
@@ -271,7 +270,7 @@ int service_init(int argc __attribute__((unused)),
 	return EC_SOFTWARE;
     }
 
-    dupelim = config_getswitch("duplicatesuppression", 1);
+    dupelim = config_getswitch(IMAPOPT_DUPLICATESUPPRESSION);
     /* initialize duplicate delivery database */
     if (duplicate_init(NULL, 0) != 0) {
 	syslog(LOG_ERR, 
@@ -433,7 +432,7 @@ pid_t open_sendmail(const char *argv[], FILE **sm)
 	close(fds[1]);
 	/* make the pipe be stdin */
 	dup2(fds[0], 0);
-	execv(SENDMAIL, (char **) argv);
+	execv(config_getstring(IMAPOPT_SENDMAIL), (char **) argv);
 
 	/* if we're here we suck */
 	printf("451 lmtpd: didn't exec?!?\r\n");
@@ -518,7 +517,7 @@ int send_rejection(const char *origid,
     fprintf(sm, "Date: %s\r\n", datestr);
 
     fprintf(sm, "X-Sieve: %s\r\n", SIEVE_VERSION);
-    fprintf(sm, "From: Mail Sieve Subsystem <%s>\r\n", POSTMASTER);
+    fprintf(sm, "From: Mail Sieve Subsystem <%s>\r\n", config_getstring(IMAPOPT_POSTMASTER));
     fprintf(sm, "To: <%s>\r\n", rejto);
     fprintf(sm, "MIME-Version: 1.0\r\n");
     fprintf(sm, "Content-Type: "
@@ -791,7 +790,7 @@ static int sieve_notify(void *ac,
 			void *mc __attribute__((unused)),
 			const char **errmsg __attribute__((unused)))
 {
-    const char *notifier = config_getstring("sievenotifier", NULL);
+    const char *notifier = config_getstring(IMAPOPT_SIEVENOTIFIER);
 
     if (notifier) {
 	sieve_notify_context_t *nc = (sieve_notify_context_t *) ac;
@@ -1162,7 +1161,7 @@ int deliver_mailbox(struct protstream *msg,
     }
 
     if (!r && user) {
-	const char *notifier = config_getstring("mailnotifier", NULL);
+	const char *notifier = config_getstring(IMAPOPT_MAILNOTIFIER);
 
 	if (notifier) {
 	    /* do we want to replace user.XXX with INBOX? */

@@ -1,7 +1,7 @@
 /* lex.c -- lexer for timsieved
  * Tim Martin
  * 9/21/99
- * $Id: lex.c,v 1.19 2002/02/16 20:56:56 rjs3 Exp $
+ * $Id: lex.c,v 1.19.4.1 2002/07/10 20:45:40 rjs3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -62,7 +62,7 @@
 #include "imapconf.h"
 #include "xmalloc.h"
 
-int token_lookup (char *str, int len)
+int token_lookup (char *str, int len __attribute__((unused)))
 {
     switch (*str) {
     case 'a':
@@ -95,7 +95,7 @@ int token_lookup (char *str, int len)
 
     case 's':
 	if (strcmp(str, "setactive")==0) return SETACTIVE;
-	if (strcmp(str, "starttls")==0 && tls_enabled("sieve"))
+	if (strcmp(str, "starttls")==0 && tls_enabled())
 	    return STARTTLS;
 	break;
     }
@@ -136,7 +136,7 @@ char *buffer;
 
 int lex_init(void)
 {
-  maxscriptsize = config_getint("sieve_maxscriptsize", 32);
+  maxscriptsize = config_getint(IMAPOPT_SIEVE_MAXSCRIPTSIZE);
   maxscriptsize *= 1024;
 
   buffer = (char *) xmalloc(maxscriptsize);

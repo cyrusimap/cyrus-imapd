@@ -42,7 +42,7 @@
  */
 
 /*
- * $Id: message.c,v 1.88 2000/12/26 21:35:41 leg Exp $
+ * $Id: message.c,v 1.88.16.1 2002/07/10 20:45:09 rjs3 Exp $
  */
 
 #include <config.h>
@@ -228,7 +228,7 @@ unsigned size;
     int r = 0;
     int n;
     int sawcr = 0, sawnl;
-    int reject8bit = config_getswitch("reject8bit", 0);
+    int reject8bit = config_getswitch(IMAPOPT_REJECT8BIT);
     int inheader = 1, blankline = 1;
 
     while (size) {

@@ -1,7 +1,7 @@
 /* timsieved.c -- main file for timsieved (sieve script accepting program)
  * Tim Martin
  * 9/21/99
- * $Id: timsieved.c,v 1.40 2002/05/25 19:57:53 leg Exp $
+ * $Id: timsieved.c,v 1.40.4.1 2002/07/10 20:45:40 rjs3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -206,7 +206,7 @@ static int mysasl_authproc(sasl_conn_t *conn,
     /* check if remote realm */
     if ((realm = strchr(auth_identity, '@'))!=NULL) {
 	realm++;
-	val = config_getstring("loginrealms", "");
+	val = config_getstring(IMAPOPT_LOGINREALMS);
 	while (*val) {
 	    if (!strncasecmp(val, realm, strlen(realm)) &&
 		(!val[strlen(realm)] || isspace((int) val[strlen(realm)]))) {
@@ -226,16 +226,16 @@ static int mysasl_authproc(sasl_conn_t *conn,
     sieved_authstate = auth_newstate(auth_identity, NULL);
 
     /* ok, is auth_identity an admin? */
-    sieved_userisadmin = authisa(sieved_authstate, "sieve", "admins");
+    sieved_userisadmin = config_authisa(sieved_authstate, IMAPOPT_ADMINS);
 
     if (strcmp(auth_identity, requested_user)) {
         /* we want to authenticate as a different user; we'll allow this
            if we're an admin or if we've allowed ACL proxy logins */
-        int use_acl = config_getswitch("loginuseacl", 0);
+        int use_acl = config_getswitch(IMAPOPT_LOGINUSEACL);
 
         if (sieved_userisadmin ||
             (use_acl && acl_ok(requested_user, auth_identity, sieved_authstate)) ||
-            authisa(sieved_authstate, "sieve", "proxyservers")) {
+            config_authisa(sieved_authstate, IMAPOPT_PROXYSERVERS)) {
             /* proxy ok! */
 
 	    sieved_userisadmin = 0; /* no longer admin */
@@ -289,8 +289,7 @@ int service_main(int argc, char **argv, char **envp)
     sieved_in = prot_new(0, 0);
     sieved_out = prot_new(1, 1);
 
-    config_changeident("timsieved");
-    timeout = config_getint("timeout", 10);
+    timeout = config_getint(IMAPOPT_TIMEOUT);
     if (timeout < 10) timeout = 10;
     prot_settimeout(sieved_in, timeout * 60);
     prot_setflushonread(sieved_in, sieved_out);
@@ -350,7 +349,7 @@ int service_main(int argc, char **argv, char **envp)
 
     /* will always return something valid */
     /* should be configurable! */
-    if (!config_getswitch("allowplaintext", 1)) {
+    if (!config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
 	secflags |= SASL_SEC_NOPLAINTEXT;
     }
     secprops = mysasl_secprops(secflags);
@@ -389,7 +388,7 @@ int reset_saslconn(sasl_conn_t **conn, sasl_ssf_t ssf, char *authid)
 			   saslprops.iplocalport);
     if(ret != SASL_OK) return ret;
     
-    if (!config_getswitch("allowplaintext", 1)) {
+    if (!config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
 	secflags |= SASL_SEC_NOPLAINTEXT;
     }
     secprops = mysasl_secprops(secflags);

@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.42.4.1 2002/07/10 20:00:05 ken3 Exp $
+ * $Id: pop3proxyd.c,v 1.42.4.2 2002/07/10 20:45:11 rjs3 Exp $
  */
 #include <config.h>
 
@@ -173,7 +173,7 @@ static int mysasl_authproc(sasl_conn_t *conn,
     /* check if remote realm */
     if ((realm = strchr(auth_identity, '@'))!=NULL) {
 	realm++;
-	val = config_getstring("loginrealms", "");
+	val = config_getstring(IMAPOPT_LOGINREALMS);
 	while (*val) {
 	    if (!strncasecmp(val, realm, strlen(realm)) &&
 		(!val[strlen(realm)] || isspace((int) val[strlen(realm)]))) {
@@ -193,13 +193,13 @@ static int mysasl_authproc(sasl_conn_t *conn,
     authstate = auth_newstate(auth_identity, NULL);
 
     /* ok, is auth_identity an admin? */
-    userisadmin = authisa(authstate, "imap", "admins");
+    userisadmin = config_authisa(authstate, IMAPOPT_ADMINS);
 
     if (alen != rlen || strncmp(auth_identity, requested_user, alen)) {
 	/* we want to authenticate as a different user; we'll allow this
 	   if we're an admin or if we've allowed ACL proxy logins */
 	if (userisadmin ||
-	    authisa(authstate, "imap", "proxyservers")) {
+	    config_authisa(authstate, IMAPOPT_ADMINS)) {
 
 	    /* proxy ok! */
 	    auth_freestate(authstate);
@@ -231,7 +231,6 @@ int service_init(int argc, char **argv, char **envp)
 {
     int r;
 
-    config_changeident("pop3d");
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
     setproctitle_init(argc, argv, envp);
 
@@ -292,7 +291,7 @@ int service_main(int argc, char **argv, char **envp __attribute__((unused)))
  	    break;
 	case 's': /* pop3s (do starttls right away) */
 	    pop3s = 1;
-	    if (!tls_enabled("pop3")) {
+	    if (!tls_enabled()) {
 		syslog(LOG_ERR, "pop3s: required OpenSSL options not present");
 		fatal("pop3s: required OpenSSL options not present",
 		      EC_CONFIG);
@@ -349,7 +348,7 @@ int service_main(int argc, char **argv, char **envp __attribute__((unused)))
     proc_register("pop3d", popd_clienthost, NULL, NULL);
 
     /* Set inactivity timer */
-    timeout = config_getint("poptimeout", 10);
+    timeout = config_getint(IMAPOPT_POPTIMEOUT);
     if (timeout < 10) timeout = 10;
     prot_settimeout(popd_in, timeout*60);
     prot_setflushonread(popd_in, popd_out);
@@ -481,7 +480,7 @@ static void kpop(void)
 	fatal("Cannot get client's IP address", EC_OSERR);
     }
 
-    srvtab = config_getstring("srvtab", "");
+    srvtab = config_getstring(IMAPOPT_SRVTAB);
 
     strcpy(instance, "*");
     r = krb_recvauth(0L, 0, &ticket, "pop", instance,
@@ -598,7 +597,7 @@ static void cmdloop(void)
 	else if (!strcmp(inputbuf, "auth")) {
 	    cmd_auth(arg);
 	}
-	else if (!strcmp(inputbuf, "stls") && tls_enabled("pop3")) {
+	else if (!strcmp(inputbuf, "stls") && tls_enabled()) {
 	    if (arg) {
 		prot_printf(popd_out,
 			    "-ERR STLS doesn't take any arguements\r\n");
@@ -615,7 +614,6 @@ static void cmdloop(void)
 #ifdef HAVE_SSL
 static void cmd_starttls(int pop3s)
 {
-    char *tls_cert, *tls_key;
     int result;
     int *layerp;
     char *auth_id;
@@ -630,11 +628,6 @@ static void cmd_starttls(int pop3s)
 		    "Already successfully executed STLS");
 	return;
     }
-
-    tls_cert = (char *)config_getstring("tls_pop3_cert_file",
-					config_getstring("tls_cert_file", ""));
-    tls_key = (char *)config_getstring("tls_pop3_key_file",
-				       config_getstring("tls_key_file", ""));
 
     result=tls_init_serverengine("pop3",
 				 5,        /* depth to verify */
@@ -804,7 +797,7 @@ char *user;
 
     /* possibly disallow USER */
     if (!(kflag || popd_starttls_done ||
-	  config_getswitch("allowplaintext", 1))) {
+	  config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
 	prot_printf(popd_out,
 		    "-ERR [AUTH] USER command only available under a layer\r\n");
 	return;
@@ -864,7 +857,7 @@ void cmd_pass(char *pass)
 #endif
 
     if (!strcmp(popd_userid, "anonymous")) {
-	if (config_getswitch("allowanonymouslogin", 0)) {
+	if (config_getswitch(IMAPOPT_ALLOWANONYMOUSLOGIN)) {
 	    pass = beautify_string(pass);
 	    if (strlen(pass) > 500) pass[500] = '\0';
 	    syslog(LOG_NOTICE, "login: %s anonymous %s",
@@ -898,7 +891,7 @@ void cmd_pass(char *pass)
 	       popd_userid, popd_starttls_done ? "+TLS" : "", 
 	       reply ? reply : "");
 
-	plaintextloginpause = config_getint("plaintextloginpause", 0);
+	plaintextloginpause = config_getint(IMAPOPT_PLAINTEXTLOGINPAUSE);
 	if (plaintextloginpause) sleep(plaintextloginpause);
     }
 
@@ -911,8 +904,8 @@ void cmd_pass(char *pass)
 void
 cmd_capa()
 {
-    int minpoll = config_getint("popminpoll", 0) * 60;
-    int expire = config_getint("popexpiretime", -1);
+    int minpoll = config_getint(IMAPOPT_POPMINPOLL) * 60;
+    int expire = config_getint(IMAPOPT_POPEXPIRETIME);
     unsigned mechcount;
     const char *mechlist;
 
@@ -927,7 +920,7 @@ cmd_capa()
 	prot_write(popd_out, mechlist, strlen(mechlist));
     }
 
-    if (tls_enabled("pop3")) {
+    if (tls_enabled()) {
 	prot_printf(popd_out, "STLS\r\n");
     }
     if (expire < 0) {
@@ -943,7 +936,7 @@ cmd_capa()
     prot_printf(popd_out, "RESP-CODES\r\n");
     prot_printf(popd_out, "AUTH-RESP-CODE\r\n");
 
-    if (kflag || popd_starttls_done || config_getswitch("allowplaintext", 1)) {
+    if (kflag || popd_starttls_done || config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
 	prot_printf(popd_out, "USER\r\n");
     }
     
@@ -1148,6 +1141,52 @@ extern sasl_callback_t *mysasl_callbacks(const char *username,
 					 const char *password);
 extern void free_callbacks(sasl_callback_t *in);
 
+static char *parsemechlist(char *str)
+{
+  char *tmp;
+  char *ret=malloc(strlen(str)+1);
+  if (ret==NULL) return NULL;
+
+  strcpy(ret,"");
+
+  if ((tmp=strstr(str,"SASL "))!=NULL)
+  {
+    char *end=tmp+5;
+    tmp+=5;
+
+    while(((*end)!='\n') && ((*end)!='\0'))
+      end++;
+
+    (*end)='\0';
+
+    strcpy(ret, tmp);
+  }
+
+  return ret;
+}
+
+static char *ask_capability(struct protstream *pout, struct protstream *pin)
+{
+  char str[1024];
+  char *ret = NULL;
+
+  /* request capabilities of server */
+  prot_printf(pout, "CAPA\r\n");
+  prot_flush(pout);
+
+  do {
+      if (prot_fgets(str,sizeof(str),pin) == NULL) {
+	  return NULL;
+      }
+      printf("S: %s", str);
+      if (!strncasecmp(str,"SASL ",5)) {
+	  ret=parsemechlist(str);
+      }
+  } while (strncasecmp(str, ".", 1));
+
+  return ret;
+}
+
 static int proxy_authenticate(const char *hostname)
 {
     int r;
@@ -1161,7 +1200,8 @@ static int proxy_authenticate(const char *hostname)
     char *in, *p;
     const char *out;
     unsigned int inlen, outlen;
-    const char *mechusing;
+    const char *mech_conf, *mechusing;
+    char *mechlist;
     unsigned b64len;
     char localip[60], remoteip[60];
     const char *pass;
@@ -1170,10 +1210,11 @@ static int proxy_authenticate(const char *hostname)
     p = strchr(optstr, '.');
     if (p) *p = '\0';
     strcat(optstr, "_password");
-    pass = config_getstring(optstr, NULL);
+    pass = config_getoverflowstring(optstr, NULL);
+    if(!pass) pass = config_getstring(IMAPOPT_PROXY_PASSWORD);
     cb = mysasl_callbacks(popd_userid, 
-			  config_getstring("proxy_authname", "proxy"),
-			  config_getstring("proxy_realm", NULL),
+			  config_getstring(IMAPOPT_PROXY_AUTHNAME),
+			  config_getstring(IMAPOPT_PROXY_REALM),
 			  pass);
 
     r = sasl_client_new("pop", hostname, NULL, NULL,
@@ -1213,15 +1254,30 @@ static int proxy_authenticate(const char *hostname)
 	return SASL_FAIL;
     }
 
+    /* Get SASL mechanism list */
+    /* We can force a particular mechanism using a <shorthost>_mechs option */
     strcpy(buf, hostname);
     p = strchr(buf, '.');
     *p = '\0';
     strcat(buf, "_mechs");
+    mech_conf = config_getoverflowstring(buf, NULL);
+    
+    /* If we don't have a mech_conf, ask the server what it can do */
+    if(!mech_conf) {
+	mechlist = ask_capability(backend_out, backend_in);
+    } else {
+	mechlist = xstrdup(mech_conf);
+    }
 
     /* we now do the actual SASL exchange */
     r = sasl_client_start(backend_saslconn, 
-			  config_getstring(buf, "KERBEROS_V4"),
+			  mechlist,
 			  NULL, &out, &outlen, &mechusing);
+
+    /* garbage collect */
+    free(mechlist);
+    mechlist = NULL;
+
     if ((r != SASL_OK) && (r != SASL_CONTINUE)) {
 	return r;
     }

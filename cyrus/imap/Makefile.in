@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.164 2002/05/26 00:50:52 ken3 Exp $
+# $Id: Makefile.in,v 1.164.4.1 2002/07/10 20:45:01 rjs3 Exp $
 # 
 # @configure_input@
 # 
@@ -97,10 +97,11 @@ exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
 LOBJS= append.o mailbox.o mboxlist.o mupdate-client.o mboxname.o message.o \
-	config.o imap_err.o mupdate_err.o proc.o setproctitle.o convert_code.o \
-	duplicate.o saslclient.o acapmbox.o signals.o annotate.o \
-	search_engines.o squat.o squat_internal.o mbdump.o \
-	base64.o imapparse.o telemetry.o user.o notify.o $(SEEN) $(IDLE)
+	config.o imap_err.o mupdate_err.o proc.o setproctitle.o \
+	convert_code.o duplicate.o saslclient.o acapmbox.o signals.o \
+	annotate.o search_engines.o squat.o squat_internal.o mbdump.o \
+	base64.o imapparse.o telemetry.o user.o notify.o imapopts.o \
+	$(SEEN) $(IDLE)
 
 IMAPDOBJS=pushstats.o backend.o imapd.o index.o tls.o version.o
 
@@ -118,7 +119,8 @@ PROGS = imapd lmtpd pop3d \
 	@IMAP_PROGS@
 
 BUILTSOURCES = imap_err.c imap_err.h pushstats.c pushstats.h \
-	lmtpstats.c lmtpstats.h xversion.h mupdate_err.c mupdate_err.h
+	lmtpstats.c lmtpstats.h xversion.h mupdate_err.c mupdate_err.h \
+	imapopts.h imapopts.c
 
 all: $(BUILTSOURCES) $(PROGS) $(SUIDPROGS)
 
@@ -157,6 +159,9 @@ pushstats.c pushstats.h: pushstats.snmp $(srcdir)/../snmp/snmpgen
 
 lmtpstats.c lmtpstats.h: lmtpstats.snmp $(srcdir)/../snmp/snmpgen
 	$(srcdir)/../snmp/snmpgen $(srcdir)/lmtpstats.snmp
+
+imapopts.c imapopts.h: imapoptions $(srcdir)/../tools/config2header
+	$(srcdir)/../tools/config2header $(srcdir)/imapopts.c $(srcdir)/imapopts.h < $(srcdir)/imapoptions
 
 collectnews: collectnews.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o collectnews collectnews.o libimap.a $(DEPLIBS) \

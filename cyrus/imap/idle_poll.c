@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle_poll.c,v 1.5 2001/11/19 21:32:44 leg Exp $ */
+/* $Id: idle_poll.c,v 1.5.6.1 2002/07/10 20:45:03 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -65,7 +65,7 @@ int idle_enabled(void)
 {
     /* get polling period */
     if (idle_period == -1) {
-      idle_period = config_getint("imapidlepoll", 60);
+      idle_period = config_getint(IMAPOPT_IMAPIDLEPOLL);
       if (idle_period < 0) idle_period = 0;
     }
 

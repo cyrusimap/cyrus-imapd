@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.75.4.1 2002/07/10 20:00:02 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.75.4.2 2002/07/10 20:45:06 rjs3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -184,14 +184,14 @@ static void send_lmtp_error(struct protstream *pout, int r)
 "550-your message, or %s if you believe you\r\n"
 "550-received this message in error.\r\n"
 "550 5.7.1 Permission denied\r\n", 
-			POSTMASTER);
+			config_getstring(IMAPOPT_POSTMASTER));
 	} else {
 	    prot_printf(pout, "550 5.7.1 Permission denied\r\n");
 	}
 	break;
 
     case IMAP_QUOTA_EXCEEDED:
-	if(config_getswitch("lmtp_overquota_perm_failure",0)) {
+	if(config_getswitch(IMAPOPT_LMTP_OVER_QUOTA_PERM_FAILURE)) {
 	    /* Not Default - Perm Failure */
 	    prot_printf(pout, "552 5.2.2 Over quota\r\n");
 	} else {
@@ -726,7 +726,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
     int off = 0;
     state s = NAME_START;
     int r = 0;
-    int reject8bit = config_getswitch("reject8bit", 0);
+    int reject8bit = config_getswitch(IMAPOPT_REJECT8BIT);
 
     if (namelen == 0) {
 	namelen += NAMEINC;
@@ -1231,7 +1231,10 @@ void lmtpmode(struct lmtp_func *func,
     cd.starttls_done = 0;
 
     sprintf(shutdownfilename, "%s/msg/shutdown", config_dir);
-    max_msgsize = config_getint("maxmessagesize", INT_MAX);
+    max_msgsize = config_getint(IMAPOPT_MAXMESSAGESIZE);
+
+    /* If max_msgsize is 0, allow any size */
+    if(!max_msgsize) max_msgsize = INT_MAX;
 
     msg_new(&msg);
 
@@ -1302,10 +1305,8 @@ void lmtpmode(struct lmtp_func *func,
     /* set my allowable security properties */
     /* ANONYMOUS is silly because we allow that anyway */
     secflags = SASL_SEC_NOANONYMOUS;
-    plaintext_result = config_getswitch("allowplaintext",1);
-    if (!config_getswitch("lmtp_allowplaintext", plaintext_result)) {
-	secflags |= SASL_SEC_NOPLAINTEXT;
-    }
+    plaintext_result = config_getswitch(IMAPOPT_ALLOWPLAINTEXT);
+
     secprops = mysasl_secprops(secflags);
     sasl_setprop(cd.conn, SASL_SEC_PROPS, secprops);
 
@@ -1571,7 +1572,7 @@ void lmtpmode(struct lmtp_func *func,
 		  prot_printf(pout, "250-SIZE %d\r\n", max_msgsize);
 	      else
 		  prot_printf(pout, "250-SIZE\r\n");
-	      if (tls_enabled("lmtp") && !func->preauth) {
+	      if (tls_enabled() && !func->preauth) {
 		  prot_printf(pout, "250-STARTTLS\r\n");
 	      }
 	      if (sasl_listmech(cd.conn, NULL, "AUTH ", " ", "", &mechs, 
@@ -1590,7 +1591,7 @@ void lmtpmode(struct lmtp_func *func,
       case 'm':
       case 'M':
 	    if (!authenticated) {
-		if (config_getswitch("soft_noauth", 1)) {
+		if (config_getswitch(IMAPOPT_SOFT_NOAUTH)) {
 		    prot_printf(pout, "430 Authentication required\r\n");
 		} else {
 		    prot_printf(pout, "530 Authentication required\r\n");
@@ -1785,7 +1786,7 @@ void lmtpmode(struct lmtp_func *func,
       case 's':
       case 'S':
 #ifdef HAVE_SSL
-	    if (!strcasecmp(buf, "starttls") && tls_enabled("lmtp") &&
+	    if (!strcasecmp(buf, "starttls") && tls_enabled() &&
 		!func->preauth) { /* don't need TLS for preauth'd connect */
 		int *layerp;
 		sasl_ssf_t ssf;
@@ -2564,10 +2565,7 @@ static int reset_saslconn(sasl_conn_t **conn)
     
     secflags = SASL_SEC_NOANONYMOUS;
 
-    plaintext_result = config_getswitch("allowplaintext", 1);
-    if (!config_getswitch("lmtp_allowplaintext", plaintext_result)) {
-	secflags |= SASL_SEC_NOPLAINTEXT;
-    }
+    plaintext_result = config_getswitch(IMAPOPT_ALLOWPLAINTEXT);
     secprops = mysasl_secprops(secflags);
     ret = sasl_setprop(*conn, SASL_SEC_PROPS, secprops);
     if(ret != SASL_OK) return ret;

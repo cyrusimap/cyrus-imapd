@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.1 2002/07/10 20:00:03 ken3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.2 2002/07/10 20:45:07 rjs3 Exp $
  */
 
 #include <config.h>
@@ -108,25 +108,14 @@ static int mboxlist_changequota(const char *name, int matchlen, int maycreate,
 static int mboxlist_getpath(const char *partition, const char *name, 
 			    char **pathp)
 {
-    size_t partitionlen;
-    char optionbuf[MAX_MAILBOX_NAME+1];
     static char pathresult[MAX_MAILBOX_PATH];
     const char *root;
 
     assert(partition && pathp);
 
-    partitionlen = strlen(partition);
+    root = config_partitiondir(partition);
+    if (!root) return IMAP_PARTITION_UNKNOWN;
 
-    if (partitionlen > sizeof(optionbuf)-11) {
-	return IMAP_PARTITION_UNKNOWN;
-    }
-    strcpy(optionbuf, "partition-");
-    strcat(optionbuf, partition);
-    
-    root = config_getstring(optionbuf, (char *)0);
-    if (!root) {
-	return IMAP_PARTITION_UNKNOWN;
-    }
     mailbox_hash_mbox(pathresult, root, name);
 
     *pathp = pathresult;
@@ -144,7 +133,7 @@ char *mboxlist_makeentry(int mbtype, const char *part, const char *acl)
 
 static const int get_deleteright(void)
 {
-    const char *r = config_getstring("deleteright", "c");
+    const char *r = config_getstring(IMAPOPT_DELETERIGHT);
 
     return cyrus_acl_strtomask(r);
 }
@@ -274,7 +263,6 @@ int mboxlist_detail(const char *name, int *typep, char **pathp, char **partp,
 
 int mboxlist_findstage(const char *name, char *stagedir) 
 {
-    char optionbuf[MAX_MAILBOX_NAME+1];
     const char *root;
     char *partition;
     int r;
@@ -290,14 +278,9 @@ int mboxlist_findstage(const char *name, char *stagedir)
 	return r;
 	break;
     }
-	
-    strcpy(optionbuf, "partition-");
-    strcpy(optionbuf + 10, partition);
-    
-    root = config_getstring(optionbuf, (char *)0);
-    if (!root) {
-	return IMAP_PARTITION_UNKNOWN;
-    }
+	    
+    root = config_partitiondir(partition);
+    if (!root) return IMAP_PARTITION_UNKNOWN;
 	
     sprintf(stagedir, "%s/stage./", root);
     
@@ -469,7 +452,7 @@ mboxlist_mycreatemailboxcheck(char *name,
 	    strcpy(identifier, mbox+5);
 	    if(firstdot) *firstdot = '.';
 
-	    if (config_getswitch("unixhierarchysep", 0)) {
+	    if (config_getswitch(IMAPOPT_UNIXHIERARCHYSEP)) {
 		/*
 		 * The mailboxname is now in the internal format,
 		 * so we we need to change DOTCHARs back to '.'
@@ -489,7 +472,7 @@ mboxlist_mycreatemailboxcheck(char *name,
 	    free(identifier);
 	} else {
 	    defaultacl = identifier = 
-		xstrdup(config_getstring("defaultacl", "anyone lrs"));
+		xstrdup(config_getstring(IMAPOPT_DEFAULTACL));
 	    for (;;) {
 		while (*identifier && isspace((int) *identifier)) identifier++;
 		rights = identifier;
@@ -594,8 +577,7 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 
     if (!(mbtype & MBTYPE_REMOTE)) {
 	/* Get partition's path */
-	sprintf(buf, "partition-%s", newpartition);
-	root = config_getstring(buf, (char *)0);
+	root = config_partitiondir(newpartition);
 	if (!root) {
 	    r = IMAP_PARTITION_UNKNOWN;
 	    goto done;

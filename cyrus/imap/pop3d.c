@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122.4.1 2002/07/10 20:00:04 ken3 Exp $
+ * $Id: pop3d.c,v 1.122.4.2 2002/07/10 20:45:10 rjs3 Exp $
  */
 #include <config.h>
 
@@ -189,7 +189,7 @@ static int mysasl_authproc(sasl_conn_t *conn,
     /* check if remote realm */
     if ((realm = strchr(auth_identity, '@'))!=NULL) {
 	realm++;
-	val = config_getstring("loginrealms", "");
+	val = config_getstring(IMAPOPT_LOGINREALMS);
 	while (*val) {
 	    if (!strncasecmp(val, realm, strlen(realm)) &&
 		(!val[strlen(realm)] || isspace((int) val[strlen(realm)]))) {
@@ -209,13 +209,13 @@ static int mysasl_authproc(sasl_conn_t *conn,
     authstate = auth_newstate(auth_identity, NULL);
 
     /* ok, is auth_identity an admin? */
-    userisadmin = authisa(authstate, "imap", "admins");
+    userisadmin = config_authisa(authstate, IMAPOPT_ADMINS);
 
     if (alen != rlen || strncmp(auth_identity, requested_user, alen)) {
 	/* we want to authenticate as a different user; we'll allow this
 	   if we're an admin or if we've allowed ACL proxy logins */
 	if (userisadmin ||
-	    authisa(authstate, "imap", "proxyservers")) {
+	    config_authisa(authstate, IMAPOPT_PROXYSERVERS)) {
 
 	    /* proxy ok! */
 	    auth_freestate(authstate);
@@ -312,7 +312,6 @@ int service_init(int argc __attribute__((unused)),
     int r;
     int opt;
 
-    config_changeident("pop3d");
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
     setproctitle_init(argc, argv, envp);
 
@@ -355,7 +354,7 @@ int service_init(int argc __attribute__((unused)),
  	    break;
 	case 's': /* pop3s (do starttls right away) */
 	    pop3s = 1;
-	    if (!tls_enabled("pop3")) {
+	    if (!tls_enabled()) {
 		syslog(LOG_ERR, "pop3s: required OpenSSL options not present");
 		fatal("pop3s: required OpenSSL options not present",
 		      EC_CONFIG);
@@ -434,7 +433,7 @@ int service_main(int argc, char **argv, char **envp)
     proc_register("pop3d", popd_clienthost, NULL, NULL);
 
     /* Set inactivity timer */
-    timeout = config_getint("poptimeout", 10);
+    timeout = config_getint(IMAPOPT_POPTIMEOUT);
     if (timeout < 10) timeout = 10;
     prot_settimeout(popd_in, timeout*60);
     prot_setflushonread(popd_in, popd_out);
@@ -545,7 +544,7 @@ void kpop(void)
 	fatal("Cannot get client's IP address", EC_OSERR);
     }
 
-    srvtab = config_getstring("srvtab", "");
+    srvtab = config_getstring(IMAPOPT_SRVTAB);
 
     strcpy(instance, "*");
     r = krb_recvauth(0L, 0, &ticket, "pop", instance,
@@ -651,7 +650,7 @@ static void cmdloop(void)
 		cmd_capa();
 	    }
 	}
-	else if (!strcmp(inputbuf, "stls") && tls_enabled("pop3")) {
+	else if (!strcmp(inputbuf, "stls") && tls_enabled()) {
 	    if (arg) {
 		prot_printf(popd_out,
 			    "-ERR STLS doesn't take any arguments\r\n");
@@ -1036,7 +1035,7 @@ char *user;
 
     /* possibly disallow USER */
     if (!(kflag || popd_starttls_done ||
-	  config_getswitch("allowplaintext", 1))) {
+	  config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
 	prot_printf(popd_out,
 		    "-ERR [AUTH] USER command only available under a layer\r\n");
 	return;
@@ -1107,7 +1106,7 @@ char *pass;
 #endif
 
     if (!strcmp(popd_userid, "anonymous")) {
-	if (config_getswitch("allowanonymouslogin", 0)) {
+	if (config_getswitch(IMAPOPT_ALLOWANONYMOUSLOGIN)) {
 	    pass = beautify_string(pass);
 	    if (strlen(pass) > 500) pass[500] = '\0';
 	    syslog(LOG_NOTICE, "login: %s anonymous %s",
@@ -1141,7 +1140,8 @@ char *pass;
 	       popd_userid, popd_starttls_done ? "+TLS" : "", 
 	       reply ? reply : "");
 
-	if ((plaintextloginpause = config_getint("plaintextloginpause", 0))!=0) {
+	if ((plaintextloginpause = config_getint(IMAPOPT_PLAINTEXTLOGINPAUSE))
+	     != 0) {
 	    sleep(plaintextloginpause);
 	}
     }
@@ -1153,8 +1153,8 @@ char *pass;
 void
 cmd_capa()
 {
-    int minpoll = config_getint("popminpoll", 0) * 60;
-    int expire = config_getint("popexpiretime", -1);
+    int minpoll = config_getint(IMAPOPT_POPMINPOLL) * 60;
+    int expire = config_getint(IMAPOPT_POPEXPIRETIME);
     unsigned mechcount;
     const char *mechlist;
 
@@ -1169,7 +1169,7 @@ cmd_capa()
 	prot_write(popd_out, mechlist, strlen(mechlist));
     }
 
-    if (tls_enabled("pop3")) {
+    if (tls_enabled()) {
 	prot_printf(popd_out, "STLS\r\n");
     }
     if (expire < 0) {
@@ -1185,7 +1185,8 @@ cmd_capa()
     prot_printf(popd_out, "RESP-CODES\r\n");
     prot_printf(popd_out, "AUTH-RESP-CODE\r\n");
 
-    if (kflag || popd_starttls_done || config_getswitch("allowplaintext", 1)) {
+    if(kflag || popd_starttls_done
+    || config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
 	prot_printf(popd_out, "USER\r\n");
     }
     
@@ -1385,7 +1386,7 @@ int openinbox(void)
 	return 1;
     }
 
-    if ((minpoll = config_getint("popminpoll", 0)) &&
+    if ((minpoll = config_getint(IMAPOPT_POPMINPOLL)) &&
 	mboxstruct.pop3_last_login + 60*minpoll > popd_login_time) {
 	prot_printf(popd_out,
 	    "-ERR [LOGIN-DELAY] Logins must be at least %d minute%s apart\r\n",
