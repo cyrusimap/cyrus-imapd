@@ -844,7 +844,7 @@ char *name;
 }
 
 /*
- * Performs a STATUS commadn
+ * Performs a STATUS command
  */
 int
 index_status(mailbox, name, statusitems)
@@ -928,6 +928,60 @@ int statusitems;
     return 0;
 }
 
+/*
+ * Performs a XGETUIDS command
+ */
+int
+index_getuids(mailbox, lowuid)
+struct mailbox *mailbox;
+unsigned lowuid;
+{
+    int msgno;
+    unsigned firstuid = 0, lastuid = 0;
+
+
+    prot_printf(imapd_out, "* XUIDS");
+
+    for (msgno = 1; msgno <= imapd_exists; msgno++) {
+	if (firstuid == 0) {
+	    if (UID(msgno) >= lowuid) {
+		prot_printf(imapd_out, " %u %u", msgno, UID(msgno));
+		firstuid = lastuid = UID(msgno);
+	    }
+	}
+	else {
+	    if (UID(msgno) != ++lastuid) {
+		if (lastuid-1 != firstuid) {
+		    prot_printf(imapd_out, ":%u", lastuid-1);
+		}
+		firstuid = lastuid = UID(msgno);
+		prot_printf(imapd_out, ",%u", firstuid);
+	    }
+	}
+    }
+    if (lastuid != firstuid) {
+	prot_printf(imapd_out, ":%u", lastuid);
+    }
+    prot_printf(imapd_out, "\r\n");
+
+    return 0;
+}
+
+/*
+ * Performs a XGETSTATE command
+ */
+int
+index_getstate(mailbox)
+struct mailbox *mailbox;
+{
+    int r;
+    int msgno;
+    unsigned firstuid, lastuid;
+
+    prot_printf(imapd_out, "* XSTATE %u %u\r\n", mailbox->index_mtime, 0);
+
+    return 0;
+}
 
 /*
  * Returns the msgno of the message with UID 'uid'.
@@ -1163,7 +1217,7 @@ unsigned octet_count;
 		    prot_putc('\r', imapd_out);
 		    if (--size == 0) return;
 		}
-		else if (!start_octet--) {
+		if (!start_octet--) {
 		    start_octet = 0;
 		    prot_putc('\n', imapd_out);
 		    size--;
