@@ -1,5 +1,5 @@
-/* mboxname.h -- Mailbox list manipulation routines
- * $Id: mboxname.h,v 1.6 2001/08/03 21:18:07 ken3 Exp $
+/* namespace.h -- Namespace manipulation routines
+ * $Id: namespace.h,v 1.2 2001/08/03 21:18:08 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -41,22 +41,30 @@
  *
  */
 
-#ifndef INCLUDED_MBOXNAME_H
-#define INCLUDED_MBOXNAME_H
+#ifndef INCLUDED_NAMESPACE_H
+#define INCLUDED_NAMESPACE_H
 
-#include "namespace.h"
+#define MAX_NAMESPACE_PREFIX 40
 
-int mboxname_tointernal(const char *name, struct namespace *namespace,
-			const char *userid, char *result);
-int mboxname_tointernal_alt(const char *name, struct namespace *namespace,
-			    const char *userid, char *result);
-int mboxname_toexternal(const char *name, struct namespace *namespace,
-			const char *userid, char *result);
-int mboxname_toexternal_alt(const char *name, struct namespace *namespace,
-			    const char *userid, char *result);
-int mboxname_userownsmailbox(char *userid, char *name);
-int mboxname_netnewscheck(char *name);
-int mboxname_policycheck(char *name);
-int mboxname_userownsmailbox(char *userid, char *name);
+#define DOTCHAR '^'
+
+enum { NAMESPACE_INBOX, NAMESPACE_USER, NAMESPACE_SHARED };
+
+struct namespace {
+    int isalt;
+    char prefix[3][MAX_NAMESPACE_PREFIX+1];
+    char hier_sep;
+    int (*mboxname_tointernal)(const char *name, struct namespace *namespace,
+			       const char *userid, char *result);
+    int (*mboxname_toexternal)(const char *name, struct namespace *namespace,
+			       const char *userid, char *result);
+};
+
+/* Initialize namespace (prefixes & hierarchy separator from imapd.conf) */
+int namespace_init(struct namespace *namespace, int force_std);
+
+char *hier_sep_tointernal(char *name, struct namespace *namespace);
+
+char *hier_sep_toexternal(char *name, struct namespace *namespace);
 
 #endif

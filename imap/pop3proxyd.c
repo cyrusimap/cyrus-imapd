@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.19 2001/08/03 15:33:24 rjs3 Exp $
+ * $Id: pop3proxyd.c,v 1.20 2001/08/03 21:18:08 ken3 Exp $
  */
 #include <config.h>
 
@@ -79,6 +79,7 @@
 #include "version.h"
 #include "xmalloc.h"
 #include "mboxlist.h"
+#include "namespace.h"
 
 #ifdef HAVE_KRB
 /* kerberos des is purported to conflict with OpenSSL DES */
@@ -116,6 +117,9 @@ int popd_auth_done = 0;
 struct protstream *backend_out, *backend_in;
 int backend_sock;
 sasl_conn_t *backend_saslconn;
+
+/* current namespace */
+static struct namespace popd_namespace;
 
 static void cmd_apop(char *user, char *digest);
 static int apop_enabled(void);
@@ -177,6 +181,12 @@ int service_init(int argc, char **argv, char **envp)
     /* open the mboxlist, we'll need it for real work */
     mboxlist_init(0);
     mboxlist_open(NULL);
+
+    /* Set namespace */
+    if (!namespace_init(&popd_namespace, 0)) {
+	syslog(LOG_ERR, "invalid namespace prefix in configuration file");
+	fatal("invalid namespace prefix in configuration file", EC_CONFIG);
+    }
 
     return 0;
 }
@@ -653,7 +663,9 @@ static void cmd_apop(char *user, char *digest)
 	shut_down(0);
     }
     else if (!(p = auth_canonifyid(user)) ||
-	       strchr(p, '.') || strlen(p) + 6 > MAX_MAILBOX_PATH) {
+	     /* '.' isn't allowed if '.' is the hierarchy separator */
+	     (popd_namespace.hier_sep == '.' && strchr(p, '.')) ||
+	     strlen(p) + 6 > MAX_MAILBOX_PATH) {
 	prot_printf(popd_out, "-ERR Invalid user\r\n");
 	syslog(LOG_NOTICE,
 	       "badlogin: %s APOP %s invalid user",
@@ -710,7 +722,9 @@ char *user;
 
     shutdown_file(); /* check for shutdown file */
     if (!(p = auth_canonifyid(user)) ||
-	       strchr(p, '.') || strlen(p) + 6 > MAX_MAILBOX_PATH) {
+	/* '.' isn't allowed if '.' is the hierarchy separator */
+	(popd_namespace.hier_sep == '.' && strchr(p, '.')) ||
+	strlen(p) + 6 > MAX_MAILBOX_PATH) {
 	prot_printf(popd_out, "-ERR Invalid user\r\n");
 	syslog(LOG_NOTICE,
 	       "badlogin: %s plaintext %s invalid user",
@@ -1144,6 +1158,11 @@ static void openproxy(void)
     /* have to figure out what server to connect to */
     strcpy(inboxname, "user.");
     strcat(inboxname, popd_userid);
+
+    /* Translate userid part of inboxname
+       (we need the original userid for AUTH to backend) */
+    hier_sep_tointernal(inboxname+5, &popd_namespace);
+
     r = mboxlist_lookup(inboxname, &server, NULL, NULL);
     if (!r) fatal("couldn't find backend server", EC_CONFIG);
 

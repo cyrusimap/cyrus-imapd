@@ -41,7 +41,7 @@
  *
 
  * 
- * $Id: mboxlist.h,v 1.13 2001/06/23 03:14:03 ken3 Exp $
+ * $Id: mboxlist.h,v 1.14 2001/08/03 21:18:07 ken3 Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -52,6 +52,7 @@
 #include "auth.h"
 #include "acap.h"
 #include "mailbox.h"
+#include "namespace.h"
 
 /* --- cut here --- */
 #define CONFIG_DB_SUBS (&cyrusdb_flat)
@@ -115,11 +116,19 @@ int mboxlist_setacl(char *name, char *identifier, char *rights, int isadmin,
 /* Find all mailboxes that match 'pattern'. */
 int mboxlist_findall(char *pattern, int isadmin, char *userid, 
 		     struct auth_state *auth_state, int (*proc)(), void *rock);
+int mboxlist_findall_alt(char *pattern, struct namespace *namespace,
+			 int isadmin, char *userid, 
+			 struct auth_state *auth_state, int (*proc)(),
+			 void *rock);
 
 /* Find subscribed mailboxes that match 'pattern'. */
 int mboxlist_findsub(char *pattern, int isadmin, char *userid, 
 		     struct auth_state *auth_state, int (*proc)(), void *rock,
 		     int force);
+int mboxlist_findsub_alt(char *pattern, struct namespace *namespace,
+			 int isadmin, char *userid, 
+			 struct auth_state *auth_state, int (*proc)(),
+			 void *rock, int force);
 
 /* given a mailbox 'name', where should we stage messages for it? 
    'stagedir' should be MAX_MAILBOX_PATH. */

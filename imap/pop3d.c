@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.100 2001/08/03 15:33:24 rjs3 Exp $
+ * $Id: pop3d.c,v 1.101 2001/08/03 21:18:08 ken3 Exp $
  */
 #include <config.h>
 
@@ -82,6 +82,7 @@
 #include "mboxlist.h"
 #include "idle.h"
 #include "telemetry.h"
+#include "namespace.h"
 
 #ifdef HAVE_KRB
 /* kerberos des is purported to conflict with OpenSSL DES */
@@ -129,6 +130,9 @@ int popd_starttls_done = 0;
 static struct mailbox mboxstruct;
 
 static mailbox_decideproc_t expungedeleted;
+
+/* current namespace */
+static struct namespace popd_namespace;
 
 static void cmd_apop(char *user, char *digest);
 static int apop_enabled(void);
@@ -232,6 +236,12 @@ int service_init(int argc, char **argv, char **envp)
 
     /* setup for sending IMAP IDLE notifications */
     idle_enabled();
+
+    /* Set namespace */
+    if (!namespace_init(&popd_namespace, 0)) {
+	syslog(LOG_ERR, "invalid namespace prefix in configuration file");
+	fatal("invalid namespace prefix in configuration file", EC_CONFIG);
+    }
 
     while ((opt = getopt(argc, argv, "C:sk")) != EOF) {
 	switch(opt) {
@@ -855,7 +865,9 @@ static void cmd_apop(char *user, char *digest)
 	shut_down(0);
     }
     else if (!(p = auth_canonifyid(user)) ||
-	       strchr(p, '.') || strlen(p) + 6 > MAX_MAILBOX_PATH) {
+	     /* '.' isn't allowed if '.' is the hierarchy separator */
+	     (popd_namespace.hier_sep == '.' && strchr(p, '.')) ||
+	     strlen(p) + 6 > MAX_MAILBOX_PATH) {
 	prot_printf(popd_out, "-ERR Invalid user\r\n");
 	syslog(LOG_NOTICE,
 	       "badlogin: %s APOP %s invalid user",
@@ -926,7 +938,9 @@ char *user;
 	shut_down(0);
     }
     else if (!(p = auth_canonifyid(user)) ||
-	       strchr(p, '.') || strlen(p) + 6 > MAX_MAILBOX_PATH) {
+	     /* '.' isn't allowed if '.' is the hierarchy separator */
+	     (popd_namespace.hier_sep == '.' && strchr(p, '.')) ||
+	     strlen(p) + 6 > MAX_MAILBOX_PATH) {
 	prot_printf(popd_out, "-ERR Invalid user\r\n");
 	syslog(LOG_NOTICE,
 	       "badlogin: %s plaintext %s invalid user",
@@ -1208,6 +1222,9 @@ int openinbox(void)
     int minpoll;
 
     popd_login_time = time(0);
+
+    /* Translate userid */
+    hier_sep_tointernal(popd_userid, &popd_namespace);
 
     strcpy(inboxname, "user.");
     strcat(inboxname, popd_userid);

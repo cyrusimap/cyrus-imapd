@@ -155,7 +155,7 @@ changequote(<<, >>)
 define(<<CMU_AC_CV_FOUND>>, translit(ac_cv_found_$2_lib, [ *], [_p]))
 changequote([, ])
 if test "$CMU_AC_CV_FOUND" = "yes"; then
-  if test \! -f "$1/lib$2.a" -a \! -f "$i/lib$2.so" -a \! -f "$i/lib$2.sl"; then
+  if test \! -r "$1/lib$2.a" -a \! -r "$1/lib$2.so" -a \! -r "$1/lib$2.sl"; then
     CMU_AC_CV_FOUND=no
   fi
 fi
@@ -166,7 +166,7 @@ changequote(<<, >>)
 define(<<CMU_AC_CV_FOUND>>, translit(ac_cv_found_$2_inc, [ *], [_p]))
 changequote([, ])
 if test "$CMU_AC_CV_FOUND" = "yes"; then
-  if test \! -f "$1/$2.h"; then
+  if test \! -r "$1/$2.h"; then
     CMU_AC_CV_FOUND=no
   fi
 fi
@@ -197,6 +197,7 @@ dnl Hacked on by Rob Earhart to not just toss stuff in LIBS
 dnl It now puts everything required for sockets into LIB_SOCKET
 
 AC_DEFUN(CMU_SOCKETS, [
+	save_LIBS="$LIBS"
 	LIB_SOCKET=""
 	AC_CHECK_FUNC(connect, :,
 		AC_CHECK_LIB(nsl, gethostbyname,
@@ -204,6 +205,14 @@ AC_DEFUN(CMU_SOCKETS, [
 		AC_CHECK_LIB(socket, connect,
 			     LIB_SOCKET="-lsocket $LIB_SOCKET")
 	)
+	LIBS="$LIB_SOCKET $save_LIBS"
+	AC_CHECK_FUNC(res_search, :,
+                AC_CHECK_LIB(resolv, res_search,
+                              LIB_SOCKET="-lresolv $LIB_SOCKET") 
+        )
+	LIBS="$LIB_SOCKET $save_LIBS"
+	AC_CHECK_FUNCS(dn_expand dns_lookup)
+	LIBS="$save_LIBS"
 	AC_SUBST(LIB_SOCKET)
 	])
 

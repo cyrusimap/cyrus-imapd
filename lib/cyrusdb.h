@@ -46,6 +46,7 @@ struct txn;
 
 enum cyrusdb_ret {
     CYRUSDB_OK = 0,
+    CYRUSDB_DONE = 1,
     CYRUSDB_IOERROR = -1,
     CYRUSDB_AGAIN = -2,
     CYRUSDB_EXISTS = -3
