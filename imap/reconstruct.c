@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.65 2002/02/20 19:29:06 rjs3 Exp $ */
+/* $Id: reconstruct.c,v 1.66 2002/03/14 18:32:48 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -214,7 +214,7 @@ int main(int argc, char **argv)
 	head.next = p->next;
 
 	/* create p and reconstruct it */
-	r = mboxlist_createmailbox(p->name, 0, NULL, 1, "cyrus", NULL);
+	r = mboxlist_createmailbox(p->name, 0, NULL, 1, "cyrus", NULL, 0);
 	if (!r) {
 	    do_reconstruct(p->name, 0, 0, &head);
 	} else {

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.348 2002/03/14 17:49:36 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.349 2002/03/14 18:32:45 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -152,10 +152,11 @@ void cmd_sort(char *tag, int usinguid);
 void cmd_thread(char *tag, int usinguid);
 void cmd_copy(char *tag, char *sequence, char *name, int usinguid);
 void cmd_expunge(char *tag, char *sequence);
-void cmd_create(char *tag, char *name, char *partition);
+void cmd_create(char *tag, char *name, char *partition, int localonly);
 void cmd_delete(char *tag, char *name);
 void cmd_dump(char *tag, char *name, int uid_start);
 void cmd_undump(char *tag, char *name);
+void cmd_xfer(char *tag, char *toserver, char *name);
 void cmd_rename(const char *tag, char *oldname, 
 		char *newname, char *partition);
 void cmd_reconstruct(const char *tag, const char *name, int recursive);
@@ -902,7 +903,7 @@ cmdloop()
 		}
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-		cmd_create(tag.s, arg1.s, havepartition ? arg2.s : 0);
+		cmd_create(tag.s, arg1.s, havepartition ? arg2.s : 0, 0);
 
 		snmp_increment(CREATE_COUNT, 1);
 	    }
@@ -1163,6 +1164,23 @@ cmdloop()
 		cmd_listrights(tag.s, arg1.s, arg2.s);
 
 		snmp_increment(LISTRIGHTS_COUNT, 1);
+	    }
+	    else if (!strcmp(cmd.s, "Localcreate")) {
+		/* create a local-only mailbox */
+		havepartition = 0;
+		if (c != ' ') goto missingargs;
+		c = getastring(imapd_in, imapd_out, &arg1);
+		if (c == EOF) goto missingargs;
+		if (c == ' ') {
+		    havepartition = 1;
+		    c = getword(imapd_in, &arg2);
+		    if (!imparse_isatom(arg2.s)) goto badpartition;
+		}
+		if (c == '\r') c = prot_getc(imapd_in);
+		if (c != '\n') goto extraargs;
+		cmd_create(tag.s, arg1.s, havepartition ? arg2.s : 0, 1);
+
+		snmp_increment(CREATE_COUNT, 1);
 	    }
 	    else goto badcmd;
 	    break;
@@ -3404,10 +3422,7 @@ char *sequence;
  * Perform a CREATE command
  */
 void
-cmd_create(tag, name, partition)
-char *tag;
-char *name;
-char *partition;
+cmd_create(char *tag, char *name, char *partition, int localonly)
 {
     int r = 0;
     char mailboxname[MAX_MAILBOX_NAME+1];
@@ -3430,7 +3445,8 @@ char *partition;
     if (!r) {
 	r = mboxlist_createmailbox(mailboxname, 0, partition,
 				   imapd_userisadmin, 
-				   imapd_userid, imapd_authstate);
+				   imapd_userid, imapd_authstate,
+				   localonly);
 
 	if (r == IMAP_PERMISSION_DENIED && !strcasecmp(name, "INBOX") &&
 	    (autocreatequota = config_getint("autocreatequota", 0))) {
@@ -3438,7 +3454,7 @@ char *partition;
 	    /* Auto create */
 	    r = mboxlist_createmailbox(mailboxname, 0,
 				       partition, 1, imapd_userid,
-				       imapd_authstate);
+				       imapd_authstate, 0);
 	    
 	    if (!r && autocreatequota > 0) {
 		(void) mboxlist_setquota(mailboxname, autocreatequota);

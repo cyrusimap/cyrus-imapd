@@ -40,7 +40,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: mboxlist.h,v 1.22 2002/03/05 16:18:15 rjs3 Exp $
+ * $Id: mboxlist.h,v 1.23 2002/03/14 18:32:47 rjs3 Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -96,7 +96,8 @@ int mboxlist_createmailboxcheck(char *name, int mbtype, char *partition,
 /* create mailbox */
 int mboxlist_createmailbox(char *name, int mbtype, char *partition, 
 			   int isadmin, char *userid, 
-			   struct auth_state *auth_state);
+			   struct auth_state *auth_state,
+			   int localonly);
 
 /* Delete a mailbox. */
 int mboxlist_deletemailbox(const char *name, int isadmin, char *userid, 
