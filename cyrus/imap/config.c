@@ -1,5 +1,5 @@
 /* config.c -- Configuration routines
- $Id: config.c,v 1.22 1999/10/02 00:43:03 leg Exp $
+ $Id: config.c,v 1.23 2000/02/01 04:05:51 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -32,6 +32,9 @@
 #include <ctype.h>
 #include <syslog.h>
 #include <com_err.h>
+#if HAVE_UNISTD_H
+# include <unistd.h>
+#endif
 
 #include "config.h"
 #include "exitcodes.h"
@@ -52,6 +55,8 @@ static int nconfiglist;
 const char *config_dir;
 const char *config_defpartition;
 const char *config_newsspool;
+
+const char *config_servername;
 
 int config_hashimapspool;
 
@@ -107,6 +112,13 @@ const char *ident;
 
     /* look up mailbox hashing */
     config_hashimapspool = config_getswitch("hashimapspool", 0);
+
+    /* look up the hostname we should present to the user */
+    config_servername = config_getstring("servername", 0);
+    if (!config_servername) {
+	config_servername = xmalloc(sizeof(char) * 256);
+	gethostname((char *) config_servername, 256);
+    }
 
     return 0;
 }

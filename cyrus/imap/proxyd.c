@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: proxyd.c,v 1.3 2000/01/28 23:27:59 leg Exp $ */
+/* $Id: proxyd.c,v 1.4 2000/02/01 04:05:55 leg Exp $ */
 
 #ifndef __GNUC__
 #define __attribute__(foo)
@@ -517,8 +517,8 @@ static int proxy_authenticate(struct backend *s)
     strcat(optstr, "_password");
     pass = config_getstring(optstr, NULL);
     cb = mysasl_callbacks(proxyd_userid, 
-			  config_getstring("proxylogin", "proxy"),
-			  config_getstring("proxyrealm", NULL),
+			  config_getstring("proxy_authname", "proxy"),
+			  config_getstring("proxy_realm", NULL),
 			  pass);
 
     r = sasl_client_new("imap", s->hostname, cb, 0, &s->saslconn);

@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.83 2000/01/29 21:30:21 tmartin Exp $
+ $Id: mailbox.c,v 1.84 2000/02/01 04:05:52 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -1425,17 +1425,12 @@ void *deciderock;
     }
 
     if (numdeleted) {
-
 	acaphandle = acapmbox_get_handle();
-
 	acapmbox_setproperty(acaphandle,
 			     mailbox->name,
 			     ACAPMBOX_TOTAL,
 			     newexists);
-	/* xxx what to do about errors? */
-
-	toimsp(mailbox->name, mailbox->uidvalidity,
-		"UIDNnn", mailbox->last_uid, newexists, 0);
+	acapmbox_release_handle(acaphandle);
     }
 
     mailbox_unlock_pop(mailbox);

@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.44 2000/01/28 22:09:52 leg Exp $
+ * $Id: imtest.c,v 1.45 2000/02/01 04:05:56 leg Exp $
  *
  * Copyright 1999 Carnegie Mellon University
  * 
@@ -924,8 +924,6 @@ static char *ask_capability(int *supports_starttls)
  
       printf("S: %s",str);
   } while (strncmp(str, CAPATAG, strlen(CAPATAG)));
-
-  free(str);
 
   return ret;
 }
