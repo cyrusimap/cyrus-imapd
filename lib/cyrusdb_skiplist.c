@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.12 2002/01/28 20:16:49 leg Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.13 2002/02/01 20:27:42 leg Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -477,16 +477,37 @@ static int write_lock(struct db *db, const char *altname)
 
 static int read_lock(struct db *db)
 {
-    struct stat sbuf;
+    struct stat sbuf, sbuffile;
+    int newfd = -1;
 
-    if (lock_shared(db->fd) < 0) {
-	syslog(LOG_ERR, "IOERROR: lock_shared %s: %m", db->fname);
-	return CYRUSDB_IOERROR;
-    }
+    for (;;) {
+	if (lock_shared(db->fd) < 0) {
+	    syslog(LOG_ERR, "IOERROR: lock_shared %s: %m", db->fname);
+	    return CYRUSDB_IOERROR;
+	}
 
-    if (fstat(db->fd, &sbuf) == -1) {
-	syslog(LOG_ERR, "IOERROR: fstat %s: %m", db->fname);
-	return CYRUSDB_IOERROR;
+	if (fstat(db->fd, &sbuf) == -1) {
+	    syslog(LOG_ERR, "IOERROR: fstat %s: %m", db->fname);
+	    lock_unlock(db->fd);
+	    return CYRUSDB_IOERROR;
+	}
+	
+	if (stat(db->fname, &sbuffile) == -1) {
+	    syslog(LOG_ERR, "IOERROR: stat %s: %m", db->fname);
+	    lock_unlock(db->fd);
+	    return CYRUSDB_IOERROR;
+	}
+	if (sbuf.st_ino == sbuffile.st_ino) break;
+
+	newfd = open(db->fname, O_RDWR);
+	if (newfd == -1) {
+	    syslog(LOG_ERR, "IOERROR: open %s: %m", db->fname);
+	    lock_unlock(db->fd);
+	    return CYRUSDB_IOERROR;
+	}
+	
+	dup2(newfd, db->fd);
+	close(newfd);
     }
 
     if (db->map_ino != sbuf.st_ino) {
@@ -1474,6 +1495,21 @@ static int dump(struct db *db, int detail)
 /* perform some basic consistency checks */
 static int consistent(struct db *db) /* xxx */
 {
+    const char *ptr;
+    int offset;
+
+    read_lock(db);
+
+    offset = FORWARD(db->map_base + DUMMY_OFFSET(db), 0);
+    while (offset != 0) {
+	ptr = db->map_base + offset;
+
+	offset = FORWARD(ptr, 0);
+	if (offset != 0) {
+	    /* check to see that ptr < ptr -> next */
+
+	}
+    }
 
     return 0;
 }
