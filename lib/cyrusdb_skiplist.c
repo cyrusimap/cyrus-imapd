@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.32 2002/04/02 00:48:02 leg Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.33 2002/04/12 22:36:21 leg Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -156,6 +156,7 @@ struct db {
 
 struct txn {
     int ismalloc;
+    int syncfd;
 
     /* logstart is where we start changes from on commit, where we truncate
        to on abort */
@@ -167,12 +168,38 @@ static time_t global_recovery = 0;
 static int do_fsync = 2;
 
 enum {
-    be_paranoid = 0
+    be_paranoid = 0,
+    use_osync = 0
 };
 
-#define FSYNC(fd) (do_fsync && fsync(fd))
-#define FDATASYNC(fd) ((do_fsync == 1 && fdatasync(fd)) || \
-                       (do_fsync == 2 && fsync(fd)))
+static void newtxn(struct db *db, struct txn *t)
+{
+    /* fill in t */
+    t->ismalloc = 0;
+    t->syncfd = -1;
+    t->logstart = db->map_size;
+    assert(t->logstart != -1);
+    t->logend = t->logstart;
+}
+
+static void getsyncfd(struct db *db, struct txn *t)
+{
+    if (!use_osync) {
+	t->syncfd = db->fd;
+    } else if (t->syncfd == -1) {
+	t->syncfd = open(db->fname, O_RDWR | O_DSYNC, 0666);
+	assert(t->syncfd != -1); /* xxx do better error recovery */
+    }
+}
+
+static void closesyncfd(struct db *db, struct txn *t)
+{
+    /* if we're using fsync, then we don't want to close the file */
+    if (use_osync && (t->syncfd != -1)) {
+	close(t->syncfd);
+    }
+    t->syncfd = -1;
+}
 
 static int myinit(const char *dbdir, int myflags)
 {
@@ -187,7 +214,7 @@ static int myinit(const char *dbdir, int myflags)
 	   time need recovery run when opened */
 
 	global_recovery = time(NULL);
-	fd = open(sfile, O_RDWR | O_CREAT, 0666);
+	fd = open(sfile, O_RDWR | O_CREAT, 0644);
 	if (fd == -1) r = -1;
 
 	if (r != -1) r = ftruncate(fd, 0);
@@ -203,7 +230,7 @@ static int myinit(const char *dbdir, int myflags)
     } else {
 	/* read the global recovery timestamp */
 
-	fd = open(sfile, O_RDONLY, 0666);
+	fd = open(sfile, O_RDONLY, 0644);
 	if (fd == -1) r = -1;
 	if (r != -1) r = read(fd, &a, 4);
 	if (r != -1) r = close(fd);
@@ -551,7 +578,7 @@ static int read_lock(struct db *db)
 	}
 	if (sbuf.st_ino == sbuffile.st_ino) break;
 
-	newfd = open(db->fname, O_RDWR);
+	newfd = open(db->fname, O_RDWR, 0644);
 	if (newfd == -1) {
 	    syslog(LOG_ERR, "IOERROR: open %s: %m", db->fname);
 	    lock_unlock(db->fd);
@@ -602,9 +629,9 @@ static int myopen(const char *fname, struct db **ret)
     db->fd = -1;
     db->fname = xstrdup(fname);
 
-    db->fd = open(fname, O_RDWR, 0666);
+    db->fd = open(fname, O_RDWR, 0644);
     if (db->fd == -1) {
-	db->fd = open(fname, O_RDWR | O_CREAT, 0666);
+	db->fd = open(fname, O_RDWR | O_CREAT, 0644);
 	new = 1;
     }
     if (db->fd == -1) {
@@ -786,10 +813,7 @@ int myfetch(struct db *db,
 	}
 
 	/* fill in t */
-	t.ismalloc = 0;
-	t.logstart = db->map_size;
-	assert(t.logstart != -1);
-	t.logend = t.logstart;
+	newtxn(db, &t);
 
 	tp = &t;
     } else {
@@ -874,10 +898,7 @@ int myforeach(struct db *db,
 	}
 
 	/* fill in t */
-	t.ismalloc = 0;
-	t.logstart = db->map_size;
-	assert(t.logstart != -1);
-	t.logend = t.logstart;
+	newtxn(db, &t);
 
 	tp = &t;
     } else {
@@ -1016,10 +1037,7 @@ int mystore(struct db *db,
 	}
 
 	/* fill in t */
-	t.ismalloc = 0;
-	t.logstart = db->map_size;
-	assert(t.logstart != -1);
-	t.logend = t.logstart;
+	newtxn(db, &t);
 
 	tp = &t;
     } else {
@@ -1113,8 +1131,9 @@ int mystore(struct db *db,
     WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) newoffsets, 4 * lvl);
     WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) &endpadding, 4);
 
-    lseek(db->fd, tp->logend, SEEK_SET);
-    r = retry_writev(db->fd, iov, num_iov);
+    getsyncfd(db, tp);
+    lseek(tp->syncfd, tp->logend, SEEK_SET);
+    r = retry_writev(tp->syncfd, iov, num_iov);
     if (r < 0) {
 	syslog(LOG_ERR, "DBERROR: retry_writev(): %m");
 	myabort(db, tp);
@@ -1178,10 +1197,7 @@ int mydelete(struct db *db,
 	}
 
 	/* fill in t */
-	t.ismalloc = 0;
-	t.logstart = db->map_size;
-	assert(t.logstart != -1);
-	t.logend = t.logstart;
+	newtxn(db, &t);
 
 	tp = &t;
     } else {
@@ -1214,12 +1230,13 @@ int mydelete(struct db *db,
 	}
 
 	/* log the deletion */
-	lseek(db->fd, tp->logend, SEEK_SET);
+	getsyncfd(db, tp);
+	lseek(tp->syncfd, tp->logend, SEEK_SET);
 	writebuf[0] = delrectype;
 	writebuf[1] = htonl(offset);
 
 	/* update end-of-log */
-	tp->logend += retry_write(db->fd, (char *) writebuf, 8);
+	tp->logend += retry_write(tp->syncfd, (char *) writebuf, 8);
     }
 
     if (tid) {
@@ -1261,18 +1278,19 @@ int mycommit(struct db *db, struct txn *tid)
 	goto done;
     }
 
-    /* fsync */
-    if (do_fsync && (fdatasync(db->fd) < 0)) {
+    /* fsync if we're not using O_SYNC writes */
+    if (!use_osync && do_fsync && (fdatasync(db->fd) < 0)) {
 	syslog(LOG_ERR, "IOERROR: writing %s: %m", db->fname);
 	return CYRUSDB_IOERROR;
     }
 
     /* write a commit record */
-    lseek(db->fd, tid->logend, SEEK_SET);
-    retry_write(db->fd, (char *) &commitrectype, 4);
+    assert(tid->syncfd != -1);
+    lseek(tid->syncfd, tid->logend, SEEK_SET);
+    retry_write(tid->syncfd, (char *) &commitrectype, 4);
 
-    /* fsync */
-    if (do_fsync && (fdatasync(db->fd) < 0)) {
+    /* fsync if we're not using O_SYNC writes */
+    if (!use_osync && do_fsync && (fdatasync(db->fd) < 0)) {
 	syslog(LOG_ERR, "IOERROR: writing %s: %m", db->fname);
 	return CYRUSDB_IOERROR;
     }
@@ -1292,6 +1310,9 @@ int mycommit(struct db *db, struct txn *tid)
 	return r;
     }
     
+    /* must close this after releasing the lock */
+    closesyncfd(db, tid);
+
     /* free tid if needed */
     if (tid->ismalloc) {
 	free(tid);
@@ -1387,6 +1408,9 @@ int myabort(struct db *db, struct txn *tid)
 	return r;
     }
 
+    /* must close this after releasing the lock */
+    closesyncfd(db, tid);
+
     /* free the tid */
     if (tid->ismalloc) {
 	free(tid);
@@ -1431,7 +1455,7 @@ static int mycheckpoint(struct db *db, int locked)
     /* open fname.NEW */
     snprintf(fname, sizeof(fname), "%s.NEW", db->fname);
     oldfd = db->fd;
-    db->fd = open(fname, O_RDWR | O_CREAT, 0666);
+    db->fd = open(fname, O_RDWR | O_CREAT, 0644);
     if (db->fd < 0) {
 	syslog(LOG_ERR, "DBERROR: skiplist checkpoint: open(%s): %m", fname);
 	if (!locked) unlock(db);
