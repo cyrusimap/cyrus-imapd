@@ -1252,6 +1252,7 @@ int usinguid;
     int inlist = 0;
     int fetchitems = 0;
     struct fetchargs fetchargs;
+    struct strlist *newfields = 0;
     char *p, *section;
 
     fetchargs = zerofetchargs;
@@ -1293,22 +1294,103 @@ int usinguid;
 		    if (*p == '0' && !isdigit(p[-1]) && p[1] != ']') break;
 		    p++;
 		}
+
+		if (*p == 'H' && !strncmp(p, "HEADER.FIELDS", 13) &&
+		    (p == section || p[-1] == '.') &&
+		    (p[13] == '\0' || !strcmp(p+13, ".NOT"))) {
+
+		    /*
+		     * If not top-level or a HEADER.FIELDS.NOT, can't pull
+		     * the headers out of the cache.
+		     */
+		    if (p != section || p[13] != '\0') {
+			fetchitems |= FETCH_UNCACHEDHEADER;
+		    }
+
+		    if (c != ' ') {
+			prot_printf(imapd_out,
+				    "%s BAD Missing required argument to %s %s\r\n",
+				    tag, cmd, fetchatt.s);
+			eatline(c);
+			goto freeargs;
+		    }
+		    c = prot_getc(imapd_in);
+		    if (c != '(') {
+			prot_printf(imapd_out, "%s BAD Missing required open parenthesis in %s %s\r\n",
+				    tag, cmd, fetchatt.s);
+			eatline(c);
+			goto freeargs;
+		    }
+		    do {
+			c = getastring(&fieldname);
+			for (p = fieldname.s; *p; p++) {
+			    if (*p <= ' ' || *p & 0x80 || *p == ':') break;
+			}
+			if (*p || !*fieldname.s) {
+			    prot_printf(imapd_out, "%s BAD Invalid field-name in %s %s\r\n",
+					tag, cmd, fetchatt.s);
+			    eatline(c);
+			    goto freeargs;
+			}
+			appendstrlist(&newfields, fieldname.s);
+			if (!(fetchitems & FETCH_UNCACHEDHEADER)) {
+			    for (i=0; i<mailbox_num_cache_header; i++) {
+				if (!strcasecmp(mailbox_cache_header_name[i],
+						fieldname.s)) break;
+			    }
+			    if (i == mailbox_num_cache_header) {
+				fetchitems |= FETCH_UNCACHEDHEADER;
+			    }
+			}
+		    } while (c == ' ');
+		    if (c != ')') {
+			prot_printf(imapd_out, "%s BAD Missing required close parenthesis in %s %s\r\n",
+				    tag, cmd, fetchatt.s);
+			eatline(c);
+			goto freeargs;
+		    }
+
+		    /* Grab/parse the ]<x.y> part */
+		    c = getword(&fieldname);
+		    p = fieldname.s;
+		    if (*p++ != ']') {
+			prot_printf(imapd_out, "%s BAD Missing required close bracket after %s %s\r\n",
+				    tag, cmd, fetchatt.s);
+			eatline(c);
+			goto freeargs;
+		    }
+		    if (*p == '<' && isdigit(p[1])) {
+			p += 2;
+			while (isdigit(*p)) p++;
+
+			if (*p == '.' && p[1] >= '1' && p[1] <= '9') {
+			    p += 2;
+			    while (isdigit(*p)) p++;
+			}
+			else p--;
+
+			if (*p != '>') {
+			    prot_printf(imapd_out, "%s BAD Invalid body partial\r\n", tag);
+			    eatline(c);
+			    goto freeargs;
+			}
+			p++;
+		    }
+		    if (*p) {
+			prot_printf(imapd_out, "%s BAD Junk after body section\r\n", tag);
+			eatline(c);
+			goto freeargs;
+		    }
+		    appendfieldlist(&fetchargs.fsections,
+				    section, newfields, fieldname.s);
+		    newfields = 0;
+		    break;
+		}
+
 		switch (*p) {
 		case 'H':
 		    if (p != section && p[-1] != '.') break;
-		    if (!strncmp(p, "HEADER.FIELDS", 13)) {
-#if 0 /* XXX */
-			p += 13;
-			if (!strncmp(p, ".NOT", 4)) p += 4;
-			xxx-end-of-atom;
-			if (*p != '\0') {
-			    p--; /* force a syntax error */
-			    break;
-			}
-			xxx-parse-header-list-check-for-"]";
-#endif
-		    }
-		    else if (!strncmp(p, "HEADER]", 7)) p += 6;
+		    if (!strncmp(p, "HEADER]", 7)) p += 6;
 		    break;
 
 		case 'M':
@@ -1431,8 +1513,10 @@ int usinguid;
 		    appendstrlist(strlen(fetchatt.s) == 19 ?
 				  &fetchargs.headers : &fetchargs.headers_not,
 				  fieldname.s);
-		    if (strlen(fetchatt.s) == 19 &&
-			!(fetchitems & FETCH_UNCACHEDHEADER)) {
+		    if (strlen(fetchatt.s) == 19) {
+			fetchitems |= FETCH_UNCACHEDHEADER;
+		    }
+		    if (!(fetchitems & FETCH_UNCACHEDHEADER)) {
 			for (i=0; i<mailbox_num_cache_header; i++) {
 			    if (!strcmp(mailbox_cache_header_name[i],
 					fieldname.s)) break;
@@ -1504,7 +1588,9 @@ int usinguid;
     prot_printf(imapd_out, "%s OK %s completed\r\n", tag, cmd);
 
  freeargs:
+    freestrlist(newfields);
     freestrlist(fetchargs.bodysections);
+    freefieldlist(fetchargs.fsections);
     freestrlist(fetchargs.headers);
     freestrlist(fetchargs.headers_not);
 }
@@ -3570,6 +3656,26 @@ char *s;
 }
 
 /*
+ * Append 'section', 'fields', 'trail' to the fieldlist 'l'.
+ */
+appendfieldlist(l, section, fields, trail)
+struct fieldlist **l;
+char *section;
+struct strlist *fields;
+char *trail;
+{
+    struct fieldlist **tail = l;
+
+    while (*tail) tail = &(*tail)->next;
+
+    *tail = (struct fieldlist *)xmalloc(sizeof(struct fieldlist));
+    (*tail)->section = strsave(section);
+    (*tail)->fields = fields;
+    (*tail)->trail = strsave(trail);
+    (*tail)->next = 0;
+}
+
+/*
  * Append 's' to the strlist 'l'.
  */
 appendstrlist(l, s)
@@ -3601,6 +3707,24 @@ char *s;
     (*tail)->s = strsave(s);
     (*tail)->p = charset_compilepat(s);
     (*tail)->next = 0;
+}
+
+/*
+ * Free the fieldlist 'l'
+ */
+freefieldlist(l)
+struct fieldlist *l;
+{
+    struct fieldlist *n;
+
+    while (l) {
+	n = l->next;
+	free(l->section);
+	freestrlist(l->fields);
+	free(l->trail);
+	free((char *)l);
+	l = n;
+    }
 }
 
 /*
