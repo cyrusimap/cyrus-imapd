@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.123.2.7 2000/06/24 13:37:23 ken3 Exp $
+ * $Id: deliver.c,v 1.123.2.8 2000/07/06 13:48:07 ken3 Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.123.2.7 2000/06/24 13:37:23 ken3 Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.123.2.8 2000/07/06 13:48:07 ken3 Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -870,26 +870,32 @@ int open_sendmail(char *argv[], FILE **sm)
     return p;
 }
 
+/* sendmail_errstr.  create a descriptive message given 'sm_stat': 
+   the exit code from wait() from sendmail.
+
+   not thread safe, but probably ok */
 static char *sendmail_errstr(int sm_stat)
 {
-    char errstr[200];
+    static char errstr[200];
 
-    if (WIFEXITED(sm_stat))
-	sprintf(errstr,
-		"Sendmail process terminated normally, exit status = %d.\n",
-		WEXITSTATUS(sm_stat));
-    else if (WIFSIGNALED(sm_stat))
-	sprintf(errstr,
-		"Sendmail process terminated abnormally, signal = %d (%s)%s.\n",
-		WTERMSIG(sm_stat), strsignal(WTERMSIG(sm_stat)),
-		WCOREDUMP(sm_stat) ? " -- core file generated" : "");
-    else if (WIFSTOPPED(sm_stat))
-	sprintf(errstr, "Sendmail process stopped, signal = %d (%s).\n",
-		WTERMSIG(sm_stat), strsignal(WSTOPSIG(sm_stat)));
-    else
+    if (WIFEXITED(sm_stat)) {
+	snprintf(errstr, sizeof errstr,
+		 "Sendmail process terminated normally, exit status %d\n",
+		 WEXITSTATUS(sm_stat));
+    } else if (WIFSIGNALED(sm_stat)) {
+	snprintf(errstr, sizeof errstr,
+		 "Sendmail process terminated abnormally, signal = %d %s\n",
+		 WTERMSIG(sm_stat), 
+		 WCOREDUMP(sm_stat) ? " -- core file generated" : "");
+    } else if (WIFSTOPPED(sm_stat)) {
+	snprintf(errstr, sizeof errstr,
+		 "Sendmail process stopped, signal = %d\n",
+		 WTERMSIG(sm_stat));
+    } else {
 	return NULL;
+    }
 
-    return (xstrdup(errstr));
+    return errstr;
 }
 
 int send_rejection(char *origid,
