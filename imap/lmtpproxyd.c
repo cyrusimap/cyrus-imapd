@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.58 2003/12/15 17:50:51 rjs3 Exp $
+ * $Id: lmtpproxyd.c,v 1.59 2003/12/15 17:52:20 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -259,6 +259,7 @@ int service_main(int argc __attribute__((unused)),
     /* free session state */
     if (deliver_in) prot_free(deliver_in);
     if (deliver_out) prot_free(deliver_out);
+    deliver_in = deliver_out = NULL;
 
     if (deliver_logfd != -1) {
         close(deliver_logfd);
