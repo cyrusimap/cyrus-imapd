@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: lmtpd.c,v 1.9 2000/02/22 20:17:16 leg Exp $
+ * $Id: lmtpd.c,v 1.10 2000/02/24 01:51:06 tmartin Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.9 2000/02/22 20:17:16 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.10 2000/02/24 01:51:06 tmartin Exp $";*/
 
 #include <config.h>
 
@@ -143,7 +143,7 @@ typedef struct script_data {
 } script_data_t;
 
 /* forward declarations */
-void lmtpmode(deliver_opts_t *delopts);
+void lmtpmode(deliver_opts_t *delopts, int listeningunix);
 int deliver_mailbox(struct protstream *msg,
 		    struct stagemsg **stage,
 		    unsigned size,
@@ -259,13 +259,15 @@ static int mysasl_authproc(void *context __attribute__((unused)),
 	}
     }
 
-    /* ok, is auth_identity an admin? */
-    allowed = authisa(canon_authuser, "lmtpadmins");
+    /* ok, is auth_identity an admin? 
+     * xxx for now only admins can do lmtp from another machine
+     */
+    allowed = authisa(canon_authuser, "admins");
 
-    /*    if (allowed==0)
+    if (allowed==0)
     {
-      return SASL_BADAUTH;
-      }*/
+	return SASL_BADAUTH;
+    }
 
     free(canon_authuser);
     *user = canon_requser;
@@ -318,6 +320,7 @@ int service_init(int argc, char **argv, char **envp)
  */
 int service_main(int argc, char **argv, char **envp)
 {
+    int listeningunix = 0;
     deliver_opts_t *delopts =
 	(deliver_opts_t *) xmalloc(sizeof(deliver_opts_t));
     message_data_t *msgdata;
@@ -339,10 +342,13 @@ int service_main(int argc, char **argv, char **envp)
 	dupelim = 0;
     }
 
-    while ((opt = getopt(argc, argv, "q")) != EOF) {
+    while ((opt = getopt(argc, argv, "uq")) != EOF) {
 	switch(opt) {
 	case 'q':
 	    delopts->quotaoverride = 1;
+	    break;
+	case 'u': /* listening on local unix socket */
+	    listeningunix = 1;
 	    break;
 
 	default:
@@ -355,7 +361,7 @@ int service_main(int argc, char **argv, char **envp)
     setup_sieve(delopts, lmtpflag);
 #endif
 
-    lmtpmode(delopts);
+    lmtpmode(delopts, listeningunix);
 
     return 0;
 }
@@ -1266,9 +1272,7 @@ setup_sieve(deliver_opts_t *delopts)
 static void
 usage()
 {
-    fprintf(stderr, 
-"421-4.3.0 usage: deliver [-m mailbox] [-a auth] [-i] [-F flag]... [user]...\r\n");
-    fprintf(stderr, "421 4.3.0        deliver -E age\n");
+    fprintf(stderr, "421-4.3.0 usage: lmtpd [-q][-u]\r\n");
     fprintf(stderr, "421 4.3.0 %s\n", CYRUS_VERSION);
     exit(EC_USAGE);
 }
@@ -1503,7 +1507,7 @@ void msg_free(message_data_t *m)
 
 #define RCPT_GROW 5 /* XXX 30 */
 
-void lmtpmode(deliver_opts_t *delopts)
+void lmtpmode(deliver_opts_t *delopts, int listeningunix)
 {
     message_data_t *msg;
     char buf[4096];
@@ -1515,6 +1519,7 @@ void lmtpmode(deliver_opts_t *delopts)
     unsigned int mechcount = 0;
     int salen;
     struct stat sbuf;
+    int authenticated = 0;
 
     sasl_conn_t *conn;
     sasl_security_properties_t *secprops = NULL;
@@ -1687,6 +1692,8 @@ void lmtpmode(deliver_opts_t *delopts)
 		     continue;
 		 }
 
+		 authenticated = 1;
+
 		 /* authenticated successfully! */
 		 prot_printf(deliver_out, "250 Authenticated!\r\n");
 
@@ -1744,6 +1751,12 @@ void lmtpmode(deliver_opts_t *delopts)
 
 	case 'm':
 	case 'M':
+	    if ((listeningunix == 0) && (authenticated==0))
+	    {
+		prot_printf(deliver_out, "530 5.5.1 Authentication required\r\n");
+		continue;
+	    }
+
 	    if (!strncasecmp(buf, "mail ", 5)) {
 		if (msg->return_path) {
 		    prot_printf(deliver_out, "503 5.5.1 Nested MAIL command\r\n");
