@@ -42,6 +42,7 @@ extern int errno;
 int
 main()
 {
+    char fnamebuf[1024];
     int s;
     int c;
     struct sockaddr_un srvaddr;
@@ -55,14 +56,17 @@ main()
 	exit(1);
     }
 
-    (void) unlink("/etc/pwcheck/pwcheck");
+    strcpy(fnamebuf, STATEDIR);
+    strcat(fnamebuf, "/pwcheck/pwcheck");
+
+    (void) unlink(fnamebuf);
 
     memset((char *)&srvaddr, 0, sizeof(srvaddr));
     srvaddr.sun_family = AF_UNIX;
-    strcpy(srvaddr.sun_path, "/etc/pwcheck/pwcheck");
+    strcpy(srvaddr.sun_path, fnamebuf);
     r = bind(s, (struct sockaddr *)&srvaddr, sizeof(srvaddr));
     if (r == -1) {
-	perror("bind: /etc/pwcheck/pwcheck");
+	perror(fnamebuf);
 	exit(1);
     }
     r = listen(s, 5);
