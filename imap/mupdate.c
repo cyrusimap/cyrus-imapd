@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.39 2002/01/31 06:07:44 rjs3 Exp $
+ * $Id: mupdate.c,v 1.40 2002/02/01 19:42:52 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -524,9 +524,16 @@ void cmdloop(struct conn *c)
 	    break;
 
 	case 'L':
-	    if (!strcmp(cmd.s, "List")) {
+	    if (!strcmp(cmd.s, "Logout")) {
+		CHECKNEWLINE(c, ch);
+
+		prot_printf(c->pout, "%s OK \"bye-bye\"\r\n", tag.s);
+		goto done;
+	    }
+	    else if (!c->userid) goto nologin;
+	    else if (!strcmp(cmd.s, "List")) {
 		int opt = 0;
-		
+
 		if (ch == ' ') {
 		    /* Optional partition/host prefix parameter */
 		    ch = getstring(c->pin, c->pout, &arg1);
@@ -539,17 +546,13 @@ void cmdloop(struct conn *c)
 		cmd_list(c, tag.s, opt ? arg1.s : NULL);
 		
 		prot_printf(c->pout, "%s OK \"list complete\"\r\n", tag.s);
-	    } else if (!strcmp(cmd.s, "Logout")) {
-		CHECKNEWLINE(c, ch);
-
-		prot_printf(c->pout, "%s OK \"bye-bye\"\r\n", tag.s);
-		goto done;
 	    }
 	    else goto badcmd;
 	    break;
 
 	case 'N':
-	    if (!strcmp(cmd.s, "Noop")) {
+	    if (!c->userid) goto nologin;
+	    else if (!strcmp(cmd.s, "Noop")) {
 		CHECKNEWLINE(c, ch);
 
 		prot_printf(c->pout, "%s OK \"Noop done\"\r\n", tag.s);
