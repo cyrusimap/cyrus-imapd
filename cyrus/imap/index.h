@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.h,v 1.6 2003/04/17 22:44:11 rjs3 Exp $
+ * $Id: index.h,v 1.7 2003/05/09 19:30:26 rjs3 Exp $
  */
 
 /* Header for internal usage of index.c + programs that make raw access
@@ -81,9 +81,16 @@
 #define USER_FLAGS(msgno,i) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_USER_FLAGS+((i)*4))))
 
 /* Access assistance macros for memory-mapped cache file data */
+/* CACHE_ITEM_BIT32: Convert to host byte order */
+/* CACHE_ITEM_LEN: Get the length out */
+/* CACHE_ITEM_NEXT: Return a pointer to the next entry.  Sizes are
+ * 4-byte aligned, so round up to the next 4 byte boundry */
 #define CACHE_ITEM_BIT32(ptr) (ntohl(*((bit32 *)(ptr))))
 #define CACHE_ITEM_LEN(ptr) CACHE_ITEM_BIT32(ptr)
 #define CACHE_ITEM_NEXT(ptr) ((ptr)+4+((3+CACHE_ITEM_LEN(ptr))&~3))
+
+/* Size of a bit32 to skip when jumping over cache item sizes */
+#define CACHE_ITEM_SIZE_SKIP sizeof(bit32)
 
 /* Calculate the number of entries in a vector */
 #define VECTOR_SIZE(vector) (sizeof(vector)/sizeof(vector[0]))
