@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.99.2.6 2002/07/31 22:25:12 ken3 Exp $
+ * $Id: lmtpd.c,v 1.99.2.7 2002/08/02 12:37:34 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1412,9 +1412,10 @@ static int verify_user(const char *user, long quotacheck,
     int userlen = strlen(user), domainlen = 0;
 
     if (config_virtdomains && (domain = strchr(user, '@'))) {
+	domain++;
 	userlen = domain - user;
 	/* ignore default domain */
-	if (!(config_defdomain && !strcasecmp(config_defdomain, ++domain)))
+	if (!(config_defdomain && !strcasecmp(config_defdomain, domain)))
 	    domainlen = strlen(domain)+1;
     }
 
