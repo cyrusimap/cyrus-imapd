@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.221.2.7 2004/01/31 20:46:57 ken3 Exp $
+ * $Id: mboxlist.c,v 1.221.2.8 2004/02/05 19:26:01 ken3 Exp $
  */
 
 #include <config.h>
@@ -780,13 +780,26 @@ int mboxlist_insertremote(const char *name, int mbtype,
 			  const char *host, const char *acl,
 			  struct txn **tid)
 {
-    char *mboxent;
+    char *mboxent, *p;
     int r = 0;
 
     assert(name != NULL && host != NULL);
 
-    /* make sure its a remote mailbox */
-    if (strchr(host, '!')) mbtype |= MBTYPE_REMOTE;
+    if (p = strchr(host, '!')) {
+      /* remote mailbox */
+      int len = (p - host);
+      if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_UNIFIED &&
+	  len == strlen(config_servername) &&
+	  !strncasecmp(host, config_servername, len)) {
+	/* its on our server, make it a local mailbox */
+	mbtype &= ~MBTYPE_REMOTE;
+	host += len + 1;
+      }
+      else {
+	/* make sure its a remote mailbox */
+	mbtype |= MBTYPE_REMOTE;
+      }
+    }
 
     mboxent = mboxlist_makeentry(mbtype, host, acl);
 
