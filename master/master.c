@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.89 2004/01/20 21:27:31 rjs3 Exp $ */
+/* $Id: master.c,v 1.90 2004/01/21 17:03:25 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -772,7 +772,9 @@ void spawn_schedule(time_t now)
 		a->mark = now + a->period;
 	    } else {
 		/* Daily Event */
-		a->mark += a->period;
+		while(a->mark < now) {
+			a->mark += a->period;
+		}
 	    }
 	    /* reschedule a */
 	    schedule_event(a);
