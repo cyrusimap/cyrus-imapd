@@ -57,10 +57,12 @@ eval cyr_conn authenticate $auth_args -pwcommand {{
     set hostname %h
     if {[string length %u] == 0} {
 	puts -nonewline "$hostname userid: "
+	flush stdout
 	gets stdin userid
     } else {set userid %u}
     exec stty -echo >@stdout
     puts -nonewline "$hostname password: "
+    flush stdout
     gets stdin passwd
     exec stty echo >@stdout
     puts ""
