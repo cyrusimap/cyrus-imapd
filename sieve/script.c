@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.6 1999/09/06 02:51:38 leg Exp $
+ * $Id: script.c,v 1.7 1999/09/06 02:57:00 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -356,7 +356,7 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 		
 		parse_address(body[0], &data, &marker);
 		tmp = get_address(ADDRESS_ALL, &data, &marker);
-		reply_to = (tmp != NULL) ? xstrdup(tmp) ? NULL;
+		reply_to = (tmp != NULL) ? xstrdup(tmp) : NULL;
 		free_address(&data, &marker);
 
 		/* first, is there a reply-to address? */
