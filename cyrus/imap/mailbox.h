@@ -81,4 +81,5 @@ struct index_record {
 #define FLAG_FLAGGED (1<<1)
 #define FLAG_DELETED (1<<2)
 
+extern char *mailbox_message_fname();
 

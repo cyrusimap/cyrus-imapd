@@ -101,23 +101,58 @@ int usinguid;
 int checkseen;
 {
     struct stat sbuf;
-    int newexists, oldexists, msgno, i, r;
+    int newexists, oldexists, oldmsgno, msgno, nexpunge, i, r;
+    struct index_record record;
     time_t last_read;
     bit32 user_flags[MAX_USER_FLAGS/32];
 
     oldexists = imapd_exists;
 
-#if 0	/* XXX implement when doing EXPUNGE */
-    if (index_len && mailbox_new_index_header(mailbox)) {
-	/* XXX send EXPUNGE oldexists-- */
-	imapd_exists = -1;
+    /* Check for expunge */
+    if (index_len && stat(FNAME_INDEX+1, &sbuf) == 0) {
+	if (sbuf.st_ino != mailbox->index_ino) {
+	    if (mailbox_open_index(mailbox)) {
+		fatal("failed to reopen index file", EX_IOERR);
+	    }
+
+	    for (oldmsgno = msgno = 1; oldmsgno <= imapd_exists;
+		 oldmsgno++, msgno++) {
+		if (msgno <= mailbox->exists) {
+		    mailbox_read_index_record(mailbox, msgno, &record);
+		}
+		else {
+		    record.uid = mailbox->last_uid+1;
+		}
+		
+		nexpunge = 0;
+		while (oldmsgno<=imapd_exists && UID(oldmsgno) < record.uid) {
+		    nexpunge++;
+		    oldmsgno++;
+		}
+		if (nexpunge) {
+		    bcopy(flagreport+msgno+nexpunge, flagreport+msgno,
+			  (oldexists-msgno-nexpunge+1)*sizeof(*flagreport));
+		    bcopy(seenflag+msgno+nexpunge, seenflag+msgno,
+			  (oldexists-msgno-nexpunge+1)*sizeof(*seenflag));
+		    oldexists -= nexpunge;
+		    while (nexpunge--) {
+			printf("* %d EXPUNGE\r\n", msgno);
+		    }
+		}
+	    }
+
+	    /* Force re-mmap of index/cache files */
+	    if (index_len) munmap(index_base, index_len);
+	    if (cache_len) munmap(cache_base, cache_len);
+	    index_len = cache_len = 0;
+
+	    /* Force a * n EXISTS message */
+	    imapd_exists = -1;
+	}
+	else if (sbuf.st_mtime != mailbox->index_mtime) {
+	    mailbox_read_index_header(mailbox);
+	}
     }
-#else
-    fstat(fileno(mailbox->index), &sbuf);
-    if (mailbox->index_mtime != sbuf.st_mtime) {
-	mailbox_read_index_header(mailbox);
-    }
-#endif
     index_ino = mailbox->index_ino;
 
     start_offset = mailbox->start_offset;
@@ -192,10 +227,12 @@ int checkseen;
 	    seenflag = xrealloc(seenflag, flagalloced+1);
 	}
 
-	for (i = imapd_exists+1; i <= newexists; i++) {
+	/* Zero out array entry for newly arrived messages */
+	for (i = oldexists+1; i <= newexists; i++) {
 	    flagreport[i] = 0;
 	    seenflag[i] = 0;
 	}
+
 	checkseen = 1;
 	imapd_exists = newexists;
 	printf("* %d EXISTS\r\n* %d RECENT\r\n", imapd_exists,
@@ -755,7 +792,7 @@ int usinguid;
 	    if (l) continue;
 	}
 	if (searchargs->body || searchargs->text) {
-	    msgfile = fopen(message_fname(mailbox, UID(msgno)), "r");
+	    msgfile = fopen(mailbox_message_fname(mailbox, UID(msgno)), "r");
 	    if (!msgfile) continue;
 
 	    for (l = searchargs->body; l; l = l->next) {
@@ -1207,7 +1244,7 @@ char *rock;
     if ((fetchitems & (FETCH_HEADER|FETCH_TEXT|FETCH_RFC822)) ||
 	fetchargs->bodysections ||
 	fetchargs->headers || fetchargs->headers_not) {
-	msgfile = fopen(message_fname(mailbox, UID(msgno)), "r");
+	msgfile = fopen(mailbox_message_fname(mailbox, UID(msgno)), "r");
 	if (!msgfile) printf("* NO Message %d no longer exists\r\n", msgno);
     }
 

@@ -121,7 +121,7 @@ char *userid;
 
     strcpy(fname, mailbox->path);
     strcat(fname, "/");
-    strcat(fname, message_fname(mailbox, message_index.uid));
+    strcat(fname, mailbox_message_fname(mailbox, message_index.uid));
     destfile = fopen(fname, "w+");
     if (!destfile) {
 	return IMAP_IOERROR;
