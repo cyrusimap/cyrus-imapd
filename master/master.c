@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: master.c,v 1.8 2000/04/06 15:16:24 leg Exp $ */
+/* $Id: master.c,v 1.9 2000/05/04 03:10:50 leg Exp $ */
 
 #include <config.h>
 
@@ -605,10 +605,10 @@ int main(int argc, char **argv, char **envp)
     int i;
     int fd;
     fd_set rfds;
-    char *p;
+    char *p = NULL;
 
     p = getenv("CYRUS_VERBOSE");
-    if (p) verbose = atoi(p);
+    if (p) verbose = atoi(p) + 1;
 
     /* close stdin/out/err */
     for (fd = 0; fd < 3; fd++) {

@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: service.c,v 1.2 2000/02/18 06:41:49 leg Exp $ */
+/* $Id: service.c,v 1.3 2000/05/04 03:10:50 leg Exp $ */
 #include <config.h>
 
 #include <stdio.h>
@@ -68,10 +68,12 @@ int main(int argc, char **argv, char **envp)
     char name[64];
     int fdflags;
     int fd;
-    char *p;
+    char *p = NULL;
 
     p = getenv("CYRUS_VERBOSE");
-    if (p) verbose = atoi(p);
+    if (p) verbose = atoi(p) + 1;
+
+    if (verbose > 30) sleep(15);
 
     snprintf(name, sizeof(name) - 1, "service-%s", argv[0]);
     config_init(name);
