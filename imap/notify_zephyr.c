@@ -73,11 +73,11 @@ char *header;
     msgbody = xmalloc(1000 + strlen(header));
     lines[1] = msgbody;
     
-    if (mailbox[0]) {
-	sprintf(msgbody, "user.%s.%s has new mail.\n\n", user, mailbox);
+    if (!strcmp(mailbox, "INBOX")) {
+	strcpy(msgbody, "You have new mail.\n\n");
     }
     else {
-	strcpy(msgbody, "You have new mail.\n\n");
+	sprintf(msgbody, "%s has new mail.\n\n", mailbox);
     }
     strcat(msgbody, header);
 

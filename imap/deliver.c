@@ -742,7 +742,12 @@ char *mailboxname;
     }
 
     if (!r && user) {
-	notify(user, submailbox, notifyheader ? notifyheader : "");
+	strcpy(namebuf, "INBOX");
+	if (submailbox) {
+	    strcat(namebuf, ".");
+	    strcat(namebuf, submailbox);
+	}
+	notify(user, namebuf, notifyheader ? notifyheader : "");
     }
 
     if (!r && dupelim && id) markdelivered(id, user ? namebuf : mailboxname);
