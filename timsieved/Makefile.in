@@ -1,5 +1,5 @@
 # Makefile.in - timsieved makefile
-# $Id: Makefile.in,v 1.6 1999/11/03 18:09:43 tmartin Exp $
+# $Id: Makefile.in,v 1.7 1999/11/11 18:30:04 leg Exp $
 # @configure_input@
 ################################################################
 #        Copyright 1998 by Carnegie Mellon University
@@ -72,7 +72,7 @@ clean:
 	rm -f *.o *.a Makefile.bak makedepend.log
 
 distclean: clean
-	rm -f Makefile
+	rm -f Makefile timsieved
 
 depend:
 	${MAKEDEPEND} $(CPPFLAGS) $(DEFS) -I$(srcdir) $(CFLAGS) *.c $(srcdir)/*.c 1>makedepend.log 2>&1
