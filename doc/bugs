@@ -1,0 +1,20 @@
+                     Known bugs in the Cyrus IMAP Server
+
+The RENAME command does not have the hierarchical behavior required by the
+IMAP4rev1 specification.  (The CAPABILITY command now returns
+X-NON-HIERARCHICAL-RENAME in its response in order to advertise this bug.
+This will be fixed in a future release.)
+
+If a client tries to FETCH or UID FETCH a BODY[] attribute from a
+netnews-format mailbox, the server truncates the message by one character
+for each line in the message (due to LF/CRLF conversion).
+
+Using AFS groups with ptclient, users with negative rights as part of
+groups may be granted access to mailboes if ptclient has failed.
+
+LIST NIL *.% causes the current imapd process to hang.
+
+
+Please report bugs to cyrus-bugs@andrew.cmu.edu.  Be sure to include
+system type, compiler used, and the options passed to configure.  Patches
+are deeply appreciated as well.
