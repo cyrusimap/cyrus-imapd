@@ -199,7 +199,7 @@ PREINIT:
 	SV *bang;
 	Cyrus_IMAP rv;
 CODE:
-	rc = imclient_connect(&client, host, port);
+	rc = imclient_connect(&client, host, port, NULL);
 	switch (rc) {
 	case -1:
 	  Perl_croak("imclient_connect: unknown host \"%s\"", host);
