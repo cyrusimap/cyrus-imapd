@@ -37,6 +37,8 @@
 
 static int dodropoff = -1;
 
+static drop_to64();
+
 /*
  * Drop off a request to send an IMSP LAST command stating the highest
  * uid for mailbox 'name' is 'uid'
@@ -46,7 +48,10 @@ drop_last(name, uid)
 char *name;
 unsigned long uid;
 {
+    int last_change = 0;
+    bit32 intbuf[2];
     char fnamebuf[MAX_MAILBOX_PATH];
+    char *p;
     FILE *f;
 
     if (dodropoff == -1) {
@@ -58,8 +63,21 @@ unsigned long uid;
 
     if (!dodropoff) return 0;
 
-    sprintf(fnamebuf, "%s%slast.%lu.%s", config_dir, FNAME_DROPDIR,
-	    uid, name);
+    intbuf[0] = htonl(uid);
+    intbuf[1] = htonl(last_change);
+    
+    sprintf(fnamebuf, "%s%sL", config_dir, FNAME_DROPDIR);
+    drop_to64(fnamebuf+strlen(fnamebuf), (unsigned char *)intbuf,
+	      sizeof(intbuf));
+
+    p = fnamebuf + strlen(fnamebuf);
+
+    if ((p - fnamebuf) + strlen(name) >= sizeof(fnamebuf)) return 0;
+    strcpy(p, name);
+    lcase(p);
+
+    while (p = strchr(p, '=')) *p = 'B';
+
     f = fopen(fnamebuf, "w");
     if (!f) {
 	syslog(LOG_ERR, "IOERROR: creating dropoff file %s: %m",
@@ -76,15 +94,16 @@ unsigned long uid;
  * message 'uid'.
  */
 int
-drop_seen(name, userid, uid)
+drop_seen(name, userid, uid, last_change)
 char *name;
 char *userid;
 unsigned long uid;
+time_t last_change;
 {
+    bit32 intbuf[2];
     char fnamebuf[MAX_MAILBOX_PATH];
+    char *p;
     FILE *f;
-
-    if (strchr(userid, '.')) return 0;
 
     if (dodropoff == -1) {
 	if (config_getstring("imspservers", 0)) {
@@ -95,8 +114,33 @@ unsigned long uid;
 
     if (!dodropoff) return 0;
 
-    sprintf(fnamebuf, "%s%sseen.%lu.%s.%s", config_dir, FNAME_DROPDIR,
-	    uid, userid, name);
+    intbuf[0] = htonl(uid);
+    intbuf[1] = htonl(last_change);
+    
+    sprintf(fnamebuf, "%s%sS", config_dir, FNAME_DROPDIR);
+    drop_to64(fnamebuf+strlen(fnamebuf), (unsigned char *)intbuf,
+	      sizeof(intbuf));
+
+    p = fnamebuf + strlen(fnamebuf);
+
+    if ((p - fnamebuf) + strlen(name) >= sizeof(fnamebuf)) return 0;
+    strcpy(p, name);
+    lcase(p);
+    while (*p) {
+	if (*p == '=') *p = 'B';
+	p++;
+    }
+
+    if ((p - fnamebuf) + strlen(userid) + 1 >= sizeof(fnamebuf)) return 0;
+    *p++ = '=';
+    strcpy(p, userid);
+    lcase(p);
+    while (*p) {
+	if (*p == '/') *p = 'A';
+	if (*p == '=') *p = 'B';
+	p++;
+    }
+
     f = fopen(fnamebuf, "w");
     if (!f) {
 	syslog(LOG_ERR, "IOERROR: creating dropoff file %s: %m",
@@ -107,3 +151,38 @@ unsigned long uid;
     return 0;
 }
       
+static char drop_basis_64[] =
+   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+:";
+drop_to64(to, from, len)
+char *to;
+unsigned char *from;
+int len;
+{
+    int c1, c2, c3;
+
+    while (len) {
+	c1 = *from++;
+	len--;
+	*to++ = drop_basis_64[c1>>2];
+	if (len == 0) c2 = 0;
+	else c2 = *from++;
+	*to++ = drop_basis_64[((c1 & 0x3)<< 4) | ((c2 & 0xF0) >> 4)];
+	if (len == 0) {
+	    *to++ = '=';
+	    *to++ = '=';
+	    break;
+	}
+
+	if (--len == 0) c3 = 0;
+	else c3 = *from++;
+        *to++ = drop_basis_64[((c2 & 0xF) << 2) | ((c3 & 0xC0) >>6)];
+	if (len == 0) {
+	    *to++ = '=';
+	    break;
+	}
+	
+	--len;
+        *to++ = drop_basis_64[c3 & 0x3F];
+    }
+    *to = '\0';
+}
