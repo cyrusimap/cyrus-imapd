@@ -31,6 +31,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #ifdef HAVE_RX
 #include <rxposix.h>
 #else
+#include <sys/types.h>
 #include <regex.h>
 #endif
 #endif
