@@ -40,7 +40,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 # 
-# $Id: Makefile.in,v 1.25 2002/05/25 19:57:47 leg Exp $
+# $Id: Makefile.in,v 1.26 2002/06/25 15:22:29 rjs3 Exp $
 srcdir = @srcdir@
 VPATH = @srcdir@
 
@@ -63,7 +63,7 @@ exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
 MAN1 = $(srcdir)/imtest.1 $(srcdir)/pop3test.1 $(srcdir)/lmtptest.1 \
-	$(srcdir)/smtptest.1 $(srcdir)/sivtest.1 \
+	$(srcdir)/smtptest.1 $(srcdir)/sivtest.1 $(srcdir)/mupdatetest.1 \
 	$(srcdir)/installsieve.1 $(srcdir)/sieveshell.1
 MAN3 = $(srcdir)/imclient.3
 MAN5 = $(srcdir)/imapd.conf.5 $(srcdir)/krb.equiv.5 $(srcdir)/cyrus.conf.5
