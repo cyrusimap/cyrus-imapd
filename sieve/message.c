@@ -1,6 +1,6 @@
 /* message.c -- message parsing functions
  * Larry Greenfield
- * $Id: message.c,v 1.11 2000/02/17 06:03:14 tmartin Exp $
+ * $Id: message.c,v 1.12 2000/02/22 07:56:41 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -62,14 +62,14 @@ int do_reject(action_list_t *a, char *msg)
 	    a->a == ACTION_MARK ||
 	    a->a == ACTION_UNMARK
 	    )
-	    return -1;
+	    return SIEVE_RUN_ERROR;
 	a = a->next;
     }
 
     /* add to the action list */
     a = (action_list_t *) xmalloc(sizeof(action_list_t));
     if (a == NULL)
-	return -1;
+	return SIEVE_NOMEM;
     a->a = ACTION_REJECT;
     a->u.rej.msg = msg;
     b->next = a;
@@ -89,14 +89,14 @@ int do_fileinto(action_list_t *a, char *mbox, sieve_imapflags_t *imapflags)
     while (a != NULL) {
 	b = a;
 	if (a->a == ACTION_REJECT)
-	    return -1;
+	    return SIEVE_RUN_ERROR;
 	a = a->next;
     }
 
     /* add to the action list */
     a = (action_list_t *) xmalloc(sizeof(action_list_t));
     if (a == NULL)
-	return -1;
+	return SIEVE_NOMEM;
     a->a = ACTION_FILEINTO;
     a->u.fil.mailbox = mbox;
     a->u.fil.imapflags = imapflags;
@@ -119,14 +119,14 @@ int do_forward(action_list_t *a, char *addr)
     while (a != NULL) {
 	b = a;
 	if (a->a == ACTION_REJECT)
-	    return -1;
+	    return SIEVE_RUN_ERROR;
 	a = a->next;
     }
 
     /* add to the action list */
     a = (action_list_t *) xmalloc(sizeof(action_list_t));
     if (a == NULL)
-	return -1;
+	return SIEVE_NOMEM;
     a->a = ACTION_REDIRECT;
     a->u.red.addr = addr;
     a->next = NULL;
@@ -146,7 +146,7 @@ int do_keep(action_list_t *a, sieve_imapflags_t *imapflags)
     while (a != NULL) {
 	b = a;
 	if (a->a == ACTION_REJECT)
-	    return -1;
+	    return SIEVE_RUN_ERROR;
 	if (a->a == ACTION_KEEP) /* don't bother doing it twice */
 	    return 0;
 	a = a->next;
@@ -155,7 +155,7 @@ int do_keep(action_list_t *a, sieve_imapflags_t *imapflags)
     /* add to the action list */
     a = (action_list_t *) xmalloc(sizeof(action_list_t));
     if (a == NULL)
-	return -1;
+	return SIEVE_NOMEM;
     a->a = ACTION_KEEP;
     a->u.keep.imapflags = imapflags;
     a->next = NULL;
@@ -182,7 +182,7 @@ int do_discard(action_list_t *a)
     /* add to the action list */
     a = (action_list_t *) xmalloc(sizeof(action_list_t));
     if (a == NULL)
-	return -1;
+	return SIEVE_NOMEM;
     a->a = ACTION_DISCARD;
     a->next = NULL;
     b->next = a;
@@ -200,14 +200,14 @@ int do_vacation(action_list_t *a, char *addr, char *fromaddr,
 	b = a;
 	if (a->a == ACTION_REJECT ||
 	    a->a == ACTION_VACATION) /* vacation can't be used twice */
-	    return -1;
+	    return SIEVE_RUN_ERROR;
 	a = a->next;
     }
 
     /* add to the action list */
     a = (action_list_t *) xmalloc(sizeof(action_list_t));
     if (a == NULL)
-	return -1;
+	return SIEVE_NOMEM;
     a->a = ACTION_VACATION;
     a->u.vac.send.addr = addr;
     a->u.vac.send.fromaddr = fromaddr;
@@ -232,14 +232,14 @@ int do_setflag(action_list_t *a, char *flag)
     while (a != NULL) {
 	b = a;
 	if (a->a == ACTION_REJECT)
-	    return -1;
+	    return SIEVE_RUN_ERROR;
 	a = a->next;
     }
  
     /* add to the action list */
     a = (action_list_t *) xmalloc(sizeof(action_list_t));
     if (a == NULL)
-	return -1;
+	return SIEVE_NOMEM;
     a->a = ACTION_SETFLAG;
     a->u.fla.flag = flag;
     b->next = a;
@@ -259,14 +259,14 @@ int do_addflag(action_list_t *a, char *flag)
     while (a != NULL) {
 	b = a;
 	if (a->a == ACTION_REJECT)
-	    return -1;
+	    return SIEVE_RUN_ERROR;
 	a = a->next;
     }
  
     /* add to the action list */
     a = (action_list_t *) xmalloc(sizeof(action_list_t));
     if (a == NULL)
-	return -1;
+	return SIEVE_NOMEM;
     a->a = ACTION_ADDFLAG;
     a->u.fla.flag = flag;
     b->next = a;
@@ -286,14 +286,14 @@ int do_removeflag(action_list_t *a, char *flag)
     while (a != NULL) {
 	b = a;
 	if (a->a == ACTION_REJECT)
-	    return -1;
+	    return SIEVE_RUN_ERROR;
 	a = a->next;
     }
  
     /* add to the action list */
     a = (action_list_t *) xmalloc(sizeof(action_list_t));
     if (a == NULL)
-	return -1;
+	return SIEVE_NOMEM;
     a->a = ACTION_REMOVEFLAG;
     a->u.fla.flag = flag;
     b->next = a;
@@ -314,14 +314,14 @@ int do_mark(action_list_t *a)
     while (a != NULL) {
 	b = a;
 	if (a->a == ACTION_REJECT)
-	    return -1;
+	    return SIEVE_RUN_ERROR;
 	a = a->next;
     }
  
     /* add to the action list */
     a = (action_list_t *) xmalloc(sizeof(action_list_t));
     if (a == NULL)
-	return -1;
+	return SIEVE_NOMEM;
     a->a = ACTION_MARK;
     b->next = a;
     a->next = NULL;
@@ -341,14 +341,14 @@ int do_unmark(action_list_t *a)
     while (a != NULL) {
 	b = a;
 	if (a->a == ACTION_REJECT)
-	    return -1;
+	    return SIEVE_RUN_ERROR;
 	a = a->next;
     }
  
     /* add to the action list */
     a = (action_list_t *) xmalloc(sizeof(action_list_t));
     if (a == NULL)
-	return -1;
+	return SIEVE_NOMEM;
     a->a = ACTION_UNMARK;
     b->next = a;
     a->next = NULL;

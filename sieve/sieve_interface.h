@@ -1,5 +1,5 @@
 /* sieve_interface.h -- interface for deliver
- * $Id: sieve_interface.h,v 1.10 2000/02/10 00:39:14 leg Exp $
+ * $Id: sieve_interface.h,v 1.11 2000/02/22 07:56:41 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -48,7 +48,7 @@ typedef struct sieve_script sieve_script_t;
 
 typedef int sieve_callback(void *action_context, void *interp_context, 
 			   void *script_context,
-			   void *message_context);
+			   void *message_context, const char **errmsg);
 typedef int sieve_get_size(void *message_context, int *size);
 typedef int sieve_get_header(void *message_context, char *header,
 			     char ***contents);
@@ -131,8 +131,14 @@ int sieve_register_header(sieve_interp_t *interp, sieve_get_header *f);
 int sieve_register_envelope(sieve_interp_t *interp, sieve_get_envelope *f);
 
 typedef int sieve_parse_error(int lineno, char *msg, void *interp_context,
-			  void *script_context);
+			      void *script_context);
 int sieve_register_parse_error(sieve_interp_t *interp, sieve_parse_error *f);
+
+typedef int sieve_execute_error(char *msg, void *interp_context,
+				void *script_context, void *message_context);
+int sieve_register_execute_error(sieve_interp_t *interp, sieve_execute_error *f);
+ 
+
 
 /* given an interpretor and a script, produce an executable script */
 int sieve_script_parse(sieve_interp_t *interp, FILE *script,
@@ -144,7 +150,7 @@ int sieve_script_free(sieve_script_t **s);
 int sieve_execute_script(sieve_script_t *script, 
 			 void *message_context);
 
-/* Get space seperated list of extensions supported by the implementation */
+/* Get space separated list of extensions supported by the implementation */
 char *sieve_listextensions(void);
 
 #endif

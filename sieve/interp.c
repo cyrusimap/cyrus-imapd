@@ -1,6 +1,6 @@
 /* interp.c -- sieve script interpretor builder
  * Larry Greenfield
- * $Id: interp.c,v 1.13 2000/02/16 19:47:03 tmartin Exp $
+ * $Id: interp.c,v 1.14 2000/02/22 07:56:40 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -185,6 +185,12 @@ int sieve_register_vacation(sieve_interp_t *interp, sieve_vacation_t *v)
 int sieve_register_parse_error(sieve_interp_t *interp, sieve_parse_error *f)
 {
     interp->err = f;
+    return SIEVE_OK;
+}
+
+int sieve_register_execute_error(sieve_interp_t *interp, sieve_execute_error *f)
+{
+    interp->execute_err = f;
     return SIEVE_OK;
 }
 

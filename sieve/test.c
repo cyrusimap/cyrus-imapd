@@ -1,6 +1,6 @@
 /* test.c -- tester for libsieve
  * Larry Greenfield
- * $Id: test.c,v 1.10 2000/02/13 06:22:50 leg Exp $
+ * $Id: test.c,v 1.11 2000/02/22 07:56:41 tmartin Exp $
  *
  * usage: "test message script"
  */
@@ -317,7 +317,7 @@ int getenvelope(void *v, char *head, char ***body)
     return SIEVE_OK;
 }
 
-int redirect(void *ac, void *ic, void *sc, void *mc)
+int redirect(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     sieve_redirect_context_t *rc = (sieve_redirect_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
@@ -325,14 +325,14 @@ int redirect(void *ac, void *ic, void *sc, void *mc)
     return SIEVE_OK;
 }
 
-int discard(void *ac, void *ic, void *sc, void *mc)
+int discard(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     message_data_t *m = (message_data_t *) mc;
     printf("discarding message '%s'\n", m->name);
     return SIEVE_OK;
 }
 
-int reject(void *ac, void *ic, void *sc, void *mc)
+int reject(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     sieve_reject_context_t *rc = (sieve_reject_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
@@ -340,7 +340,7 @@ int reject(void *ac, void *ic, void *sc, void *mc)
     return SIEVE_OK;
 }
 
-int fileinto(void *ac, void *ic, void *sc, void *mc)
+int fileinto(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     sieve_fileinto_context_t *fc = (sieve_fileinto_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
@@ -358,7 +358,7 @@ int fileinto(void *ac, void *ic, void *sc, void *mc)
     return SIEVE_OK;
 }
 
-int keep(void *ac, void *ic, void *sc, void *mc)
+int keep(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     sieve_keep_context_t *kc = (sieve_keep_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
@@ -376,9 +376,8 @@ int keep(void *ac, void *ic, void *sc, void *mc)
     return SIEVE_OK;
 }
 
-int notify(void *ac, void *ic, void *sc, void *mc)
+int notify(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
-
     sieve_notify_context_t *nc = (sieve_notify_context_t *) ac;
 
     printf("notify msg = '%s' with priority = %s\n",nc->message, nc->priority);
@@ -394,7 +393,15 @@ int mysieve_error(int lineno, char *msg,
     return SIEVE_OK;
 }
 
-int autorespond(void *ac, void *ic, void *sc, void *mc)
+int mysieve_execute_error(char *msg, void *i, void *s, void *m)
+{
+    fprintf(stderr, "%s\r\n", msg);
+ 
+    return SIEVE_OK;
+}
+
+
+int autorespond(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     sieve_autorespond_context_t *arc = (sieve_autorespond_context_t *) ac;
     char yn;
@@ -413,7 +420,7 @@ int autorespond(void *ac, void *ic, void *sc, void *mc)
     return SIEVE_FAIL;
 }
 
-int send_response(void *ac, void *ic, void *sc, void *mc)
+int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     sieve_send_response_context_t *src = (sieve_send_response_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
@@ -522,6 +529,13 @@ int main(int argc, char *argv[])
 	printf("sieve_register_parse_error() returns %d\n", res);
 	exit(1);
     }
+    
+    res = sieve_register_execute_error(i, &mysieve_execute_error);
+    if (res != SIEVE_OK) {
+	printf("sieve_register_execute_error() returns %d\n", res);
+        exit(1);
+    }
+
 
     f = fopen(argv[2], "r");
     if (!f) {
