@@ -1,6 +1,6 @@
 dnl sasl2.m4--sasl2 libraries and includes
 dnl Rob Siemborski
-dnl $Id: sasl2.m4,v 1.36 2003/10/22 18:50:02 rjs3 Exp $
+dnl $Id: sasl2.m4,v 1.37 2003/11/06 21:55:52 rjs3 Exp $
 
 AC_DEFUN([SASL_GSSAPI_CHK],[
  AC_ARG_ENABLE(gssapi, [  --enable-gssapi=<DIR>   enable GSSAPI authentication [yes] ],
@@ -25,8 +25,6 @@ AC_DEFUN([SASL_GSSAPI_CHK],[
   dnl and Sun SEAM (http://wwws.sun.com/software/security/kerberos/)
   dnl
   dnl The choice is reflected in GSSAPIBASE_LIBS
-  dnl we might need libdb
-  AC_CHECK_LIB(db, db_open)
 
   gss_impl="no";
   AC_CHECK_LIB(resolv,res_search)
