@@ -57,10 +57,6 @@ extern int opterr;
 
 extern int errno;
 
-/* The Eudora kludge */
-#define STATUS "Status: "
-#define SLEN (sizeof(STATUS)+2)
-
 #ifdef HAVE_ACTE_KRB
 #include <krb.h>
 
@@ -78,7 +74,7 @@ char popd_clienthost[250] = "[local]";
 struct protstream *popd_out, *popd_in;
 unsigned popd_exists = 0;
 unsigned popd_highest;
-unsigned popd_initialhighest;
+unsigned popd_login_time;
 struct msg {
     unsigned uid;
     unsigned size;
@@ -103,22 +99,6 @@ char **envp;
 
     popd_in = prot_new(0, 0);
     popd_out = prot_new(1, 1);
-
-    {
-	/* XXX temp hack to find auth problems */
-	char buf[MAX_MAILBOX_PATH];
-	FILE *logfile;
-
-	/* Create telemetry log */
-	sprintf(buf, "%s%s%s/%u", config_dir, FNAME_LOGDIR, "pop3-auth",
-		getpid());
-	logfile = fopen(buf, "w");
-	if (logfile) {
-	    prot_setlog(popd_in, fileno(logfile));
-	    prot_setlog(popd_out, fileno(logfile));
-	}
-    }
-
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
 
@@ -171,6 +151,22 @@ char **envp;
     timeout = config_getint("poptimeout", 10);
     if (timeout < 10) timeout = 10;
     prot_settimeout(popd_in, timeout*60);
+
+    {
+	/* XXX temp hack to find auth problems */
+	char buf[MAX_MAILBOX_PATH];
+	FILE *logfile;
+
+	/* Create telemetry log */
+	sprintf(buf, "%s%s%s/%u", config_dir, FNAME_LOGDIR, "pop3-auth",
+		getpid());
+	logfile = fopen(buf, "w");
+	if (logfile) {
+	    prot_setlog(popd_in, fileno(logfile));
+	    prot_setlog(popd_out, fileno(logfile));
+	}
+    }
+
 
 #ifdef HAVE_ACTE_KRB
     if (kflag) kpop();
@@ -314,8 +310,7 @@ cmdloop()
 	    if (!arg) {
 		if (popd_mailbox) {
 		    if (!mailbox_lock_index(popd_mailbox)) {
-			popd_mailbox->pop3_last_uid = popd_highest ? 
-			  popd_msg[popd_highest].uid : 0;
+			popd_mailbox->pop3_last_login = popd_login_time;
 			mailbox_write_index_header(popd_mailbox);
 			mailbox_unlock_index(popd_mailbox);
 		    }
@@ -523,6 +518,7 @@ cmd_pass(pass)
 char *pass;
 {
     char *reply;
+    int plaintextloginpause;
 
     if (!popd_userid) {
 	prot_printf(popd_out, "-ERR Must give USER command\r\n");
@@ -578,6 +574,9 @@ char *pass;
     else {
 	syslog(LOG_NOTICE, "login: %s %s plaintext %s",
 	       popd_clienthost, popd_userid, reply ? reply : "");
+	if (plaintextloginpause = config_getint("plaintextloginpause", 0)) {
+	    sleep(plaintextloginpause);
+	}
     }
     openinbox();
 }
@@ -679,6 +678,9 @@ int openinbox()
     struct index_record record;
     char buf[MAX_MAILBOX_PATH];
     FILE *logfile;
+    int minpoll;
+
+    popd_login_time = time(0);
 
     strcpy(inboxname, "user.");
     strcat(inboxname, popd_userid);
@@ -701,6 +703,21 @@ int openinbox()
 	return 1;
     }
 
+    if ((minpoll = config_getint("popminpoll", 0)) &&
+	mboxstruct.pop3_last_login + 60*minpoll > popd_login_time) {
+	prot_printf(popd_out,
+		    "-ERR Logins must be at least %d minute%s apart\r\n"
+		    minpoll, minpoll > 1 ? "s" : "");
+	if (!mailbox_lock_index(&mboxstruct)) {
+	    mboxstruct.pop3_last_login = popd_login_time;
+	    mailbox_write_index_header(&mboxstruct);
+	}
+	mailbox_close(&mboxstruct);
+	free(popd_userid);
+	popd_userid = 0;
+	return 1;
+    }
+
     if (chdir(mboxstruct.path)) {
 	syslog(LOG_ERR, "IOERROR: changing directory to %s: %m",
 	       mboxstruct.path);
@@ -714,11 +731,9 @@ int openinbox()
 	    if (r = mailbox_read_index_record(&mboxstruct, msg, &record))
 	      break;
 	    popd_msg[msg].uid = record.uid;
-	    popd_msg[msg].size = record.size + SLEN;
+	    popd_msg[msg].size = record.size;
 	    popd_msg[msg].deleted = 0;
-	    if (record.uid <= mboxstruct.pop3_last_uid) popd_highest = msg;
 	}
-	popd_initialhighest = popd_highest;
     }
     if (r) {
 	mailbox_close(&mboxstruct);
@@ -761,8 +776,6 @@ int lines;
 	return;
     }
     prot_printf(popd_out, "+OK Message follows\r\n");
-    prot_printf(popd_out, "%s%c\r\n", STATUS,
-		msg <= popd_initialhighest ? 'R' : 'U');
     while (lines != thisline) {
 	if (!fgets(buf, sizeof(buf), msgfile)) break;
 
