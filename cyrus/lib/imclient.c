@@ -1,6 +1,6 @@
 /* imclient.c -- Streaming IMxP client library
  *
- * $Id: imclient.c,v 1.79 2003/06/04 03:27:54 rjs3 Exp $
+ * $Id: imclient.c,v 1.80 2003/06/10 22:05:25 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -738,12 +738,17 @@ static void imclient_input(struct imclient *imclient, char *buf, int len)
     while (parsed < imclient->replylen) {
 	/* If we're reading a literal, skip over it. */
 	if (imclient->replyliteralleft) {
-	    if ((imclient->replylen - parsed) > imclient->replyliteralleft) {
+	    size_t avail;
+
+	    avail = imclient->replylen - parsed;
+
+	    if (avail > imclient->replyliteralleft) {
 		parsed += imclient->replyliteralleft;
 		imclient->replyliteralleft = 0;
 		continue;
 	    } else {
-		imclient->replyliteralleft -= (imclient->replylen - parsed);
+		parsed += avail;
+		imclient->replyliteralleft -= avail;
 		return;
 	    }
 	}
