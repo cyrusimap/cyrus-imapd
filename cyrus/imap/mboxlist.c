@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.133 2000/07/17 04:33:44 leg Exp $
+ * $Id: mboxlist.c,v 1.134 2000/07/19 01:00:00 leg Exp $
  */
 
 #include <config.h>
@@ -261,10 +261,10 @@ static int mboxlist_mylookup(const char *name, int *typep,
  * is placed in the char * pointed to by it.  If 'acl' is non-nil, a pointer
  * to the mailbox ACL is placed in the char * pointed to by it.
  */
-int mboxlist_lookup(const char *name, char **pathp, char **aclp, void *tid)
+int mboxlist_lookup(const char *name, char **pathp, char **aclp, 
+		    void *tid __attribute__((unused)))
 {
-    return mboxlist_mylookup(name, NULL, pathp, NULL, aclp,
-			     (struct txn **) &tid, 0);
+    return mboxlist_mylookup(name, NULL, pathp, NULL, aclp, NULL, 0);
 }
 
 int mboxlist_findstage(const char *name, char *stagedir) 
@@ -688,7 +688,7 @@ int mboxlist_deletemailbox(char *name, int isadmin, char *userid,
     struct mailbox mailbox;
     int deletequotaroot = 0;
     char *path;
-    struct txn *tid;
+    struct txn *tid = NULL;
     int isremote = 0;
     int mbtype;
 
@@ -848,8 +848,8 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     struct mailbox newmailbox;
     acapmbox_data_t mboxdata;
     char *oldacl;
-    const char *root;
-    struct txn *tid;
+    const char *root = NULL;
+    struct txn *tid = NULL;
     char *newpartition = NULL;
     char *mboxent = NULL;
 
@@ -995,11 +995,9 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     }
 
   done: /* ALL DATABASE OPERATIONS DONE; NEED TO DO FILESYSTEM OPERATIONS */
-    if (!r && !mbtype & MBTYPE_REMOTE) {
-	/* Get partition's path */
-	root = config_partitiondir(partition);
-
+    if (!r && !(mbtype & MBTYPE_REMOTE)) {
 	/* Rename the actual mailbox */
+	assert(root != NULL); /* from above */
 	mailbox_hash_mbox(newpath, root, newname);
 	
 	r = mailbox_rename(oldname, oldpath, oldacl, newname, 
@@ -1013,9 +1011,9 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     }
 
     if (r != 0) {
-	int r2;
+	int r2 = 0;
 	
-	r2 = DB->abort(mbdb, tid);
+	if (tid) r2 = DB->abort(mbdb, tid);
 	if (r2) {
 	    syslog(LOG_ERR, "DBERROR: can't abort: %s", cyrusdb_strerror(r2));
 	}
@@ -1260,7 +1258,9 @@ static int find_cb(void *rockp,
 	strcpy(namematchbuf, namebuf);
 	
 	if (!rock->inbox && rock->usermboxname &&
-	    !strncmp(namebuf, rock->usermboxname, rock->usermboxnamelen)) {
+	    !strncmp(namebuf, rock->usermboxname, rock->usermboxnamelen)
+	    && (keylen == rock->usermboxnamelen || 
+		namebuf[rock->usermboxnamelen] == '.')) {
 	    /* this would've been output with the inbox stuff, so skip it */
 	    return 0;
 	}
@@ -1285,31 +1285,32 @@ static int find_cb(void *rockp,
 	}
 	if (!r && !rock->isadmin) {
 	    /* check the acls */
-	    const char *acl;
+	    const char *p, *acl;
 	    char aclbuf[1024];
 	    int rights;
 	    int acllen;
 
-	    /* find last ' ' in string */
-	    for (acl = data + datalen - 1; acl > data; acl--)
-		if (*acl == ' ') break;
-
-	    if (acl > data) {
-	        acl++;
-	        acllen = datalen - (acl - data);
-		if (acllen < sizeof(aclbuf) - 1) {
-		    memcpy(aclbuf, acl, acllen);
-		    aclbuf[acllen] = '\0';
-		    rights = acl_myrights(rock->auth_state, aclbuf);
-		} else {
-		    char *a = xstrndup(acl + 1, datalen - (acl - data));
-		    rights = acl_myrights(rock->auth_state, a);
-		    free(a);
-		}
+	    p = strchr(data, ' ');
+	    if (!p) {
+		syslog(LOG_ERR, "%s: can't find partition", namebuf);
+		return IMAP_IOERROR;
+	    }
+	    p++;
+	    acl = strchr(p, ' ');
+	    if (!acl) {
+		syslog(LOG_ERR, "%s: can't find acl", namebuf);
+		return IMAP_IOERROR;
+	    }
+	    acl++;
+	    acllen = datalen - (acl - data);
+	    if (acllen < sizeof(aclbuf) - 1) {
+		memcpy(aclbuf, acl, acllen);
+		aclbuf[acllen] = '\0';
+		rights = acl_myrights(rock->auth_state, aclbuf);
 	    } else {
-		syslog(LOG_ERR, "%s: corrupt mailbox entry, missing acls",
-		       namebuf);
-		rights = 0;
+		char *a = xstrndup(acl, datalen - (acl - data));
+		rights = acl_myrights(rock->auth_state, a);
+		free(a);
 	    }
 	    if (!(rights & ACL_LOOKUP)) {
 		r = IMAP_MAILBOX_NONEXISTENT;
@@ -1364,6 +1365,7 @@ int mboxlist_findall(char *pattern, int isadmin, char *userid,
     cbrock.inboxcase = glob_inboxcase(cbrock.g);
     cbrock.isadmin = isadmin;
     cbrock.auth_state = auth_state;
+    cbrock.checkmboxlist = 0;	/* don't duplicate work */
     cbrock.proc = proc;
     cbrock.procrock = rock;
 
@@ -1372,6 +1374,7 @@ int mboxlist_findall(char *pattern, int isadmin, char *userid,
 	strlen(userid)+5 < MAX_MAILBOX_NAME) {
 	strcpy(usermboxname, "user.");
 	strcat(usermboxname, userid);
+	usermboxnamelen = strlen(usermboxname);
     }
     else {
 	userid = 0;
@@ -1391,7 +1394,7 @@ int mboxlist_findall(char *pattern, int isadmin, char *userid,
 	    r = DB->fetch(mbdb, usermboxname, usermboxnamelen,
 			  &data, &datalen, NULL);
 	    if (!r && data) {
-		r = (*proc)(cbrock.inboxcase, 5, 1, rock);
+		r = (*proc)(usermboxname, usermboxnamelen, 1, rock);
 	    }
 	}
 	strcpy(usermboxname+usermboxnamelen, ".");
@@ -1438,6 +1441,11 @@ int mboxlist_findall(char *pattern, int isadmin, char *userid,
 
     cbrock.inbox = 0;
     cbrock.inboxoffset = 0;
+    if (usermboxnamelen) {
+	usermboxname[--usermboxnamelen] = '\0';
+	cbrock.usermboxname = usermboxname;
+	cbrock.usermboxnamelen = usermboxnamelen;
+    }
     /* search for all remaining mailboxes.
        just bother looking at the ones that have the same pattern prefix. */
     DB->foreach(mbdb,
@@ -1794,6 +1802,7 @@ int mboxlist_findsub(char *pattern, int isadmin, char *userid,
 	strlen(userid)+5 < MAX_MAILBOX_NAME) {
 	strcpy(usermboxname, "user.");
 	strcat(usermboxname, userid);
+	usermboxnamelen = strlen(usermboxname);
     }
     else {
 	userid = 0;
@@ -1813,11 +1822,14 @@ int mboxlist_findsub(char *pattern, int isadmin, char *userid,
 	    r = SUBDB->fetch(subs, usermboxname, usermboxnamelen,
 			     &data, &datalen, NULL);
 	    if (!r && data) {
-		r = (*proc)(cbrock.inboxcase, 5, 1, rock);
+		r = (*proc)(usermboxname, usermboxnamelen, 1, rock);
 	    }
 	}
 	strcpy(usermboxname+usermboxnamelen, ".");
 	usermboxnamelen++;
+
+	cbrock.usermboxname = usermboxname;
+	cbrock.usermboxnamelen = usermboxnamelen;
     }
 
     if (r) goto done;
@@ -1860,6 +1872,11 @@ int mboxlist_findsub(char *pattern, int isadmin, char *userid,
 
     cbrock.inbox = 0;
     cbrock.inboxoffset = 0;
+    if (usermboxnamelen) {
+	usermboxname[--usermboxnamelen] = '\0';
+	cbrock.usermboxname = usermboxname;
+	cbrock.usermboxnamelen = usermboxnamelen;
+    }
     /* search for all remaining mailboxes.
        just bother looking at the ones that have the same pattern prefix. */
     SUBDB->foreach(subs, pattern, prefixlen, &find_cb, &cbrock, NULL);
