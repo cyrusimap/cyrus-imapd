@@ -27,6 +27,7 @@ struct mailbox {
     FILE *seen;
     FILE *quota;
 
+    char *name;
     char *path;
 
     int header_lock_count;
