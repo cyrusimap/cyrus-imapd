@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.109 2000/04/10 18:46:23 tmartin Exp $
+# $Id: Makefile.in,v 1.110 2000/04/12 18:41:08 tmartin Exp $
 # 
 # @configure_input@
 #
@@ -144,9 +144,9 @@ imapd: $(IMAPDOBJS) libimap.a $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o imapd \
 	 $(SERVICE) $(IMAPDOBJS) libimap.a $(DEPLIBS) $(LIBS)
 
-proxyd: proxyd.o libimap.a $(DEPLIBS) $(SERVICE)
+proxyd: proxyd.o tls.o libimap.a $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o proxyd \
-	 $(SERVICE) proxyd.o libimap.a $(DEPLIBS) $(LIBS)
+	 $(SERVICE) proxyd.o tls.o libimap.a $(DEPLIBS) $(LIBS)
 
 gun: gun.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o gun gun.o libimap.a $(DEPLIBS) $(LIBS)

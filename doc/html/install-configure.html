@@ -1,4 +1,4 @@
-<!-- $Id: install-configure.html,v 1.1 2000/04/10 18:49:26 wcw Exp $ -->
+<!-- $Id: install-configure.html,v 1.2 2000/04/12 18:41:08 tmartin Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Configuring the IMAP Server
@@ -467,6 +467,9 @@ Common Name (eg, YOUR name) []:<kbd>foobar.andrew.cmu.edu</kbd>
 Email Address []:
 </pre></li>
 
+<li>Make sure to make key file(s) readable by the Cyrus user. For
+example: <kbd>chown cyrus /var/imap/server.pem</kbd>
+
 <li>Add the following to <tt>/etc/imapd.conf</tt> to tell the server
 where to find the certificate and key file:
 
@@ -490,5 +493,5 @@ authenticate DN (distinguished name) to a SASL authentication
 name.</p>
 
 <P><HR>
-last modified: $Date: 2000/04/10 18:49:26 $
+last modified: $Date: 2000/04/12 18:41:08 $
 </BODY></HTML>
