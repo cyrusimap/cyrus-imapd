@@ -37,7 +37,7 @@ typedef struct hash_table {
 ** sufficient for most purposes.
 */
 
-unsigned hash(char *string);
+unsigned hash(const char *string);
 
 /*
 ** This is used to construct the table.  If it doesn't succeed, it sets
