@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.343 2002/02/20 19:29:05 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.344 2002/02/27 04:34:22 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -103,7 +103,6 @@ static sasl_ssf_t extprops_ssf = 0;
 struct protstream *imapd_out = NULL;
 struct protstream *imapd_in = NULL;
 static char imapd_clienthost[250] = "[local]";
-static time_t imapd_logtime;
 static int imapd_logfd = -1;
 char *imapd_userid;
 struct auth_state *imapd_authstate = 0;
@@ -358,7 +357,6 @@ static void imapd_reset(void)
     close(2);
 
     strcpy(imapd_clienthost, "[local]");
-    imapd_logtime = 0;
     if (imapd_logfd != -1) {
 	close(imapd_logfd);
 	imapd_logfd = -1;
