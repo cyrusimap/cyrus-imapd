@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.66 2002/04/11 21:47:29 rjs3 Exp $ */
+/* $Id: master.c,v 1.67 2002/06/07 20:13:35 leg Exp $ */
 
 #include <config.h>
 
@@ -493,6 +493,7 @@ void spawn_service(struct service *s)
     static char name_env[100];
     struct centry *c;
     time_t now = time(NULL);
+    int msg;
     
     /* update our fork rate */
     if(now - s->last_interval_start >= FORKRATE_INTERVAL) {
@@ -575,6 +576,9 @@ void spawn_service(struct service *s)
 
 	execv(path, s->exec);
 	syslog(LOG_ERR, "couldn't exec %s: %m", path);
+	if (write(STATUS_FD, &msg, sizeof(msg)) != sizeof(msg)) {
+	    syslog(LOG_ERR, "unable to tell master %x: %m", msg);
+	}
 	exit(EX_OSERR);
 
     default:			/* parent */
