@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.8 2000/04/18 18:33:12 leg Exp $
+   $Id: seen_db.c,v 1.9 2000/04/28 22:01:26 leg Exp $
  
  # Copyright 2000 Carnegie Mellon University
  # 
@@ -37,7 +37,7 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <db.h>
-
+#include <errno.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -171,18 +171,23 @@ static int seen_readold(struct seen *seendb,
     strcat(fnamebuf, FNAME_SEEN);
 
     fd = open(fnamebuf, O_RDWR, 0);
-    if (fd == -1) {
+    if (fd == -1 && errno == ENOENT) {
+	/* no old-style seen file for this database */
+	linelen = 0;
+    } else if (fd == -1) {
+	syslog("error opening '%s': %m", fnamebuf);
 	return IMAP_IOERROR;
+    } else {
+	if (fstat(fd, &sbuf) == -1) {
+	    close(fd);
+	    return IMAP_IOERROR;
+	}
+	map_refresh(fd, 1, &base, &len, sbuf.st_size, fnamebuf, 0);
+	
+	/* Find record for user */
+	offset = bsearch_mem(seendb->user, 1, base, len, 0, &linelen);
     }
-    if (fstat(fd, &sbuf) == -1) {
-	close(fd);
-	return IMAP_IOERROR;
-    }
-    map_refresh(fd, 1, &base, &len, sbuf.st_size, fnamebuf, 0);
 
-    /* Find record for user */
-    offset = bsearch_mem(seendb->user, 1, base, len, 0, &linelen);
-    
     *lastreadptr = 0;
     *lastuidptr = 0;
     *lastchangeptr = 0;
