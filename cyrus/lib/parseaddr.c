@@ -205,7 +205,7 @@ char **freemep;
 /*
  * Parse an RFC 822 "phrase", stopping at 'specials'
  */
-static int parseaddr_phrase(inp, phrasep, specials
+static int parseaddr_phrase(inp, phrasep, specials)
 char **inp;
 char **phrasep;
 char *specials;
