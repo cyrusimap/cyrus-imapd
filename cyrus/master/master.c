@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.29 2001/01/02 05:19:44 leg Exp $ */
+/* $Id: master.c,v 1.30 2001/01/16 00:48:33 leg Exp $ */
 
 #include <config.h>
 
@@ -1112,6 +1112,7 @@ int main(int argc, char **argv, char **envp)
 	for (i = 0; i < nservices; i++) {
 	    int x = Services[i].stat[0];
 	    int y = Services[i].socket;
+	    int j;
 
 	    if (FD_ISSET(x, &rfds)) {
 		r = read(x, &msg, sizeof(int));
@@ -1121,6 +1122,13 @@ int main(int argc, char **argv, char **envp)
 		}
 		
 		process_msg(&Services[i], msg);
+	    }
+
+	    for (j = Services[i].ready_workers;
+		 j < Services[i].desired_workers; 
+		 j++)
+	    {
+		spawn_service(&Services[i]);
 	    }
 
 	    if (Services[i].ready_workers == 0 && 
