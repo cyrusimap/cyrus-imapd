@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: libconfig.c,v 1.2.2.9 2004/05/25 01:28:14 ken3 Exp $ */
+/* $Id: libconfig.c,v 1.2.2.10 2004/06/24 18:09:45 ken3 Exp $ */
 
 #include <config.h>
 
@@ -268,6 +268,10 @@ void config_read(const char *alt_config)
     }
 
     config_mupdate_server = config_getstring(IMAPOPT_MUPDATE_SERVER);
+
+    if (config_mupdate_server) {
+	config_mupdate_config = config_getenum(IMAPOPT_MUPDATE_CONFIG);
+    }
 }
 
 void config_read_file(const char *filename)
