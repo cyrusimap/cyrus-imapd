@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.232.4.21 2002/12/11 16:59:34 ken3 Exp $
+dnl $Id: configure.in,v 1.232.4.22 2002/12/11 17:50:14 rjs3 Exp $
 dnl
 
 
@@ -191,10 +191,10 @@ AC_ARG_WITH(seen-db,
 CYRUS_SET_BACKEND("seen state", CONFIG_DB_SEEN, $DB)
 
 AC_ARG_WITH(pts-db,
-	[  --with-pts-db=DB       use DB (flat, berkeley, skiplist) as a backend
+	[  --with-pts-db=DB       use DB (berkeley, skiplist) as a backend
                           for the pts cache (Default: berkeley) ],
 	DB="$withval", DB="berkeley") 
-CYRUS_SET_BACKEND("pts", CONFIG_DB_PTS, $DB)
+CYRUS_SET_BACKEND_BINARY("pts", CONFIG_DB_PTS, $DB)
 
 
 AC_ARG_WITH(subs-db,
