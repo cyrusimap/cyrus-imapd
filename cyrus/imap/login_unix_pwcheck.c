@@ -66,7 +66,7 @@ char **reply;
     r = connect(s, (struct sockaddr *)&srvaddr, sizeof(srvaddr));
     if (r == -1) {
 	*reply = "cannot connect to pwcheck server";
-	return 0;
+	return 1;
     }
 
     iov[0].iov_base = user;
