@@ -25,7 +25,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.87 1998/10/16 17:59:22 tjs Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.88 1999/02/16 02:01:14 wcw Exp $";
 
 
 #ifdef HAVE_UNISTD_H
@@ -1266,7 +1266,7 @@ _prune_actual_db(fname, mark)
 	char *ptr;
 	      
 	ptr = ((char *)delivery.data + (strlen(delivery.data) + 1)); 
-	syslog(LOG_DEBUG, "prunedelivered: marking %s/%s at %d for deletion\n",
+	syslog(LOG_NOTICE, "prunedelivered: marking %s/%s at %d for deletion\n",
 	       delivery.data, ptr, (time_t)date.data);
       }
     }
@@ -1327,7 +1327,7 @@ int age;
     fatal("must specify positive number of days", EX_USAGE);
 
   mark = time(0) - (age*60*60*24);
-  syslog(LOG_DEBUG, "prunedelivered: pruning back %d days", age);
+  syslog(LOG_NOTICE, "prunedelivered: pruning back %d days", age);
   for (c = 'a' ; c <= 'z'; c++) {
     (void)strcpy(fname, _get_db_name(&c));
     (void)strcat(fname, ".db");
@@ -1344,6 +1344,6 @@ int age;
       return(rc);
     }
   }
-  syslog(LOG_DEBUG, "prunedelivered: done");
+  syslog(LOG_NOTICE, "prunedelivered: done");
   return 0;
 }
