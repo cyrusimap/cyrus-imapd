@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.59 2003/12/15 17:52:20 rjs3 Exp $
+ * $Id: lmtpproxyd.c,v 1.60 2004/02/04 18:05:31 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -80,6 +80,7 @@
 #include "mboxname.h"
 
 #include "mupdate-client.h"
+#include "backend.h"
 #include "lmtpengine.h"
 #include "lmtpstats.h"
 
@@ -90,6 +91,9 @@ struct protstream *deliver_out = NULL, *deliver_in = NULL;
 
 extern int optind;
 extern char *optarg;
+
+/* our cached connections */
+struct backend **backend_cached = NULL;
 
 /* a final destination for a message */
 struct rcpt {
@@ -193,6 +197,10 @@ int service_init(int argc __attribute__((unused)),
     }
     mhandle = NULL;
 
+    /* setup the cache */
+    backend_cached = xmalloc(sizeof(struct backend *));
+    backend_cached[0] = NULL;
+
     return 0;
 }
 
@@ -286,83 +294,39 @@ static void usage()
     exit(EC_USAGE);
 }
 
-struct connlist {
-    char *host;
-    struct lmtp_conn *conn;
-    struct connlist *next;
-} *chead = NULL;
-
-extern sasl_callback_t *mysasl_callbacks(const char *username,
-					 const char *authname,
-					 const char *realm,
-					 const char *password);
-void free_callbacks(sasl_callback_t *in);
-
-static struct lmtp_conn *getconn(const char *server)
+/* return the connection to the server */
+static struct backend *proxyd_findserver(const char *server)
 {
-    int r;
-    struct connlist *p = chead;
-    sasl_callback_t *cb = NULL;
+    int i = 0;
+    struct backend *ret = NULL;
 
-    for (p = chead; p != NULL; p = p->next) {
-	if (!strcmp(p->host, server)) break;
-    }
-    if (!p) {
-	const char *pass;
-	char *cp;
-	char optstr[128];
-
-	/* create a new one */
-	p = xmalloc(sizeof(struct connlist));
-	p->host = xstrdup(server);
-
-	strlcpy(optstr, server, sizeof(optstr));
-	cp = strchr(optstr, '.');
-	if (cp) *cp = '\0';
-	strlcat(optstr, "_password", sizeof(optstr));
-	pass = config_getoverflowstring(optstr, NULL);
-	if(!pass) pass = config_getstring(IMAPOPT_PROXY_PASSWORD);
-
-	/* Authorization does not matter for LMTP, so we'll just pass
-	 * the empty string. */
-	cb = mysasl_callbacks("",
-			      config_getstring(IMAPOPT_PROXY_AUTHNAME),
-			      config_getstring(IMAPOPT_PROXY_REALM),
-			      pass);
-	
-	r = lmtp_connect(p->host, cb, &p->conn);
-	if (r) {
-	    fatal("can't connect to backend lmtp server", EC_TEMPFAIL);
+    while (backend_cached && backend_cached[i]) {
+	if (!strcmp(server, backend_cached[i]->hostname)) {
+	    ret = backend_cached[i];
+	    /* ping/noop the server */
+	    if (backend_ping(ret, &protocol[PROTOCOL_LMTP])) {
+		backend_disconnect(ret, &protocol[PROTOCOL_LMTP]);
+	    }
+	    break;
 	}
-
-	/* insert it */
-	p->next = chead;
-	chead = p;
+	i++;
     }
 
-    /* verify connection is ok */
-    r = lmtp_verify_conn(p->conn);
-    if (r) {
-	r = lmtp_disconnect(p->conn);
-	if (r) {
-	    fatal("can't dispose of backend server connection", EC_TEMPFAIL);
-	}
-
-	r = lmtp_connect(p->host, NULL, &p->conn);
-	if (r) {
-	    fatal("can't connect to backend lmtp server", EC_TEMPFAIL);
-	}
+    if (!ret || (ret->sock == -1)) {
+	/* need to (re)establish connection to server or create one */
+	ret = backend_connect(ret, server, &protocol[PROTOCOL_LMTP], "", NULL);
+	if (!ret) return NULL;
     }
 
-    if(cb) free_callbacks(cb);
+    /* insert server in list of cached connections */
+    if (!backend_cached[i]) {
+	backend_cached = (struct backend **) 
+	    xrealloc(backend_cached, (i + 2) * sizeof(struct backend *));
+	backend_cached[i] = ret;
+	backend_cached[i + 1] = NULL;
+    }
 
-    return p->conn;
-}
-
-static void putconn(const char *server __attribute__((unused)),
-		    struct lmtp_conn *c __attribute__((unused)))
-{
-    return;
+    return ret;
 }
 
 static int adddest(struct mydata *mydata, 
@@ -481,7 +445,7 @@ static void runme(struct mydata *mydata, message_data_t *msgdata)
     while (d) {
 	struct lmtp_txn *lt = LMTP_TXN_ALLOC(d->rnum);
 	struct rcpt *rc;
-	struct lmtp_conn *remote;
+	struct backend *remote;
 	int i = 0;
 	int r = 0;
 	
@@ -500,11 +464,10 @@ static void runme(struct mydata *mydata, message_data_t *msgdata)
 		msg_getrcpt_ignorequota(msgdata, rc->rcpt_num);
 	}
 	assert(i == d->rnum);
-	
-	remote = getconn(d->server);
+
+	remote = proxyd_findserver(d->server);
 	if (remote) {
 	    r = lmtp_runtxn(remote, lt);
-	    putconn(d->server, remote);
 	} else {
 	    /* remote server not available; tempfail all deliveries */
 	    for (rc = d->to, i = 0; i < d->rnum; i++) {
@@ -697,6 +660,17 @@ void fatal(const char* s, int code)
 void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
+    int i;
+
+    /* close backend connections */
+    i = 0;
+    while (backend_cached && backend_cached[i]) {
+	backend_disconnect(backend_cached[i], &protocol[PROTOCOL_LMTP]);
+	free(backend_cached[i]);
+	i++;
+    }
+    if (backend_cached) free(backend_cached);
+
     if (deliver_out) prot_flush(deliver_out);
     if (mhandle) {
 	mupdate_disconnect(&mhandle);

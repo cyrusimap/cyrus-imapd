@@ -41,7 +41,7 @@
  *
  */
 
-/* $Id: deliver.c,v 1.170 2004/01/26 17:46:56 ken3 Exp $ */
+/* $Id: deliver.c,v 1.171 2004/02/04 18:05:30 ken3 Exp $ */
 
 #include <config.h>
 
@@ -334,7 +334,7 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
 		       char **users, int numusers, char *mailbox)
 {
     int r;
-    struct lmtp_conn *conn;
+    struct backend *conn;
     struct lmtp_txn *txn = LMTP_TXN_ALLOC(numusers ? numusers : 1);
     int j;
     int ml = 0;
@@ -345,8 +345,8 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
     }
 
     /* connect */
-    r = lmtp_connect(sockaddr, NULL, &conn);
-    if (r) {
+    conn = backend_connect(NULL, sockaddr, &protocol[PROTOCOL_LMTP], "", NULL);
+    if (!conn) {
 	just_exit("couldn't connect to lmtpd");
     }
 
@@ -382,7 +382,7 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
     r = lmtp_runtxn(conn, txn);
 
     /* disconnect */
-    lmtp_disconnect(conn);
+    backend_disconnect(conn, &protocol[PROTOCOL_LMTP]);
 
     /* examine txn for error state */
     r = 0;
