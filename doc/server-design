@@ -1,7 +1,7 @@
 -*- text -*-
 
 		       Cyrus IMAP server design
-			   March 1, 1995
+			  September 12, 1995
 
 * Introduction
 
@@ -16,10 +16,11 @@ quota control and will cooperate with the Cyrus IMSP server.
 * Mailbox namespace
 
 The Cyrus IMAP server presents mailboxes using the "netnews" namespace
-convention.  Mailbox names match in a case-insensitive manner.  The
-case used when creating a mailbox is preserved.  A mailbox name may not
-start or end with a "."  character, nor may it contain two "."
-characters in a row.
+convention.  Mailbox names match in a case-sensitive manner, with the
+exception of "INBOX".  In mailbox names starting with "INBOX.", the
+"INBOX" part of the name is case-insensitive, the rest of the name is
+case-sensitive.  A mailbox name may not start or end with a "."
+character, nor may it contain two "."  characters in a row.
 
 In the initial implementation, non-ASCII characters, shell
 metacharacters, and "/" are not permitted in mailbox names.  Later
@@ -27,13 +28,10 @@ versions of the server may make the set of permissible characters
 site-policy configurable.
 
 The personal mailboxes for user "bovik" are named with "user.bovik."
-prepended.  The mailbox "user.bovik" is handled as a special
-case and is presented to the user "bovik" as if it were named "INBOX".
-
-LIST/LSUB/FIND replies are returned in the following order: "INBOX",
-user's personal mailboxes sorted in a case-insensitive manner, other
-mailboxes sorted in a case-insensitive manner.
-
+prepended.  The mailbox "user.bovik" is presented to the user "bovik"
+as if it were named "INBOX", and mailboxes with names starting
+"user.bovik." are presented to the user "bovik" as if they instead
+started with "INBOX.".
 
 * IMAP protocol extensions and implementation decisions
 
@@ -424,8 +422,8 @@ tab-separated fields:
 * Quota root directory
 
 The subdirectory "quota" under the configuration directory contains
-one file per quota root.  The filename is the (lowercase) name of the
-quota root.  Each file contains the quota root's limit and usage.
+one file per quota root.  The filename is the name of the quota root.
+Each file contains the quota root's limit and usage.
 
 * Telemetry log directory:
 
