@@ -47,7 +47,7 @@
  */
 
 /*
- * $Id: nntpd.c,v 1.1.2.24 2002/10/17 16:58:36 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.25 2002/10/18 21:01:16 ken3 Exp $
  */
 #include <config.h>
 
@@ -107,6 +107,7 @@ extern int errno;
 int imapd_exists;
 struct protstream *imapd_out = NULL;
 struct auth_state *imapd_authstate = NULL;
+static int nntp_logfd = -1;
 char *imapd_userid = NULL;
 void printastring(const char *s)
 {
@@ -179,6 +180,7 @@ struct {
 static void cmd_starttls();
 static void cmd_user();
 static void cmd_pass();
+static void cmd_sasl();
 static void cmd_mode();
 static void cmd_list();
 static void cmd_article();
@@ -199,6 +201,10 @@ extern int proc_register(const char *progname, const char *clienthost,
 			 const char *userid, const char *mailbox);
 extern void proc_cleanup(void);
 
+extern int saslserver(sasl_conn_t *conn, const char *mech,
+		      const char *init_resp, const char *continuation,
+		      struct protstream *pin, struct protstream *pout,
+		      int *sasl_result, char **success_data);
 
 static struct 
 {
@@ -381,7 +387,7 @@ int service_main(int argc, char **argv, char **envp)
 
     /* other params should be filled in */
     if (sasl_server_new("nntp", config_servername, NULL, NULL, NULL,
-			NULL, 0, &nntp_saslconn) != SASL_OK)
+			NULL, SASL_SUCCESS_DATA, &nntp_saslconn) != SASL_OK)
 	fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL); 
 
     /* will always return something valid */
@@ -490,6 +496,49 @@ void fatal(const char* s, int code)
     shut_down(code);
 }
 
+/* Reset the given sasl_conn_t to a sane state */
+static int reset_saslconn(sasl_conn_t **conn) 
+{
+    int ret;
+    sasl_security_properties_t *secprops = NULL;
+
+    sasl_dispose(conn);
+    /* do initialization typical of service_main */
+    ret = sasl_server_new("nntp", config_servername,
+                         NULL, NULL, NULL,
+                         NULL, SASL_SUCCESS_DATA, conn);
+    if(ret != SASL_OK) return ret;
+
+    if(saslprops.ipremoteport)
+       ret = sasl_setprop(*conn, SASL_IPREMOTEPORT,
+                          saslprops.ipremoteport);
+    if(ret != SASL_OK) return ret;
+    
+    if(saslprops.iplocalport)
+       ret = sasl_setprop(*conn, SASL_IPLOCALPORT,
+                          saslprops.iplocalport);
+    if(ret != SASL_OK) return ret;
+    secprops = mysasl_secprops(SASL_SEC_NOPLAINTEXT);
+    ret = sasl_setprop(*conn, SASL_SEC_PROPS, secprops);
+    if(ret != SASL_OK) return ret;
+    /* end of service_main initialization excepting SSF */
+
+    /* If we have TLS/SSL info, set it */
+    if(saslprops.ssf) {
+       ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &saslprops.ssf);
+    }
+
+    if(ret != SASL_OK) return ret;
+
+    if(saslprops.authid) {
+       ret = sasl_setprop(*conn, SASL_AUTH_EXTERNAL, saslprops.authid);
+       if(ret != SASL_OK) return ret;
+    }
+    /* End TLS/SSL Info */
+
+    return SASL_OK;
+}
+
 /*
  * Top-level command loop parsing
  */
@@ -527,20 +576,28 @@ static void cmdloop(void)
 	switch (cmd.s[0]) {
 	case 'A':
 	    if (!strcmp(cmd.s, "Authinfo")) {
+		arg3.len = 0;
 		if (c != ' ') goto missingargs;
 		c = getword(nntp_in, &arg1);
 		if (c == EOF) goto missingargs;
 		if (c != ' ') goto missingargs;
 		c = getword(nntp_in, &arg2);
 		if (c == EOF) goto missingargs;
+
+		lcase(arg1.s);
+		if (!strcmp(arg1.s, "sasl") && c == ' ') {
+		    c = getword(nntp_in, &arg3);
+		    if (c == EOF) goto missingargs;
+		}
 		if (c == '\r') c = prot_getc(nntp_in);
 		if (c != '\n') goto extraargs;
 
-		lcase(arg1.s);
 		if (!strcmp(arg1.s, "user"))
 		    cmd_user(arg2.s);
 		else if (!strcmp(arg1.s, "pass"))
 		    cmd_pass(arg2.s);
+		else if (!strcmp(arg1.s, "sasl"))
+		    cmd_sasl(arg2.s, arg3.len ? arg3.s : NULL);
 		else
 		    prot_printf(nntp_out, "500 Unrecognized command\r\n");
 	    }
@@ -1124,8 +1181,111 @@ void cmd_pass(char *pass)
 	nntp_authstate = auth_newstate(nntp_userid, NULL);
 
 	/* Create telemetry log */
-	telemetry_log(nntp_userid, nntp_in, nntp_out);
+	nntp_logfd = telemetry_log(nntp_userid, nntp_in, nntp_out);
     }
+}
+
+void cmd_sasl(char *mech, char *resp)
+{
+    int r, sasl_result;
+    char *success_data;
+    const int *ssfp;
+    char *ssfmsg = NULL;
+    const char *canon_user;
+
+    if (nntp_userid) {
+	prot_printf(nntp_out, "452 Already authenticated\r\n");
+	return;
+    }
+
+    r = saslserver(nntp_saslconn, mech, resp, "351 ", nntp_in, nntp_out,
+		   &sasl_result, &success_data);
+
+    if (r != IMAP_SASL_OK) {
+	const char *errorstring = NULL;
+
+	switch (r) {
+	case IMAP_SASL_CANCEL:
+	    prot_printf(nntp_out,
+			"452 Client canceled authentication\r\n");
+	    break;
+	case IMAP_SASL_PROTERR:
+	    errorstring = prot_error(nntp_in);
+
+	    prot_printf(nntp_out,
+			"452 Error reading client response: %s\r\n",
+			errorstring ? errorstring : "");
+	    break;
+	default: 
+	    /* failed authentication */
+	    errorstring = sasl_errstring(sasl_result, NULL, NULL);
+
+	    syslog(LOG_NOTICE, "badlogin: %s %s [%s]",
+		   nntp_clienthost, mech, sasl_errdetail(nntp_saslconn));
+
+	    sleep(3);
+
+	    if (errorstring) {
+		prot_printf(nntp_out, "452 %s\r\n", errorstring);
+	    } else {
+		prot_printf(nntp_out, "452 Error authenticating\r\n");
+	    }
+	}
+
+	reset_saslconn(&nntp_saslconn);
+	return;
+    }
+
+    /* successful authentication */
+
+    /* get the userid from SASL --- already canonicalized from
+     * mysasl_proxy_policy()
+     */
+    sasl_result = sasl_getprop(nntp_saslconn, SASL_USERNAME,
+			       (const void **) &canon_user);
+    nntp_userid = xstrdup(canon_user);
+    if (sasl_result != SASL_OK) {
+	prot_printf(nntp_out, "452 weird SASL error %d SASL_USERNAME\r\n", 
+		    sasl_result);
+	syslog(LOG_ERR, "weird SASL error %d getting SASL_USERNAME", 
+	       sasl_result);
+	reset_saslconn(&nntp_saslconn);
+	return;
+    }
+
+    proc_register("nntpd", nntp_clienthost, nntp_userid, (char *)0);
+
+    syslog(LOG_NOTICE, "login: %s %s %s%s %s", nntp_clienthost, nntp_userid,
+	   mech, nntp_starttls_done ? "+TLS" : "", "User logged in");
+
+    sasl_getprop(nntp_saslconn, SASL_SSF, (const void **) &ssfp);
+
+    /* really, we should be doing a sasl_getprop on SASL_SSF_EXTERNAL,
+       but the current libsasl doesn't allow that. */
+    if (nntp_starttls_done) {
+	switch(*ssfp) {
+	case 0: ssfmsg = "tls protection"; break;
+	case 1: ssfmsg = "tls plus integrity protection"; break;
+	default: ssfmsg = "tls plus privacy protection"; break;
+	}
+    } else {
+	switch(*ssfp) {
+	case 0: ssfmsg = "no protection"; break;
+	case 1: ssfmsg = "integrity protection"; break;
+	default: ssfmsg = "privacy protection"; break;
+	}
+    }
+
+    if (success_data)
+	prot_printf(nntp_out, "251 %s\r\n", success_data);
+    else
+	prot_printf(nntp_out, "250 Success (%s)\r\n", ssfmsg);
+
+    prot_setsasl(nntp_in,  nntp_saslconn);
+    prot_setsasl(nntp_out, nntp_saslconn);
+
+    /* Create telemetry log */
+    nntp_logfd = telemetry_log(nntp_userid, nntp_in, nntp_out);
 }
 
 void cmd_mode(char *arg)
@@ -1192,6 +1352,9 @@ void cmd_list(char *arg1, char *arg2)
 	lcase(arg1);
 
     if (!strcmp(arg1, "extensions")) {
+	unsigned mechcount;
+	const char *mechlist;
+
 	if (arg2) {
 	    prot_printf(nntp_out, "501 Unexpected extra argument\r\n");
 	    return;
@@ -1199,6 +1362,15 @@ void cmd_list(char *arg1, char *arg2)
 
 	prot_printf(nntp_out, "202 Extensions supported:\r\n");
 	prot_printf(nntp_out, "AUTHINFO USER\r\n");
+
+	/* add the SASL mechs */
+	if (sasl_listmech(nntp_saslconn, NULL,
+			  "SASL ", " ", "\r\n",
+			  &mechlist,
+			  NULL, &mechcount) == SASL_OK && mechcount > 0) {
+	    prot_write(nntp_out, mechlist, strlen(mechlist));
+	}
+
 	prot_printf(nntp_out, "LISTGROUP\r\n");
 	prot_printf(nntp_out, "OVER\r\n");
 	prot_printf(nntp_out, ".\r\n");

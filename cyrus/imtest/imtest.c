@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/NNTP/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.82.2.5 2002/09/26 13:51:20 ken3 Exp $
+ * $Id: imtest.c,v 1.82.2.6 2002/10/18 21:01:17 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -2006,6 +2006,17 @@ static int nntp_do_auth(struct sasl_cmd_t *sasl_cmd,
     return result;
 }
 
+static char *nntp_parse_success(char *str)
+{
+    char *success = NULL;
+
+    if (!strncmp(str, "251 ", 4)) {
+	success = str+4;
+    }
+
+    return success;
+}
+
 /******************************** LMTP/SMTP **********************************/
 
 static int xmtp_do_auth(struct sasl_cmd_t *sasl_cmd,
@@ -2160,14 +2171,14 @@ static struct protocol_t protocols[] = {
       { 0, "+OK ", &pop3_parse_banner },
       { "CAPA", ".", "STLS", "SASL ", NULL },
       { "STLS", "+OK", "-ERR", 0 },
-      { "AUTH", 0, "=", NULL, "+OK", "-ERR", "+ ", "*" },
+      { "AUTH", 0, "", NULL, "+OK", "-ERR", "+ ", "*" },
       &pop3_do_auth, { "QUIT", "+OK" }, NULL, NULL, NULL
     },
     { "nntp", "nntps", "nntp",
       { 0, "20", NULL },
-      { "LIST EXTENSIONS", ".", NULL, NULL, NULL },
+      { "LIST EXTENSIONS", ".", NULL, "SASL ", NULL },
       { NULL },
-      { NULL },
+      { "AUTHINFO SASL", 0, "", &nntp_parse_success, "25", "452", "351 ", "*" },
       &nntp_do_auth, { "QUIT", "205" }, NULL, NULL, NULL
     },
     { "lmtp", NULL, "lmtp",
@@ -2190,14 +2201,14 @@ static struct protocol_t protocols[] = {
       { 1, "* OK", NULL },
       { NULL , "* OK", NULL, "* AUTH ", NULL },
       { NULL },
-      { "A01 AUTHENTICATE", 1, "=", NULL, "A01 OK", "A01 NO", "", "*" },
+      { "A01 AUTHENTICATE", 1, "", NULL, "A01 OK", "A01 NO", "", "*" },
       NULL, { "Q01 LOGOUT", "Q01 " }, NULL, NULL, NULL
     },
     { "sieve", NULL, SIEVE_SERVICE_NAME,
       { 1, "OK", NULL },
       { "CAPABILITY", "OK", "\"STARTTLS\"", "\"SASL\" ", NULL },
       { "STARTTLS", "OK", "NO", 1 },
-      { "AUTHENTICATE", 1, "=", &sieve_parse_success, "OK", "NO", NULL, "*" },
+      { "AUTHENTICATE", 1, "", &sieve_parse_success, "OK", "NO", NULL, "*" },
       NULL, { "LOGOUT", "OK" }, NULL, NULL, NULL
     },
     { NULL }
