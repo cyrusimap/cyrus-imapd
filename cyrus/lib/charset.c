@@ -1,53 +1,136 @@
 /* charset.c -- International character set support
- $Id: charset.c,v 1.29 1998/10/20 23:28:15 tjs Exp $
- 
- #        Copyright 1998 by Carnegie Mellon University
- #
- #                      All Rights Reserved
- #
- # Permission to use, copy, modify, and distribute this software and its
- # documentation for any purpose and without fee is hereby granted,
- # provided that the above copyright notice appear in all copies and that
- # both that copyright notice and this permission notice appear in
- # supporting documentation, and that the name of CMU not be
- # used in advertising or publicity pertaining to distribution of the
- # software without specific, written prior permission.
- #
- # CMU DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING
- # ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL
- # CMU BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR
- # ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
- # WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
- # ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
- # SOFTWARE.
  *
+ *        Copyright 1998 by Carnegie Mellon University
+ *
+ *                      All Rights Reserved
+ *
+ * Permission to use, copy, modify, and distribute this software and its
+ * documentation for any purpose and without fee is hereby granted,
+ * provided that the above copyright notice appear in all copies and that
+ * both that copyright notice and this permission notice appear in
+ * supporting documentation, and that the name of CMU not be
+ * used in advertising or publicity pertaining to distribution of the
+ * software without specific, written prior permission.
+ *
+ * CMU DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING
+ * ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL
+ * CMU BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR
+ * ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+ * WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+ * ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
+ * SOFTWARE.
  */
-#include <stdio.h>
+/* $Id: charset.c,v 1.30 1999/03/02 01:22:15 tjs Exp $
+ */
 #include <ctype.h>
-#include <string.h>
-#include "assert.h"
-#include "util.h"
+#include <stdlib.h>
 #include "charset.h"
 #include "xmalloc.h"
+#include "chartable.h"
 
-#define JSR 'T'
-#define JMP 'U'
-#define RET 'V'
-#define END 'W'
-#include "chartables.h"
+static const unsigned char charset_convert_to_lowercase[256] = {
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+    0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+    0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+    0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27,
+    0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
+    0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
+    0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
+    0x40, 'a', 'b', 'c', 'd', 'e', 'f', 'g',
+    'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o',
+    'p', 'q', 'r', 's', 't', 'u', 'v', 'w',
+    'x', 'y', 'z', 0x5b, 0x5c, 0x5d, 0x5e, 0x5f,
+    0x60, 'a', 'b', 'c', 'd', 'e', 'f', 'g',
+    'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o',
+    'p', 'q', 'r', 's', 't', 'u', 'v', 'w',
+    'x', 'y', 'z', 0x7b, 0x7c, 0x7d, 0x7e, 0x7f,
+    0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87,
+    0x88, 0x89, 0x8a, 0x8b, 0x8c, 0x8d, 0x8e, 0x8f,
+    0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97,
+    0x98, 0x99, 0x9a, 0x9b, 0x9c, 0x9d, 0x9e, 0x9f,
+    0xa0, 0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7,
+    0xa8, 0xa9, 0xaa, 0xab, 0xac, 0xad, 0xae, 0xaf,
+    0xb0, 0xb1, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7,
+    0xb8, 0xb9, 0xba, 0xbb, 0xbc, 0xbd, 0xbe, 0xbf,
+    0xc0, 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7,
+    0xc8, 0xc9, 0xca, 0xcb, 0xcc, 0xcd, 0xce, 0xcf,
+    0xd0, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 0xd7,
+    0xd8, 0xd9, 0xda, 0xdb, 0xdc, 0xdd, 0xde, 0xdf,
+    0xe0, 0xe1, 0xe2, 0xe3, 0xe4, 0xe5, 0xe6, 0xe7,
+    0xe8, 0xe9, 0xea, 0xeb, 0xec, 0xed, 0xee, 0xef,
+    0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7,
+    0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff
+};
+#define TOLOWER(c) (charset_convert_to_lowercase[(unsigned char)(c)])
 
-#define MAXTRANSLATION 3
-struct state {
+static const unsigned char charset_convert_to_uppercase[256] = {
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+    0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+    0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+    0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27,
+    0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
+    0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
+    0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
+    0x40, 'A', 'B', 'C', 'D', 'E', 'F', 'G',
+    'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O',
+    'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W',
+    'X', 'Y', 'Z', 0x5b, 0x5c, 0x5d, 0x5e, 0x5f,
+    0x60, 'A', 'B', 'C', 'D', 'E', 'F', 'G',
+    'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O',
+    'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W',
+    'X', 'Y', 'Z', 0x7b, 0x7c, 0x7d, 0x7e, 0x7f,
+    0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87,
+    0x88, 0x89, 0x8a, 0x8b, 0x8c, 0x8d, 0x8e, 0x8f,
+    0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97,
+    0x98, 0x99, 0x9a, 0x9b, 0x9c, 0x9d, 0x9e, 0x9f,
+    0xa0, 0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7,
+    0xa8, 0xa9, 0xaa, 0xab, 0xac, 0xad, 0xae, 0xaf,
+    0xb0, 0xb1, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7,
+    0xb8, 0xb9, 0xba, 0xbb, 0xbc, 0xbd, 0xbe, 0xbf,
+    0xc0, 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7,
+    0xc8, 0xc9, 0xca, 0xcb, 0xcc, 0xcd, 0xce, 0xcf,
+    0xd0, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 0xd7,
+    0xd8, 0xd9, 0xda, 0xdb, 0xdc, 0xdd, 0xde, 0xdf,
+    0xe0, 0xe1, 0xe2, 0xe3, 0xe4, 0xe5, 0xe6, 0xe7,
+    0xe8, 0xe9, 0xea, 0xeb, 0xec, 0xed, 0xee, 0xef,
+    0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7,
+    0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff
+};
+#define TOUPPER(c) (charset_convert_to_uppercase[(unsigned char)(c)])
+
+
+extern const unsigned char chartables_long_translations[];
+extern const int charset_max_translation;
+extern const unsigned char chartables_unicode_block[256];
+extern const unsigned char chartables_unicode[][256][4];
+extern const unsigned char chartables_us_ascii[][256][4];
+extern const struct charset chartables_charset_table[];
+extern const int chartables_num_charsets;
+
+struct decode_state {
     const unsigned char (*curtable)[256][4];
     const unsigned char (*lasttable)[256][4];
     const unsigned char (*initialtable)[256][4];
+    unsigned utfcode;
+    unsigned num_bits;
+    unsigned b64_value;
 };
 #define START(state,table) \
-((state).curtable = (state.initialtable) = (table))
+    ((state).curtable = (state.initialtable) = (table)); \
+    ((state).lasttable = NULL); \
+    ((state).utfcode = 0); \
+    ((state).num_bits = 0); \
+    ((state).b64_value = 0);
+
+
+static int xlate(int index, char *to);
+static int writeutf8(unsigned utfcode, char *to);
 
 #define TRANSLATE(state,c,ptr,idx) \
 { \
-    int _ch; \
+    unsigned char _ch; \
     const unsigned char *_translation = (state).curtable[0][(unsigned char)(c)]; \
     for (;;) { \
 	switch (_ch = *_translation++) { \
@@ -55,8 +138,8 @@ struct state {
 	    (state).lasttable = (state).curtable; \
 	    /* FALL THROUGH */ \
 	case JMP: \
-	    (state).curtable = (state).initialtable + \
-	      (_translation[0]<<8) + (_translation[1]); \
+	    (state).curtable = ((state).initialtable + \
+	      (_translation[0]<<8) + (_translation[1])); \
 	    break; \
  \
 	case RET: \
@@ -64,6 +147,45 @@ struct state {
 	    /* FALL THROUGH */ \
 	case END: \
 	    break; \
+\
+	case U7F: \
+	    (state).b64_value = 0; \
+	    (state).num_bits = 0; \
+	    (state).curtable = ((state).initialtable + 1); \
+	    /* FALL THROUGH */ \
+	case U7N: \
+	    (state).b64_value <<= 6; \
+	    (state).b64_value += index_64[c]; \
+	    (state).num_bits += 6; \
+	    if ((state).num_bits >= 16) { \
+		(state).num_bits -= 16; \
+		(state).utfcode = \
+		    ((state).b64_value >> (state).num_bits) & 0x7fff; \
+		idx += writeutf8((state).utfcode, ptr+idx); \
+	    } \
+	    break; \
+\
+	case U83: \
+	    (state).lasttable = (state).curtable; \
+	    (state).utfcode = (c & 0x0f) << 12; \
+	    (state).curtable = ((state).initialtable + 1); \
+	    break; \
+\
+	case U83_2: \
+	    (state).utfcode += (c & 0x3f) << 6; \
+	    (state).curtable = ((state).initialtable + 2); \
+	    break; \
+\
+	case U83_3: \
+	    (state).utfcode += (c & 0x03f); \
+	    (state).curtable = (state).initialtable; \
+	    idx += writeutf8((state).utfcode, ptr+idx); \
+	    break; \
+ \
+	case XLT: \
+	    idx += xlate((_translation[0]<<8) + (_translation[1]), ptr+idx); \
+	    _translation += 2; \
+	    continue; \
  \
 	default: \
 	    (ptr)[(idx)++] = _ch; \
@@ -73,35 +195,11 @@ struct state {
     } \
 }
 
-struct charset {
-    char *name;
-    const unsigned char (*table)[256][4];
-};
-
 #define PATASCII(pat) (pat+256)
 #define PATLEN(pat) ((pat)[512])
 #define PATLASTCHAR(pat) ((pat)[513])
 #define PATOTHERLASTCHAR(pat) ((pat)[514])
 #define PATSIZE 515
-
-/*
- * Mapping of character sets to tables
- */
-static const struct charset charset_table[] = {
-    { "us-ascii", us_ascii },	/* US-ASCII must be charset number 0 */
-    { "iso-8859-1", iso_8859_1 },
-    { "iso-8859-2", iso_8859_2 },
-    { "iso-8859-3", iso_8859_3 },
-    { "iso-8859-4", iso_8859_4 },
-    { "iso-8859-5", iso_8859_5 },
-    { "iso-8859-6", iso_8859_6 },
-    { "iso-8859-7", iso_8859_7 },
-    { "iso-8859-8", iso_8859_8 },
-    { "iso-8859-9", iso_8859_9 },
-    { "koi8-r", koi8_r },
-    { "iso-2022-jp", iso_2022_jp },
-};
-#define NUM_CHARSETS (sizeof(charset_table)/sizeof(*charset_table))
 
 #define GROWSIZE 100
 
@@ -152,19 +250,18 @@ static const char index_64[256] = {
 };
 #define CHAR64(c)  (index_64[(unsigned char)(c)])
 
-#define USASCII(c) (us_ascii[0][(unsigned char)(c)][0])
+#define USASCII(c) (chartables_us_ascii[0][(unsigned char)(c)][0])
 
 /*
  * Lookup the character set 'name'.  Returns the character set number
  * or -1 if there is no matching character set.
  */
-int charset_lookupname(name)
-const char *name;
+int charset_lookupname(const char *name)
 {
     int i;
 
-    for (i=0; i<NUM_CHARSETS; i++) {
-	if (!strcasecmp(name, charset_table[i].name)) return i;
+    for (i=0; i<chartables_num_charsets; i++) {
+	if (!strcasecmp(name, chartables_charset_table[i].name)) return i;
     }
     return -1;
 }
@@ -174,19 +271,17 @@ const char *name;
  * into canonical searching form.  Returns a pointer to a static
  * buffer containing 's' in canonical searching form.
  */
-char *charset_convert(s, charset)
-const char *s;
-int charset;
+char *charset_convert(const char *s, int charset, char *retval,
+    int alloced)
 {
-    static char *retval = 0;
-    static int alloced = 0;
     int pos = 0;
-    struct state state;
+    struct decode_state state;
 
     if (!s) return 0;
-    if (charset < 0 || charset >= NUM_CHARSETS) return EMPTY_STRING;
 
-    START(state,charset_table[charset].table);
+    if (charset < 0 || charset >= chartables_num_charsets) return xstrdup(EMPTY_STRING);
+
+    START(state,chartables_charset_table[charset].table);
     
     if (!alloced) {
 	alloced = GROWSIZE;
@@ -195,7 +290,7 @@ int charset;
     *retval = '\0';
 
     while (*s) {
-	if (pos + MAXTRANSLATION >= alloced) {
+	if (pos + charset_max_translation >= alloced) {
 	    alloced += GROWSIZE;
 	    retval = xrealloc(retval, alloced);
 	}
@@ -211,33 +306,32 @@ int charset;
  * Decode 1522-strings in 's'.  Returns a pointer to a static buffer
  * contining 's' in canonical searching form.
  */
-char *charset_decode1522(s)
-const char *s;
+char *charset_decode1522(const char *s, char *retval, int alloced)
 {
     int eatspace = 0;
     const char *start, *endcharset, *encoding, *end;
     const char *p;
     int i, c, c1, c2, c3, c4;
-    struct state state;
-    static char *retval = 0;
-    static int alloced = 0;
+    struct decode_state state;
     int pos = 0;
     int len;
 
     if (!s) return 0;
 
+    START(state,chartables_charset_table[0].table);    /* just for msvc lint */
     start = s;
-    while (start = strchr(start, '=')) {
+    while ((start = (const char*) strchr(start, '=')) != 0) {
 	start++;
 	if (*start != '?') continue;
-	encoding = strchr(start+1, '?');
+	encoding = (const char*) strchr(start+1, '?');
 	if (!encoding) continue;
-	endcharset = strchr(start+1, '*'); /* Language code delimiter */
+	endcharset =
+	    (const char*) strchr(start+1, '*'); /* Language code delimiter */
 	if (!endcharset || endcharset > encoding) endcharset = encoding;
 	if (encoding[1] != 'b' && encoding[1] != 'B' &&
 	    encoding[1] != 'q' && encoding[1] != 'Q') continue;
 	if (encoding[2] != '?') continue;
-	end = strchr(encoding+3, '?');
+	end = (const char*) strchr(encoding+3, '?');
 	if (!end || end[1] != '=') continue;
 
 	/*
@@ -256,7 +350,8 @@ const char *s;
 		retval = xrealloc(retval, alloced);
 	    }
 	    while (len--) {
-		retval[pos++] = USASCII(*s);
+		c = USASCII(*s);
+		if (c != END) retval[pos++] = (char)c;
 		s++;
 	    }
 	}
@@ -265,16 +360,15 @@ const char *s;
 	 * Get the 1522-word's character set
 	 */
 	start++;
-	for (i=0; i<NUM_CHARSETS; i++) {
-	    if ((int)strlen(charset_table[i].name) == endcharset-start &&
-		!strncasecmp(start, charset_table[i].name,
-			     endcharset - start)) {
-		START(state,charset_table[i].table);
+	for (i=0; i<chartables_num_charsets; i++) {
+	    if ((int)strlen(chartables_charset_table[i].name) == endcharset-start &&
+		!strncasecmp(start, chartables_charset_table[i].name, endcharset-start)) {
+		START(state,chartables_charset_table[i].table);
 		break;
 	    }
 	}
 
-	if (i == NUM_CHARSETS) {
+	if (i == chartables_num_charsets) {
 	    /* Unrecognized charset, nothing will match here */
 	    if (pos + 2 >= alloced) {
 		alloced += 2 + GROWSIZE;
@@ -297,12 +391,12 @@ const char *s;
 			c = '\0';
 		    }
 		    else {
-			c = (c << 4) + i;
+			c = (char)((c << 4) + i);
 		    }
 		}
 		else if (c == '_') c = ' ';
 
-		if (pos + MAXTRANSLATION >= alloced) {
+		if (pos + charset_max_translation >= alloced) {
 		    alloced += GROWSIZE;
 		    retval = xrealloc(retval, alloced);
 		}
@@ -313,7 +407,7 @@ const char *s;
 	    /* Decode 'B' encoding */
 	    p = encoding+3;
 	    while (p < end) {
-		if (pos + MAXTRANSLATION*3 >= alloced) {
+		if (pos + charset_max_translation*3 >= alloced) {
 		    alloced += GROWSIZE;
 		    retval = xrealloc(retval, alloced);
 		}
@@ -347,7 +441,8 @@ const char *s;
 	retval = xrealloc(retval, alloced);
     }
     while (len--) {
-	retval[pos++] = USASCII(*s);
+	c = USASCII(*s);
+	if (c != END) retval[pos++] = (char)c;
 	s++;
     }
     retval[pos] = '\0';
@@ -357,9 +452,7 @@ const char *s;
 /*
  * Compile the pattern 's' and return a pointer to the compiled form
  */
-comp_pat *
-charset_compilepat(s)
-const char *s;
+comp_pat *charset_compilepat(const char *s)
 {
     comp_pat *pat;
     int i, c, len;
@@ -368,8 +461,8 @@ const char *s;
     PATLEN(pat) = len = strlen(s);
     if (len) {
 	PATLASTCHAR(pat) = c = (unsigned char)s[len-1];
-	if (isupper(c)) PATOTHERLASTCHAR(pat) = tolower(c);
-	else if (islower(c)) PATOTHERLASTCHAR(pat) = toupper(c);
+	if (isupper(c)) PATOTHERLASTCHAR(pat) = TOLOWER(c);
+	else if (islower(c)) PATOTHERLASTCHAR(pat) = TOUPPER(c);
 	else PATOTHERLASTCHAR(pat) = c;
     }
     for (i=0; i<512; i++) pat[i] = len;
@@ -387,9 +480,7 @@ const char *s;
 /*
  * Free the compiled pattern 'pat'
  */
-void
-charset_freepat(pat)
-comp_pat *pat;
+void charset_freepat(comp_pat *pat)
 {
     free((char *)pat);
 }
@@ -398,12 +489,8 @@ comp_pat *pat;
  * Search for the string 'substr', with compiled pattern 'pat'
  * in the string 's', with length 'len'.  Return nonzero if match
  */
-int
-charset_searchstring(substr, pat, s, len)
-const char *substr;
-comp_pat *pat;
-const char *s;
-int len;
+int charset_searchstring(const char *substr, comp_pat *pat,
+    const char *s, int len)
 {
     int i, j, large;
     
@@ -437,11 +524,51 @@ int len;
     }
 }    
 
+static int xlate(int index, char *to) {
+    const unsigned char *from = chartables_long_translations + index;
+    int i = 0;
+
+    while ((*to++ = *from++) != END) i++;
+    return i;
+}
+
+static int writeutf8(unsigned utfcode, char *to)
+{
+    int table = chartables_unicode_block[utfcode>>8];
+    int idx = 0;
+    struct decode_state state;
+
+    if (table == 255) {
+	/* No translations in this block */
+	if (utfcode > 0x7ff) {
+	    to[0] = (char)(0xE0 + (utfcode >> 12));
+	    to[1] = (char)(0x80 + ((utfcode >> 6) & 0x3f));
+	    to[2] = (char)(0x80 + (utfcode & 0x3f));
+	    return 3;
+	}
+	if (utfcode > 0x7f) {
+	    to[0] = (char)(0xC0 + (utfcode >> 6));
+	    to[1] = (char)(0x80 + (utfcode & 0x3f));
+	    return 2;
+	}
+	to[0] = (char)utfcode;
+	return 1;
+    }
+
+    START(state, chartables_unicode + table);
+    TRANSLATE(state, (utfcode & 0xff), to, idx);
+
+    return idx;
+
+}
+
 /*
  * The various charset_searchfile() helper functions
  */
-typedef int rawproc_t P((char *buf, int size));
-static int charset_readconvert P((char *buf, int size));
+struct input_state;
+typedef int rawproc_t(struct input_state *state, char *buf, int size);
+
+static int charset_readconvert(struct input_state *state, char *buf, int size);
 static rawproc_t charset_readplain;
 static rawproc_t charset_readmapnl;
 static rawproc_t charset_readqp;
@@ -451,14 +578,17 @@ static rawproc_t charset_readbase64;
 /*
  * State for the various charset_searchfile() helper functions
  */
-static rawproc_t *rawproc;	/* Function to read and transfer-decode data */
-static const char *rawbase;	/* Location in mapped file of raw data */
-static int rawlen;		/* # bytes raw data left to read from file */
-static char decodebuf[4096];	/* Buffer of data deocded, but not converted
+struct input_state {
+    rawproc_t *rawproc;	/* Function to read and transfer-decode data */
+    const char *rawbase;	/* Location in mapped file of raw data */
+    int rawlen;		/* # bytes raw data left to read from file */
+    char decodebuf[2048];	/* Buffer of data deocded, but not converted
 				 * into canonical searching form */
-static int decodestart, decodeleft; /* Location/count of decoded data */
-static struct state decodestate; /* Charset state to convert decoded data
+    int decodestart, decodeleft; /* Location/count of decoded data */
+    struct decode_state decodestate; /* Charset state to convert decoded data
 				  * into canonical searching form */
+};
+
 
 /*
  * Search for the string 'substr' in the next 'len' bytes of 
@@ -468,42 +598,35 @@ static struct state decodestate; /* Charset state to convert decoded data
  * content transfer encoding of the data, respectively.
  * Returns nonzero iff the string was found.
  */
-int
-charset_searchfile(substr, pat, msg_base, mapnl, len,
-		   charset, encoding)
-const char *substr;
-comp_pat *pat;
-const char *msg_base;
-int mapnl;
-int len;
-int charset;
-int encoding;
+int charset_searchfile(const char *substr, comp_pat *pat,
+    const char *msg_base, int mapnl, int len, int charset, int encoding)
 {
     int substrlen = PATLEN(pat);
-    char *buf, smallbuf[4096];
+    char *buf, smallbuf[2048];
     int bufsize;
     int n;
     int i, j, large;
+    struct input_state state;
     
     /* Initialize character set mapping */
-    if (charset < 0 || charset >= NUM_CHARSETS) return 0;
-    START(decodestate, charset_table[charset].table);
-    decodeleft = 0;
+    if (charset < 0 || charset >= chartables_num_charsets) return 0;
+    START(state.decodestate, chartables_charset_table[charset].table);
+    state.decodeleft = 0;
 
     /* Initialize transfer-decoding */
-    rawbase = msg_base;
-    rawlen = len;
+    state.rawbase = msg_base;
+    state.rawlen = len;
     switch (encoding) {
     case ENCODING_NONE:
-	rawproc = mapnl ? charset_readmapnl : charset_readplain;
+	state.rawproc = mapnl ? charset_readmapnl : charset_readplain;
 	break;
 
     case ENCODING_QP:
-	rawproc = mapnl ? charset_readqpmapnl : charset_readqp;
+	state.rawproc = mapnl ? charset_readqpmapnl : charset_readqp;
 	break;
 
     case ENCODING_BASE64:
-	rawproc = charset_readbase64;
+	state.rawproc = charset_readbase64;
 	/* XXX have to have nl-mapping base64 in order to
 	 * properly count \n as 2 raw characters
 	 */
@@ -537,7 +660,7 @@ int encoding;
 	    return 0;
 	}
 
-	n = (*rawproc)(buf, bufsize);
+	n = (*state.rawproc)(&state, buf, bufsize);
 	if (n < substrlen) {
 	    if (buf != smallbuf) free(buf);
 	    return 0;
@@ -557,7 +680,7 @@ int encoding;
 		/* Read in more stuff */
 		j = i-n;
 		strncpy(buf, buf+i-(substrlen-1), substrlen-1-j);
-		n = (*rawproc)(buf+substrlen-1-j, bufsize-substrlen+1+j);
+		n = (*state.rawproc)(&state, buf+substrlen-1-j, bufsize-substrlen+1+j);
 		i = substrlen-1;
 		if (n > 0) {
 		    n += i-j;
@@ -591,7 +714,7 @@ int encoding;
     }
 
     /* Do the (generalized) search */
-    n = charset_readconvert(buf, bufsize);
+    n = charset_readconvert(&state, buf, bufsize);
     if (n < substrlen) {
 	if (buf != smallbuf) free(buf);
 	return 0;
@@ -609,7 +732,7 @@ int encoding;
 	    /* Read in more stuff */
 	    j = i-n;
 	    strncpy(buf, buf+i-(substrlen-1), substrlen-1-j);
-	    n = charset_readconvert(buf+substrlen-1-j,
+	    n = charset_readconvert(&state, buf+substrlen-1-j,
 				    bufsize-substrlen+1+j);
 	    i = substrlen-1;
 	    if (n > 0) {
@@ -647,27 +770,27 @@ int encoding;
  * (into canonical searching format) data into 'buf'.  Returns
  * the number of converted bytes, or 0 for end-of-data.
  */
-static int
-charset_readconvert(buf, size)
-char *buf;
-int size;
+static int charset_readconvert(struct input_state *state, char *buf, int size)
 {
     int retval = 0;
 
-    if (decodeleft && decodestart != 0) {
-	memmove(decodebuf, decodebuf+decodestart, decodeleft);
+    if (state->decodeleft && state->decodestart != 0) {
+	memmove(state->decodebuf, state->decodebuf+state->decodestart,
+		state->decodeleft);
     }
-    decodestart = 0;
+    state->decodestart = 0;
 
-    decodeleft += (*rawproc)(decodebuf+decodeleft, sizeof(decodebuf)-decodeleft);
+    state->decodeleft += (*state->rawproc)(state,
+					   state->decodebuf+state->decodeleft,
+					   sizeof(state->decodebuf)-state->decodeleft);
 
-    while (decodeleft) {
-	if (retval + MAXTRANSLATION > size) {
+    while (state->decodeleft) {
+	if (retval + charset_max_translation > size) {
 	    return retval;
 	}
-	TRANSLATE(decodestate, decodebuf[decodestart], buf, retval);
-	decodestart++;
-	decodeleft--;
+	TRANSLATE(state->decodestate, state->decodebuf[state->decodestart], buf, retval);
+	state->decodestart++;
+	state->decodeleft--;
     }
     return retval;
 }
@@ -677,17 +800,14 @@ int size;
  * transfer-decoded data into 'buf'.  Returns the number of decoded
  * bytes, or 0 for end-of-data.
  */
-static int
-charset_readplain(buf, size)
-char *buf;
-int size;
+static int charset_readplain(struct input_state *state, char *buf, int size)
 {
-    if (size > rawlen) size = rawlen;
+    if (size > state->rawlen) size = state->rawlen;
     if (!size) return 0;
 
-    memcpy(buf, rawbase, size);
-    rawlen -= size;
-    rawbase += size;
+    memcpy(buf, state->rawbase, size);
+    state->rawlen -= size;
+    state->rawbase += size;
 
     return size;
 }
@@ -697,16 +817,13 @@ int size;
  * transfer-decoded data into 'buf'.  Returns the number of decoded
  * bytes, or 0 for end-of-data.
  */
-static int
-charset_readmapnl(buf, size)
-char *buf;
-int size;
+static int charset_readmapnl(struct input_state *state, char *buf, int size)
 {
     int retval = 0;
-    int c;
+    char c;
 
-    while (size && rawlen > 0) {
-	c = *rawbase;
+    while (size && state->rawlen > 0) {
+	c = *state->rawbase;
 	if (c == '\n') {
 	    if (size < 2) {
 		return retval;
@@ -714,11 +831,11 @@ int size;
 	    *buf++ = '\r';
 	    retval++;
 	    size--;
-	    rawlen--;
+	    state->rawlen--;
 	}
 	*buf++ = c;
-	rawbase++;
-	rawlen--;
+	state->rawbase++;
+	state->rawlen--;
 	retval++;
 	size--;
     }
@@ -730,56 +847,54 @@ int size;
  * transfer-decoded data into 'buf'.  Returns the number of decoded
  * bytes, or 0 for end-of-data.
  */
-static int
-charset_readqp(buf, size)
-char *buf;
-int size;
+static int charset_readqp(struct input_state *state, char *buf, int size)
 {
     int retval = 0;
     int c, c1, c2;
     const char *nextline, *endline;
 
-    nextline = endline = rawbase;
+    nextline = endline = state->rawbase;
 
-    while (size && rawlen) {
-	if (rawbase >= nextline) {
+    while (size && state->rawlen) {
+	if (state->rawbase >= nextline) {
 	    /* Ignore trailing whitespace at end of line */
 
-	    nextline = memchr(rawbase+1, '\r', rawlen-1);
-	    if (!nextline) nextline = rawbase + rawlen;
+	    nextline =
+		(const char*) memchr(state->rawbase+1, '\r', state->rawlen-1);
+	    if (!nextline) nextline = state->rawbase + state->rawlen;
 	    endline = nextline;
-	    while (endline > rawbase &&
+	    while (endline > state->rawbase &&
 		   (endline[-1] == ' ' || endline[-1] == '\t')) {
 		endline--;
 	    }
 	}
-	if (rawbase >= endline) {
-	    rawbase += nextline - endline;
-	    rawlen -= nextline - endline;
+	if (state->rawbase >= endline) {
+	    state->rawbase += nextline - endline;
+	    state->rawlen -= nextline - endline;
 	    continue;
 	}
 
-	c = rawbase[0];
+	c = state->rawbase[0];
 	if (c == '=') {
-	    if (rawlen < 3) {
+	    if (state->rawlen < 3) {
 		return retval;
 	    }
-	    c1 = rawbase[1];
-	    c2 = rawbase[2];
-	    rawbase += 3;
-	    rawlen -= 3;
+	    c1 = state->rawbase[1];
+	    c2 = state->rawbase[2];
+	    state->rawbase += 3;
+	    state->rawlen -= 3;
 	    c1 = HEXCHAR(c1);
 	    c2 = HEXCHAR(c2);
 	    /* Following line also takes care of soft line breaks */
 	    if (c1 == XX && c2 == XX) continue;
-	    *buf++ = (c1 << 4) + c2;
+	    *buf++ = (char)((c1 << 4) + c2);
 	    retval++;
 	    size--;
 	}
 	else {
-	    rawbase++;
-	    rawlen--;
-	    *buf++ = c;
+	    state->rawbase++;
+	    state->rawlen--;
+	    *buf++ = (char)c;
 	    retval++;
 	    size--;
 	}
@@ -792,55 +907,53 @@ int size;
  * transfer-decoded data into 'buf'.  Returns the number of decoded
  * bytes, or 0 for end-of-data.
  */
-static int
-charset_readqpmapnl(buf, size)
-char *buf;
-int size;
+static int charset_readqpmapnl(struct input_state *state, char *buf, int size)
 {
     int retval = 0;
     int c, c1, c2;
     const char *nextline, *endline;
 
-    nextline = endline = rawbase;
+    nextline = endline = state->rawbase;
 
-    while (size && rawlen > 0) {
-	if (rawbase >= nextline) {
+    while (size && state->rawlen > 0) {
+	if (state->rawbase >= nextline) {
 	    /* Ignore trailing whitespace at end of line */
 
-	    nextline = memchr(rawbase+1, '\n', rawlen - 1);
-	    if (!nextline) nextline = rawbase + rawlen;
+	    nextline = (const char*)
+		memchr(state->rawbase+1, '\n', state->rawlen - 1);
+	    if (!nextline) nextline = state->rawbase + state->rawlen;
 	    endline = nextline;
-	    while (endline > rawbase &&
+	    while (endline > state->rawbase &&
 		   (endline[-1] == ' ' || endline[-1] == '\t')) {
 		endline--;
 	    }
 	}
-	if (rawbase >= endline) {
-	    rawbase += nextline - endline;
-	    rawlen -= nextline - endline;
+	if (state->rawbase >= endline) {
+	    state->rawbase += nextline - endline;
+	    state->rawlen -= nextline - endline;
 	    continue;
 	}
 
-	c = rawbase[0];
+	c = state->rawbase[0];
 	if (c == '=') {
-	    if (rawbase+1 == endline) {
-		rawbase = nextline + 1;
-		rawlen -= 3 + (nextline - endline);
+	    if (state->rawbase+1 == endline) {
+		state->rawbase = nextline + 1;
+		state->rawlen -= 3 + (nextline - endline);
 
 		continue;
 	    }
-	    if (rawlen < 3) {
+	    if (state->rawlen < 3) {
 		return retval;
 	    }
-	    c1 = rawbase[1];
-	    c2 = rawbase[2];
-	    rawbase += 3;
-	    rawlen -= 3;
-	    if (c2 == '\n') rawlen--;
+	    c1 = state->rawbase[1];
+	    c2 = state->rawbase[2];
+	    state->rawbase += 3;
+	    state->rawlen -= 3;
+	    if (c2 == '\n') state->rawlen--;
 	    c1 = HEXCHAR(c1);
 	    c2 = HEXCHAR(c2);
 	    if (c1 == XX && c2 == XX) continue;
-	    *buf++ = (c1 << 4) + c2;
+	    *buf++ = (char)((c1 << 4) + c2);
 	    retval++;
 	    size--;
 	}
@@ -848,17 +961,17 @@ int size;
 	    if (size < 2) {
 		return retval;
 	    }
-	    rawbase++;
-	    rawlen -= 2;
+	    state->rawbase++;
+	    state->rawlen -= 2;
 	    *buf++ = '\r';
 	    *buf++ = '\n';
 	    retval += 2;
 	    size -= 2;
 	}
 	else {
-	    rawbase++;
-	    rawlen--;
-	    *buf++ = c;
+	    state->rawbase++;
+	    state->rawlen--;
+	    *buf++ = (char)c;
 	    retval++;
 	    size--;
 	}
@@ -871,71 +984,68 @@ int size;
  * transfer-decoded data into 'buf'.  Returns the number of decoded
  * bytes, or 0 for end-of-data.
  */
-static int
-charset_readbase64(buf, size)
-char *buf;
-int size;
+static int charset_readbase64(struct input_state *state, char *buf, int size)
 {
     int retval = 0;
     int c1, c2, c3, c4;
 
-    while (size >= 3 && rawlen) {
+    while (size >= 3 && state->rawlen) {
 	do {
-	    c1 = *rawbase++;
-	    rawlen--;
+	    c1 = *state->rawbase++;
+	    state->rawlen--;
 	    if (c1 == '=') {
-		rawlen = 0;
+		state->rawlen = 0;
 		return retval;
 	    }
-	} while (rawlen && CHAR64(c1) == XX);
-	if (!rawlen) {
+	} while (state->rawlen && CHAR64(c1) == XX);
+	if (!state->rawlen) {
 	    return retval;
 	}
 
 	do {
-	    c2 = *rawbase++;
-	    rawlen--;
+	    c2 = *state->rawbase++;
+	    state->rawlen--;
 	    if (c2 == '=') {
-		rawlen = 0;
+		state->rawlen = 0;
 		return retval;
 	    }
-	} while (rawlen && CHAR64(c2) == XX);
-	if (!rawlen) {
+	} while (state->rawlen && CHAR64(c2) == XX);
+	if (!state->rawlen) {
 	    return retval;
 	}
 
 	do {
-	    c3 = *rawbase++;
-	    rawlen--;
+	    c3 = *state->rawbase++;
+	    state->rawlen--;
 	    if (c3 == '=') {
-		*buf++ = ((CHAR64(c1)<<2) | ((CHAR64(c2)&0x30)>>4));
+		*buf++ = (char)((CHAR64(c1)<<2) | ((CHAR64(c2)&0x30)>>4));
 		retval++;
-		rawlen = 0;
+		state->rawlen = 0;
 		return retval;
 	    }
-	} while (rawlen && CHAR64(c3) == XX);
-	if (!rawlen) {
+	} while (state->rawlen && CHAR64(c3) == XX);
+	if (!state->rawlen) {
 	    return retval;
 	}
 
 	do {
-	    c4 = *rawbase++;
-	    rawlen--;
+	    c4 = *state->rawbase++;
+	    state->rawlen--;
 	    if (c4 == '=') {
-		*buf++ = ((CHAR64(c1)<<2) | ((CHAR64(c2)&0x30)>>4));
-		*buf++ = (((CHAR64(c2)&0xf)<<4) | ((CHAR64(c3)&0x3c)>>2));
+		*buf++ = (char)((CHAR64(c1)<<2) | ((CHAR64(c2)&0x30)>>4));
+		*buf++ = (char)(((CHAR64(c2)&0xf)<<4) | ((CHAR64(c3)&0x3c)>>2));
 		retval += 2;
-		rawlen = 0;
+		state->rawlen = 0;
 		return retval;
 	    }
-	} while (rawlen && CHAR64(c4) == XX);
+	} while (state->rawlen && CHAR64(c4) == XX);
 	if (CHAR64(c4) == XX) {
 	    return retval;
 	}
 
-	*buf++ = ((CHAR64(c1)<<2) | ((CHAR64(c2)&0x30)>>4));
-	*buf++ = (((CHAR64(c2)&0xf)<<4) | ((CHAR64(c3)&0x3c)>>2));
-	*buf++ = (((CHAR64(c3)&0x3)<<6) | CHAR64(c4));
+	*buf++ = (char)((CHAR64(c1)<<2) | ((CHAR64(c2)&0x30)>>4));
+	*buf++ = (char)(((CHAR64(c2)&0xf)<<4) | ((CHAR64(c3)&0x3c)>>2));
+	*buf++ = (char)(((CHAR64(c3)&0x3)<<6) | CHAR64(c4));
 	retval += 3;
 	size -= 3;
     }
