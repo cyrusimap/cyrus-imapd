@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.164 2000/05/03 19:05:55 tmartin Exp $
+dnl $Id: configure.in,v 1.165 2000/05/03 19:24:09 leg Exp $
 dnl
 
 
@@ -21,6 +21,7 @@ Configure SASL appropriately instead.]))
 AC_ARG_WITH(cyrus-prefix,[  --with-cyrus-prefix=DIR    use DIR as cyrus install directory],
 	cyrus_prefix="$withval",cyrus_prefix="/usr/cyrus")
 AC_SUBST(cyrus_prefix)
+AC_DEFINE_UNQUOTED(CYRUS_PATH,"$cyrus_prefix")
 AC_ARG_WITH(cyrus-user,[  --with-cyrus-user=USERID   use USERID cyrus userid],
 	cyrus_user="$withval",cyrus_user="cyrus")
 AC_SUBST(cyrus_user)
@@ -66,6 +67,9 @@ AC_SUBST(DEPLIBS)
 AC_SUBST(LOCALDEFS)
 AC_FUNC_VPRINTF
 
+AC_ARG_WITH(dbdir,[  --with-dbdir=DIR       Berkeley DB in <DIR>],
+  LDFLAGS="-L$withval/lib $LDFLAGS"
+  CPPFLAGS="-I$withval/include $CPPFLAGS")
 AC_CHECK_LIB(db-3, db_create, [AC_DEFINE(HAVE_LIBDB)
        	                       LIBS=" -ldb ${LIBS}"],
 AC_ERROR([this version requires Berkeley DB 3.x.
@@ -407,7 +411,6 @@ AC_SUBST(WITH_AUTH)
 if test "$WITH_AUTH" = krb_pts; then
 	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} ptclient"
 	EXTRA_OUTPUT="${EXTRA_OUTPUT} ptclient/Makefile"
-	AC_DEFINE_UNQUOTED(CYRUS_PATH,"$cyrus_prefix")
 	AFS_LIBS="${with_afs}/lib/afs/libkauth.a ${with_afs}/lib/afs/libprot.a  ${with_afs}/lib/afs/libauth.a ${with_afs}/lib/afs/libsys.a ${with_afs}/lib/librxkad.a ${with_afs}/lib/librx.a ${with_afs}/lib/afs/libsys.a ${with_afs}/lib/libubik.a  ${with_afs}/lib/liblwp.a ${with_afs}/lib/afs/util.a"
 	if test -f ${with_afs}/lib/afs/libaudit.a; then
 		AFS_LIBS="$AFS_LIBS ${with_afs}/lib/afs/libaudit.a"
@@ -727,7 +730,7 @@ AC_ARG_ENABLE(netscapehack,
 	fi)
 
 AC_CHECK_FUNC(dlopen,,AC_CHECK_LIB(dl,dlopen))
-CMU_SASL
+CMU_NEEDS_SASL
 
 CMU_AGENTX
 

@@ -14,15 +14,11 @@ CPPFLAGS=$saved_CPPFLAGS
 
 AC_DEFUN(CMU_SASL_INC_WHERE, [
    for i in $1; do
-      AC_MSG_CHECKING(for sasl headers in $i)
       CMU_SASL_INC_WHERE1($i)
       CMU_TEST_INCPATH($i, sasl)
       if test "$ac_cv_found_sasl_inc" = "yes"; then
         ac_cv_sasl_where_inc=$i
-        AC_MSG_RESULT(found)
         break
-      else
-        AC_MSG_RESULT(not found)
       fi
     done
 ])
@@ -40,23 +36,17 @@ LIBS=$saved_LIBS
 
 AC_DEFUN(CMU_SASL_LIB_WHERE, [
    for i in $1; do
-      AC_MSG_CHECKING(for sasl libraries in $i)
       CMU_SASL_LIB_WHERE1($i)
       dnl deal with false positives from implicit link paths
       CMU_TEST_LIBPATH($i, sasl)
       if test "$ac_cv_found_sasl_lib" = "yes" ; then
         ac_cv_sasl_where_lib=$i
-        AC_MSG_RESULT(found)
         break
-      else
-        AC_MSG_RESULT(not found)
       fi
     done
 ])
 
 AC_DEFUN(CMU_SASL, [
-AC_REQUIRE([CMU_SOCKETS])
-AC_REQUIRE([CMU_KRB4])
 AC_ARG_WITH(sasl,
 	[  --with-sasl=PREFIX      Compile with Sasl support],
 	[if test "X$with_sasl" = "X"; then
