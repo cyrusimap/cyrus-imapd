@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.34 2002/11/15 21:46:58 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.35 2002/11/17 03:50:23 ken3 Exp $ */
 
 #include <config.h>
 
@@ -3125,7 +3125,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 	struct d {
 	    char *idate;
 	    char *flags;
-	    int seqno, uid;
+	    unsigned int seqno, uid;
 	    struct d *next;
 	} *head, *p, *q;
 	int c;
@@ -3145,7 +3145,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 	p = head;
 	/* read all the responses into the linked list */
 	for (/* each FETCH response */;;) {
-	    int seqno = 0, uidno = 0;
+	    unsigned int seqno = 0, uidno = 0;
 	    char *flags = NULL, *idate = NULL;
 
 	    /* read a line */
@@ -3275,7 +3275,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 	prot_printf(backend_current->out, "%s %s %s (Rfc822.peek)\r\n",
 		    mytag, usinguid ? "Uid Fetch" : "Fetch", sequence);
 	for (/* each FETCH response */;;) {
-	    int seqno = 0, uidno = 0;
+	    unsigned int seqno = 0, uidno = 0;
 
 	    /* read a line */
 	    c = prot_getc(backend_current->in);
@@ -3341,6 +3341,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 			while (isdigit(c = prot_getc(backend_current->in))) {
 			    sz *= 10;
 			    sz += c - '0';
+                            /* xxx overflow */
 			}
 		    }
 		    if (c == '}') c = prot_getc(backend_current->in);
