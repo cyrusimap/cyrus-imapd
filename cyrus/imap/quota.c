@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: quota.c,v 1.41.4.10 2003/03/08 04:18:54 ken3 Exp $ */
+/* $Id: quota.c,v 1.41.4.11 2003/03/09 18:49:05 ken3 Exp $ */
 
 
 #include <config.h>
@@ -328,6 +328,7 @@ int fixquota_mailbox(char *name,
     int i, len, thisquota, thisquotalen;
     char *p, *domain = (char *) rock;
 
+    /* make sure the domains match */
     if ((p = strchr(name, '!')) != NULL) {
 	if (!domain || (p - name) != strlen(domain) ||
 	    strncmp(name, domain, p - name)) {
@@ -349,7 +350,8 @@ int fixquota_mailbox(char *name,
 	 i < quota_num && strcmp(name, quota[i].quota.root) >= 0; i++) {
 	len = strlen(quota[i].quota.root);
 	if (!strncmp(name, quota[i].quota.root, len) &&
-	    (!name[len] || name[len] == '.')) {
+	    (!name[len] || name[len] == '.' ||
+	     (domain && name[len-1] == '!'))) {
 	    quota[i].refcount++;
 	    if (len > thisquotalen) {
 		thisquota = i;
