@@ -17,3 +17,32 @@ if test `sys` = sgi_62 -o `sys` = i386_linux2 ; then
 fi
 
 LNCOMMAND="${SRCDIR}/configure $WITHAUTH --with-inn=/usr/news $AMSSYNC --enable-experiment --enable-cmulocal --with-cyrus-user=cyrus --with-cyrus-group=staff"
+
+# Ryan's aggressive optimizations
+CC=cc
+case `uname` in
+  Linux) CFLAGS="-O3"
+	;;
+  IRIX) CFLAGS="-O2"
+        # LDFLAGS="-L/usr/local/lib -Wl,-rpath,/usr/local/lib"
+        export LDFLAGS
+	;;
+  HP-UX)   CFLAGS="-Ae +O3 +Oaggressive"
+	CC=gcc #cheat for now
+	CFLAGS="-O2"
+	;;
+  SunOS)   
+         if test "`uname -r`" = "4.1.3_U1"; then 
+           CC=gcc
+           CFLAGS=-O3
+         else
+           CFLAGS="-xO4 -xdepend"
+         fi
+         ;;
+  ULTRIX)  CFLAGS="-O"
+	;;
+  *)       CFLAGS=-g
+	;;
+esac
+
+export CFLAGS CC CXXFLAGS
