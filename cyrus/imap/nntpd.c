@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.85 2003/06/04 16:00:42 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.86 2003/06/09 02:40:34 ken3 Exp $
  */
 
 /*
@@ -2897,12 +2897,12 @@ static void cmd_post(char *msgid, int mode)
 
     if (mode != POST_TAKETHIS) {
 	if (r) {
-	    prot_printf(nntp_out, "%u Do not send article %s\r\n",
+	    prot_printf(nntp_out, "%u %s Do not send article\r\n",
 			post_codes[mode].no, msgid ? msgid : "");
 	    return;
 	}
 	else {
-	    prot_printf(nntp_out, "%u Send article %s\r\n",
+	    prot_printf(nntp_out, "%u %s Send article\r\n",
 			post_codes[mode].cont, msgid ? msgid : "");
 	    if (mode == POST_CHECK) return;
 	}
@@ -2941,7 +2941,7 @@ static void cmd_post(char *msgid, int mode)
 	}
 
 	if (!r) {
-	    prot_printf(nntp_out, "%u Article %s received ok\r\n",
+	    prot_printf(nntp_out, "%u %s Article received ok\r\n",
 			post_codes[mode].ok, msg->id ? msg->id : "");
 
 	    if (msg->id) {
@@ -2958,7 +2958,7 @@ static void cmd_post(char *msgid, int mode)
     }
 
     if (r) {
-	prot_printf(nntp_out, "%u Failed receiving article %s (%s)\r\n",
+	prot_printf(nntp_out, "%u %s Failed receiving article (%s)\r\n",
 		    post_codes[mode].fail, msgid ? msgid : "",
 		    error_message(r));
     }
