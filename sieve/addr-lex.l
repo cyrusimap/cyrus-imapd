@@ -20,7 +20,7 @@ static int ncom;	/* number of open comments */
 \"				{ BEGIN QSTRING; return yytext[0]; }
 \[				{ BEGIN DOMAINLIT; return yytext[0]; }
 \(				{ ncom = 1; BEGIN COMMENT; }
-\)				{ yyerror("address parse error, "
+\)				{ addrerror("address parse error, "
 					  "unexpected `')'' "
 					  "(unbalanced comment)");
 				  yyterminate(); }
@@ -39,7 +39,7 @@ static int ncom;	/* number of open comments */
 <COMMENT>([^\(\)\n\0\\]|\\.)*	/* ignore comments */
 <COMMENT>\(			ncom++;
 <COMMENT>\)			{ ncom--; if (ncom == 0) BEGIN INITIAL; }
-<COMMENT><<EOF>>		{ yyerror("address parse error, "
+<COMMENT><<EOF>>		{ addrerror("address parse error, "
 					  
 					  "expecting `')'' "
 					  "(unterminated comment)");

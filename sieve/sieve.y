@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.7 2000/02/03 06:51:11 tmartin Exp $
+ * $Id: sieve.y,v 1.8 2000/02/07 23:25:38 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -34,6 +34,12 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "interp.h"
 #include "script.h"
 #include "tree.h"
+
+#include "../lib/util.h"
+#include "../lib/imparse.h"
+
+    /* definitions */
+    extern int addrparse(void);
 
 struct vtags {
     int days;
@@ -72,7 +78,6 @@ static struct vtags *canon_vtags(struct vtags *v);
 static void free_vtags(struct vtags *v);
 
 static int verify_mailboxes(stringlist_t *sl);
-static int verify_priority(char *s);
 static int verify_addresses(stringlist_t *sl);
 static int verify_flags(stringlist_t *sl);
 #ifdef ENABLE_REGEX
@@ -594,21 +599,6 @@ static int verify_addresses(stringlist_t *sl)
 static int verify_mailbox(char *s)
 {
     /* if not a mailbox, call yyerror */
-    return 1;
-}
-
-static int verify_priority(char *s)
-{
-    char errbuf[500];
-
-    if ((strcmp(s,"none")!=0) && (strcmp(s,"low")!=0) && 
-	(strcmp(s,"medium")!=0) && (strcmp(s,"high")!=0))
-    {
-	sprintf(errbuf, "Invalid priority %s",s);
-	yyerror(errbuf);
-	return 0;
-    }
-
     return 1;
 }
 

@@ -3,7 +3,10 @@
  * addr.y -- RFC 822 address parser
  */
 
+#include <stdlib.h>
 #include <string.h>
+
+#include "addr.h"
 
 int yyerror(char *msg);
 extern int yylex(void);
@@ -77,7 +80,7 @@ qstring: '"' QTEXT '"'
 
 extern char addrerr[];
 
-yyerror(char *s)
+int yyerror(char *s)
 {
     strcpy(addrerr, s);
     return 0;
