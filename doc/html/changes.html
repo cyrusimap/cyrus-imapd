@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.89 1999/10/22 16:48:16 leg Exp $ -->
+<!-- $Id: changes.html,v 1.90 1999/10/24 23:40:30 leg Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -9,6 +9,8 @@
     <ul>
       <li> Fix to enclosed message parsing (thanks to John Myers).
 
+      <li> When trying to skip over non-synchronizing literals during
+      error recovery, the IMAP server never stopped eating.  Fixed.
     </ul>
 
     <h2> Changes to the Cyrus IMAP Server Since Version 1.6.13 </h2>
