@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.19 2000/12/29 09:57:06 leg Exp $
+   $Id: seen_db.c,v 1.20 2001/01/02 04:06:24 leg Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -197,28 +197,32 @@ static int seen_readold(struct seen *seendb,
     strcat(fnamebuf, FNAME_SEEN);
 
     fd = open(fnamebuf, O_RDWR, 0);
-    if (fd == -1 && errno == ENOENT) {
-	/* no old-style seen file for this database */
-	linelen = 0;
-    } else if (fd == -1) {
-	syslog(LOG_ERR, "error opening '%s': %m", fnamebuf);
-	return IMAP_IOERROR;
-    } else {
-	if (fstat(fd, &sbuf) == -1) {
-	    close(fd);
-	    return IMAP_IOERROR;
-	}
-	map_refresh(fd, 1, &base, &len, sbuf.st_size, fnamebuf, 0);
-	
-	/* Find record for user */
-	offset = bsearch_mem(seendb->user, 1, base, len, 0, &linelen);
-    }
 
     *lastreadptr = 0;
     *lastuidptr = 0;
     *lastchangeptr = 0;
+
+    if (fd == -1 && errno == ENOENT) {
+	/* no old-style seen file for this database */
+	*seenuidsptr = xstrdup("");
+	return 0;
+    } else if (fd == -1) {
+	syslog(LOG_ERR, "error opening '%s': %m", fnamebuf);
+	return IMAP_IOERROR;
+    }
+
+    if (fstat(fd, &sbuf) == -1) {
+	close(fd);
+	return IMAP_IOERROR;
+    }
+    map_refresh(fd, 1, &base, &len, sbuf.st_size, fnamebuf, 0);
+    
+    /* Find record for user */
+    offset = bsearch_mem(seendb->user, 1, base, len, 0, &linelen);
+
     if (!linelen) {
 	*seenuidsptr = xstrdup("");
+	close(fd);
 	return 0;
     }
 
