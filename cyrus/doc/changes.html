@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.43.2.11 2003/01/11 04:04:33 ken3 Exp $ -->
+<!-- $Id: changes.html,v 1.43.2.12 2003/01/27 21:56:51 ken3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -56,6 +56,16 @@ for details.</li>
 <li>Berkeley DB Configuration methods have changed.  Hopefully they're
 more generic now.  You can still use --with-dbdir, or you can use
 --with-bdb-libdir and --with-bdb-incdir</li>
+<li>timsieved now handles usernames with dots (when unixhierarchysep is active)</li>
+<li>tugowar has been removed from the distribution.</li>
+<li>Squatter now has an option to skip unmodified mailboxes.</li>
+<li>Properly hash username to remove a user's sieve scripts when their INBOX
+is removed.</li>
+<li>Reset output buffer when prot_flush returns EOF.</li>
+<li>Minor Makefile improvements with use of $(srcdir)</li>
+<li>Remotepurge improvement for empty mailboxes</li>
+<li>Fix for AFS overwriting the canonicalized username in ptloader</li>
+<li>Security audit of imapd.c performed by SecurityAppraisers and Bynari</li>
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.1.10</h2>
@@ -1744,7 +1754,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2003/01/11 04:04:33 $ <br />
+last modified: $Date: 2003/01/27 21:56:51 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
