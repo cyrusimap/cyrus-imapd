@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.138 2001/08/03 21:18:06 ken3 Exp $
+# $Id: Makefile.in,v 1.139 2001/08/15 17:00:48 ken3 Exp $
 # 
 # @configure_input@
 #
@@ -107,6 +107,8 @@ LOBJS= append.o mailbox.o mboxlist.o mboxname.o message.o \
 
 IMAPDOBJS=pushstats.o imapd.o index.o tls.o
 
+LMTPOBJS=lmtpstats.o lmtpengine.o tls.o
+
 SERVICE=../master/service.o
 SERVICETHREAD=../master/service-thread.o
 
@@ -149,26 +151,26 @@ collectnews: collectnews.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o collectnews collectnews.o libimap.a $(DEPLIBS) \
 	 $(LIBS)
 
-deliver: deliver.o lmtpstats.o lmtpengine.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o deliver deliver.o lmtpengine.o lmtpstats.o \
+deliver: deliver.o $(LMTPOBJS) libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o deliver deliver.o $(LMTPOBJS) \
 	libimap.a $(DEPLIBS) $(LIBS)
 
-lmtpd: lmtpstats.o lmtpd.o lmtpengine.o \
+lmtpd: lmtpd.o $(LMTPOBJS) \
 	libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o lmtpd \
-	 $(SERVICE) lmtpd.o lmtpengine.o lmtpstats.o \
+	 $(SERVICE) lmtpd.o $(LMTPOBJS) \
 	 libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
-lmtpd.pure: lmtpstats.o lmtpd.o lmtpengine.o \
+lmtpd.pure: lmtpd.o $(LMTPOBJS) \
 	libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(SERVICE)
 	$(PURIFY) $(PUREOPT) $(CC) $(LDFLAGS) -o lmtpd.pure \
-	 $(SERVICE) lmtpd.o lmtpengine.o lmtpstats.o \
+	 $(SERVICE) lmtpd.o $(LMTPDOBJS) \
 	 libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
-lmtpproxyd: lmtpstats.o lmtpproxyd.o lmtpengine.o \
+lmtpproxyd: lmtpproxyd.o $(LMTPOBJS) \
 	libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o lmtpproxyd \
-	 $(SERVICE) lmtpproxyd.o lmtpengine.o lmtpstats.o \
+	 $(SERVICE) lmtpproxyd.o $(LMTPOBJS) \
 	 libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
 ctl_deliver: ctl_deliver.o libimap.a $(DEPLIBS)
