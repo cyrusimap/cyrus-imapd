@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.126 1998/12/04 17:34:53 tjs Exp $
+dnl $Id: configure.in,v 1.127 1999/01/12 16:01:40 tjs Exp $
 dnl
 
 AC_INIT(imap/imapd.c)
@@ -707,8 +707,8 @@ case "$with_krb" in
       
     dnl We've replaced your regular Kerberos libraries with K5 compatibility
     dnl verrsions.  Let's see if configure can tell the difference.
-    AC_CHECK_LIB(krb4, krb_realmofhost,,
-      AC_CHECK_LIB(krb, krb_realmofhost,,
+    AC_CHECK_LIB(krb4, krb_get_phost,,
+      AC_CHECK_LIB(krb, krb_get_phost,,
         AC_MSG_ERROR([Can't find Kerberos libraries!])))
 
     AC_CACHE_CHECK(for Kerberos includes, cyrus_krbinclude, [
