@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.34 2002/04/15 19:35:49 rjs3 Exp $ */
+/* $Id: acconfig.h,v 1.35 2002/05/15 15:21:36 rjs3 Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -146,6 +146,17 @@
 /* This allows us to work even when we don't have an fdatasync */
 #ifndef HAVE_FDATASYNC
 #define fdatasync(fd) fsync(fd)
+#endif
+
+/* A similar setup for not having O_DSYNC */
+#include <fcntl.h>
+
+#ifndef O_DSYNC
+#  ifdef O_SYNC
+#    define O_DSYNC     O_SYNC          /* POSIX */
+#  else
+#    define O_DSYNC     O_FSYNC         /* BSD */
+#  endif
 #endif
 
 /* Database Backends that are configurable */
