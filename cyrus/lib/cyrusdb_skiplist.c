@@ -382,8 +382,8 @@ static int write_lock(struct db *db)
 	return CYRUSDB_IOERROR;
     }
     db->map_size = sbuf.st_size;
-    if (db->ino != sbuf.st_ino) {
-	map_free(&db->base, &db->map_len);
+    if (db->map_ino != sbuf.st_ino) {
+	map_free(&db->map_base, &db->map_len);
     }
     map_refresh(db->fd, 0, &db->map_base, &db->map_len, sbuf.st_size,
 		db->fname, 0);
@@ -401,13 +401,13 @@ static int read_lock(struct db *db)
     }
 
     if (fstat(db->fd, &sbuf) == -1) {
-	syslog(LOG_ERR, "IOERROR: fstat %s: %m", fname);
+	syslog(LOG_ERR, "IOERROR: fstat %s: %m", db->fname);
 	return CYRUSDB_IOERROR;
     }
 
     db->map_size = sbuf.st_size;
-    if (db->ino != sbuf.st_ino) {
-	map_free(&db->base, &db->map_len);
+    if (db->map_ino != sbuf.st_ino) {
+	map_free(&db->map_base, &db->map_len);
     }
     
     map_refresh(db->fd, 0, &db->map_base, &db->map_len, sbuf.st_size,
@@ -676,6 +676,7 @@ int myforeach(struct db *db,
 {
     const char *ptr;
     struct txn t, *tp;
+    int r;
 
     if (!tid) {
 	/* grab a r lock */
@@ -917,6 +918,7 @@ int mydelete(struct db *db,
     bit32 writebuf[2];
     struct txn t, *tp;
     int i;
+    int r;
 
     if (!tid || !*tid) {
 	/* grab a r/w lock */
@@ -983,8 +985,10 @@ int mydelete(struct db *db,
 
 int mycommit(struct db *db, struct txn *tid)
 {
-    assert(db && tid);
     bit32 commitrectype = htonl(COMMIT);
+    int r;
+
+    assert(db && tid);
 
     /* fsync */
     if (fsync(db->fd) < 0) {
@@ -993,8 +997,8 @@ int mycommit(struct db *db, struct txn *tid)
     }
 
     /* write a commit record */
-    lseek(db->fd, tp->logend, SEEK_SET);
-    retry_write(db->fd, &commitrectype, 4);
+    lseek(db->fd, tid->logend, SEEK_SET);
+    retry_write(db->fd, (char *) &commitrectype, 4);
 
     /* fsync */
     if (fsync(db->fd) < 0) {
