@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squatter.c,v 1.3 2001/09/27 01:07:49 ken3 Exp $
+ * $Id: squatter.c,v 1.4 2001/11/13 17:34:03 leg Exp $
  */
 
 /*
@@ -138,7 +138,7 @@ static void print_stats(FILE* out, SquatStats* stats) {
   fprintf(out, "Indexed %d messages (%d bytes) "
           "into %d index bytes in %d seconds\n",
           stats->indexed_messages, stats->indexed_bytes,
-          stats->index_size, stats->end_time - stats->start_time);
+          stats->index_size, (int) (stats->end_time - stats->start_time));
 }
 
 static void shut_down(int code) __attribute__((noreturn));
@@ -290,7 +290,7 @@ static void stats_callback(void* closure, SquatStatsEvent* params) {
 /* This is called once for each mailbox we're told to index. */
 static int index_me(char *name, int matchlen, int maycreate, void *rock) {
     struct mailbox m;
-    int r, i;
+    int r;
     SquatStats stats;
     SquatReceiverData data;
     char tmp_file_name[1000];
@@ -349,7 +349,7 @@ static int index_me(char *name, int matchlen, int maycreate, void *rock) {
 
     /* write an empty document at the beginning to record the validity
        nonce */
-    sprintf(uid_validity_buf, "validity.%d", m.uidvalidity);
+    sprintf(uid_validity_buf, "validity.%ld", m.uidvalidity);
     if (squat_index_open_document(data.index, uid_validity_buf) != SQUAT_OK
         || squat_index_close_document(data.index) != SQUAT_OK) {
       fatal_squat_error("Writing index");
@@ -465,7 +465,7 @@ int main(int argc, char **argv)
 	mboxname_hiersep_tointernal(&squat_namespace, buf);
 	index_me(buf, 0, 0, NULL);
 	if (rflag) {
-	    strcat(buf, ".*");
+	    strlcat(buf, ".*", MAX_MAILBOX_NAME);
 	    (*squat_namespace.mboxlist_findall)(&squat_namespace, buf, 1,
 						0, 0, index_me, NULL);
 	}
