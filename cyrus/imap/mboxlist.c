@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.146 2001/01/09 17:41:38 ken3 Exp $
+ * $Id: mboxlist.c,v 1.147 2001/01/17 21:21:19 leg Exp $
  */
 
 #include <config.h>
@@ -854,7 +854,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     char newpath[MAX_MAILBOX_PATH];
     struct mailbox newmailbox;
     acapmbox_data_t mboxdata;
-    char *oldacl, *newacl;
+    char *oldacl = NULL, *newacl = NULL;
     const char *root = NULL;
     struct txn *tid = NULL;
     char *newpartition = NULL;
@@ -1021,9 +1021,6 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	}
     }
 
-    /* we're done with the new ACL */
-    if (newacl) free(newacl);
-
     if (r != 0) {
 	int r2 = 0;
 	
@@ -1042,7 +1039,6 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 
 	    acapmbox_release_handle(acaphandle);
 	}
-
     } else {
 	/* commit now */
 	switch (r = DB->commit(mbdb, tid)) {
@@ -1079,6 +1075,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     }
 
     /* free memory */
+    if (newacl) free(newacl);	/* we're done with the new ACL */
     if (newpartition) free(newpartition);
     if (mboxent) free(mboxent);
     
