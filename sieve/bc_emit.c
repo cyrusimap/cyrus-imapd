@@ -1,7 +1,7 @@
 /* bc_emit.c -- sieve bytecode - pass 2 of the compiler
  * Rob Siemborski
  * Jen Smith
- * $Id: bc_emit.c,v 1.1.4.3 2003/06/20 18:52:25 jsmith2 Exp $
+ * $Id: bc_emit.c,v 1.1.4.4 2003/06/23 13:33:37 rjs3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -640,7 +640,7 @@ int sieve_emit_bytecode(int fd, bytecode_info_t *bc)
     dump(bc);
 #endif
 
-    /*the 4 is to account for the version # at the begining*/
+    /*the sizeof(int) is to account for the version # at the begining*/
     return bc_action_emit(fd, 0, bc->scriptend, bc, sizeof(int) + BYTECODE_MAGIC_LEN);
 }
 
