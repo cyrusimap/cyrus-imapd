@@ -1,5 +1,5 @@
 # Top-level Makefile for cyrus software
-# $Id: Makefile.in,v 1.26 1999/10/30 23:07:36 leg Exp $
+# $Id: Makefile.in,v 1.27 1999/10/30 23:07:59 leg Exp $
 #
 # @configure_input@
 # Copyright 1998 Carnegie Mellon University
@@ -45,7 +45,6 @@ all:: checkdepend
 	@for d in  $(SUBDIRS); \
 	do \
 		(cd $$d; echo "### Making" all "in" `pwd`;	\
-			 echo "### DESTDIR=" $(DESTDIR); \
 			$(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) all) || exit 1; \
 	done
 
