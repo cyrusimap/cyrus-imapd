@@ -1,0 +1,36 @@
+#!/usr/bin/perl -w
+
+use strict;
+
+my $verbose = 0;
+while (defined $ARGV[0] && ("-v" eq $ARGV[0])) {
+    $verbose++;
+    shift @ARGV;
+}
+
+sub mysys {
+    my $cmd = shift;
+
+    if ($verbose > 1) {
+	print "$cmd\n";
+    }
+    return system($cmd);
+}
+
+sub runone {
+    my $t = shift;
+    my $res;
+
+    $res = mysys("gcc -g -o $t $t.c -lcyrus");
+    if (!$res) {
+	$res = mysys("./$t < $t.INPUT > $t.TEMP");
+	$res = mysys("cmp -s $t.TEMP $t.OUTPUT");
+    }
+    if ($res) {
+	print "$t FAILED\n";
+    } elsif ($verbose) {
+	print "$t ok\n";
+    }
+}
+
+runone("cyrusdb");
