@@ -57,26 +57,27 @@ typedef struct lexstate_s {
 
 int yylex(lexstate_t * lvalp, void * client);
 
-#define	TAG	258
-#define	EOL	259
-#define	STRING	260
-#define NUMBER  261
+enum {
+    TAG = 258,
+    EOL = 259,
+    STRING = 260,
+    NUMBER = 261,
 
-#define TOKEN_OK      280
-#define TOKEN_NO      281
-#define TOKEN_ACTIVE  282
+    TOKEN_OK = 280,
+    TOKEN_NO = 281,
+    TOKEN_ACTIVE = 282,
+};
 
-
-#define LEXER_STATE_TAG         60
-#define LEXER_STATE_RECOVER     61
-#define LEXER_STATE_RECOVER_CR  62
-#define LEXER_STATE_CR          63
-#define LEXER_STATE_QSTR        64
-#define LEXER_STATE_LITERAL     65
-#define LEXER_STATE_NUMBER      66
-#define LEXER_STATE_NORMAL      67
-#define LEXER_STATE_ATOM        68
-
-
+enum {
+    LEXER_STATE_TAG = 60,
+    LEXER_STATE_RECOVER,
+    LEXER_STATE_RECOVER_CR,
+    LEXER_STATE_CR,
+    LEXER_STATE_QSTR,
+    LEXER_STATE_LITERAL,
+    LEXER_STATE_NUMBER,
+    LEXER_STATE_NORMAL,
+    LEXER_STATE_ATOM
+};
 
 #endif /* _LEX_H_ */

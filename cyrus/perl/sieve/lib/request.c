@@ -102,12 +102,10 @@ int handle_response(int res,int version,struct protstream *pin, mystring_t **err
 	      parseerror("expected RPAREN\n");
 
 	  res = yylex(&state, pin);
+	  if (res == ' ') res = yylex(&state, pin);
       }
 
-      if (res !=' ')
-	  parseerror("expected sp\n");
-      
-      if (yylex(&state, pin)!=STRING)
+      if (res != STRING)
 	  parseerror("expected string\n");
       
 
@@ -402,7 +400,8 @@ int list_wcb(int version, struct protstream *pout, struct protstream *pin,isieve
   return ret;
 }
 
-int setscriptactive(int version, struct protstream *pout, struct protstream *pin,char *name)
+int setscriptactive(int version, struct protstream *pout, 
+		    struct protstream *pin,char *name)
 {
   lexstate_t state;
   int res;
