@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: target-acap.c,v 1.17 2000/06/04 22:48:05 leg Exp $
+ * $Id: target-acap.c,v 1.18 2000/06/06 00:55:17 leg Exp $
  */
 
 #include <config.h>
@@ -186,10 +186,12 @@ void myacap_addto(acap_entry_t *entry,
     imapurl_fromURL(server, mailbox, d.url);
 
     syslog(LOG_DEBUG, "creating mailbox %s", name);
-    r = mboxlist_insertremote(mailbox, MBTYPE_REMOTE, server, d.acl, NULL);
-    if (r) {
-	syslog(LOG_ERR, "couldn't insert %s into mailbox list: %s\n",
-	       d.name, error_message(r));
+    if (!debugmode) {
+	r = mboxlist_insertremote(mailbox, MBTYPE_REMOTE, server, d.acl, NULL);
+	if (r) {
+	    syslog(LOG_ERR, "couldn't insert %s into mailbox list: %s\n",
+		   d.name, error_message(r));
+	}
     }
 
     free(mailbox);
@@ -207,7 +209,9 @@ void myacap_removefrom(acap_entry_t *entry,
     /* need to reencode UTF-8 name into a UTF-7 IMAP name */
 
     syslog(LOG_DEBUG, "deleting mailbox %s", name);
-    mboxlist_deletemailbox(name, 1, "", NULL, 0);
+    if (!debugmode) {
+	mboxlist_deletemailbox(name, 1, "", NULL, 0);
+    }
 }
 
 void myacap_change(acap_entry_t *entry,
@@ -276,8 +280,10 @@ void myacap_entry(acap_entry_t *entry, void *rock)
 	free(v);
 	r = 0;
     } else { /* we don't have it, add it */
-	r = mboxlist_insertremote(mailbox, MBTYPE_REMOTE, server, 
-				  acl->data, NULL);
+	if (!debugmode) {
+	    r = mboxlist_insertremote(mailbox, MBTYPE_REMOTE, server, 
+				      acl->data, NULL);
+	}
     }
 
     if (r) {
@@ -295,7 +301,9 @@ static void mboxdel(const void *v)
     int r = 0;
 
     syslog(LOG_DEBUG, "'%s' no longer exists", name);
-    r = mboxlist_deletemailbox(name, 1, "", NULL, 0);
+    if (!debugmode) {
+	r = mboxlist_deletemailbox(name, 1, "", NULL, 0);
+    }
     if (r) {
 	syslog(LOG_ERR, "error deleting '%s': %s", name, error_message(r));
     }
@@ -406,7 +414,7 @@ void listen_for_kicks()
     memset((char *)&srvaddr, 0, sizeof(srvaddr));
     srvaddr.sun_family = AF_UNIX;
     strcpy(srvaddr.sun_path, fnamebuf);
-    len = strlen(srvaddr.sun_path) + sizeof(srvaddr.sun_family);
+    len = strlen(srvaddr.sun_path) + sizeof(srvaddr.sun_family) + 1;
     oldumask = umask((mode_t) 0); /* for Linux */
     r = bind(s, (struct sockaddr *)&srvaddr, len);
     umask(oldumask); /* for Linux */

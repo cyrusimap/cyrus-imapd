@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.7 2000/06/05 19:11:02 leg Exp $
+ * $Id: lmtpengine.c,v 1.8 2000/06/06 00:54:54 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1442,7 +1442,7 @@ int lmtp_connect(const char *phost,
 	addr.sun_family = AF_UNIX;
 	strcpy(addr.sun_path, host);
 	if (connect(sock, (struct sockaddr *) &addr, 
-		    sizeof(addr.sun_family) + strlen(addr.sun_path)) < 0) {
+		    sizeof(addr.sun_family) + strlen(addr.sun_path) + 1) < 0) {
 	    syslog(LOG_ERR, "connect(%s) failed: %m", addr.sun_path);
 	    goto donesock;
 	}
@@ -1593,7 +1593,6 @@ int lmtp_connect(const char *phost,
 static void pushmsg(struct protstream *in, struct protstream *out,
 		    int isdotstuffed)
 {
-    int r;
     char buf[8192], *p;
     int lastline_hadendline = 1;
 

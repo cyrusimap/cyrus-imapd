@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.98 2000/05/23 20:52:20 robeson Exp $
+ $Id: mailbox.c,v 1.99 2000/06/06 00:55:02 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -140,8 +140,8 @@ int mailbox_initialize(void)
     acappush_remote.sun_family = AF_UNIX;
     strcpy(acappush_remote.sun_path, config_dir);
     strcat(acappush_remote.sun_path, FNAME_ACAPPUSH_SOCK);
-    acappush_remote_len = strlen(acappush_remote.sun_path) + 
-	sizeof(acappush_remote.sun_family);
+    acappush_remote_len = sizeof(acappush_remote.sun_family) +
+	strlen(acappush_remote.sun_path) + 1;
 
     /* put us in non-blocking mode */
     fdflags = fcntl(s, F_GETFD, 0);
