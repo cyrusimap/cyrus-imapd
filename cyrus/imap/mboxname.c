@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- * $Id: mboxname.c,v 1.27 2003/04/25 16:18:58 rjs3 Exp $
+ * $Id: mboxname.c,v 1.28 2003/04/25 17:20:45 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -179,6 +179,8 @@ static int mboxname_tointernal_alt(struct namespace *namespace,
 
     /* Other Users namespace */
     prefixlen = strlen(namespace->prefix[NAMESPACE_USER]);
+    if(prefixlen == 0) return IMAP_MAILBOX_BADNAME;
+
     if (!strncmp(name, namespace->prefix[NAMESPACE_USER], prefixlen-1) &&
 	(name[prefixlen-1] == '\0' || name[prefixlen-1] == namespace->hier_sep)) {
 
