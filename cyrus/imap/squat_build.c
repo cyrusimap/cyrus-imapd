@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squat_build.c,v 1.3.4.5 2003/04/17 22:49:25 ken3 Exp $
+ * $Id: squat_build.c,v 1.3.4.6 2003/06/16 02:27:39 ken3 Exp $
  */
 
 /*
@@ -1166,9 +1166,6 @@ static int write_trie_word_data(SquatIndex* index, SquatWordTable* t, int len,
   int off;
   SquatWordTableEntry* entries = t->entries;
   int r;
-
-  if(t->first_valid_entry >= VECTOR_SIZE(offsets))
-      return SQUAT_ERR;
 
   memset(offsets, 0, t->first_valid_entry*sizeof(int));
   if (len > 2) {
