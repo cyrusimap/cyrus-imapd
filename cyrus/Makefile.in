@@ -14,7 +14,7 @@
 # without specific, additional permission by the owner of the code.
 # 
 
-SUBDIRS = man @PRE_SUBDIRS@ et lib imap imtest @TCL_SUBDIRS@ @EXTRA_SUBDIRS@
+SUBDIRS = man @PRE_SUBDIRS@ lib imap imtest @TCL_SUBDIRS@ @EXTRA_SUBDIRS@
 
 srcdir = @srcdir@
 VPATH = @srcdir@

@@ -41,5 +41,6 @@ esac
 
 
 LNCOMMAND="${SRCDIR}/configure $WITHAUTH --with-inn=/usr/news $AMSSYNC --enable-experiment --enable-cmulocal --enable-debug --with-cyrus-user=cyrus --with-cyrus-group=staff"
+# --with-com-err=/usr/local"
 
 export CFLAGS CC VER LNCOMMAND
