@@ -479,7 +479,7 @@ static int cmd_login(struct admconn *conn, char *userid, char *pass, int passlen
 
 
   imclient_send(conn->imclient, callback_finish, (void *)conn,
-		"LOGIN \"%s\" {%d+}\r\n%s", 
+		"LOGIN %s %s", 
 		userid, passlen, pass);
 
   conn->cmd_done = 0;
