@@ -10,8 +10,6 @@ imapd and core utilities
       * In general, renaming an mailbox to be a subset of itself should be
         checked for and disallowed. 
       * append.c: doesn't set the \Seen flag if the client requests it. 
-      * MULTIAPPEND: does it do the right thing with an aborted APPEND
-        (literal length {0})? 
       * reconstruct doesn't deal with the mailboxes.db file. 
       * DELETE and deleting user mailboxes. 
       * we should deal with having to reset UIDs 
@@ -43,6 +41,11 @@ proxyd and Cyrus Murder
         doesn't deal with the ACAP server dying and in general should be
         replaced with something more general. 
       * is proxyd implementing idle timeouts correctly? 
+      * skip-list code uses assert(). Does SIGABRT get properly trapped so
+        we don't end up exiting holding locks? 
+      * setacl/getacl commands seem to reliably cause the proxy the die. 
+      * pop3proxyd appears to be non-functional. 
+      * IMAP SORT and THREAD extensions seem unstable. 
 
 lmtpd, deliver, and sieve
 
@@ -74,16 +77,20 @@ other utilities
       * collectnews's routines in append.c are broken. either remove
         collectnews or fix it. 
       * any utilities doing db operations should catch signals and poll for
-        them to see if it should exit. 
+        them to see if it should exit (like mbpath, ipurge). 
       * it would be nice if cyradm had a version command (would do an ID
         against the server). 
       * deliver: should look for AUTH capability instead of just assuming
         it. possibly do LMTP over TCP? full SASL authentication? 
 
+libraries
+
+      * libacap should use protection layers. 
+      * does libacap leak memory? 
+
                      Things we want to do
 
       * Implement the IMAP VIEW extension. 
-      * Implement the IMAP SORT and THREAD extensions. 
       * Implement the IMAP ANNOTATE extension. 
       * Implement some sort of backup/restore system that's more efficient
         and easier to use than Amanda on the filesystem. 
@@ -91,7 +98,9 @@ other utilities
       * Add mailbox tombstones (gives NEWNAME support). 
       * Design and implement ALIST, the advanced list command. 
       * Investigate changing from the prot layer to using sfio. 
-      * Write a test module for lmtp-parse. 
+      * Write a test module for lmtpengine. 
+      * Allow renaming users. (RENAME user.joe user.harry.) Needs to move
+        all metadata per-user data. (seen, subscriptions, sieve state?) 
 
     Please refer to Sending Feedback if you would like to submit a bug,
     feature request or (best of all) patch. 

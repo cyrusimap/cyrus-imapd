@@ -4,11 +4,9 @@
     standards-track protocol for accessing messages (mail, news, etc). The
     IMAP server stores and provides access to messages. 
 
-    A list of answers to common installation problems is maintained in
-    http://asg.web.cmu.edu/cyrus/imapd/install-FAQ.html. It is very out of
-    date and will eventually be updated. The file doc/html/questions.html
-    contains a list of questions we'd like to answer but haven't gotten to
-    yet. 
+    The file doc/questions.html contains a list of questions we'd like to
+    answer but haven't gotten to yet; doc/faq.html contains some answers
+    that we have thought of. Please feel free to contribute! 
 
     Please refer to Sending Feedback if you would like to submit a bug,
     feature request or patch. 

@@ -55,3 +55,9 @@ Prerequisites and other notes
       * For the Cyrus Murder, the IMAP aggregator, an ACAP server is
         required. You can get an ACAP server from the Cyrus project. 
 
+    The following programs and/or packages are recommended: 
+
+      * flex - libsieve has two different lexical analyzers, and that's
+        hard to do with traditional lex. 
+      * gcc - we build using gcc and the compiler options -O2 -g. 
+
