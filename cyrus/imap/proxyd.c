@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.97 2002/02/21 00:50:03 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.98 2002/02/25 22:15:18 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -3770,13 +3770,25 @@ void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
 void cmd_changesub(char *tag, char *namespace, char *name, int add)
 {
     char *cmd = add ? "Subscribe" : "Unsubscribe";
-    int r;
+    int r = 0;
 
     if (!backend_inbox) {
 	backend_inbox = proxyd_findinboxserver();
     }
 
     if (backend_inbox) {
+	char mailboxname[MAX_MAILBOX_NAME+1];
+
+	if (add) {
+	    r = (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace,
+							name, proxyd_userid,
+							mailboxname);
+	    if(!r) r = mlookup(mailboxname, NULL, NULL, NULL);
+
+	    /* Doesn't exist on murder */
+	    if(r) goto done;
+	}
+	
 	if (namespace) {
 	    prot_printf(backend_inbox->out, 
 			"%s %s {%d+}\r\n%s {%d+}\r\n%s\r\n", 
@@ -3791,6 +3803,10 @@ void cmd_changesub(char *tag, char *namespace, char *name, int add)
 	pipe_including_tag(backend_inbox, tag);
     } else {
 	r = IMAP_SERVER_UNAVAILABLE;
+    }
+
+ done:
+    if(r) {
 	prot_printf(proxyd_out, "%s NO %s: %s\r\n", tag,
 		    add ? "Subscribe" : "Unsubscribe", error_message(r));
     }
@@ -3809,7 +3825,7 @@ void cmd_getacl(char *tag, char *name, int oldform)
     r = (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace, name,
 						proxyd_userid, mailboxname);
 
-    if (!r) r = mlookup(mailboxname, (char **)0, &acl, NULL);
+    if (!r) r = mlookup(mailboxname, NULL, &acl, NULL);
 
     if (!r) {
 	access = cyrus_acl_myrights(proxyd_authstate, acl);
