@@ -65,7 +65,12 @@ enum {
 
     TOKEN_OK = 280,
     TOKEN_NO = 281,
-    TOKEN_ACTIVE = 282
+    TOKEN_BYE = 282,
+
+    TOKEN_ACTIVE = 291,
+
+    TOKEN_REFERRAL = 301,
+    TOKEN_SASL = 302
 };
 
 enum {

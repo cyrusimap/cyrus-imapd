@@ -218,7 +218,7 @@ sieve_get_handle(servername, username_cb, authname_cb, password_cb, realm_cb)
 
   PREINIT:
   Sieveobj ret = NULL;
-  sasl_callback_t callbacks[10];
+  sasl_callback_t *callbacks;
   int sock;
   sasl_conn_t *saslconn;
   int port;
@@ -227,6 +227,9 @@ sieve_get_handle(servername, username_cb, authname_cb, password_cb, realm_cb)
   isieve_t *obj;
 
   CODE:
+
+  /* xxx this gets leaked! */
+  callbacks = safemalloc(5 * sizeof(sasl_callback_t));
 
   callbacks[0].id = SASL_CB_USER;
   callbacks[0].proc = &perlsieve_simple;
