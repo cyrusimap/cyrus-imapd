@@ -96,8 +96,18 @@ on certain Internet/UNIX sockets.
 The command (with options) to spawn as a child process.  This string
 argument is required.
 .IP "\fBlisten=\fR<no default>" 5
-The service name, port number or UNIX socket to listen on.  This
-string field is required.
+The UNIX or internet socket to listen on.  This
+string field is required and takes one of the following forms:
+
+\fIpath\fR
+.br
+\fR[ \fIhost\fR \fB: \fR] \fIport\fR
+.br
+.sp
+where \fIpath\fR is the explicit path to a UNIX socket, \fIhost\fR is
+either the hostname or bracket-enclosed IP address of a network
+interface, and \fIport\fR is either a port number or service name (as listed
+in \fB/etc/services\fR).
 .IP "\fBproto=\fRtcp" 5
 The protocol used for this service (\fItcp\fR, \fIudp\fR).  This
 string argument is optional.
@@ -124,9 +134,10 @@ START {
 }
 
 SERVICES {
-  imap		cmd="imapd" listen="imap" prefork=0
-  pop3		cmd="pop3d" listen="pop3" prefork=0
+  imap		cmd="imapd" listen="imap" prefork=1
+  pop3s		cmd="pop3d -s" listen="pop3s" prefork=0
   lmtpunix	cmd="lmtpd" listen="/var/imap/socket/lmtp"
+  lmtp		cmd="lmtpd" listen="localhost:lmtp"
 .br
 }
 
