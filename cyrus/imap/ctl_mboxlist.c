@@ -1,6 +1,6 @@
 /* ctl_mboxlist.c -- do DB related operations on mboxlist
  *
- * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.36.2.5 2003/02/06 22:40:51 rjs3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.36.2.6 2003/02/13 20:32:54 rjs3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 

@@ -1,7 +1,7 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.32.4.10 2003/02/12 19:12:37 rjs3 Exp $
- * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
+ * $Id: mupdate-client.c,v 1.32.4.11 2003/02/13 20:32:59 rjs3 Exp $
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions

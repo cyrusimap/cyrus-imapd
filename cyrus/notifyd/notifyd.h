@@ -2,7 +2,7 @@
  * Ken Murchison
  */
 /*
- * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notifyd.h,v 1.1 2002/03/18 15:24:45 ken3 Exp $
+ * $Id: notifyd.h,v 1.1.4.1 2003/02/13 20:33:23 rjs3 Exp $
  */
 
 #include <config.h>

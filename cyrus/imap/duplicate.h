@@ -1,5 +1,5 @@
 /* 
- * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: duplicate.h,v 1.11.4.2 2002/11/15 21:46:56 rjs3 Exp $ */
+/* $Id: duplicate.h,v 1.11.4.3 2003/02/13 20:32:55 rjs3 Exp $ */
 
 #ifndef DUPLICATE_H
 #define DUPLICATE_H

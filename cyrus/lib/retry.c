@@ -1,7 +1,7 @@
 /* retry.c -- keep trying write system calls
- $Id: retry.c,v 1.16.4.2 2002/11/07 15:11:22 ken3 Exp $
+ $Id: retry.c,v 1.16.4.3 2003/02/13 20:33:14 rjs3 Exp $
  
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions

@@ -1,6 +1,6 @@
 /* cli_fatal.c -- Provide a generic fatal() for the command line utilities
  *
- * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cli_fatal.c,v 1.1.2.2 2003/02/06 22:40:51 rjs3 Exp $
+ * $Id: cli_fatal.c,v 1.1.2.3 2003/02/13 20:32:54 rjs3 Exp $
  */
 
 #include <config.h>

@@ -1,6 +1,6 @@
 /* spool.h -- Routines for spooling/parsing messages from a prot stream
  * 
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: spool.h,v 1.1.2.2 2002/10/15 19:12:50 ken3 Exp $
+ * $Id: spool.h,v 1.1.2.3 2003/02/13 20:33:01 rjs3 Exp $
  */
 
 #ifndef INCLUDED_SPOOL_H

@@ -1,9 +1,9 @@
 /* prot.h -- stdio-like module that handles buffering, SASL, and TLS
  *           details for I/O over sockets
  *
- * $Id: prot.h,v 1.35.4.6 2003/02/04 19:49:28 rjs3 Exp $
+ * $Id: prot.h,v 1.35.4.7 2003/02/13 20:33:14 rjs3 Exp $
  *
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions

@@ -1,5 +1,5 @@
 /* convert_code.c: Convert IMAP_* error to exitcodes.h exit status
- * Copyright (c)1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  *
- * $Id: convert_code.c,v 1.6 2000/05/29 03:50:51 leg Exp $ */
+ * $Id: convert_code.c,v 1.6.16.1 2003/02/13 20:32:54 rjs3 Exp $ */
 
 /* Same old convert_code function moved into one place instead of being
  * redundant in every file.

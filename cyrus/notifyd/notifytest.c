@@ -1,10 +1,10 @@
 /* notifytest.c: notifyd test utility
  * Ken Murchison
  * Rob Siemborski
- * $Id: notifytest.c,v 1.7.4.2 2002/11/07 15:11:23 ken3 Exp $
+ * $Id: notifytest.c,v 1.7.4.3 2003/02/13 20:33:23 rjs3 Exp $
  */
 /* 
- * Copyright (c) 2002 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions

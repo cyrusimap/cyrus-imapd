@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: sysexits.h,v 1.3 2002/05/25 19:57:47 leg Exp $ */
+/* $Id: sysexits.h,v 1.3.4.1 2003/02/13 20:33:14 rjs3 Exp $ */
 
 /*
  * Copyright (c) 1987, 1993

@@ -1,7 +1,7 @@
 /* mpool.h memory pool management
  *
- * $Id: mpool.h,v 1.7.4.1 2002/12/20 18:38:52 rjs3 Exp $
- * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
+ * $Id: mpool.h,v 1.7.4.2 2003/02/13 20:33:13 rjs3 Exp $
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions

@@ -1,5 +1,5 @@
 /* libconfig.c -- imapd.conf handling
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: libconfig.c,v 1.1.2.3 2003/02/07 23:34:51 rjs3 Exp $ */
+/* $Id: libconfig.c,v 1.1.2.4 2003/02/13 20:33:13 rjs3 Exp $ */
 
 #include <config.h>
 

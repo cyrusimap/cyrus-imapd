@@ -1,7 +1,7 @@
 /* Definitions internal to charset.c and chartable.c */
 
 /*
- * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -41,7 +41,7 @@
  *
  */
 
-/* $Id: chartable.h,v 1.3.4.1 2002/12/27 14:00:34 ken3 Exp $ */
+/* $Id: chartable.h,v 1.3.4.2 2003/02/13 20:33:11 rjs3 Exp $ */
 
 /* note that these are all uppercase letters. since the translation
    tables canonicalize to lower case letters, we never see these bytes

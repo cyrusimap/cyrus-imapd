@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -39,7 +39,7 @@
  *
  * derived from chris newman's code */
 
-/* $Id: imapurl.c,v 1.7.4.2 2003/02/11 15:46:13 ken3 Exp $ */
+/* $Id: imapurl.c,v 1.7.4.3 2003/02/13 20:33:12 rjs3 Exp $ */
 
 #include <stdio.h>
 #include <string.h>

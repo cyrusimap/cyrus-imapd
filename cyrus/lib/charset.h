@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -39,7 +39,7 @@
  *
  */
 /*
- * $Id: charset.h,v 1.15.6.1 2002/12/27 14:00:34 ken3 Exp $
+ * $Id: charset.h,v 1.15.6.2 2003/02/13 20:33:11 rjs3 Exp $
  */
 
 #ifndef INCLUDED_CHARSET_H

@@ -1,6 +1,6 @@
 /* user.h -- User manipulation routines
  * 
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: user.h,v 1.3.4.1 2002/08/23 19:53:26 ken3 Exp $
+ * $Id: user.h,v 1.3.4.2 2003/02/13 20:33:02 rjs3 Exp $
  */
 
 #ifndef INCLUDED_USER_H

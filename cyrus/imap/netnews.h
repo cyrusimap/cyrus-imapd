@@ -1,5 +1,5 @@
 /* 
- * Copyright (c) 2002 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: netnews.h,v 1.1.2.3 2002/10/23 19:55:07 ken3 Exp $ */
+/* $Id: netnews.h,v 1.1.2.4 2003/02/13 20:32:59 rjs3 Exp $ */
 
 #ifndef NETNEWS_H
 #define NETNEWS_H

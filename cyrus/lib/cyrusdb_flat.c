@@ -1,6 +1,6 @@
 /*  cyrusdb_flat: a sorted flat textfile backend
  *
- * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_flat.c,v 1.19.4.8 2003/02/11 15:45:06 ken3 Exp $ */
+/* $Id: cyrusdb_flat.c,v 1.19.4.9 2003/02/13 20:33:12 rjs3 Exp $ */
 
 #include <config.h>
 

@@ -1,7 +1,7 @@
 /* ptloader.c -- group loader daemon
  */
 /*
- * Copyright (c) 1996-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -42,7 +42,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ptloader.c,v 1.25.4.8 2003/02/06 22:41:06 rjs3 Exp $";
+      "$Id: ptloader.c,v 1.25.4.9 2003/02/13 20:33:31 rjs3 Exp $";
 
 #include <config.h>
 
@@ -100,7 +100,7 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     signal(SIGPIPE, SIG_IGN);
 
     syslog(LOG_NOTICE,
-	   "starting: $Id: ptloader.c,v 1.25.4.8 2003/02/06 22:41:06 rjs3 Exp $ (%s)",
+	   "starting: $Id: ptloader.c,v 1.25.4.9 2003/02/13 20:33:31 rjs3 Exp $ (%s)",
 	   ptsmodule_name);
 
     while ((opt = getopt(argc, argv, "d:")) != EOF) {
@@ -219,4 +219,4 @@ void fatal(const char *msg, int exitcode)
     syslog(LOG_ERR, "%s", msg);
     exit(exitcode);
 }
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.25.4.8 2003/02/06 22:41:06 rjs3 Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.25.4.9 2003/02/13 20:33:31 rjs3 Exp $ */

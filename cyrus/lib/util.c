@@ -1,6 +1,6 @@
 /* util.c -- general utility functions
  * 
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -41,7 +41,7 @@
  * Author: Chris Newman
  * Start Date: 4/6/93
  */
-/* $Id: util.c,v 1.19.6.5 2003/02/06 21:27:24 ken3 Exp $
+/* $Id: util.c,v 1.19.6.6 2003/02/13 20:33:14 rjs3 Exp $
  */
 
 #include <config.h>

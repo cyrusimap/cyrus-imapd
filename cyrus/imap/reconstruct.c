@@ -1,6 +1,6 @@
 /* reconstruct.c -- program to reconstruct a mailbox 
  *
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.68.4.9 2003/02/06 22:40:57 rjs3 Exp $ */
+/* $Id: reconstruct.c,v 1.68.4.10 2003/02/13 20:33:01 rjs3 Exp $ */
 
 #include <config.h>
 

@@ -1,5 +1,5 @@
 /* version.h: the version number
- * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -36,7 +36,7 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- * $Id: version.h,v 1.116.2.1 2002/07/10 20:00:07 ken3 Exp $
+ * $Id: version.h,v 1.116.2.2 2003/02/13 20:33:02 rjs3 Exp $
  */
 
 #define _CYRUS_VERSION "v2.2.prealpha"

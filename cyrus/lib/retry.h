@@ -1,7 +1,7 @@
 /* retry.h -- Keep retrying write system calls
- $Id: retry.h,v 1.8.4.1 2002/11/04 20:48:05 ken3 Exp $
+ $Id: retry.h,v 1.8.4.2 2003/02/13 20:33:14 rjs3 Exp $
  
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions

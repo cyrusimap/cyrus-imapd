@@ -1,7 +1,7 @@
 /* imclient.h -- Streaming IMxP client library
- $Id: imclient.h,v 1.23 2002/04/23 20:47:44 rjs3 Exp $
+ $Id: imclient.h,v 1.23.4.1 2003/02/13 20:33:12 rjs3 Exp $
  
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions

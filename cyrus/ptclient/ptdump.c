@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -48,7 +48,7 @@
 #include "global.h"
 #include "libconfig.h"
 
-static char rcsid[] = "$Id: ptdump.c,v 1.5.16.5 2003/02/06 22:41:05 rjs3 Exp $";
+static char rcsid[] = "$Id: ptdump.c,v 1.5.16.6 2003/02/13 20:33:31 rjs3 Exp $";
 
 int config_need_data = 0;
 

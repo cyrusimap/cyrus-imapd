@@ -1,7 +1,7 @@
 /* config.h -- Configuration routines
- $Id: masterconf.h,v 1.3.16.1 2003/02/07 23:34:53 rjs3 Exp $
+ $Id: masterconf.h,v 1.3.16.2 2003/02/13 20:33:20 rjs3 Exp $
  
- * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions

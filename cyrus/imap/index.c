@@ -1,6 +1,6 @@
 /* index.c -- Routines for dealing with the index file in the imapd
  *
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.180.4.22 2003/02/11 15:45:04 ken3 Exp $
+ * $Id: index.c,v 1.180.4.23 2003/02/13 20:32:56 rjs3 Exp $
  */
 #include <config.h>
 

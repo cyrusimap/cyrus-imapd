@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -68,7 +68,7 @@
 #include "libconfig.h"
 #include "lock.h"
 
-static char rcsid[] = "$Id: ptexpire.c,v 1.10.16.7 2003/02/06 22:41:06 rjs3 Exp $";
+static char rcsid[] = "$Id: ptexpire.c,v 1.10.16.8 2003/02/13 20:33:31 rjs3 Exp $";
 
 /* global */
 time_t timenow;

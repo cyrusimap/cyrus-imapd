@@ -1,6 +1,6 @@
 /* nntpproxyd.c -- NNTP server proxy for Cyrus Murder
  *
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpproxyd.c,v 1.1.2.6 2003/02/12 21:26:54 ken3 Exp $
+ * $Id: nntpproxyd.c,v 1.1.2.7 2003/02/13 20:32:59 rjs3 Exp $
  */
 
 /*

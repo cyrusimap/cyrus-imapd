@@ -1,10 +1,10 @@
 /* mystring.h
  * Tim Martin
  * 9/21/99
- * $Id: mystring.h,v 1.4 2002/05/25 19:57:50 leg Exp $
+ * $Id: mystring.h,v 1.4.4.1 2003/02/13 20:33:28 rjs3 Exp $
  */
 /*
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions

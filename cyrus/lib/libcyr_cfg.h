@@ -1,6 +1,6 @@
 /* libcyr_cfg.h -- configuration interface to libcyrus
  * 
- * Copyright (c) 1998-2002 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -41,7 +41,7 @@
  * Author: Chris Newman
  * Start Date: 4/6/93
  */
-/* $Id: libcyr_cfg.h,v 1.1.2.4 2002/11/15 21:47:01 rjs3 Exp $
+/* $Id: libcyr_cfg.h,v 1.1.2.5 2003/02/13 20:33:13 rjs3 Exp $
  */
 
 #ifndef INCLUDED_LIBCYR_CFG_H

@@ -1,7 +1,7 @@
 /* syncnews.c -- program to synchronize active file with mailbox list
  *
  * 
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -42,7 +42,7 @@
  */
 
 /*
- * $Id: syncnews.c,v 1.19.14.3 2003/02/06 22:40:57 rjs3 Exp $
+ * $Id: syncnews.c,v 1.19.14.4 2003/02/13 20:33:02 rjs3 Exp $
  */
 #include <config.h>
 

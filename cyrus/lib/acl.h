@@ -1,5 +1,5 @@
 /* acl.h -- definitions for access control lists
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -42,7 +42,7 @@
  * Start Date: 6/28/93
  */
 
-/* $Id: acl.h,v 1.13 2002/05/25 19:57:47 leg Exp $ */
+/* $Id: acl.h,v 1.13.4.1 2003/02/13 20:33:11 rjs3 Exp $ */
 
 #ifndef INCLUDED_ACL_H
 #define INCLUDED_ACL_H

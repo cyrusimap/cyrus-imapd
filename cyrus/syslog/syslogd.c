@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
-/*  $Revision: 1.2 $
+/*  $Revision: 1.2.16.1 $
 **  This file has been modified to get it to compile more easily
 **  on pre-4.4BSD (e.g., SysVr4 :-) systems.  Rich $alz, June 1991.
 */

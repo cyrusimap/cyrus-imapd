@@ -1,5 +1,5 @@
 /* 
- * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: codes.h,v 1.3 2002/05/25 19:57:46 leg Exp $ */
+/* $Id: codes.h,v 1.3.4.1 2003/02/13 20:33:09 rjs3 Exp $ */
 
 #ifndef _CODES_H_
 #define _CODES_H_

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: isieve.c,v 1.24.4.3 2003/02/12 19:12:47 rjs3 Exp $ */
+/* $Id: isieve.c,v 1.24.4.4 2003/02/13 20:33:28 rjs3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>

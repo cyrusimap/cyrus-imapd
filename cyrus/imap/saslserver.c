@@ -1,6 +1,6 @@
 /* saslserver.c -- shared SASL code for server-side authentication
  *
- * Copyright (c) 2002 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: saslserver.c,v 1.1.2.2 2002/10/21 18:07:57 ken3 Exp $ */
+/* $Id: saslserver.c,v 1.1.2.3 2003/02/13 20:33:01 rjs3 Exp $ */
 
 #include <config.h>
 

@@ -1,7 +1,7 @@
 /* auth_krb.c -- Kerberos authorization
- $Id: auth_krb.c,v 1.36.6.2 2002/12/11 20:40:29 rjs3 Exp $
+ $Id: auth_krb.c,v 1.36.6.3 2003/02/13 20:33:11 rjs3 Exp $
  
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
