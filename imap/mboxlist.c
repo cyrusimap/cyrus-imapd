@@ -1735,6 +1735,7 @@ int maycreate;
     if (r) goto error;
 
     mboxlist_newquota->used += mailbox.quota_mailbox_used;
+    mailbox_close(&mailbox);
     return 0;
 
  error:
