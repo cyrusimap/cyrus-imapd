@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.5 2002/04/03 21:16:48 rjs3 Exp $ */
+/* $Id: backend.c,v 1.6 2002/04/03 23:11:18 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -225,8 +225,8 @@ static int backend_authenticate(struct backend *s, const char *userid)
     char *in, *p;
     const char *out;
     unsigned int inlen, outlen;
-    char *mech_conf, *mechlist;
-    const char *mechusing;
+    const char *mech_conf, *mechusing;
+    char *mechlist;
     unsigned b64len;
     const char *pass;
 
