@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squat.c,v 1.2 2002/02/19 18:50:14 ken3 Exp $
+ * $Id: squat.c,v 1.3 2003/01/09 00:49:35 rjs3 Exp $
  */
 
 /*
@@ -117,7 +117,7 @@ SquatSearchIndex* squat_search_open(int fd) {
     goto cleanup_index;    
   }
 
-  index->data = mmap(NULL, data_len, PROT_READ, MAP_SHARED, fd, 0);
+  index->data = mmap(NULL, data_len + SQUAT_SAFETY_ZONE, PROT_READ, MAP_SHARED, fd, 0);
   if (index->data == MAP_FAILED) {
     squat_set_last_error(SQUAT_ERR_SYSERR);
     goto cleanup_index;
@@ -134,7 +134,7 @@ SquatSearchIndex* squat_search_open(int fd) {
       || doc_list_offset < 0 || doc_list_offset >= data_len
       || word_list_offset < 0 || word_list_offset >= data_len
       || doc_ID_list_offset < 0 || doc_ID_list_offset >= data_len
-      || !memconst(index->data + data_len, 16, 0)) {
+      || !memconst(index->data + data_len, SQUAT_SAFETY_ZONE, 0)) {
     squat_set_last_error(SQUAT_ERR_INVALID_INDEX_FILE);
     goto cleanup_unmap;
   }
