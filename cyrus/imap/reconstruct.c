@@ -111,6 +111,12 @@ char **argv;
 
     mailbox_reconstructmode();
 
+    if (optind == argc) {
+	if (!rflag) usage();
+	strcpy(buf, "*");
+	mboxlist_findall(buf, 1, 0, do_reconstruct);
+    }
+
     for (i = optind; i < argc; i++) {
 	if (rflag) {
 	    strcpy(buf, argv[i]);
