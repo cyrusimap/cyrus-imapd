@@ -1,9 +1,26 @@
-<!-- $Id: changes.html,v 1.82 1999/08/17 05:59:24 leg Exp $ -->
+<!-- $Id: changes.html,v 1.83 1999/08/24 18:11:10 leg Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
 </HEAD><BODY>
 <H1>                   Changes to the Cyrus IMAP Server</H1>
+
+    <h2> Changes to the Cyrus IMAP Server Since Version 1.6.10 </h2>
+    <ul>
+      <li> Changed the sieve option in the configure script to
+      <tt>--disable-sieve</tt>.
+
+      <li> Updated reconstruct to check for hashed imap spool
+      directories.
+
+      <li> deliver now will not use Sieve if duplicate delivery
+      suppression is disabled.  There was also a bug that caused the
+      duplicate delivery database to be checked even if dupelim was
+      disabled.
+
+      <li> deliver now uses tm_gmtoff if available to check for the
+      local timezone.
+    </ul>
 
     <h2> Changes to the Cyrus IMAP Server Since Version 1.6.1-BETA </h2>
 
