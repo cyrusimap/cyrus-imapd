@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.77 2002/07/24 19:30:35 rjs3 Exp $
+ * $Id: lmtpengine.c,v 1.78 2002/07/24 19:46:11 rjs3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1955,6 +1955,13 @@ static int revconvert_lmtp(const char *code)
 	    return IMAP_MAILBOX_NONEXISTENT;
 	}
 	return IMAP_PERMISSION_DENIED;
+    case 552:
+	if (code[6] == '2') {
+	    return IMAP_QUOTA_EXCEEDED;
+	} else if (code[6] == '3') {
+	    return IMAP_MESSAGE_TOO_LARGE;
+	}
+	return IMAP_QUOTA_EXCEEDED;
     case 554:
 	return IMAP_MESSAGE_BADHEADER; /* sigh, pick one */
 
