@@ -79,6 +79,31 @@ void fatal(const char *msg, int code)
     exit(code);
 }
 
+void do_report(void)
+{
+        printf("\n");
+    printf("*** add %ld.%ld %d\n", t_add.tv_sec, t_add.tv_usec, c_add);
+    printf("*** mod %ld.%ld %d\n", t_mod.tv_sec, t_mod.tv_usec, c_mod);
+    printf("*** del %ld.%ld %d\n", t_del.tv_sec, t_del.tv_usec, c_del);
+    printf("*** find %ld.%ld %d\n", t_find.tv_sec, t_find.tv_usec, c_find);
+
+    printf("\n");
+    printf("*** add %lf\n", ((double) t_add.tv_sec + 
+			     ((double) t_add.tv_usec) / 1000000) /
+	   (double) c_add);
+    printf("*** mod %lf\n", ((double) t_mod.tv_sec + 
+			     ((double) t_mod.tv_usec) / 1000000) /
+	   (double) c_mod);
+    printf("*** del %lf\n", ((double) t_del.tv_sec + 
+			     ((double) t_del.tv_usec) / 1000000) /
+	   (double) c_del);
+    printf("*** find %lf\n", ((double) t_find.tv_sec + 
+			     ((double) t_find.tv_usec) / 1000000) /
+	   (double) c_find);
+    
+
+}
+
 int main(int argc, char *argv[])
 {
     int iter;
@@ -92,11 +117,14 @@ int main(int argc, char *argv[])
     const char *data;
     int datalen;
     struct timeval t1, t2;
+    int initsize;
 
     if (argc > 1) {
 	iter = atoi(argv[1]);
     } else {
-	iter = 1000;
+      printf("%s [iterations] [rndseed] [initsize]\n", argv[0]);
+      printf("if iterations is negative, run forever and report every -iter\n");
+      exit(1);
     }
     TRY(DB->init(".", 0));
 
@@ -110,10 +138,35 @@ int main(int argc, char *argv[])
 	TRY(DB->consistent(db));
     }
 
+    if (argc > 3) {
+      initsize = atoi(argv[3]);
+      
+      txn = NULL;
+      for (i = 0; i < initsize; i++) {
+	/* generate a random key */
+	key = genrand(10 + (rand() % 10));
+	
+	/* generate a random value */
+	val = genrand(10 + (rand() % 100));
+	
+	TRY(DB->store(db, key, strlen(key), val, strlen(val), &txn));
+      }
+
+      TRY(DB->commit(db, txn));
+      if (DB->consistent) {
+	TRY(DB->consistent(db));
+      }
+    }
+
     printf("starting...\n");
 
-    for (i = 0; i < iter; i++) {
+    /* repeat for ever if iter < 0 */
+    for (i = 0; iter > 0 ? (i < iter) : 1; i++) {
 	int oper = rand() % 10;
+
+	if (i > 0 && iter < 0 && ((i % -iter) == 0)) {
+	  do_report();
+	}
 
 	switch (oper) {
 	case 0:
@@ -229,34 +282,17 @@ int main(int argc, char *argv[])
 
 	fflush(stdout);
 
+#if 0
 	/* run the consistency function, if any */
 	if (DB->consistent) {
 	    TRY(DB->consistent(db));
 	}
+#endif
     }
 
     TRY(DB->close(db));
     TRY(DB->done());
 
-    printf("\n");
-    printf("*** add %ld.%ld %d\n", t_add.tv_sec, t_add.tv_usec, c_add);
-    printf("*** mod %ld.%ld %d\n", t_mod.tv_sec, t_mod.tv_usec, c_mod);
-    printf("*** del %ld.%ld %d\n", t_del.tv_sec, t_del.tv_usec, c_del);
-    printf("*** find %ld.%ld %d\n", t_find.tv_sec, t_find.tv_usec, c_find);
-
-    printf("\n");
-    printf("*** add %lf\n", ((double) t_add.tv_sec + 
-			     ((double) t_add.tv_usec) / 1000000) /
-	   (double) c_add);
-    printf("*** mod %lf\n", ((double) t_mod.tv_sec + 
-			     ((double) t_mod.tv_usec) / 1000000) /
-	   (double) c_mod);
-    printf("*** del %lf\n", ((double) t_del.tv_sec + 
-			     ((double) t_del.tv_usec) / 1000000) /
-	   (double) c_del);
-    printf("*** find %lf\n", ((double) t_find.tv_sec + 
-			     ((double) t_find.tv_usec) / 1000000) /
-	   (double) c_find);
-    
+    do_report();
     return 0;
 }
