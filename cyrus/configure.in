@@ -56,10 +56,10 @@ if test "$WITH_LOGIN" = "krb"; then
 if test -f /usr/local/include/krb.h; then
      CPPFLAGS="${CPPFLAGS} -I/usr/local/include"
      LIBS="${LIBS} /usr/local/lib/libkrb.a /usr/local/lib/libdes.a"
-     LIBOBJS="${LIBOBJS} kerberos.o";
+     LIBOBJS="${LIBOBJS} acte_krb.o";
 else
 AC_HAVE_LIBRARY(krb,
-     LIBS="${LIBS} -lkrb -ldes" LIBOBJS="${LIBOBJS} kerberos.o",
+     LIBS="${LIBS} -lkrb -ldes" LIBOBJS="${LIBOBJS} acte_krb.o",
      echo Unable to find Kerberos libraries; exit 1)
 fi
 fi
