@@ -1,4 +1,4 @@
-$Id: COPYRIGHT,v 1.5 2000/05/26 13:52:07 wcw Exp $
+$Id: COPYRIGHT,v 1.6 2000/06/01 00:37:35 wcw Exp $
 
 The Cyrus IMAP distribution is covered by the following copyright 
 until July 1, 2000: 
@@ -62,3 +62,21 @@ After July 1, 2000, the following copyright applies to the code:
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+If you find this software useful and valuable in your work, we would
+welcome any support you can offer toward continuing this work.
+ 
+We gratefully accept contributions, whether intellectual or monetary.
+Intellectual contributions in the form of code or constructive
+collaboration can be directed to cyrus-bugs+@andrew.cmu.edu (even if
+it is not a bug).
+
+If you wish to provide financial support to the Cyrus Project, send a
+check payable to "Carnegie Mellon University" to
+ 
+       Project Cyrus
+       Computing Services
+       Carnegie Mellon University
+       5000 Forbes Ave
+       Pittsburgh, PA 15213
+       USA
