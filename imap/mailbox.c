@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- * $Id: mailbox.c,v 1.149 2003/11/04 20:59:31 rjs3 Exp $
+ * $Id: mailbox.c,v 1.150 2003/11/04 21:43:22 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -2400,7 +2400,7 @@ int mailbox_delete(struct mailbox *mailbox, int delete_quota_root)
     /* remove all files in directory */
     strlcpy(buf, mailbox->path, sizeof(buf));
 
-    if(strlen(buf) >= sizeof(buf) - 1) {
+    if(strlen(buf) >= sizeof(buf) - 2) {
 	syslog(LOG_ERR, "IOERROR: Path too long (%s)", buf);
 	fatal("path too long", EC_OSFILE);
     }
