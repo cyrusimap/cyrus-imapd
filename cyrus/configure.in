@@ -164,9 +164,9 @@ base = mmap((caddr_t)0, 4, PROT_READ, MAP_SHARED
 if (base == (caddr_t)-1) exit(1);
 if (strncmp(base, "test", 4) != 0) exit(1);
 lseek(fd, 0L, 0);	
-if (write(fd, "test", 4) != 4) exit(1);
+if (write(fd, "xyzz", 4) != 4) exit(1);
 fsync(fd);
-if (strncmp(base, "test", 4) != 0) exit(1);
+if (strncmp(base, "xyzz", 4) != 0) exit(1);
 exit(0);}
 ],cyrus_cv_func_mmap_stupidshared=yes,cyrus_cv_func_mmap_stupidshared=no,
 cyrus_cv_func_mmap_stupidshared=no))
