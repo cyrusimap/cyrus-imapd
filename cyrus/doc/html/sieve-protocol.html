@@ -1,0 +1,85 @@
+<!-- $Id: sieve-protocol.html,v 1.1 1999/10/02 00:44:59 leg Exp $ -->
+
+<HTML><HEAD>
+<TITLE>Protocol for Sieve script exchange</TITLE>
+</HEAD><BODY>
+<H1>Protocol for Sieve script exchange</H1>
+
+Note: This is <b>not</b> a standards track protocol. If you decide to base
+a program upon it you have been warned.
+
+This is a simple text-based protocol for getting user sieve scripts
+onto the (presumably sealed) IMAP server. The requirements for this
+process are:
+
+<ul>
+<li> the user must authenticate to gain access, preferably via a
+secure SASL mechanism.
+<li> only valid sieve scripts may be accepted
+</ul>
+
+Additional features provided:
+
+<ul>
+<li> the ability to manage multiple scripts on the server with zero or one
+of them being the "active" sieve script
+</ul>
+
+<h3>Types</h3>
+
+This a line oriented protocol much like [IMAP] or [ACAP]. There
+are two types: ATOMS and strings. Strings may be quoted or
+literal. See [ACAP] for detailed descriptions.
+<br>
+
+<i>sievename</i> is a string where only certain characters are
+allowed and it must be at least 1 character long.
+
+<h3>Commands</h3>
+
+<dl>
+<DT><tt>AUTHENTICATE SP <i>string</i> [SP <i>string</i>] EOL</tt>
+<DD>
+SASL authentication; the parameters are the mechanism and optionally
+the initial data. Initial data is base64 encoded. The server
+replies with a OK or NO response, or a string base64 encoded followed
+by an EOL. Client then replies with a string base64 encoded followed
+by an EOL and the procedure is repeated.
+
+<DT><tt>NOOP EOL</tt>
+<DD>
+No side affects. OK, NO replies
+
+<DT><tt>LOGOUT EOL</tt>
+<DD>
+Logout, terminates connection. OK, NO replies.
+
+<DT><tt>GETSCRIPT SP <i>sievename</i> EOL</tt>
+<DD>
+
+The parameter is the name of the requested script.
+Returns: <tt>string EOL</tt> containing the script data.
+Get the script with name <i>sievename</i> from the server. OK, NO replies
+
+<DT><tt>PUTSCRIPT SP <i>sievename</i> SP <i>string</i> EOL
+<DD>
+Puts <i>sievename</i> with data <i>data</i> onto the server if
+possible. OK, NO replies.
+
+<DT><tt> SETACTIVE SP <i>sievename</i> EOL
+<DD>
+Set the script with the name <i>sievename</i> as the active
+script. Any other script that was active is no longer. OK, NO replies
+
+<DT><TT>DELETESCRIPT SP <i>sievename</i> EOL
+<DD>
+Delete the script with <i>sievename</i>. OK or NO replies.
+
+<DT><TT>LISTSCRIPTS EOL</TT>
+<DD>
+returns zero or more: <i>sievename</i> EOL.
+where the active script has a '*' at the end of it's name
+OK or NO replies
+
+</dl>
+
