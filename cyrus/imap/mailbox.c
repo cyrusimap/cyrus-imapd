@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.143 2003/05/06 20:59:48 rjs3 Exp $
+ $Id: mailbox.c,v 1.144 2003/05/08 18:43:57 rjs3 Exp $
  
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -449,8 +449,8 @@ int mailbox_open_index(struct mailbox *mailbox)
 	if (mailbox->index_len < 4 || mailbox->cache_len < 4) {
 	    return IMAP_MAILBOX_BADFORMAT;
 	}
-	index_gen = *(bit32 *)mailbox->index_base;
-	cache_gen = *(bit32 *)mailbox->cache_base;
+	index_gen = ntohl(*(bit32 *)(mailbox->index_base+OFFSET_GENERATION_NO));
+	cache_gen = ntohl(*(bit32 *)(mailbox->cache_base+OFFSET_GENERATION_NO));
 
 	if (index_gen != cache_gen) {
 	    close(mailbox->index_fd);
@@ -1772,8 +1772,14 @@ void *deciderock;
 
     /* Copy over headers */
     memcpy(buf, mailbox->index_base, mailbox->start_offset);
-    (*(bit32 *)buf)++;    /* Increment generation number */
+
+    /* Update Generation Number */
+    *((bit32 *)buf+OFFSET_GENERATION_NO) = htonl(mailbox->generation_no+1);
     fwrite(buf, 1, mailbox->start_offset, newindex);
+
+    /* Write generation number to cache file */
+    fwrite(buf, 1, sizeof(bit32), newcache);
+
     /* Grow the index header if necessary */
     for (n = mailbox->start_offset; n < INDEX_HEADER_SIZE; n++) {
 	if (n == OFFSET_UIDVALIDITY+3) {
@@ -1783,7 +1789,6 @@ void *deciderock;
 	    putc(0, newindex);
 	}
     }
-    fwrite(buf, 1, sizeof(bit32), newcache);
 
     /* Copy over records for nondeleted messages */
     for (msgno = 1; msgno <= mailbox->exists; msgno++) {
