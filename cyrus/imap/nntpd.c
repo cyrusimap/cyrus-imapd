@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.46 2002/12/11 20:40:26 rjs3 Exp $
+ * $Id: nntpd.c,v 1.1.2.47 2002/12/17 16:35:08 ken3 Exp $
  */
 
 /*
@@ -134,6 +134,7 @@ struct protstream *nntp_in = NULL;
 unsigned nntp_exists = 0;
 unsigned nntp_current = 0;
 unsigned did_extensions = 0;
+int config_allowanonymous;
 
 static int nntps = 0;
 int nntp_starttls_done = 0;
@@ -553,6 +554,8 @@ static void cmdloop(void)
     const char *err;
     unsigned long uid;
 
+    config_allowanonymous = config_getswitch(IMAPOPT_ALLOWANONYMOUSLOGIN);
+
     for (;;) {
 	signals_poll();
 
@@ -576,33 +579,14 @@ static void cmdloop(void)
 	    if (isupper((unsigned char) *p)) *p = tolower((unsigned char) *p);
 	}
 
+	/* Only Authinfo/Check/Head/Help/Ihave/List [ Active | Extensions ]/
+	   Mode/Quit/Stat/Starttls/Takethis allowed when not logged in */
+	if (!nntp_userid && !config_allowanonymous &&
+	    !strchr("ACHILMQST", cmd.s[0])) goto nologin;
+    
 	switch (cmd.s[0]) {
 	case 'A':
-	    if (!strcmp(cmd.s, "Article")) {
-		char *msgid;
-
-		mode = ARTICLE_ALL;
-
-	      article:
-		msgid = NULL;
-		if (arg1.s) *arg1.s = 0;
-
-		if (c == ' ') {
-		    c = getword(nntp_in, &arg1);
-		    if (c == EOF) goto missingargs;
-		}
-		if (c == '\r') c = prot_getc(nntp_in);
-		if (c != '\n') goto extraargs;
-
-		if (parserange(arg1.s, &uid, NULL, &msgid) == -1) {
-		    if (!nntp_group) goto nogroup;
-		    if (!nntp_current) goto nocurrent;
-		    goto noarticle;
-		}
-
-		cmd_article(mode, msgid, uid);
-	    }
-	    else if (!strcmp(cmd.s, "Authinfo")) {
+	    if (!strcmp(cmd.s, "Authinfo")) {
 		arg3.len = 0;
 		if (c != ' ') goto missingargs;
 		c = getword(nntp_in, &arg1);
@@ -627,6 +611,31 @@ static void cmdloop(void)
 		    cmd_authinfo_sasl(arg2.s, arg3.len ? arg3.s : NULL);
 		else
 		    prot_printf(nntp_out, "500 Unrecognized command\r\n");
+	    }
+	    else if (!nntp_userid && !config_allowanonymous) goto nologin;
+	    else if (!strcmp(cmd.s, "Article")) {
+		char *msgid;
+
+		mode = ARTICLE_ALL;
+
+	      article:
+		msgid = NULL;
+		if (arg1.s) *arg1.s = 0;
+
+		if (c == ' ') {
+		    c = getword(nntp_in, &arg1);
+		    if (c == EOF) goto missingargs;
+		}
+		if (c == '\r') c = prot_getc(nntp_in);
+		if (c != '\n') goto extraargs;
+
+		if (parserange(arg1.s, &uid, NULL, &msgid) == -1) {
+		    if (!nntp_group) goto noopengroup;
+		    if (!nntp_current) goto nocurrent;
+		    goto noarticle;
+		}
+
+		cmd_article(mode, msgid, uid);
 	    }
 	    else goto badcmd;
 	    break;
@@ -686,7 +695,18 @@ static void cmdloop(void)
 	    break;
 
 	case 'H':
-	    if (!strcmp(cmd.s, "Hdr")) {
+	    if (!strcmp(cmd.s, "Head")) {
+		mode = ARTICLE_HEAD;
+		goto article;
+	    }
+	    else if (!strcmp(cmd.s, "Help")) {
+		if (c == '\r') c = prot_getc(nntp_in);
+		if (c != '\n') goto extraargs;
+
+		cmd_help();
+	    }
+	    else if (!nntp_userid && !config_allowanonymous) goto nologin;
+	    else if (!strcmp(cmd.s, "Hdr")) {
 		unsigned long last;
 		char *msgid;
 
@@ -705,22 +725,12 @@ static void cmdloop(void)
 		if (c != '\n') goto extraargs;
 
 		if (parserange(arg2.s, &uid, &last, &msgid) == -1) {
-		    if (!nntp_group) goto nogroup;
+		    if (!nntp_group) goto noopengroup;
 		    if (!nntp_current) goto nocurrent;
 		    goto noarticle;
 		}
 
 		cmd_hdr(cmd.s, arg1.s, msgid, uid, last);
-	    }
-	    else if (!strcmp(cmd.s, "Head")) {
-		mode = ARTICLE_HEAD;
-		goto article;
-	    }
-	    else if (!strcmp(cmd.s, "Help")) {
-		if (c == '\r') c = prot_getc(nntp_in);
-		if (c != '\n') goto extraargs;
-
-		cmd_help();
 	    }
 	    else goto badcmd;
 	    break;
@@ -742,7 +752,23 @@ static void cmdloop(void)
 	    break;
 
 	case 'L':
-	    if (!strcmp(cmd.s, "Last")) {
+	    if (!strcmp(cmd.s, "List")) {
+		arg1.len = arg2.len = 0;
+		if (c == ' ') {
+		    c = getword(nntp_in, &arg1);
+		    if (c == EOF) goto missingargs;
+		    if (c == ' ') {
+			c = getword(nntp_in, &arg2);
+			if (c == EOF) goto missingargs;
+		    }
+		}
+		if (c == '\r') c = prot_getc(nntp_in);
+		if (c != '\n') goto extraargs;
+
+		cmd_list(arg1.len ? arg1.s : NULL, arg2.len ? arg2.s : NULL);
+	    }
+	    else if (!nntp_userid && !config_allowanonymous) goto nologin;
+	    else if (!strcmp(cmd.s, "Last")) {
 		if (c == '\r') c = prot_getc(nntp_in);
 		if (c != '\n') goto extraargs;
 		if (!nntp_group) goto noopengroup;
@@ -758,21 +784,6 @@ static void cmdloop(void)
 
 		    if (msgid) free(msgid);
 		}
-	    }
-	    else if (!strcmp(cmd.s, "List")) {
-		arg1.len = arg2.len = 0;
-		if (c == ' ') {
-		    c = getword(nntp_in, &arg1);
-		    if (c == EOF) goto missingargs;
-		    if (c == ' ') {
-			c = getword(nntp_in, &arg2);
-			if (c == EOF) goto missingargs;
-		    }
-		}
-		if (c == '\r') c = prot_getc(nntp_in);
-		if (c != '\n') goto extraargs;
-
-		cmd_list(arg1.len ? arg1.s : NULL, arg2.len ? arg2.s : NULL);
 	    }
 	    else if (!strcmp(cmd.s, "Listgroup")) {
 		arg1.len = 0;
@@ -925,13 +936,7 @@ static void cmdloop(void)
 	    break;
 
 	case 'S':
-	    if (!strcmp(cmd.s, "Slave")) {	
-		if (c == '\r') c = prot_getc(nntp_in);
-		if (c != '\n') goto extraargs;
-
-		prot_printf(nntp_out, "202 Slave status noted\r\n");
-	    }
-	    else if (!strcmp(cmd.s, "Starttls") && tls_enabled()) {
+	    if (!strcmp(cmd.s, "Starttls") && tls_enabled()) {
 		if (c == '\r') c = prot_getc(nntp_in);
 		if (c != '\n') goto extraargs;
 
@@ -940,6 +945,13 @@ static void cmdloop(void)
 	    else if (!strcmp(cmd.s, "Stat")) {
 		mode = ARTICLE_STAT;
 		goto article;
+	    }
+	    else if (!nntp_userid && !config_allowanonymous) goto nologin;
+	    else if (!strcmp(cmd.s, "Slave")) {	
+		if (c == '\r') c = prot_getc(nntp_in);
+		if (c != '\n') goto extraargs;
+
+		prot_printf(nntp_out, "202 Slave status noted\r\n");
 	    }
 	    else goto badcmd;
 	    break;
@@ -968,6 +980,12 @@ static void cmdloop(void)
 	    eatline(nntp_in, c);
 	}
 
+	continue;
+
+      nologin:
+	prot_printf(nntp_out, "%u Authentication required\r\n",
+		    did_extensions ? 450 : 480);
+	eatline(nntp_in, c);
 	continue;
 
       cmdnotimpl:
@@ -1319,7 +1337,7 @@ void cmd_authinfo_pass(char *pass)
     char *reply = 0;
 
     if (!nntp_userid) {
-	prot_printf(nntp_out, "%u Must give AUTHINFO USER command\r\n",
+	prot_printf(nntp_out, "%u Must give AUTHINFO USER command first\r\n",
 		    did_extensions ? 450 : 480);
 	return;
     }
@@ -1671,6 +1689,11 @@ void cmd_list(char *arg1, char *arg2)
 	prot_printf(nntp_out, ".\r\n");
 
 	did_extensions = 1;
+    }
+    else if (!nntp_userid && !config_allowanonymous) {
+	prot_printf(nntp_out, "%u Authentication required\r\n",
+		    did_extensions ? 450 : 480);
+	return;
     }
     else if (!strcmp(arg1, "overview.fmt")) {
 	if (arg2) {
