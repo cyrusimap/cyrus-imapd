@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.26 2002/12/18 16:13:25 rjs3 Exp $
+ * $Id: parser.c,v 1.27 2003/02/05 20:43:01 ken3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -57,6 +57,7 @@
 #include <sasl/saslutil.h>
 
 #include "actions.h"
+#include "com_err.h"
 #include "exitcodes.h"
 #include "lex.h"
 #include "mboxlist.h"
@@ -75,8 +76,6 @@ const char *referral_host = NULL;
 int authenticated = 0;
 int verify_only = 0;
 int starttls_done = 0;
-
-struct namespace sieve_namespace;
 
 #ifdef HAVE_SSL
 /* our tls connection, if any */
@@ -484,7 +483,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
   const char *serverout=NULL;
   unsigned int serveroutlen;
   const char *errstr=NULL;
-  const char *username;
+  char *username;
 
   clientinstr = initial_challenge;
   if (clientinstr!=NULL)
@@ -634,22 +633,22 @@ static int cmd_authenticate(struct protstream *sieved_out,
 
   if (!verify_only) {
       /* Check for a remote mailbox (should we setup a redirect?) */
+      struct namespace sieved_namespace;
       char inboxname[1024];
       char *server;
-      int r;
-      int type;
+      int type, r;
       
-      strcpy(inboxname, "user.");
-      strcat(inboxname, username);
-
       /* Set namespace */
-      if ((r = mboxname_init_namespace(&sieve_namespace, 1)) != 0) {
-          *errmsg = "mailbox unknown";
-	  return FALSE;
+      if ((r = mboxname_init_namespace(&sieved_namespace, 0)) != 0) {
+	  syslog(LOG_ERR, error_message(r));
+	  fatal(error_message(r), EC_CONFIG);
       }
 
       /* Translate any separators in userid */
-      mboxname_hiersep_tointernal(&sieve_namespace, inboxname+5);
+      mboxname_hiersep_tointernal(&sieved_namespace, username);
+
+      (*sieved_namespace.mboxname_tointernal)(&sieved_namespace, "INBOX",
+					     username, inboxname);
 
       r = mboxlist_detail(inboxname, &type, &server, NULL, NULL, NULL);
       
