@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.133 2000/02/10 05:10:34 tmartin Exp $
+ * $Id: deliver.c,v 1.134 2000/02/10 07:59:55 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: deliver.c,v 1.133 2000/02/10 05:10:34 tmartin Exp $";*/
+/*static char _rcsid[] = "$Id: deliver.c,v 1.134 2000/02/10 07:59:55 leg Exp $";*/
 
 
 #ifdef HAVE_UNISTD_H
@@ -429,7 +429,13 @@ char **argv;
 	    break;
 
 	case 'E':
-	    exit(duplicate_prune(atoi(optarg)));
+	    if (duplicate_init() != 0) {
+		fprintf(stderr, "deliver: unable to init duplicate delivery database\n");
+		exit(1);
+	    }
+	    r = duplicate_prune(atoi(optarg));
+	    duplicate_done();
+	    exit(r);
 
 	case 'l':
 	    lmtpflag = 1;
@@ -1022,7 +1028,6 @@ static
 int sieve_redirect(void *ac, void *ic, void *sc, void *mc)
 {
     sieve_redirect_context_t *rc = (sieve_redirect_context_t *) ac;
-    script_data_t *sd = (script_data_t *) sc;
     message_data_t *md = (message_data_t *) mc;
 
     if (send_forward(rc->addr, md->return_path, md->data) == 0) {
@@ -1165,7 +1170,9 @@ int autorespond(void *ac, void *ic, void *sc, void *mc)
     now = time(NULL);
 
     /* ok, let's see if we've responded before */
-    if (t = duplicate_check(arc->hash, arc->len, sd->username, strlen(sd->username))) {
+    t = duplicate_check(arc->hash, arc->len, 
+			sd->username, strlen(sd->username));
+    if (t) {
 	if (now >= t) {
 	    /* yay, we can respond again! */
 	    ret = SIEVE_OK;
@@ -1197,7 +1204,6 @@ int send_response(void *ac, void *ic, void *sc, void *mc)
     time_t t;
     unsigned long p;
     sieve_send_response_context_t *src = (sieve_send_response_context_t *) ac;
-    message_data_t *m = (message_data_t *) mc;
     script_data_t *sdata = (script_data_t *) sc;
 
     smbuf[0] = "sendmail";
@@ -1234,7 +1240,7 @@ int send_response(void *ac, void *ic, void *sc, void *mc)
     /* check that subject is sane */
     sl = strlen(src->subj);
     for (i = 0; i < sl; i++)
-	if (iscntrl(((int) src->subj[i])) {
+	if (iscntrl((int) src->subj[i])) {
 	    src->subj[i] = '\0';
 	    break;
 	}
@@ -1253,7 +1259,7 @@ int send_response(void *ac, void *ic, void *sc, void *mc)
     fprintf(sm, "%s\r\n", src->msg);
 
     if (src->mime) {
-	fprintf(sm, "\r\n--%d/%s\r\n", p, hostname);
+	fprintf(sm, "\r\n--%ld/%s\r\n", p, hostname);
     }
     fclose(sm);
     waitpid(p, &i, 0);
@@ -1322,11 +1328,6 @@ setup_sieve(deliver_opts_t *delopts, int lmtpmode)
     if (res != SIEVE_OK) {
 	syslog(LOG_ERR, "sieve_register_imapflags() returns %d\n", res);
 	fatal("sieve_register_imapflags()", EC_TEMPFAIL);
-    }
-    res = sieve_register_unmark(sieve_interp, &sieve_unmark);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_unmark() returns %d\n", res);
-	fatal("sieve_register_unmark()", EC_TEMPFAIL);
     }
     res = sieve_register_notify(sieve_interp, &sieve_notify);
     if (res != SIEVE_OK) {

@@ -42,7 +42,7 @@ int duplicate_init()
     
     /* create the name of the db file */
     r = duplicate_dbenv->open(duplicate_dbenv, buf, NULL, 
-			      DB_INIT_CDB | DB_CREATE, 0644);
+			      DB_INIT_CDB | DB_INIT_MPOOL | DB_CREATE, 0644);
     if (r) {
 	char err[1024];
 	
@@ -209,30 +209,29 @@ int duplicate_prune(int days)
     int r;
     DB *d;
     DBC *cursor = NULL;
-    DBT key, data;
+    DBT delivery, date;
     time_t mark, expmark;
     char c[2];
 
     if (days < 0) fatal("must specify positive number of days", EC_USAGE);
 
-    memset(&delivery, 0, sizeof(key));
-    memset(&date, 0, sizeof(data));
+    memset(&delivery, 0, sizeof(delivery));
+    memset(&date, 0, sizeof(date));
 
     expmark = time(0) - (days * 60 * 60 * 24);
     syslog(LOG_NOTICE, "duplicate_prune: pruning back %d days", days);
     
-    r = db_create(&d, duplicate_dbenv, 0);
-    if (r != 0) {
-	syslog(LOG_ERR, "duplicate_prune: db_create %s: %s", fname,
-	       db_strerror(r));
-	return;
-    }
-
     c[1] = '\0';
     for (c[0] = 'a'; c[0] <= 'z'; c[0]++) {
-	char *fname = get_db_name;
+	char *fname = get_db_name(c);
 	int count = 0, deletions = 0;
 
+	r = db_create(&d, duplicate_dbenv, 0);
+	if (r != 0) {
+	    syslog(LOG_ERR, "duplicate_prune: db_create: %s", db_strerror(r));
+	    return 1;
+	}
+	
 	r = d->open(d, fname, NULL, DB_HASH, 0, 0664);
 	if (r != 0) {
 	    /* might just not exist */
@@ -241,7 +240,7 @@ int duplicate_prune(int days)
 	    continue;
 	}
 	
-	r = mbdb->cursor(mbdb, NULL, &cursor, 0);
+	r = d->cursor(d, NULL, &cursor, DB_WRITECURSOR);
 	if (r != 0) { 
 	    syslog(LOG_ERR, "duplicate_prune: unable to create cursor: %s",
 		    db_strerror(r));
@@ -269,7 +268,7 @@ int duplicate_prune(int days)
 
 	    r = cursor->c_get(cursor, &delivery, &date, DB_NEXT);
 	}
-	r = cursor->c_close(c);
+	r = cursor->c_close(cursor);
 	if (r != 0) {
 	    syslog(LOG_ERR, "duplicate_prune: error closing cursor: %s",
 		   db_strerror(r));
