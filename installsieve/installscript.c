@@ -247,29 +247,20 @@ int getauthline(char **line, unsigned int *linelen)
 {
   lexstate_t state;
   int res;
+  int ret;
+  mystring_t *errstr;
+
   /* now let's see what the server said */
   res=yylex(&state, pin);
   if (res!=STRING)
   {
-    mystring_t *savestr;
-
-    /* read string then eol */
-    if (yylex(&state, pin)!=' ')
-      parseerror("SPACE");
-
-    if (yylex(&state, pin)!=STRING)
-      parseerror("STRING");
-
-    savestr=state.str;
-
-    if (yylex(&state, pin)!=EOL)
-      parseerror("EOL");
-
+      ret = handle_response(res,version,
+			    pin, &errstr);
 
     if (res==TOKEN_OK) {
       return STAT_OK;
     } else { /* server said no */
-      printf("Authentication failed with: \"%s\"\n",string_DATAPTR(savestr));
+      printf("Authentication failed with: \"%s\"\n",string_DATAPTR(errstr));
       return STAT_NO;    
     }
   }

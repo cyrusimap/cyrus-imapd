@@ -1,6 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.17 2000/04/10 18:46:24 tmartin Exp $
+ * $Id: actions.c,v 1.18 2000/04/15 19:20:48 tmartin Exp $
  * 
  */
 /***********************************************************
@@ -270,7 +270,7 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data)
   if (countscripts(string_DATAPTR(name))+1 > maxscripts)
   {
     prot_printf(conn,
-		"NO \"You are only allowed %d scripts on this server\"\r\n",
+		"NO (\"QUOTA\") \"You are only allowed %d scripts on this server\"\r\n",
 		maxscripts);
     return TIMSIEVE_FAIL;
   }
@@ -531,7 +531,7 @@ int cmd_havespace(struct protstream *conn, mystring_t *sieve_name, unsigned long
     if (num > maxscriptsize)
     {
 	prot_printf(conn,
-		    "NO \"Script size is too large. Max script size is %d bytes\"\r\n",
+		    "NO (\"QUOTA\") \"Script size is too large. Max script size is %d bytes\"\r\n",
 		    maxscriptsize);
 	return TIMSIEVE_FAIL;
     }
@@ -542,7 +542,7 @@ int cmd_havespace(struct protstream *conn, mystring_t *sieve_name, unsigned long
     if (countscripts(string_DATAPTR(sieve_name))+1 > maxscripts)
     {
 	prot_printf(conn,
-		    "NO \"You are only allowed %d scripts on this server\"\r\n",
+		    "NO (\"QUOTA\") \"You are only allowed %d scripts on this server\"\r\n",
 		    maxscripts);
 	return TIMSIEVE_FAIL;
     }

@@ -35,6 +35,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #define OLD_VERSION 4
 #define NEW_VERSION 5
 
+int handle_response(int res,int version,struct protstream *pin, mystring_t **errstr);
 
 int deleteascript(int version,struct protstream *pout, struct protstream *pin,
 		  char *name);
