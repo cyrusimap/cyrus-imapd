@@ -40,9 +40,13 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notify_mailto.h,v 1.2 2002/03/01 20:32:38 ken3 Exp $
+ * $Id: notify_mailto.h,v 1.3 2002/03/18 15:14:17 ken3 Exp $
  */
 
-char* notify_mailto(int nopt, char **options,
+/* the only option should be a mailto URI */
+char* notify_mailto(const char *class __attribute__((unused)),
 		    const char *priority __attribute__((unused)),
+		    const char *user __attribute__((unused)),
+		    const char *mailbox __attribute__((unused)),
+		    int nopt, char **options,
 		    const char *message);

@@ -40,16 +40,19 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notify_null.c,v 1.3 2002/03/12 18:10:52 ken3 Exp $
+ * $Id: notify_null.c,v 1.4 2002/03/18 15:14:17 ken3 Exp $
  */
 
 #include "notify_null.h"
 
 #include <string.h>
 
-char* notify_null(int nopt __attribute__((unused)),
-		  char **options __attribute__((unused)),
+char* notify_null(const char *class __attribute__((unused)),
 		  const char *priority __attribute__((unused)),
+		  const char *user __attribute__((unused)),
+		  const char *mailbox __attribute__((unused)),
+		  int nopt __attribute__((unused)),
+		  char **options __attribute__((unused)),
 		  const char *message __attribute__((unused)))
 {
     return strdup("OK null notification successful");

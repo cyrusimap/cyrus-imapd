@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notifyd.c,v 1.3 2002/03/12 18:10:52 ken3 Exp $
+ * $Id: notifyd.c,v 1.4 2002/03/18 15:14:18 ken3 Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -66,7 +66,7 @@
 #include <signal.h>
 #include <string.h>
 
-#include "notify.h"
+#include "notifyd.h"
 #include "retry.h"
 #include "imapconf.h"
 #include "xmalloc.h"
@@ -102,9 +102,12 @@ void do_notify()
 {
     int rc, i;
     char *method = NULL;
+    char *class = NULL;
+    char *priority = NULL;
+    char *user = NULL;
+    char *mailbox = NULL;
     unsigned short nopt;
     char **options = NULL;
-    char *priority = NULL;
     char *message = NULL;
     char *reply;
     unsigned short count;
@@ -115,7 +118,8 @@ void do_notify()
     /*
      * read request of the form:
      *
-     * count method nopt N(count option) count priority count message
+     * count method count class count priority count user count mailbox
+     *   nopt N(count option) count message
      */
 
     rc = (retry_read(notifyd_in, &count, sizeof(count)) < (int) sizeof(count));
@@ -126,6 +130,54 @@ void do_notify()
 	if (!rc) {
 	    rc = (retry_read(notifyd_in, method, count) < (int) count);
 	    method[count] = '\0';
+	}
+    }
+
+    if (!rc)
+	rc = (retry_read(notifyd_in, &count, sizeof(count)) < (int) sizeof(count));
+    if (!rc) {
+	count = ntohs(count);
+	if ((class = (char*) xmalloc(count+1)) == NULL)
+	    fatal("can not allocate class", EX_OSERR);
+	if (!rc) {
+	    rc = (retry_read(notifyd_in, class, count) < (int) count);
+	    class[count] = '\0';
+	}
+    }
+
+    if (!rc)
+	rc = (retry_read(notifyd_in, &count, sizeof(count)) < (int) sizeof(count));
+    if (!rc) {
+	count = ntohs(count);
+	if ((priority = (char*) xmalloc(count+1)) == NULL)
+	    fatal("can not allocate priority", EX_OSERR);
+	if (!rc) {
+	    rc = (retry_read(notifyd_in, priority, count) < (int) count);
+	    priority[count] = '\0';
+	}
+    }
+
+    if (!rc)
+	rc = (retry_read(notifyd_in, &count, sizeof(count)) < (int) sizeof(count));
+    if (!rc) {
+	count = ntohs(count);
+	if ((user = (char*) xmalloc(count+1)) == NULL)
+	    fatal("can not allocate user", EX_OSERR);
+	if (!rc) {
+	    rc = (retry_read(notifyd_in, user, count) < (int) count);
+	    user[count] = '\0';
+	}
+    }
+
+    if (!rc)
+	rc = (retry_read(notifyd_in, &count, sizeof(count)) < (int) sizeof(count));
+    if (!rc) {
+	count = ntohs(count);
+	if ((mailbox = (char*) xmalloc(count+1)) == NULL)
+	    fatal("can not allocate mailbox", EX_OSERR);
+	if (!rc) {
+	    rc = (retry_read(notifyd_in, mailbox, count) < (int) count);
+	    mailbox[count] = '\0';
 	}
     }
 
@@ -154,18 +206,6 @@ void do_notify()
 	rc = (retry_read(notifyd_in, &count, sizeof(count)) < (int) sizeof(count));
     if (!rc) {
 	count = ntohs(count);
-	if ((priority = (char*) xmalloc(count+1)) == NULL)
-	    fatal("can not allocate priority", EX_OSERR);
-	if (!rc) {
-	    rc = (retry_read(notifyd_in, priority, count) < (int) count);
-	    priority[count] = '\0';
-	}
-    }
-
-    if (!rc)
-	rc = (retry_read(notifyd_in, &count, sizeof(count)) < (int) sizeof(count));
-    if (!rc) {
-	count = ntohs(count);
 	if ((message = (char*) xmalloc(count+1)) == NULL)
 	    fatal("can not allocate message", EX_OSERR);
 	if (!rc) {
@@ -176,7 +216,7 @@ void do_notify()
 
     if (rc) syslog(LOG_ERR, "do_notify read failed: %m");
 
-    if (!method[0])
+    if (!*method)
 	nmethod = default_method;
     else {
 	nmethod = methods;
@@ -190,12 +230,16 @@ void do_notify()
 	   nmethod->name ? nmethod->name: "unknown");
 
     if (nmethod->name)
-	reply = nmethod->notify(nopt, options, priority, message);
+	reply = nmethod->notify(class, priority, user, mailbox,
+				nopt, options, message);
     else
 	reply = strdup("NO unknown notification method");
 
     if (method) free(method);
+    if (class) free(class);
     if (priority) free(priority);
+    if (user) free(user);
+    if (mailbox) free(mailbox);
     if (message) free(message);
     for (i = 0; i < nopt; i++) {
 	if (options[i]) free(options[i]);

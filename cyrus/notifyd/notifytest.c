@@ -50,6 +50,7 @@
 #include <stdlib.h>
 
 #include <errno.h>
+#include <pwd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -63,10 +64,10 @@ extern int errno;
 
 #define MAX_OPT 10
 
-static int notify(const char *notifyd_path,
-		  const char *method, 
+static int notify(const char *notifyd_path, const char *method,
+		  const char *class, const char *priority,
+		  const char *user, const char *mailbox,
 		  int nopt, char **options,
-		  const char *priority,
 		  const char *message)
 {
     static char response[1024];
@@ -94,21 +95,33 @@ static int notify(const char *notifyd_path,
     /*
      * build request of the form:
      *
-     * count method nopt N(count option) count priority count message
+     * count method count class count priority count user count mailbox
+     *   nopt N(count option) count message
      */
     {
- 	unsigned short n_len, o_len[MAX_OPT], p_len, m_len;
- 	struct iovec iov[27];
+	unsigned short n_len, c_len, p_len, u_len, m_len, o_len[MAX_OPT], t_len;
+ 	struct iovec iov[13 + 2*MAX_OPT];
 	int num_iov = 0;
 	int i;
 
  	n_len = htons(strlen(method));
-	count = htons((unsigned short) nopt);
+ 	c_len = htons(strlen(class));
  	p_len = htons(strlen(priority));
-	m_len = htons(strlen(message));
+ 	u_len = htons(strlen(user));
+ 	m_len = htons(strlen(mailbox));
+	count = htons((unsigned short) nopt);
+	t_len = htons(strlen(message));
 
 	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char*) &n_len, sizeof(n_len));
 	WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, (char*) method);
+	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char*) &c_len, sizeof(c_len));
+	WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, (char*) class);
+	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char*) &p_len, sizeof(p_len));
+	WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, (char*) priority);
+	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char*) &u_len, sizeof(u_len));
+	WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, (char*) user);
+	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char*) &m_len, sizeof(m_len));
+	WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, (char*) mailbox);
 
 	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char*) &count, sizeof(count));
 
@@ -118,9 +131,7 @@ static int notify(const char *notifyd_path,
 	    WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, options[i]);
 	}	    
 
-	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char*) &p_len, sizeof(p_len));
-	WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, (char*) priority);
-	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char*) &m_len, sizeof(m_len));
+	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char*) &t_len, sizeof(t_len));
 	WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, (char*) message);
 
 	if (retry_writev(s, iov, num_iov) == -1) {
@@ -168,11 +179,12 @@ int
 main(int argc, char *argv[])
 {
   const char *method = "", *priority = "normal";
+  const char *class = "TEST", *user = "", *mailbox = "";
   const char *message = NULL, *path = NULL;
   int c;
   int flag_error = 0;
 
-  while ((c = getopt(argc, argv, "p:n:m:f:")) != EOF)
+  while ((c = getopt(argc, argv, "f:n:c:p:u:m:t:")) != EOF)
       switch (c) {
       case 'f':
 	  path = optarg;
@@ -180,10 +192,19 @@ main(int argc, char *argv[])
       case 'n':
 	  method = optarg;
 	  break;
+      case 'c':
+	  class = optarg;
+	  break;
       case 'p':
 	  priority = optarg;
 	  break;
+      case 'u':
+	  user = optarg;
+	  break;
       case 'm':
+	  mailbox = optarg;
+	  break;
+      case 't':
 	  message = optarg;
 	  break;
       default:
@@ -196,8 +217,10 @@ main(int argc, char *argv[])
 
   if (flag_error) {
     (void)fprintf(stderr,
-		 "%s: usage: %s -f socket_path -m message [-p priority]\n"
-		 "              [-n method] [option ...]\n",
+		 "%s: usage: %s -f socket_path -t text [-n method]\n"
+		  "              [-c class] [-p priority]\n"
+		  "              [-u user] [-m mailbox]\n"
+		  "              [option ...]\n",
 		  argv[0], argv[0]);
     exit(1);
   }
@@ -207,6 +230,9 @@ main(int argc, char *argv[])
       exit(1);
   }
  
-  return notify(path, method, argc - optind, argv+optind, priority, message);
+  if (!user) user = getpwuid(getuid())->pw_name;
+
+  return notify(path, method, class, priority, user, mailbox,
+		argc - optind, argv+optind, message);
 }
 
