@@ -56,7 +56,7 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
-VERSION = 2.2.1-BETA
+VERSION = 2.2.2-UNIFIED
 
 all:: 
 	@for d in  $(SUBDIRS); \
@@ -86,7 +86,7 @@ distcvs:
 	if [ \! -d dist ]; then mkdir dist ; fi
 	@echo "checking out the distribution"
 	@cd dist ; cvs -Q -d :pserver:anoncvs@cvs.andrew.cmu.edu:/cvs \
-		co -r cyrus-imapd-2_2 -d cyrus-imapd-$(VERSION) cyrus
+		co -r unified-imapd -d cyrus-imapd-$(VERSION) cyrus
 	touch distcvs
 
 install::
