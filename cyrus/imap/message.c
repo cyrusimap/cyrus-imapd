@@ -42,7 +42,7 @@
  */
 
 /*
- * $Id: message.c,v 1.83 2000/08/17 18:12:49 ken3 Exp $
+ * $Id: message.c,v 1.84 2000/08/18 15:02:44 ken3 Exp $
  */
 
 #include <config.h>
@@ -1347,9 +1347,9 @@ unsigned flags;
 
     tm.tm_isdst = -1;
 
-    if (flags & PARSE_TIME) {
+    message_parse_rfc822space(&hdr);
+    if (hdr && flags & PARSE_TIME) {
 	/* Parse hour */
-	message_parse_rfc822space(&hdr);
 	if (!hdr || !isdigit((int) *hdr)) goto baddate;
 	tm.tm_hour = *hdr++ - '0';
 	if (!isdigit((int) *hdr)) goto baddate;
@@ -1370,13 +1370,11 @@ unsigned flags;
 	    tm.tm_sec = tm.tm_sec * 10 + *hdr++ - '0';
 	}
 
-	if (flags & PARSE_ZONE) {
+	message_parse_rfc822space(&hdr);
+	if (hdr && flags & PARSE_ZONE) {
 	    /* Parse timezone offset */
 	    time_t tim;
 	    int offset;
-
-	    message_parse_rfc822space(&hdr);
-	    if (!hdr) goto baddate;
 
 	    if (*hdr == '+' || *hdr == '-') {
 		/* Parse numeric offset */
