@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.31 2000/05/29 03:00:22 leg Exp $
+ * $Id: lmtpd.c,v 1.32 2000/05/29 04:07:22 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.31 2000/05/29 03:00:22 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.32 2000/05/29 04:07:22 leg Exp $";*/
 
 #include <config.h>
 
@@ -140,10 +140,10 @@ int deliver_mailbox(struct protstream *msg,
 		    char *mailboxname,
 		    int quotaoverride,
 		    int acloverride);
-int isvalidflag(char *f);
 static int deliver(message_data_t *msgdata, char *authuser,
 		   struct auth_state *authstate);
 static int verify_user(const char *user);
+static char *generate_notify(message_data_t *m);
 
 void shut_down(int code);
 
@@ -1088,7 +1088,7 @@ int deliver(message_data_t *msgdata, char *authuser,
     /* create 'mydata', our per-delivery data */
     mydata.m = msgdata;
     mydata.stage = NULL;
-    mydata.notifyheader = "xxx";
+    mydata.notifyheader = generate_notify(msgdata);
     mydata.authuser = authuser;
     mydata.authstate = authstate;
     
@@ -1206,6 +1206,7 @@ int deliver(message_data_t *msgdata, char *authuser,
     }
 
     append_removestage(mydata.stage);
+    if (mydata.notifyheader) free(mydata.notifyheader);
 
     return 0;
 }
@@ -1249,21 +1250,6 @@ void shut_down(int code)
     exit(code);
 }
 
-int isvalidflag(char *f)
-{
-    if (f[0] == '\\') {
-	lcase(f);
-	if (strcmp(f, "\\seen") && strcmp(f, "\\answered") &&
-	    strcmp(f, "\\flagged") && strcmp(f, "\\draft") &&
-	    strcmp(f, "\\deleted")) {
-	    return 0;
-	}
-	return 1;
-    }
-    if (!imparse_isatom(f)) return 0;
-    return 1;
-}
-
 static int verify_user(const char *user)
 {
     char buf[MAX_MAILBOX_NAME];
@@ -1289,4 +1275,41 @@ static int verify_user(const char *user)
     }
 
     return r;
+}
+
+const char *notifyheaders[] = { "From", "Subject", "To", 0 };
+/* returns a malloc'd string that should be sent to users for successful
+   delivery of 'm'. */
+char *generate_notify(message_data_t *m)
+{
+    const char **body;
+    char *ret = NULL;
+    int len = 0;
+    int pos = 0;
+    int i;
+
+    for (i = 0; notifyheaders[i]; i++) {
+	const char *h = notifyheaders[i];
+	body = msg_getheader(m, h);
+	if (body) {
+	    int j;
+
+	    for (j = 0; body[j] != NULL; j++) {
+		/* put the header */
+		while (pos + strlen(h) + 5 > len) {
+		    ret = xrealloc(ret, len += 1024);
+		}
+		pos += sprintf(ret + pos, "%s: ", h);
+		
+		/* put the header body.
+		   xxx it would be nice to linewrap.*/
+		while (pos + strlen(body[j]) + 3 > len) {
+		    ret = xrealloc(ret, len += 1024);
+		}
+		pos += sprintf(ret + pos, "%s\n", body[j]);
+	    }
+	}
+    }
+
+    return ret;
 }
