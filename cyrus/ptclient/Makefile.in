@@ -41,7 +41,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.in,v 1.24 2003/10/24 18:24:11 rjs3 Exp $
+# $Id: Makefile.in,v 1.25 2003/11/12 04:02:11 rjs3 Exp $
 # 
 srcdir = @srcdir@
 VPATH = @srcdir@
@@ -75,6 +75,7 @@ MAKEDEPEND = @MAKEDEPEND@
 prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
+service_path = @service_path@
 
 EXTRA_PROGS = # ptextract pttest
 PROGS = ptexpire ptloader ptdump $(EXTRA_PROGS)
@@ -87,9 +88,9 @@ SERVICETHREAD=../master/service-thread.o
 all: $(PROGS)
 
 install:
-	$(INSTALL) -m 755 ptloader $(DESTDIR)$(cyrus_prefix)/bin
-	$(INSTALL) -m 755 ptexpire $(DESTDIR)$(cyrus_prefix)/bin
-	$(INSTALL) -m 755 ptdump $(DESTDIR)$(cyrus_prefix)/bin
+	$(INSTALL) -m 755 ptloader $(DESTDIR)$(service_path)
+	$(INSTALL) -m 755 ptexpire $(DESTDIR)$(service_path)
+	$(INSTALL) -m 755 ptdump $(DESTDIR)$(service_path)
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(LDAP_CPPFLAGS) $(DEFS) $(CFLAGS) $<
