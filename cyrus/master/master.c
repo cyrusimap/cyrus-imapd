@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.19 2000/11/08 19:35:12 leg Exp $ */
+/* $Id: master.c,v 1.20 2000/11/13 20:40:07 leg Exp $ */
 
 #include <config.h>
 
@@ -71,6 +71,8 @@
 #include <ucd-snmp/ucd-snmp-config.h>
 #include <ucd-snmp/ucd-snmp-includes.h>
 #include <ucd-snmp/ucd-snmp-agent-includes.h>
+
+#include "cyrusMasterMIB.h"
 #endif
 
 #include "masterconf.h"
@@ -767,13 +769,6 @@ int main(int argc, char **argv, char **envp)
     masterconf_init("master");
     syslog(LOG_NOTICE, "process started");
 
-    masterconf_getsection("START", &add_start, NULL);
-    masterconf_getsection("SERVICES", &add_service, NULL);
-    masterconf_getsection("EVENTS", &add_event, NULL);
-
-    /* set signal handlers */
-    sighandler_setup();
-
 #ifdef HAVE_UCDSNMP
     /* initialize SNMP agent */
     
@@ -787,6 +782,13 @@ int main(int argc, char **argv, char **envp)
 
     init_snmp("cyrusMaster"); 
 #endif
+
+    masterconf_getsection("START", &add_start, NULL);
+    masterconf_getsection("SERVICES", &add_service, NULL);
+    masterconf_getsection("EVENTS", &add_event, NULL);
+
+    /* set signal handlers */
+    sighandler_setup();
 
     /* initialize services */
     for (i = 0; i < nservices; i++) {
@@ -805,8 +807,10 @@ int main(int argc, char **argv, char **envp)
     for (;;) {
 	int r, i, msg, maxfd;
 	struct timeval tv, *tvptr;
-	int blockp = 0;
 	time_t now = time(NULL);
+#if HAVE_UCDSNMP
+	int blockp = 0;
+#endif
 
 	/* run any scheduled processes */
 	spawn_schedule(now);
