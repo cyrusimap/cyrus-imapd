@@ -1,9 +1,54 @@
-<!-- $Id: changes.html,v 1.2 2000/05/09 17:54:42 leg Exp $ -->
+<!-- $Id: changes.html,v 1.3 2000/06/07 18:42:04 leg Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
 </HEAD><BODY>
 <H1>                   Changes to the Cyrus IMAP Server</H1>
+
+<h2>Changes to the cyrus IMAP Server SINCE 2.0.3</h2>
+<ul>
+<li>fixed <tt>mbpath</tt> and <tt>ipurge</tt>. Thanks to Alain Turbide
+for the bug report.
+
+<li> configure: removed <tt>mmap_private.c</tt>; it was buggy, and not worth
+supporting.
+
+<li> configure: improvements in detecting libwrap, typos fixed in
+detecting libsasl.
+
+<li> Merged the acapsieve library into libacap.
+
+<li> improvements to the ACAP API.
+
+<li> invariant checks added to the skiplist code.
+
+<li> bugfix in TCL cyradm.
+
+<li> acapmbox.c: bugfixes in handling acap connections.
+
+<li> fix the size given for a unix socket address (changes throughout
+the code), patch thanks to Vladimir Kravchenko, <tt>jimson@null.ru</tt>.
+
+<li> rewrote <tt>deliver</tt> to use the generic LMTP API in
+lmtpengine.c.  Likewise, implemented the client-side API in
+lmtpengine.c. (Still need to implement AUTH.)
+
+<li> added SORT and THREAD support (Ken Murchison,
+<tt>ken@oceana.com</tt>.)
+</ul>
+
+<li> In checking an APPEND command, we were rejecting valid system
+flags and accepting invalid ones.
+
+<li> minor bug fixes to <tt>proxyd</tt>.
+
+<li> large amount of debugging code added to <tt>target-acap</tt>.
+
+<li> build fixes to Perl programs.
+
+<li> allow plaintext authentication to <tt>timsieved</tt>.
+
+</li>
 
 <h2> Changes to the Cyrus IMAP Server in 2.0 </h2>
 <ul>
@@ -971,7 +1016,7 @@ restore tab before breaking out of loop.
 
 
 <P><HR>
-last modified: $Date: 2000/05/09 17:54:42 $
+last modified: $Date: 2000/06/07 18:42:04 $
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>
