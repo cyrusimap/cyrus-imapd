@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.38 2001/05/03 19:00:47 wcw Exp $ */
+/* $Id: master.c,v 1.39 2001/05/21 19:26:53 leg Exp $ */
 
 #include <config.h>
 
@@ -963,7 +963,7 @@ void reread_conf(void)
 
 int main(int argc, char **argv, char **envp)
 {
-    int i, opt, dont_close = 0;
+    int i, opt, close_std = 1;
     extern int optind;
     extern char *optarg;
     int fd;
@@ -978,7 +978,7 @@ int main(int argc, char **argv, char **envp)
 	    listen_queue_backlog = atoi(optarg);
 	    break;
 	case 'D':
-	    dont_close = 1;
+	    close_std = 0;
 	    break;
 	default:
 	    break;
@@ -988,7 +988,7 @@ int main(int argc, char **argv, char **envp)
     /* zero out the children table */
     memset(&ctable, 0, sizeof(struct centry *) * child_table_size);
 
-    if (dont_close) {
+    if (close_std) {
       /* close stdin/out/err */
       for (fd = 0; fd < 3; fd++) {
 	close(fd);
