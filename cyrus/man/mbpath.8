@@ -1,0 +1,51 @@
+.\" -*- nroff -*-
+.TH MBPATH 8
+.\" Copyright 1999 Carnegie Mellon University
+.\" 
+.\" No warranties, either expressed or implied, are made regarding the
+.\" operation, use, or results of the software.
+.\"
+.\" Permission to use, copy, modify and distribute this software and its
+.\" documentation is hereby granted for non-commercial purposes only
+.\" provided that this copyright notice appears in all copies and in
+.\" supporting documentation.
+.\"
+.\" Permission is also granted to Internet Service Providers and others
+.\" entities to use the software for internal purposes.
+.\"
+.\" The distribution, modification or sale of a product which uses or is
+.\" based on the software, in whole or in part, for commercial purposes or
+.\" benefits requires specific, additional permission from:
+.\"
+.\"  Office of Technology Transfer
+.\"  Carnegie Mellon University
+.\"  5000 Forbes Avenue
+.\"  Pittsburgh, PA  15213-3890
+.\"  (412) 268-4387, fax: (412) 268-7395
+.\"  tech-transfer@andrew.cmu.edu
+.SH NAME
+mbpath \- translate mailbox names to filesystem paths
+.SH SYNOPSIS
+.B mbpath
+[
+.B \-q
+]
+[
+.IR mailbox-names ...
+]
+.SH DESCRIPTION
+Given a mailbox name or a space separated list of mailbox names, 
+.I mbpath
+outputs the filesystem path to the mailbox.
+.SH OPTIONS
+.PP
+.I \-q
+suppress any error output.
+.PP
+.I \-s
+if any error occurs, stop processing the list of mailboxes and exit.
+.SH FILES
+.TP
+.B /etc/imapd.conf
+
+.\" $Header: /mnt/data/cyrus/cvsroot/src/cyrus/man/mbpath.8,v 1.1 1999/08/14 18:56:49 wcw Exp $
