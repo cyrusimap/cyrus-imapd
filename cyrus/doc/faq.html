@@ -1,6 +1,6 @@
 <HTML><HEAD>
     <TITLE>Cyrus IMAP Server FAQ</TITLE>
-    <!-- $Id: faq.html,v 1.11 2001/01/31 18:41:34 leg Exp $ -->
+    <!-- $Id: faq.html,v 1.11.4.1 2001/07/08 15:59:58 ken3 Exp $ -->
   </HEAD><BODY>
       <H1>                Cyrus IMAP Server FAQ</H1>
 
@@ -72,16 +72,44 @@ Jan 14 13:46:24 grant ctl_deliver[9060]: duplicate_prune: opening
 Jan 14 13:46:24 grant ctl_deliver[9060]: duplicate_prune: opening
   /var/imap/deliverdb/deliver-z.db: No such file or directory
 </pre>
-in my <tt>cyrus.log</tt> file.  What's wrong?
+in my <tt>imapd.log</tt> file.  What's wrong?
 <dd>
 <p><b>A:</b> These messages are normal; one file is maintained for
 each user beginning with "x", "y", "z", etc.  If you're first starting
 or you have no users beginning with these letters, these messages are
 completely normal and can be ignored.
+
+<dt><b>Q:</b> I'm getting messages like:
+<pre>
+Jul  3 16:51:36 acadia imapd: could not getenv(CYRUS_SERVICE); exiting
+</pre>
+in my <tt>imapd.log</tt> file.  What's wrong?
+<dd>
+<p><b>A:</b> Remove all <tt>imap</tt>, <tt>pop</tt>, <tt>lmtp</tt> and
+<tt>sieve</tt> lines from <tt>[x]inetd.conf</tt> and restart
+<tt>[x]inetd</tt>.
+
+<dt><b>Q:</b> How do I use different SSL/TLS certificates for
+imap and pop (or disable SSL/TLS for pop)?
+<dd>
+<p><b>A:</b> Use a separate config file for one of the services.  For
+example, change the pop3 service in <tt>cyrus.conf</tt> to something like:
+<pre>
+pop3    cmd="pop3d -C /etc/pop3d.conf" listen="pop3"
+</pre>
+then copy <tt>/etc/imapd.conf</tt> to <tt>/etc/pop3d.conf</tt> and
+change the <tt>tls_*</tt> options to use your POP3 specific
+certificate (or remove them to disable SSL/TLS).
+
+<dt><b>Q:</b> My KPOP client is complaining about TLS keys.  What
+should I do?
+<dd>
+<p><b>A:</b> Disable TLS for the kpop service. See the answer to the
+previous question for details.
 </dl>
 
 <P><HR>
-last modified: $Date: 2001/01/31 18:41:34 $
+last modified: $Date: 2001/07/08 15:59:58 $
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>

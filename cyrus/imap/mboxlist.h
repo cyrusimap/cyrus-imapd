@@ -41,7 +41,7 @@
  *
 
  * 
- * $Id: mboxlist.h,v 1.12.4.1 2001/05/31 04:40:47 ken3 Exp $
+ * $Id: mboxlist.h,v 1.12.4.1.2.1 2001/07/08 16:00:01 ken3 Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -137,6 +137,9 @@ int mboxlist_findstage(const char *name, char *stagedir);
 /* Change 'user's subscription status for mailbox 'name'. */
 int mboxlist_changesub(const char *name, const char *userid, 
 		       struct auth_state *auth_state, int add, int force);
+
+/* get name a file containing subscriptions for 'userid' */
+char *mboxlist_hash_usersubs(const char *userid);
 
 /* set or create quota root */
 int mboxlist_setquota(const char *root, int newquota);

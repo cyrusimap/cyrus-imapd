@@ -31,8 +31,9 @@ docs:
 	for file in ../*.html; \
 	do \
 		echo "=== $$file ==="; \
-		./htmlstrip $$file > `basename $$file .html`; \
+		./htmlstrip $$file > `basename $$file .html` || true; \
 	done
+	@echo "== done =="
 
 htmlstrip: htmlstrip.c
 	$(CC) $(CFLAGS) -o htmlstrip htmlstrip.c

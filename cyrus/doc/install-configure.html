@@ -1,4 +1,4 @@
-<!-- $Id: install-configure.html,v 1.9.4.1 2001/06/21 15:13:44 ken3 Exp $ -->
+<!-- $Id: install-configure.html,v 1.9.4.1.2.1 2001/07/08 15:59:58 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Configuring the IMAP Server
@@ -196,6 +196,12 @@ aren't already there.
    lmtp      2003/tcp
    fud       4201/udp
 </pre>
+
+<p><li><b>Remove "<tt>/etc/[x]inetd.conf</tt>" entries.</b> Any
+<tt>imap</tt>, <tt>imaps</tt>, <tt>pop3</tt>, <tt>pop3s</tt>,
+<tt>kpop</tt>, <tt>lmtp</tt> and <tt>sieve</tt> lines need to be
+removed from <tt>/etc/[x]inetd.conf</tt> and [x]inetd needs to be
+restarted.
 </ol>
 
 <a name="master"><h3>Configuring the Master Process</h3></a>
@@ -404,5 +410,5 @@ authenticate DN (distinguished name) to a SASL authentication
 name.</p>
 
 <P><HR>
-last modified: $Date: 2001/06/21 15:13:44 $
+last modified: $Date: 2001/07/08 15:59:58 $
 </BODY></HTML>

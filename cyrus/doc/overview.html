@@ -64,6 +64,10 @@ Mailboxes</A>
 <li><a href="#quotapartitions">Quotas and Partitions</a>
 </UL>
 <li><a href="#notification">New Mail Notification</a>
+<UL>
+<li><A href="#notificationzephyr">Zephyr</A>
+<li><A href="#notificationunix">Unix Sockets Daemon</A>
+</UL>
 <li><a href="#partitions">Partitions</a>
 <UL>
 <li><a href="#partitionscreate">Specifying Partitions with "<TT>create</TT>"</a>
@@ -532,13 +536,32 @@ quota root can apply to mailboxes in different partitions.
 
 <h2><a name="notification">New Mail Notification</a></h2>
 
-<p>The Cyrus IMAP server comes with an optional notification
-mechanism, for use with the Zephyr notification service.
+<p>The Cyrus IMAP server comes with two optional notification
+mechanisms, for use with either the Zephyr notification service, or a
+custom Unix sockets notification daemon.
+
+<h3><a name="notificationzephyr">Zephyr</a></h3>
 
  <P>If the server software is compiled with the Zephyr notification
 mechanism, then the server sends a Zephyrgram to a user whenever mail
 is delivered to one of that user's mailboxes.  The Zephyrgram is sent
 with a class of "<TT>MAIL</TT>" and an instance of the mailbox name.
+
+<h3><a name="notificationunix">Unix Sockets Daemon</a></h3>
+
+ <P>If the server software is compiled with the custom Unix sockets
+notification daemon mechanism, then the server creates a Unix socket
+connection to <TT>/var/imap/socket/notify</TT> and passes the following
+information (separated by newlines):
+<ol><li>Class</li>
+<li>Instance</li>
+<li>User: The username that the email is being delivered to</li>
+<li>Mailbox: The folder that the email is being delivered to</li>
+<li>Message: The From, To, and Subject headers of the email.</li></ol>
+
+The <TT>contrib/notify_unix</TT> directory has two examples of Perl
+daemons that implement simple notification.  See the <TT>README</TT>
+file located the the same directory for details.
 
 <h2><a name="partitions">Partitions</a></h2>
 

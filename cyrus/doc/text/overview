@@ -52,6 +52,10 @@
           * Quotas and Partitions 
 
       * New Mail Notification 
+
+          * Zephyr 
+          * Unix Sockets Daemon 
+
       * Partitions 
 
           * Specifying Partitions with "create" 
@@ -440,13 +444,33 @@ Quotas and Partitions
 
 New Mail Notification
 
-    The Cyrus IMAP server comes with an optional notification mechanism,
-    for use with the Zephyr notification service. 
+    The Cyrus IMAP server comes with two optional notification mechanisms,
+    for use with either the Zephyr notification service, or a custom Unix
+    sockets notification daemon. 
+
+Zephyr
 
     If the server software is compiled with the Zephyr notification
     mechanism, then the server sends a Zephyrgram to a user whenever mail
     is delivered to one of that user's mailboxes. The Zephyrgram is sent
     with a class of "MAIL" and an instance of the mailbox name. 
+
+Unix Sockets Daemon
+
+    If the server software is compiled with the custom Unix sockets
+    notification daemon mechanism, then the server creates a Unix socket
+    connection to /var/imap/socket/notify and passes the following
+    information (separated by newlines): 
+
+     1. Class 
+     2. Instance 
+     3. User: The username that the email is being delivered to 
+     4. Mailbox: The folder that the email is being delivered to 
+     5. Message: The From, To, and Subject headers of the email.
+
+    The contrib/notify_unix directory has two examples of Perl daemons that
+    implement simple notification. See the README file located the the same
+    directory for details. 
 
 Partitions
 

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.304.2.8.2.5 2001/07/05 19:45:34 ken3 Exp $ */
+/* $Id: imapd.c,v 1.304.2.8.2.6 2001/07/08 15:59:59 ken3 Exp $ */
 
 #include <config.h>
 
@@ -84,6 +84,7 @@
 #include "acapmbox.h"
 #include "idle.h"
 #include "telemetry.h"
+#include "user.h"
 #include "namespace.h"
 
 #include "pushstats.h"		/* SNMP interface */
@@ -1539,6 +1540,8 @@ cmd_authenticate(char *tag,char *authtype)
     int *ssfp;
     char *ssfmsg=NULL;
 
+    char *canon_user;
+
     sasl_result = sasl_server_start(imapd_saslconn, authtype,
 				    NULL, 0,
 				    &serverout, &serveroutlen,
@@ -1602,7 +1605,8 @@ cmd_authenticate(char *tag,char *authtype)
      * mysasl_authproc()
      */
     sasl_result = sasl_getprop(imapd_saslconn, SASL_USERNAME,
-			       (void **) &imapd_userid);
+			       (void **) &canon_user);
+    imapd_userid = xstrdup(canon_user);
     if (sasl_result != SASL_OK) {
 	prot_printf(imapd_out, "%s NO weird SASL error %d SASL_USERNAME\r\n", 
 		    tag, sasl_result);
@@ -3402,6 +3406,9 @@ char *name;
 	}
 	    
 	free(l);
+
+	/* take care of deleting ACLs, subscriptions, seen state and quotas */
+	user_delete(name+5, imapd_userid, imapd_authstate);
     }
 
     if (imapd_mailbox) {

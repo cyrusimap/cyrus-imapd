@@ -1,4 +1,4 @@
-<!-- $Id: install-compile.html,v 1.5 2000/12/20 00:13:36 leg Exp $ -->
+<!-- $Id: install-compile.html,v 1.5.6.1 2001/07/08 15:59:58 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Compiling the IMAP Server
@@ -108,6 +108,9 @@ Currently implemented notification methods are:
 <DT><tt>zephyr</tt>
 <DD>New mail notification through Zephyr.  Specify the location of
 the zephyr installation with "<tt>--with-zephyr=PATH</tt>".
+<DT><tt>unix</tt>
+<DD>New mail notification through a Unix sockets daemon. See overview.html
+for details.
 <DT><tt>no</tt>
 <DD>No new mail notification.
 </dl>
@@ -262,5 +265,5 @@ If you want, you can override the "<tt>make</tt>" variables
 </kbd></pre>
 
 <P><HR>
-last modified: $Date: 2000/12/20 00:13:36 $
+last modified: $Date: 2001/07/08 15:59:58 $
 </BODY></HTML>

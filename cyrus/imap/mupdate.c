@@ -60,6 +60,8 @@ struct conn {
     /* pending changes to send, in reverse order */
     int streaming;
     pthread_mutex_t m;
+    pthread_cond_t cond;
+
     struct pending *plist;
     struct conn *updatelist_next;
 
@@ -831,6 +833,9 @@ void cmd_update(struct conn *C, const char *tag)
     skipnode *ptr;
     struct mbent *m;
 
+    /* initialize my condition variable */
+    pthread_cond_init(&C->cond, NULL);
+
     /* indicate interest in updates */
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
 
@@ -866,9 +871,21 @@ void cmd_update(struct conn *C, const char *tag)
 
     /* start streaming updates */
     for (;;) {
+	struct pending *p;
 
+	pthread_mutex_lock(&C->m);
+	pthread_cond_wait(&C->cond, &C->m);
 
+	/* just grab the update list and release the lock */
+	p = C->plist;
+	C->plist = NULL;
+	pthread_mutex_unlock(&C->m);
 
+	while (p != NULL) {
+	    /* send update */
+	    
+
+	}
     }
 }
 

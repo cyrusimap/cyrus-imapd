@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.10 2001/02/23 22:01:49 leg Exp $
+ * $Id: ipurge.c,v 1.10.4.1 2001/07/08 16:00:00 ken3 Exp $
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -227,10 +227,10 @@ purge_me(char *name, int matchlen, int maycreate) {
   return 0;
 }
 
-void deleteit(struct index_record *the_record, mbox_stats_t *stats)
+void deleteit(bit32 msgsize, mbox_stats_t *stats)
 {
     stats->deleted++;
-    stats->deleted_bytes+=the_record->size;
+    stats->deleted_bytes += msgsize;
 }
 
 /* thumbs up routine, checks date & size and returns yes or no for deletion */
@@ -240,25 +240,30 @@ purge_check(struct mailbox *mailbox, void *deciderock, char *buf) {
   struct index_record *the_record;
   unsigned long       my_time;
   mbox_stats_t *stats = (mbox_stats_t *) deciderock;
+  bit32 senttime;
+  bit32 msgsize;
 
-  the_record = (struct index_record *)buf;
+  senttime = ntohl(*((bit32 *)(buf + OFFSET_SENTDATE)));
+  msgsize = ntohl(*((bit32 *)(buf + OFFSET_SIZE)));
 
   stats->total++;
-  stats->total_bytes+=the_record->size;
+  stats->total_bytes += msgsize;
+
+
 
   if (exact == 1) {
     if (days >= 0) {
       my_time = time(0);
       /*    printf("comparing %ld :: %ld\n", my_time, the_record->sentdate); */
-      if (((my_time - the_record->sentdate)/86400) == (days/86400)) {
-	  deleteit(the_record, stats);
+      if (((my_time - senttime)/86400) == (days/86400)) {
+	  deleteit(msgsize, stats);
 	  return 1;
       }
     }
     if (size >= 0) {
       /* check size */
-      if (the_record->size == size) {
-	  deleteit(the_record, stats);
+      if (msgsize == size) {
+	  deleteit(msgsize, stats);
 	  return 1;
       }
     }
@@ -267,15 +272,15 @@ purge_check(struct mailbox *mailbox, void *deciderock, char *buf) {
     if (days >= 0) {
       my_time = time(0);
       /*    printf("comparing %ld :: %ld\n", my_time, the_record->sentdate); */
-      if ((my_time - the_record->sentdate) > days) {
-	  deleteit(the_record, stats);
+      if ((my_time - senttime) > days) {
+	  deleteit(msgsize, stats);
 	  return 1;
       }
     }
     if (size >= 0) {
       /* check size */
-      if (the_record->size > size) {
-	  deleteit(the_record, stats);
+      if (msgsize > size) {
+	  deleteit(msgsize, stats);
 	  return 1;
       }
     }

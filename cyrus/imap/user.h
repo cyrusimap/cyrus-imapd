@@ -1,5 +1,6 @@
-/* version.h: the version number
- * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
+/* user.h -- User manipulation routines
+ * 
+ * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -36,23 +37,28 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- * $Id: version.h,v 1.102.2.4.2.2 2001/07/08 16:00:02 ken3 Exp $
+ *
+ */
+/*
+ * $Id: user.h,v 1.2.2.1 2001/07/08 16:00:02 ken3 Exp $
  */
 
-#define _CYRUS_VERSION "v2.0.15-HIERSEP-r2"
+#ifndef INCLUDED_USER_H
+#define INCLUDED_USER_H
 
-/* EXTRA_IDENT is a hack to add some version information for which compile
- * was used to build this version (at CMU, but we don't care what you do with
- * it).
- */
+#include "auth.h"
 
-#ifdef EXTRA_IDENT
-#define CYRUS_VERSION _CYRUS_VERSION "-" EXTRA_IDENT
-#else
-#define CYRUS_VERSION _CYRUS_VERSION
+/* Delete meta-data (seen state, subscriptions, ACLs, quota) for 'user' */
+int user_delete(char *user, char *userid, struct auth_state *authstate);
+
+/* Rename/change user meta-data (seen state, subscriptions, ACLs, quota) */
+int user_rename(char *oldmailboxname, char *newmailboxname,
+		char *userid, struct auth_state *authstate);
+
+/* Copy a quota from mailbox 'oldname' to 'newname' */
+int user_copyquota(char *oldname, char *newname);
+
+/* Delete all quota files for 'user' */
+int user_deletequotas(const char *user);
+
 #endif
-
-/* CAPABILITIES are now defined here, not including thread and sasl ones */
-#define CAPABILITY_STRING "IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE " \
-	"UIDPLUS ID NO_ATOMIC_RENAME UNSELECT MULTIAPPEND SORT " \
-	"THREAD=ORDEREDSUBJECT THREAD=REFERENCES"

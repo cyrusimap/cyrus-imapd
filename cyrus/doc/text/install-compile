@@ -91,6 +91,8 @@ Options to configure
             zephyr  New mail notification through Zephyr. Specify the
                     location of the zephyr installation with
                     "--with-zephyr=PATH". 
+            unix    New mail notification through a Unix sockets daemon.
+                    See overview.html for details. 
             no      No new mail notification. 
 
             By default, uses "zephyr" if the Zephyr libraries are

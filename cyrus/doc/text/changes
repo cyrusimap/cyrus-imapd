@@ -1,5 +1,19 @@
                    Changes to the Cyrus IMAP Server
 
+Changes to the Cyrus IMAP Server since 2.0.14
+
+      * fixed memory management bugs in imapd, lmtpd that were being hit
+        due to the connection reuse code and causing subtle and annoying
+        problems. 
+      * we now clean up better when deleting a user 
+      * fixed an endian bug in ipurge 
+      * pop3d now can also reuse processes. 
+      * fix a bug in imclient that would strike when cyradm specifies a
+        mechanism on the command-line. (SASL mechanism names aren't case
+        sensitive.) 
+      * fix some bugs in handling SIGHUP in master 
+      * fix a couple of goofs in Admin.pm 
+
 Changes to the Cyrus IMAP Server since 2.0.13
 
       * fixed a silly bug with reusing SSL connections 

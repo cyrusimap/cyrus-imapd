@@ -86,6 +86,8 @@ AC_ARG_WITH(AFS,
  	  LDFLAGS="$cmu_save_LDFLAGS ${AFS_LIB_FLAGS}"
                         
           AC_CHECK_HEADER(afs/stds.h)
+	  AFS_CLIENT_LIBS_STATIC="${AFS_LIB_DIR}/afs/libvolser.a ${AFS_LIB_DIR}/afs/libvldb.a ${AFS_LIB_DIR}/afs/libkauth.a ${AFS_LIB_DIR}/afs/libprot.a ${AFS_LIB_DIR}/libubik.a ${AFS_LIB_DIR}/afs/libauth.a ${AFS_LIB_DIR}/librxkad.a ${AFS_LIB_DIR}/librx.a ${AFS_LIB_DIR}/afs/libsys.a ${AFS_LIB_DIR}/librx.a ${AFS_LIB_DIR}/liblwp.a ${AFS_LIB_DIR}/libdes.a ${AFS_LIB_DIR}/afs/libcmd.a ${AFS_LIB_DIR}/afs/libcom_err.a ${AFS_LIB_DIR}/afs/util.a"
+          AFS_KTC_LIBS_STATIC="${AFS_LIB_DIR}/afs/libauth.a ${AFS_LIB_DIR}/afs/libsys.a ${AFS_LIB_DIR}/librx.a ${AFS_LIB_DIR}/liblwp.a ${AFS_LIB_DIR}/libdes.a ${AFS_LIB_DIR}/afs/libcom_err.a ${AFS_LIB_DIR}/afs/util.a"
 	  AFS_CLIENT_LIBS="-lvolser -lvldb -lkauth -lprot -lubik -lauth -lrxkad -lrx ${AFS_LIB_DIR}/afs/libsys.a -lrx -llwp -ldes -lcmd -lcom_err ${AFS_LIB_DIR}/afs/util.a"
 	  AFS_RX_LIBS="-lauth -lrxkad -lrx ${AFS_LIB_DIR}/afs/libsys.a -lrx -llwp -ldes -lcmd -lcom_err ${AFS_LIB_DIR}/afs/util.a"
           AFS_KTC_LIBS="-lauth ${AFS_LIB_DIR}/afs/libsys.a -lrx -llwp -ldes -lcom_err ${AFS_LIB_DIR}/afs/util.a"
@@ -152,6 +154,8 @@ extern int UV_SetSecurity();],
              AFS_BSD_LIB="-lBSD"
           fi
           if test "X$AFS_BSD_LIB" != "X" ; then
+                AFS_CLIENT_LIBS_STATIC="$AFS_CLIENT_LIBS_STATIC $AFS_BSD_LIB"
+                AFS_KTC_LIBS_STATIC="$AFS_KTC_LIBS_STATIC $AFS_BSD_LIB"
                 AFS_CLIENT_LIBS="$AFS_CLIENT_LIBS $AFS_BSD_LIB"
                 AFS_RX_LIBS="$AFS_CLIENT_LIBS $AFS_BSD_LIB"
                 AFS_KTC_LIBS="$AFS_KTC_LIBS $AFS_BSD_LIB"
@@ -161,6 +165,8 @@ extern int UV_SetSecurity();],
           if test "X$ac_cv_func_des_pcbc_init" != "Xyes"; then
            AC_CHECK_LIB(descompat, des_pcbc_init, AFS_DESCOMPAT_LIB="-ldescompat")
            if test "X$AFS_DESCOMPAT_LIB" != "X" ; then
+                AFS_CLIENT_LIBS_STATIC="$AFS_CLIENT_LIBS_STATIC $AFS_DESCOMPAT_LIB"
+                AFS_KTC_LIBS_STATIC="$AFS_KTC_LIBS_STATIC $AFS_DESCOMPAT_LIB"
                 AFS_CLIENT_LIBS="$AFS_CLIENT_LIBS $AFS_DESCOMPAT_LIB"
                 AFS_KTC_LIBS="$AFS_KTC_LIBS $AFS_DESCOMPAT_LIB"
            else
@@ -202,6 +208,7 @@ extern int UV_SetSecurity();],
              [afsconf_SuperUser();],AFS_AUDIT_LIB="yes")
              if test "X$AFS_AUDIT_LIB" = "Xyes"; then
                  AC_MSG_RESULT([yes])
+	         AFS_CLIENT_LIBS_STATIC="${AFS_LIB_DIR}/afs/libvolser.a ${AFS_LIB_DIR}/afs/libvldb.a ${AFS_LIB_DIR}/afs/libkauth.a ${AFS_LIB_DIR}/afs/libprot.a ${AFS_LIB_DIR}/libubik.a ${AFS_LIB_DIR}/afs/libauth.a ${AFS_LIB_DIR}/afs/libaudit.a ${AFS_LIB_DIR}/librxkad.a ${AFS_LIB_DIR}/librx.a ${AFS_LIB_DIR}/afs/libsys.a ${AFS_LIB_DIR}/librx.a ${AFS_LIB_DIR}/liblwp.a ${AFS_LIB_DIR}/libdes.a ${AFS_LIB_DIR}/afs/libcmd.a ${AFS_LIB_DIR}/afs/libcom_err.a ${AFS_LIB_DIR}/afs/util.a"
                  AFS_CLIENT_LIBS="-lvolser -lvldb -lkauth -lprot -lubik -lauth -laudit -lrxkad -lrx ${AFS_LIB_DIR}/afs/libsys.a -lrx -llwp -ldes -lcmd -lcom_err ${AFS_LIB_DIR}/afs/util.a $AFS_BSD_LIB $AFS_DESCOMPAT_LIB"
                  AFS_RX_LIBS="-lauth -laudit -lrxkad -lrx ${AFS_LIB_DIR}/afs/libsys.a -lrx -llwp -ldes -lcmd -lcom_err ${AFS_LIB_DIR}/afs/util.a $AFS_BSD_LIB $AFS_DESCOMPAT_LIB"
              else
@@ -252,6 +259,8 @@ ac_cv_afs_int32=yes, ac_cv_afs_int32=no)])
           LIBS="${cmu_save_LIBS}"
 	  AC_DEFINE(AFS_ENV)
           AC_DEFINE(AFS)
+          AC_SUBST(AFS_CLIENT_LIBS_STATIC)
+          AC_SUBST(AFS_KTC_LIBS_STATIC)
           AC_SUBST(AFS_CLIENT_LIBS)
           AC_SUBST(AFS_RX_LIBS)
           AC_SUBST(AFS_KTC_LIBS)

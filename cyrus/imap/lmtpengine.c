@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.25 2001/04/11 18:42:23 leg Exp $
+ * $Id: lmtpengine.c,v 1.25.4.1 2001/07/08 16:00:00 ken3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1405,10 +1405,16 @@ void lmtpmode(struct lmtp_func *func,
 		prot_printf(pout, "250 2.0.0 ok\r\n");
 
 	      rset:
-		msg_free(msg);
+		if (msg) msg_free(msg);
 		msg_new(&msg);
-		if (authuser) free(authuser);
-		if (authstate) auth_freestate(authstate);
+		if (authuser) {
+		    free(authuser);
+		    authuser = NULL;
+		}
+		if (authstate) {
+		    auth_freestate(authstate);
+		    authstate = NULL;
+		}
 		
 		continue;
 	    }
