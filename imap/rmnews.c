@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 /*
- * $Id: rmnews.c,v 1.16 1998/08/07 06:51:41 tjs Exp $
+ * $Id: rmnews.c,v 1.17 1999/04/08 21:04:27 tjs Exp $
  */
 
 #include <stdio.h>
@@ -39,7 +39,7 @@
 #include "config.h"
 #include "imap_err.h"
 #include "mailbox.h"
-#include "sysexits.h"
+#include "exitcodes.h"
 #include "xmalloc.h"
 
 extern int errno;
@@ -69,7 +69,7 @@ char **argv;
 
     config_init("rmnews");
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
     newsprefix = config_getstring("newsprefix", 0);
     if (newsprefix) newsprefixlen = strlen(newsprefix);
@@ -77,7 +77,7 @@ char **argv;
     newspartition = config_getstring("partition-news", 0);
     if (!newspartition) {
 	fatal("partition-news option not specified in configuration file",
-	      EX_CONFIG);
+	      EC_CONFIG);
     }
 
     /* only allow setuid/setgid from news user */
@@ -196,7 +196,7 @@ struct uidlist *uidlist;
 	strcat(buf, dir);
 	if (chdir(buf)) {
 	    syslog(LOG_ERR, "IOERROR: changing dir to %s: %m", dir);
-	    fatal("cannot change dir to newsgroup", EX_IOERR);
+	    fatal("cannot change dir to newsgroup", EC_IOERR);
 	}
 	for (i = uidlist->first; i < uidlist->last; i++) {
 	    sprintf(buf, "%u", i);
@@ -211,7 +211,7 @@ struct uidlist *uidlist;
 
     if (chdir(mailbox.path)) {
 	syslog(LOG_ERR, "IOERROR: changing dir to %s: %m", mailbox.path);
-	fatal("cannot change dir to mailbox for newsgroup", EX_IOERR);
+	fatal("cannot change dir to mailbox for newsgroup", EC_IOERR);
     }
 
     r = mailbox_expunge(&mailbox, 1, expungeuidlist, (char *)uidlist);

@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.169 1999/04/01 21:41:53 tjs Exp $ */
+/* $Id: imapd.c,v 1.170 1999/04/08 21:04:22 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -52,7 +52,7 @@
 #include "charset.h"
 #include "imparse.h"
 #include "mkgmtime.h"
-#include "sysexits.h"
+#include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "imapd.h"
@@ -181,7 +181,7 @@ char **envp;
 
     signal(SIGPIPE, SIG_IGN);
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
     /* Find out name of client host */
     salen = sizeof(imapd_remoteaddr);
@@ -220,7 +220,7 @@ usage()
 {
     prot_printf(imapd_out, "* BYE usage: imapd\r\n");
     prot_flush(imapd_out);
-    exit(EX_USAGE);
+    exit(EC_USAGE);
 }
 
 /*

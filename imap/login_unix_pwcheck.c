@@ -1,5 +1,5 @@
 /* login_unix_pwcheck.c -- Unix pwcheck daemon login authentication
- $Id: login_unix_pwcheck.c,v 1.12 1998/05/15 21:49:01 neplokh Exp $
+ $Id: login_unix_pwcheck.c,v 1.13 1999/04/08 21:04:25 tjs Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -36,7 +36,7 @@
 #include "sasl.h"
 #include "retry.h"
 #include "config.h"
-#include "sysexits.h"
+#include "exitcodes.h"
 #include "mailbox.h"
 #include "imapd.h"
 

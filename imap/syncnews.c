@@ -27,7 +27,7 @@
  */
 
 /*
- * $Id: syncnews.c,v 1.11 1999/03/02 02:01:16 tjs Exp $
+ * $Id: syncnews.c,v 1.12 1999/04/08 21:04:28 tjs Exp $
  */
 
 #include <stdio.h>
@@ -42,7 +42,7 @@
 #include "assert.h"
 #include "config.h"
 #include "xmalloc.h"
-#include "sysexits.h"
+#include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"
 
@@ -67,7 +67,7 @@ char **argv;
 
     config_init("syncnews");
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
     while ((opt = getopt(argc, argv, "")) != EOF) {
 	switch (opt) {
@@ -87,7 +87,7 @@ char **argv;
 usage()
 {
     fprintf(stderr, "usage: syncnews active\n");
-    exit(EX_USAGE);
+    exit(EC_USAGE);
 }    
 
 #define GROUPGROW 300
@@ -126,7 +126,7 @@ char *active;
     if (!active_file) {
 	perror(active);
 	syslog(LOG_ERR, "cannot read active file %s: %m", active);
-	exit(EX_NOINPUT);
+	exit(EC_NOINPUT);
     }
 
     while (fgets(buf, sizeof(buf), active_file)) {
@@ -167,14 +167,14 @@ char *active;
     if (ferror(active_file)) {
 	fprintf(stderr, "syncnews: error reading active file\n");
 	syslog(LOG_ERR, "error reading active file");
-	exit(EX_DATAERR);
+	exit(EC_DATAERR);
     }
     fclose(active_file);
 
     if (group_num == 0) {
 	fprintf(stderr, "syncnews: no groups in active file\n");
 	syslog(LOG_ERR, "no groups in active file");
-	exit(EX_DATAERR);
+	exit(EC_DATAERR);
     }
 
     qsort(group, group_num, sizeof(char *), compare_group);
@@ -183,7 +183,7 @@ char *active;
   badactive:
     fprintf(stderr, "syncnews: bad line %d in active file\n", lineno);
     syslog(LOG_ERR, "bad line %d in active file", lineno);
-    exit(EX_DATAERR);
+    exit(EC_DATAERR);
     
 }
 
