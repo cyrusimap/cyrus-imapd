@@ -1,7 +1,7 @@
 .\" -*- nroff -*-
-.TH TIMSIEVED 8 "Project Cyrus" CMU
+.TH LMTPD 8 "Project Cyrus" CMU
 .\" 
-.\" Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
+.\" Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
 .\"
 .\" Redistribution and use in source and binary forms, with or without
 .\" modification, are permitted provided that the following conditions
@@ -40,24 +40,30 @@
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
 .SH NAME
-timsieved \- CMU hack for getting sieve scripts onto the server
+lmtpd \- LMTP server process
 .SH SYNOPSIS
-.B timsieved
+.B lmtpd
+[
+.B \-a
+]
 .SH DESCRIPTION
-.I timsieved
-is a server that allows users to remotly manage their sieve scripts kept on the server.
+.I Lmtpd
+is an LMTP server used to deliver mail to the IMAP mailstore.
 It accepts commands on its standard input and responds on its standard output.
 It MUST be invoked by
 .IR master (8)
 with those descriptors attached to a remote client connection.
 .PP
-.I timsieved
+.I Lmtpd
 reads its configuration options out of the
 .IR imapd.conf (5)
 file.
-.PP
 .SH OPTIONS
 .TP
+.BI \-a
+Preauthorize connections initiated on internet socket, instead of
+requiring LMTP AUTH.  This should only be used for connections coming
+from trusted hosts.
 .SH FILES
 .TP
 .B /etc/imapd.conf
