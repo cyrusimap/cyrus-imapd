@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.286 2004/05/28 18:03:00 rjs3 Exp $
+dnl $Id: configure.in,v 1.287 2004/06/22 17:05:50 rjs3 Exp $
 dnl
 
 
@@ -97,6 +97,7 @@ AC_SYS_LONG_FILE_NAMES
 if test $ac_cv_sys_long_file_names = no; then
 	AC_MSG_ERROR(The Cyrus IMAPD requires support for long file names)
 fi
+AC_C_INLINE
 
 CMU_C___ATTRIBUTE__
 CMU_C_FPIC
@@ -186,7 +187,7 @@ case "$with_bdb" in
   *)
 	use_berkeley="yes"
 	with_bdb_lib="$with_bdb/lib"
-	with_bdb_inc="$with_bdbval/include"
+	with_bdb_inc="$with_bdb/include"
 	;;
 esac
 
@@ -1012,7 +1013,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.286 2004/05/28 18:03:00 rjs3 Exp $ */
+/* $Id: configure.in,v 1.287 2004/06/22 17:05:50 rjs3 Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
