@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.231 2004/01/31 15:24:12 ken3 Exp $
+ * $Id: mboxlist.c,v 1.232 2004/02/26 22:55:32 rjs3 Exp $
  */
 
 #include <config.h>
@@ -925,7 +925,7 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 	if (!isadmin) { r = IMAP_PERMISSION_DENIED; goto done; }
     }
 
-    r = mboxlist_mylookup(name, &mbtype, &path, NULL, &acl, NULL, 1);
+    r = mboxlist_mylookup(name, &mbtype, &path, NULL, &acl, &tid, 1);
     switch (r) {
     case 0:
 	break;
