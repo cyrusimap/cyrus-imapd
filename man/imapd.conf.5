@@ -85,9 +85,14 @@ implements a less liberal policy, it needs to change this parameter
 accordingly.
 .IP "\fBadmins:\fR <none>" 5
 The list of userids with administrative rights.  Separate each userid
-with a space. We recommend that administrator userids be separate from
-standard userids.  Sites using Kerberos authentication may use
+with a space.  Sites using Kerberos authentication may use
 separate "admin" instances.
+.PP
+Note that accounts used by users should not be administrators.  Administrative 
+accounts should not receive mail.  That is, if user "jbRo" is a user reading
+mail, he should not also be in the admins line.  Some problems may occur
+otherwise, most notably  the ability of administrators to create top-level
+mailboxes visible to users, but not writable by users.
 .IP "\fBimspservers:\fR <none>" 5
 The list of the host names of the mail domain's IMSP servers.
 Separate each host name with a space.  The Kerberos identities of
