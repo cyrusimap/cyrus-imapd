@@ -43,6 +43,10 @@ char **argv;
     int n;
     char buf[4096];
 
+    /* Renounce setuid if not invoked by root or daemon */
+    n = getuid();
+    if (n != 0 && n != 1) setuid(n);
+
     config_init("deliver");
 
     while ((opt = getopt(argc, argv, "df:r:m:a:i:F:I:")) != EOF) {
