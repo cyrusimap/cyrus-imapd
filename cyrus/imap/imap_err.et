@@ -74,8 +74,8 @@ ec IMAP_MESSAGE_NOBLANKLINE,
    "Message has no header/body separator"
 
 # IMAP4 requires this protocol error be a NO instead of a BAD
-ec IMAP_SMALL_LITERAL,
-   "Size of literal too small"
+ec IMAP_ZERO_LITERAL,
+   "Zero-length literal not permitted"
 
 # Following only used for internationalization of error messages
 
