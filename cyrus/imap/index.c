@@ -1614,7 +1614,6 @@ char *rock;
 		   copyargs->msgalloc * sizeof(struct copymsg));
     }
 
-    copyargs->copymsg[copyargs->nummsg].msgno = msgno;
     copyargs->copymsg[copyargs->nummsg].uid = UID(msgno);
     copyargs->copymsg[copyargs->nummsg].internaldate = INTERNALDATE(msgno);
     copyargs->copymsg[copyargs->nummsg].size = SIZE(msgno);

@@ -2,7 +2,6 @@
  * Description of messages to be copied
  */
 struct copymsg {
-    int msgno;
     unsigned long uid;
     time_t internaldate;
     unsigned long size;

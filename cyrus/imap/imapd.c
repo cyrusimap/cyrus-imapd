@@ -377,6 +377,26 @@ cmdloop()
 	    else goto badcmd;
 	    break;
 
+	case 'R':
+	    if (!strcmp(cmd.s, "Rename")) {
+		havepartition = 0;
+		if (c != ' ') goto missingargs;
+		c = getastring(&arg1);
+		if (c != ' ') goto missingargs;
+		c = getastring(&arg2);
+		if (c == EOF) goto missingargs;
+		if (c == ' ') {
+		    havepartition = 1;
+		    c = getword(&arg3);
+		    if (!isatom(arg3.s)) goto badpartition;
+		}
+		if (c == '\r') c = getc(stdin);
+		if (c != '\n') goto extraargs;
+		cmd_rename(tag.s, arg1.s, arg2.s, havepartition ? arg3.s : 0);
+	    }
+	    else goto badcmd;
+	    break;
+	    
 	case 'S':
 	    if (!strcmp(cmd.s, "Store")) {
 		if (!imapd_mailbox) goto nomailbox;
@@ -636,7 +656,7 @@ char *name;
 	    goto freeflags;
 	}
     }
-    else if (c != ' ') {
+    else if (arg.s[0] != '{') {
 	printf("%s BAD Missing required argument to Append command\r\n",
 	       tag);
 	if (c != '\n') eatline();
@@ -669,9 +689,13 @@ char *name;
     }
     if (r) {
 	printf("%s NO %sAppend to %s failed: %s\r\n",
-	       tag, r == IMAP_MAILBOX_NONEXISTENT ? "[TRYCREATE] " : "",
+	       tag,
+	       (r == IMAP_MAILBOX_NONEXISTENT &&
+		mboxlist_createmailboxcheck(name, 0, imapd_userisadmin,
+					    imapd_userid, (char **)0,
+					    (char **)0) == 0)
+	       ? "[TRYCREATE] " : "",
 	       beautify_string(name), error_message(r));
-	/* XXX check create permissions for [TRYCREATE] */
 	goto freeflags;
     }
 
@@ -1534,7 +1558,7 @@ char *tag;
 
     if (!(imapd_mailbox->myrights & ACL_DELETE)) r = IMAP_PERMISSION_DENIED;
     else {
-	r = mailbox_expunge(imapd_mailbox, (int (*)())0, (char *)0);
+	r = mailbox_expunge(imapd_mailbox, 1, (int (*)())0, (char *)0);
     }
 
     index_check(imapd_mailbox, 0, 0);
@@ -1565,6 +1589,10 @@ char *partition;
     r = mboxlist_createmailbox(name, MAILBOX_FORMAT_NORMAL, partition,
 			       imapd_userisadmin, imapd_userid);
 
+    if (imapd_mailbox) {
+	index_check(imapd_mailbox, 0, 0);
+    }
+
     if (r) {
 	printf("%s NO Create failed: %s\r\n", tag, error_message(r));
     }
@@ -1584,11 +1612,46 @@ char *name;
 
     r = mboxlist_deletemailbox(name, imapd_userisadmin, imapd_userid, 1);
 
+    if (imapd_mailbox) {
+	index_check(imapd_mailbox, 0, 0);
+    }
+
     if (r) {
 	printf("%s NO Delete failed: %s\r\n", tag, error_message(r));
     }
     else {
 	printf("%s OK Delete completed\r\n", tag);
+    }
+}	
+
+/*
+ * Perform a RENAME command
+ */
+cmd_rename(tag, oldname, newname, partition)
+char *tag;
+char *oldname;
+char *newname;
+char *partition;
+{
+    int r;
+
+    if (partition && !imapd_userisadmin) {
+	printf("%s NO Only administrators may specify partition\r\n", tag);
+	return;
+    }
+
+    r = mboxlist_renamemailbox(oldname, newname, partition,
+			       imapd_userisadmin, imapd_userid);
+
+    if (imapd_mailbox) {
+	index_check(imapd_mailbox, 0, 0);
+    }
+
+    if (r) {
+	printf("%s NO Rename failed: %s\r\n", tag, error_message(r));
+    }
+    else {
+	printf("%s OK Rename completed\r\n", tag);
     }
 }	
 

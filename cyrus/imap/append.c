@@ -262,8 +262,7 @@ char *userid;
     unsigned long quota_usage = 0;
     char fname[MAX_MAILBOX_PATH];
     FILE *srcfile, *destfile;
-    char buf[4096];
-    int n, r;
+    int r;
     long last_cacheoffset;
     int writeheader = 0;
     int flag, userflag, emptyflag;
@@ -291,34 +290,10 @@ char *userid;
 	    strcat(fname, "/");
 	    strcat(fname, mailbox_message_fname(mailbox,
 						message_index[msg].uid));
-	    if (link(mailbox_message_fname(mailbox, copymsg[msg].uid),
-		     fname)) {
-		/* Link failed, have to copy */
-		destfile = fopen(fname, "w");
-		if (!destfile) {
-		    r = IMAP_IOERROR;
-		    goto fail;
-		}
-		srcfile = fopen(mailbox_message_fname(mailbox, copymsg[msg].uid), "r");
-		if (!srcfile) {
-		    fclose(destfile);
-		    r = IMAP_IOERROR;
-		    goto fail;
-		}
-
-		while (n = fread(buf, 1, sizeof(buf), srcfile)) {
-		    fwrite(buf, 1, n, destfile);
-		}
-		fflush(destfile);
-		if (ferror(destfile) || fsync(fileno(destfile))) {
-		    fclose(srcfile);
-		    fclose(destfile);
-		    r = IMAP_IOERROR;
-		    goto fail;
-		}
-		fclose(srcfile);
-		fclose(destfile);
-	    }
+	    r = mailbox_copyfile(mailbox_message_fname(mailbox,
+						       copymsg[msg].uid),
+				  fname);
+	    if (r) goto fail;
 
 	    /* Write out cache info, copy other info */
 	    message_index[msg].cache_offset = ftell(mailbox->cache);
