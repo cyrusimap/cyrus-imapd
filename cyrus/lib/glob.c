@@ -42,7 +42,7 @@
  * Start Date: 4/5/93
  */
 /*
- * $Id: glob.c,v 1.25 2003/02/13 20:15:40 rjs3 Exp $
+ * $Id: glob.c,v 1.25.2.1 2003/12/01 19:18:48 rjs3 Exp $
  */
 
 #include <config.h>
@@ -213,7 +213,8 @@ int glob_test (g, ptr, len, min)
     const char *ghier, *phier;	/* pointers for '%' patterns */
     const char *start;		/* start of input string */
     int newglob;
-
+    int firsttime = 1;
+    
     /* check for remaining partial matches */
     if (min && *min < 0) return (-1);
 
@@ -248,13 +249,22 @@ int glob_test (g, ptr, len, min)
 	ghier = g->ghier;
 	gptr = g->gptr;
     }
-    
+
     /* main globbing loops */
     if (!(g->flags & GLOB_ICASE)) {
 	/* case sensitive version */
 
+	printf("%c %c\n", ghier ? *ghier : '-', gstar ? *gstar : '-');
+
 	/* loop to manage wildcards */
 	do {
+	    /* reset hierarchy state */
+	    if(firsttime) {
+		firsttime = 0;
+	    } else {
+		ghier = NULL;
+	    }
+
 	    /* see if we match to the next '%' or '*' wildcard */
 	    while (*gptr != '*' && *gptr != '%' && ptr != pend
 		   && (*gptr == *ptr || (!newglob && *gptr == '?'))) {
