@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- $Id: mailbox.h,v 1.45 1998/05/15 21:49:09 neplokh Exp $
+ $Id: mailbox.h,v 1.46 1998/08/07 06:49:03 tjs Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -43,7 +43,7 @@
 #include "auth.h"
 
 #ifdef __STDC__
-#define BIT32_MAX 4294967295u
+#define BIT32_MAX 4294967295U
 #else
 #define BIT32_MAX 4294967295
 #endif
