@@ -1,6 +1,6 @@
 /* message.c -- message parsing functions
  * Larry Greenfield
- * $Id: message.c,v 1.2 1999/07/31 21:49:40 leg Exp $
+ * $Id: message.c,v 1.3 1999/12/23 18:44:49 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -180,7 +180,8 @@ int do_discard(action_list_t *a)
     return 0;
 }
 
-int do_vacation(action_list_t *a, char *addr, char *subj, char *msg, int days,
+int do_vacation(action_list_t *a, char *addr, char *fromaddr,
+		char *subj, char *msg, int days,
 		int mime)
 {
     action_list_t *b = NULL;
@@ -200,6 +201,7 @@ int do_vacation(action_list_t *a, char *addr, char *subj, char *msg, int days,
 	return -1;
     a->a = ACTION_VACATION;
     a->u.vac.addr = addr;
+    a->u.vac.fromaddr = fromaddr;
     a->u.vac.subj = subj;	/* user specified subject */
     a->u.vac.msg = msg;
     a->u.vac.days = days;
@@ -321,6 +323,7 @@ void free_action_list(action_list_t *a)
 	switch (a->a) {
 	case ACTION_VACATION:
 	    if (a->u.vac.addr) free(a->u.vac.addr);
+	    if (a->u.vac.fromaddr) free(a->u.vac.addr);
 	    if (a->u.vac.subj) free(a->u.vac.subj);
 	    break;
 
