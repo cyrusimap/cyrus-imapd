@@ -1,4 +1,4 @@
-dnl $Id: berkdb.m4,v 1.3 2002/05/25 19:57:41 leg Exp $
+dnl $Id: berkdb.m4,v 1.4 2002/08/15 00:12:21 cg2v Exp $
 
 AC_DEFUN(CMU_DB_INC_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
@@ -32,28 +32,43 @@ AC_DEFUN(CMU_DB_INC_WHERE, [
 # Test for lib files
 #
 
-AC_DEFUN(CMU_DB_LIB_WHERE1, [
+AC_DEFUN(CMU_DB3_LIB_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
 AC_REQUIRE([CMU_AFS])
 AC_REQUIRE([CMU_KRB4])
 saved_LIBS=$LIBS
-if test "$enable_db4" = "yes"; then
-  LIBS="$saved_LIBS -L$1 -ldb-4"
-else
   LIBS="$saved_LIBS -L$1 -ldb-3"
-fi
 AC_TRY_LINK(,
 [db_env_create();],
-[ac_cv_found_db_lib=yes],
-ac_cv_found_db_lib=no)
+[ac_cv_found_db_3_lib=yes],
+ac_cv_found_db_3_lib=no)
+LIBS=$saved_LIBS
+])
+AC_DEFUN(CMU_DB4_LIB_WHERE1, [
+AC_REQUIRE([AC_PROG_CC_GNU])
+AC_REQUIRE([CMU_AFS])
+AC_REQUIRE([CMU_KRB4])
+saved_LIBS=$LIBS
+LIBS="$saved_LIBS -L$1 -ldb-4"
+AC_TRY_LINK(,
+[db_env_create();],
+[ac_cv_found_db_4_lib=yes],
+ac_cv_found_db_4_lib=no)
 LIBS=$saved_LIBS
 ])
 
 AC_DEFUN(CMU_DB_LIB_WHERE, [
    for i in $1; do
       AC_MSG_CHECKING(for db libraries in $i)
-      CMU_DB_LIB_WHERE1($i)
-      CMU_TEST_LIBPATH($i, db)
+if test "$enable_db4" = "yes"; then
+      CMU_DB4_LIB_WHERE1($i)
+      CMU_TEST_LIBPATH($i, [db-4])
+      ac_cv_found_db_lib=$ac_cv_found_db_4_lib
+else
+      CMU_DB3_LIB_WHERE1($i)
+      CMU_TEST_LIBPATH($i, [db-3])
+      ac_cv_found_db_lib=$ac_cv_found_db_3_lib
+fi
       if test "$ac_cv_found_db_lib" = "yes" ; then
         ac_cv_db_where_lib=$i
         AC_MSG_RESULT(found)
