@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.44 2002/08/07 18:38:33 rjs3 Exp $
+ * $Id: pop3proxyd.c,v 1.45 2002/08/10 12:57:02 rjs3 Exp $
  */
 #include <config.h>
 
@@ -81,6 +81,7 @@
 #include "version.h"
 #include "xmalloc.h"
 #include "mboxlist.h"
+#include "telemetry.h"
 
 #ifdef HAVE_KRB
 /* kerberos des is purported to conflict with OpenSSL DES */
