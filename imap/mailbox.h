@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- $Id: mailbox.h,v 1.65 2002/02/13 22:08:50 rjs3 Exp $
+ $Id: mailbox.h,v 1.66 2002/03/30 19:46:56 ken3 Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -71,7 +71,7 @@ typedef unsigned short bit32;
 #define MAILBOX_FORMAT_NORMAL	0
 #define MAILBOX_FORMAT_NETNEWS	1
 
-#define MAILBOX_MINOR_VERSION	3
+#define MAILBOX_MINOR_VERSION	4
 
 #define FNAME_HEADER "/cyrus.header"
 #define FNAME_INDEX "/cyrus.index"
@@ -146,6 +146,11 @@ struct mailbox {
     unsigned long flagged;
     int dirty;
 
+    int pop3_new_uidl;
+
+    /* future expansion -- won't need expand the header */
+    unsigned long spares[4];
+
     struct quota quota;
 };
 
@@ -177,6 +182,11 @@ struct index_record {
 #define OFFSET_DELETED 44	/* added for ACAP */
 #define OFFSET_ANSWERED 48
 #define OFFSET_FLAGGED 52
+#define OFFSET_POP3_NEW_UIDL 56	/* added for Outlook stupidity */
+#define OFFSET_SPARE0 60
+#define OFFSET_SPARE1 64
+#define OFFSET_SPARE2 68
+#define OFFSET_SPARE3 72
 
 /* Offsets of index_record fields in index file */
 #define OFFSET_UID 0
@@ -190,7 +200,7 @@ struct index_record {
 #define OFFSET_SYSTEM_FLAGS 32
 #define OFFSET_USER_FLAGS 36
 
-#define INDEX_HEADER_SIZE (OFFSET_FLAGGED+4)
+#define INDEX_HEADER_SIZE (OFFSET_SPARE3+4)
 #define INDEX_RECORD_SIZE (OFFSET_USER_FLAGS+MAX_USER_FLAGS/8)
 
 #define FLAG_ANSWERED (1<<0)

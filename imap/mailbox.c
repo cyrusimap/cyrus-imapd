@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.119 2002/02/19 18:50:13 ken3 Exp $
+ $Id: mailbox.c,v 1.120 2002/03/30 19:46:54 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -103,6 +103,7 @@ static int mailbox_doing_reconstruct = 0;
                          (m).cache_fd = -1; }
 
 static int mailbox_calculate_flagcounts(struct mailbox *mailbox);
+static int mailbox_upgrade_index(struct mailbox *mailbox);
 
 /*
  * Names of the headers we cache in the cyrus.cache file.
@@ -617,6 +618,7 @@ int mailbox_read_acl(struct mailbox *mailbox,
 int mailbox_read_index_header(struct mailbox *mailbox)
 {
     struct stat sbuf;
+    int upgrade = 0;
 
     if (mailbox->index_fd == -1) return IMAP_MAILBOX_BADFORMAT;
 
@@ -676,8 +678,7 @@ int mailbox_read_index_header(struct mailbox *mailbox)
 	if (mailbox_calculate_flagcounts(mailbox))
 	    return IMAP_IOERROR;
 	
-	/* things might have been changed out from under us. reread */
-	mailbox_open_index(mailbox); 
+	upgrade = 1;
     } else {
 	mailbox->deleted = 
 	    ntohl(*((bit32 *)(mailbox->index_base+OFFSET_DELETED)));
@@ -686,6 +687,23 @@ int mailbox_read_index_header(struct mailbox *mailbox)
 	mailbox->flagged = 
 	    ntohl(*((bit32 *)(mailbox->index_base+OFFSET_FLAGGED)));
 	mailbox->dirty = 0;
+    }
+
+    if (mailbox->start_offset < OFFSET_POP3_NEW_UIDL+sizeof(bit32)) {
+	mailbox->pop3_new_uidl = !mailbox->exists;
+	upgrade = 1;
+    }
+    else {
+	mailbox->pop3_new_uidl = !mailbox->exists ||
+	    ntohl(*((bit32 *)(mailbox->index_base+OFFSET_POP3_NEW_UIDL)));
+    }
+
+    if (upgrade) {
+	if (mailbox_upgrade_index(mailbox))
+	    return IMAP_IOERROR;
+
+	/* things might have been changed out from under us. reread */
+	return mailbox_open_index(mailbox); 
     }
 
     if (!mailbox_doing_reconstruct &&
@@ -1119,6 +1137,7 @@ int mailbox_write_index_header(struct mailbox *mailbox)
     *((bit32 *)(buf+OFFSET_DELETED)) = htonl(mailbox->deleted);
     *((bit32 *)(buf+OFFSET_ANSWERED)) = htonl(mailbox->answered);
     *((bit32 *)(buf+OFFSET_FLAGGED)) = htonl(mailbox->flagged);
+    *((bit32 *)(buf+OFFSET_POP3_NEW_UIDL)) = htonl(mailbox->pop3_new_uidl);
 
     if (mailbox->start_offset < header_size)
 	header_size = mailbox->start_offset;
@@ -1330,11 +1349,10 @@ struct quota *quota;
 }
 
 /*
- * Lock the index file for 'mailbox'.  DON'T Reread index file header if necessary.
+ * Lock the index file for 'mailbox'.
+ * DON'T Reread index file header if necessary.
  */
-int
-mailbox_lock_index_forcalc(mailbox)
-struct mailbox *mailbox;
+static int mailbox_lock_index_for_upgrade(struct mailbox *mailbox)
 {
     char fnamebuf[MAX_MAILBOX_PATH];
     struct stat sbuffd, sbuffile;
@@ -1377,30 +1395,23 @@ struct mailbox *mailbox;
 }
 
 /*
- * Calculate the number of messages in the mailbox with answered/deleted/flagged system
- * flags
+ * Upgrade the index header for 'mailbox'
  */
-
-static int mailbox_calculate_flagcounts(struct mailbox *mailbox)
+static int mailbox_upgrade_index(struct mailbox *mailbox)
 {
     int r;
     unsigned msgno;
-    bit32 numansweredflag = 0;
-    bit32 numdeletedflag = 0;
-    bit32 numflaggedflag = 0;
-    bit32 oldstart_offset, newstart_offset;
-    bit32 newversion;
-    struct stat sbuf;
+    bit32 oldstart_offset;
     char buf[INDEX_HEADER_SIZE];
     char fnamebuf[MAX_MAILBOX_PATH], fnamebufnew[MAX_MAILBOX_PATH];
     FILE *newindex;
     char *fnametail;
     char *bufp;
 
-    /* Lock files and open new index/cache files */
+    /* Lock files and open new index file */
     r = mailbox_lock_header(mailbox);
     if (r) return r;
-    r = mailbox_lock_index_forcalc(mailbox);
+    r = mailbox_lock_index_for_upgrade(mailbox);
     if (r) {
 	mailbox_unlock_header(mailbox);
 	return r;
@@ -1419,71 +1430,36 @@ static int mailbox_calculate_flagcounts(struct mailbox *mailbox)
     newindex = fopen(fnamebuf, "w+");
     if (!newindex) {
 	syslog(LOG_ERR, "IOERROR: creating %s: %m", fnamebuf);
-	mailbox_unlock_pop(mailbox);
-	mailbox_unlock_index(mailbox);
-	mailbox_unlock_header(mailbox);
-	return IMAP_IOERROR;
+	goto fail;
     }
 
-    /* Copy over old headers to new file */
-    memcpy(buf, mailbox->index_base, mailbox->start_offset);
-
-    /* insert new version number */
-    newversion = htonl(MAILBOX_MINOR_VERSION);
-    memcpy(buf+OFFSET_MINOR_VERSION, &newversion, sizeof(bit32));
+    /* change version number */
+    mailbox->minor_version = MAILBOX_MINOR_VERSION;
 
     /* save old start_offset; change start_offset */
     oldstart_offset = mailbox->start_offset;
-    newstart_offset = htonl(INDEX_HEADER_SIZE);
-    memcpy(buf+OFFSET_START_OFFSET, &newstart_offset, sizeof(bit32));
+    mailbox->start_offset = INDEX_HEADER_SIZE;
 
-    fwrite(buf, 1, oldstart_offset, newindex);
+    /* Write the new index header */ 
+    *((bit32 *)(buf+OFFSET_GENERATION_NO)) = mailbox->generation_no;
+    *((bit32 *)(buf+OFFSET_FORMAT)) = htonl(mailbox->format);
+    *((bit32 *)(buf+OFFSET_MINOR_VERSION)) = htonl(mailbox->minor_version);
+    *((bit32 *)(buf+OFFSET_START_OFFSET)) = htonl(mailbox->start_offset);
+    *((bit32 *)(buf+OFFSET_RECORD_SIZE)) = htonl(mailbox->record_size);
+    *((bit32 *)(buf+OFFSET_EXISTS)) = htonl(mailbox->exists);
+    *((bit32 *)(buf+OFFSET_LAST_APPENDDATE)) = htonl(mailbox->last_appenddate);
+    *((bit32 *)(buf+OFFSET_LAST_UID)) = htonl(mailbox->last_uid);
+    *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) = htonl(mailbox->quota_mailbox_used);
+    *((bit32 *)(buf+OFFSET_POP3_LAST_LOGIN)) = htonl(mailbox->pop3_last_login);
+    *((bit32 *)(buf+OFFSET_UIDVALIDITY)) = htonl(mailbox->uidvalidity);
+    *((bit32 *)(buf+OFFSET_DELETED)) = htonl(mailbox->deleted);
+    *((bit32 *)(buf+OFFSET_ANSWERED)) = htonl(mailbox->answered);
+    *((bit32 *)(buf+OFFSET_FLAGGED)) = htonl(mailbox->flagged);
+    *((bit32 *)(buf+OFFSET_POP3_NEW_UIDL)) = htonl(mailbox->pop3_new_uidl);
 
-    if (fstat(mailbox->cache_fd, &sbuf) == -1) {
-	syslog(LOG_ERR, "IOERROR: fstating %s: %m", mailbox->name);
-	fatal("can't fstat cache file", EC_OSFILE);
-    }
-    mailbox->cache_size = sbuf.st_size;
-    map_refresh(mailbox->cache_fd, 0, &mailbox->cache_base,
-		&mailbox->cache_len, mailbox->cache_size, 
-		"cache", mailbox->name);
+    fwrite(buf, 1, INDEX_HEADER_SIZE, newindex);
 
-    /* for each message look at the system flags */
-    for (msgno = 1; msgno <= mailbox->exists; msgno++) {
-	bit32 sysflags;
-	
-	bufp = (char *) (mailbox->index_base + mailbox->start_offset +
-			(msgno - 1)*mailbox->record_size);
-
-	/* Sanity check */
-	if (*((bit32 *)(bufp+OFFSET_UID)) == 0) {
-	    syslog(LOG_ERR, "IOERROR: %s zero index record %u/%lu",
-		   mailbox->name, msgno, mailbox->exists);
-	    goto fail;
-	}
-
-	sysflags = ntohl(*((bit32 *)(bufp+OFFSET_SYSTEM_FLAGS)));
-	if (sysflags & FLAG_ANSWERED)
-	    numansweredflag++;
-	if (sysflags & FLAG_DELETED)
-	    numdeletedflag++;
-	if (sysflags & FLAG_FLAGGED)
-	    numflaggedflag++;
-    }
-
-    mailbox->answered = numansweredflag;
-    mailbox->deleted = numdeletedflag;
-    mailbox->flagged = numflaggedflag;
-
-    /* Grow the index header */
-    numansweredflag = htonl(numansweredflag);
-    fwrite(&numansweredflag, sizeof(bit32),1, newindex);
-    numdeletedflag = htonl(numdeletedflag);
-    fwrite(&numdeletedflag, sizeof(bit32),1, newindex);
-    numflaggedflag = htonl(numflaggedflag);
-    fwrite(&numflaggedflag, sizeof(bit32),1, newindex);
-
-    /* Write the rest of new index header same as old */
+    /* Write the rest of new index same as old */
     for (msgno = 1; msgno <= mailbox->exists; msgno++) {
 	bufp = (char *) (mailbox->index_base + oldstart_offset +
 			(msgno - 1)*mailbox->record_size);
@@ -1524,6 +1500,83 @@ static int mailbox_calculate_flagcounts(struct mailbox *mailbox)
     mailbox_unlock_header(mailbox);
 
     return IMAP_IOERROR;
+}
+
+/*
+ * Calculate the number of messages in the mailbox with
+ * answered/deleted/flagged system flags
+ */
+
+static int mailbox_calculate_flagcounts(struct mailbox *mailbox)
+{
+    int r;
+    unsigned msgno;
+    bit32 numansweredflag = 0;
+    bit32 numdeletedflag = 0;
+    bit32 numflaggedflag = 0;
+    struct stat sbuf;
+    char *bufp;
+
+    /* Lock files */
+    r = mailbox_lock_header(mailbox);
+    if (r) return r;
+    r = mailbox_lock_index_for_upgrade(mailbox);
+    if (r) {
+	mailbox_unlock_header(mailbox);
+	return r;
+    }
+
+    r = mailbox_lock_pop(mailbox);
+    if (r) {
+	mailbox_unlock_index(mailbox);
+	mailbox_unlock_header(mailbox);
+	return r;
+    }
+
+    if (fstat(mailbox->cache_fd, &sbuf) == -1) {
+	syslog(LOG_ERR, "IOERROR: fstating %s: %m", mailbox->name);
+	fatal("can't fstat cache file", EC_OSFILE);
+    }
+    mailbox->cache_size = sbuf.st_size;
+    map_refresh(mailbox->cache_fd, 0, &mailbox->cache_base,
+		&mailbox->cache_len, mailbox->cache_size, 
+		"cache", mailbox->name);
+
+    /* for each message look at the system flags */
+    for (msgno = 1; msgno <= mailbox->exists; msgno++) {
+	bit32 sysflags;
+	
+	bufp = (char *) (mailbox->index_base + mailbox->start_offset +
+			(msgno - 1)*mailbox->record_size);
+
+	/* Sanity check */
+	if (*((bit32 *)(bufp+OFFSET_UID)) == 0) {
+	    syslog(LOG_ERR, "IOERROR: %s zero index record %u/%lu",
+		   mailbox->name, msgno, mailbox->exists);
+	    mailbox_unlock_pop(mailbox);
+	    mailbox_unlock_index(mailbox);
+	    mailbox_unlock_header(mailbox);
+	    return IMAP_IOERROR;
+	}
+
+	sysflags = ntohl(*((bit32 *)(bufp+OFFSET_SYSTEM_FLAGS)));
+	if (sysflags & FLAG_ANSWERED)
+	    numansweredflag++;
+	if (sysflags & FLAG_DELETED)
+	    numdeletedflag++;
+	if (sysflags & FLAG_FLAGGED)
+	    numflaggedflag++;
+    }
+
+    mailbox->answered = numansweredflag;
+    mailbox->deleted = numdeletedflag;
+    mailbox->flagged = numflaggedflag;
+
+    mailbox_unlock_pop(mailbox);
+    mailbox_unlock_index(mailbox);
+    mailbox_unlock_header(mailbox);
+
+    return 0;
 }
 
 /*
@@ -1629,7 +1682,7 @@ void *deciderock;
     fwrite(buf, 1, mailbox->start_offset, newindex);
     /* Grow the index header if necessary */
     for (n = mailbox->start_offset; n < INDEX_HEADER_SIZE; n++) {
-	if (n == OFFSET_FLAGGED+3) {
+	if (n == OFFSET_UIDVALIDITY+3) {
 	    putc(1, newindex);
 	}
 	else {
@@ -1953,6 +2006,7 @@ int mailbox_create(const char *name,
     mailbox.deleted = 0;
     mailbox.answered = 0;
     mailbox.flagged = 0;
+    mailbox.pop3_new_uidl = 1;
 
     if (!uniqueid) {
 	mailbox.uniqueid = xmalloc(sizeof(char) * 32);

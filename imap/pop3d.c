@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.117 2002/03/27 16:02:55 ken3 Exp $
+ * $Id: pop3d.c,v 1.118 2002/03/30 19:46:57 ken3 Exp $
  */
 #include <config.h>
 
@@ -802,8 +802,13 @@ static void cmdloop(void)
 		prot_printf(popd_out, "+OK unique-id listing follows\r\n");
 		for (msg = 1; msg <= popd_exists; msg++) {
 		    if (!popd_msg[msg].deleted) {
-			prot_printf(popd_out, "%u %u\r\n", msg, 
-				    popd_msg[msg].uid);
+			if (mboxstruct.pop3_new_uidl)
+			    prot_printf(popd_out, "%u %lu.%u\r\n", msg, 
+					mboxstruct.uidvalidity,
+					popd_msg[msg].uid);
+			else
+			    prot_printf(popd_out, "%u %u\r\n", msg, 
+					popd_msg[msg].uid);
 		    }
 		}
 		prot_printf(popd_out, ".\r\n");
