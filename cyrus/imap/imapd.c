@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.190 1999/12/02 05:22:39 tmartin Exp $ */
+/* $Id: imapd.c,v 1.191 1999/12/23 18:33:12 leg Exp $ */
 
 #ifndef __GNUC__
 #define __attribute__(foo)
@@ -1706,7 +1706,7 @@ char *name;
     struct mailbox mailbox;
     char mailboxname[MAX_MAILBOX_NAME+1];
     int r = 0;
-    int usage;
+    double usage;
     int doclose = 0;
 
     if (imapd_mailbox) {
@@ -1764,9 +1764,9 @@ char *name;
 	/* Warn if mailbox is close to or over quota */
 	mailbox_read_quota(&imapd_mailbox->quota);
 	if (imapd_mailbox->quota.limit > 0) {
-	    usage = imapd_mailbox->quota.used * 100 /
-	      (imapd_mailbox->quota.limit * QUOTA_UNITS);
-	    if (usage >= 100) {
+	    usage = ((double) imapd_mailbox->quota.used * 100.0) / (double)
+		(imapd_mailbox->quota.limit * QUOTA_UNITS);
+	    if (usage >= 100.0) {
 		prot_printf(imapd_out, "* NO [ALERT] %s\r\n",
 			    error_message(IMAP_NO_OVERQUOTA));
 	    }
@@ -3241,73 +3241,72 @@ char *quotaroot;
  */
 void cmd_starttls(char *tag)
 {
-  int result;
-  int *layerp;
-  sasl_external_properties_t external;
+    int result;
+    int *layerp;
+    sasl_external_properties_t external;
 
-  layerp=& (external.ssf);
+    layerp = &(external.ssf);
 
-  if (imapd_sucessful_tls == 1)
-  {
-    prot_printf(imapd_out, "%s NO %s\r\n", tag, "Already sucessfully executed STARTTLS");
-    return;
-  }
+    if (imapd_sucessful_tls == 1)
+    {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, 
+		    "Already successfully executed STARTTLS");
+	return;
+    }
 
-  syslog(LOG_ERR,"[%s] [%s] [%s] [%s]\n",			       
-	 (char *) config_getstring("tls_CA_file", ""),
-			       (char *) config_getstring("tls_CA_path", ""),
-			       (char *) config_getstring("tls_cert_file", ""),
-			       (char *) config_getstring("tls_key_file", ""));
+    result=tls_init_serverengine(5,        /* depth to verify */
+				 1,        /* can client auth? */
+				 0,        /* required client to auth? */
+				 (char *)config_getstring("tls_ca_file", ""),
+				 (char *)config_getstring("tls_ca_path", ""),
+				 (char *)config_getstring("tls_cert_file", ""),
+				 (char *)config_getstring("tls_key_file", ""));
 
-  result=tls_init_serverengine(5,        /* depth to verify */
-			       1,        /* can client auth? */
-			       0,        /* required client to auth? */
-			       (char *) config_getstring("tls_ca_file", ""),
-			       (char *) config_getstring("tls_ca_path", ""),
-			       (char *) config_getstring("tls_cert_file", ""),
-			       (char *) config_getstring("tls_key_file", ""));
-  if (result==-1)
-  {
-    prot_printf(imapd_out, "%s NO %s\r\n", tag, "Error initializing TLS");
-    return;
-  }
+    if (result == -1) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, "Error initializing TLS");
+	syslog(LOG_ERR, "error initializing TLS: "
+	       "[CA_file: %s] [CA_path: %s] [cert_file: %s] [key_file: %s]",
+	       (char *) config_getstring("tls_CA_file", ""),
+	       (char *) config_getstring("tls_CA_path", ""),
+	       (char *) config_getstring("tls_cert_file", ""),
+	       (char *) config_getstring("tls_key_file", ""));
+	return;
+    }
 
-  prot_printf(imapd_out, "%s OK %s\r\n", tag,
-	      "Begin TLS negotiation now");
-  /* must flush our buffers before starting tls */
-  prot_flush(imapd_out);
+    prot_printf(imapd_out, "%s OK %s\r\n", tag,	"Begin TLS negotiation now");
+    /* must flush our buffers before starting tls */
+    prot_flush(imapd_out);
   
-  result=tls_start_servertls(0,  /* read */
-			     1, /* write */
-			     layerp,
-			     &(external.auth_id) );
-  if (result==-1)
-  {
-    syslog(LOG_NOTICE, "badstarttls: %s",
-	   imapd_clienthost);
-    return;
-  }
+    result=tls_start_servertls(0, /* read */
+			       1, /* write */
+			       layerp,
+			       &(external.auth_id));
+    if (result==-1) {
+	syslog(LOG_NOTICE, "STARTTLS failed: %s", imapd_clienthost);
+	return;
+    }
 
-  /* tell SASL about the negotiated layer */
-  result=sasl_setprop(imapd_saslconn,
-		      SASL_SSF_EXTERNAL,
-		      &external);
+    /* tell SASL about the negotiated layer */
+    result=sasl_setprop(imapd_saslconn,
+			SASL_SSF_EXTERNAL,
+			&external);
 
-  if (result!=SASL_OK) fatal("SASL failed setting sasl property: cmd_starttls()", EC_TEMPFAIL);
+    if (result != SASL_OK) {
+	fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
+    }
 
-  /* if authenticated set that */
-  if (external.auth_id!=NULL)
-  {
-    imapd_userid = external.auth_id;
-  }
+    /* if authenticated set that */
+    if (external.auth_id != NULL) {
+	imapd_userid = external.auth_id;
+    }
 
-  imapd_sucessful_tls = 1;
+    imapd_sucessful_tls = 1;
 
-  /* tell the prot layer about our new layers */
-  prot_settls (imapd_in, tls_conn);
-  prot_settls (imapd_out,tls_conn);
+    /* tell the prot layer about our new layers */
+    prot_settls(imapd_in, tls_conn);
+    prot_settls(imapd_out, tls_conn);
 
-  imapd_starttls_done=1;
+    imapd_starttls_done = 1;
 }
 #endif /* HAVE_SSL */
 
