@@ -42,7 +42,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ptloader.c,v 1.25 2002/05/15 16:42:02 rjs3 Exp $";
+      "$Id: ptloader.c,v 1.25.4.1 2002/09/26 19:01:04 ken3 Exp $";
 
 #include <config.h>
 
@@ -118,7 +118,7 @@ main(argc, argv)
 
     /* normally LOCAL6, but do this while we're logging keys */
     openlog(PTCLIENT, LOG_PID, LOG_LOCAL7);
-    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.25 2002/05/15 16:42:02 rjs3 Exp $");
+    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.25.4.1 2002/09/26 19:01:04 ken3 Exp $");
 
     while ((opt = getopt(argc, argv, "Uspd:l:f:u:t:")) != EOF) {
 	switch (opt) {
@@ -370,10 +370,22 @@ int c;
     strcpy(fnamebuf, STATEDIR);
     strcat(fnamebuf, PTS_DBFIL);
     rc = db_create(&ptdb, NULL, 0);
-    if (!rc) rc = ptdb->open(ptdb, fnamebuf, NULL, DB_HASH, 0, 0664);
+    if (!rc) {
+#if DB_VERSION_MAJOR == 4 && DB_VERSION_MINOR >= 1
+	rc = ptdb->open(ptdb, NULL, fnamebuf, NULL, DB_HASH, 0, 0664);
+#else
+	rc = ptdb->open(ptdb, fnamebuf, NULL, DB_HASH, 0, 0664);
+#endif
+    }
     if (rc == ENOENT) {
 	rc = db_create(&ptdb, NULL, 0);
-	if (!rc) rc = ptdb->open(ptdb, fnamebuf, NULL, DB_HASH, DB_CREATE, 0664);
+	if (!rc) {
+#if DB_VERSION_MAJOR == 4 && DB_VERSION_MINOR >= 1
+	    rc = ptdb->open(ptdb, NULL, fnamebuf, NULL, DB_HASH, DB_CREATE, 0664);
+#else
+	    rc = ptdb->open(ptdb, fnamebuf, NULL, DB_HASH, DB_CREATE, 0664);
+#endif
+	}
     }
     if (rc != 0) {
         syslog(LOG_ERR, "IOERROR: opening database %s: %s", fnamebuf,
@@ -557,4 +569,4 @@ void fatal(const char *msg, int exitcode)
     syslog(LOG_ERR, "%s", msg);
     exit(-1);
 }
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.25 2002/05/15 16:42:02 rjs3 Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.25.4.1 2002/09/26 19:01:04 ken3 Exp $ */
