@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.121.2.10 2004/02/18 19:08:51 ken3 Exp $
+ * $Id: lmtpd.c,v 1.121.2.11 2004/02/18 19:28:25 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -477,7 +477,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	    if (!r && server) {
 		/* remote mailbox */
 		adddest(&remotedata, rcpt, server, namebuf,
-			    remotedata.authuser);
+			remotedata.authuser);
 		remotedata.pend[n] = nosieve;
 	    }
 	    else if (!r) {
@@ -561,7 +561,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 
     if (remotedata.dlist) {
 	/* run the txns */
-	runme(&remotedata, msgdata);
+	runme(&remotedata, msgdata, &backend_cached);
 
 	/* free the recipient/destination lists */
 	d = remotedata.dlist;
@@ -603,7 +603,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	}
 
 	/* run the error recovery txns */
-	runme(&remotedata, msgdata);
+	runme(&remotedata, msgdata, &backend_cached);
 
 	/* everything should be in the 'done' state now, verify this */
 	for (n = 0; n < nrcpts; n++) {
