@@ -335,7 +335,7 @@ static int foreach(struct db *db,
 	if (keylen < prefixlen) break;
 	if (prefixlen && memcmp(key, prefix, prefixlen)) break;
 
-	if (goodp(rock, key, keylen)) {
+	if (goodp(rock, key, keylen, data, datalen)) {
 	    /* make callback */
 	    r = cb(rock, key, keylen, data, datalen);
 	    if (r) break;
