@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: IMAP.xs,v 1.15.4.1 2002/08/19 16:46:43 ken3 Exp $ */
+/* $Id: IMAP.xs,v 1.15.4.2 2002/09/19 18:06:43 ken3 Exp $ */
 
 /*
  * Perl interface to the Cyrus imclient routines.  This enables the
@@ -120,8 +120,7 @@ void imclient_xs_cb(struct imclient *client, struct xsccb *rock,
   PUSHMARK(SP);
   XPUSHs(sv_2mortal(newSVpv("-client", 0)));
   rv = newSVsv(&sv_undef);
-  sv_setref_pv(rv, rock->client->class, (void *) rock->client);
-  rock->client->cnt++;
+  sv_setref_pv(rv, NULL, (void *) rock->client);
   XPUSHs(rv);
   if (rock->prock != &sv_undef) {
     XPUSHs(sv_2mortal(newSVpv("-rock", 0)));
@@ -294,7 +293,7 @@ CODE:
 	  XSRETURN_UNDEF;
 	}
 	ST(0) = sv_newmortal();
-/*fprintf(stderr, "!NEW %p\n", rv);*/
+	/* fprintf(stderr, "!NEW %p %s\n", rv, class); */
 	sv_setref_pv(ST(0), class, (void *) rv);
 
 void
@@ -303,8 +302,9 @@ imclient_DESTROY(client)
 PREINIT:
 	struct xscb *nx;
 CODE:
-/*fprintf(stderr, "!DESTROY %p %d\n", client, client->cnt);*/
+/* fprintf(stderr, "!DESTROY %p %d\n", client, client->cnt); */
 	if (!--client->cnt) {
+/* printf("closing\n"); */
 	  imclient_close(client->imclient);
 	  while (client->cb) {
 	    nx = client->cb->next;
