@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.14 2001/11/13 19:59:04 leg Exp $
+ * $Id: ipurge.c,v 1.15 2002/06/26 16:04:06 ken3 Exp $
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -260,7 +260,7 @@ void deleteit(bit32 msgsize, mbox_stats_t *stats)
 /* 0 = no, 1 = yes */
 int
 purge_check(struct mailbox *mailbox, void *deciderock, char *buf) {
-  unsigned long       my_time;
+  time_t my_time;
   mbox_stats_t *stats = (mbox_stats_t *) deciderock;
   bit32 senttime;
   bit32 msgsize;
@@ -277,7 +277,7 @@ purge_check(struct mailbox *mailbox, void *deciderock, char *buf) {
     if (days >= 0) {
       my_time = time(0);
       /*    printf("comparing %ld :: %ld\n", my_time, the_record->sentdate); */
-      if (((my_time - senttime)/86400) == (days/86400)) {
+      if (((my_time - (time_t) senttime)/86400) == (days/86400)) {
 	  deleteit(msgsize, stats);
 	  return 1;
       }
@@ -294,7 +294,7 @@ purge_check(struct mailbox *mailbox, void *deciderock, char *buf) {
     if (days >= 0) {
       my_time = time(0);
       /*    printf("comparing %ld :: %ld\n", my_time, the_record->sentdate); */
-      if ((my_time - senttime) > days) {
+      if ((my_time - (time_t) senttime) > days) {
 	  deleteit(msgsize, stats);
 	  return 1;
       }
