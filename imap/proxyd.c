@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.185 2004/05/29 05:18:23 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.186 2004/06/08 19:54:15 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -4261,9 +4261,10 @@ void cmd_getquotaroot(char *tag, char *name)
 						proxyd_userid, mailboxname);
     if (!r) r = mlookup(mailboxname, &server, NULL, NULL);
 
-    if(proxyd_userisadmin && supports_referrals) {
-	/* If they are an admin, they won't be on the backend, so we
-	 * should refer them if we can. */
+    if(proxyd_userisadmin) {
+	/* If they are an admin, they won't retain that privledge if we
+	 * proxy for them, so we need to refer them -- even if they haven't
+	 * told us they're able to handle it. */
 	proxyd_refer(tag, server, name);
     } else {
 	if (!r) s = proxyd_findserver(server);
