@@ -179,10 +179,9 @@ char **argv;
 
 usage()
 {
-/* XXX */
     fprintf(stderr, 
-"421 4.3.0 usage: deliver [-m mailbox] [-a auth] [-i] [-F flag]... [user]...\r\n");
-    fprintf(stderr, "       deliver -I age\n");
+"421-4.3.0 usage: deliver [-m mailbox] [-a auth] [-i] [-F flag]... [user]...\r\n");
+    fprintf(stderr, "421 4.3.0        deliver -I age\n");
     exit(EX_USAGE);
 }
 
@@ -388,8 +387,7 @@ smtpmode()
 		    printf("501 5.5.4 Syntax error in parameters\r\n");
 		    continue;
 		}
-		/* XXX 2.1.5 valid? */
-		printf("250 2.1.5 ok\r\n");
+		printf("250 2.1.0 ok\r\n");
 		continue;
 	    }
 	    else if (!strncasecmp(buf, "mhlo ", 5)) {
