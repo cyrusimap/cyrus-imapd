@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.11 2004/01/20 01:11:01 ken3 Exp $
+ * $Id: nntpd.c,v 1.12 2004/01/22 21:17:09 ken3 Exp $
  */
 
 /*
@@ -2872,9 +2872,10 @@ static int savemsg(message_data_t *m, FILE *f)
 {
     struct stat sbuf;
     const char **body;
-    int r;
+    int r, i;
     time_t now = time(NULL);
     static int post_count = 0;
+    FILE *stagef = NULL;
 
     /* fill the cache */
     r = spool_fill_hdrcache(nntp_in, f, m->hdrcache);
@@ -2975,38 +2976,43 @@ static int savemsg(message_data_t *m, FILE *f)
 	}
     }
 
-    /* if we have a single recipient OR are using single-instance store,
-     * spool to the stage of the first recipient
-     */
-    if (m->rcpt_num == 1 || singleinstance) {
-	FILE *stagef;
+    fflush(f);
+    if (ferror(f)) {
+	return IMAP_IOERROR;
+    }
+
+    if (fstat(fileno(f), &sbuf) == -1) {
+	return IMAP_IOERROR;
+    }
+
+    /* spool to the stage of one of the recipients */
+    for (i = 0; !stagef && (i < m->rcpt_num); i++) {
+	stagef = append_newstage(m->rcpt[i], now, 0, &m->stage);
+    }
+
+    if (stagef) {
 	const char *base = 0;
 	unsigned long size = 0;
 	int n;
 
-	fflush(f);
-	/* make sure everything is happy before we start */
-	if (!ferror(f) && !fstat(fileno(f), &sbuf) &&
-	    (stagef = append_newstage(m->rcpt[0], now, &m->stage))) {
+	/* copy the header from our tmpfile to the stage */
+	map_refresh(fileno(f), 1, &base, &size, sbuf.st_size, "tmp", 0);
+	n = retry_write(fileno(stagef), base, size);
+	map_free(&base, &size);
 
-	    /* copy the header from our tmpfile to the stage */
-	    map_refresh(fileno(f), 1, &base, &size, sbuf.st_size, "tmp", 0);
-	    n = retry_write(fileno(stagef), base, size);
-	    map_free(&base, &size);
-
-	    if (n == -1) {
-		/* close and remove the stage */
-		fclose(stagef);
-		append_removestage(m->stage);
-		m->stage = NULL;
-	    }
-	    else {
-		/* close the tmpfile and use the stage */
-		fclose(f);
-		f = stagef;
-	    }
+	if (n == -1) {
+	    /* close and remove the stage */
+	    fclose(stagef);
+	    append_removestage(m->stage);
+	    return IMAP_IOERROR;
+	}
+	else {
+	    /* close the tmpfile and use the stage */
+	    fclose(f);
+	    f = stagef;
 	}
     }
+    /* else this is probably a remote group, so use the tmpfile */
 
     r = spool_copy_msg(nntp_in, f);
 
@@ -3111,12 +3117,14 @@ static int deliver(message_data_t *msg)
 
 	    if (!r) {
 		prot_rewind(msg->data);
-		if (msg->stage)
-		    r = append_fromstage(&as, msg->data, msg->size, now,
-					  (const char **) NULL, 0, msg->stage);
-		else
+		if (msg->stage) {
+		    r = append_fromstage(&as, msg->stage, now,
+					 (const char **) NULL, 0, !singleinstance);
+		} else {
+		    /* XXX should never get here */
 		    r = append_fromstream(&as, msg->data, msg->size, now,
 					  (const char **) NULL, 0);
+		}
 		if (!r) append_commit(&as, 0, NULL, &uid, NULL);
 		else append_abort(&as);
 	    }

@@ -1,5 +1,5 @@
 /* append.h -- Description of messages to be copied 
- * $Id: append.h,v 1.25 2004/01/20 01:10:55 ken3 Exp $ 
+ * $Id: append.h,v 1.26 2004/01/22 21:17:07 ken3 Exp $ 
  *
  * Copyright (c) 1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -90,6 +90,9 @@ struct appendstate {
 
     /* the amount of quota we've used so far in this append */
     int quota_used;
+
+    /* txn for updating quota */
+    struct txn *tid;
 };
 
 /* add helper function to determine uid range appended? */
@@ -117,14 +120,12 @@ int append_stageparts(struct stagemsg *stagep);
 
 /* creates a new stage and returns stage file corresponding to mailboxname */
 extern FILE *append_newstage(const char *mailboxname, time_t internaldate,
-			     struct stagemsg **stagep);
+			     int msgnum, struct stagemsg **stagep);
 
 /* adds a new mailbox to the stage initially created by append_newstage() */
 extern int append_fromstage(struct appendstate *mailbox,
-			    struct protstream *messagefile,
-			    unsigned long size, time_t internaldate,
-			    const char **flag, int nflags,
-			    struct stagemsg *stage);
+			    struct stagemsg *stage, time_t internaldate,
+			    const char **flag, int nflags, int nolink);
 
 /* removes the stage (frees memory, deletes the staging files) */
 extern int append_removestage(struct stagemsg *stage);
