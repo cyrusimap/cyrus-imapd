@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: reconstruct.c,v 1.41 1999/08/20 18:51:31 leg Exp $ */
+/* $Id: reconstruct.c,v 1.42 1999/08/20 19:05:30 leg Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -646,10 +646,7 @@ char *partition;
 }
 
 void
-todo_append(name, path, partition)
-char *name;
-char *path;
-char *partition;
+todo_append_hashed(char *name, char *path, char *partition)
 {
     DIR *dirp;
     struct dirent *dirent;
@@ -659,6 +656,10 @@ char *partition;
 	fprintf(stderr, "reconstruct: couldn't open partition %s\n", name);
     } else while (dirent = readdir(dirp)) {
 	struct todo *newentry;
+
+	if (strchr(dirent->d_name, '.')) {
+	    continue;
+	}
 
 	newentry = (struct todo *)xmalloc(sizeof(struct todo));
 	newentry->name = xstrdup(name);
