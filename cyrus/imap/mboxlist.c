@@ -832,7 +832,7 @@ char *userid;
 	fwrite(buf2, 1, n, newlistfile);
 	left -= n;
     }
-    if (oldoffset <= newoffset) {
+    if (oldoffset < newoffset) {
 	left = newoffset - oldoffset;
 	if (!isusermbox) {
 	    fseek(listfile, oldlen, 1);
@@ -856,7 +856,7 @@ char *userid;
 	fwrite(buf2, 1, n, newlistfile);
 	left -= n;
     }
-    if (oldoffset <= newoffset) {
+    if (oldoffset < newoffset) {
 	fprintf(newlistfile, "%s\t%s\t%s\n", newname, partition, acl);
     }
     else {
