@@ -19,6 +19,7 @@ extern int imapd_exists;
 struct strlist {
     char *s;			/* String */
     struct strlist *next;
+    struct glob *glob;
 };
 
 
@@ -75,7 +76,12 @@ struct searchargs {
     bit32 user_flags_unset[MAX_USER_FLAGS/32];
     int seen_state;
     int recent_state;
-    /* XXX bcc, cc, from, subject, to, body, text */
+    struct strlist *from;
+    struct strlist *to;
+    struct strlist *cc;
+    struct strlist *bcc;
+    struct strlist *subject;
+    /* XXX body, text */
 };
 
 /* values for seen_state and recent_state */

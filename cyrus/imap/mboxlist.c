@@ -170,7 +170,7 @@ char *username;
 	return IMAP_MAILBOX_BADNAME;
     }
     for (i = 0; i < NUM_BADMBOXPATTERNS; i++) {
-	g = glob_init(badmboxpatterns[i], 1);
+	g = glob_init(badmboxpatterns[i], GLOB_ICASE);
 	if (glob_test(g, name, -1)) {
 	    free((char *)g);
 	    return IMAP_MAILBOX_BADNAME;
