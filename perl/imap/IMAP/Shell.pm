@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Shell.pm,v 1.17 2002/05/25 19:57:49 leg Exp $
+# $Id: Shell.pm,v 1.18 2002/07/10 03:42:47 rjs3 Exp $
 #
 # A shell framework for IMAP::Cyrus::Admin
 #
@@ -1153,9 +1153,25 @@ sub _sc_info {
     $lfh->[2]->print($$cyrref->error, "\n");
     return 1;
   }
-  foreach my $attrib (keys %info) {
+
+  # keep track of what mailboxes we've printed a header for already
+  my %section = ();
+  foreach my $attrib (sort keys %info) {
+    $attrib =~ /(\{.*\})/;
+    my $sect = $1;
+    if(!defined($sect)) {
+	$sect = "Server Wide";
+    }
+
+    if(!exists $section{$sect}) {
+	$section{$sect} = 'x';
+	print "$sect:\n";
+    }
+
     $attrib =~ /([^\/]*)$/;
-    $lfh->[1]->print($1, ": ", $info{$attrib}, "\n");
+    my $attrname = $1;
+
+    $lfh->[1]->print("  ", $attrname, ": ", $info{$attrib}, "\n");
   }
   0;
 }
