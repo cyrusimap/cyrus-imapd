@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.23 2002/01/29 19:45:55 rjs3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.24 2002/01/29 20:01:32 rjs3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -76,12 +76,9 @@ void fatal(const char *message, int code)
     exit(code);
 }
 
-#define HOSTNAME_SIZE 512
-
 struct dumprock {
     enum mboxop op;
     mupdate_handle *h;
-    char hostname[HOSTNAME_SIZE + 2];
 };
 
 static int dump_p(void *rockp,
@@ -206,10 +203,11 @@ static int dump_cb(void *rockp,
 
     case M_POPULATE: 
     {
-	char *realpart = xmalloc(strlen(d->hostname) + 1 + strlen(part) + 1);
+	char *realpart = xmalloc(strlen(config_servername) + 1
+				 + strlen(part) + 1);
 
 	/* realpart is 'hostname!partition' */
-	sprintf(realpart, "%s!%s", d->hostname, part);
+	sprintf(realpart, "%s!%s", config_servername, part);
 
 	r = mupdate_activate(d->h,name,realpart,acl);
 
@@ -249,11 +247,7 @@ void do_dump(enum mboxop op)
 
     if(op == M_POPULATE) {
 	int ret;
-	ret = gethostname(d.hostname, HOSTNAME_SIZE);
-	if(ret != 0) {
-	    fprintf(stderr, "couldn't get local hostname\n");
-	    exit(1);
-	}
+	char buf[1024];
 
 	sasl_client_init(NULL);
 
@@ -266,8 +260,8 @@ void do_dump(enum mboxop op)
 	/* now we need a list of what the remote thinks we have
 	 * To generate it, ask for a prefix of '<our hostname>!',
 	 * (to ensure we get exactly our hostname) */
-	strncat(d.hostname, "!", sizeof(d.hostname));
-	ret = mupdate_list(d.h, mupdate_list_cb, d.hostname, NULL);
+	snprintf(buf, sizeof(buf), "%s!", config_servername);
+	ret = mupdate_list(d.h, mupdate_list_cb, buf, NULL);
 	if(ret) {
 	    fprintf(stderr, "couldn't do LIST command on mupdate server\n");
 	    exit(1);

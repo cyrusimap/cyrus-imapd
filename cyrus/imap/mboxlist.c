@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.161 2002/01/29 18:58:16 leg Exp $
+ * $Id: mboxlist.c,v 1.162 2002/01/29 20:01:32 rjs3 Exp $
  */
 
 #include <config.h>
@@ -94,7 +94,6 @@ static int mboxlist_dbopen = 0;
 
 #define HOSTNAME_SIZE 512
 static const char *mupdate_server = NULL;
-static char myhostname[HOSTNAME_SIZE];
 
 static int mboxlist_opensubs();
 static void mboxlist_closesubs();
@@ -560,7 +559,7 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 	    goto done;
 	}
 
-	sprintf(buf, "%s!%s", myhostname, newpartition);
+	sprintf(buf, "%s!%s", config_servername, newpartition);
 
 	/* reserve the mailbox in MUPDATE */
 	r = mupdate_reserve(mupdate_h, name, buf);
@@ -655,7 +654,7 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
     /* xxx maybe we should roll back if this fails? */
     if (!r && mupdate_server) {
 	/* commit the mailbox in MUPDATE */
-	sprintf(buf, "%s!%s", myhostname, newpartition);
+	sprintf(buf, "%s!%s", config_servername, newpartition);
 	    
 	r = mupdate_activate(mupdate_h, name, buf, acl);
 	if(r > 0) {
@@ -1008,7 +1007,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     if (!r && !partitionmove && mupdate_server) {
 	/* Reserve new name in MUPDATE */
 	char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
-	sprintf(buf, "%s!%s", myhostname, newpartition);
+	sprintf(buf, "%s!%s", config_servername, newpartition);
 	
 	r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);
 	if(r) {
@@ -1031,7 +1030,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     } else if(!r && partitionmove && mupdate_server) {
 	/* commit the update to MUPDATE */
 	char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
-	sprintf(buf, "%s!%s", myhostname, newpartition);
+	sprintf(buf, "%s!%s", config_servername, newpartition);
 
 	r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);
 	if(r) {
@@ -1144,7 +1143,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     if (!r && !partitionmove && mupdate_server) {
 	/* commit the mailbox in MUPDATE */
 	char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
-	sprintf(buf, "%s!%s", myhostname, newpartition);
+	sprintf(buf, "%s!%s", config_servername, newpartition);
 	
 	r = mupdate_activate(mupdate_h, newname, buf, newacl);
 	if(r > 0) {
@@ -1341,7 +1340,7 @@ int mboxlist_setacl(char *name, char *identifier, char *rights,
         mupdate_handle *mupdate_h;
 	/* commit the update to MUPDATE */
 	char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
-	sprintf(buf, "%s!%s", myhostname, partition);
+	sprintf(buf, "%s!%s", config_servername, partition);
 
 	r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);
 	if(r) {
@@ -2030,11 +2029,6 @@ void mboxlist_init(int myflags)
     }
 
     mupdate_server = config_getstring("mupdate_server", NULL);
-    r = gethostname(myhostname, HOSTNAME_SIZE);
-    if(r != 0) {
-	syslog(LOG_ERR, "couldn't get local hostname\n");
-	fatal("could not get local hostname", EC_TEMPFAIL);
-    }
     if(mupdate_server) {
 	/* We're going to need SASL */
 	r = sasl_client_init(NULL);
