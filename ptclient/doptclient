@@ -1,0 +1,58 @@
+#!/usr/local/bin/perl5 -w
+#
+# Wrapper for ptclient to restart it if it dies.
+#
+# $Id: doptclient,v 1.1 1998/05/13 15:34:42 wcw Exp $
+#
+# NOTE: This script does not create a new pag for ptclient
+#       so do NOT run this directly from the rc without
+#       creating a new pag first (unless you want all your
+#       processes to run authenticated)
+#
+
+$coredir = "/usr/tmp/ptloader-cores";
+$ptloader = '/usr/cyrus/bin/ptloader -s -f /.postman.srvtab';
+
+$ptscache = "/var/ptclient/ptscache.db";
+
+use Sys::Syslog;
+
+# logging ptclient foo to a separate log level right now
+# from standard cyrus (local6)
+#
+openlog("doptclient", 'cons,pid', "local7");
+
+# try and keep a core file around of the last one to explode.
+if (chdir($coredir)) {
+  $mvcore = 1;
+} else {
+  syslog('warning', "couldn't chdir to '$coredir'; core files will " .
+	 "be lost to the great void");
+  $mvcore = 0;
+}
+
+while(1) {
+  $st = system($ptloader);
+
+  syslog('crit',
+	 "ptloader exited with status $st, will restart in 5 " .
+	 "seconds");
+
+  # save the cores!
+  if (-f "core") {
+    $mvname = "core" . time;
+    chmod(0666, "core");
+    system "/bin/mv core $mvname" and
+      syslog('crit',
+	     "couldn't move the core file to a different name before ".
+	     "starting a new one");
+  }
+
+  system "/usr/local/bin/tokens > /tmp/doptclient.log";
+  system "/usr/local/bin/klist >> /tmp/doptclient.log";
+
+  sleep(5);
+}
+
+# $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/Attic/doptclient,v 1.1 1998/05/13 15:34:42 wcw Exp $
+
