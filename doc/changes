@@ -43,6 +43,10 @@ Changes to the Cyrus IMAP Server Since Version 1.5.14
             lock when trying to check for duplicates. Only markdelivered()
             grabs a write lock. 
 
+      * Added logic to cause cyradm to abort more cleanly if not given
+        command line arguments in an interactive session. This gets rid of
+        the dreaded application-specific intialization failed messages. 
+
 Changes to the Cyrus IMAP Server Since Version 1.5.11
 
       * The CREATE command now ignores a trailing hierarchy delimiter
