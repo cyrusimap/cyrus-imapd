@@ -79,7 +79,8 @@ install:
 	$(CC) -c $(CPPFLAGS) $(DEFS) -I$(srcdir) -I. $(CFLAGS) $<
 
 libcyrus.a: $(OBJS)
-	ar cr libcyrus.a $(OBJS)
+	rm -f libcyrus.a
+	$(AR) cr libcyrus.a $(OBJS)
 	$(RANLIB) libcyrus.a
 
 charset.o: chartables.h
