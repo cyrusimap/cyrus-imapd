@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: install-perf.html,v 1.7 2002/06/23 02:16:01 ken3 Exp $ -->
+<!-- $Id: install-perf.html,v 1.8 2002/10/04 19:56:41 rjs3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -71,6 +71,18 @@ into shortening the interval between checkpoints, controlled by the
 <tt>cyrusdb</tt> event in <tt>/etc/cyrus.conf</tt>.  We run
 checkpoints every 5 minutes; the current suggested install interval
 is 30 minutes.</li>
+
+<li>Depending on your syslog configuration and usage volume, Cyrus may
+generate thousands of syslog messages.  On Linux, syslog
+performance can be greatly improved by disabling synchronous
+logging (disabling fsync() after each message).  Prepending
+filenames in /etc/syslog.conf with a "-", e.g., "/var/log/maillog"
+becomes "-/var/log/maillog", disables syslog's fsync() call after
+each log message.  If you log many messages those fsync()s will
+kill your I/O throughput.  Note that if you do not need the detail provided
+by the LOG_DEBUG level, then not logging these messages can significantly
+reduces the amount of log entries that cyrus makes.</li>
+
 </ul>
 
 <p>In general, there's no magic bullet for performance. It depends
@@ -95,7 +107,7 @@ Solaris by Adrian Cockcroft. Go to your favorite search engine and
 look for his name.</p>
 
 <hr />
-last modified: $Date: 2002/06/23 02:16:01 $
+last modified: $Date: 2002/10/04 19:56:41 $
 </body>
 </html>
 
