@@ -41,6 +41,9 @@ while {$i < $argc} {
 unset i
 
 # Connect to server
+if {[llength $conn_args] == 0} {
+    error "usage: $argv0 \[-user user] \[-protection prot] server \[port]"
+}
 eval cyradm connect cyr_conn $conn_args
 unset conn_args
 
