@@ -84,37 +84,12 @@ struct protstream *lmtpd_out, *lmtpd_in;
 
 int logdebug = 0;
 
-typedef struct address_data {
-    char *mailbox;
-    char *detail;
-    char *all;
-} address_data_t;
-
-typedef struct message_data {
-    struct protstream *data;	/* message in temp file */
-    struct stagemsg *stage;	/* staging location for single instance
-				   store */
-
-    FILE *f;
-    char *notifyheader;
-    char *id;			/* message id */
-    int size;			/* size of message */
-
-    /* msg envelope */
-    char *return_path;		/* where to return message */
-    address_data_t **rcpt;	/* to receipients of this message */
-    char *temp[2];		/* used to avoid extra indirection in
-				   getenvelope() */
-    int rcpt_num;
-} message_data_t;
-
 /* forward declarations */
 
 void clean_retpath(char *rpath);
-int msg_new(message_data_t **m);
-void savemsg(message_data_t *m);
-void deliver_msg(message_data_t *m, char **users, int numusers, char *mailbox);
-
+void pushmsg(char *return_path, struct protstream *out);
+void deliver_msg(char *return_path, char **users, int numusers, char *mailbox);
+static int init_net(char *serverFQDN, int port);
 
 static void
 usage()
@@ -131,6 +106,81 @@ void fatal(const char* s, int code)
     prot_printf(deliver_out,"421 4.3.0 deliver: %s\r\n", s);
     prot_flush(deliver_out);
     exit(code);
+}
+
+static int push(int in, int out)
+{
+    char buf[4096];
+    int len;
+    int cnt;
+    int amnt = 0;
+    len = read(in, buf, sizeof(buf)-1);
+    
+    if (len == -1)
+    {
+	/* xxx what to do here? */
+	exit (EC_IOERR);
+    }
+    if (len == 0)
+    {
+	exit(0);
+    }
+
+    /* keep writing until we have written the whole thing xxx can cause deadlock??? */
+    do {
+	cnt = write(out, buf+amnt,len-amnt);
+    
+	if (cnt == -1)
+	{
+	    /* xxx what to do here? */
+	    exit (EC_IOERR);
+	}
+	amnt+=cnt;
+    } while (amnt<len);
+
+    return 0;
+}
+
+/*
+ * Here we're just an intermediatory piping stdin to lmtp socket
+ * and lmtp socket to stdout
+ */
+void pipe_through(int lmtp_in, int lmtp_out, int local_in, int local_out)
+{
+    int nfound;
+    int highest = 3;
+    fd_set read_set, rset;
+    fd_set write_set, wset;
+
+
+    FD_ZERO(&read_set);
+    FD_SET(lmtp_in, &read_set);
+    if (lmtp_in >= highest) highest = lmtp_in+1;
+    FD_SET(local_in, &read_set);
+
+    FD_ZERO(&write_set);
+    FD_SET(lmtp_out, &write_set);
+    if (lmtp_out >= highest) highest = lmtp_out+1;
+    FD_SET(local_out, &write_set);
+
+    while (1)
+    {
+	rset = read_set;
+	wset = write_set;
+	nfound = select(highest, &rset, &wset, NULL, NULL);
+	if (nfound < 0) {
+	    printf("xxx select err\n");
+	}
+
+	if ((FD_ISSET(lmtp_in,&rset))  && (FD_ISSET(local_out,&wset)))
+	{
+	    push(lmtp_in, local_out);
+	} else if ((FD_ISSET(local_in,&rset)) && (FD_ISSET(lmtp_out,&wset))) {
+	    push(local_in, lmtp_out);
+	} else {
+	    usleep(1000);
+	}
+    }
 }
 
 /*
@@ -179,16 +229,15 @@ clean822space(char *buf)
 int main(int argc, char **argv)
 {
     int opt;
+    int lmtpflag = 0;
     char *mailboxname = NULL;
     char *authuser = NULL;
-    message_data_t *msgdata;
+    char *return_path = NULL;
 
     deliver_in = prot_new(0, 0);
     deliver_out = prot_new(1, 1);
     prot_setflushonread(deliver_in, deliver_out);
     prot_settimeout(deliver_in, 300);
-
-    msg_new(&msgdata);
 
     while ((opt = getopt(argc, argv, "df:r:m:a:F:eE:lqD")) != EOF) {
 	switch(opt) {
@@ -202,7 +251,7 @@ int main(int argc, char **argv)
 
 	case 'r':
 	case 'f':
-	    msgdata->return_path = optarg;
+	    return_path = optarg;
 	    break;
 
 	case 'm':
@@ -236,7 +285,7 @@ int main(int argc, char **argv)
 	    break;
 
 	case 'l':
-	    /* we always do lmtp. ignore */
+	    lmtpflag = 1;
 	    break;
 
 	case 'q':
@@ -248,12 +297,15 @@ int main(int argc, char **argv)
 	}
     }
 
-    /* Copy message to temp file */
-    savemsg(msgdata);
+    if (lmtpflag == 1)
+    {
+	int s = init_net("localhost",2003);
 
+	pipe_through(s,s,0,1);
+    }
 
     /* deliver to users or global mailbox */
-    deliver_msg(msgdata, argv+optind, argc - optind, mailboxname);
+    deliver_msg(return_path, argv+optind, argc - optind, mailboxname);
     
     /* if we got here there were no errors */
     exit(0);
@@ -267,7 +319,7 @@ void just_exit(const char *msg)
 }
 
 /* initialize the network */
-static void init_net(char *serverFQDN, int port)
+static int init_net(char *serverFQDN, int port)
 {
   struct sockaddr_in addr;
   struct hostent *hp;
@@ -288,6 +340,7 @@ static void init_net(char *serverFQDN, int port)
       just_exit("connect failed");
   }
 
+  return lmtpdsock;
 }
 
 static void close_net(void)
@@ -375,13 +428,13 @@ static void say_hello(void)
     if (ask_code(buf)!=250) close_and_exit (EC_DATAERR, "Didn't get 250 response from lhlo");
 }
 
-static void say_whofrom(void)
+static void say_whofrom(char *from)
 {
     char buf[4096];
     int r;
 
     /* leave blank so we don't get any bounces */
-    r = prot_printf(lmtpd_out,"MAIL FROM:<>\r\n");
+    r = prot_printf(lmtpd_out,"MAIL FROM:<%s>\r\n");
     if (r) close_and_exit(EC_IOERR, "Error writing mail from");
 
     if (prot_fgets(buf, sizeof(buf)-1, lmtpd_in) == NULL)
@@ -435,24 +488,9 @@ static void say_rcpt(char **users, int numusers, char *mailbox)
 
 }
 
-static int dot_stuff(char *in, int inlen, char **out)
-{
-    if (in[0]=='.')
-    {
-	*out = in-1;
-	(*out)[0]='.';
-	return inlen+1;
-    }
-
-    *out = in;
-    return inlen;
-}
-
-static void pump_data(struct protstream *f)
+static void pump_data(char *return_path)
 {
     char buf[4096];
-    char *tosend;
-    int len;
     int r;
 
     r = prot_printf(lmtpd_out, "DATA\r\n");
@@ -463,19 +501,7 @@ static void pump_data(struct protstream *f)
 
     if (ask_code(buf)!=354) close_and_exit(EC_DATAERR, "Bad response to DATA command");	    
 
-    while ((prot_fgets(buf+1, sizeof(buf)-1, f)!=NULL)>0)
-    {
-	len = dot_stuff(buf, strlen(buf), &tosend);
-	
-	r = prot_write(lmtpd_out, tosend, len);
-	if (r) close_and_exit(EC_IOERR, "Error writing message data");
-
-	r = prot_printf(lmtpd_out, "\r\n");
-	if (r) close_and_exit(EC_IOERR, "Error writing message data");
-    }
-
-    r = prot_printf(lmtpd_out, "\r\n.\r\n");
-    if (r) close_and_exit(EC_IOERR, "Error writing message data");
+    pushmsg(return_path, lmtpd_out);
 
     if (prot_fgets(buf, sizeof(buf)-1, lmtpd_in) == NULL)
 	close_and_exit(EC_IOERR, "Error reading after message data");
@@ -483,7 +509,7 @@ static void pump_data(struct protstream *f)
     if (ask_code(buf)!=250) close_and_exit(EC_DATAERR, "Bad response to message data");
 }
  
-void deliver_msg(message_data_t *m, char **users, int numusers, char *mailbox)
+void deliver_msg(char *return_path, char **users, int numusers, char *mailbox)
 {
     /* connect */
     init_net("localhost",2003);
@@ -500,38 +526,27 @@ void deliver_msg(message_data_t *m, char **users, int numusers, char *mailbox)
     say_hello();
     
     /* mail from */
-    say_whofrom();
+    say_whofrom(return_path);
     
     /* rcpt to */
     say_rcpt(users,numusers, mailbox);
 
     /* data */
-    pump_data(m->data);
+    pump_data(return_path);
 
     close_net();
 }
 
 
-void savemsg(message_data_t *m)
+void pushmsg(char *return_path, struct protstream *out)
 {
-    FILE *f;
+    int r;
     char *hostname = 0;
-    int scanheader = 1;
-    int sawidhdr = 0, sawresentidhdr = 0;
-    int sawnotifyheader = 0;
-    int sawretpathhdr = 0;
     char buf[8192], *p;
     int retpathclean = 0;
-    struct stat sbuf;
 
-    /* Copy to temp file */
-    f = tmpfile();
-    if (!f) {
-	exit(EC_TEMPFAIL);
-    }
-
-    if (m->return_path) { /* add the return path */
-	char *rpath = m->return_path;
+    if (return_path) { /* add the return path */
+	char *rpath = return_path;
 
 	clean_retpath(rpath);
 	retpathclean = 1;
@@ -542,8 +557,8 @@ void savemsg(message_data_t *m)
 	    hostname = buf;
 	}
 
-	fprintf(f, "Return-Path: <%s%s%s>\r\n",
-		rpath, hostname ? "@" : "", hostname ? hostname : "");
+	prot_printf(out, "Return-Path: <%s%s%s>\r\n",
+		    rpath, hostname ? "@" : "", hostname ? hostname : "");
     }
 
     while (prot_fgets(buf, sizeof(buf)-1, deliver_in)) {
@@ -574,121 +589,24 @@ void savemsg(message_data_t *m)
 	    strcpy(p, p+1);
 	}
 
-	fputs(buf, f);
+	/* dot stuff */
+	if (buf[0]=='.') prot_write(out,".",1);
 
-	/* Look for message-id or resent-message-id headers */
-	if (scanheader) {
-	    p = 0;
-	    if (*buf == '\r') scanheader = 0;
-	    if (sawnotifyheader) {
-		if (*buf == ' ' || *buf == '\t') {
-		    m->notifyheader =
-			xrealloc(m->notifyheader,
-				 strlen(m->notifyheader) + strlen(buf) + 1);
-		    strcat(m->notifyheader, buf);
-		}
-		else sawnotifyheader = 0;
-	    }
-	    if (sawretpathhdr) {
-		if (*buf == ' ' || *buf == '\t') {
-		    m->return_path =
-			xrealloc(m->return_path,
-				 strlen(m->return_path) + strlen(buf) + 1);
-		    strcat(m->return_path, buf);
-		}
-		else sawretpathhdr = 0;
-	    }
-	    if (sawidhdr || sawresentidhdr) {
-		if (*buf == ' ' || *buf == '\t') p = buf+1;
-		else sawidhdr = sawresentidhdr = 0;
-	    }
-
-	    if (!m->id && !strncasecmp(buf, "message-id:", 11)) {
-		sawidhdr = 1;
-		p = buf + 11;
-	    }
-	    else if (!strncasecmp(buf, "resent-message-id:", 18)) {
-		sawresentidhdr = 1;
-		p = buf + 18;
-	    }
-	    else if (!strncasecmp(buf, "from:", 5) ||
-		      !strncasecmp(buf, "subject:", 8) ||
-		      !strncasecmp(buf, "to:", 3)) {
-		if (!m->notifyheader) m->notifyheader = xstrdup(buf);
-		else {
-		    m->notifyheader =
-			xrealloc(m->notifyheader,
-				 strlen(m->notifyheader) + strlen(buf) + 1);
-		    strcat(m->notifyheader, buf);
-		}
-		sawnotifyheader = 1;
-	    }
-	    else if (!m->return_path && 
-		     !strncasecmp(buf, "return-path:", 12)) {
-		sawretpathhdr = 1;
-		m->return_path = xstrdup(buf + 12);
-	    }
-
-	    if (p) {
-		clean822space(p);
-		if (*p) {
-		    m->id = xstrdup(p);
-		    /*
-		     * If we got a resent-message-id header,
-		     * we're done looking for *message-id headers.
-		     */
-		    if (sawresentidhdr) m->id = 0;
-		    sawresentidhdr = sawidhdr = 0;
-		}
-	    }
-	}
+	prot_write(out, buf, strlen(buf));
 
     }
 
-    if (m->return_path && !retpathclean) {
-	clean822space(m->return_path);
-	clean_retpath(m->return_path);
+    if (return_path && !retpathclean) {
+	clean822space(return_path);
+	clean_retpath(return_path);
     }
 
+    /* signify end of message */
+    r = prot_printf(out, "\r\n.\r\n");
+    if (r) close_and_exit(EC_IOERR, "Error writing message data");
 
-
-    fflush(f);
-    if (ferror(f)) {
-	perror("deliver: copying message");
-	exit(EC_TEMPFAIL);
-    }
-
-    if (fstat(fileno(f), &sbuf) == -1) {
-	perror("deliver: stating message");
-	exit(EC_TEMPFAIL);
-    }
-    m->size = sbuf.st_size;
-    fseek(f, 0, SEEK_SET);
-    m->f = f;
-    m->data = prot_new(fileno(f), 0);
+    prot_flush(out);
 }
-
-/* returns non-zero on failure */
-int msg_new(message_data_t **m)
-{
-    message_data_t *ret = (message_data_t *)malloc(sizeof(message_data_t));
-
-    if (!ret) {
-	return -1;
-    }
-    ret->data = NULL;
-    ret->stage = NULL;
-    ret->f = NULL;
-    ret->notifyheader = ret->id = NULL;
-    ret->size = 0;
-    ret->return_path = NULL;
-    ret->rcpt = NULL;
-    ret->rcpt_num = 0;
-
-    *m = ret;
-    return 0;
-}
-
 
 void clean_retpath(char *rpath)
 {
