@@ -298,7 +298,7 @@ cmdloop()
 			(void) mailbox_expunge(popd_mailbox, 1, expungedeleted, 0);
 		    }
 		}
-		printf("+OK\r\n");
+		prot_printf(popd_out, "+OK\r\n");
 		shut_down(0);
 	    }
 	    else prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");
