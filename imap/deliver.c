@@ -25,7 +25,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.88 1999/02/16 02:01:14 wcw Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.89 1999/03/01 20:02:32 tjs Exp $";
 
 
 #ifdef HAVE_UNISTD_H
@@ -1131,9 +1131,9 @@ char *id, *to;
     delivery.dsize = strlen(id) + strlen(to) + 2;
     date = dbm_fetch(DeliveredDBptr, delivery);
     if (date.dptr == NULL) {
-      syslog(LOG_INFO, "unable to fetch entry for %s/%s: %m", id, to);
-      close(lockfd);
-      return 0;
+	/* syslog(LOG_INFO, "unable to fetch entry for %s/%s: %m", id, to); */
+	close(lockfd);
+	return 0;
     }
     close(lockfd);
     return (date.dptr != 0);
