@@ -1,7 +1,7 @@
 /* lex.c -- lexer for timsieved
  * Tim Martin
  * 9/21/99
- * $Id: lex.c,v 1.17 2001/03/15 22:55:55 leg Exp $
+ * $Id: lex.c,v 1.18 2001/10/14 13:58:17 ken3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -54,6 +54,7 @@
 #include <string.h>
 
 #include "prot.h"
+#include "tls.h"
 #include "lex.h"
 #include "codes.h"
 #include "mystring.h"
@@ -94,6 +95,8 @@ int token_lookup (char *str, int len)
 
     case 's':
 	if (strcmp(str, "setactive")==0) return SETACTIVE;
+	if (strcmp(str, "starttls")==0 && tls_enabled("sieve"))
+	    return STARTTLS;
 	break;
     }
 

@@ -278,14 +278,13 @@ int service_main(int argc, char **argv, char **envp)
 	fatal("SASL failed initializing: sasl_server_init()", -1); 
 
     /* other params should be filled in */
-    if (sasl_server_new("imap", config_servername, NULL, 
+    if (sasl_server_new("sieve", config_servername, NULL, 
 			NULL, SASL_SECURITY_LAYER, &sieved_saslconn)
 	   != SASL_OK)
 	fatal("SASL failed initializing: sasl_server_new()", -1); 
 
     /* will always return something valid */
     /* should be configurable! */
-    secflags = SASL_SEC_NOANONYMOUS;
     if (!config_getswitch("allowplaintext", 1)) {
 	secflags |= SASL_SEC_NOPLAINTEXT;
     }
