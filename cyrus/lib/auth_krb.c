@@ -1,5 +1,5 @@
 /* auth_krb.c -- Kerberos authorization
- $Id: auth_krb.c,v 1.32 2000/02/10 21:25:38 leg Exp $
+ $Id: auth_krb.c,v 1.33 2000/02/11 19:49:39 tmartin Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -63,10 +63,10 @@ static struct auth_state auth_anonymous = {
 
 
 
-static int parse_krbequiv_line P((const char *src,
-				  char *principal, char *localuser));
-char *auth_map_krbid P((const char *real_aname, const char *real_inst,
-			const char *real_realm));
+static int parse_krbequiv_line (const char *src,
+				  char *principal, char *localuser);
+char *auth_map_krbid (const char *real_aname, const char *real_inst,
+		      const char *real_realm);
 
 /*
  * Determine if the user is a member of 'identifier'
