@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.61 2004/02/12 02:32:23 ken3 Exp $
+ * $Id: lmtpproxyd.c,v 1.62 2004/02/19 16:54:58 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -413,6 +413,7 @@ static void runme(struct mydata *mydata, message_data_t *msgdata)
 	lt->from = msgdata->return_path;
 	lt->auth = d->authas[0] ? d->authas : NULL;
 	lt->isdotstuffed = 0;
+	lt->tempfail_unknown_mailbox = 1;
 	
 	prot_rewind(msgdata->data);
 	lt->data = msgdata->data;
