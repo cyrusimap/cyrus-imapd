@@ -11,7 +11,7 @@ AC_DEFUN(SASL_GSSAPI_CHK,[
        CPPFLAGS="$CPPFLAGS -I$gssapi/include"
        LDFLAGS="$LDFLAGS -L$gssapi/lib"
     fi
-    AC_CHECK_HEADER(gssapi.h, ,
+    AC_CHECK_HEADER(gssapi.h, AC_DEFINE(HAVE_GSSAPI_H),
       AC_CHECK_HEADER(gssapi/gssapi.h,, AC_WARN(Disabling GSSAPI); gssapi=no))
  fi
 
