@@ -773,10 +773,11 @@ int r;
     case IMAP_PERMISSION_DENIED:
 	return EX_NOPERM;
 
+    case IMAP_MAILBOX_BADFORMAT:
+    case IMAP_MAILBOX_NOTSUPPORTED:
     case IMAP_QUOTA_EXCEEDED:
 	return EX_TEMPFAIL;
 
-    case IMAP_MAILBOX_NOTSUPPORTED:
     case IMAP_MESSAGE_CONTAINSNULL:
     case IMAP_MESSAGE_CONTAINSNL:
     case IMAP_MESSAGE_CONTAINS8BIT:
@@ -809,8 +810,9 @@ int r;
     case IMAP_QUOTA_EXCEEDED:
 	return "452 4.2.2 Over quota";
 
+    case IMAP_MAILBOX_BADFORMAT:
     case IMAP_MAILBOX_NOTSUPPORTED:
-	return "553 5.2.0 Mailbox has an invalid format";
+	return "453 4.2.0 Mailbox has an invalid format";
 
     case IMAP_MESSAGE_CONTAINSNULL:
 	return "554 5.6.0 Message contains NUL characters";
