@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.216 2000/02/22 22:10:21 leg Exp $ */
+/* $Id: imapd.c,v 1.217 2000/02/24 07:28:00 leg Exp $ */
 
 #include <config.h>
 
@@ -439,8 +439,10 @@ int service_main(int argc, char **argv, char **envp)
     if (extprops.ssf) {
 	sasl_setprop(imapd_saslconn, SASL_SSF_EXTERNAL, &extprops);
     }
-    sasl_setprop(imapd_saslconn, SASL_IP_REMOTE, &imapd_remoteaddr);
-    sasl_setprop(imapd_saslconn, SASL_IP_LOCAL, &imapd_localaddr);
+    if (imapd_haveaddr) {
+	sasl_setprop(imapd_saslconn, SASL_IP_REMOTE, &imapd_remoteaddr);
+	sasl_setprop(imapd_saslconn, SASL_IP_LOCAL, &imapd_localaddr);
+    }
 
     proc_register("imapd", imapd_clienthost, NULL, NULL);
 
