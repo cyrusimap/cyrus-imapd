@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.65 2003/06/09 01:42:51 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.66 2003/06/18 21:03:12 ken3 Exp $ */
 
 #include <config.h>
 
@@ -222,7 +222,6 @@ void cmd_starttls(char *tag, int imaps);
 void cmd_netscape (char* tag);
 #endif
 
-#ifdef ENABLE_ANNOTATEMORE
 void cmd_getannotation(char* tag, char *mboxpat);
 void cmd_setannotation(char* tag, char *mboxpat);
 
@@ -236,7 +235,6 @@ int annotate_fetch_proxy(const char *server, const char *mbox_pat,
 			 struct strlist *attribute_pat);
 int annotate_store_proxy(const char *server, const char *mbox_pat,
 			 struct entryattlist *entryatts);
-#endif /* ENABLE_ANNOTATEMORE */
 
 void printstring (const char *s);
 void printastring (const char *s);
@@ -1139,11 +1137,9 @@ int service_init(int argc, char **argv, char **envp)
 	}
     }
 
-#ifdef ENABLE_ANNOTATEMORE
     /* Initialize the annotatemore extention */
     annotatemore_init(0, annotate_fetch_proxy, annotate_store_proxy);
     annotatemore_open(NULL);
-#endif 
 
     return 0;
 }
@@ -1379,10 +1375,8 @@ void shut_down(int code)
     mboxlist_close();
     mboxlist_done();
 
-#ifdef ENABLE_ANNOTATEMORE
     annotatemore_close();
     annotatemore_done();
-#endif
 
     if (proxyd_in) {
 	prot_NONBLOCK(proxyd_in);
@@ -1668,7 +1662,6 @@ void cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_getacl(tag.s, arg1.s);
 	    }
-#ifdef ENABLE_ANNOTATEMORE
 	    else if (!strcmp(cmd.s, "Getannotation")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(proxyd_in, proxyd_out, &arg1);
@@ -1678,7 +1671,6 @@ void cmdloop()
 
 		snmp_increment(GETANNOTATION_COUNT, 1);
 	    }
-#endif
 	    else if (!strcmp(cmd.s, "Getquota")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(proxyd_in, proxyd_out, &arg1);
@@ -1952,7 +1944,6 @@ void cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_setacl(tag.s, arg1.s, arg2.s, arg3.s);
 	    }
-#ifdef ENABLE_ANNOTATEMORE
 	    else if (!strcmp(cmd.s, "Setannotation")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(proxyd_in, proxyd_out, &arg1);
@@ -1960,7 +1951,6 @@ void cmdloop()
 
 		cmd_setannotation(tag.s, arg1.s);
 	    }
-#endif
 	    else if (!strcmp(cmd.s, "Setquota")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(proxyd_in, proxyd_out, &arg1);
@@ -2810,10 +2800,6 @@ void cmd_capability(char *tag)
     } else {
 	/* else don't show anything */
     }
-
-#ifdef ENABLE_ANNOTATEMORE
-    prot_printf(proxyd_out, " ANNOTATEMORE");
-#endif
 
 #ifdef ENABLE_X_NETSCAPE_HACK
     prot_printf(proxyd_out, " X-NETSCAPE");
@@ -4763,7 +4749,6 @@ static int listdata(char *name, int matchlen, int maycreate,
     return 0;
 }
 
-#ifdef ENABLE_ANNOTATEMORE
 /*
  * Parse annotate fetch data.
  *
@@ -5152,8 +5137,6 @@ int annotate_store_proxy(const char *server, const char *mbox_pat,
 
     return 0;
 }
-
-#endif /* ENABLE_ANNOTATEMORE */
 
 /* Reset the given sasl_conn_t to a sane state */
 static int reset_saslconn(sasl_conn_t **conn) 

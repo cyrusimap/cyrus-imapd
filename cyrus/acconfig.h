@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.35.4.16 2003/06/07 18:31:13 ken3 Exp $ */
+/* $Id: acconfig.h,v 1.35.4.17 2003/06/18 21:03:09 ken3 Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -76,9 +76,6 @@
 
 /* do we support LISTEXT? */
 #undef ENABLE_LISTEXT
-
-/* do we support ANNOTATEMORE? */
-#undef ENABLE_ANNOTATEMORE
 
 /* do we support XNETSCAPE */
 #undef ENABLE_X_NETSCAPE_HACK

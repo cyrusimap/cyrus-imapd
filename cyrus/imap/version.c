@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: version.c,v 1.9.2.5 2003/06/07 16:43:04 ken3 Exp $
+ * $Id: version.c,v 1.9.2.6 2003/06/18 21:03:12 ken3 Exp $
  */
 
 #include <config.h>
@@ -186,10 +186,8 @@ void id_response(struct protstream *pout)
 #endif
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
 	     "; netnews.db = %s", CONFIG_DB_NETNEWS->name);
-#ifdef ENABLE_ANNOTATEMORE
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
 	     "; annotation.db = %s", CONFIG_DB_ANNOTATION->name);
-#endif
 
     prot_printf(pout, " \"environment\" \"%s\"", env_buf);
 }

@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.40 2003/06/17 15:25:19 ken3 Exp $
+ * $Id: annotate.c,v 1.8.6.41 2003/06/18 21:03:10 ken3 Exp $
  */
 
 #include <config.h>
@@ -75,8 +75,6 @@
 
 #include "annotate.h"
 
-#ifdef ENABLE_ANNOTATEMORE
-
 #define DB CONFIG_DB_ANNOTATION
 
 extern void printstring(const char *s);
@@ -91,7 +89,6 @@ int (*proxy_fetch_func)(const char *server, const char *mbox_pat,
 			struct strlist *attribute_pat) = NULL;
 int (*proxy_store_func)(const char *server, const char *mbox_pat,
 			struct entryattlist *entryatts) = NULL;
-#endif /* ENABLE_ANNOTATEMORE */
 
 /* String List Management */
 /*
@@ -180,8 +177,6 @@ void freeattvalues(struct attvaluelist *l)
 	l = n;
     }
 }
-
-#ifdef ENABLE_ANNOTATEMORE
 
 /*
  * Append the 'entry'/'attvalues' pair to the entryattlist 'l'.
@@ -1767,5 +1762,3 @@ int annotatemore_delete(char *mboxname)
 
     return annotatemore_rename(mboxname, NULL, NULL, NULL);
 }
-
-#endif /* ENABLE_ANNOTATEMORE */

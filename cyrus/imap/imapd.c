@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.83 2003/06/11 11:31:54 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.84 2003/06/18 21:03:11 ken3 Exp $ */
 
 #include <config.h>
 
@@ -202,7 +202,6 @@ void cmd_starttls(char *tag, int imaps);
 void cmd_netscrape(char* tag);
 #endif
 
-#ifdef ENABLE_ANNOTATEMORE
 void cmd_getannotation(char* tag, char *mboxpat);
 void cmd_setannotation(char* tag, char *mboxpat);
 
@@ -211,7 +210,6 @@ int getannotatefetchdata(char *tag,
 int getannotatestoredata(char *tag, struct entryattlist **entryatts);
 
 void annotate_response(struct entryattlist *l);
-#endif /* ENABLE_ANNOTATEMORE */
 
 #ifdef ENABLE_LISTEXT
 int getlistopts(char *tag, int *listopts);
@@ -469,11 +467,9 @@ int service_init(int argc, char **argv, char **envp)
 	}
     }
 
-#ifdef ENABLE_ANNOTATEMORE
     /* Initialize the annotatemore extention */
     annotatemore_init(0, NULL, NULL);
     annotatemore_open(NULL);
-#endif
 
     return 0;
 }
@@ -623,10 +619,8 @@ void shut_down(int code)
     mboxlist_close();
     mboxlist_done();
 
-#ifdef ENABLE_ANNOTATEMORE
     annotatemore_close();
     annotatemore_done();
-#endif
 
     if (imapd_in) {
 	/* Flush the incoming buffer */
@@ -967,7 +961,6 @@ void cmdloop()
 
 		snmp_increment(GETACL_COUNT, 1);
 	    }
-#ifdef ENABLE_ANNOTATEMORE
 	    else if (!strcmp(cmd.s, "Getannotation")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(imapd_in, imapd_out, &arg1);
@@ -977,7 +970,6 @@ void cmdloop()
 
 		snmp_increment(GETANNOTATION_COUNT, 1);
 	    }
-#endif
 	    else if (!strcmp(cmd.s, "Getquota")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(imapd_in, imapd_out, &arg1);
@@ -1352,7 +1344,6 @@ void cmdloop()
 
 		snmp_increment(SETACL_COUNT, 1);
 	    }
-#ifdef ENABLE_ANNOTATEMORE
 	    else if (!strcmp(cmd.s, "Setannotation")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(imapd_in, imapd_out, &arg1);
@@ -1362,7 +1353,6 @@ void cmdloop()
 
 		snmp_increment(SETANNOTATION_COUNT, 1);
 	    }
-#endif
 	    else if (!strcmp(cmd.s, "Setquota")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(imapd_in, imapd_out, &arg1);
@@ -2099,10 +2089,6 @@ void cmd_capability(char *tag)
 #ifdef ENABLE_LISTEXT
     prot_printf(imapd_out, " LISTEXT LIST-SUBSCRIBED");
 #endif /* ENABLE_LISTEXT */
-
-#ifdef ENABLE_ANNOTATEMORE
-    prot_printf(imapd_out, " ANNOTATEMORE");
-#endif
 
 #ifdef ENABLE_X_NETSCAPE_HACK
     prot_printf(imapd_out, " X-NETSCAPE");
@@ -3453,12 +3439,10 @@ static int delmbox(char *name,
 	prot_printf(imapd_out, "* NO delete %s: %s\r\n",
 		    name, error_message(r));
     }
-#ifdef ENABLE_ANNOTATEMORE
     else {
 	/* Delete mailbox annotations */
 	annotatemore_delete(name);
     }
-#endif
     
     return 0;
 }
@@ -3485,12 +3469,10 @@ void cmd_delete(char *tag, char *name, int localonly)
 				   localonly, 0);
     }
 
-#ifdef ENABLE_ANNOTATEMORE
     if (!r) {
 	/* Delete mailbox annotations */
 	annotatemore_delete(mailboxname);
     }
-#endif
 
     /* was it a top-level user mailbox? */
     /* localonly deletes are only per-mailbox */
@@ -3579,12 +3561,11 @@ static int renmbox(char *name,
 	    user_copyquotaroot(name, text->newmailboxname);
 	    user_renameacl(text->newmailboxname, text->olduser, text->newuser);
 	}
-#ifdef ENABLE_ANNOTATEMORE
+
 	/* Rename mailbox annotations */
 	annotatemore_rename(name, text->newmailboxname,
 			    text->rename_user ? text->olduser : NULL,
 			    text->newuser);
-#endif
 	
 	prot_printf(imapd_out, "* OK rename %s %s\r\n",
 		    oldextname, newextname);
@@ -3700,14 +3681,12 @@ void cmd_rename(const char *tag,
 	/* XXX report status/progress of meta-data */
     }
 
-#ifdef ENABLE_ANNOTATEMORE
     if (!r) {
 	/* Rename mailbox annotations */
 	annotatemore_rename(oldmailboxname, newmailboxname,
 			    rename_user ? olduser : NULL,
 			    newuser);
     }
-#endif
 
     /* rename all mailboxes matching this */
     if (!r && recursive_rename) {
@@ -4865,7 +4844,6 @@ void cmd_namespace(tag)
 		error_message(IMAP_OK_COMPLETED));
 }
 
-#ifdef ENABLE_ANNOTATEMORE
 /*
  * Parse annotate fetch data.
  *
@@ -5210,7 +5188,6 @@ void cmd_setannotation(char *tag, char *mboxpat)
     if (entryatts) freeentryatts(entryatts);
     return;
 }
-#endif /* ENABLE_ANNOTATEMORE */
 
 /*
  * Parse a search program
