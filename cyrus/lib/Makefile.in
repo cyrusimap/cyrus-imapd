@@ -40,7 +40,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-# $Id: Makefile.in,v 1.55.2.1 2004/01/15 20:24:37 ken3 Exp $
+# $Id: Makefile.in,v 1.55.2.2 2004/02/12 05:32:36 ken3 Exp $
 
 # Authorization namespace.
 AUTH=auth_@WITH_AUTH@.o
@@ -69,6 +69,8 @@ MAKEDEPEND = @MAKEDEPEND@
 prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
+
+libdir = @libdir@
 
 BUILTSOURCES = imapopts.h imapopts.c
 
@@ -100,10 +102,10 @@ LIBCYRM_OBJS = libconfig.o imapopts.o hash.o mpool.o xmalloc.o strhash.o \
 all: $(BUILTSOURCES) libcyrus_min.a libcyrus.a
 
 install:
-	$(srcdir)/../install-sh -d $(DESTDIR)$(exec_prefix)/lib
-	$(INSTALL) -m 644 libcyrus.a $(DESTDIR)$(exec_prefix)/lib
-	$(INSTALL) -m 644 libcyrus_min.a $(DESTDIR)$(exec_prefix)/lib
-	$(RANLIB) $(DESTDIR)$(exec_prefix)/lib/libcyrus.a
+	$(srcdir)/../install-sh -d $(DESTDIR)$(libdir)
+	$(INSTALL) -m 644 libcyrus.a $(DESTDIR)$(libdir)
+	$(INSTALL) -m 644 libcyrus_min.a $(DESTDIR)$(libdir)
+	 $(RANLIB) $(DESTDIR)$(libdir)/libcyrus.a
 	for file in $(LIBCYR_HDRS); \
 	do \
 		$(INSTALL) -m 644 $$file $(DESTDIR)$(prefix)/include/cyrus || exit 1; \

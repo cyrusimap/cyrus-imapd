@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: duplicate.h,v 1.14 2003/10/22 18:50:07 rjs3 Exp $ */
+/* $Id: duplicate.h,v 1.14.2.1 2004/02/12 05:32:34 ken3 Exp $ */
 
 #ifndef DUPLICATE_H
 #define DUPLICATE_H
@@ -50,9 +50,9 @@
 
 int duplicate_init(char*, int);
 
-time_t duplicate_check(char *id, int idlen, char *to, int tolen);
-void duplicate_log(char *msgid, char *name, char *action);
-void duplicate_mark(char *id, int idlen, char *to, int tolen, time_t mark,
+time_t duplicate_check(char *id, int idlen, const char *to, int tolen);
+void duplicate_log(char *msgid, const char *name, char *action);
+void duplicate_mark(char *id, int idlen, const char *to, int tolen, time_t mark,
 		    unsigned long uid);
 int duplicate_find(char *msgid, int (*proc)(), void *rock);
 

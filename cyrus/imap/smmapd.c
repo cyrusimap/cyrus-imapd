@@ -72,7 +72,7 @@
  * may contain an explanatory message.
  *
  *
- * $Id: smmapd.c,v 1.1.2.2 2004/02/02 19:35:30 ken3 Exp $
+ * $Id: smmapd.c,v 1.1.2.3 2004/02/12 05:32:36 ken3 Exp $
  */
 
 #include <config.h>
@@ -85,6 +85,7 @@
 #include <syslog.h>
 #include <signal.h>
 #include <com_err.h>
+#include <ctype.h>
 
 #include "acl.h"
 #include "append.h"
@@ -92,6 +93,7 @@
 #include "global.h"
 #include "exitcodes.h"
 #include "imap_err.h"
+#include "util.h"
 
 const char *BB = "";
 
@@ -207,7 +209,7 @@ int verify_user(const char *user, long quotacheck,
     int r = 0;
     int sl = strlen(BB);
     char *domain = NULL;
-    int userlen = strlen(user), domainlen = 0;
+    size_t userlen = strlen(user), domainlen = 0;
 
     if ((domain = strchr(user, '@'))) {
 	userlen = domain - user;
@@ -254,8 +256,7 @@ int verify_user(const char *user, long quotacheck,
 	}
     }
 
-    if (r) syslog(LOG_DEBUG, "append_check() of '%s' failed (%s)", buf,
-		  error_message(r));
+    syslog(LOG_DEBUG, "append_check() of '%s': %s", buf, error_message(r));
 
     return r;
 }
@@ -270,7 +271,7 @@ int begin_handling(void)
 	int r = 0, sawdigit = 0, len = 0, size = 0;
 	struct auth_state *authstate = NULL;
 	char request[MAXREQUEST+1];
-	char *mapname, *key;
+	char *mapname = NULL, *key = NULL;
 	const char *errstring = NULL;
 
 	signals_poll();
@@ -322,7 +323,8 @@ int begin_handling(void)
 	    break;
 
 	case IMAP_MAILBOX_NONEXISTENT:
-	    prot_printf(map_out, "8:NOTFOUND,");
+	    prot_printf(map_out, "%d:NOTFOUND %s,",
+			9+strlen(error_message(r)), error_message(r));
 	    break;
 
 	case IMAP_QUOTA_EXCEEDED:

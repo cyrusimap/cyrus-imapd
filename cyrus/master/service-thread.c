@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service-thread.c,v 1.14.2.1 2004/01/28 19:36:23 ken3 Exp $ */
+/* $Id: service-thread.c,v 1.14.2.2 2004/02/12 05:32:38 ken3 Exp $ */
 #include <config.h>
 
 #include <stdio.h>
@@ -271,6 +271,8 @@ int main(int argc, char **argv, char **envp)
 		case EOPNOTSUPP:
 		case ENETUNREACH:
 		case EAGAIN:
+		case EINTR:
+		case ECONNABORTED:
 		    break;
 		default:
 		    syslog(LOG_ERR, "accept failed: %m");

@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: cyrus.conf.5,v 1.11 2003/10/22 18:50:13 rjs3 Exp $
+.\" $Id: cyrus.conf.5,v 1.11.2.1 2004/02/12 05:32:37 ken3 Exp $
 .SH NAME
 cyrus.conf \- Cyrus configuration file
 .SH DESCRIPTION
@@ -110,8 +110,17 @@ either the hostname or bracket-enclosed IP address of a network
 interface, and \fIport\fR is either a port number or service name (as listed
 in \fB/etc/services\fR).
 .IP "\fBproto=\fRtcp" 5
-The protocol used for this service (\fItcp\fR, \fIudp\fR).  This
-string argument is optional.
+The protocol used for this service (\fItcp\fR, \fItcp4\fR, \fItcp6\fR,
+\fIudp\fR, \fIudp4\fR, \fIudp6\fR).  This string argument is optional.
+
+\fBtcp4\fR, \fBudp4\fR: These arguments are used to bind the service to IPv4
+only.
+.br
+\fBtcp6\fR, \fBudp6\fR: These arguments are used to bind the service to IPv6
+only, if the operating system supports this.
+.br
+\fBtcp\fR, \fBudp\fR: These arguments are used to bind to both IPv4 and IPv6
+if possible.
 .IP "\fBprefork=\fR0" 5
 The number of instances of this service to always have running and
 waiting for a connection (for faster initial response time).  This

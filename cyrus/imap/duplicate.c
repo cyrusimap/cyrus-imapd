@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: duplicate.c,v 1.35.2.2 2003/12/20 02:30:20 ken3 Exp $ */
+/* $Id: duplicate.c,v 1.35.2.3 2004/02/12 05:32:34 ken3 Exp $ */
 
 #include <config.h>
 
@@ -118,7 +118,7 @@ int duplicate_init(char *fname, int myflags)
     return r;
 }
 
-time_t duplicate_check(char *id, int idlen, char *to, int tolen)
+time_t duplicate_check(char *id, int idlen, const char *to, int tolen)
 {
     char buf[1024];
     int r;
@@ -162,7 +162,7 @@ time_t duplicate_check(char *id, int idlen, char *to, int tolen)
     return mark;
 }
 
-void duplicate_log(char *msgid, char *name, char *action)
+void duplicate_log(char *msgid, const char *name, char *action)
 {
     if (strlen(msgid) < 80) {
 	char pretty[160];
@@ -177,7 +177,7 @@ void duplicate_log(char *msgid, char *name, char *action)
     }	
 }
 
-void duplicate_mark(char *id, int idlen, char *to, int tolen, time_t mark,
+void duplicate_mark(char *id, int idlen, const char *to, int tolen, time_t mark,
 		    unsigned long uid)
 {
     char buf[1024], data[100];
