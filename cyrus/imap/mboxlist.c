@@ -528,11 +528,11 @@ char *userid;
 
 	/* Delete any subscription list file */
 	{
-	    char *val, *fname;
-	    val = config_getstring("configdirectory", "");
-	    fname = xmalloc(strlen(val)+sizeof(FNAME_USERDIR)+
+	    char *fname;
+
+	    fname = xmalloc(strlen(config_dir)+sizeof(FNAME_USERDIR)+
 				strlen(name)+sizeof(FNAME_SUBSSUFFIX));
-	    strcpy(fname, val);
+	    strcpy(fname, config_dir);
 	    strcat(fname, FNAME_USERDIR);
 	    strcat(fname, name+5);
 	    strcat(fname, FNAME_SUBSSUFFIX);
@@ -1512,7 +1512,6 @@ char **fname;
 char **newfname;
 {
     int r;
-    char *val;
     static char *subsfname, *newsubsfname;
     int subsfd;
     struct stat sbuffile, sbuffd;
@@ -1534,10 +1533,9 @@ char **newfname;
     }
 
     /* Build subscription list filename */
-    val = config_getstring("configdirectory", "");
-    subsfname = xmalloc(strlen(val)+sizeof(FNAME_USERDIR)+
+    subsfname = xmalloc(strlen(config_dir)+sizeof(FNAME_USERDIR)+
 			strlen(userid)+sizeof(FNAME_SUBSSUFFIX));
-    strcpy(subsfname, val);
+    strcpy(subsfname, config_dir);
     strcat(subsfname, FNAME_USERDIR);
     strcat(subsfname, userid);
     strcat(subsfname, FNAME_SUBSSUFFIX);
@@ -1589,12 +1587,11 @@ char **newfname;
  */
 static mboxlist_getfname()
 {
-    char *val = config_getstring("configdirectory", "");
-    listfname = xmalloc(strlen(val)+sizeof(FNAME_MBOXLIST));
-    strcpy(listfname, val);
+    listfname = xmalloc(strlen(config_dir)+sizeof(FNAME_MBOXLIST));
+    strcpy(listfname, config_dir);
     strcat(listfname, FNAME_MBOXLIST);
-    newlistfname = xmalloc(strlen(val)+sizeof(FNAME_MBOXLIST)+4);
-    strcpy(newlistfname, val);
+    newlistfname = xmalloc(strlen(config_dir)+sizeof(FNAME_MBOXLIST)+4);
+    strcpy(newlistfname, config_dir);
     strcat(newlistfname, FNAME_MBOXLIST);
     strcat(newlistfname, ".NEW");
 }
