@@ -25,8 +25,8 @@ AC_DEFUN(CMU_CHECK_HEADER_NOCACHE,
 [dnl Do the transliteration at runtime so arg 1 can be a shell variable.
 ac_safe=`echo "$1" | sed 'y%./+-%__p_%'`
 AC_MSG_CHECKING([for $1])
-AC_TRY_CPP([#include <$1>], eval "ac_cv_header_$ac_safe=yes",
-  eval "ac_cv_header_$ac_safe=no"))dnl
+[AC_TRY_CPP([#include <$1>], eval "ac_cv_header_$ac_safe=yes",
+  eval "ac_cv_header_$ac_safe=no")]dnl
 if eval "test \"`echo '$ac_cv_header_'$ac_safe`\" = yes"; then
   AC_MSG_RESULT(yes)
   ifelse([$2], , :, [$2])
