@@ -1,4 +1,4 @@
-/* $Id: cyrdump.c,v 1.11 2003/02/13 20:15:24 rjs3 Exp $
+/* $Id: cyrdump.c,v 1.12 2003/04/23 16:36:22 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -53,15 +53,17 @@
 #include <time.h>
 
 /* cyrus includes */
-#include "imapconf.h"
-#include "sysexits.h"
-#include "imap_err.h"
-#include "mailbox.h"
-#include "xmalloc.h"
-#include "mboxlist.h"
-#include "imapd.h"
+#include "assert.h"
 #include "exitcodes.h"
+#include "imapconf.h"
+#include "imapd.h"
+#include "imap_err.h"
 #include "imapurl.h"
+#include "mailbox.h"
+#include "mboxlist.h"
+#include "sysexits.h"
+#include "xmalloc.h"
+
 
 int verbose = 0;
 
@@ -90,7 +92,7 @@ struct incremental_record {
 int main(int argc, char *argv[])
 {
     int option;
-    char buf[MAX_MAILBOX_PATH];
+    char buf[MAX_MAILBOX_PATH+1];
     int i, r;
     char *alt_config = NULL;
     struct incremental_record irec;
@@ -131,7 +133,7 @@ int main(int argc, char *argv[])
 
     irec.incruid = 0;
     for (i = optind; i < argc; i++) {
-	strlcpy(buf, argv[optind], sizeof(buf));
+	strlcpy(buf, argv[i], sizeof(buf));
 	/* Translate any separators in mailboxname */
 	mboxname_hiersep_tointernal(&dump_namespace, buf);
 	(*dump_namespace.mboxlist_findall)(&dump_namespace, buf, 1, 0, 0,
@@ -157,10 +159,11 @@ void fatal(const char *s, int code)
     exit(code);
 }
 
-/* 'boundary' must be at least 100 long */
-static void generate_boundary(char *boundary)
+static void generate_boundary(char *boundary, size_t size)
 {
-    snprintf(boundary, 100, "dump-%ld-%ld-%ld", 
+    assert(size >= 100);
+    
+    snprintf(boundary, size, "dump-%ld-%ld-%ld", 
 	     (long) getpid(), (long) time(NULL), (long) rand());
 }
 
@@ -168,7 +171,7 @@ static int dump_me(char *name, int matchlen, int maycreate, void *rock)
 {
     int r;
     struct mailbox m;
-    char boundary[100];
+    char boundary[128];
     char imapurl[MAX_MAILBOX_PATH];
     struct incremental_record *irec = (struct incremental_record *) rock;
     struct searchargs searchargs;
@@ -198,7 +201,7 @@ static int dump_me(char *name, int matchlen, int maycreate, void *rock)
     mailbox_read_index_header(&m);
     index_operatemailbox(&m);
 
-    generate_boundary(boundary);
+    generate_boundary(boundary, sizeof(boundary));
 
     printf("Content-Type: multipart/related; boundary=\"%s\"\n\n", boundary);
 
