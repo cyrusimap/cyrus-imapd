@@ -189,26 +189,19 @@ acapmbox_handle_t *acapmbox_get_handle(void)
 	return cached_conn;
     }
 
-    cb = mysasl_callbacks(user,
-			  config_getstring("acap_authname", user),
-			  config_getstring("acap_realm", NULL),
-			  config_getstring("acap_password", NULL));
-
     authprog = config_getstring("acap_getauth", NULL);
     if (authprog) {
 	system(authprog);
     }
 
-    r = sasl_client_init(cb);
-    if (r != SASL_OK) {
-	syslog(LOG_ERR, "sasl_client_init() failed: %s",
-	       sasl_errstring(r, NULL, NULL));
-	return cached_conn;
-    }
-
+    cb = mysasl_callbacks(user,
+			  config_getstring("acap_authname", user),
+			  config_getstring("acap_realm", NULL),
+			  config_getstring("acap_password", NULL));
     snprintf(str, sizeof(str), "acap://%s@%s/", user, acapserver);
+    r = acap_conn_connect(str, cb, &(cached_conn->conn));
+    free(cb);
 
-    r = acap_conn_connect(str, &(cached_conn->conn));
     if (r != ACAP_OK) {
 	syslog(LOG_ERR, "acap_conn_connect() failed: %s",
 	       error_message(r));
