@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: user.c,v 1.19 2004/02/27 17:44:56 ken3 Exp $
+ * $Id: user.c,v 1.20 2004/06/22 16:59:17 rjs3 Exp $
  */
 
 #include <config.h>
@@ -453,7 +453,9 @@ int user_deletequotaroots(const char *user)
 						 user, inboxname);
 
     if (!r) {
-	struct find_rock frock = { inboxname, &tid };
+	struct find_rock frock = { NULL, NULL };
+	frock.inboxname = inboxname;
+	frock.tid = &tid;
 	r = config_quota_db->foreach(qdb, inboxname, strlen(inboxname),
 				     &find_p, &find_cb, &frock, &tid);
     }

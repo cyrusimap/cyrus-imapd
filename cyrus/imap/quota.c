@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: quota.c,v 1.54 2004/05/22 03:45:52 rjs3 Exp $ */
+/* $Id: quota.c,v 1.55 2004/06/22 16:59:17 rjs3 Exp $ */
 
 
 #include <config.h>
@@ -265,7 +265,10 @@ int buildquotalist(char *domain, char **roots, int nroots)
 {
     int i;
     char buf[MAX_MAILBOX_NAME+1];
-    struct find_rock frock = { roots, nroots };
+    struct find_rock frock;
+
+    frock.roots = roots;
+    frock.nroots = nroots;
 
     /* Translate separator in mailboxnames.
      *

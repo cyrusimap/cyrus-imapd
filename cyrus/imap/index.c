@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.207 2004/06/18 19:03:50 rjs3 Exp $
+ * $Id: index.c,v 1.208 2004/06/22 16:59:16 rjs3 Exp $
  */
 #include <config.h>
 
@@ -4806,12 +4806,14 @@ extern char *index_getheader(struct mailbox *mailbox, unsigned msgno,
 {
     static const char *msg_base = 0;
     static unsigned long msg_size = 0;
-    struct strlist headers = { hdr, NULL, NULL };
+    struct strlist headers = { NULL, NULL, NULL };
     static char *alloc = NULL;
     static int allocsize = 0;
     const char *cacheitem;
     unsigned size;
     char *buf;
+
+    headers.s = hdr;
 
     if (msg_base) {
 	mailbox_unmap_message(NULL, 0, &msg_base, &msg_size);
