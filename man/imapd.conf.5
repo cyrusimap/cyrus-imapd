@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapd.conf.5,v 1.64 2002/06/10 18:35:12 ken3 Exp $
+.\" $Id: imapd.conf.5,v 1.65 2002/06/12 17:38:58 rjs3 Exp $
 
 .SH NAME
 imapd.conf \- IMAP configuration file
@@ -340,6 +340,21 @@ when answering the STATUS command.  This is disabled by default since
 some clients issue many STATUS commands in a row, and do not cache the
 connections that these referrals would cause, thus resulting in a higher
 authentication load on the respective backend server.
+.IP "\fBmupdate_server:\fR <none>" 5
+The mupdate server for the Cyrus Murder
+.IP "\fBmupdate_port:\fR <none>" 5
+The port of the mupdate server for the Cyrus Murder
+.IP "\fBmupdate_username:\fR <none>" 5
+The SASL username (Authorization Name) to use when authenticating to the mupdate server.
+.IP "\fBmupdate_authname:\fR <none>" 5
+The SASL username (Authentication Name) to use when authenticating to the
+mupdate server (if needed).
+.IP "\fBmupdate_realm:\fR <none>" 5
+The SASL realm (if needed) to use when authenticating to the mupdate server.
+.IP "\fBmupdate_password:\fR <none>" 5
+The SASL password (if needed) to use when authenticating to the mupdate server.
+.IP "\fBmupdate_retry_delay:\fR 20" 5
+The time to wait between connection retries to the mupdate server.
 .SH SEE ALSO
 .PP
 \fBimapd(8)\fR, \fBpop3d(8)\fR, \fBlmtpd(8)\fR, \fBtimsieved(8)\fR,
