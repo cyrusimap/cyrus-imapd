@@ -1,4 +1,4 @@
-<!-- $Id: install.html,v 1.49 1998/12/07 16:16:47 tjs Exp $ -->
+<!-- $Id: install.html,v 1.50 1999/02/18 02:38:56 tjs Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
@@ -31,13 +31,14 @@ Upgrading from the Cyrus IMAP server
 version 1.3 or earlier requires running "<TT>reconstruct -m</TT>"
 after installing this version of the software.
 
-<li> Upgrading from 1.5.2 or earlier requires deleting the delivered database
-(if duplicate delivery supression is used, the default) and the PTS cache
-database (if the AFS PTS group support is used, which is not the default).
-The delivered.db is in the configdirectory; the PTS cache is in /var/ptclient.
-These files must be removed.  (There is no danger in deleting the PTS cache,
-and if the delivered database is removed, there is a chance that some duplicate
-messages may come through, but this is not a serious concern.)
+<li> Upgrading from 1.5.14 or earlier requires deleting the delivered
+database.  Remove the file delivered.db in the configdirectory and make a
+directory called "deliverdb" in the configdirectory.  This may cause some
+duplicates to get through.
+
+<li> Upgrading from 1.5.14 or earlier requires removing the PTS cache database
+(if the AFS PTS group support is used, which is not the default).  The PTS
+cache is in /var/ptclient/ptscache.db, and you should remove it.
 
 <li> The format for the PTS cache for IMSP has changed.  If you use
 AFS ACLs, IMSPd, and IMAPd on the same machine, make sure you have version
@@ -891,7 +892,7 @@ to work with the IMAP server.
 
 <P><HR><P>
 <!-- hhmts start -->
-last modified by tjs at Mon Dec  7 11:10:18 1998
+last modified by tjs at Wed Feb 17 21:38:39 1999
 <!-- hhmts end -->
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
