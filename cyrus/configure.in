@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.268.2.16 2004/11/26 21:40:06 ken3 Exp $
+dnl $Id: configure.in,v 1.268.2.17 2005/01/18 23:45:24 shadow Exp $
 dnl
 
 
@@ -552,6 +552,9 @@ dnl compile SASL, we might as well use the same checks.
 AC_ARG_WITH(krb,[  --with-krb=PATH         use Kerberos from PATH],
 	with_krb="$withval", with_krb="no")
 
+AC_ARG_WITH(krbimpl,[  --with-krbimpl=\[kth|mit\]         assume Kerberos 4 from KTH or MIT],
+	with_krbimpl="$withval", with_krbimpl="kth")
+
 AC_ARG_ENABLE(statickrb,
 		[  --enable-statickrb      link Kerberos statically],
 	with_statickrb="yes", with_statickrb="no")
@@ -598,13 +601,19 @@ if test "$WITH_AUTH" = "krb" -o "$WITH_AUTH" = "krb_pts" -o "$with_krb" != "no";
      CMU_ADD_LIBPATH(${with_krb}/lib)
   fi
 
+  if test "$with_krbimpl" != "kth"; then
+    KRBLIB="krb4"
+  else
+    KRBLIB="krb"
+  fi
+
   if test "$with_des" != no; then
     AC_CHECK_HEADER(krb.h,
-      AC_CHECK_LIB(krb, krb_mk_priv,
+      AC_CHECK_LIB(${KRBLIB}, krb_mk_priv,
 	if test "$with_statickrb" = "yes"; then
-	    KRB_LIBS="$KRB_LIBS $with_krb/lib/libkrb.a"
+	    KRB_LIBS="$KRB_LIBS $with_krb/lib/lib${KRBLIB}.a"
 	else
-	    KRB_LIBS="$KRB_LIBS -lkrb"
+	    KRB_LIBS="$KRB_LIBS -l${KRBLIB}"
 	fi,
                    AC_WARN(No Kerberos V4 found); krb4=no,
 		   $KRB_LIBS),
@@ -1000,7 +1009,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.268.2.16 2004/11/26 21:40:06 ken3 Exp $ */
+/* $Id: configure.in,v 1.268.2.17 2005/01/18 23:45:24 shadow Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
