@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.176 2003/10/22 19:42:52 ken3 Exp $
+# $Id: Makefile.in,v 1.177 2003/10/22 20:05:10 ken3 Exp $
 # 
 # @configure_input@
 # 
@@ -46,6 +46,9 @@ DEFINES=-DSETPROCTITLE
 # \Seen state database.  Either 'db' (berkeley db) or 
 # 'local' (legacy flat file).
 SEEN=seen_db.o
+
+# IMAP IDLE mechanism
+IDLE=idle_@WITH_IDLE@.o
 
 srcdir = @srcdir@
 VPATH = @srcdir@
@@ -97,10 +100,12 @@ LOBJS= append.o mailbox.o mboxlist.o mupdate-client.o mboxname.o message.o \
 	global.o imap_err.o mupdate_err.o proc.o setproctitle.o \
 	convert_code.o duplicate.o saslclient.o saslserver.o signals.o \
 	annotate.o search_engines.o squat.o squat_internal.o mbdump.o \
-	imapparse.o telemetry.o user.o notify.o protocol.o idle.o \
-	$(SEEN)
+	imapparse.o telemetry.o user.o notify.o protocol.o \
+	$(SEEN) $(IDLE)
 
 IMAPDOBJS=pushstats.o backend.o imapd.o index.o tls.o version.o
+
+PROXYDOBJS=backend.o pushstats.o proxyd.o tls.o version.o 
 
 LMTPOBJS=lmtpstats.o lmtpengine.o smtpclient.o spool.o tls.o
 
@@ -122,7 +127,7 @@ BUILTSOURCES = imap_err.c imap_err.h pushstats.c pushstats.h \
 
 all: $(BUILTSOURCES) $(PROGS) $(SUIDPROGS)
 
-pure: imapd.pure lmtpd.pure mupdate.pure lmtpproxyd.pure
+pure: imapd.pure lmtpd.pure proxyd.pure mupdate.pure lmtpproxyd.pure
 
 
 install:
@@ -132,7 +137,6 @@ install:
 		$(INSTALL) -m 755 $$file $(DESTDIR)$(cyrus_prefix)/bin || exit 1; \
 	done
 	ln -f $(DESTDIR)$(cyrus_prefix)/bin/pop3d $(DESTDIR)$(cyrus_prefix)/bin/pop3proxyd
-	ln -f $(DESTDIR)$(cyrus_prefix)/bin/imapd $(DESTDIR)$(cyrus_prefix)/bin/proxyd
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) \
@@ -221,6 +225,16 @@ imapd.quant: $(IMAPDOBJS) mutex_fake.o libimap.a $(DEPLIBS) $(SERVICE)
 	$(QUANTIFY) $(QUANTOPT) $(CC) $(LDFLAGS) -o imapd.quant \
 	 $(SERVICE) $(IMAPDOBJS) mutex_fake.o libimap.a \
 	$(DEPLIBS) $(LIBS) $(LIB_WRAP)
+
+proxyd: $(PROXYDOBJS) mutex_fake.o libimap.a $(DEPLIBS) $(SERVICE)
+	$(CC) $(LDFLAGS) -o proxyd \
+	 $(SERVICE) $(PROXYDOBJS) mutex_fake.o libimap.a \
+	 $(DEPLIBS) $(LIBS) $(LIB_WRAP)
+
+proxyd.pure: $(PROXYDOBJS) mutex_fake.o libimap.a $(DEPLIBS) $(SERVICE)
+	$(PURIFY) $(PUREOPT) $(CC) $(LDFLAGS) -o proxyd.pure \
+	 $(SERVICE) $(PROXYDOBJS) mutex_fake.o libimap.a \
+	 $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
 mupdate: mupdate.o mupdate-slave.o mupdate-client.o mutex_pthread.o tls.o \
 	libimap.a $(DEPLIBS)
