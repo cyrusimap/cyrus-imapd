@@ -44,7 +44,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 # Create newsgroups on imap server
 # Based on the make_fromactive.pl script by Tim Martin
 #
-# $Id: mknewsgroups,v 1.1.2.3 2003/03/12 21:47:52 ken3 Exp $
+# $Id: mknewsgroups,v 1.1.2.4 2003/03/17 19:34:04 ken3 Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -104,6 +104,7 @@ if ($help || !($server = shift)) {
 
 # convert wildmat to regex
 $wild =~ s/\./\\./g;
+$wild =~ s/\?/\./g;
 $wild =~ s/\*/\.\*/g;
 
 # split acl into a hash of ids and rights
