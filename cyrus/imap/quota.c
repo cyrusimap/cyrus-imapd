@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: quota.c,v 1.56 2004/06/30 17:30:21 ken3 Exp $ */
+/* $Id: quota.c,v 1.57 2004/06/30 19:23:26 ken3 Exp $ */
 
 
 #include <config.h>
@@ -309,13 +309,11 @@ int fixquota_mailbox(char *name,
     char *p, *domain = frock->domain;
 
     /* make sure the domains match */
-    if ((p = strchr(name, '!')) != NULL) {
-	if (!domain || (p - name) != strlen(domain) ||
-	    strncmp(name, domain, p - name)) {
-	  return 0;
-	}
+    if (domain &&
+	(!(p = strchr(name, '!')) || (p - name) != strlen(domain) ||
+	 strncmp(name, domain, p - name))) {
+	return 0;
     }
-    else if (domain) return 0;
 
     while (firstquota < quota_num &&
 	   strncmp(name, quota[firstquota].quota.root,
