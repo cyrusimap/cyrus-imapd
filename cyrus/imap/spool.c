@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: spool.c,v 1.2 2003/10/22 18:02:59 rjs3 Exp $
+ * $Id: spool.c,v 1.3 2004/02/06 17:07:39 ken3 Exp $
  */
 
 #include <config.h>
@@ -130,14 +130,17 @@ enum {
    on error, returns < 0
 */
 static int parseheader(struct protstream *fin, FILE *fout, 
-		       char **headname, char **contents) {
+		       char **headname, char **contents,
+		       const char **skipheaders)
+{
     int c;
     static char *name = NULL, *body = NULL;
     static int namelen = 0, bodylen = 0;
-    int off = 0, skip = 0;
+    int off = 0;
     state s = NAME_START;
     int r = 0;
     int reject8bit = config_getswitch(IMAPOPT_REJECT8BIT);
+    const char **skip;
 
     if (namelen == 0) {
 	namelen += NAMEINC;
@@ -189,14 +192,13 @@ static int parseheader(struct protstream *fin, FILE *fout,
 	case NAME:
 	    if (c == ' ' || c == '\t' || c == ':') {
 		name[off] = '\0';
-		if (!strcasecmp(name, "xref")) {
-		    /* remove Xref: header (usenet) */
-		    skip = 1;
-		}
-		else {
+		/* see if this header is in our skip list */
+		for (skip = skipheaders;
+		     skip && *skip && strcasecmp(name, *skip); skip++);
+		if (!skip || !*skip) {
 		    /* write the header name to the output */
 		    fputs(name, fout);
-		    skip = 0;
+		    skip = NULL;
 		}
 		s = (c == ':' ? BODY_START : COLON);
 		break;
@@ -231,12 +233,6 @@ static int parseheader(struct protstream *fin, FILE *fout,
 		break;
 	    off = 0;
 	    s = BODY;
-	    if (!strcasecmp(name, "path")) {
-		/* prepend servername to Path: header (usenet) */
-		sprintf(body, "%s!", config_servername);
-		off += strlen(body);
-		fputs(body, fout);
-	    }
 	    /* falls through! */
 	case BODY:
 	    /* now we want to convert all newlines into \r\n */
@@ -259,11 +255,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
 		    /* this is the end of the header */
 		    body[off] = '\0';
 		    prot_ungetc(c, fin);
-		    if (!skip) goto got_header;
-
-		    /* skipping this header, so get next one */
-		    off = 0;
-		    s = NAME_START;
+		    goto got_header;
 		}
 		/* ignore this whitespace, but we'll copy all the rest in */
 		break;
@@ -312,7 +304,8 @@ static int parseheader(struct protstream *fin, FILE *fout,
     return 0;
 }
 
-int spool_fill_hdrcache(struct protstream *fin, FILE *fout, hdrcache_t cache)
+int spool_fill_hdrcache(struct protstream *fin, FILE *fout, hdrcache_t cache,
+			const char **skipheaders)
 {
     int r = 0;
 
@@ -321,7 +314,7 @@ int spool_fill_hdrcache(struct protstream *fin, FILE *fout, hdrcache_t cache)
 	char *name, *body;
 	int cl, clinit;
 
-	if ((r = parseheader(fin, fout, &name, &body)) < 0) {
+	if ((r = parseheader(fin, fout, &name, &body, skipheaders)) < 0) {
 	    break;
 	}
 	if (!name) {

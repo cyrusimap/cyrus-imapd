@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: spool.h,v 1.2 2003/10/22 18:02:59 rjs3 Exp $
+ * $Id: spool.h,v 1.3 2004/02/06 17:07:39 ken3 Exp $
  */
 
 #ifndef INCLUDED_SPOOL_H
@@ -52,7 +52,8 @@
 typedef struct Header **hdrcache_t;
 
 hdrcache_t spool_new_hdrcache();
-int spool_fill_hdrcache(struct protstream *fin, FILE *fout, hdrcache_t cache);
+int spool_fill_hdrcache(struct protstream *fin, FILE *fout, hdrcache_t cache,
+			const char **skipheaders);
 const char **spool_getheader(hdrcache_t cache, const char *phead);
 void spool_free_hdrcache(hdrcache_t cache);
 int spool_copy_msg(struct protstream *fin, FILE *fout);
