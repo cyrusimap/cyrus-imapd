@@ -148,7 +148,7 @@ int code;
 {
     proc_cleanup();
     if (imapd_mailbox) {
-	index_checkseen(imapd_mailbox, 1, 0, imapd_exists);
+	index_closemailbox(imapd_mailbox);
 	mailbox_close(imapd_mailbox);
     }
     prot_flush(imapd_out);
@@ -1024,6 +1024,12 @@ char *name;
 
     inboxname[0] = '\0';
 
+    if (imapd_mailbox) {
+	index_closemailbox(imapd_mailbox);
+	mailbox_close(imapd_mailbox);
+	imapd_mailbox = 0;
+    }
+
     if (cmd[0] == 'B') {
 	/* BBoard namespace is empty */
 	r = IMAP_MAILBOX_NONEXISTENT;
@@ -1058,11 +1064,6 @@ char *name;
 	return;
     }
 
-    if (imapd_mailbox) {
-	/* Save \Seen state and close previously open mailbox */
-	index_checkseen(imapd_mailbox, 1, 0, imapd_exists);
-	mailbox_close(imapd_mailbox);
-    }
     mboxstruct = mailbox;
     imapd_mailbox = &mboxstruct;
 
