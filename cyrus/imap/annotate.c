@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.4 2002/07/12 20:00:38 rjs3 Exp $
+ * $Id: annotate.c,v 1.8.6.5 2002/07/13 19:38:01 rjs3 Exp $
  */
 
 #include <config.h>
@@ -167,7 +167,7 @@ void annotatemore_open(char *fname)
 enum {
     ENTRY_PARTITION =		(1<<0),
     ENTRY_SERVER =		(1<<1),
-    ENTRY_SIZE =                (1<<2)  /* xxx */
+    ENTRY_SIZE =                (1<<2)  /* xxx - notimplemented */
 };
 
 enum {
@@ -222,6 +222,7 @@ static void get_mb_data(const char *mboxname,
 }
 
 static void annotation_get_server(const char *mboxname,
+				  int isadmin,
 				  struct auth_state *auth_state,
 				  struct annotation_result *result,
 				  struct mailbox_annotation_rock *mbrock,
@@ -233,8 +234,9 @@ static void annotation_get_server(const char *mboxname,
     get_mb_data(mboxname, mbrock);
 
     /* Check ACL */
-    if(!mbrock->acl ||
-       !(cyrus_acl_myrights(auth_state, mbrock->acl) & ACL_LOOKUP))
+    if(!isadmin &&
+       (!mbrock->acl ||
+        !(cyrus_acl_myrights(auth_state, mbrock->acl) & ACL_LOOKUP)))
 	return;
 
     result->value = mbrock->server;
@@ -244,6 +246,7 @@ static void annotation_get_server(const char *mboxname,
 }
 
 static void annotation_get_partition(const char *mboxname,
+				     int isadmin,
 				     struct auth_state *auth_state,
 				     struct annotation_result *result,
 				     struct mailbox_annotation_rock *mbrock,
@@ -256,8 +259,9 @@ static void annotation_get_partition(const char *mboxname,
     get_mb_data(mboxname, mbrock);
 
     /* Check ACL */
-    if(!mbrock->acl ||
-       !(cyrus_acl_myrights(auth_state, mbrock->acl) & ACL_LOOKUP))
+    if(!isadmin &&
+       (!mbrock->acl ||
+        !(cyrus_acl_myrights(auth_state, mbrock->acl) & ACL_LOOKUP)))
 	return;
 
     result->value = mbrock->partition;
@@ -270,6 +274,7 @@ struct annotate_entry
 {
     const char *name;
     void (*get)(const char *mboxname,
+		int isadmin,
 		struct auth_state *auth_state,
 		struct annotation_result *result,
 		struct mailbox_annotation_rock *mbrock,
@@ -320,6 +325,7 @@ const struct annotate_attrib annotation_attributes[] =
 struct fetchdata {
     struct namespace *namespace;
     char *userid;
+    int isadmin;
     struct auth_state *auth_state;
     struct annotate_entry_list *entry_list;
     unsigned entries; /* xxx used for server annotations, shouldn't be */
@@ -393,7 +399,8 @@ static int fetch_cb(char *name, int matchlen,
 	attvalues = NULL;
 	memset(&result,0,sizeof(struct annotation_result));
 
-	entries_ptr->entry->get(mboxname, fdata->auth_state,
+	entries_ptr->entry->get(mboxname, fdata->isadmin,
+				fdata->auth_state,
 				&result, &mbrock, NULL);
 
 	if ((fdata->attribs & ATTRIB_VALUE_SHARED) && result.value) {
@@ -503,6 +510,7 @@ int annotatemore_fetch(struct strlist *entries, struct strlist *attribs,
 		mboxname_hiersep_tointernal(namespace, mailbox, 0);
 		fdata.namespace = namespace;
 		fdata.userid = userid;
+		fdata.isadmin = isadmin;
 		fdata.auth_state = auth_state;
 		fdata.entryatts = l;
 		(*namespace->mboxlist_findall)(namespace, mailbox,
