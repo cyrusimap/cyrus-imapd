@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.108 2002/03/18 15:53:32 wcw Exp $ */
+/* $Id: proxyd.c,v 1.109 2002/03/20 20:46:42 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -3439,12 +3439,6 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
     struct backend *s = NULL;
     char *acl = NULL;
 
-    if (partition) {
-	prot_printf(proxyd_out, 
-		    "%s NO cross-server RENAME not implemented\r\n", tag);
-	return;
-    }
-
     r = (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace, oldname,
 						proxyd_userid, oldmailboxname);
     if (!r) (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace, newname,
@@ -3454,6 +3448,27 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	s = proxyd_findserver(server);
 	if (!s) r = IMAP_SERVER_UNAVAILABLE;
     }
+
+    /* Cross Server Rename */
+    if (!r && partition) {
+	if(strcmp(oldname, newname)) {
+	    prot_printf(s->out,
+			"%s NO Cross-server move w/rename not supported\r\n",
+			tag);
+	    return;
+	}
+
+	prot_printf(s->out, "%s XFER {%d+}\r\n%s {%d+}\r\n%s\r\n", 
+		    tag, strlen(partition), partition,
+		    strlen(oldname), oldname);
+	res = pipe_including_tag(s, tag, 0);
+
+	/* xxx */
+	if (ultraparanoid && res == PROXY_OK) kick_mupdate();
+
+	return;
+    }
+
     if (!r) {
 	if (!CAPA(s, MUPDATE)) {
 #if 0

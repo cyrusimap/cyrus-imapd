@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.360 2002/03/19 21:19:44 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.361 2002/03/20 20:46:42 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -113,7 +113,8 @@ static char imapd_clienthost[250] = "[local]";
 static int imapd_logfd = -1;
 char *imapd_userid;
 struct auth_state *imapd_authstate = 0;
-static int imapd_userisadmin;
+static int imapd_userisadmin = 0;
+static int imapd_userisproxyadmin = 0;
 static sasl_conn_t *imapd_saslconn; /* the sasl connection context */
 static int imapd_starttls_done = 0; /* have we done a successful starttls? */
 #ifdef HAVE_SSL
@@ -334,6 +335,10 @@ static int mysasl_authproc(sasl_conn_t *conn,
 	    auth_freestate(imapd_authstate);
 	    
 	    imapd_authstate = auth_newstate(requested_user, NULL);
+
+	    /* are we a proxy admin? */
+	    imapd_userisproxyadmin =
+		authisa(imapd_authstate, "imap", "admins");
 	} else {
 	    sasl_seterror(conn, 0, "user %s is not allowed to proxy",
 			  auth_identity);
@@ -440,6 +445,7 @@ static void imapd_reset(void)
 	imapd_authstate = NULL;
     }
     imapd_userisadmin = 0;
+    imapd_userisproxyadmin = 0;
     if (imapd_saslconn) {
 	sasl_dispose(&imapd_saslconn);
 	imapd_saslconn = NULL;
@@ -5853,8 +5859,14 @@ void cmd_xfer(char *tag, char *toserver, char *name)
     int backout_remoteflag = 0;
     
     /* administrators only please */
-    if (!imapd_userisadmin) {
+    /* however, proxys can do this, if their authzid is an admin */
+    if (!imapd_userisadmin && !imapd_userisproxyadmin) {
 	r = IMAP_PERMISSION_DENIED;
+    }
+
+    /* if we're not in a murder this [currently] makes no sense */
+    if (!mupdate_server) {
+	r = IMAP_SERVER_UNAVAILABLE;
     }
 
     if (!r) {
