@@ -1,6 +1,6 @@
 dnl sasl2.m4--sasl2 libraries and includes
 dnl Rob Siemborski
-dnl $Id: sasl2.m4,v 1.17.4.2 2002/08/15 22:35:19 ken3 Exp $
+dnl $Id: sasl2.m4,v 1.17.4.3 2002/08/16 15:44:28 ken3 Exp $
 
 AC_DEFUN(SASL_GSSAPI_CHK,[
  AC_ARG_ENABLE(gssapi, [[  --enable-gssapi=<DIR>   enable GSSAPI authentication [yes] ]],
@@ -161,12 +161,12 @@ AC_ARG_WITH(staticsasl,
 	fi
 
 	dnl be sure to check for a SASLv2 specific function
-	AC_CHECK_HEADER(sasl/sasl.h,
-	    AC_CHECK_HEADER(sasl/saslutil.h,
+	AC_CHECK_HEADER(sasl/sasl.h, [
+	    AC_CHECK_HEADER(sasl/saslutil.h, [
 	      AC_CHECK_LIB(sasl2, prop_get, 
                            ac_cv_found_sasl=yes,
-		           ac_cv_found_sasl=no),
-	                   ac_cv_found_sasl=no), ac_cv_found_sasl=no)
+		           ac_cv_found_sasl=no)],
+	                   ac_cv_found_sasl=no)], ac_cv_found_sasl=no)
 
 	if test "$ac_cv_found_sasl" = "yes"; then
 	    if test "$ac_cv_sasl_where_lib" != ""; then
