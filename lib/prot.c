@@ -89,7 +89,7 @@ struct protstream *s;
  */
 int prot_setfunc(s, func, state, maxplain)
 struct protstream *s;
-int (*func)();
+char *(*func)();
 void *state;
 int maxplain;
 {

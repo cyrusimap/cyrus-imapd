@@ -32,7 +32,7 @@ struct protstream {
     unsigned char leftcnt;
     int fd;
     int write;
-    int (*func)();
+    char *(*func)();
     void *state;
     int maxplain;
     char *error;

@@ -93,8 +93,8 @@ krb_query_state(state, user, protlevel, encodefunc, decodefunc, maxplain)
 void *state;
 char **user;
 int *protlevel;
-int (**encodefunc)();
-int (**decodefunc)();
+char *(**encodefunc)();
+char *(**decodefunc)();
 int *maxplain;
 {
     struct krb_state *kstate = (struct krb_state *)state;
@@ -527,7 +527,7 @@ struct acte_server krb_acte_server = {
  * using the state in 'state', placing the output data and length in the
  * buffers pointed to by 'output' and 'outputlen' respectively.
  */
-static int krb_en_integrity(state, input, inputlen, output, outputlen)
+static char *krb_en_integrity(state, input, inputlen, output, outputlen)
 void *state;
 char *input;
 int inputlen;
@@ -547,7 +547,7 @@ int *outputlen;
  * output data and length in the buffers pointed to by 'output' and
  * 'outputlen' respectively.
  */
-static int krb_de_integrity(state, input, inputlen, output, outputlen)
+static char *krb_de_integrity(state, input, inputlen, output, outputlen)
 void *state;
 char *input;
 int inputlen;
@@ -560,11 +560,11 @@ int *outputlen;
 
     code = krb_rd_safe(input, inputlen, kstate->session,
 		       &kstate->remoteaddr, &kstate->localaddr, &m_data);
-    if (code) return code;
+    if (code) return krb_err_txt[code];
     if (m_data.time_sec < kstate->prot_time_sec ||
 	(m_data.time_sec == kstate->prot_time_sec &&
 	 m_data.time_5ms < kstate->prot_time_5ms)) {
-	return RD_AP_TIME;
+	return krb_err_txt[RD_AP_TIME];
     }
     kstate->prot_time_sec = m_data.time_sec;
     kstate->prot_time_5ms = m_data.time_5ms;
@@ -579,7 +579,7 @@ int *outputlen;
  * using the state in 'state', placing the output data and length in the
  * buffers pointed to by 'output' and 'outputlen' respectively.
  */
-static int krb_en_privacy(state, input, inputlen, output, outputlen)
+static char *krb_en_privacy(state, input, inputlen, output, outputlen)
 void *state;
 char *input;
 int inputlen;
@@ -600,7 +600,7 @@ int *outputlen;
  * output data and length in the buffers pointed to by 'output' and
  * 'outputlen' respectively.
  */
-static int krb_de_privacy(state, input, inputlen, output, outputlen)
+static char *krb_de_privacy(state, input, inputlen, output, outputlen)
 void *state;
 char *input;
 int inputlen;
@@ -613,11 +613,11 @@ int *outputlen;
 
     code = krb_rd_priv(input, inputlen, kstate->schedule, kstate->session,
 		       &kstate->remoteaddr, &kstate->localaddr, &m_data);
-    if (code) return code;
+    if (code) return krb_err_txt[code];
     if (m_data.time_sec < kstate->prot_time_sec ||
 	(m_data.time_sec == kstate->prot_time_sec &&
 	 m_data.time_5ms < kstate->prot_time_5ms)) {
-	return RD_AP_TIME;
+	return krb_err_txt[RD_AP_TIME];
     }
     kstate->prot_time_sec = m_data.time_sec;
     kstate->prot_time_5ms = m_data.time_5ms;
