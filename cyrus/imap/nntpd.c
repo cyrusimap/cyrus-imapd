@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.8 2003/12/23 17:24:36 ken3 Exp $
+ * $Id: nntpd.c,v 1.9 2004/01/05 19:56:37 ken3 Exp $
  */
 
 /*
@@ -3276,43 +3276,57 @@ static int cancel(message_data_t *msg)
     return r;
 }
 
-static void feedpeer(const char *peer, message_data_t *msg)
+static void feedpeer(char *peer, message_data_t *msg)
 {
-    const char *port = "119";
-    char *server, *path, *s;
-    struct wildmat *wild = NULL, *w;
+    char *user, *pass, *host, *port, *wild, *path, *s;
+    int oldform = 0;
+    struct wildmat *wmat = NULL, *w;
     int len, err, n, feed = 1;
     struct addrinfo hints, *res, *res0;
     int sock = -1;
     struct protstream *pin, *pout;
     char buf[4096];
 
-    /* make a working copy of the peer */
-    server = xstrdup(peer);
+    /* parse the peer */
+    user = pass = host = port = wild = NULL;
+    if (wild = strrchr(peer, '/'))
+	*wild++ = '\0';
+    else if ((wild = strrchr(peer, ':')) &&
+	     strcspn(wild, "!*?,.") != strlen(wild)) {
+	*wild++ = '\0';
+	host = peer;
+	oldform = 1;
+    }
+    if (!oldform) {
+	if (host = strchr(peer, '@')) {
+	    *host++ = '\0';
+	    user = peer;
+	    if (pass = strchr(user, ':')) *pass++ = '\0';
+	}
+	else
+	    host = peer;
 
-    /* check for a wildmat pattern */
-    if ((s = strchr(server, ':'))) {
-	*s++ = '\0';
-	wild = split_wildmats(s);
+	if (port = strchr(host, ':')) *port++ = '\0';
     }
 
     /* check path to see if this message came through our peer */
-    len = strlen(server);
+    len = strlen(host);
     path = msg->path;
     while (path && (s = strchr(path, '!'))) {
-	if ((s - path) == len && !strncmp(path, server, len)) {
-	    free(server);
+	if ((s - path) == len && !strncmp(path, host, len)) {
 	    return;
 	}
 	path = s + 1;
     }
 
     /* check newsgroups against wildmat to see if we should feed it */
-    if (wild) {
+    if (wild && *wild) {
+	wmat = split_wildmats(wild);
+
 	feed = 0;
 	for (n = 0; n < msg->rcpt_num; n++) {
 	    /* see if the newsgroup matches one of our wildmats */
-	    w = wild;
+	    w = wmat;
 	    while (w->pat &&
 		   wildmat(msg->rcpt[n], w->pat) != 1) {
 		w++;
@@ -3338,21 +3352,18 @@ static void feedpeer(const char *peer, message_data_t *msg)
 	    }
 	}
 
-	free_wildmats(wild);
+	free_wildmats(wmat);
     }
 
-    if (!feed) {
-	free(server);
-	return;
-    }
+    if (!feed) return;
     
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = 0;
-    if ((err = getaddrinfo(server, port, &hints, &res0)) != 0) {
-	syslog(LOG_ERR, "getaddrinfo(%s, %s) failed: %m", server, port);
-	free(server);
+    if (!port || !*port) port = "119";
+    if ((err = getaddrinfo(host, port, &hints, &res0)) != 0) {
+	syslog(LOG_ERR, "getaddrinfo(%s, %s) failed: %m", host, port);
 	return;
     }
 
@@ -3367,11 +3378,9 @@ static void feedpeer(const char *peer, message_data_t *msg)
     }
     freeaddrinfo(res0);
     if(sock < 0) {
-	syslog(LOG_ERR, "connect(%s:%s) failed: %m", server, port);
-	free(server);
+	syslog(LOG_ERR, "connect(%s:%s) failed: %m", host, port);
 	return;
     }
-    free(server);
     
     pin = prot_new(sock, 0);
     pout = prot_new(sock, 1);
@@ -3383,13 +3392,59 @@ static void feedpeer(const char *peer, message_data_t *msg)
 	goto quit;
     }
 
-    /* tell the peer about our new article */
-    prot_printf(pout, "IHAVE %s\r\n", msg->id);
-    prot_flush(pout);
+    if (user) {
+	/* change to reader mode - not always necessary, so ignore result */
+	prot_printf(pout, "MODE READER\r\n");
+	prot_fgets(buf, sizeof(buf), pin);
 
-    if (!prot_fgets(buf, sizeof(buf), pin) || strncmp("335", buf, 3)) {
-	syslog(LOG_ERR, "peer doesn't want article %s", msg->id);
-	goto quit;
+	if (*user) {
+	    /* authenticate to peer */
+	    /* XXX this should be modified to support SASL and STARTTLS */
+
+	    prot_printf(pout, "AUTHINFO USER %s\r\n", user);
+	    if (!prot_fgets(buf, sizeof(buf), pin)) {
+		syslog(LOG_ERR, "AUTHINFO USER terminated abnormally");
+		goto quit;
+	    }
+	    else if (!strncmp("381", buf, 3)) {
+		/* password required */
+		if (!pass) {
+		    syslog(LOG_ERR, "need password for AUTHINFO PASS");
+		    goto quit;
+		}
+
+		prot_printf(pout, "AUTHINFO PASS %s\r\n", pass);
+		if (!prot_fgets(buf, sizeof(buf), pin)) {
+		    syslog(LOG_ERR, "AUTHINFO PASS terminated abnormally");
+		    goto quit;
+		}
+	    }
+
+	    if (strncmp("281", buf, 3)) {
+		/* auth failed */
+		syslog(LOG_ERR, "authentication failed");
+		goto quit;
+	    }
+	}
+
+	/* tell the peer we want to post */
+	prot_printf(pout, "POST\r\n");
+	prot_flush(pout);
+
+	if (!prot_fgets(buf, sizeof(buf), pin) || strncmp("340", buf, 3)) {
+	    syslog(LOG_ERR, "peer doesn't allow posting");
+	    goto quit;
+	}
+    }
+    else {
+	/* tell the peer about our new article */
+	prot_printf(pout, "IHAVE %s\r\n", msg->id);
+	prot_flush(pout);
+
+	if (!prot_fgets(buf, sizeof(buf), pin) || strncmp("335", buf, 3)) {
+	    syslog(LOG_ERR, "peer doesn't want article %s", msg->id);
+	    goto quit;
+	}
     }
 
     /* send the article */
@@ -3407,7 +3462,7 @@ static void feedpeer(const char *peer, message_data_t *msg)
 
     prot_printf(pout, ".\r\n");
 
-    if (!prot_fgets(buf, sizeof(buf), pin) || strncmp("235", buf, 3)) {
+    if (!prot_fgets(buf, sizeof(buf), pin) || strncmp("2", buf, 1)) {
 	syslog(LOG_ERR, "article %s transfer to peer failed", msg->id);
     }
 
@@ -3621,10 +3676,32 @@ static void cmd_post(char *msgid, int mode)
 	    }
 
 	    if (msg->id) {
-		const char *peer = config_getstring(IMAPOPT_NEWSPEER);
+		const char *peers = config_getstring(IMAPOPT_NEWSPEER);
 
 		/* send the article upstream */
-		if (peer) feedpeer(peer, msg);
+		if (peers) {
+		    char *tmpbuf, *cur_peer, *next_peer;
+
+		    /* make a working copy of the peers */
+		    cur_peer = tmpbuf = xstrdup(peers);
+
+		    while (cur_peer) {
+			/* eat any leading whitespace */
+			while (isspace(*cur_peer)) cur_peer++;
+
+			/* find end of peer */
+			if (next_peer = strchr(cur_peer, ' '))
+			    *next_peer++ = '\0';
+
+			/* feed the article to this peer */
+			feedpeer(cur_peer, msg);
+
+			/* move to next peer */
+			cur_peer = next_peer;
+		    }
+
+		    free(tmpbuf);
+		}
 
 		/* gateway news to mail */
 		news2mail(msg);
