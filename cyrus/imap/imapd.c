@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.6 2002/07/14 03:24:20 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.7 2002/07/15 01:14:15 ken3 Exp $ */
 
 #include <config.h>
 
@@ -3630,8 +3630,8 @@ void cmd_delete(char *tag, char *name, int localonly)
 					       imapd_userid, mailboxname);
 
     if (!r) {
-	if (config_virtdomains && (p = strchr(mailboxname, '@')))
-	    domainlen = p - mailboxname;
+	if (config_virtdomains && (p = strchr(mailboxname, '!')))
+	    domainlen = p - mailboxname + 1;
 
 	r = mboxlist_deletemailbox(mailboxname, imapd_userisadmin,
 				   imapd_userid, imapd_authstate, 1,
