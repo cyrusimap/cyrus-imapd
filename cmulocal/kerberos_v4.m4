@@ -1,7 +1,7 @@
 dnl kerberos_v4.m4--Kerberos 4 libraries and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
-dnl $Id: kerberos_v4.m4,v 1.8 1998/12/01 22:40:06 shadow Exp $
+dnl $Id: kerberos_v4.m4,v 1.9 1998/12/01 22:49:52 shadow Exp $
 
 AC_DEFUN(CMU_KRB_INC_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
@@ -50,11 +50,7 @@ AC_DEFUN(CMU_KRB_INC_WHERE, [
 AC_DEFUN(CMU_KRB_LIB_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
 saved_LIBS=$LIBS
-if test "$ac_cv_prog_gcc" = "yes" ; then
-  LIBS="$saved_LIBS -nostdlib -L$1 -lkrb -ldes"
-else
-  LIBS="$saved_LIBS -L$1 -lkrb -ldes"
-fi
+LIBS="$saved_LIBS -L$1 -lkrb -ldes"
 AC_TRY_LINK(,
 [dest_tkt();],
 [ac_cv_found_krb_lib=yes],
