@@ -262,6 +262,7 @@ char *user;
     int r;
     struct mailbox mailbox;
     char namebuf[MAX_MAILBOX_PATH];
+    char *submailbox = 0;
     
     if (user) {
 	if (strchr(user, '.') ||
@@ -277,16 +278,20 @@ char *user;
 	    strcat(namebuf, user);
 	    strcat(namebuf, ".");
 	    strcat(namebuf, mailboxname);
+	    submailbox = mailboxname;
+
 	    if (id && checkdelivered(id, namebuf)) {
 		logdupelem(id, namebuf);
 		return 0;
 	    }
+
 	    r = append_setup(&mailbox, namebuf, MAILBOX_FORMAT_NORMAL,
 			     ACL_POST, 0);
 	}
 	if (r) {
 	    strcpy(namebuf, "user.");
 	    strcat(namebuf, user);
+	    submailbox = "";
 	    
 	    if (id && checkdelivered(id, namebuf)) {
 		logdupelem(id, namebuf);
@@ -319,6 +324,10 @@ char *user;
     if (r) {
 	com_err(user ? user : mailboxname,
 		r, (r == IMAP_IOERROR) ? error_message(errno) : NULL);
+    }
+
+    if (!r && user) {
+	notify(user, submailbox);
     }
 
     if (!r && dupelim && id) markdelivered(id, user ? namebuf : mailboxname);
