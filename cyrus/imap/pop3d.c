@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.84 2001/02/27 05:17:32 ken3 Exp $
+ * $Id: pop3d.c,v 1.85 2001/02/27 05:41:42 ken3 Exp $
  */
 #include <config.h>
 
@@ -125,7 +125,7 @@ int popd_starttls_done = 0;
 
 static struct mailbox mboxstruct;
 
-static int expungedeleted();
+static mailbox_decideproc_t expungedeleted;
 
 static void cmd_auth();
 static void cmd_capa();
