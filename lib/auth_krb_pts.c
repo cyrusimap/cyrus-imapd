@@ -322,7 +322,7 @@ const char *cacheid;
     key.size = 20;
     strcpy(fnamebuf, STATEDIR);
     strcat(fnamebuf, PTS_DBLOCK);
-    fd = open(fnamebuf, O_CREAT|O_TRUNC|O_RDWR, 0644);
+    fd = open(fnamebuf, O_CREAT|O_TRUNC|O_RDWR, 0664);
     if (fd == -1) {
         syslog(LOG_ERR, "IOERROR: creating lock file %s: %m", fnamebuf);
         return newstate;
@@ -340,7 +340,7 @@ const char *cacheid;
 	     * Hopefully, this should prevent two different processes from
 	     * trying to create the database at the same time
 	     */
-	    ptdb = dbopen(fnamebuf, O_CREAT|O_RDWR|O_EXCL, 0644, DB_HASH, &info);
+	    ptdb = dbopen(fnamebuf, O_CREAT|O_RDWR|O_EXCL, 0664, DB_HASH, &info);
 	    if (!ptdb && errno == EEXIST) {
 		ptdb = dbopen(fnamebuf, O_RDONLY, 0, DB_HASH, &info);
 		if (!ptdb) {
@@ -378,7 +378,7 @@ const char *cacheid;
 		    close(fd);
 		    return newstate;
 		}
-		ptdb = dbopen(fnamebuf, O_RDONLY, 0644, DB_HASH, &info);
+		ptdb = dbopen(fnamebuf, O_RDONLY, 0664, DB_HASH, &info);
 		if (!ptdb) {
 		    syslog(LOG_ERR, "IOERROR: reopening new database %s: %m",
 			   fnamebuf); 
@@ -474,7 +474,7 @@ const char *cacheid;
            least in db 1.1.85 */
 	strcpy(fnamebuf, STATEDIR);
 	strcat(fnamebuf, PTS_DBLOCK);
-        fd = open(fnamebuf, O_CREAT|O_TRUNC|O_RDWR, 0644);
+        fd = open(fnamebuf, O_CREAT|O_TRUNC|O_RDWR, 0664);
         if (fd == -1) {
             syslog(LOG_ERR, "IOERROR: creating lock file %s: %m", fnamebuf);
             return newstate;

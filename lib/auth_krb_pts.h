@@ -29,7 +29,11 @@
 #endif
 #include <sys/file.h>
 #include <errno.h>
+#ifdef HAVE_DB_185_H
+#include <db_185.h>
+#else
 #include <db.h>
+#endif
 #include <syslog.h>
 #include <ctype.h>
 #include <afs/ptserver.h>
