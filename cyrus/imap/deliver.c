@@ -72,6 +72,7 @@ char **argv;
     int nflags = 0;
     char *authuser = 0;
     char *id = 0;
+    char *notifyheader = 0;
 
     config_init("deliver");
 
@@ -136,11 +137,13 @@ char **argv;
     }
 
     /* Copy message to temp file */
-    prot_f = savemsg(return_path, dupelim ? &id : (char **)0, &size, 0);
+    prot_f = savemsg(return_path, dupelim ? &id : (char **)0,
+		     notify_wantheader() ? &notifyheader : (char **)0,
+		     &size, 0);
 
     if (optind == argc) {
 	/* Deliver to global mailbox */
-	r = deliver(prot_f, size, flag, nflags, authuser, id,
+	r = deliver(prot_f, size, flag, nflags, authuser, id, notifyheader,
 		    (char *)0, mailboxname);
 	
 	if (r) {
@@ -152,7 +155,7 @@ char **argv;
 	exit(exitval);
     }
     while (optind < argc) {
-	r = deliver(prot_f, size, flag, nflags, authuser, id,
+	r = deliver(prot_f, size, flag, nflags, authuser, id, notifyheader,
 		       argv[optind], mailboxname);
 
 	if (r) {
@@ -324,6 +327,7 @@ smtpmode()
     int nflags = 0;
     char *authuser = 0;
     char *id = 0;
+    char *notifyheader = 0;
     char *p;
     int i;
 
@@ -348,6 +352,7 @@ smtpmode()
 		    printf("503 5.5.1 No recipients\r\n");
 		}
 		prot_f = savemsg(return_path, dupelim ? &id : (char **)0,
+				 notify_wantheader() ? &notifyheader : (char **)0,
 				 &size, rcpt_num);
 		if (!prot_f) continue;
 
@@ -356,6 +361,7 @@ smtpmode()
 		    if (p) *p++ = '\0';
 
 		    r = deliver(prot_f, size, flag, nflags, authuser, id,
+				notifyheader,
 				rcpt_addr[i][0] ? rcpt_addr[i] : (char *)0, p);
 		    printf("%s\r\n", convert_smtp(r));
 		}
@@ -481,9 +487,10 @@ smtpmode()
 
 
 struct protstream *
-savemsg(return_path, idptr, sizeptr, smtpmode)
+savemsg(return_path, idptr, notifyptr, sizeptr, smtpmode)
 char *return_path;
 char **idptr;
+char **notifyptr;
 unsigned *sizeptr;
 int smtpmode;
 {
@@ -491,10 +498,13 @@ int smtpmode;
     char *hostname = 0;
     int scanheader = 1;
     int sawidhdr = 0, sawresentidhdr = 0;
+    int sawnotifyheader = 0;
     char buf[4096], *p;
     struct stat sbuf;
 
-    if (!idptr) scanheader = 0;
+    if (!idptr && !notifyptr) scanheader = 0;
+    if (idptr) *idptr = 0;
+    if (notifyptr) *notifyptr = 0;
 
     /* Copy to temp file */
     f = tmpfile();
@@ -568,6 +578,15 @@ int smtpmode;
 	if (scanheader) {
 	    p = 0;
 	    if (*buf == '\r') scanheader = 0;
+	    if (sawnotifyheader) {
+		if (*buf == ' ' || *buf == '\t') {
+		    *notifyptr =
+			xrealloc(*notifyptr,
+				 strlen(*notifyptr) + strlen(buf) + 1);
+		    strcat(*notifyptr, buf);
+		}
+		else sawnotifyheader = 0;
+	    }
 	    else if (sawidhdr || sawresentidhdr) {
 		if (*buf == ' ' || *buf == '\t') p = buf+1;
 		else sawidhdr = sawresentidhdr = 0;
@@ -580,7 +599,19 @@ int smtpmode;
 		sawresentidhdr = 1;
 		p = buf + 18;
 	    }
-
+	    else if (notifyptr &&
+		     (!strncasecmp(buf, "from:", 5) ||
+		      !strncasecmp(buf, "subject:", 8) ||
+		      !strncasecmp(buf, "to:", 3))) {
+		if (!*notifyptr) *notifyptr = strsave(buf);
+		else {
+		    *notifyptr =
+			xrealloc(*notifyptr,
+				 strlen(*notifyptr) + strlen(buf) + 1);
+		    strcat(*notifyptr, buf);
+		}
+		sawnotifyheader = 1;
+	    }
 	    if (p) {
 		clean822space(p);
 		if (*p) {
@@ -635,13 +666,14 @@ int smtpmode;
 }
 
 
-deliver(msg, size, flag, nflags, authuser, id, user, mailboxname)
+deliver(msg, size, flag, nflags, authuser, id, notifyheader, user, mailboxname)
 struct protstream *msg;
 unsigned size;
 char **flag;
 int nflags;
 char *authuser;
 char *id;
+char *notifyheader;
 char *user;
 char *mailboxname;
 {
@@ -708,7 +740,7 @@ char *mailboxname;
     }
 
     if (!r && user) {
-	notify(user, submailbox);
+	notify(user, submailbox, notifyheader);
     }
 
     if (!r && dupelim && id) markdelivered(id, user ? namebuf : mailboxname);
