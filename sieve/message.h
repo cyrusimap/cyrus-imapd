@@ -1,6 +1,6 @@
 /* message.h
  * Larry Greenfield
- * $Id: message.h,v 1.8 2000/02/17 06:03:14 tmartin Exp $
+ * $Id: message.h,v 1.9 2000/02/22 08:08:12 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -83,7 +83,7 @@ struct Action {
 
 typedef struct notify_action_s {
 
-    int exists; /* 0 = no 1 = yes */
+    int exists; /* 0 = no +/-1 = yes (-1 flags default action) */
 
     const char *priority;
     char *message;
@@ -103,7 +103,7 @@ typedef enum {
 int parse_address(char *header, void **data, void **marker);
 char *get_address(address_part_t addrpart, void **data, void **marker);
 int free_address(void **data, void **marker);
-void default_notify_action(notify_action_t *notify_action);  
+notify_action_t *default_notify_action(void);
 
 /* actions; return negative on failure.
  * these don't actually perform the actions, they just add it to the
