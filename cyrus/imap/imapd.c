@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.52 2003/01/07 02:19:22 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.53 2003/01/07 02:20:22 ken3 Exp $ */
 
 #include <config.h>
 
@@ -3591,7 +3591,7 @@ void cmd_rename(const char *tag,
        don't recursively rename stuff */
     omlen = strlen(oldmailboxname);
     nmlen = strlen(newmailboxname);
-    if (strlen(oldmailboxname) < strlen(newmailboxname)) {
+    if (omlen < nmlen) {
 	if (!strncmp(oldmailboxname, newmailboxname, omlen) &&
 	    newmailboxname[omlen] == '.') {
 	    recursive_rename = 0;
