@@ -1,7 +1,7 @@
 dnl kerberos_v4.m4--Kerberos 4 libraries and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
-dnl $Id: kerberos_v4.m4,v 1.23 2002/07/22 20:26:02 shadow Exp $
+dnl $Id: kerberos_v4.m4,v 1.24 2002/12/21 18:44:24 cg2v Exp $
 
 AC_DEFUN(CMU_KRB_SENDAUTH_PROTO, [
 AC_MSG_CHECKING(for krb_sendauth prototype)
@@ -81,7 +81,6 @@ AC_MSG_RESULT($ac_cv_krb_rd_req_proto)
 ])
 
 AC_DEFUN(CMU_KRB_INC_WHERE1, [
-AC_REQUIRE([AC_PROG_CC_GNU])
 saved_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="$saved_CPPFLAGS -I$1"
 AC_TRY_COMPILE([#include <krb.h>],
@@ -118,9 +117,8 @@ AC_DEFUN(CMU_KRB_INC_WHERE, [
 #
 
 AC_DEFUN(CMU_KRB_LIB_WHERE1, [
-AC_REQUIRE([AC_PROG_CC_GNU])
 saved_LIBS=$LIBS
-LIBS="$saved_LIBS -L$1 -lkrb"
+LIBS="$saved_LIBS -L$1 -lkrb $KRB_LIBDES"
 AC_TRY_LINK(,
 [dest_tkt();],
 [ac_cv_found_krb_lib=yes],
@@ -174,10 +172,6 @@ AC_ARG_WITH(krb4-include,
 	  if test "X$with_krb4_lib" != "X"; then
 	    ac_cv_krb_where_lib=$with_krb4_lib
 	  fi
-	  if test "X$ac_cv_krb_where_lib" = "X"; then
-	    CMU_KRB_LIB_WHERE(/usr/athena/lib /usr/local/lib /usr/lib)
-	  fi
-
 	  if test "X$with_krb4_include" != "X"; then
 	    ac_cv_krb_where_inc=$with_krb4_include
 	  fi
@@ -187,7 +181,7 @@ AC_ARG_WITH(krb4-include,
 	fi
 
           AC_MSG_CHECKING([if libdes is needed])
-          AC_TRY_LINK([],[des_quad_cksum();],AFS_DES_LIB="",AFS_DES_LIB="maybe")
+          AC_TRY_LINK([],[des_quad_cksum();],KRB_DES_LIB="",KRB_DES_LIB="maybe")
           if test "X$KRB_DES_LIB" != "X"; then
               LIBS="$cmu_save_LIBS -ldes"
               AC_TRY_LINK([], [des_quad_cksum();],KRB_DES_LIB="yes")
@@ -212,8 +206,12 @@ AC_ARG_WITH(krb4-include,
              AC_MSG_RESULT([no])
           fi
 
+	  if test "X$ac_cv_krb_where_lib" = "X"; then
+	    CMU_KRB_LIB_WHERE(/usr/athena/lib /usr/local/lib /usr/lib)
+	  fi
+
 	AC_MSG_CHECKING(whether to include kerberos 4)
-	if test "X$ac_cv_krb_where_lib" = "X" -a "X$ac_cv_krb_where_inc" = "X"; then
+	if test "X$ac_cv_krb_where_lib" = "X" -o "X$ac_cv_krb_where_inc" = "X"; then
 	  ac_cv_found_krb=no
 	  AC_MSG_RESULT(no)
 	else
