@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.437 2003/08/08 23:08:51 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.438 2003/08/18 20:35:38 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -2558,20 +2558,31 @@ void cmd_select(char *tag, char *cmd, char *name)
 	/* Warn if mailbox is close to or over quota */
 	mailbox_read_quota(&imapd_mailbox->quota);
 	if (imapd_mailbox->quota.limit > 0) {
-	    usage = ((double) imapd_mailbox->quota.used * 100.0) / (double)
-		(imapd_mailbox->quota.limit * QUOTA_UNITS);
-	    if (usage >= 100.0) {
-		prot_printf(imapd_out, "* NO [ALERT] %s\r\n",
-			    error_message(IMAP_NO_OVERQUOTA));
-	    }
-	    else if (usage > config_getint("quotawarn", 90)) {
-		int usageint = (int) usage;
-		prot_printf(imapd_out, "* NO [ALERT] ");
-		prot_printf(imapd_out, error_message(IMAP_NO_CLOSEQUOTA),
-			    usageint);
-		prot_printf(imapd_out, "\r\n");
+	    /* Warn if the following possibilities occur:
+	     * - quotawarnkb not set + quotawarn hit
+             * - quotawarnkb set larger than mailbox + quotawarn hit
+	     * - quotawarnkb set + hit + quotawarn hit
+	     */
+	    int warnsize = config_getint("quotawarnkb", 0);
+	    if(warnsize <= 0 || warnsize >= imapd_mailbox->quota.limit ||
+	       (int)((imapd_mailbox->quota.limit * QUOTA_UNITS) -
+		      imapd_mailbox->quota.used) < (warnsize * QUOTA_UNITS)) {
+		usage = ((double) imapd_mailbox->quota.used * 100.0) / (double)
+		    (imapd_mailbox->quota.limit * QUOTA_UNITS);
+		if (usage >= 100.0) {
+		    prot_printf(imapd_out, "* NO [ALERT] %s\r\n",
+				error_message(IMAP_NO_OVERQUOTA));
+		}
+		else if (usage > config_getint("quotawarn", 90)) {
+		    int usageint = (int) usage;
+		    prot_printf(imapd_out, "* NO [ALERT] ");
+		    prot_printf(imapd_out, error_message(IMAP_NO_CLOSEQUOTA),
+				usageint);
+		    prot_printf(imapd_out, "\r\n");
+		}
 	    }
 	}
+	
     }
 
     prot_printf(imapd_out, "%s OK [READ-%s] %s\r\n", tag,
