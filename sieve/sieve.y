@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.14 2002/02/19 18:09:46 ken3 Exp $
+ * $Id: sieve.y,v 1.15 2002/02/22 20:56:20 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -33,6 +33,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+#include <ctype.h>
 #include "xmalloc.h"
 #include "comparator.h"
 #include "interp.h"
@@ -105,6 +106,7 @@ static void free_dtags(struct dtags *d);
 static int verify_mailbox(char *s);
 static int verify_address(char *s);
 static int verify_addresses(stringlist_t *sl);
+static int verify_headers(stringlist_t *sl);
 static int verify_flags(stringlist_t *sl);
 #ifdef ENABLE_REGEX
 static regex_t *verify_regex(char *s, int cflags);
@@ -358,6 +360,10 @@ test: ANYOF testlist		 { $$ = new_test(ANYOF); $$->u.tl = $2; }
 	| STRUE			 { $$ = new_test(STRUE); }
 	| HEADER htags stringlist stringlist
 				 { patternlist_t *pl;
+                                   if (!verify_headers($3)) {
+                                     YYERROR; /* vh should call yyerror() */
+                                   }
+
 				   $2 = canon_htags($2);
 #ifdef ENABLE_REGEX
 				   if ($2->comptag == REGEX) {
@@ -372,6 +378,10 @@ test: ANYOF testlist		 { $$ = new_test(ANYOF); $$->u.tl = $2; }
 				   if ($$ == NULL) { YYERROR; } }
 	| addrorenv aetags stringlist stringlist
 				 { patternlist_t *pl;
+                                   if (!verify_headers($3)) {
+                                     YYERROR; /* vh should call yyerror() */
+                                   }
+
 				   $2 = canon_aetags($2);
 #ifdef ENABLE_REGEX
 				   if ($2->comptag == REGEX) {
@@ -753,6 +763,28 @@ static int verify_mailbox(char *s __attribute__((unused)))
 {
     /* xxx if not a mailbox, call yyerror */
     return 1;
+}
+
+static int verify_header(char *hdr)
+{
+    char *h = hdr;
+    char errbuf[100];
+
+    while (*h) {
+	if (!isgraph(*h) || *h == ':') {
+	    sprintf(errbuf, "header '%s': not a valid header", hdr);
+	    yyerror(errbuf);
+	    return 0;
+	}
+	h++;
+    }
+    return 1;
+}
+ 
+static int verify_headers(stringlist_t *sl)
+{
+    for (; sl != NULL && verify_header(sl->s); sl = sl->next) ;
+    return (sl == NULL);
 }
 
 static int verify_flag(char *f)
