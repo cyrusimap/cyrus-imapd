@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.33 2003/06/11 15:40:48 ken3 Exp $
+ * $Id: annotate.c,v 1.8.6.34 2003/06/11 19:28:00 ken3 Exp $
  */
 
 #include <config.h>
@@ -829,13 +829,13 @@ static void annotation_get_fromdb(const char *int_mboxname,
 
 struct annotate_f_entry
 {
-    const char *name;
+    const char *name;		/* entry name */
+    annotation_proxy_t proxytype; /* mask of allowed server types */
     void (*get)(const char *int_mboxname, const char *ext_mboxname,
 		const char *name, struct fetchdata *fdata,
 		struct mailbox_annotation_rock *mbrock,
-		void *rock);
-    void *rock;
-    annotation_proxy_t proxytype;
+		void *rock);	/* function to get the entry */
+    void *rock;			/* rock passed to get() function */
 };
 
 struct annotate_f_entry_list
@@ -847,30 +847,30 @@ struct annotate_f_entry_list
 
 const struct annotate_f_entry mailbox_ro_entries[] =
 {
-    { "/vendor/cmu/cyrus-imapd/partition", annotation_get_partition,
-	  NULL, BACKEND_ONLY },
-    { "/vendor/cmu/cyrus-imapd/server", annotation_get_server,
-	  NULL, PROXY_ONLY },
-    { "/vendor/cmu/cyrus-imapd/size", annotation_get_size,
-	  NULL, BACKEND_ONLY },
-    { "/vendor/cmu/cyrus-imapd/lastupdate", annotation_get_lastupdate,
-	  NULL, BACKEND_ONLY },
-    { NULL, NULL, NULL, ANNOTATION_PROXY_T_INVALID }
+    { "/vendor/cmu/cyrus-imapd/partition", BACKEND_ONLY,
+      annotation_get_partition, NULL },
+    { "/vendor/cmu/cyrus-imapd/server", PROXY_ONLY,
+      annotation_get_server, NULL },
+    { "/vendor/cmu/cyrus-imapd/size", BACKEND_ONLY,
+      annotation_get_size, NULL },
+    { "/vendor/cmu/cyrus-imapd/lastupdate", BACKEND_ONLY,
+      annotation_get_lastupdate, NULL },
+    { NULL, ANNOTATION_PROXY_T_INVALID, NULL, NULL }
 };
 
 const struct annotate_f_entry mailbox_rw_entry =
-    { NULL, annotation_get_fromdb, NULL, BACKEND_ONLY };
+    { NULL, BACKEND_ONLY, annotation_get_fromdb, NULL };
 
 const struct annotate_f_entry server_legacy_entries[] =
 {
-    { "/motd", annotation_get_fromfile, "motd", PROXY_AND_BACKEND },
-    { "/vendor/cmu/cyrus-imapd/shutdown", annotation_get_fromfile,
-      "shutdown", PROXY_AND_BACKEND },
-    { NULL, NULL, NULL, ANNOTATION_PROXY_T_INVALID }
+    { "/motd", PROXY_AND_BACKEND, annotation_get_fromfile, "motd" },
+    { "/vendor/cmu/cyrus-imapd/shutdown", PROXY_AND_BACKEND,
+      annotation_get_fromfile, "shutdown" },
+    { NULL, ANNOTATION_PROXY_T_INVALID, NULL, NULL }
 };
 
 const struct annotate_f_entry server_entry =
-    { NULL, annotation_get_fromdb, NULL, PROXY_AND_BACKEND };
+    { NULL, PROXY_AND_BACKEND, annotation_get_fromdb, NULL };
 
 /* Annotation attributes and their flags */
 struct annotate_attrib
@@ -1251,13 +1251,14 @@ struct storedata {
 };
 
 struct annotate_st_entry {
-    const char *name;
-    int attribs;
+    const char *name;		/* entry name */
+    annotation_proxy_t proxytype; /* mask of allowed server types */
+    int attribs;		/* mask of allowed attributes */
+    int acl;			/* add'l required ACL for .shared */
     int (*set)(const char *int_mboxname, struct annotate_st_entry_list *entry,
 	       struct storedata *sdata, struct mailbox_annotation_rock *mbrock,
-	       void *rock);
-    void *rock;
-    annotation_proxy_t proxytype;
+	       void *rock);	/* function to set the entry */
+    void *rock;			/* rock passed to set() function */
 };
 
 struct annotate_st_entry_list
@@ -1388,14 +1389,15 @@ static int annotation_set_todb(const char *int_mboxname,
     if (entry->shared.value || entry->shared.contenttype) {
 	/* Check ACL
 	 *
-	 * Must be any admin to set shared server annotations.
+	 * Must be an admin to set shared server annotations and
+	 * must have the required rights for shared mailbox annotations.
 	 */
+	int acl = ACL_READ | ACL_WRITE | entry->entry->acl;
+
 	if (!sdata->isadmin &&
 	    (!int_mboxname[0] || !mbrock->acl ||
-	     !(cyrus_acl_myrights(sdata->auth_state,
-				  mbrock->acl) & ACL_READ) ||
-	     !(cyrus_acl_myrights(sdata->auth_state,
-				  mbrock->acl) & ACL_WRITE))) {
+	     ((cyrus_acl_myrights(sdata->auth_state,
+				  mbrock->acl) & acl) != acl))) {
 	    return IMAP_PERMISSION_DENIED;
 	}
 
@@ -1446,43 +1448,51 @@ static int annotation_set_todb(const char *int_mboxname,
 
 const struct annotate_st_entry server_entries[] =
 {
-    { "/comment", ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV
+    { "/comment", PROXY_AND_BACKEND,
+      ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV
       | ATTRIB_CONTENTTYPE_SHARED | ATTRIB_CONTENTTYPE_PRIV,
-      annotation_set_todb, NULL, PROXY_AND_BACKEND },
-    { "/motd", ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
-      annotation_set_tofile, "motd", PROXY_AND_BACKEND },
-    { "/admin", ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
-      annotation_set_todb, NULL, PROXY_AND_BACKEND },
-    { "/vendor/cmu/cyrus-imapd/shutdown",
+      ACL_ADMIN, annotation_set_todb, NULL },
+    { "/motd", PROXY_AND_BACKEND,
       ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
-      annotation_set_tofile, "shutdown", PROXY_AND_BACKEND },
-    { NULL, 0, NULL, ANNOTATION_PROXY_T_INVALID }
+      ACL_ADMIN, annotation_set_tofile, "motd" },
+    { "/admin", PROXY_AND_BACKEND,
+      ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
+      ACL_ADMIN, annotation_set_todb, NULL },
+    { "/vendor/cmu/cyrus-imapd/shutdown", PROXY_AND_BACKEND,
+      ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
+      ACL_ADMIN, annotation_set_tofile, "shutdown" },
+    { NULL, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL }
 };
 
 const struct annotate_st_entry mailbox_rw_entries[] =
 {
-    { "/comment", ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV
+    { "/comment", BACKEND_ONLY,
+      ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV
       | ATTRIB_CONTENTTYPE_SHARED | ATTRIB_CONTENTTYPE_PRIV,
-      annotation_set_todb, NULL, BACKEND_ONLY },
-    { "/sort", ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV
+      0, annotation_set_todb, NULL },
+    { "/sort", BACKEND_ONLY,
+      ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV
       | ATTRIB_CONTENTTYPE_SHARED | ATTRIB_CONTENTTYPE_PRIV,
-      annotation_set_todb, NULL, BACKEND_ONLY },
-    { "/thread", ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV
+      0, annotation_set_todb, NULL },
+    { "/thread", BACKEND_ONLY,
+      ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV
       | ATTRIB_CONTENTTYPE_SHARED | ATTRIB_CONTENTTYPE_PRIV,
-      annotation_set_todb, NULL, BACKEND_ONLY },
-    { "/check", ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV
+      0, annotation_set_todb, NULL },
+    { "/check", BACKEND_ONLY,
+      ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV
       | ATTRIB_CONTENTTYPE_SHARED | ATTRIB_CONTENTTYPE_PRIV,
-      annotation_set_todb, NULL, BACKEND_ONLY },
-    { "/checkperiod", ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV
+      0, annotation_set_todb, NULL },
+    { "/checkperiod", BACKEND_ONLY,
+      ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV
       | ATTRIB_CONTENTTYPE_SHARED | ATTRIB_CONTENTTYPE_PRIV,
-      annotation_set_todb, NULL, BACKEND_ONLY },
-    { "/vendor/cmu/cyrus-imapd/squat", ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV
-      | ATTRIB_CONTENTTYPE_SHARED | ATTRIB_CONTENTTYPE_PRIV,
-      annotation_set_todb, NULL, BACKEND_ONLY },
-    { "/vendor/cmu/cyrus-imapd/expire", ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV
-      | ATTRIB_CONTENTTYPE_SHARED | ATTRIB_CONTENTTYPE_PRIV,
-      annotation_set_todb, NULL, BACKEND_ONLY },
-    { NULL, 0, NULL, ANNOTATION_PROXY_T_INVALID }
+      0, annotation_set_todb, NULL },
+    { "/vendor/cmu/cyrus-imapd/squat", BACKEND_ONLY,
+      ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
+      0, annotation_set_todb, NULL },
+    { "/vendor/cmu/cyrus-imapd/expire", BACKEND_ONLY,
+      ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
+      0, annotation_set_todb, NULL },
+    { NULL, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL }
 };
 
 int annotatemore_store(char *mailbox,
