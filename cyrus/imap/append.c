@@ -654,7 +654,7 @@ unsigned end;
     /* Scan back to last uid */
     while (tail > seenuids && isdigit(tail[-1])) tail--;
     for (p = tail, last_seen=0; *p; p++) last_seen = last_seen * 10 + *p - '0';
-    if (last_seen == start-1) {
+    if (last_seen && last_seen >= start-1) {
 	if (tail > seenuids && tail[-1] == ':') p = tail - 1;
 	*p++ = ':';
     }
