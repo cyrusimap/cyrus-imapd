@@ -1,9 +1,9 @@
 /* version.h: the version number
  *
- * $Id: version.h,v 1.62 1999/08/09 19:31:18 leg Exp $
+ * $Id: version.h,v 1.63 1999/08/09 19:31:35 leg Exp $
  */
 
-#define _CYRUS_VERSION "v1.6.2-BETA"
+#define _CYRUS_VERSION "v1.6.4-BETA"
 
 /* EXTRA_IDENT is a hack to add some version information for which compile
  * was used to build this version (at CMU, but we don't care what you do with
