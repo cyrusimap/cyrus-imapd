@@ -20,10 +20,11 @@
  * ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
  * SOFTWARE.
  */
-/* $Id: charset.c,v 1.31 1999/03/02 01:33:28 tjs Exp $
+/* $Id: charset.c,v 1.32 1999/09/30 07:30:32 leg Exp $
  */
 #include <ctype.h>
 #include <stdlib.h>
+#include <string.h>
 #include "charset.h"
 #include "xmalloc.h"
 #include "chartable.h"
