@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.89 2000/02/10 05:10:31 tmartin Exp $
+# $Id: Makefile.in,v 1.90 2000/02/10 07:59:32 leg Exp $
 # 
 # @configure_input@
 #
@@ -87,7 +87,8 @@ LOBJS= append.o mailbox.o mboxlist.o mboxname.o message.o \
 IMAPDOBJS= imapd.o index.o tls.o pushstats.o
 
 PROGS = collectnews syncnews imapd pop3d \
-	arbitron fud reconstruct quota dump_deliverdb mbpath purge remotepurge listenstats
+	arbitron fud reconstruct quota dump_deliverdb mbpath \
+        ipurge listenstats
 SUIDPROGS = deliver
 
 
@@ -180,11 +181,8 @@ fud: fud.o libimap.a $(DEPLIBS)
 mbpath: mbpath.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o mbpath mbpath.o libimap.a $(DEPLIBS) $(LIBS)
 
-purge: purge.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o purge purge.o libimap.a $(DEPLIBS) $(LIBS)
-
-remotepurge: remotepurge.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o remotepurge remotepurge.o libimap.a $(DEPLIBS) $(LIBS)
+ipurge: ipurge.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o ipurge ipurge.o libimap.a $(DEPLIBS) $(LIBS)
 
 listenstats: listenstats.o pushstats.o
 	$(CC) $(LDFLAGS) -o listenstats listenstats.o pushstats.o $(LIBS)
