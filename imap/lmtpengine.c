@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.72 2002/04/17 20:31:52 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.73 2002/05/07 16:06:20 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1044,7 +1044,10 @@ static int savemsg(struct clientdata *cd,
     r = fill_cache(cd->pin, f, m);
     if (r) {
 	fclose(f);
-	func->removespool(m);
+	if (func->removespool) {
+	    /* remove the spool'd message */
+	    func->removespool(m);
+	}
 	while (nrcpts--) {
 	    send_lmtp_error(cd->pout, r);
 	}
