@@ -1,11 +1,16 @@
 dnl look for the (ucd|net)snmp libraries
-dnl $Id: ucdsnmp.m4,v 1.9 2004/05/18 19:16:44 rjs3 Exp $
+dnl $Id: ucdsnmp.m4,v 1.10 2004/05/24 19:25:41 ken3 Exp $
 
 AC_DEFUN([CMU_UCDSNMP], [
   AC_REQUIRE([CMU_SOCKETS])
   AC_ARG_WITH(snmp, 
-              [  --with-ucdsnmp=DIR      use ucd|net snmp (rooted in DIR) [yes] ],
+              [  --with-snmp=DIR         use ucd|net snmp (rooted in DIR) [yes] ],
               with_snmp=$withval, with_snmp=yes)
+
+  dnl
+  dnl Maintain backwards compatibility with old --with-ucdsnmp option
+  dnl
+  AC_ARG_WITH(ucdsnmp,, with_snmp=$withval,)
 
 if test "$with_snmp" != "no"; then
 
