@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.39 2002/08/13 19:45:56 rjs3 Exp $ */
+/* $Id: fud.c,v 1.40 2002/08/30 19:55:33 rjs3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -192,7 +192,9 @@ void service_abort(int error)
     shut_down(error);
 }
 
-int service_main(int argc, char **argv, char **envp)
+int service_main(int argc __attribute__((unused)),
+		 char **argv __attribute__((unused)),
+		 char **envp __attribute__((unused)))
 {
     int r = 0; 
 
