@@ -4,7 +4,7 @@
 
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-<meta name="revision" content="$Id: database-formats.html,v 1.1.2.1 2004/04/18 17:35:55 ken3 Exp $" />
+<meta name="revision" content="$Id: database-formats.html,v 1.1.2.2 2004/04/19 00:43:52 ken3 Exp $" />
 <meta name="author" content="Ken Murchison" />
 
 <title>Database Formats</title>
@@ -13,7 +13,7 @@
 <body>
 <h1>Database Formats</h1>
 
-<h2>Intro</h2>
+<h2>Introduction</h2>
 
 <p>
 This is an attempt to document the cyrus database formats.  It should not
@@ -108,6 +108,19 @@ format of each record is as follows:</p>
 Key: &lt;Session-ID (multi-byte)&gt;
 
 Data: &lt;Timestamp (4 bytes)&gt;&lt;Session Data (multi-byte)&gt;
+</pre>
+
+<h2>PTS cache (ptscache.db)</h2>
+
+<p>This database caches authentication state records, resulting in
+shorter authentication/canonicalization times.  The database is
+indexed by userid and each data record contains an authentication
+state for the userid.  The format of each record is as follows:</p>
+
+<pre>
+Key: &lt;Userid&gt;
+
+Data: &lt;Auth State (multi-byte)&gt;
 </pre>
 
 <h2>Seen State (&lt;userid&gt;.seen)</h2>
