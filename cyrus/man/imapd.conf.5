@@ -182,11 +182,11 @@ returned by SASL with an "@" in it.)
 If enabled, any authentication identity which has \fBa\fR rights on a
 user's INBOX may log in as that user.
 .IP "\fBsingleinstancestore:\fR yes" 5
-If enabled, deliver running in LMTP mode attempts to only write one
-copy of a message per partition and create hard links, resulting in a
-potentially large disk savings.
+If enabled, lmtpd attempts to only write one copy of a message per
+partition and create hard links, resulting in a potentially large disk
+savings.
 .IP "\fBreject8bit:\fR no" 5
-If enabled, deliver rejects messages with 8-bit characters in the headers.
+If enabled, lmtpd rejects messages with 8-bit characters in the headers.
 Otherwise, 8-bit characters are changed to `X'.  (A proper soultion to
 non-ASCII characters in headers is offered by RFC 2047 and its predecessors.)
 .IP "\fBpostuser:\fR <none>" 5
@@ -201,7 +201,7 @@ is a site at CMU with a hopefully informative message; administrators
 should set this to a local resource with some information of greater
 use.
 .IP "\fBsieveusehomedir:\fR false" 5
-If enabled, deliver will look for Sieve scripts in user's home
+If enabled, lmtpd will look for Sieve scripts in user's home
 directories: ~user/.sieve.
 .IP "\fBsievedir:\fR /usr/sieve" 5
 If sieveusehomedir is false, this directory is searched for Sieve
