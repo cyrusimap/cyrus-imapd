@@ -322,6 +322,8 @@ struct mailbox *mailbox;
     char buf[4096];
     int n;
 
+    rewind(mailbox->header);
+
     /* Check magic number */
     n = fread(buf, 1, strlen(MAILBOX_HEADER_MAGIC), mailbox->header);
     buf[n] = '\0';

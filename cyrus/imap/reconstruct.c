@@ -480,6 +480,8 @@ char *acl;
     int high=newmbox_num-1;
     int mid, cmp, i;
 
+    printf("%s %s\n", name, partition);
+
     if (newmbox_num == newmbox_alloc) {
 	newmbox_alloc += NEWMBOX_GROW;
 	newmbox_name = (char **)xrealloc((char *)newmbox_name,
@@ -515,7 +517,7 @@ char *acl;
     }
     
     /* Open a slot for the new entry and insert entry into the list */
-    for (i = newmbox_num; i > high; i--) {
+    for (i = newmbox_num-1; i > high; i--) {
 	newmbox_name[i+1] = newmbox_name[i];
 	newmbox_partition[i+1] = newmbox_partition[i];
 	newmbox_acl[i+1] = newmbox_acl[i];
@@ -647,12 +649,8 @@ do_mboxlist()
 	exit(1);
     }
 
-    r = mboxlist_getinternalstuff(&listfname, &newlistfname,
-				  &startline, &left);
-    if (r) {
-	fprintf(stderr, "reconstruct: cannot get internal mailboxes file info\n");
-	exit(1);
-    }
+    mboxlist_getinternalstuff(&listfname, &newlistfname,
+			      &startline, &left);
 
     /* For each line in old mailboxes file */
     while (endline = memchr(startline, '\n', left)) {
@@ -769,7 +767,6 @@ do_mboxlist()
 	closedir(dirp);
 
 	todo_next = todo_head->next;
-	free(todo_head->name);
 	free(todo_head->path);
 	free((char *)todo_head);
 	todo_head = todo_next;
