@@ -1,6 +1,6 @@
 /* mupdate.h - private mupdate header file
  *
- * $Id: mupdate.h,v 1.8 2002/01/29 17:41:47 rjs3 Exp $
+ * $Id: mupdate.h,v 1.9 2002/01/29 18:14:55 leg Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -102,15 +102,6 @@ struct mbent_queue
     struct mbent **tail;
 };
 
-/* Scarf up the incoming data and perform the requested operations */
-/* Returns 0 on no error (or success, if wait_for_ok set) */
-/* Returns 1 on fatal error */
-/* Returns -1 on command-related error (if wait_for_ok set) */
-int mupdate_scarf(mupdate_handle *handle,
-		  mupdate_callback callback,
-		  void *context,
-		  int wait_for_ok);
-
 /* Used by the slave listener thread to update the local database */
 int cmd_change(struct mupdate_mailboxdata *mdata,
 	       const char *cmd, void *context);
@@ -121,5 +112,17 @@ int mupdate_synchronize(mupdate_handle *handle);
 /* Signal that we are ready to accept connections */
 void mupdate_ready(void);
 void mupdate_unready(void);
+
+/* --- internal client functions (mupdate-client.c) --- */
+/* these are used by the slave thread and by the client API */
+
+/* Scarf up the incoming data and perform the requested operations */
+/* Returns 0 on no error (or success, if wait_for_ok set) */
+/* Returns 1 on fatal error */
+/* Returns -1 on command-related error (if wait_for_ok set) */
+int mupdate_scarf(mupdate_handle *handle,
+		  mupdate_callback callback,
+		  void *context,
+		  int wait_for_ok);
 
 #endif /* INCLUDED_MUPDATE_H */
