@@ -177,7 +177,7 @@ const char *src;
     static int beautysize = 0;
     int len;
 
-    len = strlen(src) * 2;
+    len = strlen(src) * 2 + 1;
     if (beautysize < len) {
 	if (!beautysize) {
 	    beautysize = len > BEAUTYBUFSIZE ? len : BEAUTYBUFSIZE;
