@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.233 2004/02/27 17:44:53 ken3 Exp $
+ * $Id: mboxlist.c,v 1.234 2004/03/15 20:06:33 ken3 Exp $
  */
 
 #include <config.h>
@@ -2245,6 +2245,15 @@ int mboxlist_findall_alt(struct namespace *namespace,
     return r;
 }
 
+static int child_cb(char *name,
+		    int matchlen __attribute__((unused)),
+		    int maycreate __attribute__((unused)),
+		    void *rock)
+{
+    if (!name) return 0;
+    return (*((int *) rock) = 1);
+}
+
 /*
  * Set the quota on or create a quota root
  */
@@ -2291,9 +2300,17 @@ int mboxlist_setquota(const char *root, int newquota, int force)
 	strlcat(pattern, "*", sizeof(pattern));
     }
     else {
+	strlcat(pattern, ".*", sizeof(pattern));
+
 	/* look for a top-level mailbox in the proposed quotaroot */
 	r = mboxlist_detail(quota.root, &t, NULL, NULL, NULL, NULL);
 	if (r) {
+	    if (!force && r == IMAP_MAILBOX_NONEXISTENT) {
+		/* look for a child mailbox in the proposed quotaroot */
+		mboxlist_findall(NULL, pattern, 1, NULL, NULL,
+				 child_cb, (void *) &force);
+	    }
+
 	    /* are we going to force the create anyway? */
 	    if(!force) return r;
 	    else {
@@ -2306,8 +2323,6 @@ int mboxlist_setquota(const char *root, int newquota, int force)
 	    /* Can't set quota on a remote mailbox */
 	    return IMAP_MAILBOX_NOTSUPPORTED;
 	}
-
-	strlcat(pattern, ".*", sizeof(pattern));
     }
 
     /* perhaps create .NEW, lock, check if it got recreated, move in place */
