@@ -1,5 +1,5 @@
 /* rfc822date.c -- Generate an 822 date
- $Id: rfc822date.c,v 1.1.2.1 2001/08/17 21:03:28 leg Exp $
+ $Id: rfc822date.c,v 1.1.2.2 2001/08/21 17:49:23 leg Exp $
  
  * Copyright (c) 1998-2001 Carnegie Mellon University.  All rights reserved.
  *
@@ -53,7 +53,7 @@ static char *month[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
 static char *wday[] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
 
 /* 'buf' must be at least 80 characters */
-void rfc822date_gen(char *buf, time_t t)
+void rfc822date_gen(char *buf, size_t len, time_t t)
 {
     struct tm *tm;
     long gmtoff;
@@ -69,7 +69,7 @@ void rfc822date_gen(char *buf, time_t t)
     }
     gmtoff /= 60;
 
-    snprintf(buf, 80, "%s, %02d %s %4d %02d:%02d:%02d %c%.2lu%.2lu",
+    snprintf(buf, len, "%s, %02d %s %4d %02d:%02d:%02d %c%.2lu%.2lu",
 	     wday[tm->tm_wday], 
 	     tm->tm_mday, month[tm->tm_mon], tm->tm_year + 1900,
 	     tm->tm_hour, tm->tm_min, tm->tm_sec,
