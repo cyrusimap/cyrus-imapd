@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: lmtpd.c,v 1.22 2000/05/03 17:10:44 leg Exp $
+ * $Id: lmtpd.c,v 1.23 2000/05/22 23:30:12 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.22 2000/05/03 17:10:44 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.23 2000/05/22 23:30:12 leg Exp $";*/
 
 #include <config.h>
 
@@ -190,30 +190,6 @@ static const char *sieve_dir = NULL;
 
 struct sockaddr_in deliver_localaddr, deliver_remoteaddr;
 
-/* returns true if imapd_authstate is in "item";
-   expected: item = admins or proxyservers */
-static int authisa(char *authname, const char *item)
-{
-    const char *val = config_getstring(item, "");
-    char buf[MAX_MAILBOX_PATH];
-
-    while (*val) {
-	char *p;
-	
-	for (p = (char *) val; *p && !isspace((int) *p); p++);
-	strncpy(buf, val, p-val);
-	buf[p-val] = 0;
-
-	if (strcasecmp(authname, buf)==0) {
-	    return 1;
-	}
-	val = p;
-	while (*val && isspace((int) *val)) val++;
-    }
-    return 0;
-}
-
-
 /* should we allow users to proxy?  return SASL_OK if yes,
    SASL_BADAUTH otherwise */
 static int mysasl_authproc(void *context __attribute__((unused)),
@@ -227,17 +203,18 @@ static int mysasl_authproc(void *context __attribute__((unused)),
     char *realm;
     static char replybuf[100];
     int allowed=0;
+    struct auth_state *authstate;
 
     canon_authuser = auth_canonifyid(auth_identity);
     if (!canon_authuser) {
-	*errstr = "bad userid authenticated";
+	if (errstr) *errstr = "bad userid authenticated";
 	return SASL_BADAUTH;
     }
     canon_authuser = xstrdup(canon_authuser);
 
     canon_requser = auth_canonifyid(requested_user);
     if (!canon_requser) {
-	*errstr = "bad userid requested";
+	if (errstr) *errstr = "bad userid requested";
 	return SASL_BADAUTH;
     }
     canon_requser = xstrdup(canon_requser);
@@ -258,7 +235,7 @@ static int mysasl_authproc(void *context __attribute__((unused)),
 	if (!*val) {
 	    snprintf(replybuf, 100, "cross-realm login %s denied", 
 		     canon_authuser);
-	    *errstr = replybuf;
+	    if (errstr) *errstr = replybuf;
 	    return SASL_BADAUTH;
 	}
     }
@@ -266,17 +243,19 @@ static int mysasl_authproc(void *context __attribute__((unused)),
     /* ok, is auth_identity an admin? 
      * for now only admins can do lmtp from another machine
      */
-    allowed = authisa(canon_authuser, "admins");
 
-    if (allowed==0) {
-	if (errstr)
-	    *errstr = "only admins may authenticate";
+    authstate = auth_newstate(canon_authuser, NULL);
+    allowed = authisa(authstate, "lmtp", "admins");
+    auth_freestate(authstate);
+    
+    if (!allowed) {
+	if (errstr) *errstr = "only admins may authenticate";
 	return SASL_BADAUTH;
     }
 
     free(canon_authuser);
     *user = canon_requser;
-    *errstr = NULL;
+    if (errstr) *errstr = NULL;
     return SASL_OK;
 }
 
@@ -1696,7 +1675,7 @@ void lmtpmode(deliver_opts_t *delopts)
 	    /* set the ip addresses here */
 	    sasl_setprop(conn, SASL_IP_REMOTE, &deliver_remoteaddr);  
 	    sasl_setprop(conn, SASL_IP_LOCAL,  &deliver_localaddr );
-	    
+
 	    syslog(LOG_DEBUG, "connection from [%s]", 
 		   inet_ntoa(deliver_remoteaddr.sin_addr));
 	} else {

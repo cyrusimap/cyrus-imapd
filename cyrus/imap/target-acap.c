@@ -26,7 +26,7 @@
  *  (412) 268-4387, fax: (412) 268-7395
  *  tech-transfer@andrew.cmu.edu
  *
- * $Id: target-acap.c,v 1.13 2000/05/12 22:18:07 leg Exp $
+ * $Id: target-acap.c,v 1.14 2000/05/22 23:30:15 leg Exp $
  */
 
 #include <config.h>
@@ -59,7 +59,7 @@
 #include "imapurl.h"
 #include "acapmbox.h"
 
-int noop = 0;
+static int debugmode = 0;
 
 extern sasl_callback_t *mysasl_callbacks(const char *username,
 					 const char *authname,
@@ -200,7 +200,11 @@ void myacap_change(acap_entry_t *entry,
 		   unsigned oldpos, unsigned newpos,
 		   void *rock)
 {
-    /* xxx ACL might've changed */
+    /* ACL might've changed, but we can treat this just like an ADDTO.
+       the major problem here is that, if the ACAP server is serving as
+       a master update server, we'll be getting a lot of these and they
+       don't convey any information. */
+    myacap_addto(entry, newpos, rock);
 }
 
 void myacap_modtime(char *modtime, void *rock)
@@ -288,7 +292,7 @@ static struct acap_search_callback myacap_search_cb = {
 };
 
 static struct acap_requested myacap_request = {
-    1, { "mailbox.*" }
+    1, { {"mailbox.*", 0x0} }
 };
 
 static struct acap_context_callback myacap_context_cb = {
@@ -475,6 +479,20 @@ void handler(int sig)
 int main(int argc, char *argv[], char *envp[])
 {
     const char *server;
+    int opt;
+
+    while ((opt = getopt(argc, argv, "d")) != EOF) {
+	switch (opt) {
+	case 'd': /* don't fork. debugging mode */
+	    debugmode = 1;
+	    break;
+	default:
+	    fprintf(stderr, "invalid argument\n");
+	    exit(EC_USAGE);
+	    break;
+	}
+    }
+
 
     config_init("target");
 
@@ -498,20 +516,32 @@ int main(int argc, char *argv[], char *envp[])
     synchronize_mboxlist();
 
     /* we fork to return immediately */
-    if (fork() == 0) {
-	mboxlist_open(NULL);
+    if (!debugmode) {
+	pid_t p = fork();
+	
+	if (p == -1) {
+	    fatal("forked failed", EC_OSERR);
+	}
+	if (p) {		/* parent */
+	    exit(0);
+	}
+    }
 
+    mboxlist_open(NULL);
+
+    for (;;) {
 	/* we now look for processes asking us to issue an UPDATECONTEXT,
 	   presumably because they are looking for a mailbox that 
 	   doesn't exist */
 	listen_for_kicks();
-
+    
 	/* if this returns, we have a problem.  we should probably try
 	   to reestablish the connection with the ACAP server and
-	   resynchronize, but we're not that smart yet */
-	return 1;
+	   resynchronize */
+	acap_conn_close(acap_conn);
+	connect_acap(server);
+	synchronize_mboxlist();
     }
 
-    /* parent */
-    return 0;
+    return 1;
 }

@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: proxyd.c,v 1.27 2000/05/15 20:49:08 leg Exp $ */
+/* $Id: proxyd.c,v 1.28 2000/05/22 23:30:13 leg Exp $ */
 
 #include <config.h>
 
@@ -817,29 +817,6 @@ static int acl_ok(const char *user, const char *auth_identity)
     return r;
 }
 
-/* returns true if proxyd_authstate is in "item";
-   expected: item = admins or proxyservers */
-static int authisa(const char *item)
-{
-    const char *val = config_getstring(item, "");
-    char buf[MAX_MAILBOX_PATH];
-
-    while (*val) {
-	char *p;
-	
-	for (p = (char *) val; *p && !isspace(*p); p++);
-	strncpy(buf, val, p-val);
-	buf[p-val] = 0;
-
-	if (auth_memberof(proxyd_authstate, buf)) {
-	    return 1;
-	}
-	val = p;
-	while (*val && isspace(*val)) val++;
-    }
-    return 0;
-}
-
 /* should we allow users to proxy?  return SASL_OK if yes,
    SASL_BADAUTH otherwise */
 static int mysasl_authproc(void *context __attribute__((unused)),
@@ -855,14 +832,14 @@ static int mysasl_authproc(void *context __attribute__((unused)),
 
     canon_authuser = auth_canonifyid(auth_identity);
     if (!canon_authuser) {
-	*errstr = "bad userid authenticated";
+	if (errstr) *errstr = "bad userid authenticated";
 	return SASL_BADAUTH;
     }
     canon_authuser = xstrdup(canon_authuser);
 
     canon_requser = auth_canonifyid(requested_user);
     if (!canon_requser) {
-	*errstr = "bad userid requested";
+	if (errstr) *errstr = "bad userid requested";
 	return SASL_BADAUTH;
     }
     canon_requser = xstrdup(canon_requser);
@@ -884,7 +861,7 @@ static int mysasl_authproc(void *context __attribute__((unused)),
 	if (!*val) {
 	    snprintf(replybuf, 100, "cross-realm login %s denied", 
 		     canon_authuser);
-	    *errstr = replybuf;
+	    if (errstr) *errstr = replybuf;
 	    return SASL_BADAUTH;
 	}
     }
@@ -892,7 +869,7 @@ static int mysasl_authproc(void *context __attribute__((unused)),
     proxyd_authstate = auth_newstate(canon_authuser, NULL);
 
     /* ok, is auth_identity an admin? */
-    proxyd_userisadmin = authisa("admins");
+    proxyd_userisadmin = authisa(proxyd_authstate, "imap", "admins");
 
     if (strcmp(canon_authuser, canon_requser)) {
 	/* we want to authenticate as a different user; we'll allow this
@@ -901,7 +878,7 @@ static int mysasl_authproc(void *context __attribute__((unused)),
 
 	if (proxyd_userisadmin ||
 	    (use_acl && acl_ok(canon_requser, canon_authuser)) ||
-	    authisa("proxyservers")) {
+	    authisa(proxyd_authstate, "imap", "proxyservers")) {
 	    /* proxy ok! */
 
 	    proxyd_userisadmin = 0;	/* no longer admin */
@@ -909,7 +886,7 @@ static int mysasl_authproc(void *context __attribute__((unused)),
 	    
 	    proxyd_authstate = auth_newstate(canon_requser, NULL);
 	} else {
-	    *errstr = "user is not allowed to proxy";
+	    if (errstr) *errstr = "user is not allowed to proxy";
 	    
 	    free(canon_authuser);
 	    free(canon_requser);
@@ -921,7 +898,7 @@ static int mysasl_authproc(void *context __attribute__((unused)),
 
     free(canon_authuser);
     *user = canon_requser;
-    *errstr = NULL;
+    if (errstr) *errstr = NULL;
     return SASL_OK;
 }
 
@@ -2155,8 +2132,11 @@ void cmd_append(char *tag, char *name)
 	proxyd_refer(tag, newserver, mailboxname);
 	return;
     }
-    if (!r) s = proxyd_findserver(newserver);
-    if (s) {
+    if (!r) {
+	s = proxyd_findserver(newserver);
+	if (!s) r = IMAP_SERVER_UNAVAILABLE;
+    }
+    if (!r) {
 	prot_printf(s->out, "%s Append {%d+}\r\n%s ", tag, strlen(name), name);
 	if (!pipe_command(s, 16384)) {
 	    pipe_until_tag(s, tag);
@@ -2213,8 +2193,10 @@ void cmd_select(char *tag, char *cmd, char *name)
 	return;
     }
 
-    if (!r) backend_current = proxyd_findserver(newserver);
-    if (!r && !backend_current) r = IMAP_SERVER_UNAVAILABLE;
+    if (!r) {
+	backend_current = proxyd_findserver(newserver);
+	if (!backend_current) r = IMAP_SERVER_UNAVAILABLE;
+    }
 
     if (r) {
 	prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));

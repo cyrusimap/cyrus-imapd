@@ -134,31 +134,6 @@ static sasl_security_properties_t *make_secprops(int min,int max)
   return ret;
 }
 
-/* returns true if imapd_authstate is in "item";
-   expected: item = admins or proxyservers 
-*/
-static int authisa(const char *item)
-{
-    const char *val = config_getstring(item, "");
-    char buf[1024];
-
-    while (*val) {
-	char *p;
-	
-	for (p = (char *) val; *p && !isspace((int) *p); p++);
-	strncpy(buf, val, p-val);
-	buf[p-val] = 0;
-
-	if (auth_memberof(sieved_authstate, buf)) {
-	    return 1;
-	}
-	val = p;
-	while (*val && isspace((int) *val)) val++;
-    }
-    return 0;
-}
-
-
 /* should we allow users to proxy?  return SASL_OK if yes,
    SASL_BADAUTH otherwise */
 static int mysasl_authproc(void *context,
@@ -210,12 +185,26 @@ static int mysasl_authproc(void *context,
     sieved_authstate = auth_newstate(canon_authuser, NULL);
 
     /* ok, is auth_identity an admin? */
-    sieved_userisadmin = authisa("admins");
+    sieved_userisadmin = authisa(sieved_authstate, "sieve", "admins");
 
-    if (strcmp(canon_authuser, canon_requser)!=0) {
-      /* we want to authenticate as a different user; we'll NEVER allow this */
-      if (sieved_userisadmin!=1)
-	return SASL_BADAUTH;
+    /* we want to authenticate as a different user: ok if we're an admin or
+     a proxy server */
+    if (strcmp(canon_authuser, canon_requser)) {
+	if (sieved_userisadmin && authisa(sieved_authstate, "sieve", 
+					  "proxyservers")) {
+	    sieved_userisadmin = 0; /* no longer admin */
+	    auth_freestate(sieved_authstate);
+	    
+	    sieved_authstate = auth_newstate(canon_requser, NULL);
+	} else {
+	    *errstr = "user is not allowed to proxy";
+	    
+	    free(canon_authuser);
+	    free(canon_requser);
+	    auth_freestate(sieved_authstate);
+
+	    return SASL_BADAUTH;
+	}
     }
 
     free(canon_authuser);
