@@ -45,6 +45,7 @@ extern char *optarg;
 extern int errno;
 
 int dupelim = 0;
+int logdebug = 0;
 
 struct protstream *savemsg();
 char *convert_lmtp();
@@ -73,10 +74,14 @@ char **argv;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
 
-    while ((opt = getopt(argc, argv, "df:r:m:a:F:eE:lq")) != EOF) {
+    while ((opt = getopt(argc, argv, "df:r:m:a:F:eE:lqD")) != EOF) {
 	switch(opt) {
 	case 'd':
 	    /* Ignore -- /bin/mail compatibility flags */
+	    break;
+
+        case 'D':
+	    debug = 1;
 	    break;
 
 	case 'r':
@@ -1016,6 +1021,8 @@ char *id, *to;
     date.data = datebuf;
     date.size = strlen(datebuf);
 
+    if (debug)
+      syslog(LOG_DEBUG, "deliver: delivered %s to %s at %s", id, to, datebuf);
     (void) DeliveredDBptr->put(DeliveredDBptr, &delivery, &date, 0);
     (void) DeliveredDBptr->sync(DeliveredDBptr, 0);
 #else /* HAVE_LIBDB */
