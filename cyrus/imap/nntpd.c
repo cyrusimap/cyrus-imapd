@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.23 2004/07/12 20:20:50 ken3 Exp $
+ * $Id: nntpd.c,v 1.2.2.24 2004/07/16 12:26:34 ken3 Exp $
  */
 
 /*
@@ -2045,10 +2045,12 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
 	}
     }
 
-    if (success_data)
+    if (success_data) {
 	prot_printf(nntp_out, "283 %s\r\n", success_data);
-    else
+	free(success_data);
+    } else {
 	prot_printf(nntp_out, "281 Success (%s)\r\n", ssfmsg);
+    }
 
     prot_setsasl(nntp_in,  nntp_saslconn);
     prot_setsasl(nntp_out, nntp_saslconn);
