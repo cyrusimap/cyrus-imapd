@@ -9,8 +9,7 @@ OPT=-g
 
 LOBJS= append.o mailbox.o mboxlist.o message.o \
 	parsel.o parsey.o parseadd.o parseutl.o \
-	config.o imap_err.o assert.o xmalloc.o \
-	$(LOGIN) $(SEEN)
+	config.o imap_err.o $(LOGIN) $(SEEN)
 
 IMAPDOBJS= imapd.o index.o
 
@@ -21,10 +20,10 @@ LIBS=../lib/libcyrus.a $(COM_ERR) $(AUTHLIBS)
 
 all: deliver imapd
 
-deliver: deliver.o libimap.a
+deliver: deliver.o libimap.a $(LIBS)
 	$(CC) $(CFLAGS) -o deliver deliver.o libimap.a $(LIBS)
 
-imapd: $(IMAPDOBJS) libimap.a
+imapd: $(IMAPDOBJS) libimap.a $(LIBS)
 	$(CC) $(CFLAGS) -o imapd $(IMAPDOBJS) libimap.a $(LIBS)
 
 libimap.a: $(LOBJS)
@@ -67,20 +66,18 @@ depend: parsel.c parsey.c
 
 append.o: /usr/include/stdio.h /usr/include/ctype.h /usr/include/sys/types.h
 append.o: /usr/include/sys/stdtypes.h /usr/include/sys/sysmacros.h
-append.o: /usr/include/syslog.h ../lib/acl.h assert.h imap_err.h mailbox.h
-append.o: message.h append.h xmalloc.h
-assert.o: /usr/include/stdio.h /usr/include/sysexits.h
+append.o: /usr/include/syslog.h ../lib/acl.h ../lib/assert.h imap_err.h
+append.o: mailbox.h message.h append.h ../lib/xmalloc.h
 config.o: /usr/include/stdio.h /usr/include/ctype.h /usr/include/sysexits.h
 config.o: /usr/include/syslog.h /usr/local/include/afs/com_err.h config.h
-config.o: xmalloc.h
+config.o: ../lib/xmalloc.h
 deliver.o: /usr/include/stdio.h /usr/include/string.h
 deliver.o: /usr/include/sys/stdtypes.h /usr/include/sysexits.h
 deliver.o: /usr/local/include/afs/com_err.h /usr/include/ndbm.h
 deliver.o: /usr/include/sys/file.h /usr/include/sys/types.h
 deliver.o: /usr/include/sys/sysmacros.h /usr/include/sys/fcntlcom.h
-deliver.o: /usr/include/sys/stat.h ../lib/acl.h ../lib/util.h
-deliver.o: /usr/local/include/afs/auth.h /usr/local/include/rx/rxkad.h
-deliver.o: config.h imap_err.h mailbox.h xmalloc.h
+deliver.o: /usr/include/sys/stat.h ../lib/acl.h ../lib/util.h ../lib/auth.h
+deliver.o: config.h imap_err.h mailbox.h ../lib/xmalloc.h
 imapd.o: /usr/include/stdio.h /usr/include/string.h
 imapd.o: /usr/include/sys/stdtypes.h /usr/include/time.h
 imapd.o: /usr/include/sysexits.h /usr/include/signal.h
@@ -90,16 +87,16 @@ imapd.o: /usr/include/sys/param.h /usr/include/machine/param.h
 imapd.o: /usr/include/machine/devaddr.h /usr/include/sys/stat.h
 imapd.o: /usr/include/syslog.h /usr/local/include/afs/com_err.h
 imapd.o: /usr/include/netdb.h /usr/include/sys/socket.h
-imapd.o: /usr/include/netinet/in.h ../lib/acl.h ../lib/util.h
-imapd.o: /usr/local/include/afs/auth.h /usr/local/include/rx/rxkad.h
-imapd.o: imap_err.h mailbox.h imapd.h xmalloc.h
+imapd.o: /usr/include/netinet/in.h ../lib/acl.h ../lib/util.h ../lib/auth.h
+imapd.o: imap_err.h mailbox.h imapd.h ../lib/xmalloc.h
 index.o: /usr/include/stdio.h /usr/include/string.h
 index.o: /usr/include/sys/stdtypes.h /usr/include/time.h
 index.o: /usr/include/sysexits.h /usr/include/sys/types.h
 index.o: /usr/include/sys/sysmacros.h /usr/include/sys/stat.h
 index.o: /usr/include/netinet/in.h /usr/include/sys/mman.h
-index.o: /usr/local/include/afs/com_err.h ../lib/acl.h ../lib/util.h assert.h
-index.o: imap_err.h mailbox.h imapd.h message.h append.h xmalloc.h
+index.o: /usr/local/include/afs/com_err.h ../lib/acl.h ../lib/util.h
+index.o: ../lib/assert.h imap_err.h mailbox.h imapd.h message.h append.h
+index.o: ../lib/xmalloc.h
 login_krb.o: /usr/include/stdio.h /usr/include/ctype.h
 login_krb.o: /usr/include/sysexits.h /usr/local/include/krb.h
 login_krb.o: /usr/local/include/mit-copyright.h /usr/local/include/des.h
@@ -117,18 +114,18 @@ mailbox.o: /usr/include/sys/errno.h /usr/include/syslog.h
 mailbox.o: /usr/include/sys/types.h /usr/include/sys/sysmacros.h
 mailbox.o: /usr/include/netinet/in.h /usr/include/sys/stat.h
 mailbox.o: /usr/include/sys/file.h /usr/include/sys/fcntlcom.h ../lib/acl.h
-mailbox.o: assert.h imap_err.h mailbox.h xmalloc.h
+mailbox.o: ../lib/assert.h imap_err.h mailbox.h ../lib/xmalloc.h
 mboxlist.o: /usr/include/stdio.h /usr/include/sysexits.h
 mboxlist.o: /usr/include/string.h /usr/include/sys/stdtypes.h
 mboxlist.o: /usr/include/errno.h /usr/include/sys/errno.h
 mboxlist.o: /usr/include/sys/types.h /usr/include/sys/sysmacros.h
 mboxlist.o: /usr/include/sys/stat.h /usr/include/sys/file.h
-mboxlist.o: /usr/include/sys/fcntlcom.h ../lib/acl.h ../lib/glob.h assert.h
-mboxlist.o: config.h mailbox.h imap_err.h xmalloc.h
+mboxlist.o: /usr/include/sys/fcntlcom.h ../lib/acl.h ../lib/glob.h
+mboxlist.o: ../lib/assert.h config.h mailbox.h imap_err.h ../lib/xmalloc.h
 message.o: /usr/include/stdio.h /usr/include/ctype.h /usr/include/string.h
 message.o: /usr/include/sys/stdtypes.h imap_err.h mailbox.h
 message.o: /usr/include/sys/types.h /usr/include/sys/sysmacros.h parseadd.h
-message.o: xmalloc.h
+message.o: ../lib/xmalloc.h
 parseadd.o: /usr/include/stdio.h /usr/include/ctype.h parseadd.h
 parsel.o: /usr/include/stdio.h parseadd.h parsey.h
 parseutl.o: /usr/include/stdio.h parseadd.h
@@ -138,6 +135,5 @@ seen_local.o: /usr/include/sys/errno.h /usr/include/ctype.h
 seen_local.o: /usr/include/strings.h /usr/include/sys/stat.h
 seen_local.o: /usr/include/sys/types.h /usr/include/sys/stdtypes.h
 seen_local.o: /usr/include/sys/sysmacros.h /usr/include/sys/file.h
-seen_local.o: /usr/include/sys/fcntlcom.h assert.h mailbox.h imap_err.h
-seen_local.o: xmalloc.h
-xmalloc.o: /usr/include/stdio.h /usr/include/sysexits.h
+seen_local.o: /usr/include/sys/fcntlcom.h ../lib/assert.h mailbox.h
+seen_local.o: imap_err.h ../lib/xmalloc.h
