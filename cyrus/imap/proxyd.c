@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: proxyd.c,v 1.10 2000/03/06 08:03:17 leg Exp $ */
+/* $Id: proxyd.c,v 1.11 2000/03/08 01:42:29 leg Exp $ */
 
 #include <config.h>
 
@@ -69,6 +69,7 @@
 #include "mailbox.h"
 #include "xmalloc.h"
 #include "mboxlist.h"
+#include "acapmbox.h"
 #include "pushstats.h"
 
 /* PROXY STUFF */
@@ -672,6 +673,22 @@ struct backend *proxyd_findserver(char *server)
     return ret;
 }
 
+/* proxy mboxlist_lookup; on misses, it issues an UPDATECONTEXT to the
+   ACAP server */
+static int mlookup(const char *name, char **pathp, 
+		   char **aclp, void *tid)
+{
+    int r;
+
+    r = mboxlist_lookup(name, pathp, aclp, tid);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+	acapmbox_kick_target();
+	r = mboxlist_lookup(name, pathp, aclp, tid);
+    }
+
+    return r;
+}
+
 static struct backend *proxyd_findinboxserver(void)
 {
     char inbox[MAX_MAILBOX_NAME];
@@ -682,7 +699,7 @@ static struct backend *proxyd_findinboxserver(void)
     strcpy(inbox, "user.");
     strcat(inbox, proxyd_userid);
 	
-    r = mboxlist_lookup(inbox, &server, NULL, NULL);
+    r = mlookup(inbox, &server, NULL, NULL);
     s = proxyd_findserver(server);
 
     return s;
@@ -705,7 +722,7 @@ static int acl_ok(const char *user, const char *auth_identity)
     strcat(inboxname, user);
 
     if (!(authstate = auth_newstate(auth_identity, (char *)0)) ||
-	mboxlist_lookup(inboxname, (char **)0, &acl, NULL)) {
+	mlookup(inboxname, (char **)0, &acl, NULL)) {
 	r = 0;  /* Failed so assume no proxy access */
     }
     else {
@@ -1960,7 +1977,7 @@ void cmd_append(char *tag, char *name)
     r = mboxname_tointernal(name, proxyd_userid, mailboxname);
 
     if (!r) {
-	r = mboxlist_lookup(mailboxname, &newserver, NULL, NULL);
+	r = mlookup(mailboxname, &newserver, NULL, NULL);
     }
     if (!r) {
 	s = proxyd_findserver(newserver);
@@ -2017,17 +2034,9 @@ void cmd_select(char *tag, char *cmd, char *name)
 	r = mboxname_tointernal(name, proxyd_userid, mailboxname);
     }
 
-    if (!r) {
-	r = mboxlist_lookup(mailboxname, &newserver, NULL, NULL);
-    }
-
-    if (!r) {
-	backend_current = proxyd_findserver(newserver);
-    }
-
-    if (!backend_current) {
-	r = IMAP_SERVER_UNAVAILABLE;
-    }
+    if (!r) r = mlookup(mailboxname, &newserver, NULL, NULL);
+    if (!r) backend_current = proxyd_findserver(newserver);
+    if (!r && !backend_current) r = IMAP_SERVER_UNAVAILABLE;
 
     if (r) {
 	prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
@@ -2149,7 +2158,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
     assert(backend_current != NULL);
 
     r = mboxname_tointernal(name, proxyd_userid, mailboxname);
-    if (!r) r = mboxlist_lookup(mailboxname, &server, NULL, NULL);
+    if (!r) r = mlookup(mailboxname, &server, NULL, NULL);
     if (!r) s = proxyd_findserver(server);
 
     if (!s) {
@@ -2238,7 +2247,7 @@ void cmd_delete(char *tag, char *name)
 
     r = mboxname_tointernal(name, proxyd_userid, mailboxname);
 
-    if (!r) r = mboxlist_lookup(mailboxname, &server, NULL, NULL);
+    if (!r) r = mlookup(mailboxname, &server, NULL, NULL);
     if (!r) {
 	s = proxyd_findserver(server);
 
@@ -2272,7 +2281,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
     } else {
         r = mboxname_tointernal(oldname, proxyd_userid, oldmailboxname);
 	if (!r) mboxname_tointernal(newname, proxyd_userid, newmailboxname);
-	if (!r) r = mboxlist_lookup(oldmailboxname, &server, NULL, NULL);
+	if (!r) r = mlookup(oldmailboxname, &server, NULL, NULL);
 	if (!r) {
 	    s = proxyd_findserver(server);
 
@@ -2461,9 +2470,7 @@ void cmd_getacl(char *tag, char *name, int oldform)
 
     r = mboxname_tointernal(name, proxyd_userid, mailboxname);
 
-    if (!r) {
-	r = mboxlist_lookup(mailboxname, (char **)0, &acl, NULL);
-    }
+    if (!r) r = mlookup(mailboxname, (char **)0, &acl, NULL);
 
     if (!r) {
 	access = acl_myrights(proxyd_authstate, acl);
@@ -2540,7 +2547,7 @@ void cmd_listrights(char *tag, char *name, char *identifier)
     r = mboxname_tointernal(name, proxyd_userid, mailboxname);
 
     if (!r) {
-	r = mboxlist_lookup(mailboxname, (char **)0, &acl, NULL);
+	r = mlookup(mailboxname, (char **)0, &acl, NULL);
     }
 
     if (!r) {
@@ -2597,7 +2604,7 @@ void cmd_myrights(char *tag, char *name, int oldform)
     r = mboxname_tointernal(name, proxyd_userid, mailboxname);
 
     if (!r) {
-	r = mboxlist_lookup(mailboxname, (char **)0, &acl, NULL);
+	r = mlookup(mailboxname, (char **)0, &acl, NULL);
     }
 
     if (!r) {
@@ -2640,7 +2647,7 @@ void cmd_setacl(char *tag, char *name, char *identifier, char *rights)
     r = mboxname_tointernal(name, proxyd_userid, mailboxname);
 
     if (!r) {
-	r = mboxlist_lookup(mailboxname, &server, NULL, NULL);
+	r = mlookup(mailboxname, &server, NULL, NULL);
     }
 
     if (!r) {
@@ -2690,7 +2697,7 @@ void cmd_getquotaroot(char *tag, char *name)
     struct backend *s = NULL;
 
     r = mboxname_tointernal(name, proxyd_userid, mailboxname);
-    if (!r) r = mboxlist_lookup(mailboxname, &server, NULL, NULL);
+    if (!r) r = mlookup(mailboxname, &server, NULL, NULL);
     if (!r) s = proxyd_findserver(server);
 
     if (s) {
@@ -2730,13 +2737,8 @@ void cmd_status(char *tag, char *name)
 
     r = mboxname_tointernal(name, proxyd_userid, mailboxname);
 
-    if (!r) {
-	r = mboxlist_lookup(mailboxname, &server, NULL, NULL);
-    }
-
-    if (!r) {
-	s = proxyd_findserver(server);
-    }
+    if (!r) r = mlookup(mailboxname, &server, NULL, NULL);
+    if (!r) s = proxyd_findserver(server);
 
     if (!s) {
 	r = IMAP_SERVER_UNAVAILABLE;
