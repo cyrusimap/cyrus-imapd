@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.23 2002/02/24 04:42:17 ken3 Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.24 2002/02/24 19:43:27 leg Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -1147,6 +1147,12 @@ int mycommit(struct db *db, struct txn *tid)
 
     assert(db && tid);
 
+    /* verify that we did something this txn */
+    if (tid->logstart == tid->logend) {
+	/* empty txn, done */
+	goto done;
+    }
+
     /* fsync */
     if (do_fsync && (fdatasync(db->fd) < 0)) {
 	syslog(LOG_ERR, "IOERROR: writing %s: %m", db->fname);
@@ -1167,7 +1173,8 @@ int mycommit(struct db *db, struct txn *tid)
     if (tid->logend > (2 * db->logstart + SKIPLIST_MINREWRITE)) {
 	r = mycheckpoint(db, 1);
     }
-
+    
+ done:
     /* release the write lock */
     if ((r = unlock(db)) < 0) {
 	return r;
