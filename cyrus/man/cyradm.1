@@ -261,31 +261,17 @@ mailbox to \fInewmailbox\fR.  The optional
 the mailbox.
 .IP "\fBlistmailbox [\fI-subscribed\fR] [\fIpattern\fR] [\fIreference\fR]" 5
 The \fBlistmailbox\fR (or \fBlm\fR) command returns a list of mailbox names matching
-the string \fIpattern\fR.  The optional \fIreference\fR argument specifies the
-reference name relative to which \fIpattern\fR is then interpreted.  If you invoke
-\fBlm\fR or \fBlm *\fR, a list of all mailboxes created for the IMAP server
-is displayed.  (In this command, the asterisk (*) represents the complete
-name of any mailbox on the server.)
+the string \fIpattern\fR.  If \fIpattern\fR is omitted, it defaults to
+``*''.  The optional \fIreference\fR argument specifies the
+reference name relative to which \fIpattern\fR is then interpreted.
 .IP
-The \fB-subscribed\fR (or \fB-s\fR) switch limits the returned
-mailboxes to those to which the user has subscribed.
-.IP
-The ``%'' wildcard is used to display a list of mailboxes with the same string 
-in the same delimited portion of the mailbox name. The mailboxes that you want
-to search must contain the same number of delimited strings (strings between
-the periods). For example. if you want 
-to display the list of all mailboxes of the user named wtang, you would type:
-.IP.IP
-lm user.wtang*
-.IP
-However, if you only wanted to display the project-related mailboxes of
-the user wtang, that had the same number of delimited srings, use the
-percent sign (%) instead:
-.IP
-lm user.wtag.%
-.IP      
- Non-mailbox names which are returned 
-because of the ``%'' wildcard character are listed in parentheses.  
+Two wildcard characters are defined in \fIpattern\fR.  The ``*''
+wildcard matches zero or more characters.  The ``%'' wildcard is like
+the ``*'' wildcard except that it will not match the hierarchy
+separator, ``.''.  In some cases, where ``%'' is used as the last
+character of a pattern, non-mailbox names are listed in parentheses.
+This indicates that the name is not actually a mailbox, yet there
+exist sub-mailboxes underneath that name.
 .IP "\fBsetaclmailbox \fImailbox identifier rights\fR [\fIidentifier rights\fR]..." 5
 The \fBsetaclmailbox\fR (or \fBsam\fR) command modifies the access
 control list of the mailbox \fImailbox\fR.  One or more
