@@ -1,5 +1,5 @@
 /* xmalloc.c -- Allocation package that calls fatal() when out of memory
- $Id: xmalloc.c,v 1.13 1998/05/15 21:53:37 neplokh Exp $
+ $Id: xmalloc.c,v 1.14 1999/03/01 21:16:44 tjs Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -27,6 +27,7 @@
 #include "sysexits.h"
 
 extern char *malloc(), *realloc();
+extern void free(void* ptr);
 
 char *xmalloc (size)
 unsigned size;
