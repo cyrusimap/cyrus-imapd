@@ -40,7 +40,7 @@ extern int errno;
 #include "imap_err.h"
 #include "xmalloc.h"
 
-#define DEBUG /* XXX */
+/* #define DEBUG /* XXX */
 #ifdef DEBUG
 /* globcheck
    Called with some of glob_tests's arguments; if it gets called too many
@@ -70,7 +70,7 @@ char* line;
     }
 }
 
-#endif
+#endif /* DEBUG */
 
 acl_canonproc_t mboxlist_ensureOwnerRights;
 
@@ -91,6 +91,7 @@ static int mboxlist_safe_rename();
 
 static struct quota *mboxlist_newquota;
 static int mboxlist_changequota();
+static int safe_rename();
 
 #define FNAME_MBOXLIST "/mailboxes"
 #define FNAME_USERDIR "/user/"
@@ -440,13 +441,14 @@ struct auth_state *auth_state;
     }
     r = mailbox_create(name, buf2, acl, format, &newmailbox);
     free(acl);
+
     if (r) {
-	close(newlistfd); /* ECH */
+	close(newlistfd);
 	return r;
     }
-    if (mboxlist_safe_rename(newlistfname, listfname, newlistfd) == -1) {
+    if (safe_rename(newlistfname, listfname, newlistfd) == -1) {
 	syslog(LOG_ERR, "IOERROR: renaming %s: %m", listfname);
-	close(newlistfd); /* ECH */
+	close(newlistfd);
 	mboxlist_unlock();
 	return IMAP_IOERROR;
     }
