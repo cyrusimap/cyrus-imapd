@@ -13,6 +13,8 @@
  *
  */
 
+static char _rcsid[] = "$Id: deliver.c,v 1.77 1998/05/01 20:01:29 tjs Exp $";
+
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
@@ -42,6 +44,7 @@
 #include "imap_err.h"
 #include "mailbox.h"
 #include "xmalloc.h"
+#include "version.h"
 
 extern int optind;
 extern char *optarg;
@@ -53,7 +56,11 @@ int logdebug = 0;
 
 struct protstream *savemsg();
 char *convert_lmtp();
+void clean822space();
 
+void markdelivered();
+
+int
 main(argc, argv)
 int argc;
 char **argv;
@@ -185,6 +192,7 @@ usage()
     fprintf(stderr, 
 "421-4.3.0 usage: deliver [-m mailbox] [-a auth] [-i] [-F flag]... [user]...\r\n");
     fprintf(stderr, "421 4.3.0        deliver -I age\n");
+    fprintf(stderr, "421 4.3.0 %s", CYRUS_VERSION);
     exit(EX_USAGE);
 }
 
@@ -487,7 +495,6 @@ char **notifyptr;
 unsigned *sizeptr;
 int lmtpmode;
 {
-    int r;
     FILE *f;
     char *hostname = 0;
     int scanheader = 1;
@@ -552,13 +559,17 @@ int lmtpmode;
 	    }
 	}
 	else if (*p == '\r') {
+	    if (buf[0] == '\r' && buf[1] == '\0') {
+		/* The message contained \r\0, and fgets is confusing us.
+		   XXX ignored
+		 */
+	    }
 	    /*
 	     * We were unlucky enough to get a CR just before we ran
 	     * out of buffer--put it back.
 	     */
 	    ungetc('\r', stdin);
 	    *p = '\0';
-	    /* XXX this doesn't handle the case of \r\0 in a message */
 	}
 	/* Remove any lone CR characters */
 	while ((p = strchr(buf, '\r')) && p[1] != '\n') {
@@ -766,6 +777,8 @@ int quotaoverride;
     return r;
 }
 
+/*
+ */
 logdupelem(msgid, name)
 char *msgid;
 char *name;
@@ -780,8 +793,9 @@ char *name;
     }	
 }
 
-int convert_sysexit(r)
-int r;
+int 
+convert_sysexit(r)
+     int r;
 {
     switch (r) {
     case 0:
@@ -814,8 +828,9 @@ int r;
     return EX_SOFTWARE;
 }	
 
-char *convert_lmtp(r)
-int r;
+char 
+*convert_lmtp(r)
+     int r;
 {
     switch (r) {
     case 0:
@@ -887,6 +902,7 @@ char *f;
  * from string pointed to by 'buf'.  Does not handle continuation header
  * lines.
  */
+void
 clean822space(buf)
 char *buf;
 {
@@ -931,130 +947,196 @@ static DB	*DeliveredDBptr;
 static DBM	*DeliveredDBptr;
 #endif
 
+static int
+_lock_delivered_db() {
+  char buf[MAX_MAILBOX_PATH];
+  int lockfd;
+
+  (void)strcpy(buf, config_dir);
+  (void)strcat(buf, "/delivered.lock");
+  lockfd = open(buf, O_RDWR|O_CREAT, 0666);
+  if (lockfd < 0) {
+    syslog(LOG_ERR, "Unable to open lock file: %s: %m", buf);
+    return -1;
+  }
+  if (lock_blocking(lockfd)) {
+    syslog(LOG_ERR, "Unable to lock lock file: %s: %m", buf);
+    close(lockfd);
+    return -1;
+  }
+  
+  return lockfd;
+}
+
+/* id: message id
+   to: name of mailbox
+ */
+int
 checkdelivered(id, to)
 char *id, *to;
 {
 #ifdef HAVE_LIBDB
     char buf[MAX_MAILBOX_PATH];
+    char fname[MAX_MAILBOX_PATH];
     DBT date, delivery;
-    int i;
+    HASHINFO info;
+    int i, lockfd;
 
-    sprintf(buf, "%s/delivered.db", config_dir);
-    DeliveredDBptr = dbopen(buf, O_RDWR|O_CREAT, 0666, DB_HASH, NULL);
-    if (!DeliveredDBptr) {
-      fprintf(stderr, "deliver: can't open %s: %s", buf,
-	      error_message(errno));
-      
-    }
+    (void)memset(&info, 0, sizeof(info));
+    (void)memset(&delivery, 0, sizeof(delivery));
 
-    if (!DeliveredDBptr) return 0;
+    (void)strcpy(fname, config_dir);
+    (void)strcat(fname, "/delivered.db");
 
     sprintf(buf, "%s%c%s", id, '\0', to);
     delivery.data = buf;
     delivery.size = strlen(id) + strlen(to) + 1;
-    i = DeliveredDBptr->get(DeliveredDBptr, &delivery, &date, 0);
-    DeliveredDBptr->close(DeliveredDBptr);
+
+    if ((lockfd = _lock_delivered_db()) < 0) {
+      return 0;
+    }
+
+    DeliveredDBptr = dbopen(fname, O_RDONLY, 0666, DB_HASH, &info);
+    if (!DeliveredDBptr) {
+      close(lockfd);
+      syslog(LOG_ERR,"checkdelivered: Unable to open delivered db: %s: %m", buf);
+      return 0;
+    }
+
+    if ((i = DeliveredDBptr->get(DeliveredDBptr, &delivery, &date, 0)) < 0) {
+      syslog(LOG_ERR, "checkdelivered: error looking up %s/%d: %m", id, to);
+    }
+
+    if (DeliveredDBptr->close(DeliveredDBptr) < 0) {
+      syslog(LOG_ERR, "checkdelivered: error closing db: %m");
+    }
+    close(lockfd);
+
+    if (logdebug) 
+      syslog(LOG_DEBUG, "checking %s %s - result = %d", id, to, i);
+    
     return (i == 0);
 #else /* HAVE_LIBDB */
     static int initialized = 0;
     char buf[MAX_MAILBOX_PATH];
     datum date, delivery;
+    int lockfd;
 
+    
+    if ((lockfd = _lock_delivered_db()) <0)
+      return 0;
+	
     if (!initialized) {
-	initialized++;
+      initialized++;
 
-	sprintf(buf, "%s/delivered", config_dir);
-	DeliveredDBptr = dbm_open(buf, O_RDWR|O_CREAT, 0666);
-	if (!DeliveredDBptr) {
-	    fprintf(stderr, "deliver: can't open %s DBM database: %s",
-		    buf, error_message(errno));
-	}
+      (void)strcpy(buf, config_dir);
+      (void)strcat(buf, "/delivered.db");
+      DeliveredDBptr = dbm_open(buf, O_RDWR|O_CREAT, 0666);
+      if (!DeliveredDBptr) {
+	syslog(LOG_ERR, "checkdelivered: error opening delivered database: %s: %m",
+	       buf);
+	close(lockfd);
+	return 0;
+      }
     }
-
-    if (!DeliveredDBptr) return 0;
+    if (!DeliveredDBptr) {
+      close(lockfd);
+      return 0;
+    }
 
     sprintf(buf, "%s%c%s", id, '\0', to);
     delivery.dptr = buf;
     delivery.dsize = strlen(id) + strlen(to) + 1;
-    date = dbm_fetch(DeliveredDBptr, delivery);
+    if ((date = dbm_fetch(DeliveredDBptr, delivery)) == NULL) {
+      syslog(LOG_ERR, "unable to fetch entry for %s/%s: %m", id, to);
+      close(lockfd);
+      return 0;
+    }
+    close(lockfd);
     return (date.dptr != 0);
 #endif /* HAVE_LIBDB */
 }
 
+void
 markdelivered(id, to)
 char *id, *to;
 {
     char buf[MAX_MAILBOX_PATH];
+    char fname[MAX_MAILBOX_PATH];
     int lockfd;
     char datebuf[40];
 #ifdef HAVE_LIBDB
     DBT date, delivery;
+    HASHINFO info;
 #else /* HAVE_LIBDB */
     datum date, delivery;
 #endif
 
-#ifdef HAVE_LIBDB
-    sprintf(buf, "%s/delivered.db", config_dir);
-    DeliveredDBptr = dbopen(buf, O_RDWR|O_CREAT, 0666, DB_HASH, NULL);
-    if (!DeliveredDBptr) {
-      fprintf(stderr, "deliver: can't open %s: %s", buf,
-	      error_message(errno));
-      
-    }
-#endif
 
-    if (!DeliveredDBptr) return;
-
-    sprintf(buf, "%s/delivered.lock", config_dir);
-    lockfd = open(buf, O_RDWR|O_CREAT, 0666);
-    if (lockfd == -1) {
-	fprintf(stderr,
-		"deliver: can't open delivered.lock file: %s\n",
-		error_message(errno));
-	return;
-    }
-
-    if (lock_blocking(lockfd)) {
-	fprintf(stderr,
-		"deliver: can't lock delivered.lock file: %s\n",
-		error_message(errno));
-	close(lockfd);
-	return;
-    }
-
-#ifdef HAVE_LIBDB
     sprintf(buf, "%s%c%s", id, '\0', to);
+    sprintf(datebuf, "%lu", time(0));
+    
+#ifdef HAVE_LIBDB
+    (void)memset(&info, 0, sizeof(info));
+    (void)memset(&date, 0, sizeof(date));
+    (void)memset(&delivery, 0, sizeof(delivery));
+
     delivery.data = buf;
     delivery.size = strlen(id) + strlen(to) + 1;
 
-    sprintf(datebuf, "%lu", time(0));
     date.data = datebuf;
     date.size = strlen(datebuf);
 
-    if (logdebug)
-      syslog(LOG_DEBUG, "deliver: delivered %s to %s at %s", id, to, datebuf);
-    (void) DeliveredDBptr->put(DeliveredDBptr, &delivery, &date, 0);
-    (void) DeliveredDBptr->sync(DeliveredDBptr, 0);
-    DeliveredDBptr->close(DeliveredDBptr);
-#else /* HAVE_LIBDB */
-    sprintf(buf, "%s%c%s", id, '\0', to);
+    (void)strcpy(fname, config_dir);
+    (void)strcat(fname, "/delivered.db");
+
+    if ((lockfd = _lock_delivered_db()) < 0)
+      return;
+    
+    DeliveredDBptr = dbopen(fname, O_RDWR|O_CREAT, 0666, DB_HASH, &info);
+    if (!DeliveredDBptr) {
+      syslog(LOG_ERR, "markdelivered: error opening delivered.db: %s: %m", buf);
+      close(lockfd);
+      return;
+    }
+
+    if (DeliveredDBptr->put(DeliveredDBptr, &delivery, &date, 0) < 0) {
+      syslog(LOG_ERR, "markdelivered: error storing data: %m");
+    }
+    if (DeliveredDBptr->close(DeliveredDBptr) < 0) {
+      syslog(LOG_ERR, "markdelivered: closing database :m");
+    }
+    close(lockfd);
+#else /* don't HAVE_LIBDB */
+
     delivery.dptr = buf;
     delivery.dsize = strlen(id) + strlen(to) + 1;
 
-    sprintf(datebuf, "%lu", time(0));
     date.dptr = datebuf;
     date.dsize = strlen(datebuf);
 
-    (void) dbm_store(DeliveredDBptr, delivery, date, DBM_REPLACE);
+    /* dbm_open is called in checkdelivered. This assumes that checkdelivered
+     * gets called first */
+
+    if ((lockfd = _lock_delivered_db()) < 0)
+      return;
+
+    if (dbm_store(DeliveredDBptr, delivery, date, DBM_REPLACE) < 0) {
+      syslog(LOG_ERR, "markdelivered: dbm_store: %m");
+    }
+    close(lockfd);
 #endif /* HAVE_LIBDB */
 
-    close(lockfd);
+    if (logdebug)
+      syslog(LOG_DEBUG, "deliver: delivered %s to %s at %s", id, to, datebuf);
 }
 
+int
 prunedelivered(age)
 int age;
 {
     char buf[MAX_MAILBOX_PATH];
+    char fname[MAX_MAILBOX_PATH];
     int lockfd;
     int rcode = 0;
     char datebuf[40];
@@ -1064,53 +1146,37 @@ int age;
     int rc, mode;
     DBT date, delivery;
     DBT *deletions = 0;
+    HASHINFO info;
     int num_deletions = 0, alloc_deletions = 0;
 #else /* HAVE_LIBDB */
     datum date, delivery;
 #endif
 
-    if (age < 1) {
-	fatal("must specify positive number of days", EX_USAGE);
-    }
-
-    /* initialize database */
-    checkdelivered("", "");
-
-#ifdef HAVE_LIBDB
-    sprintf(buf, "%s/delivered.db", config_dir);
-    DeliveredDBptr = dbopen(buf, O_RDWR|O_CREAT, 0666, DB_HASH, NULL);
-    if (!DeliveredDBptr) {
-      fprintf(stderr, "deliver: can't open %s: %s", buf,
-	      error_message(errno));
-      
-    }
-#endif
-
-    if (!DeliveredDBptr) return 1;
-
-    sprintf(buf, "%s/delivered.lock", config_dir);
-    lockfd = open(buf, O_RDWR|O_CREAT, 0666);
-    if (lockfd == -1) {
-	fprintf(stderr,
-		"deliver: can't open delivered.lock file: %s\n",
-		error_message(errno));
-	return 1;
-    }
-
-    if (lock_blocking(lockfd)) {
-	fprintf(stderr,
-		"deliver: can't lock delivered.lock file: %s\n",
-		error_message(errno));
-	close(lockfd);
-	return 1;
-    }
+    if (age < 1)
+      fatal("must specify positive number of days", EX_USAGE);
 
     sprintf(datebuf, "%d", time(0) - age*60*60*24);
     len = strlen(datebuf);
 
 #ifdef HAVE_LIBDB
-    mode = R_FIRST;
+    (void)memset(&info, 0, sizeof(info));
+    (void)memset(&date, 0, sizeof(date));
+    (void)memset(&delivery, 0, sizeof(delivery));
 
+    (void)strcpy(fname, config_dir);
+    (void)strcat(fname, "/delivered.db");
+    
+    if ((lockfd = _lock_delivered_db()) < 0)
+      return -1;
+
+    DeliveredDBptr = dbopen(fname, O_RDWR|O_CREAT, 0666, DB_HASH, NULL);
+    if (!DeliveredDBptr) {
+      syslog(LOG_ERR,  "prunedelivered: error opening %s: %m");
+      close(lockfd);
+      return -1;
+    }
+    
+    mode = R_FIRST;
     while ((rc = DeliveredDBptr->seq(DeliveredDBptr, &delivery, &date, mode)) == 0) {
 	mode = R_NEXT;
 	if (date.size < len ||
@@ -1122,16 +1188,31 @@ int age;
 	    }
 	    deletions[num_deletions].size = delivery.size;
 	    deletions[num_deletions].data = xmalloc(delivery.size);
-	    memcpy(deletions[num_deletions].data, delivery.data, delivery.size);
+	    (void)memcpy(deletions[num_deletions].data, delivery.data, delivery.size);
 	    num_deletions++;
 	}
     }
-
-    while (num_deletions--) {
-	DeliveredDBptr->del(DeliveredDBptr, &deletions[num_deletions], 0);
+    if (rc < 0) {
+      syslog(LOG_ERR, "prunedelivered: error detected looking up entry: %m");
+      syslog(LOG_ERR, "prunedelivered: will try to purge %d entries", num_deletions);
     }
-    DeliveredDBptr->close(DeliveredDBptr);
+      
+    while (num_deletions--) {
+      if (DeliveredDBptr->del(DeliveredDBptr, &deletions[num_deletions], 0) < 0) {
+	syslog(LOG_ERR, "prunedelivered: error deleting entry %d", num_deletions);
+      }
+    }
+
+    if (DeliveredDBptr->close(DeliveredDBptr) < 0) {
+      syslog(LOG_ERR, "prunedelivered: error closing database: %m");
+    }
 #else /* HAVE_LIBDB */
+
+    /* initialize database */
+    checkdelivered("", "");
+
+    if (!DeliveredDBptr) return 1;
+
     for (delivery = dbm_firstkey(DeliveredDBptr); delivery.dptr;
 	 delivery = dbm_nextkey(DeliveredDBptr)) {
 	date = dbm_fetch(DeliveredDBptr, delivery);
@@ -1149,4 +1230,5 @@ int age;
     close(lockfd);
 
     return rcode;
- }
+}
+
