@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.56 2000/12/18 04:53:39 leg Exp $
+ * $Id: lmtpd.c,v 1.57 2000/12/19 19:31:41 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.56 2000/12/18 04:53:39 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.57 2000/12/19 19:31:41 ken3 Exp $";*/
 
 #include <config.h>
 
@@ -616,10 +616,26 @@ static
 int sieve_redirect(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 {
     sieve_redirect_context_t *rc = (sieve_redirect_context_t *) ac;
+    script_data_t *sd = (script_data_t *) sc;
     message_data_t *m = ((mydata_t *) mc)->m;
+    char buf[8192], *sievedb = NULL;
     int res;
 
+    /* if we have a msgid, we can track our redirects */
+    if (m->id) {
+	snprintf(buf, sizeof(buf), "%s-%s", m->id, rc->addr);
+	sievedb = make_sieve_db(sd->username);
+
+	/* ok, let's see if we've redirected this message before */
+	if (duplicate_check(buf, strlen(buf), sievedb, strlen(sievedb)))
+	    return SIEVE_OK;
+    }
+
     if ((res = send_forward(rc->addr, m->return_path, m->data)) == 0) {
+	/* mark this message as redirected */
+	if (sievedb) duplicate_mark(buf, strlen(buf), 
+				    sievedb, strlen(sievedb), time(NULL));
+
 	snmp_increment(SIEVE_REDIRECT, 1);
 	return SIEVE_OK;
     } else {
