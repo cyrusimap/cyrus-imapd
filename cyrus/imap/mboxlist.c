@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.196 2002/06/03 19:39:29 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.197 2002/06/20 16:36:13 rjs3 Exp $
  */
 
 #include <config.h>
@@ -934,7 +934,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     int mbtype;
     char *oldpath = NULL;
     char newpath[MAX_MAILBOX_PATH];
-    int oldopen = 0, newreserved = 0;
+    int oldopen = 0, newopen = 0, newreserved = 0;
     struct mailbox oldmailbox;
     struct mailbox newmailbox;
     char *oldacl = NULL, *newacl = NULL;
@@ -1117,12 +1117,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	if (r) {
 	    goto done;
 	} else {
-	    r = mailbox_open_locked(newname, newpath, newacl, auth_state,
-				    &newmailbox, 0);
-	    if(r) {
-		syslog(LOG_ERR, "error locking new mailbox");
-		goto done;
-	    }	    
+	    newopen = 1;
 	}
     }
 
@@ -1265,6 +1260,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     }
 
     if(oldopen) mailbox_close(&oldmailbox);
+    if(newopen) mailbox_close(&newmailbox);
 
     if(config_mupdate_server) mupdate_disconnect(&mupdate_h);
 
