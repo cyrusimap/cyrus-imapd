@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.110 2000/06/06 00:54:39 leg Exp $
+ * $Id: index.c,v 1.111 2000/06/06 04:11:35 leg Exp $
  */
 #include <config.h>
 
@@ -3185,7 +3185,7 @@ static int index_sort_compare(struct msgdata *md1, struct msgdata *md2,
 	    reverse = 0;
 	}
 
-	switch (sortcrit[i]) {
+	switch (label) {
 	case SORT_SEQUENCE:
 	    ret = numcmp(md1->msgno, md2->msgno);
 	    break;
