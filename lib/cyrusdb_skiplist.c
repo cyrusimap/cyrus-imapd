@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.5 2002/01/23 00:59:00 leg Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.6 2002/01/24 18:17:12 leg Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -226,6 +226,7 @@ enum {
 static int mycommit(struct db *db, struct txn *tid);
 static int myabort(struct db *db, struct txn *tid);
 static int mycheckpoint(struct db *db, int locked);
+static int recovery(struct db *db);
 
 /* file looks like:
    struct header {
@@ -274,16 +275,32 @@ static int LEVEL(const char *ptr)
 static int RECSIZE(const char *ptr)
 {
     int ret = 0;
-    ret += 4;			/* tag */
-    ret += 4;			/* keylen */
-    ret += ROUNDUP(KEYLEN(ptr)); /* key */
-    ret += 4;			/* datalen */
-    ret += ROUNDUP(DATALEN(ptr)); /* data */
-    ret += 4 * LEVEL(ptr);	/* pointers */
-    ret += 4;			/* padding */
+    switch (TYPE(ptr)) {
+    case DUMMY:
+    case INORDER:
+    case ADD:
+	ret += 4;			/* tag */
+	ret += 4;			/* keylen */
+	ret += ROUNDUP(KEYLEN(ptr));    /* key */
+	ret += 4;			/* datalen */
+	ret += ROUNDUP(DATALEN(ptr));   /* data */
+	ret += 4 * LEVEL(ptr);	        /* pointers */
+	ret += 4;			/* padding */
+	break;
+
+    case DELETE:
+	ret += 8;
+	break;
+
+    case COMMIT:
+	ret += 4;
+	break;
+    }
 
     return ret;
 }
+
+#define PADDING(ptr) (ntohl(*((bit32 *)((ptr) + RECSIZE(ptr) - 4))))
 
 /* given an open, mapped db, read in the header information */
 static int read_header(struct db *db)
@@ -502,6 +519,7 @@ static int myopen(const char *fname, struct db **ret)
 		       db->fname);
 		r = CYRUSDB_IOERROR;
 	    }
+	    free(buf);
 	}
 	
 	/* sync the db */
@@ -534,8 +552,13 @@ static int myopen(const char *fname, struct db **ret)
     }
 
     if (db->last_recovery < global_recovery) {
-	/* xxx run recovery; we rebooted since the last time recovery
-	  was run */
+	/* run recovery; we rebooted since the last time recovery
+	   was run */
+	r = recovery(db);
+	if (r) {
+	    dispose_db(db);
+	    return r;
+	}
     }
 
     *ret = db;
@@ -1028,7 +1051,7 @@ int mycommit(struct db *db, struct txn *tid)
 	return CYRUSDB_IOERROR;
     }
 
-    /* xxx consider checkpointing */
+    /* consider checkpointing */
     if (tid->logend > (2 * db->logstart + SKIPLIST_MINREWRITE)) {
 	r = mycheckpoint(db, 1);
     }
@@ -1109,6 +1132,7 @@ static int mycheckpoint(struct db *db, int locked)
 	} else {
 	    r = 0;
 	}
+	free(buf);
 	
 	/* initialize the updateoffsets array so when we append records
 	   we know where to set the pointers */
@@ -1257,10 +1281,293 @@ static int consistent(struct db *db) /* xxx */
 }
 
 /* run recovery on this file */
-static int recovery(struct db *db) /* xxx */
+static int recovery(struct db *db)
 {
+    const char *ptr, *keyptr;
+    int updateoffsets[SKIPLIST_MAXLEVEL];
+    int offset, offsetnet, myoff = 0;
+    int r = 0;
+    time_t start = time(NULL);
+    int i;
 
-    return 0;
+    if ((r = write_lock(db)) < 0) {
+	return r;
+    }
+
+    if (db->last_recovery >= global_recovery) {
+	/* someone beat us to it */
+	unlock(db);
+	return 0;
+    }
+    db->listsize = 0;
+
+    ptr = DUMMY_PTR(db);
+    r = 0;
+
+    /* verify this is DUMMY */
+    if (!r && TYPE(ptr) != DUMMY) {
+	r = CYRUSDB_IOERROR;
+	syslog(LOG_ERR, "DBERROR: skiplist recovery %s: no dummy node?",
+	       db->fname);
+    }
+
+    /* zero key */
+    if (!r && KEYLEN(ptr) != 0) {
+	r = CYRUSDB_IOERROR;
+	syslog(LOG_ERR, 
+	       "DBERROR: skiplist recovery %s: dummy node KEYLEN != 0",
+	       db->fname);
+    }
+
+    /* zero data */
+    if (!r && DATALEN(ptr) != 0) {
+	r = CYRUSDB_IOERROR;
+	syslog(LOG_ERR, 
+	       "DBERROR: skiplist recovery %s: dummy node DATALEN != 0",
+	       db->fname);
+    }
+
+    /* pointers for db->maxlevel */
+    if (!r && LEVEL(ptr) != db->maxlevel) {
+	r = CYRUSDB_IOERROR;
+	syslog(LOG_ERR, 
+	       "DBERROR: skiplist recovery %s: dummy node level: %d != %d",
+	       db->fname, LEVEL(ptr), db->maxlevel);
+    }
+    
+    for (i = 0; i < db->maxlevel; i++) {
+	/* header_size + 4 (rectype) + 4 (ksize) + 4 (dsize)
+	   + 4 * i */
+	updateoffsets[i] = HEADER_SIZE + 12 + 4 * i;
+    }
+    
+    if (!r) ptr += RECSIZE(ptr);
+
+    /* reset the data that was written INORDER by the last checkpoint */
+    offset = db->logstart;
+    while (!r && (offset < db->logstart)) {
+	ptr = db->map_base + offset;
+	offsetnet = htonl(offset);
+
+	db->listsize++;
+
+	/* make sure this is INORDER */
+	if (TYPE(ptr) != INORDER) {
+	    syslog(LOG_ERR, "DBERROR: skiplist recovery: %d should be INORDER",
+		   offset);
+	    r = CYRUSDB_IOERROR;
+	    continue;
+	}
+	    
+	/* xxx check \0 fill on key */
+
+	/* xxx check \0 fill on data */
+	    
+	/* update previous pointers, record these for updating */
+	for (i = 0; !r && i < LEVEL(ptr); i++) {
+	    r = lseek(db->fd, updateoffsets[i], SEEK_SET);
+	    if (r < 0) {
+		syslog(LOG_ERR, "DBERROR: lseek %s: %m", db->fname);
+		r = CYRUSDB_IOERROR;
+		break;
+	    } else {
+		r = 0;
+	    }
+
+	    r = retry_write(db->fd, (char *) &offsetnet, 4);
+	    if (r < 0) {
+		r = CYRUSDB_IOERROR;
+		break;
+	    } else {
+		r = 0;
+	    }
+
+	    /* PTR(ptr, i) - ptr is the offset relative to me
+	       to my ith pointer */
+	    updateoffsets[i] = offset + (PTR(ptr, i) - ptr);
+	}
+
+	/* check padding */
+	if (!r && PADDING(ptr) != -1) {
+	    syslog(LOG_ERR, "DBERROR: %s: offset %d padding not -1",
+		   db->fname, offset);
+	    r = CYRUSDB_IOERROR;
+	}
+
+	if (!r) {
+	    offset += RECSIZE(ptr);
+	}
+    }
+
+    /* zero out the remaining pointers */
+    if (!r) {
+	for (i = 0; !r && i < db->maxlevel; i++) {
+	    int zerooffset = 0;
+
+	    r = lseek(db->fd, updateoffsets[i], SEEK_SET);
+	    if (r < 0) {
+		syslog(LOG_ERR, "DBERROR: lseek %s: %m", db->fname);
+		r = CYRUSDB_IOERROR;
+		break;
+	    } else {
+		r = 0;
+	    }
+
+	    r = retry_write(db->fd, (char *) &zerooffset, 4);
+	    if (r < 0) {
+		r = CYRUSDB_IOERROR;
+		break;
+	    } else {
+		r = 0;
+	    }
+	}
+    }
+
+    /* replay the log */
+    while (!r && offset < db->map_size) {
+	const char *p, *q;
+
+	/* refresh map, so we see the writes we've just done */
+	map_refresh(db->fd, 0, &db->map_base, &db->map_len, db->map_size,
+		    db->fname, 0);
+
+	ptr = db->map_base + offset;
+	offsetnet = htonl(offset);
+
+	/* if this is a commit, we've processed everything in this txn */
+	if (TYPE(ptr) == COMMIT) {
+	    offset += RECSIZE(ptr);
+	    continue;
+	}
+
+	/* make sure this is ADD or DELETE */
+	if (TYPE(ptr) != ADD && TYPE(ptr) != DELETE) {
+	    syslog(LOG_ERR, 
+		   "DBERROR: skiplist recovery: %d should be ADD or DELETE",
+		   offset);
+	    r = CYRUSDB_IOERROR;
+	    break;
+	}
+
+	/* look ahead for a commit */
+	q = db->map_base + db->map_size;
+	p = ptr;
+	for (;;) {
+	    p += RECSIZE(p);
+	    if (p >= q) break;
+	    if (TYPE(ptr) == COMMIT) break;
+	}
+	if (p >= q) {
+	    /* no commit, we should truncate */
+	    if (ftruncate(db->fd, offset) < 0) {
+		syslog(LOG_ERR, 
+		       "DBERROR: skiplist recovery %s: ftruncate: %m",
+		       db->fname);
+		r = CYRUSDB_IOERROR;
+	    }
+	    break;
+	}
+
+	keyptr = NULL;
+	/* look for the key */
+	if (TYPE(ptr) == ADD) {
+	    keyptr = find_node(db, KEY(ptr), KEYLEN(ptr), updateoffsets);
+	    if (!compare(KEY(ptr), KEYLEN(ptr), KEY(keyptr), KEYLEN(keyptr))) {
+		keyptr = NULL;
+	    }
+	} else {
+	    const char *p;
+
+	    myoff = ntohl(*((bit32 *)(ptr + 4)));
+	    p = db->map_base + myoff;
+	    keyptr = find_node(db, KEY(p), KEYLEN(p), updateoffsets);
+	}
+
+	/* if DELETE & found key, skip over it */
+	if (TYPE(ptr) == DELETE && keyptr) {
+	    db->listsize--;
+
+	    for (i = 0; i < db->curlevel; i++) {
+		int newoffset;
+
+		if (FORWARD(db->map_base + updateoffsets[i], i) != myoff) {
+		    break;
+		}
+		newoffset = htonl(FORWARD(db->map_base + myoff, i));
+		lseek(db->fd,
+		      PTR(db->map_base + updateoffsets[i], i) - db->map_base,
+		      SEEK_SET);
+		retry_write(db->fd, (char *) &newoffset, 4);
+	    }
+
+	/* otherwise if DELETE, throw an error */
+	} else if (TYPE(ptr)) {
+	    syslog(LOG_ERR, 
+		   "DBERROR: skiplist recovery %s: DELETE at %d doesn't exist",
+		   db->fname, offset);
+	    r = CYRUSDB_IOERROR;
+
+	/* otherwise if ADD & found key, throw an error */
+	} else if (TYPE(ptr) && keyptr) {
+	    syslog(LOG_ERR, 
+		   "DBERROR: skiplist recovery %s: ADD at %d exists", 
+		   db->fname, offset);
+	    r = CYRUSDB_IOERROR;
+
+	/* otherwise insert it */
+	} else {
+	    int lvl;
+	    bit32 newoffsets[SKIPLIST_MAXLEVEL];
+
+	    db->listsize++;
+	    offsetnet = htonl(offset);
+
+	    lvl = LEVEL(ptr);
+	    for (i = 0; i < lvl; i++) {
+		/* set our next pointers */
+		newoffsets[i] = 
+		    htonl(FORWARD(db->map_base + updateoffsets[i], i));
+
+		/* replace 'updateptrs' to point to me */
+		lseek(db->fd, updateoffsets[i], SEEK_SET);
+		retry_write(db->fd, (char *) &offsetnet, 4);
+	    }
+	    /* write out newoffsets */
+	    lseek(db->fd, FIRSTPTR(ptr) - db->map_base, SEEK_SET);
+	    retry_write(db->fd, (char *) newoffsets, 4 * lvl);
+	}
+    }
+
+    /* fsync the recovered database */
+    if (!r && fsync(db->fd) < 0) {
+	
+	r = CYRUSDB_IOERROR;
+    }
+
+    /* set the last recovery timestamp */
+    if (!r) {
+	db->last_recovery = time(NULL);
+	write_header(db);
+    }
+
+    /* fsync the new header */
+    if (!r && fsync(db->fd) < 0) {
+	
+	r = CYRUSDB_IOERROR;
+    }
+
+    if (!r) {
+	int diff = time(NULL) - start;
+
+	syslog(LOG_INFO, 
+	       "skiplist: recovered %s (%d records, %d bytes) in %d second%s",
+	       db->fname, db->listsize, db->map_size, 
+	       diff, diff == 1 ? "" : "s"); 
+    }
+
+    unlock(db);
+    
+    return r;
 }
 
 struct cyrusdb_backend cyrusdb_skiplist = 
