@@ -414,8 +414,13 @@ char *name;
 	for (thischar = 0; thischar < 256; thischar++) {
 	    printf("   {");
 	    if ((code = table[curstate].ch[thischar].code) != -1) {
-		printf(" '%c', %3d, %3d, %s,", 'A' + (code>>14),
-		       0x80+((code>>7)&0x7f), 0x80+(code&0x7f),
+		if (code <= 0x7FF) {
+		    printf(" %3d, %3d, %s,   0,", 0xc0 + (code>>6),
+		       0x80+(code&0x3f), table[curstate].endaction);
+		}
+		else {
+		    printf(" %3d, %3d, %3d, %s,", 0xe0 + (code>>12),
+		       0x80+((code>>6)&0x3f), 0x80+(code&0x3f),
 		       table[curstate].endaction);
 	    }
 	    else if ((p = table[curstate].ch[thischar].translation) != 0) {
