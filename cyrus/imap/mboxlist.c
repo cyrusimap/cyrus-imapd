@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.19 2002/08/23 19:53:25 ken3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.20 2002/08/23 20:08:14 ken3 Exp $
  */
 
 #include <config.h>
@@ -1177,7 +1177,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	goto done;
     }
 
-    r = mailbox_rename_finish(&oldmailbox,&newmailbox,isusermbox);
+    r = mailbox_rename_finish(&newmailbox);
 
  done: /* Commit or cleanup */
     if (r != 0) {
@@ -1279,11 +1279,16 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	}
     }
 
-    if(oldopen) mailbox_close(&oldmailbox);
     if(newopen) mailbox_close(&newmailbox);
-
     if(config_mupdate_server) mupdate_disconnect(&mupdate_h);
 
+    if(oldopen) {
+	if(!r)
+	    mailbox_rename_cleanup(&oldmailbox,isusermbox);
+
+	mailbox_close(&oldmailbox);
+    }
+    
     /* free memory */
     if (newacl) free(newacl);	/* we're done with the new ACL */
     if (newpartition) free(newpartition);
