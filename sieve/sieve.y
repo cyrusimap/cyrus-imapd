@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.28 2004/03/22 01:50:52 ken3 Exp $
+ * $Id: sieve.y,v 1.29 2004/04/20 21:37:19 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -871,13 +871,14 @@ static int verify_header(char *hdr)
 static int verify_addrheader(char *hdr)
 {
     const char **h, *hdrs[] = {
-	"from", "sender", "reply-to",		/* RFC2822 originator fields */
-	"to", "cc", "bcc",			/* RFC2822 destination fields */
-	"resent-from", "resent-sender",		/* RFC2822 resent fields */
+	"from", "sender", "reply-to",	/* RFC2822 originator fields */
+	"to", "cc", "bcc",		/* RFC2822 destination fields */
+	"resent-from", "resent-sender",	/* RFC2822 resent fields */
 	"resent-to", "resent-cc", "resent-bcc",
-	"return-path",				/* RFC2822 trace fields */
-	"disposition-notification-to",		/* RFC2298 MDN request fields */
-	"delivered-to",				/* non-standard (loop detection) */
+	"return-path",			/* RFC2822 trace fields */
+	"disposition-notification-to",	/* RFC2298 MDN request fields */
+	"delivered-to",			/* non-standard (loop detection) */
+	"approved",			/* RFC1036 moderator/control fields */
 	NULL
     };
     char errbuf[100];
