@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: proxyd.c,v 1.20 2000/04/20 16:34:04 leg Exp $ */
+/* $Id: proxyd.c,v 1.21 2000/04/25 02:35:41 leg Exp $ */
 
 #include <config.h>
 
@@ -2671,7 +2671,7 @@ void cmd_create(char *tag, char *name, char *server)
     char mailboxname[MAX_MAILBOX_NAME+1];
     int r;
 
-    if (server && !imapd_userisadmin) {
+    if (server && !proxyd_userisadmin) {
 	r = IMAP_PERMISSION_DENIED;
     }
 
