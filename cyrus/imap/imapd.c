@@ -108,7 +108,7 @@ char **envp;
 
     proc_register("imapd", imapd_clienthost, (char *)0, (char *)0);
 
-    printf("* OK %s Cyrus IMAP4 v0.3-ALPHA server ready\r\n", hostname);
+    printf("* OK %s Cyrus IMAP4 v0.4-ALPHA server ready\r\n", hostname);
     cmdloop();
 }
 
@@ -1588,6 +1588,16 @@ char *name;
 
     if (!r) {
 	access = acl_myrights(acl);
+	if (imapd_userisadmin) {
+	    access |= ACL_ADMIN;
+	}
+	else if (!strchr(imapd_userid, '.') &&
+		 !strncasecmp(name, "user.", 5) &&
+		 !strncasecmp(name+5, imapd_userid, strlen(imapd_userid)) &&
+		 name[5+strlen(imapd_userid)] == '.') {
+	    access |= ACL_ADMIN;
+	}
+
 	if (!(access&(ACL_READ|ACL_ADMIN))) {
 	    r = (access&ACL_LOOKUP) ?
 	      IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
