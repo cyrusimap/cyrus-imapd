@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.8 2003/12/15 20:00:42 ken3 Exp $
+.\" $Id: imapoptions,v 1.9 2003/12/29 18:09:54 ken3 Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -60,8 +60,9 @@ set to.
 .PP
 Blank lines and lines beginning with ``#'' are ignored.
 .PP
-For boolean options, the values ``yes'', ``on'', ``t'', and ``1'' turn the
-option on, the values ``no'', ``off'', ``f'', and ``0'' turn the option off.
+For boolean and enumerated options, the values ``yes'', ``on'', ``t'',
+``true'' and ``1'' turn the option on, the values ``no'', ``off'',
+``f'', ``false'' and ``0'' turn the option off.
 .SH FIELD DESCRIPTIONS
 .PP
 The sections below detail options that can be placed in the
