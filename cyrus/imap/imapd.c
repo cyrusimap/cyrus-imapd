@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.461 2004/03/19 14:49:16 ken3 Exp $ */
+/* $Id: imapd.c,v 1.462 2004/05/05 18:53:06 ken3 Exp $ */
 
 #include <config.h>
 
@@ -113,6 +113,7 @@ struct protstream *imapd_in = NULL;
 static char imapd_clienthost[NI_MAXHOST*2+1] = "[local]";
 static int imapd_logfd = -1;
 char *imapd_userid;
+static char *imapd_magicplus = NULL;
 struct auth_state *imapd_authstate = 0;
 static int imapd_userisadmin = 0;
 static int imapd_userisproxyadmin = 0;
@@ -266,10 +267,98 @@ static struct
     char *authid;
 } saslprops = {NULL,NULL,0,NULL};
 
+static int imapd_canon_user(sasl_conn_t *conn, void *context,
+			    const char *user, unsigned ulen,
+			    unsigned flags, const char *user_realm,
+			    char *out, unsigned out_max, unsigned *out_ulen)
+{
+    char userbuf[MAX_MAILBOX_NAME+1], *p;
+    size_t n;
+    int r;
+
+    if (config_getswitch(IMAPOPT_IMAPMAGICPLUS)) {
+	/* make a working copy of the auth[z]id */
+	if (!ulen) ulen = strlen(user);
+	memcpy(userbuf, user, ulen);
+	userbuf[ulen] = '\0';
+	user = userbuf;
+
+	/* See if we're using the magic plus
+	   (currently we don't support anything after '+') */
+	if ((p = strchr(userbuf, '+')) && 
+	    (n = config_virtdomains ? strcspn(p, "@") : strlen(p)) == 1) {
+
+	    if (flags & SASL_CU_AUTHZID) {
+		/* make a copy of the magic plus */
+		if (imapd_magicplus) free(imapd_magicplus);
+		imapd_magicplus = xstrndup(p, n);
+	    }
+
+	    /* strip the magic plus from the auth[z]id */
+	    memmove(p, p+n, strlen(p+n)+1);
+	    ulen -= n;
+	}
+    }
+
+    r = mysasl_canon_user(conn, context, user, ulen, flags, user_realm,
+			  out, out_max, out_ulen);
+
+    if (!r && imapd_magicplus && flags == SASL_CU_AUTHZID) {
+	/* If we're only doing the authzid, put back the magic plus
+	   in case its used in the challenge/response calculation */
+	n = strlen(imapd_magicplus);
+	if (*out_ulen + n > out_max) {
+	    sasl_seterror(conn, 0, "buffer overflow while canonicalizing");
+	    r = SASL_BUFOVER;
+	}
+	else {
+	    p = (config_virtdomains && (p = strchr(out, '@'))) ?
+		p : out + *out_ulen;
+	    memmove(p+n, p, strlen(p)+1);
+	    memcpy(p, imapd_magicplus, n);
+	    *out_ulen += n;
+	}
+    }
+
+    return r;
+}
+
+static int imapd_proxy_policy(sasl_conn_t *conn,
+			      void *context,
+			      const char *requested_user, unsigned rlen,
+			      const char *auth_identity, unsigned alen,
+			      const char *def_realm,
+			      unsigned urlen,
+			      struct propctx *propctx)
+{
+    if (config_getswitch(IMAPOPT_IMAPMAGICPLUS)) {
+	char userbuf[MAX_MAILBOX_NAME+1], *p;
+	size_t n;
+
+	/* make a working copy of the authzid */
+	if (!rlen) rlen = strlen(requested_user);
+	memcpy(userbuf, requested_user, rlen);
+	userbuf[rlen] = '\0';
+	requested_user = userbuf;
+
+	/* See if we're using the magic plus */
+	if (p = strchr(userbuf, '+')) {
+	    n = config_virtdomains ? strcspn(p, "@") : strlen(p);
+
+	    /* strip the magic plus from the authzid */
+	    memmove(p, p+n, strlen(p+n)+1);
+	    rlen -= n;
+	}
+    }
+
+    return mysasl_proxy_policy(conn, context, requested_user, rlen,
+			       auth_identity, alen, def_realm, urlen, propctx);
+}
+
 static const struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
-    { SASL_CB_PROXY_POLICY, &mysasl_proxy_policy, (void*) &imapd_proxyctx },
-    { SASL_CB_CANON_USER, &mysasl_canon_user, NULL },
+    { SASL_CB_PROXY_POLICY, &imapd_proxy_policy, (void*) &imapd_proxyctx },
+    { SASL_CB_CANON_USER, &imapd_canon_user, NULL },
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
@@ -382,6 +471,10 @@ static void imapd_reset(void)
     if (imapd_userid != NULL) {
 	free(imapd_userid);
 	imapd_userid = NULL;
+    }
+    if (imapd_magicplus != NULL) {
+	free(imapd_magicplus);
+	imapd_magicplus = NULL;
     }
     if (imapd_authstate) {
 	auth_freestate(imapd_authstate);
@@ -1575,6 +1668,9 @@ void cmdloop()
  */
 void cmd_login(char *tag, char *user)
 {
+    char userbuf[MAX_MAILBOX_NAME+1];
+    unsigned userlen;
+    const char *canon_user = userbuf;
     char c;
     struct buf passwdbuf;
     char *passwd;
@@ -1588,10 +1684,22 @@ void cmd_login(char *tag, char *user)
 	return;
     }
 
+    r = imapd_canon_user(imapd_saslconn, NULL, user, 0,
+			 SASL_CU_AUTHID | SASL_CU_AUTHZID, NULL,
+			 userbuf, sizeof(userbuf), &userlen);
+
+    if (r) {
+	syslog(LOG_NOTICE, "badlogin: %s plaintext %s invalid user",
+	       imapd_clienthost, beautify_string(user));
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, 
+		    error_message(IMAP_INVALID_USER));
+	return;
+    }
+
     /* possibly disallow login */
     if ((imapd_starttls_done == 0) &&
 	(config_getswitch(IMAPOPT_ALLOWPLAINTEXT) == 0) &&
-	!is_userid_anonymous(user)) {
+	!is_userid_anonymous(canon_user)) {
 	eatline(imapd_in, ' ');
 	prot_printf(imapd_out, "%s NO Login only available under a layer\r\n",
 		    tag);
@@ -1613,7 +1721,7 @@ void cmd_login(char *tag, char *user)
 
     passwd = passwdbuf.s;
 
-    if (is_userid_anonymous(user)) {
+    if (is_userid_anonymous(canon_user)) {
 	if (config_getswitch(IMAPOPT_ALLOWANONYMOUSLOGIN)) {
 	    passwd = beautify_string(passwd);
 	    if (strlen(passwd) > 500) passwd[500] = '\0';
@@ -1632,12 +1740,12 @@ void cmd_login(char *tag, char *user)
 	}
     }
     else if ((r = sasl_checkpass(imapd_saslconn,
-				 user,
-				 strlen(user),
+				 canon_user,
+				 strlen(canon_user),
 				 passwd,
 				 strlen(passwd))) != SASL_OK) {
 	syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
-	       imapd_clienthost, user, sasl_errdetail(imapd_saslconn));
+	       imapd_clienthost, canon_user, sasl_errdetail(imapd_saslconn));
 
 	sleep(3);
 
@@ -1654,8 +1762,6 @@ void cmd_login(char *tag, char *user)
 	return;
     }
     else {
-	const char *canon_user;
-	
 	r = sasl_getprop(imapd_saslconn, SASL_USERNAME,
 			 (const void **) &canon_user);
 
@@ -1679,8 +1785,9 @@ void cmd_login(char *tag, char *user)
 	snmp_increment_args(AUTHENTICATION_YES, 1,
 			    VARIABLE_AUTH, 0 /*hash_simple("LOGIN") */, 
 			    VARIABLE_LISTEND);
-	syslog(LOG_NOTICE, "login: %s %s plaintext%s %s", imapd_clienthost,
-	       canon_user, imapd_starttls_done ? "+TLS" : "", 
+	syslog(LOG_NOTICE, "login: %s %s%s plaintext%s %s", imapd_clienthost,
+	       imapd_userid, imapd_magicplus ? imapd_magicplus : "",
+	       imapd_starttls_done ? "+TLS" : "", 
 	       reply ? reply : "");
 
 	plaintextloginpause = config_getint(IMAPOPT_PLAINTEXTLOGINPAUSE);
@@ -1786,11 +1893,33 @@ cmd_authenticate(char *tag, char *authtype, char *resp)
 	reset_saslconn(&imapd_saslconn);
 	return;
     }
-    imapd_userid = xstrdup(canon_user);
+
+    /* If we're proxying, the authzid may contain a magic plus,
+       so re-canonify it */
+    if (config_getswitch(IMAPOPT_IMAPMAGICPLUS) && strchr(canon_user, '+')) {
+	char userbuf[MAX_MAILBOX_NAME+1];
+	unsigned userlen;
+
+	sasl_result = imapd_canon_user(imapd_saslconn, NULL, canon_user, 0,
+				       SASL_CU_AUTHID | SASL_CU_AUTHZID,
+				       NULL, userbuf, sizeof(userbuf), &userlen);
+	if (sasl_result != SASL_OK) {
+	    prot_printf(imapd_out, 
+			"%s NO SASL canonification error %d\r\n", 
+			tag, sasl_result);
+	    reset_saslconn(&imapd_saslconn);
+	    return;
+	}
+
+	imapd_userid = xstrdup(userbuf);
+    } else {
+	imapd_userid = xstrdup(canon_user);
+    }
 
     proc_register("imapd", imapd_clienthost, imapd_userid, (char *)0);
 
-    syslog(LOG_NOTICE, "login: %s %s %s%s %s", imapd_clienthost, imapd_userid,
+    syslog(LOG_NOTICE, "login: %s %s%s %s%s %s", imapd_clienthost,
+	   imapd_userid, imapd_magicplus ? imapd_magicplus : "",
 	   authtype, imapd_starttls_done ? "+TLS" : "", "User logged in");
 
     sasl_getprop(imapd_saslconn, SASL_SSF, (const void **) &ssfp);
@@ -4125,7 +4254,8 @@ void cmd_list(char *tag, int listopts, char *reference, char *pattern)
 	    findall = imapd_namespace.mboxlist_findall;
 	}
 
-	if (listopts & LIST_LSUB || listopts & LIST_SUBSCRIBED) {
+	if (imapd_magicplus ||
+	    listopts & LIST_LSUB || listopts & LIST_SUBSCRIBED) {
 	    int force = config_getswitch(IMAPOPT_ALLOWALLSUBSCRIBE);
 
 	    (*findsub)(&imapd_namespace, pattern,
