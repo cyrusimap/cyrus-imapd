@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.216 2002/02/13 05:58:02 rjs3 Exp $
+dnl $Id: configure.in,v 1.217 2002/02/13 21:29:26 rjs3 Exp $
 dnl
 
 
@@ -91,6 +91,11 @@ CMU_GUESS_RUNPATH_SWITCH
 dnl let's just link against local.  otherwise we never find anything useful.
 CPPFLAGS="${CPPFLAGS} -I/usr/local/include"
 CMU_ADD_LIBPATH("/usr/local/lib")
+
+if test "$ac_cv_prog_gcc" = yes; then
+dnl xxx we should add -W at some point
+  CFLAGS="-Wall ${CFLAGS}"
+fi 
 
 AC_CHECK_HEADERS(unistd.h sys/select.h sys/param.h)
 AC_REPLACE_FUNCS(memmove strcasecmp ftruncate strerror getaddrinfo getnameinfo)
