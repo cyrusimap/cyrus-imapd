@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.22 2001/05/21 18:32:31 leg Exp $ */
+/* $Id: service.c,v 1.23 2001/05/21 20:10:17 leg Exp $ */
 #include <config.h>
 
 #include <stdio.h>
@@ -167,7 +167,7 @@ int main(int argc, char **argv, char **envp)
     p = getenv("CYRUS_SERVICE");
     if (p == NULL) {
 	syslog(LOG_ERR, "could not getenv(CYRUS_SERVICE); exiting");
-	exit(EC_SOFTWARE);
+	exit(EX_SOFTWARE);
     }
     
     snprintf(name, sizeof(name) - 1, "service-%s", p);
@@ -249,7 +249,7 @@ int main(int argc, char **argv, char **envp)
 	p = getenv("CYRUS_SERVICE");
 	if (p == NULL) {
 	    syslog(LOG_ERR, "could not getenv(CYRUS_SERVICE) (2); exiting");
-	    exit(EC_SOFTWARE);
+	    exit(EX_SOFTWARE);
 	}
 
 	libwrap_init(&request, p);
