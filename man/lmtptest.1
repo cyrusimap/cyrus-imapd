@@ -40,7 +40,7 @@
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
 .SH NAME
-lmtptest \- interactive LMTP/SMTP test program
+lmtptest \- interactive LMTP test program
 .SH SYNOPSIS
 .B lmtptest
 [
@@ -82,16 +82,17 @@ lmtptest \- interactive LMTP/SMTP test program
 .I file
 ]
 [
-.B \-s
+.B \-n
+.I num
 ]
 [
 .B \-c
 ]
-[
+.br
+         [
 .B \-v
 ]
-.br
-         \fIhostname\fR
+\fIhostname\fR
 .SH DESCRIPTION
 .I lmtptest
 is a utility that allows you to authenticate to a LMTP server
@@ -110,13 +111,13 @@ Specify \fB""\fR to negotiate a TLS encryption layer but not use TLS
 authentication.
 .TP
 .BI \-p " port"
-Port to connect to. If left off this defaults to \fBlmtp\fR (or
-\fBsmtp\fR if used with \fI-s\fR) as defined in /etc/services. 
+Port to connect to. If left off this defaults to \fBlmtp\fR as defined
+in /etc/services.
 .TP
 .BI -m " mechanism"
 Force lmtptest to use \fImechanism\fR for authentication. If not specified
 the strongest authentication mechanism supported by the server is
-chosen.  Specify \fBnone\fR to not AUTHenticate to the server.
+chosen.
 .TP
 .BI -u " user"
 Username to use for authentication; defaults to the current user.
@@ -141,10 +142,10 @@ Specify the \fIrealm\fR to use. Certain authentication mechanisms
 .BI -f " file"
 Pipe \fIfile\fR into connection after authentication.
 .TP
-.B -s
-SMTP mode.  Default to \fBsmtp\fR port (unless specified otherwise
-with the \fI-p\fR option) and issue an EHLO command instead of an LHLO
-command.
+.BI -n " num"
+Number of authentication attempts; default = 1.  The client will
+attempt to do SSL/TLS session reuse and/or fast reauth
+(e.g. DIGEST-MD5), if possible.
 .TP
 .B -c
 Enable challenge prompt callbacks.  This will cause the OTP mechanism

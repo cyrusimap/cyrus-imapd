@@ -1,5 +1,5 @@
 .\" -*- nroff -*-
-.TH IMTEST 1
+.TH SMTPTEST 1
 .\" 
 .\" Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
 .\"
@@ -40,9 +40,9 @@
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
 .SH NAME
-imtest \- interactive IMAP test program
+smtptest \- interactive SMTP test program
 .SH SYNOPSIS
-.B imtest
+.B smtptest
 [
 .B \-t
 .I keyfile
@@ -56,7 +56,7 @@ imtest \- interactive IMAP test program
 .I mechanism
 ]
 .br
-       [
+         [
 .B \-u
 .I user
 ]
@@ -73,7 +73,7 @@ imtest \- interactive IMAP test program
 .I num
 ]
 .br
-       [
+         [
 .B \-r
 .I realm
 ]
@@ -87,26 +87,23 @@ imtest \- interactive IMAP test program
 ]
 [
 .B \-s
-]-n
+]
 [
 .B \-c
 ]
 .br
-       [
-.B \-z
-]
-[
+         [
 .B \-v
 ]
 \fIhostname\fR
 .SH DESCRIPTION
-.I imtest
-is a utility that allows you to authenticate to a IMAP or IMSP server
+.I smtptest
+is a utility that allows you to authenticate to a SMTP server
 and interactively issue commands to it. Once authenticated you may
-issue any IMAP or IMSP command by simply typing it in. It is capable
+issue any SMTP command by simply typing it in. It is capable
 of multiple SASL authentication mechanisms and handles encryption
 layers transparently. This utility is often used for testing the
-operation of a imsp or imap server. Also those developing IMAP clients
+operation of a smtp server. Also those developing SMTP clients
 find it useful.
 .PP
 .SH OPTIONS
@@ -117,13 +114,13 @@ Specify \fB""\fR to negotiate a TLS encryption layer but not use TLS
 authentication.
 .TP
 .BI \-p " port"
-Port to connect to. If left off this defaults to \fBimap\fR as defined in
-/etc/services. 
+Port to connect to. If left off this defaults to \fBsmtp\fR as defined
+in /etc/services.
 .TP
 .BI -m " mechanism"
-Force imtest to use \fImechanism\fR for authentication. If not specified
+Force smtptest to use \fImechanism\fR for authentication. If not specified
 the strongest authentication mechanism supported by the server is
-chosen.  Specify \fBlogin\fR to use the LOGIN command instead of AUTHENTICATE.
+chosen.
 .TP
 .BI -u " user"
 Username to use for authentication; defaults to the current user.
@@ -137,7 +134,7 @@ Minimum protection layer required.
 .BI -l " num"
 Maximum protection layer to use (\fB0\fR=none; \fB1=\fRintegrity;
 etc).  For example if you are using the KERBEROS_V4 authentication
-mechanism specifying \fB0\fR will force imtest to not use any layer
+mechanism specifying \fB0\fR will force smtptest to not use any layer
 and specifying \fB1\fR will force it to use the integrity layer.  By
 default the maximum supported protection layer will be used.
 .TP
@@ -154,7 +151,7 @@ attempt to do SSL/TLS session reuse and/or fast reauth
 (e.g. DIGEST-MD5), if possible.
 .TP
 .B -s
-Enable IMAP over SSL (imaps).
+Enable SMTP over SSL (smtps).
 .TP
 .B -c
 Enable challenge prompt callbacks.  This will cause the OTP mechanism
@@ -163,9 +160,6 @@ to ask for the the one-time password instead of the secret pass-phrase
 .TP
 .B -v
 Verbose. Print out more information than usual.
-.TP
-.B -z
-Timing test.
 .SH SEE ALSO
 .PP
-\fBimapd(8)\fR
+\fBsendmail(8)\fR
