@@ -22,16 +22,12 @@
  *
  */
 
-/*
- * This module could stand an almost complete rewrite.
- * Perhaps something that mmap()s in the 'mailboxes' file.
- */
-
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/uio.h>
 #include <fcntl.h>
 #include <syslog.h>
 #include <com_err.h>
@@ -50,9 +46,17 @@ extern int errno;
 #include "xmalloc.h"
 
 static char *listfname, *newlistfname;
+static int listfd = -1;
+static long list_ino;
+static char *list_base;
+static unsigned long list_size = 0;
+static int list_locked = 0;
 
 static int mboxlist_opensubs();
-static int mboxlist_getfname();
+static void mboxlist_closesubs();
+static void mboxlist_reopen();
+static void mboxlist_badline();
+static void mboxlist_parseline();
 static int mboxlist_policycheck();
 static int mboxlist_userownsmailbox();
 static long ensureOwnerRights();
@@ -93,20 +97,7 @@ static char *badmboxpatterns[] = {
  */
 mboxlist_checkconfig()
 {
-    FILE *listfile;
-    char *msg;
-    
-    if (!listfname) mboxlist_getfname();
-
-    /* Open mailbox list file */
-    listfile = fopen(listfname, "r");
-    if (!listfile) {
-	msg = xmalloc(strlen(listfname)+300);
-	sprintf(msg, "cannot open %s: %s", listfname, error_message(errno));
-	syslog(LOG_ERR, "IOERROR: opening %s: %m", listfname);
-	fatal(msg, EX_OSFILE);
-    }
-    fclose(listfile);
+    mboxlist_reopen();
 }
 
 
@@ -118,50 +109,44 @@ mboxlist_checkconfig()
  * is placed in the char * pointed to by it.  If 'acl' is non-nil, a pointer
  * to the mailbox ACL is placed in the char * pointed to by it.
  */
-mboxlist_lookup(name, path, acl)
+mboxlist_lookup(name, pathp, aclp)
 char *name;
-char **path;
-char **acl;
+char **pathp;
+char **aclp;
 {
     int namelen = strlen(name);
-    FILE *listfile;
-    unsigned offset, buflen, acllen;
-    char *buf = 0;
-    char buf2[MAX_NAME_LEN];
-    char *p, *partition, *root;
+    unsigned long offset, len, partitionlen, acllen;
+    char optionbuf[MAX_NAME_LEN+1];
+    char *p, *partition, *acl, *root;
     static char pathresult[MAX_MAILBOX_PATH];
     static char *aclresult;
     static int aclresultalloced;
 
-    if (!listfname) mboxlist_getfname();
-
-    /* Open mailbox list file */
-    listfile = fopen(listfname, "r");
-    if (!listfile) {
-	syslog(LOG_ERR, "IOERROR: opening %s: %m", listfname);
-	fatal("can't read mailbox list", EX_OSFILE);
-    }
+    mboxlist_reopen();
 
     /* Find mailbox */
-    offset = n_binarySearchFD(fileno(listfile), name, 0, &buf, &buflen, 0, 0);
-    if (!buflen) {
-	fclose(listfile);
+    offset = bsearch_mem(name, 0, list_base, list_size, 0, &len);
+    if (!len) {
 	return IMAP_MAILBOX_NONEXISTENT;
     }
 	
     /* Canonicalize the case of the mailbox name */
-    strncpy(name, buf, namelen);
+    strncpy(name, list_base + offset, namelen);
 
     /* Parse partition name, construct pathname if requested */
-    partition = buf + namelen + 1;
-    p = strchr(partition, '\t');
-    assert(p != 0);
-    *p = '\0';
-    if (path) {
-	sprintf(buf2, "partition-%s", partition);
-	root = config_getstring(buf2, (char *)0);
+    mboxlist_parseline(offset, len, (char *)0, (unsigned long *)0,
+		       &partition, &partitionlen, &acl, &acllen);
+
+    if (pathp) {
+	if (partitionlen > sizeof(optionbuf)-11) {
+	    return IMAP_PARTITION_UNKNOWN;
+	}
+	strcpy(optionbuf, "partition-");
+	memcpy(optionbuf + 10, partition, partitionlen);
+	optionbuf[10+partitionlen] = '\0';
+	
+	root = config_getstring(optionbuf, (char *)0);
 	if (!root) {
-	    fclose(listfile);
 	    return IMAP_PARTITION_UNKNOWN;
 	}
 	
@@ -171,47 +156,22 @@ char **acl;
 	    else if (*p == '.') *p = '/';
 	}
 
-	*path = pathresult;
+	*pathp = pathresult;
     }
 
     /* Parse ACL if requested */
-    if (acl) {
-	p = buf + strlen(buf) + 1;
-	buflen -= p - buf;
-	for (acllen = 0; acllen < buflen; acllen++) {
-	    if (p[acllen] == '\n') break;
-	}
-	if (acllen+2 > aclresultalloced) {
-	    aclresultalloced = acllen+2;
+    if (aclp) {
+	if (acllen+1 > aclresultalloced) {
+	    aclresultalloced = acllen+100;
 	    aclresult = xrealloc(aclresult, aclresultalloced);
 	}
-	strncpy(aclresult, p, acllen+1);
-	p = aclresult + acllen;
-	if (*p != '\n') {
-	    /*
-	     * ACL is too long for buf.  we're going to have to read
-	     * the rest of it.
-	     */
-	    fseek(listfile, offset+strlen(buf)+1+buflen, 0);
-	}
-	while (*p != '\n' && fgets(buf2, sizeof(buf2), listfile)) {
-	    acllen += strlen(buf2);
-	    if (acllen+2 > aclresultalloced) {
-		aclresultalloced = acllen+2;
-		offset = p - aclresult;
-		aclresult = xrealloc(aclresult, aclresultalloced);
-		p = aclresult + offset;
-	    }
-	    strcpy(p, buf2);
-	    p += strlen(p)-1;
-	}
-	if (*p != '\n') p++;
-	*p = '\0';
 
-	*acl = aclresult;
+	memcpy(aclresult, acl, acllen);
+	aclresult[acllen] = '\0';
+
+	*aclp = aclresult;
     }
 
-    fclose(listfile);
     return 0;
 }
 
@@ -227,18 +187,18 @@ char *userid;
 char **newacl;
 char **newpartition;
 {
-    FILE *listfile = 0;
     int i;
     struct glob *g;
     int r;
-    char *buf, *p;
+    char *p;
+    unsigned long offset;
     char *canon_user;
     char *acl;
     char *defaultacl, *identifier, *rights;
     char parent[MAX_NAME_LEN+1];
-    unsigned parentlen;
-
-    if (!listfname) mboxlist_getfname();
+    unsigned long parentlen;
+    char *parentname, *parentpartition, *parentacl;
+    unsigned long parentpartitionlen, parentacllen;
 
     /* Check for invalid name/partition */
     if (strlen(name) > MAX_NAME_LEN) return IMAP_MAILBOX_BADNAME;
@@ -274,15 +234,7 @@ char **newpartition;
 	    }
 	}
 
-	fclose(listfile);
 	return r;
-    }
-
-    /* Open mailbox list file */
-    listfile = fopen(listfname, "r+");
-    if (!listfile) {
-	syslog(LOG_ERR, "IOERROR: opening %s: %m", listfname);
-	fatal("can't read mailbox list", EX_OSFILE);
     }
 
     /* Search for a parent */
@@ -290,33 +242,39 @@ char **newpartition;
     parentlen = 0;
     while (!parentlen && (p = strrchr(parent, '.'))) {
 	*p = '\0';
-	buf = 0;
-	(void) n_binarySearchFD(fileno(listfile), parent, 0, &buf,
-				&parentlen, 0, 0);
+	offset = bsearch_mem(parent, 0, list_base, list_size, 0, &parentlen);
     }
     if (parentlen) {
-	if (!partition) {
-	    partition = buf + strlen(parent) + 1;
-	    p = strchr(partition, '\t');
-	    assert(p != 0);
-	    *p = '\0';
-	}
-	partition = strsave(partition);
+	mboxlist_parseline(offset, parentlen, &parentname, (unsigned long *)0,
+			   &parentpartition, &parentpartitionlen,
+			   &parentacl, &parentacllen);
 
-	r = mboxlist_lookup(parent, (char **)0, &acl);
-	assert(r == 0);
+	/* Copy partition, if not specified */
+	if (!partition) {
+	    partition = xmalloc(parentpartitionlen + 1);
+	    memcpy(partition, parentpartition, parentpartitionlen);
+	    partition[parentpartitionlen] = '\0';
+	}
+	else {
+	    partition = strsave(partition);
+	}
+
+	/* Copy ACL */
+	acl = xmalloc(parentacllen + 1);
+	memcpy(acl, parentacl, parentacllen);
+	acl[parentacllen] = '\0';
+
 	if (!isadmin && !(acl_myrights(acl) & ACL_CREATE)) {
-	    fclose(listfile);
 	    free(partition);
+	    free(acl);
 	    return IMAP_PERMISSION_DENIED;
 	}
-	/* Copy acl, canonicalize case of parent prefix */
-	acl = strsave(acl);
+
+	/* Canonicalize case of parent prefix */
 	strncpy(name, parent, strlen(parent));
     }
     else {
 	if (!isadmin) {
-	    fclose(listfile);
 	    return IMAP_PERMISSION_DENIED;
 	}
 	
@@ -324,7 +282,6 @@ char **newpartition;
 	if (!strncasecmp(name, "user.", 5)) {
 	    if (strchr(name+5, '.')) {
 		/* Disallow creating user.X.* when no user.X */
-		fclose(listfile);
 		free(acl);
 		return IMAP_PERMISSION_DENIED;
 	    }
@@ -380,8 +337,6 @@ char **newpartition;
 	partition = strsave(partition);
     }	      
 
-    fclose(listfile);
-
     if (newpartition) *newpartition = partition;
     else free(partition);
     if (newacl) *newacl = acl;
@@ -400,89 +355,88 @@ char *partition;
 int isadmin;
 char *userid;
 {
-    FILE *listfile = 0;
     int r;
-    char *buf, *p;
-    unsigned offset, len, size;
+    char *p;
+    unsigned long offset, len;
     char *acl;
     char buf2[MAX_MAILBOX_PATH];
     char *root;
-    FILE *newlistfile;
-    int n, left;
+    int newlistfd;
+    struct iovec iov[10];
+    int n;
 
     /* Open and lock mailbox list file */
-    r = mboxlist_openlock(&listfile, &size);
+    r = mboxlist_openlock();
     if (r) return r;
 
     /* Check ability to create mailbox */
     r = mboxlist_createmailboxcheck(name, partition, isadmin, userid,
 				    &acl, &partition);
     if (r) {
-	fclose(listfile);
+	mboxlist_unlock();
 	return r;
     }
 
     /* Search for where the new entry goes */
-    buf = 0;
-    offset = n_binarySearchFD(fileno(listfile), name, 0, &buf, &len, 0, size);
+    offset = bsearch_mem(name, 0, list_base, list_size, 0, &len);
     assert(len == 0);
 
     /* Get partition's path */
     sprintf(buf2, "partition-%s", partition);
     root = config_getstring(buf2, (char *)0);
     if (!root) {
-	fclose(listfile);
+	mboxlist_unlock();
 	free(partition);
 	free(acl);
 	return IMAP_PARTITION_UNKNOWN;
     }
     if (strlen(root)+strlen(name)+20 > MAX_MAILBOX_PATH) {
-	fclose(listfile);
+	mboxlist_unlock();
 	free(partition);
 	free(acl);
 	return IMAP_MAILBOX_BADNAME;
     }
     
     /* Create new mailbox list */
-    newlistfile = fopen(newlistfname, "w+");
-    if (!newlistfile) {
+    newlistfd = open(newlistfname, O_RDWR|O_TRUNC|O_CREAT, 0666);
+    if (newlistfd == -1) {
 	syslog(LOG_ERR, "IOERROR: creating %s: %m", newlistfname);
-	fclose(listfile);
+	mboxlist_unlock();
 	free(partition);
 	free(acl);
 	return IMAP_IOERROR;
     }
 
     /* Copy mailbox list, adding new entry */
-    left = offset;
-    rewind(listfile);
-    while (left) {
-	n = fread(buf2, 1, left<sizeof(buf2) ? left : sizeof(buf2), listfile);
-	if (!n) {
-	    syslog(LOG_ERR, "IOERROR: reading %s: end of file", listfname);
-	    fclose(listfile);
-	    fclose(newlistfile);
-	    free(partition);
-	    free(acl);
-	    return IMAP_IOERROR;
-	}
-	fwrite(buf2, 1, n, newlistfile);
-	left -= n;
-    }
-    fprintf(newlistfile, "%s\t%s\t%s\n", name, partition, acl);
+    iov[0].iov_base = list_base;
+    iov[0].iov_len = offset;
+    iov[1].iov_base = name;
+    iov[1].iov_len = strlen(name);
+    iov[2].iov_base = "\t";
+    iov[2].iov_len = 1;
+    iov[3].iov_base = partition;
+    iov[3].iov_len = strlen(partition);
+    iov[4].iov_base = "\t";
+    iov[4].iov_len = 1;
+    iov[5].iov_base = acl;
+    iov[5].iov_len = strlen(acl);
+    iov[6].iov_base = "\n";
+    iov[6].iov_len = 1;
+    iov[7].iov_base = list_base + offset;
+    iov[7].iov_len = list_size - offset;
+
+    n = retry_writev(newlistfd, iov, 8);
+    
     free(partition);
     free(acl);
-    while (n = fread(buf2, 1, sizeof(buf2), listfile)) {
-	fwrite(buf2, 1, n, newlistfile);
-    }
-    fflush(newlistfile);
-    if (ferror(newlistfile) || fsync(fileno(newlistfile))) {
+
+    if (n == -1 || fsync(newlistfd)) {
 	syslog(LOG_ERR, "IOERROR: writing %s: %m", newlistfname);
-	fclose(listfile);
-	fclose(newlistfile);
+	mboxlist_unlock();
+	close(newlistfd);
 	return IMAP_IOERROR;
     }
-    fclose(newlistfile);
+    close(newlistfd);
 
     /* Create new mailbox and move new mailbox list file into place */
     sprintf(buf2, "%s/%s", root, name);
@@ -494,11 +448,11 @@ char *userid;
     if (r) return r;
     if (rename(newlistfname, listfname) == -1) {
 	syslog(LOG_ERR, "IOERROR: renaming %s: %m", listfname);
-	fclose(listfile);
+	mboxlist_unlock();
 	return IMAP_IOERROR;
     }
 
-    fclose(listfile);
+    mboxlist_unlock();
     return 0;
 }
 	
@@ -513,16 +467,14 @@ char *name;
 int isadmin;
 char *userid;
 {
-    FILE *listfile = 0;
     int r;
     char *acl;
     long access;
-    unsigned offset, len, size;
+    unsigned long offset, len;
     char buf2[MAX_MAILBOX_PATH];
-    FILE *newlistfile;
-    char *buf;
-    int n, left;
-    char *p;
+    int newlistfd;
+    struct iovec iov[10];
+    int n;
     struct mailbox mailbox;
 
     /* Can't DELETE INBOX */
@@ -565,20 +517,18 @@ char *userid;
 	}
     }
 
-    if (!listfname) mboxlist_getfname();
-
     /* Open and lock mailbox list file */
-    r = mboxlist_openlock(&listfile, &size);
+    r = mboxlist_openlock();
     if (r) return r;
 
     r = mboxlist_lookup(name, (char **)0, &acl);
     if (r) {
-	fclose(listfile);
+	mboxlist_unlock();
 	return r;
     }
     access = acl_myrights(acl);
     if (checkacl && !(access & ACL_DELETE)) {
-	fclose(listfile);
+	mboxlist_unlock();
 
 	/* User has admin rights over their own mailbox namespace */
 	if (mboxlist_userownsmailbox(userid, name)) {
@@ -590,65 +540,48 @@ char *userid;
 	  IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
     }
 
-    buf = 0;
-    offset = n_binarySearchFD(fileno(listfile), name, 0, &buf, &len, 0, size);
+    offset = bsearch_mem(name, 0, list_base, list_size, 0, &len);
     assert(len > 0);
 
-    /* Calculate real length of entry */
-    p = strchr(buf, '\t')+1;
-    p = strchr(p, '\t')+1;
-    len = p - buf + strlen(acl) + 1;
-
     /* Create new mailbox list */
-    newlistfile = fopen(newlistfname, "w+");
-    if (!newlistfile) {
+    newlistfd = open(newlistfname, O_RDWR|O_TRUNC|O_CREAT, 0666);
+    if (newlistfd == -1) {
 	syslog(LOG_ERR, "IOERROR: creating %s: %m", newlistfname);
-	fclose(listfile);
+	mboxlist_unlock();
 	return IMAP_IOERROR;
     }
 
     /* Copy mailbox list, removing entry */
-    left = offset;
-    rewind(listfile);
-    while (left) {
-	n = fread(buf2, 1, left<sizeof(buf2) ? left : sizeof(buf2), listfile);
-	if (!n) {
-	    syslog(LOG_ERR, "IOERROR: reading %s: end of file", listfname);
-	    fclose(listfile);
-	    fclose(newlistfile);
-	    return IMAP_IOERROR;
-	}
-	fwrite(buf2, 1, n, newlistfile);
-	left -= n;
-    }
-    fseek(listfile, len, 1);
-    while (n = fread(buf2, 1, sizeof(buf2), listfile)) {
-	fwrite(buf2, 1, n, newlistfile);
-    }
-    fflush(newlistfile);
-    if (ferror(newlistfile) || fsync(fileno(newlistfile))) {
+    iov[0].iov_base = list_base;
+    iov[0].iov_len = offset;
+    iov[1].iov_base = list_base+offset+len;
+    iov[1].iov_len = list_size - offset - len;
+
+    n = retry_writev(newlistfd, iov, 2);
+
+    if (n == -1 || fsync(newlistfd)) {
 	syslog(LOG_ERR, "IOERROR: writing %s: %m", newlistfname);
-	fclose(listfile);
-	fclose(newlistfile);
+	mboxlist_unlock();
+	close(newlistfd);
 	return IMAP_IOERROR;
     }
-    fclose(newlistfile);
+    close(newlistfd);
     
     /* Remove the mailbox and move new mailbox list file into place */
     r = mailbox_open_header(name, &mailbox);
     if (!r) r = mailbox_delete(&mailbox);
     if (r) {
-	fclose(listfile);
+	mboxlist_unlock();
 	return r;
     }
     if (rename(newlistfname, listfname) == -1) {
 	syslog(LOG_ERR, "IOERROR: renaming %s: %m", listfname);
-	fclose(listfile);
+	mboxlist_unlock();
 	/* XXX We're left in an inconsistent state here */
 	return IMAP_IOERROR;
     }
 
-    fclose(listfile);
+    mboxlist_unlock();
 
     return 0;
 }
@@ -663,63 +596,61 @@ char *partition;
 int isadmin;
 char *userid;
 {
-    FILE *listfile = 0;
     int r;
     long access;
     int isusermbox = 0;
-    char inboxname[MAX_NAME_LEN];
+    char inboxname[MAX_NAME_LEN+1];
     char *oldpath;
-    char *buf, *p;
-    unsigned size;
-    unsigned oldoffset, oldlen;
-    unsigned newoffset, newlen;
+    char *p;
+    unsigned long oldoffset, oldlen;
+    unsigned long newoffset, newlen;
     char *acl;
     char buf2[MAX_MAILBOX_PATH];
     char *root;
-    FILE *newlistfile;
-    int n, left;
-
-    if (!listfname) mboxlist_getfname();
+    int newlistfd;
+    struct iovec iov[10];
+    int num_iov;
+    int n;
 
     /* Open and lock mailbox list file */
-    r = mboxlist_openlock(&listfile, &size);
+    r = mboxlist_openlock();
     if (r) return r;
 
     /* Check ability to delete old mailbox */
     if (strcasecmp(oldname, "inbox") == 0) {
 	/* Special case of renaming inbox */
 	if (strlen(userid)+6 > MAX_MAILBOX_PATH) {
-	    fclose(listfile);
+	    mboxlist_unlock();
 	    return IMAP_MAILBOX_NONEXISTENT;
 	}
 	strcpy(inboxname, "user.");
 	strcat(inboxname, userid);
 	r = mboxlist_lookup(inboxname, &oldpath, &acl);
 	if (r) {
-	    fclose(listfile);
+	    mboxlist_unlock();
 	    return r;
 	}
 	access = acl_myrights(acl);
 	if (!(access & ACL_DELETE)) {
-	    fclose(listfile);
+	    mboxlist_unlock();
 	    return IMAP_PERMISSION_DENIED;
 	}
 	isusermbox = 1;
     }
     else if (!strncasecmp(oldname, "user.", 5) && !strchr(oldname+5, '.')) {
 	/* Even admins can't rename users */
-	fclose(listfile);
+	mboxlist_unlock();
 	return IMAP_PERMISSION_DENIED;
     }
     else {
 	r = mboxlist_lookup(oldname, &oldpath, &acl);
 	if (r) {
-	    fclose(listfile);
+	    mboxlist_unlock();
 	    return r;
 	}
 	access = acl_myrights(acl);
 	if (!(access & ACL_DELETE)) {
-	    fclose(listfile);
+	    mboxlist_unlock();
 	    return (isadmin || (access & ACL_LOOKUP)) ?
 	      IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
 	}
@@ -729,14 +660,14 @@ char *userid;
     /* Check ability to create new mailbox */
     if (!strncasecmp(newname, "user.", 5) && !strchr(newname+5, '.')) {
 	/* Even admins can't rename to user's inboxes */
-	fclose(listfile);
+	mboxlist_unlock();
 	free(acl);
 	return IMAP_PERMISSION_DENIED;
     }
     r = mboxlist_createmailboxcheck(newname, partition, isadmin, userid,
 				    (char **)0, &partition);
     if (r) {
-	fclose(listfile);
+	mboxlist_unlock();
 	free(acl);
 	return r;
     }
@@ -746,109 +677,81 @@ char *userid;
 	oldoffset = oldlen = 0;
     }
     else {
-	buf = 0;
-	oldoffset = n_binarySearchFD(fileno(listfile), oldname, 0, &buf,
-				     &oldlen, 0, size);
+	oldoffset = bsearch_mem(oldname, 0, list_base, list_size, 0, &oldlen);
 	assert(oldlen > 0);
-
-	/* Calculate real length of entry */
-	p = strchr(buf, '\t')+1;
-	p = strchr(p, '\t')+1;
-	oldlen = p - buf + strlen(acl) + 1;
     }
 
     /* Search for where the new entry goes */
-    buf = 0;
-    newoffset = n_binarySearchFD(fileno(listfile), newname, 0, &buf, &newlen,
-				 0, size);
+    newoffset = bsearch_mem(newname, 0, list_base, list_size, 0, &newlen);
 
     /* Get partition's path */
     sprintf(buf2, "partition-%s", partition);
     root = config_getstring(buf2, (char *)0);
     if (!root) {
-	fclose(listfile);
+	mboxlist_unlock();
 	free(acl);
 	free(partition);
 	return IMAP_PARTITION_UNKNOWN;
     }
     if (strlen(root)+strlen(newname)+20 > MAX_MAILBOX_PATH) {
-	fclose(listfile);
+	mboxlist_unlock();
 	free(acl);
 	free(partition);
 	return IMAP_MAILBOX_BADNAME;
     }
     
     /* Create new mailbox list */
-    newlistfile = fopen(newlistfname, "w+");
-    if (!newlistfile) {
+    newlistfd = open(newlistfname, O_RDWR|O_TRUNC|O_CREAT, 0666);
+    if (newlistfd == -1) {
 	syslog(LOG_ERR, "IOERROR: creating %s: %m", newlistfname);
-	fclose(listfile);
+	mboxlist_unlock();
 	free(acl);
 	free(partition);
 	return IMAP_IOERROR;
     }
 
     /* Copy mailbox list, changing entry */
-    left = oldoffset <= newoffset ? oldoffset : newoffset;
-    rewind(listfile);
-    while (left) {
-	n = fread(buf2, 1, left<sizeof(buf2) ? left : sizeof(buf2), listfile);
-	if (!n) {
-	    syslog(LOG_ERR, "IOERROR: reading %s: end of file", listfname);
-	    fclose(listfile);
-	    fclose(newlistfile);
-	    free(partition);
-	    free(acl);
-	    return IMAP_IOERROR;
-	}
-	fwrite(buf2, 1, n, newlistfile);
-	left -= n;
-    }
+    num_iov  = 0;
+    iov[num_iov].iov_base = list_base;
     if (oldoffset < newoffset) {
-	left = newoffset - oldoffset;
-	if (!isusermbox) {
-	    fseek(listfile, oldlen, 1);
-	    left -= oldlen;
-	}
+	iov[num_iov++].iov_len = oldoffset;
+	iov[num_iov].iov_base = list_base + oldoffset + oldlen;
+	iov[num_iov++].iov_len = newoffset - (oldoffset + oldlen);
     }
     else {
-	fprintf(newlistfile, "%s\t%s\t%s\n", newname, partition, acl);
-	left = oldoffset - newoffset;
+	iov[num_iov++].iov_len = newoffset;
     }
-    while (left) {
-	n = fread(buf2, 1, left<sizeof(buf2) ? left : sizeof(buf2), listfile);
-	if (!n) {
-	    syslog(LOG_ERR, "IOERROR: reading %s: end of file", listfname);
-	    fclose(listfile);
-	    fclose(newlistfile);
-	    free(partition);
-	    free(acl);
-	    return IMAP_IOERROR;
-	}
-	fwrite(buf2, 1, n, newlistfile);
-	left -= n;
-    }
+    iov[num_iov].iov_base = newname;
+    iov[num_iov++].iov_len = strlen(newname);
+    iov[num_iov].iov_base = "\t";
+    iov[num_iov++].iov_len = 1;
+    iov[num_iov].iov_base = partition;
+    iov[num_iov++].iov_len = strlen(partition);
+    iov[num_iov].iov_base = "\t";
+    iov[num_iov++].iov_len = 1;
+    iov[num_iov].iov_base = acl;
+    iov[num_iov++].iov_len = strlen(acl);
+    iov[num_iov].iov_base = "\r";
+    iov[num_iov++].iov_len = 1;
+    iov[num_iov].iov_base = list_base + newoffset;
     if (oldoffset < newoffset) {
-	fprintf(newlistfile, "%s\t%s\t%s\n", newname, partition, acl);
+	iov[num_iov++].iov_len = list_size - newoffset;
     }
     else {
-	if (!isusermbox) {
-	    fseek(listfile, oldlen, 1);
-	}
+	iov[num_iov++].iov_len = oldoffset - newoffset;
+	iov[num_iov].iov_base = list_base + oldoffset + oldlen;
+	iov[num_iov++].iov_len = list_size - (oldoffset + oldlen);
     }
-    free(partition);
-    free(acl);
-    while (n = fread(buf2, 1, sizeof(buf2), listfile)) {
-	fwrite(buf2, 1, n, newlistfile);
-    }
-    fflush(newlistfile);
-    if (ferror(newlistfile) || fsync(fileno(newlistfile))) {
+	
+    n = retry_writev(newlistfd, iov, num_iov);
+
+    if (n == -1 || fsync(newlistfd)) {
 	syslog(LOG_ERR, "IOERROR: writing %s: %m", newlistfname);
-	fclose(listfile);
-	fclose(newlistfile);
+	mboxlist_unlock();
+	close(newlistfd);
 	return IMAP_IOERROR;
     }
-    fclose(newlistfile);
+    close(newlistfd);
 
     /* Rename the mailbox and move new mailbox list file into place */
     sprintf(buf2, "%s/%s", root, newname);
@@ -859,453 +762,17 @@ char *userid;
     r = mailbox_rename(isusermbox ? inboxname : oldname,
 		       newname, buf2, isusermbox);
     if (r) {
-	fclose(listfile);
+	mboxlist_unlock();
 	return r;
     }
     if (rename(newlistfname, listfname) == -1) {
 	syslog(LOG_ERR, "IOERROR: renaming %s: %m", listfname);
-	fclose(listfile);
+	mboxlist_unlock();
 	/* XXX We're left in an inconsistent state here */
 	return IMAP_IOERROR;
     }
 
-    return 0;
-}
-
-
-/*
- * Find all mailboxes that match 'pattern'.
- * 'isadmin' is nonzero if user is a mailbox admin.  'userid'
- * is the user's login id.  For each matching mailbox, calls
- * 'proc' with the name of the mailbox.  If 'proc' ever returns
- * a nonzero value, mboxlist_findall immediately stops searching
- * and returns that value.
- */
-int mboxlist_findall(pattern, isadmin, userid, proc)
-char *pattern;
-int isadmin;
-char *userid;
-int (*proc)();
-{
-    FILE *listfile;
-    struct glob *g;
-    char usermboxname[MAX_NAME_LEN];
-    int usermboxnamelen;
-    char buf[512], *bufp = buf;
-    unsigned offset, buflen, prefixlen;
-    long matchlen, minmatch;
-    char *endname, *p, *acl;
-    int rights;
-    int r;
-
-    if (!listfname) mboxlist_getfname();
-
-    listfile = fopen(listfname, "r");
-    if (!listfile) {
-	syslog(LOG_ERR, "IOERROR: opening %s: %m", listfname);
-	fatal("can't read mailbox list", EX_OSFILE);
-    }
-
-    g = glob_init(pattern, GLOB_ICASE|GLOB_HIERARCHY);
-
-    /* Check for INBOX first of all */
-    if (userid && !strchr(userid, '.') && strlen(userid)+5 < MAX_NAME_LEN) {
-	strcpy(usermboxname, "user.");
-	strcat(usermboxname, userid);
-
-	if (GLOB_TEST(g, "inbox") != -1) {
-	    buflen = sizeof(buf);
-	    (void) n_binarySearchFD(fileno(listfile), usermboxname, 0, &bufp,
-				    &buflen, 0, 0);
-	    if (buflen) {
-		r = (*proc)("INBOX", 5, 0);
-		if (r) {
-		    fclose(listfile);
-		    glob_free(&g);
-		    return r;
-		}
-	    }
-	}
-
-	strcat(usermboxname, ".");
-	usermboxnamelen = strlen(usermboxname);
-    }
-    else {
-	userid = 0;
-    }
-
-    /* Find fixed-string pattern prefix */
-    for (p = pattern; *p; p++) {
-	if (*p == '*' || *p == '%' || *p == '?') break;
-    }
-    prefixlen = p - pattern;
-    *p = '\0';
-
-    /* If user.X can match pattern, search for those mailboxes next */
-    if (userid && !strncasecmp(usermboxname, pattern,
-	    prefixlen < usermboxnamelen ? prefixlen : usermboxnamelen)) {
-
-	buflen = sizeof(buf);
-	offset = n_binarySearchFD(fileno(listfile), usermboxname, 0, &bufp,
-				  &buflen, 0, 0);
-	fseek(listfile, offset, 0);
-	for (;;) {
-	    if (!fgets(buf, sizeof(buf), listfile)) break;
-	    p = strchr(buf, '\t');
-	    assert(p != 0);
-	    *p = '\0';
-	    if (strncasecmp(buf, usermboxname, usermboxnamelen) != 0) break;
-	    minmatch = 0;
-	    while (minmatch >= 0) {
-		matchlen = glob_test(g, buf, 0L, &minmatch);
-		if (matchlen == -1) break;
-		r = (*proc)(buf, matchlen, 1);
-		if (r) {
-		    fclose(listfile);
-		    glob_free(&g);
-		    return r;
-		}
-	    }
-	    *p = '\t';
-	    while (buf[strlen(buf)-1] != '\n') {
-		if (!fgets(buf, sizeof(buf), listfile)) break;
-	    }
-	}
-    }
-
-    /* Search for all remaining mailboxes */
-    buflen = sizeof(buf);
-    offset = n_binarySearchFD(fileno(listfile), pattern, 0, &bufp,
-			      &buflen, 0, 0);
-    fseek(listfile, offset, 0);
-    if (userid) usermboxname[--usermboxnamelen] = '\0';
-    for (;;) {
-	if (!fgets(buf, sizeof(buf), listfile)) break;
-	endname = strchr(buf, '\t');
-	assert(endname != 0);
-	*endname = '\0';
-	if (strncasecmp(buf, pattern, prefixlen)) break;
-	minmatch = 0;
-	while (minmatch >= 0) {
-	    matchlen = glob_test(g, buf, 0, &minmatch);
-	    if (matchlen == -1 ||
-		(userid &&
-		 strncasecmp(buf, usermboxname, usermboxnamelen) == 0 &&
-		 (buf[usermboxnamelen] == '\0' || buf[usermboxnamelen] == '.'))) {
-		break;
-	    }
-	    if (isadmin) {
-		r = (*proc)(buf, matchlen, 1);
-		if (r) {
-		    fclose(listfile);
-		    glob_free(&g);
-		    return r;
-		}
-	    }
-	    else {
-		acl = strchr(buf+strlen(buf)+1, '\t');
-		assert(acl != 0);
-		acl++;
-		p = strchr(acl, '\n');
-		if (p) {
-		    *p = '\0';
-		}
-		else {
-		    r = mboxlist_lookup(buf, (char **)0, &acl);
-		    assert(r == 0);
-		}
-		rights = acl_myrights(acl);
-		if (rights & ACL_LOOKUP) {
-		    r = (*proc)(buf, matchlen, (rights & ACL_CREATE));
-		    if (r) {
-			fclose(listfile);
-			glob_free(&g);
-			return r;
-		    }
-		}
-		if (p) {
-		    *p = '\n';
-		}
-	    }
-	}
-	*endname = '\t';
-	while (buf[strlen(buf)-1] != '\n') {
-	    if (!fgets(buf, sizeof(buf), listfile)) break;
-	}
-    }
-	
-    fclose(listfile);
-    glob_free(&g);
-    return 0;
-}
-
-/*
- * Find subscribed mailboxes that match 'pattern'.
- * 'isadmin' is nonzero if user is a mailbox admin.  'userid'
- * is the user's login id.  For each matching mailbox, calls
- * 'proc' with the name of the mailbox.
- */
-int mboxlist_findsub(pattern, isadmin, userid, proc)
-char *pattern;
-int isadmin;
-char *userid;
-int (*proc)();
-{
-    FILE *subsfile;
-    char *subsfname, *newsubsfname;
-    FILE *listfile;
-    struct glob *g;
-    char usermboxname[MAX_NAME_LEN];
-    int usermboxnamelen;
-    char buf[512], *bufp = buf;
-    int r;
-    unsigned offset, buflen, prefixlen;
-    char *endname, *p;
-    long matchlen, minmatch;
-    char *acl;
-
-    if (r = mboxlist_opensubs(userid, &subsfile, &subsfname, &newsubsfname)) {
-	return r;
-    }
-    lock_unlock(fileno(subsfile));
-
-    if (!listfname) mboxlist_getfname();
-
-    listfile = fopen(listfname, "r");
-    if (!listfile) {
-	syslog(LOG_ERR, "IOERROR: opening %s: %m", listfname);
-	fatal("can't read mailbox list", EX_OSFILE);
-    }
-
-    g = glob_init(pattern, GLOB_ICASE|GLOB_HIERARCHY);
-
-    /* Check for INBOX first of all */
-    if (userid && !strchr(userid, '.') && strlen(userid)+5 < MAX_NAME_LEN) {
-	strcpy(usermboxname, "user.");
-	strcat(usermboxname, userid);
-
-	if (GLOB_TEST(g, "inbox") != -1) {
-	    buflen = sizeof(buf);
-	    (void) n_binarySearchFD(fileno(subsfile), usermboxname, 0, &bufp,
-				    &buflen, 0, 0);
-	    if (buflen) {
-		r = (*proc)("INBOX", 5, 0);
-		if (r) {
-		    fclose(subsfile);
-		    fclose(listfile);
-		    glob_free(&g);
-		    return r;
-		}
-	    }
-	}
-
-	strcat(usermboxname, ".");
-	usermboxnamelen = strlen(usermboxname);
-    }
-    else {
-	userid = 0;
-    }
-
-    /* Find fixed-string pattern prefix */
-    for (p = pattern; *p; p++) {
-	if (*p == '*' || *p == '%' || *p == '?') break;
-    }
-    prefixlen = p - pattern;
-    *p = '\0';
-
-    /* If user.X can match pattern, search for those mailboxes next */
-    if (userid && !strncasecmp(usermboxname, pattern,
-	    prefixlen < usermboxnamelen ? prefixlen : usermboxnamelen)) {
-
-	buflen = sizeof(buf);
-	offset = n_binarySearchFD(fileno(subsfile), usermboxname, 0, &bufp,
-				  &buflen, 0, 0);
-	fseek(subsfile, offset, 0);
-	for (;;) {
-	    if (!fgets(buf, sizeof(buf), subsfile)) break;
-	    p = strchr(buf, '\t');
-	    assert(p != 0);
-	    *p = '\0';
-	    if (strncasecmp(buf, usermboxname, usermboxnamelen)) break;
-	    minmatch = 0;
-	    while (minmatch >= 0) {
-		matchlen = glob_test(g, buf, 0L, &minmatch);
-		if (matchlen == -1) break;
-		bufp = 0;
-		buflen = 0;
-		offset = n_binarySearchFD(fileno(listfile), buf,
-					  0, &bufp, &buflen, 0, 0);
-		if (buflen) {
-		    r = (*proc)(buf, matchlen, 1);
-		    if (r) {
-			fclose(subsfile);
-			fclose(listfile);
-			glob_free(&g);
-			return r;
-		    }
-		}
-		else {
-		    mboxlist_changesub(buf, userid, 0);
-		    break;
-		}
-	    }
-	}
-    }
-
-    /* Search for all remaining mailboxes */
-    buflen = sizeof(buf);
-    offset = n_binarySearchFD(fileno(subsfile), pattern, 0, &bufp,
-			      &buflen, 0, 0);
-    fseek(subsfile, offset, 0);
-    if (userid) usermboxname[--usermboxnamelen] = '\0';
-    for (;;) {
-	if (!fgets(buf, sizeof(buf), subsfile)) break;
-	endname = strchr(buf, '\t');
-	assert(endname != 0);
-	*endname = '\0';
-	if (strncasecmp(buf, pattern, prefixlen)) break;
-	minmatch = 0;
-	while (minmatch >= 0) {
-	    matchlen = glob_test(g, buf, 0L, &minmatch);
-	    if (matchlen == -1 ||
-		(userid &&
-		 strncasecmp(buf, usermboxname, usermboxnamelen) == 0 &&
-		 (buf[usermboxnamelen] == '\0' || buf[usermboxnamelen] == '.'))) {
-		break;
-	    }
-	    r = mboxlist_lookup(buf, (char **)0, &acl);
-	    if (r == 0) {
-		r = (*proc)(buf, matchlen, (acl_myrights(acl) & ACL_CREATE));
-		if (r) {
-		    fclose(subsfile);
-		    fclose(listfile);
-		    glob_free(&g);
-		    return r;
-		}
-	    }
-	    else {
-		mboxlist_changesub(buf, userid, 0);
-		break;
-	    }
-	}
-    }
-	
-    fclose(subsfile);
-    fclose(listfile);
-    glob_free(&g);
-    return 0;
-}
-
-/*
- * Change 'user's subscription status for mailbox 'name'.
- * Subscribes if 'add' is nonzero, unsubscribes otherwise.
- */
-int 
-mboxlist_changesub(name, userid, add)
-char *name;
-char *userid;
-int add;
-{
-    char inbox[MAX_MAILBOX_PATH];
-    int r;
-    char *acl;
-    FILE *subsfile, *newsubsfile;
-    char *subsfname, *newsubsfname;
-    unsigned offset, len;
-    char *buf = 0, *p;
-    int n;
-    char copybuf[4096];
-    
-    if (r = mboxlist_opensubs(userid, &subsfile, &subsfname, &newsubsfname)) {
-	return r;
-    }
-
-    /* Convert "inbox" to user.USERID */
-    if (!strcasecmp(name, "inbox")) {
-	strcpy(inbox, "user.");
-	strcat(inbox, userid);
-	name = inbox;
-    }
-
-    if (add) {
-	/* Ensure mailbox exists and can be either seen or read by user */
-	if (r = mboxlist_lookup(name, (char **)0, &acl)) {
-	    fclose(subsfile);
-	    return r;
-	}
-	if ((acl_myrights(acl) & (ACL_READ|ACL_LOOKUP)) == 0) {
-	    fclose(subsfile);
-	    return IMAP_MAILBOX_NONEXISTENT;
-	}
-    }
-
-    /* Find where mailbox is/would go in subscription list */
-    offset = n_binarySearchFD(fileno(subsfile), name, 0, &buf, &len, 0, 0);
-    if (add) {
-	if (len) {
-	    fclose(subsfile);
-	    return 0;		/* Already unsubscribed */
-	}
-    }
-    else {
-	if (!len) {
-	    fclose(subsfile);
-	    return 0;		/* Alredy subscribed */
-	}
-    }
-
-    rewind(subsfile);
-    newsubsfile = fopen(newsubsfname, "w");
-    if (!newsubsfile) {
-	syslog(LOG_ERR, "IOERROR: creating %s: %m", newsubsfname);
-	fclose(subsfile);
-	return IMAP_IOERROR;
-    }
-
-    /* Copy over subscription list, making change */
-    while (offset) {
-	n = fread(copybuf, 1,
-		  offset < sizeof(copybuf) ? offset : sizeof(copybuf),
-		  subsfile);
-	if (!n) {
-	    syslog(LOG_ERR, "IOERROR: reading %s: end of file", subsfname);
-	    fclose(subsfile);
-	    fclose(newsubsfile);
-	    return IMAP_IOERROR;
-	}
-	fwrite(copybuf, 1, n, newsubsfile);
-	offset -= n;
-    }
-
-    if (add) {
-	fprintf(newsubsfile, "%s\t\n", name);
-    }
-    else {
-	/* Calculate real length of entry */
-	p = strchr(buf, '\n');
-	if (p) len = p - buf + 1;
-
-	fseek(subsfile, len, 1);
-    }
-
-    while (n = fread(copybuf, 1, sizeof(copybuf), subsfile)) {
-	fwrite(copybuf, 1, n, newsubsfile);
-    }
-    fflush(newsubsfile);
-    if (ferror(newsubsfile) || fsync(fileno(newsubsfile))) {
-	syslog(LOG_ERR, "IOERROR: writing %s: %m", newsubsfname);
-	fclose(subsfile);
-	fclose(newsubsfile);
-	return IMAP_IOERROR;
-    }	
-    if (rename(newsubsfname, subsfname) == -1) {
-	syslog(LOG_ERR, "IOERROR: renaming %s: %m", subsfname);
-	fclose(subsfile);
-	fclose(newsubsfile);
-	return IMAP_IOERROR;
-    }
-    fclose(subsfile);
-    fclose(newsubsfile);
+    mboxlist_unlock();
     return 0;
 }
 
@@ -1323,22 +790,19 @@ char *rights;
 int isadmin;
 char *userid;
 {
-    FILE *listfile = 0;
     int r;
     long access;
     int isusermbox = 0;
-    char inboxname[MAX_NAME_LEN];
-    char *buf, *p;
-    char buf2[MAX_NAME_LEN];
-    unsigned offset, len, size, namepartlen;
-    char *acl, *newacl;
-    FILE *newlistfile;
-    int n, left;
-
-    if (!listfname) mboxlist_getfname();
+    char inboxname[MAX_NAME_LEN+1];
+    unsigned long offset, len;
+    char *oldacl, *acl, *newacl;
+    unsigned long oldacllen;
+    int newlistfd;
+    struct iovec iov[10];
+    int n;
 
     /* Open and lock mailbox list file */
-    r = mboxlist_openlock(&listfile, &size);
+    r = mboxlist_openlock();
     if (r) return r;
 
     if (!strchr(userid, '.') &&
@@ -1367,15 +831,15 @@ char *userid;
     }
 
     if (!r) {
-	newlistfile = fopen(newlistfname, "w+");
-	if (!newlistfile) {
+	newlistfd = open(newlistfname, O_RDWR|O_TRUNC|O_CREAT, 0666);
+	if (newlistfd == -1) {
 	    syslog(LOG_ERR, "IOERROR: creating %s: %m", newlistfname);
 	    r = IMAP_IOERROR;
 	}
     }
 
     if (r) {
-	fclose(listfile);
+	mboxlist_unlock();
 	return r;
     }
 
@@ -1384,7 +848,7 @@ char *userid;
     if (rights) {
 	if (acl_set(&newacl, identifier, acl_strtomask(rights),
 		    isusermbox ? ensureOwnerRights : 0, userid)) {
-	    fclose(listfile);
+	    mboxlist_unlock();
 	    free(newacl);
 	    return IMAP_INVALID_IDENTIFIER;
 	}
@@ -1392,64 +856,482 @@ char *userid;
     else {
 	if (acl_delete(&newacl, identifier,
 		       isusermbox ? ensureOwnerRights : 0, userid)) {
-	    fclose(listfile);
+	    mboxlist_unlock();
 	    free(newacl);
 	    return IMAP_INVALID_IDENTIFIER;
 	}
     }
 
     /* Copy over mailbox list, making change */
-    buf = 0;
-    offset = n_binarySearchFD(fileno(listfile), name, 0, &buf, &len, 0, size);
+    offset = bsearch_mem(name, 0, list_base, list_size, 0, &len);
     if (!len) {
-	fclose(listfile);
-	fclose(newlistfile);
+	mboxlist_unlock();
+	close(newlistfd);
 	return IMAP_MAILBOX_NONEXISTENT;
     }
-    p = strchr(buf, '\t')+1;
-    p = strchr(p, '\t')+1;
-    namepartlen = p - buf;
 
-    left = offset + namepartlen;
-    rewind(listfile);
-    while (left) {
-	n = fread(buf2, 1, left<sizeof(buf2) ? left : sizeof(buf2), listfile);
-	if (!n) {
-	    syslog(LOG_ERR, "IOERROR: reading %s: end of file", listfname);
-	    fclose(listfile);
-	    fclose(newlistfile);
-	    free(newacl);
-	    return IMAP_IOERROR;
-	}
-	fwrite(buf2, 1, n, newlistfile);
-	left -= n;
-    }
-    fprintf(newlistfile, "%s", newacl);
-    fseek(listfile, strlen(acl), 1);
-    while (n = fread(buf2, 1, sizeof(buf2), listfile)) {
-	fwrite(buf2, 1, n, newlistfile);
-    }
-    fflush(newlistfile);
-    if (ferror(newlistfile) || fsync(fileno(newlistfile))) {
+    mboxlist_parseline(offset, len, (char **)0, (unsigned long *)0,
+		      (char **)0, (unsigned long *)0, &oldacl, &oldacllen);
+
+    iov[0].iov_base = list_base;
+    iov[0].iov_len = oldacl - list_base;
+    iov[1].iov_base = newacl;
+    iov[1].iov_len = strlen(newacl);
+    iov[2].iov_base = list_base + offset + len - 1;
+    iov[2].iov_len = list_size - (offset + len - 1);
+    
+    n = retry_writev(newlistfd, iov, 3);
+
+    if (n == -1 || fsync(newlistfd)) {
 	syslog(LOG_ERR, "IOERROR: writing %s: %m", newlistfname);
-	fclose(listfile);
-	fclose(newlistfile);
+	mboxlist_unlock();
+	close(newlistfd);
 	free(newacl);
 	return IMAP_IOERROR;
     }
     if (rename(newlistfname, listfname) == -1) {
 	syslog(LOG_ERR, "IOERROR: renaming %s: %m", listfname);
-	fclose(listfile);
-	fclose(newlistfile);
+	mboxlist_unlock();
+	close(newlistfd);
 	free(newacl);
 	return IMAP_IOERROR;
     }
-    fclose(listfile);
-    fclose(newlistfile);
+    mboxlist_unlock();
+    close(newlistfd);
     free(newacl);
     return 0;
 }
+
+/*
+ * Find all mailboxes that match 'pattern'.
+ * 'isadmin' is nonzero if user is a mailbox admin.  'userid'
+ * is the user's login id.  For each matching mailbox, calls
+ * 'proc' with the name of the mailbox.  If 'proc' ever returns
+ * a nonzero value, mboxlist_findall immediately stops searching
+ * and returns that value.
+ */
+int mboxlist_findall(pattern, isadmin, userid, proc)
+char *pattern;
+int isadmin;
+char *userid;
+int (*proc)();
+{
+    struct glob *g;
+    char usermboxname[MAX_NAME_LEN+1];
+    int usermboxnamelen;
+    unsigned long offset, len, namelen, prefixlen, acllen;
+    long matchlen, minmatch;
+    char *name, *p, *acl, *aclcopy;
+    char aclbuf[1024];
+    char namebuf[MAX_NAME_LEN+1];
+    int rights;
+    int r;
+
+    mboxlist_reopen();
+
+    g = glob_init(pattern, GLOB_ICASE|GLOB_HIERARCHY);
+
+    /* Check for INBOX first of all */
+    if (userid && !strchr(userid, '.') && strlen(userid)+5 < MAX_NAME_LEN) {
+	strcpy(usermboxname, "user.");
+	strcat(usermboxname, userid);
+
+	if (GLOB_TEST(g, "inbox") != -1) {
+	    (void) bsearch_mem(usermboxname, 0, list_base, list_size, 0, &len);
+	    if (len) {
+		r = (*proc)("INBOX", 5, 0);
+		if (r) {
+		    glob_free(&g);
+		    return r;
+		}
+	    }
+	}
+
+	strcat(usermboxname, ".");
+	usermboxnamelen = strlen(usermboxname);
+    }
+    else {
+	userid = 0;
+    }
+
+    /* Find fixed-string pattern prefix */
+    for (p = pattern; *p; p++) {
+	if (*p == '*' || *p == '%' || *p == '?') break;
+    }
+    prefixlen = p - pattern;
+    *p = '\0';
+
+    /* If user.X can match pattern, search for those mailboxes next */
+    if (userid && !strncasecmp(usermboxname, pattern,
+	    prefixlen < usermboxnamelen ? prefixlen : usermboxnamelen)) {
+
+	offset = bsearch_mem(usermboxname, 0, list_base, list_size, 0,
+			     (unsigned long *)0);
+
+	while (offset < list_size) {
+	    p = memchr(list_base + offset, '\n', list_size-offset);
+	    if (!p) {
+		mboxlist_badline(list_base + offset, "no newline terminator");
+	    }
+
+	    len = p - (list_base + offset) + 1;
+	    mboxlist_parseline(offset, len, &name, &namelen,
+			       (char **)0, (unsigned long *)0,
+			       (char **)0, (unsigned long *)0);
+		
+	    if (strncasecmp(list_base + offset,
+			    usermboxname, usermboxnamelen) != 0) break;
+	    minmatch = 0;
+	    while (minmatch >= 0) {
+		matchlen = glob_test(g, name, namelen, &minmatch);
+		if (matchlen == -1) break;
+
+		memcpy(namebuf, name, namelen);
+		namebuf[namelen] = '\0';
+
+		r = (*proc)(namebuf, matchlen, 1);
+		if (r) {
+		    glob_free(&g);
+		    return r;
+		}
+	    }
+	    offset += len;
+	}
+    }
+
+    /* Search for all remaining mailboxes.  Start at the pattern prefix */
+    offset = bsearch_mem(pattern, 0, list_base, list_size, 0,
+			 (unsigned long *)0);
+
+    if (userid) usermboxname[--usermboxnamelen] = '\0';
+    while (offset < list_size) {
+	p = memchr(list_base + offset, '\n', list_size-offset);
+	if (!p) {
+	    mboxlist_badline(list_base + offset, "no newline terminator");
+	}
+
+	len = p - (list_base + offset) + 1;
+	mboxlist_parseline(offset, len, &name, &namelen,
+			   (char **)0, (unsigned long *)0, &acl, &acllen);
+		
+	if (strncasecmp(list_base + offset, pattern, prefixlen)) break;
+	minmatch = 0;
+	while (minmatch >= 0) {
+	    matchlen = glob_test(g, name, namelen, &minmatch);
+	    if (matchlen == -1 ||
+		(userid &&
+		 strncasecmp(name, usermboxname, usermboxnamelen) == 0 &&
+		 (name[usermboxnamelen] == '\0' ||
+		  name[usermboxnamelen] == '.'))) {
+		break;
+	    }
+
+	    memcpy(namebuf, name, namelen);
+	    namebuf[namelen] = '\0';
+
+	    if (isadmin) {
+		r = (*proc)(namebuf, matchlen, 1);
+		if (r) {
+		    glob_free(&g);
+		    return r;
+		}
+	    }
+	    else {
+		if (acllen < sizeof(aclbuf)) {
+		    memcpy(aclbuf, acl, acllen);
+		    aclbuf[acllen] = '\0';
+		    rights = acl_myrights(aclbuf);
+		}
+		else {
+		    aclcopy = xmalloc(acllen + 1);
+		    memcpy(aclcopy, acl, acllen);
+		    aclcopy[acllen] = '\0';
+		    rights = acl_myrights(aclcopy);
+		    free(aclcopy);
+		}
+		if (rights & ACL_LOOKUP) {
+		    r = (*proc)(namebuf, matchlen, (rights & ACL_CREATE));
+		    if (r) {
+			glob_free(&g);
+			return r;
+		    }
+		}
+	    }
+	}
+	offset += len;
+    }
+	
+    glob_free(&g);
+    return 0;
+}
+
+/*
+ * Find subscribed mailboxes that match 'pattern'.
+ * 'isadmin' is nonzero if user is a mailbox admin.  'userid'
+ * is the user's login id.  For each matching mailbox, calls
+ * 'proc' with the name of the mailbox.
+ */
+int mboxlist_findsub(pattern, isadmin, userid, proc)
+char *pattern;
+int isadmin;
+char *userid;
+int (*proc)();
+{
+    int subsfd;
+    char *subs_base;
+    unsigned long subs_size;
+    char *subsfname;
+    struct glob *g;
+    char usermboxname[MAX_NAME_LEN+1];
+    int usermboxnamelen;
+    char namebuf[MAX_NAME_LEN+1];
+    int r;
+    unsigned long offset, len, prefixlen, listlinelen;
+    char *name, *endname, *p;
+    long matchlen, minmatch;
+    char *acl;
+
+    if (r = mboxlist_opensubs(userid, 0, &subsfd, &subs_base, &subs_size,
+			      &subsfname, (char *) 0)) {
+	return r;
+    }
+
+    mboxlist_reopen();
+
+    g = glob_init(pattern, GLOB_ICASE|GLOB_HIERARCHY);
+
+    /* Check for INBOX first of all */
+    if (userid && !strchr(userid, '.') && strlen(userid)+5 < MAX_NAME_LEN) {
+	strcpy(usermboxname, "user.");
+	strcat(usermboxname, userid);
+
+	if (GLOB_TEST(g, "inbox") != -1) {
+	    (void) bsearch_mem(usermboxname, 0, subs_base, subs_size, 0, &len);
+	    if (len) {
+		r = (*proc)("INBOX", 5, 0);
+		if (r) {
+		    mboxlist_closesubs(subsfd, subs_base, subs_size);
+		    glob_free(&g);
+		    return r;
+		}
+	    }
+	}
+
+	strcat(usermboxname, ".");
+	usermboxnamelen = strlen(usermboxname);
+    }
+    else {
+	userid = 0;
+    }
+
+    /* Find fixed-string pattern prefix */
+    for (p = pattern; *p; p++) {
+	if (*p == '*' || *p == '%' || *p == '?') break;
+    }
+    prefixlen = p - pattern;
+    *p = '\0';
+
+    /* If user.X can match pattern, search for those mailboxes next */
+    if (userid && !strncasecmp(usermboxname, pattern,
+	    prefixlen < usermboxnamelen ? prefixlen : usermboxnamelen)) {
+
+	offset = bsearch_mem(usermboxname, 0, subs_base, subs_size, 0,
+			     (unsigned long *)0);
+	while (offset < subs_size) {
+	    name = subs_base + offset;
+	    p = memchr(name, '\n', subs_size - offset);
+	    endname = memchr(name, '\t', subs_size - offset);
+	    if (!p || !endname || endname - name > MAX_NAME_LEN) {
+		syslog(LOG_ERR, "IOERROR: corrupted subscription file %s",
+		       subsfname);
+		fatal("corrupted subscription file", EX_OSFILE);
+	    }
+
+	    len = p - name + 1;
+
+	    if (strncasecmp(name, usermboxname, usermboxnamelen)) break;
+	    minmatch = 0;
+	    while (minmatch >= 0) {
+		matchlen = glob_test(g, name, endname - name, &minmatch);
+		if (matchlen == -1) break;
+
+		memcpy(namebuf, name, endname - name);
+		namebuf[endname - name] = '\0';
+
+		(void) bsearch_mem(namebuf, 0, list_base, list_size, 0,
+				   &listlinelen);
+
+		if (listlinelen) {
+		    r = (*proc)(namebuf, matchlen, 1);
+		    if (r) {
+			mboxlist_closesubs(subsfd, subs_base, subs_size);
+			glob_free(&g);
+			return r;
+		    }
+		}
+		else {
+		    mboxlist_changesub(namebuf, userid, 0);
+		    break;
+		}
+	    }
+	    offset += len;
+	}
+    }
+
+    /* Search for all remaining mailboxes.  Start at the patten prefix */
+    offset = bsearch_mem(pattern, 0, subs_base, subs_size, 0,
+			 (unsigned long *)0);
+
+    if (userid) usermboxname[--usermboxnamelen] = '\0';
+    while (offset < subs_size) {
+	name = subs_base + offset;
+	p = memchr(name, '\n', subs_size - offset);
+	endname = memchr(name, '\t', subs_size - offset);
+	if (!p || !endname || endname - name > MAX_NAME_LEN) {
+	    syslog(LOG_ERR, "IOERROR: corrupted subscription file %s",
+		   subsfname);
+	    fatal("corrupted subscription file", EX_OSFILE);
+	}
+
+	len = p - name + 1;
+
+	if (strncasecmp(name, pattern, prefixlen)) break;
+	minmatch = 0;
+	while (minmatch >= 0) {
+	    matchlen = glob_test(g, name, endname - name, &minmatch);
+	    if (matchlen == -1 ||
+		(userid &&
+		 strncasecmp(name, usermboxname, usermboxnamelen) == 0 &&
+		 (name[usermboxnamelen] == '\0' ||
+		  name[usermboxnamelen] == '.'))) {
+		break;
+	    }
+
+	    memcpy(namebuf, name, endname - name);
+	    namebuf[endname - name] = '\0';
+
+	    r = mboxlist_lookup(namebuf, (char **)0, &acl);
+	    if (r == 0) {
+		r = (*proc)(namebuf, matchlen,
+			    (acl_myrights(acl) & ACL_CREATE));
+		if (r) {
+		    mboxlist_closesubs(subsfd, subs_base, subs_size);
+		    glob_free(&g);
+		    return r;
+		}
+	    }
+	    else {
+		mboxlist_changesub(namebuf, userid, 0);
+		break;
+	    }
+	}
+    }
+	
+    mboxlist_closesubs(subsfd, subs_base, subs_size);
+    glob_free(&g);
+    return 0;
+}
+
+/*
+ * Change 'user's subscription status for mailbox 'name'.
+ * Subscribes if 'add' is nonzero, unsubscribes otherwise.
+ */
+int 
+mboxlist_changesub(name, userid, add)
+char *name;
+char *userid;
+int add;
+{
+    char inbox[MAX_MAILBOX_PATH];
+    int r;
+    char *acl;
+    int subsfd, newsubsfd;
+    char *subs_base;
+    unsigned long subs_size;
+    char *subsfname, *newsubsfname;
+    unsigned offset, len;
+    struct iovec iov[10];
+    int num_iov;
+    int n;
     
+    if (r = mboxlist_opensubs(userid, 1, &subsfd, &subs_base, &subs_size,
+			      &subsfname, &newsubsfname)) {
+	return r;
+    }
+
+    /* Convert "inbox" to user.USERID */
+    if (!strcasecmp(name, "inbox")) {
+	strcpy(inbox, "user.");
+	strcat(inbox, userid);
+	name = inbox;
+    }
+
+    if (add) {
+	/* Ensure mailbox exists and can be either seen or read by user */
+	if (r = mboxlist_lookup(name, (char **)0, &acl)) {
+	    mboxlist_closesubs(subsfd, subs_base, subs_size);
+	    return r;
+	}
+	if ((acl_myrights(acl) & (ACL_READ|ACL_LOOKUP)) == 0) {
+	    mboxlist_closesubs(subsfd, subs_base, subs_size);
+	    return IMAP_MAILBOX_NONEXISTENT;
+	}
+    }
+
+    /* Find where mailbox is/would go in subscription list */
+    offset = bsearch_mem(name, 0, subs_base, subs_size, 0, &len);
+    if (add) {
+	if (len) {
+	    mboxlist_closesubs(subsfd, subs_base, subs_size);
+	    return 0;		/* Already unsubscribed */
+	}
+    }
+    else {
+	if (!len) {
+	    mboxlist_closesubs(subsfd, subs_base, subs_size);
+	    return 0;		/* Alredy subscribed */
+	}
+    }
+
+    newsubsfd = open(newsubsfname, O_RDWR|O_TRUNC|O_CREAT, 0666);
+    if (newsubsfd == -1) {
+	syslog(LOG_ERR, "IOERROR: creating %s: %m", newsubsfname);
+	mboxlist_closesubs(subsfd, subs_base, subs_size);
+	return IMAP_IOERROR;
+    }
+
+    /* Copy over subscription list, making change */
+    num_iov = 0;
+    iov[num_iov].iov_base = subs_base;
+    iov[num_iov++].iov_len = offset;
+    if (add) {
+	iov[num_iov].iov_base = name;
+	iov[num_iov++].iov_len = strlen(name);
+	iov[num_iov].iov_base = "\t\n";
+	iov[num_iov++].iov_len = 2;
+    }
+    iov[num_iov].iov_base = subs_base + offset + len;
+    iov[num_iov++].iov_len = subs_size - (offset + len);
+
+    n = retry_writev(newsubsfd, iov, num_iov);
+
+    if (n == -1 || fsync(newsubsfd)) {
+	syslog(LOG_ERR, "IOERROR: writing %s: %m", newsubsfname);
+	mboxlist_closesubs(subsfd, subs_base, subs_size);
+	close(newsubsfd);
+	return IMAP_IOERROR;
+    }	
+    if (rename(newsubsfname, subsfname) == -1) {
+	syslog(LOG_ERR, "IOERROR: renaming %s: %m", subsfname);
+	mboxlist_closesubs(subsfd, subs_base, subs_size);
+	close(newsubsfd);
+	return IMAP_IOERROR;
+    }
+    mboxlist_closesubs(subsfd, subs_base, subs_size);
+    close(newsubsfd);
+    return 0;
+}
+
 /*
  * Set the quota on or create a quota root
  */
@@ -1463,10 +1345,7 @@ int newquota;
     struct quota quota;
     static struct quota zeroquota;
     int r;
-    FILE *listfile = 0;
-    char *p;
-    unsigned offset, len, size;
-    char buf[MAX_MAILBOX_PATH];
+    unsigned offset, len;
 
     if (!root[0] || root[0] == '.' || strchr(root, '/')
 	|| strchr(root, '*') || strchr(root, '%') || strchr(root, '?')) {
@@ -1496,18 +1375,17 @@ int newquota;
      * Have to create a new quota root
      * Open and lock mailbox list file
      */
-    r = mboxlist_openlock(&listfile, &size);
+    r = mboxlist_openlock();
     if (r) return r;
 
     /* Ensure there is at least one mailbox under the quota root */
-    p = 0;
-    offset = n_binarySearchFD(fileno(listfile), quota.root, 0, &p, &len, 0, size);
+    offset = bsearch_mem(quota.root, 0, list_base, list_size, 0, &len);
     if (!len) {
-	fseek(listfile, offset, 0);
-	if (!fgets(buf, sizeof(buf), listfile) ||
-	    strncasecmp(quota.root, buf, strlen(quota.root)) != 0 ||
-	    buf[strlen(quota.root)] != '.') {
-	    fclose(listfile);
+	if (strlen(quota.root) >= list_size - offset ||
+	    strncasecmp(quota.root, list_base + offset,
+			strlen(quota.root)) != 0 ||
+	    list_base[offset + strlen(quota.root)] != '.') {
+	    mboxlist_unlock();
 	    return IMAP_MAILBOX_NONEXISTENT;
 	}
     }
@@ -1519,7 +1397,7 @@ int newquota;
     r = mailbox_write_quota(&quota);
 
     if (r) {
-	fclose(listfile);
+	mboxlist_unlock();
 	return r;
     }
 
@@ -1534,7 +1412,7 @@ int newquota;
     
     r = mailbox_write_quota(&quota);
     if (quota.file) fclose(quota.file);
-    fclose(listfile);
+    mboxlist_unlock();
     return r;
 }
 
@@ -1549,44 +1427,61 @@ int num;
 char **group;
 int *seen;
 {
-    FILE *listfile = 0;
-    int r, c;
-    char buf[512];
+    int r;
     int deletethis;
     int deletedsomething = 0;
-    char *endname;
     int low, high, mid;
-    FILE *newlistfile;
+    int newlistfd;
     struct mailbox mailbox;
-
-    if (!listfname) mboxlist_getfname();
+    unsigned long offset, copyoffset;
+    char *name;
+    unsigned long namelen;
+    char *partition;
+    unsigned long partitionlen;
+    char namebuf[MAX_NAME_LEN+1];
+    char *p;
+    unsigned long len;
+    int n;
 
     /* Open and lock mailbox list file */
-    r = mboxlist_openlock(&listfile, (unsigned *)0);
+    r = mboxlist_openlock();
     if (r) return r;
 
-    newlistfile = fopen(newlistfname, "w+");
-    if (!newlistfile) {
+    newlistfd = open(newlistfname, O_RDWR|O_TRUNC|O_CREAT, 0666);
+    if (newlistfd == -1) {
 	syslog(LOG_ERR, "IOERROR: creating %s: %m", newlistfname);
-	fclose(listfile);
+	mboxlist_unlock();
 	return IMAP_IOERROR;
     }
 
+    offset = copyoffset = 0;
+
     /* Copy over mailbox list, making change */
-    while (fgets(buf, sizeof(buf), listfile)) {
+    while (offset < list_size) {
+	p = memchr(list_base + offset, '\n', list_size-offset);
+	if (!p) {
+	    mboxlist_badline(list_base + offset, "no newline terminator");
+	}
+
+	len = p - (list_base + offset) + 1;
+	mboxlist_parseline(offset, len, &name, &namelen,
+			   &partition, &partitionlen,
+			   (char **)0, (unsigned long *)0);
+		
 	deletethis = 0;
-	endname = strchr(buf, '\t');
-	assert(endname != 0);
-	if (!strncasecmp(endname+1, "news\t", 5)) {
-	    *endname = '\0';
+
+	if (partitionlen == 4 && strncasecmp(partition, "news", 4) == 0) {
 	    deletethis = 1;
+
+	    memcpy(namebuf, name, namelen);
+	    namebuf[namelen] = '\0';
 
 	    /* Search for name in 'group' array */
 	    low = 0;
 	    high = num;
 	    while (low <= high) {
 		mid = (high - low)/2 + low;
-		r = strcasecmp(buf, group[mid]);
+		r = strcasecmp(namebuf, group[mid]);
 		if (r == 0) {
 		    deletethis = 0;
 		    seen[mid] = 1;
@@ -1601,106 +1496,123 @@ int *seen;
 	    }
 	    if (deletethis) {
 		/* Remove the mailbox.  Don't care about errors */
-		r = mailbox_open_header(buf, &mailbox);
+		r = mailbox_open_header(namebuf, &mailbox);
 		if (!r) r = mailbox_delete(&mailbox);
-		printf("deleted %s\n", buf);
+		printf("deleted %s\n", namebuf);
 	    }
-	    *endname = '\t';
 	}
 
 	if (deletethis) {
+	    n = retry_write(newlistfd, list_base + copyoffset,
+			    offset - copyoffset);
+	    if (n == -1) {
+		syslog(LOG_ERR, "IOERROR: writing %s: %m", newlistfname);
+		mboxlist_unlock();
+		close(newlistfd);
+		return IMAP_IOERROR;
+	    }
+	    copyoffset = offset + len;
+
 	    deletedsomething++;
-	    if (buf[strlen(buf)-1] != '\n') {
-		while ((c = getc(listfile)) != EOF) {
-		    if (c == '\n') break;
-		}
-	    }
 	}
-	else {
-	    fputs(buf, newlistfile);
-	    if (buf[strlen(buf)-1] != '\n') {
-		while ((c = getc(listfile)) != EOF) {
-		    putc(c, newlistfile);
-		    if (c == '\n') break;
-		}
-	    }
-	}
+
+	offset += len;
     }
 
     if (!deletedsomething) {
-	fclose(newlistfile);
-	fclose(listfile);
+	mboxlist_unlock();
+	close(newlistfd);
 	return 0;
     }
 
-    fflush(newlistfile);
-    if (ferror(newlistfile) || fsync(fileno(newlistfile))) {
+    if (fsync(newlistfd)) {
 	syslog(LOG_ERR, "IOERROR: writing %s: %m", newlistfname);
-	fclose(listfile);
-	fclose(newlistfile);
+	mboxlist_unlock();
+	close(newlistfd);
 	return IMAP_IOERROR;
     }
     if (rename(newlistfname, listfname) == -1) {
 	syslog(LOG_ERR, "IOERROR: renaming %s: %m", listfname);
-	fclose(listfile);
-	fclose(newlistfile);
+	mboxlist_unlock();
+	close(newlistfd);
 	return IMAP_IOERROR;
     }
-    fclose(listfile);
-    fclose(newlistfile);
+    mboxlist_unlock();
+    close(newlistfd);
     return 0;
 }
+
 /*
  * Open and lock the mailbox list file
  */
 int
-mboxlist_openlock(lfile, sizep)
-FILE **lfile;
-unsigned *sizep;
+mboxlist_openlock()
 {
-    FILE *listfile = 0;
     struct stat sbuf;
     char *lockfailaction;
     int r;
 
-    if (!listfname) mboxlist_getfname();
+    assert(list_locked == 0);
 
-    listfile = fopen(listfname, "r+");
-    if (!listfile) {
-	syslog(LOG_ERR, "IOERROR: opening %s: %m", listfname);
-	fatal("can't read mailbox list", EX_OSFILE);
-    }
+    if (listfd == -1) mboxlist_reopen();
 
-    r = lock_reopen(fileno(listfile), listfname, &sbuf, &lockfailaction);
+    r = lock_reopen(listfd, listfname, &sbuf, &lockfailaction);
     if (r == -1) {
 	syslog(LOG_ERR, "IOERROR: %s %s: %m", lockfailaction, listfname);
-	fclose(listfile);
 	return IMAP_IOERROR;
     }
 
-    if (sizep) *sizep = sbuf.st_size;
-    *lfile = listfile;
+    list_locked = 1;
+
+    if (sbuf.st_ino != list_ino) {
+	list_ino = sbuf.st_ino;
+
+	map_free(&list_base, &list_size);
+	map_refresh(listfd, 1, &list_base, &list_size, sbuf.st_size,
+		    listfname, 0);
+    }
+
     return 0;
 }
 
+/*
+ * Unlock the mailbox list file
+ */
+int
+mboxlist_unlock()
+{
+    lock_unlock(listfd);
+    list_locked = 0;
+    return 0;
+}
 
 /*
- * Open and lock the subscription list for 'userid'.
- * The FILE pointer pointed to by 'subsfile' is set to the open,
- * locked file.  The character pointers pointed to by 'fname' and
- * 'newfname' are set to the filenames of the old and new subscription
- * files, respectively.
+ * Open the subscription list for 'userid'.  If 'lock' is nonzero,
+ * lock it.
+ * 
+ * On success, returns zero.  The int pointed to by 'subsfile' is set
+ * to the open, locked file.  The file is mapped into memory and the
+ * base and size of the mapping are placed in variables pointed to by
+ * 'basep' and 'sizep', respectively .  If they are non-null, the
+ * character pointers pointed to by 'fname' and 'newfname' are set to
+ * the filenames of the old and new subscription files, respectively.
+ *
+ * On failure, returns an error code.
  */
 static int
-mboxlist_opensubs(userid, subsfile, fname, newfname)
+mboxlist_opensubs(userid, lock, subsfdp, basep, sizep, fname, newfname)
 char *userid;
-FILE **subsfile;
+int lock;
+int *subsfdp;
+char **basep;
+unsigned long *sizep;
 char **fname;
 char **newfname;
 {
     int r;
     static char *subsfname, *newsubsfname;
     int subsfd;
+    struct stat sbuf;
     char *lockfailaction;
     char buf[MAX_MAILBOX_PATH];
 
@@ -1736,33 +1648,163 @@ char **newfname;
 	return IMAP_IOERROR;
     }
 
-    r = lock_reopen(subsfd, subsfname, 0, &lockfailaction);
-    if (r == -1) {
-	syslog(LOG_ERR, "IOERROR: %s %s: %m", lockfailaction, subsfname);
-	close(subsfd);
-	return IMAP_IOERROR;
+    if (lock) {
+	r = lock_reopen(subsfd, subsfname, &sbuf, &lockfailaction);
+	if (r == -1) {
+	    syslog(LOG_ERR, "IOERROR: %s %s: %m", lockfailaction, subsfname);
+	    close(subsfd);
+	    return IMAP_IOERROR;
+	}
+    }
+    else {
+	if (fstat(subsfd, &sbuf) == -1) {
+	    syslog(LOG_ERR, "IOERROR: fstat on %s: %m", subsfname);
+	    fatal("can't fstat subscription list", EX_OSFILE);
+	}
     }
 
-    *subsfile = fdopen(subsfd, "r+");
-    *fname = subsfname;
-    *newfname = newsubsfname;
+    *basep = 0;
+    *sizep = 0;
+    map_refresh(subsfd, 1, basep, sizep, sbuf.st_size, subsfname, 0);
+
+    *subsfdp = subsfd;
+    if (fname) *fname = subsfname;
+    if (newfname) *newfname = newsubsfname;
     return 0;
 }
+
+/*
+ * Close a subscription file
+ */
+static void
+mboxlist_closesubs(subsfd, base, size)
+int subsfd;
+char *base;
+unsigned long size;
+{
+    map_free(&base, &size);
+    close(subsfd);
+}
+
 
 /*
  * Get the filenames of the mailbox list and the temporary file to
  * use when updating the mailbox list.
  */
-static mboxlist_getfname()
+static void
+mboxlist_reopen()
 {
-    listfname = xmalloc(strlen(config_dir)+sizeof(FNAME_MBOXLIST));
-    strcpy(listfname, config_dir);
-    strcat(listfname, FNAME_MBOXLIST);
-    newlistfname = xmalloc(strlen(config_dir)+sizeof(FNAME_MBOXLIST)+4);
-    strcpy(newlistfname, config_dir);
-    strcat(newlistfname, FNAME_MBOXLIST);
-    strcat(newlistfname, ".NEW");
+    struct stat sbuf;
+
+    if (!listfname) {
+	listfname = xmalloc(strlen(config_dir)+sizeof(FNAME_MBOXLIST));
+	strcpy(listfname, config_dir);
+	strcat(listfname, FNAME_MBOXLIST);
+	newlistfname = xmalloc(strlen(config_dir)+sizeof(FNAME_MBOXLIST)+4);
+	strcpy(newlistfname, config_dir);
+	strcat(newlistfname, FNAME_MBOXLIST);
+	strcat(newlistfname, ".NEW");
+    }
+
+    if (list_locked) return;
+
+    if (listfd != -1) {
+	if (stat(listfname, &sbuf) == -1) {
+	    syslog(LOG_ERR, "IOERROR: stat on %s: %m", listfname);
+	    fatal("can't stat mailbox list", EX_OSFILE);
+	}
+	if (sbuf.st_ino == list_ino) return;
+	close(listfd);
+	map_free(&list_base, &list_size);
+    }
+
+    listfd = open(listfname, O_RDONLY, 0666);
+    if (listfd == -1) {
+	syslog(LOG_ERR, "IOERROR: opening %s: %m", listfname);
+	fatal("can't read mailbox list", EX_OSFILE);
+    }
+	
+    if (fstat(listfd, &sbuf) == -1) {
+	syslog(LOG_ERR, "IOERROR: fstat on %s: %m", listfname);
+	fatal("can't fstat mailbox list", EX_OSFILE);
+    }
+    list_ino = sbuf.st_ino;
+
+    map_refresh(listfd, 1, &list_base, &list_size, sbuf.st_size,
+		listfname, 0);
 }
+
+static void
+mboxlist_badline(line, error)
+char *line;
+char *error;
+{
+    char *p;
+    char buf[1024];
+    int lineno = 1;
+
+    for (p = list_base; p < line; p++) {
+	if (*p == '\n') lineno++;
+    }
+
+    syslog(LOG_ERR, "IOERROR: corrupted mailboxes file, line %d: %s",
+	   lineno, error);
+    sprintf(buf, "corrupted mailboxes file, line %d: %s", lineno, error);
+    fatal(buf, EX_OSFILE);
+}
+    
+
+/*
+ * Parse a mailboxes line
+ */
+static void
+mboxlist_parseline(offset, len, namep, namelenp, partitionp, partitionlenp,
+		   aclp, acllenp)
+unsigned long offset;
+unsigned long len;
+char **namep;
+unsigned long *namelenp;
+char **partitionp;
+unsigned long *partitionlenp;
+char **aclp;
+unsigned long *acllenp;
+{
+    char *line = list_base + offset;
+    char *p;
+    unsigned fieldlen;
+
+    if (namep) *namep = line;
+    p = memchr(line, '\t', len);
+    if (!p) {
+	mboxlist_badline(line, "no tab separator");
+    }
+    fieldlen = p - line;
+    if (fieldlen > MAX_NAME_LEN) {
+	mboxlist_badline(line, "mailbox name too long");
+    }
+
+    if (namelenp) *namelenp = fieldlen;
+    p++;
+    len -= fieldlen+1;
+
+    if (partitionp) *partitionp = line;
+    p = memchr(line, '\t', len);
+    if (!p) {
+	mboxlist_badline(line, "only one tab separator");
+    }
+    fieldlen = p - line;
+    if (partitionlenp) *partitionlenp = fieldlen;
+    p++;
+    len -= fieldlen+1;
+
+    if (!len || line[len-1] != '\n') {
+	mboxlist_badline(line, "no newline terminator");
+    }
+    len--;
+    if (aclp) *aclp = line;
+    if (acllenp) *acllenp = len;
+}
+
 
 /*
  * Apply site policy restrictions on mailbox names.
