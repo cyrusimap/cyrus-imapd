@@ -92,7 +92,7 @@ int n_imap_acl = 0; /* how many IMAP ACL entries we have */
 char *imapkey[1024], *imapval[1024];
 struct imclient *imclient;
 ht_table *bb_hash; /* tjs */
-
+char* capb_str; /* tjs */
 
 /* tjs */
 /* This is a hash function
@@ -146,7 +146,7 @@ void bbdelete(void* bboard) {
     if (verbose) {
 	fprintf(logfile, "Deleting mailbox %s\n", bboard);
     }
-    if (noncommit == 1) {
+    if (noncommit == 0) {
 	imclient_send(imclient, (void(*)()) 0, (void *)0,
 		      "DELETE %s", (char*) bboard);
     }
@@ -197,46 +197,15 @@ int match(char *bbd, char *rexp)
     return strncmp(bbd,rexp,strlen(rexp));
 } /* match */
 
-/* Connect and authenticate */
-void cyr_connect(void)
-{
-    int code, errs;
-
-    if (verbose) {
-	fprintf(logfile,"Connecting to Cyrus server...\n");
+/* tjs */
+/* callback for capability command.  All we do is save the
+   reply->text. */
+static void callback_capability(struct imclient *imclient, void *rock,
+				struct imclient_reply *reply) {
+    if (reply->text != NULL) {
+	*((char**)rock) = xstrdup( reply->text );
     }
-    code = imclient_connect(&imclient,server,port);
-    while (code) {
-	switch (code) {
-	case -1:
-	    fprintf(stderr,"Couldn't find server!\n");
-	    exit(1);
-	    break;
-	case -2:
-	    fprintf(stderr,"Unknown service or port %s\n",port);
-	    exit(1);
-	    break;
-	case ECONNREFUSED:
-	    if (errs++ >= 5) {
-		fprintf(stderr,"Connection refused by server!\n");
-		exit(1);
-	    }
-	    sleep(5);
-	    break;
-	default:
-	    fprintf(stderr,"Unknown error %d from imclient_connect\n",code);
-	    exit(1);
-	}
-	code = imclient_connect(&imclient,server,port);
-    }
-    if (imclient_authenticate(imclient,login_acte_client,NULL,ACTE_PROT_ANY)) {
-	fprintf(stderr,"Couldn't authenticate to server!\n");
-	exit(1);
-    }
-
-    /* We know we're talking to a Cyrus IMAP server */
-    imclient_setflags(imclient, IMCLIENT_CONN_NONSYNCLITERAL);
-} /* cyr_connect */
+}
 
 /* IMAP command completion callback */
 static void
@@ -671,6 +640,82 @@ do_content(char *amsname, char *imapname)
     return imap_bboard_error; /* 0 = success */
 } /* do_content */
 
+/* Connect and authenticate */
+void cyr_connect(void)
+{
+    int code, errs;
+
+    if (verbose) {
+	fprintf(logfile,"Connecting to Cyrus server...\n");
+    }
+    code = imclient_connect(&imclient,server,port);
+    while (code) {
+	switch (code) {
+	case -1:
+	    fprintf(stderr,"Couldn't find server!\n");
+	    exit(1);
+	    break;
+	case -2:
+	    fprintf(stderr,"Unknown service or port %s\n",port);
+	    exit(1);
+	    break;
+	case ECONNREFUSED:
+	    if (errs++ >= 5) {
+		fprintf(stderr,"Connection refused by server!\n");
+		exit(1);
+	    }
+	    sleep(5);
+	    break;
+	default:
+	    fprintf(stderr,"Unknown error %d from imclient_connect\n",code);
+	    exit(1);
+	}
+	code = imclient_connect(&imclient,server,port);
+    }
+    if (imclient_authenticate(imclient,login_acte_client,NULL,ACTE_PROT_ANY)) {
+	fprintf(stderr,"Couldn't authenticate to server!\n");
+	exit(1);
+    }
+
+    /* tjs */
+    /* old code:
+     * comment: we know we're talking to a cyrus server
+     * imclient_setflags(imclient, IMCLIENT_CONN_NONSYNCLITERAL);
+     */
+    /* We know we're talking to a Cyrus IMAP server
+     */
+
+    /* new code
+     * Let's make sure we're really talking to a server that supports
+     * the LITERAL+ extension
+     * - send capability
+     * - wait for return
+     * - look at capability response.  if it contains "LITERAL+",
+     *   set flag for imclient.
+     */
+    
+    /* send command */
+    imclient_addcallback(imclient,
+			 "CAPABILITY", CALLBACK_NOLITERAL,
+			 (imclient_proc_t*)callback_capability,
+			 (void*) &capb_str,
+			 NULL);
+
+    cbclear();
+    imclient_send(imclient, callback_finish, (void*)&cb,
+		  "CAPABILITY");
+    cbwait();
+			 
+    if (strstr(capb_str, "LITERAL+")) {
+	imclient_setflags(imclient, IMCLIENT_CONN_NONSYNCLITERAL);
+    }
+
+    free(capb_str);
+    capb_str = NULL;
+
+    /* end tjs */
+} /* cyr_connect */
+
 int main(int argc, char **argv)
 {
     char *p1;
@@ -740,7 +785,7 @@ int main(int argc, char **argv)
 	fprintf(logfile,"\
 Server: %s\n\
 Port: %s\n\
-  Mode: %s%s%s\n",server,port,
+  Mode: %s%s%s%s\n",server,port,
 		acl_mode ? "Update ACLs" : "No ACLs",
 		aclro_mode ? " (read-only)" : "",
 		content_mode ? ", Update Content" : ", No Content",
@@ -760,6 +805,21 @@ Port: %s\n\
 	exit(1);
     }
 
+    /* tjs */
+    if (blast_mode) {
+	bb_hash = ht_create(h_string, 
+			    BBHASH_SIZE /* size; a magic number */,
+			    sizeof(char*), /* size of member (useless,
+					      really */
+			    strcmp, /* compare fn */
+			    free /* free fn */);
+	
+	/* tjs: add list callback */
+	imclient_addcallback(imclient,
+			     "LIST", CALLBACK_NOLITERAL,
+			     bbh_add, bb_hash,
+			     NULL) ;
+    }
 
     /* Main processing loop */
     err = cnt = 0;
@@ -781,35 +841,26 @@ Port: %s\n\
 
 	/* tjs */
 	if (blast_mode) {
-	    bb_hash = ht_create(h_string, 
-				BBHASH_SIZE /* size; a magic number */,
-				sizeof(char*), /* size of member (useless,
-						  really */
-				strcmp, /* compare fn */
-				free /* free fn */);
-	    
-	    /* tjs: add list callback */
-	    imclient_addcallback(imclient,
-				  "LIST", CALLBACK_NOLITERAL,
-				  bbh_add, bb_hash,
-				  NULL) ;
-	    
-	    /* tjs: LIST bboards from config file into hash table */
-	    cbclear();
-
 	    /* XXX THIS IS REALLY BRAINDEAD
 	     * this code doesn't actually interpret regular expressons
 	     * it just looks and sees if the first char is ^; if so,
 	     * it skips it; if not, it doesn't.  This is what match()
 	     * does anyway...
+	     * the real fix is to drop regexp support.  Right now, it's
+	     * in name only, not needed or wanted, and hasn't worked
+	     * since this was converted from perl.
 	     */
 	    if (verbose)
 		fprintf(logfile, "listing bboards (LIST NIL \
 %s.*)...\n",
 			rexp+(*rexp == '^'));
+	    /* tjs: LIST bboards from config file into hash table */
+	    cbclear();
 	    imclient_send(imclient, callback_finish, (void*) &cb,
 			  "LIST NIL %s.*", rexp+(*rexp=='^'));
 	    cbwait();
+
+	    if (debug) { ht_foreach(bb_hash, (void*) puts); }
 	}
 
 	sprintf(submap,"%s/.MESSAGES/.SubscriptionMap",dir);
@@ -843,13 +894,13 @@ Port: %s\n\
 		}
 
 		/* tjs */
-		/* if we're in blast mode, remove it from hash table */
+		/* if we're in blast mode, remove it from hash table
+		   (don't delete)
+		 */
 		if (blast_mode) {
 		    if (verbose) {
-			fprintf(logfile, "removing bboard from list \
-of bboards to be blasted ...\n");
+			fprintf(logfile, "Not blasting...\n");
 		    }
-		    /* remove from hash table */
 		    ht_remove(bb_hash, (void*) bbd);
 		}
 		cnt++;
@@ -859,6 +910,11 @@ of bboards to be blasted ...\n");
 	}
 	fgets(buf,256,cfgfile);
 	buf[255] = 0;
+    } /* end main loop! */
+
+    if (debug && blast_mode) {
+	puts("The following bboards remain in hash table:");
+	ht_foreach(bb_hash, (void*) puts);
     }
 
     /* tjs */
@@ -877,4 +933,3 @@ of bboards to be blasted ...\n");
     fprintf(stderr,"%d errors in %d bboards\n",err,cnt);
     exit(EX_OK);
 } /* main */
-
