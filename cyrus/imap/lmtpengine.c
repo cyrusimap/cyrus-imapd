@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.44 2001/12/12 04:20:21 rjs3 Exp $
+ * $Id: lmtpengine.c,v 1.45 2002/01/09 20:11:08 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1452,8 +1452,11 @@ void lmtpmode(struct lmtp_func *func,
       case 'm':
       case 'M':
 	    if (!authenticated) {
-		prot_printf(pout, 
-			    "530 Authentication required\r\n");
+		if (config_getswitch("soft_noauth", 1)) {
+		    prot_printf(pout, "430 Authentication required\r\n");
+		} else {
+		    prot_printf(pout, "530 Authentication required\r\n");
+		}
 		continue;
 	    }
 
