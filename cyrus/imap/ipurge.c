@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.20.2.2 2004/01/27 23:13:43 ken3 Exp $
+ * $Id: ipurge.c,v 1.20.2.3 2004/04/01 02:40:18 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -271,7 +271,7 @@ int purge_me(char *name, int matchlen __attribute__((unused)),
   (void) mailbox_lock_index(&the_box);
   the_box.index_lock_count = 1;
 
-  mailbox_expunge(&the_box, 1, purge_check, &stats);
+  mailbox_expunge(&the_box, 1, purge_check, &stats, EXPUNGE_FORCE);
   mailbox_close(&the_box);
 
   print_stats(&stats);

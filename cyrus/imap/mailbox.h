@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- * $Id: mailbox.h,v 1.77.2.3 2004/01/31 18:56:58 ken3 Exp $
+ * $Id: mailbox.h,v 1.77.2.4 2004/04/01 02:40:21 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -80,6 +80,7 @@ typedef unsigned short bit32;
 #define FNAME_INDEX "/cyrus.index"
 #define FNAME_CACHE "/cyrus.cache"
 #define FNAME_SQUAT_INDEX "/cyrus.squat"
+#define FNAME_EXPUNGE_INDEX "/cyrus.expunge"
 
 #define MAILBOX_FNAME_LEN 256
 
@@ -214,6 +215,12 @@ struct mailbox_header_cache {
 extern const struct mailbox_header_cache mailbox_cache_headers[];
 extern const int MAILBOX_NUM_CACHE_HEADERS;
 
+/* Bitmasks for fetchitems */
+enum {
+    EXPUNGE_FORCE =		(1<<0),
+    EXPUNGE_CLEANUP =		(1<<1)
+};
+
 int mailbox_cached_header(const char *s);
 int mailbox_cached_header_inline(const char *text);
 
@@ -291,11 +298,11 @@ extern int mailbox_append_index(struct mailbox *mailbox,
 				struct index_record *record,
 				unsigned start, unsigned num, int sync);
 
-extern int mailbox_expunge(struct mailbox *mailbox,
-			   int iscurrentdir,
-			   mailbox_decideproc_t *decideproc,
-			   void *deciderock);
-extern int mailbox_expungenews(struct mailbox *mailbox);
+extern int mailbox_expunge(struct mailbox *mailbox, int iscurrentdir,
+			   mailbox_decideproc_t *decideproc, void *deciderock,
+			   int flags);
+extern int mailbox_cleanup(struct mailbox *mailbox, int iscurrentdir,
+			   mailbox_decideproc_t *decideproc, void *deciderock);
 
 extern void mailbox_make_uniqueid(char *name, unsigned long uidvalidity,
 				  char *uniqueid, size_t outlen);

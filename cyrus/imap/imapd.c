@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.20 2004/03/24 19:53:01 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.21 2004/04/01 02:40:16 ken3 Exp $ */
 
 #include <config.h>
 
@@ -2825,7 +2825,7 @@ void cmd_close(char *tag)
     /* local mailbox */
     if (!(imapd_mailbox->myrights & ACL_DELETE)) r = 0;
     else {
-	r = mailbox_expunge(imapd_mailbox, 1, (int (*)())0, (char *)0);
+	r = mailbox_expunge(imapd_mailbox, 1, (int (*)())0, (char *)0, 0);
     }
 
     index_closemailbox(imapd_mailbox);
@@ -3969,11 +3969,12 @@ void cmd_expunge(char *tag, char *sequence)
     /* local mailbox */
     if (!(imapd_mailbox->myrights & ACL_DELETE)) r = IMAP_PERMISSION_DENIED;
     else if (sequence) {
-	r = mailbox_expunge(imapd_mailbox, 1, index_expungeuidlist, sequence);
+	r = mailbox_expunge(imapd_mailbox, 1, index_expungeuidlist,
+			    sequence, 0);
     }
     else {
 	r = mailbox_expunge(imapd_mailbox, 1, (mailbox_decideproc_t *)0,
-			    (void *)0);
+			    (void *)0, 0);
     }
 
     index_check(imapd_mailbox, 0, 0);

@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: cyr_expire.8,v 1.2 2003/10/22 18:03:08 rjs3 Exp $
+.\" $Id: cyr_expire.8,v 1.2.2.1 2004/04/01 02:40:22 ken3 Exp $
 .SH NAME
 cyr_expire \- expire messages and duplicate delivery database entries
 .SH SYNOPSIS
@@ -55,6 +55,9 @@ cyr_expire \- expire messages and duplicate delivery database entries
 .SH DESCRIPTION
 .I Cyr_expire
 is used to expire messages and duplicate delivery database entries.
+.I Cyr_expire
+also cleanses mailboxes of partially expunged messages
+(when using the "delayed" expunge mode).
 The expiration of messages is controlled by the
 \fB/vendor/cmu/cyrus-imapd/expire\fR mailbox annotation which
 specifies the age (in days) of messages in the given mailbox that

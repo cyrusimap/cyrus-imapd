@@ -4,7 +4,7 @@
 
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-<meta name="revision" content="$Id: mailbox-format.html,v 1.3.2.1 2004/01/15 20:24:25 ken3 Exp $" />
+<meta name="revision" content="$Id: mailbox-format.html,v 1.3.2.2 2004/04/01 02:40:12 ken3 Exp $" />
 <meta name="author" content="Rob Siemborski" />
 
 <title>mailbox format</title>
@@ -32,6 +32,7 @@ following files:</p>
 <li> the <tt>cyrus.header</tt> metadata file </li>
 <li> the <tt>cyrus.index</tt> metadata file </li>
 <li> the <tt>cyrus.cache</tt> metadata file </li>
+<li> zero or one <tt>cyrus.expunge</tt> metadata file </li>
 <li> zero or one <tt>cyrus.squat</tt> search indexes </li>
 <li> zero or more subdirectories </li>
 </ul>
@@ -55,7 +56,7 @@ often. Its format:</p>
 &lt;Mailbox ACL&gt;\n
 </pre>
 
-<h2><tt>cyrus.index</tt> and <tt>cyrus.cache</tt></h2>
+<h2><tt>cyrus.index</tt>, <tt>cyrus.expunge</tt> and <tt>cyrus.cache</tt></h2>
 
 <p>xxx not just caches; the index file stores stuff not present in the
 message file! </p>
@@ -71,6 +72,10 @@ All of the binary data is also 4-byte aligned. Strings in the
 <tt>cyrus.cache</tt> are stored NUL-terminated (this only applies to
 <tt>cyrus.cache</tt>). To ensure alignment of following data, the end
 of strings may be NUL-padded by up to 4 bytes.</p>
+
+<p> The cyrus.expunge file has the exact same format as cyrus.index,
+and holds the records of expunged messages which have yet to have their
+corresponding cache records and messages files deleted.</p>
 
 <p>
 The overall format of these files looks sort of like this:</p>
