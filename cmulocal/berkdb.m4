@@ -1,4 +1,4 @@
-dnl $Id: berkdb.m4,v 1.3 2002/05/25 19:57:41 leg Exp $
+dnl $Id: berkdb.m4,v 1.3.4.1 2002/12/10 20:57:06 rjs3 Exp $
 
 AC_DEFUN(CMU_DB_INC_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
@@ -32,28 +32,43 @@ AC_DEFUN(CMU_DB_INC_WHERE, [
 # Test for lib files
 #
 
-AC_DEFUN(CMU_DB_LIB_WHERE1, [
+AC_DEFUN(CMU_DB3_LIB_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
 AC_REQUIRE([CMU_AFS])
 AC_REQUIRE([CMU_KRB4])
 saved_LIBS=$LIBS
-if test "$enable_db4" = "yes"; then
-  LIBS="$saved_LIBS -L$1 -ldb-4"
-else
   LIBS="$saved_LIBS -L$1 -ldb-3"
-fi
 AC_TRY_LINK(,
 [db_env_create();],
-[ac_cv_found_db_lib=yes],
-ac_cv_found_db_lib=no)
+[ac_cv_found_db_3_lib=yes],
+ac_cv_found_db_3_lib=no)
+LIBS=$saved_LIBS
+])
+AC_DEFUN(CMU_DB4_LIB_WHERE1, [
+AC_REQUIRE([AC_PROG_CC_GNU])
+AC_REQUIRE([CMU_AFS])
+AC_REQUIRE([CMU_KRB4])
+saved_LIBS=$LIBS
+LIBS="$saved_LIBS -L$1 -ldb-4"
+AC_TRY_LINK(,
+[db_env_create();],
+[ac_cv_found_db_4_lib=yes],
+ac_cv_found_db_4_lib=no)
 LIBS=$saved_LIBS
 ])
 
 AC_DEFUN(CMU_DB_LIB_WHERE, [
    for i in $1; do
       AC_MSG_CHECKING(for db libraries in $i)
-      CMU_DB_LIB_WHERE1($i)
-      CMU_TEST_LIBPATH($i, db)
+if test "$enable_db4" = "yes"; then
+      CMU_DB4_LIB_WHERE1($i)
+      CMU_TEST_LIBPATH($i, [db-4])
+      ac_cv_found_db_lib=$ac_cv_found_db_4_lib
+else
+      CMU_DB3_LIB_WHERE1($i)
+      CMU_TEST_LIBPATH($i, [db-3])
+      ac_cv_found_db_lib=$ac_cv_found_db_3_lib
+fi
       if test "$ac_cv_found_db_lib" = "yes" ; then
         ac_cv_db_where_lib=$i
         AC_MSG_RESULT(found)
@@ -164,3 +179,80 @@ AC_ARG_ENABLE(db4,
 	fi
 	])
 
+
+
+dnl ---- CUT HERE ---
+
+dnl These are the Cyrus Berkeley DB macros.  In an ideal world these would be
+dnl identical to the above.
+
+dnl They are here so that they can be shared between Cyrus IMAPd
+dnl and Cyrus SASL with relative ease.
+
+dnl The big difference between this and the ones above is that we don't assume
+dnl that we know the name of the library, and we try a lot of permutations
+dnl instead.  We also assume that DB4 is acceptable.
+
+dnl When we're done, there will be a BDB_LIBADD and a BDB_INCADD which should
+dnl be used when necessary.  We should probably be smarter about our RPATH
+dnl handling.
+
+dnl Call these with BERKELEY_DB_CHK.
+
+dnl We will also set $dblib to "berkeley" if we are successful, "no" otherwise.
+
+dnl this is unbelievably painful due to confusion over what db-3 should be
+dnl named and where the db-3 header file is located.  arg.
+AC_DEFUN(CYRUS_BERKELEY_DB_CHK_LIB,
+[
+	BDB_SAVE_LIBS=$LIBS
+
+	if test -d $with_bdb_lib; then
+	    LIBS="$LIBS -L$with_bdb_lib"
+	    BDB_LIBADD="-L$with_bdb_lib -R $with_bdb_lib"
+	else
+	    BDB_LIBADD=""
+	fi
+
+        for dbname in db-4.1 db4.1 db-4.0 db4.0 db-4 db4 db-3.3 db3.3 db-3.2 db3.2 db-3.1 db3.1 db-3 db3 db
+          do
+            AC_CHECK_LIB($dbname, db_create, BDB_LIBADD="$BDB_LIBADD -l$dbname";
+              dblib="berkeley"; break, dblib="no")
+          done
+        if test "$dblib" = "no"; then
+          AC_CHECK_LIB(db, db_open, BDB_LIBADD="$BDB_LIBADD -ldb";
+            dblib="berkeley"; dbname=db,
+            dblib="no")
+        fi
+
+	LIBS=$BDB_SAVE_LIBS
+])
+
+AC_DEFUN(CYRUS_BERKELEY_DB_OPTS,
+[
+AC_ARG_WITH(bdb-libdir,
+	[  --with-bdb-libdir=DIR   Berkeley DB lib files are in DIR],
+	with_bdb_lib=$withval,
+	with_bdb_lib=none)
+AC_ARG_WITH(bdb-incdir,
+	[  --with-bdb-incdir=DIR   Berkeley DB include files are in DIR],
+	with_bdb_inc=$withval,
+	with_bdb_inc=none)
+])
+
+AC_DEFUN(CYRUS_BERKELEY_DB_CHK,
+[
+	AC_REQUIRE([CYRUS_BERKELEY_DB_OPTS])
+
+	if test -d $with_bdb_inc; then
+	    BDB_INCADD="-I$with_bdb_inc"
+	else
+	    BDB_INCADD=""
+	fi
+
+	dnl Note that FreeBSD puts it in a wierd place
+        dnl (but they should use with-bdb-incdir)
+        AC_CHECK_HEADER(db.h,
+                        CYRUS_BERKELEY_DB_CHK_LIB(),
+                        dblib="no")
+])
