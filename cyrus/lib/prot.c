@@ -250,18 +250,20 @@ struct protstream *s;
 	s->leftcnt = cnt - (inputlen + 4);
     }
 
-    left = s->cnt;
-    ptr = s->buf;
-    do {
-	n = write(s->logfd, ptr, left);
-	if (n == -1 && errno != EINTR) {
-	    break;
-	}
-	if (n > 0) {
-	    ptr += n;
-	    left -= n;
-	}
-    } while (left);
+    if (s->logfd != -1) {
+	left = s->cnt;
+	ptr = s->ptr;
+	do {
+	    n = write(s->logfd, ptr, left);
+	    if (n == -1 && errno != EINTR) {
+		break;
+	    }
+	    if (n > 0) {
+		ptr += n;
+		left -= n;
+	    }
+	} while (left);
+    }
 
     s->cnt--;
     return *s->ptr++;
