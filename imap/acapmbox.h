@@ -107,6 +107,7 @@ int acapmbox_setproperty(acapmbox_handle_t *AC,
 acapmbox_status mboxdata_convert_status(acap_value_t *v);
 
 /**************** proxy use *****************/
-#define FNAME_TARGET_SOCK "/cyrus/target"
+#define FNAME_TARGET_SOCK "/socket/target"
+void acapmbox_kick_target(void);
 
 #endif /* ACAP_MBOX_H_ */
