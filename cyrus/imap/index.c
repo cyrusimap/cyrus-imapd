@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.82 1999/03/01 20:35:33 tjs Exp $
+ * $Id: index.c,v 1.83 1999/03/02 01:17:42 tjs Exp $
  */
 #include <stdio.h>
 #include <string.h>
@@ -2523,7 +2523,7 @@ const char *cacheitem;
     int partsleft = 1;
     int subparts;
     int start, len, charset, encoding;
-    char *p;
+    char *p, *q;
     
     /* Won't find anything in a truncated file */
     if (msgfile->size == 0) return 0;
@@ -2544,10 +2544,12 @@ const char *cacheitem;
 		    p = index_readheader(msgfile->base, msgfile->size,
 					 format, CACHE_ITEM_BIT32(cacheitem),
 					 len);
-		    p = charset_decode1522(p);
-		    if (charset_searchstring(substr, pat, p, strlen(p))) {
+		    p = charset_decode1522(p, q, 0);
+		    if (charset_searchstring(substr, pat, q, strlen(q))) {
+			free(q);
 			return 1;
 		    }
+		    free(q);
 		}
 	    }
 	    cacheitem += 5*4;
@@ -2585,15 +2587,18 @@ struct mapfile *msgfile;
 int format;
 int size;
 {
-    char *p;
+    char *p, *q;
+    int r;
     static struct strlist header;
 
     header.s = name;
 
     p = index_readheader(msgfile->base, msgfile->size, format, 0, size);
     index_pruneheader(p, &header, 0);
-    p = charset_decode1522(p);
-    return charset_searchstring(substr, pat, p, strlen(p));
+    charset_decode1522(p, q, 0);
+    r = charset_searchstring(substr, pat, q, strlen(q));
+    free(q);
+    return r;
 }
 
 /*
@@ -2612,6 +2617,7 @@ comp_pat *pat;
     static int bufsize;
     const char *cacheitem;
     unsigned size;
+    int r;
 
     cacheitem = cache_base + CACHE_OFFSET(msgno);
     cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip envelope */
@@ -2634,8 +2640,10 @@ comp_pat *pat;
     index_pruneheader(buf, &header, 0);
     if (!*buf) return 0;	/* Header not present, fail */
     if (!*substr) return 1;	/* Only checking existence, succeed */
-    p = charset_decode1522(buf);
-    return charset_searchstring(substr, pat, p, strlen(p));
+    p = charset_decode1522(buf, p, 0);
+    r = charset_searchstring(substr, pat, p, strlen(p));
+    free(p);
+    return r;
 }
 
 /*
