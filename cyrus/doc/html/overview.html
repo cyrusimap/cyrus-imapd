@@ -1,6 +1,6 @@
 <HTML><HEAD>
 <title>Cyrus IMAP Server:  Overview and Concepts</title>
-<!-- Changed by: John Gardiner Myers, 21-Sep-1995 -->
+<!-- Changed by: John Gardiner Myers, 18-Oct-1995 -->
 </HEAD><BODY>
 <H1>              Cyrus IMAP Server:  Overview and Concepts</H1>
 
@@ -77,9 +77,9 @@ Mailboxes</A>
 <li><A href="#recovery">Mail Directory Recovery</A>
 <UL>
 <li><a href="#recoverymboxdir">Reconstructing Mailbox Directories</a>
+<li><a href="#recoverymbox">Reconstructing the Mailboxes File</a>
 <li><a href="#recoveryquotas">Reconstructing Quota Roots</a>
 <li><a href="#recoveryquotasrm">Removing Quota Roots</a>
-<li><a href="#recoverymbox">Mailboxes File</a>
 <li><a href="#recoverysubs">Subscriptions</a>
 </UL>
 <li><a href="#configdir">Configuration Directory</a>
@@ -687,6 +687,24 @@ recorded in any quota root files.  After running reconstruct, it is
 advisable to run "<TT>quota -f</TT>" (described below) in order to fix
 the quota root files.
 
+<h3><a name="recoverymbox">Reconstructing the Mailboxes File</a></h3>
+
+The mailboxes file in the configuration directory is the most critical
+file in the entire Cyrus IMAP system.  It contains a sorted list of
+each mailbox on the server, along with the mailboxes quota root and
+ACL.
+
+To reconstruct a corrupted mailboxes file, run the "<TT>reconstruct
+-m</TT>" command.  The "<TT>reconstruct</TT>" program, when invoked
+with the "<TT>-m</TT>" switch, scavenges and corrects whatever data it
+can find in the existing mailboxes file.  It then scans all partitions
+listed in the imapd.conf file for additional mailbox directories to
+put in the mailboxes file.
+
+<p>The <TT>cyrus.header</TT> file in each mailbox directory stores a
+redundant copy of the mailbox ACL, to be used as a backup when
+rebuilding the mailboxes file.
+
 <h3><a name="recoveryquotas">Reconstructing Quota Roots</a></h3>
 
 The subdirectory "<TT>quota</TT>" of the configuration directory (specified in
@@ -702,18 +720,6 @@ usage of each <a href="#quotaroots">quota root</a>.
 
 To remove a quota root, remove the quota root's file.  Then run 
 "<TT>quota -f</TT>" to make the quota files consistent again.
-
-<h3><a name="recoverymbox">Mailboxes File</a></h3>
-
-The mailboxes file in the configuration directory is the most critical
-file in the entire Cyrus IMAP system.  It contains a sorted list of
-each mailbox on the server, along with the mailboxes quota root and
-ACL.  Because the ACL is security-critical information that cannot be
-reconstructed from information stored elsewhere, there is no program
-to recover from a damaged mailboxes file.
-
-<p>To protect the contents of the <TT>mailboxes</TT> file, we suggest
-making frequent, even hourly backups of it to some other part of the disk.
 
 <h3><a name="recoverysubs">Subscriptions</a></h3>
 
