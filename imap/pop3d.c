@@ -49,11 +49,16 @@ extern char *optarg;
 
 extern int errno;
 
+/* The Eudora kludge */
+#define STATUS "Status: "
+#define SLEN (sizeof(status)+2)
+
 char *popd_userid = 0;
 struct mailbox *popd_mailbox = 0;
 char popd_clienthost[250] = "[local]";
 int popd_exists = 0;
 int popd_highest;
+int popd_initialhighest;
 struct msg {
     int uid;
     int size;
@@ -436,10 +441,11 @@ char *pass;
 	    if (r = mailbox_read_index_record(&mboxstruct, msg, &record))
 	      break;
 	    popd_msg[msg].uid = record.uid;
-	    popd_msg[msg].size = record.size;
+	    popd_msg[msg].size = record.size + SLEN;
 	    popd_msg[msg].deleted = 0;
 	    if (record.uid <= mboxstruct.pop3_last_uid) popd_highest = msg;
 	}
+	popd_initialhighest = popd_highest;
     }
     if (r) {
 	mailbox_close(&mboxstruct);
@@ -470,6 +476,7 @@ int lines;
 	return;
     }
     fprintf(stdout, "+OK Message follows\r\n");
+    printf("%s%c\r\n", STATUS, msg <= popd_initialhighest ? "R" : "U");
     while (lines != thisline) {
 	if (!fgets(buf, sizeof(buf), msgfile)) break;
 
