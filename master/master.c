@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.14 2000/08/04 18:29:25 leg Exp $ */
+/* $Id: master.c,v 1.15 2000/09/05 04:07:52 leg Exp $ */
 
 #include <config.h>
 
@@ -188,15 +188,20 @@ void service_create(struct service *s)
 
 	s->socket = socket(AF_UNIX, SOCK_STREAM, 0);
     } else { /* inet socket */
-	serv = getservbyname(s->listen, s->proto);
-	if (serv == NULL) {
-	    syslog(LOG_INFO, "no service '%s' in /etc/services, disabling %s", 
-		   s->listen, s->name);
-	    s->exec = NULL;
-	    return;
-	}
 	sin.sin_family = AF_INET;
-	sin.sin_port = serv->s_port;
+
+	serv = getservbyname(s->listen, s->proto);
+	if (serv) {
+	    sin.sin_port = serv->s_port;
+	} else {
+	    sin.sin_port = htons(atoi(s->listen));
+	    if (sin.sin_port == 0) {
+		syslog(LOG_INFO, "no service '%s' in /etc/services, "
+		       "disabling %s", s->listen, s->name);
+		s->exec = NULL;
+		return;
+	    }
+	}
 	sa = (struct sockaddr *) &sin;
 	salen = sizeof(sin);
 
@@ -255,8 +260,13 @@ void run_startup(char **cmd)
 	break;
 	
     case 0:
-	become_cyrus();
+	if (become_cyrus() != 0) {
+	    syslog(LOG_ERR, "can't change to the cyrus user");
+	    exit(1);
+	}
+
 	get_prog(path, cmd);
+	syslog(LOG_DEBUG, "about to exec %s", path);
 	execv(path, cmd);
 	syslog(LOG_ERR, "can't exec %s for startup: %m", path);
 	exit(1);
@@ -327,6 +337,7 @@ void spawn_service(struct service *s)
 	    if (Services[i].stat[0] > 0) close(Services[i].stat[0]);
 	    if (Services[i].stat[1] > 0) close(Services[i].stat[1]);
 	}
+	syslog(LOG_DEBUG, "about to exec %s", path);
 	execv(path, s->exec);
 	syslog(LOG_ERR, "couldn't exec %s: %m", path);
 
@@ -384,10 +395,14 @@ void spawn_schedule(time_t now)
 	    break;
 
 	case 0:
-	    become_cyrus();
+	    if (become_cyrus() != 0) {
+		syslog(LOG_ERR, "can't change to the cyrus user");
+		exit(1);
+	    }
 	    get_prog(path, a->exec);
+	    syslog(LOG_DEBUG, "about to exec %s", path);
 	    execv(path, a->exec);
-	    syslog(LOG_ERR, "can't exec %s for checkpointing: %m", path);
+	    syslog(LOG_ERR, "can't exec %s on schedule: %m", path);
 	    exit(1);
 	    break;
 	    
