@@ -59,8 +59,6 @@ extern int errno;
 #ifdef HAVE_ACTE_KRB
 #include <krb.h>
 
-extern char *kerberos_get_srvtab();
-
 /* MIT's kpop authentication kludge */
 int kflag = 0;
 char klrealm[REALM_SZ];
@@ -215,16 +213,19 @@ kpop()
     KTEXT_ST ticket;
     char instance[INST_SZ];  
     char version[9];
+    char *srvtab;
     int r;
 
     if (!popd_haveaddr) {
 	fatal("Cannot get client's IP address");
     }
 
+    srvtab = config_getstring("srvtab", "");
+
     strcpy(instance, "*");
     r = krb_recvauth(0L, 0, &ticket, "pop", instance,
 		     &popd_remoteaddr, (struct sockaddr_in *) NULL,
-		     &kdata, kerberos_get_srvtab(), schedule, version);
+		     &kdata, srvtab, schedule, version);
     
     if (r) {
 	prot_printf(popd_out, "-ERR Kerberos authentication failure: %s\r\n",
