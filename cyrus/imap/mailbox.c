@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.94 2000/04/06 22:53:35 tmartin Exp $
+ $Id: mailbox.c,v 1.95 2000/04/07 19:50:34 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -153,7 +153,7 @@ void mailbox_make_uniqueid(char *name, unsigned long uidvalidity,
 	hash += *name++;
 	hash %= PRIME;
     }
-    sprintf(uniqueid, "%08x%08x", hash, uidvalidity);
+    sprintf(uniqueid, "%08lx%08lx", hash, uidvalidity);
 }
 
 /*
@@ -452,7 +452,7 @@ void mailbox_close(struct mailbox *mailbox)
 int mailbox_read_header(struct mailbox *mailbox)
 {
     int flag;
-    const char *name, *p, *eol;
+    const char *name, *p, *tab, *eol;
     int oldformat = 0;
 
     /* Check magic number */
@@ -464,20 +464,21 @@ int mailbox_read_header(struct mailbox *mailbox)
 
     /* Read quota file pathname */
     p = mailbox->header_base + sizeof(MAILBOX_HEADER_MAGIC)-1;
-    eol = memchr(p, '\t', mailbox->header_len - (p - mailbox->header_base));
-    if (!eol) {
-	eol = memchr(p, '\n', 
-		     mailbox->header_len - (p - mailbox->header_base));
+    tab = memchr(p, '\t', mailbox->header_len - (p - mailbox->header_base));
+    eol = memchr(p, '\n', mailbox->header_len - (p - mailbox->header_base));
+    if (!tab || tab > eol || !eol) {
+	oldformat = 1;
 	if (!eol) return IMAP_MAILBOX_BADFORMAT;
 	else {
 	    syslog(LOG_DEBUG, "mailbox '%s' has old cyrus.header",
 		   mailbox->name);
-	    oldformat = 1;
 	}
+	tab = eol;
     }
     if (mailbox->quota.root) {
-	if (strlen(mailbox->quota.root) != eol-p ||
-	    strncmp(mailbox->quota.root, p, eol-p) != 0) {
+	/* check if this is the same as what's there */
+	if (strlen(mailbox->quota.root) != tab-p ||
+	    strncmp(mailbox->quota.root, p, tab-p) != 0) {
 	    assert(mailbox->quota.lock_count == 0);
 	    if (mailbox->quota.fd != -1) {
 		close(mailbox->quota.fd);
@@ -486,18 +487,16 @@ int mailbox_read_header(struct mailbox *mailbox)
 	}
 	free(mailbox->quota.root);
     }
-    if (p < eol) {
-	mailbox->quota.root = xstrndup(p, eol - p);
+    if (p < tab) {
+	mailbox->quota.root = xstrndup(p, tab - p);
     } else {
 	mailbox->quota.root = NULL;
     }
 
     if (!oldformat) {
 	/* read uniqueid */
-	p = eol + 1;
-	eol = memchr(p, '\n', 
-		     mailbox->header_len - (p - mailbox->header_base));
-	if (!eol || p == eol) return IMAP_MAILBOX_BADFORMAT;
+	p = tab + 1;
+	if (p == eol) return IMAP_MAILBOX_BADFORMAT;
 	mailbox->uniqueid = xstrndup(p, eol - p);
     } else {
 	/* uniqueid needs to be generated when we know the uidvalidity */
@@ -534,10 +533,10 @@ int mailbox_read_header(struct mailbox *mailbox)
 	char buf[32];
 
 	/* generate uniqueid */
+	mailbox_lock_header(mailbox);
 	mailbox_open_index(mailbox);
 	mailbox_make_uniqueid(mailbox->name, mailbox->uidvalidity, buf);
 	mailbox->uniqueid = xstrdup(buf);
-	mailbox_lock_header(mailbox);
 	mailbox_write_header(mailbox);
 	mailbox_unlock_header(mailbox);
     }
