@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.304.2.8.2.2 2001/07/04 01:37:00 ken3 Exp $ */
+/* $Id: imapd.c,v 1.304.2.8.2.3 2001/07/04 15:59:20 ken3 Exp $ */
 
 #include <config.h>
 
@@ -3545,6 +3545,7 @@ char *pattern;
 	if (*p == '%') *p = '?';
     }
 
+    /* Translate pattern */
     hier_sep_tointernal(pattern, &imapd_namespace);
 
     if (!strcmp(namespace, "mailboxes")) {
@@ -3632,6 +3633,7 @@ void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
 	    pattern = buf;
 	}
 
+	/* Translate pattern */
 	hier_sep_tointernal(pattern, &imapd_namespace);
 
 	if (subscribed) {
