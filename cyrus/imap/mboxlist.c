@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.45 2003/06/15 18:10:42 ken3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.46 2003/07/12 21:47:08 ken3 Exp $
  */
 
 #include <config.h>
@@ -1421,7 +1421,9 @@ int mboxlist_setacl(const char *name, const char *identifier,
 	   and users in the default domain */
 	if ((cp = strchr(identifier, '@'))) {
 	    if (rights &&
-		(!domain || strncasecmp(cp+1, domain, strlen(cp+1)))) {
+		((domain && strncasecmp(cp+1, domain, strlen(cp+1))) ||
+		 (!domain && (!config_defdomain ||
+			      strcasecmp(config_defdomain, cp+1))))) {
 		/* can't set cross-domain ACLs */
 		return IMAP_INVALID_IDENTIFIER;
 	    }
