@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.36 2002/08/13 00:11:28 rjs3 Exp $ */
+/* $Id: acconfig.h,v 1.37 2002/12/19 16:58:30 rjs3 Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -139,6 +139,9 @@
 
 /* do we have rlim_t? */
 #undef HAVE_RLIM_T
+
+/* path to pid lockfile for master */
+#undef MASTER_PIDFILE
 
 /* do we have fdatasync */
 #undef HAVE_FDATASYNC

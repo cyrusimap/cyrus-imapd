@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.249 2002/12/10 20:47:09 rjs3 Exp $
+dnl $Id: configure.in,v 1.250 2002/12/19 16:58:30 rjs3 Exp $
 dnl
 
 
@@ -647,7 +647,7 @@ fi
 dnl
 dnl Test for Zephyr
 dnl
-AC_ARG_WITH(zephyr,[  --with-zephyr=PATH      use Zephyr from PATH],
+AC_ARG_WITH(zephyr,[  --with-zephyr[=PATH]    enable Zephyr notification (installed on PATH)],
 	with_zephyr="${withval}")
 if test -z "$with_zephyr"; then
      if test -f /usr/local/lib/libzephyr.a; then
@@ -669,13 +669,20 @@ case "$with_zephyr" in
            fi
            ZEPHYR_LIBS="-lzephyr";;
 esac
+AC_SUBST(ZEPHYR_LIBS)
+AC_SUBST(ZEPHYR_CPPFLAGS)
 if test "$with_zephyr" != "no"; then
 	AC_DEFINE(HAVE_ZEPHYR)
-	AC_SUBST(ZEPHYR_LIBS)
-	AC_SUBST(ZEPHYR_CPPFLAGS)
 fi
 
-
+dnl
+dnl Set pidfile location
+dnl
+AC_ARG_WITH(pidfile,[  --with-pidfile[=PATH]     pidfile in PATH (/var/run/cyrus-master.pid)],
+	[MASTERPIDFILE="$withval"],
+	[MASTERPIDFILE="/var/run/cyrus-master.pid"])
+MASTERPIDFILE="\"$MASTERPIDFILE\""
+AC_DEFINE_UNQUOTED(MASTER_PIDFILE, $MASTERPIDFILE)
 
 dnl
 dnl Select a method for IMAP IDLE
