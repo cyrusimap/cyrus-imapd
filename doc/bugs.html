@@ -6,6 +6,12 @@
 </HEAD><BODY>
 <h1>                     Known bugs in the Cyrus IMAP Server</h1>
 
+<p>We're working on moving to a <a
+href="http://www.mozilla.org/bugs/">Bugzilla database</a>.  It's still
+being built up, but you can search/add to it <a
+href="http://bugzilla.andrew.cmu.edu">here</a>.  Eventually, all the
+bugs below will be in there.</p>
+
 <h3>imapd and core utilities</h3>
 
 <ul>
@@ -136,9 +142,6 @@ for them to see if it should exit (like mbpath, ipurge).
 <li> it would be nice if <tt>cyradm</tt> had a version command (would
 do an ID against the server).
 
-<li> deliver: should look for AUTH capability instead of just assuming
-it.  possibly do LMTP over TCP?  full SASL authentication?
-
 </ul>
 
 <h3>libraries</h3>
@@ -178,7 +181,7 @@ move all metadata per-user data. (seen, subscriptions, sieve state?)
 would like to submit a bug, feature request or (best of all) patch.
 
 <P><HR>
-Last update: $Date: 2000/06/07 18:42:04 $ 
+Last update: $Date: 2000/07/21 19:00:54 $ 
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>
