@@ -35,6 +35,8 @@
 #include "imclient.h"
 #include "xmalloc.h"
 
+#include "readconfig.h"
+
 #define SECS_IN_DAY (24*60*60)
 
 #define NOTFINISHED 0

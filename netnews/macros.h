@@ -1,4 +1,4 @@
-/*  $Revision: 1.1 $
+/*  $Revision: 1.2 $
 **
 **  Here be some useful macros.
 */
@@ -24,7 +24,7 @@
 #if	!defined(NEW)
 
 #define NEW(T, c)			\
-	((T *)xmalloc((unsigned int)(sizeof (T) * (c)), __FILE__, __LINE__))
+	((T *)xmalloc((unsigned int)(sizeof (T) * (c))))
 
 #define RENEW(p, T, c)			\
         (p = (T *)xrealloc((char *)(p), (unsigned int)(sizeof (T) * (c)), \
