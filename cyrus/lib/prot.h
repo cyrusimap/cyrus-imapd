@@ -1,5 +1,5 @@
 /* prot.h -- stdio-like module that handles IMAP protection mechanisms
- * $Id: prot.h,v 1.30 2000/11/13 22:09:43 leg Exp $
+ * $Id: prot.h,v 1.31 2000/11/14 19:14:05 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -58,10 +58,9 @@
 /* #define PROT_BUFSIZE 8192 */
 
 struct protstream;
+struct prot_waitevent;
 
 typedef void prot_readcallback_t(struct protstream *s, void *rock);
-typedef void prot_waiteventcallback_t(struct protstream *s, void *rock);
-typedef struct prot_waitevent *prot_waitevent_t;
 
 struct protstream {
     unsigned char *ptr;
@@ -80,13 +79,23 @@ struct protstream {
     struct protstream *flushonread;
     prot_readcallback_t *readcallback_proc;
     void *readcallback_rock;
-    prot_waitevent_t waitevent;
+    struct prot_waitevent *waitevent;
     int buf_size;
     unsigned char *buf;
 
 #ifdef HAVE_SSL
     SSL *tls_conn;
 #endif /* HAVE_SSL */
+};
+
+typedef struct prot_waitevent *prot_waiteventcallback_t(struct protstream *s,
+							void *rock);
+
+struct prot_waitevent {
+    time_t mark;
+    prot_waiteventcallback_t *proc;
+    void *rock;
+    struct prot_waitevent *next;
 };
 
 extern int prot_getc(struct protstream *s);
@@ -112,10 +121,12 @@ extern int prot_setflushonread(struct protstream *s,
 			       struct protstream *flushs);
 extern int prot_setreadcallback(struct protstream *s,
 				prot_readcallback_t *proc, void *rock);
-extern prot_waitevent_t prot_addwaitevent(struct protstream *s, time_t period,
-					  prot_waiteventcallback_t *proc,
-					  void *rock);
-extern void prot_removewaitevent(struct protstream *s, prot_waitevent_t event);
+extern struct prot_waitevent *prot_addwaitevent(struct protstream *s,
+						time_t mark,
+						prot_waiteventcallback_t *proc,
+						void *rock);
+extern void prot_removewaitevent(struct protstream *s,
+				 struct prot_waitevent *event);
 extern const char *prot_error(struct protstream *s);
 extern int prot_rewind(struct protstream *s);
 extern int prot_fill(struct protstream *s);

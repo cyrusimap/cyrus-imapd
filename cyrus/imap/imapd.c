@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.278 2000/11/11 04:11:42 ken3 Exp $ */
+/* $Id: imapd.c,v 1.279 2000/11/14 19:14:06 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1592,7 +1592,10 @@ char *cmd;
 /*
  * Perform an IDLE command
  */
-void idle_poll(struct protstream *s, void *rock)
+static time_t idle_period = -1;
+static struct prot_waitevent *idle_event;
+
+struct prot_waitevent *idle_poll(struct protstream *s, void *rock)
 {
     struct mailbox *mailbox = (struct mailbox *) rock;
 
@@ -1600,27 +1603,30 @@ void idle_poll(struct protstream *s, void *rock)
 	index_check(mailbox, 0, 1);
     }
     prot_flush(imapd_out);
+
+    idle_event->mark = time(NULL) + idle_period;
+    return idle_event;
 }
 
 void cmd_idle(char *tag)
 {
     int c;
     static struct buf arg;
-    static time_t period = -1;
-    prot_waitevent_t idle;
 
     /* get polling period */
-    if (period == -1) {
-      period = config_getint("imapidlepoll", 60);
-      if (period < 0) period = 0;
+    if (idle_period == -1) {
+      idle_period = config_getint("imapidlepoll", 60);
+      if (idle_period < 0) idle_period = 0;
     }
 
     /* Tell client we are idling and waiting for end of command */
     prot_printf(imapd_out, "+ go ahead\r\n");
     prot_flush(imapd_out);
 
-    /* Setup the mailbox polling function to be called at 'period' seconds */
-    idle = prot_addwaitevent(imapd_in, period, idle_poll, imapd_mailbox);
+    /* Setup the mailbox polling function to be called at 'idle_period'
+       seconds from now */
+    idle_event = prot_addwaitevent(imapd_in, time(NULL) + idle_period,
+				   idle_poll, imapd_mailbox);
 
     /* Get continuation data */
     c = getword(&arg);
@@ -1639,7 +1645,7 @@ void cmd_idle(char *tag)
     }
 
     /* Remove the polling function */
-    prot_removewaitevent(imapd_in, idle);
+    prot_removewaitevent(imapd_in, idle_event);
 
     return;
 }
