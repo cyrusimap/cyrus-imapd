@@ -1,4 +1,4 @@
-<!-- $Id: install-configure.html,v 1.31 2003/11/07 21:47:28 ken3 Exp $ -->
+<!-- $Id: install-configure.html,v 1.32 2004/02/04 14:37:38 rjs3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and configuring the IMAP Server
@@ -480,20 +480,14 @@ tls_key_file: /var/imap/server.pem
 Optionally, you can use separate certificates and key files for each
 service:
 
-<pre>tls_imap_cert_file: /var/imap/imap-server.pem
-tls_imap_key_file: /var/imap/imap-server.pem
-
-tls_pop3_cert_file: /var/imap/pop3-server.pem
-tls_pop3_key_file: /var/imap/pop3-server.pem
-
-tls_lmtp_cert_file: /var/imap/lmtp-server.pem
-tls_lmtp_key_file: /var/imap/lmtp-server.pem
-
-tls_sieve_cert_file: /var/imap/sieve-server.pem
-tls_sieve_key_file: /var/imap/sieve-server.pem
+<pre>[servicename]_tls_cert_file: /var/imap/imap-server.pem
+[servicename]_tls_key_file: /var/imap/imap-server.pem
 </pre>
 
-This is useful if you want to use different hostnames for each service
+&quot;servicename&quot; here refers to the name of the service as specified
+in cyrus.conf.  It is <i>not</i> necessaraly the name of the binary.
+
+<p>This is useful if you want to use different hostnames for each service
 (e.g. via virtual host interfaces or DNS CNAMEs). In the absence of
 any of the service specific options, the value of the global option is
 used. A value of <b>disabled</b> for the certificate or key file for
@@ -543,5 +537,5 @@ convention, consult <a
 href=altnamespace.html#altnameconfig>altnamespace.html</a>.
 
 <P><HR>
-last modified: $Date: 2003/11/07 21:47:28 $
+last modified: $Date: 2004/02/04 14:37:38 $
 </BODY></HTML>
