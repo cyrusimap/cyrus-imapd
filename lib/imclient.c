@@ -1,6 +1,6 @@
 /* imclient.c -- Streaming IMxP client library
  *
- * $Id: imclient.c,v 1.80 2003/06/10 22:05:25 rjs3 Exp $
+ * $Id: imclient.c,v 1.81 2003/06/18 16:02:44 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -733,6 +733,7 @@ static void imclient_input(struct imclient *imclient, char *buf, int len)
     /* Copy the data to the buffer and NUL-terminate it */
     memcpy(imclient->replybuf + imclient->replylen, plainbuf, plainlen);
     imclient->replylen += plainlen;
+    imclient->replybuf[imclient->replylen] = '\0';
 
     /* Process the new data (of length 'plainlen') */
     while (parsed < imclient->replylen) {
@@ -814,7 +815,7 @@ static void imclient_input(struct imclient *imclient, char *buf, int len)
 	
 	/* parse keyword */
 	reply.keyword = p;
-	while (*p != ' ' && *p != '\n') p++;
+	while (*p && *p != ' ' && *p != '\n') p++;
 	keywordlen = p - reply.keyword;
 	reply.text = p + 1;
 	if (*p == '\n') {
@@ -836,7 +837,8 @@ static void imclient_input(struct imclient *imclient, char *buf, int len)
 
 
 	    /* Scan back and see if the end of the line introduces a literal */
-	    if (!iscompletion && endreply[-1] == '\r' && endreply[-2] == '}' &&
+	    if (!iscompletion && endreply > imclient->replystart+2 &&
+		endreply[-1] == '\r' && endreply[-2] == '}' &&
 		isdigit((unsigned char) endreply[-3])) {
 		p = endreply - 4;
 		while (p > imclient->replystart && 
@@ -909,7 +911,8 @@ static void imclient_input(struct imclient *imclient, char *buf, int len)
 
 	/* Scan back and see if the end of the line introduces a literal */
 	if (!(imclient->callback[keywordindex].flags & CALLBACK_NOLITERAL)) {
-	    if (endreply[-1] == '\r' && endreply[-2] == '}' &&
+	    if (endreply > imclient->replystart+2 &&
+		endreply[-1] == '\r' && endreply[-2] == '}' &&
 		isdigit((unsigned char) endreply[-3])) {
 		p = endreply - 4;
 		while (p > imclient->replystart && 
@@ -1186,9 +1189,9 @@ void interaction (struct imclient *context, sasl_interact_t *t, char *user)
       printf("%s: ", t->prompt);
       if (t->id == SASL_CB_PASS) {
 	  char *ptr = getpass("");
-	  strncpy(result, ptr, sizeof(result));
+	  strlcpy(result, ptr, sizeof(result));
       } else {
-	  fgets(result, sizeof(result), stdin);
+	  fgets(result, sizeof(result)-1, stdin);
 	  result[strlen(result) - 1] = '\0';
       }
 
@@ -1264,11 +1267,11 @@ static int imclient_authenticate_sub(struct imclient *imclient,
       return 1;
 
   if(iptostring((const struct sockaddr *)&saddr_l, sizeof(struct sockaddr_in),
-		localip, 60) != 0)
+		localip, sizeof(localip)) != 0)
       return 1;
 
   if(iptostring((const struct sockaddr *)&saddr_r, sizeof(struct sockaddr_in),
-		remoteip, 60) != 0)
+		remoteip, sizeof(remoteip)) != 0)
       return 1;
 
   saslresult=sasl_setprop(imclient->saslconn, SASL_IPREMOTEPORT, remoteip);
@@ -1392,19 +1395,27 @@ int imclient_authenticate(struct imclient *imclient,
 				      &mtried);
 
 	/* eliminate mtried (mechanism tried) from mlist */
-	if (mtried) {
+	if (r != 0 && mtried) {
 	    char *newlist = xmalloc(strlen(mlist)+1);
 	    char *mtr = xstrdup(mtried);
 	    char *tmp;
 
 	    ucase(mtr);
 	    tmp = strstr(mlist,mtr);
+	    if(!tmp) {
+		free(mtr);
+		free(mlist);
+		break;
+	    }
 	    *tmp = '\0';
 	    strcpy(newlist,mlist);
 	    
-	    tmp = strchr(tmp,' ');
+	    /* Use tmp+1 here to skip the \0 we just put in.
+	     * this is safe because even if the mechs are one character
+	     * long there would still be another trailing \0 */
+	    tmp = strchr(tmp+1,' ');
 	    if (tmp) {		
-		tmp++;
+		tmp++; /* skip the space */
 		strcat(newlist,tmp);
 	    }
 
@@ -1600,7 +1611,7 @@ static int verify_callback(int ok, X509_STORE_CTX * ctx)
     err = X509_STORE_CTX_get_error(ctx);
     depth = X509_STORE_CTX_get_error_depth(ctx);
 
-    X509_NAME_oneline(X509_get_subject_name(err_cert), buf, 256);
+    X509_NAME_oneline(X509_get_subject_name(err_cert), buf, sizeof(buf));
 
     /*    if (verbose==1)
 	  printf("Peer cert verify depth=%d %s\n", depth, buf);*/
@@ -1618,7 +1629,8 @@ static int verify_callback(int ok, X509_STORE_CTX * ctx)
     }
     switch (ctx->error) {
     case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT:
-	X509_NAME_oneline(X509_get_issuer_name(ctx->current_cert), buf, 256);
+	X509_NAME_oneline(X509_get_issuer_name(ctx->current_cert),
+			  buf, sizeof(buf));
 	printf("issuer= %s\n", buf);
 	break;
     case X509_V_ERR_CERT_NOT_YET_VALID:
