@@ -110,6 +110,7 @@ static int init(const char *dbdir, int myflags)
     dbenv->set_lk_detect(dbenv, CONFIG_DEADLOCK_DETECTION);
     dbenv->set_lk_max(dbenv, 10000);
     dbenv->set_errcall(dbenv, db_err);
+    dbenv->set_errpfx(dbenv, "db3");
 
     if ((r = dbenv->set_cachesize(dbenv, 0, 64 * 1024, 0)) != 0) {
 	dbenv->err(dbenv, r, "set_cachesize");
@@ -313,7 +314,7 @@ static int foreach(struct db *mydb,
     DBT k, d;
     DBC *cursor = NULL;
     DB *db = (DB *) mydb;
-    DB_TXN *tid;
+    DB_TXN *tid = NULL;
 
     assert(dbinit && db);
     assert(cb);
@@ -342,7 +343,7 @@ static int foreach(struct db *mydb,
     }
 
     /* find first record */
-    if (prefix) {
+    if (prefix && *prefix) {
 	k.data = prefix;
 	k.size = prefixlen;
 
