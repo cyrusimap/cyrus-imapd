@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.36 2002/06/03 19:13:42 rjs3 Exp $ */
+/* $Id: service.c,v 1.37 2002/06/04 19:49:55 ken3 Exp $ */
 
 #include <config.h>
 
@@ -68,7 +68,7 @@
 
 #include "service.h"
 
-extern int optind;
+extern int optind, opterr;
 extern char *optarg;
 
 /* number of times this service has been used */
@@ -262,6 +262,8 @@ int main(int argc, char **argv, char **envp)
     int soctype;
     int typelen = sizeof(soctype);
 
+    opterr = 0; /* disable error reporting,
+		   since we don't know about service-specific options */
     while ((opt = getopt(argc, argv, "C:D")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
@@ -274,7 +276,8 @@ int main(int argc, char **argv, char **envp)
 	    break;
 	}
     }
-    optind = 1;
+    opterr = 1; /* enable error reporting */
+    optind = 1; /* reset the option index for parsing by the service */
 
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
