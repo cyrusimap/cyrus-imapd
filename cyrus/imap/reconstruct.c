@@ -278,11 +278,13 @@ char *name;
 	message_index.last_updated = time(0);
 	
 	if (r = message_parse(msgfile, &mailbox, &message_index)) {
+	    fclose(msgfile);
 	    fclose(newindex);
 	    mailbox_close(&mailbox);
 	    free(uid);
 	    return r;
 	}
+	fclose(msgfile);
 	
 	/* Write out new entry in index file */
 	*((bit32 *)(buf+OFFSET_UID)) = htonl(message_index.uid);
