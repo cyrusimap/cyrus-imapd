@@ -32,13 +32,14 @@ CC = @CC@
 INSTALL = @INSTALL@
 RANLIB = @RANLIB@
 
-DEFS = @DEFS@
+DEFS = @DEFS@ @TCL_DEFS@
 CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@ @TCL_CPPFLAGS@
+# lazy approach to linking: just do it a lot
 LIBS =  @TCL_LIBS@ @LIBS@ @TCL_LIBS@ @LIBS@
 DEPLIBS = ../lib/libcyrus.a @DEPLIBS@ 
 
 CFLAGS = @CFLAGS@
-LDFLAGS =  @TCL_LDFLAGS@ @LDFLAGS@
+LDFLAGS = @LDFLAGS@
 
 SHELL = /bin/sh
 
