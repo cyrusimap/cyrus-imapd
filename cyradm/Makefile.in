@@ -34,8 +34,7 @@ RANLIB = @RANLIB@
 
 DEFS = @DEFS@ @TCL_DEFS@
 CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@ @TCL_CPPFLAGS@
-# lazy approach to linking: just do it a lot
-LIBS =  @TCL_LIBS@ @LIBS@ @TCL_LIBS@ @LIBS@
+LIBS =  @TCL_LIBS@ @LIBS@
 DEPLIBS = ../lib/libcyrus.a @DEPLIBS@ 
 
 CFLAGS = @CFLAGS@
@@ -65,7 +64,7 @@ cyrinit.c: cyrinit.tcl cyrinit.sed
 	mv ,cyrinit.c cyrinit.c
 
 clean:
-	rm -f *.o Makefile.bak cyradm ,cyrinit.c cyrinit.c
+	rm -f *.o Makefile.bak cyradm ,cyrinit.c makedepend.log cyrinit.c
 
 distclean: clean
 	rm -f Makefile
