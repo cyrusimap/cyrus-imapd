@@ -1,6 +1,6 @@
 /* mpool.c memory pool management
  *
- * $Id: mpool.c,v 1.7.4.1 2002/07/27 13:05:52 ken3 Exp $
+ * $Id: mpool.c,v 1.7.4.2 2002/11/04 20:48:04 ken3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -145,12 +145,13 @@ void *mpool_malloc(struct mpool *pool, size_t size)
     p = pool->blob;
 
     /* This is a bit tricky, not only do we have to make sure that the current
-     * pool has enough room, we need to be sure that we haven't rounded p->ptr outside
-     * of the current pool anyway */
+     * pool has enough room, we need to be sure that we haven't rounded p->ptr
+     * outside of the current pool anyway */
     
-    remain = p->size - (p->ptr - p->base);
+    remain = p->size - ((char *)p->ptr - (char *)p->base);
 
-    if(remain < size || p->ptr > (p->size + p->base)) {
+    if(remain < size ||
+       (unsigned int)p->ptr > (p->size + (unsigned int)p->base)) {
       	/* Need a new pool */
 	struct mpool_blob *new_pool;
        	size_t new_pool_size = 2 * ((size > p->size) ? size : p->size);
