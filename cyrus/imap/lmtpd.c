@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.99.2.23 2003/02/13 20:32:57 rjs3 Exp $
+ * $Id: lmtpd.c,v 1.99.2.24 2003/02/20 16:30:03 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1001,6 +1001,7 @@ static void setup_sieve(void)
 /* returns true if user has a sieve file */
 static FILE *sieve_find_script(const char *user)
 {
+    FILE *script;
     char buf[1024];
 
     if (strlen(user) > 900) {
@@ -1047,7 +1048,13 @@ static FILE *sieve_find_script(const char *user)
 	}
     }
 	
-    return (fopen(buf, "r"));
+    script = fopen(buf, "r");
+    if(!script && errno != ENOENT) {
+	syslog(LOG_ERR, "sieve failed to load script %s: %s",
+	       buf, strerror(errno));
+    }
+
+    return script;
 }
 #else /* USE_SIEVE */
 static FILE *sieve_find_script(const char *user)
