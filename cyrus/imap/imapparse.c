@@ -1,10 +1,19 @@
 #include <config.h>
 
 #include <ctype.h>
+#include <string.h>
+#include <limits.h>
 
 #include "prot.h"
 #include "xmalloc.h"
 #include "imapconf.h"
+#include "exitcodes.h"
+
+enum {
+    MAXQUOTED = 8192,
+    MAXWORD = 8192,
+    MAXLITERAL = INT_MAX / 20
+};
 
 void freebuf(struct buf *buf)
 {
@@ -39,6 +48,9 @@ int getword(struct protstream *in, struct buf *buf)
 	if (len == buf->alloc) {
 	    buf->alloc += BUFGROWSIZE;
 	    buf->s = xrealloc(buf->s, buf->alloc+1);
+            if (len > MAXWORD) {
+                fatal("word too long", EC_IOERR);
+            }
 	}
 	buf->s[len++] = c;
     }
@@ -73,50 +85,6 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 	buf->s[0] = '\0';
 	if (c != EOF) prot_ungetc(c, pin);
 	return EOF;
-
-    default:
-	switch (type) {
-	case IMAP_ASTRING:	 /* atom, quoted-string or literal */
-	    /*
-	     * Atom -- server is liberal in accepting specials other
-	     * than whitespace, parens, or double quotes
-	     */
-	    for (;;) {
-		if (c == EOF || isspace(c) || c == '(' || 
-		          c == ')' || c == '\"') {
-		    buf->s[len] = '\0';
-		    return c;
-		}
-		if (len == buf->alloc) {
-		    buf->alloc += BUFGROWSIZE;
-		    buf->s = xrealloc(buf->s, buf->alloc+1);
-		}
-		buf->s[len++] = c;
-		c = prot_getc(pin);
-	    }
-	    break;
-
-	case IMAP_NSTRING:	 /* "NIL", quoted-string or literal */
-	    /*
-	     * Look for "NIL"
-	     */
-	    if (c == 'N') {
-		prot_ungetc(c, pin);
-		c = getword(pin, buf);
-		if (!strcmp(buf->s, "NIL"))
-		    return c;
-	    }
-	    if (c != EOF) prot_ungetc(c, pin);
-	    return EOF;
-	    break;
-
-	case IMAP_STRING:	 /* quoted-string or literal */
-	    /*
-	     * Nothing to do here - fall through.
-	     */
-	    break;
-	}
-	
     case '\"':
 	/*
 	 * Quoted-string.  Server is liberal in accepting qspecials
@@ -139,6 +107,9 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 	    if (len == buf->alloc) {
 		buf->alloc += BUFGROWSIZE;
 		buf->s = xrealloc(buf->s, buf->alloc+1);
+                if (len > MAXQUOTED) {
+                    fatal("word too long", EC_IOERR);
+                }
 	    }
 	    buf->s[len++] = c;
 	}
@@ -149,6 +120,10 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 	while ((c = prot_getc(pin)) != EOF && isdigit(c)) {
 	    sawdigit = 1;
 	    len = len*10 + c - '0';
+            if (len > MAXLITERAL || len < 0) {
+                /* we overflowed */
+                fatal("literal too big", EC_IOERR);
+            }
 	}
 	if (c == '+') {
 	    isnowait++;
@@ -187,7 +162,54 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 	buf->s[len] = '\0';
 	if (strlen(buf->s) != len) return EOF; /* Disallow imbedded NUL */
 	return prot_getc(pin);
+
+    default:
+       switch (type) {
+       case IMAP_ASTRING:       /* atom, quoted-string or literal */
+           /*
+            * Atom -- server is liberal in accepting specials other
+            * than whitespace, parens, or double quotes
+            */
+           for (;;) {
+               if (c == EOF || isspace(c) || c == '(' || 
+                         c == ')' || c == '\"') {
+                   buf->s[len] = '\0';
+                   return c;
+               }
+               if (len == buf->alloc) {
+                   buf->alloc += BUFGROWSIZE;
+                   buf->s = xrealloc(buf->s, buf->alloc+1);
+                    /* xxx limit size of atoms */
+               }
+               buf->s[len++] = c;
+               c = prot_getc(pin);
+           }
+            /* never gets here */
+           break;
+
+       case IMAP_NSTRING:       /* "NIL", quoted-string or literal */
+           /*
+            * Look for "NIL"
+            */
+           if (c == 'N') {
+               prot_ungetc(c, pin);
+               c = getword(pin, buf);
+               if (!strcmp(buf->s, "NIL"))
+                   return c;
+           }
+           if (c != EOF) prot_ungetc(c, pin);
+           return EOF;
+           break;
+
+       case IMAP_STRING:        /* quoted-string or literal */
+            /* atoms aren't acceptable */
+            if (c != EOF) prot_ungetc(c, pin);
+            return EOF;
+           break;
+       }
     }
+
+    return EOF;
 }
 
 /*
