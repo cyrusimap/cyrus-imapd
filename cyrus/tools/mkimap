@@ -40,7 +40,7 @@
 #
 exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #!perl -w
-# $Id: mkimap,v 1.13.6.5 2003/03/06 17:18:22 ken3 Exp $
+# $Id: mkimap,v 1.13.6.6 2003/03/09 18:39:36 ken3 Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -84,7 +84,7 @@ close CONF;
 
 $d = $conf;
 
-print "creating $d...\n";
+print "configuring $d...\n";
 
 chdir $d or die "couldn't change to $d";
 
