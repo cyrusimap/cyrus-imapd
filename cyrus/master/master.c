@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.67.4.16 2003/02/13 20:33:20 rjs3 Exp $ */
+/* $Id: master.c,v 1.67.4.17 2003/02/22 14:10:29 ken3 Exp $ */
 
 #include <config.h>
 
@@ -619,7 +619,7 @@ void spawn_service(struct service *s)
 	    if (Services[i].stat[0] > 0) close(Services[i].stat[0]);
 	    if (Services[i].stat[1] > 0) close(Services[i].stat[1]);
 	}
-	limit_fds(256);
+	limit_fds(s->maxfds);
 
 	syslog(LOG_DEBUG, "about to exec %s", path);
 
@@ -967,6 +967,7 @@ void add_service(const char *name, struct entry *e, void *rock)
     char *listen = xstrdup(masterconf_getstring(e, "listen", NULL));
     char *proto = xstrdup(masterconf_getstring(e, "proto", "tcp"));
     char *max = xstrdup(masterconf_getstring(e, "maxchild", "-1"));
+    rlim_t maxfds = (rlim_t) masterconf_getint(e, "maxfds", 256);
     int i, j;
 
     if(babysit && prefork == 0) prefork = 1;
@@ -1024,6 +1025,8 @@ void add_service(const char *name, struct entry *e, void *rock)
 	}
 
 	Services[i].maxforkrate = maxforkrate;
+
+ 	Services[nservices].maxfds = maxfds;
 
 	if (!strcmp(Services[i].proto, "tcp") ||
 	    !strcmp(Services[i].proto, "tcp4") ||
@@ -1118,11 +1121,12 @@ void add_service(const char *name, struct entry *e, void *rock)
 	Services[nservices].associate = 0;
 	
 	if (verbose > 2)
-	    syslog(LOG_DEBUG, "add: service '%s' (%s, %s:%s, %d, %d)",
+	    syslog(LOG_DEBUG, "add: service '%s' (%s, %s:%s, %d, %d, %d)",
 		   Services[nservices].name, cmd,
 		   Services[nservices].proto, Services[nservices].listen,
 		   Services[nservices].desired_workers,
-		   Services[nservices].max_workers);
+		   Services[nservices].max_workers,
+		   (int) Services[nservices].maxfds);
 
 	nservices++;
     }

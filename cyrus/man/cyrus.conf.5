@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: cyrus.conf.5,v 1.7.4.1 2002/10/01 16:33:37 ken3 Exp $
+.\" $Id: cyrus.conf.5,v 1.7.4.2 2003/02/22 14:10:28 ken3 Exp $
 .SH NAME
 cyrus.conf \- Cyrus configuration file
 .SH DESCRIPTION
@@ -119,6 +119,9 @@ integer value is optional.
 .IP "\fBmaxchild=\fR-1" 5
 The maximum number of instances of this service to spawn.  A value of
 -1 means unlimited.  This integer value is optional.
+.IP "\fBmaxfds=\fR256" 5
+The maximum number of file descriptors to which to limit this process.
+This integer value is optional.
 .SS EVENTS
 This section lists processes that should be run at specific intervals,
 similar to cron jobs.  This section is typically used to perform
