@@ -635,7 +635,7 @@ unsigned end;
 {
     int r;
     struct seen *seendb;
-    time_t last_time;
+    time_t last_read, last_change;
     unsigned last_uid;
     char *seenuids;
     int last_seen;
@@ -644,7 +644,7 @@ unsigned end;
     r = seen_open(mailbox, userid, &seendb);
     if (r) return r;
     
-    r = seen_lockread(seendb, &last_time, &last_uid, &seenuids);
+    r = seen_lockread(seendb, &last_read, &last_uid, &last_change, &seenuids);
     if (r) return r;
     
     seenuids = xrealloc(seenuids, strlen(seenuids)+40);
@@ -666,7 +666,7 @@ unsigned end;
     }
     sprintf(p, "%u", end);
 
-    r = seen_write(seendb, last_time, last_uid, seenuids);
+    r = seen_write(seendb, last_read, last_uid, time((time_t *)0), seenuids);
     seen_close(seendb);
     free(seenuids);
     return r;
