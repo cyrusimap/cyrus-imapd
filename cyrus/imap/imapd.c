@@ -374,6 +374,14 @@ cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_getacl(tag.s, arg1.s, arg2.s);
 	    }
+	    else if (!strcmp(cmd.s, "Getquota")) {
+		if (c != ' ') goto missingargs;
+		c = getastring(&arg1);
+		if (c == EOF) goto missingargs;
+		if (c == '\r') c = prot_getc(imapd_in);
+		if (c != '\n') goto extraargs;
+		cmd_getquota(tag.s, arg1.s);
+	    }
 	    else if (!strcmp(cmd.s, "Getquotaroot")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(&arg1);
@@ -1065,13 +1073,13 @@ char *name;
 	    usage = imapd_mailbox->quota.used * 100 /
 	      (imapd_mailbox->quota.limit * QUOTA_UNITS);
 	    if (usage >= 100) {
-		prot_printf(imapd_out, "* NO ");
-		prot_printf(imapd_out, error_message(IMAP_NO_OVERQUOTA), name);
-		prot_printf(imapd_out, "\r\n");
+		prot_printf(imapd_out, "* NO %s\r\n",
+			    error_message(IMAP_NO_OVERQUOTA));
 	    }
 	    else if (usage > config_getint("quotawarn", 90)) {
 		prot_printf(imapd_out, "* NO ");
-		prot_printf(imapd_out, error_message(IMAP_NO_CLOSEQUOTA), name, usage);
+		prot_printf(imapd_out, error_message(IMAP_NO_CLOSEQUOTA),
+			    usage);
 		prot_printf(imapd_out, "\r\n");
 	    }
 	}
@@ -1989,6 +1997,53 @@ char *rights;
     
     prot_printf(imapd_out, "%s OK %s completed\r\n", tag, cmd);
 }
+
+/*
+ * Perform a GETQUOTA command
+ */
+cmd_getquota(tag, name)
+char *tag;
+char *name;
+{
+    int r;
+    struct quota quota;
+    char buf[MAX_MAILBOX_PATH];
+
+    lcase(name);
+    quota.root = name;
+    quota.file = 0;
+
+    if (!imapd_userisadmin) r = IMAP_PERMISSION_DENIED;
+    else {
+	sprintf(buf, "%s%s%s", config_dir, FNAME_QUOTADIR, quota.root);
+	quota.file = fopen(buf, "r+");
+	if (!quota.file) {
+	    r = IMAP_MAILBOX_NONEXISTENT;
+	}
+	else r = mailbox_read_quota(&quota);
+    }
+    
+    if (!r) {
+	prot_printf(imapd_out, "* QUOTA ");
+	printastring(quota.root);
+	prot_printf(imapd_out, " (");
+	if (quota.limit >= 0) {
+	    prot_printf(imapd_out, "STORAGE %d %d",
+			quota.used/QUOTA_UNITS, quota.limit);
+	}
+	prot_printf(imapd_out, ")\r\n");
+    }
+
+    if (quota.file) fclose(quota.file);
+
+    if (r) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+	return;
+    }
+    
+    prot_printf(imapd_out, "%s OK Getquotaroot completed\r\n", tag);
+}
+
 
 /*
  * Perform a GETQUOTAROOT command
