@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.28.4.1 2002/08/22 19:16:46 ken3 Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.28.4.2 2002/08/28 18:42:35 rjs3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -12,6 +12,9 @@
 <ul>
 <li>User moves via RENAME and XFER are now controlled by the
 <tt>allowusermoves</tt> option, which defaults to off.</li>
+<li>Clients that use old-style ACL commands that include the &quot;MAILBOX&quot;
+directive will no longer function.  We do not know of any clients
+that have this problem currently.</li>
 
 </ul>
 
@@ -236,7 +239,7 @@ worry about it.)
 </ul>
 
 <HR><P>
-last modified: $Date: 2002/08/22 19:16:46 $
+last modified: $Date: 2002/08/28 18:42:35 $
 </BODY></HTML>
 
 
