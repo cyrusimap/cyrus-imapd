@@ -14,7 +14,7 @@
 
 all: htmlstrip docs clean
 
-DOCS= README install overview changes
+DOCS= README install overview changes bugs
 
 docs: $(DOCS)
 
@@ -32,6 +32,9 @@ overview: html/overview.html htmlstrip
 
 changes: html/changes.html htmlstrip
 	./htmlstrip html/changes.html > changes
+
+bugs: html/bugs.html htmlstrip
+	./htmlstrip html/bugs.html > bugs
 
 clean:
 	rm -f *.o *~ Makefile.bak htmlstrip

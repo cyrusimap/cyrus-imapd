@@ -511,7 +511,7 @@ rmnews
 
     Rmnews is also normally run from cron as the cyrus user to remove
     canceled and superseded articles. It is given as input a special cancel
-    feed.
+    feed. 
 
     As "rmnews" is invoked at expire time by the news user and must be able
     to write to the auxiliary databases, it must be installed with set-uid
