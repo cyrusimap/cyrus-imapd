@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to sieve and proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.11 2000/11/16 04:47:56 ken3 Exp $
+ * $Id: lmtpproxyd.c,v 1.12 2000/11/17 19:30:28 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpproxyd.c,v 1.11 2000/11/16 04:47:56 ken3 Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpproxyd.c,v 1.12 2000/11/17 19:30:28 ken3 Exp $";*/
 
 #include <config.h>
 
@@ -826,7 +826,7 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 	    break;
 	}
     fprintf(sm, "Subject: %s\r\n", src->subj);
-    fprintf(sm, "In-Reply-To: %s\r\n", m->id);
+    if (md->id) fprintf(sm, "In-Reply-To: %s\r\n", md->id);
     fprintf(sm, "Auto-Submitted: auto-replied (vacation)\r\n");
     if (src->mime) {
 	fprintf(sm, "MIME-Version: 1.0\r\n");
