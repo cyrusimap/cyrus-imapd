@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.232.4.28 2003/01/03 01:02:26 ken3 Exp $
+dnl $Id: configure.in,v 1.232.4.29 2003/01/03 22:08:16 rjs3 Exp $
 dnl
 
 
@@ -459,6 +459,9 @@ AC_ARG_WITH(afs,[  --with-afs=PATH         use AFS libraries from PATH],
 	[with_afs="${withval}"
 	CFLAGS="${CFLAGS} -I${withval}/include"],with_afs="/usr/local")
 
+AC_ARG_WITH(ldap, [  --with-ldap=DIR         use LDAP (in DIR) (experimental) [/usr/local] ],
+	with_ldap=$withval, with_ldap="/usr/local")
+
 AC_ARG_WITH(auth,[  --with-auth=METHOD      use authorization module METHOD
                           METHOD is 'unix' (default), 'krb',or 'pts'],
 	WITH_AUTH="$withval", WITH_AUTH="unix")
@@ -469,7 +472,7 @@ AC_MSG_RESULT($WITH_AUTH)
 
 dnl currently not terribly useful ;)
 AC_ARG_WITH(pts,[  --with-pts=MODULE       use PTS module MODULE
-                         MODULE is 'afskrb' (default)],
+                         MODULE is 'afskrb' (default) or 'ldap' (experimental)],
 	    WITH_PTS="$withval", WITH_PTS="afskrb")
 AC_SUBST(WITH_PTS)
 
@@ -479,6 +482,11 @@ if test "$WITH_AUTH" = "pts"; then
 
 	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} ptclient"
 	EXTRA_OUTPUT="${EXTRA_OUTPUT} ptclient/Makefile"
+
+	LDAP_CPPFLAGS=""
+	LDAP_LDFLAGS=""
+	LDAP_LIBS=""
+
   	if test "$WITH_PTS" = "afskrb"; then
 	    AFS_LIBS="${with_afs}/lib/afs/libkauth.a ${with_afs}/lib/afs/libprot.a  ${with_afs}/lib/afs/libauth.a ${with_afs}/lib/afs/libsys.a ${with_afs}/lib/librxkad.a ${with_afs}/lib/librx.a ${with_afs}/lib/afs/libsys.a ${with_afs}/lib/libubik.a  ${with_afs}/lib/liblwp.a ${with_afs}/lib/afs/util.a"
 	    if test -f ${with_afs}/lib/afs/libaudit.a; then
@@ -518,8 +526,28 @@ if test "$WITH_AUTH" = "pts"; then
 	    LIBS="$SAVE_LIBS"
 	    AC_SUBST(AFS_LIBS)
 	    AC_SUBST(AFS_LDFLAGS)
+	elif test "$WITH_PTS" = "ldap"; then
+	    AC_MSG_WARN([*** WARNING: COMPILING WITH EXPERIMENTAL LDAP PTLOADER MODULE ***])
+	    if test -d $with_ldap; then
+	        LDAP_CPPFLAGS="$CPPFLAGS -I${with_ldap}/include"
+	        LDAP_LDFLAGS="$LDFLAGS -L${with_ldap}/lib"
+	    else
+	 	AC_ERROR(LDAP path isn't a directory)
+	    fi	
+
+	    LDAP_LIBS=""
+	    AC_CHECK_LIB(ldap, ldap_initialize, [
+                         LDAP_LIBS="-lldap -llber -llutil" ],,-llber)
+	else
+	    AC_ERROR(unknown with-pts value)
 	fi
+
+   	AC_SUBST(LDAP_CPPFLAGS)
+	AC_SUBST(LDAP_LDFLAGS)
+	AC_SUBST(LDAP_LIBS)	
 fi
+
+
 
 SERVER_SUBDIRS="master imap"
 AC_ARG_ENABLE(server,

@@ -40,7 +40,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.1.4.13 2002/11/20 04:14:43 ken3 Exp $
+.\" $Id: imapoptions,v 1.1.4.14 2003/01/03 22:08:18 rjs3 Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -197,6 +197,35 @@ are listed with ``<none>''.
 /* If enabled, the server responds to an ID command with a parameter 
    list containing: version, vendor, support-url, os, os-version,
    command, arguments, environment.  Otherwise the server returns NIL. */
+
+{ "ldap_base", NULL, STRING }
+/* Contains the LDAP base dn for the LDAP ptloader module */
+
+{ "ldap_filter", NULL, STRING }
+/* Contains the ldap filter to use when looking up the user id.  The occurance
+   of any %u in the string will be replaced with the canonicalized user id */
+
+{ "ldap_servers", NULL, STRING }
+/* Contains a list of the URLs of all the LDAP servers when using the
+   LDAP PTS module. */
+
+{ "ldap_sasl", 1, SWITCH }
+/* Use SASL for LDAP binds in the LDAP PTS module. */
+
+{ "ldap_sasl_authc", NULL, STRING }
+/* Force the use of a particular SASL authentication ID for the LDAP server */
+
+{ "ldap_sasl_authz", NULL, STRING }
+/* Force the use of a particular SASL authorization ID for the LDAP server */
+
+{ "ldap_sasl_mech", NULL, STRING }
+/* Force the use of a particular SASL mechanism for LDAP authentication */
+
+{ "ldap_sasl_realm", NULL, STRING }
+/* Force the use of a particular SASL realm for LDAP authentication */
+
+{ "ldap_member_attribute", "memberOf", STRING }
+/* The multi-valued attribute name for an entity that lists its groups. */
 
 { "lmtp_over_quota_perm_failure", 0, SWITCH }
 /* If enabled, lmtpd returns a permanent failure code when a user's

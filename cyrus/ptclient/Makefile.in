@@ -41,7 +41,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.in,v 1.20.4.2 2002/12/13 17:10:37 rjs3 Exp $
+# $Id: Makefile.in,v 1.20.4.3 2003/01/03 22:08:19 rjs3 Exp $
 # 
 srcdir = @srcdir@
 VPATH = @srcdir@
@@ -59,6 +59,10 @@ LIBS = @LIBS@ @COM_ERR_LIBS@
 LIB_SASL = @LIB_SASL@
 LIB_WRAP = @LIB_WRAP@
 DEPLIBS = ../imap/libimap.a ../lib/libcyrus.a @DEPLIBS@
+
+LDAP_LIBS=@LDAP_LIBS@
+LDAP_CPPFLAGS=@LDAP_CPPFLAGS@
+LDAP_LDFLAGS=@LDAP_LDFLAGS@
 
 CFLAGS = @CFLAGS@
 LDFLAGS = @LDFLAGS@
@@ -86,13 +90,13 @@ install:
 	$(INSTALL) -m 755 ptdump $(DESTDIR)$(cyrus_prefix)/bin
 
 .c.o:
-	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
+	$(CC) -c $(CPPFLAGS) $(LDAP_CPPFLAGS) $(DEFS) $(CFLAGS) $<
 
 ptloader: ptloader.o @WITH_PTS@.o ../imap/mutex_fake.o $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o $@ ptloader.o @WITH_PTS@.o ../imap/mutex_fake.o $(SERVICETHREAD) ${AFS_LDFLAGS} $(AFS_LIBS) $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT)
+	$(CC) $(LDFLAGS) -o $@ ptloader.o @WITH_PTS@.o ../imap/mutex_fake.o $(SERVICETHREAD) ${AFS_LDFLAGS} ${LDAP_LDFLAGS} $(AFS_LIBS) ${LDAP_LIBS} $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT)
 
-ptloader.pure: ptloader.o ../imap/mutex_fake.o $(DEPLIBS)
-	$(PURIFY) $(PUREARGS) $(CC) $(LDFLAGS) -o $@ ptloader.o ../imap/mutex_fake.o $(SERVICETHREAD) ${AFS_LDFLAGS} $(AFS_LIBS) $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP)
+ptloader.pure: ptloader.o @WITH_PTS@.o ../imap/mutex_fake.o $(DEPLIBS)
+	$(PURIFY) $(PUREARGS) $(CC) $(LDFLAGS) -o $@ ptloader.o @WITH_PTS@.o ../imap/mutex_fake.o $(SERVICETHREAD) ${AFS_LDFLAGS} ${LDAP_LDFLAGS} $(AFS_LIBS) ${LDAP_LIBS} $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT)
 
 ptexpire: ptexpire.o ../imap/mutex_fake.o $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o $@ ptexpire.o ../imap/mutex_fake.o $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT)
