@@ -1,0 +1,7 @@
+#!/usr/contributed/bin/bash
+
+while [ 1 ]; do
+/data/prog/cyrus/cyrus.pl 2&>/dev/null
+sleep 240
+done
+
