@@ -443,7 +443,15 @@ int     tls_init_serverengine(int verifydepth,
 	    | SSL_VERIFY_CLIENT_ONCE;
     SSL_CTX_set_verify(ctx, verify_flags, verify_callback);
 
-    SSL_CTX_set_client_CA_list(ctx, SSL_load_client_CA_file(CAfile));
+    if (askcert || requirecert) {
+      if (CAfile == NULL) {
+	  syslog(LOG_ERR, 
+		 "TLS engine: No CA file specified. "
+		 "Client side certs may not work");
+      } else {
+	  SSL_CTX_set_client_CA_list(ctx, SSL_load_client_CA_file(CAfile));
+      }
+    }
 
     tls_serverengine = 1;
     return (0);
