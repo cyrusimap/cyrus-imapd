@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.25 2002/02/25 19:12:22 leg Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.26 2002/02/26 20:32:54 leg Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -164,7 +164,11 @@ struct txn {
 };
 
 static time_t global_recovery = 0;
-static int do_fsync = 1;
+static int do_fsync = 2;
+
+#define FSYNC(fd) (do_fsync && fsync(fd))
+#define FDATASYNC(fd) ((do_fsync == 1 && fdatasync(fd)) || \
+                       (do_fsync == 2 && fsync(fd)))
 
 static int myinit(const char *dbdir, int myflags)
 {
@@ -507,6 +511,8 @@ static int write_lock(struct db *db, const char *altname)
     map_refresh(db->fd, 0, &db->map_base, &db->map_len, sbuf.st_size,
 		fname, 0);
     
+    /* printf("%d: write lock: %d\n", getpid(), db->map_ino); */
+
     return 0;
 }
 
@@ -551,6 +557,8 @@ static int read_lock(struct db *db)
     db->map_size = sbuf.st_size;
     db->map_ino = sbuf.st_ino;
     
+    /* printf("%d: read lock: %d\n", getpid(), db->map_ino); */
+
     map_refresh(db->fd, 0, &db->map_base, &db->map_len, sbuf.st_size,
 		db->fname, 0);
 
@@ -563,6 +571,8 @@ static int unlock(struct db *db)
 	syslog(LOG_ERR, "IOERROR: lock_unlock %s: %m", db->fname);
 	return CYRUSDB_IOERROR;
     }
+
+    /* printf("%d: unlock: %d\n", getpid(), db->map_ino); */
 
     return 0;
 }
@@ -798,7 +808,6 @@ static int fetch(struct db *mydb,
 {
     return myfetch(mydb, key, keylen, data, datalen, mytid);
 }
-
 static int fetchlock(struct db *db, 
 		     const char *key, int keylen,
 		     const char **data, int *datalen,
@@ -1584,6 +1593,8 @@ static int consistent(struct db *db) /* xxx */
 	offset = FORWARD(ptr, 0);
     }
 
+    unlock(db);
+
     return 0;
 }
 
@@ -1598,6 +1609,11 @@ static int recovery(struct db *db)
     int i;
 
     if ((r = write_lock(db, NULL)) < 0) {
+	return r;
+    }
+
+    if ((r = read_header(db)) < 0) {
+	unlock(db);
 	return r;
     }
 
