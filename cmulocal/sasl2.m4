@@ -1,6 +1,6 @@
 dnl sasl2.m4--sasl2 libraries and includes
 dnl Rob Siemborski
-dnl $Id: sasl2.m4,v 1.17 2002/05/25 19:57:42 leg Exp $
+dnl $Id: sasl2.m4,v 1.17.4.1 2002/08/08 20:20:29 rjs3 Exp $
 
 AC_DEFUN(SASL_GSSAPI_CHK,[
  AC_ARG_ENABLE(gssapi, [  --enable-gssapi=<DIR>   enable GSSAPI authentication [yes] ],
@@ -199,6 +199,27 @@ if test "$ac_cv_found_sasl" != "yes"; then
         AC_ERROR([Cannot continue without libsasl2.
 Get it from ftp://ftp.andrew.cmu.edu/pub/cyrus-mail/.])
 fi])
+
+AC_DEFUN(CMU_SASL2_REQUIRE_VER, [
+	AC_REQUIRE([CMU_SASL2_REQUIRED])
+	AC_TRY_CPP([
+#include <sasl/sasl.h>
+
+#ifndef SASL_VERSION_MAJOR
+#error SASL_VERSION_MAJOR not defined
+#endif
+#ifndef SASL_VERSION_MINOR
+#error SASL_VERSION_MINOR not defined
+#endif
+#ifndef SASL_VERSION_STEP
+#error SASL_VERSION_STEP not defined
+#endif
+
+#if SASL_VERSION_MAJOR < $1 || SASL_VERSION_MINOR < $2 || SASL_VERSION_STEP < $3
+#error SASL version is less than $1.$2.$3
+#endif
+	],,AC_ERROR([Incorrect SASL headers found.  This package requires SASL $1.$2.$3 or newer.]))
+])
 
 AC_DEFUN(CMU_SASL2_CHECKAPOP_REQUIRED, [
 	AC_REQUIRE([CMU_SASL2_REQUIRED])

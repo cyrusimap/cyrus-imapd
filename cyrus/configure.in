@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.232.4.2 2002/07/25 17:21:36 ken3 Exp $
+dnl $Id: configure.in,v 1.232.4.3 2002/08/08 20:20:14 rjs3 Exp $
 dnl
 
 
@@ -828,6 +828,7 @@ AC_ARG_ENABLE(netscapehack,
 	fi)
 
 AC_CHECK_FUNC(dlopen,,AC_CHECK_LIB(dl, dlopen))
+CMU_SASL2_REQUIRE_VER(2,1,7)
 CMU_SASL2_CHECKAPOP_REQUIRED
 
 AC_ARG_WITH(perl,       [  --with-perl=PERL        use PERL for perl],
