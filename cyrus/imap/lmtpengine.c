@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.20 2001/02/16 04:03:34 leg Exp $
+ * $Id: lmtpengine.c,v 1.21 2001/02/19 18:05:37 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -968,6 +968,7 @@ void lmtpmode(struct lmtp_func *func,
     socklen_t salen;
 
     sasl_conn_t *conn = NULL;
+    int secflags = 0;
     sasl_security_properties_t *secprops = NULL;
     sasl_external_properties_t *extprops = NULL;
     int authenticated = 0;	/* -1: external auth'd, but no AUTH issued
@@ -982,7 +983,11 @@ void lmtpmode(struct lmtp_func *func,
     }
 
     /* set my allowable security properties */
-    secprops = mysasl_secprops(SASL_SEC_NOANONYMOUS | SASL_SEC_NOPLAINTEXT);
+    secflags = SASL_SEC_NOANONYMOUS;
+    if (!config_getswitch("allowplaintext", 1)) {
+	secflags |= SASL_SEC_NOPLAINTEXT;
+    }
+    secprops = mysasl_secprops(secflags);
     sasl_setprop(conn, SASL_SEC_PROPS, secprops);
 
     /* determine who we're talking to */
