@@ -660,10 +660,11 @@ int len;
 
     /* Process the new data */
     while (parsed < imclient->replylen) {
+        len = imclient->replylen - parsed;
+
 	/* If we're reading a literal, skip over it. */
 	if (imclient->replyliteralleft) {
 	    if (len > imclient->replyliteralleft) {
-		len -= imclient->replyliteralleft;
 		parsed += imclient->replyliteralleft;
 		imclient->replyliteralleft = 0;
 		continue;
