@@ -1,5 +1,5 @@
 /* cyrusdb_skiplist.c -- cyrusdb skiplist implementation
- * $Id: cyrusdb_skiplist.c,v 1.48 2004/06/04 17:59:19 rjs3 Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.49 2004/06/04 18:06:56 rjs3 Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -441,7 +441,7 @@ static int read_header(struct db *db)
 
     if(db->maxlevel > SKIPLIST_MAXLEVEL) {
 	syslog(LOG_ERR,
-	       "skiplist %d: MAXLEVEL %d in database beyond maximum %d\n",
+	       "skiplist %s: MAXLEVEL %d in database beyond maximum %d\n",
 	       db->fname, db->maxlevel, SKIPLIST_MAXLEVEL);
 	return CYRUSDB_IOERROR;
     }
@@ -1338,7 +1338,8 @@ int mycommit(struct db *db, struct txn *tid)
         /* error during commit; we must abort */
         r2 = myabort(db, tid);
         if (r2) {
-            syslog(LOG_ERR, "DBERROR: commit AND abort failed");
+            syslog(LOG_ERR, "DBERROR: skiplist %s: commit AND abort failed",
+		   db->fname);
         }
     } else {
         /* release the write lock */
