@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.232.4.41 2003/02/27 18:10:10 rjs3 Exp $
+dnl $Id: configure.in,v 1.232.4.42 2003/03/06 18:08:25 rjs3 Exp $
 dnl
 
 
@@ -935,7 +935,7 @@ CMU_SASL2_REQUIRE_VER(2,1,7)
 CMU_SASL2_CHECKAPOP_REQUIRED
 
 AC_ARG_WITH(perl,       [  --with-perl=PERL        use PERL for perl],
-	with_perl="$withval", with_perl="perl5")
+	with_perl="$withval", with_perl="perl")
 
 if test "${with_perl}" = yes; then
     with_perl="perl5"
