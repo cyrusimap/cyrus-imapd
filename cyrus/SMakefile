@@ -2,20 +2,20 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.38 1999/02/15 09:58:47 tjs Exp $
+# $Id: SMakefile,v 1.39 1999/02/19 03:08:29 tjs Exp $
 #
 
 MAKE=gmake
 
 # settings; we have to disable these on some platforms
 AMSSYNC=--enable-amssync
+STATIC=""
 WITHAUTH="--with-auth=krb_pts"
 
 if test "${CC-unset}" = "unset"; then
   CC=cc
 fi
 
-# CFLAGS="${CFLAGS} -g"
 
 VER=`smake -D | sed 's;^.*\/;;'`
 LOCALDEFS="-DEXTRA_IDENT=\\\"$VER\\\""
@@ -37,8 +37,9 @@ if test "${OVERRIDE-nil}" != "t" ; then
       CFLAGS="${CFLAGS} -O2"
       ;;
     SunOS)
-      CFLAGS="${CFLAGS} -xO3 "
+      CFLAGS="${CFLAGS} -xO3 -xdepend"
       LDFLAGS="${LDFLAGS} -xs -xO3 -xdepend"
+      STATIC="--enable-staric-libraries"
       ;;
     ULTRIX)
       CC=gcc # cheat -- Ultrix cc is aged
@@ -51,8 +52,12 @@ if test "${OVERRIDE-nil}" != "t" ; then
   esac
 fi;
 
+if test "${WASH_CYRUS_DEBUG}" = "t"; then
+   CFLAGS="-g"
+   LDFLAGS="-L/usr/local/lib -R/usr/local/lib -xs -g"
+fi
 
-LNCOMMAND="${SRCDIR}/configure $WITHAUTH --with-inn=/usr/news $AMSSYNC --enable-experiment --enable-cmulocal --enable-debug --with-cyrus-group=staff"
+LNCOMMAND="${SRCDIR}/configure $WITHAUTH --with-inn=/usr/news $AMSSYNC --enable-experiment --enable-cmulocal --enable-debug --with-cyrus-group=staff --enable-static-libraries"
 
 export CFLAGS CC VER LNCOMMAND LOCALDEFS LDFLAGS
 
