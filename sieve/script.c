@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.29 2000/06/14 02:41:25 wcw Exp $
+ * $Id: script.c,v 1.30 2000/06/23 18:00:12 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -783,7 +783,7 @@ static int makehash(unsigned char hash[HASHSIZE], char *s1, char *s2)
 int sieve_execute_script(sieve_script_t *s, void *message_context)
 {
     int ret = 0;
-    int implicit_keep;
+    int implicit_keep = 0;
     action_list_t *actions = NULL, *a;
     action_t lastaction = -1;
     notify_action_t *notify_action;
@@ -980,20 +980,6 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 	}
     }
 
-    if (implicit_keep) {
-	sieve_keep_context_t keep_context;
-
-	keep_context.imapflags = &s->interp.curflags;
- 
-	lastaction = ACTION_KEEP;
-        ret = s->interp.keep(&keep_context, s->interp.interp_context,
-			     s->script_context, message_context, &errmsg);
-        if (ret == SIEVE_OK)
-            snprintf(actions_string+strlen(actions_string),
-		     sizeof(actions_string)-strlen(actions_string),
-		     "Kept\n");
-    }
-
  error: /* report run-time errors */
  
     if (ret != SIEVE_OK) {
@@ -1027,7 +1013,27 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 	ret |= s->interp.execute_err(buf, s->interp.interp_context,
 				     s->script_context, message_context);
     }
-  
+
+    if (implicit_keep) {
+	sieve_keep_context_t keep_context;
+	int keep_ret;
+
+	keep_context.imapflags = &s->interp.curflags;
+ 
+	lastaction = ACTION_KEEP;
+	keep_ret = s->interp.keep(&keep_context, s->interp.interp_context,
+			     s->script_context, message_context, &errmsg);
+	ret |= keep_ret;
+        if (keep_ret == SIEVE_OK)
+            snprintf(actions_string+strlen(actions_string),
+		     sizeof(actions_string)-strlen(actions_string),
+		     "Kept\n");
+	else {
+	    implicit_keep = 0;	/* don't try an implicit keep again */
+	    goto error;		/* process the implicit keep error */
+	}
+    }
+
     if (actions)
 	free_action_list(actions);
   
