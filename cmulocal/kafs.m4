@@ -46,7 +46,7 @@ AC_DEFUN(CMU_KAFS_INC_WHERE, [
 AC_DEFUN(CMU_KAFS_LIB_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
 saved_LIBS=$LIBS
-LIBS="$saved_LIBS -L$1 -lkafs $KRB_LIB_FLAGS"
+LIBS="$saved_LIBS -L$1 -lkafs $KRB_LIB_FLAGS $KRB5_LIB_FLAGS"
 AC_TRY_LINK(,
 [krb_afslog();],
 [ac_cv_found_kafs_lib=yes],
@@ -73,6 +73,7 @@ AC_DEFUN(CMU_KAFS_LIB_WHERE, [
 AC_DEFUN(CMU_KAFS, [
 AC_REQUIRE([CMU_SOCKETS])
 AC_REQUIRE([CMU_KRB4])
+AC_REQUIRE([CMU_KRB5])
 AC_ARG_WITH(kafs,
 	[  --with-kafs=PREFIX      Compile with Kafs support],
 	[if test "X$with_kafs" = "X"; then
