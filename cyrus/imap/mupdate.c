@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.60.4.19 2003/01/30 22:49:08 rjs3 Exp $
+ * $Id: mupdate.c,v 1.60.4.20 2003/01/31 17:35:04 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -796,7 +796,9 @@ static void *thread_main(void *rock __attribute__((unused)))
     struct protgroup *protout = NULL;
     struct timeval now;
     struct timespec timeout;
+    int max_worker_flag;
     int do_a_command;
+    int send_a_banner;    
     int connflag;
     int new_fd;
     int ret = 0;
@@ -812,18 +814,20 @@ static void *thread_main(void *rock __attribute__((unused)))
     
     /* This is a big infinite loop */
     while(1) {
-	do_a_command = 0;
+	send_a_banner = do_a_command = 0;
 	
 	pthread_mutex_lock(&idle_worker_mutex);
 	/* If we are over the limit on idle threads, die. */
-	if(idle_worker_count >=
-	   config_getint(IMAPOPT_MUPDATE_WORKERS_MAXSPARE)) {
+	max_worker_flag = (idle_worker_count >=
+			   config_getint(IMAPOPT_MUPDATE_WORKERS_MAXSPARE));
+	/* Increment Idle Workers */
+	if(!max_worker_flag) idle_worker_count++;
+	pthread_mutex_unlock(&idle_worker_mutex);
+
+	if(max_worker_flag) {
 	    pthread_mutex_unlock(&idle_worker_mutex);
 	    goto worker_thread_done;
 	}
-	/* Increment Idle Workers */
-	idle_worker_count++;
-	pthread_mutex_unlock(&idle_worker_mutex);
 
 	/* Lock Listen Mutex - If locking takes more than 60 seconds,
 	 * kill off this thread.  Ideally this is a FILO queue */
@@ -843,7 +847,12 @@ static void *thread_main(void *rock __attribute__((unused)))
 	}
 	pthread_mutex_unlock(&listener_mutex); /* UNLOCK */
 
-	if(ret == ETIMEDOUT) {
+	if(ret == ETIMEDOUT) {	    
+	    /* Decrement Idle Worker Count */
+	    pthread_mutex_lock(&idle_worker_mutex); /* LOCK */
+	    idle_worker_count--;
+	    pthread_mutex_unlock(&idle_worker_mutex); /* UNLOCK */
+
 	    syslog(LOG_DEBUG,
 		   "Thread timed out waiting for listener_lock");
 	    goto worker_thread_done;
@@ -936,45 +945,10 @@ static void *thread_main(void *rock __attribute__((unused)))
 	
 	if(new_fd != NO_NEW_CONNECTION) {
 	    /* new_fd indicates a new connection */
-	    char slavebuf[4096];
-	    const char *mechs;
-	    unsigned int mechcount;
-
-	    /* setup the new connection */
 	    currConn = conn_new(new_fd);
-
 	    if(!currConn) goto nextlistener;
-
-	    /* send the banner + flush pout */
-	    ret = sasl_listmech(currConn->saslconn, NULL,
-				"* AUTH \"", "\" \"", "\"",
-				&mechs, NULL, &mechcount);
-
-	    /* AUTH banner is mandatory */
-	    if(!masterp) {
-		if(!config_mupdate_server)
-		    fatal("mupdate server was not specified for slave",
-			  EC_TEMPFAIL);
-		
-		snprintf(slavebuf, sizeof(slavebuf), "mupdate://%s",
-			 config_mupdate_server);
-	    }
 	    
-	    prot_printf(currConn->pout,
-			"%s\r\n* OK MUPDATE \"%s\" \"Cyrus Murder\" \"%s\" \"%s\"\r\n",
-			(ret == SASL_OK && mechcount > 0) ? mechs : "* AUTH",
-			config_servername,
-			CYRUS_VERSION, masterp ? "(master)" : slavebuf);
-
-	    /* xxx can we do this outside of the listner lock somehow? */
-	    prot_flush(currConn->pout);
-
-	    /* Add new connection to the idle connlist */
-	    pthread_mutex_lock(&idle_connlist_mutex); /* LOCK */
-	    currConn->idle = 1;
-	    currConn->next_idle = idle_connlist;
-	    idle_connlist = currConn;
-	    pthread_mutex_unlock(&idle_connlist_mutex); /* UNLOCK */
+	    send_a_banner = 1;
 	} else if(protout) {
 	    /* Handle existing connection, we'll need to pull it off
 	     * the idle_connlist */
@@ -1010,8 +984,36 @@ static void *thread_main(void *rock __attribute__((unused)))
 	listener_lock = 0;
 	pthread_cond_signal(&listener_cond);
 	pthread_mutex_unlock(&listener_mutex);
-	
-	if(do_a_command) {
+
+	/* Do work in this thread, if needed */
+	if(send_a_banner) {
+	    char slavebuf[4096];
+	    const char *mechs;
+	    unsigned int mechcount;
+
+	    /* send initial the banner + flush pout */
+	    ret = sasl_listmech(currConn->saslconn, NULL,
+				"* AUTH \"", "\" \"", "\"",
+				&mechs, NULL, &mechcount);
+
+	    /* Add mupdate:// tag if necessary */
+	    if(!masterp) {
+		if(!config_mupdate_server)
+		    fatal("mupdate server was not specified for slave",
+			  EC_TEMPFAIL);
+		
+		snprintf(slavebuf, sizeof(slavebuf), "mupdate://%s",
+			 config_mupdate_server);
+	    }
+	    
+	    prot_printf(currConn->pout,
+			"%s\r\n* OK MUPDATE \"%s\" \"Cyrus Murder\" \"%s\" \"%s\"\r\n",
+			(ret == SASL_OK && mechcount > 0) ? mechs : "* AUTH",
+			config_servername,
+			CYRUS_VERSION, masterp ? "(master)" : slavebuf);
+
+	    prot_flush(currConn->pout);
+	} else if(do_a_command) {
 	    assert(currConn);
 	    
 	    if(docmd(currConn) == DOCMD_CONN_FINISHED) {
@@ -1030,6 +1032,11 @@ static void *thread_main(void *rock __attribute__((unused)))
 		 * this back to the idle list */
 		continue;
 	    }
+	} /* done handling command */
+
+	if(send_a_banner || do_a_command) {
+	    /* We did work in this thread, so we need to [re-]add the
+	     * connection to the idle list and signal the current listner */
 
 	    pthread_mutex_lock(&idle_connlist_mutex); /* LOCK */
 	    currConn->idle = 1;
@@ -1044,11 +1051,14 @@ static void *thread_main(void *rock __attribute__((unused)))
 		fatal("write to conn_pipe to signal docmd done failed",
 		      EC_TEMPFAIL);
 	    }
-	} /* done handling command */
+	}
+	
     } /* while(1) */
 
  worker_thread_done:
     /* Remove this worker from the pool */
+    /* Note that workers exiting the loop above should NOT be counted
+     * in the idle_worker_count */
     pthread_mutex_lock(&worker_count_mutex); /* LOCK */
     worker_count--;
     syslog(LOG_DEBUG,
