@@ -1,6 +1,6 @@
 /* imap.c -- read/write IMAP bboards
  *
- *	(C) Copyright 1995 by Carnegie Mellon University
+ *	(C) Copyright 1995-1996 by Carnegie Mellon University
  *
  *                      All Rights Reserved
  *

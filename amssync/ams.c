@@ -32,6 +32,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/time.h>
+#include <sys/stat.h>
 #include <string.h>
 #include <sysexits.h>
 
@@ -55,6 +56,7 @@
 #include "acte.h"
 #include "imclient.h"
 #include "xmalloc.h"
+#include "AMSstuff.h"
 #include "amssync.h"
 
 extern int debug,verbose;
@@ -100,55 +102,42 @@ register char *xnum;
  * into account. This assumes that the passed parameter string will
  * not be freed/out of scope until this structure is freed
  */
-int getams(char *dname,bboard * amsbbd)
+int getams(amsname, abbd)
+    char *amsname;
+    bboard *abbd;
 {
-    char buf[1024];
-    DIR *dirp;
-    struct dirent *dirent;
+    message *msg;
+    FILE *msdir;
+    struct stat stbuf;
     int i;
-  
+    char dname[MAXPATHLEN];
+    char snap[AMS_SNAPSHOTSIZE];
 
-    amsbbd->alloced=50;
-    amsbbd->inuse=-1;
- 
-    chdir(dname);
-    dirp=opendir(dname);
-    if (!dirp) {
-	fprintf(stderr, "Bboard does not exist!\n");
-	perror(dname);
-	return 1;
+    sprintf(dname, "%s/%s", amsname, MS_DIRNAME);
+    if ((msdir = fopen(dname, "r")) == NULL) {
+	fprintf(stderr, "  Couldn't open mail folder: %s\n", abbd->name);
+	return (1);
     }
-    amsbbd->msgs=(message *)xmalloc((amsbbd->alloced + 1) * sizeof (message));
-    memset(buf, 0, sizeof(buf));
-  
-    while ((dirent=readdir(dirp))) {
-	if (dirent->d_name[0] == '+') {
-	    if (++amsbbd->inuse == amsbbd->alloced) {
-		amsbbd->alloced *= 2;
-		amsbbd->msgs=(message *)xrealloc(amsbbd->msgs, amsbbd->alloced
-						 * sizeof (message)); 
-	    }
-	    /* skip the + in the name */
-	    amsbbd->msgs[amsbbd->inuse].stamp=conv64tolong(&dirent->d_name[1]); 
-	    strcpy(amsbbd->msgs[amsbbd->inuse].name, dirent->d_name);
-	}  
+    if (fstat(fileno(msdir), &stbuf) < 0) {
+	fprintf(stderr, "  Couldn't access mail folder: %s\n", abbd->name);
+	fclose(msdir);
+	return (1);
     }
-    closedir(dirp);
-    qsort(amsbbd->msgs, amsbbd->inuse+1, sizeof (message), cmpmsg);
-    if (debug) {
-	for (i=0;i<=amsbbd->inuse;i++){
-	    printf("file %s was submitted at %ld\n" /* and is%s BE2 formatted\n"*/,
-		   amsbbd->msgs[i].name, (long)amsbbd->msgs[i].stamp);
+    abbd->alloced = abbd->inuse = (stbuf.st_size - AMS_DIRHEADSIZE) / AMS_SNAPSHOTSIZE;
+    msg = abbd->msgs =
+	(message *) xmalloc((abbd->inuse + 1) * sizeof (message));
+    if (abbd->inuse) {
+	fseek(msdir, AMS_DIRHEADSIZE, 0);
+	for (i = 0; i < abbd->inuse; ++i, ++msg) {
+	    fread(snap, AMS_SNAPSHOTSIZE, 1, msdir);
+	    msg->name[0] = '+';
+	    strcpy(msg->name+1, AMS_ID(snap));
+	    msg->stamp = conv64tolong(AMS_DATE(snap));
 	}
     }
-    else if (verbose) {
-	fprintf(logfile,"There are %d messages in %s\n", amsbbd->inuse+1,
-                dname); 
-    }
-    amsbbd->msgs[amsbbd->inuse+1].stamp=0x7fffffff;
-    return 0;
-  
+    fclose(msdir);
+    msg->stamp = 0x7fffffff;
+    abbd->inuse--;
+
+    return (0);
 }
-
-
-  

@@ -590,7 +590,7 @@ do_content(char *amsname, char *imapname)
 		    }                    
 		    amsidx++;
 		} else {
-		    fprintf(stderr,"Tried uploaing AMS Sentinel %d\n",amsidx);
+		    fprintf(stderr,"Tried uploading AMS Sentinel %d\n",amsidx);
 		}
 	    }
 	    done = 1;
