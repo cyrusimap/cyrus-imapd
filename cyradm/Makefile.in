@@ -1,4 +1,6 @@
 # Makefile for cyradm
+#
+# @configure_input@
 # 
 #	(C) Copyright 1994 by Carnegie Mellon University
 # 
@@ -32,8 +34,8 @@ CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@
 LIBS = @LIBS@ 
 DEPLIBS = ../lib/libcyrus.a @DEPLIBS@ 
 
-CFLAGS = -g
-LDFLAGS = -g
+CFLAGS = @CFLAGS@
+LDFLAGS = @LDFLAGS@
 
 SHELL = /bin/sh
 

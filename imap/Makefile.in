@@ -1,5 +1,7 @@
 # Makefile for cyrus imap server and associated programs
 # 
+# @configure_input@
+# 
 #	(C) Copyright 1994 by Carnegie Mellon University
 # 
 #                      All Rights Reserved
@@ -46,8 +48,8 @@ CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@
 LIBS = @LIBS@ 
 DEPLIBS = ../et/libcom_err.a ../lib/libcyrus.a @DEPLIBS@
 
-CFLAGS = -g
-LDFLAGS = -g
+CFLAGS = @CFLAGS@
+LDFLAGS = @LDFLAGS@
 
 SHELL = /bin/sh
 
