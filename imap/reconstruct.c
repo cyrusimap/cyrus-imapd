@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.59 2001/03/05 22:27:31 leg Exp $ */
+/* $Id: reconstruct.c,v 1.60 2001/03/14 05:56:49 leg Exp $ */
 
 #include <config.h>
 
@@ -202,7 +202,11 @@ int main(int argc, char **argv)
 
 	/* create p and reconstruct it */
 	r = mboxlist_createmailbox(p->name, 0, NULL, 1, "cyrus", NULL);
-	if (!r) do_reconstruct(p->name, 0, 0, &head);
+	if (!r) {
+	    do_reconstruct(p->name, 0, 0, &head);
+	} else {
+	    printf("createmailbox %s: %s\n", p->name, error_message(r));
+	}
 	/* may have added more things into our list */
 
 	free(p->name);
