@@ -61,7 +61,8 @@ LOBJS= append.o mailbox.o mboxlist.o message.o \
 
 IMAPDOBJS= imapd.o index.o
 
-PROGS = collectnews rmnews deliver imapd pop3d reconstruct quota updateimsp
+PROGS = collectnews rmnews syncnews \
+	deliver imapd pop3d arbitron reconstruct quota updateimsp
 
 all: $(PROGS)
 
@@ -76,6 +77,10 @@ rmnews: rmnews.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o rmnews rmnews.o libimap.a \
 		$(DEPLIBS) $(LIBS)
 
+syncnews: syncnews.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o syncnews syncnews.o libimap.a \
+		$(DEPLIBS) $(LIBS)
+
 deliver: deliver.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o deliver deliver.o libimap.a \
 		$(DEPLIBS) $(LIBS) -ldbm
@@ -86,6 +91,10 @@ imapd: $(IMAPDOBJS) libimap.a $(DEPLIBS)
 
 pop3d: pop3d.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o pop3d pop3d.o libimap.a \
+		$(DEPLIBS) $(LIBS)
+
+arbitron: arbitron.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o arbitron arbitron.o libimap.a \
 		$(DEPLIBS) $(LIBS)
 
 reconstruct: reconstruct.o libimap.a $(DEPLIBS)
