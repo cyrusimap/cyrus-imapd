@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.304.2.8.2.3 2001/07/04 15:59:20 ken3 Exp $ */
+/* $Id: imapd.c,v 1.304.2.8.2.4 2001/07/05 16:38:21 ken3 Exp $ */
 
 #include <config.h>
 
@@ -3291,7 +3291,7 @@ char *partition;
 	r = IMAP_PERMISSION_DENIED;
     }
 
-    if (name[0] && name[strlen(name)-1] == '.') {
+    if (name[0] && name[strlen(name)-1] == imapd_namespace.hier_sep) {
 	/* We don't care about trailing hierarchy delimiters. */
 	name[strlen(name)-1] = '\0';
     }
@@ -5563,8 +5563,9 @@ static void mstringdata(char *cmd, char *name, int matchlen, int maycreate)
 	    name[strlen(lastname)] == '.') {
 	    lastnamehassub = 1;
 	}
-	prot_printf(imapd_out, "* %s (%s) \".\" ", cmd,
-	       lastnamehassub ? "" : "\\Noinferiors");
+	prot_printf(imapd_out, "* %s (%s) \"%c\" ", cmd,
+		    lastnamehassub ? "" : "\\Noinferiors",
+		    imapd_namespace.hier_sep);
 	(*imapd_namespace.mboxname_toexternal)(lastname, &imapd_namespace,
 					       imapd_userid, mboxname);
 	printstring(mboxname);
@@ -5602,7 +5603,8 @@ static void mstringdata(char *cmd, char *name, int matchlen, int maycreate)
 
     c = name[matchlen];
     if (c) name[matchlen] = '\0';
-    prot_printf(imapd_out, "* %s (%s) \".\" ", cmd, c ? "\\Noselect" : "");
+    prot_printf(imapd_out, "* %s (%s) \"%c\" ", cmd, c ? "\\Noselect" : "",
+		imapd_namespace.hier_sep);
     (*imapd_namespace.mboxname_toexternal)(name, &imapd_namespace,
 					   imapd_userid, mboxname);
     printstring(mboxname);
