@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Admin.pm,v 1.28.2.12 2003/06/17 00:54:03 ken3 Exp $
+# $Id: Admin.pm,v 1.28.2.13 2003/06/26 14:47:32 ken3 Exp $
 
 package Cyrus::IMAP::Admin;
 use strict;
@@ -939,7 +939,8 @@ Administer (SETACL)
 =item setquota($mailbox, $resource, $quota[, ...])
 
 Set quotas on a mailbox.  Note that Cyrus currently only defines one resource,
-C<STORAGE>.
+C<STORAGE>.  As defined in RFC 2087, the units are groups of 1024 octets
+(i.e. Kilobytes)
 
 =item xfermailbox($mailbox, $server[, $partition])
 
