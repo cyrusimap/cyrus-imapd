@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.30 2000/06/23 18:00:12 ken3 Exp $
+ * $Id: script.c,v 1.31 2000/07/02 18:29:50 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -30,6 +30,8 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <md5global.h>
 #include <md5.h>
 #include <ctype.h>
+#include <unistd.h>
+#include <netdb.h>
 
 #include "xmalloc.h"
 
@@ -212,6 +214,10 @@ static int look_for_me(char *myaddr, stringlist_t *myaddrs, const char **body)
     int found = 0;
     int l;
     stringlist_t *sl;
+#ifndef MAXHOSTNAMELEN
+#define MAXHOSTNAMELEN 256
+#endif
+    char hostname[MAXHOSTNAMELEN];
 
     /* loop through each TO header */
     for (l = 0; body[l] != NULL && !found; l++) {
@@ -226,13 +232,33 @@ static int look_for_me(char *myaddr, stringlist_t *myaddrs, const char **body)
 		found = 1;
 		break;
 	    }
-	    
-	    for (sl = myaddrs; sl != NULL; sl = sl->next) {
-		/* is this address one of my addresses? */
-		if (!strcmp(addr, sl->s)) {
-		    found = 1;
-		    break;
+
+	    if (!gethostname(hostname, MAXHOSTNAMELEN)) {
+		char *subdom = hostname;
+		char buf[2 * MAXHOSTNAMELEN];
+		while (subdom) {
+		    snprintf(buf, sizeof(buf), "%s@%s", myaddr, subdom);
+		    if (!strcmp(addr, buf)) {
+			found = 1;
+			break;
+		    }
+
+		    if ((subdom = strchr(subdom, '.')))
+			subdom++;
 		}
+	    }
+	    
+	    for (sl = myaddrs; sl != NULL && !found; sl = sl->next) {
+		void *altdata = NULL, *altmarker = NULL;
+		char *altaddr;
+
+		/* is this address one of my addresses? */
+		parse_address(sl->s, &altdata, &altmarker);
+		altaddr = get_address(ADDRESS_ALL, &altdata, &altmarker);
+		if (!strcmp(addr, altaddr))
+		    found = 1;
+
+		free_address(&altdata, &altmarker);
 	    }
 	}
 	free_address(&data, &marker);
