@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.58 2000/12/21 20:35:43 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.59 2000/12/25 20:18:41 leg Exp $ */
 
 #undef PROXY_IDLE
 
@@ -124,13 +124,13 @@ static unsigned int proxyd_cmdcnt;
 
 /* all subscription commands go to the backend server containing the
    user's inbox */
-struct backend *backend_inbox;
+struct backend *backend_inbox = NULL;
 
 /* the current server most commands go to */
-struct backend *backend_current;
+struct backend *backend_current = NULL;
 
 /* our cached connections */
-struct backend **backend_cached;
+struct backend **backend_cached = NULL;
 
 /* has the client issued an RLIST or RLSUB? */
 static int supports_referrals;
@@ -2111,10 +2111,18 @@ void cmd_authenticate(char *tag, char *authtype)
 
     sasl_getprop(proxyd_saslconn, SASL_SSF, (void **) &ssfp);
 
-    switch(*ssfp) {
-      case 0: ssfmsg="no protection";break;
-      case 1: ssfmsg="integrity protection";break;
-      default: ssfmsg="privacy protection";break;
+    if (proxyd_starttls_done) {
+	switch(*ssfp) {
+	case 0: ssfmsg = "tls protection"; break;
+	case 1: ssfmsg = "tls plus integrity protection"; break;
+	default: ssfmsg = "tls plus privacy protection"; break;
+	}
+    } else {
+	switch(*ssfp) {
+	case 0: ssfmsg="no protection"; break;
+	case 1: ssfmsg="integrity protection"; break;
+	default: ssfmsg="privacy protection"; break;
+	}
     }
 
     prot_printf(proxyd_out, "%s OK Success (%s)\r\n", tag,ssfmsg);
@@ -2717,15 +2725,7 @@ void cmd_select(char *tag, char *cmd, char *name)
     char mailboxname[MAX_MAILBOX_NAME+1];
     int r = 0;
     char *newserver;
-
-    if (backend_current) {
-	char mytag[128];
-
-	proxyd_gentag(mytag);
-	prot_printf(backend_current->out, "%s Unselect\r\n", mytag);
-	pipe_until_tag(backend_current, mytag);
-	backend_current = NULL;
-    }
+    struct backend *backend_next = NULL;
 
     if (cmd[0] == 'B') {
 	/* BBoard namespace is empty */
@@ -2742,9 +2742,19 @@ void cmd_select(char *tag, char *cmd, char *name)
     }
 
     if (!r) {
-	backend_current = proxyd_findserver(newserver);
-	if (!backend_current) r = IMAP_SERVER_UNAVAILABLE;
+	backend_next = proxyd_findserver(newserver);
+	if (!backend_next) r = IMAP_SERVER_UNAVAILABLE;
     }
+
+    if (backend_current && backend_current != backend_next) {
+	char mytag[128];
+
+	/* switching servers; flush old server output */
+	proxyd_gentag(mytag);
+	prot_printf(backend_current->out, "%s Unselect\r\n", mytag);
+	pipe_until_tag(backend_current, mytag);
+    }
+    backend_current = backend_next;
 
     if (r) {
 	prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
