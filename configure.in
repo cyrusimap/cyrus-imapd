@@ -13,6 +13,7 @@ case "$LEX" in
 	*) LEXFLAGS="";;
 esac
 AC_SUBST(LEXFLAGS)
+AC_PROG_YACC
 AC_CONST
 AC_LONG_FILE_NAMES
 case "$DEFS" in
