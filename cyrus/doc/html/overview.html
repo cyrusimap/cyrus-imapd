@@ -1,5 +1,6 @@
 <HTML><HEAD>
 <title>Cyrus IMAP Server:  Overview and Concepts</title>
+<!-- Changed by: John Gardiner Myers, 21-Sep-1995 -->
 </HEAD><BODY>
 <H1>              Cyrus IMAP Server:  Overview and Concepts</H1>
 
@@ -56,6 +57,7 @@ Mailboxes</A>
 <li><a href="#quotawarnings">Quota Warnings Upon Select When User Has "<TT>d</TT>" Rights</a>
 <li><a href="#quotapartitions">Quotas and Partitions</a>
 </UL>
+<li><a href="#notification">New Mail Notification</a>
 <li><a href="#partitions">Partitions</a>
 <UL>
 <li><a href="#partitionscreate">Specifying Partitions with "<TT>create</TT>"</a>
@@ -89,27 +91,29 @@ Mailboxes</A>
 
 <H2><a name="mboxname">Mailbox Namespace</a></H2>
 
-The Cyrus IMAP server
-presents mailboxes using the <TT>netnews</TT> namespace convention.
-While mailbox names are case-insensitive, the case used when
-creating a mailbox is preserved.  A mailbox name may not start or end
-with a "." character, nor may it contain two "." characters in a row.
+The Cyrus IMAP server presents mailboxes using the <TT>netnews</TT>
+namespace convention.  Mailbox names are case-sensitive.  A mailbox
+name may not start or end with a "." character, nor may it contain two
+"." characters in a row.
 
 <p>In the initial implementation, non-ASCII characters, shell
 metacharacters, and "/" are not permitted in mailbox names.  Later
 versions of the server may make the set of permissible characters
 configurable at each site.
 
-<p>All personal mailboxes for user "<TT>bovik</TT>" begin with the 
-string "<TT>user.bovik.</TT>".  The mailbox "<TT>user.bovik</TT>" is a
-special case.  From
-user "<TT>bovik</TT>"'s point of view, the mailbox
-"<TT>user.bovik</TT>" is named "<TT>INBOX</TT>".
-If the <A HREF="#acl">access control list</A> of the "<TT>user.bovik</TT>"
-mailbox permits other users to see the mailbox, it appears to the other users 
-as "<TT>user.bovik</TT>".
+<p>All personal mailboxes for user "<TT>bovik</TT>" begin with the
+string "<TT>user.bovik.</TT>".  For example, if user "<TT>bovik</TT>"
+had a personal "<TT>work</TT>" mailbox, it would be called
+"<TT>user.bovik.work</TT>".  To user "<TT>bovik</TT>", however, the
+prefix "<TT>user.bovik.</TT>" normally appears as "<TT>INBOX.</TT>".
+The mailbox "<TT>user.bovik.work</TT>" would therefore appear as
+"<TT>INBOX.work</TT>".  If the <A HREF="#acl">access control list</A>
+of the mailbox permitted other users to see that mailbox, it would
+appear to them as "<TT>user.bovik.work</TT>".
 
-<P>The mailbox
+<P>The mailbox "<TT>user.bovik</TT>" is where the user
+"<TT>bovik</TT>" normally receives new mail, and normally appears to
+user "<TT>bovik</TT>" as "<TT>INBOX</TT>".  The mailbox
 "<TT>user.bovik</TT>" is referred to in this document as user
 "<TT>bovik</TT>"'s <TT>INBOX</TT>.
 
@@ -477,6 +481,16 @@ correcting the problem.
 Quota roots are independent of <A href="#partitions">partitions</A>.  A single
 quota root can apply to mailboxes in different partitions.
 
+<h2><a name="notification">New Mail Notification</a></h2>
+
+<p>The Cyrus IMAP server comes with an optional notification
+mechanism, for use with the Zephyr notification service.
+
+ <P>If the server software is compiled with the Zephyr notification
+mechanism, then the server sends a Zephyrgram to a user whenever mail
+is delivered to one of that user's mailboxes.  The Zephyrgram is sent
+with a class of "<TT>MAIL</TT>" and an instance of the mailbox name.
+
 <h2><a name="partitions">Partitions</a></h2>
 
 Partitions allow administrators to store different mailboxes in
@@ -584,7 +598,7 @@ The "<tt>syncnews</tt>" program should be invoked by the
 
 Integration with the Cyrus IMSP server, to allow transparent location
 of mailboxes on multiple servers, is not completed as of version
-1.3.
+1.4.
 
 <h2><a name="pop3">POP3 Server</a></h2>
 
