@@ -205,7 +205,9 @@ fi
 AC_MSG_RESULT($cyrus_cv_lib_syslog)
 
 dnl
-dnl Some systems need a socket library
+dnl Random other libraries
 dnl
+AC_CHECK_LIB(ndbm, main)
+AC_CHECK_LIB(dbm, main)
 AC_CHECK_LIB(socket, main, LIBS="${LIBS} -lsocket -lnsl",,-lnsl)
 AC_OUTPUT(Makefile syslog/Makefile et/Makefile lib/Makefile imap/Makefile cyradm/Makefile imtest/Makefile glue/feedcyrus)
