@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_flat.c,v 1.19.4.9 2003/02/13 20:33:12 rjs3 Exp $ */
+/* $Id: cyrusdb_flat.c,v 1.19.4.10 2003/03/06 01:17:50 ken3 Exp $ */
 
 #include <config.h>
 
@@ -63,6 +63,7 @@
 #include "bsearch.h"
 #include "lock.h"
 #include "retry.h"
+#include "util.h"
 #include "xmalloc.h"
 
 /* we have the file locked iff we have an outstanding transaction */
@@ -188,7 +189,12 @@ static int myopen(const char *fname, struct db **ret)
 
     assert(fname && ret);
 
-    db->fd = open(fname, O_RDWR | O_CREAT, 0666);
+    db->fd = open(fname, O_RDWR | O_CREAT, 0644);
+    if (db->fd == -1 && errno == ENOENT) {
+	if (cyrus_mkdir(fname, 0755) == -1) return CYRUSDB_IOERROR;
+
+	db->fd = open(fname, O_RDWR | O_CREAT, 0644);
+    }
     if (db->fd == -1) {
 	syslog(LOG_ERR, "IOERROR: opening %s: %m", fname);
 	free_db(db);

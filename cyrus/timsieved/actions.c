@@ -1,6 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.30.4.6 2003/02/27 18:14:15 rjs3 Exp $
+ * $Id: actions.c,v 1.30.4.7 2003/03/06 01:17:52 ken3 Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -122,7 +122,8 @@ int actions_setuser(const char *userid)
 
   result = chdir(sieve_dir);
   if (result != 0) {
-      result = mkdir(sieve_dir, 0755);
+      result = cyrus_mkdir(sieve_dir, 0755);
+      if (!result) result = mkdir(sieve_dir, 0755);
       if (!result) result = chdir(sieve_dir);
       if (result) {
 	  syslog(LOG_ERR, "mkdir %s: %m", sieve_dir);
@@ -321,6 +322,9 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data,
       snprintf(path, 1023, "%s.script.NEW", string_DATAPTR(name));
 
       stream = fopen(path, "w+");
+      if (stream == NULL && errno == ENOENT) {
+	  if (cyrus_mkdir(path, 0755) == 0) stream = fopen(path, "w+");
+      }
   }
 
 

@@ -40,13 +40,14 @@
  *
  */
 /*
- * $Id: util.c,v 1.19.6.7 2003/02/27 18:12:14 rjs3 Exp $
+ * $Id: util.c,v 1.19.6.8 2003/03/06 01:17:51 ken3 Exp $
  */
 
 #include <config.h>
 
 #include <stdio.h>
 #include <ctype.h>
+#include <errno.h>
 #include <string.h>
 #include <stdlib.h>
 #include <syslog.h>
@@ -304,4 +305,29 @@ int create_tempfile()
     }
 
     return fd;
+}
+
+/* Create all parent directories for the given path,
+ * up to but not including the basename.
+ */
+int cyrus_mkdir(const char *path, mode_t mode)
+{
+    char *p = (char *) path;
+    int save_errno;
+    struct stat sbuf;
+
+    while ((p = strchr(p+1, '/'))) {
+	*p = '\0';
+	if (mkdir(path, 0755) == -1 && errno != EEXIST) {
+	    save_errno = errno;
+	    if (stat(path, &sbuf) == -1) {
+		errno = save_errno;
+		syslog(LOG_ERR, "IOERROR: creating directory %s: %m", path);
+		return -1;
+	    }
+	}
+	*p = '/';
+    }
+
+    return 0;
 }

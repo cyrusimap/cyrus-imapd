@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.34.6.4 2003/02/11 15:45:07 ken3 Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.34.6.5 2003/03/06 01:17:51 ken3 Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -51,6 +51,7 @@
 #include <string.h>
 #include <limits.h>
 #include <assert.h>
+#include <errno.h>
 #include <syslog.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -65,6 +66,7 @@
 #include "lock.h"
 #include "map.h"
 #include "retry.h"
+#include "util.h"
 #include "xmalloc.h"
 
 #define PROB (0.5)
@@ -629,6 +631,11 @@ static int myopen(const char *fname, struct db **ret)
     db->fname = xstrdup(fname);
 
     db->fd = open(fname, O_RDWR, 0644);
+    if (db->fd == -1 && errno == ENOENT) {
+	if (cyrus_mkdir(fname, 0755) == -1) return CYRUSDB_IOERROR;
+
+	db->fd = open(fname, O_RDWR, 0644);
+    }
     if (db->fd == -1) {
 	db->fd = open(fname, O_RDWR | O_CREAT, 0644);
 	new = 1;

@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- * $Id: mailbox.c,v 1.134.4.19 2003/02/27 18:10:42 rjs3 Exp $
+ * $Id: mailbox.c,v 1.134.4.20 2003/03/06 01:17:49 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1311,6 +1311,11 @@ int mailbox_write_quota(struct quota *quota)
     strcat(new_quota_path, ".NEW");
 
     newfd = open(new_quota_path, O_CREAT | O_TRUNC | O_RDWR, 0666);
+    if (newfd == -1 && errno == ENOENT) {
+	if (cyrus_mkdir(new_quota_path, 0755) == -1) return IMAP_IOERROR;
+
+	newfd = open(new_quota_path, O_CREAT | O_TRUNC | O_RDWR, 0666);
+    }
     if (newfd == -1) {
 	syslog(LOG_ERR, "IOERROR: creating quota file %s: %m", new_quota_path);
 	return IMAP_IOERROR;
@@ -1946,7 +1951,7 @@ int mailbox_create(const char *name,
 		   struct mailbox *mailboxp)
 {
     int r;
-    char *p=path;
+    char *p;
     char quota_root[MAX_MAILBOX_PATH];
     int hasquota;
     char fnamebuf[MAX_MAILBOX_PATH];
@@ -1956,18 +1961,7 @@ int mailbox_create(const char *name,
     const char *lockfailaction;
     struct stat sbuf;
 
-    while ((p = strchr(p+1, '/'))) {
-	*p = '\0';
-	if (mkdir(path, 0755) == -1 && errno != EEXIST) {
-	    save_errno = errno;
-	    if (stat(path, &sbuf) == -1) {
-		errno = save_errno;
-		syslog(LOG_ERR, "IOERROR: creating directory %s: %m", path);
-		return IMAP_IOERROR;
-	    }
-	}
-	*p = '/';
-    }
+    if (cyrus_mkdir(path, 0755) == -1) return IMAP_IOERROR;
     if (mkdir(path, 0755) == -1 && errno != EEXIST) {
 	save_errno = errno;
 	if (stat(path, &sbuf) == -1) {
