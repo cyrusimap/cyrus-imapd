@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: IMAP.xs,v 1.21 2003/04/23 15:38:55 rjs3 Exp $ */
+/* $Id: IMAP.xs,v 1.22 2003/04/25 16:55:16 rjs3 Exp $ */
 
 /*
  * Perl interface to the Cyrus imclient routines.  This enables the
@@ -294,7 +294,7 @@ CODE:
 	  /*FALLTHROUGH*/
 	default:
 	  bang = perl_get_sv("^E", TRUE);
-	  Perl_sv_setiv(aTHX_ bang, rc);
+	  sv_setiv(bang, rc);
 	  XSRETURN_UNDEF;
 	}
 	ST(0) = sv_newmortal();
@@ -604,10 +604,10 @@ PPCODE:
 	    else
 	      PUSHs(&sv_no);
 	    pcb = perl_get_sv("@", TRUE);
-	    Perl_sv_setsv(aTHX_ pcb, av_shift(av));
+	    sv_setsv(pcb, av_shift(av));
 	    if (av_len(av) != -1) {
 	      pcb = perl_get_sv("^E", TRUE);
-	      Perl_sv_setsv(aTHX_ pcb, av_shift(av));
+	      sv_setsv(pcb, av_shift(av));
 	    }
 	  } else {
 	    EXTEND(SP, av_len(av) + 1);
