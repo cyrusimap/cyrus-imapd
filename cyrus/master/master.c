@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.85.2.4 2004/02/12 05:32:38 ken3 Exp $ */
+/* $Id: master.c,v 1.85.2.5 2004/02/19 01:42:47 ken3 Exp $ */
 
 #include <config.h>
 
@@ -334,12 +334,14 @@ void service_create(struct service *s)
     struct sockaddr_un sunsock;
     mode_t oldumask;
     int on = 1;
+    int res0_is_local;
     int r;
 
     if (s->associate > 0)
 	return;			/* service is already activated */
     
     if (s->listen[0] == '/') { /* unix socket */
+	res0_is_local = 1;
 	res0 = (struct addrinfo *)malloc(sizeof(struct addrinfo));
 	if (!res0)
 	    fatal("out of memory", EX_UNAVAILABLE);
@@ -493,8 +495,12 @@ void service_create(struct service *s)
 	}
 	nsocket++;
     }
-    if (res0)
-	freeaddrinfo(res0);
+    if (res0) {
+	if(res0_is_local)
+	    free(res0);
+	else
+	    freeaddrinfo(res0);
+    }
     if (nsocket <= 0) {
 	syslog(LOG_ERR, "unable to create %s listener socket: %m", s->name);
 	s->exec = NULL;

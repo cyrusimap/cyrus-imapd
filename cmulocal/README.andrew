@@ -49,7 +49,7 @@ CMU_NANA
 CMU_PROG_LIBTOOL
   Just like AM_PROG_LIBTOOL, except it performs a couple little hacks
   to make sure that things don't break on picky vendor compilers
-  which whine about empty translation units.
+  which whine about empty translation units. [DEPRECATED - DO NOT USE]
 
 CMU_PTHREADS
   This attempts to link against libpthread (failing if it can't be found),

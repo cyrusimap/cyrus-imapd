@@ -1,4 +1,4 @@
-dnl $Id: berkdb.m4,v 1.12.4.1 2003/12/19 18:33:23 ken3 Exp $
+dnl $Id: berkdb.m4,v 1.12.4.2 2004/02/19 01:42:44 ken3 Exp $
 
 AC_DEFUN([CMU_DB_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS
@@ -36,8 +36,8 @@ AC_REQUIRE([CMU_AFS])
 AC_REQUIRE([CMU_KRB4])
 saved_LIBS=$LIBS
   LIBS="$saved_LIBS -L$1 -ldb-3"
-AC_TRY_LINK(,
-[db_env_create();],
+AC_TRY_LINK([#include <db.h>],
+[db_env_create(NULL, 0);],
 [ac_cv_found_db_3_lib=yes],
 ac_cv_found_db_3_lib=no)
 LIBS=$saved_LIBS
@@ -47,8 +47,8 @@ AC_REQUIRE([CMU_AFS])
 AC_REQUIRE([CMU_KRB4])
 saved_LIBS=$LIBS
 LIBS="$saved_LIBS -L$1 -ldb-4"
-AC_TRY_LINK(,
-[db_env_create();],
+AC_TRY_LINK([#include <db.h>],
+[db_env_create(NULL, 0);],
 [ac_cv_found_db_4_lib=yes],
 ac_cv_found_db_4_lib=no)
 LIBS=$saved_LIBS

@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: libcyr_cfg.c,v 1.2.2.2 2004/01/27 23:13:52 ken3 Exp $
+ * $Id: libcyr_cfg.c,v 1.2.2.3 2004/02/19 01:42:46 ken3 Exp $
  */
 
 #include <config.h>
@@ -52,47 +52,54 @@
 #include "libcyr_cfg.h"
 #include "cyrusdb.h"
 
+#if defined(__GNUC__) && __GNUC__ > 1
+/* We can use the GCC union constructor extension */
+#define CFGVAL(t,v)	(union cyrus_config_value)((t)(v))
+#else
+#define CFGVAL(t,v)	{(void *)(v)}
+#endif
+
 struct cyrusopt_s cyrus_options[] = {
     { CYRUSOPT_ZERO, { NULL }, CYRUS_OPT_NOTOPT },
 
     { CYRUSOPT_AUTH_UNIX_GROUP_ENABLE,
-      (union cyrus_config_value)((int)1),
+      CFGVAL(int, 1),
       CYRUS_OPT_SWITCH },
 
     { CYRUSOPT_USERNAME_TOLOWER,
-      (union cyrus_config_value)((int)0),
+      CFGVAL(int, 0),
       CYRUS_OPT_SWITCH },
 
     { CYRUSOPT_SKIPLIST_UNSAFE,
-      (union cyrus_config_value)((int)0),
+      CFGVAL(int, 0),
       CYRUS_OPT_SWITCH },
 
     { CYRUSOPT_TEMP_PATH,
-      (union cyrus_config_value)((const char *)"/tmp"),
+      CFGVAL(const char *, "/tmp"),
       CYRUS_OPT_STRING },
 
     { CYRUSOPT_PTS_CACHE_TIMEOUT,
-      (union cyrus_config_value)((int)(3 * 60 * 60)), /* 3 hours */
+      CFGVAL(int, 3 * 60 * 60), /* 3 hours */
       CYRUS_OPT_INT },
 
     { CYRUSOPT_CONFIG_DIR,
-      (union cyrus_config_value)((const char *)"/var/imap"),
+      CFGVAL(const char *, "/var/imap"),
       CYRUS_OPT_STRING },
 
     { CYRUSOPT_DB_INIT_FLAGS,
-      (union cyrus_config_value)((int)0),
+      CFGVAL(int, 0),
       CYRUS_OPT_INT },
    
     { CYRUSOPT_FULLDIRHASH,
-      (union cyrus_config_value)((int)0),
+      CFGVAL(int, 0),
       CYRUS_OPT_SWITCH },
 
     { CYRUSOPT_PTSCACHE_DB,
-      (union cyrus_config_value)((const char *)"berkeley"),
+      CFGVAL(const char *, "berkeley"),
       CYRUS_OPT_STRING },
 
     { CYRUSOPT_VIRTDOMAINS,
-      (union cyrus_config_value)((int)0),
+      CFGVAL(int, 0),
       CYRUS_OPT_SWITCH },
 
     { CYRUSOPT_LAST, { NULL }, CYRUS_OPT_NOTOPT }

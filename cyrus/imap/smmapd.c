@@ -72,7 +72,7 @@
  * may contain an explanatory message.
  *
  *
- * $Id: smmapd.c,v 1.1.2.3 2004/02/12 05:32:36 ken3 Exp $
+ * $Id: smmapd.c,v 1.1.2.4 2004/02/19 01:42:46 ken3 Exp $
  */
 
 #include <config.h>
@@ -95,7 +95,8 @@
 #include "imap_err.h"
 #include "util.h"
 
-const char *BB = "";
+const char *BB;
+int forcedowncase;
 
 extern int optind;
 
@@ -161,6 +162,7 @@ int service_init(int argc, char **argv, char **envp)
     signal(SIGPIPE, SIG_IGN);
 
     BB = config_getstring(IMAPOPT_POSTUSER);
+    forcedowncase = config_getswitch(IMAPOPT_LMTP_DOWNCASE_RCPT);
 
     /* so we can do mboxlist operations */
     mboxlist_init(0);
@@ -201,62 +203,79 @@ int service_main(int argc __attribute__((unused)),
     shut_down(r);
 }
 
-int verify_user(const char *user, long quotacheck,
+int verify_user(const char *key, long quotacheck,
 		struct auth_state *authstate)
 {
-    char buf[MAX_MAILBOX_NAME+1];
-    char *plus;
+    char rcpt[MAX_MAILBOX_NAME+1], namebuf[MAX_MAILBOX_NAME+1] = "";
+    char *user = rcpt, *domain = NULL, *mailbox = NULL;
     int r = 0;
-    int sl = strlen(BB);
-    char *domain = NULL;
-    size_t userlen = strlen(user), domainlen = 0;
 
-    if ((domain = strchr(user, '@'))) {
-	userlen = domain - user;
-	domain++;
+    /* make a working copy of the key and split it into user/domain/mailbox */
+    strlcpy(rcpt, key, sizeof(rcpt));
+
+    /* find domain */
+    if (config_virtdomains && (domain = strrchr(rcpt, '@'))) {
+	*domain++ = '\0';
 	/* ignore default domain */
-	if (config_virtdomains &&
-	    !(config_defdomain && !strcasecmp(config_defdomain, domain)))
-	    domainlen = strlen(domain)+1;
+	if (config_defdomain && !strcasecmp(config_defdomain, domain))
+	    domain = NULL;
     }
 
-    /* check to see if mailbox exists and we can append to it */
-    if (!strncmp(user, BB, sl) && user[sl] == '+') {
-	/* special shared folder address */
-	if (domainlen)
-	    snprintf(buf, sizeof(buf),
-		     "%s!%.*s", domain, userlen - sl - 1, user + sl + 1);
-	else
-	    snprintf(buf, sizeof(buf),
-		     "%.*s", userlen - sl - 1, user + sl + 1);
-	/* Translate any separators in user */
-	mboxname_hiersep_tointernal(&map_namespace, buf+domainlen, 0);
-	/* - must have posting privileges on shared folders
-	   - don't care about message size (1 msg over quota allowed) */
-	r = append_check(buf, MAILBOX_FORMAT_NORMAL, authstate,
-			 ACL_POST, quotacheck > 0 ? 0 : quotacheck);
+    /* translate any separators in user & mailbox */
+    mboxname_hiersep_tointernal(&map_namespace, rcpt, 0);
+
+    /* find mailbox */
+    if (mailbox = strchr(rcpt, '+')) *mailbox++ = '\0';
+
+    /* downcase the rcpt, if necessary */
+    if (forcedowncase) {
+	lcase(user);
+	if (domain) lcase(domain);
+    }
+
+    /* see if its a shared mailbox address */
+    if (!strcmp(user, BB)) user = NULL;
+
+    /* XXX  the following is borrowed from lmtpd.c:verify_user() */
+    if ((!user && !mailbox) ||
+	(domain && (strlen(domain) + 1 > sizeof(namebuf)))) {
+	r = IMAP_MAILBOX_NONEXISTENT;
     } else {
-	/* ordinary user */
-	if (userlen > sizeof(buf)-10) {
-	    r = IMAP_MAILBOX_NONEXISTENT;
+	/* construct the mailbox that we will verify */
+	if (domain) snprintf(namebuf, sizeof(namebuf), "%s!", domain);
+
+	if (!user) {
+	    /* shared folder */
+	    if (strlen(namebuf) + strlen(mailbox) > sizeof(namebuf)) {
+ 		r = IMAP_MAILBOX_NONEXISTENT;
+	    } else {
+		strlcat(namebuf, mailbox, sizeof(namebuf));
+	    }
 	} else {
-	    if (domainlen)
-		snprintf(buf, sizeof(buf),
-			 "%s!user.%.*s", domain, userlen, user);
-	    else
-		snprintf(buf, sizeof(buf), "user.%.*s", userlen, user);
-	    plus = strchr(buf, '+');
-	    if (plus) *plus = '\0';
-	    /* Translate any separators in user */
-	    mboxname_hiersep_tointernal(&map_namespace, buf+domainlen+5, 0);
-	    /* - don't care about ACL on INBOX (always allow post)
-	       - don't care about message size (1 msg over quota allowed) */
-	    r = append_check(buf, MAILBOX_FORMAT_NORMAL, authstate,
-			     0, quotacheck > 0 ? 0 : quotacheck);
+	    /* ordinary user -- check INBOX */
+	    if (strlen(namebuf) + 5 + strlen(user) > sizeof(namebuf)) {
+		r = IMAP_MAILBOX_NONEXISTENT;
+	    } else {
+		strlcat(namebuf, "user.", sizeof(namebuf));
+		strlcat(namebuf, user, sizeof(namebuf));
+	    }
 	}
     }
 
-    syslog(LOG_DEBUG, "append_check() of '%s': %s", buf, error_message(r));
+    if (!r) {
+	/*
+	 * check to see if mailbox exists and we can append to it:
+	 *
+	 * - must have posting privileges on shared folders
+	 * - don't care about ACL on INBOX (always allow post)
+	 * - don't care about message size (1 msg over quota allowed)
+	 */
+	r = append_check(namebuf, MAILBOX_FORMAT_NORMAL, authstate,
+			 !user ? ACL_POST : 0, quotacheck > 0 ? 0 : quotacheck);
+    }
+
+    if (r) syslog(LOG_DEBUG, "verify_user(%s) failed: %s", namebuf,
+		  error_message(r));
 
     return r;
 }

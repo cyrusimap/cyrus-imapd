@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.33.2.1 2004/01/31 18:57:03 ken3 Exp $
+ * $Id: parser.c,v 1.33.2.2 2004/02/19 01:42:48 ken3 Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -549,8 +549,13 @@ static int cmd_authenticate(struct protstream *sieved_out,
     {
       clientin=(char *) malloc(str->len*2);
 
-      sasl_result=sasl_decode64(string_DATAPTR(str), str->len,
-				clientin, str->len*2, &clientinlen);
+      if (str->len) {
+	  sasl_result=sasl_decode64(string_DATAPTR(str), str->len,
+				    clientin, str->len*2, &clientinlen);
+      } else {
+	  clientinlen = 0;
+	  sasl_result = SASL_OK;
+      }
 
       if (sasl_result!=SASL_OK)
       {

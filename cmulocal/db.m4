@@ -1,4 +1,4 @@
-dnl $Id: db.m4,v 1.1 2001/04/04 17:58:30 shadow Exp $
+dnl $Id: db.m4,v 1.1.24.1 2004/02/19 01:42:45 ken3 Exp $
 dnl
 dnl tests for various db libraries
 dnl
@@ -26,7 +26,13 @@ AC_FIND_FUNC_NO_LIBS2(dbopen, $berkeley_db, [
 ],[NULL, 0, 0, 0, NULL])
 
 AC_FIND_FUNC_NO_LIBS(dbm_firstkey, $berkeley_db gdbm ndbm)
-AC_FIND_FUNC_NO_LIBS(db_create, $berkeley_db)
+AC_FIND_FUNC_NO_LIBS2(db_create, $berkeley_db, [
+#include <stdio.h>
+#if defined(HAVE_DB_H)
+#include <db.h>
+#endif
+],[NULL, NULL, 0])
+
 
 DBLIB="$LIB_dbopen"
 if test "$LIB_dbopen" != "$LIB_db_create"; then
