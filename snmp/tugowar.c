@@ -1,5 +1,5 @@
-/* listenstats.c -- Listens on unix domain udp socket and keeps track of cmd counts
- * $Id: tugowar.c,v 1.2 2000/02/18 03:29:33 leg Exp $
+/* tugowar.c -- Listens on unix domain udp socket and keeps track of oids
+ * $Id: tugowar.c,v 1.3 2000/03/07 00:56:16 tmartin Exp $
  *
  *        Copyright 2000 by Carnegie Mellon University
  *
@@ -50,6 +50,7 @@ typedef struct oid_trie_s {
 
     agentx_oid_t *oid;
     agentx_vardata_t vardata;
+    agentx_vartype_t type;
 
     int numchildren;
     int numchildren_alloc;
@@ -60,15 +61,22 @@ typedef struct oid_trie_s {
 } oid_trie_t;
 
 oid_trie_t *trie_top;
+int           agentx_session; /* agentx session id */
+
 
 #define IMAPMIB_NPARMS 11
 u_int IMAPCommandsMIB [IMAPMIB_NPARMS]  = { 1, 3, 6, 1, 4, 1, 3, 2, 2, 2, 6 };
 
-oid_trie_t *new_leaf(int value, oid_trie_t *parent)
+agentx_errortype_t
+mib_general_get  ( int Nsubid, u_int *subids, agentx_varbind_t *binding, int map );
+int mib_general_getn ( agentx_oid_t *name, int baselen, int map_handle );
+
+oid_trie_t *new_leaf(int value, oid_trie_t *parent, agentx_vartype_t type)
 {
     oid_trie_t *ret = (oid_trie_t *) malloc(sizeof(oid_trie_t));
     ret->value = value;
-
+    ret->type = type;
+    
     ret->parent = parent;
     ret->oid = NULL;
     ret->numchildren=0;
@@ -84,7 +92,7 @@ oid_trie_t *new_leaf(int value, oid_trie_t *parent)
 /* returns new child */
 oid_trie_t* add_leaf_to_branch(oid_trie_t *branch, oid_trie_t *leaf)
 {
-    int lup;
+    int lup, lup2;
 
     /* do we need to make the trie bigger? */
     if (branch->numchildren >= branch->numchildren_alloc)
@@ -97,13 +105,15 @@ oid_trie_t* add_leaf_to_branch(oid_trie_t *branch, oid_trie_t *leaf)
     /* we want the invariant that this list is always sorted so place in the right place */
     
     for (lup=0;lup<branch->numchildren;lup++)
-	if (leaf->value < branch->value)
+	if (leaf->value < branch->children[lup]->value)
 	    break;
 
+    /* we're inserting in middle. move end ones back */
     if (lup < branch->numchildren)
     { 	
-	memcpy( branch->children+lup+1, branch->children, (branch->numchildren - lup)*sizeof(oid_trie_t *));	
-    } 
+	for (lup2=branch->numchildren;lup2>=lup;lup2--)
+	    branch->children[lup2+1]=branch->children[lup2];
+    }
     
     branch->children[lup]=leaf;
     branch->numchildren++;
@@ -111,7 +121,7 @@ oid_trie_t* add_leaf_to_branch(oid_trie_t *branch, oid_trie_t *leaf)
     return leaf;
 }
 
-oid_trie_t *find_oid_str(oid_trie_t *branch, char *str)
+oid_trie_t *find_oid_str(oid_trie_t *branch, char *str, agentx_vartype_t type)
 {
     int num;
     int lup;
@@ -137,13 +147,13 @@ oid_trie_t *find_oid_str(oid_trie_t *branch, char *str)
     /* didn't find. let's add */
     if (lup == numchildren)
     {
-	branch = add_leaf_to_branch(branch, new_leaf(num, branch));
+	branch = add_leaf_to_branch(branch, new_leaf(num, branch, type));
     }
     
 
     if (*str == '.') {
 	str++;
-	return find_oid_str(branch, str);
+	return find_oid_str(branch, str, type);
     } else {
 	return branch;
     }
@@ -181,11 +191,13 @@ int go_down(oid_trie_t *branch, int Nsubid, u_int *subids, oid_trie_t **dest)
     int lup;
     int numchildren;
 
-    if (Nsubid==0)
+    if (Nsubid<=0)
     {
 	*dest = branch;
 	return 0;
     }
+
+    printf("go_down()    looking for: %d\n",subids[0]);
 
     /* look for it in trie */
     numchildren = branch->numchildren;
@@ -200,7 +212,7 @@ int go_down(oid_trie_t *branch, int Nsubid, u_int *subids, oid_trie_t **dest)
 
     if (lup == numchildren)
     {
-	printf("not found!\n");
+	printf("not found! in go_down()\n");
 	*dest = branch;
 	return Nsubid;
     }
@@ -231,7 +243,7 @@ oid_trie_t *find_after(oid_trie_t *t, long next)
 	} else {
 	    if (t->parent == NULL) return NULL;
 	    /* go to parent */
-	    return find_after(t->parent, t->value+1);
+	    return find_after(t->parent, t->value);
 	}
     } else {
 	if (next == -2)
@@ -242,11 +254,21 @@ oid_trie_t *find_after(oid_trie_t *t, long next)
 	}
 
 	if (t->parent == NULL) return NULL;
-	printf("parent %d\n", t->value+1);	
-	return find_after(t->parent, t->value+1);
+	return find_after(t->parent, t->value);
     }
 
     return NULL;
+}
+
+void print_oid(agentx_oid_t *oid)
+{
+    int lup;
+    printf("size = %d\n",oid->Nsubid);
+    for (lup=0;lup<oid->Nsubid;lup++)
+	printf("%d.",oid->subids[lup]);
+    
+    printf("\n");
+
 }
 
 int find_next(oid_trie_t *t, int len, u_int  *data, int baselen)
@@ -256,8 +278,9 @@ int find_next(oid_trie_t *t, int len, u_int  *data, int baselen)
     int diff;
     oid_trie_t *cur;
 
+    printf("len = %d baselen = %d\n",len,baselen);
     /* go down as far as we can */
-    left = go_down(t, len-baselen, data+len, &cur);
+    left = go_down(t, len-baselen, data+baselen, &cur);
     
     if (left != 0)
 	cur = find_after(cur, data[len-left]);
@@ -267,20 +290,17 @@ int find_next(oid_trie_t *t, int len, u_int  *data, int baselen)
     if (cur == NULL) return -1;
     if (cur->oid == NULL) return -1;
 
+    /* check to make sure oid matches up to baselen */
+    for (lup=0;lup<baselen;lup++)
+	if (cur->oid->subids[lup]!=data[lup])
+	    return -1;
+
     diff = cur->oid->Nsubid - baselen;
     
     for (lup = baselen ; lup<cur->oid->Nsubid;lup++)
 	data[lup]=cur->oid->subids[lup];
 	
     return diff;
-
-    /*    if (t->numchildren == 0)
-	return NULL;
-
-    for (lup=0;lup<t->numchildren;lup++)
-	data[lup]=lup;
-
-	return t->numchildren; */
 }
 
 agentx_oid_t *makeoid(char *str)
@@ -290,7 +310,7 @@ agentx_oid_t *makeoid(char *str)
     int lup;
     
     ret->Nsubid = 0;
-    ret->subids = (u_int *) malloc(sizeof(u_int *)*50);
+    ret->subids = (u_int *) malloc(sizeof(u_int *)*50); /* xxx max oid size? */
 
     str--;
 
@@ -300,7 +320,7 @@ agentx_oid_t *makeoid(char *str)
 
 	ret->subids[ret->Nsubid]=num;
 	ret->Nsubid++;
-	if (ret->Nsubid == 50)
+	if (ret->Nsubid == 50) /* xxx */
 	{
 	    printf("xxx\n");
 	    exit(1);
@@ -315,32 +335,142 @@ agentx_oid_t *makeoid(char *str)
 
     return ret;
 }
-/*
- * Log a command. The format of the string should be:
- *
- * <oid in string format>[optional arguements]\n
- *
- * ex: 1.3.6.1.4.6.3\n
- */
 
-void log_cmd(char *str)
+agentx_oid_t **registeredlist;
+int *registrationmaplist;
+int registeredsize = 0;
+int registeredalloc = 0;
+
+static int mib_register(char *str)
+{
+    int reg_imap;
+    agentx_oid_t *oid = makeoid(str);
+    int lup;
+
+    /* make sure we haven't already registered this oid */
+    for (lup=0;lup<registeredsize;lup++)
+	if (agentx_oidcmp (registeredlist[lup]->Nsubid, registeredlist[lup]->subids,
+			   oid->Nsubid, oid->subids) == 0)
+	{
+	    free(oid);
+	    return 0;
+	}
+
+    printf("registering %s\n",str);
+
+    /* add to registered list */
+    if (registeredsize >= registeredalloc)
+    {
+	registeredalloc+=100;
+	registeredlist = realloc(registeredlist, sizeof(agentx_oid_t *) * registeredalloc);
+	registrationmaplist = realloc(registrationmaplist, sizeof(int) * registeredalloc);
+    }
+
+    registeredlist[registeredsize] = oid;
+    registeredsize++;
+
+    reg_imap  = agentx_register( agentx_session, 0, 0, 127, oid->Nsubid,
+				 oid->subids);
+
+    if (reg_imap < 0)
+    {
+	    printf("error here\n");
+	    exit(1);
+    }
+    
+    registrationmaplist[registeredsize-1] = agentx_mapget( reg_imap, 0, NULL, &mib_general_get, &mib_general_getn );
+
+    if (registrationmaplist[registeredsize-1] < 0)
+	{
+	    exit(1);
+	}
+
+
+
+    return 0;
+}
+
+oid_trie_t *find(char *str, char **tmp, agentx_vartype_t type)
 {
     oid_trie_t *tree;
 
-    tree = find_oid_str(trie_top,str);
+    tree = find_oid_str(trie_top,str, type);
 
     if (tree==NULL)
     {
 	printf("xxx\n");
 	exit(1);
     }
-
+    
     if (tree->oid==NULL)
     {
 	tree->oid = makeoid(str);
     }
+    
+    /* find space */
+    *tmp = strchr(str,' ');
+    if (*tmp==NULL) {
+	printf("no space found\n");
+	exit(1);
+    }
+    tmp++;
 
-    tree->vardata.int_data++;
+    return tree;
+}
+
+/*
+ * Log a command. The format of the string should be:
+ *
+ * <type> <oid in string format> [optional arguements]\n
+ *
+ * ex: C 1.3.6.1.4.6.3 1\n
+ */
+
+void log_cmd(char *str)
+{
+    oid_trie_t *tree;
+    char *tmp;
+
+    printf("receieved [%s]\n",str);
+    
+    switch(str[0])
+	{
+	case 'C': /* counter32 */
+	    tree = find(str+2, &tmp, agentx_Counter32);
+	    if (!tree) break;
+
+	    tree->vardata.int_data += atoi(tmp);
+	    break;
+	case 'I':
+	    tree = find(str+2, &tmp, agentx_Integer);
+	    if (!tree) break;
+	    
+	    tree->vardata.int_data = atoi(tmp);
+	    break;
+	case 'S':
+	    tree = find(str+2, &tmp, agentx_OctetString);
+	    if (!tree) break;
+
+	    tree->vardata.ostr_data.len = strlen(tmp);
+	    tree->vardata.ostr_data.data = (char *) malloc(strlen(tmp)+1);
+	    strcpy(tree->vardata.ostr_data.data, tmp);
+	    
+	    break;
+
+	case 'T': /* time. we're given time. someone will request the time interval of us */
+	    tree = find(str+2, &tmp, agentx_TimeTicks);
+	    if (!tree) break;
+
+	    tree->vardata.int_data = atoi(tmp); /* xxx can we store a time_t here? */
+	    break;
+
+	case 'R':
+	    mib_register(str+2);
+	    break;
+	default:
+	    printf("Not understood\n");
+	    break;
+	}
 }
 
 agentx_errortype_t
@@ -348,8 +478,16 @@ mib_general_get  ( int Nsubid, u_int *subids, agentx_varbind_t *binding, int map
 {
     oid_trie_t *oidt;
     agentx_vardata_t vardata;
+    int lup;
+    agentx_oid_t *base;
 
-    oidt = find_oid_nums(trie_top, IMAPMIB_NPARMS, IMAPCommandsMIB);
+    /* find the base xxx this is inefficient */
+    for (lup=0;lup<registeredsize;lup++)
+	if (map == registrationmaplist[lup])
+	    base = registeredlist[lup];
+	    
+
+    oidt = find_oid_nums(trie_top, base->Nsubid, base->subids);
     if (oidt==NULL){ printf("unable to find any imap\n"); return agentx_genErr; }
 
     oidt = find_oid_nums(oidt, Nsubid, subids);
@@ -357,9 +495,14 @@ mib_general_get  ( int Nsubid, u_int *subids, agentx_varbind_t *binding, int map
     if (oidt==NULL){ printf("unable to find specific\n"); return agentx_genErr; }
     if (oidt->oid==NULL) { printf("blah\n"); return agentx_genErr; }
            
-    binding->type = agentx_Counter32;
+    binding->type = oidt->type;
 
-    binding->data = oidt->vardata;
+    if (oidt->type == agentx_TimeTicks)
+    {
+	binding->data.int_data = time(NULL) - oidt->vardata.int_data;
+    } else {
+	binding->data = oidt->vardata;
+    }
 
     return agentx_noError;     
 }
@@ -371,13 +514,11 @@ int mib_general_getn ( agentx_oid_t *name, int baselen, int map_handle )
     int newlen;
 
     cur = find_oid_nums(trie_top, baselen, name->subids);
-    if (cur == NULL) { printf("not found\n"); return agentx_genErr; }
-    
-    
-
+    if (cur == NULL) { printf("not found base\n"); return agentx_genErr; }
+        
     newlen = find_next(cur, name->Nsubid, name->subids, baselen);
 
-    if (newlen == -1) return AGENTX_NOTFOUND;
+    if (newlen == -1) { printf("not found in getn\n"); return AGENTX_NOTFOUND; }
 
     name->Nsubid = newlen+baselen;
 
@@ -392,10 +533,7 @@ int main(void)
     int lup;
     struct sockaddr_un from;
     int fromlen;
-    int           session; /* agentx session id */
     agentx_oid_t  session_oid;
-    int reg_imap;
-    int map_imap;
     mode_t oldumask;
 
     /* start up agentx */
@@ -407,9 +545,9 @@ int main(void)
     session_oid.Nsubid  = IMAPMIB_NPARMS;
     session_oid.include = 0;
     session_oid.subids  = IMAPCommandsMIB;
-    session             = agentx_open( DEFAULT_TIMEOUT, &session_oid,
-				       "CMU IMAP Commands MIB" );
-    if (session == AGENTX_NOTRUNNING)
+    agentx_session      = agentx_open( DEFAULT_TIMEOUT, &session_oid,
+				       "CMU IMAP Commands MIB");
+    if (agentx_session == AGENTX_NOTRUNNING)
     {
 	printf("AgentX not running\n");
 	exit (1);
@@ -436,23 +574,11 @@ int main(void)
     umask(oldumask); /* for Linux */
     chmod(SOCK_PATH, 0777); /* for DUX */
 
-    trie_top = new_leaf(1, NULL);
+    trie_top = new_leaf(1, NULL, agentx_Null);
 
-    reg_imap  = agentx_register( session, 0, 0, 127, IMAPMIB_NPARMS,
-				 IMAPCommandsMIB );
-
-    if (reg_imap < 0)
-	{
-	    printf("error here\n");
-	    exit(1);
-	}
-    
-    map_imap  = agentx_mapget( reg_imap, 0, NULL, mib_general_get, mib_general_getn );
-
-    if (map_imap < 0)
-	{
-	    exit(1);
-	}
+    registeredalloc = 100;
+    registeredlist = (agentx_oid_t **) malloc(sizeof(agentx_oid_t *)*registeredalloc);
+    registrationmaplist = (int *) malloc(sizeof(int) * registeredalloc);
 
     /*
      * All we do is:
@@ -461,16 +587,17 @@ int main(void)
      * -repeat
      */
 
+    printf ("listening\n");
+
     for(;;) {
 	int n;
 
 	fromlen = sizeof(from);
-
-	printf ("listening\n",n);
-
+	
 	n = recvfrom(s, str, 100, 0, (struct sockaddr *) &from, &fromlen);
+	str[n]  = '\0';
 
-	printf ("received %d\n",n);
+	printf("read %d bytes\n",n);
 
 	if (n>0)
 	    log_cmd(str);

@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.96 2000/02/16 22:53:40 leg Exp $
+ * $Id: index.c,v 1.97 2000/03/07 00:56:07 tmartin Exp $
  */
 #include <config.h>
 
@@ -833,6 +833,14 @@ int nflags;
 
     r = index_forsequence(mailbox, sequence, usinguid,
 			  index_storeflag, (char *)storeargs, NULL);
+
+
+    if (mailbox->dirty==1)
+    {
+	/* xxx what to do on failure? */
+	mailbox_write_index_header(mailbox);
+	mailbox->dirty = 0;
+    }
 
     mailbox_unlock_index(mailbox);
 
@@ -2258,6 +2266,7 @@ void *rock;
     int r;
     int firsttry = 1;
     int dirty = 0;
+    bit32 oldflags;
 
     /* Change \Seen flag */
     if (storeargs->operation == STORE_REPLACE && (mailbox->myrights&ACL_SEEN))
@@ -2311,6 +2320,9 @@ void *rock;
 	}
     }
 
+    /* save old for acapmbox foo */
+    oldflags = record.system_flags;
+
     if (storeargs->operation == STORE_REPLACE) {
 	if (!(mailbox->myrights & ACL_WRITE)) {
 	    record.system_flags = (record.system_flags&~FLAG_DELETED) |
@@ -2332,6 +2344,7 @@ void *rock;
     }
     else if (storeargs->operation == STORE_ADD) {
 	if (~record.system_flags & storeargs->system_flags) dirty++;
+
 	record.system_flags |= storeargs->system_flags;
 	for (i = 0; i < MAX_USER_FLAGS/32; i++) {
 	    if (~record.user_flags[i] & storeargs->user_flags[i]) dirty++;
@@ -2340,6 +2353,8 @@ void *rock;
     }
     else {			/* STORE_REMOVE */
 	if (record.system_flags & storeargs->system_flags) dirty++;
+
+	/* change the individual entry */
 	record.system_flags &= ~storeargs->system_flags;
 	for (i = 0; i < MAX_USER_FLAGS/32; i++) {
 	    if (record.user_flags[i] & storeargs->user_flags[i]) dirty++;
@@ -2348,6 +2363,27 @@ void *rock;
     }
 
     if (dirty) {
+	/* update totals */
+	if ( (record.system_flags & FLAG_DELETED) && !(oldflags & FLAG_DELETED))
+	    mailbox->deleted++;
+	if ( !(record.system_flags & FLAG_DELETED) && (oldflags & FLAG_DELETED))
+	    mailbox->deleted--;
+
+	if ( (record.system_flags & FLAG_ANSWERED) && !(oldflags & FLAG_ANSWERED))
+	    mailbox->answered++;
+	if ( !(record.system_flags & FLAG_ANSWERED) && (oldflags & FLAG_ANSWERED))
+	    mailbox->answered--;
+
+	if ( (record.system_flags & FLAG_FLAGGED) && !(oldflags & FLAG_FLAGGED))
+	    mailbox->flagged++;
+	if ( !(record.system_flags & FLAG_FLAGGED) && (oldflags & FLAG_FLAGGED))
+	    mailbox->flagged--;
+
+	/* either a system or user flag changed. need to at least touch acap
+	   to change the modtime */
+	mailbox->dirty = 1;
+	
+
 	/* If .SILENT, assume client has updated their cache */
 	if (storeargs->silent && flagreport[msgno] &&
 	    flagreport[msgno] == record.last_updated) {
