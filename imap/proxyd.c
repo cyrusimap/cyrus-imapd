@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.129 2002/06/14 18:18:34 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.130 2002/06/24 16:28:48 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -641,7 +641,7 @@ static int pipe_lsub(struct backend *s, char *tag, int force_notfatal,
 		     int for_find) 
 {
     int taglen = strlen(tag);
-    int i,c;
+    int c;
     int r = PROXY_OK;
     int exist_r;
     char mailboxname[MAX_MAILBOX_PATH + 1];
