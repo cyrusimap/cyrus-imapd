@@ -1,4 +1,4 @@
-$Id: drac_auth.patch,v 1.10 2001/08/10 18:32:16 ken3 Exp $
+$Id: drac_auth.patch,v 1.11 2001/10/03 15:00:07 ken3 Exp $
 
 Patch to add support for Dynamic Relay Authorization Control
 
@@ -22,7 +22,7 @@ Installation
 
     Perform the following to reconfigure your build:
 
-	# rm aclocal.m4 configure
+	# rm aclocal.m4 configure config.h.in
 	# sh SMakefile
 	# ./configure ... --with-drac=<location of libdrac>
 
@@ -67,10 +67,10 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
 Index: acconfig.h
 ===================================================================
 RCS file: /afs/andrew/system/cvs/src/cyrus/acconfig.h,v
-retrieving revision 1.17
-diff -c -r1.17 acconfig.h
-*** acconfig.h	2001/03/28 16:11:49	1.17
---- acconfig.h	2001/08/07 18:22:54
+retrieving revision 1.22
+diff -c -r1.22 acconfig.h
+*** acconfig.h	2001/09/25 16:49:49	1.22
+--- acconfig.h	2001/10/03 13:56:17
 ***************
 *** 81,86 ****
 --- 81,89 ----
@@ -86,13 +86,13 @@ diff -c -r1.17 acconfig.h
 Index: configure.in
 ===================================================================
 RCS file: /afs/andrew/system/cvs/src/cyrus/configure.in,v
-retrieving revision 1.198
-diff -c -r1.198 configure.in
-*** configure.in	2001/06/23 01:01:47	1.198
---- configure.in	2001/08/07 18:22:54
+retrieving revision 1.203
+diff -c -r1.203 configure.in
+*** configure.in	2001/09/20 17:48:41	1.203
+--- configure.in	2001/10/03 13:56:17
 ***************
-*** 731,736 ****
---- 731,751 ----
+*** 751,756 ****
+--- 751,771 ----
   SNMP_SUBDIRS=""
   AC_SUBST(SNMP_SUBDIRS)
   
@@ -117,13 +117,13 @@ diff -c -r1.198 configure.in
 Index: imap/imapd.c
 ===================================================================
 RCS file: /afs/andrew/system/cvs/src/cyrus/imap/imapd.c,v
-retrieving revision 1.311
-diff -c -r1.311 imapd.c
-*** imap/imapd.c	2001/08/07 02:09:05	1.311
---- imap/imapd.c	2001/08/07 18:22:54
+retrieving revision 1.326
+diff -c -r1.326 imapd.c
+*** imap/imapd.c	2001/10/02 21:08:10	1.326
+--- imap/imapd.c	2001/10/03 13:56:20
 ***************
-*** 119,124 ****
---- 119,132 ----
+*** 113,118 ****
+--- 113,126 ----
   static SSL *tls_conn = NULL;
   #endif /* HAVE_SSL */
   
@@ -139,8 +139,8 @@ diff -c -r1.311 imapd.c
   static struct mailbox mboxstruct;
   static struct mailbox *imapd_mailbox;
 ***************
-*** 447,452 ****
---- 455,478 ----
+*** 438,443 ****
+--- 446,469 ----
       /* setup for sending IMAP IDLE notifications */
       idle_enabled();
   
@@ -166,8 +166,8 @@ diff -c -r1.311 imapd.c
       snmp_connect(); /* ignore return code */
       snmp_set_str(SERVER_NAME_VERSION,CYRUS_VERSION);
 ***************
-*** 519,524 ****
---- 545,556 ----
+*** 510,515 ****
+--- 536,547 ----
   	if (getsockname(0, (struct sockaddr *)&imapd_localaddr, &salen) == 0) {
   	    imapd_haveaddr = 1;
   	}
@@ -181,8 +181,8 @@ diff -c -r1.311 imapd.c
   
       /* create the SASL connection */
 ***************
-*** 559,564 ****
---- 591,601 ----
+*** 552,557 ****
+--- 584,594 ----
       prot_flush(imapd_out);
       snmp_increment(ACTIVE_CONNECTIONS, -1);
   
@@ -195,8 +195,8 @@ diff -c -r1.311 imapd.c
       imapd_reset();
   
 ***************
-*** 631,636 ****
---- 668,678 ----
+*** 627,632 ****
+--- 664,674 ----
       prot_flush(imapd_out);
       /* one less active connection */
       snmp_increment(ACTIVE_CONNECTIONS, -1);
@@ -209,8 +209,8 @@ diff -c -r1.311 imapd.c
   }
   
 ***************
-*** 651,656 ****
---- 693,727 ----
+*** 647,652 ****
+--- 689,723 ----
   
   }
   
@@ -247,8 +247,8 @@ diff -c -r1.311 imapd.c
    * Top-level command loop parsing
    */
 ***************
-*** 1512,1517 ****
---- 1583,1593 ----
+*** 1508,1513 ****
+--- 1579,1589 ----
   
       prot_printf(imapd_out, "%s OK %s\r\n", tag, reply);
   
@@ -261,8 +261,8 @@ diff -c -r1.311 imapd.c
       imapd_logfd = telemetry_log(imapd_userid, imapd_in, imapd_out);
   
 ***************
-*** 1666,1671 ****
---- 1742,1752 ----
+*** 1664,1669 ****
+--- 1740,1750 ----
   
       prot_setsasl(imapd_in,  imapd_saslconn);
       prot_setsasl(imapd_out, imapd_saslconn);
@@ -277,10 +277,10 @@ diff -c -r1.311 imapd.c
 Index: imap/pop3d.c
 ===================================================================
 RCS file: /afs/andrew/system/cvs/src/cyrus/imap/pop3d.c,v
-retrieving revision 1.102
-diff -c -r1.102 pop3d.c
-*** imap/pop3d.c	2001/08/07 02:09:05	1.102
---- imap/pop3d.c	2001/08/07 18:22:54
+retrieving revision 1.109
+diff -c -r1.109 pop3d.c
+*** imap/pop3d.c	2001/08/22 01:34:27	1.109
+--- imap/pop3d.c	2001/10/03 13:56:20
 ***************
 *** 101,106 ****
 --- 101,109 ----
@@ -294,8 +294,8 @@ diff -c -r1.102 pop3d.c
   
   #ifdef HAVE_SSL
 ***************
-*** 341,346 ****
---- 344,353 ----
+*** 335,340 ****
+--- 338,347 ----
   	*popd_apop_chal = 0;
       }
   
@@ -307,8 +307,8 @@ diff -c -r1.102 pop3d.c
   		apop_enabled() ? popd_apop_chal : config_servername,
   		CYRUS_VERSION);
 ***************
-*** 1296,1301 ****
---- 1303,1321 ----
+*** 1277,1282 ****
+--- 1284,1302 ----
       }
       popd_mailbox = &mboxstruct;
       proc_register("pop3d", popd_clienthost, popd_userid, popd_mailbox->name);
@@ -328,15 +328,35 @@ diff -c -r1.102 pop3d.c
   
       /* Create telemetry log */
       telemetry_log(popd_userid, popd_in, popd_out);
+Index: imap/version.c
+===================================================================
+RCS file: /afs/andrew/system/cvs/src/cyrus/imap/version.c,v
+retrieving revision 1.1
+diff -c -r1.1 version.c
+*** imap/version.c	2001/10/02 21:08:11	1.1
+--- imap/version.c	2001/10/03 13:56:20
+***************
+*** 129,134 ****
+--- 129,138 ----
+      snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
+  	     "; %s", SIEVE_VERSION);
+  #endif
++ #ifdef DRAC_AUTH
++     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
++ 	     "; DRAC");
++ #endif
+  #ifdef HAVE_LIBWRAP
+      snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
+  	     "; TCP Wrappers");
 Index: man/imapd.conf.5
 ===================================================================
 RCS file: /afs/andrew/system/cvs/src/cyrus/man/imapd.conf.5,v
-retrieving revision 1.44
-diff -c -r1.44 imapd.conf.5
-*** man/imapd.conf.5	2001/08/07 17:58:47	1.44
---- man/imapd.conf.5	2001/08/07 18:22:54
+retrieving revision 1.50
+diff -c -r1.50 imapd.conf.5
+*** man/imapd.conf.5	2001/08/31 18:42:49	1.50
+--- man/imapd.conf.5	2001/10/03 13:56:21
 ***************
-*** 253,259 ****
+*** 287,293 ****
   Unix domain socket that idled listens on.
   .IP "\fBnotifysocket:\fR /var/imap/socket/notify" 5
   Unix domain socket that the new mail notification daemon listens on.
@@ -344,7 +364,7 @@ diff -c -r1.44 imapd.conf.5
   .PP
   \fBimapd(8)\fR, \fBpop3d(8)\fR, \fBlmtpd(8)\fR, \fBtimsieved(8)\fR,
 ! \fBidled(8)\fR, \fBdeliver(8)\fR, \fBmaster(8)\fR
---- 253,265 ----
+--- 287,299 ----
   Unix domain socket that idled listens on.
   .IP "\fBnotifysocket:\fR /var/imap/socket/notify" 5
   Unix domain socket that the new mail notification daemon listens on.
