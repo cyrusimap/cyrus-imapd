@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.232.4.16 2002/11/03 13:43:03 ken3 Exp $
+dnl $Id: configure.in,v 1.232.4.17 2002/11/04 20:15:50 ken3 Exp $
 dnl
 
 
@@ -874,6 +874,7 @@ dnl compile perl stuff
     EXTRA_SUBDIRS="${EXTRA_SUBDIRS} perl"
 dnl and compile perl/cyradm
     PERL_SUBDIRS="imap"
+    PERL="${with_perl}"
 fi
 
 dnl for timsieved
@@ -951,6 +952,7 @@ dnl     (cd perl/imap; $perl Makefile.PL PREFIX=$prefix)
 dnl   fi
 dnl ], perl=$PERL; with_perl=$with_perl; prefix=$prefix; SASL_LIB="$LIB_SASL"; SASL_INC="$SASLFLAGS"; export SASL_LIB SASL_INC)
 AC_SUBST(PERL_SUBDIRS)
+AC_SUBST(PERL)
 
 dnl make sure that Makefile is the last thing output
 AC_OUTPUT(man/Makefile master/Makefile lib/Makefile imap/Makefile imap/feedcyrus imtest/Makefile netnews/Makefile snmp/Makefile perl/Makefile $EXTRA_OUTPUT Makefile)
