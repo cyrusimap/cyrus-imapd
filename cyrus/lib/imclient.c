@@ -36,6 +36,7 @@
 #include <netdb.h>
 
 #include "acte.h"
+#include "sysexits.h"
 #include "xmalloc.h"
 #include "imclient.h"
 
@@ -330,7 +331,7 @@ va_dcl
     va_list pvar;
     struct imclient_cmdcallback *newcmdcallback;
     char buf[30];
-    char *percent, *str, *p, **v;
+    char *percent, *str, **v;
     int num;
     unsigned unum;
 #ifdef __STDC__
