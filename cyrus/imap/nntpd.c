@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.51 2002/12/20 18:32:06 rjs3 Exp $
+ * $Id: nntpd.c,v 1.1.2.52 2002/12/20 19:42:12 ken3 Exp $
  */
 
 /*
@@ -2017,7 +2017,7 @@ static int savemsg(message_data_t *m, FILE *f)
 
 static int deliver(message_data_t *msg)
 {
-    int n, r;
+    int n, r = 0, success = 0;
     char *rcpt = NULL;
     struct appendstate as;
     time_t now = time(NULL);
@@ -2040,21 +2040,21 @@ static int deliver(message_data_t *msg)
 	    prot_rewind(msg->data);
 	    r = append_fromstream(&as, msg->data, msg->size, now,
 				  (const char **) NULL, 0);
-	    if (!r) append_commit(&as, NULL, &uid, NULL);
+	    if (!r) {
+		append_commit(&as, NULL, &uid, NULL);
+		if (!success++ && have_newsdb && msg->id && rcpt) {
+		    /* store msgid for IHAVE/CHECK/TAKETHIS and reader cmds */
+		    netnews_store(msg->id, rcpt, uid, msg->lines, now);
+		}
+	    }
 	    else append_abort(&as);
 	}
 
 	if (!r && dupelim && msg->id)
 	    duplicate_mark(msg->id, strlen(msg->id), rcpt, strlen(rcpt), now);
-
-	if (r) return r;
     }
 
-    /* store msgid for IHAVE/CHECK/TAKETHIS and reader commands */
-    if (have_newsdb && msg->id && rcpt)
-	netnews_store(msg->id, rcpt, uid, msg->lines, now);
-
-    return  0;
+    return (success ? 0 : r);
 }
 
 static int newgroup(message_data_t *msg)
