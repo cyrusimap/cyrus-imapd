@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.44 1998/06/25 22:17:16 tjs Exp $ -->
+<!-- $Id: changes.html,v 1.45 1998/07/07 19:00:31 tjs Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -20,7 +20,8 @@ have that information.  This should work with 7.5 or better, which is what the
 server requires anyway.  (All the previous checks to look for Tcl
 	libraries are gone; now, configure runs tclsh and asks it where
 	the Tcl libraries are, then runs the shell scripts that are in
-	that directory.)
+	that directory.  Since the tclConfig.sh script may not be in that
+	directory, it looks in .. as well.)
 
 <li> The checks for com_err in configure are a little smarter and look
 	to see if all the pieces are there before trying to use them.
@@ -550,7 +551,7 @@ restore tab before breaking out of loop.
 </ul>
 <P><HR><P>
 <!-- hhmts start -->
-last modified by tjs at Thu Jun 25 18:17:05 1998
+last modified by tjs at Mon Jul  6 20:07:14 1998
 <!-- hhmts end -->
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
