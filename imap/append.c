@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.86 2002/03/14 22:02:59 leg Exp $
+ * $Id: append.c,v 1.87 2002/03/15 19:53:58 rjs3 Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -434,7 +434,6 @@ int append_fromstage(struct appendstate *as,
 
     /* for staging */
     char stagefile[1024];
-    FILE *f;
     int sp;
 
     assert(stage != NULL && stage->parts[0][0] != '\0');
