@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.85 1999/03/03 21:06:47 tjs Exp $
+ * $Id: index.c,v 1.86 1999/03/29 20:23:58 tjs Exp $
  */
 #include <stdio.h>
 #include <string.h>
@@ -1209,7 +1209,7 @@ index_forsequence(struct mailbox* mailbox,
 		  void* rock,
 		  int* fetchedsomething)
 {
-    int i, start = 0, end;
+    unsigned i, start = 0, end;
     int r, result = 0;
 
     /* no messages, no calls.  dumps core otherwise */
@@ -1282,7 +1282,7 @@ int num;
 char *sequence;
 int usinguid;
 {
-    int i, start = 0, end;
+    unsigned i, start = 0, end;
 
     for (;;) {
 	if (isdigit(*sequence)) {
@@ -2245,16 +2245,15 @@ void *rock;
     int mid;
     int r;
     int firsttry = 1;
-    int seendirty = 0, dirty = 0;
+    int dirty = 0;
 
     /* Change \Seen flag */
-    if (storeargs->operation == STORE_REPLACE && (mailbox->myrights&ACL_SEEN)) {
-	if (seenflag[msgno] != storeargs->seen) seendirty++;
+    if (storeargs->operation == STORE_REPLACE && (mailbox->myrights&ACL_SEEN))
+    {
 	seenflag[msgno] = storeargs->seen;
     }
     else if (storeargs->seen) {
 	i = (storeargs->operation == STORE_ADD) ? 1 : 0;
-	if (seenflag[msgno] != i) seendirty++;
 	seenflag[msgno] = i;
     }
 
@@ -2336,35 +2335,34 @@ void *rock;
 	}
     }
 
-    if (dirty || seendirty) {
-	if (dirty) {
-	    /* If .SILENT, assume client has updated their cache */
-	    if (storeargs->silent && flagreport[msgno] &&
-		flagreport[msgno] == record.last_updated) {
-		flagreport[msgno] = 
-		  (record.last_updated >= storeargs->update_time) ?
-		    record.last_updated + 1 : storeargs->update_time;
-	    }
-
-	    record.last_updated =
-	      (record.last_updated >= storeargs->update_time) ?
+    if (dirty) {
+	/* If .SILENT, assume client has updated their cache */
+	if (storeargs->silent && flagreport[msgno] &&
+	    flagreport[msgno] == record.last_updated) {
+	    flagreport[msgno] = 
+		(record.last_updated >= storeargs->update_time) ?
 		record.last_updated + 1 : storeargs->update_time;
 	}
-
-	if (!storeargs->silent) {
-	    index_fetchflags(mailbox, msgno, record.system_flags,
-			     record.user_flags, record.last_updated);
-	    if (storeargs->usinguid) {
-		prot_printf(imapd_out, " UID %u", UID(msgno));
-	    }
-	    prot_printf(imapd_out, ")\r\n");
-	}
-
-	if (dirty && mid) {
-	    r = mailbox_write_index_record(mailbox, mid, &record);
-	    if (r) return r;
-	}
+	
+	record.last_updated =
+	    (record.last_updated >= storeargs->update_time) ?
+	    record.last_updated + 1 : storeargs->update_time;
     }
+    
+    if (!storeargs->silent) {
+	index_fetchflags(mailbox, msgno, record.system_flags,
+			 record.user_flags, record.last_updated);
+	if (storeargs->usinguid) {
+	    prot_printf(imapd_out, " UID %u", UID(msgno));
+	}
+	prot_printf(imapd_out, ")\r\n");
+    }
+    
+    if (dirty && mid) {
+	r = mailbox_write_index_record(mailbox, mid, &record);
+	if (r) return r;
+    }
+    
     return 0;
 }
 
