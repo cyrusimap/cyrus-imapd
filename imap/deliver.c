@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.107 1999/10/27 21:04:44 leg Exp $
+ * $Id: deliver.c,v 1.108 1999/10/27 21:20:28 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.107 1999/10/27 21:04:44 leg Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.108 1999/10/27 21:20:28 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -1087,7 +1087,7 @@ int autorespond(unsigned char *hash, int len, int days,
     return ret;
 }
 
-int send_response(char *addr, char *subj, char *msg, int mime, int days,
+int send_response(char *addr, char *subj, char *msg, int mime, 
 		  void *ic, void *sc, void *mc)
 {
     FILE *sm;
