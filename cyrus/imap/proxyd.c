@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.29 2000/05/23 20:52:28 robeson Exp $ */
+/* $Id: proxyd.c,v 1.30 2000/05/29 03:02:59 leg Exp $ */
 
 #include <config.h>
 
@@ -547,7 +547,7 @@ static int proxy_authenticate(struct backend *s)
 	return r;
     }
 
-    secprops = mysasl_secprops();
+    secprops = mysasl_secprops(0);
     r = sasl_setprop(s->saslconn, SASL_SEC_PROPS, secprops);
     if (r != SASL_OK) {
 	return r;
@@ -1031,7 +1031,7 @@ int service_main(int argc, char **argv, char **envp)
 	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL); 
     }
 
-    secprops = mysasl_secprops();
+    secprops = mysasl_secprops(0);
     sasl_setprop(proxyd_saslconn, SASL_SEC_PROPS, secprops);
     sasl_setprop(proxyd_saslconn, SASL_IP_REMOTE, &proxyd_remoteaddr);  
     sasl_setprop(proxyd_saslconn, SASL_IP_LOCAL, &proxyd_localaddr);  

@@ -317,7 +317,7 @@ int mysasl_config(void *context __attribute__((unused)),
 /* This creates a structure that defines the allowable
  *   security properties 
  */
-sasl_security_properties_t *mysasl_secprops(void)
+sasl_security_properties_t *mysasl_secprops(int flags)
 {
     static sasl_security_properties_t ret;
 
@@ -327,7 +327,7 @@ sasl_security_properties_t *mysasl_secprops(void)
     ret.max_ssf = config_getint("sasl_maximum_layer", 256);
 				/* maximum allowable security strength */
 
-    ret.security_flags = 0;
+    ret.security_flags = flags;
     ret.security_flags |= SASL_SEC_NOPLAINTEXT;
     if (!config_getswitch("allowanonymouslogin", 0)) {
 	ret.security_flags |= SASL_SEC_NOANONYMOUS;
