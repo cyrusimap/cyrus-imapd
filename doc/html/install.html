@@ -1,4 +1,4 @@
-<!-- $Id: install.html,v 1.76 2000/02/18 00:09:33 leg Exp $ -->
+<!-- $Id: install.html,v 1.77 2000/02/19 04:41:49 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
@@ -587,9 +587,9 @@ Sieve directory:
 If Perl is not available, it should be easy (but time consuming) to
 create these directories by hand. <P>
 
-<li><b>LINUX SYSTEMS ONLY</b>: Set the configuration, user, quota, and
-partition directories to update synchronously.  Failure to do this may
-lead to data corruption and/or loss of mail after a system crash.
+<li><b>LINUX SYSTEMS ONLY</b>: Set the user, quota, and partition
+directories to update synchronously.  Failure to do this may lead to
+data corruption and/or loss of mail after a system crash.
 
 <pre>
 <kbd>   cd /var/imap
@@ -1170,12 +1170,12 @@ partition. We symlink it to a directory on a memory/viritual memory
 filesystem (specifically Solaris' tmpfs). If you use a tmpfs type
 filesystem, make sure that you have sufficient memory/swap to do this.
 
-<p><li><tt><b>/var/imap/deliverdb</b></tt> - If you enable <a
-href="#dup-deliv"> duplicate delivery suppression</a>, each time a
-mail message is delivered it needs to lock the database and check to
-see if the message-id has been seen already. If you require really
-high throughput delivery, you may want to disable this feature.
-However, disabling this feature also disables Sieve support.
+<p><li><tt><b>/var/imap/deliverdb</b></tt> - Unless you disable
+duplicate delivery suppression, each time a mail message is delivered
+it needs to lock the database and check to see if the message-id has
+been seen already. If you require really high throughput delivery, you
+may want to disable this feature.  However, disabling this feature
+also disables Sieve support.
 
 <p>We run with it enabled and it doesn't significantly impact our
 performance.
