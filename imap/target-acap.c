@@ -26,7 +26,7 @@
  *  (412) 268-4387, fax: (412) 268-7395
  *  tech-transfer@andrew.cmu.edu
  *
- * $Id: target-acap.c,v 1.9 2000/04/06 15:14:52 leg Exp $
+ * $Id: target-acap.c,v 1.10 2000/04/11 03:37:22 leg Exp $
  */
 
 #include <config.h>
@@ -274,8 +274,13 @@ void myacap_entry(acap_entry_t *entry, void *rock)
 static void mboxdel(const void *v)
 {
     char *name = (char *) v;
+    int r = 0;
 
-    mboxlist_deletemailbox(name, 1, "", NULL, 0);
+    syslog(LOG_DEBUG, "'%s' no longer exists", name);
+    r = mboxlist_deletemailbox(name, 1, "", NULL, 0);
+    if (r) {
+	syslog(LOG_ERR, "error deleting '%s': %s", name, error_message(r));
+    }
 }
 
 static struct acap_search_callback myacap_search_cb = {
