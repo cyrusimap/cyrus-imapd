@@ -41,7 +41,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ldap.c,v 1.3 2004/01/23 16:35:28 rjs3 Exp $";
+      "$Id: ldap.c,v 1.4 2004/02/24 23:11:39 rjs3 Exp $";
 
 #include <config.h>
 
@@ -60,7 +60,6 @@ static char rcsid[] __attribute__((unused)) =
 
 #include <ldap.h>
 #include <lber.h>
-#include <sasl/sasl.h>
 
 /* libimap */
 #include "global.h"
@@ -126,14 +125,58 @@ static char allowedchars[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 };
 
-typedef struct ldapglue {
-	const char *authc;
-	const char *authz;	
-	const char *realm;	
-	const char *password;
-} ldapglue;
+typedef struct _ptsm {
+    char   *uri;
+    int    version;
+    struct timeval timeout;
+    int    size_limit;
+    int    time_limit;
+    int    deref;
+    int    referrals;
+    int    restart;
+    int    scope;
+    char   *base;
+    int    sasl;
+    char   *id;
+    char   *bind_dn;
+    char   *password;
+    char   *authz;
+    char   *mech;
+    char   *realm;
+    char   *filter;
+    char   *sasl_secprops;
+    int    start_tls;
+    int    tls_check_peer;
+    char   *tls_cacert_file;
+    char   *tls_cacert_dir;
+    char   *tls_ciphers;
+    char   *tls_cert;
+    char   *tls_key;
+    int    member_method;
+    char   *member_attribute;
+    char   *member_filter;
+    char   *member_base;
+    int    member_scope;
+    char   *group_filter;
+    char   *group_base;
+    int    group_scope;
+    LDAP   *ld;
+} t_ptsm;
 
-static int ldap_interact(
+#define PTSM_OK 0
+#define PTSM_FAIL -1
+#define PTSM_NOMEM -2
+#define PTSM_RETRY -3
+
+#define PTSM_MEMBER_METHOD_ATTRIBUTE 0
+#define PTSM_MEMBER_METHOD_FILTER 1
+
+#define ISSET(x)  ((x != NULL) && (*(x) != '\0'))
+#define EMPTY(x)  ((x == NULL) || (*(x) == '\0'))
+
+static t_ptsm *ptsm = NULL;
+
+static int ptsmodule_interact(
 	LDAP *ld, 
 	unsigned flags __attribute__((unused)), 
 	void *def, 
@@ -141,26 +184,26 @@ static int ldap_interact(
 {
 	sasl_interact_t *in = inter;
 	const char *p;
-	ldapglue *glue = def;
+	t_ptsm *ptsmdef = def;
 
 	for (;in->id != SASL_CB_LIST_END;in++) {
 		p = NULL;
 		switch(in->id) {
 			case SASL_CB_AUTHNAME:
-				if (glue->authc)
-					p = glue->authc;
+				if (ISSET(ptsmdef->id))
+					p = ptsmdef->id;
 				break;
 			case SASL_CB_USER:
-				if (glue->authz)
-					p = glue->authz;
+				if (ISSET(ptsmdef->authz))
+					p = ptsmdef->authz;
 				break;
 			case SASL_CB_GETREALM:
-				if (glue->realm)
-					p = glue->realm;
+				if (ISSET(ptsmdef->realm))
+					p = ptsmdef->realm;
 				break;          
 			case SASL_CB_PASS:
-				if (glue->password)
-					p = glue->password;
+				if (ISSET(ptsmdef->password))
+					p = ptsmdef->password;
 				break;
 		}
 
@@ -181,12 +224,13 @@ static int ldap_interact(
  * representations: one for getpwent calls and one for folder names.  The
  * latter canonicalizes to a MUTF7 representation.
  */
-char *ldap_canonifyid(const char *identifier, size_t len)
+static char *ptsmodule_canonifyid(const char *identifier, size_t len)
 {
     static char retbuf[81];
     char sawalpha;
     char *p;
     int username_tolower = 0;
+    int i = 0;
 
     if(!len) len = strlen(identifier);
     if(len >= sizeof(retbuf)) return NULL;
@@ -194,27 +238,30 @@ char *ldap_canonifyid(const char *identifier, size_t len)
     memcpy(retbuf, identifier, len);
     retbuf[len] = '\0';
 
+    if (!strncmp(retbuf, "group:", 6))
+        i = 6;
+
     /* Copy the string and look up values in the allowedchars array above.
      * If we see any we don't like, reject the string.
      * Lowercase usernames if requested.
      */
     username_tolower = config_getswitch(IMAPOPT_USERNAME_TOLOWER);
     sawalpha = 0;
-    for(p = retbuf; *p; p++) {
-	if (username_tolower && isupper((unsigned char)*p))
-	    *p = tolower((unsigned char)*p);
+    for(p = retbuf+i; *p; p++) {
+        if (username_tolower && isupper((unsigned char)*p))
+            *p = tolower((unsigned char)*p);
 
-	switch (allowedchars[*(unsigned char*) p]) {
-	case 0:
-	    return NULL;
-	    
-	case 2:
-	    sawalpha = 1;
-	    /* FALL THROUGH */
-	    
-	default:
-	    ;
-	}
+        switch (allowedchars[*(unsigned char*) p]) {
+        case 0:
+            return NULL;
+            
+        case 2:
+            sawalpha = 1;
+            /* FALL THROUGH */
+            
+        default:
+            ;
+        }
     }
 
     if (!sawalpha) return NULL;  /* has to be one alpha char */
@@ -222,121 +269,288 @@ char *ldap_canonifyid(const char *identifier, size_t len)
     return retbuf;
 }
 
-static LDAP *ld = NULL; /* the LDAP handle */
 
-static int do_ldap_bind() 
+static int ptsmodule_connect(void) 
 {
-    int rc;
+	int rc = 0;
 
+	if (ptsm == NULL)  // Sanity Check
+		return PTSM_FAIL;
 
-    /* Initilization */
-    if(config_getswitch(IMAPOPT_LDAP_SASL))
-    {
-	const char *sasl_password =
-	    config_getstring(IMAPOPT_LDAP_SASL_PASSWORD);
-	const char *sasl_mech = config_getstring(IMAPOPT_LDAP_SASL_MECH);
-	const char *sasl_realm = config_getstring(IMAPOPT_LDAP_SASL_REALM);
-	const char *sasl_authc_id = config_getstring(IMAPOPT_LDAP_SASL_AUTHC);
-	const char *sasl_authz_id = config_getstring(IMAPOPT_LDAP_SASL_AUTHZ);
-    ldapglue glue;
+	if (ptsm->ld != NULL)
+		return PTSM_OK;
+
+	if (ISSET(ptsm->tls_cacert_file)) {
+		rc = ldap_set_option (NULL, LDAP_OPT_X_TLS_CACERTFILE, ptsm->tls_cacert_file);
+		if (rc != LDAP_SUCCESS) {
+			syslog (LOG_WARNING, "Unable to set LDAP_OPT_X_TLS_CACERTFILE (%s).", ldap_err2string (rc));
+		}
+	}
+
+	if (ISSET(ptsm->tls_cacert_dir)) {
+		rc = ldap_set_option (NULL, LDAP_OPT_X_TLS_CACERTDIR, ptsm->tls_cacert_dir);
+		if (rc != LDAP_SUCCESS) {
+			syslog (LOG_WARNING, "Unable to set LDAP_OPT_X_TLS_CACERTDIR (%s).", ldap_err2string (rc));
+		}
+	}
+
+	if (ptsm->tls_check_peer != 0) {
+		rc = ldap_set_option(NULL, LDAP_OPT_X_TLS_REQUIRE_CERT, &ptsm->tls_check_peer);
+		if (rc != LDAP_SUCCESS) {
+			syslog (LOG_WARNING, "Unable to set LDAP_OPT_X_TLS_REQUIRE_CERT (%s).", ldap_err2string (rc));
+		}
+	}
+
+	if (ISSET(ptsm->tls_ciphers)) {
+		/* set cipher suite, certificate and private key: */
+		rc = ldap_set_option(NULL, LDAP_OPT_X_TLS_CIPHER_SUITE, ptsm->tls_ciphers);
+		if (rc != LDAP_SUCCESS) {
+			syslog (LOG_WARNING, "Unable to set LDAP_OPT_X_TLS_CIPHER_SUITE (%s).", ldap_err2string (rc));
+		}
+	}
+
+	if (ISSET(ptsm->tls_cert)) {
+		rc = ldap_set_option(NULL, LDAP_OPT_X_TLS_CERTFILE, ptsm->tls_cert);
+		if (rc != LDAP_SUCCESS) {
+			syslog (LOG_WARNING, "Unable to set LDAP_OPT_X_TLS_CERTFILE (%s).", ldap_err2string (rc));
+		}
+	}
+
+	if (ISSET(ptsm->tls_key)) {
+		rc = ldap_set_option(NULL, LDAP_OPT_X_TLS_KEYFILE, ptsm->tls_key);
+		if (rc != LDAP_SUCCESS) {
+			syslog (LOG_WARNING, "Unable to set LDAP_OPT_X_TLS_KEYFILE (%s).", ldap_err2string (rc));
+		}
+	}
+
+	rc = ldap_initialize(&ptsm->ld, ptsm->uri);
+	if (rc != LDAP_SUCCESS) {
+		syslog(LOG_ERR, "ldap_initialize failed (%s)", ptsm->uri);
+		return PTSM_FAIL;
+	}
+
+	rc = ldap_set_option(ptsm->ld, LDAP_OPT_PROTOCOL_VERSION, &(ptsm->version));
+	if (rc != LDAP_OPT_SUCCESS) {
+
+		if (ptsm->sasl ||
+		    ptsm->start_tls) {
+			syslog(LOG_ERR, "Failed to set LDAP_OPT_PROTOCOL_VERSION %d, required for ldap_start_tls and ldap_sasl.", ptsm->version);
+			ldap_unbind(ptsm->ld);
+            ptsm->ld = NULL;
+			return PTSM_FAIL;
+		} else
+			syslog(LOG_WARNING, "Unable to set LDAP_OPT_PROTOCOL_VERSION %d.", ptsm->version);
+
+		ptsm->version = LDAP_VERSION2;
+	}
+
+	rc = ldap_set_option(ptsm->ld, LDAP_OPT_NETWORK_TIMEOUT, &(ptsm->timeout));
+	if (rc != LDAP_OPT_SUCCESS) {
+		syslog(LOG_WARNING, "Unable to set LDAP_OPT_NETWORK_TIMEOUT %d.%d.", ptsm->timeout.tv_sec, ptsm->timeout.tv_usec);
+	}
+
+	rc = ldap_set_option(ptsm->ld, LDAP_OPT_TIMELIMIT, &(ptsm->time_limit));
+	if (rc != LDAP_OPT_SUCCESS) {
+		syslog(LOG_WARNING, "Unable to set LDAP_OPT_TIMELIMIT %d.", ptsm->time_limit);
+	}
+
+	rc = ldap_set_option(ptsm->ld, LDAP_OPT_DEREF, &(ptsm->deref));
+	if (rc != LDAP_OPT_SUCCESS) {
+		syslog(LOG_WARNING, "Unable to set LDAP_OPT_DEREF %d.", ptsm->deref);
+	}
+
+	rc = ldap_set_option(ptsm->ld, LDAP_OPT_REFERRALS, ptsm->referrals ? LDAP_OPT_ON : LDAP_OPT_OFF);
+	if (rc != LDAP_OPT_SUCCESS) {
+		syslog(LOG_WARNING, "Unable to set LDAP_OPT_REFERRALS.");
+	}
+
+	rc = ldap_set_option(ptsm->ld, LDAP_OPT_SIZELIMIT, &(ptsm->size_limit));
+	if (rc != LDAP_OPT_SUCCESS)
+		syslog(LOG_WARNING, "Unable to set LDAP_OPT_SIZELIMIT %d.", ptsm->size_limit);
+
+	rc = ldap_set_option(ptsm->ld, LDAP_OPT_RESTART, ptsm->restart ? LDAP_OPT_ON : LDAP_OPT_OFF);
+	if (rc != LDAP_OPT_SUCCESS) {
+		syslog(LOG_WARNING, "Unable to set LDAP_OPT_RESTART.");
+	}
+
+	if (ptsm->start_tls) {
+
+		rc = ldap_start_tls_s(ptsm->ld, NULL, NULL);
+		if (rc != LDAP_SUCCESS) {
+			syslog(LOG_ERR, "start tls failed (%s).", ldap_err2string(rc));
+			ldap_unbind(ptsm->ld);
+            ptsm->ld = NULL;
+			return PTSM_FAIL;
+		}
+	}
 	
+	if (ptsm->sasl) {
 
-    glue.authc = sasl_authc_id;
-    glue.authz = sasl_authz_id;
-    glue.realm = sasl_realm;
-    glue.password = sasl_password;
+		if (EMPTY(ptsm->mech))
+			ldap_get_option(ptsm->ld, LDAP_OPT_X_SASL_MECH, &(ptsm->mech));
 
-	syslog(LOG_DEBUG, "doing LDAP SASL bind");
-	rc = ldap_sasl_interactive_bind_s( ld, NULL /* binddn */,
-					   sasl_mech, NULL, NULL,
-					   LDAP_SASL_QUIET, ldap_interact,
-					   &glue );
-    } else {
-	/* xxx we should probably also allow simple non-anonymous binds */
-	syslog(LOG_DEBUG, "doing LDAP SIMPLE [anonymous] bind");
-	rc = ldap_simple_bind_s(ld, "", "");
-    }
-    
-    return rc;
-}
+		if (EMPTY(ptsm->realm))
+			ldap_get_option(ptsm->ld, LDAP_OPT_X_SASL_REALM, &(ptsm->realm));
 
-int ptsmodule_ldap_connect(void) 
-{
-    int ldap_version = LDAP_VERSION2;
-    int rc;
-    
-    rc = ldap_initialize(&ld, config_getstring(IMAPOPT_LDAP_SERVERS));
+		if (ISSET(ptsm->sasl_secprops)) {
+			rc = ldap_set_option(ptsm->ld, LDAP_OPT_X_SASL_SECPROPS, (void *) ptsm->sasl_secprops);
+			if( rc != LDAP_OPT_SUCCESS ) {
+				syslog(LOG_ERR, "Unable to set LDAP_OPT_X_SASL_SECPROPS.");
+				ldap_unbind(ptsm->ld);
+                ptsm->ld = NULL;
+				return PTSM_FAIL;
+			}
+		}
+
+		rc = ldap_sasl_interactive_bind_s(
+			ptsm->ld, 
+			ptsm->bind_dn,
+			ptsm->mech, 
+			NULL, 
+			NULL, 
+			LDAP_SASL_QUIET, 
+			ptsmodule_interact, 
+			ptsm);
+	} else
+		rc = ldap_simple_bind_s(ptsm->ld, ptsm->bind_dn, ptsm->password);
+
     if (rc != LDAP_SUCCESS) {
-	syslog(LOG_ERR, "ldap_initialize failed");
-	return rc;
-    }
+        syslog(LOG_ERR,
+               (ptsm->sasl ? "ldap_sasl_interactive_bind() failed %d (%s)." : "ldap_simple_bind() failed %d (%s)."), rc, ldap_err2string(rc));
+        ldap_unbind(ptsm->ld);
+        ptsm->ld = NULL;
+        return (rc == LDAP_SERVER_DOWN ? PTSM_RETRY : PTSM_FAIL);
+	}
 
-    syslog(LOG_DEBUG, "seting LDAP version");
-
-    if(config_getswitch(IMAPOPT_LDAP_SASL))
-	    ldap_version = LDAP_VERSION3;
-
-    rc = ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &ldap_version);
-    
-    if(rc != LDAP_OPT_SUCCESS)
-    {
-	syslog(LOG_ERR, "could not set LDAP_OPT_PROTOCOL_VERSION");
-	return rc;
-    }
-
-    syslog(LOG_DEBUG, "binding LDAP");
-
-    rc = do_ldap_bind();
-    if(rc != LDAP_SUCCESS) {
-	syslog(LOG_ERR, "do_ldap_bind() failed: (%s)", ldap_err2string(rc));
-    }
-
-    return rc;
+	return PTSM_OK;
 }
-
 
 /* API */
 const char *ptsmodule_name = "ldap";
 
 void ptsmodule_init(void) 
 {
-    syslog(LOG_DEBUG, "initing LDAP");
+    char *p = NULL;
 
-    if(!config_getstring(IMAPOPT_LDAP_SERVERS)) {
-	fatal("no LDAP servers defined", EC_CONFIG);
+    if (ptsm)
+        return; // Already configured
+
+    ptsm = xmalloc(sizeof(t_ptsm));
+    if (ptsm == NULL) {
+        fatal("xmalloc() failed", EC_CONFIG);
     }
 
-    if(!config_getstring(IMAPOPT_LDAP_BASE))
-    {
-	fatal("LDAP search BASE not defined", EC_CONFIG);
+    ptsm->uri = (config_getstring(IMAPOPT_LDAP_URI) ? 
+        config_getstring(IMAPOPT_LDAP_URI) : config_getstring(IMAPOPT_LDAP_SERVERS));
+    ptsm->version = (config_getint(IMAPOPT_LDAP_VERSION) == 2 ? LDAP_VERSION2 : LDAP_VERSION3);
+    ptsm->timeout.tv_sec = config_getint(IMAPOPT_LDAP_TIME_LIMIT);
+    ptsm->timeout.tv_usec = 0;
+    ptsm->restart = config_getswitch(IMAPOPT_LDAP_RESTART);
+    p = config_getstring(IMAPOPT_LDAP_DEREF);
+    if (!strcasecmp(p, "search")) {
+        ptsm->deref = LDAP_DEREF_SEARCHING;
+    } else if (!strcasecmp(p, "find")) {
+        ptsm->deref = LDAP_DEREF_FINDING;
+    } else if (!strcasecmp(p, "always")) {
+        ptsm->deref = LDAP_DEREF_ALWAYS;
+    } else {
+        ptsm->deref = LDAP_DEREF_NEVER;
     }
+    ptsm->referrals = config_getswitch(IMAPOPT_LDAP_REFERRALS);
+    ptsm->size_limit = config_getint(IMAPOPT_LDAP_SIZE_LIMIT);
+    ptsm->time_limit = config_getint(IMAPOPT_LDAP_TIME_LIMIT);
+    p = config_getstring(IMAPOPT_LDAP_SCOPE);
+    if (!strcasecmp(p, "one")) {
+        ptsm->scope = LDAP_SCOPE_ONELEVEL;
+    } else if (!strcasecmp(p, "base")) {
+        ptsm->scope = LDAP_SCOPE_BASE;
+    } else {
+        ptsm->scope = LDAP_SCOPE_SUBTREE;
+    }
+    ptsm->bind_dn = config_getstring(IMAPOPT_LDAP_BIND_DN);
+    ptsm->sasl = config_getswitch(IMAPOPT_LDAP_SASL);
+    ptsm->id = (config_getstring(IMAPOPT_LDAP_ID) ? 
+        config_getstring(IMAPOPT_LDAP_ID) : config_getstring(IMAPOPT_LDAP_SASL_AUTHC));
+    ptsm->authz = (config_getstring(IMAPOPT_LDAP_AUTHZ) ? 
+        config_getstring(IMAPOPT_LDAP_AUTHZ) : config_getstring(IMAPOPT_LDAP_SASL_AUTHZ));
+    ptsm->mech = (config_getstring(IMAPOPT_LDAP_MECH) ? 
+        config_getstring(IMAPOPT_LDAP_MECH) : config_getstring(IMAPOPT_LDAP_SASL_MECH));
+    ptsm->realm = (config_getstring(IMAPOPT_LDAP_REALM) ? 
+        config_getstring(IMAPOPT_LDAP_REALM) : config_getstring(IMAPOPT_LDAP_SASL_REALM));
+    ptsm->password = (config_getstring(IMAPOPT_LDAP_PASSWORD) ? 
+        config_getstring(IMAPOPT_LDAP_PASSWORD) : config_getstring(IMAPOPT_LDAP_SASL_PASSWORD));
+    ptsm->start_tls = config_getswitch(IMAPOPT_LDAP_START_TLS);
+    ptsm->tls_check_peer = config_getswitch(IMAPOPT_LDAP_TLS_CHECK_PEER);
+    ptsm->tls_cacert_file = config_getstring(IMAPOPT_LDAP_TLS_CACERT_FILE);
+    ptsm->tls_cacert_dir = config_getstring(IMAPOPT_LDAP_TLS_CACERT_DIR);
+    ptsm->tls_ciphers = config_getstring(IMAPOPT_LDAP_TLS_CIPHERS);
+    ptsm->tls_cert = config_getstring(IMAPOPT_LDAP_TLS_CERT);
+    ptsm->tls_key = config_getstring(IMAPOPT_LDAP_TLS_KEY);
+    p = config_getstring(IMAPOPT_LDAP_MEMBER_METHOD);
+    if (!strcasecmp(p, "filter")) {
+        ptsm->member_method = PTSM_MEMBER_METHOD_FILTER;
+    } else {
+        ptsm->member_method = PTSM_MEMBER_METHOD_ATTRIBUTE;
+    }
+    p = config_getstring(IMAPOPT_LDAP_MEMBER_SCOPE);
+    if (!strcasecmp(p, "one")) {
+        ptsm->member_scope = LDAP_SCOPE_ONELEVEL;
+    } else if (!strcasecmp(p, "base")) {
+        ptsm->member_scope = LDAP_SCOPE_BASE;
+    } else {
+        ptsm->member_scope = LDAP_SCOPE_SUBTREE;
+    }
+    ptsm->member_filter = config_getstring(IMAPOPT_LDAP_MEMBER_FILTER);
+    ptsm->member_base = config_getstring(IMAPOPT_LDAP_MEMBER_BASE);
+    ptsm->member_attribute = (config_getstring(IMAPOPT_LDAP_MEMBER_ATTRIBUTE) ?
+        config_getstring(IMAPOPT_LDAP_MEMBER_ATTRIBUTE) : config_getstring(IMAPOPT_LDAP_MEMBER_ATTRIBUTE));
+    p = config_getstring(IMAPOPT_LDAP_GROUP_SCOPE);
+    if (!strcasecmp(p, "one")) {
+        ptsm->group_scope = LDAP_SCOPE_ONELEVEL;
+    } else if (!strcasecmp(p, "base")) {
+        ptsm->group_scope = LDAP_SCOPE_BASE;
+    } else {
+        ptsm->group_scope = LDAP_SCOPE_SUBTREE;
+    }
+    ptsm->group_filter = config_getstring(IMAPOPT_LDAP_GROUP_FILTER);
+    ptsm->group_base = config_getstring(IMAPOPT_LDAP_GROUP_BASE);
+    ptsm->filter = config_getstring(IMAPOPT_LDAP_FILTER);
+    ptsm->base = config_getstring(IMAPOPT_LDAP_BASE);
 
-    if(!config_getstring(IMAPOPT_LDAP_FILTER))
-    {
-	fatal("LDAP search FILTER not defined", EC_CONFIG);
-    }
+	if (ptsm->version != LDAP_VERSION3 && 
+	    (ptsm->sasl ||
+	     ptsm->start_tls))
+	    ptsm->version = LDAP_VERSION3;
 
-    if(ptsmodule_ldap_connect() != LDAP_SUCCESS)
-    {
-	fatal("failed initial LDAP connection", EC_CONFIG);
-    }
+    ptsm->ld = NULL;
 }
 
 /*
  * Note: calling function must free memory.
  */
-static int ldap_escape(const char *s, char **result) 
+static int ptsmodule_escape(
+	const char *s, 
+	const unsigned int n, 
+	char **result) 
 {
 	char *buf;
 	char *end, *ptr, *temp;
 
-	buf = xmalloc(strlen(s) * 3 + 1);
+	if (n > strlen(s))  // Sanity check, just in case
+		return PTSM_FAIL;
+
+	buf = xmalloc(n * 5 + 1);
+	if (buf == NULL) {
+		return PTSM_NOMEM;
+	}
+
 	buf[0] = '\0';
 	ptr = (char *)s;
-	end = ptr + strlen(ptr);
+	end = ptr + n;
 
-	while (((temp = strpbrk(ptr, "*()\\\0"))!=NULL) && (temp < end)) {
-		if ((temp-ptr) > 0)
+	while (((temp = strpbrk(ptr, "*()\\\0"))!=NULL) && (temp<end)) {
+
+		if (temp>ptr)
 			strncat(buf, ptr, temp-ptr);
 
 		switch (*temp) {
@@ -358,264 +572,632 @@ static int ldap_escape(const char *s, char **result)
 		}
 		ptr=temp+1;
 	}
-	if (temp<end)
-	    strcat(buf, ptr);
+	if (ptr<end)
+		strncat(buf, ptr, end-ptr);
 
 	*result = buf;
 
-	return 0;
+	return PTSM_OK;
 }
+
+static int ptsmodule_tokenize_domains(
+	const char *d, 
+	int n, 
+	char **result)
+{
+	char *s, *s1;
+	char *lasts;
+	int nt, i;
+
+	*result = NULL;
+
+	if (d == NULL || n < 1 || n > 9)
+		return PTSM_FAIL;
+
+	s = strdup(d);
+	if (s == NULL)
+		return PTSM_NOMEM;
+
+	for( nt=0, s1=s; *s1; s1++ )
+		if( *s1 == '.' ) nt++;
+	nt++;
+
+	if (n > nt) {
+		free(s);
+		return PTSM_FAIL;
+	}
+
+	i = nt - n;
+	s1 = (char *)strtok_r(s, ".", &lasts);
+	while(s1) {
+		if (i == 0) {
+			*result = strdup(s1);
+			free(s);
+			return (*result == NULL ? PTSM_NOMEM : PTSM_OK);
+		}
+		s1 = (char *)strtok_r(NULL, ".", &lasts);
+		i--;
+	}
+
+	free(s);
+	return PTSM_FAIL;
+}
+
+#define PTSM_MAX(a,b) (a>b?a:b)
 
 /*
- * build_filter
+ * ptsmodule_expand_tokens
  * Parts with the strings provided.
- *   %% = %
- *   %u = user
- *   %r = realm
+ *   %%   = %
+ *   %u   = user
+ *   %U   = user part of %u
+ *   %d   = domain part of %u if available, othwise same as %r
+ *   %1-9 = domain tokens (%1 = tld, %2 = domain when %d = domain.tld)
+ *   %D   = user DN
  * Note: calling function must free memory.
  */
-static int build_filter(const char *filter,
-			const char *username,
-			const char *realm,
-			char **result) 
+static int ptsmodule_expand_tokens(
+	const char *pattern,
+	const char *username, 
+	const char *dn,
+	char **result) 
 {
-    char *buf; 
-    const char *ptr, *end, *temp;
-    char *ebuf;
-    int rc;
+	char *buf; 
+	char *end, *ptr, *temp;
+	char *ebuf, *user;
+	char *domain;
+	int rc;
 
-    /* to permit multiple occurences of username and/or realm in filter */
-    /* and avoid memory overflow in filter build
-     * [eg: (|(uid=%u)(userid=%u)) ] */
-    int percents, maxparamlength;
-    int realm_len=0, user_len=0;
+	/* to permit multiple occurences of username and/or realm in filter */
+	/* and avoid memory overflow in filter build [eg: (|(uid=%u)(userid=%u)) ] */
+	int percents, user_len, dn_len, maxparamlength;
 	
-    /* find the longest param of username and realm */
-    if(username) user_len=strlen(username);
-    if(realm) realm_len=strlen(realm);
-    if( user_len > realm_len )
-	maxparamlength = user_len;
-    else
-        maxparamlength = realm_len;
+	if (pattern == NULL) {
+		syslog(LOG_ERR, "filter pattern not setup");
+		return PTSM_FAIL;
+	}
 
-    /* find the number of occurences of percent sign in filter */
-    for(percents=0, buf=filter; *buf; buf++ ) {
-	if( *buf == '%' ) percents++;
-    }
+	/* find the longest param of username and realm, 
+	   do not worry about domain because it is always shorter 
+	   then username                                           */
+	user_len=username ? strlen(username) : 0;
+	dn_len=dn ? strlen(dn) : 0;
 
-    /* percents * 3 * maxparamlength because we need to account for
-     * an entirely-escaped worst-case-length parameter */
-    buf=xmalloc(strlen(filter) + (percents * 3 * maxparamlength) +1);
-    buf[0] = '\0';
+	maxparamlength = PTSM_MAX(user_len, dn_len);
+
+	/* find the number of occurences of percent sign in filter */
+	for( percents=0, buf=(char *)pattern; *buf; buf++ ) {
+		if( *buf == '%' ) percents++;
+	}
+
+	/* percents * 3 * maxparamlength because we need to account for
+         * an entirely-escaped worst-case-length parameter */
+	buf=xmalloc(strlen(pattern) + (percents * 3 * maxparamlength) +1);
+	if(buf == NULL)
+		return PTSM_NOMEM;
+	buf[0] = '\0';
 	
-    ptr=filter;
-    end = ptr + strlen(ptr);
+	ptr = (char *)pattern;
+	end = ptr + strlen(ptr);
 
-    while ((temp=strchr(ptr,'%'))!=NULL ) {
-	if ((temp-ptr) > 0)
-	    strncat(buf, ptr, temp-ptr);
+	while ((temp=strchr(ptr,'%'))!=NULL ) {
 
-	if ((temp+1) >= end) {
-	    syslog(LOG_WARNING, "Incomplete lookup substitution format");
-	    break;
-	}
-	switch (*(temp+1)) {
-	case '%':
-		strncat(buf,temp+1,1);
-		break;
-	case 'u':
-		if (username!=NULL) {
-		    rc=ldap_escape(username, &ebuf);
-		    if (!rc) {
-		        strcat(buf,ebuf);
-		        free(ebuf);
-		    }
-		} else {
-		    syslog(LOG_WARNING, "Username not available.");
-		    return 1;
+		if ((temp-ptr) > 0)
+			strncat(buf, ptr, temp-ptr);
+
+		if ((temp+1) >= end) {
+			syslog(LOG_DEBUG, "Incomplete lookup substitution format");
+			break;
 		}
-		break;
-	case 'r':
-		if (realm!=NULL) {
-	    	    rc = ldap_escape(realm, &ebuf);
-	    	    if (!rc) {
-	    	        strcat(buf,ebuf);
-		        free(ebuf);
-	    	    }
-		} else {
-		    syslog(LOG_WARNING, "Realm not available.");
-		    return 1;
+
+		switch (*(temp+1)) {
+			case '%':
+				strncat(buf,temp+1,1);
+				break;
+			case 'u':
+				if (ISSET(username)) {
+					rc=ptsmodule_escape(username, strlen(username), &ebuf);
+					if (rc == PTSM_OK) {
+						strcat(buf,ebuf);
+						free(ebuf);
+					}
+				} else
+					syslog(LOG_DEBUG, "Username not available.");
+				break;
+			case 'U':
+				if (ISSET(username)) {
+					
+					user = strchr(username, '@');
+					rc=ptsmodule_escape(username, (user ? user - username : strlen(username)), &ebuf);
+					if (rc == PTSM_OK) {
+						strcat(buf,ebuf);
+						free(ebuf);
+					}
+				} else
+					syslog(LOG_DEBUG, "Username not available.");
+				break;
+			case '1':
+			case '2':
+			case '3':
+			case '4':
+			case '5':
+			case '6':
+			case '7':
+			case '8':
+			case '9':
+				if (ISSET(username) && (domain = strchr(username, '@')) && domain[1]!='\0') {
+					rc=ptsmodule_tokenize_domains(domain+1, (int) *(temp+1)-48, &ebuf);
+					if (rc == PTSM_OK) {
+						strcat(buf,ebuf);
+						free(ebuf);
+					}
+				} else
+					syslog(LOG_DEBUG, "Domain tokens not available.");
+				break;
+			case 'd':
+				if (ISSET(username) && (domain = strchr(username, '@')) && domain[1]!='\0') {
+					rc=ptsmodule_escape(domain+1, strlen(domain+1), &ebuf);
+					if (rc == PTSM_OK) {
+						strcat(buf,ebuf);
+						free(ebuf);
+					}
+					break;
+				} 
+			case 'D':
+				if (ISSET(dn)) {
+					rc = ptsmodule_escape(dn, strlen(dn), &ebuf);
+					if (rc == PTSM_OK) {
+						strcat(buf,ebuf);
+						free(ebuf);
+					}
+				} else
+					syslog(LOG_DEBUG, "dn not available.");
+				break;
+			default:
+				break;
 		}
-		break;
-	default:
-		break;
+		ptr=temp+2;
 	}
-	ptr=temp+2;
-    }
-    if (temp<end)
-	strcat(buf, ptr);
-    
-    *result = buf;
-    
-    return 0;
+	if (temp<end)
+		strcat(buf, ptr);
+
+	*result = buf;
+
+	return PTSM_OK;
 }
 
-struct auth_state *ptsmodule_make_authstate(const char *identifier,
-					    size_t size,
-					    const char **reply, int *dsize) 
+
+static int ptsmodule_get_dn(
+    const char *canon_id,
+    size_t size,
+    char **ret)
 {
-    const char *membership_att =
-	    config_getstring(IMAPOPT_LDAP_MEMBER_ATTRIBUTE);
-    const char *ldap_search_base =
-	    config_getstring(IMAPOPT_LDAP_BASE);
-    const char *ldap_filter =
-	    config_getstring(IMAPOPT_LDAP_FILTER);
-
-    char *fetch_attrs[] = {membership_att,NULL};
-    
-    const char *canon_id = ldap_canonifyid(identifier, size);
     int rc;
-    char *name_buf;
-    struct auth_state *newstate = NULL;
-    struct timeval timeout;
-    LDAPMessage *res;
 
-    /* attribute traversal */
+#if LDAP_VENDOR_VERSION >= 20125
+    struct berval *dn = NULL;
+    LDAPControl c;
+    LDAPControl *ctrl[2];
+    char *authzid;
+#else
+    char *base = NULL, *filter = NULL;
+    char *attrs[] = {NULL};
+    LDAPMessage *res;
     LDAPMessage *entry;
     char *attr, **vals;
     BerElement *ber;
+#endif
 
-    static time_t down_until = 0;
-    int retries = 4;
+    *ret = NULL;
 
-    syslog(LOG_DEBUG, "doing LDAP lookup of user %s", canon_id);
+    if (ptsm->ld == NULL)
+        return PTSM_FAIL;
 
-    if(down_until && down_until > time(NULL)) return NULL;
-    else if(down_until > 0) {
-	if(ld) ldap_unbind(ld);
-	ld = NULL;
-	
-	down_until = 0;
+#if LDAP_VENDOR_VERSION >= 20125
+
+    authzid = xmalloc(size + sizeof("u:"));
+    if (authzid == NULL)
+        return PTSM_NOMEM;
+
+    strcpy(authzid, "u:");
+    strcpy(authzid+2, canon_id);
+    c.ldctl_oid = LDAP_CONTROL_PROXY_AUTHZ;
+    c.ldctl_value.bv_val = authzid;
+    c.ldctl_value.bv_len = size + 2;
+    c.ldctl_iscritical = 1;
+
+    ctrl[0] = &c;
+    ctrl[1] = NULL;
+    rc = ldap_whoami_s(ptsm->ld, &dn, ctrl, NULL);
+    free(authzid);
+    if ( rc != LDAP_SUCCESS || !dn ) {
+        if (rc == LDAP_SERVER_DOWN) {
+            ldap_unbind(ptsm->ld);
+            ptsm->ld = NULL;
+            return PTSM_RETRY;
+        }
+        return PTSM_FAIL;
     }
 
- retry: 
-    if(--retries == 0) {
-	down_until = time(NULL)+60; /* xxx configurable */
-	return NULL;
-    } else if (ld == NULL) {
-	rc = ptsmodule_ldap_connect();
-	if(rc != LDAP_SUCCESS) {
-	    sleep(2);
-	    goto retry;
-	}
-    }
-    
-    /* Initilization */
-    timeout.tv_sec = 5; /* xxx configurable */
-    timeout.tv_usec = 0;
+    if ( dn->bv_val &&
+        !strncmp(dn->bv_val, "dn:", 3) )
+        *ret = strdup(dn->bv_val+3);
+    ber_bvfree(dn);
 
-    *reply = NULL;
-    size = strlen(canon_id);
+#else
 
-    /* Do Search */
-    /* xxx realm name */
-    if(build_filter(ldap_filter,canon_id,NULL,&name_buf)) {
-	return NULL;
-    }
+    rc = ptsmodule_expand_tokens(ptsm->filter, canon_id, NULL, &filter);
+    if (rc != PTSM_OK)
+        return rc;
 
-    syslog(LOG_DEBUG, "using filter %s", name_buf);
+    rc = ptsmodule_expand_tokens(ptsm->base, canon_id, NULL, &base);
+    if (rc != PTSM_OK)
+        return rc;
 
-    rc = ldap_search_st(ld, ldap_search_base,
-			LDAP_SCOPE_SUBTREE,
-			name_buf, fetch_attrs, 0, &timeout, &res);
-
-    free(name_buf);
-
-    /* Search Result? */
-    switch (rc) {
-      case LDAP_SUCCESS:
-      case LDAP_NO_SUCH_OBJECT:
-	  break;
-      case LDAP_TIMEOUT:
-      case LDAP_TIMELIMIT_EXCEEDED:
-      case LDAP_BUSY:
-	  /*  We do not need to re-connect to the LDAP server 
-	      under these conditions */
-	  goto retry;
-	  break;
-      case LDAP_UNAVAILABLE:
-      case LDAP_INSUFFICIENT_ACCESS:
-	  /*  We do not need to re-connect to the LDAP server 
-	      under these conditions */
-	  syslog(LOG_ERR|LOG_AUTH, "ldap_search_st() failed: %s", ldap_err2string(rc));
-	  ldap_msgfree(res);
-	  *reply = "LDAP configuration error";
-	  return NULL;
-    case LDAP_SERVER_DOWN:
-	  syslog(LOG_WARNING|LOG_AUTH,
-		 "ldap_search_st() failed: %s. Trying to reconnect.",
-		 ldap_err2string(rc));
-	  ldap_msgfree(res);
-
-	  ldap_unbind(ld);
-	  ld = NULL;
-
-	  goto retry;
-      default:
-	syslog(LOG_ERR|LOG_AUTH,
-	       "ldap_search_st() failed: %s", ldap_err2string(rc));
-	ldap_msgfree(res);
-	*reply = "LDAP search error";
-	return NULL;
+    rc = ldap_search_st(ptsm->ld, base, ptsm->scope, filter, attrs, 0, &(ptsm->timeout), &res);
+    free(filter);
+    free(base);
+    if (rc != LDAP_SUCCESS) {
+        if (rc == LDAP_SERVER_DOWN) {
+            ldap_unbind(ptsm->ld);
+            ptsm->ld = NULL;
+            return PTSM_RETRY;
+        }
+        return PTSM_FAIL;
     }
 
-    /* xxx only does one entry */
-    entry = ldap_first_entry(ld, res);
-    if(!entry) {
-	*reply = "NO Entries";
-	return NULL;
-    }
-    
-    for (attr = ldap_first_attribute(ld, entry, &ber); attr != NULL; 
-	 attr = ldap_next_attribute(ld, entry, ber)) {
-	int i, numvals;
-
-	if(strcmp(attr, membership_att)) continue;
-
-	vals = ldap_get_values(ld, entry, attr);
-	if (vals == NULL) continue;
-
-	for (i = 0; vals[i] != NULL; i++);
-	numvals = i;
- 
-	*dsize = sizeof(struct auth_state) +
-	    (numvals * sizeof(struct auth_ident));
-	newstate = xmalloc(*dsize);
-	newstate->ngroups = numvals;
-	
-	for (i = 0; vals[i] != NULL; i++)
-	{
-	    strlcpy(newstate->groups[i].id, vals[i],
-		    sizeof(newstate->groups[i].id));
-	    newstate->groups[i].hash = strhash(newstate->groups[i].id);
-	}
-	
-	ldap_value_free(vals);
-	ldap_memfree(attr);
-    }
+    if ( (entry = ldap_first_entry(ptsm->ld, res)) != NULL )
+        *ret = ldap_get_dn(ptsm->ld, entry);
 
     ldap_msgfree(res);
+    res = NULL;
 
-    if(!newstate) {
-	*dsize = sizeof(struct auth_state);
-	newstate = xmalloc(*dsize);
-	newstate->ngroups = 0;
+#endif
+
+    return (*ret ? PTSM_OK : PTSM_FAIL);
+}
+
+
+static int ptsmodule_make_authstate_attribute(
+    const char *canon_id,
+    size_t size,
+    const char **reply, 
+    int *dsize,
+    struct auth_state **newstate) 
+{
+    char *dn = NULL;
+    LDAPMessage *res;
+    LDAPMessage *entry;
+    char *attr, **vals;
+    BerElement *ber;
+    int rc;
+    char *attrs[] = {ptsm->member_attribute,NULL};
+
+    rc = ptsmodule_connect();
+    if (rc != PTSM_OK) {
+        *reply = "ptsmodule_connect() failed";
+        return rc;
+    }
+
+    rc = ptsmodule_get_dn(canon_id, size, &dn);
+    if (rc != PTSM_OK) {
+        *reply = "identifier not found";
+        goto done;
+    }
+
+    rc = ldap_search_st(ptsm->ld, dn, LDAP_SCOPE_BASE, "(objectclass=*)", attrs, 0, &(ptsm->timeout), &res);
+    if ( rc != LDAP_SUCCESS ) {
+        *reply = "ldap_search(attribute) failed";
+        if ( rc == LDAP_SERVER_DOWN ) {
+            ldap_unbind(ptsm->ld);
+            ptsm->ld = NULL;
+            rc = PTSM_RETRY;
+        } else
+            rc = PTSM_FAIL;
+        goto done;
+    }
+
+    if ((entry = ldap_first_entry(ptsm->ld, res)) != NULL) {
+        for (attr = ldap_first_attribute(ptsm->ld, entry, &ber); attr != NULL; 
+            attr = ldap_next_attribute(ptsm->ld, entry, ber)) {
+            int i, numvals;
+
+            vals = ldap_get_values(ptsm->ld, entry, attr);
+            if (vals == NULL)
+                continue;
+
+            for (i = 0; vals[i] != NULL; i++)
+                numvals = i;
+            numvals++;
+
+            *dsize = sizeof(struct auth_state) +
+                     (numvals * sizeof(struct auth_ident));
+            *newstate = xmalloc(*dsize);
+            if (*newstate == NULL) {
+                *reply = "no memory";
+                rc = PTSM_FAIL;
+                goto done;
+            }
+            (*newstate)->ngroups = numvals;
+
+            for (i = 0; vals[i] != NULL; i++) {
+                strlcpy((*newstate)->groups[i].id, vals[i], 
+                    sizeof((*newstate)->groups[i].id));
+                (*newstate)->groups[i].hash = strhash((*newstate)->groups[i].id);
+            }
+
+            ldap_value_free(vals);
+            vals = NULL;
+            ldap_memfree(attr);
+            attr = NULL;
+        }
+    }
+
+    if(!*newstate) {
+        *dsize = sizeof(struct auth_state);
+        *newstate = xmalloc(*dsize);
+        if (*newstate == NULL) {
+            *reply = "no memory";
+            rc = PTSM_FAIL;
+            goto done;
+        }
+        (*newstate)->ngroups = 0;
     }
     
     /* fill in the rest of our new state structure */
-    strcpy(newstate->userid.id, canon_id);
-    newstate->userid.hash = strhash(canon_id);
-    newstate->mark = time(0);
+    strcpy((*newstate)->userid.id, canon_id);
+    (*newstate)->userid.hash = strhash(canon_id);
+    (*newstate)->mark = time(0);
+
+    rc = PTSM_OK;
+
+done:;
+
+    if (res)
+        ldap_msgfree(res);
+    if (vals)
+        ldap_value_free(vals);
+    if (attr)
+        ldap_memfree(attr);
+    if (ber)
+        ber_free(ber, 0);
+    if (dn)
+        free(dn);
+
+    return rc;
+}
+
+static int ptsmodule_make_authstate_filter(
+    const char *canon_id,
+    size_t size,
+    const char **reply, 
+    int *dsize,
+    struct auth_state **newstate) 
+{
+    char *base = NULL, *filter = NULL;
+    int rc;
+    int i; int n;
+    LDAPMessage *res = NULL;
+    LDAPMessage *entry;
+    char *attr, **vals;
+    BerElement *ber = NULL;
+    char *attrs[] = {ptsm->member_attribute,NULL};
+    char *dn = NULL;
+
+    rc = ptsmodule_connect();
+    if (rc != PTSM_OK) {
+        *reply = "ptsmodule_connect() failed";
+        return rc;
+    }
+
+    rc = ptsmodule_get_dn(canon_id, size, &dn);
+    if (rc != PTSM_OK) {
+        *reply = "identifier not found";
+        return rc;
+    }
+
+    rc = ptsmodule_expand_tokens(ptsm->member_filter, canon_id, dn, &filter);
+    if (rc != PTSM_OK) {
+        *reply = "ptsmodule_expand_tokens() failed for member filter";
+        goto done;
+    }
+
+    rc = ptsmodule_expand_tokens(ptsm->member_base, canon_id, dn, &base);
+    if (rc != PTSM_OK) {
+        *reply = "ptsmodule_expand_tokens() failed for member search base";
+        goto done;
+    }
+
+    rc = ldap_search_st(ptsm->ld, base, ptsm->member_scope, filter, attrs, 0, &(ptsm->timeout), &res);
+    if (rc != LDAP_SUCCESS) {
+        *reply = "ldap_search(filter) failed";
+        if (rc == LDAP_SERVER_DOWN) {
+            ldap_unbind(ptsm->ld);
+            ptsm->ld = NULL;
+            rc = PTSM_RETRY;
+        } else
+            rc = PTSM_FAIL;
+        goto done;
+    }
+
+    n = ldap_count_entries(ptsm->ld, res);
+    if (n < 0) {
+        *reply = "ldap_count_entries() failed";
+        rc = PTSM_FAIL;
+        goto done;
+    }
+
+    *dsize = sizeof(struct auth_state) +
+             (n * sizeof(struct auth_ident));
+    *newstate = xmalloc(*dsize);
+    if (*newstate == NULL) {
+        *reply = "no memory";
+        rc = PTSM_FAIL;
+        goto done;
+    }
+    (*newstate)->ngroups = n;
+    strcpy((*newstate)->userid.id, canon_id);
+    (*newstate)->userid.hash = strhash(canon_id);
+    (*newstate)->mark = time(0);
+
+    for (i = 0, entry = ldap_first_entry(ptsm->ld, res); entry != NULL;
+         i++, entry = ldap_next_entry(ptsm->ld, entry)) {
+        for (attr = ldap_first_attribute(ptsm->ld, entry, &ber); attr != NULL; 
+            attr = ldap_next_attribute(ptsm->ld, entry, ber)) {
+
+            vals = ldap_get_values(ptsm->ld, entry, attr);
+            if (vals == NULL)
+                continue;
+
+            strlcpy((*newstate)->groups[i].id, vals[0], 
+                sizeof((*newstate)->groups[i].id));
+            (*newstate)->groups[i].hash = strhash((*newstate)->groups[i].id);
+
+            ldap_value_free(vals);
+            vals = NULL;
+            ldap_memfree(attr);
+            attr = NULL;
+        }
+    }
+
+    rc = PTSM_OK;
+
+done:;
+
+    if (res)
+        ldap_msgfree(res);
+    if (ber)
+        ber_free(ber, 0);
+    ber = NULL;
+    if (dn)
+        free(dn);
+    if (filter)
+        free(filter);
+    if (base)
+        free(base);
+
+    return rc;
+}
+
+static int ptsmodule_make_authstate_group(
+    const char *canon_id,
+    size_t size,
+    const char **reply, 
+    int *dsize,
+    struct auth_state **newstate) 
+{
+    char *base = NULL, *filter = NULL;
+    int rc;
+    int i; int n;
+    LDAPMessage *res;
+    LDAPMessage *entry;
+    char *attr, **vals;
+    char *attrs[] = {NULL};
+
+    if (strncmp(canon_id, "group:", 6))  { // Sanity check
+        *reply = "not a group identifier";
+        return PTSM_FAIL;
+    }
+
+    rc = ptsmodule_connect();
+    if (rc != PTSM_OK) {
+        *reply = "ptsmodule_connect() failed";
+        return rc;
+    }
+
+    rc = ptsmodule_expand_tokens(ptsm->group_filter, canon_id+6, NULL, &filter);
+    if (rc != PTSM_OK) {
+        *reply = "ptsmodule_expand_tokens() failed for group filter";
+        goto done;
+    }
+
+    rc = ptsmodule_expand_tokens(ptsm->group_base, canon_id+6, NULL, &base);
+    if (rc != PTSM_OK) {
+        *reply = "ptsmodule_expand_tokens() failed for group search base";
+        goto done;
+    }
+
+    rc = ldap_search_st(ptsm->ld, base, ptsm->group_scope, filter, attrs, 0, &(ptsm->timeout), &res);
+    if (rc != LDAP_SUCCESS) {
+        *reply = "ldap_search(group) failed";
+        if (rc == LDAP_SERVER_DOWN) {
+            ldap_unbind(ptsm->ld);
+            ptsm->ld = NULL;
+            rc = PTSM_RETRY;
+        } else
+            rc = PTSM_FAIL;
+        goto done;
+    }
+
+    n = ldap_count_entries(ptsm->ld, res);
+    if (n != 1) {
+        *reply = "group identifier not found";
+        rc = PTSM_FAIL;
+        goto done;
+    }
+
+    *dsize = sizeof(struct auth_state) +
+             (n * sizeof(struct auth_ident));
+    *newstate = xmalloc(*dsize);
+    if (*newstate == NULL) {
+        *reply = "no memory";
+        rc = PTSM_FAIL;
+        goto done;
+    }
+    (*newstate)->ngroups = 0;
+    strcpy((*newstate)->userid.id, canon_id);
+    (*newstate)->userid.hash = strhash(canon_id);
+    (*newstate)->mark = time(0);
+
+    rc = PTSM_OK;
+
+done:;
+
+    if (res)
+        ldap_msgfree(res);
+    if (filter)
+        free(filter);
+    if (base)
+        free(base);
+
+    return rc;
+}
+
+struct auth_state *ptsmodule_make_authstate(
+    const char *identifier,
+    size_t size,
+    const char **reply, 
+    int *dsize) 
+{
+    const char *canon_id;
+    struct auth_state *newstate = NULL;
+    int rc;
+    int retries = 1;
+
+    canon_id = ptsmodule_canonifyid(identifier, size);
+    if (EMPTY(canon_id)) {
+        *reply = "ptsmodule_canonifyid() failed";
+        return NULL;
+    }
+    size = strlen(canon_id);
+
+retry:;
+
+    *reply = NULL;
+
+    if (!strncmp(canon_id, "group:", 6))
+        rc = ptsmodule_make_authstate_group(canon_id, size, reply, dsize, &newstate);
+    else {
+        if (ptsm->member_method == PTSM_MEMBER_METHOD_ATTRIBUTE)
+            rc = ptsmodule_make_authstate_attribute(canon_id, size, reply, dsize, &newstate);
+        else
+            rc = ptsmodule_make_authstate_filter(canon_id, size, reply, dsize, &newstate);
+    }
+    if (rc == PTSM_RETRY &&
+        retries) {
+        retries--;
+        goto retry;
+    }
 
     return newstate;
 }
