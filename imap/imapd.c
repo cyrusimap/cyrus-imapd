@@ -1093,8 +1093,8 @@ char *name;
     }
 
     prot_printf(imapd_out, "%s OK [READ-%s] %s completed\r\n", tag,
-	   ((imapd_mailbox->myrights & (ACL_WRITE|ACL_DELETE)) ==
-	    (ACL_WRITE|ACL_DELETE)) ? "WRITE" : "ONLY", cmd);
+	   (imapd_mailbox->myrights & (ACL_WRITE|ACL_DELETE)) ?
+		"WRITE" : "ONLY", cmd);
 
     proc_register("imapd", imapd_clienthost, imapd_userid,
 		  inboxname[0] ? inboxname : name);
