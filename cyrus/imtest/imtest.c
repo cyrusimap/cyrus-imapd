@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.83 2002/07/15 18:59:11 rjs3 Exp $
+ * $Id: imtest.c,v 1.84 2002/07/17 18:41:38 rjs3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -42,7 +42,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <config.h>
+#include "config.h"
 
 #include <sys/time.h>
 #include <sys/types.h>
@@ -74,6 +74,7 @@
 #include "prot.h"
 #include "imparse.h"
 #include "iptostring.h"
+#include "xmalloc.h"
 
 #ifdef HAVE_SSL
 #include <openssl/ssl.h>
@@ -224,7 +225,8 @@ struct protocol_t {
 };
 
 
-void imtest_fatal(char *msg)
+void imtest_fatal(const char *msg) __attribute__((noreturn));
+void imtest_fatal(const char *msg)
 {
     struct stat sbuf;
     if (output_socket && output_socket_opened &&
@@ -239,7 +241,7 @@ void imtest_fatal(char *msg)
 }
 
 /* libcyrus makes us define this */
-void fatal(char *msg, int code)
+void fatal(const char *msg, int code)
 {
     imtest_fatal(msg);
 }
@@ -1465,7 +1467,7 @@ static int generic_pipe(char *buf, int len, void *rock)
     char *toWrite = NULL, *toSend = NULL;
     int toWriteLen = 0;
     char *lineEnd = NULL;
-    int ret;
+    int ret = IMTEST_OK;
 
     /* do we have leftovers? -- if so, we append the new stuff */
     if(text->midLine) {
@@ -1687,6 +1689,8 @@ static int imap_pipe_oneline(char *buf, int len, void *rock) {
     prot_write(pout, buf, len);
     if(add_crlf) prot_write(pout, "\r\n", 2);
     prot_flush(pout);
+
+    return IMTEST_OK;
 }
 
 static void * imap_init_conn(void) 
@@ -1929,6 +1933,8 @@ static int pop3_do_auth(struct sasl_cmd_t *sasl_cmd, void *rock,
 	    result = auth_user();
 	}
     }
+
+    return result;
 }
 
 /******************************** LMTP/SMTP **********************************/
