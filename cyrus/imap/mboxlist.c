@@ -923,7 +923,7 @@ int (*proc)();
 
     mboxlist_reopen();
 
-    g = glob_init(pattern, GLOB_HIERARCHY);
+    g = glob_init(pattern, GLOB_HIERARCHY|GLOB_INBOXCASE);
 
     /* Build usermboxname */
     if (userid && !strchr(userid, '.') &&
@@ -1131,7 +1131,7 @@ int (*proc)();
 
     mboxlist_reopen();
 
-    g = glob_init(pattern, GLOB_HIERARCHY);
+    g = glob_init(pattern, GLOB_HIERARCHY|GLOB_INBOXCASE);
 
     /* Build usermboxname */
     if (userid && !strchr(userid, '.') &&
