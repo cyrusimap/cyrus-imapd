@@ -1,5 +1,5 @@
 /* auth_krb5.c -- Kerberos V authorization for Cyrus IMAP
- * $Id: auth_krb5.c,v 1.2 2003/10/22 18:03:03 rjs3 Exp $
+ * $Id: auth_krb5.c,v 1.3 2004/01/16 15:28:58 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -74,6 +74,7 @@ int auth_memberof(struct auth_state *auth_state, const char *identifier)
 
     if (strcmp(identifier,"anyone") == 0) return 1;
     if (!auth_state && !strcmp(identifier, "anonymous")) return 3;
+    else if(!auth_state) return 0;
     if (strcmp(identifier,auth_state->userid) == 0) return 3;
     if (strcmp(auth_state->userid,"anonymous") == 0) return 0;
 
