@@ -812,7 +812,7 @@ int r;
 
     case IMAP_MAILBOX_BADFORMAT:
     case IMAP_MAILBOX_NOTSUPPORTED:
-	return "453 4.2.0 Mailbox has an invalid format";
+	return "451 4.2.0 Mailbox has an invalid format";
 
     case IMAP_MESSAGE_CONTAINSNULL:
 	return "554 5.6.0 Message contains NUL characters";
