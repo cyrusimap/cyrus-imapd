@@ -17,8 +17,6 @@ imapd and core utilities
         threadsafe. 
       * during appendstage(), the message is parsed once per delivery, not
         once at the beginning. 
-      * master process should accept a SIGHUP and reread configuration file
-        on the fly. 
       * master should pay attention to processes that have told it they are
         listening, and make sure they don't die abnormally. likewise, it
         should be on the lookout for continually forking services. 
@@ -27,7 +25,6 @@ imapd and core utilities
 
 proxyd and Cyrus Murder
 
-      * proxyd doesn't support ID. 
       * proxyd doesn't advertise ACAP=. 
       * COPY across servers isn't tested and isn't robust. 
       * RENAME across servers isn't implemented (less severe). 
@@ -45,7 +42,6 @@ proxyd and Cyrus Murder
         we don't end up exiting holding locks? 
       * setacl/getacl commands seem to reliably cause the proxy the die. 
       * pop3proxyd appears to be non-functional. 
-      * IMAP SORT and THREAD extensions seem unstable. 
 
 lmtpd, deliver, and sieve
 

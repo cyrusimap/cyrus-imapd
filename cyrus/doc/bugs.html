@@ -34,9 +34,6 @@ threadsafe.
 <li> during appendstage(), the message is parsed once per delivery,
 not once at the beginning.
 
-<li> <tt>master</tt> process should accept a SIGHUP and reread
-configuration file on the fly.
-
 <li> <tt>master</tt> should pay attention to processes that have told
 it they are listening, and make sure they don't die abnormally.
 likewise, it should be on the lookout for continually forking
@@ -49,8 +46,6 @@ services.
 
 <h3>proxyd and Cyrus Murder</h3>
 <ul>
-<li> <tt>proxyd</tt> doesn't support ID.
-
 <li> <tt>proxyd</tt> doesn't advertise <tt>ACAP=</tt>.
 
 <li> COPY across servers isn't tested and isn't robust.
@@ -81,8 +76,6 @@ should be replaced with something more general.
 <li> setacl/getacl commands seem to reliably cause the proxy the die.
 
 <li> <tt>pop3proxyd</tt> appears to be non-functional.
-
-<li> IMAP SORT and THREAD extensions seem unstable.
 
 </ul>
 
@@ -171,7 +164,7 @@ move all metadata per-user data. (seen, subscriptions, sieve state?)
 would like to submit a bug, feature request or (best of all) patch.
 
 <P><HR>
-Last update: $Date: 2000/12/01 17:41:48 $ 
+Last update: $Date: 2001/01/26 16:54:52 $ 
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>
