@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.227 2000/04/12 18:24:29 leg Exp $ */
+/* $Id: imapd.c,v 1.228 2000/04/12 18:41:08 tmartin Exp $ */
 
 #include <config.h>
 
@@ -1024,8 +1024,6 @@ cmdloop()
 
 		snmp_increment(STARTTLS_COUNT, 1);      
 		continue;
-	    } else if (!imapd_userid) {
-		goto nologin;
 	    }
 	    if (!imapd_userid) {
 		goto nologin;
@@ -1290,7 +1288,9 @@ char *passwd;
 	    syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
 		   imapd_clienthost, canon_user, reply);
 	}
-	sleep(3);
+	/* Apply penalty only if not under layer */
+	if (imapd_starttls_done == 0)
+	    sleep(3);
 
 	if (reply) {
 	    prot_printf(imapd_out, "%s NO Login failed: %s\r\n", tag, reply);
@@ -1308,7 +1308,10 @@ char *passwd;
 	syslog(LOG_NOTICE, "login: %s %s plaintext %s", imapd_clienthost,
 	       canon_user, reply ? reply : "");
 	if ((plaintextloginpause = config_getint("plaintextloginpause", 0))!=0) {
-	    sleep(plaintextloginpause);
+
+	    /* Apply penalty only if not under layer */
+	    if (imapd_starttls_done == 0)
+		sleep(plaintextloginpause);
 	}
     }
     

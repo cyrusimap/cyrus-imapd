@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: proxyd.c,v 1.14 2000/04/11 03:36:29 leg Exp $ */
+/* $Id: proxyd.c,v 1.15 2000/04/12 18:41:09 tmartin Exp $ */
 
 #include <config.h>
 
@@ -111,7 +111,14 @@ extern char *optarg;
 
 extern int errno;
 
+#ifdef HAVE_SSL
+#include "tls.h"
+
+extern SSL *tls_conn;
+#endif /* HAVE_SSL */
+
 sasl_conn_t *proxyd_saslconn; /* the sasl connection context to the client */
+int proxyd_starttls_done = 0; /* have we done a successful starttls yet? */
 
 char *proxyd_userid;
 struct auth_state *proxyd_authstate = 0;
@@ -159,6 +166,9 @@ void cmd_status(char *tag, char *name);
 void cmd_getuids(char *tag, char *startuid);
 void cmd_unselect(char* tag);
 void cmd_namespace(char* tag);
+
+void cmd_starttls(char *tag, int imaps);
+int starttls_enabled(void);
 
 #ifdef ENABLE_X_NETSCAPE_HACK
 void cmd_netscape (char* tag);
@@ -911,10 +921,33 @@ int service_init(int argc, char **argv, char **envp)
 
 int service_main(int argc, char **argv, char **envp)
 {
+    int imaps = 0;
+    int opt;
     int salen;
     struct hostent *hp;
     int timeout;
     sasl_security_properties_t *secprops = NULL;
+    sasl_external_properties_t extprops;
+
+    memset(&extprops, 0, sizeof(sasl_external_properties_t));
+    while ((opt = getopt(argc, argv, "sp:")) != EOF) {
+	switch (opt) {
+	case 's': /* imaps (do starttls right away) */
+	    imaps = 1;
+	    if (!starttls_enabled()) {
+		syslog(LOG_ERR, "imaps: required OpenSSL options not present");
+		fatal("imaps: required OpenSSL options not present",
+		      EC_CONFIG);
+	    }
+	    break;
+	case 'p': /* external protection */
+	    extprops.ssf = atoi(optarg);
+	    break;
+	default:
+	    break;
+	}
+    }
+
 
     proxyd_in = prot_new(0, 0);
     proxyd_out = prot_new(1, 1);
@@ -969,6 +1002,10 @@ int service_main(int argc, char **argv, char **envp)
 
     /* create connection to the SNMP listener, if available. */
     snmp_connect(); /* ignore return code */
+
+    /* we were connected on imaps port so we should do 
+       TLS negotiation immediately */
+    if (imaps == 1) cmd_starttls(NULL, 1);
 
     cmdloop();
     
@@ -1160,8 +1197,8 @@ cmdloop()
 	    if (isupper(*p)) *p = tolower(*p);
 	}
 
-	/* Only Authenticate/Login/Logout/Noop allowed when not logged in */
-	if (!proxyd_userid && !strchr("ALNC", cmd.s[0])) goto nologin;
+	/* Only Authenticate/Login/Logout/Noop/Starttls allowed when not logged in */
+	if (!proxyd_userid && !strchr("ALNCS", cmd.s[0])) goto nologin;
     	switch (cmd.s[0]) {
 	case 'A':
 	    if (!strcmp(cmd.s, "Authenticate")) {
@@ -1513,7 +1550,37 @@ cmdloop()
 	    break;
 	    
 	case 'S':
-	    if (!strcmp(cmd.s, "Store")) {
+	    if (!strcmp(cmd.s, "Starttls")) {
+		if (!starttls_enabled()) {
+		    /* we don't support starttls */
+		    goto badcmd;
+		}
+
+		if (c == '\r') c = prot_getc(proxyd_in);
+		if (c != '\n') goto extraargs;
+
+		/* if we've already done SASL fail */
+		if (proxyd_userid != NULL) {
+		    prot_printf(proxyd_out, 
+				"%s BAD Can't Starttls after authentication\r\n", tag.s);
+		    continue;
+		}
+		
+		/* check if already did a successful tls */
+		if (proxyd_starttls_done == 1) {
+		    prot_printf(proxyd_out, 
+				"%s BAD Already did a successful Starttls\r\n",
+				tag.s);
+		    continue;
+		}
+		cmd_starttls(tag.s, 0);	
+
+		continue;
+	    }
+
+	    if (!proxyd_userid) {
+		goto nologin;
+	    } else if (!strcmp(cmd.s, "Store")) {
 		if (!backend_current) goto nomailbox;
 		usinguid = 0;
 		if (c != ' ') goto missingargs;
@@ -1710,6 +1777,16 @@ void cmd_login(char *tag, char *user, char *passwd)
     int result;
 
     canon_user = auth_canonifyid(user);
+
+    /* possibly disallow login */
+    if ((proxyd_starttls_done == 0) &&
+	(config_getswitch("allowplaintext", 1) == 0) &&
+	strcmp(canon_user, "anonymous") != 0) {
+	prot_printf(proxyd_out, "%s NO Login only available under a layer\r\n",
+		    tag);
+	return;
+    }
+
     if (!canon_user) {
 	syslog(LOG_NOTICE, "badlogin: %s plaintext %s invalid user",
 	       proxyd_clienthost, beautify_string(user));
@@ -1746,7 +1823,9 @@ void cmd_login(char *tag, char *user, char *passwd)
 	    syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
 		   proxyd_clienthost, canon_user, reply);
 	}
-	sleep(3);
+	/* Apply penalty only if not under layer */
+	if (proxyd_starttls_done == 0)
+	    sleep(3);
 	if (errorstring) {
 	    prot_printf(proxyd_out, "%s NO Login failed: %s\r\n", 
 			tag, errorstring);
@@ -1761,7 +1840,10 @@ void cmd_login(char *tag, char *user, char *passwd)
 	       canon_user, reply ? reply : "");
 	plaintextloginpause = config_getint("plaintextloginpause", 0);
 	if (plaintextloginpause) {
-	    sleep(plaintextloginpause);
+
+	    /* Apply penalty only if not under layer */
+	    if (proxyd_starttls_done == 0)
+		sleep(plaintextloginpause);
 	}
     }
     
@@ -1959,6 +2041,11 @@ void cmd_capability(char *tag)
     prot_printf(proxyd_out, CAPABILITY_STRING);
     /* xxx STARTTLS */
     prot_printf(proxyd_out, " MAILBOX-REFERRALS");
+
+    if (starttls_enabled())
+	prot_printf(proxyd_out, " STARTTLS");
+    if (!proxyd_starttls_done && !config_getswitch("allowplaintext", 1))
+	prot_printf(proxyd_out, " LOGINDISABLED");	
 
     if (sasl_listmech(proxyd_saslconn, NULL, 
 		      "AUTH=", " AUTH=", "",
@@ -3090,6 +3177,122 @@ void cmd_setquota(char *tag, char *quotaroot)
     prot_printf(proxyd_out, "%s NO not supported from proxy server\r\n");
     eatline(prot_getc(proxyd_in));
 }
+
+#ifdef HAVE_SSL
+/*
+ * this implements the STARTTLS command, as described in RFC 2595.
+ * one caveat: it assumes that no external layer is currently present.
+ * if a client executes this command, information about the external
+ * layer that was passed on the command line is disgarded. this should
+ * be fixed.
+ */
+int starttls_enabled(void)
+{
+    if (config_getstring("tls_cert_file", NULL) == NULL) return 0;
+    if (config_getstring("tls_key_file", NULL) == NULL) return 0;
+    return 1;
+}
+
+/* imaps - weather this is an imaps transaction or not */
+void cmd_starttls(char *tag, int imaps)
+{
+    int result;
+    int *layerp;
+    sasl_external_properties_t external;
+
+
+    /* SASL and openssl have different ideas about whether ssf is signed */
+    layerp = (int *) &(external.ssf);
+
+    if (proxyd_starttls_done == 1)
+    {
+	prot_printf(proxyd_out, "%s NO %s\r\n", tag, 
+		    "TLS already active");
+	return;
+    }
+
+    result=tls_init_serverengine(5,        /* depth to verify */
+				 1,        /* can client auth? */
+				 0,        /* required client to auth? */
+				 (char *)config_getstring("tls_ca_file", ""),
+				 (char *)config_getstring("tls_ca_path", ""),
+				 (char *)config_getstring("tls_cert_file", ""),
+				 (char *)config_getstring("tls_key_file", ""));
+
+    if (result == -1) {
+
+	syslog(LOG_ERR, "error initializing TLS: "
+	       "[CA_file: %s] [CA_path: %s] [cert_file: %s] [key_file: %s]",
+	       (char *) config_getstring("tls_ca_file", ""),
+	       (char *) config_getstring("tls_ca_path", ""),
+	       (char *) config_getstring("tls_cert_file", ""),
+	       (char *) config_getstring("tls_key_file", ""));
+
+	if (imaps == 0)
+	    prot_printf(proxyd_out, "%s NO %s\r\n", 
+			tag, "Error initializing TLS");
+	else
+	    fatal("tls_init() failed", EC_CONFIG);
+
+	return;
+    }
+
+    if (imaps == 0)
+    {
+	prot_printf(proxyd_out, "%s OK %s\r\n", tag,
+		    "Begin TLS negotiation now");
+	/* must flush our buffers before starting tls */
+	prot_flush(proxyd_out);
+    }
+  
+    result=tls_start_servertls(0, /* read */
+			       1, /* write */
+			       layerp,
+			       &(external.auth_id));
+
+    /* if error */
+    if (result==-1) {
+	if (imaps == 0)	{
+	    prot_printf(proxyd_out, "%s NO Starttls failed\r\n", tag);
+	    syslog(LOG_NOTICE, "STARTTLS failed: %s", proxyd_clienthost);
+	    return;
+	} else {
+	    syslog(LOG_NOTICE, "imaps failed: %s", proxyd_clienthost);
+	    fatal("tls_start_servertls() failed", EC_TEMPFAIL);
+	    return;
+	}
+    }
+
+    /* tell SASL about the negotiated layer */
+    result = sasl_setprop(proxyd_saslconn, SASL_SSF_EXTERNAL, &external);
+
+    if (result != SASL_OK) {
+	fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
+    }
+
+    /* if authenticated set that */
+    if (external.auth_id != NULL) {
+	proxyd_userid = external.auth_id;
+    }
+
+    /* tell the prot layer about our new layers */
+    prot_settls(proxyd_in, tls_conn);
+    prot_settls(proxyd_out, tls_conn);
+
+    proxyd_starttls_done = 1;
+}
+#else
+int starttls_enabled(void)
+{
+    return 0;
+}
+
+void cmd_starttls(char *tag, int imaps)
+{
+    fatal("cmd_starttls() executed, but starttls isn't implemented!",
+	  EC_SOFTWARE);
+}
+#endif /* HAVE_SSL */
 
 /*
  * Parse and perform a STATUS command
