@@ -38,17 +38,6 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# This script WON'T work for you.  Guaranteed.
-# It checks CMU ECE policy, and your policy *will* be different.
-# Use it only as an example of how to use IMAP::Cyrus::Admin, as it will
-# almost certainly be useless to you as an actual program.
-#
-# This script sanity-checks departmental accounts against both the password
-# file and Cyrus.  It makes a LOT of CMU ECE-specific assumptions.  It also
-# doesn't do much with Cyrus aside from authenticating and getting a list of
-# top-level mailboxes, but this is currently all I have in the way of Perl
-# that uses IMAP::Cyrus.
-#
 
 use Getopt::Long;
 use Cyrus::IMAP;
@@ -207,7 +196,7 @@ sub showsize {
     $size = $size/ (1024 *1024);
     printf "%9.2f MB\t", $size;
   } else {
-    print "too fucking big\t";
+    print "way too large\t";
   }
 
   printf "%5d msgs\t", $msgs;
