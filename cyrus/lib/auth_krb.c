@@ -133,7 +133,7 @@ char *real_realm;
     char inst[INST_SZ];
     char realm[REALM_SZ];
     char lrealm[REALM_SZ];
-    char krbhst[MAXHOSTNAMELEN];
+    char krbhst[256];
     char *p;
     char buf[1024];
     FILE *mapfile;
@@ -207,7 +207,7 @@ char *identifier;
     char inst[INST_SZ];
     char realm[REALM_SZ];
     char lrealm[REALM_SZ];
-    char krbhst[MAXHOSTNAMELEN];
+    char krbhst[256];
     char *p;
     
     if (strcasecmp(identifier, "anonymous") == 0) {
