@@ -1,7 +1,7 @@
-/* imtest.c -- IMAP/POP3/LMTP/SMTP/MUPDATE/SIEVE test client
+/* imtest.c -- IMAP/POP3/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.74 2002/05/24 18:14:58 ken3 Exp $
+ * $Id: imtest.c,v 1.75 2002/05/25 03:25:46 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -77,6 +77,7 @@
 
 static SSL_CTX *tls_ctx = NULL;
 static SSL *tls_conn = NULL;
+static SSL_SESSION *tls_sess = NULL;
 
 #else /* HAVE_SSL */
 #include <sasl/md5global.h>
@@ -560,7 +561,6 @@ int tls_start_clienttls(unsigned *layer, char **authid)
     int     sts;
     int     j;
     unsigned int n;
-    SSL_SESSION *session;
     SSL_CIPHER *cipher;
     X509   *peer;
     
@@ -598,12 +598,16 @@ int tls_start_clienttls(unsigned *layer, char **authid)
     /* Dump the negotiation for loglevels 3 and 4 */
     if (verbose==1)
 	do_dump = 1;
-    
+
+    if (tls_sess)  /* Reuse a session if we have one */
+	SSL_set_session(tls_conn, tls_sess);
+
     if ((sts = SSL_connect(tls_conn)) < 0) {
 	printf("SSL_connect error %d\n", sts);
-	session = SSL_get_session(tls_conn);
-	if (session) {
-	    SSL_CTX_remove_session(tls_ctx, session);
+	tls_sess = SSL_get_session(tls_conn);
+	if (tls_sess) {
+	    SSL_CTX_remove_session(tls_ctx, tls_sess);
+	    tls_sess = NULL;
 	    printf("SSL session removed\n");
 	}
 	if (tls_conn!=NULL)
@@ -667,6 +671,7 @@ void do_starttls(int ssl, char *keyfile, unsigned *ssf)
 	}
     
     /* TLS negotiation suceeded */
+    tls_sess = SSL_get_session(tls_conn); /* Save the session for reuse */
     
     /* tell SASL about the negotiated layer */
     result=sasl_setprop(conn,
