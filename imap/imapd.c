@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.241 2000/05/12 22:18:03 leg Exp $ */
+/* $Id: imapd.c,v 1.242 2000/05/15 17:29:40 leg Exp $ */
 
 #include <config.h>
 
@@ -884,8 +884,10 @@ cmdloop()
 
 		snmp_increment(LOGOUT_COUNT, 1);		
 
-		prot_printf(imapd_out, "* BYE %s\r\n", error_message(IMAP_BYE_LOGOUT));
-		prot_printf(imapd_out, "%s OK %s\r\n", tag.s, error_message(IMAP_OK_COMPLETED));
+		prot_printf(imapd_out, "* BYE %s\r\n", 
+			    error_message(IMAP_BYE_LOGOUT));
+		prot_printf(imapd_out, "%s OK %s\r\n", tag.s, 
+			    error_message(IMAP_OK_COMPLETED));
 		shut_down(0);
 	    }
 	    else if (!imapd_userid) goto nologin;
