@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.60 2001/03/07 01:52:52 ken3 Exp $
+ * $Id: prot.c,v 1.61 2001/03/14 22:39:04 leg Exp $
  */
 
 #include <config.h>
@@ -88,7 +88,6 @@ int write;
     newstream->fd = fd;
     newstream->write = write;
     newstream->logfd = -1;
-    newstream->log_timeptr = 0;
     newstream->error = 0;
     newstream->eof = 0;
     newstream->read_timeout = 0;
@@ -125,16 +124,6 @@ struct protstream *s;
 int fd;
 {
     s->logfd = fd;
-    return 0;
-}
-
-/*
- * Start logging timing information for stream 's'.
- */
-int prot_setlogtime(struct protstream *s, time_t *ptr)
-{
-    s->log_timeptr = ptr;
-    time(s->log_timeptr);
     return 0;
 }
 
@@ -470,12 +459,9 @@ int prot_fill(struct protstream *s)
 		time_t newtime;
 		char timebuf[20];
 
-		if (s->log_timeptr) {
-		    time(&newtime);
-		    sprintf(timebuf, "<%ld<", newtime - *s->log_timeptr);
-		    write(s->logfd, timebuf, strlen(timebuf));
-		    *s->log_timeptr = newtime;
-		}
+		time(&newtime);
+		sprintf(timebuf, "<%ld<", newtime);
+		write(s->logfd, timebuf, strlen(timebuf));
 
 		left = s->cnt;
 		ptr = s->buf;
@@ -490,6 +476,7 @@ int prot_fill(struct protstream *s)
 		    }
 		} while (left);
 	    }
+
 	    s->cnt--;		/* we return the first char */
 	    return *s->buf;
 	}
@@ -520,11 +507,9 @@ int prot_flush(struct protstream *s)
 	time_t newtime;
 	char timebuf[20];
 
-	if (s->log_timeptr) {
-	    time(&newtime);
-	    sprintf(timebuf, ">%ld>", newtime - *s->log_timeptr);
-	    write(s->logfd, timebuf, strlen(timebuf));
-	}
+	time(&newtime);
+	sprintf(timebuf, ">%ld>", newtime);
+	write(s->logfd, timebuf, strlen(timebuf));
 
 	do {
 	    n = write(s->logfd, ptr, left);
@@ -549,7 +534,6 @@ int prot_flush(struct protstream *s)
 			     &encoded_output, &outlen);
 	if (result != SASL_OK) {
 	    s->error = "Encoding error";
-	    if (s->log_timeptr) time(s->log_timeptr);
 	    return EOF;
 	}
 	
@@ -570,7 +554,6 @@ int prot_flush(struct protstream *s)
 #endif /* HAVE_SSL */
 	if (n == -1 && errno != EINTR) {
 	    s->error = strerror(errno);
-	    if (s->log_timeptr) time(s->log_timeptr);
 	    return EOF;
 	}
 
@@ -589,7 +572,6 @@ int prot_flush(struct protstream *s)
     s->ptr = s->buf;
     s->cnt = s->maxplain;
 
-    if (s->log_timeptr) time(s->log_timeptr);
     return 0;
 }
 
