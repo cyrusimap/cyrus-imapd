@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: cvt_cyrusdb.c,v 1.4 2002/02/23 01:32:05 rjs3 Exp $
+ * $Id: cvt_cyrusdb.c,v 1.5 2002/02/25 23:40:00 rjs3 Exp $
  */
 
 #include <config.h>
@@ -142,7 +142,9 @@ int main(int argc, char *argv[])
 	fprintf(stderr, "Usage: %s [-C altconfig] <old db> <old db backend> <new db> <new db backend>\n", argv[0]);
 	fprintf(stderr, "Usable Backends:  ");
 
-	/* xxx We better have at least 1 backend! */
+	if(!cyrusdb_backends || !cyrusdb_backends[0])
+	    fatal("we don't seem to have any db backends available", EC_OSERR);
+	
 	fprintf(stderr, "%s", cyrusdb_backends[0]->name);
 	for(i=1; cyrusdb_backends[i]; i++)
 	    fprintf(stderr, ", %s", cyrusdb_backends[i]->name);
@@ -152,6 +154,15 @@ int main(int argc, char *argv[])
     }
 
     old_db = argv[optind];
+    new_db = argv[optind+2];
+
+    if(old_db[0] != '/' || new_db[0] != '/') {
+	printf("\nSorry, you cannot use this tool with relative path names.\n"
+	       "This is because some database backends (mainly db3) do not\n"
+	       "always do what you would expect with them.\n"
+	       "\nPlease use absolute pathnames instead.\n\n");
+	exit(EC_OSERR);
+    }
 
     for(i=0; cyrusdb_backends[i]; i++) {
 	if(!strcmp(cyrusdb_backends[i]->name, argv[optind+1])) {
@@ -160,9 +171,7 @@ int main(int argc, char *argv[])
     }
     if(!cyrusdb_backends[i]) {
 	fatal("unknown old backend", EC_TEMPFAIL);
-    }
-    
-    new_db = argv[optind+2];
+    }   
 
     for(i=0; cyrusdb_backends[i]; i++) {
 	if(!strcmp(cyrusdb_backends[i]->name, argv[optind+3])) {
