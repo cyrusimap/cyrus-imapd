@@ -140,6 +140,10 @@ script, and exit. <P>
 <dd>Specifies the userid used for installing setuid programs.  By default,
 configure uses "<TT>cyrus</TT>". <P>
 
+<dt><tt>--with-cyrus-group=USER</tt>
+<dd>Specifies the group used for installing setuid programs.  By default,
+configure uses "<TT>mail</TT>". <P>
+
 <dt><tt>--with-login=METHOD</tt>
 <dd>Specifies the login authentication module to use.  Currently
 implemented authentication modules are:
@@ -352,7 +356,9 @@ examples in this document assume a user of "<tt>cyrus</tt>" and a
 group of "<tt>mail</tt>", though any user and group name can be used.
 If a user other than "<tt>cyrus</tt>" is to be used, it must have been
 previously specified in the "<TT>--with-cyrus-user=</TT>" option to
-"<TT>configure</TT>".
+"<TT>configure</TT>".  If a group other than "<tt>mail</tt>" is to be
+used, it must have been previously specified in the
+"<TT>--with-cyrus-group=</TT>" option to "<TT>configure</TT>".
  <P>
 
 <li>After you've logged in as "<TT>root</TT>", install the cyrus software.
@@ -570,6 +576,10 @@ be obtained from
 to the IMAP server.  See the files <TT>cf/README</TT> and
 <TT>cf/cf/cyrusproto.mc</TT> in the Sendmail distribution for
 information on how to do this.
+
+ <P> <LI> Edit <TT>/etc/group</TT> and add user "<TT>daemon</TT>" to
+the "<TT>mail</TT>" group.  This will permit sendmail to run the
+"<TT>deliver</TT>" program to deliver mail to the IMAP server.
 
  <P>
 <li>The Cyrus IMAP server support in Sendmail defaults to enabling
