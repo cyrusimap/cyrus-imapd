@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.4 2002/05/16 19:11:25 ken3 Exp $
+ * $Id: annotate.c,v 1.5 2002/05/16 19:44:42 ken3 Exp $
  */
 
 #include <config.h>
@@ -245,6 +245,7 @@ static int fetch_cb(char *name, int matchlen, int maycreate, void* rock)
     if (server && (fdata->entries & ENTRY_SERVER)) {
 	sprintf(entry, "/mailbox/{%s}/vendor/cyrus/server", mboxname);
 
+	attvalues = NULL;
 	if (fdata->attribs & ATTRIB_VALUE)
 	    appendattvalue(&attvalues, "value.shared", server);
 	if (fdata->attribs & ATTRIB_SIZE) {
@@ -258,6 +259,7 @@ static int fetch_cb(char *name, int matchlen, int maycreate, void* rock)
     if (fdata->entries & ENTRY_PARTITION) {
 	sprintf(entry, "/mailbox/{%s}/vendor/cyrus/partition", mboxname);
 
+	attvalues = NULL;
 	if (fdata->attribs & ATTRIB_VALUE)
 	    appendattvalue(&attvalues, "value.shared", partition);
 	if (fdata->attribs & ATTRIB_SIZE) {
