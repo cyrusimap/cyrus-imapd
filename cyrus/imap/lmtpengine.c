@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.75.4.11 2002/10/21 18:07:52 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.75.4.12 2002/11/03 14:18:04 ken3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -141,6 +141,7 @@ static struct
     char *authid;
 } saslprops = {NULL,NULL,0,NULL};
 
+#ifdef USING_SNMPGEN
 /* round to nearest 1024 bytes and return number of Kbytes.
  used for SNMP updates. */
 static int roundToK(int x)
@@ -153,6 +154,9 @@ static int roundToK(int x)
     else
 	return ri+1;    
 }
+#else
+#define roundToK(x)
+#endif /* USING_SNMPGEN */
 
 static void send_lmtp_error(struct protstream *pout, int r)
 {
