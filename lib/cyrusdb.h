@@ -57,6 +57,9 @@ enum cyrusdb_initflags {
     CYRUSDB_RECOVER = 0x01
 };
 
+typedef int foreach_p(void *rock,
+		      const char *key, int keylen);
+
 typedef int foreach_cb(void *rock,
 		       const char *key, int keylen,
 		       const char *data, int datalen);
@@ -81,6 +84,7 @@ struct cyrusdb_backend {
 		     struct txn **mytid);
     int (*foreach)(struct db *mydb,
 		   char *prefix, int prefixlen,
+		   foreach_p *p,
 		   foreach_cb *cb, void *rock, 
 		   struct txn **tid);
     int (*create)(struct db *db, 
