@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.147 2003/02/10 21:24:50 leg Exp $ */
+/* $Id: proxyd.c,v 1.148 2003/02/12 20:07:54 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -370,7 +370,8 @@ static int pipe_until_tag(struct backend *s, char *tag, int force_notfatal)
 	    /* eol now contains the last characters from the line; we want
 	       to see if we've hit a literal */
 	    i = strlen(eol);
-	    if (eol[i-1] == '\n' && eol[i-2] == '\r' && eol[i-3] == '}') {
+	    if (i >= 4 &&
+		eol[i-1] == '\n' && eol[i-2] == '\r' && eol[i-3] == '}') {
 		/* possible literal */
 		i -= 4;
 		while (i > 0 && eol[i] != '{' && isdigit((int) eol[i])) {
@@ -484,7 +485,8 @@ static int pipe_to_end_of_response(struct backend *s, int force_notfatal)
 	    /* eol now contains the last characters from the line; we want
 	       to see if we've hit a literal */
 	    i = strlen(eol);
-	    if (eol[i-1] == '\n' && eol[i-2] == '\r' && eol[i-3] == '}') {
+	    if (i >= 4 &&
+		eol[i-1] == '\n' && eol[i-2] == '\r' && eol[i-3] == '}') {
 		/* possible literal */
 		i -= 4;
 		while (i > 0 && eol[i] != '{' && isdigit((int) eol[i])) {
@@ -575,7 +577,8 @@ static int pipe_command(struct backend *s, int optimistic_literal)
 
 	    /* now determine if eol has a literal in it */
 	    i = strlen(eol);
-	    if (eol[i-1] == '\n' && eol[i-2] == '\r' && eol[i-3] == '}') {
+	    if (i >= 4 &&
+		eol[i-1] == '\n' && eol[i-2] == '\r' && eol[i-3] == '}') {
 		/* possible literal */
 		i -= 4;
 		if (eol[i] == '+') {
@@ -954,8 +957,8 @@ static void kick_mupdate(void)
 	return;
     }
 
-    strncpy(buf, config_dir, sizeof(buf));
-    strncat(buf, FNAME_MUPDATE_TARGET_SOCK, sizeof(buf));
+    strlcpy(buf, config_dir, sizeof(buf));
+    strlcat(buf, FNAME_MUPDATE_TARGET_SOCK, sizeof(buf));
     memset((char *)&srvaddr, 0, sizeof(srvaddr));
     srvaddr.sun_family = AF_UNIX;
     strcpy(srvaddr.sun_path, buf);
@@ -967,7 +970,7 @@ static void kick_mupdate(void)
 	goto done;
     }
 
-    r = read(s, &buf, sizeof(buf));
+    r = read(s, buf, sizeof(buf));
     if (r <= 0) {
 	syslog(LOG_ERR, "kick_mupdate: can't read from target: %m");
     }
@@ -1026,7 +1029,7 @@ static void proxyd_refer(const char *tag,
 			 const char *server,
 			 const char *mailbox)
 {
-    char url[MAX_MAILBOX_PATH];
+    char url[MAX_MAILBOX_PATH + 1];
 
     if(!strcmp(proxyd_userid, "anonymous")) {
 	imapurl_toURL(url, server, mailbox, "ANONYMOUS");
@@ -3680,6 +3683,11 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 
 	destpart = strchr(partition,'!');
 	if(destpart) {
+	    if(strlen(partition)>=sizeof(newmailboxname)) {
+		prot_printf(s->out,
+			    "%s NO Partition name too long\r\n", tag);
+		return;
+	    }
 	    strcpy(newmailboxname,partition);
 	    newmailboxname[destpart-partition]='\0';
 	    destpart++;
