@@ -28,20 +28,33 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #ifndef _REQUEST_H_
 #define _REQUEST_H_
 
+#include "prot.h"
+#include "mystring.h"
 
-int deleteascript(char *name);
 
-int installafile(char *filename);
+int deleteascript(struct protstream *pout, struct protstream *pin,
+		  char *name);
 
-int showlist(void);
+int installafile(struct protstream *pout, struct protstream *pin,
+		 char *filename);
 
-int setscriptactive(char *name);
+int installdata(struct protstream *pout, struct protstream *pin,
+		char *scriptname, char *data, int len);
+
+int showlist(struct protstream *pout, struct protstream *pin);
+
+int setscriptactive(struct protstream *pout, struct protstream *pin,
+		    char *name);
 
 /*
  * Getscript. Save {0,1} wheather to save to disk or display on screen
  */
 
-int getscript(char *name, int save);
+int getscript(struct protstream *pout, struct protstream *pin,
+	      char *name, int save);
+
+int getscriptvalue(struct protstream *pout, struct protstream *pin,
+	      char *name, string_t **data);
 
 void parseerror(char *str);
 

@@ -635,35 +635,34 @@ int main(int argc, char **argv)
   if (viewfile!=NULL)
   {
     printf("viewfile=%s\n",viewfile);
-    getscript(viewfile,0);
+    getscript(pout,pin, viewfile,0);
   }
 
-  if (dolist==1)
-  {
-    showlist();
-  }
+
 
   if (installfile!=NULL)
   {
-    installafile(installfile);
-    showlist();
+    installafile(pout,pin,installfile);
   }
 
   if (setactive!=NULL)
   {
-    setscriptactive(setactive);
-    showlist();
+    setscriptactive(pout,pin,setactive);
   }
 
   if (deletescript!=NULL)
   {
-    deleteascript(deletescript);
-    showlist();
+    deleteascript(pout, pin, deletescript);
   }
 
   if (getscriptname!=NULL)
   {
-    getscript(getscriptname,1);
+    getscript(pout,pin, getscriptname,1);
+  }
+
+  if (dolist==1)
+  {
+    showlist(pout,pin);
   }
 
   return 0;
