@@ -165,8 +165,8 @@ char *userid;
     fclose(destfile);
     if (!r) {
 	/* Flush out the cache file data */
-	fflush(message->cache);
-	if (ferror(message->cache) || fsync(fileno(message->cache))) {
+	fflush(mailbox->cache);
+	if (ferror(mailbox->cache) || fsync(fileno(mailbox->cache))) {
 	    syslog(LOG_ERR, "IOERROR: writing cache file for %s: %m",
 		   mailbox->name);
 	    r = IMAP_IOERROR;
@@ -400,8 +400,8 @@ char *userid;
     }
 
     /* Flush out the cache file data */
-    fflush(message->cache);
-    if (ferror(message->cache) || fsync(fileno(message->cache))) {
+    fflush(mailbox->cache);
+    if (ferror(mailbox->cache) || fsync(fileno(mailbox->cache))) {
 	syslog(LOG_ERR, "IOERROR: writing cache file for %s: %m",
 	       mailbox->name);
 	r = IMAP_IOERROR;
@@ -552,8 +552,8 @@ unsigned long feeduid;
     }
 
     /* Flush out the cache file data */
-    fflush(message->cache);
-    if (ferror(message->cache) || fsync(fileno(message->cache))) {
+    fflush(mailbox->cache);
+    if (ferror(mailbox->cache) || fsync(fileno(mailbox->cache))) {
 	syslog(LOG_ERR, "IOERROR: writing cache file for %s: %m",
 	       mailbox->name);
 	r = IMAP_IOERROR;
