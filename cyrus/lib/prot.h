@@ -58,6 +58,7 @@ struct protstream {
     const char *error;
     int eof;
     int read_timeout;
+    struct protstream *flushonread;
 };
 
 #define prot_getc(s) ((s)->cnt-- > 0 ? (int)*(s)->ptr++ : prot_fill(s))
@@ -71,6 +72,8 @@ extern int prot_setlogtime P((struct protstream *s, time_t *ptr));
 extern int prot_setfunc P((struct protstream *s,
 			   const char *(*func)(), void *state, int maxplain));
 extern int prot_settimeout P((struct protstream *s, int timeout));
+extern int prot_setflushonread P((struct protstream *s,
+				  struct protstream *flushs));
 extern const char *prot_error P((struct protstream *s));
 extern int prot_rewind P((struct protstream *s));
 extern int prot_fill P((struct protstream *s));
