@@ -1,4 +1,5 @@
-/* 
+/* imapidle.c -- mailbox update notifier for IMAP IDLE
+ *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -39,23 +40,15 @@
  */
 
 
-#ifndef SERVICE_H
-#define SERVICE_H
+#include "imapidle.h"
+#include "service.h"
 
-#define STATUS_FD (3)
-#define LISTEN_FD (4)
+void imap_idlenotify(struct mailbox *mailbox)
+{
+    imap_idledata_t idledata;
 
-#define SERVICE_AVAILABLE	0x01
-#define SERVICE_UNAVAILABLE	0x02
-#define SERVICE_IMAP_IDLE	0x03
-#define SERVICE_IMAP_IDLENOTIFY	0x04
-#define SERVICE_IMAP_IDLEDONE	0x05
-
-extern int service_init(int argc, char **argv, char **envp);
-extern int service_main(int argc, char **argv, char **envp);
-extern void service_abort(void);
-extern int notify_master(int fd, int msg, void *data, int datalen);
-
-#define MAX_USE 100
-
-#endif
+    strcpy(idledata.mboxname, mailbox->name);
+    idledata.namelen = strlen(idledata.mboxname)+1;
+    notify_master(STATUS_FD, SERVICE_IMAP_IDLENOTIFY, &idledata,
+		  IDLEDATA_BASE_SIZE+idledata.namelen);
+}

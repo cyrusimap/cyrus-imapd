@@ -39,23 +39,20 @@
  */
 
 
-#ifndef SERVICE_H
-#define SERVICE_H
+#ifndef IMAPIDLE_H
+#define IMAPIDLE_H
 
-#define STATUS_FD (3)
-#define LISTEN_FD (4)
+#include "mailbox.h"
 
-#define SERVICE_AVAILABLE	0x01
-#define SERVICE_UNAVAILABLE	0x02
-#define SERVICE_IMAP_IDLE	0x03
-#define SERVICE_IMAP_IDLENOTIFY	0x04
-#define SERVICE_IMAP_IDLEDONE	0x05
+typedef struct imap_idledata_s {
+    unsigned long pid;
+    unsigned long namelen;
 
-extern int service_init(int argc, char **argv, char **envp);
-extern int service_main(int argc, char **argv, char **envp);
-extern void service_abort(void);
-extern int notify_master(int fd, int msg, void *data, int datalen);
+    /* 1 for null. leave at end of structure for alignment */
+    char mboxname[MAX_MAILBOX_NAME+1];
+} imap_idledata_t;
 
-#define MAX_USE 100
+#define IDLEDATA_BASE_SIZE 8
+void imap_idlenotify(struct mailbox *mailbox);
 
 #endif

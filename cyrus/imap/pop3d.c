@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.77 2000/07/06 16:13:35 leg Exp $
+ * $Id: pop3d.c,v 1.78 2000/11/30 15:55:44 ken3 Exp $
  */
 #include <config.h>
 
@@ -79,6 +79,7 @@
 #include "version.h"
 #include "xmalloc.h"
 #include "mboxlist.h"
+#include "imapidle.h"
 
 #ifdef HAVE_KRB
 /* kerberos des is purported to conflict with OpenSSL DES */
@@ -185,6 +186,9 @@ int service_init(int argc, char **argv, char **envp)
     /* open the mboxlist, we'll need it for real work */
     mboxlist_init(0);
     mboxlist_open(NULL);
+
+    /* set the mailbox update notifier for IMAP IDLE */
+    mailbox_set_updatenotifier(imap_idlenotify);
 
     return 0;
 }

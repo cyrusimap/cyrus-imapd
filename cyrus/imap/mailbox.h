@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- $Id: mailbox.h,v 1.54 2000/05/23 20:52:21 robeson Exp $
+ $Id: mailbox.h,v 1.55 2000/11/30 15:55:44 ken3 Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -198,6 +198,10 @@ extern char *mailbox_cache_header_name[];
 extern int mailbox_num_cache_header;
 
 typedef int mailbox_decideproc_t(void *rock, char *indexbuf);
+
+typedef void mailbox_notifyproc_t(struct mailbox *mailbox);
+
+extern void mailbox_set_updatenotifier(mailbox_notifyproc_t *notifyproc);
 
 extern int mailbox_initialize(void);
 

@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.103 2000/11/17 02:12:18 leg Exp $
+ $Id: mailbox.c,v 1.104 2000/11/30 15:55:43 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -124,6 +124,17 @@ int mailbox_num_cache_header =
 static int acappush_sock = -1;
 static struct sockaddr_un acappush_remote;
 static int acappush_remote_len = 0;
+
+/* function to be used for notification of mailbox changes/updates */
+static mailbox_notifyproc_t *updatenotifier = NULL;
+
+/*
+ * Set the updatenotifier function
+ */
+void mailbox_set_updatenotifier(mailbox_notifyproc_t *notifyproc)
+{
+    updatenotifier = notifyproc;
+}
 
 /*
  * Create connection to acappush
@@ -1080,6 +1091,8 @@ mailbox_write_index_header(struct mailbox *mailbox)
 
     assert(mailbox->index_lock_count != 0);
 
+    if (updatenotifier) updatenotifier(mailbox);
+
     if (acappush_sock != -1) {
 	acapmbdata_t acapdata;
 
@@ -1771,6 +1784,8 @@ void *deciderock;
     }
 
     if (numdeleted) {
+	if (updatenotifier) updatenotifier(mailbox);
+
 	if (acappush_sock != -1) {
 	    acapmbdata_t acapdata;
 	    
