@@ -60,7 +60,7 @@ LOBJS= append.o mailbox.o mboxlist.o message.o \
 
 IMAPDOBJS= imapd.o index.o
 
-PROGS = collectnews rmnews deliver imapd pop3d reconstruct
+PROGS = collectnews rmnews deliver imapd pop3d reconstruct quota
 
 all: $(PROGS)
 
@@ -84,6 +84,9 @@ pop3d: pop3d.o libimap.a $(LIBS)
 
 reconstruct: reconstruct.o libimap.a $(LIBS)
 	$(CC) $(LDFLAGS) -o reconstruct reconstruct.o libimap.a $(LIBS)
+
+quota: quota.o libimap.a $(LIBS)
+	$(CC) $(LDFLAGS) -o quota quota.o libimap.a $(LIBS)
 
 libimap.a: $(LOBJS)
 	ar cr libimap.a $(LOBJS)
