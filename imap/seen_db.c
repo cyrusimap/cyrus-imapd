@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.12 2000/06/28 05:49:18 leg Exp $
+   $Id: seen_db.c,v 1.13 2000/07/30 15:37:26 leg Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -165,7 +165,7 @@ static int seen_readold(struct seen *seendb,
     int fd;
     const char *base;
     const char *buf = 0, *p;
-    unsigned long len, linelen;
+    unsigned long len = 0, linelen;
     unsigned long offset = 0;
 
     strcpy(fnamebuf, seendb->path);
