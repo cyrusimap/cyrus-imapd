@@ -42,7 +42,12 @@ is created under the directory specified in the
 .I configdirectory
 configuration option, then
 .I imapd
-will send the first line contained in the file to clients upon connect.
+will send the first line contained in the file to clients upon connect as
+an ALERT message which IMAP-compliant clients are required to display.
+This option serves to annoy users mostly.  Unfortunately clients tend to
+connect far more frequently than is apparent, causing each connection to
+generate a seperate server ALERT for each connection.  Many clients do not
+display these properly, if they do anything with them at all.
 .PP
 If the directory
 .RI log/ user
