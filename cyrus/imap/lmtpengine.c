@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.67 2002/03/13 21:39:17 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.68 2002/04/01 22:22:04 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -638,33 +638,45 @@ char *buf;
     }
 }
 
-/* copies the message from fin to fout, massaging accordingly: mostly
- * newlines are fiddled. "." terminates */
+/* copies the message from fin to fout, massaging accordingly: 
+   . newlines are fiddled to \r\n
+   . "." terminates 
+   . embedded NULs are rejected
+   . bare \r are removed
+*/
 static int copy_msg(struct protstream *fin, FILE *fout)
 {
     char buf[8192], *p;
 
     while (prot_fgets(buf, sizeof(buf)-1, fin)) {
 	p = buf + strlen(buf) - 1;
-	if (p <= buf || (p[0] == '\n' && p[-1] != '\r')) {
-	    /* either a \0 by itself or a \n without a \r */
+	if (p < buf) {
+	    /* buffer start with a \0 */
+	    return IMAP_MESSAGE_CONTAINSNULL;
+	}
+	else if (buf[0] == '\r' && buf[1] == '\0') {
+	    /* The message contained \r\0, and fgets is confusing us. */
+	    return IMAP_MESSAGE_CONTAINSNULL;
+	}
+	else if (p[0] == '\r') {
+	    /*
+	     * We were unlucky enough to get a CR just before we ran
+	     * out of buffer--put it back.
+	     */
+	    prot_ungetc('\r', fin);
+	    *p = '\0';
+	}
+	else if (p[0] == '\n' && p[-1] != '\r') {
+	    /* found an \n without a \r */
 	    p[0] = '\r';
 	    p[1] = '\n';
 	    p[2] = '\0';
-	} else if (*p == '\r') {
-	    if (buf[0] == '\r' && buf[1] == '\0') {
-		/* The message contained \r\0, and fgets is confusing us.
-		   XXX ignored
-		   */
-	    } else {
-		/*
-		 * We were unlucky enough to get a CR just before we ran
-		 * out of buffer--put it back.
-		 */
-		prot_ungetc('\r', fin);
-		*p = '\0';
-	    }
 	}
+	else if (p[0] != '\n') {
+	    /* line contained a \0 not at the end */
+	    return IMAP_MESSAGE_CONTAINSNULL;
+	}
+
 	/* Remove any lone CR characters */
 	while ((p = strchr(buf, '\r')) && p[1] != '\n') {
 	    strcpy(p, p+1);
@@ -717,6 +729,8 @@ static int parseheader(struct protstream *fin, FILE *fout,
     static int namelen = 0, bodylen = 0;
     int off = 0;
     state s = NAME_START;
+    int r = 0;
+    int reject8bit = config_getswitch("reject8bit", 0);
 
     if (namelen == 0) {
 	namelen += NAMEINC;
@@ -728,13 +742,14 @@ static int parseheader(struct protstream *fin, FILE *fout,
     }
 
     /* there are two ways out of this loop, both via gotos:
-       either we successfully read a character (got_header)
+       either we successfully read a header (got_header)
        or we hit an error (ph_error) */
     while ((c = prot_getc(fin)) != EOF) { /* examine each character */
 	switch (s) {
 	case NAME_START:
 	    if (c == '\r' || c == '\n') {
 		/* no header here! */
+		r = IMAP_MESSAGE_BADHEADER;
 		goto ph_error;
 	    }
 	    /* field-name      =       1*ftext
@@ -744,6 +759,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
 				       ;  ":". */
 	    if (!((c >= 33 && c <= 57) || (c >= 59 && c <= 126))) {
 		/* invalid header name */
+		r = IMAP_MESSAGE_BADHEADER;
 		goto ph_error;
 	    }
 	    name[0] = tolower(c);
@@ -758,6 +774,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
 		break;
 	    }
 	    if (!((c >= 33 && c <= 57) || (c >= 59 && c <= 126))) {
+		r = IMAP_MESSAGE_BADHEADER;
 		goto ph_error;
 	    }
 	    name[off++] = tolower(c);
@@ -776,6 +793,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
 		    fputc(c, fout);
 		    c = prot_getc(fin);
 		}
+		r = IMAP_MESSAGE_BADHEADER;
 		goto ph_error;
 	    }
 	    break;
@@ -810,6 +828,18 @@ static int parseheader(struct protstream *fin, FILE *fout,
 		/* ignore this whitespace, but we'll copy all the rest in */
 		break;
 	    } else {
+		if (c >= 0x80) {
+		    if (reject8bit) {
+			/* We have been configured to reject all mail of this
+			   form. */
+			r = IMAP_MESSAGE_CONTAINS8BIT;
+			goto ph_error;
+		    } else {
+			/* We have been configured to munge all mail of this
+			   form. */
+			c = 'X';
+		    }
+		}
 		/* just an ordinary character */
 		body[off++] = c;
 		if (off >= bodylen - 3) {
@@ -833,7 +863,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
     /* and we didn't get a header */
     if (headname != NULL) *headname = NULL;
     if (contents != NULL) *contents = NULL;
-    return -1;
+    return r;
 
  got_header:
     if (headname != NULL) *headname = xstrdup(name);
@@ -844,12 +874,14 @@ static int parseheader(struct protstream *fin, FILE *fout,
 
 static int fill_cache(struct protstream *fin, FILE *fout, message_data_t *m)
 {
+    int r = 0;
+
     /* let's fill that header cache */
     for (;;) {
 	char *name, *body;
 	int cl, clinit;
 
-	if (parseheader(fin, fout, &name, &body) < 0) {
+	if ((r = parseheader(fin, fout, &name, &body)) < 0) {
 	    break;
 	}
 
@@ -889,7 +921,12 @@ static int fill_cache(struct protstream *fin, FILE *fout, message_data_t *m)
 	m->cache[cl]->contents[m->cache[cl]->ncontents] = NULL;
     }
 
-    return copy_msg(fin, fout);
+    if (r) {
+	/* bad header */
+	return r;
+    } else {
+	return copy_msg(fin, fout);
+    }
 }
 
 /*
