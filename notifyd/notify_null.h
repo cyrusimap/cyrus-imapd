@@ -40,8 +40,13 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notify_null.h,v 1.3 2002/03/18 15:14:17 ken3 Exp $
+ * $Id: notify_null.h,v 1.4 2002/07/03 14:57:44 rjs3 Exp $
  */
+
+#ifndef _NOTIFY_NULL_H_
+#define _NOTIFY_NULL_H_
+
+#include <config.h>
 
 char* notify_null(const char *class __attribute__((unused)),
 		  const char *priority __attribute__((unused)),
@@ -50,3 +55,5 @@ char* notify_null(const char *class __attribute__((unused)),
 		  int nopt __attribute__((unused)),
 		  char **options __attribute__((unused)),
 		  const char *message __attribute__((unused)));
+
+#endif /* _NOTIFY_NULL_H_ */

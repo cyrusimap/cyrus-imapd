@@ -40,11 +40,18 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notify_zephyr.h,v 1.1 2002/03/18 15:14:18 ken3 Exp $
+ * $Id: notify_zephyr.h,v 1.2 2002/07/03 14:57:45 rjs3 Exp $
  */
+
+#ifndef _NOTIFY_ZEPHYR_H_
+#define _NOTIFY_ZEPHYR_H_
+
+#include <config.h>
 
 /* the options should be a list of users to notify in addition to 'user' */
 char* notify_zephyr(const char *class, const char *priority,
 		    const char *user, const char *mailbox,
 		    int nopt, char **options,
 		    const char *message);
+
+#endif /* _NOTIFY_ZEPHYR_H_ */
