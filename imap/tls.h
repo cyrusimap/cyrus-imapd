@@ -49,6 +49,8 @@
 /* is tls enabled? */
 int tls_enabled(const char *ident);
 
+#define CONFIG_DB_TLS (&cyrusdb_db3_nosync)
+
 #ifdef HAVE_SSL
 
 #include <openssl/ssl.h>

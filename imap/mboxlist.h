@@ -40,7 +40,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: mboxlist.h,v 1.18 2002/01/24 16:39:28 rjs3 Exp $
+ * $Id: mboxlist.h,v 1.19 2002/01/25 19:26:55 leg Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -49,7 +49,6 @@
 #include "cyrusdb.h"
 #include "mailbox.h"
 #include "auth.h"
-#include "acap.h"
 #include "mboxname.h"
 
 /* --- cut here --- */

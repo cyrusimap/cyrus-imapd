@@ -42,6 +42,8 @@
 #ifndef DUPLICATE_H
 #define DUPLICATE_H
 
+ /* we have binary data and \0 -> can't use flat */
+#define CONFIG_DB_DUPLICATE (&cyrusdb_db3_nosync)
 #define DUPLICATE_RECOVER 0x01
 
 int duplicate_init(char*, int);

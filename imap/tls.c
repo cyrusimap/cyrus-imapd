@@ -94,7 +94,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.31 2002/01/12 16:12:53 rjs3 Exp $ */
+/* $Id: tls.c,v 1.32 2002/01/25 19:26:55 leg Exp $ */
 
 #include <config.h>
 
@@ -127,7 +127,7 @@
 #include "time.h"
 #include "cyrusdb.h"
 
-#define DB (&cyrusdb_db3_nosync) /* sessions are binary -> MUST use DB3 */
+#define DB (CONFIG_DB_TLS) /* sessions are binary -> MUST use DB3 */
 #define FNAME_SESSIONS "/tls_sessions.db"
 
 static struct db *sessdb = NULL;

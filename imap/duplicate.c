@@ -81,8 +81,7 @@
 
 #include "duplicate.h"
 
- /* we have binary data and \0 -> MUST use DB3 */
-#define DB (&cyrusdb_db3_nosync)
+#define DB (CONFIG_DB_DUPLICATE)
 #define FNAME_DELIVERDB "/deliver.db"
 
 static struct db *dupdb = NULL;
