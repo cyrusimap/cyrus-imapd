@@ -1,3 +1,5 @@
+$Id: drac_auth.patch,v 1.3 2001/03/07 01:57:08 ken3 Exp $
+
 Patch to add support for Dynamic Relay Authorization Control
 
 For more information about DRAC, see:
@@ -49,17 +51,21 @@ Installation
 Operation
 ---------
 
+The behavior of DRAC is controlled by the value of the 'dracinterval' option
+in imapd.conf(5).  If 'dracinterval' is 0 (zero), DRAC is disabled.
+Otherwise, DRAC is enabled and has the following behavior:
+
 pop3d: Whenever a client opens a user's INBOX, drac_auth() is called.
 
-imapd: Once a client is logged in, drac_send() will be called every 5 minutes.
-       To change this interval, see drac_ping() in imap/imapd.c
+imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
+       drac_send() will be once called every 'dracinterval' minutes.
 
 
 
 
 
 *** acconfig.h.orig	Wed Feb  7 16:46:56 2001
---- acconfig.h	Tue Feb 20 08:49:19 2001
+--- acconfig.h	Tue Mar  6 12:27:16 2001
 ***************
 *** 78,83 ****
 --- 78,86 ----
@@ -72,8 +78,8 @@ imapd: Once a client is logged in, drac_send() will be called every 5 minutes.
   /* do we have OpenSSL? */
   #undef HAVE_SSL
   
-*** configure.in.orig	Mon Feb 19 13:36:34 2001
---- configure.in	Tue Feb 20 08:49:19 2001
+*** configure.in.orig	Mon Feb 19 12:54:42 2001
+--- configure.in	Tue Mar  6 12:27:16 2001
 ***************
 *** 714,719 ****
 --- 714,734 ----
@@ -99,18 +105,38 @@ imapd: Once a client is logged in, drac_send() will be called every 5 minutes.
   CMU_LIBWRAP
   CMU_UCDSNMP
 *** imap/imapd.c.orig	Fri Feb 16 13:55:10 2001
---- imap/imapd.c	Tue Feb 20 08:49:19 2001
+--- imap/imapd.c	Tue Mar  6 15:48:05 2001
+***************
+*** 89,94 ****
+--- 89,98 ----
+  #ifdef HAVE_SSL
+  #include "tls.h"
+  
++ #ifdef DRAC_AUTH
++ static int drac_interval; /* dracd "ping" interval; 0 = disabled */
++ #endif /* DRAC_AUTH */
++ 
+  /* our tls connection, if any */
+  static SSL *tls_conn = NULL;
+  #endif /* HAVE_SSL */
 ***************
 *** 486,491 ****
---- 486,499 ----
+--- 490,510 ----
          TLS negotiation immediately */
       if (imaps == 1) cmd_starttls(NULL, 1);
   
 + #ifdef DRAC_AUTH
-+     {
++     drac_interval = config_getint("dracinterval", 5);
++     if (drac_interval < 0) drac_interval = 0;
++ 
++     if (drac_interval) {
 + 	char *err;
-+ 	if (dracconn(config_getstring("drachost", "localhost"), &err) != 0)
-+ 	    syslog(LOG_NOTICE, "dracconn: %s", err);
++ 
++ 	if (dracconn(config_getstring("drachost", "localhost"), &err) != 0) {
++ 	    /* disable DRAC */
++ 	    drac_interval = 0;
++ 	    syslog(LOG_NOTICE, "dracconn: %s (DISABLED)", err);
++ 	}
 +     }
 + #endif /* DRAC_AUTH */
 + 
@@ -119,13 +145,13 @@ imapd: Once a client is logged in, drac_send() will be called every 5 minutes.
   
 ***************
 *** 561,566 ****
---- 569,579 ----
+--- 580,590 ----
       prot_flush(imapd_out);
       /* one less active connection */
       snmp_increment(ACTIVE_CONNECTIONS, -1);
 + 
 + #ifdef DRAC_AUTH
-+     (void) dracdisc((char **)NULL);
++     if (drac_interval) (void) dracdisc((char **)NULL);
 + #endif /* DRAC_AUTH */
 + 
       exit(code);
@@ -133,23 +159,28 @@ imapd: Once a client is logged in, drac_send() will be called every 5 minutes.
   
 ***************
 *** 581,586 ****
---- 594,616 ----
+--- 605,632 ----
   
   }
   
 + #ifdef DRAC_AUTH
 + /*
-+  * Ping dracd every 5 min to let it know that we are still connected
++  * Ping dracd every 'drac_interval' minutes
++  * to let it know that we are still connected
 +  */
 + struct prot_waitevent *drac_ping(struct protstream *s,
 + 				 struct prot_waitevent *ev, void *rock)
 + {
 +     char *err;
 + 
-+     if (dracsend(imapd_remoteaddr.sin_addr.s_addr, &err) != 0)
-+ 	syslog(LOG_NOTICE, "dracsend: %s", err);
++     if (dracsend(imapd_remoteaddr.sin_addr.s_addr, &err) != 0) {
++ 	/* disable DRAC */
++ 	prot_removewaitevent(s, ev);
++ 	syslog(LOG_NOTICE, "dracsend: %s (DISABLED)", err);
++ 	return NULL;
++     }
 + 
-+     ev->mark = time(NULL) + (5 * 60);
++     ev->mark = time(NULL) + (drac_interval * 60);
 +     return ev;
 + }
 + #endif /* DRAC_AUTH */
@@ -159,12 +190,13 @@ imapd: Once a client is logged in, drac_send() will be called every 5 minutes.
    */
 ***************
 *** 1429,1434 ****
---- 1459,1468 ----
+--- 1475,1485 ----
   
       if (!reply) reply = "User logged in";
   
 + #ifdef DRAC_AUTH
-+     prot_addwaitevent(imapd_in, 0 /* ping now */, drac_ping, NULL);
++     if (drac_interval)
++ 	prot_addwaitevent(imapd_in, 0 /* ping now */, drac_ping, NULL);
 + #endif /* DRAC_AUTH */
 + 
       /* Create telemetry log */
@@ -172,45 +204,86 @@ imapd: Once a client is logged in, drac_send() will be called every 5 minutes.
   	    (unsigned long) getpid());
 ***************
 *** 1585,1590 ****
---- 1619,1628 ----
+--- 1636,1646 ----
   
       prot_setsasl(imapd_in,  imapd_saslconn);
       prot_setsasl(imapd_out, imapd_saslconn);
 + 
 + #ifdef DRAC_AUTH
-+     prot_addwaitevent(imapd_in, 0 /* ping now */, drac_ping, NULL);
++     if (drac_interval)
++ 	prot_addwaitevent(imapd_in, 0 /* ping now */, drac_ping, NULL);
 + #endif /* DRAC_AUTH */
   
       /* Create telemetry log */
       sprintf(buf, "%s%s%s/%lu", config_dir, FNAME_LOGDIR, imapd_userid,
 *** imap/pop3d.c.orig	Fri Feb 16 13:55:10 2001
---- imap/pop3d.c	Tue Feb 20 08:49:19 2001
+--- imap/pop3d.c	Tue Mar  6 15:48:03 2001
 ***************
-*** 1111,1116 ****
---- 1111,1125 ----
-      popd_mailbox = &mboxstruct;
-      proc_register("pop3d", popd_clienthost, popd_userid, popd_mailbox->name);
+*** 98,104 ****
+  
+  extern int errno;
+  
+! 
+  
+  #ifdef HAVE_SSL
+  static SSL *tls_conn;
+--- 98,106 ----
+  
+  extern int errno;
+  
+! #ifdef DRAC_AUTH
+! static int drac_enabled;
+! #endif /* DRAC_AUTH */
+  
+  #ifdef HAVE_SSL
+  static SSL *tls_conn;
+***************
+*** 276,281 ****
+--- 278,287 ----
+         TLS negotiation immediatly */
+      if (pop3s == 1) cmd_starttls(1);
   
 + #ifdef DRAC_AUTH
-+     {
-+ 	char *err;
-+ 	if (dracauth(config_getstring("drachost", "localhost"),
-+ 		     popd_remoteaddr.sin_addr.s_addr, &err) != 0)
-+ 	    syslog(LOG_NOTICE, "dracauth: %s", err);
-+     }
++     drac_enabled = (config_getint("dracinterval", 5) > 0);
 + #endif /* DRAC_AUTH */
 + 
+      prot_printf(popd_out, "+OK %s Cyrus POP3 %s server ready\r\n",
+  		config_servername, CYRUS_VERSION);
+      cmdloop();
+***************
+*** 1110,1115 ****
+--- 1116,1134 ----
+      }
+      popd_mailbox = &mboxstruct;
+      proc_register("pop3d", popd_clienthost, popd_userid, popd_mailbox->name);
++ 
++ #ifdef DRAC_AUTH
++     if (drac_enabled) {
++ 	char *err;
++ 
++ 	if (dracauth(config_getstring("drachost", "localhost"),
++ 		     popd_remoteaddr.sin_addr.s_addr, &err) != 0) {
++ 	    /* disable DRAC */
++ 	    drac_enabled = 0;
++ 	    syslog(LOG_NOTICE, "dracauth: %s (DISABLED)", err);
++ 	}
++     }
++ #endif /* DRAC_AUTH */
+  
       /* Create telemetry log */
       sprintf(buf, "%s%s%s/%lu", config_dir, FNAME_LOGDIR, popd_userid,
-  	    (long unsigned) getpid());
-*** man/imapd.conf.5.orig	Mon Feb 19 14:38:59 2001
---- man/imapd.conf.5	Tue Feb 20 08:49:19 2001
+*** man/imapd.conf.5.orig	Mon Feb 19 14:39:37 2001
+--- man/imapd.conf.5	Tue Mar  6 15:55:09 2001
 ***************
 *** 217,222 ****
---- 217,224 ----
+--- 217,228 ----
   file overrides the SASL configuration file.
   .IP "\fBlmtpsocket:\fR /var/imap/socket/lmtp" 5
   Unix domain socket that lmtpd listens on.
++ .IP "\fBdracinterval:\fR 5" 5
++ If nonzero, enables the use of DRAC (Dynamic Relay Authorization Control)
++ by the pop3d and imapd daemons.  Also sets the interval (in minutes) between 
++ re-authorization requests made by imapd.
 + .IP "\fBdrachost:\fR localhost" 5
 + Hostname of the dracd server.
   .SH SEE ALSO
