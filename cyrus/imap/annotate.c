@@ -40,12 +40,12 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.1 2002/03/06 20:49:02 ken3 Exp $
+ * $Id: annotate.c,v 1.2 2002/04/11 18:27:33 ken3 Exp $
  */
 
-#ifdef ENABLE_ANNOTATEMORE
-
 #include <config.h>
+
+#ifdef ENABLE_ANNOTATEMORE
 
 #include <stdio.h>
 #include <stdlib.h>
