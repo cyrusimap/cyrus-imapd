@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.55 2003/02/13 20:15:29 rjs3 Exp $
+ * $Id: pop3proxyd.c,v 1.56 2003/03/10 19:00:20 rjs3 Exp $
  */
 #include <config.h>
 
@@ -122,7 +122,7 @@ sasl_conn_t *backend_saslconn;
 
 /* the sasl proxy policy context */
 static struct proxy_context popd_proxyctx = {
-    0, 0, NULL, NULL, NULL
+    "pop3", 0, 0, 0, NULL, NULL, NULL
 };
 
 /* current namespace */

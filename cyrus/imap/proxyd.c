@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.150 2003/02/27 20:46:10 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.151 2003/03/10 19:00:20 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -149,7 +149,7 @@ static SSL *tls_conn;
 
 /* the sasl proxy policy context */
 static struct proxy_context proxyd_proxyctx = {
-    1, 1, &proxyd_authstate, &proxyd_userisadmin, NULL
+    "imap", 0, 1, 1, &proxyd_authstate, &proxyd_userisadmin, NULL
 };
 
 /* current namespace */

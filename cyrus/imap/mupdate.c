@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.71 2003/02/13 20:15:28 rjs3 Exp $
+ * $Id: mupdate.c,v 1.72 2003/03/10 19:00:20 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -253,9 +253,14 @@ static void conn_free(struct conn *C)
     free(C);
 }
 
+/* the sasl proxy policy context */
+static struct proxy_context mupdate_proxyctx = {
+    "mupdate", 1, 0, 0, NULL, NULL, NULL
+};
+
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
-    { SASL_CB_PROXY_POLICY, &mysasl_proxy_policy, NULL },
+    { SASL_CB_PROXY_POLICY, &mysasl_proxy_policy, (void*) &mupdate_proxyctx },
     { SASL_CB_LIST_END, NULL, NULL }
 };
 

@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.134 2003/02/13 20:15:29 rjs3 Exp $
+ * $Id: pop3d.c,v 1.135 2003/03/10 19:00:20 rjs3 Exp $
  */
 #include <config.h>
 
@@ -133,7 +133,7 @@ static mailbox_decideproc_t expungedeleted;
 
 /* the sasl proxy policy context */
 static struct proxy_context popd_proxyctx = {
-    0, 1, NULL, NULL, NULL
+    "pop3", 0, 0, 1, NULL, NULL, NULL
 };
 
 /* current namespace */

@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.109 2003/02/27 21:27:16 ken3 Exp $
+ * $Id: lmtpd.c,v 1.110 2003/03/10 19:00:20 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -173,13 +173,17 @@ int deliver_logfd = -1; /* used in lmtpengine.c */
 /* current namespace */
 static struct namespace lmtpd_namespace;
 
+/* the sasl proxy policy context */
+static struct proxy_context lmtpd_proxyctx = {
+    "lmtp", 1, 0, 0, NULL, NULL, NULL
+};
+
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
-    { SASL_CB_PROXY_POLICY, &mysasl_proxy_policy, NULL },
+    { SASL_CB_PROXY_POLICY, &mysasl_proxy_policy, (void*) &lmtpd_proxyctx },
     { SASL_CB_CANON_USER, &mysasl_canon_user, NULL },
     { SASL_CB_LIST_END, NULL, NULL }
 };
-
 
 int service_init(int argc __attribute__((unused)), 
 		 char **argv __attribute__((unused)), 
