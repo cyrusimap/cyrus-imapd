@@ -26,3 +26,9 @@ To make a release:
 - make sure the version number is correct
 - make sure to include the C versions of the lex & yacc files in sieve
 - make sure to build configure
+
+announce to:
+- info-cyrus
+- comp.mail.imap
+- comp.os.linux.announce
+- freshmeat.net
