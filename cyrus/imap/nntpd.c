@@ -50,7 +50,7 @@
  */
 
 /*
- * $Id: nntpd.c,v 1.1.2.11 2002/09/25 20:49:17 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.12 2002/09/26 19:19:16 ken3 Exp $
  */
 #include <config.h>
 
@@ -1667,9 +1667,11 @@ static int savemsg(message_data_t *m, FILE *f)
 
 	    /* build a To: header */
 	    for (n = 0; n < m->rcpt_num; n++) {
-		snprintf(buf+strlen(buf), sizeof(buf)-strlen(buf), "%s%s+%s",
-			 sep, /* XXX make this an option */ "post",
-			 m->rcpt[n]);
+		snprintf(buf+strlen(buf), sizeof(buf)-strlen(buf),
+			 "%s%s+%s@%s", sep,
+			 config_getstring(IMAPOPT_NEWSPOSTUSER),
+			 m->rcpt[n]+strlen(newsprefix),
+			 config_servername);
 		sep = ", ";
 	    }
 
@@ -1746,6 +1748,100 @@ static int deliver(message_data_t *msg)
     return  0;
 }
 
+static void feedpeer(message_data_t *msg)
+{
+    const char *server;
+    struct hostent *hp;
+    struct sockaddr_in sin;
+    int sock;
+    struct protstream *pin, *pout;
+    char buf[4096];
+
+    /* XXX need to filter the newsgroups we send upstream.
+       should we do this via imapd.conf, or via an annotation on the
+       mailbox?
+    */
+
+    if ((server = config_getstring(IMAPOPT_NEWSPEER)) == NULL) {
+	syslog(LOG_ERR, "no newspeer defined");
+	return;
+    }
+
+    if ((hp = gethostbyname(server)) == NULL) {
+	syslog(LOG_ERR, "gethostbyname(%s) failed: %m", server);
+	return;
+    }
+
+    sin.sin_family = AF_INET;
+    memcpy(&sin.sin_addr, hp->h_addr, hp->h_length);
+    sin.sin_port = htons(119);
+    
+    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+	syslog(LOG_ERR, "socket() failed: %m");
+	return;
+    }
+    if (connect(sock, (struct sockaddr *) &sin, sizeof(sin)) < 0) {
+	syslog(LOG_ERR, "connect() failed: %m");
+	return;
+    }
+    
+    pin = prot_new(sock, 0);
+    pout = prot_new(sock, 1);
+    prot_setflushonread(pin, pout);
+
+    /* read the initial greeting */
+    if (!prot_fgets(buf, sizeof(buf), pin) || strncmp("200", buf, 3)) {
+	syslog(LOG_ERR, "peer doesn't allow posting");
+	goto quit;
+    }
+
+    /* tell the peer about our new article */
+    prot_printf(pout, "IHAVE %s\r\n", msg->id);
+    prot_flush(pout);
+
+    if (!prot_fgets(buf, sizeof(buf), pin) || strncmp("335", buf, 3)) {
+	syslog(LOG_ERR, "peer doesn't want article %s", msg->id);
+	goto quit;
+    }
+
+    /* send the article */
+    rewind(msg->f);
+    while (fgets(buf, sizeof(buf), msg->f)) {
+	if (buf[0] == '.') prot_putc('.', pout);
+	do {
+	    prot_printf(pout, "%s", buf);
+	} while (buf[strlen(buf)-1] != '\n' &&
+		 fgets(buf, sizeof(buf), msg->f));
+    }
+
+    /* Protect against messages not ending in CRLF */
+    if (buf[strlen(buf)-1] != '\n') prot_printf(pout, "\r\n");
+
+    prot_printf(pout, ".\r\n");
+
+    if (!prot_fgets(buf, sizeof(buf), pin) || strncmp("235", buf, 3)) {
+	syslog(LOG_ERR, "article %s transfer failed", msg->id);
+    }
+
+  quit:
+    prot_printf(pout, "QUIT\r\n");
+    prot_flush(pout);
+
+    prot_fgets(buf, sizeof(buf), pin);
+
+    /* Flush the incoming buffer */
+    prot_NONBLOCK(pin);
+    prot_fill(pin);
+
+    /* close/free socket & prot layer */
+    close(sock);
+    
+    prot_free(pin);
+    prot_free(pout);
+
+    return;
+}
+
 static void cmd_post(char *msgid, int mode)
 {
     FILE *f = NULL;
@@ -1798,8 +1894,15 @@ static void cmd_post(char *msgid, int mode)
 	}
 
 	if (!r) {
-	    if (mode == POST_POST) {
-		/* XXX send the article upstream */
+	    if (mode == POST_POST && msg->id) {
+		/* send the article upstream */
+		/* XXX should also do this for IHAVE/TAKETHIS, since
+		   posting via email will come in from lmtp2nntp in
+		   this fashion.
+		   should we check the Path: header so we don't try to
+		   feed articles that originated upstream?
+		*/
+		feedpeer(msg);
 	    }
 
 	    prot_printf(nntp_out, "%u Article %s received ok\r\n",
