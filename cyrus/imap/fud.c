@@ -27,7 +27,7 @@
  *
  */
 
-/* $Id: fud.c,v 1.3 1998/06/24 00:26:43 tjs Exp $ */
+/* $Id: fud.c,v 1.4 1998/06/24 15:25:52 dar Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -52,6 +52,10 @@
 #include "xmalloc.h"
 #include "acl.h"
 
+#define REQ_OK		0
+#define REQ_DENY	1
+#define REQ_UNK		2
+
 extern int errno;
 extern int optind;
 extern char *optarg;
@@ -70,8 +74,6 @@ main(argc, argv)
 int argc; 
 char **argv;
 {
-    struct passwd *pw;
-    int cyrus_uid, cyrus_gid;
     int port, r;
    
 
@@ -80,28 +82,9 @@ char **argv;
     config_init("fud");
     port = config_getint("fud-port", 4201);
 
-    if (port < IPPORT_RESERVED) {
-	if(geteuid() != 0)
-            fatal("must run as root when fud-port is restricted", EX_USAGE);
-        pw = getpwnam(CYRUS_USER);    
-        if(!pw) 
-            fatal("unable to determine the cyrus user's uid", EX_USAGE);
-        cyrus_uid = pw->pw_uid;
-        cyrus_gid = pw->pw_gid;
-        endpwent(); /* just in case */
-
-        r = init_network(port);
-        
-        syslog(LOG_ERR,"RENOUNCE: renouncing root privledges in favor of %d,%d",cyrus_uid,cyrus_gid);
-        if(setgid(cyrus_gid) || setuid(cyrus_uid))  {
-            close(soc);
-            fatal("unable to renounce root privledges", EX_OSERR);
-        }
-    } else {
-        if (geteuid() == 0) 
-            fatal("must run as the Cyrus user", EX_USAGE);
-        r = init_network(port);
-    }
+    if(geteuid() == 0)
+        fatal("must run as the Cyrus user", EX_USAGE);
+    r = init_network(port);
     signal(SIGHUP,SIG_IGN);
 
     if (r)
@@ -117,21 +100,7 @@ int
 init_network(port)
 int port;
 {
-    int r;
-    struct sockaddr_in sin;
-
-    soc = socket(PF_INET,SOCK_DGRAM,0);   
-    if(soc == -1) {
-        return(errno);
-    }
-    sin.sin_family = AF_INET;
-    sin.sin_addr.s_addr = INADDR_ANY;
-    sin.sin_port = htons(port);
-    
-    r = bind(soc, (struct sockaddr *) &sin, sizeof(sin));
-    if(soc) {
-        return(errno);
-    }
+    soc = 0;	/* inetd has handed us the port as stdin */
     return(0);
 }
 
@@ -163,6 +132,10 @@ begin_handling()
             strncpy(mbox,q,(r - (off + 1)  < MAX_MAILBOX_NAME) ? r - (off + 1) : MAX_MAILBOX_NAME);
 
             handle_request(username,mbox,sfrom);
+
+            /* For safety */
+            memset(username,'\0',off);	
+            memset(mbox,'\0',r - off - 1);
         }
 }
 
@@ -193,7 +166,10 @@ struct sockaddr_in sfrom;
      * Open/lock header 
      */
     r = mailbox_open_header(mboxname, 0, &mailbox);
-    if (r) return r; 
+    if (r) {
+        send_reply(sfrom, REQ_UNK, who, name, 0, 0, 0);
+	return r; 
+    }
     r = mailbox_open_index(&mailbox);
 
     if (r) {
@@ -202,7 +178,7 @@ struct sockaddr_in sfrom;
     }
 
     if(!(strncmp(mboxname,"user.",5)) && !(mailbox.myrights & ACL_USER0)) {
-        send_reply(sfrom, 0, who, name, 0, 0, 0);
+        send_reply(sfrom, REQ_DENY, who, name, 0, 0, 0);
     }
    
 
@@ -236,7 +212,7 @@ struct sockaddr_in sfrom;
 
     mailbox_close(&mailbox);
     
-    send_reply(sfrom, 1, who, name, numrecent, lastread, lastarrived);
+    send_reply(sfrom, REQ_OK, who, name, numrecent, lastread, lastarrived);
     
     return(0);
 }
@@ -254,11 +230,18 @@ time_t lastarrived;
     char buf[MAX_MAILBOX_PATH + 16 + 9];
     int siz;
 
-    if(!status) {
-        sendto(soc,"PERMDENY",9,0,(struct sockaddr *) &sfrom, sizeof(sfrom));       
-    }
-    siz = sprintf(buf,"%s|%s|%d|%d|%d",user,mbox,numrecent,(int) lastread,(int) lastarrived);
-    sendto(soc,buf,siz,0,(struct sockaddr *) &sfrom, sizeof(sfrom));       
+    switch(status) {
+        case REQ_DENY:
+            sendto(soc,"PERMDENY",9,0,(struct sockaddr *) &sfrom, sizeof(sfrom));       
+            break;
+        case REQ_OK:
+            siz = sprintf(buf,"%s|%s|%d|%d|%d",user,mbox,numrecent,(int) lastread,(int) lastarrived);
+            sendto(soc,buf,siz,0,(struct sockaddr *) &sfrom, sizeof(sfrom));       
+            break;
+        case REQ_UNK:
+            sendto(soc,"UNKNOWN",8,0,(struct sockaddr *) &sfrom, sizeof(sfrom));       
+            break;
+    } 
 }
 
 int convert_code(r)
