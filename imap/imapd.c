@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.347 2002/03/12 21:00:10 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.348 2002/03/14 17:49:36 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -3674,6 +3674,8 @@ cmd_reconstruct(const char *tag, const char *name, int recursive)
 {
     int r = 0;
     char mailboxname[MAX_MAILBOX_NAME+1];
+    char quotaroot[MAX_MAILBOX_NAME+1];
+    struct mailbox mailbox;
 
     /* administrators only please */
     if (!imapd_userisadmin) {
@@ -3731,10 +3733,25 @@ cmd_reconstruct(const char *tag, const char *name, int recursive)
 	}
     }
 
-    /* Still in parent, run quota -f */
+    /* Still in parent, need to re-quota the mailbox*/
+
+    /* Find its quota root */
+    if (!r) {
+	r = mailbox_open_header(mailboxname, imapd_authstate, &mailbox);
+    }
+
+    if(!r) {
+	if(mailbox.quota.root) {
+	    strcpy(quotaroot, mailbox.quota.root);
+	} else {
+	    strcpy(quotaroot, mailboxname);
+	}
+	mailbox_close(&mailbox);
+    }
+    
+    /* Run quota -f */
     if (!r) {
 	int pid;
-	/* Reconstruct it */
 
 	pid = fork();
 	if(pid == -1) {
@@ -3742,8 +3759,9 @@ cmd_reconstruct(const char *tag, const char *name, int recursive)
 	} else if(pid == 0) {
 	    char buf[4096];
 	    /* Child - exec reconstruct*/	    
-	    syslog(LOG_NOTICE, "Regenerating quota roots for user '%s'",
-		   imapd_userid);
+	    syslog(LOG_NOTICE,
+		   "Regenerating quota roots starting with '%s' for user '%s'",
+		   mailboxname, imapd_userid);
 
 	    snprintf(buf, sizeof(buf), "%s/quota", SERVICE_PATH);
 
@@ -3751,7 +3769,7 @@ cmd_reconstruct(const char *tag, const char *name, int recursive)
 	    fclose(stdout);
 	    fclose(stderr);
 
-	    execl(buf, buf, "-C", config_filename, "-f", NULL);
+	    execl(buf, buf, "-C", config_filename, "-f", quotaroot, NULL);
 	    
 	    /* if we are here, we have a problem */
 	    exit(-1);
