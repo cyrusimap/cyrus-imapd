@@ -447,10 +447,8 @@ static int charset_readbase64();
  * State for the various charset_searchfile() helper functions
  */
 static int (*rawproc)();	/* Function to read and transfer-decode data */
-static FILE *rawfile;		/* File to read raw data from */
+static char *rawbase;		/* Location in mapped file of raw data */
 static int rawlen;		/* # bytes raw data left to read from file */
-static char rawbuf[4096];	/* Buffer of data read, but not decoded */
-static int rawstart, rawleft;	/* Location/count of unprocessed raw data */
 static char decodebuf[4096];	/* Buffer of data deocded, but not converted
 				 * into canonical searching form */
 static int decodestart, decodeleft; /* Location/count of decoded data */
@@ -459,17 +457,18 @@ static struct state decodestate; /* Charset state to convert decoded data
 
 /*
  * Search for the string 'substr' in the next 'len' bytes of 
- * 'msgfile'.  If 'mapnl' is nonzero, then LF characters in the file
+ * 'msg_base'.  If 'mapnl' is nonzero, then LF characters in the file
  * map to CR LF and count as 2 bytes w.r.t. the value of 'len'.
  * 'charset' and 'encoding' specify the character set and 
  * content transfer encoding of the data, respectively.
  * Returns nonzero iff the string was found.
  */
 int
-charset_searchfile(substr, pat, msgfile, mapnl, len, charset, encoding)
+charset_searchfile(substr, pat, msg_base, mapnl, len,
+		   charset, encoding)
 char *substr;
 comp_pat *pat;
-FILE *msgfile;
+char *msg_base;
 int mapnl;
 int len;
 int charset;
@@ -487,9 +486,8 @@ int encoding;
     decodeleft = 0;
 
     /* Initialize transfer-decoding */
-    rawfile = msgfile;
+    rawbase = msg_base;
     rawlen = len;
-    rawleft = 0;
     switch (encoding) {
     case ENCODING_NONE:
 	if (mapnl && !strchr(substr, '\n') && !strchr(substr, '\r')) {
@@ -683,15 +681,14 @@ charset_readplain(buf, size)
 char *buf;
 int size;
 {
-    int n;
-
     if (size > rawlen) size = rawlen;
     if (!size) return 0;
 
-    n = fread(buf, 1, size, rawfile);
-    rawlen -= n;
+    memcpy(buf, rawbase, size);
+    rawlen -= size;
+    rawbase += size;
 
-    return n;
+    return size;
 }
 
 /*
@@ -705,34 +702,22 @@ char *buf;
 int size;
 {
     int retval = 0;
-    int n, limit;
     int c;
 
-    if (rawleft && rawstart != 0) {
-	bcopy(rawbuf+rawstart, rawbuf, rawleft);
-    }
-    rawstart = 0;
-
-    limit = sizeof(rawbuf)-rawleft;
-    if (limit > rawlen) limit = rawlen;
-    n = fread(rawbuf+rawleft, 1, limit, rawfile);
-    rawlen -= n;
-    rawleft += n;
-
-    while (size && rawleft > 0) {
-	c = rawbuf[rawstart];
+    while (size && rawlen > 0) {
+	c = *rawbase;
 	if (c == '\n') {
 	    if (size < 2) {
 		return retval;
 	    }
-	    rawleft--;
 	    *buf++ = '\r';
 	    retval++;
 	    size--;
+	    rawlen--;
 	}
-	rawstart++;
-	rawleft--;
 	*buf++ = c;
+	rawbase++;
+	rawlen--;
 	retval++;
 	size--;
     }
@@ -750,30 +735,38 @@ char *buf;
 int size;
 {
     int retval = 0;
-    int n, limit;
     int c, c1, c2;
+    char *nextline, *endline;
 
-    if (rawleft && rawstart != 0) {
-	bcopy(rawbuf+rawstart, rawbuf, rawleft);
-    }
-    rawstart = 0;
+    nextline = endline = rawbase;
 
-    limit = sizeof(rawbuf)-rawleft;
-    if (limit > rawlen) limit = rawlen;
-    n = fread(rawbuf+rawleft, 1, limit, rawfile);
-    rawlen -= n;
-    rawleft += n;
+    while (size && rawlen) {
+	if (rawbase >= nextline) {
+	    /* Ignore trailing whitespace at end of line */
 
-    while (size && rawleft) {
-	c = rawbuf[rawstart];
+	    nextline = memchr(rawbase+1, '\r', rawlen-1);
+	    if (!nextline) nextline = rawbase + rawlen;
+	    endline = nextline;
+	    while (endline > rawbase &&
+		   (endline[-1] == ' ' || endline[-1] == '\t')) {
+		endline--;
+	    }
+	}
+	if (rawbase >= endline) {
+	    rawbase += nextline - endline;
+	    rawlen -= nextline - endline;
+	    continue;
+	}
+
+	c = rawbase[0];
 	if (c == '=') {
-	    if (rawleft < 3) {
+	    if (rawlen < 3) {
 		return retval;
 	    }
-	    c1 = rawbuf[rawstart+1];
-	    c2 = rawbuf[rawstart+2];
-	    rawstart += 3;
-	    rawleft -= 3;
+	    c1 = rawbase[1];
+	    c2 = rawbase[2];
+	    rawbase += 3;
+	    rawlen -= 3;
 	    c1 = HEXCHAR(c1);
 	    c2 = HEXCHAR(c2);
 	    /* Following line also takes care of soft line breaks */
@@ -783,8 +776,8 @@ int size;
 	    size--;
 	}
 	else {
-	    rawstart++;
-	    rawleft--;
+	    rawbase++;
+	    rawlen--;
 	    *buf++ = c;
 	    retval++;
 	    size--;
@@ -804,38 +797,45 @@ char *buf;
 int size;
 {
     int retval = 0;
-    int n, limit;
     int c, c1, c2;
+    char *nextline, *endline;
 
-    if (rawleft && rawstart != 0) {
-	bcopy(rawbuf+rawstart, rawbuf, rawleft);
-    }
-    rawstart = 0;
+    nextline = endline = rawbase;
 
-    limit = sizeof(rawbuf)-rawleft;
-    if (limit > rawlen) limit = rawlen;
-    n = fread(rawbuf+rawleft, 1, limit, rawfile);
-    rawlen -= n;
-    rawleft += n;
+    while (size && rawlen > 0) {
+	if (rawbase >= nextline) {
+	    /* Ignore trailing whitespace at end of line */
 
-    while (size && rawleft > 0) {
-	c = rawbuf[rawstart];
-	if (c == '=') {
-	    if (rawleft < 2) {
-		return retval;
+	    nextline = memchr(rawbase+1, '\n', rawlen - 1);
+	    if (!nextline) nextline = rawbase + rawlen;
+	    endline = nextline;
+	    while (endline > rawbase &&
+		   (endline[-1] == ' ' || endline[-1] == '\t')) {
+		endline--;
 	    }
-	    c1 = rawbuf[rawstart+1];
-	    if (c1 == '\n') {
-		rawstart += 2;
-		rawleft -= 3;
+	}
+	if (rawbase >= endline) {
+	    rawbase += nextline - endline;
+	    rawlen -= nextline - endline;
+	    continue;
+	}
+
+	c = rawbase[0];
+	if (c == '=') {
+	    if (rawbase+1 == endline) {
+		rawbase = nextline + 1;
+		rawlen -= 3 + (nextline - endline);
+
 		continue;
 	    }
-	    if (rawleft < 3) {
+	    if (rawlen < 3) {
 		return retval;
 	    }
-	    c2 = rawbuf[rawstart+2];
-	    rawstart += 3;
-	    rawleft -= 3;
+	    c1 = rawbase[1];
+	    c2 = rawbase[2];
+	    rawbase += 3;
+	    rawlen -= 3;
+	    if (c2 == '\n') rawlen--;
 	    c1 = HEXCHAR(c1);
 	    c2 = HEXCHAR(c2);
 	    if (c1 == XX && c2 == XX) continue;
@@ -847,16 +847,16 @@ int size;
 	    if (size < 2) {
 		return retval;
 	    }
-	    rawstart++;
-	    rawleft -= 2;
+	    rawbase++;
+	    rawlen -= 2;
 	    *buf++ = '\r';
 	    *buf++ = '\n';
 	    retval += 2;
 	    size -= 2;
 	}
 	else {
-	    rawstart++;
-	    rawleft--;
+	    rawbase++;
+	    rawlen--;
 	    *buf++ = c;
 	    retval++;
 	    size--;
@@ -876,84 +876,59 @@ char *buf;
 int size;
 {
     int retval = 0;
-    int n, limit;
     int c1, c2, c3, c4;
 
-    if (rawleft && rawstart != 0) {
-	bcopy(rawbuf+rawstart, rawbuf, rawleft);
-    }
-    rawstart = 0;
-
-    limit = sizeof(rawbuf)-rawleft;
-    if (limit > rawlen) limit = rawlen;
-    n = fread(rawbuf+rawleft, 1, limit, rawfile);
-    rawlen -= n;
-    rawleft += n;
-
-    while (size >= 3 && rawleft) {
+    while (size >= 3 && rawlen) {
 	do {
-	    c1 = rawbuf[rawstart++];
-	    rawleft--;
+	    c1 = *rawbase++;
+	    rawlen--;
 	    if (c1 == '=') {
-		rawlen = rawleft = 0;
+		rawlen = 0;
 		return retval;
 	    }
-	} while (rawleft && CHAR64(c1) == XX);
-	if (!rawleft) {
-	    rawbuf[--rawstart] = c1;
-	    rawleft++;
+	} while (rawlen && CHAR64(c1) == XX);
+	if (!rawlen) {
 	    return retval;
 	}
 
 	do {
-	    c2 = rawbuf[rawstart++];
-	    rawleft--;
+	    c2 = *rawbase++;
+	    rawlen--;
 	    if (c2 == '=') {
-		rawlen = rawleft = 0;
+		rawlen = 0;
 		return retval;
 	    }
-	} while (rawleft && CHAR64(c2) == XX);
-	if (!rawleft) {
-	    rawbuf[--rawstart] = c2;
-	    rawbuf[--rawstart] = c1;
-	    rawleft += 2;
+	} while (rawlen && CHAR64(c2) == XX);
+	if (!rawlen) {
 	    return retval;
 	}
 
 	do {
-	    c3 = rawbuf[rawstart++];
-	    rawleft--;
+	    c3 = *rawbase++;
+	    rawlen--;
 	    if (c3 == '=') {
 		*buf++ = ((CHAR64(c1)<<2) | ((CHAR64(c2)&0x30)>>4));
 		retval++;
-		rawlen = rawleft = 0;
+		rawlen = 0;
 		return retval;
 	    }
-	} while (rawleft && CHAR64(c3) == XX);
-	if (!rawleft) {
-	    rawbuf[--rawstart] = c3;
-	    rawbuf[--rawstart] = c2;
-	    rawbuf[--rawstart] = c1;
-	    rawleft += 3;
+	} while (rawlen && CHAR64(c3) == XX);
+	if (!rawlen) {
 	    return retval;
 	}
 
 	do {
-	    c4 = rawbuf[rawstart++];
-	    rawleft--;
+	    c4 = *rawbase++;
+	    rawlen--;
 	    if (c4 == '=') {
 		*buf++ = ((CHAR64(c1)<<2) | ((CHAR64(c2)&0x30)>>4));
 		*buf++ = (((CHAR64(c2)&0xf)<<4) | ((CHAR64(c3)&0x3c)>>2));
 		retval += 2;
-		rawlen = rawleft = 0;
+		rawlen = 0;
 		return retval;
 	    }
-	} while (rawleft && CHAR64(c4) == XX);
+	} while (rawlen && CHAR64(c4) == XX);
 	if (CHAR64(c4) == XX) {
-	    rawbuf[--rawstart] = c3;
-	    rawbuf[--rawstart] = c2;
-	    rawbuf[--rawstart] = c1;
-	    rawleft += 3;
 	    return retval;
 	}
 
