@@ -12,9 +12,8 @@
 #include <string.h>
 
 #include <acl.h>
+#include "auth.h"
 #include "xmalloc.h"
-
-extern char *auth_canonifyid();
 
 /*
  * Calculate the set of rights the user has in the ACL 'acl'.
