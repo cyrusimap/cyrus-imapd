@@ -9,10 +9,11 @@ dnl AC_MINIX Don't think MINIX handles long file names
 AC_ISC_POSIX
 AC_CONST
 AC_LONG_FILE_NAMES
-if test -z "HAVE_LONG_FILE_NAMES"; then
-	echo "The Cyrus IMAPD requires support for long file names"
-	exit 1
-fi
+case "$DEFS" in
+	*-DHAVE_LONG_FILE_NAMES*) ;;
+	*) echo "The Cyrus IMAPD requires support for long file names"
+	   exit 1;;
+esac
 AC_HAVE_HEADERS(unistd.h)
 AC_REPLACE_FUNCS(bcopy strcasecmp ftruncate getdtablesize)
 AC_DIR_HEADER
@@ -39,14 +40,13 @@ AC_SUBST(WITH_NONBLOCK)
 AC_COMPILE_CHECK(tm_gmtoff,[#include <time.h>],[struct tm tm;
 tm.tm_gmtoff = 0;],WITH_GMTOFF=tm,WITH_GMTOFF=gmtime)
 AC_SUBST(WITH_GMTOFF)
-echo checking for mmap
-AC_TEST_PROGRAM([#include <sys/types.h>
-#include <sys/mman.h>
-#include <fcntl.h>
-main() {int fd = open("conftestmmap", O_RDWR|O_CREAT, 666);
-if (fd == -1) exit(1);
-if (mmap((caddr_t)0, 100, PROT_READ, MAP_SHARED, fd, 0L) == (caddr_t)-1)
- exit(1);exit(0);}],WITH_MAP=mmap,WITH_MAP=nommap)
+AC_MMAP
+case "$DEFS" in
+	*-DHAVE_MMAP*) WITH_MAP="mmap" ;;
+	*) echo "*** This system does not have a working mmap()"
+	   echo "*** Expect a considerable performance penalty"
+	   WITH_MAP="nommap" ;;
+esac
 AC_SUBST(WITH_MAP)
 AC_WITH(lock,WITH_LOCK="$withval",
 	AC_FUNC_CHECK(flock,WITH_LOCK="flock",WITH_LOCK="fcntl"))
