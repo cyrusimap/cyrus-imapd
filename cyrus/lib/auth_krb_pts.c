@@ -1,5 +1,5 @@
 /* auth_krb_pts.c -- Kerberos authorization with AFS PTServer groups
- $Id: auth_krb_pts.c,v 1.20 1998/05/15 21:50:47 neplokh Exp $
+ $Id: auth_krb_pts.c,v 1.21 1998/07/30 21:30:49 wcw Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -302,7 +302,7 @@ const char *cacheid;
 {
     struct auth_state *newstate;
     DBT key, dataheader,datalist;
-    char keydata[PR_MAXNAMELEN + 4]; /* or 20, whichever is greater */
+    char keydata[PTS_DB_KEYSIZE];
     int fd,rc,xpid;
     char fnamebuf[1024];
     DB *ptdb;
@@ -332,7 +332,7 @@ const char *cacheid;
     (void)memset(&info, 0, sizeof(info));
     (void)memset(&key, 0, sizeof(key));
     key.data = keydata;
-    key.size = 20;
+    key.size = PTS_DB_KEYSIZE;
     strcpy(fnamebuf, STATEDIR);
     strcat(fnamebuf, PTS_DBLOCK);
     fd = open(fnamebuf, O_CREAT|O_TRUNC|O_RDWR, 0664);
@@ -407,29 +407,23 @@ const char *cacheid;
 	}
     }
     if (cacheid) {
-        memset(key.data, 0, key.size);
-        memcpy(key.data, cacheid, 16);
-        key.size = 20;
-	/* the session key is colliding too much; overlay the userid */
-	memcpy(key.data, identifier, 
-		 ((strlen(identifier) > 16) ? 16 : strlen(identifier)));
-    }
-    else {
-        key.size = PR_MAXNAMELEN + 4;
-        if ((strlen(identifier) + 5 )  < PR_MAXNAMELEN) {
-            /*
-	     * round length up to nearest multiple of 4
-	     * so that the the hash function works properly
-	     */
-            key.size=(((strlen(identifier) + 3) >> 2) << 2) + 4;
+        memset(keydata, 0, key.size);
+        memcpy(keydata, cacheid, 16); /* why 16? see sasl_krb_server.c */
+	/* toss on userid to further uniquify */
+	if ((strlen(identifier) + 16)  < PTS_DB_KEYSIZE) {
+	  memcpy(keydata+16, identifier, strlen(identifier)); 
+	} else {
+	  memcpy(keydata+16, identifier, PTS_DB_KEYSIZE-16);
 	}
-        memset(key.data, 0, key.size);
-        strncpy(key.data, identifier, key.size-4);
+    } /* cacheid */
+    else {
+        memset(keydata, 0, key.size);
+        strncpy(keydata, identifier, PR_MAXNAMELEN);
     }
     /* Fetch and process the header record for the user, if any */
-    keydata[key.size-4] = 'H';
+    keydata[PTS_DB_HOFFSET] = 'H';
     rc = GET(ptdb, &key, &dataheader, 0);
-    keydata[key.size-4] = 0;
+    keydata[PTS_DB_HOFFSET] = 0;
     if (rc < 0) {
         syslog(LOG_ERR, "IOERROR: reading database %s: %m", fnamebuf);
         CLOSE(ptdb);
@@ -437,8 +431,9 @@ const char *cacheid;
         return newstate;
     }
     if (!rc) {
-        if(dataheader.size != sizeof(ptluser)) {
-            syslog(LOG_ERR, "IOERROR: Database %s probably corrupt", fnamebuf);
+        if (dataheader.size != sizeof(ptluser)) {
+            syslog(LOG_ERR, "IOERROR: Database %s probably corrupt (%d != %d)", 
+		   fnamebuf, dataheader.size, sizeof(ptluser));
             CLOSE(ptdb);
             close(fd);
             return newstate;
@@ -509,9 +504,9 @@ const char *cacheid;
         }
 
         /* fetch the new header record and process it */
-        keydata[key.size-4] = 'H';
+        keydata[PTS_DB_HOFFSET] = 'H';
         rc = GET(ptdb, &key, &dataheader, 0);
-        keydata[key.size-4] = 0;
+        keydata[PTS_DB_HOFFSET] = 0;
         if (rc < 0) {
             syslog(LOG_ERR, "IOERROR: reading database: %m");             
             CLOSE(ptdb);
@@ -545,7 +540,7 @@ const char *cacheid;
      * now get the actual data from the database. this will be a contiguous
      * char[][] of size PR_MAXNAMELEN * us.ngroups
      */
-    keydata[key.size-4] = 'D';
+    keydata[PTS_DB_HOFFSET] = 'D';
     rc = GET(ptdb, &key, &datalist, 0);
     CLOSE(ptdb);    
     close(fd);

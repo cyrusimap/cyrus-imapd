@@ -18,7 +18,7 @@
 
 #include "auth_krb_pts.h"
 
-static char rcsid[] = "$Id: ptexpire.c,v 1.5 1998/05/01 21:55:57 tjs Exp $";
+static char rcsid[] = "$Id: ptexpire.c,v 1.6 1998/07/30 21:31:02 wcw Exp $";
 
 typedef struct {
   char keydata[PR_MAXNAMELEN + 4];
@@ -142,7 +142,7 @@ main(argc, argv)
     syslog(LOG_DEBUG, "Processing: %s", keyinhex);
   }
 
-  if (thekey[key.size-4] == 'H') {
+  if (thekey[PTS_DB_HOFFSET] == 'H') {
     if (data.size != sizeof(ptluser)) {
       syslog(LOG_ERR, "IOERROR: Database probably corrupt");
       exit(-1);
@@ -189,7 +189,7 @@ main(argc, argv)
 	  sprintf(keyinhex+(2*i), "%.2x", thekey[i]);
 	syslog(LOG_DEBUG, "Processing: %s", keyinhex);
       }
-      if (thekey[key.size-4] == 'H') {
+      if (thekey[PTS_DB_HOFFSET] == 'H') {
 	if (data.size != sizeof(ptluser)) {
 	  syslog(LOG_ERR, "IOERROR: Database probably corrupt");
 	  CLOSE(ptdb);
@@ -242,7 +242,7 @@ main(argc, argv)
       exit(-1);
     }
 
-    thekey[key.size-4] = 'D';
+    thekey[PTS_DB_HOFFSET] = 'D';
     if (ptexpire_verbose > 10) {
       for (i=0; i<size; i++) 
 	sprintf(keyinhex+(2*i), "%.2x", thekey[i]);

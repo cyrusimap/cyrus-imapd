@@ -13,7 +13,7 @@
  *
  */
 
-static char rcsid[] = "$Id: ptloader.c,v 1.12 1998/05/13 16:41:53 wcw Exp $";
+static char rcsid[] = "$Id: ptloader.c,v 1.13 1998/07/30 21:31:00 wcw Exp $";
 #include <string.h>
 #include "auth_krb_pts.h"
 #include <stdio.h>
@@ -71,7 +71,7 @@ main(argc, argv)
 
     /* normally LOCAL6, but do this while we're logging keys */
     openlog(PTCLIENT, LOG_PID, LOG_LOCAL7);
-    syslog(LOG_DEBUG, "starting: $Id: ptloader.c,v 1.12 1998/05/13 16:41:53 wcw Exp $");
+    syslog(LOG_DEBUG, "starting: $Id: ptloader.c,v 1.13 1998/07/30 21:31:00 wcw Exp $");
 
     while ((opt = getopt(argc, argv, "Uspd:l:f:u:t:")) != EOF) {
       switch (opt) {
@@ -213,7 +213,7 @@ int c;
     const char *reply;
     HASHINFO info;
     DB *ptdb;
-    char indata[PR_MAXNAMELEN+4];
+    char indata[PTS_DB_KEYSIZE];
     char user[PR_MAXNAMELEN];
     namelist groups;
     int i,fd,rc;
@@ -229,7 +229,14 @@ int c;
         goto sendreply;
     }
 
-    (void)memset(&indata,0,sizeof(indata));
+    if (size > PTS_DB_KEYSIZE)  {
+      syslog(LOG_ERR, "size sent %d is greater than buffer size %d", 
+	     size, PTS_DB_KEYSIZE);
+      reply  = "Error: invalid request size";
+      goto sendreply;
+    }
+
+    (void)memset(&indata,0,PTS_DB_KEYSIZE);
     if (read(c, &indata, size) < 0) {
         syslog(LOG_ERR,"socket (indata; size = %d): %m", size);
         reply = "Error reading request (key)";
@@ -289,7 +296,7 @@ int c;
     dataheader.size = sizeof(ptluser);
     datalist.data = list;
     datalist.size = us.ngroups*PR_MAXNAMELEN;
-    indata[key.size-4] = 'H';
+    indata[PTS_DB_HOFFSET] = 'H';
 
     strcpy(fnamebuf, STATEDIR);
     strcat(fnamebuf, PTS_DBLOCK);
@@ -333,7 +340,7 @@ int c;
     }
 
     /* store the grouplist */
-    indata[key.size-4] = 'D';
+    indata[PTS_DB_HOFFSET] = 'D';
     if (ptclient_debug > 10) {
       for (i=0; i<size; i++) 
 	sprintf(keyinhex+(2*i), "%.2x", indata[i]);
@@ -515,4 +522,4 @@ int exitcode;
   syslog(LOG_ERR, "%s", msg);
   exit(-1);
 }
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.12 1998/05/13 16:41:53 wcw Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.13 1998/07/30 21:31:00 wcw Exp $ */
