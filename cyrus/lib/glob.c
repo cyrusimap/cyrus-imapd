@@ -36,7 +36,7 @@ extern void fs_give( /* void ** */ );
 /* initialize globbing structure
  *  This makes the following changes to the input string:
  *   1) '*' added to each end if GLOB_SUBSTRING
- *   2) '%' converted to '*' if no GLOB_HIERARCHIAL
+ *   2) '%' converted to '?' if no GLOB_HIERARCHIAL
  *   3) '?'s moved to left of '*'
  *   4) '*' eats all '*'s and '%'s connected by any wildcard
  *   5) '%' eats all adjacent '%'s
@@ -47,8 +47,9 @@ glob *glob_init(str, flags)
 {
     glob *g;
     char *dst, *scan;
-    int len;
+    int len, newglob;
 
+    newglob = flags & GLOB_HIERARCHY;
     len = strlen(str);
     g = (glob *) fs_get(sizeof (glob) + len);
     if (g != NULL) {
@@ -57,40 +58,53 @@ glob *glob_init(str, flags)
 	/* if we're doing a substring match, put a '*' prefix (1) */
 	if (flags & GLOB_SUBSTRING) {
 	    /* skip over unneeded glob prefixes (3,4) */
-	    while (*str == '%' || *str == '?' || *str == '*') {
-		if (*str++ == '?') *dst++ = '?';
+	    if (newglob) {
+		while (*str == '%' || *str == '*') ++str;
+	    } else {
+		while (*str == '%' || *str == '*' || *str == '?') {
+		    if (*str++ != '*') *dst++ = '?';
+		}
 	    }
 	    *dst++ = '*';
 	}
-	while (*str) {
-	    if (*str == '*' || *str == '%') {
-		/* remove duplicates (5) */
-		while (str[0] == str[1]) ++str;
-		/* Look for '*'.  If we find one, treat '%' as '*'. (2) */
-		for (scan = str; *scan == '%' || *scan == '?'; ++scan);
-		if (*scan != '*' && (flags & GLOB_HIERARCHY)) {
-		    *dst++ = *str++;
-		} else {
-		    /* skip over unneeded globbing with '*' (3,4) */
-		    while (*str == '%' || *str == '?' || *str == '*') {
-			if (*str++ == '?') *dst++ = '?';
+	if (!newglob) {
+	    while (*str) {
+		if (*str == '*') {
+		    /* move '?' to left of '*' (3) */
+		    while (*str == '*' || *str == '%' || *str == '?') {
+			if (*str++ != '*') *dst++ = '?';
 		    }
 		    *dst++ = '*';
+		} else {
+		    *dst++ = (*str == '%') ? '?' : *str;
+		    ++str;
 		}
-	    } else {
-		*dst++ = *str++;
+	    }
+	} else {
+	    while (*str) {
+		if (*str == '*' || *str == '%') {
+		    /* remove duplicate hierarchy match (5) */
+		    while (*str == '%') ++str;
+		    /* If we found a '*', treat '%' as '*' (4) */
+		    if (*str == '*') {
+			/* remove duplicate wildcards (4) */
+			while (*str == '*' || *str == '%') ++str;
+			*dst++ = '*';
+		    } else {
+			*dst++ = '%';
+		    }
+		} else {
+		    *dst++ = *str++;
+		}
 	    }
 	}
 	/* put a '*' suffix (1) */
 	if (flags & GLOB_SUBSTRING && dst[-1] != '*') {
-	    while (dst[-1] == '%' || dst[-1] == '?') --dst;
+	    /* remove duplicate wildcards (4) */
+	    if (newglob) while (dst[-1] == '%') --dst;
 	    *dst++ = '*';
 	}
 	*dst = '\0';
-	if (flags & GLOB_HIERARCHY) {
-	    for (dst = g->str; *dst && *dst != '*' && *dst != '?'; ++dst);
-	    if (*dst) flags |= GLOB_MULTIPARTIAL;
-	}
 	if (flags & GLOB_ICASE) lcase(g->str);
 	g->flags = flags;
     }
@@ -98,70 +112,12 @@ glob *glob_init(str, flags)
     return (g);
 }
 
-
 /* free a glob structure
  */
 void glob_free(g)
     glob **g;
 {
     fs_give((void **) g);
-}
-
-/* recursive handling of "%" character -- match until end of string or a "*"
- *  This needs to be recursive for the degenerate case of "%...?...%"
- *  sequences.
- */
-static int glob_recurse(pglob, pstr, g, start, pend, min)
-    char **pglob, **pstr;
-    glob *g;
-    char *start, *pend;
-    long *min;
-{
-    char *gptr, *ptr, *plev = *pstr;
-    int result;
-
-    /* handle special case of "%" at end of string */
-    if (!**pglob) {
-	while (plev != pend && *plev && *plev != g->sep_char) ++plev;
-	*pstr = plev;
-	if (plev == pend || !*plev) return (plev - start);
-	if (min && plev - start >= *min) {
-	    *min = (g->flags & GLOB_MULTIPARTIAL) ? plev - start + 1 : -1;
-	    return (plev - start);
-	}
-	return (-1);
-    }
-    
-    /* loop for each character the "%" eats */
-    do {
-	gptr = *pglob;
-	ptr = plev;
-	if (!(g->flags & GLOB_ICASE)) {
-	    while (ptr != pend && *ptr && *gptr != '*' && *gptr != '%'
-		   && (*gptr == '?' || *gptr == *ptr)) {
-		++ptr, ++gptr;
-	    }
-	} else {
-	    while (ptr != pend && *ptr && *gptr != '*' && *gptr != '%'
-		   && (*gptr == '?' || *gptr == TOLOWER(*ptr))) {
-		++ptr, ++gptr;
-	    }
-	}
-	if (*gptr == '%') {
-	    ++gptr;
-	    result = glob_recurse(&gptr, &ptr, g, start, pend, min);
-	    if (result >= 0) {
-		*pglob = gptr;
-		*pstr = ptr;
-		return (result);
-	    }
-	}
-    } while (*gptr != '*' && (*gptr || (ptr != pend && *ptr))
-	     && plev != pend && *plev && *plev++ != g->sep_char);
-    *pglob = gptr;
-    *pstr = ptr;
-
-    return (!*gptr && (ptr == pend || !*ptr) ? ptr - start : -1);
 }
 
 /* returns -1 if no match, otherwise length of match or partial-match
@@ -180,96 +136,129 @@ int glob_test(g, ptr, len, min)
 {
     char *gptr, *pend;		/* glob pointer, end of ptr string */
     char *gstar, *pstar;	/* pointers for '*' patterns */
+    char *ghier, *phier;	/* pointers for '%' patterns */
     char *start;		/* start of input string */
     int result;
+    int newglob;
 
     if (min && *min < 0) return (-1);
+    if (!len) len = strlen(ptr);
     gptr = g->str;
     start = ptr;
     pend = ptr + len;
-    gstar = NULL;
+    gstar = ghier = NULL;
+    newglob = g->flags & GLOB_HIERARCHY;
     if (!(g->flags & GLOB_ICASE)) {
 	/* case sensitive version */
 
-	/* loop to manage '*' wildcards */
+	/* loop to manage wildcards */
 	do {
 	    if (*gptr == '*') {
 		/* if nothing after '*', we're done */
 		if (!*++gptr) {
-		    while (ptr != pend && *ptr) ++ptr;
+		    ptr = pend;
 		    break;
 		}
+		ghier = NULL;
 		gstar = gptr;
 		pstar = ptr;
 	    } else if (*gptr == '%') {
-		/* recurse in case we hit the "%...?...%" case */
-		result = glob_recurse(&gptr, &ptr, g, start, pend, min);
-		if (result >= 0) {
-		    if (min && (ptr == pend || !*ptr)) *min = -1;
-		    return (result);
+		/* if nothing after '%', we may be done */
+		if (!*++gptr) {
+		    while (ptr != pend && *ptr != g->sep_char) ++ptr;
+		    if (min && ptr != pend && ptr - start >= *min) {
+			*min = gstar ? ptr - start + 1 : -1;
+			return (ptr - start);
+		    }
+		} else {
+		    ghier = gptr;
+		    phier = ptr;
 		}
 	    }
-	    if (gstar) {
+	    if (ghier) {
+		/* look for a match with first char following '%' */
+		while (phier != pend && *ghier != *phier) ++phier;
+		if (phier == pend) break;
+		ptr = ++phier;
+		gptr = ghier + 1;
+	    } else if (gstar) {
 		/* look for a match with first char following '*' */
-		while (pstar != pend && *pstar && *gstar != *pstar) ++pstar;
-		if (pstar == pend || !*pstar) break;
+		while (pstar != pend && *gstar != *pstar) ++pstar;
+		if (pstar == pend) break;
 		ptr = ++pstar;
 		gptr = gstar + 1;
 	    }
 	    /* see if we match to the next '%' or '*' wildcard */
-	    while (*gptr != '*' && *gptr != '%' && ptr != pend && *ptr
-		   && (*gptr == '?' || *gptr == *ptr)) {
+	    while (*gptr != '*' && *gptr != '%' && ptr != pend
+		   && (*gptr == *ptr || (!newglob && *gptr == '?'))) {
 		++ptr, ++gptr;
 	    }
 	    /* continue if at wildcard or we passed an asterisk */
-	} while (*gptr == '*' || *gptr == '%' || (gstar && *gptr)
-		 || (gstar && ptr < pend && *ptr));
+	} while (*gptr == '*' || *gptr == '%' ||
+		 ((gstar || ghier) && (*gptr || ptr != pend)));
     } else {
 	/* case insensitive version (same as above, but with TOLOWER()) */
 
-
-	/* loop to manage '*' wildcards */
+	/* loop to manage wildcards */
 	do {
 	    if (*gptr == '*') {
 		/* if nothing after '*', we're done */
 		if (!*++gptr) {
-		    while (ptr != pend && *ptr) ++ptr;
+		    ptr = pend;
 		    break;
 		}
+		ghier = NULL;
 		gstar = gptr;
 		pstar = ptr;
 	    } else if (*gptr == '%') {
-		/* recurse in case we hit the "%...?...%" case */
-		++gptr;
-		result = glob_recurse(&gptr, &ptr, g, start, pend, min);
-		if (result >= 0) {
-		    if (min && (ptr == pend || !*ptr)) *min = -1;
-		    return (result);
+		/* if nothing after '%', we may be done */
+		if (!*++gptr) {
+		    while (ptr != pend && *ptr != g->sep_char) ++ptr;
+		    if (min && ptr != pend && ptr - start >= *min) {
+			*min = gstar ? ptr - start + 1 : -1;
+			return (ptr - start);
+		    }
+		} else {
+		    ghier = gptr;
+		    phier = ptr;
 		}
 	    }
-	    if (gstar) {
+	    if (ghier) {
+		/* look for a match with first char following '%' */
+		while (phier != pend && *ghier != TOLOWER(*phier)) ++phier;
+		if (phier == pend) break;
+		ptr = ++phier;
+		gptr = ghier + 1;
+	    } else if (gstar) {
 		/* look for a match with first char following '*' */
-		while (pstar != pend && *pstar
-		       && *gstar != TOLOWER(*pstar)) ++pstar;
-		if (pstar == pend || !*pstar) break;
+		while (pstar != pend && *gstar != TOLOWER(*pstar)) ++pstar;
+		if (pstar == pend) break;
 		ptr = ++pstar;
 		gptr = gstar + 1;
 	    }
 	    /* see if we match to the next '%' or '*' wildcard */
-	    while (*gptr != '*' && *gptr != '%' && ptr != pend && *ptr
-		   && (*gptr == '?' || *gptr == TOLOWER(*ptr))) {
+	    while (*gptr != '*' && *gptr != '%' && ptr != pend
+		   && (*gptr == TOLOWER(*ptr) || (!newglob && *gptr == '?'))) {
 		++ptr, ++gptr;
 	    }
 	    /* continue if at wildcard or we passed an asterisk */
-	} while (*gptr == '*' || *gptr == '%' || (gstar && *gptr)
-		 || (gstar && ptr < pend && *ptr));
+	} while (*gptr == '*' || *gptr == '%' ||
+		 ((gstar || ghier) && (*gptr || ptr != pend)));
     }
 
     if (min) *min = -1;
-    return (*gptr == '\0' && (ptr == pend || *ptr == '\0') ? ptr - start : -1);
+    return (*gptr == '\0' && ptr == pend ? ptr - start : -1);
 }
 
 #ifdef TEST_GLOB
+fatal(str, val)
+    char *str;
+    int val;
+{
+    fprintf(stderr, "%s\n", str);
+    exit(1);
+}
+
 main(argc, argv)
     int argc;
     char **argv;
@@ -282,8 +271,8 @@ main(argc, argv)
     if (g) {
 	printf("%d/%s\n", g->flags, g->str);
 	while (fgets(text, sizeof (text), stdin) != NULL) {
-	    len = strlen(text);
-	    text[len-1] = '\0';
+	    len = strlen(text) - 1;
+	    text[len] = '\0';
 	    min = 0;
 	    while (min >= 0) {
 		printf("%d\n", glob_test(g, text, len, &min));
