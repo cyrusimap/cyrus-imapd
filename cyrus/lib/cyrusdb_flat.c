@@ -604,5 +604,6 @@ struct cyrusdb_backend cyrusdb_flat =
     &commit_txn,
     &abort_txn,
 
+    NULL,
     NULL
 };

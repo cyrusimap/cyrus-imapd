@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.24 2002/02/24 19:43:27 leg Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.25 2002/02/25 19:12:22 leg Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -1558,13 +1558,30 @@ static int consistent(struct db *db) /* xxx */
 
     offset = FORWARD(db->map_base + DUMMY_OFFSET(db), 0);
     while (offset != 0) {
+	int i;
+
 	ptr = db->map_base + offset;
 
-	offset = FORWARD(ptr, 0);
-	if (offset != 0) {
-	    /* check to see that ptr < ptr -> next */
+	for (i = 0; i < LEVEL(ptr); i++) {
+	    offset = FORWARD(ptr, i);
 
+	    if (offset != 0) {
+		/* check to see that ptr < ptr -> next */
+		const char *q = db->map_base + offset;
+		int cmp = compare(KEY(ptr), KEYLEN(ptr), KEY(q), KEYLEN(q));
+		if (cmp >= 0) {
+		    fprintf(stderr, 
+			    "skiplist inconsistent: %04X: ptr %d is %04X; "
+			    "compare() = %d\n", 
+			    ptr - db->map_base,
+			    i,
+			    offset, cmp);
+		    return CYRUSDB_INTERNAL;
+		}
+	    }
 	}
+
+	offset = FORWARD(ptr, 0);
     }
 
     return 0;
@@ -1900,5 +1917,6 @@ struct cyrusdb_backend cyrusdb_skiplist =
     &mycommit,
     &myabort,
 
-    &dump
+    &dump,
+    &consistent
 };
