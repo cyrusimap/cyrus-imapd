@@ -211,7 +211,7 @@ main(argc, argv)
     }
     if (!port) usage();
     if ((hp = gethostbyname(host)) == NULL) {
-	perror("gethostbyname");
+	herror("gethostbyname");
 	exit(1);
     }
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
