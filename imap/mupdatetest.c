@@ -1,6 +1,6 @@
 /* mupdatetest.c -- cyrus murder database test client
  *
- * $Id: mupdatetest.c,v 1.3 2002/02/20 21:01:15 rjs3 Exp $
+ * $Id: mupdatetest.c,v 1.4 2002/02/20 21:10:11 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -218,6 +218,8 @@ static int mupdate_authenticate_spew(mupdate_handle *h,
     if(saslresult != SASL_OK) {
 	fprintf(stderr, "bad authentication: %s\n",
 	       sasl_errdetail(h->saslconn));
+
+	printf("C: *\n");
 	
 	prot_printf(h->pout, "*");
 	return 1;
@@ -227,14 +229,29 @@ static int mupdate_authenticate_spew(mupdate_handle *h,
     ch = getword(h->pin, &(h->tag));
     if(ch != ' ') return 1; /* need an OK or NO */
 
+    printf("S: %s", h->tag.s);
+
     ch = getword(h->pin, &(h->cmd));
+
+    printf(" %s", h->cmd.s);
     if(!strncmp(h->cmd.s, "NO", 2)) {
-	if(ch != ' ') return 1; /* no reason really necessary, but we failed */
+	if(ch != ' ') {
+	    printf("\n");
+	    return 1; /* no reason really necessary, but we failed */
+	}
 	ch = getstring(h->pin, h->pout, &(h->arg1));
 	fprintf(stderr, "authentication failed: %s\n", h->arg1.s);
+	printf(" \"%s\"\n", h->arg1.s);
 	return 1;
     }
 
+    if(ch == ' ') {
+	ch = getstring(h->pin, h->pout, &(h->arg1));
+	printf(" \"%s\"\n", h->arg1.s);
+    } else {
+	printf("\n");
+    }
+    
     prot_setsasl(h->pin, h->saslconn);
     prot_setsasl(h->pout, h->saslconn);
 
