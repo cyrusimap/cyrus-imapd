@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.49 2002/02/25 03:17:28 leg Exp $
+ * $Id: script.c,v 1.50 2002/02/26 01:28:32 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -744,11 +744,12 @@ static int send_notify_callback(sieve_script_t *s, void *message_context,
 				notify_list_t *notify, char *actions_string,
 				const char **errmsg)
 {
+    sieve_notify_context_t nc;
     char *out_msg;
     int out_msglen;    
     int ret;
 
-    sieve_notify_context_t nc;
+    assert(notify->isactive);
 
     nc.method = notify->method;
     nc.options = notify->options ? 
@@ -766,11 +767,11 @@ static int send_notify_callback(sieve_script_t *s, void *message_context,
 
     strcat(nc.message,actions_string);
 
-    ret =  s->interp.notify(&nc,
-			    s->interp.interp_context,
-			    s->script_context,
-			    message_context,
-			    errmsg);    
+    ret = s->interp.notify(&nc,
+			   s->interp.interp_context,
+			   s->script_context,
+			   message_context,
+			   errmsg);    
 
     if (nc.options) {
 	char **opts = nc.options;
