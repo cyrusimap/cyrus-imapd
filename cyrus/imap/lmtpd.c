@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.99.2.7 2002/08/02 12:37:34 ken3 Exp $
+ * $Id: lmtpd.c,v 1.99.2.8 2002/08/02 14:53:38 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1412,8 +1412,8 @@ static int verify_user(const char *user, long quotacheck,
     int userlen = strlen(user), domainlen = 0;
 
     if (config_virtdomains && (domain = strchr(user, '@'))) {
-	domain++;
 	userlen = domain - user;
+	domain++;
 	/* ignore default domain */
 	if (!(config_defdomain && !strcasecmp(config_defdomain, domain)))
 	    domainlen = strlen(domain)+1;
@@ -1501,12 +1501,16 @@ FILE *spoolfile(message_data_t *msgdata)
      */
     if ((msg_getnumrcpt(msgdata) == 1) || singleinstance) {
 	int r = 0;
-	char *rcpt, *plus, *user = NULL;
+	char *rcpt, *plus, *user = NULL, *domain = NULL;
 	char namebuf[MAX_MAILBOX_PATH], mailboxname[MAX_MAILBOX_PATH];
 	time_t now = time(NULL);
 
 	/* build the mailboxname from the recipient address */
-	rcpt = xstrdup(msg_getrcpt(msgdata, 0));
+	user = rcpt = xstrdup(msg_getrcpt(msgdata, 0));
+	if (config_virtdomains && (domain = strchr(rcpt, '@'))) {
+	    *domain = '\0';
+	}
+
 	plus = strchr(rcpt, '+');
 	if (plus) *plus++ = '\0';
 
@@ -1519,7 +1523,6 @@ FILE *spoolfile(message_data_t *msgdata)
 	/* case 2: ordinary user */
 	else if (!strchr(rcpt, lmtpd_namespace.hier_sep) &&
 	         strlen(rcpt) + 30 <= MAX_MAILBOX_PATH) {
-	    user = rcpt;
 
 	    /* assume delivery to INBOX for now */
 	    strcpy(namebuf, "INBOX");
@@ -1529,6 +1532,13 @@ FILE *spoolfile(message_data_t *msgdata)
 	else {
 	    /* force error and we'll fallback to using /tmp */
 	    r = 1;
+	}
+
+	/* reassemble the user and domain */
+	if (domain) {
+	    *domain = '@';
+	    /* slide the domain up to the user */
+	    if (plus) memmove(plus-1, domain, strlen(domain)+1);
 	}
 
 	if (!r) {
