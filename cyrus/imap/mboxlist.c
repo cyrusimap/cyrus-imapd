@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.185 2002/05/06 17:18:51 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.186 2002/05/06 19:22:16 rjs3 Exp $
  */
 
 #include <config.h>
@@ -1081,15 +1081,11 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	tid = NULL;
     }
 
-    syslog(LOG_ERR, "unlocked mailbox list REN");
-
     if(!r) {
 	r = mailbox_open_locked(oldname, oldpath, oldacl, auth_state,
 				&oldmailbox, 0);
 	oldopen = 1;
     }
-
-    syslog(LOG_ERR, "locked mailbox REN");
 
     /* 5. Copy mailbox */
     if (!r && !(mbtype & MBTYPE_REMOTE)) {
@@ -1128,8 +1124,6 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	    goto done;
 	    break;
 	}
-	
-	syslog(LOG_ERR, "Deleted old entry");
     }
 
     /* create new entry */
