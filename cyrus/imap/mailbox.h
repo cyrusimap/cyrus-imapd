@@ -108,7 +108,7 @@ struct mailbox {
     time_t last_appenddate;
     unsigned long last_uid;
     unsigned long quota_mailbox_used;
-    unsigned long pop3_last_uid;
+    unsigned long pop3_last_login;
     unsigned long uidvalidity;
 
     struct quota quota;
