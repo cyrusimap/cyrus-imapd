@@ -1,6 +1,6 @@
 /* bc_generate.c -- sieve bytecode- almost flattened bytecode
  * Rob Siemborski
- * $Id: bc_generate.c,v 1.1.4.2 2003/02/27 20:52:50 jsmith2 Exp $
+ * $Id: bc_generate.c,v 1.1.4.3 2003/03/05 17:53:01 rjs3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -322,6 +322,9 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 				       t->u.ae.relation, 
 				       t->u.ae.comparator);
 	if (codep == -1) return -1;
+
+	if(!atleast(retval,codep+1)) return -1;
+
 	/*address part*/
 	switch(t->u.ae.addrpart) {
 	case ALL:
@@ -342,6 +345,7 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 	default:
 	    return -1;
 	}
+
 	/*headers*/
 	codep = bc_stringlist_generate(codep, retval, t->u.h.sl);
 	if (codep == -1) return -1;
