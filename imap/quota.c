@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  *
  */
-/* $Id: quota.c,v 1.28 1999/08/09 21:07:51 leg Exp $ */
+/* $Id: quota.c,v 1.29 1999/08/20 20:08:30 leg Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -167,6 +167,8 @@ int nroots;
 	if (!dirp) continue;
 
 	while (dirent = readdir(dirp)) {
+	    if (dirent->d_name[0] == '.') continue;
+
 	    /* If restricting our list, see if this quota file matches */
 	    if (nroots) {
 		for (i = 0; i < nroots; i++) {
