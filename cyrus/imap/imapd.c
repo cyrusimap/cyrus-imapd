@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.35 2002/08/31 02:03:47 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.36 2002/09/06 20:42:14 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -3421,32 +3421,22 @@ cmd_create(char *tag, char *name, char *partition, int localonly)
     }
 }	
 
-/* 'tmplist' is used for recursive means in cmd_delete() and cmd_rename() */
-struct tmplist {
-    int alloc;
-    int num;
-    char mb[1][MAX_MAILBOX_NAME];
-};
-
-#define TMPLIST_INC 50
-
 /* Callback for use by cmd_delete */
-static int addmbox(char *name,
+static int delmbox(char *name,
 		   int matchlen __attribute__((unused)),
 		   int maycreate __attribute__((unused)),
-		   void *rock)
+		   void *rock __attribute__((unused)))
 {
-    struct tmplist **lptr = (struct tmplist **) rock;
-    struct tmplist *l = *lptr;
+    int r;
+
+    r = mboxlist_deletemailbox(name, imapd_userisadmin,
+			       imapd_userid, imapd_authstate,
+			       0, 0, 0);
     
-    if (l->alloc == l->num) {
-	l->alloc += TMPLIST_INC;
-	l = xrealloc(l, sizeof(struct tmplist) + 
-		     l->alloc * MAX_MAILBOX_NAME * (sizeof(char)));
-	*lptr = l;
+    if(r) {
+	prot_printf(imapd_out, "* NO delete %s: %s\r\n",
+		    name, error_message(r));
     }
-    
-    strcpy(l->mb[l->num++], name);
     
     return 0;
 }
@@ -3478,30 +3468,12 @@ void cmd_delete(char *tag, char *name, int localonly)
     if (!r && !localonly &&
 	!strncmp(mailboxname+domainlen, "user.", 5) &&
 	!strchr(mailboxname+domainlen+5, '.')) {
-	struct tmplist *l = xmalloc(sizeof(struct tmplist));
-	int r2, i;
-
-	l->alloc = 0;
-	l->num = 0;
 
 	p = mailboxname + strlen(mailboxname); /* end of mailboxname */
 	strcpy(p, ".*");
 	/* build a list of mailboxes - we're using internal names here */
 	mboxlist_findall(NULL, mailboxname, imapd_userisadmin, imapd_userid,
-			 imapd_authstate, addmbox, &l);
-
-	/* foreach mailbox in list, remove it */
-	for (i = 0; i < l->num; i++) {
-	    r2 = mboxlist_deletemailbox(l->mb[i], imapd_userisadmin,
-					imapd_userid, imapd_authstate,
-					0, 0, 0);
-	    if (r2) {
-		prot_printf(imapd_out, "* NO delete %s: %s\r\n",
-			    l->mb[i], error_message(r2));
-	    }
-	}
-	    
-	free(l);
+			 imapd_authstate, delmbox, NULL);
 
 	/* take care of deleting ACLs, subscriptions, seen state and quotas */
 	*p = '\0'; /* clip off pattern */
@@ -3525,6 +3497,63 @@ void cmd_delete(char *tag, char *name, int localonly)
 		    error_message(IMAP_OK_COMPLETED));
     }
 }	
+
+struct renrock 
+{
+    int ol;
+    int nl;
+    int rename_user;
+    char *olduser, *newuser;
+    char *newmailboxname;
+    char *partition;
+};
+
+/* Callback for use by cmd_rename */
+static int renmbox(char *name,
+		   int matchlen __attribute__((unused)),
+		   int maycreate __attribute__((unused)),
+		   void *rock)
+{
+    char oldextname[MAX_MAILBOX_NAME];
+    char newextname[MAX_MAILBOX_NAME];
+    struct renrock *text = (struct renrock *)rock;
+    int r;
+
+    if((text->nl + strlen(name + text->ol)) > MAX_MAILBOX_NAME)
+	return 0;
+
+    strcpy(text->newmailboxname + text->nl, name + text->ol);
+
+    r = mboxlist_renamemailbox(name, text->newmailboxname,
+			       text->partition,
+			       1, imapd_userid, imapd_authstate);
+    
+    (*imapd_namespace.mboxname_toexternal)(&imapd_namespace,
+					   name,
+					   imapd_userid, oldextname);
+    (*imapd_namespace.mboxname_toexternal)(&imapd_namespace,
+					   text->newmailboxname,
+					   imapd_userid, newextname);
+
+    if(r) {
+	prot_printf(imapd_out, "* NO rename %s %s: %s\r\n",
+		    oldextname, newextname, error_message(r));
+	if (RENAME_STOP_ON_ERROR) return r;
+    } else {
+	/* If we're renaming a user, change quotaroot and ACL */
+	if (text->rename_user) {
+	    user_copyquotaroot(name, text->newmailboxname);
+	    user_renameacl(text->newmailboxname, text->olduser, text->newuser);
+	}
+	
+	prot_printf(imapd_out, "* OK rename %s %s\r\n",
+		    oldextname, newextname);
+    }
+
+    prot_flush(imapd_out);
+
+    return 0;
+}
 
 /*
  * Perform a RENAME command
@@ -3633,10 +3662,9 @@ void cmd_rename(const char *tag,
 
     /* rename all mailboxes matching this */
     if (!r && recursive_rename) {
-	struct tmplist *l = xmalloc(sizeof(struct tmplist));
+	struct renrock rock;
 	int ol = omlen + 1;
 	int nl = nmlen + 1;
-	int i;
 
 	(*imapd_namespace.mboxname_toexternal)(&imapd_namespace,
 					       oldmailboxname,
@@ -3649,55 +3677,22 @@ void cmd_rename(const char *tag,
 		    oldextname, newextname);
 	prot_flush(imapd_out);
 
-	l->alloc = 0;
-	l->num = 0;
-
 	strcat(oldmailboxname, ".*");
 	strcat(newmailboxname, ".");
 
+	/* setup the rock */
+	rock.newmailboxname = newmailboxname;
+	rock.ol = ol;
+	rock.nl = nl;
+	rock.olduser = olduser;
+	rock.newuser = newuser;
+	rock.partition = partition;
+	rock.rename_user = rename_user;
+	
 	/* add submailboxes; we pretend we're an admin since we successfully
-	 renamed the parent - we're using internal names here */
-	mboxlist_findall(NULL, oldmailboxname, 1, imapd_userid,
-			 imapd_authstate, addmbox, &l);
-
-	/* foreach mailbox in list, rename it, pretending we're admin */
-	for (i = 0; i < l->num; i++) {
-	    int r2 = 0;
-
-	    if (nl + strlen(l->mb[i] + ol) > MAX_MAILBOX_NAME) {
-		/* this mailbox name is too long */
-		continue;
-	    }
-	    strcpy(newmailboxname + nl, l->mb[i] + ol);
-	    r2 = mboxlist_renamemailbox(l->mb[i], newmailboxname,
-					partition,
-					1, imapd_userid, imapd_authstate);
-
-	    (*imapd_namespace.mboxname_toexternal)(&imapd_namespace,
-						   l->mb[i],
-						   imapd_userid, oldextname);
-	    (*imapd_namespace.mboxname_toexternal)(&imapd_namespace,
-						   newmailboxname,
-						   imapd_userid, newextname);
-
-	    if (r2) {
-		prot_printf(imapd_out, "* NO rename %s %s: %s\r\n",
-			    oldextname, newextname, error_message(r2));
-		if (RENAME_STOP_ON_ERROR) break;
-	    } else {
-		/* If we're renaming a user, change quotaroot and ACL */
-		if (rename_user) {
-		    user_copyquotaroot(l->mb[i], newmailboxname);
-		    user_renameacl(newmailboxname, olduser, newuser);
-		}
-
-		prot_printf(imapd_out, "* OK rename %s %s\r\n",
-			    oldextname, newextname);
-	    }
-	    prot_flush(imapd_out);
-	}
-
-	free(l);
+	   renamed the parent - we're using internal names here */
+	r = mboxlist_findall(NULL, oldmailboxname, 1, imapd_userid,
+			     imapd_authstate, renmbox, &rock);
     }
 
     /* take care of deleting old ACLs, subscriptions, seen state and quotas */
