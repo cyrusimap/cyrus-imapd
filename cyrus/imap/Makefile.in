@@ -38,7 +38,7 @@ CC = @CC@
 INSTALL = @INSTALL@
 RANLIB = @RANLIB@
 
-LEX = lex
+LEX = @LEX@
 YACC = yacc
 
 DEFS = @DEFS@

@@ -7,6 +7,12 @@ AC_SET_MAKE
 AC_AIX
 dnl AC_MINIX Don't think MINIX handles long file names
 AC_ISC_POSIX
+AC_PROG_LEX
+case "$LEX" in
+	flex) LEXFLAGS="-l";;
+	*) LEXFLAGS="";;
+esac
+AC_SUBST(LEXFLAGS)
 AC_CONST
 AC_LONG_FILE_NAMES
 case "$DEFS" in
