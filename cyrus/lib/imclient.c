@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.48 2000/02/10 21:25:39 leg Exp $
+ $Id: imclient.c,v 1.49 2000/03/29 04:47:16 tmartin Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -644,13 +644,16 @@ int len;
     char *plainbuf;
     int plainlen;
     int freeplain;
+    int result;
     
     if (imclient->saslcompleted == 1) {
 	/* decrypt what we have */
-	if (sasl_decode(imclient->saslconn, buf, len,
-			&plainbuf, &plainlen) != SASL_OK) {
+	if ((result = sasl_decode(imclient->saslconn, buf, len,
+			&plainbuf, &plainlen)) != SASL_OK) {
 	    (void) shutdown(imclient->fd, 0);
 	}
+
+	if (plainlen == 0) return;
 	freeplain = 1;
     } else {
 	plainbuf = buf;
@@ -953,6 +956,8 @@ struct imclient *imclient;
     int n;
     int writelen;
     fd_set rfds, wfds;
+    FD_ZERO(&rfds);
+    FD_ZERO(&wfds);
 
     for (;;) {
 	writelen = imclient->outptr - imclient->outstart;
