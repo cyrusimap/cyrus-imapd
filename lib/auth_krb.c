@@ -30,6 +30,7 @@
 #include <limits.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <string.h>
 #include <krb.h>
 
 #include "auth.h"
@@ -56,6 +57,7 @@ char *auth_map_krbid P((const char *real_aname, const char *real_inst,
  *	2	User is in the group that is identifier
  *	3	User is identifer
  */
+int
 auth_memberof(identifier)
 const char *identifier;
 {
@@ -267,6 +269,7 @@ const char *identifier;
  * points to a 16-byte binary key to cache identifier's information
  * with.
  */
+int
 auth_setid(identifier, cacheid)
 const char *identifier;
 const char *cacheid;
