@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.439 2003/08/22 16:31:42 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.440 2003/09/23 19:17:58 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -1815,7 +1815,8 @@ void cmd_login(char *tag, char *user)
     imapd_logfd = telemetry_log(imapd_userid, imapd_in, imapd_out, 0);
 
     /* Set namespace */
-    if ((r = mboxname_init_namespace(&imapd_namespace, imapd_userisadmin)) != 0) {
+    if ((r = mboxname_init_namespace(&imapd_namespace,
+				     imapd_userisadmin || imapd_userisproxyadmin)) != 0) {
 	syslog(LOG_ERR, error_message(r));
 	fatal(error_message(r), EC_CONFIG);
     }
@@ -1936,7 +1937,8 @@ cmd_authenticate(char *tag,char *authtype)
     imapd_logfd = telemetry_log(imapd_userid, imapd_in, imapd_out, 0);
 
     /* Set namespace */
-    if ((r = mboxname_init_namespace(&imapd_namespace, imapd_userisadmin)) != 0) {
+    if ((r = mboxname_init_namespace(&imapd_namespace,
+				     imapd_userisadmin || imapd_userisproxyadmin)) != 0) {
 	syslog(LOG_ERR, error_message(r));
 	fatal(error_message(r), EC_CONFIG);
     }
@@ -6292,17 +6294,10 @@ static int xfer_user_cb(char *name,
     }
 
     if (!r) {
-	size_t res_size = strlcpy(externalname, name, sizeof(externalname));
-	
-	if(res_size >= sizeof(externalname)) {
-	    /* Overflow */
-	    r = IMAP_MAILBOX_BADNAME;
-	} else {
-	    /* Don't do full namespace tointernal, since for altnamespace
-	     * that will assume we're in this admin's inbox namespace, which
-	     * we aren't! */
-	    mboxname_hiersep_toexternal(&imapd_namespace, externalname);
-	}
+	r = (*imapd_namespace.mboxname_toexternal)(&imapd_namespace,
+						   name,
+						   imapd_userid,
+						   externalname);
     }
 
     if(!r) {
@@ -6342,17 +6337,10 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
     }
 
     if (!r) {
-	size_t res_size = strlcpy(mailboxname, name, sizeof(mailboxname));
-	
-	if(res_size >= sizeof(mailboxname)) {
-	    /* Overflow */
-	    r = IMAP_MAILBOX_BADNAME;
-	} else {
-	    /* Don't do full namespace tointernal, since for altnamespace
-	     * that will assume we're in this admin's inbox namespace, which
-	     * we aren't! */
-	    mboxname_hiersep_tointernal(&imapd_namespace, mailboxname);
-	}
+	r = (*imapd_namespace.mboxname_toexternal)(&imapd_namespace,
+						   name,
+						   imapd_userid,
+						   mailboxname);
     }
 
     /* NOTE: Since XFER can only be used by an admin, and we always connect
