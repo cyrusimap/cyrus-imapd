@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: proxyd.c,v 1.19 2000/04/20 16:29:34 leg Exp $ */
+/* $Id: proxyd.c,v 1.20 2000/04/20 16:34:04 leg Exp $ */
 
 #include <config.h>
 
@@ -190,6 +190,7 @@ static void mstringdata(char *cmd, char *name, int matchlen, int maycreate);
 
 /* proxy support functions */
 enum {
+    NOCONNECTION = -1,
     OK = 0,
     NO = 1,
     BAD = 2
@@ -229,7 +230,7 @@ static int pipe_until_tag(struct backend *s, char *tag)
 
 	if (!prot_fgets(buf, sizeof(buf), s->in)) {
 	    /* uh oh */
-	    return -1;
+	    return NOCONNECTION;
 	}
 	if (!cont && buf[taglen] == ' ' && !strncmp(tag, buf, taglen)) {
 	    strncpy(s->last_result, buf + taglen + 1, LAST_RESULT_LEN);
@@ -244,7 +245,7 @@ static int pipe_until_tag(struct backend *s, char *tag)
 		r = BAD;
 		break;
 	    default: /* huh? no result? */
-		r = -1;
+		r = NOCONNECTION;
 		break;
 	    }
 
@@ -327,7 +328,10 @@ static int pipe_including_tag(struct backend *s, char *tag)
     case BAD:
 	prot_printf(proxyd_out, "%s %s", tag, s->last_result);
 	break;
-    default:
+    case NOCONNECTION:
+	/* erg.  oh well, not much we can do about this. */
+	prot_printf(proxyd_out, "%s NO %s\r\n", tag, 
+		    error_message(IMAP_SERVER_UNAVAILABLE));
 	break;
     }
     return r;
