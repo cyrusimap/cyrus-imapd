@@ -109,10 +109,10 @@ AC_ARG_WITH(nadine-include,
 
 	AC_MSG_CHECKING(whether to include nadine)
 	if test "X$ac_cv_event_where_lib" = "X" -a "X$ac_cv_event_where_inc" = "X"; then
-	  ac_cv_found_nadine=no
+	  ac_cv_found_event=no
 	  AC_MSG_RESULT(no)
 	else
-	  ac_cv_found_nadine=yes
+	  ac_cv_found_event=yes
 	  AC_MSG_RESULT(yes)
 	  NADINE_INC_DIR=$ac_cv_event_where_inc
 	  NADINE_LIB_DIR=$ac_cv_event_where_lib
