@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.182 2002/04/05 18:51:56 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.183 2002/04/08 01:46:38 leg Exp $
  */
 
 #include <config.h>
@@ -980,7 +980,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     }
 
     /* We don't support renaming mailboxes in transit */
-    if(!r && mbtype & MBTYPE_MOVING) {
+    if(!r && (mbtype & MBTYPE_MOVING)) {
 	r = IMAP_MAILBOX_NOTSUPPORTED;
 	goto done;
     }
@@ -1121,6 +1121,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	}
 	
 	/* unroll mupdate operations if necessary */
+	/* xxx where do we unroll if 'partitionmove == 1' ? */
 	if (madenew && config_mupdate_server) {
 	    r2 = mupdate_delete(mupdate_h, newname);
 	    if(r2 > 0) {
