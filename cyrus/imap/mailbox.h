@@ -84,8 +84,6 @@ dont know what to use for bit32
 
 struct quota {
     int fd;
-    const char *base;
-    unsigned long len;
 
     int lock_count;
     char *root;

@@ -361,7 +361,6 @@ struct mailbox *mailbox;
 
     if (mailbox->quota.fd != -1) {
 	close(mailbox->quota.fd);
-	map_free(&mailbox->quota.base, &mailbox->quota.len);
     }
 	
     free(mailbox->name);
@@ -406,7 +405,6 @@ struct mailbox *mailbox;
 	    assert(mailbox->quota.lock_count == 0);
 	    if (mailbox->quota.fd != -1) {
 		close(mailbox->quota.fd);
-		map_free(&mailbox->quota.base, &mailbox->quota.len);
 	    }
 	    mailbox->quota.fd = -1;
 	}
@@ -632,6 +630,9 @@ struct quota *quota;
 {
     const char *p, *eol;
     char buf[4096];
+    const char *quota_base = 0;
+    unsigned long quota_len = 0;
+
 
     if (!quota->root) {
 	quota->used = 0;
@@ -647,13 +648,15 @@ struct quota *quota;
 	    syslog(LOG_ERR, "IOERROR: opening quota file %s: %m", buf);
 	    return IMAP_IOERROR;
 	}
-	map_refresh(quota->fd, 1, &quota->base, &quota->len,
-		    MAP_UNKNOWN_LEN, buf, 0);
     }
     
+    map_refresh(quota->fd, 1, &quota_base, &quota_len,
+		MAP_UNKNOWN_LEN, buf, 0);
+
     p = quota->base;
     eol = memchr(p, '\n', quota->len - (p - quota->base));
     if (!eol) {
+	map_free(&quota_base, &quota_len);
 	return IMAP_MAILBOX_BADFORMAT;
     }
     quota->used = atol(p);
@@ -661,10 +664,12 @@ struct quota *quota;
     p = eol + 1;
     eol = memchr(p, '\n', quota->len - (p - quota->base));
     if (!eol) {
+	map_free(&quota_base, &quota_len);
 	return IMAP_MAILBOX_BADFORMAT;
     }
     quota->limit = atoi(p);
 
+    map_free(&quota_base, &quota_len);
     return 0;
 }
 
@@ -830,10 +835,6 @@ struct quota *quota;
 	       quota->root);
 	return IMAP_IOERROR;
     }
-
-    map_free(&quota->base, &quota->len);
-    map_refresh(quota->fd, 1, &quota->base, &quota->len, sbuf.st_size,
-		quota_path, 0);
 
     return mailbox_read_quota(quota);
 }
@@ -1155,13 +1156,10 @@ struct quota *quota;
 
     if (quota->fd != -1) {
 	close(quota->fd);
-	map_free(&quota->base, &quota->len);
 	quota->fd = -1;
     }
 
     quota->fd = newfd;
-    map_refresh(quota->fd, 1, &quota->base, &quota->len,
-		MAP_UNKNOWN_LEN, "quota", 0);
 
     return 0;
 }
@@ -1188,7 +1186,6 @@ struct quota *quota;
 
     if (quota->fd != -1) {
 	close(quota->fd);
-	map_free(&quota->base, &quota->len);
 	quota->fd = -1;
     }
 
