@@ -14,14 +14,6 @@ We plan to have this fixed in the next release.
 groups may be granted access to mailboes if ptclient has died.  We plan
 to have this fixed in the next release.
 
-<li> We are aware that cyrus.seen files are occasionally corrupted, but we
-are not sure why this is happening.  It seems to happen most with mailboxes
-with a large number of users.  We hope to have this fixed in a future
-release.
-
-<li> UID FETCH of a range of nonexistant UIDs causes the server to drop
-connection.
-
 <li> imtest cheats and sends a non-synchronizing literal if you try to
 LOGIN (cleartext passwords).
 
@@ -29,8 +21,8 @@ LOGIN (cleartext passwords).
 bear no resemblance to what actually went wrong.
 
 <li> Deliver does not handle messages containing NUL properly due to stdio
-	  problems (the characters between the NUL and the LF will be
-	  lost.)
+problems (the characters between the NUL and the LF will be
+lost.)
 
 </ul>
 
