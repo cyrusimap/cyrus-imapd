@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: libcyr_cfg.c,v 1.2.2.8 2005/02/20 03:23:45 shadow Exp $
+ * $Id: libcyr_cfg.c,v 1.2.2.9 2005/02/20 05:22:29 shadow Exp $
  */
 
 #include <config.h>
@@ -139,7 +139,11 @@ int libcyrus_config_getint(enum cyrus_opt opt)
     assert(opt > CYRUSOPT_ZERO && opt < CYRUSOPT_LAST);
     assert(cyrus_options[opt].opt == opt);
     assert(cyrus_options[opt].t == CYRUS_OPT_INT);
-
+#if (SIZEOF_LONG != 4)
+    if ((cyrus_options[opt].val.i > 0x7fffffff)||(cyrus_options[opt].val.i < -0x7fffffff)) {
+	syslog(LOG_ERR, "libcyrus_config_getint: option %d: %lld too large for type", cyrus_options[opt].opt, cyrus_options[opt].val.i);
+    }
+#endif    
     return cyrus_options[opt].val.i;
 }
 
@@ -148,7 +152,11 @@ int libcyrus_config_getswitch(enum cyrus_opt opt)
     assert(opt > CYRUSOPT_ZERO && opt < CYRUSOPT_LAST);
     assert(cyrus_options[opt].opt == opt);
     assert(cyrus_options[opt].t == CYRUS_OPT_SWITCH);
-    
+#if (SIZEOF_LONG != 4)
+    if ((cyrus_options[opt].val.b > 0x7fffffff)||(cyrus_options[opt].val.b < -0x7fffffff)) {
+	syslog(LOG_ERR, "libcyrus_config_getswitch: option %d: %lld too large for type", cyrus_options[opt].opt, cyrus_options[opt].val.b);
+    }
+#endif    
     return cyrus_options[opt].val.b;
 }
 
