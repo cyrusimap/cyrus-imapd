@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to sieve and proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.10 2000/11/11 04:14:50 ken3 Exp $
+ * $Id: lmtpproxyd.c,v 1.11 2000/11/16 04:47:56 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpproxyd.c,v 1.10 2000/11/11 04:14:50 ken3 Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpproxyd.c,v 1.11 2000/11/16 04:47:56 ken3 Exp $";*/
 
 #include <config.h>
 
@@ -780,7 +780,7 @@ int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     time_t t;
     pid_t sm_pid, p;
     sieve_send_response_context_t *src = (sieve_send_response_context_t *) ac;
-    message_data_t *m = (message_data_t *) mc;
+    message_data_t *md = ((mydata_t *) mc)->m;
     script_data_t *sdata = (script_data_t *) sc;
 
     smbuf[0] = "sendmail";
