@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.213 2000/02/22 00:54:10 tmartin Exp $ */
+/* $Id: imapd.c,v 1.214 2000/02/22 01:23:00 leg Exp $ */
 
 #include <config.h>
 
@@ -387,16 +387,12 @@ int service_main(int argc, char **argv, char **envp)
     while ((opt = getopt(argc, argv, "sp:")) != EOF) {
 	switch (opt) {
 	case 's': /* imaps (do starttls right away) */
-#ifdef HAVE_SSL
 	    imaps = 1;
 	    if (!starttls_enabled()) {
-		syslog(LOG_ERR, "Required openSSL options not present. Cannot do imaps");
-		fatal("Required openSSL optiongs not present. Cannot do imaps",EC_TEMPFAIL);
+		syslog(LOG_ERR, "imaps: required OpenSSL options not present");
+		fatal("imaps: required OpenSSL options not present",
+		      EC_CONFIG);
 	    }
-#else
-	    syslog(LOG_ERR, "Not compiled with openSSL. Cannot do imaps");
-	    fatal("Not compiled with openSSL. Cannot do imaps",EC_TEMPFAIL);
-#endif /* HAVE_SSL */
 	    break;
 	case 'p': /* external protection */
 	    extprops.ssf = atoi(optarg);
@@ -453,7 +449,8 @@ int service_main(int argc, char **argv, char **envp)
     prot_settimeout(imapd_in, timeout*60);
     prot_setflushonread(imapd_in, imapd_out);
 
-    /* we were connected on imaps port so we should do STARTTLS negotiation immediatly */
+    /* we were connected on imaps port so we should do 
+       TLS negotiation immediately */
     if (imaps == 1) cmd_starttls(NULL, 1);
 
     cmdloop();
@@ -3290,7 +3287,7 @@ void cmd_starttls(char *tag, int imaps)
     if (imapd_starttls_done == 1)
     {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, 
-		    "Already successfully executed STARTTLS");
+		    "TLS already active");
 	return;
     }
 
@@ -3312,16 +3309,18 @@ void cmd_starttls(char *tag, int imaps)
 	       (char *) config_getstring("tls_key_file", ""));
 
 	if (imaps == 0)
-	    prot_printf(imapd_out, "%s NO %s\r\n", tag, "Error initializing TLS");
+	    prot_printf(imapd_out, "%s NO %s\r\n", 
+			tag, "Error initializing TLS");
 	else
-	    fatal("tls_init() failed",EC_TEMPFAIL);
+	    fatal("tls_init() failed", EC_CONFIG);
 
 	return;
     }
 
     if (imaps == 0)
     {
-	prot_printf(imapd_out, "%s OK %s\r\n", tag,	"Begin TLS negotiation now");
+	prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		    "Begin TLS negotiation now");
 	/* must flush our buffers before starting tls */
 	prot_flush(imapd_out);
     }
@@ -3333,8 +3332,7 @@ void cmd_starttls(char *tag, int imaps)
 
     /* if error */
     if (result==-1) {
-	if (imaps == 0)
-	{
+	if (imaps == 0)	{
 	    prot_printf(imapd_out, "%s NO Starttls failed\r\n", tag);
 	    syslog(LOG_NOTICE, "STARTTLS failed: %s", imapd_clienthost);
 	    return;
