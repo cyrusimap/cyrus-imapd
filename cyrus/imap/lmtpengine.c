@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.45 2002/01/09 20:11:08 leg Exp $
+ * $Id: lmtpengine.c,v 1.46 2002/01/15 20:24:22 rjs3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -2399,7 +2399,7 @@ static int reset_saslconn(sasl_conn_t **conn)
 
     sasl_dispose(conn);
     /* do initialization typical of service_main */
-    ret = sasl_server_new("imap", config_servername,
+    ret = sasl_server_new("lmtp", config_servername,
                          NULL, NULL, NULL,
                          NULL, 0, conn);
     if(ret != SASL_OK) return ret;
