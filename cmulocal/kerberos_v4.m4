@@ -1,9 +1,10 @@
 dnl kerberos_v4.m4--Kerberos 4 libraries and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
-dnl $Id: kerberos_v4.m4,v 1.3 1998/10/26 19:09:27 shadow Exp $
+dnl $Id: kerberos_v4.m4,v 1.4 1998/10/26 22:30:20 shadow Exp $
 
 AC_DEFUN(CMU_KRB_INC_WHERE1, [
+AC_REQUIRE([AC_PROG_CC_GNU])
 saved_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="$saved_CPPFLAGS -I$1"
 AC_TRY_COMPILE([#include <krb.h>],
@@ -11,7 +12,11 @@ AC_TRY_COMPILE([#include <krb.h>],
 ac_cv_found_krb_inc=yes,
 ac_cv_found_krb_inc=no)
 if test "$ac_cv_found_krb_inc" = "no"; then
-  CPPFLAGS="$saved_CPPFLAGS -I$1 -I$1/kerberosIV"
+  if test "$ac_cv_prog_gcc" = "yes" ; then
+    CPPFLAGS="$saved_CPPFLAGS -nostdinc -I$1 -I$1/kerberosIV -I/usr/include"
+  else
+    CPPFLAGS="$saved_CPPFLAGS -I$1 -I$1/kerberosIV"
+  fi
   AC_TRY_COMPILE([#include <krb.h>],
   [struct ktext foo;],
   [ac_cv_found_krb_inc=yes],
