@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.92 2002/06/14 17:10:01 rjs3 Exp $
+ * $Id: append.c,v 1.93 2002/06/14 18:20:25 rjs3 Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -48,6 +48,7 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
+#include <com_err.h>
 #include <sys/types.h>
 #include <syslog.h>
 #include <sys/stat.h>
