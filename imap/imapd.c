@@ -1657,7 +1657,7 @@ char *name;
 	rights = acl_myrights(acl);
 
 	/* Add in implicit rights */
-	if (imapd_userisadmin || strcasecmp(name, "inbox")) {
+	if (imapd_userisadmin || !strcasecmp(name, "inbox")) {
 	    rights |= ACL_LOOKUP|ACL_ADMIN;
 	}
 	if (!strchr(imapd_userid, '.') &&
