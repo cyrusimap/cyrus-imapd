@@ -7,19 +7,7 @@ dnl from KTH krb and Arla
 AC_DEFUN(CMU_AFS_INC_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
 cmu_save_CPPFLAGS=$CPPFLAGS
-if test "$ac_cv_prog_gcc" = "yes" ; then
-  cmu_gcc_inc_dir=`gcc --print-file-name=include`
-  if test "$cmu_gcc_inc_dir" = "include"  ; then
-     cmu_gcc_inc_dir=""
-  fi
-  if test "$cmu_gcc_inc_dir" != ""  ; then
-     CPPFLAGS="$cmu_save_CPPFLAGS -nostdinc -I$1 -I${cmu_gcc_inc_dir} -I/usr/include"
-  else
-     CPPFLAGS="$cmu_save_CPPFLAGS -nostdinc -I$1 -I/usr/include"
-  fi
-else
-  CPPFLAGS="$cmu_save_CPPFLAGS -I$1"
-fi
+CPPFLAGS="$cmu_save_CPPFLAGS -I$1"
 AC_TRY_COMPILE([#include <afs/param.h>],
 [#ifndef SYS_NAME
 choke me
@@ -90,7 +78,7 @@ AC_ARG_WITH(AFS,
 	  AFS_LIB_DIR="$ac_cv_afs_where/lib"
 	  AFS_TOP_DIR="$ac_cv_afs_where"
 	  AFS_INC_FLAGS="-I${AFS_INC_DIR}"
-	  AFS_LIB_FLAGS="-L${AFS_LIB_DIR} -L${AFS_LIB_DIR}/afs"
+          AFS_LIB_FLAGS="-L${AFS_LIB_DIR} -L${AFS_LIB_DIR}/afs"
           cmu_save_LIBS="$LIBS"
           cmu_save_CPPFLAGS="$CPPFLAGS"
           CPPFLAGS="$CPPFLAGS ${AFS_INC_FLAGS}"
