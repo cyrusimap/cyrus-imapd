@@ -29,6 +29,9 @@
 #endif
 #include <sys/file.h>
 #include <errno.h>
+#ifdef HAVE_SYS_PARAM_H
+#include <sys/param.h>
+#endif
 #ifdef HAVE_DB_185_H
 #include <db_185.h>
 #else
@@ -60,30 +63,6 @@ typedef struct {
 #define DEL(db,key,flags) (db)->del((db),(key),(flags))
 #define SYNC(db,flags) (db)->sync((db),(flags))
 #define EXPIRE_TIME 7200 /* 2 hours */
-
-extern int errno;
-
-static int32_t hashfn P((const void *, size_t));
-
-/* Do not make this unsigned. you'll lose! (db won't open the file) */
-static int32_t hashfn(data, size)
-const void *data;
-size_t size;
-{
-    int32_t ret, val;
-    int i;
-    ret=0;
-    if (size % 4) {
-        syslog(LOG_WARNING,
-             "Database key size %d not multiple of 4; continuing anyway",
-               size);
-    }
-    for (i=0; i*4<size; i++) {
-        memcpy(&val, ((char *)data)+4*i, 4);
-        ret = ret ^ val;
-    }
-    return ret;
-}
 
 
 #endif /* INCLUDED_AUTH_KRB_PTS_H */
