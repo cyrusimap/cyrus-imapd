@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.49 1998/08/07 06:47:50 tjs Exp $ -->
+<!-- $Id: changes.html,v 1.50 1998/08/15 14:59:10 wcw Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -13,6 +13,10 @@ draft-gellens-pop3ext-06.txt.
 <li> Fixed a bug in mailbox.c that disallowed MUTF-7 representations of ASCII
 characters when it shouldn't have.  (Thanks to John Myers for providing a fix
 and to Per Steinar Iversen for telling me that I didn't do it before.)
+
+<li> Reduced the number of key collisions in auth_krb_pts.c. It appers that
+the Kerberos session key was conflicting with plaintext login ids. Other 
+minor cleanup was also done with this section of the code.
 
 <h2> Changes to the Cyrus IMAP Server Since Version 1.5.11</h2>
 
