@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: sync_client.8,v 1.1.2.4 2005/03/27 17:56:22 ken3 Exp $
+.\" $Id: sync_client.8,v 1.1.2.5 2005/03/31 20:27:53 ken3 Exp $
 .SH NAME
 sync_client \- client side of the synchronization (replication) engine
 .SH SYNOPSIS
@@ -120,10 +120,8 @@ configuration option.
 .TP
 .BI \-f " input-file"
 In mailbox or user replication mode: provides list of users or mailboxes
-to replicate. In rolling replication mode, overrides
-.I sync_log_file
-option in
-.I imapd.conf
+to replicate.  In rolling replication mode, specifies an alternate log
+file (sync_client will exit after processing the log file).
 .TP
 .BI \-F " shutdown-file"
 Rolling replication checks for this file at the end of each replication

@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.16 2005/03/31 18:51:25 ken3 Exp $
+ * $Id: sync_client.c,v 1.1.2.17 2005/03/31 20:27:51 ken3 Exp $
  */
 
 #include <config.h>
@@ -2910,6 +2910,14 @@ static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
+enum {
+    MODE_UNKNOWN = -1,
+    MODE_REPEAT,
+    MODE_USER,
+    MODE_MAILBOX,
+    MODE_SIEVE
+};
+
 int main(int argc, char **argv)
 {
     int   opt, i = 0;
@@ -2918,16 +2926,12 @@ int main(int argc, char **argv)
     const char *servername = NULL;
     int   r = 0;
     int   exit_rc = 0;
-    int   interact = 0;
-    int   repeat   = 0;
-    int   user     = 0;
-    int   mailbox  = 0;
-    int   sieve    = 0;
+    int   mode = MODE_UNKNOWN;
     int   wait     = 0;
     int   timeout  = 600;
     int   min_delta = 0;
     const char *sync_host = NULL;
-    char sync_log_file[MAX_MAILBOX_PATH+1] = "";
+    char sync_log_file[MAX_MAILBOX_PATH+1];
     const char *sync_shutdown_file = NULL;
     char buf[512];
     FILE *file;
@@ -2943,7 +2947,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:f:vlS:F:w:t:d:Frums")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:vlS:F:f:w:t:d:rums")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -2965,10 +2969,9 @@ int main(int argc, char **argv)
             sync_shutdown_file = optarg;
             break;
 
-        case 'f': /* Input file (sync_log_file used by rolling replication,
-                   * input_filename used by user and mailbox modes). */
+        case 'f': /* input_filename used by user and mailbox modes; OR
+		     alternate sync_log_file used by single-run repeat mode */
             input_filename = optarg;
-	    strlcpy(sync_log_file, optarg, sizeof(sync_log_file));
             break;
 
         case 'w':
@@ -2984,23 +2987,27 @@ int main(int argc, char **argv)
             break;
 
         case 'r':
-            repeat = 1;
-            break;
-
-        case 'R': /* alt input file for rolling replication */
-	    strlcpy(sync_log_file, optarg, sizeof(sync_log_file));
+	    if (mode != MODE_UNKNOWN)
+		fatal("Mutually exclusive options defined", EC_USAGE);
+            mode = MODE_REPEAT;
             break;
 
         case 'u':
-            user = 1;
+	    if (mode != MODE_UNKNOWN)
+		fatal("Mutually exclusive options defined", EC_USAGE);
+            mode = MODE_USER;
             break;
 
         case 'm':
-            mailbox = 1;
+	    if (mode != MODE_UNKNOWN)
+		fatal("Mutually exclusive options defined", EC_USAGE);
+            mode = MODE_MAILBOX;
             break;
 
         case 's':
-            sieve = 1;
+	    if (mode != MODE_UNKNOWN)
+		fatal("Mutually exclusive options defined", EC_USAGE);
+            mode = MODE_SIEVE;
             break;
 
         default:
@@ -3008,12 +3015,8 @@ int main(int argc, char **argv)
         }
     }
 
-    if ((interact && (            repeat || user || mailbox || sieve)) ||
-        (repeat   && (interact           || user || mailbox || sieve)) ||
-        (user     && (interact || repeat         || mailbox || sieve)) ||
-        (mailbox  && (interact || repeat || user)) ||
-        (sieve    && (interact || repeat || user)))
-        fatal("Mutually exclusive options defined", EC_USAGE);
+    if (mode == MODE_UNKNOWN)
+        fatal("No replication mode specified", EC_USAGE);
 
     cyrus_init(alt_config, "sync_client", 0);
 
@@ -3021,17 +3024,6 @@ int main(int argc, char **argv)
 	!(servername = config_getstring(IMAPOPT_SYNC_HOST))) {
         fatal("sync_host not defined", EC_SOFTWARE);
     }
-
-    if (!*sync_log_file) {
-	strlcpy(sync_log_file, config_dir, sizeof(sync_log_file));
-	strlcat(sync_log_file, "/sync/log", sizeof(sync_log_file));
-    }
-
-    if (!sync_shutdown_file)
-        sync_shutdown_file = config_getstring(IMAPOPT_SYNC_SHUTDOWN_FILE);
-
-    if (!min_delta)
-        min_delta = config_getint(IMAPOPT_SYNC_REPEAT_INTERVAL);
 
     /* Just to help with debugging, so we have time to attach debugger */
     if (wait > 0) {
@@ -3076,7 +3068,8 @@ int main(int argc, char **argv)
     fromserver = be->in;
     toserver = be->out;
 
-    if (user) {
+    switch (mode) {
+    case MODE_USER:
 	if (input_filename) {
             if ((file=fopen(input_filename, "r")) == NULL) {
                 syslog(LOG_NOTICE, "Unable to open %s: %m", input_filename);
@@ -3130,34 +3123,36 @@ int main(int argc, char **argv)
 		send_unlock();
 	    }
 	}
-    } else if (mailbox) {
-        struct sync_folder_list *folder_list = sync_folder_list_create();
-        struct sync_user   *user;
-        char   *s, *t;
+	break;
 
-        if (input_filename) {
-            if ((file=fopen(input_filename, "r")) == NULL) {
-                syslog(LOG_NOTICE, "Unable to open %s: %m", input_filename);
-                shut_down(1);
-            }
-            while (fgets(buf, sizeof(buf), file)) {
-                /* Chomp, then ignore empty/comment lines. */
-                if (((len=strlen(buf)) > 0) && (buf[len-1] == '\n'))
-                    buf[--len] = '\0';
+    case MODE_MAILBOX:
+    {
+	struct sync_folder_list *folder_list = sync_folder_list_create();
+	struct sync_user   *user;
+	char   *s, *t;
 
-                if ((len == 0) || (buf[0] == '#'))
-                    continue;
+	if (input_filename) {
+	    if ((file=fopen(input_filename, "r")) == NULL) {
+		syslog(LOG_NOTICE, "Unable to open %s: %m", input_filename);
+		shut_down(1);
+	    }
+	    while (fgets(buf, sizeof(buf), file)) {
+		/* Chomp, then ignore empty/comment lines. */
+		if (((len=strlen(buf)) > 0) && (buf[len-1] == '\n'))
+		    buf[--len] = '\0';
 
-                if (!sync_folder_lookup_byname(folder_list, argv[i]))
-                    sync_folder_list_add(folder_list,
-                                         NULL, argv[i], NULL, NULL);
-            }
-            fclose(file);
-        } else for (i = optind; i < argc; i++) {
+		if ((len == 0) || (buf[0] == '#'))
+		    continue;
 
-            if (!sync_folder_lookup_byname(folder_list, argv[i]))
-                sync_folder_list_add(folder_list, NULL, argv[i], NULL, NULL);
-        }
+		if (!sync_folder_lookup_byname(folder_list, argv[i]))
+		    sync_folder_list_add(folder_list,
+					 NULL, argv[i], NULL, NULL);
+	    }
+	    fclose(file);
+	} else for (i = optind; i < argc; i++) {
+	    if (!sync_folder_lookup_byname(folder_list, argv[i]))
+		sync_folder_list_add(folder_list, NULL, argv[i], NULL, NULL);
+	}
 
 	if ((r = send_lock())) {
 	    if (verbose) {
@@ -3178,8 +3173,11 @@ int main(int argc, char **argv)
 	    send_unlock();
 	}
 
-        sync_folder_list_free(&folder_list);
-    } else if (sieve) {
+	sync_folder_list_free(&folder_list);
+    }
+    break;
+
+    case MODE_SIEVE:
         for (i = optind; !r && i < argc; i++) {
 	    if ((r = send_lock())) {
 		if (verbose) {
@@ -3203,10 +3201,31 @@ int main(int argc, char **argv)
 		send_unlock();
 	    }
         }
-    } else if (repeat)
-        do_daemon(sync_log_file, sync_shutdown_file, timeout, min_delta, be, cb);
-    else if (verbose)
-        fprintf(stderr, "Nothing to do!\n");
+	break;
+
+    case MODE_REPEAT:
+	if (input_filename) {
+	    exit_rc = do_sync(input_filename);
+	}
+	else {
+	    strlcpy(sync_log_file, config_dir, sizeof(sync_log_file));
+	    strlcat(sync_log_file, "/sync/log", sizeof(sync_log_file));
+
+	    if (!sync_shutdown_file)
+		sync_shutdown_file = config_getstring(IMAPOPT_SYNC_SHUTDOWN_FILE);
+
+	    if (!min_delta)
+		min_delta = config_getint(IMAPOPT_SYNC_REPEAT_INTERVAL);
+
+	    do_daemon(sync_log_file, sync_shutdown_file, timeout, min_delta,
+		      be, cb);
+	}
+	break;
+
+    default:
+	if (verbose) fprintf(stderr, "Nothing to do!\n");
+	break;
+    }
 
     sync_msgid_list_free(&msgid_onserver);
     backend_disconnect(be);
