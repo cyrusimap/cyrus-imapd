@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.108 2000/02/01 22:42:38 leg Exp $
+ * $Id: mboxlist.c,v 1.109 2000/02/08 06:34:14 leg Exp $
  */
 
 #include <stdio.h>
@@ -589,8 +589,6 @@ int real_mboxlist_createmailbox(char *name, int mbtype, char *partition,
     r = mbdb->put(mbdb, tid, &key, &data, 0);
     switch (r) {
     case 0:
-	syslog(LOG_DEBUG, "inserted '%s' into mailboxes database",
-	       name);
 	break;
     case DB_LOCK_DEADLOCK:
 	goto retry;
@@ -3098,9 +3096,9 @@ void db_panic(DB_ENV *dbenv, int errno)
     exit(EC_TEMPFAIL);
 }
 
-void db_err(char *db_prfx, char *buffer)
+static void db_err(const char *db_prfx, char *buffer)
 {
-    syslog(LOG_INFO, "DBINFO: %s", buffer);
+    syslog(LOG_ERR, "DBERROR %s: %s", db_prfx, buffer);
 }
 
 void mboxlist_init(void)
@@ -3120,11 +3118,11 @@ void mboxlist_init(void)
     }
 
     /* dbenv->set_paniccall(dbenv, (void (*)(DB_ENV *, int)) &db_panic);*/
-    /* dbenv.db_errcall = &db_err; */
     dbenv->set_verbose(dbenv, DB_VERB_DEADLOCK, 1);
-    dbenv->set_verbose(dbenv, DB_VERB_WAITSFOR, 1);
-    dbenv->set_errfile(dbenv, stderr);
+    /* dbenv->set_verbose(dbenv, DB_VERB_WAITSFOR, 1); */
     dbenv->set_errpfx(dbenv, "mbdb");
+    dbenv->set_lk_detect(dbenv, DB_LOCK_DEFAULT);
+    dbenv->set_errcall(dbenv, db_err);
 
     /*
      * We want to specify the shared memory buffer pool cachesize,
