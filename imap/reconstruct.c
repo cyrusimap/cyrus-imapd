@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.74 2003/05/06 20:59:49 rjs3 Exp $ */
+/* $Id: reconstruct.c,v 1.75 2003/05/08 18:43:57 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -397,7 +397,7 @@ int reconstruct(char *name, struct discovered *found)
     }
     
     memset(buf, 0, sizeof(buf));
-    (*(bit32 *)buf) = mailbox.generation_no + 1;
+    *((bit32 *)(buf+OFFSET_GENERATION_NO)) = htonl(mailbox.generation_no + 1);
     fwrite(buf, 1, INDEX_HEADER_SIZE, newindex);
     retry_write(newcache_fd, buf, sizeof(bit32));
 
