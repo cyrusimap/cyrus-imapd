@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/NNTP/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.94 2004/01/03 15:14:29 ken3 Exp $
+ * $Id: imtest.c,v 1.95 2004/02/27 18:29:35 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -263,7 +263,7 @@ void imtest_fatal(const char *msg, ...)
 }
 
 /* libcyrus makes us define this */
-void fatal(const char *msg, int code)
+void fatal(const char *msg, int code __attribute__((unused)))
 {
     imtest_fatal(msg);
 }
@@ -306,12 +306,8 @@ static int verify_error = X509_V_OK;
 static int do_dump = 0;
 
 #define CCERT_BUFSIZ 256
-static char peer_subject[CCERT_BUFSIZ];
-static char peer_issuer[CCERT_BUFSIZ];
 static char peer_CN[CCERT_BUFSIZ];
 static char issuer_CN[CCERT_BUFSIZ];
-static unsigned char md[EVP_MAX_MD_SIZE];
-static char fingerprint[EVP_MAX_MD_SIZE * 3];
 
 char   *tls_peer_CN = NULL;
 char   *tls_issuer_CN = NULL;
@@ -407,7 +403,8 @@ static int verify_callback(int ok, X509_STORE_CTX * ctx)
 
 /* taken from OpenSSL apps/s_cb.c */
 
-static RSA *tmp_rsa_cb(SSL * s, int export, int keylength)
+static RSA *tmp_rsa_cb(SSL * s __attribute__((unused)),
+		       int export __attribute__((unused)), int keylength)
 {
     static RSA *rsa_tmp = NULL;
     
@@ -622,7 +619,7 @@ static int tls_dump(const char *s, int len)
 /* taken from OpenSSL apps/s_cb.c */
 
 static long bio_dump_cb(BIO * bio, int cmd, const char *argp, int argi,
-			long argl, long ret)
+			long argl __attribute__((unused)), long ret)
 {
     if (!do_dump)
 	return (ret);
@@ -643,8 +640,6 @@ static long bio_dump_cb(BIO * bio, int cmd, const char *argp, int argi,
 int tls_start_clienttls(unsigned *layer, char **authid)
 {
     int     sts;
-    int     j;
-    unsigned int n;
     SSL_CIPHER *cipher;
     X509   *peer;
     
@@ -1197,7 +1192,6 @@ static void interactive(struct protocol_t *protocol, char *filename)
     int nfds;
     int nfound;
     int count;
-    int r;
     int fd = 0, fd_out = 1, listen_sock = -1;
     void *rock = NULL;
     int donewritingfile = 0;
@@ -2242,7 +2236,13 @@ static struct protocol_t protocols[] = {
       { "AUTHENTICATE", INT_MAX, 1, "OK", "NO", NULL, "*", &sieve_parse_success },
       NULL, { "LOGOUT", "OK" }, NULL, NULL, NULL
     },
-    { NULL }
+    { NULL, NULL, NULL,
+      { 0, NULL, NULL },
+      { NULL, NULL, NULL, NULL, NULL },
+      { NULL, NULL, NULL, 0 },
+      { NULL, 0, 0, NULL, NULL, NULL, NULL, NULL },
+      NULL, { NULL, NULL }, NULL, NULL, NULL
+    }
 };
 
 int main(int argc, char **argv)
@@ -2382,7 +2382,7 @@ int main(int argc, char **argv)
 
 	case 'o':
 	    /* parse the opt=val string.  if no value is given, assume '1' */
-	    if (val = strchr(optarg, '='))
+	    if ((val = strchr(optarg, '=')))
 		*val++ = '\0';
 	    else
 		val = "1";

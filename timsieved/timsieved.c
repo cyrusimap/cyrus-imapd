@@ -1,7 +1,7 @@
 /* timsieved.c -- main file for timsieved (sieve script accepting program)
  * Tim Martin
  * 9/21/99
- * $Id: timsieved.c,v 1.50 2004/02/18 20:59:04 rjs3 Exp $
+ * $Id: timsieved.c,v 1.51 2004/02/27 18:32:20 ken3 Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -197,7 +197,9 @@ static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
-int service_init(int argc, char **argv, char **envp)
+int service_init(int argc __attribute__((unused)),
+		 char **argv __attribute__((unused)),
+		 char **envp __attribute__((unused)))
 {
     global_sasl_init(0, 1, mysasl_cb);
 
@@ -214,7 +216,9 @@ void service_abort(int error)
     shut_down(error);
 }
 
-int service_main(int argc, char **argv, char **envp)
+int service_main(int argc __attribute__((unused)),
+		 char **argv __attribute__((unused)),
+		 char **envp __attribute__((unused)))
 {
     socklen_t salen;
     int timeout;

@@ -1,4 +1,4 @@
-/* $Id: mystring.c,v 1.6 2002/05/25 19:57:53 leg Exp $ */
+/* $Id: mystring.c,v 1.7 2004/02/27 18:32:19 ken3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -67,7 +67,8 @@ int string_compare(mystring_t *str1, mystring_t *str2)
   return TIMSIEVE_OK;
 }
 
-int string_compare_with(mystring_t *str1, mystring_t *str2, mystring_t *comp)
+int string_compare_with(mystring_t *str1, mystring_t *str2,
+			mystring_t *comp __attribute__((unused)))
 {
   char *data1;
   char *data2;
