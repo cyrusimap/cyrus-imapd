@@ -49,7 +49,7 @@
  */
 
 /*
- * $Id: nntpd.c,v 1.1.2.18 2002/10/12 15:36:04 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.19 2002/10/14 21:09:07 ken3 Exp $
  */
 #include <config.h>
 
@@ -347,6 +347,7 @@ int service_main(int argc, char **argv, char **envp)
 
     nntp_in = prot_new(0, 0);
     nntp_out = prot_new(1, 1);
+    imapd_out = nntp_out; /* XXX hack for index.c */
 
     /* Find out name of client host */
     salen = sizeof(nntp_remoteaddr);
@@ -484,9 +485,12 @@ void fatal(const char* s, int code)
  */
 static void cmdloop(void)
 {
-    int c, r;
+    int c, r, mode;
     static struct buf cmd, arg1, arg2;
+    char *p;
     const char *err;
+    unsigned long uid;
+    int idx;
 
     for (;;) {
 	signals_poll();
@@ -505,239 +509,321 @@ static void cmdloop(void)
 	    eatline(nntp_in, c);
 	    continue;
 	}
-
-	lcase(cmd.s);
-
-	if (!strcmp(cmd.s, "quit")) {
-	    if (c == '\r') c = prot_getc(nntp_in);
-	    if (c != '\n') goto extraargs;
-
-	    prot_printf(nntp_out, "205 Bye\r\n");
-	    return;
+	if (islower((unsigned char) cmd.s[0])) 
+	    cmd.s[0] = toupper((unsigned char) cmd.s[0]);
+	for (p = &cmd.s[1]; *p; p++) {
+	    if (isupper((unsigned char) *p)) *p = tolower((unsigned char) *p);
 	}
-	else if (!strcmp(cmd.s, "date")) {
-	    time_t now = time(NULL);
-	    struct tm *my_tm = gmtime(&now);
-	    char buf[15];
 
-	    if (c == '\r') c = prot_getc(nntp_in);
-	    if (c != '\n') goto extraargs;
-
-	    strftime(buf, sizeof(buf), "%Y%m%d%H%M%S", my_tm);
-	    prot_printf(nntp_out, "111 %s\r\n", buf);
-	}
-	else if (!strcmp(cmd.s, "mode")) {
-	    if (c != ' ') goto missingargs;
-	    c = getword(nntp_in, &arg1);
-	    if (c == EOF) goto missingargs;
-	    if (c == '\r') c = prot_getc(nntp_in);
-	    if (c != '\n') goto extraargs;
-
-	    cmd_mode(arg1.s);
-	}
-	else if (!strcmp(cmd.s, "authinfo")) {
-	    if (c != ' ') goto missingargs;
-	    c = getword(nntp_in, &arg1);
-	    if (c == EOF) goto missingargs;
-	    if (c != ' ') goto missingargs;
-	    c = getword(nntp_in, &arg2);
-	    if (c == EOF) goto missingargs;
-	    if (c == '\r') c = prot_getc(nntp_in);
-	    if (c != '\n') goto extraargs;
-
-	    lcase(arg1.s);
-	    if (!strcmp(arg1.s, "user"))
-		cmd_user(arg2.s);
-	    else if (!strcmp(arg1.s, "pass"))
-		cmd_pass(arg2.s);
-	    else
-		prot_printf(nntp_out, "500 Unrecognized command\r\n");
-	}
-	else if (!strcmp(cmd.s, "list")) {
-	    arg1.len = arg2.len = 0;
-	    if (c == ' ') {
+	switch (cmd.s[0]) {
+	case 'A':
+	    if (!strcmp(cmd.s, "Authinfo")) {
+		if (c != ' ') goto missingargs;
 		c = getword(nntp_in, &arg1);
 		if (c == EOF) goto missingargs;
+		if (c != ' ') goto missingargs;
+		c = getword(nntp_in, &arg2);
+		if (c == EOF) goto missingargs;
+		if (c == '\r') c = prot_getc(nntp_in);
+		if (c != '\n') goto extraargs;
+
+		lcase(arg1.s);
+		if (!strcmp(arg1.s, "user"))
+		    cmd_user(arg2.s);
+		else if (!strcmp(arg1.s, "pass"))
+		    cmd_pass(arg2.s);
+		else
+		    prot_printf(nntp_out, "500 Unrecognized command\r\n");
+	    }
+	    else if (!strcmp(cmd.s, "Article")) {
+		mode = ARTICLE_ALL;
+
+	      article:
+		uid = 0;
 		if (c == ' ') {
-		    c = getword(nntp_in, &arg2);
+		    c = getword(nntp_in, &arg1);
+		    if (c == EOF) goto missingargs;
+		    uid = parsenum(arg1.s, NULL);
+		}
+		if (c == '\r') c = prot_getc(nntp_in);
+		if (c != '\n') goto extraargs;
+		if (uid == -1) {
+		    /* XXX search for msgid (arg1.s) */
+		    goto nomsgid;
+		} else {
+		    if (!nntp_group) goto noopengroup;
+		    if (uid) {
+			idx = index_finduid(uid);
+			if (index_getuid(idx) != uid) goto noarticle;
+			nntp_current = idx;
+		    } else {
+			uid = index_getuid(nntp_current);
+		    }
+		}
+
+		cmd_article(uid, mode);
+	    }
+	    else goto badcmd;
+	    break;
+
+	case 'B':
+	    if (!strcmp(cmd.s, "Body")) {
+		mode = ARTICLE_BODY;
+		goto article;
+	    }
+	    else goto badcmd;
+	    break;
+
+	case 'C':
+	    if (!strcmp(cmd.s, "Check")) {
+		mode = POST_CHECK;
+		goto ihave;
+	    }
+	    else goto badcmd;
+	    break;
+
+	case 'D':
+	    if (!strcmp(cmd.s, "Date")) {
+		time_t now = time(NULL);
+		struct tm *my_tm = gmtime(&now);
+		char buf[15];
+
+		if (c == '\r') c = prot_getc(nntp_in);
+		if (c != '\n') goto extraargs;
+
+		strftime(buf, sizeof(buf), "%Y%m%d%H%M%S", my_tm);
+		prot_printf(nntp_out, "111 %s\r\n", buf);
+	    }
+	    else goto badcmd;
+	    break;
+
+	case 'G':
+	    if (!strcmp(cmd.s, "Group")) {
+		if (c != ' ') goto missingargs;
+		c = getword(nntp_in, &arg1);
+		if (c == EOF) goto missingargs;
+		if (c == '\r') c = prot_getc(nntp_in);
+		if (c != '\n') goto extraargs;
+
+		r = open_group(arg1.s, 0);
+		if (r) goto nogroup;
+		else {
+		    prot_printf(nntp_out, "211 %u %u %u %s\r\n",
+				nntp_exists, nntp_exists ? index_getuid(1) : 1,
+				nntp_exists ? index_getuid(nntp_exists) : 0,
+				arg1.s);
+		}
+	    }
+	    else goto badcmd;
+	    break;
+
+	case 'H':
+	    if (!strcmp(cmd.s, "Head")) {
+		mode = ARTICLE_HEAD;
+		goto article;
+	    }
+	    else goto badcmd;
+	    break;
+
+	case 'I':
+	    if (!strcmp(cmd.s, "Ihave")) {
+		mode = POST_IHAVE;
+
+	      ihave:
+		if (c != ' ') goto missingargs;
+		c = getword(nntp_in, &arg1);
+		if (c == EOF) goto missingargs;
+		if (c == '\r') c = prot_getc(nntp_in);
+		if (c != '\n') goto extraargs;
+
+		cmd_post(arg1.s, mode);
+	    }
+	    else goto badcmd;
+	    break;
+
+	case 'L':
+	    if (!strcmp(cmd.s, "Last")) {
+		if (c == '\r') c = prot_getc(nntp_in);
+		if (c != '\n') goto extraargs;
+		if (!nntp_group) goto noopengroup;
+		if (nntp_current == 1) {
+		    prot_printf(nntp_out,
+				"422 No previous article in this group\r\n");
+		} else {
+		    char *msgid = index_get_msgid(nntp_group, --nntp_current);
+
+		    prot_printf(nntp_out, "223 %u %s\r\n",
+				index_getuid(nntp_current),
+				msgid ? msgid : "<0>");
+
+		    if (msgid) free(msgid);
+		}
+	    }
+	    else if (!strcmp(cmd.s, "List")) {
+		arg1.len = arg2.len = 0;
+		if (c == ' ') {
+		    c = getword(nntp_in, &arg1);
+		    if (c == EOF) goto missingargs;
+		    if (c == ' ') {
+			c = getword(nntp_in, &arg2);
+			if (c == EOF) goto missingargs;
+		    }
+		}
+		if (c == '\r') c = prot_getc(nntp_in);
+		if (c != '\n') goto extraargs;
+
+		cmd_list(arg1.len ? arg1.s : NULL, arg2.len ? arg2.s : NULL);
+	    }
+	    else if (!strcmp(cmd.s, "Listgroup")) {
+		r = 0;
+		arg1.len = 0;
+
+		if (c == ' ') {
+		    c = getword(nntp_in, &arg1);
 		    if (c == EOF) goto missingargs;
 		}
-	    }
-	    if (c == '\r') c = prot_getc(nntp_in);
-	    if (c != '\n') goto extraargs;
+		if (c == '\r') c = prot_getc(nntp_in);
+		if (c != '\n') goto extraargs;
 
-	    cmd_list(arg1.len ? arg1.s : NULL, arg2.len ? arg2.s : NULL);
-	}
-	else if (!strcmp(cmd.s, "listgroup")) {
-	    r = 0;
-	    arg1.len = 0;
-
-	    if (c == ' ') {
-		c = getword(nntp_in, &arg1);
-		if (c == EOF) goto missingargs;
-	    }
-	    if (c == '\r') c = prot_getc(nntp_in);
-	    if (c != '\n') goto extraargs;
-
-	    if (arg1.len) r = open_group(arg1.s, 0);
-	    if (r) goto nogroup;
-	    else if (!nntp_group) goto noopengroup;
-	    else {
-		int i;
-		prot_printf(nntp_out, "211 list of articles follows\r\n");
-		for (i = 1; i <= nntp_exists; i++)
-		    prot_printf(nntp_out, "%u\r\n", index_getuid(i));
-		prot_printf(nntp_out, ".\r\n");
-	    }
-	}
-	else if (!strcmp(cmd.s, "group")) {
-	    if (c != ' ') goto missingargs;
-	    c = getword(nntp_in, &arg1);
-	    if (c == EOF) goto missingargs;
-	    if (c == '\r') c = prot_getc(nntp_in);
-	    if (c != '\n') goto extraargs;
-
-	    r = open_group(arg1.s, 0);
-	    if (r) goto nogroup;
-	    else {
-		prot_printf(nntp_out, "211 %u %u %u %s\r\n",
-			    nntp_exists, nntp_exists ? index_getuid(1) : 1,
-			    nntp_exists ? index_getuid(nntp_exists) : 0,
-			    arg1.s);
-	    }
-	}
-	else if (!strcmp(cmd.s, "last")) {
-	    if (c == '\r') c = prot_getc(nntp_in);
-	    if (c != '\n') goto extraargs;
-	    if (!nntp_group) goto noopengroup;
-	    if (nntp_current == 1) {
-		prot_printf(nntp_out,
-			    "422 No previous article in this group\r\n");
-	    } else {
-		char *msgid = index_get_msgid(nntp_group, --nntp_current);
-
-		prot_printf(nntp_out, "223 %u %s\r\n",
-			    index_getuid(nntp_current),
-			    msgid ? msgid : "<0>");
-
-		if (msgid) free(msgid);
-	    }
-	}
-	else if (!strcmp(cmd.s, "next")) {
-	    if (c == '\r') c = prot_getc(nntp_in);
-	    if (c != '\n') goto extraargs;
-	    if (!nntp_group) goto noopengroup;
-	    if (nntp_current == nntp_exists) {
-		prot_printf(nntp_out, "422 No next article in this group\r\n");
-	    } else {
-		char *msgid = index_get_msgid(nntp_group, ++nntp_current);
-
-		prot_printf(nntp_out, "223 %u %s\r\n",
-			    index_getuid(nntp_current),
-			    msgid ? msgid : "<0>");
-
-		if (msgid) free(msgid);
-	    }
-	}
-	else if (!strcmp(cmd.s, "article") || !strcmp(cmd.s, "head") ||
-		 !strcmp(cmd.s, "body") || !strcmp(cmd.s, "stat")) {
-	    unsigned long uid = 0;
-	    int part = 0, idx;
-
-	    if (c == ' ') {
-		c = getword(nntp_in, &arg1);
-		if (c == EOF) goto missingargs;
-		uid = parsenum(arg1.s, NULL);
-	    }
-	    if (c == '\r') c = prot_getc(nntp_in);
-	    if (c != '\n') goto extraargs;
-	    if (uid == -1) {
-		/* search for msgid (arg1.s) */
-		goto nomsgid;
-	    } else {
-		if (!nntp_group) goto noopengroup;
-		if (uid) {
-		    idx = index_finduid(uid);
-		    if (index_getuid(idx) != uid) goto noarticle;
-		    nntp_current = idx;
-		} else {
-		    uid = index_getuid(nntp_current);
+		if (arg1.len) r = open_group(arg1.s, 0);
+		if (r) goto nogroup;
+		else if (!nntp_group) goto noopengroup;
+		else {
+		    int i;
+		    prot_printf(nntp_out, "211 list of articles follows\r\n");
+		    for (i = 1; i <= nntp_exists; i++)
+			prot_printf(nntp_out, "%u\r\n", index_getuid(i));
+		    prot_printf(nntp_out, ".\r\n");
 		}
 	    }
+	    else goto badcmd;
+	    break;
 
-	    switch (cmd.s[0]) {
-	    case 'a': part = ARTICLE_ALL;  break;
-	    case 'h': part = ARTICLE_HEAD; break;
-	    case 'b': part = ARTICLE_BODY; break;
-	    case 's': part = ARTICLE_STAT; break;
-	    }
-
-	    cmd_article(uid, part);
-	}
-	else if (!strcmp(cmd.s, "over") || !strcmp(cmd.s, "xover")) {
-	    unsigned long first = 0, last, i;
-	    char *p = NULL;
-	    int idx;
-
-	    if (c == ' ') {
+	case 'M':
+	    if (!strcmp(cmd.s, "Mode")) {
+		if (c != ' ') goto missingargs;
 		c = getword(nntp_in, &arg1);
 		if (c == EOF) goto missingargs;
-		first = parsenum(arg1.s, &p);
-		if (first == -1) goto noarticle;
-	    }
-	    if (c == '\r') c = prot_getc(nntp_in);
-	    if (c != '\n') goto extraargs;
+		if (c == '\r') c = prot_getc(nntp_in);
+		if (c != '\n') goto extraargs;
 
-	    if (!nntp_group) goto noopengroup;
-	    if (!first)
-		last = first = index_getuid(nntp_current);
-	    else if (p && *p) {
-		if (*p != '-') goto noarticle;
-		if (*++p)
-		    last = parsenum(p, NULL);
+		cmd_mode(arg1.s);
+	    }
+	    else goto badcmd;
+	    break;
+
+	case 'N':
+	    if (!strcmp(cmd.s, "Next")) {
+		if (c == '\r') c = prot_getc(nntp_in);
+		if (c != '\n') goto extraargs;
+		if (!nntp_group) goto noopengroup;
+		if (nntp_current == nntp_exists) {
+		    prot_printf(nntp_out,
+				"422 No next article in this group\r\n");
+		} else {
+		    char *msgid = index_get_msgid(nntp_group, ++nntp_current);
+
+		    prot_printf(nntp_out, "223 %u %s\r\n",
+				index_getuid(nntp_current),
+				msgid ? msgid : "<0>");
+
+		    if (msgid) free(msgid);
+		}
+	    }
+	    else goto badcmd;
+	    break;
+
+	case 'O':
+	    if (!strcmp(cmd.s, "Over")) {
+		unsigned long last;
+
+	      over:
+		uid = 0;
+		p = NULL;
+
+		if (c == ' ') {
+		    c = getword(nntp_in, &arg1);
+		    if (c == EOF) goto missingargs;
+		    uid = parsenum(arg1.s, &p);
+		    if (uid == -1) goto noarticle;
+		}
+		if (c == '\r') c = prot_getc(nntp_in);
+		if (c != '\n') goto extraargs;
+
+		if (!nntp_group) goto noopengroup;
+		if (!uid)
+		    last = uid = index_getuid(nntp_current);
+		else if (p && *p) {
+		    if (*p != '-') goto noarticle;
+		    if (*++p)
+			last = parsenum(p, NULL);
+		    else
+			last = index_getuid(nntp_exists);
+		}
 		else
-		    last = index_getuid(nntp_exists);
+		    last = uid;
+		if (last == -1) goto noarticle;
+
+		prot_printf(nntp_out,
+			    "224 Overview information follows:\r\n");
+
+		for (; uid <= last; uid++) {
+		    idx = index_finduid(uid);
+		    if (index_getuid(idx) != uid) continue;
+		    index_overview(nntp_group, idx);
+		}
+
+		prot_printf(nntp_out, ".\r\n");
 	    }
-	    else
-		last = first;
-	    if (last == -1) goto noarticle;
+	    else goto badcmd;
+	    break;
 
-	    prot_printf(nntp_out, "224 Overview information follows:\r\n");
+	case 'P':
+	    if (!strcmp(cmd.s, "Post")) {
+		if (c == '\r') c = prot_getc(nntp_in);
+		if (c != '\n') goto extraargs;
 
-	    imapd_out = nntp_out;  /* XXX hack */
-	    for (i = first; i <= last; i++) {
-		idx = index_finduid(i);
-		if (index_getuid(idx) != i) continue;
-		index_overview(nntp_group, idx);
+		cmd_post(NULL, POST_POST);
 	    }
+	    else goto badcmd;
+	    break;
 
-	    prot_printf(nntp_out, ".\r\n");
-	}
-	else if (!strcmp(cmd.s, "post")) {
-	    if (c == '\r') c = prot_getc(nntp_in);
-	    if (c != '\n') goto extraargs;
+	case 'Q':
+	    if (!strcmp(cmd.s, "Quit")) {
+		if (c == '\r') c = prot_getc(nntp_in);
+		if (c != '\n') goto extraargs;
 
-	    cmd_post(NULL, POST_POST);
-	}
-	else if (!strcmp(cmd.s, "ihave") ||
-		 !strcmp(cmd.s, "check") || !strcmp(cmd.s, "takethis")) {
-	    int mode = 0;
-
-	    if (c != ' ') goto missingargs;
-	    c = getword(nntp_in, &arg1);
-	    if (c == EOF) goto missingargs;
-	    if (c == '\r') c = prot_getc(nntp_in);
-	    if (c != '\n') goto extraargs;
-
-	    switch (cmd.s[0]) {
-	    case 'i': mode = POST_IHAVE;    break;
-	    case 'c': mode = POST_CHECK;    break;
-	    case 't': mode = POST_TAKETHIS; break;
+		prot_printf(nntp_out, "205 Bye\r\n");
+		return;
 	    }
+	    else goto badcmd;
+	    break;
 
-	    cmd_post(arg1.s, mode);
-	}
-	else {
+	case 'S':
+	    if (!strcmp(cmd.s, "Stat")) {
+		mode = ARTICLE_STAT;
+		goto article;
+	    }
+	    else goto badcmd;
+	    break;
+
+	case 'T':
+	    if (!strcmp(cmd.s, "Takethis")) {
+		mode = POST_TAKETHIS;
+		goto ihave;
+	    }
+	    else goto badcmd;
+	    break;
+
+	case 'X':
+	    if (!strcmp(cmd.s, "Xover")) {
+		goto over;
+	    }
+	    else goto badcmd;
+	    break;
+
+	default:
+	  badcmd:
 	    prot_printf(nntp_out, "500 Unrecognized command\r\n");
 	    eatline(nntp_in, c);
 	}
