@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: fetchnews.8,v 1.1.2.2 2003/05/16 17:30:17 ken3 Exp $
+.\" $Id: fetchnews.8,v 1.1.2.3 2003/07/06 14:56:15 ken3 Exp $
 .SH NAME
 fetchnews \- retrieve new articles from peer and feed to Cyrus
 .SH SYNOPSIS
@@ -50,11 +50,7 @@ fetchnews \- retrieve new articles from peer and feed to Cyrus
 ]
 [
 .B \-s
-.I servername
-]
-[
-.B \-p
-.I port
+.I servername[:port]
 ]
 .br
           [
@@ -64,6 +60,15 @@ fetchnews \- retrieve new articles from peer and feed to Cyrus
 [
 .B \-f
 .I tstampfile
+]
+.br
+          [
+.B \-a
+.I authname
+[
+.B \-p
+.I password
+]
 ]
 .I peername
 .SH DESCRIPTION
@@ -88,12 +93,8 @@ file unless specified otherwise by \fB-C\fR.
 Read configuration options from \fIconfig-file\fR.
 .TP
 .BI \-s " servername"
-Hostname of the Cyrus server to which articles should be fed.  Defaults to
-"localhost".
-.TP
-.BI \-p " port"
-Port on the Cyrus server to connect to when feeding articles.  Defaults to
-"nntp".
+Hostname of the Cyrus server (with optional port) to which articles
+should be fed.  Defaults to "localhost:nntp".
 .TP
 .BI \-w " wildmat"
 Wildmat pattern specifying which newsgroups to search for new
@@ -104,6 +105,12 @@ File in which to read/write the timestamp of when articles were last
 retrieved.  Defaults to "newsstamp" located in
 .I configdir
 as specified by the configuration options.
+.TP
+.BI \-a " authname"
+Userid to use for authentication.
+.TP
+.BI \-p " password"
+Password to use for authentication.
 .SH FILES
 .TP
 .B /etc/imapd.conf

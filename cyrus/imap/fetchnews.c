@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: fetchnews.c,v 1.1.2.13 2003/05/16 17:30:16 ken3 Exp $
+ * $Id: fetchnews.c,v 1.1.2.14 2003/07/06 14:56:14 ken3 Exp $
  */
 
 #include <config.h>
@@ -118,6 +118,7 @@ int main(int argc, char *argv[])
     int opt;
     char *alt_config = NULL, *port = "119";
     const char *peer = NULL, *server = "localhost", *wildmat = "*";
+    char *authname = NULL, *password = NULL;
     int psock = -1, ssock = -1;
     struct protstream *pin, *pout, *sin, *sout;
     char buf[4096], sbuf[4096];
@@ -129,18 +130,18 @@ int main(int argc, char *argv[])
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
-    while ((opt = getopt(argc, argv, "C:s:p:w:f:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:s:w:f:a:p:")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
 	    break;
 
 	case 's': /* server */
-	    server = optarg;
-	    break;
-
-	case 'p': /* port on server */
-	    port = optarg;
+	    server = xstrdup(optarg);
+	    if ((port = strchr(server, ':')))
+		*port++ = '\0';
+	    else
+		port = "119";
 	    break;
 
 	case 'w': /* wildmat */
@@ -149,6 +150,14 @@ int main(int argc, char *argv[])
 
 	case 'f': /* timestamp file */
 	    snprintf(sfile, sizeof(sfile), optarg);
+	    break;
+
+	case 'a': /* authname */
+	    authname = optarg;
+	    break;
+
+	case 'p': /* password */
+	    password = optarg;
 	    break;
 
 	default:
@@ -177,6 +186,38 @@ int main(int argc, char *argv[])
     if (!prot_fgets(buf, sizeof(buf), pin) || strncmp("20", buf, 2)) {
 	syslog(LOG_ERR, "peer not available");
 	goto quit;
+    }
+
+    if (authname) {
+	/* authenticate to peer */
+	/* XXX this should be modified to support SASL and STARTTLS */
+
+	prot_printf(pout, "AUTHINFO USER %s\r\n", authname);
+	if (!prot_fgets(buf, sizeof(buf), pin)) {
+	    syslog(LOG_ERR, "AUTHINFO USER terminated abnormally");
+	    goto quit;
+	}
+	else if (!strncmp("381", buf, 3)) {
+	    /* password required */
+	    if (!password)
+		password = getpass("Please enter the password: ");
+
+	    if (!password) {
+		fprintf(stderr, "failed to get password\n");
+		goto quit;
+	    }
+
+	    prot_printf(pout, "AUTHINFO PASS %s\r\n", password);
+	    if (!prot_fgets(buf, sizeof(buf), pin)) {
+		syslog(LOG_ERR, "AUTHINFO PASS terminated abnormally");
+		goto quit;
+	    }
+	}
+
+	if (strncmp("281", buf, 3)) {
+	    /* auth failed */
+	    goto quit;
+	}
     }
 
     /* change to reader mode - not always necessary, so ignore result */
