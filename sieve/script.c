@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.56 2003/04/03 14:59:43 ken3 Exp $
+ * $Id: script.c,v 1.57 2003/05/18 13:28:55 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -943,8 +943,10 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 
     if (s->support.notify) {
 	notify_list = new_notify_list();
-	if (notify_list == NULL)
-	    return SIEVE_NOMEM;
+	if (notify_list == NULL) {
+	    ret = SIEVE_NOMEM;
+	    goto error;
+	}
     }
 
     actions = new_action_list();
@@ -954,8 +956,10 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
     }
  
     if (eval(&s->interp, s->cmds, &s->imapflags, message_context, actions,
-	     notify_list, &errmsg) < 0)
-	return SIEVE_RUN_ERROR;
+	     notify_list, &errmsg) < 0) {
+	ret = SIEVE_RUN_ERROR;
+	goto error;
+    }
   
     strcpy(actions_string,"Action(s) taken:\n");
   
