@@ -51,6 +51,10 @@ chk_cyrus \- perform a consistancy check of the cyrus mailstore
 .B \-P
 .I partition
 ]
+[
+.B \-M
+.I mailbox
+]
 .SH DESCRIPTION
 .I Chk_cyrus
 is used to perform a consistancy check on the cyrus datastore, and output
@@ -70,6 +74,10 @@ Read configuration options from \fIconfig-file\fR.
 .TP
 .BI \-P " partition"
 Run the consistancy check for only the given partition.
+May not be specified with -M.
+.BI \-M " mailbox"
+Run the consistancy check for only the given mailbox.
+May not be specified with -P.
 .SH FILES
 .TP
 .B /etc/imapd.conf
