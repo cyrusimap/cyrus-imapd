@@ -37,10 +37,11 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #endif
 
 /* compares pat to text; returns 1 if it's true, 0 otherwise 
-   first arg is pat, second arg is text */
-typedef int comparator_t(const char *, const char *);
+   first arg is text, second arg is pat, third arg is rock */
+typedef int comparator_t(const char *, const char *, void *);
 
 /* returns a pointer to a comparator function given it's name */
-comparator_t *lookup_comp(const char *comp, int mode);
+comparator_t *lookup_comp(const char *comp, int mode,
+			  const char *relation, void **rock);
 
 #endif

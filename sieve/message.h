@@ -1,6 +1,6 @@
 /* message.h
  * Larry Greenfield
- * $Id: message.h,v 1.13 2002/02/19 18:09:46 ken3 Exp $
+ * $Id: message.h,v 1.14 2002/05/14 16:51:50 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -129,7 +129,7 @@ int do_notify(notify_list_t *n, char *id,
 	      char *method, stringlist_t **options,
 	      const char *priority, char *message);
 int do_denotify(notify_list_t *n, comparator_t *comp, void *pat,
-		const char *priority);
+		void *comprock, const char *priority);
 
 
 #endif

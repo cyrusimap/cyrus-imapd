@@ -1,6 +1,6 @@
 /* test.c -- tester for libsieve
  * Larry Greenfield
- * $Id: test.c,v 1.18 2002/02/26 22:05:34 ken3 Exp $
+ * $Id: test.c,v 1.19 2002/05/14 16:51:51 ken3 Exp $
  *
  * usage: "test message script"
  */
@@ -638,7 +638,7 @@ static int test_comparator(void)
     int didfail = 0;
 
     for (t = tc; t->comp != NULL; t++) {
-	comparator_t *c = lookup_comp(t->comp, t->mode);
+	comparator_t *c = lookup_comp(t->comp, t->mode, NULL, NULL);
 	int res;
 	char *mode;
 
@@ -654,7 +654,7 @@ static int test_comparator(void)
 	    didfail++;
 	    continue;
 	}
-	res = c(t->pat, t->text);
+	res = c(t->text, t->pat, NULL);
 	if (res != t->result) {
 	    printf("FAIL: %s/%s(%s, %s) = %d, not %d\n", 
 		   t->comp, mode, t->pat, t->text, res, t->result);
