@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- $Id: append.c,v 1.61 2000/02/10 05:10:31 tmartin Exp $
+ $Id: append.c,v 1.62 2000/02/10 08:00:19 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -48,7 +48,7 @@
 #include "xmalloc.h"
 #include "mboxlist.h"
 #include "acapmbox.h"
-#include "seen_local.h"
+#include "seen.h"
 #include "retry.h"
 
 struct stagemsg {

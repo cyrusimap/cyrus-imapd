@@ -1,5 +1,5 @@
-/* notify_zephyr.c -- Module to (not) notify of new mail
- $Id: notify_no.c,v 1.6 2000/02/10 08:00:25 leg Exp $
+/* notify.h -- abstract interface for notifications
+  $Id: notify.h,v 1.1 2000/02/10 08:00:25 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -27,10 +27,13 @@
  *
  */
 
+#ifndef NOTIFY_H
+#define NOTIFY_H
+
 void notify(const char *class,
 	    const char *instance,
 	    const char *user,
 	    const char *mailbox,
-	    const char *message)
-{
-}
+	    const char *message);
+
+#endif /* NOTIFY_H */

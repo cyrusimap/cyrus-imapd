@@ -1,5 +1,5 @@
 /* proc.c -- Server process registry
- $Id: proc.c,v 1.16 2000/02/10 05:10:44 tmartin Exp $
+ $Id: proc.c,v 1.17 2000/02/10 08:00:26 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -36,12 +36,14 @@
 #include "config.h"
 #include "exitcodes.h"
 #include "xmalloc.h"
-#include "setproctitle.h"
 
 #define FNAME_PROCDIR "/proc/"
 
 static char *procfname = 0;
 static FILE *procfile = 0;
+
+extern void setproctitle_init(int argc, char **argv, char **envp);
+extern void setproctitle(const char *fmt, ...);
 
 int proc_register(progname, clienthost, userid, mailbox)
 char *progname;

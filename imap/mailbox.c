@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.86 2000/02/10 05:10:38 tmartin Exp $
+ $Id: mailbox.c,v 1.87 2000/02/10 08:00:22 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -72,7 +72,7 @@
 #include "xmalloc.h"
 #include "mboxlist.h"
 #include "acapmbox.h"
-#include "seen_local.h"
+#include "seen.h"
 
 static int mailbox_doing_reconstruct = 0;
 static struct mailbox zeromailbox = {-1, -1, -1};

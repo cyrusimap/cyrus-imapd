@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.202 2000/02/10 05:10:36 tmartin Exp $ */
+/* $Id: imapd.c,v 1.203 2000/02/10 08:00:20 leg Exp $ */
 
 #ifndef __GNUC__
 #define __attribute__(foo)
@@ -66,11 +66,10 @@
 #include "mailbox.h"
 #include "imapd.h"
 #include "xmalloc.h"
-#include "setproctitle.h"
 #include "mboxname.h"
 #include "append.h"
-#include "proc.h"
 #include "pushstats.h"
+#include "mboxlist.h"
 
 #ifdef HAVE_SSL
 #include "tls.h"
@@ -78,10 +77,7 @@
 
 extern int optind;
 extern char *optarg;
-
 extern int errno;
-
-extern char *login_capabilities();
 
 struct buf {
     char *s;
@@ -187,10 +183,13 @@ void freesearchargs P((struct searchargs *s));
 
 void printauthready P((int len, unsigned char *data));
 
-#include "mboxlist.h"
-
 static int mailboxdata(), listdata(), lsubdata();
 static void mstringdata(char *cmd, char *name, int matchlen, int maycreate);
+
+extern void setproctitle_init(int argc, char **argv, char **envp);
+extern int proc_register(char *progname, char *clienthost, 
+			 char *userid, char *mailbox);
+extern void proc_cleanup(void);
 
 /* This creates a structure that defines the allowable
  *   security properties 
@@ -434,7 +433,6 @@ int main(int argc, char **argv, char **envp)
     imapd_in = prot_new(0, 0);
     imapd_out = prot_new(1, 1);
 
-    setproctitle_init(argc, argv, envp);
     config_init("imapd");
     mboxlist_init();
 

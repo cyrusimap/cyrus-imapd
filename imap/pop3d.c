@@ -26,7 +26,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.56 2000/02/10 05:10:43 tmartin Exp $
+ * $Id: pop3d.c,v 1.57 2000/02/10 08:00:26 leg Exp $
  */
 
 #ifndef __GNUC__
@@ -57,8 +57,6 @@
 #include "util.h"
 #include "auth.h"
 #include "config.h"
-#include "setproctitle.h"
-#include "proc.h"
 
 /* openSSL has it's own DES function which conflict in names with those used by krb.h */
 #ifdef HAVE_SSL
@@ -123,6 +121,11 @@ static void cmdloop(void);
 void kpop(void);
 static int parsenum(char **ptr);
 void usage(void);
+
+extern void setproctitle_init(int argc, char **argv, char **envp);
+extern int proc_register(char *progname, char *clienthost, 
+			 char *userid, char *mailbox);
+extern void proc_cleanup(void);
 
 /* This creates a structure that defines the allowable
  *   security properties 

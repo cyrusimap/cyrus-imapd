@@ -1,5 +1,5 @@
 /* notify_zephyr.c -- Module to notify of new mail via zephyr
- $Id: notify_zephyr.c,v 1.20 2000/02/10 05:10:43 tmartin Exp $
+ $Id: notify_zephyr.c,v 1.21 2000/02/10 08:00:26 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -60,11 +60,11 @@ int notify_wantheader()
     return 1;
 }
 
-void notify(char *class,
-	    char *instance,
-	    char *user,
-	    char *mailbox,
-	    char *message)
+void notify(const char *class,
+	    const char *instance,
+	    const char *user,
+	    const char *mailbox,
+	    const char *message)
 {
     ZNotice_t notice;
     int retval;
@@ -96,15 +96,13 @@ void notify(char *class,
 
     strcpy(msgbody,"");
 
-    if (mailbox)
-    {
-	snprintf(msgbody,900, "You have new mail in %s\n\n",mailbox);
+    if (mailbox) {
+	snprintf(msgbody,900, "You have new mail in %s.\n\n", mailbox);
     }
 
-    if (message)
-    {
-	strcat(msgbody,message);
-	strcat(msgbody,"\n");
+    if (message) {
+	strcat(msgbody, message);
+	strcat(msgbody, "\n");
     }
 
     (void) sprintf(mysender, "imap%s%s@%s",
@@ -115,13 +113,13 @@ void notify(char *class,
     memset((char *)&notice, 0, sizeof(notice));
     notice.z_kind = UNSAFE;
     notice.z_class = MAIL_CLASS;
-    notice.z_class_inst = instance;
+    notice.z_class_inst = (char *) instance;
 
     notice.z_opcode = "";
     notice.z_sender = mysender;
     notice.z_default_format = "From Post Office $1:\n$2";
   
-    notice.z_recipient = user;
+    notice.z_recipient = (char *) user;
 
     retval = ZSendList(&notice,lines,2,ZNOAUTH);
     free(msgbody);

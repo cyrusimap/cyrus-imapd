@@ -1,5 +1,5 @@
 /* seen_local.c -- Storage for /Recent and /Seen state on local filesystem
- $Id: seen_local.c,v 1.28 2000/02/10 05:10:45 tmartin Exp $
+ $Id: seen_local.c,v 1.29 2000/02/10 08:00:27 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -51,7 +51,7 @@
 #include "imap_err.h"
 #include "xmalloc.h"
 
-#include "seen_local.h"
+#include "seen.h"
 
 extern int errno;
 
