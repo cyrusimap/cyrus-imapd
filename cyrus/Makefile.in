@@ -56,7 +56,7 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
-VERSION = 2.1.5
+VERSION = 2.2.0-ALPHA
 
 all:: 
 	@for d in  $(SUBDIRS); \
