@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.25 2000/12/18 20:26:25 leg Exp $ */
+/* $Id: master.c,v 1.26 2000/12/22 20:47:10 leg Exp $ */
 
 #include <config.h>
 
@@ -69,6 +69,14 @@
 #include <arpa/inet.h>
 #include <sysexits.h>
 #include <errno.h>
+
+#ifndef INADDR_NONE
+#define INADDR_NONE 0xffffffff
+#endif
+
+#ifndef INADDR_ANY
+#define INADDR_ANY 0x00000000
+#endif
 
 #ifdef HAVE_UCDSNMP
 #include <ucd-snmp/ucd-snmp-config.h>
@@ -200,15 +208,96 @@ static struct centry *get_centry(void)
     return t;
 }
 
+/* see if 'listen' parameter has both hostname and port, or just port */
+char *parse_listen(char *listen)
+{
+    char *cp;
+    char *port = NULL;
+
+    if ((cp = strrchr(listen,']')) != NULL) {
+        /* ":port" after closing bracket for IP address? */
+        if (*cp++ != '\0' && *cp == ':') {
+            *cp++ = '\0';
+            if (*cp != '\0') {
+                port = cp;
+            } 
+        }
+    } else if ((cp = strrchr(listen,':')) != NULL) {
+        /* ":port" after hostname? */
+        *cp++ = '\0';
+        if (*cp != '\0') {
+            port = cp;
+        }
+    }
+    return port;
+}
+
+/* set sin_port accordingly. return of 0 indicates failure. */
+int resolve_port(char *port, struct service *s, struct sockaddr_in *sin)
+{
+    struct servent *serv;
+    
+    serv = getservbyname(port, s->proto);
+    if (serv) {
+        sin->sin_port = serv->s_port;
+    } else {
+        sin->sin_port = htons(atoi(port));
+        if (sin->sin_port == 0) {
+            syslog(LOG_INFO, "no service '%s' in /etc/services, "
+                   "disabling %s", port, s->name);
+            s->exec = NULL;
+            return 0;
+        }
+    }
+    return 1;
+}
+
+/* set sin_addr accordingly. return of 0 indicates failure. */
+int resolve_host(struct service *s, struct sockaddr_in *sin)
+{
+    struct hostent *hp;
+    char *cp;
+
+    /* do we have a hostname, or IP number? */
+    /* XXX are brackets necessary, like for IPv6 later? */
+    if (*s->listen == '[') {
+        s->listen++;  /* skip first bracket */
+        if ((cp = strrchr(s->listen,']')) != NULL) {
+            *cp = '\0';
+        }
+    }
+    sin->sin_addr.s_addr = inet_addr(s->listen);
+    if ((sin->sin_addr.s_addr == INADDR_NONE) || (sin->sin_addr.s_addr == 0)) {
+        /* looks like it isn't an IP address, so look up the host */
+        if ((hp = gethostbyname(s->listen)) == 0) {
+            syslog(LOG_INFO, "host not found: %s", s->listen);
+            s->exec = NULL;
+            return 0;
+        }
+        if (hp->h_addrtype != AF_INET) {
+            syslog(LOG_INFO, "unexpected address family: %d", hp->h_addrtype);
+            s->exec = NULL;
+            return 0;
+        }
+        if (hp->h_length != sizeof(sin->sin_addr)) {
+            syslog(LOG_INFO, "unexpected address length %d", hp->h_length);
+            s->exec = NULL;
+            return 0;
+        }
+        memcpy((char *) &sin->sin_addr, hp->h_addr, hp->h_length);
+    }
+    return 1;
+}
+
 void service_create(struct service *s)
 {
     struct sockaddr_in sin;
     struct sockaddr_un sunsock;
     struct sockaddr *sa;
-    struct servent *serv;
     mode_t oldumask;
     int on = 1, salen;
     int r;
+    char *port;
 
     memset(&sin, 0, sizeof(sin));
 
@@ -223,18 +312,21 @@ void service_create(struct service *s)
     } else { /* inet socket */
 	sin.sin_family = AF_INET;
 
-	serv = getservbyname(s->listen, s->proto);
-	if (serv) {
-	    sin.sin_port = serv->s_port;
-	} else {
-	    sin.sin_port = htons(atoi(s->listen));
-	    if (sin.sin_port == 0) {
-		syslog(LOG_INFO, "no service '%s' in /etc/services, "
-		       "disabling %s", s->listen, s->name);
-		s->exec = NULL;
-		return;
-	    }
-	}
+        if ((port = parse_listen(s->listen)) == NULL) {
+            /* s->listen IS the port */
+            if (!resolve_port(s->listen, s, &sin)) {
+                return;
+            }
+            sin.sin_addr.s_addr = INADDR_ANY;
+        } else {
+            /* s->listen is now just the address */
+            if (!resolve_port(port, s, &sin)) {
+                return;
+            }
+            if (!resolve_host(s, &sin)) {
+                return;
+            }
+        }
 	sa = (struct sockaddr *) &sin;
 	salen = sizeof(sin);
 
