@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.199.2.17 2005/02/28 20:45:10 ken3 Exp $
+ * $Id: index.c,v 1.199.2.18 2005/03/03 19:37:48 ken3 Exp $
  */
 #include <config.h>
 
@@ -1227,7 +1227,7 @@ index_copy(struct mailbox *mailbox,
     if (!r) append_commit(&append_mailbox, totalsize,
 			  &uidvalidity, &startuid, &num);
 
-    if (!r) sync_log_mailbox(name);
+    if (!r) sync_log_mailbox_double(mailbox->name, name);
 
     if (!r) {
 	copyuid_size = 1024;
