@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.33 1999/08/30 19:22:14 leg Exp $
+ $Id: imclient.c,v 1.34 1999/08/30 19:40:49 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -1053,6 +1053,7 @@ void interaction (sasl_interact_t *t, char *user)
 	  strncpy(result, ptr, sizeof(result));
       } else {
 	  fgets(result, sizeof(result), stdin);
+	  result[strlen(result) - 1] = '\0';
       }
 
       t->len = strlen(result);
