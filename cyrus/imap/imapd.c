@@ -1044,6 +1044,7 @@ char *name;
     c = prot_getc(imapd_in);
     if (c == '\r') c = prot_getc(imapd_in);
     if (c != '\n') {
+	if (c == EOF) return;
 	prot_printf(imapd_out, "* BAD Junk after literal in APPEND command\r\n");
 	eatline();
     }
