@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.112 1998/06/09 04:29:55 tjs Exp $
+dnl $Id: configure.in,v 1.113 1998/06/10 01:51:39 tjs Exp $
 dnl
 
 AC_INIT(imap/imapd.c)
@@ -198,21 +198,102 @@ if test $cyrus_cv_func_mmap_stupidshared = yes; then
 else
 	AC_MSG_CHECKING(for non-shared mmap)
 	AC_CACHE_VAL(cyrus_cv_func_mmap_private,AC_TRY_RUN([
+/* Verify the OS supports the memory mapping semantics needed by map_private
+ * from John Myers <jgmyers@netscape.com>
+ */
+
 #include <sys/types.h>
 #include <sys/mman.h>
 #include <fcntl.h>
-main() {int fd = open("conftestmmap", O_RDWR|O_CREAT, 0666);
-if (fd == -1) exit(1);
-if (write(fd, "test", 4) != 4) exit(1);
-if (mmap((caddr_t)0, 4, PROT_READ, MAP_PRIVATE
-#ifdef MAP_FILE
-| MAP_FILE
+
+#ifndef MAP_NORESERVE
+#define MAP_NORESERVE 0
 #endif
-#ifdef MAP_VARIABLE
-| MAP_VARIABLE
+
+/* not on Linux */
+#ifndef MAP_VARIABLE
+#define MAP_VARIABLE 0
 #endif
-, fd, 0L) == (caddr_t)-1)
- exit(1);exit(0);}
+
+fatal(char *s)
+{
+    write(2, s, strlen(s));
+    write(2, "\n", 1);
+    unlink("conftestmmap");
+    exit(1);
+}
+
+main() {
+    int fd = open("conftestmmap", O_RDWR|O_CREAT|O_TRUNC, 0666);
+    int fd2;
+    char *base_shared, *base_private, *base_private2;
+
+    if (fd == -1) fatal("cannot create test file");
+    if (write(fd, "test", 4) != 4) fatal("cannot write test file");
+    base_shared = mmap((caddr_t)0, 10000, PROT_READ,
+	     MAP_SHARED | MAP_FILE| MAP_VARIABLE,
+	     fd, 0L);
+    if (base_shared == (caddr_t)-1) fatal("cannot create shared map");
+
+    base_private = mmap((caddr_t)0, 4, PROT_READ,
+	     MAP_PRIVATE | MAP_NORESERVE | MAP_FILE| MAP_VARIABLE,
+	     fd, 0L);
+    if (base_private == (caddr_t)-1) fatal("cannot create private map");
+
+    base_private2 = mmap((caddr_t)0, 4, PROT_READ,
+	     MAP_PRIVATE | MAP_NORESERVE | MAP_FILE| MAP_VARIABLE,
+	     fd, 0L);
+    if (base_private == (caddr_t)-1) fatal("cannot create private2 map");
+
+
+    if (strncmp(base_shared, "test", 4) != 0) fatal("shared map does not match");
+    if (strncmp(base_private, "test", 4) != 0) fatal("private map does not match");
+
+    if (write(fd, "test", 4) != 4) fatal("cannot extend test file within page");
+    fsync(fd);
+    msync((caddr_t)base_shared, 10000, MS_INVALIDATE);
+
+
+    if (munmap(base_private, 4)) fatal("cannot unmap private map");
+    base_private = mmap((caddr_t)0, 8, PROT_READ,
+	     MAP_PRIVATE | MAP_NORESERVE | MAP_FILE| MAP_VARIABLE,
+	     fd, 0L);
+    if (base_private == (caddr_t)-1) fatal("cannot create private map second time");
+
+    if (strncmp(base_shared+4, "test", 4) != 0) fatal("shared map does not match within page");
+    if (strncmp(base_private+4, "test", 4) != 0) fatal("private map does not match within page");
+
+    fd2 = open("conftestmmap", O_RDWR, 0666);
+    if (lseek(fd2, 0, 0) == -1) fatal("cannot seek second fd");
+    if (write(fd2, "xyzy", 4) != 4) fatal("cannot write second fd");
+    fsync(fd2);
+
+    
+    if (munmap(base_private, 8)) fatal("cannot unmap private map");
+    base_private = mmap((caddr_t)0, 8, PROT_READ,
+	     MAP_PRIVATE | MAP_NORESERVE | MAP_FILE| MAP_VARIABLE,
+	     fd, 0L);
+    if (base_private == (caddr_t)-1) fatal("cannot create private map third time");
+    if (strncmp(base_private, "xyzy", 4) != 0) fatal("private map does not show change");
+
+
+    {
+	int i;
+	for (i = 0; i < 9000; i++) {
+	    if (write(fd, "test", 4) != 4) fatal("cannot extend test file outside page");
+	}
+    }
+    msync((caddr_t)base_shared, 10000, MS_INVALIDATE);
+    msync((caddr_t)base_private, 10000, MS_INVALIDATE);
+
+    if (strncmp(base_shared+9000, "test", 4) != 0) fatal("shared map does not match beyond page");
+#if 0
+    if (strncmp(base_private+9000, "test", 4) != 0) fatal("private map does not match beyond page");
+#endif
+	
+    unlink("conftestmmap");
+    exit(0);
+}
 ],cyrus_cv_func_mmap_private=yes,cyrus_cv_func_mmap_private=no,
 cyrus_cv_func_mmap_private=no))
 	AC_MSG_RESULT($cyrus_cv_func_mmap_private)
