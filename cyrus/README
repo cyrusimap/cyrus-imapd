@@ -1,27 +1,19 @@
-$Id: README,v 1.10.4.1 2003/02/27 18:10:08 rjs3 Exp $
+$Id: README,v 1.10.4.2 2003/06/23 13:40:14 rjs3 Exp $
 
 This is the Carnegie Mellon University Cyrus IMAP Server.
 
 This distribution is what we are running on our production servers.  
 
-The 2.1 and 2.0 releases contains many new features over 1.6.
+The 2.2, 2.1 and 2.0 releases contains many new features over 1.6.
 
 No further development work will progress on 1.6 so we encourage you
-to work with the Cyrus 2.1 code wherever possible.  Support for 1.6 is
-extremely limited.  (We only have the resources to support the latest
-release.)
-
-Version 1.6 can be found at:
-  ftp://ftp.andrew.cmu.edu/pub/cyrus-mail/cyrus-imapd-1.6.24.tar.gz
-  ftp://ftp.andrew.cmu.edu/pub/cyrus-mail/BETA/cyrus-imapd-1.6.25.tar.gz
-
-1.5 at this point is ancient; many interesting bugs have been fixed
-since then.  You should expect absolutely no support at all for that
-code base.
+to work with the Cyrus 2.2 code wherever possible.  Version 1.6
+has known security vulnerabilities, and is not supported.
 
 If you continue to install this software PLEASE be sure to read the
-documentation as a number of items have changed.  Please also refer to
-doc/bugs.html for any outstanding bugs with the current release.
+documentation (located in the doc/ subdirectory).  Many common questions
+can be answered just by carefully following the documentation.
+Please also refer to http://bugzilla.andrew.cmu.edu for any outstanding bugs.
 
 Note that CMU only provides a source distribution. If you run into
 problems with any binary distribution, please contact the source of
