@@ -239,15 +239,6 @@ sub authenticate {
   $rc;
 }
 
-# xxx should use imapurl_fromURL libcyrus calls!!!
-sub fromURL {
-  my($self,$url) = @_;
-
-  $url =~ m|[iI][mM][aA][pP]://([^/]+)/(.+)|;
-
-  return ($1, $2);
-}
-
 1;
 __END__
 
@@ -261,7 +252,10 @@ Cyrus::IMAP - Interface to Cyrus imclient library
 
   my $client = Cyrus::IMAP->new('mailhost'[, $flags]);
   $flags = Cyrus::IMAP::CONN_NONSYNCLITERAL;
+
   ($server, $mailbox) = Cyrus::IMAP->fromURL($url);
+  $url = Cyrus::IMAP->toURL($server, $mailbox);
+
   $client->setflags($flags);
   $client->clearflags(Cyrus::IMAP::CONN_INITIALRESPONSE);
   $flags = $client->flags;
@@ -326,6 +320,10 @@ anything other than C<select()>.  In particular, I/O on the file descriptor
 will almost certainly cause more problems than whatever problem you think
 you are trying to solve.
 
+The B<toURL> and B<fromURL> routines are to ease conversion between URLs and
+IMAP mailbox and server combinations, and are a simple frontend for the
+libcyrus functions of the same name.
+
 The B<imparse> library routines are not implemented, because they are little
 more than a (failed) attempt to make parsing as simple in C as it is in Perl.
 
@@ -334,9 +332,9 @@ our Perl-based account management system, and secondarily so that we can
 rewrite B<cyradm> in a sensible language instead of Tcl.  Usability for other
 purposes is not guaranteed.
 
-=head1 AUTHOR
+=head1 AUTHORs
 
-Brandon S. Allbery, allbery@ece.cmu.edu
+Brandon S. Allbery <allbery@ece.cmu.edu>, Rob Siemborski <rjs3+@andrew.cmu.edu>
 
 =head1 SEE ALSO
 

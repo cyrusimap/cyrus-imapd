@@ -1,4 +1,4 @@
- /*
+/*
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -50,6 +50,7 @@
 #include <pwd.h>
 #include "imclient.h"
 #include "cyrperl.h"
+#include "imapurl.h"
 
 typedef struct xscyrus *Cyrus_IMAP;
 
@@ -619,3 +620,63 @@ PPCODE:
 	  PUSHs(&sv_yes);
 	else
 	  PUSHs(&sv_no);
+
+void
+imclient_fromURL(client,url)
+	Cyrus_IMAP client
+	char *url
+PREINIT:
+	SV *out_server, *out_box;
+	char *server_buf, *box_buf;
+	int len;
+PPCODE:
+	len = strlen(url);
+	server_buf = safemalloc(len);
+	box_buf = safemalloc(2*len);
+
+	server_buf[0] = '\0';
+	box_buf[0] = '\0';
+	imapurl_fromURL(server_buf, box_buf, url);
+
+	if(!server_buf[0] || !box_buf[0]) {
+		safefree(server_buf);
+		safefree(box_buf);
+		XSRETURN_UNDEF;
+	}
+
+	XPUSHs(sv_2mortal(newSVpv(server_buf, 0)));
+	XPUSHs(sv_2mortal(newSVpv(box_buf, 0)));
+
+	/* newSVpv copies these */
+	safefree(server_buf);
+	safefree(box_buf);
+	
+	XSRETURN(2);
+
+void
+imclient_toURL(client,server,box)
+	Cyrus_IMAP client
+	char *server
+	char *box
+PREINIT:
+	SV *out;
+	char *out_buf;
+	int len;
+PPCODE:
+	len = strlen(server)+strlen(box);
+	out_buf = safemalloc(4*len);
+
+	out_buf[0] = '\0';
+	imapurl_toURL(out_buf, server, box);
+
+	if(!out_buf[0]) {
+		safefree(out_buf);
+		XSRETURN_UNDEF;
+	}
+
+	XPUSHs(sv_2mortal(newSVpv(out_buf, 0)));
+
+	/* newSVpv copies this */
+	safefree(out_buf);
+	
+	XSRETURN(1);
