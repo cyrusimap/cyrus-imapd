@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.144.2.14 2004/04/15 19:07:58 ken3 Exp $
+ * $Id: pop3d.c,v 1.144.2.15 2004/04/22 19:22:41 ken3 Exp $
  */
 #include <config.h>
 
@@ -999,13 +999,20 @@ static void cmd_starttls(int pop3s __attribute__((unused)))
 static void cmd_apop(char *response)
 {
     int sasl_result;
-    char *canon_user;
+    char *p, *canon_user;
 
     assert(response != NULL);
 
     if (popd_userid) {
 	prot_printf(popd_out, "-ERR [AUTH] Must give PASS command\r\n");
 	return;
+    }
+
+    /* See if we're trying to access a subfolder */
+    if (p = strchr(response, '+')) {
+	size_t n = strcspn(p, "@ ");
+	popd_subfolder = xstrndup(p, n);
+	memmove(p, p+n, strlen(p+n)+1);
     }
 
     sasl_result = sasl_checkapop(popd_saslconn,
