@@ -149,7 +149,8 @@ else
 #include <fcntl.h>
 main() {int fd = open("conftestmmap", O_RDWR|O_CREAT, 0666);
 if (fd == -1) exit(1);
-if (mmap((caddr_t)0, 100, PROT_READ, MAP_PRIVATE
+if (write(fd, "test", 4) != 4) exit(1);
+if (mmap((caddr_t)0, 4, PROT_READ, MAP_PRIVATE
 #ifdef MAP_FILE
 | MAP_FILE
 #endif
