@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.177 2002/04/11 15:30:46 ken3 Exp $
+ * $Id: index.c,v 1.178 2002/05/13 20:32:03 rjs3 Exp $
  */
 #include <config.h>
 
@@ -516,6 +516,14 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 
 /*
  * Checkpoint the user's \Seen state
+ *
+ * Format of the seenuids string:
+ *
+ * no whitespace, n:m indicates an inclusive range (n to m), otherwise
+ * list is comma separated of single messages, e.g.:
+ *
+ * 1:16239,16241:17015,17019:17096,17098,17100
+ *
  */
 #define SAVEGROW 200
 void

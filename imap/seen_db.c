@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.28 2002/03/29 00:03:57 rjs3 Exp $
+   $Id: seen_db.c,v 1.29 2002/05/13 20:32:04 rjs3 Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -544,3 +544,85 @@ int seen_reconstruct(struct mailbox *mailbox,
     return 0;
 }
 
+/* Look up the unique id in the tgt file, if it is there, compare the
+ * last change times, and ensure that the tgt database uses the newer of
+ * the two */
+static int seen_merge_cb(void *rockp,
+			 const char *key, int keylen,
+			 const char *tmpdata, int tmpdatalen) 
+{
+    int r;
+    struct db *tgt = (struct db *)rockp;
+    const char *tgtdata;
+    int tgtdatalen, dirty = 0;
+
+    if(!tgt) return IMAP_INTERNAL;
+
+    r = DB->fetch(tgt, key, keylen, &tgtdata, &tgtdatalen, NULL);
+    if(!r) {
+	/* compare timestamps */
+	int version, tmplast, tgtlast;
+	char *p, *tmp = tmpdata, *tgt = tgtdata;
+	
+	/* get version */
+	version = strtol(tgt, &p, 10); tgt = p;
+	assert(version == SEEN_VERSION);
+       	/* skip lastread */
+	strtol(tgt, &p, 10); tgt = p;
+	/* skip lastuid */
+	strtol(tgt, &p, 10); tgt = p;
+	/* get lastchange */
+	tgtlast = strtol(tgt, &p, 10);
+
+	/* get version */
+	version = strtol(tmp, &p, 10); tmp = p;
+	assert(version == SEEN_VERSION);
+       	/* skip lastread */
+	strtol(tmp, &p, 10); tmp = p;
+	/* skip lastuid */
+	strtol(tmp, &p, 10); tmp = p;
+	/* get lastchange */
+	tmplast = strtol(tmp, &p, 10);
+
+	if(tmplast > tgtlast) dirty = 1;
+    } else {
+	dirty = 1;
+    }
+    
+    if(dirty) {
+	/* write back data from new entry */
+	return DB->store(tgt, key, keylen, tmpdata, tmpdatalen, NULL);
+    } else {
+	return 0;
+    }
+}
+
+static int seen_merge_p(void *rockp __attribute__((unused)),
+			const char *key __attribute__((unused)),
+			int keylen __attribute__((unused)),
+			const char *data __attribute__((unused)),
+			int datalen __attribute__((unused)))
+{
+    return 1;
+}
+
+int seen_merge(const char *tmpfile, const char *tgtfile) 
+{
+    int r = 0;
+    struct db *tmp = NULL, *tgt = NULL;
+    
+    r = DB->open(tmpfile, &tmp);
+    if(r) goto done;
+	    
+    r = DB->open(tgtfile, &tgt);
+    if(r) goto done;
+
+    r = DB->foreach(tmp, "", 0, seen_merge_p, seen_merge_cb, tgt, NULL);
+
+ done:
+
+    if(tgt) DB->close(tgt);
+    if(tmp) DB->close(tmp);
+    
+    return r;
+}

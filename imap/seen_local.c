@@ -1,5 +1,5 @@
 /* seen_local.c -- Storage for /Recent and /Seen state on local filesystem
- $Id: seen_local.c,v 1.32 2000/05/23 20:52:31 robeson Exp $
+ $Id: seen_local.c,v 1.33 2002/05/13 20:32:04 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -773,4 +773,8 @@ int seen_done(void)
     return 0;
 }
 
-
+int seen_merge(const char *tmpfile, const char *tgtfile) 
+{
+    /* Not supported */
+    return -1;
+}

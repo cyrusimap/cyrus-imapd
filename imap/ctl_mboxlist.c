@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.33 2002/03/29 00:03:53 rjs3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.34 2002/05/13 20:32:03 rjs3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -80,9 +80,11 @@ struct dumprock {
     mupdate_handle *h;
 };
 
-static int dump_p(void *rockp,
-		  const char *key, int keylen,
-		  const char *data, int datalen)
+static int dump_p(void *rockp __attribute__((unused)),
+			const char *key __attribute__((unused)),
+			int keylen __attribute__((unused)),
+			const char *data __attribute__((unused)),
+			int datalen __attribute__((unused)))
 {
     return 1;
 }
