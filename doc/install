@@ -23,6 +23,14 @@ Upgrading From Previous Versions
 
 Upgrading from 1.6
 
+      * Upgrading from the Cyrus IMAP server version 1.6.10 or earlier: if
+        you export news via the IMAP server, you'll have to change your
+        "newsfeeds" file to contain 
+
+        collectnews!:*:Tf,WR:collectnews
+
+        The format of the input to collectnews has changed. Duplicate
+        delivery suppression is now required for Sieve. 
       * Upgrading from the Cyrus IMAP server version 1.6.1 or earlier: the
         quota and user directories are now hashed by the first character of
         the username. This is to reduce the number of entries in any given
@@ -252,12 +260,10 @@ Compiling the IMAP Server
             By default, uses "flock" if the "flock()" function exists,
             "fcntl" otherwise. 
 
-    --with-sieve=DIR 
-            Specifies which version of Sieve is used, relative to the top
-            level source directory. By default, configure searches for a
-            sieve directory under the top level source directory and uses
-            it if it finds one. Use --with-sieve=no to disable Sieve
-            support
+    --disable-sieve 
+            By default, Sieve support is enabled. Note that you need
+            duplicate delivery suppression enabled if you're going to use
+            Sieve. Use --disable-sieve to disable Sieve support
 
     --disable-cyradm 
             Do not compile the cyradm administrative client.
@@ -439,7 +445,7 @@ Configuring the IMAP Server
         crash. 
 
            cd /var/imap
-           chattr +S . user quota
+           chattr +S . user quota user/* quota/*
            chattr +S /var/spool/imap
 
         Also set the queue directory of the mail daemon to update
@@ -548,6 +554,8 @@ Configuring the IMAP Server
         to the same mailbox. Add a cron job to periodically prune the
         database of deliveries by running "/usr/cyrus/bin/deliver -E 3"
         daily as the cyrus user. 
+
+        Duplicate delivery suppression is required if you are using Sieve. 
 
         If you want to export netnews newsgroups using IMAP do the
         following: 
@@ -760,11 +768,12 @@ Performance Notes
         filesystem, make sure that you have sufficient memory/swap to do
         this. 
 
-      * /var/imap/deliverdb - If you enable duplicate delivery suprression,
+      * /var/imap/deliverdb - If you enable duplicate delivery suppression,
         each time a mail message is delivered it needs to lock the database
         and check to see if the message-id has been seen already. If you
         require really high throughput delivery, you may want to disable
-        this feature. 
+        this feature. However, disabling this feature also disables Sieve
+        support. 
 
         We run with it enabled and it doesn't significantly impact our
         performance. 
@@ -779,9 +788,9 @@ Performance Notes
         database. If you are interested in doing this work, send mail to
         cyrus-bugs+@andrew.cmu.edu. 
 
-        (at this moment in time)We have 95105 entries in our mailboxes file
-        (4.4MB). It resides on a Seagate 7200rpm Fast/Wide disk off of a
-        Sun QLGC Fast-Wide sbus card. We haven't experienced any
+        (at this moment in time) We have 95105 entries in our mailboxes
+        file (4.4MB). It resides on a Seagate 7200rpm Fast/Wide disk off of
+        a Sun QLGC Fast-Wide sbus card. We haven't experienced any
         significant problem as a result of this though there have been
         other reports. 
 
