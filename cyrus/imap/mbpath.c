@@ -1,6 +1,6 @@
 /* mbpath.c -- help the sysadmin to find the path matching the mailbox
  *
- * $Id: mbpath.c,v 1.14.2.3 2004/05/31 18:22:54 ken3 Exp $
+ * $Id: mbpath.c,v 1.14.2.4 2004/06/02 19:58:28 ken3 Exp $
  * 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -42,7 +42,7 @@
  *
  */
 
-/* static char _rcsid[] = "$Id: mbpath.c,v 1.14.2.3 2004/05/31 18:22:54 ken3 Exp $"; */
+/* static char _rcsid[] = "$Id: mbpath.c,v 1.14.2.4 2004/06/02 19:58:28 ken3 Exp $"; */
 
 #include <config.h>
 
@@ -74,6 +74,9 @@
 extern int optind;
 extern char *optarg;
 
+/* current namespace */
+static struct namespace mbpath_namespace;
+
 /* config.c stuff */
 const int config_need_data = 0;
 
@@ -93,6 +96,7 @@ main(int argc, char **argv)
   int rc, i, quiet = 0, stop_on_error=0, metadata=0;
   int opt;		/* getopt() returns an int */
   char *alt_config = NULL;
+  char buf[MAX_MAILBOX_PATH+1];
 
   while ((opt = getopt(argc, argv, "C:qsm")) != EOF) {
     switch(opt) {
@@ -116,12 +120,20 @@ main(int argc, char **argv)
 
   cyrus_init(alt_config, "mbpath", 0);
 
+  if ((rc = mboxname_init_namespace(&mbpath_namespace, 1)) != 0) {
+    fatal(error_message(rc), -1);
+  }
+
   mboxlist_init(0);
   mboxlist_open(NULL);
 
   for (i = optind; i < argc; i++) {
     (void)memset(&path, 0, sizeof(path));
-    if ((rc = mboxlist_detail(argv[i], NULL, &path, &mpath,
+
+    /* Translate mailboxname */
+    (*mbpath_namespace.mboxname_tointernal)(&mbpath_namespace, argv[i], NULL, buf);
+
+    if ((rc = mboxlist_detail(buf, NULL, &path, &mpath,
 			      NULL, NULL, NULL)) == 0) {
       if (metadata && mpath) printf("%s\n", mpath);
       else printf("%s\n", path);
@@ -147,5 +159,5 @@ main(int argc, char **argv)
   return 0;
 }
 
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/mbpath.c,v 1.14.2.3 2004/05/31 18:22:54 ken3 Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/mbpath.c,v 1.14.2.4 2004/06/02 19:58:28 ken3 Exp $ */
 

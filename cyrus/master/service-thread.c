@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service-thread.c,v 1.14.2.3 2004/02/27 21:17:41 ken3 Exp $ */
+/* $Id: service-thread.c,v 1.14.2.4 2004/06/02 19:58:29 ken3 Exp $ */
 #include <config.h>
 
 #include <stdio.h>
@@ -66,6 +66,7 @@
 #include <string.h>
 
 #include "service.h"
+#include "libconfig.h"
 #include "xmalloc.h"
 
 extern int optind;
@@ -141,7 +142,6 @@ static int libwrap_ask(struct request_info *r __attribute__((unused)),
 #endif
 
 extern void cyrus_init(const char *, const char *, unsigned);
-extern const char *config_getstring(const char *key, const char *def);
 
 #define ARGV_GROW 10
 
@@ -216,7 +216,7 @@ int main(int argc, char **argv, char **envp)
     if (call_debugger) {
 	char debugbuf[1024];
 	int ret;
-	const char *debugger = config_getstring("debug_command", NULL);
+	const char *debugger = config_getstring(IMAPOPT_DEBUG_COMMAND);
 	if (debugger) {
 	    snprintf(debugbuf, sizeof(debugbuf), debugger, 
 		     argv[0], getpid(), service);
