@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.141 2003/02/13 20:15:27 rjs3 Exp $
+ $Id: mailbox.c,v 1.142 2003/03/11 21:40:59 rjs3 Exp $
  
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -190,7 +190,7 @@ int mailbox_initialize(void)
 #define PRIME (2147484043UL)
 
 void mailbox_make_uniqueid(char *name, unsigned long uidvalidity,
-			   char *uniqueid)
+			   char *uniqueid, size_t outlen)
 {
     unsigned long hash = 0;
 
@@ -199,7 +199,7 @@ void mailbox_make_uniqueid(char *name, unsigned long uidvalidity,
 	hash += *name++;
 	hash %= PRIME;
     }
-    sprintf(uniqueid, "%08lx%08lx", hash, uidvalidity);
+    snprintf(uniqueid, outlen, "%08lx%08lx", hash, uidvalidity);
 }
 
 /*
@@ -207,11 +207,17 @@ void mailbox_make_uniqueid(char *name, unsigned long uidvalidity,
  * in 'mailbox'. 'out' must be at least MAILBOX_FNAME_LEN long.
  */
 void mailbox_message_get_fname(struct mailbox *mailbox, unsigned long uid,
-			       char *out)
+			       char *out, size_t size)
 {
+    char buf[MAILBOX_FNAME_LEN];
+	     
     assert(mailbox->format != MAILBOX_FORMAT_NETNEWS);
 
-    sprintf(out, "%lu.", uid);
+    snprintf(buf, sizeof(buf), "%lu.", uid);
+
+    assert(strlen(buf) < size);
+
+    strlcpy(out,buf,size);
 }
 
 /*
@@ -229,13 +235,22 @@ int mailbox_map_message(struct mailbox *mailbox,
     char *p = buf;
     struct stat sbuf;
 
+    buf[0]='\0';
+
     if (!iscurrentdir) {
-	strcpy(buf, mailbox->path);
+	/* 26 is max # of digits in a long + strlen("/") + strlen(".") */
+	if(strlen(mailbox->path) + 25 >= sizeof(buf)) {
+	    syslog(LOG_ERR, "IOERROR: Path too long while mapping message: %s",
+		   mailbox->path);
+	    fatal("path too long for message file", EC_OSFILE);
+	}
+
+	strlcpy(buf, mailbox->path, sizeof(buf));
 	p = buf + strlen(buf);
 	*p++ = '/';
     }
 
-    sprintf(p, "%lu.", uid);
+    snprintf(p, sizeof(buf) - strlen(buf), "%lu.", uid);
 
     msgfd = open(buf, O_RDONLY, 0666);
     if (msgfd == -1) return errno;
@@ -300,15 +315,15 @@ int mailbox_open_header_path(const char *name,
 			     struct mailbox *mailbox,
 			     int suppresslog)
 {
-    char fnamebuf[MAX_MAILBOX_PATH];
+    char fnamebuf[MAX_MAILBOX_PATH+1];
     struct stat sbuf;
     int r;
 
     zeromailbox(*mailbox);
     mailbox->quota.fd = -1;
 
-    strcpy(fnamebuf, path);
-    strcat(fnamebuf, FNAME_HEADER);
+    strlcpy(fnamebuf, path, sizeof(fnamebuf));
+    strlcat(fnamebuf, FNAME_HEADER, sizeof(fnamebuf));
     mailbox->header_fd = open(fnamebuf, O_RDWR, 0);
     
     if (mailbox->header_fd == -1 && !mailbox_doing_reconstruct) {
@@ -383,7 +398,7 @@ int mailbox_open_locked(const char *mbname,
  */
 int mailbox_open_index(struct mailbox *mailbox)
 {
-    char fnamebuf[MAX_MAILBOX_PATH];
+    char fnamebuf[MAX_MAILBOX_PATH+1];
     bit32 index_gen = 0, cache_gen = 0;
     int tries = 0;
 
@@ -396,8 +411,8 @@ int mailbox_open_index(struct mailbox *mailbox)
 	map_free(&mailbox->cache_base, &mailbox->cache_len);
     }
     do {
-	strcpy(fnamebuf, mailbox->path);
-	strcat(fnamebuf, FNAME_INDEX);
+	strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
+	strlcat(fnamebuf, FNAME_INDEX, sizeof(fnamebuf));
 	mailbox->index_fd = open(fnamebuf, O_RDWR, 0);
 	if (mailbox->index_fd != -1) {
 	    map_refresh(mailbox->index_fd, 0, &mailbox->index_base,
@@ -410,8 +425,8 @@ int mailbox_open_index(struct mailbox *mailbox)
 	    return IMAP_IOERROR;
 	}
 
-	strcpy(fnamebuf, mailbox->path);
-	strcat(fnamebuf, FNAME_CACHE);
+	strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
+	strlcat(fnamebuf, FNAME_CACHE, sizeof(fnamebuf));
 	mailbox->cache_fd = open(fnamebuf, O_RDWR, 0);
 	if (mailbox->cache_fd != -1) {
 	    struct stat sbuf;
@@ -581,7 +596,8 @@ int mailbox_read_header(struct mailbox *mailbox)
 	/* generate uniqueid */
 	mailbox_lock_header(mailbox);
  	mailbox_open_index(mailbox);
- 	mailbox_make_uniqueid(mailbox->name, mailbox->uidvalidity, buf);
+ 	mailbox_make_uniqueid(mailbox->name, mailbox->uidvalidity,
+			      buf, sizeof(buf));
 	mailbox->uniqueid = xstrdup(buf);
 	mailbox_write_header(mailbox);
 	mailbox_unlock_header(mailbox);
@@ -848,7 +864,7 @@ int
 mailbox_lock_header(mailbox)
 struct mailbox *mailbox;
 {
-    char fnamebuf[MAX_MAILBOX_PATH];
+    char fnamebuf[MAX_MAILBOX_PATH+1];
     struct stat sbuf;
     const char *lockfailaction;
     int r;
@@ -859,8 +875,8 @@ struct mailbox *mailbox;
     assert(mailbox->quota.lock_count == 0);
     assert(mailbox->seen_lock_count == 0);
 
-    strcpy(fnamebuf, mailbox->path);
-    strcat(fnamebuf, FNAME_HEADER);
+    strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
+    strlcat(fnamebuf, FNAME_HEADER, sizeof(fnamebuf));
 
     r = lock_reopen(mailbox->header_fd, fnamebuf, &sbuf, &lockfailaction);
     if (r) {
@@ -893,7 +909,7 @@ int
 mailbox_lock_index(mailbox)
 struct mailbox *mailbox;
 {
-    char fnamebuf[MAX_MAILBOX_PATH];
+    char fnamebuf[MAX_MAILBOX_PATH+1];
     struct stat sbuffd, sbuffile;
     int r;
 
@@ -902,8 +918,8 @@ struct mailbox *mailbox;
     assert(mailbox->quota.lock_count == 0);
     assert(mailbox->seen_lock_count == 0);
 
-    strcpy(fnamebuf, mailbox->path);
-    strcat(fnamebuf, FNAME_INDEX);
+    strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
+    strlcat(fnamebuf, FNAME_INDEX, sizeof(fnamebuf));
 
     /* xxx why is this not a lock_reopen() ? */
     for (;;) {
@@ -1079,18 +1095,18 @@ int mailbox_write_header(struct mailbox *mailbox)
     int newheader_fd;
     int r = 0;
     const char *quota_root;
-    char fnamebuf[MAX_MAILBOX_PATH];
-    char newfnamebuf[MAX_MAILBOX_PATH];
+    char fnamebuf[MAX_MAILBOX_PATH+1];
+    char newfnamebuf[MAX_MAILBOX_PATH+1];
     struct stat sbuf;
     struct iovec iov[10];
     int niov;
 
     assert(mailbox->header_lock_count != 0);
 
-    strcpy(fnamebuf, mailbox->path);
-    strcat(fnamebuf, FNAME_HEADER);
-    strcpy(newfnamebuf, fnamebuf);
-    strcat(newfnamebuf, ".NEW");
+    strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
+    strlcat(fnamebuf, FNAME_HEADER, sizeof(fnamebuf));
+    strlcpy(newfnamebuf, fnamebuf, sizeof(newfnamebuf));
+    strlcat(newfnamebuf, ".NEW", sizeof(newfnamebuf));
 
     newheader_fd = open(newfnamebuf, O_CREAT | O_TRUNC | O_RDWR, 0666);
     if (newheader_fd == -1) {
@@ -1342,8 +1358,9 @@ int mailbox_write_quota(struct quota *quota)
     if (!quota->root) return 0;
 
     mailbox_hash_quota(quota_path, sizeof(quota_path), quota->root);
-    strcpy(new_quota_path, quota_path);
-    strcat(new_quota_path, ".NEW");
+
+    strlcpy(new_quota_path, quota_path, sizeof(new_quota_path));
+    strlcat(new_quota_path, ".NEW", sizeof(new_quota_path));
 
     newfd = open(new_quota_path, O_CREAT | O_TRUNC | O_RDWR, 0666);
     if (newfd == -1) {
@@ -1421,7 +1438,7 @@ struct quota *quota;
  */
 static int mailbox_lock_index_for_upgrade(struct mailbox *mailbox)
 {
-    char fnamebuf[MAX_MAILBOX_PATH];
+    char fnamebuf[MAX_MAILBOX_PATH+1];
     struct stat sbuffd, sbuffile;
     int r;
 
@@ -1430,8 +1447,8 @@ static int mailbox_lock_index_for_upgrade(struct mailbox *mailbox)
     assert(mailbox->quota.lock_count == 0);
     assert(mailbox->seen_lock_count == 0);
 
-    strcpy(fnamebuf, mailbox->path);
-    strcat(fnamebuf, FNAME_INDEX);
+    strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
+    strlcat(fnamebuf, FNAME_INDEX, sizeof(fnamebuf));
 
     for (;;) {
 	r = lock_blocking(mailbox->index_fd);
@@ -1470,7 +1487,8 @@ static int mailbox_upgrade_index(struct mailbox *mailbox)
     unsigned msgno;
     bit32 oldstart_offset;
     char buf[INDEX_HEADER_SIZE];
-    char fnamebuf[MAX_MAILBOX_PATH], fnamebufnew[MAX_MAILBOX_PATH];
+    char fnamebuf[MAX_MAILBOX_PATH+1], fnamebufnew[MAX_MAILBOX_PATH+1];
+    size_t fnamebuf_len;
     FILE *newindex;
     char *fnametail;
     char *bufp;
@@ -1491,9 +1509,10 @@ static int mailbox_upgrade_index(struct mailbox *mailbox)
 	return r;
     }
 
-    strcpy(fnamebuf, mailbox->path);
-    strcat(fnamebuf, FNAME_INDEX);
-    strcat(fnamebuf, ".NEW");
+    strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
+    strlcat(fnamebuf, FNAME_INDEX, sizeof(fnamebuf));
+    strlcat(fnamebuf, ".NEW", sizeof(fnamebuf));
+
     newindex = fopen(fnamebuf, "w+");
     if (!newindex) {
 	syslog(LOG_ERR, "IOERROR: creating %s: %m", fnamebuf);
@@ -1543,11 +1562,16 @@ static int mailbox_upgrade_index(struct mailbox *mailbox)
 	goto fail;
     }
 
-    strcpy(fnamebuf, mailbox->path);
-    fnametail = fnamebuf + strlen(fnamebuf);
-    strcpy(fnametail, FNAME_INDEX);
-    strcpy(fnamebufnew, fnamebuf);
-    strcat(fnamebufnew, ".NEW");
+    strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
+
+    fnamebuf_len = strlen(fnamebuf);
+    fnametail = fnamebuf + fnamebuf_len;
+
+    strlcpy(fnametail, FNAME_INDEX, sizeof(fnamebuf) - fnamebuf_len);
+
+    strlcpy(fnamebufnew, fnamebuf, sizeof(fnamebufnew));
+    strlcat(fnamebufnew, ".NEW", sizeof(fnamebufnew));
+
     if (rename(fnamebufnew, fnamebuf)) {
 	syslog(LOG_ERR, "IOERROR: renaming index file for %s: %m",
 	       mailbox->name);
@@ -1661,7 +1685,8 @@ mailbox_decideproc_t *decideproc;
 void *deciderock;
 {
     int r, n;
-    char fnamebuf[MAX_MAILBOX_PATH], fnamebufnew[MAX_MAILBOX_PATH];
+    char fnamebuf[MAX_MAILBOX_PATH+1], fnamebufnew[MAX_MAILBOX_PATH+1];
+    size_t fnamebuf_len;
     FILE *newindex, *newcache;
     unsigned long *deleted;
     unsigned numdeleted = 0, quotadeleted = 0;
@@ -1706,9 +1731,10 @@ void *deciderock;
 		&mailbox->cache_len, mailbox->cache_size,
 		"cache", mailbox->name);
 
-    strcpy(fnamebuf, mailbox->path);
-    strcat(fnamebuf, FNAME_INDEX);
-    strcat(fnamebuf, ".NEW");
+    strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
+    strlcat(fnamebuf, FNAME_INDEX, sizeof(fnamebuf));
+    strlcat(fnamebuf, ".NEW", sizeof(fnamebuf));
+
     newindex = fopen(fnamebuf, "w+");
     if (!newindex) {
 	syslog(LOG_ERR, "IOERROR: creating %s: %m", fnamebuf);
@@ -1718,9 +1744,10 @@ void *deciderock;
 	return IMAP_IOERROR;
     }
 
-    strcpy(fnamebuf, mailbox->path);
-    strcat(fnamebuf, FNAME_CACHE);
-    strcat(fnamebuf, ".NEW");
+    strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
+    strlcat(fnamebuf, FNAME_CACHE, sizeof(fnamebuf));
+    strlcat(fnamebuf, ".NEW", sizeof(fnamebuf));
+
     newcache = fopen(fnamebuf, "w+");
     if (!newcache) {
 	syslog(LOG_ERR, "IOERROR: creating %s: %m", fnamebuf);
@@ -1878,20 +1905,27 @@ void *deciderock;
     }
     mailbox_unlock_quota(&mailbox->quota);
 
-    strcpy(fnamebuf, mailbox->path);
-    fnametail = fnamebuf + strlen(fnamebuf);
-    strcpy(fnametail, FNAME_INDEX);
-    strcpy(fnamebufnew, fnamebuf);
-    strcat(fnamebufnew, ".NEW");
+    strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
+
+    fnamebuf_len = strlen(fnamebuf);
+    fnametail = fnamebuf + fnamebuf_len;
+
+    strlcpy(fnametail, FNAME_INDEX, sizeof(fnamebuf) - fnamebuf_len);
+
+    strlcpy(fnamebufnew, fnamebuf, sizeof(fnamebufnew));
+    strlcat(fnamebufnew, ".NEW", sizeof(fnamebufnew));
+
     if (rename(fnamebufnew, fnamebuf)) {
 	syslog(LOG_ERR, "IOERROR: renaming index file for %s: %m",
 	       mailbox->name);
 	goto fail;
     }
 
-    strcpy(fnametail, FNAME_CACHE);
-    strcpy(fnamebufnew, fnamebuf);
-    strcat(fnamebufnew, ".NEW");
+    strlcpy(fnametail, FNAME_CACHE, sizeof(fnamebuf) - fnamebuf_len);
+
+    strlcpy(fnamebufnew, fnamebuf, sizeof(fnamebufnew));
+    strlcat(fnamebufnew, ".NEW", sizeof(fnamebufnew));
+
     if (rename(fnamebufnew, fnamebuf)) {
 	syslog(LOG_CRIT,
 	       "CRITICAL IOERROR: renaming cache file for %s, need to reconstruct: %m",
@@ -1935,11 +1969,14 @@ void *deciderock;
     for (msgno = 0; msgno < numdeleted; msgno++) {
 	if (iscurrentdir) {
 	    char shortfnamebuf[MAILBOX_FNAME_LEN];
-	    mailbox_message_get_fname(mailbox, deleted[msgno], shortfnamebuf);
+	    mailbox_message_get_fname(mailbox, deleted[msgno],
+				      shortfnamebuf, sizeof(shortfnamebuf));
 	    unlink(shortfnamebuf);
 	}
 	else {
-	    mailbox_message_get_fname(mailbox, deleted[msgno], fnametail);
+	    mailbox_message_get_fname(mailbox, deleted[msgno],
+				      fnametail,
+				      sizeof(fnamebuf) - strlen(fnamebuf));
 	    unlink(fnamebuf);
 	}
     }
@@ -1965,20 +2002,20 @@ void *deciderock;
 
    returns true if a quotaroot is found, 0 otherwise. 
 */
-int mailbox_findquota(char *start, const char *name)
+int mailbox_findquota(char *ret, size_t retlen, const char *name)
 {
     char quota_path[MAX_MAILBOX_PATH+1];
     char *tail;
     struct stat sbuf;
 
-    strcpy(start, name);
+    strlcpy(ret, name, retlen);
 
-    mailbox_hash_quota(quota_path, sizeof(quota_path), start);
+    mailbox_hash_quota(quota_path, sizeof(quota_path), ret);
     while (stat(quota_path, &sbuf) == -1) {
-	tail = strrchr(start, '.');
+	tail = strrchr(ret, '.');
 	if (!tail) return 0;
 	*tail = '\0';
-	mailbox_hash_quota(quota_path, sizeof(quota_path), start);
+	mailbox_hash_quota(quota_path, sizeof(quota_path), ret);
     }
     return 1;
 }
@@ -1993,9 +2030,10 @@ int mailbox_create(const char *name,
 {
     int r;
     char *p=path;
-    char quota_root[MAX_MAILBOX_PATH];
+    char quota_root[MAX_MAILBOX_PATH+1];
     int hasquota;
-    char fnamebuf[MAX_MAILBOX_PATH];
+    char fnamebuf[MAX_MAILBOX_PATH+1];
+    size_t fname_len;
     struct mailbox mailbox;
     int save_errno;
     int n;
@@ -2026,11 +2064,34 @@ int mailbox_create(const char *name,
     zeromailbox(mailbox);
     mailbox.quota.fd = -1;
 
-    hasquota = mailbox_findquota(quota_root, name);
+    hasquota = mailbox_findquota(quota_root, sizeof(quota_root), name);
 
-    strcpy(fnamebuf, path);
-    p = fnamebuf + strlen(fnamebuf);
+    /* Set up buffer */
+    strlcpy(fnamebuf, path, sizeof(fnamebuf));
+    fname_len = strlen(fnamebuf);
+    p = fnamebuf + fname_len;
+    
+    /* Bounds Check 
+     *
+     * - Do all bounds checking now, before we open anything so that we
+     *   fail as early as possible */
+    if(fname_len + strlen(FNAME_HEADER) >= sizeof(fnamebuf)) {
+	syslog(LOG_ERR, "IOERROR: Mailbox name too long (%s + %s)",
+	       fnamebuf, FNAME_HEADER);
+	return IMAP_IOERROR;
+    } else if(fname_len + strlen(FNAME_INDEX) >= sizeof(fnamebuf)) {
+	syslog(LOG_ERR, "IOERROR: Mailbox name too long (%s + %s)",
+	       fnamebuf, FNAME_INDEX);
+	return IMAP_IOERROR;
+    } else if(fname_len + strlen(FNAME_CACHE) >= sizeof(fnamebuf)) {
+	syslog(LOG_ERR, "IOERROR: Mailbox name too long (%s + %s)",
+	       fnamebuf, FNAME_CACHE);
+	return IMAP_IOERROR;
+    }
+
+    /* Concatinate */
     strcpy(p, FNAME_HEADER);
+
     mailbox.header_fd = open(fnamebuf, O_RDWR|O_TRUNC|O_CREAT, 0666);
     if (mailbox.header_fd == -1) {
 	syslog(LOG_ERR, "IOERROR: creating %s: %m", fnamebuf);
@@ -2099,9 +2160,10 @@ int mailbox_create(const char *name,
     mailbox.pop3_new_uidl = 1;
 
     if (!uniqueid) {
-	mailbox.uniqueid = xmalloc(sizeof(char) * 32);
+	size_t unique_size = sizeof(char) * 32;
+	mailbox.uniqueid = xmalloc(unique_size);
 	mailbox_make_uniqueid(mailbox.name, mailbox.uidvalidity, 
-			      mailbox.uniqueid);
+			      mailbox.uniqueid, unique_size);
     } else {
 	mailbox.uniqueid = xstrdup(uniqueid);
     }
@@ -2136,7 +2198,7 @@ int mailbox_delete(struct mailbox *mailbox, int delete_quota_root)
     int r, rquota = 0;
     DIR *dirp;
     struct dirent *f;
-    char buf[MAX_MAILBOX_PATH];
+    char buf[MAX_MAILBOX_PATH+1];
     char *tail;
     
     /* Ensure that we are locked */
@@ -2166,7 +2228,13 @@ int mailbox_delete(struct mailbox *mailbox, int delete_quota_root)
     }
 
     /* remove all files in directory */
-    strcpy(buf, mailbox->path);
+    strlcpy(buf, mailbox->path, sizeof(buf));
+
+    if(strlen(buf) >= sizeof(buf) - 1) {
+	syslog(LOG_ERR, "IOERROR: Path too long (%s)", buf);
+	fatal("path too long", EC_OSFILE);
+    }
+
     tail = buf + strlen(buf);
     *tail++ = '/';
     dirp = opendir(mailbox->path);
@@ -2181,8 +2249,14 @@ int mailbox_delete(struct mailbox *mailbox, int delete_quota_root)
 		   unlink("..").  Let's not do that. */
 		continue;
 	    }
+
+	    if(strlen(buf) + strlen(f->d_name) >= sizeof(buf)) {
+		syslog(LOG_ERR, "IOERROR: Path too long (%s + %s)",
+		       buf, f->d_name);
+		fatal("Path too long", EC_OSFILE);
+	    }
 	    strcpy(tail, f->d_name);
-	    (void) unlink(buf);
+	    unlink(buf);
 	}
 	closedir(dirp);
     }
@@ -2220,12 +2294,12 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     int r;
     unsigned int flag, msgno;
     struct index_record record;
-    char oldfname[MAX_MAILBOX_PATH], newfname[MAX_MAILBOX_PATH];
+    char oldfname[MAX_MAILBOX_PATH+1], newfname[MAX_MAILBOX_PATH+1];
+    size_t oldfname_len, newfname_len, fn_len;
     char *oldfnametail, *newfnametail;
 
     assert(oldmailbox->header_lock_count > 0
 	   && oldmailbox->index_lock_count > 0);
-    
 
     /* Create new mailbox */
     r = mailbox_create(newname, newpath, 
@@ -2271,19 +2345,54 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
 	}
     }
 
-    strcpy(oldfname, oldmailbox->path);
-    oldfnametail = oldfname + strlen(oldfname);
-    strcpy(newfname, newmailbox->path);
-    newfnametail = newfname + strlen(newfname);
+    strlcpy(oldfname, oldmailbox->path, sizeof(oldfname));
+    oldfname_len = strlen(oldfname);
+    oldfnametail = oldfname + oldfname_len;
+
+    strlcpy(newfname, newmailbox->path, sizeof(newfname));
+    newfname_len = strlen(newfname);
+    newfnametail = newfname + newfname_len;
+
+    /* Check to see if we're going to be over-long */
+    fn_len = strlen(FNAME_INDEX);
+    if(oldfname_len + fn_len > sizeof(oldfname))
+    {
+	syslog(LOG_ERR, "IOERROR: Path too long (%s + %s)",
+	       oldfname, FNAME_INDEX);
+	fatal("Path Too Long", EC_OSFILE);
+    }
+    if(newfname_len + fn_len > sizeof(newfname))
+    {
+	syslog(LOG_ERR, "IOERROR: Path too long (%s + %s)",
+	       newfname, FNAME_INDEX);
+	fatal("Path Too Long", EC_OSFILE);
+    }
+
+    fn_len = strlen(FNAME_CACHE);
+    if(oldfname_len + fn_len > sizeof(oldfname))
+    {
+	syslog(LOG_ERR, "IOERROR: Path too long (%s + %s)",
+	       oldfname, FNAME_CACHE);
+	fatal("Path Too Long", EC_OSFILE);
+    }
+    if(newfname_len + fn_len > sizeof(newfname))
+    {
+	syslog(LOG_ERR, "IOERROR: Path too long (%s + %s)",
+	       newfname, FNAME_CACHE);
+	fatal("Path Too Long", EC_OSFILE);
+    }
 
     /* Copy over index/cache files */
-    strcpy(oldfnametail, FNAME_INDEX);
-    strcpy(newfnametail, FNAME_INDEX);
+    strlcpy(oldfnametail, FNAME_INDEX, sizeof(oldfname) - oldfname_len);
+    strlcpy(newfnametail, FNAME_INDEX, sizeof(newfname) - newfname_len);
     unlink(newfname);		/* Make link() possible */
+
     r = mailbox_copyfile(oldfname, newfname);
-    strcpy(oldfnametail, FNAME_CACHE);
-    strcpy(newfnametail, FNAME_CACHE);
+
+    strlcpy(oldfnametail, FNAME_CACHE, sizeof(oldfname) - oldfname_len);
+    strlcpy(newfnametail, FNAME_CACHE, sizeof(newfname) - newfname_len);
     unlink(newfname);
+
     if (!r) r = mailbox_copyfile(oldfname, newfname);
     if (r) {
 	mailbox_close(newmailbox);
@@ -2303,8 +2412,17 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     for (msgno = 1; msgno <= oldmailbox->exists; msgno++) {
 	r = mailbox_read_index_record(oldmailbox, msgno, &record);
 	if (r) break;
-	mailbox_message_get_fname(oldmailbox, record.uid, oldfnametail);
+	mailbox_message_get_fname(oldmailbox, record.uid, oldfnametail,
+				  sizeof(oldfname) - strlen(oldfname));
+
+	if(strlen(newfname) + strlen(oldfnametail) >= sizeof(newfname)) {
+	    syslog(LOG_ERR, "IOERROR: Path too long (%s + %s)",
+		   newfname, oldfnametail);
+	    fatal("Path too long", EC_OSFILE);
+	}
+
 	strcpy(newfnametail, oldfnametail);
+
 	r = mailbox_copyfile(oldfname, newfname);
 	if (r) break;
     }
@@ -2321,7 +2439,8 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
 	for (msgno = 1; msgno <= oldmailbox->exists; msgno++) {
 	    if (mailbox_read_index_record(oldmailbox, msgno, &record))
 		continue;
-	    mailbox_message_get_fname(oldmailbox, record.uid, newfnametail);
+	    mailbox_message_get_fname(oldmailbox, record.uid, newfnametail,
+				      sizeof(newfname) - strlen(newfname));
 	    (void) unlink(newfname);
 	}
     }
@@ -2364,7 +2483,8 @@ mailbox_sync(const char *oldname, const char *oldpath, const char *oldacl,
     struct mailbox oldmailbox, newmailbox;
     unsigned int flag, oldmsgno, newmsgno;
     struct index_record oldrecord, newrecord;
-    char oldfname[MAX_MAILBOX_PATH], newfname[MAX_MAILBOX_PATH];
+    char oldfname[MAX_MAILBOX_PATH+1], newfname[MAX_MAILBOX_PATH+1];
+    size_t oldfname_len, newfname_len, fn_len;
     char *oldfnametail, *newfnametail;
 
     /* Open old mailbox and lock */
@@ -2439,12 +2559,15 @@ mailbox_sync(const char *oldname, const char *oldpath, const char *oldacl,
 	}
     }
 
-    strcpy(oldfname, oldmailbox.path);
-    strcat(oldfname, "/");
-    oldfnametail = oldfname + strlen(oldfname);
-    strcpy(newfname, newmailbox.path);
-    strcat(newfname, "/");
-    newfnametail = newfname + strlen(newfname);
+    strlcpy(oldfname, oldmailbox.path, sizeof(oldfname));
+    strlcat(oldfname, "/", sizeof(oldfname));
+    oldfname_len = strlen(oldfname);
+    oldfnametail = oldfname + oldfname_len;
+
+    strlcpy(newfname, newmailbox.path, sizeof(newfname));
+    strlcat(newfname, "/", sizeof(newfname));
+    newfname_len = strlen(newfname);
+    newfnametail = newfname + newfname_len;
 
     /*
      * Copy over new message files and delete expunged ones.
@@ -2476,7 +2599,8 @@ mailbox_sync(const char *oldname, const char *oldpath, const char *oldacl,
 		if (newrecord.uid < oldrecord.uid) {
 		    /* message expunged since last sync - delete message file */
 		    mailbox_message_get_fname(&newmailbox, newrecord.uid,
-					      newfnametail);
+					      newfnametail,
+					      sizeof(newfname) - strlen(newfname));
 		    unlink(newfname);
 		}
 	    } while ((newrecord.uid < oldrecord.uid) &&
@@ -2485,7 +2609,9 @@ mailbox_sync(const char *oldname, const char *oldpath, const char *oldacl,
 	/* we check 'exists' instead of last UID in case of empty mailbox */
 	if (newmsgno > newmailbox.exists) {
 	    /* message arrived since last sync - copy message file */
-	    mailbox_message_get_fname(&oldmailbox, oldrecord.uid, oldfnametail);
+	    mailbox_message_get_fname(&oldmailbox, oldrecord.uid,
+				      oldfnametail,
+				      sizeof(oldfname) - strlen(oldfname));
 	    strcpy(newfnametail, oldfnametail);
 	    r = mailbox_copyfile(oldfname, newfname);
 	    if (r) break;
@@ -2497,14 +2623,51 @@ mailbox_sync(const char *oldname, const char *oldpath, const char *oldacl,
 	/* Copy over index/cache files */
 	oldfnametail--;
 	newfnametail--;
-	strcpy(oldfnametail, FNAME_INDEX);
-	strcpy(newfnametail, FNAME_INDEX);
+
+	fn_len = strlen(FNAME_INDEX);
+	if((oldfname_len - 1) + fn_len > sizeof(oldfname))
+	{
+	    syslog(LOG_ERR, "IOERROR: Path too long (%s + %s)",
+		   oldfname, FNAME_INDEX);
+	    fatal("Path too long", EC_OSFILE);
+	}
+	if((newfname_len - 1) + fn_len > sizeof(oldfname))
+	{
+	    syslog(LOG_ERR, "IOERROR: Path too long (%s + %s)",
+		   newfname, FNAME_INDEX);
+	    fatal("Path too long", EC_OSFILE);
+	}
+
+	strlcpy(oldfnametail, FNAME_INDEX,
+		sizeof(oldfname) - (oldfname_len - 1));
+	strlcpy(newfnametail, FNAME_INDEX,
+	        sizeof(newfname) - (newfname_len - 1));
+
 	unlink(newfname);		/* Make link() possible */
 	r = mailbox_copyfile(oldfname, newfname);
-	strcpy(oldfnametail, FNAME_CACHE);
-	strcpy(newfnametail, FNAME_CACHE);
+
+	fn_len = strlen(FNAME_CACHE);
+	if((oldfname_len - 1) + fn_len > sizeof(oldfname))
+	{
+	    syslog(LOG_ERR, "IOERROR: Path too long (%s + %s)",
+		   oldfname, FNAME_CACHE);
+	    fatal("Path too long", EC_OSFILE);
+	}
+	if((newfname_len - 1) + fn_len > sizeof(oldfname))
+	{
+	    syslog(LOG_ERR, "IOERROR: Path too long (%s + %s)",
+		   newfname, FNAME_CACHE);
+	    fatal("Path too long", EC_OSFILE);
+	}
+
+	strlcpy(oldfnametail, FNAME_CACHE,
+		sizeof(oldfname) - (oldfname_len - 1));
+	strlcpy(newfnametail, FNAME_CACHE,
+	        sizeof(newfname) - (newfname_len - 1));
+
 	unlink(newfname);
 	if (!r) r = mailbox_copyfile(oldfname, newfname);
+
 	if (r) {
 	    mailbox_close(&newmailbox);
 	    mailbox_close(&oldmailbox);
@@ -2554,7 +2717,8 @@ mailbox_sync(const char *oldname, const char *oldpath, const char *oldacl,
 #if 0
     for (msgno = 1; msgno <= oldmailbox.exists; msgno++) {
 	if (mailbox_read_index_record(&oldmailbox, msgno, &record)) continue;
-	mailbox_message_get_fname(&oldmailbox, record.uid, newfnametail);
+	mailbox_message_get_fname(&oldmailbox, record.uid, newfnametail,
+				  sizeof(newfname) - strlen(newfname));
 	(void) unlink(newfname);
     }
 #endif
@@ -2623,7 +2787,7 @@ const char *to;
     return 0;
 }
 
-void mailbox_hash_mbox(char *buf, 
+void mailbox_hash_mbox(char *buf, size_t buf_len,
 		       const char *root,
 		       const char *name)
 {
@@ -2639,21 +2803,25 @@ void mailbox_hash_mbox(char *buf,
 	}
 	c = (char) dir_hash_c(idx);
 	
-	sprintf(buf, "%s/%c/%s", root, c, name);
+	snprintf(buf, buf_len, "%s/%c/%s", root, c, name);
     } else {
 	/* standard mailbox placement */
-	sprintf(buf, "%s/%s", root, name);
+	snprintf(buf, buf_len, "%s/%s", root, name);
     }
 
     /* change all '.'s to '/' */
-    for (p = buf + strlen(root) + 1; *p; p++) {
-	if (*p == '.') *p = '/';
+    if(strlen(root) < strlen(buf)) {
+	for (p = buf + strlen(root) + 1; *p; p++) {
+	    if (*p == '.') *p = '/';
+	}
+    } else {
+	fatal("mailbox hashed path too long", EC_OSFILE);
     }
 }
 
 /* simple hash so it's easy to find these things in the filesystem;
    our human time is worth more than efficiency */
-void mailbox_hash_quota(char *buf, unsigned size, const char *qr) {
+void mailbox_hash_quota(char *buf, size_t size, const char *qr) {
     const char *idx;
     char c;
 

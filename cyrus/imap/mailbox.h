@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- $Id: mailbox.h,v 1.73 2003/02/13 20:15:27 rjs3 Exp $
+ $Id: mailbox.h,v 1.74 2003/03/11 21:41:00 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -226,7 +226,7 @@ extern char *mailbox_message_fname(struct mailbox *mailbox,
 /* 'len(out) >= MAILBOX_FNAME_LEN' */
 extern void mailbox_message_get_fname(struct mailbox *mailbox,
 				      unsigned long uid,
-				      char *out);
+				      char *out, size_t size);
 
 extern int mailbox_map_message(struct mailbox *mailbox,
 				  int iscurrentdir,
@@ -291,9 +291,9 @@ extern int mailbox_expunge(struct mailbox *mailbox,
 			   void *deciderock);
 extern int mailbox_expungenews(struct mailbox *mailbox);
 
-extern int mailbox_findquota(char *ret, const char *name);
+extern int mailbox_findquota(char *ret, size_t retlen, const char *name);
 extern void mailbox_make_uniqueid(char *name, unsigned long uidvalidity,
-				  char *uniqueid);
+				  char *uniqueid, size_t outlen);
 
 extern int mailbox_create(const char *name, char *path,
 			  const char *acl, const char *uniqueid, int format,
@@ -315,6 +315,7 @@ extern int mailbox_sync(const char *oldname, const char *oldpath,
 			struct mailbox *mailboxp);
 
 extern int mailbox_copyfile(const char *from, const char *to);
-extern void mailbox_hash_mbox(char *buf, const char *root, const char *name);
+extern void mailbox_hash_mbox(char *buf, size_t buf_len,
+			      const char *root, const char *name);
 
 #endif /* INCLUDED_MAILBOX_H */

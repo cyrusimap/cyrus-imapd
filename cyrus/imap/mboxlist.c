@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.207 2003/02/13 20:15:27 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.208 2003/03/11 21:41:00 rjs3 Exp $
  */
 
 #include <config.h>
@@ -108,7 +108,7 @@ static int mboxlist_getpath(const char *partition, const char *name,
 {
     size_t partitionlen;
     char optionbuf[MAX_MAILBOX_NAME+1];
-    static char pathresult[MAX_MAILBOX_PATH];
+    static char pathresult[MAX_MAILBOX_PATH+1];
     const char *root;
 
     assert(partition && pathp);
@@ -125,7 +125,7 @@ static int mboxlist_getpath(const char *partition, const char *name,
     if (!root) {
 	return IMAP_PARTITION_UNKNOWN;
     }
-    mailbox_hash_mbox(pathresult, root, name);
+    mailbox_hash_mbox(pathresult, sizeof(pathresult), root, name);
 
     *pathp = pathresult;
 
@@ -636,10 +636,10 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 
  done: /* All checks compete.  Time to fish or cut bait. */
     if (!r && !(mbtype & MBTYPE_REMOTE)) {
-	char mbbuf[MAX_MAILBOX_PATH];
+	char mbbuf[MAX_MAILBOX_PATH+1];
 
 	/* Create new mailbox in the filesystem */
-	mailbox_hash_mbox(mbbuf, root, name);
+	mailbox_hash_mbox(mbbuf, sizeof(mbbuf), root, name);
 	r = mailbox_create(name, mbbuf, acl, NULL,
 			   ((mbtype & MBTYPE_NETNEWS) ?
 			    MAILBOX_FORMAT_NETNEWS :
@@ -940,7 +940,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     int partitionmove = 0;
     int mbtype;
     char *oldpath = NULL;
-    char newpath[MAX_MAILBOX_PATH];
+    char newpath[MAX_MAILBOX_PATH+1];
     int oldopen = 0, newopen = 0, newreserved = 0;
     struct mailbox oldmailbox;
     struct mailbox newmailbox;
@@ -1119,7 +1119,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     if (!r && !(mbtype & MBTYPE_REMOTE)) {
 	/* Rename the actual mailbox */
 	assert(root != NULL); /* from above */
-	mailbox_hash_mbox(newpath, root, newname);
+	mailbox_hash_mbox(newpath, sizeof(newpath), root, newname);
 	
 	r = mailbox_rename_copy(&oldmailbox, newname, newpath,
 				NULL, NULL, &newmailbox);
