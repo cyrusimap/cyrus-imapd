@@ -318,7 +318,7 @@ if test "$WITH_AUTH" = krb_pts; then
 		AFS_LIBS="$AFS_LIBS ${with_afs}/lib/afs/libaudit.a"
 	fi
 	if test -f /usr/ucblib/libucb.a; then
-		ANDREW_ADD_LIBPATH_TO("/usr/ucblib","AFS_LDFLAGS")
+		ANDREW_ADD_LIBPATH_TO(/usr/ucblib, AFS_LDFLAGS)
 		AFS_LIBS="$AFS_LIBS -lc -lucb"
 	fi
 
@@ -427,7 +427,7 @@ case "$with_tcl" in
 
   dnl hey, the user told us where it is, do the completely obvious thing!
   *) TCL_CPPFLAGS="-I${with_tcl}/include"
-     ANDREW_ADD_LIBPATH_TO("${with_tcl}", TCL_LDFLAGS)
+     ANDREW_ADD_LIBPATH_TO(${with_tcl}/lib, TCL_LDFLAGS)
      TCL_LIBS="-l${tcllib} -lm"
      ;;
 esac
@@ -463,6 +463,7 @@ case "$with_krb" in
 		;;
 	*)  if test -f ${with_krb}/lib/libdes.a; then
 		CPPFLAGS="${CPPFLAGS} -I${with_krb}/include"
+		LDFLAGS="${ld_runpath_switch}${with_krb}"
 		LIBS="${with_krb}/lib/libkrb.a ${with_krb}/lib/libdes.a ${LIBS}"
 	    else
 		AC_MSG_ERROR(The Kerberos DES library is required for Kerberos support)
@@ -524,20 +525,24 @@ if test -z "$with_com_err"; then
 	fi
 fi
 if test "${with_com_err}" = "no"; then
-	AC_MSG_WARN([com_err is required.; included version will be used.])
+	AC_MSG_WARN([com_err is required; included version will be used.])
 	with_com_err=""
 fi
 
 case "$with_com_err" in
-	# built-in et
-	""|yes) COM_ERR_LIBS="../et/libcom_err.a" COMPILE_ET="../et/compile_et" COM_ERR_LDFLAGS="" COM_ERR_CPPFLAGS=[-I${srcdir}/../et]
-	;;
-	# use whatever they told us, or whatever we found
-	*)
-	COM_ERR_LIBS="-lcom_err"
-	COM_ERR_CPPFLAGS="-I${with_com_err}"
-	ANDREW_ADD_LIBPATH("${with_com_err}")
-	COMPILE_ET="compile_et"
+  # built-in et
+  ""|yes) # use the com_err we're gonna build
+	  COM_ERR_LIBS="../et/libcom_err.a"
+	  COMPILE_ET="../et/compile_et"
+	  COM_ERR_LDFLAGS=""
+	  COM_ERR_CPPFLAGS=[-I${srcdir}/../et]
+	  PRE_SUBDIRS="et ${PRE_SUBDIRS}"
+	  ;;
+  *) # use whatever they told us, or whatever we found
+     COM_ERR_LIBS="-lcom_err"
+     COM_ERR_CPPFLAGS="-I${with_com_err}/include"
+     ANDREW_ADD_LIBPATH_TO(${with_com_err}/lib, COM_ERR_LDFLAGS)
+     COMPILE_ET="compile_et"
 esac
 AC_SUBST(COMPILE_ET)
 AC_SUBST(COM_ERR_LIBS)
