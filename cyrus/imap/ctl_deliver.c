@@ -1,5 +1,5 @@
 /* ctl_deliver.c -- Program to perform operations on duplicate delivery db
- $Id: ctl_deliver.c,v 1.13 2001/09/18 21:04:55 ken3 Exp $
+ $Id: ctl_deliver.c,v 1.14 2002/01/15 18:44:09 leg Exp $
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -55,6 +55,7 @@
 #include <com_err.h>
 #include <errno.h>
 #include <time.h>
+#include <signal.h>
 
 #include "util.h"
 #include "imapconf.h"
@@ -65,6 +66,13 @@
 void fatal(const char *message, int code)
 {
     fprintf(stderr, "fatal error: %s\n", message);
+    exit(code);
+}
+
+void shut_down(int code) __attribute__((noreturn));
+void shut_down(int code)
+{
+    duplicate_done();
     exit(code);
 }
 
@@ -91,6 +99,10 @@ main(argc, argv)
     enum { DUMP, PRUNE, RECOVER, NONE } op = NONE;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+
+    signals_set_shutdown(&shut_down);
+    signals_add_handlers();
+    signal(SIGPIPE, SIG_IGN);
 
     while ((opt = getopt(argc, argv, "C:drE:f:")) != EOF) {
 	switch (opt) {
@@ -160,4 +172,4 @@ main(argc, argv)
     return r;
 }
 
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/ctl_deliver.c,v 1.13 2001/09/18 21:04:55 ken3 Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/ctl_deliver.c,v 1.14 2002/01/15 18:44:09 leg Exp $ */
