@@ -1,30 +1,32 @@
 /* pop3d.c -- POP3 server protocol parsing
- $Id: pop3d.c,v 1.35 1998/05/15 21:49:36 neplokh Exp $
- 
- # Copyright 1998 Carnegie Mellon University
- # 
- # No warranties, either expressed or implied, are made regarding the
- # operation, use, or results of the software.
- #
- # Permission to use, copy, modify and distribute this software and its
- # documentation is hereby granted for non-commercial purposes only
- # provided that this copyright notice appears in all copies and in
- # supporting documentation.
- #
- # Permission is also granted to Internet Service Providers and others
- # entities to use the software for internal purposes.
- #
- # The distribution, modification or sale of a product which uses or is
- # based on the software, in whole or in part, for commercial purposes or
- # benefits requires specific, additional permission from:
- #
- #  Office of Technology Transfer
- #  Carnegie Mellon University
- #  5000 Forbes Avenue
- #  Pittsburgh, PA  15213-3890
- #  (412) 268-4387, fax: (412) 268-7395
- #  tech-transfer@andrew.cmu.edu
  *
+ * Copyright 1998 Carnegie Mellon University
+ * 
+ * No warranties, either expressed or implied, are made regarding the
+ * operation, use, or results of the software.
+ *
+ * Permission to use, copy, modify and distribute this software and its
+ * documentation is hereby granted for non-commercial purposes only
+ * provided that this copyright notice appears in all copies and in
+ * supporting documentation.
+ *
+ * Permission is also granted to Internet Service Providers and others
+ * entities to use the software for internal purposes.
+ *
+ * The distribution, modification or sale of a product which uses or is
+ * based on the software, in whole or in part, for commercial purposes or
+ * benefits requires specific, additional permission from:
+ *
+ *  Office of Technology Transfer
+ *  Carnegie Mellon University
+ *  5000 Forbes Avenue
+ *  Pittsburgh, PA  15213-3890
+ *  (412) 268-4387, fax: (412) 268-7395
+ *  tech-transfer@andrew.cmu.edu
+ */
+
+/*
+ * $Id: pop3d.c,v 1.36 1998/08/07 06:47:24 tjs Exp $
  */
 
 #include <stdio.h>
@@ -86,6 +88,7 @@ struct msg {
 static struct mailbox mboxstruct;
 
 static int expungedeleted();
+static void cmd_capa();
 
 main(argc, argv, envp)
 int argc;
@@ -235,7 +238,7 @@ kpop()
     strcpy(instance, "*");
     r = krb_recvauth(0L, 0, &ticket, "pop", instance,
 		     &popd_remoteaddr, (struct sockaddr_in *) NULL,
-		     &kdata, srvtab, schedule, version);
+		     &kdata, (char*) srvtab, schedule, version);
     
     if (r) {
 	prot_printf(popd_out, "-ERR Kerberos authentication failure: %s\r\n",
@@ -317,7 +320,14 @@ cmdloop()
 	    }
 	    else prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");
 	}
-	if (!popd_mailbox) {
+	else if (!strcmp(inputbuf, "capa")) {
+	    if (arg) {
+		prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");
+	    } else {
+		cmd_capa();
+	    }
+	}
+	else if (!popd_mailbox) {
 	    if (!strcmp(inputbuf, "user")) {
 		if (popd_userid) {
 		    prot_printf(popd_out, "-ERR Must give PASS command\r\n");
@@ -569,6 +579,43 @@ char *pass;
     openinbox();
 }
 
+void
+cmd_capa()
+{
+    int i;
+    int minpoll = config_getint("popminpoll", 0) * 60;
+    const char *capabilities, *next_capabilities;
+
+    prot_printf(popd_out, "+OK List of capabilities follows\r\n");
+
+    next_capabilities = login_capabilities();
+    while (next_capabilities[0]) {
+	capabilities = next_capabilities;
+	next_capabilities = strchr(capabilities+1, ' ');
+	if (!next_capabilities) {
+	    next_capabilities = capabilities + strlen(capabilities);
+	}
+	if (!strncmp(capabilities, " AUTH=", 6)) {
+	    capabilities += 6;
+	    prot_write(popd_out, capabilities,
+		       next_capabilities - capabilities);
+	    if (next_capabilities[0]) prot_putc(' ', popd_out);
+	}
+    }
+    prot_printf(popd_out, "\r\n");
+    
+    prot_printf(popd_out, "LOGIN-DELAY %d\r\n", minpoll);
+    prot_printf(popd_out, "TOP\r\n");
+    prot_printf(popd_out, "UIDL\r\n");
+    
+    prot_printf(popd_out,
+		"IMPLEMENTATION Cyrus POP3 server %s\r\n",
+		CYRUS_VERSION);
+
+    prot_printf(popd_out, ".\r\n");
+    prot_flush(popd_out);
+}
+
 cmd_auth(authtype)
 char *authtype;
 {
@@ -731,14 +778,14 @@ int openinbox()
 	mailbox_close(&mboxstruct);
 	free(popd_userid);
 	popd_userid = 0;
-	prot_printf(popd_out, "-ERR Unable to lock maildrop\r\n");
+	prot_printf(popd_out, "-ERR [IN-USE] Unable to lock maildrop\r\n");
 	return 1;
     }
 
     if ((minpoll = config_getint("popminpoll", 0)) &&
 	mboxstruct.pop3_last_login + 60*minpoll > popd_login_time) {
 	prot_printf(popd_out,
-		    "-ERR Logins must be at least %d minute%s apart\r\n",
+	    "-ERR [LOGIN-DELAY] Logins must be at least %d minute%s apart\r\n",
 		    minpoll, minpoll > 1 ? "s" : "");
 	if (!mailbox_lock_index(&mboxstruct)) {
 	    mboxstruct.pop3_last_login = popd_login_time;
