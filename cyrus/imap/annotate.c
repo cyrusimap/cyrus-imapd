@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.13 2003/02/13 20:15:23 rjs3 Exp $
+ * $Id: annotate.c,v 1.14 2003/08/14 16:20:32 rjs3 Exp $
  */
 
 #include <config.h>
@@ -148,7 +148,7 @@ void annotatemore_open(char *fname)
 	strcat(fname, FNAME_ANNOTATIONS);
     }
 
-    ret = DB->open(fname, &anndb);
+    ret = DB->open(fname, CYRUSDB_CREATE, &anndb);
     if (ret != 0) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
 	       cyrusdb_strerror(ret));

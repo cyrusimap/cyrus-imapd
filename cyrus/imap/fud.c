@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.44 2003/02/13 20:15:24 rjs3 Exp $ */
+/* $Id: fud.c,v 1.45 2003/08/14 16:20:32 rjs3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -334,21 +334,31 @@ int handle_request(const char *who, const char *name,
 	return 0;
     }
    
-    r = seen_open(&mailbox, who, &seendb);
-    if (r) {
+    r = seen_open(&mailbox, who, 0, &seendb);
+
+/* 
 	mailbox_close(&mailbox);
         send_reply(sfrom, REQ_UNK, who, name, 0, 0, 0);
 	return r;
     }
+*/
 
-    seenuids = NULL;
-    r = seen_read(seendb, &lastread, &recentuid, &lastarrived, &seenuids);
-    if (seenuids) free(seenuids);
-    seen_close(seendb);
-    if (r) {
-	mailbox_close(&mailbox);
-        send_reply(sfrom, REQ_UNK, who, name, 0, 0, 0);
-	return r;
+    if (!r) {
+	seenuids = NULL;
+	r = seen_read(seendb, &lastread, &recentuid, &lastarrived, &seenuids);
+	if (seenuids) free(seenuids);
+	seen_close(seendb);
+	if (r) {
+	    mailbox_close(&mailbox);
+	    send_reply(sfrom, REQ_UNK, who, name, 0, 0, 0);
+	    return r;
+	}
+    } else {
+	/* Fake Data -- couldn't open seen database */
+	lastread = 0;
+	recentuid = 0;
+	lastarrived = 0;
+	seenuids = "";
     }
     
     lastarrived = mailbox.last_appenddate;

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_db3.c,v 1.50 2003/06/18 22:59:16 rjs3 Exp $ */
+/* $Id: cyrusdb_db3.c,v 1.51 2003/08/14 16:20:36 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -339,10 +339,11 @@ static int myarchive(const char **fnames, const char *dirname)
     return 0;
 }
 
-static int myopen(const char *fname, struct db **ret)
+static int myopen(const char *fname, int flags, struct db **ret)
 {
     DB *db = NULL;
     int r;
+    int dbflags = (flags & CYRUSDB_CREATE) ? DB_CREATE : 0;
 
     assert(dbinit && fname && ret);
 
@@ -356,15 +357,17 @@ static int myopen(const char *fname, struct db **ret)
     /* xxx set comparator! */
 
 #if DB_VERSION_MAJOR == 4 && DB_VERSION_MINOR >= 1
-    r = db->open(db, NULL, fname, NULL, DB_BTREE, DB_CREATE | DB_AUTO_COMMIT, 0664);
+    r = db->open(db, NULL, fname, NULL, DB_BTREE, dbflags | DB_AUTO_COMMIT, 0664);
 #else
-    r = db->open(db, fname, NULL, DB_BTREE, DB_CREATE, 0664);
+    r = db->open(db, fname, NULL, DB_BTREE, dbflags, 0664);
 #endif
+
     if (r != 0) {
-	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname, db_strerror(r));
+	int level = (flags & CYRUSDB_CREATE) ? LOG_ERR : LOG_DEBUG;
+	syslog(level, "DBERROR: opening %s: %s", fname, db_strerror(r));
 	r = db->close(db, DB_NOSYNC);
         if (r != 0) {
-            syslog(LOG_ERR, "DBERROR: closing %s: %s", fname, db_strerror(r));
+            syslog(level, "DBERROR: closing %s: %s", fname, db_strerror(r));
         }
 	return CYRUSDB_IOERROR;
     }

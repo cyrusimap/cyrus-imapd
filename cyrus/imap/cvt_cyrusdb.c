@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: cvt_cyrusdb.c,v 1.9 2003/04/14 20:15:12 rjs3 Exp $
+ * $Id: cvt_cyrusdb.c,v 1.10 2003/08/14 16:20:32 rjs3 Exp $
  */
 
 #include <config.h>
@@ -200,10 +200,10 @@ int main(int argc, char *argv[])
     if(r != CYRUSDB_OK)
 	fatal("can't initialize new database", EC_TEMPFAIL);
 
-    r = DB_OLD->open(old_db, &odb);
+    r = DB_OLD->open(old_db, 0, &odb);
     if(r != CYRUSDB_OK)
 	fatal("can't open old database", EC_TEMPFAIL);
-    r = DB_NEW->open(new_db, &ndb);
+    r = DB_NEW->open(new_db, CYRUSDB_CREATE, &ndb);
     if(r != CYRUSDB_OK)
 	fatal("can't open new database", EC_TEMPFAIL);
 

@@ -93,7 +93,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.44 2003/05/29 02:06:45 rjs3 Exp $ */
+/* $Id: tls.c,v 1.45 2003/08/14 16:20:33 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -663,7 +663,7 @@ int     tls_init_serverengine(const char *ident,
 	    strlcpy(dbdir, config_dir, sizeof(dbdir));
 	    strlcat(dbdir, FNAME_TLSSESSIONS, sizeof(dbdir));
 
-	    r = DB->open(dbdir, &sessdb);
+	    r = DB->open(dbdir, CYRUSDB_CREATE, &sessdb);
 	    if (r != 0) {
 		syslog(LOG_ERR, "DBERROR: opening %s: %s",
 		       dbdir, cyrusdb_strerror(ret));
@@ -1045,7 +1045,7 @@ int tls_prune_sessions(void)
     strlcpy(dbdir, config_dir, sizeof(dbdir));
     strlcat(dbdir, FNAME_TLSSESSIONS, sizeof(dbdir));
 
-    ret = DB->open(dbdir, &sessdb);
+    ret = DB->open(dbdir, CYRUSDB_CREATE, &sessdb);
     if (ret != CYRUSDB_OK) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s",
 	       dbdir, cyrusdb_strerror(ret));

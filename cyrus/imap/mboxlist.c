@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.216 2003/08/08 23:08:52 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.217 2003/08/14 16:20:32 rjs3 Exp $
  */
 
 #include <config.h>
@@ -2344,7 +2344,7 @@ void mboxlist_open(char *fname)
 	strlcat(fname, FNAME_MBOXLIST, fname_len);
     }
 
-    ret = DB->open(fname, &mbdb);
+    ret = DB->open(fname, CYRUSDB_CREATE, &mbdb);
     if (ret != 0) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
 	       cyrusdb_strerror(ret));
@@ -2412,7 +2412,7 @@ mboxlist_opensubs(const char *userid,
 
     /* Build subscription list filename */
     subsfname = mboxlist_hash_usersubs(userid);
-    r = SUBDB->open(subsfname, ret);
+    r = SUBDB->open(subsfname, CYRUSDB_CREATE, ret);
     if (r != CYRUSDB_OK) {
 	r = IMAP_IOERROR;
     }

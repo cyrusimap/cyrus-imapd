@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: arbitron.c,v 1.28 2003/08/04 16:02:56 rjs3 Exp $ */
+/* $Id: arbitron.c,v 1.29 2003/08/14 16:20:32 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -336,7 +336,7 @@ void process_seen(const char *path)
     int r;    
     struct db *tmp = NULL;
 
-    r = DB->open(path, &tmp);
+    r = DB->open(path, 0, &tmp);
     if(r) goto done;
     
     DB->foreach(tmp, "", 0, process_user_p, process_user_cb, tmp, NULL);
@@ -382,7 +382,7 @@ void process_subs(const char *path)
     int r;    
     struct db *tmp = NULL;
 
-    r = SUBDB->open(path, &tmp);
+    r = SUBDB->open(path, 0, &tmp);
     if(r) goto done;
     
     SUBDB->foreach(tmp, "", 0, process_subs_p, process_subs_cb, NULL, NULL);

@@ -1,5 +1,5 @@
 /* seen.h -- abstract interface for /Recent and /Seen information
-   $Id: seen.h,v 1.11 2003/02/13 20:15:30 rjs3 Exp $
+   $Id: seen.h,v 1.12 2003/08/14 16:20:33 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -46,9 +46,12 @@
 
 struct seen;
 
+#define SEEN_CREATE 0x01
+
 /* get a database handle corresponding to (mailbox, user) pair */
 int seen_open(struct mailbox *mailbox, 
-	      const char *user, 
+	      const char *user,
+	      int flags,
 	      struct seen **seendbptr);
 
 /* read an entry from 'seendb' */
