@@ -951,21 +951,16 @@ checkdelivered(id, to)
 char *id, *to;
 {
 #ifdef HAVE_LIBDB
-    static int initialized = 0;
     char buf[MAX_MAILBOX_PATH];
     DBT date, delivery;
     int i;
 
-    if (!initialized) {
-	initialized++;
-
-	sprintf(buf, "%s/delivered.db", config_dir);
-	DeliveredDBptr = dbopen(buf, O_RDWR|O_CREAT, 0666, DB_HASH, NULL);
-	if (!DeliveredDBptr) {
-	    fprintf(stderr, "deliver: can't open %s: %s", buf,
-		    error_message(errno));
-	    
-	}
+    sprintf(buf, "%s/delivered.db", config_dir);
+    DeliveredDBptr = dbopen(buf, O_RDWR|O_CREAT, 0666, DB_HASH, NULL);
+    if (!DeliveredDBptr) {
+      fprintf(stderr, "deliver: can't open %s: %s", buf,
+	      error_message(errno));
+      
     }
 
     if (!DeliveredDBptr) return 0;
@@ -974,6 +969,7 @@ char *id, *to;
     delivery.data = buf;
     delivery.size = strlen(id) + strlen(to) + 1;
     i = DeliveredDBptr->get(DeliveredDBptr, &delivery, &date, 0);
+    DeliveredDBptr->close(DeliveredDBptr);
     return (i == 0);
 #else /* HAVE_LIBDB */
     static int initialized = 0;
@@ -1013,6 +1009,16 @@ char *id, *to;
     datum date, delivery;
 #endif
 
+#ifdef HAVE_LIBDB
+    sprintf(buf, "%s/delivered.db", config_dir);
+    DeliveredDBptr = dbopen(buf, O_RDWR|O_CREAT, 0666, DB_HASH, NULL);
+    if (!DeliveredDBptr) {
+      fprintf(stderr, "deliver: can't open %s: %s", buf,
+	      error_message(errno));
+      
+    }
+#endif
+
     if (!DeliveredDBptr) return;
 
     sprintf(buf, "%s/delivered.lock", config_dir);
@@ -1045,6 +1051,7 @@ char *id, *to;
       syslog(LOG_DEBUG, "deliver: delivered %s to %s at %s", id, to, datebuf);
     (void) DeliveredDBptr->put(DeliveredDBptr, &delivery, &date, 0);
     (void) DeliveredDBptr->sync(DeliveredDBptr, 0);
+    DeliveredDBptr->close(DeliveredDBptr);
 #else /* HAVE_LIBDB */
     sprintf(buf, "%s%c%s", id, '\0', to);
     delivery.dptr = buf;
@@ -1085,9 +1092,17 @@ int age;
     /* initialize database */
     checkdelivered("", "");
 
+#ifdef HAVE_LIBDB
+    sprintf(buf, "%s/delivered.db", config_dir);
+    DeliveredDBptr = dbopen(buf, O_RDWR|O_CREAT, 0666, DB_HASH, NULL);
     if (!DeliveredDBptr) {
-	return 1;
+      fprintf(stderr, "deliver: can't open %s: %s", buf,
+	      error_message(errno));
+      
     }
+#endif
+
+    if (!DeliveredDBptr) return 1;
 
     sprintf(buf, "%s/delivered.lock", config_dir);
     lockfd = open(buf, O_RDWR|O_CREAT, 0666);
