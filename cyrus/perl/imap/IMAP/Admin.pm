@@ -156,7 +156,7 @@ sub listaclmailbox {
 
 sub listmailbox {
   my ($self, $pat, $ref) = @_;
-  $ref ||= $pat;
+  $ref ||= "";
   my @info = ();
   $self->addcallback({-trigger => 'LIST',
 		      -callback => sub {
@@ -182,7 +182,7 @@ sub listmailbox {
 			push @{$d{-rock}}, [$mbox, $attrs, $sep];
 		      },
 		      -rock => \@info});
-  my ($rc, $msg) = $self->send('', '', 'LIST %s %s', $pat, $ref);
+  my ($rc, $msg) = $self->send('', '', 'LIST %s %s', $ref, $pat);
   $self->addcallback({-trigger => 'LIST'});
   if ($rc eq 'OK') {
     $self->{error} = undef;
