@@ -1,6 +1,6 @@
 /* imclient.c -- Streaming IMxP client library
  *
- * $Id: imclient.c,v 1.68 2002/03/31 06:00:54 leg Exp $
+ * $Id: imclient.c,v 1.69 2002/03/31 09:35:26 leg Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1413,7 +1413,7 @@ int imclient_authenticate(struct imclient *imclient,
 	const int *ptr;
 
 	sasl_getprop(imclient->saslconn, SASL_MAXOUTBUF, &ptr);
-	imclient->maxplain = *ptr;
+	imclient->maxplain = *ptr < IMCLIENT_BUFSIZE ? *ptr : IMCLIENT_BUFSIZE;
     }
 
     free(mlist);
