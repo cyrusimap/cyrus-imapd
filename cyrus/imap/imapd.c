@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.453 2004/01/31 17:01:59 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.454 2004/01/31 17:09:34 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -4423,13 +4423,10 @@ void cmd_setacl(const char *tag, const char *name,
  * Perform a GETQUOTA command
  */
 void
-cmd_getquota(tag, name)
-char *tag;
-char *name;
+cmd_getquota(const char *tag, const char *name)
 {
     int r;
     struct quota quota;
-    char buf[MAX_MAILBOX_PATH+1];
     char mailboxname[MAX_MAILBOX_NAME+1];
 
     if (!imapd_userisadmin) r = IMAP_PERMISSION_DENIED;
@@ -6450,7 +6447,6 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 
 	/* If needed, set an uppermost quota root */
 	if(!r) {
-	    char buf[MAX_MAILBOX_PATH+1];
 	    struct quota quota;
 	    
 	    quota.root = mailboxname;
