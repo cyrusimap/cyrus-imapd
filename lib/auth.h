@@ -27,6 +27,19 @@
  *
  */
 
-extern int auth_memberof();
-extern char *auth_canonifyid();
-extern int auth_setid();
+#ifndef INCLUDED_AUTH_H
+#define INCLUDED_AUTH_H
+
+#ifndef P
+#ifdef __STDC__
+#define P(x) x
+#else
+#define P(x) ()
+#endif
+#endif
+
+extern int auth_memberof P((const char *identifier));
+extern char *auth_canonifyid P((const char *identifier));
+extern int auth_setid P((const char *identifier, const char *cacheid));
+
+#endif /* INCLUDED_AUTH_H */

@@ -30,6 +30,7 @@
 #include <pwd.h>
 #include <grp.h>
 
+#include "auth.h"
 #include "xmalloc.h"
 
 static char auth_userid[30] = "anonymous";
@@ -45,7 +46,7 @@ static int auth_ngroups;
  *	3	User is identifer
  */
 auth_memberof(identifier)
-char *identifier;
+const char *identifier;
 {
     int i;
 
@@ -67,7 +68,7 @@ char *identifier;
  * or NULL if 'identifier' is invalid.
  */
 char *auth_canonifyid(identifier)
-char *identifier;
+const char *identifier;
 {
     static char retbuf[30];
     struct passwd *pwd;
@@ -104,8 +105,8 @@ char *identifier;
  * with.
  */
 auth_setid(identifier, cacheid)
-char *identifier;
-char *cacheid;
+const char *identifier;
+const char *cacheid;
 {
     struct passwd *pwd;
     struct group *grp;

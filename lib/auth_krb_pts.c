@@ -34,7 +34,11 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/uio.h>
+
+#include "auth.h"
 #include "auth_krb_pts.h"
+#include "xmalloc.h"
+
 #ifndef KRB_MAPNAME
 #define KRB_MAPNAME "/etc/krb.equiv"
 #endif
@@ -52,6 +56,11 @@ static char auth_realm[REALM_SZ] = "";
 static char (*auth_groups)[][PR_MAXNAMELEN]=NULL;
 static int auth_ngroups=0;
 
+static int parse_krbequiv_line P((const char *src,
+				  char *principal, char *localuser));
+char *auth_map_krbid P((const char *real_aname, const char *real_inst,
+			const char *real_realm));
+
 /*
  * Determine if the user is a member of 'identifier'
  * Returns one of:
@@ -61,7 +70,7 @@ static int auth_ngroups=0;
  *      3       User is identifer
  */
 int auth_memberof(identifier)
-char *identifier;
+const char *identifier;
 {
     int i;
     
@@ -88,7 +97,7 @@ char *identifier;
  * MAX_K_NAME_SZ.  Returns 1 on success, 0 on failure.
  */
 static int parse_krbequiv_line(src, principal, localuser)
-char *src;
+const char *src;
 char *principal;
 char *localuser;
 {
@@ -122,9 +131,9 @@ char *localuser;
  * Eventually, this may be more sophisticated than a simple file scan.
  */
 char *auth_map_krbid(real_aname, real_inst, real_realm)
-char *real_aname;
-char *real_inst;
-char *real_realm;
+const char *real_aname;
+const char *real_inst;
+const char *real_realm;
 {
     static char localuser[MAX_K_NAME_SZ + 1];
     char principal[MAX_K_NAME_SZ + 1];
@@ -197,7 +206,7 @@ char *real_realm;
  * or NULL if 'identifier' is invalid.
  */
 char *auth_canonifyid(identifier)
-char *identifier;
+const char *identifier;
 {
     static char retbuf[MAX_K_NAME_SZ+1];
     char aname[ANAME_SZ];
@@ -280,8 +289,8 @@ char *identifier;
 
 
 int auth_setid(identifier, cacheid)
-char *identifier;
-char *cacheid;
+const char *identifier;
+const char *cacheid;
 {
     DBT key, dataheader,datalist;
     char keydata[PR_MAXNAMELEN + 4]; /* or 20, whichever is greater */
