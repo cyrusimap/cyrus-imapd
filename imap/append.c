@@ -3,9 +3,10 @@
  */
 
 #include <stdio.h>
-#include <assert.h>
 
 #include <acl.h>
+#include "assert.h"
+#include "imap_err.h"
 #include "mailbox.h"
 #include "message.h"
 
@@ -36,7 +37,7 @@ long quotacheck;
 
     if ((mailbox->my_acl & aclcheck) != aclcheck) {
 	mailbox_close(mailbox);
-	return 1;		/* XXX Permission denied */
+	return IMAP_PERMISSION_DENIED;
     }
 
     r = mailbox_lock_header(mailbox);
@@ -48,7 +49,7 @@ long quotacheck;
     /* In case it changed */
     if ((mailbox->my_acl & aclcheck) != aclcheck) {
 	mailbox_close(mailbox);
-	return 1;		/* XXX Permission denied */
+	return IMAP_PERMISSION_DENIED;
     }
 
     r = mailbox_open_index(mailbox);
@@ -59,7 +60,7 @@ long quotacheck;
 
     if (mailbox->format != format) {
 	mailbox_close(mailbox);
-	return 1;		/* XXX wrong mailbox format */
+	return IMAP_MAILBOX_NOTSUPPORTED;
     }
 
     r = mailbox_lock_index(mailbox);
@@ -76,7 +77,7 @@ long quotacheck;
 
     if (mailbox->quota_limit >= 0 && quotacheck >= 0  &&
 	mailbox->quota_used + quotacheck > mailbox->quota_limit * QUOTA_UNITS) {
-	return 1;		/* XXX over quota */
+	return IMAP_QUOTA_EXCEEDED;
     }
 
     return 0;
@@ -111,7 +112,7 @@ FILE *messagefile;
     strcat(fname, message_fname(mailbox, message_index.uid));
     destfile = fopen(fname, "w+");
     if (!destfile) {
-	return 1;		/* XXX can't write file */
+	return IMAP_IOERROR;
     }
 
     fseek(mailbox->cache, 0L, 2);
