@@ -1,5 +1,5 @@
 /* namespace.c -- Namespace manipulation routines
- * $Id: namespace.c,v 1.1.2.2 2001/05/31 04:40:48 ken3 Exp $
+ * $Id: namespace.c,v 1.1.2.3 2001/06/03 23:58:16 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -43,28 +43,42 @@
 
 #include <config.h>
 
-#include "namespace.h"
+#include <string.h>
+
+#include "imapconf.h"
 #include "mboxname.h"
+#include "namespace.h"
 
 /*
  * Create namespace based on config options.
  */
 int namespace_init(struct namespace *namespace)
 {
+    const char *prefix;
+
     namespace->hier_sep = '.';
     namespace->isalt = config_getswitch("altnamespace", 0);
 
     if (namespace->isalt) {
 	/* alternate namespace */
 	strcpy(namespace->prefix[NAMESPACE_INBOX], "");
+
+	prefix = config_getstring("userprefix", "Other Users");
+	if (!prefix || strlen(prefix) == 0 ||
+	    strlen(prefix) >= MAX_NAMESPACE_PREFIX ||
+	    strchr(prefix,namespace->hier_sep) != NULL)
+	    return 0;
 	sprintf(namespace->prefix[NAMESPACE_USER], "%.*s%c",
-		MAX_NAMESPACE_PREFIX-1,
-		config_getstring("userprefix", "Other Users"),
-		namespace->hier_sep);
+		MAX_NAMESPACE_PREFIX-1, prefix, namespace->hier_sep);
+
+	prefix = config_getstring("sharedprefix", "Shared Folders");
+	if (!prefix || strlen(prefix) == 0 ||
+	    strlen(prefix) >= MAX_NAMESPACE_PREFIX ||
+	    strchr(prefix, namespace->hier_sep) != NULL ||
+	    !strncmp(namespace->prefix[NAMESPACE_USER], prefix, strlen(prefix)))
+	    return 0;
 	sprintf(namespace->prefix[NAMESPACE_SHARED], "%.*s%c",
-		MAX_NAMESPACE_PREFIX-1,
-		config_getstring("sharedprefix", "Shared Folders"),
-		namespace->hier_sep); 
+		MAX_NAMESPACE_PREFIX-1, prefix, namespace->hier_sep); 
 
 	namespace->mboxname_tointernal = mboxname_tointernal_alt;
 	namespace->mboxname_toexternal = mboxname_toexternal_alt;
@@ -82,5 +96,5 @@ int namespace_init(struct namespace *namespace)
 	namespace->mboxname_toexternal = mboxname_toexternal;
     }
 
-    return 0;
+    return 1;
 }

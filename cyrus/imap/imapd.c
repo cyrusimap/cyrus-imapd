@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.304.2.4 2001/05/31 14:46:20 ken3 Exp $ */
+/* $Id: imapd.c,v 1.304.2.5 2001/06/03 23:58:14 ken3 Exp $ */
 
 #include <config.h>
 
@@ -124,7 +124,7 @@ static struct mailbox *imapd_mailbox;
 int imapd_exists;
 
 /* current namespace */
-struct namespace imapd_namespace;
+static struct namespace imapd_namespace;
 
 static const char *monthname[] = {
     "jan", "feb", "mar", "apr", "may", "jun",
@@ -544,7 +544,10 @@ int service_main(int argc, char **argv, char **envp)
     if (imaps == 1) cmd_starttls(NULL, 1);
 
     /* Set namespace */
-    namespace_init(&imapd_namespace);
+    if (!namespace_init(&imapd_namespace)) {
+	syslog(LOG_ERR, "invalid namespace prefix in configuration file");
+	fatal("invalid namespace prefix in configuration file", EC_CONFIG);
+    }
 
     snmp_increment(TOTAL_CONNECTIONS, 1);
     snmp_increment(ACTIVE_CONNECTIONS, 1);
