@@ -540,8 +540,9 @@ SSL_SESSION *get_session_cb(SSL *ssl, unsigned char *id, int idlen, int *copy)
 	for (i = 0; i < idlen; i++)
 	    sprintf(idstr+i*2, "%02X", id[i]);
 
-	syslog(LOG_DEBUG, "get TLS session: id=%s, status=%s",
-	       idstr, !data ? "not found" : expire < now ? "expired" : "ok");
+	syslog(LOG_DEBUG, "get TLS session: id=%s, expire=%s, status=%s",
+	       idstr, ctime(&expire),
+	       !data ? "not found" : expire < now ? "expired" : "ok");
     }
 
     *copy = 0;
@@ -567,7 +568,7 @@ int find_cb(void *rock, const char *id, int idlen, const char *data, int len)
     DB->delete((struct db *) rock, id, idlen, NULL);
 
     /* log this transaction */
-    if (var_imapd_tls_loglevel >= 0) {
+    if (var_imapd_tls_loglevel > 0) {
 	int i;
 	char idstr[SSL_MAX_SSL_SESSION_ID_LENGTH*2 + 1];
 	for (i = 0; i < idlen; i++)
