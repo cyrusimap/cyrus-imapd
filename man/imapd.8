@@ -41,6 +41,15 @@ reads its configuration options out of the
 .IR imapd.conf (5)
 file.
 .PP
+If the file
+msg/shutdown
+is created under the directory specified in the
+.I configdirectory
+configuration option, then
+.I imapd
+will shut down the connection, sending the first line contained in the
+file to the client as the reason.
+.PP
 If the directory
 .RI log/ user
 exists under the directory specified in the
