@@ -1,5 +1,5 @@
 /* sieve_interface.h -- interface for deliver
- * $Id: sieve_interface.h,v 1.7 2000/01/28 22:09:56 leg Exp $
+ * $Id: sieve_interface.h,v 1.8 2000/02/03 06:51:11 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -55,13 +55,11 @@ typedef int sieve_get_header(void *message_context, char *header,
 typedef int sieve_get_envelope(void *message_context, char *field,
 			       char ***contents);
 
-typedef int sieve_notify_callback(char *priority, 
-				 char *method, 
-				 char *message, 
-				 char **headers,
-				 void *interp_context, 
-				 void *script_context,
-				 void *message_context);
+typedef int sieve_notify_callback(const char *priority,
+				  char *message, 
+				  void *interp_context,
+				  void *script_context,
+				  void *message_context);
 
 typedef struct sieve_vacation {
     int min_response;		/* 0 -> defaults to 3 */
@@ -98,6 +96,7 @@ int sieve_register_addflag(sieve_interp_t *interp, sieve_callback *f);
 int sieve_register_removeflag(sieve_interp_t *interp, sieve_callback *f);
 int sieve_register_mark(sieve_interp_t *interp, sieve_callback *f);
 int sieve_register_unmark(sieve_interp_t *interp, sieve_callback *f);
+int sieve_register_notify(sieve_interp_t *interp, sieve_notify_callback *f);
 
 /* add the callbacks for messages. again, undefined if used after
    sieve_script_parse */
@@ -119,5 +118,7 @@ int sieve_script_free(sieve_script_t **s);
 int sieve_execute_script(sieve_script_t *script, 
 			 void *message_context);
 
+/* Get space seperated list of extensions supported by the implementation */
+const char *sieve_listextensions(void);
 
 #endif

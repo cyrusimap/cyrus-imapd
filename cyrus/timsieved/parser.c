@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.3 2000/01/28 22:09:57 leg Exp $
+ * $Id: parser.c,v 1.4 2000/02/03 06:51:12 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -120,6 +120,42 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
     
     break;
 
+  case CAPABILITY:
+      capabilities(sieved_out, sieved_saslconn);
+      break;
+
+  case HAVESPACE:
+      if (timlex(NULL, sieved_in)!=SPACE)
+      {
+	  error_msg = "SPACE must occur after PUTSCRIPT";
+	  goto error;
+      }
+      
+      if (timlex(&sieve_name, sieved_in)!=STRING)
+      {
+	  error_msg = "Did not specify script name";
+	  goto error;
+      }
+      
+      if (timlex(NULL, sieved_in)!=SPACE)
+      {
+	  error_msg = "Expected SPACE";
+	  goto error;
+      }
+      
+      if (timlex(NULL, sieved_in)!=EOL)
+      {
+	  error_msg = "Garbage after logout command";
+	  goto error;
+      }
+
+      if (timlex(NULL, sieved_in)!=EOL)
+      {
+	  error_msg = "Garbage after logout command";
+	  goto error;
+      }
+      /* abcd */
+      break;
 
   case LOGOUT:
     if (timlex(NULL, sieved_in)!=EOL)

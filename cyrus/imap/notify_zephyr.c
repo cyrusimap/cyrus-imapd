@@ -1,5 +1,5 @@
 /* notify_zephyr.c -- Module to notify of new mail via zephyr
- $Id: notify_zephyr.c,v 1.18 2000/02/02 02:34:44 tmartin Exp $
+ $Id: notify_zephyr.c,v 1.19 2000/02/03 06:51:09 tmartin Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -54,13 +54,11 @@ int notify_wantheader()
     return 1;
 }
 
-void notify(char *priority,
-	    char *folder,
-	    char *user,	    
-	    char *message,
-	    char **headers,
-	    char *actions_taken)
-
+void notify(char *class,
+	    char *instance,
+	    char *user,
+	    char *mailbox,
+	    char *message)
 {
     ZNotice_t notice;
     int retval;
@@ -68,10 +66,9 @@ void notify(char *priority,
     char *msgbody;
     char *lines[2];
     char *mykrbhost = 0;
-    char *instance = "INBOX";
     int lup;
 
-    if (folder) instance = folder;
+    if (!instance) instance = "INBOX";
   
     if ((retval = ZInitialize()) != ZERR_NONE) {
 	syslog(LOG_ERR, "IOERROR: cannot initialize zephyr: %m");
@@ -94,31 +91,17 @@ void notify(char *priority,
 
     strcpy(msgbody,"");
 
+    if (mailbox)
+    {
+	snprintf(msgbody,900, "You have new mail in %s\n\n",mailbox);
+    }
+
     if (message)
     {
 	strcat(msgbody,message);
 	strcat(msgbody,"\n");
     }
 
-    if (headers)
-    {
-	strcat(msgbody,"\n");
-	for (lup=0; headers[lup]!=NULL;lup+=2)
-	{
-	    headers[lup][0] = toupper(headers[lup][0]);
-	    strcat(msgbody,headers[lup]);
-	    strcat(msgbody,": ");
-	    strcat(msgbody,headers[lup+1]);
-	    strcat(msgbody,"\n");
-	}
-    }
-
-    if (actions_taken)
-    {
-	strcat(msgbody,"\nAction(s) taken for this message:\n");
-	strcat(msgbody,actions_taken);
-    }
-    
     (void) sprintf(mysender, "imap%s%s@%s",
 		   mykrbhost ? "." : "",
 		   mykrbhost ? mykrbhost : "",

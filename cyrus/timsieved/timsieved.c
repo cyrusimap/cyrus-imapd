@@ -82,17 +82,7 @@ void cmdloop()
 
   chdir("/tmp/");
 
-  prot_printf(sieved_out, "\"" SIEVED_IDENT " " SIEVED_VERSION "\"");
-
-  if (sasl_listmech(sieved_saslconn, NULL, 
-		    " \"SASL={", ", ", "}\"",
-		    &sasllist,
-		    NULL, &mechcount) == SASL_OK && mechcount > 0)
-    {
-      prot_printf(sieved_out,"%s",sasllist);
-    }
-    
-  prot_printf(sieved_out,"\r\n");
+  capabilities(sieved_out, sieved_saslconn);
 
   /* initialize lexer */
   lex_init();

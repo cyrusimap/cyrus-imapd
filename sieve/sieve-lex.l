@@ -87,6 +87,9 @@ CRLF		(\r\n|\r|\n)
 <INITIAL>unmark               return UNMARK;
 <INITIAL>notify       return NOTIFY;
 <INITIAL>denotify     return DENOTIFY;
+<INITIAL>:low         return LOW;
+<INITIAL>:medium      return MEDIUM;
+<INITIAL>:high        return HIGH;
 <INITIAL>vacation	return VACATION;
 <INITIAL>:days		return DAYS;
 <INITIAL>:addresses	return ADDRESSES;

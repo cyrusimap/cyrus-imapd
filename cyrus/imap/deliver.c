@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.129 2000/02/02 02:34:43 tmartin Exp $
+ * $Id: deliver.c,v 1.130 2000/02/03 06:51:05 tmartin Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.129 2000/02/02 02:34:43 tmartin Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.130 2000/02/03 06:51:05 tmartin Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -105,32 +105,13 @@ typedef struct address_data {
     char *all;
 } address_data_t;
 
-typedef struct notify_data {
-
-    char *priority;
-    char *method;
-    char *message;
-    char **headers;
-
-} notify_data_t;
-
-typedef struct notify_list {
-
-    notify_data_t data;
-    
-    struct notify_list *next;
-} notify_list_t;
-
 typedef struct message_data {
     struct protstream *data;	/* message in temp file */
     struct stagemsg *stage;	/* staging location for single instance
 				   store */
 
     FILE *f;
-    notify_list_t *notify_list; /* list of notifications to preform */
     char *notifyheader;
-    char actions_string[500];
-    char lastaction[100];
     char *id;			/* message id */
     int size;			/* size of message */
 
@@ -786,7 +767,8 @@ static int getheader(void *v, char *head, char ***body)
 
     h = head;
     while (*h != '\0') {
-	*h = tolower(*h);
+	if (isupper(*h))
+	    *h = tolower(*h);
 	h++;
     }
 
@@ -1005,16 +987,6 @@ int send_forward(char *forwardto, char *return_path, struct protstream *file)
     return (i == 0 ? SIEVE_OK : SIEVE_FAIL); /* sendmail exit value */
 }
 
-static void append_string(char *str, message_data_t *m)
-{
-    int curlen = strlen(m->actions_string);
-    int newlen = strlen(str);
-
-    if ( curlen + newlen >= sizeof(m->actions_string))
-	return;
-    
-    strcat(m->actions_string, str);
-}
 
 static
 int sieve_redirect(char *addr, void *ic, void *sc, void *mc)
@@ -1023,11 +995,8 @@ int sieve_redirect(char *addr, void *ic, void *sc, void *mc)
     message_data_t *md = (message_data_t *) mc;
 
     if (send_forward(addr, md->return_path, md->data) == 0) {
-	append_string("Redirected ",md);
-	snprintf(md->lastaction,sizeof(md->lastaction),"Redirected");
 	return SIEVE_OK;
     } else {
-	append_string("Redirection failure ",md);
 	return SIEVE_FAIL;
     }
 }
@@ -1039,8 +1008,6 @@ int sieve_discard(char *arg, void *ic, void *sc, void *mc)
     message_data_t *md = (message_data_t *) mc;
 
     /* ok, we won't file it */
-    append_string("Discarded ",md);
-    snprintf(md->lastaction,sizeof(md->lastaction),"Discarded");
     return SIEVE_OK;
 }
 
@@ -1054,7 +1021,6 @@ int sieve_reject(char *msg, void *ic, void *sc, void *mc)
     char *origreceip;
 
     if (md->return_path == NULL) {
-	append_string("Reject failed because of no return path ",md);
 	/* return message to who?!? */
 	return SIEVE_FAIL;
     }
@@ -1068,13 +1034,8 @@ int sieve_reject(char *msg, void *ic, void *sc, void *mc)
 
     if (send_rejection(md->id, md->return_path, origreceip, sd->username,
 		       msg, md->data) == 0) {
-	append_string("Rejected ",md);
-
-	snprintf(md->lastaction,sizeof(md->lastaction),"Rejected");
-
 	return SIEVE_OK;
     } else {
-	append_string("Rejection failed ",md);
 	return SIEVE_FAIL;
     }
 }
@@ -1094,19 +1055,12 @@ int sieve_fileinto(char *mailbox, void *ic, void *sc, void *mc)
     ret = deliver_mailbox(md->data, &md->stage, md->size,
 			  sd->flag, sd->nflags,
                           sd->username, sd->authstate, md->id,
-                          sd->username,
+                          sd->username, md->notifyheader,
                           mailbox, dop->quotaoverride, 0);
 
     if (ret == 0) {
-	append_string("Filed into ",md);
-	append_string(mailbox,md);
-	append_string(" ",md);
-
-	snprintf(md->lastaction,sizeof(md->lastaction),"%s",mailbox);
-
 	return SIEVE_OK;
     } else {
-	append_string("Fileinto failed ",md);
 	return SIEVE_FAIL;
     }
 }
@@ -1127,7 +1081,7 @@ int sieve_keep(char *arg, void *ic, void *sc, void *mc)
 	ret = deliver_mailbox(md->data, &md->stage, md->size,
 			      sd->flag, sd->nflags,
 			      dop->authuser, dop->authstate, md->id,
-			      sd->username,
+			      sd->username, md->notifyheader,
 			      namebuf, dop->quotaoverride, 0);
     }
     if (ret) {
@@ -1139,16 +1093,13 @@ int sieve_keep(char *arg, void *ic, void *sc, void *mc)
 
 	ret = deliver_mailbox(md->data, &md->stage, md->size, sd->flag, sd->nflags,
 			      sd->username, sd->authstate, md->id,
-			      sd->username,
+			      sd->username, md->notifyheader,
 			      namebuf, dop->quotaoverride, 1);
     }
 
     if (ret == 0) {	
-	append_string("Kept ",md);
-	snprintf(md->lastaction,sizeof(md->lastaction),"%s",namebuf);
 	return SIEVE_OK;
     } else {
-	append_string("Keep failed ",md);
 	return SIEVE_FAIL;
     }
 }
@@ -1248,33 +1199,19 @@ int sieve_unmark(char *arg, void *ic, void *sc, void *mc)
     return sieve_removeflag("\\flagged", ic, sc, mc);
 }
 
-static int sieve_notify(char *priority, 
-			char *method, 
+static int sieve_notify(const char *priority, 
 			char *message, 
-			char **headers,
 			void *interp_context, 
 			void *script_context,
 			void *mc)
 {
-    message_data_t *m = (message_data_t *) mc;
+    script_data_t *sd = (script_data_t *) script_context;
 
-    notify_list_t *nlist = xmalloc(sizeof(notify_list_t));
-    
-    /* fill in data item */
-    nlist->data.priority = priority;
-    nlist->data.method   = method;
-    nlist->data.message  = message;
-    nlist->data.headers  = headers;
-
-    nlist->next = NULL;
-
-    /* add to the beggining of the list */
-    if (m->notify_list == NULL) {
-	m->notify_list = nlist;
-    } else {
-	nlist->next = m->notify_list;
-	m->notify_list = nlist;
-    }
+    notify("SIEVE",
+	   priority,
+	   sd->username,
+	   NULL,
+	   message);
     
     return SIEVE_OK;
 }
@@ -1664,9 +1601,7 @@ int msg_new(message_data_t **m)
     ret->data = NULL;
     ret->stage = NULL;
     ret->f = NULL;
-    ret->notify_list = NULL;
-    ret->actions_string[0]='\0';
-    ret->lastaction[0]='\0';
+    ret->notifyheader = NULL;
     ret->id = NULL;
     ret->size = 0;
     ret->return_path = NULL;
@@ -1682,22 +1617,6 @@ int msg_new(message_data_t **m)
     return 0;
 }
 
-void notifydata_free(notify_data_t *data)
-{
-    if (data->priority) free(data->priority);
-    if (data->method) free(data->method);
-    if (data->message) free(data->message);
-    if (data->headers)
-    {
-	int lup;
-	for (lup = 0; data->headers[lup]!=NULL; lup++)
-	    free( data->headers[lup] );
-
-	free(data->headers);
-    }
-
-}
-
 void msg_free(message_data_t *m)
 {
     int i;
@@ -1711,17 +1630,8 @@ void msg_free(message_data_t *m)
     if (m->stage) {
 	append_removestage(m->stage);
     }
-    if (m->notify_list) {
-	/* abcd */
-	notify_list_t *tofree, *lis = m->notify_list;
-
-	while (lis!=NULL)
-	{	    
-	    tofree = lis;
-	    lis=lis->next;
-	    notifydata_free(&(tofree->data));
-	}
-    }
+    if (m->notifyheader)
+	free(m->notifyheader);
     if (m->id) {
 	free(m->id);
     }
@@ -2190,6 +2100,39 @@ savemsg(message_data_t *m, int lmtpmode)
 	m->id = NULL;		/* no message-id */
     }
 
+    /* figure out notifyheader */
+    strcpy(buf, "from"), getheader((void *) m, buf, &frombody);
+    strcpy(buf, "subject"), getheader((void *) m, buf, &subjbody);
+    strcpy(buf, "to"), getheader((void *) m, buf, &tobody);
+
+    sl = 0;
+    if (frombody) for (i = 0; frombody[i] != NULL; i++) {
+	sl += strlen(frombody[i]) + 10;
+    }
+    if (subjbody) for (i = 0; subjbody[i] != NULL; i++) {
+	sl += strlen(subjbody[i]) + 13;
+    }
+    if (tobody) for (i = 0; tobody[i] != NULL; i++) {
+	sl += strlen(tobody[i]) + 8;
+    }
+    m->notifyheader = (char *) malloc(sizeof(char) * (sl + 50));
+    m->notifyheader[0] = '\0';
+    if (frombody) for (i = 0; frombody[i] != NULL; i++) {
+	strcat(m->notifyheader, "From: ");
+	strcat(m->notifyheader, frombody[i]);
+	strcat(m->notifyheader, "\n");
+    }
+    if (subjbody) for (i = 0; subjbody[i] != NULL; i++) {
+	strcat(m->notifyheader, "Subject: ");
+	strcat(m->notifyheader, subjbody[i]);
+	strcat(m->notifyheader, "\n");
+    }
+    if (tobody) for (i = 0; tobody[i] != NULL; i++) {
+	strcat(m->notifyheader, "To: ");
+	strcat(m->notifyheader, tobody[i]);
+	strcat(m->notifyheader, "\n");
+    }
+
     if (!m->return_path &&
 	(strcpy(buf, "return-path"),
 	 getheader((void *) m, buf, &body) == SIEVE_OK)) {
@@ -2379,6 +2322,7 @@ int deliver_mailbox(struct protstream *msg,
 		    struct auth_state *authstate,
 		    char *id,
 		    char *user,
+		    char *notifyheader,
 		    char *mailboxname,
 		    int quotaoverride,
 		    int acloverride)
@@ -2423,30 +2367,16 @@ int deliver_mailbox(struct protstream *msg,
 	mailbox_close(&mailbox);
     }
 
+    if (!r && user) {
+	/* do we want to replace user.XXX with INBOX? */
+
+	notify("MAIL", mailboxname, user, mailboxname, notifyheader ? notifyheader : "");
+    }
+
     if (!r && dupelim && id) duplicate_mark(id, strlen(id), 
 					    namebuf, strlen(namebuf),
 					    now);
-    
     return r;
-}
-
-int deliver_notifications(message_data_t *msgdata, script_data_t *sd)
-{
-    notify_list_t *nlist = msgdata->notify_list;
-
-    while (nlist!=NULL)
-    {
-	if (strcmp(nlist->data.priority,"none")!=0)
-	    notify(nlist->data.priority,
-		   msgdata->lastaction,
-		   sd->username,
-		   nlist->data.message,
-		   nlist->data.headers,
-		   msgdata->actions_string);
-		   
-	
-	nlist=nlist->next;
-    }
 }
 
 #ifdef USE_SIEVE
@@ -2547,8 +2477,6 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 		if (r != SIEVE_OK) {
 		    syslog(LOG_INFO, "sieve runtime error for %s id %s",
 			   user, msgdata->id ? msgdata->id : "(null)");
-		} else {
-		    deliver_notifications(msgdata, sdata);
 		}
 	    }
 
@@ -2587,7 +2515,7 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 				    msgdata->size, 
 				    flag, nflags, 
 				    delopts->authuser, delopts->authstate,
-				    msgdata->id, user,
+				    msgdata->id, user, msgdata->notifyheader,
 				    namebuf, delopts->quotaoverride, 0);
 	    }
 	    if (r) {
@@ -2599,16 +2527,9 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 				    msgdata->size, 
 				    flag, nflags, 
 				    delopts->authuser, delopts->authstate,
-				    msgdata->id, user,
+				    msgdata->id, user, msgdata->notifyheader,
 				    namebuf, delopts->quotaoverride, 1);
 	    }
-	    if (!r) {
-		/* give notification */
-
-		notify("medium",namebuf, user,
-		       msgdata->notifyheader, NULL, NULL);
-	    }
-
 	}
     }
     else if (mailboxname) {
@@ -2617,7 +2538,7 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 			    msgdata->size, 
 			    flag, nflags, 
 			    delopts->authuser, delopts->authstate,
-			    msgdata->id, user,
+			    msgdata->id, user, msgdata->notifyheader,
 			    mailboxname, delopts->quotaoverride, 0);
     }
     else {

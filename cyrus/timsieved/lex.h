@@ -1,7 +1,7 @@
 /* lex.h -- lexer for timsieved
  * Tim Martin
  * 9/21/99
- * $Id: lex.h,v 1.6 2000/01/28 22:09:56 leg Exp $
+ * $Id: lex.h,v 1.7 2000/02/03 06:51:12 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -51,13 +51,17 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 /* these must be above 255 */
 #define EOL          300
 #define STRING       301
-#define AUTHENTICATE 302
-#define LOGOUT       304
-#define GETSCRIPT    305
-#define PUTSCRIPT    306
-#define SETACTIVE    307
-#define LISTSCRIPTS  308
-#define DELETESCRIPT 309
+#define NUMBER       302
+
+#define AUTHENTICATE 400
+#define LOGOUT       401
+#define GETSCRIPT    402
+#define PUTSCRIPT    403
+#define SETACTIVE    404
+#define LISTSCRIPTS  405
+#define DELETESCRIPT 406
+#define CAPABILITY   407
+#define HAVESPACE    408
 
 
 int lex_init(void);

@@ -1,6 +1,6 @@
 /* message.h
  * Larry Greenfield
- * $Id: message.h,v 1.4 2000/01/28 22:09:55 leg Exp $
+ * $Id: message.h,v 1.5 2000/02/03 06:51:10 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -27,6 +27,8 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #ifndef MESSAGE_H
 #define MESSAGE_H
+
+#include "tree.h" /* for stringlist_t */
 
 typedef struct Action action_list_t;
 
@@ -78,12 +80,6 @@ struct Action {
 	struct {
 	    char *flag;
 	} fla;
-	struct {
-	    char *priority;
-	    char *method;
-	    char *message;
-	    char **headers;
-	} not;
     } u;
     char *param;		/* freed! */
     struct Action *next;
@@ -91,6 +87,16 @@ struct Action {
     char *vac_msg;
     int vac_days;
 };
+
+typedef struct notify_action_s {
+
+    int exists; /* 0 = no 1 = yes */
+
+    const char *priority;
+    char *message;
+    stringlist_t *headers;
+
+} notify_action_t;
 
 /* header parsing */
 typedef enum {
@@ -102,6 +108,7 @@ typedef enum {
 int parse_address(char *header, void **data, void **marker);
 char *get_address(address_part_t addrpart, void **data, void **marker);
 int free_address(void **data, void **marker);
+notify_action_t *default_notify_action(void);
 
 /* actions; return negative on failure.
  * these don't actually perform the actions, they just add it to the

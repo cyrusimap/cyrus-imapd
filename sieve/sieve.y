@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.6 2000/01/28 22:09:56 leg Exp $
+ * $Id: sieve.y,v 1.7 2000/02/03 06:51:11 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -107,6 +107,7 @@ extern int yylex(void);
 %token ANYOF ALLOF EXISTS FALSE TRUE HEADER NOT SIZE ADDRESS ENVELOPE
 %token COMPARATOR IS CONTAINS MATCHES REGEX OVER UNDER ALL LOCALPART DOMAIN
 %token DAYS ADDRESSES SUBJECT MIME
+%token LOW MEDIUM HIGH
 
 %type <cl> commands command action elsif block
 %type <sl> stringlist strings
@@ -117,6 +118,7 @@ extern int yylex(void);
 %type <aetag> aetags
 %type <vtag> vtags
 %type <sl> optional_headers
+%type <sval> priority
 
 %%
 
@@ -216,22 +218,17 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
                                     }
                                   $$ = new_command(UNMARK); }
 
-         | NOTIFY STRING STRING STRING optional_headers
+         | NOTIFY priority STRING optional_headers
                                     {
 					if (!parse_script->support.notify) {
 					    yyerror("notify not required");
 					    YYERROR;
 					}
 
-					if (!verify_priority($2)) {
-					    YYERROR; /* vf should call yyerror() */ 
-					}
-					/* xxx verify method? */										
 					$$ = new_command(NOTIFY); 
 					$$->u.n.priority = $2;
-					$$->u.n.method = $3;
-					$$->u.n.message = $4;
-					$$->u.n.headers_list = $5;
+					$$->u.n.message = $3;
+					$$->u.n.headers_list = $4;
 				    }
          | DENOTIFY               { if (!parse_script->support.notify) {
                                     yyerror("notify not required");
@@ -241,18 +238,13 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
 
 	;
 
-optional_headers: /* empty */ { stringlist_t *sl;
-	                        char *subj = xmalloc(8);
-                                char *from = xmalloc(5);
-				char *to   = xmalloc(3);
-				strcpy(subj,"subject");
-				strcpy(from,"from");
-				strcpy(to,"to");
-	                        
-				sl = new_sl(subj,NULL);
-                                if (sl!=NULL) sl = new_sl(from,sl);
-				if (sl!=NULL) sl = new_sl(to,sl);
-				$$ = sl;
+priority: LOW    { $$ = "low"; }
+        | MEDIUM { $$ = "medium"; }
+        | HIGH { $$ = "high"; }
+        ;
+
+optional_headers: /* empty */ { 	                        
+				$$ = NULL;
 	                      }
                  | stringlist { $$ = $1; }
                  ;
