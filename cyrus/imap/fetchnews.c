@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: fetchnews.c,v 1.1.2.5 2002/11/15 21:46:56 rjs3 Exp $
+ * $Id: fetchnews.c,v 1.1.2.6 2002/11/17 16:01:42 ken3 Exp $
  */
 
 #include <config.h>
@@ -58,9 +58,9 @@
 #include <arpa/inet.h>
 #include <sys/un.h>
 
-#include "prot.h"
-#include "imapconf.h"
 #include "exitcodes.h"
+#include "imapconf.h"
+#include "prot.h"
 #include "xmalloc.h"
 
 /* global state */

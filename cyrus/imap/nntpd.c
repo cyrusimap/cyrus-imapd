@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.44 2002/11/17 04:53:51 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.45 2002/11/17 16:01:42 ken3 Exp $
  */
 
 /*
@@ -69,33 +69,32 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <ctype.h>
-#include "prot.h"
 
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
 #include "acl.h"
-#include "util.h"
-#include "auth.h"
-#include "iptostring.h"
-#include "imapconf.h"
-#include "tls.h"
-
-#include "exitcodes.h"
-#include "imap_err.h"
-#include "nntp_err.h"
-#include "mailbox.h"
-#include "spool.h"
 #include "append.h"
+#include "auth.h"
 #include "duplicate.h"
+#include "exitcodes.h"
+#include "imapconf.h"
+#include "imap_err.h"
+#include "index.h"
+#include "iptostring.h"
+#include "mailbox.h"
+#include "mboxlist.h"
+#include "mkgmtime.h"
 #include "netnews.h"
+#include "nntp_err.h"
+#include "prot.h"
+#include "rfc822date.h"
+#include "spool.h"
+#include "telemetry.h"
+#include "tls.h"
+#include "util.h"
 #include "version.h"
 #include "xmalloc.h"
-#include "mboxlist.h"
-#include "telemetry.h"
-#include "index.h"
-#include "mkgmtime.h"
-#include "rfc822date.h"
 
 extern int optind;
 extern char *optarg;

@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: netnews.c,v 1.1.2.5 2002/11/15 21:46:58 rjs3 Exp $ */
+/* $Id: netnews.c,v 1.1.2.6 2002/11/17 16:01:42 ken3 Exp $ */
 
 #include <config.h>
 
@@ -74,15 +74,15 @@
 
 #include <db.h>
 
-#include "xmalloc.h"
+#include "cyrusdb.h"
+#include "exitcodes.h"
 #include "imap_err.h"
 #include "imapconf.h"
-#include "exitcodes.h"
 #include "mailbox.h"
-#include "util.h"
-#include "cyrusdb.h"
-
 #include "netnews.h"
+#include "util.h"
+#include "xmalloc.h"
+
 
 #define DB (CONFIG_DB_NETNEWS)
 
