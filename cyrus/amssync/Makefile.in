@@ -53,7 +53,7 @@ MISCPERL = $(srcdir)/getacl.pl $(srcdir)/pioctl.pl
 all: amssync afs.ph param.ph
 
 install:
-	$(INSTALL) -d ${DESTDIR}$(cyrus_prefix)/perllib/afs
+	$(srcdir)/../install-sh -d ${DESTDIR}$(cyrus_prefix)/perllib/afs
 	$(INSTALL) -s -m 755 amssync $(DESTDIR)$(cyrus_prefix)/bin
 	$(INSTALL) -m 755 amssynctree $(DESTDIR)$(cyrus_prefix)/bin
 	$(INSTALL) -m 644 afs.ph param.ph $(MISCPH) $(DESTDIR)$(cyrus_prefix)/perllib/afs
