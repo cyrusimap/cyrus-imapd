@@ -1,4 +1,4 @@
-/* $Id: cyrrestore.c,v 1.3 2003/02/13 20:15:24 rjs3 Exp $
+/* $Id: cyrrestore.c,v 1.4 2003/04/24 17:27:56 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -82,7 +82,7 @@ struct incremental_record {
 int main(int argc, char *argv[])
 {
     int option;
-    char buf[MAX_MAILBOX_PATH];
+    char buf[MAX_MAILBOX_PATH+1];
     int i;
     char *alt_config = NULL;
     struct incremental_record irec;
@@ -188,7 +188,7 @@ static int restore_me(char *mailboxname)
     int r;
     struct mailbox m;
     char boundary[100];
-    char imapurl[MAX_MAILBOX_PATH];
+    char imapurl[MAX_MAILBOX_PATH+1];
     char buf[2048];
     struct incremental_record irec;
     struct searchargs searchargs;
@@ -206,7 +206,7 @@ static int restore_me(char *mailboxname)
     newmailbox = (r == 0);
 
     /* open mailbox */
-    memset(&m, 0, sizeof(struct mailbox));
+    memset(&m, 0, sizeof(m));
     r = mailbox_open_header(name, 0, &m);
     if (r) {
 	if (verbose) {
@@ -236,7 +236,7 @@ static int restore_me(char *mailboxname)
     if (!p) goto badfmt;
     p += 10;
     q = boundary;
-    while (*p != '"') {
+    while (*p && *p != '"') {
 	*q++ = *p++;
     }
     *q = '\0';
@@ -265,13 +265,16 @@ static int restore_me(char *mailboxname)
     printf("IMAP-Dump-Version: 0\n");
     printf("\n");
 
+    /* XXX what is going on here?  in addition to the random empty block
+     * below, there's the fact that uids[] and numuids haven't been inited
+     * yet */
+
     /* check if the incremental is valid */
     if (!newmailbox) {
 
 
     }
     
-
     for (i = 0; i < numuids; i++) {
 	const char *base;
 	unsigned long len;
