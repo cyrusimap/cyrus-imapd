@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.82.2.5 2004/08/09 18:51:22 ken3 Exp $
+ * $Id: prot.c,v 1.82.2.6 2004/08/13 16:09:36 ken3 Exp $
  */
 
 #include <config.h>
@@ -857,8 +857,8 @@ int prot_write(struct protstream *s, const char *buf, unsigned len)
 
 /*
  * Stripped-down version of printf() that works on protection streams
- * Only understands '%ld', '%lu', '%d', %u', '%s', '%c', and '%%'
- * in the format string.
+ * Only understands '%lld', '%llu', '%ld', '%lu', '%d', %u', '%s',
+ * '%c', and '%%' in the format string.
  */
 int prot_printf(struct protstream *s, const char *fmt, ...)
 {
@@ -870,11 +870,6 @@ int prot_printf(struct protstream *s, const char *fmt, ...)
     unsigned u;
     char buf[30];
     va_start(pvar, fmt);
-
-#ifdef HAVE_LONG_LONG_INT
-    long long int ll;
-    unsigned long long int ull;
-#endif
 
     assert(s->write);
 
@@ -900,7 +895,10 @@ int prot_printf(struct protstream *s, const char *fmt, ...)
 		break;
 
 #ifdef HAVE_LONG_LONG_INT
-            case 'l':
+            case 'l': {
+		long long int ll;
+		unsigned long long int ull;
+
 	        switch (*++percent) {
 		case 'd':
 		    ll = va_arg(pvar, long long int);
@@ -918,6 +916,7 @@ int prot_printf(struct protstream *s, const char *fmt, ...)
 		    abort();
 		}
 		break;
+	    }
 #endif
 
 	    default:
