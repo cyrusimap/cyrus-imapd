@@ -45,9 +45,28 @@ AC_SUBST(WITH_GMTOFF)
 AC_MMAP
 case "$DEFS" in
 	*-DHAVE_MMAP*) WITH_MAP="mmap" ;;
-	*) echo "*** This system does not have a working mmap()"
+	*) echo checking for non-shared mmap
+AC_TEST_PROGRAM([#include <sys/types.h>
+#include <sys/types.h>
+#include <sys/mman.h>
+#include <fcntl.h>
+main() {int fd = open("conftestmmap", O_RDWR|O_CREAT, 666);
+if (fd == -1) exit(1);
+if (mmap((caddr_t)0, 100, PROT_READ, MAP_PRIVATE
+#ifdef MAP_FILE
+| MAP_FILE
+#endif
+#ifdef MAP_VARIABLE
+| MAP_VARIABLE
+#endif
+, fd, 0L) == (caddr_t)-1)
+ exit(1);exit(0);}],
+   echo "*** This system's mmap() does not adequately support shared memory"
+   echo "*** Expect a performance penalty"
+   WITH_MAP=private,
+	   echo "*** This system does not have a working mmap()"
 	   echo "*** Expect a considerable performance penalty"
-	   WITH_MAP="nommap" ;;
+	   WITH_MAP=nommap) ;;
 esac
 AC_SUBST(WITH_MAP)
 AC_WITH(lock,WITH_LOCK="$withval",
