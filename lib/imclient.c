@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.44 1999/12/23 19:58:42 tmartin Exp $
+ $Id: imclient.c,v 1.45 1999/12/23 21:03:19 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -1839,7 +1839,7 @@ int imclient_starttls(struct imclient *imclient,
   result=tls_init_clientengine(imclient, 10, var_tls_cert_file, var_tls_key_file);
   if (result!=0)
   {
-    printf("[ Start TLS engine failed ]\n");
+    printf("[ TLS engine failed ]\n");
     return 1;
   } else {
     result=tls_start_clienttls(imclient, &externalprop.ssf, &externalprop.auth_id, imclient->fd);
