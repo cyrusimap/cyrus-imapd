@@ -1,6 +1,6 @@
 /* mailbox.h -- Mailbox format definitions
  *
- *	(C) Copyright 1993 by Carnegie Mellon University
+ *	(C) Copyright 1994 by Carnegie Mellon University
  *
  *                      All Rights Reserved
  *

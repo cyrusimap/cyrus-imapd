@@ -1,6 +1,6 @@
-/* xmalloc.c -- Allocation package that calls fatal() when out of memory
+/* xmalloc.h -- Allocation package that calls fatal() when out of memory
  *
- *	(C) Copyright 1993 by Carnegie Mellon University
+ *	(C) Copyright 1994 by Carnegie Mellon University
  *
  *                      All Rights Reserved
  *

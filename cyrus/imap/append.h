@@ -1,6 +1,6 @@
 /* append.h -- Description of messages to be copied 
  *
- *	(C) Copyright 1993 by Carnegie Mellon University
+ *	(C) Copyright 1994 by Carnegie Mellon University
  *
  *                      All Rights Reserved
  *

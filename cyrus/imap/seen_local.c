@@ -1,6 +1,6 @@
 /* seen_local.c -- Storage for /Recent and /Seen state on local filesystem
  *
- *	(C) Copyright 1993 by Carnegie Mellon University
+ *	(C) Copyright 1994 by Carnegie Mellon University
  *
  *                      All Rights Reserved
  *
