@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.319 2001/08/31 21:17:24 ken3 Exp $ */
+/* $Id: imapd.c,v 1.320 2001/09/12 15:55:51 ken3 Exp $ */
 
 #include <config.h>
 
@@ -4615,34 +4615,49 @@ int parsecharset;
 
     case 'h':
 	if (!strcmp(criteria.s, "header")) {
+	    struct strlist **patlist;
+
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c != ' ') goto missingarg;
 	    lcase(arg.s);
 
-	    /* we look message-id up in the envelope */
-	    if (!strcmp(arg.s, "message-id")) {
-		c = getastring(imapd_in, imapd_out, &arg);
-		if (c == EOF) goto missingarg;
-		str = charset_convert(arg.s, *charset, NULL, 0);
-		if (strchr(str, EMPTY)) {
-		    /* Force failure */
-		    searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
-		} else {
-		    appendstrlistpat(&searchargs->messageid, str);
-		}
+	    /* some headers can be reduced to search terms */
+            if (!strcmp(arg.s, "bcc")) {
+                patlist = &searchargs->bcc;
+            }
+            else if (!strcmp(arg.s, "cc")) {
+		patlist = &searchargs->cc;
+            }
+	    else if (!strcmp(arg.s, "to")) {
+		patlist = &searchargs->to;
+            }
+	    else if (!strcmp(arg.s, "from")) {
+		patlist = &searchargs->from;
+            }
+	    else if (!strcmp(arg.s, "subject")) {
+		patlist = &searchargs->subject;
+            }
 
-		break;
+	    /* we look message-id up in the envelope */
+	    else if (!strcmp(arg.s, "message-id")) {
+		patlist = &searchargs->messageid;
 	    }
-	    if (!(searchargs->flags & SEARCH_UNCACHEDHEADER)) {
-		for (i=0; i<mailbox_num_cache_header; i++) {
-		    if (!strcmp(mailbox_cache_header_name[i], arg.s)) break;
+
+	    /* all other headers we handle normally */
+	    else {
+		if (!(searchargs->flags & SEARCH_UNCACHEDHEADER)) {
+		    for (i=0; i<mailbox_num_cache_header; i++) {
+			if (!strcmp(mailbox_cache_header_name[i], arg.s)) break;
+		    }
+		    if (i == mailbox_num_cache_header) {
+			searchargs->flags |= SEARCH_UNCACHEDHEADER;
+		    }
 		}
-		if (i == mailbox_num_cache_header) {
-		    searchargs->flags |= SEARCH_UNCACHEDHEADER;
-		}
+		appendstrlist(&searchargs->header_name, arg.s);
+		patlist = &searchargs->header;
 	    }
-	    appendstrlist(&searchargs->header_name, arg.s);
+
 	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset, NULL, 0);
@@ -4651,7 +4666,7 @@ int parsecharset;
 		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	    }
 	    else {
-		appendstrlistpat(&searchargs->header, str);
+		appendstrlistpat(patlist, str);
 	    }
 	}
 	else goto badcri;
