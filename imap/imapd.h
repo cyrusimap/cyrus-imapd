@@ -74,6 +74,7 @@ struct fetchargs {
 /* Arguments to Store functions */
 struct storeargs {
     int operation;
+    int silent;
     int seen;
     bit32 system_flags;
     /* private to index.c */
