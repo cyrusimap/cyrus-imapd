@@ -1,12 +1,32 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.71.2.5 2004/03/24 19:52:57 ken3 Exp $ -->
+<!-- $Id: changes.html,v 1.71.2.6 2004/04/03 19:08:10 ken3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
 <title>Changes to the Cyrus IMAP Server</title>
 </head>
 <body>
+
+<h1>Changes to the Cyrus IMAP Server since 2.2.x</h1>
+<ul>
+<li>Added support for "unified" Murders.  A Murder no longer has to have
+discrete frontend and backend servers; any one server can both proxy
+and serve local mailboxes (proxy functionality in <tt>proxyd</tt> and
+<tt>lmtpproxyd</tt> has been merged with <tt>imapd</tt> and
+<tt>lmtpd</tt> respectively).  The new <tt>mupdate_config</tt> option
+in <tt>imapd.conf</tt> is used to determine whether a Murder is using
+a "traditional" or "unified" configuration.</li>
+<li>Added support for "delayed" expunge, in which messages are
+removed from the mailbox index at the time of the EXPUNGE (hiding them
+from the client), but the message files and cache entries are left
+behind, to be purged at a later time by <tt>cyr_expire</tt>.  This
+reduces the amount of I/O that takes place at the time of EXPUNGE and
+should result in greater responsiveness for the client, especially
+when expunging a large number of messages.  The new <tt>expunge_mode</tt>
+option in <tt>imapd.conf</tt> controls whether expunges are
+"immediate" or "delayed".</li>
+</ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.2.3</h1>
 <ul>
@@ -1922,7 +1942,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2004/03/24 19:52:57 $ <br />
+last modified: $Date: 2004/04/03 19:08:10 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
