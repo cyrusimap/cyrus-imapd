@@ -63,8 +63,8 @@ Prerequisites and other notes
 Compiling the IMAP Server
 
     Once you have unpacked the files (see the README file for more
-    information), "cd" to the "cyrus-imapd-1.5" directory (assuming the
-    version number is 1.5). The configuration files and various
+    information), "cd" to the "cyrus-imapd-1.5.14" directory (assuming the
+    version number is 1.5.14). The configuration files and various
     subdirectories are stored there. In the directory that the configure
     file is in, type "./configure" to configure the software. 
 
@@ -152,6 +152,11 @@ Compiling the IMAP Server
 
             By default, configure uses "krb" if the file /etc/krb.conf
             exists, "unix" otherwise. 
+
+            If you use shadow passwords, you should use
+            --with-login=unix_pwcheck, not just unix. The Cyrus imapd does
+            not run as root, and the pwcheck daemon is required for
+            authentication if you use shadow passwords. 
 
     --with-pwcheck=METHOD 
             Specifies the password checking module to use inside the
@@ -251,7 +256,8 @@ Compiling the IMAP Server
             synchronization support. Requires the AMS libraries. 
 
     --enable-cmulocal 
-            Include Carnegie Mellon's internal support features. 
+            Include Carnegie Mellon's internal support features. (Ignore
+            this if you're not at CMU.) 
 
     "configure" ignores any other arguments that you give it. 
 
@@ -329,13 +335,13 @@ Configuring the IMAP Server
         messages into both levels and categories. Invoke "man syslog" to
         see if "openlog()" takes three arguments. If it does not, replace
         the system "syslogd" and "syslog.conf" with the files provided in
-        the cyrus-imapd-1.5/syslog directory. 
+        the cyrus-imapd-1.5.14/syslog directory. 
 
            mv syslogd /etc/syslogd
            mv syslog.conf /etc/syslog.conf
 
         If you do not copy the "syslog.conf" file in
-        "cyrus-imapd-1.5/syslog" to the "/etc" directory, be sure to add
+        "cyrus-imapd-1.5.14/syslog" to the "/etc" directory, be sure to add
         support for "local6.debug". The file should include a line like: 
 
            local6.debug  /var/adm/imapd.log
@@ -480,7 +486,12 @@ Configuring the IMAP Server
         "cyrus" is the Cyrus user and "/usr/cyrus/bin/" is the path name to
         the executable. 
 
-    13. If you wish to use the interm finger information service: 
+    13. If you wish to use the interm finger information service, you need
+        to enable support for it in "/etc/services" and "/etc/inetd.conf". 
+
+        Note that this requires a finger client that supports this service.
+        If you don't know that yours supports it, it doesn't. At this time,
+        we are not providing a finger client that supports this. 
 
          1. Add the following line to the "/etc/services" file if it isn't
             already there. 
@@ -564,10 +575,10 @@ Testing the IMAP Server
 
         If your server is running, you'll get the following message: 
 
-           Trying 128.2.44.20...
+           Trying 128.2.232.95...
            Connected to foobar.andrew.cmu.edu.
            Escape character is '^]'.
-           * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.5 server ready
+           * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.5.14 server ready
 
         Any message other than one starting with "* OK" means there is a
         problem. To terminate the connection, type ". logout". 
@@ -578,7 +589,7 @@ Testing the IMAP Server
 
         If your server is running, you'll get the following message: 
 
-           * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.5 server ready
+           * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.5.14 server ready
            Password: <enter your password, imtest does not echo it>
            . LOGIN smith X
            . OK User logged in
@@ -590,10 +601,10 @@ Testing the IMAP Server
 
      4. If the server is compiled with Kerberos v4 authentication, test
         Kerberos authentication by using the imtest command. Change to the
-        "cyrus-v1.5" directory and type the following: 
+        "cyrus-v1.5.14" directory and type the following: 
 
            /usr/local/bin/imtest -k foobar imap
-           * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.5 server ready
+           * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.5.14 server ready
            . AUTHENTICATE KERBEROS_V4
            + Ln8h6Q==
            BAcBQU5EUkVXLkNNVS5FRFUAOCA+0y5YnrqIVikng46sam7RSObZXCVSA9xCx

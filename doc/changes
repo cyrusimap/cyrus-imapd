@@ -8,6 +8,10 @@ Changes to the Cyrus IMAP Server Since Version 1.5.11
         availible. The UIDPLUS extension is a set of optimizations using
         UID values instead of sequence numbers and is described in RFC
         2359. 
+      * Cyrus no longer rejects messages with 8-bit characters in the
+        headers. Rather than reject the message, characters with the 8th
+        bit set are changed to 'X'. Internationalization in headers is
+        supported by the mechanism specified in RFC 2047 (and RFC 1342). 
 
 Changes to the Cyrus IMAP Server Since Version 1.5.10
 
@@ -47,7 +51,7 @@ Changes to the Cyrus IMAP Server Since Version 1.5.2
       * Patches from John Myers, including more glob fixes. 
       * Use the default hash function from DB. Note that this means that
         the existing delivered.db and ptscache.db is NOT compatible with
-        this release. 
+        this release. These files should be removed. 
       * Provide two debugging programs that dump the databases: ptdump and
         dump_deliverdb. 
       * Multiple changes to ptloader. added a bunch of flags; let it

@@ -7,12 +7,10 @@
       * Using AFS groups with ptclient, users with negative rights as part
         of groups may be granted access to mailboes if ptclient has died.
         We plan to have this fixed in the next release. 
-      * We are aware that cyrus.seen files are occasionally corrupted, but
-        we are not sure why this is happening. It seems to happen most with
-        mailboxes with a large number of users. We hope to have this fixed
-        in a future release. 
-      * UID FETCH of a range of nonexistant UIDs causes the server to drop
-        connection. 
+      * COPY of a nonexistant sequence of messages results in OK, but
+        should result in NO. 
+      * 8-bit set characters are coerced to 'X', but not before the
+        notify_zephyr code (if used) has had a chance to send them out. 
       * imtest cheats and sends a non-synchronizing literal if you try to
         LOGIN (cleartext passwords). 
       * In some failures of the krbck program, the error messages printed
@@ -26,6 +24,6 @@
     along with a detailed report. Additional information is welcome, and
     naturally, patches are deeply appreciated. 
 
-    If you submit a patch, please send context diffs or unified diffs, not
-    the default. 
+    If you submit a patch, please send unified diffs (-u) if your diff
+    program supports them, or context diffs (-c) if it doesn't. 
 
