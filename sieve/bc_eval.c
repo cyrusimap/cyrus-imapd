@@ -1,5 +1,5 @@
 /* bc_eval.c - evaluate the bytecode
- * $Id: bc_eval.c,v 1.1.4.5 2003/03/26 18:16:31 rjs3 Exp $
+ * $Id: bc_eval.c,v 1.1.4.6 2003/03/26 18:47:09 rjs3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -673,12 +673,13 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 		  const char **errmsg) 
 {
     const char *data;
-    unsigned int ip = 0;
+    unsigned int ip = 0, ip_max = (bc_len/sizeof(bytecode_input_t));
     int res=0;
    
     bytecode_input_t *bc = (bytecode_input_t *)bc_in;
     
     if(!bc) return SIEVE_FAIL;
+    if(bc_len <= BYTECODE_MAGIC_LEN) return SIEVE_FAIL;
 
     if(memcmp(bc, BYTECODE_MAGIC, BYTECODE_MAGIC_LEN)) {
 	*errmsg = "Not a bytecode file";
@@ -699,7 +700,7 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
     printf("version number %d\n",bc[ip].op); 
 #endif
 
-    for(ip++; ip<=bc_len; ) { 
+    for(ip++; ip<ip_max; ) { 
 	
 	switch(bc[ip].op) {
 	case B_STOP:/*0*/
