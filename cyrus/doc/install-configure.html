@@ -1,4 +1,4 @@
-<!-- $Id: install-configure.html,v 1.23.4.3 2002/08/29 16:19:57 ken3 Exp $ -->
+<!-- $Id: install-configure.html,v 1.23.4.4 2003/02/11 15:34:52 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and configuring the IMAP Server
@@ -398,50 +398,8 @@ consult the Exim documentation and sample configurations.
 
 <h3>Exporting Netnews via IMAP</h3>
 
-If you want to export netnews newsgroups using IMAP do the following:
+TODO: Explain setup of nntpd and lmtp2nntp.
 
-<ol>
- <P><LI>Create a directory for the "news" partition.  This directory
-should be different than the news spool directory.  This document uses
-a news partition directory of "<TT>/var/spool/imap-news</TT>" in the
-following examples:
-
-<pre>
-<kbd>   cd /var/spool
-   mkdir imap-news
-   chown cyrus imap-news
-   chgrp mail imap-news
-   chmod 750 imap-news
-</kbd></pre>
-
- <P>
-<LI> Set the "partition-news" and "newsspool" options to appropriate values:
-
-<pre>
-   partition-news: /var/spool/imap-news
-   newsspool: /var/spool/news
-</pre>
-
- <P> <LI>The cyrus user must be able to write to the out.going
-("<TT>/var/spool/news/out.going</TT>") directory.  This can be done by
-putting the cyrus user into the news group and making the oug.going
-directory group writable.
-
- <P>
-<LI> Add the following line to the <TT>newsfeeds</TT> file
-
-<pre>
-   collectnews!:*:Tf,WO:collectnews
-</pre>
-
- <P> <LI> Add a <TT>cron</TT> job to run
-"<TT>/usr/cyrus/bin/feedcyrus</TT>" every ten minutes as the cyrus
-user.  Also add a <TT>cron</TT> job to run
-"<TT>/usr/cyrus/bin/syncnews /var/news/active &gt;/dev/null
-2&gt;&amp;1</TT>" nightly.  (Using the appropriate path to the
-<TT>active</TT> file.)
-
-</ol>
 <a name="openssl"><h2>SSL, TLS, and OpenSSL</h2></a>
 
 <p>Transport Layer Security (TLS), is a standardized version of the Secure
@@ -577,5 +535,5 @@ convention, consult <a
 href=altnamespace.html#altnameconfig>altnamespace.html</a>.
 
 <P><HR>
-last modified: $Date: 2002/08/29 16:19:57 $
+last modified: $Date: 2003/02/11 15:34:52 $
 </BODY></HTML>
