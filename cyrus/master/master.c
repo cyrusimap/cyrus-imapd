@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.34 2001/03/05 19:24:17 leg Exp $ */
+/* $Id: master.c,v 1.35 2001/03/05 20:30:47 leg Exp $ */
 
 #include <config.h>
 
@@ -600,7 +600,7 @@ void reap_child(void)
 	}
 
 	if (WIFSIGNALED(status)) {
-	    syslog(LOG_ERROR, "process %d exited, signaled to death by %d",
+	    syslog(LOG_ERR, "process %d exited, signaled to death by %d",
 		   pid, WTERMSIG(status));
 	}
 
