@@ -6,7 +6,7 @@ AC_DEFUN(CMU_LIBSSL_INC_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
 saved_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="$saved_CPPFLAGS -I$1"
-AC_CHECK_HEADER(openssl/ssl.h,
+CMU_CHECK_HEADER_NOCACHE(openssl/ssl.h,
 ac_cv_found_libssl_inc=yes,
 ac_cv_found_libssl_inc=no)
 CPPFLAGS=$saved_CPPFLAGS

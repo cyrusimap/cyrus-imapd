@@ -6,7 +6,7 @@ AC_DEFUN(CMU_LIBCYRUS_INC_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
 saved_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="$saved_CPPFLAGS -I$1"
-AC_CHECK_HEADER(imclient.h,
+CMU_CHECK_HEADER_NOCACHE(imclient.h,
 ac_cv_found_libcyrus_inc=yes,
 ac_cv_found_libcyrus_inc=no)
 CPPFLAGS=$saved_CPPFLAGS

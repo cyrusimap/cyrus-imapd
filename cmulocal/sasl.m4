@@ -6,10 +6,7 @@ AC_DEFUN(CMU_SASL_INC_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
 saved_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="$saved_CPPFLAGS -I$1"
-AC_TRY_COMPILE([
-#include <sasl.h>
-],
-[sasl_secret_t foo;],
+CMU_CHECK_HEADER_NOCACHE(sasl.h,
 ac_cv_found_sasl_inc=yes,
 ac_cv_found_sasl_inc=no)
 CPPFLAGS=$saved_CPPFLAGS
