@@ -29,6 +29,37 @@
 extern int errno;
 
 /*
+ * Keep calling the write() system call with 'fd', 'buf', and 'nbyte'
+ * until all the data is written out or an error occurs.
+ */
+retry_write(fd, buf, nbyte)
+int fd;
+char *buf;
+unsigned nbyte;
+{
+    int n;
+    int written = 0;
+
+    if (nbyte == 0) return 0;
+
+    for (;;) {
+	n = write(fd, buf, nbyte);
+	if (n == -1) {
+	    if (errno == EINTR) continue;
+	    return -1;
+	}
+
+	written += n;
+
+	if (n >= nbyte) return written;
+
+	buf += n;
+	nbyte -= n;
+    }
+}
+
+	
+/*
  * Keep calling the writev() system call with 'fd', 'iov', and 'iovcnt'
  * until all the data is written out or an error occurs.
  */
