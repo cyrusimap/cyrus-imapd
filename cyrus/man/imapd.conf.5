@@ -178,9 +178,8 @@ secrets when given a plaintext password.  See the SASL documentation.
 .IP "\fBsasl_option\fR" 5
 Any other SASL option can be set by preceeding it with "sasl_".  This
 file overrides the SASL configuration file.
-.IP "\fBlmtpsockpath:\fR /var/imap" 5
-Unix domain socket path that lmtp communication uses (deliver talks to lmtpd)
-
+.IP "\fBlmtpsocket:\fR /var/imap/socket/lmtp" 5
+Unix domain socket that lmtpd listens on.
 .SH SEE ALSO
 .PP
 \fBimapd(8)\fR, \fBtimsieved(8)\fR, \fBdeliver(8)\fR
