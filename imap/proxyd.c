@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.116 2002/04/11 17:05:05 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.117 2002/04/12 20:24:41 leg Exp $ */
 
 #undef PROXY_IDLE
 
@@ -2125,8 +2125,9 @@ void cmd_authenticate(char *tag, char *authtype)
 
     proc_register("proxyd", proxyd_clienthost, proxyd_userid, (char *)0);
 
-    syslog(LOG_NOTICE, "login: %s %s %s %s", proxyd_clienthost, proxyd_userid,
-	   authtype, "User logged in");
+    syslog(LOG_NOTICE, "login: %s %s %s%s %s", 
+	   proxyd_clienthost, proxyd_userid,
+	   authtype, proxyd_starttls_done ? "+TLS" : "", "User logged in");
 
     sasl_getprop(proxyd_saslconn, SASL_SSF, (const void **) &ssfp);
 
