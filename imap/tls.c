@@ -94,7 +94,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.25 2001/09/19 18:53:31 ken3 Exp $ */
+/* $Id: tls.c,v 1.26 2001/09/19 20:02:10 ken3 Exp $ */
 
 #include <config.h>
 
@@ -127,7 +127,7 @@
 #include "time.h"
 #include "cyrusdb.h"
 
-#define DB (&cyrusdb_db3) /* sessions are binary -> MUST use DB3 */
+#define DB (&cyrusdb_db3_nosync) /* sessions are binary -> MUST use DB3 */
 #define FNAME_SESSIONS "/tls_sessions.db"
 
 /* We must keep some of the info available */
