@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.194 2000/01/04 19:42:22 leg Exp $ */
+/* $Id: imapd.c,v 1.195 2000/01/04 20:58:53 leg Exp $ */
 
 #ifndef __GNUC__
 #define __attribute__(foo)
@@ -81,7 +81,7 @@ struct buf {
 };
 
 sasl_conn_t *imapd_saslconn; /* the sasl connection context */
-int imapd_starttls_done=0; /* have we done a sucessful starttls yet? */
+int imapd_starttls_done = 0; /* have we done a sucessful starttls yet? */
 
 char *imapd_userid;
 struct auth_state *imapd_authstate = 0;
@@ -97,8 +97,6 @@ time_t imapd_logtime;
 #ifdef HAVE_SSL
 extern SSL *tls_conn;
 #endif /* HAVE_SSL */
-
-int imapd_sucessful_tls = 0; /* yes keep outside of ifdef */
 
 static struct mailbox mboxstruct;
 
@@ -151,6 +149,7 @@ void cmd_namespace P((char* tag));
 #ifdef HAVE_SSL
 void cmd_starttls(char *tag);
 #endif /* HAVE_SSL */
+int starttls_enabled(void);
 
 #ifdef ENABLE_X_NETSCAPE_HACK
 void cmd_netscrape P((char* tag));
@@ -996,41 +995,37 @@ cmdloop()
 	    break;
 	    
 	case 'S':
-#ifdef HAVE_SSL
-	  if (!strcmp(cmd.s, "Starttls"))
-	  {
-	      if (c == '\r') c = prot_getc(imapd_in);
-	      if (c != '\n') goto extraargs;
+	    if (!strcmp(cmd.s, "Starttls")) {
+		if (!starttls_enabled()) {
+		    /* we don't support starttls */
+		    goto badcmd;
+		}
 
-	      /* if we've already done SASL fail */
-	      if (imapd_userid!=NULL)
-	      {
-		prot_printf(imapd_out, "%s BAD Can't StartTLS after already authenticated\r\n", tag.s);
-		continue;
-	      }
+		if (c == '\r') c = prot_getc(imapd_in);
+		if (c != '\n') goto extraargs;
 
-	      /* check if already did a sucessful tls */
-	      if (imapd_starttls_done==1)
-	      {
-		prot_printf(imapd_out, "%s BAD Already did a sucessful Starttls\r\n",tag.s);
-		continue;
-	      }
+		/* if we've already done SASL fail */
+		if (imapd_userid != NULL) {
+		    prot_printf(imapd_out, 
+	       "%s BAD Can't Starttls after authentication\r\n", tag.s);
+		    continue;
+		}
+		
+		/* check if already did a successful tls */
+		if (imapd_starttls_done == 1) {
+		    prot_printf(imapd_out, 
+				"%s BAD Already did a successful Starttls\r\n",
+				tag.s);
+		    continue;
+		}
+		cmd_starttls(tag.s);	      
 
-	      cmd_starttls(tag.s);	      
-	  } else if (!imapd_userid) {
-	    goto nologin;
-	  }
-#else  /* HAVE_SSL */
-	  if (!imapd_userid) {
-	    goto nologin;
-	  }
-#endif /* HAVE_SSL */
-
-
-
-
-
-	    else if (!strcmp(cmd.s, "Store")) {
+	    } else if (!imapd_userid) {
+		goto nologin;
+	    }
+	    if (!imapd_userid) {
+		goto nologin;
+	    } else if (!strcmp(cmd.s, "Store")) {
 		if (!imapd_mailbox) goto nomailbox;
 		usinguid = 0;
 		if (c != ' ') goto missingargs;
@@ -1229,7 +1224,7 @@ char *passwd;
     canon_user = auth_canonifyid(user);
 
     /* possibly disallow login */
-    if ((imapd_sucessful_tls == 0) &&
+    if ((imapd_starttls_done == 0) &&
 	(config_getswitch("allowplaintext", 1) == 0) &&
 	strcmp(canon_user, "anonymous") != 0) {
 	prot_printf(imapd_out, "%s NO Login only available under a layer\r\n",
@@ -1489,19 +1484,14 @@ char *tag;
     /* XXX */
     prot_printf(imapd_out,
 		" X-NON-HIERARCHICAL-RENAME NO_ATOMIC_RENAME");
-
-#ifdef HAVE_SSL
-    prot_printf(imapd_out, " STARTTLS");
-
-    if ((imapd_sucessful_tls == 0) &&
+    if (starttls_enabled()) {
+	prot_printf(imapd_out, " STARTTLS");
+    }
+    if ((imapd_starttls_done == 0) &&
 	(config_getswitch("allowplaintext", 1)==0))
     {
       prot_printf(imapd_out, " LOGINDISABLED");	
     }      
-    
-    
-#endif /* HAVE_SSL */
-
     /* add the SASL mechs */
     if (sasl_listmech(imapd_saslconn, NULL, 
 		      "AUTH=", " AUTH=", "",
@@ -3249,7 +3239,6 @@ char *quotaroot;
 }
 
 #ifdef HAVE_SSL
-
 /*
  * this implements the STARTTLS command, as described in RFC 2595.
  * one caveat: it assumes that no external layer is currently present.
@@ -3257,6 +3246,13 @@ char *quotaroot;
  * layer that was passed on the command line is disgarded. this should
  * be fixed.
  */
+int starttls_enabled(void)
+{
+    if (config_getstring("tls_ca_file", NULL) == NULL) return 0;
+    if (config_getstring("tls_ca_path", NULL) == NULL) return 0;
+    return 1;
+}
+
 void cmd_starttls(char *tag)
 {
     int result;
@@ -3266,7 +3262,7 @@ void cmd_starttls(char *tag)
     /* SASL and openssl have different ideas about whether ssf is signed */
     layerp = (int *) &(external.ssf);
 
-    if (imapd_sucessful_tls == 1)
+    if (imapd_starttls_done == 1)
     {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, 
 		    "Already successfully executed STARTTLS");
@@ -3317,13 +3313,16 @@ void cmd_starttls(char *tag)
 	imapd_userid = external.auth_id;
     }
 
-    imapd_sucessful_tls = 1;
-
     /* tell the prot layer about our new layers */
     prot_settls(imapd_in, tls_conn);
     prot_settls(imapd_out, tls_conn);
 
     imapd_starttls_done = 1;
+}
+#else
+int starttls_enabled(void)
+{
+    return 0;
 }
 #endif /* HAVE_SSL */
 
