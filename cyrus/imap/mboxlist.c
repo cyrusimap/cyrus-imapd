@@ -1787,6 +1787,12 @@ int maycreate;
     r = mailbox_lock_header(&mailbox);
     if (r) goto error;
 
+    r = mailbox_open_index(&mailbox);
+    if (r) goto error;
+
+    r = mailbox_lock_index(&mailbox);
+    if (r) goto error;
+
     if (mailbox.quota.root) {
 	if (strlen(mailbox.quota.root) >= strlen(mboxlist_newquota->root)) {
 	    /* Part of a child quota root */
@@ -1796,7 +1802,12 @@ int maycreate;
 
 	r = mailbox_lock_quota(&mailbox.quota);
 	if (r) goto error;
-	mailbox.quota.used -= mailbox.quota_mailbox_used;
+	if (mailbox.quota.used >= mailbox.quota_mailbox_used) {
+	    mailbox.quota.used -= mailbox.quota_mailbox_used;
+	}
+	else {
+	    mailbox.quota.used = 0;
+	}
 	r = mailbox_write_quota(&mailbox.quota);
 	if (r) {
 	    syslog(LOG_ERR,
