@@ -1,0 +1,39 @@
+<HTML><HEAD>
+<TITLE>Changes to the Cyrus IMAP Server</TITLE>
+<!-- Changed by: Tim Showalter 19-Mar-1997 -->
+</HEAD><BODY>
+<h1>                     Known bugs in the Cyrus IMAP Server</h1>
+
+<ul>
+<li>The RENAME command does not have the hierarchical behavior required by
+the IMAP4rev1 specification.  The CAPABILITY command now returns
+X-NON-HIERARCHICAL-RENAME in its response in order to advertise this bug.
+We plan to have this fixed in the next release.
+
+<li>If a client tries to FETCH or UID FETCH a BODY[] attribute from a
+netnews-format mailbox, the server truncates the message by one character
+for each line in the message (due to LF/CRLF conversion) We plan to have
+this fixed in the next release.
+
+<li>Using AFS groups with ptclient, users with negative rights as part of
+groups may be granted access to mailboes if ptclient has failed.  We plan
+to have this fixed in the next release.
+
+<li>LIST NIL *.% causes the current imapd process to hang.  We plan to have
+this fixed in the next release.
+
+<li>We are aware that cyrus.seen files are occasionally corrupted, but we
+are not sure why this is happening.  It seems to happen most with mailboxes
+with a large number of users.  We hope to have this fixed in a future
+release.
+</ul>
+
+<p>
+Please report bugs to cyrus-bugs@andrew.cmu.edu.  Be sure to include
+(at least) system type, compiler used, and the options passed to configure,
+along with a detailed report.  Additional information is welcome, and
+naturally, patches are deeply appreciated.
+
+<P><HR><P>
+<A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
+</BODY></HTML>
