@@ -1,5 +1,5 @@
 /* mboxname.h -- Mailbox list manipulation routines
- * $Id: mboxname.h,v 1.9.4.5 2002/08/21 20:43:50 ken3 Exp $
+ * $Id: mboxname.h,v 1.9.4.6 2002/08/24 18:48:28 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -59,7 +59,8 @@ enum { NAMESPACE_INBOX = 0,
 /* structure holding server namespace info */
 struct namespace {
     char hier_sep;
-    int isalt;  /* are we using he alternate namespace? */
+    int isalt;  /* are we using the alternate namespace? */
+    int isadmin; /* current user is an admin */
     char prefix[3][MAX_NAMESPACE_PREFIX+1];
     /* Convert the external mailbox 'name' to an internal name. */
     int (*mboxname_tointernal)(struct namespace *namespace, const char *name,
@@ -78,7 +79,7 @@ struct namespace {
 };
 
 /* Create namespace based on config options. */
-int mboxname_init_namespace(struct namespace *namespace, int force_std);
+int mboxname_init_namespace(struct namespace *namespace, int isadmin);
 
 /*
  * Translate separator charactors in a mailboxname from its external
