@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.277 2004/01/06 22:08:07 rjs3 Exp $
+dnl $Id: configure.in,v 1.278 2004/01/20 01:10:53 ken3 Exp $
 dnl
 
 
@@ -166,7 +166,7 @@ AC_MSG_RESULT($WITH_AUTH)
 dnl function for doing each of the database backends
 dnl parameters: backend name, variable to set, withval
 
-CYRUSDB_OBJS="cyrusdb_flat.o cyrusdb_skiplist.o"
+CYRUSDB_OBJS="cyrusdb_flat.o cyrusdb_skiplist.o cyrusdb_quotalegacy.o"
 
 dnl Berkeley DB Detection
 
@@ -1001,7 +1001,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.277 2004/01/06 22:08:07 rjs3 Exp $ */
+/* $Id: configure.in,v 1.278 2004/01/20 01:10:53 ken3 Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *

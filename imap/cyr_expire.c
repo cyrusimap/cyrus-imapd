@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_expire.c,v 1.3 2003/10/24 18:24:05 rjs3 Exp $
+ * $Id: cyr_expire.c,v 1.4 2004/01/20 01:10:55 ken3 Exp $
  */
 
 #include <config.h>
@@ -238,6 +238,10 @@ int main(int argc, char *argv[])
     mboxlist_init(0);
     mboxlist_open(NULL);
 
+    /* open the quota db, we'll need it for expunge */
+    quotadb_init(0);
+    quotadb_open(NULL);
+
     if (duplicate_init(NULL, 0) != 0) {
 	fprintf(stderr, 
 		"cyr_expire: unable to init duplicate delivery database\n");
@@ -265,6 +269,8 @@ int main(int argc, char *argv[])
 
     free_hash_table(&expire_table, free);
 
+    quotadb_close();
+    quotadb_done();
     mboxlist_close();
     mboxlist_done();
     annotatemore_close();

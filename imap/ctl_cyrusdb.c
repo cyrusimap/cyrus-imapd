@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ctl_cyrusdb.c,v 1.20 2003/12/15 21:02:49 rjs3 Exp $
+ * $Id: ctl_cyrusdb.c,v 1.21 2004/01/20 01:10:55 ken3 Exp $
  */
 
 #include <config.h>
@@ -96,6 +96,7 @@ struct cyrusdb {
     int archive;
 } dblist[] = {
     { FNAME_MBOXLIST,		&config_mboxlist_db,	1 },
+    { FNAME_QUOTADB,		&config_quota_db,	1 },
     { FNAME_ANNOTATIONS,	&config_annotation_db,	1 },
     { FNAME_DELIVERDB,		&config_duplicate_db,	0 },
     { FNAME_TLSSESSIONS,	&config_tlscache_db,	0 },

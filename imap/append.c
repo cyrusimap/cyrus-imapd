@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.102 2003/10/22 18:50:07 rjs3 Exp $
+ * $Id: append.c,v 1.103 2004/01/20 01:10:55 ken3 Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -65,6 +65,7 @@
 #include "mboxlist.h"
 #include "seen.h"
 #include "retry.h"
+#include "quota.h"
 
 struct stagemsg {
     char fname[1024];
@@ -136,21 +137,18 @@ int append_check(const char *name, int format,
 	return IMAP_MAILBOX_NOTSUPPORTED;
     }
 
-    r = mailbox_read_quota(&m.quota);
-    if (r) {
-	mailbox_close(&m);
-	return r;
-    }
-
-    if (m.quota.limit >= 0 && quotacheck >= 0 &&
-	m.quota.used + quotacheck > 
+    r = quota_read(&m.quota, NULL, 0);
+    if (!r) {
+	if (m.quota.limit >= 0 && quotacheck >= 0 &&
+	    m.quota.used + quotacheck > 
 	    ((unsigned) m.quota.limit * QUOTA_UNITS)) {
-	mailbox_close(&m);
-	return IMAP_QUOTA_EXCEEDED;
+	    r = IMAP_QUOTA_EXCEEDED;
+	}
     }
+    else if (r == IMAP_QUOTAROOT_NONEXISTENT) r = 0;
 
     mailbox_close(&m);
-    return 0;
+    return r;
 }
 
 /*
@@ -206,17 +204,20 @@ int append_setup(struct appendstate *as, const char *name,
 	return r;
     }
 
-    r = mailbox_lock_quota(&as->m.quota);
+    r = quota_read(&as->m.quota, NULL, 0);
+    if (!r) {
+	if (as->m.quota.limit >= 0 && quotacheck >= 0 &&
+	    as->m.quota.used + quotacheck > 
+	    ((unsigned) as->m.quota.limit * QUOTA_UNITS)) {
+	    mailbox_close(&as->m);
+	    r = IMAP_QUOTA_EXCEEDED;
+	}
+    }
+    else if (r == IMAP_QUOTAROOT_NONEXISTENT) r = 0;
+
     if (r) {
 	mailbox_close(&as->m);
 	return r;
-    }
-
-    if (as->m.quota.limit >= 0 && quotacheck >= 0 &&
-	as->m.quota.used + quotacheck > 
-	    ((unsigned) as->m.quota.limit * QUOTA_UNITS)) {
-	mailbox_close(&as->m);
-	return IMAP_QUOTA_EXCEEDED;
     }
 
     if (userid) {
@@ -242,11 +243,13 @@ int append_setup(struct appendstate *as, const char *name,
 /* may return non-zero, indicating that the entire append has failed
  and the mailbox is probably in an inconsistent state. */
 int append_commit(struct appendstate *as, 
+		  long quotacheck,
 		  unsigned long *uidvalidity, 
 		  unsigned long *start,
 		  unsigned long *num)
 {
     int r = 0;
+    struct txn *tid = NULL;
     
     if (as->s == APPEND_DONE) return 0;
 
@@ -302,8 +305,21 @@ int append_commit(struct appendstate *as,
     }
 
     /* Write out quota file */
-    as->m.quota.used += as->quota_used;
-    r = mailbox_write_quota(&as->m.quota);
+    r = quota_read(&as->m.quota, &tid, 1);
+    if (!r) {
+	if (as->m.quota.limit >= 0 && quotacheck >= 0 &&
+	    as->m.quota.used + quotacheck > 
+	    ((unsigned) as->m.quota.limit * QUOTA_UNITS)) {
+	    quota_abort(&tid);
+	    append_abort(as);
+	    return IMAP_QUOTA_EXCEEDED;
+	}
+
+	as->m.quota.used += as->quota_used;
+	r = quota_write(&as->m.quota, &tid);
+	if (!r) quota_commit(&tid);
+    }
+    else if (r == IMAP_QUOTAROOT_NONEXISTENT) r = 0;
     if (r) {
 	syslog(LOG_ERR,
 	       "LOSTQUOTA: unable to record use of %u bytes in quota file %s",
@@ -318,7 +334,6 @@ int append_commit(struct appendstate *as,
 	free(as->seen_msgrange);
     }
 
-    mailbox_unlock_quota(&as->m.quota);
     mailbox_unlock_index(&as->m);
     mailbox_unlock_header(&as->m);
     mailbox_close(&as->m);
@@ -356,7 +371,6 @@ int append_abort(struct appendstate *as)
     ftruncate(as->m.cache_fd, as->orig_cache_len);
 
     /* unlock mailbox */
-    mailbox_unlock_quota(&as->m.quota);
     mailbox_unlock_index(&as->m);
     mailbox_unlock_header(&as->m);
     mailbox_close(&as->m);

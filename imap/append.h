@@ -1,5 +1,5 @@
 /* append.h -- Description of messages to be copied 
- * $Id: append.h,v 1.24 2003/10/22 18:50:07 rjs3 Exp $ 
+ * $Id: append.h,v 1.25 2004/01/20 01:10:55 ken3 Exp $ 
  *
  * Copyright (c) 1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -107,6 +107,7 @@ extern int append_setup(struct appendstate *mailbox, const char *name,
 			long aclcheck, long quotacheck);
 
 extern int append_commit(struct appendstate *mailbox,
+			 long quotacheck,
 			 unsigned long *uidvalidity, 
 			 unsigned long *startuid, 
 			 unsigned long *num);

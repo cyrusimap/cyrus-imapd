@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: quota.c,v 1.48 2003/10/22 18:50:08 rjs3 Exp $ */
+/* $Id: quota.c,v 1.49 2004/01/20 01:11:02 ken3 Exp $ */
 
 
 #include <config.h>
@@ -77,6 +77,7 @@
 #endif
 
 #include "assert.h"
+#include "cyrusdb.h"
 #include "global.h"
 #include "exitcodes.h"
 #include "imap_err.h"
@@ -84,6 +85,7 @@
 #include "xmalloc.h"
 #include "mboxlist.h"
 #include "mboxname.h"
+#include "quota.h"
 #include "convert_code.h"
 #include "util.h"
 
@@ -103,11 +105,16 @@ int buildquotalist(char *domain, char **roots, int nroots);
 int fixquota_mailbox(char *name,
 		     int matchlen,
 		     int maycreate,
-		     void* rock);
+		     void *rock);
 int fixquota(char *domain, int ispartial);
 int fixquota_fixroot(struct mailbox *mailbox,
 		     char *root);
-int fixquota_finish(int thisquota);
+int fixquota_finish(int thisquota, struct txn **tid);
+
+struct fix_rock {
+    char *domain;
+    struct txn **tid;
+};
 
 struct quotaentry {
     struct quota quota;
@@ -118,7 +125,6 @@ struct quotaentry {
 
 #define QUOTAGROW 300
 
-struct quotaentry zeroquotaentry;
 struct quotaentry *quota;
 int quota_num = 0, quota_alloc = 0;
 
@@ -162,13 +168,19 @@ int main(int argc,char **argv)
 	fatal(error_message(r), EC_CONFIG);
     }
 
-    r = buildquotalist(domain, argv+optind, argc-optind);
+    quotadb_init(0);
+    quotadb_open(NULL);
+
+    if (!r) r = buildquotalist(domain, argv+optind, argc-optind);
 
     if (!r && fflag) {
 	mboxlist_init(0);
 	r = fixquota(domain, argc-optind);
 	mboxlist_done();
     }
+
+    quotadb_close();
+    quotadb_done();
 
     if (!r) reportquota();
 
@@ -188,51 +200,59 @@ void usage(void)
     exit(EC_USAGE);
 }    
 
-/*
- * Comparison function for sorting quota roots
- */
-int compare_quota(const void *a, const void *b)
+struct find_rock {
+    char **roots;
+    int nroots;
+};
+
+static int find_p(void *rockp,
+		  const char *key, int keylen,
+		  const char *data, int datalen)
 {
-    return strcmp(((struct quotaentry *)a)->quota.root,
-		      ((struct quotaentry *)b)->quota.root);
+    struct find_rock *frock = (struct find_rock *) rockp;
+    int i;
+
+    /* If restricting our list, see if this quota root matches */
+    if (frock->nroots) {
+	for (i = 0; i < frock->nroots; i++) {
+	    if ((!strncmp(key, frock->roots[i], keylen) &&
+		 keylen == strlen(frock->roots[i])) ||
+		(!strncmp(key, frock->roots[i], strlen(frock->roots[i])) &&
+		 key[strlen(frock->roots[i])] == '.')) break;
+	}
+	if (i == frock->nroots) return 0;
+    }
+
+    return 1;
 }
 
 /*
  * Add a quota root to the list in 'quota'
  */
-void addquotaroot(char *domain, char *qr)
+static int find_cb(void *rockp,
+		   const char *key, int keylen,
+		   const char *data, int datalen)
 {
     int r;
+    unsigned long used;
+    int limit;
+    char *p;
+
+    if (!data) return 0;
 
     if (quota_num == quota_alloc) {
 	quota_alloc += QUOTAGROW;
 	quota = (struct quotaentry *)
 	  xrealloc((char *)quota, quota_alloc * sizeof(struct quotaentry));
     }
-    quota[quota_num] = zeroquotaentry;
-    quota[quota_num].quota.fd = -1;
-    if (domain) {
-  	quota[quota_num].quota.root =
-	  xmalloc(strlen(qr) + strlen(domain) + 2);
-	sprintf(quota[quota_num].quota.root, "%s!%s",
-		domain, qr);
-    }
-    else
-  	quota[quota_num].quota.root = xstrdup(qr);
-  
-    r = mailbox_read_quota(&quota[quota_num].quota);
-    if (quota[quota_num].quota.fd != -1) {
-  	close(quota[quota_num].quota.fd);
-	quota[quota_num].quota.fd = -1;
-    }
-    if (r) {
-  	com_err(qr, r,
-		(r == EC_IOERR) ? error_message(errno) : NULL);
-	quota[quota_num].quota.used = 0;
-	quota[quota_num].quota.limit = -1;
-    }
+    memset(&quota[quota_num], 0, sizeof(struct quotaentry));
+    quota[quota_num].quota.root = xstrndup(key, keylen);
+    sscanf(data, "%lu %d",
+	   &quota[quota_num].quota.used, &quota[quota_num].quota.limit);
   
     quota_num++;
+
+    return 0;
 }
 
 /*
@@ -240,11 +260,9 @@ void addquotaroot(char *domain, char *qr)
  */
 int buildquotalist(char *domain, char **roots, int nroots)
 {
-    char quota_path[MAX_MAILBOX_PATH+1];
     int i;
-    DIR *dirp;
-    DIR *topp;
-    struct dirent *dirent;
+    char buf[MAX_MAILBOX_NAME+1];
+    struct find_rock frock = { roots, nroots };
 
     /* Translate separator in mailboxnames.
      *
@@ -257,60 +275,13 @@ int buildquotalist(char *domain, char **roots, int nroots)
 	mboxname_hiersep_tointernal(&quota_namespace, roots[i], 0);
     }
 
+    buf[0] = '\0';
     if (domain) {
-	snprintf(quota_path, sizeof(quota_path),
-		 "%s%s%c/%s%s", config_dir, FNAME_DOMAINDIR,
-		 dir_hash_c(domain), domain, FNAME_QUOTADIR);
-    } else {
-	snprintf(quota_path, sizeof(quota_path),
-		 "%s%s", config_dir, FNAME_QUOTADIR);
-    }
-    if (chdir(quota_path)) {
-	/* No quota directory in this domain */
- 	return 0;
-    }
-    
-    topp = opendir(".");
-    if (!topp) {
-	return IMAP_IOERROR;
-    }
-    while ((dirent = readdir(topp))!=NULL) {
-	if (dirent->d_name[0] == '.') continue;
-
-	if (domain && !strcmp(dirent->d_name, "root")) {
-	    /* Quota for entire domain */
-	    addquotaroot(domain, "");
-	    continue;
-	}
-	
-	dirp = opendir(dirent->d_name);
-	if (!dirp) continue;
-
-	while ((dirent = readdir(dirp))!=NULL) {
-	    if (dirent->d_name[0] == '.') continue;
-
-	    /* If restricting our list, see if this quota file matches */
-	    if (nroots) {
-		for (i = 0; i < nroots; i++) {
-		    if (!strcmp(dirent->d_name, roots[i]) ||
-			(!strncmp(dirent->d_name, roots[i], strlen(roots[i])) &&
-			 dirent->d_name[strlen(roots[i])] == '.')) break;
+	snprintf(buf, sizeof(buf), "%s!", domain);
 		}
-		if (i == nroots) continue;
-	    }
 	    
-	    /* Ignore .NEW files */
-	    i = strlen(dirent->d_name);
-	    if (i > 4 && !strcmp(dirent->d_name+i-4, ".NEW")) continue;
-	    
-	    addquotaroot(domain, dirent->d_name);
-	}
-	
-	/* close this subdirectory */
-	closedir(dirp);
-    }
-    closedir(topp);
-    qsort((char *)quota, quota_num, sizeof(*quota), compare_quota);
+    config_quota_db->foreach(qdb, buf, strlen(buf),
+			     &find_p, &find_cb, &frock, NULL);
 
     return 0;
 }
@@ -326,7 +297,9 @@ int fixquota_mailbox(char *name,
     int r;
     struct mailbox mailbox;
     int i, len, thisquota, thisquotalen;
-    char *p, *domain = (char *) rock;
+    struct fix_rock *frock = (struct fix_rock *) rock;
+    char *p, *domain = frock->domain;
+    struct txn **tid = frock->tid;
 
     /* make sure the domains match */
     if ((p = strchr(name, '!')) != NULL) {
@@ -340,7 +313,7 @@ int fixquota_mailbox(char *name,
     while (firstquota < quota_num &&
 	   strncmp(name, quota[firstquota].quota.root,
 		       strlen(quota[firstquota].quota.root)) > 0) {
-	r = fixquota_finish(firstquota++);
+	r = fixquota_finish(firstquota++, tid);
 	if (r) return r;
     }
 
@@ -386,14 +359,6 @@ int fixquota_mailbox(char *name,
 	}
     }
     
-    if (quota[thisquota].quota.fd == -1) {
-	r = mailbox_lock_quota(&quota[thisquota].quota);
-	if (r) {
-	    mailbox_close(&mailbox);
-	    return r;
-	}
-    }
-
     r = mailbox_open_index(&mailbox);
     if (r) {
 	mailbox_close(&mailbox);
@@ -411,22 +376,6 @@ int fixquota_fixroot(struct mailbox *mailbox,
 {
     int i, r;
 
-    /*
-     * Locking order is to lock header before quota.  We therefore
-     * unlock all the quota roots we have locked in order to avoid a
-     * deadlock.  As releasing these locks can cause the quota use
-     * recalculation to screw up, we set the global variable 'redofix'
-     * to cause the quota use recalculation to be redone.
-     *
-     * We could optimize this by trying to get a nonblocking lock on
-     * the header and unlocking all the quota roots only when that fails.
-     */
-    for (i = firstquota; i < quota_num; i++) {
-	if (quota[i].quota.fd != -1) {
-	    close(quota[i].quota.fd);
-	    quota[i].quota.fd = -1;
-	}
-    }
     redofix = 1;
 
     r = mailbox_lock_header(mailbox);
@@ -452,43 +401,29 @@ int fixquota_fixroot(struct mailbox *mailbox,
 /*
  * Finish fixing up a quota root
  */
-int fixquota_finish(int thisquota)
+int fixquota_finish(int thisquota, struct txn **tid)
 {
     int r;
 
     if (!quota[thisquota].refcount) {
 	if (!quota[thisquota].deleted++) {
-	    char buf[MAX_MAILBOX_PATH+1];
-	    
 	    printf("%s: removed\n", quota[thisquota].quota.root);
-	    mailbox_hash_quota(buf, sizeof(buf), quota[thisquota].quota.root);
-
-	    unlink(buf);
+	    r = quota_delete(&quota[thisquota].quota, tid);
+	    if (r) return r;
+	    free(quota[thisquota].quota.root);
+	    quota[thisquota].quota.root = NULL;
 	}
 	return 0;
     }
 
-    if (quota[thisquota].quota.fd == -1) {
-	r = mailbox_lock_quota(&quota[thisquota].quota);
-	if (r) {
-	    if (quota[thisquota].quota.fd != -1) {
-		close(quota[thisquota].quota.fd);
-		quota[thisquota].quota.fd = -1;
-	    }
-	    return r;
-	}
-    }
-    
     if (quota[thisquota].quota.used != quota[thisquota].newused) {
 	printf("%s: usage was %lu, now %lu\n", quota[thisquota].quota.root,
 	       quota[thisquota].quota.used, quota[thisquota].newused);
 	quota[thisquota].quota.used = quota[thisquota].newused;
-	r = mailbox_write_quota(&quota[thisquota].quota);
+	r = quota_write(&quota[thisquota].quota, tid);
 	if (r) return r;
     }
 
-    close(quota[thisquota].quota.fd);
-    quota[thisquota].quota.fd = -1;
     return 0;
 }
 
@@ -500,12 +435,17 @@ int fixquota(char *domain, int ispartial)
 {
     int r = 0;
     static char pattern[2] = "*";
+    struct fix_rock frock;
+    struct txn *tid = NULL;
 
     /*
      * Lock mailbox list to prevent mailbox creation/deletion
      * during the fix
      */
     mboxlist_open(NULL);
+
+    frock.domain = domain;
+    frock.tid = &tid;
 
     redofix = 1;
     while (redofix) {
@@ -514,20 +454,22 @@ int fixquota(char *domain, int ispartial)
 	partial = ispartial;
 
 	r = (*quota_namespace.mboxlist_findall)(&quota_namespace, pattern, 1,
-						0, 0, fixquota_mailbox, domain);
+						0, 0, fixquota_mailbox, &frock);
 	if (r) {
 	    mboxlist_close();
 	    return r;
 	}
 
 	while (firstquota < quota_num) {
-	    r = fixquota_finish(firstquota++);
+	    r = fixquota_finish(firstquota++, &tid);
 	    if (r) {
 		mboxlist_close();
 		return r;
 	    }
 	}
     }
+
+    if (!r) quota_commit(&tid);
     
     mboxlist_close();
     return 0;

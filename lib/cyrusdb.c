@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb.c,v 1.8 2004/01/03 20:12:33 ken3 Exp $ */
+/* $Id: cyrusdb.c,v 1.9 2004/01/20 01:11:03 ken3 Exp $ */
 
 #include <config.h>
 #include <stdlib.h>
@@ -68,6 +68,7 @@ struct cyrusdb_backend *cyrusdb_backends[] = {
 #endif
     &cyrusdb_flat,
     &cyrusdb_skiplist,
+    &cyrusdb_quotalegacy,
     NULL };
 
 void cyrusdb_init() 
