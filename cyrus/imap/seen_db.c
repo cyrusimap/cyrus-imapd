@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.2 2000/04/11 03:37:02 leg Exp $
+   $Id: seen_db.c,v 1.3 2000/04/11 20:52:49 leg Exp $
  
  # Copyright 2000 Carnegie Mellon University
  # 
@@ -27,14 +27,14 @@
  *
  */
 
-/* xxx should probably store integers in network byte order */
-
 #include <config.h>
 
 #include <stdlib.h>
 #include <assert.h>
 #include <syslog.h>
 #include <ctype.h>
+#include <sys/types.h>
+#include <netinet/in.h>
 #include <db.h>
 
 #include "imapconf.h"
@@ -179,9 +179,9 @@ static int seen_readit(struct seen *seendb,
     }
 
     e = (struct seenentry *) data.data;
-    *lastreadptr = e->lastread;
-    *lastuidptr = e->lastuid;
-    *lastchangeptr = e->lastchange;
+    *lastreadptr = ntohl(e->lastread);
+    *lastuidptr = ntohl(e->lastuid);
+    *lastchangeptr = ntohl(e->lastchange);
     *seenuidsptr = xstrdup(e->seenuids);
 
     return 0;
@@ -233,9 +233,9 @@ int seen_write(struct seen *seendb, time_t lastread, unsigned int lastuid,
     key.data = (void *) seendb->uniqueid;
     key.size = strlen(seendb->uniqueid);
 
-    e->lastread = lastread;
-    e->lastuid = lastuid;
-    e->lastchange = lastchange;
+    e->lastread = htonl(lastread);
+    e->lastuid = htonl(lastuid);
+    e->lastchange = htonl(lastchange);
     strcpy(e->seenuids, seenuids);
 
     data.data = e;
