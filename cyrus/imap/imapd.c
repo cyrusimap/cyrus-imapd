@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.294 2001/01/16 00:59:56 leg Exp $ */
+/* $Id: imapd.c,v 1.295 2001/01/19 16:37:28 ken3 Exp $ */
 
 #include <config.h>
 
@@ -5060,8 +5060,6 @@ int getsortcriteria(char *tag, struct sortcrit **sortcrit)
     static struct buf criteria;
     int nsort, n;
 
-    *sortcrit = NULL;
-
     c = prot_getc(imapd_in);
     if (c != '(') goto missingcrit;
 
@@ -5072,7 +5070,7 @@ int getsortcriteria(char *tag, struct sortcrit **sortcrit)
     nsort = 0;
     n = 0;
     for (;;) {
-	if (n == nsort) {
+	if (n >= nsort - 1) {	/* leave room for implicit criterion */
 	    /* (Re)allocate an array for sort criteria */
 	    nsort += SORTGROWSIZE;
 	    *sortcrit =
