@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.185 2000/10/26 19:59:26 ken3 Exp $
+dnl $Id: configure.in,v 1.186 2000/11/05 22:11:27 leg Exp $
 dnl
 
 
@@ -673,17 +673,21 @@ AC_ARG_ENABLE(netscapehack,
 AC_CHECK_FUNC(dlopen,,AC_CHECK_LIB(dl, dlopen))
 CMU_SASL_REQUIRED
 
-CMU_AGENTX
-
-if test "$found_agentx" = yes; then
-  CMU_PTHREADS
-  SNMP_SUBDIRS="snmp"
-fi
-
+dnl --- cmu agentx library deprecated in favor of ucd snmp
+dnl CMU_AGENTX
+dnl 
+dnl if test "$found_agentx" = yes; then
+dnl   CMU_PTHREADS
+dnl   SNMP_SUBDIRS="snmp"
+dnl fi
+dnl
+SNMP_SUBDIRS=""
 AC_SUBST(SNMP_SUBDIRS)
 
 CMU_SOCKETS
 CMU_LIBWRAP
+CMU_UCDSNMP
+
 LIBS="$LIBS ${LIB_WRAP} ${LIB_SOCKET}"
 
 # Figure out what directories we're linking against.

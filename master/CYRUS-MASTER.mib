@@ -1,0 +1,161 @@
+CYRUS-MASTER-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Counter32
+        FROM SNMPv2-SMI
+    DisplayString
+        FROM SNMPv2-TC
+    cmuCyrus
+        FROM CMU-MIB;
+
+cyrusMasterMIB MODULE-IDENTITY
+    LAST-UPDATED "0010312300Z"		-- 2000 Oct 31
+    ORGANIZATION "CMU Project Cyrus"
+    CONTACT-INFO
+                "       Email: cyrus-bugs@andrew.cmu.edu
+
+		        Project Cyrus
+                        Computing Services
+                        Carnegie Mellon University
+                        Pittsburgh PA. 15213
+                "
+    DESCRIPTION "A simple MIB for application status of the Cyrus
+	         master process.
+		"
+	::= { cmuCyrus 1 }
+
+-- general information
+
+cyrusMasterInfo OBJECT IDENTIFIER ::= { cyrusMasterMIB 1 }
+
+  -- version information
+
+   cyrusMasterInfoDescr  OBJECT-TYPE 
+
+                         SYNTAX     DisplayString (SIZE (0..255)) 
+
+                         ACCESS     read-only 
+
+                         STATUS     mandatory 
+
+                         DESCRIPTION   "A general textual description 
+
+                                        of the Cyrus server." 
+
+                         ::= { cyrusMasterInfo 1 }
+
+   cyrusMasterInfoVers   OBJECT-TYPE 
+
+                         SYNTAX     DisplayString (SIZE (0..255)) 
+
+                         ACCESS     read-only 
+
+                         STATUS     mandatory 
+
+                         DESCRIPTION  "The Version of the Cyrus server."
+
+                         ::= { cyrusMasterInfo 2 } 
+
+-- service table
+
+   serviceTable          OBJECT-TYPE 
+
+                         SYNTAX     SEQUENCE OF serviceEntry
+
+                         ACCESS     not-accessible 
+
+                         STATUS     mandatory 
+
+                         ::= { cyrusMasterMIB 2 }
+
+
+   serviceEntry          OBJECT-TYPE 
+
+                         SYNTAX     ServiceEntry 
+
+                         ACCESS     not-accessible 
+
+                         STATUS     mandatory 
+
+                         INDEX     { serviceId } 
+
+                         ::= { serviceTable 1 } 
+
+
+   ServiceEntry      ::= SEQUENCE { 
+
+                         serviceForks		Counter32,
+
+			 serviceActive		Gauge32,
+
+			 serviceName		DisplayString (SIZE (0..255)),
+
+			 serviceId		INTEGER
+
+                         } 		   
+
+      -- forks since startup
+      serviceForks       OBJECT-TYPE 
+
+                         SYNTAX     Counter32 
+
+                         ACCESS     read-only 
+
+                         STATUS     mandatory 
+
+                         DESCRIPTION  "The total number of forks for this 
+			               service since initialization." 
+
+                         ::= { serviceEntry 1 } 
+
+             
+
+      -- active children
+      serviceActive      OBJECT-TYPE 
+
+                         SYNTAX     Gauge32 
+
+                         ACCESS     read-only 
+
+                         STATUS     mandatory 
+
+                         DESCRIPTION  "The total number of children currently 
+
+                                       active." 
+
+                         ::= { serviceEntry 2 } 
+
+
+      serviceName        OBJECT-TYPE 
+
+                         SYNTAX     DisplayString (SIZE (0..255))
+
+                         ACCESS     read-only 
+
+                         STATUS     mandatory 
+
+                         DESCRIPTION  "The name of this service."
+
+                         ::= { serviceEntry 3 } 
+
+      serviceId          OBJECT-TYPE 
+
+                         SYNTAX     INTEGER 
+
+                         ACCESS     read-only 
+
+                         STATUS     mandatory 
+
+                         DESCRIPTION  "The id of the service as configured." 
+
+                         ::= { serviceEntry 4 }
+
+-- event table
+
+--   eventTable            OBJECT-TYPE 
+--                         SYNTAX     SEQUENCE OF eventEntry
+--                         ACCESS     not-accessible 
+--                         STATUS     mandatory 
+--                         ::= { cyrusMasterMIB 3 }
+
+END

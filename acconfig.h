@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.11 2000/10/26 19:59:27 ken3 Exp $ */
+/* $Id: acconfig.h,v 1.12 2000/11/05 22:11:27 leg Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -86,6 +86,9 @@
 
 /* is Sieve enabled? */
 #undef USE_SIEVE
+
+/* do we have the UCD SNMP libraries? */
+#undef HAVE_UCDSNMP
 
 /* _POSIX_PTHREAD_SEMANTICS needed? */
 #undef _POSIX_PTHREAD_SEMANTICS
