@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.6 2000/06/05 18:36:01 leg Exp $
+ * $Id: lmtpengine.c,v 1.7 2000/06/05 19:11:02 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1429,7 +1429,7 @@ int lmtp_connect(const char *phost,
     sasl_external_properties_t *extprops = NULL;
 
     assert(host);
-    assert(conn);
+    assert(ret);
 
     if (host[0] == '/') {
 	struct sockaddr_un addr;
@@ -1597,7 +1597,6 @@ static void pushmsg(struct protstream *in, struct protstream *out,
     char buf[8192], *p;
     int lastline_hadendline = 1;
 
-    prot_rewind(in);
     while (prot_fgets(buf, sizeof(buf)-1, in)) {
 	/* dot stuff */
 	if (!isdotstuffed && (lastline_hadendline == 1) && (buf[0]=='.')) {
