@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.81 2002/01/28 23:32:57 leg Exp $ */
+/* $Id: proxyd.c,v 1.82 2002/01/29 20:45:09 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -840,12 +840,21 @@ static int mlookup(const char *name, char **pathp,
 {
     int r;
 
+    if(pathp) *pathp = NULL;
+
     r = mboxlist_lookup(name, pathp, aclp, tid);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	/* xxx stub function for requiring a round-trip to the mupdate
 	   server */
 	kick_mupdate();
 	r = mboxlist_lookup(name, pathp, aclp, tid);
+    }
+
+    /* xxx hide the fact that we are storing partitions */
+    if(pathp && *pathp) {
+	char *c;
+	c = strchr(*pathp, '!');
+	if(c) *c = '\0';
     }
 
     return r;

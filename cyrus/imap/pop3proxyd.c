@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.27 2001/12/01 04:03:16 ken3 Exp $
+ * $Id: pop3proxyd.c,v 1.28 2002/01/29 20:45:09 rjs3 Exp $
  */
 #include <config.h>
 
@@ -1204,6 +1204,13 @@ static void openproxy(void)
 
     r = mboxlist_lookup(inboxname, &server, NULL, NULL);
     if (!r) fatal("couldn't find backend server", EC_CONFIG);
+
+    /* xxx hide the fact that we are storing partitions */
+    if(server) {
+	char *c;
+	c = strchr(server, '!');
+	if(c) *c = '\0';
+    }
 
     hp = gethostbyname(server);
     if (!hp) fatal("gethostbyname failed", EC_CONFIG);

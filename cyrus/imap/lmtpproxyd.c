@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.27 2002/01/29 20:13:31 leg Exp $
+ * $Id: lmtpproxyd.c,v 1.28 2002/01/29 20:45:08 rjs3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -410,6 +410,13 @@ static int adddest(struct mydata *mydata,
     }
 
     assert(mailboxdata != NULL);
+
+    /* xxx hide the fact that we are storing partitions */
+    if(mailboxdata->server) {
+	char *c;
+	c = strchr(mailboxdata->server, '!');
+	if(c) *c = '\0';
+    }
 
     /* see if we currently have a 'mailboxdata->server'/'authas' 
        combination. */
