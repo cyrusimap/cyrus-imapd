@@ -66,7 +66,7 @@
 #include "xmalloc.h"
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ptloader.c,v 1.38 2004/05/22 03:45:57 rjs3 Exp $";
+      "$Id: ptloader.c,v 1.39 2004/12/17 16:32:26 ken3 Exp $";
 
 extern const char *ptsmodule_name;
 extern void ptsmodule_init(void);
@@ -96,11 +96,10 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     setproctitle_init(argc, argv, envp);
 
     /* set signal handlers */
-    signals_add_handlers();
     signal(SIGPIPE, SIG_IGN);
 
     syslog(LOG_NOTICE,
-	   "starting: $Id: ptloader.c,v 1.38 2004/05/22 03:45:57 rjs3 Exp $ (%s)",
+	   "starting: $Id: ptloader.c,v 1.39 2004/12/17 16:32:26 ken3 Exp $ (%s)",
 	   ptsmodule_name);
 
     while ((opt = getopt(argc, argv, "d:")) != EOF) {

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: mbexamine.c,v 1.10 2004/12/03 16:24:15 ken3 Exp $ */
+/* $Id: mbexamine.c,v 1.11 2004/12/17 16:32:16 ken3 Exp $ */
 
 #include <config.h>
 
@@ -158,7 +158,7 @@ int main(int argc, char **argv)
     mboxlist_open(NULL);
 
     signals_set_shutdown(&shut_down);
-    signals_add_handlers();
+    signals_add_handlers(0);
 
     if (optind == argc) {
 	strlcpy(buf, "*", sizeof(buf));

@@ -72,7 +72,7 @@
  * may contain an explanatory message.
  *
  *
- * $Id: smmapd.c,v 1.10 2004/09/09 16:21:28 shadow Exp $
+ * $Id: smmapd.c,v 1.11 2004/12/17 16:32:22 ken3 Exp $
  */
 
 #include <config.h>
@@ -157,7 +157,6 @@ int service_init(int argc, char **argv, char **envp)
     setproctitle_init(argc, argv, envp);
 
     signals_set_shutdown(&shut_down);
-    signals_add_handlers();
     signal(SIGPIPE, SIG_IGN);
 
     BB = config_getstring(IMAPOPT_POSTUSER);
@@ -316,7 +315,10 @@ int begin_handling(void)
 	char *mapname = NULL, *key = NULL;
 	const char *errstring = NULL;
 
-	signals_poll();
+	if (signals_poll() == SIGHUP) {
+	    /* caught a SIGHUP, return */
+	    return 0;
+	}
 
 	while (isdigit(c)) {
 	    sawdigit = 1;

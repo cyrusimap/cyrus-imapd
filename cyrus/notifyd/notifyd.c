@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notifyd.c,v 1.17 2004/05/22 03:45:56 rjs3 Exp $
+ * $Id: notifyd.c,v 1.18 2004/12/17 16:32:25 ken3 Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -113,7 +113,10 @@ int do_notify()
 	method = class = priority = user = mailbox = message = reply = NULL;
 	nopt = 0;
 
-	signals_poll();
+	if (signals_poll() == SIGHUP) {
+	    /* caught a SIGHUP, return */
+	    return 0;
+	}
 	r = recvfrom(soc, buf, NOTIFY_MAXSIZE, 0,
 		     (struct sockaddr *) &sun_data, &sunlen);
 	if (r == -1) {
@@ -244,7 +247,6 @@ int service_init(int argc, char **argv, char **envp __attribute__((unused)))
     if (!default_method) fatal("unknown notification method %s", EC_USAGE);
 
     signals_set_shutdown(&shut_down);
-    signals_add_handlers();
 
     return 0;
 }
