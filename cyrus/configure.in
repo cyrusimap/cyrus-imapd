@@ -529,9 +529,13 @@ AC_ARG_ENABLE(cmulocal,
 		EXTRA_SUBDIRS="${EXTRA_SUBDIRS} cmulocal"
 		EXTRA_OUTPUT="${EXTRA_OUTPUT} cmulocal/Makefile"
 	fi)			
+STRIP="-s"
 AC_ARG_ENABLE(debug,
-[  --enable-debug          allow some debugging information in binaries],
-STRIP="-s",STRIP="")
+[  --enable-debug          do not strip binaries on the install],
+	if test "$enableval" = yes; then
+		STRIP=""
+	fi)
+AC_SUBST(STRIP)
 AC_ARG_ENABLE(experiment,
 	[  --enable-experiment       enable experimental code (gurus only)],
 	if test "$enableval" = yes; then
