@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.58 2002/05/24 16:07:23 ken3 Exp $
+ * $Id: mupdate.c,v 1.59 2002/05/29 16:49:16 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -821,7 +821,7 @@ void database_log(const struct mbent *mb)
 	break;
 
     case SET_DELETE:
-	mboxlist_deletemailbox(mb->mailbox, 1, "", NULL, 0, 0);
+	mboxlist_deletemailbox(mb->mailbox, 1, "", NULL, 0, 0, 0);
 	break;
 
     case SET_DEACTIVATE:
@@ -1548,7 +1548,7 @@ int mupdate_synchronize(mupdate_handle *handle)
 	    remote_boxes.head = r->next;
 	} else if (ret < 0) {
 	    /* Local without corresponding remote, delete it */
-	    mboxlist_deletemailbox(l->mailbox, 1, "", NULL, 0, 0);
+	    mboxlist_deletemailbox(l->mailbox, 1, "", NULL, 0, 0, 0);
 	    local_boxes.head = l->next;
 	} else /* (ret > 0) */ {
 	    /* Remote without corresponding local, insert it */
@@ -1563,7 +1563,7 @@ int mupdate_synchronize(mupdate_handle *handle)
     if(l && !r) {
 	/* we have more deletes to do */
 	while(l) {
-	    mboxlist_deletemailbox(l->mailbox, 1, "", NULL, 0, 0);
+	    mboxlist_deletemailbox(l->mailbox, 1, "", NULL, 0, 0, 0);
 	    local_boxes.head = l->next;
 	    l = local_boxes.head;
 	}

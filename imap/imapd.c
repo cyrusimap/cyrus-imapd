@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.392 2002/05/24 18:05:14 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.393 2002/05/29 16:49:14 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -3642,7 +3642,7 @@ void cmd_delete(char *tag, char *name, int localonly)
     if (!r) {
 	r = mboxlist_deletemailbox(mailboxname, imapd_userisadmin,
 				   imapd_userid, imapd_authstate, 1,
-				   localonly);
+				   localonly, 0);
     }
 
     /* was it a top-level user mailbox? */
@@ -3665,7 +3665,8 @@ void cmd_delete(char *tag, char *name, int localonly)
 	/* foreach mailbox in list, remove it */
 	for (i = 0; i < l->num; i++) {
 	    r2 = mboxlist_deletemailbox(l->mb[i], imapd_userisadmin,
-					imapd_userid, imapd_authstate, 0, 0);
+					imapd_userid, imapd_authstate,
+					0, 0, 0);
 	    if (r2) {
 		prot_printf(imapd_out, "* NO delete %s: %s\r\n",
 			    l->mb[i], error_message(r2));
@@ -6160,7 +6161,7 @@ static int do_xfer_single(char *toserver, char *topart,
 	/* note also that we need to remember to let proxyadmins do this */
 	r = mboxlist_deletemailbox(mailboxname,
 				   imapd_userisadmin || imapd_userisproxyadmin,
-				   imapd_userid, imapd_authstate, 0, 1);
+				   imapd_userid, imapd_authstate, 0, 1, 0);
 	if(r) syslog(LOG_ERR,
 		     "Could not delete local mailbox during move of %s",
 		     mailboxname);
