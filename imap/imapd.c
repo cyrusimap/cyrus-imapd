@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.224 2000/04/06 18:32:26 leg Exp $ */
+/* $Id: imapd.c,v 1.225 2000/04/07 19:50:54 leg Exp $ */
 
 #include <config.h>
 
@@ -1620,15 +1620,24 @@ cmd_append(char *tag, char *name)
     int firstuid, num;
     const char *parseerr = NULL;
 
-    c = ' '; /* just parsed a space */
-
     /* Set up the append */
     r = mboxname_tointernal(name, imapd_userid, mailboxname);
     if (!r) {
 	r = append_setup(&mailbox, mailboxname, MAILBOX_FORMAT_NORMAL,
 			 imapd_authstate, ACL_INSERT, size);
     }
+    if (r) {
+	prot_printf(imapd_out, "%s NO %s%s\r\n",
+		    tag,
+		    (r == IMAP_MAILBOX_NONEXISTENT &&
+		     mboxlist_createmailboxcheck(mailboxname, 0, 0,
+						 imapd_userisadmin,
+						 imapd_userid, imapd_authstate,
+						 (char **)0, (char **)0) == 0)
+		    ? "[TRYCREATE] " : "", error_message(r));
+    }
 
+    c = ' '; /* just parsed a space */
     /* we loop, to support MULTIAPPEND */
     while (!r && c == ' ') {
 	/* Parse flags */
@@ -1765,8 +1774,6 @@ cmd_append(char *tag, char *name)
 						 (char **)0, (char **)0) == 0)
 		    ? "[TRYCREATE] " : "", error_message(r));
     } else {
-	int a;
-
 	/* is this a space seperated list or sequence list? */
 	prot_printf(imapd_out, "%s OK [APPENDUID %u", tag, uidvalidity);
 	if (num == 1) {
