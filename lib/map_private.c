@@ -29,6 +29,7 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <syslog.h>
 
 #include "map.h"
@@ -48,6 +49,19 @@ unsigned long newlen;
 const char *name;
 const char *mboxname;
 {
+    struct sbuf *sbuf;
+    char buf[80];
+
+    if (newlen == MAP_UNKNOWN_LEN) {
+	if (fstat(fd, &sbuf) == -1) {
+	    syslog(LOG_ERR, "IOERROR: fstating %s file%s%s: %m", name,
+		   mboxname ? " for " : "", mboxname ? mboxname : "");
+	    sprintf(buf, "failed to fstat %s file", name);
+	    fatal(buf, EX_IOERR);
+	}
+	newlen = sbuf.st_size;
+    }
+	    
     if (*len) munmap((char *)*base, *len);
     if (newlen == 0) {
 	*base = 0;
@@ -64,8 +78,6 @@ const char *mboxname;
 #endif
 			 , fd, 0L);
     if (*base == (char *)-1) {
-	char buf[80];
-
 	if (onceonly) {
 	    /* Try again without using MAP_SHARED */
 	    *len = 0;
