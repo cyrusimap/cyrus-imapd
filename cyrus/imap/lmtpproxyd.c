@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.42.4.8 2002/08/19 01:57:21 ken3 Exp $
+ * $Id: lmtpproxyd.c,v 1.42.4.9 2002/10/03 18:21:07 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -220,12 +220,8 @@ int service_main(int argc __attribute__((unused)),
     prot_setflushonread(deliver_in, deliver_out);
     prot_settimeout(deliver_in, 300);
 
-    while ((opt = getopt(argc, argv, "C:Dq")) != EOF) {
+    while ((opt = getopt(argc, argv, "q")) != EOF) {
 	switch(opt) {
-	case 'C': /* alt config file - handled by service::main() */
-	    break;
-	case 'D': /* ext debugger - handled by service::main() */
- 	    break;
 	case 'q':
 	    quotaoverride = 1;
 	    break;

@@ -50,7 +50,7 @@
  */
 
 /*
- * $Id: nntpd.c,v 1.1.2.13 2002/09/30 19:53:37 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.14 2002/10/03 18:21:08 ken3 Exp $
  */
 #include <config.h>
 
@@ -313,12 +313,8 @@ int service_init(int argc __attribute__((unused)),
     mboxlist_init(0);
     mboxlist_open(NULL);
 
-    while ((opt = getopt(argc, argv, "C:Ds")) != EOF) {
+    while ((opt = getopt(argc, argv, "s")) != EOF) {
 	switch(opt) {
-	case 'C': /* alt config file - handled by service::main() */
-	    break;
-	case 'D': /* external debugger - handled by service::main() */
- 	    break;
 	case 's': /* nntps (do starttls right away) */
 	    nntps = 1;
 	    if (!tls_enabled()) {

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.27 2002/08/31 02:03:48 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.28 2002/10/03 18:21:09 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1068,12 +1068,8 @@ int service_init(int argc, char **argv, char **envp)
     mboxlist_init(0);
     mboxlist_open(NULL);
 
-    while ((opt = getopt(argc, argv, "C:Dsp:")) != EOF) {
+    while ((opt = getopt(argc, argv, "sp:")) != EOF) {
 	switch (opt) {
-	case 'C': /* alt config file - handled by service::main() */
-	    break;
-	case 'D': /* ext. debugger - handled by service::main() */
- 	    break;
 	case 's': /* imaps (do starttls right away) */
 	    imaps = 1;
 	    if (!tls_enabled()) {

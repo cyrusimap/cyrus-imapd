@@ -40,7 +40,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 # 
-# $Id: Makefile.in,v 1.26.2.1 2002/07/10 20:45:32 rjs3 Exp $
+# $Id: Makefile.in,v 1.26.2.2 2002/10/03 18:21:10 ken3 Exp $
 srcdir = @srcdir@
 VPATH = @srcdir@
 
@@ -62,9 +62,9 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
-MAN1 = $(srcdir)/imtest.1 $(srcdir)/pop3test.1 $(srcdir)/lmtptest.1 \
-	$(srcdir)/smtptest.1 $(srcdir)/sivtest.1 $(srcdir)/mupdatetest.1 \
-	$(srcdir)/installsieve.1 $(srcdir)/sieveshell.1
+MAN1 = $(srcdir)/imtest.1 $(srcdir)/pop3test.1 $(srcdir)/nntptest.1 \
+	 $(srcdir)/lmtptest.1 $(srcdir)/smtptest.1 $(srcdir)/sivtest.1 \
+	$(srcdir)/mupdatetest.1 $(srcdir)/installsieve.1 $(srcdir)/sieveshell.1
 MAN3 = $(srcdir)/imclient.3
 MAN5 = $(srcdir)/imapd.conf.5 $(srcdir)/krb.equiv.5 $(srcdir)/cyrus.conf.5
 MAN8 = $(srcdir)/arbitron.8 $(srcdir)/collectnews.8 $(srcdir)/deliver.8 \
@@ -74,7 +74,7 @@ MAN8 = $(srcdir)/arbitron.8 $(srcdir)/collectnews.8 $(srcdir)/deliver.8 \
 	$(srcdir)/lmtpd.8 $(srcdir)/idled.8 $(srcdir)/ctl_mboxlist.8 \
 	$(srcdir)/ctl_deliver.8 $(srcdir)/ctl_cyrusdb.8 $(srcdir)/ipurge.8 \
 	$(srcdir)/tls_prune.8 $(srcdir)/squatter.8 $(srcdir)/cvt_cyrusdb.8 \
-	$(srcdir)/notifyd.8 $(srcdir)/chk_cyrus.8
+	$(srcdir)/notifyd.8 $(srcdir)/chk_cyrus.8 $(srcdir)/nntpd.8
 
 all: $(MAN1) $(MAN3) $(MAN5) $(MAN8)
 

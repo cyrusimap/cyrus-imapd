@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service-thread.c,v 1.6 2002/06/03 19:13:42 rjs3 Exp $ */
+/* $Id: service-thread.c,v 1.6.4.1 2002/10/03 18:21:11 ken3 Exp $ */
 #include <config.h>
 
 #include <stdio.h>
@@ -137,6 +137,8 @@ static int libwrap_ask(struct request_info *r, int fd)
 extern void config_init(const char *, const char *);
 extern const char *config_getstring(const char *key, const char *def);
 
+#define ARGV_GROW 10
+
 int main(int argc, char **argv, char **envp)
 {
     int fdflags;
@@ -146,28 +148,8 @@ int main(int argc, char **argv, char **envp)
     int opt;
     char *alt_config = NULL;
     int call_debugger = 0;
-
-    while ((opt = getopt(argc, argv, "C:D")) != EOF) {
-	switch (opt) {
-	case 'C': /* alt config file */
-	    alt_config = optarg;
-	    break;
-	case 'D':
-	    call_debugger = 1;
-	    break;
-	default:
-	    break;
-	}
-    }
-    optind = 1;
-
-    p = getenv("CYRUS_VERBOSE");
-    if (p) verbose = atoi(p) + 1;
-
-    if (verbose > 30) {
-	syslog(LOG_DEBUG, "waiting 15 seconds for debugger");
-	sleep(15);
-    }
+    int newargc = 0;
+    char **newargv = (char **) malloc(ARGV_GROW * sizeof(char *));
 
     p = getenv("CYRUS_SERVICE");
     if (p == NULL) {
@@ -180,6 +162,54 @@ int main(int argc, char **argv, char **envp)
 	exit(EX_OSERR);
     }
     config_init(alt_config, service);
+
+
+    opterr = 0; /* disable error reporting,
+		   since we don't know about service-specific options */
+
+    newargv[newargc++] = argv[0];
+
+    while ((opt = getopt(argc, argv, "C:D")) != EOF) {
+	switch (opt) {
+	case 'C': /* alt config file */
+	    alt_config = optarg;
+	    break;
+	case 'D':
+	    call_debugger = 1;
+	    break;
+	default:
+	    if (!((newargc+1) % ARGV_GROW)) { /* time to alloc more */
+		newargv = (char **) realloc(newargv, (newargc + ARGV_GROW) * 
+					    sizeof(char *));
+	    }
+	    newargv[newargc++] = argv[optind-1];
+
+	    /* option has an argument */
+	    if (optind < argc && argv[optind][0] != '-')
+		newargv[newargc++] = argv[optind++];
+
+	    break;
+	}
+    }
+    /* grab the remaining arguments */
+    for (; optind < argc; optind++) {
+	if (!(newargc % ARGV_GROW)) { /* time to alloc more */
+	    newargv = (char **) realloc(newargv, (newargc + ARGV_GROW) * 
+					sizeof(char *));
+	}
+	newargv[newargc++] = argv[optind];
+    }
+
+    opterr = 1; /* enable error reporting */
+    optind = 1; /* reset the option index for parsing by the service */
+
+    p = getenv("CYRUS_VERBOSE");
+    if (p) verbose = atoi(p) + 1;
+
+    if (verbose > 30) {
+	syslog(LOG_DEBUG, "waiting 15 seconds for debugger");
+	sleep(15);
+    }
 
     if (call_debugger) {
 	char debugbuf[1024];
@@ -213,7 +243,7 @@ int main(int argc, char **argv, char **envp)
 	return 1;
     }
 
-    if (service_init(argc, argv, envp) != 0) {
+    if (service_init(newargc, newargv, envp) != 0) {
 	notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
 	return 1;
     }
@@ -259,7 +289,7 @@ int main(int argc, char **argv, char **envp)
 
 	use_count++;
 	notify_master(STATUS_FD, MASTER_SERVICE_CONNECTION);
-	if (service_main_fd(fd, argc, argv, envp) < 0) {
+	if (service_main_fd(fd, newargc, newargv, envp) < 0) {
 	    break;
 	}
     }

@@ -1,5 +1,5 @@
 .\" -*- nroff -*-
-.TH FUD 8
+.TH NNTPD 8 "Project Cyrus" CMU
 .\" 
 .\" Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
 .\"
@@ -39,11 +39,11 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: fud.8,v 1.7.2.2 2002/10/03 18:21:10 ken3 Exp $
+.\" $Id: nntpd.8,v 1.1.2.1 2002/10/03 18:21:10 ken3 Exp $
 .SH NAME
-FUD \- provide information about user mailboxes
+nntpd \- NNTP server process
 .SH SYNOPSIS
-.B fud
+.B nntpd
 [
 .B \-C
 .I config-file
@@ -59,25 +59,36 @@ FUD \- provide information about user mailboxes
 [
 .B \-D
 ]
+.br
+      [
+.B \-s
+]
 .SH DESCRIPTION
-.B FUD
-is a long lived datagram daemon started from master that provides
-information about when a user last
-read their mail, when mail last arrived in a user's mailbox, and how
-many messages are recent for that user.
+.I Nntpd
+is a NNTP server.
+It accepts commands on its standard input and responds on its standard output.
+It MUST invoked by
+.IR master (8)
+with those descriptors attached to a remote client connection.
 .PP
-Note that for
-.B FUD
-to run properly you must set proto=udp in its cyrus.conf
-services entry.  prefork=1 is also recommended.
-.B FUD
-will automatically proxy any and all FUD requests to the appropriate
-backend server if it is runing on a Cyrus Murder frontend machine.
-.PP
-.B FUD
+.I Nntpd
 reads its configuration options out of the
 .IR imapd.conf (5)
 file unless specified otherwise by \fB-C\fR.
+.PP
+If the directory
+.RI log/ user
+exists under the directory specified in the
+.I configdirectory
+configuration option, then
+.I nntpd
+will create protocol telemetry logs for sessions authenticating as
+.IR user .
+The telemetry logs will be stored in the 
+.RI log/ user
+directory with a filename of the
+.I nntpd
+process-id.
 .SH OPTIONS
 .TP
 .BI \-C " config-file"
@@ -94,24 +105,14 @@ timeout.  The default is 60.
 .TP
 .BI \-D
 Run external debugger specified in debug_command.
+.TP
+.BI \-s
+Serve NNTP over SSL (nntps).  All data to and from
+.I nntpd
+is encrypted using the Secure Sockets Layer.
 .SH FILES
 .TP
 .B /etc/imapd.conf
-Default configuration file.
-.TP
-.B /etc/cyrus.conf
-Cyrus Master process configuration file.
-.SH BUGS
-Though not really a bug, 
-.B FUD
-will silently ignore any requests that it does not consider valid.
+.SH SEE ALSO
 .PP
-Also not really a bug,
-.B FUD
-requires that the anonymous user has the 0 (zero) right on the mailbox
-in question.  This is only a "bug" because 0 is not a standard IMAP ACL bit.
-.PP
-.B FUD
-is an experimental interface meant to provide information to build a
-finger-like service around.  Eventually it should be superceded by a
-more standards-based protocol.
+\fBimapd.conf(5)\fR, \fBmaster(8)\fR

@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.60.4.10 2002/09/23 20:41:22 ken3 Exp $
+ * $Id: mupdate.c,v 1.60.4.11 2002/10/03 18:21:08 ken3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -391,12 +391,8 @@ int service_init(int argc, char **argv,
     config_sasl_init(1, 1, mysasl_cb);
 
     /* see if we're the master or a slave */
-    while ((opt = getopt(argc, argv, "C:m")) != EOF) {
+    while ((opt = getopt(argc, argv, "m")) != EOF) {
 	switch (opt) {
-	case 'C': /* alt. config file - handled by service::main */
-	    break;
-	case 'D': /* ext debugger - handled by service::main */
- 	    break;
 	case 'm':
 	    masterp = 1;
 	    break;

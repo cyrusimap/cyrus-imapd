@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122.4.10 2002/08/19 01:57:21 ken3 Exp $
+ * $Id: pop3d.c,v 1.122.4.11 2002/10/03 18:21:08 ken3 Exp $
  */
 #include <config.h>
 
@@ -279,12 +279,8 @@ int service_init(int argc __attribute__((unused)),
 	fatal(error_message(r), EC_CONFIG);
     }
 
-    while ((opt = getopt(argc, argv, "C:Dsk")) != EOF) {
+    while ((opt = getopt(argc, argv, "sk")) != EOF) {
 	switch(opt) {
-	case 'C': /* alt config file - handled by service::main() */
-	    break;
-	case 'D': /* external debugger - handled by service::main() */
- 	    break;
 	case 's': /* pop3s (do starttls right away) */
 	    pop3s = 1;
 	    if (!tls_enabled()) {
