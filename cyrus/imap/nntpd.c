@@ -38,14 +38,13 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.38 2002/11/01 18:09:30 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.39 2002/11/03 04:19:51 ken3 Exp $
  */
 
 /*
  * TODO:
  *
  * - remove Xref header from articles
- * - support for control messages?
  */
 
 
@@ -1935,7 +1934,7 @@ static int savemsg(message_data_t *m, FILE *f)
     /* get newsgroups */
     if ((body = spool_getheader(m->hdrcache, "newsgroups")) != NULL) {
 	/* parse newsgroups */
-	if ((r = parse_groups(body[0], m)) == 0) {
+	if (!m->control && (r = parse_groups(body[0], m)) == 0) {
 	    char buf[1024] = "";
 	    const char *sep = "";
 	    int n;
@@ -2015,6 +2014,132 @@ static int deliver(message_data_t *msg)
     /* store msgid for IHAVE/CHECK/TAKETHIS and reader commands */
     if (have_newsdb && msg->id && rcpt)
 	netnews_store(msg->id, rcpt, uid, msg->lines, now);
+
+    return  0;
+}
+
+static int newgroup(message_data_t *msg)
+{
+    int r;
+    char *group;
+    char mailboxname[MAX_MAILBOX_NAME+1];
+
+    /* isolate newsgroup */
+    group = msg->control + 9; /* skip "newgroup " */
+    while (isspace((int) *group)) group++;
+
+    snprintf(mailboxname, sizeof(mailboxname), "%s%.*s",
+	     newsprefix, (int) strcspn(group, " \t\r\n"), group);
+
+    /* XXX check ACL, localonly? force? */
+    r = mboxlist_createmailbox(mailboxname, 0, NULL, 1,
+			       nntp_userid, nntp_authstate, 0, 0);
+
+    /* XXX check body of message for useful MIME parts */
+
+    return 0;
+}
+
+static int rmgroup(message_data_t *msg)
+{
+    int r;
+    char *group;
+    char mailboxname[MAX_MAILBOX_NAME+1];
+
+    /* isolate newsgroup */
+    group = msg->control + 8; /* skip "rmgroup " */
+    while (isspace((int) *group)) group++;
+
+    snprintf(mailboxname, sizeof(mailboxname), "%s%.*s",
+	     newsprefix, (int) strcspn(group, " \t\r\n"), group);
+
+    /* XXX should we delete right away, or wait until empty? */
+
+    /* XXX check ACL, localonly? force? */
+    r = mboxlist_deletemailbox(mailboxname, 1,
+			       nntp_userid, nntp_authstate, 0, 0, 0);
+
+    return 0;
+}
+
+static int mvgroup(message_data_t *msg)
+{
+    int r, len;
+    char *group;
+    char oldmailboxname[MAX_MAILBOX_NAME+1];
+    char newmailboxname[MAX_MAILBOX_NAME+1];
+
+    /* isolate old newsgroup */
+    group = msg->control + 8; /* skip "mvgroup " */
+    while (isspace((int) *group)) group++;
+
+    len = (int) strcspn(group, " \t\r\n");
+    snprintf(oldmailboxname, sizeof(oldmailboxname), "%s%.*s",
+	     newsprefix, len, group);
+
+    /* isolate new newsgroup */
+    group += len; /* skip old newsgroup */
+    while (isspace((int) *group)) group++;
+
+    len = (int) strcspn(group, " \t\r\n");
+    snprintf(newmailboxname, sizeof(newmailboxname), "%s%.*s",
+	     newsprefix, len, group);
+
+    /* XXX check ACL, localonly? force? */
+    r = mboxlist_renamemailbox(oldmailboxname, newmailboxname, NULL, 1,
+			       nntp_userid, nntp_authstate);
+
+    /* XXX check body of message for useful MIME parts */
+
+    return 0;
+}
+
+static int expunge_cancelled(struct mailbox *mailbox, void *rock, char *index)
+{
+    int uid = ntohl(*((bit32 *)(index+OFFSET_UID)));
+
+    return (uid == *((unsigned long *) rock));
+}
+
+static int cancel(message_data_t *msg)
+{
+    int r;
+    char *msgid, *p, *mailbox;
+    time_t now = time(NULL);
+    unsigned long uid;
+
+    /* isolate msgid */
+    msgid = strchr(msg->control, '<');
+    p = strrchr(msgid, '>') + 1;
+    *p = '\0';
+
+    if (netnews_lookup(msgid, &mailbox, &uid, NULL, NULL)) {
+	struct mailbox mbox;
+	int doclose = 0;
+
+	r = mailbox_open_header(mailbox, 0, &mbox);
+
+	if (!r) {
+	    doclose = 1;
+	    if (mbox.header_fd != -1)
+		mailbox_lock_header(&mbox);
+	    mbox.header_lock_count = 1;
+
+	    r = mailbox_open_index(&mbox);
+	}
+
+	if (!r) {
+	    mailbox_lock_index(&mbox);
+	    mbox.index_lock_count = 1;
+	    /* XXX check ACL */
+	    mailbox_expunge(&mbox, 0, expunge_cancelled, &uid);
+	}
+
+	if (doclose) mailbox_close(&mbox);
+    }
+
+    /* store msgid of cancelled message for IHAVE/CHECK/TAKETHIS */
+    if (have_newsdb) netnews_store(msgid, "", uid, 0, now);
 
     return  0;
 }
@@ -2158,7 +2283,18 @@ static void cmd_post(char *msgid, int mode)
 
 	if (!r) {
 	    if (msg->control) {
-		/* do something with the control message */
+		/* XXX should we deliver control messages somewhere? */
+		if (!strncmp(msg->control, "newgroup", 8))
+		    r = newgroup(msg);
+		else if (!strncmp(msg->control, "rmgroup", 7))
+		    r = rmgroup(msg);
+		else if (!strncmp(msg->control, "mvgroup", 7))
+		    r = mvgroup(msg);
+		else if (!strncmp(msg->control, "cancel", 6))
+		    r = cancel(msg);
+		else
+		    syslog(LOG_ERR, "unknown control message: %s",
+			   msg->control);
 	    }
 	    else {
 		/* deliver the article */
