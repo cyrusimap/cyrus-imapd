@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: version.c,v 1.9 2002/07/09 18:50:24 ken3 Exp $
+ * $Id: version.c,v 1.9.2.1 2002/08/09 19:12:13 rjs3 Exp $
  */
 
 #include <config.h>
@@ -87,6 +87,8 @@ void id_getcmdline(int argc, char **argv)
 void id_response(struct protstream *pout)
 {
     struct utsname os;
+    const char *sasl_imp;
+    int sasl_ver;
     char env_buf[MAXIDVALUELEN+1];
 
     prot_printf(pout, "* ID ("
@@ -113,9 +115,18 @@ void id_response(struct protstream *pout)
     }
 #endif
 
-    /* add the environment info */
-    snprintf(env_buf, MAXIDVALUELEN,"Cyrus SASL %d.%d.%d",
+    /* SASL information */
+    snprintf(env_buf, MAXIDVALUELEN,"Built w/Cyrus SASL %d.%d.%d",
 	     SASL_VERSION_MAJOR, SASL_VERSION_MINOR, SASL_VERSION_STEP);
+
+    sasl_version(&sasl_imp, &sasl_ver);
+    snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
+	     "; Running w/%s %d.%d.%d", sasl_imp,
+	     (sasl_ver & 0xFF000000) >> 24,
+	     (sasl_ver & 0x00FF0000) >> 16,
+	     (sasl_ver & 0x0000FFFF));
+
+    /* add the environment info */
 #ifdef DB_VERSION_STRING
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
 	     "; %s", DB_VERSION_STRING);
