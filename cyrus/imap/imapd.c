@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.23 2002/08/16 22:00:48 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.24 2002/08/18 00:45:59 ken3 Exp $ */
 
 #include <config.h>
 
@@ -6017,7 +6017,7 @@ static int do_xfer_single(char *toserver, char *topart,
     /* Step 1a: Connect to mupdate (as needed) */
     if(h_in) {
 	mupdate_h = h_in;
-    } else {
+    } else if (config_mupdate_server) {
 	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
 	if(r) {
 	    syslog(LOG_ERR,
@@ -6054,7 +6054,7 @@ static int do_xfer_single(char *toserver, char *topart,
 
     /* Step 3: mupdate.DEACTIVATE(mailbox, newserver) */
     /* (only if mailbox has not been already deactivated by our caller) */
-    if(!r && !prereserved) {
+    if(!r && mupdate_h && !prereserved) {
 	backout_remoteflag = 1;
 
 	/* Note we are making the reservation on OUR host so that recovery
@@ -6101,7 +6101,7 @@ static int do_xfer_single(char *toserver, char *topart,
 
     /* Step 6: mupdate.activate(mailbox, remote) */
     /* We do this from the local server first so that recovery is easier */
-    if(!r) {
+    if(!r && mupdate_h) {
 	/* Note the flag that we don't have a valid partiton at the moment */
 	snprintf(buf, sizeof(buf), "%s!MOVED", toserver);
 	r = mupdate_activate(mupdate_h, mailboxname, buf, acl);
@@ -6115,14 +6115,16 @@ static int do_xfer_single(char *toserver, char *topart,
 
 	/* 6.5) Kick remote server to correct mupdate entry */
 	/* Note that we don't really care if this succeeds or not */
-	prot_printf(be->out, "MP1 MUPDATEPUSH {%d+}\r\n%s\r\n",
-		    strlen(name), name);
-	rerr = getresult(be->in, "MP1");
-	if(rerr) {
-	    syslog(LOG_ERR,
-		   "Could not trigger remote push to mupdate server" \
-		   "during move of %s",
-		   mailboxname);
+	if (mupdate_h) {
+	    prot_printf(be->out, "MP1 MUPDATEPUSH {%d+}\r\n%s\r\n",
+			strlen(name), name);
+	    rerr = getresult(be->in, "MP1");
+	    if(rerr) {
+		syslog(LOG_ERR,
+		       "Could not trigger remote push to mupdate server" \
+		       "during move of %s",
+		       mailboxname);
+	    }
 	}
     }
 
@@ -6140,7 +6142,7 @@ static int do_xfer_single(char *toserver, char *topart,
      }
 
 done:
-    if(r && backout_mupdate) {
+    if(r && mupdate_h && backout_mupdate) {
 	rerr = 0;
 	/* xxx if the mupdate server is what failed, then this won't
 	   help any! */
@@ -6172,7 +6174,7 @@ done:
     }
 
     /* release the handles we got locally if necessary */
-    if(!h_in)
+    if(mupdate_h && !h_in)
 	mupdate_disconnect(&mupdate_h);
     if(be && !be_in)
 	downserver(be);
@@ -6256,11 +6258,6 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	r = IMAP_PERMISSION_DENIED;
     }
 
-    /* if we're not in a murder this [currently] makes no sense */
-    if (!config_mupdate_server) {
-	r = IMAP_SERVER_UNAVAILABLE;
-    }
-
     if (!r) {
 	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace,
 						   name,
@@ -6310,7 +6307,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	struct backend *be = NULL;
 	
 	/* we need to reserve the users inbox - connect to mupdate */
-	if(!r) {
+	if(!r && config_mupdate_server) {
 	    r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
 	    if(r) {
 		syslog(LOG_ERR,
@@ -6331,7 +6328,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	}
 
 	/* deactivate their inbox */
-	if(!r) {
+	if(!r && mupdate_h) {
 	    /* Note we are making the reservation on OUR host so that recovery
 	     * make sense */
 	    snprintf(buf, sizeof(buf), "%s!%s", config_servername, part);
@@ -6343,7 +6340,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	}
 
 	/* If needed, set an uppermost quota root */
-	{
+	if(!r) {
 	    char buf[MAX_MAILBOX_PATH];
 	    struct quota quota;
 	    
@@ -6400,7 +6397,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	    free(be);
 	}
 
-	if(r && backout_mupdate) {
+	if(r && mupdate_h && backout_mupdate) {
 	    int rerr = 0;
 	    /* xxx if the mupdate server is what failed, then this won't
 	       help any! */
