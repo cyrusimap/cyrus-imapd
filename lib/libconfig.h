@@ -1,5 +1,5 @@
 /* libconfig.h -- Header for imapd.conf processing
- * $Id: libconfig.h,v 1.2 2003/10/22 18:03:04 rjs3 Exp $
+ * $Id: libconfig.h,v 1.3 2003/12/07 01:00:59 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -52,6 +52,7 @@ extern void config_read(const char *alt_config);
 extern const char *config_getstring(enum imapopt opt);
 extern int config_getint(enum imapopt opt);
 extern int config_getswitch(enum imapopt opt);
+extern enum enum_value config_getenum(enum imapopt opt);
 
 /* these work on additional strings that are not defined in the
  * imapoptions table */
