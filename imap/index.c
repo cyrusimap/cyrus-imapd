@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.157 2001/02/25 05:09:41 ken3 Exp $
+ * $Id: index.c,v 1.158 2001/02/26 22:24:26 leg Exp $
  */
 #include <config.h>
 
@@ -86,8 +86,8 @@ static char *seenflag;		/* Array for each msgno, nonzero if \Seen */
 static time_t seen_last_change;	/* Last mod time of \Seen state change */
 static int flagalloced = -1;	/* Allocated size of above two arrays */
 static int examining;		/* Nonzero if opened with EXAMINE command */
-static int keepingseen;		/* Nonzero if /Seen is meaningful */
-static unsigned allseen;	/* Last UID if all msgs /Seen last checkpoint */
+static int keepingseen;		/* Nonzero if \Seen is meaningful */
+static unsigned allseen;	/* Last UID if all msgs \Seen last checkpoint */
 struct seen *seendb;		/* Seen state database object */
 static char *seenuids;		/* Sequence of UID's from last seen checkpoint */
 
@@ -195,7 +195,6 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 {
     struct stat sbuf;
     int newexists, oldexists, oldmsgno, msgno, nexpunge, i, r;
-    struct index_record record;
     time_t last_read;
     bit32 user_flags[MAX_USER_FLAGS/32];
 
@@ -218,6 +217,19 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 	    }
 	}
 	else if (sbuf.st_ino != mailbox->index_ino) {
+	    /* ok, the index file has been replaced -> expunge happened.
+	     figure out which messages were expunged. */
+	    struct index_record record;
+	    unsigned long *olduids;
+
+	    /* save old uids */
+	    olduids = (unsigned long *) 
+		xmalloc((imapd_exists + 1) * sizeof(unsigned long));
+	    for (oldmsgno = 1; oldmsgno <= imapd_exists; oldmsgno++) {
+		olduids[oldmsgno] = UID(mailbox, oldmsgno);
+	    }
+
+	    /* reopen the mailbox */
 	    if (mailbox_open_index(mailbox)) {
 		fatal("failed to reopen index file", EC_IOERR);
 	    }
@@ -228,12 +240,14 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 		    mailbox_read_index_record(mailbox, msgno, &record);
 		}
 		else {
+		    /* definitely was deleted; no corresponding msgno
+		       in new index file */
 		    record.uid = mailbox->last_uid+1;
 		}
 		
 		nexpunge = 0;
-		while (oldmsgno<=imapd_exists && 
-		       UID(mailbox,oldmsgno) < record.uid) {
+		while (oldmsgno <= imapd_exists && 
+		       olduids[oldmsgno] < record.uid) {
 		    nexpunge++;
 		    oldmsgno++;
 		}
@@ -256,6 +270,9 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 
 	    /* Force a * n EXISTS message */
 	    imapd_exists = -1;
+
+	    /* free old uids */
+	    free(olduids);
 	}
 	else if (sbuf.st_mtime != mailbox->index_mtime) {
 	    mailbox_read_index_header(mailbox);
