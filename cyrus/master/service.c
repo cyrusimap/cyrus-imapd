@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.37.4.9 2003/03/04 00:38:12 ken3 Exp $ */
+/* $Id: service.c,v 1.37.4.10 2003/05/29 14:44:28 ken3 Exp $ */
 
 #include <config.h>
 
@@ -521,5 +521,6 @@ int main(int argc, char **argv, char **envp)
 	notify_master(STATUS_FD, MASTER_SERVICE_AVAILABLE);
     }
 
+    service_abort(0);
     return 0;
 }
