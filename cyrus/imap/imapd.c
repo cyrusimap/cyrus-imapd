@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.400 2002/07/24 19:30:32 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.401 2002/07/24 20:42:22 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -6013,7 +6013,7 @@ static int do_xfer_single(char *toserver, char *topart,
      * 2.5) Set mailbox as REMOTE on local server
      * 3) mupdate.DEACTIVATE(mailbox, remoteserver) xxx what partition?
      * 4) undump mailbox from local to remote
-     * 5) reconstruct remote mailbox
+     * 5) Sync remote acl
      * 6) mupdate.ACTIVATE(mailbox, remoteserver)
      * ** MAILBOX NOW LIVING ON REMOTE SERVER
      * 6.5) force remote server to push the final mupdate entry to ensure
@@ -6110,7 +6110,7 @@ static int do_xfer_single(char *toserver, char *topart,
 		     mailboxname);
     }
     
-    /* Step 4.5: Set ACL on remote */
+    /* Step 5: Set ACL on remote */
     if(!r) {
 	r = trashacl(be->in, be->out, mailboxname);
 	if(r) syslog(LOG_ERR, "Could not clear remote acl on %s",
