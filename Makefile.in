@@ -1,5 +1,5 @@
 # Top-level Makefile for cyrus software
-# $Id: Makefile.in,v 1.23 1998/11/03 19:40:30 tjs Exp $
+# $Id: Makefile.in,v 1.24 1998/11/03 21:09:46 tjs Exp $
 #
 # @configure_input@
 # Copyright 1998 Carnegie Mellon University
@@ -51,7 +51,6 @@ all:: checkdepend
 install::
 	$(srcdir)/install-sh -d ${DESTDIR}$(exec_prefix)/bin
 	$(srcdir)/install-sh -d ${DESTDIR}$(exec_prefix)/lib
-	$(srcdir)/install-sh -d ${DESTDIR}$(cyrus_prefix)/bin
 	$(srcdir)/install-sh -d ${DESTDIR}$(prefix)/include/cyrus
 	$(srcdir)/install-sh -d ${DESTDIR}$(prefix)/man/man1
 	$(srcdir)/install-sh -d ${DESTDIR}$(prefix)/man/man3
