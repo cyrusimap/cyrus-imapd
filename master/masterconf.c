@@ -1,5 +1,5 @@
 /* masterconfig.c -- Configuration routines for master process
- $Id: masterconf.c,v 1.5 2001/03/14 22:39:35 leg Exp $
+ $Id: masterconf.c,v 1.6 2001/09/03 19:36:07 wcw Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -240,6 +240,7 @@ void masterconf_getsection(const char *section, masterconf_process *f,
 	}
     }
 
+    fclose(infile);
 }
 
 
