@@ -216,12 +216,12 @@ int snmp_close(void)
 int snmp_increment(${basename}_t cmd, int incr)
 {
     int len;
-    char tosend[100];
+    char tosend[256];
 
     if (mysock == -1) return 1;
 
     strcpy(tosend, snmp_getoid(cmd));
-    strcat(tosend,"\n");
+    strcat(tosend,"\\n");
 
     len = strlen(remote.sun_path) + sizeof(remote.sun_family);
 
@@ -234,7 +234,8 @@ int snmp_increment(${basename}_t cmd, int incr)
 
 int snmp_set(${basename}_t cmd, int value)
 {
-    fprintf(stderr, "bah humbug\n");
+    fprintf(stderr, "bah humbug\\n");
+    return 1;
 }
 
 EOF
