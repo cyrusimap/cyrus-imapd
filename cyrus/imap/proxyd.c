@@ -39,9 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.19 2002/08/19 01:57:22 ken3 Exp $ */
-
-#undef PROXY_IDLE
+/* $Id: proxyd.c,v 1.131.2.20 2002/08/19 16:42:50 ken3 Exp $ */
 
 #include <config.h>
 
@@ -2592,15 +2590,19 @@ void id_freeparamlist(struct idparamlist *l)
  */
 void cmd_idle(char *tag)
 {
-#ifdef PROXY_IDLE
     static int idle_period = -1;
     int c;
     static struct buf arg;
 
     /* get polling period */
     if (idle_period == -1) {
-      idle_period = config_getint(IMAPOPT_IMAPIDLEPOLL));
-      if (idle_period < 1) idle_period = 1;
+      idle_period = config_getint(IMAPOPT_IMAPIDLEPOLL);
+      if (idle_period < 1) idle_period = 0;
+    }
+
+    if (!idle_period) {
+	prot_printf(proxyd_out, "%s NO idle disabled\r\n", tag);
+	return;
     }
 
     if (!backend_current) {
@@ -2623,9 +2625,6 @@ void cmd_idle(char *tag)
 	    eatline(proxyd_in, c);
 	}
     }
-#else
-    prot_printf(proxyd_out, "%s NO idle disabled\r\n", tag);
-#endif
 }
 
 /* Check for alerts */ 
@@ -2634,6 +2633,8 @@ struct prot_waitevent *idle_getalerts(struct protstream *s,
 {
     int idle_period = *((int *) rock);
     int fd;
+
+    ev->mark = time(NULL) + idle_period;
 
     if (! proxyd_userisadmin &&
 	(fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
@@ -2645,7 +2646,6 @@ struct prot_waitevent *idle_getalerts(struct protstream *s,
 	shutdown_file(fd);
     }
 
-    ev->mark = time(NULL) + idle_period;
     return ev;
 }
 
@@ -2797,9 +2797,9 @@ void cmd_capability(char *tag)
     prot_printf(proxyd_out, "* CAPABILITY ");
     prot_printf(proxyd_out, CAPABILITY_STRING);
 
-#ifdef PROXY_IDLE
-    prot_printf(proxyd_out, " IDLE");
-#endif
+    if (config_getint(IMAPOPT_IMAPIDLEPOLL) > 0) {
+	prot_printf(proxyd_out, " IDLE");
+    }
 
     if (tls_enabled()) {
 	prot_printf(proxyd_out, " STARTTLS");
