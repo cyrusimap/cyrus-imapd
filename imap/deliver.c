@@ -25,7 +25,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.83 1998/07/07 19:12:44 tjs Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.84 1998/07/31 22:22:02 tjs Exp $";
 
 #include <stdio.h>
 #include <string.h>
@@ -95,7 +95,10 @@ char **argv;
 
     config_init("deliver");
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+    /* Can't be EX_USAGE; sendmail thinks that EX_USAGE implies
+     * a permenant failure.
+     */
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_TEMPFAIL);
 
     while ((opt = getopt(argc, argv, "df:r:m:a:F:eE:lqD")) != EOF) {
 	switch(opt) {
