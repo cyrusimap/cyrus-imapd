@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.153 2001/09/13 16:35:02 ken3 Exp $
+ * $Id: mboxlist.c,v 1.154 2001/09/18 20:01:13 ken3 Exp $
  */
 
 #include <config.h>
@@ -1980,17 +1980,6 @@ mboxlist_opensubs(const char *userid,
 {
     int r = 0;
     char *subsfname;
-    char inboxname[MAX_MAILBOX_NAME+1];
-
-    /* Users without INBOXes may not keep subscriptions */
-    if (strchr(userid, '.') || strlen(userid) + 6 > MAX_MAILBOX_NAME) {
-	return IMAP_PERMISSION_DENIED;
-    }
-    strcpy(inboxname, "user.");
-    strcat(inboxname, userid);
-    if (mboxlist_lookup(inboxname, NULL, NULL, NULL) != 0) {
-	return IMAP_PERMISSION_DENIED;
-    }
 
     /* Build subscription list filename */
     subsfname = mboxlist_hash_usersubs(userid);
