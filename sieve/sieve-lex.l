@@ -55,46 +55,46 @@ CRLF		(\r\n|\r|\n)
 		    mlbuf[mlcur++] = yytext[0]; }
 <MULTILINE><<EOF>> { yyerror("unexpected end of file in string"); 
 		     yyterminate(); }
-text:{ws}?(#.*)?{CRLF}	{ BEGIN MULTILINE;
+<INITIAL>text:{ws}?(#.*)?{CRLF}	{ BEGIN MULTILINE;
 			  mlcur = 0; mlbufsz = 0; mlbuf = NULL; }
-[0-9]+[KMG]?	{ yylval.nval = tonum(yytext); return NUMBER; }
-if		return IF;
-elsif		return ELSIF;
-else		return ELSE;
-anyof		return ANYOF;
-allof		return ALLOF;
-exists		return EXISTS;
-false		return FALSE;
-true		return TRUE;
-address		return ADDRESS;
-envelope        return ENVELOPE;
-header		return HEADER;
-not		return NOT;
-size		return SIZE;
-reject		return REJCT;
-fileinto	return FILEINTO;
-redirect	return FORWARD;
-keep		return KEEP;
-require         return REQUIRE;
-stop		return STOP;
-discard		return DISCARD;
-vacation	return VACATION;
-:days		return DAYS;
-:addresses	return ADDRESSES;
-:subject	return SUBJECT;
-:mime		return MIME;
-:comparator	return COMPARATOR;
-:is		return IS;
-:contains	return CONTAINS;
-:matches	return MATCHES;
-:over		return OVER;
-:under		return UNDER;
-:all		return ALL;
-:localpart	return LOCALPART;
-:domain		return DOMAIN;
-\"([^"]|\\.)*\"	{ yylval.sval = fixstr(yytext); return STRING; }
-[ \t\n\r] ;	/* ignore whitespace */
-#.* ;		/* ignore comments */
+<INITIAL>[0-9]+[KMG]?	{ yylval.nval = tonum(yytext); return NUMBER; }
+<INITIAL>if		return IF;
+<INITIAL>elsif		return ELSIF;
+<INITIAL>else		return ELSE;
+<INITIAL>anyof		return ANYOF;
+<INITIAL>allof		return ALLOF;
+<INITIAL>exists		return EXISTS;
+<INITIAL>false		return FALSE;
+<INITIAL>true		return TRUE;
+<INITIAL>address		return ADDRESS;
+<INITIAL>envelope        return ENVELOPE;
+<INITIAL>header		return HEADER;
+<INITIAL>not		return NOT;
+<INITIAL>size		return SIZE;
+<INITIAL>reject		return REJCT;
+<INITIAL>fileinto	return FILEINTO;
+<INITIAL>redirect	return FORWARD;
+<INITIAL>keep		return KEEP;
+<INITIAL>require         return REQUIRE;
+<INITIAL>stop		return STOP;
+<INITIAL>discard		return DISCARD;
+<INITIAL>vacation	return VACATION;
+<INITIAL>:days		return DAYS;
+<INITIAL>:addresses	return ADDRESSES;
+<INITIAL>:subject	return SUBJECT;
+<INITIAL>:mime		return MIME;
+<INITIAL>:comparator	return COMPARATOR;
+<INITIAL>:is		return IS;
+<INITIAL>:contains	return CONTAINS;
+<INITIAL>:matches	return MATCHES;
+<INITIAL>:over		return OVER;
+<INITIAL>:under		return UNDER;
+<INITIAL>:all		return ALL;
+<INITIAL>:localpart	return LOCALPART;
+<INITIAL>:domain		return DOMAIN;
+<INITIAL>\"([^"]|\\.)*\"	{ yylval.sval = fixstr(yytext); return STRING; }
+<INITIAL>[ \t\n\r] ;	/* ignore whitespace */
+<INITIAL>#.* ;		/* ignore comments */
 .		return yytext[0];
 
 %%
