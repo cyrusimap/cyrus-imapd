@@ -1,5 +1,5 @@
 /* auth_krb_pts.c -- Kerberos authorization with AFS PTServer groups
- $Id: auth_krb_pts.c,v 1.41 2002/01/29 17:32:07 leg Exp $
+ $Id: auth_krb_pts.c,v 1.42 2002/01/31 19:54:55 rjs3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -432,10 +432,6 @@ struct auth_state *auth_newstate(const char *identifier,
     }
 
  load:
-    /* close and unlock the database */
-    ptdb->close(ptdb, 0);
-    close(fd);
-
     /* if it's expired, ask the ptloader to reload it and reread it */
     if (!r) {
 	fetched = (struct auth_state *) data.data;
@@ -445,9 +441,17 @@ struct auth_state *auth_newstate(const char *identifier,
 	    newstate = (struct auth_state *) xrealloc(newstate, data.size);
 	    memcpy(newstate, fetched, data.size);
 
+	    /* Close the database before we return */
+	    ptdb->close(ptdb,0);
+	    close(fd);
+
 	    return newstate;
 	}
     }
+
+    /* close and unlock the database */
+    ptdb->close(ptdb, 0);
+    close(fd);
 
     s = socket(AF_UNIX, SOCK_STREAM, 0);
     if (s == -1) {
