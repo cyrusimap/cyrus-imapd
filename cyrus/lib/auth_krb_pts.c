@@ -1,5 +1,5 @@
 /* auth_krb_pts.c -- Kerberos authorization with AFS PTServer groups
- * $Id: auth_krb_pts.c,v 1.44.4.5 2002/11/14 19:36:22 rjs3 Exp $
+ * $Id: auth_krb_pts.c,v 1.44.4.6 2002/11/14 20:59:43 leg Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -393,12 +393,10 @@ struct auth_state *auth_newstate(const char *identifier,
     r = CONFIG_DB_PTS->fetch(ptdb, keydata, PTS_DB_KEYSIZE,
                              &data, &dsize, NULL);
     if (r != 0) {
-      /* close and unlock the database */
-      CONFIG_DB_PTS->close(ptdb);
+        syslog(LOG_ERR, "auth_newstate: error fetching record: %s",
+               cyrusdb_strerror(r));
 
-      syslog(LOG_ERR, "auth_newstate: error fetching record: %s",
-             cyrusdb_strerror(r));
-      return newstate;
+        goto done;
     }
 
     /* if it's expired, ask the ptloader to reload it and reread it */
@@ -411,24 +409,23 @@ struct auth_state *auth_newstate(const char *identifier,
              time(0) - libcyrus_config_getint(CYRUSOPT_PTS_CACHE_TIMEOUT));
     }
 
-    if (fetched && fetched->mark > time(0) - libcyrus_config_getint(CYRUSOPT_PTS_CACHE_TIMEOUT)) {
-      /* not expired; let's return it */
-      newstate = (struct auth_state *) xrealloc(newstate, dsize);
-      memcpy(newstate, fetched, dsize);
-                           
-      /* Close the database before we return */
-      CONFIG_DB_PTS->close(ptdb);
-      
-      return newstate;
+    if (fetched && fetched->mark > 
+        (time(0) - libcyrus_config_getint(CYRUSOPT_PTS_CACHE_TIMEOUT))) {
+        /* not expired; let's return it */
+        newstate = (struct auth_state *) xrealloc(newstate, dsize);
+        memcpy(newstate, fetched, dsize);
+        
+        goto done;
     }
 
     syslog(LOG_DEBUG, "auth_newstate: pinging ptloader");
 
     s = socket(AF_UNIX, SOCK_STREAM, 0);
     if (s == -1) {
-      syslog(LOG_ERR,
-	     "auth_newstate: unable to create socket for ptloader: %m");
-      return newstate;
+        syslog(LOG_ERR,
+               "auth_newstate: unable to create socket for ptloader: %m");
+
+        goto done;
     }
         
     strcpy(fnamebuf, config_dir);
@@ -441,7 +438,8 @@ struct auth_state *auth_newstate(const char *identifier,
     if (r == -1) {
 	syslog(LOG_ERR, "auth_newstate: can't connect to ptloader server: %m");
 	close(s);
-	return newstate;
+
+        goto done;
     }
 
     ksize = PTS_DB_KEYSIZE;
@@ -462,37 +460,37 @@ struct auth_state *auth_newstate(const char *identifier,
         
     close(s);
         
-    if (start <= 1 || strncmp(response, "OK", 2)) return newstate;
+    if (start <= 1 || strncmp(response, "OK", 2)) {
+        syslog(LOG_ERR, "auth_newstate: bad response from ptloader server");
+        goto done;
+    }
 
     /* fetch the current record for the user */
     r = CONFIG_DB_PTS->fetch(ptdb, keydata, PTS_DB_KEYSIZE, 
 			     &data, &dsize, NULL);
     if (r != 0) {
-	/* close and unlock the database */
-	CONFIG_DB_PTS->close(ptdb);
-	
 	syslog(LOG_ERR, "auth_newstate: error fetching record: %s", 
 	       cyrusdb_strerror(r));
-	return newstate;
+
+        goto done;
     }
 
     if (!data) {
-	/* close and unlock the database */
-	CONFIG_DB_PTS->close(ptdb);
-	
 	syslog(LOG_ERR, "auth_newstate: error fetching record: %s "
 	       "(did ptloader add the record?)", 
 	       cyrusdb_strerror(r));
-	return newstate;
+
+        goto done;
     }
 
-    /* if it's expired, ask the ptloader to reload it and reread it */
+    /* ok, we got what we wanted */
     fetched = (struct auth_state *) data;
 
     /* copy it into our structure */
     newstate = (struct auth_state *) xrealloc(newstate, dsize);
     memcpy(newstate, fetched, dsize);
 
+ done:
     /* close and unlock the database */
     CONFIG_DB_PTS->close(ptdb);
 
