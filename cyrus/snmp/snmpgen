@@ -40,7 +40,7 @@
 #
 exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #!perl -w
-# $Id: snmpgen,v 1.12 2000/12/18 04:53:43 leg Exp $
+# $Id: snmpgen,v 1.13 2002/02/13 21:00:12 rjs3 Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -334,7 +334,8 @@ print OUTPUT_C <<EOF
     return NULL;
 }
 
-const char *snmp_getoid(const char *name, ${basename}_t evt, char *buf, int buflen)
+const char *snmp_getoid(const char *name __attribute__((unused)),
+			${basename}_t evt, char *buf, int buflen)
 {
     switch (evt) {
 EOF
