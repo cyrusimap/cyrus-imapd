@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.249 2000/05/30 21:02:06 ken3 Exp $ */
+/* $Id: imapd.c,v 1.250 2000/06/01 05:48:32 leg Exp $ */
 
 #include <config.h>
 
@@ -355,7 +355,13 @@ int service_init(int argc, char **argv, char **envp)
     if ((r = sasl_server_init(mysasl_cb, "Cyrus")) != SASL_OK) {
 	syslog(LOG_ERR, "SASL failed initializing: sasl_server_init(): %s", 
 	       sasl_errstring(r, NULL, NULL));
-	return 2;
+	return EC_SOFTWARE;
+    }
+
+    if ((r = sasl_client_init(NULL)) != SASL_OK) {
+	syslog(LOG_ERR, "SASL failed initializing: sasl_client_init(): %s", 
+	       sasl_errstring(r, NULL, NULL));
+	return EC_SOFTWARE;
     }
 
     /* syslog(LOG_DEBUG, "finished initializiting libsasl"); */
@@ -1764,14 +1770,14 @@ static int isokflag(char *s)
 {
     if (s[0] == '\\') {
 	lcase(s);
-	if (!strcmp(s, "\\seen")) return 0;
-	if (!strcmp(s, "\\answered")) return 0;
-	if (!strcmp(s, "\\flagged")) return 0;
-	if (!strcmp(s, "\\draft")) return 0;
-	if (!strcmp(s, "\\deleted")) return 0;
+	if (!strcmp(s, "\\seen")) return 1;
+	if (!strcmp(s, "\\answered")) return 1;
+	if (!strcmp(s, "\\flagged")) return 1;
+	if (!strcmp(s, "\\draft")) return 1;
+	if (!strcmp(s, "\\deleted")) return 1;
 	
 	/* uh oh, system flag i don't recognize */
-	return 1;
+	return 0;
     } else {
 	/* valid user flag? */
 	return imparse_isatom(s);
