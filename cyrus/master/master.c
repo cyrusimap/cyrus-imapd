@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.15 2000/09/05 04:07:52 leg Exp $ */
+/* $Id: master.c,v 1.16 2000/09/30 15:57:32 leg Exp $ */
 
 #include <config.h>
 
@@ -114,7 +114,7 @@ static struct event *schedule = NULL;
 
 void fatal(char *msg, int code)
 {
-    syslog(LOG_CRIT, msg);
+    syslog(LOG_CRIT, "%s", msg);
     syslog(LOG_NOTICE, "exiting");
     exit(code);
 }

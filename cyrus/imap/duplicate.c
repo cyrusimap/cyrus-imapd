@@ -123,10 +123,7 @@ int duplicate_init(int myflags)
 	if (r) return r;
     }
     if ((r = db_env_create(&duplicate_dbenv, 0)) != 0) {
-	char err[1024];
-	
-	sprintf(err, "DBERROR: db_appinit failed: %s", strerror(r));
-	syslog(LOG_ERR, err);
+	syslog(LOG_ERR, "DBERROR: db_appinit failed: %s", strerror(r));
 	return IMAP_IOERROR;
     }
     
@@ -138,10 +135,7 @@ int duplicate_init(int myflags)
     r = duplicate_dbenv->open(duplicate_dbenv, buf, NULL, flags, 0644);
 #endif
     if (r) {
-	char err[1024];
-	
-	sprintf(err, "DBERROR: dbenv->open failed: %s", strerror(r));
-	syslog(LOG_ERR, err);
+	syslog(LOG_ERR, "DBERROR: dbenv->open failed: %s", strerror(r));
 	return IMAP_IOERROR;
     }
 
