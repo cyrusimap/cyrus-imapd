@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_quotalegacy.c,v 1.1.2.5 2004/06/09 19:42:47 ken3 Exp $ */
+/* $Id: cyrusdb_quotalegacy.c,v 1.1.2.6 2004/06/30 19:38:22 ken3 Exp $ */
 
 #include <config.h>
 
@@ -285,7 +285,7 @@ static int myopen(const char *fname, int flags, struct db **ret)
     assert(fname && ret);
 
     db->path = xstrdup(fname);
-    construct_hash_table(&db->table, 32, 0);
+    construct_hash_table(&db->table, 200, 0);
 
     /* strip any filename from the path */
     if ((p = strrchr(db->path, '/'))) *p = '\0';
@@ -438,6 +438,34 @@ static int fetch(struct db *db,
     return myfetch(db, quota_path, data, datalen, tid);
 }
 
+static const char *path_to_qr(const char *path, char *buf)
+{
+    const char *qr;
+    char *p;
+
+    qr = strrchr(path, '/') + 1;
+    if ((p = strstr(path, FNAME_DOMAINDIR))) {
+	/* use the quota_path as a buffer to construct virtdomain qr */
+	p += strlen(FNAME_DOMAINDIR) + 2; /* +2 for hashdir */
+	sprintf(buf, "%.*s!%s", (int) strcspn(p, "/"), p,
+		strcmp(qr, "root") ? qr : "");
+	qr = buf;
+    }
+
+    return qr;
+}
+
+static int compar_qr(const void *v1, const void *v2)
+{
+    const char *qr1, *qr2;
+    char qrbuf1[MAX_QUOTA_PATH+1], qrbuf2[MAX_QUOTA_PATH+1];
+
+    qr1 = path_to_qr(*((const char **) v1), qrbuf1);
+    qr2 = path_to_qr(*((const char **) v2), qrbuf2);
+
+    return strcmp(qr1, qr2);
+}   
+
 static int foreach(struct db *db,
 		   char *prefix, int prefixlen,
 		   foreach_p *goodp,
@@ -468,50 +496,42 @@ static int foreach(struct db *db,
 	    "?/%s*", prefix);
 
     /* search for the quotaroots */
-    glob(quota_path, 0, NULL, &globbuf);
+    glob(quota_path, GLOB_NOSORT, NULL, &globbuf);
 
     if (config_virtdomains) {
 	if (!prefixlen) {
 	    /* search for all virtdomain quotaroots */
 	    snprintf(quota_path, sizeof(quota_path), "%s%s?/*%s?/*",
 		     db->path, FNAME_DOMAINDIR, FNAME_QUOTADIR);
-	    glob(quota_path, GLOB_APPEND, NULL, &globbuf);
+	    glob(quota_path, GLOB_NOSORT | GLOB_APPEND, NULL, &globbuf);
 
 	    /* search for all domain quotas */
 	    snprintf(quota_path, sizeof(quota_path), "%s%s?/*%sroot",
 		     db->path, FNAME_DOMAINDIR, FNAME_QUOTADIR);
-	    glob(quota_path, GLOB_APPEND, NULL, &globbuf);
+	    glob(quota_path, GLOB_NOSORT | GLOB_APPEND, NULL, &globbuf);
 	}
 	else if (!strlen(prefix)) {
 	    /* search for the domain quotas */
 	    strcpy(strstr(quota_path, FNAME_QUOTADIR) + strlen(FNAME_QUOTADIR),
 		   "root");
-	    glob(quota_path, GLOB_APPEND, NULL, &globbuf);
+	    glob(quota_path, GLOB_NOSORT | GLOB_APPEND, NULL, &globbuf);
 	}
     }
     if (tmpprefix) free(tmpprefix);
 
     if (tid && !*tid) *tid = (struct txn *) &db->table;
 
+    /* sort the quotaroots (ignoring paths) */
+    qsort(globbuf.gl_pathv, globbuf.gl_pathc, sizeof(char *), &compar_qr);
+
     for (i = 0; i < globbuf.gl_pathc; i++) {
-	const char *data;
-	char *qr, *key;
+	const char *data, *key;
 	size_t keylen, datalen;
 
 	r = myfetch(db, globbuf.gl_pathv[i], &data, &datalen, tid);
 	if (r) break;
 
-	qr = strrchr(globbuf.gl_pathv[i], '/') + 1;
-	if ((p = strstr(globbuf.gl_pathv[i], FNAME_DOMAINDIR))) {
-	    /* use the quota_path as a buffer to construct virtdomain qr */
-	    p += strlen(FNAME_DOMAINDIR) + 2; /* +2 for hashdir */
-	    sprintf(quota_path, "%.*s!%s", strcspn(p, "/"), p,
-		    strcmp(qr, "root") ? qr : "");
-	    key = quota_path;
-	}
-	else
-	    key = qr;
-
+	key = path_to_qr(globbuf.gl_pathv[i], quota_path);
 	keylen = strlen(key);
 
 	if (!goodp || goodp(rock, key, keylen, data, datalen)) {
