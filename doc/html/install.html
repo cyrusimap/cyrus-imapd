@@ -394,6 +394,13 @@ beginning with "<tt>Mlocal</tt>", change the "<tt>P=/bin/mail,</tt>" to
 "<tt>P=/usr/etc/deliver,</tt>" and add the "<tt>S</tt>" character to the
 "<tt>F=</tt>" field.
 
+<P>If you want to enable duplicate delivery suppression, add the
+"<TT>-e</TT>" switch to the "<TT>A=</TT>" field.  This will prevent
+two messages with the same <TT>Message-ID:</TT>
+(<TT>Resent-Message-ID:</TT> if it exits) from being delivered to the
+same mailbox.  Periodically prune the database of deliveries by
+running "<TT>/usr/etc/deliver -E 3</TT>" daily as the cyrus user.
+
 </ol>
 
 <h2>Testing the IMAP Server</h2>
