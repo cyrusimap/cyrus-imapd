@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.72 1998/05/15 21:49:05 neplokh Exp $
+ $Id: mailbox.c,v 1.73 1998/06/25 22:16:02 tjs Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -433,7 +433,7 @@ struct mailbox *mailbox;
 	if (!p) p = eol;
 	if (mailbox->flagname[flag]) free(mailbox->flagname[flag]);
 	if (name != p) {
-	    mailbox->flagname[flag++] = xstrndup(p, p-name);
+	    mailbox->flagname[flag++] = xstrndup(name, p-name);
 	}
 	else {
 	    mailbox->flagname[flag++] = NULL;
