@@ -303,8 +303,8 @@ char *cacheid;
     
     if (auth_ngroups) {
 	free(auth_groups);
-	auth_groups=NULL;
-	auth_ngroups=0;
+	auth_groups = NULL;
+	auth_ngroups = 0;
     }
     
     identifier = auth_canonifyid(identifier);
@@ -314,41 +314,41 @@ char *cacheid;
     if (strcmp(auth_userid, "anyone") == 0) return 0;
     strcpy(auth_userid, identifier);
     
-    info.hash=hashfn;
-    info.lorder=0;
-    info.bsize=2048;
-    info.cachesize=20480;
-    info.ffactor=8;
-    key.data=keydata;
-    key.size=20;
+    info.hash = hashfn;
+    info.lorder = 0;
+    info.bsize = 2048;
+    info.cachesize = 20480;
+    info.ffactor = 8;
+    key.data = keydata;
+    key.size = 20;
     fd=open(DBLOCK, O_CREAT|O_TRUNC|O_RDWR, 0644);
     if (fd == -1) {
         syslog(LOG_ERR, "IOERROR: creating lock file %s: %m", DBLOCK);
-        return -1;
+        return 0;
     }
     if (lock_shared(fd) < 0) {
         syslog(LOG_ERR, "IOERROR: locking lock file %s: %m", DBLOCK);
-        return -1;
+        return 0;
     }
-    ptdb=dbopen(DBFIL, O_RDONLY, 0, DB_HASH, &info);
+    ptdb = dbopen(DBFIL, O_RDONLY, 0, DB_HASH, &info);
     if (!ptdb) {
 	if (errno == ENOENT) {
 	    /*
 	     * Hopefully, this should prevent two different processes from
 	     * trying to create the database at the same time
 	     */
-	    ptdb=dbopen(DBFIL, O_CREAT|O_RDWR|O_EXCL, 0644, DB_HASH, &info);
+	    ptdb = dbopen(DBFIL, O_CREAT|O_RDWR|O_EXCL, 0644, DB_HASH, &info);
 	    if (!ptdb && errno == EEXIST) {
-		ptdb=dbopen(DBFIL,O_RDONLY,0,DB_HASH,&info);
+		ptdb = dbopen(DBFIL,O_RDONLY,0,DB_HASH,&info);
 		if (!ptdb) {
 		    syslog(LOG_ERR, "IOERROR: opening database %s: %m", DBFIL);
 		    close(fd);
-		    return -1;
+		    return 0;
 		}
 	    }
 	    else if (!ptdb) {
 		syslog(LOG_ERR, "IOERROR: creating database %s: %m", DBFIL);
-		return -1;
+		return 0;
 	    }
 	    else {
 		/*
@@ -362,25 +362,25 @@ char *cacheid;
 		if (PUT(ptdb, &key, &dataheader, 0) < 0) {
 		    syslog(LOG_ERR, "IOERROR: initializing database %s: %m",
 			   DBFIL); 
-		    return -1;
+		    return 0;
 		}
 		/* close and reopen the database in read-only mode */
 		if (CLOSE(ptdb) < 0) {
 		    syslog(LOG_ERR, "IOERROR: initializing database %s: %m",
 			   DBFIL); 
-		    return -1;
+		    return 0;
 		}
-		ptdb=dbopen(DBFIL, O_RDONLY, 0644, DB_HASH, &info);
+		ptdb = dbopen(DBFIL, O_RDONLY, 0644, DB_HASH, &info);
 		if (!ptdb) {
 		    syslog(LOG_ERR, "IOERROR: reopening new database %s: %m",
 			   DBFIL); 
-		    return -1;
+		    return 0;
 		}
 	    }          
 	}
 	else {
 	    syslog(LOG_ERR, "IOERROR: opening database %s: %m", DBFIL);
-	    return -1;
+	    return 0;
 	}
     }
     if (cacheid) {
@@ -402,20 +402,20 @@ char *cacheid;
     }
     /* Fetch and process the header record for the user, if any */
     keydata[key.size-4] = 'H';
-    rc=GET(ptdb, &key, &dataheader, 0);
+    rc = GET(ptdb, &key, &dataheader, 0);
     keydata[key.size-4] = 0;
     if (rc < 0) {
         syslog(LOG_ERR, "IOERROR: reading database %s: %m", DBFIL);
         CLOSE(ptdb);
         close(fd);
-        return -1;
+        return 0;
     }
     if (!rc) {
         if(dataheader.size != sizeof(ptluser)) {
             syslog(LOG_ERR, "IOERROR: Database %s probably corrupt", DBFIL);
             CLOSE(ptdb);
             close(fd);
-            return -1;
+            return 0;
         }
         /* make sure the record is aligned */
         memcpy(&us, dataheader.data, sizeof(ptluser));
@@ -453,37 +453,37 @@ char *cacheid;
         
         close(s);
         
-        if (start <= 1 || strncmp(response, "OK", 2)) return -1;
+        if (start <= 1 || strncmp(response, "OK", 2)) return 0;
         /*  response[start] = '\0';
          *reply = response; */
 
         /* The database must be re-opened after external modifications, at
            least in db 1.1.85 */
-        fd=open(DBLOCK, O_CREAT|O_TRUNC|O_RDWR, 0644);
+        fd = open(DBLOCK, O_CREAT|O_TRUNC|O_RDWR, 0644);
         if (fd == -1) {
             syslog(LOG_ERR, "IOERROR: creating lock file %s: %m", DBLOCK);
-            return -1;
+            return 0;
         }
         if (lock_shared(fd) < 0) {
             syslog(LOG_ERR, "IOERROR: locking lock file %s: %m", DBLOCK);
-            return -1;
+            return 0;
         }
-        ptdb=dbopen(DBFIL, O_RDONLY, 0, DB_HASH, &info);
+        ptdb = dbopen(DBFIL, O_RDONLY, 0, DB_HASH, &info);
         if (!ptdb) {
             syslog(LOG_ERR, "IOERROR: opening database %s: %m", DBFIL);
             close(fd);
-            return -1;
+            return 0;
         }
 
         /* fetch the new header record and process it */
         keydata[key.size-4] = 'H';
-        rc=GET(ptdb, &key, &dataheader, 0);
+        rc = GET(ptdb, &key, &dataheader, 0);
         keydata[key.size-4] = 0;
         if (rc < 0) {
             syslog(LOG_ERR, "IOERROR: reading database: %m");             
             CLOSE(ptdb);
             close(fd);
-            return -1;
+            return 0;
         }
         /* The record still isn't there, even though the child claimed sucess
          */ 
@@ -492,7 +492,7 @@ char *cacheid;
                    identifier);
             CLOSE(ptdb);
             close(fd);
-            return -1;
+            return 0;
         }
         memcpy(&us, dataheader.data, dataheader.size);
     }
@@ -506,7 +506,7 @@ char *cacheid;
                identifier, us.user);
         CLOSE(ptdb);
         close(fd);      
-        return -1;
+        return 0;
     }
     /*
      * now get the actual data from the database. this will be a contiguous
@@ -518,7 +518,7 @@ char *cacheid;
     close(fd);
     if (rc < 0) {
         syslog(LOG_ERR, "IOERROR: reading database %s: %m", DBFIL);
-        return -1;
+        return 0;
     }
     if (rc) {
         syslog(LOG_ERR,
@@ -527,8 +527,8 @@ char *cacheid;
     }
     auth_ngroups = us.ngroups;
     if (auth_ngroups) {
-        auth_groups=(char (*)[][PR_MAXNAMELEN])xmalloc(auth_ngroups *
-                                                       PR_MAXNAMELEN); 
+        auth_groups = (char (*)[][PR_MAXNAMELEN])xmalloc(auth_ngroups *
+							 PR_MAXNAMELEN); 
         memcpy(auth_groups, datalist.data, auth_ngroups*PR_MAXNAMELEN);
     }
     return 0;
