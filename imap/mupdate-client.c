@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.24 2002/02/23 00:30:09 rjs3 Exp $
+ * $Id: mupdate-client.c,v 1.25 2002/02/25 02:37:45 leg Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -238,7 +238,7 @@ int mupdate_connect(const char *server, const char *port,
 		    mupdate_handle **handle,
 		    sasl_callback_t *cbs)
 {
-    mupdate_handle *h;
+    mupdate_handle *h = NULL;
     struct hostent *hp;
     struct servent *sp;
     struct sockaddr_in addr;

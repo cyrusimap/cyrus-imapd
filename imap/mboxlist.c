@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.168 2002/02/19 18:50:13 ken3 Exp $
+ * $Id: mboxlist.c,v 1.169 2002/02/25 02:37:21 leg Exp $
  */
 
 #include <config.h>
@@ -511,7 +511,7 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
     char *newpartition = NULL;
     struct mailbox newmailbox;
     struct txn *tid = NULL;
-    mupdate_handle *mupdate_h;
+    mupdate_handle *mupdate_h = NULL;
     char *mboxent = NULL;
 
     /* Must be atleast MAX_PARTITION_LEN + 30 for partition, need
@@ -742,7 +742,7 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
     int isremote = 0;
     int mbtype;
     int deleteright = get_deleteright();
-    mupdate_handle *mupdate_h;
+    mupdate_handle *mupdate_h = NULL;
 
  retry:
     /* Check for request to delete a user:
@@ -909,7 +909,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     char *mboxent = NULL;
     int deleteright = get_deleteright();
 
-    mupdate_handle *mupdate_h;
+    mupdate_handle *mupdate_h = NULL;
     int madenew = 0;
 
  retry:
@@ -1337,7 +1337,7 @@ int mboxlist_setacl(char *name, char *identifier, char *rights,
 
     /* 7. Change mupdate entry  */
     if (!r && mupdate_server) {
-        mupdate_handle *mupdate_h;
+        mupdate_handle *mupdate_h = NULL;
 	/* commit the update to MUPDATE */
 	char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
 	sprintf(buf, "%s!%s", config_servername, partition);
