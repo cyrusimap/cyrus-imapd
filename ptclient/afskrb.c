@@ -41,7 +41,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: afskrb.c,v 1.9 2005/01/06 20:03:30 shadow Exp $";
+      "$Id: afskrb.c,v 1.10 2005/01/19 07:35:45 shadow Exp $";
 
 #include <config.h>
 
@@ -72,6 +72,7 @@ static char rcsid[] __attribute__((unused)) =
 /* AFS stuff */
 #include <des.h> /* for int32, necessary for the AFS includes below */
 #include <afs/ptserver.h>
+#include <afs/pterror.h>
 #include <afs/cellconfig.h>
 #include <rx/rxkad.h>
 #include <afs/auth.h>
@@ -486,7 +487,7 @@ struct auth_state *ptsmodule_make_authstate(const char *identifier,
     if (rc == PRPERM) {
 	newstate->mark = time(0) + 60 - 
 	    (config_getint(IMAPOPT_PTSCACHE_TIMEOUT) > 60)?
-	    config_getint(IMAPOPT_PTSCACHE_TIMEOUT) : 60);
+	    config_getint(IMAPOPT_PTSCACHE_TIMEOUT) : 60;
     } else
 	newstate->mark = time(0);
 
