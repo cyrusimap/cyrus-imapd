@@ -1,7 +1,7 @@
 /* timsieved.c -- main file for timsieved (sieve script accepting program)
  * Tim Martin
  * 9/21/99
- * $Id: timsieved.c,v 1.40.4.4 2002/08/16 22:01:00 rjs3 Exp $
+ * $Id: timsieved.c,v 1.40.4.5 2002/08/19 01:57:23 ken3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -106,6 +106,11 @@ char sieved_clienthost[250] = "[local]";
 int sieved_userisadmin;
 int sieved_domainfromip = 0;
 
+/* the sasl proxy policy context */
+static struct proxy_context sieved_proxyctx = {
+    1, 1, &sieved_authstate, &sieved_userisadmin, NULL
+};
+
 /*
  * Cleanly shut down and exit
  */
@@ -164,104 +169,9 @@ void fatal(const char *s, int code)
     shut_down(EC_TEMPFAIL);
 }
 
-/*
- * acl_ok() checks to see if the the inbox for 'user' grants the 'a'
- * right to the principal 'auth_identity'. Returns 1 if so, 0 if not.
- */
-static int acl_ok(const char *user, 
-                  const char *auth_identity,
-                  struct auth_state *authstate)
-{
-    struct namespace sieved_namespace;
-    char *acl;
-    char inboxname[1024];
-    int r;
-
-    /* Set namespace */
-    r = mboxname_init_namespace(&sieved_namespace, 0);
-
-    if (!r)
-	r = (*sieved_namespace.mboxname_tointernal)(&sieved_namespace, "INBOX",
-						    user, inboxname);
-
-    if (r || !authstate ||
-        mboxlist_lookup(inboxname, (char **)0, &acl, NULL)) {
-        r = 0;  /* Failed so assume no proxy access */
-    }
-    else {
-        r = (cyrus_acl_myrights(authstate, acl) & ACL_ADMIN) != 0;
-    }
-
-    return r;
-}
-
-/* should we allow users to proxy?  return SASL_OK if yes,
-   SASL_BADAUTH otherwise */
-static int mysasl_authproc(sasl_conn_t *conn,
-			   void *context,
-			   const char *requested_user, unsigned rlen,
-			   const char *auth_identity, unsigned alen,
-			   const char *def_realm, unsigned urlen,
-			   struct propctx *propctx)
-{
-    const char *val = config_getstring(IMAPOPT_LOGINREALMS);
-    char *realm;
-
-    /* check if remote realm */
-    if ((!config_virtdomains || *val) &&
-	(realm = strchr(auth_identity, '@'))!=NULL) {
-	realm++;
-	while (*val) {
-	    if (!strncasecmp(val, realm, strlen(realm)) &&
-		(!val[strlen(realm)] || isspace((int) val[strlen(realm)]))) {
-		break;
-	    }
-	    /* not this realm, try next one */
-	    while (*val && !isspace((int) *val)) val++;
-	    while (*val && isspace((int) *val)) val++;
-	}
-	if (!*val) {
-	    sasl_seterror(conn, 0, "cross-realm login %s denied",
-			  auth_identity);
-	    return SASL_BADAUTH;
-	}
-    }
-
-    sieved_authstate = auth_newstate(auth_identity, NULL);
-
-    /* ok, is auth_identity an admin? */
-    sieved_userisadmin = config_authisa(sieved_authstate, IMAPOPT_ADMINS);
-
-    if (strcmp(auth_identity, requested_user)) {
-        /* we want to authenticate as a different user; we'll allow this
-           if we're an admin or if we've allowed ACL proxy logins */
-        int use_acl = config_getswitch(IMAPOPT_LOGINUSEACL);
-
-        if (sieved_userisadmin ||
-            (use_acl && acl_ok(requested_user, auth_identity, sieved_authstate)) ||
-            config_authisa(sieved_authstate, IMAPOPT_PROXYSERVERS)) {
-            /* proxy ok! */
-
-	    sieved_userisadmin = 0; /* no longer admin */
-	    auth_freestate(sieved_authstate);
-	    
-	    sieved_authstate = auth_newstate(requested_user, NULL);
-	} else {
-          sasl_seterror(conn, 0, "user %s is not allowed to proxy",
-                          auth_identity);
-	    
-	    auth_freestate(sieved_authstate);
-	    
-	    return SASL_BADAUTH;
-	}
-    }
-
-    return SASL_OK;
-}
-
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
-    { SASL_CB_PROXY_POLICY, &mysasl_authproc, NULL },
+    { SASL_CB_PROXY_POLICY, &mysasl_proxy_policy, (void*) &sieved_proxyctx },
     { SASL_CB_CANON_USER, &mysasl_canon_user, (void*) &sieved_domainfromip },
     { SASL_CB_LIST_END, NULL, NULL }
 };

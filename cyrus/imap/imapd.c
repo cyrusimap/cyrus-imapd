@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.25 2002/08/18 01:06:18 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.26 2002/08/19 01:57:20 ken3 Exp $ */
 
 #include <config.h>
 
@@ -119,6 +119,11 @@ static int imapd_starttls_done = 0; /* have we done a successful starttls? */
 /* our tls connection, if any */
 static SSL *tls_conn = NULL;
 #endif /* HAVE_SSL */
+
+/* the sasl proxy policy context */
+static struct proxy_context imapd_proxyctx = {
+    1, 1, &imapd_authstate, &imapd_userisadmin, &imapd_userisproxyadmin
+};
 
 /* current sub-user state */
 static struct mailbox mboxstruct;
@@ -249,103 +254,9 @@ static struct
     char *authid;
 } saslprops = {NULL,NULL,0,NULL};
 
-/*
- * acl_ok() checks to see if the the inbox for 'user' grants the 'a'
- * right to 'authstate'. Returns 1 if so, 0 if not.
- */
-/* Note that we do not determine if the mailbox is remote or not */
-static int acl_ok(const char *user, 
-		  struct auth_state *authstate)
-{
-    char *acl;
-    char inboxname[1024];
-    int r;
-
-    r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, "INBOX",
-					       user, inboxname);
-
-    if (r || !authstate ||
-	mboxlist_lookup(inboxname, NULL, &acl, NULL)) {
-	r = 0;  /* Failed so assume no proxy access */
-    }
-    else {
-	r = (cyrus_acl_myrights(authstate, acl) & ACL_ADMIN) != 0;
-    }
-    return r;
-}
-
-/* should we allow users to proxy?  return SASL_OK if yes,
-   SASL_BADAUTH otherwise */
-static int mysasl_authproc(sasl_conn_t *conn,
-			   void *context __attribute__((unused)),
-			   const char *requested_user, unsigned rlen,
-			   const char *auth_identity, unsigned alen,
-			   const char *def_realm __attribute__((unused)),
-			   unsigned urlen __attribute__((unused)),
-			   struct propctx *propctx __attribute__((unused)))
-{
-    const char *val = config_getstring(IMAPOPT_LOGINREALMS);
-    char *realm;
-
-    /* check if remote realm */
-    if ((!config_virtdomains || *val) &&
-	(realm = strchr(auth_identity, '@'))!=NULL) {
-	realm++;
-	while (*val) {
-	    if (!strncasecmp(val, realm, strlen(realm)) &&
-		(!val[strlen(realm)] || isspace((int) val[strlen(realm)]))) {
-		break;
-	    }
-	    /* not this realm, try next one */
-	    while (*val && !isspace((int) *val)) val++;
-	    while (*val && isspace((int) *val)) val++;
-	}
-	if (!*val) {
-	    sasl_seterror(conn, 0, "cross-realm login %s denied",
-			  auth_identity);
-	    return SASL_BADAUTH;
-	}
-    }
-
-    imapd_authstate = auth_newstate(auth_identity, NULL);
-
-    /* ok, is auth_identity an admin? */
-    imapd_userisadmin = config_authisa(imapd_authstate, IMAPOPT_ADMINS);
-
-    if (alen != rlen || strncmp(auth_identity, requested_user, alen)) {
-	/* we want to authenticate as a different user; we'll allow this
-	   if we're an admin or if we've allowed ACL proxy logins */
-	int use_acl = config_getswitch(IMAPOPT_LOGINUSEACL);
-
-	if (imapd_userisadmin ||
-	    (use_acl && acl_ok(requested_user, imapd_authstate)) ||
-	    config_authisa(imapd_authstate, IMAPOPT_PROXYSERVERS)) {
-	    /* proxy ok! */
-
-	    imapd_userisadmin = 0;	/* no longer admin */
-	    auth_freestate(imapd_authstate);
-	    
-	    imapd_authstate = auth_newstate(requested_user, NULL);
-
-	    /* are we a proxy admin? */
-	    imapd_userisproxyadmin =
-		config_authisa(imapd_authstate, IMAPOPT_ADMINS);
-	} else {
-	    sasl_seterror(conn, 0, "user %s is not allowed to proxy",
-			  auth_identity);
-
-	    auth_freestate(imapd_authstate);
-
-	    return SASL_BADAUTH;
-	}
-    }
-
-    return SASL_OK;
-}
-
 static const struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
-    { SASL_CB_PROXY_POLICY, &mysasl_authproc, NULL },
+    { SASL_CB_PROXY_POLICY, &mysasl_proxy_policy, (void*) &imapd_proxyctx },
     { SASL_CB_CANON_USER, &mysasl_canon_user, NULL },
     { SASL_CB_LIST_END, NULL, NULL }
 };
@@ -1879,7 +1790,7 @@ cmd_authenticate(char *tag,char *authtype)
     /* successful authentication */
 
     /* get the userid from SASL --- already canonicalized from
-     * mysasl_authproc()
+     * mysasl_proxy_policy()
      */
     sasl_result = sasl_getprop(imapd_saslconn, SASL_USERNAME,
 			       (const void **) &canon_user);

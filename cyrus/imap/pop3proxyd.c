@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.42.4.10 2002/08/16 22:00:53 rjs3 Exp $
+ * $Id: pop3proxyd.c,v 1.42.4.11 2002/08/19 01:57:22 ken3 Exp $
  */
 #include <config.h>
 
@@ -122,6 +122,11 @@ struct protstream *backend_out, *backend_in;
 int backend_sock;
 sasl_conn_t *backend_saslconn;
 
+/* the sasl proxy policy context */
+static struct proxy_context popd_proxyctx = {
+    0, 0, NULL, NULL, NULL
+};
+
 /* current namespace */
 static struct namespace popd_namespace;
 
@@ -157,71 +162,9 @@ static struct
     char *authid;
 } saslprops = {NULL,NULL,0,NULL};
 
-/* should we allow users to proxy?  return SASL_OK if yes,
-   SASL_BADAUTH otherwise */
-static int mysasl_authproc(sasl_conn_t *conn,
-			   void *context __attribute__((unused)),
-			   const char *requested_user, unsigned rlen,
-			   const char *auth_identity, unsigned alen,
-			   const char *def_realm __attribute__((unused)),
-			   unsigned urlen __attribute__((unused)),
-			   struct propctx *propctx __attribute__((unused)))
-{
-    const char *val = config_getstring(IMAPOPT_LOGINREALMS);
-    struct auth_state *authstate;
-    int userisadmin = 0;
-    char *realm;
-
-    /* check if remote realm */
-    if ((!config_virtdomains || *val) &&
-	(realm = strchr(auth_identity, '@'))!=NULL) {
-	realm++;
-	while (*val) {
-	    if (!strncasecmp(val, realm, strlen(realm)) &&
-		(!val[strlen(realm)] || isspace((int) val[strlen(realm)]))) {
-		break;
-	    }
-	    /* not this realm, try next one */
-	    while (*val && !isspace((int) *val)) val++;
-	    while (*val && isspace((int) *val)) val++;
-	}
-	if (!*val) {
-	    sasl_seterror(conn, 0, "cross-realm login %s denied",
-			  auth_identity);
-	    return SASL_BADAUTH;
-	}
-    }
-
-    authstate = auth_newstate(auth_identity, NULL);
-
-    /* ok, is auth_identity an admin? */
-    userisadmin = config_authisa(authstate, IMAPOPT_ADMINS);
-
-    if (alen != rlen || strncmp(auth_identity, requested_user, alen)) {
-	/* we want to authenticate as a different user; we'll allow this
-	   if we're an admin or if we've allowed ACL proxy logins */
-	if (userisadmin ||
-	    config_authisa(authstate, IMAPOPT_ADMINS)) {
-
-	    /* proxy ok! */
-	    auth_freestate(authstate);
-	    return SASL_OK;
-	} else {
-	    sasl_seterror(conn, 0, "user %s is not allowed to proxy",
-			  auth_identity);
-
-	    auth_freestate(authstate);
-
-	    return SASL_BADAUTH;
-	}
-    }
-
-    return SASL_OK;
-}
-
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
-    { SASL_CB_PROXY_POLICY, &mysasl_authproc, NULL },
+    { SASL_CB_PROXY_POLICY, &mysasl_proxy_policy, (void*) &popd_proxyctx },
     { SASL_CB_CANON_USER, &mysasl_canon_user, NULL },   
     { SASL_CB_LIST_END, NULL, NULL }
 };
@@ -768,7 +711,7 @@ static void cmd_apop(char *response)
 
     /*
      * get the userid from SASL --- already canonicalized from
-     * mysasl_authproc()
+     * mysasl_proxy_policy()
      */
     sasl_result = sasl_getprop(popd_saslconn, SASL_USERNAME,
 			       (const void **) &canon_user);
@@ -1084,7 +1027,7 @@ void cmd_auth(char *arg)
     /* successful authentication */
 
     /* get the userid from SASL --- already canonicalized from
-     * mysasl_authproc()
+     * mysasl_proxy_policy()
      */
     /* FIXME XXX: popd_userid is NOT CONST */
     sasl_result = sasl_getprop(popd_saslconn, SASL_USERNAME,

@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- * $Id: imapconf.h,v 1.16.4.6 2002/08/16 22:00:48 rjs3 Exp $
+ * $Id: imapconf.h,v 1.16.4.7 2002/08/19 01:57:20 ken3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -46,6 +46,7 @@
 #include <sasl/sasl.h>
 #include "imapopts.h"
 #include "auth.h"
+#include "mboxname.h"
 
 /* Startup the configuration subsystem */
 extern int config_init(const char *alt_config, const char *ident);
@@ -82,6 +83,14 @@ extern int mysasl_canon_user(sasl_conn_t *conn,
 		             char *out_user,
 		             unsigned out_max, unsigned *out_ulen);
 
+extern int mysasl_proxy_policy(sasl_conn_t *conn,
+			       void *context,
+			       const char *requested_user, unsigned rlen,
+			       const char *auth_identity, unsigned alen,
+			       const char *def_realm __attribute__((unused)),
+			       unsigned urlen __attribute__((unused)),
+			       struct propctx *propctx __attribute__((unused)));
+
 /* check if `authstate' is a valid member of class */
 extern int config_authisa(struct auth_state *authstate, 
 			  enum imapopt opt);
@@ -110,6 +119,14 @@ struct buf {
     char *s;
     int len;
     int alloc;
+};
+
+struct proxy_context {
+    int use_acl;
+    int proxy_servers;
+    struct auth_state **authstate;
+    int *userisadmin;
+    int *userisproxyadmin;
 };
 
 /* base64 authentication functions (base64.c) */

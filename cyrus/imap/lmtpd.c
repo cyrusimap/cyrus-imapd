@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.99.2.9 2002/08/16 22:00:49 rjs3 Exp $
+ * $Id: lmtpd.c,v 1.99.2.10 2002/08/19 01:57:21 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -174,61 +174,9 @@ int deliver_logfd = -1; /* used in lmtpengine.c */
 /* current namespace */
 static struct namespace lmtpd_namespace;
 
-/* should we allow users to proxy?  return SASL_OK if yes,
-   SASL_BADAUTH otherwise */
-static int mysasl_authproc(sasl_conn_t *conn,
-			   void *context __attribute__((unused)),
-			   const char *requested_user __attribute__((unused)),
-			   unsigned rlen __attribute__((unused)),
-			   const char *auth_identity, 
-			   unsigned alen __attribute__((unused)),
-			   const char *def_realm __attribute__((unused)),
-			   unsigned urlen __attribute__((unused)),
-			   struct propctx *propctx __attribute__((unused)))
-{
-    const char *val;
-    char *realm;
-    int allowed=0;
-    struct auth_state *authstate;
-
-    /* check if remote realm */
-    if ((realm = strchr(auth_identity, '@'))!=NULL) {
-	realm++;
-	val = config_getstring(IMAPOPT_LOGINREALMS);
-	while (*val) {
-	    if (!strncasecmp(val, realm, strlen(realm)) &&
-		(!val[strlen(realm)] || isspace((int) val[strlen(realm)]))) {
-		break;
-	    }
-	    /* not this realm, try next one */
-	    while (*val && !isspace((int) *val)) val++;
-	    while (*val && isspace((int) *val)) val++;
-	}
-	if (!*val) {
-	    sasl_seterror(conn, 0, "cross-realm login %s denied",
-			  auth_identity);
-	    return SASL_BADAUTH;
-	}
-    }
-
-    /* ok, is auth_identity an admin? 
-     * for now only admins can do lmtp from another machine
-     */
-    authstate = auth_newstate(auth_identity, NULL);
-    allowed = config_authisa(authstate, IMAPOPT_ADMINS);
-    auth_freestate(authstate);
-    
-    if (!allowed) {
-	sasl_seterror(conn, 0, "only admins may authenticate");
-	return SASL_BADAUTH;
-    }
-
-    return SASL_OK;
-}
-
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
-    { SASL_CB_PROXY_POLICY, &mysasl_authproc, NULL },
+    { SASL_CB_PROXY_POLICY, &mysasl_proxy_policy, NULL },
     { SASL_CB_CANON_USER, &mysasl_canon_user, NULL },
     { SASL_CB_LIST_END, NULL, NULL }
 };

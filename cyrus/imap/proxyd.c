@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.18 2002/08/18 01:06:19 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.19 2002/08/19 01:57:22 ken3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -151,6 +151,11 @@ int proxyd_starttls_done = 0; /* have we done a successful starttls yet? */
 #ifdef HAVE_SSL
 static SSL *tls_conn;
 #endif /* HAVE_SSL */
+
+/* the sasl proxy policy context */
+static struct proxy_context proxyd_proxyctx = {
+    1, 1, &proxyd_authstate, &proxyd_userisadmin, NULL
+};
 
 /* current namespace */
 static struct namespace proxyd_namespace;
@@ -1027,97 +1032,9 @@ static void proxyd_refer(const char *tag,
 		tag, url);
 }
 
-/*
- * acl_ok() checks to see if the the inbox for 'user' grants the 'a'
- * right to the principal 'auth_identity'. Returns 1 if so, 0 if not.
- */
-static int acl_ok(const char *user, const char *auth_identity)
-{
-    char *acl;
-    char inboxname[1024];
-    int r;
-    struct auth_state *authstate = NULL;
-
-    r = (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace, "INBOX",
-						user, inboxname);
-
-    if (r || !(authstate = auth_newstate(auth_identity, (char *)0)) ||
-	mlookup(inboxname, (char **)0, &acl, NULL)) {
-	r = 0;  /* Failed so assume no proxy access */
-    }
-    else {
-	r = (cyrus_acl_myrights(authstate, acl) & ACL_ADMIN) != 0;
-    }
-    if (authstate) auth_freestate(authstate);
-    return r;
-}
-
-/* should we allow users to proxy?  return SASL_OK if yes,
-   SASL_BADAUTH otherwise */
-static int mysasl_authproc(sasl_conn_t *conn,
-			   void *context,
-			   const char *requested_user, unsigned rlen,
-			   const char *auth_identity, unsigned alen,
-			   const char *def_realm, unsigned urlen,
-			   struct propctx *propctx)
-{
-    const char *val = config_getstring(IMAPOPT_LOGINREALMS);
-    char *realm;
-
-    /* check if remote realm */
-    if ((!config_virtdomains || *val) &&
-	(realm = strchr(auth_identity, '@'))!=NULL) {
-	realm++;
-	while (*val) {
-	    if (!strncasecmp(val, realm, strlen(realm)) &&
-		(!val[strlen(realm)] || isspace((int) val[strlen(realm)]))) {
-		break;
-	    }
-	    /* not this realm, try next one */
-	    while (*val && !isspace((int) *val)) val++;
-	    while (*val && isspace((int) *val)) val++;
-	}
-	if (!*val) {
-	    sasl_seterror(conn, 0, "cross-realm login %s denied",
-			  auth_identity);
-	    return SASL_BADAUTH;
-	}
-    }
-
-    proxyd_authstate = auth_newstate(auth_identity, NULL);
-
-    /* ok, is auth_identity an admin? */
-    proxyd_userisadmin = config_authisa(proxyd_authstate, IMAPOPT_ADMINS);
-
-    if (strcmp(auth_identity, requested_user)) {
-	/* we want to authenticate as a different user; we'll allow this
-	   if we're an admin or if we've allowed ACL proxy logins */
-	int use_acl = config_getswitch(IMAPOPT_LOGINUSEACL);
-
-	if (proxyd_userisadmin ||
-	    (use_acl && acl_ok(requested_user, auth_identity)) ||
-	    config_authisa(proxyd_authstate, IMAPOPT_PROXYSERVERS)) {
-	    /* proxy ok! */
-
-	    proxyd_userisadmin = 0;	/* no longer admin */
-	    auth_freestate(proxyd_authstate);
-	    
-	    proxyd_authstate = auth_newstate(requested_user, NULL);
-	} else {
-	    sasl_seterror(conn, 0, "user %s is not allowed to proxy", auth_identity);
-	    
-	    auth_freestate(proxyd_authstate);
-	    
-	    return SASL_BADAUTH;
-	}
-    }
-
-    return SASL_OK;
-}
-
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
-    { SASL_CB_PROXY_POLICY, &mysasl_authproc, NULL },
+    { SASL_CB_PROXY_POLICY, &mysasl_proxy_policy, (void*) &proxyd_proxyctx },
     { SASL_CB_CANON_USER, &mysasl_canon_user, (void*) &disable_referrals },
     { SASL_CB_LIST_END, NULL, NULL }
 };
@@ -2394,7 +2311,7 @@ void cmd_authenticate(char *tag, char *authtype)
     /* successful authentication */
 
     /* get the userid from SASL --- already canonicalized from
-     * mysasl_authproc()
+     * mysasl_proxy_policy()
      */
     sasl_result = sasl_getprop(proxyd_saslconn, SASL_USERNAME,
 			       (const void **)&userid_buf);
