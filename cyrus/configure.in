@@ -252,15 +252,16 @@ AC_CACHE_VAL(cyrus_sigveclib,[
 	cyrus_sigveclib=""
   ], [
   AC_CHECK_LIB(BSD, sigvec, cyrus_sigveclib="-lBSD", [
-    SAVE_CFLAGS="$CFLAGS"
-    CFLAGS="-L/usr/ucblib -R/usr/ucblib $CFLAGS"
+    SAVE_LDFLAGS="$LDFLAGS"
+    LDFLAGS="-L/usr/ucblib -R/usr/ucblib $LDFLAGS"
     AC_CHECK_LIB(ucb, sigvec, [
       cyrus_sigveclib="-L/usr/ucblib -R/usr/ucblib -lucb"],
-      [ AC_MSG_WARN(** Can't find a sigvec() -- makedepend will not build.)
-	AC_MSG_WARN(** Some AFS dependant programs (ptloader) may fail to build.)
-	AC_MSG_WARN(** If you're not using AFS and have makedepend, this isn't a problem.)
+      [ AC_MSG_WARN(Can't find a sigvec() -- makedepend will not build.)
+	AC_MSG_WARN(Some AFS dependant programs (ptloader) may fail to build.)
+	AC_MSG_WARN(If you're not using AFS and have makedepend)
+	AC_MSG_WARN(then this isn't a problem.)
 	])
-    CFLAGS="$SAVE_CFLAGS"])
+    LDFLAGS="$SAVE_LDFLAGS"])
   ])
 ])
 AC_SUBST(cyrus_sigveclib)
@@ -269,9 +270,6 @@ AC_ARG_WITH(afs,[  --with-afs=PATH         use AFS libraries from PATH],
 	[with_afs="${withval}"
 	CFLAGS="${CFLAGS} -I${withval}/include"],with_afs="/usr/local")
 
-AC_CHECK_LIB(ndbm, dbm_open)
-AC_CHECK_LIB(dbm, dbm_open)
-AC_CHECK_FUNC(dbopen,AC_DEFINE(HAVE_LIBDB),AC_CHECK_LIB(db, dbopen))
 AC_MSG_CHECKING(for Kerberos)
 AC_CACHE_VAL(cyrus_cv_lib_kerberos, if test -f /etc/krb.conf; then
 	cyrus_cv_lib_kerberos=yes
@@ -395,40 +393,18 @@ case "$with_tcl" in
 	    [if test "$TCL_SUBDIRS" != ""; then
 		AC_MSG_ERROR(Could not find Tcl libraries.  You must either install Tcl or configure with --disable-cyradm)
 	     fi],-lm) ;;
-	*)  CPPFLAGS="${CPPFLAGS} -I${with_tcl}/include"
+	*)  TCLCPPFLAGS="${CPPFLAGS} -I${with_tcl}/include"
 	    TCLLIBS="-L${with_tcl}/lib ${ld_runpath_switch}${with_tcl}/lib -ltcl -lm" ;;
 esac
 AC_SUBST(TCLLIBS)
+AC_SUBST(TCLCPPFLAGS)
 dnl
-dnl Test for Zephyr
+dnl thanks to snprintf problems, we have to do this before kerberos checks,
+dnl then put krb libs at front of line
 dnl
-AC_ARG_WITH(zephyr,[  --with-zephyr=PATH      use Zephyr from PATH],
-	with_zephyr="${withval}")
-if test -z "$with_zephyr"; then
-     if test -f /usr/local/lib/libzephyr.a; then
-	with_zephyr="/usr/local"
-     fi
-fi
-case "$with_zephyr" in
-	no) true;;
-	""|yes) AC_CHECK_LIB(zephyr,ZInitialize,LIBS="${LIBS} -lzephyr",
-		with_zephyr="no",);;
-	*)  CPPFLAGS="${CPPFLAGS} -I${with_zephyr}/include"
-	    LIBS="${LIBS} ${with_zephyr}/lib/libzephyr.a";;
-esac
-AC_ARG_WITH(notify,[  --with-notify=METHOD    use mail notification METHOD
-                          METHOD is zephyr or no],WITH_NOTIFY="${withval}",
-	if test "$with_zephyr" = "no"; then
-		WITH_NOTIFY=no
-	else
-		WITH_NOTIFY=zephyr
-	fi)
-AC_SUBST(WITH_NOTIFY)
-if test "$with_zephyr" = "no"; then
-     if test "$WITH_NOTIFY" = "zephyr"; then
-	AC_MSG_ERROR(Unable to find Zephyr libraries)
-     fi
-fi     
+AC_CHECK_LIB(ndbm, dbm_open)
+AC_CHECK_LIB(dbm, dbm_open)
+AC_CHECK_FUNC(dbopen,AC_DEFINE(HAVE_LIBDB),AC_CHECK_LIB(db, dbopen))
 dnl
 dnl Test for Kerberos
 dnl
@@ -442,7 +418,7 @@ fi
 case "$with_krb" in
 	no) true;;
 	""|yes) AC_CHECK_LIB(krb,des_ecb_encrypt,
-		[LIBS="${LIBS} -lkrb -ldes"
+		[LIBS=" -lkrb -ldes ${LIBS}"
 		 if test -d /usr/include/kerberosIV; then
 			CFLAGS="${CFLAGS} -I/usr/include/kerberosIV"
 		 fi],
@@ -450,7 +426,7 @@ case "$with_krb" in
 		;;
 	*)  if test -f ${with_krb}/lib/libdes.a; then
 		CPPFLAGS="${CPPFLAGS} -I${with_krb}/include"
-		LIBS="${LIBS} ${with_krb}/lib/libkrb.a ${with_krb}/lib/libdes.a"
+		LIBS="${with_krb}/lib/libkrb.a ${with_krb}/lib/libdes.a ${LIBS}"
 	    else
 		AC_MSG_ERROR(The Kerberos DES library is required for Kerberos support)
 	    fi
@@ -469,6 +445,36 @@ if test "$with_krb" = "no"; then
 else
      AC_DEFINE(HAVE_SASL_KRB)
      LIBOBJS="${LIBOBJS} sasl_krb.o sasl_krb_client.o sasl_krb_server.o";
+fi     
+dnl
+dnl Test for Zephyr
+dnl
+AC_ARG_WITH(zephyr,[  --with-zephyr=PATH      use Zephyr from PATH],
+	with_zephyr="${withval}")
+if test -z "$with_zephyr"; then
+     if test -f /usr/local/lib/libzephyr.a; then
+	with_zephyr="/usr/local"
+     fi
+fi
+case "$with_zephyr" in
+	no) true;;
+	""|yes) AC_CHECK_LIB(zephyr,ZInitialize,LIBS=" -lzephyr ${LIBS}",
+		with_zephyr="no",);;
+	*)  CPPFLAGS="${CPPFLAGS} -I${with_zephyr}/include"
+	    LIBS="${with_zephyr}/lib/libzephyr.a ${LIBS}";;
+esac
+AC_ARG_WITH(notify,[  --with-notify=METHOD    use mail notification METHOD
+                          METHOD is zephyr or no],WITH_NOTIFY="${withval}",
+	if test "$with_zephyr" = "no"; then
+		WITH_NOTIFY=no
+	else
+		WITH_NOTIFY=zephyr
+	fi)
+AC_SUBST(WITH_NOTIFY)
+if test "$with_zephyr" = "no"; then
+     if test "$WITH_NOTIFY" = "zephyr"; then
+	AC_MSG_ERROR(Unable to find Zephyr libraries)
+     fi
 fi     
 dnl
 dnl Look for inn
