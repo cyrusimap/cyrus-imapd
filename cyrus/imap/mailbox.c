@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- * $Id: mailbox.c,v 1.148 2003/10/27 21:53:51 rjs3 Exp $
+ * $Id: mailbox.c,v 1.149 2003/11/04 20:59:31 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -215,6 +215,8 @@ int mailbox_cached_header_inline(const char *text)
     
     /* Scan for header */
     for (i=0; i < MAX_CACHED_HEADER_SIZE; i++) {
+	if (!text[i] || text[i] == '\r' || text[i] == '\n') break;
+	
 	if (text[i] == ':') {
 	    buf[i] = '\0';
 	    return is_cached_header(buf);
@@ -1318,6 +1320,7 @@ int mailbox_write_index_header(struct mailbox *mailbox)
     *((bit32 *)(buf+OFFSET_EXISTS)) = htonl(mailbox->exists);
     *((bit32 *)(buf+OFFSET_LAST_APPENDDATE)) = htonl(mailbox->last_appenddate);
     *((bit32 *)(buf+OFFSET_LAST_UID)) = htonl(mailbox->last_uid);
+    *((bit32 *)(buf+OFFSET_QUOTA_RESERVED_FIELD)) = htonl(0); /* RESERVED */
     *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) =
 	htonl(mailbox->quota_mailbox_used);
     *((bit32 *)(buf+OFFSET_POP3_LAST_LOGIN)) = htonl(mailbox->pop3_last_login);
@@ -1328,7 +1331,9 @@ int mailbox_write_index_header(struct mailbox *mailbox)
     *((bit32 *)(buf+OFFSET_POP3_NEW_UIDL)) = htonl(mailbox->pop3_new_uidl);
     *((bit32 *)(buf+OFFSET_LEAKED_CACHE)) =
 	htonl(mailbox->leaked_cache_records);
-    
+    *((bit32 *)(buf+OFFSET_SPARE1)) = htonl(0); /* RESERVED */
+    *((bit32 *)(buf+OFFSET_SPARE2)) = htonl(0); /* RESERVED */
+
     if (mailbox->start_offset < header_size)
 	header_size = mailbox->start_offset;
 
@@ -2402,6 +2407,7 @@ int mailbox_delete(struct mailbox *mailbox, int delete_quota_root)
 
     tail = buf + strlen(buf);
     *tail++ = '/';
+    *tail = '\0';
     dirp = opendir(mailbox->path);
     if (dirp) {
 	while ((f = readdir(dirp))!=NULL) {
@@ -2422,6 +2428,7 @@ int mailbox_delete(struct mailbox *mailbox, int delete_quota_root)
 	    }
 	    strcpy(tail, f->d_name);
 	    unlink(buf);
+	    *tail = '\0';
 	}
 	closedir(dirp);
     }
