@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.106 2004/03/02 20:01:07 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.107 2004/03/03 21:23:49 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -92,12 +92,6 @@
 #define RCPT_GROW 30
 
 /* data per message */
-struct Header {
-    char *name;
-    int ncontents;
-    char *contents[1];
-};
-
 struct address_data {
     char *all;		/* storage for entire RCPT TO addr -- MUST be freed */
     char *rcpt;		/* storage for user[+mbox][@domain] -- MUST be freed */
@@ -622,6 +616,8 @@ static int savemsg(struct clientdata *cd,
 	"Return-Path",  /* need to remove (we add our own) */
 	NULL
     };
+    char *addname, *addbody, *fold[5], *p;
+    int addlen, nfold, i;
 
     /* Copy to spool file */
     f = func->spoolfile(m);
@@ -650,25 +646,41 @@ static int savemsg(struct clientdata *cd,
 	    hostname = config_servername;
 	}
 
-	fprintf(f, "Return-Path: <%s%s%s>\r\n",
+	addname = xstrdup("Return-Path");
+	addlen = 2 + strlen(rpath) + (hostname ? 1 + strlen(hostname) : 0);
+	addbody = xmalloc(addlen + 1);
+	sprintf(addbody, "<%s%s%s>",
 		rpath, hostname ? "@" : "", hostname ? hostname : "");
+	fprintf(f, "%s: %s\r\n", addname, addbody);
+	spool_cache_header(addname, addbody, m->hdrcache);
     }
 
     /* add a received header */
     rfc822date_gen(datestr, sizeof(datestr), now);
-    fprintf(f, "Received: from %s (%s)",
-	    cd->lhlo_param, cd->clienthost);
+    addname = xstrdup("Received");
+    addlen = 8 + strlen(cd->lhlo_param) + strlen(cd->clienthost);
+    if (m->authuser) addlen += 28 + strlen(m->authuser) + 5; /* +5 for ssf */
+    addlen += 25 + strlen(config_servername) + strlen(CYRUS_VERSION);
+    addlen += 2 + strlen(datestr);
+    p = addbody = xmalloc(addlen + 1);
+
+    nfold = 0;
+    p += sprintf(p, "from %s (%s)", cd->lhlo_param, cd->clienthost);
+    fold[nfold++] = p;
     if (m->authuser) {
 	const int *ssfp;
 	sasl_getprop(cd->conn, SASL_SSF, (const void **) &ssfp);
-	fprintf(f, " (authenticated user=%s bits=%d)", m->authuser, *ssfp);
+	p += sprintf(p, " (authenticated user=%s bits=%d)",
+		     m->authuser, *ssfp);
+	fold[nfold++] = p;
     }
+
     /* We are always atleast "with LMTPA" -- no unauth delivery */
-    fprintf(f, "\r\n\tby %s (Cyrus %s) with LMTP%s%s",
-	    config_servername,
-	    CYRUS_VERSION,
-	    cd->starttls_done ? "S" : "",
-	    cd->authenticated == DIDAUTH ? "A" : "");
+    p += sprintf(p, " by %s (Cyrus %s) with LMTP%s%s",
+		 config_servername,
+		 CYRUS_VERSION,
+		 cd->starttls_done ? "S" : "",
+		 cd->authenticated == DIDAUTH ? "A" : "");
 
 #ifdef HAVE_SSL
     if (cd->tls_conn) {
@@ -677,15 +689,33 @@ static int savemsg(struct clientdata *cd,
 	tls_info[0] = '\0';
 	/* grab TLS info for Received: header */
 	tls_get_info(cd->tls_conn, tls_info, sizeof(tls_info));
-	if (*tls_info) fprintf(f, " (%s)", tls_info);
+	if (*tls_info) {
+	    fold[nfold++] = p;
+	    addlen += 3 + strlen(tls_info);
+	    addbody = xrealloc(addbody, addlen + 1);
+	    p += sprintf(p, " (%s)", tls_info);
+	}
     }
 #endif /* HAVE_SSL */
 
-    fprintf(f, "; %s\r\n", datestr);
+    strcat(p++, ";");
+    fold[nfold++] = p;
+    p += sprintf(p, " %s", datestr);
+ 
+    fprintf(f, "%s: ", addname);
+    for (i = 0, p = addbody; i < nfold; p = fold[i], i++) {
+	fprintf(f, "%.*s\r\n\t", fold[i] - p, p);
+    }
+    fprintf(f, "%s\r\n", p);
+    spool_cache_header(addname, addbody, m->hdrcache);
 
     /* add any requested headers */
     if (func->addheaders) {
-	fputs(func->addheaders, f);
+	struct addheader *h;
+	for (h = func->addheaders; h && h->name; h++) {
+	    fprintf(f, "%s: %s\r\n", h->name, h->body);
+	    spool_cache_header(xstrdup(h->name), xstrdup(h->body), m->hdrcache);
+	}
     }
 
     /* fill the cache */
@@ -705,15 +735,20 @@ static int savemsg(struct clientdata *cd,
 	pid_t p = getpid();
 
 	m->id = xmalloc(40 + strlen(config_servername));
-	sprintf(m->id, "<cmu-lmtpd-%d-%d-%u@%s>", p, (int) now, 
+	sprintf(m->id, "<cmu-lmtpd-%d-%d-%u@%s>", p, (int) now,
 		msgid_count++, config_servername);
-	fprintf(f, "Message-ID: %s\r\n", m->id);
+	addname = xstrdup("Message-ID");
+	fprintf(f, "%s: %s\r\n", addname, m->id);
+	spool_cache_header(addname, xstrdup(m->id), m->hdrcache);
     }
 
     /* get date */
     if (!(body = spool_getheader(m->hdrcache, "date"))) {
 	/* no date, create one */
-	fprintf(f, "Date: %s\r\n", datestr);
+	addname = xstrdup("Date");
+	addbody = xstrdup(datestr);
+	fprintf(f, "%s: %s\r\n", addname, addbody);
+	spool_cache_header(addname, addbody, m->hdrcache);
     }
 
     if (!m->return_path &&
