@@ -42,7 +42,7 @@
  * Start Date: 4/5/93
  */
 /*
- * $Id: glob.c,v 1.20 2000/05/23 20:56:14 robeson Exp $
+ * $Id: glob.c,v 1.21 2000/12/20 22:51:25 leg Exp $
  */
 
 #include <config.h>
@@ -330,7 +330,8 @@ int glob_test (g, ptr, len, min)
 	do {
 	    /* see if we match to the next '%' or '*' wildcard */
 	    while (*gptr != '*' && *gptr != '%' && ptr != pend
-		   && (*gptr == TOLOWER(*ptr) || (!newglob && *gptr == '?'))) {
+		   && (((unsigned char) *gptr == TOLOWER(*ptr) || 
+			(!newglob && *gptr == '?'))) {
 		++ptr, ++gptr;
 	    }
 	    if (*gptr == '\0' && ptr == pend) break;
@@ -348,7 +349,7 @@ int glob_test (g, ptr, len, min)
 		 * stop at a sep_char unless we're doing "*%"
 		 */
 		ptr = phier;
-		while (ptr != pend && *ghier != TOLOWER(*ptr)
+		while (ptr != pend && (unsigned char) *ghier != TOLOWER(*ptr)
 		       && (*ptr != g->sep_char ||
 			   (!*ghier && gstar && *gstar == '%' && min
 			    && ptr - start < *min))) {
@@ -378,7 +379,8 @@ int glob_test (g, ptr, len, min)
 		    break;
 		}
 		/* look for a match with first char following '*' */
-		while (pstar != pend && *gstar != TOLOWER(*pstar)) ++pstar;
+		while (pstar != pend && 
+		       (unsigned char) *gstar != TOLOWER(*pstar)) ++pstar;
 		if (pstar == pend) {
 		    gptr = gstar;
 		    break;
