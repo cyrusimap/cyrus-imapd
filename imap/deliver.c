@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.100 1999/08/16 01:56:55 leg Exp $
+ * $Id: deliver.c,v 1.101 1999/08/24 18:12:29 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.100 1999/08/16 01:56:55 leg Exp $";
+static char _rcsid[] = "$Id: deliver.c,v 1.101 1999/08/24 18:12:29 leg Exp $";
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -55,7 +55,12 @@ static char _rcsid[] = "$Id: deliver.c,v 1.100 1999/08/16 01:56:55 leg Exp $";
 
 #define HEADERCACHESIZE 4009
 
+#ifdef TM_IN_SYS_TIME
+#include <sys/time.h>
+#else
 #include <time.h>
+#endif
+
 #include <pwd.h>
 #include <sys/types.h>
 #endif
@@ -705,7 +710,11 @@ int send_rejection(char *rejto,
     fprintf(sm, "Message-ID: %s\r\n", buf);
 
     tm = localtime(&t);
+#ifdef HAVE_TM_ZONE
+    tz = tm->tm_gmtoff / 60;
+#else
     tz = timezone / 60;
+#endif
     fprintf(sm, "Date: %s, %02d %s %4d %02d:%02d:%02d %c%02d%02d\r\n",
 	    wday[tm->tm_wday], 
 	    tm->tm_mday, month[tm->tm_mon], tm->tm_year + 1900,
@@ -914,7 +923,7 @@ int send_response(char *addr, char *subj, char *msg, int mime, int days,
 {
     FILE *sm;
     char *smbuf[3];
-    char hostname[1024], buf[8192], *namebuf;
+    char hostname[1024], outmsgid[8192], *sievedb;
     int i, sl;
     struct tm *tm;
     int tz;
@@ -934,17 +943,17 @@ int send_response(char *addr, char *subj, char *msg, int mime, int days,
     gethostname(hostname, 1024);
     t = time(NULL);
     p = getpid();
-    snprintf(buf, sizeof(buf), "<cmu-sieve-%d-%d-%d@%s>", p, t, 
+    snprintf(outmsgid, sizeof(outmsgid), "<cmu-sieve-%d-%d-%d@%s>", p, t, 
 	     global_outgoing_count++, hostname);
     
-    namebuf = make_sieve_db(sdata->username);
-    markdelivered(buf, strlen(buf), namebuf, strlen(namebuf), 
-		  t + days * (24 * 60 * 60));
-
-    fprintf(sm, "Message-ID: %s\r\n", buf);
+    fprintf(sm, "Message-ID: %s\r\n", outmsgid);
 
     tm = localtime(&t);
+#ifdef HAVE_TM_ZONE
+    tz = tm->tm_gmtoff / 60;
+#else
     tz = timezone / 60;
+#endif
     fprintf(sm, "Date: %s, %02d %s %4d %02d:%02d:%02d %c%02d%02d\r\n",
 	    wday[tm->tm_wday], 
 	    tm->tm_mday, month[tm->tm_mon], tm->tm_year + 1900,
@@ -981,7 +990,15 @@ int send_response(char *addr, char *subj, char *msg, int mime, int days,
     fclose(sm);
     waitpid(p, &i, 0);
 
-    return (i == 0 ? SIEVE_OK : SIEVE_FAIL); /* sendmail exit value */
+    if (i == 0) { /* i is sendmail exit value */
+	sievedb = make_sieve_db(sdata->username);
+
+	markdelivered(outmsgid, strlen(outmsgid), sievedb, strlen(sievedb), 
+		      t + days * (24 * 60 * 60));
+	return SIEVE_OK;
+    } else {
+	return SIEVE_FAIL;
+    }
 }
 
 /* vacation support */
@@ -1778,7 +1795,8 @@ int acloverride;
 	strcpy(namebuf, mailboxname);
     }
 
-    if (id && checkdelivered(id, strlen(id), namebuf, strlen(namebuf))) {
+    if (dupelim && id && 
+	checkdelivered(id, strlen(id), namebuf, strlen(namebuf))) {
 	/* duplicate message */
 	logdupelem(id, namebuf);
 	return 0;
@@ -1813,9 +1831,15 @@ FILE *sieve_find_script(char *user)
 {
     char buf[1024];
 
-    if (strlen(user) > 900)
+    if (strlen(user) > 900) {
 	return NULL;
+    }
     
+    if (!dupelim) {
+	/* duplicate delivery suppression is needed for sieve */
+	return NULL;
+    }
+
     if (sieve_usehomedir) { /* look in homedir */
 	struct passwd *pent = getpwnam(user);
 
