@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.28 2004/01/20 01:11:00 ken3 Exp $
+ * $Id: mbdump.c,v 1.29 2004/03/17 17:27:03 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -224,6 +224,7 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
 	r = quota_read(&quota, NULL, 0);
 	if(r) {
 	    prot_printf(pout, "NIL ");
+	    if(r == IMAP_QUOTAROOT_NONEXISTENT) r = 0;
 	    goto dump_files; 
 	}
 	
