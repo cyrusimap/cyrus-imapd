@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.34.6.2 2002/08/02 17:18:23 rjs3 Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.34.6.3 2002/12/20 18:38:52 rjs3 Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -58,7 +58,6 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
-#include <time.h>
 #include <netinet/in.h>
 
 #include "cyrusdb.h"

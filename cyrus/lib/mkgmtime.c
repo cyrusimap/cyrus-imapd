@@ -1,5 +1,5 @@
 /* mkgmtime.c - make time corresponding to a GMT timeval struct
- $Id: mkgmtime.c,v 1.5 2000/05/23 20:56:18 robeson Exp $
+ $Id: mkgmtime.c,v 1.5.16.1 2002/12/20 18:38:52 rjs3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -85,8 +85,6 @@
 **	just 32 bits, its a max of 32 iterations (even at 64 bits it
 **	would still be very reasonable).
 */
-
-#include <time.h>
 
 #ifndef WRONG
 #define WRONG	(-1)

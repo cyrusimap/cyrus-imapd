@@ -1,5 +1,5 @@
 /* gmtoff_tm.c - Get offset from GMT by calling gmtime and subtracting
- $Id: gmtoff_gmtime.c,v 1.8 2000/05/23 20:56:15 robeson Exp $
+ $Id: gmtoff_gmtime.c,v 1.8.16.1 2002/12/20 18:38:52 rjs3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -42,7 +42,6 @@
  *
  */
 #include <config.h>
-#include <time.h>
 
 /*
  * Returns the GMT offset of the struct tm 'tm', obtained from 'time'.

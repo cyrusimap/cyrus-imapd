@@ -1,6 +1,6 @@
 /* imclient.c -- Streaming IMxP client library
  *
- * $Id: imclient.c,v 1.72.4.3 2002/11/07 15:11:22 ken3 Exp $
+ * $Id: imclient.c,v 1.72.4.4 2002/12/20 18:38:52 rjs3 Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -58,7 +58,6 @@
 #include <varargs.h>
 #endif
 #include <sys/types.h>
-#include <sys/time.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>

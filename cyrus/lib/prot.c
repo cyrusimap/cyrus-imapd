@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.72.4.13 2002/10/21 20:46:19 ken3 Exp $
+ * $Id: prot.c,v 1.72.4.14 2002/12/20 18:38:52 rjs3 Exp $
  */
 
 #include <config.h>
@@ -59,7 +59,6 @@
 #include <unistd.h>
 #endif
 #include <sys/types.h>
-#include <sys/time.h>
 #include <sys/stat.h>
 #include <netinet/in.h>
 #ifdef HAVE_SYS_SELECT_H
