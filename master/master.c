@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.56 2001/11/13 20:00:06 leg Exp $ */
+/* $Id: master.c,v 1.57 2002/01/15 18:44:49 leg Exp $ */
 
 #include <config.h>
 
@@ -461,13 +461,22 @@ void run_startup(char **cmd)
     }
 }
 
+void fcntl_unset(int fd, int flag)
+{
+    int fdflags = fcntl(fd, F_GETFD, 0);
+    if (fdflags != -1) fdflags = fcntl(STATUS_FD, F_SETFD, 
+				       fdflags & ~flag);
+    if (fdflags == -1) {
+	syslog(LOG_ERR, "fcntl(): unable to unset %d: %m", flag);
+    }
+}
+
 void spawn_service(struct service *s)
 {
     pid_t p;
     int i;
     char path[1024];
     static char name_env[100];
-    int fdflags;
     struct centry *c;
 
     switch (p = fork()) {
@@ -492,18 +501,8 @@ void spawn_service(struct service *s)
 	    exit(1);
 	}
 
-	fdflags = fcntl(LISTEN_FD, F_GETFD, 0);
-	if (fdflags != -1) fdflags = fcntl(LISTEN_FD, F_SETFD, 
-					   fdflags & ~FD_CLOEXEC);
-	if (fdflags == -1) {
-	    syslog(LOG_ERR, "unable to unset close on exec: %m");
-	}
-	fdflags = fcntl(STATUS_FD, F_GETFD, 0);
-	if (fdflags != -1) fdflags = fcntl(STATUS_FD, F_SETFD, 
-					   fdflags & ~FD_CLOEXEC);
-	if (fdflags == -1) {
-	    syslog(LOG_ERR, "unable to unset close on exec: %m");
-	}
+	fcntl_unset(STATUS_FD, FD_CLOEXEC);
+	fcntl_unset(LISTEN_FD, FD_CLOEXEC);
 
 	/* close all listeners */
 	for (i = 0; i < nservices; i++) {
