@@ -1,5 +1,5 @@
-/* mboxname.h -- Mailbox list manipulation routines
- * $Id: mboxname.h,v 1.5.4.1 2001/04/17 22:19:08 ken3 Exp $
+/* namespace.c -- Namespace manipulation routines
+ * $Id: namespace.c,v 1.1.2.1 2001/04/17 22:21:34 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -41,18 +41,38 @@
  *
  */
 
-#ifndef INCLUDED_MBOXNAME_H
-#define INCLUDED_MBOXNAME_H
+#include <config.h>
 
 #include "namespace.h"
+#include "mboxname.h"
 
-int mboxname_tointernal(const char *name, struct namespace *namespace,
-			const char *userid, char *result);
-int mboxname_toexternal(const char *name, struct namespace *namespace,
-			const char *userid, char *result);
-int mboxname_userownsmailbox(char *userid, char *name);
-int mboxname_netnewscheck(char *name);
-int mboxname_policycheck(char *name);
-int mboxname_userownsmailbox(char *userid, char *name);
+/*
+ * Create namespace based on config options.
+ */
+int namespace_init(struct namespace *namespace)
+{
+    namespace->hier_sep = '.';
+    namespace->isalt = config_getswitch("altnamespace", 0);
 
-#endif
+    if (namespace->isalt) {
+	/* alternate namespace */
+	strcpy(namespace->prefix[NAMESPACE_INBOX], "");
+	sprintf(namespace->prefix[NAMESPACE_USER], "%.*s%c",
+		MAX_NAMESPACE_PREFIX-1,
+		config_getstring("userprefix", "Other Users"),
+		namespace->hier_sep);
+	sprintf(namespace->prefix[NAMESPACE_SHARED], "%.*s%c",
+		MAX_NAMESPACE_PREFIX-1,
+		config_getstring("sharedprefix", "Shared Folders"),
+		namespace->hier_sep); 
+    } else {
+	/* standard namespace */
+	sprintf(namespace->prefix[NAMESPACE_INBOX], "%s%c",
+		"INBOX", namespace->hier_sep);
+	sprintf(namespace->prefix[NAMESPACE_USER], "%s%c",
+		"user", namespace->hier_sep);
+	strcpy(namespace->prefix[NAMESPACE_SHARED], "");
+    }
+
+    return 0;
+}

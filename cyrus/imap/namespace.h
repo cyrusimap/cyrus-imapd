@@ -1,5 +1,5 @@
-/* mboxname.h -- Mailbox list manipulation routines
- * $Id: mboxname.h,v 1.5.4.1 2001/04/17 22:19:08 ken3 Exp $
+/* namespace.h -- Namespace manipulation routines
+ * $Id: namespace.h,v 1.1.2.1 2001/04/17 22:21:35 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -41,18 +41,19 @@
  *
  */
 
-#ifndef INCLUDED_MBOXNAME_H
-#define INCLUDED_MBOXNAME_H
+#ifndef INCLUDED_NAMESPACE_H
+#define INCLUDED_NAMESPACE_H
 
-#include "namespace.h"
+#define MAX_NAMESPACE_PREFIX 40
 
-int mboxname_tointernal(const char *name, struct namespace *namespace,
-			const char *userid, char *result);
-int mboxname_toexternal(const char *name, struct namespace *namespace,
-			const char *userid, char *result);
-int mboxname_userownsmailbox(char *userid, char *name);
-int mboxname_netnewscheck(char *name);
-int mboxname_policycheck(char *name);
-int mboxname_userownsmailbox(char *userid, char *name);
+enum { NAMESPACE_INBOX, NAMESPACE_USER, NAMESPACE_SHARED };
+
+struct namespace {
+    int isalt;
+    char prefix[3][MAX_NAMESPACE_PREFIX+1];
+    char hier_sep;
+};
+
+int namespace_init(struct namespace *namespace);
 
 #endif

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.304 2001/03/15 22:29:02 leg Exp $ */
+/* $Id: imapd.c,v 1.304.2.1 2001/04/17 22:19:05 ken3 Exp $ */
 
 #include <config.h>
 
@@ -84,6 +84,7 @@
 #include "acapmbox.h"
 #include "idle.h"
 #include "telemetry.h"
+#include "namespace.h"
 
 #include "pushstats.h"		/* SNMP interface */
 
@@ -119,6 +120,9 @@ static SSL *tls_conn = NULL;
 static struct mailbox mboxstruct;
 static struct mailbox *imapd_mailbox;
 int imapd_exists;
+
+/* current namespace */
+struct namespace imapd_namespace;
 
 static const char *monthname[] = {
     "jan", "feb", "mar", "apr", "may", "jun",
@@ -540,6 +544,9 @@ int service_main(int argc, char **argv, char **envp)
     /* we were connected on imaps port so we should do 
        TLS negotiation immediately */
     if (imaps == 1) cmd_starttls(NULL, 1);
+
+    /* Set namespace */
+    namespace_init(&imapd_namespace);
 
     snmp_increment(TOTAL_CONNECTIONS, 1);
     snmp_increment(ACTIVE_CONNECTIONS, 1);
@@ -2067,7 +2074,7 @@ cmd_append(char *tag, char *name)
     const char *parseerr = NULL;
 
     /* Set up the append */
-    r = mboxname_tointernal(name, imapd_userid, mailboxname);
+    r = mboxname_tointernal(name, &imapd_namespace, imapd_userid, mailboxname);
     if (!r) {
 	r = append_setup(&mailbox, mailboxname, MAILBOX_FORMAT_NORMAL,
 			 imapd_userid, imapd_authstate, ACL_INSERT, size);
@@ -2261,7 +2268,8 @@ void cmd_select(char *tag, char *cmd, char *name)
 	r = IMAP_MAILBOX_NONEXISTENT;
     }
     else {
-	r = mboxname_tointernal(name, imapd_userid, mailboxname);
+	r = mboxname_tointernal(name, &imapd_namespace, imapd_userid,
+				mailboxname);
     }
 
     if (!r) {
@@ -3185,7 +3193,7 @@ int usinguid;
     char mailboxname[MAX_MAILBOX_NAME+1];
     char *copyuid;
 
-    r = mboxname_tointernal(name, imapd_userid, mailboxname);
+    r = mboxname_tointernal(name, &imapd_namespace, imapd_userid, mailboxname);
     if (!r) {
 	r = index_copy(imapd_mailbox, sequence, usinguid, mailboxname,
 		       &copyuid);
@@ -3273,7 +3281,8 @@ char *partition;
     }
 
     if (!r) {
-	r = mboxname_tointernal(name, imapd_userid, mailboxname);
+	r = mboxname_tointernal(name, &imapd_namespace, imapd_userid,
+				mailboxname);
     }
 
     if (!r) {
@@ -3345,7 +3354,7 @@ char *name;
     int r;
     char mailboxname[MAX_MAILBOX_NAME+1];
 
-    r = mboxname_tointernal(name, imapd_userid, mailboxname);
+    r = mboxname_tointernal(name, &imapd_namespace, imapd_userid, mailboxname);
 
     if (!r) {
 	r = mboxlist_deletemailbox(mailboxname, imapd_userisadmin,
@@ -3415,8 +3424,10 @@ void cmd_rename(const char *tag,
 	recursive_rename = 0;
     }
 
-    if (!r) r = mboxname_tointernal(oldname, imapd_userid, oldmailboxname);
-    if (!r) r = mboxname_tointernal(newname, imapd_userid, newmailboxname);
+    if (!r) r = mboxname_tointernal(oldname, &imapd_namespace, imapd_userid,
+				    oldmailboxname);
+    if (!r) r = mboxname_tointernal(newname, &imapd_namespace, imapd_userid,
+				    newmailboxname);
 
     /* if we're renaming something inside of something else, 
        don't recursively rename stuff */
@@ -3548,6 +3559,7 @@ void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
     static int ignorereference = 0;
     clock_t start = clock();
     char mytime[100];
+    char patbuf[MAX_MAILBOX_NAME+1];
 
     /* Ignore the reference argument?
        (the behavior in 1.5.10 & older) */
@@ -3557,7 +3569,7 @@ void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
 
     /* Reset state in mstringdata */
     mstringdata(NULL, NULL, 0, 0);
-    
+
     if (!pattern[0] && !subscribed) {
 	/* Special case: query top-level hierarchy separator */
 	prot_printf(imapd_out, "* LIST (\\Noselect) \".\" \"\"\r\n");
@@ -3585,6 +3597,12 @@ void cmd_list(char *tag, int subscribed, char *reference, char *pattern)
 	    }
 	    strcat(buf, pattern);
 	    pattern = buf;
+	}
+
+	if (pattern[0] != '*' && pattern[0] != '%') {
+	    mboxname_tointernal(pattern, &imapd_namespace, imapd_userid,
+				patbuf);
+	    pattern = patbuf;
 	}
 
 	if (subscribed) {
@@ -3620,7 +3638,8 @@ void cmd_changesub(char *tag, char *namespace,
 
     if (namespace) lcase(namespace);
     if (!namespace || !strcmp(namespace, "mailbox")) {
-	r = mboxname_tointernal(name, imapd_userid, mailboxname);
+	r = mboxname_tointernal(name, &imapd_namespace, imapd_userid,
+				mailboxname);
 	if (!r) {
 	    r = mboxlist_changesub(mailboxname, imapd_userid, 
 				   imapd_authstate, add, force);
@@ -3659,7 +3678,7 @@ int oldform;
     char *acl;
     char *rights, *nextid;
 
-    r = mboxname_tointernal(name, imapd_userid, mailboxname);
+    r = mboxname_tointernal(name, &imapd_namespace, imapd_userid, mailboxname);
 
     if (!r) {
 	r = mboxlist_lookup(mailboxname, (char **)0, &acl, NULL);
@@ -3741,7 +3760,7 @@ char *identifier;
     char *acl;
     char *rightsdesc;
 
-    r = mboxname_tointernal(name, imapd_userid, mailboxname);
+    r = mboxname_tointernal(name, &imapd_namespace, imapd_userid, mailboxname);
 
     if (!r) {
 	r = mboxlist_lookup(mailboxname, (char **)0, &acl, NULL);
@@ -3802,7 +3821,7 @@ int oldform;
     char *acl;
     char str[ACL_MAXSTR];
 
-    r = mboxname_tointernal(name, imapd_userid, mailboxname);
+    r = mboxname_tointernal(name, &imapd_namespace, imapd_userid, mailboxname);
 
     if (!r) {
 	r = mboxlist_lookup(mailboxname, (char **)0, &acl, NULL);
@@ -3848,7 +3867,7 @@ char *rights;
     int r;
     char mailboxname[MAX_MAILBOX_NAME+1];
 
-    r = mboxname_tointernal(name, imapd_userid, mailboxname);
+    r = mboxname_tointernal(name, &imapd_namespace, imapd_userid, mailboxname);
 
     if (!r) {
 	r = mboxlist_setacl(mailboxname, identifier, rights,
@@ -3875,19 +3894,24 @@ char *name;
     int r;
     struct quota quota;
     char buf[MAX_MAILBOX_PATH];
+    char mailboxname[MAX_MAILBOX_NAME+1];
 
-    quota.root = name;
     quota.fd = -1;
 
     if (!imapd_userisadmin) r = IMAP_PERMISSION_DENIED;
     else {
-	mailbox_hash_quota(buf, quota.root);
-	quota.fd = open(buf, O_RDWR, 0);
-	if (quota.fd == -1) {
-	    r = IMAP_QUOTAROOT_NONEXISTENT;
-	}
-	else {
-	    r = mailbox_read_quota(&quota);
+	r = mboxname_tointernal(name, &imapd_namespace, imapd_userid,
+				mailboxname);
+	if (!r) {
+	    quota.root = mailboxname;
+	    mailbox_hash_quota(buf, quota.root);
+	    quota.fd = open(buf, O_RDWR, 0);
+	    if (quota.fd == -1) {
+		r = IMAP_QUOTAROOT_NONEXISTENT;
+	    }
+	    else {
+		r = mailbox_read_quota(&quota);
+	    }
 	}
     }
     
@@ -3929,7 +3953,7 @@ char *name;
     int r;
     int doclose = 0;
 
-    r = mboxname_tointernal(name, imapd_userid, mailboxname);
+    r = mboxname_tointernal(name, &imapd_namespace, imapd_userid, mailboxname);
 
     if (!r) {
 	r = mailbox_open_header(mailboxname, imapd_authstate, &mailbox);
@@ -3991,6 +4015,7 @@ char *quotaroot;
     static struct buf arg;
     char *p;
     int r;
+    char mailboxname[MAX_MAILBOX_NAME+1];
 
     c = prot_getc(imapd_in);
     if (c != '(') goto badlist;
@@ -4022,7 +4047,12 @@ char *quotaroot;
     if (badresource) r = IMAP_UNSUPPORTED_QUOTA;
     else if (!imapd_userisadmin) r = IMAP_PERMISSION_DENIED;
     else {
-	r = mboxlist_setquota(quotaroot, newquota);
+	r = mboxname_tointernal(quotaroot, &imapd_namespace, imapd_userid,
+				mailboxname);
+
+	if (!r) {
+	    r = mboxlist_setquota(mailboxname, newquota);
+	}
     }
 
     if (r) {
@@ -4223,7 +4253,7 @@ char *name;
 	index_check(imapd_mailbox, 0, 1);
     }
 
-    r = mboxname_tointernal(name, imapd_userid, mailboxname);
+    r = mboxname_tointernal(name, &imapd_namespace, imapd_userid, mailboxname);
 
     if (!r) {
 	r = mailbox_open_header(mailboxname, imapd_authstate, &mailbox);
@@ -4288,10 +4318,6 @@ cmd_netscrape(tag)
  * order to ensure the namespace response is correct on a server with
  * no shared namespace.
  */
-/* locations to set if the user can see a given namespace */
-#define NAMESPACE_INBOX  0
-#define NAMESPACE_USER   1
-#define NAMESPACE_SHARED 2
 static int namespacedata(name, matchlen, maycreate, rock)
     char* name;
     int matchlen;
@@ -4340,10 +4366,29 @@ void cmd_namespace(tag)
 	free(pattern);
     }
 
-    prot_printf(imapd_out, "* NAMESPACE %s %s %s\r\n",
-		(sawone[NAMESPACE_INBOX]) ? "((\"INBOX.\" \".\"))" : "NIL",
-		(sawone[NAMESPACE_USER]) ? "((\"user.\" \".\"))" : "NIL",
-		(sawone[NAMESPACE_SHARED]) ? "((\"\" \".\"))" : "NIL");
+    prot_printf(imapd_out, "* NAMESPACE");
+    if (sawone[NAMESPACE_INBOX]) {
+	prot_printf(imapd_out, " ((\"%s\" \"%c\"))",
+		    imapd_namespace.prefix[NAMESPACE_INBOX],
+		    imapd_namespace.hier_sep);
+    } else {
+	prot_printf(imapd_out, " NIL");
+    }
+    if (sawone[NAMESPACE_USER]) {
+	prot_printf(imapd_out, " ((\"%s\" \"%c\"))",
+		    imapd_namespace.prefix[NAMESPACE_USER],
+		    imapd_namespace.hier_sep);
+    } else {
+	prot_printf(imapd_out, " NIL");
+    }
+    if (sawone[NAMESPACE_SHARED]) {
+	prot_printf(imapd_out, " ((\"%s\" \"%c\"))",
+		    imapd_namespace.prefix[NAMESPACE_SHARED],
+		    imapd_namespace.hier_sep);
+    } else {
+	prot_printf(imapd_out, " NIL");
+    }
+    prot_printf(imapd_out, "\r\n");
 
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
@@ -5657,6 +5702,7 @@ static void mstringdata(char *cmd, char *name, int matchlen, int maycreate)
     static int sawuser = 0;
     int lastnamehassub = 0;
     int c;
+    char mboxname[MAX_MAILBOX_PATH+1];
 
     /* We have to reset the sawuser flag before each list command.
      * Handle it as a dirty hack.
@@ -5711,7 +5757,8 @@ static void mstringdata(char *cmd, char *name, int matchlen, int maycreate)
     c = name[matchlen];
     if (c) name[matchlen] = '\0';
     prot_printf(imapd_out, "* %s (%s) \".\" ", cmd, c ? "\\Noselect" : "");
-    printstring(name);
+    mboxname_toexternal(name, &imapd_namespace, imapd_userid, mboxname);
+    printstring(mboxname);
     prot_printf(imapd_out, "\r\n");
     if (c) name[matchlen] = c;
     return;
