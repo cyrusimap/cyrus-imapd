@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.11 2000/12/18 04:53:43 leg Exp $
+ * $Id: sieve.y,v 1.12 2001/10/03 13:43:46 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -598,6 +598,7 @@ static int verify_address(char *s)
     char errbuf[500];
 
     addrptr = s;
+    addrerr[0] = '\0';	/* paranoia */
     if (addrparse()) {
 	sprintf(errbuf, "address '%s': %s", s, addrerr);
 	yyerror(errbuf);
