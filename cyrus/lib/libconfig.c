@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: libconfig.c,v 1.1.2.4 2003/02/13 20:33:13 rjs3 Exp $ */
+/* $Id: libconfig.c,v 1.1.2.5 2003/04/15 16:08:36 ken3 Exp $ */
 
 #include <config.h>
 
@@ -130,9 +130,10 @@ const char *config_partitiondir(const char *partition)
 {
     char buf[80];
 
-    if (strlen(partition) > 70) return 0;
-    strcpy(buf, "partition-");
-    strcat(buf, partition);
+    if(strlcpy(buf, "partition-", sizeof(buf)) >= sizeof(buf))
+	return 0;
+    if(strlcat(buf, partition, sizeof(buf)) >= sizeof(buf))
+	return 0;
 
     return config_getoverflowstring(buf, NULL);
 }
@@ -151,14 +152,15 @@ void config_read(const char *alt_config)
 	fatal("could not construct configuration hash table", EC_CONFIG);
     }
 
+    /* xxx this is leaked, this may be able to be better in 2.2 (cyrus_done) */
     if(alt_config) config_filename = xstrdup(alt_config);
     else config_filename = xstrdup(CONFIG_FILENAME);
 
     /* read in config file */
     infile = fopen(config_filename, "r");
     if (!infile) {
-	strcpy(buf, CYRUS_PATH);
-	strcat(buf, config_filename);
+	strlcpy(buf, CYRUS_PATH, sizeof(buf));
+	strlcat(buf, config_filename, sizeof(buf));
 	infile = fopen(buf, "r");
     }
     if (!infile) {
@@ -172,7 +174,7 @@ void config_read(const char *alt_config)
 
 	service_specific = 0;
 	
-	if (buf[strlen(buf)-1] == '\n') buf[strlen(buf)-1] = '\0';
+	if (buf[0] && buf[strlen(buf)-1] == '\n') buf[strlen(buf)-1] = '\0';
 	for (p = buf; *p && isspace((int) *p); p++);
 	if (!*p || *p == '#') continue;
 

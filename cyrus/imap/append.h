@@ -1,5 +1,5 @@
 /* append.h -- Description of messages to be copied 
- * $Id: append.h,v 1.21.4.2 2003/02/27 18:10:30 rjs3 Exp $ 
+ * $Id: append.h,v 1.21.4.3 2003/04/15 16:11:57 ken3 Exp $ 
  *
  * Copyright (c) 1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -66,7 +66,7 @@ struct copymsg {
 struct appendstate {
     /* mailbox we're appending to */
     struct mailbox m;
-    char userid[MAX_MAILBOX_NAME];
+    char userid[MAX_MAILBOX_NAME+1];
 
     enum { APPEND_READY, APPEND_DONE } s;
 				/* current state of append */

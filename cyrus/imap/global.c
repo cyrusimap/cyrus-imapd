@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.1.2.7 2003/03/19 19:00:37 rjs3 Exp $ */
+/* $Id: global.c,v 1.1.2.8 2003/04/15 16:08:35 ken3 Exp $ */
 
 #include <config.h>
 
@@ -267,6 +267,7 @@ int global_authisa(struct auth_state *authstate, enum imapopt opt)
 {
     char buf[1024];
     const char *val = config_getstring(opt);
+    int len;
 
     /* Is the option defined? */
     if(!val) return 0;
@@ -275,8 +276,11 @@ int global_authisa(struct auth_state *authstate, enum imapopt opt)
 	char *p;
 	
 	for (p = (char *) val; *p && !isspace((int) *p); p++);
-	memcpy(buf, val, p-val);
-	buf[p-val] = 0;
+	len = p-val;
+	if(len >= sizeof(buf))
+	    len = sizeof(buf) - 1;
+	memcpy(buf, val, len);
+	buf[len] = '\0';
 
 	if (auth_memberof(authstate, buf)) {
 	    return 1;
