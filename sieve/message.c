@@ -1,6 +1,6 @@
 /* message.c -- message parsing functions
  * Larry Greenfield
- * $Id: message.c,v 1.27.2.3 2004/07/15 15:00:49 ken3 Exp $
+ * $Id: message.c,v 1.27.2.4 2005/03/12 03:30:11 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -76,6 +76,7 @@ int do_reject(action_list_t *a, const char *msg)
     if (a == NULL)
 	return SIEVE_NOMEM;
     a->a = ACTION_REJECT;
+    a->cancel_keep = 1;
     a->u.rej.msg = msg;
     b->next = a;
     a->next =  NULL;
@@ -86,7 +87,7 @@ int do_reject(action_list_t *a, const char *msg)
  *
  * incompatible with: reject
  */
-int do_fileinto(action_list_t *a, const char *mbox,
+int do_fileinto(action_list_t *a, const char *mbox, int cancel_keep,
 		sieve_imapflags_t *imapflags)
 {
     action_list_t *b = NULL;
@@ -104,6 +105,7 @@ int do_fileinto(action_list_t *a, const char *mbox,
     if (a == NULL)
 	return SIEVE_NOMEM;
     a->a = ACTION_FILEINTO;
+    a->cancel_keep = cancel_keep;
     a->u.fil.mailbox = mbox;
     a->u.fil.imapflags = imapflags;
     b->next = a;
@@ -115,7 +117,7 @@ int do_fileinto(action_list_t *a, const char *mbox,
  *
  * incompatible with: reject
  */
-int do_redirect(action_list_t *a, const char *addr)
+int do_redirect(action_list_t *a, const char *addr, int cancel_keep)
 {
     action_list_t *b = NULL;
 
@@ -134,6 +136,7 @@ int do_redirect(action_list_t *a, const char *addr)
     if (a == NULL)
 	return SIEVE_NOMEM;
     a->a = ACTION_REDIRECT;
+    a->cancel_keep = cancel_keep;
     a->u.red.addr = addr;
     a->next = NULL;
     b->next = a;
@@ -163,6 +166,7 @@ int do_keep(action_list_t *a, sieve_imapflags_t *imapflags)
     if (a == NULL)
 	return SIEVE_NOMEM;
     a->a = ACTION_KEEP;
+    a->cancel_keep = 1;
     a->u.keep.imapflags = imapflags;
     a->next = NULL;
     b->next = a;
@@ -190,6 +194,7 @@ int do_discard(action_list_t *a)
     if (a == NULL)
 	return SIEVE_NOMEM;
     a->a = ACTION_DISCARD;
+    a->cancel_keep = 1;
     a->next = NULL;
     b->next = a;
     return 0;
@@ -215,6 +220,7 @@ int do_vacation(action_list_t *a, char *addr, char *fromaddr,
     if (a == NULL)
 	return SIEVE_NOMEM;
     a->a = ACTION_VACATION;
+    a->cancel_keep = 0;
     a->u.vac.send.addr = addr;
     a->u.vac.send.fromaddr = fromaddr;
     a->u.vac.send.subj = subj;	/* user specified subject */
@@ -247,6 +253,7 @@ int do_setflag(action_list_t *a, const char *flag)
     if (a == NULL)
 	return SIEVE_NOMEM;
     a->a = ACTION_SETFLAG;
+    a->cancel_keep = 0;
     a->u.fla.flag = flag;
     b->next = a;
     a->next = NULL;
@@ -274,6 +281,7 @@ int do_addflag(action_list_t *a, const char *flag)
     if (a == NULL)
 	return SIEVE_NOMEM;
     a->a = ACTION_ADDFLAG;
+    a->cancel_keep = 0;
     a->u.fla.flag = flag;
     b->next = a;
     a->next = NULL;
@@ -301,6 +309,7 @@ int do_removeflag(action_list_t *a, const char *flag)
     if (a == NULL)
 	return SIEVE_NOMEM;
     a->a = ACTION_REMOVEFLAG;
+    a->cancel_keep = 0;
     a->u.fla.flag = flag;
     b->next = a;
     a->next = NULL;
@@ -329,6 +338,7 @@ int do_mark(action_list_t *a)
     if (a == NULL)
 	return SIEVE_NOMEM;
     a->a = ACTION_MARK;
+    a->cancel_keep = 0;
     b->next = a;
     a->next = NULL;
     return 0;
@@ -356,6 +366,7 @@ int do_unmark(action_list_t *a)
     if (a == NULL)
 	return SIEVE_NOMEM;
     a->a = ACTION_UNMARK;
+    a->cancel_keep = 0;
     b->next = a;
     a->next = NULL;
     return 0;

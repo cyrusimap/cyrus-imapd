@@ -1,6 +1,6 @@
 /* bc_generate.c -- sieve bytecode- almost flattened bytecode
  * Rob Siemborski
- * $Id: bc_dump.c,v 1.2.2.2 2004/07/16 14:37:42 ken3 Exp $
+ * $Id: bc_dump.c,v 1.2.2.3 2005/03/12 03:30:10 ken3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -248,15 +248,15 @@ void dump(bytecode_info_t *d, int level)
 	    break;
 
 	case B_FILEINTO:
-	    printf("%d: FILEINTO {%d}%s\n",i,
-		   d->data[i+1].len,d->data[i+2].str);
-	    i+=2;
+	    printf("%d: FILEINTO COPY(%d) FOLDER({%d}%s)\n",i,
+		   d->data[i+1].value,d->data[i+2].len,d->data[i+3].str);
+	    i+=3;
 	    break;
 
 	case B_REDIRECT:
-	    printf("%d: REDIRECT {%d}%s\n",i,
-		   d->data[i+1].len,d->data[i+2].str);
-	    i+=2;
+	    printf("%d: REDIRECT COPY(%d) ADDRESS({%d}%s)\n",i,
+		   d->data[i+1].value,d->data[i+2].len,d->data[i+3].str);
+	    i+=3;
 	    break;
 
 	case B_SETFLAG:

@@ -1,6 +1,6 @@
 /* tree.h -- abstract syntax tree
  * Larry Greenfield
- * $Id: tree.h,v 1.8.2.3 2004/09/02 19:39:25 ken3 Exp $
+ * $Id: tree.h,v 1.8.2.4 2005/03/12 03:30:14 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -113,6 +113,15 @@ struct Commandlist {
 	    int location;
 	    char *script;
 	} inc;
+	struct { /* it's a fileinto action */
+	    char *folder;
+	    int copy;
+	    /* add stringlist_t for imap4flags */
+	} f;
+	struct { /* it's a redirect action */
+	    char *address;
+	    int copy;
+	} r;
 	struct { /* it's a vacation action */
 	    char *subject;
 	    int days;

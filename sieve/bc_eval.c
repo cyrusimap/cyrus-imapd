@@ -1,5 +1,5 @@
 /* bc_eval.c - evaluate the bytecode
- * $Id: bc_eval.c,v 1.2.2.7 2004/07/16 14:37:42 ken3 Exp $
+ * $Id: bc_eval.c,v 1.2.2.8 2005/03/12 03:30:10 ken3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -953,6 +953,8 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 #endif
 
     for(ip++; ip<ip_max; ) { 
+	int copy = 0;
+
 	op=ntohl(bc[ip].op);
 	switch(op) {
 	case B_STOP:/*0*/
@@ -981,11 +983,15 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
 	    break;
 
-	case B_FILEINTO:/*4*/
+	case B_FILEINTO:/*19*/
+	    copy = ntohl(bc[ip+1].value);
+	    ip+=1;
+
+	case B_FILEINTO_ORIG:/*4*/
 	{
 	    ip = unwrap_string(bc, ip+1, &data, NULL);
 
-	    res = do_fileinto(actions, data, imapflags);
+	    res = do_fileinto(actions, data, !copy, imapflags);
 
 	    if (res == SIEVE_RUN_ERROR)
 		*errmsg = "Fileinto can not be used with Reject";
@@ -993,11 +999,15 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    break;
 	}
 
-	case B_REDIRECT:/*5*/
+	case B_REDIRECT:/*20*/
+	    copy = ntohl(bc[ip+1].value);
+	    ip+=1;
+
+	case B_REDIRECT_ORIG:/*5*/
 	{
 	    ip = unwrap_string(bc, ip+1, &data, NULL);
 
-	    res = do_redirect(actions, data);
+	    res = do_redirect(actions, data, !copy);
 
 	    if (res == SIEVE_RUN_ERROR)
 		*errmsg = "Redirect can not be used with Reject";

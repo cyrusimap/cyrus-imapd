@@ -1,7 +1,7 @@
 /* bc_emit.c -- sieve bytecode - pass 2 of the compiler
  * Rob Siemborski
  * Jen Smith
- * $Id: bc_emit.c,v 1.2.2.2 2004/07/16 14:37:42 ken3 Exp $
+ * $Id: bc_emit.c,v 1.2.2.3 2005/03/12 03:30:10 ken3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -492,9 +492,33 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 	    break;
 	}
 	
-	case B_REJECT:
 	case B_FILEINTO:
 	case B_REDIRECT:
+	    /* Copy (word), Folder/Address String */
+
+	    if(write_int(fd,bc->data[codep++].value) == -1)
+		return -1;
+
+	    filelen += sizeof(int);
+
+	    len = bc->data[codep++].len;
+	    if(write_int(fd,len) == -1)
+		return -1;
+
+	    filelen+=sizeof(int);
+	    
+	    if(write(fd,bc->data[codep++].str,len) == -1)
+		return -1;
+	    
+	    ret = align_string(fd, len);
+	    if(ret == -1)
+		return -1;
+
+	    filelen += len + ret;
+
+	    break;
+
+	case B_REJECT:
 	    /*just a string*/
 	    len = bc->data[codep++].len;
 	    if(write_int(fd,len) == -1)

@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.59.2.9 2004/09/15 17:33:40 ken3 Exp $
+ * $Id: script.c,v 1.59.2.10 2005/03/12 03:30:12 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -144,6 +144,10 @@ int script_require(sieve_script_t *s, char *req)
 	return 1;
     } else if (!strcmp("comparator-i;ascii-numeric", req)) {
 	s->support.i_ascii_numeric = 1;
+	return 1;
+    } else if (!strcmp("copy", req) &&
+	       (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_COPY)) {
+	s->support.copy = 1;
 	return 1;
     }
     return 0;
@@ -710,19 +714,18 @@ static int do_action_list(sieve_interp_t *interp,
     action_list_t *a;
     action_t lastaction = -1;
     int ret = 0;
-    int implicit_keep = 0;
+    int implicit_keep = 1;
     
     strcpy(actions_string,"Action(s) taken:\n");
   
     /* now perform actions attached to m */
     a = actions;
-    implicit_keep = 1;
     while (a != NULL) {
 	lastaction = a->a;
 	errmsg = NULL;
+	implicit_keep = implicit_keep && !a->cancel_keep;
 	switch (a->a) {
 	case ACTION_REJECT:
-	    implicit_keep = 0;
 	    if (!interp->reject)
 		return SIEVE_INTERNAL_ERROR;
 	    ret = interp->reject(&a->u.rej,
@@ -738,7 +741,6 @@ static int do_action_list(sieve_interp_t *interp,
 
 	    break;
 	case ACTION_FILEINTO:
-	    implicit_keep = 0;
 	    if (!interp->fileinto)
 		return SIEVE_INTERNAL_ERROR;
 	    ret = interp->fileinto(&a->u.fil,
@@ -753,7 +755,6 @@ static int do_action_list(sieve_interp_t *interp,
 			 "Filed into: %s\n",a->u.fil.mailbox);
 	    break;
 	case ACTION_KEEP:
-	    implicit_keep = 0;
 	    if (!interp->keep)
 		return SIEVE_INTERNAL_ERROR;
 	    ret = interp->keep(&a->u.keep,
@@ -767,7 +768,6 @@ static int do_action_list(sieve_interp_t *interp,
 			 "Kept\n");
 	    break;
 	case ACTION_REDIRECT:
-	    implicit_keep = 0;
 	    if (!interp->redirect)
 		return SIEVE_INTERNAL_ERROR;
 	    ret = interp->redirect(&a->u.red,
@@ -781,7 +781,6 @@ static int do_action_list(sieve_interp_t *interp,
 			 "Redirected to %s\n", a->u.red.addr);
 	    break;
 	case ACTION_DISCARD:
-	    implicit_keep = 0;
 	    if (interp->discard) /* discard is optional */
 		ret = interp->discard(NULL, interp->interp_context,
 				      script_context,

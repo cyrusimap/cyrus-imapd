@@ -86,8 +86,8 @@ enum bytecode {
     B_KEEP,
     B_DISCARD,
     B_REJECT,		/* require reject */
-    B_FILEINTO,		/* require fileinto */
-    B_REDIRECT,
+    B_FILEINTO_ORIG,	/* legacy fileinto w/o support for :copy */
+    B_REDIRECT_ORIG,	/* legacy redirect w/o support for :copy */
 
     B_IF,
   
@@ -106,7 +106,10 @@ enum bytecode {
     B_JUMP,
 
     B_INCLUDE,		/* require include */
-    B_RETURN		/* require include */
+    B_RETURN,		/* require include */
+
+    B_FILEINTO,		/* require fileinto */
+    B_REDIRECT
 };
 
 enum bytecode_comps {

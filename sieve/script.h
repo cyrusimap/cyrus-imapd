@@ -1,6 +1,6 @@
 /* script.h -- script definition
  * Larry Greenfield
- * $Id: script.h,v 1.11.2.2 2004/07/16 14:37:44 ken3 Exp $
+ * $Id: script.h,v 1.11.2.3 2005/03/12 03:30:12 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -53,6 +53,7 @@ struct sieve_script {
 	int relational     : 1;
 	int i_ascii_numeric: 1;
 	int include        : 1;
+	int copy           : 1;
     } support;
 
     void *script_context;

@@ -1,6 +1,6 @@
 /* bc_generate.c -- sieve bytecode- almost flattened bytecode
  * Rob Siemborski
- * $Id: bc_generate.c,v 1.2.2.3 2004/09/02 19:42:20 ken3 Exp $
+ * $Id: bc_generate.c,v 1.2.2.4 2005/03/12 03:30:11 ken3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -522,18 +522,26 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
 		retval->data[codep++].str = c->u.str;
 		break;
 	    case FILEINTO:
-		/* FILEINTO (STRING: len + dataptr) */
-		if(!atleast(retval,codep+3)) return -1;
+		/* FILEINTO
+		   VALUE copy
+		   STRING folder
+		*/
+		if(!atleast(retval,codep+4)) return -1;
 		retval->data[codep++].op = B_FILEINTO;
-		retval->data[codep++].len = strlen(c->u.str);
-		retval->data[codep++].str = c->u.str;
+		retval->data[codep++].value = c->u.f.copy;
+		retval->data[codep++].len = strlen(c->u.f.folder);
+		retval->data[codep++].str = c->u.f.folder;
 		break;
 	    case REDIRECT:
-		/* REDIRECT (STRING: len + dataptr) */
-		if(!atleast(retval,codep+3)) return -1;
+		/* REDIRECT
+		   VALUE copy
+		   STRING address
+		*/
+		if(!atleast(retval,codep+4)) return -1;
 		retval->data[codep++].op = B_REDIRECT;
-		retval->data[codep++].len = strlen(c->u.str);
-		retval->data[codep++].str = c->u.str;
+		retval->data[codep++].value = c->u.r.copy;
+		retval->data[codep++].len = strlen(c->u.r.address);
+		retval->data[codep++].str = c->u.r.address;
 		break;
 	    case ADDFLAG:
 		/* ADDFLAG stringlist */

@@ -1,6 +1,6 @@
 /* interp.c -- sieve script interpretor builder
  * Larry Greenfield
- * $Id: interp.c,v 1.22.8.4 2004/09/15 17:33:40 ken3 Exp $
+ * $Id: interp.c,v 1.22.8.5 2005/03/12 03:30:11 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -123,6 +123,8 @@ const char *sieve_listextensions(sieve_interp_t *i)
 	/* add misc extensions */
 	if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_SUBADDRESS)
 	    strlcat(extensions, " subaddress", sizeof(extensions));
+	if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_COPY)
+	    strlcat(extensions, " copy", sizeof(extensions));
     }
 
     return extensions;

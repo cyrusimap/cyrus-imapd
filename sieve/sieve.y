@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.23.2.10 2004/08/05 16:23:51 ken3 Exp $
+ * $Id: sieve.y,v 1.23.2.11 2005/03/12 03:30:13 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -102,6 +102,8 @@ static test_t *build_body(int t, struct btags *b, stringlist_t *pl);
 static commandlist_t *build_vacation(int t, struct vtags *h, char *s);
 static commandlist_t *build_notify(int t, struct ntags *n);
 static commandlist_t *build_denotify(int t, struct dtags *n);
+static commandlist_t *build_fileinto(int t, int c, char *f);
+static commandlist_t *build_redirect(int t, int c, char *a);
 static struct aetags *new_aetags(void);
 static struct aetags *canon_aetags(struct aetags *ae);
 static void free_aetags(struct aetags *ae);
@@ -171,11 +173,12 @@ extern void yyrestart(FILE *f);
 %token DAYS ADDRESSES SUBJECT MIME
 %token METHOD ID OPTIONS LOW NORMAL HIGH ANY MESSAGE
 %token INCLUDE PERSONAL GLOBAL RETURN
+%token COPY
 
 %type <cl> commands command action elsif block
 %type <sl> stringlist strings
 %type <test> test
-%type <nval> comptag relcomp sizetag addrparttag addrorenv offset location
+%type <nval> comptag relcomp sizetag addrparttag addrorenv offset location copy
 %type <testl> testlist tests
 %type <htag> htags
 %type <aetag> aetags
@@ -224,20 +227,18 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
 				   }
 				   $$ = new_command(REJCT);
 				   $$->u.str = $2; }
-	| FILEINTO STRING	 { if (!parse_script->support.fileinto) {
+	| FILEINTO copy STRING	 { if (!parse_script->support.fileinto) {
 				     yyerror("fileinto not required");
 	                             YYERROR;
                                    }
-				   if (!verify_mailbox($2)) {
+				   if (!verify_mailbox($3)) {
 				     YYERROR; /* vm should call yyerror() */
 				   }
-	                           $$ = new_command(FILEINTO);
-				   $$->u.str = $2; }
-	| REDIRECT STRING         { $$ = new_command(REDIRECT);
-				   if (!verify_address($2)) {
+	                           $$ = build_fileinto(FILEINTO, $2, $3); }
+	| REDIRECT copy STRING   { if (!verify_address($3)) {
 				     YYERROR; /* va should call yyerror() */
 				   }
-				   $$->u.str = $2; }
+	                           $$ = build_redirect(REDIRECT, $2, $3); }
 	| KEEP			 { $$ = new_command(KEEP); }
 	| STOP			 { $$ = new_command(STOP); }
 	| DISCARD		 { $$ = new_command(DISCARD); }
@@ -653,6 +654,14 @@ offset: /* empty */		 { $$ = 0; }
 	| OFFSET NUMBER		 { $$ = $2; }
 	;
 
+copy: /* empty */		 { $$ = 0; }
+	| COPY			 { if (!parse_script->support.copy) {
+				     yyerror("copy not required");
+	                             YYERROR;
+                                   }
+				   $$ = COPY; }
+	;
+
 testlist: '(' tests ')'		 { $$ = $2; }
 	;
 
@@ -810,6 +819,32 @@ static commandlist_t *build_denotify(int t, struct dtags *d)
 	ret->u.d.pattern = d->pattern; d->pattern = NULL;
 	ret->u.d.priority = d->priority;
 	free_dtags(d);
+    }
+    return ret;
+}
+
+static commandlist_t *build_fileinto(int t, int copy, char *folder)
+{
+    commandlist_t *ret = new_command(t);
+
+    assert(t == FILEINTO);
+
+    if (ret) {
+	ret->u.f.copy = copy;
+	ret->u.f.folder = folder;
+    }
+    return ret;
+}
+
+static commandlist_t *build_redirect(int t, int copy, char *address)
+{
+    commandlist_t *ret = new_command(t);
+
+    assert(t == REDIRECT);
+
+    if (ret) {
+	ret->u.r.copy = copy;
+	ret->u.r.address = address;
     }
     return ret;
 }

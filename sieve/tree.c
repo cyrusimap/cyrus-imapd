@@ -1,6 +1,6 @@
 /* tree.c -- abstract syntax tree handling
  * Larry Greenfield
- * $Id: tree.c,v 1.11.2.2 2004/07/16 14:37:45 ken3 Exp $
+ * $Id: tree.c,v 1.11.2.3 2005/03/12 03:30:13 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -186,7 +186,13 @@ void free_tree(commandlist_t *cl)
 	    break;
 
 	case FILEINTO:
+	    if (cl->u.f.folder) free(cl->u.f.folder);
+	    break;
+
 	case REDIRECT:
+	    if (cl->u.r.address) free(cl->u.r.address);
+	    break;
+
 	case REJCT:
 	    if (cl->u.str) free(cl->u.str);
 	    break;
