@@ -1,7 +1,7 @@
 #ifndef HAVE_MASTER_H
 #define HAVE_MASTER_H
 
-/* $Id: master.h,v 1.9 2003/10/22 18:50:14 rjs3 Exp $ */
+/* $Id: master.h,v 1.9.2.1 2004/02/06 18:48:14 ken3 Exp $ */
 
 #include <config.h>
 #include <sys/resource.h> /* for rlim_t */
@@ -35,6 +35,7 @@ struct service {
     unsigned int forkrate;
 
     int associate;
+    int family;
 
     /* limits */
     rlim_t maxfds;

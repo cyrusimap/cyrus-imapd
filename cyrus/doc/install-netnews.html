@@ -1,4 +1,4 @@
-<!-- $Id: install-netnews.html,v 1.2.2.2 2004/01/31 02:03:23 ken3 Exp $ -->
+<!-- $Id: install-netnews.html,v 1.2.2.3 2004/02/06 18:48:12 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Cyrus and Netnews
@@ -60,14 +60,6 @@ In order to receive usenet articles, you must make sure that the Cyrus
 sample configs both include entries for <tt>nntpd</tt> (disabled by
 default).
 
-<p>Whenever <tt>nntpd</tt> receives an article, it automatically adds a
-To: header with email addresses corresponding to the newsgroups
-that the article is destined for (eg, post+comp.mail.imap).  The
-presence of this header makes it easier for email clients to
-post/reply to the newsgroup.  The "pseudo" user that is used when
-constructing the email address can be specified with the
-<tt>newspostuser</tt> option in <tt>imapd.conf</tt> (default = "post").
-
 <h4>Push (traditional) feeds</h4>
 If your usenet peer will be pushing articles to you, no further
 configuration is necessary, beyond letting your peer access your Cyrus
@@ -80,9 +72,9 @@ retrieve articles from your peer and feed them to your Cyrus server.
 If supported by your peer, <tt>fetchnews</tt> will use the NEWNEWS
 command, otherwise it will fallback to keeping track of the high water
 mark of each group.
-You will probably want to configure <tt>fetchnews</tt> or
-<tt>suck</tt> as an EVENT in <tt>cyrus.conf</tt> to be called
-periodically (eg, once an hour, every 15 minutes, etc).
+You will probably want to configure <tt>fetchnews</tt> as an EVENT in
+<tt>cyrus.conf</tt> to be called periodically (eg, once an hour, every
+15 minutes, etc).
 
 <p>As an alternative to <tt>fetchnews</tt>, you can also use the
  <a href=http://home.comcast.net/~bobyetman/><tt>suck</tt></a> program
@@ -145,15 +137,14 @@ have to configure your server so your users can reply to and post
 articles via SMTP.
 
 <p>To help faciliate this, you can set the <tt>newspostuser</tt>
-option to a userid which will be used to construct email delivery
+option to a "pseudo" user which will be used to construct email delivery
 addresses for each incoming article.  These addresses are inserted
-into a <tt>To:</tt> in the article.  For example, if set to "post", an
+into a <tt>Reply-To:</tt> in the article.  For example, if set to "post", an
 article posted to <tt>comp.mail.imap</tt> will have an address of
-"post+comp.mail.imap" inserted into the <tt>To:</tt> header.  This
-will allow a user to easily reply to an article via email by using
-their messaging client's "Reply All" feature.  Otherwise, the users
-will have to learn the correct email address format for posting and
-replying to articles.
+"post+comp.mail.imap" inserted into the <tt>Reply-To:</tt> header.  This
+will allow a user to easily reply to an article via email.  Otherwise,
+the users will have to learn the correct email address format for
+posting and replying to articles.
 
 <p>In order for these email messages to be fed into your news server
 (and subsequently to the outside world) you need to use an email to
@@ -210,5 +201,5 @@ newsgroups under <tt>alt</tt> will be expired at the same time
 (independently from <tt>comp</tt>).
 
 <P><HR>
-last modified: $Date: 2004/01/31 02:03:23 $
+last modified: $Date: 2004/02/06 18:48:12 $
 </BODY></HTML>

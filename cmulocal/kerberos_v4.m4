@@ -1,7 +1,7 @@
 dnl kerberos_v4.m4--Kerberos 4 libraries and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
-dnl $Id: kerberos_v4.m4,v 1.26 2003/10/08 20:35:24 rjs3 Exp $
+dnl $Id: kerberos_v4.m4,v 1.26.4.1 2004/02/06 18:48:12 ken3 Exp $
 
 AC_DEFUN([CMU_KRB_SENDAUTH_PROTO], [
 AC_MSG_CHECKING(for krb_sendauth prototype)
@@ -118,7 +118,7 @@ AC_DEFUN([CMU_KRB_INC_WHERE], [
 
 AC_DEFUN([CMU_KRB_LIB_WHERE1], [
 saved_LIBS=$LIBS
-LIBS="$saved_LIBS -L$1 -lkrb $KRB_LIBDES"
+LIBS="$saved_LIBS -L$1 -lkrb ${KRB_LIBDES}"
 AC_TRY_LINK(,
 [dest_tkt();],
 [ac_cv_found_krb_lib=yes],
@@ -167,7 +167,7 @@ AC_ARG_WITH(krb4-include,
 	    ac_cv_krb_where_inc=$with_krb4/include
 	  fi
 	fi
-
+       
 	if test "$with_krb4" != "no"; then
 	  if test "X$with_krb4_lib" != "X"; then
 	    ac_cv_krb_where_lib=$with_krb4_lib
@@ -178,7 +178,6 @@ AC_ARG_WITH(krb4-include,
 	  if test "X$ac_cv_krb_where_inc" = "X"; then
 	    CMU_KRB_INC_WHERE(/usr/athena/include /usr/include/kerberosIV /usr/local/include /usr/include/kerberos)
 	  fi
-	fi
 
           AC_MSG_CHECKING([if libdes is needed])
           AC_TRY_LINK([],[des_quad_cksum();],KRB_DES_LIB="",KRB_DES_LIB="maybe")
@@ -188,7 +187,7 @@ AC_ARG_WITH(krb4-include,
               if test "X$KRB_DES_LIB" = "Xyes"; then
                   AC_MSG_RESULT([yes])
                   KRB_LIBDES="-ldes"
-                  KRB_LIBDESA="${KRB_LIB_DIR}/libdes.a"
+                  KRB_LIBDESA='$(KRB_LIB_DIR)/libdes.a'
               else
                   LIBS="$cmu_save_LIBS $LIBSSL_LIB_FLAGS"
                   AC_TRY_LINK([],
@@ -205,13 +204,14 @@ AC_ARG_WITH(krb4-include,
           else
              AC_MSG_RESULT([no])
           fi
+          if test "X$ac_cv_krb_where_lib" = "X"; then
+            CMU_KRB_LIB_WHERE(/usr/athena/lib /usr/local/lib /usr/lib)
+          fi
+	fi
 	  LIBS="${cmu_save_LIBS}"
 
-	  if test "X$ac_cv_krb_where_lib" = "X"; then
-	    CMU_KRB_LIB_WHERE(/usr/athena/lib /usr/local/lib /usr/lib)
-	  fi
 
-	AC_MSG_CHECKING(whether to include kerberos 4)
+	AC_MSG_CHECKING([whether to include kerberos 4])
 	if test "X$ac_cv_krb_where_lib" = "X" -o "X$ac_cv_krb_where_inc" = "X"; then
 	  ac_cv_found_krb=no
 	  AC_MSG_RESULT(no)
@@ -225,6 +225,7 @@ AC_ARG_WITH(krb4-include,
 	  LIBS="${cmu_save_LIBS} ${KRB_LIB_FLAGS}"
 	  AC_CHECK_LIB(resolv, dns_lookup, KRB_LIB_FLAGS="${KRB_LIB_FLAGS} -lresolv",,"${KRB_LIB_FLAGS}")
 	  AC_CHECK_LIB(crypt, crypt, KRB_LIB_FLAGS="${KRB_LIB_FLAGS} -lcrypt",,"${KRB_LIB_FLAGS}")
+	  LIBS="${LIBS} ${KRB_LIB_FLAGS}"
 	  AC_CHECK_FUNCS(krb_get_int krb_life_to_time)
           AC_SUBST(KRB_INC_FLAGS)
           AC_SUBST(KRB_LIB_FLAGS)

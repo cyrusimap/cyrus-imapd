@@ -133,12 +133,12 @@ var_cyrusMasterMIB(struct variable *vp,
      */
     switch(vp->magic) {
     case CYRUSMASTERINFODESCR:
-	strcpy(string, "Cyrus IMAP server master process");
+	strlcpy(string, "Cyrus IMAP server master process", sizeof(string));
 	*var_len = strlen(string);
 	return (unsigned char *) string;
       
     case CYRUSMASTERINFOVERS:
-	strcpy(string, CYRUS_VERSION);
+	strlcpy(string, CYRUS_VERSION, sizeof(string));
 	*var_len = strlen(string);
 	return (unsigned char *) string;
       
@@ -203,7 +203,10 @@ var_serviceTable(struct variable *vp,
 	return (unsigned char *) &long_ret;
       
     case SERVICENAME:
-	strcpy(string, Services[index - 1].name);
+	strlcpy(string, Services[index - 1].name, sizeof(string));
+	if(Services[index - 1].family == AF_INET6) {
+	    strlcat(string, "[v6]", sizeof(string));
+	}
 	*var_len = strlen(string);
 	return (unsigned char *) string;
       

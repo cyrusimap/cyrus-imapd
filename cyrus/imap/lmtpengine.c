@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.93.2.4 2004/02/04 20:26:31 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.93.2.5 2004/02/06 18:48:13 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -679,7 +679,7 @@ static int savemsg(struct clientdata *cd,
     }
 
     /* fill the cache */
-    r = spool_fill_hdrcache(cd->pin, f, m->hdrcache);
+    r = spool_fill_hdrcache(cd->pin, f, m->hdrcache, NULL);
     r |= spool_copy_msg(cd->pin, f);
     if (r) {
 	fclose(f);

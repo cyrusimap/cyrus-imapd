@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.6 2004/01/31 18:56:59 ken3 Exp $
+ * $Id: nntpd.c,v 1.2.2.7 2004/02/06 18:48:13 ken3 Exp $
  */
 
 /*
@@ -2879,9 +2879,15 @@ static int savemsg(message_data_t *m, FILE *f)
     time_t now = time(NULL);
     static int post_count = 0;
     FILE *stagef = NULL;
+    const char *skipheaders[] = {
+	"Path",		/* need to prepend our servername */
+	"Xref",		/* need to remove (generated on the fly) */
+	"Reply-To",	/* need to add "post" email addresses */
+	NULL
+    };
 
     /* fill the cache */
-    r = spool_fill_hdrcache(nntp_in, f, m->hdrcache);
+    r = spool_fill_hdrcache(nntp_in, f, m->hdrcache, skipheaders);
     if (r) {
 	/* got a bad header */
 
@@ -2897,9 +2903,11 @@ static int savemsg(message_data_t *m, FILE *f)
 	m->path = xstrdup(body[0]);
     } else {
 	m->path = NULL;		/* no path-id */
-	fprintf(f, "Path: %s!%s\r\n",
-		config_servername, nntp_userid ? nntp_userid : "anonymous");
     }
+
+    /* add Path: header */
+    fprintf(f, "Path: %s!%s\r\n", config_servername,
+	    m->path ? m->path : (nntp_userid ? nntp_userid : "anonymous"));
 
     /* get message-id */
     if ((body = spool_getheader(m->hdrcache, "message-id")) != NULL) {
@@ -2946,24 +2954,36 @@ static int savemsg(message_data_t *m, FILE *f)
 		r = IMAP_MAILBOX_NONEXISTENT; /* no newsgroups that we serve */
 	    }
 	    if (!r) {
-		const char *newspostuser;
+		const char *newspostuser = config_getstring(IMAPOPT_NEWSPOSTUSER);
+		/* get reply-to */
+		body = spool_getheader(m->hdrcache, "reply-to");
 
-		if ((newspostuser = config_getstring(IMAPOPT_NEWSPOSTUSER))) {
-		    char buf[1024] = "";
+		/* add Reply-To: header */
+		if (body || newspostuser) {
 		    const char *sep = "";
-		    int n;
 
-		    /* build a To: header */
-		    for (n = 0; n < m->rcpt_num; n++) {
-			snprintf(buf+strlen(buf), sizeof(buf)-strlen(buf),
-				 "%s%s+%s@%s", sep, newspostuser,
-				 m->rcpt[n]+strlen(newsprefix),
-				 config_servername);
+		    /* begin header */
+		    fprintf(f, "Reply-To: ");
+
+		    /* add existing body */
+		    if (body) {
+			fprintf(f, "%s", body[0]);
 			sep = ", ";
 		    }
 
-		    /* add To: header */
-		    fprintf(f, "To: %s\r\n", buf);
+		    /* add "post" email addresses based on newsgroup */
+		    if (newspostuser) {
+			int n;
+			for (n = 0; n < m->rcpt_num; n++) {
+			    fprintf(f, "%s%s+%s@%s", sep, newspostuser,
+				    m->rcpt[n]+strlen(newsprefix),
+				    config_servername);
+			    sep = ", ";
+			}
+		    }
+
+		    /* end header */
+		    fprintf(f, "\r\n");
 		}
 	    }
 	} else {
