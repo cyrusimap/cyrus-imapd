@@ -14,12 +14,20 @@ extern struct mailbox *imapd_mailbox;
 /* Number of messages in currently open mailbox */
 extern int imapd_exists;
 
+
+/* List of strings, for fetch and search argument blocks */
+struct strlist {
+    char *s;			/* String */
+    struct strlist *next;
+};
+
+
 /* Items that may be fetched */
 struct fetchargs {
     int fetchitems;		/* Bitmask */
-    char *bodyparts;		/* BODY[x] values */
-    char *headers;		/* RFC822.HEADER.LINES */
-    char *headers_not;		/* RFC822.HEADER.LINES.NOT */
+    struct strlist *bodysections; /* BODY[x] values */
+    struct strlist *headers;	/* RFC822.HEADER.LINES */
+    struct strlist *headers_not; /* RFC822.HEADER.LINES.NOT */
     int start_octet;		/* start_octet for partial fetch, or 0 */
     int octet_count;		/* octet_count for partial fetch */
 };
@@ -39,6 +47,7 @@ struct fetchargs {
 #define FETCH_ALL  (FETCH_FLAGS|FETCH_INTERNALDATE|FETCH_SIZE|FETCH_ENVELOPE)
 #define FETCH_FULL (FETCH_ALL|FETCH_BODY)
 
+/* Arguments to Store functions */
 struct storeargs {
     int operation;
     int seen;
@@ -58,6 +67,7 @@ struct storeargs {
 #define STORE_REMOVE	2
 #define STORE_REPLACE	3
 
+/* Things that may be searched for */
 struct searchargs {
     time_t before, after;
     bit32 system_flags_set;
