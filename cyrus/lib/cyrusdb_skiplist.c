@@ -1,5 +1,5 @@
 /* skip-list.c -- generic skip list routines
- * $Id: cyrusdb_skiplist.c,v 1.13 2002/02/01 20:27:42 leg Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.14 2002/02/02 01:06:38 leg Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -567,7 +567,7 @@ static int myopen(const char *fname, struct db **ret)
 	db->curlevel = 0;
 	db->listsize = 0;
 	/* where do we start writing new entries? */
-	db->logstart = HEADER_SIZE + DUMMY_SIZE(db);
+	db->logstart = DUMMY_OFFSET(db) + DUMMY_SIZE(db);
 	db->last_recovery = time(NULL);
 
 	/* create the header */
@@ -581,7 +581,7 @@ static int myopen(const char *fname, struct db **ret)
 	    buf[0] = htonl(DUMMY);
 	    buf[(dsize / 4) - 1] = htonl(-1);
 
-	    lseek(db->fd, HEADER_SIZE, SEEK_SET);
+	    lseek(db->fd, DUMMY_OFFSET(db), SEEK_SET);
 	    n = retry_write(db->fd, (char *) buf, dsize);
 	    if (n != dsize) {
 		syslog(LOG_ERR, "DBERROR: writing dummy node for %s: %m",
@@ -620,7 +620,7 @@ static int myopen(const char *fname, struct db **ret)
 	return r;
     }
 
-    if (db->last_recovery < global_recovery) {
+    if (!global_recovery || db->last_recovery < global_recovery) {
 	/* run recovery; we rebooted since the last time recovery
 	   was run */
 	r = recovery(db);
@@ -664,7 +664,7 @@ static const char *find_node(struct db *db,
 			     const char *key, int keylen,
 			     int *updateoffsets)
 {
-    const char *ptr = db->map_base + HEADER_SIZE;
+    const char *ptr = db->map_base + DUMMY_OFFSET(db);
     int i;
     int offset;
 
@@ -1277,7 +1277,7 @@ static int mycheckpoint(struct db *db, int locked)
 	buf[0] = htonl(DUMMY);
 	buf[(dsize / 4) - 1] = htonl(-1);
 
-	lseek(db->fd, HEADER_SIZE, SEEK_SET);
+	lseek(db->fd, DUMMY_OFFSET(db), SEEK_SET);
 	r = retry_write(db->fd, (char *) buf, dsize);
 	if (r != dsize) {
 	    r = CYRUSDB_IOERROR;
@@ -1291,7 +1291,7 @@ static int mycheckpoint(struct db *db, int locked)
 	for (i = 0; i < db->maxlevel; i++) {
 	    /* header_size + 4 (rectype) + 4 (ksize) + 4 (dsize)
 	       + 4 * i */
-	    updateoffsets[i] = HEADER_SIZE + 12 + 4 * i;
+	    updateoffsets[i] = DUMMY_OFFSET(db) + 12 + 4 * i;
 	}
     }
 
@@ -1528,7 +1528,7 @@ static int recovery(struct db *db)
 	return r;
     }
 
-    if (db->last_recovery >= global_recovery) {
+    if (global_recovery && db->last_recovery >= global_recovery) {
 	/* someone beat us to it */
 	unlock(db);
 	return 0;
@@ -1572,13 +1572,11 @@ static int recovery(struct db *db)
     for (i = 0; i < db->maxlevel; i++) {
 	/* header_size + 4 (rectype) + 4 (ksize) + 4 (dsize)
 	   + 4 * i */
-	updateoffsets[i] = HEADER_SIZE + 12 + 4 * i;
+	updateoffsets[i] = DUMMY_OFFSET(db) + 12 + 4 * i;
     }
     
-    if (!r) ptr += RECSIZE(ptr);
-
     /* reset the data that was written INORDER by the last checkpoint */
-    offset = db->logstart;
+    offset = DUMMY_OFFSET(db) + DUMMY_SIZE(db);
     while (!r && (offset < db->logstart)) {
 	ptr = db->map_base + offset;
 	offsetnet = htonl(offset);
