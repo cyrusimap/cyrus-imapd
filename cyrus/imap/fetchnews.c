@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: fetchnews.c,v 1.1.2.11 2003/02/14 19:47:09 ken3 Exp $
+ * $Id: fetchnews.c,v 1.1.2.12 2003/02/28 16:30:23 ken3 Exp $
  */
 
 #include <config.h>
@@ -59,6 +59,7 @@
 
 #include "exitcodes.h"
 #include "global.h"
+#include "lock.h"
 #include "prot.h"
 #include "xmalloc.h"
 
@@ -197,12 +198,19 @@ int main(int argc, char *argv[])
     /* read the previous timestamp */
     if (!sfile[0]) snprintf(sfile, sizeof(sfile), "%s/newsstamp", config_dir);
 
-    fd = open(sfile, O_RDONLY, 0644);
-    if (fd == -1 || read(fd, &stamp, sizeof(stamp)) < sizeof(stamp)) {
+    if ((fd = open(sfile, O_RDWR | O_CREAT, 0644)) == -1) {
+	syslog(LOG_ERR, "can not open %s", sfile);
+	goto quit;
+    }
+    if (lock_nonblocking(fd) == -1) {
+	syslog(LOG_ERR, "can not lock %s: %m", sfile);
+	goto quit;
+    }
+
+    if (read(fd, &stamp, sizeof(stamp)) < sizeof(stamp)) {
 	/* XXX do something better here */
 	stamp = time(NULL);
     }
-    if (fd != -1) close(fd);
 
     /* ask for new articles */
     tm = gmtime(&stamp);
@@ -287,11 +295,11 @@ int main(int argc, char *argv[])
 	   offered, rejected, accepted, failed);
 
     /* write the current timestamp */
-    fd = open(sfile, O_RDWR | O_CREAT, 0644);
-    if (fd != -1) {
-	write(fd, &stamp, sizeof(stamp));
-	close(fd);
-    }
+    lseek(fd, 0, SEEK_SET);
+    if (write(fd, &stamp, sizeof(stamp)) < sizeof(stamp))
+	syslog(LOG_ERR, "error writing %s", sfile);
+    lock_unlock(fd);
+    close(fd);
 
   quit:
     if (psock >= 0) {
