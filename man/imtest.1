@@ -82,16 +82,19 @@ imtest \- interactive IMAP test program
 .I file
 ]
 [
-.B \-c
+.B \-s
 ]
 [
-.B \-v
+.B \-c
 ]
 [
 .B \-z
 ]
 .br
-       \fIhostname\fR
+       [
+.B \-v
+]
+\fIhostname\fR
 .SH DESCRIPTION
 .I imtest
 is a utility that allows you to authenticate to a IMAP or IMSP server
@@ -141,10 +144,13 @@ Specify the \fIrealm\fR to use. Certain authentication mechanisms
 .BI -f " file"
 Pipe \fIfile\fR into connection after authentication.
 .TP
+.B -s
+Enable IMAP over SSL (imaps).
+.TP
 .B -c
-Disable challenge prompt callbacks.  This will cause the OTP mechanism
-to ask for the secret pass-phrase (library generates the correct
-response) instead of the one-time password.
+Enable challenge prompt callbacks.  This will cause the OTP mechanism
+to ask for the the one-time password instead of the secret pass-phrase
+(library generates the correct response).
 .TP
 .B -v
 Verbose. Print out more information than usual.

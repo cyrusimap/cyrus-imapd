@@ -1,5 +1,5 @@
 /* pop3test.c -- pop3 test client
- * $Id: pop3test.c,v 1.7 2002/04/12 18:09:30 ken3 Exp $
+ * $Id: pop3test.c,v 1.8 2002/05/21 20:15:24 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -99,7 +99,7 @@ sasl_conn_t *conn;
 int sock; /* socket descriptor */
 
 int verbose=0;
-int dochallenge=1;
+int dochallenge=0;
 
 struct protstream *pout, *pin;
 
@@ -1185,13 +1185,53 @@ void usage(void)
   printf("  -f file  : pipe file into connection after authentication\n");
   printf("  -r realm : realm\n");
 #ifdef HAVE_SSL
+  printf("  -s       : Enable POP3 over SSL (pop3s)\n");
   printf("  -t file  : Enable TLS. file has the TLS public and private keys\n"
 	 "             (specify \"\" to not use TLS for authentication)\n");
 #endif /* HAVE_SSL */
-  printf("  -c       : disable challenge prompt callbacks\n"
-	 "             (enter secret pass-phrase instead of one-time password)\n");
+  printf("  -c       : enable challenge prompt callbacks\n"
+	 "             (enter one-time password instead of secret pass-phrase)\n");
 
   exit(1);
+}
+
+void starttls(int ssl, char *keyfile, unsigned *ssf)
+{
+  int result;
+  char *auth_id;
+      
+  result=tls_init_clientengine(10, keyfile, keyfile);
+  if (result!=IMTEST_OK)
+  {
+    if (ssl) {
+      imtest_fatal("Start TLS engine failed\n");
+    } else {
+      printf("Start TLS engine failed\n");
+    }
+  } else {
+    result=tls_start_clienttls(ssf, &auth_id);
+      
+    if (result!=IMTEST_OK)
+      imtest_fatal("TLS negotiation failed!\n");
+  }
+
+  /* TLS negotiation suceeded */
+
+  /* tell SASL about the negotiated layer */
+  result=sasl_setprop(conn,
+		      SASL_SSF_EXTERNAL,
+		      ssf);
+  if (result!=SASL_OK)
+      imtest_fatal("Error setting SASL property (external ssf)");
+
+  result=sasl_setprop(conn,
+		      SASL_AUTH_EXTERNAL,
+		      auth_id);
+  if (result!=SASL_OK)
+      imtest_fatal("Error setting SASL property (external auth_id)");
+
+  prot_settls (pin,  tls_conn);
+  prot_settls (pout, tls_conn);
 }
 
 
@@ -1211,11 +1251,11 @@ int main(int argc, char **argv)
   int errflg = 0;
 
   char *tls_keyfile="";
-  char *port = "pop3";
+  char *port = "";
   struct servent *serv;
   int servport;
   int run_stress_test=0;
-  int dotls=0;
+  int dotls=0, dossl=0;
   int server_supports_tls;
   char str[1024], *start, *cp;
   char *apop_chal=NULL;
@@ -1228,10 +1268,17 @@ int main(int argc, char **argv)
   setbuf(stderr, NULL);
 
   /* look at all the extra args */
-  while ((c = getopt(argc, argv, "cvk:l:p:u:a:m:f:r:t:")) != EOF)
+  while ((c = getopt(argc, argv, "scvk:l:p:u:a:m:f:r:t:")) != EOF)
     switch (c) {
+    case 's':
+#ifdef HAVE_SSL
+	dossl=1;
+#else
+	imtest_fatal("pop3test was not compiled with SSL/TLS support\n");
+#endif
+	break;
     case 'c':
-	dochallenge=0;
+	dochallenge=1;
 	break;
     case 'v':
 	verbose=1;
@@ -1261,8 +1308,12 @@ int main(int argc, char **argv)
         realm=optarg;
         break;
     case 't':
-      dotls=1;
-      tls_keyfile=optarg;
+#ifdef HAVE_SSL
+	dotls=1;
+	tls_keyfile=optarg;
+#else
+	imtest_fatal("pop3test was not compiled with SSL/TLS support\n");
+#endif
       break;
     case '?':
     default:
@@ -1276,6 +1327,14 @@ int main(int argc, char **argv)
 
   if (errflg) {
       usage();
+  }
+
+  if (!*port) {
+      if (dossl) {
+	  port="pop3s";
+      } else {
+	  port="pop3";
+      }
   }
 
   /* last arg is server name */
@@ -1301,6 +1360,12 @@ int main(int argc, char **argv)
   pin = prot_new(sock, 0);
   pout = prot_new(sock, 1); 
 
+#ifdef HAVE_SSL
+  if (dossl==1) {
+    starttls(1, "", &ext_ssf);
+  }
+#endif /* HAVE_SSL */
+ 
   /* Get header line */
   if(prot_fgets(str,sizeof(str),pin) == NULL) {
       imtest_fatal("prot layer failure");
@@ -1330,43 +1395,16 @@ int main(int argc, char **argv)
   mechlist=ask_capability(&server_supports_tls);
 
 #ifdef HAVE_SSL
-  if ((dotls==1) && (server_supports_tls==1))
+  if ((dossl==0) && (dotls==1) && (server_supports_tls==1))
   {
-    char *auth_id;
-      
     prot_printf(pout,"STLS\r\n");
     prot_flush(pout);
     
+    printf("C: STLS\r\n");
+
     waitfor("+OK");
 
-    result=tls_init_clientengine(10, tls_keyfile, tls_keyfile);
-    if (result!=IMTEST_OK)
-    {
-      printf("Start TLS engine failed\n");
-    } else {
-      result=tls_start_clienttls(&ext_ssf, &auth_id);
-      
-      if (result!=IMTEST_OK)
-	printf("TLS negotiation failed!\n");
-    }
-
-    /* TLS negotiation suceeded */
-
-    /* tell SASL about the negotiated layer */
-    result=sasl_setprop(conn,
-			SASL_SSF_EXTERNAL,
-			&ext_ssf);
-    if (result!=SASL_OK)
-	imtest_fatal("Error setting SASL property (external ssf)");
-
-    result=sasl_setprop(conn,
-			SASL_AUTH_EXTERNAL,
-			auth_id);
-    if (result!=SASL_OK)
-	imtest_fatal("Error setting SASL property (external auth_id)");
-
-    prot_settls (pin,  tls_conn);
-    prot_settls (pout, tls_conn);
+    starttls(0, tls_keyfile, &ext_ssf);
 
     /* ask for the capabilities again */
     if (verbose==1)
