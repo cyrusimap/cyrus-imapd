@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.38 2002/10/03 19:02:42 ken3 Exp $ */
+/* $Id: service.c,v 1.39 2002/10/03 20:31:55 ken3 Exp $ */
 
 #include <config.h>
 
@@ -268,19 +268,6 @@ int main(int argc, char **argv, char **envp)
     int newargc = 0;
     char **newargv = (char **) malloc(ARGV_GROW * sizeof(char *));
 
-    p = getenv("CYRUS_SERVICE");
-    if (p == NULL) {
-	syslog(LOG_ERR, "could not getenv(CYRUS_SERVICE); exiting");
-	exit(EX_SOFTWARE);
-    }
-    service = strdup(p);
-    if (service == NULL) {
-	syslog(LOG_ERR, "couldn't strdup() service: %m");
-	exit(EX_OSERR);
-    }
-    config_init(alt_config, service);
-
-
     opterr = 0; /* disable error reporting,
 		   since we don't know about service-specific options */
 
@@ -342,6 +329,18 @@ int main(int argc, char **argv, char **envp)
 	syslog(LOG_DEBUG, "waiting 15 seconds for debugger");
 	sleep(15);
     }
+
+    p = getenv("CYRUS_SERVICE");
+    if (p == NULL) {
+	syslog(LOG_ERR, "could not getenv(CYRUS_SERVICE); exiting");
+	exit(EX_SOFTWARE);
+    }
+    service = strdup(p);
+    if (service == NULL) {
+	syslog(LOG_ERR, "couldn't strdup() service: %m");
+	exit(EX_OSERR);
+    }
+    config_init(alt_config, service);
 
     if (call_debugger) {
 	char debugbuf[1024];
