@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.20.4.7 2002/12/04 16:12:44 ken3 Exp $
+ * $Id: parser.c,v 1.20.4.8 2003/02/05 21:01:11 ken3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -640,7 +640,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
   if (!verify_only) {
       /* Check for a remote mailbox (should we setup a redirect?) */
       struct namespace sieved_namespace;
-      char inboxname[1024];
+      char inboxname[MAX_MAILBOX_NAME];
       char *server;
       int type, r;
       

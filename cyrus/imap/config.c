@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: config.c,v 1.55.4.25 2003/01/22 03:37:10 ken3 Exp $ */
+/* $Id: config.c,v 1.55.4.26 2003/02/05 21:01:09 ken3 Exp $ */
 
 #include <config.h>
 
@@ -720,15 +720,25 @@ static int acl_ok(const char *user, struct auth_state *authstate)
 {
     struct namespace namespace;
     char *acl;
-    char inboxname[1024];
+    char bufuser[MAX_MAILBOX_NAME], inboxname[MAX_MAILBOX_NAME];
     int r;
 
     /* Set namespace */
-    r = mboxname_init_namespace(&namespace, 0);
+    if ((r = mboxname_init_namespace(&namespace, 0)) != 0) {
+	syslog(LOG_ERR, error_message(r));
+	fatal(error_message(r), EC_CONFIG);
+    }
+    
+    strlcpy(bufuser, user, sizeof(bufuser));
+
+    /* Translate any separators in userid */
+    mboxname_hiersep_tointernal(&namespace, bufuser,
+				config_virtdomains ?
+				strcspn(bufuser, "@") : 0);
 
     if (!r)
 	r = (*namespace.mboxname_tointernal)(&namespace, "INBOX",
-					     user, inboxname);
+					     bufuser, inboxname);
 
     if (r || !authstate ||
 	mboxlist_lookup(inboxname, NULL, &acl, NULL)) {
