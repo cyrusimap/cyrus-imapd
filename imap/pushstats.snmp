@@ -1,7 +1,9 @@
-# This is where all the numbers go under. This is the CMU apps hierarchy? Should
-# be some IMAP hierarchy in some distant some in a land far away
+# This is where all the numbers go under. 
+# This is the CMU apps hierarchy? 
+# Should be some IMAP hierarchy in some distant some in a land far away,
+# when ACAP rules the earth.
 
-BASE 1.3.6.1
+BASE 1.3.6.1.4.1.3.2.2.2.6
 
 # 'I' means increment
 # 'auto' means just pick any number you want
