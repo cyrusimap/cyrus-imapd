@@ -79,9 +79,9 @@ libcyrus.a: $(OBJS)
 	ar cr libcyrus.a $(OBJS)
 	$(RANLIB) libcyrus.a
 
-charset.c: chartables.h
+charset.o: chartables.h
 
-chartables.h : mkchartable 
+chartables.h: mkchartable 
 	rm -f chartables.h
 	./mkchartable -m $(srcdir)/charset/unicode.map $(srcdir)/charset/*.t >x-chartables.h
 	mv x-chartables.h chartables.h
