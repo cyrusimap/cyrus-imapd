@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.268.2.21 2005/02/22 05:50:46 shadow Exp $
+dnl $Id: configure.in,v 1.268.2.22 2005/03/07 04:53:04 shadow Exp $
 dnl
 
 
@@ -515,6 +515,11 @@ if test "x$with_afs" != "xno"; then
         AC_SUBST(AFS_LDFLAGS)
         AC_DEFINE(HAVE_AFSKRB,[],[Should we build afskrb pts module?])
       fi
+    else
+      AFS_LIBS="${AFS_LIBS}"
+      AC_SUBST(AFS_LIBS)
+      AC_SUBST(AFS_LDFLAGS)
+      AC_DEFINE(HAVE_AFSKRB,[],[Should we build afskrb pts module?])
     fi
     LIBS="$SAVE_LIBS"
 fi
@@ -1045,7 +1050,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.268.2.21 2005/02/22 05:50:46 shadow Exp $ */
+/* $Id: configure.in,v 1.268.2.22 2005/03/07 04:53:04 shadow Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
