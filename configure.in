@@ -36,7 +36,7 @@ LDFLAGS="-L/usr/local/lib ${CFLAGS}"
 dnl if db_185.h is present, we're using db2.0 and should include db_185.h
 dnl instead of db.h; otherwise, include db.h.  this is handled in the code
 dnl itself.
-AC_CHECK_HEADERS(unistd.h sys/select.h db_185.h)
+AC_CHECK_HEADERS(unistd.h sys/select.h db_185.h sys/param.h)
 AC_REPLACE_FUNCS(memmove strcasecmp ftruncate strerror)
 AC_HEADER_DIRENT
 
@@ -258,7 +258,7 @@ AC_CACHE_VAL(cyrus_sigveclib,[
     SAVE_LDFLAGS="$LDFLAGS"
     LDFLAGS="-L/usr/ucblib -R/usr/ucblib $LDFLAGS"
     AC_CHECK_LIB(ucb, sigvec, [
-      cyrus_sigveclib="-L/usr/ucblib -R/usr/ucblib -lucb"],
+      cyrus_sigveclib="-lc -L/usr/ucblib -R/usr/ucblib -lucb"],
       [ AC_MSG_WARN(Can't find a sigvec() -- makedepend will not build.)
 	AC_MSG_WARN(Some AFS dependant programs (ptloader) may fail to build.)
 	AC_MSG_WARN(If you're not using AFS and have makedepend)
@@ -334,9 +334,29 @@ if test "$WITH_AUTH" = krb_pts; then
 		AFSLIBS="$AFSLIBS ${with_afs}/lib/afs/libaudit.a"
 	fi
 	if test -f /usr/ucblib/libucb.a; then
-		AFSLIBS="$AFSLIBS ${ld_runpath_switch}/usr/ucblib -L/usr/ucblib -lucb"
+		AFSLIBS="$AFSLIBS -lc ${ld_runpath_switch}/usr/ucblib -L/usr/ucblib -lucb"
 	fi
 
+	AC_CACHE_VAL(cyrus_afs_pr_end,[
+		SAVE_LIBS="$LIBS"
+		LIBS="$AFSLIBS"
+		AC_MSG_CHECKING(if AFS libraries have pr_End)
+		AC_TRY_LINK([pr_End();],
+			[pr_End()],
+			[
+				dnl it linked; have it
+				AC_MSG_RESULT(yes)
+				cyrus_afs_pr_end="yes"
+			], [
+				dnl didn't link; use old code
+				AC_MSG_RESULT(no)
+				cyrus_afs_pr_end="no"
+			])
+		])
+	LIBS="$SAVE_LIBS"
+	if test "$cyrus_afs_pr_end" = no; then
+		AC_DEFINE(HAVE_PR_END)
+	fi
 	AC_CACHE_VAL(cyrus_afs_sigvec,[
 		SAVE_LIBS="$LIBS"
 		LIBS="${with_afs}/lib/liblwp.a"
@@ -506,6 +526,14 @@ if test "$with_zephyr" = "no"; then
 	AC_MSG_ERROR(Unable to find Zephyr libraries)
      fi
 fi     
+
+dnl
+dnl System version of com_err
+dnl
+AC_CHECK_LIB(com_err, error_message, [LIBS="${LIBS} -lcom_err"
+	AC_CHECK_PROGS(COMPILE_ET, compile_et)
+],[LIBS="${LIBS} ../et/libcom_err.a" COMPILE_ET="../et/compile_et"])
+
 dnl
 dnl Look for inn
 dnl
