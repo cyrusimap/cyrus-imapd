@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.15 2002/08/16 22:00:50 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.16 2002/08/21 19:52:40 ken3 Exp $
  */
 
 #include <config.h>
@@ -1003,8 +1003,18 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	      goto done;
 	    }
 	    isusermbox = 1;
+	} else if (((!strncmp(newname, "user.", 5) && (p = newname+5)) ||
+		    ((p = strstr(newname, "!user.")) && (p += 6))) &&
+		   !strchr(p, '.')) {
+	    /* Special case of renaming a user */
+	    access = cyrus_acl_myrights(auth_state, oldacl);
+	    if (!(access & deleteright) && !isadmin) {
+		r = (isadmin || (access & ACL_LOOKUP)) ?
+		    IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+		goto done;
+	    }
 	} else {
-	    /* Even admins can't rename users */
+	    /* Only admins can rename users (INBOX to INBOX) */
 	    r = IMAP_MAILBOX_NOTSUPPORTED;
 	    goto done;
 	}
@@ -1026,11 +1036,21 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     /* Check ability to create new mailbox */
     if (!partitionmove) {
 	if (((!strncmp(newname, "user.", 5) && (p = newname+5)) ||
-		  ((p = strstr(newname, "!user.")) && (p += 6))) &&
-		  !strchr(p, '.')) { 
-	    /* Even admins can't rename to user's inboxes */
-	    r = IMAP_MAILBOX_NOTSUPPORTED;
-	    goto done;
+	     ((p = strstr(newname, "!user.")) && (p += 6))) &&
+	    !strchr(p, '.')) {
+	    if (((!strncmp(oldname, "user.", 5) && (p = oldname+5)) ||
+		 ((p = strstr(oldname, "!user.")) && (p += 6))) &&
+		!strchr(p, '.')) {
+		if (!isadmin) {
+		    /* Only admins can rename users (INBOX to INBOX) */
+		    r = IMAP_MAILBOX_NOTSUPPORTED;
+		    goto done;
+		}
+	    } else {
+		/* Even admins can't rename to user's inboxes */
+		r = IMAP_MAILBOX_NOTSUPPORTED;
+		goto done;
+	    }
 	}
 	r = mboxlist_mycreatemailboxcheck(newname, 0, partition, isadmin, 
 					  userid, auth_state, NULL, 

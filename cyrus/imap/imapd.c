@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.27 2002/08/21 18:53:51 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.28 2002/08/21 19:52:40 ken3 Exp $ */
 
 #include <config.h>
 
@@ -3568,18 +3568,12 @@ void cmd_rename(const char *tag,
     char newmailboxname[MAX_MAILBOX_NAME+2];
     int omlen, nmlen;
     char *p;
-    int recursive_rename;
+    int recursive_rename = 1;
+    int rename_user = 0;
 
     /* canonicalize names */
     if (partition && !imapd_userisadmin) {
 	r = IMAP_PERMISSION_DENIED;
-    }
-
-    recursive_rename = 1;
-
-    /* if this is my inbox, don't do recursive renames */
-    if (!strcasecmp(oldname, "inbox")) {
-	recursive_rename = 0;
     }
 
     if (!r)
@@ -3588,6 +3582,20 @@ void cmd_rename(const char *tag,
     if (!r)
 	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, newname,
 						   imapd_userid, newmailboxname);
+
+    /* if this is my inbox, don't do recursive renames */
+    if (!strcasecmp(oldname, "inbox")) {
+	recursive_rename = 0;
+    }
+    /* check if we're an admin renaming a user */
+    else if (((!strncmp(oldmailboxname, "user.", 5) && (p = oldmailboxname+5)) ||
+	      ((p = strstr(oldmailboxname, "!user.")) && (p += 6))) &&
+	     !strchr(p, '.') &&
+	     ((!strncmp(newmailboxname, "user.", 5) && (p = newmailboxname+5)) ||
+	      ((p = strstr(newmailboxname, "!user.")) && (p += 6))) &&
+	     !strchr(p, '.') && imapd_userisadmin) {
+	rename_user = 1;
+    }
 
     /* if we're renaming something inside of something else, 
        don't recursively rename stuff */
@@ -3615,6 +3623,36 @@ void cmd_rename(const char *tag,
 	r = mboxlist_renamemailbox(oldmailboxname, newmailboxname, partition,
 				   imapd_userisadmin, 
 				   imapd_userid, imapd_authstate);
+    }
+
+    /* if we're renaming a user, take care of changing ACLs,
+       subscriptions, seen state, sieve scripts and toplevel quota */
+    if (!r && rename_user) {
+	char *domain;
+
+	/* create canonified userids */
+
+	if (!strchr(oldmailboxname, '!') && (domain = strrchr(oldname, '@'))) {
+	    /* trim default domain from source */
+	    *domain = '\0';
+	}
+
+	/* Translate any separators in source old userid */
+	mboxname_hiersep_tointernal(&imapd_namespace, oldname+5,
+				    config_virtdomains ?
+				    strcspn(oldname+5, "@") : 0);
+
+	if (!strchr(newmailboxname, '!') && (domain = strrchr(newname, '@'))) {
+	    /* trim default domain from destination */
+	    *domain = '\0';
+	}
+
+	/* Translate any separators in destination new userid */
+	mboxname_hiersep_tointernal(&imapd_namespace, newname+5,
+				    config_virtdomains ?
+				    strcspn(newname+5, "@") : 0);
+
+	user_rename(oldname+5, newname+5, imapd_userid, imapd_authstate);
     }
 
     /* rename all mailboxes matching this */
@@ -3652,10 +3690,17 @@ void cmd_rename(const char *tag,
 			    l->mb[i], newmailboxname, error_message(r2));
 		if (RENAME_STOP_ON_ERROR) break;
 	    }
+
+ 	    /* if we're renaming a user copy quota onto new mailbox */
+ 	    if (rename_user) user_copyquota(l->mb[i], newmailboxname);
 	}
 
 	free(l);
     }
+
+    /* take care of deleting old ACLs, subscriptions, seen state and quotas */
+    if (!r && rename_user)
+	user_delete(oldname+5, imapd_userid, imapd_authstate, 1);
 
     if (imapd_mailbox) {
 	index_check(imapd_mailbox, 0, 0);

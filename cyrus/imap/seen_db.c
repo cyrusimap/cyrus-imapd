@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_db.c,v 1.34.4.5 2002/08/14 20:21:05 ken3 Exp $
+   $Id: seen_db.c,v 1.34.4.6 2002/08/21 19:52:41 ken3 Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -481,6 +481,25 @@ int seen_delete_user(const char *user)
 	r = IMAP_IOERROR;
     }
     free(fname);
+    
+    return r;
+}
+
+int seen_rename_user(const char *olduser, const char *newuser)
+{
+    char *oldfname = seen_getpath(olduser);
+    char *newfname = seen_getpath(newuser);
+    int r;
+
+    if (SEEN_DEBUG) {
+	syslog(LOG_DEBUG, "seen_db: seen_rename_user(%s, %s)", 
+	       olduser, newuser);
+    }
+
+    r = seen_merge(oldfname, newfname);
+
+    free(oldfname);
+    free(newfname);
     
     return r;
 }

@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_bigdb.c,v 1.3.4.2 2002/08/14 20:21:05 ken3 Exp $
+   $Id: seen_bigdb.c,v 1.3.4.3 2002/08/21 19:52:41 ken3 Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -354,6 +354,11 @@ int seen_create_user(const char *user)
 }
 
 int seen_delete_user(const char *user)
+{
+    return 0;			/* noop */
+}
+
+int seen_rename_user(const char *olduser, const char *newuser)
 {
     return 0;			/* noop */
 }
