@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.19.4.3 2003/02/27 18:13:53 rjs3 Exp $
+ * $Id: sieve.y,v 1.19.4.4 2003/02/27 18:39:44 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -104,6 +104,7 @@ static struct ntags *new_ntags(void);
 static struct ntags *canon_ntags(struct ntags *n);
 static void free_ntags(struct ntags *n);
 static struct dtags *new_dtags(void);
+static struct dtags *canon_dtags(struct dtags *d);
 static void free_dtags(struct dtags *d);
 
 static int verify_stringlist(stringlist_t *sl, int (*verify)(char *));
