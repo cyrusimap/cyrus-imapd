@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.64 2002/03/13 15:19:48 ken3 Exp $ */
+/* $Id: master.c,v 1.65 2002/04/04 22:25:36 ken3 Exp $ */
 
 #include <config.h>
 
@@ -335,7 +335,12 @@ void service_create(struct service *s)
 	sa = (struct sockaddr *) &sunsock;
 	salen = sizeof(sunsock.sun_family) + strlen(sunsock.sun_path) + 1;
 
-	s->socket = socket(AF_UNIX, SOCK_STREAM, 0);
+	if(!strcmp(s->proto, "tcp")) {
+	    s->socket = socket(AF_UNIX, SOCK_STREAM, 0);
+	} else {
+	    /* udp */
+	    s->socket = socket(AF_UNIX, SOCK_DGRAM, 0);
+	}
     } else { /* inet socket */
 	char *listen, *port;
 
