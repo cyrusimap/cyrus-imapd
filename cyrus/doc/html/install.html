@@ -1,4 +1,4 @@
-<!-- $Id: install.html,v 1.79 2000/03/06 00:34:51 leg Exp $ -->
+<!-- $Id: install.html,v 1.80 2000/03/15 10:31:08 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
@@ -626,7 +626,7 @@ aren't already there.
 <h3>Configuring the Master Process</h3>
 
 <ol>
-<li> Choose a configuration from the <tt>master</tt> directory:
+<li> Choose a configuration from the <tt>master/conf</tt> directory:
 
    <dl compact>
    <dt><tt>small.conf</tt><dd>bare-bones server supporting IMAP and POP
@@ -639,12 +639,12 @@ aren't already there.
 
 <p>To use <tt>normal.conf</tt>, do:
 <pre>
-<kbd>   cp master/normal.conf /etc/master.conf
+<kbd>   cp master/conf/normal.conf /etc/master.conf
 </kbd></pre>
 
 <p>Optionally, you can edit <tt>/etc/master.conf</tt> to disable or
 enabling certain services, or to tune the number of preforked copies.
-Be sure not to remove the entries that are labelled required.
+Be sure not to remove the entries that are labeled required.
 
 <p><li>Arrange to start "<tt>/usr/cyrus/bin/master</tt>" as root when
 the system starts.  It will bind some ports and then give up it's root

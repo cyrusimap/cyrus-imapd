@@ -1,5 +1,5 @@
 /* prot.h -- stdio-like module that handles IMAP protection mechanisms
- * $Id: prot.h,v 1.25 2000/02/22 05:07:26 leg Exp $
+ * $Id: prot.h,v 1.26 2000/03/15 10:31:15 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -77,6 +77,8 @@ extern int prot_putc(int c, struct protstream *s);
 #define prot_getc(s) ((s)->cnt-- > 0 ? (int)*(s)->ptr++ : prot_fill(s))
 #define prot_ungetc(c, s) ((s)->cnt++, (*--(s)->ptr = (c)))
 #define prot_putc(c, s) ((*(s)->ptr++ = (c)), --(s)->cnt == 0 ? prot_flush(s) : 0)
+#define prot_BLOCK(s) ((s)->dontblock = 0)
+#define prot_NONBLOCK(s) ((s)->dontblock = 1)
 
 extern struct protstream *prot_new(int fd, int write);
 extern int prot_free(struct protstream *s);

@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- $Id: append.c,v 1.65 2000/03/14 21:34:53 tmartin Exp $
+ $Id: append.c,v 1.66 2000/03/15 10:31:10 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -150,7 +150,6 @@ int append_fromstage(struct mailbox *mailbox,
     long last_cacheoffset;
     int setseen = 0, writeheader = 0;
     int userflag, emptyflag;
-    acapmbox_handle_t *acaphandle = NULL;
 
     /* for staging */
     struct stagemsg *stage;

@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- $Id: config.h,v 1.14 2000/02/19 04:46:03 leg Exp $
+ $Id: config.h,v 1.15 2000/03/15 10:31:11 leg Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -65,5 +65,16 @@ typedef void shutdownfn(int);
 void signals_add_handlers(void);
 void signals_set_shutdown(shutdownfn *s);
 void signals_poll(void);
+
+/* base64 authentication functions (base64.c) */
+struct protstream;
+struct buf {
+    char *s;
+    int alloc;
+};
+
+void printauthready(struct protstream *out, int len, unsigned char *data);
+int getbase64string(struct protstream *in, struct buf *buf);
+int parsebase64string(char **ptr, const char *s);
 
 #endif /* INCLUDED_CONFIG_H */
