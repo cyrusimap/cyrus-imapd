@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.128 2002/06/07 15:42:15 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.129 2002/06/14 18:18:34 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -641,14 +641,22 @@ static int pipe_lsub(struct backend *s, char *tag, int force_notfatal,
 		     int for_find) 
 {
     int taglen = strlen(tag);
-    int c;
+    int i,c;
     int r = PROXY_OK;
     int exist_r;
     char mailboxname[MAX_MAILBOX_PATH + 1];
     static struct buf tagb, cmd, sep, name;
     int cur_flags_size = 64;
     char *flags = xmalloc(cur_flags_size);
-    
+
+    const char *end_strip_flags[] = { " \\NonExistent)", "\\NonExistent)",
+				      " \\Noselect)", "\\Noselect)",
+				      NULL };
+    const char *mid_strip_flags[] = { "\\NonExistent ",
+				      "\\Noselect ",
+				      NULL 
+				    };
+
     assert(s);
     assert(s->timeout);
     
@@ -722,6 +730,7 @@ static int pipe_lsub(struct backend *s, char *tag, int force_notfatal,
 	} else {
 	    /* build up the response bit by bit */
 	    int i = 0;
+	    char *p;
 
 	    c = prot_getc(s->in);
 	    while(c != ')' && c != EOF) {
@@ -749,13 +758,31 @@ static int pipe_lsub(struct backend *s, char *tag, int force_notfatal,
 	    
 	    if(c != ' ') {
 		if(s == backend_current && !force_notfatal)
-		    fatal("Bad LSUB response from  selected backend",
+		    fatal("Bad LSUB response from selected backend",
 			  EC_UNAVAILABLE);
 		proxyd_downserver(s);
 		free(flags);
 		return PROXY_NOCONNECTION;
 	    }
 
+	    /* Check for flags that we should remove
+	     * (e.g. NoSelect, NonExistent) */
+	    for(i=0; end_strip_flags[i]; i++) {
+		p = strstr(flags, end_strip_flags[i]);
+		if(p) {
+		    *p = ')';
+		    *(p+1) = '\0';
+		}
+	    }
+
+	    for(i=0; mid_strip_flags[i]; i++) {
+		p = strstr(flags, mid_strip_flags[i]);
+		while(p) {
+		    strcpy(p, p + 13);
+		    p = strstr(flags, mid_strip_flags[i]);
+		}
+	    }
+		
 	    /* Get separator */
 	    c = getastring(s->in, s->out, &sep);
 
@@ -788,7 +815,11 @@ static int pipe_lsub(struct backend *s, char *tag, int force_notfatal,
 							proxyd_userid,
 							mailboxname);
 	    if (!r) {
-		exist_r = mlookup(mailboxname, NULL, NULL, NULL);
+		int mbtype;
+		exist_r = mboxlist_detail(mailboxname, &mbtype,
+					  NULL, NULL, NULL, NULL);
+		if(!exist_r && (mbtype & MBTYPE_RESERVE))
+		    exist_r = IMAP_MAILBOX_RESERVED;
 	    } else {
 		/* skip this one */
 		syslog(LOG_ERR, "could not convert %s to internal form",
