@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.16.2.13 2005/02/21 19:25:19 ken3 Exp $ */
+/* $Id: backend.c,v 1.16.2.14 2005/02/24 14:38:44 ken3 Exp $ */
 
 #include <config.h>
 
@@ -351,7 +351,6 @@ struct backend *backend_connect(struct backend *ret, const char *server,
 	if (res0 != &hints)
 	    freeaddrinfo(res0);
 	syslog(LOG_ERR, "connect(%s) failed: %m", server);
-        close(sock);
 	free(ret);
 	return NULL;
     }
