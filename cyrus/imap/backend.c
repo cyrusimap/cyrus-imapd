@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.9 2002/07/26 17:28:13 rjs3 Exp $ */
+/* $Id: backend.c,v 1.10 2002/07/26 18:30:53 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -350,7 +350,7 @@ struct backend *findserver(struct backend *ret, const char *server,
 
 	ret = xmalloc(sizeof(struct backend));
 	memset(ret, 0, sizeof(struct backend));
-	ret->hostname = xstrdup(server);
+	strlcpy(ret->hostname, server, sizeof(ret->hostname));
 	if ((hp = gethostbyname(server)) == NULL) {
 	    syslog(LOG_ERR, "gethostbyname(%s) failed: %m", server);
 	    free(ret);
