@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squat.c,v 1.3 2003/01/09 00:49:35 rjs3 Exp $
+ * $Id: squat.c,v 1.4 2003/01/09 20:22:24 rjs3 Exp $
  */
 
 /*
@@ -53,6 +53,8 @@
 #include <assert.h>
 
 #include "squat_internal.h"
+
+#include "xmalloc.h"
 
 struct _SquatSearchIndex {
   int         index_fd;               /* the index file */
@@ -99,12 +101,7 @@ SquatSearchIndex* squat_search_open(int fd) {
     }
   }
 
-  index = (SquatSearchIndex*)malloc(sizeof(SquatSearchIndex));
-  if (index == NULL) {
-    squat_set_last_error(SQUAT_ERR_OUT_OF_MEMORY);
-    return NULL;
-  }
-   
+  index = (SquatSearchIndex*)xmalloc(sizeof(SquatSearchIndex));
   index->index_fd = fd;
 
   if (fstat(fd, &buf) != 0) {  /* fstat64? */
@@ -333,12 +330,7 @@ static int set_to_docs_containing_word(SquatSearchIndex* index,
   int i;
 
   set->array_len = doc_count;
-
-  set->array_data = (int*)malloc(sizeof(int)*set->array_len);
-  if (set->array_data == NULL) {
-    squat_set_last_error(SQUAT_ERR_OUT_OF_MEMORY);
-    return SQUAT_ERR;
-  }
+  set->array_data = (int*)xmalloc(sizeof(int)*set->array_len);
   
   i = (int)squat_decode_I(&doc_list);
   if ((i & 1) != 0) {
@@ -502,13 +494,8 @@ int squat_search_execute(SquatSearchIndex* index, char const* data,
      ... so we don't have to traverse the trie data structures more
      than once per subword.
   */
-  run_starts = (char const**)malloc(sizeof(char const*)*
+  run_starts = (char const**)xmalloc(sizeof(char const*)*
                                     (data_len - SQUAT_WORD_SIZE + 1));
-  if (run_starts == NULL) {
-    squat_set_last_error(SQUAT_ERR_OUT_OF_MEMORY);
-    return SQUAT_ERR;
-  }
-
   squat_set_last_error(SQUAT_ERR_OK);
 
   /* Now, for each subword, find its list of documents and how many
