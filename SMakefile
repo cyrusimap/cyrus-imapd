@@ -40,7 +40,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.65 2000/11/14 00:11:27 leg Exp $
+# $Id: SMakefile,v 1.66 2000/12/18 20:28:20 leg Exp $
 #
 
 if test ! -x configure; then
@@ -116,7 +116,7 @@ if test "${WASH_CYRUS_DEBUG}" = "t"; then
   DEBUG="--enable-debug"
 fi
 
-MFCOMMAND="./configure $WITHAUTH --with-inn=/usr/news --enable-experiment --enable-cmulocal --with-cyrus-group=staff --with-openssl=/usr/local/lib --enable-thread-ref --with-ucdsnmp=/usr/local $DEBUG"
+MFCOMMAND="./configure $WITHAUTH --with-inn=/usr/news --enable-experiment --enable-cmulocal --with-cyrus-group=staff --with-openssl=/usr/local/lib --enable-thread-ref --with-ucdsnmp=/usr/local --enable-murder $DEBUG"
 
 export CFLAGS CC VER LNCOMMAND LOCALDEFS LDFLAGS
 export LIBS
