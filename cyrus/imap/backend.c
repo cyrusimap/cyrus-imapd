@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.7.6.11 2002/12/20 18:31:59 rjs3 Exp $ */
+/* $Id: backend.c,v 1.7.6.12 2003/02/05 01:31:01 ken3 Exp $ */
 
 #include <config.h>
 
@@ -72,6 +72,7 @@
 #include "imapconf.h"
 #include "xmalloc.h"
 #include "iptostring.h"
+#include "util.h"
 
 static char *ask_capability(struct protstream *pout, struct protstream *pin,
 			    struct capa_cmd_t *capa_cmd,
@@ -349,7 +350,7 @@ void backend_disconnect(struct backend *s, struct protocol_t *prot)
     }
 
     /* close/free socket & prot layer */
-    close(s->sock);
+    cyrus_close_sock(s->sock);
     s->sock = -1;
     
     prot_free(s->in);

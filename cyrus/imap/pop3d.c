@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122.4.20 2003/01/10 21:53:28 ken3 Exp $
+ * $Id: pop3d.c,v 1.122.4.21 2003/02/05 01:31:05 ken3 Exp $
  */
 #include <config.h>
 
@@ -210,9 +210,9 @@ static void popd_reset(void)
     
     popd_in = popd_out = NULL;
 
-    close(0);
-    close(1);
-    close(2);
+    cyrus_close_sock(0);
+    cyrus_close_sock(1);
+    cyrus_close_sock(2);
 
     strcpy(popd_clienthost, "[local]");
     if (popd_userid != NULL) {

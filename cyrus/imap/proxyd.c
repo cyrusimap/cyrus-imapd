@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.42 2003/01/22 03:37:12 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.43 2003/02/05 01:31:06 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1000,18 +1000,15 @@ static void kick_mupdate(void)
     r = connect(s, (struct sockaddr *)&srvaddr, len);
     if (r == -1) {
 	syslog(LOG_ERR, "kick_mupdate: can't connect to target: %m");
-	close(s);
-	return;
+	goto done;
     }
 
     r = read(s, &buf, sizeof(buf));
     if (r <= 0) {
 	syslog(LOG_ERR, "kick_mupdate: can't read from target: %m");
-	close(s);
-	return;
     }
 
-    /* if we got here, it's been kicked */
+ done:
     close(s);
     return;
 }
@@ -1168,9 +1165,9 @@ static void proxyd_reset(void)
     }
     
     proxyd_in = proxyd_out = NULL;
-    close(0);
-    close(1);
-    close(2);
+    cyrus_close_sock(0);
+    cyrus_close_sock(1);
+    cyrus_close_sock(2);
     
     /* Cleanup Globals */
     proxyd_cmdcnt = 0;

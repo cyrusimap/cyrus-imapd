@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.99.2.19 2002/12/11 20:40:25 rjs3 Exp $
+ * $Id: lmtpd.c,v 1.99.2.20 2003/02/05 01:31:03 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -281,9 +281,9 @@ int service_main(int argc, char **argv,
 	deliver_logfd = -1;
     }
 
-    close(0);
-    close(1);
-    close(2);
+    cyrus_close_sock(0);
+    cyrus_close_sock(1);
+    cyrus_close_sock(2);
 
     return 0;
 }

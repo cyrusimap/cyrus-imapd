@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.35.4.9 2003/01/28 01:54:32 ken3 Exp $ */
+/* $Id: acconfig.h,v 1.35.4.10 2003/02/05 01:31:00 ken3 Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -243,6 +243,10 @@ typedef int rlim_t;
 #define FNAME_DOMAINDIR "/domain/"
 #define FNAME_LOGDIR "/log/"
 #define FNAME_PTSDB "/ptclient/ptscache.db"
+
+#ifndef HAVE_SHUTDOWN
+#define shutdown(fd, mode) 0
+#endif
 
 /* compile time options; think carefully before modifying */
 enum {

@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.42.4.12 2002/11/15 21:46:57 rjs3 Exp $
+ * $Id: lmtpproxyd.c,v 1.42.4.13 2003/02/05 01:31:04 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -265,9 +265,9 @@ int service_main(int argc __attribute__((unused)),
         deliver_logfd = -1;
     }
 
-    close(0);
-    close(1);
-    close(2);
+    cyrus_close_sock(0);
+    cyrus_close_sock(1);
+    cyrus_close_sock(2);
 
     return 0;
 }

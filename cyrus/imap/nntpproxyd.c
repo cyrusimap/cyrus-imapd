@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpproxyd.c,v 1.1.2.2 2002/12/22 22:41:46 ken3 Exp $
+ * $Id: nntpproxyd.c,v 1.1.2.3 2003/02/05 01:31:05 ken3 Exp $
  */
 
 /*
@@ -271,9 +271,9 @@ static void nntp_reset(void)
     
     nntp_in = nntp_out = NULL;
 
-    close(0);
-    close(1);
-    close(2);
+    cyrus_close_sock(0);
+    cyrus_close_sock(1);
+    cyrus_close_sock(2);
 
     strcpy(nntp_clienthost, "[local]");
     if (nntp_userid != NULL) {

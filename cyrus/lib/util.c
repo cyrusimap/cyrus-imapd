@@ -41,7 +41,7 @@
  * Author: Chris Newman
  * Start Date: 4/6/93
  */
-/* $Id: util.c,v 1.19.6.3 2002/08/02 17:18:24 rjs3 Exp $
+/* $Id: util.c,v 1.19.6.4 2003/02/05 01:31:10 ken3 Exp $
  */
 
 #include <config.h>
@@ -50,6 +50,7 @@
 #include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
+#include <syslog.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #ifdef HAVE_UNISTD_H
@@ -264,6 +265,16 @@ int dir_hash_c(const char *name)
     if (!isascii(c) || !islower(c)) c = 'q';
 #endif
     return c;
+}
+
+int cyrus_close_sock(int fd) 
+{
+    int r = shutdown(fd, SHUT_RD);
+    if(r) {
+	syslog(LOG_ERR, "Could not shut down filedescriptor %d: %m", fd);
+    }
+    
+    return close(fd);
 }
 
 /* Given a mkstemp(3) pattern for a filename,

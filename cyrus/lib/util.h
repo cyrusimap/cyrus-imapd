@@ -1,5 +1,5 @@
 /* util.h -- general utility functions
- * $Id: util.h,v 1.13.6.2 2002/08/02 17:18:24 rjs3 Exp $
+ * $Id: util.h,v 1.13.6.3 2003/02/05 01:31:10 ken3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -104,5 +104,8 @@ extern int dir_hash_c(const char *name);
  * create an [unlinked] temporary file and return the file descriptor.
  */
 extern int create_tempfile();
+
+/* Close a network filedescriptor the "safe" way */
+int cyrus_close_sock(int fd);
 
 #endif /* INCLUDED_UTIL_H */
