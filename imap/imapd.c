@@ -11,6 +11,9 @@
 #include <sys/stat.h>
 #include <syslog.h>
 #include <com_err.h>
+#include <netdb.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
 
 #include <acl.h>
 #include <glob.h>
@@ -35,6 +38,7 @@ char *imapd_userid;
 int imapd_userisadmin;
 struct mailbox *imapd_mailbox;
 int imapd_exists;
+char imapd_clienthost[250] = "[local]";
 
 static struct mailbox mboxstruct;
 
@@ -43,22 +47,32 @@ static struct fetchargs zerofetchargs;
 main(argc, argv)
 {
     char hostname[MAXHOSTNAMELEN+1];
-    int opt;
+    struct sockaddr_in sa;
+    int salen = sizeof(sa);
+    struct hostent *hp;
 
     config_init("imapd");
 
-#if 0
-    while ((opt = getopt(argc, argv, "")) != EOF) {
-	switch(opt) {
-	default:
-	    usage();
-	}
-    }
-#endif
-
     signal(SIGPIPE, SIG_IGN);
-
     gethostname(hostname, sizeof(hostname));
+
+    if (getpeername(0, &sa, &salen) == 0 &&
+	sa.sin_family == AF_INET) {
+	if (hp = gethostbyaddr((char *)&sa.sin_addr, sizeof(sa.sin_addr),
+			       AF_INET)) {
+	    if (strlen(hp->h_name) + 30 > sizeof(imapd_clienthost)) {
+		hp->h_name[sizeof(imapd_clienthost)-30] = '\0';
+	    }
+	    strcpy(imapd_clienthost, hp->h_name);
+	}
+	else {
+	    imapd_clienthost[0] = '\0';
+	}
+	strcat(imapd_clienthost, "[");
+	strcat(imapd_clienthost, inet_ntoa(sa.sin_addr));
+	strcat(imapd_clienthost, "]");
+    }
+
     printf("* OK %s Cyrus IMAP2bis v0.1-ALPHA server ready\r\n", hostname);
     cmdloop();
 }
@@ -365,6 +379,8 @@ char *passwd;
 
     canon_user = auth_canonifyid(user);
     if (!canon_user) {
+	syslog(LOG_NOTICE, "badlogin: %s bad userid %s",
+	       imapd_clienthost, beautify_string(user));
 	printf("%s NO Invalid user %s\r\n", tag, beautify_string(user));
 	return;
     }
@@ -373,11 +389,13 @@ char *passwd;
 	if (config_getswitch("allowanonymouslogin", 0)) {
 	    passwd = beautify_string(passwd);
 	    if (strlen(passwd) > 500) passwd[500] = '\0';
-	    syslog(LOG_NOTICE, "login: anonymous %s", passwd);
+	    syslog(LOG_NOTICE, "login: %s anonymous %s",
+		   imapd_clienthost, passwd);
 	    reply = "Anonymous access granted";
 	}
 	else {
-	    syslog(LOG_NOTICE, "badlogin: anonymous login refused");
+	    syslog(LOG_NOTICE, "badlogin: %s anonymous login refused",
+		   imapd_clienthost);
 	    printf("%s NO Anonymous login not permitted\r\n", tag);
 	    return;
 	}

@@ -60,7 +60,8 @@ char **reply;
 	    }
 	    if (!*val) {
 		syslog(LOG_NOTICE,
-		     "badlogin: cross-realm login as %s from %s%s%s@%s denied",
+		 "badlogin: %s cross-realm login as %s from %s%s%s@%s denied",
+		       imapd_clienthost,
 		       kdata.pname, kdata.pinst[0] ? "." : "",
 		       kdata.pinst, kdata.prealm);
 		*reply = "Cross-realm login denied";
@@ -73,7 +74,8 @@ char **reply;
 	    strcmp(kdata.pinst, inst) == 0 &&
 	    strcmp(kdata.prealm, realm[0] ? realm : lrealm) == 0) {
 
-	    syslog(LOG_NOTICE, "login: using kerberos as %s", user);
+	    syslog(LOG_NOTICE, "login: %s using kerberos as %s",
+		   imapd_clienthost, user);
 	    login_setadmin(user);
 	    return 0;
 	}
@@ -90,7 +92,8 @@ char **reply;
 		while (*val && isspace(*val)) val++;
 	    }
 	    if (*val) {
-		syslog(LOG_NOTICE, "login: proxy from imap.%s@%s as %s",
+		syslog(LOG_NOTICE, "login: %s proxy from imap.%s@%s as %s",
+		       imapd_clienthost,
 		       inst, lrealm, user);
 		login_setadmin(user);
 		return 0;
@@ -102,11 +105,12 @@ char **reply;
     }
 
     if (kerberos_verify_password(user, pass) == 0) {
-	syslog(LOG_NOTICE, "badlogin: wrong password for %s", user);
+	syslog(LOG_NOTICE, "badlogin: %s wrong password for %s",
+	       imapd_clienthost, user);
 	return 1;
     }
 
-    syslog(LOG_NOTICE, "login: plaintext as %s", user);
+    syslog(LOG_NOTICE, "login: %s plaintext as %s", imapd_clienthost, user);
     login_setadmin(user);
     return 0;
 }
