@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.28 2002/06/05 02:27:35 ken3 Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.29 2003/05/05 14:23:16 rjs3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -7,6 +7,16 @@
 <body>
 
 <h1>Upgrading From Previous Versions</h1>
+
+<h3>Upgrading from 2.1.12 or earlier</h3>
+<ul>
+<li>timsieved was corrected to behave properly in the altnamespace configuration.
+However, this means that it was previously looking for sieve scripts in
+&quot;user.name&quot; format instead of the (correct) &quot;user^name&quot;
+format.  A sample script to do this (which should be run in the top level of
+the sieve directory) is in <tt>tools/convert-sieve.pl</tt>.  Note that this
+is only needed if you are running with altnamespace turned on.</li>
+</ul>
 
 <h3>Upgrading from 2.1.3 or earlier</h3>
 <ul>
@@ -229,7 +239,7 @@ worry about it.)
 </ul>
 
 <HR><P>
-last modified: $Date: 2002/06/05 02:27:35 $
+last modified: $Date: 2003/05/05 14:23:16 $
 </BODY></HTML>
 
 
