@@ -43,6 +43,8 @@ typedef struct acapmbox_handle_s acapmbox_handle_t;
  */
 acapmbox_handle_t *acapmbox_get_handle(void);
 
+void acapmbox_disconnect(acapmbox_handle_t *conn);
+
 void acapmbox_release_handle(acapmbox_handle_t *handle);
 
 /*

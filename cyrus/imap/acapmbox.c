@@ -84,17 +84,30 @@ char *acapmbox_get_postaddr(char *name)
     return postaddr;
 }
 
+static acapmbox_handle_t *cached_conn = NULL;
+
+void acapmbox_disconnect(acapmbox_handle_t *conn)
+{
+
+    if (conn == cached_conn) {
+
+	acap_conn_close(conn);
+	free(conn);
+	/* xxx free memory */
+	cached_conn = NULL;
+    }
+}
 
 acapmbox_handle_t *acapmbox_get_handle(void)
 {
     int r;
     char str[2048];
     const char *acapserver;
-    static acapmbox_handle_t *cached_conn = NULL;
+
     const char *user;
     const char *authprog;
     sasl_callback_t *cb;
-
+    
     acapserver = config_getstring("acap_server", NULL);
     if (!acapserver) return NULL;
 
