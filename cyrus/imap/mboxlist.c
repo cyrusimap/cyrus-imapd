@@ -1539,6 +1539,118 @@ int newquota;
 }
 
 /*
+ * Resynchronize the news mailboxes with the 'num' groups in the
+ * sorted array 'group'.  Mark the ones we have seen in the array
+ * 'seen'
+ */
+int
+mboxlist_syncnews(num, group, seen)
+int num;
+char **group;
+int *seen;
+{
+    FILE *listfile = 0;
+    int r, c;
+    char buf[512];
+    int deletethis;
+    int deletedsomething = 0;
+    char *endname;
+    int low, high, mid;
+    FILE *newlistfile;
+    struct mailbox mailbox;
+
+    if (!listfname) mboxlist_getfname();
+
+    /* Open and lock mailbox list file */
+    r = mboxlist_openlock(&listfile, (unsigned *)0);
+    if (r) return r;
+
+    newlistfile = fopen(newlistfname, "w+");
+    if (!newlistfile) {
+	syslog(LOG_ERR, "IOERROR: creating %s: %m", newlistfname);
+	fclose(listfile);
+	return IMAP_IOERROR;
+    }
+
+    /* Copy over mailbox list, making change */
+    while (fgets(buf, sizeof(buf), listfile)) {
+	deletethis = 0;
+	endname = strchr(buf, '\t');
+	assert(endname != 0);
+	if (!strncasecmp(endname+1, "news\t", 5)) {
+	    *endname = '\0';
+	    deletethis = 1;
+
+	    /* Search for name in 'group' array */
+	    low = 0;
+	    high = num;
+	    while (low <= high) {
+		mid = (high - low)/2 + low;
+		r = strcasecmp(buf, group[mid]);
+		if (r == 0) {
+		    deletethis = 0;
+		    seen[mid] = 1;
+		    break;
+		}
+		else if (r < 0) {
+		    high = mid - 1;
+		}
+		else {
+		    low = mid + 1;
+		}
+	    }
+	    if (deletethis) {
+		/* Remove the mailbox.  Don't care about errors */
+		r = mailbox_open_header(buf, &mailbox);
+		if (!r) r = mailbox_delete(&mailbox);
+		printf("deleted %s\n", buf);
+	    }
+	    *endname = '\t';
+	}
+
+	if (deletethis) {
+	    deletedsomething++;
+	    if (buf[strlen(buf)-1] != '\n') {
+		while ((c = getc(listfile)) != EOF) {
+		    if (c == '\n') break;
+		}
+	    }
+	}
+	else {
+	    fputs(buf, newlistfile);
+	    if (buf[strlen(buf)-1] != '\n') {
+		while ((c = getc(listfile)) != EOF) {
+		    putc(c, newlistfile);
+		    if (c == '\n') break;
+		}
+	    }
+	}
+    }
+
+    if (!deletedsomething) {
+	fclose(newlistfile);
+	fclose(listfile);
+	return 0;
+    }
+
+    fflush(newlistfile);
+    if (ferror(newlistfile) || fsync(fileno(newlistfile))) {
+	syslog(LOG_ERR, "IOERROR: writing %s: %m", newlistfname);
+	fclose(listfile);
+	fclose(newlistfile);
+	return IMAP_IOERROR;
+    }
+    if (rename(newlistfname, listfname) == -1) {
+	syslog(LOG_ERR, "IOERROR: renaming %s: %m", listfname);
+	fclose(listfile);
+	fclose(newlistfile);
+	return IMAP_IOERROR;
+    }
+    fclose(listfile);
+    fclose(newlistfile);
+    return 0;
+}
+/*
  * Open and lock the mailbox list file
  */
 int
