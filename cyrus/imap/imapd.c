@@ -293,9 +293,21 @@ cmdloop()
 	    }
 	    else if (!strcmp(cmd.s, "Search")) {
 		if (!imapd_mailbox) goto nomailbox;
+		usinguid = 0;
 		if (c != ' ') goto missingargs;
-		cmd_search(tag.s);
+	    search:
+		cmd_search(tag.s, usinguid);
 	    }
+	    else if (!strcmp(cmd.s, "Subscribe")) {
+		if (c != ' ') goto missingargs;
+		c = getword(&arg1);
+		if (c != ' ') goto missingargs;
+		c = getastring(&arg2);
+		if (c == EOF) goto missingargs;
+		if (c == '\r') c = getc(stdin);
+		if (c != '\n') goto extraargs;
+		cmd_changesub(tag.s, arg1.s, arg2.s, 1);
+	    }		
 	    else goto badcmd;
 	    break;
 
@@ -313,18 +325,25 @@ cmdloop()
 		else if (!strcmp(arg1.s, "store")) {
 		    goto store;
 		}
-		/* XXX copy */
-		else if (!strcmp(arg1.s, "after")) {
-		    c = getword(&arg2);
-		    if (c == '\r') c = getc(stdin);
-		    if (c != '\n') goto extraargs;
-		    cmd_uidafter(tag.s, arg2.s);
+		else if (!strcmp(arg1.s, "search")) {
+		    goto search;
 		}
+		/* XXX copy */
 		else {
 		    printf("%s BAD Unrecognized UID subcommand\r\n", tag.s);
 		    if (c != '\n') eatline();
 		}
 	    }
+	    else if (!strcmp(cmd.s, "Unsubscribe")) {
+		if (c != ' ') goto missingargs;
+		c = getword(&arg1);
+		if (c != ' ') goto missingargs;
+		c = getastring(&arg2);
+		if (c == EOF) goto missingargs;
+		if (c == '\r') c = getc(stdin);
+		if (c != '\n') goto extraargs;
+		cmd_changesub(tag.s, arg1.s, arg2.s, 0);
+	    }		
 	    else goto badcmd;
 	    break;
 
@@ -643,8 +662,15 @@ int usinguid;
 	    else if (!strcmp(fetchatt.s, "bodystructure")) {
 		fetchitems |= FETCH_BODYSTRUCTURE;
 	    }
-	    else if (!strncmp(fetchatt.s, "body[", 5)) {
+	    else if (!strncmp(fetchatt.s, "body[", 5) ||
+		     !strncmp(fetchatt.s, "body.peek[", 10)) {
 		p = section = fetchatt.s + 5;
+		if (*p == 'p') {
+		    p = section += 5;
+		}
+		else {
+		    fetchitems |= FETCH_SETSEEN;
+		}
 		while (isdigit(*p) || *p == '.') {
 		    if (*p == '.' && (p == section || !isdigit(p[1]))) break;
 		    p++;
@@ -689,15 +715,21 @@ int usinguid;
 
 	case 'r':
 	    if (!strcmp(fetchatt.s, "rfc822")) {
-		fetchitems |= FETCH_RFC822;
+		fetchitems |= FETCH_RFC822|FETCH_SETSEEN;
 	    }
 	    else if (!strcmp(fetchatt.s, "rfc822.header")) {
 		fetchitems |= FETCH_HEADER;
+	    }
+	    else if (!strcmp(fetchatt.s, "rfc822.peek")) {
+		fetchitems |= FETCH_RFC822;
 	    }
 	    else if (!strcmp(fetchatt.s, "rfc822.size")) {
 		fetchitems |= FETCH_SIZE;
 	    }
 	    else if (!strcmp(fetchatt.s, "rfc822.text")) {
+		fetchitems |= FETCH_TEXT|FETCH_SETSEEN;
+	    }
+	    else if (!strcmp(fetchatt.s, "rfc822.text.peek")) {
 		fetchitems |= FETCH_TEXT;
 	    }
 	    else if (!strcmp(fetchatt.s, "rfc822.header.lines") ||
@@ -821,16 +853,23 @@ char *count;
 
     lcase(data);
     if (!strcmp(data, "rfc822")) {
-	fetchargs.fetchitems = FETCH_RFC822;
+	fetchargs.fetchitems = FETCH_RFC822|FETCH_SETSEEN;
     }
     else if (!strcmp(data, "rfc822.header")) {
 	fetchargs.fetchitems = FETCH_HEADER;
     }
     else if (!strcmp(data, "rfc822.text")) {
-	fetchargs.fetchitems = FETCH_TEXT;
+	fetchargs.fetchitems = FETCH_TEXT|FETCH_SETSEEN;
     }
-    else if (!strncmp(data, "body[", 5)) {
+    else if (!strncmp(data, "body[", 5) ||
+	     !strncmp(data, "body.peek[", 10)) {
 	p = section = data + 5;
+	if (*p == 'p') {
+	    p = section += 5;
+	}
+	else {
+	    fetchargs.fetchitems = FETCH_SETSEEN;
+	}
 	while (isdigit(*p) || *p == '.') {
 	    if (*p == '.' && (p == section || !isdigit(p[1]))) break;
 	    p++;
@@ -875,36 +914,6 @@ char *count;
 
     printf("%s OK Partial completed\r\n", tag);
     freestrlist(fetchargs.bodysections);
-}
-
-cmd_uidafter(tag, arg)
-char *tag;
-char *arg;
-{
-    int c, num = 0;
-    struct fetchargs fetchargs;
-    char sequence[60];
-
-    while (c = *arg++) {
-	if (!isdigit(c)) {
-	    printf("%s BAD Invalid number in UID After command\r\n", tag);
-	    return;
-	}
-	num = num*10 + c - '0';
-    }
-    
-    index_check(imapd_mailbox, 1, 0);
-
-    fetchargs = zerofetchargs;
-    fetchargs.fetchitems = FETCH_UID;
-
-    num = index_finduid(num)+1;
-    if (num <= imapd_exists) {
-	sprintf(sequence, "%d:%d", num, imapd_exists);
-	index_fetch(imapd_mailbox, sequence, 0, &fetchargs);
-    }
-
-    printf("%s OK UID After completed\r\n", tag);
 }
 
 cmd_store(tag, sequence, operation, usinguid)
@@ -1030,8 +1039,9 @@ int usinguid;
     if (flag) free((char *)flag);
 }
 
-cmd_search(tag)
+cmd_search(tag, usinguid)
 char *tag;
+int usinguid;
 {
     int c = ' ';
     static struct buf criteria, arg;
@@ -1254,7 +1264,7 @@ char *tag;
 	printf("* SEARCH\r\n");
     }
     else {
-	index_search(imapd_mailbox, &searchargs);
+	index_search(imapd_mailbox, &searchargs, usinguid);
     }
 
     printf("%s OK Search completed\r\n", tag);
@@ -1318,10 +1328,10 @@ char *pattern;
 {
     lcase(namespace);
     if (!strcmp(namespace, "mailboxes")) {
-	;
+	mboxlist_find(pattern, imapd_userisadmin, imapd_userid);
     }
     else if (!strcmp(namespace, "all.mailboxes")) {
-	mboxlist_find(pattern, imapd_userisadmin, imapd_userid);
+	mboxlist_findall(pattern, imapd_userisadmin, imapd_userid);
     }
     else if (!strcmp(namespace, "bboards")
 	     || !strcmp(namespace, "all.bboards")) {
@@ -1334,6 +1344,37 @@ char *pattern;
     printf("%s OK Find completed\r\n", tag);
 }
   
+cmd_changesub(tag, namespace, name, add)
+char *tag;
+char *namespace;
+char *name;
+int add;
+{
+    int r;
+
+    lcase(namespace);
+    if (!strcmp(namespace, "mailbox")) {
+	r = mboxlist_changesub(name, imapd_userid, add);
+    }
+    else if (!strcmp(namespace, "bboard")) {
+	r = add ? IMAP_MAILBOX_NONEXISTENT : IMAP_MAILBOX_UNSUBSCRIBED;
+    }
+    else {
+	printf("%s BAD Invalid %s subcommand\r\n", tag,
+	       add ? "Subscribe" : "Unsubscribe");
+	return;
+    }
+
+    if (r) {
+	printf("%s NO %s failed: %s\r\n", tag,
+	       add ? "Subscribe" : "Unsubscribe", error_message(r));
+    }
+    else {
+	printf("%s OK %s completed\r\n", tag,
+	       add ? "Subscribe" : "Unsubscribe");
+    }
+}
+
 #define BUFGROWSIZE 100
 int getword(buf)
 struct buf *buf;
