@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.50 2002/02/26 01:28:32 ken3 Exp $
+ * $Id: script.c,v 1.51 2002/02/26 20:55:54 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -852,7 +852,7 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
     char actions_string[4096] = "";
     const char *errmsg = NULL;
 
-    if (s->interp.notify) {
+    if (s->support.notify) {
 	notify_list = new_notify_list();
 	if (notify_list == NULL)
 	    return SIEVE_NOMEM;
@@ -1059,20 +1059,6 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 		     errmsg ? errmsg : sieve_errstr(ret));
     }
  
-    /* Process notify actions */
-    if (s->interp.notify) {
-	notify_list_t *n = notify_list;
-	while (n != NULL) {
-	    if (n->isactive) {
-		ret |= send_notify_callback(s, message_context, n,
-					    actions_string, &errmsg);
-	    }
-	    n = n->next;
-	}
-
-	free_notify_list(notify_list);
-    }
- 
     if ((ret != SIEVE_OK) && s->interp.err) {
 	char buf[1024];
 	if (lastaction == -1) /* we never executed an action */
@@ -1105,6 +1091,24 @@ int sieve_execute_script(sieve_script_t *s, void *message_context)
 	}
     }
 
+    /* Process notify actions */
+    if (s->support.notify && notify_list) {
+	notify_list_t *n = notify_list;
+
+	while (n != NULL) {
+	    if (n->isactive) {
+		ret |= send_notify_callback(s, message_context, n,
+					    actions_string, &errmsg);
+	    }
+	    n = n->next;
+	}
+
+	if (notify_list) free_notify_list(notify_list);
+	notify_list = NULL;
+
+	/* XXX should we report notify failures? */
+    }
+ 
     if (actions)
 	free_action_list(actions);
   
