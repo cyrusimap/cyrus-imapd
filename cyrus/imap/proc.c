@@ -22,6 +22,7 @@
  *
  */
 #include <stdio.h>
+#include <syslog.h>
 #include <sysexits.h>
 #include "config.h"
 #include "xmalloc.h"

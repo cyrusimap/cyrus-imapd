@@ -29,6 +29,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/file.h>
+#include <syslog.h>
 
 #include "acl.h"
 #include "glob.h"
