@@ -447,7 +447,7 @@ int checkacl;
     struct iovec iov[10];
     int n;
     struct mailbox mailbox;
-    bit32 uidvalidity, timestamp;
+    bit32 uidvalidity;
 
     /* Check for request to delete a user */
     if (!strncmp(name, "user.", 5) && !strchr(name+5, '.')) {
