@@ -1,4 +1,4 @@
-<!-- $Id: install.html,v 1.71 1999/10/30 23:36:34 leg Exp $ -->
+<!-- $Id: install.html,v 1.72 1999/11/24 03:32:01 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
@@ -50,20 +50,19 @@ input to collectnews has changed.
 
 Duplicate delivery suppression is now required for Sieve.
 
-<li> Upgrading from the Cyrus IMAP server version 1.6.1 or earlier:
-the quota and user directories are now hashed by the first character
-of the username.  This is to reduce the number of entries in any given
-directory. It doesn't do a great job (and in some cases it will do a
-really poor job) but as a quick hack it shouldn't make things worse.
-Optionally, the data partitions can also be hashed by enabling the
-"hashimapspool" option.
+<li> Upgrading from the Cyrus IMAP server version 1.6.1 or earlier
+(including 1.5.x!): the quota and user directories are now hashed by
+the first character of the username.  This is to reduce the number of
+entries in any given directory. It doesn't do a great job (and in some
+cases it will do a really poor job) but as a quick hack it shouldn't
+make things worse.  Optionally, the data partitions can also be hashed
+by enabling the "hashimapspool" option.
 
-<p>You can automatically hash your directories using the
-"<tt>dohash</tt>" script in the tools subdirectory.  If you want to
-hash your mail spool, be sure to set "hashimapspool" before running
-"<tt>dohash</tt>".  This must be run as the Cyrus user. Be sure to
-stop mail service while converting. Doing this in single user mode is
-probably the safest.
+<p>Hash your directories using the "<tt>dohash</tt>" script in the
+tools subdirectory.  (If you want to hash your mail spool, be sure to
+set "hashimapspool" before running "<tt>dohash</tt>".)  This must be
+run as the Cyrus user. Be sure to stop mail service while
+converting. Doing this in single user mode is probably the safest.
 
 </ul>
 
@@ -77,6 +76,8 @@ you must allow the cyrus user read access to /etc/shadow.
 <li> An ANSI C compiler is now required.  gcc should work fine and can
 be acquired from <a href="http://www.gnu.org/software/gcc/gcc.html">
 http://www.gnu.org/software/gcc/gcc.html</a>.
+
+<li> Make sure to read the upgrading instructions under 1.6 above.
 
 <li> Upgrading from 1.5.14 or earlier requires deleting the delivered
 database.  Remove the file delivered.db in the configdirectory and make a
