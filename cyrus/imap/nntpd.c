@@ -47,7 +47,7 @@
  */
 
 /*
- * $Id: nntpd.c,v 1.1.2.28 2002/10/21 18:28:09 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.29 2002/10/22 00:56:32 ken3 Exp $
  */
 #include <config.h>
 
@@ -925,7 +925,13 @@ static void cmdloop(void)
 	    break;
 
 	case 'S':
-	    if (!strcmp(cmd.s, "Stat")) {
+	    if (!strcmp(cmd.s, "Starttls") && tls_enabled()) {
+		if (c == '\r') c = prot_getc(nntp_in);
+		if (c != '\n') goto extraargs;
+
+		cmd_starttls(0);
+	    }
+	    else if (!strcmp(cmd.s, "Stat")) {
 		mode = ARTICLE_STAT;
 		goto article;
 	    }
@@ -1009,7 +1015,7 @@ static void cmd_starttls(int nntps)
 
     if (nntp_starttls_done == 1)
     {
-	prot_printf(nntp_out, "400 %s\r\n", 
+	prot_printf(nntp_out, "491 %s\r\n", 
 		    "Already successfully executed STLS");
 	return;
     }
@@ -1024,7 +1030,7 @@ static void cmd_starttls(int nntps)
 	syslog(LOG_ERR, "[nntpd] error initializing TLS");
 
 	if (nntps == 0)
-	    prot_printf(nntp_out, "400 %s\r\n", "Error initializing TLS");
+	    prot_printf(nntp_out, "490 %s\r\n", "Error initializing TLS");
 	else
 	    fatal("tls_init() failed",EC_TEMPFAIL);
 
@@ -1033,7 +1039,7 @@ static void cmd_starttls(int nntps)
 
     if (nntps == 0)
     {
-	prot_printf(nntp_out, "300 %s\r\n", "Begin TLS negotiation now");
+	prot_printf(nntp_out, "390 %s\r\n", "Begin TLS negotiation now");
 	/* must flush our buffers before starting tls */
 	prot_flush(nntp_out);
     }
@@ -1047,7 +1053,7 @@ static void cmd_starttls(int nntps)
     /* if error */
     if (result==-1) {
 	if (nntps == 0) {
-	    prot_printf(nntp_out, "400 Starttls failed\r\n");
+	    prot_printf(nntp_out, "490 Starttls failed\r\n");
 	    syslog(LOG_NOTICE, "[nntpd] STARTTLS failed: %s", nntp_clienthost);
 	} else {
 	    syslog(LOG_NOTICE, "nntps failed: %s", nntp_clienthost);
@@ -1373,6 +1379,7 @@ void cmd_list(char *arg1, char *arg2)
 
 	prot_printf(nntp_out, "LISTGROUP\r\n");
 	prot_printf(nntp_out, "OVER\r\n");
+	prot_printf(nntp_out, "STARTTLS\r\n");
 	prot_printf(nntp_out, ".\r\n");
     }
     else if (!strcmp(arg1, "active")) {
