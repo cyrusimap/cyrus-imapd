@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.114 2000/02/10 21:25:28 leg Exp $
+ * $Id: mboxlist.c,v 1.115 2000/02/15 22:21:23 leg Exp $
  */
 
 #include <config.h>
@@ -99,13 +99,6 @@ static char *mboxlist_hash_usersubs(const char *userid);
 const char *acap_authname = NULL;
 const char *acap_realm = NULL;
 const char *acap_password = NULL;
-
-/*
- * Check our configuration for consistency, die if there's a problem
- */
-void mboxlist_checkconfig(void)
-{
-}
 
 /*
  * Convert a partition into a path
@@ -2936,12 +2929,15 @@ static void db_err(const char *db_prfx, char *buffer)
     syslog(LOG_ERR, "DBERROR %s: %s", db_prfx, buffer);
 }
 
-void mboxlist_init(void)
+void mboxlist_init(int myflags)
 {
     int r;
+    int flags = 0;
     char dbdir[1024];
 
     assert (!mboxlist_dbinit);
+
+    if (myflags & MBOXLIST_RECOVER) flags |= DB_RECOVER;
 
     if ((r = db_env_create(&dbenv, 0)) != 0) {
 	char err[1024];
@@ -2953,11 +2949,11 @@ void mboxlist_init(void)
     }
 
     dbenv->set_paniccall(dbenv, (void (*)(DB_ENV *, int)) &db_panic);
-    dbenv->set_verbose(dbenv, DB_VERB_DEADLOCK, 1);
+    /* dbenv->set_verbose(dbenv, DB_VERB_DEADLOCK, 1); */
     /* dbenv->set_verbose(dbenv, DB_VERB_WAITSFOR, 1); */
     dbenv->set_errpfx(dbenv, "mbdb");
     dbenv->set_lk_detect(dbenv, DB_LOCK_DEFAULT);
-    dbenv->set_lk_max(dbenv, 100000);
+    dbenv->set_lk_max(dbenv, 10000);
     dbenv->set_errcall(dbenv, db_err);
 
     /*
@@ -2973,9 +2969,9 @@ void mboxlist_init(void)
     /* create the name of the db file */
     strcpy(dbdir, config_dir);
     strcat(dbdir, FNAME_DBDIR);
-    r = dbenv->open(dbenv, dbdir, NULL, 
-		    DB_CREATE | DB_INIT_LOCK | DB_INIT_MPOOL
-		    | DB_INIT_LOG | DB_INIT_TXN, 0644);
+    flags |= DB_CREATE | DB_INIT_LOCK | DB_INIT_MPOOL | 
+	     DB_INIT_LOG | DB_INIT_TXN;
+    r = dbenv->open(dbenv, dbdir, NULL, flags, 0644); 
     if (r) {
 	char err[1024];
 	    
@@ -2983,6 +2979,16 @@ void mboxlist_init(void)
 		db_strerror(r));
 	syslog(LOG_ERR, err);
 	fatal(err, EC_TEMPFAIL);
+    }
+
+    if (myflags & MBOXLIST_SYNC) {
+	do {
+	    r = txn_checkpoint(dbenv, 0, 0);
+	} while (r == DB_INCOMPLETE);
+	if (r) {
+	    syslog(LOG_ERR, "DBERROR: couldn't checkpoint: %s",
+		   db_strerror(r));
+	}
     }
 
     mboxlist_dbinit = 1;
@@ -3052,7 +3058,6 @@ void mboxlist_done(void)
     int r;
 
     assert (mboxlist_dbinit);
-
 
     r = dbenv->close(dbenv, 0);
     if (r) {

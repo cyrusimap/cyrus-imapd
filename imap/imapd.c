@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.206 2000/02/11 04:43:40 leg Exp $ */
+/* $Id: imapd.c,v 1.207 2000/02/15 22:21:21 leg Exp $ */
 
 #include <config.h>
 
@@ -109,7 +109,6 @@ static char *monthname[] = {
     "jul", "aug", "sep", "oct", "nov", "dec"
 };
 
-void usage P((void));
 void shutdown_file P((int fd));
 void motd_file P((int fd));
 void shut_down P((int code));
@@ -401,28 +400,59 @@ static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
-int main(int argc, char **argv, char **envp)
+/*
+ * run once when process is forked;
+ * MUST NOT exit directly; must return with non-zero error code
+ */
+int service_init(int argc, char **argv, char **envp)
+{
+    int r;
+
+    config_changeident("imapd");
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+    setproctitle_init(argc, argv, envp);
+
+    /* open the mboxlist, we'll need it for real work */
+    mboxlist_init(0);
+    mboxlist_open(NULL);
+
+    signal(SIGPIPE, SIG_IGN);
+
+    /* set the SASL allocation functions */
+    sasl_set_alloc((sasl_malloc_t *) &xmalloc, 
+		   (sasl_calloc_t *) &calloc, 
+		   (sasl_realloc_t *) &xrealloc, 
+		   (sasl_free_t *) &free);
+
+    /* load the SASL plugins */
+    if ((r = sasl_server_init(mysasl_cb, "Cyrus")) != SASL_OK) {
+	syslog(LOG_ERR, "SASL failed initializing: sasl_server_init(): %s", 
+	       sasl_errstring(r, NULL, NULL));
+	return 2;
+    }
+
+    return 0;
+}
+
+/*
+ * run for each accepted connection
+ */
+int service_main(int argc, char **argv, char **envp)
 {
     int opt;
     int salen;
     struct hostent *hp;
     int timeout;
-    char hostname[MAXHOSTNAMELEN+1];
     sasl_security_properties_t *secprops = NULL;
     sasl_external_properties_t extprops;
 
+    config_init("imapd");
     memset(&extprops, 0, sizeof(sasl_external_properties_t));
-
-    if (gethostname(hostname, MAXHOSTNAMELEN) != 0) {
-	fatal("gethostname failed\n",EC_USAGE);
-    }
-
     while ((opt = getopt(argc, argv, "p:")) != EOF) {
 	switch (opt) {
 	case 'p': /* external protection */
 	    extprops.ssf = atoi(optarg);
 	    break;
-
 	default:
 	    break;
 	}
@@ -431,25 +461,18 @@ int main(int argc, char **argv, char **envp)
     imapd_in = prot_new(0, 0);
     imapd_out = prot_new(1, 1);
 
-    config_init("imapd");
-    mboxlist_init();
-
-    mboxlist_open(NULL);
-
     signal(SIGPIPE, SIG_IGN);
-
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
     /* Find out name of client host */
     salen = sizeof(imapd_remoteaddr);
     if (getpeername(0, (struct sockaddr *)&imapd_remoteaddr, &salen) == 0 &&
 	imapd_remoteaddr.sin_family == AF_INET) {
-	if ((hp = gethostbyaddr((char *)&imapd_remoteaddr.sin_addr,
-			       sizeof(imapd_remoteaddr.sin_addr), AF_INET))!=NULL) {
+	hp = gethostbyaddr((char *)&imapd_remoteaddr.sin_addr,
+			   sizeof(imapd_remoteaddr.sin_addr), AF_INET);
+	if (hp != NULL) {
 	    strncpy(imapd_clienthost, hp->h_name, sizeof(imapd_clienthost)-30);
 	    imapd_clienthost[sizeof(imapd_clienthost)-30] = '\0';
-	}
-	else {
+	} else {
 	    imapd_clienthost[0] = '\0';
 	}
 	strcat(imapd_clienthost, "[");
@@ -461,21 +484,12 @@ int main(int argc, char **argv, char **envp)
 	}
     }
 
-    /* set the SASL allocation functions */
-    sasl_set_alloc((sasl_malloc_t *) &xmalloc, 
-		   (sasl_calloc_t *) &calloc, 
-		   (sasl_realloc_t *) &xrealloc, 
-		   (sasl_free_t *) &free);
-
-    /* Make a SASL connection and setup some properties for it */
-    if (sasl_server_init(mysasl_cb, "Cyrus") != SASL_OK)
-	fatal("SASL failed initializing: sasl_server_init()", EC_TEMPFAIL); 
-
-    /* other params should be filled in */
+    /* create the SASL connection */
     if (sasl_server_new("imap", config_servername, 
 			NULL, NULL, SASL_SECURITY_LAYER, 
-			&imapd_saslconn) != SASL_OK)
-	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL); 
+			&imapd_saslconn) != SASL_OK) {
+	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL);
+    }
 
     secprops = make_secprops(config_getint("sasl_minimum_layer", 0),
 			     config_getint("sasl_maximum_layer", 256));
@@ -488,7 +502,7 @@ int main(int argc, char **argv, char **envp)
     sasl_setprop(imapd_saslconn, SASL_IP_REMOTE, &imapd_remoteaddr);
     sasl_setprop(imapd_saslconn, SASL_IP_LOCAL, &imapd_localaddr);
 
-    proc_register("imapd", imapd_clienthost, (char *)0, (char *)0);
+    proc_register("imapd", imapd_clienthost, NULL, NULL);
 
     /* Set inactivity timer */
     timeout = config_getint("timeout", 30);
@@ -496,20 +510,13 @@ int main(int argc, char **argv, char **envp)
     prot_settimeout(imapd_in, timeout*60);
     prot_setflushonread(imapd_in, imapd_out);
 
-    snmp_connect();
+    /* create connection to the SNMP listener, if available. */
+    snmp_connect(); /* ignore return code */
 
     cmdloop();
 
     /* never reaches! */
-    return 0;
-}
-
-void
-usage()
-{
-    prot_printf(imapd_out, "* BYE usage: imapd\r\n");
-    prot_flush(imapd_out);
-    exit(EC_USAGE);
+    return 1;
 }
 
 /*
@@ -3368,8 +3375,8 @@ void cmd_starttls(char *tag)
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, "Error initializing TLS");
 	syslog(LOG_ERR, "error initializing TLS: "
 	       "[CA_file: %s] [CA_path: %s] [cert_file: %s] [key_file: %s]",
-	       (char *) config_getstring("tls_CA_file", ""),
-	       (char *) config_getstring("tls_CA_path", ""),
+	       (char *) config_getstring("tls_ca_file", ""),
+	       (char *) config_getstring("tls_ca_path", ""),
 	       (char *) config_getstring("tls_cert_file", ""),
 	       (char *) config_getstring("tls_key_file", ""));
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, 

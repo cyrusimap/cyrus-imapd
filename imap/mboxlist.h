@@ -2,7 +2,7 @@
  * 
  * Copyright 1999 Carnegie Mellon University
  * 
- * $Id: mboxlist.h,v 1.4 2000/02/10 05:10:40 tmartin Exp $
+ * $Id: mboxlist.h,v 1.5 2000/02/15 22:21:25 leg Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -114,19 +114,17 @@ void mboxlist_open(char *name);
 void mboxlist_close(void);
 
 /* initialize database structures */
-void mboxlist_init(void);
+#define MBOXLIST_RECOVER 0x01
+#define MBOXLIST_SYNC 0x02
+void mboxlist_init(int flags);
 
 /* done with database stuff */
 void mboxlist_done(void);
 
-/* Check for consistancy. die if there's a problem */
-void mboxlist_checkconfig(void);
-
-/* open up acap connection if possible */
-int mboxlist_acapinit(void);
-
-void mboxlist_getinternalstuff(const char **listfnamep,const char **newlistfnamep, 
-			       const char **basep,unsigned long * sizep);
+void mboxlist_getinternalstuff(const char **listfnamep,
+			       const char **newlistfnamep, 
+			       const char **basep,
+			       unsigned long * sizep);
 
 
 #endif

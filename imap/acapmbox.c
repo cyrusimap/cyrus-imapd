@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <syslog.h>
+#include <com_err.h>
 
 #include <acap.h>
 #include "acapmbox.h"
@@ -61,6 +62,7 @@ acapmbox_handle_t *acapmbox_get_handle(void)
     const char *acapserver;
     static acapmbox_handle_t *cached_conn = NULL;
     const char *user;
+    const char *authprog;
     sasl_callback_t *cb;
 
     acapserver = config_getstring("acap_server", NULL);
@@ -84,6 +86,11 @@ acapmbox_handle_t *acapmbox_get_handle(void)
 			  config_getstring("acap_authname", user),
 			  config_getstring("acap_realm", NULL),
 			  config_getstring("acap_password", NULL));
+
+    authprog = config_getstring("acap_getauth", NULL);
+    if (authprog) {
+	system(authprog);
+    }
 
     r = sasl_client_init(cb);
     if (r != SASL_OK) {

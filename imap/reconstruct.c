@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: reconstruct.c,v 1.46 2000/02/10 21:25:33 leg Exp $ */
+/* $Id: reconstruct.c,v 1.47 2000/02/15 22:21:25 leg Exp $ */
 
 #include <config.h>
 
@@ -669,7 +669,8 @@ todo_append_hashed(char *name, char *path, char *partition)
 
     dirp = opendir(path);
     if (!dirp) {
-	fprintf(stderr, "reconstruct: couldn't open partition %s\n", name);
+	fprintf(stderr, "reconstruct: couldn't open partition %s: %s\n", 
+		partition, strerror(errno));
     } else while ((dirent = readdir(dirp))!=NULL) {
 	struct todo *newentry;
 

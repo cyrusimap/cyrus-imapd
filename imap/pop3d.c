@@ -26,7 +26,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.58 2000/02/10 21:25:31 leg Exp $
+ * $Id: pop3d.c,v 1.59 2000/02/15 22:21:25 leg Exp $
  */
 
 #include <config.h>
@@ -186,10 +186,42 @@ static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
-int main(int argc,char **argv,char **envp)
+/*
+ * run once when process is forked;
+ * MUST NOT exit directly; must return with non-zero error code
+ */
+int service_init(int argc, char **argv, char **envp)
+{
+    int r;
+
+    config_changeident("pop3d");
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+    setproctitle_init(argc, argv, envp);
+
+    signal(SIGPIPE, SIG_IGN);
+
+    /* set the SASL allocation functions */
+    sasl_set_alloc((sasl_malloc_t *) &xmalloc, 
+		   (sasl_calloc_t *) &calloc, 
+		   (sasl_realloc_t *) &xrealloc, 
+		   (sasl_free_t *) &free);
+
+    /* load the SASL plugins */
+    if (sasl_server_init(mysasl_cb, "Cyrus") != SASL_OK) {
+	syslog(LOG_ERR, "SASL failed initializing: sasl_server_init(): %s", 
+	       sasl_errstring(r, NULL, NULL));
+	return 2;
+    }
+
+    return 0;
+}
+
+/*
+ * run for each accepted connection
+ */
+int service_main(int argc, char **argv, char **envp)
 {
     int opt;
-    char hostname[MAXHOSTNAMELEN+1];
     int salen;
     struct hostent *hp;
     int timeout;
@@ -198,43 +230,26 @@ int main(int argc,char **argv,char **envp)
     popd_in = prot_new(0, 0);
     popd_out = prot_new(1, 1);
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
-
-    opterr = 0;
     while ((opt = getopt(argc, argv, "k")) != EOF) {
 	switch(opt) {
-#ifdef HAVE_KRB
 	case 'k':
 	    kflag++;
 	    break;
-#endif
-
 	default:
 	    usage();
 	}
     }
 
-    setproctitle_init(argc, argv, envp);
-    config_init("pop3d");
-
-    signal(SIGPIPE, SIG_IGN);
-    gethostname(hostname, sizeof(hostname));
-
     /* Find out name of client host */
     salen = sizeof(popd_remoteaddr);
     if (getpeername(0, (struct sockaddr *)&popd_remoteaddr, &salen) == 0 &&
 	popd_remoteaddr.sin_family == AF_INET) {
-	if ((hp = gethostbyaddr((char *)&popd_remoteaddr.sin_addr,
-			       sizeof(popd_remoteaddr.sin_addr), AF_INET))!=NULL) {
-	    if (strlen(hp->h_name) + 30 > sizeof(popd_clienthost)) {
-		strncpy(popd_clienthost, hp->h_name, sizeof(popd_clienthost)-30);
-		popd_clienthost[sizeof(popd_clienthost)-30] = '\0';
-	    }
-	    else {
-		strcpy(popd_clienthost, hp->h_name);
-	    }
-	}
-	else {
+	hp = gethostbyaddr((char *)&popd_remoteaddr.sin_addr,
+			   sizeof(popd_remoteaddr.sin_addr), AF_INET);
+	if (hp != NULL) {
+	    strncpy(popd_clienthost, hp->h_name, sizeof(popd_clienthost)-30);
+	    popd_clienthost[sizeof(popd_clienthost)-30] = '\0';
+	} else {
 	    popd_clienthost[0] = '\0';
 	}
 	strcat(popd_clienthost, "[");
@@ -246,24 +261,21 @@ int main(int argc,char **argv,char **envp)
 	}
     }
 
-    /* Make a SASL connection and setup some properties for it */
-
-    if (sasl_server_init(mysasl_cb, "Cyrus") != SASL_OK)
-	fatal("SASL failed initializing: sasl_server_init()",EC_TEMPFAIL); 
-
     /* other params should be filled in */
-    if (sasl_server_new("pop", hostname, NULL, 
-			NULL, 2000, &popd_saslconn)!=SASL_OK)
+    if (sasl_server_new("pop", config_servername, NULL, 
+			NULL, SASL_SECURITY_LAYER, &popd_saslconn) != SASL_OK)
 	fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL); 
 
     /* will always return something valid */
-    secprops=make_secprops(0,2000);        
+    secprops = make_secprops(config_getint("sasl_minimum_layer", 0),
+			     config_getint("sasl_maximum_layer", 256));
     sasl_setprop(popd_saslconn, SASL_SEC_PROPS, secprops);
+    free(secprops);
     
-    sasl_setprop(popd_saslconn,   SASL_IP_REMOTE, &popd_remoteaddr);  
-    sasl_setprop(popd_saslconn,   SASL_IP_LOCAL, &popd_localaddr);  
+    sasl_setprop(popd_saslconn, SASL_IP_REMOTE, &popd_remoteaddr);  
+    sasl_setprop(popd_saslconn, SASL_IP_LOCAL, &popd_localaddr);  
 
-    proc_register("pop3d", popd_clienthost, (char *)0, (char *)0);
+    proc_register("pop3d", popd_clienthost, NULL, NULL);
 
     /* Set inactivity timer */
     timeout = config_getint("poptimeout", 10);
@@ -273,11 +285,12 @@ int main(int argc,char **argv,char **envp)
 
 #ifdef HAVE_KRB
     if (kflag) kpop();
+#else
+    if (kflag) usage();
 #endif
 
     prot_printf(popd_out, "+OK %s Cyrus POP3 %s server ready\r\n",
-		hostname, CYRUS_VERSION);
-
+		config_servername, CYRUS_VERSION);
     cmdloop();
 
     return 0;
