@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.121.2.11 2004/02/18 19:28:25 ken3 Exp $
+ * $Id: lmtpd.c,v 1.121.2.12 2004/02/19 19:41:18 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -476,8 +476,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	    r = mlookup(namebuf, &server, NULL, NULL);
 	    if (!r && server) {
 		/* remote mailbox */
-		adddest(&remotedata, rcpt, server, namebuf,
-			remotedata.authuser);
+		adddest(&remotedata, rcpt, server, remotedata.authuser);
 		remotedata.pend[n] = nosieve;
 	    }
 	    else if (!r) {
@@ -500,7 +499,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	    r = mlookup(namebuf, &server, NULL, NULL);
 	    if (!r && server) {
 		/* remote mailbox */
-		adddest(&remotedata, rcpt, server, namebuf, authuser);
+		adddest(&remotedata, rcpt, server, authuser);
 		remotedata.pend[n] = nosieve;
 	    }
 	    else if (!r) {
