@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.139 2000/09/20 16:48:39 ken3 Exp $
+ * $Id: index.c,v 1.140 2000/09/20 19:17:48 ken3 Exp $
  */
 #include <config.h>
 
@@ -2962,6 +2962,8 @@ static MsgData *index_msgdata_load(unsigned *msgno_list, int n,
     int i, j;
     char *tmpenv;
     char *envtokens[NUMENVTOKENS];
+    int did_cache, did_env;
+    int label;
 
     if (!n)
 	return NULL;
@@ -2977,27 +2979,46 @@ static MsgData *index_msgdata_load(unsigned *msgno_list, int n,
 	/* set pointer to next node */
 	cur->next = (i+1 < n ? cur+1 : NULL);
 
-	/* fetch cached info */
-	env = cache_base + CACHE_OFFSET(cur->msgno);
-	cacheitem = CACHE_ITEM_NEXT(env); /* bodystructure */
-	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* body */
-	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* section */
-	headers = CACHE_ITEM_NEXT(cacheitem);
-	from = CACHE_ITEM_NEXT(headers);
-	to = CACHE_ITEM_NEXT(from);
-	cc = CACHE_ITEM_NEXT(to);
-	cacheitem = CACHE_ITEM_NEXT(cc); /* bcc */
-	subj = CACHE_ITEM_NEXT(cacheitem);
-
-	/* make a working copy of envelope -- strip outer ()'s */
-	tmpenv = xstrndup(env+5, strlen(env+4) - 2);
-
-	/* parse envelope into tokens */
-	parse_cached_envelope(tmpenv, envtokens);
+	did_cache = did_env = 0;
+	tmpenv = NULL;
 
 	j = 0;
 	while (sortcrit[j].key) {
-	    switch (sortcrit[j++].key & SORT_KEY_MASK) {
+	    label = sortcrit[j++].key & SORT_KEY_MASK;
+
+	    if ((label == SORT_CC || label == SORT_DATE ||
+		 label == SORT_FROM || label == SORT_SUBJECT ||
+		 label == SORT_TO || label == LOAD_IDS) &&
+		!did_cache) {
+
+		/* fetch cached info */
+		env = cache_base + CACHE_OFFSET(cur->msgno);
+		cacheitem = CACHE_ITEM_NEXT(env); /* bodystructure */
+		cacheitem = CACHE_ITEM_NEXT(cacheitem); /* body */
+		cacheitem = CACHE_ITEM_NEXT(cacheitem); /* section */
+		headers = CACHE_ITEM_NEXT(cacheitem);
+		from = CACHE_ITEM_NEXT(headers);
+		to = CACHE_ITEM_NEXT(from);
+		cc = CACHE_ITEM_NEXT(to);
+		cacheitem = CACHE_ITEM_NEXT(cc); /* bcc */
+		subj = CACHE_ITEM_NEXT(cacheitem);
+
+		did_cache++;
+	    }
+
+	    if ((label == SORT_DATE || label == LOAD_IDS) &&
+		!did_env) {
+
+		/* make a working copy of envelope -- strip outer ()'s */
+		tmpenv = xstrndup(env+5, strlen(env+4) - 2);
+
+		/* parse envelope into tokens */
+		parse_cached_envelope(tmpenv, envtokens);
+
+		did_env++;
+	    }
+
+	    switch (label) {
 	    case SORT_ARRIVAL:
 		cur->arrival = INTERNALDATE(cur->msgno);
 		break;
@@ -3027,7 +3048,7 @@ static MsgData *index_msgdata_load(unsigned *msgno_list, int n,
 	    }
 	}
 
-	free(tmpenv);
+	if (tmpenv) free(tmpenv);
     }
 
     return md;
