@@ -1,6 +1,6 @@
 /* lmtp_sieve.c -- Sieve implementation for lmtpd
  *
- * $Id: lmtp_sieve.c,v 1.3 2004/03/01 20:50:11 ken3 Exp $
+ * $Id: lmtp_sieve.c,v 1.4 2004/03/11 15:23:18 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -48,8 +48,6 @@
 #include <unistd.h>
 #endif
 
-#include <sieve_interface.h>
-
 #include <com_err.h>
 #include <pwd.h>
 #include <stdlib.h>
@@ -70,6 +68,7 @@
 #include "notify.h"
 #include "prot.h"
 #include "rfc822date.h"
+#include "sieve_interface.h"
 #include "smtpclient.h"
 #include "util.h"
 #include "version.h"
