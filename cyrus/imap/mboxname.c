@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- * $Id: mboxname.c,v 1.25.4.7 2002/08/02 20:51:12 ken3 Exp $
+ * $Id: mboxname.c,v 1.25.4.8 2002/08/04 13:55:45 ken3 Exp $
  * Copyright (c)1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -493,7 +493,7 @@ char *mboxname_hiersep_toexternal(struct namespace *namespace, char *name)
  */
 int mboxname_userownsmailbox(const char *userid, const char *name)
 {
-    struct namespace internal = { 0, '.' };
+    struct namespace internal = { '.' };
     char inboxname[MAX_MAILBOX_NAME+1];
 
     if (!mboxname_tointernal(&internal, "INBOX", userid, inboxname) &&
