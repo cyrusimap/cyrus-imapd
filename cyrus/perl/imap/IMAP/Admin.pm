@@ -43,7 +43,7 @@ use strict;
 use Cyrus::IMAP;
 use vars qw($VERSION
 	    *create *delete *deleteacl *listacl *list *rename *setacl
-	    *subscribed *quota *quotaroot *info);
+	    *subscribed *quota *quotaroot *info *setinfo);
 
 $VERSION = '1.00';
 
@@ -632,7 +632,6 @@ sub setquota {
   }
 }
 
-# xxx this is entirely untested ;)
 sub getinfo {
   my ($self,$box) = @_;
   my $pat;
@@ -693,6 +692,27 @@ sub getinfo {
   }
 }
 *info = *getinfo;
+
+sub setinfoserver {
+  my ($self, $entry, $value) = @_;
+
+  if(!$self->{support_annotatemore}) {
+    $self->{error} = "Remote does not support ANNOTATEMORE.";
+    return undef;
+  }
+
+  my ($rc, $msg) = $self->send('', '', "SETANNOTATION \"/server/%s\" (\"value.shared\" \"%s\")",
+			       $entry, $value);
+
+  if ($rc eq 'OK') {
+    $self->{error} = undef;
+    1;
+  } else {
+    $self->{error} = $msg;
+    undef;
+  }
+}
+*setinfo = *setinfoserver;
 
 sub error {
   my $self = shift;

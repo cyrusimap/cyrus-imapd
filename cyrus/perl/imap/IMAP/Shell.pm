@@ -136,6 +136,9 @@ my %builtins = (exit =>
 		   'set ACLs on mailbox'],
 		setacl => 'setaclmailbox',
 		sam => 'setaclmailbox',
+		setinfo =>
+		  [\&_sc_setinfo, '[motd|comment] text',
+		   'set server metadata'],
 		setquota =>
 		  [\&_sc_setquota,
 		   'mailbox resource value [resource value ...]',
@@ -1152,6 +1155,31 @@ sub _sc_info {
     $attrib =~ /([^\/]*)$/;
     $lfh->[1]->print($1, ": ", $info{$attrib}, "\n");
   }
+  0;
+}
+
+sub _sc_setinfo {
+  my ($cyrref, $name, $fh, $lfh, @argv) = @_;
+  my (@nargv, $opt);
+  shift(@argv);
+  while (defined ($opt = shift(@argv))) {
+    last if $opt eq '--';
+    if ($opt =~ /^-/) {
+      die "usage: setinfo [motd|comment] text\n";
+    }
+    else {
+      push(@nargv, $opt);
+      last;
+    }
+  }
+  push(@nargv, @argv);
+  if (@nargv < 2) {
+    die "usage: setinfo [motd|comment] text\n";
+  }
+  if (!$cyrref || !$$cyrref) {
+    die "setinfo: no connection to server\n";
+  }
+  $$cyrref->setinfoserver(@nargv) || die "setinfo: " . $$cyrref->error . "\n";
   0;
 }
 
