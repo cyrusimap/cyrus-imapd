@@ -35,11 +35,15 @@ int installafile(char *filename);
 
 int showlist(void);
 
-int viewafile(char *name);
-
 int setscriptactive(char *name);
 
-int getscript(char *name);
+/*
+ * Getscript. Save {0,1} wheather to save to disk or display on screen
+ */
+
+int getscript(char *name, int save);
+
+void parseerror(char *str);
 
 
 #endif

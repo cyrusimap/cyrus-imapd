@@ -70,16 +70,6 @@ int sock; /* socket descriptor */
 
 struct protstream *pout, *pin;
 
-void parseerror(char *str)
-{
-  printf("Parse error:\n");
-
-  printf("client expected %s\n",str);
-  printf("exiting\n");
-
-  exit(2);
-}
-
 void imtest_fatal(char *msg)
 {
   if (msg!=NULL)
@@ -517,8 +507,6 @@ char *read_capability(void)
 	/* eliminate trailing '}' */
 	cap[ strlen(cap) -1]='\0';
 	
-	printf("capability=[%s]",cap);
-	
     }
 
   }
@@ -647,7 +635,7 @@ int main(int argc, char **argv)
   if (viewfile!=NULL)
   {
     printf("viewfile=%s\n",viewfile);
-    viewafile(viewfile);
+    getscript(viewfile,0);
   }
 
   if (dolist==1)
@@ -675,7 +663,7 @@ int main(int argc, char **argv)
 
   if (getscriptname!=NULL)
   {
-    getscript(getscriptname);
+    getscript(getscriptname,1);
   }
 
   return 0;
