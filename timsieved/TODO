@@ -1,15 +1,11 @@
-q's:
 
 does authenticating leak memory?  (mechanism name parameter in yacc
 not freed?)
 	- leg 9/29/99
 
-document the sieve quotas in (- leg):
-	imapd.conf
+document the sieve quotas in:
 	sieve.html (yet to be written)
-
-what about script size? -leg
 
 proxying is broken
 
-make it not prompt for username
+should probably use symlinks instead of hard links

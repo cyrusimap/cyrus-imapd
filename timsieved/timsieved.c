@@ -256,7 +256,9 @@ static mysasl_authproc(void *context,
 
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
+#if 0
     { SASL_CB_PROXY_POLICY, &mysasl_authproc, NULL },
+#endif
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
