@@ -5,7 +5,7 @@
     IMAP server stores and provides access to messages. 
 
     A list of answers to common installation problems is maintained in
-    http://andrew2.andrew.cmu.edu/cyrus/imapd/install-FAQ. 
+    http://andrew2.andrew.cmu.edu/cyrus/imapd/install-FAQ.html. 
 
     Feedback on the software or on the document may be sent to
     "cyrus-bugs@andrew.cmu.edu". The info-cyrus@andrew.cmu.edu mailing list
