@@ -4,7 +4,7 @@
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
 <title>Cyrus IMAP Server FAQ</title>
-<!-- $Id: faq.html,v 1.18 2002/02/13 17:10:13 ken3 Exp $ -->
+<!-- $Id: faq.html,v 1.19 2002/05/20 18:56:43 ken3 Exp $ -->
 </head>
 <body>
 <h1>Cyrus IMAP Server FAQ</h1>
@@ -12,6 +12,14 @@
 <ul>
 <li><b>Using PAM</b> Under Linux when using PAM and shadow
 passwords, /etc/shadow needs to be readable by the Cyrus user.</li>
+
+<li><b>POP-Before-SMTP</b> It is not included in the default distribution
+because there is already a standard way of doing this with SMTP AUTH.
+Any good MTA and/or MUA should support SMTP AUTH, so we shouldn't have
+to create a hack in an unrelated service.  However, if you would like
+to install it anyway, we recommend using
+<a href="http://mail.cc.umanitoba.ca/drac/">DRAC</a>,
+along with the patch available in <tt>contrib/drac_auth.patch</tt>.</li>
 
 <li><b>Using NFS</b> We don't recommend it. If you want to do it,
 it may possibly work but you may also lose your email or have
@@ -152,7 +160,7 @@ tls.c:</p>
 </dl>
 
 <hr />
-last modified: $Date: 2002/02/13 17:10:13 $ <br />
+last modified: $Date: 2002/05/20 18:56:43 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
