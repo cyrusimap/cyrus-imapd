@@ -1,4 +1,6 @@
-#!/usr/local/bin/perl -w
+#! /bin/sh
+exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
+#!perl -w
 # 
 # Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
 #
