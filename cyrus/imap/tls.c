@@ -94,7 +94,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.22 2001/08/23 12:59:31 ken3 Exp $ */
+/* $Id: tls.c,v 1.23 2001/09/07 19:08:16 ken3 Exp $ */
 
 #include <config.h>
 
@@ -537,24 +537,26 @@ SSL_SESSION *get_session_cb(SSL *ssl, unsigned char *id, int idlen, int *copy)
 	do {
 	    ret = DB->fetch(sessdb, id, idlen, &data, &len, NULL);
 	} while (ret == CYRUSDB_AGAIN);
+
+	if (data) {
+	    assert(len == sizeof(time_t));
+
+	    /* grab the expire time */
+	    memcpy(&expire, data, sizeof(time_t));
+
+	    /* check if the session has expired */
+	    if (expire < now) {
+		remove_session(id, idlen);
+	    }
+	    else {
+		/* transform the ASN1 representation of the session
+		   into an SSL_SESSION object */
+		asn = (unsigned char*) data + sizeof(time_t);
+		sess = d2i_SSL_SESSION(NULL, &asn, len - sizeof(time_t));
+		if (!sess) syslog(LOG_ERR, "d2i_SSL_SESSION failed: %m");
+	    }
+	}
 	DB->close(sessdb);
-    }
-
-    if (data) {
-	/* grab the expire time */
-	memcpy(&expire, data, sizeof(time_t));
-
-	/* check if the session has expired */
-	if (expire < now) {
-	    remove_session(id, idlen);
-	}
-	else {
-	    /* transform the ASN1 representation of the session
-	       into an SSL_SESSION object */
-	    asn = (unsigned char*) data + sizeof(time_t);
-	    sess = d2i_SSL_SESSION(NULL, &asn, len - sizeof(time_t));
-	    if (!sess) syslog(LOG_ERR, "d2i_SSL_SESSION failed: %m");
-	}
     }
 
     /* log this transaction */
