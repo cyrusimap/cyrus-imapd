@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.50 2000/05/23 20:56:15 robeson Exp $
+ $Id: imclient.c,v 1.51 2000/05/24 05:35:43 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1441,14 +1441,6 @@ static int do_dump = 1;
 static char peer_CN[CCERT_BUFSIZ];
 static char issuer_CN[CCERT_BUFSIZ];
 
-char   *tls_peer_CN = "";
-char   *tls_issuer_CN = NULL;
-
-char   *tls_protocol = NULL;
-const char   *tls_cipher_name = NULL;
-int	tls_cipher_usebits = 0;
-int	tls_cipher_algbits = 0;
-
 /*
   * Set up the cert things on the server side. We do need both the
   * private key (in key_file) and the cert (in cert_file).
@@ -1758,6 +1750,12 @@ int tls_start_clienttls(struct imclient *imclient,
     SSL_SESSION *session;
     SSL_CIPHER *cipher;
     X509   *peer;
+    const char *tls_protocol = NULL;
+    const char *tls_cipher_name = NULL;
+    int tls_cipher_usebits = 0;
+    int tls_cipher_algbits = 0;
+    char *tls_peer_CN = "";
+    char *tls_issuer_CN = NULL;
 
     if (imclient->tls_conn == NULL) {
 	imclient->tls_conn = (SSL *) SSL_new(imclient->tls_ctx);
