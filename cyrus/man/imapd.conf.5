@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapd.conf.5,v 1.70 2003/07/01 14:39:55 ken3 Exp $
+.\" $Id: imapd.conf.5,v 1.71 2003/07/30 13:27:21 rjs3 Exp $
 
 .SH NAME
 imapd.conf \- IMAP configuration file
@@ -110,7 +110,7 @@ with nonexistent or unselectable mailboxes (eg. Microsoft Outlook).
 Permit logins by the user "anonymous" using any password.  Also allows
 use of the SASL ANONYMOUS mechanism.
 .IP "\fBallowplaintext:\fR yes" 5
-Allow the use of the SASL PLAIN mechanism.
+Allow the use of cleartext passwords on the wire.
 .IP "\fBquotawarn:\fR 90" 5
 The percent of quota utilization over which the server generates
 warnings.
