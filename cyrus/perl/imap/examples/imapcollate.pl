@@ -151,7 +151,7 @@ foreach $a (@sorted) {
   if ((defined $min) && ($fromlis{$a} < $min)) {
     next;
   }
-  print "$a\t-\t$fromlis{$a} \n";
+  printf("%40s %d\n", $a, $fromlis{$a});
 }
 
 
@@ -161,7 +161,7 @@ sub coll {
   my %dat;
 
   #select something
-  my ($rc, $msg) = $cyrus->send('', '', "SELECT $mb");
+  my ($rc, $msg) = $cyrus->send('', '', "EXAMINE $mb");
   if ($rc eq 'OK') {
   } else {
     die "Select of $mb failed with $msg";
@@ -182,14 +182,20 @@ sub coll {
 			 my $size = 0;
 			 if ( $d{-text} =~ /.*(From:)(.*)\<(.*\@.*)\>/i)
 			   {
-			     ${$d{-rock}}{$3} ++; 
+			       $addr = $3;
 			   } elsif ( $d{-text} =~ /.*(From:)\s*\".*\"\s*(.*\@.*)/i) {
-			     ${$d{-rock}}{$2} ++;
+			       $addr = $2;
 			   } elsif ( $d{-text} =~ /.*(From:)\s*(\S+\@\S+)\s*/i) {
-			     ${$d{-rock}}{$2} ++;
+			       $addr = $2;
 			   } else {
 			     #print "no From header found in msgno $msgno ($d{-text})\n";
+			       $addr = "<none>";
 			   }
+			   $addr =~ tr/[A-Z]/[a-z]/;
+			   if ($addr =~ /(.*)\+.*@(.*)/) {
+				   $addr = "$1\@$2";
+			   }
+               ${$d{-rock}}{$addr}++;
 		    }, 
   -rock => \%dat});
 
