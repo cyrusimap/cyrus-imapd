@@ -215,11 +215,11 @@ char **newpartition;
     }
     for (i = 0; i < NUM_BADMBOXPATTERNS; i++) {
 	g = glob_init(badmboxpatterns[i], GLOB_ICASE);
-	if (glob_test(g, name, -1)) {
-	    glob_free(g);
+	if (glob_test(g, name, -1L, (long *)0) != -1) {
+	    glob_free(&g);
 	    return IMAP_MAILBOX_BADNAME;
 	}
-	glob_free(g);
+	glob_free(&g);
     }
     r = mboxlist_policycheck(name);
     if (r) return r;
@@ -921,7 +921,9 @@ int (*proc)();
     int usermboxnamelen;
     char buf[512], *bufp = buf;
     unsigned offset, buflen, prefixlen;
+    long matchlen, minmatch;
     char *endname, *p, *acl;
+    int rights;
     int r;
 
     if (!listfname) mboxlist_getfname();
@@ -932,22 +934,22 @@ int (*proc)();
 	fatal("can't read mailbox list", EX_OSFILE);
     }
 
-    g = glob_init(pattern, GLOB_ICASE);
+    g = glob_init(pattern, GLOB_ICASE|GLOB_HIERARCHY);
 
     /* Check for INBOX first of all */
     if (!strchr(userid, '.') && strlen(userid)+5 < MAX_NAME_LEN) {
 	strcpy(usermboxname, "user.");
 	strcat(usermboxname, userid);
 
-	if (glob_test(g, "inbox", -1)) {
+	if (glob_test(g, "inbox", -1L, (long *)0) != -1) {
 	    buflen = sizeof(buf);
 	    (void) n_binarySearchFD(fileno(listfile), usermboxname, 0, &bufp,
 				    &buflen, 0, 0);
 	    if (buflen) {
-		r = (*proc)("INBOX");
+		r = (*proc)("INBOX", 5, 0);
 		if (r) {
 		    fclose(listfile);
-		    glob_free(g);
+		    glob_free(&g);
 		    return r;
 		}
 	    }
@@ -980,12 +982,15 @@ int (*proc)();
 	    /* XXX assuming \t before running past sizeof(buf) */
 	    p = strchr(buf, '\t');
 	    *p = '\0';
-	    if (strncasecmp(buf, usermboxname, usermboxnamelen)) break;
-	    if (glob_test(g, buf, -1)) {
-		r = (*proc)(buf);
+	    if (strncasecmp(buf, usermboxname, usermboxnamelen) != 0) break;
+	    minmatch = 0;
+	    while (minmatch >= 0) {
+		matchlen = glob_test(g, buf, -1L, &minmatch);
+		if (matchlen == -1) break;
+		r = (*proc)(buf, matchlen, 1);
 		if (r) {
 		    fclose(listfile);
-		    glob_free(g);
+		    glob_free(&g);
 		    return r;
 		}
 	    }
@@ -1008,14 +1013,19 @@ int (*proc)();
 	endname = strchr(buf, '\t');
 	*endname = '\0';
 	if (strncasecmp(buf, pattern, prefixlen)) break;
-	if (glob_test(g, buf, -1) &&
-	    (strncasecmp(buf, usermboxname, usermboxnamelen) ||
-	     (buf[usermboxnamelen] != '\0' && buf[usermboxnamelen] != '.'))) {
+	minmatch = 0;
+	while (minmatch >= 0) {
+	    matchlen = glob_test(g, buf, -1L, &minmatch);
+	    if (matchlen == -1 ||
+		(strncasecmp(buf, usermboxname, usermboxnamelen) == 0 &&
+		 (buf[usermboxnamelen] == '\0' || buf[usermboxnamelen] == '.'))) {
+		break;
+	    }
 	    if (isadmin) {
-		r = (*proc)(buf);
+		r = (*proc)(buf, matchlen, 1);
 		if (r) {
 		    fclose(listfile);
-		    glob_free(g);
+		    glob_free(&g);
 		    return r;
 		}
 	    }
@@ -1030,11 +1040,12 @@ int (*proc)();
 		    r = mboxlist_lookup(buf, (char **)0, &acl);
 		    assert(r == 0);
 		}
-		if (acl_myrights(acl) & ACL_LOOKUP) {
-		    r = (*proc)(buf);
+		rights = acl_myrights(acl);
+		if (rights & ACL_LOOKUP) {
+		    r = (*proc)(buf, matchlen, (rights & ACL_CREATE));
 		    if (r) {
 			fclose(listfile);
-			glob_free(g);
+			glob_free(&g);
 			return r;
 		    }
 		}
@@ -1050,7 +1061,7 @@ int (*proc)();
     }
 	
     fclose(listfile);
-    glob_free(g);
+    glob_free(&g);
     return 0;
 }
 
@@ -1076,6 +1087,8 @@ int (*proc)();
     int r;
     unsigned offset, buflen, prefixlen;
     char *endname, *p;
+    long matchlen, minmatch;
+    char *acl;
 
     if (r = mboxlist_opensubs(userid, &subsfile, &subsfname, &newsubsfname)) {
 	return r;
@@ -1090,23 +1103,23 @@ int (*proc)();
 	fatal("can't read mailbox list", EX_OSFILE);
     }
 
-    g = glob_init(pattern, GLOB_ICASE);
+    g = glob_init(pattern, GLOB_ICASE|GLOB_HIERARCHY);
 
     /* Check for INBOX first of all */
     if (!strchr(userid, '.') && strlen(userid)+5 < MAX_NAME_LEN) {
 	strcpy(usermboxname, "user.");
 	strcat(usermboxname, userid);
 
-	if (glob_test(g, "inbox", -1)) {
+	if (glob_test(g, "inbox", -1L, (long *)0) != -1) {
 	    buflen = sizeof(buf);
 	    (void) n_binarySearchFD(fileno(subsfile), usermboxname, 0, &bufp,
 				    &buflen, 0, 0);
 	    if (buflen) {
-		r = (*proc)("INBOX");
+		r = (*proc)("INBOX", 5, 0);
 		if (r) {
 		    fclose(subsfile);
 		    fclose(listfile);
-		    glob_free(g);
+		    glob_free(&g);
 		    return r;
 		}
 	    }
@@ -1140,22 +1153,26 @@ int (*proc)();
 	    p = strchr(buf, '\t');
 	    *p = '\0';
 	    if (strncasecmp(buf, usermboxname, usermboxnamelen)) break;
-	    if (glob_test(g, buf, -1)) {
+	    minmatch = 0;
+	    while (minmatch >= 0) {
+		matchlen = glob_test(g, buf, -1L, &minmatch);
+		if (matchlen == -1) break;
 		bufp = 0;
 		buflen = 0;
 		offset = n_binarySearchFD(fileno(listfile), buf,
 					  0, &bufp, &buflen, 0, 0);
 		if (buflen) {
-		    r = (*proc)(buf);
+		    r = (*proc)(buf, matchlen, 1);
 		    if (r) {
 			fclose(subsfile);
 			fclose(listfile);
-			glob_free(g);
+			glob_free(&g);
 			return r;
 		    }
 		}
 		else {
 		    mboxlist_changesub(buf, userid, 0);
+		    break;
 		}
 	    }
 	}
@@ -1173,31 +1190,34 @@ int (*proc)();
 	endname = strchr(buf, '\t');
 	*endname = '\0';
 	if (strncasecmp(buf, pattern, prefixlen)) break;
-	if (glob_test(g, buf, -1) &&
-	    (strncasecmp(buf, usermboxname, usermboxnamelen) ||
-	     (buf[usermboxnamelen] != '\0' && buf[usermboxnamelen] != '.'))) {
-	    bufp = 0;
-	    buflen = 0;
-	    offset = n_binarySearchFD(fileno(listfile), buf,
-				      0, &bufp, &buflen, 0, 0);
-	    if (buflen) {
-		r = (*proc)(buf);
+	minmatch = 0;
+	while (minmatch >= 0) {
+	    matchlen = glob_test(g, buf, -1L, &minmatch);
+	    if (matchlen == -1 ||
+		(strncasecmp(buf, usermboxname, usermboxnamelen) == 0 &&
+		 (buf[usermboxnamelen] == '\0' || buf[usermboxnamelen] == '.'))) {
+		break;
+	    }
+	    r = mboxlist_lookup(buf, (char **)0, &acl);
+	    if (r == 0) {
+		r = (*proc)(buf, matchlen, (acl_myrights(acl) & ACL_CREATE));
 		if (r) {
 		    fclose(subsfile);
 		    fclose(listfile);
-		    glob_free(g);
+		    glob_free(&g);
 		    return r;
 		}
 	    }
 	    else {
 		mboxlist_changesub(buf, userid, 0);
+		break;
 	    }
 	}
     }
 	
     fclose(subsfile);
     fclose(listfile);
-    glob_free(g);
+    glob_free(&g);
     return 0;
 }
 
@@ -1625,8 +1645,10 @@ long access;
 /*
  * Helper function to delete a user's sub-mailbox when deleting that user
  */
-static int mboxlist_deletesubmailbox(name)
+static int mboxlist_deletesubmailbox(name, matchlen, maycreate)
 char *name;
+int matchlen;
+int maycreate;
 {
     return mboxlist_deletemailbox(name, 1, "", 0);
 }

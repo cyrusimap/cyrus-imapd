@@ -70,7 +70,7 @@ static char *monthname[] = {
     "jul", "aug", "sep", "oct", "nov", "dec"
 };
 
-static int mailboxdata();
+static int mailboxdata(), listdata(), lsubdata();
 
 main(argc, argv, envp)
 int argc;
@@ -353,6 +353,18 @@ cmdloop()
 		shutdown(0);
 	    }
 	    else if (!imapd_userid) goto nologin;
+	    else if (!strcmp(cmd.s, "List")) {
+		c = getastring(&arg1);
+		if (c == '\r') c = getc(stdin);
+		if (c != '\n') goto extraargs;
+		cmd_list(tag.s, 0, arg1.s);
+	    }
+	    else if (!strcmp(cmd.s, "Lsub")) {
+		c = getastring(&arg1);
+		if (c == '\r') c = getc(stdin);
+		if (c != '\n') goto extraargs;
+		cmd_list(tag.s, 1, arg1.s);
+	    }
 	    else goto badcmd;
 	    break;
 
@@ -1504,7 +1516,13 @@ char *tag;
 char *namespace;
 char *pattern;
 {
+    char *p;
     lcase(namespace);
+
+    for (p = pattern; *p; p++) {
+	if (*p == '%') *p = '?';
+    }
+
     if (!strcmp(namespace, "mailboxes")) {
 	mboxlist_findsub(pattern, imapd_userisadmin, imapd_userid,
 			 mailboxdata);
@@ -1522,6 +1540,27 @@ char *pattern;
 	return;
     }
     printf("%s OK Find completed\r\n", tag);
+}
+
+/*
+ * Perform a LIST or LSUB command
+ */
+cmd_list(tag, subscribed, pattern)
+char *tag;
+int subscribed;
+char *pattern;
+{
+    if (subscribed) {
+	mboxlist_findsub(pattern, imapd_userisadmin, imapd_userid,
+			 lsubdata);
+	lsubdata((char *)0, 0, 0);
+    }
+    else {
+	mboxlist_findall(pattern, imapd_userisadmin, imapd_userid,
+			 listdata);
+	listdata((char *)0, 0, 0);
+    }
+    printf("%s OK %s completed\r\n", tag, subscribed ? "LIST" : "LSUB");
 }
   
 /*
@@ -2800,9 +2839,92 @@ struct searchargs *s;
 /*
  * Issue a MAILBOX untagged response
  */
-static int mailboxdata(name)
+static int mailboxdata(name, matchlen, maycreate)
 char *name;
+int matchlen;
+int maycreate;
 {
     printf("* MAILBOX %s\r\n", name);
     return 0;
+}
+
+/*
+ * Issue a LIST or LSUB untagged response
+ */
+static int mstringdata(cmd, name, matchlen, maycreate)
+char *cmd;
+char *name;
+int matchlen;
+int maycreate;
+{
+    static char lastname[MAX_MAILBOX_PATH];
+    static int lastnamedelayed;
+    static sawuser = 0;
+    int lastnamehassub = 0;
+
+    if (lastnamedelayed) {
+	if (name && strncasecmp(lastname, name, strlen(lastname)) == 0 &&
+	    name[strlen(lastname)] == '.') {
+	    lastnamehassub = 1;
+	}
+	printf("* %s (%s) \".\" \"%s\"\r\n", cmd,
+	       lastnamehassub ? "" : "\\Noinferiors",
+	       lastname);
+	lastnamedelayed = 0;
+    }
+
+    /* Special-case to flush any final state */
+    if (!name) {
+	lastname[0] = '\0';
+	return 0;
+    }
+
+    /* Suppress any output of a partial match */
+    if (name[matchlen] && strncasecmp(lastname, name, matchlen) == 0) {
+	return 0;
+    }
+	
+    /*
+     * We can get a partial match for "user" multiple times with
+     * other matches inbetween.  Handle it as a special case
+     */
+    if (matchlen == 4 && strncasecmp(name, "user", 4) == 0) {
+	if (sawuser) return 0;
+	sawuser = 1;
+    }
+
+    strcpy(lastname, name);
+    lastname[matchlen] = '\0';
+
+    if (!name[matchlen] && !maycreate) {
+	lastnamedelayed = 1;
+	return 0;
+    }
+
+    printf("* %s (%s) \".\" \"%.*s\"\r\n", cmd,
+	   name[matchlen] ? "\\Noselect" : "",
+	   matchlen, name);
+    return 0;
+}
+
+/*
+ * Issue a LIST untagged response
+ */
+static int listdata(name, matchlen, maycreate)
+char *name;
+int matchlen;
+int maycreate;
+{
+    return mstringdata("LIST", name, matchlen, maycreate);
+}
+
+/*
+ * Issue a LSUB untagged response
+ */
+static int lsubdata(name, matchlen, maycreate)
+char *name;
+int matchlen;
+int maycreate;
+{
+    return mstringdata("LSUB", name, matchlen, maycreate);
 }
