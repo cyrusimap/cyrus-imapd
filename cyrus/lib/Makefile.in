@@ -44,7 +44,7 @@ LDFLAGS = -g
 
 SHELL = /bin/sh
 
-OBJS= acl.o assert.o charset.o glob.o util.o n_binsearch.o xmalloc.o \
+OBJS= acl.o assert.o charset.o glob.o util.o prot.o n_binsearch.o xmalloc.o \
 	$(ACL) $(AUTH) @LIBOBJS@
 
 all: libcyrus.a

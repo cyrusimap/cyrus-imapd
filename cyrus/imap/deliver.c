@@ -36,6 +36,7 @@
 #include "acl.h"
 #include "util.h"
 #include "auth.h"
+#include "prot.h"
 #include "config.h"
 #include "imap_err.h"
 #include "mailbox.h"
@@ -53,6 +54,7 @@ char **flag = 0;
 int nflags = 0;
 
 FILE *f;
+struct protstream *prot_f;
 
 main(argc, argv)
 int argc;
@@ -134,6 +136,7 @@ char **argv;
 	perror("deliver: copying message");
 	exit(EX_TEMPFAIL);
     }
+    prot_f = prot_new(fileno(f), 0);
 
     if (optind == argc) {
 	/* Deliver to global mailbox */
@@ -200,8 +203,9 @@ char *user;
     }
 
     if (!r) {
-	rewind(f);
-	r = append_fromstream(&mailbox, f, 0, time(0), flag, nflags, authuser);
+	prot_rewind(prot_f);
+	r = append_fromstream(&mailbox, prot_f, 0, time(0), flag, nflags,
+			      authuser);
 	mailbox_close(&mailbox);
     }
 

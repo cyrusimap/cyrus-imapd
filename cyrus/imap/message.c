@@ -29,6 +29,7 @@
 #include <syslog.h>
 
 #include "imap_err.h"
+#include "prot.h"
 #include "mailbox.h"
 #include "parseadd.h"
 #include "charset.h"
@@ -133,11 +134,12 @@ static int message_ibuf_write(), message_ibuf_free(), message_free_body();
  */
 int
 message_copy_byline(from, to)
-FILE *from, *to;
+struct protstream *from;
+FILE *to;
 {
     char buf[4096], *p;
 
-    while (fgets(buf, sizeof(buf)-1, from)) {
+    while (prot_fgets(buf, sizeof(buf)-1, from)) {
 	p = buf + strlen(buf) - 1;
 	if (*p == '\n') {
 	    if (p == buf || p[-1] != '\r') {
@@ -151,13 +153,20 @@ FILE *from, *to;
 	     * We were unlucky enough to get a CR just before we ran
 	     * out of buffer--put it back.
 	     */
-	    ungetc('\r', from);
+	    prot_ungetc('\r', from);
 	    *p = '\0';
 	}
 	fputs(buf, to);
     }
     fflush(to);
-    if (ferror(from) || ferror(to) || fsync(fileno(to))) return IMAP_IOERROR;
+    if (p = prot_error(from)) {
+	syslog(LOG_ERR, "IOERROR: reading message: %s", p);
+	return IMAP_IOERROR;
+    }
+    if (ferror(to) || fsync(fileno(to))) {
+	syslog(LOG_ERR, "IOERROR: writing message: %m");
+	return IMAP_IOERROR;
+    }
     return 0;
 }
 
@@ -167,8 +176,9 @@ FILE *from, *to;
  */
 int
 message_copy_strict(from, to, size)
-FILE *from;
+struct protstream *from;
 FILE *to;
+int size;
 {
     char buf[4096+1];
     unsigned char *p;
@@ -177,7 +187,7 @@ FILE *to;
     int sawcr = 0, sawnl;
 
     while (size) {
-	n = fread(buf, 1, size > 4096 ? 4096 : size, from);
+	n = prot_read(from, buf, size > 4096 ? 4096 : size);
 	if (!n) {
 	    syslog(LOG_ERR, "IOERROR: reading message: %m");
 	    return IMAP_IOERROR;

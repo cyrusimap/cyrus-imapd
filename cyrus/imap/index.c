@@ -168,7 +168,7 @@ int checkseen;
 			  (oldexists-msgno-nexpunge+1)*sizeof(*seenflag));
 		    oldexists -= nexpunge;
 		    while (nexpunge--) {
-			printf("* %d EXPUNGE\r\n", msgno);
+			prot_printf(imapd_out, "* %d EXPUNGE\r\n", msgno);
 		    }
 		}
 	    }
@@ -215,7 +215,7 @@ int checkseen;
 	}
 	if (r) {
 	    seendb = 0;
-	    printf("* NO %s: %s\r\n",
+	    prot_printf(imapd_out, "* NO %s: %s\r\n",
 		   error_message(IMAP_NO_CHECKPRESERVE), error_message(r));
 	}
 	else {
@@ -255,7 +255,7 @@ int checkseen;
 
 	checkseen = 1;
 	imapd_exists = newexists;
-	printf("* %d EXISTS\r\n* %d RECENT\r\n", imapd_exists,
+	prot_printf(imapd_out, "* %d EXISTS\r\n* %d RECENT\r\n", imapd_exists,
 	       imapd_exists-lastnotrecent);
     }
 
@@ -263,7 +263,7 @@ int checkseen;
     if (checkseen) index_checkseen(mailbox, 0, usinguid, oldexists);
     if (oldexists == -1 && imapd_exists) {
 	for (i = 1; i <= imapd_exists && seenflag[i]; i++);
-	if (i <= imapd_exists) printf("* OK [UNSEEN %d] \r\n", i);
+	if (i <= imapd_exists) prot_printf(imapd_out, "* OK [UNSEEN %d] \r\n", i);
     }
     for (msgno = 1; msgno <= oldexists; msgno++) {
 	if (flagreport[msgno] && flagreport[msgno] < LAST_UPDATED(msgno)) {
@@ -272,8 +272,8 @@ int checkseen;
 	    }
 	    index_fetchflags(mailbox, msgno, SYSTEM_FLAGS(msgno), user_flags,
 			     LAST_UPDATED(msgno));
-	    if (usinguid) printf(" UID %d", UID(msgno));
-	    printf(")\r\n");
+	    if (usinguid) prot_printf(imapd_out, " UID %d", UID(msgno));
+	    prot_printf(imapd_out, ")\r\n");
 	}
     }
 }
@@ -312,7 +312,7 @@ int oldexists;
     /* Lock \Seen database and read current values */
     r = seen_lockread(seendb, &last_time, &last_uid, &newseenuids);
     if (r) {
-	printf("* NO %s: %s\r\n",
+	prot_printf(imapd_out, "* NO %s: %s\r\n",
 	       error_message(IMAP_NO_CHECKSEEN), error_message(r));
 	return;
     }
@@ -369,8 +369,8 @@ int oldexists;
 		    }
 		    index_fetchflags(mailbox, msgno, SYSTEM_FLAGS(msgno), user_flags,
 				     LAST_UPDATED(msgno));
-		    if (usinguid) printf(" UID %d", UID(msgno));
-		    printf(")\r\n");
+		    if (usinguid) prot_printf(imapd_out, " UID %d", UID(msgno));
+		    prot_printf(imapd_out, ")\r\n");
 		}
 	    }
 	}
@@ -518,7 +518,7 @@ int oldexists;
     seen_unlock(seendb);
     free(seenuids);
     if (r) {
-	printf("* NO %s: %s\r\n",
+	prot_printf(imapd_out, "* NO %s: %s\r\n",
 	       error_message(IMAP_NO_CHECKSEEN), error_message(r));
 	free(saveseenuids);
 	seenuids = newseenuids;
@@ -705,18 +705,18 @@ int usinguid;
     int msgno;
     FILE *msgfile = 0;
 
-    printf("* SEARCH");
+    prot_printf(imapd_out, "* SEARCH");
 
     for (msgno = 1; msgno <= imapd_exists; msgno++) {
 	if (index_search_evaluate(mailbox, searchargs, msgno, &msgfile)) {
-	    printf(" %d", usinguid ? UID(msgno) : msgno);
+	    prot_printf(imapd_out, " %d", usinguid ? UID(msgno) : msgno);
 	}
 	if (msgfile) {
 	    fclose(msgfile);
 	    msgfile = 0;
 	}
     }
-    printf("\r\n");
+    prot_printf(imapd_out, "\r\n");
 }
 
 /*
@@ -936,12 +936,12 @@ int octet_count;
 
     /* If no data, output null quoted string */
     if (!msgfile || size == 0) {
-	printf("\"\"");
+	prot_printf(imapd_out, "\"\"");
 	return;
     }
 
     /* Write size of literal */
-    printf("{%d}\r\n", size);
+    prot_printf(imapd_out, "{%d}\r\n", size);
 
     if (format == MAILBOX_FORMAT_NETNEWS) {
 	/* Have to fetch line-by-line, converting LF to CRLF */
@@ -949,7 +949,7 @@ int octet_count;
 	while (size) {
 	    if (!fgets(buf, sizeof(buf)-1, msgfile)) {
 		/* Read error, resynch client */
-		while (size--) putc(' ', stdout);
+		while (size--) prot_putc(' ', imapd_out);
 		return;
 	    }
 	    p = buf + strlen(buf);
@@ -966,7 +966,7 @@ int octet_count;
 	    else {
 		/* Skip over (possibly zero) first part of line */
 		n -= start_octet;
-		fwrite(buf + start_octet, 1, n, stdout);
+		prot_write(imapd_out, buf + start_octet, n);
 		start_octet = 0;
 		size -= n;
 	    }
@@ -980,10 +980,10 @@ int octet_count;
 	    n = fread(buf, 1, size>sizeof(buf) ? sizeof(buf) : size, msgfile);
 	    if (n == 0) {
 		/* Read error, resynch client */
-		while (size--) putc(' ', stdout);
+		while (size--) prot_putc(' ', imapd_out);
 		return;
 	    }
-	    fwrite(buf, 1, n, stdout);
+	    prot_write(imapd_out, buf, n);
 	    size -= n;
 	}
     }
@@ -1039,7 +1039,7 @@ int octet_count;
     return;
 
  badpart:
-    printf("NIL");
+    prot_printf(imapd_out, "NIL");
 }
 
 /*
@@ -1164,7 +1164,7 @@ struct strlist *headers_not;
 
     /* If no data, output null quoted string */
     if (!msgfile) {
-	printf("\"\"");
+	prot_printf(imapd_out, "\"\"");
 	return;
     }
 
@@ -1174,9 +1174,7 @@ struct strlist *headers_not;
     index_pruneheader(buf, headers, headers_not);
 
     size = strlen(buf);
-    printf("{%d}\r\n", size+2);
-    fputs(buf, stdout);
-    printf("\r\n");		/* Delimiting blank line */
+    prot_printf(imapd_out, "{%d}\r\n%s\r\n", size+2, buf);
 }
 
 /*
@@ -1211,9 +1209,7 @@ struct strlist *headers;
     index_pruneheader(buf, headers, 0);
 
     size = strlen(buf);
-    printf("{%d}\r\n", size+2);
-    fputs(buf, stdout);
-    printf("\r\n");		/* Delimiting blank line */
+    prot_printf(imapd_out, "{%d}\r\n%s\r\n", size+2, buf);
 }
 
 /*
@@ -1227,38 +1223,38 @@ struct mailbox *mailbox;
     int cancreate = 0;
     char sepchar = '(';
 
-    printf("* FLAGS (\\Answered \\Flagged \\Deleted \\Seen");
+    prot_printf(imapd_out, "* FLAGS (\\Answered \\Flagged \\Deleted \\Seen");
     for (i = 0; i < MAX_USER_FLAGS; i++) {
 	if (mailbox->flagname[i]) {
-	    printf(" %s", mailbox->flagname[i]);
+	    prot_printf(imapd_out, " %s", mailbox->flagname[i]);
 	}
 	else cancreate++;
     }
-    printf(")\r\n* OK [PERMANENTFLAGS ");
+    prot_printf(imapd_out, ")\r\n* OK [PERMANENTFLAGS ");
     if (mailbox->myrights & ACL_WRITE) {
-	printf("%c\\Answered \\Flagged", sepchar);
+	prot_printf(imapd_out, "%c\\Answered \\Flagged", sepchar);
 	sepchar = ' ';
     }
     if (mailbox->myrights & ACL_DELETE) {
-	printf("%c\\Deleted", sepchar);
+	prot_printf(imapd_out, "%c\\Deleted", sepchar);
 	sepchar = ' ';
     }
     if (mailbox->myrights & ACL_SEEN) {
-	printf("%c\\Seen", sepchar);
+	prot_printf(imapd_out, "%c\\Seen", sepchar);
 	sepchar = ' ';
     }
     if (mailbox->myrights & ACL_WRITE) {
 	for (i = 0; i < MAX_USER_FLAGS; i++) {
 	    if (mailbox->flagname[i]) {
-		printf(" %s", mailbox->flagname[i]);
+		prot_printf(imapd_out, " %s", mailbox->flagname[i]);
 	    }
 	}
 	if (cancreate) {
-	    printf(" \\*");
+	    prot_printf(imapd_out, " \\*");
 	}
     }
-    if (sepchar == '(') printf("(");
-    printf(")] \r\n");
+    if (sepchar == '(') prot_printf(imapd_out, "(");
+    prot_printf(imapd_out, ")] \r\n");
 }
 
 /*
@@ -1289,26 +1285,26 @@ time_t last_updated;
 	}
     }
 
-    printf("* %d FETCH (FLAGS ", msgno);
+    prot_printf(imapd_out, "* %d FETCH (FLAGS ", msgno);
 
     if (msgno > lastnotrecent) {
-	printf("%c\\Recent", sepchar);
+	prot_printf(imapd_out, "%c\\Recent", sepchar);
 	sepchar = ' ';
     }
     if (system_flags & FLAG_ANSWERED) {
-	printf("%c\\Answered", sepchar);
+	prot_printf(imapd_out, "%c\\Answered", sepchar);
 	sepchar = ' ';
     }
     if (system_flags & FLAG_FLAGGED) {
-	printf("%c\\Flagged", sepchar);
+	prot_printf(imapd_out, "%c\\Flagged", sepchar);
 	sepchar = ' ';
     }
     if (system_flags & FLAG_DELETED) {
-	printf("%c\\Deleted", sepchar);
+	prot_printf(imapd_out, "%c\\Deleted", sepchar);
 	sepchar = ' ';
     }
     if (seenflag[msgno]) {
-	printf("%c\\Seen", sepchar);
+	prot_printf(imapd_out, "%c\\Seen", sepchar);
 	sepchar = ' ';
     }
     for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
@@ -1316,12 +1312,12 @@ time_t last_updated;
 	    flagmask = user_flags[flag/32];
 	}
 	if (mailbox->flagname[flag] && (flagmask & (1<<(flag & 31)))) {
-	    printf("%c%s", sepchar, mailbox->flagname[flag]);
+	    prot_printf(imapd_out, "%c%s", sepchar, mailbox->flagname[flag]);
 	    sepchar = ' ';
 	}
     }
-    if (sepchar == '(') putc('(', stdout);
-    putc(')', stdout);
+    if (sepchar == '(') prot_putc('(', imapd_out);
+    prot_putc(')', imapd_out);
 
     flagreport[msgno] = last_updated;
 }
@@ -1349,9 +1345,9 @@ char *rock;
 	fetchargs->bodysections || fetchargs->headers_not) {
 	msgfile = fopen(mailbox_message_fname(mailbox, UID(msgno)), "r");
 	if (!msgfile) {
-	    printf("* NO ");
-	    printf(error_message(IMAP_NO_MSGGONE), msgno);
-	    printf("\r\n");
+	    prot_printf(imapd_out, "* NO ");
+	    prot_printf(imapd_out, error_message(IMAP_NO_MSGGONE), msgno);
+	    prot_printf(imapd_out, "\r\n");
 	}
     }
 
@@ -1372,11 +1368,11 @@ char *rock;
 	sepchar = ' ';
     }
     else {
-	printf("* %d FETCH ", msgno);
+	prot_printf(imapd_out, "* %d FETCH ", msgno);
 	sepchar = '(';
     }
     if (fetchitems & FETCH_UID) {
-	printf("%cUID %d", sepchar, UID(msgno));
+	prot_printf(imapd_out, "%cUID %d", sepchar, UID(msgno));
 	sepchar = ' ';
     }
     if (fetchitems & FETCH_INTERNALDATE) {
@@ -1389,71 +1385,71 @@ char *rock;
 
 	if (gmtoff < 0) gmtoff = -gmtoff;
 	gmtoff /= 60;
-	printf("%cINTERNALDATE \"%2d-%s-%d %.2d:%.2d:%.2d %c%.2d%.2d\"",
+	prot_printf(imapd_out, "%cINTERNALDATE \"%2d-%s-%d %.2d:%.2d:%.2d %c%.2d%.2d\"",
 	       sepchar, tm->tm_mday, monthname[tm->tm_mon], tm->tm_year+1900,
 	       tm->tm_hour, tm->tm_min, tm->tm_sec,
 	       tm->tm_gmtoff < 0 ? '-' : '+', gmtoff/60, gmtoff%60);
 	sepchar = ' ';
     }
     if (fetchitems & FETCH_SIZE) {
-	printf("%cRFC822.SIZE %d", sepchar, SIZE(msgno));
+	prot_printf(imapd_out, "%cRFC822.SIZE %d", sepchar, SIZE(msgno));
 	sepchar = ' ';
     }
     if (fetchitems & FETCH_ENVELOPE) {
-	printf("%cENVELOPE ", sepchar);
+	prot_printf(imapd_out, "%cENVELOPE ", sepchar);
 	sepchar = ' ';
 	cacheitem = cache_base + CACHE_OFFSET(msgno);
-	fwrite(cacheitem+4, 1, CACHE_ITEM_LEN(cacheitem), stdout);
+	prot_write(imapd_out, cacheitem+4, CACHE_ITEM_LEN(cacheitem));
     }
     if (fetchitems & FETCH_BODYSTRUCTURE) {
-	printf("%cBODYSTRUCTURE ", sepchar);
+	prot_printf(imapd_out, "%cBODYSTRUCTURE ", sepchar);
 	sepchar = ' ';
 	cacheitem = cache_base + CACHE_OFFSET(msgno);
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip envelope */
-	fwrite(cacheitem+4, 1, CACHE_ITEM_LEN(cacheitem), stdout);
+	prot_write(imapd_out, cacheitem+4, CACHE_ITEM_LEN(cacheitem));
     }
     if (fetchitems & FETCH_BODY) {
-	printf("%cBODY ", sepchar);
+	prot_printf(imapd_out, "%cBODY ", sepchar);
 	sepchar = ' ';
 	cacheitem = cache_base + CACHE_OFFSET(msgno);
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip envelope */
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bodystructure */
-	fwrite(cacheitem+4, 1, CACHE_ITEM_LEN(cacheitem), stdout);
+	prot_write(imapd_out, cacheitem+4, CACHE_ITEM_LEN(cacheitem));
     }
 
     if (fetchitems & FETCH_HEADER) {
-	printf("%cRFC822.HEADER ", sepchar);
+	prot_printf(imapd_out, "%cRFC822.HEADER ", sepchar);
 	sepchar = ' ';
 	index_fetchmsg(msgfile, mailbox->format, 0, HEADER_SIZE(msgno),
 		       fetchargs->start_octet, fetchargs->octet_count);
     }
     else if ((fetchitems & FETCH_UNCACHEDHEADER) || fetchargs->headers_not) {
-	printf("%cRFC822.HEADER ", sepchar);
+	prot_printf(imapd_out, "%cRFC822.HEADER ", sepchar);
 	sepchar = ' ';
 	index_fetchheader(msgfile, mailbox->format, HEADER_SIZE(msgno),
 			  fetchargs->headers, fetchargs->headers_not);
     }
     else if (fetchargs->headers) {
-	printf("%cRFC822.HEADER ", sepchar);
+	prot_printf(imapd_out, "%cRFC822.HEADER ", sepchar);
 	sepchar = ' ';
 	index_fetchcacheheader(msgno, fetchargs->headers);
     }
 
     if (fetchitems & FETCH_TEXT) {
-	printf("%cRFC822.TEXT ", sepchar);
+	prot_printf(imapd_out, "%cRFC822.TEXT ", sepchar);
 	sepchar = ' ';
 	index_fetchmsg(msgfile, mailbox->format, CONTENT_OFFSET(msgno),
 		       SIZE(msgno) - HEADER_SIZE(msgno),
 		       fetchargs->start_octet, fetchargs->octet_count);
     }
     if (fetchitems & FETCH_RFC822) {
-	printf("%cRFC822 ", sepchar);
+	prot_printf(imapd_out, "%cRFC822 ", sepchar);
 	sepchar = ' ';
 	index_fetchmsg(msgfile, mailbox->format, 0, SIZE(msgno),
 		       fetchargs->start_octet, fetchargs->octet_count);
     }
     for (section = fetchargs->bodysections; section; section = section->next) {
-	printf("%cBODY[%s] ", sepchar, section->s);
+	prot_printf(imapd_out, "%cBODY[%s] ", sepchar, section->s);
 	sepchar = ' ';
 	cacheitem = cache_base + CACHE_OFFSET(msgno);
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip envelope */
@@ -1463,7 +1459,7 @@ char *rock;
 	index_fetchsection(msgfile, mailbox->format, section->s, cacheitem,
 			   fetchargs->start_octet, fetchargs->octet_count);
     }
-    printf(")\r\n");
+    prot_printf(imapd_out, ")\r\n");
     if (msgfile) fclose(msgfile);
     return 0;
 }
@@ -1492,9 +1488,9 @@ char *rock;
     index_fetchflags(mailbox, msgno, SYSTEM_FLAGS(msgno), user_flags,
 		     LAST_UPDATED(msgno));
     if (storeargs->usinguid) {
-	printf(" UID %d", UID(msgno));
+	prot_printf(imapd_out, " UID %d", UID(msgno));
     }
-    printf(")\r\n");
+    prot_printf(imapd_out, ")\r\n");
 
     return 0;
 }
@@ -1616,9 +1612,9 @@ char *rock;
 	index_fetchflags(mailbox, msgno, record.system_flags,
 			 record.user_flags, record.last_updated);
 	if (storeargs->usinguid) {
-	    printf(" UID %d", UID(msgno));
+	    prot_printf(imapd_out, " UID %d", UID(msgno));
 	}
-	printf(")\r\n");
+	prot_printf(imapd_out, ")\r\n");
 
 	if (dirty && mid) {
 	    r = mailbox_write_index_record(mailbox, mid, &record);

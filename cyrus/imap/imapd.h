@@ -126,5 +126,6 @@ struct searchargs {
     struct searchsub *sublist;
 };
 
+#include "prot.h"
 
-
+extern struct protstream *imapd_out, *imapd_in;
