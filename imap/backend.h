@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.h,v 1.1 2002/03/14 20:02:02 rjs3 Exp $ */
+/* $Id: backend.h,v 1.2 2002/03/14 21:19:25 rjs3 Exp $ */
 
 #ifndef _INCLUDED_BACKEND_H
 #define _INCLUDED_BACKEND_H
@@ -71,7 +71,10 @@ struct backend {
     struct protstream *out; /* to the be server */
 };
 
-struct backend *findserver(const char *server, const char *userid);
+/* if cache is NULL, returns a new struct backend, otherwise returns
+ * cache on success (and returns NULL on failure, but leaves cache alone) */
+struct backend *findserver(struct backend *cache, const char *server,
+			   const char *userid);
 void downserver(struct backend *s);
 
 #define CAPA(s, c) ((s)->capability & (c))

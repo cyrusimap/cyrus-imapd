@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.1 2002/03/14 20:02:02 rjs3 Exp $ */
+/* $Id: backend.c,v 1.2 2002/03/14 21:19:25 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -158,7 +158,6 @@ static int backend_authenticate(struct backend *s, const char *userid)
     char remoteip[60], localip[60];
     socklen_t addrsize;
     sasl_callback_t *cb;
-    char mytag[128];
     char buf[2048];
     char optstr[128];
     char *in, *p;
@@ -228,7 +227,7 @@ static int backend_authenticate(struct backend *s, const char *userid)
 
     in = NULL;
     inlen = 0;
-    r = mysasl_getauthline(s->in, mytag, &in, &inlen);
+    r = mysasl_getauthline(s->in, "A01", &in, &inlen);
     while (r == SASL_CONTINUE) {
 	r = sasl_client_step(s->saslconn, in, inlen, NULL, &out, &outlen);
 	if (in) { 
@@ -246,7 +245,7 @@ static int backend_authenticate(struct backend *s, const char *userid)
 	prot_write(s->out, buf, b64len);
 	prot_printf(s->out, "\r\n");
 
-	r = mysasl_getauthline(s->in, mytag, &in, &inlen);
+	r = mysasl_getauthline(s->in, "A01", &in, &inlen);
     }
 
     free_callbacks(cb);
@@ -260,14 +259,31 @@ static int backend_authenticate(struct backend *s, const char *userid)
     return r;
 }
 
-struct backend *findserver(const char *server, const char *userid) 
+struct backend *findserver(struct backend *ret, const char *server,
+			   const char *userid) 
 {
-    struct backend *ret = NULL;
-    
     /* need to (re)establish connection to server or create one */
     int sock;
     int r;
-    
+
+    if (!ret) {
+	struct hostent *hp;
+
+	ret = xmalloc(sizeof(struct backend));
+	memset(ret, 0, sizeof(struct backend));
+	ret->hostname = xstrdup(server);
+	if ((hp = gethostbyname(server)) == NULL) {
+	    syslog(LOG_ERR, "gethostbyname(%s) failed: %m", server);
+	    free(ret);
+	    return NULL;
+	}
+	ret->addr.sin_family = AF_INET;
+	memcpy(&ret->addr.sin_addr, hp->h_addr, hp->h_length);
+	ret->addr.sin_port = htons(143);
+
+	ret->timeout = NULL;
+    }
+
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
 	syslog(LOG_ERR, "socket() failed: %m");
 	free(ret);

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.350 2002/03/14 20:02:02 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.351 2002/03/14 21:19:25 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -1526,7 +1526,25 @@ cmdloop()
 		cmd_undump(tag.s, arg1.s);
 	    /*	snmp_increment(UNDUMP_COUNT, 1);*/
 	    }
+	    else goto badcmd;
+	    break;
 
+	case 'X':
+	    if (!strcmp(cmd.s, "Xfer")) {
+		/* Dest Server */
+		if(c != ' ') goto missingargs;
+		c = getastring(imapd_in, imapd_out, &arg1);
+
+		/* Mailbox */
+		if(c != ' ') goto missingargs;
+		c = getastring(imapd_in, imapd_out, &arg2);
+		
+		if (c == '\r') c = prot_getc(imapd_in);
+		if (c != '\n') goto extraargs;
+
+		cmd_xfer(tag.s, arg1.s, arg2.s);
+	    /*	snmp_increment(XFER_COUNT, 1);*/
+	    }
 	    else goto badcmd;
 	    break;
 
@@ -5611,6 +5629,61 @@ void cmd_undump(char *tag, char *name)
 						 imapd_userid, imapd_authstate,
 						 NULL, NULL) == 0)
 		    ? "[TRYCREATE] " : "", error_message(r));
+    } else {
+	prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED));
+    }
+}
+
+void cmd_xfer(char *tag, char *toserver, char *name) 
+{
+    int r = 0;
+    char mailboxname[MAX_MAILBOX_NAME+1];
+    char *path;
+    struct backend *be = NULL;
+    
+    /* administrators only please */
+    if (!imapd_userisadmin) {
+	r = IMAP_PERMISSION_DENIED;
+    }
+
+    if (!r) {
+	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
+						   imapd_userid, mailboxname);
+    }
+    
+    if (!r) {
+	r = mlookup(tag, name, mailboxname, &path, NULL, NULL);
+    }
+    if (r == IMAP_MAILBOX_MOVED) return;
+
+    /* Okay, we have the mailbox, now the order of steps is:
+     *
+     * 1) Connect to remote server.
+     * 2) LOCALCREATE on remote server
+     * 3) mupdate.DEACTIVATE(mailbox, remoteserver) xxx what partition?
+     * 4) undump mailbox from local to remote
+     * 5) reconstruct remote mailbox
+     * 6) mupdate.ACTIVATE(mailbox, remoteserver)
+     * ** MAILBOX NOW LIVING ON REMOTE SERVER
+     * 7) local delete of mailbox
+     * 8) remove local remote mailbox entry??????
+     */
+
+    /* Step 1: Connect to remote server */
+    if(!r) {
+	/* Just authorize as the IMAP server, so pass "" as our authzid */
+	be = findserver(NULL, toserver, "");
+	if(!be) r = IMAP_SERVER_UNAVAILABLE;
+    }
+
+ done:
+    if(be) downserver(be);
+
+    if (r) {
+	prot_printf(imapd_out, "%s NO %s\r\n",
+		    tag,
+		    error_message(r));
     } else {
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));

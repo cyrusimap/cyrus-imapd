@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.106 2002/03/14 20:02:03 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.107 2002/03/14 21:19:25 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -646,27 +646,9 @@ struct backend *proxyd_findserver(char *server)
 	i++;
     }
 
-    if (!ret) {
-	struct hostent *hp;
-
-	ret = xmalloc(sizeof(struct backend));
-	memset(ret, 0, sizeof(struct backend));
-	ret->hostname = xstrdup(server);
-	if ((hp = gethostbyname(server)) == NULL) {
-	    syslog(LOG_ERR, "gethostbyname(%s) failed: %m", server);
-	    free(ret);
-	    return NULL;
-	}
-	ret->addr.sin_family = AF_INET;
-	memcpy(&ret->addr.sin_addr, hp->h_addr, hp->h_length);
-	ret->addr.sin_port = htons(143);
-
-	ret->timeout = NULL;
-    }
- 	
-    if (!ret->timeout) {
+    if (!ret || !ret->timeout) {
 	/* need to (re)establish connection to server or create one */
-	ret = findserver(server, proxyd_userid);
+	ret = findserver(ret, server, proxyd_userid);
 	if(!ret) return NULL;
 
 	/* add the timeout */
@@ -676,8 +658,8 @@ struct backend *proxyd_findserver(char *server)
 
     ret->timeout->mark = time(NULL) + IDLE_TIMEOUT;
 
+    /* insert server in list of cached connections */
     if (!backend_cached[i]) {
-	/* insert server in list of cached connections */
 	backend_cached = (struct backend **) 
 	    xrealloc(backend_cached, (i + 2) * sizeof(struct backend *));
 	backend_cached[i] = ret;
