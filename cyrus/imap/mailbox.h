@@ -41,6 +41,7 @@ typedef unsigned bit32;
 #define FNAME_INDEX "/cyrus.index"
 #define FNAME_CACHE "/cyrus.cache"
 #define FNAME_QUOTADIR "/quota/"
+#define FNAME_LOGDIR "/log/"
 
 #define QUOTA_UNITS (1024)
 
