@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.81 1998/10/29 20:16:29 tjs Exp $
+ * $Id: index.c,v 1.82 1999/03/01 20:35:33 tjs Exp $
  */
 #include <stdio.h>
 #include <string.h>
@@ -1078,6 +1078,8 @@ struct mailbox *mailbox;
     return 0;
 }
 
+#if 0
+/* What's this for?  Might as well keep it around. */
 /*
  * Performs a XCHECKSTATE command
  */
@@ -1108,7 +1110,7 @@ unsigned seendate;
 	    prot_printf(imapd_out,
 			"* XCHECKSTATE %u:%u\r\n", UID(1), UID(imapd_exists));
 	}
-	return;
+	return 0;
     }
 
     prot_printf(imapd_out, "* XCHECKSTATE");
@@ -1139,6 +1141,7 @@ unsigned seendate;
     prot_printf(imapd_out, "\r\n");
     return 0;
 }
+#endif
 
 /*
  * Returns the msgno of the message with UID 'uid'.
