@@ -1,6 +1,6 @@
 /* mupdate-client.h -- cyrus murder database clients
  *
- * $Id: mupdate-client.h,v 1.11 2002/02/23 00:30:09 rjs3 Exp $
+ * $Id: mupdate-client.h,v 1.12 2002/03/14 18:32:47 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -65,6 +65,10 @@ int mupdate_activate(mupdate_handle *handle,
 /* reserve a piece of namespace */
 int mupdate_reserve(mupdate_handle *handle,
 		    const char *mailbox, const char *server);
+
+/* deactivate a mailbox (ACTIVE->RESERVE) */
+int mupdate_deactivate(mupdate_handle *handle,
+		       const char *mailbox, const char *server);
 
 /* delete a mailbox */
 int mupdate_delete(mupdate_handle *handle,

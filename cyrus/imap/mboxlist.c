@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.172 2002/03/05 16:18:15 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.173 2002/03/14 18:32:46 rjs3 Exp $
  */
 
 #include <config.h>
@@ -307,7 +307,7 @@ mboxlist_mycreatemailboxcheck(char *name, int mbtype, char *partition,
 			      int isadmin, char *userid, 
 			      struct auth_state *auth_state, 
 			      char **newacl, char **newpartition,
-			      int RMW, struct txn **tid)
+			      int RMW, int localonly, struct txn **tid)
 {
     int r;
     char *p;
@@ -327,6 +327,9 @@ mboxlist_mycreatemailboxcheck(char *name, int mbtype, char *partition,
     }
     r = mboxname_policycheck(name);
     if (r) return r;
+
+    /* you must be a real admin to create a local-only mailbox */
+    if(!isadmin && localonly) return IMAP_PERMISSION_DENIED;
 
     /* User has admin rights over their own mailbox namespace */
     if (mboxname_userownsmailbox(userid, name)) {
@@ -484,7 +487,7 @@ mboxlist_createmailboxcheck(char *name, int mbtype, char *partition,
 {
     return mboxlist_mycreatemailboxcheck(name, mbtype, partition, isadmin,
 					 userid, auth_state, newacl, 
-					 newpartition, 0, NULL);
+					 newpartition, 0, 0, NULL);
 }
 
 /*
@@ -502,8 +505,9 @@ mboxlist_createmailboxcheck(char *name, int mbtype, char *partition,
  */
 
 int mboxlist_createmailbox(char *name, int mbtype, char *partition, 
-				int isadmin, char *userid, 
-				struct auth_state *auth_state)
+			   int isadmin, char *userid, 
+			   struct auth_state *auth_state,
+			   int localonly)
 {
     int r;
     char *acl = NULL;
@@ -525,7 +529,8 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
     /* 2. verify ACL's to best of ability (CRASH: abort) */
     r = mboxlist_mycreatemailboxcheck(name, mbtype, partition, isadmin, 
 				      userid, auth_state, 
-				      &acl, &newpartition, 1, &tid);
+				      &acl, &newpartition, 1, localonly,
+				      &tid);
     switch (r) {
     case 0:
 	break;
@@ -550,7 +555,7 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
     }
 
     /* 4. Create mupdate reservation */
-    if (mupdate_server) {
+    if (mupdate_server && !localonly) {
 	r = mupdate_connect(mupdate_server, NULL, &mupdate_h, NULL);
 	if(r) {
 	    syslog(LOG_ERR,
@@ -652,7 +657,7 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 
     /* 9. set MUPDATE entry as commited (CRASH: commited) */
     /* xxx maybe we should roll back if this fails? */
-    if (!r && mupdate_server) {
+    if (!r && mupdate_server && !localonly) {
 	/* commit the mailbox in MUPDATE */
 	sprintf(buf, "%s!%s", config_servername, newpartition);
 	    
@@ -982,7 +987,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	}
 	r = mboxlist_mycreatemailboxcheck(newname, 0, partition, isadmin, 
 					  userid, auth_state, NULL, 
-					  &newpartition, 1, &tid);
+					  &newpartition, 1, 0, &tid);
 	switch (r) {
 	case 0:
 	    break;

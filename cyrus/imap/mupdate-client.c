@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.28 2002/03/12 18:55:34 rjs3 Exp $
+ * $Id: mupdate-client.c,v 1.29 2002/03/14 18:32:47 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -452,6 +452,32 @@ int mupdate_reserve(mupdate_handle *handle,
 
     prot_printf(handle->pout,
 		"X%u RESERVE {%d+}\r\n%s {%d+}\r\n%s\r\n",
+		handle->tagn++, strlen(mailbox), mailbox, 
+		strlen(server), server);
+
+    ret = mupdate_scarf(handle, mupdate_scarf_one, &called, 1, &response);
+    if (ret) {
+	return ret;
+    } else if (response != MUPDATE_OK) {
+	return MUPDATE_FAIL_RESERVE;
+    } else {
+	return 0;
+    }
+}
+
+int mupdate_deactivate(mupdate_handle *handle,
+		       const char *mailbox, const char *server)
+{
+    int ret;
+    int called = 0;
+    enum mupdate_cmd_response response;
+    
+    if (!handle) return MUPDATE_BADPARAM;
+    if (!mailbox || !server) return MUPDATE_BADPARAM;
+    if (!handle->saslcompleted) return MUPDATE_NOAUTH;
+
+    prot_printf(handle->pout,
+		"X%u DEACTIVATE {%d+}\r\n%s {%d+}\r\n%s\r\n",
 		handle->tagn++, strlen(mailbox), mailbox, 
 		strlen(server), server);
 
