@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.92 2002/03/23 00:34:51 ken3 Exp $
+ * $Id: lmtpd.c,v 1.93 2002/04/01 21:15:21 leg Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -175,11 +175,14 @@ static struct namespace lmtpd_namespace;
 /* should we allow users to proxy?  return SASL_OK if yes,
    SASL_BADAUTH otherwise */
 static int mysasl_authproc(sasl_conn_t *conn,
-			   void *context,
-			   const char *requested_user, unsigned rlen,
-			   const char *auth_identity, unsigned alen,
-			   const char *def_realm, unsigned urlen,
-			   struct propctx *propctx)
+			   void *context __attribute__((unused)),
+			   const char *requested_user __attribute__((unused)),
+			   unsigned rlen __attribute__((unused)),
+			   const char *auth_identity, 
+			   unsigned alen __attribute__((unused)),
+			   const char *def_realm __attribute__((unused)),
+			   unsigned urlen __attribute__((unused)),
+			   struct propctx *propctx __attribute__((unused)))
 {
     const char *val;
     char *realm;
@@ -229,7 +232,9 @@ static struct sasl_callback mysasl_cb[] = {
 };
 
 
-int service_init(int argc, char **argv, char **envp)
+int service_init(int argc __attribute__((unused)), 
+		 char **argv __attribute__((unused)), 
+		 char **envp __attribute__((unused)))
 {
     int r;
 
@@ -297,7 +302,8 @@ int service_init(int argc, char **argv, char **envp)
 /*
  * run for each accepted connection
  */
-int service_main(int argc, char **argv, char **envp)
+int service_main(int argc, char **argv, 
+		 char **envp __attribute__((unused)))
 {
     int opt;
 
@@ -597,7 +603,9 @@ int send_forward(char *forwardto, char *return_path, struct protstream *file)
 
 
 static
-int sieve_redirect(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
+int sieve_redirect(void *ac, 
+		   void *ic __attribute__((unused)), 
+		   void *sc, void *mc, const char **errmsg)
 {
     sieve_redirect_context_t *rc = (sieve_redirect_context_t *) ac;
     script_data_t *sd = (script_data_t *) sc;
@@ -633,7 +641,10 @@ int sieve_redirect(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 }
 
 static
-int sieve_discard(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
+int sieve_discard(void *ac __attribute__((unused)), 
+		  void *ic __attribute__((unused)), 
+		  void *sc, void *mc, 
+		  const char **errmsg __attribute__((unused)))
 {
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *md = ((mydata_t *) mc)->m;
@@ -657,7 +668,9 @@ int sieve_discard(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 }
 
 static
-int sieve_reject(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
+int sieve_reject(void *ac, 
+		 void *ic __attribute__((unused)), 
+		 void *sc, void *mc, const char **errmsg)
 {
     sieve_reject_context_t *rc = (sieve_reject_context_t *) ac;
     script_data_t *sd = (script_data_t *) sc;
@@ -690,7 +703,11 @@ int sieve_reject(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 }
 
 static
-int sieve_fileinto(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
+int sieve_fileinto(void *ac, 
+		   void *ic __attribute__((unused)),
+		   void *sc, 
+		   void *mc __attribute__((unused)), 
+		   const char **errmsg __attribute__((unused)))
 {
     sieve_fileinto_context_t *fc = (sieve_fileinto_context_t *) ac;
     script_data_t *sd = (script_data_t *) sc;
@@ -721,7 +738,9 @@ int sieve_fileinto(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 }
 
 static
-int sieve_keep(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
+int sieve_keep(void *ac, 
+	       void *ic __attribute__((unused)),
+	       void *sc, void *mc, const char **errmsg)
 {
     sieve_keep_context_t *kc = (sieve_keep_context_t *) ac;
     script_data_t *sd = (script_data_t *) sc;
@@ -765,10 +784,10 @@ int sieve_keep(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
 }
 
 static int sieve_notify(void *ac,
-			void *interp_context, 
+			void *interp_context __attribute__((unused)), 
 			void *script_context,
-			void *mc,
-			const char **errmsg)
+			void *mc __attribute__((unused)),
+			const char **errmsg __attribute__((unused)))
 {
     const char *notifier = config_getstring("sievenotifier", NULL);
 
@@ -790,7 +809,11 @@ static int sieve_notify(void *ac,
     return SIEVE_OK;
 }
 
-int autorespond(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
+int autorespond(void *ac, 
+		void *ic __attribute__((unused)), 
+		void *sc,
+		void *mc __attribute__((unused)),
+		const char **errmsg __attribute__((unused)))
 {
     sieve_autorespond_context_t *arc = (sieve_autorespond_context_t *) ac;
     script_data_t *sd = (script_data_t *) sc;
@@ -825,7 +848,9 @@ int autorespond(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     return ret;
 }
 
-int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
+int send_response(void *ac, 
+		  void *ic __attribute__((unused)), 
+		  void *sc, void *mc, const char **errmsg)
 {
     FILE *sm;
     const char *smbuf[10];
@@ -919,7 +944,9 @@ sieve_vacation_t vacation = {
 static char *markflags[] = { "\\flagged" };
 static sieve_imapflags_t mark = { markflags, 1 };
 
-int sieve_parse_error_handler(int lineno, const char *msg, void *ic, void *sc)
+int sieve_parse_error_handler(int lineno, const char *msg, 
+			      void *ic __attribute__((unused)),
+			      void *sc)
 {
     script_data_t *sd = (script_data_t *) sc;
     
@@ -929,7 +956,9 @@ int sieve_parse_error_handler(int lineno, const char *msg, void *ic, void *sc)
     return SIEVE_OK;
 }
 
-int sieve_execute_error_handler(const char *msg, void *ic, void *sc, void *mc)
+int sieve_execute_error_handler(const char *msg, 
+				void *ic  __attribute__((unused)), 
+				void *sc, void *mc)
 {
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *md = ((mydata_t *) mc)->m;
@@ -1111,7 +1140,7 @@ int deliver_mailbox(struct protstream *msg,
 
     if (!r) {
 	r = append_setup(&as, namebuf, MAILBOX_FORMAT_NORMAL,
-			 user, authstate, acloverride ? 0 : ACL_POST, 
+			 authuser, authstate, acloverride ? 0 : ACL_POST, 
 			 quotaoverride ? -1 : 0);
     }
 
@@ -1397,8 +1426,8 @@ char *generate_notify(message_data_t *m)
 {
     const char **body;
     char *ret = NULL;
-    int len = 0;
-    int pos = 0;
+    unsigned int len = 0;
+    unsigned int pos = 0;
     int i;
 
     for (i = 0; notifyheaders[i]; i++) {
