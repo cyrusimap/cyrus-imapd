@@ -42,13 +42,19 @@
 
 #include "auth.h"
 
-#if UINT_MAX == 4294967295
+#ifdef __STDC__
+#define BIT32_MAX 4294967295u
+#else
+#define BIT32_MAX 4294967295
+#endif
+
+#if UINT_MAX == BIT32_MAX
 typedef unsigned int bit32;
 #else
-#if ULONG_MAX == 4294967295
+#if ULONG_MAX == BIT32_MAX
 typedef unsigned long bit32;
 #else
-#if USHRT_MAX == 4294967295
+#if USHRT_MAX == BIT32_MAX
 typedef unsigned short bit32;
 #else
 dont know what to use for bit32
@@ -66,7 +72,7 @@ dont know what to use for bit32
 #define MAILBOX_FORMAT_NORMAL	0
 #define MAILBOX_FORMAT_NETNEWS	1
 
-#define MAILBOX_MINOR_VERSION	1
+#define MAILBOX_MINOR_VERSION	2
 
 #define FNAME_HEADER "/cyrus.header"
 #define FNAME_INDEX "/cyrus.index"
