@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.16 2002/01/16 17:56:37 rjs3 Exp $
+ * $Id: mupdate.c,v 1.17 2002/01/17 19:30:41 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -148,6 +148,31 @@ static int reset_saslconn(struct conn *c);
 void database_init();
 void sendupdates(struct conn *C);
 
+/* --- prototypes in mupdate-client.c */
+void *mupdate_client_start(void *rock);
+
+/* --- mutex wrapper functions for SASL */
+void *my_mutex_new(void)
+{
+    pthread_mutex_t *ret = (pthread_mutex_t *)xmalloc(sizeof(pthread_mutex_t));
+
+    pthread_mutex_init(ret, NULL);
+
+    return ret;
+}
+
+int my_mutex_destroy(pthread_mutex_t *m)
+{
+    if(!m) return SASL_BADPARAM;
+    
+    if(pthread_mutex_destroy(m)) return SASL_FAIL;
+
+    free(m);
+
+    return SASL_OK;
+}
+/* end mutex wrapper functions */
+
 static struct conn *conn_new(int fd)
 {
     struct conn *C = xzmalloc(sizeof(struct conn));
@@ -290,6 +315,12 @@ int service_init(int argc, char **argv, char **envp)
 		   (sasl_realloc_t *) &xrealloc, 
 		   (sasl_free_t *) &free);
 
+    /* set the SASL mutex functions */
+    sasl_set_mutex((sasl_mutex_alloc_t *) &my_mutex_new,
+                   (sasl_mutex_lock_t *) &pthread_mutex_lock,
+                   (sasl_mutex_unlock_t *) &pthread_mutex_unlock,
+                   (sasl_mutex_free_t *) &my_mutex_destroy);
+
     /* load the SASL plugins */
     if ((r = sasl_server_init(mysasl_cb, "Cyrus")) != SASL_OK) {
 	syslog(LOG_ERR, "SASL failed initializing: sasl_server_init(): %s", 
@@ -319,8 +350,15 @@ int service_init(int argc, char **argv, char **envp)
     database_init();
 
     if (!masterp) {
-	/* spawn off listener thread to connect to the master */
-	syslog(LOG_ERR, "mupdate running unimplemented slave code");
+	pthread_t t;
+	
+	r = pthread_create(&t, NULL, &mupdate_client_start, NULL);
+	if(r == 0) {
+	    pthread_detach(t);
+	} else {
+	    syslog(LOG_ERR, "could not start client thread");
+	    return EC_SOFTWARE;
+	}
     }
 
     return 0;
@@ -329,6 +367,7 @@ int service_init(int argc, char **argv, char **envp)
 /* called if 'service_init()' was called but not 'service_main()' */
 void service_abort(int error)
 {
+    exit(error);
 }
 
 void fatal(const char *s, int code)
@@ -358,10 +397,12 @@ void cmdloop(struct conn *c)
     ret=sasl_listmech(c->saslconn, NULL, "\r\n* AUTH ", " ", "", &mechs,
 		      NULL, &mechcount);
 
-    prot_printf(c->pout, "* OK %s Cyrus Murder MUPDATE %s %s%s\r\n", 
+    /* AUTH banner is mandatory, even if empty */
+    prot_printf(c->pout,
+		"* OK MUPDATE \"%s\" \"Cyrus Murder\" \"%s\" \"%s\"%s\r\n", 
 		config_servername,
 		CYRUS_VERSION, masterp ? "(master)" : "(slave)",
-		(ret == SASL_OK && mechcount > 0) ? mechs : "");
+		(ret == SASL_OK && mechcount > 0) ? mechs : "* AUTH");
     for (;;) {
 	int ch;
 	char *p;
@@ -415,9 +456,9 @@ void cmdloop(struct conn *c)
 		int opt = 0;
 
 		if (ch != ' ') goto missingargs;
-		ch = getastring(c->pin, c->pout, &arg1);
+		ch = getstring(c->pin, c->pout, &arg1);
 		if (ch == ' ') {
-		    ch = getastring(c->pin, c->pout, &arg2);
+		    ch = getstring(c->pin, c->pout, &arg2);
 		    opt = 1;
 		}
 		CHECKNEWLINE(c, ch);
@@ -923,7 +964,8 @@ void cmd_authenticate(struct conn *C,
 	if(p >= buf && *p == '\r') *p-- = '\0';
 
 	if(buf[0] == '*') {
-	    prot_printf(C->pout, "%s NO client canceled authentication\r\n",
+	    prot_printf(C->pout,
+			"%s NO \"client canceled authentication\"\r\n",
 			tag);
 	    reset_saslconn(C);
 	    return;
