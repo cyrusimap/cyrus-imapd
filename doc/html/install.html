@@ -1,4 +1,4 @@
-<!-- $Id: install.html,v 1.61 1999/08/17 05:59:25 leg Exp $ -->
+<!-- $Id: install.html,v 1.62 1999/08/18 19:37:00 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
@@ -19,107 +19,137 @@ It is somewhat out of date and will eventually be updated.
 <P>Feedback on the software or on the document may be sent to
 "<tt>cyrus-bugs@andrew.cmu.edu</tt>".  The
 <tt>info-cyrus@andrew.cmu.edu</tt> mailing list exists for the
-discussion of this server and other Cyrus software; more information is
-availible <a href="mailing-list.html">in the mailing-list document</a>.
-Be sure to include the version numbers of imapd and libsasl you are
-using, as well as your system type (and version!) and any
-configuration options you selected.
+discussion of this server and other Cyrus software; more information
+is availible <a href="mailing-list.html">in the mailing-list
+document</a>.  Be sure to include the version numbers of imapd and
+libsasl you are using, as well as your system type (and version!) and
+any configuration options you selected.
+
+<p>
+For detailed changes, refer to the file <a
+HREF="changes.html"><TT>doc/changes</TT></a> in the distribution. 
 
 <h2>Upgrading From Previous Versions</h2>
 
+<h3>Upgrading from 1.6</h3>
 <ul>
-<li> Upgrading from the Cyrus IMAP server version 1.4
-or earlier requires running "<TT>reconstruct -r</TT>" after installing
-this version of the software. 
-<li>
-Upgrading from the Cyrus IMAP server
-version 1.3 or earlier requires running "<TT>reconstruct -m</TT>"
-after installing this version of the software.
+
+<li> Upgrading from the Cyrus IMAP server version 1.6.1 or earlier:
+the quota and user directories are now hashed by the first character
+of the username.  This is to reduce the number of entries in any given
+directory. It doesn't do a great job (and in some cases it will do a
+really poor job) but as a quick hack it shouldn't make things worse.
+Optionally, the data partitions can also be hashed by enabling the
+"hashimapspool" option.
+
+<p>You can automatically hash your directories using the
+"<tt>dohash</tt>" script in the tools subdirectory.  If you want to
+hash your mail spool, be sure to set "hashimapspool" before running
+"<tt>dohash</tt>".  This must be run as the Cyrus user. Be sure to
+stop mail service while converting. Doing this in single user mode is
+probably the safest.
+
+</ul>
+
+<h3>Upgrading from 1.5</h3>
+<ul>
+<li> Upgrading from the Cyrus IMAP server version 1.5 or earlier:
+libsasl is now required.  Configuring SASL to work may be a chore,
+especially if you use shadow passwords.  If you use shadow passwords,
+you must allow the cyrus user read access to /etc/shadow.
+
+<li> An ANSI C compiler is now required.  gcc should work fine and can
+be acquired from <a href="http://www.gnu.org/software/gcc/gcc.html">
+http://www.gnu.org/software/gcc/gcc.html</a>.
 
 <li> Upgrading from 1.5.14 or earlier requires deleting the delivered
 database.  Remove the file delivered.db in the configdirectory and make a
 directory called "deliverdb" in the configdirectory.  This may cause some
 duplicates to get through.
 
-<li> Upgrading from 1.5.14 or earlier requires removing the PTS cache database
-(if the AFS PTS group support is used, which is not the default).  The PTS
-cache is in /var/ptclient/ptscache.db, and you should remove it.
-
-<li> The format for the PTS cache for IMSP has changed.  If you use
-AFS ACLs, IMSPd, and IMAPd on the same machine, make sure you have version
-1.5a5 of the IMSP server for this version of the IMAP server.  (If you don't
-have IMSP, or AFS, don't worry about it.)
+<li> Upgrading from 1.5.14 or earlier requires removing the PTS cache
+database (if the AFS PTS group support is used, which is not the
+default).  The PTS cache is in /var/ptclient/ptscache.db, and you
+should remove it. This is because the format for the PTS cache for
+IMSP has changed.  If you use AFS ACLs, IMSPd, and IMAPd on the same
+machine, make sure you have version 1.5a5 of the IMSP server for this
+version of the IMAP server.  (If you don't have IMSP, or AFS, don't
+worry about it.)
 
 <li> If you are upgrading from 1.5.14 (or earlier) you should remove the
 delivered-db database and mkdir /var/imap/deliverdb.
 
-<li> Upgrading from the Cyrus IMAP server version 1.5 or earlier:
-libsasl is now required.  Configuring SASL to work may be a chore,
-especially if you use shadow passwords.  If you use shadow passwords,
-you must allow the cyrus user read access to /etc/shadow.
-
-<li> Upgrading from the Cyrus IMAP server version 1.6.1 or earlier:
-the quota and user directories are now hashed by the first character
-of the username.  Optionally, the data partitions can also be hashed
-by enabling the "hashimapspool" option.
-
-<p>You can automatically hash your directories using the
-"<tt>dohash</tt>" script in the tools subdirectory.  Be sure to set
-"hashimapspool" before running "<tt>dohash</tt>" if you want to
-hash your mail spool.  Be sure to run it as the Cyrus user and to stop
-mail service while converting.
-
-<li> An ANSI C compiler is now required.  You can acquire one from
-<TT>prep.ai.mit.edu</TT>.
 </ul>
-<p>
-See the file <a
-HREF="changes.html"><TT>doc/changes</TT></a> in the distribution for
-more information.
+
+<h3>Upgrading from before 1.3</h3>
+
+<ul>
+<li> Upgrading from the Cyrus IMAP server version 1.4 or earlier
+requires running "<TT>reconstruct -r</TT>" after installing this
+version of the software.
+<li>
+Upgrading from the Cyrus IMAP server
+version 1.3 or earlier requires running "<TT>reconstruct -m</TT>"
+after installing this version of the software.
+</ul>
+
 
 <H2>Prerequisites and other notes</H2>
 
 <P>The following programs and/or packages are required:
 
 <ul>
+<LI> <b>makedepend</b>.  A version is included in the
+<TT>makedepend</TT> subdirectory of the distribution.  Try and install
+it before installing the Cyrus IMAPd.  If it fails, the configure
+script will use a dummy shell script instead of makedepend, and you
+should be sure to always give the command "<TT>make clean</TT>" before
+"<TT>make all</TT>". If you don't plan on doing any development, this
+isn't a big deal.
 
-<LI> makedepend.  A version is included in the <TT>makedepend</TT>
-subdirectory of the distribution.  Try and install it before installing the
-Cyrus IMAPd.  If it fails, the configure script will use a dummy shell script
-instead of makedepend, and you should be sure to
-always give the command "<TT>make clean</TT>" before "<TT>make all</TT>".
-
-<LI> Tcl, version 7.5 or 7.6, or 8.0.  To obtain Tcl, see the <A
+<LI> <b>Tcl</b>, version 7.5 or 7.6, or 8.0.  To obtain Tcl, see the
+<A
 HREF="ftp://rtfm.mit.edu/pub/usenet/comp.lang.tcl"><TT>comp.lang.tcl</TT>
-FAQ</A>.  Other versions of Tcl might work, but it must be at least Tcl 7.5.
-(Tcl 7.4 ships with some Unix variants, and it is not sufficient.)
+FAQ</A>.  Other versions of Tcl might work, but it must be at least
+Tcl 7.5.  (Tcl 7.4 ships with some Unix variants, and it is not
+sufficient.).
 
-<LI> libsasl, version 1.5.0 or higher.  To obtain libsasl, ftp it from
-<a
+<LI> <b>libsasl</b>, version 1.5.0 or higher.  To obtain libsasl, ftp
+it from <a
 href="ftp://ftp.andrew.cmu.edu/pub/cyrus-mail"><TT>ftp.andrew.cmu.edu</TT></a>.
 Earlier versions of SASL will not work; please get the latest one.
 Configure SASL so that it supports whatever authentication method your
 site uses.  It is recommended that if you have PAM, you configure SASL
 to use PAM.
 
-<LI> Note that Cyrus still depends on Kerberos and AFS if you use AFS
-PTS support for groups.  If you successfully compiled SASL with your
+<li><b>perl</b> is used for some administrative scripts. You don't
+need it but it may make your life easier. Version 5 is required. Perl
+is available from <a http="http://www.cpan.org">CPAN</a>.
+
+<li>You can use Berkeley DB instead of some DBM variant. Berkeley DB
+can be obtained from <a
+href="http://www.sleepycat.com">Sleepycat</a>. DB is currently only
+used for duplicate delivery suppression and the AFS ptloader.
+
+<LI> If you use AFS PTS support for groups, Cyrus still depends on
+Kerberos and AFS.  If you successfully compiled SASL with your
 Kerberos library, it's likely that it will work well with Cyrus.
 
-<LI> It is recommended that sites install Sendmail version 8.7.1 or later.
-Sendmail distributions may be obtained from
-<A HREF="ftp://ftp.sendmail.org/ucb/sendmail"
->ftp://ftp.sendmail.org/ucb/sendmail</A>
+<LI> We use sendmail and we've gotten some others to work. If you want
+something with the least fuss, go with sendmail. Please use version
+8.7.1 or later as that includes support for Cyrus.  Sendmail
+distributions may be obtained from <A
+HREF="http://www.sendmail.org">http://www.sendmail.org</a>.
 
 <LI> If you want to export netnews newsgroups using IMAP, the IMAP
 server must receive newsgroups with the INN news server.
 </ul>
+
 <H2>Compiling the IMAP Server</H2>
 
-Once you have unpacked the files (see the <A
-HREF="readme.html"><TT>README</TT></A> file for more information),
-"<TT>cd</TT>" to the "<tt>cyrus-imapd-1.6.0</tt>" directory (assuming the
-version number is 1.6.0).  The configuration files and
+Once you have unpacked the files by extracting the tar archive,
+"<TT>cd</TT>" to the "<tt>cyrus-imapd-<i>NNNN</i></tt>" directory
+where <i>NNNN</i> is the version number.  The configuration files and
 various subdirectories are stored there.  In the directory that the
 <TT>configure</TT> file is in, type "<kbd>./configure</kbd>" to
 configure the software.
@@ -472,6 +502,7 @@ IMAP server as a whole.
 in its examples.  This directory should be owned by the
 cyrus user and group and should not permit access to other users.
 
+
 <pre>
 <kbd>   cd /var
    mkdir imap
@@ -525,7 +556,7 @@ Sieve directory:
 If perl is not available, it should be easy to create these directories
 by hand. <P>
 
-<li>LINUX SYSTEMS ONLY: Set the configuration, user, quota, and
+<li><b>LINUX SYSTEMS ONLY</b>: Set the configuration, user, quota, and
 partition directories to update synchronously.  Failure to do this may
 lead to data corruption and/or loss of mail after a system crash.
 
@@ -615,6 +646,13 @@ protocol, add the following line
 "<tt>cyrus</tt>" is the Cyrus user and "<tt>/usr/cyrus/bin/</tt>" is the
 path name to the executable.
 
+<p> If you'd like to be able to do a <kbd>ps</kbd> and see what the
+<tt>imapd</tt> or <tt>pop3d</tt> is doing, you may need to add this to
+the end of imapd or pop3d <tt>inetd.conf</tt> entry. 
+<pre>
+ junk to allow room for setproctitle xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+</pre>
+
 <p><li>
  If you wish to use the interm finger information service,
  you need to enable support for
@@ -644,23 +682,19 @@ isn't already there.
 generic method is to find the process id of inetd (use <tt>/bin/ps -elf</tt>
 on most systems), then <tt>kill -HUP <i>pid</i></tt>.
 
-<li> Sendmail versions 8.7 and later include support for the Cyrus
-IMAP server.  If you are running a verson of Sendmail older than
-8.7.1, replace it with 8.7.1 or later.  Sendmail distributions may
-be obtained from
-<A HREF="ftp://ftp.cs.berkeley.edu/ucb/sendmail">ftp://ftp.cs.berkely.edu/ucb/sendmail</A>
-
  <P>
 <li> Generate a sendmail configuration file which delivers local mail
 to the IMAP server.  See the files <TT>cf/README</TT> and
 <TT>cf/cf/cyrusproto.mc</TT> in the Sendmail distribution for
-information on how to do this.
+information on how to do this. Be sure the sendmail configuration file
+gets reloaded after you make the changes.
 
  <P> <LI> Edit <TT>/etc/group</TT> and add user "<TT>daemon</TT>" to
 the "<TT>mail</TT>" group.  This will permit sendmail to run the
 "<TT>deliver</TT>" program to deliver mail to the IMAP server.
 
  <P>
+<a name="dup-deliv"></a>
 <li>The Cyrus IMAP server support in Sendmail defaults to enabling
 duplicate delivery suppression, by invoking the "<TT>deliver</TT>"
 program with the "<TT>-e</TT>" switch.  This prevents two messages
@@ -748,8 +782,13 @@ If your server is running, you'll get the following message:
    * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.6.0 server ready
 </pre>
 
+<p>
 Any message other than one starting with "<tt>* OK</tt>" means there
-is a problem.  To terminate the connection, type "<kbd>. logout</kbd>".
+is a problem.  To terminate the connection, type
+	      "<kbd>. logout</kbd>".
+
+<p>Naturally the version number should match the version you just
+installed.
 
 <P>
 <li>Use "<tt>imtest</tt>" to test logging in with plaintext passwords.
@@ -761,7 +800,7 @@ is a problem.  To terminate the connection, type "<kbd>. logout</kbd>".
 If your server is running, you'll get the following message:
 
 <pre>
-   * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.5.14 server ready
+   * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.6.0 server ready
    Password: <var>&lt;enter your password, imtest does not echo it&gt;</var>
    . LOGIN smith X
    . OK User logged in
@@ -840,8 +879,8 @@ integrity layer type:
   imtest -m KERBEROS_V4 -l 1 -p imap foobar
 </pre>
 
-See libsasl for a full description of what mechanisms support what layers. 
-
+See the libsasl documentation for a full description of what
+mechanisms support what layers.
 
 </ol>
 
@@ -916,10 +955,57 @@ Once you have created mailboxes, your IMAP server installation
 is done.  You must then configure a mail interface, such as Pine,
 to work with the IMAP server.
 
+<h2>Performance Notes</h2>
+
+If your configuration directory is not <tt>/var/imap</tt>, adjust
+	accordingly. 
+
+<p>
+<ul>
+<li><tt><b>/var/imap/proc</b></tt> - After a successful login, the imapd
+creates a file in <tt>/var/imap/proc</tt> that is its unix process
+id. It also contains the name of any <tt>SELECT</tt>'d mailbox. The
+file is deleted when the user logs out.
+
+<p>Given the potential load, this is a good candidate to move
+elsewhere. This can be done by symlink'ing the directory to another
+partition. We symlink it to a directory on a memory/viritual memory
+filesystem (specifically Solaris' tmpfs). If you use a tmpfs type
+filesystem, make sure that you have sufficient memory/swap to do this.
+
+<p><li><tt><b>/var/imap/deliverdb</b></tt> - If you enable <a
+href="#dup-deliv"> duplicate delivery suprression</a>, each time a
+mail message is delivered it needs to lock the database and check to
+see if the message-id has been seen already. If you require really
+high throughput delivery, you may want to disable this feature. 
+
+<p>We run with it enabled and it doesn't significantly impact our
+performance.
+
+<p><li><tt><b>/var/imap/mailboxes</b></tt> - Updating this file can be
+fairly expensive, especially if it gets large.  Things get even worse
+if your operating system doesn't have a good <tt>mmap()</tt>
+implementation. Other than trying to put <tt>/var/imap</tt> on its own
+disk, there really isn't a good short term solution to this.
+
+<p>It should not be hard to move this from a flat file to some other
+database. If you are interested in doing this work, send mail to <a
+href="mailto:cyrus-bugs+@andrew.cmu.edu">cyrus-bugs+@andrew.cmu.edu</a>.
+
+<p>(at this moment in time)We have 95105 entries in our mailboxes file
+(4.4MB). It resides on a Seagate 7200rpm Fast/Wide disk off of a Sun
+QLGC Fast-Wide sbus card. We haven't experienced any significant
+problem as a result of this though there have been other reports.
+
+<p><li><tt><b>/var/spool/mqueue</b></tt> - Sendmail can be pretty
+harsh on the spool partition. Having this on a separate disk is
+usually a good idea.
+
+</ul>
+
+
 <P><HR><P>
 <!-- hhmts start -->
-Last modified: $Date: 1999/08/17 05:59:25 $
+Last modified: $Date: 1999/08/18 19:37:00 $
 <!-- hhmts end -->
-<br>
-<A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>
