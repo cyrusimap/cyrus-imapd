@@ -26,7 +26,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.110 2000/02/08 19:36:15 tmartin Exp $
+ * $Id: mboxlist.c,v 1.111 2000/02/10 00:33:41 leg Exp $
  */
 
 #include <stdio.h>
@@ -76,8 +76,8 @@ extern int errno;
 
 acl_canonproc_t mboxlist_ensureOwnerRights;
 
-static DB *mbdb;
-static DB_ENV *dbenv;
+DB *mbdb;
+DB_ENV *dbenv;
 
 static int mboxlist_dbinit = 0,
     mboxlist_dbopen = 0;
@@ -1607,12 +1607,13 @@ int mboxlist_setacl(char *name, char *identifier, char *rights, int isadmin,
 /*
  * NOTE!!!
  *
- * Ok this is how we're doing it now. The whole thing is in a
- * transaction. we remember where we are so if the transaction abort
- * we can just restart where we left off. This can give results that
- * aren't consistent with the state of the world at any one time---but
- * every mailbox not touched will be listed once and only once.  IMAP
- * has no consistency guarantees on the LIST.
+ * Ok this is how we're doing it now. mboxlist_findall does not use
+ * transactions, which can make the results a little funky.  We
+ * remember where we are so if we hit a deadlock (unlikely?) we can just
+ * restart where we left off. This can give results that aren't
+ * consistent with the state of the world at any one time---but every
+ * mailbox not touched will be listed once and only once.  IMAP has no
+ * consistency guarantees on the LIST.
  *
  * Double deletion problem: 1 connection does a list. Another
  * connection deletes 2 mailboxes (mailbox.deleted.1 and
@@ -1620,7 +1621,8 @@ int mboxlist_setacl(char *name, char *identifier, char *rights, int isadmin,
  * alphabetical order of the deleted mailboxes) say mailbox.deleted.1
  * exists but mailbox.deleted.2 doesn't. This is weird.
  *
- * Blame larry if you don't like this solution */
+ * Blame Larry if you don't like this solution.
+ */
 
 typedef enum {
   FINDALL_START,
@@ -1630,292 +1632,164 @@ typedef enum {
   FINDALL_INBOXSTAR,
   FINDALL_DOING_REST,
   FINDALL_REST
-} findall_t;
+} findall_state;
 
-int mboxlist_findall(char *pattern, int isadmin, char *userid, 
-		     struct auth_state *auth_state, 
+int mboxlist_findall(char *pattern, int isadmin, char *userid,
+		     struct auth_state *auth_state,
 		     int (*proc)(), void *rock)
 {
-    struct glob *g;
-    char usermboxname[MAX_MAILBOX_NAME+1];
+    char inboxbuf[MAX_MAILBOX_NAME + 1], 
+	usermboxname[MAX_MAILBOX_NAME + 1];
     int usermboxnamelen = 0;
-    unsigned long namelen, prefixlen = 0;
-    int inboxoffset;
-    long matchlen, minmatch;
-    char *name, *p;
-    char namebuf[MAX_MAILBOX_NAME+1];
-    int rights;
-    int r, r2;
-    char *inboxcase;
-    DBC *cursor=NULL;
-    DB_TXN *tid;
+    long minmatch;
+    unsigned long prefixlen = 0;
+    int r;
+    struct glob *g = NULL;
+    char *p;
+    findall_state state;
     DBT key, data;
+    DBC *cursor = NULL;
     struct mbox_entry *mboxent;
-    findall_t state = FINDALL_START;
-    DBT DID_inboxstar_data;
-    DBT DID_rest_data;    
 
-    memset(&DID_rest_data, 0, sizeof(DID_rest_data));
+    memset(&key, 0, sizeof(key));
+    memset(&data, 0, sizeof(data));
 
-    g = glob_init(pattern, GLOB_HIERARCHY|GLOB_INBOXCASE);
-    inboxcase = glob_inboxcase(g);
+    state = FINDALL_START;
 
-    /* Build usermboxname */
-    if (userid && !strchr(userid, '.') &&
-	strlen(userid)+5 < MAX_MAILBOX_NAME) {
+    g = glob_init(pattern, GLOB_HIERARCHY | GLOB_INBOXCASE);
+    
+    if (userid && !strchr(userid, '.') && 
+	strlen(userid) + 5 < MAX_MAILBOX_NAME) {
 	strcpy(usermboxname, "user.");
 	strcat(usermboxname, userid);
 	usermboxnamelen = strlen(usermboxname);
-    }
-    else {
-	userid = 0;
-    }
-
-    /* transaction restart place */
-    if (0) {
-      retry:
-	if ((r = txn_abort(tid)) != 0) {
-	    syslog(LOG_ERR, "DBERROR: error aborting txn: %s",
-		   db_strerror(r));
-	    return IMAP_IOERROR;
-	}
-    }
-
-    /* begin the transaction */
-    if ((r = txn_begin(dbenv, NULL, &tid, 0)) != 0) {
-	syslog(LOG_ERR, "DBERROR: error beginning txn: %s", db_strerror(r));
-	return IMAP_IOERROR;
-    }
-
-    /* Check for INBOX first of all */
-    if (userid!=NULL)
-    {
-      if (state < FINDALL_INBOX)
-      {
-	if (GLOB_TEST(g, "INBOX") != -1)
-	{
-	    DBT key, data;
-
-	    memset(&data, 0, sizeof(data));
-	    memset(&key, 0, sizeof(key));
-	    key.data = usermboxname;
-	    key.size = usermboxnamelen;
-
-	    r = mbdb->get(mbdb, tid, &key, &data, 0);
-	    switch (r) {
-	    case 0:
-		r = proc(inboxcase, 5, 1, rock);
-		if (r) {
-		    glob_free(&g);
-		    goto done;
-		}
-		break;
-	    case DB_NOTFOUND:
-		break;
-	    case DB_LOCK_DEADLOCK:
-		goto retry;
-	    default: /* DB error */
-		syslog(LOG_ERR, "DBERROR: error fetching %s: %s",
-		       usermboxname, db_strerror(r));
-		r = IMAP_IOERROR;
-		goto done;
-	    }
-	}
-
-	/* "user.X" matches patterns "user.X", "user.X*", "user.X%", etc */
-	else if (!strncmp(pattern, usermboxname, usermboxnamelen) &&
-		 GLOB_TEST(g, usermboxname) != -1) {
-	    key.data = usermboxname;
-	    key.size = usermboxnamelen;
-	    r = mbdb->get(mbdb, tid, &key, &data, 0);
-	    switch (r) {
-	    case 0:
-		r = proc(usermboxname, usermboxnamelen, 1, rock);
-		if (r) {
-		    glob_free(&g);
-		    goto done;
-		}
-		break;
-	    case DB_NOTFOUND:
-		break;
-	    case DB_LOCK_DEADLOCK:
-		goto retry;
-		break;
-	    default: /* DB error */
-		syslog(LOG_ERR, "DBERROR: error fetching %s: %s",
-		       usermboxname, db_strerror(r));
-		r = IMAP_IOERROR;
-		goto done;
-	    }
-	}
-
-	state=FINDALL_INBOX;
-	strcpy(usermboxname+usermboxnamelen, ".");
-	usermboxnamelen++;
-      }
-
+    } else {
+	userid = NULL;
     }
 
     /* Find fixed-string pattern prefix */
-    if (state < FINDALL_PREFIX)
-    {
-      for (p = pattern; *p; p++) {
+    for (p = pattern; *p; p++) {
 	if (*p == '*' || *p == '%' || *p == '?') break;
-      }
-      prefixlen = p - pattern;
-      *p = '\0';
-
-      state = FINDALL_PREFIX;
     }
+    prefixlen = p - pattern;
+    *p = '\0';
 
-    /*
-     * If user.X.* or INBOX.* can match pattern,
-     * search for those mailboxes next
-     */
-
-    r = mbdb->cursor(mbdb, tid, &cursor, 0);
+    r = mbdb->cursor(mbdb, NULL, &cursor, 0);
     if (r != 0) { 
 	syslog(LOG_ERR, "DBERROR: Unable to create cursor");
 	goto done;
     }
 
-    if ((userid!=NULL) && (state < FINDALL_INBOXSTAR) &&
-	(!strncmp(usermboxname, pattern, usermboxnamelen-1) ||
-	 !strncasecmp("inbox.", pattern, prefixlen < 6 ? prefixlen : 6))) {
-	
-	if (!strncmp(usermboxname, pattern, usermboxnamelen-1)) {
-	    inboxoffset = 0;
-	}
-	else {
-	    inboxoffset = strlen(userid);
-	}
+    if (userid != NULL) {
+	/* first find all personal mailboxes */
+	if (!strncasecmp("inbox", pattern, prefixlen < 5 ? prefixlen : 5)) {
+	    int i;
 
-	
-	memset(&data, 0, sizeof(data));
-	memset(&key, 0, sizeof(key));
-
-	if (state == FINDALL_DOING_INBOXSTAR)
-	{  
-	  /* we've been here before. let's start where we left off */
-	  key.data = DID_inboxstar_data.data;
-	  key.size = DID_inboxstar_data.size;
+	    strcpy(inboxbuf, glob_inboxcase(g));
+	    /* make inboxbuf match pattern's case */
+	    for (i = 0; i < (prefixlen > 5 ? 5 : prefixlen); i++)
+		inboxbuf[i] = pattern[i];
+	} else if (!strncmp(pattern, usermboxname, usermboxnamelen)) {
+	    /* we require "user.X" to appear in the glob to match
+               personal mailboxes for user X */
+	    strcpy(inboxbuf, usermboxname);
 	} else {
-	  /* first time we got here */
-	  key.data = usermboxname;
-	  key.size = usermboxnamelen;
+	    /* this doesn't match personal mailboxes */
+	    inboxbuf[0] = '\0';
 	}
-
-	r = cursor->c_get(cursor, &key, &data, DB_SET_RANGE);
-
+    }
+    if (userid != NULL && inboxbuf[0]) {
+	key.data = usermboxname;
+	key.size = strlen(usermboxname);
+	
+	/* find out if INBOX exists */
+	do {
+	    r = cursor->c_get(cursor, &key, &data, DB_SET);
+	} while (r == DB_LOCK_DEADLOCK);
 	while (r != DB_NOTFOUND) {
+	    long minmatch;
+
 	    switch (r) {
 	    case 0:
-	      break;
-		
-	    case DB_LOCK_DEADLOCK:
-		goto retry;
 		break;
-		
 	    default:
-		syslog(LOG_ERR, "DBERROR: error advancing: %s", db_strerror(r));
+		syslog(LOG_ERR, "DBERROR: error fetching %s: %s",
+		       usermboxname, db_strerror(r));
 		r = IMAP_IOERROR;
 		goto done;
 	    }
-
 	    mboxent = (struct mbox_entry *) data.data;
 
-	    /* make sure has the prefix */
-	    if (strncmp(mboxent->name, usermboxname, usermboxnamelen) != 0) {
-		break;
-	    }
+	    /* make sure it's a personal mailbox */
+	    if (strncmp(mboxent->name, usermboxname, usermboxnamelen)) break;
+	    if (mboxent->name[usermboxnamelen] != '\0' &&
+		mboxent->name[usermboxnamelen] != '.') break;
 
 	    minmatch = 0;
 	    while (minmatch >= 0) {
-	      strcpy(namebuf, "INBOX.");
-	      strcat(namebuf, mboxent->name+usermboxnamelen);
-	      namelen=strlen(namebuf);
-
-	      matchlen = glob_test(g, namebuf,
-				   namelen, &minmatch);
-	      if (matchlen == -1) { break; }
+		char namebuf[MAX_MAILBOX_NAME+1];
+		unsigned long namelen;
+		long matchlen;
 		
-	      r = proc(namebuf, matchlen, 1, rock);
-	      if (r) {
-		glob_free(&g);
-		goto done;
-	      }
+		strcpy(namebuf, inboxbuf);
+		strcat(namebuf, mboxent->name + usermboxnamelen);
+		namelen = strlen(namebuf);
+		
+		matchlen = glob_test(g, namebuf, namelen, &minmatch);
+		if (matchlen == -1) { break; }
 
+		r = proc(namebuf, matchlen, 1, rock);
+		if (r) goto done;
 	    }
 
-	    /* this is the last one we output in case we have to restart */
-	    memset(&DID_inboxstar_data, 0, sizeof(DID_inboxstar_data));
-	    DID_inboxstar_data.data = xmalloc(key.size);
-	    memcpy(DID_inboxstar_data.data, key.data, key.size);
-	    DID_inboxstar_data.size = key.size;	    
-	    state = FINDALL_DOING_INBOXSTAR; /* we're in the middle now :) */
-
-
-	    memset(&data, 0, sizeof(data));
-	    r = cursor->c_get(cursor, &key, &data, DB_NEXT);
+	    do {
+		r = cursor->c_get(cursor, &key, &data, DB_NEXT);
+	    } while (r == DB_LOCK_DEADLOCK);
 	}
-
-	state = FINDALL_INBOXSTAR;
-	if (userid) usermboxname[--usermboxnamelen] = '\0';
     }
 
-    /* Search for all remaining mailboxes.  Start at the pattern prefix */
-    memset(&data, 0, sizeof(data));
-    memset(&key, 0, sizeof(key));    
 
-    if (state == FINDALL_DOING_REST) {
-	/* we've been here before. let's start where we left off */
-	key.data = DID_rest_data.data;
-	key.size = DID_rest_data.size;
-
-	r = cursor->c_get(cursor, &key, &data, DB_SET_RANGE);
-	if (!r) {
-	    /* now skip to the next one */
-	    r = cursor->c_get(cursor, &key, &data, DB_NEXT);
-	}
-	free(DID_rest_data.data); DID_rest_data.data = NULL;
-
-    } else {
-	if (prefixlen) {
-	    key.data = pattern;
-	    key.size = prefixlen;
-	    
+    /* search for all remaining mailboxes; start at the pattern prefix */
+    if (prefixlen) {
+	key.data = pattern;
+	key.size = prefixlen;
+	
+	do {
 	    r = cursor->c_get(cursor, &key, &data, DB_SET_RANGE);
-	} else {
+	} while (r == DB_LOCK_DEADLOCK);
+    } else {
+	do {
 	    r = cursor->c_get(cursor, &key, &data, DB_FIRST);
-	}
+	} while (r == DB_LOCK_DEADLOCK);
     }
 
+    /* iterate over all mailboxes matching prefix */
     while (r != DB_NOTFOUND) {
+	char *name;
+	unsigned long namelen;
+	long minmatch;
+
 	switch (r) {
 	case 0:
 	    break;
-
-	case DB_LOCK_DEADLOCK:
-	    goto retry;
-	    break;
-	    
 	default:
 	    syslog(LOG_ERR, "DBERROR: error advancing: %s", db_strerror(r));
 	    r = IMAP_IOERROR;
 	    goto done;
 	}
 	
-	name = key.data;
-	namelen = key.size;
 	mboxent = (struct mbox_entry *) data.data;
-
-	/* does this even match our prefix? */
-	if (strncmp(namebuf, pattern, prefixlen)) break;
+	name = mboxent->name;
+	namelen = key.size;
+	
+	/* does this match our prefix? */
+	if (strncmp(name, pattern, prefixlen)) break;
 
 	/* does it match the glob? */
 	minmatch = 0;
 	while (minmatch >= 0) {
-	    matchlen = glob_test(g, name, namelen, &minmatch);
+	    long matchlen = glob_test(g, name, namelen, &minmatch);
+	    char namebuf[MAX_MAILBOX_NAME+1];
 
 	    if (matchlen == -1 ||
 		(userid && namelen >= usermboxnamelen &&
@@ -1929,49 +1803,33 @@ int mboxlist_findall(char *pattern, int isadmin, char *userid,
 		break;
 	    }
 
-	    memcpy(namebuf, name, namelen);
-	    namebuf[namelen] = '\0';
+	    strcpy(namebuf, name);
 
 	    if (isadmin) {
 		r = proc(namebuf, matchlen, 1, rock);
-		if (r) {
-		    glob_free(&g);
-		    goto done;
-		}
+		if (r) goto done;
 	    } else {
-		rights = acl_myrights(auth_state, mboxent->acls);
+		int rights = acl_myrights(auth_state, mboxent->acls);
 		if (rights & ACL_LOOKUP) {
-		    r = proc(namebuf, matchlen, (rights & ACL_CREATE),
-			     rock);
-		    if (r) {
-			glob_free(&g);
-			goto done;
-		    }
+		    r = proc(namebuf, matchlen, (rights & ACL_CREATE), rock);
+		    if (r) goto done;
 		}
 	    }
 	}
-
-	/* this is the last one we output (used when we have to restart) */
-	if (DID_rest_data.data) free(DID_rest_data.data);
-	memset(&DID_rest_data, 0, sizeof(DID_rest_data));
-	DID_rest_data.data = xmalloc(key.size);
-	memcpy(DID_rest_data.data, key.data, key.size);
-	DID_rest_data.size = key.size;	    
-	state = FINDALL_DOING_REST; /* we're in the middle now :) */
-
-	memset(&data, 0, sizeof(data));
-
-	r = cursor->c_get(cursor, &key, &data, DB_NEXT);
+	
+	do {
+	    r = cursor->c_get(cursor, &key, &data, DB_NEXT);
+	} while (r == DB_LOCK_DEADLOCK);
     }
+    /* normal case; DB_NOTFOUND or we stopped matching */
     r = 0;
 
-  done:
-    if (cursor!=NULL) {
+ done:
+    if (cursor) {
+	int r2;
+
 	switch (r2 = cursor->c_close(cursor)) {
 	case 0:
-	    break;
-	case DB_LOCK_DEADLOCK:
-	    goto retry;
 	    break;
 	default:
 	    syslog(LOG_ERR, "DBERROR: couldn't close cursor: %s",
@@ -1980,21 +1838,8 @@ int mboxlist_findall(char *pattern, int isadmin, char *userid,
 	}
     }
 
-    switch (txn_commit(tid, 0)) {
-    case 0:
-	break;
-    case EINVAL:
-	syslog(LOG_WARNING, "tried to commit an already aborted transaction");
-	break;
-    default:
-	syslog(LOG_WARNING, "failed on commit to read-only transaction");
-	r = IMAP_IOERROR;
-	break;
-    }
-
-    if (DID_rest_data.data) free(DID_rest_data.data);
-	
-    glob_free(&g);
+    if (g) glob_free(&g);
+   
     return r;
 }
 
@@ -3106,11 +2951,12 @@ void mboxlist_init(void)
 	fatal(err, EC_TEMPFAIL);
     }
 
-    /* dbenv->set_paniccall(dbenv, (void (*)(DB_ENV *, int)) &db_panic);*/
+    dbenv->set_paniccall(dbenv, (void (*)(DB_ENV *, int)) &db_panic);
     dbenv->set_verbose(dbenv, DB_VERB_DEADLOCK, 1);
     /* dbenv->set_verbose(dbenv, DB_VERB_WAITSFOR, 1); */
     dbenv->set_errpfx(dbenv, "mbdb");
     dbenv->set_lk_detect(dbenv, DB_LOCK_DEFAULT);
+    dbenv->set_lk_max(dbenv, 100000);
     dbenv->set_errcall(dbenv, db_err);
 
     /*
@@ -3126,7 +2972,7 @@ void mboxlist_init(void)
     /* create the name of the db file */
     strcpy(dbdir, config_dir);
     strcat(dbdir, FNAME_DBDIR);
-    r = dbenv->open(dbenv, "/var/imap/db", NULL, 
+    r = dbenv->open(dbenv, dbdir, NULL, 
 		    DB_CREATE | DB_INIT_LOCK | DB_INIT_MPOOL
 		    | DB_INIT_LOG | DB_INIT_TXN, 0644);
     if (r) {
