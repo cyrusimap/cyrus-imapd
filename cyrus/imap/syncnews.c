@@ -42,7 +42,7 @@
  */
 
 /*
- * $Id: syncnews.c,v 1.19.14.2 2002/11/15 21:46:59 rjs3 Exp $
+ * $Id: syncnews.c,v 1.19.14.3 2003/02/06 22:40:57 rjs3 Exp $
  */
 #include <config.h>
 
@@ -61,7 +61,7 @@
 #include <com_err.h>
 
 #include "assert.h"
-#include "imapconf.h"
+#include "global.h"
 #include "xmalloc.h"
 #include "exitcodes.h"
 #include "imap_err.h"
@@ -107,7 +107,7 @@ int main(int argc, char **argv)
 	}
     }
 
-    config_init(alt_config, "syncnews");
+    cyrus_init(alt_config, "syncnews");
 
     if (!argv[optind] || argv[optind+1]) usage();
 

@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.42.4.24 2003/02/05 01:31:06 ken3 Exp $
+ * $Id: pop3proxyd.c,v 1.42.4.25 2003/02/06 22:40:56 rjs3 Exp $
  */
 #include <config.h>
 
@@ -71,7 +71,7 @@
 #include "acl.h"
 #include "util.h"
 #include "auth.h"
-#include "imapconf.h"
+#include "global.h"
 #include "tls.h"
 
 #include "iptostring.h"
@@ -189,7 +189,7 @@ int service_init(int argc, char **argv, char **envp)
     signal(SIGPIPE, SIG_IGN);
 
     /* load the SASL plugins */
-    config_sasl_init(1, 1, mysasl_cb);
+    global_sasl_init(1, 1, mysasl_cb);
 
     /* open the mboxlist, we'll need it for real work */
     mboxlist_init(0);

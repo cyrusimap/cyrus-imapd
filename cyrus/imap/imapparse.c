@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapparse.c,v 1.8.2.2 2002/12/03 15:06:22 ken3 Exp $ */
+/* $Id: imapparse.c,v 1.8.2.3 2003/02/06 22:40:53 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -48,7 +48,7 @@
 
 #include "prot.h"
 #include "xmalloc.h"
-#include "imapconf.h"
+#include "global.h"
 #include "exitcodes.h"
 
 enum {

@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.32.4.8 2003/01/31 21:48:51 rjs3 Exp $
+ * $Id: mupdate-client.c,v 1.32.4.9 2003/02/06 22:40:55 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -66,7 +66,7 @@
 #include "assert.h"
 #include "cyrusdb.h"
 #include "exitcodes.h"
-#include "imapconf.h"
+#include "global.h"
 #include "imparse.h"
 #include "iptostring.h"
 #include "mupdate.h"

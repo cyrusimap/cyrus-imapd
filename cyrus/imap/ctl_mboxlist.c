@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.36.2.4 2002/11/15 21:46:55 rjs3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.36.2.5 2003/02/06 22:40:51 rjs3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -59,7 +59,7 @@
 #include "assert.h"
 #include "exitcodes.h"
 #include "imap_err.h"
-#include "imapconf.h"
+#include "global.h"
 #include "libcyr_cfg.h"
 #include "mboxlist.h"
 #include "mupdate-client.h"
@@ -689,12 +689,12 @@ int main(int argc, char *argv[])
 	libcyrus_config_setint(CYRUSOPT_DB_INIT_FLAGS, CYRUSDB_RECOVER);
     }
     
-    config_init(alt_config, "ctl_mboxlist");
-    config_sasl_init(1,0,NULL);
+    cyrus_init(alt_config, "ctl_mboxlist");
+    global_sasl_init(1,0,NULL);
 
     switch (op) {
     case RECOVER:
-	/* this was done by the call to config_init via libcyrus */
+	/* this was done by the call to cyrus_init via libcyrus */
 	syslog(LOG_NOTICE, "done running mboxlist recovery");
 	break;
 

@@ -1,6 +1,6 @@
-/* signals.c -- signal handling functions to allow clean shutdown
-
- * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
+/* libconfig.h -- Header for imapd.conf processing
+ * $Id: libconfig.h,v 1.1.2.1 2003/02/06 22:41:00 rjs3 Exp $
+ * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -37,64 +37,39 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ *
  */
-/* $Id: signals.c,v 1.8.6.1 2003/02/06 22:40:57 rjs3 Exp $ */
 
-#include <config.h>
+#ifndef INCLUDED_LIBCONFIG_H
+#define INCLUDED_LIBCONFIG_H
 
-#include <stdlib.h>
-#include <signal.h>
-#include <syslog.h>
-
-#include "global.h"
-#include "xmalloc.h"
 #include "exitcodes.h"
+#include "imapopts.h"
 
-static int gotsignal = 0;
+/* these will assert() if they're called on the wrong type of
+   option (imapopts.c) */
+extern const char *config_getstring(enum imapopt opt);
+extern int config_getint(enum imapopt opt);
+extern int config_getswitch(enum imapopt opt);
 
-static void sighandler(int sig)
-{
-    /* syslog(LOG_DEBUG, "got signal %d", sig); */
-    gotsignal = sig;
-}
+/* these work on additional strings that are not defined in the
+ * imapoptions table */
+extern const char *config_getoverflowstring(const char *key, const char *def);
+extern const char *config_partitiondir(const char *partition);
 
-static const int catch[] = { SIGHUP, SIGINT, SIGQUIT, 0 };
+/* cached configuration variables accessable to external world */
+extern const char *config_filename;
+extern const char *config_dir;
+extern const char *config_defpartition;
+extern const char *config_servername;
+extern const char *config_mupdate_server;
+extern const char *config_defdomain;
+extern const char *config_ident;
+extern int config_hashimapspool;
+extern int config_implicitrights;
+extern int config_virtdomains;
 
-void signals_add_handlers(void)
-{
-    struct sigaction action;
-    int i;
-    
-    sigemptyset(&action.sa_mask);
+/* config requirement flags */
+#define CONFIG_NEED_PARTITION_DATA (1<<0)
 
-    action.sa_flags = 0;
-#ifdef SA_RESETHAND
-    action.sa_flags |= SA_RESETHAND;
-#endif
-#ifdef SA_RESTART
-    action.sa_flags |= SA_RESTART;
-#endif
-
-    action.sa_handler = sighandler;
-    
-    for (i = 0; catch[i] != 0; i++) {
-	if (sigaction(catch[i], &action, NULL) < 0) {
-	    fatal("unable to install signal handler for %d: %m", catch[i]);
-	}
-    }
-}
-
-static shutdownfn *shutdown_cb = NULL;
-
-void signals_set_shutdown(shutdownfn *s)
-{
-    shutdown_cb = s;
-}
-
-void signals_poll(void)
-{
-    if (gotsignal) {
-	if (shutdown_cb) shutdown_cb(EC_TEMPFAIL);
-	else exit(EC_TEMPFAIL);
-    }
-}
+#endif /* INCLUDED_LIBCONFIG_H */

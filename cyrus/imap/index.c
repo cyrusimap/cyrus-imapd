@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.180.4.20 2003/01/11 20:24:41 ken3 Exp $
+ * $Id: index.c,v 1.180.4.21 2003/02/06 22:40:53 rjs3 Exp $
  */
 #include <config.h>
 
@@ -64,7 +64,7 @@
 #include "exitcodes.h"
 #include "hash.h"
 #include "imap_err.h"
-#include "imapconf.h"
+#include "global.h"
 #include "imapd.h"
 #include "lsort.h"
 #include "mailbox.h"
@@ -73,6 +73,7 @@
 #include "parseaddr.h"
 #include "search_engines.h"
 #include "seen.h"
+#include "strhash.h"
 #include "stristr.h"
 #include "util.h"
 #include "xmalloc.h"
@@ -3182,7 +3183,7 @@ static MsgData *index_msgdata_load(unsigned *msgno_list, int n,
 		break;
 	    case SORT_SUBJECT:
 		cur->xsubj = index_extract_subject(subj+4, &cur->is_refwd);
-		cur->xsubj_hash = hash(cur->xsubj);
+		cur->xsubj_hash = strhash(cur->xsubj);
 		break;
 	    case SORT_TO:
 		cur->to = get_localpart_addr(to+4);

@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.75.4.15 2003/01/28 18:52:45 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.75.4.16 2003/02/06 22:40:54 rjs3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -76,7 +76,7 @@
 #include "auth.h"
 #include "prot.h"
 #include "rfc822date.h"
-#include "imapconf.h"
+#include "global.h"
 #include "iptostring.h"
 #include "exitcodes.h"
 #include "imap_err.h"

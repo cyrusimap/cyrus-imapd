@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.134.4.15 2003/01/21 02:38:31 ken3 Exp $
+ $Id: mailbox.c,v 1.134.4.16 2003/02/06 22:40:54 rjs3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -81,7 +81,7 @@
 #endif
 
 #include "assert.h"
-#include "imapconf.h"
+#include "global.h"
 #include "acl.h"
 #include "map.h"
 #include "retry.h"

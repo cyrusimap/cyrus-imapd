@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: spool.c,v 1.1.2.2 2002/10/15 19:12:50 ken3 Exp $
+ * $Id: spool.c,v 1.1.2.3 2003/02/06 22:40:57 rjs3 Exp $
  */
 
 #include <config.h>
@@ -60,7 +60,7 @@
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "nntp_err.h"
-#include "imapconf.h"
+#include "global.h"
 
 #define HEADERCACHESIZE 4009
 

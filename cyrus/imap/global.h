@@ -1,5 +1,5 @@
-/* config.h -- Configuration routines
- * $Id: imapconf.h,v 1.16.4.13 2003/01/22 03:37:10 ken3 Exp $
+/* global.h -- Header for global/shared variables & functions.
+ * $Id: global.h,v 1.1.2.1 2003/02/06 22:40:52 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -40,35 +40,24 @@
  *
  */
 
-#ifndef INCLUDED_IMAPCONF_H
-#define INCLUDED_IMAPCONF_H
+#ifndef INCLUDED_GLOBAL_H
+#define INCLUDED_GLOBAL_H
 
 #include <sasl/sasl.h>
-#include "imapopts.h"
+#include "libconfig.h"
 #include "auth.h"
 #include "mboxname.h"
 
 /* Startup the configuration subsystem */
-/* Note that config_init is pretty much the wholesale startup function
+/* Note that cyrus_init is pretty much the wholesale startup function
  * for any libimap/libcyrus process, and should be called fairly early
  * (and needs an associated cyrus_done call) */
-extern int config_init(const char *alt_config, const char *ident);
-extern void config_sasl_init(int client, int server,
+extern int cyrus_init(const char *alt_config, const char *ident);
+extern void global_sasl_init(int client, int server,
 			     const sasl_callback_t *callbacks);
 
 /* Shutdown a cyrus process */
 extern void cyrus_done();
-
-/* these will assert() if they're called on the wrong type of
-   option (imapopt.c) */
-extern const char *config_getstring(enum imapopt opt);
-extern int config_getint(enum imapopt opt);
-extern int config_getswitch(enum imapopt opt);
-
-/* these work on additional strings that are not defined in the
- * imapoptions table */
-extern const char *config_getoverflowstring(const char *key, const char *def);
-extern const char *config_partitiondir(const char *partition);
 
 /* sasl configuration */
 extern int mysasl_config(void *context,
@@ -98,20 +87,8 @@ extern int mysasl_proxy_policy(sasl_conn_t *conn,
 			       struct propctx *propctx __attribute__((unused)));
 
 /* check if `authstate' is a valid member of class */
-extern int config_authisa(struct auth_state *authstate, 
+extern int global_authisa(struct auth_state *authstate, 
 			  enum imapopt opt);
-
-/* Values of mandatory options */
-extern const char *config_filename;
-extern const char *config_dir;
-extern const char *config_defpartition;
-extern const char *config_servername;
-extern const char *config_mupdate_server;
-extern int config_hashimapspool;
-
-extern int config_implicitrights;
-extern int config_virtdomains;
-extern const char *config_defdomain;
 
 /* signal handling (signals.c) */
 typedef void shutdownfn(int);
@@ -161,7 +138,4 @@ void eatline(struct protstream *pin, int c);
 /* Misc utils */
 extern void cyrus_ctime(time_t date, char *datebuf);
 
-/* config requirement flags */
-#define CONFIG_NEED_PARTITION_DATA (1<<0)
-
-#endif /* INCLUDED_IMAPCONF_H */
+#endif /* INCLUDED_GLOBAL_H */

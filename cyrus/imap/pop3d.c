@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122.4.21 2003/02/05 01:31:05 ken3 Exp $
+ * $Id: pop3d.c,v 1.122.4.22 2003/02/06 22:40:56 rjs3 Exp $
  */
 #include <config.h>
 
@@ -72,7 +72,7 @@
 #include "util.h"
 #include "auth.h"
 #include "iptostring.h"
-#include "imapconf.h"
+#include "global.h"
 #include "tls.h"
 
 #include "exitcodes.h"
@@ -269,7 +269,7 @@ int service_init(int argc __attribute__((unused)),
     signal(SIGPIPE, SIG_IGN);
 
     /* load the SASL plugins */
-    config_sasl_init(0, 1, mysasl_cb);
+    global_sasl_init(0, 1, mysasl_cb);
 
     /* open the mboxlist, we'll need it for real work */
     mboxlist_init(0);

@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.93.4.3 2002/12/03 15:05:26 ken3 Exp $
+ * $Id: append.c,v 1.93.4.4 2003/02/06 22:40:51 rjs3 Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -59,7 +59,7 @@
 #include "mailbox.h"
 #include "message.h"
 #include "append.h"
-#include "imapconf.h"
+#include "global.h"
 #include "prot.h"
 #include "xmalloc.h"
 #include "mboxlist.h"

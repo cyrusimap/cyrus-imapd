@@ -40,7 +40,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 # 
-# $Id: Makefile.in,v 1.26.2.6 2003/02/06 15:49:38 rjs3 Exp $
+# $Id: Makefile.in,v 1.26.2.7 2003/02/06 22:41:01 rjs3 Exp $
 srcdir = @srcdir@
 VPATH = @srcdir@
 
@@ -83,8 +83,8 @@ $(srcdir)/sieveshell.1: $(srcdir)/../perl/sieve/scripts/sieveshell.pl
 	@echo creating sieveshell.1
 	pod2man $(srcdir)/../perl/sieve/scripts/sieveshell.pl > $(srcdir)/sieveshell.1
 
-imapd.conf.5: $(srcdir)/../imap/imapoptions $(srcdir)/../tools/config2header
-	$(srcdir)/../tools/config2man $(srcdir)/../imap/imapoptions > imapd.conf.5
+imapd.conf.5: $(srcdir)/../lib/imapoptions $(srcdir)/../tools/config2header
+	$(srcdir)/../tools/config2man $(srcdir)/../lib/imapoptions > imapd.conf.5
 
 install:
 	for file in $(MAN1); \

@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.32.4.12 2002/12/11 20:40:24 rjs3 Exp $ */
+/* $Id: fud.c,v 1.32.4.13 2003/02/06 22:40:52 rjs3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -65,7 +65,7 @@
 
 #include "assert.h"
 #include "mboxlist.h"
-#include "imapconf.h"
+#include "global.h"
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"

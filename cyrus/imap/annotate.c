@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.20 2002/11/17 05:06:28 ken3 Exp $
+ * $Id: annotate.c,v 1.8.6.21 2003/02/06 22:40:51 rjs3 Exp $
  */
 
 #include <config.h>
@@ -67,7 +67,7 @@
 #include "glob.h"
 #include "hash.h"
 #include "imapd.h"
-#include "imapconf.h"
+#include "global.h"
 #include "imap_err.h"
 #include "mboxlist.h"
 #include "util.h"
@@ -212,7 +212,7 @@ void freeentryatts(struct entryattlist *l)
     }
 }
 
-/* must be called after config_init */
+/* must be called after cyrus_init */
 void annotatemore_init(int myflags,int (*func)(const char *, const char *,
 					       struct strlist *))
 {

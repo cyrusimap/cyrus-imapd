@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.63 2003/02/05 01:31:02 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.64 2003/02/06 22:40:52 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -72,7 +72,7 @@
 #include "charset.h"
 #include "exitcodes.h"
 #include "idle.h"
-#include "imapconf.h"
+#include "global.h"
 #include "imap_err.h"
 #include "imapd.h"
 #include "imapurl.h"
@@ -430,7 +430,7 @@ int service_init(int argc, char **argv, char **envp)
     signal(SIGPIPE, SIG_IGN);
 
     /* load the SASL plugins */
-    config_sasl_init(1, 1, mysasl_cb);
+    global_sasl_init(1, 1, mysasl_cb);
 
     ret = snprintf(shutdownfilename, sizeof(shutdownfilename),
 		   "%s/msg/shutdown", config_dir);
@@ -1679,7 +1679,7 @@ void cmd_login(char *tag, char *user)
     
     imapd_authstate = auth_newstate(imapd_userid);
 
-    imapd_userisadmin = config_authisa(imapd_authstate, IMAPOPT_ADMINS);
+    imapd_userisadmin = global_authisa(imapd_authstate, IMAPOPT_ADMINS);
 
     if (!reply) reply = "User logged in";
 
@@ -4162,7 +4162,7 @@ char *identifier;
 	int implicit;
 	char rightsdesc[100], optional[33];
 
-	if (config_authisa(authstate, IMAPOPT_ADMINS))
+	if (global_authisa(authstate, IMAPOPT_ADMINS))
 	    canon_identifier = identifier; /* don't canonify global admins */
 	else
 	    canon_identifier = canonify_userid(identifier, imapd_userid, NULL);

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: arbitron.c,v 1.23.6.4 2002/12/20 18:31:59 rjs3 Exp $ */
+/* $Id: arbitron.c,v 1.23.6.5 2003/02/06 22:40:51 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -58,7 +58,7 @@
 #include <com_err.h>
 
 #include "assert.h"
-#include "imapconf.h"
+#include "global.h"
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"
@@ -120,7 +120,7 @@ int main(int argc,char **argv)
 	}
     }
 
-    config_init(alt_config, "arbitron");
+    cyrus_init(alt_config, "arbitron");
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&arb_namespace, 1)) != 0) {

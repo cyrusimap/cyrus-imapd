@@ -1,6 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.30.4.3 2002/10/18 20:19:46 ken3 Exp $
+ * $Id: actions.c,v 1.30.4.4 2003/02/06 22:41:07 rjs3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -63,7 +63,8 @@
 #include "prot.h"
 #include "tls.h"
 #include "util.h"
-#include "imapconf.h"
+#include "global.h"
+#include "libconfig.h"
 #include "xmalloc.h"
 #include "sieve_interface.h"
 

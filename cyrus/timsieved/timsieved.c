@@ -1,7 +1,7 @@
 /* timsieved.c -- main file for timsieved (sieve script accepting program)
  * Tim Martin
  * 9/21/99
- * $Id: timsieved.c,v 1.40.4.9 2003/02/05 01:31:12 ken3 Exp $
+ * $Id: timsieved.c,v 1.40.4.10 2003/02/06 22:41:07 rjs3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -70,10 +70,11 @@
 #include <string.h>
 
 #include "prot.h"
-#include "imapconf.h"
+#include "libconfig.h"
 #include "xmalloc.h"
 #include "exitcodes.h"
 #include "iptostring.h"
+#include "global.h"
 #include "codes.h"
 #include "actions.h"
 #include "parser.h"
@@ -192,7 +193,7 @@ static struct sasl_callback mysasl_cb[] = {
 
 int service_init(int argc, char **argv, char **envp)
 {
-    config_sasl_init(0, 1, mysasl_cb);
+    global_sasl_init(0, 1, mysasl_cb);
 
     /* open mailboxes */
     mboxlist_init(0);

@@ -41,7 +41,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: expirenews.c,v 1.1.2.4 2002/12/20 18:32:00 rjs3 Exp $ */
+/* $Id: expirenews.c,v 1.1.2.5 2003/02/06 22:40:52 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -54,7 +54,7 @@
 #include <syslog.h>
 
 #include "exitcodes.h"
-#include "imapconf.h"
+#include "global.h"
 #include "netnews.h"
 #include "xmalloc.h"
 
@@ -110,7 +110,7 @@ int main(int argc, char *argv[])
 	}
     }
 
-    config_init(alt_config, "expirenews");
+    cyrus_init(alt_config, "expirenews");
 
     /* initialize news database */
     if (netnews_init(NULL, 0) != 0) {

@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- * $Id: mboxname.c,v 1.25.4.12 2002/10/04 17:16:47 ken3 Exp $
+ * $Id: mboxname.c,v 1.25.4.13 2003/02/06 22:40:55 rjs3 Exp $
  * Copyright (c)1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -50,7 +50,7 @@
 
 #include "assert.h"
 #include "glob.h"
-#include "imapconf.h"
+#include "global.h"
 #include "mailbox.h"
 #include "exitcodes.h"
 #include "imap_err.h"

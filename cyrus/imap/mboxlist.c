@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.34 2003/02/05 01:36:28 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.35 2003/02/06 22:40:54 rjs3 Exp $
  */
 
 #include <config.h>
@@ -67,7 +67,7 @@
 #include "auth.h"
 #include "glob.h"
 #include "assert.h"
-#include "imapconf.h"
+#include "global.h"
 #include "cyrusdb.h"
 #include "util.h"
 #include "mailbox.h"
@@ -2428,7 +2428,7 @@ static int mboxlist_changequota(const char *name, int matchlen, int maycreate,
     return 0;
 }
 
-/* must be called after config_init */
+/* must be called after cyrus_init */
 void mboxlist_init(int myflags)
 {
     int r;

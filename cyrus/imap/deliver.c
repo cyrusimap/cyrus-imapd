@@ -41,7 +41,7 @@
  *
  */
 
-/* $Id: deliver.c,v 1.164.4.4 2002/11/15 21:46:55 rjs3 Exp $ */
+/* $Id: deliver.c,v 1.164.4.5 2003/02/06 22:40:51 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -67,7 +67,7 @@
 #include <arpa/inet.h>
 #include <sys/un.h>
 
-#include "imapconf.h"
+#include "global.h"
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "xmalloc.h"
@@ -271,7 +271,7 @@ int main(int argc, char **argv)
     prot_setflushonread(deliver_in, deliver_out);
     prot_settimeout(deliver_in, 300);
 
-    config_init(alt_config, "deliver");
+    cyrus_init(alt_config, "deliver");
 
     sockaddr = config_getstring(IMAPOPT_LMTPSOCKET);
     if (!sockaddr) {	

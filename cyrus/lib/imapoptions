@@ -1,0 +1,562 @@
+# things inside of C comments get copied to the manpage
+# things starting with # are ignored
+
+/* .\" -*- nroff -*-
+.TH IMAPD.CONF 5 "Project Cyrus" CMU
+.\" 
+.\" Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+.\"
+.\" Redistribution and use in source and binary forms, with or without
+.\" modification, are permitted provided that the following conditions
+.\" are met:
+.\"
+.\" 1. Redistributions of source code must retain the above copyright
+.\"    notice, this list of conditions and the following disclaimer. 
+.\"
+.\" 2. Redistributions in binary form must reproduce the above copyright
+.\"    notice, this list of conditions and the following disclaimer in
+.\"    the documentation and/or other materials provided with the
+.\"    distribution.
+.\"
+.\" 3. The name "Carnegie Mellon University" must not be used to
+.\"    endorse or promote products derived from this software without
+.\"    prior written permission. For permission or any other legal
+.\"    details, please contact  
+.\"      Office of Technology Transfer
+.\"      Carnegie Mellon University
+.\"      5000 Forbes Avenue
+.\"      Pittsburgh, PA  15213-3890
+.\"      (412) 268-4387, fax: (412) 268-7395
+.\"      tech-transfer@andrew.cmu.edu
+.\"
+.\" 4. Redistributions of any form whatsoever must retain the following
+.\"    acknowledgment:
+.\"    "This product includes software developed by Computing Services
+.\"     at Carnegie Mellon University (http://www.cmu.edu/computing/)."
+.\"
+.\" CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
+.\" THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+.\" AND FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE
+.\" FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+.\" WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+.\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
+.\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+.\" 
+.\" $Id: imapoptions,v 1.1.2.1 2003/02/06 22:40:59 rjs3 Exp $
+.SH NAME
+imapd.conf \- IMAP configuration file
+.SH DESCRIPTION
+\fB/etc/imapd.conf\fR 
+is the configuration file for the Cyrus IMAP server.  It defines
+local parameters for IMAP. 
+.PP
+Each line of the \fB/etc/imapd.conf\fR file has the form
+.IP
+\fIoption\fR: \fIvalue\fR
+.PP
+where \fIoption\fR is the name of the configuration option being set
+and \fIvalue\fR is the value that the configuration option is being
+set to.
+.PP
+Blank lines and lines beginning with ``#'' are ignored.
+.PP
+For boolean options, the values ``yes'', ``on'', ``t'', and ``1'' turn the
+option on, the values ``no'', ``off'', ``f'', and ``0'' turn the option off.
+.SH FIELD DESCRIPTIONS
+.PP
+The sections below detail options that can be placed in the
+\fB/etc/imapd.conf\fR file, and show each option's default value.
+Some options have no default value, these are listed with
+``<no default>''.  Some options default to the empty string, these
+are listed with ``<none>''.
+*/
+
+# OPTIONS
+
+{ "admins", "", STRING }
+/* The list of userids with administrative rights.  Separate each userid
+   with a space.  Sites using Kerberos authentication may use
+   separate "admin" instances.
+.PP
+   Note that accounts used by users should not be administrators.
+   Administrative accounts should not receive mail.  That is, if user
+   "jbRo" is a user reading mail, he should not also be in the admins line.
+   Some problems may occur otherwise, most notably the ability of
+   administrators to create top-level mailboxes visible to users,
+   but not writable by users. */
+
+{ "allowallsubscribe", 0, SWITCH }
+/* Allow subscription to nonexistent mailboxes.  This option is
+   typically used on backend servers in a Murder so that users can
+   subscribe to mailboxes that don't reside on their "home" server.
+   This option can also be used as a workaround for IMAP clients which
+   don't play well with nonexistent or unselectable mailboxes (eg.
+   Microsoft Outlook). */
+
+{ "allowanonymouslogin", 0, SWITCH }
+/* Permit logins by the user "anonymous" using any password.  Also
+   allows use of the SASL ANONYMOUS mechanism. */
+
+{ "allownewnews", 0, SWITCH }
+/* Allow use of the NNTP NEWNEWS command.
+.PP
+  Note that this is a very expensive command and should only be
+  enabled when absolutely necessary. */
+
+{ "allowplaintext", 1, SWITCH }
+/* Allow passwords to pass in the clear. */
+   
+{ "allowusermoves", 0, SWITCH }
+/* Allow moving user accounts (with associated meta-data) via RENAME
+   or XFER.
+.PP
+  Note that measures should be taken to make sure that the user being
+  moved is not logged in, and can not login during the move.  Failure
+  to do so may result in the user's meta-data (seen state,
+  subscriptions, etc) being corrupted or out of date. */
+   
+{ "altnamespace", 0, SWITCH }
+/* Use the alternate IMAP namespace, where personal folders reside at the
+   same level in the hierarchy as INBOX.
+.PP
+   This option ONLY applies where interaction takes place with the
+   client/user.  Currently this is limited to the IMAP protocol (imapd)
+   and Sieve scripts (lmtpd).  This option does NOT apply to admin tools
+   such as cyradm (admins ONLY), reconstruct, quota, etc., NOR does it
+   affect LMTP delivery of messages directly to mailboxes via
+   plus-addressing. */
+
+{ "autocreatequota", 0, INT }
+/* If nonzero, normal users may create their own IMAP accounts by
+   creating the mailbox INBOX.  The user's quota is set to the value
+   if it is positive, otherwise the user has unlimited quota. */
+
+{ "configdirectory", NULL, STRING }
+/* The pathname of the IMAP configuration directory.  This field is
+   required. */
+
+{ "debug_command", NULL, STRING }
+/* Debug command to be used by processes started with -D option.  The string
+   is a C format string that gets 3 options: the first is the name of the
+   executable (without path).  The second is the pid (integer) and the third
+   is the service ID.  Example: /usr/local/bin/gdb /usr/cyrus/bin/%s %d */
+
+{ "defaultacl", "anyone lrs", STRING }
+/* The Access Control List (ACL) placed on a newly-created (non-user)
+   mailbox that does not have a parent mailbox. */
+
+{ "defaultdomain", NULL, STRING }
+/* The default domain for virtual domain support */
+
+{ "defaultpartition", "default", STRING }
+/* The partition name used by default for new mailboxes. */
+
+{ "deleteright", "c", STRING }
+/* The right that a user needs to delete a mailbox. */
+
+{ "duplicatesuppression", 1, SWITCH }
+/* If enabled, lmtpd will suppress delivery of a message to a mailbox if
+   a message with the same message-id (or resent-message-id) is recorded
+   as having already been delivered to the mailbox.  Records the mailbox
+   and message-id/resent-message-id of all successful deliveries. */
+
+{ "foolstupidclients", 0, SWITCH }
+/* If enabled, only list the personal namespace when a LIST "*" is performed.
+   (it changes the request to a LIST "INBOX*" */
+
+{ "hashimapspool", 0, SWITCH }
+/* If enabled, the partitions will also be hashed, in addition to the
+   hashing done on configuration directories.  This is recommended if
+   one partition has a very bushy mailbox tree. */
+
+# Commented out - there's no such thing as "partition-name", but we need
+# this for the man page
+# { "hostname_mechs", NULL, STRING }
+/* Force a particuar list of SASL mechanisms to be used when authenticating
+   to the backend server hostname (where hostname is the short hostname of
+   the server in question). If it is not specified it will query the server
+   for available mechanisms and pick one to use. - Cyrus Murder */
+
+# { "hostname_password", NULL, STRING }
+/* The password to use for authentication to the backend server hostname
+   (where hostname is the short hostname of the server) - Cyrus Murder */
+
+{ "idlesocket", "{configdirectory}/socket/idle", STRING }
+/* Unix domain socket that idled listens on. */
+
+{ "ignorereference", 0, SWITCH }
+/* For backwards compatibility with Cyrus 1.5.10 and earlier -- ignore
+  the reference argument in LIST or LSUB commands. */
+
+{ "imapidlepoll", 60, INT }
+/* The interval (in seconds) for polling the mailbox for changes while
+   running the IDLE command.  This option is used when idled can not
+   be contacted or when polling is used exclusively.  The minimum
+   value is 1.  A value of 0 will disable polling (and disable IDLE if
+   polling is the only method available). */
+
+{ "imapidresponse", 1, SWITCH }
+/* If enabled, the server responds to an ID command with a parameter 
+   list containing: version, vendor, support-url, os, os-version,
+   command, arguments, environment.  Otherwise the server returns NIL. */
+
+{ "implicit_owner_rights", "lca", STRING }
+/* The implicit Access Control List (ACL) for the owner of a mailbox. */
+
+{ "ldap_base", NULL, STRING }
+/* Contains the LDAP base dn for the LDAP ptloader module */
+
+{ "ldap_filter", NULL, STRING }
+/* Contains the ldap filter to use when looking up the user id.  The occurance
+   of any %u in the string will be replaced with the canonicalized user id */
+
+{ "ldap_servers", NULL, STRING }
+/* Contains a list of the URLs of all the LDAP servers when using the
+   LDAP PTS module. */
+
+{ "ldap_sasl", 1, SWITCH }
+/* Use SASL for LDAP binds in the LDAP PTS module. */
+
+{ "ldap_sasl_authc", NULL, STRING }
+/* Force the use of a particular SASL authentication ID for the LDAP server */
+
+{ "ldap_sasl_authz", NULL, STRING }
+/* Force the use of a particular SASL authorization ID for the LDAP server */
+
+{ "ldap_sasl_mech", NULL, STRING }
+/* Force the use of a particular SASL mechanism for LDAP authentication */
+
+{ "ldap_sasl_password", NULL, STRING }
+/* Password for the LDAP SASL mechanism (if needed) */
+
+{ "ldap_sasl_realm", NULL, STRING }
+/* Force the use of a particular SASL realm for LDAP authentication */
+
+{ "ldap_member_attribute", "memberOf", STRING }
+/* The multi-valued attribute name for an entity that lists its groups. */
+
+{ "lmtp_over_quota_perm_failure", 0, SWITCH }
+/* If enabled, lmtpd returns a permanent failure code when a user's
+   mailbox is over quota.  By default, the failure is temporary,
+   causing the MTA to queue the message and retry later. */
+
+{ "lmtpsocket", "{configdirectory}/socket/lmtp", STRING }
+/* Unix domain socket that lmtpd listens on, used by deliver(8). This should
+   match the path specified in cyrus.conf(5). */
+
+# xxx how does this tie into virtual domains?
+{ "loginrealms", "", STRING }
+/* The list of remote realms whose users may log in using cross-realm
+   authentications.  Seperate each realm name by a space.  (A
+   cross-realm identity is considered any identity returned by SASL
+   with an "@" in it.) */
+
+{ "loginuseacl", 0, SWITCH }
+/* If enabled, any authentication identity which has \fBa\fR rights on a
+   user's INBOX may log in as that user. */
+
+{ "logtimestamps", 0, SWITCH }
+/* Include notations in the protocol telemetry logs indicating the number of
+   seconds since the last command or response. */
+
+{ "mailnotifier", NULL, STRING }
+/* Notifyd(8) method to use for "MAIL" notifications.  If not set, "MAIL"
+   notifications are disabled. */
+
+{ "maxmessagesize", 0, INT }
+/* Maximum incoming LMTP message size.  If non-zero, lmtpd will reject
+   messages larger than \fImaxmessagesize\fR bytes.  If set to 0, this
+   will allow messages of any size (the default). */
+
+# xxx badly worded
+{ "mupdate_connections_max", 128, INT }
+/* The max number of connections that a mupdate process will allow, this
+   is related to the number of file descriptors in the mupdate process.
+   Beyond this number connections will be immedately issued a BYE response. */
+
+{ "mupdate_authname", NULL, STRING }
+/* The SASL username (Authentication Name) to use when authenticating to the
+   mupdate server (if needed). */
+
+{ "mupdate_password", NULL, STRING }
+/* The SASL password (if needed) to use when authenticating to the
+   mupdate server. */
+
+{ "mupdate_port", 2004, INT }
+/* The port of the mupdate server for the Cyrus Murder */
+
+{ "mupdate_realm", NULL, STRING }
+/* The SASL realm (if needed) to use when authenticating to the mupdate
+   server. */
+
+{ "mupdate_retry_delay", 20, INT }
+/* The base time to wait between connection retries to the mupdate server. */
+
+{ "mupdate_server", NULL, STRING }
+/* The mupdate server for the Cyrus Murder */
+
+{ "mupdate_workers_start", 5, INT }
+/* The number of mupdate worker threads to start */
+
+{ "mupdate_workers_minspare", 2, INT }
+/* The minimum number of idle mupdate worker threads */
+
+{ "mupdate_workers_maxspare", 10, INT }
+/* The maximum number of idle mupdate worker threads */
+
+{ "mupdate_workers_max", 50, INT }
+/* The maximum number of mupdate worker threads (overall) */
+
+{ "mupdate_username", "", STRING }
+/* The SASL username (Authorization Name) to use when authenticating to
+   the mupdate server */
+
+{ "netscapeurl", "http://asg.web.cmu.edu/cyrus/imapd/netscape-admin.html", STRING }
+/* If enabled at compile time, this specifies a URL to reply when
+   Netscape asks the server where the mail administration HTTP server
+   is.  The default is a site at CMU with a hopefully informative
+   message; administrators should set this to a local resource with
+   some information of greater use. */
+
+{ "newspeer", NULL, STRING }
+/* The fully qualified hostname of the upstream news server to which
+   articles should be fed. */
+
+{ "newspostuser", "post", STRING }
+/* Userid used to deliver usenet articles to newsgroup folders.  For
+   example, if set to "news", email sent to "news+comp.mail.imap"
+   would be delivered to the "comp.mail.imap" folder.  By default, an
+   email address of "post+comp.mail.imap" would be used. */ 
+
+{ "newsprefix", NULL, STRING }
+/* Prefix to be prepended to newsgroup names to make the corresponding
+   IMAP mailbox names. */
+
+{ "notifysocket", "{configdirectory}/socket/notify", STRING }
+/* Unix domain socket that the new mail notification daemon listens on. */
+
+# Commented out - there's no such thing as "partition-name", but we need
+# this for the man page
+# { "partition-name", NULL, STRING }
+/* The pathname of the partition \fIname\fR.  At least one field, for the
+   partition named in the \fBdefaultpartition\fR option, is required.
+   For example, if the value of the \fBdefaultpartion\fR option is
+   \fBdefault\fR, then the \fBpartition-default\fR field is required. */
+
+{ "plaintextloginpause", 0, INT }
+/* Number of seconds to pause after a successful plaintext login.  For
+   systems that support strong authentication, this permits users to  
+   perceive a cost of using plaintext passwords.  (This does not
+   affect the use of PLAIN in SASL authentications.) */
+
+{ "popexpiretime", -1, INT }
+/* The number of days advertised as being the minimum a message may be
+   left on the POP server before it is deleted (via the CAPA command,
+   defined in the POP3 Extension Mechanism, which some clients may
+   support).  "NEVER", the default, may be specified with a negative
+   number.  The Cyrus POP3 server never deletes mail, no matter what  
+   the value of this parameter is.  However, if a site implements a 
+   less liberal policy, it needs to change this parameter
+   accordingly. */
+
+{ "popminpoll", 0, INT }
+/* Set the minimum amount of time the server forces users to wait
+   between successive POP logins, in minutes.  The default is 0. */ 
+
+{ "poptimeout", 10, INT }
+/* Set the length of the POP server's inactivity autologout timer,    
+   in minutes.  The minimum value is 10, the default. */
+
+{ "postmaster", "postmaster", STRING }
+/* Username that is used as the 'From' address in rejection MDNs produced
+   by sieve. */
+   
+{ "postspec", NULL, STRING }
+
+{ "postuser", "", STRING }
+/* Userid used to deliver messages to shared folders.  For example, if
+   set to "bb", email sent to "bb+shared.blah" would be delivered to
+   the "shared.blah" folder.  By default, an email address of
+   "+shared.blah" would be used. */ 
+
+{ "proxy_authname", "proxy", STRING }
+/* The authentication name to use when authenticating to a backend server
+   in the Cyrus Murder. */
+
+{ "proxy_password", NULL, STRING }
+/* The default password to use when authenticating to a backend server
+   in the Cyrus Murder.  May be overridden on a host-specific basis using
+   the hostname_password option. */
+
+{ "proxy_realm", NULL, STRING }
+/* The authentication realm to use when authenticating to a backend server
+   in the Cyrus Murder */
+
+{ "proxyd_allow_status_referral", 0, SWITCH }
+/* Set to true to allow proxyd to issue referrals to clients that support it
+   when answering the STATUS command.  This is disabled by default since
+   some clients issue many STATUS commands in a row, and do not cache the
+   connections that these referrals would cause, thus resulting in a higher
+   authentication load on the respective backend server. */
+
+{ "proxyservers", NULL, STRING }
+/* A list of users and groups that are allowed to proxy for other
+   users, seperated by spaces.  Any user listed in this will be
+   allowed to login for any other user: use with caution. */ 
+
+{ "ptscache_timeout", 10800, INT }
+/* The timeout (in seconds) for the PTS cache database when using the
+   auth_krb_pts authorization method (default: 3 hours). */
+
+{ "quotawarn", 90, INT }
+/* The percent of quota utilization over which the server generates
+   warnings. */
+
+{ "reject8bit", 0, SWITCH }
+/* If enabled, lmtpd rejects messages with 8-bit characters in the
+   headers.  Otherwise, 8-bit characters are changed to `X'.  (A
+   proper soultion to non-ASCII characters in headers is offered by  
+   RFC 2047 and its predecessors.) */
+
+# Commented out - used by libsasl
+# { "sasl_auto_transition", 0, SWITCH }
+/* If enabled, the SASL library will automatically create authentication
+   secrets when given a plaintext password.  See the SASL documentation. */
+
+{ "sasl_maximum_layer", 256, INT }
+/* Maximum SSF (security strength factor) that the server will allow a
+   client to negotiate. */
+
+{ "sasl_minimum_layer", 0, INT }
+/* The minimum SSF that the server will allow a client to negotiate.
+   A value of 1 requires integrity protection; any higher value  
+   requires some amount of encryption. */
+
+# Commented out - used by libsasl
+# { "sasl_option", 0, STRING }
+/* Any SASL option can be set by preceeding it with "sasl_".  This
+   file overrides the SASL configuration file. */
+
+# Commented out - used by libsasl
+# { "sasl_pwcheck_method", NULL, STRING }
+/* The mechanism used by the server to verify plaintext passwords. 
+   Possible values include "auxprop", "saslauthd", and "pwcheck". */
+
+{ "sendmail", "/usr/lib/sendmail", STRING }
+/* The pathname of the sendmail executable.  Sieve invokes sendmail
+   for sending rejections, redirects and vacation responses. */
+
+{ "servername", NULL, STRING }
+/* This is the hostname visible in the greeting messages of the POP,
+   IMAP and LMTP daemons. If it is unset, then the result returned
+   from gethostname(2) is used. */
+   
+{ "sharedprefix", "Shared Folders", STRING }
+/* If using the alternate IMAP namespace, the prefix for the shared
+   namespace.  The hierarchy delimiter will be automatically appended. */
+
+{ "sieve_maxscriptsize", 32, INT }
+/* Maximum size (in kilobytes) any sieve script can be, enforced at
+   submission by timsieved(8). */
+
+{ "sieve_maxscripts", 5, INT }
+/* Maximum number of sieve scripts any user may have, enforced at
+   submission by timsieved(8). */
+   
+{ "sievedir", "/usr/sieve", STRING }
+/* If sieveusehomedir is false, this directory is searched for Sieve
+   scripts. */
+
+{ "sievenotifier", NULL, STRING }
+/* Notifyd(8) method to use for "SIEVE" notifications.  If not set, "SIEVE"
+   notifications are disabled.
+.PP
+   This method is only used when no method is specified in the script. */
+
+{ "sieveusehomedir", 0, SWITCH }
+/* If enabled, lmtpd will look for Sieve scripts in user's home
+   directories: ~user/.sieve. */
+
+{ "singleinstancestore", 1, SWITCH }
+/* If enabled, lmtpd attempts to only write one copy of a message per
+   partition and create hard links, resulting in a potentially large
+   disk savings. */
+
+{ "skiplist_unsafe", 0, SWITCH }
+/* If enabled, this option forces the skiplist cyrusdb backend to
+   not sync writes to the disk.  Enabling this option is NOT RECOMMENDED. */
+
+{ "soft_noauth", 1, SWITCH }
+/* If enabled, lmtpd returns temporary failures if the client does not
+   successfully authenticate.  Otherwise lmtpd returns permanant failures
+   (causing the mail to bounce immediately). */
+
+{ "srvtab", "", STRING }
+/* The pathname of \fIsrvtab\fR file containing the server's private
+   key.  This option is passed to the SASL library and overrides its
+   default setting. */
+
+{ "temp_path", "/tmp", STRING }
+/* The pathname to store temporary files in */
+
+{ "timeout", 30, INT }   
+/* The length of the IMAP server's inactivity autologout timer,       
+   in minutes.  The minimum value is 30, the default. */
+
+{ "tls_ca_file", NULL, STRING }
+/* File containing one or more Certificate Authority (CA) certificates. */
+
+{ "tls_ca_path", NULL, STRING }
+/* Path to directory with certificates of CAs.  This directory must
+   have filenames with the hashed value of the certificate (see
+   openssl(XXX)). */
+
+{ "tls_cert_file", NULL, STRING }
+/* File containing the certificate presented for server authentication
+   during STARTTLS.  A value of "disabled" will disable SSL/TLS. */
+
+{ "tls_cipher_list", "DEFAULT", STRING }
+/* The list of SSL/TLS ciphers to allow.  The format of the string is
+   described in ciphers(1). */
+
+{ "tls_key_file", NULL, STRING }
+/* File containing the private key belonging to the server
+   certificate.  A value of "disabled" will disable SSL/TLS. */
+
+{ "tls_require_cert", 0, SWITCH }
+/* Require a client certificate for ALL services (imap, pop3, lmtp, sieve). */
+
+{ "tls_session_timeout", 1440, INT }
+/* The length of time (in minutes) that a TLS session will be cached
+   for later reuse.  The maximum value is 1440 (24 hours), the
+   default.  A value of 0 will disable session caching. */
+
+{ "umask", "077", STRING }
+/* The umask value used by various Cyrus IMAP programs. */
+
+{ "userprefix", "Other Users", STRING }
+/* If using the alternate IMAP namespace, the prefix for the other users
+   namespace.  The hierarchy delimiter will be automatically appended. */
+
+# xxx badly worded
+{ "unix_group_enable", 1, SWITCH }
+/* Should we look up groups when using auth_unix (disable this if you are
+   not using groups in ACLs for your IMAP server, and you are using auth_unix
+   with a backend (such as LDAP) that can make getgrent() calls very
+   slow) */
+
+{ "unixhierarchysep", 0, SWITCH }
+/* Use the UNIX separator character '/' for delimiting levels of
+   mailbox hierarchy.  The default is to use the netnews separator
+   character '.'. */
+
+{ "virtdomains", 0, SWITCH }
+/* Enable virtual domain support */
+
+/*
+.SH SEE ALSO
+.PP
+\fBimapd(8)\fR, \fBpop3d(8)\fR, \fBlmtpd(8)\fR, \fBtimsieved(8)\fR,
+\fBidled(8)\fR, \fBnotifyd(8)\fR, \fBdeliver(8)\fR, \fBmaster(8)\fR, 
+\fBciphers(1)\fR
+*/

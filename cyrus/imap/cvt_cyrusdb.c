@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: cvt_cyrusdb.c,v 1.6.6.6 2002/12/20 18:32:00 rjs3 Exp $
+ * $Id: cvt_cyrusdb.c,v 1.6.6.7 2003/02/06 22:40:51 rjs3 Exp $
  */
 
 #include <config.h>
@@ -70,7 +70,7 @@
 #include "exitcodes.h"
 #include "glob.h"
 #include "imap_err.h"
-#include "imapconf.h"
+#include "global.h"
 #include "mailbox.h"
 #include "util.h"
 #include "xmalloc.h"
@@ -163,7 +163,7 @@ int main(int argc, char *argv[])
 	fatal("no conversion required", EC_TEMPFAIL);
     }
 
-    config_init(alt_config, "cvt_cyrusdb");
+    cyrus_init(alt_config, "cvt_cyrusdb");
 
     printf("Converting from %s (%s) to %s (%s)\n", old_db, DB_OLD->name,
 	   new_db, DB_NEW->name);

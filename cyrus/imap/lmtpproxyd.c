@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.42.4.13 2003/02/05 01:31:04 ken3 Exp $
+ * $Id: lmtpproxyd.c,v 1.42.4.14 2003/02/06 22:40:54 rjs3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -71,7 +71,7 @@
 #include "assert.h"
 #include "util.h"
 #include "prot.h"
-#include "imapconf.h"
+#include "global.h"
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"
@@ -179,7 +179,7 @@ int service_init(int argc __attribute__((unused)),
 
     BB = config_getstring(IMAPOPT_POSTUSER);
 
-    config_sasl_init(1, 1, mysasl_cb);
+    global_sasl_init(1, 1, mysasl_cb);
 
     /* Set namespace */
     if ((r = mboxname_init_namespace(&lmtpd_namespace, 0)) != 0) {

@@ -1,5 +1,5 @@
 /* masterconfig.c -- Configuration routines for master process
- $Id: masterconf.c,v 1.6.6.3 2003/01/08 22:18:20 rjs3 Exp $
+ $Id: masterconf.c,v 1.6.6.4 2003/02/06 22:41:03 rjs3 Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -58,8 +58,6 @@
 
 #include "masterconf.h"
 
-#define CONFIG_FILENAME "/etc/cyrus.conf"
-
 struct configlist {
     char *key;
     char *value;
@@ -101,7 +99,7 @@ const char *masterconf_getstring(struct entry *e, const char *key,
 	    }
 	    if (*p != '"') {
 		sprintf(k, "configuration file %s: missing \" on line %d",
-			CONFIG_FILENAME, e->lineno);
+			MASTER_CONFIG_FILENAME, e->lineno);
 		fatal(k, EX_CONFIG);
 	    }
 	} else {
@@ -197,10 +195,10 @@ void masterconf_getsection(const char *section, masterconf_process *f,
     int lineno = 0;
     char buf[4096];
 
-    infile = fopen(CONFIG_FILENAME, "r");
+    infile = fopen(MASTER_CONFIG_FILENAME, "r");
     if (!infile) {
 	snprintf(buf, sizeof(buf), "can't open configuration file %s: %s",
-		CONFIG_FILENAME, strerror(errno));
+		MASTER_CONFIG_FILENAME, strerror(errno));
 	fatal(buf, EX_CONFIG);
     }
 

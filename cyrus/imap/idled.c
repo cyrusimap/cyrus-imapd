@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idled.c,v 1.10.4.8 2003/01/08 22:18:15 rjs3 Exp $ */
+/* $Id: idled.c,v 1.10.4.9 2003/02/06 22:40:52 rjs3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -58,7 +58,7 @@
 #include <fcntl.h>
 
 #include "idled.h"
-#include "imapconf.h"
+#include "global.h"
 #include "mboxlist.h"
 #include "xmalloc.h"
 #include "hash.h"
@@ -285,7 +285,7 @@ int main(int argc, char **argv)
 	openlog("idled", LOG_PID, SYSLOG_FACILITY);
     }
 
-    config_init(alt_config, "idled");
+    cyrus_init(alt_config, "idled");
 
     /* get name of shutdown file */
     snprintf(shutdownfilename, sizeof(shutdownfilename), "%s/msg/shutdown",

@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.18.6.5 2003/01/11 04:01:21 ken3 Exp $
+ * $Id: mbdump.c,v 1.18.6.6 2003/02/06 22:40:54 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -63,7 +63,7 @@
 
 #include "exitcodes.h"
 #include "imap_err.h"
-#include "imapconf.h"
+#include "global.h"
 #include "imparse.h"
 #include "mailbox.h"
 #include "map.h"

@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: duplicate.c,v 1.31.4.3 2002/12/20 18:32:00 rjs3 Exp $ */
+/* $Id: duplicate.c,v 1.31.4.4 2003/02/06 22:40:52 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -75,7 +75,7 @@
 
 #include "xmalloc.h"
 #include "imap_err.h"
-#include "imapconf.h"
+#include "global.h"
 #include "exitcodes.h"
 #include "util.h"
 #include "cyrusdb.h"
@@ -87,7 +87,7 @@
 static struct db *dupdb = NULL;
 static int duplicate_dbopen = 0;
 
-/* must be called after config_init */
+/* must be called after cyrus_init */
 int duplicate_init(char *fname, int myflags)
 {
     char buf[1024];

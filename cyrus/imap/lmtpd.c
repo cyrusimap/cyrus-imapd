@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.99.2.21 2003/02/05 21:01:10 ken3 Exp $
+ * $Id: lmtpd.c,v 1.99.2.22 2003/02/06 22:40:53 rjs3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -82,7 +82,7 @@
 #include "prot.h"
 #include "imparse.h"
 #include "lock.h"
-#include "imapconf.h"
+#include "global.h"
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"
@@ -212,7 +212,7 @@ int service_init(int argc __attribute__((unused)),
     singleinstance = config_getswitch(IMAPOPT_SINGLEINSTANCESTORE);
     BB = config_getstring(IMAPOPT_POSTUSER);
 
-    config_sasl_init(0, 1, mysasl_cb);
+    global_sasl_init(0, 1, mysasl_cb);
 
     dupelim = config_getswitch(IMAPOPT_DUPLICATESUPPRESSION);
     /* initialize duplicate delivery database */

@@ -1,5 +1,5 @@
 /* ctl_deliver.c -- Program to perform operations on duplicate delivery db
- $Id: ctl_deliver.c,v 1.14.4.3 2002/12/20 18:31:59 rjs3 Exp $
+ $Id: ctl_deliver.c,v 1.14.4.4 2003/02/06 22:40:51 rjs3 Exp $
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -59,7 +59,7 @@
 #include "cyrusdb.h"
 #include "duplicate.h"
 #include "exitcodes.h"
-#include "imapconf.h"
+#include "global.h"
 #include "libcyr_cfg.h"
 #include "util.h"
 #include "xmalloc.h"
@@ -126,7 +126,7 @@ main(argc, argv)
 	}
     }
 
-    config_init(alt_config, "ctl_deliver");
+    cyrus_init(alt_config, "ctl_deliver");
 
     if (duplicate_init(alt_file, flag) != 0) {
 	fprintf(stderr, 
@@ -159,4 +159,4 @@ main(argc, argv)
     return r;
 }
 
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/ctl_deliver.c,v 1.14.4.3 2002/12/20 18:31:59 rjs3 Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/ctl_deliver.c,v 1.14.4.4 2003/02/06 22:40:51 rjs3 Exp $ */

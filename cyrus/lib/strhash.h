@@ -1,6 +1,7 @@
-/* signals.c -- signal handling functions to allow clean shutdown
-
- * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
+/* strhash.h string hashing
+ *
+ * $Id: strhash.h,v 1.1.2.1 2003/02/06 22:41:00 rjs3 Exp $
+ * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -38,63 +39,22 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-/* $Id: signals.c,v 1.8.6.1 2003/02/06 22:40:57 rjs3 Exp $ */
 
-#include <config.h>
+#ifndef _STRHASH_H_
 
-#include <stdlib.h>
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
 #include <signal.h>
+#include <stdlib.h>
+#include <assert.h>
 #include <syslog.h>
+#include <errno.h>
 
-#include "global.h"
-#include "xmalloc.h"
-#include "exitcodes.h"
+unsigned strhash(const char *string);
 
-static int gotsignal = 0;
-
-static void sighandler(int sig)
-{
-    /* syslog(LOG_DEBUG, "got signal %d", sig); */
-    gotsignal = sig;
-}
-
-static const int catch[] = { SIGHUP, SIGINT, SIGQUIT, 0 };
-
-void signals_add_handlers(void)
-{
-    struct sigaction action;
-    int i;
-    
-    sigemptyset(&action.sa_mask);
-
-    action.sa_flags = 0;
-#ifdef SA_RESETHAND
-    action.sa_flags |= SA_RESETHAND;
-#endif
-#ifdef SA_RESTART
-    action.sa_flags |= SA_RESTART;
-#endif
-
-    action.sa_handler = sighandler;
-    
-    for (i = 0; catch[i] != 0; i++) {
-	if (sigaction(catch[i], &action, NULL) < 0) {
-	    fatal("unable to install signal handler for %d: %m", catch[i]);
-	}
-    }
-}
-
-static shutdownfn *shutdown_cb = NULL;
-
-void signals_set_shutdown(shutdownfn *s)
-{
-    shutdown_cb = s;
-}
-
-void signals_poll(void)
-{
-    if (gotsignal) {
-	if (shutdown_cb) shutdown_cb(EC_TEMPFAIL);
-	else exit(EC_TEMPFAIL);
-    }
-}
+#endif /* _STRHASH_H_ */

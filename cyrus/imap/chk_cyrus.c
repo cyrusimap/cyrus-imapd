@@ -40,7 +40,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: chk_cyrus.c,v 1.6.6.4 2002/12/20 18:31:59 rjs3 Exp $
+ * $Id: chk_cyrus.c,v 1.6.6.5 2003/02/06 22:40:51 rjs3 Exp $
  */
 
 #include <config.h>
@@ -64,7 +64,7 @@
 
 #include "exitcodes.h"
 #include "index.h"
-#include "imapconf.h"
+#include "global.h"
 #include "mboxlist.h"
 #include "mailbox.h"
 #include "map.h"
@@ -217,7 +217,7 @@ int main(int argc, char **argv)
 	}
     }
 
-    config_init(alt_config, "chk_cyrus");    
+    cyrus_init(alt_config, "chk_cyrus");    
 
     mboxlist_init(0);
     mboxlist_open(NULL);

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: fetchnews.c,v 1.1.2.7 2002/12/20 18:32:00 rjs3 Exp $
+ * $Id: fetchnews.c,v 1.1.2.8 2003/02/06 22:40:52 rjs3 Exp $
  */
 
 #include <config.h>
@@ -58,7 +58,7 @@
 #include <sys/un.h>
 
 #include "exitcodes.h"
-#include "imapconf.h"
+#include "global.h"
 #include "prot.h"
 #include "xmalloc.h"
 
@@ -157,7 +157,7 @@ int main(int argc, char *argv[])
 
     peer = argv[optind++];
 
-    config_init(alt_config, "fetchnews");
+    cyrus_init(alt_config, "fetchnews");
 
     /* connect to the peer */
     if ((psock = init_net(peer, 119, &pin, &pout)) < 0) {

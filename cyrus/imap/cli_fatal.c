@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cli_fatal.c,v 1.1.2.1 2002/11/15 21:46:55 rjs3 Exp $
+ * $Id: cli_fatal.c,v 1.1.2.2 2003/02/06 22:40:51 rjs3 Exp $
  */
 
 #include <config.h>
@@ -46,7 +46,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include "imapconf.h"
+#include "global.h"
 #include "xmalloc.h"
 
 /* generic fatal() routine for command line utilities */

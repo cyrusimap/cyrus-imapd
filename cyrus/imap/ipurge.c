@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.15.2.7 2002/12/20 18:32:03 rjs3 Exp $
+ * $Id: ipurge.c,v 1.15.2.8 2003/02/06 22:40:53 rjs3 Exp $
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -61,7 +61,7 @@
 #include <netinet/in.h>
 
 /* cyrus includes */
-#include "imapconf.h"
+#include "global.h"
 #include "sysexits.h"
 #include "exitcodes.h"
 #include "imap_err.h"
@@ -162,7 +162,7 @@ main (int argc, char *argv[]) {
     usage(argv[0]);
   }
 
-  config_init(alt_config, "ipurge");
+  cyrus_init(alt_config, "ipurge");
 
   /* Set namespace -- force standard (internal) */
   if ((r = mboxname_init_namespace(&purge_namespace, 1)) != 0) {

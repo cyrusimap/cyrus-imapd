@@ -93,7 +93,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.38.4.6 2003/01/17 16:44:31 ken3 Exp $ */
+/* $Id: tls.c,v 1.38.4.7 2003/02/06 22:40:57 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -122,7 +122,7 @@
 #include "tls.h"
 
 /* Session caching/reuse stuff */
-#include "imapconf.h"
+#include "global.h"
 #include "cyrusdb.h"
 
 #define DB (CONFIG_DB_TLS) /* sessions are binary -> MUST use DB3 */
@@ -560,7 +560,7 @@ static int tls_rand_init(void)
   * returns -1 on error
   */
 
-/* must be called after config_init */
+/* must be called after cyrus_init */
 int     tls_init_serverengine(const char *ident,
 			      int verifydepth,
 			      int askcert,
@@ -989,7 +989,7 @@ static int prune_cb(void *rock, const char *id, int idlen,
     return 0;
 }
 
-/* must be called after config_init */
+/* must be called after cyrus_init */
 int tls_prune_sessions(void)
 {
     char dbdir[1024];

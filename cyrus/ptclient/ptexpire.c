@@ -64,10 +64,11 @@
 #include "auth_pts.h"
 #include "cyrusdb.h"
 #include "exitcodes.h"
-#include "imapconf.h"
+#include "global.h"
+#include "libconfig.h"
 #include "lock.h"
 
-static char rcsid[] = "$Id: ptexpire.c,v 1.10.16.6 2003/01/08 22:18:22 rjs3 Exp $";
+static char rcsid[] = "$Id: ptexpire.c,v 1.10.16.7 2003/02/06 22:41:06 rjs3 Exp $";
 
 /* global */
 time_t timenow;
@@ -140,7 +141,7 @@ int main(int argc, char *argv[])
 	}
     }
 
-    config_init(alt_config, "ptexpire");
+    cyrus_init(alt_config, "ptexpire");
 
     timenow = time(0);
     syslog(LOG_INFO, "Expiring entries older than %d seconds (currently %d)",

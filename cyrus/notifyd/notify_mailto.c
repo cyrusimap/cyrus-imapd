@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notify_mailto.c,v 1.4.2.1 2002/07/10 20:45:38 rjs3 Exp $
+ * $Id: notify_mailto.c,v 1.4.2.2 2003/02/06 22:41:04 rjs3 Exp $
  */
 
 #include <config.h>
@@ -54,7 +54,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-#include "imapconf.h"
+#include "global.h"
+#include "libconfig.h"
 #include "rfc822date.h"
 #include <sieve_interface.h>
 

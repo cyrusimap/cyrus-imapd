@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
-   $Id: seen_bigdb.c,v 1.3.4.3 2002/08/21 19:52:41 ken3 Exp $
+   $Id: seen_bigdb.c,v 1.3.4.4 2003/02/06 22:40:57 rjs3 Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -59,7 +59,7 @@
 #include <sys/uio.h>
 #include "cyrusdb.h"
 
-#include "imapconf.h"
+#include "global.h"
 #include "xmalloc.h"
 #include "mailbox.h"
 #include "imap_err.h"

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.43 2003/02/05 01:31:06 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.44 2003/02/06 22:40:56 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -74,7 +74,7 @@
 #include "util.h"
 #include "auth.h"
 #include "map.h"
-#include "imapconf.h"
+#include "global.h"
 #include "tls.h"
 #include "version.h"
 #include "charset.h"
@@ -1103,7 +1103,7 @@ int service_init(int argc, char **argv, char **envp)
     signal(SIGPIPE, SIG_IGN);
 
     /* load the SASL plugins */
-    config_sasl_init(1, 1, mysasl_cb);
+    global_sasl_init(1, 1, mysasl_cb);
 
     /* open the mboxlist, we'll need it for real work */
     mboxlist_init(0);
@@ -2209,7 +2209,7 @@ void cmd_login(char *tag, char *user)
     
     proxyd_authstate = auth_newstate(proxyd_userid);
 
-    proxyd_userisadmin = config_authisa(proxyd_authstate, IMAPOPT_ADMINS);
+    proxyd_userisadmin = global_authisa(proxyd_authstate, IMAPOPT_ADMINS);
 
     if (!reply) reply = "User logged in";
 
@@ -3992,7 +3992,7 @@ void cmd_listrights(char *tag, char *name, char *identifier)
 	int implicit;
 	char rightsdesc[100], optional[33];
 
-	if (config_authisa(authstate, IMAPOPT_ADMINS))
+	if (global_authisa(authstate, IMAPOPT_ADMINS))
 	    canon_identifier = identifier; /* don't canonify global admins */
 	else
 	    canon_identifier = canonify_userid(identifier, proxyd_userid, NULL);

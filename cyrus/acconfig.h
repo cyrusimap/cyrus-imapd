@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.35.4.10 2003/02/05 01:31:00 ken3 Exp $ */
+/* $Id: acconfig.h,v 1.35.4.11 2003/02/06 22:40:46 rjs3 Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -243,6 +243,8 @@ typedef int rlim_t;
 #define FNAME_DOMAINDIR "/domain/"
 #define FNAME_LOGDIR "/log/"
 #define FNAME_PTSDB "/ptclient/ptscache.db"
+#define CONFIG_FILENAME "/etc/imapd.conf"
+#define MASTER_CONFIG_FILENAME "/etc/cyrus.conf"
 
 #ifndef HAVE_SHUTDOWN
 #define shutdown(fd, mode) 0

@@ -40,7 +40,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-# $Id: Makefile.in,v 1.53.4.2 2002/08/14 20:21:05 ken3 Exp $
+# $Id: Makefile.in,v 1.53.4.3 2003/02/06 22:40:59 rjs3 Exp $
 
 # Authorization namespace.
 AUTH=auth_@WITH_AUTH@.o
@@ -70,32 +70,43 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
-HDRS = $(srcdir)/acl.h $(srcdir)/assert.h $(srcdir)/auth.h \
+BUILTSOURCES = imapopts.h imapopts.c
+
+LIBCYR_HDRS = $(srcdir)/acl.h $(srcdir)/assert.h $(srcdir)/auth.h \
 	$(srcdir)/bsearch.h $(srcdir)/charset.h $(srcdir)/glob.h \
 	$(srcdir)/gmtoff.h $(srcdir)/imclient.h $(srcdir)/imparse.h \
 	$(srcdir)/lock.h $(srcdir)/map.h $(srcdir)/mkgmtime.h \
 	$(srcdir)/nonblock.h $(srcdir)/parseaddr.h $(srcdir)/prot.h \
-	$(srcdir)/retry.h $(srcdir)/sysexits.h \
-	$(srcdir)/lsort.h $(srcdir)/stristr.h $(srcdir)/hash.h \
+	$(srcdir)/retry.h $(srcdir)/sysexits.h $(srcdir)/strhash.h \
+	$(srcdir)/lsort.h $(srcdir)/stristr.h \
 	$(srcdir)/util.h $(srcdir)/xmalloc.h $(srcdir)/imapurl.h \
 	$(srcdir)/cyrusdb.h $(srcdir)/iptostring.h $(srcdir)/rfc822date.h \
-	$(srcdir)/mpool.h $(srcdir)/libcyr_cfg.h
+	$(srcdir)/libcyr_cfg.h
 
-OBJS = acl.o assert.o bsearch.o charset.o glob.o retry.o util.o libcyr_cfg.o \
-	mkgmtime.o prot.o parseaddr.o imclient.o imparse.o xmalloc.o \
-	lsort.o stristr.o hash.o rfc822date.o mpool.o cyrusdb.o \
+LIBCYR_OBJS = acl.o assert.o bsearch.o charset.o glob.o retry.o util.o \
+	libcyr_cfg.o mkgmtime.o prot.o parseaddr.o imclient.o imparse.o \
+	lsort.o stristr.o rfc822date.o cyrusdb.o strhash.o \
 	chartable.o imapurl.o nonblock_@WITH_NONBLOCK@.o lock_@WITH_LOCK@.o \
 	gmtoff_@WITH_GMTOFF@.o map_@WITH_MAP@.o $(ACL) $(AUTH) \
 	@LIBOBJS@ cyrusdb_berkeley.o cyrusdb_flat.o cyrusdb_skiplist.o \
-	iptostring.o
+	iptostring.o xmalloc.o
 
-all: libcyrus.a
+LIBCYRM_HDRS = $(srcdir)/hash.h $(srcdir)/mpool.h $(srcdir)/xmalloc.h \
+	$(srcdir)/strhash.o $(srcdir)/libconfig.h imapopts.h
+LIBCYRM_OBJS = libconfig.o imapopts.o hash.o mpool.o xmalloc.o strhash.o
+
+all: $(BUILTSOURCES) libcyrus_min.a libcyrus.a
 
 install:
 	$(srcdir)/../install-sh -d $(DESTDIR)$(exec_prefix)/lib
 	$(INSTALL) -m 644 libcyrus.a $(DESTDIR)$(exec_prefix)/lib
+	$(INSTALL) -m 644 libcyrus_min.a $(DESTDIR)$(exec_prefix)/lib
 	$(RANLIB) $(DESTDIR)$(exec_prefix)/lib/libcyrus.a
-	for file in $(HDRS); \
+	for file in $(LIBCYR_HDRS); \
+	do \
+		$(INSTALL) -m 644 $$file $(DESTDIR)$(prefix)/include/cyrus || exit 1; \
+	done
+	for file in $(LIBCYRM_HDRS); \
 	do \
 		$(INSTALL) -m 644 $$file $(DESTDIR)$(prefix)/include/cyrus || exit 1; \
 	done
@@ -104,10 +115,18 @@ install:
 	$(CC) -c $(CPPFLAGS) $(DEFS) -I$(srcdir) -I. $(CFLAGS) \
 	$<
 
-libcyrus.a: $(OBJS)
+libcyrus.a: $(LIBCYR_OBJS)
 	rm -f libcyrus.a
-	ar cr libcyrus.a $(OBJS)
+	ar cr libcyrus.a $(LIBCYR_OBJS)
 	$(RANLIB) libcyrus.a
+
+libcyrus_min.a: $(LIBCYRM_OBJS)
+	rm -f libcyrus_min.a
+	ar cr libcyrus_min.a $(LIBCYRM_OBJS)
+	$(RANLIB) libcyrus_min.a
+
+imapopts.c imapopts.h: imapoptions $(srcdir)/../tools/config2header
+	$(srcdir)/../tools/config2header $(srcdir)/imapopts.c $(srcdir)/imapopts.h < $(srcdir)/imapoptions
 
 chartable.c: mkchartable 
 	@echo "### Building chartables..."
@@ -126,7 +145,8 @@ mkchartable: mkchartable.o xmalloc.o assert.o
 	$(CC) $(LDFLAGS) -o mkchartable mkchartable.o xmalloc.o assert.o
 
 clean:
-	rm -f *.o *.a chartable.c Makefile.bak mkchartable makedepend.log
+	rm -f *.o *.a chartable.c Makefile.bak mkchartable makedepend.log \
+	$(BUILTSOURCES)
 
 distclean: clean
 	rm -f Makefile

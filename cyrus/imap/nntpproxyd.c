@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpproxyd.c,v 1.1.2.3 2003/02/05 01:31:05 ken3 Exp $
+ * $Id: nntpproxyd.c,v 1.1.2.4 2003/02/06 22:40:56 rjs3 Exp $
  */
 
 /*
@@ -78,7 +78,7 @@
 #include "auth.h"
 #include "backend.h"
 #include "exitcodes.h"
-#include "imapconf.h"
+#include "global.h"
 #include "imap_err.h"
 #include "iptostring.h"
 #include "mboxlist.h"
@@ -330,7 +330,7 @@ int service_init(int argc __attribute__((unused)),
     signal(SIGPIPE, SIG_IGN);
 
     /* load the SASL plugins */
-    config_sasl_init(1, 1, mysasl_cb);
+    global_sasl_init(1, 1, mysasl_cb);
 
     if ((prefix = config_getstring(IMAPOPT_NEWSPREFIX)))
 	snprintf(newsprefix, sizeof(newsprefix), "%s.", prefix);

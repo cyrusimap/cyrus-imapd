@@ -1,5 +1,5 @@
 /* proc.c -- Server process registry
- $Id: proc.c,v 1.22 2001/11/27 02:24:59 ken3 Exp $
+ $Id: proc.c,v 1.22.6.1 2003/02/06 22:40:56 rjs3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -50,7 +50,7 @@
 #include <syslog.h>
 #include <string.h>
 
-#include "imapconf.h"
+#include "global.h"
 #include "exitcodes.h"
 #include "xmalloc.h"
 

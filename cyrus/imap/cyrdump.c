@@ -1,4 +1,4 @@
-/* $Id: cyrdump.c,v 1.9.4.7 2002/12/20 18:32:00 rjs3 Exp $
+/* $Id: cyrdump.c,v 1.9.4.8 2003/02/06 22:40:51 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -52,7 +52,7 @@
 #include <string.h>
 
 /* cyrus includes */
-#include "imapconf.h"
+#include "global.h"
 #include "sysexits.h"
 #include "imap_err.h"
 #include "mailbox.h"
@@ -119,7 +119,7 @@ int main(int argc, char *argv[])
 	usage(argv[0]);
     }
 
-    config_init(alt_config, "dump");
+    cyrus_init(alt_config, "dump");
     mboxlist_init(0);
     mboxlist_open(NULL);
 

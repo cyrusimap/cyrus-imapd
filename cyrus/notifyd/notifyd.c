@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notifyd.c,v 1.10.2.4 2002/11/15 21:47:04 rjs3 Exp $
+ * $Id: notifyd.c,v 1.10.2.5 2003/02/06 22:41:04 rjs3 Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -63,9 +63,12 @@
 #include <string.h>
 
 #include "notifyd.h"
-#include "imapconf.h"
-#include "xmalloc.h"
+
 #include "exitcodes.h"
+#include "global.h"
+#include "libconfig.h"
+#include "xmalloc.h"
+
 
 /* global state */
 const int config_need_data = 0;

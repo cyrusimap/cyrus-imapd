@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: netnews.c,v 1.1.2.7 2002/12/20 18:32:06 rjs3 Exp $ */
+/* $Id: netnews.c,v 1.1.2.8 2003/02/06 22:40:56 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -76,7 +76,7 @@
 #include "cyrusdb.h"
 #include "exitcodes.h"
 #include "imap_err.h"
-#include "imapconf.h"
+#include "global.h"
 #include "mailbox.h"
 #include "netnews.h"
 #include "util.h"
@@ -88,7 +88,7 @@
 static struct db *newsdb = NULL;
 static int news_dbopen = 0;
 
-/* must be called after config_init */
+/* must be called after cyrus_init */
 int netnews_init(char *fname, int myflags)
 {
     char buf[1024];

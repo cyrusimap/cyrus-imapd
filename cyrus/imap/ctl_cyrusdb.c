@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ctl_cyrusdb.c,v 1.14.4.6 2003/01/27 21:26:34 rjs3 Exp $
+ * $Id: ctl_cyrusdb.c,v 1.14.4.7 2003/02/06 22:40:51 rjs3 Exp $
  */
 
 #include <config.h>
@@ -75,7 +75,7 @@
 
 #include "cyrusdb.h"
 #include "duplicate.h"
-#include "imapconf.h"
+#include "global.h"
 #include "exitcodes.h"
 #include "libcyr_cfg.h"
 #include "mboxlist.h"
@@ -215,7 +215,7 @@ int main(int argc, char *argv[])
 	/* NOTREACHED */
     }
 
-    config_init(alt_config, "ctl_cyrusdb");
+    cyrus_init(alt_config, "ctl_cyrusdb");
 
     /* create the name of the db directory */
     /* (used by backup directory names) */

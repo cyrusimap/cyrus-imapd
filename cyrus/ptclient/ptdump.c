@@ -45,9 +45,10 @@
 
 #include "auth_pts.h"
 #include "cyrusdb.h"
-#include "imapconf.h"
+#include "global.h"
+#include "libconfig.h"
 
-static char rcsid[] = "$Id: ptdump.c,v 1.5.16.4 2002/12/13 17:10:37 rjs3 Exp $";
+static char rcsid[] = "$Id: ptdump.c,v 1.5.16.5 2003/02/06 22:41:05 rjs3 Exp $";
 
 int config_need_data = 0;
 
@@ -103,7 +104,7 @@ int main(int argc, char *argv[])
 	}
     }
 
-    config_init(alt_config, "ptdump");
+    cyrus_init(alt_config, "ptdump");
 
     /* open database */
     strcpy(fnamebuf, config_dir);

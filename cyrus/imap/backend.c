@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.7.6.12 2003/02/05 01:31:01 ken3 Exp $ */
+/* $Id: backend.c,v 1.7.6.13 2003/02/06 22:40:51 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -69,7 +69,7 @@
 
 #include "prot.h"
 #include "backend.h"
-#include "imapconf.h"
+#include "global.h"
 #include "xmalloc.h"
 #include "iptostring.h"
 #include "util.h"

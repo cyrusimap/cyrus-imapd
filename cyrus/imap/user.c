@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: user.c,v 1.10.4.8 2003/01/11 20:23:45 ken3 Exp $
+ * $Id: user.c,v 1.10.4.9 2003/02/06 22:40:58 rjs3 Exp $
  */
 
 #include <config.h>
@@ -73,7 +73,7 @@
 # endif
 #endif
 
-#include "imapconf.h"
+#include "global.h"
 #include "user.h"
 #include "mboxlist.h"
 #include "mailbox.h"

@@ -1,5 +1,5 @@
 /* telemetry.c -- common server telemetry
- * $Id: telemetry.c,v 1.4.14.1 2002/12/20 18:32:08 rjs3 Exp $
+ * $Id: telemetry.c,v 1.4.14.2 2003/02/06 22:40:57 rjs3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -52,7 +52,7 @@
 #include <string.h>
 
 #include "prot.h"
-#include "imapconf.h"
+#include "global.h"
 
 /* create telemetry log; return fd of log */
 int telemetry_log(const char *userid, struct protstream *pin, 

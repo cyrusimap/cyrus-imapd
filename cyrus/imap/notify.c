@@ -1,5 +1,5 @@
 /* notify.c -- Module to notify of new mail
- * $Id: notify.c,v 1.6.6.3 2002/11/07 15:11:19 ken3 Exp $ 
+ * $Id: notify.c,v 1.6.6.4 2003/02/06 22:40:56 rjs3 Exp $ 
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -56,7 +56,7 @@
 # include <unistd.h>
 #endif
 
-#include "imapconf.h"
+#include "global.h"
 #include "notify.h"
 
 #define FNAME_NOTIFY_SOCK "/socket/notify"

@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.43.2.12 2003/01/27 21:56:51 ken3 Exp $ -->
+<!-- $Id: changes.html,v 1.43.2.13 2003/02/06 22:40:49 rjs3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -25,6 +25,10 @@ service groups completely override the generic group. </li>
 be specified using the service name of your lmtp process if you
 require a specific value</li>
 </ul></li>
+
+<li> libcyrus has been split into libcyrus_min and libcyrus, so as to allow
+sensative applications (such as master) include the least amount of code
+necessary for operation </li>
 
 <li> Virtual domain support.  See the <a
 href="install-virtdomains.html">virtual domains</a> document for
@@ -1754,7 +1758,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2003/01/27 21:56:51 $ <br />
+last modified: $Date: 2003/02/06 22:40:49 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>

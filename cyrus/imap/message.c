@@ -42,7 +42,7 @@
  */
 
 /*
- * $Id: message.c,v 1.88.16.4 2002/12/20 18:32:04 rjs3 Exp $
+ * $Id: message.c,v 1.88.16.5 2003/02/06 22:40:55 rjs3 Exp $
  */
 
 #include <config.h>
@@ -70,7 +70,7 @@
 #include "charset.h"
 #include "util.h"
 #include "xmalloc.h"
-#include "imapconf.h"
+#include "global.h"
 #include "retry.h"
 
 /* Message being parsed */
@@ -213,7 +213,7 @@ static void message_free_body P((struct body *body));
  * Copy a message of 'size' bytes from 'from' to 'to',
  * ensuring minimal RFC-822 compliance.
  *
- * Caller must have initialized config_* routines (with config_init) to read
+ * Caller must have initialized config_* routines (with cyrus_init) to read
  * imapd.conf before calling.
  */
 int

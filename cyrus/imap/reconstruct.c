@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.68.4.8 2002/11/15 21:46:58 rjs3 Exp $ */
+/* $Id: reconstruct.c,v 1.68.4.9 2003/02/06 22:40:57 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -80,13 +80,13 @@
 #include "assert.h"
 #include "bsearch.h"
 #include "imparse.h"
-#include "imapconf.h"
+#include "global.h"
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "message.h"
 #include "xmalloc.h"
-#include "imapconf.h"
+#include "global.h"
 #include "mboxname.h"
 #include "mboxlist.h"
 #include "seen.h"
@@ -159,7 +159,7 @@ int main(int argc, char **argv)
 	}
     }
 
-    config_init(alt_config, "reconstruct");
+    cyrus_init(alt_config, "reconstruct");
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&recon_namespace, 1)) != 0) {

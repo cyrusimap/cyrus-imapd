@@ -1,5 +1,5 @@
 /* auth_pts.c -- PTLOADER authorization
- * $Id: auth_pts.c,v 1.1.2.5 2002/12/20 22:10:00 rjs3 Exp $
+ * $Id: auth_pts.c,v 1.1.2.6 2003/02/06 22:40:59 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -57,10 +57,10 @@
 #include "auth_pts.h"
 #include "cyrusdb.h"
 #include "exitcodes.h"
-#include "hash.h"
 #include "libcyr_cfg.h"
 #include "lock.h"
 #include "retry.h"
+#include "strhash.h"
 #include "xmalloc.h"
 
 const char *auth_method_desc = "pts";
@@ -86,10 +86,10 @@ int auth_memberof(struct auth_state *auth_state,
 		  const char *identifier)
 {
     int i;
-    unsigned idhash = hash(identifier);
+    unsigned idhash = strhash(identifier);
     static unsigned anyonehash = 0;
 
-    anyonehash = !anyonehash ? hash("anyone") : anyonehash;
+    anyonehash = !anyonehash ? strhash("anyone") : anyonehash;
     
     if (!auth_state) {
 	/* special case anonymous */
@@ -180,7 +180,7 @@ struct auth_state *auth_newstate(const char *identifier)
 		    (struct auth_state *)xzmalloc(sizeof(struct auth_state));
 		strlcpy(output->userid.id, identifier,
 			sizeof(output->userid.id));
-		output->userid.hash = hash(identifier);
+		output->userid.hash = strhash(identifier);
 	}
     }
 	

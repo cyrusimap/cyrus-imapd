@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
-/* $Id: quota.c,v 1.41.4.6 2003/01/11 04:01:21 ken3 Exp $ */
+/* $Id: quota.c,v 1.41.4.7 2003/02/06 22:40:57 rjs3 Exp $ */
 
 
 #include <config.h>
@@ -76,7 +76,7 @@
 #endif
 
 #include "assert.h"
-#include "imapconf.h"
+#include "global.h"
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"
@@ -148,7 +148,7 @@ int main(int argc,char **argv)
 	}
     }
 
-    config_init(alt_config, "quota");
+    cyrus_init(alt_config, "quota");
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&quota_namespace, 1)) != 0) {

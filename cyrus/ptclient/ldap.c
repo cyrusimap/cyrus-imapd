@@ -41,7 +41,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ldap.c,v 1.1.2.2 2003/01/20 19:34:19 rjs3 Exp $";
+      "$Id: ldap.c,v 1.1.2.3 2003/02/06 22:41:05 rjs3 Exp $";
 
 #include <config.h>
 
@@ -67,13 +67,15 @@ static char rcsid[] __attribute__((unused)) =
 #include <lutil_ldap.h>
 
 /* libimap */
-#include "imapopts.h"
-#include "imapconf.h"
+#include "global.h"
+
+/* libconfig */
+#include "libconfig.h"
 
 /* libcyrus */
 #include "auth_pts.h"
 #include "exitcodes.h"
-#include "hash.h"
+#include "strhash.h"
 #include "xmalloc.h"
 
 /* xxx this just uses the UNIX canonicalization semantics, which is
@@ -557,7 +559,7 @@ struct auth_state *ptsmodule_make_authstate(const char *identifier,
 	{
 	    strlcpy(newstate->groups[i].id, vals[i],
 		    sizeof(newstate->groups[i].id));
-	    newstate->groups[i].hash = hash(newstate->groups[i].id);
+	    newstate->groups[i].hash = strhash(newstate->groups[i].id);
 	}
 	
 	ldap_value_free(vals);
@@ -574,7 +576,7 @@ struct auth_state *ptsmodule_make_authstate(const char *identifier,
     
     /* fill in the rest of our new state structure */
     strcpy(newstate->userid.id, canon_id);
-    newstate->userid.hash = hash(canon_id);
+    newstate->userid.hash = strhash(canon_id);
     newstate->mark = time(0);
 
     return newstate;

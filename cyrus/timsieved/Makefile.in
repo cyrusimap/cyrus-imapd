@@ -1,5 +1,5 @@
 # Makefile.in - timsieved makefile
-# $Id: Makefile.in,v 1.18.4.4 2002/11/14 19:36:29 rjs3 Exp $
+# $Id: Makefile.in,v 1.18.4.5 2003/02/06 22:41:07 rjs3 Exp $
 # @configure_input@
 # 
 # Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
@@ -70,7 +70,7 @@ IMAP_LIBS = @IMAP_LIBS@ @LIB_RT@
 IMAP_COM_ERR_LIBS = @IMAP_COM_ERR_LIBS@
 LIB_WRAP = @LIB_WRAP@
 LIBS = $(IMAP_COM_ERR_LIBS)
-DEPLIBS=../sieve/libsieve.a ../imap/mutex_fake.o ../imap/libimap.a ../lib/libcyrus.a @DEPLIBS@
+DEPLIBS=../sieve/libsieve.a ../imap/mutex_fake.o ../imap/libimap.a ../lib/libcyrus_min.a ../lib/libcyrus.a @DEPLIBS@
 
 PURIFY=/usr/local/bin/purify
 PUREOPT=-best-effort

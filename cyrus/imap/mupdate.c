@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.60.4.26 2003/02/05 01:39:56 ken3 Exp $
+ * $Id: mupdate.c,v 1.60.4.27 2003/02/06 22:40:55 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -73,7 +73,7 @@
 #include "exitcodes.h"
 #include "nonblock.h"
 #include "prot.h"
-#include "imapconf.h"
+#include "global.h"
 #include "imap_err.h"
 #include "version.h"
 #include "mpool.h"
@@ -426,7 +426,7 @@ int service_init(int argc, char **argv,
     signals_add_handlers();
     signal(SIGPIPE, SIG_IGN);
 
-    config_sasl_init(1, 1, mysasl_cb);
+    global_sasl_init(1, 1, mysasl_cb);
 
     /* see if we're the master or a slave */
     while ((opt = getopt(argc, argv, "m")) != EOF) {

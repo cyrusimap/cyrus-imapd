@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle_poll.c,v 1.5.6.2 2002/12/20 18:32:00 rjs3 Exp $ */
+/* $Id: idle_poll.c,v 1.5.6.3 2003/02/06 22:40:52 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -49,7 +49,7 @@
 #include <signal.h>
 
 #include "idle.h"
-#include "imapconf.h"
+#include "global.h"
 
 const char *idle_method_desc = "poll";
 

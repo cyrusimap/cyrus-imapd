@@ -1,5 +1,5 @@
 /* +++Date last modified: 05-Jul-1997 */
-/* $Id: hash.c,v 1.8.4.1 2002/08/19 20:41:33 rjs3 Exp $ */
+/* $Id: hash.c,v 1.8.4.2 2003/02/06 22:40:59 rjs3 Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -22,7 +22,6 @@
 **
 ** Modified for use with libcyrus by Ken Murchison.
 **  - prefixed functions with 'hash_' to avoid symbol clashing
-**  - make hash() a public function
 **  - use xmalloc() and xstrdup()
 **  - cleaned up free_hash_table(), doesn't use enumerate anymore
 **  - added 'rock' to hash_enumerate()
@@ -69,27 +68,6 @@ hash_table *construct_hash_table(hash_table *table, size_t size, int use_mpool)
       return table;
 }
 
-
-/*
-** Hashes a string to produce an unsigned short, which should be
-** sufficient for most purposes.
-*/
-
-unsigned hash(const char *string)
-{
-      unsigned ret_val = 0;
-      int i;
-
-      while (*string)
-      {
-            i = (int) *string;
-            ret_val ^= i;
-            ret_val <<= 1;
-            string ++;
-      }
-      return ret_val;
-}
-
 /*
 ** Insert 'key' into hash table.
 ** Returns pointer to old data associated with the key, if any, or
@@ -98,7 +76,7 @@ unsigned hash(const char *string)
 
 void *hash_insert(char *key, void *data, hash_table *table)
 {
-      unsigned val = hash(key) % table->size;
+      unsigned val = strhash(key) % table->size;
       bucket *ptr, *newptr;
       bucket **prev;
 
@@ -179,7 +157,7 @@ void *hash_insert(char *key, void *data, hash_table *table)
 
 void *hash_lookup(const char *key, hash_table *table)
 {
-      unsigned val = hash(key) % table->size;
+      unsigned val = strhash(key) % table->size;
       bucket *ptr;
 
       if (!(table->table)[val])
@@ -204,7 +182,7 @@ void *hash_lookup(const char *key, hash_table *table)
  * since it will leak memory until you get rid of the entire hash table */
 void *hash_del(char *key, hash_table *table)
 {
-      unsigned val = hash(key) % table->size;
+      unsigned val = strhash(key) % table->size;
       void *data;
       bucket *ptr, *last = NULL;
 
