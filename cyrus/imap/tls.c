@@ -93,7 +93,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.43 2003/04/03 19:54:33 rjs3 Exp $ */
+/* $Id: tls.c,v 1.44 2003/05/29 02:06:45 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -316,8 +316,6 @@ static int tls_dump(const char *s, int len)
 		ch = ((unsigned char) *((char *) (s) + i * DUMP_WIDTH + j))
 		    & 0xFF;
 
-		assert(ch <= 0xFF); /* paranoia */
-
 		sprintf(ss, "%02x%c", ch, j == 7 ? '|' : ' ');
 		ss += 3;
 	    }
@@ -439,7 +437,6 @@ static int new_session_cb(SSL *ssl __attribute__((unused)),
 	unsigned int i;
 	char idstr[SSL_MAX_SSL_SESSION_ID_LENGTH*2 + 1];
 	for (i = 0; i < sess->session_id_length; i++) {
-	    assert(sess->session_id[i] <= 0xFF);
 	    sprintf(idstr+i*2, "%02X", sess->session_id[i]);
 	}
 	syslog(LOG_DEBUG, "new TLS session: id=%s, expire=%s, status=%s",
@@ -471,7 +468,6 @@ static void remove_session(unsigned char *id, int idlen)
 	char idstr[SSL_MAX_SSL_SESSION_ID_LENGTH*2 + 1];
 
 	for (i = 0; i < idlen; i++) {
-	    assert(id[i] <= 0xFF);
 	    sprintf(idstr+i*2, "%02X", id[i]);
 	}
 	    
@@ -1004,7 +1000,6 @@ static int prune_p(void *rock, const char *id, int idlen,
 	assert(idlen <= SSL_MAX_SSL_SESSION_ID_LENGTH);
 
 	for (i = 0; i < idlen; i++) {
-	    assert((unsigned char)id[i] <= 0xFF);
 	    sprintf(idstr+i*2, "%02X", (unsigned char) id[i]);
 	}
 	
