@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.67.4.18 2003/02/23 22:55:30 rjs3 Exp $ */
+/* $Id: master.c,v 1.67.4.19 2003/03/31 20:32:55 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1465,7 +1465,7 @@ int main(int argc, char **argv)
     limit_fds(RLIM_INFINITY);
 
     /* Write out the pidfile */
-    pidfd = open(pidfile, O_CREAT|O_TRUNC|O_RDWR, 0644);
+    pidfd = open(pidfile, O_CREAT|O_RDWR, 0644);
     if(pidfd == -1) {
 	int exit_result = EX_OSERR;
 
@@ -1499,8 +1499,16 @@ int main(int argc, char **argv)
 	    }
 	    
 	    /* Write PID */
-	    snprintf(buf, sizeof(buf), "%d\n", getpid());
-	    write(pidfd, buf, strlen(buf));
+	    snprintf(buf, sizeof(buf), "%-16d\n", getpid());
+	    if(lseek(pidfd, 0, SEEK_SET) == -1 ||
+	       write(pidfd, buf, strlen(buf)) == -1) {
+		int exit_result = EX_OSERR;
+
+		/* Tell our parent that we failed. */
+		write(startup_pipe[1], &exit_result, sizeof(exit_result));
+
+		fatal("unable to write to pidfile: %m", EX_OSERR);
+	    }
 	    fsync(pidfd);
 	}
     }
