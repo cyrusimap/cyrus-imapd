@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: lmtpd.c,v 1.4 2000/02/18 03:27:45 leg Exp $
+ * $Id: lmtpd.c,v 1.5 2000/02/18 06:44:16 tmartin Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.4 2000/02/18 03:27:45 leg Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.5 2000/02/18 06:44:16 tmartin Exp $";*/
 
 #include <config.h>
 
@@ -2248,10 +2248,6 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 				mailboxname, delopts->quotaoverride, 0);
 	    return r;
 	}
-
-	prot_printf(deliver_out,"not in bb %s\r\n", user);
-	prot_flush(deliver_out);
-
 
 	if (strchr(user, '.') ||
 	    strlen(user) + 30 > MAX_MAILBOX_PATH) {
