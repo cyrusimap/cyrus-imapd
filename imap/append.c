@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.73 2000/08/04 18:38:25 leg Exp $
+ * $Id: append.c,v 1.74 2000/08/08 17:31:31 leg Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -884,7 +884,7 @@ static int append_addseen(struct mailbox *mailbox,
     if (r) return r;
     
     oldlen = strlen(seenuids);
-    seenuids = xrealloc(seenuids, oldlen+strlen(msgrange) +10);
+    seenuids = xrealloc(seenuids, oldlen + strlen(msgrange) + 10);
 
     tail = seenuids + oldlen;
     /* Scan back to last uid */
@@ -896,10 +896,10 @@ static int append_addseen(struct mailbox *mailbox,
     }
     else {
 	if (p > seenuids) *p++ = ',';
-	strcpy(p, msgrange);
     }
+    strcpy(p, msgrange);
 
-    r = seen_write(seendb, last_read, last_uid, time((time_t *)0), seenuids);
+    r = seen_write(seendb, last_read, last_uid, time(NULL), seenuids);
     seen_close(seendb);
     free(seenuids);
     return r;
