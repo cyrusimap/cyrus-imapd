@@ -4,4 +4,4 @@
 #
 
 MAKE=gmake
-LNCOMMAND="${SRCDIR}/configure --with-tcl=/usr/contributed --enable-amssync --enable-cmulocal"
+LNCOMMAND="${SRCDIR}/configure --with-tcl=/usr/contributed --with-inn=/usr/news --enable-amssync --enable-cmulocal"
