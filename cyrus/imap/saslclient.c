@@ -49,11 +49,11 @@ static int mysasl_getsecret_cb(sasl_conn_t *conn,
 			       int id,
 			       sasl_secret_t **result)
 {
-    char optstr[1024];
     const char *pass;
-    char *p;
     size_t len;
-    struct backend *s = (struct backend *) context;
+    /*    struct backend *s = (struct backend *) context; */
+    
+    
 
     if (!conn || !result || id != SASL_CB_PASS) {
 	return SASL_BADPARAM;

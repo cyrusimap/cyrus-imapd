@@ -272,10 +272,10 @@ int showlist(struct protstream *pout, struct protstream *pin)
 	  if (yylex(&state, pin)!=EOL)
 	      printf("Expected EOL\n");
 
-	  printf("  %s  <- Active Sieve Script\n",string_DATAPTR(state.str));	  
+	  printf("  %s  <- Active Sieve Script\n",str);	  
       } else {
 	  /* assume it's a EOL */
-	  printf("  %s\n",string_DATAPTR(state.str));	  
+	  printf("  %s\n",str);	  
 	  
       }      
 

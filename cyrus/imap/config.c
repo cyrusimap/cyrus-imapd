@@ -1,5 +1,5 @@
 /* config.c -- Configuration routines
- $Id: config.c,v 1.23 2000/02/01 04:05:51 leg Exp $
+ $Id: config.c,v 1.24 2000/02/10 05:10:33 tmartin Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -32,6 +32,9 @@
 #include <ctype.h>
 #include <syslog.h>
 #include <com_err.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+
 #if HAVE_UNISTD_H
 # include <unistd.h>
 #endif
@@ -39,6 +42,7 @@
 #include "config.h"
 #include "exitcodes.h"
 #include "xmalloc.h"
+#include "mboxlist.h"
 
 extern int errno;
 
@@ -88,10 +92,10 @@ const char *ident;
     /* Look up default partition */
     config_defpartition = config_getstring("defaultpartition", "default");
     for (p = (char *)config_defpartition; *p; p++) {
-	if (!isalnum(*p))
+	if (!isalnum((int) *p))
 	  fatal("defaultpartition option contains non-alphanumeric character",
 		EC_CONFIG);
-	if (isupper(*p)) *p = tolower(*p);
+	if (isupper((int) *p)) *p = tolower((int) *p);
     }
     if (!config_partitiondir(config_defpartition)) {
 	sprintf(buf, "partition-%s option not specified in configuration file",
@@ -144,7 +148,7 @@ int def;
     const char *val = config_getstring(key, (char *)0);
 
     if (!val) return def;
-    if (!isdigit(*val) && (*val != '-' || !isdigit(val[1]))) return def;
+    if (!isdigit((int) *val) && (*val != '-' || !isdigit((int) val[1]))) return def;
     return atoi(val);
 }
 
@@ -200,12 +204,12 @@ config_read()
 	lineno++;
 
 	if (buf[strlen(buf)-1] == '\n') buf[strlen(buf)-1] = '\0';
-	for (p = buf; *p && isspace(*p); p++);
+	for (p = buf; *p && isspace((int) *p); p++);
 	if (!*p || *p == '#') continue;
 
 	key = p;
-	while (*p && (isalnum(*p) || *p == '-' || *p == '_')) {
-	    if (isupper(*p)) *p = tolower(*p);
+	while (*p && (isalnum((int) *p) || *p == '-' || *p == '_')) {
+	    if (isupper((int) *p)) *p = tolower((int) *p);
 	    p++;
 	}
 	if (*p != ':') {
@@ -216,7 +220,7 @@ config_read()
 	}
 	*p++ = '\0';
 
-	while (*p && isspace(*p)) p++;
+	while (*p && isspace((int) *p)) p++;
 	
 	if (!*p) {
 	    sprintf(buf, "empty option value on line %d of configuration file",
@@ -241,9 +245,7 @@ config_read()
  * Call proc (expected to be todo_append in reconstruct.c) with
  * information on each configured partition
  */
-void
-config_scanpartition(proc)
-void (*proc)();
+void config_scanpartition( void (*proc)() )
 {
     int opt;
     char *s;

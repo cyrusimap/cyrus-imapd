@@ -422,8 +422,6 @@ char *read_capability(void)
 {
   lexstate_t state;
   char *cap = NULL;
-  char *data;
-  int res;
 
   while (yylex(&state,pin)==STRING)
   {

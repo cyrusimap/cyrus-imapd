@@ -27,7 +27,7 @@
  */
 
 /*
- * $Id: message.c,v 1.71 2000/01/28 22:09:49 leg Exp $
+ * $Id: message.c,v 1.72 2000/02/10 05:10:42 tmartin Exp $
  */
 
 #ifdef HAVE_UNISTD_H
@@ -55,6 +55,7 @@
 #include "util.h"
 #include "xmalloc.h"
 #include "config.h"
+#include "retry.h"
 
 /* Message being parsed */
 struct msg {
@@ -188,7 +189,7 @@ static void message_write_searchaddr P((struct ibuf *ibuf,
 					struct address *addrlist));
 
 static void message_ibuf_init P((struct ibuf *ibuf));
-static message_ibuf_ensure P((struct ibuf *ibuf, unsigned len));
+static int message_ibuf_ensure P((struct ibuf *ibuf, unsigned len));
 static void message_ibuf_iov P((struct iovec *iov, struct ibuf *ibuf));
 static void message_ibuf_free P((struct ibuf *ibuf));
 static void message_free_body P((struct body *body));
@@ -429,6 +430,8 @@ struct boundary *boundaries;
 
     /* Free up boundary storage if necessary */
     if (newboundaries.id) free(newboundaries.id);
+
+    return 0;
 }
 
 /*
@@ -680,7 +683,7 @@ message_parse_address(hdr, addrp)
 char *hdr;
 struct address **addrp;
 {
-    char *hdrend, hdrendchar;
+    char *hdrend, hdrendchar = '\0';
 
     /* Find end of header */
     hdrend = hdr;
@@ -720,7 +723,7 @@ char **hdrp;
     if (!hdr) return;
 
     /* Find end of encoding token */
-    for (p = hdr; *p && !isspace(*p) && *p != '('; p++) {
+    for (p = hdr; *p && !isspace((int) *p) && *p != '('; p++) {
 	if (*p < ' ' || strchr(TSPECIALS, *p)) return;
     }
     len = p - hdr;
@@ -734,7 +737,7 @@ char **hdrp;
     strncpy(*hdrp, hdr, len);
     (*hdrp)[len] = '\0';
     for (p = *hdrp; *p; p++) {
-	if (islower(*p)) *p = toupper(*p);
+	if (islower((int) *p)) *p = toupper((int) *p);
     }
 }
 	
@@ -775,7 +778,7 @@ char **hdrp;
 
     /* Un-fold header */
     hdrend = *hdrp;
-    while (hdrend = strchr(hdrend, '\n')) {
+    while ((hdrend = strchr(hdrend, '\n'))!=NULL) {
 	if (hdrend > *hdrp && hdrend[-1] == '\r') {
 	    hdrend--;
 	    strcpy(hdrend, hdrend+2);
@@ -841,7 +844,7 @@ struct body *body;
 
     /* Find end of type token */
     type = hdr;
-    for (; *hdr && !isspace(*hdr) && *hdr != '/' && *hdr != '('; hdr++) {
+    for (; *hdr && !isspace((int) *hdr) && *hdr != '/' && *hdr != '('; hdr++) {
 	if (*hdr < ' ' || strchr(TSPECIALS, *hdr)) return;
     }
     typelen = hdr - type;
@@ -859,7 +862,7 @@ struct body *body;
 
     /* Find end of subtype token */
     subtype = hdr;
-    for (; *hdr && !isspace(*hdr) && *hdr != ';' && *hdr != '('; hdr++) {
+    for (; *hdr && !isspace((int) *hdr) && *hdr != ';' && *hdr != '('; hdr++) {
 	if (*hdr < ' ' || strchr(TSPECIALS, *hdr)) return;
     }
     subtypelen = hdr - subtype;
@@ -875,13 +878,13 @@ struct body *body;
     strncpy(body->type, type, typelen);
     body->type[typelen] = '\0';
     for (p = body->type; *p; p++) {
-	if (islower(*p)) *p = toupper(*p);
+	if (islower((int) *p)) *p = toupper((int) *p);
     }
     body->subtype = xmalloc(subtypelen + 1);
     strncpy(body->subtype, subtype, subtypelen);
     body->subtype[subtypelen] = '\0';
     for (p = body->subtype; *p; p++) {
-	if (islower(*p)) *p = toupper(*p);
+	if (islower((int) *p)) *p = toupper((int) *p);
     }
 
     /* Parse parameter list */
@@ -912,7 +915,7 @@ struct body *body;
 
     /* Find end of disposition token */
     disposition = hdr;
-    for (; *hdr && !isspace(*hdr) && *hdr != ';' && *hdr != '('; hdr++) {
+    for (; *hdr && !isspace((int) *hdr) && *hdr != ';' && *hdr != '('; hdr++) {
 	if (*hdr < ' ' || strchr(TSPECIALS, *hdr)) return;
     }
     dispositionlen = hdr - disposition;
@@ -928,7 +931,7 @@ struct body *body;
     strncpy(body->disposition, disposition, dispositionlen);
     body->disposition[dispositionlen] = '\0';
     for (p = body->disposition; *p; p++) {
-	if (islower(*p)) *p = toupper(*p);
+	if (islower((int) *p)) *p = toupper((int) *p);
     }
 
     /* Parse parameter list */
@@ -961,7 +964,7 @@ struct param **paramp;
 
 	/* Find end of attribute */
 	attribute = hdr;
-	for (; *hdr && !isspace(*hdr) && *hdr != '=' && *hdr != '('; hdr++) {
+	for (; *hdr && !isspace((int) *hdr) && *hdr != '=' && *hdr != '('; hdr++) {
 	    if (*hdr < ' ' || strchr(TSPECIALS, *hdr)) return;
 	}
 	attributelen = hdr - attribute;
@@ -995,7 +998,7 @@ struct param **paramp;
 	    if (!*hdr++) return;
 	}
 	else {
-	    for (; *hdr && !isspace(*hdr) && *hdr != ';' && *hdr != '('; hdr++) {
+	    for (; *hdr && !isspace((int) *hdr) && *hdr != ';' && *hdr != '('; hdr++) {
 		if (*hdr < ' ' || strchr(TSPECIALS, *hdr)) return;
 	    }
 	}
@@ -1014,7 +1017,7 @@ struct param **paramp;
 	strncpy(param->attribute, attribute, attributelen);
 	param->attribute[attributelen] = '\0';
 	for (p = param->attribute; *p; p++) {
-	    if (islower(*p)) *p = toupper(*p);
+	    if (islower((int) *p)) *p = toupper((int) *p);
 	}
 	param->value = xmalloc(valuelen + 1);
 	if (*value == '\"') {
@@ -1137,7 +1140,8 @@ message_fold_params(struct param **params)
 				     strlen((*continuation)->value) + 1);
 			from = (*continuation)->value;
 			to = thisparam->value + strlen(thisparam->value);
-			while (*to++ = *from++);
+			while ((*to++ = *from++)!= 0)
+			    { }
 		    }
 		}
 		else {
@@ -1149,7 +1153,8 @@ message_fold_params(struct param **params)
 				     strlen((*continuation)->value) + 1);
 			from = (*continuation)->value;
 			to = thisparam->value + strlen(thisparam->value);
-			while (*to++ = *from++);
+			while ((*to++ = *from++) != 0)
+			    { }
 		    }
 		    else {
 			/* Have to re-encode thisparam value */
@@ -1174,7 +1179,9 @@ message_fold_params(struct param **params)
 			    from++;
 			}
 			from = (*continuation)->value;
-			while (*to++ = *from++);
+
+			while ((*to++ = *from++)!=0)
+			    { }
 
 			free(thisparam->value);
 			thisparam->value = tmpvalue;
@@ -1228,8 +1235,8 @@ struct param **paramp;
 
 	/* Find end of value */
 	value = hdr;
-	for (; *hdr && !isspace(*hdr) && *hdr != ',' && *hdr != '('; hdr++) {
-	    if (*hdr != '-' && !isalpha(*hdr)) return;
+	for (; *hdr && !isspace((int) *hdr) && *hdr != ',' && *hdr != '('; hdr++) {
+	    if (*hdr != '-' && !isalpha(((int) *hdr))) return;
 	}
 	valuelen = hdr - value;
 
@@ -1246,7 +1253,7 @@ struct param **paramp;
 	strncpy(param->value, value, valuelen);
 	param->value[valuelen] = '\0';
 	for (p = param->value; *p; p++) {
-	    if (islower(*p)) *p = toupper(*p);
+	    if (islower((int) *p)) *p = toupper((int) *p);
 	}
 
 	/* Get ready to parse the next parameter */
@@ -1277,12 +1284,12 @@ char *hdr;
     message_parse_rfc822space(&hdr);
     if (!hdr) goto baddate;
 
-    if (isalpha(*hdr)) {
+    if (isalpha((int) *hdr)) {
 	/* Day name -- skip over it */
 	hdr++;
-	if (!isalpha(*hdr)) goto baddate;
+	if (!isalpha((int) *hdr)) goto baddate;
 	hdr++;
-	if (!isalpha(*hdr)) goto baddate;
+	if (!isalpha((int) *hdr)) goto baddate;
 	hdr++;
 	message_parse_rfc822space(&hdr);
 	if (!hdr || *hdr++ != ',') goto baddate;
@@ -1290,9 +1297,9 @@ char *hdr;
 	if (!hdr) goto baddate;
     }
 
-    if (!isdigit(*hdr)) goto baddate;
+    if (!isdigit((int) *hdr)) goto baddate;
     tm.tm_mday = *hdr++ - '0';
-    if (isdigit(*hdr)) {
+    if (isdigit((int) *hdr)) {
 	tm.tm_mday = tm.tm_mday*10 + *hdr++ - '0';
     }
     
@@ -1300,11 +1307,11 @@ char *hdr;
     message_parse_rfc822space(&hdr);
     if (!hdr) goto baddate;
     month[0] = *hdr++;
-    if (!isalpha(month[0])) goto baddate;
+    if (!isalpha((int) month[0])) goto baddate;
     month[1] = *hdr++;
-    if (!isalpha(month[1])) goto baddate;
+    if (!isalpha((int) month[1])) goto baddate;
     month[2] = *hdr++;
-    if (!isalpha(month[2])) goto baddate;
+    if (!isalpha((int) month[2])) goto baddate;
     month[3] = '\0';
     lcase(month);
     for (tm.tm_mon = 0; tm.tm_mon < 12; tm.tm_mon++) {
@@ -1314,15 +1321,15 @@ char *hdr;
     
     /* Parse year */
     message_parse_rfc822space(&hdr);
-    if (!hdr || !isdigit(*hdr)) goto baddate;
+    if (!hdr || !isdigit((int) *hdr)) goto baddate;
     tm.tm_year = *hdr++ - '0';
-    if (!isdigit(*hdr)) goto baddate;
+    if (!isdigit((int) *hdr)) goto baddate;
     tm.tm_year = tm.tm_year * 10 + *hdr++ - '0';
-    if (isdigit(*hdr)) {
+    if (isdigit((int) *hdr)) {
 	if (tm.tm_year < 19) goto baddate;
 	tm.tm_year -= 19;
 	tm.tm_year = tm.tm_year * 10 + *hdr++ - '0';
-	if (!isdigit(*hdr)) goto baddate;
+	if (!isdigit((int) *hdr)) goto baddate;
 	tm.tm_year = tm.tm_year * 10 + *hdr++ - '0';
     }
 
@@ -1346,7 +1353,7 @@ char **s;
     int commentlevel = 0;
 
     if (!p) return;
-    while (*p && (isspace(*p) || *p == '(')) {
+    while (*p && (isspace((int) *p) || *p == '(')) {
 	if (*p == '\n') {
 	    p++;
 	    if (*p != ' ' && *p != '\t') {
@@ -1679,7 +1686,7 @@ struct body *body;
 }
 
 /* Append character 'c' to 'ibuf' */
-#define PUTIBUF(ibuf,c) (((ibuf)->end<(ibuf)->last || message_ibuf_ensure((ibuf),1)),(*((ibuf)->end)++ = (c)))
+#define PUTIBUF(ibuf,c) (((void)((ibuf)->end<(ibuf)->last || message_ibuf_ensure((ibuf),1))),(*((ibuf)->end)++ = (c)))
 
 /*
  * Write the IMAP envelope for 'body' to 'ibuf'
@@ -1748,13 +1755,13 @@ int newformat;
 
 	if (newformat) {
 	    PUTIBUF(ibuf, ' ');
-	    if (param = body->params) {
+	    if ((param = body->params)!=NULL) {
 		PUTIBUF(ibuf, '(');
 		while (param) {
 		    message_write_nstring(ibuf, param->attribute);
 		    PUTIBUF(ibuf, ' ');
 		    message_write_nstring(ibuf, param->value);
-		    if (param = param->next) {
+		    if ((param = param->next)!=NULL) {
 			PUTIBUF(ibuf, ' ');
 		    }
 		}
@@ -1766,13 +1773,13 @@ int newformat;
 		PUTIBUF(ibuf, '(');
 		message_write_nstring(ibuf, body->disposition);
 		PUTIBUF(ibuf, ' ');
-		if (param = body->disposition_params) {
+		if ((param = body->disposition_params)!=NULL) {
 		    PUTIBUF(ibuf, '(');
 		    while (param) {
 			message_write_nstring(ibuf, param->attribute);
 			PUTIBUF(ibuf, ' ');
 			message_write_nstring(ibuf, param->value);
-			if (param = param->next) {
+			if ((param = param->next)!=NULL) {
 			    PUTIBUF(ibuf, ' ');
 			}
 		    }
@@ -1785,11 +1792,11 @@ int newformat;
 		message_write_nstring(ibuf, (char *)0);
 	    }
 	    PUTIBUF(ibuf, ' ');
-	    if (param = body->language) {
+	    if ((param = body->language)!=NULL) {
 		PUTIBUF(ibuf, '(');
 		while (param) {
 		    message_write_nstring(ibuf, param->value);
-		    if (param = param->next) {
+		    if ((param = param->next)!=NULL) {
 			PUTIBUF(ibuf, ' ');
 		    }
 		}
@@ -1808,13 +1815,13 @@ int newformat;
     message_write_nstring(ibuf, body->subtype);
     PUTIBUF(ibuf, ' ');
 
-    if (param = body->params) {
+    if ((param = body->params)!=NULL) {
 	PUTIBUF(ibuf, '(');
 	while (param) {
 	    message_write_nstring(ibuf, param->attribute);
 	    PUTIBUF(ibuf, ' ');
 	    message_write_nstring(ibuf, param->value);
-	    if (param = param->next) {
+	    if ((param = param->next)!=NULL) {
 		PUTIBUF(ibuf, ' ');
 	    }
 	}
@@ -1856,13 +1863,13 @@ int newformat;
 	    PUTIBUF(ibuf, '(');
 	    message_write_nstring(ibuf, body->disposition);
 	    PUTIBUF(ibuf, ' ');
-	    if (param = body->disposition_params) {
+	    if ((param = body->disposition_params)!=NULL) {
 		PUTIBUF(ibuf, '(');
 		while (param) {
 		    message_write_nstring(ibuf, param->attribute);
 		    PUTIBUF(ibuf, ' ');
 		    message_write_nstring(ibuf, param->value);
-		    if (param = param->next) {
+		    if ((param = param->next)!=NULL) {
 			PUTIBUF(ibuf, ' ');
 		    }
 		}
@@ -1875,11 +1882,11 @@ int newformat;
 	    message_write_nstring(ibuf, (char *)0);
 	}
 	PUTIBUF(ibuf, ' ');
-	if (param = body->language) {
+	if ((param = body->language)!=NULL) {
 	    PUTIBUF(ibuf, '(');
 	    while (param) {
 		message_write_nstring(ibuf, param->value);
-		if (param = param->next) {
+		if ((param = param->next)!=NULL) {
 		    PUTIBUF(ibuf, ' ');
 		}
 	    }
@@ -2265,15 +2272,14 @@ struct ibuf *ibuf;
 /*
  * Ensure 'ibuf' has enough free space to append 'len' bytes.
  */
-static
-message_ibuf_ensure(ibuf, len)
-struct ibuf *ibuf;
-unsigned len;
+static int
+message_ibuf_ensure(struct ibuf *ibuf,
+		    unsigned len)
 {
     char *s;
     int size;
 
-    if (ibuf->last - ibuf->end >= len) return;
+    if (ibuf->last - ibuf->end >= len) return 0;
     if (len < IBUFGROWSIZE) len = IBUFGROWSIZE;
 
     s = ibuf->start - sizeof(bit32);
@@ -2283,6 +2289,8 @@ unsigned len;
     ibuf->end = (ibuf->end - ibuf->start) + s;
     ibuf->start = s;
     ibuf->last = s + size;
+
+    return 1;
 }
 
 /*

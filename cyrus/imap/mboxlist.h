@@ -2,7 +2,7 @@
  * 
  * Copyright 1999 Carnegie Mellon University
  * 
- * $Id: mboxlist.h,v 1.3 2000/02/10 00:33:44 leg Exp $
+ * $Id: mboxlist.h,v 1.4 2000/02/10 05:10:40 tmartin Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -12,6 +12,7 @@
 #include "mailbox.h"
 #include "auth.h"
 #include "acap.h"
+#include "mailbox.h"
 
 /*
  * Maximum length of partition name. [config.c has a limit of 70]
@@ -93,6 +94,9 @@ int mboxlist_foreach(foreach_proc *p, void *rock, int rw);
 int mboxlist_findsub(char *pattern, int isadmin, char *userid, 
 		     struct auth_state *auth_state, int (*proc)(), void *rock);
 
+/* xxx */
+int mboxlist_findstage(const char *name, char *stagedir);
+
 /* Change 'user's subscription status for mailbox 'name'. */
 int mboxlist_changesub(const char *name, const char *userid, 
 		       struct auth_state *auth_state, int add);
@@ -115,11 +119,14 @@ void mboxlist_init(void);
 /* done with database stuff */
 void mboxlist_done(void);
 
-
+/* Check for consistancy. die if there's a problem */
+void mboxlist_checkconfig(void);
 
 /* open up acap connection if possible */
 int mboxlist_acapinit(void);
 
+void mboxlist_getinternalstuff(const char **listfnamep,const char **newlistfnamep, 
+			       const char **basep,unsigned long * sizep);
 
 
 #endif

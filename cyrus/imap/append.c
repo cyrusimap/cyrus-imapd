@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- $Id: append.c,v 1.60 2000/02/01 04:05:51 leg Exp $
+ $Id: append.c,v 1.61 2000/02/10 05:10:31 tmartin Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -48,6 +48,8 @@
 #include "xmalloc.h"
 #include "mboxlist.h"
 #include "acapmbox.h"
+#include "seen_local.h"
+#include "retry.h"
 
 struct stagemsg {
     unsigned long size;
@@ -165,7 +167,7 @@ int append_fromstage(struct mailbox *mailbox,
 
 	stage->size = size;
 	stage->internaldate = internaldate;
-	sprintf(stage->fname, "%d-%d", getpid(), internaldate);
+	sprintf(stage->fname, "%d-%d",(int) getpid(), (int) internaldate);
 	stage->num_parts = 5; /* room for 5 paths */
 	stage->parts[0][0] = '\0';
     } else {
@@ -704,8 +706,8 @@ const char *userid;
 	    }
 
 	    startline = src_base;
-	    while (endline = memchr(startline, '\n',
-				    src_size - (startline - src_base))) {
+	    while ( (endline = memchr(startline, '\n',
+				    src_size - (startline - src_base))) ) {
 		fwrite(startline, 1, (endline - startline), destfile);
 		if (endline == startline || endline[-1] != '\r') {
 		    putc('\r', destfile);
@@ -1062,7 +1064,7 @@ unsigned end;
 
     tail = seenuids + strlen(seenuids);
     /* Scan back to last uid */
-    while (tail > seenuids && isdigit(tail[-1])) tail--;
+    while (tail > seenuids && isdigit((int) tail[-1])) tail--;
     for (p = tail, last_seen=0; *p; p++) last_seen = last_seen * 10 + *p - '0';
     if (last_seen && last_seen >= start-1) {
 	if (tail > seenuids && tail[-1] == ':') p = tail - 1;

@@ -27,9 +27,12 @@
  */
 
 /*
- * $Id: syncnews.c,v 1.14 2000/01/28 22:09:52 leg Exp $
+ * $Id: syncnews.c,v 1.15 2000/02/10 05:10:46 tmartin Exp $
  */
-
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
@@ -46,6 +49,8 @@
 #include "imap_err.h"
 #include "mailbox.h"
 #include "mboxlist.h"
+#include "convert_code.h"
+
 
 extern int errno;
 extern int optind;
@@ -53,12 +58,21 @@ extern char *optarg;
 
 int code = 0;
 
-int do_syncnews();
+void do_syncnews(void);
 
 char **group = 0;
 int *group_seen;
 int group_num = 0;
 int group_alloc = 0;
+
+/* Forward declarations */
+void readactive(char *active);
+
+void usage(void)
+{
+    fprintf(stderr, "usage: syncnews active\n");
+    exit(EC_USAGE);
+}    
 
 int main(int argc, char **argv)
 {
@@ -83,19 +97,12 @@ int main(int argc, char **argv)
     exit(code);
 }
 
-usage()
-{
-    fprintf(stderr, "usage: syncnews active\n");
-    exit(EC_USAGE);
-}    
-
 #define GROUPGROW 300
 
 /*
  * comparison function for qsort() of the group list
  */
-compare_group(a, b)
-char **a, **b;
+int compare_group(char **a,char **b)
 {
     return strcmp(*a, *b);
 }
@@ -103,8 +110,7 @@ char **a, **b;
 /*
  * Read a news active file, building the group list
  */
-readactive(active)
-char *active;
+void readactive(char *active)
 {
     FILE *active_file;
     char buf[1024];
@@ -176,7 +182,7 @@ char *active;
 	exit(EC_DATAERR);
     }
 
-    qsort(group, group_num, sizeof(char *), compare_group);
+    qsort(group, group_num, sizeof(char *), (int (*)(const void *, const void *)) compare_group);
     return;
 
   badactive:
@@ -189,7 +195,7 @@ char *active;
 /*
  * Do the real work.
  */
-do_syncnews()
+void do_syncnews(void)
 {
     int r;
     int i;

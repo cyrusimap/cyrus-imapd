@@ -25,8 +25,11 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: reconstruct.c,v 1.43 2000/01/28 22:09:51 leg Exp $ */
-
+/* $Id: reconstruct.c,v 1.44 2000/02/10 05:10:44 tmartin Exp $ */
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <fcntl.h>
@@ -36,6 +39,7 @@
 #include <netinet/in.h>
 #include <sys/stat.h>
 #include <com_err.h>
+#include <stdlib.h>
 
 #if HAVE_DIRENT_H
 # include <dirent.h>
@@ -64,10 +68,21 @@
 #include "mailbox.h"
 #include "message.h"
 #include "xmalloc.h"
+#include "config.h"
+#include "mboxname.h"
+#include "mboxlist.h"
+#include "seen_local.h"
+#include "retry.h"
+#include "convert_code.h"
 
 extern int errno;
 extern int optind;
 extern char *optarg;
+
+/* forward declarations */
+void do_mboxlist(void);
+int reconstruct(char *name);
+void usage(void);
 
 extern char *mailbox_findquota P((const char *name));
 extern acl_canonproc_t mboxlist_ensureOwnerRights;
@@ -76,9 +91,7 @@ int code = 0;
 
 int do_reconstruct();
 
-main(argc, argv)
-int argc;
-char **argv;
+int main(int argc, char **argv)
 {
     int opt, i;
     int rflag = 0;
@@ -136,7 +149,7 @@ char **argv;
     exit(code);
 }
 
-usage()
+void usage(void)
 {
     fprintf(stderr, "usage: reconstruct [-r] mailbox...\n");
     fprintf(stderr, "       reconstruct -m\n");
@@ -178,9 +191,7 @@ void* rock;
 /*
  * Reconstruct the single mailbox named 'name'
  */
-int 
-reconstruct(name)
-char *name;
+int reconstruct(char *name)
 {
     int r;
     struct mailbox mailbox;
@@ -311,9 +322,9 @@ char *name;
 	}
 
 	group = mailbox.name;
-	if (newsprefixlen = strlen(config_getstring("newsprefix", ""))) {
+	if ((newsprefixlen = strlen(config_getstring("newsprefix", "")))!=0) {
 	    group += newsprefixlen;
-	    if (*group == '.') group++;
+	    if ((*group) == '.') group++;
 	}
 	strcpy(end_newspath, group);
 
@@ -344,8 +355,8 @@ char *name;
 	    return IMAP_IOERROR;
 	}
     } else {
-	while (dirent = readdir(dirp)) {
-	    if (!isdigit(dirent->d_name[0]) || dirent->d_name[0] ==
+	while ((dirent = readdir(dirp))!=NULL) {
+	    if (!isdigit((int) (dirent->d_name[0])) || dirent->d_name[0] ==
 		'0')
 		continue;
 	    if (uid_num == uid_alloc) {
@@ -355,7 +366,7 @@ char *name;
 	    }
 	    uid[uid_num] = 0;
 	    p = dirent->d_name;
-	    while (isdigit(*p)) {
+	    while (isdigit((int) *p)) {
 		uid[uid_num] = uid[uid_num] * 10 + *p++ - '0';
 	    }
 	    if (format != MAILBOX_FORMAT_NETNEWS) {
@@ -381,7 +392,7 @@ char *name;
 	message_index.uid = uid[msg];
 	
 	if (format == MAILBOX_FORMAT_NETNEWS) {
-	    sprintf(end_newspath, "%u", uid[msg]);
+	    sprintf(end_newspath, "%u", (unsigned int) uid[msg]);
 	    msgfile = fopen(newspath, "r");
 	}
 	else {
@@ -430,7 +441,7 @@ char *name;
 	}
 	message_index.last_updated = time(0);
 	
-	if (r = message_parse_file(msgfile, &mailbox, &message_index)) {
+	if ((r = message_parse_file(msgfile, &mailbox, &message_index))!=0) {
 	    fclose(msgfile);
 	    fclose(newindex);
 	    mailbox_close(&mailbox);
@@ -654,7 +665,7 @@ todo_append_hashed(char *name, char *path, char *partition)
     dirp = opendir(path);
     if (!dirp) {
 	fprintf(stderr, "reconstruct: couldn't open partition %s\n", name);
-    } else while (dirent = readdir(dirp)) {
+    } else while ((dirent = readdir(dirp))!=NULL) {
 	struct todo *newentry;
 
 	if (strchr(dirent->d_name, '.')) {
@@ -715,9 +726,9 @@ char *mboxname;
 /*
  * Reconstruct the mailboxes list.
  */
-do_mboxlist()
+void do_mboxlist(void)
 {
-    int r;
+    int r = 0;
     const char *listfname, *newlistfname;
     const char *startline;
     unsigned long left;
@@ -740,17 +751,13 @@ do_mboxlist()
     int i;
 
     /* Lock mailbox list */
-    r = mboxlist_open();
-    if (r) {
-	fprintf(stderr, "reconstruct: cannot open/lock mailboxes file\n");
-	exit(1);
-    }
+    mboxlist_open(NULL);
 
     mboxlist_getinternalstuff(&listfname, &newlistfname,
 			      &startline, &left);
 
     /* For each line in old mailboxes file */
-    while (endline = memchr(startline, '\n', left)) {
+    while ((endline = memchr(startline, '\n', left))!=NULL) {
 	/* Copy line into malloc'ed memory; skip over line */
 	mboxname = xmalloc(endline - startline + 1);
 	strncpy(mboxname, startline, endline - startline);
@@ -829,13 +836,13 @@ do_mboxlist()
 	    continue;
 	}
 
-	while (dirent = readdir(dirp)) {
+	while ((dirent = readdir(dirp))!=NULL) {
 	    if (!strchr(dirent->d_name, '.')) {
 		/* Ignore all-numeric files in news partitons */
 		if (isnewspartition) {
 		    p = dirent->d_name;
 		    while (*p) {
-			if (!isdigit(*p)) break;
+			if (!isdigit((int) *p)) break;
 			p++;
 		    }
 		    if (!*p) continue;

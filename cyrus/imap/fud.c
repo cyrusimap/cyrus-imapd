@@ -27,8 +27,11 @@
  *
  */
 
-/* $Id: fud.c,v 1.9 1999/04/08 21:04:22 tjs Exp $ */
-
+/* $Id: fud.c,v 1.10 2000/02/10 05:10:36 tmartin Exp $ */
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
@@ -51,6 +54,9 @@
 #include "mailbox.h"
 #include "xmalloc.h"
 #include "acl.h"
+#include "seen_local.h"
+#include "mboxname.h"
+#include "map.h"
 
 #define REQ_OK		0
 #define REQ_DENY	1
@@ -59,6 +65,9 @@
 extern int errno;
 extern int optind;
 extern char *optarg;
+
+/* forward decls */
+int handle_request(char *who,char *name,struct sockaddr_in sfrom);
 
 void send_reply P((struct sockaddr_in sfrom, int status,
 		   char *user, char *mbox, int numrecent, time_t lastread,
@@ -69,35 +78,7 @@ int soc;
 
 char who[16];
 
-int
-main(argc, argv)
-int argc; 
-char **argv;
-{
-    int port, r;
-   
-
-    r = 0; /* to shut up lint/gcc */
-
-    config_init("fud");
-
-    if(geteuid() == 0)
-        fatal("must run as the Cyrus user", EC_USAGE);
-    r = init_network(port);
-    signal(SIGHUP,SIG_IGN);
-
-    if (r)
-        fatal("unable to configure network port", EC_OSERR);
-    
-    begin_handling();
-
-    exit(code);
-}
-
-
-int
-init_network(port)
-int port;
+int init_network(int port)
 {
     soc = 0;	/* inetd has handed us the port as stdin */
     return(0);
@@ -105,8 +86,7 @@ int port;
 
 #define MAXLOGNAME 16		/* should find out for real */
 
-int
-begin_handling()
+int begin_handling(void)
 {
         struct sockaddr_in  sfrom;
         int sfromsiz = sizeof(sfrom);
@@ -139,11 +119,36 @@ begin_handling()
         }
 }
 
-int 
-handle_request(who,name,sfrom)
-char *who;
-char *name;
-struct sockaddr_in sfrom;
+
+
+int main(int argc, char **argv)
+{
+    int port = 0;
+    int r;
+   
+    r = 0; /* to shut up lint/gcc */
+
+    config_init("fud");
+
+    if(geteuid() == 0)
+        fatal("must run as the Cyrus user", EC_USAGE);
+    r = init_network(port);
+    signal(SIGHUP,SIG_IGN);
+
+    if (r)
+        fatal("unable to configure network port", EC_OSERR);
+    
+    begin_handling();
+
+    exit(code);
+}
+
+
+
+
+
+
+int handle_request(char *who,char *name,struct sockaddr_in sfrom)
 {
     int r;
     struct mailbox mailbox;

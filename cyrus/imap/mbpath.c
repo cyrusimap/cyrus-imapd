@@ -1,6 +1,6 @@
 /* mbpath.c -- help the sysadmin to find the path matching the mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: mbpath.c,v 1.2 2000/01/28 22:09:49 leg Exp $
+ * $Id: mbpath.c,v 1.3 2000/02/10 05:10:42 tmartin Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-static char _rcsid[] = "$Id: mbpath.c,v 1.2 2000/01/28 22:09:49 leg Exp $";
+/* static char _rcsid[] = "$Id: mbpath.c,v 1.3 2000/02/10 05:10:42 tmartin Exp $"; */
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -50,6 +50,7 @@ static char _rcsid[] = "$Id: mbpath.c,v 1.2 2000/01/28 22:09:49 leg Exp $";
 #include "imap_err.h"
 #include "mailbox.h"
 #include "xmalloc.h"
+#include "mboxlist.h"
 
 extern int optind;
 extern char *optarg;
@@ -97,7 +98,7 @@ main(int argc, char **argv)
     }
   }
 
-  mboxlist_open();
+  mboxlist_open(NULL);
 
   for (i = optind; i < argc; i++) {
     (void)memset(&path, 0, sizeof(path));
@@ -120,5 +121,5 @@ main(int argc, char **argv)
   exit(0);
 }
 
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/mbpath.c,v 1.2 2000/01/28 22:09:49 leg Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/mbpath.c,v 1.3 2000/02/10 05:10:42 tmartin Exp $ */
 

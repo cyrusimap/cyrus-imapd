@@ -77,9 +77,6 @@ int sieved_userisadmin;
 
 void cmdloop()
 {
-  unsigned int mechcount;
-  char *sasllist;
-
   chdir("/tmp/");
 
   capabilities(sieved_out, sieved_saslconn);
@@ -179,7 +176,7 @@ static int authisa(const char *item)
     while (*val) {
 	char *p;
 	
-	for (p = (char *) val; *p && !isspace(*p); p++);
+	for (p = (char *) val; *p && !isspace((int) *p); p++);
 	strncpy(buf, val, p-val);
 	buf[p-val] = 0;
 
@@ -187,7 +184,7 @@ static int authisa(const char *item)
 	    return 1;
 	}
 	val = p;
-	while (*val && isspace(*val)) val++;
+	while (*val && isspace((int) *val)) val++;
     }
     return 0;
 }

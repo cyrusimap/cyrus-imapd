@@ -1,6 +1,6 @@
 /* scripttest.c -- test wheather the sieve script is valid
  * Tim Martin
- * $Id: scripttest.c,v 1.10 2000/02/10 00:39:15 leg Exp $
+ * $Id: scripttest.c,v 1.11 2000/02/10 05:10:51 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -54,7 +54,7 @@ sieve_vacation_t vacation = {
 static int sieve_notify(void *ac, 
 			void *interp_context, 
 			void *script_context,
-			void *mc)
+			void *message_context)
 {
     fatal("stub function called", 0);
     return SIEVE_FAIL;

@@ -77,9 +77,10 @@ static int quitFlag = 0;	/* 1 means the "checkmem" command was
 /*
  * Forward references for procedures defined later in this file:
  */
-
+#ifdef TCL_MEM_DEBUG
 static int		CheckmemCmd _ANSI_ARGS_((ClientData clientData,
 			    Tcl_Interp *interp, int argc, char *argv[]));
+#endif /* TCL_MEM_DEBUG */
 
 /*
  *----------------------------------------------------------------------

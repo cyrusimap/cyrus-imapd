@@ -1,5 +1,5 @@
 /* imparse.c -- IMxP client-side parsing routines
- $Id: imparse.c,v 1.8 1999/03/22 02:35:56 tjs Exp $
+ $Id: imparse.c,v 1.9 2000/02/10 05:10:49 tmartin Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -157,17 +157,17 @@ int imparse_issequence(const char* s)
     while ((c = *s)) {
 	if (c == ',') {
 	    if (!len) return 0;
-	    if (!isdigit(s[-1]) && s[-1] != '*') return 0;
+	    if (!isdigit((int) s[-1]) && s[-1] != '*') return 0;
 	    sawcolon = 0;
 	}
 	else if (c == ':') {
 	    if (sawcolon || !len) return 0;
-	    if (!isdigit(s[-1]) && s[-1] != '*') return 0;
+	    if (!isdigit((int) s[-1]) && s[-1] != '*') return 0;
 	    sawcolon = 1;
 	}
 	else if (c == '*') {
 	    if (len && s[-1] != ',' && s[-1] != ':') return 0;
-	    if (isdigit(s[1])) return 0;
+	    if (isdigit((int) s[1])) return 0;
 	}
 	else if (!isdigit(c)) {
 	    return 0;
@@ -176,19 +176,18 @@ int imparse_issequence(const char* s)
 	len++;
     }
     if (len == 0) return 0;
-    if (!isdigit(s[-1]) && s[-1] != '*') return 0;
+    if (!isdigit((int) s[-1]) && s[-1] != '*') return 0;
     return 1;
 }
 
 /*
  * Return nonzero if 's' matches the grammar for a number
  */
-int imparse_isnumber(s)
-const char *s;
+int imparse_isnumber(const char *s)
 {
     if (!*s) return 0;
     for (; *s; s++) {
-	if (!isdigit(*s)) return 0;
+	if (!isdigit((int) *s)) return 0;
     }
     return 1;
 }

@@ -1,5 +1,5 @@
 /* collectnews.c -- program to add news articles to relevant header files
- $Id: collectnews.c,v 1.20 2000/01/28 22:09:42 leg Exp $
+ $Id: collectnews.c,v 1.21 2000/02/10 05:10:32 tmartin Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -27,6 +27,7 @@
  *
  */
 
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <syslog.h>
@@ -41,6 +42,8 @@
 #include "mailbox.h"
 #include "xmalloc.h"
 #include "mboxlist.h"
+#include "append.h"
+#include "convert_code.h"
 
 extern int errno;
 
@@ -90,7 +93,7 @@ int main(int argc, char **argv)
 
 	    if (!strchr(buf, '\t')) {
 		/* No overview junk to throw away */
-		if (p = strrchr(buf, ' ')) {
+		if ((p = strrchr(buf, ' '))!=NULL) {
 		    /* Throw away last (partial) filename */
 		    *p = '\0';
 		}

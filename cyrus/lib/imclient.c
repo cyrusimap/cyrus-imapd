@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.46 2000/01/28 22:09:54 leg Exp $
+ $Id: imclient.c,v 1.47 2000/02/10 05:10:49 tmartin Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -748,7 +748,7 @@ int len;
 	}
 	else {
 	    replytag = 0;
-	    while (isdigit(*p)) replytag = replytag * 10 + *p++ - '0';
+	    while (isdigit((int) *p)) replytag = replytag * 10 + *p++ - '0';
 	    if (*p++ != ' ') {
 		/* XXX Got junk from the server */
 		/* Start parsing the next reply */
@@ -758,9 +758,9 @@ int len;
 	}
 
 	/* parse num, if there */
-	if (replytag == 0 && isdigit(*p)) {
+	if (replytag == 0 && isdigit((int) *p)) {
 	    reply.msgno = 0;
-	    while (isdigit(*p)) reply.msgno = reply.msgno * 10 + *p++ - '0';
+	    while (isdigit((int) *p)) reply.msgno = reply.msgno * 10 + *p++ - '0';
 	    if (*p++ != ' ') {
 		/* XXX Got junk from the server */
 		/* Start parsing the next reply */
@@ -797,16 +797,16 @@ int len;
 
 	    /* Scan back and see if the end of the line introduces a literal */
 	    if (!iscompletion && endreply[-1] == '\r' && endreply[-2] == '}' &&
-		isdigit(endreply[-3])) {
+		isdigit((int) endreply[-3])) {
 		p = endreply - 4;
-		while (p > imclient->replystart && isdigit(*p)) p--;
+		while (p > imclient->replystart && isdigit((int) *p)) p--;
 		if (p > imclient->replystart + 2 && *p == '{' &&
 		    charclass[(unsigned char)p[-1]] != 2) {
 
 		    /* Parse the size of the literal */
 		    literallen = 0;
 		    p++;
-		    while (isdigit(*p)) literallen = literallen*10 + *p++ -'0';
+		    while (isdigit((int) *p)) literallen = literallen*10 + *p++ -'0';
 
 		    /* Do a continue to read literal & following line */
 		    imclient->replyliteralleft = literallen;
@@ -864,16 +864,16 @@ int len;
 	/* Scan back and see if the end of the line introduces a literal */
 	if (!(imclient->callback[keywordindex].flags & CALLBACK_NOLITERAL)) {
 	    if (endreply[-1] == '\r' && endreply[-2] == '}' &&
-		isdigit(endreply[-3])) {
+		isdigit((int) endreply[-3])) {
 		p = endreply - 4;
-		while (p > imclient->replystart && isdigit(*p)) p--;
+		while (p > imclient->replystart && isdigit((int) *p)) p--;
 		if (p > imclient->replystart + 2 && *p == '{' &&
 		    charclass[(unsigned char)p[-1]] != 2) {
 
 		    /* Parse the size of the literal */
 		    literallen = 0;
 		    p++;
-		    while (isdigit(*p)) literallen = literallen*10 + *p++ -'0';
+		    while (isdigit((int) *p)) literallen = literallen*10 + *p++ -'0';
 
 		    /* Do a continue to read literal & following line */
 		    imclient->replyliteralleft = literallen;
@@ -1239,7 +1239,7 @@ int imclient_authenticate(struct imclient *imclient,
     /* stop looping on command completion */
     if (!imclient->readytxt) break;
 
-    if (isspace(*imclient->readytxt)) {
+    if (isspace((int) *imclient->readytxt)) {
 	inlen = 0;
     } else {
 	inlen = imclient_decodebase64(imclient->readytxt);
@@ -1413,12 +1413,8 @@ static int verify_error = X509_V_OK;
 static int do_dump = 1;
 
 #define CCERT_BUFSIZ 256
-static char peer_subject[CCERT_BUFSIZ];
-static char peer_issuer[CCERT_BUFSIZ];
 static char peer_CN[CCERT_BUFSIZ];
 static char issuer_CN[CCERT_BUFSIZ];
-static unsigned char md[EVP_MAX_MD_SIZE];
-static char fingerprint[EVP_MAX_MD_SIZE * 3];
 
 char   *tls_peer_CN = "";
 char   *tls_issuer_CN = NULL;
@@ -1716,13 +1712,15 @@ static long bio_dump_cb(BIO * bio, int cmd, const char *argp, int argi,
 	return (ret);
 
     if (cmd == (BIO_CB_READ | BIO_CB_RETURN)) {
-	printf("read from %08X [%08lX] (%d bytes => %ld (0x%X))\n", bio, argp,
-		 argi, ret, ret);
+	printf("read from %08X [%08lX] (%d bytes => %ld (0x%X))\n", (unsigned int) bio, 
+	       (unsigned long) argp,
+	       argi, ret, (unsigned int) ret);
 	tls_dump(argp, (int) ret);
 	return (ret);
     } else if (cmd == (BIO_CB_WRITE | BIO_CB_RETURN)) {
-	printf("write to %08X [%08lX] (%d bytes => %ld (0x%X))\n", bio, argp,
-		 argi, ret, ret);
+	printf("write to %08X [%08lX] (%d bytes => %ld (0x%X))\n", (unsigned int) bio, 
+	       (unsigned long) argp,
+	       argi, ret, (unsigned int) ret);
 	tls_dump(argp, (int) ret);
     }
     return (ret);
@@ -1732,8 +1730,6 @@ int tls_start_clienttls(struct imclient *imclient,
 			int *layer, char **authid, int fd)
 {
     int     sts;
-    int     j;
-    unsigned int n;
     SSL_SESSION *session;
     SSL_CIPHER *cipher;
     X509   *peer;

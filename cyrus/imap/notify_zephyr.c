@@ -1,5 +1,5 @@
 /* notify_zephyr.c -- Module to notify of new mail via zephyr
- $Id: notify_zephyr.c,v 1.19 2000/02/03 06:51:09 tmartin Exp $
+ $Id: notify_zephyr.c,v 1.20 2000/02/10 05:10:43 tmartin Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -27,6 +27,10 @@
  *
  */
 
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <netdb.h>
@@ -44,6 +48,8 @@
 #ifndef MAIL_CLASS
 #define MAIL_CLASS "MAIL"
 #endif
+
+#include "notify.h"
 
 extern int errno;
 
@@ -66,7 +72,6 @@ void notify(char *class,
     char *msgbody;
     char *lines[2];
     char *mykrbhost = 0;
-    int lup;
 
     if (!instance) instance = "INBOX";
   

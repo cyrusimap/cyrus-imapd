@@ -1,5 +1,5 @@
 /* dump_deliver.c -- Program to dump deliver db for debugging purposes
- $Id: dump_deliver.c,v 1.7 2000/01/28 22:09:43 leg Exp $
+ $Id: dump_deliver.c,v 1.8 2000/02/10 05:10:35 tmartin Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -27,8 +27,12 @@
  *
  */
 
-static char _rcsid[] = "$Id: dump_deliver.c,v 1.7 2000/01/28 22:09:43 leg Exp $";
+/* static char _rcsid[] = "$Id: dump_deliver.c,v 1.8 2000/02/10 05:10:35 tmartin Exp $"; */
 
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
@@ -38,6 +42,8 @@ static char _rcsid[] = "$Id: dump_deliver.c,v 1.7 2000/01/28 22:09:43 leg Exp $"
 #include <com_err.h>
 #include <errno.h>
 #include <db.h>
+#include <time.h>
+
 #include "util.h"
 #include "config.h"
 #include "mailbox.h"
@@ -49,7 +55,7 @@ dump_deliver(fname)
      char *fname;
 {
     DB *db;
-    DB_TXN *tid;
+    DB_TXN *tid = NULL;
     DBC *c;
     int ret;
     DBT key, data;
@@ -81,7 +87,7 @@ dump_deliver(fname)
 	count++;
 	(void)memcpy(&mark, data.data, sizeof(time_t));
 	to = ((char *)key.data + (strlen(key.data) + 1));
-	printf("id: %-40s\tto: %-20s\tat: %d\n", key.data, to, mark);
+	printf("id: %-40s\tto: %-20s\tat: %d\n", (char *) key.data, to, (int) mark);
 	r = c->c_get(c, &key, &data, DB_NEXT);
     }
     if (r != DB_NOTFOUND) {
@@ -89,6 +95,8 @@ dump_deliver(fname)
     }
     
     printf("got %d entries\n", count);
+
+    return 0;
 }
 
 
@@ -120,7 +128,7 @@ main(argc, argv)
 
   config_init("dump_deliverdb");
   
-  printf("it is NOW: %d\n", time(NULL));
+  printf("it is NOW: %d\n", (int) time(NULL));
   
   duplicate_init();
   if (alt_file == NULL) {
@@ -135,14 +143,15 @@ main(argc, argv)
   }
 
   duplicate_done();
+  
+  return 0;
 }
 
-fatal(s, code)
-char *s;
-int code;
+void fatal(char *s,
+	   int code)
 {
     fprintf(stderr,"dump_deliver: %s\n", s);
     exit(code);
 }
 
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/Attic/dump_deliver.c,v 1.7 2000/01/28 22:09:43 leg Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/Attic/dump_deliver.c,v 1.8 2000/02/10 05:10:35 tmartin Exp $ */

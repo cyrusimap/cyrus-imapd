@@ -1,5 +1,5 @@
 /* mboxname.h -- Mailbox list manipulation routines
- * $Id: mboxname.h,v 1.2 2000/01/28 22:09:49 leg Exp $
+ * $Id: mboxname.h,v 1.3 2000/02/10 05:10:41 tmartin Exp $
  *
  # Copyright 1999 Carnegie Mellon University
  # 
@@ -34,5 +34,6 @@ int mboxname_tointernal(char *name, char *userid, char *result);
 int mboxname_userownsmailbox(char *userid, char *name);
 int mboxname_netnewscheck(char *name);
 int mboxname_policycheck(char *name);
+int mboxname_userownsmailbox(char *userid, char *name);
 
 #endif

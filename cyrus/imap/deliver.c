@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: deliver.c,v 1.132 2000/02/10 00:39:12 leg Exp $
+ * $Id: deliver.c,v 1.133 2000/02/10 05:10:34 tmartin Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,8 @@
  *
  */
 
-static char _rcsid[] = "$Id: deliver.c,v 1.132 2000/02/10 00:39:12 leg Exp $";
+/*static char _rcsid[] = "$Id: deliver.c,v 1.133 2000/02/10 05:10:34 tmartin Exp $";*/
+
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -41,6 +42,8 @@ static char _rcsid[] = "$Id: deliver.c,v 1.132 2000/02/10 00:39:12 leg Exp $";
 #include <syslog.h>
 #include <com_err.h>
 #include <errno.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 #ifdef USE_SIEVE
 #include <sieve_interface.h>
@@ -62,6 +65,7 @@ static char _rcsid[] = "$Id: deliver.c,v 1.132 2000/02/10 00:39:12 leg Exp $";
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sasl.h>
+#include <saslutil.h>
 
 #include "acl.h"
 #include "util.h"
@@ -76,6 +80,10 @@ static char _rcsid[] = "$Id: deliver.c,v 1.132 2000/02/10 00:39:12 leg Exp $";
 #include "xmalloc.h"
 #include "version.h"
 #include "duplicate.h"
+#include "append.h"
+#include "mboxlist.h"
+#include "notify.h"
+
 
 struct protstream *deliver_out, *deliver_in;
 
@@ -134,9 +142,28 @@ typedef struct script_data {
     struct auth_state *authstate;
 } script_data_t;
 
+/* forward declarations */
+void lmtpmode(deliver_opts_t *delopts);
+int deliver_mailbox(struct protstream *msg,
+		    struct stagemsg **stage,
+		    unsigned size,
+		    char **flag,
+		    int nflags,
+		    char *authuser,
+		    struct auth_state *authstate,
+		    char *id,
+		    char *user,
+		    char *notifyheader,
+		    char *mailboxname,
+		    int quotaoverride,
+		    int acloverride);
+int isvalidflag(char *f);
+int convert_sysexit(int r);
 int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 	    char **flag, int nflags,
 	    char *user, char *mailboxname);
+
+
 
 int dupelim = 0;
 int logdebug = 0;
@@ -224,7 +251,7 @@ static int authisa(char *authname, const char *item)
     while (*val) {
 	char *p;
 	
-	for (p = (char *) val; *p && !isspace(*p); p++);
+	for (p = (char *) val; *p && !isspace((int) *p); p++);
 	strncpy(buf, val, p-val);
 	buf[p-val] = 0;
 
@@ -232,7 +259,7 @@ static int authisa(char *authname, const char *item)
 	    return 1;
 	}
 	val = p;
-	while (*val && isspace(*val)) val++;
+	while (*val && isspace((int) *val)) val++;
     }
     return 0;
 }
@@ -240,17 +267,15 @@ static int authisa(char *authname, const char *item)
 
 /* should we allow users to proxy?  return SASL_OK if yes,
    SASL_BADAUTH otherwise */
-static mysasl_authproc(void *context __attribute__((unused)),
-		       const char *auth_identity,
-		       const char *requested_user,
-		       const char **user,
-		       const char **errstr)
+static int mysasl_authproc(void *context __attribute__((unused)),
+			   const char *auth_identity,
+			   const char *requested_user,
+			   const char **user,
+			   const char **errstr)
 {
-    char *p;
     const char *val;
     char *canon_authuser, *canon_requser;
-    char *username=NULL, *realm;
-    char buf[MAX_MAILBOX_PATH];
+    char *realm;
     static char replybuf[100];
     int allowed=0;
 
@@ -269,17 +294,17 @@ static mysasl_authproc(void *context __attribute__((unused)),
     canon_requser = xstrdup(canon_requser);
 
     /* check if remote realm */
-    if (realm = strchr(canon_authuser, '@')) {
+    if ((realm = strchr(canon_authuser, '@'))!=NULL) {
 	realm++;
 	val = config_getstring("loginrealms", "");
 	while (*val) {
 	    if (!strncasecmp(val, realm, strlen(realm)) &&
-		(!val[strlen(realm)] || isspace(val[strlen(realm)]))) {
+		(!val[strlen(realm)] || isspace((int) val[strlen(realm)]))) {
 		break;
 	    }
 	    /* not this realm, try next one */
-	    while (*val && !isspace(*val)) val++;
-	    while (*val && isspace(*val)) val++;
+	    while (*val && !isspace((int) *val)) val++;
+	    while (*val && isspace((int) *val)) val++;
 	}
 	if (!*val) {
 	    snprintf(replybuf, 100, "cross-realm login %s denied", 
@@ -491,7 +516,7 @@ static int hashheader(char *header)
 {
     int x = 0;
     /* any CHAR except ' ', :, or a ctrl char */
-    for (; !iscntrl(*header) && (*header != ' ') && (*header != ':'); 
+    for (; !iscntrl((int) *header) && (*header != ' ') && (*header != ':'); 
 	 header++) {
 	x *= 256;
 	x += *header;
@@ -752,20 +777,26 @@ static void fill_cache(struct protstream *fin, FILE *fout,
 }
 
 /* gets the header "head" from msg. */
-static int getheader(void *v, char *head, char ***body)
+static int getheader(void *v, char *phead, char ***body)
 {
     message_data_t *m = (message_data_t *) v;
     int cl, clinit;
     char *h;
+    char *head;
 
-    if (head==NULL) return SIEVE_FAIL;
+    if (phead==NULL) return SIEVE_FAIL;
 
     *body = NULL;
 
+    /* copy header parameter so we can mangle it */
+    head = malloc(strlen(phead)+1);
+    if (!head) return SIEVE_FAIL;
+    strcpy(head, phead);
+
     h = head;
     while (*h != '\0') {
-	if (isupper(*h))
-	    *h = tolower(*h);
+	if (isupper((int) *h))
+	    *h = tolower((int) *h);
 	h++;
     }
 
@@ -780,6 +811,8 @@ static int getheader(void *v, char *head, char ***body)
 	cl %= HEADERCACHESIZE;
 	if (cl == clinit) break; /* gone all the way around */
     }
+
+    free(head);
 
     if (*body) {
 	return SIEVE_OK;
@@ -868,12 +901,12 @@ int send_rejection(char *origid,
     struct tm *tm;
     int tz;
     time_t t;
-    pid_t p;
+    unsigned long p;
 
     smbuf[0] = "sendmail";
     smbuf[1] = rejto;
     smbuf[2] = NULL;
-    p = open_sendmail(smbuf, &sm);
+    p = (unsigned long) open_sendmail(smbuf, &sm);
     if (sm == NULL) {
 	return -1;
     }
@@ -906,19 +939,19 @@ int send_rejection(char *origid,
     fprintf(sm, "MIME-Version: 1.0\r\n");
     fprintf(sm, "Content-Type: "
 	    "multipart/report; report-type=disposition-notification;"
-	    "\r\n\tboundary=\"%d/%s\"\r\n", p, hostname);
+	    "\r\n\tboundary=\"%ld/%s\"\r\n", p, hostname);
     fprintf(sm, "Subject: Automatically rejected mail\r\n");
     fprintf(sm, "Auto-Submitted: auto-replied (rejected)\r\n");
     fprintf(sm, "\r\nThis is a MIME-encapsulated message\r\n\r\n");
 
     /* this is the human readable status report */
-    fprintf(sm, "--%d/%s\r\n\r\n", p, hostname);
+    fprintf(sm, "--%ld/%s\r\n\r\n", p, hostname);
     fprintf(sm, "Your message was automatically rejected by Sieve, a mail\r\n"
 	    "filtering language.\r\n\r\n");
     fprintf(sm, "The following reason was given:\r\n%s\r\n\r\n", reason);
 
     /* this is the MDN status report */
-    fprintf(sm, "--%d/%s\r\n"
+    fprintf(sm, "--%ld/%s\r\n"
 	    "Content-Type: message/disposition-notification\r\n\r\n",
 	    p, hostname);
     fprintf(sm, "Reporting-UA: %s; Cyrus %s/%s\r\n",
@@ -932,14 +965,14 @@ int send_rejection(char *origid,
     fprintf(sm, "\r\n");
 
     /* this is the original message */
-    fprintf(sm, "--%d/%s\r\nContent-Type: message/rfc822\r\n\r\n",
+    fprintf(sm, "--%ld/%s\r\nContent-Type: message/rfc822\r\n\r\n",
 	    p, hostname);
     prot_rewind(file);
     while ((i = prot_read(file, buf, sizeof(buf))) > 0) {
 	fwrite(buf, i, 1, sm);
     }
     fprintf(sm, "\r\n\r\n");
-    fprintf(sm, "--%d/%s\r\n", p, hostname);
+    fprintf(sm, "--%ld/%s\r\n", p, hostname);
 
     fclose(sm);
     waitpid(p, &i, 0);
@@ -1002,8 +1035,6 @@ int sieve_redirect(void *ac, void *ic, void *sc, void *mc)
 static
 int sieve_discard(void *ac, void *ic, void *sc, void *mc)
 {
-    script_data_t *sd = (script_data_t *) sc;
-    message_data_t *md = (message_data_t *) mc;
 
     /* ok, we won't file it */
     return SIEVE_OK;
@@ -1164,7 +1195,7 @@ int send_response(void *ac, void *ic, void *sc, void *mc)
     struct tm *tm;
     int tz;
     time_t t;
-    pid_t p;
+    unsigned long p;
     sieve_send_response_context_t *src = (sieve_send_response_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
     script_data_t *sdata = (script_data_t *) sc;
@@ -1172,7 +1203,7 @@ int send_response(void *ac, void *ic, void *sc, void *mc)
     smbuf[0] = "sendmail";
     smbuf[1] = src->addr;
     smbuf[2] = NULL;
-    p = open_sendmail(smbuf, &sm);
+    p = (unsigned long) open_sendmail(smbuf, &sm);
     if (sm == NULL) {
 	return -1;
     }
@@ -1203,7 +1234,7 @@ int send_response(void *ac, void *ic, void *sc, void *mc)
     /* check that subject is sane */
     sl = strlen(src->subj);
     for (i = 0; i < sl; i++)
-	if (iscntrl(src->subj[i])) {
+	if (iscntrl(((int) src->subj[i])) {
 	    src->subj[i] = '\0';
 	    break;
 	}
@@ -1212,9 +1243,9 @@ int send_response(void *ac, void *ic, void *sc, void *mc)
     if (src->mime) {
 	fprintf(sm, "MIME-Version: 1.0\r\n");
 	fprintf(sm, "Content-Type: multipart/mixed;"
-		"\r\n\tboundary=\"%d/%s\"\r\n", p, hostname);
+		"\r\n\tboundary=\"%ld/%s\"\r\n", p, hostname);
 	fprintf(sm, "\r\nThis is a MIME-encapsulated message\r\n\r\n");
-	fprintf(sm, "--%d/%s\r\n", p, hostname);
+	fprintf(sm, "--%ld/%s\r\n", p, hostname);
     } else {
 	fprintf(sm, "\r\n");
     }
@@ -1287,9 +1318,15 @@ setup_sieve(deliver_opts_t *delopts, int lmtpmode)
 	fatal("sieve_register_keep()", EC_TEMPFAIL);
     }
     res = sieve_register_imapflags(sieve_interp, &mark);
+
     if (res != SIEVE_OK) {
 	syslog(LOG_ERR, "sieve_register_imapflags() returns %d\n", res);
 	fatal("sieve_register_imapflags()", EC_TEMPFAIL);
+    }
+    res = sieve_register_unmark(sieve_interp, &sieve_unmark);
+    if (res != SIEVE_OK) {
+	syslog(LOG_ERR, "sieve_register_unmark() returns %d\n", res);
+	fatal("sieve_register_unmark()", EC_TEMPFAIL);
     }
     res = sieve_register_notify(sieve_interp, &sieve_notify);
     if (res != SIEVE_OK) {
@@ -1349,11 +1386,11 @@ char *s;
 	p++;
 	if (*p == '[') {
 	    p++;
-	    while (isdigit(*p) || *p == '.') p++;
+	    while (isdigit((int) *p) || *p == '.') p++;
 	    if (*p++ != ']') return 0;
 	}
 	else {
-	    while (isalnum(*p) || *p == '.' || *p == '-') p++;
+	    while (isalnum((int) *p) || *p == '.' || *p == '-') p++;
 	}
 	if (*p == ',' && p[1] == '@') p++;
 	else if (*p == ':' && p[1] != '@') p++;
@@ -1389,11 +1426,11 @@ char *s;
 	p++;
 	if (*p == '[') {
 	    p++;
-	    while (isdigit(*p) || *p == '.') p++;
+	    while (isdigit((int) *p) || *p == '.') p++;
 	    if (*p++ != ']') return 0;
 	}
 	else {
-	    while (isalnum(*p) || *p == '.' || *p == '-') p++;
+	    while (isalnum((int) *p) || *p == '.' || *p == '-') p++;
 	}
     }
     
@@ -1557,13 +1594,11 @@ void msg_free(message_data_t *m)
 
 #define RCPT_GROW 5 /* XXX 30 */
 
-lmtpmode(delopts)
-deliver_opts_t *delopts;
+void lmtpmode(deliver_opts_t *delopts)
 {
     message_data_t *msg;
     char buf[4096];
     char *p;
-    char *authuser = 0;
     char myhostname[1024];
     int r;
     char *err;
@@ -1654,7 +1689,6 @@ deliver_opts_t *delopts;
       case 'A':
 	    if (!strncasecmp(buf, "auth ", 5)) {
 		char *mech;
-		char *data;
 		char *in, *out;
 		unsigned int inlen, outlen;
 		const char *errstr;
@@ -1860,8 +1894,8 @@ deliver_opts_t *delopts;
 		    prot_printf(deliver_out, "501 5.5.4 Syntax error in parameters\r\n");
 		    continue;
 		}
-		if (err = process_recipient(rcpt, 
-					    &msg->rcpt[msg->rcpt_num])) {
+		if ((err = process_recipient(rcpt, 
+					     &msg->rcpt[msg->rcpt_num]))!=NULL) {
 		    prot_printf(deliver_out, "%s\r\n", err);
 		    continue;
 		}
@@ -1900,7 +1934,6 @@ deliver_opts_t *delopts;
 
 void clean_retpath(char *rpath)
 {
-    char buf[8192];
     int i, sl;
 
     /* Remove any angle brackets around return path */
@@ -1926,10 +1959,10 @@ savemsg(message_data_t *m, int lmtpmode)
     int sawidhdr = 0, sawresentidhdr = 0;
     int sawnotifyheader = 0;
     int sawretpathhdr = 0;
-#endif
-    char buf[8192], *p;
+#endif /* USE_SIEVE */
     int retpathclean = 0;
     struct stat sbuf;
+    char buf[8192];
     char **body, **frombody, **subjbody, **tobody;
     int sl, i;
 
@@ -2248,10 +2281,10 @@ int deliver_mailbox(struct protstream *msg,
     if (!r) {
 	prot_rewind(msg);
 	if (singleinstance && stage) {
-	    r = append_fromstage(&mailbox, msg, size, now, flag, nflags,
+	    r = append_fromstage(&mailbox, msg, size, now, (const char **) flag, nflags,
 				 user, stage);
 	} else {
-	    r = append_fromstream(&mailbox, msg, size, now, flag, nflags,
+	    r = append_fromstream(&mailbox, msg, size, now, (const char **) flag, nflags,
 				  user);
 	}
 	mailbox_close(&mailbox);
@@ -2297,7 +2330,7 @@ FILE *sieve_find_script(char *user)
 	char hash;
 
 	hash = (char) tolower((int) *user);
-	if (!islower(hash)) { hash = 'q'; }
+	if (!islower((int) hash)) { hash = 'q'; }
 
 	snprintf(buf, sizeof(buf), "%s/%c/%s/default", sieve_dir, hash, user);
     }
@@ -2310,10 +2343,7 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 	    char **flag, int nflags, char *user, char *mailboxname)
 {
     int r;
-    struct mailbox mailbox;
     char namebuf[MAX_MAILBOX_PATH];
-    char notifybuf[MAX_MAILBOX_PATH];
-    char *submailbox = 0;
     FILE *f;
 
     if (user) {
@@ -2454,9 +2484,7 @@ char *name;
     }	
 }
 
-int 
-convert_sysexit(r)
-     int r;
+int convert_sysexit(int r)
 {
     switch (r) {
     case 0:
@@ -2541,8 +2569,7 @@ void fatal(const char* s, int code)
     exit(code);
 }
 
-int isvalidflag(f)
-char *f;
+int isvalidflag(char *f)
 {
     if (f[0] == '\\') {
 	lcase(f);
@@ -2570,7 +2597,7 @@ char *buf;
     int c;
     int commentlevel = 0;
 
-    while (c = *from++) {
+    while ((c = *from++)!=0) {
 	switch (c) {
 	case '\r':
 	case '\n':
