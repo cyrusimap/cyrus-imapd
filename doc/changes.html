@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.53 2002/12/03 23:59:30 rjs3 Exp $ -->
+<!-- $Id: changes.html,v 1.54 2002/12/10 20:47:11 rjs3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -8,6 +8,14 @@
 </head>
 <body>
 <h1>Changes to the Cyrus IMAP Server</h1>
+
+<h2>Changes to the Cyrus IMAP Server since 2.1.11</h2>
+<ul>
+<li>Master now has a daemon mode and pidfile support (-d and -p options)</li>
+<li>Berkeley DB Configuration methods have changed.  Hopefully they're
+more generic now.  You can still use --with-dbdir, or you can use
+--with-bdb-libdir and --with-bdb-incdir</li>
+</ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.1.10</h2>
 <ul>
@@ -1703,7 +1711,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2002/12/03 23:59:30 $ <br />
+last modified: $Date: 2002/12/10 20:47:11 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
