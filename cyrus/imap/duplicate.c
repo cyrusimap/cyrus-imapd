@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: duplicate.c,v 1.37 2003/12/15 20:00:39 ken3 Exp $ */
+/* $Id: duplicate.c,v 1.38 2003/12/20 02:25:53 ken3 Exp $ */
 
 #include <config.h>
 
@@ -70,8 +70,6 @@
 # endif
 #endif
 #include <errno.h>
-
-#include <db.h>
 
 #include "xmalloc.h"
 #include "imap_err.h"
