@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.13 2000/06/09 02:45:09 leg Exp $ */
+/* $Id: master.c,v 1.14 2000/08/04 18:29:25 leg Exp $ */
 
 #include <config.h>
 
@@ -173,7 +173,9 @@ void service_create(struct service *s)
     struct sockaddr_un sunsock;
     struct sockaddr *sa;
     struct servent *serv;
+    mode_t oldumask;
     int on = 1, salen;
+    int r;
 
     memset(&sin, 0, sizeof(sin));
 
@@ -210,12 +212,21 @@ void service_create(struct service *s)
     /* allow reuse of address */
     setsockopt(s->socket, SOL_SOCKET, SO_REUSEADDR, (void *) &on, sizeof(on));
 
-    if (bind(s->socket, sa, salen) < 0) {
+    oldumask = umask((mode_t) 0); /* for linux */
+    r = bind(s->socket, sa, salen);
+    umask(oldumask);
+    if (r < 0) {
 	syslog(LOG_ERR, "unable to bind %s socket: %m", s->name);
 	close(s->socket);
 	s->socket = 0;
 	s->exec = NULL;
 	return;
+    }
+
+    if (s->listen[0] == '/') { /* unix socket */
+	/* for DUX, where this isn't the default.
+	   (harmlessly fails on some systems) */
+	chmod(s->listen, (mode_t) 0777);
     }
 
     if (listen(s->socket, listen_queue_backlog) < 0) {
