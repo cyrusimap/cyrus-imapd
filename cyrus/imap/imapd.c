@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.471 2004/05/31 18:21:35 ken3 Exp $ */
+/* $Id: imapd.c,v 1.472 2004/06/22 19:42:55 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -3142,7 +3142,7 @@ cmd_partial(const char *tag, const char *msgno, char *data,
 	    freestrlist(fetchargs.bodysections);
 	    return;
 	}
-	*p = '\0';
+	*(p+1) = '\0'; /* Keep the closing bracket in place */
 	appendstrlist(&fetchargs.bodysections, section);
     }
     else {
