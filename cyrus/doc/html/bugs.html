@@ -16,6 +16,8 @@ response. (can't reproduce?)
 
 <li> The RENAME command is not atomic.
 
+<li> RENAMEing INBOX doesn't work correctly. (important!)
+
 <li> append.c: doesn't set the \Seen flag if the client requests it.
 
 <li> MULTIAPPEND: does it do the right thing with an aborted APPEND
@@ -23,6 +25,7 @@ response. (can't reproduce?)
 
 <li> seen_db: doesn't use network byte order. also, need to close the
 database before exiting and before the environment is closed down.
+doesn't transition information from seen_local databases.
 
 <li> does <tt>reconstruct</tt> correctly deal with the new header and
 index summary information?
@@ -39,7 +42,14 @@ Return-Path when none is given. (not important)
 
 <li> RENAME across servers isn't implemented (less severe).
 
-<li> Tagged lines with literals can cause problems.
+<li> Tagged lines with literals can cause problems for <tt>proxyd</tt>.
+
+<li> <tt>acappush</tt> doesn't seem to deal with the ACAP server dying
+well.
+
+<li> <tt>acappush</tt>: should we be avoiding some ACAP round trips?
+do we have any concerns speed-wise?  what about out-of-memory
+situations?
 </ul>
 
 <h3>lmtpd, deliver, and sieve</h3>
@@ -109,18 +119,13 @@ efficient and easier to use than Amanda on the filesystem.
 </ul>
 
 <p>
-Please report bugs to <a
-href="mailto:cyrus-bugs@andrew.cmu.edu">cyrus-bugs@andrew.cmu.edu</a>.
-Be sure to include (at least) the version of Cyrus you're using,
-system type, compiler used, and the options passed to configure, along
-with a detailed report.  Additional information is welcome, and
-naturally, patches are deeply appreciated.
-
-<p>
-If you submit a patch, please send unified diffs (-u) if your diff program
-supports them, or context diffs (-c) if it doesn't.  Plain diffs are very
-difficult to evaluate.
+<p>Please refer to <a href="feedback.html">Sending Feedback</a> if you
+would like to submit a bug, feature request or (best of all) patch.
 
 <P><HR><P>
+<!-- hhmts start -->
+Last update: $Date: 2000/04/10 15:02:31 $ 
+<!-- hhmts end -->
+<br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>
