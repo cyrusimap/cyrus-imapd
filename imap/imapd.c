@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.200 2000/01/28 23:27:57 leg Exp $ */
+/* $Id: imapd.c,v 1.201 2000/02/08 06:32:29 leg Exp $ */
 
 #ifndef __GNUC__
 #define __attribute__(foo)
@@ -1022,7 +1022,7 @@ cmdloop()
 		    continue;
 		}
 		cmd_starttls(tag.s);	      
-
+		continue;
 	    } else if (!imapd_userid) {
 		goto nologin;
 	    }
@@ -3255,8 +3255,8 @@ char *quotaroot;
  */
 int starttls_enabled(void)
 {
-    if (config_getstring("tls_ca_file", NULL) == NULL) return 0;
-    if (config_getstring("tls_ca_path", NULL) == NULL) return 0;
+    if (config_getstring("tls_cert_file", NULL) == NULL) return 0;
+    if (config_getstring("tls_key_file", NULL) == NULL) return 0;
     return 1;
 }
 
