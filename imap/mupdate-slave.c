@@ -1,6 +1,6 @@
 /* mupdate-slave.c -- cyrus murder database clients
  *
- * $Id: mupdate-slave.c,v 1.18 2002/10/03 19:00:04 rjs3 Exp $
+ * $Id: mupdate-slave.c,v 1.19 2002/10/03 19:05:32 ken3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -279,8 +279,7 @@ void *mupdate_placebo_kick_start(void *rock __attribute__((unused)))
 {
     int len, gotdata = 0;
     fd_set rset, read_set;
-    int highest_fd, kicksock, kickconn = -1;
-    int waiting_for_noop = 0;
+    int kicksock, kickconn = -1;
     
     kicksock = open_kick_socket();
 
