@@ -725,7 +725,6 @@ char *authtype;
     lcase(authtype);
     r = login_authenticate(authtype, &mech, &authproc);
     if (!r) {
-	/* XXX need ip addrs */
 	r = mech->start(authproc, ACTE_PROT_ANY, PROT_BUFSIZE,
 			imapd_haveaddr ? &imapd_localaddr : 0,
 			imapd_haveaddr ? &imapd_remoteaddr : 0,
@@ -941,8 +940,7 @@ char *name;
     prot_flush(imapd_out);
 
     /* Perform the rest of the append */
-    /* XXX change to prot mechanism */
-    r = append_fromstream(&mailbox, stdin, size, internaldate, flag, nflags,
+    r = append_fromstream(&mailbox, imapd_in, size, internaldate, flag, nflags,
 			  imapd_userid);
     mailbox_close(&mailbox);
 
