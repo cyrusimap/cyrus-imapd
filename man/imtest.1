@@ -40,9 +40,54 @@
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
 .SH NAME
-imtest \- test interactive IMAP program
+imtest \- interactive IMAP test program
 .SH SYNOPSIS
 .B imtest
+[
+.B \-t
+.I keyfile
+]
+[
+.B \-p
+.I port
+]
+[
+.B \-m
+.I mechanism
+]
+.br
+       [
+.B \-u
+.I user
+]
+[
+.B \-a
+.I user
+]
+[
+.B \-k
+.I num
+]
+[
+.B \-l
+.I num
+]
+.br
+       [
+.B \-r
+.I realm
+]
+[
+.B \-f
+.I file
+]
+[
+.B \-v
+]
+[
+.B \-z
+]
+.I hostname
 .SH DESCRIPTION
 .I imtest
 is a utility that allows you to authenticate to a IMAP or IMSP server
@@ -52,43 +97,50 @@ of multiple SASL authentication mechanisms and handles encryption
 layers transparently. This utility is often used for testing the
 operation of a imsp or imap server. Also those developing IMAP clients
 find it useful.
-
 .PP
 .SH OPTIONS
-
-.I -p <port>
-Port to connect to. If left off this defaults to "imap" as defined in
-/etc/services. 
-
-.I -m <mechanism>
-Force imtest to use <mechanism> for authentication. If not specified
-the strongest authentication mechanism supported by the server is
-chosen.
-
-.I -u <user>
-Username to use for authentication; defaults to the current user.
-
-.I -a <user>
-Authname to use for authentication; defaults to the current user.
-
-.I -l <num>
-Maximum protection layer to use (0=none; 1=integrity; etc). For
-example if you are using the KERBEROS_V4 authentication mechanism
-specifing 0 will force imtest to not use any layer and specifying 1
-will force it to use the integrity layer. By default the maximum
-supported protection layer will be used.
-
-.I -r realm
-Specify the realm to use. Certain authentication mechanisms
-(e.g. DIGEST-MD5) may require one to specify the realm
-
-.I -f <file>
-Pipe file into connection after authentication
-
-.I -v
-Verbose. Print out more information than usual
-
-.I -z
-Timing test.
-
 .TP
+.BI \-t " keyfile"
+Enable TLS.  \fIkeyfile\fR contains the TLS public and private keys.
+Specify \fB""\fR to not use TLS authentication.
+.TP
+.BI \-p " port"
+Port to connect to. If left off this defaults to \fBimap\fR as defined in
+/etc/services. 
+.TP
+.BI -m " mechanism"
+Force imtest to use \fImechanism\fR for authentication. If not specified
+the strongest authentication mechanism supported by the server is
+chosen.  Specify \fBlogin\fR to use the LOGIN command instead of AUTHENTICATE.
+.TP
+.BI -u " user"
+Username to use for authentication; defaults to the current user.
+.TP
+.BI -a " user"
+Authname to use for authentication; defaults to the current user.
+.TP
+.BI -k " num"
+Minimum protection layer required.
+.TP
+.BI -l " num"
+Maximum protection layer to use (\fB0\fR=none; \fB1=\fRintegrity;
+etc).  For example if you are using the KERBEROS_V4 authentication
+mechanism specifying \fB0\fR will force imtest to not use any layer
+and specifying \fB1\fR will force it to use the integrity layer.  By
+default the maximum supported protection layer will be used.
+.TP
+.BI -r " realm"
+Specify the \fIrealm\fR to use. Certain authentication mechanisms
+(e.g. DIGEST-MD5) may require one to specify the realm.
+.TP
+.BI -f " file"
+Pipe \fIfile\fR into connection after authentication.
+.TP
+.B -v
+Verbose. Print out more information than usual.
+.TP
+.B -z
+Timing test.
+.SH SEE ALSO
+.PP
+\fBimapd(8)\fR

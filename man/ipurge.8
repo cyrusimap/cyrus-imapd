@@ -1,5 +1,5 @@
 .\" -*- nroff -*-
-.TH DELIVER 8 "Project Cyrus" CMU
+.TH IPURGE 8
 .\" 
 .\" Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
 .\"
@@ -40,111 +40,56 @@
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
 .SH NAME
-deliver \- deliver mail to an IMAP mailbox
+ipurge \- delete mail from IMAP mailbox or partition based on age or size
 .SH SYNOPSIS
-.B deliver
+.B ipurge
 [
-.B \-d
-]
-[
-.B \-r
-.I address
-]
-[
-.B \-f
-.I address
+.BI \-d " days"
+|
+.BI \-b " bytes"
+|
+.BI \-k " Kbytes"
+|
+.BI \-m " Mbytes"
 ]
 .br
-        [
-.B \-m
-.I mailbox
+       [
+.B \-x
 ]
 [
-.B \-a
-.I auth-id
+.IR mailbox-pattern ...
 ]
-[
-.B \-q
-]
-[
-.I userid
-]...
-.br
-.B deliver
-.B \-l
 .SH DESCRIPTION
-.I Deliver
-reads a message from the standard input and delivers it to one or more
-IMAP mailboxes.
+.I Ipurge
+deletes messages from the mailbox(es) specified by
+\fImailbox-pattern\fR that are older or larger than specified by the
+\fB-d\fR, \fB-b\fR, \fB-k\fR or \fB-m\fR options.  If no
+\fImailbox-pattern\fR is given, \fIipurge\fR works on all mailboxes.  If the
+\fB-x\fR option is given, the message age and size MUST match exactly
+those specified by \fB-d\fR, \fB-b\fR, \fB-k\fR or \fB-m\fR.  The are
+no default values, and at least one of \fB-d\fR, \fB-b\fR, \fB-k\fR or
+\fB-m\fR MUST be specified.
 .PP
-.I Deliver
+.I Ipurge
 reads its configuration options out of the
 .IR imapd.conf (5)
 file.
 .SH OPTIONS
 .TP
-.B \-d
-Ignored for compatability with 
-.B /bin/mail.
+.BI \-d " days"
+Age of message in \fIdays\fR.
 .TP
-.BI \-r " address"
-Insert a 
-.B Return-Path: 
-header containing
-.i address
+.BI \-b " bytes"
+Size of message in \fIbytes\fR.
 .TP
-.BI \-f " address"
-Insert a 
-.B Return-Path: 
-header containing
-.i address
+.BI \-k " Kbytes"
+Size of message in \fIKbytes\fR (2^10 bytes).
 .TP
-.BI \-m " mailbox"
-Deliver to 
-.IR mailbox .
-If any
-.IR userid s
-are specified, attempts to deliver to
-.RI user. userid . mailbox
-for each 
-.IR userid .
-If the ACL on any such mailbox does not grant the sender the "p" right
-or if 
-.B \-m
-is not specified,
-then delivers to the INBOX for the
-.IR userid ,
-regardless of the ACL on the INBOX.
-.IP
-If no
-.IR userid s
-are specified, attempts to deliver to
-.IR mailbox .
-If the ACL on
-.I mailbox
-does not grant the sender the "p" right, the delivery fails.
+.BI \-m " Mbytes"
+Size of message in \fIMbytes\fR (2^20 bytes).
 .TP
-.BI \-a " auth-id"
-Specify the authorization id of the sender.  Defaults to "anonymous".
-.TP
-.B \-q
-Deliver message even when receiving mailbox is over quota.
-.TP
-.B \-l
-Accept messages using the LMTP protocol.
-.SH NOTES
-Depending on the setting of \fBreject8bit\fR in \fBimapd.conf(5)\fR, deliver
-either rejects messages with 8-bit-set characters in the headers or 
-changes these characters to `X'.
-This is because such characters can't be interpreted since the
-character set is not known, although some communities not well-served by
-US-ASCII assume that those characters can be used to represent characters not
-present in US-ASCII.
-.PP
-A method for encoding 8-bit-set characters is provided by RFC 2047.
+.B \-x
+Perform an exact match on age or size (instead of older or larger).
 .SH FILES
 .TP
 .B /etc/imapd.conf
-.SH SEE ALSO
-.PP
-\fBlmtpd(8)\fR
