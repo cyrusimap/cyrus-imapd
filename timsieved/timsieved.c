@@ -83,6 +83,11 @@
 #include "acl.h"
 #include "mboxlist.h"
 
+static struct 
+{
+    char *ipremoteport;
+    char *iplocalport;
+} saslprops = {NULL,NULL};
 
 sasl_conn_t *sieved_saslconn; /* the sasl connection context */
 
@@ -332,11 +337,15 @@ int service_main(int argc, char **argv, char **envp)
 	fatal("SASL failed initializing: sasl_server_new()", -1); 
 
     if(iptostring((struct sockaddr *)&sieved_remoteaddr,
-		  sizeof(struct sockaddr_in), remoteip, 60) == 0)
-	sasl_setprop(sieved_saslconn, SASL_IPREMOTEPORT, remoteip);  
+		  sizeof(struct sockaddr_in), remoteip, 60) == 0) {
+	sasl_setprop(sieved_saslconn, SASL_IPREMOTEPORT, remoteip);
+	saslprops.ipremoteport = xstrdup(remoteip);
+    }
     if(iptostring((struct sockaddr *)&sieved_remoteaddr,
-		  sizeof(struct sockaddr_in), localip, 60) == 0)
+		  sizeof(struct sockaddr_in), localip, 60) == 0) {
 	sasl_setprop(sieved_saslconn, SASL_IPLOCALPORT, localip);
+	saslprops.iplocalport = xstrdup(localip);
+    }
 
     /* will always return something valid */
     /* should be configurable! */
@@ -355,4 +364,50 @@ int service_main(int argc, char **argv, char **envp)
     exit(EC_SOFTWARE);
 }
 
+/* Reset the given sasl_conn_t to a sane state */
+int reset_saslconn(sasl_conn_t **conn, sasl_ssf_t ssf, char *authid)
+{
+    int ret = 0;
+    int secflags = 0;
+    sasl_security_properties_t *secprops = NULL;
 
+    sasl_dispose(conn);
+    /* do initialization typical of service_main */
+    ret = sasl_server_new(SIEVE_SERVICE_NAME, config_servername,
+		          NULL, NULL, NULL,
+			  NULL, SASL_SUCCESS_DATA, conn);
+    if(ret != SASL_OK) return ret;
+
+    if(saslprops.ipremoteport)
+	ret = sasl_setprop(*conn, SASL_IPREMOTEPORT,
+			   saslprops.ipremoteport);
+    if(ret != SASL_OK) return ret;
+    
+    if(saslprops.iplocalport)
+	ret = sasl_setprop(*conn, SASL_IPLOCALPORT,
+			   saslprops.iplocalport);
+    if(ret != SASL_OK) return ret;
+    
+    if (!config_getswitch("allowplaintext", 1)) {
+	secflags |= SASL_SEC_NOPLAINTEXT;
+    }
+    secprops = mysasl_secprops(secflags);
+    ret = sasl_setprop(*conn, SASL_SEC_PROPS, secprops);
+    if(ret != SASL_OK) return ret;
+
+    /* end of service_main initialization excepting SSF */
+
+    /* If we have TLS/SSL info, set it */
+    if(ssf) {
+	ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &ssf);
+	if(ret != SASL_OK) return ret;
+    }
+    
+    if(authid) {
+	ret = sasl_setprop(*conn, SASL_AUTH_EXTERNAL, authid);
+	if(ret != SASL_OK) return ret;
+    }
+    /* End TLS/SSL Info */
+
+    return SASL_OK;
+}

@@ -160,14 +160,19 @@ int init_sasl(isieve_t *obj,
 	      int ssf,
 	      sasl_callback_t *callbacks)
 {
-  int saslresult;
+  static int sasl_started = 0;
+  int saslresult = SASL_OK;
   sasl_security_properties_t *secprops=NULL;
   socklen_t addrsize=sizeof(struct sockaddr_in);
   struct sockaddr_in saddr_l, saddr_r;
   char localip[60], remoteip[60];
 
   /* attempt to start sasl */
-  saslresult=sasl_client_init(NULL);
+  if(!sasl_started) {
+      saslresult=sasl_client_init(NULL);
+      obj->conn = NULL;
+      sasl_started = 1;
+  }
 
   /* Save the callbacks array */
   obj->callbacks = callbacks;
@@ -192,6 +197,8 @@ int init_sasl(isieve_t *obj,
   if (iptostring((struct sockaddr *)&saddr_l,
 		 sizeof(struct sockaddr_in), localip, 60))
       return -1;
+
+  if(obj->conn) sasl_dispose(&obj->conn);
 
   /* client new connection */
   saslresult=sasl_client_new(SIEVE_SERVICE_NAME,

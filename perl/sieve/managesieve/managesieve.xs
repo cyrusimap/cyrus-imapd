@@ -280,6 +280,8 @@ sieve_get_handle(servername, username_cb, authname_cb, password_cb, realm_cb)
     mtried = NULL;
     r = auth_sasl(mlist, obj, &mtried, &globalerr);
 
+    if(r) init_sasl(obj, 128, callbacks);
+
     if(mtried) {
 	char *newlist = (char*) xmalloc(strlen(mlist)+1);
 	char *mtr = (char*) xstrdup(mtried);
