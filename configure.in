@@ -19,6 +19,7 @@ AC_DIR_HEADER
 dnl AC_XENIX_DIR  Don't think Xenix handles long file names
 AC_SUBST(CPPFLAGS)
 AC_SUBST(EXTRA_SUBDIRS)
+AC_SUBST(NODEP_LIBS)
 echo checking for modern syslog
 AC_TEST_CPP([#include <syslog.h>
 #ifndef LOG_LOCAL6
@@ -28,6 +29,13 @@ echo checking setproctitle
 AC_TEST_CPP([#if defined(_AIX3) || defined(DGUX) || defined(_SEQUENT_) || defined(apollo)
 #include </nonexistent>
 #endif],AC_DEFINE(SETPROCTITLE))
+AC_COMPILE_CHECK(nonblocking fcntl,[#include <sys/types.h>
+#include <sys/file.h>
+#include <fcntl.h>
+#ifndef	FNDELAY
+#define FNDELAY		O_NDELAY
+#endif],[fcntl(0, F_GETFL, 0)&FNDELAY],WITH_NONBLOCK=fcntl,WITH_NONBLOCK=ioctl)
+AC_SUBST(WITH_NONBLOCK)
 echo checking for mmap
 AC_TEST_PROGRAM([#include <sys/types.h>
 #include <sys/mman.h>
@@ -54,17 +62,57 @@ AC_WITH(auth,[WITH_AUTH="$withval"
 	*) echo Authorization module incompatibile with login module; exit 1;;
 	esac],WITH_AUTH="$WITH_LOGIN")
 AC_SUBST(WITH_AUTH)
-if test "$WITH_LOGIN" = "krb"; then
-if test -f /usr/local/include/krb.h; then
-     CPPFLAGS="${CPPFLAGS} -I/usr/local/include"
-     LIBS="${LIBS} /usr/local/lib/libkrb.a /usr/local/lib/libdes.a"
-     LIBOBJS="${LIBOBJS} acte_krb.o";
+dnl
+dnl XXX MUST CHECK FOR TCL BEFORE KERBEROS V4 XXX
+dnl This is because some genius at MIT named one of the Kerberos v4
+dnl library functions log().  This of course conflicts with the
+dnl logarithm function in the standard math library, used by Tcl.
+dnl
+dnl Checking for Tcl first puts -lm before -lkrb on the library list.
+dnl
+TCL_SUBDIRS="cyradm"
+AC_WITH(tcl,with_tcl="${withval}")
+if test -z "$with_tcl"; then
+     if test -f /usr/local/lib/libtcl.a; then
+	with_tcl="/usr/local"
+     fi
+fi
+case "$with_tcl" in
+	no) TCL_SUBDIRS="" ;;
+	"") AC_HAVE_LIBRARY(tcl,NODEP_LIBS="${NODEP_LIBS} -ltcl -lm",
+	    [echo "Unable to find Tcl, will not compile cyradm"
+	     TCL_SUBDIRS=""]) ;;
+	*)  CPPFLAGS="${CPPFLAGS} -I${with_tcl}/include"
+	    NODEP_LIBS="${NODEP_LIBS} ${with_tcl}/lib/libtcl.a -lm" ;;
+esac
+AC_SUBST(TCL_SUBDIRS)
+dnl
+dnl Test for Kerberos
+dnl
+AC_WITH(krb,with_krb="${withval}")
+if test -z "$with_krb"; then
+     if test -f /usr/local/lib/libkrb.a; then
+	with_krb="/usr/local"
+     fi
+fi
+case "$with_krb" in
+	no) true;;
+	"") AC_HAVE_LIBRARY(krb,NODEP_LIBS="${NODEP_LIBS} -lkrb -ldes",
+		with_krb="no");;
+	*)  CPPFLAGS="${CPPFLAGS} -I${with_krb}/include"
+	    NODEP_LIBS="${NODEP_LIBS} ${with_krb}/lib/libkrb.a ${with_krb}/lib/libdes.a";;
+esac
+if test "$with_krb" = "no"; then
+     if test "$WITH_LOGIN" = "krb"; then
+	echo Unable to find Kerberos libraries; exit 1
+     fi
 else
-AC_HAVE_LIBRARY(krb,
-     LIBS="${LIBS} -lkrb -ldes" LIBOBJS="${LIBOBJS} acte_krb.o",
-     echo Unable to find Kerberos libraries; exit 1)
-fi
-fi
+     AC_DEFINE(HAVE_ACTE_KRB)
+     LIBOBJS="${LIBOBJS} acte_krb.o";
+fi     
+dnl
+dnl Look for inn
+dnl
 AC_WITH(inn,INNSHELLVARS="$withval/innshellvars",[
 echo checking for inn
 if test -f /usr/local/news/innshellvars; then
@@ -74,8 +122,8 @@ elif test -f /usr/lib/news/innshellvars; then
 elif test -f /usr/news/innshellvars; then
 	INNSHELLVARS=/usr/news/innshellvars
 else
-	echo did not find inn
+	echo "did not find inn, don't worry"
 	INNSHELLVARS=/did/not/find/innshellvars
 fi])
 AC_SUBST(INNSHELLVARS)
-AC_OUTPUT(Makefile syslog/Makefile et/Makefile lib/Makefile imap/Makefile imtest/Makefile glue/feedcyrus)
+AC_OUTPUT(Makefile syslog/Makefile et/Makefile lib/Makefile imap/Makefile cyradm/Makefile imtest/Makefile glue/feedcyrus)
