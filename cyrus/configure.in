@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.184 2000/10/12 19:11:25 leg Exp $
+dnl $Id: configure.in,v 1.185 2000/10/26 19:59:26 ken3 Exp $
 dnl
 
 
@@ -668,11 +668,6 @@ AC_ARG_ENABLE(netscapehack,
                           in Communicator to Administrate Mail],
 	if test "$enableval" = yes; then
 		AC_DEFINE(ENABLE_X_NETSCAPE_HACK)
-	fi)
-AC_ARG_ENABLE(thread-ref,
-	[  --enable-thread-ref     enable REFERENCES threading algorithm],
-	if test "$enableval" = yes; then
-		AC_DEFINE(ENABLE_THREAD_REF)
 	fi)
 
 AC_CHECK_FUNC(dlopen,,AC_CHECK_LIB(dl, dlopen))
