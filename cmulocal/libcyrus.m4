@@ -30,13 +30,12 @@ AC_DEFUN(CMU_LIBCYRUS_INC_WHERE, [
     done
 ])
 
-dnl bsearch_mem doesn't require sasl so we can simplify here
 AC_DEFUN(CMU_LIBCYRUS_LIB_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
 saved_LIBS=$LIBS
-LIBS="$saved_LIBS -L$1 -lcyrus"
+LIBS="$saved_LIBS -L$1 -lcyrus ${SASL_LIB_FLAGS} ${SSL_LIB_FLAGS}"
 AC_TRY_LINK(,
-[bsearch_mem();],
+[imclient_authenticate();],
 [ac_cv_found_libcyrus_lib=yes],
 ac_cv_found_libcyrus_lib=no)
 LIBS=$saved_LIBS
