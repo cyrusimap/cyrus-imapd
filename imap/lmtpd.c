@@ -1,6 +1,6 @@
 /* deliver.c -- Program to deliver mail to a mailbox
  * Copyright 1999 Carnegie Mellon University
- * $Id: lmtpd.c,v 1.13 2000/02/24 20:11:32 tmartin Exp $
+ * $Id: lmtpd.c,v 1.14 2000/02/24 20:55:43 leg Exp $
  * 
  * No warranties, either expressed or implied, are made regarding the
  * operation, use, or results of the software.
@@ -26,7 +26,7 @@
  *
  */
 
-/*static char _rcsid[] = "$Id: lmtpd.c,v 1.13 2000/02/24 20:11:32 tmartin Exp $";*/
+/*static char _rcsid[] = "$Id: lmtpd.c,v 1.14 2000/02/24 20:55:43 leg Exp $";*/
 
 #include <config.h>
 
@@ -69,6 +69,7 @@
 #include <saslutil.h>
 
 #include "acl.h"
+#include "assert.h"
 #include "util.h"
 #include "auth.h"
 #include "prot.h"
@@ -1402,7 +1403,7 @@ char *process_recipient(char *addr,
 	if (!dot) {
 	    r = IMAP_MAILBOX_NONEXISTENT;
         } else {
-	    user = "";
+	    user = NULL; /* no user */
 	    r = mboxlist_lookup(dot + 1, NULL, NULL, NULL);
 	}
     } else {
@@ -1643,7 +1644,11 @@ void lmtpmode(deliver_opts_t *delopts)
 				    &out,
 				    &outlen,
 				    &errstr);
-	      
+	      if (r == SASL_NOMECH) {
+		  prot_printf(deliver_out, 
+			      "504 Unrecognized authentication type.\r\n");
+		  continue;
+	      }
 	      if (in) { free(in); }
 	      
 	      while (r == SASL_CONTINUE) {
@@ -1687,14 +1692,14 @@ void lmtpmode(deliver_opts_t *delopts)
 	      }
 	      
 	      if ((r != SASL_OK) && (r != SASL_CONTINUE)) {
-		  prot_printf(deliver_out, "501 5.5.4 %s\n",
+		  prot_printf(deliver_out, "501 5.5.4 %s\r\n",
 			      sasl_errstring(r, NULL, NULL));
 		  continue;
 	      }
 	      
 	      /* authenticated successfully! */
 	      authenticated++;
-	      prot_printf(deliver_out, "250 Authenticated!\r\n");
+	      prot_printf(deliver_out, "235 Authenticated!\r\n");
 	      
 	      /* set protection layers */
 	      prot_setsasl(deliver_in,  conn);
@@ -1718,8 +1723,7 @@ void lmtpmode(deliver_opts_t *delopts)
 		    int cur = msg->rcpt_num;
 
 		    r = deliver(delopts, msg, 0, 0,
-				msg->rcpt[cur]->mailbox[0] ? 
-				msg->rcpt[cur]->mailbox : (char *)0, 
+				msg->rcpt[cur]->mailbox,
 				msg->rcpt[cur]->detail);
 
 		    prot_printf(deliver_out,"%s\r\n", convert_lmtp(r));
@@ -1752,7 +1756,7 @@ void lmtpmode(deliver_opts_t *delopts)
       case 'M':
 	    if (!authenticated) {
 		prot_printf(deliver_out, 
-			    "530 5.5.1 Authentication required\r\n");
+			    "530 Authentication required\r\n");
 		continue;
 	    }
 
@@ -1771,24 +1775,23 @@ void lmtpmode(deliver_opts_t *delopts)
 		}
 		tmp = buf+10+strlen(msg->return_path);
 
-		if (*tmp == ' ')
-		{
+		if (*tmp == ' ') {
 		    tmp++;
-		    if (strncasecmp(tmp, "auth=", 5) != 0)
-		    {
-			prot_printf(deliver_out, "501 5.5.4 Syntax error in parameters\r\n");  
+		    if (strncasecmp(tmp, "auth=", 5) != 0) {
+			prot_printf(deliver_out, 
+				    "501 5.5.4 Unrecognized parameters\r\n");
 			continue;
 		    }
-		    if (!(delopts->authstate = auth_newstate(tmp+5,
-							     NULL)))
-		    {
-			prot_printf(deliver_out, "501 5.5.4 xxx Unknown user\r\n");	      
+		    tmp += 5;
+		    if (!(delopts->authstate = auth_newstate(tmp, NULL))) {
+			/* do we want to bounce mail because of this? */
+			prot_printf(deliver_out, "501 5.5.4 xxx Unknown user\r\n");
 			continue;			
 		    }
-		    
-		    delopts->authuser = xstrdup(tmp+5);
-		} else if (*tmp!='\0') {
-		    prot_printf(deliver_out, "501 5.5.4 Syntax error in parameters\r\n");  
+		    delopts->authuser = xstrdup(tmp);
+		} else if (*tmp != '\0') {
+		    prot_printf(deliver_out, 
+				"501 5.5.4 Syntax error in parameters\r\n");  
 		    continue;
 		}
 
@@ -2277,19 +2280,10 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
     char namebuf[MAX_MAILBOX_PATH];
     FILE *f;
 
-    if (user) {
-	/* this is a netnews delivery. special case */
-	if (!strcmp(user, BB)) {
-	    r = deliver_mailbox(msgdata->data,
-				&msgdata->stage,
-				msgdata->size, 
-				flag, nflags,
-				delopts->authuser, delopts->authstate,
-				msgdata->id, NULL, msgdata->notifyheader,
-				mailboxname, delopts->quotaoverride, 0);
-	    return r;
-	}
+    /* we're either delivery to a user or a mailbox */
+    assert(user || mailboxname);
 
+    if (user) {
 	if (strchr(user, '.') ||
 	    strlen(user) + 30 > MAX_MAILBOX_PATH) {
 	    return IMAP_MAILBOX_NONEXISTENT;
@@ -2383,8 +2377,9 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 				    namebuf, delopts->quotaoverride, 1);
 	    }
 	}
-    }
-    else if (mailboxname) {
+    } else {
+	/* this is a shared folder delivery: special case. */
+
 	r = deliver_mailbox(msgdata->data, 
 			    &msgdata->stage,
 			    msgdata->size, 
@@ -2392,10 +2387,6 @@ int deliver(deliver_opts_t *delopts, message_data_t *msgdata,
 			    delopts->authuser, delopts->authstate,
 			    msgdata->id, user, msgdata->notifyheader,
 			    mailboxname, delopts->quotaoverride, 0);
-    }
-    else {
-	fprintf(stderr, "deliver: either -m or user required\n");
-	usage();
     }
 
     return r;
