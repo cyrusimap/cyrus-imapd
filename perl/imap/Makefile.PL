@@ -56,7 +56,7 @@ WriteMakefile(
     'clean'	=> {'FILES' => 'libcyrperl.a cyradm'},
     'OBJECT'    => 'IMAP.o ../../lib/libcyrus.a',
     'LIBS'	=> ["$SASL_LIB -lssl -lcrypto"],
-    'DEFINE'	=> '',     # e.g., '-DHAVE_SOMETHING' 
+    'DEFINE'	=> '-DPERL_POLLUTE',     # e.g., '-DHAVE_SOMETHING' 
     'INC'	=> "-I../../lib $SASL_INC", 
     'EXE_FILES' => [cyradm],
 );
