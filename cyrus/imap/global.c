@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.18 2005/02/16 20:37:58 shadow Exp $ */
+/* $Id: global.c,v 1.19 2005/03/03 15:59:12 shadow Exp $ */
 
 #include <config.h>
 
@@ -242,7 +242,7 @@ void global_sasl_init(int client, int server, const sasl_callback_t *callbacks)
     }
 
     if(server && sasl_server_init(callbacks, "Cyrus")) {
-	fatal("could not init sasl (client)", EC_SOFTWARE);
+	fatal("could not init sasl (server)", EC_SOFTWARE);
     }
 }
 
