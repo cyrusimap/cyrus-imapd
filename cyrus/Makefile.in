@@ -56,6 +56,8 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
+mandir = @mandir@
+
 VERSION = 2.2.3
 
 all:: 
@@ -93,10 +95,10 @@ install::
 	$(srcdir)/install-sh -d ${DESTDIR}$(exec_prefix)/bin
 	$(srcdir)/install-sh -d ${DESTDIR}$(exec_prefix)/lib
 	$(srcdir)/install-sh -d ${DESTDIR}$(prefix)/include/cyrus
-	$(srcdir)/install-sh -d ${DESTDIR}$(prefix)/man/man1
-	$(srcdir)/install-sh -d ${DESTDIR}$(prefix)/man/man3
-	$(srcdir)/install-sh -d ${DESTDIR}$(prefix)/man/man5
-	$(srcdir)/install-sh -d ${DESTDIR}$(prefix)/man/man8
+	$(srcdir)/install-sh -d ${DESTDIR}$(mandir)/man1
+	$(srcdir)/install-sh -d ${DESTDIR}$(mandir)/man3
+	$(srcdir)/install-sh -d ${DESTDIR}$(mandir)/man5
+	$(srcdir)/install-sh -d ${DESTDIR}$(mandir)/man8
 	@for d in  $(SUBDIRS); \
 	do \
 		(cd $$d; echo "### Making" install "in" `pwd`;	\

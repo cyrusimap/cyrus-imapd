@@ -40,7 +40,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 # 
-# $Id: Makefile.in,v 1.30 2003/11/07 21:33:54 ken3 Exp $
+# $Id: Makefile.in,v 1.31 2004/02/09 18:13:31 rjs3 Exp $
 
 srcdir = @srcdir@
 VPATH = @srcdir@
@@ -62,6 +62,8 @@ SHELL = /bin/sh
 prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
+
+mandir = @mandir@
 
 MAN1 = $(srcdir)/imtest.1 $(srcdir)/pop3test.1 $(srcdir)/nntptest.1 \
 	 $(srcdir)/lmtptest.1 $(srcdir)/smtptest.1 $(srcdir)/sivtest.1 \
@@ -90,19 +92,19 @@ imapd.conf.5: $(srcdir)/../lib/imapoptions $(srcdir)/../tools/config2header
 install:
 	for file in $(MAN1); \
 	do \
-		$(INSTALL) -m 644 $$file $(DESTDIR)$(prefix)/man/man1 || exit 1; \
+		$(INSTALL) -m 644 $$file $(DESTDIR)$(mandir)/man1 || exit 1; \
 	done
 	for file in $(MAN3); \
 	do \
-		$(INSTALL) -m 644 $$file $(DESTDIR)$(prefix)/man/man3 || exit 1; \
+		$(INSTALL) -m 644 $$file $(DESTDIR)$(mandir)/man3 || exit 1; \
 	done
 	for file in $(MAN5); \
 	do \
-		$(INSTALL) -m 644 $$file $(DESTDIR)$(prefix)/man/man5 || exit 1; \
+		$(INSTALL) -m 644 $$file $(DESTDIR)$(mandir)/man5 || exit 1; \
 	done
 	for file in $(MAN8); \
 	do \
-		$(INSTALL) -m 644 $$file $(DESTDIR)$(prefix)/man/man8 || exit 1; \
+		$(INSTALL) -m 644 $$file $(DESTDIR)$(mandir)/man8 || exit 1; \
 	done
 
 .c.o:
