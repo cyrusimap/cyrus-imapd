@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.267 2000/08/04 18:38:27 leg Exp $ */
+/* $Id: imapd.c,v 1.268 2000/08/21 20:51:28 leg Exp $ */
 
 #include <config.h>
 
@@ -3200,17 +3200,40 @@ void cmd_rename(const char *tag,
     int r = 0;
     char oldmailboxname[MAX_MAILBOX_NAME+3];
     char newmailboxname[MAX_MAILBOX_NAME+2];
+    int omlen, nmlen;
     char *p;
-    int isinbox;
+    int recursive_rename;
 
     /* canonicalize names */
     if (partition && !imapd_userisadmin) {
 	r = IMAP_PERMISSION_DENIED;
     }
 
-    isinbox = !strcasecmp(oldname, "inbox");
+    recursive_rename = 1;
+
+    /* if this is my inbox, don't do recursive renames */
+    if (!strcasecmp(oldname, "inbox")) {
+	recursive_rename = 0;
+    }
+
     if (!r) r = mboxname_tointernal(oldname, imapd_userid, oldmailboxname);
     if (!r) r = mboxname_tointernal(newname, imapd_userid, newmailboxname);
+
+    /* if we're renaming something inside of something else, 
+       don't recursively rename stuff */
+    omlen = strlen(oldmailboxname);
+    nmlen = strlen(newmailboxname);
+    if (strlen(oldmailboxname) < strlen(newmailboxname)) {
+	if (!strncmp(oldmailboxname, newmailboxname, omlen) &&
+	    newmailboxname[omlen] == '.') {
+	    recursive_rename = 0;
+	}
+    } else {
+	if (!strncmp(oldmailboxname, newmailboxname, nmlen) &&
+	    oldmailboxname[nmlen] == '.') {
+	    recursive_rename = 0;
+	}
+    }
 
     /* verify that the mailbox doesn't have a wildcard in it */
     for (p = oldmailboxname; !r && *p; p++) {
@@ -3225,10 +3248,10 @@ void cmd_rename(const char *tag,
     }
 
     /* rename all mailboxes matching this */
-    if (!r && !isinbox) {
+    if (!r && recursive_rename) {
 	struct tmplist *l = xmalloc(sizeof(struct tmplist));
-	int ol = strlen(oldmailboxname) + 1;
-	int nl = strlen(newmailboxname) + 1;
+	int ol = omlen + 1;
+	int nl = nmlen + 1;
 	int i;
 
 	l->alloc = 0;
@@ -3254,7 +3277,11 @@ void cmd_rename(const char *tag,
 	    r2 = mboxlist_renamemailbox(l->mb[i], newmailboxname,
 					partition,
 					1, imapd_userid, imapd_authstate);
-	    if (r2) break;
+	    if (r2) {
+		prot_printf(imapd_out, "* NO rename %s %s: %s\r\n",
+			    l->mb[i], newmailboxname, error_message(r));
+		break;
+	    }
 	}
 
 	free(l);
