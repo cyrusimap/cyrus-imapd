@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122.4.34 2003/06/25 18:57:46 ken3 Exp $
+ * $Id: pop3d.c,v 1.122.4.35 2003/06/29 00:18:18 ken3 Exp $
  */
 #include <config.h>
 
@@ -117,7 +117,6 @@ struct protstream *popd_out = NULL;
 struct protstream *popd_in = NULL;
 static int popd_logfd = -1;
 unsigned popd_exists = 0;
-unsigned popd_highest;
 unsigned popd_login_time;
 struct msg {
     unsigned uid;
@@ -775,7 +774,6 @@ static void cmdloop(void)
 		    prot_printf(popd_out, "-ERR No such message\r\n");
 		}
 		else {
-		    if (msg > popd_highest) popd_highest = msg;
 		    blat(msg, -1);
 		}
 	    }
@@ -793,7 +791,6 @@ static void cmdloop(void)
 		}
 		else {
 		    popd_msg[msg].deleted = 1;
-		    if (msg > popd_highest) popd_highest = msg;
 		    prot_printf(popd_out, "+OK message deleted\r\n");
 		}
 	    }
@@ -806,20 +803,11 @@ static void cmdloop(void)
 		prot_printf(popd_out, "+OK\r\n");
 	    }
 	}
-	else if (!strcmp(inputbuf, "last")) {
-	    if (arg) {
-		prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");
-	    }
-	    else {
-		prot_printf(popd_out, "+OK %u\r\n", popd_highest);
-	    }
-	}
 	else if (!strcmp(inputbuf, "rset")) {
 	    if (arg) {
 		prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");
 	    }
 	    else {
-		popd_highest = 0;
 		for (msg = 1; msg <= popd_exists; msg++) {
 		    popd_msg[msg].deleted = 0;
 		}
@@ -1401,7 +1389,6 @@ int openinbox(void)
 	}
 	if (!r) {
 	    popd_exists = mboxstruct.exists;
-	    popd_highest = 0;
 	    popd_msg = (struct msg *) xmalloc((popd_exists+1) *
 					      sizeof(struct msg));
 	    for (msg = 1; msg <= popd_exists; msg++) {
