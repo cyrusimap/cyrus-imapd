@@ -1,0 +1,54 @@
+<!-- $Id: os.html,v 1.1 2000/04/10 18:49:28 wcw Exp $ -->
+<HTML>
+<HEAD>
+<TITLE>Operating System Notes
+</title>
+</head>
+<h1>Operating System Notes
+</h1>
+<body>
+
+<h2>All</h2>
+
+<li> Shadow passwords
+<br>On any system with shadow passwords (including Solaris 2.5 with
+Unix authentication), read the SASL documentation carefully to make
+sure it is configured correctly.
+
+<h2>HP-UX</h2>
+
+<li> The memory mapping support (<tt>mmap(2)</tt>) in HP-UX does not
+have the right semantics for the Cyrus IMAP server under the 9.0 and
+10.0 release of the operating system. It appears this is related to
+the hardware's use of inverse page tables. It is recommended that
+large-scale sites consider using some other platform.
+
+<p><LI> HP-UX 9.0.4: Comments from testers
+
+<br> The C that ships with HP-UX is totally unsuited for use with unix
+packages.  Either the HP-UX ANSI C developers kit must be purchased
+separately from HP or GNU's gcc compiler (which can bootstrap itself
+from the basic HP C) must be built on the target system.
+
+
+<h2>Linux</h2>
+<li> synchronous fs updates.
+<br>By turning on synchronous updates for ext2fs, all updates (instead of
+just meta-data) become synchronous. This is good for reliability. Bad
+for performance.
+
+<p> The big problem used to be with the <tt>mailboxes</tt> file. The
+2.0 release and later addressed this problem by changing the flat file
+to a Berkerley DB database.
+
+<p>Note this is for ext2fs. If you are using a newer filesystem (such
+as reiserfs or xfs) the performance hit may not be as bad or you may
+not need to do this. We haven't really looked at other filesystems for
+linux yet.
+
+
+<P><HR>
+last modified: $Date: 2000/04/10 18:49:28 $
+</BODY></HTML>
+
+

@@ -1,0 +1,93 @@
+<!-- $Id: install-prereq.html,v 1.1 2000/04/10 18:49:27 wcw Exp $ -->
+<HTML>
+<HEAD>
+<TITLE>Prerequisites and other notes
+</title>
+</head>
+<h1>Prerequisites and other notes
+</h1>
+<body>
+
+<P>The following programs and/or packages are <b>required</b>.
+
+<ul>
+<LI> <b>libsasl</b>, version 1.5.15 or higher.  To obtain libsasl, ftp
+it from <a
+href="ftp://ftp.andrew.cmu.edu/pub/cyrus-mail"><TT>ftp.andrew.cmu.edu</TT></a>.
+Earlier versions of SASL will not work; please get the latest one.
+Configure SASL so that it supports whatever authentication method your
+site uses.  Please pay careful attention to the SASL
+configuration. This is the biggest problem that most people have.
+
+<li> <b>Berkeley DB</b>, version 3.0.55 or higher. Berkeley DB can be
+obtained from <a href="http://www.sleepycat.com">Sleepycat</a>.
+
+<li> <b>GNU Make</b> is required.  Get it from <a
+href="http://www.gnu.org/">the Free Software Foundation</a>. It is
+probably easier to find it via <a
+href="ftp://ftp.gnu.org/pub/gnu/make">ftp</a>.
+
+</ul>
+<p>
+
+The following programs and/or packages are required for specific
+features.  If you don't have them, certain features of the IMAP server
+will be disabled.
+
+<ul>
+<LI> <b>makedepend</b>.  A version is included in the
+<TT>makedepend</TT> subdirectory of the distribution.  Try and install
+it before installing the Cyrus IMAPd.  If it fails, the configure
+script will use a dummy shell script instead of makedepend, and you
+should be sure to always give the command "<TT>make clean</TT>" before
+"<TT>make all</TT>". If you don't mind builds taking longer, this
+isn't a big deal and you can ignore any makedepend errors.
+
+<LI> <b>Tcl</b>, version 7.5 or 7.6, or 8.0.  To obtain Tcl, see the
+<A
+HREF="ftp://rtfm.mit.edu/pub/usenet/comp.lang.tcl"><TT>comp.lang.tcl</TT>
+FAQ</A>.  Other versions of Tcl might work, but it must be at least
+Tcl 7.5.  (Tcl 7.4 ships with some Unix variants, and it is not
+sufficient.), for the older <tt>cyradm</tt>.
+
+<LI> <b>Perl</b>, version 5.  To obtain Perl, see <a
+href="http://www.cpan.org/">the comprehensive Perl archive</a>.  This
+is required for the newer version of <tt>cyradm</tt> written by
+Brandon Allbery.  It is also used for some installation scripts: you
+don't need it but it may make your life easier.
+
+<li> <b>OpenSSL</b>, version 0.9.4 or higher.  Required for STARTTLS
+support and eventually for IMAP wrapped in SSL (the imaps port).
+Available from <a href="http://www.openssl.org/">http://www.openssl.org/</a>.
+
+<LI> If you use AFS PTS support for groups, Cyrus still depends on
+Kerberos and AFS.  If you successfully compiled SASL with your
+Kerberos library, it's likely that it will work well with Cyrus.
+
+<LI> We recommend using an MTA (mail transfer agent) that supports
+LMTP (local mail transfer protocol).  We use Sendmail and recommend
+version 8.10.0 or higher, available from <A
+HREF="http://www.sendmail.org">http://www.sendmail.org</a>.  Others
+have reported success with
+<href="http://www.postfix.org/">Postfix</a>.
+
+<LI> If you want to export netnews newsgroups using IMAP, the IMAP
+server must receive newsgroups with the INN news server.  We are also
+working on patches to the INN news server to allow it to deliver
+newsgroups via LMTP.
+
+<li> For SNMP monitoring of the IMAP server, AgentX and pthreads is
+required.  The CMU implementation is available from our Network
+Development group at <a href="http://www.net.cmu.edu/groups/netdev/agentx/">
+http://www.net.cmu.edu/groups/netdev/agentx/</a>.
+
+<li> For the Cyrus Murder, the IMAP aggregator, an ACAP server is
+required.  You can get an ACAP server from the <a
+href="http://asg.web.cmu.edu/asg/">Cyrus project</a>.
+</ul>
+
+<P><HR>
+last modified: $Date: 2000/04/10 18:49:27 $
+</BODY></HTML>
+
+

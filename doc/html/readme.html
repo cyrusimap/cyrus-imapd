@@ -1,109 +1,110 @@
 <HTML><HEAD>
     <TITLE>Cyrus IMAP Server Release Information</TITLE>
-    <!-- $Id: readme.html,v 1.22 2000/04/10 15:02:31 wcw Exp $ -->
+    <!-- $Id: readme.html,v 1.23 2000/04/10 18:49:28 wcw Exp $ -->
   </HEAD><BODY>
       <H1>                Cyrus IMAP Server Release Information</H1>
       
-      IMAP (Internet Message Access Protocol) is an Internet standards-track
-      protocol for accessing messages (mail, bboards, news, etc).  The Cyrus
-      IMAP server differs from other IMAP server implementations in that it
-      is generally intended to be run on "sealed" servers, where normal
-      users are not permitted to log in.  The mailbox database is stored in
-      parts of the filesystem that are private to the Cyrus IMAP system.
-      All user access to mail is through the IMAP, POP3, or KPOP protocols.
+
+IMAP (Internet Message Access Protocol) is an Internet standards-track
+protocol for accessing messages (mail, bboards, news, etc).  The Cyrus
+IMAP server differs from other IMAP server implementations in that it
+is generally intended to be run on "sealed" servers, where normal
+users are not permitted to log in.  The mailbox database is stored in
+parts of the filesystem that are private to the Cyrus IMAP system.
+All user access to mail is through the IMAP, POP3, or KPOP protocols.
       
-      <P>
-	The private mailbox database design gives the server large advantages
-	in efficiency, scalability, and administratability.  Multiple
-	concurrent read/write connections to the same mailbox are permitted.
-	The server supports access control lists on mailboxes and storage
-	quotas on mailbox hierarchies.
-	
-      <P>
-	This system should be expected to have the same order-of-magnitude
-	<A HREF="install.html">installation</A> complexity as a netnews
-	system.  Maintenance should have similar complexity, except
-	administrators will have to deal with <A
-	HREF="cyradm.1.html">creation and deletion of users</A> and will
-	have the option of managing quotas and access control lists.
-	  
-      <P> This server has been successfully installed on a number of Unix
-	systems.  The following are notes on particular Unix variants:
-	
-      <ul>
-	
-	<LI> HP-UX 9.0.4:  Comments from testers:
-	  <P> The C that ships with HP-UX is totally unsuited for use with unix
-	    packages.  Either the HP-UX ANSI C developers kit must be
-	    purchased separately from HP or GNU's gcc compiler (which can
-	    bootstrap itself from the basic HP C) must be built on the target
-	    system.
-	  <P> The author further notes that the memory mapping support in HP-UX
-	    is lacking on 9.0 versions of HP-UX and 10.20 as well; it appears
-	    this is related to the hardware's use of inverse page tables. It
-	    is recommended that large-scale sites consider using some other
-	    platform for IMAP servers.
-	    
-      </ul>
+<P> The private mailbox database design gives the server large
+advantages in efficiency, scalability, and administratability.
+Multiple concurrent read/write connections to the same mailbox are
+permitted.  The server supports access control lists on mailboxes and
+storage quotas on mailbox hierarchies.
 
-    <p>
-      The following are notes on specific Unix features:
-    <ul>
-      <li> On any system with shadow passwords (including Solaris 2.5 with
-	Unix authentication), read the SASL documentation carefully to
-	make sure it is configured correctly.
-    </ul>
-    
+<h2>Features</h2>
 
+<P> The Cyrus server supports the IMAP4rev1 protocol described in RFC
+2060, with the exception that it does not currently support the
+hierarchical behavior of the RENAME command.  IMAP4rev1 has been
+approved as a proposed standard.
+
+<P> Character sets supported for searching are: us-ascii, iso-8859-1,
+iso-8859-2, iso-8859-3, iso-8859-4, iso-8859-5, iso-8859-6,
+iso-8859-7, iso-8859-8, iso-8859-9, koi8-r, and iso-2022-jp.  The
+character mapping tables most likely contain errors.
+      
+<P> The server supports any authentication mechanism available from
+the SASL library. Currently, support includes: KERBEROS_V4, GSSAPI,
+CRAM-MD5, DIGEST-MD5, and STARTLS.
+
+<p> The server also has support for imaps/pops (IMAP/POP encrypted
+using SSL).
+
+<p>We current support the following IMAP capabilities:
+<tt>
+IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE UIDPLUS NO_ATOMIC_RENAME
+UNSELECT MULTIAPPEND</tt>.
+
+<h2>Upgrade Caveats</h2>
+
+This section reserved for WARNING WARNING WARNING comments.
+
+<h2>Installation Overview</h2>
+	
+<P> This system should be expected to have the same order-of-magnitude
+installation complexity as a netnews system.  Maintenance should have
+similar complexity, except administrators will have to deal with <A
+HREF="cyradm.1.html">creation and deletion of users</A> and will have
+the option of managing quotas and access control lists.
+
+<p>This package is distributed as a source only release. It is
+expected that you can compile and configure software. Installation
+instructions are in the <a
+href="install.html">install.html</a>. Please be sure to read
+this document.
+
+<p>A detailed overview of the server is available in <a
+href="overview.html">overview.html</a>.
+
+<P> This server has been successfully installed on a number of Unix
+systems.  We run the software under SPARC Solaris 2.6.  Please refer
+to <a href="os.html">os.html</a> for operating system specific issues. 
+
+
+<h2>Server Notes</h2>
+
+<P> The mailbox namespace is like that for netnews--hierarchical names
+separated by the "<tt>.</tt>" character.  Mailboxes without a parent
+may only be created by an administrator.  Mailboxes with a parent may
+be created as the ACL (Access Control List) on the parent mailbox
+permits.
+      
+<P> Users' personal mailboxes are under the "<tt>user</tt>" hierarchy.
+The names of the personal mailboxes for user "<tt>bovik</tt>" all
+start with the prefix "<tt>user.bovik.</tt>".  The mailbox
+"<tt>user.bovik</tt>" is special in that it is presented to user
+"<tt>bovik</tt>" as if it were named "<tt>INBOX</tt>".  Creating the
+mailbox "<tt>user.bovik</tt>" is equivalent to creating an account for
+user "<tt>bovik</tt>"--it permits "<tt>bovik</tt>" to receive mail,
+create personal mailboxes, and subscribe to mailboxes.  Deleting the
+mailbox "<tt>user.bovik</tt>" has the special-case side-effect of
+deleting all mailboxes starting with "<tt>user.bovik.</tt>" and of
+deleting the subscriptions for "<tt>bovik</tt>."
+
+<h2>Summary</h2>
+
+<p>If you want to install the server, be sure to read the installation
+instructions in <a
+href="install.html">install.html"</a>. More details about the
+server implementation is in the <a href="overview.html">server
+overview</a> document.
+	
 <p>Please refer to <a href="feedback.html">Sending Feedback</a> if you
 would like to submit a bug, feature request or (best of all) patch.
 
 <p>There is a mailing list. See the <a
-	    href="mailing-list.html">mailing list</a> for details.
-    
-    <P>
-      The Cyrus server supports the IMAP4rev1 protocol described in RFC
-      2060, with the exception that it does not currently support the
-      hierarchical behavior of the RENAME command.  IMAP4rev1 has been
-      approved as a proposed standard.
-    <P>
-      Character sets supported for searching are: us-ascii, iso-8859-1,
-      iso-8859-2, iso-8859-3, iso-8859-4, iso-8859-5, iso-8859-6,
-      iso-8859-7, iso-8859-8, iso-8859-9, koi8-r, and iso-2022-jp.  The
-      character mapping tables most likely contain errors.
-      
-    <P>
-      The server server supports any authentication mechanism
-	  available from the SASL library. Currently, support
-	  includes: KERBEROS_V4, GSSAPI, CRAM-MD5, DIGEST-MD5.  
+href="mailing-list.html">mailing list</a> document for details.
 
-    <P>
-      The mailbox namespace is like that for netnews--hierarchical names
-      separated by the "<tt>.</tt>" character.  Mailboxes without a parent may only
-      be created by an administrator.  Mailboxes with a parent may be
-      created as the ACL (Access Control List) on the parent mailbox
-      permits.
-      
-    <P>
-      Users' personal mailboxes are under the "<tt>user</tt>" hierarchy.
-      The names of the personal mailboxes for user "<tt>bovik</tt>" all
-      start with the prefix "<tt>user.bovik.</tt>".  The mailbox
-      "<tt>user.bovik</tt>" is special in that it is presented to user
-      "<tt>bovik</tt>" as if it were named "<tt>INBOX</tt>".  Creating
-      the mailbox "<tt>user.bovik</tt>" is equivalent to creating an
-      account for user "<tt>bovik</tt>"--it permits "<tt>bovik</tt>" to
-      receive mail, create personal mailboxes, and subscribe to
-      mailboxes.  Deleting the mailbox "<tt>user.bovik</tt>" has the
-	special-case side-effect of deleting all mailboxes starting with
-	"<tt>user.bovik.</tt>" and of deleting the subscriptions for
-	"<tt>bovik</tt>."
-
-      <p>
-	If you want to install the server, be sure to read the
-	<a href="install.html">install</a> instructions along with the <a
-	  href="overview.html">server overview</a>.
-	
-      <P><HR><P>
-	<A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
-  </BODY>
-</HTML>
+<P><HR>
+last modified: $Date: 2000/04/10 18:49:28 $
+<br>
+<A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
+</BODY></HTML>

@@ -1,0 +1,139 @@
+<!-- $Id: install-testing.html,v 1.1 2000/04/10 18:49:27 wcw Exp $ -->
+<HTML>
+<HEAD>
+<TITLE>Testing the IMAP Server
+</title>
+</head>
+<h1>Testing the IMAP Server
+</h1>
+<body>
+
+To test the IMAP server, reboot and perform the following steps (all
+of these samples use "<tt>foobar</tt>" as the IMAP server name).  A
+list of answers to common installation problems is maintained in <A
+HREF="http://asg.web.cmu.edu/cyrus/imapd/install-FAQ">http://asg.web.cmu.edu/cyrus/imapd/install-FAQ</A>.
+
+<ol>
+<li>From your normal account, telnet to the IMAP port on the
+server you're setting up:
+
+<pre>
+<kbd>   telnet foobar imap
+</kbd></pre>
+
+If your server is running, you'll get the following message:
+
+<pre>
+   Trying 128.2.232.95...
+   Connected to foobar.andrew.cmu.edu.
+   Escape character is '^]'.
+   * OK foobar.andrew.cmu.edu Cyrus IMAP4 v2.0.0 server ready
+</pre>
+
+<p>
+Any message other than one starting with "<tt>* OK</tt>" means there
+is a problem.  To terminate the connection, type
+	      "<kbd>. logout</kbd>".
+
+<p>Naturally the version number should match the version you just
+installed.
+
+<P>
+<li>Use "<tt>imtest</tt>" to test logging in with plaintext passwords:
+
+<pre>
+<kbd>   /usr/local/bin/imtest -m login foobar
+</kbd></pre>
+
+<p>If you want to specify a different user, do:
+
+<pre>
+<kbd>   /usr/local/bin/imtest -m login -a <i>USER</i> foobar
+</kbd></pre>
+
+If your server is running, you'll get the following message:
+<pre>
+   <kbd>/usr/local/bin/imtest -m login -p imap foobar</kbd>
+   S: * OK mail1.andrew.cmu.edu Cyrus IMAP4 v2.0.0 server ready
+   C: C01 CAPABILITY
+   S: * CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE UIDPLUS 
+   X-NON-HIERARCHICAL-RENAME NO_ATOMIC_RENAME AUTH=GSSAPI AUTH=ANONYMOUS 
+   AUTH=KERBEROS_V4 UNSELECT
+   S: C01 OK Completed
+   Password: 
+   + go ahead
+   L01 OK User logged in
+   Authenticated.
+   Security strength factor: 0
+</pre>
+
+<p>Any message other than one starting with a "<tt>L01 OK</tt>" means there is
+a problem.  If the test fails, a more specific error message should be
+written through <tt>syslog</tt> to the server log.  To terminate the
+connection, type "<kbd>. logout</kbd>".
+
+<li>You should now test the server with each of the various
+authentication mechanisms you have installed. The supported mechanisms
+are listed in the CAPABILITY line:
+
+<pre>
+  * CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE UIDPLUS 
+  X-NON-HIERARCHICAL-RENAME NO_ATOMIC_RENAME AUTH=ANONYMOUS
+  AUTH=KERBEROS_V4 AUTH=DIGEST-MD5 AUTH=CRAM-MD5 UNSELECT
+  . OK Completed
+</pre>
+
+Each of the mechanism names is preceded by a 'AUTH='. For this example
+the ANONYMOUS, KERBEROS_V4, DIGEST-MD5, and CRAM-MD5 mechanisms are
+available. If a mechanism does not appear that you wish to use,
+examine the libsasl log messages.  Generally, if a mechanism does not
+appear, it means it failed to initialize.  (For example, if the server
+is unable to access the srvtab file the KERBEROS_V4 mechanism will
+refuse to load.)
+
+<p>Plaintext login is a special case: the PLAIN SASL mechanism is only
+advertised under an encrypted connection.  However, plaintext logins
+are available (as long as you haven't disabled plaintext)
+by using <tt>-m login</tt>(as above).
+
+<p>To terminate the <tt>imtest</tt> connection, type "<kbd>. logout</kbd>".
+
+<p>Once you are satisfied with the authentication mechanism list you
+should attempt to log in with each of those mechanisms. Run <tt>imtest</tt>
+specifying which mechanism you would like to use.
+
+<pre>
+   <kbd>/usr/local/bin/imtest -m KERBEROS_V4 foobar</kbd>
+   C: C01 CAPABILITY
+   S: * OK foobar.andrew.cmu.edu Cyrus IMAP4 v2.0.0 server ready
+   S: * CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE
+   UIDPLUS X-NON-HIERARCHICAL-RENAME NO_ATOMIC_RENAME AUTH=ANONYMOUS
+   AUTH=GSSAPI AUTH=KERBEROS_V4 UNSELECT
+   S: C01 OK Completed
+   C: A01 AUTHENTICATE KERBEROS_V4
+   S: + wYcDAA==
+   C: BAYBQU5EUkVXLkNNVS5FRFUAOCAm7F/Y+HabCzJ
+      /UMtVcvWRjTohuq/USaCV6gYdkAU5DOcADAq
+   S: + 0aAsUGQZhgQ=
+   C: ADMe/cVivAYYzy1yd4Vojg==
+   S: A01 OK Success (privacy protection)
+   Authenticated.
+   Security strength factor: 56
+</pre>
+
+<p>Any message other than one starting with a "<tt>A01 OK</tt>" means there is
+a problem. If the test fails, a more specific error message is written
+through <TT>syslog</TT> to the server log.  To terminate the
+connection, type "<kbd>. logout</kbd>".</p>
+
+<p>See the libsasl documentation for a full description of all the
+mechanisms.  It is also possible to support "security layers"
+(privacy or integrity protected connections).  By default,
+<tt>imtest</tt> uses the strongest layer available with the selected
+mechanism; use "<tt>-l</tt>" to choose an alternate layer.</p>
+
+</ol>
+
+<P><HR>
+last modified: $Date: 2000/04/10 18:49:27 $
+</BODY></HTML>
