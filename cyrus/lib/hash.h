@@ -1,5 +1,5 @@
 /* +++Date last modified: 05-Jul-1997 */
-/* $Id: hash.h,v 1.4 2002/05/25 19:57:47 leg Exp $ */
+/* $Id: hash.h,v 1.5 2002/06/17 17:29:32 rjs3 Exp $ */
 
 #ifndef HASH__H
 #define HASH__H
@@ -60,7 +60,7 @@ void *hash_insert(char *key,void *data,hash_table *table);
 ** not been inserted in the table, returns NULL.
 */
 
-void *hash_lookup(char *key,hash_table *table);
+void *hash_lookup(const char *key,hash_table *table);
 
 /*
 ** Deletes an entry from the table.  Returns a pointer to the data that
