@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.66 2002/04/03 21:00:49 leg Exp $
+ * $Id: imtest.c,v 1.67 2002/04/22 19:44:19 rjs3 Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -664,9 +664,11 @@ imt_stat getauthline(char **line, int *linelen)
   unsigned len;
   char *str=(char *) buf;
   
-  str = prot_fgets(str, BUFSIZE, pin);
-  if (str == NULL) imtest_fatal("prot layer failure");
-  printf("S: %s",str);
+  do {
+      str = prot_fgets(str, BUFSIZE, pin);
+      if (str == NULL) imtest_fatal("prot layer failure");
+      printf("S: %s",str);
+  } while(str[0] == '*');      /* Ignore potential untagged responses */
 
   if (!strncasecmp(str, "A01 OK ", 7)) { return STAT_OK; }
   if (!strncasecmp(str, "A01 NO ", 7)) { return STAT_NO; }
