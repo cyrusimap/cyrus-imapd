@@ -1,6 +1,6 @@
 /* mpool.h memory pool management
  *
- * $Id: mpool.h,v 1.1 2002/02/07 19:45:42 rjs3 Exp $
+ * $Id: mpool.h,v 1.2 2002/02/07 20:14:26 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -57,14 +57,12 @@
 #include <syslog.h>
 #include <errno.h>
 
+struct mpool_blob;
+
 struct mpool 
 {
-    size_t size;
-    void *base; /* Base of allocated section */
-    void *ptr; /* End of allocated section */
-    struct mpool *next; /* Next Pool */
+    struct mpool_blob *blob;
 };
-
 
 /* Create a new pool */
 struct mpool *new_mpool(size_t size);
@@ -73,7 +71,7 @@ struct mpool *new_mpool(size_t size);
 void free_mpool(struct mpool *pool);
 
 /* Allocate from a pool */
-void *mpool_malloc(struct mpool **pool, size_t size);
+void *mpool_malloc(struct mpool *pool, size_t size);
  
 
 #endif /* _MPOOL_H_ */

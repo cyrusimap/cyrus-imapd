@@ -1,6 +1,6 @@
 /* mpool.c memory pool management
  *
- * $Id: mpool.c,v 1.1 2002/02/07 19:45:42 rjs3 Exp $
+ * $Id: mpool.c,v 1.2 2002/02/07 20:14:26 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -61,14 +61,31 @@
 #include "xmalloc.h"
 #include "exitcodes.h"
 
+struct mpool_blob
+{
+    size_t size;
+    void *base; /* Base of allocated section */
+    void *ptr; /* End of allocated section */
+    struct mpool_blob *next; /* Next Pool */
+};
+
+static struct mpool_blob *new_mpool_blob(size_t size) 
+{
+    struct mpool_blob *blob = xmalloc(sizeof(struct mpool_blob));
+
+    blob->base = blob->ptr = xzmalloc(size);
+    blob->size = size;
+    blob->next = NULL;
+
+    return blob;
+}
+
 /* Create a new pool */
 struct mpool *new_mpool(size_t size) 
 {
     struct mpool *ret = xmalloc(sizeof(struct mpool));
 
-    ret->base = ret->ptr = xzmalloc(size);
-    ret->size = size;
-    ret->next = NULL;
+    ret->blob = new_mpool_blob(size);
     
     return ret;
 }
@@ -76,42 +93,50 @@ struct mpool *new_mpool(size_t size)
 /* Free a pool */
 void free_mpool(struct mpool *pool) 
 {
-    struct mpool *p_next;
-    
-    if(!pool) return;
+    struct mpool_blob *p, *p_next;
 
-    while(pool) {
-	p_next = pool->next;
-	free(pool);
-	pool = p_next;
+    if(!pool) return;
+    if(!pool->blob) {
+	fatal("memory pool without a blob",EC_TEMPFAIL);
+	return;
     }
+    
+    p = pool->blob;
+
+    while(p) {
+	p_next = p->next;
+	free(p);
+	p = p_next;
+    }
+
+    free(pool);
 }
 
 /* Allocate from a pool */
-void *mpool_malloc(struct mpool **pool, size_t size) 
+void *mpool_malloc(struct mpool *pool, size_t size) 
 {
     void *ret = NULL;
-    struct mpool *p;
+    struct mpool_blob *p;
     size_t remain;
     
-    if(!pool || !(*pool)) {
-	fatal("mpool_malloc called without a pool", EC_TEMPFAIL);
+    if(!pool || !pool->blob) {
+	fatal("mpool_malloc called without a valid pool", EC_TEMPFAIL);
     }
     if(!size) {
 	fatal("mpool_malloc called with size = 0", EC_TEMPFAIL);
     }
 
-    p = *pool;
+    p = pool->blob;
     
     remain = p->size - (p->ptr - p->base);
     if(remain < size) {
       	/* Need a new pool */
-	struct mpool *new_pool;
+	struct mpool_blob *new_pool;
        	size_t new_pool_size = 2 * ((size > p->size) ? size : p->size);
 	
-	new_pool = new_mpool(new_pool_size);
+	new_pool = new_mpool_blob(new_pool_size);
 	new_pool->next = p;
-	p = *pool = new_pool;
+	p = pool->blob = new_pool;
     }
 
     ret = p->ptr;

@@ -10,15 +10,13 @@ void fatal(char *s, int code)
     exit(1);
 }
 
-	
-
 int main(void) {
 	int i;
 	struct mpool *p;
 	char *s;
 	p = new_mpool(25);
 	for(i=1; i<26; i++) {
-		s = mpool_malloc(&p,i);
+		s = mpool_malloc(p,i);
 		if(s[0]) fatal("error!\n",0);
 
 		memset(s,(char)i + 'a',i);
