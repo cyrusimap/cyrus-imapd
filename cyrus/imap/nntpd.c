@@ -50,7 +50,7 @@
  */
 
 /*
- * $Id: nntpd.c,v 1.1.2.9 2002/09/25 19:10:58 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.10 2002/09/25 20:18:37 ken3 Exp $
  */
 #include <config.h>
 
@@ -184,7 +184,7 @@ static void cmd_list();
 static void cmd_article();
 static void cmd_post();
 static void cmdloop(void);
-static struct mailbox *open_group();
+static int open_group();
 static int parsenum(char *ptr);
 void usage(void);
 void shut_down(int code) __attribute__ ((noreturn));
@@ -488,7 +488,7 @@ void fatal(const char* s, int code)
  */
 static void cmdloop(void)
 {
-    int c;
+    int c, r;
     static struct buf cmd, arg1, arg2;
     const char *err;
 
@@ -573,7 +573,9 @@ static void cmdloop(void)
 	    cmd_list(arg1.len ? arg1.s : NULL, arg2.len ? arg2.s : NULL);
 	}
 	else if (!strcmp(cmd.s, "listgroup")) {
+	    r = 0;
 	    arg1.len = 0;
+
 	    if (c == ' ') {
 		c = getword(nntp_in, &arg1);
 		if (c == EOF) goto missingargs;
@@ -581,8 +583,10 @@ static void cmdloop(void)
 	    if (c == '\r') c = prot_getc(nntp_in);
 	    if (c != '\n') goto extraargs;
 
-	    if (arg1.len) nntp_group = open_group(arg1.s, 0);
-	    if (nntp_group) {
+	    if (arg1.len) r = open_group(arg1.s, 0);
+	    if (r) goto nogroup;
+	    else if (!nntp_group) goto noopengroup;
+	    else {
 		int i;
 		prot_printf(nntp_out, "211 list of articles follows\r\n");
 		for (i = 1; i <= nntp_exists; i++)
@@ -597,8 +601,9 @@ static void cmdloop(void)
 	    if (c == '\r') c = prot_getc(nntp_in);
 	    if (c != '\n') goto extraargs;
 
-	    nntp_group = open_group(arg1.s, 0);
-	    if (nntp_group) {
+	    r = open_group(arg1.s, 0);
+	    if (r) goto nogroup;
+	    else {
 		prot_printf(nntp_out, "211 %u %u %u %s\r\n",
 			    nntp_exists, nntp_exists ? index_getuid(1) : 1,
 			    nntp_exists ? index_getuid(nntp_exists) : 0,
@@ -606,9 +611,9 @@ static void cmdloop(void)
 	    }
 	}
 	else if (!strcmp(cmd.s, "last")) {
-	    if (!nntp_group) goto nogroup;
 	    if (c == '\r') c = prot_getc(nntp_in);
 	    if (c != '\n') goto extraargs;
+	    if (!nntp_group) goto noopengroup;
 	    if (nntp_current == 1) {
 		prot_printf(nntp_out,
 			    "422 No previous article in this group\r\n");
@@ -618,9 +623,9 @@ static void cmdloop(void)
 	    }
 	}
 	else if (!strcmp(cmd.s, "next")) {
-	    if (!nntp_group) goto nogroup;
 	    if (c == '\r') c = prot_getc(nntp_in);
 	    if (c != '\n') goto extraargs;
+	    if (!nntp_group) goto noopengroup;
 	    if (nntp_current == nntp_exists) {
 		prot_printf(nntp_out, "422 No next article in this group\r\n");
 	    } else {
@@ -642,7 +647,7 @@ static void cmdloop(void)
 	    if (c != '\n') goto extraargs;
 	    if (uid == -1) goto nomsgid;
 	    else {
-		if (!nntp_group) goto nogroup;
+		if (!nntp_group) goto noopengroup;
 		if (uid) {
 		    idx = index_finduid(uid);
 		    if (index_getuid(idx) != uid) goto noarticle;
@@ -703,8 +708,12 @@ static void cmdloop(void)
 	continue;
 
       nogroup:
+	prot_printf(nntp_out, "411 No such newsgroup (%s)\r\n",
+		    error_message(r));
+	continue;
+
+      noopengroup:
 	prot_printf(nntp_out, "412 No newsgroup selected\r\n");
-	eatline(nntp_in, c);
 	continue;
 
       noarticle:
@@ -932,7 +941,12 @@ int do_list(char *name, int matchlen, int maycreate __attribute__((unused)),
 {
     static char lastname[MAX_MAILBOX_PATH] = "";
     char *acl;
-    int r, post;
+    int r, myrights;
+
+    /* skip personal mailboxes */
+    if ((!strncasecmp(name, "INBOX", 5) && (!name[5] || name[5] == '.')) ||
+	!strncmp(name, "user.", 5))
+	return 0;
 
     /* don't repeat */
     if (matchlen == strlen(lastname) &&
@@ -941,18 +955,19 @@ int do_list(char *name, int matchlen, int maycreate __attribute__((unused)),
     strncpy(lastname, name, matchlen);
     lastname[matchlen] = '\0';
 
-    nntp_group = open_group(name, 1);
-    if (nntp_group) {
-	/* look it up */
-	r = mboxlist_detail(name, NULL, NULL, NULL, &acl, NULL);
-	if (r) return r;
-	/* see if we can post */
-	post = acl && (cyrus_acl_myrights(nntp_authstate, acl) & ACL_POST);
+    /* look it up */
+    r = mboxlist_detail(name, NULL, NULL, NULL, &acl, NULL);
+    if (r) return 0;
 
+    if (!(acl && (myrights = cyrus_acl_myrights(nntp_authstate, acl)) &&
+	  (myrights & ACL_LOOKUP) && (myrights & ACL_READ)))
+	return 0;
+
+    if (open_group(name, 1) == 0) {
 	prot_printf(nntp_out, "%s %u %u %c\r\n", name+strlen(newsprefix),
 		    nntp_exists ? index_getuid(1) : 1,
 		    nntp_exists ? index_getuid(nntp_exists) : 0,
-		    post ? 'y' : 'n');
+		    myrights & ACL_POST ? 'y' : 'n');
     }
 
     return 0;
@@ -1003,7 +1018,7 @@ void cmd_list(char *arg1, char *arg2)
     prot_flush(nntp_out);
 }
 
-struct mailbox *open_group(char *name, int has_prefix)
+int open_group(char *name, int has_prefix)
 {
     char mailboxname[MAX_MAILBOX_NAME+1];
     int r = 0;
@@ -1036,21 +1051,21 @@ struct mailbox *open_group(char *name, int has_prefix)
 	       "IOERROR: changing directory to %s: %m", mboxstruct.path);
 	r = IMAP_IOERROR;
     }
-    if (!r) {
-	nntp_exists = mboxstruct.exists;
-	nntp_current = 1;
-	index_operatemailbox(&mboxstruct);
-    }
 
     if (r) {
-	prot_printf(nntp_out, "411 %s\r\n", error_message(r));
 	if (doclose) mailbox_close(&mboxstruct);
-	return NULL;
+	return r;
     }
 
-    syslog(LOG_DEBUG, "open: user %s opened %s", nntp_userid, name);
+    nntp_exists = mboxstruct.exists;
+    nntp_current = 1;
+    index_operatemailbox(&mboxstruct);
+    nntp_group = &mboxstruct;
 
-    return &mboxstruct;
+    syslog(LOG_DEBUG, "open: user %s opened %s",
+	   nntp_userid ? nntp_userid : "anonymous", name);
+
+    return 0;
 }
 
 static void cmd_article(unsigned long uid, int part)
