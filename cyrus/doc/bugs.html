@@ -106,6 +106,9 @@ to the authentication name, except when specifically overridden.
 <li> <tt>collectnews</tt>'s routines in <tt>append.c</tt> are broken.
 either remove <tt>collectnews</tt> or fix it.
 
+<li> any utilities doing db operations should catch signals and poll
+for them to see if it should exit.
+
 </ul>
 
 <h1>                     Things we want to do</h1>
@@ -136,7 +139,7 @@ efficient and easier to use than Amanda on the filesystem.
 would like to submit a bug, feature request or (best of all) patch.
 
 <P><HR>
-Last update: $Date: 2000/05/23 21:30:40 $ 
+Last update: $Date: 2000/05/24 05:02:45 $ 
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>
