@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.36 2002/10/28 18:49:03 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.37 2002/10/29 12:24:41 ken3 Exp $
  */
 
 /*
@@ -566,7 +566,7 @@ static void cmdloop(void)
 	    return;
 	}
 	if (!cmd.s[0]) {
-	    prot_printf(nntp_out, "501 Null command\r\n");
+	    prot_printf(nntp_out, "501 Empty command\r\n");
 	    eatline(nntp_in, c);
 	    continue;
 	}
@@ -864,7 +864,7 @@ static void cmdloop(void)
 		if (!nntp_group) goto noopengroup;
 		if (nntp_current == nntp_exists) {
 		    prot_printf(nntp_out,
-				"422 No next article in this group\r\n");
+				"421 No next article in this group\r\n");
 		} else {
 		    char *msgid = index_get_msgid(nntp_group, ++nntp_current);
 
@@ -1196,7 +1196,8 @@ static void cmd_article(int part, char *msgid, unsigned long uid)
 	if (netnews_lookup(msgid, &mailbox, &uid, NULL, NULL)) {
 	    r = mboxlist_lookup(mailbox, &path, NULL, NULL);
 	    if (r) {
-		prot_printf(nntp_out, "411 No such newsgroup (%s)\r\n",
+		prot_printf(nntp_out,
+			    "430 No article found with that message-id (%s)\r\n",
 			    error_message(r));
 		return;
 	    }
@@ -1674,10 +1675,10 @@ void cmd_list(char *arg1, char *arg2)
     }
     else if (!strcmp(arg1, "active.times") || !strcmp(arg1, "distributions") ||
 	     !strcmp(arg1, "distrib.pats") || !strcmp(arg1, "newsgroups")) {
-	prot_printf(nntp_out, "503 Unsupported LIST command\r\n");
+	prot_printf(nntp_out, "501 Unsupported LIST command\r\n");
     }
     else {
-	prot_printf(nntp_out, "500 Unrecognized LIST command\r\n");
+	prot_printf(nntp_out, "501 Unrecognized LIST command\r\n");
     }
     prot_flush(nntp_out);
 }
@@ -1693,7 +1694,7 @@ void cmd_mode(char *arg)
 	prot_printf(nntp_out, "203 Streaming is OK\r\n");
     }
     else {
-	prot_printf(nntp_out, "500 Unrecognized MODE\r\n");
+	prot_printf(nntp_out, "501 Unrecognized MODE\r\n");
     }
     prot_flush(nntp_out);
 }
@@ -1713,14 +1714,16 @@ static void cmd_over(unsigned long uid, unsigned long last)
 {
     int msgno;
     struct nntp_overview *over;
-
-    prot_printf(nntp_out, "224 Overview information follows:\r\n");
+    int found = 0;
 
     for (; uid <= last; uid++) {
 	msgno = index_finduid(uid);
 	if (index_getuid(msgno) != uid) continue;
 
 	if ((over = index_overview(nntp_group, msgno))) {
+	    if (!found++)
+		prot_printf(nntp_out, "224 Overview information follows:\r\n");
+
 	    prot_printf(nntp_out, "%lu\t%s\t%s\t%s\t%s\t%s\t%lu\t",
 			over->uid,
 			over->subj ? over->subj : "",
@@ -1738,7 +1741,10 @@ static void cmd_over(unsigned long uid, unsigned long last)
 	}
     }
 
-    prot_printf(nntp_out, ".\r\n");
+    if (found)
+	prot_printf(nntp_out, ".\r\n");
+    else
+	prot_printf(nntp_out, "420 No articles selected\r\n");
 }
 
 
