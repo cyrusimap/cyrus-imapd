@@ -637,6 +637,7 @@ do_mboxlist()
     static char pathresult[MAX_MAILBOX_PATH];
     struct mailbox mailbox;
     char *newacl;
+    int isnewspartition;
     DIR *dirp;
     struct dirent *dirent;
     struct todo *todo_next;
@@ -725,6 +726,7 @@ do_mboxlist()
     
     /* Process each directory in queue */
     while (todo_head) {
+	isnewspartition = (strcmp(todo_head->partition, "news") == 0);
 	dirp = opendir(todo_head->path);
 	if (!dirp) {
 	    free(todo_head->name);
@@ -737,6 +739,16 @@ do_mboxlist()
 
 	while (dirent = readdir(dirp)) {
 	    if (!strchr(dirent->d_name, '.')) {
+		/* Ignore all-numeric files in news partitons */
+		if (isnewspartition) {
+		    p = dirent->d_name;
+		    while (*p) {
+			if (!isdigit(*p)) break;
+			p++;
+		    }
+		    if (*p) continue;
+		}
+
 		/* Probably a directory, enqueue it */
 		mboxname = xmalloc(strlen(todo_head->name) +
 				   strlen(dirent->d_name) + 2);
