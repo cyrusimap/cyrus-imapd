@@ -1,5 +1,5 @@
 /* config.h -- Configuration routines
- * $Id: imapconf.h,v 1.15 2002/04/05 18:51:54 rjs3 Exp $
+ * $Id: imapconf.h,v 1.16 2002/06/14 18:18:49 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -100,8 +100,6 @@ extern const char *config_servername;
 extern const char *config_mupdate_server;
 
 extern int config_hashimapspool;
-
-void config_scanpartition( void (*proc)() );
 
 /* signal handling (signals.c) */
 typedef void shutdownfn(int);
