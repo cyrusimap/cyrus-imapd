@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.131.2.22 2002/08/21 20:43:50 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.131.2.23 2002/08/23 19:52:05 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -3543,17 +3543,7 @@ void cmd_create(char *tag, char *name, char *server)
     }
     if (!r) {
 	if (!CAPA(s, MUPDATE)) {
-#if 0
-	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
-	    
-	    /* reserve mailbox on ACAP */
-	    acapmbox_new(&mboxdata, s->hostname, mailboxname);
-	    r = acapmbox_create(acaphandle, &mboxdata);
-	    if (r) {
-		syslog(LOG_ERR, "ACAP: unable to reserve %s: %s\n",
-		       name, error_message(r));
-	    }
-#endif
+	    /* reserve mailbox on MUPDATE */
 	}
     }
 
@@ -3565,32 +3555,7 @@ void cmd_create(char *tag, char *name, char *server)
 	tag = "*";		/* can't send another tagged response */
 	
 	if (!CAPA(s, MUPDATE)) {
-#if 0
-	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
-	    
-	    switch (res) {
-	    case PROXY_OK:
-		/* race condition here, but not much we can do about it */
-		mboxdata.acl = acl;
-
-		/* commit mailbox */
-		r = acapmbox_markactive(acaphandle, &mboxdata);
-		if (r) {
-		    syslog(LOG_ERR, "ACAP: unable to commit %s: %s\n",
-			   mailboxname, error_message(r));
-		}
-		break;
-		
-	    default:
-		/* abort mailbox */
-		r = acapmbox_delete(acaphandle, mailboxname);
-		if (r) {
-		    syslog(LOG_ERR, "ACAP: unable to unreserve %s: %s\n", 
-			   mailboxname, error_message(r));
-		}
-		break;
-	    }
-#endif
+	    /* do MUPDATE create operations */
 	}
 	/* make sure we've seen the update */
 	if (ultraparanoid && res == PROXY_OK) kick_mupdate();
@@ -3631,17 +3596,7 @@ void cmd_delete(char *tag, char *name)
 	tag = "*";		/* can't send another tagged response */
 
 	if (!CAPA(s, MUPDATE) && res == PROXY_OK) {
-#if 0
-	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
-	    
-	    /* delete mailbox from acap server */
-	    r = acapmbox_delete(acaphandle, mailboxname);
-	    if (r) {
-		syslog(LOG_ERR, 
-		       "ACAP: can't delete mailbox entry %s: %s",
-		       name, error_message(r));
-	    }
-#endif
+	    /* do MUPDATE delete operations */
 	}
 
 	/* make sure we've seen the update */
@@ -3754,17 +3709,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 
     if (!r) {
 	if (!CAPA(s, MUPDATE)) {
-#if 0
-	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
-	    
-	    /* reserve new mailbox */
-	    acapmbox_new(&mboxdata, s->hostname, newmailboxname);
-	    r = acapmbox_create(acaphandle, &mboxdata);
- 	    if (r) {
-		syslog(LOG_ERR, "ACAP: unable to reserve %s: %s\n",
-		       newmailboxname, error_message(r));
-	    }
-#endif
+	    /* do MUPDATE create operations for new mailbox */
 	}
 
 	prot_printf(s->out, "%s RENAME {%d+}\r\n%s {%d+}\r\n%s\r\n", 
@@ -3774,38 +3719,10 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	tag = "*";		/* can't send another tagged response */
 	
 	if (!CAPA(s, MUPDATE)) {
-#if 0
-	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
-	    
-	    switch (res) {
-	    case PROXY_OK:
-		/* commit new mailbox */
-		mboxdata.acl = acl;
-		r = acapmbox_markactive(acaphandle, &mboxdata);
-		if (r) {
-		    syslog(LOG_ERR, "ACAP: unable to commit %s: %s\n",
-			   oldmailboxname, error_message(r));
-		}
-
-		/* delete old mailbox */
-		r = acapmbox_delete(acaphandle, oldmailboxname);
-		if (r) {
-		    syslog(LOG_ERR, "ACAP: unable to delete %s: %s\n", 
-			   oldmailboxname, error_message(r));
-		}
-		break;
-		
-	    default:
-		/* abort new mailbox */
-		r = acapmbox_delete(acaphandle, newmailboxname);
-		if (r) {
-		    syslog(LOG_ERR, "ACAP: unable to unreserve %s: %s\n", 
-			   newmailboxname, error_message(r));
-		}
-		break;
-	    }
-#endif
+	    /* Activate/abort new mailbox in MUPDATE*/
+	    /* delete old mailbox from MUPDATE */
 	}
+
 	/* make sure we've seen the update */
 	if (res == PROXY_OK) kick_mupdate();
     }
@@ -4237,38 +4154,7 @@ void cmd_setacl(char *tag, char *name, char *identifier, char *rights)
 	res = pipe_including_tag(s, tag, 0);
 	tag = "*";		/* can't send another tagged response */
 	if (!CAPA(s, MUPDATE) && res == PROXY_OK) {
-#if 0
-	    acapmbox_handle_t *acaphandle = acapmbox_get_handle();
-	    int mode;
-	    
-	    /* calculate new ACL; race conditions here */
-	    if (rights) {
-		mode = ACL_MODE_SET;
-		if (*rights == '+') {
-		    rights++;
-		    mode = ACL_MODE_ADD;
-		} else if (*rights == '-') {
-		    rights++;
-		    mode = ACL_MODE_REMOVE;
-		}
-		
-		if (cyrus_acl_set(&acl, identifier, mode, cyrus_acl_strtomask(rights),
-			    NULL, proxyd_userid)) {
-		    r = IMAP_INVALID_IDENTIFIER;
-		}
-	    } else {
-		if (cyrus_acl_remove(&acl, identifier, NULL, proxyd_userid)) {
-		    r = IMAP_INVALID_IDENTIFIER;
-		}
-	    }
-	    
-	    /* change the ACAP server */
-	    r = acapmbox_setproperty_acl(acaphandle, mailboxname, acl);
-	    if (r) {
-		syslog(LOG_ERR, "ACAP: unable to change ACL on %s: %s\n", 
-		       mailboxname, error_message(r));
-	    }
-#endif
+	    /* setup new ACL in MUPDATE */
 	}
 	/* make sure we've seen the update */
 	if (ultraparanoid && res == PROXY_OK) kick_mupdate();

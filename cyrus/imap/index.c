@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.180.4.5 2002/08/19 15:42:05 ken3 Exp $
+ * $Id: index.c,v 1.180.4.6 2002/08/23 19:52:04 rjs3 Exp $
  */
 #include <config.h>
 
@@ -2499,7 +2499,7 @@ void *rock;
 	}
     }
 
-    /* save old for acapmbox foo */
+    /* save old */
     oldflags = record.system_flags;
 
     if (storeargs->operation == STORE_REPLACE) {

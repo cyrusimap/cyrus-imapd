@@ -40,7 +40,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.1.4.6 2002/08/22 19:16:48 ken3 Exp $
+.\" $Id: imapoptions,v 1.1.4.7 2002/08/23 19:52:03 rjs3 Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -70,20 +70,6 @@ are listed with ``<none>''.
 */
 
 # OPTIONS
-
-{ "acap_authname", NULL, STRING }
-
-{ "acap_getauth", NULL, STRING }
-
-{ "acap_password", NULL, STRING }
-
-{ "acap_realm", NULL, STRING }
-
-{ "acap_retry_timeout", 60, INT }
-
-{ "acap_server", NULL, STRING }  
-
-{ "acap_username", NULL, STRING }
 
 { "admins", "", STRING }
 /* The list of userids with administrative rights.  Separate each userid

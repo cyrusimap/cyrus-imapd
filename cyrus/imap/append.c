@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.93.4.1 2002/07/25 17:21:40 ken3 Exp $
+ * $Id: append.c,v 1.93.4.2 2002/08/23 19:52:03 rjs3 Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -292,8 +292,7 @@ int append_commit(struct appendstate *as,
 	as->m.minor_version = MAILBOX_MINOR_VERSION;
     }
     
-    /* Write out index header & synchronize to disk.
-       this writes to acappush too. */
+    /* Write out index header & synchronize to disk. */
     r = mailbox_write_index_header(&as->m);
     if (r) {
 	syslog(LOG_ERR, "IOERROR: writing index header for %s: %s",

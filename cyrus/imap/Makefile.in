@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.164.4.3 2002/08/16 22:00:46 rjs3 Exp $
+# $Id: Makefile.in,v 1.164.4.4 2002/08/23 19:52:03 rjs3 Exp $
 # 
 # @configure_input@
 # 
@@ -62,13 +62,13 @@ CYRUS_USER=@cyrus_user@
 CYRUS_GROUP=@cyrus_group@
 
 DEFS = @DEFS@ @LOCALDEFS@
-CPPFLAGS = -I. -I.. -I../sieve -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../acap -I../acap @COM_ERR_CPPFLAGS@ @SIEVE_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@
+CPPFLAGS = -I. -I.. -I../sieve -I$(srcdir) -I$(srcdir)/../lib @COM_ERR_CPPFLAGS@ @SIEVE_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@
 IMAP_LIBS = @IMAP_LIBS@
 SIEVE_LIBS = @SIEVE_LIBS@
 IMAP_COM_ERR_LIBS = @IMAP_COM_ERR_LIBS@
 LIB_WRAP = @LIB_WRAP@
 LIBS = $(IMAP_LIBS) $(IMAP_COM_ERR_LIBS)
-DEPLIBS = ../acap/libacap.a ../lib/libcyrus.a @DEPLIBS@
+DEPLIBS = ../lib/libcyrus.a @DEPLIBS@
 
 CFLAGS = @CFLAGS@
 LDFLAGS = @LDFLAGS@ @CFLAGS@ @COM_ERR_LDFLAGS@ 
@@ -98,7 +98,7 @@ cyrus_prefix = @cyrus_prefix@
 
 LOBJS= append.o mailbox.o mboxlist.o mupdate-client.o mboxname.o message.o \
 	config.o imap_err.o mupdate_err.o proc.o setproctitle.o \
-	convert_code.o duplicate.o saslclient.o acapmbox.o signals.o \
+	convert_code.o duplicate.o saslclient.o signals.o \
 	annotate.o search_engines.o squat.o squat_internal.o mbdump.o \
 	base64.o imapparse.o telemetry.o user.o notify.o imapopts.o \
 	$(SEEN) $(IDLE)
@@ -152,10 +152,6 @@ idled: idled.o mutex_fake.o libimap.a $(DEPLIBS)
 tls_prune: tls_prune.o tls.o mutex_fake.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o \
 	 $@ tls_prune.o tls.o mutex_fake.o libimap.a $(DEPLIBS) $(LIBS)
-
-acappush: acappush.o mutex_fake.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o acappush \
-	 acappush.o libimap.a mutex_fake.o $(DEPLIBS) $(LIBS)
 
 pushstats.c pushstats.h: pushstats.snmp $(srcdir)/../snmp/snmpgen
 	$(srcdir)/../snmp/snmpgen $(srcdir)/pushstats.snmp
@@ -244,14 +240,6 @@ proxyd.pure: $(PROXYDOBJS) mutex_fake.o libimap.a $(DEPLIBS) $(SERVICE)
 	 $(SERVICE) $(PROXYDOBJS) mutex_fake.o libimap.a \
 	 $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
-target-acap: target-acap.o mutex_fake.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o target-acap \
-	 target-acap.o mutex_fake.o libimap.a $(DEPLIBS) $(LIBS)
-
-sendmail-map: sendmail-map.o mutex_fake.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o sendmail-map \
-	 sendmail-map.o mutex_fake.o libimap.a $(DEPLIBS) $(LIBS)
-
 mupdate: mupdate.o mupdate-slave.o mupdate-client.o mutex_pthread.o \
 	libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o mupdate \
@@ -274,10 +262,6 @@ pop3proxyd: pop3proxyd.o tls.o mutex_fake.o libimap.a $(DEPLIBS) $(SERVICE)
 
 arbitron: arbitron.o mutex_fake.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o arbitron arbitron.o mutex_fake.o \
-	libimap.a $(DEPLIBS) $(LIBS)
-
-populateacap: populateacap.o mutex_fake.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o populateacap populateacap.o mutex_fake.o \
 	libimap.a $(DEPLIBS) $(LIBS)
 
 fud: fud.o libimap.a mutex_fake.o $(DEPLIBS) $(SERVICE)

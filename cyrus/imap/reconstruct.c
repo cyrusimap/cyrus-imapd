@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.68.4.4 2002/08/21 20:43:50 ken3 Exp $ */
+/* $Id: reconstruct.c,v 1.68.4.5 2002/08/23 19:52:06 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -92,7 +92,6 @@
 #include "retry.h"
 #include "convert_code.h"
 #include "util.h"
-#include "acapmbox.h"
 
 extern int errno;
 extern int optind;
@@ -114,8 +113,6 @@ void usage(void);
 void shut_down(int code);
 
 extern cyrus_acl_canonproc_t mboxlist_ensureOwnerRights;
-
-static acapmbox_handle_t *acaphandle = NULL;
 
 int code = 0;
 
@@ -596,9 +593,6 @@ int reconstruct(char *name, struct discovered *found)
 	return IMAP_IOERROR;
     }
     
-    acapmbox_setproperty(acaphandle, mailbox.name, ACAPMBOX_UIDVALIDITY,
-			 mailbox.uidvalidity);
-
     fclose(newindex);
     r = seen_reconstruct(&mailbox, (time_t)0, (time_t)0, (int (*)())0, (void *)0);
     mailbox_close(&mailbox);

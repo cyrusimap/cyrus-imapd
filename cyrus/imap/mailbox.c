@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.134.4.4 2002/07/21 14:24:48 ken3 Exp $
+ $Id: mailbox.c,v 1.134.4.5 2002/08/23 19:52:04 rjs3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -93,11 +93,7 @@
 #include "mailbox.h"
 #include "xmalloc.h"
 #include "mboxlist.h"
-#include "acapmbox.h"
 #include "seen.h"
-#if 0
-#include "acappush.h"
-#endif
 
 static int mailbox_doing_reconstruct = 0;
 #define zeromailbox(m) { memset(&m, 0, sizeof(struct mailbox)); \
@@ -124,13 +120,6 @@ char *mailbox_cache_header_name[] = {
 int mailbox_num_cache_header =
   sizeof(mailbox_cache_header_name)/sizeof(char *);
 
-#if 0
-/* acappush variables */
-static int acappush_sock = -1;
-static struct sockaddr_un acappush_remote;
-static int acappush_remote_len = 0;
-#endif
-
 /* function to be used for notification of mailbox changes/updates */
 static mailbox_notifyproc_t *updatenotifier = NULL;
 
@@ -143,42 +132,10 @@ void mailbox_set_updatenotifier(mailbox_notifyproc_t *notifyproc)
 }
 
 /*
- * Create connection to acappush
+ * Create connection to acappush (obsolete)
  */
 int mailbox_initialize(void)
 {
-#if 0
-    int s;
-    int fdflags;
-    struct stat sbuf;
-
-    /* if not configured to do acap do nothing */
-    if (config_getstring("acap_server", NULL)==NULL) return 0;
-
-    if ((s = socket(AF_UNIX, SOCK_DGRAM, 0)) == -1) {
-	return IMAP_IOERROR;
-    }
-
-    acappush_remote.sun_family = AF_UNIX;
-    strcpy(acappush_remote.sun_path, config_dir);
-    strcat(acappush_remote.sun_path, FNAME_ACAPPUSH_SOCK);
-    acappush_remote_len = sizeof(acappush_remote.sun_family) +
-	strlen(acappush_remote.sun_path) + 1;
-
-    /* check that the socket exists */
-    if (stat(acappush_remote.sun_path, &sbuf) < 0) {
-	close(s);
-	return 0;
-    }
-
-    /* put us in non-blocking mode */
-    fdflags = fcntl(s, F_GETFD, 0);
-    if (fdflags != -1) fdflags = fcntl(s, F_SETFL, O_NONBLOCK | fdflags);
-    if (fdflags == -1) { close(s); return IMAP_IOERROR; }
-
-    acappush_sock = s;
-#endif
-
     return 0;
 }
 
@@ -1164,27 +1121,6 @@ int mailbox_write_index_header(struct mailbox *mailbox)
 
     if (updatenotifier) updatenotifier(mailbox);
 
-#if 0
-    if (acappush_sock != -1) {
-	acapmbdata_t acapdata;
-
-	/* fill in structure */
-	strcpy(acapdata.name, mailbox->name);
-	acapdata.uidvalidity = mailbox->uidvalidity;
-	acapdata.exists      = mailbox->exists;
-	acapdata.deleted     = mailbox->deleted;
-	acapdata.answered    = mailbox->answered;
-	acapdata.flagged     = mailbox->flagged;
-	
-	/* send */
-	if (sendto(acappush_sock, &acapdata, 20+strlen(mailbox->name), 0,
-		   (struct sockaddr *) &acappush_remote, 
-		   acappush_remote_len) == -1) {
-	    syslog(LOG_ERR, "sending to acappush: %m");
-	}
-    }
-#endif
-
     *((bit32 *)(buf+OFFSET_GENERATION_NO)) = mailbox->generation_no;
     *((bit32 *)(buf+OFFSET_FORMAT)) = htonl(mailbox->format);
     *((bit32 *)(buf+OFFSET_MINOR_VERSION)) = htonl(mailbox->minor_version);
@@ -1209,7 +1145,6 @@ int mailbox_write_index_header(struct mailbox *mailbox)
     if ((unsigned long)n != header_size || fsync(mailbox->index_fd)) {
 	syslog(LOG_ERR, "IOERROR: writing index header for %s: %m",
 	       mailbox->name);
-	/* xxx can we unroll the acap send??? */
 	return IMAP_IOERROR;
     }
 
@@ -1893,27 +1828,6 @@ void *deciderock;
 
     if (numdeleted) {
 	if (updatenotifier) updatenotifier(mailbox);
-
-#if 0
-	if (acappush_sock != -1) {
-	    acapmbdata_t acapdata;
-	    
-	    /* fill in structure */
-	    strcpy(acapdata.name, mailbox->name);
-	    acapdata.uidvalidity = mailbox->uidvalidity;
-	    acapdata.exists      = newexists;
-	    acapdata.deleted     = newdeleted;
-	    acapdata.answered    = newanswered;
-	    acapdata.flagged     = newflagged;		
-	    
-	    /* send */
-	    if (sendto(acappush_sock, &acapdata, 20+strlen(mailbox->name), 0,
-		       (struct sockaddr *) &acappush_remote, 
-		       acappush_remote_len) == -1) {
-		syslog(LOG_ERR, "Error sending to acappush: %m");
-	    }
-	}
-#endif
     }
 
     mailbox_unlock_pop(mailbox);
