@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: mbexamine.c,v 1.2.2.1 2003/05/12 23:52:28 ken3 Exp $ */
+/* $Id: mbexamine.c,v 1.2.2.2 2003/05/15 18:28:24 ken3 Exp $ */
 
 #include <config.h>
 
@@ -301,7 +301,7 @@ int do_examine(char *name,
 	printf("%06d> UID:%08d   INT_DATE:%d SENTDATE:%d SIZE:%-6d\n",
 	       i, UID(i), INTERNALDATE(i), SENTDATE(i),
 	       SIZE(i));
-	printf("      > HDRSIZE:%-6d LASTUPD :%d SYSFLAGS:%08X",
+	printf("      > HDRSIZE:%-6d LASTUPD :%ld SYSFLAGS:%08X",
 	       HEADER_SIZE(i), LAST_UPDATED(i), SYSTEM_FLAGS(i));
 	if (mailbox.minor_version >= 5)
 	    printf("   LINES:%-6d", CONTENT_LINES(i));
