@@ -259,7 +259,7 @@ static int init_sasl(char *serverFQDN, int port, int ssf)
 }
 
 
-int getauthline(char **line, int *linelen)
+int getauthline(char **line, unsigned int *linelen)
 {
   lexstate_t state;
   int res;
@@ -308,10 +308,10 @@ int auth_sasl(char *mechlist)
   char *out;
   unsigned int outlen;
   char *in;
-  int inlen;
+  unsigned int inlen;
   const char *mechusing;
   char inbase64[2048];
-  int inbase64len;
+  unsigned int inbase64len;
 
   imt_stat status = STAT_CONT;
 
