@@ -16,6 +16,11 @@
 static duplicate_dbinit = 0;
 DB_ENV *duplicate_dbenv;
 
+static void db_err(const char *db_prfx, char *buffer)
+{
+    syslog(LOG_ERR, "DBERROR %s: %s", db_prfx, buffer);
+}
+
 int duplicate_init()
 {
     char buf[1024];
@@ -43,6 +48,9 @@ int duplicate_init()
 	syslog(LOG_ERR, err);
 	return IMAP_IOERROR;
     }
+
+    duplicate_dbenv->set_errpfx(duplicate_dbenv, "dup");
+    duplicate_dbenv->set_errcall(duplicate_dbenv, db_err);
 
     duplicate_dbinit = 1;
 
@@ -104,12 +112,14 @@ time_t duplicate_check(char *id, int idlen, char *to, int tolen)
 
     r = db_create(&d, duplicate_dbenv, 0);
     if (r != 0) {
-	syslog(LOG_ERR, "duplicate_check: opening %s: %m", fname);
+	syslog(LOG_ERR, "duplicate_check: opening %s: %s", fname,
+	       db_strerror(r));
 	return 0;
     }
     r = d->open(d, fname, NULL, DB_HASH, DB_CREATE, 0664);
     if (r != 0) {
-	syslog(LOG_ERR, "duplicate_check: opening %s: %m", fname);
+	syslog(LOG_ERR, "duplicate_check: opening %s: %s", fname,
+	       db_strerror(r));
 	return 0;
     }
 
@@ -120,13 +130,15 @@ time_t duplicate_check(char *id, int idlen, char *to, int tolen)
     } else if (r == DB_NOTFOUND) {
 	mark = 0;
     } else {
-	syslog(LOG_ERR, "duplicate_check: error looking up %s/%d: %m", id, to);
+	syslog(LOG_ERR, "duplicate_check: error looking up %s/%d: %s", id, to,
+	       db_strerror(r));
 	mark = 0;
     }
 
     r = d->close(d, 0);
     if (r != 0) {
-	syslog(LOG_ERR, "duplicate_check: closing %s: %m", fname);
+	syslog(LOG_ERR, "duplicate_check: closing %s: %s", fname, 
+	       db_strerror(r));
 	return 0;
     }
 
@@ -161,24 +173,28 @@ void duplicate_mark(char *id, int idlen, char *to, int tolen, time_t mark)
 
     r = db_create(&d, duplicate_dbenv, 0);
     if (r != 0) {
-	syslog(LOG_ERR, "duplicate_mark: opening %s: %m", fname);
+	syslog(LOG_ERR, "duplicate_mark: opening %s: %s", fname,
+	       db_strerror(r));
 	return;
     }
     r = d->open(d, fname, NULL, DB_HASH, DB_CREATE, 0664);
     if (r != 0) {
-	syslog(LOG_ERR, "duplicate_mark: opening %s: %m", fname);
+	syslog(LOG_ERR, "duplicate_mark: opening %s: %s", fname,
+	       db_strerror(r));
 	return;
     }
 
     r = d->put(d, NULL, &delivery, &date, 0);
     if (r != 0) {
-	syslog(LOG_ERR, "duplicate_mark: error setting %s/%d: %m", id, to);
+	syslog(LOG_ERR, "duplicate_mark: error setting %s/%d: %s", id, to,
+	       db_strerror(r));
 	mark = 0;
     }
 
     r = d->close(d, 0);
     if (r != 0) {
-	syslog(LOG_ERR, "duplicate_mark: closing %s: %m", fname);
+	syslog(LOG_ERR, "duplicate_mark: closing %s: %s", fname,
+	       db_strerror(r));
 	return;
     }
 
