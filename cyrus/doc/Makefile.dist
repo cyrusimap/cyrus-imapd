@@ -1,8 +1,9 @@
 dist:
+	mkdir man
 	for man in ../man/*.[1-9]; \
 	do \
 		echo "=== $$man ==="; \
-		groff -man -Thtml $$man > `basename $$man`.html; \
+		groff -man -Thtml $$man > man/`basename $$man`.html; \
 	done
 
 	pod2html ../perl/imap/cyradm > cyradm.1.html
