@@ -46,7 +46,7 @@ glob *glob_init(str, flags)
     int flags;
 {
     glob *g;
-    char *dst, *scan;
+    char *dst;
     int len, newglob;
 
     newglob = flags & GLOB_HIERARCHY;
@@ -138,7 +138,6 @@ int glob_test(g, ptr, len, min)
     char *gstar, *pstar;	/* pointers for '*' patterns */
     char *ghier, *phier;	/* pointers for '%' patterns */
     char *start;		/* start of input string */
-    int result;
     int newglob;
 
     if (min && *min < 0) return (-1);
