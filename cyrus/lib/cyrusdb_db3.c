@@ -1,5 +1,3 @@
-/* XXX why is tid getting to be 0? put some asserts in place? */
-
 /*  cyrusdb_db3: berkeley db backend
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
@@ -117,14 +115,14 @@ static int init(const char *dbdir, int myflags)
     }
     dbenv->set_lk_detect(dbenv, CONFIG_DEADLOCK_DETECTION);
 
-    /* XXX should make this value configurable */
+    /* XXX should make this value runtime configurable */
     r = dbenv->set_lk_max(dbenv, 50000);
     if (r) {
 	syslog(LOG_ERR, "DBERROR: set_lk_max(): %s", db_strerror(r));
 	abort();
     }
 
-    /* XXX should make this value configurable */
+    /* XXX should make this value runtime configurable */
     r = dbenv->set_tx_max(dbenv, 100);
     if (r) {
 	syslog(LOG_ERR, "DBERROR: set_tx_max(): %s", db_strerror(r));
@@ -270,7 +268,8 @@ static int gettid(struct txn **mytid, DB_TXN **tid, char *where)
     int r;
 
     if (mytid) {
-	if (*mytid && (txn_id((DB_TXN *)*mytid) != 0)) {
+	if (*mytid) {
+  	    assert((txn_id((DB_TXN *)*mytid) != 0));
 	    *tid = (DB_TXN *) *mytid;
 	    if (CONFIG_DB_VERBOSE)
 		syslog(LOG_DEBUG, "%s: reusing txn %lu", where, txn_id(*tid));
@@ -323,8 +322,10 @@ static int myfetch(struct db *mydb,
 	r = 0;
 	break;
     case DB_LOCK_DEADLOCK:
-	if (mytid)
+	if (mytid) {
 	    abort_txn(mydb, *mytid);
+	    *mytid = NULL;
+	}
 	r = CYRUSDB_AGAIN;
 	break;
     default:
@@ -496,12 +497,14 @@ static int foreach(struct db *mydb,
     case DB_LOCK_DEADLOCK:	/* erg, we're in a txn! */
 	if (mytid) {
 	    abort_txn(mydb, *mytid);
+	    *mytid = NULL;
 	}
 	r = CYRUSDB_AGAIN;
 	break;
     default:
 	if (mytid) {
-	    abort_txn(mydb, *mytid);
+	    abort_txn(mydb, *mytid); 
+	    *mytid = NULL;
 	}
 	syslog(LOG_ERR, "DBERROR: error advancing: %s",  db_strerror(r));
 	r = CYRUSDB_IOERROR;
@@ -576,7 +579,10 @@ static int mystore(struct db *mydb,
     }
 
     if ( r != 0) {
-	if (mytid) abort_txn(mydb, *mytid);
+	if (mytid) {
+	    abort_txn(mydb, *mytid);
+	    *mytid = NULL;
+	}
 	if (r == DB_LOCK_DEADLOCK) {
 	    r = CYRUSDB_AGAIN;
 	} else {
@@ -662,7 +668,10 @@ static int delete(struct db *mydb,
     }
 
     if (r != 0) {
-	if (mytid) abort_txn(mydb, *mytid);
+	if (mytid) {
+	    abort_txn(mydb, *mytid);
+	    *mytid = NULL;
+	}
 	if (r == DB_LOCK_DEADLOCK) {
 	    r = CYRUSDB_AGAIN;
 	} else {
