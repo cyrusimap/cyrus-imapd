@@ -1,6 +1,6 @@
 /* interp.c -- sieve script interpretor builder
  * Larry Greenfield
- * $Id: interp.c,v 1.14 2000/02/22 07:56:40 tmartin Exp $
+ * $Id: interp.c,v 1.15 2000/04/06 15:18:40 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -38,6 +38,12 @@ const char *sieve_version = "cmu-sieve 1.3";
 int sieve_interp_alloc(sieve_interp_t **interp, void *interp_context)
 {
     sieve_interp_t *i;
+    static initonce;
+
+    if (!initonce) {
+	initialize_siev_error_table();
+	initonce = 1;
+    }
 
     *interp = NULL;
     i = (sieve_interp_t *) xmalloc(sizeof(sieve_interp_t));
@@ -62,14 +68,15 @@ int sieve_interp_alloc(sieve_interp_t **interp, void *interp_context)
     return SIEVE_OK;
 }
 
-static char *sieve_extensions = "fileinto reject envelope vacation imapflags notify subaddress" 
+static const char *sieve_extensions = "fileinto reject envelope vacation"
+                                      " imapflags notify subaddress" 
 #ifdef ENABLE_REGEX
 " regex";
 #else
 "";
 #endif /* ENABLE_REGEX */
 
-char *sieve_listextensions(void)
+const char *sieve_listextensions(void)
 {
     return sieve_extensions;
 }
