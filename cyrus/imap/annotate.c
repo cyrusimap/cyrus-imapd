@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.25 2004/06/22 16:59:16 rjs3 Exp $
+ * $Id: annotate.c,v 1.26 2004/06/22 21:36:17 rjs3 Exp $
  */
 
 #include <config.h>
@@ -91,12 +91,9 @@ int (*proxy_store_func)(const char *server, const char *mbox_pat,
 
 /* String List Management */
 /*
- * Append 's' to the strlist 'l'.
+ * Append 's' to the strlist 'l'.  Possibly include metadata.
  */
-void
-appendstrlist(l, s)
-struct strlist **l;
-char *s;
+void appendstrlist_withdata(struct strlist **l, char *s, void *d, size_t size)
 {
     struct strlist **tail = l;
 
@@ -105,17 +102,28 @@ char *s;
     *tail = (struct strlist *)xmalloc(sizeof(struct strlist));
     (*tail)->s = xstrdup(s);
     (*tail)->p = 0;
+    if(d && size) {
+	(*tail)->rock = xmalloc(size);
+	memcpy((*tail)->rock, d, size);
+    } else {
+	(*tail)->rock = NULL;
+    }
     (*tail)->next = 0;
+}
+
+/*
+ * Append 's' to the strlist 'l'.
+ */
+void appendstrlist(struct strlist **l, char *s) 
+{
+    appendstrlist_withdata(l, s, NULL, 0);
 }
 
 /*
  * Append 's' to the strlist 'l', compiling it as a pattern.
  * Caller must pass in memory that is freed when the strlist is freed.
  */
-void
-appendstrlistpat(l, s)
-struct strlist **l;
-char *s;
+void appendstrlistpat(struct strlist **l, char *s)
 {
     struct strlist **tail = l;
 
@@ -130,9 +138,7 @@ char *s;
 /*
  * Free the strlist 'l'
  */
-void
-freestrlist(l)
-struct strlist *l;
+void freestrlist(struct strlist *l)
 {
     struct strlist *n;
 
@@ -140,6 +146,7 @@ struct strlist *l;
 	n = l->next;
 	free(l->s);
 	if (l->p) charset_freepat(l->p);
+	if (l->rock) free(l->rock);
 	free((char *)l);
 	l = n;
     }

@@ -1,5 +1,5 @@
 /* imapd.h -- Common state for IMAP daemon
- * $Id: imapd.h,v 1.60 2004/06/22 19:04:16 rjs3 Exp $
+ * $Id: imapd.h,v 1.61 2004/06/22 21:36:18 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -63,6 +63,7 @@ struct fieldlist {
     char *section;		/* First part of BODY[x] value */
     struct strlist *fields;	/* List of field-names */
     char *trail;		/* Last part of BODY[x] value */
+    void *rock;
     struct fieldlist *next;
 };
 
@@ -80,6 +81,12 @@ struct fetchargs {
 
     bit32 cache_atleast;          /* to do headers we need atleast this
 				   * cache version */
+};
+
+struct octetinfo 
+{
+    int start_octet;
+    int octet_count;
 };
 
 /* Bitmasks for fetchitems */
