@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.8 2000/09/16 21:50:51 leg Exp $ */
+/* $Id: acconfig.h,v 1.9 2000/09/16 22:35:01 leg Exp $ */
 /* 
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -119,4 +119,9 @@ enum {
     /* should we call fsync() to maybe help with softupdates?
      * (that is, i'm not sure this solves the problem.) */
     APPEND_ULTRA_PARANOID = 1,
+
+    /* should we log extra information at the DEBUG level for DB stuff? 
+     * 0 -> nothing; 1 -> some; higher -> even more */
+    CONFIG_DB_VERBOSE = 1,
+
 };
