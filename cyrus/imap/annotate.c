@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.31 2003/06/07 16:43:01 ken3 Exp $
+ * $Id: annotate.c,v 1.8.6.32 2003/06/11 11:31:53 ken3 Exp $
  */
 
 #include <config.h>
@@ -687,8 +687,8 @@ static void annotation_get_lastupdate(const char *int_mboxname,
     output_entryatt(ext_mboxname, entry, &attrib, 0, fdata);
 }
 
-static int make_key(const char *mboxname, const char *entry, char *userid,
-		    char *key, size_t keysize)
+static int make_key(const char *mboxname, const char *entry,
+		    const char *userid, char *key, size_t keysize)
 {
     int keylen = 0;
 
@@ -1190,8 +1190,9 @@ static int read_entry(const char *mboxname, const char *entry, char *userid,
     return r;
 }
 
-static int write_entry(const char *mboxname, const char *entry, char *userid,
-		       struct annotation_data *attrib, struct txn **tid)
+static int write_entry(const char *mboxname, const char *entry,
+		       const char *userid, struct annotation_data *attrib,
+		       struct txn **tid)
 {
     char key[MAX_MAILBOX_PATH+1];
     int keylen, r;
@@ -1664,6 +1665,153 @@ int annotatemore_store(char *mailbox,
     }
 
     return r;
+}
+
+struct rename_rock {
+    struct glob *g;
+    const char *newmboxname;
+    const char *olduserid;
+    const char *newuserid;
+    struct txn *tid;
+};
+
+static int rename_p(void *rock, const char *key,
+		    int keylen __attribute__((unused)),
+		    const char *data __attribute__((unused)),
+		    int datalen __attribute__((unused)))
+{
+    struct rename_rock *rrock = (struct rename_rock *) rock;
+    const char *mboxname, *entry, *userid;
+
+    mboxname = key;
+    entry = mboxname + strlen(mboxname) + 1;
+    userid = entry + strlen(entry) + 1;
+
+    /* make sure that the mailbox matches our pattern */
+    return (GLOB_TEST(rrock->g, mboxname) != -1);
+}
+
+static int rename_cb(void *rock, const char *key,
+		     int keylen __attribute__((unused)),
+		     const char *data, int datalen)
+{
+    struct rename_rock *rrock = (struct rename_rock *) rock;
+    const char *mboxname, *entry, *userid;
+    struct annotation_data attrib;
+    int r;
+
+    mboxname = key;
+    entry = mboxname + strlen(mboxname) + 1;
+    userid = entry + strlen(entry) + 1;
+
+    r = split_attribs(data, datalen, &attrib);
+
+    if (!r) {
+	if (rrock->newmboxname) {
+	    /* create newly renamed entry */
+
+	    if (rrock->olduserid  && rrock->newuserid &&
+		!strcmp(rrock->olduserid, userid)) {
+		/* renaming a user, so change the userid for priv annots */
+		r = write_entry(rrock->newmboxname, entry, rrock->newuserid,
+				&attrib, &(rrock->tid));
+	    }
+	    else {
+		r = write_entry(rrock->newmboxname, entry, userid,
+				&attrib, &(rrock->tid));
+	    }
+	}
+
+	if (!r) {
+	    /* delete existing entry */
+	    attrib.value = "NIL";
+	    r = write_entry(mboxname, entry, userid, &attrib, &(rrock->tid));
+	}
+    }
+
+    return r;
+}
+
+int annotatemore_rename(char *oldmboxname, char *newmboxname,
+			char *olduserid, char *newuserid)
+{
+    struct rename_rock rrock;
+    char *p;
+    int patlen, r;
+
+    rrock.g = glob_init(oldmboxname, GLOB_HIERARCHY);
+    rrock.newmboxname = newmboxname;
+    rrock.olduserid = olduserid;
+    rrock.newuserid = newuserid;
+    rrock.tid = NULL;
+
+    /* Find fixed-string pattern prefix */
+    for (p = oldmboxname; *p; p++) {
+	if (*p == '*' || *p == '%') break;
+    }
+    patlen = p - oldmboxname;
+
+    r = DB->foreach(anndb, oldmboxname, patlen, &rename_p, &rename_cb,
+		    &rrock, &(rrock.tid));
+
+    glob_free(&(rrock.g));
+
+    if (rrock.tid) {
+	if (!r) {
+	    /* commit txn */
+	    DB->commit(anndb, rrock.tid);
+	}
+	else {
+	    /* abort txn */
+	    DB->abort(anndb, rrock.tid);
+	}
+    }
+
+    return r;
+}
+
+int annotatemore_delete(char *mboxname)
+{
+    /* we treat a deleteion as a rename without a new name */
+
+    return annotatemore_rename(mboxname, NULL, NULL, NULL);
+}
+
+static int dump_p(void *rock __attribute__((unused)),
+		  const char *key __attribute__((unused)),
+		  int keylen __attribute__((unused)),
+		  const char *data __attribute__((unused)),
+		  int datalen __attribute__((unused)))
+{
+    return 1;
+}
+
+static int dump_cb(void *rock, const char *key,
+		     int keylen __attribute__((unused)),
+		     const char *data, int datalen)
+{
+    FILE *f = (FILE *) rock;
+    const char *mboxname, *entry, *userid;
+    struct annotation_data attrib;
+    int r;
+
+    mboxname = key;
+    entry = mboxname + strlen(mboxname) + 1;
+    userid = entry + strlen(entry) + 1;
+
+    r = split_attribs(data, datalen, &attrib);
+
+    if (!r)
+	fprintf(f, "%s\t%s\t%s\t%s\t%u\t%s\t%lu\n",
+		mboxname, entry, userid, attrib.value, attrib.size,
+		attrib.contenttype, attrib.modifiedsince);
+
+    return 0;
+}
+
+void annotatemore_dump(FILE *f)
+{
+    DB->foreach(anndb, "*", 0, &dump_p, &dump_cb, f, NULL);
 }
 
 #endif /* ENABLE_ANNOTATEMORE */

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.82 2003/06/07 16:43:02 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.83 2003/06/11 11:31:54 ken3 Exp $ */
 
 #include <config.h>
 
@@ -3453,6 +3453,12 @@ static int delmbox(char *name,
 	prot_printf(imapd_out, "* NO delete %s: %s\r\n",
 		    name, error_message(r));
     }
+#ifdef ENABLE_ANNOTATEMORE
+    else {
+	/* Delete mailbox annotations */
+	annotatemore_delete(name);
+    }
+#endif
     
     return 0;
 }
@@ -3478,6 +3484,13 @@ void cmd_delete(char *tag, char *name, int localonly)
 				   imapd_userid, imapd_authstate, 1,
 				   localonly, 0);
     }
+
+#ifdef ENABLE_ANNOTATEMORE
+    if (!r) {
+	/* Delete mailbox annotations */
+	annotatemore_delete(mailboxname);
+    }
+#endif
 
     /* was it a top-level user mailbox? */
     /* localonly deletes are only per-mailbox */
@@ -3566,6 +3579,12 @@ static int renmbox(char *name,
 	    user_copyquotaroot(name, text->newmailboxname);
 	    user_renameacl(text->newmailboxname, text->olduser, text->newuser);
 	}
+#ifdef ENABLE_ANNOTATEMORE
+	/* Rename mailbox annotations */
+	annotatemore_rename(name, text->newmailboxname,
+			    text->rename_user ? text->olduser : NULL,
+			    text->newuser);
+#endif
 	
 	prot_printf(imapd_out, "* OK rename %s %s\r\n",
 		    oldextname, newextname);
@@ -3680,6 +3699,15 @@ void cmd_rename(const char *tag,
 
 	/* XXX report status/progress of meta-data */
     }
+
+#ifdef ENABLE_ANNOTATEMORE
+    if (!r) {
+	/* Rename mailbox annotations */
+	annotatemore_rename(oldmailboxname, newmailboxname,
+			    rename_user ? olduser : NULL,
+			    newuser);
+    }
+#endif
 
     /* rename all mailboxes matching this */
     if (!r && recursive_rename) {

@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: annotate.h,v 1.2.6.9 2003/06/07 16:43:02 ken3 Exp $
+ * $Id: annotate.h,v 1.2.6.10 2003/06/11 11:31:54 ken3 Exp $
  */
 
 #ifndef ANNOTATE_H
@@ -109,6 +109,16 @@ int annotatemore_store(char *mailbox,
 		       struct entryattlist *l, struct namespace *namespace,
 		       int isadmin, char *userid,
 		       struct auth_state *auth_state);
+
+/* rename the annotations for 'oldmboxname' to 'newmboxname'
+ * if 'olduserid' is non-NULL then the private annotations
+ * for 'olduserid' are renamed to 'newuserid'
+ */
+int annotatemore_rename(char *oldmboxname, char *newmboxname,
+			char *olduserid, char *newuserid);
+
+/* delete the annotations for 'mboxname' */
+int annotatemore_delete(char *mboxname);
 
 /* close the database */
 void annotatemore_close(void);
