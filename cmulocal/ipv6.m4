@@ -46,7 +46,7 @@ if test $ipv6_cv_$1 = no; then
   if test $1 = getaddrinfo; then
     for ipv6_cv_pfx in o n; do
       AC_EGREP_HEADER(${ipv6_cv_pfx}$1, netdb.h,
-		      AC_CHECK_FUNC(${ipv6_cv_pfx}$1))
+		      [AC_CHECK_FUNC(${ipv6_cv_pfx}$1)])
       if eval test X\$ac_cv_func_${ipv6_cv_pfx}$1 = Xyes; then
         AC_DEFINE(HAVE_GETADDRINFO)
         ipv6_cv_$1=yes
