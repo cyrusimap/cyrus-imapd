@@ -1,4 +1,4 @@
-<!-- $Id: install-netnews.html,v 1.3 2003/10/28 17:00:21 rjs3 Exp $ -->
+<!-- $Id: install-netnews.html,v 1.4 2004/01/05 20:20:07 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Cyrus and Netnews
@@ -33,7 +33,8 @@ You will need to build Cyrus IMAPd with the <tt>--enable-nntp</tt> configure
 option.  This builds nntpd and the associated utilities.
 
 <h3>Requirements</h3>
-Obviously you must have a newsfeed from your ISP or Usenet provider.
+Obviously you must have a newsfeed or news reader access from your ISP
+or Usenet provider.
 
 <h2>Configuration</h2>
 The first thing that must be done is to decide where your newsgroup
@@ -75,15 +76,17 @@ server on port 119 (nntp).
 <h4>Pull (suck) feeds</h4>
 If you prefer to pull articles from your peer (and your provider
 allows it), then you can use the <tt>fetchnews</tt> utility which will
-use the NNTP NEWNEWS command to retrieve articles from your peer and
-feed them to your Cyrus server.  If your provider does not allow the
-use of the NNTP NEWNEWS command, then you can use the <a
-href=http://home.comcast.net/~bobyetman/><tt>suck</tt></a> program.
+retrieve articles from your peer and feed them to your Cyrus server.
+If supported by your peer, <tt>fetchnews</tt> will use the NEWNEWS
+command, otherwise it will fallback to keeping track of the high water
+mark of each group.
 You will probably want to configure <tt>fetchnews</tt> or
 <tt>suck</tt> as an EVENT in <tt>cyrus.conf</tt> to be called
 periodically (eg, once an hour, every 15 minutes, etc).
 
-<p>
+<p>As an alternative to <tt>fetchnews</tt>, you can also use the
+ <a href=http://home.comcast.net/~bobyetman/><tt>suck</tt></a> program
+ to pull articles from your peer.
 
 <h4>imapfeed</h4>
 Alternatively, if you already have an INN v2.3 server in-house you can
@@ -128,6 +131,16 @@ enable the <tt>nntps</tt> service in <tt>cyrus.conf</tt>.
 <p>If you want to allow your news clients to use the NNTP NEWNEWS
 command, you will have to enable the <tt>allownewnews</tt> option in
 <tt>imapd.conf</tt>.
+
+<p>To have articles posted by NNTP client fed to upstream servers, you
+must set the <tt>newspeer</tt> option accordingly.  Depending on the
+configuration of the <tt>newspeer</tt> option, articles will be fed to the
+upstream server using either the POST or IHAVE command (see
+<tt>imapd.conf(5)</tt> for details).
+
+<p>Newsgroups can also be gatewayed to email by setting
+<tt>/vendor/cmu/cyrus-imapd/news2mail</tt> mailbox annotations to the
+corresponding email addresses.
 
 <h4>Email clients</h4>
 If you are exporting Usenet via IMAP, and your users' messaging clients
@@ -201,5 +214,5 @@ newsgroups under <tt>alt</tt> will be expired at the same time
 (independently from <tt>comp</tt>).
 
 <P><HR>
-last modified: $Date: 2003/10/28 17:00:21 $
+last modified: $Date: 2004/01/05 20:20:07 $
 </BODY></HTML>
