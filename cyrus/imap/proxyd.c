@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.109 2002/03/20 20:46:42 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.110 2002/03/22 19:21:22 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -4092,7 +4092,10 @@ void cmd_setacl(char *tag, char *name, char *identifier, char *rights)
 	if (!s) r = IMAP_SERVER_UNAVAILABLE;
     }
 
-    if (!r) {
+    if (!r && proxyd_userisadmin && supports_referrals) {
+	/* They aren't an admin remotely, so let's refer them */
+	proxyd_refer(tag, server, name);
+    } else if (!r) {
 	if (rights) {
 	    prot_printf(s->out, 
 			"%s Setacl {%d+}\r\n%s {%d+}\r\n%s {%d+}\r\n%s\r\n",
