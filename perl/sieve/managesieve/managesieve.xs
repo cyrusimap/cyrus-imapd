@@ -60,6 +60,7 @@ extern "C" {
 #include <sasl.h>
 
 typedef struct xscyrus *Sieveobj;
+static char *globalerr = NULL;
 
 #include "isieve.h"
 
@@ -162,7 +163,7 @@ perlsieve_simple(context, id, result, len)
 	        XPUSHs(sv_2mortal(newSVpv("realm", 0)));
 		XPUSHs(sv_2mortal(newSVpv("Please enter your realm", 0)));
 	} else {
-		printf("Bad callback\n");
+	        croak("Bad callback\n");
 		return SASL_FAIL;
 	}
 
@@ -254,42 +255,54 @@ sieve_get_handle(servername, username_cb, authname_cb, password_cb, realm_cb)
   }
 
   if (init_net(servername, port, &obj)) {
-	printf("network init failure!\n");
+      globalerr = "network initialization failed";
+      XSRETURN_UNDEF;
   }
 
   if (init_sasl(obj, 128, callbacks)) {
-      printf("sasl init failure!\n");
+      globalerr = "sasl initialization failed";
+      XSRETURN_UNDEF;
   }
   
   ret = malloc(sizeof(struct xscyrus));
-  ret->class = safemalloc(10);
-  strcpy(ret->class,"foo");
+  ret->class = safemalloc(20);
+  strcpy(ret->class,"managesieve");
   ret->isieve = obj;
+  ret->errstr = NULL;
   
   mechlist=read_capability(obj);
 
-  if (auth_sasl(mechlist, obj)) {
-      printf("auth failed\n");
+  if (auth_sasl(mechlist, obj, &globalerr)) {
+	free(ret->class);
+	free(ret);
+	XSRETURN_UNDEF;
   }
-
   ST(0) = sv_newmortal();
   sv_setref_pv(ST(0), ret->class, (void *) ret);
 
+char *
+sieve_get_error(obj)
+  Sieveobj obj
+  CODE:
+    RETVAL = obj->errstr;
+  OUTPUT:
+    RETVAL
+
+char *
+sieve_get_global_error()
+  CODE:
+    RETVAL = globalerr;
+  OUTPUT:
+    RETVAL
 
 int
 sieve_put_file(obj, filename)
   Sieveobj obj
   char *filename
-  PREINIT:
-  int ret;
-
   CODE:
-
-  ret = isieve_put_file(obj->isieve, filename);
-
-  ST(0) = sv_newmortal();
-  sv_setnv( ST(0), ret);
-
+    RETVAL = isieve_put_file(obj->isieve, filename, &obj->errstr);
+  OUTPUT:
+    RETVAL
 
 int
 sieve_put(obj,name,data)
@@ -297,66 +310,41 @@ sieve_put(obj,name,data)
   char *name
   char *data
 
-  PREINIT:
-  int ret;
-
   CODE:
-
-  ret = isieve_put(obj->isieve, name, data, strlen(data));
-
-  ST(0) = sv_newmortal();
-  sv_setnv( ST(0), ret);
-
+    RETVAL = isieve_put(obj->isieve, name, data, strlen(data), &obj->errstr);
+  OUTPUT:
+    RETVAL
 
 int
 sieve_delete(obj,name)
   Sieveobj obj
   char *name
 
-  PREINIT:
-  int ret;
-
   CODE:
-
-  ret = isieve_delete(obj->isieve, name);
-
-  ST(0) = sv_newmortal();
-  sv_setnv( ST(0), ret);
+    RETVAL = isieve_delete(obj->isieve, name, &obj->errstr);
+  OUTPUT:
+    RETVAL
 
 int
 sieve_list(obj,cb)
   Sieveobj obj
   SV *cb
 
-
-  PREINIT:
-  int ret;
-
   CODE:
-
-  ret = isieve_list(obj->isieve,
-                    &call_listcb,
-                    cb);
-
-
-  ST(0) = sv_newmortal();
-  sv_setnv( ST(0), ret);
-
+    RETVAL = isieve_list(obj->isieve, (isieve_listcb_t *) &call_listcb,
+			 cb, &obj->errstr);
+  OUTPUT:
+    RETVAL
 
 int
 sieve_activate(obj,name)
   Sieveobj obj
   char *name
 
-  PREINIT:
-  int ret;
-
   CODE:
-
-  ret = isieve_activate(obj->isieve, name);
-
-  ST(0) = sv_newmortal();
-  sv_setnv( ST(0), ret);
+    RETVAL = isieve_activate(obj->isieve, name, &obj->errstr);
+  OUTPUT:
+    RETVAL
 
 int
 sieve_get(obj,name,output)
@@ -364,16 +352,9 @@ sieve_get(obj,name,output)
   char *name
   char *output
 
-  PREINIT:
-  int ret;
-  char *a;
-
   CODE:
-
-  ret = isieve_get(obj->isieve, name, &output);  
-
-  ST(0) = sv_newmortal();
-  sv_setnv( ST(0), ret);
+    RETVAL = isieve_get(obj->isieve, name, &output, &obj->errstr);  
 
   OUTPUT:
+  RETVAL
   output

@@ -51,7 +51,9 @@ require DynaLoader;
 # names by default without a very good reason. Use EXPORT_OK instead.
 # Do not simply export all your public functions/methods/constants.
 @EXPORT = qw(
-  sieve_get_handle	
+  sieve_get_handle
+  sieve_get_error
+  sieve_get_global_error
   sieve_put_file
   sieve_put
   sieve_delete
@@ -103,16 +105,15 @@ Cyrus::SIEVE::managesieve - Perl extension for blah blah blah
 
 =head1 DESCRIPTION
 
-Stub documentation for Cyrus::SIEVE::managesieve was created by h2xs. It looks like the
-author of the extension was negligent enough to leave the stub
-unedited.
+Call sieve_get_handle to get a handle for further calls.
+sieve_get_error will return a string representing the last error, if any.
 
 Blah blah blah.
 
 =head1 AUTHOR
 
-A. U. Thor, a.u.thor@a.galaxy.far.far.away
-
+T. Martin, tmartin@andrew.cmu.edu
+    
 =head1 SEE ALSO
 
 perl(1).

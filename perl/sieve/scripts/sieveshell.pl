@@ -41,13 +41,14 @@
 
 use Cyrus::SIEVE::managesieve;
 use Getopt::Long;
+use strict;
 
-$username = "";
-$authname = "";
-$realm = "";
-$ex = "";
-$ret = GetOptions("a|authname:s" => \$username,
-                  "u|username:s" => \$authname,
+my $username = "";
+my $authname = "";
+my $realm = "";
+my $ex = "";
+my $ret = GetOptions("a|authname:s" => \$authname,
+                  "u|username:s" => \$username,
 		  "r|realm:s" => \$realm,
 		  "e|exec:s" => \$ex
                   );
@@ -56,20 +57,23 @@ if (!$ret || $#ARGV != 0) {
     exit;
 }
 
-$acapserver = $ARGV[0];
+my $acapserver = $ARGV[0];
+
+my $filehandle;
+my $interactive;
 
 if (! $ex eq "") {
-  $tmpfile = "/tmp/sieveshell.tmp";
-  open (TMP,">$tmpfile") || die "Unable to open tmp file";
-  print TMP $ex;
-  close(TMP);
-  open (TMP,"<$tmpfile") || die "Unable to open tmp file";
-  unlink($tmpfile);
-  $filehandle = *TMP;
-  $interactive = 0;
+    my $tmpfile = "/tmp/sieveshell.tmp";
+    open (TMP,">$tmpfile") || die "Unable to open tmp file";
+    print TMP $ex;
+    close(TMP);
+    open (TMP,"<$tmpfile") || die "Unable to open tmp file";
+    unlink($tmpfile);
+    $filehandle = *TMP;
+    $interactive = 0;
 } else {
-  $filehandle = *STDIN;
-  $interactive = 1;
+    $filehandle = *STDIN;
+    $interactive = 1;
 }
 
 
@@ -109,7 +113,7 @@ sub prompt {
 
 sub show_help {
   print "Usage:\n";
-  print "  sieveshell [-u username][-a authname][-r realm] <server>\n";
+  print "  sieveshell [-u username] [-a authname] [-r realm] <server>\n";
   print "\n";
   print "help             - this screen\n";
   print "list             - list scripts on server\n";
@@ -128,13 +132,15 @@ my $obj = sieve_get_handle($acapserver,
 			   "prompt", "prompt", "prompt", "prompt");
 
 if (!defined $obj) {
-  die "Unable to connect to server";
+    my $err = sieve_get_global_error();
+    die "unable to connect to server: $err";
 }
 
 print "> " if ($interactive);
 
 while(<$filehandle>) {
-    @words = split ' ',$_;
+    my @words = split ' ',$_;
+    my $str;
     if ($#words < 0) {
 	print "> " if ($interactive);
 	next;
@@ -142,32 +148,40 @@ while(<$filehandle>) {
 
     if (($words[0] eq "put") || 
 	($words[0] eq "p")) {
-
 	$ret = sieve_put_file($obj, $words[1]);
-	if ($ret != 0) { print "Upload failed\n"; }
+	if ($ret != 0) { 
+	    my $errstr = sieve_get_error($obj);
+	    print "upload failed: $errstr\n"; 
+	}
     } elsif (($words[0] eq "list") || 
 	     ($words[0] eq "l") || 
 	     ($words[0] eq "ls")) {
-	
 	$ret = sieve_list($obj, "list_cb");
-	if ($ret != 0) { print "List command failed\n"; }
-	
+	if ($ret != 0) { 
+	    my $errstr = sieve_get_error($obj);
+	    print "list failed: $errstr\n";
+	}
     } elsif (($words[0] eq "activate") || 
 	     ($words[0] eq "a")) {
-	
 	$ret = sieve_activate($obj, $words[1]);
-	if ($ret != 0) { print "Activate failed\n"; }
+	if ($ret != 0) { 
+	    my $errstr = sieve_get_error($obj);
+	    print "activate failed: $errstr\n";
+	}
     } elsif (($words[0] eq "delete") || 
 	     ($words[0] eq "d")) {    
-	
 	$ret = sieve_delete($obj, $words[1]);
-	if ($ret != 0) { print "Delete failed\n"; }
+	if ($ret != 0) { 
+	    my $errstr = sieve_get_error($obj);
+	    print "delete failed: $errstr\n"; 
+	}
     } elsif (($words[0] eq "get") || 
 	     ($words[0] eq "g")) {
-	
+	$str = "";
 	$ret = sieve_get($obj, $words[1], $str);
 	if ($ret != 0) { 
-	    print "get failed\n"; 
+	    my $errstr = sieve_get_error($obj);
+	    print "get failed: $errstr\n"; 
 	} else {
 	    if ($words[2]) {
 		open (OUTPUT,">$words[2]") || die "Unable to open $words[2]";

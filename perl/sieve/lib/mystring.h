@@ -73,7 +73,7 @@ int string_compare_with(mystring_t *str1, mystring_t *str2, mystring_t *comp);
 /*eq_result_t
   string_equal_cstr(const mystring_t * str, const char *cstr);*/
 
-#define string_DATAPTR(s) (((char *) s)+sizeof(mystring_t))
+#define string_DATAPTR(s) (s ? (((char *) s)+sizeof(mystring_t)) : 0)
 
 int safe_to_use_quoted(char *str, int len);
 
