@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.25 2002/01/30 01:29:24 rjs3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.26 2002/01/30 02:12:13 rjs3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -90,10 +90,12 @@ static int dump_p(void *rockp,
 struct mb_node 
 {
     char mailbox[MAX_MAILBOX_NAME];
+    char server[MAX_MAILBOX_NAME];
+    char *acl;
     struct mb_node *next;
 };
 
-struct mb_node *mb_head = NULL;
+struct mb_node *del_head = NULL, *act_head = NULL, **act_tail = &act_head;
 
 /* For each mailbox that this guy gets called for, check that
  * it is a mailbox that:
@@ -103,6 +105,8 @@ struct mb_node *mb_head = NULL;
  * b) we do not actually host
  *
  * if that's the case, enqueue a delete
+ * otherwise, we both agree that it exists, but we still need
+ * to verify that its info is up to date.
  */
 static int mupdate_list_cb(struct mupdate_mailboxdata *mdata,
 			   const char *cmd, void *context) 
@@ -114,13 +118,26 @@ static int mupdate_list_cb(struct mupdate_mailboxdata *mdata,
     if(ret) {
 	struct mb_node *next;
 	
-	next = xmalloc(sizeof(struct mb_node));
+	next = xzmalloc(sizeof(struct mb_node));
 	strcpy(next->mailbox, mdata->mailbox);
 	
-	next->next = mb_head;
-	mb_head = next;
-    } 
+	next->next = del_head;
+	del_head = next;
+    } else {
+	/* we both agree that it exists */
+	/* throw it onto the back of the activate queue */
+	/* we may or may not need to send an update */
+	struct mb_node *next;
+	
+	next = xzmalloc(sizeof(struct mb_node));
+	strcpy(next->mailbox, mdata->mailbox);
+	strcpy(next->server, mdata->server);
+	if(!strncmp(cmd, "MAILBOX", 7))
+	    next->acl = xstrdup(mdata->acl);
 
+	*act_tail = next;
+	act_tail = &(next->next);
+    }
     return 0;
 }
 
@@ -161,9 +178,38 @@ static int dump_cb(void *rockp,
     {
 	char *realpart = xmalloc(strlen(config_servername) + 1
 				 + strlen(part) + 1);
-
+	int skip_flag;
+	
 	/* realpart is 'hostname!partition' */
 	sprintf(realpart, "%s!%s", config_servername, part);
+
+	/* If they match, then we should check that we actually need
+	 * to update it.  If they *don't* match, then we believe that we
+	 * need to send fresh data.  There will be no point at which something
+	 * is in the act_head list that we do not have locally, because that
+	 * is a condition of being in the act_head list */
+	if(!strcmp(name, act_head->mailbox)) {
+	    struct mb_node *tmp;
+	    /* Do not update if location does match, and there is an acl,
+	     * and the acl matches */
+	    if(act_head->acl &&
+	       !strcmp(realpart, act_head->server) &&
+	       !strcmp(acl, act_head->acl)) {
+		skip_flag = 1;
+	    } else {
+		skip_flag = 0;
+	    }
+
+	    /* in any case, free the node. */
+	    if(act_head->acl) free(act_head->acl);
+	    tmp = act_head;
+	    act_head = act_head->next;
+	    free(tmp);
+	} else {
+	    skip_flag = 0;
+	}
+
+	if(skip_flag) break;
 
 	r = mupdate_activate(d->h,name,realpart,acl);
 
@@ -224,9 +270,9 @@ void do_dump(enum mboxop op)
 	}
 
 	/* Run pending deletes */
-	while(mb_head) {
-	    struct mb_node *me = mb_head;
-	    mb_head = mb_head->next;
+	while(del_head) {
+	    struct mb_node *me = del_head;
+	    del_head = del_head->next;
 
 	    ret = mupdate_delete(d.h, me->mailbox);
 	    if(ret) {
