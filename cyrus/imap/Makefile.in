@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.71 1999/03/01 20:11:40 tjs Exp $
+# $Id: Makefile.in,v 1.72 1999/03/02 01:11:03 tjs Exp $
 # 
 # @configure_input@
 #
@@ -174,7 +174,7 @@ imap_err.h imap_err.c: imap_err.et
 
 clean:
 	rm -f *.o *.a Makefile.bak imap_err.c imap_err.h makedepend.log \
-	$(PROGS)
+	$(PROGS) $(SUIDPROGS) $(SUGIDPROGS) feedcyrus
 
 distclean: clean
 	rm -f Makefile
