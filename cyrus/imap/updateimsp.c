@@ -162,6 +162,7 @@ getdroplist()
 	droplist = newfile;
     }
 	
+    closedir(dirp);
     return droplist;
 }
 

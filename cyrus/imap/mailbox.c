@@ -382,8 +382,9 @@ struct index_record *record;
 
     n = fread(buf, 1, INDEX_RECORD_SIZE, mailbox->index);
     if (n != INDEX_RECORD_SIZE) {
-	syslog(LOG_ERR, "IOERROR: reading index record %u for %s: %m",
-	       msgno, mailbox->name);
+	syslog(LOG_ERR,
+	       "IOERROR: reading index record %u for %s: got %d of %d",
+	       msgno, mailbox->name, n, INDEX_RECORD_SIZE);
 	return IMAP_IOERROR;
     }
 
@@ -989,8 +990,9 @@ char *deciderock;
     rewind(mailbox->index);
     n = fread(buf, 1, mailbox->start_offset, mailbox->index);
     if (n != mailbox->start_offset) {
-	syslog(LOG_ERR, "IOERROR: reading index header for %s: %m",
-	       mailbox->name);
+	syslog(LOG_ERR,
+	       "IOERROR: reading index header for %s: got %d of %d bytes",
+	       mailbox->name, n, mailbox->start_offset);
 	goto fail;
     }
     (*(bit32 *)buf)++;    /* Increment generation number */
@@ -1009,6 +1011,12 @@ char *deciderock;
     /* Copy over records for nondeleted messages */
     for (msgno = 1; msgno <= mailbox->exists; msgno++) {
 	n = fread(buf, 1, mailbox->record_size, mailbox->index);
+	if (n != mailbox->record_size) {
+	    syslog(LOG_ERR,
+		   "IOERROR: reading index record %u for %s: got %d of %d bytes",
+		   msgno, mailbox->name, n, mailbox->record_size);
+	    goto fail;
+	}
 	if (decideproc ? decideproc(deciderock, buf) :
 	    (ntohl(*((bit32 *)(buf+OFFSET_SYSTEM_FLAGS))) & FLAG_DELETED)) {
 
@@ -1026,7 +1034,8 @@ char *deciderock;
 			      left>sizeof(cachebuf) ? sizeof(cachebuf) : left,
 			      mailbox->cache);
 		    if (!n) {
-			syslog(LOG_ERR, "IOERROR: reading cache for %s: %m",
+			syslog(LOG_ERR,
+			       "IOERROR: reading cache for %s: end of file",
 			       mailbox->name);
 			goto fail;
 		    }
@@ -1066,8 +1075,8 @@ char *deciderock;
     rewind(newindex);
     n = fread(buf, 1, mailbox->start_offset, newindex);
     if (n != mailbox->start_offset) {
-	syslog(LOG_ERR, "IOERROR: reading index header for %s: %m",
-	       mailbox->name);
+	syslog(LOG_ERR, "IOERROR: reading index header for %s: got %d of %d",
+	       mailbox->name, n, mailbox->start_offset);
 	goto fail;
     }
     /* Fix up exists */
