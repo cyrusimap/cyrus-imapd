@@ -12,7 +12,8 @@
       * 8-bit set characters are coerced to 'X', but not before the
         notify_zephyr code (if used) has had a chance to send them out. 
       * imtest cheats and sends a non-synchronizing literal if you try to
-        LOGIN (cleartext passwords). 
+        LOGIN (cleartext passwords) without checking to see if the server
+        supports the relavant extension. 
       * In some failures of the krbck program, the error messages printed
         out bear no resemblance to what actually went wrong. 
       * Deliver does not handle messages containing NUL properly due to
@@ -20,6 +21,8 @@
         lost.) 
       * Depending on how getpwnam/getspnam make their calls, pwcheck may
         "cache" users undesirably. This has not yet been fixed. 
+      * Cyradm doesn't handle BYE quite properly (especially a BYE right
+        after connect). 
 
     Please report bugs to cyrus-bugs@andrew.cmu.edu. Be sure to include (at
     least) system type, compiler used, and the options passed to configure,
@@ -27,5 +30,6 @@
     naturally, patches are deeply appreciated. 
 
     If you submit a patch, please send unified diffs (-u) if your diff
-    program supports them, or context diffs (-c) if it doesn't. 
+    program supports them, or context diffs (-c) if it doesn't. Plain diffs
+    are very difficult to evaluate. 
 

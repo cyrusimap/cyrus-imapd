@@ -1,6 +1,6 @@
 /* imtest.c -- imap test client
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.23 1999/06/29 18:02:49 leg Exp $
+ * $Id: imtest.c,v 1.24 1999/06/30 18:34:41 leg Exp $
  *
  * Copyright 1999 Carnegie Mellon University
  * 
@@ -203,15 +203,16 @@ void interaction (int id, char *prompt, char **tresult,int *tlen)
 
   if (id==SASL_CB_PASS)
   {
-    *tresult=getpass(prompt);
-    *tlen=strlen(*tresult);
-    return;
+      printf("%s: ", prompt);
+      *tresult=strdup(getpass(""));
+      *tlen=strlen(*tresult);
+      return;
 
   } else if (((id==SASL_CB_USER) || (id==SASL_CB_AUTHNAME)) && (authname!=NULL))
   {
     strcpy(result,authname);
   } else {
-    printf("%s:",prompt);
+    printf("%s: ",prompt);
     scanf("%s",&result);
   }
   *tlen=strlen(result);
@@ -232,6 +233,21 @@ void fillin_interactions(sasl_interact_t *tlist)
 
 }
 
+static int waitfor(char *tag)
+{
+  char *str=malloc(301);
+
+  do {
+    str=prot_fgets(str,300,pin);
+    if (str==NULL) imtest_fatal("prot layer failure");
+    printf("%s",str);
+  } while (strstr(str,tag)==NULL);
+
+  free(str);
+
+  return 0;
+}
+
 static int auth_login(void)
 {
   /* we need username and password to do "login" */
@@ -241,7 +257,7 @@ static int auth_login(void)
   int passlen;
 
   interaction(SASL_CB_AUTHNAME,"Userid",&username,&userlen);
-  interaction(SASL_CB_PASS,"Password: ",&pass,&passlen);
+  interaction(SASL_CB_PASS,"Password",&pass,&passlen);
 
   prot_printf(pout,"L01 LOGIN %s {%d}\r\n",username,passlen);
   prot_flush(pout);
@@ -428,21 +444,6 @@ static char *ask_capability(void)
   free(str);
 
   return ret;
-}
-
-static int waitfor(char *tag)
-{
-  char *str=malloc(301);
-
-  do {
-    str=prot_fgets(str,300,pin);
-    if (str==NULL) imtest_fatal("prot layer failure");
-    printf("%s",str);
-  } while (strstr(str,tag)==NULL);
-
-  free(str);
-
-  return 0;
 }
 
 #define HEADERS "Date: Mon, 7 Feb 1994 21:52:25 -0800 (PST)\r\n \

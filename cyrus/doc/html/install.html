@@ -1,4 +1,4 @@
-<!-- $Id: install.html,v 1.50 1999/02/18 02:38:56 tjs Exp $ -->
+<!-- $Id: install.html,v 1.51 1999/06/30 18:34:38 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and Configuring the Cyrus IMAP Server</TITLE>
@@ -71,17 +71,14 @@ HREF="ftp://rtfm.mit.edu/pub/usenet/comp.lang.tcl"><TT>comp.lang.tcl</TT>
 FAQ</A>.  Other versions of Tcl might work, but it must be at least Tcl 7.5.
 (Tcl 7.4 ships with some Unix variants, and it is not sufficient.)
 
-<LI> If compiling with Kerberos support, the installed Kerberos must
-include the DES library.  Some vendor distributions of Kerberos,
-including the one with Solaris, do not have this support and cannot be
-used.  Sites in the USA and Canada may obtain Kerberos by following
-the instructions in <A
-HREF="ftp://athena-dist.mit.edu/pub/kerberos/README.KRB4"
->ftp://athena-dist.mit.edu/pub/kerberos/README.KRB4</A>.
-Sites worldwide may wish to use the KTH Kerberos distribution;
-information is avalible from <a href="http://www.pdc.kth.se/kth-krb/">
-http://www.pdc.kth.se/kth-krb/</a>.
-We are not able to assist other sites in obtaining Kerberos.
+<LI> libsasl, version 1.5.0 or higher.  To obtain libsasl, ftp it from
+<a
+href="ftp://ftp.andrew.cmu.edu/pub/cyrus-mail"><TT>ftp.andrew.cmu.edu</TT></a>.
+Earlier versions of SASL will not work; please get the latest one.
+
+<LI> Note that Cyrus still depends on Kerberos and AFS if you use AFS
+PTS support for groups.  If you successfully compiled SASL with your
+Kerberos library, it's likely that it will work well with Cyrus.
 
 <LI> It is recommended that sites install Sendmail version 8.7.1 or later.
 Sendmail distributions may be obtained from
@@ -96,8 +93,8 @@ server must receive newsgroups with the INN news server.
 
 Once you have unpacked the files (see the <A
 HREF="readme.html"><TT>README</TT></A> file for more information),
-"<TT>cd</TT>" to the "<tt>cyrus-imapd-1.5.14</tt>" directory (assuming the
-version number is 1.5.14).  The configuration files and
+"<TT>cd</TT>" to the "<tt>cyrus-imapd-1.6.0</tt>" directory (assuming the
+version number is 1.6.0).  The configuration files and
 various subdirectories are stored there.  In the directory that the
 <TT>configure</TT> file is in, type "<kbd>./configure</kbd>" to
 configure the software.
@@ -182,49 +179,6 @@ configure uses "<TT>mail</TT>". <P>
 the <TT>pwcheck</TT> and/or <TT>ptclient</TT> state directories.  By
 default, configure uses "<TT>/var</TT>". <P>
 
-<dt><tt>--with-login=METHOD</tt>
-<dd>Specifies the login authentication module to use.  Currently
-implemented authentication modules are:
-
-<dl compact>
-
-<DT><TT>unix</TT>
-<DD>Unix <tt>/etc/passwd</tt> file
-<DT><TT>unix_pwcheck</TT>
-<DD>Unix shadow <tt>passwd</tt> file, accessed through pwcheck daemon
-<DT><TT>krb</TT>
-<DD>Kerberos version 4
-<DT><TT>krb_pwcheck</TT>
-<DD>Either Kerberos version 4 or the pwcheck daemon
-
-</dl>
-
-By default, configure uses "<tt>krb</tt>" if the file <TT>/etc/krb.conf</TT>
-exists, "<tt>unix</tt>" otherwise. <P>
-
-If you use shadow passwords, you should use
-<tt>--with-login=unix_pwcheck</tt>, not just <tt>unix</tt>.
-The Cyrus imapd does not run as root, and the pwcheck daemon is required for
-authentication if you use shadow passwords.
-<p>
-
-<dt><tt>--with-pwcheck=METHOD</tt>
-<dd>Specifies the password checking module to use inside the pwcheck daemon.
-This option is only used if the login module has a name ending in 
-"<TT>_pwcheck</TT>".  Currently implemented authentication modules are:
-
-<dl compact>
-
-<DT><TT>getspnam</TT>
-<DD>SVR4 style <tt>getspnam()</tt> shadow passwords
-<DT><TT>getpwnam</TT>
-<DD>NetBSD style shadow passwords
-
-</dl>
-
-By default, configure uses "<tt>getspnam</tt>" if the function
-<TT>getspnam</TT> exists, "<tt>getpwnam</tt>" otherwise. <P>
-
 <dt><tt>--with-auth=METHOD</tt>
 <dd>Specifies the authorization module to use.  Currently implemented
 authorization modules are:
@@ -242,9 +196,13 @@ authorization modules are:
 
 </dl>
 
-The selected authorization module must be compatible with the 
+The selected authorization module should be compatible with the 
 login module.  By default, uses the authorization module with 
-the same name as the selected login module. <P>
+the same name as the selected login module.  Since the login module is
+now SASL, this is much more confusing.  We are considering adding
+group support to libsasl, thus solving this ambiguity.
+
+<P>
 
 <dt><tt>--with-notify=METHOD</tt>
 <dt><tt>--without-notify</tt>
@@ -469,6 +427,9 @@ Create the <TT>imapd.log</TT> file:
 
 For a description of all the fields in this file, see the <A
 HREF="imapd.conf.5.html"><tt>imapd.conf</tt>(5)</A> man page.
+(Note that this file also exports values to libsasl; the srvtab
+setting here overrides the srvtab setting in the SASL configuration
+file.)
  <P>
 
 Note that <b>everyday users should not be administrators</b>.
@@ -777,7 +738,7 @@ is a problem.  To terminate the connection, type "<kbd>. logout</kbd>".
 <li>Use "<tt>imtest</tt>" to test logging in with plaintext passwords.
 
 <pre>
-<kbd>   /usr/local/bin/imtest -p foobar imap
+<kbd>   /usr/local/bin/imtest -m login foobar
 </kbd></pre>
 
 If your server is running, you'll get the following message:
@@ -800,7 +761,7 @@ Kerberos authentication by using the imtest command.  Change
 to the "<tt>cyrus-v1.5.14</tt>" directory and type the following:
 
 <pre>
-   <kbd>/usr/local/bin/imtest -k foobar imap</kbd>
+   <kbd>/usr/local/bin/imtest foobar</kbd>
    * OK foobar.andrew.cmu.edu Cyrus IMAP4 v1.5.14 server ready
    . AUTHENTICATE KERBEROS_V4
    + Ln8h6Q==

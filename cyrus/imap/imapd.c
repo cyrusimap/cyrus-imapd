@@ -25,7 +25,7 @@
  *  tech-transfer@andrew.cmu.edu
  */
 
-/* $Id: imapd.c,v 1.173 1999/06/29 21:19:27 leg Exp $ */
+/* $Id: imapd.c,v 1.174 1999/06/30 18:34:40 leg Exp $ */
 
 #ifndef __GNUC__
 /* can't use attributes... */
@@ -4583,7 +4583,7 @@ int maycreate;
     }
     
     if (lastnamedelayed) {
-	if (name && strncasecmp(lastname, name, strlen(lastname)) == 0 &&
+	if (name && strncmp(lastname, name, strlen(lastname)) == 0 &&
 	    name[strlen(lastname)] == '.') {
 	    lastnamehassub = 1;
 	}
@@ -4601,7 +4601,7 @@ int maycreate;
     }
 
     /* Suppress any output of a partial match */
-    if (name[matchlen] && strncasecmp(lastname, name, matchlen) == 0) {
+    if (name[matchlen] && strncmp(lastname, name, matchlen) == 0) {
 	return;
     }
 	
