@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.50 2005/01/11 19:18:32 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.51 2005/01/11 20:08:13 ken3 Exp $ */
 
 #include <config.h>
 
@@ -3409,13 +3409,10 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 	goto freeargs;
     }
 
-    if (config_getswitch(IMAPOPT_FLUSHSEENSTATE)) {
-	/* update \Seen state from disk */
-	index_check(imapd_mailbox, usinguid, 2 /* quiet */);
-    }
-    else if (usinguid) {
-	fetchitems |= FETCH_UID;
-	index_check(imapd_mailbox, 1, 0);
+    if (usinguid || config_getswitch(IMAPOPT_FLUSHSEENSTATE)) {
+	if (usinguid) fetchitems |= FETCH_UID; 
+	index_check(imapd_mailbox, usinguid, /* update \Seen state from disk? */
+		    config_getswitch(IMAPOPT_FLUSHSEENSTATE) << 1 /* quiet */);
     }
 
     fetchargs.fetchitems = fetchitems;
