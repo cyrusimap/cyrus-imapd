@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# A shell framework for Cyrus::IMAP::Admin
+# A shell framework for IMAP::Cyrus::Admin
 #
 # run(*FH|'FH')
 #	read commands from the filehandle and pass to exec(); defaults to
@@ -407,7 +407,7 @@ sub shell {
   GetOptions('user|u=s' => \$user,
 	     'rc|r!' => \$dorc,
 	     'systemrc|S=s' => \$systemrc,
-	     'userrc|U=s' => \$userrc,
+	     'userrc=s' => \$userrc,
 	     'server|s=s' => \$server,
 	     'port|p=i' => \$port,
 	     'auth|a=s' => \$mech,
@@ -427,6 +427,7 @@ sub shell {
     $cyradm->addcallback({-trigger => 'EOF',
 			  -callback => \&_cb_eof,
 			  -rock => \$cyradm});
+#    print "trying to auth as [$user].\n";
     $cyradm->authenticate(-user => $user, -mechanism => $mech)
       or die "cyradm: cannot authenticate to server with $mech as $user\n";
   }
