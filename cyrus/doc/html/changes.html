@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.46 1998/07/10 20:27:30 tjs Exp $ -->
+<!-- $Id: changes.html,v 1.47 1998/07/10 20:36:28 tjs Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -11,6 +11,10 @@
 
 <li> The CREATE command now ignores a trailing hierarchy delimiter instead of
 ignoring the CREATE command.
+
+<li> UIDPLUS is now always advertised in CAPABILITY and is always availible.
+The UIDPLUS extension is a set of optimizations using UID values instead of
+sequence numbers and is described in RFC 2359.
 
 </ul>
 
@@ -560,7 +564,7 @@ restore tab before breaking out of loop.
 </ul>
 <P><HR><P>
 <!-- hhmts start -->
-last modified by tjs at Fri Jul 10 16:26:43 1998
+last modified by tjs at Fri Jul 10 16:35:40 1998
 <!-- hhmts end -->
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
