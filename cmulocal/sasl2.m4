@@ -152,7 +152,8 @@ AC_ARG_WITH(staticsasl,
             ac_cv_sasl_where_inc=${with_sasl}/include
 
 	    DYNSASLFLAGS="-I$ac_cv_sasl_where_inc"
-	    LIB_DYN_SASL="-L$ac_cv_sasl_where_lib"
+	    CMU_ADD_LIBPATH_TO($ac_cv_sasl_where_lib, LIB_DYN_SASL)
+	    LIB_DYN_SASL="$LIB_DYN_SASL -lsasl2"
 	    CPPFLAGS="${cmu_saved_CPPFLAGS} -I${ac_cv_sasl_where_inc}"
 	    LDFLAGS="${cmu_saved_LDFLAGS} -L${ac_cv_sasl_where_lib}"
 	fi
@@ -166,7 +167,8 @@ AC_ARG_WITH(staticsasl,
 	                   ac_cv_found_sasl=no), ac_cv_found_sasl=no)
 
 	if test "$ac_cv_found_sasl" = "yes"; then
-	    DYNLIB_SASL="$LIB_SASL -lsasl2"
+	    CMU_ADD_LIBPATH_TO($ac_cv_sasl_where_lib, DYNLIB_SASL)
+	    DYNLIB_SASL="$DYNLIB_SASL -lsasl2"
 	    if test "$using_static_sasl" != "static"; then
 		LIB_SASL=$DYNLIB_SASL
 		SASLFLAGS=$DYNSASLFLAGS
