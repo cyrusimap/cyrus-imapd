@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.32 2002/02/19 18:50:13 ken3 Exp $
+ * $Id: pop3proxyd.c,v 1.33 2002/02/27 00:35:50 rjs3 Exp $
  */
 #include <config.h>
 
@@ -306,7 +306,9 @@ int service_main(int argc, char **argv, char **envp)
 		apop_enabled() ? popd_apop_chal : "");
     cmdloop();
     
-    return 0;
+    /* xxx no process reuse for you */
+    shut_down(0);
+    /* return 0; */
 }
 
 /* called if 'service_init()' was called but not 'service_main()' */
