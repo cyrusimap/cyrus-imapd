@@ -676,6 +676,18 @@ char **hdrp;
     *hdrp = xmalloc(len + 1);
     strncpy(*hdrp, hdr, len);
     (*hdrp)[len] = '\0';
+
+    /* Un-fold header */
+    hdrend = *hdrp;
+    while (hdrend = strchr(hdrend, '\n')) {
+	if (hdrend > *hdrp && hdrend[-1] == '\r') {
+	    hdrend--;
+	    strcpy(hdrend, hdrend+2);
+	}
+	else {
+	    strcpy(hdrend, hdrend+1);
+	}
+    }
 }
 
 /*
