@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.75 2002/10/21 20:44:22 rjs3 Exp $
+ * $Id: prot.c,v 1.76 2003/01/06 19:40:36 rjs3 Exp $
  */
 
 #include <config.h>
@@ -793,6 +793,7 @@ int prot_ungetc(int c, struct protstream *s)
 int prot_putc(int c, struct protstream *s)
 {
     assert(s->write);
+    if(s->error || s->eof) return EOF;
     assert(s->cnt > 0);
 
     *s->ptr++ = c;
