@@ -86,7 +86,7 @@ AC_ARG_WITH(arx-include,
 	  ac_cv_arx_where_lib=$with_arx_lib
 	fi
 	if test "X$ac_cv_arx_where_lib" = "X"; then
-	  CMU_ARX_LIB_WHERE(/usr/athena/lib /usr/lib /usr/local/lib)
+	  CMU_ARX_LIB_WHERE(/usr/athena/lib /usr/local/lib /usr/lib)
 	fi
 
 	if test "X$with_arx_include" != "X"; then
@@ -97,7 +97,7 @@ AC_ARG_WITH(arx-include,
 	fi
 
 	AC_MSG_CHECKING(whether to include arx)
-	if test "X$ac_cv_arx_where_lib" = "X" -a "X$ac_cv_arx_where_inc" = "X"; then
+	if test "X$ac_cv_arx_where_lib" = "X" -o "X$ac_cv_arx_where_inc" = "X"; then
 	  ac_cv_found_arx=no
 	  AC_MSG_RESULT(no)
 	else
@@ -107,10 +107,12 @@ AC_ARG_WITH(arx-include,
 	  ARX_LIB_DIR=$ac_cv_arx_where_lib
 	  ARX_INC_FLAGS="-I${ARX_INC_DIR}"
 	  ARX_LIB_FLAGS="-L${ARX_LIB_DIR} -larx"
+	  ARX_LD_FLAGS="-L${ARX_LIB_DIR}"
           dnl Do not force configure.in to put these in CFLAGS and LIBS unconditionally
           dnl Allow makefile substitutions....
           AC_SUBST(ARX_INC_FLAGS)
           AC_SUBST(ARX_LIB_FLAGS)
+          AC_SUBST(ARX_LD_FLAGS)
 	  if test "X$RPATH" = "X"; then
 		RPATH=""
 	  fi
