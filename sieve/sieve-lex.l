@@ -37,6 +37,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 static int tonum(char *c);
 static char *fixstr(char *);
+static char *chkstr(char *);
 static char *mlbuf;
 static int mlbufsz, mlcur;
 extern int yyerror(char *);
@@ -50,19 +51,31 @@ ident		[a-zA-Z_][a-zA-Z_0-9]*
 CRLF		(\r\n|\r|\n)
 
 %state MULTILINE
+%state QSTRING
 
 %%
 <MULTILINE>^\.{CRLF}	{ BEGIN INITIAL; 
-                          mlbuf[mlcur] = '\0';
-                          yylval.sval = mlbuf; return STRING; }
+                          if (mlbuf) mlbuf[mlcur] = '\0';
+                          yylval.sval = chkstr(mlbuf); return STRING; }
 <MULTILINE>^\.\.  { /* dot stuffing! we want one . */ yyless(1); }
 <MULTILINE>(.|\n) { if (mlcur == mlbufsz) 
 			mlbuf = xrealloc(mlbuf, 1 + (mlbufsz+=1024));
 		    mlbuf[mlcur++] = yytext[0]; }
 <MULTILINE><<EOF>> { yyerror("unexpected end of file in string"); 
 		     yyterminate(); }
+<QSTRING>\"        { BEGIN INITIAL;
+                     if (mlbuf) mlbuf[mlcur] = '\0';
+		     yylval.sval = chkstr(mlbuf); return STRING; }
+<QSTRING>\\.      { if (mlcur == mlbufsz) 
+			mlbuf = xrealloc(mlbuf, 1 + (mlbufsz+=1024));
+		    mlbuf[mlcur++] = yytext[1]; }
+<QSTRING>.        { if (mlcur == mlbufsz) 
+			mlbuf = xrealloc(mlbuf, 1 + (mlbufsz+=1024));
+		    mlbuf[mlcur++] = yytext[0]; }
 <INITIAL>text:{ws}?(#.*)?{CRLF}	{ BEGIN MULTILINE;
 			  mlcur = 0; mlbufsz = 0; mlbuf = NULL; }
+<INITIAL>\"        { BEGIN QSTRING;
+                    mlcur = 0; mlbufsz = 0; mlbuf = NULL; }
 <INITIAL>[0-9]+[KMG]?	{ yylval.nval = tonum(yytext); return NUMBER; }
 <INITIAL>if		return IF;
 <INITIAL>elsif		return ELSIF;
@@ -111,12 +124,12 @@ CRLF		(\r\n|\r|\n)
 <INITIAL>:domain		return DOMAIN;
 <INITIAL>:user		return USER;
 <INITIAL>:detail	return DETAIL;
-<INITIAL>\"([^"]|\\.)*\"	{ yylval.sval = fixstr(yytext); return STRING; }
 <INITIAL>[ \t\n\r] ;	/* ignore whitespace */
 <INITIAL>#.* ;		/* ignore comments */
 .		return yytext[0];
 
 %%
+/* " */
 static int tonum(char *c)
 {
   int val = atoi(c);
@@ -127,6 +140,13 @@ static int tonum(char *c)
   default: break;
   }
   return val;
+}
+
+/* convert NLUL strings to "" */
+static char *chkstr(char *str)
+{
+    if (!str) return xstrdup("");
+    else return str;
 }
 
 static char *fixstr(char *str)
