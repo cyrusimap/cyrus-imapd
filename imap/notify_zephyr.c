@@ -38,16 +38,22 @@ extern int errno;
 
 /* This code is mostly stolen from zpopnotify, from the Zephyr dist. */
 
-notify(user, mailbox)
+notify_wantheader()
+{
+    return 1;
+}
+
+notify(user, mailbox, header)
 char *user;
 char *mailbox;
+char *header;
 {
     ZNotice_t notice;
     struct hostent *hent;
     int retval;
     register int i;
     char *whoami,myhost[256],mysender[BUFSIZ];
-    char msgbody[1024];
+    char *msgbody;
     char *lines[2],*mykrbhost;
   
     if ((retval = ZInitialize()) != ZERR_NONE) {
@@ -64,20 +70,23 @@ char *mailbox;
     mykrbhost = krb_get_phost(myhost);
   
     lines[0] = myhost;
+    msgbody = xmalloc(1000 + strlen(header));
+    lines[1] = msgbody;
+    
     if (mailbox[0]) {
-	sprintf(msgbody,"user.%s.%s has new mail.", user, mailbox);
-	lines[1] = msgbody;
+	sprintf(msgbody, "user.%s.%s has new mail.\n\n", user, mailbox);
     }
     else {
-	lines[1] = "You have new mail.";
+	strcpy(msgbody, "You have new mail.\n\n");
     }
-  
+    strcat(msgbody, header);
+
     (void) sprintf(mysender,"imap.%s@%s", mykrbhost, ZGetRealm());
 
     memset((char *)&notice, 0, sizeof(notice));
     notice.z_kind = UNSAFE;
     notice.z_class = MAIL_CLASS;
-    notice.z_class_inst = mailbox;
+    notice.z_class_inst = mailbox[0] ? mailbox : "INBOX";
 
     notice.z_opcode = "";
     notice.z_sender = mysender;
@@ -85,7 +94,10 @@ char *mailbox;
   
     notice.z_recipient = user;
 
-    if ((retval = ZSendList(&notice,lines,2,ZNOAUTH)) != ZERR_NONE) {
+    retval = ZSendList(&notice,lines,2,ZNOAUTH);
+    free(msgbody);
+    
+    if (retval != ZERR_NONE) {
 	syslog(LOG_ERR, "IOERROR: cannot send zephyr notice: %m");
 	return;
     } 
