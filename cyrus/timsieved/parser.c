@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.21 2002/09/19 18:16:53 rjs3 Exp $
+ * $Id: parser.c,v 1.22 2002/10/02 13:54:18 rjs3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -56,13 +56,14 @@
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
-#include "mboxlist.h"
-#include "xmalloc.h"
-#include "prot.h"
-#include "tls.h"
-#include "lex.h"
 #include "actions.h"
 #include "exitcodes.h"
+#include "lex.h"
+#include "mboxlist.h"
+#include "prot.h"
+#include "telemetry.h"
+#include "tls.h"
+#include "xmalloc.h"
 
 extern char sieved_clienthost[250];
 
