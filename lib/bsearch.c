@@ -1,5 +1,5 @@
 /* bsearch.c -- binary search newline-separated fields in memory
- $Id: bsearch.c,v 1.17 2000/05/23 20:56:12 robeson Exp $
+ $Id: bsearch.c,v 1.18 2000/06/27 21:48:41 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -100,14 +100,12 @@ static unsigned char convert_to_compare[256] = {
  * be inserted is returned and zero is put in the unsigned long pointed to
  * by 'linelenp'.
  */
-int
-bsearch_mem(word, caseSensitive, base, len, hint, linelenp)
-const char *word;
-int caseSensitive;
-const char *base;
-unsigned long len;
-unsigned long hint;
-unsigned long *linelenp;
+int bsearch_mem(const char *word,
+		int caseSensitive,
+		const char *base,
+		unsigned long len,
+		unsigned long hint,
+		unsigned long *linelenp)
 {
     int firstsearch = 1;
     unsigned long start = 0, end = len - 1, mid, offset;
@@ -197,10 +195,7 @@ unsigned long *linelenp;
     return p - base + 1;
 }
 
-int
-bsearch_compare(s1, s2)
-const char *s1;
-const char *s2;
+int bsearch_compare(const char *s1, const char *s2)
 {
     int cmp;
     char c2;

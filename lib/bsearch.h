@@ -1,5 +1,5 @@
 /* bsearch.h -- binary search
-	$Id: bsearch.h,v 1.5 2000/05/23 20:56:13 robeson Exp $
+	$Id: bsearch.h,v 1.6 2000/06/27 21:48:41 leg Exp $
 	
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -44,19 +44,11 @@
 #ifndef INCLUDED_BSEARCH_H
 #define INCLUDED_BSEARCH_H
 
-#ifndef P
-#ifdef __STDC__
-#define P(x) x
-#else
-#define P(x) ()
-#endif
-#endif
+extern int bsearch_mem(const char *word, int caseSensitive,
+		       const char *base, unsigned long len,
+		       unsigned long hint,
+		       unsigned long *linelenp);
 
-extern int bsearch_mem P((const char *word, int caseSensitive,
-			   const char *base, unsigned long len,
-			   unsigned long hint,
-			   unsigned long *linelenp));
-
-extern int bsearch_compare P((const char *s1, const char *s2));
+extern int bsearch_compare(const char *s1, const char *s2);
 
 #endif /* INCLUDED_BSEARCH_H */
