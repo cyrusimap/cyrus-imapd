@@ -1,4 +1,4 @@
-# Makefile for amssync
+# Makefile for ptclient
 # 
 # @configure_input@
 # 
@@ -39,14 +39,13 @@ exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
 EXTRA_PROGS = # ptextract pttest
-PROGS = ptexpire ptloader ptdump $(EXTRA_PROGS)
+PROGS = ptexpire ptloader $(EXTRA_PROGS)
 
 all: $(PROGS)
 
 install:
 	$(INSTALL) @STRIP@ -m 755 ptloader $(DESTDIR)$(cyrus_prefix)/bin
 	$(INSTALL) @STRIP@ -m 755 ptexpire $(DESTDIR)$(cyrus_prefix)/bin
-	$(INSTALL) @STRIP@ -m 755 ptdump   $(DESTDIR)$(cyrus_prefix)/bin
 	$(INSTALL) @STRIP@ -m 755 $(srcdir)/doptclient   $(DESTDIR)$(cyrus_prefix)/bin
 
 .c.o:
@@ -60,9 +59,6 @@ ptloader.pure: ptloader.o $(DEPLIBS)
 
 ptexpire: ptexpire.o $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o $@ ptexpire.o $(DEPLIBS) $(LIBS)
-
-ptdump: ptdump.o $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o $@ ptdump.o $(DEPLIBS) $(LIBS)
 
 ptextract: ptextract.o $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o $@ ptextract.o $(DEPLIBS) $(LIBS)
