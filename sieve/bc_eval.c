@@ -1,5 +1,5 @@
 /* bc_eval.c - evaluate the bytecode
- * $Id: bc_eval.c,v 1.1.4.6 2003/03/26 18:47:09 rjs3 Exp $
+ * $Id: bc_eval.c,v 1.1.4.7 2003/03/26 18:49:44 rjs3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -678,8 +678,13 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
    
     bytecode_input_t *bc = (bytecode_input_t *)bc_in;
     
+    /* Check that we
+     * a) have bytecode
+     * b) it is atleast long enough for the magic number, the version
+     *    ane one opcode */
     if(!bc) return SIEVE_FAIL;
-    if(bc_len <= BYTECODE_MAGIC_LEN) return SIEVE_FAIL;
+    if(bc_len <= (BYTECODE_MAGIC_LEN + 2*sizeof(bytecode_input_t)))
+       return SIEVE_FAIL;
 
     if(memcmp(bc, BYTECODE_MAGIC, BYTECODE_MAGIC_LEN)) {
 	*errmsg = "Not a bytecode file";
