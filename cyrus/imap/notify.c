@@ -1,5 +1,5 @@
 /* notify.c -- Module to notify of new mail
- * $Id: notify.c,v 1.4 2002/04/08 20:39:09 rjs3 Exp $ 
+ * $Id: notify.c,v 1.5 2002/04/11 19:23:25 leg Exp $ 
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -141,6 +141,8 @@ void notify(const char *method,
 	syslog(LOG_ERR, "unable to sendto() notify socket: %m");
 	return;
     }
+
+    close(soc);
 
     return;
 }
