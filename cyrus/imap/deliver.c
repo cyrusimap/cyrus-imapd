@@ -1,11 +1,7 @@
-/*
- * deliver shell - this just calls lmtpd
+/* deliver shell - this just calls lmtpd through a unix domain socket
+ * as defined in imapd.conf
  *
- * 
- *
- *
- *
- */
+ * */
 
 /* issues:
    -l flag
@@ -92,7 +88,7 @@ int exitcode = 0;
 
 void pushmsg(struct protstream *out);
 void deliver_msg(char *return_path, char *authuser, char **users, int numusers, char *mailbox, int portnum);
-static int init_net(char *serverFQDN, int port);
+static int init_net(void);
 
 static void
 usage()
@@ -312,8 +308,8 @@ int main(int argc, char **argv)
     }
 
     if (lmtpflag == 1)
-    {
-	int s = init_net("/var/lmtp",portnum);
+    {	
+	int s = init_net();
 
 	pipe_through(s,s,0,1);
     }
@@ -335,10 +331,13 @@ void just_exit(const char *msg)
 /* initialize the network 
  * we talk on unix sockets
  */
-static int init_net(char *unixpath, int port)
+static int init_net(void)
 {
   struct sockaddr_un addr;
   struct hostent *hp;
+  char *unixpath = NULL;
+
+  unixpath = config_getstring("lmtpsockpath","/var/lmtp");
 
   if ((lmtpdsock = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
       just_exit("socket failed");
