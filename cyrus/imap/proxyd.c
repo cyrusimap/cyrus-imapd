@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.120 2002/05/06 17:18:52 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.121 2002/05/16 18:15:08 ken3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -74,6 +74,7 @@
 #include "prot.h"
 
 #include "acl.h"
+#include "annotate.h"
 #include "util.h"
 #include "auth.h"
 #include "map.h"
@@ -214,6 +215,22 @@ void cmd_starttls(char *tag, int imaps);
 #ifdef ENABLE_X_NETSCAPE_HACK
 void cmd_netscape (char* tag);
 #endif
+
+#ifdef ENABLE_ANNOTATEMORE
+void cmd_getannotation(char* tag);
+void cmd_setannotation(char* tag);
+
+int getannotatefetchdata(char *tag,
+			 struct strlist **entries, struct strlist **attribs);
+int getannotatestoredata(char *tag, struct entryattlist **entryatts);
+
+void annotate_response(struct entryattlist *l);
+
+void appendstrlist(struct strlist **l, char *s);
+void freestrlist(struct strlist *l);
+void appendattvalue(struct attvaluelist **l, char *attrib, char *value);
+void freeattvalues(struct attvaluelist *l);
+#endif /* ENABLE_ANNOTATEMORE */
 
 void printstring (const char *s);
 void printastring (const char *s);
@@ -1481,6 +1498,13 @@ void cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_getacl(tag.s, arg1.s, oldform);
 	    }
+#ifdef ENABLE_ANNOTATEMORE
+	    else if (!strcmp(cmd.s, "Getannotation")) {
+		if (c != ' ') goto missingargs;
+
+		cmd_getannotation(tag.s);
+	    }
+#endif
 	    else if (!strcmp(cmd.s, "Getquota")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(proxyd_in, proxyd_out, &arg1);
@@ -1764,6 +1788,13 @@ void cmdloop()
 		if (c != '\n') goto extraargs;
 		cmd_setacl(tag.s, arg1.s, arg2.s, arg3.s);
 	    }
+#ifdef ENABLE_ANNOTATEMORE
+	    else if (!strcmp(cmd.s, "Setannotation")) {
+		if (c != ' ') goto missingargs;
+
+		cmd_setannotation(tag.s);
+	    }
+#endif
 	    else if (!strcmp(cmd.s, "Setquota")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(proxyd_in, proxyd_out, &arg1);
@@ -2639,9 +2670,14 @@ void cmd_capability(char *tag)
 	/* else don't show anything */
     }
 
+#ifdef ENABLE_ANNOTATEMORE
+    prot_printf(proxyd_out, " ANNOTATEMORE");
+#endif
+
 #ifdef ENABLE_X_NETSCAPE_HACK
     prot_printf(proxyd_out, " X-NETSCAPE");
 #endif
+
     prot_printf(proxyd_out, "\r\n");
 
     prot_printf(proxyd_out, "%s OK %s\r\n", tag,
@@ -4834,6 +4870,392 @@ static int listdata(char *name, int matchlen, int maycreate, void *rock)
     mstringdata("LIST", name, matchlen, maycreate);
     return 0;
 }
+
+#ifdef ENABLE_ANNOTATEMORE
+/*
+ * Parse annotate fetch data.
+ *
+ * This is a generic routine which parses just the annotation data.
+ * Any surrounding command text must be parsed elsewhere, ie,
+ * GETANNOTATION, FETCH.
+ */
+
+int getannotatefetchdata(char *tag,
+			 struct strlist **entries, struct strlist **attribs)
+{
+    int c;
+    static struct buf arg;
+
+    *entries = *attribs = NULL;
+
+    c = prot_getc(proxyd_in);
+    if (c == EOF) {
+	prot_printf(proxyd_out,
+		    "%s BAD Missing annotation entry\r\n", tag);
+	goto baddata;
+    }
+    else if (c == '(') {
+	/* entry list */
+	do {
+	    c = getqstring(proxyd_in, proxyd_out, &arg);
+	    if (c == EOF) {
+		prot_printf(proxyd_out,
+			    "%s BAD Missing annotation entry\r\n", tag);
+		goto baddata;
+	    }
+
+	    /* add the entry to the list */
+	    appendstrlist(entries, arg.s);
+
+	} while (c == ' ');
+
+	if (c != ')') {
+	    prot_printf(proxyd_out,
+			"%s BAD Missing close paren in annotation entry list \r\n",
+			tag);
+	    goto baddata;
+	}
+
+	c = prot_getc(proxyd_in);
+    }
+    else {
+	/* single entry -- add it to the list */
+	prot_ungetc(c, proxyd_in);
+	c = getqstring(proxyd_in, proxyd_out, &arg);
+	if (c == EOF) {
+	    prot_printf(proxyd_out,
+			"%s BAD Missing annotation entry\r\n", tag);
+	    goto baddata;
+	}
+
+	appendstrlist(entries, arg.s);
+    }
+
+    if (c != ' ' || (c = prot_getc(proxyd_in)) == EOF) {
+	prot_printf(proxyd_out,
+		    "%s BAD Missing annotation attribute(s)\r\n", tag);
+	goto baddata;
+    }
+
+    if (c == '(') {
+	/* attrib list */
+	do {
+	    c = getnstring(proxyd_in, proxyd_out, &arg);
+	    if (c == EOF) {
+		prot_printf(proxyd_out,
+			    "%s BAD Missing annotation attribute(s)\r\n", tag);
+		goto baddata;
+	    }
+
+	    /* add the attrib to the list */
+	    appendstrlist(attribs, arg.s);
+
+	} while (c == ' ');
+
+	if (c != ')') {
+	    prot_printf(proxyd_out,
+			"%s BAD Missing close paren in "
+			"annotation attribute list\r\n", tag);
+	    goto baddata;
+	}
+
+	c = prot_getc(proxyd_in);
+    }
+    else {
+	/* single attrib */
+	prot_ungetc(c, proxyd_in);
+	c = getqstring(proxyd_in, proxyd_out, &arg);
+	    if (c == EOF) {
+		prot_printf(proxyd_out,
+			    "%s BAD Missing annotation attribute\r\n", tag);
+		goto baddata;
+	    }
+
+	appendstrlist(attribs, arg.s);
+   }
+
+    return c;
+
+  baddata:
+    if (c != EOF) prot_ungetc(c, proxyd_in);
+    return EOF;
+}
+
+/*
+ * Parse annotate store data.
+ *
+ * This is a generic routine which parses just the annotation data.
+ * Any surrounding command text must be parsed elsewhere, ie,
+ * SETANNOTATION, STORE, APPEND.
+ */
+
+int getannotatestoredata(char *tag, struct entryattlist **entryatts)
+{
+    int c;
+    static struct buf entry, attrib, value;
+    struct attvaluelist *attvalues = NULL;
+
+    *entryatts = NULL;
+
+    do {
+	/* get entry */
+	c = getqstring(proxyd_in, proxyd_out, &entry);
+	if (c == EOF) {
+	    prot_printf(proxyd_out,
+			"%s BAD Missing annotation entry\r\n", tag);
+	    goto baddata;
+	}
+
+	/* parse att-value list */
+	if (c != ' ' || (c = prot_getc(proxyd_in)) != '(') {
+	    prot_printf(proxyd_out,
+			"%s BAD Missing annotation attribute-values list\r\n",
+			tag);
+	    goto baddata;
+	}
+
+	do {
+	    /* get attrib */
+	    c = getqstring(proxyd_in, proxyd_out, &attrib);
+	    if (c == EOF) {
+		prot_printf(proxyd_out,
+			    "%s BAD Missing annotation attribute\r\n", tag);
+		goto baddata;
+	    }
+
+	    /* get value */
+	    if (c != ' ' ||
+		(c = getnstring(proxyd_in, proxyd_out, &value)) == EOF) {
+		prot_printf(proxyd_out,
+			    "%s BAD Missing annotation value\r\n", tag);
+		goto baddata;
+	    }
+
+	    /* add the attrib-value pair to the list */
+	    appendattvalue(&attvalues, attrib.s, value.s);
+
+	} while (c == ' ');
+
+	if (c != ')') {
+	    prot_printf(proxyd_out,
+			"%s BAD Missing close paren in annotation "
+			"attribute-values list\r\n", tag);
+	    goto baddata;
+	}
+
+	/* add the entry to the list */
+	appendentryatt(entryatts, entry.s, attvalues);
+	attvalues = NULL;
+
+	c = prot_getc(proxyd_in);
+
+    } while (c == ' ');
+
+    return c;
+
+  baddata:
+    if (attvalues) freeattvalues(attvalues);
+    if (c != EOF) prot_ungetc(c, proxyd_in);
+    return EOF;
+}
+
+/*
+ * Output an entry/attribute-value list response.
+ *
+ * This is a generic routine which outputs just the annotation data.
+ * Any surrounding response text must be output elsewhere, ie,
+ * GETANNOTATION, FETCH. 
+ */
+void annotate_response(struct entryattlist *l)
+{
+    int islist; /* do we have more than one entry? */
+
+    if (!l) return;
+
+    islist = (l->next != NULL);
+
+    while (l) {
+	if (islist) prot_printf(proxyd_out, "(");
+	prot_printf(proxyd_out, "\"%s\"", l->entry);
+
+	/* do we have attributes?  solicited vs. unsolicited */
+	if (l->attvalues) {
+	    struct attvaluelist *av = l->attvalues;
+
+	    prot_printf(proxyd_out, " (");
+	    while (av) {
+		prot_printf(proxyd_out, "\"%s\" ", av->attrib);
+		if (!strcasecmp(av->value, "NIL"))
+		    prot_printf(proxyd_out, "NIL");
+		else
+		    prot_printf(proxyd_out, "\"%s\"", av->value);
+
+		if ((av = av->next) == NULL)
+		    prot_printf(proxyd_out, ")");
+		else
+		    prot_printf(proxyd_out, " ");
+	    }
+	}
+	if (islist) prot_printf(proxyd_out, ")");
+
+	if ((l = l->next) != NULL)
+	    prot_printf(proxyd_out, " ");
+    }
+}
+
+/*
+ * Perform a GETANNOTATION command
+ *
+ * The command has been parsed up to the entries
+ */    
+void cmd_getannotation(char *tag)
+{
+    int c, r = 0;
+    struct strlist *entries = NULL, *attribs = NULL;
+    struct entryattlist *entryatts = NULL;
+
+    c = getannotatefetchdata(tag, &entries, &attribs);
+    if (c == EOF) {
+	eatline(proxyd_in, c);
+	return;
+    }
+
+
+    /* check for CRLF */
+    if (c == '\r') c = prot_getc(proxyd_in);
+    if (c != '\n') {
+	prot_printf(proxyd_out,
+		    "%s BAD Unexpected extra arguments to Getannotation\r\n",
+		    tag);
+	eatline(proxyd_in, c);
+	goto freeargs;
+    }
+
+    r = annotatemore_fetch(entries, attribs, &proxyd_namespace,
+			   proxyd_userisadmin, proxyd_userid,
+			   proxyd_authstate, &entryatts);
+
+    if (r) {
+	prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
+    }
+    else if (entryatts) {
+	prot_printf(proxyd_out, "* ANNOTATION ");
+	annotate_response(entryatts);
+	prot_printf(proxyd_out, "\r\n");
+	prot_printf(proxyd_out, "%s OK %s\r\n",
+		    tag, error_message(IMAP_OK_COMPLETED));
+    }
+    else
+	prot_printf(proxyd_out, "%s NO %s\r\n", tag,
+		    error_message(IMAP_NO_NOSUCHANNOTATION));
+
+  freeargs:
+    if (entries) freestrlist(entries);
+    if (attribs) freestrlist(attribs);
+    if (entryatts) freeentryatts(entryatts);
+
+    return;
+}
+
+/*
+ * Perform a SETANNOTATION command
+ *
+ * The command has been parsed up to the entry-att list
+ */    
+void cmd_setannotation(char *tag)
+{
+    int c;
+    struct entryattlist *entryatts = NULL;
+
+    c = getannotatestoredata(tag, &entryatts);
+    if (c == EOF) {
+	eatline(proxyd_in, c);
+	return;
+    }
+
+    /* check for CRLF */
+    if (c == '\r') c = prot_getc(proxyd_in);
+    if (c != '\n') {
+	prot_printf(proxyd_out,
+		    "%s BAD Unexpected extra arguments to Setannotation\r\n",
+		    tag);
+	eatline(proxyd_in, c);
+	goto freeargs;
+    }
+
+    prot_printf(proxyd_out, "%s NO setting annotations not supported\r\n", tag);
+
+  freeargs:
+    if (entryatts) freeentryatts(entryatts);
+    return;
+}
+
+/*
+ * Append 's' to the strlist 'l'.
+ */
+void
+appendstrlist(l, s)
+struct strlist **l;
+char *s;
+{
+    struct strlist **tail = l;
+
+    while (*tail) tail = &(*tail)->next;
+
+    *tail = (struct strlist *)xmalloc(sizeof(struct strlist));
+    (*tail)->s = xstrdup(s);
+    (*tail)->p = 0;
+    (*tail)->next = 0;
+}
+
+/*
+ * Free the strlist 'l'
+ */
+void
+freestrlist(l)
+struct strlist *l;
+{
+    struct strlist *n;
+
+    while (l) {
+	n = l->next;
+	free(l->s);
+	if (l->p) charset_freepat(l->p);
+	free((char *)l);
+	l = n;
+    }
+}
+
+/*
+ * Append the 'attrib'/'value' pair to the attvaluelist 'l'.
+ */
+void appendattvalue(struct attvaluelist **l, char *attrib, char *value)
+{
+    struct attvaluelist **tail = l;
+
+    while (*tail) tail = &(*tail)->next;
+
+    *tail = (struct attvaluelist *)xmalloc(sizeof(struct attvaluelist));
+    (*tail)->attrib = xstrdup(attrib);
+    (*tail)->value = xstrdup(value);
+    (*tail)->next = 0;
+}
+
+/*
+ * Free the attvaluelist 'l'
+ */
+void freeattvalues(struct attvaluelist *l)
+{
+    struct attvaluelist *n;
+
+    while (l) {
+	n = l->next;
+	free(l->attrib);
+	free(l->value);
+	l = n;
+    }
+}
+#endif /* ENABLE_ANNOTATEMORE */
 
 /* Reset the given sasl_conn_t to a sane state */
 static int reset_saslconn(sasl_conn_t **conn) 
