@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.18 2001/09/18 21:04:55 ken3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.19 2001/09/19 18:33:16 ken3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -291,7 +291,7 @@ int main(int argc, char *argv[])
 	    /* deprecated, but we still support it */
 	    fprintf(stderr, "ctl_mboxlist -r is deprecated: "
 		    "use ctl_cyrusdb -r instead\b");
-	    syslog(LOG_WARN, "ctl_mboxlist -r is deprecated: "
+	    syslog(LOG_WARNING, "ctl_mboxlist -r is deprecated: "
 		   "use ctl_cyrusdb -r instead\b");
 	    if (op == NONE) op = RECOVER;
 	    else usage();
@@ -301,7 +301,7 @@ int main(int argc, char *argv[])
 	    /* deprecated, but we still support it */
 	    fprintf(stderr, "ctl_mboxlist -c is deprecated: "
 		    "use ctl_cyrusdb -c instead\b");
-	    syslog(LOG_WARN, "ctl_mboxlist -c is deprecated: "
+	    syslog(LOG_WARNING, "ctl_mboxlist -c is deprecated: "
 		   "use ctl_cyrusdb -c instead\b");
 	    if (op == NONE) op = CHECKPOINT;
 	    else usage();
