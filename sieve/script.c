@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.37 2000/11/17 16:50:05 ken3 Exp $
+ * $Id: script.c,v 1.38 2000/11/17 19:32:27 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -223,7 +223,7 @@ static int look_for_me(char *myaddr, stringlist_t *myaddrs, const char **body)
 	parse_address(body[l], &data, &marker);
 	/* loop through each address in the header */
 	while (!found && ((addr = get_address(ADDRESS_ALL, 
-					      &data, &marker)) != NULL)) {
+					      &data, &marker, 1)) != NULL)) {
 	    if (!strcmp(addr, myaddr)) {
 		found = 1;
 		break;
@@ -235,7 +235,7 @@ static int look_for_me(char *myaddr, stringlist_t *myaddrs, const char **body)
 
 		/* is this address one of my addresses? */
 		parse_address(sl->s, &altdata, &altmarker);
-		altaddr = get_address(ADDRESS_ALL, &altdata, &altmarker);
+		altaddr = get_address(ADDRESS_ALL, &altdata, &altmarker, 1);
 		if (!strcmp(addr, altaddr))
 		    found = 1;
 
@@ -286,11 +286,11 @@ static int evaltest(sieve_interp_t *i, test_t *t, void *m)
 		    char *val;
 
 		    parse_address(body[l], &data, &marker);
-                    val = get_address(addrpart, &data, &marker);
+                    val = get_address(addrpart, &data, &marker, 0);
 		    while (val != NULL && !res) { 
 			/* loop through each address */
 			res |= t->u.ae.comp(pl->p, val);
-			val = get_address(addrpart, &data, &marker);
+			val = get_address(addrpart, &data, &marker, 0);
        		    }
 		    free_address(&data, &marker);
 		}
@@ -408,9 +408,12 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 	case VACATION:
 	    {
 		const char **body;
-		char buf[128], myaddr[256], *fromaddr;
+		char buf[128], *fromaddr;
+		char *myaddr = NULL;
 		char *reply_to = NULL;
 		int l = SIEVE_OK;
+		void *data = NULL, *marker = NULL;
+		char *tmp;
 
 		/* is there an Auto-Submitted keyword other than "no"? */
 		strcpy(buf, "auto-submitted");
@@ -425,7 +428,10 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 		    strcpy(buf, "to");
 		    l = i->getenvelope(m, buf, &body);
 		    if (body[0]) {
-			strncpy(myaddr, body[0], sizeof(myaddr) - 1);
+			parse_address(body[0], &data, &marker);
+			tmp = get_address(ADDRESS_ALL, &data, &marker, 1);
+			myaddr = (tmp != NULL) ? xstrdup(tmp) : NULL;
+			free_address(&data, &marker);
 		    }
 		}
 		if (l == SIEVE_OK) {
@@ -435,11 +441,8 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 		if (l == SIEVE_OK && body[0]) {
 		    /* we have to parse this address & decide whether we
 		       want to respond to it */
-		    void *data = NULL, *marker = NULL;
-		    char *tmp;
-		
 		    parse_address(body[0], &data, &marker);
-		    tmp = get_address(ADDRESS_ALL, &data, &marker);
+		    tmp = get_address(ADDRESS_ALL, &data, &marker, 1);
 		    reply_to = (tmp != NULL) ? xstrdup(tmp) : NULL;
 		    free_address(&data, &marker);
 
@@ -529,6 +532,7 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 		} else {
 		    if (l != SIEVE_DONE) res = -1; /* something went wrong */
 		}
+		if (myaddr) free(myaddr);
 		break;
 	    }
 	case STOP:
