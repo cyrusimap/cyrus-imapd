@@ -1,6 +1,6 @@
 /* login_unix_pwcheck.c -- Unix pwcheck daemon login authentication
  *
- *      (C) Copyright 1994 by Carnegie Mellon University
+ *      (C) Copyright 1995 by Carnegie Mellon University
  *
  *                      All Rights Reserved
  *
@@ -27,6 +27,7 @@
  *
  */
 #include <stdio.h>
+#include <errno.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -36,6 +37,8 @@
 #include "sysexits.h"
 #include "mailbox.h"
 #include "imapd.h"
+
+extern int errno;
 
 /*
  * Unix pwcheck daemon-authenticated login (shadow password)
@@ -61,7 +64,7 @@ char **reply;
     srvaddr.sun_family = AF_UNIX;
     strcpy(srvaddr.sun_path, "/etc/pwcheck/pwcheck");
     r = connect(s, (struct sockaddr *)&srvaddr, sizeof(srvaddr));
-    if (r == -1) return {
+    if (r == -1) {
 	*reply = "cannot connect to pwcheck server";
 	return errno;
     }
