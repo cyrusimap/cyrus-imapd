@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.63 2002/02/25 17:18:06 rjs3 Exp $
+ * $Id: lmtpengine.c,v 1.64 2002/02/27 04:34:39 rjs3 Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -120,6 +120,9 @@ struct clientdata {
 #endif /* HAVE_SSL */
     int starttls_done;
 };
+
+/* defined in lmtpd.c or lmtpproxyd.c */
+extern int deliver_logfd;
 
 /* Enable the resetting of a sasl_conn_t */
 static int reset_saslconn(sasl_conn_t **conn);
@@ -1258,6 +1261,7 @@ void lmtpmode(struct lmtp_func *func,
     prot_printf(pout, "220 %s LMTP Cyrus %s ready\r\n", 
 		config_servername,
 		CYRUS_VERSION);
+
     for (;;) {
     nextcmd:
       signals_poll();
@@ -1424,6 +1428,9 @@ void lmtpmode(struct lmtp_func *func,
 		  reset_saslconn(&cd.conn);
 		  goto nextcmd;
 	      }
+
+	      /* Create telemetry log */
+	      deliver_logfd = telemetry_log(user, pin, pout);
 
 	      /* authenticated successfully! */
 	      snmp_increment_args(AUTHENTICATION_YES,1,
