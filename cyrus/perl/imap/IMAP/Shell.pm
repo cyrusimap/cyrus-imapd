@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Shell.pm,v 1.18 2002/07/10 03:42:47 rjs3 Exp $
+# $Id: Shell.pm,v 1.19 2002/08/21 20:14:03 rjs3 Exp $
 #
 # A shell framework for IMAP::Cyrus::Admin
 #
@@ -181,15 +181,16 @@ my $coll_command = '';
 sub _nexttoken {
   my $lr = shift;
   $$lr =~ s/^(\s+)// and $coll_command .= $1;
-
+  my $quoted = 0;
   my $q = '';
+
   my @tok = ('', undef);
   # this is cute.  (shells are funny that way)
   # we parse "words" which are delimited by whitespace.  except that if a
   # quote appears, we have to gobble to the closing quote and then continue
   # with what we were doing.  and outside quotes, we need to look for special
   # characters (in this case, /&<>;/) and break "words" there.
-  while ($$lr ne '' && $$lr !~ /^\s/) {
+  while ($$lr ne '' && ($quoted || $$lr !~ /^\s/)) {
     $tok[1] ||= 0;
     if ($$lr =~ /^([&<>;])/) {
       last if $tok[0] ne '';
@@ -220,16 +221,18 @@ sub _nexttoken {
       $$lr =~ s/^(\s+)// and $coll_command .= $1 if $q;
       redo;
     }
-    if ($$lr =~ /^([\'\"])/ && $q eq $1) {
+    if ($$lr =~ /^([\'\"])/ && $q eq 'x') {
       $q = '';
       $coll_command .= $1;
       $$lr =~ s///;
+      $quoted = !$quoted;
       next;
     }
     if ($$lr =~ /^([\'\"])/ && $q eq '') {
-      $q = $1;
+      $q = 'x';
       $coll_command .= $1;
       $$lr =~ s///;
+      $quoted = !$quoted;
       next;
     }
     $$lr =~ s/^(.)//;
