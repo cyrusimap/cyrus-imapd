@@ -827,7 +827,7 @@ int r;
 	return "553 5.2.0 Mailbox has an invalid format";
 
     case IMAP_MESSAGE_CONTAINSNULL:
-	return "554 5.6.0 Message contains bare newlines";
+	return "554 5.6.0 Message contains NUL characters";
 	
     case IMAP_MESSAGE_CONTAINSNL:
 	return "554 5.6.0 Message contains bare newlines";
