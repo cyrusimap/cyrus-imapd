@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.171 2003/07/13 15:04:53 rjs3 Exp $
+# $Id: Makefile.in,v 1.172 2003/07/31 13:59:48 rjs3 Exp $
 # 
 # @configure_input@
 # 
@@ -114,7 +114,7 @@ SERVICETHREAD=../master/service-thread.o
 PROGS = imapd lmtpd pop3d \
 	fud reconstruct quota mbpath ipurge \
 	cyrdump chk_cyrus cvt_cyrusdb deliver ctl_mboxlist \
-	ctl_deliver ctl_cyrusdb squatter mbexamine @IMAP_PROGS@
+	ctl_deliver ctl_cyrusdb squatter mbexamine arbitron @IMAP_PROGS@
 
 BUILTSOURCES = imap_err.c imap_err.h pushstats.c pushstats.h \
 	lmtpstats.c lmtpstats.h xversion.h mupdate_err.c mupdate_err.h
