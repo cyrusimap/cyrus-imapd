@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.27 2003/05/28 19:21:05 ken3 Exp $
+ * $Id: annotate.c,v 1.8.6.28 2003/05/28 19:54:00 ken3 Exp $
  */
 
 #include <config.h>
@@ -796,9 +796,6 @@ int annotatemore_fetch(char *mailbox,
 	int entrycount, exact_match;
 	char mboxpat[MAX_MAILBOX_NAME];
 
-	mboxname_hiersep_tointernal(namespace, mailbox,
-				    config_virtdomains ?
-				    strcspn(mailbox, "@") : 0);
 	while (e) {
 	    exact_match = 0;
 
@@ -855,6 +852,9 @@ int annotatemore_fetch(char *mailbox,
 
 		/* copy the pattern because findall is destructive */
 		strlcpy(mboxpat, mailbox, sizeof(mboxpat));
+		mboxname_hiersep_tointernal(namespace, mboxpat,
+					    config_virtdomains ?
+					    strcspn(mboxpat, "@") : 0);
 
 		fdata.pout = pout;
 		fdata.namespace = namespace;
