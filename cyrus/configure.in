@@ -28,6 +28,7 @@ dnl AC_XENIX_DIR  Don't think Xenix handles long file names
 AC_SUBST(CPPFLAGS)
 AC_SUBST(EXTRA_SUBDIRS)
 AC_SUBST(DEPLIBS)
+AC_VPRINTF
 echo checking setproctitle
 AC_TEST_CPP([#if defined(_AIX3) || defined(DGUX) || defined(_SEQUENT_) || defined(apollo)
 #include </nonexistent>
