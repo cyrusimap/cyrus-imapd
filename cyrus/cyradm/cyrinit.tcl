@@ -1,4 +1,5 @@
 # cyrinit.c -- Cyrus administrative client initialization for interactive mode
+# $Id: cyrinit.tcl,v 1.14 1999/09/30 07:27:35 leg Exp $
 # Copyright 1998 Carnegie Mellon University
 # 
 # No warranties, either expressed or implied, are made regarding the
@@ -27,6 +28,7 @@
 
 # Parse args
 set i 0;
+set help 0;
 set conn_args ""
 set auth_args ""
 while {$i < $argc} {
@@ -35,8 +37,12 @@ while {$i < $argc} {
 	-- {}
 	-u {incr i; lappend auth_args -user [lindex $argv $i] }
 	-user {incr i; lappend auth_args -user [lindex $argv $i] }
-	-p {incr i; lappend auth_args -protection [lindex $argv $i] }
-	-protection {incr i; lappend auth_args -protection [lindex $argv $i] }
+	-l {incr i; lappend auth_args -layers [lindex $argv $i] }
+	-layers {incr i; lappend auth_args -layers [lindex $argv $i] }
+	-m {incr i; lappend auth_args -mech [lindex $argv $i] }
+	-mech {incr i; lappend auth_args -mech [lindex $argv $i] }
+	-h {incr i; set help 1 }
+	-help {incr i; set help 1 }
 	default {lappend conn_args [lindex $argv $i]}
     }
     incr i
@@ -44,35 +50,20 @@ while {$i < $argc} {
 unset i
 
 # Connect to server
-if {[llength $conn_args] == 0} {
+if {[llength $conn_args] == 0 || $help == 1} {
     if {$tcl_interactive != 0} {
-        puts "usage: $argv0 \[-user user] \[-protection prot] server \[port]"
+        puts "usage: $argv0 \[-user user] \[-layers 0,1,56,...] \[-mech mech] server \[port]"
         exit 1
     } else {
-        error "usage: $argv0 \[-user user] \[-protection prot] server \[port]"
+        error "usage: $argv0 \[-user user] \[-layers #] \[-mech mech] server \[port]"
     }
 }
 eval cyradm connect cyr_conn $conn_args
 unset conn_args
+unset help
 
 # Authenticate, prompting for userid and password as necessary
-eval cyr_conn authenticate $auth_args -pwcommand {{
-    set hostname %h
-    if {[string length %u] == 0} {
-	puts -nonewline "$hostname userid: "
-	flush stdout
-	gets stdin userid
-    } else {set userid %u}
-    exec stty -echo >@stdout
-    puts -nonewline "$hostname password: "
-    flush stdout
-    stty -echo
-    gets stdin passwd
-    stty echo
-    #exec stty echo >@stdout
-    puts ""
-    list $userid $passwd
-}   }
+eval cyr_conn authenticate $auth_args
 unset auth_args
 
 # Initialize default mailbox and prompt
