@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.27 2004/05/31 18:22:49 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.28 2004/06/09 19:42:40 ken3 Exp $ */
 
 #include <config.h>
 
@@ -5595,9 +5595,10 @@ void cmd_getquotaroot(const char *tag, const char *name)
 	/* remote mailbox */
 	struct backend *s = NULL;
 
-	if (imapd_userisadmin && supports_referrals) {
-	    /* If they are an admin, they won't be on the backend, so we
-	     * should refer them if we can. */
+	if (imapd_userisadmin) {
+	    /* If they are an admin, they won't retain that privledge if we
+	     * proxy for them, so we need to refer them -- even if they haven't
+	     * told us they're able to handle it. */
 	    imapd_refer(tag, server, name);
 	    return;
 	} else {

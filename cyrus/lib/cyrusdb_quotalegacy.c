@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_quotalegacy.c,v 1.1.2.4 2004/06/02 01:15:26 ken3 Exp $ */
+/* $Id: cyrusdb_quotalegacy.c,v 1.1.2.5 2004/06/09 19:42:47 ken3 Exp $ */
 
 #include <config.h>
 
@@ -590,7 +590,8 @@ static int mystore(struct db *db,
     }
     else {
 	char new_quota_path[MAX_QUOTA_PATH+1], *buf, *p;
-	int newfd = -1, r1;;
+	int newfd = -1, r1 = 0;
+	ssize_t n;
 
 	if (mytid->fd != -1 && !overwrite) {
 	    if (tid)
@@ -642,12 +643,17 @@ static int mystore(struct db *db,
 	buf[datalen] = '\n';
 
 	lseek(mytid->fdnew, 0, SEEK_SET);
-	r1 = write(mytid->fdnew, buf, datalen+1);
+	n = write(mytid->fdnew, buf, datalen+1);
+	if (n == datalen+1) r1 = ftruncate(mytid->fdnew, datalen+1);
 	free(buf);
 
-	if (r1 == -1) {
-	    syslog(LOG_ERR, "IOERROR: writing quota file %s: %m",
-		   new_quota_path);
+	if (n != datalen+1 || r1 == -1) {
+	    if (n == -1 || r1 == -1)
+		syslog(LOG_ERR, "IOERROR: writing quota file %s: %m",
+		       new_quota_path);
+	    else
+		syslog(LOG_ERR, "IOERROR: writing quota file %s: failed to write %d bytes",
+		       new_quota_path, datalen+1);
 	    if (tid)
 		abort_txn(db, *tid);
 	    else

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.16.2.6 2004/05/25 01:28:02 ken3 Exp $ */
+/* $Id: backend.c,v 1.16.2.7 2004/06/09 19:42:39 ken3 Exp $ */
 
 #include <config.h>
 
@@ -367,6 +367,7 @@ int backend_ping(struct backend *s)
     char buf[1024];
 
     if (!s || !s->prot->ping_cmd.cmd) return 0;
+    if (!s->sock == -1) return -1; /* Disconnected Socket */
     
     prot_printf(s->out, "%s\r\n", s->prot->ping_cmd.cmd);
     prot_flush(s->out);
@@ -392,7 +393,7 @@ void backend_disconnect(struct backend *s)
 {
     char buf[1024];
 
-    if (!s) return;
+    if (!s || s->sock == -1) return;
     
     if (!prot_error(s->in)) {
 	if (s->prot->logout_cmd.cmd) {

@@ -59,7 +59,9 @@ int main(int argc, char *argv[])
     int txnp = 0;
     int r;
 
+    printf("Initing enviornment in '.'...\n");
     TRY(DB->init(".", 0));
+    printf("Ready!\n");
 
     for (;;) {
 	if (fgets(buf, sizeof buf, stdin) == NULL) break;
@@ -70,7 +72,7 @@ int main(int argc, char *argv[])
 	    if (db) { /* close it */
 		TRY(DB->close(db));
 	    }
-	    TRY(DB->open(fname, &db));
+	    TRY(DB->open(fname, 1, &db));
 
 	    printf("ok\n");
 	} else if (!db) {
