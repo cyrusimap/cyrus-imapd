@@ -56,6 +56,7 @@ CFLAGS = @CFLAGS@
 LDFLAGS = @LDFLAGS@ @CFLAGS@ @COM_ERR_LDFLAGS@ 
 
 SHELL = /bin/sh
+MAKEDEPEND = @MAKEDEPEND@
 
 COMPILE_ET=@COMPILE_ET@
 
@@ -171,6 +172,6 @@ distclean: clean
 	rm -f Makefile
 
 depend: imap_err.h
-	makedepend $(CPPFLAGS) $(DEFS) $(CFLAGS) *.c $(srcdir)/*.c 1>makedepend.log 2>&1
+	${MAKEDEPEND} $(CPPFLAGS) $(DEFS) $(CFLAGS) *.c $(srcdir)/*.c 1>makedepend.log 2>&1
 
 # DO NOT DELETE THIS LINE -- make depend depends on it.

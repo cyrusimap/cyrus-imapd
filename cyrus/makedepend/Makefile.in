@@ -35,7 +35,7 @@ RANLIB = @RANLIB@
 
 DEFS = @DEFS@
 CPPFLAGS = -I. -I$(srcdir)  @CPPFLAGS@ 
-LIBS = @cyrus_sigveclib@ @LIBS@
+LIBS = @LIBS@
 DEPLIBS = @DEPLIBS@ 
 
 CFLAGS = @CFLAGS@

@@ -43,6 +43,7 @@ CFLAGS = @CFLAGS@
 LDFLAGS = @LDFLAGS@
 
 SHELL = /bin/sh
+MAKEDEPEND = @MAKEDEPEND@
 
 all: libsyslog.a syslogd
 
@@ -66,7 +67,7 @@ distclean: clean
 	rm -f Makefile
 
 depend:
-	makedepend $(CPPFLAGS) $(DEFS) -I$(srcdir) $(CFLAGS) *.c $(srcdir)/*.c 1>makedepend.log 2>&1
+	${MAKEDEPEND} $(CPPFLAGS) $(DEFS) -I$(srcdir) $(CFLAGS) *.c $(srcdir)/*.c 1>makedepend.log 2>&1
 
 # DO NOT DELETE THIS LINE -- make depend depends on it.
 
