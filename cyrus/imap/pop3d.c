@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.144.2.18 2004/05/01 23:14:32 ken3 Exp $
+ * $Id: pop3d.c,v 1.144.2.19 2004/05/05 14:42:19 ken3 Exp $
  */
 #include <config.h>
 
@@ -207,7 +207,7 @@ static int popd_canon_user(sasl_conn_t *conn, void *context,
 	if (p = strchr(userbuf, '+')) {
 	    n = config_virtdomains ? strcspn(p, "@") : strlen(p);
 
-	    if (flags & SASL_CU_AUTHZID) {
+	    if (n > 1 && flags & SASL_CU_AUTHZID) {
 		/* make a copy of the subfolder */
 		if (popd_subfolder) free(popd_subfolder);
 		popd_subfolder = xstrndup(p, n);
