@@ -750,7 +750,7 @@ static int store_nosync(struct db *db,
 
 static int mydelete(struct db *mydb, 
 		    const char *key, int keylen,
-		    struct txn **mytid, int txnflags)
+		    struct txn **mytid, int txnflags, int force)
 {
     int r = 0;
     DBT k;
@@ -814,6 +814,8 @@ static int mydelete(struct db *mydb,
 	}
 	if (r == DB_LOCK_DEADLOCK) {
 	    r = CYRUSDB_AGAIN;
+	} else if (force && r == DB_NOTFOUND) {
+	    r = CYRUSDB_OK;  /* ignore not found errors */
 	} else {
 	    syslog(LOG_ERR, "DBERROR: mydelete: error deleting %s: %s",
 		   key, db_strerror(r));
@@ -826,16 +828,16 @@ static int mydelete(struct db *mydb,
 
 static int delete(struct db *db, 
 		  const char *key, int keylen,
-		  struct txn **tid)
+		  struct txn **tid, int force)
 {
-    return mydelete(db, key, keylen, tid, 0);
+    return mydelete(db, key, keylen, tid, 0, force);
 }
 
 static int delete_nosync(struct db *db, 
 			 const char *key, int keylen,
-			 struct txn **tid)
+			 struct txn **tid, int force)
 {
-    return mydelete(db, key, keylen, tid, DB_TXN_NOSYNC);
+    return mydelete(db, key, keylen, tid, DB_TXN_NOSYNC, force);
 }
 
 static int mycommit(struct db *db, struct txn *tid, int txnflags)

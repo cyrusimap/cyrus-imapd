@@ -194,7 +194,7 @@ int main(int argc, char *argv[])
 	    assert(victim != NULL);
 
 	    /* delete it */
-	    TRY(DB->delete(db, victim, strlen(victim), &txn));
+	    TRY(DB->delete(db, victim, strlen(victim), &txn), 0);
 
 	    TRY(DB->commit(db, txn));
 	    free(victim); victim = NULL;

@@ -87,7 +87,7 @@ int main(int argc, char *argv[])
 	    printf("ok\n");
 	} else if (!strncasecmp(buf, "del ", 4)) {
 	    char *key = buf + 4;
-	    TRY(DB->delete(db, key, strlen(key), (txnp ? &txn : NULL)));
+	    TRY(DB->delete(db, key, strlen(key), (txnp ? &txn : NULL), 0));
 	    printf("ok\n");
 	} else if (!strncasecmp(buf, "get ", 4)) {
 	    char *key = buf + 4;

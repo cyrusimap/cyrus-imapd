@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.169 2002/02/25 02:37:21 leg Exp $
+ * $Id: mboxlist.c,v 1.170 2002/02/27 21:20:38 ken3 Exp $
  */
 
 #include <config.h>
@@ -818,7 +818,7 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
     }
 
     /* delete entry */
-    r = DB->delete(mbdb, name, strlen(name), &tid);
+    r = DB->delete(mbdb, name, strlen(name), &tid, 0);
     switch (r) {
     case CYRUSDB_OK: /* success */
 	break;
@@ -1051,7 +1051,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     
     if (!isusermbox) {
 	/* 4. Delete entry from berkeley db */
-	r = DB->delete(mbdb, oldname, strlen(oldname), &tid);
+	r = DB->delete(mbdb, oldname, strlen(oldname), &tid, 0);
 	switch (r) {
 	case 0: /* success */
 	    break;
@@ -2492,7 +2492,7 @@ int mboxlist_changesub(const char *name, const char *userid,
     if (add) {
 	r = SUBDB->store(subs, name, strlen(name), "", 0, NULL);
     } else {
-	r = SUBDB->delete(subs, name, strlen(name), NULL);
+	r = SUBDB->delete(subs, name, strlen(name), NULL, 0);
 	/* if it didn't exist, that's ok */
 	if (r == CYRUSDB_EXISTS) r = CYRUSDB_OK;
     }

@@ -94,7 +94,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.33 2002/02/24 04:42:16 ken3 Exp $ */
+/* $Id: tls.c,v 1.34 2002/02/27 21:20:39 ken3 Exp $ */
 
 #include <config.h>
 
@@ -450,7 +450,7 @@ static void remove_session(unsigned char *id, int idlen)
     if (!sess_dbopen) return;
 
     do {
-	ret = DB->delete(sessdb, id, idlen, NULL);
+	ret = DB->delete(sessdb, id, idlen, NULL, 1);
     } while (ret == CYRUSDB_AGAIN);
 
     /* log this transaction */
@@ -483,7 +483,8 @@ static void remove_session_cb(SSL_CTX *ctx, SSL_SESSION *sess)
  * called, also when session caching was disabled.  We lookup the
  * session in our database in case it was stored by another process.
  */
-static SSL_SESSION *get_session_cb(SSL *ssl, unsigned char *id, int idlen, int *copy)
+static SSL_SESSION *get_session_cb(SSL *ssl, unsigned char *id, int idlen,
+				   int *copy)
 {
     int ret;
     const char *data = NULL;
@@ -607,7 +608,12 @@ int     tls_init_serverengine(const char *ident,
     }
     SSL_CTX_set_options(ctx, off);
     SSL_CTX_set_info_callback(ctx, apps_ssl_info_callback);
-    SSL_CTX_sess_set_cache_size(ctx, 128);
+
+    /* Don't use an internal session cache */
+    SSL_CTX_sess_set_cache_size(ctx, 1);  /* 0 is unlimited */
+    SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_SERVER |
+				   SSL_SESS_CACHE_NO_AUTO_CLEAR |
+				   SSL_SESS_CACHE_NO_INTERNAL_LOOKUP);
 
     /* Get the session timeout from the config file (in minutes) */
     timeout = config_getint("tls_session_timeout", 1440); /* 24 hours */
@@ -945,7 +951,6 @@ int tls_shutdown_serverengine(void)
  * Delete expired sessions.
  */
 struct prunerock {
-    struct db *db;
     int count;
     int deletions;
 };
@@ -966,7 +971,7 @@ static int prune_p(void *rock, const char *id, int idlen,
 	int i;
 	char idstr[SSL_MAX_SSL_SESSION_ID_LENGTH*2 + 1];
 	for (i = 0; i < idlen; i++)
-	    sprintf(idstr+i*2, "%02X", id[i]);
+	    sprintf(idstr+i*2, "%02X", (unsigned char) id[i]);
 
 	syslog(LOG_DEBUG, "found TLS session: id=%s, expire=%s",
 	       idstr, ctime(&expire));
@@ -980,23 +985,10 @@ static int prune_cb(void *rock, const char *id, int idlen,
 		    const char *data, int datalen)
 {
     struct prunerock *prock = (struct prunerock *) rock;
-    int ret;
 
     prock->deletions++;
 
-    do {
-	ret = DB->delete(prock->db, id, idlen, NULL);
-    } while (ret == CYRUSDB_AGAIN);
-
-    /* log this transaction */
-    if (var_imapd_tls_loglevel > 0) {
-	int i;
-	char idstr[SSL_MAX_SSL_SESSION_ID_LENGTH*2 + 1];
-	for (i = 0; i < idlen; i++)
-	    sprintf(idstr+i*2, "%02X", id[i]);
-
-	syslog(LOG_DEBUG, "expiring TLS session: id=%s", idstr);
-    }
+    remove_session((unsigned char*) id, idlen);
 
     return 0;
 }
@@ -1024,11 +1016,12 @@ int tls_prune_sessions(void)
     }
     else {
 	/* check each session in our database */
-	prock.db = sessdb;
+	sess_dbopen = 1;
 	prock.count = prock.deletions = 0;
 	DB->foreach(sessdb, "", 0, &prune_p, &prune_cb, &prock, NULL);
 	DB->close(sessdb);
 	sessdb = NULL;
+	sess_dbopen = 0;
 
 	syslog(LOG_NOTICE, "tls_prune: purged %d out of %d entries",
 	       prock.deletions, prock.count);
