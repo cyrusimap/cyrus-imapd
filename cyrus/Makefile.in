@@ -1,4 +1,6 @@
 # Top-level Makefile for cyrus software
+#
+# @configure_input@
 # 
 #	(C) Copyright 1994 by Carnegie Mellon University
 # 
@@ -61,7 +63,7 @@ distclean::
 			$(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) distclean ; \
 			echo "### Done with" `pwd`);		\
 	done
-	rm -f Makefile
+	rm -f Makefile config.status config.log config.cache
 
 depend::
 	@for d in  $(SUBDIRS); \
