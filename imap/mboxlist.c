@@ -1,5 +1,5 @@
 /* mboxlist.c -- Mailbox list manipulation routines
- $Id: mboxlist.c,v 1.86 1998/05/15 21:49:13 neplokh Exp $
+ $Id: mboxlist.c,v 1.87 1998/06/04 20:23:28 tjs Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -1047,12 +1047,13 @@ struct auth_state *auth_state;
  * a nonzero value, mboxlist_findall immediately stops searching
  * and returns that value.
  */
-int mboxlist_findall(pattern, isadmin, userid, auth_state, proc)
+int mboxlist_findall(pattern, isadmin, userid, auth_state, proc, rock)
 char *pattern;
 int isadmin;
 char *userid;
 struct auth_state *auth_state;
 int (*proc)();
+void* rock;
 {
     struct glob *g;
     char usermboxname[MAX_MAILBOX_NAME+1];
@@ -1092,7 +1093,7 @@ int (*proc)();
 	if (GLOB_TEST(g, "INBOX") != -1) {
 	    (void) bsearch_mem(usermboxname, 1, list_base, list_size, 0, &len);
 	    if (len) {
-		r = (*proc)(inboxcase, 5, 1);
+		r = (*proc)(inboxcase, 5, 1, rock);
 		if (r) {
 		    glob_free(&g);
 		    list_doingfind--;
@@ -1669,7 +1670,7 @@ int newquota;
     if (len) {
 	mboxlist_changequota(quota.root, 0, 0);
     }
-    mboxlist_findall(pattern, 1, 0, 0, mboxlist_changequota);
+    mboxlist_findall(pattern, 1, 0, 0, mboxlist_changequota, NULL);
     
     r = mailbox_write_quota(&quota);
     if (quota.fd != -1) {

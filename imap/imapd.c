@@ -1,31 +1,30 @@
 /* imapd.c -- IMAP server protocol parsing
- $Id: imapd.c,v 1.143 1998/05/15 21:48:33 neplokh Exp $
- 
- # Copyright 1998 Carnegie Mellon University
- # 
- # No warranties, either expressed or implied, are made regarding the
- # operation, use, or results of the software.
- #
- # Permission to use, copy, modify and distribute this software and its
- # documentation is hereby granted for non-commercial purposes only
- # provided that this copyright notice appears in all copies and in
- # supporting documentation.
- #
- # Permission is also granted to Internet Service Providers and others
- # entities to use the software for internal purposes.
- #
- # The distribution, modification or sale of a product which uses or is
- # based on the software, in whole or in part, for commercial purposes or
- # benefits requires specific, additional permission from:
- #
- #  Office of Technology Transfer
- #  Carnegie Mellon University
- #  5000 Forbes Avenue
- #  Pittsburgh, PA  15213-3890
- #  (412) 268-4387, fax: (412) 268-7395
- #  tech-transfer@andrew.cmu.edu
  *
+ * Copyright 1998 Carnegie Mellon University
+ * 
+ * No warranties, either expressed or implied, are made regarding the
+ * operation, use, or results of the software.
+ *
+ * Permission to use, copy, modify and distribute this software and its
+ * documentation is hereby granted for non-commercial purposes only
+ * provided that this copyright notice appears in all copies and in
+ * supporting documentation.
+ *
+ * Permission is also granted to Internet Service Providers and others
+ * entities to use the software for internal purposes.
+ *
+ * The distribution, modification or sale of a product which uses or is
+ * based on the software, in whole or in part, for commercial purposes or
+ * benefits requires specific, additional permission from:
+ *
+ *  Office of Technology Transfer
+ *  Carnegie Mellon University
+ *  5000 Forbes Avenue
+ *  Pittsburgh, PA  15213-3890
+ *  (412) 268-4387, fax: (412) 268-7395
+ *  tech-transfer@andrew.cmu.edu
  */
+/* $Id: imapd.c,v 1.144 1998/06/04 20:23:26 tjs Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -2364,8 +2363,8 @@ char *pattern;
 			 mailboxdata);
     }
     else if (!strcmp(namespace, "all.mailboxes")) {
-	mboxlist_findall(pattern, imapd_userisadmin, imapd_userid, imapd_authstate,
-			 mailboxdata);
+	mboxlist_findall(pattern, imapd_userisadmin, imapd_userid,
+			 imapd_authstate, mailboxdata, NULL);
     }
     else if (!strcmp(namespace, "bboards")
 	     || !strcmp(namespace, "all.bboards")) {
@@ -2411,8 +2410,8 @@ char *pattern;
 	prot_printf(imapd_out, "* LIST (\\Noselect) \".\" \"\"\r\n");
     }
     else {
-	mboxlist_findall(pattern, imapd_userisadmin, imapd_userid, imapd_authstate,
-			 listdata);
+	mboxlist_findall(pattern, imapd_userisadmin, imapd_userid,
+			 imapd_authstate, listdata, NULL);
 	listdata((char *)0, 0, 0);
     }
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
@@ -3015,18 +3014,62 @@ cmd_netscrape(tag)
 
 #ifdef ENABLE_EXPERIMENT
 /*
+ *
+ *
+ */
+static int
+namespace_cb(name, matchlen, maycreate, rock)
+    char* name;
+    int matchlen;
+    int maycreate;
+    void* rock;
+{
+    int* sawone = rock;
+
+    if (!strcmp(name, "user") || !strcmp(name, "INBOX")) {
+	/* this is not a "shared" namespace
+	 * move along, move along
+	 */
+	return 0;
+    }
+
+    /* this is a shared namespace */
+    if (! *sawone) {
+	/* open the sexp, we're not going to print NIL */
+	prot_printf(imapd_out, "(");
+	*sawone = 1;
+    }
+    *sawone = 1;
+
+    /* it's not; print it: */
+    prot_printf(imapd_out, "(\"%s\" \".\")", name);
+}
+
+/*
  * Print out a response to the NAMESPACE command defined by
- * draft-gahrns-imap-namespace-03.txt.  Cyrus' responses are hardcoded;
- * I can't think of anything that needs to be configurable.
+ * RFC 2342.txt.  This isn't configurable, but it wasn't obvious that there
+ * was any reason that it needs to be.
  */
 void
 cmd_namespace(tag)
     char* tag;
 {
+    int sawone = 0;
+
+    /* print out the boring hardcoded namespaces */
     prot_printf(imapd_out,
-  "* NAMESPACE ((\"INBOX.\" \".\")) ((\"user.\" \".\")) ((\"\" \".\"))\r\n");
+		"* NAMESPACE ((\"INBOX.\" \".\")) ((\"user.\" \".\")) ");
+
+    /* now find all the exciting toplevel namespaces */
+    mboxlist_findall("%", imapd_userisadmin, imapd_userid, imapd_authstate,
+		     namespace_cb, (void*) &sawone);
+    /* if there were any, sawone = 1, and end it
+       if not, there were none, and print NIL */
+    prot_printf(imapd_out, sawone ? ")\r\n" : "NIL\r\n");
+
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
+  
 }
 #endif /* ENABLE_EXPERIMENT */
 
@@ -4276,10 +4319,11 @@ unsigned char *data;
 /*
  * Issue a MAILBOX untagged response
  */
-static int mailboxdata(name, matchlen, maycreate)
+static int mailboxdata(name, matchlen, maycreate, rock)
 char *name;
 int matchlen;
 int maycreate;
+void* rock;
 {
     prot_printf(imapd_out, "* MAILBOX %s\r\n", name);
     return 0;
@@ -4352,10 +4396,11 @@ int maycreate;
 /*
  * Issue a LIST untagged response
  */
-static int listdata(name, matchlen, maycreate)
+static int listdata(name, matchlen, maycreate, rock)
 char *name;
 int matchlen;
 int maycreate;
+void* rock;
 {
     return mstringdata("LIST", name, matchlen, maycreate);
 }
