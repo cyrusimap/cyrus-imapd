@@ -20,6 +20,7 @@
  * Open and read the header of the mailbox with pathname 'path'.
  * The structure pointed to by 'mailbox' is initialized.
  */
+int
 mailbox_open_header(name, mailbox)
 char *name;
 struct mailbox *mailbox;
@@ -60,6 +61,7 @@ struct mailbox *mailbox;
  * Open the index and cache files for 'mailbox'.  Also 
  * read the index header.
  */
+int 
 mailbox_open_index(mailbox)
 struct mailbox *mailbox;
 {
@@ -134,6 +136,7 @@ struct mailbox *mailbox;
 /*
  * Read the header of 'mailbox'
  */
+int
 mailbox_read_header(mailbox)
 struct mailbox *mailbox;
 {
@@ -210,8 +213,59 @@ struct mailbox *mailbox;
 }
 
 /*
+ * Read the header of 'mailbox' and just get the ACL.
+ */
+int 
+mailbox_read_acl(mailbox)
+struct mailbox *mailbox;
+{
+    char buf[4096];
+    char *p;
+    int aclbufsize, n;
+
+    /* Check magic number */
+    n = fread(buf, 1, strlen(MAILBOX_HEADER_MAGIC), mailbox->header);
+    buf[n] = '\0';
+    if (n != strlen(MAILBOX_HEADER_MAGIC) || strcmp(buf, MAILBOX_HEADER_MAGIC)) {
+	return IMAP_MAILBOX_BADFORMAT;
+    }
+
+    /* Read quota file pathname */
+    if (!fgets(buf, sizeof(buf), mailbox->header)) {
+	return IMAP_MAILBOX_BADFORMAT;
+    }
+
+    /* Read names of user flags */
+    if (!fgets(buf, sizeof(buf), mailbox->header)) {
+	return IMAP_MAILBOX_BADFORMAT;
+    }
+
+    /* Read and interpret ACL */
+    if (mailbox->acl) free(mailbox->acl);
+    aclbufsize = 128;
+    p = mailbox->acl = xmalloc(aclbufsize);
+    while (fgets(p, aclbufsize - (p - mailbox->acl), mailbox->header)) {
+	if (*p == '\n' && (p == mailbox->acl || p[-1] == '\n')) {
+	    *p = '\0';
+	    break;
+	}
+	p += strlen(p);
+	if (p - mailbox->acl + 1 >= aclbufsize) {
+	    n = p - mailbox->acl;
+	    aclbufsize *= 2;
+	    mailbox->acl = xrealloc(mailbox->acl, aclbufsize);
+	    p = mailbox->acl + n;
+	}
+    }
+    mailbox->my_acl = acl_myacl(mailbox->acl);
+
+    return 0;
+}
+
+/*
  * Read the header of the index file for mailbox
  */
+int 
 mailbox_read_index_header(mailbox)
 struct mailbox *mailbox;
 {
@@ -242,8 +296,43 @@ struct mailbox *mailbox;
 }
 
 /*
+ * Read an index record from a mailbox
+ */
+int
+mailbox_read_index_record(mailbox, msgno, record)
+struct mailbox *mailbox;
+int msgno;
+struct index_record *record;
+{
+    int n;
+    char buf[4*8 + MAX_USER_FLAGS/4];
+
+    n = fseek(mailbox->index,
+	      mailbox->start_offset + (msgno-1) * mailbox->record_size,
+	      0);
+    if (n == -1) return IMAP_IOERROR;
+
+    n = fread(buf, 1, sizeof(buf), mailbox->index);
+    if (n != sizeof(buf)) return IMAP_IOERROR;
+
+    record->uid = htonl(*((bit32 *)buf));
+    record->internaldate = htonl(*((bit32 *)(buf+4)));
+    record->size = htonl(*((bit32 *)(buf+8)));
+    record->header_size = htonl(*((bit32 *)(buf+12)));
+    record->content_offset = htonl(*((bit32 *)(buf+16)));
+    record->cache_offset = htonl(*((bit32 *)(buf+20)));
+    record->last_updated = htonl(*((bit32 *)(buf+24)));
+    record->system_flags = htonl(*((bit32 *)(buf+28)));
+    for (n = 0; n < MAX_USER_FLAGS/32; n++) {
+	record->user_flags[n] = htonl(*((bit32 *)(buf+32+4*n)));
+    }
+    return 0;
+}
+
+/*
  * Open and read the quota file for 'mailbox'
  */
+int
 mailbox_read_quota(mailbox)
 struct mailbox *mailbox;
 {
@@ -272,6 +361,7 @@ struct mailbox *mailbox;
 /*
  * Lock the header for 'mailbox'.  Reread header if necessary.
  */
+int
 mailbox_lock_header(mailbox)
 struct mailbox *mailbox;
 {
@@ -327,6 +417,7 @@ struct mailbox *mailbox;
 /*
  * Lock the index file for 'mailbox'.  Reread index file header if necessary.
  */
+int
 mailbox_lock_index(mailbox)
 struct mailbox *mailbox;
 {
@@ -381,6 +472,7 @@ struct mailbox *mailbox;
 /*
  * Lock the quota file for 'mailbox'.  Reread quota file if necessary.
  */
+int
 mailbox_lock_quota(mailbox)
 struct mailbox *mailbox;
 {
@@ -542,8 +634,48 @@ struct mailbox *mailbox;
 }
 
 /*
+ * Read an index record from a mailbox
+ */
+int
+mailbox_write_index_record(mailbox, msgno, record)
+struct mailbox *mailbox;
+int msgno;
+struct index_record *record;
+{
+    int n;
+    char buf[4*8 + MAX_USER_FLAGS/4];
+
+    *((bit32 *)buf) = htonl(record->uid);
+    *((bit32 *)(buf+4)) = htonl(record->internaldate);
+    *((bit32 *)(buf+8)) = htonl(record->size);
+    *((bit32 *)(buf+12)) = htonl(record->header_size);
+    *((bit32 *)(buf+16)) = htonl(record->content_offset);
+    *((bit32 *)(buf+20)) = htonl(record->cache_offset);
+    *((bit32 *)(buf+24)) = htonl(record->last_updated);
+    *((bit32 *)(buf+28)) = htonl(record->system_flags);
+    for (n = 0; n < MAX_USER_FLAGS/32; n++) {
+	*((bit32 *)(buf+32+4*n)) = htonl(record->user_flags[n]);
+    }
+
+    n = fseek(mailbox->index,
+	      mailbox->start_offset + (msgno-1) * mailbox->record_size,
+	      0);
+    if (n == -1) return IMAP_IOERROR;
+
+    n = fwrite(buf, 1, sizeof(buf), mailbox->index);
+    if (n != sizeof(buf)) return IMAP_IOERROR;
+    fflush(mailbox->index);
+    if (ferror(mailbox->index) || fsync(fileno(mailbox->index))) {
+	return IMAP_IOERROR;
+    }
+
+    return 0;
+}
+
+/*
  * Append a new record to the index file
  */
+int
 mailbox_append_index(mailbox, record, num)
 struct mailbox *mailbox;
 struct index_record *record;
@@ -581,6 +713,7 @@ int num;
 
     last_offset = fseek(mailbox->index, 0L, 2);
     fwrite(buf, len, 1, mailbox->index);
+    fflush(mailbox->index);
     if (ferror(mailbox->index) || fsync(fileno(mailbox->index))) {
 	ftruncate(fileno(mailbox->index), last_offset);
 	return IMAP_IOERROR;
@@ -593,6 +726,7 @@ int num;
 /*
  * Write out the quota file for 'mailbox'
  */
+int
 mailbox_write_quota(mailbox)
 struct mailbox *mailbox;
 {

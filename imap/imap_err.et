@@ -11,6 +11,9 @@ ec IMAP_PERMISSION_DENIED,
 ec IMAP_QUOTA_EXCEEDED,
    "over quota"
 
+ec IMAP_USERFLAG_EXHAUSTED,
+   "too many user flags in mailbox"
+
 ec IMAP_MAILBOX_BADFORMAT,
    "mailbox has an invalid format"
 

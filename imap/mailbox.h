@@ -15,7 +15,6 @@ typedef unsigned bit32;
 #define FNAME_HEADER "/cyrus.header"
 #define FNAME_INDEX "/cyrus.index"
 #define FNAME_CACHE "/cyrus.cache"
-#define FNAME_SEEN "/cyrus.seen"
 #define FNAME_QUOTA "/cyrus.quota"
 
 #define QUOTA_UNITS (1024*1024)

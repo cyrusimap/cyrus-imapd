@@ -58,7 +58,7 @@ char *name;
     r = append_setup(&mailbox, name, MAILBOX_FORMAT_NORMAL, ACL_POST, 0);
 
     if (!r) {
-	r = append_fromstream(&mailbox, stdin, 0, (char **)0, 0);
+	r = append_fromstream(&mailbox, stdin, 0, (char **)0, 0, 0);
     }
 
     if (r) {
