@@ -1,3 +1,25 @@
+# Makefile for cyrus imap server and associated programs
+# 
+#	(C) Copyright 1993 by Carnegie Mellon University
+# 
+#                      All Rights Reserved
+# 
+# Permission to use, copy, modify, and distribute this software and its 
+# documentation for any purpose and without fee is hereby granted, 
+# provided that the above copyright notice appear in all copies and that
+# both that copyright notice and this permission notice appear in 
+# supporting documentation, and that the name of CMU not be
+# used in advertising or publicity pertaining to distribution of the
+# software without specific, written prior permission.  
+# 
+# CMU DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING
+# ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL
+# CMU BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR
+# ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+# WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+# ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
+# SOFTWARE.
+# 
 DEFINES=-DSETPROCTITLE
 
 # Authentication (login) routines.  Two choices
@@ -69,7 +91,7 @@ imap_err.h imap_err.o: imap_err.et
 	$(CC) $(CFLAGS) -c imap_err.c
 
 clean:
-	rm -f *.o *.a parsey.c parsey.h parsel.c deliver imapd
+	rm -f *.o *.a parsey.c parsey.h parsel.c imap_err.c imap_err.h deliver imapd
 
 depend: parsel.c parsey.c
 	makedepend $(CFLAGS) *.c
@@ -79,7 +101,7 @@ depend: parsel.c parsey.c
 append.o: /usr/include/stdio.h /usr/include/ctype.h /usr/include/sys/types.h
 append.o: /usr/include/sys/stdtypes.h /usr/include/sys/sysmacros.h
 append.o: /usr/include/syslog.h ../lib/acl.h ../lib/assert.h imap_err.h
-append.o: mailbox.h message.h append.h ../lib/xmalloc.h
+append.o: mailbox.h append.h ../lib/xmalloc.h
 config.o: /usr/include/stdio.h /usr/include/ctype.h /usr/include/sysexits.h
 config.o: /usr/include/syslog.h /usr/local/include/afs/com_err.h config.h
 config.o: ../lib/xmalloc.h
@@ -100,14 +122,14 @@ imapd.o: /usr/include/machine/devaddr.h /usr/include/sys/stat.h
 imapd.o: /usr/include/syslog.h /usr/local/include/afs/com_err.h
 imapd.o: /usr/include/netdb.h /usr/include/sys/socket.h
 imapd.o: /usr/include/netinet/in.h ../lib/acl.h ../lib/util.h ../lib/auth.h
-imapd.o: imap_err.h mailbox.h imapd.h ../lib/xmalloc.h
+imapd.o: imap_err.h mailbox.h imapd.h ../lib/charset.h ../lib/xmalloc.h
 index.o: /usr/include/stdio.h /usr/include/string.h
 index.o: /usr/include/sys/stdtypes.h /usr/include/time.h
 index.o: /usr/include/sysexits.h /usr/include/sys/types.h
 index.o: /usr/include/sys/sysmacros.h /usr/include/sys/stat.h
 index.o: /usr/include/netinet/in.h /usr/include/sys/mman.h
 index.o: /usr/local/include/afs/com_err.h ../lib/acl.h ../lib/util.h
-index.o: ../lib/assert.h imap_err.h mailbox.h imapd.h message.h append.h
+index.o: ../lib/assert.h imap_err.h mailbox.h imapd.h append.h
 index.o: ../lib/xmalloc.h
 login_krb.o: /usr/include/stdio.h /usr/include/ctype.h
 login_krb.o: /usr/include/sysexits.h /usr/local/include/krb.h
@@ -125,7 +147,8 @@ mailbox.o: /usr/include/sys/stdtypes.h /usr/include/errno.h
 mailbox.o: /usr/include/sys/errno.h /usr/include/syslog.h
 mailbox.o: /usr/include/sys/types.h /usr/include/sys/sysmacros.h
 mailbox.o: /usr/include/netinet/in.h /usr/include/sys/stat.h
-mailbox.o: /usr/include/sys/file.h /usr/include/sys/fcntlcom.h ../lib/acl.h
+mailbox.o: /usr/include/sys/file.h /usr/include/sys/fcntlcom.h
+mailbox.o: /usr/include/dirent.h /usr/include/sys/dirent.h ../lib/acl.h
 mailbox.o: ../lib/assert.h imap_err.h mailbox.h ../lib/xmalloc.h
 mboxlist.o: /usr/include/stdio.h /usr/include/sysexits.h
 mboxlist.o: /usr/include/string.h /usr/include/sys/stdtypes.h
@@ -135,17 +158,20 @@ mboxlist.o: /usr/include/sys/stat.h /usr/include/sys/file.h
 mboxlist.o: /usr/include/sys/fcntlcom.h ../lib/acl.h ../lib/glob.h
 mboxlist.o: ../lib/assert.h config.h mailbox.h imap_err.h ../lib/xmalloc.h
 message.o: /usr/include/stdio.h /usr/include/ctype.h /usr/include/string.h
-message.o: /usr/include/sys/stdtypes.h imap_err.h mailbox.h
-message.o: /usr/include/sys/types.h /usr/include/sys/sysmacros.h parseadd.h
-message.o: ../lib/xmalloc.h
+message.o: /usr/include/sys/stdtypes.h /usr/include/time.h imap_err.h
+message.o: mailbox.h /usr/include/sys/types.h /usr/include/sys/sysmacros.h
+message.o: parseadd.h ../lib/charset.h ../lib/util.h ../lib/xmalloc.h
 parseadd.o: /usr/include/stdio.h /usr/include/ctype.h parseadd.h
 parsel.o: /usr/include/stdio.h parseadd.h parsey.h
 parseutl.o: /usr/include/stdio.h parseadd.h
 parsey.o: parseadd.h
+proc.o: /usr/include/stdio.h /usr/include/sysexits.h config.h
+proc.o: ../lib/xmalloc.h
 seen_local.o: /usr/include/stdio.h /usr/include/errno.h
 seen_local.o: /usr/include/sys/errno.h /usr/include/ctype.h
-seen_local.o: /usr/include/strings.h /usr/include/sys/stat.h
-seen_local.o: /usr/include/sys/types.h /usr/include/sys/stdtypes.h
-seen_local.o: /usr/include/sys/sysmacros.h /usr/include/sys/file.h
+seen_local.o: /usr/include/strings.h /usr/include/sys/types.h
+seen_local.o: /usr/include/sys/stdtypes.h /usr/include/sys/sysmacros.h
+seen_local.o: /usr/include/sys/stat.h /usr/include/sys/file.h
 seen_local.o: /usr/include/sys/fcntlcom.h ../lib/assert.h mailbox.h
 seen_local.o: imap_err.h ../lib/xmalloc.h
+setproctitle.o: /usr/include/stdio.h ../lib/xmalloc.h /usr/include/varargs.h
