@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.77 2003/10/22 18:50:08 rjs3 Exp $
+ * $Id: mupdate.c,v 1.77.2.1 2003/11/04 19:09:59 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1228,13 +1228,13 @@ void database_log(const struct mbent *mb, struct txn **mytid)
  * a non-null pool implies we should use the mpool functionality */
 struct mbent *database_lookup(const char *name, struct mpool *pool) 
 {
-    char *path, *acl;
+    char *part, *acl;
     int type;
     struct mbent *out;
     
     if(!name) return NULL;
     
-    if(mboxlist_detail(name, &type, &path, NULL, &acl, NULL))
+    if(mboxlist_detail(name, &type, NULL, &part, &acl, NULL))
 	return NULL;
 
     if(type & MBTYPE_RESERVE) {
@@ -1250,7 +1250,7 @@ struct mbent *database_lookup(const char *name, struct mpool *pool)
     }
 
     out->mailbox = (pool) ? mpool_strdup(pool, name) : xstrdup(name);
-    out->server = (pool) ? mpool_strdup(pool, path) : xstrdup(path);
+    out->server = (pool) ? mpool_strdup(pool, part) : xstrdup(part);
 
     return out;
 }
