@@ -126,12 +126,11 @@ struct mailbox *mailbox;
 int
 mailbox_open_header_path (name, path, acl, mailbox, suppresslog)
 char *name;
-char *path
+char *path;
 char *acl;
 struct mailbox *mailbox;
 int suppresslog;
 {
-    char *path, *acl;
     char fnamebuf[MAX_MAILBOX_PATH];
     int r;
     static struct mailbox zeromailbox;
@@ -309,6 +308,45 @@ struct mailbox *mailbox;
 	if (mailbox->flagname[flag]) free(mailbox->flagname[flag]);
 	mailbox->flagname[flag++] = NULL;
     }
+
+    return 0;
+}
+
+/*
+ * Read the acl out of the header of 'mailbox'
+ */
+int
+mailbox_read_header_acl(mailbox)
+struct mailbox *mailbox;
+{
+    char buf[4096];
+    int n;
+
+    /* Check magic number */
+    n = fread(buf, 1, strlen(MAILBOX_HEADER_MAGIC), mailbox->header);
+    buf[n] = '\0';
+    if (n != strlen(MAILBOX_HEADER_MAGIC) || strcmp(buf, MAILBOX_HEADER_MAGIC)) {
+	return IMAP_MAILBOX_BADFORMAT;
+    }
+
+    /* Read quota file pathname */
+    if (!fgets(buf, sizeof(buf), mailbox->header)) {
+	return IMAP_MAILBOX_BADFORMAT;
+    }
+
+    /* Read names of user flags */
+    if (!fgets(buf, sizeof(buf), mailbox->header)) {
+	return IMAP_MAILBOX_BADFORMAT;
+    }
+
+    /* Read ACL */
+    if (!fgets(buf, sizeof(buf), mailbox->header)) {
+	return IMAP_MAILBOX_BADFORMAT;
+    }
+    
+    buf[strlen(buf)-1] = '\0';
+    free(mailbox->acl);
+    mailbox->acl = strsave(buf);
 
     return 0;
 }
