@@ -15,6 +15,7 @@
 
 #include <acl.h>
 #include <util.h>
+#include "auth.h"
 #include "config.h"
 #include "imap_err.h"
 #include "mailbox.h"
@@ -93,7 +94,8 @@ char **argv;
     }
 
     if (authuser) {
-	auth_setid(authuser);
+	authuser = auth_canonifyid(authuser);
+	if (authuser) auth_setid(authuser);
     }
 
     /* Copy to temp file */
