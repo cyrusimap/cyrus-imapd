@@ -1,4 +1,4 @@
-<!-- $Id: install-configure.html,v 1.6 2000/10/18 18:32:17 wcw Exp $ -->
+<!-- $Id: install-configure.html,v 1.7 2000/10/23 20:47:54 leg Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Configuring the IMAP Server
@@ -331,8 +331,10 @@ OpenSSL.  Here, we create a self-signed  key for the machine
 "<tt> foobar.andrew.cmu.edu</tt>" and put both the certificate and key
 in the file "<tt>/var/imap/server.pem</tt>".</p>
 
-<p>Please enter the appropriate information for your organization,
-instead of Carnegie Mellon University.</p>
+<p>Please do not blindly enter in the information to OpenSSL
+below. Instead, enter the appropriate information for your
+organization (i.e. NOT Carnegie Mellon University for the Organization
+name, etc.).</p>
 
 <pre>
 <kbd>openssl req -new -x509 -nodes -out /var/imap/server.pem -keyout /var/imap/server.pem -days 365</kbd>
@@ -388,5 +390,5 @@ authenticate DN (distinguished name) to a SASL authentication
 name.</p>
 
 <P><HR>
-last modified: $Date: 2000/10/18 18:32:17 $
+last modified: $Date: 2000/10/23 20:47:54 $
 </BODY></HTML>
