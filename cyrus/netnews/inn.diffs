@@ -1,3 +1,23 @@
+This is a patch against INN 2.2.1 for allowing INN to deliver directly
+to an IMAP server using LMTP and IMAP (to handle control messages)
+
+This patch will hopefully be included in future versions on INN.
+
+
+To configure INN to deliver to an IMAP server put something like the
+following in your newsfeeds file.
+
+imapfeed!:\
+        !*,\
+        :Tc,Wnm*,S30000:/usr/news/bin/startinnfeed imapfeed
+
+# A real-time feed through innfeed.
+myhostname.cmu.edu\
+        :!junk,!control/!foo\
+        :Tm:imapfeed!
+
+
+
 *** Makefile.old	Mon Feb 28 00:50:47 2000
 --- Makefile	Thu Feb 10 23:39:19 2000
 ***************
