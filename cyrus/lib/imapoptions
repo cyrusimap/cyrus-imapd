@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.21 2004/04/26 19:27:29 rjs3 Exp $
+.\" $Id: imapoptions,v 1.22 2004/04/27 19:53:07 rjs3 Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -85,6 +85,13 @@ are listed with ``<none>''.
    Some problems may occur otherwise, most notably the ability of
    administrators to create top-level mailboxes visible to users,
    but not writable by users. */
+
+{ "afspts_localrealms", NULL, STRING }
+/* The list of realms which are to be treated as local, and thus stripped
+   during identifier canoicalization (for the AFSPTS ptloader module) */
+
+{ "afspts_mycell", NULL, STRING }
+/* Cell to use for AFS PTS lookups.  Defaults to the local cell. */
 
 { "allowallsubscribe", 0, SWITCH }
 /* Allow subscription to nonexistent mailboxes.  This option is
