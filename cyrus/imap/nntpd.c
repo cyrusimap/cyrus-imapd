@@ -50,7 +50,7 @@
  */
 
 /*
- * $Id: nntpd.c,v 1.1.2.10 2002/09/25 20:18:37 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.11 2002/09/25 20:49:17 ken3 Exp $
  */
 #include <config.h>
 
@@ -1149,6 +1149,7 @@ struct message_data {
     FILE *f;			/* FILE * corresponding */
 
     char *id;			/* message id */
+    char *control;		/* control message */
     int size;			/* size of message */
 
     char **rcpt;		/* mailboxes to post message */
@@ -1166,6 +1167,7 @@ int msg_new(message_data_t **m)
     ret->data = NULL;
     ret->f = NULL;
     ret->id = NULL;
+    ret->control = NULL;
     ret->size = 0;
     ret->rcpt = NULL;
     ret->rcpt_num = 0;
@@ -1189,6 +1191,9 @@ void msg_free(message_data_t *m)
     }
     if (m->id) {
 	free(m->id);
+    }
+    if (m->control) {
+	free(m->control);
     }
 
     if (m->rcpt) {
@@ -1632,7 +1637,11 @@ static int savemsg(message_data_t *m, FILE *f)
 
     /* now, using our header cache, fill in the data that we want */
 
-    /* XXX check for control messages */
+    /* add Path: header (if necessary) */
+    if ((body = msg_getheader(m, "path")) == NULL) {
+	fprintf(f, "Path: %s!%s\r\n",
+		config_servername, nntp_userid ? nntp_userid : "anonymous");
+    }
 
     /* get message-id */
     if ((body = msg_getheader(m, "message-id")) != NULL) {
@@ -1641,10 +1650,11 @@ static int savemsg(message_data_t *m, FILE *f)
 	m->id = NULL;	/* no message-id */
     }
 
-    /* add Path: header (if necessary) */
-    if ((body = msg_getheader(m, "path")) == NULL) {
-	fprintf(f, "Path: %s!%s\r\n",
-		config_servername, nntp_userid ? nntp_userid : "anonymous");
+    /* get control */
+    if ((body = msg_getheader(m, "control")) != NULL) {
+	m->control = xstrdup(body[0]);
+    } else {
+	m->control = NULL;	/* no control */
     }
 
     /* get newsgroups */
@@ -1655,6 +1665,7 @@ static int savemsg(message_data_t *m, FILE *f)
 	    const char *sep = "";
 	    int n;
 
+	    /* build a To: header */
 	    for (n = 0; n < m->rcpt_num; n++) {
 		snprintf(buf+strlen(buf), sizeof(buf)-strlen(buf), "%s%s+%s",
 			 sep, /* XXX make this an option */ "post",
@@ -1764,20 +1775,27 @@ static void cmd_post(char *msgid, int mode)
 	}
     }
 
-    /* get a spool file if needed */
+    /* get a spool file (if needed) */
     if (!r) {
 	f = tmpfile();
 	if (!f) r = IMAP_IOERROR;
     }
 
     if (f) {
-	/* spool the article */
 	msg_new(&msg);
 
+	/* spool the article */
 	r = savemsg(msg, f);
 
-	/* deliver the article */
-	if (!r) r = deliver(msg);
+	if (!r) {
+	    if (msg->control) {
+		/* do something with the control message */
+	    }
+	    else {
+		/* deliver the article */
+		r = deliver(msg);
+	    }
+	}
 
 	if (!r) {
 	    if (mode == POST_POST) {
