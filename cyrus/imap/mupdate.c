@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.62 2002/08/07 20:41:04 rjs3 Exp $
+ * $Id: mupdate.c,v 1.63 2002/09/23 19:59:59 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1464,7 +1464,7 @@ int cmd_resync(struct mupdate_mailboxdata *mdata,
 
 /* Callback for mupdate_synchronize to be passed to mboxlist_findall. */
 static int sync_findall_cb(char *name,
-			   int matchlen __attribute((unused)),
+			   int matchlen __attribute__((unused)),
 			   int maycreate __attribute__((unused)),
 			   void *rock)
 {
