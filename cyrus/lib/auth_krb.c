@@ -1,5 +1,5 @@
 /* auth_krb.c -- Kerberos authorization
- $Id: auth_krb.c,v 1.27 1998/05/15 21:50:43 neplokh Exp $
+ $Id: auth_krb.c,v 1.28 1999/01/09 08:37:03 tjs Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -30,10 +30,14 @@
 #include <sys/types.h>
 
 #include <krb.h>
+#ifdef HAVE_LIBDB
 #ifdef HAVE_DB_185_H
 #include <db_185.h>
 #else
 #include <db.h>
+#endif
+#else
+#include <ndbm.h>
 #endif
 #include <krb.h>
 
