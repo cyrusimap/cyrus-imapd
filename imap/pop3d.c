@@ -737,7 +737,8 @@ int lines;
 	return;
     }
     prot_printf(popd_out, "+OK Message follows\r\n");
-    printf("%s%c\r\n", STATUS, msg <= popd_initialhighest ? 'R' : 'U');
+    prot_printf(popd_out, "%s%c\r\n", STATUS,
+		msg <= popd_initialhighest ? 'R' : 'U');
     while (lines != thisline) {
 	if (!fgets(buf, sizeof(buf), msgfile)) break;
 
