@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.120 2000/06/12 01:30:41 leg Exp $
+ * $Id: index.c,v 1.121 2000/06/14 15:54:04 ken3 Exp $
  */
 #include <config.h>
 
@@ -73,6 +73,8 @@
 #include "lsort.h"
 #include "message.h"
 #include "parseaddr.h"
+#include "hash.h"
+#include "stristr.h"
 
 extern int errno;
 
@@ -123,6 +125,26 @@ static char *seenuids;		/* Sequence of UID's from last seen checkpoint */
 #define CACHE_ITEM_LEN(ptr) CACHE_ITEM_BIT32(ptr)
 #define CACHE_ITEM_NEXT(ptr) ((ptr)+4+((3+CACHE_ITEM_LEN(ptr))&~3))
 
+/* Cached envelope token positions */
+enum {
+    ENV_DATE = 0,
+    ENV_SUBJECT,
+    ENV_FROM,
+    ENV_SENDER,
+    ENV_REPLYTO,
+    ENV_TO,
+    ENV_CC,
+    ENV_BCC,
+    ENV_INREPLYTO,
+    ENV_MSGID,
+};
+#define NUMENVTOKENS (10)
+
+/* Special "sort criteria" to load message-id and references/in-reply-to
+ * into msgdata array for threaders that need them.
+ */
+#define LOAD_IDS	127
+
 struct copyargs {
     struct copymsg *copymsg;
     int nummsg;
@@ -147,6 +169,7 @@ typedef struct msgdata {
     char *to;			/* local-part of first "to" address */
     char *xsubj;		/* extracted subject text */
     unsigned xsubj_hash;	/* hash of extracted subject text */
+    int is_refwd;		/* is message a reply or forward? */
     unsigned size;		/* size of message */
     struct msgdata *next;
 } MsgData;
@@ -216,7 +239,11 @@ static index_sequenceproc_t index_copysetup;
 static int _index_search P((unsigned **msgno_list, struct mailbox *mailbox,
 			    struct searchargs *searchargs));
 
-static char *index_extract_subject P((const char *subj));
+static void parse_cached_envelope P((char *env, char *tokens[]));
+static char *get_localpart_addr P((const char *header));
+static char *index_extract_subject P((const char *subj, int *is_refwd));
+static void index_get_ids P((MsgData *msgdata,
+			     char *envtokens[], const char *headers));
 static MsgData *index_msgdata_load P((unsigned *msgno_list, int n,
 				      signed char *sortcrit));
 
@@ -232,10 +259,18 @@ static int index_thread_compare P((Thread *t1, Thread *t2,
 				   signed char *call_data));
 static void index_thread_orderedsubj P((unsigned *msgno_list, int nmsg,
 					int usinguid));
+static void index_thread_sort P((Thread *root, signed char *sortcrit));
 static void index_thread_print P((Thread *threads, int usinguid));
+#ifdef ENABLE_THREAD_JWZ
+static void index_thread_jwz P((unsigned *msgno_list, int nmsg,
+				int usinguid));
+#endif
 
 static struct thread_algorithm thread_algs[] = {
     { "ORDEREDSUBJECT", index_thread_orderedsubj },
+#ifdef ENABLE_THREAD_JWZ
+    { "JWZ", index_thread_jwz },
+#endif
     { NULL, NULL }
 };
 
@@ -2949,56 +2984,26 @@ void *rock;
 }
 
 /*
- * Hashes a string to produce an unsigned short, which should be
- * sufficient for most purposes.
- *
- * public domain code by Jerry Coffin, with improvements by HenkJan Wolthuis.
- *
- * Can we find a function that maintains alphabetical (ascii) ordering
- * between strings ( hash(abc) < hash(abd) < hash(abe) )?
- */
-
-static unsigned hash(char *string)
-{
-    unsigned ret_val = 0;
-    int i;
-
-    while (*string) {
-	i = (int) *string;
-	ret_val ^= i;
-	ret_val <<= 1;
-	string ++;
-    }
-    return ret_val;
-}
-
-/*
  * Creates a list of msgdata.
  *
  * We fill these structs with the info that will be needed
  * by the specified sort criteria.
  */
-
-#define GETADDR(header)							\
-    parseaddr_list((header)+4, &addr);					\
-    cur->header = xstrdup(addr && addr->mailbox ? addr->mailbox : "");	\
-    parseaddr_free(addr);						\
-    addr=NULL
-
 static MsgData *index_msgdata_load(unsigned *msgno_list, int n,
 				   signed char *sortcrit)
 {
     MsgData *md, *cur;
-    const char *cacheitem, *env, *from, *to, *cc, *subj;
-    struct address *addr;
+    const char *cacheitem, *env, *headers, *from, *to, *cc, *subj;
     int i, j;
+    char *tmpenv;
+    char *envtokens[NUMENVTOKENS];
 
     if (!n)
 	return NULL;
 
     /* create an array of MsgData to use as nodes of linked list */
-    md = (MsgData *) memset(xmalloc(n * sizeof(MsgData)), 0,
-			    n * sizeof(MsgData));
+    md = (MsgData *) xmalloc(n * sizeof(MsgData));
+    memset(md, 0, n * sizeof(MsgData));
 
     for (i = 0, cur = md; i < n; i++, cur = cur->next) {
 	/* set msgno */
@@ -3012,12 +3017,18 @@ static MsgData *index_msgdata_load(unsigned *msgno_list, int n,
 	cacheitem = CACHE_ITEM_NEXT(env); /* bodystructure */
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* body */
 	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* section */
-	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* cacheheaders */
-	from = CACHE_ITEM_NEXT(cacheitem);
+	headers = CACHE_ITEM_NEXT(cacheitem);
+	from = CACHE_ITEM_NEXT(headers);
 	to = CACHE_ITEM_NEXT(from);
 	cc = CACHE_ITEM_NEXT(to);
 	cacheitem = CACHE_ITEM_NEXT(cc); /* bcc */
 	subj = CACHE_ITEM_NEXT(cacheitem);
+
+	/* make a working copy of envelope -- strip outer ()'s */
+	tmpenv = xstrndup(env+5, strlen(env+4) - 2);
+
+	/* parse envelope into tokens */
+	parse_cached_envelope(tmpenv, envtokens);
 
 	j = 0;
 	while (sortcrit[j]) {
@@ -3026,35 +3037,109 @@ static MsgData *index_msgdata_load(unsigned *msgno_list, int n,
 		cur->arrival = INTERNALDATE(cur->msgno);
 		break;
 	    case SORT_CC:
-		GETADDR(cc);
+		cur->cc = get_localpart_addr(cc+4);
 		break;
 	    case SORT_DATE:
-		/* skip open paren and double-quote */
-		cur->date = message_parse_date((char *) env+6,
+		cur->date = message_parse_date(envtokens[ENV_DATE],
 					       PARSE_TIME | PARSE_ZONE);
 		break;
 	    case SORT_FROM:
-		GETADDR(from);
+		cur->from = get_localpart_addr(from+4);
 		break;
 	    case SORT_SIZE:
 		cur->size = SIZE(cur->msgno);
 		break;
 	    case SORT_SUBJECT:
-		cur->xsubj = index_extract_subject(subj+4);
+		cur->xsubj = index_extract_subject(subj+4, &cur->is_refwd);
 		cur->xsubj_hash = hash(cur->xsubj);
 		break;
 	    case SORT_TO:
-		GETADDR(to);
+		cur->to = get_localpart_addr(to+4);
+		break;
+	    case LOAD_IDS:
+		index_get_ids(cur, envtokens, headers+4);
 		break;
 	    }
 	}
+
+	free(tmpenv);
     }
 
     return md;
 }
 
-/* Extract base subject from subject header */
-char *index_extract_subject(const char *subj)
+/*
+ * Parse a cached envelope into individual tokens
+ */
+static void parse_cached_envelope(char *env, char *tokens[])
+{
+    char *c;
+    int i = 0, len, ncom;
+
+    c = env;
+    while (*c != '\0') {
+	switch (*c) {
+	case ' ':			/* end of token */
+	    *c = '\0';			/* mark end of token */
+	    c++;
+	    break;
+	case 'N':			/* "NIL" */
+	    tokens[i++] = NULL;		/* empty token */
+	    c += 3;			/* skip "NIL" */
+	    break;
+	case '"':			/* quoted string */
+	    c++;			/* skip open quote */
+	    tokens[i++] = c;		/* start of string */
+	    c = strchr(c, '"');		/* find close quote */
+	    *c = '\0';			/* end of string */
+	    c++;			/* skip close quote */
+	    break;
+	case '{':			/* literal */
+	    c++;			/* skip open brace */
+	    len = 0;			/* determine length of literal */
+	    while (isdigit((int) *c)) {
+		len = len*10 + *c - '0';
+		c++;
+	    }
+	    c += 3;			/* skip close brace & CRLF */
+	    tokens[i++] = c;		/* start of literal */
+	    c += len;			/* skip literal */
+	    break;
+	case '(':			/* address list */
+	    c++;			/* skip open paren */
+	    tokens[i++] = c;		/* start of address list */
+	    ncom = 1;			/* find matching close paren */
+	    while (ncom) {		/* until all paren are closed... */
+		if (*c == '(')		/* new open - inc counter */
+		    ncom++;
+		else if (*c == ')')	/* close - dec counter */
+		    ncom--;
+		c++;
+	    }
+	    *(c-1) = '\0';		/* end of list - trim close paren */
+	    break;
+	}
+    }
+}
+
+/*
+ * Get the 'local-part' of an address from a header
+ */
+static char *get_localpart_addr(const char *header)
+{
+    struct address *addr = NULL;
+    char *ret;
+
+    parseaddr_list(header, &addr);
+    ret = xstrdup(addr && addr->mailbox ? addr->mailbox : "");
+    parseaddr_free(addr);
+    return ret;
+}
+
+/*
+ * Extract base subject from subject header
+ */
+static char *index_extract_subject(const char *subj, int *is_refwd)
 {
     char *s, *base, *ret, *x;
 
@@ -3091,6 +3176,7 @@ char *index_extract_subject(const char *subj)
      * start at the head of the string and work towards the end,
      * skipping over stuff we don't care about.
      */
+    *is_refwd = 0;
     for (base = s; base;) {
 	if (isspace((int) *base)) base++;		/* whitespace? */
 
@@ -3114,8 +3200,10 @@ char *index_extract_subject(const char *subj)
 
 	    while (isspace((int) *x)) x++;              /* skip whitespace */
 
-	    if (*x == ':')				/* ending colon? */
+	    if (*x == ':') {				/* ending colon? */
 		base = x + 1;				/* yes, skip past it */
+		*is_refwd = 1;
+	    }
 	    else
 		break;					/* no, we're done */
 	}
@@ -3131,7 +3219,8 @@ char *index_extract_subject(const char *subj)
 		/* make a working copy of blob contents */
 		blob = xstrndup(base+1, strlen(base) - 2);
 
-		ret = index_extract_subject(blob);	/* extract blob-base */
+		/* extract blob-base */
+		ret = index_extract_subject(blob, is_refwd);
 
 		free(blob);
 		free(s);
@@ -3153,6 +3242,76 @@ char *index_extract_subject(const char *subj)
     return ret;
 }
 
+/* Find a message-id looking thingy in a string.  Returns a pointer to the
+ * id and the length is returned in the *len parameter.
+ *
+ * This is a poor-man's way of finding the message-id.  We simply look for
+ * any string having the format "< ... @ ... >" and assume that the mail
+ * client created a properly formatted message-id.
+ */
+char *find_msgid(char *str, int *len)
+{
+    char *start, *at, *end;
+
+    if (str &&
+	(start = strchr(str, '<')) &&
+	(at = strchr(start, '@')) &&
+	(end = strchr(at, '>'))) {
+	*len = end - start + 1;
+	return start;
+    }
+    else {
+	*len = 0;
+	return NULL;
+    }
+}
+
+/* Get message-id, and references/in-reply-to */
+#define REFGROWSIZE 10
+
+void index_get_ids(MsgData *msgdata, char *envtokens[], const char *headers)
+{
+    char *msgid, *refstr, *ref, *in_reply_to;
+    int len, refsize = REFGROWSIZE;
+
+    /* get msgid */
+    msgid = find_msgid(envtokens[ENV_MSGID], &len);
+    if (msgid)
+	msgdata->msgid = xstrndup(msgid, len);
+    else
+	msgdata->msgid = xstrdup("");
+
+    /* grab the References header */
+    if ((refstr = stristr(headers, "references:"))) {
+	/* allocate some space for refs */
+	msgdata->ref = (char **) xmalloc(refsize * sizeof(char *));
+	/* find references */
+	while ((ref = find_msgid(refstr, &len)) != NULL) {
+	    /* reallocate space for this msgid if necessary */
+	    if (msgdata->nref == refsize) {
+		refsize += REFGROWSIZE;
+		msgdata->ref = (char **)
+		    xrealloc(msgdata->ref, refsize * sizeof(char *));
+	    }
+	    /* store this msgid in the array */
+	    msgdata->ref[msgdata->nref++] = xstrndup(ref, len);
+	    /* skip past this msgid */
+	    refstr = ref + len;
+	}
+    }
+
+    /* if we have no references, try in-reply-to */
+    if (!msgdata->nref) {
+	/* get in-reply-to id */
+	in_reply_to = find_msgid(envtokens[ENV_INREPLYTO], &len);
+	/* if we have an in-reply-to id, make it the ref */
+	if (in_reply_to) {
+	    msgdata->ref = (char **) xmalloc(sizeof(char *));
+	    msgdata->ref[msgdata->nref++] = xstrndup(in_reply_to, len);
+	}
+    }
+}
+
 /*
  * Getnext function for sorting message lists.
  */
@@ -3170,13 +3329,16 @@ static void index_sort_setnext(MsgData *node, MsgData *next)
 }
 
 /*
- * Comparison function for sorting message lists.
+ * Function for comparing two integers.
  */
 static int numcmp(int x, int y)
 {
     return ((x < y) ? -1 : (x > y) ? 1 : 0);
 }
 
+/*
+ * Comparison function for sorting message lists.
+ */
 static int index_sort_compare(MsgData *md1, MsgData *md2,
 			      signed char *sortcrit)
 {
@@ -3230,10 +3392,18 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
 static void index_msgdata_free(MsgData *md)
 {
 #define FREE(x)	if (x) free(x)
+    int i;
+
+    if (!md)
+	return;
     FREE(md->cc);
     FREE(md->from);
     FREE(md->to);
     FREE(md->xsubj);
+    FREE(md->msgid);
+    for (i = 0; i < md->nref; i++)
+	free(md->ref[i]);
+    FREE(md->ref);
 }
 
 /*
@@ -3258,7 +3428,36 @@ static void index_thread_setnext(Thread *thread, Thread *next)
 static int index_thread_compare(Thread *t1, Thread *t2,
 				signed char *call_data)
 {
-  return index_sort_compare(t1->msgdata, t2->msgdata, call_data);
+    MsgData *md1, *md2;
+
+    /* if the container is empty, use the first child's container */
+    md1 = t1->msgdata ? t1->msgdata : t1->child->msgdata;
+    md2 = t2->msgdata ? t2->msgdata : t2->child->msgdata;
+    return index_sort_compare(md1, md2, call_data);
+}
+
+/*
+ * Sort a list of threads.
+ */
+static void index_thread_sort(Thread *root, signed char *sortcrit)
+{
+    Thread *child;
+
+    /* sort the grandchildren */
+    child = root->child;
+    while (child) {
+	/* if the child has children, sort them */
+	if (child->child)
+	    index_thread_sort(child, sortcrit);
+	child = child->next;
+    }
+
+    /* sort the children */
+    root->child = lsort(root->child,
+			(void * (*)(void*)) index_thread_getnext,
+			(void (*)(void*,void*)) index_thread_setnext,
+			(int (*)(void*,void*,void*)) index_thread_compare,
+			sortcrit);
 }
 
 /*
@@ -3269,9 +3468,9 @@ static void index_thread_orderedsubj(unsigned *msgno_list, int nmsg,
 {
     MsgData *msgdata, *freeme;
     signed char sortcrit[] = { SORT_SUBJECT, SORT_DATE, SORT_SEQUENCE };
-    unsigned psubj_hash;
+    unsigned psubj_hash = 0;
     char *psubj;
-    Thread *head, *newnode, *cur, *parent, *threads;
+    Thread *head, *newnode, *cur, *parent;
 
     /* Create/load the msgdata array */
     freeme = msgdata = index_msgdata_load(msgno_list, nmsg, sortcrit);
@@ -3291,21 +3490,23 @@ static void index_thread_orderedsubj(unsigned *msgno_list, int nmsg,
     head = (Thread *) xmalloc((nmsg + 1) * sizeof(Thread));
     memset(head, 0, (nmsg + 1) * sizeof(Thread));
 
-    cur = head;		/* set current thread to the dummy head */
-    newnode = head + 1;	/* set next newnode to the second one in the array */
-
-    /* guarantee psubj != first subj so that we start a new thread */
-    psubj_hash = msgdata->xsubj_hash + 1;
-    psubj = NULL;
-    parent = NULL;
+    newnode = head + 1;	/* set next newnode to the second
+			   one in the array (skip the head) */
+    parent = head;	/* parent is the head node */
+    psubj = NULL;	/* no previous subject */
+    cur = NULL;		/* no current thread */
 
     while (msgdata) {
-	/* if current subj = prev subj (subjs have same hash, and
+	/* if no previous subj, or
+	   current subj = prev subj (subjs have same hash, and
 	   the strings are equal), then add message to current thread */
-	if (msgdata->xsubj_hash == psubj_hash &&
-	    !strcmp(msgdata->xsubj, psubj)) {
+	if (!psubj ||
+	    (msgdata->xsubj_hash == psubj_hash &&
+	     !strcmp(msgdata->xsubj, psubj))) {
 	    parent->child = newnode;	/* create a new child */
 	    parent->child->msgdata = msgdata;
+	    if (!cur)
+		cur = parent->child;	/* first thread */
 	    parent = parent->child;	/* this'll be the parent 
 					   next time around */
 	}
@@ -3323,14 +3524,10 @@ static void index_thread_orderedsubj(unsigned *msgno_list, int nmsg,
     }
 
     /* Sort threads by date */
-    threads = lsort(head->next,
-		    (void * (*)(void*)) index_thread_getnext,
-		    (void (*)(void*,void*)) index_thread_setnext,
-		    (int (*)(void*,void*,void*)) index_thread_compare,
-		    sortcrit+1);
+    index_thread_sort(head, sortcrit+1);
 
     /* Output the threaded messages */ 
-    index_thread_print(threads, usinguid);
+    index_thread_print(head, usinguid);
 
     /* free the thread array */
     free(head);
@@ -3352,9 +3549,11 @@ static void _index_thread_print(Thread *thread, int usinguid)
     while (thread) {
 	prot_printf(imapd_out, "(");
 
+	/* if this is an empty container, print zero */
 	prot_printf(imapd_out, "%u",
-		    usinguid ? UID(thread->msgdata->msgno) :
-		    thread->msgdata->msgno);
+		    thread->msgdata ?
+		    (usinguid ? UID(thread->msgdata->msgno) :
+		     thread->msgdata->msgno) : 0);
 
 	/* free contents of the current node */
 	index_msgdata_free(thread->msgdata);
@@ -3366,16 +3565,18 @@ static void _index_thread_print(Thread *thread, int usinguid)
 
 	    /* if the child has siblings, print new branch and break */
 	    if (child->next) {
-		index_thread_print(child, usinguid);
+		_index_thread_print(child, usinguid);
 		break;
 	    }
 	    /* otherwise print the only child */
 	    else {
+		/* if this is an empty container, print zero */
 		prot_printf(imapd_out, "%u",
-			    usinguid ? UID(child->msgdata->msgno) :
-			    child->msgdata->msgno);
+			    child->msgdata ?
+			    (usinguid ? UID(child->msgdata->msgno) :
+			     child->msgdata->msgno) : 0);
 
-		/* free contents of the current node */
+		/* free contents of the child node */
 		index_msgdata_free(child->msgdata);
 
 		child = child->child;
@@ -3397,7 +3598,7 @@ static void index_thread_print(Thread *thread, int usinguid)
 {
     prot_printf(imapd_out, "* THREAD ");
 
-    _index_thread_print(thread, usinguid);
+    _index_thread_print(thread->child, usinguid);
 
     prot_printf(imapd_out, "\r\n");
 }
@@ -3428,3 +3629,394 @@ int find_thread_algorithm(char *arg)
     }
     return -1;
 }
+
+#ifdef ENABLE_THREAD_JWZ
+/*
+ * Tries to find child in parent's child-list.
+ *
+ * Returns 1 if found, 0 otherwise.
+ */
+static int thread_find_child(Thread *parent, Thread *child)
+{
+    Thread *cur = parent->child;
+
+    while (cur) {
+	if (cur == child || thread_find_child(cur, child))
+	    return 1;
+	cur = cur->next;
+    }
+    return 0;
+}
+
+/*
+ * Links child into parent's child-list.
+ */
+static void thread_adopt_child(Thread *parent, Thread *child)
+{
+    child->parent = parent;
+    child->next = parent->child;
+    parent->child = child;
+}
+
+/*
+ * Unlinks child from it's parent's child-list.
+ */
+static void thread_orphan_child(Thread *child)
+{
+    Thread *prev, *rest;
+
+    for (prev = NULL, rest = child->parent->child;
+	 rest != NULL; prev = rest, rest = rest->next) {
+	if ((rest = child))
+	    break;
+    }
+
+    if (!rest) {
+	/* uh oh!  couldn't find the child in it's parent's child-list
+	 * we should probably return NO to thread command
+	 */
+	return;
+    }
+
+    if (!prev)
+	child->parent->child = child->next;
+    else
+	prev->next = child->next;
+
+    child->parent = child->next = NULL;
+}
+
+/* Root node for all threads - all threads are children of this dummy node */
+static Thread *root;
+
+/* Number of children of the root node */
+static unsigned nroot;
+
+static void jwz_add_root_node(char *key, Thread *node)
+{
+    if (!node->parent) {
+	if (node->next) {
+	    /* uh oh!  a node without a parent should not have a sibling
+	     * we should probably return NO to thread command
+	     */
+	    return;
+	}
+	node->next = root->child;
+	root->child = node;
+	nroot++;
+    }
+}
+
+/*
+ * Prune empty containers.
+ */
+static void jwz_prune_empty(Thread *parent)
+{
+    Thread *cur, *prev, *next;
+
+    for (prev = NULL, cur = parent->child, next = cur->next;
+	 cur;
+	 prev = cur, cur = next, next = (!cur ? NULL : cur->next)) {
+
+	/* if we have an empty container with no kids, delete it */
+	if (!cur->msgdata && !cur->child) {
+	    if (!prev)
+		parent->child = cur->next;
+	    else
+		prev->next = cur->next;
+
+	    /* set cur to prev, so that we keep the same prev next time thru */
+	    cur = prev;
+	}
+
+	else if (!cur->msgdata &&		/* empty container, and */
+		 cur->child &&			/* has kids, and */
+		 (cur->parent ||		/* not at root, or */
+		  !cur->child->next)) {		/* only one child */
+	    Thread *tail, *kids = cur->child;
+
+	    /* remove container from the list, replacing it with kids */
+	    if (!prev)
+		parent->child = kids;
+	    else
+		prev->next = kids;
+
+	    /* make each child's parent be this level's parent.
+	     * make the last child's next be this container's next
+	     * (splicing kids into the list in place of cur).
+	     */
+	    for (tail = kids; tail->next; tail = tail->next)
+		tail->parent = cur->parent;
+
+	    tail->parent = cur->parent;
+	    tail->next = cur->next;
+
+	    /* since we promoted the kids into the 'next' position,
+	     * set next to point to the kids so that we process them
+	     * next time thru
+	     */
+	    next = kids;
+
+	    /* set cur to prev, so that we keep the same prev next time thru */
+	    cur = prev;
+	}
+
+	/* a real message with kids, prune it's children */
+	else if (cur->child)
+	    jwz_prune_empty(cur);
+    }
+}
+
+/*
+ * Thread a list of messages using the JWZ algorithm.
+ *
+ * Most of this code is just a straight port of Jamie Zawinski's
+ * Java implementation in the Grendel source.
+ */
+void index_thread_jwz(unsigned *msgno_list, int nmsg, int usinguid)
+{
+    MsgData *msgdata, *freeme, *md;
+    signed char sortcrit[] = { LOAD_IDS, SORT_SUBJECT,
+			       SORT_DATE, SORT_SEQUENCE };
+    int i;
+    Thread *newnode, *ref, *cur, *parent;
+    Thread *old, *prev, *rest, *tail;
+    struct hash_table id_table, subj_table;
+    int tref, nnode;
+    char *subj;
+
+    /* Create/load the msgdata array */
+    freeme = msgdata = index_msgdata_load(msgno_list, nmsg, sortcrit);
+
+    /* calculate the sum of the number of references for all messages */
+    for (md = msgdata, tref = 0; md; md = md->next)
+	tref += md->nref;
+
+    /* create an array of Thread to use as nodes of thread tree (including
+     * empty containers)
+     *
+     * - We will be building threads under a dummy root, so we need at least
+     *   (nmsg + 1) nodes.
+     * - We also will need containers for references to non-existent messages.
+     *   To make sure we have enough, we will take the worst case and
+     *   use the sum of the number of references for all messages.
+     * - Finally, we will might need containers to group threads with the same
+     *   subject together.  To make sure we have enough, we will take the
+     *   worst case which will be half of the number of messages.
+     *
+     * This is overkill, but it is the only way to make sure we have enough
+     * ahead of time.  If we tried to use xrealloc(), the array might be moved,
+     * and our pointers will no longer be correct (been there, done that).
+     */
+    nnode = (int) (1.5 * nmsg + 1 + tref);
+    root = (Thread *) xmalloc(nnode * sizeof(Thread));
+    memset(root, 0, nnode * sizeof(Thread));
+
+    newnode = root + 1;	/* set next newnode to the second
+			   one in the array (skip the root) */
+
+    /* 0 - create the id_table with one bucket for every possible
+       message-id and reference/in-reply-to (nmsg + tref) */
+    construct_hash_table(&id_table, nmsg + tref);
+
+    /* 1 - create all of the parent/child/sibling relationships
+       based on message-id and references/in-reply-to */
+    while (msgdata) {
+	/* 1A - fill the containers with msgdata */
+	if ((cur = (Thread *) hash_lookup(msgdata->msgid, &id_table))) {
+	    cur->msgdata = msgdata;
+	}
+	/* make and index a new container if necessary */
+	else {
+	    cur = newnode;
+	    cur->msgdata = msgdata;
+	    hash_insert(msgdata->msgid, cur, &id_table);
+	    newnode++;
+	}
+
+	/* 1B - link the references together */
+	for (i = 0, parent = NULL; i < msgdata->nref; i++) {
+	    /* if no container for the ref, make and index an empty one */
+	    if (!(ref = (Thread *) hash_lookup(msgdata->ref[i], &id_table))) {
+		ref = newnode;
+		hash_insert(msgdata->ref[i], ref, &id_table);
+		newnode++;
+	    }
+
+	    /* link the refs together as long as they aren't already linked
+	       and we won't create a loop */
+	    if (parent &&				/* there is a parent */
+		!ref->parent &&				/* no parent already */
+		parent != ref &&			/* not a tight loop */
+		!thread_find_child(ref, parent)) {	/* not a wide loop */
+		thread_adopt_child(parent, ref);
+	    }
+
+	    parent = ref;
+	}
+
+	/* 1C - make the parent of this message be the last reference */
+	/* if we have a parent already, it is probably bogus, so unlink
+	   from it. */
+	if (cur->parent) thread_orphan_child(cur);
+
+	/* link our message into the parent's child-list as long as we
+	   won't create a loop */
+	if (parent &&				/* there is a parent */
+	    parent != cur &&			/* not a tight loop */
+	    !thread_find_child(cur, parent)) {	/* not a wide loop */
+	    thread_adopt_child(parent, cur);
+	}
+
+	msgdata = msgdata->next;
+    }
+
+    /* 2 - find the root set */
+    nroot = 0;
+    hash_enumerate(&id_table, (void (*)(char*,void*)) jwz_add_root_node);
+
+    /* 3 - discard id_table */
+    free_hash_table(&id_table, NULL);
+
+    /* 4 - prune empty containers */
+    jwz_prune_empty(root);
+
+    /* 5 - group root set by subject
+     *
+     * 5A - create the subj_table with one bucket for every possible
+     * subject in the root set
+     */
+    construct_hash_table(&subj_table, nroot);
+
+    /* 5B - populate the table with a container for each non-empty subject */
+    for (cur = root->child; cur; cur = cur->next) {	
+	/* if container is not empty, use it's subject */
+	if (cur->msgdata)
+	    subj = cur->msgdata->xsubj;
+	/* otherwise, use the subject of it's first child */
+	else
+	    subj = cur->child->msgdata->xsubj;
+
+	/* if subject is empty, skip it */
+	if (!strlen(subj)) continue;
+
+	/* lookup this subject in the table */
+	old = (Thread *) hash_lookup(subj, &subj_table);
+
+	/* insert the current container into the table if:
+	 * - this subject is not in the table, or
+	 * - this container is empty and the one in the table is not, or
+	 * - the container in the table is a re/fwd and this one is not
+	 */
+	if (!old ||
+	    (!cur->msgdata && old->msgdata) ||
+	    (old->msgdata && old->msgdata->is_refwd &&
+	     cur->msgdata && !cur->msgdata->is_refwd)) {
+	  hash_insert(subj, cur, &subj_table);
+	}
+    }
+
+    /* 5C - group threads with the same subject together */
+    for (prev = NULL, cur = root->child, rest = cur->next;
+	 cur;
+	 prev = cur, cur = rest, rest = (!rest ? NULL : rest->next)) {	
+	/* if container is not empty, use it's subject */
+	if (cur->msgdata)
+	    subj = cur->msgdata->xsubj;
+	/* otherwise, use the subject of it's first child */
+	else
+	    subj = cur->child->msgdata->xsubj;
+
+	/* if subject is empty, skip it -- let subjectless messages dangle */
+	if (!strlen(subj)) continue;
+
+	/* lookup this subject in the table */
+	old = (Thread *) hash_lookup(subj, &subj_table);
+
+	/* this is us, continue */
+	if (old == cur) continue;
+
+	/* ok, we already have a thread which contains our current subject,
+	 * so pull this thread out of the root set, because we are going to
+	 * merge this with something else
+	 */
+	if (!prev)
+	    root->child = cur->next;
+	else
+	    prev->next = cur->next;
+	cur->next = NULL;
+
+	/* if both threads have empty containers at the head, merge them */
+	if (!old->msgdata && !cur->msgdata) {
+	    /* go to the end of old's sibling-list */
+	    for (tail = old->child; tail && tail->next; tail = tail->next);
+
+	    /* add cur's child to the end of old's sibling list */
+	    tail->next = cur->child;
+
+	    /* make old the parent of cur's children */
+	    for (tail = cur->child; tail; tail = tail->next)
+		tail->parent = old;
+	    cur->child = NULL;
+	}
+
+	/* make the current message a child of the other, if:
+	 * - old container is empty, or
+	 * - the current message is a re/fwd and the other is not
+	 */
+	else if (!old->msgdata ||
+		 (cur->msgdata &&
+		  cur->msgdata->is_refwd &&
+		  !old->msgdata->is_refwd)) {
+	    thread_adopt_child(old, cur);
+	}
+
+	/* if both messages are re/fwds or neither are re/fwds,
+	 * then make both of them siblings of a new dummy container
+	 *
+	 * make the new container a copy of the old, and then make the
+	 * old container the dummy, so that the hash table still points
+	 * to the old
+	 */
+	else {
+	    Thread *new = newnode++;
+
+	    /* make new a copy of old (except parent and next) */
+ 	    new->msgdata = old->msgdata;
+	    new->child = old->child;
+	    new->next = NULL;
+
+	    /* make new the parent of new's (used to be old's) children */
+	    for (tail = new->child; tail; tail = tail->next)
+		tail->parent = new;
+
+	    /* make old the parent of its two siblings (cur and new) */
+	    cur->parent = old;
+	    new->parent = old;
+
+	    /* empty out old and make it have two kids (cur and new) */
+	    old->msgdata = NULL;
+	    old->child = cur;
+	    cur->next = new;
+	}
+
+	/* we've done a merge, so keep the same prev next time around */
+	cur = prev;
+    }
+
+    /* 6 - done threading */
+    free_hash_table(&subj_table, NULL);
+
+    /* 7 - sort threads by date */
+    index_thread_sort(root, sortcrit+2);
+
+    /* Output the threaded messages */ 
+    index_thread_print(root, usinguid);
+
+    /* free the thread array */
+    free(root);
+
+    /* free the msgdata array */
+    free(freeme);
+}
+#endif /* ENABLE_THREAD_JWZ */
