@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.59 2002/02/22 18:08:34 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.60 2002/02/22 18:36:58 leg Exp $
  *
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -729,7 +729,12 @@ static int parseheader(struct protstream *fin, FILE *fout,
 		/* no header here! */
 		goto ph_error;
 	    }
-	    if (!isgraph(c) || c == ':') {
+	    /* field-name      =       1*ftext
+	       ftext           =       %d33-57 / %d59-126         
+	                               ; Any character except
+				       ;  controls, SP, and
+				       ;  ":". */
+	    if (!((c >= 33 && c <= 57) || (c >= 59 && c <= 126))) {
 		/* invalid header name */
 		goto ph_error;
 	    }
@@ -744,7 +749,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
 		s = (c == ':' ? BODY_START : COLON);
 		break;
 	    }
-	    if (iscntrl(c)) {
+	    if (!((c >= 33 && c <= 57) || (c >= 59 && c <= 126))) {
 		goto ph_error;
 	    }
 	    name[off++] = tolower(c);
