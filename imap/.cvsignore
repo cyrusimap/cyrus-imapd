@@ -18,6 +18,7 @@ lmtpproxyd
 lmtpstats.c
 lmtpstats.h
 mbpath
+mbexamine
 mupdate
 mupdate_err.c
 mupdate_err.h
