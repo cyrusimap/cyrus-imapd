@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.53 2003/01/07 02:20:22 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.54 2003/01/08 14:33:48 ken3 Exp $ */
 
 #include <config.h>
 
@@ -507,17 +507,18 @@ int service_main(int argc __attribute__((unused)),
 	} else {
 	    imapd_clienthost[0] = '\0';
 	}
-	strcat(imapd_clienthost, "[");
-	strcat(imapd_clienthost, inet_ntoa(imapd_remoteaddr.sin_addr));
-	strcat(imapd_clienthost, "]");
+	strlcat(imapd_clienthost, "[", sizeof(imapd_clienthost));
+	strlcat(imapd_clienthost, inet_ntoa(imapd_remoteaddr.sin_addr),
+		sizeof(imapd_clienthost));
+	strlcat(imapd_clienthost, "]", sizeof(imapd_clienthost));
 	salen = sizeof(imapd_localaddr);
 	if (getsockname(0, (struct sockaddr *)&imapd_localaddr, &salen) == 0) {
 	      if(iptostring((struct sockaddr *)&imapd_remoteaddr,
 			    sizeof(struct sockaddr_in),
-			    remoteip, 60) == 0
+			    remoteip, sizeof(remoteip)) == 0
 		 && iptostring((struct sockaddr *)&imapd_localaddr,
 			       sizeof(struct sockaddr_in),
-			       localip, 60) == 0) {
+			       localip, sizeof(localip)) == 0) {
 		  imapd_haveaddr = 1;
 	      }
 	}
@@ -5671,7 +5672,12 @@ static int getresult(struct protstream *p, char *tag)
 	    return IMAP_SERVER_UNAVAILABLE;
 	}
 	if (!strncmp(str, tag, strlen(tag))) {
-	    str += strlen(tag) + 1;
+	    str += strlen(tag);
+	    if(!*str) {
+		/* We got a tag, but no response */
+		return IMAP_SERVER_UNAVAILABLE;
+	    }
+	    str++;
 	    if (!strncasecmp(str, "OK ", 3)) { return 0; }
 	    if (!strncasecmp(str, "NO ", 3)) { return IMAP_REMOTE_DENIED; }
 	    return IMAP_SERVER_UNAVAILABLE; /* huh? */
@@ -6108,7 +6114,7 @@ static int xfer_user_cb(char *name,
     char *toserver = ((struct xfer_user_rock *)rock)->toserver;
     char *topart = ((struct xfer_user_rock *)rock)->topart;
     struct backend *be = ((struct xfer_user_rock *)rock)->be;
-    char externalname[MAX_MAILBOX_NAME];
+    char externalname[MAX_MAILBOX_NAME+1];
     int mbflags;
     int r = 0;
     char *inpath, *inpart, *inacl;
@@ -6253,7 +6259,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 
 	/* If needed, set an uppermost quota root */
 	if(!r) {
-	    char buf[MAX_MAILBOX_PATH];
+	    char buf[MAX_MAILBOX_PATH+1];
 	    struct quota quota;
 	    
 	    quota.fd = -1;
@@ -6974,7 +6980,7 @@ static int mailboxdata(char *name,
 static void mstringdata(char *cmd, char *name, int matchlen, int maycreate,
 			int listopts)
 {
-    static char lastname[MAX_MAILBOX_PATH];
+    static char lastname[MAX_MAILBOX_PATH+1];
     static int lastnamedelayed = 0;
     static int lastnamenoinferiors = 0;
     static int nonexistent = 0;
@@ -7048,7 +7054,7 @@ static void mstringdata(char *cmd, char *name, int matchlen, int maycreate,
 	sawuser = 1;
     }
 
-    strcpy(lastname, name);
+    strlcpy(lastname, name, sizeof(lastname));
     lastname[matchlen] = '\0';
     nonexistent = 0;
 
