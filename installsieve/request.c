@@ -426,7 +426,10 @@ int setscriptactive(int version, struct protstream *pout, struct protstream *pin
   /* if command failed */
   if (ret!=0)
   {
-    printf("Setting script %s active failed with message: %s\n",name, string_DATAPTR(errstr));
+    if (!strlen(name))
+      printf("Disabling active script failed with message: %s\n", string_DATAPTR(errstr));
+    else
+      printf("Setting script %s active failed with message: %s\n",name, string_DATAPTR(errstr));
     return -1;
   }
 
