@@ -1,0 +1,148 @@
+dnl libnet.m4--libnet and includes
+dnl Derrick Brashear
+dnl from KTH krb and Arla
+
+AC_DEFUN(CMU_LIBNET_INC_WHERE1, [
+AC_REQUIRE([AC_PROG_CC_GNU])
+saved_CPPFLAGS=$CPPFLAGS
+if test "$ac_cv_prog_gcc" = "yes" ; then
+  CPPFLAGS="$saved_CPPFLAGS -nostdinc -I$1 -I/usr/include"
+else
+  CPPFLAGS="$saved_CPPFLAGS -I$1"
+fi
+AC_TRY_COMPILE([#include <libnet.h>],
+[struct link_int foo;],
+ac_cv_found_libnet_inc=yes,
+ac_cv_found_libnet_inc=no)
+CPPFLAGS=$saved_CPPFLAGS
+])
+
+AC_DEFUN(CMU_LIBNET_INC_WHERE, [
+   for i in $1; do
+      AC_MSG_CHECKING(for libnet header in $i)
+      CMU_LIBNET_INC_WHERE1($i)
+      if test "$ac_cv_found_libnet_inc" = "yes"; then
+        ac_cv_libnet_where_inc=$i
+        AC_MSG_RESULT(found)
+        break
+      else
+        AC_MSG_RESULT(no found)
+      fi
+    done
+])
+
+AC_DEFUN(CMU_LIBNET_LIB_WHERE1, [
+AC_REQUIRE([AC_PROG_CC_GNU])
+saved_LIBS=$LIBS
+LIBS="$saved_LIBS -L$1 -lnet"
+AC_TRY_LINK(,
+[open_link_interface("","");],
+[ac_cv_found_libnet_lib=yes],
+ac_cv_found_libnet_lib=no)
+LIBS=$saved_LIBS
+])
+
+AC_DEFUN(CMU_LIBNET_LIB_WHERE, [
+   for i in $1; do
+      AC_MSG_CHECKING(for libnet library in $i)
+      CMU_LIBNET_LIB_WHERE1($i)
+      if test "$ac_cv_found_libnet_lib" = "yes" ; then
+        ac_cv_libnet_where_lib=$i
+        AC_MSG_RESULT(found)
+        break
+      else
+        AC_MSG_RESULT(no found)
+      fi
+    done
+])
+
+AC_DEFUN(CMU_LIBNET, [
+AC_ARG_WITH(libnet,
+	[  --with-libnet=PREFIX      Compile with LIBNET support],
+	[if test "X$with_libnet" = "X"; then
+		with_libnet=yes
+	fi])
+AC_ARG_WITH(libnet-lib,
+	[  --with-libnet-lib=dir     use libnet libraries in dir],
+	[if test "$withval" = "yes" -o "$withval" = "no"; then
+		AC_MSG_ERROR([No argument for --with-libnet-lib])
+	fi])
+AC_ARG_WITH(libnet-include,
+	[  --with-libnet-include=dir use libnet headers in dir],
+	[if test "$withval" = "yes" -o "$withval" = "no"; then
+		AC_MSG_ERROR([No argument for --with-libnet-include])
+	fi])
+
+	if test "X$with_libnet" != "X"; then
+	  if test "$with_libnet" != "yes"; then
+	    ac_cv_libnet_where_lib=$with_libnet/lib
+	    ac_cv_libnet_where_inc=$with_libnet/include
+	  fi
+	fi
+
+	if test "X$with_libnet_lib" != "X"; then
+	  ac_cv_libnet_where_lib=$with_libnet_lib
+	fi
+	if test "X$ac_cv_libnet_where_lib" = "X"; then
+	  CMU_LIBNET_LIB_WHERE(/usr/ng/lib /usr/lib /usr/local/lib)
+	fi
+
+	if test "X$with_libnet_include" != "X"; then
+	  ac_cv_libnet_where_inc=$with_libnet_include
+	fi
+	if test "X$ac_cv_libnet_where_inc" = "X"; then
+	  CMU_LIBNET_INC_WHERE(/usr/ng/include /usr/include /usr/local/include)
+	fi
+
+	AC_MSG_CHECKING(whether to include libnet)
+	if test "X$ac_cv_libnet_where_lib" = "X" -a "X$ac_cv_libnet_where_inc" = "X"; then
+	  ac_cv_found_libnet=no
+	  AC_MSG_RESULT(no)
+	else
+	  ac_cv_found_libnet=yes
+	  AC_MSG_RESULT(yes)
+	  LIBNET_INC_DIR=$ac_cv_libnet_where_inc
+	  LIBNET_LIB_DIR=$ac_cv_libnet_where_lib
+	  LIBNET_INC_FLAGS="-I${LIBNET_INC_DIR}"
+	  LIBNET_LIB_FLAGS="-L${LIBNET_LIB_DIR} -lnet"
+	  if test "X$RPATH" = "X"; then
+		RPATH=""
+	  fi
+	  case "${host}" in
+	    *-*-linux*)
+	      if test "X$RPATH" = "X"; then
+	        RPATH="-Wl,-rpath,${LIBNET_LIB_DIR}"
+	      else 
+		RPATH="${RPATH}:${LIBNET_LIB_DIR}"
+	      fi
+	      ;;
+	    *-*-hpux*)
+	      if test "X$RPATH" = "X"; then
+	        RPATH="-Wl,+b${LIBNET_LIB_DIR}"
+	      else 
+		RPATH="${RPATH}:${LIBNET_LIB_DIR}"
+	      fi
+	      ;;
+	    *-*-irix*)
+	      if test "X$RPATH" = "X"; then
+	        RPATH="-Wl,-rpath,${LIBNET_LIB_DIR}"
+	      else 
+		RPATH="${RPATH}:${LIBNET_LIB_DIR}"
+	      fi
+	      ;;
+	    *-*-solaris2*)
+	      if test "$ac_cv_prog_gcc" = yes; then
+		if test "X$RPATH" = "X"; then
+		  RPATH="-Wl,-R${LIBNET_LIB_DIR}"
+		else 
+		  RPATH="${RPATH}:${LIBNET_LIB_DIR}"
+		fi
+	      else
+	        RPATH="${RPATH} -R${LIBNET_LIB_DIR}"
+	      fi
+	      ;;
+	  esac
+	  AC_SUBST(RPATH)
+	fi
+	])
+

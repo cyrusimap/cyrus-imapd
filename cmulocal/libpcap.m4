@@ -111,34 +111,34 @@ AC_ARG_WITH(pcap-include,
 	  case "${host}" in
 	    *-*-linux*)
 	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,-rpath,/usr/local/lib"
+	        RPATH="-Wl,-rpath,${PCAP_LIB_DIR}"
 	      else 
-		RPATH="${RPATH}:/usr/local/lib"
+		RPATH="${RPATH}:${PCAP_LIB_DIR}"
 	      fi
 	      ;;
 	    *-*-hpux*)
 	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,+b/usr/local/lib"
+	        RPATH="-Wl,+b${PCAP_LIB_DIR}"
 	      else 
-		RPATH="${RPATH}:/usr/local/lib"
+		RPATH="${RPATH}:${PCAP_LIB_DIR}"
 	      fi
 	      ;;
 	    *-*-irix*)
 	      if test "X$RPATH" = "X"; then
-	        RPATH="-Wl,-rpath,/usr/local/lib"
+	        RPATH="-Wl,-rpath,${PCAP_LIB_DIR}"
 	      else 
-		RPATH="${RPATH}:/usr/local/lib"
+		RPATH="${RPATH}:${PCAP_LIB_DIR}"
 	      fi
 	      ;;
 	    *-*-solaris2*)
 	      if test "$ac_cv_prog_gcc" = yes; then
 		if test "X$RPATH" = "X"; then
-		  RPATH="-Wl,-R/usr/local/lib"
+		  RPATH="-Wl,-R${PCAP_LIB_DIR}"
 		else 
-		  RPATH="${RPATH}:/usr/local/lib"
+		  RPATH="${RPATH}:${PCAP_LIB_DIR}"
 		fi
 	      else
-	        RPATH="${RPATH} -R/usr/local/lib"
+	        RPATH="${RPATH} -R${PCAP_LIB_DIR}"
 	      fi
 	      ;;
 	  esac
