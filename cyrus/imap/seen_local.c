@@ -25,7 +25,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <ctype.h>
-#include <strings.h>
+#include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <syslog.h>
@@ -467,3 +467,73 @@ struct mailbox *mailbox;
 
     return seen_create(mailbox);
 }
+
+int seen_arbitron(mailbox, report_time, prune_time, proc, rock)
+struct mailbox *mailbox;
+time_t report_time;
+time_t prune_time;
+int (*proc)();
+void *rock;
+{
+    int r;
+    char fnamebuf[MAX_MAILBOX_PATH];
+    struct stat sbuf;
+    char *lockfailaction;
+    FILE *seenfile;
+    char buf[1024];
+    char *p, *end_userid;
+    time_t lastread;
+    int c;
+
+    strcpy(fnamebuf, mailbox->path);
+    strcat(fnamebuf, FNAME_SEEN);
+
+    seenfile = fopen(fnamebuf, "r+");
+    if (!seenfile) {
+	syslog(LOG_ERR, "IOERROR: opening %s: %m", fnamebuf);
+	return IMAP_IOERROR;
+    }
+    
+    /* Lock the database */
+    r = lock_reopen(fileno(seenfile), fnamebuf, &sbuf, &lockfailaction);
+    if (r == -1) {
+	syslog(LOG_ERR, "IOERROR: %s %s: %m", lockfailaction, fnamebuf);
+	fclose(seenfile);
+	return IMAP_IOERROR;
+    }
+
+    while (fgets(buf, sizeof(buf), seenfile)) {
+	/* Skip over username we know is there */
+	p = strchr(buf, '\t');
+	if (!p) {
+	    /* XXX remove bogus record */
+	    goto nextline;
+	}
+	end_userid = p;
+	p++;
+
+	lastread = 0;
+	while (isdigit(*p)) {
+	    lastread = lastread * 10 + *p++ - '0';
+	}
+
+	if (lastread > report_time) {
+	    *end_userid = '\0';
+	    (*proc)(rock, buf);
+	    *end_userid = '\t';
+	}
+
+	/* XXX deal with prune_time, if nonzero */
+
+      nextline:
+	if (buf[strlen(buf)-1] != '\n') {
+	    do {
+		c = getc(seenfile);
+	    } while (c != EOF && c != '\n');
+	}
+    }
+
+    fclose(seenfile);
+    return 0;
+}
+
