@@ -1,9 +1,9 @@
 /* imtest.c -- IMAP/POP3/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.88 2002/11/04 16:10:32 ken3 Exp $
+ * $Id: imtest.c,v 1.89 2003/02/13 20:15:33 rjs3 Exp $
  *
- * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions

@@ -1,7 +1,7 @@
 /* mbdump.h -- Mailbox dump routine definitions
- * $Id: mbdump.h,v 1.3 2002/03/21 17:26:21 rjs3 Exp $
+ * $Id: mbdump.h,v 1.4 2003/02/13 20:15:27 rjs3 Exp $
  *
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions

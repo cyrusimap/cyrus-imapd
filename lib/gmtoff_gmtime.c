@@ -1,7 +1,7 @@
 /* gmtoff_tm.c - Get offset from GMT by calling gmtime and subtracting
- $Id: gmtoff_gmtime.c,v 1.8 2000/05/23 20:56:15 robeson Exp $
+ $Id: gmtoff_gmtime.c,v 1.9 2003/02/13 20:15:40 rjs3 Exp $
  
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions

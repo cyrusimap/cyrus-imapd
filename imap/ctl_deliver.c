@@ -1,6 +1,6 @@
 /* ctl_deliver.c -- Program to perform operations on duplicate delivery db
- $Id: ctl_deliver.c,v 1.14 2002/01/15 18:44:09 leg Exp $
- * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
+ $Id: ctl_deliver.c,v 1.15 2003/02/13 20:15:23 rjs3 Exp $
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -172,4 +172,4 @@ main(argc, argv)
     return r;
 }
 
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/ctl_deliver.c,v 1.14 2002/01/15 18:44:09 leg Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/ctl_deliver.c,v 1.15 2003/02/13 20:15:23 rjs3 Exp $ */

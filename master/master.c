@@ -1,6 +1,6 @@
 /* master.c -- IMAP master process to handle recovery, checkpointing, spawning
  *
- * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.77 2003/01/08 19:17:21 rjs3 Exp $ */
+/* $Id: master.c,v 1.78 2003/02/13 20:15:45 rjs3 Exp $ */
 
 #include <config.h>
 

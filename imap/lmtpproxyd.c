@@ -1,7 +1,7 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.48 2003/02/05 19:09:43 ken3 Exp $
- * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
+ * $Id: lmtpproxyd.c,v 1.49 2003/02/13 20:15:26 rjs3 Exp $
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions

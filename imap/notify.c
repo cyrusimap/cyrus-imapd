@@ -1,6 +1,6 @@
 /* notify.c -- Module to notify of new mail
- * $Id: notify.c,v 1.8 2002/11/06 20:43:23 rjs3 Exp $ 
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * $Id: notify.c,v 1.9 2003/02/13 20:15:29 rjs3 Exp $ 
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions

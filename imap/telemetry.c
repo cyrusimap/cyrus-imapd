@@ -1,7 +1,7 @@
 /* telemetry.c -- common server telemetry
- * $Id: telemetry.c,v 1.4 2001/04/04 01:16:46 ken3 Exp $
+ * $Id: telemetry.c,v 1.5 2003/02/13 20:15:31 rjs3 Exp $
  *
- * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions

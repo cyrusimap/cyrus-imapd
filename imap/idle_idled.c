@@ -1,5 +1,5 @@
 /* 
- * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle_idled.c,v 1.9 2002/01/18 22:58:47 rjs3 Exp $ */
+/* $Id: idle_idled.c,v 1.10 2003/02/13 20:15:24 rjs3 Exp $ */
 
 #include <config.h>
 

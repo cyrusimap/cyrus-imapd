@@ -1,6 +1,6 @@
 /* backend.c -- IMAP server proxy for Cyrus Murder
  *
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.13 2003/02/04 17:46:05 rjs3 Exp $ */
+/* $Id: backend.c,v 1.14 2003/02/13 20:15:23 rjs3 Exp $ */
 
 #include <config.h>
 

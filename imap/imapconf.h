@@ -1,6 +1,6 @@
 /* config.h -- Configuration routines
- * $Id: imapconf.h,v 1.18 2003/02/05 19:09:43 ken3 Exp $
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * $Id: imapconf.h,v 1.19 2003/02/13 20:15:24 rjs3 Exp $
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions

@@ -1,5 +1,5 @@
 /* fud.c -- long-lived finger information provider
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.43 2002/11/06 20:43:20 rjs3 Exp $ */
+/* $Id: fud.c,v 1.44 2003/02/13 20:15:24 rjs3 Exp $ */
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif

@@ -1,6 +1,6 @@
 /* search_engines.h --  Prefiltering routines for SEARCH
  *
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: search_engines.h,v 1.1 2001/09/25 16:49:51 ken3 Exp $
+ * $Id: search_engines.h,v 1.2 2003/02/13 20:15:30 rjs3 Exp $
  */
 
 #ifndef INCLUDED_SEARCH_ENGINES_H

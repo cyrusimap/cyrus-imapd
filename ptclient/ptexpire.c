@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -65,7 +65,7 @@
 #include "auth_krb_pts.h"
 
 
-static char rcsid[] = "$Id: ptexpire.c,v 1.11 2002/09/26 17:18:28 rjs3 Exp $";
+static char rcsid[] = "$Id: ptexpire.c,v 1.12 2003/02/13 20:15:56 rjs3 Exp $";
 
 int main(int argc, char *argv[])
 {

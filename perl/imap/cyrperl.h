@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
-/* $Id: cyrperl.h,v 1.6 2002/05/25 19:57:49 leg Exp $ */
+/* $Id: cyrperl.h,v 1.7 2003/02/13 20:15:49 rjs3 Exp $ */
 /*
  * Internal callback rock, used to invoke arbitrary Perl code via a CODE
  * reference ( \&sub ).  Allocate with Perl's New(), free with Safefree().

@@ -1,7 +1,7 @@
 /* ptloader.c -- AFS group loader daemon
  */
 /*
- * Copyright (c) 1996-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -42,7 +42,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ptloader.c,v 1.29 2003/01/10 17:44:56 rjs3 Exp $";
+      "$Id: ptloader.c,v 1.30 2003/02/13 20:15:56 rjs3 Exp $";
 
 #include <config.h>
 
@@ -118,7 +118,7 @@ main(argc, argv)
 
     /* normally LOCAL6, but do this while we're logging keys */
     openlog("ptloader", LOG_PID, LOG_LOCAL7);
-    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.29 2003/01/10 17:44:56 rjs3 Exp $");
+    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.30 2003/02/13 20:15:56 rjs3 Exp $");
 
     while ((opt = getopt(argc, argv, "Uspd:l:f:u:t:")) != EOF) {
 	switch (opt) {
@@ -573,4 +573,4 @@ void fatal(const char *msg, int exitcode)
     syslog(LOG_ERR, "%s", msg);
     exit(-1);
 }
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.29 2003/01/10 17:44:56 rjs3 Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/ptclient/ptloader.c,v 1.30 2003/02/13 20:15:56 rjs3 Exp $ */

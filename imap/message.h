@@ -1,7 +1,7 @@
 /* message.h -- Message parsing
- $Id: message.h,v 1.5 2000/05/30 21:02:05 ken3 Exp $
+ $Id: message.h,v 1.6 2003/02/13 20:15:28 rjs3 Exp $
 
- * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions

@@ -1,5 +1,5 @@
-/* $Id: cyrdump.c,v 1.10 2002/08/13 16:46:32 rjs3 Exp $
- * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
+/* $Id: cyrdump.c,v 1.11 2003/02/13 20:15:24 rjs3 Exp $
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions

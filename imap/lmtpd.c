@@ -1,7 +1,7 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.106 2003/02/05 19:09:43 ken3 Exp $
- * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
+ * $Id: lmtpd.c,v 1.107 2003/02/13 20:15:26 rjs3 Exp $
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions

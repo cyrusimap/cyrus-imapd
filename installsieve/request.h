@@ -3,7 +3,7 @@
  * 9/21/99
  */
 /* 
- * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -42,7 +42,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: request.h,v 1.12 2002/05/25 19:57:47 leg Exp $ */
+/* $Id: request.h,v 1.13 2003/02/13 20:15:37 rjs3 Exp $ */
 
 #ifndef _REQUEST_H_
 #define _REQUEST_H_
