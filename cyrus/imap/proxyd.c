@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.163 2003/07/22 19:17:17 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.164 2003/09/23 18:34:24 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -3693,16 +3693,17 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 
 	destpart = strchr(partition,'!');
 	if(destpart) {
-	    if(strlen(partition)>=sizeof(newmailboxname)) {
+	    char newserver[MAX_MAILBOX_NAME+1];	    
+	    if(strlen(partition)>=sizeof(newserver)) {
 		prot_printf(s->out,
 			    "%s NO Partition name too long\r\n", tag);
 		return;
 	    }
-	    strcpy(newmailboxname,partition);
-	    newmailboxname[destpart-partition]='\0';
+	    strcpy(newserver,partition);
+	    newserver[destpart-partition]='\0';
 	    destpart++;
 
-	    if(!strcmp(server, newmailboxname)) {
+	    if(!strcmp(server, newserver)) {
 		/* Same Server, different partition */
 		/* xxx this would require administrative access to the
 		 * backend, which we won't get */
@@ -3716,7 +3717,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 		prot_printf(s->out,
 			    "%s XFER {%d+}\r\n%s {%d+}\r\n%s {%d+}\r\n%s\r\n", 
 			    tag, strlen(oldname), oldname,
-			    strlen(newmailboxname), newmailboxname,
+			    strlen(newserver), newserver,
 			    strlen(destpart), destpart);
 	    }
 	    
