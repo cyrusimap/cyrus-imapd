@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.320 2001/09/12 15:55:51 ken3 Exp $ */
+/* $Id: imapd.c,v 1.321 2001/09/17 00:26:50 ken3 Exp $ */
 
 #include <config.h>
 
@@ -3409,12 +3409,14 @@ char *name;
     if (!r &&
 	!strncmp(mailboxname, "user.", 5) && !strchr(mailboxname+5, '.')) {
 	struct tmplist *l = xmalloc(sizeof(struct tmplist));
+	char *p;
 	int r2, i;
 
 	l->alloc = 0;
 	l->num = 0;
 
-	strcat(mailboxname, ".*");
+	p = mailboxname + strlen(mailboxname); /* end of mailboxname */
+	strcpy(p, ".*");
 	/* build a list of mailboxes - we're using internal names here */
 	mboxlist_findall(NULL, mailboxname, imapd_userisadmin, imapd_userid,
 			 imapd_authstate, addmbox, &l);
@@ -3432,7 +3434,8 @@ char *name;
 	free(l);
 
 	/* take care of deleting ACLs, subscriptions, seen state and quotas */
-	user_delete(name+5, imapd_userid, imapd_authstate);
+	*p = '\0'; /* clip off pattern */
+	user_delete(mailboxname+5, imapd_userid, imapd_authstate);
     }
 
     if (imapd_mailbox) {
