@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.3 2005/03/01 18:12:03 ken3 Exp $
+ * $Id: sync_client.c,v 1.1.2.4 2005/03/01 18:15:50 ken3 Exp $
  */
 
 #include <config.h>
@@ -2472,56 +2472,6 @@ int do_meta(char *user)
 
 /* ====================================================================== */
 
-/*
- * Optimise out redundant clauses:
- *    user  <username> overrides meta   <username>
- *    user  <username> overrides folder user.<username>[.<anything>]
- *    user  <username> overrides append user.<username>[.<anything>]
- *    user  <username> overrides seen   <anything> <user>
- *
- * folder <foldername> <username>  overrides seen <foldername> <username> 
- */
-
-/* XXX Replace params with single structure? */
-#if 0
-static void remove_small(char *user,
-			 struct sync_action_list *meta_list,
-			 struct sync_action_list *folder_list,
-			 struct sync_action_list *append_list,
-			 struct sync_action_list *seen_list)
-{
-    struct sync_action *action;
-    int len= (user) ? strlen(user) : 0;
-
-    /* user <username> overrides meta <username> */
-    for (action = meta_list->head ; action ; action = action->next) {
-        if (!strcmp(user, action->name))
-            action->active = 0;
-    }
-
-    /* user <username> overrides folder user.<username>[.anything] */
-    for (action = folder_list->head ; action ; action = action->next) {
-        if (!strncmp(action->name, "user.", 5) &&
-            !strncmp(user, action->name+5, len) &&
-            ((action->name[5+len]=='\0') || (action->name[5+len]=='.')))
-            action->active = 0;
-    }
-
-    /* user  <username> overrides append <anything> <user> */
-    for (action = append_list->head ; action ; action = action->next) {
-        if (!strncmp(action->name, "user.", 5) &&
-            !strncmp(user, action->name+5, len) &&
-            ((action->name[5+len]=='\0') || (action->name[5+len]=='.')))
-            action->active = 0;
-    }
-
-    /* user  <username> overrides seen   <anything> <user> */
-    for (action = seen_list->head ; action ; action = action->next) {
-        if (action->user && !strcmp(user, action->user))
-            action->active = 0;
-    }
-}
-#endif
 static void remove_meta(char *user, struct sync_action_list *list)
 {
     struct sync_action *action;
@@ -2650,10 +2600,6 @@ int do_sync(const char *filename)
     /* Optimise out redundant clauses */
 
     for (action = user_list->head ; action ; action = action->next) {
-#if 0
-        remove_small(action->name,
-                     meta_list, folder_list, append_list, seen_list);
-#else
 	char inboxname[MAX_MAILBOX_NAME+1];
 
 	/* USER action overrides any APPEND, ACL, QUOTA action on
@@ -2668,7 +2614,6 @@ int do_sync(const char *filename)
         remove_meta(action->user, seen_list);
         remove_meta(action->user, sub_list);
         remove_meta(action->user, unsub_list);
-#endif
     }
     
     for (action = meta_list->head ; action ; action = action->next) {
@@ -2776,43 +2721,6 @@ int do_sync(const char *filename)
             }
         }
     }
-#if 0
-    /* Group folder actions by userid for do_mailboxes() */
-    for (action = folder_list->head ; action ; action = action->next) {
-        if (!action->active)
-            continue;
-
-        if (!(userid = do_sync_getuserid(action->name))) {
-            syslog(LOG_ERR, "Ignoring invalid mailbox name: %s", action->name);
-            continue;
-        }
-
-        if (!(user=sync_user_list_lookup(user_folder_list, userid)))
-            user = sync_user_list_add(user_folder_list, userid);
-            
-        if (!sync_folder_lookup_byname(user->folder_list, action->name))
-            sync_folder_list_add(user->folder_list, NULL, action->name, NULL);
-    }
-
-    for (user = user_folder_list->head ; user ; user = user->next) {
-        if ((r=do_mailboxes(user->folder_list))) {
-            if (r == IMAP_INVALID_USER)
-                goto bail;
-
-            remove_small(user->userid,
-                         meta_list, folder_list, append_list, seen_list);
-            sync_action_list_add(user_list, user->userid, NULL);
-            if (verbose) {
-                printf("  Promoting: MAILBOXES [%lu] -> USER %s\n",
-                       user->folder_list->count, user->userid);
-            }
-            if (verbose_logging) {
-                syslog(LOG_INFO, "  Promoting: MAILBOXES [%lu] -> USER %s",
-                       user->folder_list->count, user->userid);
-            }
-        }
-    }
-#else
     for (action = mailbox_list->head ; action ; action = action->next) {
         if (!action->active)
             continue;
@@ -2822,7 +2730,7 @@ int do_sync(const char *filename)
 
     if (folder_list->count && (r=do_mailboxes(folder_list)))
 	goto bail;
-#endif
+
     for (action = meta_list->head ; action ; action = action->next) {
         if (action->active && (r=do_meta(action->user))) {
             if (r == IMAP_INVALID_USER)
@@ -3209,65 +3117,27 @@ main(int argc, char **argv)
 
                 if ((len == 0) || (buf[0] == '#'))
                     continue;
-#if 0
-                if (strncmp(argv[i], "user.", 5) != 0)
-                    continue;
 
-                s = argv[i]+5;
-
-                if ((t = strchr(s, '.'))) {
-                    if ((t-s) >= 31) continue;
-
-                    memcpy(buf, s, t-s);
-                    buf[t-s] = '\0';
-                } else
-                    strcpy(buf, s);
-
-                if (!(user = sync_user_list_lookup(user_list, buf)))
-                    user = sync_user_list_add(user_list, buf);
-#endif
                 if (!sync_folder_lookup_byname(folder_list, argv[i]))
                     sync_folder_list_add(folder_list,
                                          NULL, argv[i], NULL);
             }
             fclose(file);
         } else for (i = optind; i < argc; i++) {
-#if 0
-            if (strncmp(argv[i], "user.", 5) != 0)
-                continue;
 
-            s = argv[i]+5;
-
-            if ((t = strchr(s, '.'))) {
-                if ((t-s) >= 31) continue;
-
-                memcpy(buf, s, t-s);
-                buf[t-s] = '\0';
-            } else
-                strcpy(buf, s);
-
-            if (!(user = sync_user_list_lookup(user_list, buf)))
-                user = sync_user_list_add(user_list, buf);
-#endif
             if (!sync_folder_lookup_byname(folder_list, argv[i]))
                 sync_folder_list_add(folder_list, NULL, argv[i], NULL);
         }
 
-#if 0
-        for (user = user_list->head ; user ; user = user->next) {
-#endif
-            if (do_mailboxes(folder_list)) {
-                if (verbose) {
-                    fprintf(stderr,
-                            "Error from do_mailboxes(): bailing out!\n");
-                }
-                syslog(LOG_ERR, "Error in do_mailboxes(): bailing out!");
-                exit_rc = 1;
-/*                break;*/
-            }
-#if 0
-        }
-#endif
+	if (do_mailboxes(folder_list)) {
+	    if (verbose) {
+		fprintf(stderr,
+			"Error from do_mailboxes(): bailing out!\n");
+	    }
+	    syslog(LOG_ERR, "Error in do_mailboxes(): bailing out!");
+	    exit_rc = 1;
+	}
+
         sync_folder_list_free(&folder_list);
     } else if (sieve) {
         for (i = optind; i < argc; i++) {
