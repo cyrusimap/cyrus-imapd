@@ -1,6 +1,6 @@
 /* setproctitle -- set process title shown by ps(1)
  *
- *	(C) Copyright 1994 by Carnegie Mellon University
+ *	(C) Copyright 1995 by Carnegie Mellon University
  *
  *                      All Rights Reserved
  *
@@ -27,7 +27,7 @@
  *
  */
 /*
- * Copyright (c) 1983 Eric P. Allman
+ * Copyright (c) 1983, 1995 Eric P. Allman
  * Copyright (c) 1988, 1993
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -87,14 +87,10 @@
 
 # define MAXLINE 2048            /* max line length */
 
-# ifdef SETPROCTITLE
 extern char **environ;
 
 static char		**Argv = NULL;		/* pointer to argument vector */
 static char		*LastArgv = NULL;	/* end of argv */
-#define MAXUSERENVIRON 100
-static char *UserEnviron[MAXUSERENVIRON + 2]; /* saved user environment */
-# endif /* SETPROCTITLE */
 
 /*
  * Sets up a process to be able to use setproctitle()
@@ -103,7 +99,6 @@ setproctitle_init(argc, argv, envp)
 int argc;
 char **argv, **envp;
 {
-# ifdef SETPROCTITLE
     int i, j;
     char *p;
 
@@ -111,11 +106,12 @@ char **argv, **envp;
      * Move the environment so setproctitle can use the space at
      * the top of memory.
      */
-    for (i = j = 0; j < MAXUSERENVIRON && (p = envp[i]) != NULL; i++) {
-	UserEnviron[j++] = strsave(p);
-    }
-    UserEnviron[j] = NULL;
-    environ = UserEnviron;
+    for (i = 0; envp[i] != NULL; i++)
+	continue;
+    environ = (char **) xmalloc(sizeof (char *) * (i + 1));
+    for (i = 0; envp[i] != NULL; i++)
+	environ[i] = strsave(envp[i]);
+    environ[i] = NULL;
 
     /*
      * Save start and extent of argv for setproctitle.
@@ -126,7 +122,6 @@ char **argv, **envp;
       LastArgv = envp[i - 1] + strlen(envp[i - 1]);
     else
       LastArgv = argv[argc - 1] + strlen(argv[argc - 1]);
-# endif /* SETPROCTITLE */
 }
 
 /*
@@ -144,62 +139,136 @@ char **argv, **envp;
 **		display the title.
 */
 
-#ifdef SETPROCTITLE
-# ifdef __hpux
-#  include <sys/pstat.h>
-# endif
-# ifdef BSD4_4
-#  include <machine/vmparam.h>
-#  include <sys/exec.h>
-#  ifdef __bsdi__
-#   undef PS_STRINGS	/* BSDI 1.0 doesn't do PS_STRINGS as we expect */
-#  endif
-#  ifdef PS_STRINGS
-#   define SETPROC_STATIC static
-#  endif
-# endif
-# ifndef SETPROC_STATIC
-#  define SETPROC_STATIC
-# endif
+#define SPT_NONE	0	/* don't use it at all */
+#define SPT_REUSEARGV	1	/* cover argv with title information */
+#define SPT_BUILTIN	2	/* use libc builtin */
+#define SPT_PSTAT	3	/* use pstat(PSTAT_SETCMD, ...) */
+#define SPT_PSSTRINGS	4	/* use PS_STRINGS->... */
+#define SPT_SYSMIPS	5	/* use sysmips() supported by NEWS-OS 6 */
+#define SPT_SCO		6	/* write kernel u. area */
+
+#ifndef SPT_TYPE
+# define SPT_TYPE	SPT_REUSEARGV
 #endif
 
+#if SPT_TYPE != SPT_NONE && SPT_TYPE != SPT_BUILTIN
+
+# if SPT_TYPE == SPT_PSTAT
+#  include <sys/pstat.h>
+# endif
+# if SPT_TYPE == SPT_PSSTRINGS
+#  include <machine/vmparam.h>
+#  include <sys/exec.h>
+#  ifndef PS_STRINGS	/* hmmmm....  apparently not available after all */
+#   undef SPT_TYPE
+#   define SPT_TYPE	SPT_REUSEARGV
+#  else
+#   ifndef NKPDE			/* FreeBSD 2.0 */
+#    define NKPDE 63
+typedef unsigned int	*pt_entry_t;
+#   endif
+#  endif
+# endif
+
+# if SPT_TYPE == SPT_PSSTRINGS
+#  define SETPROC_STATIC	static
+# else
+#  define SETPROC_STATIC
+# endif
+
+# if SPT_TYPE == SPT_SYSMIPS
+#  include <sys/sysmips.h>
+#  include <sys/sysnews.h>
+# endif
+
+# if SPT_TYPE == SPT_SCO
+#  include <sys/immu.h>
+#  include <sys/dir.h>
+#  include <sys/user.h>
+#  include <sys/fs/s5param.h>
+#  if PSARGSZ > MAXLINE
+#   define SPT_BUFSIZE	PSARGSZ
+#  endif
+# endif
+
+# ifndef SPT_PADCHAR
+#  define SPT_PADCHAR	' '
+# endif
+
+# ifndef SPT_BUFSIZE
+#  define SPT_BUFSIZE	MAXLINE
+# endif
+
+#endif /* SPT_TYPE != SPT_NONE && SPT_TYPE != SPT_BUILTIN */
+
+#if SPT_TYPE != SPT_BUILTIN
+
 /*VARARGS1*/
-#ifdef __STDC__
-setproctitle(char *fmt, ...)
-#else
+void
+# ifdef __STDC__
+setproctitle(const char *fmt, ...)
+# else
 setproctitle(fmt, va_alist)
-	char *fmt;
+	const char *fmt;
 	va_dcl
-#endif
+# endif
 {
-# ifdef SETPROCTITLE
+# if SPT_TYPE != SPT_NONE
 	register char *p;
 	register int i;
-	SETPROC_STATIC char buf[MAXLINE];
+	SETPROC_STATIC char buf[SPT_BUFSIZE];
 	VA_LOCAL_DECL
-#  ifdef __hpux
+#  if SPT_TYPE == SPT_PSTAT
 	union pstun pst;
 #  endif
+#  if SPT_TYPE == SPT_SCO
+	off_t seek_off;
+	static int kmem = -1;
+	static int kmempid = -1;
+	struct user u;
+#  endif
+#  if SPT_TYPE == SPT_REUSEARGV
 	extern char **Argv;
 	extern char *LastArgv;
+#  endif
 
 	p = buf;
 
 	/* print the argument string */
 	VA_START(fmt);
-	(void) vsprintf(p, fmt, ap);
+	(void) vsnprintf(p, sizeof buf - (p - buf), fmt, ap);
 	VA_END;
 
 	i = strlen(buf);
 
-#  ifdef __hpux
+#  if SPT_TYPE == SPT_PSTAT
 	pst.pst_command = buf;
 	pstat(PSTAT_SETCMD, pst, i, 0, 0);
-#  else
-#   ifdef PS_STRINGS
+#  endif
+#  if SPT_TYPE == SPT_PSSTRINGS
 	PS_STRINGS->ps_nargvstr = 1;
 	PS_STRINGS->ps_argvstr = buf;
-#   else
+#  endif
+#  if SPT_TYPE == SPT_SYSMIPS
+	sysmips(SONY_SYSNEWS, NEWS_SETPSARGS, buf);
+#  endif
+#  if SPT_TYPE == SPT_SCO
+	if (kmem < 0 || kmempid != getpid())
+	{
+		if (kmem >= 0)
+			close(kmem);
+		kmem = open(_PATH_KMEM, O_RDWR, 0);
+		if (kmem < 0)
+			return;
+		(void) fcntl(kmem, F_SETFD, 1);
+		kmempid = getpid();
+	}
+	buf[PSARGSZ - 1] = '\0';
+	seek_off = UVUBLK + (off_t) u.u_psargs - (off_t) &u;
+	if (lseek(kmem, (char *) seek_off, SEEK_SET) == seek_off)
+		(void) write(kmem, buf, PSARGSZ);
+#  endif
+#  if SPT_TYPE == SPT_REUSEARGV
 	if (i > LastArgv - Argv[0] - 2)
 	{
 		i = LastArgv - Argv[0] - 2;
@@ -208,8 +277,10 @@ setproctitle(fmt, va_alist)
 	(void) strcpy(Argv[0], buf);
 	p = &Argv[0][i];
 	while (p < LastArgv)
-		*p++ = ' ';
-#   endif
+		*p++ = SPT_PADCHAR;
+	Argv[1] = NULL;
 #  endif
-# endif /* SETPROCTITLE */
+# endif /* SPT_TYPE != SPT_NONE */
 }
+
+#endif /* SPT_TYPE != SPT_BUILTIN */

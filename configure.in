@@ -38,15 +38,53 @@ AC_FUNC_VPRINTF
 dnl for et routines
 AC_FUNC_CHECK(strerror,AC_DEFINE(HAS_STRERROR))
 
-AC_MSG_CHECKING(for setproctitle)
-AC_CACHE_VAL(cyrus_cv_sys_setproctitle, AC_TRY_CPP([
-#if defined(_AIX3) || defined(DGUX) || defined(_SEQUENT_) || defined(apollo)
+dnl Bunch of setproctitle stuff
+spt_type=""
+AC_CHECK_FUNC(setproctitle,spt_type=SPT_BUILTIN)
+if test "$spt_type" = ""; then
+	AC_CHECK_HEADER(sys/pstat.h,spt_type=SPT_PSTAT)
+fi
+if test "$spt_type" = ""; then
+	AC_CHECK_HEADER(sys/sysmips.h,spt_type=SPT_SYSMIPS)
+fi
+if test "$spt_type" = ""; then
+	AC_MSG_CHECKING(for PS_STRINGS)
+	AC_CACHE_VAL(cyrus_cv_sys_psstrings, AC_TRY_CPP([
+#include <machine/vmparam.h>
+#include <sys/exec.h>
+#ifndef PS_STRINGS
+#include </nonexistent>
+#endif],cyrus_cv_sys_psstrings=yes,cyrus_cv_sys_psstrings=no))
+	if test $cyrus_cv_sys_psstrings = yes; then
+		spt_type=SPT_PSSTRINGS
+	fi
+	AC_MSG_RESULT($cyrus_cv_sys_psstrings)
+fi
+if test "$spt_type" = ""; then
+	AC_MSG_CHECKING(for SCO)
+	AC_CACHE_VAL(cyrus_cv_sys_sco, AC_TRY_CPP([
+#ifndef _SCO_unix_
+#include </nonexistent>
+#endif],cyrus_cv_sys_sco=yes,cyrus_cv_sys_sco=no))
+	if test $cyrus_cv_sys_sco = yes; then
+		spt_type=SPT_SCO
+	fi
+	AC_MSG_RESULT($cyrus_cv_sys_sco)
+fi
+if test "$spt_type" = ""; then
+	AC_MSG_CHECKING(for setproctitle usability)
+	AC_CACHE_VAL(cyrus_cv_sys_setproctitle, AC_TRY_CPP([
+#if defined(DGUX) || defined(_SEQUENT_) || defined(apollo)
 #include </nonexistent>
 #endif],cyrus_cv_sys_setproctitle=yes,cyrus_cv_sys_setproctitle=no))
-if test $cyrus_cv_sys_setproctitle = yes; then
-	AC_DEFINE(SETPROCTITLE)
+	if test $cyrus_cv_sys_setproctitle = no; then
+		spt_type=SPT_NONE
+	fi
+	AC_MSG_RESULT($cyrus_cv_sys_setproctitle)
 fi
-AC_MSG_RESULT($cyrus_cv_sys_setproctitle)
+if test "$spt_type" != ""; then
+	AC_DEFINE_UNQUOTED(SPT_TYPE,$spt_type)
+fi
 
 AC_MSG_CHECKING(nonblocking method)
 AC_CACHE_VAL(cyrus_cv_sys_nonblock,AC_TRY_LINK([#include <sys/types.h>
