@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.99.2.10 2002/08/19 01:57:21 ken3 Exp $
+ * $Id: lmtpd.c,v 1.99.2.11 2002/09/25 19:09:20 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -148,7 +148,6 @@ static void removespool(message_data_t *msgdata);
 struct lmtp_func mylmtp = { &deliver, &verify_user, &shut_down,
 			    &spoolfile, &removespool, 0, 1, 0 };
 
-static void logdupelem();
 static void usage();
 static void setup_sieve();
 
@@ -1099,7 +1098,7 @@ int deliver_mailbox(struct protstream *msg,
     if (dupelim && id && 
 	duplicate_check(id, strlen(id), namebuf, strlen(namebuf))) {
 	/* duplicate message */
-	logdupelem(id, namebuf);
+	duplicate_log(id, namebuf);
 	return 0;
     }
 
@@ -1277,26 +1276,6 @@ int deliver(message_data_t *msgdata, char *authuser,
     if (mydata.notifyheader) free(mydata.notifyheader);
 
     return 0;
-}
-
-/*
- */
-static void
-logdupelem(msgid, name)
-char *msgid;
-char *name;
-{
-    if (strlen(msgid) < 80) {
-	char pretty[160];
-
-	beautify_copy(pretty, msgid);
-	syslog(LOG_INFO, "dupelim: eliminated duplicate message to %s id %s",
-	       name, msgid);
-    }
-    else {
-	syslog(LOG_INFO, "dupelim: eliminated duplicate message to %s",
-	       name);
-    }	
 }
 
 void fatal(const char* s, int code)

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: duplicate.h,v 1.11 2002/05/25 19:57:45 leg Exp $ */
+/* $Id: duplicate.h,v 1.11.4.1 2002/09/25 19:09:07 ken3 Exp $ */
 
 #ifndef DUPLICATE_H
 #define DUPLICATE_H
@@ -51,6 +51,7 @@
 int duplicate_init(char*, int);
 
 time_t duplicate_check(char *id, int idlen, char *to, int tolen);
+void duplicate_log(char *msgid, char *name);
 void duplicate_mark(char *id, int idlen, char *to, int tolen, time_t mark);
 
 int duplicate_prune(int days);
