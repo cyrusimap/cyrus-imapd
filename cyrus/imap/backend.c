@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.7.6.4 2002/08/02 17:22:14 ken3 Exp $ */
+/* $Id: backend.c,v 1.7.6.5 2002/08/16 20:24:34 ken3 Exp $ */
 
 #include <config.h>
 
@@ -282,7 +282,7 @@ static int backend_authenticate(struct backend *s, const char *userid)
     /* We can force a particular mechanism using a <shorthost>_mechs option */
     strcpy(buf, s->hostname);
     p = strchr(buf, '.');
-    *p = '\0';
+    if (p) *p = '\0';
     strcat(buf, "_mechs");
     mech_conf = config_getoverflowstring(buf, NULL);
     
