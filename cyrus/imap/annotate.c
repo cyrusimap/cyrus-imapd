@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.8.6.19 2002/11/15 21:46:55 rjs3 Exp $
+ * $Id: annotate.c,v 1.8.6.20 2002/11/17 05:06:28 ken3 Exp $
  */
 
 #include <config.h>
@@ -217,8 +217,6 @@ void annotatemore_init(int myflags,int (*func)(const char *, const char *,
 					       struct strlist *))
 {
     int r;
-    char dbdir[1024];
-    int flags = 0;
 
     if (myflags & ANNOTATE_SYNC) {
 	r = DB->sync();

@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.26 2002/11/15 21:46:57 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.27 2002/11/17 05:06:28 ken3 Exp $
  */
 
 #include <config.h>
@@ -2350,8 +2350,6 @@ static int mboxlist_changequota(const char *name, int matchlen, int maycreate,
 void mboxlist_init(int myflags)
 {
     int r;
-    char dbdir[1024];
-    int flags = 0;
 
     if (myflags & MBOXLIST_SYNC) {
 	r = DB->sync();

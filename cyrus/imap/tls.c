@@ -93,7 +93,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.38.4.2 2002/11/15 21:46:59 rjs3 Exp $ */
+/* $Id: tls.c,v 1.38.4.3 2002/11/17 05:06:35 ken3 Exp $ */
 
 #include <config.h>
 
@@ -638,21 +638,17 @@ int     tls_init_serverengine(const char *ident,
 	SSL_CTX_sess_set_remove_cb(ctx, remove_session_cb);
 	SSL_CTX_sess_set_get_cb(ctx, get_session_cb);
 
-	if (r != 0)
-	    syslog(LOG_ERR, "DBERROR: init: %s", cyrusdb_strerror(r));
-	else {
-	    /* create the name of the db file */
-	    strcpy(dbdir, config_dir);
-	    strcat(dbdir, FNAME_TLSSESSIONS);
+	/* create the name of the db file */
+	strcpy(dbdir, config_dir);
+	strcat(dbdir, FNAME_TLSSESSIONS);
 
-	    r = DB->open(dbdir, &sessdb);
-	    if (r != 0) {
-		syslog(LOG_ERR, "DBERROR: opening %s: %s",
-		       dbdir, cyrusdb_strerror(ret));
-	    }
-	    else
-		sess_dbopen = 1;
+	r = DB->open(dbdir, &sessdb);
+	if (r != 0) {
+	    syslog(LOG_ERR, "DBERROR: opening %s: %s",
+		   dbdir, cyrusdb_strerror(ret));
 	}
+	else
+	    sess_dbopen = 1;
     }
 
     cipher_list = config_getstring(IMAPOPT_TLS_CIPHER_LIST);
