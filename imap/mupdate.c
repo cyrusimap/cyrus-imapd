@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.38 2002/01/30 01:20:23 rjs3 Exp $
+ * $Id: mupdate.c,v 1.39 2002/01/31 06:07:44 rjs3 Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1071,7 +1071,7 @@ static int sendupdate(char *name, int matchlen, int maycreate, void *rock)
 
 void cmd_list(struct conn *C, const char *tag, const char *host_prefix) 
 {
-    char pattern[2] = {'%','\0'};
+    char pattern[2] = {'*','\0'};
 
     /* indicate interest in updates */
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
@@ -1093,7 +1093,7 @@ void cmd_list(struct conn *C, const char *tag, const char *host_prefix)
 
 void cmd_startupdate(struct conn *C, const char *tag)
 {
-    char pattern[2] = {'%','\0'};
+    char pattern[2] = {'*','\0'};
 
     /* initialize my condition variable */
     pthread_cond_init(&C->cond, NULL);
@@ -1368,7 +1368,7 @@ int mupdate_synchronize(mupdate_handle *handle)
     struct mbent_queue local_boxes;
     struct mbent_queue remote_boxes;
     struct mbent *l,*r;
-    char pattern[] = { '%', '\0' };
+    char pattern[] = { '*', '\0' };
 
     if(!handle || !handle->saslcompleted) return 1;
 
