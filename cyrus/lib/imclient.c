@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.52 2000/11/13 22:09:38 leg Exp $
+ $Id: imclient.c,v 1.53 2000/12/12 21:56:19 leg Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -651,10 +651,7 @@ unsigned len;
 #define REPLYSLACK 80		/* When growing, allocate this extra slack */
 #define REPLYSHRINK (4096+500)	/* If more than this free, shrink buffer */
 static void
-imclient_input(imclient, buf, len)
-struct imclient *imclient;
-char *buf;
-int len;
+imclient_input(struct imclient *imclient, char *buf, int len)
 {
     long replytag;
     struct imclient_reply reply;
@@ -715,7 +712,6 @@ int len;
 	}
     }
     
-
     /* Remember where new data starts */
     parsed = imclient->replylen;
 
@@ -753,7 +749,6 @@ int len;
 
 	parsed = endreply - imclient->replybuf + 1;
 
-
 	/* parse tag */
 	p = imclient->replystart;
 	if (*p == '+' && p[1] == ' ') {
@@ -776,7 +771,9 @@ int len;
 	}
 	else {
 	    replytag = 0;
-	    while (isdigit((int) *p)) replytag = replytag * 10 + *p++ - '0';
+	    while (isdigit((unsigned char) *p)) {
+		replytag = replytag * 10 + *p++ - '0';
+	    }
 	    if (*p++ != ' ') {
 		/* XXX Got junk from the server */
 		/* Start parsing the next reply */
@@ -786,9 +783,11 @@ int len;
 	}
 
 	/* parse num, if there */
-	if (replytag == 0 && isdigit((int) *p)) {
+	if (replytag == 0 && isdigit((unsigned char) *p)) {
 	    reply.msgno = 0;
-	    while (isdigit((int) *p)) reply.msgno = reply.msgno * 10 + *p++ - '0';
+	    while (isdigit((unsigned char) *p)) {
+		reply.msgno = reply.msgno * 10 + *p++ - '0';
+	    }
 	    if (*p++ != ' ') {
 		/* XXX Got junk from the server */
 		/* Start parsing the next reply */
@@ -825,16 +824,21 @@ int len;
 
 	    /* Scan back and see if the end of the line introduces a literal */
 	    if (!iscompletion && endreply[-1] == '\r' && endreply[-2] == '}' &&
-		isdigit((int) endreply[-3])) {
+		isdigit((unsigned char) endreply[-3])) {
 		p = endreply - 4;
-		while (p > imclient->replystart && isdigit((int) *p)) p--;
+		while (p > imclient->replystart && 
+		       isdigit((unsigned char) *p)) {
+		    p--;
+		}
 		if (p > imclient->replystart + 2 && *p == '{' &&
 		    charclass[(unsigned char)p[-1]] != 2) {
 
 		    /* Parse the size of the literal */
 		    literallen = 0;
 		    p++;
-		    while (isdigit((int) *p)) literallen = literallen*10 + *p++ -'0';
+		    while (isdigit((unsigned char) *p)) {
+		        literallen = literallen*10 + *p++ -'0';
+		    }
 
 		    /* Do a continue to read literal & following line */
 		    imclient->replyliteralleft = literallen;
@@ -893,16 +897,21 @@ int len;
 	/* Scan back and see if the end of the line introduces a literal */
 	if (!(imclient->callback[keywordindex].flags & CALLBACK_NOLITERAL)) {
 	    if (endreply[-1] == '\r' && endreply[-2] == '}' &&
-		isdigit((int) endreply[-3])) {
+		isdigit((unsigned char) endreply[-3])) {
 		p = endreply - 4;
-		while (p > imclient->replystart && isdigit((int) *p)) p--;
+		while (p > imclient->replystart && 
+		       isdigit((unsigned char) *p)) {
+		    p--;
+		}
 		if (p > imclient->replystart + 2 && *p == '{' &&
 		    charclass[(unsigned char)p[-1]] != 2) {
 
 		    /* Parse the size of the literal */
 		    literallen = 0;
 		    p++;
-		    while (isdigit((int) *p)) literallen = literallen*10 + *p++ -'0';
+		    while (isdigit((unsigned char) *p)) {
+		        literallen = literallen*10 + *p++ -'0';
+		    }
 
 		    /* Do a continue to read literal & following line */
 		    imclient->replyliteralleft = literallen;
@@ -1270,7 +1279,7 @@ static int imclient_authenticate_sub(struct imclient *imclient,
     /* stop looping on command completion */
     if (!imclient->readytxt) break;
 
-    if (isspace((int) *imclient->readytxt)) {
+    if (isspace((unsigned char) *imclient->readytxt)) {
 	inlen = 0;
     } else {
 	inlen = imclient_decodebase64(imclient->readytxt);
