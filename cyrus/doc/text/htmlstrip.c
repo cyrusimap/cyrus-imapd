@@ -13,7 +13,7 @@
  *
  */
   
-/* $Id: htmlstrip.c,v 1.5.4.1 2002/11/14 15:53:36 ken3 Exp $ */
+/* $Id: htmlstrip.c,v 1.5.4.2 2002/11/14 15:56:33 ken3 Exp $ */
   
 #include <stdio.h>
 #include <string.h>
@@ -85,6 +85,9 @@ struct tag cmds[] = {
     { "br",	FLAG_BREAK|FLAG_NOPUSH,	0,	0, },
     { "hr",	FLAG_BREAK|FLAG_NOPUSH,	0,	0, },
     { "meta",   FLAG_NOPUSH,    0,              0, },
+    { "table",  0,		0,		0, },
+    { "tr",	FLAG_PARAGRAPH,	0,		0, },
+    { "td",	0,		0,		0, },
 };
 
 
