@@ -113,18 +113,20 @@ char **retval;
 
     case '{':
 	/* Literal */
-	while (isdigit(c = *(*s)++)) {
-	    sawdigit = 1;
-	    len = len*10 + c - '0';
-	}
-	if (!sawdigit || c != '}' || *(*s)++ != '\r' || *(*s)++ != '\n') {
-	    *retval = "";
-	    return EOF;
-	}
-	*retval = *s;
-	c = (*s)[len];
-	(*s)[len] = '\0';
-	return c;
+        (*s)++;
+        while (isdigit(c = *(*s)++)) {
+            sawdigit = 1;
+            len = len*10 + c - '0';
+        }
+        if (!sawdigit || c != '}' || *(*s)++ != '\r' || *(*s)++ != '\n') {
+            *retval = "";
+            return EOF;
+        }
+        *retval = *s;
+        *s += len;
+        c = **s;
+        *(*s)++ = '\0';  /* Note that 0 and '\0' mean the same thing */
+        return c;
     }
 }
 
