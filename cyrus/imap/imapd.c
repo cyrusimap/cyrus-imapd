@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.402 2002/07/25 18:23:29 ken3 Exp $ */
+/* $Id: imapd.c,v 1.403 2002/07/26 23:21:37 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -6412,6 +6412,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 
 	if(be) {
 	    downserver(be);
+	    free(be);
 	}
 
 	if(r && backout_mupdate) {
