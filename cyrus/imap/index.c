@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.175 2002/04/02 15:49:48 rjs3 Exp $
+ * $Id: index.c,v 1.176 2002/04/10 00:47:59 ken3 Exp $
  */
 #include <config.h>
 
@@ -3579,6 +3579,7 @@ static char *find_msgid(char *str, char **rem)
 	/* quoted string */
 	if (*src == '\"') {
 	    src++;
+	    if (!strchr(src, '\"')) continue;
 	    while (*src) {
 		if (*src == '\"') break;
 		if (*src == '\\') {
@@ -3611,7 +3612,7 @@ static char *find_msgid(char *str, char **rem)
 	return msgid;
     }
 
-    free(msgid);
+    if (msgid) free(msgid);
     return NULL;
 }
 
