@@ -223,7 +223,7 @@ time_t duplicate_check(char *id, int idlen, char *to, int tolen)
     r = d->open(d, fname, NULL, DB_HASH, flags, 0664);
     if (r != 0) {
         if (do_retry && (r == ENOENT)) {
-	  flags = DB_CREATE;
+	  flags |= DB_CREATE;
  	  do_retry = 0;
 	  goto retry;
         }
@@ -292,7 +292,7 @@ void duplicate_mark(char *id, int idlen, char *to, int tolen, time_t mark)
     r = d->open(d, fname, NULL, DB_HASH, flags, 0664);
     if (r != 0) {
         if (do_retry && (r == ENOENT)) {
-	  flags = DB_CREATE;
+	  flags |= DB_CREATE;
 	  do_retry = 0;
 	  goto retry;
         }
