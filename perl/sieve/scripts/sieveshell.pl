@@ -52,8 +52,8 @@ my $activatehelp =   "activate <name>  - set a script as the active script\n";
 my $deactivatehelp = "deactivate       - deactivate all scripts\n";
 my $deletehelp =     "delete <name>    - delete script.\n";
 
-my $username = "";
-my $authname = "";
+my $username = $ENV{USER};
+my $authname = $ENV{USER};
 my $realm = "";
 my $ex = "";
 my $ret = GetOptions("a|authname:s" => \$authname,
