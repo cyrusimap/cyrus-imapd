@@ -103,9 +103,12 @@ main(argc, argv)
     char **argv;			/* Array of argument strings. */
 {
     char buffer[1000], *cmd, *args, *fileName;
-    int code, gotPartial, tty;
+    int code, gotPartial, tty, length;
     int exitCode = 0;
+    Tcl_Channel inChannel, outChannel, errChannel;
+    Tcl_DString temp;
 
+    Tcl_FindExecutable(argv[0]);
     interp = Tcl_CreateInterp();
 #ifdef TCL_MEM_DEBUG
     Tcl_InitMemory(interp);
@@ -146,8 +149,13 @@ main(argc, argv)
      */
 
     if (Tcl_AppInit(interp) != TCL_OK) {
-	fprintf(stderr, "Initialization failed: %s\n", interp->result);
-	exit(1);
+        errChannel = Tcl_GetStdChannel(TCL_STDERR);
+        if (errChannel) {
+            Tcl_Write(errChannel,
+                    "application-specific initialization failed: ", -1);
+            Tcl_Write(errChannel, interp->result, -1);
+            Tcl_Write(errChannel, "\n", 1);
+        }
     }
 
     /*
@@ -156,12 +164,21 @@ main(argc, argv)
      */
 
     if (fileName != NULL) {
+        char *msg;
 	code = Tcl_EvalFile(interp, fileName);
-	if (code != TCL_OK) {
-	    fprintf(stderr, "%s\n", interp->result);
-	    exitCode = 1;
-	}
-	goto done;
+        if (code != TCL_OK) {
+            errChannel = Tcl_GetStdChannel(TCL_STDERR);
+            if (errChannel) {
+                msg = Tcl_GetVar(interp, "errorInfo", TCL_GLOBAL_ONLY);
+                if (msg == NULL) {
+                    msg = interp->result;
+                }
+                Tcl_Write(errChannel, msg, -1);
+                Tcl_Write(errChannel, "\n", 1);
+            }
+            exitCode = 1;
+        }
+        goto done;
     }
 
     /*
@@ -169,29 +186,40 @@ main(argc, argv)
      * file if Tcl_AppInit specified one and if the file exists.
      */
 
-    if (Tcl_GetVar(interp, "tcl_rcFileName", TCL_GLOBAL_ONLY) != NULL) {
-	Tcl_DString buffer;
-	char *fullName;
-	FILE *f;
+    fileName = Tcl_GetVar(interp, "tcl_rcFileName", TCL_GLOBAL_ONLY);
 
-	fullName = Tcl_TildeSubst(interp, 
-				  Tcl_GetVar(interp, "tcl_rcFileName",
-					     TCL_GLOBAL_ONLY), 
-				  &buffer);
-	if (fullName == NULL) {
-	    fprintf(stderr, "%s\n", interp->result);
-	} else {
-	    f = fopen(fullName, "r");
-	    if (f != NULL) {
-		code = Tcl_EvalFile(interp, fullName);
-		if (code != TCL_OK) {
-		    fprintf(stderr, "%s\n", interp->result);
-		}
-		fclose(f);
-	    }
-	}
-	Tcl_DStringFree(&buffer);
-    }
+    if (fileName != NULL) {
+        Tcl_Channel c;
+        char *fullName;
+
+        Tcl_DStringInit(&temp);
+        fullName = Tcl_TranslateFileName(interp, fileName, &temp);
+        if (fullName == NULL) {
+            errChannel = Tcl_GetStdChannel(TCL_STDERR);
+            if (errChannel) {
+                Tcl_Write(errChannel, interp->result, -1);
+                Tcl_Write(errChannel, "\n", 1);
+            }
+        } else {
+
+            /*
+             * Test for the existence of the rc file before trying to read it.
+             */
+
+            c = Tcl_OpenFileChannel(NULL, fullName, "r", 0);
+            if (c != (Tcl_Channel) NULL) {
+                Tcl_Close(NULL, c);
+                if (Tcl_EvalFile(interp, fullName) != TCL_OK) {
+                    errChannel = Tcl_GetStdChannel(TCL_STDERR);
+                    if (errChannel) {
+                        Tcl_Write(errChannel, interp->result, -1);
+                        Tcl_Write(errChannel, "\n", 1);
+                    }
+                }
+            }
+        }
+        Tcl_DStringFree(&temp);
+      }
 
     /*
      * Process commands from stdin until there's an end-of-file.
@@ -199,64 +227,81 @@ main(argc, argv)
 
     gotPartial = 0;
     Tcl_DStringInit(&command);
+    inChannel = Tcl_GetStdChannel(TCL_STDIN);
+    outChannel = Tcl_GetStdChannel(TCL_STDOUT);
     while (1) {
-	clearerr(stdin);
-	if (tty) {
-	    char *promptCmd;
+        if (tty) {
+            char *promptCmd;
 
-	    promptCmd = Tcl_GetVar(interp,
-		gotPartial ? "tcl_prompt2" : "tcl_prompt1", TCL_GLOBAL_ONLY);
-	    if (promptCmd == NULL) {
-		defaultPrompt:
-		if (!gotPartial) {
-		    fputs("% ", stdout);
-		}
-	    } else {
-		code = Tcl_Eval(interp, promptCmd);
-		if (code != TCL_OK) {
-		    fprintf(stderr, "%s\n", interp->result);
-		    Tcl_AddErrorInfo(interp,
-			    "\n    (script that generates prompt)");
-		    goto defaultPrompt;
-		}
-	    }
-	    fflush(stdout);
-	}
-	if (fgets(buffer, 1000, stdin) == NULL) {
-	    if (ferror(stdin)) {
-		if (errno == EINTR) {
-		    if (Tcl_AsyncReady()) {
-			(void) Tcl_AsyncInvoke((Tcl_Interp *) NULL, 0);
-		    }
-		    clearerr(stdin);
-		} else {
-		    goto done;
-		}
-	    } else {
-		if (!gotPartial) {
-		    goto done;
-		}
-	    }
-	    buffer[0] = 0;
-	}
-	cmd = Tcl_DStringAppend(&command, buffer, -1);
-	if ((buffer[0] != 0) && !Tcl_CommandComplete(cmd)) {
-	    gotPartial = 1;
-	    continue;
-	}
+            promptCmd = Tcl_GetVar(interp,
+                gotPartial ? "tcl_prompt2" : "tcl_prompt1", TCL_GLOBAL_ONLY);
+            if (promptCmd == NULL) {
+defaultPrompt:
+                if (!gotPartial && outChannel) {
+                    Tcl_Write(outChannel, "% ", 2);
+                }
+            } else {
+                code = Tcl_Eval(interp, promptCmd);
+                inChannel = Tcl_GetStdChannel(TCL_STDIN);
+                outChannel = Tcl_GetStdChannel(TCL_STDOUT);
+                errChannel = Tcl_GetStdChannel(TCL_STDERR);
+                if (code != TCL_OK) {
+                    if (errChannel) {
+                        Tcl_Write(errChannel, interp->result, -1);
+                        Tcl_Write(errChannel, "\n", 1);
+                    }
+                    Tcl_AddErrorInfo(interp,
+                            "\n    (script that generates prompt)");
+                    goto defaultPrompt;
+                }
+            }
+            if (outChannel) {
+                Tcl_Flush(outChannel);
+            }
+        }
+        if (!inChannel) {
+            goto done;
+        }
+        length = Tcl_Gets(inChannel, &command);
+        if (length < 0) {
+            goto done;
+        }
+        if ((length == 0) && Tcl_Eof(inChannel) && (!gotPartial)) {
+            goto done;
+        }
 
-	gotPartial = 0;
-	code = Tcl_RecordAndEval(interp, cmd, 0);
-	Tcl_DStringFree(&command);
-	if (code != TCL_OK) {
-	    fprintf(stderr, "%s\n", interp->result);
-	} else if (tty && (*interp->result != 0)) {
-	    printf("%s\n", interp->result);
-	}
+        /*
+         * Add the newline removed by Tcl_Gets back to the string.
+         */
+        
+        (void) Tcl_DStringAppend(&command, "\n", -1);
+
+        cmd = Tcl_DStringValue(&command);
+        if (!Tcl_CommandComplete(cmd)) {
+            gotPartial = 1;
+            continue;
+	  }
+
+        gotPartial = 0;
+        code = Tcl_RecordAndEval(interp, cmd, 0);
+        inChannel = Tcl_GetStdChannel(TCL_STDIN);
+        outChannel = Tcl_GetStdChannel(TCL_STDOUT);
+        errChannel = Tcl_GetStdChannel(TCL_STDERR);
+        Tcl_DStringFree(&command);
+        if (code != TCL_OK) {
+            if (errChannel) {
+                Tcl_Write(errChannel, interp->result, -1);
+                Tcl_Write(errChannel, "\n", 1);
+	      }
+	  } else if (tty && (*interp->result != 0)) {
+            if (outChannel) {
+                Tcl_Write(outChannel, interp->result, -1);
+                Tcl_Write(outChannel, "\n", 1);
+	      }
+	  }
 #ifdef TCL_MEM_DEBUG
 	if (quitFlag) {
 	    Tcl_DeleteInterp(interp);
-	    Tcl_DumpActiveMemory(dumpFile);
 	    exit(0);
 	}
 #endif
