@@ -56,7 +56,6 @@ all: amssync
 
 install:
 	$(INSTALL) -s -m 755 amssync $(DESTDIR)$(cyrus_prefix)/bin
-	$(INSTALL) -s -m 755 amssync $(DESTDIR)$(cyrus_prefix)/bin/amssynctree
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
