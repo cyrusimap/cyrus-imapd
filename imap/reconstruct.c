@@ -381,6 +381,12 @@ char *name;
 	    fclose(msgfile);
 	    continue;
 	}
+	if (((sbuf.st_mode & S_IFMT) == S_IFDIR) && 
+	    (format == MAILBOX_FORMAT_NETNEWS)) {
+	  /* This is in theory a subnewsgroup and should be left alone. */
+	  fclose(msgfile);
+	  continue;
+	}
 	if (sbuf.st_size == 0) {
 	    /* Zero-length message file--blow it away */
 	    fclose(msgfile);

@@ -21,6 +21,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <syslog.h>
+#include <sys/stat.h>
 
 #include "acl.h"
 #include "assert.h"
@@ -580,6 +581,7 @@ unsigned long feeduid;
     FILE *f;
     int r;
     long last_cacheoffset;
+    struct stat sbuf;
     
     assert(mailbox->format == MAILBOX_FORMAT_NETNEWS);
 
@@ -628,6 +630,17 @@ unsigned long feeduid;
 	    break;
 	}
 	
+	if (fstat(fileno(f), &sbuf)) {
+	  fclose(f);
+	  continue;
+	}
+
+	if ((sbuf.st_mode & S_IFMT) == S_IFDIR) {
+          /* This is in theory a subnewsgroup and should be left alone. */
+	  fclose(f);
+          continue;
+	}
+
 	if (msg == size_message_index) {
 	    size_message_index += COLLECTGROW;
 	    message_index = (struct index_record *)
