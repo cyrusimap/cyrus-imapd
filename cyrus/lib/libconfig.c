@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: libconfig.c,v 1.2.2.5 2004/04/05 14:59:04 ken3 Exp $ */
+/* $Id: libconfig.c,v 1.2.2.6 2004/04/05 17:57:41 ken3 Exp $ */
 
 #include <config.h>
 
@@ -92,8 +92,7 @@ const char *config_getstring(enum imapopt opt)
 int config_getint(enum imapopt opt)
 {
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
-    assert((imapopts[opt].t == OPT_INT) ||
-	   (imapopts[opt].t == OPT_BITFIELD));
+    assert(imapopts[opt].t == OPT_INT);
 
     return imapopts[opt].val.i;
 }
@@ -112,6 +111,14 @@ enum enum_value config_getenum(enum imapopt opt)
     assert(imapopts[opt].t == OPT_ENUM);
     
     return imapopts[opt].val.e;
+}
+
+unsigned long config_getbitfield(enum imapopt opt)
+{
+    assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
+    assert(imapopts[opt].t == OPT_BITFIELD);
+    
+    return imapopts[opt].val.x;
 }
 
 const char *config_getoverflowstring(const char *key, const char *def)
@@ -325,8 +332,15 @@ void config_read(const char *alt_config)
 	    }
 	    case OPT_ENUM:
 	    case OPT_STRINGLIST:
+	    case OPT_BITFIELD:
 	    {
-		const struct enum_option_s *e = imapopts[opt].enum_options;
+		const struct enum_option_s *e;
+
+		/* zero the value */
+		memset(&imapopts[opt].val, 0, sizeof(imapopts[opt].val));
+
+		/* q is already at EOS so we'll process entire the string
+		   as one value unless told otherwise */
 
 		if (imapopts[opt].t == OPT_ENUM) {
 		    /* normalize on/off values */
@@ -337,51 +351,35 @@ void config_read(const char *alt_config)
 			       !strcmp(p, "f") || !strcmp(p, "false")) {
 			p = "off";
 		    }
+		} else if (imapopts[opt].t == OPT_BITFIELD) {
+		    /* split the string into separate values */
+		    q = p;
 		}
-
-		while (e->name) {
-		    if (!strcmp(e->name, p)) break;
-		    e++;
-		}
-		if (e->name) {
-		    if (imapopts[opt].t == OPT_ENUM)
-			imapopts[opt].val.e = e->val;
-		    else
-			imapopts[opt].val.s = e->name;
-		} else {
-		    /* error during conversion */
-		    sprintf(errbuf, "invalid value for %s in line %d",
-			    imapopts[opt].optname, lineno);
-		    fatal(errbuf, EC_CONFIG);
-		}
-		break;
-	    }
-	    case OPT_BITFIELD:
-	    {
-		const struct enum_option_s *e;
-
-		imapopts[opt].val.i = 0;
 
 		while (*p) {
 		    /* find the end of the first value */
-		    for (q = p; *q && !isspace((int) *q); q++);
-		    *q++ = '\0';
+		    for (; *q && !isspace((int) *q); q++);
+		    if (*q) *q++ = '\0';
 
 		    /* see if its a legal value */
 		    for (e = imapopts[opt].enum_options;
 			 e->name && strcmp(e->name, p); e++);
 
-		    if (e->name) imapopts[opt].val.i |= e->val;
-		    else {
+		    if (!e->name) {
 			/* error during conversion */
-			sprintf(errbuf, "invalid value for %s in line %d",
-				imapopts[opt].optname, lineno);
+			sprintf(errbuf, "invalid value '%s' for %s in line %d",
+				p, imapopts[opt].optname, lineno);
 			fatal(errbuf, EC_CONFIG);
 		    }
+		    else if (imapopts[opt].t == OPT_STRINGLIST)
+			imapopts[opt].val.s = e->name;
+		    else if (imapopts[opt].t == OPT_ENUM)
+			imapopts[opt].val.e = e->val;
+		    else
+			imapopts[opt].val.x |= e->val;
 
 		    /* find the start of the next value */
-		    p = q;
-		    while (*p && isspace((int) *p)) p++;
+		    for (p = q; *p && isspace((int) *p); p++);
 		}
 
 		break;
