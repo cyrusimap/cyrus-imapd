@@ -1,5 +1,5 @@
 /* message.h -- Message parsing
- $Id: message.h,v 1.6.4.4 2004/06/28 18:44:29 ken3 Exp $
+ $Id: message.h,v 1.6.4.5 2005/02/21 19:25:41 ken3 Exp $
 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -94,5 +94,10 @@ extern int message_create_record P((struct mailbox *mailbox,
 				    struct index_record *message_index,
 				    struct body *body));
 extern void message_free_body P((struct body *body));
+
+extern int
+message_parse_mapped_async P((const char *msg_base, unsigned long msg_len,
+                              int format, int cache_fd,
+                              struct index_record *message_index));
 
 #endif /* INCLUDED_MESSAGE_H */

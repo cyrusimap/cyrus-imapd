@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.221.2.18 2004/08/09 18:51:20 ken3 Exp $
+ * $Id: mboxlist.c,v 1.221.2.19 2005/02/21 19:25:37 ken3 Exp $
  */
 
 #include <config.h>
@@ -1655,6 +1655,140 @@ int mboxlist_setacl(const char *name, const char *identifier,
     if (mailbox_open) mailbox_close(&mailbox);
     if (mboxent) free(mboxent);
     if (newacl) free(newacl);
+    
+    return r;
+}
+
+/*
+ * Change the ACL for mailbox 'name'.
+ *
+ * 1. Start transaction
+ * 3. Set db entry
+ * 4. Change backup copy (cyrus.header)
+ * 5. Commit transaction
+ * 6. Change mupdate entry 
+ *
+ */
+int
+mboxlist_sync_setacls(char *name, char *newacl)
+{
+    int r;
+    struct mailbox mailbox;
+    int mailbox_open = 0;
+    char *acl;
+    char *partition, *path, *mpath;
+    char *mboxent = NULL;
+    int mbtype;
+    struct txn *tid = NULL;
+
+    /* 1. Start Transaction */
+    /* lookup the mailbox to make sure it exists and get its acl */
+    do {
+	r = mboxlist_mylookup(name, &mbtype, &path, &mpath,
+			      &partition, &acl, &tid, 1);
+    } while(r == IMAP_AGAIN);    
+
+    /* Can't do this to an in-transit or reserved mailbox */
+    if(!r && mbtype & (MBTYPE_MOVING | MBTYPE_RESERVE)) {
+	r = IMAP_MAILBOX_NOTSUPPORTED;
+    }
+
+    /* if it is not a remote mailbox, we need to unlock the mailbox list,
+     * lock the mailbox, and re-lock the mailboxes list */
+    /* we must do this to obey our locking rules */
+    if (!r && !(mbtype & MBTYPE_REMOTE)) {
+	DB->abort(mbdb, tid);
+	tid = NULL;
+
+	/* open & lock mailbox header */
+        r = mailbox_open_header_path(name, path, mpath,
+				     acl, NULL, &mailbox, 0);
+	if (!r) {
+	    mailbox_open = 1;
+	    r = mailbox_lock_header(&mailbox);
+	} 
+
+	if(!r) {
+	    do {
+		/* lookup the mailbox to make sure it exists and get its acl */
+		r = mboxlist_mylookup(name, &mbtype, &path, &mpath,
+				      &partition, &acl, &tid, 1);
+	    } while( r == IMAP_AGAIN );
+	}
+
+	if(r) goto done;
+    }
+
+    /* 3. Set DB Entry */
+    if(!r) {
+	/* ok, change the database */
+	mboxent = mboxlist_makeentry(mbtype, partition, newacl);
+
+	do {
+	    r = DB->store(mbdb, name, strlen(name),
+			  mboxent, strlen(mboxent), &tid);
+	} while(r == CYRUSDB_AGAIN);
+    
+	if(r) {
+	    syslog(LOG_ERR, "DBERROR: error updating acl %s: %s",
+		   name, cyrusdb_strerror(r));
+	    r = IMAP_IOERROR;
+	}
+    }
+
+    /* 4. Change backup copy (cyrus.header) */
+    /* we already have it locked from above */
+    if (!r && !(mbtype & MBTYPE_REMOTE)) {
+	if(mailbox.acl) free(mailbox.acl);
+	mailbox.acl = xstrdup(newacl);
+	r = mailbox_write_header(&mailbox);
+    }
+
+    /* 5. Commit transaction */
+    if (!r) {
+	if((r = DB->commit(mbdb, tid)) != 0) {
+	    syslog(LOG_ERR, "DBERROR: failed on commit: %s",
+		   cyrusdb_strerror(r));
+	    r = IMAP_IOERROR;
+	}
+	tid = NULL;
+    }
+
+    /* 6. Change mupdate entry  */
+    if (!r && config_mupdate_server) {
+        mupdate_handle *mupdate_h = NULL;
+	/* commit the update to MUPDATE */
+	char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
+	sprintf(buf, "%s!%s", config_servername, partition);
+
+	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
+	if(r) {
+	    syslog(LOG_ERR,
+		   "can not connect to mupdate server for reservation on '%s'",
+		   name);
+	} else {
+	    r = mupdate_activate(mupdate_h, name, buf, newacl);
+	    if(r) {
+		syslog(LOG_ERR,
+		       "MUPDATE: can't update mailbox entry for '%s'",
+		       name);
+	    }
+	}
+	mupdate_disconnect(&mupdate_h);
+    }
+
+  done:
+    if (r && tid) {
+	/* if we are mid-transaction, abort it! */
+	int r2 = DB->abort(mbdb, tid);
+	if(r2) {
+	    syslog(LOG_ERR,
+		   "DBERROR: error aborting txn in mboxlist_setacl: %s",
+		   cyrusdb_strerror(r2));
+	}
+    }
+    if (mailbox_open) mailbox_close(&mailbox);
+    if (mboxent) free(mboxent);
     
     return r;
 }

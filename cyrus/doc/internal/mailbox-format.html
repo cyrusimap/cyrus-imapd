@@ -4,7 +4,7 @@
 
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-<meta name="revision" content="$Id: mailbox-format.html,v 1.3.2.2 2004/04/01 02:40:12 ken3 Exp $" />
+<meta name="revision" content="$Id: mailbox-format.html,v 1.3.2.3 2005/02/21 19:25:14 ken3 Exp $" />
 <meta name="author" content="Rob Siemborski" />
 
 <title>mailbox format</title>
@@ -229,6 +229,9 @@ of the message.</p>
 <dt>CACHE_VERSION (4 bytes)</dt>
 <dd>Indicates the version number of the cache record for the message
 (determines which headers are cached).</dd>
+
+<dt>UUID (MESSAGE_UUID_SIZE bytes)</dt>
+<dd>Global UID of the message (used by replication code).</dd>
 </dl>
 
 <h3><tt>cyrus.cache</tt> file format detail</h3>

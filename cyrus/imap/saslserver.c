@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: saslserver.c,v 1.5.2.3 2004/08/05 16:23:47 ken3 Exp $ */
+/* $Id: saslserver.c,v 1.5.2.4 2005/02/21 19:25:45 ken3 Exp $ */
 
 #include <config.h>
 
@@ -102,6 +102,7 @@ int saslserver(sasl_conn_t *conn, const char *mech,
 	}
 
 	prot_printf(pout, "%s%s\r\n", continuation, serverout);
+	prot_flush(pout);
 
 	/* get response from the client */
 	if (!prot_fgets(base64, BASE64_BUF_SIZE, pin) ||

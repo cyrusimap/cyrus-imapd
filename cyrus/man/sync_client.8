@@ -1,0 +1,142 @@
+.\" -*- nroff -*-
+.TH SYNC_CLIENT HERMES 8
+.SH NAME
+sync_client \- One half of the synchronisation (replication) engine
+.SH SYNOPSIS
+.B sync_client
+[
+.B \-v
+]
+[
+.B \-l
+]
+[
+.B \-C
+.I config-file
+]
+[
+.B \-f
+.I input-file
+]
+[
+.B \-S
+.I servername
+]
+[
+.B \-F
+.I shutdown_file
+]
+[
+.B \-w
+.I wait_interval
+]
+[
+.B \-t
+.I timeout
+]
+[
+.B \-d
+.I delay
+]
+[
+.B \-r
+]
+[
+.B \-u
+]
+[
+.B \-m
+]
+[
+.B \-s
+]
+.IR objects ...
+
+
+.SH DESCRIPTION
+.I Sync_client
+is one half of the the replication system.
+.PP
+Given a connection to the replicate system created by the
+.B replicate(8)
+program, it generates an appropriaet sequence of transactions to bring
+the target (replica) system in line with the client system.
+
+.SH OPTIONS
+.TP
+.BI \-v
+Verbose mode.
+.BI \-l
+Verbose logging mode.
+.TP
+.BI \-C " config-file"
+Read configuration options from \fIconfig-file\fR.
+.TP
+.BI \-f " input-file"
+In mailbox or user replication mode: provides list of users or mailboxes
+to replicate. In rolling replication mode, overrides
+.I sync_log_file
+option in
+.I imapd.conf
+.TP
+.BI \-F " shutdown-file"
+Rolling replication checks for this file at the end of each replication
+cycle and shuts down if it is present. Used to request nice clean shutdown
+at first convenient point. The file in question is removed on shutdown.
+Overrides
+.I sync_shutdown_file
+option in
+.I imapd.conf
+.TP
+.BI \-S " servername"
+Tells
+.B sync_client
+which server to communicate with.
+.TP
+.BI \-w " interval"
+Wait this long before starting. Typically used so that we can attach a
+debugger to one end of the replication system or the other.
+.TP
+.BI \-t " timeout"
+Timeout for single replication run in rolling replication.
+.B sync_client
+will negotiate a restart after this many seconds. Default: 600 seconds
+.TP
+.BI \-d " delay"
+Minimum delay between replication runs in rolling replication mode.
+Larger values provide better efficiency as transactions can be merged.
+Smaller values mean that the replica system is more up to date and that
+you don't end up with large blocks of replication transactions as a single
+group. Default: 3 seconds.
+.TP
+.BI \-r
+Rolling (repeat) replication mode. Pick up a list of actions recorded by
+the
+.B lmtpd(8), imapd(8) and popd(8)
+daemons from the file specified in
+.I sync_log_file.
+Repeat until
+.I sync_shutdwon_file
+appears.
+.TP
+.BI \-u
+User mode.
+Remaining arguments are list of users who should be replicated.
+.TP
+.BI \-m
+Mailbox mode.
+Remaining arguments are list of mailboxes which should be replicated.
+.TP
+.BI \-s
+Sieve mode.
+Remaining arguments are list of users whose Sieve files should be replicated.
+Principally used for debugging purposes: not exposed to
+.B sync_client(8).
+.SH FILES
+.TP
+.B /etc/imapd.conf
+.SH SEE ALSO
+.PP
+\fBreplicate(8)\fR, \fBsync_server(8)\fR
+.SH AUTHORS
+David Carter (dpc22@cam.ac.uk)

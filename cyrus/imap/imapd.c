@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.52 2005/02/14 06:43:14 shadow Exp $ */
+/* $Id: imapd.c,v 1.443.2.53 2005/02/21 19:25:20 ken3 Exp $ */
 
 #include <config.h>
 
@@ -88,6 +88,7 @@
 #include "mkgmtime.h"
 #include "mupdate-client.h"
 #include "quota.h"
+#include "sync_log.h"
 #include "telemetry.h"
 #include "tls.h"
 #include "user.h"
@@ -659,6 +660,9 @@ int service_init(int argc, char **argv, char **envp)
     /* Create a protgroup for input from the client and selected backend */
     protin = protgroup_new(2);
 
+    /* YYY Sanity checks possible here? */
+    message_uuid_client_init(getenv("CYRUS_UUID_PREFIX"));
+
     return 0;
 }
 
@@ -688,6 +692,8 @@ int service_main(int argc __attribute__((unused)),
     /* get command line args for use in ID before getopt mangles them */
     id_getcmdline(argc, argv);
 #endif
+
+    sync_log_init();
 
     imapd_in = prot_new(0, 0);
     imapd_out = prot_new(1, 1);
@@ -2731,6 +2737,7 @@ void cmd_append(char *tag, char *name)
 
 	if (!r) {
 	    r = append_commit(&mailbox, totalsize, &uidvalidity, &firstuid, &num);
+            if (!r) sync_log_append(mailboxname);
 	} else {
 	    append_abort(&mailbox);
 	}
@@ -2971,6 +2978,7 @@ void cmd_close(char *tag)
     if (!(imapd_mailbox->myrights & ACL_DELETE)) r = 0;
     else {
 	r = mailbox_expunge(imapd_mailbox, (int (*)())0, (char *)0, 0);
+	if (!r) sync_log_mailbox(imapd_mailbox->name);
     }
 
     index_closemailbox(imapd_mailbox);
@@ -3717,6 +3725,13 @@ void cmd_store(char *tag, char *sequence, char *operation, int usinguid)
     else {
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
+
+	/* We only need to log a MAILBOX event if we've changed
+	   a flag other than \Seen */
+	if (storeargs.system_flags || nflags ||
+	    storeargs.operation == STORE_REPLACE) {
+	    sync_log_mailbox(imapd_mailbox->name);
+	}
     }
 
  freeflags:
@@ -4142,6 +4157,7 @@ void cmd_expunge(char *tag, char *sequence)
     else {
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
+        sync_log_mailbox(imapd_mailbox->name);
     }
 }    
 
@@ -4153,6 +4169,7 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
     int r = 0;
     char mailboxname[MAX_MAILBOX_NAME+1];
     int autocreatequota;
+    int sync_lockfd = (-1);
 
     if (partition && !imapd_userisadmin) {
 	r = IMAP_PERMISSION_DENIED;
@@ -4243,10 +4260,12 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
     if (!r) {
 	/* xxx we do forced user creates on LOCALCREATE to facilitate
 	 * mailbox moves */
+        sync_log_lock(&sync_lockfd, imapd_userid);
 	r = mboxlist_createmailbox(mailboxname, 0, partition,
 				   imapd_userisadmin, 
 				   imapd_userid, imapd_authstate,
 				   localonly, localonly, 0);
+        sync_log_unlock(&sync_lockfd);
 
 	if (r == IMAP_PERMISSION_DENIED && !strcasecmp(name, "INBOX") &&
 	    (autocreatequota = config_getint(IMAPOPT_AUTOCREATEQUOTA))) {
@@ -4275,6 +4294,7 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
 
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
+        sync_log_mailbox(mailboxname);
     }
 }	
 
@@ -4290,6 +4310,8 @@ static int delmbox(char *name,
 			       imapd_userid, imapd_authstate,
 			       0, 0, 0);
     
+    if (!r) sync_log_mailbox(name);
+
     if(r) {
 	prot_printf(imapd_out, "* NO delete %s: %s\r\n",
 		    name, error_message(r));
@@ -4309,6 +4331,7 @@ void cmd_delete(char *tag, char *name, int localonly, int force)
     char *server;
     char *p;
     int domainlen = 0;
+    int sync_lockfd = (-1);
 
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
 					       imapd_userid, mailboxname);
@@ -4365,9 +4388,13 @@ void cmd_delete(char *tag, char *name, int localonly, int force)
 	if (config_virtdomains && (p = strchr(mailboxname, '!')))
 	    domainlen = p - mailboxname + 1;
 
+        sync_log_lock(&sync_lockfd, imapd_userid);
+
 	r = mboxlist_deletemailbox(mailboxname, imapd_userisadmin,
 				   imapd_userid, imapd_authstate, 1-force,
 				   localonly, 0);
+
+        sync_log_unlock(&sync_lockfd);
     }
 
     /* was it a top-level user mailbox? */
@@ -4384,8 +4411,10 @@ void cmd_delete(char *tag, char *name, int localonly, int force)
  	}
 	
 	/* build a list of mailboxes - we're using internal names here */
+	sync_log_lock(&sync_lockfd, imapd_userid);
 	mboxlist_findall(NULL, mailboxname, imapd_userisadmin, imapd_userid,
 			 imapd_authstate, delmbox, NULL);
+	sync_log_unlock(&sync_lockfd);
 
 	/* take care of deleting ACLs, subscriptions, seen state and quotas */
 	*p = '\0'; /* clip off pattern */
@@ -4414,6 +4443,7 @@ void cmd_delete(char *tag, char *name, int localonly, int force)
 
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
+        sync_log_mailbox(mailboxname);
     }
 }	
 
@@ -4474,6 +4504,8 @@ static int renmbox(char *name,
 	
 	prot_printf(imapd_out, "* OK rename %s %s\r\n",
 		    oldextname, newextname);
+
+        sync_log_mailbox_double(name, text->newmailboxname);
     }
 
     prot_flush(imapd_out);
@@ -4489,8 +4521,11 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
     int r = 0;
     char oldmailboxname[MAX_MAILBOX_NAME+3];
     char newmailboxname[MAX_MAILBOX_NAME+2];
+    char oldmailboxname2[MAX_MAILBOX_NAME+1];
+    char newmailboxname2[MAX_MAILBOX_NAME+1];
     char oldextname[MAX_MAILBOX_NAME+1];
     char newextname[MAX_MAILBOX_NAME+1];
+    int sync_lockfd = (-1);
     int omlen, nmlen;
     char *p;
     int recursive_rename = 1;
@@ -4510,6 +4545,10 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
     if (!r)
 	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, newname,
 						   imapd_userid, newmailboxname);
+
+    /* Keep temporary copy: master is trashed */
+    strcpy(oldmailboxname2, oldmailboxname);
+    strcpy(newmailboxname2, newmailboxname);
 
     if (!r) {
 	r = mlookup(NULL, NULL, oldmailboxname, &mbtype, NULL, NULL,
@@ -4679,6 +4718,8 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	if (*p == '*' || *p == '%') r = IMAP_MAILBOX_BADNAME;
     }
 
+    sync_log_lock(&sync_lockfd, imapd_userid);
+
     /* attempt to rename the base mailbox */
     if (!r) {
 	r = mboxlist_renamemailbox(oldmailboxname, newmailboxname, partition,
@@ -4772,6 +4813,8 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
     if (!r && rename_user)
 	user_deletedata(olduser, imapd_userid, imapd_authstate, 1);
 
+    sync_log_unlock(&sync_lockfd);
+
     imapd_check(NULL, 0, 0);
 
     if (r) {
@@ -4784,6 +4827,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
+        sync_log_mailbox_double(oldmailboxname2, newmailboxname2);
     }
 }	
 
@@ -4931,6 +4975,7 @@ void cmd_reconstruct(const char *tag, const char *name, int recursive)
     } else {
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
+        sync_log_user(imapd_userid);
     }
 }	
 
@@ -5203,6 +5248,7 @@ void cmd_changesub(char *tag, char *namespace, char *name, int add)
     else {
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
+        sync_log_meta(imapd_userid);
     }
 }
 
@@ -5502,6 +5548,7 @@ void cmd_setacl(char *tag, const char *name,
 
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
+	sync_log_mailbox(mailboxname);
     }
 }
 
@@ -7360,7 +7407,8 @@ static int do_xfer_single(char *toserver, char *topart,
     /* Step 1: Connect to remote server */
     if(!r && !be_in) {
 	/* Just authorize as the IMAP server, so pass "" as our authzid */
-	be = backend_connect(NULL, toserver, &protocol[PROTOCOL_IMAP], "", NULL);
+	be = backend_connect(NULL, toserver, &protocol[PROTOCOL_IMAP],
+			     "", NULL, NULL);
 	if(!be) r = IMAP_SERVER_UNAVAILABLE;
 	if(r) syslog(LOG_ERR,
 		     "Could not move mailbox: %s, Backend connect failed",
@@ -7684,7 +7732,8 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	}
 
 	/* Get a single connection to the remote backend */
-	be = backend_connect(NULL, toserver, &protocol[PROTOCOL_IMAP], "", NULL);
+	be = backend_connect(NULL, toserver, &protocol[PROTOCOL_IMAP],
+			     "", NULL, NULL);
 	if(!be) {
 	    r = IMAP_SERVER_UNAVAILABLE;
 	    syslog(LOG_ERR,

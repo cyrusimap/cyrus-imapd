@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.147.2.25 2005/02/17 18:48:32 shadow Exp $
+ * $Id: mailbox.c,v 1.147.2.26 2005/02/21 19:25:34 ken3 Exp $
  *
  */
 
@@ -294,6 +294,29 @@ int mailbox_cached_header_inline(const char *text)
 	}
     }
     return BIT32_MAX;
+}
+
+unsigned long
+mailbox_cache_size(struct mailbox *mailbox, unsigned msgno)
+{
+    const char *p;
+    unsigned long cache_offset;
+    unsigned int cache_ent;
+    const char *cacheitem, *cacheitembegin;
+
+    assert((msgno > 0) && (msgno <= mailbox->exists));
+
+    p = (mailbox->index_base + mailbox->start_offset +
+         ((msgno-1) * mailbox->record_size));
+    
+    cache_offset = ntohl(*((bit32 *)(p+OFFSET_CACHE_OFFSET)));
+
+    /* Compute size of this record */
+    cacheitembegin = cacheitem = mailbox->cache_base + cache_offset;
+    for (cache_ent = 0; cache_ent < NUM_CACHE_FIELDS; cache_ent++) {
+        cacheitem = CACHE_ITEM_NEXT(cacheitem);
+    }
+    return(cacheitem - cacheitembegin);
 }
 
 /* function to be used for notification of mailbox changes/updates */
@@ -1007,6 +1030,8 @@ struct index_record *record;
     }
     record->content_lines = htonl(*((bit32 *)(buf+OFFSET_CONTENT_LINES)));
     record->cache_version = htonl(*((bit32 *)(buf+OFFSET_CACHE_VERSION)));
+
+    message_uuid_unpack(&record->uuid, buf+OFFSET_MESSAGE_UUID);
     return 0;
 }
 
@@ -1360,6 +1385,7 @@ void mailbox_index_record_to_buf(struct index_record *record, char *buf)
     }
     *((bit32 *)(buf+OFFSET_CONTENT_LINES)) = htonl(record->content_lines);
     *((bit32 *)(buf+OFFSET_CACHE_VERSION)) = htonl(record->cache_version);
+    message_uuid_pack(&record->uuid, buf+OFFSET_MESSAGE_UUID);
 }
 
 /*
@@ -1612,6 +1638,10 @@ static int mailbox_upgrade_index(struct mailbox *mailbox)
 	    if (oldrecord_size < OFFSET_CACHE_VERSION+sizeof(bit32)) {
 		*((bit32 *)(buf+OFFSET_CACHE_VERSION)) = htonl(0);
 	    }
+
+            /* Reset undefined MessageUUIDs to NULL value (slow copy) */
+            if (oldrecord_size<OFFSET_MESSAGE_UUID+MESSAGE_UUID_PACKED_SIZE)
+                memset(buf+OFFSET_MESSAGE_UUID, 0, MESSAGE_UUID_PACKED_SIZE);
 
 	    fwrite(buf+oldrecord_size, recsize_diff, 1, newindex);
 	}

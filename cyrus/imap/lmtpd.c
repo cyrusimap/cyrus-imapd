@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.121.2.27 2004/12/17 18:15:11 ken3 Exp $
+ * $Id: lmtpd.c,v 1.121.2.28 2005/02/21 19:25:32 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -98,6 +98,8 @@
 
 static sieve_interp_t *sieve_interp = NULL;
 #endif
+
+#include "sync_log.h"
 
 /* forward declarations */
 static int deliver(message_data_t *msgdata, char *authuser,
@@ -218,6 +220,9 @@ int service_init(int argc __attribute__((unused)),
     snmp_connect(); /* ignore return code */
     snmp_set_str(SERVER_NAME_VERSION, CYRUS_VERSION);
 
+    /* YYY Sanity checks possible here? */
+    message_uuid_client_init(getenv("CYRUS_UUID_PREFIX"));
+
     return 0;
 }
 
@@ -237,6 +242,8 @@ int service_main(int argc, char **argv,
 		 char **envp __attribute__((unused)))
 {
     int opt, r;
+
+    sync_log_init();
 
     deliver_in = prot_new(0, 0);
     deliver_out = prot_new(1, 1);
@@ -485,6 +492,8 @@ int deliver_mailbox(FILE *f,
 			     (const char **) flag, nflags, !singleinstance);
 	if (!r) append_commit(&as, quotaoverride ? -1 : 0, NULL, &uid, NULL);
 	else append_abort(&as);
+
+        if (!r) sync_log_append(mailboxname);
     }
 
     if (!r && user && (notifier = config_getstring(IMAPOPT_MAILNOTIFIER))) {

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  * 
- * $Id: mboxlist.h,v 1.38.2.2 2004/04/08 21:13:06 ken3 Exp $
+ * $Id: mboxlist.h,v 1.38.2.3 2005/02/21 19:25:40 ken3 Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -136,6 +136,9 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 int mboxlist_setacl(const char *name, const char *identifier,
 		    const char *rights, int isadmin, 
 		    const char *userid, struct auth_state *auth_state);
+
+/* Change all ACLs on mailbox */
+int mboxlist_sync_setacls(char *name, char *acl);
 
 /* Find all mailboxes that match 'pattern'. */
 int mboxlist_findall(struct namespace *namespace,

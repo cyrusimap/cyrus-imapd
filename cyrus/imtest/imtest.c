@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/NNTP/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.93.2.11 2004/12/07 19:34:21 ken3 Exp $
+ * $Id: imtest.c,v 1.93.2.12 2005/02/21 19:25:50 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -1086,12 +1086,12 @@ int auth_sasl(struct sasl_cmd_t *sasl_cmd, char *mechlist)
 	    prot_write(pout, inbase64, inbase64len);
 
 	    out = NULL;
-	} else if(sendliteral) {
+	} else if (sendliteral) {
 	    /* If we had no response, we still need to send the
 	       empty literal in this case */
 	    printf("{0+}\r\nC: ");
 	    prot_printf(pout, "{0+}\r\n");
-	} else {
+	} else if (!initial_response) {
 	    printf("C: ");
 	}
       noinitresp:
@@ -2242,6 +2242,13 @@ static struct protocol_t protocols[] = {
       { "AUTHENTICATE", INT_MAX, 1, "OK", "NO", NULL, "*", &sieve_parse_success },
       NULL, { "LOGOUT", "OK" }, NULL, NULL, NULL
     },
+    { "csync", NULL, "csync",
+      { 1, "* OK", NULL },
+      { NULL , "* OK", "* STARTTLS", "* SASL ", NULL },
+      { "STARTTLS", "OK", "NO", 1 },
+      { "AUTHENTICATE", INT_MAX, 0, "OK", "NO", "+ ", "*", NULL },
+      NULL, { "EXIT", "OK" }, NULL, NULL, NULL
+    },
     { NULL, NULL, NULL,
       { 0, NULL, NULL },
       { NULL, NULL, NULL, NULL, NULL },
@@ -2419,6 +2426,8 @@ int main(int argc, char **argv)
 	    prot = "mupdate";
 	else if (!strcasecmp(prog, "sivtest"))
 	    prot = "sieve";
+	else if (!strcasecmp(prog, "synctest"))
+	    prot = "csync";
     }
 
     protocol = protocols;

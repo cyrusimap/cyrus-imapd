@@ -1,0 +1,44 @@
+.\" -*- nroff -*-
+.TH SYNC_RESET HERMES 8
+.SH NAME
+sync_reset \- Account reset utility. DANGER.
+.SH SYNOPSIS
+.B sync_server
+[
+.B \-C
+.I config-file
+]
+[
+.B \-v
+[
+.B \-v
+]
+]
+[
+.B \-f
+]
+.SH DESCRIPTION
+
+.I Sync_reset
+is a small utility program to destroy user accounts on a system. The
+only safeguard which is in place is the obligary force option.
+.SH OPTIONS
+.TP
+.BI \-C " config-file"
+Read configuration options from \fIconfig-file\fR.
+.TP
+.BI \-v
+Verbose mode.
+.TP
+.BI \-f
+Force operation. Without this flag \fIsync_reset\fR just bails out with
+an error. Principally here to try and prevent accidents with command
+autorepeat. 
+.SH FILES
+.TP
+.B /etc/imapd.conf
+.SH SEE ALSO
+.PP
+\fBreplicate(8)\fR, \fBsync_client(8)\fR, \fBsync_upload(8)\fR
+.SH AUTHORS
+David Carter (dpc22@cam.ac.uk)

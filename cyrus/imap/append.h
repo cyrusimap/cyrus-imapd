@@ -1,5 +1,5 @@
 /* append.h -- Description of messages to be copied 
- * $Id: append.h,v 1.24.2.2 2004/06/15 17:13:26 ken3 Exp $ 
+ * $Id: append.h,v 1.24.2.3 2005/02/21 19:25:18 ken3 Exp $ 
  *
  * Copyright (c) 1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -60,6 +60,7 @@ struct copymsg {
     const char *cache_begin;
     int cache_len;		/* 0 if need to copy & parse message */
     int seen;
+    struct message_uuid uuid;
     bit32 system_flags;
     char *flag[MAX_USER_FLAGS+1];
 };

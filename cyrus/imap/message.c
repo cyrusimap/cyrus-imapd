@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: message.c,v 1.97.2.7 2004/09/16 18:03:53 ken3 Exp $
+ * $Id: message.c,v 1.97.2.8 2005/02/21 19:25:40 ken3 Exp $
  */
 
 #include <config.h>
@@ -472,6 +472,50 @@ struct body *body;
 
     if (n == -1) {
 	syslog(LOG_ERR, "IOERROR: appending cache for %s: %m", mailbox->name);
+	return IMAP_IOERROR;
+    }
+
+    return 0;
+}
+
+/* YYY Following used by sync_support.c. Should use message_create_record()
+ *     instead now that is available?
+ *
+ * Parse the message at 'msg_base' of length 'msg_len' in 'mailbox'.
+ * Appends the message's cache information to the mailbox's cache file
+ * and fills in appropriate information in the index record pointed to
+ * by 'message_index'.
+ */
+int
+message_parse_mapped_async(msg_base, msg_len, format, cache_fd, message_index)
+const char *msg_base;
+unsigned long msg_len;
+int format;
+int cache_fd;
+struct index_record *message_index;
+{
+    struct body body;
+    struct msg msg;
+    int n;
+
+    msg.base = msg_base;
+    msg.len = msg_len;
+    msg.offset = 0;
+
+    message_parse_body(&msg, format, &body,
+		       DEFAULT_CONTENT_TYPE, (struct boundary *)0);
+    
+    message_index->sentdate = message_parse_date(body.date, 0);
+    message_index->size = body.header_size + body.content_size;
+    message_index->header_size = body.header_size;
+    message_index->content_offset = body.content_offset;
+
+    message_index->cache_offset = lseek(cache_fd, 0, SEEK_CUR);
+    n = message_write_cache(cache_fd, &body);
+    message_free_body(&body);
+
+    if (n == -1) {
+	syslog(LOG_ERR, "IOERROR: appending cache for sync_server: %m");
 	return IMAP_IOERROR;
     }
 

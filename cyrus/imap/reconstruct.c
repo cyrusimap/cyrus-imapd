@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.81.2.14 2004/12/30 21:05:35 ken3 Exp $ */
+/* $Id: reconstruct.c,v 1.81.2.15 2005/02/21 19:25:45 ken3 Exp $ */
 
 #include <config.h>
 
@@ -719,6 +719,8 @@ int reconstruct(char *name, struct discovered *found)
 		message_index.user_flags[i] =
 		  old_index.user_flags[i] & valid_user_flags[i];
 	    }
+            /* Copy across MessageUUID if confident that data on disk */
+            message_uuid_copy(&message_index.uuid, &old_index.uuid);
 	}
 	else {
 	    /* Message file write time is good estimate of internaldate */
@@ -726,6 +728,8 @@ int reconstruct(char *name, struct discovered *found)
 	    /* If we are recovering a message, assume new UIDL
 	       so that stupid clients will retrieve this message */
 	    mailbox.pop3_new_uidl = 1;
+            /* Wipe the Message UUID */
+            message_uuid_set_null(&message_index.uuid);
 	}
 	message_index.last_updated = time(0);
 	
@@ -797,6 +801,8 @@ int reconstruct(char *name, struct discovered *found)
     *((bit32 *)(buf+OFFSET_FLAGGED)) = htonl(new_flagged);
     *((bit32 *)(buf+OFFSET_POP3_NEW_UIDL)) = htonl(mailbox.pop3_new_uidl);
     *((bit32 *)(buf+OFFSET_LEAKED_CACHE)) = htonl(0);
+
+    message_uuid_pack(&message_index.uuid, buf+OFFSET_MESSAGE_UUID);
 
     n = fwrite(buf, 1, INDEX_HEADER_SIZE, newindex);
     fflush(newindex);

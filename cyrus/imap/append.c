@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.102.2.8 2004/08/09 18:51:16 ken3 Exp $
+ * $Id: append.c,v 1.102.2.9 2005/02/21 19:25:18 ken3 Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -66,6 +66,8 @@
 #include "retry.h"
 #include "quota.h"
 
+#include "message_uuid.h"
+
 struct stagemsg {
     char fname[1024];
 
@@ -79,6 +81,7 @@ struct stagemsg {
     */
     char *parts; /* buffer of current stage parts */
     char *partend; /* end of buffer */
+    struct message_uuid uuid;
 };
 
 static int append_addseen(struct mailbox *mailbox, const char *userid,
@@ -410,6 +413,9 @@ FILE *append_newstage(const char *mailboxname, time_t internaldate,
     stage->parts = xzmalloc(5 * (MAX_MAILBOX_PATH+1) * sizeof(char));
     stage->partend = stage->parts + 5 * (MAX_MAILBOX_PATH+1) * sizeof(char);
 
+    /* Assign new, shared MessageID */
+    message_uuid_assign(&stage->uuid);
+
     snprintf(stage->fname, sizeof(stage->fname), "%d-%d-%d",
 	     (int) getpid(), (int) internaldate, msgnum);
 
@@ -626,6 +632,8 @@ int append_fromstage(struct appendstate *as, struct body **body,
 	    }
 	}
     }
+    /* Copy Message UUID from stage */
+    message_uuid_copy(&message_index.uuid, &stage->uuid);
 
     /* Write out index file entry */
     r = mailbox_append_index(mailbox, &message_index, 
@@ -779,6 +787,9 @@ int append_fromstream(struct appendstate *as, struct body **body,
 	    }
 	}
     }
+
+    /* Assign new Message-UUID */
+    message_uuid_assign(&message_index.uuid);
 
     /* Write out index file entry; if we abort later, it's not
        important */
@@ -976,6 +987,9 @@ int append_copy(struct mailbox *mailbox,
     }
 
     if (body) free(body);
+
+    /* Assign messageID for this message */
+    message_uuid_copy(&message_index[msg].uuid, &copymsg[msg].uuid);
 
     /* Write out index file entries */
     r = mailbox_append_index(append_mailbox, message_index,

@@ -40,7 +40,7 @@
 #
 exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #!perl -w
-# $Id: mkimap,v 1.15.2.1 2004/06/30 19:36:21 ken3 Exp $
+# $Id: mkimap,v 1.15.2.2 2005/02/21 19:26:01 ken3 Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -95,11 +95,47 @@ mkdir "log", 0755 || warn "can't create $d/log: $!";
 mkdir "msg", 0755 || warn "can't create $d/msg: $!";
 mkdir "ptclient", 0755 || warn "can't create $d/ptclient: $!";
 
+# begin replication stuff
+# XXX make this dependent on imapd.conf options
+#
+mkdir "sync", 0755 || warn "can't create $d/sync: $!";
+
+mkdir "md5", 0750;
+foreach $i ("a".."z") { mkdir "md5/$i", 0750; }
+
+$host=`uname -n`;
+
+# Hermes (Cambridge) specific stuff
+if ($host =~ /^cyrus-(\d+)\.csi\.private\.cam\.ac\.uk$/) {
+  $machine = $1;
+} else {
+  print "Warning: Not an obvious Hermes system. Setting \$machine=1\n";
+  $machine = 1;
+}
+
+# Set up UUID scheme for this system
+open(UUID, ">master_machine") or die ("Failed to open master_machine");
+print UUID "machine=${machine}\n";
+close(UUID);
+
+$time = time();
+
+open(UUID, ">master_uuid") or die ("Failed to open master_uuid");
+print UUID "schema=1\n";
+print UUID "machine=${machine}\n";
+print UUID "master_start_time=${time}\n";
+close(UUID);
+
+# end replication stuff
+
 while ($part = shift @parts) {
     print "creating $part...\n";
     mkdir $part, 0755 || warn "can't create $part: $!";
     chdir $part or die "couldn't change to partition $part";
     mkdir "stage.", 0755 || warn "can't create $part/stage.: $!";
+# replication stuff
+    mkdir "sync.", 0755 || warn "can't create $part/sync.: $!";
+    mkdir "sync./locks", 0755 || warn "can't create $part/sync./locks: $!";
 }
 
 print "done\n";

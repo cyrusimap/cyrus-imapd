@@ -1,0 +1,489 @@
+Replication Wire protocol : types
+=================================
+
+ulong::
+  Unsigned long integer 0 <= x <= (2^32)-1
+
+quota_t:: 
+  EITHER : Unsigned long integer      :: 0 <= x <= (2^32)-1
+      OR : Unsigned long long integer :: 0 <= x <= (2^64)-1
+
+time_t::
+  Timestamp (currently 32 bit unsigned integer, offset into Unix epoch)
+
+literal+::
+  {count+}\r\n
+Arbitrary string of count bytes\r\n
+
+astring::
+  Atom or string
+
+qstring::
+  Quoted string
+
+flag_list_t
+  List of system and user flags of the form: (\Deleted \Answered Hello World)
+
+Return values
+=============
+
+Each command sent to the server is a single logical line of arbitrary length
+(literal encoding may make the single logical line span multiple lines).
+
+Responses follow the IMAP three state module:
+
+ OK English text\r\n   -- Operation completed okay
+ NO English text\r\n   -- Operation failed: reason attached
+BAD English text\r\n   -- replication protocol error.
+
+Unsolicited/Multiline responses.
+
+Some commands generate responses which span multiple lines. The final line
+in the response will start "OK", "NO", or "BAD". Intermediate lines will
+all start "*". Some commands may generate structured responses (e.g: a list
+of mailboxes plus all of their contents) where the number of "*" at the
+start of the line defines the structure of the response.
+
+Replication Wire Protocol : Brief text descriptions
+===================================================
+
+The replication protocol defines 32 verbs at the time of writing.
+
+----------------------------------------------------------------------
+
+ADDSUB
+  subscription :: astring
+
+Add string to list of subscription on server.
+
+----------------------------------------------------------------------
+
+ACTIVATE_SIEVE
+  sieve_name :: astring
+
+Activate sieve file of given name for this user.
+
+----------------------------------------------------------------------
+
+CREATE
+  mailboxname :: astring  -- e.g: user.dpc22.zzz
+  uniqueid    :: astring  -- Cyrus UniqueID (currently 64bit hex number)
+  acl         :: astring  -- Initial ACL for this mailbox
+  mbtype      :: int      
+  uidvalidity :: ulong
+
+Create mailbox with given name. UniqueID currently derived from
+UIDvalidity and mailbox name, but no guarantee that this will always
+be the case.
+
+Special value "NIL" for ACL means that mailbox has come from UW world or
+some other location without ACL. We construct appropriate default ACL:
+
+     userid    --> "lrswipcda" 
+     anonymous --> "0"           (for FUD daemon)
+  
+----------------------------------------------------------------------
+
+CONTENTS
+
+Dump complete contents of current folder to output screen. Used for
+downloading messages from Cyrus into UW world.
+
+Response is series of lines of the form:
+
+  * [uid] [internaldate] 
+    [flags :: flag_list_t]
+    [message body :: literal]
+
+followed by final "OK" line. flag_list includes \Seen state for current
+users, unlike STATUS, USER_ALL and USER_SOME.
+
+----------------------------------------------------------------------
+
+DEACTIVATE_SIEVE
+
+Deactivate the active sieve file for this user.
+
+----------------------------------------------------------------------
+
+DELETE
+  mailbox :: astring.
+
+Delete mailbox with given name.
+
+----------------------------------------------------------------------
+
+DELSUB
+  mailbox :: astring
+
+Delete subscription with given name
+
+----------------------------------------------------------------------
+
+DELETE_SIEVE
+  sieve_name :: astring
+
+Delete sieve file with given name.
+
+----------------------------------------------------------------------
+
+EXIT
+
+Shut down sync_server
+
+----------------------------------------------------------------------
+
+EXPUNGE
+  uid0 :: ulong
+     . . .
+  uidn :: ulong
+
+Remove messages matching given list of UIDS from currently selected
+folder. Will return single line "OK Expunge Complete" on success.
+
+----------------------------------------------------------------------
+
+ENDUSER
+
+Unlock current user  and call auth_freestate() to discard current
+authentication.
+
+----------------------------------------------------------------------
+
+GET_SIEVE sieve_name :: astring
+
+Get sieve script with given name. Successful response is of form:
+
+OK {%lu+}\r\n
+Sieve script
+\r\n
+
+----------------------------------------------------------------------
+
+INFO 
+
+Get meta information for currently selected folder. Response is single line
+of the form:
+
+OK
+  UIDvalidity :: ulong
+  UIDlast     :: ulong
+  Flags       :: flag_list_t
+
+"INFO" command is almost certainly historical baggage and should be removed.
+
+----------------------------------------------------------------------
+
+LIST
+
+List mail folders for currently selected list. Multiline response of
+the form:
+
+   * [Uniqueid :: astring] [Name :: astring] [Acl :: astring]
+      . . .
+   * [Uniqueid :: astring] [Name :: astring] [Acl :: astring]
+   OK List complete
+
+List command probably obsolete with advent of USER_ALL and USER_SOME
+commands.
+
+----------------------------------------------------------------------
+
+LSUB
+
+List subscriptions for currently selected user. Multiline response of the
+form:
+
+   * [Subscription :: astring]
+     . . .
+   * [Subscription :: astring]
+   OK Lsub complete
+
+----------------------------------------------------------------------
+
+LIST_SIEVE
+
+List available sieve files for currently selected users. Multiline
+response of the form:
+
+   * [Sieve_name :: astring]   [*]   <-- "*" for active sieve file
+     . . .
+   * [Sieve_name :: astring]
+   OK List_sieve complete
+
+----------------------------------------------------------------------
+
+QUOTA
+  quota_root :: astring
+
+Get quota root information. Response is single line of the form:
+
+OK
+  Limit                 :: quota_t   (Kbytes)
+  Expunged_timeout      :: ulong     (seconds) 
+  Expunged_vol_min      :: quota_t   (KBytes)
+  Expunged_vol_max      :: quota_t   (KBytes)
+  Expunged_vol_overflow :: quota_t   (KBytes)
+  Mailbox_limit         :: ulong     (KBytes)
+
+----------------------------------------------------------------------
+
+RENAME
+  old_name :: astring
+  new_name :: astring
+
+Rename mailbox old_name --> new_name
+
+----------------------------------------------------------------------
+
+RESET
+  account :: astring
+
+Reset named account back to initial state. Wipes all of the following:
+  mailboxes
+  subscriptions
+  seen data
+  Sieve files.
+
+----------------------------------------------------------------------
+
+RESERVE
+  mailbox :: astring
+  uuid0 :: ulong
+     . . .
+  uuidn :: ulong
+
+Reserves collection of messages matching list of UUIDs in given mailbox.
+Message data is linked into /var/spool/imap/sync. staging directory
+so that we can later link the messages into other folders even if the
+original has been expunged. Multiline response of the form:
+
+  * [UUID :: astring]
+    . . .
+  * [UUID :: astring]
+  OK Reserve complete
+
+so that client knows which reserve operations have been complete and which
+have failed.
+
+----------------------------------------------------------------------
+
+RESTART
+
+sync_client wants to negotiate a restart to clear up. Clears out all staged
+messages causes by upload and reserve sync_server child process exits
+cleanly, parent forks off a new child to resolve any memory leaks.
+
+Responds:
+  OK restarting.
+
+----------------------------------------------------------------------
+
+SELECT mailbox :: astring
+
+Select named mailbox as current folder (calls mailbox_open()).
+
+----------------------------------------------------------------------
+
+STATUS
+
+Return complete status of currently selected mailbox. Multiline response:
+
+  * [uid :: ulong] [uuid :: astring] [flags :: flag_list]
+    . . .
+  * [uid :: ulong] [uuid :: astring] [flags :: flag_list]
+  OK [last_uid :: ulong]
+
+Believe that this command has been obsoleted by USER_ALL and USER_SOME.
+Occasionally useful for debugging purposes.
+
+----------------------------------------------------------------------
+
+SETFLAGS
+  [
+    uid   :: ulong
+    flags :: flag_list_t     e.g: (\Deleted \Flagged Hello World)
+  ] +
+
+Set flags for messages with given series of UIDs. SETFLAGS can take
+an arbitrary number of "uid (flags) " pairs on a single line.
+
+----------------------------------------------------------------------
+
+SETSEEN
+  user       :: astring
+  lastread   :: time_t
+  lastuid    :: time_t
+  lastchange :: time_t
+  seenuid    :: astring
+
+Update seen database for current selected mailbox + nominated userid.
+seenuid is opaque string used by seendb code. The replication engine
+doesn't attempt to decompose seenuid strings to work out if anything
+has changed, it just uses the lastchange timestamp to work out if
+the seenuid string should be updated.
+
+Successful Response:
+  OK Setseen Succeeded
+
+----------------------------------------------------------------------
+
+SETACL
+  mailbox :: astring
+  acl :: astring
+
+Set ACL on given mailbox. ACL will typically contain tab characters,
+so the astring will be the quoted form e.g:
+
+  "dpc22\ttlrswipcda\tanonymous\t0\t"
+
+----------------------------------------------------------------------
+
+SETQUOTA
+  quotaroot :: astring
+  limit     :: quota_t
+  expunged_timeout :: ulong
+  expunged_vol_min :: ulong
+  expunged_vol_max :: ulong
+  expunged_vol_overflow :: ulong
+  mailbox_limit         :: ulong     (KBytes)
+
+Set limits and overrides for given quota root.
+
+----------------------------------------------------------------------
+
+UPLOAD 
+  newlastuid      :: ulong
+  last_appenddate :: time_t
+
+  Arbitrary list of messages on single logical line , with three forms:
+
+   SIMPLE                          # Unparsed message that we need to parse
+     UUID          :: astring
+     UID           :: ulong        # "NIL" => Use UUID 0.
+     internaldate  :: time_t
+     sentdate      :: time_t
+     last_updated  :: time_t
+     flags         :: flag_list_t
+     message_text  :: literal+
+
+   PARSED                          # Message plus pre-parsed cyrus.cache entry
+     UUID          :: astring
+     UID           :: ulong
+     internaldate  :: time_t
+     sentdate      :: time_t
+     last_updated  :: time_t
+     flags         :: flag_list_t
+     message_cache :: literal+
+     message_text  :: literal+
+
+   COPY                           # Copy of message which has already
+     UUID          :: astring     # been UPLOADED or RESERVED
+     UID           :: ulong       # Message body and cache available
+     internaldate  :: time_t      # from staging directory
+     sentdate      :: time_t
+
+Upload an arbitrary list of messages to the currently selected folder.
+
+Will normally only add messages to the end of the mailfolder in current use
+(and the code has special optimised path for that case).  However if
+message list contains UIDs which belong in the middle of a mailbox, or a
+given UID exists on both client and server but the UUID values don't match
+(which normally indicates the two ends have lost sync with each other),
+the the UPLOAD command will merge in new and replacement messages.
+
+Response:
+  OK Upload %lu messages okay
+
+----------------------------------------------------------------------
+
+UIDLAST
+  last_uid        :: ulong
+  last_appenddate :: ulong
+
+Update last_uid and last_appenddate timestamps on mailfolder. Typically
+used when new messages have been arrived and then been expunged between
+replication runs. Essentially UPLOAD operation with an empty message list.
+
+----------------------------------------------------------------------
+
+USER
+  user ::astring 
+
+Select given user: locks out concurrent access from other replication
+runners and calls auth_newstate to authenticate us as the user in question.
+
+Response:
+  OK Locked [username]
+
+----------------------------------------------------------------------
+
+USER_ALL
+  user ::astring 
+
+
+Select given user: locks out concurrent access from other replication
+runners and calls auth_newstate to authenticate us as the user in question.
+
+Response is a complete list of _everything_ in the target account on
+the replica system in a single round trip. Multi line response,
+with various kinds of "*" response indicating different objects.
+Format should be familiar from other commands which examine only a
+portion of the target account.
+
+**** Sieve script. Single line response of the form:
+
+  **** [name :: astring]       
+       [last_update :: time_t] 
+       [* - if active Sieve]
+
+*** Subscription. Single line response of the form:
+
+  *** [name :: astring]
+
+** Mailbox. Single line response of the form: 
+
+  ** [uniqueid   :: astring]
+     [name       :: astring]
+     [acl        :: astring]
+     [lastuid    :: ulong]
+     [lastchange :: time_t]
+
+* Message within last mailbox listed as a "**" item. Format is the
+  same as that generated by STATUS command:
+
+  * [uid :: ulong]
+    [uuid :: astring]
+    [flags :: flag_list_t]
+
+Final line of successful response is used to report QUOTA information
+in the same format:
+
+OK
+  Limit                 :: quota_t   (Kbytes)
+  expunged_timeout      :: ulong     (seconds) 
+  expunged_vol_min      :: quota_t   (KBytes)
+  expunged_vol_max      :: quota_t   (KBytes)
+  expunged_vol_overflow :: quota_t   (KBytes)
+  mailbox_limit         :: ulong     (KBytes)
+  
+----------------------------------------------------------------------
+
+USER_SOME
+  user     :: astring 
+  mailbox1 :: astring
+    . . .
+  mailboxn :: astring
+
+Similar to USER_ALL command, but only returns mailbox and message lists
+for given set of mailboxes. Doesn't return sieve or subscription info.
+
+----------------------------------------------------------------------
+
+UPLOAD_SIEVE
+  sieve_name :: astring
+  sieve_file :: literal+
+
+Response on success:
+  Upload_sieve completed.
+

@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: proxy.c,v 1.1.2.4 2004/09/03 20:12:37 ken3 Exp $
+ * $Id: proxy.c,v 1.1.2.5 2005/02/21 19:25:44 ken3 Exp $
  */
 
 #include <config.h>
@@ -175,7 +175,7 @@ proxy_findserver(const char *server,		/* hostname of backend */
 
     if (!ret || (ret->sock == -1)) {
 	/* need to (re)establish connection to server or create one */
-	ret = backend_connect(ret, server, prot, userid, NULL);
+	ret = backend_connect(ret, server, prot, userid, NULL, NULL);
 	if (!ret) return NULL;
 
 	if (clientin) {

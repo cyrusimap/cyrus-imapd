@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.16.2.12 2005/02/14 06:43:14 shadow Exp $ */
+/* $Id: backend.c,v 1.16.2.13 2005/02/21 19:25:19 ken3 Exp $ */
 
 #include <config.h>
 
@@ -102,7 +102,7 @@ static char *ask_capability(struct protstream *pout, struct protstream *pin,
 		    if (prot->capa_cmd.parse_mechlist)
 			ret = prot->capa_cmd.parse_mechlist(str, prot);
 		    else
-			ret = strdup(tmp+strlen(c->str));
+			ret = xstrdup(tmp+strlen(c->str));
 		}
 	    }
 	}
@@ -156,27 +156,30 @@ static int do_starttls(struct backend *s, struct tls_cmd_t *tls_cmd)
 
 static int backend_authenticate(struct backend *s, struct protocol_t *prot,
 				char **mechlist, const char *userid,
-				const char **status)
+				sasl_callback_t *cb, const char **status)
 {
     int r;
     sasl_security_properties_t *secprops = NULL;
     struct sockaddr_storage saddr_l, saddr_r;
     char remoteip[60], localip[60];
     socklen_t addrsize;
-    sasl_callback_t *cb;
+    int local_cb = 0;
     char buf[2048], optstr[128], *p;
     const char *mech_conf, *pass;
 
-    strlcpy(optstr, s->hostname, sizeof(optstr));
-    p = strchr(optstr, '.');
-    if (p) *p = '\0';
-    strlcat(optstr, "_password", sizeof(optstr));
-    pass = config_getoverflowstring(optstr, NULL);
-    if(!pass) pass = config_getstring(IMAPOPT_PROXY_PASSWORD);
-    cb = mysasl_callbacks(userid, 
-			  config_getstring(IMAPOPT_PROXY_AUTHNAME),
-			  config_getstring(IMAPOPT_PROXY_REALM),
-			  pass);
+    if (!cb) {
+	local_cb = 1;
+	strlcpy(optstr, s->hostname, sizeof(optstr));
+	p = strchr(optstr, '.');
+	if (p) *p = '\0';
+	strlcat(optstr, "_password", sizeof(optstr));
+	pass = config_getoverflowstring(optstr, NULL);
+	if(!pass) pass = config_getstring(IMAPOPT_PROXY_PASSWORD);
+	cb = mysasl_callbacks(userid, 
+			      config_getstring(IMAPOPT_PROXY_AUTHNAME),
+			      config_getstring(IMAPOPT_PROXY_REALM),
+			      pass);
+    }
 
     /* set the IP addresses */
     addrsize=sizeof(struct sockaddr_storage);
@@ -200,7 +203,7 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
 	return r;
     }
 
-    secprops = mysasl_secprops(0);
+    secprops = mysasl_secprops(SASL_SEC_NOPLAINTEXT);
     r = sasl_setprop(s->saslconn, SASL_SEC_PROPS, secprops);
     if (r != SASL_OK) {
 	return r;
@@ -242,7 +245,7 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
 	     (*mechlist = ask_capability(s->out, s->in, prot, &s->capability)));
 
     /* xxx unclear that this is correct */
-    free_callbacks(cb);
+    if (local_cb) free_callbacks(cb);
 
     if (r == SASL_OK) {
 	prot_setsasl(s->in, s->saslconn);
@@ -266,7 +269,7 @@ static void timed_out(int sig)
 
 struct backend *backend_connect(struct backend *ret, const char *server,
 				struct protocol_t *prot, const char *userid,
-				const char **auth_status)
+				sasl_callback_t *cb, const char **auth_status)
 {
     /* need to (re)establish connection to server or create one */
     int sock = -1;
@@ -380,7 +383,8 @@ struct backend *backend_connect(struct backend *ret, const char *server,
     /* now need to authenticate to backend server,
        unless we're doing LMTP on a UNIX socket (deliver) */
     if ((server[0] != '/') || strcmp(prot->sasl_service, "lmtp")) {
-	if ((r = backend_authenticate(ret, prot, &mechlist, userid, auth_status))) {
+	if ((r = backend_authenticate(ret, prot, &mechlist, userid,
+				      cb, auth_status))) {
 	    syslog(LOG_ERR, "couldn't authenticate to backend server: %s",
 		   sasl_errstring(r, NULL, NULL));
 	    free(ret);

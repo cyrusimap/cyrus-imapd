@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.144.2.31 2004/12/17 18:15:16 ken3 Exp $
+ * $Id: pop3d.c,v 1.144.2.32 2005/02/21 19:25:43 ken3 Exp $
  */
 #include <config.h>
 
@@ -84,6 +84,8 @@
 #include "telemetry.h"
 #include "backend.h"
 #include "proxy.h"
+
+#include "sync_log.h"
 
 #ifdef HAVE_KRB
 /* kerberos des is purported to conflict with OpenSSL DES */
@@ -442,6 +444,8 @@ int service_main(int argc __attribute__((unused)),
 
     signals_poll();
 
+    sync_log_init();
+
     popd_in = prot_new(0, 0);
     popd_out = prot_new(1, 1);
 
@@ -793,6 +797,7 @@ static void cmdloop(void)
 		    if (msg <= popd_exists) {
 			(void) mailbox_expunge(popd_mailbox, expungedeleted,
 					       0, 0);
+			sync_log_mailbox(popd_mailbox->name);
 		    }
 		}
 		prot_printf(popd_out, "+OK\r\n");
@@ -1531,7 +1536,7 @@ int openinbox(void)
 	}
 
 	backend = backend_connect(NULL, server, &protocol[PROTOCOL_POP3],
-				  userid, &statusline);
+				  userid, NULL, &statusline);
 
 	if (!backend) {
 	    syslog(LOG_ERR, "couldn't authenticate to backend server");

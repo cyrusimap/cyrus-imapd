@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: protocol.c,v 1.2.2.10 2004/12/07 19:34:24 ken3 Exp $ */
+/* $Id: protocol.c,v 1.2.2.11 2005/02/21 19:25:44 ken3 Exp $ */
 
 #include <config.h>
 
@@ -139,5 +139,14 @@ struct protocol_t protocol[] = {
       { "S01 STARTTLS", "S01 OK", "S01 NO" },
       { "A01 AUTHENTICATE", INT_MAX, 1, "A01 OK", "A01 NO", "", "*", NULL },
       { "N01 NOOP", NULL, "N01 OK" },
-      { "Q01 LOGOUT", NULL, "Q01 " } }
+      { "Q01 LOGOUT", NULL, "Q01 " } },
+    { "csync", "csync",
+      { NULL, "* OK", NULL,
+	{ { "* SASL ", CAPA_AUTH },
+	  { "* STARTTLS", CAPA_STARTTLS },
+	  { NULL, 0 } } },
+      { "STARTTLS", "OK", "NO" },
+      { "AUTHENTICATE", INT_MAX, 0, "OK", "NO", "+ ", "*", NULL },
+      { "NOOP", NULL, "OK" },
+      { "EXIT", NULL, "OK" } }
 };

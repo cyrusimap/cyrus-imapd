@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.33 2004/12/17 18:15:14 ken3 Exp $
+ * $Id: nntpd.c,v 1.2.2.34 2005/02/21 19:25:41 ken3 Exp $
  */
 
 /*
@@ -99,6 +99,7 @@
 #include "rfc822date.h"
 #include "smtpclient.h"
 #include "spool.h"
+#include "sync_log.h"
 #include "telemetry.h"
 #include "tls.h"
 #include "util.h"
@@ -521,6 +522,8 @@ int service_main(int argc __attribute__((unused)),
     char unavail[1024];
 
     signals_poll();
+
+    sync_log_init();
 
     nntp_in = prot_new(0, 0);
     nntp_out = prot_new(1, 1);
@@ -3186,7 +3189,10 @@ static int deliver(message_data_t *msg)
 		    r = append_fromstream(&as, &body, msg->data, msg->size, now,
 					  (const char **) NULL, 0);
 		}
-		if (!r) append_commit(&as, 0, NULL, &uid, NULL);
+		if (!r) {
+		    r = append_commit(&as, 0, NULL, &uid, NULL);
+		    if (!r) sync_log_append(rcpt);
+		}
 		else append_abort(&as);
 	    }
 
@@ -3228,6 +3234,7 @@ static int newgroup(message_data_t *msg)
     int r;
     char *group;
     char mailboxname[MAX_MAILBOX_NAME+1];
+    int sync_lockfd = (-1);
 
     /* isolate newsgroup */
     group = msg->control + 8; /* skip "newgroup" */
@@ -3236,10 +3243,14 @@ static int newgroup(message_data_t *msg)
     snprintf(mailboxname, sizeof(mailboxname), "%s%.*s",
 	     newsprefix, (int) strcspn(group, " \t\r\n"), group);
 
+    sync_log_lock(&sync_lockfd, newsmaster);
     r = mboxlist_createmailbox(mailboxname, 0, NULL, 0,
 			       newsmaster, newsmaster_authstate, 0, 0, 0);
+    sync_log_unlock(&sync_lockfd);
 
     /* XXX check body of message for useful MIME parts */
+
+    if (!r) sync_log_mailbox(mailboxname);
 
     return r;
 }
@@ -3249,6 +3260,7 @@ static int rmgroup(message_data_t *msg)
     int r;
     char *group;
     char mailboxname[MAX_MAILBOX_NAME+1];
+    int sync_lockfd = (-1);
 
     /* isolate newsgroup */
     group = msg->control + 7; /* skip "rmgroup" */
@@ -3259,8 +3271,12 @@ static int rmgroup(message_data_t *msg)
 
     /* XXX should we delete right away, or wait until empty? */
 
+    sync_log_lock(&sync_lockfd, newsmaster);
     r = mboxlist_deletemailbox(mailboxname, 0,
 			       newsmaster, newsmaster_authstate, 1, 0, 0);
+    sync_log_unlock(&sync_lockfd);
+
+    if (!r) sync_log_mailbox(mailboxname);
 
     return r;
 }
@@ -3271,6 +3287,7 @@ static int mvgroup(message_data_t *msg)
     char *group;
     char oldmailboxname[MAX_MAILBOX_NAME+1];
     char newmailboxname[MAX_MAILBOX_NAME+1];
+    int sync_lockfd = (-1);
 
     /* isolate old newsgroup */
     group = msg->control + 7; /* skip "mvgroup" */
@@ -3288,10 +3305,14 @@ static int mvgroup(message_data_t *msg)
     snprintf(newmailboxname, sizeof(newmailboxname), "%s%.*s",
 	     newsprefix, len, group);
 
+    sync_log_lock(&sync_lockfd, newsmaster);
     r = mboxlist_renamemailbox(oldmailboxname, newmailboxname, NULL, 0,
 			       newsmaster, newsmaster_authstate);
+    sync_log_unlock(&sync_lockfd);
 
     /* XXX check body of message for useful MIME parts */
+
+    if (!r) sync_log_mailbox_double(oldmailboxname, newmailboxname);
 
     return r;
 }
@@ -3349,6 +3370,7 @@ static int cancel_cb(const char *msgid __attribute__((unused)),
 
 	/* if we failed, pass the return code back in the rock */
 	if (r) *((int *) rock) = r;
+	else sync_log_mailbox(mbox.name);
     }
 
     return 0;

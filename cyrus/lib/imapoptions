@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.2.2.28 2005/02/16 21:06:51 shadow Exp $
+.\" $Id: imapoptions,v 1.2.2.29 2005/02/21 19:25:53 ken3 Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -516,6 +516,14 @@ are listed with ``<none>''.
    mailspool, but each have their own "replicated" copy of
    mailboxes.db. */
 
+{ "md5_dir", NULL, STRING }
+/* Top level directory for MD5 store manipulated by make_md5. File
+   structure within this directory is one file for each user on the system,
+   hashed on the first letter of the userid (e.g: /var/imap/md5/d/dpc22). */
+
+{ "md5_user_map", NULL, STRING }
+/* Map file (cdb) to allow partial make_md5 runs. Maps username to UID */
+
 # xxx badly worded
 { "mupdate_connections_max", 128, INT }
 /* The max number of connections that a mupdate process will allow, this
@@ -842,6 +850,32 @@ are listed with ``<none>''.
 
 { "subscription_db", "flat", STRINGLIST("flat", "berkeley", "skiplist") }
 /* The cyrusdb backend to use for the subscriptions list. */
+
+{ "sync_authname", NULL, STRING }
+/* The authentication name to use when authenticating to a sync server. */
+
+{ "sync_dir", NULL, STRING }
+/* Directory used as staging area by sync_server(8) and for locking
+   purposes by both client and server ends of a replication link. */
+
+{ "sync_log_file", NULL, STRING }
+/* Log file used by lmtpd(8), imapd(8), pop3d(8), and nntpd(8) to
+   record actions which would lead to replication.  */
+
+{ "sync_password", NULL, STRING }
+/* The default password to use when authenticating to a sync server. */
+
+{ "sync_realm", NULL, STRING }
+/* The authentication realm to use when authenticating to a sync server. */
+
+{ "sync_repeat_interval", 1, INT }
+/* Minimum interval (in seconds) between replication runs in rolling
+   replication mode. If a replication run takes longer than this
+   time, we repeat immediately. */
+
+{ "sync_shutdown_file", NULL, STRING }
+/* Simple latch used to tell sync_client(8) that it should shut down at the
+   next opportunity. Safer than sending signals to running processes */
 
 { "syslog_prefix", NULL, STRING }
 /* String to be appended to the process name in syslog entries. */

@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- * $Id: mailbox.h,v 1.77.2.9 2005/01/11 19:18:46 ken3 Exp $
+ * $Id: mailbox.h,v 1.77.2.10 2005/02/21 19:25:35 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -49,6 +49,8 @@
 
 #include "auth.h"
 #include "quota.h"
+#include "message_uuid.h"
+
 
 #define BIT32_MAX 4294967295U
 
@@ -78,7 +80,7 @@ typedef unsigned long long int bit64;
 #define MAILBOX_FORMAT_NORMAL	0
 #define MAILBOX_FORMAT_NETNEWS	1
 
-#define MAILBOX_MINOR_VERSION	6
+#define MAILBOX_MINOR_VERSION	7
 #define MAILBOX_CACHE_MINOR_VERSION 2
 
 #define FNAME_HEADER "/cyrus.header"
@@ -164,6 +166,7 @@ struct index_record {
     bit32 user_flags[MAX_USER_FLAGS/32];
     unsigned long content_lines;
     unsigned long cache_version;
+    struct message_uuid uuid;
 };
 
 /* Offsets of index/expunge header fields */
@@ -200,9 +203,10 @@ struct index_record {
 #define OFFSET_USER_FLAGS 36
 #define OFFSET_CONTENT_LINES (OFFSET_USER_FLAGS+MAX_USER_FLAGS/8) /* added for nntpd */
 #define OFFSET_CACHE_VERSION OFFSET_CONTENT_LINES+sizeof(bit32)
+#define OFFSET_MESSAGE_UUID OFFSET_CACHE_VERSION+sizeof(bit32)
 
 #define INDEX_HEADER_SIZE (OFFSET_SPARE2+sizeof(bit32))
-#define INDEX_RECORD_SIZE (OFFSET_CACHE_VERSION+sizeof(bit32))
+#define INDEX_RECORD_SIZE (OFFSET_MESSAGE_UUID+MESSAGE_UUID_PACKED_SIZE)
 
 /* Number of fields in an individual message's cache record */
 #define NUM_CACHE_FIELDS 10
@@ -229,6 +233,8 @@ enum {
 
 int mailbox_cached_header(const char *s);
 int mailbox_cached_header_inline(const char *text);
+
+unsigned long mailbox_cache_size(struct mailbox *mailbox, unsigned msgno);
 
 typedef int mailbox_decideproc_t(struct mailbox *mailbox, void *rock,
 				 char *indexbuf, int expunge_flags);

@@ -1,6 +1,6 @@
-/* backend.h -- IMAP server proxy for Cyrus Murder
+/* sync_commit.h -- Cyrus synchonization mailbox functions
  *
- * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2005 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -37,59 +37,28 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ *
+ * Original version written by David Carter <dpc22@cam.ac.uk>
+ * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
+ *
+ * $Id: sync_commit.h,v 1.1.2.1 2005/02/21 19:25:47 ken3 Exp $
  */
 
-/* $Id: backend.h,v 1.7.2.6 2005/02/21 19:25:19 ken3 Exp $ */
+#ifndef INCLUDED_SYNC_COMMIT_H
+#define INCLUDED_SYNC_COMMIT_H
 
-#ifndef _INCLUDED_BACKEND_H
-#define _INCLUDED_BACKEND_H
+int sync_upload_commit(struct mailbox *mailbox, time_t last_appenddate,
+		       struct sync_upload_list  *upload_list,
+		       struct sync_message_list *message_list);
 
-#include "mboxlist.h"
-#include "prot.h"
-#include "protocol.h"
-#include "tls.h"
+int sync_uidlast_commit(struct mailbox *mailbox, unsigned long last_uid,
+			time_t last_appenddate);
 
-/* Functionality to bring up/down connections to backend servers */
+int sync_setflags_commit(struct mailbox *mailbox,
+			 struct sync_flag_list *flag_list);
 
-#define LAST_RESULT_LEN 1024
+int sync_create_commit(char *name, char *uniqueid, char *acl,
+		       int mbtype, unsigned long uidvalidity,
+		       int isadmin, char *userid, struct auth_state *auth_state);
 
-struct backend {
-    char hostname[MAX_PARTITION_LEN];
-    struct sockaddr_storage addr;
-    int sock;
-
-    /* protocol we're speaking */
-    struct protocol_t *prot;
-
-    /* service-specific context */
-    void *context;
-
-    /* only used by imapd and nntpd */
-    struct protstream *clientin; /* input stream from client to proxy */
-    struct backend **current, **inbox; /* pointers to current/inbox be ptrs */
-    struct prot_waitevent *timeout; /* event for idle timeout */
-
-    sasl_conn_t *saslconn;
-#ifdef HAVE_SSL
-    SSL *tlsconn;
-    SSL_SESSION *tlssess;
-#endif /* HAVE_SSL */
-
-    unsigned long capability;
-
-    char last_result[LAST_RESULT_LEN];
-    struct protstream *in; /* from the be server to me, the proxy */
-    struct protstream *out; /* to the be server */
-};
-
-/* if cache is NULL, returns a new struct backend, otherwise returns
- * cache on success (and returns NULL on failure, but leaves cache alone) */
-struct backend *backend_connect(struct backend *cache, const char *server,
-				struct protocol_t *prot, const char *userid,
-				sasl_callback_t *cb, const char **auth_status);
-int backend_ping(struct backend *s);
-void backend_disconnect(struct backend *s);
-
-#define CAPA(s, c) ((s)->capability & (c))
-
-#endif /* _INCLUDED_BACKEND_H */
+#endif /* INCLUDED_SYNC_COMMIT_H */

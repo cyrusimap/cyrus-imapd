@@ -1,7 +1,7 @@
 #ifndef HAVE_MASTER_H
 #define HAVE_MASTER_H
 
-/* $Id: master.h,v 1.9.2.3 2004/12/17 18:15:20 ken3 Exp $ */
+/* $Id: master.h,v 1.9.2.4 2005/02/21 19:25:58 ken3 Exp $ */
 
 #include <config.h>
 #include <sys/resource.h> /* for rlim_t */
@@ -13,6 +13,7 @@ struct service {
     char *proto;		/* protocol to accept */
     char *const *exec;		/* command (with args) to execute */
     int babysit;		/* babysit this service? */
+    int provide_uuid;           /* Service assigns UUIDS */
     
     /* multiple address family support */
     int associate;		/* are we primary or additional instance? */

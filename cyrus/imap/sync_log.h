@@ -1,6 +1,6 @@
-/* backend.h -- IMAP server proxy for Cyrus Murder
+/* sync_log.c -- Cyrus synchonization logging functions
  *
- * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1998-2005 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -37,59 +37,34 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ *
+ * Original version written by David Carter <dpc22@cam.ac.uk>
+ * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
+ *
+ * $Id: sync_log.h,v 1.1.2.1 2005/02/21 19:25:48 ken3 Exp $
  */
 
-/* $Id: backend.h,v 1.7.2.6 2005/02/21 19:25:19 ken3 Exp $ */
+#ifndef INCLUDED_SYNC_LOG_H
+#define INCLUDED_SYNC_LOG_H
 
-#ifndef _INCLUDED_BACKEND_H
-#define _INCLUDED_BACKEND_H
+#define SYNC_LOG_RETRIES (64)
 
-#include "mboxlist.h"
-#include "prot.h"
-#include "protocol.h"
-#include "tls.h"
+void sync_log_init(void);
 
-/* Functionality to bring up/down connections to backend servers */
+void sync_log_user(const char *user);
 
-#define LAST_RESULT_LEN 1024
+void sync_log_meta(const char *user);
 
-struct backend {
-    char hostname[MAX_PARTITION_LEN];
-    struct sockaddr_storage addr;
-    int sock;
+void sync_log_mailbox(const char *name);
 
-    /* protocol we're speaking */
-    struct protocol_t *prot;
+void sync_log_mailbox_double(const char *name1, const char *name2);
 
-    /* service-specific context */
-    void *context;
+void sync_log_append(const char *name);
 
-    /* only used by imapd and nntpd */
-    struct protstream *clientin; /* input stream from client to proxy */
-    struct backend **current, **inbox; /* pointers to current/inbox be ptrs */
-    struct prot_waitevent *timeout; /* event for idle timeout */
+void sync_log_seen(const char *name, const char *seenuser);
 
-    sasl_conn_t *saslconn;
-#ifdef HAVE_SSL
-    SSL *tlsconn;
-    SSL_SESSION *tlssess;
-#endif /* HAVE_SSL */
+int sync_log_lock(int *fdp, char *userid);
 
-    unsigned long capability;
+int sync_log_unlock(int *fdp);
 
-    char last_result[LAST_RESULT_LEN];
-    struct protstream *in; /* from the be server to me, the proxy */
-    struct protstream *out; /* to the be server */
-};
-
-/* if cache is NULL, returns a new struct backend, otherwise returns
- * cache on success (and returns NULL on failure, but leaves cache alone) */
-struct backend *backend_connect(struct backend *cache, const char *server,
-				struct protocol_t *prot, const char *userid,
-				sasl_callback_t *cb, const char **auth_status);
-int backend_ping(struct backend *s);
-void backend_disconnect(struct backend *s);
-
-#define CAPA(s, c) ((s)->capability & (c))
-
-#endif /* _INCLUDED_BACKEND_H */
+#endif /* INCLUDED_SYNC_LOG_H */

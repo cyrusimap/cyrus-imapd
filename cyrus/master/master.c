@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.85.2.10 2004/12/17 18:15:19 ken3 Exp $ */
+/* $Id: master.c,v 1.85.2.11 2005/02/21 19:25:57 ken3 Exp $ */
 
 #include <config.h>
 
@@ -108,6 +108,8 @@
 #include "lock.h"
 
 #include "xmalloc.h"
+
+#include "message_uuid_master.h"
 
 enum {
     become_cyrus_early = 1,
@@ -594,6 +596,9 @@ void spawn_service(const int si)
     struct centry *c;
     struct service * const s = &Services[si];
     time_t now = time(NULL);
+    struct message_uuid uuid_prefix;
+    char *uuid_prefix_text;
+    static char uuid_env[100];
 
     if (!s->name) {
 	fatal("Serious software bug found: spawn_service() called on unnamed service!",
@@ -640,6 +645,21 @@ void spawn_service(const int si)
 	return;
     }
 
+    if (s->provide_uuid) {
+        if (!message_uuid_master_next_child(&uuid_prefix)) {
+            syslog(LOG_ERR, "Failed to generate UUID for %s", s->name);
+            message_uuid_set_null(&uuid_prefix);
+        }
+
+        if (!message_uuid_master_checksum(&uuid_prefix)) {
+            syslog(LOG_ERR, "Failed to checksum UUID for %s", s->name);
+            message_uuid_set_null(&uuid_prefix);
+        }
+
+        uuid_prefix_text = message_uuid_text(&uuid_prefix);
+    } else
+        uuid_prefix_text = NULL;
+
     switch (p = fork()) {
     case -1:
 	syslog(LOG_ERR, "can't fork process to run service %s: %m", s->name);
@@ -682,6 +702,11 @@ void spawn_service(const int si)
 	putenv(name_env);
 	snprintf(name_env2, sizeof(name_env2), "CYRUS_ID=%d", s->associate);
 	putenv(name_env2);
+
+	/* add UUID prefix to environment */
+	snprintf(uuid_env, sizeof(uuid_env), "CYRUS_UUID_PREFIX=%s",
+                 uuid_prefix_text);
+	putenv(uuid_env);
 
 	execv(path, s->exec);
 	syslog(LOG_ERR, "couldn't exec %s: %m", path);
@@ -1315,6 +1340,7 @@ void add_service(const char *name, struct entry *e, void *rock)
     rlim_t maxfds = (rlim_t) masterconf_getint(e, "maxfds", 256);
     int reconfig = 0;
     int i, j;
+    int provide_uuid = masterconf_getswitch(e, "provide_uuid", 0);
 
     if(babysit && prefork == 0) prefork = 1;
     if(babysit && maxforkrate == 0) maxforkrate = 10; /* reasonable safety */
@@ -1394,6 +1420,7 @@ void add_service(const char *name, struct entry *e, void *rock)
 
     Services[i].maxforkrate = maxforkrate;
     Services[i].maxfds = maxfds;
+    Services[i].provide_uuid = provide_uuid;
 
     if (!strcmp(Services[i].proto, "tcp") ||
 	!strcmp(Services[i].proto, "tcp4") ||
@@ -1422,6 +1449,7 @@ void add_service(const char *name, struct entry *e, void *rock)
 		Services[j].desired_workers = Services[i].desired_workers;
 		Services[j].babysit = Services[i].babysit;
 		Services[j].max_workers = Services[i].max_workers;
+		Services[j].provide_uuid = Services[i].provide_uuid;
 	    }
 	}
     }
@@ -1918,6 +1946,11 @@ int main(int argc, char **argv)
 	    exit(1);
 	}
     }
+
+    if (!message_uuid_master_init()) {
+        syslog(LOG_ERR, "Couldn't initialise UUID subsystem");
+        exit(EX_OSERR);
+    }
     
     /* init ctable janitor */
     init_janitor();
@@ -1975,6 +2008,7 @@ int main(int argc, char **argv)
 		Services[i].nactive = 0;
 		Services[i].nconnections = 0;
 		Services[i].associate = 0;
+                Services[i].provide_uuid = 0;
 
 		if (Services[i].stat[0] > 0) close(Services[i].stat[0]);
 		if (Services[i].stat[1] > 0) close(Services[i].stat[1]);

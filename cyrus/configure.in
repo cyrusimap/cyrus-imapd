@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.268.2.19 2005/02/17 17:51:33 shadow Exp $
+dnl $Id: configure.in,v 1.268.2.20 2005/02/21 19:25:12 ken3 Exp $
 dnl
 
 
@@ -771,7 +771,7 @@ dnl see if we're compiling with NNTP support
 dnl
 ENABLE_NNTP=no
 AC_ARG_ENABLE(nntp,
-        [  --enable-nntp           enable NNTP support (experimental)],
+        [  --enable-nntp           enable NNTP support],
 	ENABLE_NNTP=$enableval
         if test "$ENABLE_NNTP" != no; then
 	  IMAP_PROGS="$IMAP_PROGS nntpd fetchnews"
@@ -790,6 +790,17 @@ if test "$ENABLE_MURDER" != no; then
 	# for master/slave auto-selection
 	AC_CHECK_HEADERS(sys/sockio.h)
 fi
+
+dnl
+dnl see if we're compiling replication support programs
+dnl
+ENABLE_REPLICATION=no
+AC_ARG_ENABLE(replication,
+        [  --enable-replication    enable replication support (experimental)],
+	ENABLE_REPLICATION=$enableval
+        if test "$ENABLE_REPLICATION" != no; then
+	  IMAP_PROGS="$IMAP_PROGS sync_client sync_server sync_reset make_md5"
+        fi) 
 
 AC_SUBST(IMAP_PROGS)
 
@@ -1032,7 +1043,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.268.2.19 2005/02/17 17:51:33 shadow Exp $ */
+/* $Id: configure.in,v 1.268.2.20 2005/02/21 19:25:12 ken3 Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *

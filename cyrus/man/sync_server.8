@@ -1,0 +1,55 @@
+.\" -*- nroff -*-
+.TH SYNC_SERVER HERMES 8
+.SH NAME
+sync_server \- One half of the synchronisation (replication) engine
+.SH SYNOPSIS
+.B sync_server
+[
+.B \-C
+.I config-file
+]
+[
+.B \-v
+[
+.B \-v
+]
+]
+[
+.B \-f
+]
+.SH DESCRIPTION
+
+.I Sync_server
+is one half of the the replication system. It runs on the target (replica)
+system and
+.I Sync_client
+provides instructions for bringing transforming the target system into a
+clone of the master system.
+
+.SH OPTIONS
+.TP
+.BI \-C " config-file"
+Read configuration options from \fIconfig-file\fR.
+.TP
+.BI \-v
+Verbose mode.
+.BI \-v
+.BI \-v
+provides full running commentary of transactions as they take place.
+.TP
+.BI \-f
+Run in foreground mode. Stops
+.B sync_server
+from forking off a child process as a worker (which can be restarted on
+request by the client program). Princiaply used for debugging, when we
+might want to attach a debugger such as
+.B gdb
+to a running process.
+.SH FILES
+.TP
+.B /etc/imapd.conf
+.SH SEE ALSO
+.PP
+\fBreplicate(8)\fR, \fBsync_client(8)\fR, \fBsync_upload(8)\fR
+.SH AUTHORS
+David Carter (dpc22@cam.ac.uk)

@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.199.2.15 2005/02/20 09:31:03 shadow Exp $
+ * $Id: index.c,v 1.199.2.16 2005/02/21 19:25:30 ken3 Exp $
  */
 #include <config.h>
 
@@ -78,6 +78,7 @@
 #include "xmalloc.h"
 
 #include "index.h"
+#include "sync_log.h"
 
 extern void printastring (const char *s);
 
@@ -482,6 +483,7 @@ int oldexists;
     int savealloced;
     unsigned start, newallseen, inrange, usecomma;
     mailbox_notifyproc_t *updatenotifier;
+    int dosync = 0;
 
     if (!keepingseen || !seendb) return;
     if (imapd_exists == 0) {
@@ -570,11 +572,19 @@ int oldexists;
 
     if (dirty) {
 	seen_last_change = time((time_t *)0);
+        dosync = 1;
     }
 
     if (!examining && oldexists != imapd_exists) {
 	/* If just did a SELECT, record time of our reading the mailbox */
 	if (oldexists == -1) last_read = time((time_t *)0);
+
+        /* Track last_uid changes, but not last_read. Tracking last_read
+         * would cause a sync on every SELECT operation, and our (hacked)
+         * FUD doesn't use the information anyway
+         */
+        if (last_uid != mailbox->last_uid)
+            dosync = 1;
 
 	/* Update the \Recent high-water mark */
 	last_uid = mailbox->last_uid;
@@ -734,12 +744,21 @@ int oldexists;
     r = seen_write(seendb, last_read, last_uid, seen_last_change, saveseenuids);
     seen_unlock(seendb);
     free(seenuids);
+
     if (r) {
 	prot_printf(imapd_out, "* OK %s: %s\r\n",
 	       error_message(IMAP_NO_CHECKSEEN), error_message(r));
 	free(saveseenuids);
 	seenuids = newseenuids;
 	return;
+    }
+
+    /* (oldexists == imapd_exists) => mailbox already open? */
+    /* Has to be here:
+     * imapd.c doesn't have enough context to work out where seen flags set.
+     * Downside: we have to link sync_client, sync_server with sync_log */
+    if (!r && dosync) {
+        sync_log_seen(mailbox->name, imapd_userid);
     }
 
 #if TOIMSP
@@ -1207,6 +1226,9 @@ index_copy(struct mailbox *mailbox,
 		    copyargs.copymsg);
     if (!r) append_commit(&append_mailbox, totalsize,
 			  &uidvalidity, &startuid, &num);
+
+    if (!r) sync_log_mailbox(name);
+
     if (!r) {
 	copyuid_size = 1024;
 	copyuid = xmalloc(copyuid_size);
@@ -3266,6 +3288,10 @@ void *rock;
     copyargs->copymsg[copyargs->nummsg].content_lines = CONTENT_LINES(msgno);
     copyargs->copymsg[copyargs->nummsg].cache_version = CACHE_VERSION(msgno);
     copyargs->copymsg[copyargs->nummsg].cache_begin = cache_base + CACHE_OFFSET(msgno);
+    message_uuid_unpack(&copyargs->copymsg[copyargs->nummsg].uuid,
+                        (unsigned char *) /* YYY */
+                        INDEC_OFFSET(msgno)+OFFSET_MESSAGE_UUID);
+
     if (mailbox->format != MAILBOX_FORMAT_NORMAL) {
 	/* Force copy and re-parse of message */
 	copyargs->copymsg[copyargs->nummsg].cache_len = 0;

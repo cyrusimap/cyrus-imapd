@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.175.2.15 2004/09/05 19:58:55 ken3 Exp $
+# $Id: Makefile.in,v 1.175.2.16 2005/02/21 19:25:17 ken3 Exp $
 # 
 # @configure_input@
 # 
@@ -101,7 +101,7 @@ LOBJS= append.o mailbox.o mboxlist.o mupdate-client.o mboxname.o message.o \
 	convert_code.o duplicate.o saslclient.o saslserver.o signals.o \
 	annotate.o search_engines.o squat.o squat_internal.o mbdump.o \
 	imapparse.o telemetry.o user.o notify.o protocol.o idle.o quota_db.o \
-	$(SEEN)
+	sync_log.o $(SEEN)
 
 IMAPDOBJS=pushstats.o backend.o imapd.o proxy.o imap_proxy.o index.o \
 	tls.o version.o
@@ -246,6 +246,13 @@ smmapd: smmapd.o libimap.a mutex_fake.o $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o smmapd $(SERVICE) smmapd.o mutex_fake.o libimap.a \
 	$(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
+sync_server: sync_server.o sync_support.o sync_commit.o \
+	imapparse.o tls.o libimap.a mutex_fake.o $(DEPLIBS) $(SERVICE)
+	$(CC) $(LDFLAGS) -o \
+	sync_server sync_server.o sync_support.o sync_commit.o \
+	imapparse.o tls.o $(SERVICE) libimap.a mutex_fake.o \
+	$(DEPLIBS) $(LIBS) $(LIB_WRAP)
+
 ### Command Line Utilities
 arbitron: arbitron.o $(CLIOBJS) libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o arbitron arbitron.o $(CLIOBJS) \
@@ -314,6 +321,21 @@ quota: quota.o $(CLIOBJS) libimap.a $(DEPLIBS)
 tls_prune: tls_prune.o tls.o $(CLIOBJS) libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o \
 	 $@ tls_prune.o tls.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
+
+make_md5: make_md5.o libimap.a mutex_fake.o $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o make_md5 make_md5.o libimap.a mutex_fake.o $(DEPLIBS) $(LIBS)
+
+sync_client: sync_client.o sync_support.o \
+	backend.o tls.o imapparse.o libimap.a mutex_fake.o $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o \
+	sync_client sync_client.o sync_support.o \
+	backend.o tls.o imapparse.o libimap.a mutex_fake.o $(DEPLIBS) $(LIBS)
+
+sync_reset: sync_reset.o sync_support.o sync_commit.o \
+	libimap.a mutex_fake.o $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o \
+	sync_reset sync_reset.o sync_support.o sync_commit.o \
+	libimap.a mutex_fake.o $(DEPLIBS) $(LIBS)
 
 ### Other Misc Targets
 

@@ -41,7 +41,7 @@
  *
  */
 
-/* $Id: deliver.c,v 1.169.2.8 2004/09/05 20:03:11 ken3 Exp $ */
+/* $Id: deliver.c,v 1.169.2.9 2005/02/21 19:25:19 ken3 Exp $ */
 
 #include <config.h>
 
@@ -312,7 +312,8 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
     }
 
     /* connect */
-    conn = backend_connect(NULL, sockaddr, &protocol[PROTOCOL_LMTP], "", NULL);
+    conn = backend_connect(NULL, sockaddr, &protocol[PROTOCOL_LMTP],
+			   "", NULL, NULL);
     if (!conn) {
 	just_exit("couldn't connect to lmtpd");
     }
