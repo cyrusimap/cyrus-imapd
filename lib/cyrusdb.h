@@ -49,7 +49,8 @@ enum cyrusdb_ret {
     CYRUSDB_DONE = 1,
     CYRUSDB_IOERROR = -1,
     CYRUSDB_AGAIN = -2,
-    CYRUSDB_EXISTS = -3
+    CYRUSDB_EXISTS = -3,
+    CYRUSDB_INTERNAL = -4
 };
 
 #define cyrusdb_strerror(c) ("cyrusdb error")
@@ -151,6 +152,7 @@ struct cyrusdb_backend {
     int (*abort)(struct db *db, struct txn *tid);
 
     int (*dump)(struct db *db, int detail);
+    int (*consistent)(struct db *db);
 };
 
 extern struct cyrusdb_backend *cyrusdb_backends[];
