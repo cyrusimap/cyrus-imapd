@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.58 2003/03/11 21:40:52 rjs3 Exp $ -->
+<!-- $Id: changes.html,v 1.59 2003/05/01 19:02:04 rjs3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -12,7 +12,12 @@
 <h2>Changes to the Cyrus IMAP Server since 2.1.12</h2>
 <ul>
 <li>Add maxfds= option in cyrus.conf</li>
-<li>Security Appraisers and Bynari review of proxyd.c, mailboxes.c</li>
+<li>&quot;The shutdown() Patch&quot; by
+Henrique de Moraes Holschuh &lt;hmh@debian.org&gt; and
+Jeremy Howard &lt;jhoward@fastmail.fm&gt;</li>
+<li>Now report both built-with and running-with OpenSSL versions</li>
+<li>Security Appraisers and Bynari review of the majority of the modules
+in <tt>imap/</tt></li>
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.1.11</h2>
@@ -1728,7 +1733,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2003/03/11 21:40:52 $ <br />
+last modified: $Date: 2003/05/01 19:02:04 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
