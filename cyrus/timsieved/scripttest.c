@@ -1,6 +1,6 @@
 /* scripttest.c -- test wheather the sieve script is valid
  * Tim Martin
- * $Id: scripttest.c,v 1.8 2000/01/28 22:09:57 leg Exp $
+ * $Id: scripttest.c,v 1.9 2000/02/02 02:34:46 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -54,6 +54,18 @@ sieve_vacation_t vacation = {
 	     void *, void *,
 	     void *) )   &foo   /* send_response() */
 };
+
+static int sieve_notify(char *priority, 
+			char *method, 
+			char *message, 
+			char **headers,
+			void *interp_context, 
+			void *script_context,
+			void *mc)
+{
+    fatal("stub function called", 0);
+    return SIEVE_FAIL;
+}
 
 int mysieve_error(int lineno, char *msg,
 		  void *i, void *s)
@@ -155,6 +167,12 @@ int is_script_parsable(FILE *stream, char **errstr)
     res = sieve_register_vacation(i, &vacation);
     if (res != SIEVE_OK) {
 	syslog(LOG_ERR, "sieve_register_vacation() returns %d\n", res);
+	return TIMSIEVE_FAIL;
+    }
+
+    res = sieve_register_notify(i, &sieve_notify);
+    if (res != SIEVE_OK) {
+	syslog(LOG_ERR, "sieve_register_notify() returns %d\n", res);
 	return TIMSIEVE_FAIL;
     }
 

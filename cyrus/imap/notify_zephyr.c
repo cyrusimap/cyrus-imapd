@@ -1,5 +1,5 @@
 /* notify_zephyr.c -- Module to notify of new mail via zephyr
- $Id: notify_zephyr.c,v 1.17 2000/01/28 22:09:49 leg Exp $
+ $Id: notify_zephyr.c,v 1.18 2000/02/02 02:34:44 tmartin Exp $
  
  # Copyright 1998 Carnegie Mellon University
  # 
@@ -55,7 +55,8 @@ int notify_wantheader()
 }
 
 void notify(char *priority,
-	    char *user,
+	    char *folder,
+	    char *user,	    
 	    char *message,
 	    char **headers,
 	    char *actions_taken)
@@ -67,7 +68,10 @@ void notify(char *priority,
     char *msgbody;
     char *lines[2];
     char *mykrbhost = 0;
+    char *instance = "INBOX";
     int lup;
+
+    if (folder) instance = folder;
   
     if ((retval = ZInitialize()) != ZERR_NONE) {
 	syslog(LOG_ERR, "IOERROR: cannot initialize zephyr: %m");
@@ -87,12 +91,18 @@ void notify(char *priority,
     lines[0] = myhost;
     msgbody = xmalloc(1000 + strlen(message));
     lines[1] = msgbody;
-    
+
+    strcpy(msgbody,"");
+
     if (message)
-	sprintf(msgbody,"--> %s <--\n\n",message);
+    {
+	strcat(msgbody,message);
+	strcat(msgbody,"\n");
+    }
 
     if (headers)
     {
+	strcat(msgbody,"\n");
 	for (lup=0; headers[lup]!=NULL;lup+=2)
 	{
 	    headers[lup][0] = toupper(headers[lup][0]);
@@ -117,7 +127,7 @@ void notify(char *priority,
     memset((char *)&notice, 0, sizeof(notice));
     notice.z_kind = UNSAFE;
     notice.z_class = MAIL_CLASS;
-    notice.z_class_inst = priority;
+    notice.z_class_inst = instance;
 
     notice.z_opcode = "";
     notice.z_sender = mysender;

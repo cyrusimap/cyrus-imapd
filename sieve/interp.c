@@ -1,6 +1,6 @@
 /* interp.c -- sieve script interpretor builder
  * Larry Greenfield
- * $Id: interp.c,v 1.7 2000/01/28 22:09:55 leg Exp $
+ * $Id: interp.c,v 1.8 2000/02/02 02:34:45 tmartin Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -140,13 +140,6 @@ int sieve_register_unmark(sieve_interp_t *interp, sieve_callback *f)
 int sieve_register_notify(sieve_interp_t *interp, sieve_notify_callback *f)
 {
     interp->notify = f;
- 
-    return SIEVE_OK;
-}
-
-int sieve_register_denotify(sieve_interp_t *interp, sieve_callback *f)
-{
-    interp->denotify = f;
  
     return SIEVE_OK;
 }
