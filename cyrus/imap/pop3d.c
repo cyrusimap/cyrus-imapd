@@ -26,7 +26,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.39 1998/11/30 20:21:16 tjs Exp $
+ * $Id: pop3d.c,v 1.40 1998/12/02 18:54:46 tjs Exp $
  */
 
 #include <stdio.h>
@@ -89,7 +89,11 @@ struct msg {
 static struct mailbox mboxstruct;
 
 static int expungedeleted();
+
+static void cmd_auth();
 static void cmd_capa();
+static void cmd_pass();
+static void cmd_user();
 
 main(argc, argv, envp)
 int argc;
@@ -334,7 +338,7 @@ cmdloop()
 		    prot_printf(popd_out, "-ERR Missing argument\r\n");
 		}
 		else {
-		    cmd_pass(arg);
+		    cmd_user(arg);
 		}
 	    }
 	    else if (!strcmp(inputbuf, "pass")) {
@@ -542,7 +546,7 @@ char *user;
     }
 }
 
-cmd_pass(pass)
+void cmd_pass(pass)
 char *pass;
 {
     char *reply = 0;
@@ -660,6 +664,7 @@ cmd_capa()
     prot_flush(popd_out);
 }
 
+void
 cmd_auth(authtype)
 char *authtype;
 {
