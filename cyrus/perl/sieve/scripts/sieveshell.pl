@@ -46,6 +46,8 @@ use Getopt::Long;
 use strict;
 use File::Temp qw/ tempfile /;
 use Pod::Usage;
+use Term::ReadLine;
+use POSIX qw(:sys_wait_h);
 
 my $puthelp =        "put <filename>   - upload script to server\n";
 my $gethelp =        "get <name> [<filename>]\n" .
@@ -154,7 +156,7 @@ sub show_help {
   print $deactivatehelp;
   print "quit             - quit\n";
 }
-
+#no longer used, replaced by readline module
 sub getline {
     print "> " if ($interactive);
     return <$filehandle>;
@@ -172,9 +174,14 @@ if (!defined $obj) {
     die "unable to connect to server: $err";
 }
 
-while($_ = getline()) {
-    my @words = split ' ',$_;
-    my $str;
+my $term = Term::ReadLine->new("sieveshell");
+
+while(defined($_  = $term->readline('> '))){
+  
+  $term->addhistory($_);
+
+  my @words = split ' ',$_;
+  my $str;
     if ($#words < 0) {
 	next;
     }
