@@ -1339,7 +1339,7 @@ int val;
 /*
  * Initialize 'ibuf'
  */
-#define IBUFGROWSIZE 100 /* XXX 1000 */
+#define IBUFGROWSIZE 1000
 static message_ibuf_init(ibuf)
 struct ibuf *ibuf;
 {
