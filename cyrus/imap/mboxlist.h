@@ -41,7 +41,7 @@
  *
 
  * 
- * $Id: mboxlist.h,v 1.9 2000/07/03 20:13:31 leg Exp $
+ * $Id: mboxlist.h,v 1.10 2000/07/06 17:19:47 leg Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -74,13 +74,6 @@ struct mbox_entry {
 				/* holds remote machine for REMOTE mailboxes */
     char acls[1];
 };
-
-typedef enum {
-    MB_NEXT,
-    MB_REMOVE,
-    MB_UPDATE,
-    MB_FATAL
-} foreach_res;
 
 /* Lookup 'name' in the mailbox list. */
 int mboxlist_lookup(const char *name, char **pathp, char **aclp, void *tid);
