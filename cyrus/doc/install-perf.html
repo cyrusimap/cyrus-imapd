@@ -1,77 +1,80 @@
-<!-- $Id: install-perf.html,v 1.3 2001/11/18 19:39:03 leg Exp $ -->
-<HTML>
-<HEAD>
-<TITLE>Performance Notes
-</title>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<!-- $Id: install-perf.html,v 1.4 2001/11/18 19:40:08 leg Exp $ -->
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta name="generator" content="HTML Tidy, see www.w3.org" />
+<title>Performance Notes</title>
 </head>
-<h1>Performance Notes
-</h1>
 <body>
+<h1>Performance Notes</h1>
 
 Performance issues for you to consider. If you never expect to have
-more than 100 simultaneous users, chances are any hardware you 
-have will be fine. If you plan on having thousands or more users, 
-please be sure to review this section.
+more than 100 simultaneous users, chances are any hardware you have
+will be fine. If you plan on having thousands or more users, please
+be sure to review this section. 
 
-<p>
-If your configuration directory is not <tt>/var/imap</tt>, adjust
-	accordingly. 
+<p>If your configuration directory is not <tt>/var/imap</tt>,
+adjust accordingly.</p>
 
-<p>
 <ul>
-<li><tt><b>/var/imap/proc</b></tt> - After a successful login, the imapd
-creates a file in <tt>/var/imap/proc</tt> that is its unix process
-id. It also contains the name of any <tt>SELECT</tt>'d mailbox. The
-file is deleted when the user logs out.
+<li><tt><b>/var/imap/proc</b></tt> - After a successful login, the
+imapd creates a file in <tt>/var/imap/proc</tt> that is its unix
+process id. It also contains the name of any <tt>SELECT</tt>'d
+mailbox. The file is deleted when the user logs out. 
 
 <p>Given the potential load, this is a good candidate to move
 elsewhere. This can be done by symlink'ing the directory to another
 partition. We symlink it to a directory on a memory/viritual memory
 filesystem (specifically Solaris' tmpfs). If you use a tmpfs type
-filesystem, make sure that you have sufficient memory/swap to do this.
+filesystem, make sure that you have sufficient memory/swap to do
+this.</p>
 
-<p>Some people don't care about this information and just #ifdef out
-the code. We probably should add a <tt>configure</tt> option to do
-this.
+<p>Some people don't care about this information and just #ifdef
+out the code. We probably should add a <tt>configure</tt> option to
+do this.</p>
+</li>
 
-<p><li><tt><b>/var/imap/deliverdb</b></tt> - Unless you disable
-duplicate delivery suppression, each time a mail message is delivered
-it needs to lock the database and check to see if the message-id has
-been seen already. If you require really high throughput delivery, you
-may want to disable this feature.  However, disabling this feature
-also disables Sieve support.
+<li><tt><b>/var/imap/deliverdb</b></tt> - Unless you disable
+duplicate delivery suppression, each time a mail message is
+delivered it needs to lock the database and check to see if the
+message-id has been seen already. If you require really high
+throughput delivery, you may want to disable this feature. However,
+disabling this feature also disables Sieve support. 
 
 <p>We run with it enabled and it doesn't significantly impact our
-performance.
+performance.</p>
+</li>
 
-<p><li><tt><b>/var/spool/mqueue</b></tt> - Sendmail can be pretty
+<li><tt><b>/var/spool/mqueue</b></tt> - Sendmail can be pretty
 harsh on the spool partition. Having this on a separate disk is
-usually a good idea.  Consider using LMTP and delivering from a
-separate machine.
+usually a good idea. Consider using LMTP and delivering from a
+separate machine.</li>
 
-<p><li>Unused SASL mechanisms - If you just build the SASL library 
-and copied all the mechanisms into /usr/lib/sasl, the <tt>imapd</tt>
-will try to use them and allocate some amount of memory. In general,
-the operating system will swap out those pages but you may be allocating
-more swap space than you need. So, look in /usr/lib/sasl and if you don't
-plan on using those mechanisms, don't leave them there. 
+<li>Unused SASL mechanisms - If you just build the SASL library and
+copied all the mechanisms into /usr/lib/sasl, the <tt>imapd</tt>
+will try to use them and allocate some amount of memory. In
+general, the operating system will swap out those pages but you may
+be allocating more swap space than you need. So, look in
+/usr/lib/sasl and if you don't plan on using those mechanisms,
+don't leave them there.</li>
 
-<p><li>You may want to increase the listen queue value when starting
-up the master process.  For example, you may want to do this if you
-see the Listen queue drop counter increasing quickly.  For example,
+<li>You may want to increase the listen queue value when starting
+up the master process. For example, you may want to do this if you
+see the Listen queue drop counter increasing quickly. For example,
 under Solaris, look at the variable tcpListenDrop (from <tt>netstat
--sP tcp</tt>).
+-sP tcp</tt>).</li>
 </ul>
 
-<p>In general, there's no magic bullet for performance.  It depends on
-your hardware, your operating system, and how your users use the
-system. In general, an <tt>imapd</tt> process takes up anywhere from
-256 Kbytes of memory to 512 Kbytes when it is first fired up. CPU has
-not been a big deal, but it may become more important as the imap
-sessions are encrypted and now that searching may be more
+<p>In general, there's no magic bullet for performance. It depends
+on your hardware, your operating system, and how your users use the
+system. In general, an <tt>imapd</tt> process takes up anywhere
+from 256 Kbytes of memory to 512 Kbytes when it is first fired up.
+CPU has not been a big deal, but it may become more important as
+the imap sessions are encrypted and now that searching may be more
 frequent. Disk I/O is probably the most important and having a
-hardware RAID subsystem with an amount of write-back cache would be a
-good thing.
+hardware RAID subsystem with an amount of write-back cache would be
+a good thing.</p>
 
 <p>Finally, if you are talking about less than 100 interactive
 users it is likely that any relatively modern hardware can support
@@ -84,8 +87,8 @@ able to hire someone that can help.</p>
 Solaris by Adrian Cockcroft. Go to your favorite search engine and
 look for his name.</p>
 
-<P><HR>
-last modified: $Date: 2001/11/18 19:39:03 $
-</BODY></HTML>
-
+<hr />
+last modified: $Date: 2001/11/18 19:40:08 $
+</body>
+</html>
 
