@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.2 2002/07/10 20:45:03 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.3 2002/07/12 19:06:37 ken3 Exp $ */
 
 #include <config.h>
 
@@ -3623,11 +3623,16 @@ void cmd_delete(char *tag, char *name, int localonly)
 {
     int r;
     char mailboxname[MAX_MAILBOX_NAME+1];
+    char *p;
+    int domainlen = 0;
 
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
 					       imapd_userid, mailboxname);
 
     if (!r) {
+	if (config_virtdomains && (p = strchr(mailboxname, '@')))
+	    domainlen = p - mailboxname;
+
 	r = mboxlist_deletemailbox(mailboxname, imapd_userisadmin,
 				   imapd_userid, imapd_authstate, 1,
 				   localonly, 0);
@@ -3636,9 +3641,9 @@ void cmd_delete(char *tag, char *name, int localonly)
     /* was it a top-level user mailbox? */
     /* localonly deletes are only per-mailbox */
     if (!r && !localonly &&
-	!strncmp(mailboxname, "user.", 5) && !strchr(mailboxname+5, '.')) {
+	!strncmp(mailboxname+domainlen, "user.", 5) &&
+	!strchr(mailboxname+domainlen+5, '.')) {
 	struct tmplist *l = xmalloc(sizeof(struct tmplist));
-	char *p;
 	int r2, i;
 
 	l->alloc = 0;
