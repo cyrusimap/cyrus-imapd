@@ -1,18 +1,17 @@
 -*- text -*-
 
 		       Cyrus IMAP server design
-			     Feb 17, 1994
+			     May 5, 1994
 
 * Introduction
 
-This document describes the preliminary design of the Cyrus IMAP
-server.  The Cyrus IMAP server will provide access to personal mail
-and system-wide bboards through the IMAP protocol.  It differs from
-other IMAP server implementations in that it is intended to be run on
-"sealed" servers, where normal users are not normally permitted to log
-in.  It will support extensions to allow administrative functions such
-as ACL's and quota control and will cooperate with the Cyrus IMSP
-server.
+This document describes the design of the Cyrus IMAP server.  The
+Cyrus IMAP server will provide access to personal mail and system-wide
+bboards through the IMAP protocol.  It differs from other IMAP server
+implementations in that it is intended to be run on "sealed" servers,
+where normal users are not normally permitted to log in.  It will
+support extensions to allow administrative functions such as ACL's and
+quota control and will cooperate with the Cyrus IMSP server.
 
 * Mailbox namespace
 
@@ -70,7 +69,7 @@ determine the site's methods for:
 	Authentication mechanism (kerberos, unix-passwd, or trivial)
 	Storage of \Seen state (local-file or remote-database)
 
-Posix ACL interpretatin and remote database storage of \Seen state
+Posix ACL interpretation and remote database storage of \Seen state
 may not be implemented in the first versions of the server.
 
 * Mailbox storage format
@@ -98,7 +97,7 @@ values are in network byte order:
 cyrus.header	Contains variable-length information about the mailbox itself.
 
 - magic-number
-- Filename of cyrus.quota for this mailbox
+- Name of the quota root for this mailbox
 - The names of the user-defined flags
 
 
@@ -113,8 +112,8 @@ cyrus.index	Contains a header and a sequence of fixed-length
 - start-offset	4 bytes		offset of first per-message record
 - record-size	4 bytes		size of per-message records
 - exists	4 bytes		number of messages in mailbox
-- last-date	4 bytes		INTERNALDATE of the last message
-				appended to the mailbox
+- last-date	4 bytes		Unix time of the last insertion
+				of a message into the mailbox
 - last-uid	4 bytes		UID of the last message	appended to
 				the mailbox
 - quota-used	4 bytes		size quota usage this mailbox
@@ -151,7 +150,7 @@ cyrus.cache	Contains a header and a sequence of variable-length
 - IMAP "envelope", in format suitable for use in FETCH reply
 - IMAP "bodystructure", in format suitable for use in FETCH reply
 - IMAP "body", in format suitable for use in FETCH reply
-- sizes and file offsets of the various MIME body sections
+- size, file offsets, charsets, and encodings of the various MIME body sections
 - From, To, Cc, and BCC strings for searching
 
 Each field contains a 4 byte length in network byte order, the data,
@@ -172,30 +171,28 @@ access to cyrus.seen will be through an interface which can later be
 replaced by a distributed database.
 
 
-* Quota information storage format
-
-Each directory, whether it corresponds to mailbox or not, can act as
-the quota "root" of a hierarchy of mailboxes.  Such roots contain the
-file:
-
-cyrus.quota	Contains hierarchy-wide quota limits and usage.
-
-
 * Mailbox locking semantics
 
 In order to update information in a mailbox, the implementation must
 follow set locking procedures in order to prevent concurrency errors.
 
-The locking order is: cyrus.header cyrus.index cyrus.quota cyrus.seen
+The locking order is: cyrus.header cyrus.index quota-root cyrus.seen
 To prevent deadlocks, an implementation may not lock a given file while
 holding a lock on a later file.
 
 After obtaining a lock on any file, the implementation must
 double-check to make sure the file wasn't rewritten.
 
-It is necessary to lock cyrus.header before locking cyrus.quota in
+It is necessary to lock cyrus.header before locking the quota-root in
 order to guard against the possibility of another process changing the
-cyrus.quota for the mailbox.
+quota root for the mailbox.
+
+The file cyrus.cache is locked by the POP server in order to prevent
+multiple concurrent POP sessions on a mailbox.  As POP doesn't allow
+for the possibility of concurrent expunges, the expunge operation must
+obtain a lock on cyrus.cache after cyrus.index in order to prevent an
+expunge operation from occuring concurrently with a POP session.
+
 
 The order of the specific update operations is:
 
@@ -203,16 +200,15 @@ To append one or more messages:
 	open/lock cyrus.header
 	check ACL
 	open/lock cyrus.index and cyrus.cache
-	open/lock appropriate cyrus.quota
+	open/lock appropriate quota root
 	check quota
 	write cyrus.header if creating new user flags
 	assign uid as one plus last-uid
-	ensure new internaldate is later than last-date
 	write or hard-link message file(s)
 	append info to cyrus.cache
 	append info to cyrus.index
 	update last-date, last-uid, and quota-used
-	update cyrus.quota
+	update quota root
 	release locks
 	perform status update if permitted
 
@@ -235,15 +231,17 @@ To expunge:
 	if cyrus.index has been replaced since last opened, close,
 		reopen, lock, and repeat.
 	if reopened cyrus.index file, reopen cyrus.cache file.
+	nonblocking lock cyrus.cache
+	if didn't get lock, fail (mailbox opened via POP)
 	create files cyrus.index.NEW and cyrus.cache.NEW
 	copy header, incrementing generation-no
 	copy non-\DELETED records to new files, remember uid's and sizes
 	[remove unused user flags from cyrus.header?]
 	update quota-used in cyrus.index.NEW
-	lock appropriate cyrus.quota
+	lock appropriate quota root
 	rename cyrus.index.NEW to cyrus.index
 	rename cyrus.cache.NEW to cyrus.cache
-	update cyrus.quota
+	update quota root
 	release locks
 	remove deleted message files
 	lock cyrus.seen
@@ -380,6 +378,14 @@ When a mailbox is deleted or renamed, this directory is scanned for
 processes reading the mailbox.  Those processes are sent a signal
 causing them to shut down.
 
+
+* Quota root directory
+
+The subdirectory "quota" under the configuration directory contains
+one file per quota root.  The filename is the (lowercase) name of the
+quota root.  Each file contains the quota root's limit and usage.
+
+
 * IMSP dropoff directory:
 
 Contains one file for each SEEN or LAST command that needs to be sent
@@ -387,16 +393,16 @@ to an IMSP server.
 
 Filename is one of:
 
-- last.MAILBOX-NAME.UID
-- seen.USER.MAILBOX-NAME.UID
+- last.UID.MAILBOX-NAME
+- seen.UID.USER.MAILBOX-NAME
 
 With the following definitions:
 
-	USER - Name of user owning/reading
-	MAILBOX-NAME - Name of relevant mailbox
 	UID - UID of last message posted/read
 		A UID of "0" for seen means user no longer
 		read everything in mailbox.
+	USER - Name of user owning/reading
+	MAILBOX-NAME - Name of relevant mailbox
 
 The order of operations for the update daemon is:
 
@@ -427,19 +433,20 @@ The following programs will be written
 	Daemon to monitor the dropoff directory and give SEEN/LAST
 	commands to an IMSP server.
 
-- builddir
+- collectnews
 	Called by the netnews system to build cyrus header files in
 	the news spool area.
 
-- docancel
-	Scans the cancel log of the netnews system and removes
-	the canceled messages from the cyrus header files in the news
-	spool area.
+- rmnews
+	Called by the netnews system to remove and EXPUNGE articles
+	either expired or cancelled.
+
+- syncnews
+	Run occasionally to synchronize the netnews active file
+	with the Cyrus netnews mailbox list.
 
 - expire
 	Expires old mailbox posts
-	Has mode to clean up after a news system expire
-	Has mode to process the cancel log of the netnews system
 
 - arbitron
 	Reports readership statistics
@@ -495,21 +502,33 @@ Implementation order is as follows:
 
   + LIST, LSUB
 
-  + \Junked
+  + \Draft
 
   + Alpha release
 
 - Everything else
 
+  + collectnews, rmnews
+
   + quota
 
-  + builddir, minimal expire
+  + sendmail v8 config macros
 
   + IMSP seen/last, updateimsp
 
-  + quota-usage reporter, full expire
+  + quota-usage reporter & consistency checker, expire
 
-  + pop3d, pop2d, arbitron; Beta release
+  + admin tools -- create/delete user, manipulate ACL, quota
+
+  + pop3d, pop2d
+
+  + arbitron
+
+  + syncnews
+
+  + Beta release
+
+  + reconstruct
 
   + IMSP move
 
