@@ -94,7 +94,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.23 2001/09/07 19:08:16 ken3 Exp $ */
+/* $Id: tls.c,v 1.24 2001/09/10 15:21:56 ken3 Exp $ */
 
 #include <config.h>
 
@@ -539,7 +539,7 @@ SSL_SESSION *get_session_cb(SSL *ssl, unsigned char *id, int idlen, int *copy)
 	} while (ret == CYRUSDB_AGAIN);
 
 	if (data) {
-	    assert(len == sizeof(time_t));
+	    assert(len >= sizeof(time_t));
 
 	    /* grab the expire time */
 	    memcpy(&expire, data, sizeof(time_t));
