@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ctl_cyrusdb.c,v 1.15 2003/02/13 20:15:23 rjs3 Exp $
+ * $Id: ctl_cyrusdb.c,v 1.16 2003/05/02 15:23:05 ken3 Exp $
  */
 
 #include <config.h>
@@ -274,7 +274,7 @@ int main(int argc, char *argv[])
 	    r2 = (dblist[i].env)->sync();
 	    if (r2) {
 		syslog(LOG_ERR, "DBERROR: sync %s: %s", dirname,
-		       cyrusdb_strerror(r));
+		       cyrusdb_strerror(r2));
 		fprintf(stderr, 
 			"ctl_cyrusdb: unable to sync environment\n");
 	    }
@@ -323,7 +323,7 @@ int main(int argc, char *argv[])
 
 	    if (r2) {
 		syslog(LOG_ERR, "DBERROR: archive %s: %s", dirname,
-		       cyrusdb_strerror(r));
+		       cyrusdb_strerror(r2));
 		fprintf(stderr, 
 			"ctl_cyrusdb: unable to archive environment\n");
 	    }
@@ -342,7 +342,7 @@ int main(int argc, char *argv[])
 
 	r2 = (dblist[i].env)->done();
 	if (r2) {
-	    syslog(LOG_ERR, "DBERROR: done: %s", cyrusdb_strerror(r));
+	    syslog(LOG_ERR, "DBERROR: done: %s", cyrusdb_strerror(r2));
 	}
     }
 
