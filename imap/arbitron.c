@@ -64,7 +64,7 @@ char **argv;
 
     config_init("arbitron");
 
-    while ((opt = getopt(argc, argv, "dp")) != EOF) {
+    while ((opt = getopt(argc, argv, "d:p:")) != EOF) {
 	switch (opt) {
 	case 'd':
 	    report_days = atoi(optarg);
