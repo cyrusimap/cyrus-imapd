@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.13 2004/03/09 18:08:39 rjs3 Exp $ */
+/* $Id: global.c,v 1.14 2004/04/22 21:00:53 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -544,7 +544,8 @@ int mysasl_proxy_policy(sasl_conn_t *conn,
 	auth_freestate(authstate);
     
 	if (!userisadmin) {
-	    sasl_seterror(conn, 0, "only admins may authenticate");
+	    syslog(LOG_ERR, "%s is not an admin", auth_identity);
+	    sasl_seterror(conn, SASL_NOLOG, "only admins may authenticate");
 	    return SASL_BADAUTH;
 	}
 
