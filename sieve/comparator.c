@@ -1,6 +1,6 @@
 /* comparator.c -- comparator functions
  * Larry Greenfield
- * $Id: comparator.c,v 1.7 2000/12/18 04:53:42 leg Exp $
+ * $Id: comparator.c,v 1.8 2002/01/07 04:58:27 leg Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -32,7 +32,6 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
-#include <fnmatch.h>
 
 #include "comparator.h"
 #include "tree.h"
@@ -91,9 +90,70 @@ static int octet_contains(const char *pat, const char *text)
     return (strstr(text, pat) != NULL);
 }
 
+static int octet_matches_(const char *pat, const char *text, int casemap)
+{
+    const char *p;
+    const char *t;
+    char c;
+
+    t = text;
+    p = pat;
+    for (;;) {
+	if (*p == '\0') {
+	    /* ran out of pattern */
+	    return (*t == '\0');
+	}
+	c = *p++;
+	switch (c) {
+	case '?':
+	    if (*t == '\0') {
+		return 0;
+	    }
+	    t++;
+	    break;
+	case '*':
+	    while (*p == '*' || *p == '?') {
+		if (*p == '?') {
+		    /* eat the character now */
+		    if (*t == '\0') {
+			return 0;
+		    }
+		    t++;
+		}
+		/* coalesce into a single wildcard */
+		p++;
+	    }
+	    if (*p == '\0') {
+		/* wildcard at end of string, any remaining text is ok */
+		return 1;
+	    }
+
+	    while (*t != '\0') {
+		/* recurse */
+		if (octet_matches_(p, t, casemap)) return 1;
+		t++;
+	    }
+	case '\\':
+	    p++;
+	    /* falls through */
+	default:
+	    if (casemap && (toupper(c) == toupper(*t))) {
+		t++;
+	    } else if (!casemap && (c == *t)) {
+		t++;
+	    } else {
+		/* literal char doesn't match */
+		return 0;
+	    }
+	}
+    }
+    /* never reaches */
+    abort();
+}
+
 static int octet_matches(const char *pat, const char *text)
 {
-    return !fnmatch(pat, text, 0);
+    return octet_matches_(pat, text, 0);
 }
 
 #ifdef ENABLE_REGEX
@@ -135,21 +195,7 @@ static int ascii_casemap_contains(const char *pat, const char *text)
 
 static int ascii_casemap_matches(const char *pat, const char *text)
 {
-    int ret;
-    char *p, *t;
-    int i;
-
-    /* sigh, i'll just make local copies of these guys */
-    p = strdup(pat); t = strdup(text);
-    for (i = 0; p[i] != '\0'; i++)
-	p[i] = toupper(p[i]);
-    for (i = 0; t[i] != '\0'; i++)
-	t[i] = toupper(t[i]);
-
-    ret = !fnmatch(p, t, 0);
-    free(p); free(t);
-
-    return ret;
+    return octet_matches_(pat, text, 1);
 }
 
 /* i;ascii-numeric; only supports "is"
