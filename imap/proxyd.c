@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.125 2002/06/03 18:22:27 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.126 2002/06/06 19:39:54 rjs3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -4576,7 +4576,8 @@ void cmd_status(char *tag, char *name)
 						proxyd_userid, mailboxname);
 
     if (!r) r = mlookup(mailboxname, &server, NULL, NULL);
-    if (!r && supports_referrals) { 
+    if (!r && supports_referrals
+	&& config_getswitch("proxyd_allow_status_referral",0)) { 
 	proxyd_refer(tag, server, mailboxname);
 	/* Eat the argument */
 	eatline(proxyd_in, prot_getc(proxyd_in));
