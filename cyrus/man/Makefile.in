@@ -2,7 +2,7 @@
 # 
 # @configure_input@
 # 
-#	(C) Copyright 1995 by Carnegie Mellon University
+#	(C) Copyright 1997 by Carnegie Mellon University
 # 
 #                      All Rights Reserved
 # 
@@ -49,6 +49,7 @@ exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 
 MAN1 = $(srcdir)/cyradm.1
+MAN3 = $(srcdir)/imclient.3
 MAN5 = $(srcdir)/imapd.conf.5 $(srcdir)/krb.equiv.5
 MAN8 = $(srcdir)/arbitron.8 $(srcdir)/collectnews.8 $(srcdir)/deliver.8 \
 	$(srcdir)/imapd.8 $(srcdir)/pop3d.8 $(srcdir)/quota.8 \
@@ -61,6 +62,10 @@ install:
 	for file in $(MAN1); \
 	do \
 		$(INSTALL) -m 644 $$file $(DESTDIR)$(prefix)/man/man1 || exit 1; \
+	done
+	for file in $(MAN3); \
+	do \
+		$(INSTALL) -m 644 $$file $(DESTDIR)$(prefix)/man/man3 || exit 1; \
 	done
 	for file in $(MAN5); \
 	do \
