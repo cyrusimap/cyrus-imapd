@@ -168,7 +168,7 @@ FILE *to;
 	size -= n;
 	if (r) continue;
 
-	for (p = buf; *p; p++) {
+	for (p = (unsigned char *)buf; *p; p++) {
 	    if (*p == '\n') {
 		if (!sawcr) r = IMAP_MESSAGE_CONTAINSNL;
 		sawcr = 0;
@@ -198,13 +198,13 @@ FILE *to;
 	/* Check for valid header name */
 	if (sawnl && buf[0] != ' ' && buf[0] != '\t') {
 	    if (buf[0] == ':') return IMAP_MESSAGE_BADHEADER;
-	    for (p = buf; *p != ':'; p++) {
+	    for (p = (unsigned char *)buf; *p != ':'; p++) {
 		if (*p <= ' ') return IMAP_MESSAGE_BADHEADER;
 	    }
 	}
 
 	/* Check for non-ASCII character */ 
-	for (p = buf; *p; p++) {
+	for (p = (unsigned char *)buf; *p; p++) {
 	    if (*p >= 0x80) return IMAP_MESSAGE_CONTAINS8BIT;
 	}
 
