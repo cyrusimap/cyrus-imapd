@@ -382,16 +382,26 @@ int     tls_init_serverengine(int verifydepth,
     SSL_load_error_strings();
     SSLeay_add_ssl_algorithms();
 
+#if 0
     if (tlsonly) {
 	ctx = SSL_CTX_new(TLSv1_server_method());
     } else {
 	ctx = SSL_CTX_new(SSLv23_server_method());
     }
+#endif
+    /* even if we want TLS only, we use SSLv23 server method so we can
+       deal with a client sending an SSLv2 greeting message */
+
+    ctx = SSL_CTX_new(SSLv23_server_method());
     if (ctx == NULL) {
 	return (-1);
     };
 
     off |= SSL_OP_ALL;		/* Work around all known bugs */
+    if (tlsonly) {
+	off |= SSL_OP_NO_SSLv2;
+	off |= SSL_OP_NO_SSLv3;
+    }
     SSL_CTX_set_options(ctx, off);
     SSL_CTX_set_info_callback(ctx, apps_ssl_info_callback);
     SSL_CTX_sess_set_cache_size(ctx, 128);
