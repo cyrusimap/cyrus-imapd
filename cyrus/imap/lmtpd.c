@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.99.2.16 2002/11/15 21:46:57 rjs3 Exp $
+ * $Id: lmtpd.c,v 1.99.2.17 2002/11/28 17:49:35 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -514,7 +514,7 @@ int send_forward(char *forwardto, char *return_path, struct protstream *file)
 
     smbuf[0] = "sendmail";
     smbuf[1] = "-i";		/* ignore dots */
-    if (return_path != NULL) {
+    if (return_path && *return_path) {
 	smbuf[2] = "-f";
 	smbuf[3] = return_path;
     } else {
