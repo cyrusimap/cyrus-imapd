@@ -43,6 +43,7 @@ SHELL = /bin/sh
 all: libsyslog.a syslogd
 
 install:
+	@echo "Install syslogd and syslog.conf as appropriate"
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) -I$(srcdir) $(CFLAGS) $<
@@ -53,7 +54,6 @@ libsyslog.a: syslog.o
 
 syslogd: syslogd.o
 	$(CC) $(LDFLAGS) -o syslogd syslogd.o $(LIBS)
-	@echo "Install syslogd and syslog.conf as appropriate"
 
 clean:
 	rm -f *.o *.a Makefile.bak
