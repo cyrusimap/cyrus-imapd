@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_expire.c,v 1.2.2.8 2004/05/25 01:28:03 ken3 Exp $
+ * $Id: cyr_expire.c,v 1.2.2.9 2004/06/15 15:59:45 ken3 Exp $
  */
 
 #include <config.h>
@@ -168,11 +168,13 @@ int expire(char *name, int matchlen, int maycreate __attribute__((unused)),
     if (!r && (attrib.value ||
 	       erock->expunge_mode != IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE)) {
 	struct mailbox mailbox;
+	int doclose = 0;
 	int expunge_flags = 0;
 
 	/* Open/lock header */
 	r = mailbox_open_header(name, 0, &mailbox);
 	if (!r && mailbox.header_fd != -1) {
+	    doclose = 1;
 	    (void) mailbox_lock_header(&mailbox);
 	    mailbox.header_lock_count = 1;
 	}
@@ -184,7 +186,12 @@ int expire(char *name, int matchlen, int maycreate __attribute__((unused)),
 	    mailbox.index_lock_count = 1;
 	}
 
-	if (r) return r;
+	if (r) {
+	    /* mailbox corrupt/nonexistent -- skip it */
+	    syslog(LOG_WARNING, "unable to open/lock mailbox %s", name);
+	    if (doclose) mailbox_close(&mailbox);
+	    return 0;
+	}
 
 	erock->mailboxes++;
 	erock->expire_mark = 0;
