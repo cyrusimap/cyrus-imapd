@@ -41,7 +41,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: afskrb.c,v 1.3 2003/11/11 03:26:00 rjs3 Exp $";
+      "$Id: afskrb.c,v 1.4 2004/04/23 16:00:52 rjs3 Exp $";
 
 #include <config.h>
 
@@ -153,12 +153,27 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
     krb5_free_principal(context,princ_dummy);
     free(realm);
 
-    /* get the text version of princ */
-    if (krb5_unparse_name(context,princ,&retbuf))
-    {
-	krb5_free_principal(context,princ);
-	krb5_free_context(context);
-	return NULL;
+    if (config_getswitch(IMAPOPT_PTSKRB5_CONVERT524)) {
+	char nbuf[64], ibuf[64], rbuf[64];
+
+	if (krb5_524_conv_principal(context, princ, nbuf, ibuf, rbuf)) {
+	    krb5_free_principal(context,princ);
+	    krb5_free_context(context);
+	    return NULL;
+	}
+
+	retbuf = xmalloc(3*64 + 3);
+	sprintf(retbuf, "%s%s%s%s%s", nbuf,
+		ibuf[0] ? "." : "", ibuf,
+		rbuf[0] ? "@" : "", rbuf);
+    } else {
+	/* get the text version of princ */
+	if (krb5_unparse_name(context,princ,&retbuf))
+	{
+	    krb5_free_principal(context,princ);
+	    krb5_free_context(context);
+	    return NULL;
+        }
     }
 
     /* we have the canonical name pointed to by p -- strip realm if local */
@@ -166,13 +181,6 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
     {
 	char *realmbegin = strrchr(retbuf, '@');
 	if(realmbegin) *realmbegin = '\0';
-    }
-
-    if (config_getswitch(IMAPOPT_PTSKRB5_SLASHTODOT)) {
-	char *slash;
-	while((slash = strchr(retbuf, '/')) != NULL) {
-	    *slash = '.';
-	}
     }
     
     krb5_free_principal(context,princ);
