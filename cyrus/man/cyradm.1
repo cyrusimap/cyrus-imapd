@@ -254,8 +254,10 @@ named \fImailbox\fR.  The optional \fIpartition\fR argument
 specifies the partition name on which to create the mailbox.
 .IP "\fBdeletemailbox \fImailbox\fR" 5
 The \fBdeletemailbox\fR (or \fBdm\fR) command deletes the named mailbox.
-Since administrators don't have explicit delete rights use \fBsetaclmailbox\fR 
-to give delete rights before trying to delete a user's mailbox.
+.IP
+Since administrators don't have implicit delete rights on all
+mailboxes, they may need to use \fBsetaclmailbox\fR 
+to give themselves delete rights before trying to delete a mailbox.
 .IP "\fBrenamemailbox \fImailbox newmailbox\fR [\fIpartition\fR]" 5
 The \fBrenamemailbox\fR (or \fBrenm\fR) command renames the named
 mailbox to \fInewmailbox\fR.  The optional
