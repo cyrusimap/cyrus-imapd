@@ -40,7 +40,7 @@
 #
 exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #!perl -w
-# $Id: mkimap,v 1.13.6.3 2002/11/14 19:36:30 rjs3 Exp $
+# $Id: mkimap,v 1.13.6.4 2003/03/04 17:16:18 rjs3 Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -75,8 +75,11 @@ $imapdconf = shift || "/etc/imapd.conf";
 $sievedir = "/usr/sieve";
 $nosievedir = 0;
 $hashispool = 0;
+$virtdomains = 0;
 
 sub mkdomain {
+    die "virtdomains not supported" if(!$virtdomains);
+
     my $domain = shift;
     my $hash = shift;
 
@@ -118,6 +121,10 @@ while (<CONF>) {
     if (/^hashimapspool:\s+(1|t|yes|on)/) {
 	$hashispool = 1;
 	print "i will also hash partitions.\n";
+    }
+    if (/^virtdomains:\s+(1|t|yes|on)/) {
+	$virtdomains = 1;
+	print "i can deal with virtual domains.\n";
     }
 }
 print "done\n";
