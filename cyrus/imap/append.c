@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.74 2000/08/08 17:31:31 leg Exp $
+ * $Id: append.c,v 1.75 2000/08/21 21:40:38 leg Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -78,7 +78,12 @@ struct stagemsg {
 static int append_addseen(struct mailbox *mailbox, const char *userid,
 			  const char *msgrange);
 static void addme(char **msgrange, int *alloced, long uid);
-static struct index_record zero_index;
+
+#define zero_index(i) { memset(&i, 0, sizeof(struct index_record)); }
+
+enum {
+    ULTRA_PARANOID = 1
+};
 
 /*
  * Open a mailbox for appending
@@ -312,7 +317,7 @@ int append_fromstage(struct appendstate *as,
 		     struct stagemsg **stagep)
 {
     struct mailbox *mailbox = &as->m;
-    struct index_record message_index = zero_index;
+    struct index_record message_index;
     char fname[MAX_MAILBOX_PATH];
     FILE *destfile;
     int i, r;
@@ -328,6 +333,7 @@ int append_fromstage(struct appendstate *as,
     assert(mailbox->format == MAILBOX_FORMAT_NORMAL);
     assert(size != 0);
 
+    zero_index(message_index);
     if (!*stagep) { /* create a new stage */
 	stage = xmalloc(sizeof(struct stagemsg) +
 			5 * MAX_MAILBOX_PATH * sizeof(char));
@@ -414,6 +420,7 @@ int append_fromstage(struct appendstate *as,
     }
     if (destfile) {
 	/* this will hopefully ensure that the link() actually happened */
+	if (ULTRA_PARANOID) fsync(fileno(destfile));
 	fclose(destfile);
     }
     if (r) {
@@ -530,7 +537,7 @@ int append_fromstream(struct appendstate *as,
 		      int nflags)
 {
     struct mailbox *mailbox = &as->m;
-    struct index_record message_index = zero_index;
+    struct index_record message_index;
     char fname[MAX_MAILBOX_PATH];
     FILE *destfile;
     int i, r;
@@ -539,6 +546,7 @@ int append_fromstream(struct appendstate *as,
     assert(mailbox->format == MAILBOX_FORMAT_NORMAL);
     assert(size != 0);
 
+    zero_index(message_index);
     /* Setup */
     message_index.uid = mailbox->last_uid + as->nummsg + 1;
     message_index.last_updated = time(0);
@@ -673,7 +681,7 @@ int append_copy(struct mailbox *mailbox,
 
     /* Copy/link all files and cache info */
     for (msg = 0; msg < nummsg; msg++) {
-	message_index[msg] = zero_index;
+	zero_index(message_index[msg]);
 	message_index[msg].uid = append_mailbox->last_uid + 1 + as->nummsg;
 	message_index[msg].last_updated = time(0);
 	message_index[msg].internaldate = copymsg[msg].internaldate;
