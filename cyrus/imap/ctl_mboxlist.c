@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.43.2.2 2004/01/27 23:13:38 ken3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.43.2.3 2004/03/24 19:53:00 ken3 Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -90,15 +90,6 @@ struct dumprock {
 
     mupdate_handle *h;
 };
-
-static int dump_p(void *rockp __attribute__((unused)),
-			const char *key __attribute__((unused)),
-			int keylen __attribute__((unused)),
-			const char *data __attribute__((unused)),
-			int datalen __attribute__((unused)))
-{
-    return 1;
-}
 
 struct mb_node 
 {
@@ -409,7 +400,7 @@ void do_dump(enum mboxop op, const char *part, int purge)
     }
 
     /* Dump Database */
-    config_mboxlist_db->foreach(mbdb, "", 0, &dump_p, &dump_cb, &d, NULL);
+    config_mboxlist_db->foreach(mbdb, "", 0, NULL, &dump_cb, &d, NULL);
 
     if(d.tid) {
 	config_mboxlist_db->commit(mbdb, d.tid);
@@ -708,8 +699,14 @@ int main(int argc, char *argv[])
     case M_POPULATE:
 	mboxlist_init(0);
 	mboxlist_open(mboxdb_fname);
+
+ 	quotadb_init(0);
+ 	quotadb_open(NULL);
 	
 	do_dump(op, partition, dopurge);
+
+	quotadb_close();
+	quotadb_done();
 	
 	mboxlist_close();
 	mboxlist_done();
@@ -719,8 +716,14 @@ int main(int argc, char *argv[])
 	mboxlist_init(0);
 	mboxlist_open(mboxdb_fname);
 
+ 	quotadb_init(0);
+ 	quotadb_open(NULL);
+
 	do_undump();
 
+	quotadb_close();
+	quotadb_done();
+	
 	mboxlist_close();
 	mboxlist_done();
 	break;

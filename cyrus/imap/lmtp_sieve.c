@@ -1,6 +1,6 @@
 /* lmtp_sieve.c -- Sieve implementation for lmtpd
  *
- * $Id: lmtp_sieve.c,v 1.1.2.2 2004/02/12 05:32:34 ken3 Exp $
+ * $Id: lmtp_sieve.c,v 1.1.2.3 2004/03/24 19:53:03 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -48,8 +48,6 @@
 #include <unistd.h>
 #endif
 
-#include <sieve_interface.h>
-
 #include <com_err.h>
 #include <pwd.h>
 #include <stdlib.h>
@@ -70,6 +68,7 @@
 #include "notify.h"
 #include "prot.h"
 #include "rfc822date.h"
+#include "sieve_interface.h"
 #include "smtpclient.h"
 #include "util.h"
 #include "version.h"
@@ -263,9 +262,10 @@ static int send_forward(const char *forwardto,
 {
     FILE *sm;
     const char *smbuf[10];
-    int i, sm_stat;
+    int sm_stat;
     char buf[1024];
     pid_t sm_pid;
+    int body = 0, skip;
 
     smbuf[0] = "sendmail";
     smbuf[1] = "-i";		/* ignore dots */
@@ -286,9 +286,24 @@ static int send_forward(const char *forwardto,
     }
 
     prot_rewind(file);
+    while (prot_fgets(buf, sizeof(buf), file)) {
+	if (!body && buf[0] == '\r' && buf[1] == '\n') {
+	    /* blank line between header and body */
+	    body = 1;
+	}
 
-    while ((i = prot_read(file, buf, sizeof(buf))) > 0) {
-	fwrite(buf, i, 1, sm);
+	skip = 0;
+	if (!body) {
+	    if (!strncasecmp(buf, "Return-Path:", 12)) {
+		/* strip the Return-Path */
+		skip = 1;
+	    }
+	}
+
+	do {
+	    if (!skip) fwrite(buf, strlen(buf), 1, sm);
+	} while (buf[strlen(buf)-1] != '\n' &&
+		 prot_fgets(buf, sizeof(buf), file));
     }
 
     fclose(sm);

@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: quota.c,v 1.48.2.2 2004/02/27 21:17:35 ken3 Exp $ */
+/* $Id: quota.c,v 1.48.2.3 2004/03/24 19:53:10 ken3 Exp $ */
 
 
 #include <config.h>
@@ -215,11 +215,19 @@ static int find_p(void *rockp,
 
     /* If restricting our list, see if this quota root matches */
     if (frock->nroots) {
-	for (i = 0; i < frock->nroots; i++) {
-	    if ((!strncmp(key, frock->roots[i], keylen) &&
-		 keylen == strlen(frock->roots[i])) ||
-		(!strncmp(key, frock->roots[i], strlen(frock->roots[i])) &&
-		 key[strlen(frock->roots[i])] == '.')) break;
+	const char *p;
+
+	/* skip over domain */
+	if (config_virtdomains && (p = strchr(key, '!'))) {
+	    keylen -= (++p - key);
+	    key = p;
+	}
+
+ 	for (i = 0; i < frock->nroots; i++) {
+	    if (keylen >= strlen(frock->roots[i]) &&
+		!strncmp(key, frock->roots[i], strlen(frock->roots[i]))) {
+		break;
+	    }
 	}
 	if (i == frock->nroots) return 0;
     }
@@ -272,9 +280,10 @@ int buildquotalist(char *domain, char **roots, int nroots)
     }
 
     buf[0] = '\0';
-    if (domain) {
-	snprintf(buf, sizeof(buf), "%s!", domain);
-		}
+    if (domain) snprintf(buf, sizeof(buf), "%s!", domain);
+
+    /* if we have exactly one root specified, narrow the search */
+    if (nroots == 1) strlcat(buf, roots[0], sizeof(buf));
 	    
     config_quota_db->foreach(qdb, buf, strlen(buf),
 			     &find_p, &find_cb, &frock, NULL);

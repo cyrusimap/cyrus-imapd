@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: cvt_cyrusdb.c,v 1.12.2.1 2004/01/27 23:13:38 ken3 Exp $
+ * $Id: cvt_cyrusdb.c,v 1.12.2.2 2004/03/24 19:53:00 ken3 Exp $
  */
 
 #include <config.h>
@@ -82,16 +82,6 @@ struct cyrusdb_backend *DB_OLD = NULL, *DB_NEW = NULL;
 
 struct db *odb = NULL, *ndb = NULL;
 struct txn *tid = NULL;
-
-int converter_p(void *rock __attribute__((unused)),
-		const char *key __attribute__((unused)),
-		int keylen __attribute__((unused)),
-		const char *data __attribute__((unused)),
-		int datalen __attribute__((unused)))
-{
-    /* Always true */
-    return 1;
-}
 
 int converter_cb(void *rock __attribute__((unused)),
 		 const char *key, int keylen,
@@ -175,7 +165,7 @@ int main(int argc, char *argv[])
     if(r != CYRUSDB_OK)
 	fatal("can't open new database", EC_TEMPFAIL);
 
-    DB_OLD->foreach(odb, "", 0, converter_p, converter_cb, NULL, NULL);
+    DB_OLD->foreach(odb, "", 0, NULL, converter_cb, NULL, NULL);
 
     /* we want to have done atleast one entry at this point */
     if(tid)

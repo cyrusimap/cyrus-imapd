@@ -72,7 +72,7 @@
  * may contain an explanatory message.
  *
  *
- * $Id: smmapd.c,v 1.1.2.5 2004/02/27 21:17:36 ken3 Exp $
+ * $Id: smmapd.c,v 1.1.2.6 2004/03/24 19:53:11 ken3 Exp $
  */
 
 #include <config.h>
@@ -93,6 +93,7 @@
 #include "global.h"
 #include "exitcodes.h"
 #include "imap_err.h"
+#include "mupdate-client.h"
 #include "util.h"
 #include "xmalloc.h"
 
@@ -264,6 +265,9 @@ int verify_user(const char *key, long quotacheck,
     }
 
     if (!r) {
+	long aclcheck = !user ? ACL_POST : 0;
+	int type;
+	char *acl;
 	/*
 	 * check to see if mailbox exists and we can append to it:
 	 *
@@ -271,8 +275,29 @@ int verify_user(const char *key, long quotacheck,
 	 * - don't care about ACL on INBOX (always allow post)
 	 * - don't care about message size (1 msg over quota allowed)
 	 */
-	r = append_check(namebuf, MAILBOX_FORMAT_NORMAL, authstate,
-			 !user ? ACL_POST : 0, quotacheck > 0 ? 0 : quotacheck);
+	r = mboxlist_detail(namebuf, &type, NULL, NULL, &acl, NULL);
+	if (r == IMAP_MAILBOX_NONEXISTENT && config_mupdate_server) {
+	    kick_mupdate();
+	    r = mboxlist_detail(namebuf, &type, NULL, NULL, &acl, NULL);
+	}
+
+	if (!r && (type & MBTYPE_REMOTE)) {
+	    /* XXX  Perhaps we should support the VRFY command in lmtpd
+	     * and then we could do a VRFY to the correct backend which
+	     * would also do a quotacheck.
+	     */
+	    int access = cyrus_acl_myrights(authstate, acl);
+
+	    if ((access & aclcheck) != aclcheck) {
+		r = (access & ACL_LOOKUP) ?
+		    IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+	    } else {
+		r = 0;
+	    }
+	} else if (!r) {
+	    r = append_check(namebuf, MAILBOX_FORMAT_NORMAL, authstate,
+			     aclcheck, quotacheck > 0 ? 0 : quotacheck);
+	}
     }
 
     if (r) syslog(LOG_DEBUG, "verify_user(%s) failed: %s", namebuf,

@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: libcyr_cfg.c,v 1.2.2.4 2004/02/27 21:17:40 ken3 Exp $
+ * $Id: libcyr_cfg.c,v 1.2.2.5 2004/03/24 19:53:15 ken3 Exp $
  */
 
 #include <config.h>
@@ -108,6 +108,14 @@ struct cyrusopt_s cyrus_options[] = {
 
     { CYRUSOPT_BERKELEY_CACHESIZE,
       CFGVAL(int, 512 * 1024), /* 512KB */
+      CYRUS_OPT_INT },
+
+    { CYRUSOPT_BERKELEY_LOCKS_MAX,
+      CFGVAL(int, 50000),
+      CYRUS_OPT_INT },
+
+    { CYRUSOPT_BERKELEY_TXNS_MAX,
+      CFGVAL(int, 100),
       CYRUS_OPT_INT },
 
     { CYRUSOPT_LAST, { NULL }, CYRUS_OPT_NOTOPT }

@@ -1,7 +1,7 @@
 /* timsieved.c -- main file for timsieved (sieve script accepting program)
  * Tim Martin
  * 9/21/99
- * $Id: timsieved.c,v 1.48.2.3 2004/02/27 21:17:48 ken3 Exp $
+ * $Id: timsieved.c,v 1.48.2.4 2004/03/24 19:53:22 ken3 Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -252,15 +252,17 @@ int service_main(int argc __attribute__((unused)),
 	} else {
 	    sieved_clienthost[0] = '\0';
 	}
-
-	niflags = NI_NUMERICHOST |
-		(sieved_remoteaddr.ss_family == AF_INET6 ? NI_WITHSCOPEID : 0);
+	niflags = NI_NUMERICHOST;
+#ifdef NI_WITHSCOPEID
+	if (((struct sockaddr *)&sieved_remoteaddr)->sa_family == AF_INET6)
+	    niflags |= NI_WITHSCOPEID;
+#endif
 	if (getnameinfo((struct sockaddr *)&sieved_remoteaddr, salen, hbuf,
-			 sizeof(hbuf), NULL, 0, niflags) == 0) {
-		strlcat(sieved_clienthost, "[", sizeof(sieved_clienthost));
-		strlcat(sieved_clienthost, hbuf, sizeof(sieved_clienthost));
-		strlcat(sieved_clienthost, "]", sizeof(sieved_clienthost));
-	}
+			sizeof(hbuf), NULL, 0, niflags) != 0)
+	    strlcpy(hbuf, "unknown", sizeof(hbuf));
+	strlcat(sieved_clienthost, "[", sizeof(sieved_clienthost));
+	strlcat(sieved_clienthost, hbuf, sizeof(sieved_clienthost));
+	strlcat(sieved_clienthost, "]", sizeof(sieved_clienthost));
 	salen = sizeof(sieved_localaddr);
 	if(getsockname(0, (struct sockaddr *)&sieved_localaddr, &salen) == 0) {
 	    sieved_haveaddr = 1;

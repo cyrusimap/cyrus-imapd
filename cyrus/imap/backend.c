@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.16.2.3 2004/02/27 21:17:25 ken3 Exp $ */
+/* $Id: backend.c,v 1.16.2.4 2004/03/24 19:52:59 ken3 Exp $ */
 
 #include <config.h>
 
@@ -168,10 +168,10 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
     char buf[2048], optstr[128], *p;
     const char *mech_conf, *pass;
 
-    strcpy(optstr, s->hostname);
+    strlcpy(optstr, s->hostname, sizeof(optstr));
     p = strchr(optstr, '.');
     if (p) *p = '\0';
-    strcat(optstr, "_password");
+    strlcat(optstr, "_password", sizeof(optstr));
     pass = config_getoverflowstring(optstr, NULL);
     if(!pass) pass = config_getstring(IMAPOPT_PROXY_PASSWORD);
     cb = mysasl_callbacks(userid, 
@@ -391,22 +391,24 @@ void backend_disconnect(struct backend *s)
 
     if (!s) return;
     
-    if (s->prot->logout_cmd.cmd) {
-	prot_printf(s->out, "%s\r\n", s->prot->logout_cmd.cmd);
-	prot_flush(s->out);
+    if (!prot_error(s->in)) {
+	if (s->prot->logout_cmd.cmd) {
+	    prot_printf(s->out, "%s\r\n", s->prot->logout_cmd.cmd);
+	    prot_flush(s->out);
 
-	for (;;) {
-	    if (!prot_fgets(buf, sizeof(buf), s->in)) {
-		/* connection closed? */
-		break;
-	    } else if (s->prot->logout_cmd.unsol &&
-		       !strncmp(s->prot->logout_cmd.unsol, buf,
-				strlen(s->prot->logout_cmd.unsol))) {
-		/* unsolicited response */
-		continue;
-	    } else {
-		/* success/fail response -- don't care either way */
-		break;
+	    for (;;) {
+		if (!prot_fgets(buf, sizeof(buf), s->in)) {
+		    /* connection closed? */
+		    break;
+		} else if (s->prot->logout_cmd.unsol &&
+			   !strncmp(s->prot->logout_cmd.unsol, buf,
+				    strlen(s->prot->logout_cmd.unsol))) {
+		    /* unsolicited response */
+		    continue;
+		} else {
+		    /* success/fail response -- don't care either way */
+		    break;
+		}
 	    }
 	}
     }

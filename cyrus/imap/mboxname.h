@@ -1,5 +1,5 @@
 /* mboxname.h -- Mailbox list manipulation routines
- * $Id: mboxname.h,v 1.12 2003/10/22 18:50:08 rjs3 Exp $
+ * $Id: mboxname.h,v 1.12.2.1 2004/03/24 19:53:08 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -68,12 +68,12 @@ struct namespace {
     /* Convert the internal mailbox 'name' to an external name. */
     int (*mboxname_toexternal)(struct namespace *namespace, const char *name,
 			       const char *userid, char *result);
-    int (*mboxlist_findall)(struct namespace *namespace, char *pattern,
-			    int isadmin, char *userid, 
+    int (*mboxlist_findall)(struct namespace *namespace,
+			    const char *pattern, int isadmin, char *userid, 
 			    struct auth_state *auth_state, int (*proc)(),
 			    void *rock);
-    int (*mboxlist_findsub)(struct namespace *namespace, char *pattern,
-			    int isadmin, char *userid, 
+    int (*mboxlist_findsub)(struct namespace *namespace,
+			    const char *pattern, int isadmin, char *userid, 
 			    struct auth_state *auth_state, int (*proc)(),
 			    void *rock, int force);
 };

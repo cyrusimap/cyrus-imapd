@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.45.2.3 2004/02/27 21:17:42 ken3 Exp $ */
+/* $Id: service.c,v 1.45.2.4 2004/03/24 19:53:17 ken3 Exp $ */
 
 #include <config.h>
 
@@ -442,6 +442,15 @@ int main(int argc, char **argv, char **envp)
 
 	fd = -1;
 	while (fd < 0 && !gotalrm) { /* loop until we succeed */
+	    /* check current process file inode, size and mtime */
+	    stat(path, &sbuf);
+	    if (sbuf.st_ino != start_ino || sbuf.st_size != start_size ||
+		sbuf.st_mtime != start_mtime) {
+		syslog(LOG_INFO, "process file has changed");
+		gotalrm = 1;
+		break;
+	    }
+
 	    if (soctype == SOCK_STREAM) {
 		fd = accept(LISTEN_FD, NULL, NULL);
 		if (fd < 0) {
@@ -549,14 +558,6 @@ int main(int argc, char **argv, char **envp)
 	/* if we returned, we can service another client with this process */
 
 	if (use_count >= max_use) {
-	    break;
-	}
-
-	/* check current process file inode, size and mtime */
-	stat(path, &sbuf);
-	if (sbuf.st_ino != start_ino ||sbuf.st_size != start_size ||
-	    sbuf.st_mtime != start_mtime) {
-	    syslog(LOG_INFO, "process file has changed");
 	    break;
 	}
 

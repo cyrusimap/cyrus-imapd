@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.2.2.5 2004/02/27 21:17:26 ken3 Exp $ */
+/* $Id: global.c,v 1.2.2.6 2004/03/24 19:53:00 ken3 Exp $ */
 
 #include <config.h>
 
@@ -207,6 +207,10 @@ int cyrus_init(const char *alt_config, const char *ident, unsigned flags)
 				  config_getenum(IMAPOPT_VIRTDOMAINS));
 	libcyrus_config_setint(CYRUSOPT_BERKELEY_CACHESIZE,
 			       config_getint(IMAPOPT_BERKELEY_CACHESIZE));
+	libcyrus_config_setint(CYRUSOPT_BERKELEY_LOCKS_MAX,
+			       config_getint(IMAPOPT_BERKELEY_LOCKS_MAX));
+	libcyrus_config_setint(CYRUSOPT_BERKELEY_TXNS_MAX,
+			       config_getint(IMAPOPT_BERKELEY_TXNS_MAX));
 
 	/* Not until all configuration parameters are set! */
 	libcyrus_init();
@@ -384,10 +388,8 @@ char *canonify_userid(char *user, char *loginid, int *domain_from_ip)
 	    
 	    salen = sizeof(localaddr);
 	    if (getsockname(0, (struct sockaddr *)&localaddr, &salen) == 0) {
-		int niflags = NI_NAMEREQD |
-			(localaddr.ss_family == AF_INET6 ? NI_WITHSCOPEID : 0);
 		error = getnameinfo((struct sockaddr *)&localaddr, salen,
-				    hbuf, sizeof(hbuf), NULL, 0, niflags);
+				    hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD);
 		if (error == 0 && (domain = strchr(hbuf, '.')) &&
 		    !(config_defdomain && !strcasecmp(config_defdomain, domain+1))) {
 		    /* append the domain from our IP */

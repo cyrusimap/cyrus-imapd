@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.19 2004/02/27 21:17:27 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.20 2004/03/24 19:53:01 ken3 Exp $ */
 
 #include <config.h>
 
@@ -591,15 +591,17 @@ int service_main(int argc __attribute__((unused)),
 	} else {
 	    imapd_clienthost[0] = '\0';
 	}
-
-	niflags = NI_NUMERICHOST |
-		(imapd_remoteaddr.ss_family == AF_INET6 ? NI_WITHSCOPEID : 0);
+	niflags = NI_NUMERICHOST;
+#ifdef NI_WITHSCOPEID
+	if (((struct sockaddr *)&imapd_remoteaddr)->sa_family == AF_INET6)
+	    niflags |= NI_WITHSCOPEID;
+#endif
 	if (getnameinfo((struct sockaddr *)&imapd_remoteaddr, salen, hbuf,
-		    sizeof(hbuf), NULL, 0, niflags) == 0) {
-		strlcat(imapd_clienthost, "[", sizeof(imapd_clienthost));
-		strlcat(imapd_clienthost, hbuf, sizeof(imapd_clienthost));
-		strlcat(imapd_clienthost, "]", sizeof(imapd_clienthost));
-	}
+			sizeof(hbuf), NULL, 0, niflags) != 0)
+	    strlcpy(hbuf, "unknown", sizeof(hbuf));
+	strlcat(imapd_clienthost, "[", sizeof(imapd_clienthost));
+	strlcat(imapd_clienthost, hbuf, sizeof(imapd_clienthost));
+	strlcat(imapd_clienthost, "]", sizeof(imapd_clienthost));
 	salen = sizeof(imapd_localaddr);
 	if (getsockname(0, (struct sockaddr *)&imapd_localaddr, &salen) == 0) {
 	    if(iptostring((struct sockaddr *)&imapd_remoteaddr, salen,
@@ -806,7 +808,8 @@ void cmdloop()
 	/* Parse tag */
 	c = getword(imapd_in, &tag);
 	if (c == EOF) {
-	    if ((err = prot_error(imapd_in))!=NULL) {
+	    if ((err = prot_error(imapd_in))!=NULL
+		&& strcmp(err, PROT_EOF_STRING)) {
 		syslog(LOG_WARNING, "%s, closing connection", err);
 		prot_printf(imapd_out, "* BYE %s\r\n", err);
 	    }
@@ -2184,6 +2187,18 @@ void cmd_idle(char *tag)
     prot_flush(imapd_out);
 
     while (!done) {
+	/* check for shutdown file */
+	if (!imapd_userisadmin && shutdown_file(shut, sizeof(shut))) {
+	    shutdown = done = 1;
+	    goto done;
+	}
+
+	if (!backend_current || !CAPA(backend_current, CAPA_IDLE)) {
+	    /* Check the mailbox for updates, unless we proxied IDLE */
+	    imapd_check(NULL, 0, 1);
+	    prot_flush(imapd_out);
+	}
+
 	/* Clear protout if needed */
 	protgroup_free(protout);
 	protout = NULL;
@@ -2206,18 +2221,13 @@ void cmd_idle(char *tag)
 		    done = 1;
 		}
 		else if (backend_current && ptmp == backend_current->in) {
-		    /* Get unsolicited untagged responses from the backend
-		       assumes that untagged responses are:
-		       a) short
-		       b) don't contain literals
-		    */
-
-		    prot_NONBLOCK(backend_current->in);
-		    while (prot_fgets(buf, sizeof(buf), backend_current->in)) {
-			prot_write(imapd_out, buf, strlen(buf));
-			prot_flush(imapd_out);
-		    }
-		    prot_BLOCK(backend_current->in);
+		    /* Get unsolicited untagged responses from the backend */
+		    do {
+			int c = prot_read(backend_current->in, buf, sizeof(buf));
+			if (c == 0 || c < 0) break;
+			prot_write(imapd_out, buf, c);
+		    } while (backend_current->in->cnt > 0);
+		    prot_flush(imapd_out);
 
 		    if (prot_error(backend_current->in)) {
 			/* uh oh, we're not happy */
@@ -2232,38 +2242,6 @@ void cmd_idle(char *tag)
 		}
 	    }
 	}
-
-	/* Check for ALERTs */
-	if (!imapd_userisadmin && shutdown_file(shut, sizeof(shut))) {
-	    shutdown = done = 1;
-	}
-
-	if (!done) {
-	    /* Check the mailbox for updates, unless we proxied IDLE */
-	    if (!backend_current || !CAPA(backend_current, CAPA_IDLE)) {
-		imapd_check(NULL, 0, 1);
-	    }
-
-	    prot_flush(imapd_out);
-	}
-    }
-
-    /* Done listening to idled */
-    if (idle_init()) idle_done(imapd_mailbox);
-
-    if (backend_current && CAPA(backend_current, CAPA_IDLE)) {
-	/* Either the client timed out, or gave us a continuation.
-	   In either case we're done, so terminate IDLE on backend */
-	prot_printf(backend_current->out, "Done\r\n");
-	pipe_until_tag(backend_current, tag, 0);
-    }
-
-    if (shutdown) {
-	char *p;
-
-	for (p = shut; *p == '['; p++); /* can't have [ be first char */
-	prot_printf(imapd_out, "* BYE [ALERT] %s\r\n", p);
-	shut_down(0);
     }
 
     /* Get continuation data */
@@ -2273,6 +2251,25 @@ void cmd_idle(char *tag)
     protgroup_free(protin);
     protgroup_free(protout);
 
+    if (done) {
+	/* Done listening to idled */
+	if (idle_init()) idle_done(imapd_mailbox);
+
+	if (backend_current && CAPA(backend_current, CAPA_IDLE)) {
+	    /* Either the client timed out, or gave us a continuation.
+	       In either case we're done, so terminate IDLE on backend */
+	    prot_printf(backend_current->out, "Done\r\n");
+	    pipe_until_tag(backend_current, tag, 0);
+	}
+    }
+
+    if (shutdown) {
+	char *p;
+
+	for (p = shut; *p == '['; p++); /* can't have [ be first char */
+	prot_printf(imapd_out, "* BYE [ALERT] %s\r\n", p);
+	shut_down(0);
+    }
 
     if (c != EOF) {
 	if (!strcasecmp(arg.s, "Done") &&
@@ -4837,12 +4834,12 @@ void cmd_list(char *tag, int listopts, char *reference, char *pattern)
     static int ignorereference = 0;
     clock_t start = clock();
     char mytime[100];
-    int (*findall)(struct namespace *namespace, char *pattern,
-		   int isadmin, char *userid, 
+    int (*findall)(struct namespace *namespace,
+		   const char *pattern, int isadmin, char *userid, 
 		   struct auth_state *auth_state, int (*proc)(),
 		   void *rock);
-    int (*findsub)(struct namespace *namespace, char *pattern,
-		   int isadmin, char *userid, 
+    int (*findsub)(struct namespace *namespace,
+		   const char *pattern, int isadmin, char *userid, 
 		   struct auth_state *auth_state, int (*proc)(),
 		   void *rock, int force);
 

@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.121.2.14 2004/02/27 21:17:31 ken3 Exp $
+ * $Id: lmtpd.c,v 1.121.2.15 2004/03/24 19:53:06 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -92,7 +92,11 @@
 
 #include "lmtpengine.h"
 #include "lmtpstats.h"
+#ifdef USE_SIEVE
 #include "lmtp_sieve.h"
+
+static sieve_interp_t *sieve_interp = NULL;
+#endif
 
 /* forward declarations */
 static int deliver(message_data_t *msgdata, char *authuser,
@@ -124,10 +128,6 @@ extern char *optarg;
 static int dupelim = 1;		/* eliminate duplicate messages with
 				   same message-id */
 static int singleinstance = 1;	/* attempt single instance store */
-
-#ifdef USE_SIEVE
-static sieve_interp_t *sieve_interp = NULL;
-#endif
 
 /* per-user/session state */
 static struct protstream *deliver_out, *deliver_in;
@@ -176,8 +176,9 @@ int service_init(int argc __attribute__((unused)),
 	dupelim = config_getswitch(IMAPOPT_DUPLICATESUPPRESSION);
 
 #ifdef USE_SIEVE
-	mylmtp.addheaders = xmalloc(80);
-	snprintf(mylmtp.addheaders, 80, "X-Sieve: %s\r\n", SIEVE_VERSION);
+	mylmtp.addheaders = xzmalloc(2 * sizeof(struct addheader));
+	mylmtp.addheaders[0].name = "X-Sieve";
+	mylmtp.addheaders[0].body = SIEVE_VERSION;
 
 	/* setup sieve support */
 	sieve_interp = setup_sieve();
@@ -540,24 +541,29 @@ int deliver(message_data_t *msgdata, char *authuser,
     enum rcpt_status *status;
     struct stagemsg *stage;
     char *notifyheader;
-    sieve_msgdata_t sievedata;
+#ifdef USE_SIEVE
+    sieve_msgdata_t mydata;
+#endif
     
     assert(msgdata);
     nrcpts = msg_getnumrcpt(msgdata);
     assert(nrcpts);
+
     stage = (struct stagemsg *) msg_getrock(msgdata);
     notifyheader = generate_notify(msgdata);
 
     /* create our per-recipient status */
     status = xzmalloc(sizeof(enum rcpt_status) * nrcpts);
 
-    /* create our per-delivery sieve data */
-    sievedata.m = msgdata;
-    sievedata.stage = stage;
-    sievedata.notifyheader = notifyheader;
-    sievedata.namespace = &lmtpd_namespace;
-    sievedata.authuser = authuser;
-    sievedata.authstate = authstate;
+#ifdef USE_SIEVE
+    /* create 'mydata', our per-delivery data */
+    mydata.m = msgdata;
+    mydata.stage = stage;
+    mydata.notifyheader = notifyheader;
+    mydata.namespace = &lmtpd_namespace;
+    mydata.authuser = authuser;
+    mydata.authstate = authstate;
+#endif
     
     /* loop through each recipient, attempting delivery for each */
     for (n = 0; n < nrcpts; n++) {
@@ -568,7 +574,6 @@ int deliver(message_data_t *msgdata, char *authuser,
 
 	rcpt = msg_getrcptall(msgdata, n);
 	msg_getrcpt(msgdata, n, &user, &domain, &mailbox);
-	sievedata.cur_rcpt = n;
 
 	if (domain) snprintf(namebuf, sizeof(namebuf), "%s!", domain);
 
@@ -614,7 +619,8 @@ int deliver(message_data_t *msgdata, char *authuser,
 		}
 
 #ifdef USE_SIEVE
-		r = run_sieve(user, domain, mailbox, sieve_interp, &sievedata);
+		mydata.cur_rcpt = n;
+		r = run_sieve(user, domain, mailbox, sieve_interp, &mydata);
 		/* if there was no sieve script, or an error during execution,
 		   r is non-zero and we'll do normal delivery */
 #else
@@ -785,7 +791,7 @@ void shut_down(int code)
 static int verify_user(const char *user, const char *domain, const char *mailbox,
 		       long quotacheck, struct auth_state *authstate)
 {
-    char namebuf[MAX_MAILBOX_NAME+1] = "", *server;
+    char namebuf[MAX_MAILBOX_NAME+1] = "";
     int r = 0;
 
     if ((!user && !mailbox) ||
@@ -813,20 +819,30 @@ static int verify_user(const char *user, const char *domain, const char *mailbox
 	}
     }
 
-    if (!r) r = mlookup(namebuf, &server, NULL, NULL);
-
-    if (!r && !server) {
+    if (!r) {
+	char *server, *acl;
+	long aclcheck = !user ? ACL_POST : 0;
 	/*
-	 * local mailbox, check to see if we can append to it:
+	 * check to see if mailbox exists and we can append to it:
 	 *
 	 * - must have posting privileges on shared folders
 	 * - don't care about ACL on INBOX (always allow post)
 	 * - don't care about message size (1 msg over quota allowed)
 	 */
-	r = append_check(namebuf, MAILBOX_FORMAT_NORMAL, authstate,
-			 !user ? ACL_POST : 0, quotacheck > 0 ? 0 : quotacheck);
+	r = mlookup(namebuf, &server, &acl, NULL);
+
+	if (!r && server) {
+	    int access = cyrus_acl_myrights(authstate, acl);
+
+	    if ((access & aclcheck) != aclcheck) {
+		r = (access & ACL_LOOKUP) ?
+		    IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+	    }
+	} else if (!r) {
+	    r = append_check(namebuf, MAILBOX_FORMAT_NORMAL, authstate,
+			     aclcheck, quotacheck > 0 ? 0 : quotacheck);
+	}
     }
-    /* for a remote mailbox, we worry about it later */
 
     if (r) syslog(LOG_DEBUG, "verify_user(%s) failed: %s", namebuf,
 		  error_message(r));

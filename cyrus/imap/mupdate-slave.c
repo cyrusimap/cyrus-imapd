@@ -1,6 +1,6 @@
 /* mupdate-slave.c -- cyrus murder database clients
  *
- * $Id: mupdate-slave.c,v 1.24.2.1 2003/12/19 18:33:37 ken3 Exp $
+ * $Id: mupdate-slave.c,v 1.24.2.2 2004/03/24 19:53:09 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -264,6 +264,7 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
     for(;num_kick_fds;num_kick_fds--) {
       close(kick_fds[num_kick_fds-1]);
     }
+    close(kicksock);
 }
 
 void *mupdate_client_start(void *rock __attribute__((unused)))

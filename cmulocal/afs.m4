@@ -1,5 +1,5 @@
 dnl afs.m4--AFS libraries, includes, and dependencies
-dnl $Id: afs.m4,v 1.26 2003/10/08 20:35:24 rjs3 Exp $
+dnl $Id: afs.m4,v 1.26.4.1 2004/03/24 19:52:56 ken3 Exp $
 dnl Chaskiel Grundman
 dnl based on kerberos_v4.m4
 dnl Derrick Brashear
@@ -65,7 +65,7 @@ AC_ARG_WITH(AFS,
 	  ac_cv_afs_where=$with_AFS
 	fi
 	if test "X$ac_cv_afs_where" = "X"; then
-	  CMU_AFS_WHERE(/usr/afsws /usr/local /usr/athena)
+	  CMU_AFS_WHERE(/usr/afsws /usr/local /usr/athena /Library/OpenAFS/Tools)
 	fi
 
 	AC_MSG_CHECKING(whether to include AFS)

@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: duplicate.c,v 1.35.2.4 2004/02/27 21:17:26 ken3 Exp $ */
+/* $Id: duplicate.c,v 1.35.2.5 2004/03/24 19:53:00 ken3 Exp $ */
 
 #include <config.h>
 
@@ -337,19 +337,6 @@ struct dumprock {
     int count;
 };
 
-static int dump_p(void *rock,
-		  const char *key __attribute__((unused)),
-		  int keylen __attribute__((unused)),
-		  const char *data __attribute__((unused)),
-		  int datalen __attribute__((unused)))
-{
-    struct dumprock *drock = (struct dumprock *) rock;
-
-    drock->count++;
-
-    return 1;
-}
-
 static const char hexcodes[] = "0123456789ABCDEF";
 
 static int dump_cb(void *rock,
@@ -364,6 +351,8 @@ static int dump_cb(void *rock,
 
     assert((datalen == sizeof(time_t)) ||
 	   (datalen == sizeof(time_t) + sizeof(unsigned long)));
+
+    drock->count++;
 
     memcpy(&mark, data, sizeof(time_t));
     if (datalen > sizeof(mark))
@@ -405,7 +394,7 @@ int duplicate_dump(FILE *f)
     drock.count = 0;
 
     /* check each entry in our database */
-    DB->foreach(dupdb, "", 0, &dump_p, &dump_cb, &drock, NULL);
+    DB->foreach(dupdb, "", 0, NULL, &dump_cb, &drock, NULL);
 
     return drock.count;
 }

@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/NNTP/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.93.2.3 2004/03/01 14:30:20 ken3 Exp $
+ * $Id: imtest.c,v 1.93.2.4 2004/03/24 19:53:12 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -1113,7 +1113,7 @@ int auth_sasl(struct sasl_cmd_t *sasl_cmd, char *mechlist)
 	    return saslresult;
 	}
 
-	if (out) printf("C: ");
+	if (status == STAT_CONT) printf("C: ");
 	sendliteral = !sasl_cmd->cont;
 
     } while (status == STAT_CONT);

@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.93.2.10 2004/02/27 21:17:31 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.93.2.11 2004/03/24 19:53:06 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -92,12 +92,6 @@
 #define RCPT_GROW 30
 
 /* data per message */
-struct Header {
-    char *name;
-    int ncontents;
-    char *contents[1];
-};
-
 struct address_data {
     char *all;		/* storage for entire RCPT TO addr -- MUST be freed */
     char *rcpt;		/* storage for user[+mbox][@domain] -- MUST be freed */
@@ -615,13 +609,15 @@ static int savemsg(struct clientdata *cd,
     const char **body;
     int r;
     int nrcpts = m->rcpt_num;
-    time_t t;
+    time_t now = time(NULL);
+    static unsigned msgid_count = 0;
     char datestr[80];
     const char *skipheaders[] = {
-	"Return-Path",	/* need to remove (we add our own) */
-	"X-Sieve",	/* need to remove (we add our own) */
+	"Return-Path",  /* need to remove (we add our own) */
 	NULL
     };
+    char *addbody, *fold[5], *p;
+    int addlen, nfold, i;
 
     /* Copy to spool file */
     f = func->spoolfile(m);
@@ -650,26 +646,39 @@ static int savemsg(struct clientdata *cd,
 	    hostname = config_servername;
 	}
 
-	fprintf(f, "Return-Path: <%s%s%s>\r\n",
+	addlen = 2 + strlen(rpath) + (hostname ? 1 + strlen(hostname) : 0);
+	addbody = xmalloc(addlen + 1);
+	sprintf(addbody, "<%s%s%s>",
 		rpath, hostname ? "@" : "", hostname ? hostname : "");
+	fprintf(f, "Return-Path: %s\r\n", addbody);
+	spool_cache_header(xstrdup("Return-Path"), addbody, m->hdrcache);
     }
 
     /* add a received header */
-    t = time(NULL);
-    rfc822date_gen(datestr, sizeof(datestr), t);
-    fprintf(f, "Received: from %s (%s)",
-	    cd->lhlo_param, cd->clienthost);
+    rfc822date_gen(datestr, sizeof(datestr), now);
+    addlen = 8 + strlen(cd->lhlo_param) + strlen(cd->clienthost);
+    if (m->authuser) addlen += 28 + strlen(m->authuser) + 5; /* +5 for ssf */
+    addlen += 25 + strlen(config_servername) + strlen(CYRUS_VERSION);
+    addlen += 2 + strlen(datestr);
+    p = addbody = xmalloc(addlen + 1);
+
+    nfold = 0;
+    p += sprintf(p, "from %s (%s)", cd->lhlo_param, cd->clienthost);
+    fold[nfold++] = p;
     if (m->authuser) {
 	const int *ssfp;
 	sasl_getprop(cd->conn, SASL_SSF, (const void **) &ssfp);
-	fprintf(f, " (authenticated user=%s bits=%d)", m->authuser, *ssfp);
+	p += sprintf(p, " (authenticated user=%s bits=%d)",
+		     m->authuser, *ssfp);
+	fold[nfold++] = p;
     }
+
     /* We are always atleast "with LMTPA" -- no unauth delivery */
-    fprintf(f, "\r\n\tby %s (Cyrus %s) with LMTP%s%s",
-	    config_servername,
-	    CYRUS_VERSION,
-	    cd->starttls_done ? "S" : "",
-	    cd->authenticated == DIDAUTH ? "A" : "");
+    p += sprintf(p, " by %s (Cyrus %s) with LMTP%s%s",
+		 config_servername,
+		 CYRUS_VERSION,
+		 cd->starttls_done ? "S" : "",
+		 cd->authenticated != NOAUTH ? "A" : "");
 
 #ifdef HAVE_SSL
     if (cd->tls_conn) {
@@ -678,19 +687,74 @@ static int savemsg(struct clientdata *cd,
 	tls_info[0] = '\0';
 	/* grab TLS info for Received: header */
 	tls_get_info(cd->tls_conn, tls_info, sizeof(tls_info));
-	if (*tls_info) fprintf(f, " (%s)", tls_info);
+	if (*tls_info) {
+	    fold[nfold++] = p;
+	    addlen += 3 + strlen(tls_info);
+	    addbody = xrealloc(addbody, addlen + 1);
+	    p += sprintf(p, " (%s)", tls_info);
+	}
     }
 #endif /* HAVE_SSL */
 
-    fprintf(f, "; %s\r\n", datestr);
+    strcat(p++, ";");
+    fold[nfold++] = p;
+    p += sprintf(p, " %s", datestr);
+ 
+    fprintf(f, "Received: ");
+    for (i = 0, p = addbody; i < nfold; p = fold[i], i++) {
+	fprintf(f, "%.*s\r\n\t", fold[i] - p, p);
+    }
+    fprintf(f, "%s\r\n", p);
+    spool_cache_header(xstrdup("Received"), addbody, m->hdrcache);
 
     /* add any requested headers */
     if (func->addheaders) {
-	fputs(func->addheaders, f);
+	struct addheader *h;
+	for (h = func->addheaders; h && h->name; h++) {
+	    fprintf(f, "%s: %s\r\n", h->name, h->body);
+	    spool_cache_header(xstrdup(h->name), xstrdup(h->body), m->hdrcache);
+	}
     }
 
     /* fill the cache */
     r = spool_fill_hdrcache(cd->pin, f, m->hdrcache, skipheaders);
+
+    /* now, using our header cache, fill in the data that we want */
+
+    /* first check resent-message-id */
+    if ((body = msg_getheader(m, "resent-message-id")) && body[0][0]) {
+	m->id = xstrdup(body[0]);
+    } else if ((body = msg_getheader(m, "message-id")) && body[0][0]) {
+	m->id = xstrdup(body[0]);
+    } else if (body) {
+	r = IMAP_MESSAGE_BADHEADER;  /* empty message-id */
+    } else {
+	/* no message-id, create one */
+	pid_t p = getpid();
+
+	m->id = xmalloc(40 + strlen(config_servername));
+	sprintf(m->id, "<cmu-lmtpd-%d-%d-%u@%s>", p, (int) now,
+		msgid_count++, config_servername);
+	fprintf(f, "Message-ID: %s\r\n", m->id);
+	spool_cache_header(xstrdup("Message-ID"), xstrdup(m->id), m->hdrcache);
+    }
+
+    /* get date */
+    if (!(body = spool_getheader(m->hdrcache, "date"))) {
+	/* no date, create one */
+	addbody = xstrdup(datestr);
+	fprintf(f, "Date: %s\r\n", addbody);
+	spool_cache_header(xstrdup("Date"), addbody, m->hdrcache);
+    }
+
+    if (!m->return_path &&
+	(body = msg_getheader(m, "return-path"))) {
+	/* let's grab return_path */
+	m->return_path = xstrdup(body[0]);
+	clean822space(m->return_path);
+	clean_retpath(m->return_path);
+    }
+
     r |= spool_copy_msg(cd->pin, f);
     if (r) {
 	fclose(f);
@@ -702,25 +766,6 @@ static int savemsg(struct clientdata *cd,
 	    send_lmtp_error(cd->pout, r);
 	}
 	return r;
-    }
-
-    /* now, using our header cache, fill in the data that we want */
-
-    /* first check resent-message-id */
-    if ((body = msg_getheader(m, "resent-message-id")) != NULL) {
-	m->id = xstrdup(body[0]);
-    } else if ((body = msg_getheader(m, "message-id")) != NULL) {
-	m->id = xstrdup(body[0]);
-    } else {
-	m->id = NULL;		/* no message-id */
-    }
-
-    if (!m->return_path &&
-	(body = msg_getheader(m, "return-path"))) {
-	/* let's grab return_path */
-	m->return_path = xstrdup(body[0]);
-	clean822space(m->return_path);
-	clean_retpath(m->return_path);
     }
 
     fflush(f);
@@ -1002,7 +1047,6 @@ void lmtpmode(struct lmtp_func *func,
 	(remoteaddr.ss_family == AF_INET ||
 	 remoteaddr.ss_family == AF_INET6)) {
 	/* connected to an internet socket */
-
 	if (getnameinfo((struct sockaddr *)&remoteaddr, salen,
 			hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) == 0) {
 	    strncpy(cd.clienthost, hbuf, sizeof(hbuf));
@@ -1011,15 +1055,17 @@ void lmtpmode(struct lmtp_func *func,
 	} else {
 	    cd.clienthost[0] = '\0';
 	}
-	niflags = NI_NUMERICHOST |
-		  (remoteaddr.ss_family == AF_INET6 ? NI_WITHSCOPEID : 0);
-	if (getnameinfo((struct sockaddr *)&remoteaddr, salen, hbuf, sizeof(hbuf),
-		    NULL, 0, niflags) == 0) {
-		strlcat(cd.clienthost, "[", sizeof(cd.clienthost));
-		strlcat(cd.clienthost, hbuf, sizeof(cd.clienthost));
-		strlcat(cd.clienthost, "]", sizeof(cd.clienthost));
-	}
-	
+	niflags = NI_NUMERICHOST;
+#ifdef NI_WITHSCOPEID
+	if (((struct sockaddr *)&remoteaddr)->sa_family == AF_INET6)
+	    niflags |= NI_WITHSCOPEID;
+#endif
+	if (getnameinfo((struct sockaddr *)&remoteaddr, salen,
+			hbuf, sizeof(hbuf), NULL, 0, niflags) != 0)
+	    strlcpy(hbuf, "unknown", sizeof(hbuf));
+	strlcat(cd.clienthost, "[", sizeof(cd.clienthost));
+	strlcat(cd.clienthost, hbuf, sizeof(cd.clienthost));
+	strlcat(cd.clienthost, "]", sizeof(cd.clienthost));
 	salen = sizeof(localaddr);
 	if (!getsockname(fd, (struct sockaddr *)&localaddr, &salen)) {
 	    /* set the ip addresses here */
@@ -1049,7 +1095,7 @@ void lmtpmode(struct lmtp_func *func,
 
     /* Setup SASL to go.  We need to do this *after* we decide if
      *  we are preauthed or not. */
-    if (sasl_server_new("lmtp", NULL, NULL, NULL,
+    if (sasl_server_new("lmtp", config_servername, NULL, NULL,
 			NULL, (func->preauth ? localauth_override_cb : NULL),
 			0, &cd.conn) != SASL_OK) {
 	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL);
@@ -1171,14 +1217,17 @@ void lmtpmode(struct lmtp_func *func,
 			  sleep(3);
 
 			  if (remoteaddr.ss_family == AF_INET ||
-			      remoteaddr.ss_family == AF_INET6)
-			      niflags = NI_NUMERICHOST |
-					(remoteaddr.ss_family == AF_INET6
-					? NI_WITHSCOPEID : 0);
+			      remoteaddr.ss_family == AF_INET6) {
+			      niflags = NI_NUMERICHOST;
+#ifdef NI_WITHSCOPEID
+			      if (remoteaddr.ss_family == AF_INET6)
+				  niflags |= NI_WITHSCOPEID;
+#endif
 			      if (getnameinfo((struct sockaddr *)&remoteaddr,
-					  salen, hbuf, sizeof(hbuf), NULL, 0,
-					  niflags) != 0)
-				    strlcpy(hbuf, "[unknown]", sizeof(hbuf));
+					      salen, hbuf, sizeof(hbuf),
+					      NULL, 0, niflags) != 0)
+				  strlcpy(hbuf, "[unknown]", sizeof(hbuf));
+			  }
 			  else
 			      strlcpy(hbuf, "[unix socket]", sizeof(hbuf));		  
 			  syslog(LOG_ERR, "badlogin: %s %s %s",

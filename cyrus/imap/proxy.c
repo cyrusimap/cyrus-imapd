@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: proxy.c,v 1.1.2.2 2004/02/19 21:16:15 ken3 Exp $
+ * $Id: proxy.c,v 1.1.2.3 2004/03/24 19:53:10 ken3 Exp $
  */
 
 #include <config.h>
@@ -199,39 +199,4 @@ proxy_findserver(const char *server,		/* hostname of backend */
     }
 
     return ret;
-}
-
-void kick_mupdate(void)
-{
-    char buf[2048];
-    struct sockaddr_un srvaddr;
-    int s, r;
-    int len;
-    
-    s = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (s == -1) {
-	syslog(LOG_ERR, "socket: %m");
-	return;
-    }
-
-    strlcpy(buf, config_dir, sizeof(buf));
-    strlcat(buf, FNAME_MUPDATE_TARGET_SOCK, sizeof(buf));
-    memset((char *)&srvaddr, 0, sizeof(srvaddr));
-    srvaddr.sun_family = AF_UNIX;
-    strcpy(srvaddr.sun_path, buf);
-    len = sizeof(srvaddr.sun_family) + strlen(srvaddr.sun_path) + 1;
-
-    r = connect(s, (struct sockaddr *)&srvaddr, len);
-    if (r == -1) {
-	syslog(LOG_ERR, "kick_mupdate: can't connect to target: %m");
-    }
-    else {
-	r = read(s, buf, sizeof(buf));
-	if (r <= 0) {
-	    syslog(LOG_ERR, "kick_mupdate: can't read from target: %m");
-	}
-    }
-
-    close(s);
-    return;
 }

@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: proxy.h,v 1.1.2.2 2004/02/19 21:16:15 ken3 Exp $
+ * $Id: proxy.h,v 1.1.2.3 2004/03/24 19:53:10 ken3 Exp $
  */
 
 #ifndef _PROXY_H
@@ -74,7 +74,5 @@ proxy_findserver(const char *server, struct protocol_t *prot,
 		 struct protstream *clientin);
 
 void proxy_downserver(struct backend *s);
-
-void kick_mupdate(void);
 
 #endif /* _PROXY_H */

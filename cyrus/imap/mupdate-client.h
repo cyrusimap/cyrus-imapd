@@ -1,6 +1,6 @@
 /* mupdate-client.h -- cyrus murder database clients
  *
- * $Id: mupdate-client.h,v 1.13 2003/02/13 20:15:28 rjs3 Exp $
+ * $Id: mupdate-client.h,v 1.13.4.1 2004/03/24 19:53:08 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -109,4 +109,8 @@ int mupdate_list(mupdate_handle *handle, mupdate_callback callback,
 /* ping the mupdate server with a NOOP. */
 int mupdate_noop(mupdate_handle *handle, mupdate_callback callback,
 		 void *context);
+
+/* ping a local slave */
+void kick_mupdate(void);
+
 #endif

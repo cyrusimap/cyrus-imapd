@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.268.2.8 2004/02/14 16:15:05 ken3 Exp $
+dnl $Id: configure.in,v 1.268.2.9 2004/03/24 19:52:55 ken3 Exp $
 dnl
 
 
@@ -77,9 +77,6 @@ AC_DEFINE_UNQUOTED(CYRUS_USER, "$cyrus_user",[What user will we run as?])
 AC_ARG_WITH(cyrus-group,[  --with-cyrus-group=GROUPID use GROUPID cyrus group],
 	cyrus_group="$withval",cyrus_group="mail")
 AC_SUBST(cyrus_group)
-AC_ARG_WITH(statedir,[  --with-statedir=DIR        use DIR as state directory],
-	statedir="$withval",statedir="/var")
-AC_DEFINE_UNQUOTED(STATEDIR,"$statedir",[Where should we put our state?])
 
 dnl allow users to override $sysconfdir, but retain old default (/etc)
 dnl if not specified
@@ -1006,7 +1003,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.268.2.8 2004/02/14 16:15:05 ken3 Exp $ */
+/* $Id: configure.in,v 1.268.2.9 2004/03/24 19:52:55 ken3 Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -1128,10 +1125,6 @@ struct sockaddr_storage {
 
 #if !defined(HAVE_GETADDRINFO) || !defined(HAVE_GETNAMEINFO)
 #include "gai.h"
-#endif
-
-#ifndef	NI_WITHSCOPEID
-#define	NI_WITHSCOPEID	0
 #endif
 
 /* End IPv6 things */

@@ -48,18 +48,9 @@
 #include "global.h"
 #include "libconfig.h"
 
-static char rcsid[] = "$Id: ptdump.c,v 1.8.2.3 2004/01/31 18:57:02 ken3 Exp $";
+static char rcsid[] = "$Id: ptdump.c,v 1.8.2.4 2004/03/24 19:53:19 ken3 Exp $";
 
 int config_need_data = 0;
-
-static int dump_p(void *rockp __attribute__((unused)),
-		    const char *key __attribute__((unused)),
-		    int keylen __attribute__((unused)),
-		    const char *data __attribute__((unused)),
-		    int datalen __attribute__((unused)))
-{
-    return 1;
-}
 
 static int dump_cb(void *rockp __attribute__((unused)),
 		     const char *key, int keylen,
@@ -117,7 +108,7 @@ int main(int argc, char *argv[])
     }
 
     /* iterate through db, wiping expired entries */
-    config_ptscache_db->foreach(ptdb, "", 0, dump_p, dump_cb, ptdb, NULL);
+    config_ptscache_db->foreach(ptdb, "", 0, NULL, dump_cb, ptdb, NULL);
 
     config_ptscache_db->close(ptdb);
 
