@@ -2,7 +2,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.49 1999/12/29 19:21:48 leg Exp $
+# $Id: SMakefile,v 1.50 2000/01/25 06:49:23 leg Exp $
 #
 
 if test ! -x configure; then
@@ -24,7 +24,6 @@ if test "${CC-unset}" = "unset"; then
   CC=cc
 fi
 
-
 VER=`smake -D | sed 's;^.*\/;;'`
 LOCALDEFS="-DEXTRA_IDENT=\\\"$VER\\\""
 
@@ -36,7 +35,6 @@ if test "${OVERRIDE-nil}" != "t" ; then
 	   LDFLAGS="${LDFLAGS}"
 	   #LIBS="-ldbm"
 	   export LIBS
-           AMSSYNC=""
 
            if test "${WASH_CYRUS_DEBUG}" = "t"; then
 	     CC="gcc"
@@ -49,22 +47,26 @@ if test "${OVERRIDE-nil}" != "t" ; then
 	  LDFLAGS="${LDFLAGS}"
 	  #LDFLAGS="-L/usr/local/lib -Wl,-rpath,/usr/local/lib"
 	  #export LDFLAGS
-	  AMSSYNC=""
 	  ;;
     HP-UX)
       CC=gcc # hp cc can't handle Cyrus
       CFLAGS="${CFLAGS} -O2"
       ;;
     SunOS)
-      CFLAGS="${CFLAGS} -xs -xO3 -xdepend"
-      LDFLAGS="${LDFLAGS} -xs -xO3 -xdepend"
+#      CFLAGS="${CFLAGS} -xs -xO3 -xdepend"
+#      LDFLAGS="${LDFLAGS} -xs -xO3 -xdepend"
+#      STATIC=""
+
+      CC="gcc"
+      CFLAGS="${CFLAGS} -g -O3"
+      LDFLAGS="${LDFLAGS}"
       STATIC=""
 
-      if test "${WASH_CYRUS_DEBUG}" = "t"; then
-        CFLAGS="-g -xs"
-        LDFLAGS="-L/usr/local/lib -R/usr/local/lib -xs -g"
-        STATIC=""
-      fi
+#     if test "${WASH_CYRUS_DEBUG}" = "t"; then
+#        CFLAGS="-g -xs"
+#        LDFLAGS="-L/usr/local/lib -R/usr/local/lib -xs -g"
+#        STATIC=""
+#      fi
       ;;
     ULTRIX)
       CC=gcc # cheat -- Ultrix cc is aged
@@ -79,6 +81,10 @@ fi;
 
 if test "${WASH_CYRUS_DEBUG}" = "t"; then
   DEBUG="--enable-debug"
+fi
+
+if [ ! -r /usr/local/include/atk/unscribe.h ]; then
+  AMSSYNC=""
 fi
 
 LNCOMMAND="${SRCDIR}/configure $WITHAUTH --with-inn=/usr/news $AMSSYNC --enable-experiment --enable-cmulocal --with-cyrus-group=staff $DEBUG"
