@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.34 1998/05/07 06:19:49 tjs Exp $ -->
+<!-- $Id: changes.html,v 1.35 1998/05/12 01:10:13 tjs Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -9,14 +9,16 @@
 
 <ul>
 
+<li> Use the default hash function from DB. Note that this means that
+	  the existing <tt>delivered.db</tt> and <tt>ptscache.db</tt>
+	  is <b>NOT</b> compatible with this release. 
+
 <li> The mailboxes file is now closed if it isn't likely to be referenced,
 	  hopefully preventing old mailboxes files from hanging around in
 	  memory as frequently.
 
 <li> Added a patch from Eric Haberg to work around a possible deadlock
 	  condition in mboxlist.c where rename isn't atomic.
-
-<li> Updated db code to use db 2.0 where possible.
 
 <li> Fixes to ptloader including the removal of some core leaks.
 
@@ -496,7 +498,7 @@ restore tab before breaking out of loop.
 </ul>
 <P><HR><P>
 <!-- hhmts start -->
-last modified by tjs at Thu May  7 02:15:06 1998
+Last modified: Mon May 11 19:45:43 EDT 
 <!-- hhmts end -->
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
