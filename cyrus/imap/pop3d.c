@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.122.4.25 2003/02/26 20:20:10 ken3 Exp $
+ * $Id: pop3d.c,v 1.122.4.26 2003/02/26 21:28:05 ken3 Exp $
  */
 #include <config.h>
 
@@ -635,15 +635,13 @@ static void cmdloop(void)
 
 	/* check if client has just authenticated */
 	if (popd_auth_done && !popd_mailbox) {
-	    /* open the INBOX */
-	    if (openinbox() != 0) return;
-
-	    /* create a pipe from client to backend */
 	    if (backend) {
+		/* create a pipe from client to backend */
 		bitpipe();
-		/* client has QUIT, we're done */
-		return;
 	    }
+
+	    /* either we failed to open INBOX, or pipe has been closed */
+	    return;
 	}
 
 	/* check for shutdown file */
@@ -1072,6 +1070,7 @@ static void cmd_apop(char *response)
 	   popd_clienthost, popd_userid, "User logged in");
 
     popd_auth_done = 1;
+    openinbox();
 }
 
 void cmd_user(char *user)
@@ -1135,6 +1134,7 @@ void cmd_pass(char *pass)
 	syslog(LOG_NOTICE, "login: %s %s kpop", popd_clienthost, popd_userid);
 
 	popd_auth_done = 1;
+	openinbox();
 	return;
     }
 #endif
@@ -1179,6 +1179,7 @@ void cmd_pass(char *pass)
     }
 
     popd_auth_done = 1;
+    openinbox();
 }
 
 /* Handle the POP3 Extension extension.
@@ -1331,10 +1332,11 @@ void cmd_auth(char *arg)
     syslog(LOG_NOTICE, "login: %s %s %s %s", popd_clienthost, popd_userid,
 	   authtype, "User logged in");
 
+    popd_auth_done = 1;
+    openinbox();
+
     prot_setsasl(popd_in,  popd_saslconn);
     prot_setsasl(popd_out, popd_saslconn);
-
-    popd_auth_done = 1;
 }
 
 /*
