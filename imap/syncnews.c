@@ -27,7 +27,7 @@
  */
 
 /*
- * $Id: syncnews.c,v 1.10 1998/08/07 06:51:17 tjs Exp $
+ * $Id: syncnews.c,v 1.11 1999/03/02 02:01:16 tjs Exp $
  */
 
 #include <stdio.h>
@@ -235,9 +235,7 @@ do_syncnews()
     return;
 }
 
-fatal(s, code)
-char *s;
-int code;
+void fatal(const char* s, int code)
 {
     fprintf(stderr, "syncnews: %s\n", s);
     exit(code);
