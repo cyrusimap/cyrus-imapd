@@ -63,7 +63,10 @@ CFLAGS= $(OPT) $(INCLUDES) $(DEFINES)
 INCLUDES= -I../lib -I/usr/local/include -I/usr/local/include/afs
 LIBS=../lib/libcyrus.a $(COM_ERR) $(AUTHLIBS)
 
-all: deliver imapd
+all: collectnews deliver imapd
+
+collectnews: collectnews.o libimap.a $(LIBS)
+	$(CC) $(CFLAGS) -o collectnews collectnews.o libimap.a $(LIBS)
 
 deliver: deliver.o libimap.a $(LIBS)
 	$(CC) $(CFLAGS) -o deliver deliver.o libimap.a $(LIBS)
