@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.147.2.24 2005/02/16 21:06:18 shadow Exp $
+ * $Id: mailbox.c,v 1.147.2.25 2005/02/17 18:48:32 shadow Exp $
  *
  */
 
@@ -665,15 +665,16 @@ void mailbox_close(struct mailbox *mailbox)
 
     if (mailbox->index_fd != -1) {
 	close(mailbox->index_fd);
-	map_free(&mailbox->index_base, &mailbox->index_len);
+	if (mailbox->index_base)
+	    map_free(&mailbox->index_base, &mailbox->index_len);
     }
 
     if (mailbox->cache_fd != -1) {
 	close(mailbox->cache_fd);
-	map_free(&mailbox->cache_base, &mailbox->cache_len);
+	if (mailbox->cache_base)
+	    map_free(&mailbox->cache_base, &mailbox->cache_len);
     }
 
-    index_closemailbox(mailbox);
     free(mailbox->name);
     free(mailbox->path);
     if (mailbox->mpath) free(mailbox->mpath);

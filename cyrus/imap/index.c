@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.199.2.13 2005/02/14 16:41:29 shadow Exp $
+ * $Id: index.c,v 1.199.2.14 2005/02/17 18:48:32 shadow Exp $
  */
 #include <config.h>
 
@@ -208,8 +208,11 @@ void index_closemailbox(struct mailbox *mailbox)
 	seendb = 0;
     }
     if (index_len) {
+	/* So what happens if these weren't cloned from this mailbox? */
 	map_free(&index_base, &index_len); 
+	mailbox->index_base = 0;
 	map_free(&cache_base, &cache_len); 
+	mailbox->cache_base = 0;
 	index_len = cache_end = 0;
     }
 }
