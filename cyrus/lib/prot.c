@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.64 2002/02/19 18:13:41 ken3 Exp $
+ * $Id: prot.c,v 1.65 2002/02/19 18:48:10 rjs3 Exp $
  */
 
 #include <config.h>
@@ -333,6 +333,9 @@ int prot_fill(struct protstream *s)
     struct prot_waitevent *event, *next;
    
     assert(!s->write);
+
+    /* Zero errno just in case */
+    errno = 0;
 
     if (s->eof || s->error) return EOF;
 
