@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.85 2004/02/27 16:59:26 rjs3 Exp $
+ * $Id: prot.c,v 1.86 2004/02/27 22:08:56 rjs3 Exp $
  */
 
 #include <config.h>
@@ -314,7 +314,7 @@ const char *prot_error(struct protstream *s)
 {
     if(!s) return "bad protstream passed to prot_error";
     else if(s->error) return s->error;
-    else if(s->eof) return "end of file reached";
+    else if(s->eof) return PROT_EOF_STRING;
     else return NULL;
 }
 

@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/NNTP/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.95 2004/02/27 18:29:35 ken3 Exp $
+ * $Id: imtest.c,v 1.96 2004/02/27 22:08:58 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -1316,7 +1316,8 @@ static void interactive(struct protocol_t *protocol, char *filename)
 	    do {
 		count = prot_read(pin, buf, sizeof (buf) - 1);
 		if (count == 0) {
-		    if (prot_error(pin)) {
+		    const char *str = prot_error(pin);
+		    if (str && strcmp(str, PROT_EOF_STRING)) {
 			printf("Protection error: %s\n", prot_error(pin));
 		    }
 		    close(sock);
