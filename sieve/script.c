@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.38 2000/11/17 19:32:27 ken3 Exp $
+ * $Id: script.c,v 1.39 2000/11/17 19:45:57 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -424,6 +424,9 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 		    if (strcasecmp(body[0], "no")) l = SIEVE_DONE;
 		}
 
+		/* Note: the domain-part of all addresses are canonicalized */
+
+		/* grab my address from the envelope */
 		if (l == SIEVE_OK) {
 		    strcpy(buf, "to");
 		    l = i->getenvelope(m, buf, &body);
@@ -451,8 +454,7 @@ static int eval(sieve_interp_t *i, commandlist_t *c,
 			l = SIEVE_DONE;
 		    }
 
-		    /* first, is it from me? really should use a
-		       compare_address function */
+		    /* first, is it from me? */
 		    if (l == SIEVE_OK && !strcmp(myaddr, reply_to)) {
 			l = SIEVE_DONE;
 		    }
