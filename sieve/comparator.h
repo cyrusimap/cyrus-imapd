@@ -27,7 +27,9 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #ifndef COMPARATOR_H
 #define COMPARATOR_H
 
-#include "config.h"
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
 
 #ifdef ENABLE_REGEX
 #ifdef HAVE_RX
