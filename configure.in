@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.281 2004/03/04 16:12:25 rjs3 Exp $
+dnl $Id: configure.in,v 1.282 2004/03/09 18:08:38 rjs3 Exp $
 dnl
 
 
@@ -1000,7 +1000,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.281 2004/03/04 16:12:25 rjs3 Exp $ */
+/* $Id: configure.in,v 1.282 2004/03/09 18:08:38 rjs3 Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -1122,10 +1122,6 @@ struct sockaddr_storage {
 
 #if !defined(HAVE_GETADDRINFO) || !defined(HAVE_GETNAMEINFO)
 #include "gai.h"
-#endif
-
-#ifndef	NI_WITHSCOPEID
-#define	NI_WITHSCOPEID	0
 #endif
 
 /* End IPv6 things */

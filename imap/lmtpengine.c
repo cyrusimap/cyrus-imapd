@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.109 2004/03/04 21:06:47 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.110 2004/03/09 18:08:40 rjs3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -1047,7 +1047,6 @@ void lmtpmode(struct lmtp_func *func,
 	(remoteaddr.ss_family == AF_INET ||
 	 remoteaddr.ss_family == AF_INET6)) {
 	/* connected to an internet socket */
-
 	if (getnameinfo((struct sockaddr *)&remoteaddr, salen,
 			hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) == 0) {
 	    strncpy(cd.clienthost, hbuf, sizeof(hbuf));
@@ -1056,15 +1055,17 @@ void lmtpmode(struct lmtp_func *func,
 	} else {
 	    cd.clienthost[0] = '\0';
 	}
-	niflags = NI_NUMERICHOST |
-		  (remoteaddr.ss_family == AF_INET6 ? NI_WITHSCOPEID : 0);
-	if (getnameinfo((struct sockaddr *)&remoteaddr, salen, hbuf, sizeof(hbuf),
-		    NULL, 0, niflags) == 0) {
-		strlcat(cd.clienthost, "[", sizeof(cd.clienthost));
-		strlcat(cd.clienthost, hbuf, sizeof(cd.clienthost));
-		strlcat(cd.clienthost, "]", sizeof(cd.clienthost));
-	}
-	
+	niflags = NI_NUMERICHOST;
+#ifdef NI_WITHSCOPEID
+	if (((struct sockaddr *)&remoteaddr)->sa_family == AF_INET6)
+	    niflags |= NI_WITHSCOPEID;
+#endif
+	if (getnameinfo((struct sockaddr *)&remoteaddr, salen,
+			hbuf, sizeof(hbuf), NULL, 0, niflags) != 0)
+	    strlcpy(hbuf, "unknown", sizeof(hbuf));
+	strlcat(cd.clienthost, "[", sizeof(cd.clienthost));
+	strlcat(cd.clienthost, hbuf, sizeof(cd.clienthost));
+	strlcat(cd.clienthost, "]", sizeof(cd.clienthost));
 	salen = sizeof(localaddr);
 	if (!getsockname(fd, (struct sockaddr *)&localaddr, &salen)) {
 	    /* set the ip addresses here */
@@ -1216,14 +1217,17 @@ void lmtpmode(struct lmtp_func *func,
 			  sleep(3);
 
 			  if (remoteaddr.ss_family == AF_INET ||
-			      remoteaddr.ss_family == AF_INET6)
-			      niflags = NI_NUMERICHOST |
-					(remoteaddr.ss_family == AF_INET6
-					? NI_WITHSCOPEID : 0);
+			      remoteaddr.ss_family == AF_INET6) {
+			      niflags = NI_NUMERICHOST;
+#ifdef NI_WITHSCOPEID
+			      if (remoteaddr.ss_family == AF_INET6)
+				  niflags |= NI_WITHSCOPEID;
+#endif
 			      if (getnameinfo((struct sockaddr *)&remoteaddr,
-					  salen, hbuf, sizeof(hbuf), NULL, 0,
-					  niflags) != 0)
-				    strlcpy(hbuf, "[unknown]", sizeof(hbuf));
+					      salen, hbuf, sizeof(hbuf),
+					      NULL, 0, niflags) != 0)
+				  strlcpy(hbuf, "[unknown]", sizeof(hbuf));
+			  }
 			  else
 			      strlcpy(hbuf, "[unix socket]", sizeof(hbuf));		  
 			  syslog(LOG_ERR, "badlogin: %s %s %s",
