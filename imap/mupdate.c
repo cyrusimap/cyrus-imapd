@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.14 2002/01/15 21:27:17 rjs3 Exp $
+ * $Id: mupdate.c,v 1.15 2002/01/16 01:17:43 leg Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -320,7 +320,7 @@ int service_init(int argc, char **argv, char **envp)
 
     if (!masterp) {
 	/* spawn off listener thread to connect to the master */
-	syslog(LOG_ERR, "mupdate running unimplimented slave code");
+	syslog(LOG_ERR, "mupdate running unimplemented slave code");
     }
 
     return 0;
