@@ -43,6 +43,13 @@ use Cyrus::SIEVE::managesieve;
 use Getopt::Long;
 use strict;
 
+my $puthelp =        "put <filename>   - upload script to server\n";
+my $gethelp =        "get <name> [<filename>]\n" .
+                     "                 - get script. if no filename display to stdout\n";
+my $activatehelp =   "activate <name>  - set a script as the active script\n";
+my $deactivatehelp = "deactivate       - deactivate all scripts\n";
+my $deletehelp =     "delete <name>    - delete script.\n";
+
 my $username = "";
 my $authname = "";
 my $realm = "";
@@ -110,13 +117,6 @@ sub prompt {
   
   return $b;
 }
-
-my $puthelp =        "put <filename>   - upload script to server\n";
-my $gethelp =        "get <name> [<filename>]\n" .
-                     "                 - get script. if no filename display to stdout\n";
-my $activatehelp =   "activate <name>  - set a script as the active script\n";
-my $deactivatehelp = "deactivate       - deactivate all scripts\n";
-my $deletehelp =     "delete <name>    - delete script.\n";
 
 sub show_help {
   print "Usage:\n";
