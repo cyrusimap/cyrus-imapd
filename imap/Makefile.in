@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.82 1999/11/05 01:00:34 tmartin Exp $
+# $Id: Makefile.in,v 1.83 2000/01/13 21:56:29 wcw Exp $
 # 
 # @configure_input@
 #
@@ -122,15 +122,15 @@ deliver: deliver.o libimap.a $(DEPLIBS) $(SIEVE_LIBS)
 	$(CC) $(LDFLAGS) -o deliver \
 	 deliver.o libimap.a $(DEPLIBS) $(SIEVE_LIBS) $(LIBS)
 
-deliver.pure: deliver.o libimap.a $(DEPLIBS)
+deliver.pure: deliver.o libimap.a $(DEPLIBS) $(SIEVE_LIBS)
 	$(PURIFY) $(PUREOPT) \
 	 $(CC) $(LDFLAGS) -o deliver.pure \
-	 deliver.o libimap.a $(DEPLIBS) $(LIBS)
+	 deliver.o libimap.a $(DEPLIBS) $(SIEVE_LIBS) $(LIBS)
 
-deliver.quant: deliver.o libimap.a $(DEPLIBS)
+deliver.quant: deliver.o libimap.a $(DEPLIBS) $(SIEVE_LIBS)
 	$(QUANTIFY) $(QUANTOPT) \
 	 $(CC) $(LDFLAGS) -o deliver.quant \
-	 deliver.o libimap.a $(DEPLIBS) $(LIBS)
+	 deliver.o libimap.a $(DEPLIBS) $(SIEVE_LIBS) $(LIBS)
 
 dump_deliverdb: dump_deliver.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o \
