@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.60.4.29 2003/02/13 20:32:59 rjs3 Exp $
+ * $Id: mupdate.c,v 1.60.4.30 2003/04/02 02:12:25 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -99,7 +99,7 @@ enum {
 struct pending {
     struct pending *next;
 
-    char mailbox[MAX_MAILBOX_NAME];
+    char mailbox[MAX_MAILBOX_NAME+1];
 };
 
 struct conn {
@@ -1329,7 +1329,7 @@ void cmd_set(struct conn *C,
     for (upc = updatelist; upc != NULL; upc = upc->updatelist_next) {
 	/* for each connection, add to pending list */
 	struct pending *p = (struct pending *) xmalloc(sizeof(struct pending));
-	strcpy(p->mailbox, mailbox);
+	strlcpy(p->mailbox, mailbox, sizeof(p->mailbox));
 	
 	pthread_mutex_lock(&upc->m);
 	p->next = upc->plist;
@@ -1699,7 +1699,7 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 	/* for each connection, add to pending list */
 
 	struct pending *p = (struct pending *) xmalloc(sizeof(struct pending));
-	strcpy(p->mailbox, mdata->mailbox);
+	strlcpy(p->mailbox, mdata->mailbox, sizeof(p->mailbox));
 	
 	pthread_mutex_lock(&upc->m);
 	p->next = upc->plist;
