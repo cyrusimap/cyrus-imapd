@@ -1,5 +1,5 @@
 /* telemetry.c -- common server telemetry
- * $Id: telemetry.c,v 1.1 2001/03/14 05:59:31 leg Exp $
+ * $Id: telemetry.c,v 1.2 2001/03/14 20:44:26 leg Exp $
  *
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -60,7 +60,6 @@ int telemetry_log(const char *userid, struct protstream *pin,
 {
     char buf[1024];
     int fd = -1;
-    FILE *logfile;
     time_t now;
 
     snprintf(buf, sizeof(buf), "%s%s%s/%lu", 

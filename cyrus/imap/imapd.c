@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.302 2001/03/14 06:02:11 leg Exp $ */
+/* $Id: imapd.c,v 1.303 2001/03/14 20:44:25 leg Exp $ */
 
 #include <config.h>
 
@@ -1390,7 +1390,6 @@ char *passwd;
     const char *val;
     char buf[MAX_MAILBOX_PATH];
     char *p;
-    FILE *logfile;
     int plaintextloginpause;
     int result;
 
@@ -1524,9 +1523,6 @@ cmd_authenticate(char *tag,char *authtype)
     const char *errstr;
     
     const char *errorstring = NULL;
-
-    char buf[MAX_MAILBOX_PATH];
-    FILE *logfile;
 
     int *ssfp;
     char *ssfmsg=NULL;
