@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.44 2004/04/26 19:27:30 rjs3 Exp $
+ * $Id: mupdate-client.c,v 1.45 2004/07/07 19:49:05 rjs3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -238,11 +238,15 @@ int mupdate_connect(const char *server, const char *port,
 	mechlist = xstrdup(forcemech);
     }
 
-    if (h->saslcompleted || 
-	saslclient(h->saslconn, &protocol[PROTOCOL_MUPDATE].sasl_cmd,
-		   mechlist, h->pin, h->pout, NULL, &sasl_status) != SASL_OK) {
+    if (h->saslcompleted) {
+	syslog(LOG_ERR,
+	       "Already authenticated to remote mupdate server in mupdate_connect.  Continuing.");
+    } else if(saslclient(h->saslconn,
+			 &protocol[PROTOCOL_MUPDATE].sasl_cmd,
+			 mechlist, h->pin, h->pout, NULL,
+			 &sasl_status) != SASL_OK) {
 	syslog(LOG_ERR, "authentication to remote mupdate server failed: %s",
-	       sasl_status ? sasl_status : "already authenticated");
+	       sasl_status ? sasl_status : "unspecified saslclient() error");
 	free(mechlist);
 	mupdate_disconnect(handle);
 	free_callbacks(cbs);
