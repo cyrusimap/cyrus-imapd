@@ -40,30 +40,32 @@ static char *srvtab = "";	/* Srvtab filename */
 /* Maximum number of bytes of overhead the protection mechanisms use */
 #define PROTECTION_OVERHEAD 31
 
-/* XXX Left to do:
- * "hard" vs "soft" errors
- */ 
-
+/* Private state used by this mechanism */
 struct krb_state {
     /* common */
     int authstepno;
     des_cblock session;	/* Our session key */
     des_key_schedule schedule; /* Schedule for our session key */
     long challenge;
+    char user[MAX_K_NAME_SZ+1];
     int protallowed;
     int maxbufsize;
-    struct sockaddr_in sender, receiver;
+    struct sockaddr_in localaddr, remoteaddr;
     long prot_time_sec;
-    char prot_time_5ms
+    char prot_time_5ms;
     /* client */
     char instance[INST_SZ];
-    char ream[REALM_SZ];
+    char realm[REALM_SZ];
     /* server */
     int (*authproc)();
     AUTH_DAT kdata;
 };
 
-static void krb_free_state(state)
+/*
+ * Free the space used by an opaque state pointer
+ */
+static void
+krb_free_state(state)
 void *state;
 {
     memset((char *)state, 0, sizeof(struct krb_state));
@@ -73,9 +75,25 @@ void *state;
 static int krb_en_integrity(), krb_de_integrity();
 static int krb_en_privacy(), krb_de_privacy();
 
-static void krb_query_state(state, completed, encodefunc, decodefunc, maxplain)
+/*
+ * Query public values of the state pointer.  Fills in buffers
+ * pointed to by the following arguments:
+ *
+ * completed  -- nonzero if the authentication protocol is complete
+ *               if zero, none of the other buffers are filled in.
+ * user       -- IMAP userid authenticated as
+ * encodefunc -- if nonzero, protection mechanism function to encode
+ *               outgoing data with.
+ * decodefunc -- if nonzero, protection mechanism function to decode
+ *               incoming data with.
+ * maxplain   -- The maximum number of bytes that may be encoded by
+ *                the encodefunc at one time
+ */
+static void 
+krb_query_state(state, completed, user, encodefunc, decodefunc, maxplain)
 void *state;
-int completed;
+int *completed;
+char **user;
 int (**encodefunc)();
 int (**decodefunc)();
 int *maxplain;
@@ -87,20 +105,21 @@ int *maxplain;
 	return;
     }
     *completed = 1;
+    *user = kstate->user;
 
     switch (kstate->protallowed) {
-    case PROT_NONE:
+    case ACTE_PROT_NONE:
 	*encodefunc = *decodefunc = 0;
 	*maxplain = 0;
 	return;
 
-    case PROT_INTEGRITY:
+    case ACTE_PROT_INTEGRITY:
 	*encodefunc = krb_en_integrity;
 	*decodefunc = krb_de_integrity;
 	*maxplain = kstate->maxbufsize - PROTECTION_OVERHEAD;
 	return;
 
-    case PROT_PRIVACY:
+    case ACTE_PROT_PRIVACY:
 	*encodefunc = krb_en_privacy;
 	*decodefunc = krb_de_privacy;
 	*maxplain = kstate->maxbufsize - PROTECTION_OVERHEAD;
@@ -111,49 +130,56 @@ int *maxplain;
     }
 }
 
+/*
+ * Start the client side of an authentication exchange.
+ */
 static int krb_client_start(host, user, protallowed, maxbufsize,
-			    sender, receiver, state)
-char *host;
-char *user;
-void **state;
-int protallowed;
-int maxbufsize;
-struct sockaddr *sender;
-struct sockaddr *receiver;
+			    localaddr, remoteaddr, state)
+char *host;			/* Name of server host */
+char *user;			/* (optional) user to log in as */
+int protallowed;		/* Protection mechanisms allowed */
+int maxbufsize;			/* Maximum ciphertext input buffer size */
+struct sockaddr *localaddr;	/* Network address of local side */
+struct sockaddr *remoteaddr;	/* Network address of remote side */
+void **state;			/* On success, filled in with state ptr */
 {
     struct hostent *host_name;
+    char userbuf[MAX_K_NAME_SZ+1];
     char instance[INST_SZ];
     char realm[REALM_SZ];
+    int code;
     char uinst[INST_SZ];
     char urealm[INST_SZ];
-    int code;
-    int i;
     CREDENTIALS cr;
     struct krb_state *kstate;
 
     protallowed &= ACTE_PROT_NONE|ACTE_PROT_INTEGRITY|ACTE_PROT_PRIVACY;
+    if (!localaddr || !remoteaddr) {
+	protallowed &= ACTE_PROT_NONE;
+    }
     if (!protallowed) {
-	return ACTE_FAIL_SOFT;
+	return ACTE_FAIL;
     }
     if (maxbufsize > 0xffffff) maxbufsize = 0xffffff;
 
     /* Canonicalize hostname */
     host_name = gethostbyname(host);
     if (!host_name) {
-	return ACTE_FAIL_SOFT;
+	return ACTE_FAIL;
     }
 
     strcpy(realm, krb_realmofhost(host_name->h_name));
     strcpy(instance, krb_get_phost(host_name->h_name));
 
     if (code = krb_get_cred("imap", instance, realm, &cr)) {
-	return ACTE_FAIL_SOFT;
+	return ACTE_FAIL;
     }
     
-    if (!user[0]) {
+    if (!user || !user[0]) {
+	user = userbuf;
 	if (krb_get_tf_fullname(TKT_FILE, user, uinst, urealm)) {
 	    memset(&cr, 0, sizeof(cr));
-	    return ACTE_FAIL_SOFT;
+	    return ACTE_FAIL;
 	}
 	if (uinst[0]) {
 	    strcat(user, ".");
@@ -164,17 +190,23 @@ struct sockaddr *receiver;
 	    strcat(user, urealm);
 	}
     }
+    else if (strlen(user) > MAX_K_NAME_SZ) {
+	return ACTE_FAIL;
+    }
 
     kstate = (struct krb_state *)malloc(sizeof(struct krb_state));
-    if (!kstate) return ACTE_FAIL_SOFT
+    if (!kstate) return ACTE_FAIL;
     memset((char *)kstate, 0, sizeof(*kstate));
     kstate->authstepno = 0;
     memcpy(kstate->session, cr.session, sizeof(des_cblock));
     des_key_sched(kstate->session, kstate->schedule);
+    strcpy(kstate->user, user);
     kstate->protallowed = protallowed;
     kstate->maxbufsize = maxbufsize;
-    kstate->sender = *(struct sockaddr_in *)sender;
-    kstate->receiver = *(struct sockaddr_in *)receiver;
+    if (localaddr && remoteaddr) {
+	kstate->localaddr = *(struct sockaddr_in *)localaddr;
+	kstate->remoteaddr = *(struct sockaddr_in *)remoteaddr;
+    }
     strcpy(kstate->instance, instance);
     strcpy(kstate->realm, realm);
 
@@ -183,45 +215,54 @@ struct sockaddr *receiver;
     return 0;
 }
 
+/*
+ * Perform client-side authentication protocol exchange
+ */
 static int krb_client_auth(state, inputlen, input, outputlen, output)
-void *state;
-int inputlen;
-char *input;
-int *outputlen;
-char **output;
+void *state;			/* State of exchange */
+int inputlen;			/* Length of server response */
+char *input;			/* Server response data */
+int *outputlen;			/* Set to length of client reply */
+char **output;			/* Set to point to client reply data */
 {
     static KTEXT_ST authent;
     struct krb_state *kstate = (struct krb_state *)state;
+    int code;
     int maxbufsize;
 
     switch (kstate->authstepno++) {
     case 0:
+	/* Server gave us challenge, respond with ticket+authenticator */
 	if (inputlen < 4) {
 	    kstate->authstepno = -1;
-	    return ACTE_FAIL_SOFT;
+	    return ACTE_FAIL;
 	}
 	kstate->challenge = ntohl(*(int *)input);
 
-	code = krb_mk_req(&authent, "imap", instance, realm,
+	code = krb_mk_req(&authent, "imap", kstate->instance, kstate->realm,
 			  kstate->challenge);
 	if (code) {
 	    kstate->authstepno = -1;
-	    return ACTE_FAIL_SOFT;
+	    return ACTE_FAIL;
 	}
 	*outputlen = authent.length;
 	*output = authent.dat;
 	return 0;
 
     case 1:
+	/*
+	 * Server gave us mutual auth reply+available protection mechanisms.
+	 * Respond with challenge, desired protection mechanism, userid
+	 */
 	if (inputlen < 8) {
 	    kstate->authstepno = -1;
-	    return ACTE_FAIL_SOFT;
+	    return ACTE_FAIL;
 	}
 	des_ecb_encrypt(input, input, kstate->schedule, 0);
 	if (ntohl(*(int *)input) + 1 != kstate->challenge) {
 	    /* Server failed to mutually authenticte */
 	    kstate->authstepno = -1;
-	    return ACTE_FAIL_HARD;
+	    return ACTE_FAIL;
 	}	    
 	maxbufsize = ntohl(*(int *)(input+4)) & 0xfffff;
 	kstate->protallowed &= input[4];
@@ -241,87 +282,109 @@ char **output;
 	else {
 	    /* No mutually agreeable protection mechanism */
 	    kstate->authstepno = -1;
-	    return ACTE_FAIL_HARD;
+	    return ACTE_FAIL;
 	}
 
 	*(int *)authent.dat = htonl(kstate->challenge);
 	*(int *)(authent.dat+4) = htonl(kstate->maxbufsize);
 	authent.dat[4] = kstate->protallowed;
-	des_ecb_encrypt(authent.dat, authent.dat, kstate->schedule, 1);
-	*output = authent.dat
-	*outputlen = 8;
+	strcpy(&authent.dat[8], kstate->user);
+	authent.length = 8+strlen(kstate->user);
+	do {
+	    authent.dat[authent.length++] = '\0';
+	} while (authent.length & 7);
+	des_pcbc_encrypt(authent.dat, authent.dat, authent.length,
+			 kstate->schedule, kstate->session, 1);
+	*output = authent.dat;
+	*outputlen = authent.length;
 	kstate->maxbufsize = maxbufsize;
 	return 0;
 
     default:
 	kstate->authstepno = -1;
-	return ACTE_FAIL_HARD;
+	return ACTE_FAIL;
     }
 }
 
-struct acte_client {
+/* Exported definition of client-side authentication mechanism */
+struct acte_client krb_acte_client = {
     "KERBEROS_V4",
     krb_client_start,
     krb_client_auth,
     krb_query_state,
     krb_free_state
-} krb_acte_client;
+};
 
+/*
+ * Start the server side of an authentication exchange
+ */
 static int
-krb_server_start(user, authproc, protallowed, maxbufsize,
-		 sender, receiver, outputlen, output, state, reply)
-char *user;
-int (*authproc)();
-int protallowed;
-int maxbufsize;
-struct sockaddr *sender;
-struct sockaddr *receiver;
-int *outputlen;
-char **output;
-void **state;
-char **reply;
+krb_server_start(authproc, protallowed, maxbufsize,
+		 localaddr, remoteaddr, outputlen, output, state, reply)
+int (*authproc)();		/* (optional) function to decide
+				 * authoriztion to log in as given user
+				 */
+int protallowed;		/* Protection mechanisms allowed */
+int maxbufsize;			/* Maximum ciphertext input buffer size */
+struct sockaddr *localaddr;	/* Network address of local side */
+struct sockaddr *remoteaddr;	/* Network address of remote side */
+int *outputlen;			/* Set to length of initial reply */
+char **output;			/* Set to point to initial reply data */
+void **state;			/* On success, filled in with state ptr */
+char **reply;			/* On failure, filled in with ptr to reason */
 {
     static char outputbuf[4];
     struct krb_state *kstate;
 
     protallowed &= ACTE_PROT_NONE|ACTE_PROT_INTEGRITY|ACTE_PROT_PRIVACY;
+    if (!localaddr || !remoteaddr) {
+	protallowed &= ACTE_PROT_NONE;
+    }
     if (!protallowed) {
 	*reply = "No suitable protection mechanism";
-	return ACTE_FAIL_SOFT;
+	return ACTE_FAIL;
     }
     if (maxbufsize > 0xffffff) maxbufsize = 0xffffff;
 
     kstate = (struct krb_state *)malloc(sizeof(struct krb_state));
     if (!kstate) {
 	*reply = "Out of memory";
-	return ACT_FAIL_SOFT;
+	return ACTE_FAIL;
     }
     memset((char *)kstate, 0, sizeof(*kstate));
     kstate->authstepno = 0;
     kstate->challenge = time(0) ^ getpid();
     kstate->protallowed = protallowed;
     kstate->maxbufsize = maxbufsize;
-    kstate->sender = *(struct sockaddr_in *)sender;
-    kstate->receiver = *(struct sockaddr_in *)receiver;
+    if (localaddr && remoteaddr) {
+	kstate->localaddr = *(struct sockaddr_in *)localaddr;
+	kstate->remoteaddr = *(struct sockaddr_in *)remoteaddr;
+    }
+    kstate->authproc = authproc;
 
     *(int *)outputbuf = htonl(kstate->challenge);
-    *output = outbutbuf;
+    *output = outputbuf;
     *outputlen = 4;
     *state = (void *)kstate;
     
     return 0;
 }
 
+/*
+ * Perform server-side authentication protocol exchange.
+ * Returns 0 to continue exchange, ACTE_FAIL on failure, and ACTE_DONE
+ * if user is now successfully authenticated
+ */
 static int krb_server_auth(state, inputlen, input, outputlen, output, reply)
-void *state;
-int inputlen;
-char *input;
-int *outputlen;
-char **output;
-char **reply
+void *state;			/* State of exchange */
+int inputlen;			/* Length of client response */
+char *input;			/* Client response data */
+int *outputlen;			/* Set to length of server reply */
+char **output;			/* Set to point to server reply data */
+char **reply;			/* On failure, filled in with ptr to reason */
 {
     struct krb_state *kstate = (struct krb_state *)state;
-    static char outbutbuf[8];
+    static char outputbuf[8];
     KTEXT_ST authent;
     int code;
     char instance[INST_SZ];
@@ -331,10 +394,14 @@ char **reply
 
     switch (kstate->authstepno++) {
     case 0:
+	/*
+	 * Client gave us ticket+authenticator
+	 * reply with mutual auth + supported protection mechanisms
+	 */
 	if (inputlen > MAX_KTXT_LEN) {
 	    kstate->authstepno = -1;
 	    *reply = "Kerberos authenticator too long";
-	    return ACTE_FAIL_SOFT;
+	    return ACTE_FAIL;
 	}
 	authent.length = inputlen;
 	memcpy(authent.dat, input, inputlen);
@@ -344,47 +411,18 @@ char **reply
 			  srvtab);
 	if (code) {
 	    kstate->authstepno = -1;
-	    *reply = error_message(code);
-	    return ACTE_FAIL_HARD;
+	    *reply = krb_err_txt[code];
+	    return ACTE_FAIL;
 	}
-	if (kdata->checksum != kstate->challenge) {
+	if (kstate->kdata.checksum != kstate->challenge) {
 	    kstate->authstepno = -1;
 	    *reply = "Incorrect checksum in Kerberos authenticator";
-	    return ACTE_FAIL_HARD;
+	    return ACTE_FAIL;
 	}
-	memcpy(kstate->session, cr.session, sizeof(des_cblock));
+	memcpy(kstate->session, kstate->kdata.session, sizeof(des_cblock));
 	des_key_sched(kstate->session, kstate->schedule);
 	
-	/* Check kerberos identity can log in as user */
-	if (krb_get_lrealm(realm,1)) {
-	    *reply = "Can't find local Kerberos realm";
-	    return ACTE_FAIL_SOFT;
-	}
-	if (kstate->authproc) {
-	    strcpy(clientname, kstate->kdata->pname);
-	    if (kstate->kdata->pinst[0]) {
-		strcat(clientname, ".");
-		strcat(clientname, kstate->kdata->pinst);
-	    }
-	    if (strcmp(kstate->kdata->prealm, realm) != 0) {
-		strcat(clientname, "@");
-		strcat(clientname, kstate->kdata->prealm);
-	    }
-	    if (!kstate->authproc(user, clientname)) {
-		*reply = "Not authorized";
-		return ACTE_FAIL_SOFT;
-	    }
-	}
-	else {
-	    if (strcmp(kstate->kdata->pname, user) != 0 ||
-		kstate->kdata->pinst[0] ||
-		strcmp(kstate->kdata->prealm, realm) != 0) {
-		*reply = "Not authorized";
-		return ACTE_FAIL_SOFT;
-	    }
-	}
-
-	*(int *)outputbuf = htonl(challenge+1);
+	*(int *)outputbuf = htonl(kstate->challenge+1);
 	*(int *)(outputbuf+4) = htonl(kstate->maxbufsize);
 	outputbuf[4] = kstate->protallowed;
 	des_ecb_encrypt(outputbuf, outputbuf, kstate->schedule, 1);
@@ -394,57 +432,98 @@ char **reply
 	return 0;
 
     case 1:
-	if (inputlen < 8) {
+	/* Client gave us selected protection mechanism + userid, we're done */
+	if (inputlen < 16 || inputlen & 7) {
 	    kstate->authstepno = -1;
-	    *reply = "Kerberos authenticator too short";
-	    return ACTE_FAIL_HARD;
+	    *reply = "Kerberos authenticator has incorrect length";
+	    return ACTE_FAIL;
 	}
-	des_ecb_encrypt(input, input, kstate->schedule, 0);
+	des_pcbc_encrypt(input, input, inputlen,
+			 kstate->schedule, kstate->session, 0);
 	if (ntohl(*(int *)input) != kstate->challenge) {
 	    kstate->authstepno = -1;
 	    *reply = "Incorrect checksum in Kerberos authenticator";
-	    return ACTE_FAIL_HARD;
+	    return ACTE_FAIL;
 	}
 	kstate->maxbufsize = ntohl(*(int *)(input+4)) & 0xfffff;
 	protallowed = input[4];
 	if (!(protallowed & kstate->protallowed)) {
 	    kstate->authstepno = -1;
 	    *reply = "No suitable protection mechanism selected";
-	    return ACTE_FAIL_HARD;
+	    return ACTE_FAIL;
 	}
 	if (protallowed != ACTE_PROT_PRIVACY &&
 	    protallowed != ACTE_PROT_INTEGRITY &&
 	    protallowed != ACTE_PROT_NONE) {
 	    kstate->authstepno = -1;
 	    *reply = "Multiple protection mechanisms selected";
-	    return ACTE_FAIL_HARD;
+	    return ACTE_FAIL;
 	}
 	if (protallowed != ACTE_PROT_NONE &&
 	    kstate->maxbufsize <= PROTECTION_OVERHEAD) {
 	    /* Protection buffer too small */
 	    kstate->authstepno = -1;
 	    *reply = "Protection buffer size too small";
-	    return ACTE_FAIL_HARD;
+	    return ACTE_FAIL;
 	}
 	kstate->protallowed = protallowed;
-	
+
+	if (input[inputlen-1] != '\0') {
+	    *reply = "User name not nul-terminated";
+	    return ACTE_FAIL;
+	}
+	strcpy(kstate->user, input+8);
+
+	/* Check kerberos identity can log in as user */
+	if (krb_get_lrealm(realm,1)) {
+	    *reply = "Can't find local Kerberos realm";
+	    return ACTE_FAIL;
+	}
+	if (kstate->authproc) {
+	    strcpy(clientname, kstate->kdata.pname);
+	    if (kstate->kdata.pinst[0]) {
+		strcat(clientname, ".");
+		strcat(clientname, kstate->kdata.pinst);
+	    }
+	    if (strcmp(kstate->kdata.prealm, realm) != 0) {
+		strcat(clientname, "@");
+		strcat(clientname, kstate->kdata.prealm);
+	    }
+	    if (kstate->authproc(kstate->user, clientname, reply) != 0) {
+		return ACTE_FAIL;
+	    }
+	}
+	else {
+	    if (strcmp(kstate->kdata.pname, kstate->user) != 0 ||
+		kstate->kdata.pinst[0] ||
+		strcmp(kstate->kdata.prealm, realm) != 0) {
+		*reply = "Kerberos ID does not match user name";
+		return ACTE_FAIL;
+	    }
+	}
+
 	return ACTE_DONE;
 
     default:
 	*reply = "Internal error: invalid state in krb_server_auth";
-	return ACTE_FAIL_HARD;
+	return ACTE_FAIL;
     }
 }
 
-/* Server side stuff */
-struct acte_server {
+/* Exported definition of server-side authentication mechanism */
+struct acte_server krb_acte_server = {
     "KERBEROS_V4",
     krb_server_start,
     krb_server_auth,
     krb_query_state,
     krb_free_state
-} krb_acte_server;
+};
 
+/*
+ * Apply integrity protection to the 'inputlen' bytes of data at 'input',
+ * using the state in 'state', placing the output data and length in the
+ * buffers pointed to by 'output' and 'outputlen' respectively.
+ */
 static int krb_en_integrity(state, input, inputlen, output, outputlen)
 void *state;
 char *input;
@@ -454,11 +533,17 @@ int *outputlen;
 {
     struct krb_state *kstate = (struct krb_state *)state;
 
-    *output = krb_mk_safe(input, output, inputlen, kstate->session,
-			  &kstate->sender, &kstate->receiver);
+    *outputlen = krb_mk_safe(input, output, inputlen, kstate->session,
+			     &kstate->localaddr, &kstate->remoteaddr);
     return 0;
 }
 
+/*
+ * Decode integrity protection on the 'inputlen' bytes of data at
+ * 'input', using the state in 'state', placing a pointer to the
+ * output data and length in the buffers pointed to by 'output' and
+ * 'outputlen' respectively.
+ */
 static int krb_de_integrity(state, input, inputlen, output, outputlen)
 void *state;
 char *input;
@@ -471,22 +556,26 @@ int *outputlen;
     MSG_DAT m_data;
 
     code = krb_rd_safe(input, inputlen, kstate->session,
-		       kstate->sender, kstate->receiver, &m_data);
+		       kstate->remoteaddr, kstate->localaddr, &m_data);
     if (code) return code;
     if (m_data.time_sec < kstate->prot_time_sec ||
 	(m_data.time_sec == kstate->prot_time_sec &&
 	 m_data.time_5ms < kstate->prot_time_5ms)) {
 	return RD_AP_TIME;
     }
-    kstate->prot_time_sec = mdata.time_sec;
-    kstate->prot_time_5ms = mdata.time_5ms;
+    kstate->prot_time_sec = m_data.time_sec;
+    kstate->prot_time_5ms = m_data.time_5ms;
 
     *output = m_data.app_data;
     *outputlen = m_data.app_length;
     return 0;
 }
 
-
+/*
+ * Apply privacy protection to the 'inputlen' bytes of data at 'input',
+ * using the state in 'state', placing the output data and length in the
+ * buffers pointed to by 'output' and 'outputlen' respectively.
+ */
 static int krb_en_privacy(state, input, inputlen, output, outputlen)
 void *state;
 char *input;
@@ -496,11 +585,18 @@ int *outputlen;
 {
     struct krb_state *kstate = (struct krb_state *)state;
 
-    *output = krb_mk_safe(input, output, inputlen, kstate->schedule,
-			  kstate->session, &kstate->sender, &kstate->receiver);
+    *outputlen = krb_mk_safe(input, output, inputlen, kstate->schedule,
+			     kstate->session, &kstate->localaddr,
+			     &kstate->remoteaddr);
     return 0;
 }
 
+/*
+ * Decode privacy protection on the 'inputlen' bytes of data at
+ * 'input', using the state in 'state', placing a pointer to the
+ * output data and length in the buffers pointed to by 'output' and
+ * 'outputlen' respectively.
+ */
 static int krb_de_privacy(state, input, inputlen, output, outputlen)
 void *state;
 char *input;
@@ -513,15 +609,15 @@ int *outputlen;
     MSG_DAT m_data;
 
     code = krb_rd_priv(input, inputlen, kstate->schedule, kstate->session,
-		       kstate->sender, kstate->receiver, &m_data);
+		       kstate->remoteaddr, kstate->localaddr, &m_data);
     if (code) return code;
     if (m_data.time_sec < kstate->prot_time_sec ||
 	(m_data.time_sec == kstate->prot_time_sec &&
 	 m_data.time_5ms < kstate->prot_time_5ms)) {
 	return RD_AP_TIME;
     }
-    kstate->prot_time_sec = mdata.time_sec;
-    kstate->prot_time_5ms = mdata.time_5ms;
+    kstate->prot_time_sec = m_data.time_sec;
+    kstate->prot_time_5ms = m_data.time_5ms;
 
     *output = m_data.app_data;
     *outputlen = m_data.app_length;
@@ -552,25 +648,30 @@ des_cblock returned_key;
     return 0;
 }
 
-int kerberos_verify_password(user, passwd)
+/*
+ * Securely verify the plaintext password 'passwd' for user 'user' against
+ * the Kerberos database.  Returns 1 for success, 0 for failure.  On failure,
+ * 'reply' is filled in with a pointer to the reason.
+ */
+int kerberos_verify_password(user, passwd, reply)
 char *user;
 char *passwd;
+char **reply;
 {
     int result;
     des_cblock key;
+    char tfname[40];
     char realm[REALM_SZ];
     char cell[REALM_SZ];
     char hostname[MAXHOSTNAMELEN+1];
-    KTEXT_ST authent
+    KTEXT_ST authent;
     char instance[INST_SZ];
-    char userbuf[ANAME_SZ];
     AUTH_DAT kdata;
-    char *reply;
 
-    if (krb_get_lrealm(realm,1)) return NIL;
+    if (krb_get_lrealm(realm,1)) return 0;
 
-    sprintf(passbuf, "/tmp/tkt_imapd_%d", getpid());
-    krb_set_tkt_string(passbuf);
+    sprintf(tfname, "/tmp/tkt_imapd_%d", getpid());
+    krb_set_tkt_string(tfname);
 
     /* First try Kerberos string-to-key */
     des_string_to_key(passwd, key);
@@ -592,7 +693,8 @@ char *passwd;
 
     if (result != 0) {
 	dest_tkt();
-	return NIL;
+	*reply = krb_err_txt[result];
+	return 0;
     }
 
     /* Check validity of returned ticket */
@@ -601,7 +703,8 @@ char *passwd;
     if (result != 0) {
 	memset(&authent, 0, sizeof(authent));
 	dest_tkt();
-	return NIL;
+	*reply = krb_err_txt[result];
+	return 0;
     }
     strcpy(instance, "*");
     result = krb_rd_req(&authent, "imap", instance, 0L, &kdata, srvtab);
@@ -609,9 +712,15 @@ char *passwd;
     memset(kdata.session, 0, sizeof(kdata.session));
     if (result != 0 || strcmp(kdata.pname, user) != 0 || kdata.pinst[0] ||
 	strcmp(kdata.prealm, realm) != 0) {
-	result = NIL;
+	if (result != 0) {
+	    *reply = krb_err_txt[result];
+	}
+	else {
+	    *reply = "Kerberos ID does not match user name";
+	}
+	result = 0;
     }
-    else result = T;
+    else result = 1;
 
     dest_tkt();
     return result;
