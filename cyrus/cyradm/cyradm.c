@@ -464,7 +464,8 @@ static int cmd_login(struct admconn *conn, char *userid, char *pass, int passlen
   imclient_send(conn->imclient, callback_finish, (void *)conn,
 		"LOGIN %s {%d+}\r\n%s", 
 		userid, passlen, pass);
-  
+
+  conn->cmd_done = 0;
   while (!conn->cmd_done) {
     imclient_processoneevent(conn->imclient);
   }
