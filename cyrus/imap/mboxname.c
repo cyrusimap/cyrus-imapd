@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- * $Id: mboxname.c,v 1.25.4.11 2002/08/24 18:48:16 ken3 Exp $
+ * $Id: mboxname.c,v 1.25.4.12 2002/10/04 17:16:47 ken3 Exp $
  * Copyright (c)1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -198,10 +198,10 @@ static int mboxname_tointernal_alt(struct namespace *namespace, const char *name
     if (config_virtdomains) {
 	if (userid && (cp = strchr(userid, '@'))) {
 	    /* user logged in as user@domain */
-	    userlen = cp - userid;
+	    userlen = cp++ - userid;
 	    if (!(config_defdomain && !strcasecmp(config_defdomain, cp))) {
 		/* don't prepend default domain */
-		sprintf(result, "%s!", cp+1);
+		sprintf(result, "%s!", cp);
 		domainlen = strlen(result);
 	    }
 	}

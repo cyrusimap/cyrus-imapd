@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.99.2.12 2002/10/03 18:21:07 ken3 Exp $
+ * $Id: lmtpd.c,v 1.99.2.13 2002/10/04 17:16:47 ken3 Exp $
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1117,7 +1117,7 @@ int deliver_mailbox(struct protstream *msg,
 	else append_abort(&as);
     }
 
-    if (!r && user) {
+    if (!r && user && strcspn(user, "@")) {
 	const char *notifier = config_getstring(IMAPOPT_MAILNOTIFIER);
 
 	if (notifier) {
@@ -1167,16 +1167,16 @@ int deliver(message_data_t *msgdata, char *authuser,
 	if (plus) *plus++ = '\0';
 	/* case 1: shared mailbox request */
 	if (plus && !strcmp(rcpt, BB)) {
-	    strcpy(namebuf, "");
-	    if (domain) sprintf(namebuf, "%s!", domain);
-	    strcat(namebuf, lmtpd_namespace.prefix[NAMESPACE_SHARED]);
+	    strcpy(user, "");
+	    if (domain) sprintf(user+strlen(user), "@%s", domain);
+	    strcpy(namebuf, lmtpd_namespace.prefix[NAMESPACE_SHARED]);
 	    strcat(namebuf, plus);
 	    r = deliver_mailbox(msgdata->data, 
 				mydata.stage,
 				msgdata->size, 
 				NULL, 0,
 				mydata.authuser, mydata.authstate,
-				msgdata->id, NULL, mydata.notifyheader,
+				msgdata->id, user, mydata.notifyheader,
 				namebuf, quotaoverride, 0);
 	}
 
@@ -1437,6 +1437,7 @@ FILE *spoolfile(message_data_t *msgdata)
 	if (plus && !strcmp(rcpt, BB)) {
 	    strcpy(namebuf, lmtpd_namespace.prefix[NAMESPACE_SHARED]);
 	    strcat(namebuf, plus);
+	    user += strlen(BB);
 	}
 
 	/* case 2: ordinary user */
