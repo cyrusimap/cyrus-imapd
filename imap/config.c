@@ -210,6 +210,11 @@ static void config_read(void)
 
     infile = fopen(CONFIG_FILENAME, "r");
     if (!infile) {
+	strcpy(buf, CYRUS_PATH);
+	strcat(buf, CONFIG_FILENAME);
+	infile = fopen(buf, "r");
+    }
+    if (!infile) {
 	sprintf(buf, "can't open configuration file %s: %s", CONFIG_FILENAME,
 		error_message(errno));
 	fatal(buf, EC_CONFIG);
