@@ -1118,7 +1118,7 @@ char *name;
     mboxstruct = mailbox;
     imapd_mailbox = &mboxstruct;
 
-    index_newmailbox(imapd_mailbox);
+    index_newmailbox(imapd_mailbox, cmd[0] == 'E');
 
     /* Examine command puts mailbox in read-only mode */
     if (cmd[0] == 'E') {

@@ -64,6 +64,7 @@ static time_t *flagreport;	/* Array for each msgno of last_updated when
 				 * Zero if FLAGS data never reported */
 static char *seenflag;		/* Array for each msgno, nonzero if \Seen */
 static int flagalloced = -1;	/* Allocated size of above two arrays */
+static int examining;		/* Nonzero if opened with EXAMINE command */
 static int keepingseen;		/* Nonzero if /Seen is meaningful */
 static unsigned allseen;	/* Last UID if all msgs /Seen last checkpoint */
 struct seen *seendb;		/* Seen state database object */
@@ -124,10 +125,12 @@ struct mailbox *mailbox;
  * A new mailbox has been selected, map it into memory and do the
  * initial CHECK.
  */
-index_newmailbox(mailbox)
+index_newmailbox(mailbox, examine_mode)
 struct mailbox *mailbox;
+int examine_mode;
 {
     keepingseen = (mailbox->myrights & ACL_SEEN);
+    examining = examine_mode;
     allseen = 0;
     recentuid = 0;
     index_listflags(mailbox);
@@ -246,9 +249,11 @@ int checkseen;
 		   error_message(IMAP_NO_CHECKPRESERVE), error_message(r));
 	}
 	else {
-	    /* Record our reading the mailbox */
-	    (void) seen_write(seendb, time((time_t *)0), mailbox->last_uid,
-			      seenuids);
+	    if (!examining) {
+		/* Record our reading the mailbox */
+		(void) seen_write(seendb, time((time_t *)0), mailbox->last_uid,
+				  seenuids);
+	    }
 	    /*
 	     * Empty seenuids so that index_checkseen() will pick up the
 	     * initial \Seen info.  Leave the database locked.
