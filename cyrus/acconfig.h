@@ -1,4 +1,4 @@
-/* $Id: acconfig.h,v 1.1 2000/02/10 21:25:22 leg Exp $ */
+/* $Id: acconfig.h,v 1.2 2000/02/17 02:56:09 tmartin Exp $ */
 
 @TOP@
 
@@ -40,6 +40,16 @@
 
 /* do we have the AFS symbol pr_End? */
 #undef HAVE_PR_END
+
+/* For Sieve regular expression support */
+#undef ENABLE_REGEX
+#undef HAVE_RX
+
+/* For pthreads */
+#undef _REENTRANT
+#undef _POSIX_PTHREAD_SEMANTICS
+#undef __EXTENSIONS__
+#undef _SGI_REENTRANT_FUNCTIONS
 
 @BOTTOM@
 

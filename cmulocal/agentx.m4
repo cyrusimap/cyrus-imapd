@@ -25,7 +25,7 @@ AC_DEFUN(CMU_AGENTX, [
 	     AGENTX_DIR="/usr/ng"
 
 	else
-	  AC_MSG_ERROR([Could not locate AgentX Libraries!])
+	  AC_MSG_WARN([Could not locate AgentX Libraries! http://www.net.cmu.edu/groups/netdev/agentx/])
 	fi
 
 	LIB_AGENTX="-L$AGENTX_DIR/lib${ABILIBDIR} -lagentx"
