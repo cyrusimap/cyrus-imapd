@@ -1,6 +1,6 @@
 /* imclient.c -- Streaming IMxP client library
  *
- * $Id: imclient.c,v 1.73 2002/07/24 20:27:41 rjs3 Exp $
+ * $Id: imclient.c,v 1.74 2002/08/05 12:46:15 leg Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1343,12 +1343,15 @@ static int imclient_authenticate_sub(struct imclient *imclient,
 	}
     }
 
-    /* send to server */
-    /* Send our reply to the server */
+    /* send our reply to the server */
     if ((saslresult==SASL_OK) || (saslresult==SASL_CONTINUE)) {
-	imclient_writebase64(imclient, out, outlen);
+        if (out == NULL || outlne == 0) {
+            imclient_write(imclient, "\r\n", 2);
+        } else {
+            imclient_writebase64(imclient, out, outlen);
+        }
     } else {
-	imclient_write(imclient,"*\r\n",3);
+	imclient_write(imclient,"*\r\n", 3);
 	return saslresult;
     }
 
