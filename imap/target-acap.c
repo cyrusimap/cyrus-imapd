@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: target-acap.c,v 1.18 2000/06/06 00:55:17 leg Exp $
+ * $Id: target-acap.c,v 1.19 2000/06/06 21:18:17 leg Exp $
  */
 
 #include <config.h>
@@ -235,6 +235,11 @@ static int mbox_comp(const void *v1, const void *v2)
     return strcmp((const char *)v1, (const char *)v2);
 }
 
+static void mbox_dump(const void *v)
+{
+    printf("%s ", (const char *) v);
+}
+
 static int mboxadd(char *name, int matchlen, int maycreate, void *rock)
 {
     skiplist *s = (skiplist *) rock;
@@ -258,6 +263,10 @@ void myacap_entry(acap_entry_t *entry, void *rock)
     void *v;
     int r = 0;
 
+    if (debugmode) {
+	printf("considering %s ", name ? name : "<entry?>");
+    }
+
     if (!name || !url || !acl) {
 	if (name && (name[0] == '\0')) return; /* null entry, ok */
 	syslog(LOG_NOTICE, "%s received with incomplete ACAP entry",
@@ -276,14 +285,23 @@ void myacap_entry(acap_entry_t *entry, void *rock)
 
     v = ssearch(s, mailbox);
     if (v) { 
+	if (debugmode) printf("have ");
 	sdelete(s, mailbox);
 	free(v);
 	r = 0;
     } else { /* we don't have it, add it */
+	if (debugmode) printf("inserting ");
 	if (!debugmode) {
 	    r = mboxlist_insertremote(mailbox, MBTYPE_REMOTE, server, 
 				      acl->data, NULL);
 	}
+    }
+    if (debugmode > 3) {
+	printf("now: ");
+	sforeach(s, &mbox_dump);
+    }
+    if (debugmode) {
+	printf("\n");
     }
 
     if (r) {
@@ -301,7 +319,9 @@ static void mboxdel(const void *v)
     int r = 0;
 
     syslog(LOG_DEBUG, "'%s' no longer exists", name);
-    if (!debugmode) {
+    if (debugmode) {
+	printf("deleting %s\n", name);
+    } else {
 	r = mboxlist_deletemailbox(name, 1, "", NULL, 0);
     }
     if (r) {
@@ -368,8 +388,7 @@ void synchronize_mboxlist(void)
 
     /* anything left over has been deleted */
     sforeach(mailboxes, &mboxdel);
-    sforeach(mailboxes, &free);
-    skiplist_free(mailboxes);
+    skiplist_freeeach(mailboxes, (void (*)(const void *))&free);
 
     mboxlist_close();
 
@@ -507,7 +526,7 @@ int main(int argc, char *argv[], char *envp[])
     while ((opt = getopt(argc, argv, "d")) != EOF) {
 	switch (opt) {
 	case 'd': /* don't fork. debugging mode */
-	    debugmode = 1;
+	    debugmode++;
 	    break;
 	default:
 	    fprintf(stderr, "invalid argument\n");
