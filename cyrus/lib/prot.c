@@ -23,7 +23,7 @@
  */
 #include <stdio.h>
 #include <errno.h>
-#include <strings.h>
+#include <string.h>
 #include <signal.h>
 #include <setjmp.h>
 #ifdef __STDC__
@@ -80,7 +80,7 @@ int write;
 int prot_free(s)
 struct protstream *s;
 {
-    fs_give((char **)&s);
+    fs_give((void **)&s);
     return 0;
 }
 
