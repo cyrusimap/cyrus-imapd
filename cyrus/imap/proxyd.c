@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.123 2002/05/29 19:42:04 rjs3 Exp $ */
+/* $Id: proxyd.c,v 1.124 2002/06/02 15:25:42 ken3 Exp $ */
 
 #undef PROXY_IDLE
 
@@ -4485,7 +4485,6 @@ void cmd_starttls(char *tag, int imaps)
     result=tls_init_serverengine("imap",
 				 5,        /* depth to verify */
 				 !imaps,   /* can client auth? */
-				 0,        /* require client to auth? */
 				 !imaps);  /* TLSv1 only? */
 
     if (result == -1) {

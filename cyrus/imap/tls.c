@@ -93,7 +93,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.36 2002/05/20 20:33:46 rjs3 Exp $ */
+/* $Id: tls.c,v 1.37 2002/06/02 15:25:42 ken3 Exp $ */
 
 #include <config.h>
 
@@ -562,7 +562,6 @@ static int tls_rand_init(void)
 int     tls_init_serverengine(const char *ident,
 			      int verifydepth,
 			      int askcert,
-			      int requirecert,
 			      int tlsonly)
 {
     int     off = 0;
@@ -573,6 +572,7 @@ int     tls_init_serverengine(const char *ident,
     const char   *CAfile;
     const char   *s_cert_file;
     const char   *s_key_file;
+    int    requirecert;
     int    timeout;
 
     if (tls_serverengine)
@@ -694,6 +694,10 @@ int     tls_init_serverengine(const char *ident,
     verify_depth = verifydepth;
     if (askcert!=0)
 	verify_flags |= SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE;
+
+    sprintf(buf, "tls_%s_require_cert", ident);
+    requirecert = config_getswitch(buf,
+				   config_getstring("tls_require_cert", 0));
     if (requirecert)
 	verify_flags |= SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT
 	    | SSL_VERIFY_CLIENT_ONCE;

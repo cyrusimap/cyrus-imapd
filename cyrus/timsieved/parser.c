@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.19 2002/05/24 19:02:05 rjs3 Exp $
+ * $Id: parser.c,v 1.20 2002/06/02 15:25:44 ken3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -669,7 +669,6 @@ static int cmd_starttls(struct protstream *sieved_out, struct protstream *sieved
     result=tls_init_serverengine("sieve",
 				 5,        /* depth to verify */
 				 1,        /* can client auth? */
-				 0,        /* require client to auth? */
 				 1);       /* TLS only? */
 
     if (result == -1) {
