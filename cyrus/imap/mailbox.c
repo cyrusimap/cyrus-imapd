@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.136 2002/08/23 17:59:25 rjs3 Exp $
+ $Id: mailbox.c,v 1.137 2002/08/29 14:21:37 ken3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1162,8 +1162,6 @@ int mailbox_write_index_header(struct mailbox *mailbox)
     
     assert(mailbox->index_lock_count != 0);
 
-    if (updatenotifier) updatenotifier(mailbox);
-
 #if 0
     if (acappush_sock != -1) {
 	acapmbdata_t acapdata;
@@ -1212,6 +1210,8 @@ int mailbox_write_index_header(struct mailbox *mailbox)
 	/* xxx can we unroll the acap send??? */
 	return IMAP_IOERROR;
     }
+
+    if (updatenotifier) updatenotifier(mailbox);
 
     return 0;
 }
