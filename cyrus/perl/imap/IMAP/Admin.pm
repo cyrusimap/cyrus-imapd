@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Admin.pm,v 1.43 2004/01/15 14:35:35 ken3 Exp $
+# $Id: Admin.pm,v 1.44 2004/02/19 21:31:20 rjs3 Exp $
 
 package Cyrus::IMAP::Admin;
 use strict;
@@ -669,8 +669,10 @@ sub setquota {
 }
 
 sub getinfo {
-  my ($self,$box) = @_;
-
+  my $self = shift;
+  my $box = shift;
+  my @entries = @_;
+  
   if(!defined($box)) {
     $box = "";
   }
@@ -726,8 +728,17 @@ sub getinfo {
 		      -rock => \%info});
 
   # send getannotation "/mailbox/name/* or /server/*"
-  my ($rc, $msg) = $self->send('', '', "GETANNOTATION %s \"*\" \"value.shared\"",
-			       $box);
+  my($rc, $msg);
+  if(scalar(@entries)) {
+    foreach my $annot (@entries) {
+      ($rc, $msg) = $self->send('', '', "GETANNOTATION %s %q \"value.shared\"",
+				$box, $annot);
+      last if($rc ne 'OK');
+    }
+  } else {
+    ($rc, $msg) = $self->send('', '', "GETANNOTATION %s \"*\" \"value.shared\"",
+			      $box);
+  }
   $self->addcallback({-trigger => 'ANNOTATION'});
   if ($rc eq 'OK') {
     $self->{error} = undef;
