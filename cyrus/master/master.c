@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.42 2001/07/16 18:23:11 leg Exp $ */
+/* master.c,v 1.42 2001/07/16 18:23:11 leg Exp */
 
 #include <config.h>
 
@@ -147,15 +147,29 @@ int become_cyrus(void)
 {
     struct passwd *p;
     static int uid = 0;
+    static int gid = 0;
 
     if (uid) return setuid(uid);
 
     p = getpwnam(CYRUS_USER);
     if (p == NULL) {
-	syslog(LOG_ERR, "no entry in /etc/passwd for %s", CYRUS_USER);
+	syslog(LOG_ERR, "no entry in /etc/passwd for user %s", CYRUS_USER);
 	return -1;
     }
     uid = p->pw_uid;
+    gid = p->pw_gid;
+
+    if (initgroups(CYRUS_USER, gid)) {
+        syslog(LOG_ERR, "unable to initialize groups for user %s: %s",
+	       CYRUS_USER, strerror(errno));
+        return -1;
+    }
+
+    if (setgid(gid)) {
+        syslog(LOG_ERR, "unable to set set group id to %d for user %s: %s",
+	       uid, CYRUS_USER, strerror(errno));
+        return -1;
+    }
 
     return setuid(uid);
 }
