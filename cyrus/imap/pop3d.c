@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.116 2002/03/18 19:55:30 wcw Exp $
+ * $Id: pop3d.c,v 1.117 2002/03/27 16:02:55 ken3 Exp $
  */
 #include <config.h>
 
@@ -114,7 +114,8 @@ struct mailbox *popd_mailbox = 0;
 struct sockaddr_in popd_localaddr, popd_remoteaddr;
 int popd_haveaddr = 0;
 char popd_clienthost[250] = "[local]";
-struct protstream *popd_out, *popd_in;
+struct protstream *popd_out = NULL;
+struct protstream *popd_in = NULL;
 unsigned popd_exists = 0;
 unsigned popd_highest;
 unsigned popd_login_time;
@@ -250,6 +251,7 @@ static void popd_reset(void)
     prot_flush(popd_out);
     if (popd_in) prot_free(popd_in);
     if (popd_out) prot_free(popd_out);
+    popd_in = popd_out = NULL;
     close(0);
     close(1);
     close(2);
@@ -495,8 +497,10 @@ void fatal(const char* s, int code)
 	exit(recurse_code);
     }
     recurse_code = code;
-    prot_printf(popd_out, "-ERR [SYS/PERM] Fatal error: %s\r\n", s);
-    prot_flush(popd_out);
+    if (popd_out) {
+	prot_printf(popd_out, "-ERR [SYS/PERM] Fatal error: %s\r\n", s);
+	prot_flush(popd_out);
+    }
     shut_down(code);
 }
 
