@@ -1739,6 +1739,7 @@ char *partition;
 {
     int r;
     char mailboxname[MAX_MAILBOX_NAME+1];
+    int autocreatequota;
 
     if (partition && !imapd_userisadmin) {
 	r = IMAP_PERMISSION_DENIED;
@@ -1754,6 +1755,18 @@ char *partition;
     if (!r) {
 	r = mboxlist_createmailbox(mailboxname, MAILBOX_FORMAT_NORMAL,
 				   partition, imapd_userisadmin, imapd_userid);
+
+	if (r == IMAP_PERMISSION_DENIED && !strcasecmp(name, "INBOX") &&
+	    (autocreatequota = config_getint("autocreatequota", 0))) {
+
+	    /* Auto create */
+	    r = mboxlist_createmailbox(mailboxname, MAILBOX_FORMAT_NORMAL,
+				       partition, 1, imapd_userid);
+	    
+	    if (!r && autocreatequota > 0) {
+		(void) mboxlist_setquota(mailboxname, autocreatequota);
+	    }
+	}
     }
 
     if (imapd_mailbox) {
