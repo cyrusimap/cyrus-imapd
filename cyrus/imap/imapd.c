@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.398.2.75 2003/05/21 15:54:34 ken3 Exp $ */
+/* $Id: imapd.c,v 1.398.2.76 2003/05/21 16:26:56 ken3 Exp $ */
 
 #include <config.h>
 
@@ -1618,8 +1618,8 @@ void cmd_login(char *tag, char *user)
 	}
     }
     else if ((r = sasl_checkpass(imapd_saslconn,
-				 user,
-				 strlen(user),
+				 canon_user,
+				 strlen(canon_user),
 				 passwd,
 				 strlen(passwd))) != SASL_OK) {
 	syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
