@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.14 2004/02/06 17:07:39 ken3 Exp $
+ * $Id: nntpd.c,v 1.15 2004/02/19 15:39:29 ken3 Exp $
  */
 
 /*
@@ -2527,7 +2527,7 @@ static void cmd_list(char *arg1, char *arg2)
 	return;
     }
     else if (!strcmp(arg1, "headers")) {
-	if (arg2) {
+	if (arg2 && strcmp(arg2, "msgid")) {
 	    prot_printf(nntp_out, "501 Unexpected extra argument\r\n");
 	    return;
 	}
