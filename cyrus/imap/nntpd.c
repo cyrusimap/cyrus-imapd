@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.1.2.48 2002/12/18 18:13:46 ken3 Exp $
+ * $Id: nntpd.c,v 1.1.2.49 2002/12/18 21:04:16 ken3 Exp $
  */
 
 /*
@@ -494,7 +494,7 @@ void fatal(const char* s, int code)
     }
     recurse_code = code;
     if (nntp_out) {
-	prot_printf(nntp_out, "400 Fatal error: %s\r\n", s);
+	prot_printf(nntp_out, "205 Fatal error: %s\r\n", s);
 	prot_flush(nntp_out);
     }
     shut_down(code);
