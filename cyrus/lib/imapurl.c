@@ -39,7 +39,7 @@
  *
  * derived from chris newman's code */
 
-/* $Id: imapurl.c,v 1.7 2002/02/01 19:43:36 rjs3 Exp $ */
+/* $Id: imapurl.c,v 1.8 2003/02/04 20:26:47 leg Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -183,7 +183,7 @@ static void URLtoMailbox(char *dst, char *src)
     utf7mode = 0;
     utf8total = 0;
     bitstogo = 0;
-    while ((c = *src) != '\0') {
+    while ((c = (unsigned char)*src) != '\0') {
         ++src;
         /* undo hex-encoding */
         if (c == '%' && src[0] != '\0' && src[1] != '\0') {
