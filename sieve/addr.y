@@ -2,7 +2,7 @@
 /*
  * addr.y -- RFC 822 address parser
  * Ken Murchison
- * $Id: addr.y,v 1.7 2002/10/28 16:30:18 ken3 Exp $
+ * $Id: addr.y,v 1.8 2002/12/03 18:45:19 rjs3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -31,7 +31,8 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <string.h>
 
 #include "addr.h"
-
+#include "script.h"
+    
 int yyerror(char *msg);
 extern int yylex(void);
 
@@ -82,8 +83,6 @@ qstring: '"' QTEXT '"'
 /* copy address error message into buffer provided by sieve parser */
 int yyerror(char *s)
 {
-extern char addrerr[];
-
-    strcpy(addrerr, s);
+    strlcpy(addrerr, s, sizeof(addrerr));
     return 0;
 }
