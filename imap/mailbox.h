@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- $Id: mailbox.h,v 1.71 2003/01/08 17:40:17 rjs3 Exp $
+ $Id: mailbox.h,v 1.72 2003/02/10 21:04:02 leg Exp $
  *
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -112,9 +112,9 @@ struct mailbox {
     int seen_lock_count;
     int pop_lock_count;
 
-    unsigned long header_ino;
+    ino_t header_ino;
     time_t index_mtime;
-    unsigned long index_ino;
+    ino_t index_ino;
     off_t index_size;
 
     /* Information in mailbox list */

@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.189 2003/01/11 18:45:14 rjs3 Exp $
+ * $Id: index.c,v 1.190 2003/02/10 21:04:00 leg Exp $
  */
 #include <config.h>
 
@@ -90,7 +90,7 @@ static unsigned long cache_len;
 static unsigned long cache_end;
 
 /* Attributes of memory-mapped index file */
-static long index_ino;
+static ino_t index_ino;
 static unsigned long start_offset;
 static unsigned long record_size;
 
