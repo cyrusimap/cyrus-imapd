@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.113 1998/06/10 01:51:39 tjs Exp $
+dnl $Id: configure.in,v 1.114 1998/07/06 23:13:29 tjs Exp $
 dnl
 
 AC_INIT(imap/imapd.c)
@@ -18,6 +18,7 @@ AC_SUBST(cyrus_prefix)
 AC_ARG_WITH(cyrus-user,[  --with-cyrus-user=USERID   use USERID cyrus userid],
 	cyrus_user="$withval",cyrus_user="cyrus")
 AC_SUBST(cyrus_user)
+AC_DEFINE_UNQUOTED(CYRUS_USER, "$cyrus_user")
 AC_ARG_WITH(cyrus-group,[  --with-cyrus-group=GROUPID use GROUPID cyrus group],
 	cyrus_group="$withval",cyrus_group="mail")
 AC_SUBST(cyrus_group)
@@ -482,18 +483,59 @@ dnl Checking for Tcl first puts -lm before -lkrb on the library list.
 dnl
 dnl Check for some information from the user
 AC_ARG_WITH(tcl,[  --with-tcl=PATH         use Tcl from PATH],
-	TclLibBase="${withval}")
+	TclLibBase="${withval}/lib")
+AC_ARG_WITH(tclsh,[  --with-tclsh=TCLSH      use TCLSH as the tclsh program],
+	TCLSH="${withval}")
 dnl $TCL_SUBDIRS is nonempty if we are using Tcl.
 if test "$TCL_SUBDIRS" != ""; then
+  # Run tclsh and ask it where it lives.
   if test -z "$TclLibBase"; then
-    AC_MSG_CHECKING([where Tcl says it lives])
-    [TclLibBase=`echo puts \\\$tcl_library | tclsh | sed -e 's,[^/]*$,,'`]
-    AC_MSG_RESULT($TclLibBase)
+
+    # Did the user tell us where to find tclsh?
+    if test -z "$TCLSH"; then
+      # Try and find tclsh.
+      AC_PATH_PROGS(TCLSH, [tclsh tclsh8.0], unknown)
+    fi
+
+    # If we know where to get a tclsh,
+    if test "${TCLSH}" != "unknown"; then
+      AC_MSG_CHECKING([where Tcl says it lives])
+      TclLibBase=`echo puts \\\$tcl_library | ${TCLSH} | sed -e 's,[^/]*$,,'`
+      AC_MSG_RESULT($TclLibBase)
+    else
+      AC_MSG_WARN([Couldn't find "tclsh"; use --with-tclsh switch (or --with-tcl).])
+    fi
   fi
 
   if test "$TclLibBase" != ""; then
+    # See if Tcl really lives there.
+    # It looks like under 7.5, it does -- and under 8.0, it lives elsewhere.
+    # That's "bad", as far as I know.
+    AC_MSG_CHECKING([if tclsh knows where tclConfig.sh is])
+    if test -e ${TclLibBase}tclConfig.sh ; then
+      AC_MSG_RESULT([yes])
+    else
+      AC_MSG_RESULT([no])
+      AC_MSG_WARN([tclsh does not really know where its install is.])
+      AC_MSG_WARN([The configure script will try and guess where it is.])
+      AC_MSG_CHECKING([a tclConfig.sh in likely places])
+      # Whee!  Okay, let's guess -- maybe it's in ../tclConfig.sh, which is
+      # likely on some of the warped tcl8 systems I tried.
+      if test -e "${TclLibBase}/../tclConfig.sh" ; then
+        TclLibBase="${TclLibBase}/.."
+      # possibly others for other creative vendors
+      else
+        AC_MSG_RESULT("unknown")
+        AC_MSG_WARN([tclsh was found, but tclConfig.sh could not be located.])
+        AC_MSG_WARN([Either your Tcl install was too old to be usable,])
+        AC_MSG_WARN([or tclsh doesn't know where it's supposed to live.])
+        AC_MSG_ERROR([Fix the Tcl install or reconfigure with --disable-cyradm.])
+      fi
+      AC_MSG_RESULT(${TclLibBase}/)
+    fi
+
     AC_MSG_CHECKING([with Tcl on how it says it should be compiled])
-    . ${TclLibBase}tclConfig.sh
+    . ${TclLibBase}/tclConfig.sh
     dnl no TK stuff for us.
     dnl . ${TclLibBase}tkConfig.sh
 
@@ -506,6 +548,7 @@ if test "$TCL_SUBDIRS" != ""; then
     AC_SUBST(TCL_CPPFLAGS)dnl
 
     AC_MSG_RESULT([ok])
+
   else
    AC_MSG_RESULT([can't find tclsh])
 
@@ -634,17 +677,16 @@ if test -z "$with_com_err"; then
 		with_com_err=yes
 	fi
 	])
-	
-fi
 
-if test "${with_com_err}" = "no"; then
-  AC_MSG_WARN([com_err is required; included version will be used.])
-  with_com_err="yes"
-fi
-if test "${COMPILE_ET}" = "no compile et" -o "${COMPILE_ET}" = ""; then
-  AC_MSG_WARN([Parts of com_err distribuion were found, but not compile_et.])
-  AC_MSG_WARN([Will build com_err from included sources.])
-  with_com_err="yes" # build it ourselves
+	if test "${with_com_err}" = "no"; then
+	  AC_MSG_WARN([com_err is required; included version will be used.])
+	  with_com_err="yes"
+	fi
+	if test "${COMPILE_ET}" = "no compile et" -o "${COMPILE_ET}" = ""; then
+	  AC_MSG_WARN([Parts of com_err distribuion were found, but not compile_et.])
+	  AC_MSG_WARN([Will build com_err from included sources.])
+	  with_com_err="yes" # build it ourselves
+	fi
 fi
 
 case "$with_com_err" in
