@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.144.2.21 2004/05/05 15:44:26 ken3 Exp $
+ * $Id: pop3d.c,v 1.144.2.22 2004/05/16 21:51:27 ken3 Exp $
  */
 #include <config.h>
 
@@ -196,9 +196,10 @@ static int popd_canon_user(sasl_conn_t *conn, void *context,
     size_t n;
     int r;
 
+    if (!ulen) ulen = strlen(user);
+
     if (config_getswitch(IMAPOPT_POPSUBFOLDERS)) {
 	/* make a working copy of the auth[z]id */
-	if (!ulen) ulen = strlen(user);
 	memcpy(userbuf, user, ulen);
 	userbuf[ulen] = '\0';
 	user = userbuf;
