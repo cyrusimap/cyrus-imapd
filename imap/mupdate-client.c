@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.19 2002/02/02 21:23:21 leg Exp $
+ * $Id: mupdate-client.c,v 1.20 2002/02/02 21:24:04 leg Exp $
  * Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -602,7 +602,7 @@ int mupdate_scarf(mupdate_handle *handle,
     struct mupdate_mailboxdata box;
     int r = 0;
 
-    if (!handle || !callback) return 1;
+    if (!handle || !callback) return MUPDATE_BADPARAM;
 
     /* keep going while we have input or if we're waiting for an OK */
     while (!r) {
@@ -619,7 +619,7 @@ int mupdate_scarf(mupdate_handle *handle,
 	    /* this was just "no input" we return 0 */
 	    goto done;
 	} else {
-	    /* this was a fatal error, return 1 */
+	    /* this was a fatal error */
 	    r = MUPDATE_NOCONN;
 	    goto done;
 	}
