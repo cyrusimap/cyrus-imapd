@@ -298,11 +298,12 @@ char *userid;
 		free(acl);
 		return IMAP_PERMISSION_DENIED;
 	    }
-	    acl_set(&acl, name+5, ACL_ALL);
+	    acl_set(&acl, name+5, ACL_ALL, (long (*)())0, (char *)0);
 	}
 	else {
 	    /* XXX config_getstring("defaultacl", ... */
-	    acl_set(&acl, "anybody", ACL_LOOKUP|ACL_READ|ACL_SEEN);
+	    acl_set(&acl, "anybody", ACL_LOOKUP|ACL_READ|ACL_SEEN,
+		    (long (*)())0, (char *)0);
 	}
 
 	if (!partition) {  
