@@ -1250,7 +1250,7 @@ char *name;
 		"WRITE" : "ONLY", cmd);
 
     proc_register("imapd", imapd_clienthost, imapd_userid, mailboxname);
-    syslog(LOG_INFO, "open: user %s opened %s", imapd_userid, name);
+    syslog(LOG_DEBUG, "open: user %s opened %s", imapd_userid, name);
 }
 	  
 /*
