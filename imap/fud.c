@@ -27,7 +27,7 @@
  *
  */
 
-/* $Id: fud.c,v 1.5 1998/06/24 15:33:51 dar Exp $ */
+/* $Id: fud.c,v 1.6 1998/06/24 20:24:36 dar Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -118,6 +118,11 @@ begin_handling()
         int     off;
         
         while(1) {
+            /* For safety */
+            memset(username,'\0',MAXLOGNAME);	
+            memset(mbox,'\0',MAX_MAILBOX_NAME+1);
+            memset(buf, '\0', MAXLOGNAME + MAX_MAILBOX_NAME + 1);
+
             r = recvfrom(soc, buf, 511, 0, (struct sockaddr *) &sfrom, &sfromsiz);
             if(r == -1)
                     return(errno);
@@ -131,10 +136,6 @@ begin_handling()
             strncpy(mbox,q,(r - (off + 1)  < MAX_MAILBOX_NAME) ? r - (off + 1) : MAX_MAILBOX_NAME);
 
             handle_request(username,mbox,sfrom);
-
-            /* For safety */
-            memset(username,'\0',off);	
-            memset(mbox,'\0',r - off - 1);
         }
 }
 
