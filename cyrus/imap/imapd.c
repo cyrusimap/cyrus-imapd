@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.489 2004/12/17 16:32:08 ken3 Exp $ */
+/* $Id: imapd.c,v 1.490 2005/02/14 06:39:55 shadow Exp $ */
 
 #include <config.h>
 
@@ -3775,12 +3775,16 @@ void cmd_delete(char *tag, char *name, int localonly)
 
 	/* take care of deleting ACLs, subscriptions, seen state and quotas */
 	*p = '\0'; /* clip off pattern */
-	if (domainlen) {
-	    /* fully qualify the userid */
-	    sprintf(p, "@%.*s", domainlen-1, mailboxname);
+	if ((!domainlen) || 
+	    (domainlen+1 < (sizeof(mailboxname) - mailboxname_len))) {
+	    if (domainlen) {
+		/* fully qualify the userid */
+		snprintf(p, (sizeof(mailboxname) - mailboxname_len), "@%.*s", 
+			 domainlen-1, mailboxname);
+	    }
+	    user_deletedata(mailboxname+domainlen+5, imapd_userid,
+			    imapd_authstate, 1);
 	}
-	user_deletedata(mailboxname+domainlen+5, imapd_userid,
-			imapd_authstate, 1);
     }
 
     if (imapd_mailbox) {
@@ -3813,8 +3817,8 @@ static int renmbox(char *name,
 		   int maycreate __attribute__((unused)),
 		   void *rock)
 {
-    char oldextname[MAX_MAILBOX_NAME];
-    char newextname[MAX_MAILBOX_NAME];
+    char oldextname[MAX_MAILBOX_NAME+1];
+    char newextname[MAX_MAILBOX_NAME+1];
     struct renrock *text = (struct renrock *)rock;
     int r;
 

@@ -1,12 +1,20 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.97 2004/11/23 17:52:50 shadow Exp $ -->
+<!-- $Id: changes.html,v 1.98 2005/02/14 06:39:54 shadow Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
 <title>Changes to the Cyrus IMAP Server</title>
 </head>
 <body>
+
+<h1>Changes to the Cyrus IMAP Server since 2.2.10</h1>
+<ul>
+<li>Fix possible single byte overflow in mailbox handling code.</li>
+<li>Fix possible single byte overflows in the imapd annotate extension.</li>
+<li>Fix stack buffer overflows in fetchnews (exploitable by peer news server),
+backend (exploitable by admin), and in imapd (exploitable by users though only on platforms where a filename may be larger than a mailbox name).</li>
+</ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.2.9</h1>
 <ul>
@@ -1990,7 +1998,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2004/11/23 17:52:50 $ <br />
+last modified: $Date: 2005/02/14 06:39:54 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.34 2005/01/20 19:57:25 rjs3 Exp $ */
+/* $Id: backend.c,v 1.35 2005/02/14 06:39:55 shadow Exp $ */
 
 #include <config.h>
 
@@ -297,7 +297,7 @@ struct backend *backend_connect(struct backend *ret, const char *server,
  	sunsock.sun_len = res0->ai_addrlen;
 #endif
 	sunsock.sun_family = AF_UNIX;
-	strcpy(sunsock.sun_path, server);
+	strlcpy(sunsock.sun_path, server, sizeof(sunsock.sun_path));
 
 	/* XXX set that we are preauthed */
 
