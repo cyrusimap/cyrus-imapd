@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.33 2003/12/15 20:00:37 ken3 Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.34 2004/01/07 20:08:43 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -14,7 +14,10 @@
 using <tt>imapd.conf</tt> options.  If you are not using the default
 backend for any of the databases, make sure that you specify the
 correct backend(s) in appropriate option(s).</li>
-
+<li>The format of the <tt>newspeer</tt> option has been changed.
+The existing format will still be parsed, but the option should be
+upgraded to use the new format (see <tt>imapd.conf(5)</tt> for
+details).</li>
 </ul>
 
 <h2>Upgrading from 2.2.1 or earlier</h2>
@@ -421,7 +424,7 @@ worry about it.)
 </ul>
 
 <HR><P>
-last modified: $Date: 2003/12/15 20:00:37 $
+last modified: $Date: 2004/01/07 20:08:43 $
 </BODY></HTML>
 
 
