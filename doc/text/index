@@ -30,18 +30,6 @@ The Cyrus IMAP Server Distribution
       * Installing the Cyrus IMAP Server 
       * Changes since the last release 
       * Frequently Asked Questions 
-
-    Man Pages 
-
-      * collectnews(8) 
-      * cyradm(1) 
-      * deliver(8) 
-      * imapd(8) 
-      * imapd.conf(5) 
-      * krb.equiv(5) 
-      * pop3d(8) 
-      * quota(8) 
-      * reconstruct(8) 
-      * rmnews(8) 
-      * syncnews(8) 
+      * Man Pages 
+      * Protocol Specifications 
 

@@ -16,10 +16,8 @@
 
 Features
 
-    The Cyrus server supports the IMAP4rev1 protocol described in RFC 2060,
-    with the exception that it does not currently support the hierarchical
-    behavior of the RENAME command. IMAP4rev1 has been approved as a
-    proposed standard. 
+    The Cyrus server supports the IMAP4rev1 protocol described in RFC 2060.
+    IMAP4rev1 has been approved as a proposed standard. 
 
     Character sets supported for searching are: us-ascii, iso-8859-1,
     iso-8859-2, iso-8859-3, iso-8859-4, iso-8859-5, iso-8859-6, iso-8859-7,
