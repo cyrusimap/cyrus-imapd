@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Admin.pm,v 1.28.2.2 2002/08/19 14:54:07 ken3 Exp $
+# $Id: Admin.pm,v 1.28.2.3 2002/08/21 18:54:19 rjs3 Exp $
 
 package Cyrus::IMAP::Admin;
 use strict;
@@ -679,7 +679,7 @@ sub getinfo {
 			my $text = $d{-text};
 
 			if($text =~ /^\(.*\)$/) {
-			  # list of annotations
+			  # list of annotations (old style)
 			  $text =~ s/^\(//;
 			  
 			  while($text !~ /^\)/) {
