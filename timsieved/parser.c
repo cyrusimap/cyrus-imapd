@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.15 2002/02/14 16:22:28 rjs3 Exp $
+ * $Id: parser.c,v 1.16 2002/02/16 20:56:56 rjs3 Exp $
  */
 /*
  * Copyright (c) 1999-2000 Carnegie Mellon University.  All rights reserved.
@@ -108,7 +108,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
   /* If we have a referral host, no matter what the command is, we want
    * to send them there */
   /* note that referral_host is only non-NULL if we are authenticated */
-  if(referral_host) {
+  if(referral_host && token != LOGOUT) {
       char buf[4096];
       char *c;
 
@@ -186,7 +186,8 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 
     if (authenticated)
 	prot_printf(sieved_out, "NO \"Already authenticated\"\r\n");
-    else if (cmd_authenticate(sieved_out, sieved_in, mechanism_name, initial_challenge, &error_msg)==FALSE)
+    else if (cmd_authenticate(sieved_out, sieved_in, mechanism_name,
+			      initial_challenge, &error_msg)==FALSE)
     {
 	error_msg = "Authentication Error";
 	goto error;
@@ -239,17 +240,20 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
       break;
 
   case LOGOUT:
-    if (timlex(NULL, NULL, sieved_in)!=EOL)
-    {
-      error_msg = "Garbage after logout command";
-      goto error;
-    }
+      token = timlex(NULL, NULL, sieved_in);
+      
+      /* timlex() will return LOGOUT when the remote disconnects badly */
+      if (token!=EOL && token!=EOF && token!=LOGOUT)
+      {
+	  error_msg = "Garbage after logout command";
+	  goto error;
+      }
 
-    cmd_logout(sieved_out, sieved_in);
-
-    ret = TRUE;
-    goto done;
-    break;
+      cmd_logout(sieved_out, sieved_in);
+      
+      ret = TRUE;
+      goto done;
+      break;
 
   case GETSCRIPT:
     if (timlex(NULL, NULL, sieved_in)!=SPACE)
@@ -416,7 +420,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 void cmd_logout(struct protstream *sieved_out,
 		struct protstream *sieved_in __attribute__((unused)))
 {
-    prot_printf(sieved_out, "Ok \"Logout Complete\"\r\n");
+    prot_printf(sieved_out, "OK \"Logout Complete\"\r\n");
     prot_flush(sieved_out);
 }
 
