@@ -1,6 +1,0 @@
-Makefile.PL		Build Makefile for Cyrus::sieve::acap
-acap.h			include file
-acap.pm			Cyrus::sieve::acap perl module
-acap.xs			Perl interface routines for calling C
-typemap			Typemap defining Perl "class"
-MANIFEST		This file
