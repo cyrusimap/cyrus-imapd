@@ -1,4 +1,4 @@
-<!-- $Id: changes.html,v 1.50 1998/08/15 14:59:10 wcw Exp $ -->
+<!-- $Id: changes.html,v 1.51 1998/08/16 10:48:12 wcw Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Changes to the Cyrus IMAP Server</TITLE>
@@ -14,9 +14,7 @@ draft-gellens-pop3ext-06.txt.
 characters when it shouldn't have.  (Thanks to John Myers for providing a fix
 and to Per Steinar Iversen for telling me that I didn't do it before.)
 
-<li> Reduced the number of key collisions in auth_krb_pts.c. It appers that
-the Kerberos session key was conflicting with plaintext login ids. Other 
-minor cleanup was also done with this section of the code.
+<li> More cleanup the ptloader/auth_krb_pts code.
 
 <h2> Changes to the Cyrus IMAP Server Since Version 1.5.11</h2>
 
@@ -582,7 +580,7 @@ restore tab before breaking out of loop.
 </ul>
 <P><HR><P>
 <!-- hhmts start -->
-last modified by tjs at Fri Aug  7 02:40:05 1998
+Last modified: Sun Aug 16 06:46:52 EDT 
 <!-- hhmts end -->
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
