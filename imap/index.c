@@ -628,6 +628,53 @@ int nflags;
 }
 
 /*
+ * Performs a SEARCH command
+ */
+index_search(mailbox, searchargs)
+struct mailbox *mailbox;
+struct searchargs *searchargs;
+{
+    int hits = 0;
+    int msgno, start=1, end=imapd_exists;
+    int seen_matters = (searchargs->seen_state != SEARCH_DONTCARE);
+    int seenstate = (searchargs->seen_state == SEARCH_SET);
+    int i;
+
+    if (searchargs->recent_state == SEARCH_SET) {
+	start = lastnotrecent+1;
+    }
+    else if (searchargs->recent_state == SEARCH_UNSET) {
+	end = lastnotrecent;
+    }
+
+    for (msgno = start; msgno <= end; msgno++) {
+	if (seen_matters && seenstate != seenflag[msgno]) continue;
+
+	if (searchargs->after && INTERNALDATE(msgno) < searchargs->after)
+	  continue;
+	if (searchargs->before && INTERNALDATE(msgno) > searchargs->before)
+	  continue;
+
+	if (~SYSTEM_FLAGS(msgno) & searchargs->system_flags_set) continue;
+	if (SYSTEM_FLAGS(msgno) & searchargs->system_flags_unset) continue;
+	
+	for (i = 0; i < MAX_USER_FLAGS/32; i++) {
+	    if (~USER_FLAGS(msgno,i) & searchargs->user_flags_set[i])
+	      break;
+	    if (USER_FLAGS(msgno,i) & searchargs->user_flags_unset[i])
+	      break;
+	}
+	if (i != MAX_USER_FLAGS/32) continue;
+
+	if (!hits++) {
+	    printf("* SEARCH");
+	}
+	printf(" %d", msgno);
+    }
+    if (hits) printf("\r\n");
+}
+
+/*
  * Returns the msgno of the message with UID 'uid'.
  * If no message with UID 'uid', returns the message with
  * the higest UID not greater than 'uid'.
