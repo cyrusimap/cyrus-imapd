@@ -1,5 +1,5 @@
 /* imclient.c -- Streaming IMxP client library
- $Id: imclient.c,v 1.31 1999/08/20 18:51:00 leg Exp $
+ $Id: imclient.c,v 1.32 1999/08/20 19:43:08 leg Exp $
  
  #        Copyright 1998 by Carnegie Mellon University
  #
@@ -1179,9 +1179,7 @@ int imclient_authenticate(struct imclient *imclient,
   imclient_send(imclient, authresult, (void *)&result,
 		"AUTHENTICATE %a", mechusing);
 
-  while (1)
-  {
-
+  while (1) {
     /* Wait for ready response or command completion */
     imclient->readytag = imclient->gensym;
     while (imclient->readytag) {
@@ -1197,30 +1195,38 @@ int imclient_authenticate(struct imclient *imclient,
 	inlen = imclient_decodebase64(imclient->readytxt);
     }
 
-    /* perform a step */
-    saslresult=SASL_INTERACT;
-    while (saslresult==SASL_INTERACT)
-    {
-      saslresult=sasl_client_step(imclient->saslconn,
-				  imclient->readytxt,
-				  inlen, 
-				  &client_interact,
-				  &out,
-				  &outlen);
-
-      if (saslresult==SASL_INTERACT) {
-	  fillin_interactions(client_interact, user); /* fill in prompts */
-      }
+    if (inlen == 0 && outlen > 0) {
+	/* we have something from the initial thing to send */
+    } else {
+	/* perform a step */
+	saslresult=SASL_INTERACT;
+	while (saslresult==SASL_INTERACT) {
+	    saslresult=sasl_client_step(imclient->saslconn,
+					imclient->readytxt,
+					inlen, 
+					&client_interact,
+					&out,
+					&outlen);
+	    
+	    if (saslresult==SASL_INTERACT) {
+		/* fill in prompts */
+		fillin_interactions(client_interact, user); 
+	    }
+	}
     }
 
     /* send to server */
     /* Send our reply to the server */
-    if ((saslresult==SASL_OK) || (saslresult==SASL_CONTINUE))
+    if ((saslresult==SASL_OK) || (saslresult==SASL_CONTINUE)) {
       imclient_writebase64(imclient, out, outlen);
+    } else {
+	return saslresult;
+    }
 
     if (outlen > 0) { 
 	free(out); 
     }
+    outlen = 0;
   }
   
   imclient->saslcompleted=1;
