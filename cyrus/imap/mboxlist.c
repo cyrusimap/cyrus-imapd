@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.10 2002/07/24 14:42:55 ken3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.11 2002/07/24 16:20:09 ken3 Exp $
  */
 
 #include <config.h>
@@ -791,7 +791,9 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 		  ((p = strstr(name, "!user.")) && (p += 6))) &&
 		  !strchr(p, '.')) { 
 	/* Can't DELETE INBOX (your own inbox) */
-	if (userid && !strcmp(p, userid)) {
+	if (userid && !strncmp(p, userid,
+			       config_virtdomains ? strcspn(userid, "@") :
+			       strlen(userid))) {
 	    r = IMAP_MAILBOX_NOTSUPPORTED;
 	    goto done;
 	}
@@ -998,8 +1000,9 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	}
     } else if (((!strncmp(oldname, "user.", 5) && (p = oldname+5)) ||
 		  ((p = strstr(oldname, "!user.")) && (p += 6))) &&
-		  !strchr(p, '.')) { 
-	if (!strcmp(p, userid)) {
+		  !strchr(p, '.')) {
+	if (!strncmp(p, userid, config_virtdomains ? strcspn(userid, "@") :
+		     strlen(userid))) {
 	    /* Special case of renaming inbox */
 	    access = cyrus_acl_myrights(auth_state, oldacl);
 	    if (!(access & deleteright)) {

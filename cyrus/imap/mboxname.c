@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- * $Id: mboxname.c,v 1.25.4.5 2002/07/20 01:18:22 ken3 Exp $
+ * $Id: mboxname.c,v 1.25.4.6 2002/07/24 16:20:10 ken3 Exp $
  * Copyright (c)1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -495,9 +495,8 @@ int mboxname_userownsmailbox(const char *userid, const char *name)
     char inboxname[MAX_MAILBOX_NAME+1];
 
     if (!mboxname_tointernal(&internal, "INBOX", userid, inboxname) &&
-		 !strncmp(name, inboxname, strlen(inboxname)) &&
-		 (name[strlen(inboxname)] == '\0' ||
-		  name[strlen(inboxname)] == '.')) {
+	!strncmp(name, inboxname, strlen(inboxname)) &&
+	(name[strlen(inboxname)] == '\0' || name[strlen(inboxname)] == '.')) {
 	return 1;
     }
     return 0;
