@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.20 2001/03/14 18:22:15 ken3 Exp $ */
+/* $Id: service.c,v 1.21 2001/03/14 22:39:35 leg Exp $ */
 #include <config.h>
 
 #include <stdio.h>
@@ -51,6 +51,7 @@
 #endif
 #include <fcntl.h>
 #include <signal.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/stat.h>

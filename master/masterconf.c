@@ -1,5 +1,5 @@
 /* masterconfig.c -- Configuration routines for master process
- $Id: masterconf.c,v 1.4 2000/05/23 20:56:30 robeson Exp $
+ $Id: masterconf.c,v 1.5 2001/03/14 22:39:35 leg Exp $
  
  * Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -47,7 +47,6 @@
 #include <string.h>
 #include <ctype.h>
 #include <syslog.h>
-#include <com_err.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sysexits.h>
