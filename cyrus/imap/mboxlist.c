@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.221 2003/10/22 18:50:08 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.221.2.1 2003/11/04 16:27:32 ken3 Exp $
  */
 
 #include <config.h>
@@ -779,7 +779,10 @@ int mboxlist_insertremote(const char *name, int mbtype,
 
     assert(name != NULL && host != NULL);
 
-    mboxent = mboxlist_makeentry(mbtype | MBTYPE_REMOTE, host, acl);
+    /* make sure its a remote mailbox */
+    if (strchr(host, '!')) mbtype |= MBTYPE_REMOTE;
+
+    mboxent = mboxlist_makeentry(mbtype, host, acl);
 
     /* database put */
     r = DB->store(mbdb, name, strlen(name), mboxent, strlen(mboxent), tid);
