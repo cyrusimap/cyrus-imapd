@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.10 2002/03/29 23:29:51 rjs3 Exp $
+ * $Id: mbdump.c,v 1.11 2002/04/04 17:48:22 rjs3 Exp $
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -465,8 +465,8 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
 	/* free strings for user_data_files */
     } /* end if user */
 
- done:
     prot_printf(pout,")\r\n");
+ done:
     prot_flush(pout);
 
     mailbox_close(&mb);
