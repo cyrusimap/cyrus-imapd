@@ -25,32 +25,28 @@
 #include <ctype.h>
 #include <sysexits.h>
 #include <krb.h>
-#include <syslog.h>
 
-#include <kerberos.h>
+#include <acte.h>
 #include "config.h"
 #include "mailbox.h"
-#include "imapd.h"
 
-static login_setadmin();
+static login_authproc();
+
+extern struct acte_server krb_acte_server;
+
+static char lrealm[REALM_SZ];
 
 /*
  * Kerberos-authenticated login
  */
 
 int
-login_authenticate(user, pass, reply)
+login_plaintext(user, pass, reply)
 char *user;
 char *pass;
 char **reply;
 {
-    static char lrealm[REALM_SZ];
-    AUTH_DAT kdata;
-    char aname[ANAME_SZ];
-    char inst[INST_SZ];
-    char realm[REALM_SZ];
     char *val;
-
 
     if (!lrealm[0]) {
 	if (krb_get_lrealm(lrealm,1)) {
@@ -61,100 +57,114 @@ char **reply;
 	}
     }
 
-    aname[0] = inst[0] = realm[0] = '\0';
-    if (kname_parse(aname, inst, realm, user) != 0) {
+    if (kerberos_verify_password(user, pass, reply) == 0) {
 	return 1;
     }
 
-    if (strncmp(pass, KERBEROS_IDENT, strlen(KERBEROS_IDENT)) == 0) {
-	if (kerberos_read_authenticator(pass+strlen(KERBEROS_IDENT),
-					&kdata, reply) == 0) {
-	    return 1;
-	}
-
-	/* If remote realm, check configuration to ensure they're allowed in */
-	if (realm[0]) {
-	    val = config_getstring("loginrealms", "");
-	    while (*val) {
-		if (!strncasecmp(val, realm, strlen(realm)) &&
-		    (!val[strlen(realm)] || isspace(val[strlen(realm)]))) {
-		    break;
-		}
-		while (*val && !isspace(*val)) val++;
-		while (*val && isspace(*val)) val++;
-	    }
-	    if (!*val) {
-		syslog(LOG_NOTICE,
-		 "badlogin: %s cross-realm login as %s from %s%s%s@%s denied",
-		       imapd_clienthost,
-		       kdata.pname, kdata.pinst[0] ? "." : "",
-		       kdata.pinst, kdata.prealm);
-		*reply = "Cross-realm login denied";
-		return 1;
-	    }
-	}
-
-	/* Logging in as the user in the authenticator? */
-	if (strcmp(kdata.pname, aname) == 0 &&
-	    strcmp(kdata.pinst, inst) == 0 &&
-	    strcmp(kdata.prealm, realm[0] ? realm : lrealm) == 0) {
-
-	    syslog(LOG_NOTICE, "login: %s using kerberos as %s",
-		   imapd_clienthost, user);
-	    login_setadmin(user);
-	    return 0;
-	}
-
-	/* Check for imsp-server proxy login */
-	if (!strcmp(kdata.pname, "imap") && !strcmp(kdata.prealm, lrealm)) {
-	    val = config_getstring("imspservers", "");
-	    while (*val) {
-		if (!strncasecmp(val, inst, strlen(inst)) &&
-		    (!val[strlen(inst)] || val[strlen(inst)] != '.')) {
-		    break;
-		}
-		while (*val && !isspace(*val)) val++;
-		while (*val && isspace(*val)) val++;
-	    }
-	    if (*val) {
-		syslog(LOG_NOTICE, "login: %s proxy from imap.%s@%s as %s",
-		       imapd_clienthost,
-		       inst, lrealm, user);
-		login_setadmin(user);
-		return 0;
-	    }
-	}
-
-	*reply = "Proxy login denied";
-	return 1;
-    }
-
-    if (kerberos_verify_password(user, pass) == 0) {
-	syslog(LOG_NOTICE, "badlogin: %s wrong password for %s",
-	       imapd_clienthost, user);
-	return 1;
-    }
-
-    syslog(LOG_NOTICE, "login: %s plaintext as %s", imapd_clienthost, user);
-    login_setadmin(user);
     return 0;
 }
-  
-static login_setadmin(user)
-char *user;
+
+int
+login_authenticate(authtype, mech, authproc)
+char *authtype;
+struct acte_server **mech;
+int (**authproc)();
 {
     char *val;
 
-    val = config_getstring("admins", "");
-    
-    while (*val) {
-	if (!strncmp(val, user, strlen(user)) &&
-	    (!val[strlen(user)] || isspace(val[strlen(user)]))) {
-	    break;
+    if (strcmp(authtype, "kerberos_v4") != 0) return 1;
+
+    if (!lrealm[0]) {
+	if (krb_get_lrealm(lrealm,1)) {
+	    fatal("can't find local Kerberos realm", EX_OSFILE);
 	}
-	while (*val && !isspace(*val)) val++;
-	while (*val && isspace(*val)) val++;
+	if (val = config_getstring("srvtab", 0)) {
+	    kerberos_set_srvtab(val);
+	}
     }
 
-    imapd_userisadmin = (*val != '\0');
+    *mech = &krb_acte_server;
+    *authproc = login_authproc;
+    return 0;
 }
+
+static int
+login_authproc(user, auth_identity, reply)
+char *user;
+char *auth_identity;
+char **reply;
+{
+    char aname[ANAME_SZ];
+    char inst[INST_SZ];
+    char realm[REALM_SZ];
+    char auth_aname[ANAME_SZ];
+    char auth_inst[INST_SZ];
+    char auth_realm[REALM_SZ];
+    char *val;
+    static char replybuf[100];
+
+    aname[0] = inst[0] = realm[0] = '\0';
+    auth_aname[0] = auth_inst[0] = auth_realm[0] = '\0';
+    if (kname_parse(aname, inst, realm, user) != 0) {
+	*reply = "unparsable user name";
+	return 1;
+    }
+    if (kname_parse(auth_aname, auth_inst, auth_realm, auth_identity) != 0) {
+	*reply = "unparsable Kerberos identity";
+	return 1;
+    }
+
+    /* If remote realm, check configuration to ensure they're allowed in */
+    if (realm[0]) {
+	val = config_getstring("loginrealms", "");
+	while (*val) {
+	    if (!strncasecmp(val, realm, strlen(realm)) &&
+		(!val[strlen(realm)] || isspace(val[strlen(realm)]))) {
+		break;
+		}
+	    while (*val && !isspace(*val)) val++;
+	    while (*val && isspace(*val)) val++;
+	}
+	if (!*val) {
+	    sprintf(replybuf, "cross-realm login from %s%s%s@%s denied",
+		    auth_aname, auth_inst[0] ? "." : "",
+		    auth_inst, auth_realm);
+	    *reply = replybuf;
+	    return 1;
+	}
+    }
+
+    /* Logging in as the user in the authenticator? */
+    if (strcmp(auth_aname, aname) == 0 &&
+	strcmp(auth_inst, inst) == 0 &&
+	strcmp(auth_realm, realm[0] ? realm : lrealm) == 0) {
+
+	return 0;
+    }
+
+    /* Check for imsp-server proxy login */
+    if (!strcmp(auth_aname, "imap") && !strcmp(auth_realm, lrealm)) {
+	val = config_getstring("imspservers", "");
+	while (*val) {
+	    if (!strncasecmp(val, auth_inst, strlen(auth_inst)) &&
+		(!val[strlen(auth_inst)] || val[strlen(auth_inst)] != '.')) {
+		break;
+	    }
+	    while (*val && !isspace(*val)) val++;
+		while (*val && isspace(*val)) val++;
+	    }
+	    if (*val) {
+		sprintf(replybuf, "proxy from imap.%s@%s",
+			auth_inst, auth_realm);
+		*reply = replybuf;
+		return 0;
+	    }
+    }
+
+    sprintf(replybuf, "proxy login from %s%s%s@%s denied",
+	    auth_aname, auth_inst[0] ? "." : "",
+	    auth_inst, auth_realm);
+    *reply = replybuf;
+    return 1;
+}
+
