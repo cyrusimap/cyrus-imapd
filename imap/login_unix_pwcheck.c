@@ -66,7 +66,7 @@ char **reply;
     r = connect(s, (struct sockaddr *)&srvaddr, sizeof(srvaddr));
     if (r == -1) {
 	*reply = "cannot connect to pwcheck server";
-	return errno;
+	return 0;
     }
 
     iov[0].iov_base = user;
@@ -93,10 +93,11 @@ char **reply;
 }
   
 int
-login_authenticate(authtype, mech, authproc)
+login_authenticate(authtype, mech, authproc, reply)
 char *authtype;
 struct acte_server **mech;
 int (**authproc)();
+char **reply;
 {
     return 1;
 }

@@ -587,7 +587,7 @@ char *authtype;
 
     lcase(authtype);
     
-    r = login_authenticate(authtype, &mech, &authproc);
+    r = login_authenticate(authtype, &mech, &authproc, &reply);
     if (!r) {
 	r = mech->start("pop", authproc, ACTE_PROT_ANY, PROT_BUFSIZE,
 			popd_haveaddr ? &popd_localaddr : 0,

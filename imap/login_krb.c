@@ -89,10 +89,11 @@ char **reply;
 }
 
 int
-login_authenticate(authtype, mech, authproc)
+login_authenticate(authtype, mech, authproc, reply)
 char *authtype;
 struct acte_server **mech;
 int (**authproc)();
+char **reply;
 {
     char *val;
 
