@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- $Id: mailbox.c,v 1.125 2002/04/29 20:00:23 rjs3 Exp $
+ $Id: mailbox.c,v 1.126 2002/05/06 17:18:50 rjs3 Exp $
  
  * Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -62,6 +62,7 @@
 #include <sys/stat.h>
 #include <ctype.h>
 #include <time.h>
+#include <com_err.h>
 
 #ifdef HAVE_DIRENT_H
 # include <dirent.h>
@@ -1967,6 +1968,7 @@ int mailbox_create(const char *name,
     struct mailbox mailbox;
     int save_errno;
     int n;
+    const char *lockfailaction;
     struct stat sbuf;
 
     while ((p = strchr(p+1, '/'))) {
@@ -2004,6 +2006,20 @@ int mailbox_create(const char *name,
 	return IMAP_IOERROR;
     }
 
+    /* Note that we are locking the mailbox here.  Technically, this function
+     * can be called with a lock on the mailbox list.  This would otherwise
+     * violate the locking semantics, but it is okay since the mailbox list
+     * changes have not been committed, and the mailbox we create here *can't*
+     * be opened by anyone else */
+
+    r = lock_reopen(mailbox.header_fd, fnamebuf, NULL, &lockfailaction);
+    if(r) {
+	syslog(LOG_ERR, "IOERROR: %s header for new mailbox %s: %m",
+	       lockfailaction, mailbox.name);
+	return IMAP_IOERROR;
+    }
+    mailbox.header_lock_count++;
+
     mailbox.name = xstrdup(name);
     mailbox.path = xstrdup(path);
     mailbox.acl = xstrdup(acl);
@@ -2016,6 +2032,14 @@ int mailbox_create(const char *name,
 	return IMAP_IOERROR;
     }
 
+    r = lock_reopen(mailbox.index_fd, fnamebuf, NULL, &lockfailaction);
+    if(r) {
+	syslog(LOG_ERR, "IOERROR: %s index for new mailbox %s: %m",
+	       lockfailaction, mailbox.name);
+	return IMAP_IOERROR;
+    }
+    mailbox.index_lock_count++;
+
     strcpy(p, FNAME_CACHE);
     mailbox.cache_fd = open(fnamebuf, O_WRONLY|O_TRUNC|O_CREAT, 0666);
     if (mailbox.cache_fd == -1) {
@@ -2023,10 +2047,7 @@ int mailbox_create(const char *name,
 	mailbox_close(&mailbox);
 	return IMAP_IOERROR;
     }
-
-    mailbox.header_lock_count = 1;
-    mailbox.index_lock_count = 1;
-
+        
     if (hasquota) mailbox.quota.root = xstrdup(quota_root);
     mailbox.generation_no = 0;
     mailbox.format = format;
@@ -2162,83 +2183,69 @@ static int expungeall(struct mailbox *mailbox __attribute__((unused)),
 /* if 'isinbox' is set, we perform the funky RENAME INBOX INBOX.old
    semantics, regardless of whether or not the name of the mailbox is
    'user.foo'.*/
-int
-mailbox_rename(const char *oldname, const char *oldpath, const char *oldacl, 
-	       const char *newname, char *newpath, int isinbox, 
-	       bit32 *olduidvalidityp, bit32 *newuidvalidityp,
-	       struct mailbox *mailboxp)
+/* requires a LOCKED oldmailbox pointer */
+int mailbox_rename_copy(struct mailbox *oldmailbox, 
+			const char *newname, char *newpath,
+			bit32 *olduidvalidityp, bit32 *newuidvalidityp,
+			struct mailbox *mailboxp)
 {
-    int r, r2;
-    struct mailbox oldmailbox, newmailbox;
+    int r;
+    struct mailbox newmailbox;
     unsigned int flag, msgno;
     struct index_record record;
     char oldfname[MAX_MAILBOX_PATH], newfname[MAX_MAILBOX_PATH];
     char *oldfnametail, *newfnametail;
 
-    /* Open old mailbox and lock */
-    mailbox_open_header_path(oldname, oldpath, oldacl, 0, &oldmailbox, 0);
-
-    if (oldmailbox.format == MAILBOX_FORMAT_NETNEWS) {
-	mailbox_close(&oldmailbox);
-	return IMAP_MAILBOX_NOTSUPPORTED;
-    }
-
-    r =  mailbox_lock_header(&oldmailbox);
-    if (!r) r = mailbox_open_index(&oldmailbox);
-    if (!r) r = mailbox_lock_index(&oldmailbox);
-    if (r) {
-	mailbox_close(&oldmailbox);
-	return r;
-    }
+    assert(oldmailbox->header_lock_count > 0
+	   && oldmailbox->index_lock_count > 0);
+    
 
     /* Create new mailbox */
     r = mailbox_create(newname, newpath, 
-		       oldmailbox.acl, oldmailbox.uniqueid, oldmailbox.format,
-		       &newmailbox);
-    if (r) {
-	mailbox_close(&oldmailbox);
-	return r;
-    }
-    if (strcmp(oldname, newname) == 0) {
+		       oldmailbox->acl, oldmailbox->uniqueid,
+		       oldmailbox->format, &newmailbox);
+
+    if (r) return r;
+    if (mailboxp) mailboxp = &newmailbox;
+
+    if (strcmp(oldmailbox->name, newname) == 0) {
 	/* Just moving mailboxes between partitions */
-	newmailbox.uidvalidity = oldmailbox.uidvalidity;
+	newmailbox.uidvalidity = oldmailbox->uidvalidity;
     }
 
-    if (olduidvalidityp) *olduidvalidityp = oldmailbox.uidvalidity;
+    if (olduidvalidityp) *olduidvalidityp = oldmailbox->uidvalidity;
     if (newuidvalidityp) *newuidvalidityp = newmailbox.uidvalidity;
 
     /* Copy flag names */
     for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
-	if (oldmailbox.flagname[flag]) {
-	    newmailbox.flagname[flag] = xstrdup(oldmailbox.flagname[flag]);
+	if (oldmailbox->flagname[flag]) {
+	    newmailbox.flagname[flag] = xstrdup(oldmailbox->flagname[flag]);
 	}
     }
     r = mailbox_write_header(&newmailbox);
     if (r) {
 	mailbox_close(&newmailbox);
-	mailbox_close(&oldmailbox);
 	return r;
     }
 
     /* Check quota if necessary */
     if (newmailbox.quota.root) {
 	r = mailbox_lock_quota(&newmailbox.quota);
-	if (!oldmailbox.quota.root ||
-	    strcmp(oldmailbox.quota.root, newmailbox.quota.root) != 0) {
+	if (!oldmailbox->quota.root ||
+	    strcmp(oldmailbox->quota.root, newmailbox.quota.root) != 0) {
 	    if (!r && newmailbox.quota.limit >= 0 &&
-		newmailbox.quota.used + oldmailbox.quota_mailbox_used >
+		newmailbox.quota.used + oldmailbox->quota_mailbox_used >
 		((unsigned) newmailbox.quota.limit * QUOTA_UNITS)) {
 		r = IMAP_QUOTA_EXCEEDED;
 	    }
 	}
 	if (r) {
 	    mailbox_close(&newmailbox);
-	    mailbox_close(&oldmailbox);
 	    return r;
 	}
     }
 
-    strcpy(oldfname, oldmailbox.path);
+    strcpy(oldfname, oldmailbox->path);
     oldfnametail = oldfname + strlen(oldfname);
     strcpy(newfname, newmailbox.path);
     newfnametail = newfname + strlen(newfname);
@@ -2254,76 +2261,85 @@ mailbox_rename(const char *oldname, const char *oldpath, const char *oldacl,
     if (!r) r = mailbox_copyfile(oldfname, newfname);
     if (r) {
 	mailbox_close(&newmailbox);
-	mailbox_close(&oldmailbox);
 	return r;
     }
 
     /* Re-open index file and store new uidvalidity  */
     close(newmailbox.index_fd);
-    newmailbox.index_fd = dup(oldmailbox.index_fd);
+    newmailbox.index_fd = dup(oldmailbox->index_fd);
     (void) mailbox_read_index_header(&newmailbox);
-    newmailbox.generation_no = oldmailbox.generation_no;
+    newmailbox.generation_no = oldmailbox->generation_no;
     (void) mailbox_write_index_header(&newmailbox);
 
     /* Copy over message files */
     oldfnametail++;
     newfnametail++;
-    for (msgno = 1; msgno <= oldmailbox.exists; msgno++) {
-	r = mailbox_read_index_record(&oldmailbox, msgno, &record);
+    for (msgno = 1; msgno <= oldmailbox->exists; msgno++) {
+	r = mailbox_read_index_record(oldmailbox, msgno, &record);
 	if (r) break;
-	mailbox_message_get_fname(&oldmailbox, record.uid, oldfnametail);
+	mailbox_message_get_fname(oldmailbox, record.uid, oldfnametail);
 	strcpy(newfnametail, oldfnametail);
 	r = mailbox_copyfile(oldfname, newfname);
 	if (r) break;
     }
-    if (!r) r = seen_copy(&oldmailbox, &newmailbox);
+    if (!r) r = seen_copy(oldmailbox, &newmailbox);
 
     /* Record new quota usage */
     if (!r && newmailbox.quota.root) {
-	newmailbox.quota.used += oldmailbox.quota_mailbox_used;
+	newmailbox.quota.used += oldmailbox->quota_mailbox_used;
 	r = mailbox_write_quota(&newmailbox.quota);
 	mailbox_unlock_quota(&newmailbox.quota);
     }
-    if (r) goto fail;
+    if (r) {
+	/* failure and back out */
+	for (msgno = 1; msgno <= oldmailbox->exists; msgno++) {
+	    if (mailbox_read_index_record(oldmailbox, msgno, &record))
+		continue;
+	    mailbox_message_get_fname(oldmailbox, record.uid, newfnametail);
+	    (void) unlink(newfname);
+	}
+    }
+
+    return r;
+}
+
+int mailbox_rename_finish(struct mailbox *oldmailbox,
+			  struct mailbox *newmailbox,
+			  int isinbox) 
+{
+    int r, r2;
 
     if (isinbox) {
 	/* Expunge old mailbox */
-	r = mailbox_expunge(&oldmailbox, 0, expungeall, (char *)0);
-	mailbox_close(&oldmailbox);
+	r = mailbox_expunge(oldmailbox, 0, expungeall, (char *)0);
     } else {
-	r = mailbox_delete(&oldmailbox, 0);
+	r = mailbox_delete(oldmailbox, 0);
     }
 
-    if (r && newmailbox.quota.root) {
-	r2 = mailbox_lock_quota(&newmailbox.quota);
-	newmailbox.quota.used += newmailbox.quota_mailbox_used;
+    if (r && newmailbox->quota.root) {
+	r2 = mailbox_lock_quota(&(newmailbox->quota));
+	newmailbox->quota.used += newmailbox->quota_mailbox_used;
 	if (!r2) {
-	    r2 = mailbox_write_quota(&newmailbox.quota);
-	    mailbox_unlock_quota(&newmailbox.quota);
+	    r2 = mailbox_write_quota(&(newmailbox->quota));
+	    mailbox_unlock_quota(&(newmailbox->quota));
 	}
 	if (r2) {
 	    syslog(LOG_ERR,
 	      "LOSTQUOTA: unable to record use of %lu bytes in quota %s",
-		   newmailbox.quota_mailbox_used, newmailbox.quota.root);
+		   newmailbox->quota_mailbox_used, newmailbox->quota.root);
 	}
     }
-    if (r) goto fail;
 
-    if (mailboxp) {
-	*mailboxp = newmailbox;
-    } else {
-	mailbox_close(&newmailbox);
+    if(r) {
+	syslog(LOG_CRIT,
+	       "Rename Failure during mailbox_rename_finish (%s->%s), " \
+	       "potential leaked space (%s)", oldmailbox->name,
+	       newmailbox->name, error_message(r));
     }
-    return 0;
 
- fail:
-    for (msgno = 1; msgno <= oldmailbox.exists; msgno++) {
-	if (mailbox_read_index_record(&oldmailbox, msgno, &record)) continue;
-	mailbox_message_get_fname(&oldmailbox, record.uid, newfnametail);
-	(void) unlink(newfname);
-    }
-    mailbox_close(&newmailbox);
-    mailbox_close(&oldmailbox);
+    /* Ugh, we'd have to back all the way out at this point. */
+    /* xxx we leak space for now if something failed. */
+
     return r;
 }
 

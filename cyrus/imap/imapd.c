@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.384 2002/04/25 18:15:14 rjs3 Exp $ */
+/* $Id: imapd.c,v 1.385 2002/05/06 17:18:49 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -393,6 +393,8 @@ static int mlookup(const char *tag, const char *ext_name,
     if(flags) *flags = mbtype;
     if(r) return r;
 
+    if(mbtype & MBTYPE_RESERVE) return IMAP_MAILBOX_RESERVED;
+    
     if(mbtype & MBTYPE_MOVING) {
 	/* do we have rights on the mailbox? */
 	if(!imapd_userisadmin &&
@@ -425,8 +427,21 @@ static void imapd_reset(void)
 	imapd_mailbox = 0;
     }
 
-    if (imapd_in) prot_free(imapd_in);
-    if (imapd_out) prot_free(imapd_out);
+    if (imapd_in) {
+	/* Flush the incoming buffer */
+	prot_NONBLOCK(imapd_in);
+	prot_fill(imapd_in);
+
+	prot_free(imapd_in);
+    }
+
+    if (imapd_out) {
+	/* Flush the outgoing buffer */
+	prot_flush(imapd_out);
+
+	prot_free(imapd_out);
+    }
+    
     imapd_in = imapd_out = NULL;
     close(0);
     close(1);
@@ -721,15 +736,27 @@ void shut_down(int code)
     seen_done();
     mboxlist_close();
     mboxlist_done();
-#ifdef HAVE_SSL
-    tls_shutdown_serverengine();
-#endif
-    if (imapd_out) {
-	prot_flush(imapd_out);
 
+    if (imapd_in) {
+	/* Flush the incoming buffer */
+	prot_NONBLOCK(imapd_in);
+	prot_fill(imapd_in);
+	
+	prot_free(imapd_in);
+    }
+    
+    if (imapd_out) {
+	/* Flush the outgoing buffer */
+	prot_flush(imapd_out);
+	prot_free(imapd_out);
+	
 	/* one less active connection */
 	snmp_increment(ACTIVE_CONNECTIONS, -1);
     }
+
+#ifdef HAVE_SSL
+    tls_shutdown_serverengine();
+#endif
 
     exit(code);
 }
@@ -4301,7 +4328,7 @@ char *rights;
 	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL, NULL, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
-
+    
     if (!r) {
 	r = mboxlist_setacl(mailboxname, identifier, rights,
 			    imapd_userisadmin, imapd_userid, imapd_authstate);
@@ -7034,7 +7061,7 @@ static void mstringdata(char *cmd, char *name, int matchlen, int maycreate,
     static int nonexistent = 0;
     static int sawuser = 0;
     int lastnamehassub = 0;
-    int c;
+    int c, mbtype;
     char mboxname[MAX_MAILBOX_PATH+1];
 
     /* We have to reset the sawuser flag before each list command.
@@ -7046,7 +7073,7 @@ static void mstringdata(char *cmd, char *name, int matchlen, int maycreate,
 	return;
     }
     mstringdatacalls++;
-    
+
     if (lastnamedelayed) {
 	/* Check if lastname has children */
 	if (name && strncmp(lastname, name, strlen(lastname)) == 0 &&
@@ -7054,7 +7081,13 @@ static void mstringdata(char *cmd, char *name, int matchlen, int maycreate,
 	    lastnamehassub = 1;
 	}
 	prot_printf(imapd_out, "* %s (", cmd);
-	if (nonexistent) {
+	if (nonexistent == IMAP_MAILBOX_RESERVED) {
+	    /* LISTEXT wants \\PlaceHolder instead of \\Noselect */
+	    if (listopts & LIST_EXT)
+		prot_printf(imapd_out, "\\PlaceHolder");
+	    else
+		prot_printf(imapd_out, "\\Noselect");
+	} else if (nonexistent) {
 	    prot_printf(imapd_out, "\\NonExistent");
 	}
 	if (lastnamenoinferiors) {
@@ -7073,7 +7106,7 @@ static void mstringdata(char *cmd, char *name, int matchlen, int maycreate,
 					       imapd_userid, mboxname);
 	printstring(mboxname);
 	prot_printf(imapd_out, "\r\n");
-	lastnamedelayed = lastnamenoinferiors = 0;
+	lastnamedelayed = lastnamenoinferiors = nonexistent = 0;
     }
 
     /* Special-case to flush any final state */
@@ -7100,16 +7133,18 @@ static void mstringdata(char *cmd, char *name, int matchlen, int maycreate,
     lastname[matchlen] = '\0';
     nonexistent = 0;
 
-    /* See if subscribed mailbox exists */
-    if ((listopts & LIST_SUBSCRIBED) &&
-	config_getswitch("allowallsubscribe", 0)) {
-	/* convert "INBOX" to "user.<userid>" */
-	if (!strncasecmp(lastname, "inbox", 5))
-	    sprintf(mboxname, "user.%s%s", imapd_userid, lastname+5);
-	else
-	    strcpy(mboxname, lastname);
-	nonexistent = mboxlist_lookup(mboxname, NULL, NULL, NULL);
-    }
+    /* Now we need to see if this mailbox exists */
+    /* first convert "INBOX" to "user.<userid>" */
+    if (!strncasecmp(lastname, "inbox", 5))
+	sprintf(mboxname, "user.%s%s", imapd_userid, lastname+5);
+    else
+	strcpy(mboxname, lastname);
+
+    /* Look it up */
+    nonexistent = mboxlist_detail(mboxname, &mbtype,
+				  NULL, NULL, NULL, NULL);
+    if(!nonexistent && (mbtype & MBTYPE_RESERVE))
+	nonexistent = IMAP_MAILBOX_RESERVED;
 
     if (!name[matchlen]) {
 	lastnamedelayed = 1;

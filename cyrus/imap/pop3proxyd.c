@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3proxyd.c,v 1.38 2002/04/23 18:41:33 rjs3 Exp $
+ * $Id: pop3proxyd.c,v 1.39 2002/05/06 17:18:51 rjs3 Exp $
  */
 #include <config.h>
 
@@ -335,10 +335,24 @@ void shut_down(int code)
     proc_cleanup();
     mboxlist_close();
     mboxlist_done();
+
+    if (popd_in) {
+	prot_NONBLOCK(popd_in);
+	prot_fill(popd_in);
+	
+	prot_free(popd_in);
+    }
+
+    if (popd_out) {
+	prot_flush(popd_out);
+
+	prot_free(popd_out);
+    }
+
 #ifdef HAVE_SSL
     tls_shutdown_serverengine();
 #endif
-    if (popd_out) prot_flush(popd_out);
+
     exit(code);
 }
 

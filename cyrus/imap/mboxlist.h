@@ -40,7 +40,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: mboxlist.h,v 1.30 2002/05/01 15:20:30 rjs3 Exp $
+ * $Id: mboxlist.h,v 1.31 2002/05/06 17:18:51 rjs3 Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -61,7 +61,10 @@ extern struct db *mbdb;
 
 /* flags for types of mailboxes */
 #define MBTYPE_REMOTE 0x01 /* Not on this server (part is remote host) */
-#define MBTYPE_RESERVE 0x02 /* Reserved / Being Created */
+#define MBTYPE_RESERVE 0x02 /* Reserved [mupdate/imapd] /
+			       Rename Target [imapd] (part is normal, but
+			       you are not allowed to create this mailbox,
+			       even though it doesn't actually exist */
 #define MBTYPE_NETNEWS 0x04 /* Netnews Mailbox */
 #define MBTYPE_MOVING 0x08 /* Mailbox in mid-transfer (part is remotehost!localpart) */
 
