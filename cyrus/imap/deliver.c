@@ -41,7 +41,7 @@
  *
  */
 
-/* $Id: deliver.c,v 1.166 2003/02/13 20:15:24 rjs3 Exp $ */
+/* $Id: deliver.c,v 1.167 2003/04/17 16:46:48 rjs3 Exp $ */
 
 #include <config.h>
 
@@ -263,8 +263,8 @@ int main(int argc, char **argv)
 
     sockaddr = config_getstring("lmtpsocket", NULL);
     if (!sockaddr) {	
-	strcpy(buf, config_dir);
-	strcat(buf, "/socket/lmtp");
+	strlcpy(buf, config_dir, sizeof(buf));
+	strlcat(buf, "/socket/lmtp", sizeof(buf));
 	sockaddr = buf;
     }
 
@@ -304,7 +304,7 @@ static int init_net(const char *unixpath)
   }
 
   addr.sun_family = AF_UNIX;
-  strcpy(addr.sun_path, unixpath);
+  strlcpy(addr.sun_path, unixpath, sizeof(addr.sun_path));
 
   if (connect(lmtpdsock, (struct sockaddr *) &addr, 
 	      sizeof(addr.sun_family) + strlen(addr.sun_path) + 1) < 0) {
