@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.474 2004/07/06 20:02:19 ken3 Exp $ */
+/* $Id: imapd.c,v 1.475 2004/07/14 17:20:24 ken3 Exp $ */
 
 #include <config.h>
 
@@ -2304,7 +2304,7 @@ void cmd_append(char *tag, char *name)
     char mailboxname[MAX_MAILBOX_NAME+1];
     struct appendstate mailbox;
     unsigned long uidvalidity;
-    unsigned long firstuid, num = 0;
+    unsigned long firstuid, num;
     const char *parseerr = NULL;
     FILE *f;
     int numalloc = 5;
@@ -2443,7 +2443,7 @@ void cmd_append(char *tag, char *name)
 	    stage = xrealloc(stage, numalloc * sizeof(struct stagemsg *));
 	}
 	stage[numstage] = NULL;
-	f = append_newstage(mailboxname, now, num, &stage[numstage]);
+	f = append_newstage(mailboxname, now, numstage, &stage[numstage]);
 	if (f) {
 	    numstage++;
 	    totalsize += size;
