@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.198.2.33 2003/02/04 19:02:55 rjs3 Exp $
+ * $Id: mboxlist.c,v 1.198.2.34 2003/02/05 01:36:28 rjs3 Exp $
  */
 
 #include <config.h>
@@ -249,7 +249,7 @@ static int mboxlist_mylookup(const char *name, int *typep,
 int mboxlist_lookup(const char *name, char **pathp, char **aclp, 
 		    struct txn **tid)
 {
-    return mboxlist_mylookup(name, NULL, pathp, NULL, aclp, &tid, 0);
+    return mboxlist_mylookup(name, NULL, pathp, NULL, aclp, tid, 0);
 }
 
 int mboxlist_detail(const char *name, int *typep, char **pathp, char **partp,
