@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.42 2005/01/04 15:06:12 ken3 Exp $
+ * $Id: nntpd.c,v 1.43 2005/01/07 20:59:04 ken3 Exp $
  */
 
 /*
@@ -1809,14 +1809,16 @@ static void cmd_capabilities(char *keyword __attribute__((unused)))
     prot_printf(nntp_out,
 		"IMPLEMENTATION Cyrus NNTP%s server %s\r\n",
 		config_mupdate_server ? " Murder" : "", CYRUS_VERSION);
-    if ((nntp_capa & MODE_READ) && (nntp_userid || allowanonymous))
-	prot_printf(nntp_out, "READER POST\r\n");
-    if (nntp_capa & MODE_FEED) prot_printf(nntp_out, "TRANSIT\r\n");
+
+    /* add STARTTLS */
+    if (tls_enabled() && !nntp_starttls_done && !nntp_authstate)
+	prot_printf(nntp_out, "STARTTLS\r\n");
 
     /* check for SASL mechs */
     sasl_listmech(nntp_saslconn, NULL, "SASL ", " ", "\r\n",
 		  &mechlist, NULL, &mechcount);
 
+    /* add the AUTHINFO variants */
     if (!nntp_authstate) {
 	prot_printf(nntp_out, "AUTHINFO%s%s\r\n",
 		    (nntp_starttls_done ||
@@ -1827,23 +1829,25 @@ static void cmd_capabilities(char *keyword __attribute__((unused)))
     /* add the SASL mechs */
     if (mechcount) prot_printf(nntp_out, "%s", mechlist);
 
-    if (tls_enabled() && !nntp_starttls_done && !nntp_authstate)
-	prot_printf(nntp_out, "STARTTLS\r\n");
-
-    prot_printf(nntp_out, "LIST ACTIVE%s\r\n",
-		((nntp_capa & MODE_READ) && (nntp_userid || allowanonymous)) ?
-		" NEWSGROUPS" : "");
-
+    /* add the reader capabilities/extensions */
     if ((nntp_capa & MODE_READ) && (nntp_userid || allowanonymous)) {
+	prot_printf(nntp_out, "READER POST LISTGROUP\r\n");
 	prot_printf(nntp_out, "HDR\r\n");
-	prot_printf(nntp_out, "LISTGROUP\r\n");
 	prot_printf(nntp_out, "OVER\r\n");
 	prot_printf(nntp_out, "XPAT\r\n");
     }
 
+    /* add the feeder capabilities/extensions */
     if (nntp_capa & MODE_FEED) {
+	prot_printf(nntp_out, "IHAVE\r\n");
 	prot_printf(nntp_out, "STREAMING\r\n");
     }
+
+    /* add the LIST variants */
+    prot_printf(nntp_out, "LIST ACTIVE%s\r\n",
+		((nntp_capa & MODE_READ) && (nntp_userid || allowanonymous)) ?
+		" HEADERS NEWSGROUPS OVERVIEW.FMT" : "");
+
     prot_printf(nntp_out, ".\r\n");
 
     did_capabilities = 1;
