@@ -1,0 +1,167 @@
+#!/bin/sh
+# 
+# Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer. 
+#
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in
+#    the documentation and/or other materials provided with the
+#    distribution.
+#
+# 3. The name "Carnegie Mellon University" must not be used to
+#    endorse or promote products derived from this software without
+#    prior written permission. For permission or any other legal
+#    details, please contact  
+#      Office of Technology Transfer
+#      Carnegie Mellon University
+#      5000 Forbes Avenue
+#      Pittsburgh, PA  15213-3890
+#      (412) 268-4387, fax: (412) 268-7395
+#      tech-transfer@andrew.cmu.edu
+#
+# 4. Redistributions of any form whatsoever must retain the following
+#    acknowledgment:
+#    "This product includes software developed by Computing Services
+#     at Carnegie Mellon University (http://www.cmu.edu/computing/)."
+#
+# CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
+# THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+# AND FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE
+# FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+# AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
+# OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+#
+exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
+#!perl -w
+# script to upgrade from versions of imapd previous to 1.6.2
+# make sure you run it as the cyrus user
+# $Id: migrate-metadata,v 1.1.2.1 2004/04/14 01:02:28 ken3 Exp $
+
+if ($] !~ /^5\..*/) {
+  # uh-oh. this isn't perl 5.
+  foreach (split(/:/, $ENV{PATH})) { # try to find "perl5".
+    exec("$_/perl5", "-x", "-S", $0, @ARGV) if (-x "$_/perl5");
+  }
+  # we failed. bail.
+  die "Your perl is too old; I need perl 5.\n";
+}
+
+# load the real script. this is isolated in an 'eval' so perl4 won't
+# choke on the perl5-isms.
+eval join("\n", <DATA>);
+if ($@) { die "$@"; }
+
+__END__
+require 5;
+
+$| = 1;
+
+if ($#ARGV > -1 && "-i" eq $ARGV[0]) {
+    $interactive = 1;
+    shift @ARGV;
+}
+if ($#ARGV > -1 && "-f" eq $ARGV[0]) {
+    $force = 1;
+    shift @ARGV;
+}
+if (($#ARGV > -1 && "-h" eq $ARGV[0]) || $#ARGV > 0) {
+    print "usage: migrate-metadata [-i] [-f] [imapd.conf]\n";
+    print "       -i interactive\n";
+    print "       -f keep going on errors\n";
+    exit;
+}
+
+sub ouch {
+    my $msg = shift;
+
+    if ($force) {
+	print "fatal error: $msg\n";
+    } else {
+	print "error: $msg\n";
+	exit 1;
+    }
+}
+
+$imapdconf = shift || "/etc/imapd.conf";
+
+$yn = "y";
+%parts = ();  # start with empty partition hash
+%mparts = (); # start with empty metapartition hash
+%mfiles = (); # start with empty metapartition_files hash
+
+
+open CONF, $imapdconf or die "can't open $imapdconf";
+while (<CONF>) {
+    if (/^partition-(.*):\s*(.*)$/) {
+	$parts{$1} = $2;
+    }
+    if (/^metapartition-(.*):\s*(.*)$/) {
+	$mparts{$1} = $2;
+    }
+    if (/^metapartition_files:\s*(.*)$/) {
+	# split the list of files and make a hash
+	@metafiles = split(/\s+/, $1);
+	foreach $file (@metafiles) {
+	    $mfiles{$file} = 1;
+	}
+    }
+}
+close CONF;
+
+if (!keys(%mfiles)) {
+    print "no metapartition_files option in $imapdconf\n";
+    exit 1;
+}
+
+# process each subdir, recursing if necessary
+sub migrate {
+    my $part = shift;
+    my $mpart = shift;
+    my $path = shift;
+    local *DIR;
+
+    opendir DIR, $part . $path;
+    while ($subdir = readdir DIR) {
+	my $subpath = $path . "/" . $subdir;
+
+	if ($subdir =~ /^cyrus\.(.+)/s) {
+	    # cyrus.* file, see if we should migrate it
+	    if (defined($mfiles{$1})) {
+		rename($part . $subpath, $mpart . $subpath) ||
+		    ouch "couldn't move $part$subpath to $mpart$subpath";
+	    }
+	}
+	elsif ($subdir =~ /^[^\.]+$/s) {
+	    # no dot in name, so this is a subdir, process it
+	    mkdir($mpart . $subpath, 0700) ||
+		ouch "couldn't create $mpart$subpath";
+	    migrate($part, $mpart, $subpath);
+	}
+    }
+    closedir DIR;
+}
+
+# *** now for each data partition
+while (($name,$part) = each(%parts)) {
+    my $mpart = $mparts{$name};
+    if (!defined($mpart)) { next; } # no corresponding metapartition, skip it
+
+    if ($interactive) {
+	print "upgrade $part? ";
+	$yn = <STDIN>;
+    }
+    if ($yn =~ /^y/) {
+	print "upgrading data partition $part...";
+
+	migrate($part, $mpart, "");
+    }
+    
+    print "done\n";
+}
