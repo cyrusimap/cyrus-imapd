@@ -4,7 +4,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 # script to translate sieve scripts to use unixhierarchysep and/or altnamespace
 # make sure you run it as the cyrus user
 #!/usr/bin/perl
-# $Id: translatesieve,v 1.5 2001/08/12 15:54:44 ken3 Exp $
+# $Id: translatesieve,v 1.6 2002/05/07 20:49:42 rjs3 Exp $
 # 
 # Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
 #
@@ -69,7 +69,7 @@ if (($#ARGV > -1) && ("-f" eq $ARGV[0])) {
     shift @ARGV;
 }
 if ((($#ARGV > -1) && ($ARGV[0] eq "-h")) || ($#ARGV > 0)) {
-    print "usage: translateesieve [-f] [imapd.conf]\n";
+    print "usage: translatesieve [-f] [imapd.conf]\n";
     print "       -f keep going on errors\n";
     exit;
 }
@@ -193,7 +193,7 @@ foreach $i ("a".."z") {
 	    close(OUT);
 
 	    rename(".$file", "$file")
-		or ouch "couldn't move .$file to $f";
+		or ouch "couldn't move .$file to $file";
 
 	    # print "\n";
 	}
