@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.147.2.27 2005/03/19 01:05:06 ken3 Exp $
+ * $Id: mailbox.c,v 1.147.2.28 2005/04/07 00:27:09 shadow Exp $
  *
  */
 
@@ -1847,6 +1847,12 @@ static int process_records(struct mailbox *mailbox, FILE *newindex,
 	    const char *cacheitem, *cacheitembegin;
 	    
 	    cache_offset = ntohl(*((bit32 *)(buf+OFFSET_CACHE_OFFSET)));
+
+	    if (cache_offset == 0) {
+		syslog(LOG_ERR, "IOERROR: reading index header for %s: got 0 cache_offset on message %u/%lu; trying recovery",
+		       mailbox->name, msgno, mailbox->exists);
+		continue;
+	    }
 
 	    /* Fix up cache file offset */
 	    *((bit32 *)(buf+OFFSET_CACHE_OFFSET)) =
