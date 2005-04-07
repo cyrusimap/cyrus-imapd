@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- * $Id: mailbox.c,v 1.158 2005/02/25 06:49:41 shadow Exp $
+ * $Id: mailbox.c,v 1.159 2005/04/07 00:25:52 shadow Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1779,6 +1779,12 @@ mailbox_expunge(struct mailbox *mailbox,
 	    const char *cacheitem, *cacheitembegin;
 	    
 	    cache_offset = ntohl(*((bit32 *)(buf+OFFSET_CACHE_OFFSET)));
+
+	    if (cache_offset == 0) {
+		syslog(LOG_ERR, "IOERROR: reading index header for %s: got 0 cache_offset on message %u/%lu; trying recovery",
+		       mailbox->name, msgno, mailbox->exists);
+		continue;
+	    }
 
 	    /* Fix up cache file offset */
 	    *((bit32 *)(buf+OFFSET_CACHE_OFFSET)) =
