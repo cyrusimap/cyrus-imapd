@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.36 2005/03/22 18:49:32 ken3 Exp $
+ * $Id: nntpd.c,v 1.2.2.37 2005/04/08 16:14:25 shadow Exp $
  */
 
 /*
@@ -2907,6 +2907,8 @@ static int savemsg(message_data_t *m, FILE *f)
     };
     int addlen;
 
+    m->f = f;
+
     /* fill the cache */
     r = spool_fill_hdrcache(nntp_in, f, m->hdrcache, skipheaders);
     if (r) {
@@ -3111,7 +3113,7 @@ static int savemsg(message_data_t *m, FILE *f)
 	else {
 	    /* close the tmpfile and use the stage */
 	    fclose(f);
-	    f = stagef;
+	    m->f = f = stagef;
 	}
     }
     /* else this is probably a remote group, so use the tmpfile */
@@ -3129,7 +3131,6 @@ static int savemsg(message_data_t *m, FILE *f)
 	return IMAP_IOERROR;
     }
     m->size = sbuf.st_size;
-    m->f = f;
     m->data = prot_new(fileno(f), 0);
 
     return 0;
