@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_commit.c,v 1.1.2.4 2005/03/01 18:06:03 ken3 Exp $
+ * $Id: sync_commit.c,v 1.1.2.5 2005/04/08 18:01:40 ken3 Exp $
  */
 
 #include <config.h>
@@ -145,14 +145,7 @@ sync_combine_commit(struct mailbox *mailbox,
         snprintf(target, MAX_MAILBOX_PATH,
                  "%s/%lu.", mailbox->path, (unsigned long)item->uid);
 
-        rc = link(item->message->msg_path, target);
-
-        if ((rc < 0) && (errno == EEXIST)) {
-            unlink(target);
-            rc = link(item->message->msg_path, target);
-        }
-        
-        if (rc < 0) {
+        if (mailbox_copyfile(item->message->msg_path, target, 0) != 0) {
             /* Attempt undo before we bail out */
             for (item=upload_list->head ; item != item; item = item->next)
                 unlink(item->message->msg_path);
@@ -531,7 +524,7 @@ sync_append_commit(struct mailbox *mailbox,
         snprintf(target, MAX_MAILBOX_PATH,
                  "%s/%lu.", mailbox->path, (unsigned long)item->uid);
 
-        if (link(item->message->msg_path, target) < 0) {
+        if (mailbox_copyfile(item->message->msg_path, target, 0) != 0) {
             /* Attempt undo before we bail out */
             for (item = upload_list->head ; item != item; item = item->next)
                 unlink(item->message->msg_path);
