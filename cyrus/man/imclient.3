@@ -38,7 +38,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imclient.3,v 1.10 2003/10/22 18:50:13 rjs3 Exp $
+.\" $Id: imclient.3,v 1.10.2.1 2005/04/11 05:48:09 shadow Exp $
 
 .SH NAME
 imclient library - authenticating callback interface to IMAP/IMSP servers
@@ -70,6 +70,10 @@ imclient library - authenticating callback interface to IMAP/IMSP servers
 .BI "void imclient_processoneevent (struct imclient *" imclient ");"
 .sp .025i
 .BI "int imclient_authenticate (struct imclient *" imclient ", struct sasl_client **" availmech ", const char *" service ", const char *" user ", int " protallowed ");"
+.sp .025i
+.BI "int imclient_havetls ();"
+.sp .025i
+.BI "int imclient_starttls (struct imclient *" imclient ", char *" cert_file ", char *" key_file ", char *" CAfile ", char *" CApath ");"
 
 .SH DESCRIPTION
 The imclient library functions are distributed with Cyrus IMAP and IMSP.
@@ -255,6 +259,32 @@ is a bitmask of permissible protection mechanisms.
 On success, 0 is returned.  On failure (i.e., "BAD" keyboard, or no
 authentication mechanisms worked), 1 is returned. On extreme failure
 (premature "OK"), 2 is returned.
+.IP \fB\imclient_havetls() \fP5
+Returns a Boolean indicating whether the
+.B imclient
+library was compiled with TLS (SSL) support.  If so,
+.B imclient_starttls()
+may be used to secure the IMAP connection.
+.IP \fB\imclient_starttls() \fP5
+Issues a STARTTLS command on an existing IMAP connection and
+negotiates the secure link.  The
+.B cert_file
+and
+.B key_file
+arguments specify the client certificate and secret key to use to
+authenticate ourselves to the server.  If client authentication is not
+needed, set both of these arguments to NULL.
+.sp
+The
+.B CAfile
+and
+.B CApath
+arguments specify a file or directory, respectively, of CA
+certificates for validating server certificates.  (See
+.B SSL_CTX_load_verify_locations(3)
+for details.)  If both of these are NULL, the client will be unable to
+validate the server's certificate, in which case the connection may
+succeed but a warning will be printed to stdout.
 
 .SH EXAMPLES
 The following code is a possible skeletion of
