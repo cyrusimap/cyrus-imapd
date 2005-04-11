@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notify_mailto.c,v 1.8.2.1 2004/03/24 19:53:18 ken3 Exp $
+ * $Id: notify_mailto.c,v 1.8.2.2 2005/04/11 06:22:54 shadow Exp $
  */
 
 #include <config.h>
@@ -58,6 +58,8 @@
 #include "libconfig.h"
 #include "rfc822date.h"
 #include "sieve_interface.h"
+
+static int contains_8bit(const char *msg);
 
 static int global_outgoing_count = 0;
 
@@ -120,6 +122,11 @@ char* notify_mailto(const char *class __attribute__((unused)),
     fprintf(sm, "From: Mail Sieve Subsystem <%s>\r\n", config_getstring(IMAPOPT_POSTMASTER));
     fprintf(sm, "To: <%s>\r\n", options[0]);
     fprintf(sm, "Subject: [SIEVE] New mail notification\r\n");
+    if (contains_8bit(message)) {
+	fprintf(sm, "MIME-Version: 1.0\r\n");
+	fprintf(sm, "Content-Type: text/plain; charset=UTF-8\r\n");
+	fprintf(sm, "Content-Transfer-Encoding: 8BIT\r\n");
+    }
     fprintf(sm, "\r\n");
 
     fprintf(sm, "%s\r\n", message);
@@ -132,4 +139,22 @@ char* notify_mailto(const char *class __attribute__((unused)),
     /* XXX add outmsgid to duplicate delivery database to prevent loop */
 
     return strdup("OK mailto notification successful");
+}
+
+static int contains_8bit(const char * msg)
+{
+    int result = 0;
+
+    if (msg) {
+	const unsigned char *s = (const unsigned char *)msg;
+	
+	while (*s) {
+	    if (0 != (*s & 0x80)) {
+		result = 1;
+		break ;
+	    }
+	    s++;
+	}
+    }
+    return result;
 }
