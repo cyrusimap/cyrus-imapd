@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.144.2.32 2005/02/21 19:25:43 ken3 Exp $
+ * $Id: pop3d.c,v 1.144.2.33 2005/04/11 06:56:27 shadow Exp $
  */
 #include <config.h>
 
@@ -785,7 +785,18 @@ static void cmdloop(void)
 	    if (!arg) {
 		if (popd_mailbox) {
 		    if (!mailbox_lock_index(popd_mailbox)) {
-			popd_mailbox->pop3_last_login = popd_login_time;
+		        int pollpadding =config_getint(IMAPOPT_POPPOLLPADDING);
+			int minpollsec = config_getint(IMAPOPT_POPMINPOLL)*60;
+		        if ((minpollsec > 0) && (pollpadding > 1)) { 
+			    int mintime = popd_login_time - (minpollsec*(pollpadding));
+			    if (popd_mailbox->pop3_last_login < mintime) {
+			        popd_mailbox->pop3_last_login = mintime + minpollsec; 
+			    } else {
+			        popd_mailbox->pop3_last_login += minpollsec;
+			    }
+		        } else { 
+			    popd_mailbox->pop3_last_login = popd_login_time;
+		        }
 			mailbox_write_index_header(popd_mailbox);
 			mailbox_unlock_index(popd_mailbox);
 		    }

@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.2.2.33 2005/04/06 20:36:58 ken3 Exp $
+.\" $Id: imapoptions,v 1.2.2.34 2005/04/11 06:56:24 shadow Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -652,6 +652,22 @@ are listed with ``<none>''.
 { "popsubfolders", 0, SWITCH }
 /* Allow access to subfolders of INBOX via POP3 by using
    userid+subfolder syntax as the authentication/authorization id. */
+
+{ "poppollpadding", 1, INT }
+/* Create a softer minimum poll restriction.  Allows \fIpoppollpadding\fR
+   connections before the minpoll restriction is triggered.  Additionally,
+   one padding entry is recovered every \fIpopminpoll\fR minutes.
+   This allows for the occasional polling rate faster than popminpoll, 
+   (i.e. for clients that require a send/recieve to send mail) but still 
+   enforces the rate long-term.  Default is 1 (disabled).
+.br
+.sp
+   The easiest way to think of it is a queue of past connections, with one
+   slot being filled for every connection, and one slot being cleared 
+   every \fIpopminpoll\fR minutes. When the queue is full, the user
+   will not be able to check mail again until a slot is cleared.  If the 
+   user waits a sufficent amount of time, they will get back many or all
+   of the slots. */
 
 { "poptimeout", 10, INT }
 /* Set the length of the POP server's inactivity autologout timer,    
