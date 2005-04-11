@@ -379,7 +379,7 @@ message_uuid_master_init()
 	if (r == 0) return(0);
 
 	if (uuid_private.machine != machine) {
-	    syslog(LOG_ERR, "Machine mismatch: %lu |= %lu",
+	    syslog(LOG_ERR, "Machine mismatch: %lu != %lu",
 		   (unsigned long)machine, 
 		   (unsigned long)uuid_private.machine);
 	    return(0);
