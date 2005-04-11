@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.c,v 1.1.2.8 2005/03/31 18:51:26 ken3 Exp $
+ * $Id: sync_support.c,v 1.1.2.9 2005/04/11 17:56:01 ken3 Exp $
  */
 
 #include <config.h>
@@ -830,8 +830,7 @@ int sync_message_list_newstage(struct sync_message_list *l, char *mboxname)
     int r;
     const char *root;
     char *partition;
-    struct stat sbuf;
-
+ 
     /* Find mailbox partition */
     r = mboxlist_detail(mboxname, NULL, NULL, NULL, &partition, NULL, NULL);
     if (!r) {
@@ -844,7 +843,7 @@ int sync_message_list_newstage(struct sync_message_list *l, char *mboxname)
 	return r;
     }
 
-    snprintf(l->stage_dir, sizeof(l->stage_dir), "%s/sync./%lu/",
+    snprintf(l->stage_dir, sizeof(l->stage_dir), "%s/sync./%lu",
 	     root, (unsigned long) getpid());
 
     if (cyrus_mkdir(l->stage_dir, 0755) == -1) return IMAP_IOERROR;
@@ -910,15 +909,20 @@ struct sync_message *sync_message_add(struct sync_message_list *l,
 {
     struct sync_message *result;
     int offset;
-    char tmp[10];
-
-    sprintf(tmp, "%lu.", l->count);
 
     result = xzmalloc(sizeof(struct sync_message));
     message_uuid_set_null(&result->uuid);
     
-    result->msg_path   = xmalloc(strlen(l->stage_dir)+strlen(tmp)+2);
-    sprintf(result->msg_path, "%s/%s", l->stage_dir, tmp);
+    result->msg_path = xzmalloc(5 * (MAX_MAILBOX_PATH+1) * sizeof(char));
+    result->msg_path_end = result->msg_path +
+	5 * (MAX_MAILBOX_PATH+1) * sizeof(char);
+
+    snprintf(result->stagename, sizeof(result->stagename), "%lu.", l->count);
+
+    snprintf(result->msg_path, MAX_MAILBOX_PATH,
+	     "%s/%s", l->stage_dir, result->stagename);
+    /* make sure there's a NUL NUL at the end */
+    result->msg_path[strlen(result->msg_path) + 1] = '\0';
 
     l->count++;
     if (l->tail)
@@ -975,6 +979,96 @@ FILE *sync_message_open(struct sync_message_list *l,
     return(file);
 }
 
+int sync_message_copy_fromstage(struct sync_message *message,
+				struct mailbox *mailbox,
+				unsigned long uid)
+{
+    int r;
+    const char *root;
+    char *partition, stagefile[MAX_MAILBOX_PATH+1], *p;
+    size_t sflen;
+    char  target[MAX_MAILBOX_PATH+1];
+ 
+    /* Find mailbox partition */
+    r = mboxlist_detail(mailbox->name, NULL, NULL, NULL, &partition, NULL, NULL);
+    if (!r) {
+	root = config_partitiondir(partition);
+	if (!root) r = IMAP_PARTITION_UNKNOWN;
+    }
+    if (r) {
+	syslog(LOG_ERR, "couldn't find sync stage directory for mbox: '%s': %s",
+	       mailbox->name, error_message(r));
+	return r;
+    }
+
+    snprintf(stagefile, sizeof(stagefile), "%s/sync./%lu/%s",
+	     root, (unsigned long) getpid(), message->stagename);
+    sflen = strlen(stagefile);
+
+    p = message->msg_path;
+    while (p < message->msg_path_end) {
+	int sl = strlen(p);
+
+	if (sl == 0) {
+	    /* our partition isn't here */
+	    break;
+	}
+	if (!strcmp(stagefile, p)) {
+	    /* aha, this is us */
+	    break;
+	}
+	
+	p += sl + 1;
+    }
+
+    if (*p == '\0') {
+	/* ok, create this file, and copy the name of it into 'p'.
+	   make sure not to overwrite message->msg_path_end */
+
+	/* create the new staging file from the first stage part */
+	r = mailbox_copyfile(message->msg_path, stagefile, 0);
+	if (r) {
+	    /* maybe the directory doesn't exist? */
+	    if (cyrus_mkdir(stagefile, 0755) == -1) {
+		syslog(LOG_ERR, "couldn't create sync stage directory for : %s: %m",
+		       stagefile);
+	    } else {
+		syslog(LOG_NOTICE, "created sync stage directory for %s",
+		       stagefile);
+		r = mailbox_copyfile(message->msg_path, stagefile, 0);
+	    }
+	}
+	if (r) {
+	    /* oh well, we tried */
+
+	    syslog(LOG_ERR, "IOERROR: creating message file %s: %m", 
+		   stagefile);
+	    unlink(stagefile);
+	    return r;
+	}
+	
+	if (p + sflen > message->msg_path_end - 5) {
+	    int cursize = message->msg_path_end - message->msg_path;
+	    int curp = p - message->msg_path;
+
+	    /* need more room; double the buffer */
+	    message->msg_path = xrealloc(message->msg_path, 2 * cursize);
+	    message->msg_path_end = message->msg_path + 2 * cursize;
+	    p = message->msg_path + curp;
+	}
+	strcpy(p, stagefile);
+	/* make sure there's a NUL NUL at the end */
+	p[sflen + 1] = '\0';
+    }
+
+    /* 'p' contains the message and is on the same partition
+       as the mailbox we're looking at */
+
+    snprintf(target, MAX_MAILBOX_PATH, "%s/%lu.", mailbox->path, uid);
+
+    return mailbox_copyfile(p, target, 0);
+}
+
 void sync_message_list_free(struct sync_message_list **lp)
 {
     struct sync_message_list *l = *lp;
@@ -984,7 +1078,13 @@ void sync_message_list_free(struct sync_message_list **lp)
         next = current->next;
 
         if (current->msg_path) {
-            unlink(current->msg_path);
+	    char *p = current->msg_path;
+	    while (*p != '\0' && p < current->msg_path_end) {
+		if (unlink(p) != 0) {
+		    syslog(LOG_ERR, "IOERROR, error unlinking file %s: %m", p);
+		}
+		p += strlen(p) + 1;
+	    }
             free(current->msg_path);
         }
         free(current);

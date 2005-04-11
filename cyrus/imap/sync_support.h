@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.h,v 1.1.2.6 2005/03/27 17:56:20 ken3 Exp $
+ * $Id: sync_support.h,v 1.1.2.7 2005/04/11 17:56:01 ken3 Exp $
  */
 
 #ifndef INCLUDED_SYNC_SUPPORT_H
@@ -247,7 +247,18 @@ struct sync_message {
     unsigned  long  content_lines;
     unsigned  long  cache_version;
     struct message_uuid uuid;
-    char           *msg_path;
+    char           stagename[100];
+
+    /* the msg_path buffer consists of
+       /part1/sync./pid/file \0
+       /part2/sync./pid/file \0
+       ... \0
+       \0
+       
+       the main invariant is double \0 at the end
+    */
+    char           *msg_path; /* buffer of current stage parts */
+    char           *msg_path_end; /* end of buffer */
     unsigned long   msg_size;
 };
 
@@ -297,6 +308,10 @@ void sync_message_fsync(struct sync_message_list *l);
 
 FILE *sync_message_open(struct sync_message_list *l,
 			struct sync_message *message);
+
+int sync_message_copy_fromstage(struct sync_message *message,
+				struct mailbox *mailbox,
+				unsigned long uid);
 
 /* ====================================================================== */
 

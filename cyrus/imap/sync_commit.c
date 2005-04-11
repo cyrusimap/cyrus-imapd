@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_commit.c,v 1.1.2.5 2005/04/08 18:01:40 ken3 Exp $
+ * $Id: sync_commit.c,v 1.1.2.6 2005/04/11 17:56:00 ken3 Exp $
  */
 
 #include <config.h>
@@ -142,6 +142,7 @@ sync_combine_commit(struct mailbox *mailbox,
     /* Copy messages into target mailfolder (blat existing messages:
      * caused by UUID conflict on messages: sync_client wins) */
     for (item = upload_list->head ; item ; item = item->next) {
+#if 0
         snprintf(target, MAX_MAILBOX_PATH,
                  "%s/%lu.", mailbox->path, (unsigned long)item->uid);
 
@@ -152,6 +153,11 @@ sync_combine_commit(struct mailbox *mailbox,
 
             goto fail;
         }
+#else
+	if (sync_message_copy_fromstage(item->message, mailbox, item->uid)) {
+	    goto fail;
+	}
+#endif
     }
 
     /* Make sure that new flag names recorded before we try to use them */
@@ -192,28 +198,8 @@ sync_combine_commit(struct mailbox *mailbox,
         if ((msgno <= mailbox->exists) &&
             ((item == NULL) || (record.uid < item->uid))) {
             /* Use record item from existing mailbox */
-#if 0
-            *((bit32 *)(buf+OFFSET_UID))          = htonl(record.uid);
-            *((bit32 *)(buf+OFFSET_INTERNALDATE)) = htonl(record.internaldate);
-            *((bit32 *)(buf+OFFSET_SENTDATE))     = htonl(record.sentdate);
-            *((bit32 *)(buf+OFFSET_SIZE))         = htonl(record.size);
-            *((bit32 *)(buf+OFFSET_HEADER_SIZE))  = htonl(record.header_size);
-            *((bit32 *)(buf+OFFSET_CONTENT_OFFSET))=htonl(record.header_size);
-            *((bit32 *)(buf+OFFSET_LAST_UPDATED)) = htonl(record.last_updated);
-
-            *((bit32 *)(buf+OFFSET_SYSTEM_FLAGS))
-                = htonl(record.system_flags);
-            
-            for (n = 0; n < MAX_USER_FLAGS/32; n++) {
-                *((bit32 *)(buf+OFFSET_USER_FLAGS+4*n))
-                    = htonl(record.user_flags[n]);
-            }
-            *((bit32 *)(buf+OFFSET_CONTENT_LINES))=htonl(record.content_lines);
-            *((bit32 *)(buf+OFFSET_CACHE_VERSION))=htonl(record.cache_version);
-            message_uuid_pack(&record.uuid, buf+OFFSET_MESSAGE_UUID);
-#else
 	    mailbox_index_record_to_buf(&record, buf);
-#endif
+
             /* Write out message cache and index */
             /* Fix up cache file offset */
             *((bit32 *)(buf+OFFSET_CACHE_OFFSET)) = htonl(ftell(newcache));
@@ -521,6 +507,7 @@ sync_append_commit(struct mailbox *mailbox,
 
     /* Copy messages into target mailfolder */
     for (item = upload_list->head ; item ; item = item->next) {
+#if 0
         snprintf(target, MAX_MAILBOX_PATH,
                  "%s/%lu.", mailbox->path, (unsigned long)item->uid);
 
@@ -531,6 +518,11 @@ sync_append_commit(struct mailbox *mailbox,
 
             goto fail;
         }
+#else
+	if (sync_message_copy_fromstage(item->message, mailbox, item->uid)) {
+	    goto fail;
+	}
+#endif
     }
 
     /* Make sure that new flag names recorded before we try to use them */
