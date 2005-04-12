@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.294 2005/03/23 19:44:48 shadow Exp $
+dnl $Id: configure.in,v 1.295 2005/04/12 20:06:02 shadow Exp $
 dnl
 
 
@@ -686,6 +686,10 @@ AC_MSG_RESULT($with_openssl)
 if test "$with_openssl" != "no"; then
 	AC_DEFINE(HAVE_SSL,[],[Build with SSL support?])
 	IMAP_PROGS="$IMAP_PROGS tls_prune"
+        if test "${krb4}" != no; then
+           AC_DEFINE(OPENSSL_ENABLE_OLD_DES_SUPPORT,[],[Configure OpenSSL to provide legacy des apis])
+           AC_DEFINE(OPENSSL_DES_LIBDES_COMPATIBILITY,[],[Configure OpenSSL to provide krb4-compatible legacy des apis])
+        fi
 fi
 AC_SUBST(OPENSSL_INC)
 AC_SUBST(OPENSSL_LIB)
@@ -1014,7 +1018,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.294 2005/03/23 19:44:48 shadow Exp $ */
+/* $Id: configure.in,v 1.295 2005/04/12 20:06:02 shadow Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
