@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.37 2005/04/08 16:14:25 shadow Exp $
+ * $Id: nntpd.c,v 1.2.2.38 2005/04/12 20:10:16 shadow Exp $
  */
 
 /*
@@ -3236,11 +3236,21 @@ static int deliver(message_data_t *msg)
 		    r = append_fromstream(&as, &body, msg->data, msg->size, now,
 					  (const char **) NULL, 0);
 		}
-		if (!r) {
+		if (r || (msg->id &&   
+			  duplicate_check(msg->id, strlen(msg->id),
+					  rcpt, strlen(rcpt)))) {  
+		    append_abort(&as);
+                   
+		    if (!r) {
+			/* duplicate message */
+			duplicate_log(msg->id, rcpt, "nntp delivery");
+			continue;
+		    }            
+		}                
+		else {           
 		    r = append_commit(&as, 0, NULL, &uid, NULL);
 		    if (!r) sync_log_append(rcpt);
 		}
-		else append_abort(&as);
 	    }
 
 	    if (!r && msg->id)
