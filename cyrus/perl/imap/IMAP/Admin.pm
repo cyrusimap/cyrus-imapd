@@ -37,14 +37,15 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Admin.pm,v 1.46 2005/02/22 05:58:00 shadow Exp $
+# $Id: Admin.pm,v 1.47 2005/04/12 20:16:43 shadow Exp $
 
 package Cyrus::IMAP::Admin;
 use strict;
 use Cyrus::IMAP;
 use vars qw($VERSION
 	    *create *delete *deleteacl *listacl *list *rename *setacl
-	    *subscribed *quota *quotaroot *info *setinfo *xfer);
+	    *subscribed *quota *quotaroot *info *setinfo *xfer
+	    *subscribe *unsubscribe);
 
 $VERSION = '1.00';
 
@@ -337,7 +338,6 @@ sub listmailbox {
 			next unless $d{-text} =~ s/^\(([^\)]*)\) //;
 			my $attrs = $1;
 			my $sep = '';
-			my $mbox;
 			# NIL or (attrs) "sep" "str"
 			if ($d{-text} =~ /^N/) {
 			  return if $d{-text} !~ s/^NIL//;
@@ -346,10 +346,8 @@ sub listmailbox {
 			  $sep = $1;
 			}
 			return unless $d{-text} =~ s/^ //;
-                        if ($d{-text} =~ /{\d+}(.*)/) {
-			  # cope with literals (?)
-			  (undef, $mbox) = split(/\n/, $d{-text});
-                        } elsif ($d{-text} =~ /\"(([^\\\"]*\\)*[^\\\"]*)\"/) {
+			my $mbox;
+			if ($d{-text} =~ /\"(([^\\\"]*\\)*[^\\\"]*)\"/) {
 			  ($mbox = $1) =~ s/\\(.)/$1/g;
 			} else {
 			  $d{-text} =~ /^([]!\#-[^-~]+)/;
@@ -882,6 +880,76 @@ sub setinfoserver {
   }
 }
 *setinfo = *setinfoserver;
+
+sub subscribemailbox {
+  my ($self, $mbx) = @_;
+  my ($rc, $msg) = $self->send('', '', 'SUBSCRIBE %s', $mbx);
+  if ($rc eq 'OK') {
+    $self->{error} = undef;
+    1;
+  } else {
+    if($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
+      my ($refserver, $box) = $self->fromURL($1);
+      my $port = 143;
+
+      if($refserver =~ /:/) {
+        $refserver =~ /([^:]+):(\d+)/;
+        $refserver = $1; $port = $2;
+      }
+
+      my $cyradm = Cyrus::IMAP::Admin->new($refserver, $port)
+        or die "cyradm: cannot connect to $refserver\n";
+      $cyradm->addcallback({-trigger => 'EOF',
+                            -callback => \&_cb_ref_eof,
+                            -rock => \$cyradm});
+      $cyradm->authenticate(@{$self->_getauthopts()})
+        or die "cyradm: cannot authenticate to $refserver\n";
+
+      my $ret = $cyradm->subscribemailbox($box);
+      $self->{error} = $cyradm->error;
+      $cyradm = undef;
+      return $ret;
+    }
+    $self->{error} = $msg;
+    undef;
+  }
+}
+*subscribe = *subscribemailbox;
+
+sub unsubscribemailbox {
+  my ($self, $mbx) = @_;
+  my ($rc, $msg) = $self->send('', '', 'UNSUBSCRIBE %s', $mbx);
+  if ($rc eq 'OK') {
+    $self->{error} = undef;
+    1;
+  } else {
+    if($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
+      my ($refserver, $box) = $self->fromURL($1);
+      my $port = 143;
+
+      if($refserver =~ /:/) {
+        $refserver =~ /([^:]+):(\d+)/;
+        $refserver = $1; $port = $2;
+      }
+
+      my $cyradm = Cyrus::IMAP::Admin->new($refserver, $port)
+        or die "cyradm: cannot connect to $refserver\n";
+      $cyradm->addcallback({-trigger => 'EOF',
+                            -callback => \&_cb_ref_eof,
+                            -rock => \$cyradm});
+      $cyradm->authenticate(@{$self->_getauthopts()})
+        or die "cyradm: cannot authenticate to $refserver\n";
+
+      my $ret = $cyradm->unsubscribemailbox($box);
+      $self->{error} = $cyradm->error;
+      $cyradm = undef;
+      return $ret;
+    }
+    $self->{error} = $msg;
+    undef;
+  }
+}
+*unsubscribe = *unsubscribemailbox;
 
 sub error {
   my $self = shift;
