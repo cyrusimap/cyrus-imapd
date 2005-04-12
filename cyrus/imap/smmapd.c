@@ -72,7 +72,7 @@
  * may contain an explanatory message.
  *
  *
- * $Id: smmapd.c,v 1.1.2.11 2004/12/17 18:15:17 ken3 Exp $
+ * $Id: smmapd.c,v 1.1.2.12 2005/04/12 20:13:48 shadow Exp $
  */
 
 #include <config.h>
@@ -119,7 +119,7 @@ void shut_down(int code)
     if (map_in) prot_free(map_in);
     if (map_out) prot_free(map_out);
 
-    cyrus_reset_stdio();
+    cyrus_reset_stdio(); 
 
     mboxlist_close();
     mboxlist_done();
@@ -264,6 +264,14 @@ int verify_user(const char *key, long quotacheck,
 	long aclcheck = !user ? ACL_POST : 0;
 	int type;
 	char *acl;
+        char *path;
+        char *c;
+        struct hostent *hp;
+        char *host;
+        struct sockaddr_in sin,sfrom;
+        char buf[512];
+        int soc, x, rc;
+
 	/*
 	 * check to see if mailbox exists and we can append to it:
 	 *
@@ -271,10 +279,10 @@ int verify_user(const char *key, long quotacheck,
 	 * - don't care about ACL on INBOX (always allow post)
 	 * - don't care about message size (1 msg over quota allowed)
 	 */
-	r = mboxlist_detail(namebuf, &type, NULL, NULL, NULL, &acl, NULL);
+	r = mboxlist_detail(namebuf, &type, &path, NULL, NULL, &acl, NULL);
 	if (r == IMAP_MAILBOX_NONEXISTENT && config_mupdate_server) {
 	    kick_mupdate();
-	    r = mboxlist_detail(namebuf, &type, NULL, NULL, NULL, &acl, NULL);
+	    r = mboxlist_detail(namebuf, &type, &path, NULL, NULL, &acl, NULL);
 	}
 
 	if (!r && (type & MBTYPE_REMOTE)) {
@@ -287,9 +295,55 @@ int verify_user(const char *key, long quotacheck,
 	    if ((access & aclcheck) != aclcheck) {
 		r = (access & ACL_LOOKUP) ?
 		    IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+                return r;
 	    } else {
-		r = 0;
-	    }
+                r = 0;
+            }
+
+            /* proxy the request to the real backend server to 
+             * check the quota.  if this fails, just return 0
+             * (asuume under quota)
+             */
+
+            host = strdup(path);
+            c = strchr(host, '!');
+            if (c) *c = 0;
+
+            syslog(LOG_ERR, "verify_user(%s) proxying to host %s",
+                   namebuf, host);
+
+            hp = gethostbyname(host);
+            if (hp == (struct hostent*) 0) {
+               syslog(LOG_ERR, "verify_user(%s) failed: can't find host %s",
+                      namebuf, host);
+               return r;
+            }
+
+            soc = socket(PF_INET, SOCK_STREAM, 0);
+            memcpy(&sin.sin_addr.s_addr,hp->h_addr,hp->h_length);
+            sin.sin_family = AF_INET;
+
+            /* XXX port should be configurable */
+            sin.sin_port = htons(12345);
+
+            if (connect(soc,(struct sockaddr *) &sin, sizeof(sin)) < 0) { 
+                syslog(LOG_ERR, "verify_user(%s) failed: can't connect to %s", 
+                       namebuf, host);
+               return r;
+            }
+
+            sprintf(buf,"%d:cyrus %s,%c",strlen(key)+6,key,4);
+            sendto(soc,buf,strlen(buf),0,(struct sockaddr *)&sin,sizeof(sin));
+
+            x = sizeof(sfrom);
+            rc = recvfrom(soc,buf,512,0,(struct sockaddr *)&sfrom,&x);
+ 
+            buf[rc] = '\0';
+            close(soc);
+
+	    prot_printf(map_out, "%s", buf);
+            return -1;   /* tell calling function we already replied */
+
 	} else if (!r) {
 	    r = append_check(namebuf, MAILBOX_FORMAT_NORMAL, authstate,
 			     aclcheck, quotacheck > 0 ? 0 : quotacheck);
@@ -362,6 +416,10 @@ int begin_handling(void)
 	}
 
 	switch (r) {
+        case -1:
+            /* reply already sent */
+            break;
+
 	case 0:
 	    prot_printf(map_out, "%d:OK %s,", 3+strlen(key), key);
 	    break;
