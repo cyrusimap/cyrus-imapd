@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: IMAP.pm,v 1.19.2.1 2005/04/11 05:56:22 shadow Exp $
+# $Id: IMAP.pm,v 1.19.2.2 2005/04/12 20:02:19 shadow Exp $
 
 package Cyrus::IMAP;
 
@@ -229,7 +229,7 @@ sub authenticate {
     # `Use of uninitialized value in subroutine entry' warning with perl -w
     # when $opts{-password} is uninitialized (which may well be ok for e.g.
     # the GSSAPI mechanism).
-    no warnings 'uninitialized';
+    $opts{-password} = "" if (!defined($opts{-password}));
     $rc = $self->_authenticate($opts{-mechanism}, $opts{-service},
 			       $opts{-authz}, $opts{-user}, $opts{-password},
 			       $opts{-minssf}, $opts{-maxssf});
