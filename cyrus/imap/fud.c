@@ -42,7 +42,7 @@
 
 #include <config.h>
 
-/* $Id: fud.c,v 1.48.2.5 2004/12/17 18:15:00 ken3 Exp $ */
+/* $Id: fud.c,v 1.48.2.6 2005/04/13 15:43:36 shadow Exp $ */
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -202,6 +202,7 @@ int service_main(int argc __attribute__((unused)),
     r = begin_handling();
 
     shut_down(r);
+    return 0;
 }
 
 static void cyrus_timeout(int signo __attribute__((unused)))
