@@ -72,7 +72,7 @@
  * may contain an explanatory message.
  *
  *
- * $Id: smmapd.c,v 1.12 2005/04/12 20:11:41 shadow Exp $
+ * $Id: smmapd.c,v 1.13 2005/04/13 15:42:04 shadow Exp $
  */
 
 #include <config.h>
@@ -199,6 +199,7 @@ int service_main(int argc __attribute__((unused)),
     r = begin_handling();
 
     shut_down(r);
+    return 0;
 }
 
 int verify_user(const char *key, long quotacheck,
