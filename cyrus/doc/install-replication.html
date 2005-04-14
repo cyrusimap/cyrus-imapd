@@ -1,0 +1,168 @@
+<!-- $Id: install-replication.html,v 1.1.2.1 2005/04/14 17:03:57 ken3 Exp $ -->
+<HTML>
+<HEAD>
+<TITLE>Cyrus replication
+</title>
+</head>
+<h1>Cyrus replication
+</h1>
+<body>
+
+<b><i>Note that Cyrus replication is still relatively young in the
+grand scheme of things, and if you choose to deploy you are doing so
+at your own risk.  The core of the replication code has been used
+successfully in production at <a
+href="http://www-uxsup.csx.cam.ac.uk/~dpc22/cyrus/replication.html">Cambridge 
+University</a> for about a year, but it has been rewritten extensively
+as part of the integration into the mainstream Cyrus codebase.
+</i></b><br>
+
+<h3>Introduction &amp; Assumptions</h3>
+<p>The Cyrus replication engine is designed to replicate the mailstore on
+standalone Cyrus servers or "backend" servers in a Cyrus Murder to
+provide a high-availability environment.  It is <b>NOT</b> intended to
+replicate "frontend" servers or the "mupdate master" in a Cyrus
+Murder.  <i>Note that load balancing is not possible with the current
+replication code, but it is intended to be supported in the
+future.</i></p>
+
+<p>This document assumes that you have successfully been able to setup
+atleast one Cyrus IMAP server.  This server will become your first
+"master" server. It also assumes that you are familliar with the
+administration and day to day operations of the Cyrus IMAP server and
+the SASL authentication library. If you feel uncomfortable with this,
+please refer to the rest of the documentation first.</p>
+
+<h2>Installation</h2>
+You will need to build Cyrus IMAPd with the
+<tt>--enable-replication</tt> configure option.  This builds the 
+replication client/server applications and utilities.
+
+<h3>Requirements</h3>
+<ul>
+<li>Atleast one standalone or "backend" Cyrus IMAP server.</li>
+<li>Atleast one machine that will become the first "replica" server.</li>
+</ul>
+
+<h3>Configuring the "replica" server</h3>
+
+The "replica" server is a standalone server which listens for
+and processes synchronization messages from a "master" server.  The
+"replica" server needs to be configured to accept these synchonization
+messages.<p>
+
+<ol>
+<p><li>Configure a standalone server as described in the rest
+of the documentation.
+
+<p><li>Add the following line to the "<tt>/etc/services</tt>" file.
+
+<pre>
+   csync     2005/tcp
+</pre>
+
+<p>Note that the port number is arbitrary as long as its not being
+used by any other services on your network.
+
+<p><li>
+Add a line similar to the following in the SERVICES section of cyrus.conf:<p>
+
+<pre>
+  syncserver       cmd="/usr/cyrus/bin/sync_server" listen="csync"
+</pre>
+
+<p><li>Start/restart <tt>"/usr/cyrus/bin/master"</tt>.
+
+</ol>
+
+<h3>Configuring the "master" server</h3>
+
+The "master" server is the standalone or "backend" server which
+is actively serving mailboxes to clients.  This server needs to be
+configured to synchronize its mailstore with a "replica" server.<p>
+
+<ol>
+<p><li>Add the following line to the "<tt>/etc/services</tt>" file.
+
+<pre>
+   csync     2005/tcp
+</pre>
+
+<p>Note that the port number MUST be the same as that used on the
+"replica" server.
+
+<pre>
+sync_machineid: 1
+sync_host: cyrus_replica
+</pre>
+
+<p><li>
+Define the <tt>sync_machineid</tt> option in imapd.conf.  This option
+specifies the numeric identifier of the "master" machine which is used
+in constructing the universally unique identifier (UUID) for each
+message on the server.  This identifier MUST be unique across all
+"backend" servers in a Murder. Example:<p>
+
+<pre>
+sync_machineid: 1
+</pre>
+
+<p><li>
+Specify the hostname of the "replica" server and how to authenticate
+to it using the following imap.conf options:
+
+<ul>
+<li><tt>sync_host</tt></li>
+<li><tt>sync_authname</tt></li>
+<li><tt>sync_realm</tt></li>
+<li><tt>sync_password</tt></li>
+</ul>
+
+<p>Note that <tt>aync_authname</tt> MUST be an admin on the "replica"
+server.  Also note that <tt>sync_realm</tt> and <tt>sync_password</tt>
+may not be necessary depending on the SASL mechanism used for
+authentication.
+
+</ol>
+
+<h4>"Rolling" replication</h4>
+
+"Rolling" replication means that the "master" server continuously
+synchonizes itself with the replica.  To configure "rolling"
+relplication, perform the following:
+
+<ol>
+<p><li>Enable the <tt>sync_log</tt> option in imapd.conf.  This allows
+the <tt>imapd</tt>, <tt>pop3d</tt>, <tt>nntpd</tt>, and <tt>lmtpd</tt>
+services to log synchonization actions which will be periodically
+serviced by <tt>sync_client</tt>.
+
+<p><li>Optionally, adjust the <tt>sync_repeat_interval</tt> in imapd.conf.
+
+<p><li>
+Add a line similar to the following in the STARTUP section of cyrus.conf:<p>
+
+<pre>
+  syncclient       cmd="/usr/cyrus/bin/sync_server -r"
+</pre>
+
+<p><li>Start/restart <tt>"/usr/cyrus/bin/master"</tt>.
+
+</ol>
+
+<h2>Administration</h2>
+
+<h3>Manual replication</h3>
+
+To manually synchonize any part of the mailstore, simply run
+<tt>sync_client(8)</tt> with the appropriate command line options.
+Note that you CAN manually synchonize even if "rolling" replication
+has been configured.
+
+<h3>Failover</h3>
+
+<P><HR>
+last modified: $Date: 2005/04/14 17:03:57 $
+</BODY></HTML>
+
+
