@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.2.2.34 2005/04/11 06:56:24 shadow Exp $
+.\" $Id: imapoptions,v 1.2.2.35 2005/04/14 14:51:55 ken3 Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -881,8 +881,8 @@ are listed with ``<none>''.
 
 { "sync_machineid", -1, INT }
 /* Machine ID of this server which must be unique within a cluster.
-   Any negative number, the default, will disable the use of UUIDs for
-   replication. *./
+   Any negative nuqmber, the default, will disable the use of UUIDs for
+   replication. */
 
 { "sync_password", NULL, STRING }
 /* The default password to use when authenticating to a sync server. */
