@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: quota.c,v 1.57 2004/06/30 19:23:26 ken3 Exp $ */
+/* $Id: quota.c,v 1.58 2005/04/18 15:06:45 shadow Exp $ */
 
 
 #include <config.h>
@@ -168,19 +168,27 @@ int main(int argc,char **argv)
 	fatal(error_message(r), EC_CONFIG);
     }
 
+    /*
+     * Lock mailbox list to prevent mailbox creation/deletion
+     * during work
+     */
+    mboxlist_init(0);
+    mboxlist_open(NULL);
+
     quotadb_init(0);
     quotadb_open(NULL);
 
     if (!r) r = buildquotalist(domain, argv+optind, argc-optind);
 
     if (!r && fflag) {
-	mboxlist_init(0);
 	r = fixquota(domain, argc-optind);
-	mboxlist_done();
     }
 
     quotadb_close();
     quotadb_done();
+
+    mboxlist_close();
+    mboxlist_done();
 
     if (!r) reportquota();
 
@@ -200,41 +208,6 @@ void usage(void)
     exit(EC_USAGE);
 }    
 
-struct find_rock {
-    char **roots;
-    int nroots;
-};
-
-static int find_p(void *rockp,
-		  const char *key, int keylen,
-		  const char *data __attribute__((unused)),
-		  int datalen __attribute__((unused)))
-{
-    struct find_rock *frock = (struct find_rock *) rockp;
-    int i;
-
-    /* If restricting our list, see if this quota root matches */
-    if (frock->nroots) {
-	const char *p;
-
-	/* skip over domain */
-	if (config_virtdomains && (p = strchr(key, '!'))) {
-	    keylen -= (++p - key);
-	    key = p;
-	}
-
- 	for (i = 0; i < frock->nroots; i++) {
-	    if (keylen >= strlen(frock->roots[i]) &&
-		!strncmp(key, frock->roots[i], strlen(frock->roots[i]))) {
-		break;
-	    }
-	}
-	if (i == frock->nroots) return 0;
-    }
-
-    return 1;
-}
-
 /*
  * Add a quota root to the list in 'quota'
  */
@@ -242,12 +215,29 @@ static int find_cb(void *rockp __attribute__((unused)),
 		   const char *key, int keylen,
 		   const char *data, int datalen __attribute__((unused)))
 {
+    int i;
+
     if (!data) return 0;
 
+    /* Suppress duplicates on qr list
+     *
+     * XXX: For some reason all subfolders of a mailbox with their own
+     *      qr will be delivered twice to this function and therefore
+     *      added twice to the qr list. This happens at least with the
+     *      flat and skiplist quota backends.
+     *      Fix that and we can remove this time consuming part!
+     */
+    for (i = 0; i < quota_num; i++) {
+	if (keylen == strlen(quota[i].quota.root) &&
+	    !strncmp(key, quota[i].quota.root, strlen(quota[i].quota.root)))
+	    return 0;
+    }
+
+    /* Create new qr list entry */
     if (quota_num == quota_alloc) {
 	quota_alloc += QUOTAGROW;
 	quota = (struct quotaentry *)
-	  xrealloc((char *)quota, quota_alloc * sizeof(struct quotaentry));
+	   xrealloc((char *)quota, quota_alloc * sizeof(struct quotaentry));
     }
     memset(&quota[quota_num], 0, sizeof(struct quotaentry));
     quota[quota_num].quota.root = xstrndup(key, keylen);
@@ -260,16 +250,34 @@ static int find_cb(void *rockp __attribute__((unused)),
 }
 
 /*
+ * A matching mailbox was found, process it.
+ */
+static int found_match(char *name,
+		       int matchlen __attribute__((unused)),
+		       int maycreate __attribute__((unused)),
+		       void* rockp __attribute__((unused)))
+{
+    int r;
+
+    /*
+     * We do not use matchlen here, since we are only interested
+     * in (sub)folders with their own quota root. With matchlen
+     * foreach would return any subfolder of a mailbox since we
+     * only match at the mailbox name itself.
+     */
+    r = config_quota_db->foreach(qdb, name, strlen(name),
+				 NULL, &find_cb, NULL, NULL);
+
+    return r;
+}
+
+/*
  * Build the list of quota roots in 'quota'
  */
 int buildquotalist(char *domain, char **roots, int nroots)
 {
     int i;
     char buf[MAX_MAILBOX_NAME+1];
-    struct find_rock frock;
-
-    frock.roots = roots;
-    frock.nroots = nroots;
 
     /* Translate separator in mailboxnames.
      *
@@ -282,14 +290,27 @@ int buildquotalist(char *domain, char **roots, int nroots)
 	mboxname_hiersep_tointernal(&quota_namespace, roots[i], 0);
     }
 
-    buf[0] = '\0';
-    if (domain) snprintf(buf, sizeof(buf), "%s!", domain);
+    /*
+     * Walk through all given pattern(s) and resolve them to all
+     * matching mailbox names. Call found_match() for every mailbox
+     * name found. If no pattern is given, assume "*".
+     */
+    i = 0;
+    do {
+	buf[0] = '\0';
+	if (domain) snprintf(buf, sizeof(buf), "%s!", domain);
 
-    /* if we have exactly one root specified, narrow the search */
-    if (nroots == 1) strlcat(buf, roots[0], sizeof(buf));
-	    
-    config_quota_db->foreach(qdb, buf, strlen(buf),
-			     &find_p, &find_cb, &frock, NULL);
+	if (nroots > 0) {
+	    strlcat(buf, roots[i], sizeof(buf));
+	}
+	else {
+	    strlcat(buf, "*", sizeof(buf));
+	}
+	i++;
+
+	(*quota_namespace.mboxlist_findall)(&quota_namespace, buf, 1, 0, 0,
+					    &found_match, NULL);
+    } while (i < nroots);
 
     return 0;
 }
@@ -445,16 +466,9 @@ int fixquota_finish(int thisquota, struct txn **tid, unsigned long *count)
  */
 int fixquota(char *domain, int ispartial)
 {
-    int r = 0;
-    static char pattern[2] = "*";
+    int i, r = 0;
     struct fix_rock frock;
     struct txn *tid = NULL;
-
-    /*
-     * Lock mailbox list to prevent mailbox creation/deletion
-     * during the fix
-     */
-    mboxlist_open(NULL);
 
     frock.domain = domain;
     frock.tid = &tid;
@@ -466,8 +480,15 @@ int fixquota(char *domain, int ispartial)
 	firstquota = 0;
 	partial = ispartial;
 
-	r = (*quota_namespace.mboxlist_findall)(&quota_namespace, pattern, 1,
-						0, 0, fixquota_mailbox, &frock);
+	/*
+	 * Loop over all qr entries and recalculate the quota.
+	 * We need the subfolders too!
+	 */
+	for (i = 0; !r && i < quota_num; i++) {
+	    r = (*quota_namespace.mboxlist_findall)(&quota_namespace, quota[i].quota.root,
+						    1, 0, 0, fixquota_mailbox, &frock);
+	}
+
 	while (!r && firstquota < quota_num) {
 	    r = fixquota_finish(firstquota++, &tid, &frock.change_count);
 	}
@@ -475,8 +496,6 @@ int fixquota(char *domain, int ispartial)
 
     if (!r && tid) quota_commit(&tid);
     
-    mboxlist_close();
-
     return 0;
 }
     

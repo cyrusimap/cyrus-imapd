@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_quotalegacy.c,v 1.10 2004/08/04 13:03:19 ken3 Exp $ */
+/* $Id: cyrusdb_quotalegacy.c,v 1.11 2005/04/18 15:06:15 shadow Exp $ */
 
 #include <config.h>
 
@@ -490,10 +490,6 @@ static int foreach(struct db *db,
     hash_quota(quota_path, sizeof(quota_path), prefix, db->path);
     if (config_virtdomains && (p = strchr(prefix, '!')))
 	prefix = p + 1;
-
-    /* strip off the qr specific path and replace with pattern */
-    sprintf(strstr(quota_path, FNAME_QUOTADIR) + strlen(FNAME_QUOTADIR),
-	    "?/%s*", prefix);
 
     /* search for the quotaroots */
     glob(quota_path, GLOB_NOSORT, NULL, &globbuf);
