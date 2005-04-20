@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: quota.c,v 1.58 2005/04/18 15:06:45 shadow Exp $ */
+/* $Id: quota.c,v 1.59 2005/04/20 16:29:19 ken3 Exp $ */
 
 
 #include <config.h>
@@ -229,7 +229,7 @@ static int find_cb(void *rockp __attribute__((unused)),
      */
     for (i = 0; i < quota_num; i++) {
 	if (keylen == strlen(quota[i].quota.root) &&
-	    !strncmp(key, quota[i].quota.root, strlen(quota[i].quota.root)))
+	    !strncmp(key, quota[i].quota.root, keylen))
 	    return 0;
     }
 
@@ -277,17 +277,14 @@ static int found_match(char *name,
 int buildquotalist(char *domain, char **roots, int nroots)
 {
     int i;
-    char buf[MAX_MAILBOX_NAME+1];
+    char buf[MAX_MAILBOX_NAME+1], *tail;
+    size_t domainlen = 0;
 
-    /* Translate separator in mailboxnames.
-     *
-     * We do this directly instead of using the mboxname_tointernal()
-     * function pointer because we know that we are using the internal
-     * namespace and so we don't have to allocate a buffer for the
-     * translated name.
-     */
-    for (i = 0; i < nroots; i++) {
-	mboxname_hiersep_tointernal(&quota_namespace, roots[i], 0);
+    buf[0] = '\0';
+    tail = buf;
+    if (domain) {
+	domainlen = snprintf(buf, sizeof(buf), "%s!", domain);
+	tail += domainlen;
     }
 
     /*
@@ -297,14 +294,20 @@ int buildquotalist(char *domain, char **roots, int nroots)
      */
     i = 0;
     do {
-	buf[0] = '\0';
-	if (domain) snprintf(buf, sizeof(buf), "%s!", domain);
-
 	if (nroots > 0) {
-	    strlcat(buf, roots[i], sizeof(buf));
+	    /* Translate separator in quotaroot.
+	     *
+	     * We do this directly instead of using the mboxname_tointernal()
+	     * function pointer because we know that we are using the internal
+	     * namespace and so we don't have to allocate a buffer for the
+	     * translated name.
+	     */
+	    mboxname_hiersep_tointernal(&quota_namespace, roots[i], 0);
+
+	    strlcpy(tail, roots[i], sizeof(buf) - domainlen);
 	}
 	else {
-	    strlcat(buf, "*", sizeof(buf));
+	    strlcpy(tail, "*", sizeof(buf) - domainlen);
 	}
 	i++;
 
