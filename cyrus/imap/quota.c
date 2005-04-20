@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: quota.c,v 1.48.2.12 2005/04/20 19:34:26 ken3 Exp $ */
+/* $Id: quota.c,v 1.48.2.13 2005/04/20 19:35:55 ken3 Exp $ */
 
 
 #include <config.h>
@@ -217,8 +217,6 @@ static int found_match(char *name,
 		       void* rockp __attribute__((unused)))
 {
     int r;
-    const char *data;
-    int datalen;
 
     if (quota_num == quota_alloc) {
 	/* Create new qr list entry */
