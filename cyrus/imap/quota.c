@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: quota.c,v 1.48.2.10 2005/04/20 16:26:49 ken3 Exp $ */
+/* $Id: quota.c,v 1.48.2.11 2005/04/20 18:34:30 ken3 Exp $ */
 
 
 #include <config.h>
@@ -209,47 +209,6 @@ void usage(void)
 }    
 
 /*
- * Add a quota root to the list in 'quota'
- */
-static int find_cb(void *rockp __attribute__((unused)),
-		   const char *key, int keylen,
-		   const char *data, int datalen __attribute__((unused)))
-{
-    int i;
-
-    if (!data) return 0;
-
-    /* Suppress duplicates on qr list
-     *
-     * XXX: For some reason all subfolders of a mailbox with their own
-     *      qr will be delivered twice to this function and therefore
-     *      added twice to the qr list. This happens at least with the
-     *      flat and skiplist quota backends.
-     *      Fix that and we can remove this time consuming part!
-     */
-    for (i = 0; i < quota_num; i++) {
-	if (keylen == strlen(quota[i].quota.root) &&
-	    !strncmp(key, quota[i].quota.root, keylen))
-	    return 0;
-    }
-
-    /* Create new qr list entry */
-    if (quota_num == quota_alloc) {
-	quota_alloc += QUOTAGROW;
-	quota = (struct quotaentry *)
-	   xrealloc((char *)quota, quota_alloc * sizeof(struct quotaentry));
-    }
-    memset(&quota[quota_num], 0, sizeof(struct quotaentry));
-    quota[quota_num].quota.root = xstrndup(key, keylen);
-    sscanf(data, UQUOTA_T_FMT " %d",
-	   &quota[quota_num].quota.used, &quota[quota_num].quota.limit);
-  
-    quota_num++;
-
-    return 0;
-}
-
-/*
  * A matching mailbox was found, process it.
  */
 static int found_match(char *name,
@@ -258,15 +217,27 @@ static int found_match(char *name,
 		       void* rockp __attribute__((unused)))
 {
     int r;
+    const char *data;
+    int datalen;
 
-    /*
-     * We do not use matchlen here, since we are only interested
-     * in (sub)folders with their own quota root. With matchlen
-     * foreach would return any subfolder of a mailbox since we
-     * only match at the mailbox name itself.
-     */
-    r = config_quota_db->foreach(qdb, name, strlen(name),
-				 NULL, &find_cb, NULL, NULL);
+    /* See if the mailbox name corresponds to a quotaroot */
+    r = config_quota_db->fetch(qdb, name, strlen(name), &data, &datalen, NULL);
+    if (r == CYRUSDB_NOTFOUND) r = 0;
+
+    if (!r && data) {
+	/* Create new qr list entry */
+	if (quota_num == quota_alloc) {
+	    quota_alloc += QUOTAGROW;
+	    quota = (struct quotaentry *)
+		xrealloc((char *)quota, quota_alloc * sizeof(struct quotaentry));
+	}
+	memset(&quota[quota_num], 0, sizeof(struct quotaentry));
+	quota[quota_num].quota.root = xstrdup(name);
+	sscanf(data, UQUOTA_T_FMT " %d",
+	       &quota[quota_num].quota.used, &quota[quota_num].quota.limit);
+
+	quota_num++;
+    }
 
     return r;
 }
