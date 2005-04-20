@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: quota.c,v 1.60 2005/04/20 18:43:15 ken3 Exp $ */
+/* $Id: quota.c,v 1.61 2005/04/20 19:37:34 ken3 Exp $ */
 
 
 #include <config.h>
@@ -217,27 +217,23 @@ static int found_match(char *name,
 		       void* rockp __attribute__((unused)))
 {
     int r;
-    const char *data;
-    int datalen;
+
+    if (quota_num == quota_alloc) {
+	/* Create new qr list entry */
+	quota_alloc += QUOTAGROW;
+	quota = (struct quotaentry *)
+	    xrealloc((char *)quota, quota_alloc * sizeof(struct quotaentry));
+	memset(&quota[quota_num], 0, sizeof(struct quotaentry));
+    }
 
     /* See if the mailbox name corresponds to a quotaroot */
-    r = config_quota_db->fetch(qdb, name, strlen(name), &data, &datalen, NULL);
-    if (r == CYRUSDB_NOTFOUND) r = 0;
+    quota[quota_num].quota.root = name;
+    do {
+	r = quota_read(&quota[quota_num].quota, NULL, 0);
+    } while (r == IMAP_AGAIN);
 
-    if (!r && data) {
-	/* Create new qr list entry */
-	if (quota_num == quota_alloc) {
-	    quota_alloc += QUOTAGROW;
-	    quota = (struct quotaentry *)
-		xrealloc((char *)quota, quota_alloc * sizeof(struct quotaentry));
-	}
-	memset(&quota[quota_num], 0, sizeof(struct quotaentry));
-	quota[quota_num].quota.root = xstrdup(name);
-	sscanf(data, "%lu %d",
-	       &quota[quota_num].quota.used, &quota[quota_num].quota.limit);
-
-	quota_num++;
-    }
+    if (!r) quota[quota_num++].quota.root = xstrdup(name);
+    else if (r == IMAP_QUOTAROOT_NONEXISTENT) r = 0;
 
     return r;
 }
