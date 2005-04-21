@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: isieve.c,v 1.27.2.1 2004/06/18 14:46:55 ken3 Exp $ */
+/* $Id: isieve.c,v 1.27.2.2 2005/04/21 21:04:50 shadow Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -251,7 +251,9 @@ char * read_capability(isieve_t *obj)
   while (yylex(&state,obj->pin)==STRING)
   {
       char *attr = string_DATAPTR(state.str);
-      char *val = NULL;
+      char *val;
+
+      val = NULL;
 
       if (yylex(&state,obj->pin)==' ')
       {
@@ -259,7 +261,7 @@ char * read_capability(isieve_t *obj)
 	  {
 	      parseerror("STRING");
 	  }
-	  val = string_DATAPTR(state.str);
+	  val = xstrdup(string_DATAPTR(state.str));
 	  if (yylex(&state,obj->pin)!=EOL)
 	  {
 	      parseerror("EOL1");
@@ -268,7 +270,8 @@ char * read_capability(isieve_t *obj)
 
       if (strcasecmp(attr,"SASL")==0)
       {
-	cap = val;
+	if (cap) free(cap);
+	cap = xstrdup(val);
       } else if (strcasecmp(attr,"SIEVE")==0) {
 
       } else if (strcasecmp(attr,"IMPLEMENTATION")==0) {
@@ -279,12 +282,13 @@ char * read_capability(isieve_t *obj)
 	  obj->version = OLD_VERSION;
 	  cap = (char *) xmalloc(strlen(val));
 	  memset(cap, '\0', strlen(val));
-	  memcpy(cap, val+6, strlen(val)-7);
+	  memcpy(cap, val+5, strlen(val)-6);
 
 	  return cap;
       } else {
-	  /* unkown capability */
+	  /* unknown capability */
       }
+      if (val) { free(val); val = NULL; }
   }
 
   if (yylex(&state,obj->pin)!=EOL)
