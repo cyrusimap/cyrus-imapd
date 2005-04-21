@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: managesieve.xs,v 1.21 2003/10/22 18:50:27 rjs3 Exp $ */
+/* $Id: managesieve.xs,v 1.21.2.1 2005/04/21 18:38:48 shadow Exp $ */
 
 #ifdef __cplusplus
 extern "C" {
@@ -330,7 +330,7 @@ sieve_get_handle(servername, username_cb, authname_cb, password_cb, realm_cb)
 
   if(r) {
 	/* we failed */
-	free(ret->class);
+	safefree(ret->class);
 	free(ret);
 	XSRETURN_UNDEF;
   }
