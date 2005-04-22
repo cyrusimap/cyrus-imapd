@@ -1,6 +1,6 @@
 /* message.c -- message parsing functions
  * Larry Greenfield
- * $Id: message.c,v 1.27.2.4 2005/03/12 03:30:11 ken3 Exp $
+ * $Id: message.c,v 1.27.2.5 2005/04/22 17:57:37 shadow Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -570,6 +570,7 @@ action_list_t *new_action_list(void)
 	ret->a = ACTION_NONE;
 	ret->param = NULL;
 	ret->next = NULL;
+	ret->cancel_keep = 0;
     }
     return ret;
 }
