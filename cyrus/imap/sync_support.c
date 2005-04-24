@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.c,v 1.1.2.9 2005/04/11 17:56:01 ken3 Exp $
+ * $Id: sync_support.c,v 1.1.2.10 2005/04/24 20:30:36 ken3 Exp $
  */
 
 #include <config.h>
@@ -1491,7 +1491,7 @@ struct sync_sieve_list *sync_sieve_list_generate(char *userid)
         if (stat(filename, &sbuf) < 0)
             continue;
 
-        if (!strcmp(next->d_name, "default")) {
+        if (!strcmp(next->d_name, "defaultbc")) {
             if (sbuf.st_mode & S_IFLNK) {
                 count = readlink(filename, active, 2047);
 
@@ -1626,7 +1626,7 @@ int sync_sieve_activate(char *userid, char *name)
              config_getstring(IMAPOPT_SIEVEDIR), dir_hash_c(userid), userid);
 
     snprintf(target, sizeof(target), "%s", name);
-    snprintf(active, sizeof(active), "%s/%s", sieve_path, "default");
+    snprintf(active, sizeof(active), "%s/%s", sieve_path, "defaultbc");
     unlink(active);
     
     if (symlink(target, active) < 0)
@@ -1643,7 +1643,7 @@ int sync_sieve_deactivate(char *userid)
     snprintf(sieve_path, sizeof(sieve_path), "%s/%c/%s",
              config_getstring(IMAPOPT_SIEVEDIR), dir_hash_c(userid), userid);
 
-    snprintf(active, sizeof(active), "%s/%s", sieve_path, "default");
+    snprintf(active, sizeof(active), "%s/%s", sieve_path, "defaultbc");
     unlink(active);
     
     return(0);
@@ -1676,7 +1676,7 @@ int sync_sieve_delete(char *userid, char *name)
         if (stat(filename, &sbuf) < 0)
             continue;
 
-        if (!strcmp(next->d_name, "default")) {
+        if (!strcmp(next->d_name, "defaultbc")) {
             if (sbuf.st_mode & S_IFLNK) {
                 count = readlink(filename, active, 2047);
 
@@ -1692,7 +1692,7 @@ int sync_sieve_delete(char *userid, char *name)
     closedir(mbdir);
 
     if (is_default) {
-        snprintf(filename, sizeof(filename), "%s/default", sieve_path);
+        snprintf(filename, sizeof(filename), "%s/defaultbc", sieve_path);
         unlink(filename);
     }
 
