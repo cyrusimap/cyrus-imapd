@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.c,v 1.1.2.10 2005/04/24 20:30:36 ken3 Exp $
+ * $Id: sync_support.c,v 1.1.2.11 2005/04/24 21:04:19 ken3 Exp $
  */
 
 #include <config.h>
@@ -1719,27 +1719,22 @@ void sync_action_list_add(struct sync_action_list *l, char *name, char *user)
 {
     struct sync_action *current;
 
+    if (!name && !user) return;
+
     for (current = l->head ; current ; current = current->next) {
-        if (user && current->user) {
-            if (!strcmp(current->name, name) &&
-                !strcmp(current->user, user)) {
-                current->active = 1;  /* Make sure active */
-                return;
-            }
-        } else if (!user && !current->user) {
-            if (!strcmp(current->name, name)) {
-                current->active = 1;  /* Make sure active */
-                return;
-            }
-        } else {
-            /* user doesn't match current->user: no match possible */
-        }
+        if ((!name || (current->name && !strcmp(current->name, name))) &&
+	    (!user || (current->user && !strcmp(current->user, user)))) {
+	    current->active = 1;  /* Make sure active */
+	    return;
+	} else {
+	    /* name and/or user don't match current: no match possible */
+	}
     }
 
     current           = xzmalloc(sizeof(struct sync_action));
     current->next     = NULL;
-    current->name     = (name)      ? xstrdup(name)      : NULL;
-    current->user = (user)  ? xstrdup(user)  : NULL;
+    current->name     = (name)  ? xstrdup(name)  : NULL;
+    current->user     = (user)  ? xstrdup(user)  : NULL;
     current->active   = 1;
 
     if (l->tail)
