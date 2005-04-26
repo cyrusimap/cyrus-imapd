@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: quota.c,v 1.48.2.14 2005/04/26 16:54:25 ken3 Exp $ */
+/* $Id: quota.c,v 1.48.2.15 2005/04/26 23:10:31 shadow Exp $ */
 
 
 #include <config.h>
@@ -444,7 +444,7 @@ int fixquota_fixroot(struct mailbox *mailbox,
  */
 int fixquota_finish(int thisquota, struct txn **tid, unsigned long *count)
 {
-    int r;
+    int r = 0;
 
     if (!quota[thisquota].refcount) {
 	if (!quota[thisquota].deleted++) {
