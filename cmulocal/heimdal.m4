@@ -1,7 +1,7 @@
 dnl kerberos_v5.m4--Kerberos 5 libraries and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
-dnl $Id: heimdal.m4,v 1.8 2004/04/07 06:34:36 shadow Exp $
+dnl $Id: heimdal.m4,v 1.9 2005/04/26 19:14:07 shadow Exp $
 
 AC_DEFUN([CMU_LIBHEIMDAL_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS
@@ -79,8 +79,17 @@ AC_DEFUN([CMU_LIBHEIMDAL_LIBDES], [
               HEIM_LIBDES="$LIBSSL_LIB_FLAGS"
               HEIM_LIBDESA="$LIBSSL_LIB_FLAGS"
           else
-              AC_MSG_RESULT([unknown])
-              AC_MSG_ERROR([Could not use -ldes])
+              LIBS="$cmu_save_LIBS -L$LIBSSL_LIB_DIR -ldescompat $LIBSSL_LIB_FLAGS"
+              AC_TRY_LINK([],
+              [des_quad_cksum();],HEIM_DES_LIB="libcrypto+descompat")
+              if test "X$HEIM_DES_LIB" = "Xlibcrypto+descompat"; then
+                  AC_MSG_RESULT([libcrypto+descompat])
+                  HEIM_LIBDES="-L$LIBSSL_LIB_DIR -ldescompat $LIBSSL_LIB_FLAGS"
+                  HEIM_LIBDESA="-L$LIBSSL_LIB_DIR -ldescompat $LIBSSL_LIB_FLAGS"
+              else
+                  AC_MSG_RESULT([unknown])
+                  AC_MSG_ERROR([Could not use -ldes])
+              fi 
           fi 
       fi 
   else
@@ -89,6 +98,7 @@ AC_DEFUN([CMU_LIBHEIMDAL_LIBDES], [
 ])
 
 AC_DEFUN([CMU_LIBHEIMDAL], [
+AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_REQUIRE([CMU_SOCKETS])
 AC_REQUIRE([CMU_USE_COMERR])
 AC_ARG_WITH(LIBHEIMDAL,
@@ -109,7 +119,7 @@ AC_ARG_WITH(libheimdal-include,
 
 	if test "X$with_libheimdal" != "X"; then
 	  if test "$with_libheimdal" != "yes" -a "$with_libheimdal" != "no"; then
-	    ac_cv_libheimdal_where_lib=$with_libheimdal/lib
+	    ac_cv_libheimdal_where_lib=$with_libheimdal/$CMU_LIB_SUBDIR
 	    ac_cv_libheimdal_where_inc=$with_libheimdal/include
 	  fi
 	fi
@@ -119,7 +129,7 @@ AC_ARG_WITH(libheimdal-include,
 	    ac_cv_libheimdal_where_lib=$with_libheimdal_lib
 	  fi
 	  if test "X$ac_cv_libheimdal_where_lib" = "X"; then
-	    CMU_LIBHEIMDAL_LIB_WHERE(/usr/athena/lib /usr/lib /usr/heimdal/lib /usr/local/lib)
+	    CMU_LIBHEIMDAL_LIB_WHERE(/usr/athena/$CMU_LIB_SUBDIR /usr/$CMU_LIB_SUBDIR /usr/heimdal/$CMU_LIB_SUBDIR /usr/local/$CMU_LIB_SUBDIR)
 	  fi
 
 	  if test "X$with_libheimdal_include" != "X"; then

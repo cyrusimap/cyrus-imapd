@@ -1,7 +1,7 @@
 dnl sasl.m4--sasl libraries and includes
 dnl Derrick Brashear
 dnl from KTH sasl and Arla
-dnl $Id: sasl.m4,v 1.22 2003/10/08 20:35:25 rjs3 Exp $
+dnl $Id: sasl.m4,v 1.23 2005/04/26 19:14:08 shadow Exp $
 
 AC_DEFUN([CMU_SASL_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS
@@ -46,6 +46,7 @@ AC_DEFUN([CMU_SASL_LIB_WHERE], [
 ])
 
 AC_DEFUN([CMU_SASL], [
+AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_ARG_WITH(sasl,
             [  --with-sasl=DIR        Compile with libsasl in <DIR>],
 	    with_sasl="$withval",
@@ -58,7 +59,7 @@ AC_ARG_WITH(sasl,
 	cmu_saved_LDFLAGS=$LDFLAGS
 	cmu_saved_LIBS=$LIBS
 	if test -d ${with_sasl}; then
-          ac_cv_sasl_where_lib=${with_sasl}/lib
+          ac_cv_sasl_where_lib=${with_sasl}/$CMU_LIB_SUBDIR
           ac_cv_sasl_where_inc=${with_sasl}/include
 
 	  SASLFLAGS="-I$ac_cv_sasl_where_inc"
