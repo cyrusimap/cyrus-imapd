@@ -1,4 +1,4 @@
-<!-- $Id: install-replication.html,v 1.1.2.2 2005/04/24 20:16:51 ken3 Exp $ -->
+<!-- $Id: install-replication.html,v 1.1.2.3 2005/04/26 15:17:26 ken3 Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Cyrus replication
@@ -155,7 +155,7 @@ serviced by <tt>sync_client</tt>.
 Add a line similar to the following in the STARTUP section of cyrus.conf:<p>
 
 <pre>
-  syncclient       cmd="/usr/cyrus/bin/sync_server -r"
+  syncclient       cmd="/usr/cyrus/bin/sync_client -r"
 </pre>
 
 <p><li>Start/restart <tt>"/usr/cyrus/bin/master"</tt>.
@@ -174,7 +174,7 @@ has been configured.
 <h3>Failover</h3>
 
 <P><HR>
-last modified: $Date: 2005/04/24 20:16:51 $
+last modified: $Date: 2005/04/26 15:17:26 $
 </BODY></HTML>
 
 
