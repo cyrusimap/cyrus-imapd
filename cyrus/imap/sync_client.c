@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.17 2005/03/31 20:27:51 ken3 Exp $
+ * $Id: sync_client.c,v 1.1.2.18 2005/04/26 20:15:07 ken3 Exp $
  */
 
 #include <config.h>
@@ -127,6 +127,8 @@ static void shut_down(int code) __attribute__((noreturn));
 static void shut_down(int code)
 {
     seen_done();
+    annotatemore_close();
+    annotatemore_done();
     quotadb_close();
     quotadb_done();
     mboxlist_close();
@@ -703,6 +705,25 @@ static int folder_setacl(char *name, char *acl)
     prot_flush(toserver);
 
     return(sync_parse_code("SETACL", fromserver, SYNC_PARSE_EAT_OKLINE, NULL));
+}
+
+static int folder_setannotation(char *name, char *entry, char *userid,
+				char *value)
+{
+    prot_printf(toserver, "SETANNOTATION "); 
+    sync_printastring(toserver, name);
+    prot_printf(toserver, " ");
+    sync_printastring(toserver, entry);
+    prot_printf(toserver, " ");
+    sync_printastring(toserver, userid);
+    prot_printf(toserver, " ");
+    if (value) sync_printastring(toserver, value);
+    else prot_printf(toserver, "NIL");
+    prot_printf(toserver, "\r\n"); 
+    prot_flush(toserver);
+
+    return(sync_parse_code("SETANNOTATION", fromserver,
+			   SYNC_PARSE_EAT_OKLINE, NULL));
 }
 
 /* ====================================================================== */
@@ -1407,6 +1428,118 @@ static int do_quota(char *name)
     return(r);
 }
 
+static int add_annot(const char *mailbox __attribute__((unused)),
+		     const char *entry, const char *userid,
+		     struct annotation_data *attrib, void *rock)
+{
+    struct sync_annot_list *l = (struct sync_annot_list *) rock;
+
+    sync_annot_list_add(l, entry, userid, attrib->value);
+
+    return 0;
+}
+
+static int do_annotation(char *name)
+{
+    int unsolicited, c, r = 0;
+    static struct buf entry, userid, value;
+    struct sync_annot_list *server_list = sync_annot_list_create();
+
+    prot_printf(toserver, "LIST_ANNOTATIONS %s\r\n", name);
+    prot_flush(toserver);
+    r=sync_parse_code("LIST_ANNOTATIONS", fromserver,
+		      SYNC_PARSE_EAT_OKLINE, &unsolicited);
+
+    while (!r && unsolicited) {
+	if ((c = getastring(fromserver, toserver, &entry)) != ' ') {
+            syslog(LOG_ERR,
+		   "LIST_ANNOTATIONS: Invalid type %d response from server: %s",
+                   unsolicited, entry.s);
+            sync_eatlines_unsolicited(fromserver, c);
+            r = IMAP_PROTOCOL_ERROR;
+            break;
+        }
+
+	if ((c = getastring(fromserver, toserver, &userid)) != ' ') {
+            syslog(LOG_ERR,
+		   "LIST_ANNOTATIONS: Invalid type %d response from server: %s",
+                   unsolicited, userid.s);
+            sync_eatlines_unsolicited(fromserver, c);
+            r = IMAP_PROTOCOL_ERROR;
+            break;
+        }
+
+        c = getastring(fromserver, toserver, &value);
+        if (c == '\r') c = prot_getc(fromserver);
+        if (c != '\n') {
+            syslog(LOG_ERR,
+		   "LIST_ANNOTATIONS: Invalid type %d response from server: %s",
+                   unsolicited, value.s);
+            sync_eatlines_unsolicited(fromserver, c);
+            r = IMAP_PROTOCOL_ERROR;
+            break;
+        }
+        sync_annot_list_add(server_list, entry.s, userid.s, value.s);
+
+        r = sync_parse_code("LIST_ANNOTATIONS", fromserver,
+                            SYNC_PARSE_EAT_OKLINE, &unsolicited);
+    }
+
+    if (!r) {
+	struct sync_annot_list *client_list = sync_annot_list_create();
+	struct sync_annot_item *c, *s;
+	int n;
+
+	annotatemore_findall(name, "*", &add_annot, client_list, NULL);
+
+	/* both lists are sorted, so we work our way through the lists
+	   top-to-bottom and determine what we need to do based on order */
+	for (c = client_list->head,
+		 s = server_list->head; c || s;  c = c ? c->next : NULL) {
+	    if (!s) n = -1;		/* add all client annotations */
+	    else if (!c) n = 1;		/* remove all server annotations */
+	    else if ((n = strcmp(c->entry, s->entry)) == 0)
+		n = strcmp(c->userid, s->userid);
+
+	    if (n > 0) {
+		/* remove server annotations until we reach or pass the
+		   current client annotation, or we reach the end of the
+		   server list */
+		do {
+		    if ((r = folder_setannotation(name, s->entry, s->userid,
+						  NULL))) {
+			goto bail;
+		    }
+		    s = s->next;
+		    if (!s) n = -1;	/* end of server list, we're done */
+		    else if (!c) n = 1;	/* remove all server annotations */
+		    else if ((n = strcmp(c->entry, s->entry)) == 0)
+			n = strcmp(c->userid, s->userid);
+		} while (n > 0);
+	    }
+
+	    if (n == 0) {
+		/* already have the annotation, but is the value different? */
+		if (strcmp(c->value, s->value) != 0) n = -1;
+		s = s->next;
+	    }
+	    if (c && n < 0) {
+		/* add the current client annotation */
+		if ((r = folder_setannotation(name, c->entry, c->userid,
+					      c->value))) {
+		    goto bail;
+		}
+	    }
+	}
+      bail:
+	sync_annot_list_free(&client_list);
+    }
+
+    sync_annot_list_free(&server_list);
+
+    return(r);
+}
+
 /* ====================================================================== */
 
 /* Caller should acquire expire lock before opening mailbox index:
@@ -1604,7 +1737,9 @@ int do_folders(struct sync_folder_list *client_list,
 		if (!r && m.quota.root && !strcmp(m.name, m.quota.root))
 		    r = update_quota_work(&m.quota, &folder2->quota);
 
-                if (do_contents) {
+		if (!r) r = do_annotation(m.name);
+
+                if (!r && do_contents) {
                     struct sync_msg_list *folder_msglist;
 
                     /* 0L, 0L Forces last_uid and seendb push as well */
@@ -1620,6 +1755,8 @@ int do_folders(struct sync_folder_list *client_list,
 		if (!r && m.quota.root && !strcmp(m.name, m.quota.root))
 		    r = update_quota_work(&m.quota, &folder2->quota);
 
+		if (!r) r = do_annotation(m.name);
+
                 if (!r && do_contents)
                     r = do_mailbox_work(&m, folder2->msglist, 0, m.uniqueid);
             }
@@ -1631,7 +1768,9 @@ int do_folders(struct sync_folder_list *client_list,
 	    if (!r && m.quota.root && !strcmp(m.name, m.quota.root))
 		r = update_quota_work(&m.quota, NULL);
 
-            if (do_contents) {
+	    if (!r) r = do_annotation(m.name);
+
+            if (!r && do_contents) {
                 struct sync_msg_list *folder_msglist;
 
                 /* 0L, 0L Forces last_uid and seendb push as well */
@@ -1898,7 +2037,8 @@ int do_user_sub(char *user, struct sync_folder_list *server_list)
 {
     int r = 0;
     struct sync_folder_list *client_list = sync_folder_list_create();
-    struct sync_folder *folder, *folder2;
+    struct sync_folder *c, *s;
+    int n;
 
     /* Includes subsiduary nodes automatically */
     r = (sync_namespace.mboxlist_findsub)(&sync_namespace, "*", 1,
@@ -1909,16 +2049,35 @@ int do_user_sub(char *user, struct sync_folder_list *server_list)
         goto bail;
     }
 
-    for (folder = client_list->head ; folder ; folder = folder->next) {
-        if ((folder2 = sync_folder_lookup(server_list, folder->name)))
-            folder2->mark = 1;
-        else if ((r=user_addsub(user, folder->name)))
-            goto bail;
-    }
+    /* both lists are sorted, so we work our way through the lists
+       top-to-bottom and determine what we need to do based on order */
+    for (c = client_list->head,
+	     s = server_list->head; c || s; c = c ? c->next : NULL) {
+	if (!s) n = -1;		/* add all client subscriptions */
+	else if (!c) n = 1;	/* remove all server subscriptions */
+	else n = strcmp(c->name, s->name);
 
-    for (folder = server_list->head ; folder ; folder = folder->next) {
-        if (!folder->mark && ((r=user_delsub(user, folder->name))))
-            goto bail;
+	if (n > 0) {
+	    /* remove server subscriptions until we reach or pass the
+	       current client subscription, or we reach the end of the
+	       server list */
+	    do {
+		if ((r = user_delsub(user, s->name))) goto bail;
+		s = s->next;
+		if (!s) n = -1;		/* end of server list, we're done */
+		else if (!c) n = 1;	/* remove all server subscriptions */
+		else n = strcmp(c->name, s->name);
+	    } while (n > 0);
+	}
+
+	if (n == 0) {
+	    /* already subscribed, skip it */
+	    s = s->next;
+	}
+	else if (c && n < 0) {
+	    /* add the current client subscription */
+	    if ((r = user_addsub(user, c->name))) goto bail;
+	}
     }
 
  bail:
@@ -2618,7 +2777,7 @@ static int do_sync(const char *filename)
             }
         }
     }
-#if 0
+
     for (action = annot_list->head ; action ; action = action->next) {
         if (action->active && do_annotation(action->name) && *action->name) {
             sync_action_list_add(mailbox_list, action->name, NULL);
@@ -2632,7 +2791,7 @@ static int do_sync(const char *filename)
             }
         }
     }
-#endif
+
     for (action = sieve_list->head ; action ; action = action->next) {
         if (action->active && do_sieve(action->user)) {
             sync_action_list_add(meta_list, NULL, action->user);
@@ -3044,6 +3203,10 @@ int main(int argc, char **argv)
     /* open the quota db, we'll need it for real work */
     quotadb_init(0);
     quotadb_open(NULL);
+
+    /* open the annotation db */
+    annotatemore_init(0, NULL, NULL);
+    annotatemore_open(NULL);
 
     signals_set_shutdown(&shut_down);
     signals_add_handlers(0);

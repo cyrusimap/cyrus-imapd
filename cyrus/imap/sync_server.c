@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.1.2.10 2005/04/08 18:08:18 ken3 Exp $
+ * $Id: sync_server.c,v 1.1.2.11 2005/04/26 20:15:08 ken3 Exp $
  */
 
 #include <config.h>
@@ -178,6 +178,9 @@ static void cmd_rename(char *oldmailboxname, char *newmailboxname);
 static void cmd_lsub(char *user);
 static void cmd_addsub(char *user, char *name);
 static void cmd_delsub(char *user, char *name);
+static void cmd_set_annotation(char *mailboxname, char *entry, char *userid,
+			       char *value);
+static void cmd_list_annotations(char *mailboxname);
 static void cmd_list_sieve(char *user);
 static void cmd_get_sieve(char *user, char *name);
 static void cmd_upload_sieve(char *user, char *name, unsigned long last_update);
@@ -775,6 +778,13 @@ static void cmdloop(void)
 		if (c != '\n') goto extraargs;
                 cmd_lsub(arg1.s);
                 continue;
+            } else if (!strcmp(cmd.s, "List_annotations")) {
+		if (c != ' ') goto missingargs;
+		c = getastring(sync_in, sync_out, &arg1);
+		if (c == '\r') c = prot_getc(sync_in);
+		if (c != '\n') goto extraargs;
+                cmd_list_annotations(arg1.s);
+                continue;
             } else if (!strcmp(cmd.s, "List_sieve")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(sync_in, sync_out, &arg1);
@@ -950,6 +960,20 @@ static void cmdloop(void)
 		    !imparse_isnumber(arg2.s)) goto invalidargs;
 
                 cmd_setquota(arg1.s, sync_atoul(arg2.s));
+                continue;
+            }
+            else if (!strcmp(cmd.s, "Setannotation")) {
+		if (c != ' ') goto missingargs;
+		c = getastring(sync_in, sync_out, &arg1);
+		if (c != ' ') goto missingargs;
+		c = getastring(sync_in, sync_out, &arg2);
+		if (c != ' ') goto missingargs;
+		c = getastring(sync_in, sync_out, &arg3);
+		if (c != ' ') goto missingargs;
+		c = getastring(sync_in, sync_out, &arg4);
+		if (c == '\r') c = prot_getc(sync_in);
+		if (c != '\n') goto extraargs;
+                cmd_set_annotation(arg1.s, arg2.s, arg3.s, arg4.s);
                 continue;
             }
 	    break;
@@ -2771,6 +2795,31 @@ static void cmd_delsub(char *user, char *name)
 
 /* ====================================================================== */
 
+static int find_cb(const char *mailbox __attribute__((unused)),
+		   const char *entry, const char *userid,
+		   struct annotation_data *attrib,
+		   void *rock __attribute__((unused)))
+{
+    prot_printf(sync_out, "* ");
+    sync_printastring(sync_out, entry);
+    prot_printf(sync_out, " ");
+    sync_printastring(sync_out, userid);
+    prot_printf(sync_out, " ");
+    sync_printastring(sync_out, attrib->value);
+    prot_printf(sync_out, "\r\n");
+
+    return 0;
+}
+
+static void cmd_list_annotations(char *mailboxname)
+{
+    annotatemore_findall(mailboxname, "*", &find_cb, NULL, NULL);
+
+    prot_printf(sync_out, "OK List_annotations completed\r\n");
+}
+
+/* ====================================================================== */
+
 static void cmd_list_sieve(char *user)
 {
     struct sync_sieve_list *list;
@@ -2878,4 +2927,28 @@ static void cmd_delete_sieve(char *user, char *name)
 		    user, error_message(r));
     else
         prot_printf(sync_out, "OK Delete_sieve completed\r\n");
+}
+
+/* ====================================================================== */
+
+static void cmd_set_annotation(char *mailboxname, char *entry, char *userid,
+			       char *value)
+{
+    int r;
+    struct entryattlist *entryatts = NULL;
+    struct attvaluelist *attvalues = NULL;
+
+    appendattvalue(&attvalues, *userid ? "value.priv" : "value.shared", value);
+    appendentryatt(&entryatts, entry, attvalues);
+
+    r = annotatemore_store(mailboxname, entryatts, sync_namespacep,
+			   sync_userisadmin, userid, sync_authstate);
+
+    freeentryatts(entryatts);
+
+    if (r)
+        prot_printf(sync_out, "NO Setannotation %s failed: %s %s %s %s\r\n",
+		    mailboxname, entry, userid, value, error_message(r));
+    else
+        prot_printf(sync_out, "OK Setannotation completed\r\n");
 }

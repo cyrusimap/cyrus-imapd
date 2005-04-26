@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.c,v 1.1.2.11 2005/04/24 21:04:19 ken3 Exp $
+ * $Id: sync_support.c,v 1.1.2.12 2005/04/26 20:15:09 ken3 Exp $
  */
 
 #include <config.h>
@@ -1700,6 +1700,55 @@ int sync_sieve_delete(char *userid, char *name)
     unlink(filename);
 
     return(0);
+}
+
+/* ====================================================================== */
+
+struct sync_annot_list *sync_annot_list_create()
+{
+    struct sync_annot_list *l = xzmalloc(sizeof (struct sync_annot_list));
+
+    l->head   = NULL;
+    l->tail   = NULL;
+    l->count  = 0;
+    return(l);
+}
+
+void sync_annot_list_add(struct sync_annot_list *l,
+			 const char *entry, const char *userid,
+			 const char *value)
+{
+    struct sync_annot_item *item = xzmalloc(sizeof(struct sync_annot_item));
+
+    item->entry = xstrdup(entry);
+    item->userid = xstrdup(userid);
+    item->value = xstrdup(value);
+    item->mark = 0;
+
+    if (l->tail)
+        l->tail = l->tail->next = item;
+    else
+        l->head = l->tail = item;
+
+    l->count++;
+}
+
+void sync_annot_list_free(struct sync_annot_list **lp)
+{
+    struct sync_annot_list *l = *lp;
+    struct sync_annot_item *current, *next;
+
+    current = l->head;
+    while (current) {
+        next = current->next;
+        if (current->entry) free(current->entry);
+        if (current->userid) free(current->userid);
+        if (current->value) free(current->value);
+        free(current);
+        current = next;
+    }
+    free(l);
+    *lp = NULL;
 }
 
 /* ====================================================================== */

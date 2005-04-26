@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.h,v 1.1.2.7 2005/04/11 17:56:01 ken3 Exp $
+ * $Id: sync_support.h,v 1.1.2.8 2005/04/26 20:15:09 ken3 Exp $
  */
 
 #ifndef INCLUDED_SYNC_SUPPORT_H
@@ -417,6 +417,30 @@ int sync_sieve_activate(char *userid, char *name);
 int sync_sieve_deactivate(char *userid);
 
 int sync_sieve_delete(char *userid, char *name);
+
+/* ====================================================================== */
+
+struct sync_annot_item {
+    struct sync_annot_item *next;
+    char *entry;
+    char *userid;
+    char *value;
+    int mark;
+};
+
+struct sync_annot_list {
+    struct sync_annot_item *head;
+    struct sync_annot_item *tail;
+    unsigned long count;
+};
+
+struct sync_annot_list *sync_annot_list_create(void);
+
+void sync_annot_list_add(struct sync_annot_list *l,
+			 const char *entry, const char *userid,
+			 const char *value);
+
+void sync_annot_list_free(struct sync_annot_list **lp);
 
 /* ====================================================================== */
 
