@@ -1,6 +1,6 @@
 # sasl2.m4--sasl2 libraries and includes
 # Rob Siemborski
-# $Id: sasl2.m4,v 1.49 2005/04/11 05:51:45 shadow Exp $
+# $Id: sasl2.m4,v 1.50 2005/04/26 18:51:24 shadow Exp $
 
 # SASL2_CRYPT_CHK
 # ---------------
@@ -69,7 +69,7 @@ if test "$gssapi" != no; then
                   [AC_DEFINE(HAVE_GSSAPI_H,,
                              [Define if you have the gssapi.h header file])],
                   [AC_CHECK_HEADER([gssapi/gssapi.h],,
-                                   [AC_WARN([Disabling GSSAPI - no include files found]); gssapi=no)])
+                                   [AC_WARN([Disabling GSSAPI - no include files found]); gssapi=no])])
 
   CPPFLAGS=$cmu_saved_CPPFLAGS
 
