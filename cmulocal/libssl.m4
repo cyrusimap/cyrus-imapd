@@ -1,7 +1,7 @@
 dnl libssl.m4--Ssl libraries and includes
 dnl Derrick Brashear
 dnl from KTH kafs and Arla
-dnl $Id: libssl.m4,v 1.9 2003/10/08 20:35:25 rjs3 Exp $
+dnl $Id: libssl.m4,v 1.10 2005/04/26 19:14:08 shadow Exp $
 
 AC_DEFUN([CMU_LIBSSL_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS
@@ -54,6 +54,7 @@ AC_DEFUN([CMU_LIBSSL_LIB_WHERE], [
 ])
 
 AC_DEFUN([CMU_LIBSSL], [
+AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_REQUIRE([CMU_SOCKETS])
 AC_ARG_WITH(libssl,
 	[  --with-libssl=PREFIX      Compile with Libssl support],
@@ -73,7 +74,7 @@ AC_ARG_WITH(libssl-include,
 
 	if test "X$with_libssl" != "X"; then
 	  if test "$with_libssl" != "yes" -a "$with_libssl" != no; then
-	    ac_cv_libssl_where_lib=$with_libssl/lib
+	    ac_cv_libssl_where_lib=$with_libssl/$CMU_LIB_SUBDIR
 	    ac_cv_libssl_where_inc=$with_libssl/include
 	  fi
 	fi
@@ -83,7 +84,7 @@ AC_ARG_WITH(libssl-include,
 	    ac_cv_libssl_where_lib=$with_libssl_lib
 	  fi
 	  if test "X$ac_cv_libssl_where_lib" = "X"; then
-	    CMU_LIBSSL_LIB_WHERE(/usr/local/lib/openssl /usr/lib/openssl /usr/local/lib /usr/lib)
+	    CMU_LIBSSL_LIB_WHERE(/usr/local/$CMU_LIB_SUBDIR/openssl /usr/$CMU_LIB_SUBDIR/openssl /usr/local/$CMU_LIB_SUBDIR /usr/$CMU_LIB_SUBDIR)
 	  fi
 
 	  if test "X$with_libssl_include" != "X"; then

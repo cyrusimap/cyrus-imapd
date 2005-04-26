@@ -1,7 +1,7 @@
 dnl kerberos_v4.m4--Kafs libraries and includes
 dnl Derrick Brashear
 dnl from KTH kafs and Arla
-dnl $Id: kafs.m4,v 1.6 2003/10/08 20:35:24 rjs3 Exp $
+dnl $Id: kafs.m4,v 1.7 2005/04/26 19:14:07 shadow Exp $
 
 AC_DEFUN([CMU_KAFS_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS
@@ -70,6 +70,7 @@ AC_DEFUN([CMU_KAFS_LIB_WHERE], [
 ])
 
 AC_DEFUN([CMU_KAFS], [
+AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_REQUIRE([CMU_SOCKETS])
 AC_REQUIRE([CMU_KRB4])
 AC_REQUIRE([CMU_KRB5])
@@ -91,7 +92,7 @@ AC_ARG_WITH(kafs-include,
 
 	if test "X$with_kafs" != "X"; then
 	  if test "$with_kafs" != "yes" -a "$with_kafs" != no; then
-	    ac_cv_kafs_where_lib=$with_kafs/lib
+	    ac_cv_kafs_where_lib=$with_kafs/$CMU_LIB_SUBDIR
 	    ac_cv_kafs_where_inc=$with_kafs/include
 	  fi
 	fi
@@ -101,7 +102,7 @@ AC_ARG_WITH(kafs-include,
 	    ac_cv_kafs_where_lib=$with_kafs_lib
 	  fi
 	  if test "X$ac_cv_kafs_where_lib" = "X"; then
-	    CMU_KAFS_LIB_WHERE(/usr/athena/lib /usr/local/lib /usr/lib)
+	    CMU_KAFS_LIB_WHERE(/usr/athena/$CMU_LIB_SUBDIR /usr/local/$CMU_LIB_SUBDIR /usr/$CMU_LIB_SUBDIR)
 	  fi
 
 	  if test "X$with_kafs_include" != "X"; then

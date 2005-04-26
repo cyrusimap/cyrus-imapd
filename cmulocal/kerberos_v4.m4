@@ -1,7 +1,7 @@
 dnl kerberos_v4.m4--Kerberos 4 libraries and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
-dnl $Id: kerberos_v4.m4,v 1.27 2004/02/05 18:28:47 cg2v Exp $
+dnl $Id: kerberos_v4.m4,v 1.28 2005/04/26 19:14:08 shadow Exp $
 
 AC_DEFUN([CMU_KRB_SENDAUTH_PROTO], [
 AC_MSG_CHECKING(for krb_sendauth prototype)
@@ -143,6 +143,7 @@ AC_DEFUN([CMU_KRB_LIB_WHERE], [
 ])
 
 AC_DEFUN([CMU_KRB4], [
+AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_REQUIRE([CMU_SOCKETS])
 AC_REQUIRE([CMU_LIBSSL])
 AC_ARG_WITH(krb4,
@@ -163,7 +164,7 @@ AC_ARG_WITH(krb4-include,
 
 	if test "X$with_krb4" != "X"; then
 	  if test "$with_krb4" != "yes" -a "$with_krb4" != "no"; then
-	    ac_cv_krb_where_lib=$with_krb4/lib
+	    ac_cv_krb_where_lib=$with_krb4/$CMU_LIB_SUBDIR
 	    ac_cv_krb_where_inc=$with_krb4/include
 	  fi
 	fi
@@ -197,15 +198,24 @@ AC_ARG_WITH(krb4-include,
                       KRB_LIBDES="$LIBSSL_LIB_FLAGS"
                       KRB_LIBDESA="$LIBSSL_LIB_FLAGS"
                   else
-                      AC_MSG_RESULT([unknown])
-                      AC_MSG_ERROR([Could not use -ldes])
+                      LIBS="$cmu_save_LIBS -L$LIBSSL_LIB_DIR -ldescompat $LIBSSL_LIB_FLAGS"
+                      AC_TRY_LINK([],
+                      [des_quad_cksum();],KRB_DES_LIB="libcrypto+descompat")
+                      if test "X$KRB_DES_LIB" = "Xlibcrypto+descompat"; then
+                          AC_MSG_RESULT([libcrypto+descompat])
+                          KRB_LIBDES="-L$LIBSSL_LIB_DIR -ldescompat $LIBSSL_LIB_FLAGS"
+                          KRB_LIBDESA="-L$LIBSSL_LIB_DIR -ldescompat $LIBSSL_LIB_FLAGS"
+                      else
+                          AC_MSG_RESULT([unknown])
+                          AC_MSG_ERROR([Could not use -ldes])
+                      fi 
                   fi 
               fi 
           else
              AC_MSG_RESULT([no])
           fi
           if test "X$ac_cv_krb_where_lib" = "X"; then
-            CMU_KRB_LIB_WHERE(/usr/athena/lib /usr/local/lib /usr/lib)
+            CMU_KRB_LIB_WHERE(/usr/athena/$CMU_LIB_SUBDIR /usr/local/$CMU_LIB_SUBDIR /usr/$CMU_LIB_SUBDIR)
           fi
 	fi
 	  LIBS="${cmu_save_LIBS}"
@@ -230,6 +240,7 @@ AC_ARG_WITH(krb4-include,
           AC_SUBST(KRB_INC_FLAGS)
           AC_SUBST(KRB_LIB_FLAGS)
 	  LIBS="${cmu_save_LIBS}"
+	  AC_DEFINE(HAVE_KRB4,,[Kerberos V4 is present])dnl zephyr uses this
 	  AC_DEFINE(KERBEROS,,[Use kerberos 4. find out what needs this symbol])
 	  if test "X$RPATH" = "X"; then
 		RPATH=""

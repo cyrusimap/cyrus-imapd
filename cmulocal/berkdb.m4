@@ -1,4 +1,4 @@
-dnl $Id: berkdb.m4,v 1.19 2005/01/06 20:24:52 shadow Exp $
+dnl $Id: berkdb.m4,v 1.20 2005/04/26 19:14:07 shadow Exp $
 
 AC_DEFUN([CMU_DB_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS
@@ -77,6 +77,7 @@ fi
 ])
 
 AC_DEFUN([CMU_USE_DB], [
+AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_ARG_WITH(db,
 	[  --with-db=PREFIX      Compile with db support],
 	[if test "X$with_db" = "X"; then
@@ -97,7 +98,7 @@ AC_ARG_ENABLE(db4,
 	
 	if test "X$with_db" != "X"; then
 	  if test "$with_db" != "yes"; then
-	    ac_cv_db_where_lib=$with_db/lib
+	    ac_cv_db_where_lib=$with_db/$CMU_LIB_SUBDIR
 	    ac_cv_db_where_inc=$with_db/include
 	  fi
 	fi
@@ -106,7 +107,7 @@ AC_ARG_ENABLE(db4,
 	  ac_cv_db_where_lib=$with_db_lib
 	fi
 	if test "X$ac_cv_db_where_lib" = "X"; then
-	  CMU_DB_LIB_WHERE(/usr/athena/lib /usr/lib /usr/local/lib)
+	  CMU_DB_LIB_WHERE(/usr/athena/$CMU_LIB_SUBDIR /usr/$CMU_LIB_SUBDIR /usr/local/$CMU_LIB_SUBDIR)
 	fi
 
 	if test "X$with_db_include" != "X"; then

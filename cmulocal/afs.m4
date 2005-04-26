@@ -1,5 +1,5 @@
 dnl afs.m4--AFS libraries, includes, and dependencies
-dnl $Id: afs.m4,v 1.28 2004/04/29 22:00:07 cg2v Exp $
+dnl $Id: afs.m4,v 1.29 2005/04/26 19:14:07 shadow Exp $
 dnl Chaskiel Grundman
 dnl based on kerberos_v4.m4
 dnl Derrick Brashear
@@ -31,6 +31,7 @@ LDFLAGS="$save_LDFLAGS"
 ])
 
 AC_DEFUN([CMU_AFS_WHERE], [
+AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
    for i in $1; do
       AC_MSG_CHECKING(for AFS in $i)
       CMU_AFS_INC_WHERE1("$i/include")
@@ -38,7 +39,7 @@ AC_DEFUN([CMU_AFS_WHERE], [
       CMU_TEST_INCPATH($i/include, lwp) 
       ac_cv_found_afs_inc=$ac_cv_found_lwp_inc
       if test "$ac_cv_found_afs_inc" = "yes"; then
-        CMU_AFS_LIB_WHERE1("$i/lib")
+        CMU_AFS_LIB_WHERE1("$i/$CMU_LIB_SUBDIR")
         if test "$ac_cv_found_afs_lib" = "yes"; then
           ac_cv_afs_where=$i
           AC_MSG_RESULT(found)
@@ -53,6 +54,7 @@ AC_DEFUN([CMU_AFS_WHERE], [
 ])
 
 AC_DEFUN([CMU_AFS], [
+AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_REQUIRE([CMU_SOCKETS])
 AC_REQUIRE([CMU_LIBSSL])
 AC_ARG_WITH(AFS,
@@ -76,7 +78,7 @@ AC_ARG_WITH(AFS,
 	  ac_cv_found_afs=yes
 	  AC_MSG_RESULT(yes)
 	  AFS_INC_DIR="$ac_cv_afs_where/include"
-	  AFS_LIB_DIR="$ac_cv_afs_where/lib"
+	  AFS_LIB_DIR="$ac_cv_afs_where/$CMU_LIB_SUBDIR"
 	  AFS_TOP_DIR="$ac_cv_afs_where"
 	  AFS_INC_FLAGS="-I${AFS_INC_DIR}"
           AFS_LIB_FLAGS="-L${AFS_LIB_DIR} -L${AFS_LIB_DIR}/afs"
@@ -105,9 +107,18 @@ AC_ARG_WITH(AFS,
 	              AC_MSG_RESULT([libcrypto])
 		      AFS_LIBDES="$LIBSSL_LIB_FLAGS"
 	              AFS_LIBDESA="$LIBSSL_LIB_FLAGS"
-	          else
-         	      AC_MSG_RESULT([unknown])
-	              AC_MSG_ERROR([Could not use -ldes])
+    	          else
+   	              LIBS="$cmu_save_LIBS -L$LIBSSL_LIB_DIR -ldescompat $LIBSSL_LIB_FLAGS"
+ 	              AC_TRY_LINK([],
+	              [des_quad_cksum();],AFS_DES_LIB="libcrypto+descompat")
+	              if test "X$AFS_DES_LIB" = "Xlibcrypto+descompat"; then
+	                  AC_MSG_RESULT([libcrypto+descompat])
+		          AFS_LIBDES="-L$LIBSSL_LIB_DIR -ldescompat $LIBSSL_LIB_FLAGS"
+	                  AFS_LIBDESA="-L$LIBSSL_LIB_DIR -ldescompat $LIBSSL_LIB_FLAGS"
+	              else
+         	          AC_MSG_RESULT([unknown])
+	                  AC_MSG_ERROR([Could not use -ldes])
+	              fi 
 	          fi 
 	      fi 
 	  else

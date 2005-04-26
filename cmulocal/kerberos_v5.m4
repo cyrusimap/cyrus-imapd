@@ -1,7 +1,7 @@
 dnl kerberos_v5.m4--Kerberos 5 libraries and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
-dnl $Id: kerberos_v5.m4,v 1.8 2004/04/07 06:34:36 shadow Exp $
+dnl $Id: kerberos_v5.m4,v 1.9 2005/04/26 19:14:08 shadow Exp $
 
 AC_DEFUN([CMU_KRB5_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS
@@ -58,6 +58,7 @@ AC_DEFUN([CMU_KRB5_LIB_WHERE], [
 ])
 
 AC_DEFUN([CMU_KRB5], [
+AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_REQUIRE([CMU_SOCKETS])
 AC_REQUIRE([CMU_USE_COMERR])
 AC_ARG_WITH(krb5,
@@ -84,7 +85,7 @@ AC_ARG_WITH(krb5-impl,
 
 	if test "X$with_krb5" != "X"; then
 	  if test "$with_krb5" != "yes" -a "$with_krb5" != "no"; then
-	    ac_cv_krb5_where_lib=$with_krb5/lib
+	    ac_cv_krb5_where_lib=$with_krb5/$CMU_LIB_SUBDIR
 	    ac_cv_krb5_where_inc=$with_krb5/include
 	    ac_cv_krb5_impl=mit
 	  fi
@@ -99,13 +100,13 @@ AC_ARG_WITH(krb5-impl,
 	    ac_cv_krb5_impl=$with_krb5_impl
 	  fi
 	  if test "X$ac_cv_krb5_where_lib" = "X" -a "X$with_krb5_impl" != "Xheimdal"; then
-	    CMU_KRB5_LIB_WHERE(/usr/athena/lib /usr/lib /usr/local/lib)
+	    CMU_KRB5_LIB_WHERE(/usr/athena/$CMU_LIB_SUBDIR /usr/$CMU_LIB_SUBDIR /usr/local/$CMU_LIB_SUBDIR)
 	    if test "X$ac_cv_krb5_where_lib" != "X"; then
               ac_cv_krb5_impl=mit
 	    fi
 	  fi
 	  if test "X$ac_cv_krb5_where_lib" = "X" -a "X$with_krb5_impl" != "Xmit"; then
-	    CMU_LIBHEIMDAL_LIB_WHERE(/usr/athena/lib /usr/lib /usr/heimdal/lib /usr/local/lib)
+	    CMU_LIBHEIMDAL_LIB_WHERE(/usr/athena/$CMU_LIB_SUBDIR /usr/$CMU_LIB_SUBDIR /usr/heimdal/$CMU_LIB_SUBDIR /usr/local/$CMU_LIB_SUBDIR)
 	    if test "X$ac_cv_libheimdal_where_lib" != "X"; then
 	      ac_cv_krb5_where_lib=$ac_cv_libheimdal_where_lib
 	      ac_cv_krb5_impl=heimdal
@@ -139,6 +140,7 @@ AC_ARG_WITH(krb5-impl,
 	  KRB5_INC_FLAGS="-I${KRB5_INC_DIR}"
 	  AC_SUBST(KRB5_INC_FLAGS)
 	  AC_SUBST(KRB5_LIB_FLAGS)
+	  AC_DEFINE(HAVE_KRB5,,[Kerberos V5 is present])dnl zephyr uses this
 	  AC_DEFINE(KRB5,,[Use Kerberos 5. (maybe find what needs this and nuke it)])
 	  if test "X$RPATH" = "X"; then
 		RPATH=""
