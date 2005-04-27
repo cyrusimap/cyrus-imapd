@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.1.2.11 2005/04/26 20:15:08 ken3 Exp $
+ * $Id: sync_server.c,v 1.1.2.12 2005/04/27 00:29:08 ken3 Exp $
  */
 
 #include <config.h>
@@ -2941,14 +2941,19 @@ static void cmd_set_annotation(char *mailboxname, char *entry, char *userid,
     appendattvalue(&attvalues, *userid ? "value.priv" : "value.shared", value);
     appendentryatt(&entryatts, entry, attvalues);
 
+    /* annotatemore_store() expects external mailbox names,
+       so translate the separator character */
+    mboxname_hiersep_toexternal(sync_namespacep, mailboxname, 0);
     r = annotatemore_store(mailboxname, entryatts, sync_namespacep,
 			   sync_userisadmin, userid, sync_authstate);
 
     freeentryatts(entryatts);
 
-    if (r)
+    if (r) {
+	mboxname_hiersep_tointernal(sync_namespacep, mailboxname, 0);
         prot_printf(sync_out, "NO Setannotation %s failed: %s %s %s %s\r\n",
 		    mailboxname, entry, userid, value, error_message(r));
+    }
     else
         prot_printf(sync_out, "OK Setannotation completed\r\n");
 }
