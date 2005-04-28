@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.18 2005/04/26 20:15:07 ken3 Exp $
+ * $Id: sync_client.c,v 1.1.2.19 2005/04/28 15:34:43 ken3 Exp $
  */
 
 #include <config.h>
@@ -3020,6 +3020,16 @@ void do_daemon(const char *sync_log_file, const char *sync_shutdown_file,
     pid_t pid;
     int status;
     int restart;
+
+    /* for a child so we can release from master */
+    if ((pid=fork()) < 0)
+	fatal("fork failed", EC_SOFTWARE);
+
+    if (pid != 0) { /* parent */
+	cyrus_done();
+	exit(0);
+    }
+    /* child */
 
     if (timeout == 0) {
         do_daemon_work(sync_log_file, sync_shutdown_file,
