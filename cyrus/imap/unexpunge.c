@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: unexpunge.c,v 1.1.2.2 2005/03/30 21:15:52 ken3 Exp $
+ * $Id: unexpunge.c,v 1.1.2.3 2005/05/02 19:57:58 ken3 Exp $
  */
 
 #include <config.h>
@@ -74,12 +74,14 @@
 /* global state */
 const int config_need_data = 0;
 
+int verbose = 0;
+
 void usage(void)
 {
     fprintf(stderr,
 	    "unexpunge [-C <altconfig>] -l <mailbox>\n"
-	    "unexpunge [-C <altconfig>] -a <mailbox>\n"
-	    "unexpunge [-C <altconfig>] -u <mailbox> <uid>...\n");
+	    "unexpunge [-C <altconfig>] -a [-d] [-v] <mailbox>\n"
+	    "unexpunge [-C <altconfig>] -u [-d] [-v] <mailbox> <uid>...\n");
     exit(-1);
 }
 
@@ -155,7 +157,8 @@ void list_expunged(struct mailbox *mailbox,
 
 int restore_expunged(struct mailbox *mailbox,
 		     struct msg *msgs, unsigned long eexists,
-		     const char *expunge_index_base)
+		     const char *expunge_index_base,
+		     unsigned *numrestored, int unsetdeleted)
 {
     int r = 0;
     const char *irec;
@@ -165,7 +168,6 @@ int restore_expunged(struct mailbox *mailbox,
     FILE *newindex = NULL, *newexpungeindex = NULL;
     unsigned emsgno, imsgno;
     unsigned long iexists, euid, iuid;
-    unsigned numrestored = 0;
     uquota_t quotarestored = 0, newquotaused;
     unsigned numansweredflag = 0, numdeletedflag = 0, numflaggedflag = 0;
     unsigned newexists, newexpunged, newdeleted, newanswered, newflagged;
@@ -202,8 +204,10 @@ int restore_expunged(struct mailbox *mailbox,
 	return IMAP_IOERROR;
     }
 
-    /* Copy over index/expunge headers */
-    /* XXX do we want/need to bump the generation number? */
+    /* Copy over index/expunge headers
+     *
+     * XXX do we want/need to bump the generation number?
+     */
     fwrite(mailbox->index_base, 1, mailbox->start_offset, newindex);
     fwrite(expunge_index_base, 1, mailbox->start_offset, newexpungeindex);
 
@@ -234,12 +238,22 @@ int restore_expunged(struct mailbox *mailbox,
 	if (msgs[emsgno].restore) {
 	    bit32 sysflags = ntohl(*((bit32 *)(buf+OFFSET_SYSTEM_FLAGS)));
 
+	    if (verbose) {
+		fprintf(stderr, "\trestoring UID %ld\n", msgs[emsgno].uid);
+		syslog(LOG_INFO, "restoring UID %ld in mailbox '%s'",
+		       msgs[emsgno].uid, mailbox->name);
+	    }
+
 	    /* Update counts */
-	    numrestored++;
+	    (*numrestored)++;
 	    quotarestored += ntohl(*((bit32 *)(buf+OFFSET_SIZE)));
 	    if (sysflags & FLAG_ANSWERED) numansweredflag++;
-	    if (sysflags & FLAG_DELETED) numdeletedflag++;
 	    if (sysflags & FLAG_FLAGGED) numflaggedflag++;
+	    if (unsetdeleted) {
+		sysflags &= ~FLAG_DELETED;
+		*((bit32 *)(buf+OFFSET_SYSTEM_FLAGS)) = htonl(sysflags);
+	    }
+	    else if (sysflags & FLAG_DELETED) numdeletedflag++;
 
 	    /* Write record to cyrus.index */
 	    *((bit32 *)(buf+OFFSET_LAST_UPDATED)) = htonl(now);
@@ -267,11 +281,11 @@ int restore_expunged(struct mailbox *mailbox,
     *((bit32 *)(buf+OFFSET_UIDVALIDITY)) = now;
 
     /* Fix up exists */
-    newexists = ntohl(*((bit32 *)(buf+OFFSET_EXISTS))) + numrestored;
+    newexists = ntohl(*((bit32 *)(buf+OFFSET_EXISTS))) + *numrestored;
     *((bit32 *)(buf+OFFSET_EXISTS)) = htonl(newexists);
 
     /* Fix up expunged count */
-    newexpunged = ntohl(*((bit32 *)(buf+OFFSET_LEAKED_CACHE))) - numrestored;
+    newexpunged = ntohl(*((bit32 *)(buf+OFFSET_LEAKED_CACHE))) - *numrestored;
     *((bit32 *)(buf+OFFSET_LEAKED_CACHE)) = htonl(newexpunged);
 	    
     /* Fix up other counts */
@@ -310,13 +324,18 @@ int restore_expunged(struct mailbox *mailbox,
     *((bit32 *)(buf+OFFSET_UIDVALIDITY)) = now;
 
     /* Fix up exists */
-    newexists = ntohl(*((bit32 *)(buf+OFFSET_EXISTS))) - numrestored;
+    newexists = ntohl(*((bit32 *)(buf+OFFSET_EXISTS))) - *numrestored;
     *((bit32 *)(buf+OFFSET_EXISTS)) = htonl(newexists);
 
     /* Fix up other counts */
     newanswered = ntohl(*((bit32 *)(buf+OFFSET_ANSWERED))) - numansweredflag;
     *((bit32 *)(buf+OFFSET_ANSWERED)) = htonl(newanswered);
-    newdeleted = ntohl(*((bit32 *)(buf+OFFSET_DELETED))) - numdeletedflag;
+    /* XXX we use the numrestored count here because we may have unset
+     * the \Deleted flag when we copied the record to cyrus.index,
+     * but we know that any message that has to be restored had the
+     * \Deleted set in cyrus.expunge in the first place
+     */
+    newdeleted = ntohl(*((bit32 *)(buf+OFFSET_DELETED))) - *numrestored;
     *((bit32 *)(buf+OFFSET_DELETED)) = htonl(newdeleted);
     newflagged = ntohl(*((bit32 *)(buf+OFFSET_FLAGGED))) - numflaggedflag;
     *((bit32 *)(buf+OFFSET_FLAGGED)) = htonl(newflagged);
@@ -398,16 +417,17 @@ int main(int argc, char *argv[])
     int opt, r = 0;
     char *alt_config = NULL;
     struct mailbox mailbox;
-    int doclose = 0, mode = MODE_UNKNOWN;
+    int doclose = 0, mode = MODE_UNKNOWN, unsetdeleted = 0;
     char expunge_fname[MAX_MAILBOX_PATH+1];
     int expunge_fd = -1;
     struct stat sbuf;
     const char *lockfailaction;
     struct msg *msgs;
+    unsigned numrestored = 0;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
-    while ((opt = getopt(argc, argv, "C:lau")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:laudv")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -426,6 +446,14 @@ int main(int argc, char *argv[])
 	case 'u':
 	    if (mode != MODE_UNKNOWN) usage();
 	    mode = MODE_UID;
+	    break;
+
+	case 'd':
+	    unsetdeleted = 1;
+	    break;
+	
+	case 'v':
+	    verbose = 1;
 	    break;
 	
 	default:
@@ -545,8 +573,22 @@ int main(int argc, char *argv[])
 
 	if (mode == MODE_LIST)
 	    list_expunged(&mailbox, msgs, exists, expunge_index_base);
-	else
-	    r = restore_expunged(&mailbox, msgs, exists, expunge_index_base);
+	else {
+	    fprintf(stderr,
+		    "restoring %sexpunged messages in mailbox '%s'\n",
+		    mode == MODE_ALL ? "all " : "", mailbox.name);
+
+	    r = restore_expunged(&mailbox, msgs, exists, expunge_index_base,
+				 &numrestored, unsetdeleted);
+	    if (!r) {
+		fprintf(stderr,
+			"restored %u out of %lu expunged messages\n",
+			numrestored, exists);
+		syslog(LOG_NOTICE,
+		       "restored %u out of %lu expunged messages in mailbox '%s'",
+		       numrestored, exists, mailbox.name);
+	    }
+	}
 
 	map_free(&expunge_index_base, &expunge_index_len);
 	free(msgs);

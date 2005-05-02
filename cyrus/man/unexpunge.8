@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: unexpunge.8,v 1.1.2.1 2005/03/30 21:44:26 ken3 Exp $
+.\" $Id: unexpunge.8,v 1.1.2.2 2005/05/02 19:57:59 ken3 Exp $
 .SH NAME
 unexpunge \- restore expunged (but yet unremoved) messages
 .SH SYNOPSIS
@@ -57,6 +57,12 @@ unexpunge \- restore expunged (but yet unremoved) messages
 .I config-file
 ]
 .B \-a
+[
+.B \-d
+]
+[
+.B \-v
+]
 .I mailbox
 .br
 .B expunge
@@ -65,6 +71,12 @@ unexpunge \- restore expunged (but yet unremoved) messages
 .I config-file
 ]
 .B \-u
+[
+.B \-d
+]
+[
+.B \-v
+]
 .IR "mailbox uid" ...
 .SH DESCRIPTION
 .I Unexpunge
@@ -91,6 +103,12 @@ Restore \fBall\fR of the expunged messages in the specified mailbox.
 .B \-u
 Restore only those messages having the specified UIDs in the specified
 mailbox.
+.TP
+.B \-d
+Unset the \fI\\Deleted\fR flag on any restored messages.
+.TP
+.B \-v
+Enable verbose output/logging.
 .SH FILES
 .TP
 .B /etc/imapd.conf
