@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: unexpunge.c,v 1.1.2.3 2005/05/02 19:57:58 ken3 Exp $
+ * $Id: unexpunge.c,v 1.1.2.4 2005/05/03 01:32:14 ken3 Exp $
  */
 
 #include <config.h>
@@ -239,7 +239,7 @@ int restore_expunged(struct mailbox *mailbox,
 	    bit32 sysflags = ntohl(*((bit32 *)(buf+OFFSET_SYSTEM_FLAGS)));
 
 	    if (verbose) {
-		fprintf(stderr, "\trestoring UID %ld\n", msgs[emsgno].uid);
+		printf("\trestoring UID %ld\n", msgs[emsgno].uid);
 		syslog(LOG_INFO, "restoring UID %ld in mailbox '%s'",
 		       msgs[emsgno].uid, mailbox->name);
 	    }
@@ -574,15 +574,13 @@ int main(int argc, char *argv[])
 	if (mode == MODE_LIST)
 	    list_expunged(&mailbox, msgs, exists, expunge_index_base);
 	else {
-	    fprintf(stderr,
-		    "restoring %sexpunged messages in mailbox '%s'\n",
+	    printf("restoring %sexpunged messages in mailbox '%s'\n",
 		    mode == MODE_ALL ? "all " : "", mailbox.name);
 
 	    r = restore_expunged(&mailbox, msgs, exists, expunge_index_base,
 				 &numrestored, unsetdeleted);
 	    if (!r) {
-		fprintf(stderr,
-			"restored %u out of %lu expunged messages\n",
+		printf("restored %u out of %lu expunged messages\n",
 			numrestored, exists);
 		syslog(LOG_NOTICE,
 		       "restored %u out of %lu expunged messages in mailbox '%s'",
