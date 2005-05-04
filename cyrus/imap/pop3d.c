@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.144.2.33 2005/04/11 06:56:27 shadow Exp $
+ * $Id: pop3d.c,v 1.144.2.34 2005/05/04 19:26:28 ken3 Exp $
  */
 #include <config.h>
 
@@ -1802,7 +1802,7 @@ static void bitpipe(void)
 	    goto done;
 	}
     } while (!proxy_check_input(protin, popd_in, popd_out,
-				backend->in, backend->out, 60));
+				backend->in, backend->out, 0));
 
  done:
     /* ok, we're done. */

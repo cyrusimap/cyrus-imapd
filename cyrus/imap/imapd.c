@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.55 2005/03/22 18:49:21 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.56 2005/05/04 19:26:17 ken3 Exp $ */
 
 #include <config.h>
 
@@ -972,7 +972,7 @@ void cmdloop()
 
 	if (!proxy_check_input(protin, imapd_in, imapd_out,
 			       backend_current ? backend_current->in : NULL,
-			       NULL, 60)) {
+			       NULL, 0)) {
 	    /* No input from client */
 	    continue;
 	}

@@ -41,7 +41,7 @@
  *
  */
 
-/* $Id: deliver.c,v 1.169.2.9 2005/02/21 19:25:19 ken3 Exp $ */
+/* $Id: deliver.c,v 1.169.2.10 2005/05/04 19:26:16 ken3 Exp $ */
 
 #include <config.h>
 
@@ -134,7 +134,7 @@ void pipe_through(struct backend *conn)
 	prot_flush(conn->out);
 
     } while (!proxy_check_input(protin, deliver_in, deliver_out,
-				conn->in, conn->out, 60));
+				conn->in, conn->out, 0));
 
     /* ok, we're done. */
     protgroup_free(protin);

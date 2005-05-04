@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: proxy.c,v 1.1.2.5 2005/02/21 19:25:44 ken3 Exp $
+ * $Id: proxy.c,v 1.1.2.6 2005/05/04 19:26:29 ken3 Exp $
  */
 
 #include <config.h>
@@ -211,20 +211,21 @@ proxy_findserver(const char *server,		/* hostname of backend */
  *   - input from clientin is sent to serverout.
  *   - returns -1 if clientin or serverin closed, otherwise returns 0.
  * If serverout is NULL:
- *   - returns 1 if input from clientin is pending, 1, otherwise returns 0.
+ *   - returns 1 if input from clientin is pending, otherwise returns 0.
  */
 inline int proxy_check_input(struct protgroup *protin,
 			     struct protstream *clientin,
 			     struct protstream *clientout,
 			     struct protstream *serverin,
 			     struct protstream *serverout,
-			     long timeout_sec)
+			     unsigned long timeout_sec)
 {
     struct protgroup *protout = NULL;
     struct timeval timeout = { timeout_sec, 0 };
     int n, ret = 0;
 
-    n = prot_select(protin, PROT_NO_FD, &protout, NULL, &timeout);
+    n = prot_select(protin, PROT_NO_FD, &protout, NULL,
+		    timeout_sec ? &timeout : NULL);
     if (n == -1 && errno != EINTR) {
 	syslog(LOG_ERR, "prot_select() failed in proxy_check_input(): %m");
 	fatal("prot_select() failed in proxy_check_input()", EC_TEMPFAIL);

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.38 2005/04/12 20:10:16 shadow Exp $
+ * $Id: nntpd.c,v 1.2.2.39 2005/05/04 19:26:26 ken3 Exp $
  */
 
 /*
@@ -779,7 +779,7 @@ static void cmdloop(void)
 
 	if (!proxy_check_input(protin, nntp_in, nntp_out,
 			       backend_current ? backend_current->in : NULL,
-			       NULL, 60)) {
+			       NULL, 0)) {
 	    /* No input from client */
 	    continue;
 	}
