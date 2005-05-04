@@ -1,7 +1,7 @@
 /* prot.h -- stdio-like module that handles buffering, SASL, and TLS
  *           details for I/O over sockets
  *
- * $Id: prot.h,v 1.40.2.3 2004/09/01 21:11:01 ken3 Exp $
+ * $Id: prot.h,v 1.40.2.4 2005/05/04 19:25:44 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -102,6 +102,7 @@ struct protstream {
     int dontblock; /* Application requested nonblocking */
     int dontblock_isset; /* write only, we've fcntl(O_NONBLOCK)'d */
     int read_timeout;
+    time_t timeout_mark;
     struct protstream *flushonread;
 
     /* Events */

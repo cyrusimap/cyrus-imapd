@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.82.2.7 2004/09/01 21:11:00 ken3 Exp $
+ * $Id: prot.c,v 1.82.2.8 2005/05/04 19:25:44 ken3 Exp $
  */
 
 #include <config.h>
@@ -216,6 +216,7 @@ int prot_settimeout(struct protstream *s, int timeout)
     assert(!s->write);
 
     s->read_timeout = timeout;
+    s->timeout_mark = time(NULL) + timeout;
     return 0;
 }
 
@@ -399,7 +400,7 @@ int prot_fill(struct protstream *s)
 	    time_t now = time(NULL);
 	    time_t sleepfor;
 
-	    read_timeout = now + (s->dontblock ? 0 : s->read_timeout);
+	    read_timeout = s->dontblock ? now : s->timeout_mark;
 	    do {
 		sleepfor = read_timeout - now;
 		/* execute each callback that has timed out */
@@ -442,6 +443,9 @@ int prot_fill(struct protstream *s)
 		return EOF;
 	    }
 	}
+
+	/* we have data, reset the timeout_mark */
+	s->timeout_mark = time(NULL) + s->read_timeout;
 	
 	do {
 #ifdef HAVE_SSL	  
@@ -1045,22 +1049,15 @@ int prot_select(struct protgroup *readstreams, int extra_read_fd,
 	}
 	
 	/* check the idle timeout on this one as well */
-	if(!have_thistimeout || this_timeout > s->read_timeout)
-	    this_timeout = s->read_timeout;
+	if(!have_thistimeout || s->timeout_mark - now < this_timeout)
+	    this_timeout = s->timeout_mark - now;
 
-	if(!have_readtimeout && !s->dontblock) {
+	if(!s->dontblock &&
+	   (!have_readtimeout || now + this_timeout < read_timeout)) {
 	    read_timeout = now + this_timeout;
 	    have_readtimeout = 1;
-	    if(!timeout || read_timeout <= timeout->tv_sec)
+	    if(!timeout || this_timeout <= timeout->tv_sec)
 		timeout_prot = s;
-	} else if(!s->dontblock) {
-	    time_t new_timeout;
-	    new_timeout = now + this_timeout;
-	    if(new_timeout < read_timeout) {
-		read_timeout = new_timeout;
-		if(!timeout || read_timeout <= timeout->tv_sec)
-		    timeout_prot = s;
-	    }
 	}
 	    
 	FD_SET(s->fd, &rfds);
@@ -1109,7 +1106,7 @@ int prot_select(struct protgroup *readstreams, int extra_read_fd,
 	 * a local version.  Otherwise, make sure that we are timing out
 	 * for the right reason */
 	if((!timeout && have_readtimeout)
-	   || (timeout && read_timeout < timeout->tv_sec)) {
+	   || (timeout && sleepfor < timeout->tv_sec)) {
 	    if(!timeout)
 		timeout = &my_timeout;
 	    timeout->tv_sec = sleepfor;
@@ -1143,6 +1140,8 @@ int prot_select(struct protgroup *readstreams, int extra_read_fd,
 	    } else if(s == timeout_prot && now >= read_timeout) {
 		/* If we timed out, be sure to add the protstream we were
 		 * waiting for, even if it didn't show up */
+		found_fds++;
+
 		if(!retval)
 		    retval = protgroup_new(readstreams->next_element + 1);
 
