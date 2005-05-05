@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.46 2005/05/05 17:55:33 ken3 Exp $
+ * $Id: nntpd.c,v 1.47 2005/05/05 19:09:29 ken3 Exp $
  */
 
 /*
@@ -1013,16 +1013,22 @@ static void cmdloop(void)
 		if (c == '\r') c = prot_getc(nntp_in);
 		if (c != '\n') goto extraargs;
 
-		r = open_group(arg1.s, 0, &backend_current, NULL);
+		r = open_group(arg1.s, 0, &be, NULL);
 		if (r) goto nogroup;
-		else if (backend_current) {
-		    prot_printf(backend_current->out, "GROUP %s\r\n", arg1.s);
-		    r = read_response(backend_current, 0, &result);
+		else if (be) {
+		    prot_printf(be->out, "GROUP %s\r\n", arg1.s);
+		    r = read_response(be, 0, &result);
 		    if (r) goto nogroup;
 
 		    prot_printf(nntp_out, "%s", result);
+
+		    if (!strncmp(result, "211", 3)) {
+			backend_current = be;
+		    }
 		}
 		else {
+		    backend_current = NULL;
+
 		    nntp_exists = nntp_group->exists;
 		    nntp_current = nntp_exists > 0;
 
@@ -1164,6 +1170,7 @@ static void cmdloop(void)
 	    else if (!strcmp(cmd.s, "Listgroup")) {
 		arg1.len = 0;
 		arg2.s = arg2.s ? strcpy(arg2.s, "1-") : "1-";
+		be = backend_current;
 
 		if (c == ' ') {
 		    c = getword(nntp_in, &arg1); /* group (optional) */
@@ -1177,32 +1184,32 @@ static void cmdloop(void)
 		if (c != '\n') goto extraargs;
 
 		if (arg1.len) {
-		    r = open_group(arg1.s, 0, &backend_current, NULL);
+		    r = open_group(arg1.s, 0, &be, NULL);
 		    if (r) goto nogroup;
-
-		    if (nntp_group) {
-			nntp_exists = nntp_group->exists;
-			nntp_current = nntp_exists > 0;
-		    }
 		}
-		if (backend_current) {
+
+		if (be) {
 		    if (arg1.len)
-			prot_printf(backend_current->out, "LISTGROUP %s %s",
+			prot_printf(be->out, "LISTGROUP %s %s",
 				    arg1.s, arg2.s);
 		    else
-			prot_printf(backend_current->out, "LISTGROUP\r\n");
+			prot_printf(be->out, "LISTGROUP\r\n");
 
-		    r = read_response(backend_current, 0, &result);
+		    r = read_response(be, 0, &result);
 		    if (r) goto noopengroup;
 
 		    prot_printf(nntp_out, "%s", result);
 		    if (!strncmp(result, "211", 3)) {
-			pipe_to_end_of_response(backend_current, 0);
+			pipe_to_end_of_response(be, 0);
+
+			backend_current = be;
 		    }
 		}
 		else if (!nntp_group) goto noopengroup;
 		else if (parserange(arg2.s, &uid, &last, NULL, NULL) != -1) {
 		    int msgno, last_msgno;
+
+		    backend_current = NULL;
 
 		    nntp_exists = nntp_group->exists;
 		    nntp_current = nntp_exists > 0;
