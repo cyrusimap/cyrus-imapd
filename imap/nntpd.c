@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.45 2005/04/12 20:07:40 shadow Exp $
+ * $Id: nntpd.c,v 1.46 2005/05/05 17:55:33 ken3 Exp $
  */
 
 /*
@@ -828,7 +828,7 @@ static void cmdloop(void)
     static struct buf cmd, arg1, arg2, arg3, arg4;
     char *p, *result, buf[1024];
     const char *err;
-    unsigned long uid;
+    unsigned long uid, last;
     struct backend *be;
 
     allowanonymous = config_getswitch(IMAPOPT_ALLOWANONYMOUSLOGIN);
@@ -1053,7 +1053,6 @@ static void cmdloop(void)
 	    else if (!nntp_userid && !allowanonymous) goto nologin;
 	    else if (!strcmp(cmd.s, "Hdr")) {
 		char curgroup[MAX_MAILBOX_NAME+1], *msgid;
-		unsigned long last;
 
 	      hdr:
 		if (arg2.s) *arg2.s = 0;
@@ -1164,10 +1163,15 @@ static void cmdloop(void)
 	    }
 	    else if (!strcmp(cmd.s, "Listgroup")) {
 		arg1.len = 0;
+		arg2.s = arg2.s ? strcpy(arg2.s, "1-") : "1-";
 
 		if (c == ' ') {
 		    c = getword(nntp_in, &arg1); /* group (optional) */
 		    if (c == EOF) goto missingargs;
+		    if (c == ' ') {
+			c = getword(nntp_in, &arg2); /* range (optional) */
+			if (c == EOF) goto missingargs;
+		    }
 		}
 		if (c == '\r') c = prot_getc(nntp_in);
 		if (c != '\n') goto extraargs;
@@ -1183,8 +1187,8 @@ static void cmdloop(void)
 		}
 		if (backend_current) {
 		    if (arg1.len)
-			prot_printf(backend_current->out, "LISTGROUP %s\r\n",
-				    arg1.s);
+			prot_printf(backend_current->out, "LISTGROUP %s %s",
+				    arg1.s, arg2.s);
 		    else
 			prot_printf(backend_current->out, "LISTGROUP\r\n");
 
@@ -1197,8 +1201,8 @@ static void cmdloop(void)
 		    }
 		}
 		else if (!nntp_group) goto noopengroup;
-		else {
-		    int i;
+		else if (parserange(arg2.s, &uid, &last, NULL, NULL) != -1) {
+		    int msgno, last_msgno;
 
 		    nntp_exists = nntp_group->exists;
 		    nntp_current = nntp_exists > 0;
@@ -1211,8 +1215,12 @@ static void cmdloop(void)
 				nntp_group->last_uid,
 				nntp_group->name + strlen(newsprefix));
 
-		    for (i = 1; i <= nntp_exists; i++)
-			prot_printf(nntp_out, "%u\r\n", index_getuid(i));
+		    msgno = index_finduid(uid);
+		    if (!msgno || index_getuid(msgno) != uid) msgno++;
+		    last_msgno = index_finduid(last);
+
+		    for (; msgno <= last_msgno; msgno++)
+			prot_printf(nntp_out, "%u\r\n", index_getuid(msgno));
 		    prot_printf(nntp_out, ".\r\n");
 		}
 	    }
@@ -1316,7 +1324,6 @@ static void cmdloop(void)
 	case 'O':
 	    if (!strcmp(cmd.s, "Over")) {
 		char curgroup[MAX_MAILBOX_NAME+1], *msgid;
-		unsigned long last;
 
 	      over:
 		if (arg1.s) *arg1.s = 0;
@@ -1421,7 +1428,6 @@ static void cmdloop(void)
 	    }
 	    else if (!strcmp(cmd.s, "Xpat")) {
 		char curgroup[MAX_MAILBOX_NAME+1], *msgid;
-		unsigned long last;
 
 		if (c != ' ') goto missingargs;
 		c = getword(nntp_in, &arg1); /* header */
@@ -1519,6 +1525,10 @@ static void cmdloop(void)
       nocurrent:
 	prot_printf(nntp_out, "420 Current article number is invalid\r\n");
 	continue;
+
+      noarticle:
+	prot_printf(nntp_out, "423 No such article(s) in this newsgroup\r\n");
+	continue;
     }
 }
 
@@ -1599,7 +1609,7 @@ static int parserange(char *str, unsigned long *uid, unsigned long *last,
     if (ret) *ret = NULL;
 
     if (!str || !*str) {
-	/* argument, use current article */
+	/* no argument, use current article */
 	if (backend_current) {
 	    if (ret) *ret = backend_current;
 	}
@@ -1623,7 +1633,6 @@ static int parserange(char *str, unsigned long *uid, unsigned long *last,
     else if (backend_current)
 	*ret = backend_current;
     else if (!nntp_group) goto noopengroup;
-    else if (!nntp_exists) goto noarticle;
     else if ((*uid = parsenum(str, &p)) <= 0) goto badrange;
     else if (p && *p) {
 	/* extra stuff, check for range */
@@ -1632,7 +1641,6 @@ static int parserange(char *str, unsigned long *uid, unsigned long *last,
 	    *last = parsenum(p, NULL);
 	else
 	    *last = index_getuid(nntp_exists);
-	if (*last <= 0 || *last < *uid) goto badrange;
     }
 
     if (last && !*last) *last = *uid;
@@ -1647,10 +1655,6 @@ static int parserange(char *str, unsigned long *uid, unsigned long *last,
     prot_printf(nntp_out, "420 Current article number is invalid\r\n");
     return -1;
 
-  noarticle:
-    prot_printf(nntp_out, "423 No such article in this newsgroup\r\n");
-    return -1;
-
   nomsgid:
     prot_printf(nntp_out, "430 No article found with that message-id");
     if (r) prot_printf(nntp_out, " (%s)", error_message(r));
@@ -1658,7 +1662,7 @@ static int parserange(char *str, unsigned long *uid, unsigned long *last,
     return -1;
 
   badrange:
-    prot_printf(nntp_out, "501 Bad message-id or range\r\n");
+    prot_printf(nntp_out, "501 Bad message-id, message number, or range\r\n");
     return -1;
 }
 
@@ -1831,7 +1835,10 @@ static void cmd_capabilities(char *keyword __attribute__((unused)))
 
     /* add the reader capabilities/extensions */
     if ((nntp_capa & MODE_READ) && (nntp_userid || allowanonymous)) {
-	prot_printf(nntp_out, "READER POST LISTGROUP\r\n");
+	prot_printf(nntp_out, "READER\r\n");
+	prot_printf(nntp_out, "POST\r\n");
+	if (config_getswitch(IMAPOPT_ALLOWNEWNEWS))
+	    prot_printf(nntp_out, "NEWNEWS\r\n");
 	prot_printf(nntp_out, "HDR\r\n");
 	prot_printf(nntp_out, "OVER\r\n");
 	prot_printf(nntp_out, "XPAT\r\n");
@@ -2203,16 +2210,22 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
 static void cmd_hdr(char *cmd, char *hdr, char *pat, char *msgid,
 		    unsigned long uid, unsigned long last)
 {
+    int msgno, last_msgno;
+    int by_msgid = (msgid != NULL);
+    int found = 0;
+
     lcase(hdr);
 
-    prot_printf(nntp_out, "%u Headers follow:\r\n", cmd[0] == 'X' ? 221 : 225);
+    msgno = index_finduid(uid);
+    if (!msgno || index_getuid(msgno) != uid) msgno++;
+    last_msgno = index_finduid(last);
 
-    for (; uid <= last; uid++) {
+    for (; msgno <= last_msgno; msgno++) {
 	char *body;
-	int msgno = index_finduid(uid);
-	int by_msgid = (msgid != NULL);
 
-	if (!msgno || index_getuid(msgno) != uid) continue;
+	if (!found++)
+	    prot_printf(nntp_out, "%u Headers follow:\r\n",
+			cmd[0] == 'X' ? 221 : 225);
 
 	/* see if we're looking for metadata */
 	if (hdr[0] == ':') {
@@ -2228,10 +2241,12 @@ static void cmd_hdr(char *cmd, char *hdr, char *pat, char *msgid,
 			    size + strlen(xref) + 2); /* +2 for \r\n */
 	    }
 	    else if (!strcasecmp(":lines", hdr))
-		prot_printf(nntp_out, "%lu %lu\r\n", by_msgid ? 0 : uid,
+		prot_printf(nntp_out, "%lu %lu\r\n",
+			    by_msgid ? 0 : index_getuid(msgno),
 			    index_getlines(nntp_group, msgno));
 	    else
-		prot_printf(nntp_out, "%lu \r\n", by_msgid ? 0 : uid);
+		prot_printf(nntp_out, "%lu \r\n",
+			    by_msgid ? 0 : index_getuid(msgno));
 	}
 	else if (!strcmp(hdr, "xref") && !pat /* [X]HDR only */) {
 	    char xref[8192];
@@ -2240,16 +2255,21 @@ static void cmd_hdr(char *cmd, char *hdr, char *pat, char *msgid,
 	    build_xref(msgid, xref, sizeof(xref), 1);
 	    if (!by_msgid) free(msgid);
 
-	    prot_printf(nntp_out, "%lu %s\r\n", by_msgid ? 0 : uid, xref);
+	    prot_printf(nntp_out, "%lu %s\r\n",
+			by_msgid ? 0 : index_getuid(msgno), xref);
 	}
 	else if ((body = index_getheader(nntp_group, msgno, hdr)) &&
 		 (!pat ||			/* [X]HDR */
 		  wildmat(body, pat))) {	/* XPAT with match */
-		prot_printf(nntp_out, "%lu %s\r\n", by_msgid ? 0 : uid, body);
+		prot_printf(nntp_out, "%lu %s\r\n",
+			    by_msgid ? 0 : index_getuid(msgno), body);
 	}
     }
 
-    prot_printf(nntp_out, ".\r\n");
+    if (found)
+	prot_printf(nntp_out, ".\r\n");
+    else
+	prot_printf(nntp_out, "423 No such article(s) in this newsgroup\r\n");
 }
 
 static void cmd_help(void)
@@ -2311,9 +2331,7 @@ static void cmd_help(void)
 		    "\t\tList the descriptions of the specified newsgroups.\r\n");
 	prot_printf(nntp_out, "\tLIST OVERVIEW.FMT\r\n"
 		    "\t\tList the headers and metadata items available via OVER.\r\n");
-    }
-    if ((nntp_capa & MODE_READ) && (nntp_userid || allowanonymous)) {
-	prot_printf(nntp_out, "\tLISTGROUP [group]\r\n"
+	prot_printf(nntp_out, "\tLISTGROUP [group [range]]\r\n"
 		    "\t\tList the article numbers in the specified newsgroup.\r\n");
 	if (config_getswitch(IMAPOPT_ALLOWNEWNEWS))
 	    prot_printf(nntp_out, "\tNEWNEWS wildmat date time [GMT]\r\n"
@@ -2759,21 +2777,22 @@ static void cmd_newnews(char *wild, time_t tstamp)
 
 static void cmd_over(char *msgid, unsigned long uid, unsigned long last)
 {
-    int msgno;
+    int msgno, last_msgno;
     struct nntp_overview *over;
     int found = 0;
 
-    for (; uid <= last; uid++) {
-	msgno = index_finduid(uid);
-	if (!msgno || index_getuid(msgno) != uid) continue;
+    msgno = index_finduid(uid);
+    if (!msgno || index_getuid(msgno) != uid) msgno++;
+    last_msgno = index_finduid(last);
+
+    for (; msgno <= last_msgno; msgno++) {
+	if (!found++)
+	    prot_printf(nntp_out, "224 Overview information follows:\r\n");
 
 	if ((over = index_overview(nntp_group, msgno))) {
 	    char xref[8192];
 
 	    build_xref(over->msgid, xref, sizeof(xref), 0);
-
-	    if (!found++)
-		prot_printf(nntp_out, "224 Overview information follows:\r\n");
 
 	    prot_printf(nntp_out, "%lu\t%s\t%s\t%s\t%s\t%s\t%lu\t%lu\t%s\r\n",
 			msgid ? 0 : over->uid,
@@ -2790,7 +2809,7 @@ static void cmd_over(char *msgid, unsigned long uid, unsigned long last)
     if (found)
 	prot_printf(nntp_out, ".\r\n");
     else
-	prot_printf(nntp_out, "420 No articles selected\r\n");
+	prot_printf(nntp_out, "423 No such article(s) in this newsgroup\r\n");
 }
 
 
