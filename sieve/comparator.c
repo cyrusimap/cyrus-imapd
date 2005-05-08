@@ -1,7 +1,7 @@
 /* comparator.c -- comparator functions
  * Larry Greenfield
  * Ken Murchison (rewritten to handle relational ops and non-terminated text)
- * $Id: comparator.c,v 1.15.2.3 2005/03/15 15:04:07 ken3 Exp $
+ * $Id: comparator.c,v 1.15.2.4 2005/05/08 14:31:00 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -335,7 +335,7 @@ static int ascii_numeric_cmp(const char *text, size_t tlen, const char *pat)
 	    } else if (text_digit_len > pat_digit_len) {
 		/* Pad "pad" with leading 0s */
 		while (text_digit_len > pat_digit_len) {
-		    /* "pad" can only be less or equal to "text" */
+		    /* "pad" can only be greater or equal to "text" */
 		    if (*text > '0') {
 			return 1;
 		    }
@@ -350,7 +350,7 @@ static int ascii_numeric_cmp(const char *text, size_t tlen, const char *pat)
 		if (*text < *pat) {
 		    return -1;
 		} else if (*text > *pat) {
-		    return -1;
+		    return 1;
 		}
 		/* Characters are equal, carry on */
 		text++;
