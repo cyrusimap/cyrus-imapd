@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.47 2005/05/05 19:09:29 ken3 Exp $
+ * $Id: nntpd.c,v 1.48 2005/05/10 15:43:00 ken3 Exp $
  */
 
 /*
@@ -1190,7 +1190,7 @@ static void cmdloop(void)
 
 		if (be) {
 		    if (arg1.len)
-			prot_printf(be->out, "LISTGROUP %s %s",
+			prot_printf(be->out, "LISTGROUP %s %s\r\n",
 				    arg1.s, arg2.s);
 		    else
 			prot_printf(be->out, "LISTGROUP\r\n");
