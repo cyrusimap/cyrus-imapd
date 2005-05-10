@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.19 2005/04/28 15:34:43 ken3 Exp $
+ * $Id: sync_client.c,v 1.1.2.20 2005/05/10 18:28:06 ken3 Exp $
  */
 
 #include <config.h>
@@ -1332,9 +1332,12 @@ static int do_seen(char *user, char *name)
     }
 
     /* Update seen list */
-    prot_printf(toserver, "SETSEEN %s %s %lu %lu %lu ",
-             user, m.name, lastread, last_recent_uid, lastchange);
-
+    prot_printf(toserver, "SETSEEN ");
+    sync_printastring(toserver, user);
+    prot_printf(toserver, " ");
+    sync_printastring(toserver, m.name);
+    prot_printf(toserver, " %lu %lu %lu ",
+		lastread, last_recent_uid, lastchange);
     sync_printastring(toserver, seenuid);
     prot_printf(toserver, "\r\n");
     prot_flush(toserver);
@@ -1445,7 +1448,9 @@ static int do_annotation(char *name)
     static struct buf entry, userid, value;
     struct sync_annot_list *server_list = sync_annot_list_create();
 
-    prot_printf(toserver, "LIST_ANNOTATIONS %s\r\n", name);
+    prot_printf(toserver, "LIST_ANNOTATIONS ");
+    sync_printastring(toserver, name);
+    prot_printf(toserver, "\r\n", name);
     prot_flush(toserver);
     r=sync_parse_code("LIST_ANNOTATIONS", fromserver,
 		      SYNC_PARSE_EAT_OKLINE, &unsolicited);
@@ -2119,7 +2124,9 @@ static int do_user_seen(char *user)
     free(seen_file);
 
     /* Update seen db */
-    prot_printf(toserver, "SETSEEN_ALL %s {%lu+}\r\n", user, len);
+    prot_printf(toserver, "SETSEEN_ALL ");
+    sync_printastring(toserver, user);
+    prot_printf(toserver, " {%lu+}\r\n", len);
 
     prot_write(toserver, base, len);
     map_free(&base, &len);
@@ -2441,7 +2448,9 @@ static int do_meta_sub(char *user)
     static struct buf name;
     struct sync_folder_list *server_list = sync_folder_list_create();
 
-    prot_printf(toserver, "LSUB %s\r\n", user);
+    prot_printf(toserver, "LSUB ");
+    sync_printastring(toserver, user);
+    prot_printf(toserver, "\r\n");
     prot_flush(toserver);
     r=sync_parse_code("LSUB",fromserver, SYNC_PARSE_EAT_OKLINE, &unsolicited);
 
