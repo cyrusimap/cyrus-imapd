@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.99 2005/02/14 18:01:30 shadow Exp $ -->
+<!-- $Id: changes.html,v 1.100 2005/05/10 15:49:41 ken3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -25,6 +25,8 @@ backend (exploitable by admin), and in imapd (exploitable by users though only o
 <ul>
 <li>Fix 0 termination in mysasl_canon_user.</li>
 <li>Check for imap magic plus buffer overflow in proxyd also (CAN-2004-1015).</li>
+<li>Only send an over quota ALERT on SELECT if the quotaroot is different
+from the last ALERT, or we haven't sent an ALERT in over 10 min.</li>
 </ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.2.8</h1>
@@ -2003,7 +2005,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2005/02/14 18:01:30 $ <br />
+last modified: $Date: 2005/05/10 15:49:41 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
