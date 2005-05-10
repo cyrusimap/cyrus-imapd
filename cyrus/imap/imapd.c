@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.56 2005/05/04 19:26:17 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.57 2005/05/10 15:41:19 ken3 Exp $ */
 
 #include <config.h>
 
@@ -2802,6 +2802,8 @@ void cmd_select(char *tag, char *cmd, char *name)
     int mbtype;
     char *newserver;
     struct backend *backend_next = NULL;
+    static char lastqr[MAX_MAILBOX_PATH+1] = "";
+    static time_t nextalert = 0;
 
     if (imapd_mailbox) {
 	index_closemailbox(imapd_mailbox);
@@ -2924,9 +2926,12 @@ void cmd_select(char *tag, char *cmd, char *name)
     }
 
     if (imapd_mailbox->myrights & ACL_DELETE) {
+	time_t now = time(NULL);
+
 	/* Warn if mailbox is close to or over quota */
 	r = quota_read(&imapd_mailbox->quota, NULL, 0);
-	if (!r && imapd_mailbox->quota.limit > 0) {
+	if (!r && imapd_mailbox->quota.limit > 0 &&
+	    (strcmp(imapd_mailbox->quota.root, lastqr) || now > nextalert)) {
  	    /* Warn if the following possibilities occur:
  	     * - quotawarnkb not set + quotawarn hit
 	     * - quotawarnkb set larger than mailbox + quotawarn hit
@@ -2950,6 +2955,8 @@ void cmd_select(char *tag, char *cmd, char *name)
 		    prot_printf(imapd_out, "\r\n");
 		}
 	    }
+	    strlcpy(lastqr, imapd_mailbox->quota.root, sizeof(lastqr));
+	    nextalert = now + 600; /* ALERT every 10 min regardless */
 	}
     }
 
