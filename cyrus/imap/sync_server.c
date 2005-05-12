@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.1.2.12 2005/04/27 00:29:08 ken3 Exp $
+ * $Id: sync_server.c,v 1.1.2.13 2005/05/12 20:04:19 ken3 Exp $
  */
 
 #include <config.h>
@@ -2755,7 +2755,7 @@ static void cmd_lsub(char *user)
 
     r = ((*sync_namespacep).mboxlist_findsub)(sync_namespacep, "*",
 					      sync_userisadmin,
-                                              sync_userid, sync_authstate,
+                                              user, sync_authstate,
                                               do_lsub_single, NULL, 1);
 
     if (r) {
