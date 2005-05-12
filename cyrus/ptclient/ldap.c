@@ -41,7 +41,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ldap.c,v 1.8 2005/02/16 20:38:04 shadow Exp $";
+      "$Id: ldap.c,v 1.9 2005/05/12 19:49:55 shadow Exp $";
 
 #include <config.h>
 #include "ptloader.h"
@@ -612,11 +612,7 @@ static int ptsmodule_tokenize_domains(
 	s1 = (char *)strtok_r(s, ".", &lasts);
 	while(s1) {
 		if (i == 0) {
-			*result = strdup(s1);
-			if (*result != NULL)
-				rc = ptsmodule_escape(s1, strlen(s1), result);
-			else
-				rc = PTSM_NOMEM;
+			rc = ptsmodule_escape(s1, strlen(s1), result);
 			free(s);
 			return rc;
 		}
