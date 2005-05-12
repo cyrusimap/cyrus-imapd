@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.c,v 1.1.2.12 2005/04/26 20:15:09 ken3 Exp $
+ * $Id: sync_support.c,v 1.1.2.13 2005/05/12 20:06:53 ken3 Exp $
  */
 
 #include <config.h>
@@ -1170,10 +1170,10 @@ int sync_getcache(struct protstream *input, struct protstream *output,
 {
     static char          *cache_entry = NULL;
     static unsigned long  max_cache_size  = 0;
-    unsigned long cache_size;
-    unsigned long i;
+    unsigned long cache_size, size;
     int c, r = 0;
     static struct buf version;
+    int n;
 
     /* Parse Cache version number */
     if ((c = getastring(input, output, &version)) != ' ')
@@ -1187,10 +1187,17 @@ int sync_getcache(struct protstream *input, struct protstream *output,
 	cache_entry = xrealloc(cache_entry, cache_size);
         max_cache_size = cache_size;
     }
-        
-    for (i=0 ; i < cache_size ; i++) {
-        if ((c = prot_getc(input)) == EOF) return(IMAP_IOERROR);
-        cache_entry[i] = (unsigned char)c;
+
+    size = cache_size;
+    while (size) {
+	n = prot_read(input, cache_entry, size);
+	if (!n) {
+	    syslog(LOG_ERR,
+		   "IOERROR: reading cache entry: unexpected end of file");
+	    return(IMAP_IOERROR);
+	}
+
+	size -=n;
     }
     message->cache_offset = sync_message_list_cache_offset(list);
     message->cache_size   = cache_size;
@@ -1204,8 +1211,10 @@ int sync_getmessage(struct protstream *input, struct protstream *output,
 		    struct sync_message *message)
 {
     FILE *file;
-    int   c, r = 0;
+    int   r = 0;
     unsigned long size;
+    char buf[8192+1];
+    int n;
 
     if ((r = sync_getliteral_size(input, output, &message->msg_size)))
         return(r);
@@ -1213,16 +1222,19 @@ int sync_getmessage(struct protstream *input, struct protstream *output,
     if ((file=sync_message_open(list, message)) == NULL)
         return(IMAP_IOERROR);
 
-    for (size = message->msg_size; size > 0 ; size--) {
-        if ((c = prot_getc(input)) == EOF) {
-            r = IMAP_IOERROR;
-            break;
-        }
-        if ((fputc(c, file) == EOF)) {
-            r = IMAP_IOERROR;
-            break;
-        }
+    size = message->msg_size;
+    while (size) {
+	n = prot_read(input, buf, size > 8192 ? 8192 : size);
+	if (!n) {
+	    syslog(LOG_ERR, "IOERROR: reading message: unexpected end of file");
+	    r = IMAP_IOERROR;
+	    break;
+	}
+
+	size -= n;
+	fwrite(buf, 1, n, file);
     }
+
     /* fsync()/fclose() batched later */
     return(r);
 }
@@ -1232,11 +1244,13 @@ int sync_getsimple(struct protstream *input, struct protstream *output,
 		   struct sync_message *message)
 {
     FILE         *file;
-    int           c, r = 0;
+    int           r = 0;
     unsigned long size;
     const char *msg_base = 0;
     unsigned long msg_len = 0;
     struct index_record record;
+    char buf[8192+1];
+    int n;
 
     /* If switching from PARSED to SIMPLE, need to flush cache.  This is
      * redundant as it duplicates code in cmd_upload() (which is the
@@ -1255,15 +1269,20 @@ int sync_getsimple(struct protstream *input, struct protstream *output,
         r = IMAP_IOERROR;
     }
 
-    for (size = message->msg_size; size > 0 ; size--) {
-        if ((c = prot_getc(input)) == EOF) {
-            r = IMAP_IOERROR;
-            break;
-        }
-        if (!r && (fputc(c, file) == EOF)) {
-            r = IMAP_IOERROR;
-        }
+    size = message->msg_size;
+    while (size) {
+	n = prot_read(input, buf, size > 8192 ? 8192 : size);
+	if (!n) {
+	    syslog(LOG_ERR,
+		   "IOERROR: reading message: unexpected end of file");
+	    r = IMAP_IOERROR;
+	    break;
+	}
+
+	size -= n;
+	fwrite(buf, 1, n, file);
     }
+
     if (r) {
         fclose(file);
         return(IMAP_IOERROR);
@@ -1561,16 +1580,23 @@ int sync_sieve_upload(struct protstream *input, struct protstream *output,
     char tmpname[2048];
     char newname[2048];
     FILE *file;
-    int   c, r = 0;
+    int   r = 0;
     unsigned long size;
     struct stat sbuf;
     struct utimbuf utimbuf;
+    char buf[8192+1];
+    int n;
 
     snprintf(sieve_path, sizeof(sieve_path), "%s/%c/%s",
              config_getstring(IMAPOPT_SIEVEDIR), dir_hash_c(userid), userid);
 
-    if (stat(sieve_path, &sbuf) < 0)
-        mkdir(sieve_path, 0755);
+    if (stat(sieve_path, &sbuf) == -1 && errno == ENOENT) {
+	if (cyrus_mkdir(sieve_path, 0755) == -1) return IMAP_IOERROR;
+	if (mkdir(sieve_path, 0755) == -1 && errno != EEXIST) {
+	    syslog(LOG_ERR, "Failed to create %s:%m", sieve_path);
+	    return IMAP_IOERROR;
+	}
+    }
 
     snprintf(tmpname, sizeof(tmpname), "%s/sync_tmp-%lu",
              sieve_path, (unsigned long)getpid());
@@ -1580,22 +1606,19 @@ int sync_sieve_upload(struct protstream *input, struct protstream *output,
         return(r);
 
     if ((file=fopen(tmpname, "w")) == NULL) {
-        for (; size > 0 ; size--) {
-            if ((c = prot_getc(input)) == EOF)
-                break;
-        }
         return(IMAP_IOERROR);
     }
 
-    for (; size > 0 ; size--) {
-        if ((c = prot_getc(input)) == EOF) {
-            r = IMAP_IOERROR;
-            break;
-        }
-        if ((fputc(c, file) == EOF)) {
-            r = IMAP_IOERROR;
-            break;
-        }
+    while (size) {
+	n = prot_read(input, buf, size > 8192 ? 8192 : size);
+	if (!n) {
+	    syslog(LOG_ERR, "IOERROR: reading message: unexpected end of file");
+	    r = IMAP_IOERROR;
+	    break;
+	}
+
+	size -= n;
+	fwrite(buf, 1, n, file);
     }
 
     if ((fflush(file) != 0) || (fsync(fileno(file)) < 0))
