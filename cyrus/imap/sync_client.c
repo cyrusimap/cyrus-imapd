@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.20 2005/05/10 18:28:06 ken3 Exp $
+ * $Id: sync_client.c,v 1.1.2.21 2005/05/12 19:56:54 ken3 Exp $
  */
 
 #include <config.h>
@@ -122,6 +122,8 @@ static struct auth_state *sync_authstate = NULL;
 
 static int verbose         = 0;
 static int verbose_logging = 0;
+
+static int do_meta(char *user);
 
 static void shut_down(int code) __attribute__((noreturn));
 static void shut_down(int code)
@@ -1766,6 +1768,8 @@ int do_folders(struct sync_folder_list *client_list,
                     r = do_mailbox_work(&m, folder2->msglist, 0, m.uniqueid);
             }
         } else {
+	    char *userid;
+
             /* Need to create fresh folder on server */
             if ((r=folder_create(m.name, m.uniqueid, m.acl, m.uidvalidity)))
                 goto bail;
@@ -1783,6 +1787,10 @@ int do_folders(struct sync_folder_list *client_list,
                 r = do_mailbox_work(&m, folder_msglist, 1, m.uniqueid);
                 sync_msg_list_free(&folder_msglist);
             }
+
+	    if (!r && (userid = mboxname_isusermailbox(m.name, 1)))
+		r = do_meta(userid);
+
         }
         if (r) goto bail;
 
@@ -2044,6 +2052,7 @@ int do_user_sub(char *user, struct sync_folder_list *server_list)
     struct sync_folder_list *client_list = sync_folder_list_create();
     struct sync_folder *c, *s;
     int n;
+    char buf[MAX_MAILBOX_NAME+1];
 
     /* Includes subsiduary nodes automatically */
     r = (sync_namespace.mboxlist_findsub)(&sync_namespace, "*", 1,
@@ -2067,7 +2076,9 @@ int do_user_sub(char *user, struct sync_folder_list *server_list)
 	       current client subscription, or we reach the end of the
 	       server list */
 	    do {
-		if ((r = user_delsub(user, s->name))) goto bail;
+		(sync_namespace.mboxname_tointernal)(&sync_namespace, s->name,
+						     user, buf);
+		if ((r = user_delsub(user, buf))) goto bail;
 		s = s->next;
 		if (!s) n = -1;		/* end of server list, we're done */
 		else if (!c) n = 1;	/* remove all server subscriptions */
@@ -2081,7 +2092,9 @@ int do_user_sub(char *user, struct sync_folder_list *server_list)
 	}
 	else if (c && n < 0) {
 	    /* add the current client subscription */
-	    if ((r = user_addsub(user, c->name))) goto bail;
+	    (sync_namespace.mboxname_tointernal)(&sync_namespace, c->name,
+						 user, buf);
+	    if ((r = user_addsub(user, buf))) goto bail;
 	}
     }
 
