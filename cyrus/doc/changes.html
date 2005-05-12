@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.71.2.29 2005/05/10 15:45:49 ken3 Exp $ -->
+<!-- $Id: changes.html,v 1.71.2.30 2005/05/12 17:05:15 ken3 Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -19,6 +19,8 @@ merged with <tt>imapd</tt> and <tt>lmtpd</tt> respectively), or all
 filesystem.  The new <tt>mupdate_config</tt> option in
 <tt>imapd.conf</tt> is used to determine whether a Murder is using a
 "traditional", "unified" or "replicated" configuration.</li> 
+<li>Ported/rewrote/integrated David Carter's mailspool replication
+code.  <i>Development sponsored by Columbia University</i>.</li>
 <li>Added support for "delayed" expunge, in which messages are
 removed from the mailbox index at the time of the EXPUNGE (hiding them
 from the client), but the message files and cache entries are left
@@ -2049,7 +2051,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2005/05/10 15:45:49 $ <br />
+last modified: $Date: 2005/05/12 17:05:15 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
