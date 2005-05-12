@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_log.c,v 1.1.2.6 2005/03/31 18:51:26 ken3 Exp $
+ * $Id: sync_log.c,v 1.1.2.7 2005/05/12 19:56:17 ken3 Exp $
  */
 
 /* YYY Need better quoting for obscure filenames: use literals? */
@@ -129,7 +129,8 @@ static void sync_log_base(const char *string, int len)
     if (rc < len)
         syslog(LOG_ERR, "Partial write to %s: %d out of %d only written",
                sync_log_file, rc, len);
-    
+
+    fsync(fd); /* paranoia */
     close(fd);
 }
 
