@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.1.2.13 2005/05/12 20:04:19 ken3 Exp $
+ * $Id: sync_server.c,v 1.1.2.14 2005/05/13 14:17:00 ken3 Exp $
  */
 
 #include <config.h>
@@ -150,10 +150,6 @@ static void cmd_quota(char *quotaroot);
 static void cmd_setquota(char *root, int limit);
 static void cmd_reset(char *user);
 static void cmd_status(struct mailbox *mailbox);
-#if 0
-static void cmd_info(struct mailbox *mailbox);
-static void cmd_contents(struct mailbox *mailbox, char *user);
-#endif
 static void cmd_upload(struct mailbox *mailbox,
 		       struct sync_message_list *message_list,
 		       unsigned long new_last_uid, time_t last_appenddate);
@@ -166,9 +162,6 @@ static void cmd_setseen(struct mailbox **mailboxp, char *user, char *mboxname,
 static void cmd_setseen_all(char *user, struct buf *data);
 static void cmd_setacl(char *name, char *acl);
 static void cmd_expunge(struct mailbox *mailbox);
-#if 0
-static void cmd_list();
-#endif
 static void cmd_mailboxes();
 static void cmd_user(char *userid);
 static void cmd_create(char *mailboxname, char *uniqueid, char *acl,
@@ -677,13 +670,6 @@ static void cmdloop(void)
                 cmd_create(arg1.s, arg2.s, arg3.s, 
                            atoi(arg4.s), sync_atoul(arg5.s));
                 continue;
-#if 0
-            } else if (!strcmp(cmd.s, "Contents")) {
-		if (c == '\r') c = prot_getc(sync_in);
-		if (c != '\n') goto extraargs;
-                cmd_contents(mailbox, sync_userid);
-                continue;
-#endif
             }
             break;
         case 'D':
@@ -751,26 +737,7 @@ static void cmdloop(void)
                 continue;
             }
             break;
-#if 0
-        case 'I':
-            if (!strcmp(cmd.s, "Info")) {
-		if (c == EOF) goto missingargs;
-		if (c == '\r') c = prot_getc(sync_in);
-		if (c != '\n') goto extraargs;
-                cmd_info(mailbox);
-                continue;
-            }
-            break;
-#endif
         case 'L':
-#if 0
-	    if (!strcmp(cmd.s, "List")) {
-		if (c == '\r') c = prot_getc(sync_in);
-		if (c != '\n') goto extraargs;
-                cmd_list();
-                continue;
-            }
-#endif
 	    if (!strcmp(cmd.s, "Lsub")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(sync_in, sync_out, &arg1);
@@ -1674,27 +1641,6 @@ static void cmd_status(struct mailbox *mailbox)
 }
 
 /* ====================================================================== */
-#if 0
-static void cmd_info(struct mailbox *mailbox)
-{
-    int i, sp = 0;
-    char **flagname = mailbox->flagname;
-
-    if (!mailbox) {
-        prot_printf(sync_out, "NO Mailbox not open\r\n");
-        return;
-    }
-
-    prot_printf(sync_out, "OK %lu %lu (", mailbox->uidvalidity, mailbox->last_uid);
-
-    for (i = 0 ; i < MAX_USER_FLAGS ; i++) {
-        if (flagname[i])
-            sync_flag_print(sync_out, &sp, flagname[i]);
-    }
-    prot_printf(sync_out, ")\r\n");
-}
-#endif
-/* ====================================================================== */
 
 static const char *
 seen_parse(const char *s, unsigned long *first_uidp, unsigned long *last_uidp)
@@ -1776,138 +1722,6 @@ find_return_path(char *hdr)
     return(NULL);
 }
 
-/* ====================================================================== */
-#if 0
-static void cmd_contents(struct mailbox *mailbox, char *user)
-{
-    struct seen *seendb = NULL;
-    time_t last_read, seen_last_change;
-    unsigned int recentuid;
-    char *seenuid  = NULL;
-    char *hdr;
-    int  *seenflag = NULL;
-    unsigned long msgno;
-    struct index_record record;
-    const char *msg_base = NULL, *s;
-    unsigned long msg_size = 0;
-    unsigned long len;
-    unsigned long first_uid, last_uid;
-    int r = 0;
-    int flag;
-    int flags_printed = 0;
-
-    if (!mailbox) {
-        prot_printf(sync_out, "NO Mailbox not open\r\n");
-        return;
-    }
-
-    if (chdir(mailbox->path) != 0)
-        goto fail;
-
-    if ((r = seen_open(mailbox, user, 0, &seendb)))
-        goto fail;
-
-    r = seen_read(seendb, &last_read, &recentuid,
-                  &seen_last_change, &seenuid);
-
-    seenflag = xzmalloc(mailbox->exists * sizeof(int));
-
-    s     = seen_parse(seenuid, &first_uid, &last_uid);
-    msgno = 1;
-
-    while (s && (msgno <= mailbox->exists)) {
-        if ((r = mailbox_read_index_record(mailbox, msgno, &record))) {
-            syslog(LOG_ERR,
-                   "IOERROR: reading index entry for nsgno %lu of %s: %m",
-                   record.uid, mailbox->name);
-            goto fail;
-        }
-        while (s && (record.uid > last_uid))
-            s = seen_parse(s, &first_uid, &last_uid);
-
-        if (!s) break;
-
-        if ((record.uid >= first_uid) && (record.uid <= last_uid))
-            seenflag[msgno-1] = 1;
-
-        msgno++;
-    }
-
-    for (msgno = 1 ; msgno <= mailbox->exists ; msgno++) {
-        if ((r = mailbox_read_index_record(mailbox, msgno, &record))) {
-            syslog(LOG_ERR,
-                   "IOERROR: reading index entry for nsgno %lu of %s: %m",
-                   record.uid, mailbox->name);
-            goto fail;
-        }
-
-	r = mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size);
-
-        if (record.header_size > msg_size) {
-            syslog(LOG_ERR, "record.header_size too large");
-            r = IMAP_IOERROR;
-            goto fail;
-        }
-        prot_printf(sync_out, "* %lu %lu ", record.uid, record.internaldate); 
-
-        hdr = xmalloc(record.header_size+1);
-        memcpy(hdr, msg_base, record.header_size);
-        hdr[record.header_size] = '\0';
-        if ((s=find_return_path(hdr)) == NULL)
-            s = "MAILER_DAEMON";
-        sync_printastring(sync_out, s);
-        free(hdr);
-
-        prot_printf(sync_out, " (");
-        flags_printed = 0;
-        if (record.system_flags & FLAG_DELETED)
-            sync_flag_print(sync_out, &flags_printed, "\\deleted");
-        if (record.system_flags & FLAG_ANSWERED)
-            sync_flag_print(sync_out, &flags_printed, "\\answered");
-        if (record.system_flags & FLAG_FLAGGED)
-            sync_flag_print(sync_out, &flags_printed, "\\flagged");
-        if (record.system_flags & FLAG_DRAFT)
-            sync_flag_print(sync_out, &flags_printed, "\\draft");
-
-        if (seenflag[msgno-1])
-            sync_flag_print(sync_out, &flags_printed, "\\seen");
-
-        if (record.uid > recentuid)
-            sync_flag_print(sync_out, &flags_printed, "\\recent");
-
-        for (flag = 0 ; flag < MAX_USER_FLAGS ; flag++) {
-            if (mailbox->flagname[flag] &&
-                (record.user_flags[flag/32] & (1<<(flag&31)) ))
-                sync_flag_print(sync_out, 
-                                &flags_printed, mailbox->flagname[flag]);
-        }
-
-        prot_printf(sync_out, ") {%lu+}\r\n", record.size);
-
-        for (s=msg_base, len=record.size; len > 0 ; s++, len--)
-            prot_putc(*s, sync_out);
-
-        prot_printf(sync_out, "\r\n");
-
-        mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
-    }
-
-    free(seenflag);
-    free(seenuid);
-    seen_close(seendb);
-    prot_printf(sync_out, "OK Contents succeeded\r\n");
-    return;
-
- fail:
-    prot_printf(sync_out, "NO Contents failed for %s: %s\r\n",
-             mailbox->name, error_message(r));
-
-    if (seenflag) free(seenflag);
-    if (seenuid)  free(seenuid);
-    if (seendb)   seen_close(seendb);
-    return;
-}
-#endif
 /* ====================================================================== */
 
 static void cmd_upload(struct mailbox *mailbox,
@@ -2412,59 +2226,6 @@ static void cmd_expunge(struct mailbox *mailbox)
     }
 }
 
-/* ====================================================================== */
-
-static int cmd_list_single(char *name, int matchlen, int maycreate, void *rock)
-{
-    struct mailbox m;
-    int r;
-    int open = 0;
-
-    r = mailbox_open_header(name, 0, &m);
-    if (!r) open = 1;
-    if (!r) r = mailbox_open_index(&m);
-
-    if (r) {
-        if (open) mailbox_close(&m);
-        return(r);
-    }
-
-    prot_printf(sync_out, "* ");
-    sync_printastring(sync_out, m.uniqueid);
-    prot_printf(sync_out, " ");
-    sync_printastring(sync_out, m.name);
-    prot_printf(sync_out, " ");
-    sync_printastring(sync_out, m.acl);
-    prot_printf(sync_out, "\r\n");
-
-    if (open) mailbox_close(&m);
-    return(0);
-}
-#if 0
-static void cmd_list()
-{
-    char buf[MAX_MAILBOX_PATH];
-    int r;
-    
-    /* Count inbox */
-    snprintf(buf, sizeof(buf)-1, "user.%s", sync_userid);
-    cmd_list_single(buf, 0, 0, NULL);
-
-    /* And then all folders */
-    snprintf(buf, sizeof(buf)-1, "user.%s.*", sync_userid);
-    r = ((*sync_namespacep).mboxlist_findall)(sync_namespacep, buf,
-					      sync_userisadmin,
-                                              sync_userid, sync_authstate,
-                                              cmd_list_single, NULL);
-    if (r) {
-        syslog(LOG_NOTICE,
-               "Failed to enumerate mailboxes for %s", sync_userid);
-        prot_printf(sync_out, "NO Failed to enumerate mailboxes for %s: %s\r\n",
-                 sync_userid, error_message(r));
-    } else
-        prot_printf(sync_out, "OK List completed\r\n");
-}
-#endif
 /* ====================================================================== */
 
 static int do_mailbox_single(char *name, int matchlen, int maycreate, void *rock)
