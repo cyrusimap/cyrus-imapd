@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.c,v 1.1.2.13 2005/05/12 20:06:53 ken3 Exp $
+ * $Id: sync_support.c,v 1.1.2.14 2005/05/16 17:51:05 ken3 Exp $
  */
 
 #include <config.h>
@@ -1173,6 +1173,7 @@ int sync_getcache(struct protstream *input, struct protstream *output,
     unsigned long cache_size, size;
     int c, r = 0;
     static struct buf version;
+    char *p;
     int n;
 
     /* Parse Cache version number */
@@ -1188,15 +1189,17 @@ int sync_getcache(struct protstream *input, struct protstream *output,
         max_cache_size = cache_size;
     }
 
+    p = cache_entry;
     size = cache_size;
     while (size) {
-	n = prot_read(input, cache_entry, size);
+	n = prot_read(input, p, size);
 	if (!n) {
 	    syslog(LOG_ERR,
 		   "IOERROR: reading cache entry: unexpected end of file");
 	    return(IMAP_IOERROR);
 	}
 
+	p += n;
 	size -=n;
     }
     message->cache_offset = sync_message_list_cache_offset(list);
