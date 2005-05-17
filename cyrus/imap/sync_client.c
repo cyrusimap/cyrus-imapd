@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.21 2005/05/12 19:56:54 ken3 Exp $
+ * $Id: sync_client.c,v 1.1.2.22 2005/05/17 18:29:44 ken3 Exp $
  */
 
 #include <config.h>
@@ -621,11 +621,13 @@ static int folder_select(char *name, char *myuniqueid,
     return(0);
 }
 
-static int folder_create(char *name, char *uniqueid, char *acl,
+static int folder_create(char *name, char *part, char *uniqueid, char *acl,
 			 unsigned long uidvalidity)
 {
     prot_printf(toserver, "CREATE ");
     sync_printastring(toserver, name);
+    prot_printf(toserver, " ");
+    sync_printastring(toserver, part);
     prot_printf(toserver, " ");
     sync_printastring(toserver, uniqueid);
     prot_printf(toserver, " ");
@@ -1734,11 +1736,13 @@ int do_folders(struct sync_folder_list *client_list,
         if ((folder2=sync_folder_lookup(server_list, folder->id))) {
             if (strcmp(folder2->id, m.uniqueid) != 0) {
                 /* Folder UniqueID has changed under our feet: force resync */
+		char *part;
 
                 if ((r=folder_delete(folder2->name)))
                     goto bail;
 
-                if ((r=folder_create(m.name,m.uniqueid,m.acl,m.uidvalidity)))
+                if ((r=mboxlist_detail(m.name,NULL,NULL,NULL,&part,NULL,NULL))
+		    || (r=folder_create(m.name,part,m.uniqueid,m.acl,m.uidvalidity)))
                     goto bail;
 
 		if (!r && m.quota.root && !strcmp(m.name, m.quota.root))
@@ -1768,10 +1772,11 @@ int do_folders(struct sync_folder_list *client_list,
                     r = do_mailbox_work(&m, folder2->msglist, 0, m.uniqueid);
             }
         } else {
-	    char *userid;
+	    char *userid, *part;
 
             /* Need to create fresh folder on server */
-            if ((r=folder_create(m.name, m.uniqueid, m.acl, m.uidvalidity)))
+            if ((r=mboxlist_detail(m.name,NULL,NULL,NULL,&part,NULL,NULL)) ||
+		(r=folder_create(m.name,part,m.uniqueid,m.acl,m.uidvalidity)))
                 goto bail;
 
 	    if (!r && m.quota.root && !strcmp(m.name, m.quota.root))

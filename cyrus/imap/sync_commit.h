@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_commit.h,v 1.1.2.1 2005/02/21 19:25:47 ken3 Exp $
+ * $Id: sync_commit.h,v 1.1.2.2 2005/05/17 18:29:46 ken3 Exp $
  */
 
 #ifndef INCLUDED_SYNC_COMMIT_H
@@ -57,7 +57,7 @@ int sync_uidlast_commit(struct mailbox *mailbox, unsigned long last_uid,
 int sync_setflags_commit(struct mailbox *mailbox,
 			 struct sync_flag_list *flag_list);
 
-int sync_create_commit(char *name, char *uniqueid, char *acl,
+int sync_create_commit(char *name, char *partition, char *uniqueid, char *acl,
 		       int mbtype, unsigned long uidvalidity,
 		       int isadmin, char *userid, struct auth_state *auth_state);
 

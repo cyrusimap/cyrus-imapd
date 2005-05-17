@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_commit.c,v 1.1.2.6 2005/04/11 17:56:00 ken3 Exp $
+ * $Id: sync_commit.c,v 1.1.2.7 2005/05/17 18:29:45 ken3 Exp $
  */
 
 #include <config.h>
@@ -820,13 +820,12 @@ sync_setflags_commit(struct mailbox *mailbox, struct sync_flag_list *flag_list)
 #define DB config_mboxlist_db
 
 int
-sync_create_commit(char *name, char *uniqueid, char *acl,
+sync_create_commit(char *name, char *partition, char *uniqueid, char *acl,
                    int mbtype, unsigned long uidvalidity,
                    int isadmin, char *userid, struct auth_state *auth_state)
 {
     int r;
     int free_uniqueid = 0;
-    char *partition = (char *)config_defpartition;
     const char *root = NULL;
     char *newpartition;
     char *mboxent = NULL;

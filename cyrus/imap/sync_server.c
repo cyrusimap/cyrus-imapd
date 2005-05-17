@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.1.2.14 2005/05/13 14:17:00 ken3 Exp $
+ * $Id: sync_server.c,v 1.1.2.15 2005/05/17 18:29:46 ken3 Exp $
  */
 
 #include <config.h>
@@ -164,7 +164,8 @@ static void cmd_setacl(char *name, char *acl);
 static void cmd_expunge(struct mailbox *mailbox);
 static void cmd_mailboxes();
 static void cmd_user(char *userid);
-static void cmd_create(char *mailboxname, char *uniqueid, char *acl,
+static void cmd_create(char *mailboxname, char *partition,
+		       char *uniqueid, char *acl,
 		       int mbtype, unsigned long uidvalidity);
 static void cmd_delete(char *name);
 static void cmd_rename(char *oldmailboxname, char *newmailboxname);
@@ -661,13 +662,15 @@ static void cmdloop(void)
 		c = getastring(sync_in, sync_out, &arg4);
 		if (c != ' ') goto missingargs;
 		c = getastring(sync_in, sync_out, &arg5);
+		if (c != ' ') goto missingargs;
+		c = getastring(sync_in, sync_out, &arg6);
 		if (c == '\r') c = prot_getc(sync_in);
 		if (c != '\n') goto extraargs;
 
-                if (!imparse_isnumber(arg4.s) || !imparse_isnumber(arg5.s))
+                if (!imparse_isnumber(arg5.s) || !imparse_isnumber(arg6.s))
                     goto invalidargs;
 
-                cmd_create(arg1.s, arg2.s, arg3.s, 
+                cmd_create(arg1.s, arg2.s, arg3.s, arg4.s,
                            atoi(arg4.s), sync_atoul(arg5.s));
                 continue;
             }
@@ -2433,7 +2436,8 @@ static void cmd_user(char *userid)
 
 /* ====================================================================== */
 
-static void cmd_create(char *mailboxname, char *uniqueid, char *acl,
+static void cmd_create(char *mailboxname, char *partition,
+		       char *uniqueid, char *acl,
 		       int mbtype, unsigned long uidvalidity)
 {
     int r;
@@ -2460,7 +2464,8 @@ static void cmd_create(char *mailboxname, char *uniqueid, char *acl,
         acl = aclbuf;
     }
 
-    r = sync_create_commit(mailboxname, uniqueid, acl, mbtype, uidvalidity,
+    r = sync_create_commit(mailboxname, partition,
+			   uniqueid, acl, mbtype, uidvalidity,
                            1,  sync_userid, sync_authstate);
 
     if (r)
