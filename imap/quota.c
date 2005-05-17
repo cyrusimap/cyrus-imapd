@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: quota.c,v 1.63 2005/04/26 23:11:12 shadow Exp $ */
+/* $Id: quota.c,v 1.64 2005/05/17 21:17:51 ken3 Exp $ */
 
 
 #include <config.h>
@@ -239,7 +239,7 @@ static int found_match(char *name, int matchlen, int maycreate, void *frock)
 	quota_alloc += QUOTAGROW;
 	quota = (struct quotaentry *)
 	    xrealloc((char *)quota, quota_alloc * sizeof(struct quotaentry));
-	memset(&quota[quota_num], 0, sizeof(struct quotaentry));
+	memset(&quota[quota_num], 0, QUOTAGROW * sizeof(struct quotaentry));
     }
 
     /* See if the mailbox name corresponds to a quotaroot */
