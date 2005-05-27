@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.193 2005/05/27 18:10:20 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.194 2005/05/27 20:03:42 ken3 Exp $ */
 
 #include <config.h>
 
@@ -3245,6 +3245,14 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 		}
 	    }
 	    if (c == EOF) {
+		/* XXX  the "exists" check above will eat "ex" */
+		c = chomp(backend_current->in, "punge\r");
+		if (c == '\n') { /* got EXPUNGE response */
+		    prot_printf(proxyd_out, "* %d EXPUNGE\r\n", seqno);
+		    continue;
+		}
+	    }
+	    if (c == EOF) {
 		c = chomp(backend_current->in, "recent\r");
 		if (c == '\n') { /* got RECENT response */
 		    prot_printf(proxyd_out, "* %d RECENT\r\n", seqno);
@@ -3370,6 +3378,14 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 		c = chomp(backend_current->in, "exists\r");
 		if (c == '\n') { /* got EXISTS response */
 		    prot_printf(proxyd_out, "* %d EXISTS\r\n", seqno);
+		    continue;
+		}
+	    }
+	    if (c == EOF) { /* not an exists response */
+		/* XXX  the "exists" check above will eat "ex" */
+		c = chomp(backend_current->in, "punge\r");
+		if (c == '\n') { /* got EXPUNGE response */
+		    prot_printf(proxyd_out, "* %d EXPUNGE\r\n", seqno);
 		    continue;
 		}
 	    }
