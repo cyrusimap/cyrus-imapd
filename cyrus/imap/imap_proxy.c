@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.c,v 1.1.2.13 2005/05/27 18:33:33 ken3 Exp $
+ * $Id: imap_proxy.c,v 1.1.2.14 2005/05/27 20:09:23 ken3 Exp $
  */
 
 #include <config.h>
@@ -826,6 +826,14 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
 	    }
 	}
 	if (c == EOF) {
+	    /* XXX  the "exists" check above will eat "ex" */
+	    c = chomp(backend_current->in, "punge\r");
+	    if (c == '\n') { /* got EXPUNGE response */
+		prot_printf(imapd_out, "* %d EXPUNGE\r\n", seqno);
+		continue;
+	    }
+	}
+	if (c == EOF) {
 	    c = chomp(backend_current->in, "recent\r");
 	    if (c == '\n') { /* got RECENT response */
 		prot_printf(imapd_out, "* %d RECENT\r\n", seqno);
@@ -951,6 +959,14 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
 	    c = chomp(backend_current->in, "exists\r");
 	    if (c == '\n') { /* got EXISTS response */
 		prot_printf(imapd_out, "* %d EXISTS\r\n", seqno);
+		continue;
+	    }
+	}
+	if (c == EOF) { /* not an exists response */
+	    /* XXX  the "exists" check above will eat "ex" */
+	    c = chomp(backend_current->in, "punge\r");
+	    if (c == '\n') { /* got EXPUNGE response */
+		prot_printf(imapd_out, "* %d EXPUNGE\r\n", seqno);
 		continue;
 	    }
 	}
