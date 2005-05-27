@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.491 2005/05/10 15:49:43 ken3 Exp $ */
+/* $Id: imapd.c,v 1.492 2005/05/27 14:57:41 ken3 Exp $ */
 
 #include <config.h>
 
@@ -2322,6 +2322,7 @@ void cmd_append(char *tag, char *name)
     struct appendstate mailbox;
     unsigned long uidvalidity;
     unsigned long firstuid, num;
+    long doappenduid;
     const char *parseerr = NULL;
     FILE *f;
     int numalloc = 5;
@@ -2498,6 +2499,8 @@ void cmd_append(char *tag, char *name)
 			 imapd_userid, imapd_authstate, ACL_INSERT, totalsize);
     }
     if (!r) {
+	doappenduid = (mailbox.m.myrights & ACL_READ);
+
 	for (i = 0; !r && i < numstage; i++) {
 	    r = append_fromstage(&mailbox, stage[i]->stage, stage[i]->internaldate, 
 				 (const char **) stage[i]->flag, stage[i]->nflags, 0);
@@ -2539,8 +2542,7 @@ void cmd_append(char *tag, char *name)
 						 imapd_userid, imapd_authstate,
 						 (char **)0, (char **)0) == 0)
 		    ? "[TRYCREATE] " : "", error_message(r));
-    } else {
-	/* is this a space seperated list or sequence list? */
+    } else if (doappenduid) {
 	prot_printf(imapd_out, "%s OK [APPENDUID %lu", tag, uidvalidity);
 	if (num == 1) {
 	    prot_printf(imapd_out, " %lu", firstuid);
@@ -2548,6 +2550,9 @@ void cmd_append(char *tag, char *name)
 	    prot_printf(imapd_out, " %lu:%lu", firstuid, firstuid + num - 1);
 	}
 	prot_printf(imapd_out, "] %s\r\n", error_message(IMAP_OK_COMPLETED));
+    } else {
+	prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED));
     }
 }
 
@@ -3605,7 +3610,7 @@ int usinguid;
 
     index_check(imapd_mailbox, usinguid, 0);
 
-    if (r) {
+    if (r && !(usinguid && r == IMAP_NO_NOSUCHMSG)) {
 	prot_printf(imapd_out, "%s NO %s%s\r\n", tag,
 		    (r == IMAP_MAILBOX_NONEXISTENT &&
 		     mboxlist_createmailboxcheck(mailboxname, 0, 0,
@@ -3614,21 +3619,14 @@ int usinguid;
 						 (char **)0, (char **)0) == 0)
 		    ? "[TRYCREATE] " : "", error_message(r));
     }
-    else {
-	if (copyuid) {
+    else if (copyuid) {
 	    prot_printf(imapd_out, "%s OK [COPYUID %s] %s\r\n", tag,
 			copyuid, error_message(IMAP_OK_COMPLETED));
 	    free(copyuid);
-	}
-	else if (usinguid) {
-	    prot_printf(imapd_out, "%s OK %s\r\n", tag,
-			error_message(IMAP_OK_COMPLETED));
-	}
-	else {
-	    /* normal COPY, message doesn't exist */
-	    prot_printf(imapd_out, "%s NO %s\r\n", tag,
-			error_message(IMAP_NO_NOSUCHMSG));
-	}
+    }
+    else {
+	prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED));
     }
 }    
 

@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.216 2005/02/25 07:16:36 shadow Exp $
+ * $Id: index.c,v 1.217 2005/05/27 14:57:55 ken3 Exp $
  */
 #include <config.h>
 
@@ -1167,15 +1167,15 @@ index_copy(struct mailbox *mailbox,
     int sepchar;
     unsigned long uidvalidity;
     unsigned long startuid, num;
+    long docopyuid;
+
+    *copyuidp = NULL;
 
     copyargs.nummsg = 0;
     index_forsequence(mailbox, sequence, usinguid, index_copysetup,
 		      (char *)&copyargs, NULL);
 
-    if (copyargs.nummsg == 0) {
-	*copyuidp = 0;
-	return 0;
-    }
+    if (copyargs.nummsg == 0) return IMAP_NO_NOSUCHMSG;
 
     for (i = 0; i < copyargs.nummsg; i++) {
 	totalsize += copyargs.copymsg[i].size;
@@ -1185,11 +1185,13 @@ index_copy(struct mailbox *mailbox,
 		     imapd_userid, imapd_authstate, ACL_INSERT, totalsize);
     if (r) return r;
 
+    docopyuid = (append_mailbox.m.myrights & ACL_READ);
+
     r = append_copy(mailbox, &append_mailbox, copyargs.nummsg,
 		    copyargs.copymsg);
     if (!r) append_commit(&append_mailbox, totalsize,
 			  &uidvalidity, &startuid, &num);
-    if (!r) {
+    if (!r && docopyuid) {
 	copyuid_size = 1024;
 	copyuid = xmalloc(copyuid_size);
 	snprintf(copyuid, copyuid_size, "%lu", uidvalidity);
