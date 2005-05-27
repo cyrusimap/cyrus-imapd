@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.192 2004/12/17 16:32:20 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.193 2005/05/27 18:10:20 ken3 Exp $ */
 
 #include <config.h>
 
@@ -3162,7 +3162,7 @@ static char *editflags(char *flags)
  */    
 void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 {
-    char *server;
+    char *server, *acl;
     char *cmd = usinguid ? "UID Copy" : "Copy";
     struct backend *s = NULL;
     char mailboxname[MAX_MAILBOX_NAME+1];
@@ -3172,7 +3172,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 
     r = (*proxyd_namespace.mboxname_tointernal)(&proxyd_namespace, name,
 						proxyd_userid, mailboxname);
-    if (!r) r = mlookup(mailboxname, &server, NULL, NULL);
+    if (!r) r = mlookup(mailboxname, &server, &acl, NULL);
     if (!r) s = proxyd_findserver(server);
 
     if (!s) {
@@ -3480,13 +3480,20 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 	    res = pipe_until_tag(s, tag, 0);
 
 	    if (res == PROXY_OK) {
-		appenduid = strchr(s->last_result, '[');
-		/* skip over APPENDUID */
-		appenduid += strlen("[appenduid ");
-		b = strchr(appenduid, ']');
-		*b = '\0';
-		prot_printf(proxyd_out, "%s OK [COPYUID %s] %s\r\n", tag,
-			    appenduid, error_message(IMAP_OK_COMPLETED));
+		int access = cyrus_acl_myrights(proxyd_authstate, acl);
+
+		if (access & ACL_READ) {
+		    appenduid = strchr(s->last_result, '[');
+		    /* skip over APPENDUID */
+		    appenduid += strlen("[appenduid ");
+		    b = strchr(appenduid, ']');
+		    *b = '\0';
+		    prot_printf(proxyd_out, "%s OK [COPYUID %s] %s\r\n", tag,
+				appenduid, error_message(IMAP_OK_COMPLETED));
+		} else {
+		    prot_printf(proxyd_out, "%s OK %s\r\n", tag,
+				error_message(IMAP_OK_COMPLETED));
+		}
 	    } else {
 		prot_printf(proxyd_out, "%s %s", tag, s->last_result);
 	    }
