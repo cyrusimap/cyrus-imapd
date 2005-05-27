@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.58 2005/05/27 17:40:39 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.59 2005/05/27 18:33:33 ken3 Exp $ */
 
 #include <config.h>
 
@@ -2760,6 +2760,7 @@ void cmd_append(char *tag, char *name)
     struct appendstate mailbox;
     unsigned long uidvalidity;
     unsigned long firstuid, num;
+    long doappenduid;
     const char *parseerr = NULL, *url = NULL;
     int mbtype;
     char *newserver;
@@ -2946,6 +2947,8 @@ void cmd_append(char *tag, char *name)
     if (!r) {
 	struct body *body = NULL;
 
+	doappenduid = (mailbox.m.myrights & ACL_READ);
+
 	for (i = 0; !r && i < numstage; i++) {
 	    r = append_fromstage(&mailbox, &body, stage[i]->stage, stage[i]->internaldate, 
 				 (const char **) stage[i]->flag, stage[i]->nflags, 0);
@@ -2995,7 +2998,7 @@ void cmd_append(char *tag, char *name)
 						 (char **)0, (char **)0) == 0)
 		    ? "[TRYCREATE] " : r == IMAP_MESSAGE_TOO_LARGE
 		    ? "[TOOBIG]" : "", error_message(r));
-    } else {
+    } else if (doappenduid) {
 	/* is this a space seperated list or sequence list? */
 	prot_printf(imapd_out, "%s OK [APPENDUID %lu", tag, uidvalidity);
 	if (num == 1) {
@@ -3004,6 +3007,9 @@ void cmd_append(char *tag, char *name)
 	    prot_printf(imapd_out, " %lu:%lu", firstuid, firstuid + num - 1);
 	}
 	prot_printf(imapd_out, "] %s\r\n", error_message(IMAP_OK_COMPLETED));
+    } else {
+	prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED));
     }
 }
 
@@ -4210,10 +4216,10 @@ void cmd_thread(char *tag, int usinguid)
  */    
 void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 {
-    int r;
+    int r, myrights;
     char mailboxname[MAX_MAILBOX_NAME+1];
     int mbtype;
-    char *server;
+    char *server, *acl;
     char *copyuid;
 
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
@@ -4221,8 +4227,10 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 
     if (!r) {
 	r = mlookup(NULL, NULL, mailboxname, &mbtype, NULL, NULL,
-		    &server, NULL, NULL);
+		    &server, &acl, NULL);
     }
+
+    if (!r) myrights = cyrus_acl_myrights(imapd_authstate, acl);
 
     if (!r && backend_current) {
 	/* remote mailbox -> local or remote mailbox */
@@ -4243,7 +4251,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 	    /* this is the hard case; we have to fetch the messages and append
 	       them to the other mailbox */
 
-	    proxy_copy(tag, sequence, name, usinguid, s);
+	    proxy_copy(tag, sequence, name, myrights, usinguid, s);
 	    return;
 	}
 	/* xxx  end of separate proxy-only code */
@@ -4294,13 +4302,18 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 	    res = pipe_until_tag(s, tag, 0);
 
 	    if (res == PROXY_OK) {
-		appenduid = strchr(s->last_result, '[');
-		/* skip over APPENDUID */
-		appenduid += strlen("[appenduid ");
-		b = strchr(appenduid, ']');
-		*b = '\0';
-		prot_printf(imapd_out, "%s OK [COPYUID %s] %s\r\n", tag,
-			    appenduid, error_message(IMAP_OK_COMPLETED));
+		if (myrights & ACL_READ) {
+		    appenduid = strchr(s->last_result, '[');
+		    /* skip over APPENDUID */
+		    appenduid += strlen("[appenduid ");
+		    b = strchr(appenduid, ']');
+		    *b = '\0';
+		    prot_printf(imapd_out, "%s OK [COPYUID %s] %s\r\n", tag,
+				appenduid, error_message(IMAP_OK_COMPLETED));
+		} else {
+		    prot_printf(imapd_out, "%s OK %s\r\n", tag,
+				error_message(IMAP_OK_COMPLETED));
+		}
 	    } else {
 		prot_printf(imapd_out, "%s %s", tag, s->last_result);
 	    }
@@ -4325,7 +4338,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
     index_check(imapd_mailbox, usinguid, 0);
 
   done:
-    if (r) {
+    if (r && !(usinguid && r == IMAP_NO_NOSUCHMSG)) {
 	prot_printf(imapd_out, "%s NO %s%s\r\n", tag,
 		    (r == IMAP_MAILBOX_NONEXISTENT &&
 		     mboxlist_createmailboxcheck(mailboxname, 0, 0,
@@ -4334,21 +4347,14 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 						 (char **)0, (char **)0) == 0)
 		    ? "[TRYCREATE] " : "", error_message(r));
     }
-    else {
-	if (copyuid) {
+    else if (copyuid) {
 	    prot_printf(imapd_out, "%s OK [COPYUID %s] %s\r\n", tag,
 			copyuid, error_message(IMAP_OK_COMPLETED));
 	    free(copyuid);
-	}
-	else if (usinguid) {
-	    prot_printf(imapd_out, "%s OK %s\r\n", tag,
-			error_message(IMAP_OK_COMPLETED));
-	}
-	else {
-	    /* normal COPY, message doesn't exist */
-	    prot_printf(imapd_out, "%s NO %s\r\n", tag,
-			error_message(IMAP_NO_NOSUCHMSG));
-	}
+    }
+    else {
+	prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED));
     }
 }    
 

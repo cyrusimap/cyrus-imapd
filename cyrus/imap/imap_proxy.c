@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.c,v 1.1.2.12 2004/08/05 16:23:31 ken3 Exp $
+ * $Id: imap_proxy.c,v 1.1.2.13 2005/05/27 18:33:33 ken3 Exp $
  */
 
 #include <config.h>
@@ -51,6 +51,7 @@
 #include <syslog.h>
 #include <sys/un.h>
 
+#include "acl.h"
 #include "annotate.h"
 #include "backend.h"
 #include "exitcodes.h"
@@ -773,8 +774,8 @@ static char *editflags(char *flags)
     return flags;
 }
 
-void proxy_copy(const char *tag, char *sequence, char *name, int usinguid,
-		struct backend *s)
+void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
+		int usinguid, struct backend *s)
 {
     char mytag[128];
     struct d {
@@ -1060,13 +1061,18 @@ void proxy_copy(const char *tag, char *sequence, char *name, int usinguid,
 	res = pipe_until_tag(s, tag, 0);
 
 	if (res == PROXY_OK) {
-	    appenduid = strchr(s->last_result, '[');
-	    /* skip over APPENDUID */
-	    appenduid += strlen("[appenduid ");
-	    b = strchr(appenduid, ']');
-	    *b = '\0';
-	    prot_printf(imapd_out, "%s OK [COPYUID %s] %s\r\n", tag,
-			appenduid, error_message(IMAP_OK_COMPLETED));
+	    if (myrights & ACL_READ) {
+		appenduid = strchr(s->last_result, '[');
+		/* skip over APPENDUID */
+		appenduid += strlen("[appenduid ");
+		b = strchr(appenduid, ']');
+		*b = '\0';
+		prot_printf(imapd_out, "%s OK [COPYUID %s] %s\r\n", tag,
+			    appenduid, error_message(IMAP_OK_COMPLETED));
+	    } else {
+		prot_printf(imapd_out, "%s OK %s\r\n", tag,
+			    error_message(IMAP_OK_COMPLETED));
+	    }
 	} else {
 	    prot_printf(imapd_out, "%s %s", tag, s->last_result);
 	}
