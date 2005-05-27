@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.22 2005/05/17 18:29:44 ken3 Exp $
+ * $Id: sync_client.c,v 1.1.2.23 2005/05/27 17:09:20 ken3 Exp $
  */
 
 #include <config.h>
@@ -2836,7 +2836,7 @@ static int do_sync(const char *filename)
     for (action = seen_list->head ; action ; action = action->next) {
         if (action->active && do_seen(action->user, action->name)) {
 	    char *userid = mboxname_isusermailbox(action->name, 1);
-	    if (!strcmp(userid, action->user)) {
+	    if (userid && !strcmp(userid, action->user)) {
 		sync_action_list_add(user_list, NULL, action->user);
 		if (verbose) {
 		    printf("  Promoting: SEEN %s %s -> USER %s\n",
