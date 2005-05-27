@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.57 2005/05/10 15:41:19 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.58 2005/05/27 17:40:39 ken3 Exp $ */
 
 #include <config.h>
 
@@ -414,13 +414,15 @@ static void imapd_refer(const char *tag,
 			const char *server,
 			const char *mailbox)
 {
+    struct imapurl imapurl;
     char url[MAX_MAILBOX_PATH+1];
 
-    if(!strcmp(imapd_userid, "anonymous")) {
-	imapurl_toURL(url, server, mailbox, "ANONYMOUS");
-    } else {
-	imapurl_toURL(url, server, mailbox, "*");
-    }
+    memset(&imapurl, 0, sizeof(struct imapurl));
+    imapurl.server = server;
+    imapurl.mailbox = mailbox;
+    imapurl.auth = !strcmp(imapd_userid, "anonymous") ? "anonymous" : "*";
+
+    imapurl_toURL(url, &imapurl);
     
     prot_printf(imapd_out, "%s NO [REFERRAL %s] Remote mailbox.\r\n", 
 		tag, url);
@@ -2499,6 +2501,251 @@ static int isokflag(char *s, int *isseen)
     }
 }
 
+static int getliteralsize(char *p, int c,
+			  unsigned *size, const char **parseerr)
+
+{
+    int sawdigit = 0;
+    int isnowait = 0;
+
+    /* Check for literal8 */
+    if (*p == '~') {
+	p++;
+	/* We don't support binary append yet */
+	return IMAP_NO_UNKNOWN_CTE;
+    }
+    if (*p != '{') {
+	*parseerr = "Missing required argument to Append command";
+	return IMAP_PROTOCOL_ERROR;
+    }
+	
+    /* Read size from literal */
+    isnowait = 0;
+    *size = 0;
+    for (++p; *p && isdigit((int) *p); p++) {
+	sawdigit++;
+	if (*size > (UINT_MAX - (*p - '0')) / 10)
+	    return IMAP_MESSAGE_TOO_LARGE;
+	*size = (*size)*10 + *p - '0';
+#if 0
+	if (*size < 0) {
+	    lose();
+	}
+#endif
+    }
+    if (*p == '+') {
+	isnowait++;
+	p++;
+    }
+	
+    if (c == '\r') {
+	c = prot_getc(imapd_in);
+    }
+    else {
+	prot_ungetc(c, imapd_in);
+	c = ' ';		/* Force a syntax error */
+    }
+	
+    if (*p != '}' || p[1] || c != '\n' || !sawdigit) {
+	*parseerr = "Invalid literal in Append command";
+	return IMAP_PROTOCOL_ERROR;
+    }
+
+    if (!isnowait) {
+	/* Tell client to send the message */
+	prot_printf(imapd_out, "+ go ahead\r\n");
+	prot_flush(imapd_out);
+    }
+
+    return 0;
+}
+
+static int catenate_text(FILE *f, unsigned *totalsize, const char **parseerr)
+{
+    int c;
+    static struct buf arg;
+    unsigned size = 0;
+    char buf[4096+1];
+    int n;
+    int r;
+
+    c = getword(imapd_in, &arg);
+
+    /* Read size from literal */
+    r = getliteralsize(arg.s, c, &size, parseerr);
+    if (r) return r;
+
+    if (*totalsize > UINT_MAX - size) r = IMAP_MESSAGE_TOO_LARGE;
+
+    /* Catenate message part to stage */
+    while (size) {
+	n = prot_read(imapd_in, buf, size > 4096 ? 4096 : size);
+	if (!n) {
+	    syslog(LOG_ERR,
+		   "IOERROR: reading message: unexpected end of file");
+	    return IMAP_IOERROR;
+	}
+
+	buf[n] = '\0';
+	if (n != strlen(buf)) r = IMAP_MESSAGE_CONTAINSNULL;
+
+	size -= n;
+	if (r) continue;
+
+	/* XXX  do we want to try and validate the message like
+	   we do in message_copy_strict()? */
+
+	if (f) fwrite(buf, 1, n, f);
+    }
+
+    *totalsize += size;
+
+    return r;
+}
+
+static int catenate_url(const char *s, FILE *f,
+			unsigned *totalsize, const char **parseerr)
+{
+    struct imapurl url;
+    char mailboxname[MAX_MAILBOX_NAME+1];
+    struct mailbox mboxstruct, *mailbox;
+    unsigned msgno;
+    int r = 0, doclose = 0;
+
+    imapurl_fromURL(&url, s);
+
+    if (url.server && strcmp(url.server, config_servername)) {
+	*parseerr = "Can not catenate messages from another server";
+	r = IMAP_BADURL;
+    } else if (!imapd_mailbox && !url.mailbox) {
+	*parseerr = "No mailbox is selected or specified";
+	r = IMAP_BADURL;
+    } else if (url.mailbox) {
+	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace,
+						   url.mailbox,
+						   imapd_userid, mailboxname);
+
+	if (!r) {
+	    if (!imapd_mailbox || strcmp(imapd_mailbox->name, mailboxname)) {
+		/* not the currently selected mailbox, so try to open it */
+
+		/* XXX  check for remote mailbox */
+		r = mailbox_open_header(mailboxname, imapd_authstate, &mboxstruct);
+
+		if (!r) {
+		    doclose = 1;
+		    r = mailbox_open_index(&mboxstruct);
+		}
+
+		if (!r) {
+		    mailbox = &mboxstruct;
+		    index_operatemailbox(mailbox);
+		}
+	    } else {
+		mailbox = imapd_mailbox;
+	    }
+	}
+
+	if (r) {
+	    *parseerr = error_message(r);
+	    r = IMAP_BADURL;
+	}
+    } else {
+	mailbox = imapd_mailbox;
+    }
+
+    if (r) {
+	/* nothing to do, handled up top */
+    } else if (url.uidvalidity &&
+	       (mailbox->uidvalidity != url.uidvalidity)) {
+	*parseerr = "Uidvalidity of mailbox has changed";
+	r = IMAP_BADURL;
+    } else if (!url.uid || !(msgno = index_finduid(url.uid)) ||
+	       (index_getuid(msgno) != url.uid)) {
+	*parseerr = "No such message in mailbox";
+	r = IMAP_BADURL;
+    } else {
+	/* Catenate message part to stage */
+	r = index_catenate(mailbox, msgno, url.section, f);
+	if (r == IMAP_BADURL)
+	    *parseerr = "No such message part";
+	else if (r >= 0) {
+	    if (*totalsize > UINT_MAX - r)
+		r = IMAP_MESSAGE_TOO_LARGE;
+	    else {
+		*totalsize += r;
+		r = 0;
+	    }
+	}
+
+	/* XXX  do we want to try and validate the message like
+	   we do in message_copy_strict()? */
+    }
+
+    free(url.freeme);
+
+    if (doclose) {
+	mailbox_close(&mboxstruct);
+	if (imapd_mailbox) index_operatemailbox(imapd_mailbox);
+    }
+
+    return r;
+}
+
+static int append_catenate(FILE *f, unsigned *totalsize,
+			   const char **parseerr, const char **url)
+{
+    int c, r = 0;
+    static struct buf arg;
+
+    do {
+	c = getword(imapd_in, &arg);
+	if (c != ' ') {
+	    *parseerr = "Missing message part data in Append command";
+	    return IMAP_PROTOCOL_ERROR;
+	}
+
+	if (!strcasecmp(arg.s, "TEXT")) {
+	    int r1 = catenate_text(!r ? f : NULL, totalsize, parseerr);
+	    if (r1) return r1;
+
+	    /* if we see a SP, we're trying to catenate more than one part */
+
+	    /* Parse newline terminating command */
+	    c = prot_getc(imapd_in);
+	}
+	else if (!strcasecmp(arg.s, "URL")) {
+	    c = getastring(imapd_in, imapd_out, &arg);
+	    if (c != ' ' && c != ')') {
+		*parseerr = "Missing URL in Append command";
+		return IMAP_PROTOCOL_ERROR;
+	    }
+
+	    if (!r) {
+		r = catenate_url(arg.s, f, totalsize, parseerr);
+		if (r) *url = arg.s;
+	    }
+	}
+	else {
+	    *parseerr = "Invalid message part type in Append command";
+	    return IMAP_PROTOCOL_ERROR;
+	}
+    } while (c == ' ');
+
+    if (c != ')') {
+	*parseerr = "Missing space or ) after catenate list in Append command";
+	return IMAP_PROTOCOL_ERROR;
+    }
+
+    fflush(f);
+    if (ferror(f) || fsync(fileno(f))) {
+	syslog(LOG_ERR, "IOERROR: writing message: %m");
+	return IMAP_IOERROR;
+    }
+
+    return 0;
+}
+
 #define FLAGGROW 10
 void cmd_append(char *tag, char *name)
 {
@@ -2507,15 +2754,13 @@ void cmd_append(char *tag, char *name)
     char *p;
     time_t now = time(NULL);
     unsigned size, totalsize = 0;
-    int sawdigit = 0;
-    int isnowait = 0;
     int sync_seen = 0;
     int r, i;
     char mailboxname[MAX_MAILBOX_NAME+1];
     struct appendstate mailbox;
     unsigned long uidvalidity;
     unsigned long firstuid, num;
-    const char *parseerr = NULL;
+    const char *parseerr = NULL, *url = NULL;
     int mbtype;
     char *newserver;
     FILE *f;
@@ -2644,67 +2889,36 @@ void cmd_append(char *tag, char *name)
 	    curstage->internaldate = now;
 	}
 
-	p = arg.s;
-	/* Check for literal8 */
-	if (*p == '~') {
-	    p++;
-	    /* We don't support binary append yet */
-	    r = IMAP_NO_UNKNOWN_CTE;
-	    goto done;
-	}
-	if (*p != '{') {
-	    parseerr = "Missing required argument to Append command";
-	    r = IMAP_PROTOCOL_ERROR;
-	    goto done;
-	}
-	
-	/* Read size from literal */
-	isnowait = 0;
-	size = 0;
-	for (++p; *p && isdigit((int) *p); p++) {
-	    sawdigit++;
-	    size = size*10 + *p - '0';
-#if 0
-            if (size < 0) {
-                lose();
-            }
-#endif
-	}
-	if (*p == '+') {
-	    isnowait++;
-	    p++;
-	}
-	
-	if (c == '\r') {
-	    c = prot_getc(imapd_in);
-	}
-	else {
-	    prot_ungetc(c, imapd_in);
-	    c = ' ';		/* Force a syntax error */
-	}
-	
-	if (*p != '}' || p[1] || c != '\n' || !sawdigit) {
-	    parseerr = "Invalid literal in Append command";
-	    r = IMAP_PROTOCOL_ERROR;
+	/* Stage the message */
+	f = append_newstage(mailboxname, now, numstage, &(curstage->stage));
+	if (!f) {
+	    r = IMAP_IOERROR;
 	    goto done;
 	}
 
-	if (!isnowait) {
-	    /* Tell client to send the message */
-	    prot_printf(imapd_out, "+ go ahead\r\n");
-	    prot_flush(imapd_out);
+	if (!strcasecmp(arg.s, "CATENATE")) {
+	    if (c != ' ' || (c = prot_getc(imapd_in) != '(')) {
+		parseerr = "Missing message part(s) in Append command";
+		r = IMAP_PROTOCOL_ERROR;
+		goto done;
+	    }
+
+	    /* Catenate the message part(s) to stage */
+	    size = 0;
+	    r = append_catenate(f, &size, &parseerr, &url);
+	    if (r) goto done;
 	}
-	
-	/* Stage the message */
-	f = append_newstage(mailboxname, now, numstage, &(curstage->stage));
-	if (f) {
-	    totalsize += size;
+	else {
+	    /* Read size from literal */
+	    r = getliteralsize(arg.s, c, &size, &parseerr);
+	    if (r) goto done;
+
+	    /* Copy message to stage */
 	    r = message_copy_strict(imapd_in, f, size);
-	    fclose(f);
-	} else {
-	    r = IMAP_IOERROR;
 	}
-	
+	totalsize += size;
+	fclose(f);
+
 	/* if we see a SP, we're trying to append more than one message */
 
 	/* Parse newline terminating command */
@@ -2768,6 +2982,9 @@ void cmd_append(char *tag, char *name)
 
     if (r == IMAP_PROTOCOL_ERROR && parseerr) {
 	prot_printf(imapd_out, "%s BAD %s\r\n", tag, parseerr);
+    } else if (r == IMAP_BADURL) {
+	prot_printf(imapd_out, "%s NO [BADURL \"%s\"] %s\r\n",
+		    tag, url, parseerr);
     } else if (r) {
 	prot_printf(imapd_out, "%s NO %s%s\r\n",
 		    tag,
@@ -2776,7 +2993,8 @@ void cmd_append(char *tag, char *name)
 						 imapd_userisadmin,
 						 imapd_userid, imapd_authstate,
 						 (char **)0, (char **)0) == 0)
-		    ? "[TRYCREATE] " : "", error_message(r));
+		    ? "[TRYCREATE] " : r == IMAP_MESSAGE_TOO_LARGE
+		    ? "[TOOBIG]" : "", error_message(r));
     } else {
 	/* is this a space seperated list or sequence list? */
 	prot_printf(imapd_out, "%s OK [APPENDUID %lu", tag, uidvalidity);

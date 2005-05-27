@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.147.2.28 2005/04/07 00:27:09 shadow Exp $
+ * $Id: mailbox.c,v 1.147.2.29 2005/05/27 17:40:52 ken3 Exp $
  *
  */
 
@@ -90,7 +90,8 @@ static int mailbox_doing_reconstruct = 0;
 #define zeromailbox(m) { memset(&m, 0, sizeof(struct mailbox)); \
                          (m).header_fd = -1; \
                          (m).index_fd = -1; \
-                         (m).cache_fd = -1; }
+                         (m).cache_fd = -1; \
+                         (m).examining = 1; }
 
 static int mailbox_upgrade_index(struct mailbox *mailbox);
 

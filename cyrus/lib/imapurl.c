@@ -39,12 +39,17 @@
  *
  * derived from chris newman's code */
 
-/* $Id: imapurl.c,v 1.10.4.1 2004/05/06 19:38:02 ken3 Exp $ */
+/* $Id: imapurl.c,v 1.10.4.2 2005/05/27 17:40:55 ken3 Exp $ */
 
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <errno.h>
+#include <limits.h>
+
+#include "imapurl.h"
+#include "xmalloc.h"
 
 /* hexadecimal lookup table */
 static const char hex[] = "0123456789ABCDEF";
@@ -296,49 +301,97 @@ static void URLtoMailbox(char *dst, char *src)
     *dst = '\0';
 }
 
-void imapurl_fromURL(char *server, char *mailbox, const char *src)
+void imapurl_fromURL(struct imapurl *url, const char *s)
 {
-    if (server) server[0] = '\0';
-    if (mailbox) mailbox[0] = '\0';
+    char *src;
+
+    memset(url, 0, sizeof(struct imapurl));
+    url->freeme = xmalloc(3 * strlen(s) + 3); /* space for copy of URL +
+						 decoded mailbox */
+    src = strcpy(url->freeme, s);
+
     if (src[0] == '{') {	/* c-client style */
 	char *se;
 
 	src++;
 	se = strchr(src, '}');
 	if (se == NULL) return;
-	if (server) {
-	    strncpy(server, src, se - src);
-	    server[se - src] = '\0';
-	}
-	se += 1;
-	if (mailbox) strcpy(mailbox, se);
-    } else if (!strncmp(src, "imap://", 7)) { /* IMAP URL */
+	*se = '\0';
+	url->server = src;
+	url->mailbox = se + 1;
+    } else { /* IMAP URL */
 	char *se;
 	char *at;
+	char *mbox = NULL;
+	char *opt;
 	
-	src += 7; /* skip imap:// */
-	se = strchr(src, '/');
-	if (se == NULL) return;
-	at = strchr(src, '@');
+	if (!strncmp(src, "imap://", 7)) { /* absolute URL */
+	    src += 7; /* skip imap:// */
+	    se = strchr(src, '/');
+	    if (se == NULL) return;
+	    at = strchr(src, '@');
 	
-	if (at) {
-	    /* xxx we discard the username for now */
-	    src = at + 1; 
+	    if (at) {
+		*at = '\0';
+		url->user = src;
+		src = at + 1; 
+	    }
+	    *se = '\0';
+	    url->server = src;
+	    src = mbox = ++se;
 	}
-	*se = '\0';
-	if (server) {
-	    strncpy(server, src, se - src);
-	    server[se - src] = '\0';
+	else { /* relative URL */
+	    if (*src == '/') src++;
+	    mbox = src;
 	}
-	se += 1;
-	if (mailbox) URLtoMailbox(mailbox, se);
+
+	/* parse options */
+	while ((src = strchr(src, ';'))) {
+	    unsigned long ul;
+
+	    *src++ = '\0';
+	    if (!strncasecmp(src, "uidvalidity=", 12)) {
+		src += 12; /* skip uidvalidity= */
+		errno = 0;
+		ul = strtoul(src, NULL, 10);  /* ends at '/' or '\0' */
+		if (ul < ULONG_MAX || !errno) url->uidvalidity = ul;
+	    }
+	    else if (!strncasecmp(src, "uid=", 4)) {
+		src += 4; /* skip uid= */
+		errno = 0;
+		ul = strtoul(src, NULL, 10);  /* ends at '/' or '\0' */
+		if (ul < ULONG_MAX || !errno) url->uid = ul;
+	    }
+	    else if (!strncasecmp(src, "section=", 8)) {
+		src += 8; /* skip section= */
+		url->section = src;  /* ends at ';' (next pass) or '\0' */
+	    }
+	    /* XXX  add expire and urlauth options */
+	}
+
+	if (mbox && *mbox) {
+	    url->mailbox = url->freeme + strlen(s) + 1;
+	    URLtoMailbox((char *) url->mailbox, mbox);
+	}
     }
 }
 
-void imapurl_toURL(char *dst, const char *server, const char *mailbox,
-		   const char *mechname)
+void imapurl_toURL(char *dst, struct imapurl *url)
 {
-    if(mechname) sprintf(dst, "imap://;AUTH=%s@%s/",mechname,server);
-    else sprintf(dst, "imap://%s/", server);
-    MailboxToURL(dst + strlen(dst), mailbox);
+    if (url->mailbox) {
+	if (url->server) {
+	    dst += sprintf(dst, "imap://");
+	    if (url->auth) dst += sprintf(dst, ";AUTH=%s@", url->auth);
+	    dst += sprintf(dst, "%s", url->server);
+	}
+	*dst++ = '/';
+	MailboxToURL(dst, url->mailbox);
+	dst += strlen(dst);
+    }
+    if (url->uidvalidity)
+	dst += sprintf(dst, ";UIDVALIDITY=%lu", url->uidvalidity);
+    if (url->uid) {
+	dst += sprintf(dst, "/;UID=%lu", url->uid);
+	if (url->section) dst += sprintf(dst, "/;SECTION=%s", url->section);
+    }
 }

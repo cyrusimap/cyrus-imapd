@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- * $Id: mailbox.h,v 1.77.2.10 2005/02/21 19:25:35 ken3 Exp $
+ * $Id: mailbox.h,v 1.77.2.11 2005/05/27 17:40:54 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -151,6 +151,12 @@ struct mailbox {
     unsigned long spares[2];
 
     struct quota quota;
+
+    /* Information in current session */
+    int examining;	/* Nonzero if opened with EXAMINE command */
+    int keepingseen;	/* Nonzero if /Seen is meaningful */
+    unsigned allseen;	/* Last UID if all msgs /Seen last checkpoint */
+    unsigned recentuid;	/* UID of last non-\Recent message */
 };
 
 struct index_record {

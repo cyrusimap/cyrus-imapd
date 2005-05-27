@@ -1,4 +1,4 @@
-/* $Id: cyrdump.c,v 1.14.2.3 2004/05/25 01:28:03 ken3 Exp $
+/* $Id: cyrdump.c,v 1.14.2.4 2005/05/27 17:40:38 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -170,6 +170,7 @@ static int dump_me(char *name, int matchlen __attribute__((unused)),
     int r;
     struct mailbox m;
     char boundary[128];
+    struct imapurl url;
     char imapurl[MAX_MAILBOX_PATH];
     struct incremental_record *irec = (struct incremental_record *) rock;
     struct searchargs searchargs;
@@ -209,7 +210,10 @@ static int dump_me(char *name, int matchlen __attribute__((unused)),
     printf("\n");
 
     printf("<imapdump uniqueid=\"%s\">\n", m.uniqueid);
-    imapurl_toURL(imapurl, config_servername, m.name, NULL);
+    memset(&url, 0, sizeof(struct imapurl));
+    url.server = config_servername;
+    url.mailbox = m.name;
+    imapurl_toURL(imapurl, &url);
     printf("  <mailbox-url>%s</mailbox-url>\n", imapurl);
     printf("  <incremental-uid>%d</incremental-uid>\n", irec->incruid);
     printf("  <nextuid>%ld</nextuid>\n", m.last_uid + 1);

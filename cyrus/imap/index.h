@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.h,v 1.9.2.2 2004/08/05 16:23:42 ken3 Exp $
+ * $Id: index.h,v 1.9.2.3 2005/05/27 17:40:52 ken3 Exp $
  */
 
 /* Header for internal usage of index.c + programs that make raw access
@@ -176,6 +176,8 @@ struct nntp_overview {
 extern void index_operatemailbox(struct mailbox *mailbox);
 extern int index_finduid(unsigned uid);
 extern int index_getuid(unsigned msgno);
+extern int index_catenate(struct mailbox *mailbox, unsigned msgno,
+			  const char *section, FILE *f);
 extern char *index_get_msgid(struct mailbox *mailbox, unsigned msgno);
 extern struct nntp_overview *index_overview(struct mailbox *mailbox,
 					    unsigned msgno);

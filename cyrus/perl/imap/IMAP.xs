@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: IMAP.xs,v 1.23.4.1 2003/12/19 18:33:50 ken3 Exp $ */
+/* $Id: IMAP.xs,v 1.23.4.2 2005/05/27 17:40:58 ken3 Exp $ */
 
 /*
  * Perl interface to the Cyrus imclient routines.  This enables the
@@ -656,30 +656,20 @@ imclient_fromURL(client,url)
 	Cyrus_IMAP client
 	char *url
 PREINIT:
-	SV *out_server, *out_box;
-	char *server_buf, *box_buf;
-	int len;
+	struct imapurl imapurl;
 PPCODE:
-	len = strlen(url);
-	server_buf = safemalloc(len);
-	box_buf = safemalloc(2*len);
+	imapurl_fromURL(&imapurl, url);
 
-	server_buf[0] = '\0';
-	box_buf[0] = '\0';
-	imapurl_fromURL(server_buf, box_buf, url);
-
-	if(!server_buf[0] || !box_buf[0]) {
-		safefree(server_buf);
-		safefree(box_buf);
+	if(!imapurl.server || !imapurl.mailbox) {
+		safefree(imapurl.freeme);
 		XSRETURN_UNDEF;
 	}
 
-	XPUSHs(sv_2mortal(newSVpv(server_buf, 0)));
-	XPUSHs(sv_2mortal(newSVpv(box_buf, 0)));
+	XPUSHs(sv_2mortal(newSVpv(imapurl.server, 0)));
+	XPUSHs(sv_2mortal(newSVpv(imapurl.mailbox, 0)));
 
-	/* newSVpv copies these */
-	safefree(server_buf);
-	safefree(box_buf);
+	/* newSVpv copies the above */
+	safefree(imapurl.freeme);
 	
 	XSRETURN(2);
 
@@ -689,15 +679,17 @@ imclient_toURL(client,server,box)
 	char *server
 	char *box
 PREINIT:
-	SV *out;
 	char *out_buf;
 	int len;
+	struct imapurl imapurl;
 PPCODE:
 	len = strlen(server)+strlen(box);
 	out_buf = safemalloc(4*len);
 
-	out_buf[0] = '\0';
-	imapurl_toURL(out_buf, server, box, NULL);
+	memset(&imapurl, 0, sizeof(struct imapurl));
+	imapurl.server = server;
+	imapurl.mailbox = box;
+	imapurl_toURL(out_buf, &imapurl);
 
 	if(!out_buf[0]) {
 		safefree(out_buf);

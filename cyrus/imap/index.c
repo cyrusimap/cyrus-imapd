@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.199.2.19 2005/03/31 21:46:01 ken3 Exp $
+ * $Id: index.c,v 1.199.2.20 2005/05/27 17:40:49 ken3 Exp $
  */
 #include <config.h>
 
@@ -96,7 +96,6 @@ static ino_t index_ino;
 static unsigned long start_offset;
 static unsigned long record_size;
 
-static unsigned recentuid;	/* UID of last non-\Recent message */
 static unsigned lastnotrecent;	/* Msgno of last non-\Recent message */
 
 static time_t *flagreport;	/* Array for each msgno of last_updated when
@@ -105,9 +104,6 @@ static time_t *flagreport;	/* Array for each msgno of last_updated when
 static char *seenflag;		/* Array for each msgno, nonzero if \Seen */
 static time_t seen_last_change;	/* Last mod time of \Seen state change */
 static int flagalloced = -1;	/* Allocated size of above two arrays */
-static int examining;		/* Nonzero if opened with EXAMINE command */
-static int keepingseen;		/* Nonzero if /Seen is meaningful */
-static unsigned allseen;	/* Last UID if all msgs /Seen last checkpoint */
 struct seen *seendb;		/* Seen state database object */
 static char *seenuids;		/* Sequence of UID's from last seen checkpoint */
 
@@ -226,10 +222,8 @@ void index_closemailbox(struct mailbox *mailbox)
  */
 void index_newmailbox(struct mailbox *mailbox, int examine_mode)
 {
-    keepingseen = (mailbox->myrights & ACL_SEEN);
-    examining = examine_mode;
-    allseen = 0;
-    recentuid = 0;
+    mailbox->keepingseen = (mailbox->myrights & ACL_SEEN);
+    mailbox->examining = examine_mode;
     index_listflags(mailbox);
     imapd_exists = -1;
     index_check(mailbox, 0, 1);
@@ -237,10 +231,6 @@ void index_newmailbox(struct mailbox *mailbox, int examine_mode)
 
 void index_operatemailbox(struct mailbox *mailbox)
 {
-    keepingseen = 0;
-    examining = 1;
-    allseen = 0;
-    recentuid = 0;
     index_dirty = cache_dirty = 0;
     index_base = mailbox->index_base;
     index_len = mailbox->index_len;
@@ -373,12 +363,12 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
     }
 
     /* If opening mailbox, get \Recent info */
-    if (oldexists == -1 && keepingseen) {
+    if (oldexists == -1 && mailbox->keepingseen) {
 	r = seen_open(mailbox, imapd_userid, SEEN_CREATE, &seendb);
 	if (!r) {
 	    free(seenuids);
 	    seenuids = NULL;
-	    r = seen_lockread(seendb, &last_read, &recentuid,
+	    r = seen_lockread(seendb, &last_read, &mailbox->recentuid,
 			      &seen_last_change, &seenuids);
 	    if (r) seen_close(seendb);
 	}
@@ -401,7 +391,7 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
     /* If opening mailbox or had an EXPUNGE, find where \Recent starts */
     if (imapd_exists == -1) {
 	imapd_exists = newexists;
-	lastnotrecent = index_finduid(recentuid);
+	lastnotrecent = index_finduid(mailbox->recentuid);
 	imapd_exists = -1;
     }
     
@@ -432,7 +422,7 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
     if (checkseen) index_checkseen(mailbox, checkseen >> 1, usinguid, oldexists);
     else if (oldexists == -1) seen_unlock(seendb);
     for (i = 1; i <= imapd_exists && seenflag[i]; i++);
-    if (i == imapd_exists + 1) allseen = mailbox->last_uid;
+    if (i == imapd_exists + 1) mailbox->allseen = mailbox->last_uid;
     if (oldexists == -1) {
 	if (imapd_exists && i <= imapd_exists) {
 	    prot_printf(imapd_out, "* OK [UNSEEN %u]  \r\n", i);
@@ -492,7 +482,7 @@ int oldexists;
     mailbox_notifyproc_t *updatenotifier;
     int dosync = 0;
 
-    if (!keepingseen || !seendb) return;
+    if (!mailbox->keepingseen || !seendb) return;
     if (imapd_exists == 0) {
 	seen_unlock(seendb);
 	return;
@@ -582,7 +572,7 @@ int oldexists;
         dosync = 1;
     }
 
-    if (!examining && oldexists != imapd_exists) {
+    if (!mailbox->examining && oldexists != imapd_exists) {
 	/* If just did a SELECT, record time of our reading the mailbox */
 	if (oldexists == -1) last_read = time((time_t *)0);
 
@@ -604,7 +594,7 @@ int oldexists;
 	free(seenuids);
 	seenuids = newseenuids;
 	/* We might have deleted our last unseen message */
-	if (!allseen) {
+	if (!mailbox->allseen) {
 	    for (msgno = 1; msgno <= imapd_exists; msgno++) {
 		if (!seenflag[msgno]) break;
 	    }
@@ -773,7 +763,7 @@ int oldexists;
 	toimsp(mailbox->name, mailbox->uidvalidity, "SEENsnn", imapd_userid,
 	       mailbox->last_uid, seen_last_change, 0);
     }
-    else if (allseen == mailbox->last_uid) {
+    else if (mailbox->allseen == mailbox->last_uid) {
 	toimsp(mailbox->name, mailbox->uidvalidity, "SEENsnn", imapd_userid,
 	       0, seen_last_change, 0);
     }
@@ -2261,7 +2251,7 @@ static void index_listflags(struct mailbox *mailbox)
 	else cancreate++;
     }
     prot_printf(imapd_out, ")\r\n* OK [PERMANENTFLAGS ");
-    if (!examining) {
+    if (!mailbox->examining) {
 	if (mailbox->myrights & ACL_WRITE) {
 	    prot_printf(imapd_out, "%c\\Answered \\Flagged \\Draft", sepchar);
 	    sepchar = ' ';
@@ -2610,6 +2600,129 @@ static int index_fetchreply(struct mailbox *mailbox,
     if (msg_base) {
 	mailbox_unmap_message(mailbox, UID(msgno), &msg_base, &msg_size);
     }
+    return r;
+}
+
+/*
+ * Catenate a bodysection to a file.
+ *
+ * This is an amalgamation of index_fetchreply(), index_fetchsection()
+ * and index_fetchmsg().
+ */
+int index_catenate(struct mailbox *mailbox, unsigned msgno,
+		   const char *section, FILE *f)
+{
+    const char *msg_base = 0;
+    unsigned long msg_size = 0;
+    const char *cacheitem;
+    int skip = 0;
+    int fetchmime = 0;
+    unsigned size, offset = 0;
+    int n, r = 0;
+
+    /* Open the message file */
+    if (mailbox_map_message(mailbox, UID(msgno), &msg_base, &msg_size)) {
+	return IMAP_NO_MSGGONE;
+    }
+
+    cacheitem = cache_base + CACHE_OFFSET(msgno);
+    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip envelope */
+    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bodystructure */
+    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body */
+
+    size = SIZE(msgno);
+
+    cacheitem += CACHE_ITEM_SIZE_SKIP;
+
+    /* Special-case BODY[] */
+    if (!section || !*section) {
+	/* whole message, no further parsing */
+    }
+    else {
+	char *p = ucase((char *) section);
+
+	while (*p && *p != 'M') {
+	    /* Generate the actual part number */
+	    skip = 0;
+	    while (isdigit((int) *p)) {
+		skip = skip * 10 + *p++ - '0';
+		/* xxx overflow */
+	    }
+	    if (*p == '.') p++;
+
+	    /* section number too large */
+	    if (skip >= CACHE_ITEM_BIT32(cacheitem)) {
+		r = IMAP_BADURL;
+		goto done;
+	    }
+
+	    /* Handle .0, .HEADER, and .TEXT */
+	    if (!skip) {
+		/* We don't have any digits, so its a string */
+		switch (*p) {
+		case 'H':
+		    p += 6;
+		    fetchmime++;  /* .HEADER maps internally to .0.MIME */
+		    break;
+
+		case 'T':
+		    p += 4;
+		    break;	  /* .TEXT maps internally to .0 */
+
+		default:
+		    fetchmime++;  /* .0 maps internally to .0.MIME */
+		    break;
+		}
+	    }
+	
+	    if (*p && *p != 'M') {
+		/* We are NOT at the end of a part specification, so there's
+		 * a subpart being requested.  Find the subpart in the tree. */
+
+		/* Skip the headers for this part, along with the number of
+		 * sub parts */
+		cacheitem +=
+		    CACHE_ITEM_BIT32(cacheitem) * 5 * 4 + CACHE_ITEM_SIZE_SKIP;
+
+		/* Skip to the correct part */
+		while (--skip) {
+		    if (CACHE_ITEM_BIT32(cacheitem) > 0) {
+			/* Skip each part at this level */
+			skip += CACHE_ITEM_BIT32(cacheitem)-1;
+			cacheitem += CACHE_ITEM_BIT32(cacheitem) * 5 * 4;
+		    }
+		    cacheitem += CACHE_ITEM_SIZE_SKIP;
+		}
+	    }
+	}
+
+	if (*p == 'M') fetchmime++;
+
+	cacheitem += skip * 5 * 4 + CACHE_ITEM_SIZE_SKIP +
+	    (fetchmime ? 0 : 2 * 4);
+    
+	if (CACHE_ITEM_BIT32(cacheitem + CACHE_ITEM_SIZE_SKIP) == -1) {
+	    r = IMAP_BADURL;
+	    goto done;
+	}
+
+	offset = CACHE_ITEM_BIT32(cacheitem);
+	size = CACHE_ITEM_BIT32(cacheitem + CACHE_ITEM_SIZE_SKIP);
+    }
+
+    if (size) {
+	n = size;
+	if (offset + size > msg_size) {
+	    n = msg_size - offset;
+	}
+	r = fwrite(msg_base + offset, 1, n, f);
+	if (r != n) r = IMAP_IOERROR;
+    }
+
+  done:
+    /* Close the message file */
+    mailbox_unmap_message(mailbox, UID(msgno), &msg_base, &msg_size);
+
     return r;
 }
 
