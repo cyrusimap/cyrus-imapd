@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: quota.c,v 1.48.2.16 2005/05/15 23:35:47 ken3 Exp $ */
+/* $Id: quota.c,v 1.48.2.17 2005/05/27 16:49:44 ken3 Exp $ */
 
 
 #include <config.h>
@@ -221,7 +221,7 @@ void errmsg(const char *fmt, const char *arg, int err)
     if (len < sizeof(buf))
 	len += snprintf(buf+len, sizeof(buf)-len, ": %s", error_message(err));
     if ((err == IMAP_IOERROR) && (len < sizeof(buf)))
-	len += snprintf(buf+len, sizeof(buf)-len, ": %m");
+	len += snprintf(buf+len, sizeof(buf)-len, ": %%m");
 
     syslog(LOG_ERR, buf);
     fprintf(stderr, "%s\n", buf);
