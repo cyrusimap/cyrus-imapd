@@ -39,7 +39,7 @@
  *
  * derived from chris newman's code */
 
-/* $Id: imapurl.c,v 1.10.4.2 2005/05/27 17:40:55 ken3 Exp $ */
+/* $Id: imapurl.c,v 1.10.4.3 2005/05/31 17:40:10 ken3 Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -349,7 +349,8 @@ void imapurl_fromURL(struct imapurl *url, const char *s)
 	while ((src = strchr(src, ';'))) {
 	    unsigned long ul;
 
-	    *src++ = '\0';
+	    if (src[-1] == '/') src[-1] = '\0'; /* trim mailbox at /; */
+	    *src++ = '\0'; /* break url at ; */
 	    if (!strncasecmp(src, "uidvalidity=", 12)) {
 		src += 12; /* skip uidvalidity= */
 		errno = 0;
