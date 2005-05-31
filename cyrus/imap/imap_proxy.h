@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.h,v 1.1.2.6 2005/05/27 18:33:33 ken3 Exp $
+ * $Id: imap_proxy.h,v 1.1.2.7 2005/05/31 18:09:20 ken3 Exp $
  */
 
 #ifndef _IMAP_PROXY_H
@@ -47,6 +47,7 @@
 
 #include "annotate.h"
 #include "backend.h"
+#include "imapurl.h"
 
 enum {
     PROXY_NOCONNECTION = -1,
@@ -67,6 +68,9 @@ int pipe_lsub(struct backend *s, const char *tag,
 
 void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
 		int usinguid, struct backend *s);
+
+int proxy_catenate_url(struct backend *s, struct imapurl *url, FILE *f,
+		       unsigned long *size, const char **parseerr);
 
 int annotate_fetch_proxy(const char *server, const char *mbox_pat,
 			 struct strlist *entry_pat,

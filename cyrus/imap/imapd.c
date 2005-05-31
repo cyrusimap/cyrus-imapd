@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.59 2005/05/27 18:33:33 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.60 2005/05/31 18:09:20 ken3 Exp $ */
 
 #include <config.h>
 
@@ -198,7 +198,7 @@ void cmd_login(char *tag, char *user);
 void cmd_authenticate(char *tag, char *authtype, char *resp);
 void cmd_noop(char *tag, char *cmd);
 void cmd_capability(char *tag);
-void cmd_append(char *tag, char *name);
+void cmd_append(char *tag, char *name, const char *cur_name);
 void cmd_select(char *tag, char *cmd, char *name);
 void cmd_close(char *tag);
 void cmd_fetch(char *tag, char *sequence, int usinguid);
@@ -1055,7 +1055,7 @@ void cmdloop()
 		c = getastring(imapd_in, imapd_out, &arg1);
 		if (c != ' ') goto missingargs;
 
-		cmd_append(tag.s, arg1.s);
+		cmd_append(tag.s, arg1.s, NULL);
 
 		snmp_increment(APPEND_COUNT, 1);
 	    }
@@ -1367,6 +1367,18 @@ void cmdloop()
 		cmd_listrights(tag.s, arg1.s, arg2.s);
 
 		snmp_increment(LISTRIGHTS_COUNT, 1);
+	    }
+	    else if (!strcmp(cmd.s, "Localappend")) {
+		/* create a local-only mailbox */
+		if (c != ' ') goto missingargs;
+		c = getastring(imapd_in, imapd_out, &arg1);
+		if (c != ' ') goto missingargs;
+		c = getastring(imapd_in, imapd_out, &arg2);
+		if (c != ' ') goto missingargs;
+
+		cmd_append(tag.s, arg1.s, *arg2.s ? arg2.s : NULL);
+
+		snmp_increment(APPEND_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Localcreate")) {
 		/* create a local-only mailbox */
@@ -2595,7 +2607,7 @@ static int catenate_text(FILE *f, unsigned *totalsize, const char **parseerr)
 	/* XXX  do we want to try and validate the message like
 	   we do in message_copy_strict()? */
 
-	if (f) fwrite(buf, 1, n, f);
+	if (f) fwrite(buf, n, 1, f);
     }
 
     *totalsize += size;
@@ -2603,7 +2615,7 @@ static int catenate_text(FILE *f, unsigned *totalsize, const char **parseerr)
     return r;
 }
 
-static int catenate_url(const char *s, FILE *f,
+static int catenate_url(const char *s, const char *cur_name, FILE *f,
 			unsigned *totalsize, const char **parseerr)
 {
     struct imapurl url;
@@ -2611,26 +2623,57 @@ static int catenate_url(const char *s, FILE *f,
     struct mailbox mboxstruct, *mailbox;
     unsigned msgno;
     int r = 0, doclose = 0;
+    unsigned long size = 0;
 
     imapurl_fromURL(&url, s);
 
     if (url.server && strcmp(url.server, config_servername)) {
 	*parseerr = "Can not catenate messages from another server";
 	r = IMAP_BADURL;
-    } else if (!imapd_mailbox && !url.mailbox) {
+    } else if (!url.mailbox && !imapd_mailbox && !cur_name) {
 	*parseerr = "No mailbox is selected or specified";
 	r = IMAP_BADURL;
-    } else if (url.mailbox) {
+    } else if (url.mailbox || (url.mailbox = cur_name)) {
 	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace,
 						   url.mailbox,
 						   imapd_userid, mailboxname);
-
 	if (!r) {
 	    if (!imapd_mailbox || strcmp(imapd_mailbox->name, mailboxname)) {
 		/* not the currently selected mailbox, so try to open it */
+		int mbtype;
+		char *newserver;
 
-		/* XXX  check for remote mailbox */
-		r = mailbox_open_header(mailboxname, imapd_authstate, &mboxstruct);
+		/* lookup the location of the mailbox */
+		r = mlookup(NULL, NULL, mailboxname, &mbtype, NULL, NULL,
+			    &newserver, NULL, NULL);
+
+		if (!r && (mbtype & MBTYPE_REMOTE)) {
+		    /* remote mailbox */
+		    struct backend *be;
+
+		    be = proxy_findserver(newserver, &protocol[PROTOCOL_IMAP],
+					 proxy_userid, &backend_cached,
+					 &backend_current, &backend_inbox, imapd_in);
+		    if (!s) {
+			r = IMAP_SERVER_UNAVAILABLE;
+		    } else {
+			r = proxy_catenate_url(be, &url, f, &size, parseerr);
+			if (*totalsize > UINT_MAX - size)
+			    r = IMAP_MESSAGE_TOO_LARGE;
+			else
+			    *totalsize += size;
+		    }
+
+		    free(url.freeme);
+
+		    return r;
+		}
+
+		/* local mailbox */
+		if (!r) {
+		    r = mailbox_open_header(mailboxname, imapd_authstate,
+					    &mboxstruct);
+		}
 
 		if (!r) {
 		    doclose = 1;
@@ -2666,16 +2709,15 @@ static int catenate_url(const char *s, FILE *f,
 	r = IMAP_BADURL;
     } else {
 	/* Catenate message part to stage */
-	r = index_catenate(mailbox, msgno, url.section, f);
+	r = index_catenate(mailbox, msgno, url.section, f, &size);
+syslog(LOG_INFO, "catenate %lu", size);
 	if (r == IMAP_BADURL)
 	    *parseerr = "No such message part";
-	else if (r >= 0) {
-	    if (*totalsize > UINT_MAX - r)
+	else if (!r) {
+	    if (*totalsize > UINT_MAX - size)
 		r = IMAP_MESSAGE_TOO_LARGE;
-	    else {
-		*totalsize += r;
-		r = 0;
-	    }
+	    else
+		*totalsize += size;
 	}
 
 	/* XXX  do we want to try and validate the message like
@@ -2692,7 +2734,7 @@ static int catenate_url(const char *s, FILE *f,
     return r;
 }
 
-static int append_catenate(FILE *f, unsigned *totalsize,
+static int append_catenate(FILE *f, const char *cur_name, unsigned *totalsize,
 			   const char **parseerr, const char **url)
 {
     int c, r = 0;
@@ -2722,7 +2764,7 @@ static int append_catenate(FILE *f, unsigned *totalsize,
 	    }
 
 	    if (!r) {
-		r = catenate_url(arg.s, f, totalsize, parseerr);
+		r = catenate_url(arg.s, cur_name, f, totalsize, parseerr);
 		if (r) *url = arg.s;
 	    }
 	}
@@ -2746,8 +2788,12 @@ static int append_catenate(FILE *f, unsigned *totalsize,
     return 0;
 }
 
+/* If an APPEND is proxied from another server,
+ * 'cur_name' is the name of the currently selected mailbox (if any) 
+ * in case we have to resolve relative URLs
+ */
 #define FLAGGROW 10
-void cmd_append(char *tag, char *name)
+void cmd_append(char *tag, char *name, const char *cur_name)
 {
     int c;
     static struct buf arg;
@@ -2795,7 +2841,14 @@ void cmd_append(char *tag, char *name)
 	imapd_check(s, 0, 0);
 
 	if (!r) {
-	    prot_printf(s->out, "%s Append {%d+}\r\n%s ", tag, strlen(name), name);
+	    if (imapd_mailbox) {
+		prot_printf(s->out, "%s Localappend {%d+}\r\n{%d+}\r\n%s ",
+			    tag, strlen(name), name,
+			    strlen(imapd_mailbox->name), imapd_mailbox->name);
+	    } else {
+		prot_printf(s->out, "%s Localappend {%d+}\r\n{%d+}\r\n%s ",
+			    tag, strlen(name), name, 0, "");
+	    }
 	    if (!pipe_command(s, 16384)) {
 		if (s != backend_current) pipe_including_tag(s, tag, 0);
 	    }
@@ -2906,7 +2959,7 @@ void cmd_append(char *tag, char *name)
 
 	    /* Catenate the message part(s) to stage */
 	    size = 0;
-	    r = append_catenate(f, &size, &parseerr, &url);
+	    r = append_catenate(f, cur_name, &size, &parseerr, &url);
 	    if (r) goto done;
 	}
 	else {

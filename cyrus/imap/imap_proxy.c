@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.c,v 1.1.2.14 2005/05/27 20:09:23 ken3 Exp $
+ * $Id: imap_proxy.c,v 1.1.2.15 2005/05/31 18:09:19 ken3 Exp $
  */
 
 #include <config.h>
@@ -1112,6 +1112,212 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
     }
 }
 /* xxx  end of separate proxy-only code */
+
+int proxy_catenate_url(struct backend *s, struct imapurl *url, FILE *f,
+		       unsigned long *size, const char **parseerr)
+{
+    char mytag[128];
+    int c, r = 0, found = 0;
+    unsigned long uidvalidity = 0;
+
+    *size = 0;
+    *parseerr = NULL;
+
+    /* select the mailbox (read-only) */
+    proxy_gentag(mytag, sizeof(mytag));
+    prot_printf(s->out, "%s Examine {%d+}\r\n%s\r\n",
+		mytag, strlen(url->mailbox), url->mailbox);
+    for (/* each examine response */;;) {
+	/* read a line */
+	c = prot_getc(s->in);
+	if (c != '*') break;
+	c = prot_getc(s->in);
+	if (c != ' ') { /* protocol error */ c = EOF; break; }
+
+	c = chomp(s->in, "ok [uidvalidity");
+	if (c == EOF) {
+	    /* we don't care about this response */
+	    eatline(s->in, c);
+	    continue;
+	}
+
+	/* read uidvalidity */
+	while (isdigit(c = prot_getc(s->in))) {
+	    uidvalidity *= 10;
+	    uidvalidity += c - '0';
+	}
+	if (c != ']') { c = EOF; break; }
+	eatline(s->in, c); /* we don't care about the rest of the line */
+    }
+    if (c != EOF) {
+	prot_ungetc(c, s->in);
+
+	/* we should be looking at the tag now */
+	eatline(s->in, c);
+    }
+    if (c == EOF) {
+	/* uh oh, we're not happy */
+	fatal("Lost connection to backend", EC_UNAVAILABLE);
+    }
+
+    if (url->uidvalidity && (uidvalidity != url->uidvalidity)) {
+	*parseerr = "Uidvalidity of mailbox has changed";
+	r = IMAP_BADURL;
+	goto unselect;
+    }
+
+    /* fetch the bodypart */
+    proxy_gentag(mytag, sizeof(mytag));
+    prot_printf(s->out, "%s Uid Fetch %lu Body.Peek[%s]\r\n",
+		mytag, url->uid, url->section ? url->section : "");
+    for (/* each fetch response */;;) {
+	unsigned long seqno;
+
+      next_resp:
+	/* read a line */
+	c = prot_getc(s->in);
+	if (c != '*') break;
+	c = prot_getc(s->in);
+	if (c != ' ') { /* protocol error */ c = EOF; break; }
+	    
+	/* read seqno */
+	seqno = 0;
+	while (isdigit(c = prot_getc(s->in))) {
+	    seqno *= 10;
+	    seqno += c - '0';
+	}
+	if (seqno == 0 || c != ' ') {
+	    /* we suck and won't handle this case */
+	    c = EOF; break;
+	}
+	c = chomp(s->in, "fetch (");
+	if (c == EOF) { /* not a fetch response */
+	    eatline(s->in, c);
+	    continue;
+	}
+
+	for (/* each fetch item */;;) {
+	    unsigned long uid, sz;
+
+	    switch (c) {
+	    case 'u': case 'U':
+		c = chomp(s->in, "id");
+		if (c != ' ') { c = EOF; }
+		else {
+		    uid = 0;
+		    while (isdigit(c = prot_getc(s->in))) {
+			uid *= 10;
+			uid += c - '0';
+		    }
+
+		    if (uid != url->uid) {
+			/* not our response */
+			eatline(s->in, c);
+			goto next_resp;
+		    }
+		}
+		break;
+
+	    case 'b': case 'B':
+		c = chomp(s->in, "ody[");
+		while (c != ']') c = prot_getc(s->in);
+		if (c == ']') c = prot_getc(s->in);
+		if (c == ' ') c = prot_getc(s->in);
+		if (c == '{') {
+		    sz = 0;
+		    while (isdigit(c = prot_getc(s->in))) {
+			sz *= 10;
+			sz += c - '0';
+			/* xxx overflow */
+		    }
+		    if (c == '}') c = prot_getc(s->in);
+		    if (c == '\r') c = prot_getc(s->in);
+		    if (c != '\n') c = EOF;
+		}
+		else if (c == 'n' || c == 'N') {
+		    c = chomp(s->in, "il");
+		    r = IMAP_BADURL;
+		    *parseerr = "No such message part";
+		}
+
+		if (c != EOF) {
+		    /* catenate to f */
+		    found = 1;
+		    *size = sz;
+		    
+		    while (sz) {
+			char buf[2048];
+			int j = (sz > sizeof(buf) ? sizeof(buf) : sz);
+
+			j = prot_read(s->in, buf, j);
+			if(!j) break;
+			fwrite(buf, j, 1, f);
+			sz -= j;
+		    }
+		    c = prot_getc(s->in);
+		}
+
+		break; /* end of case */
+	    default:
+		/* probably a FLAGS item */
+		eatline(s->in, c);
+		goto next_resp;
+	    }
+	    /* looking at either SP separating items or a RPAREN */
+	    if (c == ' ') { c = prot_getc(s->in); }
+	    else if (c == ')') break;
+	    else { c = EOF; break; }
+	}
+
+	/* if c == EOF we have either a protocol error or a situation
+	   we can't handle, and we should die. */
+	if (c == ')') c = prot_getc(s->in);
+	if (c == '\r') c = prot_getc(s->in);
+	if (c != '\n') { c = EOF; break; }
+    }
+    if (c != EOF) {
+	prot_ungetc(c, s->in);
+
+	/* we should be looking at the tag now */
+	eatline(s->in, c);
+    }
+    if (c == EOF) {
+	/* uh oh, we're not happy */
+	fatal("Lost connection to backend", EC_UNAVAILABLE);
+    }
+
+  unselect:
+    /* unselect the mailbox */
+    proxy_gentag(mytag, sizeof(mytag));
+    prot_printf(s->out, "%s Unselect\r\n", mytag);
+    for (/* each unselect response */;;) {
+	/* read a line */
+	c = prot_getc(s->in);
+	if (c != '*') break;
+	c = prot_getc(s->in);
+	if (c != ' ') { /* protocol error */ c = EOF; break; }
+
+	/* we don't care about this response */
+	eatline(s->in, c);
+    }
+    if (c != EOF) {
+	prot_ungetc(c, s->in);
+
+	/* we should be looking at the tag now */
+	eatline(s->in, c);
+    }
+    if (c == EOF) {
+	/* uh oh, we're not happy */
+	fatal("Lost connection to backend", EC_UNAVAILABLE);
+    }
+
+    if (!r && !found) {
+	r = IMAP_BADURL;
+	*parseerr = "No such message in mailbox";
+    }
+
+    return r;
+}
 
 /* Proxy GETANNOTATION commands to backend */
 int annotate_fetch_proxy(const char *server, const char *mbox_pat,

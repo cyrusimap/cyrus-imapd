@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.199.2.21 2005/05/27 18:33:43 ken3 Exp $
+ * $Id: index.c,v 1.199.2.22 2005/05/31 18:09:31 ken3 Exp $
  */
 #include <config.h>
 
@@ -2612,7 +2612,7 @@ static int index_fetchreply(struct mailbox *mailbox,
  * and index_fetchmsg().
  */
 int index_catenate(struct mailbox *mailbox, unsigned msgno,
-		   const char *section, FILE *f)
+		   const char *section, FILE *f, unsigned long *outsize)
 {
     const char *msg_base = 0;
     unsigned long msg_size = 0;
@@ -2621,6 +2621,8 @@ int index_catenate(struct mailbox *mailbox, unsigned msgno,
     int fetchmime = 0;
     unsigned size, offset = 0;
     int n, r = 0;
+
+    *outsize = 0;
 
     /* Open the message file */
     if (mailbox_map_message(mailbox, UID(msgno), &msg_base, &msg_size)) {
@@ -2717,8 +2719,8 @@ int index_catenate(struct mailbox *mailbox, unsigned msgno,
 	if (offset + size > msg_size) {
 	    n = msg_size - offset;
 	}
-	r = fwrite(msg_base + offset, 1, n, f);
-	if (r != n) r = IMAP_IOERROR;
+	fwrite(msg_base + offset, n, 1, f);
+	*outsize = n;
     }
 
   done:
