@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.217 2005/05/27 14:57:55 ken3 Exp $
+ * $Id: index.c,v 1.218 2005/06/02 15:47:58 ken3 Exp $
  */
 #include <config.h>
 
@@ -1155,7 +1155,8 @@ index_copy(struct mailbox *mailbox,
 	   char *sequence, 
 	   int usinguid,
 	   char *name, 
-	   char **copyuidp)
+	   char **copyuidp,
+	   int nolink)
 {
     static struct copyargs copyargs;
     int i;
@@ -1188,7 +1189,7 @@ index_copy(struct mailbox *mailbox,
     docopyuid = (append_mailbox.m.myrights & ACL_READ);
 
     r = append_copy(mailbox, &append_mailbox, copyargs.nummsg,
-		    copyargs.copymsg);
+		    copyargs.copymsg, nolink);
     if (!r) append_commit(&append_mailbox, totalsize,
 			  &uidvalidity, &startuid, &num);
     if (!r && docopyuid) {
