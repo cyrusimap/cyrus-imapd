@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.60 2005/05/31 18:09:20 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.61 2005/06/02 16:16:02 ken3 Exp $ */
 
 #include <config.h>
 
@@ -4385,7 +4385,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
     /* local mailbox -> local mailbox */
     if (!r) {
 	r = index_copy(imapd_mailbox, sequence, usinguid, mailboxname,
-		       &copyuid);
+		       &copyuid, !config_getswitch(IMAPOPT_SINGLEINSTANCESTORE));
     }
 
     index_check(imapd_mailbox, usinguid, 0);

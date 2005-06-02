@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.102.2.10 2005/03/03 01:13:03 ken3 Exp $
+ * $Id: append.c,v 1.102.2.11 2005/06/02 16:16:01 ken3 Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -816,7 +816,8 @@ int append_fromstream(struct appendstate *as, struct body **body,
 int append_copy(struct mailbox *mailbox, 
 		struct appendstate *as,
 		int nummsg, 
-		struct copymsg *copymsg)
+		struct copymsg *copymsg,
+		int nolink)
 {
     struct mailbox *append_mailbox = &as->m;
     int msg;
@@ -866,7 +867,7 @@ int append_copy(struct mailbox *mailbox,
 				      sizeof(fnamebuf) - strlen(fnamebuf));
 
 	    /* Link/copy message file */
-	    r = mailbox_copyfile(fnamebuf, fname, 0);
+	    r = mailbox_copyfile(fnamebuf, fname, nolink);
 	    if (r) goto fail;
 
 	    /* Write out cache info, copy other info */
