@@ -1,5 +1,5 @@
 /* append.h -- Description of messages to be copied 
- * $Id: append.h,v 1.26 2004/01/22 21:17:07 ken3 Exp $ 
+ * $Id: append.h,v 1.27 2005/06/02 15:47:51 ken3 Exp $ 
  *
  * Copyright (c) 1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -137,7 +137,7 @@ extern int append_fromstream(struct appendstate *as,
 
 extern int append_copy(struct mailbox *mailbox,
 		       struct appendstate *append_mailbox,
-		       int nummsg, struct copymsg *copymsg);
+		       int nummsg, struct copymsg *copymsg, int nolink);
 
 extern int append_collectnews(struct appendstate *mailbox,
 			      const char *group, unsigned long feeduid);
