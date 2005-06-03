@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.144.2.34 2005/05/04 19:26:28 ken3 Exp $
+ * $Id: pop3d.c,v 1.144.2.35 2005/06/03 23:07:46 ken3 Exp $
  */
 #include <config.h>
 
@@ -401,7 +401,7 @@ int service_init(int argc __attribute__((unused)),
     }
 
     /* Set namespace */
-    if ((r = mboxname_init_namespace(&popd_namespace, 0)) != 0) {
+    if ((r = mboxname_init_namespace(&popd_namespace, 1)) != 0) {
 	syslog(LOG_ERR, error_message(r));
 	fatal(error_message(r), EC_CONFIG);
     }
