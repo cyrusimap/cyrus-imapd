@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.h,v 1.1.2.8 2005/04/26 20:15:09 ken3 Exp $
+ * $Id: sync_support.h,v 1.1.2.9 2005/06/16 00:02:10 ken3 Exp $
  */
 
 #ifndef INCLUDED_SYNC_SUPPORT_H
@@ -234,9 +234,9 @@ void sync_user_list_free(struct sync_user_list **lp);
 
 #define SYNC_MESSAGE_INIT_CACHE (16384)
 
-/* Reset sync_message_list after 512 MBytes to avoid problems with large
+/* Reset sync_message_list after 128 MBytes to avoid problems with large
  * mmaped files on 32 bit platform */
-#define SYNC_MESSAGE_LIST_MAX_CACHE (512*1024*1024)
+#define SYNC_MESSAGE_LIST_MAX_CACHE (128*1024*1024)
 
 struct sync_message {
     struct sync_message *next;
