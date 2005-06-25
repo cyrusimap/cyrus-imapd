@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.1.2.15 2005/05/17 18:29:46 ken3 Exp $
+ * $Id: sync_server.c,v 1.1.2.16 2005/06/25 17:50:02 ken3 Exp $
  */
 
 #include <config.h>
@@ -2431,7 +2431,7 @@ static void cmd_user(char *userid)
         sync_sieve_list_free(&sieve_list);
     }
 
-    prot_printf(sync_out, "OK User_all completed\r\n");
+    prot_printf(sync_out, "OK User completed\r\n");
 }
 
 /* ====================================================================== */
