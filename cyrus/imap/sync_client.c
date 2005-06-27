@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.23 2005/05/27 17:09:20 ken3 Exp $
+ * $Id: sync_client.c,v 1.1.2.24 2005/06/27 20:17:30 ken3 Exp $
  */
 
 #include <config.h>
@@ -1618,7 +1618,8 @@ static int do_mailbox_work(struct mailbox *mailbox,
 int do_folders(struct sync_folder_list *client_list,
 	       struct sync_folder_list *server_list,
 	       int *vanishedp,
-	       int do_contents)
+	       int do_contents,
+	       int doing_user)
 {
     struct mailbox m;
     int r = 0, mailbox_open = 0;
@@ -1793,7 +1794,7 @@ int do_folders(struct sync_folder_list *client_list,
                 sync_msg_list_free(&folder_msglist);
             }
 
-	    if (!r && (userid = mboxname_isusermailbox(m.name, 1)))
+	    if (!r && !doing_user && (userid = mboxname_isusermailbox(m.name, 1)))
 		r = do_meta(userid);
 
         }
@@ -1934,7 +1935,7 @@ static int do_mailboxes(struct sync_folder_list *client_folder_list)
     if (!r) r = do_mailboxes_work(client_folder_list,
 				  server_folder_list);
     if (!r) r = do_folders(client_folder_list, server_folder_list,
-                           &vanished, 1);
+                           &vanished, 1, 0);
 
     sync_folder_list_free(&server_folder_list);
     return(r);
@@ -2048,7 +2049,7 @@ int do_user_main(char *user, struct sync_folder_list *server_list,
         return(r);
     }
 
-    return(do_folders(client_list, server_list, vanishedp, 1));
+    return(do_folders(client_list, server_list, vanishedp, 1, 1));
 }
 
 int do_user_sub(char *user, struct sync_folder_list *server_list)
