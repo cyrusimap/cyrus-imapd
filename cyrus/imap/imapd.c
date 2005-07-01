@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.61 2005/06/02 16:16:02 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.62 2005/07/01 14:40:53 ken3 Exp $ */
 
 #include <config.h>
 
@@ -3410,13 +3410,15 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 		else {
 		    fetchitems |= FETCH_SETSEEN;
 		}
-		while ((*p >= '1' && *p <= '9') || *p == '.') {
+		while (isdigit((int) *p) || *p == '.') {
 		    if (*p == '.' && !isdigit((int) p[-1])) break;
+		    /* Part number can not begin with '0' */
+		    if (*p == '0' && !isdigit((int) p[-1])) break;
 		    p++;
 		}
 
 		if (*p != ']') {
-		    prot_printf(imapd_out, "%s BAD Invalid body section\r\n", tag);
+		    prot_printf(imapd_out, "%s BAD Invalid binary section\r\n", tag);
 		    eatline(imapd_in, c);
 		    goto freeargs;
 		}
@@ -3425,7 +3427,7 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 		if (!binsize) PARSE_PARTIAL(oi.start_octet, oi.octet_count);
 
 		if (*p) {
-		    prot_printf(imapd_out, "%s BAD Junk after body section\r\n", tag);
+		    prot_printf(imapd_out, "%s BAD Junk after binary section\r\n", tag);
 		    eatline(imapd_in, c);
 		    goto freeargs;
 		}
