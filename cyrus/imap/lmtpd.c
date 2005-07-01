@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.121.2.28 2005/02/21 19:25:32 ken3 Exp $
+ * $Id: lmtpd.c,v 1.121.2.29 2005/07/01 22:13:43 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -452,7 +452,7 @@ static int mlookup(const char *name, char **server, char **aclp, void *tid)
 int deliver_mailbox(FILE *f,
 		    struct message_content *content,
 		    struct stagemsg *stage,
-		    unsigned size __attribute__((unused)),
+		    unsigned size,
 		    char **flag,
 		    int nflags,
 		    char *authuser,
@@ -479,7 +479,8 @@ int deliver_mailbox(FILE *f,
 
     r = append_setup(&as, mailboxname, MAILBOX_FORMAT_NORMAL,
 		     authuser, authstate, acloverride ? 0 : ACL_POST, 
-		     quotaoverride ? -1 : 0);
+		     quotaoverride ? -1 :
+		     config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA) ? size : 0);
 
     if (!r && !content->body) {
 	/* parse the message body if we haven't already,
@@ -961,7 +962,9 @@ static int verify_user(const char *user, const char *domain, char *mailbox,
 	    }
 	} else if (!r) {
 	    r = append_check(namebuf, MAILBOX_FORMAT_NORMAL, authstate,
-			     aclcheck, quotacheck > 0 ? 0 : quotacheck);
+			     aclcheck, (quotacheck < 0)
+			     || config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA) ?
+			     quotacheck : 0);
 	}
     }
 

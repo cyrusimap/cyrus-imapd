@@ -72,7 +72,7 @@
  * may contain an explanatory message.
  *
  *
- * $Id: smmapd.c,v 1.1.2.13 2005/04/13 15:43:36 shadow Exp $
+ * $Id: smmapd.c,v 1.1.2.14 2005/07/01 22:13:45 ken3 Exp $
  */
 
 #include <config.h>
@@ -347,7 +347,9 @@ int verify_user(const char *key, long quotacheck,
 
 	} else if (!r) {
 	    r = append_check(namebuf, MAILBOX_FORMAT_NORMAL, authstate,
-			     aclcheck, quotacheck > 0 ? 0 : quotacheck);
+			     aclcheck, (quotacheck < 0 )
+			     || config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA) ?
+			     quotacheck : 0);
 	}
     }
 
