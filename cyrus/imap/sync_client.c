@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.24 2005/06/27 20:17:30 ken3 Exp $
+ * $Id: sync_client.c,v 1.1.2.25 2005/07/06 21:24:03 ken3 Exp $
  */
 
 #include <config.h>
@@ -1199,6 +1199,8 @@ static int upload_messages_list(struct mailbox *mailbox,
     struct index_record record;
     struct sync_msg *msg;
     int count = 0;
+    int c = ' ';
+    static struct buf token;   /* BSS */
 
     if (chdir(mailbox->path)) {
         syslog(LOG_ERR, "Couldn't chdir to %s: %s",
@@ -1245,7 +1247,26 @@ static int upload_messages_list(struct mailbox *mailbox,
 
     prot_printf(toserver, "\r\n"); 
     prot_flush(toserver);
-    return(sync_parse_code("UPLOAD", fromserver, SYNC_PARSE_EAT_OKLINE, NULL));
+
+    r = sync_parse_code("UPLOAD", fromserver, SYNC_PARSE_NOEAT_OKLINE, NULL);
+    if (r) return(r);
+
+    if ((c = getword(fromserver, &token)) != ' ') {
+        eatline(fromserver, c);
+        syslog(LOG_ERR, "Garbage on Upload response");
+        return(IMAP_PROTOCOL_ERROR);
+    }
+    eatline(fromserver, c);
+
+    /* Clear out msgid_on_server list if server restarted */
+    if (!strcmp(token.s, "[RESTART]")) {
+        int hash_size = msgid_onserver->hash_size;
+
+        sync_msgid_list_free(&msgid_onserver);
+        msgid_onserver = sync_msgid_list_create(hash_size);
+    }
+
+    return(0);
 }
 
 static int upload_messages_from(struct mailbox *mailbox,
@@ -1255,6 +1276,8 @@ static int upload_messages_from(struct mailbox *mailbox,
     int r = 0;
     struct index_record record;
     int count = 0;
+    int c = ' ';
+    static struct buf token;   /* BSS */
 
     if (chdir(mailbox->path)) {
         syslog(LOG_ERR, "Couldn't chdir to %s: %s",
@@ -1288,7 +1311,26 @@ static int upload_messages_from(struct mailbox *mailbox,
 
     prot_printf(toserver, "\r\n"); 
     prot_flush(toserver);
-    return(sync_parse_code("UPLOAD", fromserver, SYNC_PARSE_EAT_OKLINE, NULL));
+
+    r = sync_parse_code("UPLOAD", fromserver, SYNC_PARSE_NOEAT_OKLINE, NULL);
+    if (r) return(r);
+
+    if ((c = getword(fromserver, &token)) != ' ') {
+        eatline(fromserver, c);
+        syslog(LOG_ERR, "Garbage on Upload response");
+        return(IMAP_PROTOCOL_ERROR);
+    }
+    eatline(fromserver, c);
+
+    /* Clear out msgid_on_server list if server restarted */
+    if (!strcmp(token.s, "[RESTART]")) {
+        int hash_size = msgid_onserver->hash_size;
+
+        sync_msgid_list_free(&msgid_onserver);
+        msgid_onserver = sync_msgid_list_create(hash_size);
+    }
+
+    return(0);
 }
 
 /* upload_messages() null operations still requires UIDLAST update */

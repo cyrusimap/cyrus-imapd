@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.1.2.16 2005/06/25 17:50:02 ken3 Exp $
+ * $Id: sync_server.c,v 1.1.2.17 2005/07/06 21:24:04 ken3 Exp $
  */
 
 #include <config.h>
@@ -1913,8 +1913,19 @@ static void cmd_upload(struct mailbox *mailbox,
         prot_printf(sync_out, "NO Failed to commit message upload to %s: %s\r\n",
                  mailbox->name, error_message(r));
     } else {
-        prot_printf(sync_out, "OK Upload %lu messages okay\r\n",
-                 upload_list->count);
+	int restart = sync_message_list_need_restart(message_list);
+
+	if (restart) {
+	    int hash_size = message_list->hash_size;
+	    int file_max  = message_list->file_max;
+
+	    /* Reset message list */
+	    sync_message_list_free(&message_list);
+	    message_list = sync_message_list_create(hash_size, file_max);
+	}
+
+        prot_printf(sync_out, "OK [%s] Upload %lu messages okay\r\n",
+		    restart ? "RESTART" : "CONTINUE", upload_list->count);
     }
 
     sync_upload_list_free(&upload_list);
