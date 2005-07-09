@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.25 2005/07/06 21:24:03 ken3 Exp $
+ * $Id: sync_client.c,v 1.1.2.26 2005/07/09 18:42:55 ken3 Exp $
  */
 
 #include <config.h>
@@ -187,6 +187,8 @@ static int send_unlock()
 
         sync_msgid_list_free(&msgid_onserver);
         msgid_onserver = sync_msgid_list_create(hash_size);
+
+	syslog(LOG_INFO, "UNLOCK: received RESTART");
     }
 
     return(0);
@@ -1264,6 +1266,8 @@ static int upload_messages_list(struct mailbox *mailbox,
 
         sync_msgid_list_free(&msgid_onserver);
         msgid_onserver = sync_msgid_list_create(hash_size);
+
+	syslog(LOG_INFO, "UPLOAD: received RESTART");
     }
 
     return(0);
@@ -1328,6 +1332,8 @@ static int upload_messages_from(struct mailbox *mailbox,
 
         sync_msgid_list_free(&msgid_onserver);
         msgid_onserver = sync_msgid_list_create(hash_size);
+
+	syslog(LOG_INFO, "UPLOAD: received RESTART");
     }
 
     return(0);
