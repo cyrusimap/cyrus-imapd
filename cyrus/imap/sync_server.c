@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.1.2.17 2005/07/06 21:24:04 ken3 Exp $
+ * $Id: sync_server.c,v 1.1.2.18 2005/07/09 18:44:13 ken3 Exp $
  */
 
 #include <config.h>
@@ -152,7 +152,8 @@ static void cmd_reset(char *user);
 static void cmd_status(struct mailbox *mailbox);
 static void cmd_upload(struct mailbox *mailbox,
 		       struct sync_message_list *message_list,
-		       unsigned long new_last_uid, time_t last_appenddate);
+		       unsigned long new_last_uid, time_t last_appenddate,
+		       int *restart);
 static void cmd_uidlast(struct mailbox *mailbox, unsigned long last_uid,
 			time_t last_appenddate);
 static void cmd_setflags(struct mailbox *mailbox);
@@ -949,6 +950,8 @@ static void cmdloop(void)
 	    break;
 	case 'U':
             if (!strcmp(cmd.s, "Upload")) {
+		int restart;
+
 		if (c != ' ') goto missingargs;
 		c = getastring(sync_in, sync_out, &arg1);
 		if (c != ' ') goto missingargs;
@@ -959,7 +962,18 @@ static void cmdloop(void)
                 if (!imparse_isnumber(arg2.s)) goto invalidargs;
 
                 cmd_upload(mailbox, message_list,
-                           sync_atoul(arg1.s), sync_atoul(arg2.s));
+                           sync_atoul(arg1.s), sync_atoul(arg2.s), &restart);
+
+                if (restart); {
+                    int hash_size = message_list->hash_size;
+                    int file_max  = message_list->file_max;
+
+                    /* Reset message list */
+                    sync_message_list_free(&message_list);
+                    message_list
+			= sync_message_list_create(hash_size, file_max);
+		}
+
                 continue;
             } else if (!strcmp(cmd.s, "Uidlast")) {
 		if (c != ' ') goto missingargs;
@@ -1729,7 +1743,8 @@ find_return_path(char *hdr)
 
 static void cmd_upload(struct mailbox *mailbox,
 		       struct sync_message_list *message_list,
-		       unsigned long new_last_uid, time_t last_appenddate)
+		       unsigned long new_last_uid, time_t last_appenddate,
+		       int *restart)
            
 {
     struct sync_upload_list *upload_list;
@@ -1740,6 +1755,8 @@ static void cmd_upload(struct mailbox *mailbox,
     enum {MSG_SIMPLE, MSG_PARSED, MSG_COPY} msg_type;
     int   r = 0;
     char *err;
+
+    *restart = 0;
 
     if (!mailbox) {
 	eatline(sync_in,c);
@@ -1913,19 +1930,11 @@ static void cmd_upload(struct mailbox *mailbox,
         prot_printf(sync_out, "NO Failed to commit message upload to %s: %s\r\n",
                  mailbox->name, error_message(r));
     } else {
-	int restart = sync_message_list_need_restart(message_list);
-
-	if (restart) {
-	    int hash_size = message_list->hash_size;
-	    int file_max  = message_list->file_max;
-
-	    /* Reset message list */
-	    sync_message_list_free(&message_list);
-	    message_list = sync_message_list_create(hash_size, file_max);
-	}
+	if ((*restart = sync_message_list_need_restart(message_list)))
+	    syslog(LOG_INFO, "UPLOAD: issuing RESTART");
 
         prot_printf(sync_out, "OK [%s] Upload %lu messages okay\r\n",
-		    restart ? "RESTART" : "CONTINUE", upload_list->count);
+		    *restart ? "RESTART" : "CONTINUE", upload_list->count);
     }
 
     sync_upload_list_free(&upload_list);
