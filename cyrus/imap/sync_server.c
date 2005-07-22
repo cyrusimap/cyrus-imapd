@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.1.2.18 2005/07/09 18:44:13 ken3 Exp $
+ * $Id: sync_server.c,v 1.1.2.19 2005/07/22 12:16:06 ken3 Exp $
  */
 
 #include <config.h>
@@ -964,7 +964,7 @@ static void cmdloop(void)
                 cmd_upload(mailbox, message_list,
                            sync_atoul(arg1.s), sync_atoul(arg2.s), &restart);
 
-                if (restart); {
+                if (restart) {
                     int hash_size = message_list->hash_size;
                     int file_max  = message_list->file_max;
 
