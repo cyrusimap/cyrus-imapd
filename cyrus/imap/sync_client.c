@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.27 2005/07/22 12:21:47 ken3 Exp $
+ * $Id: sync_client.c,v 1.1.2.28 2005/09/19 18:18:36 ken3 Exp $
  */
 
 #include <config.h>
@@ -406,6 +406,9 @@ static int reserve_messages(struct sync_folder_list *client_list,
 
     /* Find messages we want to upload that are available on server */
     for (folder = client_list->head ; folder ; folder = folder->next) {
+	/* Quietly skip over folders that have already been processed */
+	if (folder->mark) continue;
+
         folder->id  = NULL;
         folder->acl = NULL;
 
@@ -532,6 +535,9 @@ static int folders_get_uniqueid(struct sync_folder_list *client_list,
 
     /* Find messages we want to upload that are available on server */
     for (folder = client_list->head ; folder ; folder = folder->next) {
+	/* Quietly skip over folders that have already been processed */
+	if (folder->mark) continue;
+
         folder->id  = NULL;
         folder->acl = NULL;
 
@@ -1690,6 +1696,9 @@ int do_folders(struct sync_folder_list *client_list,
     /* Tag folders on server which still exist on the client. Anything
      * on the server which remains untagged can be deleted immediately */
     for (folder = client_list->head ; folder ; folder = folder->next) {
+	/* Quietly skip over folders that have already been processed */
+	if (folder->mark) continue;
+
         if (folder->id &&
             (folder2 = sync_folder_lookup(server_list, folder->id))) {
             folder2->mark = 1;
@@ -1742,7 +1751,8 @@ int do_folders(struct sync_folder_list *client_list,
     }
 
     for (folder = client_list->head ; folder ; folder = folder->next) {
-        if (!folder->id) continue;
+	/* Quietly skip over folders that have already been processed */
+        if (folder->mark || !folder->id) continue;
 
         r = mailbox_open_header(folder->name, 0, &m);
 
@@ -1848,6 +1858,10 @@ int do_folders(struct sync_folder_list *client_list,
         }
         if (r) goto bail;
 
+	/* Mark folder as processed */
+	folder->mark = 1;
+	client_list->count--;
+
         mailbox_close(&m);
         mailbox_open = 0;
     }
@@ -1880,6 +1894,9 @@ int do_mailboxes_work(struct sync_folder_list *client_list,
     prot_printf(toserver, "MAILBOXES"); 
 
     for (folder = client_list->head ; folder; folder = folder->next) {
+	/* Quietly skip over folders that have already been processed */
+	if (folder->mark) continue;
+
         prot_printf(toserver, " "); 
         sync_printastring(toserver, folder->name);
     }
@@ -1964,15 +1981,22 @@ static int do_mailboxes(struct sync_folder_list *client_folder_list)
     if (verbose) {
         printf("MAILBOXES");
 
-        for (folder = client_folder_list->head; folder ; folder = folder->next)
-            printf(" %s", folder->name);
+        for (folder = client_folder_list->head; folder ; folder = folder->next) {
+	    /* Quietly skip over folders that have already been processed */
+	    if (folder->mark) continue;
 
+            printf(" %s", folder->name);
+	}
         printf("\n");
     }
 
     if (verbose_logging) {
-        for (folder = client_folder_list->head; folder ; folder = folder->next)
+        for (folder = client_folder_list->head; folder ; folder = folder->next) {
+	    /* Quietly skip over folders that have already been processed */
+	    if (folder->mark) continue;
+
             syslog(LOG_INFO, "MAILBOX %s", folder->name);
+	}
     }
 
     /* Worthwhile doing mailboxes even in case of single mailbox:
@@ -2948,6 +2972,31 @@ static int do_sync(const char *filename)
 	do {
 	    sleep(n*2);  /* XXX  should this be longer? */
 	    r = do_mailboxes(folder_list);
+	    if (r) {
+		/* promote failed personal mailboxes to USER */
+		struct sync_folder *folder;
+		char *userid, *p;
+
+		for (folder = folder_list->head; folder && folder->mark;
+		     folder = folder->next);
+		if (folder &&
+		    (userid = xstrdup(mboxname_isusermailbox(folder->name, 0)))) {
+		    if ((p = strchr(userid, '.'))) *p = '\0';
+		    folder->mark = 1;
+		    if (--folder_list->count == 0) r = 0;
+
+		    sync_action_list_add(user_list, NULL, userid);
+		    if (verbose) {
+			printf("  Promoting: MAILBOX %s -> USER %s\n",
+			       folder->name, userid);
+		    }
+		    if (verbose_logging) {
+			syslog(LOG_INFO, "  Promoting: MAILBOX %s -> USER %s",
+			       folder->name, userid);
+		    }
+		    free(userid);
+		}
+	    }
 	} while (r && (++n < SYNC_MAILBOX_RETRIES));
 
 	if (r) goto bail;
