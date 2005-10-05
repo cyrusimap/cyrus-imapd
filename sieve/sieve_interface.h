@@ -1,5 +1,5 @@
 /* sieve_interface.h -- interface for deliver
- * $Id: sieve_interface.h,v 1.19.2.4 2004/07/16 14:37:44 ken3 Exp $
+ * $Id: sieve_interface.h,v 1.19.2.5 2005/10/05 15:56:25 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -108,9 +108,10 @@ typedef struct sieve_notify_context {
     const char *message;
 } sieve_notify_context_t;
 
+#define SIEVE_HASHLEN 16
+
 typedef struct sieve_autorespond_context {
-    unsigned char *hash;
-    int len;
+    unsigned char hash[SIEVE_HASHLEN];
     int days;
 } sieve_autorespond_context_t;
 

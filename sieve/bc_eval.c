@@ -1,5 +1,5 @@
 /* bc_eval.c - evaluate the bytecode
- * $Id: bc_eval.c,v 1.2.2.10 2005/04/05 14:58:33 ken3 Exp $
+ * $Id: bc_eval.c,v 1.2.2.11 2005/10/05 15:56:21 ken3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -1236,7 +1236,9 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    int respond;
 	    char *fromaddr = NULL; /* relative to message we send */
 	    char *toaddr = NULL; /* relative to message we send */
+	    char *handle = NULL;
 	    const char *message = NULL;
+	    int days, mime;
 	    char buf[128];
 	    char subject[1024];
 	    int x;
@@ -1265,10 +1267,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 			/* s[0] contains the original subject */
 			const char *origsubj = s[0];
 
-			while (!strncasecmp(origsubj, "Re: ", 4)) 
-			    origsubj += 4;
-
-			snprintf(subject, sizeof(subject), "Re: %s", origsubj);
+			snprintf(subject, sizeof(subject), "Auto: %s", origsubj);
 		    }
 		} else {
 		    /* user specified subject */
@@ -1277,11 +1276,30 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 		
 		ip = unwrap_string(bc, ip, &message, NULL);
 
-		res = do_vacation(actions, toaddr, fromaddr,
-				  xstrdup(subject), message,
-				  ntohl(bc[ip].value), ntohl(bc[ip+1].value));
+		days = ntohl(bc[ip].value);
+		mime = ntohl(bc[ip+1].value);
 
-		ip+=2;		
+		ip+=2;	
+
+		if (version >= 0x05) {
+		    ip = unwrap_string(bc, ip, &data, NULL);
+
+		    if (data) {
+			/* user specified from address */
+			free(fromaddr);
+			fromaddr = xstrdup(data);
+		    }
+
+		    ip = unwrap_string(bc, ip, &data, NULL);
+
+		    if (data) {
+			/* user specified handle */
+			handle = data;
+		    }
+		}
+
+		res = do_vacation(actions, toaddr, fromaddr, xstrdup(subject),
+				  message, days, mime, handle);
 
 		if (res == SIEVE_RUN_ERROR)
 		    *errmsg = "Vacation can not be used with Reject or Vacation";
@@ -1292,6 +1310,12 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 		ip = unwrap_string(bc, ip, &data, NULL);
 
 		ip+=2;/*skip days and mime flag*/
+
+		if (version >= 0x05) {
+		    /* skip from and handle */
+		    ip = unwrap_string(bc, ip, &data, NULL);
+		    ip = unwrap_string(bc, ip, &data, NULL);
+		}
 	    } else {
 		res = SIEVE_RUN_ERROR; /* something is bad */ 
 	    }

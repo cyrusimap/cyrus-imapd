@@ -1,7 +1,7 @@
 %{
 /* sieve.l -- sieve lexer
  * Larry Greenfield
- * $Id: sieve-lex.l,v 1.20.8.4 2005/04/05 14:58:34 ken3 Exp $
+ * $Id: sieve-lex.l,v 1.20.8.5 2005/10/05 15:56:24 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -117,6 +117,8 @@ CRLF		(\r\n|\r|\n)
 <INITIAL>:days		return DAYS;
 <INITIAL>:addresses	return ADDRESSES;
 <INITIAL>:subject	return SUBJECT;
+<INITIAL>:from		return FROM;
+<INITIAL>:handle	return HANDLE;
 <INITIAL>:mime		return MIME;
 <INITIAL>:comparator	return COMPARATOR;
 <INITIAL>:is		return IS;

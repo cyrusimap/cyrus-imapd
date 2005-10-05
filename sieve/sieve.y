@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.23.2.12 2005/04/05 14:58:34 ken3 Exp $
+ * $Id: sieve.y,v 1.23.2.13 2005/10/05 15:56:24 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -51,6 +51,8 @@ struct vtags {
     int days;
     stringlist_t *addresses;
     char *subject;
+    char *from;
+    char *handle;
     int mime;
 };
 
@@ -170,7 +172,7 @@ extern void yyrestart(FILE *f);
 %token GT GE LT LE EQ NE
 %token ALL LOCALPART DOMAIN USER DETAIL
 %token RAW TEXT CONTENT
-%token DAYS ADDRESSES SUBJECT MIME
+%token DAYS ADDRESSES SUBJECT FROM HANDLE MIME
 %token METHOD ID OPTIONS LOW NORMAL HIGH ANY MESSAGE
 %token INCLUDE PERSONAL GLOBAL RETURN
 %token COPY
@@ -396,6 +398,18 @@ vtags: /* empty */		 { $$ = new_vtags(); }
 				   } else if (!verify_utf8($3)) {
 				        YYERROR; /* vu should call yyerror() */
 				   } else { $$->subject = $3; } }
+	| vtags FROM STRING	 { if ($$->from != NULL) { 
+					yyerror("duplicate :from"); 
+					YYERROR;
+				   } else if (!verify_address($3)) {
+				        YYERROR; /* vu should call yyerror() */
+				   } else { $$->from = $3; } }
+	| vtags HANDLE STRING	 { if ($$->handle != NULL) { 
+					yyerror("duplicate :handle"); 
+					YYERROR;
+				   } else if (!verify_utf8($3)) {
+				        YYERROR; /* vu should call yyerror() */
+				   } else { $$->handle = $3; } }
 	| vtags MIME		 { if ($$->mime != -1) { 
 					yyerror("duplicate :mime"); 
 					YYERROR; }
@@ -767,6 +781,8 @@ static commandlist_t *build_vacation(int t, struct vtags *v, char *reason)
 
     if (ret) {
 	ret->u.v.subject = v->subject; v->subject = NULL;
+	ret->u.v.from = v->from; v->from = NULL;
+	ret->u.v.handle = v->handle; v->handle = NULL;
 	ret->u.v.days = v->days;
 	ret->u.v.mime = v->mime;
 	ret->u.v.addresses = v->addresses; v->addresses = NULL;
@@ -927,6 +943,8 @@ static struct vtags *new_vtags(void)
     r->days = -1;
     r->addresses = NULL;
     r->subject = NULL;
+    r->from = NULL;
+    r->handle = NULL;
     r->mime = -1;
 
     return r;
@@ -950,6 +968,8 @@ static void free_vtags(struct vtags *v)
 {
     if (v->addresses) { free_sl(v->addresses); }
     if (v->subject) { free(v->subject); }
+    if (v->from) { free(v->from); }
+    if (v->handle) { free(v->handle); }
     free(v);
 }
 

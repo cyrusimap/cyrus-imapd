@@ -1,6 +1,6 @@
 /* bc_generate.c -- sieve bytecode- almost flattened bytecode
  * Rob Siemborski
- * $Id: bc_dump.c,v 1.2.2.3 2005/03/12 03:30:10 ken3 Exp $
+ * $Id: bc_dump.c,v 1.2.2.4 2005/10/05 15:56:20 ken3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -300,11 +300,14 @@ void dump(bytecode_info_t *d, int level)
 	    printf("%d:VACATION\n",i);
 	    i++;
 	    i=dump_sl(d,i,level);
-	    printf("SUBJ({%d}%s) MESG({%d}%s)\n DAYS(%d) MIME(%d)\n", 
+	    printf("SUBJ({%d}%s) MESG({%d}%s)\n DAYS(%d) MIME(%d)\n"
+		   " FROM({%d}%s) HANDLE({%d}%s)\n",
 		   d->data[i+1].len, (d->data[i+1].len == -1 ? "[nil]" : d->data[i+2].str),
 		   d->data[i+3].len, (d->data[i+3].len == -1 ? "[nil]" : d->data[i+4].str),
-		   d->data[i+5].value, d->data[i+6].value);
-	    i+=6;
+		   d->data[i+5].value, d->data[i+6].value,
+		   d->data[i+7].len, (d->data[i+7].len == -1 ? "[nil]" : d->data[i+8].str),
+		   d->data[i+9].len, (d->data[i+9].len == -1 ? "[nil]" : d->data[i+10].str));
+	    i+=10;
 	
 	    break;
 	case B_JUMP:

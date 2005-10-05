@@ -1,7 +1,7 @@
 /* bc_emit.c -- sieve bytecode - pass 2 of the compiler
  * Rob Siemborski
  * Jen Smith
- * $Id: bc_emit.c,v 1.2.2.3 2005/03/12 03:30:10 ken3 Exp $
+ * $Id: bc_emit.c,v 1.2.2.4 2005/10/05 15:56:21 ken3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -649,7 +649,7 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 	    	    break;
 	case B_VACATION:
 	    /* Address list, Subject String, Message String,
-	       Days (word), Mime (word) */
+	       Days (word), Mime (word), From String, Handle String */
 	   
 	        /*new code-this might be broken*/
 	    ret = bc_stringlist_emit(fd, &codep, bc);
@@ -694,6 +694,35 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 	    if(write_int(fd,bc->data[codep].value) == -1)
 		return -1;
 	    codep++;
+
+	    for(i=0; i<2; i++) {/*writing strings*/
+
+		/*write length of string*/
+		len = bc->data[codep++].len;
+		if(write_int(fd,len) == -1)
+		    return -1;
+		filelen += sizeof(int);
+		    
+		if(len == -1)
+		{
+		    /* this is a nil string */
+		    /* skip the null pointer and make up for it 
+		     * by adjusting the offset */
+		    codep++;
+		}
+		else
+		{
+		    /*write string*/
+		    if(write(fd,bc->data[codep++].str,len) == -1)
+			return -1;
+		    
+		    ret = align_string(fd, len);
+		    if(ret == -1) return -1;
+		    
+		    filelen += len + ret;
+		}
+		
+	    }
 	    filelen += sizeof(int);
 	    
 	    break;

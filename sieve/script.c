@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.59.2.10 2005/03/12 03:30:12 ken3 Exp $
+ * $Id: script.c,v 1.59.2.11 2005/10/05 15:56:23 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -42,8 +42,6 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "hash.h"
 #include "xmalloc.h"
 
-#include "md5global.h"
-#include "md5.h"
 #include "sieve_interface.h"
 #include "interp.h"
 #include "script.h"
@@ -496,21 +494,6 @@ static char *sieve_errstr(int code)
     return "Error!";
 }
 
-#define HASHSIZE 16
-
-static int makehash(unsigned char hash[HASHSIZE],
-		    const char *s1, const char *s2)
-{
-    MD5_CTX ctx;
-
-    MD5Init(&ctx);
-    MD5Update(&ctx, s1, strlen(s1));
-    MD5Update(&ctx, s2, strlen(s2));
-    MD5Final(hash, &ctx);
-
-    return SIEVE_OK;
-}
-
 
 /******************************bytecode functions*****************************
  *****************************************************************************/
@@ -794,24 +777,16 @@ static int do_action_list(sieve_interp_t *interp,
 
 	case ACTION_VACATION:
 	    {
-		unsigned char hash[HASHSIZE];
-
 		if (!interp->vacation)
 		    return SIEVE_INTERNAL_ERROR;
 
 		/* first, let's figure out if we should respond to this */
-		ret = makehash(hash, a->u.vac.send.addr,
-			       a->u.vac.send.msg);
+		ret = interp->vacation->autorespond(&a->u.vac.autoresp,
+						    interp->interp_context,
+						    script_context,
+						    message_context,
+						    &errmsg);
 
-		if (ret == SIEVE_OK) {
-		    a->u.vac.autoresp.hash = hash;
-		    a->u.vac.autoresp.len = HASHSIZE;
-		    ret = interp->vacation->autorespond(&a->u.vac.autoresp,
-							interp->interp_context,
-							script_context,
-							message_context,
-							&errmsg);
-		}
 		if (ret == SIEVE_OK) {
 		    /* send the response */
 		    ret = interp->vacation->send_response(&a->u.vac.send,

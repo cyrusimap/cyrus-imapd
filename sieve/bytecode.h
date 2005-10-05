@@ -76,8 +76,9 @@ typedef union
  * version 0x02 scripts started using network byte order (recompile)
  * version 0x03 scripts implemented short-circuiting of testlists (recompile)
  * version 0x04 scripts implemented BODY, INCLUDE and COPY extensions
+ * version 0x05 scripts implemented updated VACATION (:from and :handle)
  */
-#define BYTECODE_VERSION 0x04
+#define BYTECODE_VERSION 0x05
 #define BYTECODE_MIN_VERSION 0x03 /* minimum supported version */
 #define BYTECODE_MAGIC "CyrSBytecode"
 #define BYTECODE_MAGIC_LEN 12 /* Should be multiple of 4 */

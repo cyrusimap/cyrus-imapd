@@ -1,6 +1,6 @@
 /* message.h
  * Larry Greenfield
- * $Id: message.h,v 1.16.2.1 2005/03/12 03:30:12 ken3 Exp $
+ * $Id: message.h,v 1.16.2.2 2005/10/05 15:56:23 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -119,7 +119,7 @@ int do_redirect(action_list_t *m, const char *addr, int cancel_keep);
 int do_keep(action_list_t *m, sieve_imapflags_t *imapflags);
 int do_discard(action_list_t *m);
 int do_vacation(action_list_t *m, char *addr, char *fromaddr,
-		char *subj, const char *msg, int days, int mime);
+		char *subj, const char *msg, int days, int mime, char *handle);
 int do_setflag(action_list_t *m, const char *flag);
 int do_addflag(action_list_t *m, const char *flag);
 int do_removeflag(action_list_t *m, const char *flag);

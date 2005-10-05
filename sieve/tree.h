@@ -1,6 +1,6 @@
 /* tree.h -- abstract syntax tree
  * Larry Greenfield
- * $Id: tree.h,v 1.8.2.4 2005/03/12 03:30:14 ken3 Exp $
+ * $Id: tree.h,v 1.8.2.5 2005/10/05 15:56:26 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -127,6 +127,8 @@ struct Commandlist {
 	    int days;
 	    stringlist_t *addresses;
 	    char *message;
+	    char *from;
+	    char *handle;
 	    int mime;
 	} v;
 	struct { /* it's a notify action */

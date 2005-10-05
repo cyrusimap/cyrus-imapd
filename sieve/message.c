@@ -1,6 +1,6 @@
 /* message.c -- message parsing functions
  * Larry Greenfield
- * $Id: message.c,v 1.27.2.5 2005/04/22 17:57:37 shadow Exp $
+ * $Id: message.c,v 1.27.2.6 2005/10/05 15:56:23 ken3 Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -38,6 +38,8 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <fcntl.h>
 #include <string.h>
 
+#include "md5global.h"
+#include "md5.h"
 #include "sieve_interface.h"
 #include "interp.h"
 #include "message.h"
@@ -200,9 +202,23 @@ int do_discard(action_list_t *a)
     return 0;
 }
 
+static int makehash(unsigned char hash[],
+		    const char *s1, const char *s2, const char *s3)
+{
+    MD5_CTX ctx;
+
+    MD5Init(&ctx);
+    MD5Update(&ctx, s1, strlen(s1));
+    MD5Update(&ctx, s2, strlen(s2));
+    if (s3) MD5Update(&ctx, s3, strlen(s3));
+    MD5Final(hash, &ctx);
+
+    return SIEVE_OK;
+}
+
 int do_vacation(action_list_t *a, char *addr, char *fromaddr,
 		char *subj, const char *msg, int days,
-		int mime)
+		int mime, char *handle)
 {
     action_list_t *b = NULL;
 
@@ -226,6 +242,10 @@ int do_vacation(action_list_t *a, char *addr, char *fromaddr,
     a->u.vac.send.subj = subj;	/* user specified subject */
     a->u.vac.send.msg = msg;
     a->u.vac.send.mime = mime;
+    if (handle)
+	makehash(a->u.vac.autoresp.hash, addr, handle, NULL);
+    else
+	makehash(a->u.vac.autoresp.hash, addr, fromaddr, msg);
     a->u.vac.autoresp.days = days;
     a->next = NULL;
     b->next = a;

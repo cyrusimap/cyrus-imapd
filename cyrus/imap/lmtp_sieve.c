@@ -1,6 +1,6 @@
 /* lmtp_sieve.c -- Sieve implementation for lmtpd
  *
- * $Id: lmtp_sieve.c,v 1.1.2.11 2004/07/16 14:37:40 ken3 Exp $
+ * $Id: lmtp_sieve.c,v 1.1.2.12 2005/10/05 15:56:19 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -623,7 +623,7 @@ static int autorespond(void *ac,
     now = time(NULL);
 
     /* ok, let's see if we've responded before */
-    t = duplicate_check(arc->hash, arc->len, 
+    t = duplicate_check(arc->hash, SIEVE_HASHLEN, 
 			sd->username, strlen(sd->username));
     if (t) {
 	if (now >= t) {
@@ -638,7 +638,7 @@ static int autorespond(void *ac,
     }
 
     if (ret == SIEVE_OK) {
-	duplicate_mark((char *) arc->hash, arc->len, 
+	duplicate_mark((char *) arc->hash, SIEVE_HASHLEN, 
 		       sd->username, strlen(sd->username), 
 		       now + arc->days * (24 * 60 * 60), 0);
     }

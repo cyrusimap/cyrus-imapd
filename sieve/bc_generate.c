@@ -1,6 +1,6 @@
 /* bc_generate.c -- sieve bytecode- almost flattened bytecode
  * Rob Siemborski
- * $Id: bc_generate.c,v 1.2.2.5 2005/04/05 14:58:33 ken3 Exp $
+ * $Id: bc_generate.c,v 1.2.2.6 2005/10/05 15:56:22 ken3 Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -620,9 +620,11 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
 		/* VACATION
 		   STRINGLIST addresses
 		   STRING subject (if len is -1, then subject was NULL)
-		   STRING message (again, len == -1 means subject was NULL)
+		   STRING message (again, len == -1 means message was NULL)
 		   VALUE days
 		   VALUE mime
+		   STRING from (if len is -1, then from was NULL)
+		   STRING handle (again, len == -1 means handle was NULL)
 		*/
 
 		if(!atleast(retval,codep+1)) return -1;
@@ -653,6 +655,24 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
 		retval->data[codep++].value = c->u.v.days;
 		retval->data[codep++].value = c->u.v.mime;
 	    
+		if (!atleast(retval,codep+2)) return -1;
+		if(c->u.v.from) {
+		    retval->data[codep++].len = strlen(c->u.v.from);
+		    retval->data[codep++].str = c->u.v.from;
+		} else {
+		    retval->data[codep++].len = -1;
+		    retval->data[codep++].str = NULL;
+		}
+
+		if (!atleast(retval,codep+2)) return -1;
+		if(c->u.v.handle) {
+		    retval->data[codep++].len = strlen(c->u.v.handle);
+		    retval->data[codep++].str = c->u.v.handle;
+		} else {
+		    retval->data[codep++].len = -1;
+		    retval->data[codep++].str = NULL;
+		}
+
 
 		if(codep == -1) return -1;
 		break;

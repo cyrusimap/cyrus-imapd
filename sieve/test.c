@@ -2,7 +2,7 @@
   
  * test.c -- tester for libsieve
  * Larry Greenfield
- * $Id: test.c,v 1.21.2.5 2005/03/15 16:09:58 ken3 Exp $
+ * $Id: test.c,v 1.21.2.6 2005/10/05 15:56:25 ken3 Exp $
  *
  * usage: "test message script"
  */
@@ -476,7 +476,7 @@ int autorespond(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     int i;
 
     printf("Have I already responded to '");
-    for (i = 0; i < arc->len; i++) {
+    for (i = 0; i < SIEVE_HASHLEN; i++) {
 	printf("%x", arc->hash[i]);
     }
     printf("' in %d days? ", arc->days);

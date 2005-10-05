@@ -317,6 +317,7 @@ int dump2_test(bytecode_input_t * d, int i)
 void dump2(bytecode_input_t *d, int bc_len) 
 {
     int i;
+    int version;
     const char *data;
     int len;
     
@@ -327,7 +328,8 @@ void dump2(bytecode_input_t *d, int bc_len)
 
     i = BYTECODE_MAGIC_LEN / sizeof(bytecode_input_t);
 
-    printf("Sievecode version %d\n", ntohl(d[i].op));
+    version = ntohl(d[i].op);
+    printf("Sievecode version %d\n", version);
     if(!d) return;
     
     for(i++; i<bc_len;) 
@@ -448,6 +450,16 @@ void dump2(bytecode_input_t *d, int bc_len)
 
 	    printf("DAYS(%d) MIME(%d)\n", ntohl(d[i].value), ntohl(d[i+1].value));
 	    i+=2;
+
+	    if (version >= 0x05) {
+		i = unwrap_string(d, i, &data, &len);
+
+		printf("%d FROM({%d}%s) \n",i, len, (!data ? "[nil]" : data));
+
+		i = unwrap_string(d, i, &data, &len);
+
+		printf("%d HANDLE({%d}%s) \n",i, len, (!data ? "[nil]" : data));
+	    }
 
 	    break;
 	case B_NULL:/*15*/
