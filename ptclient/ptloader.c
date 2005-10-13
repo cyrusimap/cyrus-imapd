@@ -67,7 +67,7 @@
 #include "ptloader.h"
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ptloader.c,v 1.40 2005/02/16 20:38:04 shadow Exp $";
+      "$Id: ptloader.c,v 1.41 2005/10/13 20:37:10 jeaton Exp $";
 
 struct pts_module *pts_modules[] = {
 #ifdef HAVE_LDAP
@@ -94,6 +94,7 @@ static struct pts_module *pts_fromname()
 	    pts = pts_modules[i]; break;
 	}
     }
+
     if (!pts) {
 	char errbuf[1024];
 	snprintf(errbuf, sizeof(errbuf),
@@ -126,6 +127,11 @@ const int config_need_data = 0;
 /* Globals */
 #define DB (config_ptscache_db)
 
+/* XXXXXXXXX */
+void des_init_random_number_generator() {
+        return;
+} 
+
 static char ptclient_debug = 0;
 struct db *ptsdb = NULL;
   
@@ -143,7 +149,7 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     signal(SIGPIPE, SIG_IGN);
 
     syslog(LOG_NOTICE,
-	   "starting: $Id: ptloader.c,v 1.40 2005/02/16 20:38:04 shadow Exp $");
+	   "starting: $Id: ptloader.c,v 1.41 2005/10/13 20:37:10 jeaton Exp $");
 
     while ((opt = getopt(argc, argv, "d:")) != EOF) {
 	switch (opt) {

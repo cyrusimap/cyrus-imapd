@@ -41,7 +41,7 @@
  */
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: afskrb.c,v 1.11 2005/02/16 20:38:04 shadow Exp $";
+      "$Id: afskrb.c,v 1.12 2005/10/13 20:37:10 jeaton Exp $";
 
 #include <config.h>
 #include "ptloader.h"
@@ -131,11 +131,13 @@ int is_local_realm(const char *realm)
 static char *afspts_canonifyid(const char *identifier, size_t len)
 {
     static char *retbuf = NULL;
+    char *tmp = NULL;
     krb5_context context;
     krb5_principal princ, princ_dummy;
     char *realm;
     char *realmbegin;
     int striprealm = 0;
+    char *identifier2;
 
     if(retbuf) free(retbuf);
     retbuf = NULL;
@@ -149,14 +151,23 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
     if (strcasecmp(identifier, "anyone") == 0) 
 	return "anyone";
 
+    identifier2 = strdup(identifier);
+    if (tmp = strchr(identifier2, '+')) {
+	syslog(LOG_DEBUG, "afspts_canonifyid stripping: %s", identifier2);
+        tmp[0] = 0;
+	syslog(LOG_DEBUG, "afspts_canonifyid stripped: %s", identifier2);
+    }
+
     if (krb5_init_context(&context))
 	return NULL;
 
-    if (krb5_parse_name(context,identifier,&princ))
+    if (krb5_parse_name(context,identifier2,&princ))
     {
 	krb5_free_context(context);
+        free(identifier2);
 	return NULL;
     }
+    free(identifier2);
 
     if(config_getswitch(IMAPOPT_PTSKRB5_STRIP_DEFAULT_REALM)) {
 	/* get local realm */
