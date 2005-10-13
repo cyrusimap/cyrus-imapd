@@ -1,7 +1,7 @@
 dnl Process this file with autoconf to produce a configure script.
 
 dnl
-dnl Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+dnl Copyright (c) 1998-2005 Carnegie Mellon University.  All rights reserved.
 dnl
 dnl Redistribution and use in source and binary forms, with or without
 dnl modification, are permitted provided that the following conditions
@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.295 2005/04/12 20:06:02 shadow Exp $
+dnl $Id: configure.in,v 1.296 2005/10/13 19:56:14 jeaton Exp $
 dnl
 
 
@@ -1018,7 +1018,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.295 2005/04/12 20:06:02 shadow Exp $ */
+/* $Id: configure.in,v 1.296 2005/10/13 19:56:14 jeaton Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
