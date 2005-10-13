@@ -40,7 +40,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.95 2005/02/24 03:35:10 shadow Exp $
+# $Id: SMakefile,v 1.96 2005/10/13 19:54:38 jeaton Exp $
 #
 
 NEW_AUTOTOOLS=yes
@@ -89,7 +89,7 @@ if test "${WASH_CYRUS_INSURE}" = "t"; then
   CFLAGS="-g"
 else
   CC="gcc"
-  CFLAGS="${CFLAGS} -O3 -g -Wall -W"
+  CFLAGS="${CFLAGS} -g -Wall -W"
 fi
 
 if test "${WASH_CYRUS_DEBUG}" = "t"; then
@@ -107,7 +107,6 @@ case `uname` in
     SunOS)
         LDFLAGS="${LDFLAGS} -L/usr/local/lib -Wl,-R,/usr/local/lib"
 	LIBS="-lkstat -ldoor"
-        CC=cc
     ;;
     *)
         CC=cc
@@ -117,7 +116,7 @@ esac
 
 # settings; we have to disable these on some platforms
 DEBUG=""
-WITHAUTH="--with-auth=pts --enable-krb5afspts --without-krbdes"
+WITHAUTH="--with-afs=/usr/local --enable-krb5afspts --without-krbdes"
 SSL_CONFIG="--with-openssl=/usr/local/lib"
 
 # the defaults are good enough for us
