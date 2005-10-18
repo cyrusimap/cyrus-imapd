@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapparse.c,v 1.14 2004/01/06 16:32:17 rjs3 Exp $ */
+/* $Id: imapparse.c,v 1.15 2005/10/18 23:38:43 jeaton Exp $ */
 
 #include <config.h>
 
@@ -52,8 +52,8 @@
 #include "exitcodes.h"
 
 enum {
-    MAXQUOTED = 16384,
-    MAXWORD = 16384,
+    MAXQUOTED = 32768,
+    MAXWORD = 32768,
     MAXLITERAL = INT_MAX / 20
 };
 
