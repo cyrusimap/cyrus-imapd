@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.121.2.29 2005/07/01 22:13:43 ken3 Exp $
+ * $Id: lmtpd.c,v 1.121.2.30 2005/10/19 14:50:06 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -91,6 +91,7 @@
 #include "version.h"
 #include "xmalloc.h"
 
+#include "lmtpd.h"
 #include "lmtpengine.h"
 #include "lmtpstats.h"
 #ifdef USE_SIEVE
@@ -203,6 +204,10 @@ int service_init(int argc __attribute__((unused)),
 	/* so we can do quota operations */
 	quotadb_init(0);
 	quotadb_open(NULL);
+
+	/* Initialize the annotatemore db (for sieve on shared mailboxes) */
+	annotatemore_init(0, NULL, NULL);
+	annotatemore_open(NULL);
 
 	/* setup for sending IMAP IDLE notifications */
 	if (config_getint(IMAPOPT_IMAPIDLEPOLL) > 0) {
@@ -624,6 +629,74 @@ void deliver_remote(message_data_t *msgdata,
     }
 }
 
+int deliver_local(deliver_data_t *mydata, char **flag, int nflags,
+		  const char *username, const char *mailboxname)
+{
+    char namebuf[MAX_MAILBOX_NAME+1] = "", *tail;
+    message_data_t *md = mydata->m;
+    int quotaoverride = msg_getrcpt_ignorequota(md, mydata->cur_rcpt);
+    int ret;
+
+    /* case 1: shared mailbox request */
+    if (!*username || username[0] == '@') {
+	if (*username) snprintf(namebuf, sizeof(namebuf), "%s!", username+1);
+	strlcat(namebuf, mailboxname, sizeof(namebuf));
+
+	return deliver_mailbox(md->f, mydata->content, mydata->stage,
+			       md->size, flag, nflags,
+			       mydata->authuser, mydata->authstate, md->id,
+			       NULL, mydata->notifyheader,
+			       namebuf, quotaoverride, 0);
+    }
+
+    /* case 2: ordinary user */
+    ret = (*mydata->namespace->mboxname_tointernal)(mydata->namespace,
+						    "INBOX",
+						    username, namebuf);
+
+    if (!ret) {
+	int ret2 = 1;
+
+	tail = namebuf + strlen(namebuf);
+	if (mailboxname) {
+	    strlcat(namebuf, ".", sizeof(namebuf));
+	    strlcat(namebuf, mailboxname, sizeof(namebuf));
+
+	    ret2 = deliver_mailbox(md->f, mydata->content, mydata->stage,
+				   md->size, flag, nflags,
+				   mydata->authuser, mydata->authstate, md->id,
+				   username, mydata->notifyheader,
+				   namebuf, quotaoverride, 0);
+	}
+	if (ret2 == IMAP_MAILBOX_NONEXISTENT && mailboxname &&
+	    config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH) &&
+	    fuzzy_match(namebuf)) {
+	    /* try delivery to a fuzzy matched mailbox */
+	    ret2 = deliver_mailbox(md->f, mydata->content, mydata->stage,
+				   md->size, flag, nflags,
+				   mydata->authuser, mydata->authstate, md->id,
+				   username, mydata->notifyheader,
+				   namebuf, quotaoverride, 0);
+	}
+	if (ret2) {
+	    /* normal delivery to INBOX */
+	    struct auth_state *authstate = auth_newstate(username);
+
+	    *tail = '\0';
+
+	    ret = deliver_mailbox(md->f, mydata->content, mydata->stage,
+				  md->size, flag, nflags,
+				  (char *) username, authstate, md->id,
+				  username, mydata->notifyheader,
+				  namebuf, quotaoverride, 1);
+
+	    if (authstate) auth_freestate(authstate);
+	}
+    }
+
+    return ret;
+}
+
 int deliver(message_data_t *msgdata, char *authuser,
 	    struct auth_state *authstate)
 {
@@ -632,9 +705,7 @@ int deliver(message_data_t *msgdata, char *authuser,
     enum rcpt_status *status;
     struct message_content content = { NULL, 0, NULL };
     char *notifyheader;
-#ifdef USE_SIEVE
-    sieve_msgdata_t mydata;
-#endif
+    deliver_data_t mydata;
     
     assert(msgdata);
     nrcpts = msg_getnumrcpt(msgdata);
@@ -645,7 +716,6 @@ int deliver(message_data_t *msgdata, char *authuser,
     /* create our per-recipient status */
     status = xzmalloc(sizeof(enum rcpt_status) * nrcpts);
 
-#ifdef USE_SIEVE
     /* create 'mydata', our per-delivery data */
     mydata.m = msgdata;
     mydata.content = &content;
@@ -654,11 +724,11 @@ int deliver(message_data_t *msgdata, char *authuser,
     mydata.namespace = &lmtpd_namespace;
     mydata.authuser = authuser;
     mydata.authstate = authstate;
-#endif
     
     /* loop through each recipient, attempting delivery for each */
     for (n = 0; n < nrcpts; n++) {
 	char namebuf[MAX_MAILBOX_NAME+1] = "", *server;
+	char userbuf[MAX_MAILBOX_NAME+1];
 	const char *rcpt, *user, *domain, *mailbox;
 	int quotaoverride = msg_getrcpt_ignorequota(msgdata, n);
 	int r = 0;
@@ -666,89 +736,46 @@ int deliver(message_data_t *msgdata, char *authuser,
 	rcpt = msg_getrcptall(msgdata, n);
 	msg_getrcpt(msgdata, n, &user, &domain, &mailbox);
 
+	namebuf[0] = '\0';
+	userbuf[0] = '\0';
+
 	if (domain) snprintf(namebuf, sizeof(namebuf), "%s!", domain);
 
 	/* case 1: shared mailbox request */
 	if (!user) {
 	    strlcat(namebuf, mailbox, sizeof(namebuf));
-
-	    r = mlookup(namebuf, &server, NULL, NULL);
-	    if (!r && server) {
-		/* remote mailbox */
-		proxy_adddest(&dlist, rcpt, n, server, authuser);
-		status[n] = nosieve;
-	    }
-	    else if (!r) {
-		/* local mailbox */
-		r = deliver_mailbox(msgdata->f, &content, stage, msgdata->size, 
-				    NULL, 0, authuser, authstate,
-				    msgdata->id, NULL, notifyheader,
-				    namebuf, quotaoverride, 0);
-	    }
 	}
-
-	/* case 2: ordinary user, might have Sieve script */
+	/* case 2: ordinary user */
 	else {
 	    strlcat(namebuf, "user.", sizeof(namebuf));
 	    strlcat(namebuf, user, sizeof(namebuf));
 
-	    r = mlookup(namebuf, &server, NULL, NULL);
-	    if (!r && server) {
-		/* remote mailbox */
-		proxy_adddest(&dlist, rcpt, n, server, authuser);
-		status[n] = nosieve;
-	    }
-	    else if (!r) {
-		/* local mailbox */
-		char userbuf[MAX_MAILBOX_NAME+1];
-		char *tail = namebuf + strlen(namebuf);
+	    strlcpy(userbuf, user, sizeof(userbuf));
+	}
+	if (domain) {
+	    strlcat(userbuf, "@", sizeof(userbuf));
+	    strlcat(userbuf, domain, sizeof(userbuf));
+	}
 
-		strlcpy(userbuf, user, sizeof(userbuf));
-		if (domain) {
-		    strlcat(userbuf, "@", sizeof(userbuf));
-		    strlcat(userbuf, domain, sizeof(userbuf));
-		}
-
+	r = mlookup(namebuf, &server, NULL, NULL);
+	if (!r && server) {
+	    /* remote mailbox */
+	    proxy_adddest(&dlist, rcpt, n, server, authuser);
+	    status[n] = nosieve;
+	}
+	else if (!r) {
+	    /* local mailbox */
+	    mydata.cur_rcpt = n;
 #ifdef USE_SIEVE
-		mydata.cur_rcpt = n;
-		r = run_sieve(user, domain, mailbox, sieve_interp, &mydata);
-		/* if there was no sieve script, or an error during execution,
-		   r is non-zero and we'll do normal delivery */
+	    r = run_sieve(user, domain, mailbox, sieve_interp, &mydata);
+	    /* if there was no sieve script, or an error during execution,
+	       r is non-zero and we'll do normal delivery */
 #else
-		r = 1;		/* normal delivery */
+	    r = 1;	/* normal delivery */
 #endif
 
-		if (r && mailbox) {
-		    /* normal delivery to + mailbox */
-		    strlcat(namebuf, ".", sizeof(namebuf));
-		    strlcat(namebuf, mailbox, sizeof(namebuf));
-		
-		    r = deliver_mailbox(msgdata->f, &content, stage,  msgdata->size, 
-					NULL, 0, authuser, authstate,
-					msgdata->id, userbuf, notifyheader,
-					namebuf, quotaoverride, 0);
-		}
-
-		if (r == IMAP_MAILBOX_NONEXISTENT && mailbox &&
-		    config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH) &&
-		    fuzzy_match(namebuf)) {
-		    /* try delivery to a fuzzy matched mailbox */
-		    r = deliver_mailbox(msgdata->f, &content, stage,  msgdata->size, 
-					NULL, 0, authuser, authstate,
-					msgdata->id, userbuf, notifyheader,
-					namebuf, quotaoverride, 0);
-		}
-
-		if (r) {
-		    /* normal delivery to INBOX */
-		    *tail = '\0';
-		
-		    /* ignore ACL's trying to deliver to INBOX */
-		    r = deliver_mailbox(msgdata->f, &content, stage, msgdata->size, 
-					NULL, 0, authuser, authstate,
-					msgdata->id, userbuf, notifyheader,
-					namebuf, quotaoverride, 1);
-		}
+	    if (r) {
+		r = deliver_local(&mydata, NULL, 0, userbuf, mailbox);
 	    }
 	}
 
@@ -879,6 +906,9 @@ void shut_down(int code)
 
 	quotadb_close();
 	quotadb_done();
+
+	annotatemore_close();
+	annotatemore_done();
     }
 
 #ifdef HAVE_SSL
