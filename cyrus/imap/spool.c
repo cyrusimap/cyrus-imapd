@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: spool.c,v 1.2.2.5 2004/10/27 20:42:27 shadow Exp $
+ * $Id: spool.c,v 1.2.2.6 2005/10/24 12:58:43 ken3 Exp $
  */
 
 #include <config.h>
@@ -451,7 +451,7 @@ int spool_copy_msg(struct protstream *fin, FILE *fout)
 	    p[1] = '\n';
 	    p[2] = '\0';
 	}
-	else if (p[0] != '\n' && (strlen(buf) < sizeof(buf)-2)) {
+	else if (p[0] != '\n' && (strlen(buf) < sizeof(buf)-3)) {
 	    /* line contained a \0 not at the end */
 	    r = IMAP_MESSAGE_CONTAINSNULL;
 	    continue;
