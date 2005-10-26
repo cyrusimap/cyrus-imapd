@@ -212,10 +212,14 @@ var_serviceTable(struct variable *vp,
 	return (unsigned char *) &long_ret;
       
     case SERVICENAME:
-	strlcpy(string, Services[index - 1].name, sizeof(string));
-	if(Services[index - 1].family == AF_INET6) {
-	    strlcat(string, "[v6]", sizeof(string));
-	}
+        if (Services[index - 1].name != NULL) {
+	   strlcpy(string, Services[index - 1].name, sizeof(string));
+	   if(Services[index - 1].family == AF_INET6) {
+	       strlcat(string, "[v6]", sizeof(string));
+	   }
+        } else {
+           strlcpy(string, "", sizeof(string));
+        }
 	*var_len = strlen(string);
 	return (unsigned char *) string;
       
