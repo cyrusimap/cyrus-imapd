@@ -93,7 +93,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.50 2004/05/04 19:47:34 rjs3 Exp $ */
+/* $Id: tls.c,v 1.51 2005/10/28 14:45:19 ken3 Exp $ */
 
 #include <config.h>
 
@@ -357,8 +357,7 @@ static int set_cert_stuff(SSL_CTX * ctx,
 			  const char *cert_file, const char *key_file)
 {
     if (cert_file != NULL) {
-	if (SSL_CTX_use_certificate_file(ctx, cert_file,
-					 SSL_FILETYPE_PEM) <= 0) {
+	if (SSL_CTX_use_certificate_chain_file(ctx, cert_file) <= 0) {
 	    syslog(LOG_ERR, "unable to get certificate from '%s'", cert_file);
 	    return (0);
 	}
