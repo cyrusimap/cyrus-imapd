@@ -1,6 +1,6 @@
 /* imclient.c -- Streaming IMxP client library
  *
- * $Id: imclient.c,v 1.84.2.1 2005/04/11 05:48:05 shadow Exp $
+ * $Id: imclient.c,v 1.84.2.2 2005/10/28 14:51:22 ken3 Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -1570,8 +1570,7 @@ static char issuer_CN[CCERT_BUFSIZ];
 static int set_cert_stuff(SSL_CTX * ctx, char *cert_file, char *key_file)
 {
     if (cert_file != NULL) {
-	if (SSL_CTX_use_certificate_file(ctx, cert_file,
-					 SSL_FILETYPE_PEM) <= 0) {
+	if (SSL_CTX_use_certificate_chain_file(ctx, cert_file) <= 0) {
 	  printf("[ unable to get certificate from '%s' ]\n", cert_file);
 	  return (0);
 	}
