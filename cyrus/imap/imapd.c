@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.493 2005/06/02 15:47:51 ken3 Exp $ */
+/* $Id: imapd.c,v 1.494 2005/10/31 14:06:14 ken3 Exp $ */
 
 #include <config.h>
 
@@ -2322,7 +2322,7 @@ void cmd_append(char *tag, char *name)
     struct appendstate mailbox;
     unsigned long uidvalidity;
     unsigned long firstuid, num;
-    long doappenduid;
+    long doappenduid = 0;
     const char *parseerr = NULL;
     FILE *f;
     int numalloc = 5;
