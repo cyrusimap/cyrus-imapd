@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.31 2005/10/20 15:29:01 murch Exp $
+ * $Id: annotate.c,v 1.32 2005/10/31 17:08:59 ken3 Exp $
  */
 
 #include <config.h>
@@ -1041,7 +1041,7 @@ static int fetch_cb(char *name, int matchlen,
 					  (void*) entries_ptr->entrypat));
     }
 
-    if (proxy_fetch_func && fdata->orig_entry
+    if (proxy_fetch_func && fdata->orig_entry && mbrock.server
 	&& !hash_lookup(mbrock.server, &(fdata->server_table))) {
 	/* xxx ignoring result */
 	proxy_fetch_func(mbrock.server, fdata->orig_mailbox,
