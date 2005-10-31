@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.141 2005/10/20 15:29:03 murch Exp $
+ * $Id: lmtpd.c,v 1.142 2005/10/31 14:21:53 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -66,6 +66,7 @@
 #include <sasl/saslutil.h>
 
 #include "acl.h"
+#include "annotate.h"
 #include "assert.h"
 #include "util.h"
 #include "auth.h"
@@ -433,7 +434,6 @@ int deliver(message_data_t *msgdata, char *authuser,
 	char namebuf[MAX_MAILBOX_NAME+1] = "";
 	char userbuf[MAX_MAILBOX_NAME+1];
 	const char *user, *domain, *mailbox;
-	int quotaoverride = msg_getrcpt_ignorequota(msgdata, n);
 	int r = 0;
 
 	msg_getrcpt(msgdata, n, &user, &domain, &mailbox);

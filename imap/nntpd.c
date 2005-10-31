@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.48 2005/05/10 15:43:00 ken3 Exp $
+ * $Id: nntpd.c,v 1.49 2005/10/31 14:21:54 ken3 Exp $
  */
 
 /*
@@ -1532,10 +1532,6 @@ static void cmdloop(void)
       nocurrent:
 	prot_printf(nntp_out, "420 Current article number is invalid\r\n");
 	continue;
-
-      noarticle:
-	prot_printf(nntp_out, "423 No such article(s) in this newsgroup\r\n");
-	continue;
     }
 }
 
@@ -2248,11 +2244,11 @@ static void cmd_hdr(char *cmd, char *hdr, char *pat, char *msgid,
 			    size + strlen(xref) + 2); /* +2 for \r\n */
 	    }
 	    else if (!strcasecmp(":lines", hdr))
-		prot_printf(nntp_out, "%lu %lu\r\n",
+		prot_printf(nntp_out, "%u %lu\r\n",
 			    by_msgid ? 0 : index_getuid(msgno),
 			    index_getlines(nntp_group, msgno));
 	    else
-		prot_printf(nntp_out, "%lu \r\n",
+		prot_printf(nntp_out, "%u \r\n",
 			    by_msgid ? 0 : index_getuid(msgno));
 	}
 	else if (!strcmp(hdr, "xref") && !pat /* [X]HDR only */) {
@@ -2262,13 +2258,13 @@ static void cmd_hdr(char *cmd, char *hdr, char *pat, char *msgid,
 	    build_xref(msgid, xref, sizeof(xref), 1);
 	    if (!by_msgid) free(msgid);
 
-	    prot_printf(nntp_out, "%lu %s\r\n",
+	    prot_printf(nntp_out, "%u %s\r\n",
 			by_msgid ? 0 : index_getuid(msgno), xref);
 	}
 	else if ((body = index_getheader(nntp_group, msgno, hdr)) &&
 		 (!pat ||			/* [X]HDR */
 		  wildmat(body, pat))) {	/* XPAT with match */
-		prot_printf(nntp_out, "%lu %s\r\n",
+		prot_printf(nntp_out, "%u %s\r\n",
 			    by_msgid ? 0 : index_getuid(msgno), body);
 	}
     }
