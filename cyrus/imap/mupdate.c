@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.89 2004/12/17 16:32:16 ken3 Exp $
+ * $Id: mupdate.c,v 1.90 2005/10/31 18:02:55 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -460,9 +460,36 @@ static int stringlist_contains(struct stringlist *list, const char *str)
     return 0;
 }
 
+
+/*
+ * The auth_*.c backends called by mysasl_proxy_policy()
+ * use static variables which we need to protect with a mutex.
+ */
+static pthread_mutex_t proxy_policy_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static int mupdate_proxy_policy(sasl_conn_t *conn,
+				void *context,
+				const char *requested_user, unsigned rlen,
+				const char *auth_identity, unsigned alen,
+				const char *def_realm,
+				unsigned urlen,
+				struct propctx *propctx)
+{
+    int r;
+
+    pthread_mutex_lock(&proxy_policy_mutex); /* LOCK */
+
+    r = mysasl_proxy_policy(conn, context, requested_user, rlen,
+			    auth_identity, alen, def_realm, urlen, propctx);
+
+    pthread_mutex_unlock(&proxy_policy_mutex); /* UNLOCK */
+
+    return r;
+}
+
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
-    { SASL_CB_PROXY_POLICY, &mysasl_proxy_policy, NULL },
+    { SASL_CB_PROXY_POLICY, &mupdate_proxy_policy, NULL },
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
