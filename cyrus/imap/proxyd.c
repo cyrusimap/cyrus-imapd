@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.194 2005/05/27 20:03:42 ken3 Exp $ */
+/* $Id: proxyd.c,v 1.195 2005/11/01 20:16:56 murch Exp $ */
 
 #include <config.h>
 
@@ -4601,7 +4601,7 @@ static int namespacedata(char *name, int matchlen __attribute__((unused)),
 	return 0;
     }
     
-    if (!(strncmp(name, "INBOX.", 6))) {
+    if ((!strncasecmp(name, "INBOX", 5) && (!name[5] || name[5] == '.'))) {
 	/* The user has a "personal" namespace. */
 	sawone[NAMESPACE_INBOX] = 1;
     } else if (mboxname_isusermailbox(name, 0)) {
