@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.77.2.16 2005/10/31 18:05:12 ken3 Exp $
+ * $Id: mupdate.c,v 1.77.2.17 2005/11/01 15:33:19 ken3 Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1149,10 +1149,7 @@ static void *thread_main(void *rock __attribute__((unused)))
 	if(!max_worker_flag) idle_worker_count++;
 	pthread_mutex_unlock(&idle_worker_mutex);
 
-	if(max_worker_flag) {
-	    pthread_mutex_unlock(&idle_worker_mutex);
-	    goto worker_thread_done;
-	}
+	if(max_worker_flag) goto worker_thread_done;
 
     retry_lock:
 
@@ -1237,7 +1234,7 @@ static void *thread_main(void *rock __attribute__((unused)))
 	if(need_workers > 0) {
 	    too_many = (need_workers + worker_count) - 
 		config_getint(IMAPOPT_MUPDATE_WORKERS_MAX);
-	    need_workers -= too_many;
+	    if (too_many > 0) need_workers -= too_many;
 	}
 	
 	/* Do we need a new worker (or two, or three...)?
