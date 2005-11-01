@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.115 2004/08/10 17:18:38 ken3 Exp $
+ * $Id: lmtpengine.c,v 1.116 2005/11/01 19:47:47 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -774,7 +774,7 @@ static int savemsg(struct clientdata *cd,
 		   error_message(errno));
 	}
 	fclose(f);
-	func->removespool(m);
+	if (func->removespool) func->removespool(m);
 	return IMAP_IOERROR;
     }
 
@@ -785,7 +785,7 @@ static int savemsg(struct clientdata *cd,
 			error_message(errno));
 	}
 	fclose(f);
-	func->removespool(m);
+	if (func->removespool) func->removespool(m);
 	return IMAP_IOERROR;
     }
     m->size = sbuf.st_size;
