@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.67 2004/12/17 16:32:16 ken3 Exp $
+ * $Id: lmtpproxyd.c,v 1.68 2005/11/01 19:47:16 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -714,6 +714,10 @@ static int verify_user(const char *user, const char *domain, const char *mailbox
 /* we're a proxy, we don't care about single instance store */
 FILE *proxy_spoolfile(message_data_t *msgdata __attribute__((unused))) 
 {
-    return tmpfile();
+    FILE *f = NULL;
+    int fd = create_tempfile();
+
+    if (fd != -1) f = fdopen(fd, "w+");
+
+    return f;
 }
-    
