@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.63 2005/10/31 14:07:07 ken3 Exp $ */
+/* $Id: imapd.c,v 1.443.2.64 2005/11/01 20:16:00 murch Exp $ */
 
 #include <config.h>
 
@@ -6446,7 +6446,7 @@ static int namespacedata(char *name,
 	return 0;
     }
     
-    if (!(strncmp(name, "INBOX.", 6))) {
+    if ((!strncasecmp(name, "INBOX", 5) && (!name[5] || name[5] == '.'))) {
 	/* The user has a "personal" namespace. */
 	sawone[NAMESPACE_INBOX] = 1;
     } else if (mboxname_isusermailbox(name, 0)) {
