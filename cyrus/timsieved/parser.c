@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.33.2.6 2004/07/16 14:37:47 ken3 Exp $
+ * $Id: parser.c,v 1.33.2.7 2005/11/03 13:42:16 murch Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -669,8 +669,14 @@ static int cmd_authenticate(struct protstream *sieved_out,
       
       if(r && !sieved_userisadmin) {
 	  /* mboxlist_detail error */
-	  *errmsg = "mailbox unknown";
-	  return FALSE;
+	  syslog(LOG_ERR, error_message(r));
+
+	  if(reset_saslconn(&sieved_saslconn, ssf, authid) != SASL_OK)
+	      fatal("could not reset the sasl_conn_t after failure",
+		    EC_TEMPFAIL);
+
+	  ret = FALSE;
+	  goto cleanup;
       }
 
       if(type & MBTYPE_REMOTE) {
