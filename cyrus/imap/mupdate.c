@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.77.2.17 2005/11/01 15:33:19 ken3 Exp $
+ * $Id: mupdate.c,v 1.77.2.18 2005/11/04 13:34:23 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1053,7 +1053,7 @@ int service_main_fd(int fd,
 	close(fd);
 
 	syslog(LOG_ERR,
-	       "Server too busy, droping connection.");
+	       "Server too busy, dropping connection.");
     } else if(write(conn_pipe[1], &fd, sizeof(fd)) == -1) {
 	/* signal that a new file descriptor is available.
 	 * If it fails... */
