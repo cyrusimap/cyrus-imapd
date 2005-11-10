@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.147.2.29 2005/05/27 17:40:52 ken3 Exp $
+ * $Id: mailbox.c,v 1.147.2.30 2005/11/10 06:04:55 murch Exp $
  *
  */
 
@@ -1619,7 +1619,7 @@ static int mailbox_upgrade_index(struct mailbox *mailbox)
 {
     int r;
     char fnamebuf[MAX_MAILBOX_PATH+1], fnamebufnew[MAX_MAILBOX_PATH+1], *path;
-    FILE *newindex;
+    FILE *newindex = NULL;
     int expunge_fd;
 
     /* Lock files and open new index file */
@@ -1672,6 +1672,9 @@ static int mailbox_upgrade_index(struct mailbox *mailbox)
 	       mailbox->name);
 	goto fail;
     }
+
+    fclose(newindex);
+    newindex = NULL;
 
     /* Upgrade expunge index file */
     path = (mailbox->mpath &&
@@ -1738,7 +1741,7 @@ static int mailbox_upgrade_index(struct mailbox *mailbox)
     mailbox_unlock_pop(mailbox);
     mailbox_unlock_index(mailbox);
     mailbox_unlock_header(mailbox);
-    fclose(newindex);
+    if (newindex) fclose(newindex);
 
     return 0;
 
@@ -1746,6 +1749,7 @@ static int mailbox_upgrade_index(struct mailbox *mailbox)
     mailbox_unlock_pop(mailbox);
     mailbox_unlock_index(mailbox);
     mailbox_unlock_header(mailbox);
+    if (newindex) fclose(newindex);
 
     return IMAP_IOERROR;
 }
