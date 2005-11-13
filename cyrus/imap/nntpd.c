@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.40 2005/05/05 19:27:16 ken3 Exp $
+ * $Id: nntpd.c,v 1.2.2.41 2005/11/13 14:24:34 murch Exp $
  */
 
 /*
@@ -1895,6 +1895,8 @@ static void cmd_article(int part, char *msgid, unsigned long uid)
 	prot_printf(nntp_out, "502 Could not read message file\r\n");
 	return;
     }
+
+    nntp_current = msgno;
 
     if (!by_msgid) msgid = index_get_msgid(nntp_group, msgno);
 
