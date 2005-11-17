@@ -1,5 +1,5 @@
 /* global.h -- Header for global/shared variables & functions.
- * $Id: global.h,v 1.2.2.5 2005/02/16 21:06:18 shadow Exp $
+ * $Id: global.h,v 1.2.2.6 2005/11/17 15:46:15 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -149,6 +149,7 @@ extern struct cyrusdb_backend *config_quota_db;
 extern struct cyrusdb_backend *config_subscription_db;
 extern struct cyrusdb_backend *config_annotation_db;
 extern struct cyrusdb_backend *config_seenstate_db;
+extern struct cyrusdb_backend *config_mboxkey_db;
 extern struct cyrusdb_backend *config_duplicate_db;
 extern struct cyrusdb_backend *config_tlscache_db;
 extern struct cyrusdb_backend *config_ptscache_db;

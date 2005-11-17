@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.2.2.13 2005/03/03 15:59:54 shadow Exp $ */
+/* $Id: global.c,v 1.2.2.14 2005/11/17 15:46:15 murch Exp $ */
 
 #include <config.h>
 
@@ -88,6 +88,7 @@ struct cyrusdb_backend *config_quota_db;
 struct cyrusdb_backend *config_subscription_db;
 struct cyrusdb_backend *config_annotation_db;
 struct cyrusdb_backend *config_seenstate_db;
+struct cyrusdb_backend *config_mboxkey_db;
 struct cyrusdb_backend *config_duplicate_db;
 struct cyrusdb_backend *config_tlscache_db;
 struct cyrusdb_backend *config_ptscache_db;
@@ -176,6 +177,8 @@ int cyrus_init(const char *alt_config, const char *ident, unsigned flags)
 	    cyrusdb_fromname(config_getstring(IMAPOPT_ANNOTATION_DB));
 	config_seenstate_db =
 	    cyrusdb_fromname(config_getstring(IMAPOPT_SEENSTATE_DB));
+	config_mboxkey_db =
+	    cyrusdb_fromname(config_getstring(IMAPOPT_MBOXKEY_DB));
 	config_duplicate_db =
 	    cyrusdb_fromname(config_getstring(IMAPOPT_DUPLICATE_DB));
 	config_tlscache_db =

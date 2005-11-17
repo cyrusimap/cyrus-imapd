@@ -1,5 +1,6 @@
-/*
- * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
+/* mboxkey.h -- abstract interface for URLAUTH mailbox keys
+ * $Id: mboxkey.h,v 1.1.2.1 2005/11/17 15:46:28 murch Exp $
+ * Copyright (c) 1998-2005 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -39,50 +40,48 @@
  *
  */
 
-/* $Id: imapurl.h,v 1.5.4.2 2005/11/17 15:46:30 murch Exp $ */
 
-#ifndef IMAPURL_H
-#define IMAPURL_H
+#ifndef MBOXKEY_H
+#define MBOXKEY_H
 
-struct imapurl {
-    char *freeme;		/* copy of original URL + decoded mailbox;
-				   caller must free() */
+struct mboxkey;
 
-    /* RFC 2192 */
-    const char *user;
-    const char *auth;
-    const char *server;
-    const char *mailbox;
-    unsigned long uidvalidity;
-    unsigned long uid;
-    const char *section;
-    /* RFC 2192bis */
-    unsigned long start_octet;
-    unsigned long octet_count;
-    /* URLAUTH */
-    struct {
-	const char *access;
-	const char *mech;
-	const char *token;
-	time_t expire;
-	size_t rump_len;
-    } urlauth;
-};
+#define MBOXKEY_CREATE 0x01
 
-/* Convert hex coded UTF-8 URL path to modified UTF-7 IMAP mailbox
- *  mailbox should be about twice the length of src to deal with non-hex
- *  coded URLs; server should be as large as src.
- */
-void imapurl_fromURL(struct imapurl *url, const char *src);
+/* get a database handle corresponding to user pair */
+int mboxkey_open(const char *user,
+		 int flags,
+		 struct mboxkey **mboxkeydbptr);
 
-/* Convert an IMAP mailbox to a URL path
- *  dst needs to have roughly 4 times the storage space of mailbox
- *    Hex encoding can triple the size of the input
- *    UTF-7 can be slightly denser than UTF-8
- *     (worst case: 8 octets UTF-7 becomes 9 octets UTF-8)
- *
- *  it is valid for mechname to be NULL (implies anonymous mech)
- */
-void imapurl_toURL(char *dst, struct imapurl *url);
+/* read an entry from 'mboxkeydb' */
+int mboxkey_read(struct mboxkey *mboxkeydb, const char *mailbox,
+		 const char **mboxkey, size_t *mboxkeylen);
 
-#endif /* IMAPURL_H */
+/* read an entry from 'mboxkeydb' and leave that record (or some superset
+   of it) locked for update */
+int mboxkey_lockread(struct mboxkey *mboxkeydb, const char *mailbox,
+		     const char **mboxkey, size_t *mboxkeylen);
+
+/* write an entry to 'mboxkeydb' */
+int mboxkey_write(struct mboxkey *mboxkeydb, const char *mailbox,
+		  const char *mboxkey, size_t mboxkeylen);
+
+/* close this handle */
+int mboxkey_close(struct mboxkey *mboxkeydb);
+
+/* discard lock on handle */
+int mboxkey_unlock(struct mboxkey *mboxkeydb);
+
+/* called on user operations */
+int mboxkey_delete_user(const char *user);
+
+/* done with all mboxkey operations for this process */
+int mboxkey_done(void);
+
+/* Return a path to the mboxkey database for the given user */
+char *mboxkey_getpath(const char *userid);
+#if 0
+/* Merge tmpfile into tgtfile */
+int mboxkey_merge(const char *tmpfile, const char *tgtfile);
+#endif
+#endif /* MBOXKEY_H */

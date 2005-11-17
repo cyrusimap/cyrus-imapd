@@ -39,7 +39,7 @@
  *
  * derived from chris newman's code */
 
-/* $Id: imapurl.c,v 1.10.4.3 2005/05/31 17:40:10 ken3 Exp $ */
+/* $Id: imapurl.c,v 1.10.4.4 2005/11/17 15:46:30 murch Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -47,6 +47,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <limits.h>
+#include <time.h>
 
 #include "imapurl.h"
 #include "xmalloc.h"
@@ -346,7 +347,7 @@ void imapurl_fromURL(struct imapurl *url, const char *s)
 	}
 
 	/* parse options */
-	while ((src = strchr(src, ';'))) {
+	while (src && (src = strchr(src, ';'))) {
 	    unsigned long ul;
 
 	    if (src[-1] == '/') src[-1] = '\0'; /* trim mailbox at /; */
@@ -367,7 +368,69 @@ void imapurl_fromURL(struct imapurl *url, const char *s)
 		src += 8; /* skip section= */
 		url->section = src;  /* ends at ';' (next pass) or '\0' */
 	    }
-	    /* XXX  add expire and urlauth options */
+	    else if (!strncasecmp(src, "partial=", 8)) {
+		src += 8; /* skip partial= */
+		errno = 0;
+		ul = strtoul(src, &src, 10);  /* ends at '.', '/' or '\0' */
+		if (ul < ULONG_MAX || !errno) url->start_octet = ul;
+		if (*src == '.') {
+		    src++; /* skip . */
+		    errno = 0;
+		    ul = strtoul(src, NULL, 10);  /* ends at '/' or '\0' */
+		    if (ul < ULONG_MAX || !errno) url->octet_count = ul;
+		}
+	    }
+	    else if (!strncasecmp(src, "expire=", 7)) {
+		struct tm exp;
+		int tm_off, tm_houroff, tm_minoff;
+
+		src += 7; /* skip expire= */
+
+		/* parse the ISO 8601 date/time */
+		memset(&exp, 0, sizeof(struct tm));
+		sscanf(src, "%4d-%2d-%2dT%2d:%2d:%2d", 
+		       &exp.tm_year, &exp.tm_mon, &exp.tm_mday,
+		       &exp.tm_hour, &exp.tm_min, &exp.tm_sec);
+
+		src += 19;
+		if (*src == '.') {
+		    /* skip fractional secs */
+		    while (isdigit((int) *(++src)));
+		}
+
+		/* handle offset */
+		switch (*src++) {
+		case 'Z': tm_off = 0; break;
+		case '-': tm_off = -1; break;
+		case '+': tm_off = 1; break;
+		default: fprintf(stderr, "illegal offset\n"); exit(1);
+		}
+		if (tm_off) sscanf(src, "%2d:%2d", &tm_houroff, &tm_minoff);
+		tm_off *= 60 * (60 * tm_houroff + tm_minoff);
+
+		exp.tm_year -= 1900; /* normalize to years since 1900 */
+		exp.tm_mon--; /* normalize to months since January */
+
+		/* normalize to GMT */
+		url->urlauth.expire = mktime(&exp) - tm_off;
+	    }
+	    else if (!strncasecmp(src, "urlauth=", 8)) {
+		src += 8; /* skip urlauth= */
+		url->urlauth.access = src;
+		if ((src = strchr(src, ':'))) {
+		    url->urlauth.rump_len = (src - url->freeme);
+
+		    *src++ = '\0'; /* break urlauth at : */
+		    url->urlauth.mech = src;
+		    if ((src = strchr(src, ':'))) {
+			*src++ = '\0'; /* break urlauth at : */
+			url->urlauth.token = src;
+		    }
+		}
+		else {
+		    url->urlauth.rump_len = strlen(s);
+		}
+	    }
 	}
 
 	if (mbox && *mbox) {
@@ -394,5 +457,20 @@ void imapurl_toURL(char *dst, struct imapurl *url)
     if (url->uid) {
 	dst += sprintf(dst, "/;UID=%lu", url->uid);
 	if (url->section) dst += sprintf(dst, "/;SECTION=%s", url->section);
+	if (url->start_octet || url->octet_count) {
+	    dst += sprintf(dst, "/;PARTIAL=%lu", url->start_octet);
+	    if (url->octet_count) dst += sprintf(dst, ".%lu", url->octet_count);
+	}
+    }
+    if (url->urlauth.access) {
+	if (url->urlauth.expire) {
+	    struct tm *exp = (struct tm *) gmtime(&url->urlauth.expire);
+	    dst += strftime(dst, INT_MAX, ";EXPIRE=%Y-%m-%dT%H:%M:%SZ", exp);
+	}
+	dst += sprintf(dst, ";URLAUTH=%s", url->urlauth.access);
+	if (url->urlauth.mech) {
+	    dst += sprintf(dst, ":%s", url->urlauth.mech);
+	    if (url->urlauth.token) dst += sprintf(dst, ":%s", url->urlauth.token);
+	}
     }
 }

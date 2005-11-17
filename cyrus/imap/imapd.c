@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.64 2005/11/01 20:16:00 murch Exp $ */
+/* $Id: imapd.c,v 1.443.2.65 2005/11/17 15:46:15 murch Exp $ */
 
 #include <config.h>
 
@@ -82,8 +82,9 @@
 #include "iptostring.h"
 #include "mailbox.h"
 #include "message.h"
-#include "mboxname.h"
+#include "mboxkey.h"
 #include "mboxlist.h"
+#include "mboxname.h"
 #include "mbdump.h"
 #include "mkgmtime.h"
 #include "mupdate-client.h"
@@ -239,6 +240,12 @@ extern void id_response(struct protstream *pout);
 void cmd_idle(char* tag);
 
 void cmd_starttls(char *tag, int imaps);
+
+#ifdef HAVE_SSL
+void cmd_urlfetch(char *tag);
+void cmd_genurlauth(char *tag);
+void cmd_resetkey(char *tag, char *mailbox, char *mechanism);
+#endif
 
 #ifdef ENABLE_X_NETSCAPE_HACK
 void cmd_netscrape(char* tag);
@@ -831,6 +838,7 @@ void shut_down(int code)
 	mailbox_close(imapd_mailbox);
     }
     seen_done();
+    mboxkey_done();
     mboxlist_close();
     mboxlist_done();
 
@@ -1275,6 +1283,14 @@ void cmdloop()
 
 		snmp_increment(GETQUOTAROOT_COUNT, 1);
 	    }
+#ifdef HAVE_SSL
+	    else if (!strcmp(cmd.s, "Genurlauth")) {
+		if (c != ' ') goto missingargs;
+		
+		cmd_genurlauth(tag.s);
+	    /*	snmp_increment(GENURLAUTH_COUNT, 1);*/
+	    }
+#endif
 	    else goto badcmd;
 	    break;
 
@@ -1541,7 +1557,29 @@ void cmdloop()
 		cmd_list(tag.s, LIST_LSUB | LIST_CHILDREN | LIST_REMOTE,
 			 arg1.s, arg2.s);
 /* 		snmp_increment(LSUB_COUNT, 1); */
-	    } else goto badcmd;
+	    }
+#ifdef HAVE_SSL
+	    else if (!strcmp(cmd.s, "Resetkey")) {
+		int have_mbox = 0, have_mech = 0;
+
+		if (c == ' ') {
+		    have_mbox = 1;
+		    c = getastring(imapd_in, imapd_out, &arg1);
+		    if (c == EOF) goto missingargs;
+		    if (c == ' ') {
+			have_mech = 1;
+			c = getword(imapd_in, &arg2);
+		    }
+		}
+		
+		if (c == '\r') c = prot_getc(imapd_in);
+		if (c != '\n') goto extraargs;
+		cmd_resetkey(tag.s, have_mbox ? arg1.s : 0,
+			     have_mech ? arg2.s : 0);
+	    /*	snmp_increment(RESETKEY_COUNT, 1);*/
+	    }
+#endif
+	    else goto badcmd;
 	    break;
 	    
 	case 'S':
@@ -1771,6 +1809,14 @@ void cmdloop()
 		cmd_undump(tag.s, arg1.s);
 	    /*	snmp_increment(UNDUMP_COUNT, 1);*/
 	    }
+#ifdef HAVE_SSL
+	    else if (!strcmp(cmd.s, "Urlfetch")) {
+		if (c != ' ') goto missingargs;
+		
+		cmd_urlfetch(tag.s);
+	    /*	snmp_increment(URLFETCH_COUNT, 1);*/
+	    }
+#endif
 	    else goto badcmd;
 	    break;
 
@@ -2374,7 +2420,7 @@ void cmd_idle(char *tag)
     }
 
     /* Start listening to idled */
-    if (idle_init) idle_start(imapd_mailbox);
+    if (idle_init()) idle_start(imapd_mailbox);
 
     /* Tell client we are idling and waiting for end of command */
     prot_printf(imapd_out, "+ idling\r\n");
@@ -2443,7 +2489,7 @@ void cmd_idle(char *tag)
 void cmd_capability(char *tag)
 {
     const char *sasllist; /* the list of SASL mechanisms */
-    unsigned mechcount;
+    int mechcount;
 
     imapd_check(NULL, 0, 0);
 
@@ -2482,6 +2528,10 @@ void cmd_capability(char *tag)
 
 #ifdef ENABLE_X_NETSCAPE_HACK
     prot_printf(imapd_out, " X-NETSCAPE");
+#endif
+
+#ifdef HAVE_SSL
+    prot_printf(imapd_out, " URLAUTH");
 #endif
     prot_printf(imapd_out, "\r\n%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
@@ -2627,9 +2677,14 @@ static int catenate_url(const char *s, const char *cur_name, FILE *f,
 
     imapurl_fromURL(&url, s);
 
-    if (url.server && strcmp(url.server, config_servername)) {
+    if (url.server) {
+	*parseerr = "Only relative URLs are supported";
+	r = IMAP_BADURL;
+#if 0
+    } else if (url.server && strcmp(url.server, config_servername)) {
 	*parseerr = "Can not catenate messages from another server";
 	r = IMAP_BADURL;
+#endif
     } else if (!url.mailbox && !imapd_mailbox && !cur_name) {
 	*parseerr = "No mailbox is selected or specified";
 	r = IMAP_BADURL;
@@ -2709,8 +2764,10 @@ static int catenate_url(const char *s, const char *cur_name, FILE *f,
 	r = IMAP_BADURL;
     } else {
 	/* Catenate message part to stage */
-	r = index_catenate(mailbox, msgno, url.section, f, &size);
-syslog(LOG_INFO, "catenate %lu", size);
+	struct protstream *s = prot_new(fileno(f), 1);
+
+	r = index_urlfetch(mailbox, msgno, url.section,
+			   url.start_octet, url.octet_count, s, &size);
 	if (r == IMAP_BADURL)
 	    *parseerr = "No such message part";
 	else if (!r) {
@@ -2719,6 +2776,9 @@ syslog(LOG_INFO, "catenate %lu", size);
 	    else
 		*totalsize += size;
 	}
+
+	prot_flush(s);
+	prot_free(s);
 
 	/* XXX  do we want to try and validate the message like
 	   we do in message_copy_strict()? */
@@ -9016,3 +9076,435 @@ void cmd_mupdatepush(char *tag, char *name)
 		    error_message(IMAP_OK_COMPLETED));
     }
 }
+
+#ifdef HAVE_SSL
+/* Convert the ASCII hex into binary data
+ *
+ * 'bin' MUST be able to accomodate at least strlen(hex)/2 bytes
+ */
+void hex2bin(const char *hex, unsigned char *bin, unsigned int *binlen)
+{
+    int i;
+    const char *c;
+    unsigned char msn, lsn;
+
+    for (c = hex, i = 0; *c && isxdigit((int) *c); c++) {
+	msn = (*c > '9') ? tolower((int) *c) - 'a' + 10 : *c - '0';
+	c++;
+	lsn = (*c > '9') ? tolower((int) *c) - 'a' + 10 : *c - '0';
+	
+	bin[i++] = (unsigned char) (msn << 4) | lsn;
+    }
+    *binlen = i;
+}
+
+enum {
+    URLAUTH_ALG_HMAC_SHA1 =	0 /* HMAC-SHA1 */
+};
+
+void cmd_urlfetch(char *tag)
+{
+    struct mboxkey *mboxkey_db;
+    int c, r, doclose;
+    static struct buf arg;
+    struct imapurl url;
+    char mailboxname[MAX_MAILBOX_NAME+1];
+    struct mailbox mboxstruct, *mailbox;
+    unsigned msgno;
+    unsigned int token_len;
+    int mbtype;
+    char *newserver;
+    time_t now = time(NULL);
+
+    prot_printf(imapd_out, "* URLFETCH");
+
+    do {
+	c = getastring(imapd_in, imapd_out, &arg);
+	prot_putc(' ', imapd_out);
+	printstring(arg.s);
+	prot_putc(' ', imapd_out);
+
+	r = doclose = 0;
+	imapurl_fromURL(&url, arg.s);
+
+	/* validate the URL */
+	if (!url.user || !url.server || !url.mailbox || !url.uid ||
+	    !url.urlauth.access || !url.urlauth.token) {
+	    /* missing info */
+	    r = IMAP_BADURL;
+	} else if (strcmp(url.server, config_servername)) {
+	    /* wrong server */
+	    r = IMAP_BADURL;
+	} else if (url.urlauth.expire &&
+		   url.urlauth.expire < mktime(gmtime(&now))) {
+	    /* expired */
+	    r = IMAP_BADURL;
+	} else {
+	    /* check authorization */
+	    int authorized = 0;
+
+	    if (!strncasecmp(url.urlauth.access, "submit+", 7) &&
+		global_authisa(imapd_authstate, IMAPOPT_SUBMITSERVERS)) {
+		/* authorized submit server */
+		authorized = 1;
+	    } else if (!strncasecmp(url.urlauth.access, "user+", 5) &&
+		       !strcmp(url.urlauth.access+5, imapd_userid)) {
+		/* currently authorized user */
+		authorized = 1;
+	    } else if (!strcasecmp(url.urlauth.access, "authuser") &&
+		       strcmp(imapd_userid, "anonymous")) {
+		/* any non-anonymous authorized user */
+		authorized = 1;
+	    } else if (!strcasecmp(url.urlauth.access, "anonymous")) {
+		/* anyone */
+		authorized = 1;
+	    }
+
+	    if (!authorized) {
+		r = IMAP_BADURL;
+	    }
+	}
+		
+	if (!r) {
+	    r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace,
+						       url.mailbox,
+						       url.user, mailboxname);
+	}
+	if (!r) {
+	    r = mlookup(NULL, NULL, mailboxname, &mbtype, NULL, NULL,
+			&newserver, NULL, NULL);
+	}
+
+	if (!r && (mbtype & MBTYPE_REMOTE)) {
+	    /* remote mailbox */
+	    struct backend *be;
+
+	    be = proxy_findserver(newserver, &protocol[PROTOCOL_IMAP],
+				  proxy_userid, &backend_cached,
+				  &backend_current, &backend_inbox, imapd_in);
+	    if (!be) {
+		r = IMAP_SERVER_UNAVAILABLE;
+	    } else {
+		/* XXX  proxy command to backend */
+	    }
+	    
+	    free(url.freeme);
+
+	    continue;
+	}
+
+	/* local mailbox */
+	if (!r) {
+	    /* validate the URLAUTH token */
+	    hex2bin(url.urlauth.token,
+		    (unsigned char *) url.urlauth.token, &token_len);
+
+	    /* first byte is the algorithm used to create token */
+	    switch (url.urlauth.token[0]) {
+	    case URLAUTH_ALG_HMAC_SHA1: {
+		const char *key;
+		size_t keylen;
+		unsigned char vtoken[EVP_MAX_MD_SIZE];
+		unsigned int vtoken_len;
+
+		r = mboxkey_open(url.user, 0, &mboxkey_db);
+		r = mboxkey_read(mboxkey_db, mailboxname, &key, &keylen);
+		HMAC(EVP_sha1(), key, keylen, arg.s, url.urlauth.rump_len,
+		     vtoken, &vtoken_len);
+		mboxkey_close(mboxkey_db);
+
+		if (memcmp(vtoken, url.urlauth.token+1, vtoken_len)) {
+		    r = IMAP_BADURL;
+		}
+
+		break;
+	    }
+	    default:
+		r = IMAP_BADURL;
+		break;
+	    }
+
+	    if (!r) {
+		if (!imapd_mailbox || strcmp(imapd_mailbox->name, mailboxname)) {
+		    /* not the currently selected mailbox, so try to open it */
+
+		    r = mailbox_open_header(mailboxname, imapd_authstate,
+					    &mboxstruct);
+
+		    if (!r) {
+			doclose = 1;
+			r = mailbox_open_index(&mboxstruct);
+		    }
+
+		    if (!r) {
+			mailbox = &mboxstruct;
+			index_operatemailbox(mailbox);
+		    }
+		} else {
+		    mailbox = imapd_mailbox;
+		}
+	    }
+
+	    if (r) {
+		/* nothing to do, handled up top */
+	    } else if (url.uidvalidity &&
+		       (mailbox->uidvalidity != url.uidvalidity)) {
+		r = IMAP_BADURL;
+	    } else if (!url.uid || !(msgno = index_finduid(url.uid)) ||
+		       (index_getuid(msgno) != url.uid)) {
+		r = IMAP_BADURL;
+	    } else {
+		r = index_urlfetch(mailbox, msgno, url.section,
+				   url.start_octet, url.octet_count,
+				   imapd_out, NULL);
+	    }
+
+	    free(url.freeme);
+
+	    if (doclose) {
+		mailbox_close(&mboxstruct);
+		if (imapd_mailbox) index_operatemailbox(imapd_mailbox);
+	    }
+	}
+
+	if (r) prot_printf(imapd_out, "NIL");
+
+    } while (c == ' ');
+
+    prot_printf(imapd_out, "\r\n");
+
+    if (c == '\r') c = prot_getc(imapd_in);
+    if (c != '\n') {
+	prot_printf(imapd_out,
+		    "%s BAD Unexpected extra arguments to URLFETCH\r\n", tag);
+	eatline(imapd_in, c);
+    }
+    else {
+	prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED));
+    }
+}
+
+/* Convert the binary data into ASCII hex
+ *
+ * 'hex' MUST be able to accomodate at least 2*binlen+1 bytes
+ */
+void bin2hex(unsigned char *bin, int binlen, char *hex)
+{
+    int i;
+    unsigned char c;
+    
+    for (i = 0; i < binlen; i++) {
+	c = (bin[i] >> 4) & 0xf;
+	hex[i*2] = (c > 9) ? ('a' + c - 10) : ('0' + c);
+	c = bin[i] & 0xf;
+	hex[i*2+1] = (c > 9) ? ('a' + c - 10) : ('0' + c);
+    }
+    hex[i*2] = '\0';
+}
+
+#define MBOX_KEY_LEN 16		  /* 128 bits */
+
+void cmd_genurlauth(char *tag)
+{
+    struct mboxkey *mboxkey_db;
+    int first = 1;
+    int c, r, doclose;
+    static struct buf arg1, arg2;
+    struct imapurl url;
+    char mailboxname[MAX_MAILBOX_NAME+1], *urlauth = NULL;
+    char newkey[MBOX_KEY_LEN];
+    const char *key;
+    size_t keylen;
+    unsigned char token[EVP_MAX_MD_SIZE+1]; /* +1 for algorithm */
+    unsigned int token_len;
+    int mbtype;
+    char *newserver;
+    time_t now = time(NULL);
+
+    r = mboxkey_open(imapd_userid, MBOXKEY_CREATE, &mboxkey_db);
+    if (r) {
+	prot_printf(imapd_out,
+		   "%s NO Can not open mailbox key db for %s: %s\r\n",
+		   tag, imapd_userid, error_message(r));
+	return;
+    }
+
+    do {
+	c = getastring(imapd_in, imapd_out, &arg1);
+	if (c != ' ') {
+	    prot_printf(imapd_out,
+			"%s BAD Missing required argument to Genurlauth\r\n",
+			tag);
+	    eatline(imapd_in, c);
+	    return;
+	}
+	c = getword(imapd_in, &arg2);
+	if (strcasecmp(arg2.s, "INTERNAL")) {
+	    prot_printf(imapd_out,
+			"%s BAD Unknown auth mechanism to Genurlauth %s\r\n",
+			tag, arg2.s);
+	    eatline(imapd_in, c);
+	    return;
+	}
+
+	r = 0;
+	imapurl_fromURL(&url, arg1.s);
+
+	/* validate the URL */
+	if (!url.user || !url.server || !url.mailbox || !url.uid ||
+	    !url.urlauth.access) {
+	    r = IMAP_BADURL;
+	} else if (strcmp(url.user, imapd_userid)) {
+	    /* not using currently authorized user's namespace */
+	    r = IMAP_BADURL;
+	} else if (strcmp(url.server, config_servername)) {
+	    /* wrong server */
+	    r = IMAP_BADURL;
+	} else if (url.urlauth.expire &&
+		   url.urlauth.expire < mktime(gmtime(&now))) {
+	    /* already expired */
+	    r = IMAP_BADURL;
+	}
+
+	if (!r) {
+	    r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace,
+						       url.mailbox,
+						       imapd_userid, mailboxname);
+	}
+	if (!r) {
+	    r = mlookup(NULL, NULL, mailboxname, &mbtype, NULL, NULL,
+			&newserver, NULL, NULL);
+	}
+	if (r) {
+	    prot_printf(imapd_out,
+			"%s BAD Poorly specified URL to Genurlauth %s\r\n",
+			tag, arg1.s);
+	    eatline(imapd_in, c);
+	    return;
+	}
+
+	if (mbtype & MBTYPE_REMOTE) {
+	    /* XXX  proxy to backend */
+	    continue;
+	}
+
+	/* lookup key */
+	r = mboxkey_read(mboxkey_db, mailboxname, &key, &keylen);
+	if (r) {
+	    syslog(LOG_ERR, "DBERROR: error fetching mboxkey: %s",
+		   cyrusdb_strerror(r));
+	}
+	else if (!key) {
+	    /* create a new key */
+	    RAND_bytes(newkey, MBOX_KEY_LEN);
+	    key = newkey;
+	    keylen = MBOX_KEY_LEN;
+	    r = mboxkey_write(mboxkey_db, mailboxname, key, keylen);
+	    if (r) {
+		syslog(LOG_ERR, "DBERROR: error writing new mboxkey: %s",
+		       cyrusdb_strerror(r));
+	    }
+	}
+
+	if (r) {
+	    eatline(imapd_in, c);
+	    prot_printf(imapd_out,
+			"%s NO Error authorizing %s: %s\r\n",
+			tag, arg1.s, cyrusdb_strerror(r));
+	    return;
+	}
+
+	/* first byte is the algorithm used to create token */
+	token[0] = URLAUTH_ALG_HMAC_SHA1;
+	HMAC(EVP_sha1(), key, keylen, arg1.s, strlen(arg1.s),
+	     token+1, &token_len);
+	token_len++;
+
+	urlauth = xrealloc(urlauth, strlen(arg1.s) + 10 +
+			   2 * (EVP_MAX_MD_SIZE+1) + 1);
+	strcpy(urlauth, arg1.s);
+	strcat(urlauth, ":internal:");
+	bin2hex(token, token_len, urlauth+strlen(urlauth));
+
+	if (first) {
+	    prot_printf(imapd_out, "* GENURLAUTH");
+	    first = 0;
+	}
+	prot_putc(' ', imapd_out);
+	printstring(urlauth);
+    } while (c == ' ');
+
+    if (!first) prot_printf(imapd_out, "\r\n");
+ 
+    if (c == '\r') c = prot_getc(imapd_in);
+    if (c != '\n') {
+	prot_printf(imapd_out,
+		    "%s BAD Unexpected extra arguments to GENURLAUTH\r\n", tag);
+	eatline(imapd_in, c);
+    }
+    else {
+	prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED));
+    }
+
+    mboxkey_close(mboxkey_db);
+}
+
+void cmd_resetkey(char *tag, char *mailbox,
+		  char *mechanism __attribute__((unused)))
+/* XXX we don't support any external mechanisms, so we ignore it */
+{
+    int r;
+
+    if (mailbox) {
+	/* delete key for specified mailbox */
+	char mailboxname[MAX_MAILBOX_NAME+1], *newserver;
+	int mbtype;
+	struct mboxkey *mboxkey_db;
+
+	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace,
+						   mailbox,
+						   imapd_userid, mailboxname);
+	if (!r) {
+	    r = mlookup(NULL, NULL, mailboxname, &mbtype, NULL, NULL,
+			&newserver, NULL, NULL);
+	}
+	if (r) {
+	    prot_printf(imapd_out, "%s NO Error removing key: %s\r\n",
+			tag, error_message(r));
+	    return;
+	}
+
+	if (mbtype & MBTYPE_REMOTE) {
+	    /* XXX  proxy to backend */
+	    return;
+	}
+
+	r = mboxkey_open(imapd_userid, MBOXKEY_CREATE, &mboxkey_db);
+	if (!r) {
+	    r = mboxkey_write(mboxkey_db, mailboxname, NULL, 0);
+	    mboxkey_close(mboxkey_db);
+	}
+
+	if (r) {
+	    prot_printf(imapd_out, "%s NO Error removing key: %s\r\n",
+			tag, cyrusdb_strerror(r));
+	} else {
+	    prot_printf(imapd_out,
+			"%s OK [URLMECH INTERNAL] key removed\r\n", tag);
+	}
+    }
+    else {
+	/* delete ALL keys */
+	/* XXX  what do we do about multiple backends? */
+	r = mboxkey_delete_user(imapd_userid);
+	if (r) {
+	    prot_printf(imapd_out, "%s NO Error removing keys: %s\r\n",
+			tag, cyrusdb_strerror(r));
+	} else {
+	    prot_printf(imapd_out, "%s OK All keys removed\r\n", tag);
+	}
+    }
+}
+#endif /* HAVE_SSL */

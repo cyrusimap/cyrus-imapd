@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.199.2.23 2005/06/02 16:16:14 ken3 Exp $
+ * $Id: index.c,v 1.199.2.24 2005/11/17 15:46:25 murch Exp $
  */
 #include <config.h>
 
@@ -2607,13 +2607,19 @@ static int index_fetchreply(struct mailbox *mailbox,
 }
 
 /*
- * Catenate a bodysection to a file.
+ * Fetch the text data associated with an IMAP URL.
+ *
+ * If outsize is NULL, the data will be output as a literal (URLFETCH),
+ * otherwise just the data will be output (CATENATE), and its size returned
+ * in *outsize.
  *
  * This is an amalgamation of index_fetchreply(), index_fetchsection()
  * and index_fetchmsg().
  */
-int index_catenate(struct mailbox *mailbox, unsigned msgno,
-		   const char *section, FILE *f, unsigned long *outsize)
+int index_urlfetch(struct mailbox *mailbox, unsigned msgno,
+		   const char *section,
+		   unsigned long start_octet, unsigned long octet_count,
+		   struct protstream *pout, unsigned long *outsize)
 {
     const char *msg_base = 0;
     unsigned long msg_size = 0;
@@ -2623,7 +2629,7 @@ int index_catenate(struct mailbox *mailbox, unsigned msgno,
     unsigned size, offset = 0;
     int n, r = 0;
 
-    *outsize = 0;
+    if (outsize) *outsize = 0;
 
     /* Open the message file */
     if (mailbox_map_message(mailbox, UID(msgno), &msg_base, &msg_size)) {
@@ -2715,14 +2721,22 @@ int index_catenate(struct mailbox *mailbox, unsigned msgno,
 	size = CACHE_ITEM_BIT32(cacheitem + CACHE_ITEM_SIZE_SKIP);
     }
 
-    if (size) {
+    /* Handle PARTIAL request */
+    offset += start_octet;
+    if (octet_count) size = octet_count;
+
+    /* Sanity check the requested size */
+    if (size && (offset + size > msg_size))
+	n = msg_size - offset;
+    else
 	n = size;
-	if (offset + size > msg_size) {
-	    n = msg_size - offset;
-	}
-	fwrite(msg_base + offset, n, 1, f);
+
+    if (outsize)
 	*outsize = n;
-    }
+    else
+	prot_printf(pout, "{%u}\r\n", n);
+
+    prot_write(pout, msg_base + offset, n);
 
   done:
     /* Close the message file */

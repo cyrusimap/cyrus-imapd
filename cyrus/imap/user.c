@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: user.c,v 1.17.2.4 2004/06/24 15:16:29 ken3 Exp $
+ * $Id: user.c,v 1.17.2.5 2005/11/17 15:46:28 murch Exp $
  */
 
 #include <config.h>
@@ -75,6 +75,7 @@
 
 #include "global.h"
 #include "user.h"
+#include "mboxkey.h"
 #include "mboxlist.h"
 #include "mailbox.h"
 #include "util.h"
@@ -170,9 +171,12 @@ int user_deletedata(char *user, char *userid __attribute__((unused)),
 {
     char *fname;
 
-    /* delete seen state */
-    if(wipe_user)
+    /* delete seen state and mbox keys */
+    if(wipe_user) {
 	seen_delete_user(user);
+	/* XXX  what do we do about multiple backends? */
+	mboxkey_delete_user(user);
+    }
 
     /* delete subscriptions */
     fname = mboxlist_hash_usersubs(user);
