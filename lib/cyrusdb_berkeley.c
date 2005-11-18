@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_berkeley.c,v 1.9 2004/11/17 15:41:31 shadow Exp $ */
+/* $Id: cyrusdb_berkeley.c,v 1.10 2005/11/18 13:58:24 murch Exp $ */
 
 #include <config.h>
 
@@ -104,7 +104,12 @@ static void db_panic(DB_ENV *dbenv __attribute__((unused)),
     exit(EC_TEMPFAIL);
 }
 
+#if (DB_VERSION_MAJOR == 4) && (DB_VERSION_MINOR >= 3)
+static void db_err(const DB_ENV *dbenv __attribute__((unused)),
+		   const char *db_prfx, const char *buffer)
+#else
 static void db_err(const char *db_prfx, char *buffer)
+#endif
 {
     syslog(LOG_WARNING, "DBERROR %s: %s", db_prfx, buffer);
 }
