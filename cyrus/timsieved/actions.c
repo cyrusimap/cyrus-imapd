@@ -1,6 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.36.2.4 2005/03/15 01:28:43 ken3 Exp $
+ * $Id: actions.c,v 1.36.2.5 2005/11/18 14:16:11 murch Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -180,7 +180,7 @@ int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
 		 int starttls_done, int authenticated)
 {
     const char *sasllist;
-    unsigned mechcount;
+    int mechcount;
 
     /* implementation */
     prot_printf(conn, "\"IMPLEMENTATION\" \"Cyrus timsieved %s\"\r\n",
