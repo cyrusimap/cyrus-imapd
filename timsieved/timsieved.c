@@ -1,7 +1,7 @@
 /* timsieved.c -- main file for timsieved (sieve script accepting program)
  * Tim Martin
  * 9/21/99
- * $Id: timsieved.c,v 1.55 2004/09/09 16:22:06 shadow Exp $
+ * $Id: timsieved.c,v 1.56 2005/11/18 14:18:35 murch Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -135,6 +135,10 @@ void shut_down(int code)
     if (sieved_in) prot_free(sieved_in);
 
     if (sieved_logfd != -1) close(sieved_logfd);
+
+#ifdef HAVE_SSL
+    tls_shutdown_serverengine();
+#endif
 
     cyrus_done();
 
