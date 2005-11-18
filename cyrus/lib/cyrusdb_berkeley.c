@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_berkeley.c,v 1.2.2.8 2005/11/18 13:51:43 murch Exp $ */
+/* $Id: cyrusdb_berkeley.c,v 1.2.2.9 2005/11/18 14:10:43 murch Exp $ */
 
 #include <config.h>
 
@@ -114,6 +114,12 @@ static void db_err(const char *db_prfx, char *buffer)
     syslog(LOG_WARNING, "DBERROR %s: %s", db_prfx, buffer);
 }
 
+static void db_msg(const DB_ENV *dbenv __attribute__((unused)),
+		   const char *msg)
+{
+    syslog(LOG_INFO, "DBMSG: %s", msg);
+}
+
 static int init(const char *dbdir, int myflags)
 {
     int r, do_retry = 1;
@@ -154,6 +160,9 @@ static int init(const char *dbdir, int myflags)
 #endif
     }
 
+#if (DB_VERSION_MAJOR == 4) && (DB_VERSION_MINOR >= 3)
+    dbenv->set_msgcall(dbenv, db_msg);
+#endif
     dbenv->set_errcall(dbenv, db_err);
     snprintf(errpfx, sizeof(errpfx), "db%d", DB_VERSION_MAJOR);
     dbenv->set_errpfx(dbenv, errpfx);
