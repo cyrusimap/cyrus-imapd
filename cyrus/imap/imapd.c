@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.65 2005/11/17 15:46:15 murch Exp $ */
+/* $Id: imapd.c,v 1.443.2.66 2005/11/21 14:52:13 murch Exp $ */
 
 #include <config.h>
 
@@ -2832,6 +2832,8 @@ static int append_catenate(FILE *f, const char *cur_name, unsigned *totalsize,
 	    *parseerr = "Invalid message part type in Append command";
 	    return IMAP_PROTOCOL_ERROR;
 	}
+
+	fflush(f);
     } while (c == ' ');
 
     if (c != ')') {
@@ -2839,7 +2841,6 @@ static int append_catenate(FILE *f, const char *cur_name, unsigned *totalsize,
 	return IMAP_PROTOCOL_ERROR;
     }
 
-    fflush(f);
     if (ferror(f) || fsync(fileno(f))) {
 	syslog(LOG_ERR, "IOERROR: writing message: %m");
 	return IMAP_IOERROR;
