@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.66 2005/11/21 14:52:13 murch Exp $ */
+/* $Id: imapd.c,v 1.443.2.67 2005/11/21 19:48:36 murch Exp $ */
 
 #include <config.h>
 
@@ -2735,6 +2735,11 @@ static int catenate_url(const char *s, const char *cur_name, FILE *f,
 		    r = mailbox_open_index(&mboxstruct);
 		}
 
+		if (!r && !(mboxstruct.myrights & ACL_READ)) {
+		    r = (imapd_userisadmin || (mboxstruct.myrights & ACL_LOOKUP)) ?
+			IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+		}
+
 		if (!r) {
 		    mailbox = &mboxstruct;
 		    index_operatemailbox(mailbox);
@@ -2846,7 +2851,7 @@ static int append_catenate(FILE *f, const char *cur_name, unsigned *totalsize,
 	return IMAP_IOERROR;
     }
 
-    return 0;
+    return r;
 }
 
 /* If an APPEND is proxied from another server,
@@ -9130,7 +9135,7 @@ void cmd_urlfetch(char *tag)
 
 	/* validate the URL */
 	if (!url.user || !url.server || !url.mailbox || !url.uid ||
-	    !url.urlauth.access || !url.urlauth.token) {
+	    (url.urlauth.access && !(url.urlauth.mech && url.urlauth.token))) {
 	    /* missing info */
 	    r = IMAP_BADURL;
 	} else if (strcmp(url.server, config_servername)) {
@@ -9140,30 +9145,30 @@ void cmd_urlfetch(char *tag)
 		   url.urlauth.expire < mktime(gmtime(&now))) {
 	    /* expired */
 	    r = IMAP_BADURL;
-	} else {
-	    /* check authorization */
+	} else if (url.urlauth.access) {
+	    /* check mechanism & authorization */
 	    int authorized = 0;
 
-	    if (!strncasecmp(url.urlauth.access, "submit+", 7) &&
-		global_authisa(imapd_authstate, IMAPOPT_SUBMITSERVERS)) {
-		/* authorized submit server */
-		authorized = 1;
-	    } else if (!strncasecmp(url.urlauth.access, "user+", 5) &&
-		       !strcmp(url.urlauth.access+5, imapd_userid)) {
-		/* currently authorized user */
-		authorized = 1;
-	    } else if (!strcasecmp(url.urlauth.access, "authuser") &&
-		       strcmp(imapd_userid, "anonymous")) {
-		/* any non-anonymous authorized user */
-		authorized = 1;
-	    } else if (!strcasecmp(url.urlauth.access, "anonymous")) {
-		/* anyone */
-		authorized = 1;
+	    if (!strcasecmp(url.urlauth.mech, "INTERNAL")) {
+		if (!strncasecmp(url.urlauth.access, "submit+", 7) &&
+		    global_authisa(imapd_authstate, IMAPOPT_SUBMITSERVERS)) {
+		    /* authorized submit server */
+		    authorized = 1;
+		} else if (!strncasecmp(url.urlauth.access, "user+", 5) &&
+			   !strcmp(url.urlauth.access+5, imapd_userid)) {
+		    /* currently authorized user */
+		    authorized = 1;
+		} else if (!strcasecmp(url.urlauth.access, "authuser") &&
+			   strcmp(imapd_userid, "anonymous")) {
+		    /* any non-anonymous authorized user */
+		    authorized = 1;
+		} else if (!strcasecmp(url.urlauth.access, "anonymous")) {
+		    /* anyone */
+		    authorized = 1;
+		}
 	    }
 
-	    if (!authorized) {
-		r = IMAP_BADURL;
-	    }
+	    if (!authorized) r = IMAP_BADURL;
 	}
 		
 	if (!r) {
@@ -9196,33 +9201,35 @@ void cmd_urlfetch(char *tag)
 
 	/* local mailbox */
 	if (!r) {
-	    /* validate the URLAUTH token */
-	    hex2bin(url.urlauth.token,
-		    (unsigned char *) url.urlauth.token, &token_len);
+	    if (url.urlauth.token) {
+		/* validate the URLAUTH token */
+		hex2bin(url.urlauth.token,
+			(unsigned char *) url.urlauth.token, &token_len);
 
-	    /* first byte is the algorithm used to create token */
-	    switch (url.urlauth.token[0]) {
-	    case URLAUTH_ALG_HMAC_SHA1: {
-		const char *key;
-		size_t keylen;
-		unsigned char vtoken[EVP_MAX_MD_SIZE];
-		unsigned int vtoken_len;
+		/* first byte is the algorithm used to create token */
+		switch (url.urlauth.token[0]) {
+		case URLAUTH_ALG_HMAC_SHA1: {
+		    const char *key;
+		    size_t keylen;
+		    unsigned char vtoken[EVP_MAX_MD_SIZE];
+		    unsigned int vtoken_len;
 
-		r = mboxkey_open(url.user, 0, &mboxkey_db);
-		r = mboxkey_read(mboxkey_db, mailboxname, &key, &keylen);
-		HMAC(EVP_sha1(), key, keylen, arg.s, url.urlauth.rump_len,
-		     vtoken, &vtoken_len);
-		mboxkey_close(mboxkey_db);
+		    r = mboxkey_open(url.user, 0, &mboxkey_db);
+		    r = mboxkey_read(mboxkey_db, mailboxname, &key, &keylen);
+		    HMAC(EVP_sha1(), key, keylen, arg.s, url.urlauth.rump_len,
+			 vtoken, &vtoken_len);
+		    mboxkey_close(mboxkey_db);
 
-		if (memcmp(vtoken, url.urlauth.token+1, vtoken_len)) {
-		    r = IMAP_BADURL;
+		    if (memcmp(vtoken, url.urlauth.token+1, vtoken_len)) {
+			r = IMAP_BADURL;
+		    }
+
+		    break;
 		}
-
-		break;
-	    }
-	    default:
-		r = IMAP_BADURL;
-		break;
+		default:
+		    r = IMAP_BADURL;
+		    break;
+		}
 	    }
 
 	    if (!r) {
@@ -9235,6 +9242,13 @@ void cmd_urlfetch(char *tag)
 		    if (!r) {
 			doclose = 1;
 			r = mailbox_open_index(&mboxstruct);
+		    }
+
+		    if (!r && !url.urlauth.access &&
+			!(mboxstruct.myrights & ACL_READ)) {
+			r = (imapd_userisadmin ||
+			     (mboxstruct.myrights & ACL_LOOKUP)) ?
+			    IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
 		    }
 
 		    if (!r) {
