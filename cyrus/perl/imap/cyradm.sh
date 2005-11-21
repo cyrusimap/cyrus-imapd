@@ -39,7 +39,7 @@
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 #
-# $Id: cyradm.sh,v 1.13.2.2 2004/01/15 20:24:41 ken3 Exp $
+# $Id: cyradm.sh,v 1.13.2.3 2005/11/21 16:41:34 murch Exp $
 case "x$BASH_VERSION" in
 x) exec perl -MCyrus::IMAP::Shell -e shell -- ${1+"$@"} ;;
 *) exec perl -MCyrus::IMAP::Shell -e shell -- "$@" ;;
@@ -215,6 +215,12 @@ Sets a comment or description associated with the mailbox.
 =item C<expire>
 
 Sets the number of days after which messages will be expired from the mailbox.
+
+=item C<sieve>
+
+Indicates the name of the global sieve script that should be run when
+a message is delivered to the shared mailbox (not used for personal
+mailboxes).
 
 =item C<squat>
 
