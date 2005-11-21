@@ -1,6 +1,6 @@
 /* lmtp_sieve.c -- Sieve implementation for lmtpd
  *
- * $Id: lmtp_sieve.c,v 1.10 2005/10/31 14:21:53 ken3 Exp $
+ * $Id: lmtp_sieve.c,v 1.11 2005/11/21 16:26:16 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -417,9 +417,6 @@ static int sieve_fileinto(void *ac,
     int quotaoverride = msg_getrcpt_ignorequota(md, mdata->cur_rcpt);
     char namebuf[MAX_MAILBOX_NAME+1];
     int ret;
-
-    /* we're now the user who owns the script */
-    if (!sd->authstate) return SIEVE_FAIL;
 
     ret = (*mdata->namespace->mboxname_tointernal)(mdata->namespace,
 						   fc->mailbox,
