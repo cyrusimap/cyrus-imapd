@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.71.2.35 2005/11/21 17:11:01 murch Exp $ -->
+<!-- $Id: changes.html,v 1.71.2.36 2005/11/22 18:42:34 murch Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -69,6 +69,19 @@ performance/scalability.  <i>Based on a patch by John A. Tamplin
 <li>Updated Sieve "vacation" extension to draft-ietf-sieve-vacation-04.</li>
 <li>Added support for Sieve scripts on shared mailboxes via the 
 /vendor/cmu/cyrus-imapd/sieve annotation.</li>
+</ul>
+
+<h1>Changes to the Cyrus IMAP Server since 2.2.11</h1> 
+<ul> 
+<li>Revert index change which wasn't supposed to make it into 2.2.11</li>
+</ul>
+
+<h1>Changes to the Cyrus IMAP Server since 2.2.10</h1>
+<ul>
+<li>Fix possible single byte overflow in mailbox handling code.</li>
+<li>Fix possible single byte overflows in the imapd annotate extension.</li>
+<li>Fix stack buffer overflows in fetchnews (exploitable by peer news server),
+backend (exploitable by admin), and in imapd (exploitable by users though only on platforms where a filename may be larger than a mailbox name).</li>
 </ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.2.9</h1>
@@ -2055,7 +2068,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2005/11/21 17:11:01 $ <br />
+last modified: $Date: 2005/11/22 18:42:34 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
