@@ -1,6 +1,6 @@
 /* mupdate-slave.c -- cyrus murder database clients
  *
- * $Id: mupdate-slave.c,v 1.26 2004/03/08 19:23:04 rjs3 Exp $
+ * $Id: mupdate-slave.c,v 1.27 2005/11/23 13:40:09 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -73,7 +73,6 @@
 #include "imparse.h"
 #include "iptostring.h"
 #include "mupdate.h"
-#include "mupdate_err.h"
 #include "exitcodes.h"
 
 /* Returns file descriptor of kick socket (or does not return) */
