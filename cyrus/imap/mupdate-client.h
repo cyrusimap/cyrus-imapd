@@ -1,6 +1,6 @@
 /* mupdate-client.h -- cyrus murder database clients
  *
- * $Id: mupdate-client.h,v 1.13.4.1 2004/03/24 19:53:08 ken3 Exp $
+ * $Id: mupdate-client.h,v 1.13.4.2 2005/11/23 13:41:26 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -44,7 +44,6 @@
 #define INCLUDED_MUPDATE_CLIENT_H
 
 #include <sasl/sasl.h>
-#include "mupdate_err.h"
 
 #define FNAME_MUPDATE_TARGET_SOCK "/socket/mupdate.target"
 

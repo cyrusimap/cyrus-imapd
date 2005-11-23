@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.43.2.5 2004/05/25 01:28:02 ken3 Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.43.2.6 2005/11/23 13:41:24 murch Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -61,7 +61,7 @@
 #include "global.h"
 #include "libcyr_cfg.h"
 #include "mboxlist.h"
-#include "mupdate-client.h"
+#include "mupdate.h"
 #include "xmalloc.h"
 
 /* config.c stuff */
