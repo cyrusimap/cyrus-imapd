@@ -1,6 +1,6 @@
 /* lmtpproxyd.c -- Program to proxy mail delivery
  *
- * $Id: lmtpproxyd.c,v 1.68 2005/11/01 19:47:16 murch Exp $
+ * $Id: lmtpproxyd.c,v 1.69 2005/11/29 16:22:35 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -78,7 +78,7 @@
 #include "version.h"
 #include "mboxname.h"
 
-#include "mupdate-client.h"
+#include "mupdate.h"
 #include "backend.h"
 #include "lmtpengine.h"
 #include "lmtpstats.h"
