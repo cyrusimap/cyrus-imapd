@@ -45,7 +45,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #
 # Written by Gary Mills <mills@cc.UManitoba.CA>
 #
-# $Id: rehash,v 1.7 2003/10/22 18:50:32 rjs3 Exp $
+# $Id: rehash,v 1.8 2005/12/01 22:01:12 murch Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -140,6 +140,46 @@ sub dir_hash_c {
     }
 }
 
+sub read_conf {
+    my $file = shift;
+
+    open CONF, $file or die "can't open $file";
+    while (<CONF>) {
+	if (/^#/) { 
+	    next; 
+	}
+	if (/\@include:\s+(.*)$/) {
+	    push @configs, $1;
+	}
+	if (/^configdirectory:\s+(.*)$/) {
+	    $confdir = $1;
+	}
+	if (/^partition-.*:\s+(.*)$/) {
+	    if (grep /$1/, @parts) {
+		next;
+	    }
+	    push @parts, $1;
+	}
+	if (/^hashimapspool:\s*(1|t|yes|on)/) {
+	    $hashispool = 1;
+	    print "i will also hash partitions.\n";
+	}
+        if (/^sieveusehomedir:\s+(1|t|yes|on)/) {
+	    $nosievedir = 1;
+	    print "you are storing sieve scripts in user's home directories.\n";
+        }
+        if (/^sievedir:\s+(.*)$/) {
+	    $sievedir = $1;
+	    print "you are using $sievedir as your sieve directory.\n";
+        }
+        if (/^virtdomains:\s+(1|t|yes|on)/) {
+	    $virtdomains = 1;
+	    print "i will deal with virtual domains.\n";
+        }
+    }
+    close CONF;
+}
+
 $imapdconf = shift || "/etc/imapd.conf";
 
 $yn = "y";
@@ -148,48 +188,24 @@ $nosievedir = 0;
 $hashispool = 0;
 $virtdomains = 0;
 
-open CONF, $imapdconf or die "can't open $imapdconf";
-while (<CONF>) {
-    if (/^configdirectory:\s*(.*)$/) {
-	$conf = $1;
-    }
-    if (/^sieveusehomedir:\s+(1|t|yes|on)/) {
-	$nosievedir = 1;
-	print "you are storing sieve scripts in user's home directories.\n";
-    }
-    if (/^sievedir:\s+(.*)$/) {
-	$sievedir = $1;
-	print "you are using $sievedir as your sieve directory.\n";
-    }
-    if (/^partition-.*:\s*(.*)$/) {
-	if (grep /$1/, @parts) {
-	    next;
-	}
-	push @parts, $1;
-    }
-    if (/^hashimapspool:\s*(1|t|yes|on)/) {
-	$hashispool = 1;
-	print "i will also hash partitions.\n";
-    }    
-    if (/^virtdomains:\s+(1|t|yes|on)/) {
-	$virtdomains = 1;
-	print "i will deal with virtual domains.\n";
-    }
-}
-close CONF;
+push @configs, $imapdconf;
 
-if (! $conf) { $conf = "/var/imap"; }
+while ($conf = shift @configs) {
+    read_conf($conf);
+}
+
+if (! $confdir) { $confdir = "/var/imap"; }
 
 if ($interactive) {
-    print "upgrade $conf? ";
+    print "upgrade $confdir? ";
     $yn = <STDIN>;
 }
 if ($yn =~ /^y/) {
-    unless (-d $conf) {	print "creating $conf...\n";
-	mkdir $conf, 0755;
+    unless (-d $confdir) {	print "creating $confdir...\n";
+	mkdir $confdir, 0755;
     }
-    print "converting configuration directory $conf...";
-    chdir $conf or die "couldn't change to $conf";
+    print "converting configuration directory $confdir...";
+    chdir $confdir or die "couldn't change to $confdir";
     
     foreach $i ("user", "proc", "db", "socket", "log", "msg", "quota") {
 	unless (-d $i) {
