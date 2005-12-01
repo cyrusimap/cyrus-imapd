@@ -4,7 +4,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 # script to translate sieve scripts to use unixhierarchysep and/or altnamespace
 # make sure you run it as the cyrus user
 #!/usr/bin/perl
-# $Id: translatesieve,v 1.6 2002/05/07 20:49:42 rjs3 Exp $
+# $Id: translatesieve,v 1.6.8.1 2005/12/01 22:30:22 murch Exp $
 # 
 # Copyright (c) 2001 Carnegie Mellon University.  All rights reserved.
 #
@@ -85,6 +85,39 @@ sub ouch {
     }
 }
 
+sub read_conf {
+    my $file = shift;
+
+    open CONF, $file or die "can't open $file";
+    while (<CONF>) {
+	if (/^#/) { 
+	    next; 
+	}
+	if (/\@include:\s+(.*)$/) {
+	    push @configs, $1;
+	}
+        if (/^sievedir:\s+(.*)$/) {
+	    $sievedir = $1;
+	    print "you are using $sievedir as your sieve directory.\n";
+        }
+	if (/^unixhierarchysep:\s*(1|t|yes|on)/) {
+	    $unixhierarchysep = 1;
+	}
+	if (/^altnamespace:\s*(1|t|yes|on)/) {
+	    $altnamespace = 1;
+	}
+	if (/^userprefix:\s*(.*)$/) {
+	    $userprefix = $1;
+	    print "you are using $userprefix as your other users prefix.\n";
+	}
+	if (/^sharedprefix:\s*(.*)$/) {
+	    $sharedprefix = $1;
+	    print "you are using $sharedprefix as your shared prefix.\n";
+	}
+    }
+    close CONF;
+}
+
 $imapdconf = shift || "/etc/imapd.conf";
 
 $sievedir = "/usr/sieve";
@@ -93,28 +126,11 @@ $altnamespace = 0;
 $userprefix = "Other Users";
 $sharedprefix = "Shared Folders";
 
-open CONF, $imapdconf or die "can't open $imapdconf";
-while (<CONF>) {
-    if (/^sievedir:\s*(.*)$/) {
-	$sievedir = $1;
-	print "you are using $sievedir as your sieve directory.\n";
-    }
-    if (/^unixhierarchysep:\s*(1|t|yes|on)/) {
-	$unixhierarchysep = 1;
-    }
-    if (/^altnamespace:\s*(1|t|yes|on)/) {
-	$altnamespace = 1;
-    }
-    if (/^userprefix:\s*(.*)$/) {
-	$userprefix = $1;
-	print "you are using $userprefix as your other users prefix.\n";
-    }
-    if (/^sharedprefix:\s*(.*)$/) {
-	$sharedprefix = $1;
-	print "you are using $sharedprefix as your shared prefix.\n";
-    }
+push @configs, $imapdconf;
+
+while ($conf = shift @configs) {
+    read_conf($conf);
 }
-close CONF;
 
 unless ($unixhierarchysep || $altnamespace) {
     ouch "you are not using the Unix hierarchy separator or the alternate namespace";

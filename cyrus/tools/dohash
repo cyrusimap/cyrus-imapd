@@ -42,7 +42,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #!perl -w
 # script to upgrade from versions of imapd previous to 1.6.2
 # make sure you run it as the cyrus user
-# $Id: dohash,v 1.10 2001/02/23 04:43:01 leg Exp $
+# $Id: dohash,v 1.10.18.1 2005/12/01 22:30:21 murch Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -89,38 +89,54 @@ sub ouch {
     }
 }
 
+sub read_conf {
+    my $file = shift;
+
+    open CONF, $file or die "can't open $file";
+    while (<CONF>) {
+	if (/^#/) { 
+	    next; 
+	}
+	if (/\@include:\s+(.*)$/) {
+	    push @configs, $1;
+	}
+	if (/^configdirectory:\s+(.*)$/) {
+	    $confdir = $1;
+	}
+	if (/^(?:meta)?partition-.*:\s+(.*)$/) {
+	    if (grep /$1/, @parts) {
+		next;
+	    }
+	    push @parts, $1;
+	}
+	if (/^hashimapspool:\s*(1|t|yes|on)/) {
+	    $hashispool = 1;
+	    print "i will also hash partitions.\n";
+	}
+    }
+    close CONF;
+}
+
 $imapdconf = shift || "/etc/imapd.conf";
 
 $yn = "y";
 $hashispool = 0;
 
-open CONF, $imapdconf or die "can't open $imapdconf";
-while (<CONF>) {
-    if (/^configdirectory:\s*(.*)$/) {
-	$conf = $1;
-    }
-    if (/^partition-.*:\s*(.*)$/) {
-	if (grep /$1/, @parts) {
-	    next;
-	}
-	push @parts, $1;
-    }
-    if (/^hashimapspool:\s*(1|t|yes|on)/) {
-	$hashispool = 1;
-	print "i will also hash partitions.\n";
-    }
-}
-close CONF;
+push @configs, $imapdconf;
 
-if (! $conf) { $conf = "/var/imap"; }
+while ($conf = shift @configs) {
+    read_conf($conf);
+}
+
+if (! $confdir) { $confdir = "/var/imap"; }
 
 if ($interactive) {
-    print "upgrade $conf? ";
+    print "upgrade $confdir? ";
     $yn = <STDIN>;
 }
 if ($yn =~ /^y/) {
-    print "upgrading configuration directory $conf...";
-    chdir $conf or die "couldn't change to $conf";
+    print "upgrading configuration directory $confdir...";
+    chdir $confdir or die "couldn't change to $confdir";
     
     # *** user subdirectory; holds subscription files
     print "user ";

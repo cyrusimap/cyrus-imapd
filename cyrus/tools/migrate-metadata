@@ -42,7 +42,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #!perl -w
 # script to upgrade from versions of imapd previous to 1.6.2
 # make sure you run it as the cyrus user
-# $Id: migrate-metadata,v 1.1.2.2 2004/04/14 15:42:18 ken3 Exp $
+# $Id: migrate-metadata,v 1.1.2.3 2005/12/01 22:30:22 murch Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -91,6 +91,36 @@ sub ouch {
     }
 }
 
+sub read_conf {
+    my $file = shift;
+
+    open CONF, $file or die "can't open $file";
+    print "reading configure file $file...\n";
+    while (<CONF>) {
+	if (/^#/) { 
+	    next; 
+	}
+	if (/\@include:\s+(.*)$/) {
+	    push @configs, $1;
+	}
+	if (/^partition-(.*):\s*(.*)$/) {
+	    $parts{$1} = $2;
+	}
+	if (/^metapartition-(.*):\s*(.*)$/) {
+	    $mparts{$1} = $2;
+	}
+	if (/^metapartition_files:\s*(.*)$/) {
+	    # split the list of files and make a hash
+	    @metafiles = split(/\s+/, $1);
+	    foreach $file (@metafiles) {
+		$mfiles{$file} = 1;
+	    }
+	}
+    }
+    print "done\n";
+    close CONF;
+}
+
 $imapdconf = shift || "/etc/imapd.conf";
 
 $yn = "y";
@@ -99,23 +129,11 @@ $yn = "y";
 %mfiles = (); # start with empty metapartition_files hash
 
 
-open CONF, $imapdconf or die "can't open $imapdconf";
-while (<CONF>) {
-    if (/^partition-(.*):\s*(.*)$/) {
-	$parts{$1} = $2;
-    }
-    if (/^metapartition-(.*):\s*(.*)$/) {
-	$mparts{$1} = $2;
-    }
-    if (/^metapartition_files:\s*(.*)$/) {
-	# split the list of files and make a hash
-	@metafiles = split(/\s+/, $1);
-	foreach $file (@metafiles) {
-	    $mfiles{$file} = 1;
-	}
-    }
+push @configs, $imapdconf;
+
+while ($conf = shift @configs) {
+    read_conf($conf);
 }
-close CONF;
 
 if (!keys(%mfiles)) {
     print "no metapartition_files option in $imapdconf\n";

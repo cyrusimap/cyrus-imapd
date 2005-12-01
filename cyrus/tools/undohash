@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # script to downgrade from cyrus imapd 1.6.2+ to earlier.
 # do NOT run this script while imapd's are running
-# $Id: undohash,v 1.7 2002/05/25 19:57:53 leg Exp $
+# $Id: undohash,v 1.7.8.1 2005/12/01 22:30:23 murch Exp $
 # 
 # Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
 #
@@ -45,30 +45,45 @@ require 5;
 
 $| = 1;
 
+sub read_conf {
+    my $file = shift;
+
+    open CONF, $file or die "can't open $file";
+    while (<CONF>) {
+	if (/^#/) { 
+	    next; 
+	}
+	if (/\@include:\s+(.*)$/) {
+	    push @configs, $1;
+	}
+	if (/^configdirectory:\s+(.*)$/) {
+	    $confdir = $1;
+	}
+	if (/^(?:meta)?partition-.*:\s+(.*)$/) {
+	    if (grep /$1/, @parts) {
+		next;
+	    }
+	    push @parts, $1;
+	}
+	if (/^hashimapspool:\s*(1|t|yes|on)/) {
+	    $hashispool = 1;
+	    print "i will also hash partitions.\n";
+	}
+    }
+    close CONF;
+}
+
 $imapdconf = shift || "/etc/imapd.conf";
 $hashispool = 0;
 
-open CONF, $imapdconf or die "can't open $imapdconf";
-while (<CONF>) {
-    print;
-    if (/^configdirectory:\s(.*)$/) {
-	$conf = $1;
-    }
-    if (/^partition-.*:\s(.*)$/) {
-	if (grep /$1/, @parts) {
-	    next;
-	}
-	push @parts, $1;
-    }
-    if (/^hashimapspool:\s(1|t|yes|on)/) {
-	$hashispool = 1;
-	print "i will also unhash partitions.\n";
-    }
-}
-close CONF;
+push @configs, $imapdconf;
 
-print "downgrading configuration directory $conf...";
-chdir $conf or die "couldn't change to $conf";
+while ($conf = shift @configs) {
+    read_conf($conf);
+}
+
+print "downgrading configuration directory $confdir...";
+chdir $confdir or die "couldn't change to $confdir";
 
 # *** user subdirectory; holds subscription files
 print "user ";

@@ -43,7 +43,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #
 # Script for mass compilation of sieve scripts.
 #
-# $Id: masssievec,v 1.2.2.2 2004/06/24 15:16:35 ken3 Exp $
+# $Id: masssievec,v 1.2.2.3 2005/12/01 22:30:21 murch Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -89,18 +89,34 @@ if($SIEVEC !~ /^\//) {
     exit;
 }
 
-open CONF, $imapdconf or die "can't open $imapdconf";
-while (<CONF>) {
-    if (/^sieveusehomedir:\s+(1|t|yes|on)/) {
-	$nosievedir = 1;
-	print "you are storing sieve scripts in user's home directories, this script cannot deal with that\n";
-	exit;
+sub read_conf {
+    my $file = shift;
+
+    open CONF, $file or die "can't open $file";
+    while (<CONF>) {
+	if (/^#/) { 
+	    next; 
+	}
+	if (/\@include:\s+(.*)$/) {
+	    push @configs, $1;
+	}
+	if (/^sieveusehomedir:\s+(1|t|yes|on)/) {
+	    $nosievedir = 1;
+	    print "you are storing sieve scripts in user's home directories, this script cannot deal with that\n";
+	    exit;
+	}
+	if (/^sievedir:\s+(.*)$/) {
+	    $sievedir = $1;
+	}
     }
-    if (/^sievedir:\s+(.*)$/) {
-	$sievedir = $1;
-    }
+    close CONF;
 }
-close CONF;
+
+push @configs, $imapdconf;
+
+while ($conf = shift @configs) {
+    read_conf($conf);
+}
 
 print "you are using $sievedir as your sieve directory.\n";
 

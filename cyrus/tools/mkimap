@@ -40,7 +40,7 @@
 #
 exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #!perl -w
-# $Id: mkimap,v 1.15.2.3 2005/04/06 20:39:57 ken3 Exp $
+# $Id: mkimap,v 1.15.2.4 2005/12/01 22:30:22 murch Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -59,30 +59,44 @@ if ($@) { die "$@"; }
 __END__
 require 5;
 
+sub read_conf {
+    my $file = shift;
+
+    open CONF, $file or die "can't open $file";
+    print "reading configure file $file...\n";
+    while (<CONF>) {
+	if (/^#/) { 
+	    next; 
+	}
+	if (/\@include:\s+(.*)$/) {
+	    print "i will include configure file $1.\n";
+	    push @configs, $1;
+	}
+	if (/^configdirectory:\s+(.*)$/) {
+	    $confdir = $1;
+	    print "i will configure directory $confdir.\n";
+	}
+	if (/^(?:meta)?partition-.*:\s+(.*)$/) {
+	    if (grep /$1/, @parts) {
+		next;
+	    }
+	    print "i saw partition $1.\n";
+	    push @parts, $1;
+	}
+    }
+    print "done\n";
+    close CONF;
+}
+
 $imapdconf = shift || "/etc/imapd.conf";
 
-open CONF, $imapdconf or die "can't open $imapdconf";
-print "reading configure file...\n";
-while (<CONF>) {
-    if (/^#/) { 
-	next; 
-    }
-    if (/^configdirectory:\s+(.*)$/) {
-	$conf = $1;
-	print "i will configure directory $conf.\n";
-    }
-    if (/^partition-.*:\s+(.*)$/) {
-	if (grep /$1/, @parts) {
-	    next;
-	}
-	print "i saw partition $1.\n";
-	push @parts, $1;
-    }
-}
-print "done\n";
-close CONF;
+push @configs, $imapdconf;
 
-$d = $conf;
+while ($conf = shift @configs) {
+    read_conf($conf);
+}
+
+$d = $confdir;
 
 print "configuring $d...\n";
 
