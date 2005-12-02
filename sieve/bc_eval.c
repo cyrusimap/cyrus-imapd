@@ -1,5 +1,5 @@
 /* bc_eval.c - evaluate the bytecode
- * $Id: bc_eval.c,v 1.2.2.11 2005/10/05 15:56:21 ken3 Exp $
+ * $Id: bc_eval.c,v 1.2.2.12 2005/12/02 00:06:00 murch Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -127,7 +127,7 @@ static int sysaddr(const char *addr)
     if (!strncasecmp(addr, "majordomo", 9))
 	return 1;
 
-    if (strstr(addr, "-request"))
+    if (strstr(addr, "-request@"))
 	return 1;
 
     if (!strncmp(addr, "owner-", 6))
@@ -189,6 +189,17 @@ static char* look_for_me(char *myaddr, int numaddresses,
 
     return found;
 }
+
+static char *list_fields[] = {
+    "list-id",
+    "list-help",
+    "list-subscribe",
+    "list-unsubscribe",
+    "list-post",
+    "list-owner",
+    "list-archive",
+    NULL
+};
  
 /* Determine if we should respond to a vacation message */
 int shouldRespond(void * m, sieve_interp_t *interp,
@@ -198,14 +209,28 @@ int shouldRespond(void * m, sieve_interp_t *interp,
     const char **body;
     char buf[128];
     char *myaddr = NULL;
-    int l = SIEVE_OK;
+    int l = SIEVE_OK, j;
     void *data = NULL, *marker = NULL;
     char *tmp;
     int curra, x;
     char *found=NULL;
     char *reply_to=NULL;
   
-    /* is there an Auto-Submitted keyword other than "no"? */
+    /* Implementations SHOULD NOT respond to any message that contains a
+       "List-Id" [RFC2919], "List-Help", "List-Subscribe", "List-
+       Unsubscribe", "List-Post", "List-Owner" or "List-Archive" [RFC2369]
+       header field. */
+    for (j = 0; list_fields[j]; j++) {
+	strcpy(buf, list_fields[j]);
+	if (interp->getheader(m, buf, &body) == SIEVE_OK) {
+	    l = SIEVE_DONE;
+	    break;
+	}
+    }
+
+    /* Implementations SHOULD NOT respond to any message that has an
+       "Auto-submitted" header field with a value other than "no".
+       This header field is described in [RFC3834]. */
     strcpy(buf, "auto-submitted");
     if (interp->getheader(m, buf, &body) == SIEVE_OK) {
 	/* we don't deal with comments, etc. here */
@@ -215,6 +240,7 @@ int shouldRespond(void * m, sieve_interp_t *interp,
     }
 
     /* is there a Precedence keyword of "junk | bulk | list"? */
+    /* XXX  non-standard header, but worth checking */
     strcpy(buf, "precedence");
     if (interp->getheader(m, buf, &body) == SIEVE_OK) {
 	/* we don't deal with comments, etc. here */
@@ -285,7 +311,7 @@ int shouldRespond(void * m, sieve_interp_t *interp,
     if (l == SIEVE_OK) {
 	/* ok, we're willing to respond to the sender.
 	   but is this message to me?  that is, is my address
-	   in the TO, CC or BCC fields? */
+	   in the [Resent]-To, [Resent]-Cc or [Resent]-Bcc fields? */
 	if (strcpy(buf, "to"), 
 	    interp->getheader(m, buf, &body) == SIEVE_OK)
 	    found = look_for_me(myaddr, numaddresses ,bc, i, body);
@@ -293,6 +319,15 @@ int shouldRespond(void * m, sieve_interp_t *interp,
 		       (interp->getheader(m, buf, &body) == SIEVE_OK)))
 	    found = look_for_me(myaddr, numaddresses, bc, i, body);
 	if (!found && (strcpy(buf, "bcc"),
+		       (interp->getheader(m, buf, &body) == SIEVE_OK)))
+	    found = look_for_me(myaddr, numaddresses, bc, i, body);
+	if (!found && strcpy(buf, "resent-to"), 
+	    interp->getheader(m, buf, &body) == SIEVE_OK)
+	    found = look_for_me(myaddr, numaddresses ,bc, i, body);
+	if (!found && (strcpy(buf, "resent-cc"),
+		       (interp->getheader(m, buf, &body) == SIEVE_OK)))
+	    found = look_for_me(myaddr, numaddresses, bc, i, body);
+	if (!found && (strcpy(buf, "resent-bcc"),
 		       (interp->getheader(m, buf, &body) == SIEVE_OK)))
 	    found = look_for_me(myaddr, numaddresses, bc, i, body);
 	if (!found)
