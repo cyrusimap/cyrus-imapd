@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: mbexamine.c,v 1.5.2.6 2004/12/17 18:15:12 ken3 Exp $ */
+/* $Id: mbexamine.c,v 1.5.2.7 2005/12/05 15:01:37 murch Exp $ */
 
 #include <config.h>
 
@@ -122,7 +122,7 @@ int main(int argc, char **argv)
 
     /* Ensure we're up-to-date on the index file format */
     assert(INDEX_HEADER_SIZE == (OFFSET_SPARE2+4));
-    assert(INDEX_RECORD_SIZE == (OFFSET_CACHE_VERSION+4));
+    assert(INDEX_RECORD_SIZE == (OFFSET_MESSAGE_UUID+MESSAGE_UUID_PACKED_SIZE));
 
     while ((opt = getopt(argc, argv, "C:u:s:")) != EOF) {
 	switch (opt) {
