@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.494 2005/10/31 14:06:14 ken3 Exp $ */
+/* $Id: imapd.c,v 1.495 2005/12/06 14:25:01 murch Exp $ */
 
 #include <config.h>
 
@@ -2193,6 +2193,10 @@ void cmd_idle(char *tag)
 
     /* Get continuation data */
     c = getword(imapd_in, &arg);
+
+    /* Do any necessary cleanup */
+    idle_done(imapd_mailbox);
+
     if (c != EOF) {
 	if (!strcasecmp(arg.s, "Done") &&
 	    (c = (c == '\r') ? prot_getc(imapd_in) : c) == '\n') {
@@ -2206,9 +2210,6 @@ void cmd_idle(char *tag)
 	    eatline(imapd_in, c);
 	}
     }
-
-    /* Do any necessary cleanup */
-    idle_done(imapd_mailbox);
 
     return;
 }
