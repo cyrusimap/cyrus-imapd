@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.496 2005/12/09 16:12:50 murch Exp $ */
+/* $Id: imapd.c,v 1.497 2005/12/09 19:15:35 murch Exp $ */
 
 #include <config.h>
 
@@ -2192,6 +2192,7 @@ void cmd_idle(char *tag)
     prot_flush(imapd_out);
 
     /* Start doing mailbox updates */
+    if (imapd_mailbox) index_check(imapd_mailbox, 0, 1);
     idle_start(imapd_mailbox);
 
     /* Get continuation data */
@@ -2199,6 +2200,8 @@ void cmd_idle(char *tag)
 
     /* Stop updates and do any necessary cleanup */
     idle_done(imapd_mailbox);
+
+    if (imapd_mailbox) index_check(imapd_mailbox, 0, 1);
 
     if (c != EOF) {
 	if (!strcasecmp(arg.s, "Done") &&

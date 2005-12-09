@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle_poll.c,v 1.11 2005/12/09 16:12:50 murch Exp $ */
+/* $Id: idle_poll.c,v 1.12 2005/12/09 19:15:35 murch Exp $ */
 
 #include <config.h>
 
@@ -105,7 +105,7 @@ int idle_init(idle_updateproc_t *proc)
 
 void idle_start(struct mailbox *mailbox __attribute__((unused)))
 {
-    idle_poll(SIGALRM);
+    alarm(idle_period);
 }
 
 void idle_done(struct mailbox *mailbox __attribute__((unused)))
