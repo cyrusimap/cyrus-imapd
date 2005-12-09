@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle_poll.c,v 1.10 2003/10/22 20:05:11 ken3 Exp $ */
+/* $Id: idle_poll.c,v 1.11 2005/12/09 16:12:50 murch Exp $ */
 
 #include <config.h>
 
@@ -78,8 +78,7 @@ static void idle_poll(int sig __attribute__((unused)))
     alarm(idle_period);
 }
 
-int idle_init(struct mailbox *mailbox __attribute__((unused)),
-	      idle_updateproc_t *proc)
+int idle_init(idle_updateproc_t *proc)
 {
     struct sigaction action;
 
@@ -95,16 +94,24 @@ int idle_init(struct mailbox *mailbox __attribute__((unused)),
     action.sa_handler = idle_poll;
     if (sigaction(SIGALRM, &action, NULL) < 0) {
 	syslog(LOG_ERR, "sigaction: %m");
+
+	/* Cancel receiving signals */
+	idle_done(NULL);
 	return 0;
     }
 
-    alarm(idle_period);
-
     return 1;
+}
+
+void idle_start(struct mailbox *mailbox __attribute__((unused)))
+{
+    idle_poll(SIGALRM);
 }
 
 void idle_done(struct mailbox *mailbox __attribute__((unused)))
 {
     /* Remove the polling function */
     signal(SIGALRM, SIG_IGN);
+
+    idle_update = NULL;
 }
