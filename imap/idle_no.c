@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle_no.c,v 1.5 2003/10/22 20:05:11 ken3 Exp $ */
+/* $Id: idle_no.c,v 1.6 2005/12/09 16:12:50 murch Exp $ */
 
 #include "idle.h"
 
@@ -50,9 +50,13 @@ int idle_enabled(void)
     return 0;
 }
 
-int idle_init(struct mailbox *mailbox, idle_updateproc_t *proc)
+int idle_init(idle_updateproc_t *proc)
 {
     return 0;
+}
+
+void idle_start(struct mailbox *mailbox)
+{
 }
 
 void idle_done(struct mailbox *mailbox)

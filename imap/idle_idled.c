@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle_idled.c,v 1.14 2003/10/22 20:05:11 ken3 Exp $ */
+/* $Id: idle_idled.c,v 1.15 2005/12/09 16:12:50 murch Exp $ */
 
 #include <config.h>
 
@@ -150,38 +150,43 @@ static void idle_poll(int sig)
     }
 }
 
-int idle_init(struct mailbox *mailbox, idle_updateproc_t *proc)
+int idle_init(idle_updateproc_t *proc)
 {
     struct sigaction action;
 
     idle_update = proc;
 
+    /* We don't want recursive calls to idle_update() */
     sigemptyset(&action.sa_mask);
+    sigaddset(&action.sa_mask, SIGUSR1);
+    sigaddset(&action.sa_mask, SIGUSR2);
     action.sa_flags = 0;
 #ifdef SA_RESTART
     action.sa_flags |= SA_RESTART;
 #endif
     action.sa_handler = idle_poll;
 
-    /* Tell idled that we're idling */
-    if (idle_send_msg(IDLE_INIT, mailbox)) {
-	/* if we can talk to idled, setup the signal handlers */
-	if ((sigaction(SIGUSR1, &action, NULL) < 0) ||
-	    (sigaction(SIGUSR2, &action, NULL) < 0)) {
-	    syslog(LOG_ERR, "sigaction: %m");
-	    return 0;
-	}
-    }
-    else { /* otherwise, we'll poll with SIGALRM */
-	if (sigaction(SIGALRM, &action, NULL) < 0) {
-	    syslog(LOG_ERR, "sigaction: %m");
-	    return 0;
-	}
+    /* Setup the signal handlers */
+    if ((sigaction(SIGUSR1, &action, NULL) < 0) ||
+	(sigaction(SIGUSR2, &action, NULL) < 0) ||
+	(sigaction(SIGALRM, &action, NULL) < 0)) {
+	syslog(LOG_ERR, "sigaction: %m");
 
-	alarm(idle_period);
+	/* Cancel receiving signals */
+	idle_done(NULL);
+	return 0;
     }
 
     return 1;
+}
+
+void idle_start(struct mailbox *mailbox)
+{
+    /* Tell idled that we're idling */
+    if (!idle_send_msg(IDLE_INIT, mailbox)) {
+	/* otherwise, we'll poll with SIGALRM */
+	alarm(idle_period);
+    }
 }
 
 void idle_done(struct mailbox *mailbox)
@@ -193,6 +198,8 @@ void idle_done(struct mailbox *mailbox)
     signal(SIGUSR1, SIG_IGN);
     signal(SIGUSR2, SIG_IGN);
     signal(SIGALRM, SIG_IGN);
+
+    idle_update = NULL;
 }
 
 /*

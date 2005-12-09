@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.495 2005/12/06 14:25:01 murch Exp $ */
+/* $Id: imapd.c,v 1.496 2005/12/09 16:12:50 murch Exp $ */
 
 #include <config.h>
 
@@ -2181,7 +2181,7 @@ void cmd_idle(char *tag)
     static struct buf arg;
 
     /* Setup for doing mailbox updates */
-    if (!idle_init(imapd_mailbox, idle_update)) {
+    if (!idle_init(idle_update)) {
 	prot_printf(imapd_out, 
 		    "%s NO cannot start idling\r\n", tag);
 	return;
@@ -2191,10 +2191,13 @@ void cmd_idle(char *tag)
     prot_printf(imapd_out, "+ idling\r\n");
     prot_flush(imapd_out);
 
+    /* Start doing mailbox updates */
+    idle_start(imapd_mailbox);
+
     /* Get continuation data */
     c = getword(imapd_in, &arg);
 
-    /* Do any necessary cleanup */
+    /* Stop updates and do any necessary cleanup */
     idle_done(imapd_mailbox);
 
     if (c != EOF) {
