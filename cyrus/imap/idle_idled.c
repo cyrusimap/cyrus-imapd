@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle_idled.c,v 1.15 2005/12/09 16:12:50 murch Exp $ */
+/* $Id: idle_idled.c,v 1.16 2005/12/09 21:09:14 murch Exp $ */
 
 #include <config.h>
 
@@ -65,6 +65,7 @@ static idle_updateproc_t *idle_update = NULL;
 
 /* how often to poll the mailbox */
 static time_t idle_period = -1;
+static int idle_started = 0;
 
 /* UNIX socket variables */
 static int notify_sock = -1;
@@ -136,6 +137,9 @@ int idle_enabled(void)
 
 static void idle_poll(int sig)
 {
+    /* ignore the signals, unless the server has started idling */
+    if (!idle_started) return;
+
     switch (sig) {
     case SIGUSR1:
 	idle_update(IDLE_MAILBOX);
@@ -182,6 +186,8 @@ int idle_init(idle_updateproc_t *proc)
 
 void idle_start(struct mailbox *mailbox)
 {
+    idle_started = 1;
+
     /* Tell idled that we're idling */
     if (!idle_send_msg(IDLE_INIT, mailbox)) {
 	/* otherwise, we'll poll with SIGALRM */
@@ -200,6 +206,7 @@ void idle_done(struct mailbox *mailbox)
     signal(SIGALRM, SIG_IGN);
 
     idle_update = NULL;
+    idle_started = 0;
 }
 
 /*
