@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.144.2.35 2005/06/03 23:07:46 ken3 Exp $
+ * $Id: pop3d.c,v 1.144.2.36 2005/12/12 23:10:58 murch Exp $
  */
 #include <config.h>
 
@@ -396,9 +396,7 @@ int service_init(int argc __attribute__((unused)),
     quotadb_open(NULL);
 
     /* setup for sending IMAP IDLE notifications */
-    if (config_getint(IMAPOPT_IMAPIDLEPOLL) > 0) {
-	idle_init();
-    }
+    idle_enabled();
 
     /* Set namespace */
     if ((r = mboxname_init_namespace(&popd_namespace, 1)) != 0) {
