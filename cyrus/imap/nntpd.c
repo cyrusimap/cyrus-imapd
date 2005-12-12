@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.41 2005/11/13 14:24:34 murch Exp $
+ * $Id: nntpd.c,v 1.2.2.42 2005/12/12 23:17:53 murch Exp $
  */
 
 /*
@@ -116,6 +116,8 @@ int imapd_exists;
 struct protstream *imapd_out = NULL;
 struct auth_state *imapd_authstate = NULL;
 char *imapd_userid = NULL;
+int imapd_condstore_enabled = 0;
+
 void printastring(const char *s __attribute__((unused)))
 {
     fatal("not implemented", EC_SOFTWARE);
@@ -463,9 +465,7 @@ int service_init(int argc __attribute__((unused)),
     quotadb_open(NULL);
 
     /* setup for sending IMAP IDLE notifications */
-    if (config_getint(IMAPOPT_IMAPIDLEPOLL) > 0) {
-	idle_init();
-    }
+    idle_enabled();
 
     while ((opt = getopt(argc, argv, "srf")) != EOF) {
 	switch(opt) {
