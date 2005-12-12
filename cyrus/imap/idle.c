@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle.c,v 1.2.2.2 2004/02/27 21:17:26 ken3 Exp $ */
+/* $Id: idle.c,v 1.2.2.3 2005/12/12 21:23:58 murch Exp $ */
 
 #include <config.h>
 
@@ -58,12 +58,20 @@
 #include "idled.h"
 #include "global.h"
 
-const char *idle_method_desc = "poll";
+const char *idle_method_desc = "no";
+
+/* function to report mailbox updates to the client */
+static idle_updateproc_t *idle_update = NULL;
+
+/* how often to poll the mailbox */
+static time_t idle_period = -1;
+static int idle_started = 0;
 
 /* UNIX socket variables */
 static int notify_sock = -1;
 static struct sockaddr_un idle_remote;
 static int idle_remote_len = 0;
+
 
 /*
  * Send a message to idled
@@ -102,81 +110,145 @@ void idle_notify(struct mailbox *mailbox)
 /*
  * Create connection to idled for sending notifications
  */
-int idle_init(void)
+int idle_enabled(void)
 {
-    int s;
-    int fdflags;
-    struct stat sbuf;
-    const char *idle_sock;
+    if (idle_period == -1) {
+	int s;
+	int fdflags;
+	struct stat sbuf;
+	const char *idle_sock;
 
-    /* if the socket is already open, return */
-    if (notify_sock != -1) return 1;
+	/* get polling period in case we can't connect to idled
+	 * NOTE: if used, a period of zero disables IDLE
+	 */
+	idle_period = config_getint(IMAPOPT_IMAPIDLEPOLL);
+	if (idle_period < 0) idle_period = 0;
 
-    /* open the socket */
-    if ((s = socket(AF_UNIX, SOCK_DGRAM, 0)) == -1) return 0;
+	if (!idle_period) return 0;
 
-    idle_remote.sun_family = AF_UNIX;
-    idle_sock = config_getstring(IMAPOPT_IDLESOCKET);
-    if (idle_sock) {	
-	strcpy(idle_remote.sun_path, idle_sock);
+	idle_method_desc = "poll";
+
+	if ((s = socket(AF_UNIX, SOCK_DGRAM, 0)) == -1) {
+	    return idle_period;
+	}
+
+	idle_remote.sun_family = AF_UNIX;
+	idle_sock = config_getstring(IMAPOPT_IDLESOCKET);
+	if (idle_sock) {	
+	    strcpy(idle_remote.sun_path, idle_sock);
+	}
+	else {
+	    strcpy(idle_remote.sun_path, config_dir);
+	    strcat(idle_remote.sun_path, FNAME_IDLE_SOCK);
+	}
+	idle_remote_len = sizeof(idle_remote.sun_family) +
+	    strlen(idle_remote.sun_path) + 1;
+
+	/* check that the socket exists */
+	if (stat(idle_remote.sun_path, &sbuf) < 0) {
+	    close(s);
+	    return idle_period;
+	}
+
+	/* put us in non-blocking mode */
+	fdflags = fcntl(s, F_GETFD, 0);
+	if (fdflags != -1) fdflags = fcntl(s, F_SETFL, O_NONBLOCK | fdflags);
+	if (fdflags == -1) { close(s); return idle_period; }
+
+	notify_sock = s;
+
+	if (!idle_send_msg(IDLE_NOOP, NULL)) {
+	    close(s);
+	    notify_sock = -1;
+	    return idle_period;
+	}
+
+	/* set the mailbox update notifier */
+	mailbox_set_updatenotifier(idle_notify);
+
+	idle_method_desc = "idled";
+
+	return 1;
+    }
+    else if (notify_sock != -1) {
+	/* if the idle socket is already open, we're enabled */
+	return 1;
     }
     else {
-	strcpy(idle_remote.sun_path, config_dir);
-	strcat(idle_remote.sun_path, FNAME_IDLE_SOCK);
+	return idle_period;
     }
-    idle_remote_len = sizeof(idle_remote.sun_family) +
-	strlen(idle_remote.sun_path) + 1;
+}
 
-    /* check that the socket exists */
-    if (stat(idle_remote.sun_path, &sbuf) < 0) {
-	close(s);
+static void idle_handler(int sig)
+{
+    /* ignore the signals, unless the server has started idling */
+    if (!idle_started) return;
+
+    switch (sig) {
+    case SIGUSR1:
+	idle_update(IDLE_MAILBOX);
+	break;
+    case SIGUSR2:
+	idle_update(IDLE_ALERT);
+	break;
+    case SIGALRM:
+	idle_update(IDLE_MAILBOX|IDLE_ALERT);
+	alarm(idle_period);
+	break;
+    }
+}
+
+int idle_init(idle_updateproc_t *proc)
+{
+    struct sigaction action;
+
+    idle_update = proc;
+
+    /* We don't want recursive calls to idle_update() */
+    sigemptyset(&action.sa_mask);
+    sigaddset(&action.sa_mask, SIGUSR1);
+    sigaddset(&action.sa_mask, SIGUSR2);
+    action.sa_flags = 0;
+#ifdef SA_RESTART
+    action.sa_flags |= SA_RESTART;
+#endif
+    action.sa_handler = idle_handler;
+
+    /* Setup the signal handlers */
+    if ((sigaction(SIGUSR1, &action, NULL) < 0) ||
+	(sigaction(SIGUSR2, &action, NULL) < 0) ||
+	(sigaction(SIGALRM, &action, NULL) < 0)) {
+	syslog(LOG_ERR, "sigaction: %m");
+
+	/* Cancel receiving signals */
+	idle_done(NULL);
 	return 0;
     }
-
-    /* put us in non-blocking mode */
-    fdflags = fcntl(s, F_GETFD, 0);
-    if (fdflags != -1) fdflags = fcntl(s, F_SETFL, O_NONBLOCK | fdflags);
-    if (fdflags == -1) {
-	close(s);
-	return 0;
-    }
-
-    notify_sock = s;
-
-    /* set the mailbox update notifier */
-    mailbox_set_updatenotifier(idle_notify);
-
-    idle_method_desc = "idled";
 
     return 1;
 }
 
-static void idle_handler(int sig __attribute__((unused))) { /* do nothing */ }
-
 void idle_start(struct mailbox *mailbox)
 {
-    struct sigaction action;
-
-    sigemptyset(&action.sa_mask);
-    action.sa_flags = 0;
-    action.sa_handler = idle_handler;
+    idle_started = 1;
 
     /* Tell idled that we're idling */
-    if (idle_send_msg(IDLE_INIT, mailbox)) {
-	/* if we can talk to idled, setup the signal handlers */
-	if ((sigaction(SIGUSR1, &action, NULL) < 0) ||
-	    (sigaction(SIGUSR2, &action, NULL) < 0)) {
-	    syslog(LOG_ERR, "sigaction: %m");
-	}
+    if (notify_sock == -1 || !idle_send_msg(IDLE_INIT, mailbox)) {
+	/* otherwise, we'll poll with SIGALRM */
+	alarm(idle_period);
     }
 }
 
 void idle_done(struct mailbox *mailbox)
 {
     /* Tell idled that we're done idling */
-    idle_send_msg(IDLE_DONE, mailbox);
+    if (notify_sock != -1) idle_send_msg(IDLE_DONE, mailbox);
 
     /* Remove the signal handlers */
     signal(SIGUSR1, SIG_IGN);
     signal(SIGUSR2, SIG_IGN);
+    signal(SIGALRM, SIG_IGN);
+
+    idle_update = NULL;
+    idle_started = 0;
 }

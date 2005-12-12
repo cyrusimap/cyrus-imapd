@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.67 2005/11/21 19:48:36 murch Exp $ */
+/* $Id: imapd.c,v 1.443.2.68 2005/12/12 21:23:59 murch Exp $ */
 
 #include <config.h>
 
@@ -238,6 +238,7 @@ extern void id_getcmdline(int argc, char **argv);
 extern void id_response(struct protstream *pout);
 
 void cmd_idle(char* tag);
+void idle_update(idle_flags_t flags);
 
 void cmd_starttls(char *tag, int imaps);
 
@@ -633,9 +634,7 @@ int service_init(int argc, char **argv, char **envp)
     quotadb_open(NULL);
 
     /* setup for sending IMAP IDLE notifications */
-    if (config_getint(IMAPOPT_IMAPIDLEPOLL) > 0) {
-	idle_init();
-    }
+    idle_enabled();
 
     /* create connection to the SNMP listener, if available. */
     snmp_connect(); /* ignore return code */
@@ -1302,8 +1301,7 @@ void cmdloop()
 		snmp_increment(ID_COUNT, 1);
 	    }
 	    else if (!imapd_userid) goto nologin;
-	    else if (!strcmp(cmd.s, "Idle") &&
-		     config_getint(IMAPOPT_IMAPIDLEPOLL) > 0) {
+	    else if (!strcmp(cmd.s, "Idle") && idle_enabled()) {
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 		cmd_idle(tag.s);
@@ -2389,85 +2387,104 @@ void cmd_id(char *tag)
  */
 void cmd_idle(char *tag)
 {
-    static int idle_period = -1;
+    int c = EOF;
     static struct buf arg;
-    int c = EOF, done = 0, shutdown = 0;
-    char shut[1024];
+    static int idle_period = -1;
 
-    /* get polling period */
-    if (idle_period == -1) {
-      idle_period = config_getint(IMAPOPT_IMAPIDLEPOLL);
-    }
-
-    if (backend_current && CAPA(backend_current, CAPA_IDLE)) {
-	/* Start IDLE on backend */
-	char buf[2048];
-
-	prot_printf(backend_current->out, "%s IDLE\r\n", tag);
-	if (!prot_fgets(buf, sizeof(buf), backend_current->in)) {
-
-	    /* If we received nothing from the backend, fail */
-	    prot_printf(imapd_out, "%s NO %s\r\n", tag, 
-			error_message(IMAP_SERVER_UNAVAILABLE));
-	    goto done;
+    if (!backend_current) {  /* Local mailbox */
+	/* Setup for doing mailbox updates */
+	if (!idle_init(idle_update)) {
+	    prot_printf(imapd_out, 
+			"%s NO cannot start idling\r\n", tag);
+	    return;
 	}
-	if (buf[0] != '+') {
-	    /* If we received anything but a continuation response,
-	       spit out what we received and quit */
-	    prot_write(imapd_out, buf, strlen(buf));
-	    goto done;
-	}
-    }
 
-    /* Start listening to idled */
-    if (idle_init()) idle_start(imapd_mailbox);
-
-    /* Tell client we are idling and waiting for end of command */
-    prot_printf(imapd_out, "+ idling\r\n");
-
-    while (!done) {
-	/* Flush any buffered output */
+	/* Tell client we are idling and waiting for end of command */
+	prot_printf(imapd_out, "+ idling\r\n");
 	prot_flush(imapd_out);
 
-	/* Check for shutdown file */
-	if (!imapd_userisadmin && shutdown_file(shut, sizeof(shut))) {
-	    shutdown = done = 1;
-	    goto done;
-	}
+	/* Start doing mailbox updates */
+	if (imapd_mailbox) index_check(imapd_mailbox, 0, 1);
+	idle_start(imapd_mailbox);
 
-	done = proxy_check_input(protin, imapd_in, imapd_out,
-				 backend_current ? backend_current->in : NULL,
-				 NULL, idle_period);
+	/* Get continuation data */
+	c = getword(imapd_in, &arg);
 
-	/* If not running IDLE on backend, check the mailbox for updates */
-	if (!backend_current || !CAPA(backend_current, CAPA_IDLE)) {
-	    imapd_check(NULL, 0, 1);
-	}
+	/* Stop updates and do any necessary cleanup */
+	idle_done(imapd_mailbox);
     }
+    else {  /* Remote mailbox */
+	int done = 0, shutdown = 0;
+	char buf[2048];
 
-    /* Get continuation data */
-    c = getword(imapd_in, &arg);
+	/* get polling period */
+	if (idle_period == -1) {
+	    idle_period = config_getint(IMAPOPT_IMAPIDLEPOLL);
+	}
 
-  done:
-    if (done) {
-	/* Done listening to idled */
-	if (idle_init()) idle_done(imapd_mailbox);
+	if (CAPA(backend_current, CAPA_IDLE)) {
+	    /* Start IDLE on backend */
+	    prot_printf(backend_current->out, "%s IDLE\r\n", tag);
+	    if (!prot_fgets(buf, sizeof(buf), backend_current->in)) {
 
-	if (backend_current && CAPA(backend_current, CAPA_IDLE)) {
-	    /* Either the client timed out, or gave us a continuation.
+		/* If we received nothing from the backend, fail */
+		prot_printf(imapd_out, "%s NO %s\r\n", tag, 
+			    error_message(IMAP_SERVER_UNAVAILABLE));
+		return;
+	    }
+	    if (buf[0] != '+') {
+		/* If we received anything but a continuation response,
+		   spit out what we received and quit */
+		prot_write(imapd_out, buf, strlen(buf));
+		return;
+	    }
+	}
+
+	/* Tell client we are idling and waiting for end of command */
+	prot_printf(imapd_out, "+ idling\r\n");
+	prot_flush(imapd_out);
+
+	/* Pipe updates to client while waiting for end of command */
+	while (!done) {
+	    /* Flush any buffered output */
+	    prot_flush(imapd_out);
+
+	    /* Check for shutdown file */
+	    if (!imapd_userisadmin && shutdown_file(buf, sizeof(buf))) {
+		shutdown = done = 1;
+		goto done;
+	    }
+
+	    done = proxy_check_input(protin, imapd_in, imapd_out,
+				     backend_current->in, NULL, idle_period);
+
+	    /* If not running IDLE on backend, poll the mailbox for updates */
+	    if (!CAPA(backend_current, CAPA_IDLE)) {
+		imapd_check(NULL, 0, 1);
+	    }
+	}
+
+	/* Get continuation data */
+	c = getword(imapd_in, &arg);
+
+      done:
+	if (CAPA(backend_current, CAPA_IDLE)) {
+	    /* Either the client timed out, or ended the command.
 	       In either case we're done, so terminate IDLE on backend */
 	    prot_printf(backend_current->out, "Done\r\n");
 	    pipe_until_tag(backend_current, tag, 0);
 	}
+
+	if (shutdown) {
+	    char *p;
+
+	    for (p = buf; *p == '['; p++); /* can't have [ be first char */
+	    prot_printf(imapd_out, "* BYE [ALERT] %s\r\n", p);
+	    shut_down(0);
+	}
     }
 
-    if (shutdown) {
-	char *p;
-
-	for (p = shut; *p == '['; p++); /* can't have [ be first char */
-	prot_printf(imapd_out, "* BYE [ALERT] %s\r\n", p);
-	shut_down(0);
-    }
+    imapd_check(NULL, 0, 1);
 
     if (c != EOF) {
 	if (!strcasecmp(arg.s, "Done") &&
@@ -2483,6 +2500,25 @@ void cmd_idle(char *tag)
     }
 }
 
+/* Send unsolicited untagged responses to the client */
+void idle_update(idle_flags_t flags)
+{
+    if ((flags & IDLE_MAILBOX) && imapd_mailbox)
+	index_check(imapd_mailbox, 0, 1);
+
+    if (flags & IDLE_ALERT) {
+	char shut[1024];
+	if (! imapd_userisadmin && shutdown_file(shut, sizeof(shut))) {
+	    char *p;
+	    for (p = shut; *p == '['; p++); /* can't have [ be first char */
+	    prot_printf(imapd_out, "* BYE [ALERT] %s\r\n", p);
+	    shut_down(0);
+	}
+    }
+
+    prot_flush(imapd_out);
+}
+
 /*
  * Perform a CAPABILITY command
  */
@@ -2495,7 +2531,7 @@ void cmd_capability(char *tag)
 
     prot_printf(imapd_out, "* CAPABILITY " CAPABILITY_STRING);
 
-    if (config_getint(IMAPOPT_IMAPIDLEPOLL) > 0) {
+    if (idle_enabled()) {
 	prot_printf(imapd_out, " IDLE");
     }
 
