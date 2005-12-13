@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_reset.c,v 1.1.2.3 2005/03/14 19:37:18 ken3 Exp $
+ * $Id: sync_reset.c,v 1.1.2.4 2005/12/13 15:31:10 murch Exp $
  */
 
 #include <config.h>
@@ -55,7 +55,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <fcntl.h>
-#include <com_err.h>
 #include <syslog.h>
 #include <string.h>
 #include <sys/wait.h>

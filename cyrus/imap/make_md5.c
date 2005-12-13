@@ -9,7 +9,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <fcntl.h>
-#include <com_err.h>
 #include <syslog.h>
 #include <string.h>
 #include <sys/wait.h>

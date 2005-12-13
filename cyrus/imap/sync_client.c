@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.28 2005/09/19 18:18:36 ken3 Exp $
+ * $Id: sync_client.c,v 1.1.2.29 2005/12/13 15:31:09 murch Exp $
  */
 
 #include <config.h>
@@ -55,7 +55,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <fcntl.h>
-#include <com_err.h>
 #include <syslog.h>
 #include <string.h>
 #include <sys/wait.h>
