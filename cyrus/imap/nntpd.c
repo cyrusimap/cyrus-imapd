@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.50 2005/11/13 14:24:55 murch Exp $
+ * $Id: nntpd.c,v 1.51 2005/12/13 15:18:55 murch Exp $
  */
 
 /*
@@ -784,7 +784,7 @@ static int reset_saslconn(sasl_conn_t **conn)
 
     sasl_dispose(conn);
     /* do initialization typical of service_main */
-    ret = sasl_server_new("news", config_servername,
+    ret = sasl_server_new("nntp", config_servername,
                          NULL, NULL, NULL,
                          NULL, SASL_SUCCESS_DATA, conn);
     if(ret != SASL_OK) return ret;
