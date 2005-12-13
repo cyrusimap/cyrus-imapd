@@ -1,5 +1,5 @@
 /* auth_pts.h -- PTLOADER authorization module.
-   $Id: auth_pts.h,v 1.2 2003/10/22 18:03:04 rjs3 Exp $
+   $Id: auth_pts.h,v 1.2.2.1 2005/12/13 13:35:06 murch Exp $
 	
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -53,7 +53,6 @@
 #ifdef HAVE_SYS_PARAM_H
 #include <sys/param.h>
 #endif
-#include <db.h>
 #include <syslog.h>
 #include <ctype.h>
 
