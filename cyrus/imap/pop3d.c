@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.144.2.36 2005/12/12 23:10:58 murch Exp $
+ * $Id: pop3d.c,v 1.144.2.37 2005/12/13 19:36:08 murch Exp $
  */
 #include <config.h>
 
@@ -910,7 +910,7 @@ static void cmdloop(void)
 	}
 	else if (!strcmp(inputbuf, "dele")) {
 	    if (!arg) prot_printf(popd_out, "-ERR Missing argument\r\n");
-	    else if (config_popuseacl && !(mboxstruct.myrights & ACL_DELETE)) {
+	    else if (config_popuseacl && !(mboxstruct.myrights & ACL_DELETEMSG)) {
 		prot_printf(popd_out, "-ERR [SYS/PERM] %s\r\n",
 			    error_message(IMAP_PERMISSION_DENIED));
 	    }

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.68 2005/12/12 21:23:59 murch Exp $ */
+/* $Id: imapd.c,v 1.443.2.69 2005/12/13 19:35:50 murch Exp $ */
 
 #include <config.h>
 
@@ -3301,10 +3301,10 @@ void cmd_select(char *tag, char *cmd, char *name)
 
     /* Examine command puts mailbox in read-only mode */
     if (cmd[0] == 'E') {
-	imapd_mailbox->myrights &= ~(ACL_SEEN|ACL_WRITE|ACL_DELETE);
+	imapd_mailbox->myrights &= ~(ACL_SEEN|ACL_WRITE|ACL_DELETEMSG|ACL_EXPUNGE);
     }
 
-    if (imapd_mailbox->myrights & ACL_DELETE) {
+    if (imapd_mailbox->myrights & ACL_EXPUNGE) {
 	time_t now = time(NULL);
 
 	/* Warn if mailbox is close to or over quota */
@@ -3340,7 +3340,7 @@ void cmd_select(char *tag, char *cmd, char *name)
     }
 
     prot_printf(imapd_out, "%s OK [READ-%s] %s\r\n", tag,
-	   (imapd_mailbox->myrights & (ACL_WRITE|ACL_DELETE)) ?
+	   (imapd_mailbox->myrights & (ACL_INSERT|ACL_EXPUNGE|ACL_WRITE|ACL_DELETEMSG)) ?
 		"WRITE" : "ONLY", error_message(IMAP_OK_COMPLETED));
 
     proc_register("imapd", imapd_clienthost, imapd_userid, mailboxname);
@@ -3368,7 +3368,7 @@ void cmd_close(char *tag)
     }
 
     /* local mailbox */
-    if (!(imapd_mailbox->myrights & ACL_DELETE)) r = 0;
+    if (!(imapd_mailbox->myrights & ACL_EXPUNGE)) r = 0;
     else {
 	r = mailbox_expunge(imapd_mailbox, (int (*)())0, (char *)0, 0);
 	if (!r) sync_log_mailbox(imapd_mailbox->name);
@@ -4535,7 +4535,7 @@ void cmd_expunge(char *tag, char *sequence)
     }
 
     /* local mailbox */
-    if (!(imapd_mailbox->myrights & ACL_DELETE)) r = IMAP_PERMISSION_DENIED;
+    if (!(imapd_mailbox->myrights & ACL_EXPUNGE)) r = IMAP_PERMISSION_DENIED;
     else if (sequence) {
 	r = mailbox_expunge(imapd_mailbox, index_expungeuidlist, sequence, 0);
     }
@@ -5651,6 +5651,7 @@ void cmd_getacl(const char *tag, const char *name)
     int r, access;
     char *acl;
     char *rights, *nextid;
+    char str[ACL_MAXSTR];
 
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
 					       imapd_userid, mailboxname);
@@ -5663,7 +5664,7 @@ void cmd_getacl(const char *tag, const char *name)
     if (!r) {
 	access = cyrus_acl_myrights(imapd_authstate, acl);
 
-	if (!(access & (ACL_READ|ACL_ADMIN)) &&
+	if (!(access & ACL_ADMIN) &&
 	    !imapd_userisadmin &&
 	    !mboxname_userownsmailbox(imapd_userid, mailboxname)) {
 	    r = (access&ACL_LOOKUP) ?
@@ -5693,6 +5694,7 @@ void cmd_getacl(const char *tag, const char *name)
 	prot_printf(imapd_out, " ");
 	printastring(acl);
 	prot_printf(imapd_out, " ");
+	rights = cyrus_acl_masktostr(cyrus_acl_strtomask(rights), str, 1);
 	printastring(rights);
 	acl = nextid;
     }
@@ -5765,11 +5767,11 @@ char *identifier;
 
 	/* calculate optional rights */
 	cyrus_acl_masktostr(implicit ^ (canon_identifier ? ACL_FULL : 0),
-			    optional);
+			    optional, 1);
 
 	/* build the rights string */
 	if (implicit) {
-	    cyrus_acl_masktostr(implicit, rightsdesc);
+	    cyrus_acl_masktostr(implicit, rightsdesc, 1);
 	}
 	else {
 	    strcpy(rightsdesc, "\"\"");
@@ -5829,7 +5831,7 @@ void cmd_myrights(const char *tag, const char *name)
 	    rights |= config_implicitrights;
 	}
 
-	if (!rights) {
+	if (!(rights & (ACL_LOOKUP|ACL_READ|ACL_INSERT|ACL_CREATE|ACL_DELETEMBOX|ACL_ADMIN))) {
 	    r = IMAP_MAILBOX_NONEXISTENT;
 	}
     }
@@ -5844,7 +5846,7 @@ void cmd_myrights(const char *tag, const char *name)
     prot_printf(imapd_out, "* MYRIGHTS ");
     printastring(name);
     prot_printf(imapd_out, " ");
-    printastring(cyrus_acl_masktostr(rights, str));
+    printastring(cyrus_acl_masktostr(rights, str, 1));
     prot_printf(imapd_out, "\r\n%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
 }

@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.71.2.37 2005/12/13 18:49:23 murch Exp $ -->
+<!-- $Id: changes.html,v 1.71.2.38 2005/12/13 19:35:46 murch Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -10,6 +10,8 @@
 
 <h1>Changes to the Cyrus IMAP Server since 2.3.0</h1> 
 <ul> 
+<li>Updated ACL code to RFC 4314 (separate rights for message delete,
+mailbox delete, and expunge).</li>
 <li>Fixed IDLE to use idled for local mailboxes.</li>
 <li>Fixed miscellaneous build issues.</li>
 </ul>
@@ -2074,7 +2076,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2005/12/13 18:49:23 $ <br />
+last modified: $Date: 2005/12/13 19:35:46 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>

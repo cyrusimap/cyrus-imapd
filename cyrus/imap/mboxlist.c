@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.221.2.20 2005/11/22 18:22:38 murch Exp $
+ * $Id: mboxlist.c,v 1.221.2.21 2005/12/13 19:36:03 murch Exp $
  */
 
 #include <config.h>
@@ -141,13 +141,6 @@ char *mboxlist_makeentry(int mbtype, const char *part, const char *acl)
 				     (30 + strlen(acl) + strlen(part)));
     sprintf(mboxent, "%d %s %s", mbtype, part, acl);
     return mboxent;
-}
-
-static int get_deleteright(void)
-{
-    const char *r = config_getstring(IMAPOPT_DELETERIGHT);
-
-    return cyrus_acl_strtomask(r);
 }
 
 /*
@@ -909,7 +902,6 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
     struct txn *tid = NULL;
     int isremote = 0;
     int mbtype;
-    int deleteright = get_deleteright();
     const char *p;
     mupdate_handle *mupdate_h = NULL;
 
@@ -958,9 +950,10 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
      * from deleting a user mailbox) */
     if(checkacl) {
 	access = cyrus_acl_myrights(auth_state, acl);
-	if(!(access & deleteright)) {
+	if(!(access & ACL_DELETEMBOX)) {
 	    /* User has admin rights over their own mailbox namespace */
-	    if (mboxname_userownsmailbox(userid, name)) {
+	    if (mboxname_userownsmailbox(userid, name) &&
+		(config_implicitrights & ACL_ADMIN)) {
 		isadmin = 1;
 	    }
 	    
@@ -1074,7 +1067,6 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     struct txn *tid = NULL;
     char *newpartition = NULL;
     char *mboxent = NULL;
-    int deleteright = get_deleteright();
     char *p;
 
     mupdate_handle *mupdate_h = NULL;
@@ -1130,7 +1122,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 		     strlen(userid))) {
 	    /* Special case of renaming inbox */
 	    access = cyrus_acl_myrights(auth_state, oldacl);
-	    if (!(access & deleteright)) {
+	    if (!(access & ACL_DELETEMBOX)) {
 	      r = IMAP_PERMISSION_DENIED;
 	      goto done;
 	    }
@@ -1139,7 +1131,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 		   mboxname_isusermailbox(newname, 1)) {
 	    /* Special case of renaming a user */
 	    access = cyrus_acl_myrights(auth_state, oldacl);
-	    if (!(access & deleteright) && !isadmin) {
+	    if (!(access & ACL_DELETEMBOX) && !isadmin) {
 		r = (isadmin || (access & ACL_LOOKUP)) ?
 		    IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
 		goto done;
@@ -1151,7 +1143,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	}
     } else {
 	access = cyrus_acl_myrights(auth_state, oldacl);
-	if (!(access & deleteright) && !isadmin) {
+	if (!(access & ACL_DELETEMBOX) && !isadmin) {
 	    r = (isadmin || (access & ACL_LOOKUP)) ?
 		IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
 	    goto done;
@@ -3206,12 +3198,12 @@ int mboxlist_changesub(const char *name, const char *userid,
     }
 
     if (add && !force) {
-	/* Ensure mailbox exists and can be either seen or read by user */
+	/* Ensure mailbox exists and can be seen by user */
 	if ((r = mboxlist_lookup(name, &acl, NULL))!=0) {
 	    mboxlist_closesubs(subs);
 	    return r;
 	}
-	if ((cyrus_acl_myrights(auth_state, acl) & (ACL_READ|ACL_LOOKUP)) == 0) {
+	if ((cyrus_acl_myrights(auth_state, acl) & ACL_LOOKUP) == 0) {
 	    mboxlist_closesubs(subs);
 	    return IMAP_MAILBOX_NONEXISTENT;
 	}

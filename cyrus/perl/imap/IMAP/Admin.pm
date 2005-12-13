@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Admin.pm,v 1.39.2.5 2005/11/21 16:41:35 murch Exp $
+# $Id: Admin.pm,v 1.39.2.6 2005/12/13 19:36:14 murch Exp $
 
 package Cyrus::IMAP::Admin;
 use strict;
@@ -598,9 +598,9 @@ my %aclalias = (none => '',
 		read => 'lrs',
 		post => 'lrsp',
 		append => 'lrsip',
-		write => 'lrswipcd',
-		delete => 'lrd',
-		all => 'lrswipcda');
+		write => 'lrswipkxte',
+		delete => 'lrxte',
+		all => 'lrswipkxtea');
 
 sub setaclmailbox {
   my ($self, $mbx, %acl) = @_;
@@ -1088,22 +1088,23 @@ Renames the specified mailbox, optionally moving it to a different partition.
 
 Set ACLs on a mailbox.  The ACL may be one of the special strings C<none>,
 C<read> (C<lrs>), C<post> (C<lrsp>), C<append> (C<lrsip>), C<write>
-(C<lrswipcd>), C<delete> (C<lrd>), or C<all> (C<lrswipcda>), or any combinations 
-of the ACL codes:
+(C<lrswipkxte>), C<delete> (C<lrxte>), or C<all> (C<lrswipkxte>), or
+any combinations of the ACL codes:
 
 =over 4
 
 =item l
 
-Lookup (visible to LIST/LSUB/UNSEEN)
+Lookup (mailbox is visible to LIST/LSUB, SUBSCRIBE mailbox)
 
 =item r
 
-Read (SELECT, CHECK, FETCH, PARTIAL, SEARCH, COPY source)
+Read (SELECT/EXAMINE the mailbox, perform STATUS)
 
 =item s
 
-Seen (STORE \SEEN)
+Seen (set/clear \SEEN flag via STORE, also set \SEEN flag during
+    APPEND/COPY/FETCH BODY[...])
 
 =item w
 
@@ -1117,17 +1118,26 @@ Insert (APPEND, COPY destination)
 
 Post (send mail to mailbox)
 
-=item c
+=item k
 
-Create (subfolders)
+Create mailbox (CREATE new sub-mailboxes, parent for new mailbox in RENAME)
 
-=item d
+=item x
 
-Delete (STORE \DELETED, EXPUNGE)
+Delete mailbox (DELETE mailbox, old mailbox name in RENAME)
+
+=item t
+
+Delete messages (set/clear \DELETED flag via STORE, also set \DELETED
+    flag during APPEND/COPY)
+
+=item e
+
+Perform EXPUNGE and expunge as part of CLOSE
 
 =item a
 
-Administer (SETACL)
+Administer (SETACL/DELETEACL/GETACL/LISTRIGHTS)
 
 =back
 

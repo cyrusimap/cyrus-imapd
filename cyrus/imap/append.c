@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.102.2.11 2005/06/02 16:16:01 ken3 Exp $
+ * $Id: append.c,v 1.102.2.12 2005/12/13 19:35:49 murch Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -587,7 +587,7 @@ int append_fromstage(struct appendstate *as, struct body **body,
 	    addme(&as->seen_msgrange, &as->seen_alloced, message_index.uid);
 	}
 	else if (!strcmp(flag[i], "\\deleted")) {
-	    if (mailbox->myrights & ACL_DELETE) {
+	    if (mailbox->myrights & ACL_DELETEMSG) {
 		message_index.system_flags |= FLAG_DELETED;
 		as->numdeleted++;
 	    }
@@ -742,7 +742,7 @@ int append_fromstream(struct appendstate *as, struct body **body,
 	    addme(&as->seen_msgrange, &as->seen_alloced, message_index.uid);
 	}
 	else if (!strcmp(flag[i], "\\deleted")) {
-	    if (mailbox->myrights & ACL_DELETE) {
+	    if (mailbox->myrights & ACL_DELETEMSG) {
 		message_index.system_flags |= FLAG_DELETED;
 		as->numdeleted++;
 	    }
@@ -971,7 +971,7 @@ int append_copy(struct mailbox *mailbox,
 		}
 	    }
 	}
-	if (append_mailbox->myrights & ACL_DELETE) {
+	if (append_mailbox->myrights & ACL_DELETEMSG) {
 	    message_index[msg].system_flags |=
 	      copymsg[msg].system_flags & FLAG_DELETED;
 	}

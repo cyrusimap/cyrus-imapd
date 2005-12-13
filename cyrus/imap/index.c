@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.199.2.24 2005/11/17 15:46:25 murch Exp $
+ * $Id: index.c,v 1.199.2.25 2005/12/13 19:36:00 murch Exp $
  */
 #include <config.h>
 
@@ -830,7 +830,7 @@ int nflags;
     /* First pass at checking permission */
     if ((storeargs->seen && !(myrights & ACL_SEEN)) ||
 	((storeargs->system_flags & FLAG_DELETED) &&
-	 !(myrights & ACL_DELETE)) ||
+	 !(myrights & ACL_DELETEMSG)) ||
 	(((storeargs->system_flags & ~FLAG_DELETED) || nflags) &&
 	 !(myrights & ACL_WRITE))) {
 	mailbox->myrights = myrights;
@@ -2259,7 +2259,7 @@ static void index_listflags(struct mailbox *mailbox)
 	    prot_printf(imapd_out, "%c\\Answered \\Flagged \\Draft", sepchar);
 	    sepchar = ' ';
 	}
-	if (mailbox->myrights & ACL_DELETE) {
+	if (mailbox->myrights & ACL_DELETEMSG) {
 	    prot_printf(imapd_out, "%c\\Deleted", sepchar);
 	    sepchar = ' ';
 	}
@@ -2852,7 +2852,7 @@ static int index_storeflag(struct mailbox *mailbox,
 	      (storeargs->system_flags&FLAG_DELETED);
 	}
 	else {
-	    if (!(mailbox->myrights & ACL_DELETE)) {
+	    if (!(mailbox->myrights & ACL_DELETEMSG)) {
 		record.system_flags = (record.system_flags&FLAG_DELETED) |
 		  (storeargs->system_flags&~FLAG_DELETED);
 	    }

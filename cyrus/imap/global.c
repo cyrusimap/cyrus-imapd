@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.2.2.14 2005/11/17 15:46:15 murch Exp $ */
+/* $Id: global.c,v 1.2.2.15 2005/12/13 19:35:50 murch Exp $ */
 
 #include <config.h>
 
@@ -214,6 +214,8 @@ int cyrus_init(const char *alt_config, const char *ident, unsigned flags)
 			       config_getint(IMAPOPT_BERKELEY_LOCKS_MAX));
 	libcyrus_config_setint(CYRUSOPT_BERKELEY_TXNS_MAX,
 			       config_getint(IMAPOPT_BERKELEY_TXNS_MAX));
+	libcyrus_config_setstring(CYRUSOPT_DELETERIGHT,
+				  config_getstring(IMAPOPT_DELETERIGHT));
 
 	/* Not until all configuration parameters are set! */
 	libcyrus_init();

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.43 2005/12/13 15:18:21 murch Exp $
+ * $Id: nntpd.c,v 1.2.2.44 2005/12/13 19:36:06 murch Exp $
  */
 
 /*
@@ -3414,7 +3414,7 @@ static int cancel_cb(const char *msgid __attribute__((unused)),
 	r = mailbox_open_header(mailbox, 0, &mbox);
 
 	if (!r &&
-	    !(cyrus_acl_myrights(newsmaster_authstate, mbox.acl) & ACL_DELETE))
+	    !(cyrus_acl_myrights(newsmaster_authstate, mbox.acl) & ACL_DELETEMSG))
 	    r = IMAP_PERMISSION_DENIED;
 
 	if (!r) {

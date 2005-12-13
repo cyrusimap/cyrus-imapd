@@ -39,7 +39,7 @@
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 #
-# $Id: cyradm.sh,v 1.13.2.3 2005/11/21 16:41:34 murch Exp $
+# $Id: cyradm.sh,v 1.13.2.4 2005/12/13 19:36:13 murch Exp $
 case "x$BASH_VERSION" in
 x) exec perl -MCyrus::IMAP::Shell -e shell -- ${1+"$@"} ;;
 *) exec perl -MCyrus::IMAP::Shell -e shell -- "$@" ;;
@@ -125,9 +125,8 @@ Remove ACLs from the specified mailbox.
 Delete the specified mailbox.
 
 Administrators do not have implicit delete rights on mailboxes.  Use the
-B<setaclmailbox> command to grant the C<c> permission (or other permission
-as specified by the deleteright configuration option in imapd.conf)
-to your principal if you need to delete a mailbox you do not own.
+B<setaclmailbox> command to grant the C<x> permission to your
+principal if you need to delete a mailbox you do not own.
 
 Note that the online help admits to an optional host argument.  This argument
 is not currently used, and will be rejected with an error if specified; it
@@ -272,21 +271,23 @@ of the connected server.
 
 Set ACLs on a mailbox.  The ACL may be one of the special strings C<none>,
 C<read> (C<lrs>), C<post> (C<lrsp>), C<append> (C<lrsip>), C<write>
-(C<lrswipcd>), or C<all> (C<lrswipcda>), or any combinations of the ACL codes:
+(C<lrswipkxte>), C<delete> (C<lrxte>), or C<all> (C<lrswipkxte>), or
+any combinations of the ACL codes:
 
 =over 4
 
 =item l
 
-Lookup (visible to LIST/LSUB/UNSEEN)
+Lookup (mailbox is visible to LIST/LSUB, SUBSCRIBE mailbox)
 
 =item r
 
-Read (SELECT, CHECK, FETCH, PARTIAL, SEARCH, COPY source)
+Read (SELECT/EXAMINE the mailbox, perform STATUS)
 
 =item s
 
-Seen (STORE \SEEN)
+Seen (set/clear \SEEN flag via STORE, also set \SEEN flag during
+    APPEND/COPY/FETCH BODY[...])
 
 =item w
 
@@ -300,17 +301,26 @@ Insert (APPEND, COPY destination)
 
 Post (send mail to mailbox)
 
-=item c
+=item k
 
-Create and Delete mailbox (CREATE new sub-mailboxes, RENAME or DELETE mailbox)
+Create mailbox (CREATE new sub-mailboxes, parent for new mailbox in RENAME)
 
-=item d
+=item x
 
-Delete (STORE \DELETED, EXPUNGE)
+Delete mailbox (DELETE mailbox, old mailbox name in RENAME)
+
+=item t
+
+Delete messages (set/clear \DELETED flag via STORE, also set \DELETED
+    flag during APPEND/COPY)
+
+=item e
+
+Perform EXPUNGE and expunge as part of CLOSE
 
 =item a
 
-Administer (SETACL)
+Administer (SETACL/DELETEACL/GETACL/LISTRIGHTS)
 
 =back
 

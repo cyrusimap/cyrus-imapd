@@ -42,7 +42,7 @@
  * Start Date: 6/28/93
  */
 
-/* $Id: acl.h,v 1.14 2003/02/13 20:15:38 rjs3 Exp $ */
+/* $Id: acl.h,v 1.14.4.1 2005/12/13 19:36:11 murch Exp $ */
 
 #ifndef INCLUDED_ACL_H
 #define INCLUDED_ACL_H
@@ -53,27 +53,29 @@
 #define ACL_MAXSTR 32
 
 /* ACL bits */
-#define ACL_LOOKUP 0x00001L
-#define ACL_READ   0x00002L
-#define ACL_SEEN   0x00004L
-#define ACL_WRITE  0x00008L
-#define ACL_INSERT 0x00010L
-#define ACL_POST   0x00020L
-#define ACL_CREATE 0x00040L
-#define ACL_DELETE 0x00080L
-#define ACL_ADMIN  0x00100L
-#define ACL_ALL    0x001FFL
-#define ACL_USER0  0x00200L
-#define ACL_USER1  0x00400L
-#define ACL_USER2  0x00800L
-#define ACL_USER3  0x01000L
-#define ACL_USER4  0x02000L
-#define ACL_USER5  0x04000L
-#define ACL_USER6  0x08000L
-#define ACL_USER7  0x10000L
-#define ACL_USER8  0x20000L
-#define ACL_USER9  0x40000L
-#define ACL_FULL   0xFFFFFL
+#define ACL_LOOKUP	0x000001L
+#define ACL_READ	0x000002L
+#define ACL_SEEN	0x000004L
+#define ACL_WRITE	0x000008L
+#define ACL_INSERT	0x000010L
+#define ACL_POST	0x000020L
+#define ACL_CREATE	0x000040L
+#define ACL_DELETEMBOX	0x000080L
+#define ACL_DELETEMSG	0x000100L
+#define ACL_EXPUNGE	0x000200L
+#define ACL_ADMIN 	0x000400L
+#define ACL_ALL		0x0007FFL
+#define ACL_USER0	0x000800L
+#define ACL_USER1	0x001000L
+#define ACL_USER2	0x002000L
+#define ACL_USER3	0x004000L
+#define ACL_USER4	0x008000L
+#define ACL_USER5	0x010000L
+#define ACL_USER6	0x020000L
+#define ACL_USER7	0x040000L
+#define ACL_USER8	0x080000L
+#define ACL_USER9	0x100000L
+#define ACL_FULL	0x1FFFFFL
 
 #define ACL_MODE_SET 0
 #define ACL_MODE_ADD 1
@@ -89,7 +91,7 @@ extern int cyrus_acl_strtomask(const char *str);
  *  dst must have room for 32 characters (only 20 used currently)
  *  returns dst
  */
-extern char *cyrus_acl_masktostr(int acl, char *str);
+extern char *cyrus_acl_masktostr(int acl, char *str, int legacy);
 
 /*  cyrus_acl_myrights(acl)
  * Calculate the set of rights the user in 'auth_state' has in the ACL 'acl'.

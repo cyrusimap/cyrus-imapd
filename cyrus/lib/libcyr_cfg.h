@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: libcyr_cfg.h,v 1.2.2.8 2005/02/20 05:22:29 shadow Exp $
+ * $Id: libcyr_cfg.h,v 1.2.2.9 2005/12/13 19:36:12 murch Exp $
  */
 
 #ifndef INCLUDED_LIBCYR_CFG_H
@@ -99,6 +99,8 @@ enum cyrus_opt {
     CYRUSOPT_BERKELEY_LOCKS_MAX,
     /* BDB max txns (100) */
     CYRUSOPT_BERKELEY_TXNS_MAX,
+    /* RFC 2086 right which allows DELETE ("c") */
+    CYRUSOPT_DELETERIGHT,
 
     CYRUSOPT_LAST
     

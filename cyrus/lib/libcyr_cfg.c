@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: libcyr_cfg.c,v 1.2.2.11 2005/02/21 18:54:29 ken3 Exp $
+ * $Id: libcyr_cfg.c,v 1.2.2.12 2005/12/13 19:36:12 murch Exp $
  */
 
 #include <config.h>
@@ -122,6 +122,10 @@ struct cyrusopt_s cyrus_options[] = {
     { CYRUSOPT_BERKELEY_TXNS_MAX,
       CFGVAL(long, 100),
       CYRUS_OPT_INT },
+
+    { CYRUSOPT_DELETERIGHT,
+      CFGVAL(const char *, "c"),
+      CYRUS_OPT_STRING },
 
     { CYRUSOPT_LAST, { NULL }, CYRUS_OPT_NOTOPT }
 };

@@ -8,7 +8,7 @@
  *
  */
 /* 
- $Id: acl_afs.c,v 1.22.4.1 2004/03/24 19:53:13 ken3 Exp $
+ $Id: acl_afs.c,v 1.22.4.2 2005/12/13 19:36:11 murch Exp $
  
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -196,7 +196,7 @@ void *canonrock;
 	strncpy(newacl, *acl, (thisid - *acl));
 	strcpy(newacl + (thisid - *acl), identifier);
 	strcat(newacl, "\t");
-	(void) cyrus_acl_masktostr(access, newacl + strlen(newacl));
+	(void) cyrus_acl_masktostr(access, newacl + strlen(newacl), 0);
 	strcat(newacl, "\t");
 	strcat(newacl, nextid);
 	free(*acl);
