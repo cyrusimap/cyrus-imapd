@@ -1,7 +1,7 @@
 /* bc_emit.c -- sieve bytecode - pass 2 of the compiler
  * Rob Siemborski
  * Jen Smith
- * $Id: bc_emit.c,v 1.2.2.4 2005/10/05 15:56:21 ken3 Exp $
+ * $Id: bc_emit.c,v 1.2.2.5 2005/12/14 13:45:18 murch Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -45,7 +45,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 void dump(bytecode_info_t *d);
 #endif
 
-inline int write_int (int fd, int x)
+static inline int write_int (int fd, int x)
 {
     int y=htonl(x);
     return (write(fd, &y, sizeof(int)));
