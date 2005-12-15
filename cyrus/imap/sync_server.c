@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.1.2.19 2005/07/22 12:16:06 ken3 Exp $
+ * $Id: sync_server.c,v 1.1.2.20 2005/12/15 17:16:28 murch Exp $
  */
 
 #include <config.h>
@@ -672,7 +672,7 @@ static void cmdloop(void)
                     goto invalidargs;
 
                 cmd_create(arg1.s, arg2.s, arg3.s, arg4.s,
-                           atoi(arg4.s), sync_atoul(arg5.s));
+                           atoi(arg5.s), sync_atoul(arg6.s));
                 continue;
             }
             break;
