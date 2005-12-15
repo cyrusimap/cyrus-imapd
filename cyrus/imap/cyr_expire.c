@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_expire.c,v 1.2.2.10 2004/08/05 16:23:30 ken3 Exp $
+ * $Id: cyr_expire.c,v 1.2.2.11 2005/12/15 13:21:16 murch Exp $
  */
 
 #include <config.h>
@@ -73,7 +73,7 @@ const int config_need_data = 0;
 void usage(void)
 {
     fprintf(stderr,
-	    "cyr_expire [-C <altconfig>] -E <days> [-v]\n");
+	    "cyr_expire [-C <altconfig>] -E <days> [-X <expunge-days>] [-v]\n");
     exit(-1);
 }
 
