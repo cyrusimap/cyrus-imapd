@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.26.2.8 2004/08/11 18:18:47 ken3 Exp $
+ * $Id: mbdump.c,v 1.26.2.9 2005/12/19 15:22:45 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -148,10 +148,14 @@ struct data_file {
     unsigned long flag;
 };
 
+static const char fname_header[] = FNAME_HEADER;
+static const char fname_index[] = FNAME_INDEX;
+static const char fname_cache[] = FNAME_CACHE;
+
 static struct data_file data_files[] = {
-    { FNAME_HEADER+1, IMAP_ENUM_METAPARTITION_FILES_HEADER },
-    { FNAME_INDEX+1, IMAP_ENUM_METAPARTITION_FILES_INDEX },
-    { FNAME_CACHE+1, IMAP_ENUM_METAPARTITION_FILES_CACHE },
+    { fname_header+1, IMAP_ENUM_METAPARTITION_FILES_HEADER },
+    { fname_index+1, IMAP_ENUM_METAPARTITION_FILES_INDEX },
+    { fname_cache+1, IMAP_ENUM_METAPARTITION_FILES_CACHE },
     /* XXX For two-phase expunge, we also need to copy cyrus.expunge */
     { NULL, 0 }
 };
