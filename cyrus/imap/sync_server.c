@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.1.2.20 2005/12/15 17:16:28 murch Exp $
+ * $Id: sync_server.c,v 1.1.2.21 2005/12/20 15:54:43 murch Exp $
  */
 
 #include <config.h>
@@ -1489,7 +1489,7 @@ static void cmd_quota_work(char *quotaroot)
 
 static void cmd_quota(char *quotaroot)
 {
-    return(cmd_quota_work(quotaroot));
+    cmd_quota_work(quotaroot);
 }
 
 static void cmd_setquota(char *root, int limit)
