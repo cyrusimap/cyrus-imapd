@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: proxy.c,v 1.1.2.6 2005/05/04 19:26:29 ken3 Exp $
+ * $Id: proxy.c,v 1.1.2.7 2005/12/20 15:43:22 murch Exp $
  */
 
 #include <config.h>
@@ -213,12 +213,12 @@ proxy_findserver(const char *server,		/* hostname of backend */
  * If serverout is NULL:
  *   - returns 1 if input from clientin is pending, otherwise returns 0.
  */
-inline int proxy_check_input(struct protgroup *protin,
-			     struct protstream *clientin,
-			     struct protstream *clientout,
-			     struct protstream *serverin,
-			     struct protstream *serverout,
-			     unsigned long timeout_sec)
+int proxy_check_input(struct protgroup *protin,
+		      struct protstream *clientin,
+		      struct protstream *clientout,
+		      struct protstream *serverin,
+		      struct protstream *serverout,
+		      unsigned long timeout_sec)
 {
     struct protgroup *protout = NULL;
     struct timeval timeout = { timeout_sec, 0 };
