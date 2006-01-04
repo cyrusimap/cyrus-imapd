@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb.h,v 1.25.2.3 2004/03/24 19:53:14 ken3 Exp $ */
+/* $Id: cyrusdb.h,v 1.25.2.4 2006/01/04 02:14:14 murch Exp $ */
 
 #ifndef INCLUDED_CYRUSDB_H
 #define INCLUDED_CYRUSDB_H
@@ -183,6 +183,8 @@ extern struct cyrusdb_backend *cyrusdb_backends[];
  * if libcyrus was not built with support for them */
 extern struct cyrusdb_backend cyrusdb_berkeley;
 extern struct cyrusdb_backend cyrusdb_berkeley_nosync;
+extern struct cyrusdb_backend cyrusdb_berkeley_hash;
+extern struct cyrusdb_backend cyrusdb_berkeley_hash_nosync;
 extern struct cyrusdb_backend cyrusdb_flat;
 extern struct cyrusdb_backend cyrusdb_skiplist;
 extern struct cyrusdb_backend cyrusdb_quotalegacy;

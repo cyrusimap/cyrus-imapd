@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_berkeley.c,v 1.2.2.9 2005/11/18 14:10:43 murch Exp $ */
+/* $Id: cyrusdb_berkeley.c,v 1.2.2.10 2006/01/04 02:14:14 murch Exp $ */
 
 #include <config.h>
 
@@ -376,7 +376,7 @@ static int myarchive(const char **fnames, const char *dirname)
     return 0;
 }
 
-static int myopen(const char *fname, int flags, struct db **ret)
+static int myopen(const char *fname, DBTYPE type, int flags, struct db **ret)
 {
     DB *db = NULL;
     int r;
@@ -394,9 +394,9 @@ static int myopen(const char *fname, int flags, struct db **ret)
     /* xxx set comparator! */
 
 #if DB_VERSION_MAJOR == 4 && DB_VERSION_MINOR >= 1
-    r = db->open(db, NULL, fname, NULL, DB_BTREE, dbflags | DB_AUTO_COMMIT, 0664);
+    r = db->open(db, NULL, fname, NULL, type, dbflags | DB_AUTO_COMMIT, 0664);
 #else
-    r = db->open(db, fname, NULL, DB_BTREE, dbflags, 0664);
+    r = db->open(db, fname, NULL, type, dbflags, 0664);
 #endif
 
     if (r != 0) {
@@ -412,6 +412,16 @@ static int myopen(const char *fname, int flags, struct db **ret)
     *ret = (struct db *) db;
 
     return r;
+}
+
+static int open_btree(const char *fname, int flags, struct db **ret)
+{
+    return myopen(fname, DB_BTREE, flags, ret);
+}
+
+static int open_hash(const char *fname, int flags, struct db **ret)
+{
+    return myopen(fname, DB_HASH, flags, ret);
 }
 
 static int myclose(struct db *db)
@@ -971,7 +981,7 @@ struct cyrusdb_backend cyrusdb_berkeley =
     &mysync,
     &myarchive,
 
-    &myopen,
+    &open_hash,
     &myclose,
 
     &fetch,
@@ -997,7 +1007,59 @@ struct cyrusdb_backend cyrusdb_berkeley_nosync =
     &mysync,
     &myarchive,
 
-    &myopen,
+    &open_hash,
+    &myclose,
+
+    &fetch,
+    &fetchlock,
+    &foreach,
+    &create_nosync,
+    &store_nosync,
+    &delete_nosync,
+
+    &commit_nosync,
+    &abort_txn,
+
+    NULL,
+    NULL
+};
+
+struct cyrusdb_backend cyrusdb_berkeley_hash = 
+{
+    "berkeley_hash",		/* name */
+
+    &init,
+    &done,
+    &mysync,
+    &myarchive,
+
+    &open_hash,
+    &myclose,
+
+    &fetch,
+    &fetchlock,
+    &foreach,
+    &create,
+    &store,
+    &delete,
+
+    &commit_txn,
+    &abort_txn,
+    
+    NULL,
+    NULL
+};
+
+struct cyrusdb_backend cyrusdb_berkeley_hash_nosync = 
+{
+    "berkeley-hash-nosync",	/* name */
+
+    &init,
+    &done,
+    &mysync,
+    &myarchive,
+
+    &open_hash,
     &myclose,
 
     &fetch,
