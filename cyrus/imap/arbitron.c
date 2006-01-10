@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: arbitron.c,v 1.36 2006/01/10 18:15:33 murch Exp $ */
+/* $Id: arbitron.c,v 1.37 2006/01/10 19:25:36 murch Exp $ */
 
 #include <config.h>
 
@@ -95,7 +95,7 @@ struct arb_mailbox_data {
 struct mpool *arb_pool;
 hash_table mailbox_table, mboxname_table;
 
-time_t report_time, prune_time = 0;
+time_t report_start_time = -1, report_end_time, prune_time = 0;
 int code = 0;
 int dosubs = 1;
 int dousers = 0;
@@ -118,21 +118,53 @@ int main(int argc,char **argv)
     int prune_months = 0;
     char pattern[MAX_MAILBOX_NAME+1];
     char *alt_config = NULL;
+    time_t now = time(0);
 
     strcpy(pattern, "*");
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
-    while ((opt = getopt(argc, argv, "C:oud:p:")) != EOF) {
+    report_end_time = now;
+
+    while ((opt = getopt(argc, argv, "C:oud:D:p:")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
 	    break;
 
 	case 'd':
+	    if (report_start_time != -1) usage();
 	    report_days = atoi(optarg);
 	    if (report_days <= 0) usage();
 	    break;
+
+	case 'D': {
+	    unsigned  month, day, year;
+	    struct tm date;
+
+	    if (strlen(optarg) < 8 ||
+		sscanf(optarg, "%02u%02u%04u", &month, &day, &year) < 3) {
+		usage();
+	    }
+	    memset(&date, 0, sizeof(struct tm));
+	    date.tm_mon = month - 1;
+	    date.tm_mday = day;
+	    date.tm_year = year - 1900;
+	    report_start_time = mktime(&date);
+
+	    if (optarg[8] == ':' && strlen(optarg+9) == 8) {
+		if (sscanf(optarg+9, "%02u%02u%04u", &month, &day, &year) < 3) {
+		    usage();
+		}
+		memset(&date, 0, sizeof(struct tm));
+		date.tm_mon = month - 1;
+		date.tm_mday = day;
+		date.tm_year = year - 1900;
+		report_end_time = mktime(&date);
+	    }
+
+	    break;
+	}
 
 	case 'o':
 	    dosubs = 0;
@@ -166,9 +198,11 @@ int main(int argc,char **argv)
 
     if (optind != argc) strlcpy(pattern, argv[optind], sizeof(pattern));
 
-    report_time = time(0) - (report_days*60*60*24);
+    if (report_start_time == -1) {
+	report_start_time = now - (report_days*60*60*24);
+    }
     if (prune_months) {
-	prune_time = time(0) - (prune_months*60*60*24*31);
+	prune_time = now - (prune_months*60*60*24*31);
     }
 
     /* Allocate our shared memory pools */
@@ -209,8 +243,9 @@ int main(int argc,char **argv)
 void usage(void)
 {
     fprintf(stderr,
-	    "usage: arbitron [-o] [-u] [-C alt_config] [-d days]"
-	    " [-p months] [mboxpattern]\n");
+	    "usage: arbitron [-o] [-u] [-C alt_config] "
+	    "[-d days | -D mmddyyy[:mmddyyyy]]\n"
+            "                [-p months] [mboxpattern]\n");
     exit(EC_USAGE);
 }    
 
@@ -345,7 +380,8 @@ static int process_user_p(void *rockp,
 
     mbox = hash_lookup(buf, &mailbox_table);
 
-    if(mbox && lastread >= report_time) {
+    if(mbox && lastread >= report_start_time &&
+       lastread <= report_end_time) {
 /*	printf("got %s\n", mbox->name);	     */
 	mbox->nreaders++;
 	if (user) {
