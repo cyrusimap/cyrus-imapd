@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_berkeley.c,v 1.2.2.10 2006/01/04 02:14:14 murch Exp $ */
+/* $Id: cyrusdb_berkeley.c,v 1.2.2.11 2006/01/10 20:35:09 murch Exp $ */
 
 #include <config.h>
 
@@ -1026,7 +1026,7 @@ struct cyrusdb_backend cyrusdb_berkeley_nosync =
 
 struct cyrusdb_backend cyrusdb_berkeley_hash = 
 {
-    "berkeley_hash",		/* name */
+    "berkeley-hash",		/* name */
 
     &init,
     &done,
