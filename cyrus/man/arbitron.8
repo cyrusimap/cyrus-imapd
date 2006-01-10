@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: arbitron.8,v 1.11 2006/01/10 19:25:37 murch Exp $
+.\" $Id: arbitron.8,v 1.12 2006/01/10 20:58:52 murch Exp $
 
 .SH NAME
 arbitron \- arbitron mailboxes
@@ -83,9 +83,9 @@ subscribers userids).
 .PP
 Each "reader" is a distinct authentication identity which has
 "s" rights to the mailbox and which has SELECTed the mailbox within
-the past
+either the past
 .I days
-days.
+days or the specified date range.
 Users are not counted as reading their own personal mailboxes.
 Personal mailboxes are not reported unless there is at least one
 reader other than the mailboxes owner.
