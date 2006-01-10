@@ -1,5 +1,4 @@
-/* xmalloc.h -- Allocation package that calls fatal() when out of memory
- * $Id: xmalloc.h,v 1.26 2006/01/10 23:18:48 jeaton Exp $
+/* xmalloc.c -- Allocation package that calls fatal() when out of memory
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -38,26 +37,37 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *
  */
+/*
+ * $Id: xstrlcpy.c,v 1.1 2006/01/10 23:18:48 jeaton Exp $
+ */
+#include "xstrlcpy.h"
 
-#ifndef INCLUDED_XMALLOC_H
-#define INCLUDED_XMALLOC_H
+#include "exitcodes.h"
 
-/* for size_t */
-#include <stdio.h>
-/* for free() */
-#include <stdlib.h>
+#ifndef HAVE_STRLCPY
+/* strlcpy -- copy string smartly.
+ *
+ * i believe/hope this is compatible with the BSD strlcpy(). 
+ */
+size_t strlcpy(char *dst, const char *src, size_t len)
+{
+    size_t n;
 
-extern void *xmalloc (unsigned size);
-extern void *xzmalloc (unsigned size);
-extern void *xrealloc (void *ptr, unsigned size);
-extern char *xstrdup (const char *str);
-extern char *xstrndup (const char *str, unsigned len);
+    if (len <= 0) {
+        /* we can't do anything ! */
+        return strlen(src);
+    }
 
-/* Functions using xmalloc.h must provide a function called fatal() conforming
-   to the following: */
-extern void fatal(const char *fatal_message, int fatal_code);
-/*   __attribute__ ((noreturn));*/
-
-#endif /* INCLUDED_XMALLOC_H */
+    /* assert(len >= 1); */
+    for (n = 0; n < len-1; n++) {
+	if ((dst[n] = src[n]) == '\0') break;
+    }
+    if (n >= len-1) {
+	/* ran out of space */
+	dst[n] = '\0';
+	while(src[n]) n++;
+    }
+    return n;
+}
+#endif
