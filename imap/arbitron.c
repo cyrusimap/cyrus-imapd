@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: arbitron.c,v 1.35 2004/05/22 03:45:48 rjs3 Exp $ */
+/* $Id: arbitron.c,v 1.36 2006/01/10 18:15:33 murch Exp $ */
 
 #include <config.h>
 
@@ -80,9 +80,16 @@ extern char *optarg;
 
 /* Maintain the mailbox list */
 /* xxx it'd be nice to generate a subscriber list too */
+struct user_list {
+    const char *user;
+    struct user_list *next;
+};
+
 struct arb_mailbox_data {
-    int readers;
-    int subscribers;
+    int nreaders;
+    struct user_list *readers;
+    int nsubscribers;
+    struct user_list *subscribers;
 };
 
 struct mpool *arb_pool;
@@ -91,6 +98,7 @@ hash_table mailbox_table, mboxname_table;
 time_t report_time, prune_time = 0;
 int code = 0;
 int dosubs = 1;
+int dousers = 0;
 
 /* current namespace */
 static struct namespace arb_namespace;
@@ -99,8 +107,8 @@ static struct namespace arb_namespace;
 void usage(void);
 void run_users(void);
 void make_report(char *key, void *data, void *rock);
-void process_seen(const char *path);
-void process_subs(const char *path);
+void process_seen(const char *path, const char *user);
+void process_subs(const char *path, const char *user);
 int do_mailbox(const char *name, int matchlen, int maycreate, void *rock);
 
 int main(int argc,char **argv)
@@ -115,7 +123,7 @@ int main(int argc,char **argv)
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
-    while ((opt = getopt(argc, argv, "C:od:p:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:oud:p:")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -128,6 +136,10 @@ int main(int argc,char **argv)
 
 	case 'o':
 	    dosubs = 0;
+	    break;
+
+	case 'u':
+	    dousers = 1;
 	    break;
 
 	case 'p':
@@ -177,7 +189,7 @@ int main(int argc,char **argv)
     /* Now do all the users */
     run_users();
 
-    fprintf(stderr, "\n");    
+    fprintf(stderr, "Done\n");    
 
     /* And print the report */
     hash_enumerate(&mboxname_table, make_report, NULL);    
@@ -197,7 +209,7 @@ int main(int argc,char **argv)
 void usage(void)
 {
     fprintf(stderr,
-	    "usage: arbitron [-o] [-C alt_config] [-d days]"
+	    "usage: arbitron [-o] [-u] [-C alt_config] [-d days]"
 	    " [-p months] [mboxpattern]\n");
     exit(EC_USAGE);
 }    
@@ -214,8 +226,8 @@ int do_mailbox(const char *name, int matchlen __attribute__((unused)),
 	struct arb_mailbox_data *d = mpool_malloc(arb_pool,
 						  sizeof(struct arb_mailbox_data));
     
-	d->readers = 0;
-	d->subscribers = 0;
+	d->nreaders = 0;
+	d->nsubscribers = 0;
 
 /*	printf("inserting %s (key %s)\n", name, mbox.uniqueid); */
 
@@ -266,15 +278,25 @@ void run_users()
 	        /* 5 is magic number for strlen(".seen") and
 		   4 is the magic number for strlen(".sub") */
 		if(len > 4) {
+		    char *user = NULL;
+
 		    snprintf(file, sizeof(file),
 			     "%s/%s", path, dirent2->d_name);
 /*		    printf("got file %s\n",file); */
 		    if(len > 5 &&
 		       !strcmp(dirent2->d_name + len - 5, ".seen")) {
-			process_seen(file);
+			if (dousers) {
+			    user = mpool_strndup(arb_pool, dirent2->d_name,
+						 len-5);
+			}
+			process_seen(file, user);
 		    } else if (dosubs &&
 			       !strcmp(dirent2->d_name + len - 4, ".sub")) {
-			process_subs(file);		    
+			if (dousers) {
+			    user = mpool_strndup(arb_pool, dirent2->d_name,
+						 len-4);
+			}
+			process_subs(file, user);
 		    }
 		}
 	    }
@@ -300,7 +322,7 @@ static int process_user_cb(void *rockp,
 }
 
 /* We can cheat and do all we need to in this function */
-static int process_user_p(void *rockp __attribute__((unused)),
+static int process_user_p(void *rockp,
 			  const char *key,
 			  int keylen,
 			  const char *data,
@@ -311,6 +333,7 @@ static int process_user_p(void *rockp __attribute__((unused)),
     char *p;    
     char buf[64];
     struct arb_mailbox_data *mbox;
+    const char *user = (const char *) rockp;
 
     /* remember that 'data' may not be null terminated ! */
     version = strtol(data, &p, 10); data = p;
@@ -324,7 +347,15 @@ static int process_user_p(void *rockp __attribute__((unused)),
 
     if(mbox && lastread >= report_time) {
 /*	printf("got %s\n", mbox->name);	     */
-	mbox->readers++;
+	mbox->nreaders++;
+	if (user) {
+	    struct user_list *u = mpool_malloc(arb_pool,
+					       sizeof(struct user_list));
+
+	    u->user = user;
+	    u->next = mbox->readers;
+	    mbox->readers = u;
+	}
     }
 
     /* Check for pruning even if mailbox isn't valid */
@@ -336,7 +367,7 @@ static int process_user_p(void *rockp __attribute__((unused)),
     return ret;    
 }
 
-void process_seen(const char *path) 
+void process_seen(const char *path, const char *user) 
 {
     int r;    
     struct db *tmp = NULL;
@@ -344,7 +375,8 @@ void process_seen(const char *path)
     r = DB->open(path, 0, &tmp);
     if(r) goto done;
     
-    DB->foreach(tmp, "", 0, process_user_p, process_user_cb, tmp, NULL);
+    DB->foreach(tmp, "", 0, process_user_p, process_user_cb,
+		(void *) user, NULL);
 
  done:
     if(tmp) DB->close(tmp);
@@ -359,13 +391,14 @@ static int process_subs_cb(void *rockp __attribute__((unused)),
     return 0;
 }
 
-static int process_subs_p(void *rockp __attribute__((unused)),
+static int process_subs_p(void *rockp,
 			  const char *key, int keylen,
 			  const char *tmpdata __attribute__((unused)),
 			  int tmpdatalen __attribute__((unused))) 
 {
     struct arb_mailbox_data *mbox;
     char buf[MAX_MAILBOX_NAME+1];
+    const char *user = (const char *) rockp;
 
     memcpy(buf, key, keylen);
     buf[keylen] = '\0';
@@ -376,13 +409,21 @@ static int process_subs_p(void *rockp __attribute__((unused)),
 
     if(mbox) {
 /*	printf("got sub %s\n", buf); */
-	mbox->subscribers++;
+	mbox->nsubscribers++;
+	if (user) {
+	    struct user_list *u = mpool_malloc(arb_pool,
+					       sizeof(struct user_list));
+
+	    u->user = user;
+	    u->next = mbox->subscribers;
+	    mbox->subscribers = u;
+	}
     }
 
     return 0; /* never do callback */
 }
 
-void process_subs(const char *path) 
+void process_subs(const char *path, const char *user) 
 {
     int r;    
     struct db *tmp = NULL;
@@ -390,10 +431,22 @@ void process_subs(const char *path)
     r = SUBDB->open(path, 0, &tmp);
     if(r) goto done;
     
-    SUBDB->foreach(tmp, "", 0, process_subs_p, process_subs_cb, NULL, NULL);
+    SUBDB->foreach(tmp, "", 0, process_subs_p, process_subs_cb,
+		   (void *) user, NULL);
 
  done:
     if(tmp) SUBDB->close(tmp);
+}
+
+void report_users(struct user_list *u)
+{
+    char sep = ':';
+
+    while (u) {
+	printf("%c%s", sep, u->user);
+	sep = ',';
+	u = u->next;
+    }
 }
 
 void make_report(char *key, void *data, void *rock __attribute__((unused))) 
@@ -401,12 +454,16 @@ void make_report(char *key, void *data, void *rock __attribute__((unused)))
     struct arb_mailbox_data *mbox = (struct arb_mailbox_data *)data;
 
     /* Skip underread user mailboxes */
-    if(!strncasecmp(key, "user.", 5) && mbox->readers <= 1)
+    if(!strncasecmp(key, "user.", 5) && mbox->nreaders <= 1)
 	return;    
 
     mboxname_hiersep_toexternal(&arb_namespace, key, 0);
 
-    printf("%s %d", key, mbox->readers);
-    if(dosubs) printf(" %d", mbox->subscribers);
+    printf("%s %d", key, mbox->nreaders);
+    if (dousers) report_users(mbox->readers);
+    if (dosubs) {
+	printf(" %d", mbox->nsubscribers);
+	if (dousers) report_users(mbox->subscribers);
+    }
     printf("\n");   
 }

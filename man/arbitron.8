@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: arbitron.8,v 1.9 2003/08/09 23:43:14 rjs3 Exp $
+.\" $Id: arbitron.8,v 1.10 2006/01/10 18:15:34 murch Exp $
 
 .SH NAME
 arbitron \- arbitron mailboxes
@@ -50,6 +50,8 @@ arbitron \- arbitron mailboxes
 .I config-file
 ] [
 .B \-o
+] [
+.B \-u
 ] [
 .B \-d
 days
@@ -68,8 +70,11 @@ dormant users.
 .I Arbitron
 produces one line of output per mailbox, reporting the mailbox name
 followed by a space, followed by the number of
-readers, and if -o is not specified, another space and the number
-of subscribers.
+readers (and if -u is specified, followed by a colon and a
+comma-separated list of the readers userids), and if -o is not
+specified, another space and the number of subscribers (and if -u is
+specified, followed by a colon and a comma-separated list of the
+subscribers userids).
 \fBIMPORTANT: This format is subject to change in future versions.\fR
 .PP
 Each "reader" is a distinct authentication identity which has
@@ -92,6 +97,9 @@ Read configuration options from \fIconfig-file\fR.
 .TP
 .BI \-o
 "old way" -- do not report subscribers.
+.TP
+.BI \-u
+Report userids in addition to the count(s).
 .TP
 .BI "\-d " days
 Count as a reader an authentication identity which has SELECTed the
