@@ -1,5 +1,4 @@
-/* xmalloc.h -- Allocation package that calls fatal() when out of memory
- * $Id: xmalloc.h,v 1.26 2006/01/10 23:18:48 jeaton Exp $
+/* xmalloc.c -- Allocation package that calls fatal() when out of memory
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -38,26 +37,29 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *
  */
+/*
+ * $Id: xstrlcat.c,v 1.1 2006/01/10 23:18:48 jeaton Exp $
+ */
+#include "xstrlcat.h"
 
-#ifndef INCLUDED_XMALLOC_H
-#define INCLUDED_XMALLOC_H
-
-/* for size_t */
-#include <stdio.h>
-/* for free() */
-#include <stdlib.h>
-
-extern void *xmalloc (unsigned size);
-extern void *xzmalloc (unsigned size);
-extern void *xrealloc (void *ptr, unsigned size);
-extern char *xstrdup (const char *str);
-extern char *xstrndup (const char *str, unsigned len);
-
-/* Functions using xmalloc.h must provide a function called fatal() conforming
-   to the following: */
-extern void fatal(const char *fatal_message, int fatal_code);
-/*   __attribute__ ((noreturn));*/
-
-#endif /* INCLUDED_XMALLOC_H */
+#ifndef HAVE_STRLCAT
+size_t strlcat(char *dst, const char *src, size_t len)
+{
+    size_t i, j, o;
+    
+    o = strlen(dst);
+    if (len < o + 1)
+	return o + strlen(src);
+    len -= o + 1;
+    for (i = 0, j = o; i < len; i++, j++) {
+	if ((dst[j] = src[i]) == '\0') break;
+    }
+    dst[j] = '\0';
+    if (src[i] == '\0') {
+	return j;
+    } else {
+	return j + strlen(src + i);
+    }
+}
+#endif

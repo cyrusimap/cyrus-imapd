@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 /*
- * $Id: xmalloc.c,v 1.29 2003/02/13 20:15:42 rjs3 Exp $
+ * $Id: xmalloc.c,v 1.30 2006/01/10 23:18:48 jeaton Exp $
  */
 #include <config.h>
 #include <stdio.h>
@@ -100,51 +100,3 @@ char *xstrndup(const char* str, unsigned len)
     p[len] = '\0';
     return p;
 }
-
-#ifndef HAVE_STRLCPY
-/* strlcpy -- copy string smartly.
- *
- * i believe/hope this is compatible with the BSD strlcpy(). 
- */
-size_t strlcpy(char *dst, const char *src, size_t len)
-{
-    size_t n;
-
-    if (len <= 0) {
-        /* we can't do anything ! */
-        return strlen(src);
-    }
-
-    /* assert(len >= 1); */
-    for (n = 0; n < len-1; n++) {
-	if ((dst[n] = src[n]) == '\0') break;
-    }
-    if (n >= len-1) {
-	/* ran out of space */
-	dst[n] = '\0';
-	while(src[n]) n++;
-    }
-    return n;
-}
-#endif
-
-#ifndef HAVE_STRLCAT
-size_t strlcat(char *dst, const char *src, size_t len)
-{
-    size_t i, j, o;
-    
-    o = strlen(dst);
-    if (len < o + 1)
-	return o + strlen(src);
-    len -= o + 1;
-    for (i = 0, j = o; i < len; i++, j++) {
-	if ((dst[j] = src[i]) == '\0') break;
-    }
-    dst[j] = '\0';
-    if (src[i] == '\0') {
-	return j;
-    } else {
-	return j + strlen(src + i);
-    }
-}
-#endif
