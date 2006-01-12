@@ -39,19 +39,18 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.h,v 1.11 2004/02/04 01:42:38 ken3 Exp $ */
+/* $Id: backend.h,v 1.12 2006/01/12 22:17:57 murch Exp $ */
 
 #ifndef _INCLUDED_BACKEND_H
 #define _INCLUDED_BACKEND_H
 
+#include "global.h"
 #include "mboxlist.h"
 #include "prot.h"
 #include "protocol.h"
 #include "tls.h"
 
 /* Functionality to bring up/down connections to backend servers */
-
-#define LAST_RESULT_LEN 1024
 
 struct backend {
     char hostname[MAX_PARTITION_LEN];
@@ -72,7 +71,7 @@ struct backend {
 
     unsigned long capability;
 
-    char last_result[LAST_RESULT_LEN];
+    struct buf last_result;
     struct protstream *in; /* from the be server to me, the proxy */
     struct protstream *out; /* to the be server */
 };
