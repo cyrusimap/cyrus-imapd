@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.195 2005/11/01 20:16:56 murch Exp $ */
+/* $Id: proxyd.c,v 1.196 2006/01/12 22:17:57 murch Exp $ */
 
 #include <config.h>
 
@@ -279,9 +279,7 @@ static void proxyd_gentag(char *tag, size_t len)
    starting with 'tag' appears.  it returns the result of the
    tagged command, and sets 's->last_result' with the tagged line. */
 
-/* 's->last_result' assumes that tagged responses are:
-   a) short
-   b) don't contain literals
+/* 's->last_result' assumes that tagged responses don't contain literals
    
    IMAP grammar allows both, unfortunately */
 
@@ -301,6 +299,8 @@ static int pipe_until_tag(struct backend *s, char *tag, int force_notfatal)
 	fatal("tag too large",EC_TEMPFAIL);
     }
 
+    s->last_result.len = 0;
+
     /* the only complication here are literals */
     while (!last || cont) {
 	/* if 'cont' is set, we're looking at the continuation to a very
@@ -316,35 +316,45 @@ static int pipe_until_tag(struct backend *s, char *tag, int force_notfatal)
 	    proxyd_downserver(s);
 	    return PROXY_NOCONNECTION;
 	}
-	if (!cont && buf[taglen] == ' ' && !strncmp(tag, buf, taglen)) {
-	    strlcpy(s->last_result, buf + taglen + 1, sizeof(s->last_result));
-	    /* guarantee that 's->last_result' has \r\n\0 at the end */
-	    s->last_result[LAST_RESULT_LEN - 3] = '\r';
-	    s->last_result[LAST_RESULT_LEN - 2] = '\n';
-	    s->last_result[LAST_RESULT_LEN - 1] = '\0';
-	    switch (buf[taglen + 1]) {
-	    case 'O': case 'o':
-		r = PROXY_OK;
-		break;
-	    case 'N': case 'n':
-		r = PROXY_NO;
-		break;
-	    case 'B': case 'b':
-		r = PROXY_BAD;
-		break;
-	    default: /* huh? no result? */
-		if(s == backend_current && !force_notfatal)
-		    fatal("Lost connection to selected backend",
-			  EC_UNAVAILABLE);
-		proxyd_downserver(s);
-		r = PROXY_NOCONNECTION;
-		break;
+
+	sl = strlen(buf);
+	if (last ||
+	    (!cont && buf[taglen] == ' ' && !strncmp(tag, buf, taglen))) {
+	    if (sl > s->last_result.alloc - s->last_result.len) {
+		s->last_result.alloc =
+		    (s->last_result.alloc == 0) ? sizeof(buf) :
+		    s->last_result.alloc * 2;
+		s->last_result.s = xrealloc(s->last_result.s,
+					    s->last_result.alloc+1);
+	    }
+
+	    strcpy(s->last_result.s + s->last_result.len, buf + taglen + 1);
+	    s->last_result.len += sl - taglen - 1;
+
+	    if (!cont) {
+		switch (buf[taglen + 1]) {
+		case 'O': case 'o':
+		    r = PROXY_OK;
+		    break;
+		case 'N': case 'n':
+		    r = PROXY_NO;
+		    break;
+		case 'B': case 'b':
+		    r = PROXY_BAD;
+		    break;
+		default: /* huh? no result? */
+		    if(s == backend_current && !force_notfatal)
+			fatal("Lost connection to selected backend",
+			      EC_UNAVAILABLE);
+		    proxyd_downserver(s);
+		    r = PROXY_NOCONNECTION;
+		    break;
+		}
 	    }
 
 	    last = 1;
 	}
 	
-	sl = strlen(buf);
 	if (sl == (sizeof(buf) - 1) && buf[sl-1] != '\n') {
             /* only got part of a line */
 	    /* we save the last 64 characters in case it has important
@@ -424,7 +434,7 @@ static int pipe_including_tag(struct backend *s, char *tag, int force_notfatal)
     case PROXY_OK:
     case PROXY_NO:
     case PROXY_BAD:
-	prot_printf(proxyd_out, "%s %s", tag, s->last_result);
+	prot_printf(proxyd_out, "%s %s", tag, s->last_result.s);
 	break;
     case PROXY_NOCONNECTION:
 	/* don't have to worry about downing the server, since
@@ -700,11 +710,13 @@ static int pipe_lsub(struct backend *s, char *tag, int force_notfatal,
 		return PROXY_NOCONNECTION;
 	    }	
 	    /* Got the end of the response */
-	    strlcpy(s->last_result, buf, sizeof(s->last_result));
-	    /* guarantee that 's->last_result' has \r\n\0 at the end */
-	    s->last_result[LAST_RESULT_LEN - 3] = '\r';
-	    s->last_result[LAST_RESULT_LEN - 2] = '\n';
-	    s->last_result[LAST_RESULT_LEN - 1] = '\0';
+	    if (s->last_result.alloc == 0) {
+		s->last_result.alloc = sizeof(buf);
+		s->last_result.s = xmalloc(s->last_result.alloc+1);
+	    }
+	    strcpy(s->last_result.s, buf);
+	    s->last_result.len = strlen(buf);
+
 	    switch (buf[0]) {
 	    case 'O': case 'o':
 		r = PROXY_OK;
@@ -1192,6 +1204,9 @@ static void proxyd_reset(void)
     i = 0;
     while (backend_cached[i]) {
 	proxyd_downserver(backend_cached[i]);
+	if (backend_cached[i]->last_result.s) {
+	    free(backend_cached[i]->last_result.s);
+	}
 	free(backend_cached[i]);
 	i++;
     }
@@ -1415,6 +1430,9 @@ void shut_down(int code)
     i = 0;
     while (backend_cached && backend_cached[i]) {
 	proxyd_downserver(backend_cached[i]);
+	if (backend_cached[i]->last_result.s) {
+	    free(backend_cached[i]->last_result.s);
+	}
 	free(backend_cached[i]);
 	i++;
     }
@@ -2907,7 +2925,7 @@ void cmd_append(char *tag, char *name)
     } else {
 	/* we're allowed to reference last_result since the noop, if
 	   sent, went to a different server */
-	prot_printf(proxyd_out, "%s %s", tag, s->last_result);
+	prot_printf(proxyd_out, "%s %s", tag, s->last_result.s);
     }
 }
 
@@ -3499,7 +3517,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 		int access = cyrus_acl_myrights(proxyd_authstate, acl);
 
 		if (access & ACL_READ) {
-		    appenduid = strchr(s->last_result, '[');
+		    appenduid = strchr(s->last_result.s, '[');
 		    /* skip over APPENDUID */
 		    appenduid += strlen("[appenduid ");
 		    b = strchr(appenduid, ']');
@@ -3511,7 +3529,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 				error_message(IMAP_OK_COMPLETED));
 		}
 	    } else {
-		prot_printf(proxyd_out, "%s %s", tag, s->last_result);
+		prot_printf(proxyd_out, "%s %s", tag, s->last_result.s);
 	    }
 	} else {
 	    /* abort the append */
@@ -4555,7 +4573,7 @@ void cmd_status(char *tag, char *name)
     }
 
     if (!r) {
-	prot_printf(proxyd_out, "%s %s", tag, s->last_result);
+	prot_printf(proxyd_out, "%s %s", tag, s->last_result.s);
     } else {
 	prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
     }
