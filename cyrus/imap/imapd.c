@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.497 2005/12/09 19:15:35 murch Exp $ */
+/* $Id: imapd.c,v 1.498 2006/01/13 22:06:28 murch Exp $ */
 
 #include <config.h>
 
@@ -118,6 +118,7 @@ static int imapd_userisadmin = 0;
 static int imapd_userisproxyadmin = 0;
 static sasl_conn_t *imapd_saslconn; /* the sasl connection context */
 static int imapd_starttls_done = 0; /* have we done a successful starttls? */
+const char *plaintextloginalert = NULL;
 #ifdef HAVE_SSL
 /* our tls connection, if any */
 static SSL *tls_conn = NULL;
@@ -501,6 +502,7 @@ static void imapd_reset(void)
 	imapd_saslconn = NULL;
     }
     imapd_starttls_done = 0;
+    plaintextloginalert = NULL;
 
     if(saslprops.iplocalport) {
 	free(saslprops.iplocalport);
@@ -873,6 +875,12 @@ void cmdloop()
 	    cmd.s[0] = toupper((unsigned char) cmd.s[0]);
 	for (p = &cmd.s[1]; *p; p++) {
 	    if (isupper((unsigned char) *p)) *p = tolower((unsigned char) *p);
+	}
+
+	if (plaintextloginalert) {
+	    prot_printf(imapd_out, "* OK [ALERT] %s\r\n",
+			plaintextloginalert);
+	    plaintextloginalert = NULL;
 	}
 
 	/* Only Authenticate/Login/Logout/Noop/Capability/Id/Starttls
@@ -1704,7 +1712,6 @@ void cmd_login(char *tag, char *user)
     struct buf passwdbuf;
     char *passwd;
     const char *reply = NULL;
-    int plaintextloginpause;
     int r;
     
     if (imapd_userid) {
@@ -1819,10 +1826,15 @@ void cmd_login(char *tag, char *user)
 	       imapd_starttls_done ? "+TLS" : "", 
 	       reply ? reply : "");
 
-	plaintextloginpause = config_getint(IMAPOPT_PLAINTEXTLOGINPAUSE);
-	if (plaintextloginpause != 0 && !imapd_starttls_done) {
-	    /* Apply penalty only if not under layer */
-	    sleep(plaintextloginpause);
+	/* Apply penalty only if not under layer */
+	if (!imapd_starttls_done) {
+	    int plaintextloginpause = config_getint(IMAPOPT_PLAINTEXTLOGINPAUSE);
+	    if (plaintextloginpause) {
+		sleep(plaintextloginpause);
+	    }
+
+	    /* Fetch plaintext login nag message */
+	    plaintextloginalert = config_getstring(IMAPOPT_PLAINTEXTLOGINALERT);
 	}
     }
     

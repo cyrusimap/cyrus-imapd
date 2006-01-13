@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.197 2006/01/13 19:56:27 murch Exp $ */
+/* $Id: proxyd.c,v 1.198 2006/01/13 22:06:35 murch Exp $ */
 
 #include <config.h>
 
@@ -146,6 +146,7 @@ struct auth_state *proxyd_authstate = 0;
 int proxyd_userisadmin;
 sasl_conn_t *proxyd_saslconn; /* the sasl connection context to the client */
 int proxyd_starttls_done = 0; /* have we done a successful starttls yet? */
+const char *plaintextloginalert = NULL;
 #ifdef HAVE_SSL
 static SSL *tls_conn;
 #endif /* HAVE_SSL */
@@ -1164,6 +1165,7 @@ static void proxyd_reset(void)
     proxyd_userisadmin = 0;
     proxyd_starttls_done = 0;
     proxyd_logtime = 0;
+    plaintextloginalert = NULL;
 
     strcpy(proxyd_clienthost, "[local]");
 
@@ -1470,6 +1472,12 @@ void cmdloop()
 	if(referral_kick) {
 	    kick_mupdate();
 	    referral_kick = 0;
+	}
+
+	if (plaintextloginalert) {
+	    prot_printf(proxyd_out, "* OK [ALERT] %s\r\n",
+			plaintextloginalert);
+	    plaintextloginalert = NULL;
 	}
 	
 	/* Only Authenticate/Login/Logout/Noop/Starttls 
@@ -2098,7 +2106,6 @@ void cmd_login(char *tag, char *user)
     struct buf passwdbuf;
     char *passwd;
     char *reply = 0;
-    int plaintextloginpause;
     int r;
 
     if (proxyd_userid) {
@@ -2197,12 +2204,15 @@ void cmd_login(char *tag, char *user)
 	       proxyd_starttls_done ? "+TLS" : "", 
 	       reply ? reply : "");
 
-	plaintextloginpause = config_getint(IMAPOPT_PLAINTEXTLOGINPAUSE);
-	if (plaintextloginpause) {
-
-	    /* Apply penalty only if not under layer */
-	    if (proxyd_starttls_done == 0)
+	/* Apply penalty only if not under layer */
+	if (!proxyd_starttls_done) {
+	    int plaintextloginpause = config_getint(IMAPOPT_PLAINTEXTLOGINPAUSE);
+	    if (plaintextloginpause) {
 		sleep(plaintextloginpause);
+	    }
+
+	    /* Fetch plaintext login nag message */
+	    plaintextloginalert = config_getstring(IMAPOPT_PLAINTEXTLOGINALERT);
 	}
     }
     
