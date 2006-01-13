@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: arbitron.c,v 1.37 2006/01/10 19:25:36 murch Exp $ */
+/* $Id: arbitron.c,v 1.38 2006/01/13 15:57:55 murch Exp $ */
 
 #include <config.h>
 
@@ -99,6 +99,7 @@ time_t report_start_time = -1, report_end_time, prune_time = 0;
 int code = 0;
 int dosubs = 1;
 int dousers = 0;
+int long_report = 0;
 
 /* current namespace */
 static struct namespace arb_namespace;
@@ -126,7 +127,7 @@ int main(int argc,char **argv)
 
     report_end_time = now;
 
-    while ((opt = getopt(argc, argv, "C:oud:D:p:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:oud:D:p:l")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -177,6 +178,10 @@ int main(int argc,char **argv)
 	case 'p':
 	    prune_months = atoi(optarg);
 	    if (prune_months <= 0) usage();
+	    break;
+
+	case 'l':
+	    long_report = dousers = 1;
 	    break;
 
 	default:
@@ -243,7 +248,7 @@ int main(int argc,char **argv)
 void usage(void)
 {
     fprintf(stderr,
-	    "usage: arbitron [-o] [-u] [-C alt_config] "
+	    "usage: arbitron [-o] [-u] [-l] [-C alt_config] "
 	    "[-d days | -D mmddyyy[:mmddyyyy]]\n"
             "                [-p months] [mboxpattern]\n");
     exit(EC_USAGE);
@@ -485,6 +490,24 @@ void report_users(struct user_list *u)
     }
 }
 
+void long_report_users(struct user_list *u, const char *mbox, char type)
+{
+    char buf[100];
+    struct tm *tm;
+
+    while (u) {
+	printf("%s\t%s\t%c\t", mbox, u->user, type);
+	tm = localtime(&report_start_time);
+	strftime(buf, sizeof(buf), "%m-%d-%Y %H:%M:%S", tm);
+	printf("%s\t", buf);
+
+	tm = localtime(&report_end_time);
+	strftime(buf, sizeof(buf), "%m-%d-%Y %H:%M:%S", tm);
+	printf("%s\n", buf);
+	u = u->next;
+    }
+}
+
 void make_report(char *key, void *data, void *rock __attribute__((unused))) 
 {
     struct arb_mailbox_data *mbox = (struct arb_mailbox_data *)data;
@@ -495,11 +518,17 @@ void make_report(char *key, void *data, void *rock __attribute__((unused)))
 
     mboxname_hiersep_toexternal(&arb_namespace, key, 0);
 
-    printf("%s %d", key, mbox->nreaders);
-    if (dousers) report_users(mbox->readers);
-    if (dosubs) {
-	printf(" %d", mbox->nsubscribers);
-	if (dousers) report_users(mbox->subscribers);
+    if (long_report) {
+	long_report_users(mbox->readers, key, 'r');
+	long_report_users(mbox->subscribers, key, 's');
     }
-    printf("\n");   
+    else {
+	printf("%s %d", key, mbox->nreaders);
+	if (dousers) report_users(mbox->readers);
+	if (dosubs) {
+	    printf(" %d", mbox->nsubscribers);
+	if (dousers) report_users(mbox->subscribers);
+	}
+	printf("\n");
+    }
 }
