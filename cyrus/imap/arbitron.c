@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: arbitron.c,v 1.38 2006/01/13 15:57:55 murch Exp $ */
+/* $Id: arbitron.c,v 1.39 2006/01/13 16:47:18 murch Exp $ */
 
 #include <config.h>
 
@@ -496,10 +496,10 @@ void long_report_users(struct user_list *u, const char *mbox, char type)
     struct tm *tm;
 
     while (u) {
-	printf("%s\t%s\t%c\t", mbox, u->user, type);
+	printf("%s,%s,%c,", mbox, u->user, type);
 	tm = localtime(&report_start_time);
 	strftime(buf, sizeof(buf), "%m-%d-%Y %H:%M:%S", tm);
-	printf("%s\t", buf);
+	printf("%s,", buf);
 
 	tm = localtime(&report_end_time);
 	strftime(buf, sizeof(buf), "%m-%d-%Y %H:%M:%S", tm);
