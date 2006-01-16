@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.2.2.40 2006/01/04 02:14:15 murch Exp $
+.\" $Id: imapoptions,v 1.2.2.41 2006/01/16 23:44:16 murch Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -645,6 +645,9 @@ are listed with ``<none>''.
    systems that support strong authentication, this permits users to  
    perceive a cost of using plaintext passwords.  (This does not
    affect the use of PLAIN in SASL authentications.) */
+
+{ "plaintextloginalert", NULL, STRING }
+/* Message to send to client after a successful plaintext login. */
 
 { "popexpiretime", -1, INT }
 /* The number of days advertised as being the minimum a message may be
