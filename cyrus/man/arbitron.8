@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: arbitron.8,v 1.9 2003/08/09 23:43:14 rjs3 Exp $
+.\" $Id: arbitron.8,v 1.9.4.1 2006/01/16 15:43:08 murch Exp $
 
 .SH NAME
 arbitron \- arbitron mailboxes
@@ -51,14 +51,22 @@ arbitron \- arbitron mailboxes
 ] [
 .B \-o
 ] [
-.B \-d
-days
+.B \-u
+] [
+.B \-l
 ] [
 .B \-p
-months
+.I months
 ]
 .br
-         \fImailbox\fR...
+         [
+.B \-d
+.I days
+|
+.B \-D
+\fImmddyyyy\fR[\fB:\fImmddyyyy\fR]
+]
+\fImailbox\fR...
 .SH DESCRIPTION
 .I Arbitron
 collects and reports readership statistics for mailboxes on the
@@ -68,15 +76,18 @@ dormant users.
 .I Arbitron
 produces one line of output per mailbox, reporting the mailbox name
 followed by a space, followed by the number of
-readers, and if -o is not specified, another space and the number
-of subscribers.
+readers (and if -u is specified, followed by a colon and a
+comma-separated list of the readers userids), and if -o is not
+specified, another space and the number of subscribers (and if -u is
+specified, followed by a colon and a comma-separated list of the
+subscribers userids).
 \fBIMPORTANT: This format is subject to change in future versions.\fR
 .PP
 Each "reader" is a distinct authentication identity which has
 "s" rights to the mailbox and which has SELECTed the mailbox within
-the past
+either the past
 .I days
-days.
+days or the specified date range.
 Users are not counted as reading their own personal mailboxes.
 Personal mailboxes are not reported unless there is at least one
 reader other than the mailboxes owner.
@@ -93,11 +104,25 @@ Read configuration options from \fIconfig-file\fR.
 .BI \-o
 "old way" -- do not report subscribers.
 .TP
+.BI \-u
+Report userids in addition to the count(s).
+.TP
+.BI \-l
+Enable long reporting (comma delimited table consisting of mbox, userid,
+r/s, start time, end time).
+.TP
 .BI "\-d " days
 Count as a reader an authentication identity which has SELECTed the
 mailbox within
 .I days
 days.  Default is 30.
+.TP
+\fB\-D\fR \fImmddyyyy\fR[\fB:\fImmddyyyy\fR]
+Count as a reader an authentication identity which has SELECTed the
+mailbox within the given date range.  The start date and optional end
+date are specified as 2-digit month of the year, 2-digit day of the
+month, and 4-digit year.  If the end date is not specified, then the
+current system time is used as the end time.
 .TP
 .BI "\-p " months
 Prune \\Seen state for users who have not SELECTed the mailbox within
