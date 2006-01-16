@@ -1,6 +1,6 @@
 /* mpool.h memory pool management
  *
- * $Id: mpool.h,v 1.10 2003/10/22 18:50:12 rjs3 Exp $
+ * $Id: mpool.h,v 1.10.2.1 2006/01/16 15:39:09 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -70,5 +70,6 @@ void free_mpool(struct mpool *pool);
 /* Allocate from a pool */
 void *mpool_malloc(struct mpool *pool, size_t size);
 char *mpool_strdup(struct mpool *pool, const char *str);
+char *mpool_strndup(struct mpool *pool, const char *str, size_t n);
 
 #endif /* _MPOOL_H_ */

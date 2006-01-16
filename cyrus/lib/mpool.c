@@ -1,6 +1,6 @@
 /* mpool.c memory pool management
  *
- * $Id: mpool.c,v 1.14 2003/10/22 18:50:12 rjs3 Exp $
+ * $Id: mpool.c,v 1.14.2.1 2006/01/16 15:39:09 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -169,18 +169,27 @@ void *mpool_malloc(struct mpool *pool, size_t size)
     return ret;
 }
 
-char *mpool_strdup(struct mpool *pool, const char *str) 
+char *mpool_strndup(struct mpool *pool, const char *str, size_t n) 
 {
     char *ret;
+    
+    if(!str) return NULL;
+    
+    ret = mpool_malloc(pool, n+1);
+    strncpy(ret, str, n);
+    ret[n] = '\0';
+
+    return ret;
+}
+
+
+char *mpool_strdup(struct mpool *pool, const char *str) 
+{
     size_t len;
     
     if(!str) return NULL;
     
     len = strlen(str);
     
-    ret = mpool_malloc(pool, len+1);
-    strcpy(ret, str);
-
-    return ret;
+    return mpool_strndup(pool, str, len);
 }
-
