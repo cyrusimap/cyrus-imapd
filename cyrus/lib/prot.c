@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.82.2.8 2005/05/04 19:25:44 ken3 Exp $
+ * $Id: prot.c,v 1.82.2.9 2006/01/17 20:07:45 murch Exp $
  */
 
 #include <config.h>
@@ -1140,8 +1140,6 @@ int prot_select(struct protgroup *readstreams, int extra_read_fd,
 	    } else if(s == timeout_prot && now >= read_timeout) {
 		/* If we timed out, be sure to add the protstream we were
 		 * waiting for, even if it didn't show up */
-		found_fds++;
-
 		if(!retval)
 		    retval = protgroup_new(readstreams->next_element + 1);
 
