@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.c,v 1.1.2.15 2005/05/31 18:09:19 ken3 Exp $
+ * $Id: imap_proxy.c,v 1.1.2.16 2006/01/17 20:15:21 murch Exp $
  */
 
 #include <config.h>
@@ -105,38 +105,43 @@ struct backend *proxy_findinboxserver(void)
     return s;
 }
 
-/* pipe_until_tag() reads from 's->in' until the tagged response
-   starting with 'tag' appears.  it returns the result of the
-   tagged command, and sets 's->last_result' with the tagged line. */
+/* pipe_response() reads from 's->in' until either the tagged response
+   starting with 'tag' appears, or if 'tag' is NULL, to the end of the
+   current line.  If 'include_tag' is set, the tagged line is included
+   in the output, otherwise the tagged line is stored in 's->last_result'. 
+   In either case, the result of the tagged command is returned.
 
-/* 's->last_result' assumes that tagged responses are:
-   a) short
-   b) don't contain literals
-   
-   IMAP grammar allows both, unfortunately */
+/* 's->last_result' assumes that tagged responses don't contain literals.
+   Unfortunately, the IMAP grammar allows them */
 
 /* force_notfatal says to not fatal() if we lose connection to backend_current
  * even though it is in 95% of the cases, a good idea... */
-int pipe_until_tag(struct backend *s, const char *tag, int force_notfatal)
+static int pipe_response(struct backend *s, const char *tag, int include_tag,
+			 int force_notfatal)
 {
     char buf[2048];
     char eol[128];
     int sl;
-    int cont = 0, last = 0, r = -1;
-    size_t taglen = strlen(tag);
+    int cont = 0, last = !tag, r = PROXY_OK;
+    size_t taglen;
 
     s->timeout->mark = time(NULL) + IDLE_TIMEOUT;
-    
-    if(taglen >= sizeof(buf)) {
-	fatal("tag too large",EC_TEMPFAIL);
+
+    if (tag) {
+	taglen = strlen(tag);
+	if(taglen >= sizeof(buf)) {
+	    fatal("tag too large",EC_TEMPFAIL);
+	}
     }
 
+    s->last_result.len = 0;
+
     /* the only complication here are literals */
-    while (!last || cont) {
+    do {
 	/* if 'cont' is set, we're looking at the continuation to a very
 	   long line.
 	   if 'last' is set, we've seen the tag we're looking for, we're
-	   just reading the end of the line, and we shouldn't echo it. */
+	   just reading the end of the line. */
 	if (!cont) eol[0] = '\0';
 
 	if (!prot_fgets(buf, sizeof(buf), s->in)) {
@@ -146,35 +151,50 @@ int pipe_until_tag(struct backend *s, const char *tag, int force_notfatal)
 	    proxy_downserver(s);
 	    return PROXY_NOCONNECTION;
 	}
-	if (!cont && buf[taglen] == ' ' && !strncmp(tag, buf, taglen)) {
-	    strlcpy(s->last_result, buf + taglen + 1, sizeof(s->last_result));
-	    /* guarantee that 's->last_result' has \r\n\0 at the end */
-	    s->last_result[LAST_RESULT_LEN - 3] = '\r';
-	    s->last_result[LAST_RESULT_LEN - 2] = '\n';
-	    s->last_result[LAST_RESULT_LEN - 1] = '\0';
-	    switch (buf[taglen + 1]) {
-	    case 'O': case 'o':
-		r = PROXY_OK;
-		break;
-	    case 'N': case 'n':
-		r = PROXY_NO;
-		break;
-	    case 'B': case 'b':
-		r = PROXY_BAD;
-		break;
-	    default: /* huh? no result? */
-		if(s == backend_current && !force_notfatal)
-		    fatal("Lost connection to selected backend",
-			  EC_UNAVAILABLE);
-		proxy_downserver(s);
-		r = PROXY_NOCONNECTION;
-		break;
-	    }
 
-	    last = 1;
-	}
-	
 	sl = strlen(buf);
+
+	if (tag) {
+	    /* Check for the tagged line */
+	    if (!cont && buf[taglen] == ' ' && !strncmp(tag, buf, taglen)) {
+
+		switch (buf[taglen + 1]) {
+		case 'O': case 'o':
+		    r = PROXY_OK;
+		    break;
+		case 'N': case 'n':
+		    r = PROXY_NO;
+		    break;
+		case 'B': case 'b':
+		    r = PROXY_BAD;
+		    break;
+		default: /* huh? no result? */
+		    if(s == backend_current && !force_notfatal)
+			fatal("Lost connection to selected backend",
+			      EC_UNAVAILABLE);
+		    proxy_downserver(s);
+		    r = PROXY_NOCONNECTION;
+		    break;
+		}
+
+		last = 1;
+	    }
+	
+	    if (last && !include_tag) {
+		/* Store the tagged line */
+		if (sl > s->last_result.alloc - s->last_result.len) {
+		    s->last_result.alloc =
+			(s->last_result.alloc == 0) ? sizeof(buf) :
+			s->last_result.alloc * 2;
+		    s->last_result.s = xrealloc(s->last_result.s,
+						s->last_result.alloc+1);
+		}
+
+		strcpy(s->last_result.s + s->last_result.len, buf + taglen + 1);
+		s->last_result.len += sl - taglen - 1;
+	    }
+	}
+
 	if (sl == (sizeof(buf) - 1) && buf[sl-1] != '\n') {
             /* only got part of a line */
 	    /* we save the last 64 characters in case it has important
@@ -183,14 +203,14 @@ int pipe_until_tag(struct backend *s, const char *tag, int force_notfatal)
 
 	    /* write out this part, but we have to keep reading until we
 	       hit the end of the line */
-	    if (!last) prot_write(imapd_out, buf, sl);
+	    if (!last || include_tag) prot_write(imapd_out, buf, sl);
 	    cont = 1;
 	    continue;
 	} else {		/* we got the end of the line */
 	    int i;
 	    int litlen = 0, islit = 0;
 
-	    if (!last) prot_write(imapd_out, buf, sl);
+	    if (!last || include_tag) prot_write(imapd_out, buf, sl);
 
 	    /* now we have to see if this line ends with a literal */
 	    if (sl < 64) {
@@ -225,7 +245,7 @@ int pipe_until_tag(struct backend *s, const char *tag, int force_notfatal)
 			/* EOF or other error */
 			return -1;
 		    }
-		    if (!last) prot_write(imapd_out, buf, j);
+		    if (!last || include_tag) prot_write(imapd_out, buf, j);
 		    litlen -= j;
 		}
 
@@ -240,124 +260,33 @@ int pipe_until_tag(struct backend *s, const char *tag, int force_notfatal)
 
 	/* ok, let's read another line */
 	cont = 0;
-    }
+
+    } while (!last || cont);
 
     return r;
 }
 
-int pipe_including_tag(struct backend *s, const char *tag, int force_notfatal)
+int pipe_until_tag(struct backend *s, const char *tag, int force_notfatal)
 {
+    return pipe_response(s, tag, 0, force_notfatal);
+}
+
+int pipe_including_tag(struct backend *s, const char *tag, int force_notfatal) {
     int r;
 
-    r = pipe_until_tag(s, tag, force_notfatal);
-    switch (r) {
-    case PROXY_OK:
-    case PROXY_NO:
-    case PROXY_BAD:
-	prot_printf(imapd_out, "%s %s", tag, s->last_result);
-	break;
-    case PROXY_NOCONNECTION:
+    r = pipe_response(s, tag, 1, force_notfatal);
+    if (r == PROXY_NOCONNECTION) {
 	/* don't have to worry about downing the server, since
 	 * pipe_until_tag does that for us */
-	prot_printf(imapd_out, "%s NO %s\r\n", tag, 
+	prot_printf(imapd_out, "%s NO %s\r\n", tag,
 		    error_message(IMAP_SERVER_UNAVAILABLE));
-	break;
     }
     return r;
 }
 
 static int pipe_to_end_of_response(struct backend *s, int force_notfatal)
 {
-    char buf[2048];
-    char eol[128];
-    int sl;
-    int cont = 1, r = PROXY_OK;
-
-    s->timeout->mark = time(NULL) + IDLE_TIMEOUT;
-    
-    eol[0]='\0';
-
-    /* the only complication here are literals */
-    while (cont) {
-	/* if 'cont' is set, we're looking at the continuation to a very
-	   long line. */
-	if (!prot_fgets(buf, sizeof(buf), s->in)) {
-	    /* uh oh */
-	    if(s == backend_current && !force_notfatal)
-		fatal("Lost connection to selected backend", EC_UNAVAILABLE);
-	    proxy_downserver(s);
-	    return PROXY_NOCONNECTION;
-	}
-	
-	sl = strlen(buf);
-	if (sl == (sizeof(buf) - 1) && buf[sl-1] != '\n') {
-            /* only got part of a line */
-	    /* we save the last 64 characters in case it has important
-	       literal information */
-	    strcpy(eol, buf + sl - 64);
-
-	    /* write out this part, but we have to keep reading until we
-	       hit the end of the line */
-	    prot_write(imapd_out, buf, sl);
-	    cont = 1;
-	    continue;
-	} else {		/* we got the end of the line */
-	    int i;
-	    int litlen = 0, islit = 0;
-
-	    prot_write(imapd_out, buf, sl);
-
-	    /* now we have to see if this line ends with a literal */
-	    if (sl < 64) {
-		strcat(eol, buf);
-	    } else {
-		strcat(eol, buf + sl - 63);
-	    }
-
-	    /* eol now contains the last characters from the line; we want
-	       to see if we've hit a literal */
-	    i = strlen(eol);
-	    if (i >= 4 &&
-		eol[i-1] == '\n' && eol[i-2] == '\r' && eol[i-3] == '}') {
-		/* possible literal */
-		i -= 4;
-		while (i > 0 && eol[i] != '{' && isdigit((int) eol[i])) {
-		    i--;
-		}
-		if (eol[i] == '{') {
-		    islit = 1;
-		    litlen = atoi(eol + i + 1);
-		}
-	    }
-
-	    /* copy the literal over */
-	    if (islit) {
-		while (litlen > 0) {
-		    int j = (litlen > sizeof(buf) ? sizeof(buf) : litlen);
-		    
-		    j = prot_read(s->in, buf, j);
-		    if(!j) {
-			/* EOF or other error */
-			return -1;
-		    }
-		    prot_write(imapd_out, buf, j);
-		    litlen -= j;
-		}
-
-		/* none of our saved information has any relevance now */
-		eol[0] = '\0';
-		
-		/* have to keep going for the end of the line */
-		cont = 1;
-		continue;
-	    }
-	}
-
-	/* ok, if we're here, we're done */
-	cont = 0;
-    }
-
-    return r;
+    return pipe_response(s, NULL, 0, force_notfatal);
 }
 
 /* copy our current input to 's' until we hit a true EOL.
@@ -529,11 +458,13 @@ int pipe_lsub(struct backend *s, const char *tag,
 		return PROXY_NOCONNECTION;
 	    }	
 	    /* Got the end of the response */
-	    strlcpy(s->last_result, buf, sizeof(s->last_result));
-	    /* guarantee that 's->last_result' has \r\n\0 at the end */
-	    s->last_result[LAST_RESULT_LEN - 3] = '\r';
-	    s->last_result[LAST_RESULT_LEN - 2] = '\n';
-	    s->last_result[LAST_RESULT_LEN - 1] = '\0';
+	    if (s->last_result.alloc == 0) {
+		s->last_result.alloc = sizeof(buf);
+		s->last_result.s = xmalloc(s->last_result.alloc+1);
+	    }
+	    strcpy(s->last_result.s, buf);
+	    s->last_result.len = strlen(buf);
+
 	    switch (buf[0]) {
 	    case 'O': case 'o':
 		r = PROXY_OK;
@@ -1078,7 +1009,7 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
 
 	if (res == PROXY_OK) {
 	    if (myrights & ACL_READ) {
-		appenduid = strchr(s->last_result, '[');
+		appenduid = strchr(s->last_result.s, '[');
 		/* skip over APPENDUID */
 		appenduid += strlen("[appenduid ");
 		b = strchr(appenduid, ']');
@@ -1090,7 +1021,7 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
 			    error_message(IMAP_OK_COMPLETED));
 	    }
 	} else {
-	    prot_printf(imapd_out, "%s %s", tag, s->last_result);
+	    prot_printf(imapd_out, "%s %s", tag, s->last_result.s);
 	}
     } else {
 	/* abort the append */

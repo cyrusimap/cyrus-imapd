@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.70 2006/01/16 23:44:04 murch Exp $ */
+/* $Id: imapd.c,v 1.443.2.71 2006/01/17 20:15:21 murch Exp $ */
 
 #include <config.h>
 
@@ -506,6 +506,9 @@ static void imapd_reset(void)
     i = 0;
     while (backend_cached && backend_cached[i]) {
 	proxy_downserver(backend_cached[i]);
+	if (backend_cached[i]->last_result.s) {
+	    free(backend_cached[i]->last_result.s);
+	}
 	free(backend_cached[i]);
 	i++;
     }
@@ -829,6 +832,9 @@ void shut_down(int code)
     i = 0;
     while (backend_cached && backend_cached[i]) {
 	proxy_downserver(backend_cached[i]);
+	if (backend_cached[i]->last_result.s) {
+	    free(backend_cached[i]->last_result.s);
+	}
 	free(backend_cached[i]);
 	i++;
     }
@@ -4472,7 +4478,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 
 	    if (res == PROXY_OK) {
 		if (myrights & ACL_READ) {
-		    appenduid = strchr(s->last_result, '[');
+		    appenduid = strchr(s->last_result.s, '[');
 		    /* skip over APPENDUID */
 		    appenduid += strlen("[appenduid ");
 		    b = strchr(appenduid, ']');
@@ -4484,7 +4490,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 				error_message(IMAP_OK_COMPLETED));
 		}
 	    } else {
-		prot_printf(imapd_out, "%s %s", tag, s->last_result);
+		prot_printf(imapd_out, "%s %s", tag, s->last_result.s);
 	    }
 	} else {
 	    /* abort the append */
@@ -4653,7 +4659,7 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
 	    } else {
 		/* we're allowed to reference last_result since the noop, if
 		   sent, went to a different server */
-		prot_printf(imapd_out, "%s %s", tag, s->last_result);
+		prot_printf(imapd_out, "%s %s", tag, s->last_result.s);
 	    }
 
 	    return;
@@ -4788,7 +4794,7 @@ void cmd_delete(char *tag, char *name, int localonly, int force)
 	} else {
 	    /* we're allowed to reference last_result since the noop, if
 	       sent, went to a different server */
-	    prot_printf(imapd_out, "%s %s", tag, s->last_result);
+	    prot_printf(imapd_out, "%s %s", tag, s->last_result.s);
 	}
 
 	return;
@@ -5059,7 +5065,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	} else {
 	    /* we're allowed to reference last_result since the noop, if
 	       sent, went to a different server */
-	    prot_printf(imapd_out, "%s %s", tag, s->last_result);
+	    prot_printf(imapd_out, "%s %s", tag, s->last_result.s);
 	}
 
 	return;
@@ -5928,7 +5934,7 @@ void cmd_setacl(char *tag, const char *name,
 	} else {
 	    /* we're allowed to reference last_result since the noop, if
 	       sent, went to a different server */
-	    prot_printf(imapd_out, "%s %s", tag, s->last_result);
+	    prot_printf(imapd_out, "%s %s", tag, s->last_result.s);
 	}
 
 	return;
