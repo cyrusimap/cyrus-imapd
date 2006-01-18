@@ -391,7 +391,13 @@ md5_mailbox_list_write(struct md5_mailbox_list *list, char *name)
     FILE *file;
     int i;
 
-    if ((file=fopen(name, "w")) == NULL)
+    file = fopen(name, "w");
+    if (file == NULL && errno == ENOENT) {
+	if (cyrus_mkdir(name, 0750) == 0) {
+	    file = fopen(name, "w");
+	}
+    }
+    if (file == NULL)
         return(IMAP_IOERROR);
 
     for (mailbox = list->head ; mailbox ; mailbox = mailbox->next) {
