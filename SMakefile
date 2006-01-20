@@ -40,7 +40,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.96 2005/10/13 19:54:38 jeaton Exp $
+# $Id: SMakefile,v 1.97 2006/01/20 20:26:46 jeaton Exp $
 #
 
 NEW_AUTOTOOLS=yes
@@ -113,6 +113,13 @@ case `uname` in
     ;;
 esac
 
+case `sys` in
+    i386_fc3)
+	LIBS="$LIBS -ldes"
+	OS_CONFIG="--with-krbdes"
+    ;;
+esac
+
 
 # settings; we have to disable these on some platforms
 DEBUG=""
@@ -124,7 +131,8 @@ DB_CONFIG=""
 
 # the following is for staticly linking SASL only
 SASL_CONFIG="--with-staticsasl=/usr/local --with-gssapi=/usr/local"
-KRB_CONFIG="--enable-statickrb --with-krb=/usr/local"
+#KRB_CONFIG="--enable-statickrb --with-krb=/usr/local"
+KRB_CONFIG="--with-krb=/usr/local"
 FEATURE_CONFIG="--enable-murder --enable-cmulocal --enable-nntp --with-idle=idled"
 EXT_PACKAGE_CONFIG="--with-inn=/usr/news --with-ucdsnmp=/usr/local"
 
