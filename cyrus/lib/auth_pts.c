@@ -1,5 +1,5 @@
 /* auth_pts.c -- PTLOADER authorization
- * $Id: auth_pts.c,v 1.8 2005/02/16 20:38:01 shadow Exp $
+ * $Id: auth_pts.c,v 1.9 2006/01/20 20:34:07 jeaton Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -66,12 +66,113 @@
 static char *canonuser_id = NULL;
 static struct auth_state *canonuser_cache = NULL;
 
+/* XXX should make this an imap option */
+#define PT_TIMEOUT_SEC  30
+
+#define TS_READ 1
+#define TS_WRITE 2
+#define TS_RW 3
+
+static int
+timeout_select (int sock, int op, int sec) {
+  struct timeval tv;
+  int r;
+  fd_set rfds, wfds, *rp, *wp;
+
+  FD_ZERO(&rfds);
+  FD_ZERO(&wfds);
+  rp = NULL;
+  wp = NULL;
+
+  switch (op) {
+  case TS_READ:
+    FD_SET(sock, &rfds);
+    rp = &rfds;
+    break;
+  case TS_WRITE:
+    FD_SET(sock, &wfds);
+    wp = &wfds;
+    break;
+  case TS_RW:
+    FD_SET(sock, &rfds);
+    FD_SET(sock, &wfds);
+    rp = &rfds;
+    wp = &wfds;
+  default:  /* no action */
+    break;
+  }
+
+  tv.tv_sec = sec;
+  tv.tv_usec = 0;
+
+  syslog(LOG_DEBUG, "timeout_select: sock = %d, rp = 0x%x, wp = 0x%x, sec = %d", 
+         sock, rp, wp, sec);
+
+  if ((r = select(sock+1, rp, wp, NULL, &tv)) == 0) {
+    /* r == 0 then timed out. we change this into an error */
+    errno = ETIMEDOUT;
+    r = -1;
+  }
+
+  syslog(LOG_DEBUG, "timeout_select exiting. r = %d; errno = %d", r, errno);
+  return r;
+}
+
+
+static int
+nb_connect(int s, struct sockaddr *sa, socklen_t slen, int sec) {
+  int flags, r, rc=0;
+
+  if ((flags = fcntl(s, F_GETFL,0)) == -1) {
+    syslog(LOG_ERR, "unable to get socket flags");
+    return -1;
+  }
+
+  if (fcntl(s, F_SETFL, flags|O_NONBLOCK) == -1) {
+    syslog(LOG_ERR, "unable to set socket to NON_BLOCK");
+    return -1;
+  }
+
+  if ((r = connect(s, sa, slen)) < 0) {
+    if (errno != EINPROGRESS) {
+      rc = -1;
+      goto done;
+    }
+  } else {
+    /* yay, it got through on the first shot. */
+    syslog(LOG_DEBUG, "connected with no delay");
+    rc = 0;
+    goto done;
+  }
+
+  syslog(LOG_DEBUG, "didn't immediately connect. waiting...");
+
+  if (timeout_select(s, TS_RW, sec) < 0) {
+    syslog(LOG_ERR, "timeoutselect: %m");
+    rc = -1;
+    goto done;
+  }
+
+  syslog(LOG_DEBUG, "connect: connected in time.");
+  rc = 0;
+
+ done:
+  /* set back to blocking so the reads/writes don't screw up), but why bother on an error... */
+  if (!rc && (fcntl(s, F_SETFL, flags) == -1)) {
+    syslog(LOG_ERR, "unable to set socket back to nonblocking: %m");
+    rc = -1;
+  }
+
+  return rc;
+}
+
 /* Returns 0 on successful connection to ptloader/valid cache entry,
  * complete with allocated & filled in struct auth_state.
  *
  * state must be a NULL pointer when passed in */
 static int ptload(const char *identifier,struct auth_state **state);
 static void myfreestate(struct auth_state *auth_state);
+
 
 /*
  * Determine if the user is a member of 'identifier'
@@ -144,14 +245,24 @@ static char *mycanonifyid(const char *identifier,
         /* we can fill this in ourselves - no cacheing */
 	strlcpy(retbuf, identifier, sizeof(retbuf));
 	return retbuf;
-    } else if(ptload(identifier, &canonuser_cache)) {
-	/* Couldn't contact ptloader/database.  Fail. */
-	return NULL;
-    } else {
-	canonuser_id = xstrdup(identifier);
-	strlcpy(retbuf, canonuser_cache->userid.id, sizeof(retbuf));
-	return retbuf;
     }
+
+    canonuser_cache = NULL;
+    if(ptload(identifier, &canonuser_cache) < 0) {
+      if (canonuser_cache == NULL) {
+        syslog(LOG_ERR, "ptload completely failed: unable to canonify identifier: %s",
+               identifier);
+        return NULL;
+      } else {
+        syslog(LOG_ERR, "ptload failed: but canonified %s -> %s", identifier,
+               canonuser_cache->userid.id);
+      }
+    }
+
+    canonuser_id = xstrdup(identifier);
+    strlcpy(retbuf, canonuser_cache->userid.id, sizeof(retbuf));
+    syslog(LOG_DEBUG, "canonified %s -> %s", identifier, retbuf);
+    return retbuf;
 }
 
 /* 
@@ -170,19 +281,40 @@ static struct auth_state *mynewstate(const char *identifier)
 
 	output = canonuser_cache;
 	canonuser_cache = NULL;
-    } else {
-	if(!strcmp(identifier, "anyone") ||
-           !strcmp(identifier, "anonymous") ||
-	   ptload(identifier, &output)) {
-		/* Anyone/Anonymous/ptload failure; fake it */
-		output =
-		    (struct auth_state *)xzmalloc(sizeof(struct auth_state));
-		strlcpy(output->userid.id, identifier,
-			sizeof(output->userid.id));
-		output->userid.hash = strhash(identifier);
-	}
+        return output;
+    } 
+
+    /*
+     * If anyone or anonymous, just pass through. Otherwise, try to load the
+     * groups the user is in
+     */
+    if(strcmp(identifier, "anyone") &&
+       strcmp(identifier, "anonymous")) {
+
+      if(ptload(identifier, &output) < 0) {
+        syslog(LOG_ERR, "ptload failed for %s", identifier);
+        /* Allowing this to go through is a problem if negative group access is
+         * used significantly.   Allowing this to go through is a feature when
+         * the ptserver is having problems and the user wants to get to his
+         * inbox.
+         *
+         * note that even on a failure, output should either be NULL or a
+         * correct (enough) value.
+         */
+      }
     }
-	
+
+    if (output == NULL) {
+      output =
+        (struct auth_state *)xzmalloc(sizeof(struct auth_state));
+      strlcpy(output->userid.id, identifier,
+              sizeof(output->userid.id));
+      output->userid.hash = strhash(identifier);
+      syslog(LOG_DEBUG, "creating empty auth_state for %s", identifier);
+    } else {
+      syslog(LOG_DEBUG, "using ptloaded value of: %s", output->userid.id);
+    }
+
     return output;
 }
 
@@ -193,13 +325,13 @@ static int ptload(const char *identifier, struct auth_state **state)
 {
     struct auth_state *fetched = NULL;
     size_t id_len;
-    const char *data;
+    const char *data = NULL;
     int dsize;
     char fnamebuf[1024];
     struct db *ptdb;
     int s;
     struct sockaddr_un srvaddr;
-    int r;
+    int r, rc=0;
     static char response[1024];
     struct iovec iov[10];
     int niov, n;
@@ -223,12 +355,14 @@ static int ptload(const char *identifier, struct auth_state **state)
     if (r != 0) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s", fnamebuf,
 	       cyrusdb_strerror(ret));
+        *state = NULL;
 	return -1;
     }
 
     id_len = strlen(identifier);
     if(id_len > PTS_DB_KEYSIZE) {
 	syslog(LOG_ERR, "identifier too long in auth_newstate");
+        *state = NULL;
 	return -1;
     }
       
@@ -239,6 +373,7 @@ static int ptload(const char *identifier, struct auth_state **state)
         syslog(LOG_ERR, "auth_newstate: error fetching record: %s",
                cyrusdb_strerror(r));
 
+        rc = -1;
         goto done;
     }
 
@@ -251,15 +386,12 @@ static int ptload(const char *identifier, struct auth_state **state)
 	int timeout = libcyrus_config_getint(CYRUSOPT_PTS_CACHE_TIMEOUT);
 	
 	syslog(LOG_DEBUG,
-	       "ptload(): fetched cache record " \
-	       "(mark %ld, current %ld, limit %ld)",
+	       "ptload(): fetched cache record (%s)" \
+	       "(mark %ld, current %ld, limit %ld)", identifier,
 	       fetched->mark, now, now - timeout);
 
 	if (fetched->mark > (now - timeout)) {
 	    /* not expired; let's return it */
-	    *state = (struct auth_state *)xmalloc(dsize);
-	    memcpy(*state, fetched, dsize);
-	    
 	    goto done;
 	}
     }
@@ -270,7 +402,7 @@ static int ptload(const char *identifier, struct auth_state **state)
     if (s == -1) {
         syslog(LOG_ERR,
                "ptload(): unable to create socket for ptloader: %m");
-
+        rc = -1;
         goto done;
     }
         
@@ -284,28 +416,42 @@ static int ptload(const char *identifier, struct auth_state **state)
     memset((char *)&srvaddr, 0, sizeof(srvaddr));
     srvaddr.sun_family = AF_UNIX;
     strcpy(srvaddr.sun_path, fnamebuf);
-    r = connect(s, (struct sockaddr *)&srvaddr, sizeof(srvaddr));
+    r = nb_connect(s, (struct sockaddr *)&srvaddr, sizeof(srvaddr), PT_TIMEOUT_SEC);
+
     if (r == -1) {
 	syslog(LOG_ERR, "ptload(): can't connect to ptloader server: %m");
 	close(s);
-
+        rc = -1;
         goto done;
     }
 
+    syslog(LOG_DEBUG, "ptload(): connected");
     niov = 0;
     WRITEV_ADD_TO_IOVEC(iov, niov, (char *) &id_len, sizeof(id_len));
     WRITEV_ADD_TO_IOVEC(iov, niov, (char *) identifier, id_len);
 
+    if (timeout_select(s, TS_WRITE, PT_TIMEOUT_SEC) < 0) {
+      syslog(LOG_ERR, "timeoutselect: writing to ptloader %m");
+      rc = -1;
+      goto done;
+    }
     retry_writev(s, iov, niov);
+    syslog(LOG_DEBUG, "ptload sent data");
         
     start = 0;
     while (start < sizeof(response) - 1) {
-	n = read(s, response+start, sizeof(response) - 1 - start);
-	if (n < 1) break;
-	start += n;
+      if (timeout_select(s, TS_READ, PT_TIMEOUT_SEC) < 0) {
+        syslog(LOG_ERR, "timeout_select: reading from ptloader: %m");
+        rc = -1;
+        goto done;
+      }
+      n = read(s, response+start, sizeof(response) - 1 - start);
+      if (n < 1) break;
+      start += n;
     }
         
     close(s);
+    syslog(LOG_DEBUG, "ptload read data back");
         
     if (start <= 1 || strncmp(response, "OK", 2)) {
        if(start > 1) {
@@ -314,6 +460,7 @@ static int ptload(const char *identifier, struct auth_state **state)
        } else {
 	   syslog(LOG_ERR, "ptload(): empty response from ptloader server");
        }
+       rc = -1;
        goto done;
     }
 
@@ -324,22 +471,31 @@ static int ptload(const char *identifier, struct auth_state **state)
 	syslog(LOG_ERR, "ptload(): error fetching record: %s"
 	       "(did ptloader add the record?)",
 	       cyrusdb_strerror(r));
-	
-        goto done;
+      data = NULL;
+      rc = -1;
+      goto done;
     }
 
-    /* ok, we got what we wanted */
-    fetched = (struct auth_state *) data;
-
-    /* copy it into our structure */
-    *state = (struct auth_state *)xmalloc(dsize);
-    memcpy(*state, fetched, dsize);
-
  done:
+    /* ok, we got real data, let's use it */
+    if (data != NULL) {
+      fetched = (struct auth_state *) data;
+    }
+
+    if (fetched == NULL) {
+      *state = NULL;
+      syslog(LOG_DEBUG, "No data available at all from ptload()");
+    } else  {
+      /* copy it into our structure */
+      *state = (struct auth_state *)xmalloc(dsize);
+      memcpy(*state, fetched, dsize);
+      syslog(LOG_DEBUG, "ptload returning data");
+    }
+
     /* close and unlock the database */
     the_ptscache_db->close(ptdb);
 
-    return (*state) ? 0 : -1;
+    return rc;
 }
 
 static void myfreestate(struct auth_state *auth_state)
