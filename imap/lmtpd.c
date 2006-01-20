@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.142 2005/10/31 14:21:53 ken3 Exp $
+ * $Id: lmtpd.c,v 1.143 2006/01/20 20:29:33 jeaton Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -305,8 +305,23 @@ int deliver_mailbox(struct protstream *msg,
 	prot_rewind(msg);
 	r = append_fromstage(&as, stage, now,
 			     (const char **) flag, nflags, !singleinstance);
-	if (!r) append_commit(&as, quotaoverride ? -1 : 0, NULL, &uid, NULL);
-	else append_abort(&as);
+	if (r || (dupelim && id && 
+	    duplicate_check(id, strlen(id), mailboxname, strlen(mailboxname)))) 
+	{
+	    append_abort(&as);
+                    
+	    if (!r) {
+	      /* duplicate message */
+		duplicate_log(id, mailboxname, "delivery");
+		return 0;
+	    }            
+	} else {
+	    if (dupelim && id) 
+		duplicate_mark(id, strlen(id), mailboxname, 
+			       strlen(mailboxname), now, uid);
+
+	    append_commit(&as, quotaoverride ? -1 : 0, NULL, &uid, NULL);
+	}
     }
 
     if (!r && user && (notifier = config_getstring(IMAPOPT_MAILNOTIFIER))) {
@@ -344,9 +359,6 @@ int deliver_mailbox(struct protstream *msg,
 	}
     }
 
-    if (!r && dupelim && id) duplicate_mark(id, strlen(id), 
-					    mailboxname, strlen(mailboxname),
-					    now, uid);
     return r;
 }
 
