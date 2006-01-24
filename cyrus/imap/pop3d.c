@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.144.2.37 2005/12/13 19:36:08 murch Exp $
+ * $Id: pop3d.c,v 1.144.2.38 2006/01/24 01:17:30 murch Exp $
  */
 #include <config.h>
 
@@ -499,10 +499,6 @@ int service_main(int argc __attribute__((unused)),
 
     proc_register("pop3d", popd_clienthost, NULL, NULL);
 
-    /* Set inactivity timer */
-    timeout = config_getint(IMAPOPT_POPTIMEOUT);
-    if (timeout < 10) timeout = 10;
-    prot_settimeout(popd_in, timeout*60);
     prot_setflushonread(popd_in, popd_out);
 
     if (kflag) kpop();
@@ -723,6 +719,11 @@ static void cmdloop(void)
     char inputbuf[8192];
     char *p, *arg;
     unsigned msg = 0;
+    int timeout;
+
+    timeout = config_getint(IMAPOPT_POPTIMEOUT);
+    if (timeout < 10) timeout = 10;
+    timeout *= 60; /* convert to seconds */
 
     for (;;) {
 	signals_poll();
@@ -741,6 +742,11 @@ static void cmdloop(void)
 	    prot_printf(popd_out, "-ERR [SYS/TEMP] %s\r\n", p);
 	    shut_down(0);
 	}
+
+	/* (Re)set inactivity timer */
+	/* XXX  We do this every iteration in case we spend a long
+	   time processing a command (e.g. RETR over a slow link) */
+	prot_settimeout(popd_in, timeout);
 
 	if (!prot_fgets(inputbuf, sizeof(inputbuf), popd_in)) {
 	    shut_down(0);
