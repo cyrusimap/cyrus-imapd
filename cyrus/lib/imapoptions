@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.2.2.42 2006/02/01 19:25:40 murch Exp $
+.\" $Id: imapoptions,v 1.2.2.43 2006/02/01 19:44:06 murch Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -88,7 +88,7 @@ are listed with ``<none>''.
 
 { "afspts_localrealms", NULL, STRING }
 /* The list of realms which are to be treated as local, and thus stripped
-   during identifier canoicalization (for the AFSPTS ptloader module).
+   during identifier canonicalization (for the AFSPTS ptloader module).
    This is different from loginrealms in that it occurs later in the
    authorization process (as the user id is canonified for PTS lookup) */
 
@@ -170,7 +170,7 @@ are listed with ``<none>''.
 
 { "client_timeout", 10, INT }
 /* Number of seconds to wait before returning a timeout failure when
-   performing a client connection (e.g. in a murder enviornment) */
+   performing a client connection (e.g. in a murder environment) */
 
 { "configdirectory", NULL, STRING }
 /* The pathname of the IMAP configuration directory.  This field is
@@ -233,8 +233,8 @@ are listed with ``<none>''.
 
 { "force_sasl_client_mech", NULL, STRING }
 /* Force preference of a given SASL mechanism for client side operations
-   (e.g. murder enviornments).  This is separate from (and overridden by)
-   the ability to use the <host shortname>_mechs option to set prefered
+   (e.g. murder environments).  This is separate from (and overridden by)
+   the ability to use the <host shortname>_mechs option to set preferred
    mechanisms for a specific host */
 
 { "fulldirhash", 0, SWITCH }
@@ -255,7 +255,7 @@ are listed with ``<none>''.
 # Commented out - there's no such thing as "hostname_mechs", but we need
 # this for the man page
 # { "hostname_mechs", NULL, STRING }
-/* Force a particuar list of SASL mechanisms to be used when authenticating
+/* Force a particular list of SASL mechanisms to be used when authenticating
    to the backend server hostname (where hostname is the short hostname of
    the server in question). If it is not specified it will query the server
    for available mechanisms and pick one to use. - Cyrus Murder */
@@ -381,25 +381,25 @@ are listed with ``<none>''.
 /* Use SASL for LDAP binds in the LDAP PTS module. */
 
 { "ldap_sasl_authc", NULL, STRING }
-/* Depricated.  Use ldap_id */
+/* Deprecated.  Use ldap_id */
 
 { "ldap_sasl_authz", NULL, STRING }
-/* Depricated.  Use ldap_authz */
+/* Deprecated.  Use ldap_authz */
 
 { "ldap_sasl_mech", NULL, STRING }
-/* Depricated.  Use ldap_mech */
+/* Deprecated.  Use ldap_mech */
 
 { "ldap_sasl_password", NULL, STRING }
-/* Depricated.  User ldap_password */
+/* Deprecated.  User ldap_password */
 
 { "ldap_sasl_realm", NULL, STRING }
-/* Depricated.  Use ldap_realm */
+/* Deprecated.  Use ldap_realm */
 
 { "ldap_scope", "sub", STRINGLIST("sub", "one", "base") }
 /* Specify search scope. */
 
 { "ldap_servers", "ldap://localhost/", STRING }
-/* Depricated.  Use ldap_uri */
+/* Deprecated.  Use ldap_uri */
 
 { "ldap_size_limit", 1, INT }
 /* Specify a number of entries for a search request to return. */
@@ -440,7 +440,7 @@ are listed with ``<none>''.
 
 { "ldap_version", 3, INT }
 /* Specify the LDAP protocol version.  If ldap_start_tls and/or
-   ldap_use_sasl are enabled, ldap_version will be automatiacally
+   ldap_use_sasl are enabled, ldap_version will be automatically
    set to 3. */
 
 { "lmtp_downcase_rcpt", 0, SWITCH }
@@ -470,7 +470,7 @@ are listed with ``<none>''.
 # xxx how does this tie into virtual domains?
 { "loginrealms", "", STRING }
 /* The list of remote realms whose users may authenticate using cross-realm
-   authentication identifiers.  Seperate each realm name by a space.  (A
+   authentication identifiers.  Separate each realm name by a space.  (A
    cross-realm identity is considered any identity returned by SASL
    with an "@" in it.). */
 
@@ -539,7 +539,7 @@ are listed with ``<none>''.
 { "mupdate_connections_max", 128, INT }
 /* The max number of connections that a mupdate process will allow, this
    is related to the number of file descriptors in the mupdate process.
-   Beyond this number connections will be immedately issued a BYE response. */
+   Beyond this number connections will be immediately issued a BYE response. */
 
 { "mupdate_password", NULL, STRING }
 /* The SASL password (if needed) to use when authenticating to the
@@ -676,7 +676,7 @@ are listed with ``<none>''.
    connections before the minpoll restriction is triggered.  Additionally,
    one padding entry is recovered every \fIpopminpoll\fR minutes.
    This allows for the occasional polling rate faster than popminpoll, 
-   (i.e. for clients that require a send/recieve to send mail) but still 
+   (i.e. for clients that require a send/receive to send mail) but still 
    enforces the rate long-term.  Default is 1 (disabled).
 .br
 .sp
@@ -684,7 +684,7 @@ are listed with ``<none>''.
    slot being filled for every connection, and one slot being cleared 
    every \fIpopminpoll\fR minutes. When the queue is full, the user
    will not be able to check mail again until a slot is cleared.  If the 
-   user waits a sufficent amount of time, they will get back many or all
+   user waits a sufficient amount of time, they will get back many or all
    of the slots. */
 
 { "poptimeout", 10, INT }
@@ -732,7 +732,7 @@ are listed with ``<none>''.
 
 { "proxyservers", NULL, STRING }
 /* A list of users and groups that are allowed to proxy for other
-   users, seperated by spaces.  Any user listed in this will be
+   users, separated by spaces.  Any user listed in this will be
    allowed to login for any other user: use with caution. */ 
 
 { "pts_module", "afskrb", STRINGLIST("afskrb", "ldap") }
@@ -774,7 +774,7 @@ are listed with ``<none>''.
 { "reject8bit", 0, SWITCH }
 /* If enabled, lmtpd rejects messages with 8-bit characters in the
    headers.  Otherwise, 8-bit characters are changed to `X'.  (A
-   proper soultion to non-ASCII characters in headers is offered by  
+   proper solution to non-ASCII characters in headers is offered by  
    RFC 2047 and its predecessors.) */
 
 { "rfc2046_strict", 0, SWITCH }
@@ -809,7 +809,7 @@ are listed with ``<none>''.
 
 # Commented out - used by libsasl
 # { "sasl_option", 0, STRING }
-/* Any SASL option can be set by preceeding it with "sasl_".  This
+/* Any SASL option can be set by preceding it with "sasl_".  This
    file overrides the SASL configuration file. */
 
 # Commented out - used by libsasl
@@ -874,7 +874,7 @@ are listed with ``<none>''.
 
 { "soft_noauth", 1, SWITCH }
 /* If enabled, lmtpd returns temporary failures if the client does not
-   successfully authenticate.  Otherwise lmtpd returns permanant failures
+   successfully authenticate.  Otherwise lmtpd returns permanent failures
    (causing the mail to bounce immediately). */
 
 { "srvtab", "", STRING }
@@ -905,7 +905,7 @@ are listed with ``<none>''.
 
 { "sync_machineid", -1, INT }
 /* Machine ID of this server which must be unique within a cluster.
-   Any negative nuqmber, the default, will disable the use of UUIDs for
+   Any negative number, the default, will disable the use of UUIDs for
    replication. */
 
 { "sync_password", NULL, STRING }
