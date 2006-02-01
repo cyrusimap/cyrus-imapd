@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.144.2.38 2006/01/24 01:17:30 murch Exp $
+ * $Id: pop3d.c,v 1.144.2.39 2006/02/01 19:25:38 murch Exp $
  */
 #include <config.h>
 
@@ -499,6 +499,10 @@ int service_main(int argc __attribute__((unused)),
 
     proc_register("pop3d", popd_clienthost, NULL, NULL);
 
+    /* Set inactivity timer */
+    timeout = config_getint(IMAPOPT_POPTIMEOUT);
+    if (timeout < 10) timeout = 10;
+    prot_settimeout(popd_in, timeout*60);
     prot_setflushonread(popd_in, popd_out);
 
     if (kflag) kpop();
@@ -719,11 +723,6 @@ static void cmdloop(void)
     char inputbuf[8192];
     char *p, *arg;
     unsigned msg = 0;
-    int timeout;
-
-    timeout = config_getint(IMAPOPT_POPTIMEOUT);
-    if (timeout < 10) timeout = 10;
-    timeout *= 60; /* convert to seconds */
 
     for (;;) {
 	signals_poll();
@@ -742,11 +741,6 @@ static void cmdloop(void)
 	    prot_printf(popd_out, "-ERR [SYS/TEMP] %s\r\n", p);
 	    shut_down(0);
 	}
-
-	/* (Re)set inactivity timer */
-	/* XXX  We do this every iteration in case we spend a long
-	   time processing a command (e.g. RETR over a slow link) */
-	prot_settimeout(popd_in, timeout);
 
 	if (!prot_fgets(inputbuf, sizeof(inputbuf), popd_in)) {
 	    shut_down(0);
@@ -1297,7 +1291,7 @@ void cmd_capa()
 {
     int minpoll = config_getint(IMAPOPT_POPMINPOLL) * 60;
     int expire = config_getint(IMAPOPT_POPEXPIRETIME);
-    unsigned mechcount;
+    int mechcount;
     const char *mechlist;
 
     prot_printf(popd_out, "+OK List of capabilities follows\r\n");
@@ -1357,7 +1351,7 @@ void cmd_auth(char *arg)
      */
     if (!arg) {
 	const char *sasllist;
-	unsigned int mechnum;
+	int mechnum;
 
 	prot_printf(popd_out, "+OK List of supported mechanisms follows\r\n");
       
@@ -1700,6 +1694,10 @@ static void blat(int msg,int lines)
     if (buf[strlen(buf)-1] != '\n') prot_printf(popd_out, "\r\n");
 
     prot_printf(popd_out, ".\r\n");
+
+    /* Reset inactivity timer in case we spend a long time
+       pushing data to the client over a slow link. */
+    prot_resettimeout(popd_in);
 }
 
 static int parsenum(char **ptr)

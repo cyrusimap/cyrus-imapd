@@ -1,7 +1,7 @@
 /* prot.h -- stdio-like module that handles buffering, SASL, and TLS
  *           details for I/O over sockets
  *
- * $Id: prot.h,v 1.40.2.4 2005/05/04 19:25:44 ken3 Exp $
+ * $Id: prot.h,v 1.40.2.5 2006/02/01 19:25:42 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -180,6 +180,9 @@ extern int prot_settls(struct protstream *s, SSL *tlsconn);
 
 /* Set a timeout for the connection (in seconds) */
 extern int prot_settimeout(struct protstream *s, int timeout);
+
+/* Reset the timeout timer for the connection (in seconds) */
+extern int prot_resettimeout(struct protstream *s);
 
 /* Connect two streams so that when you block on reading s, the layer
  * will automaticly flush flushs */

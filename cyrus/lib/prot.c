@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.82.2.10 2006/01/24 01:17:32 murch Exp $
+ * $Id: prot.c,v 1.82.2.11 2006/02/01 19:25:41 murch Exp $
  */
 
 #include <config.h>
@@ -217,6 +217,18 @@ int prot_settimeout(struct protstream *s, int timeout)
 
     s->read_timeout = timeout;
     s->timeout_mark = time(NULL) + timeout;
+    return 0;
+}
+
+/*
+ * Reset the read timeout_mark for the stream 's'.
+ * 'S' must have been created for reading.
+ */
+int prot_resettimeout(struct protstream *s)
+{
+    assert(!s->write);
+
+    s->timeout_mark = time(NULL) + s->read_timeout;
     return 0;
 }
 
@@ -577,7 +589,7 @@ static void prot_flush_log(struct protstream *s)
 /* Do the encoding part of prot_flush */
 static int prot_flush_encode(struct protstream *s,
 			     const char **output_buf,
-			     int *output_len) 
+			     unsigned *output_len) 
 {
     unsigned char *ptr = s->buf;
     int left = s->ptr - s->buf;
@@ -598,7 +610,7 @@ static int prot_flush_encode(struct protstream *s,
 	    return EOF;
 	}
     } else {
-	*output_buf = ptr;
+	*output_buf = (char *) ptr;
 	*output_len = left;
     }
     return 0;
@@ -630,8 +642,8 @@ int prot_flush_internal(struct protstream *s, int force)
     int n;
     int save_dontblock = s->dontblock;
 
-    const char *ptr = s->buf; /* Memory buffer info */
-    int left = s->ptr - s->buf;
+    const char *ptr = (char *) s->buf; /* Memory buffer info */
+    unsigned left = s->ptr - s->buf;
 
     assert(s->write);
     assert(s->cnt >= 0);

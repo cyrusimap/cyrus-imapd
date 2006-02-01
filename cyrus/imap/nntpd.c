@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.44 2005/12/13 19:36:06 murch Exp $
+ * $Id: nntpd.c,v 1.2.2.45 2006/02/01 19:25:36 murch Exp $
  */
 
 /*
@@ -583,7 +583,7 @@ int service_main(int argc __attribute__((unused)),
     proc_register("nntpd", nntp_clienthost, NULL, NULL);
 
     /* Set inactivity timer */
-    timeout = config_getint(IMAPOPT_TIMEOUT);
+    timeout = config_getint(IMAPOPT_NNTPTIMEOUT);
     if (timeout < 3) timeout = 3;
     prot_settimeout(nntp_in, timeout*60);
     prot_setflushonread(nntp_in, nntp_out);
@@ -1781,7 +1781,7 @@ static int open_group(char *name, int has_prefix, struct backend **ret,
 static void cmd_capabilities(char *keyword __attribute__((unused)))
 {
     const char *mechlist;
-    unsigned mechcount = 0;
+    int mechcount = 0;
 
     prot_printf(nntp_out, "101 Capability list follows:\r\n");
     prot_printf(nntp_out, "VERSION 2\r\n");
@@ -1944,6 +1944,10 @@ static void cmd_article(int part, char *msgid, unsigned long uid)
 	if (buf[strlen(buf)-1] != '\n') prot_printf(nntp_out, "\r\n");
 
 	prot_printf(nntp_out, ".\r\n");
+
+	/* Reset inactivity timer in case we spend a long time
+	   pushing data to the client over a slow link. */
+	prot_resettimeout(nntp_in);
     }
 
     if (!by_msgid) free(msgid);
@@ -2055,7 +2059,7 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
 	/* if client didn't specify any mech we give them the list */
 	if (!mech) {
 	    const char *sasllist;
-	    unsigned int mechnum;
+	    int mechnum;
 
 	    prot_printf(nntp_out, "281 List of mechanisms follows\r\n");
       
