@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.16.2.15 2005/02/25 06:46:14 shadow Exp $ */
+/* $Id: backend.c,v 1.16.2.16 2006/02/01 19:38:05 murch Exp $ */
 
 #include <config.h>
 
@@ -274,7 +274,7 @@ struct backend *backend_connect(struct backend *ret, const char *server,
     /* need to (re)establish connection to server or create one */
     int sock = -1;
     int r;
-    int err;
+    int err = -1;
     struct addrinfo hints, *res0 = NULL, *res1 = NULL, *res;
     struct sockaddr_un sunsock;
     char buf[2048], *mechlist = NULL;
