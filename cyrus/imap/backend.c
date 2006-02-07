@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.38 2005/10/31 14:21:53 ken3 Exp $ */
+/* $Id: backend.c,v 1.39 2006/02/07 20:57:27 murch Exp $ */
 
 #include <config.h>
 
@@ -435,13 +435,14 @@ void backend_disconnect(struct backend *s, struct protocol_t *prot)
 	if (prot && prot->logout_cmd.cmd) {
 	    prot_printf(s->out, "%s\r\n", prot->logout_cmd.cmd);
 	    prot_flush(s->out);
-
+#if 0  /* XXX  don't care about response -- we may not get one */
 	    while (prot_fgets(buf, sizeof(buf), s->in)) {
 		if (!strncmp(prot->logout_cmd.resp, buf,
 			     strlen(prot->logout_cmd.resp))) {
 		    break;
 		}
 	    }
+#endif
 	}
 
 	/* Flush the incoming buffer */

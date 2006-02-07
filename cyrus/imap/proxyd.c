@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.198 2006/01/13 22:06:35 murch Exp $ */
+/* $Id: proxyd.c,v 1.199 2006/02/07 20:57:27 murch Exp $ */
 
 #include <config.h>
 
@@ -824,8 +824,9 @@ struct prot_waitevent *backend_timeout(struct protstream *s __attribute__((unuse
 				       struct prot_waitevent *ev, void *rock)
 {
     struct backend *be = (struct backend *) rock;
+    int is_active = (be->context ? *((int *) be->context) : 0);
 
-    if (be != backend_current) {
+    if ((be != backend_current) && !is_active) {
 	/* server is not our current server, and idle too long.
 	 * down the backend server (removes the event as a side-effect)
 	 */
@@ -2755,7 +2756,7 @@ void cmd_idle(char *tag)
 void cmd_capability(char *tag)
 {
     const char *sasllist; /* the list of SASL mechanisms */
-    unsigned mechcount;
+    int mechcount;
 
     if (backend_current) {
 	char mytag[128];
@@ -2831,10 +2832,13 @@ void cmd_append(char *tag, char *name)
 	if (!s) r = IMAP_SERVER_UNAVAILABLE;
     }
     if (!r) {
+	int is_active = 1;
+	s->context = (void*) &is_active;
 	prot_printf(s->out, "%s Append {%d+}\r\n%s ", tag, strlen(name), name);
-	if (!pipe_command(s, 16384)) {
+	if (!(r = pipe_command(s, 16384))) {
 	    pipe_until_tag(s, tag, 0);
 	}
+	s->context = NULL;
     } else {
 	eatline(proxyd_in, prot_getc(proxyd_in));
     }
@@ -2849,7 +2853,9 @@ void cmd_append(char *tag, char *name)
     }
 
     if (r) {
-	prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
+	prot_printf(proxyd_out, "%s NO %s\r\n", tag,
+		    prot_error(proxyd_in) ? prot_error(proxyd_in) :
+		    error_message(r));
     } else {
 	/* we're allowed to reference last_result since the noop, if
 	   sent, went to a different server */
