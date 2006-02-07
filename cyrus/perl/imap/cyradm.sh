@@ -39,7 +39,7 @@
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 #
-# $Id: cyradm.sh,v 1.13.2.4 2005/12/13 19:36:13 murch Exp $
+# $Id: cyradm.sh,v 1.13.2.5 2006/02/07 18:57:20 murch Exp $
 case "x$BASH_VERSION" in
 x) exec perl -MCyrus::IMAP::Shell -e shell -- ${1+"$@"} ;;
 *) exec perl -MCyrus::IMAP::Shell -e shell -- "$@" ;;
@@ -54,7 +54,8 @@ cyradm - Cyrus administration shell, alter ego of Cyrus::IMAP::Shell
 =head1 SYNOPSIS
 
   $ cyradm [--user user] [--[no]rc] [--systemrc file] [--userrc file] \
-  > [--port n] [--auth mechanism] [--server] server
+  > [--port n] [--auth mechanism] [--tlskey keyfile] [--notls] \
+  > [--server] server
 
 but possibly
 

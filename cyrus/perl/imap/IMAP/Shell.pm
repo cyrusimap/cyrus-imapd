@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Shell.pm,v 1.31.2.4 2005/12/13 19:36:15 murch Exp $
+# $Id: Shell.pm,v 1.31.2.5 2006/02/07 18:57:21 murch Exp $
 #
 # A shell framework for Cyrus::IMAP::Admin
 #
@@ -428,9 +428,10 @@ sub run {
 # (It's not as trivial as run() because it does things expected of standalone
 # programs, as opposed to things expected from within a program.)
 sub shell {
-  my ($server, $port, $authz, $auth, $systemrc, $userrc, $dorc, $mech, $pw) =
+  my ($server, $port, $authz, $auth, $systemrc, $userrc, $dorc, $mech, $pw,
+      $tlskey, $notls) =
     ('', 143, undef, $ENV{USER} || $ENV{LOGNAME}, '/usr/local/etc/cyradmrc.pl',
-     "$ENV{HOME}/.cyradmrc.pl", 1, undef, undef);
+     "$ENV{HOME}/.cyradmrc.pl", 1, undef, undef, undef, undef);
   GetOptions('user|u=s' => \$auth,
 	     'authz|z=s' => \$authz,
 	     'rc|r!' => \$dorc,
@@ -440,6 +441,8 @@ sub shell {
 	     'port|p=i' => \$port,
 	     'auth|a=s' => \$mech,
 	     'password|w=s' => \$pw,
+  	     'tlskey|t:s' => \$tlskey,
+  	     'notls' => \$notls,
 	     'help|h' => sub { cyradm_usage(); exit(0); }
 	    );
   if ($server ne '' && @ARGV) {
@@ -458,7 +461,8 @@ sub shell {
 			  -callback => \&_cb_eof,
 			  -rock => \$cyradm});
     $cyradm->authenticate(-authz => $authz, -user => $auth,
-			  -mechanism => $mech, -password => $pw)
+			  -mechanism => $mech, -password => $pw,
+			  -tlskey => $tlskey, -notls => $notls)
       or die "cyradm: cannot authenticate to server with $mech as $auth\n";
   }
   my $fstk = [*STDIN, *STDOUT, *STDERR];
@@ -765,6 +769,20 @@ sub _sc_auth {
       $want = '-service';
       next;
     }
+    if (Cyrus::IMAP::imclient_havetls()) {
+      if ($opt ne '' && '-tlskey' =~ /^\Q$opt/ || $opt eq '--tlskey') {
+	$want = '-tlskey';
+	next;
+      }
+      if ($opt ne '' && '-notls' =~ /^\Q$opt/ || $opt eq '--notls') {
+	$want = '-notls';
+	next;
+      }
+      if ($opt =~ /^-/) {
+	die "usage: authenticate [-minssf N] [-maxssf N] [-mechanisms STR]\n".
+	    "                    [-service name] [-tlskey keyfile] [-notls] [user]\n";
+      }
+    }
     if ($opt =~ /^-/) {
       die "usage: authenticate [-minssf N] [-maxssf N] [-mechanisms STR]\n".
 	  "                    [-service name] [user]\n";
@@ -776,8 +794,13 @@ sub _sc_auth {
   }
   push(@nargv, @argv);
   if (@nargv > 1) {
-    die "usage: authenticate [-minssf N] [-maxssf N] [-mechanisms STR]\n".
-        "                    [-service name] [user]\n";
+    if (Cyrus::IMAP::imclient_havetls()) {
+      die "usage: authenticate [-minssf N] [-maxssf N] [-mechanisms STR]\n".
+          "                    [-service name] [-tlskey keyfile] [-notls] [user]\n";
+    } else {
+      die "usage: authenticate [-minssf N] [-maxssf N] [-mechanisms STR]\n".
+          "                    [-service name] [user]\n";
+    }
   }
   if (@nargv) {
     $opts{-user} = shift(@nargv);

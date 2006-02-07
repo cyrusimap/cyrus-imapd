@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: IMAP.pm,v 1.19.2.3 2005/08/08 15:10:20 ken3 Exp $
+# $Id: IMAP.pm,v 1.19.2.4 2006/02/07 18:57:19 murch Exp $
 
 package Cyrus::IMAP;
 
@@ -196,27 +196,20 @@ sub _stringize {
 sub authenticate {
   my ($self, $first) = @_;
   my (%opts, $rc);
+  my ($starttls, $logindisabled, $availmechs) = (0, 0, "");
 
   if (defined $first &&
-      $first =~ /^-\w+|Mechanism|Service|Authz|User|Minssf|Maxssf|Password$/) {
+      $first =~ /^-\w+|Mechanism|Service|Authz|User|Minssf|Maxssf|Password|Tlskey|Notls|CAfile|CApath$/) {
     (undef, %opts) = @_;
-    foreach (qw(mechanism service authz user minssf maxssf password)) {
+    foreach (qw(mechanism service authz user minssf maxssf password tlskey notls)) {
       $opts{'-' . $_} = $opts{ucfirst($_)} if !defined($opts{'-' . $_});
     }
   } else {
     (undef, $opts{-mechanism}, $opts{-service}, $opts{-authz}, $opts{-user},
-     $opts{-minssf}, $opts{-maxssf}, $opts{-password}) = @_;
+     $opts{-minssf}, $opts{-maxssf}, $opts{-password},
+     $opts{-tlskey}, $opts{-notls}, $opts{-cafile}, $opts{-capath}) = @_;
   }
-  if (!defined($opts{-mechanism})) {
-    $opts{-mechanism} = '';
-    $self->addcallback({-trigger => 'CAPABILITY',
-			-callback => sub {my %a = @_;
-					  map {$opts{-mechanism} .= $_ . ' '
-						 if s/^AUTH=//}
-					  split(/ /, $a{-text})}});
-    $self->send(undef, undef, 'CAPABILITY');
-    $self->addcallback({-trigger => 'CAPABILITY'});
-  }
+
   $opts{-service} = "imap" if !defined($opts{-service});
   $opts{-minssf} = 0 if !defined($opts{-minssf});
   $opts{-maxssf} = 10000 if !defined($opts{-maxssf});
@@ -224,7 +217,63 @@ sub authenticate {
     if !defined($opts{-user});
   $opts{-authz} = "" if (!defined($opts{-authz}));
   $rc = 0;
-  if (defined($opts{-mechanism}) && lc($opts{-mechanism}) ne 'login') {
+
+  # Fetch all relevent capabilities
+  $self->addcallback({-trigger => 'CAPABILITY',
+		      -callback => sub {my %a = @_;
+					map {
+					    $starttls = 1
+						if /^STARTTLS$/i;
+					    $logindisabled = 1
+						if /^LOGINDISABLED$/i;
+					    $availmechs .= $_ . ' '
+						if s/^AUTH=//;
+					}
+					split(/ /, $a{-text})}});
+  $self->send(undef, undef, 'CAPABILITY');
+
+  $opts{-mechanism} = $availmechs if !defined($opts{-mechanism});
+
+  # Do STARTTLS if given a TLS key, OR
+  # if the specified SASL mech isn't available and LOGINDISABLED
+  if (defined($opts{-tlskey}) ||
+      (!($availmechs =~ /(\b|^)$opts{-mechanism}($|\b)/i) && $logindisabled)) {
+      if (!havetls() || !$starttls) {
+	  if ($logindisabled) {
+	      warn "Login disabled.\n"
+	  } else {
+	      warn "TLS disabled.\n";
+	  }
+	  return undef;
+      }
+
+      if (!defined($opts{-tlskey})) {
+	  $opts{-tlskey} = "";
+      }
+      if (!defined($opts{-cafile})) {
+	  $opts{-cafile} = "";
+      }
+      if (!defined($opts{-capath})) {
+	  $opts{-capath} = "";
+      }
+      if ($opts{-notls}) {
+	  $opts{-tlskey} = undef;
+      }
+
+      if (defined($opts{-tlskey})) {
+	  $self->_starttls($opts{-tlskey}, $opts{-tlskey}, $opts{-cafile}, $opts{-capath});
+
+	  # Refetch all relevent capabilities
+	  ($starttls, $logindisabled, $availmechs) = (0, 0, "");
+	  $self->send(undef, undef, 'CAPABILITY');
+
+	  $opts{-mechanism} = $availmechs if ($opts{-mechanism} eq '');
+      }
+  }
+
+  $self->addcallback({-trigger => 'CAPABILITY'});
+
+  if (lc($opts{-mechanism}) ne 'login') {
     # This seems to be the only way to avoid a
     # `Use of uninitialized value in subroutine entry' warning with perl -w
     # when $opts{-password} is uninitialized (which may well be ok for e.g.
@@ -234,6 +283,12 @@ sub authenticate {
 			       $opts{-authz}, $opts{-user}, $opts{-password},
 			       $opts{-minssf}, $opts{-maxssf});
   }
+
+  if (!$rc && $logindisabled) {
+      warn "Login disabled.\n";
+      return undef;
+  }
+
   $opts{-mechanism} ||= 'plain';
   if (!$rc && $opts{-mechanism} =~ /(\b|^)(plain|login)($|\b)/i) {
     $opts{-user} = getlogin if !defined($opts{-user});

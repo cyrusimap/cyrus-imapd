@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: IMAP.xs,v 1.23.4.2 2005/05/27 17:40:58 ken3 Exp $ */
+/* $Id: IMAP.xs,v 1.23.4.3 2006/02/07 18:57:20 murch Exp $ */
 
 /*
  * Perl interface to the Cyrus imclient routines.  This enables the
@@ -57,6 +57,7 @@
 #include "xmalloc.h"
 
 #include "cyrperl.h"
+#include "config.h"
 
 typedef struct xscyrus *Cyrus_IMAP;
 
@@ -416,6 +417,44 @@ CODE:
 	  client->authenticated = 1;
 	  ST(0) = &sv_yes;
 	}
+
+int
+imclient_havetls()
+CODE:
+#ifdef HAVE_SSL
+	RETVAL = 1;
+#else
+	RETVAL = 0;
+#endif /* HAVE_SSL */
+OUTPUT:
+	RETVAL
+
+SV *
+imclient__starttls(client, tls_cert_file, tls_key_file, CAfile, CApath)
+	Cyrus_IMAP client
+	char* tls_cert_file
+	char* tls_key_file
+        char* CAfile
+        char* CApath
+PREINIT:
+	int rc;
+	int tls_layer;
+CODE:
+	ST(0) = sv_newmortal();
+
+	/* If the tls_{cert, key}_file parameters are undef, set to be NULL */
+	if(!SvOK(ST(2))) tls_cert_file = NULL;
+	if(!SvOK(ST(3))) tls_key_file = NULL;
+#ifdef HAVE_SSL
+	rc = imclient_starttls(client->imclient, tls_cert_file, tls_key_file, CAfile, CApath);
+	if (rc)
+	  ST(0) = &sv_no;
+	else {
+	  ST(0) = &sv_yes;
+	}
+#else
+	ST(0) = &sv_no;
+#endif /* HAVE_SSL */
 
 void
 imclient_addcallback(client, ...)
