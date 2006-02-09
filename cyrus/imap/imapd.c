@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.72 2006/02/09 01:06:36 murch Exp $ */
+/* $Id: imapd.c,v 1.443.2.73 2006/02/09 01:08:21 murch Exp $ */
 
 #include <config.h>
 
@@ -2960,11 +2960,11 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 
 	if (!r) {
 	    if (imapd_mailbox) {
-		prot_printf(s->out, "%s Localappend {%d+}\r\n{%d+}\r\n%s ",
+		prot_printf(s->out, "%s Localappend {%d+}\r\n%s {%d+}\r\n%s ",
 			    tag, strlen(name), name,
 			    strlen(imapd_mailbox->name), imapd_mailbox->name);
 	    } else {
-		prot_printf(s->out, "%s Localappend {%d+}\r\n{%d+}\r\n%s ",
+		prot_printf(s->out, "%s Localappend {%d+}\r\n%s {%d+}\r\n%s ",
 			    tag, strlen(name), name, 0, "");
 	    }
 	    if (!pipe_command(s, 16384)) {
