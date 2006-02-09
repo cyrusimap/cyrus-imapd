@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.71 2006/01/17 20:15:21 murch Exp $ */
+/* $Id: imapd.c,v 1.443.2.72 2006/02/09 01:06:36 murch Exp $ */
 
 #include <config.h>
 
@@ -946,7 +946,6 @@ void cmdloop()
 {
     int fd;
     char motdfilename[1024];
-    char hostname[MAXHOSTNAMELEN+1];
     int c;
     int ret;
     int usinguid, havepartition, havenamespace, recursive;
@@ -954,9 +953,8 @@ void cmdloop()
     char *p, shut[1024];
     const char *err;
 
-    gethostname(hostname, sizeof(hostname));
     prot_printf(imapd_out,
-		"* OK %s Cyrus IMAP4 %s%s server ready\r\n", hostname,
+		"* OK %s Cyrus IMAP4 %s%s server ready\r\n", config_servername,
 		config_mupdate_server ? "(Murder) " : "", CYRUS_VERSION);
 
     ret = snprintf(motdfilename, sizeof(motdfilename), "%s/msg/motd",
