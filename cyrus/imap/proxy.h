@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: proxy.h,v 1.1.2.6 2005/12/20 15:43:22 murch Exp $
+ * $Id: proxy.h,v 1.1.2.7 2006/02/10 21:10:58 murch Exp $
  */
 
 #ifndef _PROXY_H
@@ -48,6 +48,8 @@
 #include "backend.h"
 #include "protocol.h"
 #include "prot.h"
+
+#define IDLE_TIMEOUT (5 * 60)
 
 /* a final destination for a message */
 struct rcpt {

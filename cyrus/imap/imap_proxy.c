@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.c,v 1.1.2.16 2006/01/17 20:15:21 murch Exp $
+ * $Id: imap_proxy.c,v 1.1.2.17 2006/02/10 21:10:45 murch Exp $
  */
 
 #include <config.h>
@@ -75,8 +75,6 @@ extern void printastring(const char *s);
 extern int mlookup(const char *tag, const char *ext_name,
 		   const char *name, int *flags, char **pathp, char **mpathp,
 		   char **partp, char **aclp, struct txn **tid) ;
-
-#define IDLE_TIMEOUT (5 * 60)
 
 void proxy_gentag(char *tag, size_t len)
 {

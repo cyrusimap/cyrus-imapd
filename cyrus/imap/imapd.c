@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.73 2006/02/09 01:08:21 murch Exp $ */
+/* $Id: imapd.c,v 1.443.2.74 2006/02/10 21:10:46 murch Exp $ */
 
 #include <config.h>
 
@@ -2959,6 +2959,8 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 	imapd_check(s, 0, 0);
 
 	if (!r) {
+	    int is_active = 1;
+	    s->context = (void*) &is_active;
 	    if (imapd_mailbox) {
 		prot_printf(s->out, "%s Localappend {%d+}\r\n%s {%d+}\r\n%s ",
 			    tag, strlen(name), name,
@@ -2967,12 +2969,18 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 		prot_printf(s->out, "%s Localappend {%d+}\r\n%s {%d+}\r\n%s ",
 			    tag, strlen(name), name, 0, "");
 	    }
-	    if (!pipe_command(s, 16384)) {
+	    if (!(r = pipe_command(s, 16384))) {
 		if (s != backend_current) pipe_including_tag(s, tag, 0);
 	    }
+	    s->context = NULL;
 	} else {
 	    eatline(imapd_in, prot_getc(imapd_in));
-	    prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+	}
+
+	if (r) {
+	    prot_printf(imapd_out, "%s NO %s\r\n", tag,
+			prot_error(imapd_in) ? prot_error(imapd_in) :
+			error_message(r));
 	}
 
 	return;
@@ -3376,10 +3384,11 @@ void cmd_close(char *tag)
 	/* xxx do we want this to say OK if the connection is gone?
 	 * saying NO is clearly wrong, hense the fatal request. */
 	pipe_including_tag(backend_current, tag, 0);
-	backend_current = NULL;
 
 	/* remove backend_current from the protgroup */
 	protgroup_delete(protin, backend_current->in);
+
+	backend_current = NULL;
 	return;
     }
 

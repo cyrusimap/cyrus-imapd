@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.45 2006/02/01 19:25:36 murch Exp $
+ * $Id: nntpd.c,v 1.2.2.46 2006/02/10 21:10:56 murch Exp $
  */
 
 /*
@@ -127,7 +127,6 @@ void printastring(const char *s __attribute__((unused)))
 /* PROXY STUFF */
 /* we want a list of our outgoing connections here and which one we're
    currently piping */
-#define IDLE_TIMEOUT (5 * 60)
 
 /* the current server most commands go to */
 struct backend *backend_current = NULL;

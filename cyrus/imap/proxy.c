@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: proxy.c,v 1.1.2.7 2005/12/20 15:43:22 murch Exp $
+ * $Id: proxy.c,v 1.1.2.8 2006/02/10 21:10:58 murch Exp $
  */
 
 #include <config.h>
@@ -60,8 +60,6 @@
 #include "prot.h"
 #include "proxy.h"
 #include "xmalloc.h"
-
-#define IDLE_TIMEOUT (5 * 60)
 
 void proxy_adddest(struct dest **dlist, const char *rcpt, int rcpt_num,
 		   char *server, const char *authas)
@@ -125,8 +123,9 @@ backend_timeout(struct protstream *s __attribute__((unused)),
 		struct prot_waitevent *ev, void *rock)
 {
     struct backend *be = (struct backend *) rock;
+    int is_active = (be->context ? *((int *) be->context) : 0);
 
-    if (be != *(be->current)) {
+    if ((be != *(be->current)) && !is_active) {
 	/* server is not our current server, and idle too long.
 	 * down the backend server (removes the event as a side-effect)
 	 */
