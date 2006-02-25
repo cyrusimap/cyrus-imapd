@@ -2,7 +2,7 @@ dnl damnit, i don't want to figure out if I need to build an integral com_err
 dnl library with the collection, I just want to know where it's installed,
 dnl so don't bitch, Rob...
 dnl Derrick Brashear
-dnl $Id: com_err_link.m4,v 1.8 2005/04/26 19:14:07 shadow Exp $
+dnl $Id: com_err_link.m4,v 1.9 2006/02/25 18:32:46 cg2v Exp $
 
 
 AC_DEFUN([CMU_COMERR_INC_WHERE1], [
@@ -107,8 +107,9 @@ AC_ARG_WITH(comerr-include,
 	  AC_MSG_RESULT(yes)
 	  COMERR_INC_DIR=$ac_cv_comerr_where_inc
 	  COMERR_LIB_DIR=$ac_cv_comerr_where_lib
-	  COMERR_INC_FLAGS="-I${COMERR_INC_DIR}"
-	  COMERR_LIB_FLAGS="-L${COMERR_LIB_DIR} -lcom_err"
+	  test "$COMERR_INC_DIR"  && COMERR_INC_FLAGS="-I${COMERR_INC_DIR}"
+	  COMERR_LIB_FLAGS="-lcom_err"
+	  test "$COMERR_LIB_DIR"  && COMERR_LIB_FLAGS="-L${COMERR_LIB_DIR} -lcom_err"
           dnl Do not force configure.in to put these in CFLAGS and LIBS unconditionally
           dnl Allow makefile substitutions....
           AC_SUBST(COMERR_INC_FLAGS)
