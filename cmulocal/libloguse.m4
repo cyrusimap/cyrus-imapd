@@ -1,7 +1,7 @@
 dnl libloguse.m4--LOGUSE libraries and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
-dnl $Id: libloguse.m4,v 1.6 2005/04/26 19:14:08 shadow Exp $
+dnl $Id: libloguse.m4,v 1.7 2006/02/25 18:26:22 cg2v Exp $
 
 AC_DEFUN([CMU_LOGUSE_LIB_WHERE1], [
 saved_LIBS=$LIBS
@@ -56,7 +56,7 @@ AC_ARG_WITH(loguse,
 	  AC_MSG_RESULT(no)
 	else
 	  ac_cv_found_loguse=yes
-	  AC_DEFINE(HAVE_LOGUSE)
+	  AC_DEFINE(HAVE_LOGUSE,, [Use libloguse])
 	  AC_MSG_RESULT(yes)
 	  LOGUSE_LIB_DIR=$ac_cv_loguse_where_lib
 	  LOGUSE_LIB_FLAGS="-L${LOGUSE_LIB_DIR} -lloguse"

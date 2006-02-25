@@ -1,7 +1,7 @@
 dnl librestrict.m4--restrict libraries and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
-dnl $Id: librestrict.m4,v 1.5 2005/04/26 19:14:08 shadow Exp $
+dnl $Id: librestrict.m4,v 1.6 2006/02/25 18:26:22 cg2v Exp $
 
 AC_DEFUN([CMU_RESTRICT_LIB_WHERE1], [
 saved_LIBS=$LIBS
@@ -55,7 +55,7 @@ AC_ARG_WITH(restrict,
 	  AC_MSG_RESULT(no)
 	else
 	  ac_cv_found_restrict=yes
-	  AC_DEFINE(HAVE_RESTRICT)
+	  AC_DEFINE(HAVE_RESTRICT,, [Use librestrict])
 	  AC_MSG_RESULT(yes)
 	  RESTRICT_LIB_DIR=$ac_cv_restrict_where_lib
 	  RESTRICT_LIB_FLAGS="-L${RESTRICT_LIB_DIR} -lrestrict"
