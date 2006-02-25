@@ -1,11 +1,11 @@
-dnl $Id: common.m4,v 1.12 2005/04/26 19:14:07 shadow Exp $
+dnl $Id: common.m4,v 1.13 2006/02/25 18:29:46 cg2v Exp $
 
 AC_DEFUN([CMU_TEST_LIBPATH], [
 changequote(<<, >>)
 define(<<CMU_AC_CV_FOUND>>, translit(ac_cv_found_$2_lib, <<- *>>, <<__p>>))
 changequote([, ])
 if test "$CMU_AC_CV_FOUND" = "yes"; then
-  if test \! -r "$1/lib$2.a" -a \! -r "$1/lib$2.so" -a \! -r "$1/lib$2.sl"; then
+  if test \! -r "$1/lib$2.a" -a \! -r "$1/lib$2.so" -a \! -r "$1/lib$2.sl" -a \! -r "$1/lib$2.dylib"; then
     CMU_AC_CV_FOUND=no
   fi
 fi
