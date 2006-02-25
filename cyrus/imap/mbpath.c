@@ -1,6 +1,6 @@
 /* mbpath.c -- help the sysadmin to find the path matching the mailbox
  *
- * $Id: mbpath.c,v 1.14.2.4 2004/06/02 19:58:28 ken3 Exp $
+ * $Id: mbpath.c,v 1.14.2.5 2006/02/25 18:32:35 murch Exp $
  * 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -42,7 +42,7 @@
  *
  */
 
-/* static char _rcsid[] = "$Id: mbpath.c,v 1.14.2.4 2004/06/02 19:58:28 ken3 Exp $"; */
+/* static char _rcsid[] = "$Id: mbpath.c,v 1.14.2.5 2006/02/25 18:32:35 murch Exp $"; */
 
 #include <config.h>
 
@@ -97,6 +97,8 @@ main(int argc, char **argv)
   int opt;		/* getopt() returns an int */
   char *alt_config = NULL;
   char buf[MAX_MAILBOX_PATH+1];
+
+  if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
   while ((opt = getopt(argc, argv, "C:qsm")) != EOF) {
     switch(opt) {
@@ -159,5 +161,5 @@ main(int argc, char **argv)
   return 0;
 }
 
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/mbpath.c,v 1.14.2.4 2004/06/02 19:58:28 ken3 Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/mbpath.c,v 1.14.2.5 2006/02/25 18:32:35 murch Exp $ */
 
