@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.c,v 1.1.2.15 2005/12/13 15:31:10 murch Exp $
+ * $Id: sync_support.c,v 1.1.2.16 2006/03/06 13:12:26 murch Exp $
  */
 
 #include <config.h>
@@ -800,7 +800,7 @@ struct sync_message_list *sync_message_list_create(int hash_size, int file_max)
     l->file_max   = file_max;  
 
     /* Set up cache file */
-    root = config_partitiondir("default");
+    root = config_partitiondir(config_defpartition);
 
     snprintf(l->cache_name, sizeof(l->cache_name), "%s/sync./%lu.cache",
 	     root, (unsigned long) getpid());
