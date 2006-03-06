@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.81.2.16 2005/03/27 14:36:25 ken3 Exp $ */
+/* $Id: reconstruct.c,v 1.81.2.17 2006/03/06 13:11:01 murch Exp $ */
 
 #include <config.h>
 
@@ -248,7 +248,7 @@ int main(int argc, char **argv)
 		     IMAP_ENUM_METAPARTITION_FILES_HEADER)) ?
 		start_part_mpath : start_part_path;
 	    mailbox_hash_mbox(mbbuf, sizeof(mbbuf), path, buf);
-	    strlcat(mbbuf, "FNAME_HEADER", sizeof(mbbuf));
+	    strlcat(mbbuf, FNAME_HEADER, sizeof(mbbuf));
 	    if(stat(mbbuf, &sbuf) < 0) {
 		fprintf(stderr,
 			"%s does not appear to be a mailbox (no %s).\n",
