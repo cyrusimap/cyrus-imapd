@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.102.2.12 2005/12/13 19:35:49 murch Exp $
+ * $Id: append.c,v 1.102.2.13 2006/03/09 22:39:23 murch Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -724,7 +724,7 @@ int append_fromstream(struct appendstate *as, struct body **body,
     }
 
     /* Copy and parse message */
-    r = message_copy_strict(messagefile, destfile, size);
+    r = message_copy_strict(messagefile, destfile, size, 0);
     if (!r) {
 	if (!*body || (as->nummsg - 1))
 	    r = message_parse_file(destfile, NULL, NULL, body);

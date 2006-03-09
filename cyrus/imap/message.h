@@ -1,5 +1,5 @@
 /* message.h -- Message parsing
- $Id: message.h,v 1.6.4.5 2005/02/21 19:25:41 ken3 Exp $
+ $Id: message.h,v 1.6.4.6 2006/03/09 22:39:36 murch Exp $
 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -58,7 +58,7 @@
 #include "mailbox.h"
 
 extern int message_copy_strict P((struct protstream *from, FILE *to,
-				  unsigned size));
+				  unsigned size, int allow_null));
 
 /* Flags for parsing message date/time - to be bitwise OR'd */
 #define PARSE_DATE	(1<<0)
@@ -84,6 +84,7 @@ struct bodypart {
     unsigned long size;
 };
 
+extern int message_parse_binary_file P((FILE *infile, struct body **body));
 extern int message_parse_file P((FILE *infile,
 				 const char **msg_base, unsigned long *msg_len,
 				 struct body **body));

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.74 2006/02/10 21:10:46 murch Exp $ */
+/* $Id: imapd.c,v 1.443.2.75 2006/03/09 22:39:24 murch Exp $ */
 
 #include <config.h>
 
@@ -162,9 +162,11 @@ static SSL *tls_conn = NULL;
 /* stage(s) for APPEND */
 struct appendstage {
     struct stagemsg *stage;
+    FILE *f;
     char **flag;
     int nflags, flagalloc;
     time_t internaldate;
+    int binary;
 } **stage = NULL;
 unsigned long numstage = 0;
 
@@ -903,6 +905,7 @@ void fatal(const char *s, int code)
 	while (numstage) {
 	    struct appendstage *curstage = stage[--numstage];
 
+	    if (curstage->f != NULL) fclose(curstage->f);
 	    append_removestage(curstage->stage);
 	    while (curstage->nflags--) {
 		free(curstage->flag[curstage->nflags]);
@@ -2616,7 +2619,7 @@ static int isokflag(char *s, int *isseen)
 }
 
 static int getliteralsize(char *p, int c,
-			  unsigned *size, const char **parseerr)
+			  unsigned *size, int *binary, const char **parseerr)
 
 {
     int sawdigit = 0;
@@ -2625,8 +2628,8 @@ static int getliteralsize(char *p, int c,
     /* Check for literal8 */
     if (*p == '~') {
 	p++;
-	/* We don't support binary append yet */
-	return IMAP_NO_UNKNOWN_CTE;
+
+	*binary = 1;
     }
     if (*p != '{') {
 	*parseerr = "Missing required argument to Append command";
@@ -2674,7 +2677,8 @@ static int getliteralsize(char *p, int c,
     return 0;
 }
 
-static int catenate_text(FILE *f, unsigned *totalsize, const char **parseerr)
+static int catenate_text(FILE *f, unsigned *totalsize, int *binary,
+			 const char **parseerr)
 {
     int c;
     static struct buf arg;
@@ -2686,7 +2690,7 @@ static int catenate_text(FILE *f, unsigned *totalsize, const char **parseerr)
     c = getword(imapd_in, &arg);
 
     /* Read size from literal */
-    r = getliteralsize(arg.s, c, &size, parseerr);
+    r = getliteralsize(arg.s, c, &size, binary, parseerr);
     if (r) return r;
 
     if (*totalsize > UINT_MAX - size) r = IMAP_MESSAGE_TOO_LARGE;
@@ -2701,7 +2705,7 @@ static int catenate_text(FILE *f, unsigned *totalsize, const char **parseerr)
 	}
 
 	buf[n] = '\0';
-	if (n != strlen(buf)) r = IMAP_MESSAGE_CONTAINSNULL;
+	if (!*binary && (n != strlen(buf))) r = IMAP_MESSAGE_CONTAINSNULL;
 
 	size -= n;
 	if (r) continue;
@@ -2852,7 +2856,7 @@ static int catenate_url(const char *s, const char *cur_name, FILE *f,
 }
 
 static int append_catenate(FILE *f, const char *cur_name, unsigned *totalsize,
-			   const char **parseerr, const char **url)
+			   int *binary, const char **parseerr, const char **url)
 {
     int c, r = 0;
     static struct buf arg;
@@ -2865,7 +2869,7 @@ static int append_catenate(FILE *f, const char *cur_name, unsigned *totalsize,
 	}
 
 	if (!strcasecmp(arg.s, "TEXT")) {
-	    int r1 = catenate_text(!r ? f : NULL, totalsize, parseerr);
+	    int r1 = catenate_text(!r ? f : NULL, totalsize, binary, parseerr);
 	    if (r1) return r1;
 
 	    /* if we see a SP, we're trying to catenate more than one part */
@@ -2928,7 +2932,6 @@ void cmd_append(char *tag, char *name, const char *cur_name)
     const char *parseerr = NULL, *url = NULL;
     int mbtype;
     char *newserver;
-    FILE *f;
     int numalloc = 5;
     struct appendstage *curstage;
 
@@ -3070,8 +3073,8 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 	}
 
 	/* Stage the message */
-	f = append_newstage(mailboxname, now, numstage, &(curstage->stage));
-	if (!f) {
+	curstage->f = append_newstage(mailboxname, now, numstage, &(curstage->stage));
+	if (!curstage->f) {
 	    r = IMAP_IOERROR;
 	    goto done;
 	}
@@ -3085,19 +3088,19 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 
 	    /* Catenate the message part(s) to stage */
 	    size = 0;
-	    r = append_catenate(f, cur_name, &size, &parseerr, &url);
+	    r = append_catenate(curstage->f, cur_name, &size,
+				&(curstage->binary), &parseerr, &url);
 	    if (r) goto done;
 	}
 	else {
 	    /* Read size from literal */
-	    r = getliteralsize(arg.s, c, &size, &parseerr);
+	    r = getliteralsize(arg.s, c, &size, &(curstage->binary), &parseerr);
 	    if (r) goto done;
 
 	    /* Copy message to stage */
-	    r = message_copy_strict(imapd_in, f, size);
+	    r = message_copy_strict(imapd_in, curstage->f, size, curstage->binary);
 	}
 	totalsize += size;
-	fclose(f);
 
 	/* if we see a SP, we're trying to append more than one message */
 
@@ -3129,8 +3132,16 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 	doappenduid = (mailbox.m.myrights & ACL_READ);
 
 	for (i = 0; !r && i < numstage; i++) {
-	    r = append_fromstage(&mailbox, &body, stage[i]->stage, stage[i]->internaldate, 
-				 (const char **) stage[i]->flag, stage[i]->nflags, 0);
+	    if (stage[i]->binary) {
+		r = message_parse_binary_file(stage[i]->f, &body);
+	    }
+	    fclose(stage[i]->f); stage[i]->f = NULL;
+	    if (!r) {
+		r = append_fromstage(&mailbox, &body, stage[i]->stage,
+				     stage[i]->internaldate, 
+				     (const char **) stage[i]->flag,
+				     stage[i]->nflags, 0);
+	    }
 	    if (body) message_free_body(body);
 	}
 	if (body) free(body);
@@ -3150,6 +3161,7 @@ void cmd_append(char *tag, char *name, const char *cur_name)
     while (numstage) {
 	curstage = stage[--numstage];
 
+	if (curstage->f != NULL) fclose(curstage->f);
 	append_removestage(curstage->stage);
 	while (curstage->nflags--) {
 	    free(curstage->flag[curstage->nflags]);

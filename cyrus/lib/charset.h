@@ -39,7 +39,7 @@
  *
  */
 /*
- * $Id: charset.h,v 1.19 2003/10/22 18:50:12 rjs3 Exp $
+ * $Id: charset.h,v 1.19.2.1 2006/03/09 22:39:38 murch Exp $
  */
 
 #ifndef INCLUDED_CHARSET_H
@@ -75,6 +75,8 @@ extern int charset_searchfile(const char *substr, comp_pat *pat,
 extern char *charset_decode_mimebody(const char *msg_base, int len,
 				     int encoding, char **retval, int alloced,
 				     int *outlen);
+extern char *charset_encode_mimebody(const char *msg_base, int len,
+				     char *retval, int *outlen, int *outlines);
 
 /* Definitions for charset_extractfile */
 

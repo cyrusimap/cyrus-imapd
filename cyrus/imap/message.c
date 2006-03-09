@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: message.c,v 1.97.2.8 2005/02/21 19:25:40 ken3 Exp $
+ * $Id: message.c,v 1.97.2.9 2006/03/09 22:39:35 murch Exp $
  */
 
 #include <config.h>
@@ -77,6 +77,7 @@ struct msg {
     const char *base;
     unsigned long len;
     unsigned long offset;
+    int encode;
 };
 
 /* cyrus.cache file item buffer */
@@ -217,10 +218,11 @@ static void message_ibuf_free P((struct ibuf *ibuf));
  * imapd.conf before calling.
  */
 int
-message_copy_strict(from, to, size)
+message_copy_strict(from, to, size, allow_null)
 struct protstream *from;
 FILE *to;
 unsigned size;
+int allow_null;
 {
     char buf[4096+1];
     unsigned char *p;
@@ -238,14 +240,16 @@ unsigned size;
 	}
 
 	buf[n] = '\0';
-	if (n != strlen(buf)) r = IMAP_MESSAGE_CONTAINSNULL;
+	if ((inheader || !allow_null) && (n != strlen(buf)))
+	    r = IMAP_MESSAGE_CONTAINSNULL;
 
 	size -= n;
 	if (r) continue;
 
 	for (p = (unsigned char *)buf; *p; p++) {
 	    if (*p == '\n') {
-		if (!sawcr) r = IMAP_MESSAGE_CONTAINSNL;
+		if (!sawcr && (inheader || !allow_null))
+		    r = IMAP_MESSAGE_CONTAINSNL;
 		sawcr = 0;
 		if (blankline) {
 		    inheader = 0;
@@ -355,6 +359,63 @@ int message_parse_file(FILE *infile,
 
 
 /*
+ * Parse the message 'infile' in 'mailbox'.  Appends the message's
+ * cache information to the mailbox's cache file and fills in
+ * appropriate information in the index record pointed to by
+ * 'message_index'.
+ *
+ * The caller MUST free the allocated body struct.
+ *
+ * This function differs from message_parse_file() in that we create a
+ * writable buffer rather than memory-mapping the file, so that binary
+ * data can be encoded into the buffer.  The file is rewritten upon
+ * completion.
+ *
+ * XXX can we do this with mmap()?
+ */
+int message_parse_binary_file(FILE *infile, struct body **body)
+{
+    int fd = fileno(infile);
+    struct stat sbuf;
+    struct msg msg;
+    int n;
+
+    if (fstat(fd, &sbuf) == -1) {
+	syslog(LOG_ERR, "IOERROR: fstat on new message in spool: %m");
+	fatal("can't fstat message file", EC_OSFILE);
+    }
+    msg.len = sbuf.st_size;
+    msg.base = xmalloc(msg.len);
+    msg.offset = 0;
+    msg.encode = 1;
+
+    lseek(fd, 0L, SEEK_SET);
+
+    n = retry_read(fd, (char*) msg.base, msg.len);
+    if (n != msg.len) {
+	syslog(LOG_ERR, "IOERROR: reading binary file in spool: %m");
+	return IMAP_IOERROR;
+    }
+
+    if (!*body) *body = (struct body *) xmalloc(sizeof(struct body));
+    message_parse_body(&msg, MAILBOX_FORMAT_NORMAL, *body,
+		       DEFAULT_CONTENT_TYPE, (struct boundary *)0);
+
+    lseek(fd, 0L, SEEK_SET);
+    n = retry_write(fd, msg.base, msg.len);
+
+    free((char*) msg.base);
+
+    if (n != msg.len || fsync(fd)) {
+	syslog(LOG_ERR, "IOERROR: rewriting binary file in spool: %m");
+	return IMAP_IOERROR;
+    }
+
+    return 0;
+}
+
+
+/*
  * Parse the message at 'msg_base' of length 'msg_len' in 'mailbox'.
  * Appends the message's cache information to the mailbox's cache file
  * and fills in appropriate information in the index record pointed to
@@ -368,6 +429,7 @@ int message_parse_mapped(const char *msg_base, unsigned long msg_len,
     msg.base = msg_base;
     msg.len = msg_len;
     msg.offset = 0;
+    msg.encode = 0;
 
     message_parse_body(&msg, MAILBOX_FORMAT_NORMAL, body,
 		       DEFAULT_CONTENT_TYPE, (struct boundary *)0);
@@ -501,6 +563,7 @@ struct index_record *message_index;
     msg.base = msg_base;
     msg.len = msg_len;
     msg.offset = 0;
+    msg.encode = 0;
 
     message_parse_body(&msg, format, &body,
 		       DEFAULT_CONTENT_TYPE, (struct boundary *)0);
@@ -722,6 +785,17 @@ struct boundary *boundaries;
 		    case 'T':
 			if (!strncasecmp(next+10, "ransfer-encoding:", 17)) {
 			    message_parse_encoding(next+27, &body->encoding);
+
+			    /* If we're encoding binary, replace "binary"
+			       with "base64" in CTE header body */
+			    if (msg->encode &&
+				!strcmp(body->encoding, "BINARY")) {
+				char *p = (char*)
+				    stristr(msg->base + body->header_offset +
+					    (next - headers) + 27,
+					    "binary");
+				memcpy(p, "base64", 6);
+			    }
 			}
 			else if (!strncasecmp(next+10, "ype:", 4)) {
 			    message_parse_type(next+14, body);
@@ -1749,7 +1823,13 @@ struct body *body;
 struct boundary *boundaries;
 {
     const char *line, *endline;
+    unsigned long s_offset = msg->offset;
+    int encode;
     int len;
+
+    /* Should we encode a binary part? */
+    encode = msg->encode &&
+	body->encoding && !strcasecmp(body->encoding, "binary");
 
     while (msg->offset < msg->len) {
 	line = msg->base + msg->offset;
@@ -1775,14 +1855,49 @@ struct boundary *boundaries;
 		body->content_size -= 2;
 		body->boundary_size += 2;
 	    }
-	    return;
+	    break;
 	}
 
 	body->content_size += len;
 
-	if (endline[-1] == '\n') {
+	/* Count the content lines, unless we're encoding
+	   (we always count blank lines) */
+	if (endline[-1] == '\n' &&
+	    (!encode || line[0] == '\r')) {
 	    body->content_lines++;
 	}
+    }
+
+    if (encode) {
+	int b64_size, b64_lines, delta;
+
+	/* Determine encoded size */
+	charset_encode_mimebody(NULL, body->content_size, NULL,
+				&b64_size, NULL);
+
+	delta = b64_size - body->content_size;
+
+	/* Realloc buffer to accomodate encoding overhead */
+	msg->base = xrealloc((char*) msg->base, msg->len + delta);
+
+	/* Shift content and remaining data by delta */
+	memmove((char*) msg->base + s_offset + delta, msg->base + s_offset,
+		msg->len - s_offset);
+
+	/* Encode content into buffer at current position */
+	charset_encode_mimebody(msg->base + s_offset + delta,
+				body->content_size,
+				(char*) msg->base + s_offset,
+				NULL, &b64_lines);
+
+	/* Adjust buffer position and length to account for encoding */
+	msg->offset += delta;
+	msg->len += delta;
+
+	/* Adjust body structure to account for encoding */
+	strcpy(body->encoding, "BASE64");
+	body->content_size = b64_size;
+	body->content_lines += b64_lines;
     }
 }
 
