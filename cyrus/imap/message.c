@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: message.c,v 1.97.2.9 2006/03/09 22:39:35 murch Exp $
+ * $Id: message.c,v 1.97.2.10 2006/03/10 23:41:57 murch Exp $
  */
 
 #include <config.h>
@@ -225,7 +225,7 @@ unsigned size;
 int allow_null;
 {
     char buf[4096+1];
-    unsigned char *p;
+    unsigned char *p, *endp;
     int r = 0;
     int n;
     int sawcr = 0, sawnl;
@@ -240,14 +240,21 @@ int allow_null;
 	}
 
 	buf[n] = '\0';
-	if ((inheader || !allow_null) && (n != strlen(buf)))
+
+	/* Quick check for NUL in entire buffer, if we're not allowing it */
+	if (!allow_null && (n != strlen(buf))) {
 	    r = IMAP_MESSAGE_CONTAINSNULL;
+	}
 
 	size -= n;
 	if (r) continue;
 
-	for (p = (unsigned char *)buf; *p; p++) {
-	    if (*p == '\n') {
+	for (p = (unsigned char *)buf, endp = p + n; p < endp; p++) {
+	    if (!*p && inheader) {
+		/* NUL in header is always bad */
+		r = IMAP_MESSAGE_CONTAINSNULL;
+	    }
+	    else if (*p == '\n') {
 		if (!sawcr && (inheader || !allow_null))
 		    r = IMAP_MESSAGE_CONTAINSNL;
 		sawcr = 0;
