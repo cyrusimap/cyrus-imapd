@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 /*
- * $Id: charset.c,v 1.44.2.1 2006/03/09 22:39:37 murch Exp $
+ * $Id: charset.c,v 1.44.2.2 2006/03/10 23:41:01 murch Exp $
  */
 #include <config.h>
 #include <ctype.h>
@@ -1349,8 +1349,9 @@ static char base_64[] =
 char *charset_encode_mimebody(const char *msg_base, int len,
 			      char *retval, int *outlen, int *outlines)
 {
-    const char *s;
-    char s0, s1, s2, *d;
+    const unsigned char *s;
+    unsigned char s0, s1, s2;
+    char *d;
     int b64_len, b64_lines, cnt;
 
     b64_len = ((len + 2) / 3) * 4;
@@ -1364,7 +1365,7 @@ char *charset_encode_mimebody(const char *msg_base, int len,
 
     if (!msg_base) return NULL;
 
-    for (s = msg_base, d = retval, cnt = 0; len;
+    for (s = (const unsigned char*) msg_base, d = retval, cnt = 0; len;
 	 s += 3, d += 4, cnt += 4) { /* process tuplets */
 	if (cnt == BASE64_MAX_LINE_LEN) {
 	    /* reset line len count, add CRLF */
