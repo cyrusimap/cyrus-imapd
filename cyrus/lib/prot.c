@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.82.2.12 2006/02/10 21:10:59 murch Exp $
+ * $Id: prot.c,v 1.82.2.13 2006/03/13 20:05:04 murch Exp $
  */
 
 #include <config.h>
@@ -1024,6 +1024,7 @@ int prot_select(struct protgroup *readstreams, int extra_read_fd,
     int max_fd, found_fds = 0;
     int i;
     fd_set rfds;
+    int have_readtimeout = 0;
     struct timeval my_timeout;
     struct prot_waitevent *event;
     time_t now = time(NULL);
@@ -1043,8 +1044,8 @@ int prot_select(struct protgroup *readstreams, int extra_read_fd,
     max_fd = extra_read_fd;
 
     for(i = 0; i<readstreams->next_element; i++) {
-	time_t this_timeout = 0; /* used to compute the minimal timeout for
-				    this stream */
+	int have_thistimeout = 0; /* used to compute the minimal timeout for */
+	time_t this_timeout = 0;  /* this stream */
 	
 	s = readstreams->group[i];
 	if (!s) continue;
@@ -1054,20 +1055,23 @@ int prot_select(struct protgroup *readstreams, int extra_read_fd,
 	/* scan for waitevent callbacks */
 	for (event = s->waitevent; event; event = event->next)
 	{
-	    if(!this_timeout || event->mark - now < this_timeout) {
+	    if(!have_thistimeout || event->mark - now < this_timeout) {
 		this_timeout = event->mark - now;
+		have_thistimeout = 1;
 	    }
 	}
 	
 	/* check the idle timeout on this one as well */
 	if(s->read_timeout &&
-	   (!this_timeout || s->timeout_mark - now < this_timeout)) {
+	   (!have_thistimeout || s->timeout_mark - now < this_timeout)) {
 	    this_timeout = s->timeout_mark - now;
+	    have_thistimeout = 1;
 	}
 
-	if(!s->dontblock && this_timeout &&
-	   (!read_timeout || now + this_timeout < read_timeout)) {
+	if(!s->dontblock && have_thistimeout &&
+	   (!have_readtimeout || now + this_timeout < read_timeout)) {
 	    read_timeout = now + this_timeout;
+	    have_readtimeout = 1;
 	    if(!timeout || this_timeout <= timeout->tv_sec)
 		timeout_prot = s;
 	}
@@ -1117,7 +1121,8 @@ int prot_select(struct protgroup *readstreams, int extra_read_fd,
 	/* If we don't have a timeout structure, and we need one, use
 	 * a local version.  Otherwise, make sure that we are timing out
 	 * for the right reason */
-	if(!timeout || (timeout && sleepfor < timeout->tv_sec)) {
+	if(have_readtimeout &&
+	   (!timeout || sleepfor < timeout->tv_sec)) {
 	    if(!timeout) timeout = &my_timeout;
 	    timeout->tv_sec = sleepfor;
 	    timeout->tv_usec = 0;
