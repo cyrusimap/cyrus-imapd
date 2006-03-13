@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: protocol.c,v 1.2.2.11 2005/02/21 19:25:44 ken3 Exp $ */
+/* $Id: protocol.c,v 1.2.2.12 2006/03/13 21:24:36 murch Exp $ */
 
 #include <config.h>
 
@@ -135,6 +135,7 @@ struct protocol_t protocol[] = {
     { "mupdate", "mupdate",
       { NULL, "* OK", NULL,
 	{ { "* AUTH ", CAPA_AUTH },
+	  { "* STARTTLS", CAPA_STARTTLS },
 	  { NULL, 0 } } },
       { "S01 STARTTLS", "S01 OK", "S01 NO" },
       { "A01 AUTHENTICATE", INT_MAX, 1, "A01 OK", "A01 NO", "", "*", NULL },
