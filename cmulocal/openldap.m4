@@ -1,6 +1,6 @@
 dnl
 dnl macros for configure.in to detect openldap
-dnl $Id: openldap.m4,v 1.1 2005/04/26 16:06:06 shadow Exp $
+dnl $Id: openldap.m4,v 1.2 2006/03/13 19:16:11 mel Exp $
 dnl
 
 dnl
@@ -28,6 +28,8 @@ AC_DEFUN([CMU_OPENLDAP_COMPAT],
 char *__openldap_compat = "2.1.27 or better okay";
 #elif LDAP_VENDOR_VERSION_MAJOR == 2  && LDAP_VENDOR_VERSION_MINOR == 2 && LDAP_VENDOR_VERSION_PATCH > 5
 char *__openldap_compat = "2.2.6 or better okay";
+#elif LDAP_VENDOR_VERSION_MAJOR == 2  && LDAP_VENDOR_VERSION_MINOR > 2
+char *__openldap_compat = "2.3 or better okay"
 #endif
 ],      [cmu_cv_openldap_compat=yes], [cmu_cv_openldap_compat=no])])
 ])
