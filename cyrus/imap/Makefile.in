@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.175.2.19 2005/12/13 15:28:43 murch Exp $
+# $Id: Makefile.in,v 1.175.2.20 2006/03/15 18:56:29 murch Exp $
 # 
 # @configure_input@
 # 
@@ -101,12 +101,11 @@ LOBJS= append.o mailbox.o mboxlist.o mupdate-client.o mboxname.o message.o \
 	convert_code.o duplicate.o saslclient.o saslserver.o signals.o \
 	annotate.o search_engines.o squat.o squat_internal.o mbdump.o \
 	imapparse.o telemetry.o user.o notify.o protocol.o idle.o quota_db.o \
-	sync_log.o $(SEEN) mboxkey.o
+	sync_log.o $(SEEN) mboxkey.o backend.o tls.o
 
-IMAPDOBJS=pushstats.o backend.o imapd.o proxy.o imap_proxy.o index.o \
-	tls.o version.o
+IMAPDOBJS=pushstats.o imapd.o proxy.o imap_proxy.o index.o version.o
 
-LMTPOBJS=lmtpstats.o lmtpengine.o backend.o spool.o tls.o
+LMTPOBJS=lmtpstats.o lmtpengine.o spool.o
 
 # Your typical objects for the command line utilities
 CLIOBJS=cli_fatal.o mutex_fake.o
@@ -137,6 +136,7 @@ install:
 	done
 	ln -f $(DESTDIR)$(service_path)/pop3d $(DESTDIR)$(service_path)/pop3proxyd
 	ln -f $(DESTDIR)$(service_path)/imapd $(DESTDIR)$(service_path)/proxyd
+	ln -f $(DESTDIR)$(service_path)/lmtpd $(DESTDIR)$(service_path)/lmtpproxyd
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) \

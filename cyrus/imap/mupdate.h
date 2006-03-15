@@ -1,6 +1,6 @@
 /* mupdate.h - private mupdate header file
  *
- * $Id: mupdate.h,v 1.15.2.1 2003/12/19 18:33:38 ken3 Exp $
+ * $Id: mupdate.h,v 1.15.2.2 2006/03/15 18:56:32 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -52,16 +52,14 @@
  * mupdate-slave.c: Slave listener thread functions.
  */
 
+#include "backend.h"
 #include "mailbox.h"
 #include "mupdate-client.h"
 #include "mupdate_err.h"
 #include "global.h"
 
 struct mupdate_handle_s {
-    int sock;
-
-    struct protstream *pin;
-    struct protstream *pout;
+    struct backend *conn;
 
     /* For keeping track of what tag # is next */
     unsigned int tagn;
@@ -76,7 +74,6 @@ struct mupdate_handle_s {
     size_t acl_buf_len;
     struct mupdate_mailboxdata mailboxdata_buf;
 
-    sasl_conn_t *saslconn;
     int saslcompleted;
 };
 

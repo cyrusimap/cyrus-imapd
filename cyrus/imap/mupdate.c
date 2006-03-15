@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.77.2.18 2005/11/04 13:34:23 murch Exp $
+ * $Id: mupdate.c,v 1.77.2.19 2006/03/15 18:56:31 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -2236,7 +2236,7 @@ int mupdate_synchronize(mupdate_handle *handle)
     rock.pool = pool;
     
     /* ask for updates and set nonblocking */
-    prot_printf(handle->pout, "U01 UPDATE\r\n");
+    prot_printf(handle->conn->out, "U01 UPDATE\r\n");
 
     /* Note that this prevents other people from running an UPDATE against
      * us for the duration.  this is a GOOD THING */
@@ -2265,7 +2265,7 @@ int mupdate_synchronize(mupdate_handle *handle)
     }
 
     /* Make socket nonblocking now */
-    prot_NONBLOCK(handle->pin);
+    prot_NONBLOCK(handle->conn->in);
 
     rock.boxes = &local_boxes;
 
