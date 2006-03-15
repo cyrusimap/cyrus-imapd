@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/NNTP/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.93.2.13 2005/10/28 14:51:19 ken3 Exp $
+ * $Id: imtest.c,v 1.93.2.14 2006/03/15 19:24:02 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -1282,7 +1282,10 @@ static void interactive(struct protocol_t *protocol, char *filename)
     FD_SET(fd_out, &write_set);
     FD_SET(sock, &write_set);
     
-    nfds = getdtablesize();
+    nfds = fd;
+    if (nfds < sock) nfds = sock;
+    if (nfds < fd_out) nfds = fd_out;
+    nfds++;
     
     if (filename != NULL) {
 	donewritingfile = 0;
