@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.121.2.33 2005/12/12 23:10:59 murch Exp $
+ * $Id: lmtpd.c,v 1.121.2.34 2006/03/17 14:46:10 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -66,6 +66,7 @@
 #include <sasl/saslutil.h>
 
 #include "acl.h"
+#include "annotate.h"
 #include "append.h"
 #include "assert.h"
 #include "auth.h"
@@ -494,10 +495,25 @@ int deliver_mailbox(FILE *f,
     if (!r) {
 	r = append_fromstage(&as, &content->body, stage, now,
 			     (const char **) flag, nflags, !singleinstance);
-	if (!r) append_commit(&as, quotaoverride ? -1 : 0, NULL, &uid, NULL);
-	else append_abort(&as);
+	if (r ||
+	    (dupelim && id && 
+	     duplicate_check(id, strlen(id), mailboxname, strlen(mailboxname)))) {
+	    append_abort(&as);
+                    
+	    if (!r) {
+		/* duplicate message */
+		duplicate_log(id, mailboxname, "delivery");
+		return 0;
+	    }         
+	} else {
+	    if (dupelim && id) 
+		duplicate_mark(id, strlen(id), mailboxname, 
+			       strlen(mailboxname), now, uid);
 
-        if (!r) sync_log_append(mailboxname);
+	    append_commit(&as, quotaoverride ? -1 : 0, NULL, &uid, NULL);
+
+	    sync_log_append(mailboxname);
+	}
     }
 
     if (!r && user && (notifier = config_getstring(IMAPOPT_MAILNOTIFIER))) {
@@ -535,9 +551,6 @@ int deliver_mailbox(FILE *f,
 	}
     }
 
-    if (!r && dupelim && id) duplicate_mark(id, strlen(id), 
-					    mailboxname, strlen(mailboxname),
-					    now, uid);
     return r;
 }
 
@@ -728,7 +741,6 @@ int deliver(message_data_t *msgdata, char *authuser,
 	char namebuf[MAX_MAILBOX_NAME+1] = "", *server;
 	char userbuf[MAX_MAILBOX_NAME+1];
 	const char *rcpt, *user, *domain, *mailbox;
-	int quotaoverride = msg_getrcpt_ignorequota(msgdata, n);
 	int r = 0;
 
 	rcpt = msg_getrcptall(msgdata, n);
