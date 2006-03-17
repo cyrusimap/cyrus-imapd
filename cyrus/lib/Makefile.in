@@ -40,7 +40,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-# $Id: Makefile.in,v 1.55.2.8 2005/02/21 19:25:52 ken3 Exp $
+# $Id: Makefile.in,v 1.55.2.9 2006/03/17 17:29:40 murch Exp $
 
 # Authorization namespace.
 AUTH=auth.o auth_krb.o auth_unix.o auth_krb5.o auth_pts.o
@@ -83,7 +83,7 @@ LIBCYR_HDRS = $(srcdir)/acl.h $(srcdir)/assert.h $(srcdir)/auth.h \
 	$(srcdir)/nonblock.h $(srcdir)/parseaddr.h $(srcdir)/prot.h \
 	$(srcdir)/retry.h $(srcdir)/sysexits.h $(srcdir)/strhash.h \
 	$(srcdir)/lsort.h $(srcdir)/stristr.h \
-	$(srcdir)/util.h $(srcdir)/xmalloc.h $(srcdir)/imapurl.h \
+	$(srcdir)/util.h $(srcdir)/xstrlcpy.h $(srcdir)/xstrlcat.h $(srcdir)/xmalloc.h $(srcdir)/imapurl.h \
 	$(srcdir)/cyrusdb.h $(srcdir)/iptostring.h $(srcdir)/rfc822date.h \
 	$(srcdir)/libcyr_cfg.h $(srcdir)/byteorder64.h \
 	$(srcdir)/message_uuid.h $(srcdir)/md5.h $(srcdir)/hmac-md5.h
@@ -95,13 +95,14 @@ LIBCYR_OBJS = acl.o bsearch.o charset.o glob.o retry.o util.o \
 	gmtoff_@WITH_GMTOFF@.o map_@WITH_MAP@.o $(ACL) $(AUTH) \
 	@LIBOBJS@ @CYRUSDB_OBJS@ @MD5OBJ@ \
 	iptostring.o xmalloc.o wildmat.o byteorder64.o \
-	message_uuid.o
+	message_uuid.o xstrlcat.o xstrlcpy.o
 
 LIBCYRM_HDRS = $(srcdir)/hash.h $(srcdir)/mpool.h $(srcdir)/xmalloc.h \
+	$(srcdir)/xstrlcat.h $(srcdir)/xstrlcpy.h \
 	$(srcdir)/strhash.o $(srcdir)/libconfig.h $(srcdir)/assert.h \
 	imapopts.h
 LIBCYRM_OBJS = libconfig.o imapopts.o hash.o mpool.o xmalloc.o strhash.o \
-	assert.o @IPV6_OBJS@
+	xstrlcat.o xstrlcpy.o assert.o @IPV6_OBJS@
 
 all: $(BUILTSOURCES) libcyrus_min.a libcyrus.a
 
@@ -151,8 +152,8 @@ chartable.c: mkchartable
 #	./mkchartable -m $(srcdir)/charset/unicode.map $(srcdir)/charset/*.t >x-chartables.h
 #	mv x-chartables.h chartables.h
 
-mkchartable: mkchartable.o xmalloc.o assert.o
-	$(CC) $(LDFLAGS) -o mkchartable mkchartable.o xmalloc.o assert.o
+mkchartable: mkchartable.o xstrlcpy.o xstrlcat.o xmalloc.o assert.o
+	$(CC) $(LDFLAGS) -o mkchartable mkchartable.o xstrlcpy.o xstrlcat.o xmalloc.o assert.o
 
 clean:
 	rm -f *.o *.a chartable.c Makefile.bak mkchartable makedepend.log \
