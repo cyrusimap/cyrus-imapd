@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: version.h,v 1.128.2.11 2006/03/23 17:02:05 murch Exp $
+ * $Id: version.h,v 1.128.2.12 2006/03/23 17:04:37 murch Exp $
  */
 
 #define _CYRUS_VERSION "v2.3.3"
@@ -58,7 +58,8 @@ enum {
     CAPA_POSTAUTH = 0x2
 };
 
-/* CAPABILITIES are now defined here, not including sasl ones */
+/* CAPABILITIES are defined here, not including TLS/SASL ones,
+   and those that are configurable */
 #define CAPA_PREAUTH_STRING "IMAP4 IMAP4rev1 LITERAL+ ID"
 
 #define CAPA_POSTAUTH_STRING " ACL RIGHTS=kxte QUOTA " \
