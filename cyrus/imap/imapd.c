@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.75 2006/03/09 22:39:24 murch Exp $ */
+/* $Id: imapd.c,v 1.443.2.76 2006/03/23 17:01:55 murch Exp $ */
 
 #include <config.h>
 
@@ -201,6 +201,7 @@ void cmdloop(void);
 void cmd_login(char *tag, char *user);
 void cmd_authenticate(char *tag, char *authtype, char *resp);
 void cmd_noop(char *tag, char *cmd);
+void capa_response(int flags);
 void cmd_capability(char *tag);
 void cmd_append(char *tag, char *name, const char *cur_name);
 void cmd_select(char *tag, char *cmd, char *name);
@@ -956,8 +957,10 @@ void cmdloop()
     char *p, shut[1024];
     const char *err;
 
-    prot_printf(imapd_out,
-		"* OK %s Cyrus IMAP4 %s%s server ready\r\n", config_servername,
+    prot_printf(imapd_out, "* OK [CAPABILITY ");
+    capa_response(CAPA_PREAUTH);
+    prot_printf(imapd_out, "] %s Cyrus IMAP4 %s%s server ready\r\n",
+		config_servername,
 		config_mupdate_server ? "(Murder) " : "", CYRUS_VERSION);
 
     ret = snprintf(motdfilename, sizeof(motdfilename), "%s/msg/motd",
@@ -2045,7 +2048,9 @@ void cmd_login(char *tag, char *user)
 
     imapd_userisadmin = global_authisa(imapd_authstate, IMAPOPT_ADMINS);
 
-    prot_printf(imapd_out, "%s OK %s\r\n", tag, reply);
+    prot_printf(imapd_out, "%s OK [CAPABILITY ", tag);
+    capa_response(CAPA_PREAUTH|CAPA_POSTAUTH);
+    prot_printf(imapd_out, "] %s\r\n", reply);
 
     /* Create telemetry log */
     imapd_logfd = telemetry_log(imapd_userid, imapd_in, imapd_out, 0);
@@ -2191,7 +2196,13 @@ cmd_authenticate(char *tag, char *authtype, char *resp)
 			VARIABLE_AUTH, 0, /* hash_simple(authtype) */
 			VARIABLE_LISTEND);
 
-    prot_printf(imapd_out, "%s OK Success (%s)\r\n", tag, ssfmsg);
+    if (!*ssfp) {
+	prot_printf(imapd_out, "%s OK [CAPABILITY ", tag);
+	capa_response(CAPA_PREAUTH|CAPA_POSTAUTH);
+	prot_printf(imapd_out, "] Success (%s)\r\n", ssfmsg);
+    } else {
+	prot_printf(imapd_out, "%s OK Success (%s)\r\n", tag, ssfmsg);
+    }
 
     prot_setsasl(imapd_in,  imapd_saslconn);
     prot_setsasl(imapd_out, imapd_saslconn);
@@ -2538,20 +2549,15 @@ void idle_update(idle_flags_t flags)
     prot_flush(imapd_out);
 }
 
-/*
- * Perform a CAPABILITY command
- */
-void cmd_capability(char *tag)
+void capa_response(int flags)
 {
     const char *sasllist; /* the list of SASL mechanisms */
     int mechcount;
 
-    imapd_check(NULL, 0, 0);
+    prot_printf(imapd_out, CAPA_PREAUTH_STRING);
 
-    prot_printf(imapd_out, "* CAPABILITY " CAPABILITY_STRING);
-
-    if (idle_enabled()) {
-	prot_printf(imapd_out, " IDLE");
+    if(config_mupdate_server) {
+	prot_printf(imapd_out, " MUPDATE=mupdate://%s/", config_mupdate_server);
     }
 
     if (tls_enabled() && !imapd_starttls_done && !imapd_authstate) {
@@ -2560,10 +2566,6 @@ void cmd_capability(char *tag)
     if (imapd_authstate ||
 	(!imapd_starttls_done && !config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
 	prot_printf(imapd_out, " LOGINDISABLED");
-    }
-
-    if(config_mupdate_server) {
-	prot_printf(imapd_out, " MUPDATE=mupdate://%s/", config_mupdate_server);
     }
 
     /* add the SASL mechs */
@@ -2577,6 +2579,14 @@ void cmd_capability(char *tag)
 	/* else don't show anything */
     }
 
+    if (!(flags & CAPA_POSTAUTH)) return;
+
+    prot_printf(imapd_out, CAPA_POSTAUTH_STRING);
+
+    if (idle_enabled()) {
+	prot_printf(imapd_out, " IDLE");
+    }
+
 #ifdef ENABLE_LISTEXT
     prot_printf(imapd_out, " LISTEXT LIST-SUBSCRIBED");
 #endif /* ENABLE_LISTEXT */
@@ -2588,6 +2598,19 @@ void cmd_capability(char *tag)
 #ifdef HAVE_SSL
     prot_printf(imapd_out, " URLAUTH");
 #endif
+}
+
+/*
+ * Perform a CAPABILITY command
+ */
+void cmd_capability(char *tag)
+{
+    imapd_check(NULL, 0, 0);
+
+    prot_printf(imapd_out, "* CAPABILITY ");
+
+    capa_response(CAPA_PREAUTH|CAPA_POSTAUTH);
+
     prot_printf(imapd_out, "\r\n%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
 }
