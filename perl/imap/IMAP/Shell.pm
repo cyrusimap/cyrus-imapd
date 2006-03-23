@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Shell.pm,v 1.36 2005/11/21 16:39:25 murch Exp $
+# $Id: Shell.pm,v 1.37 2006/03/23 15:41:56 jeaton Exp $
 #
 # A shell framework for Cyrus::IMAP::Admin
 #
@@ -159,6 +159,14 @@ my %builtins = (exit =>
 		   '[--partition partition] mailbox server [partition]',
 		   'transfer (relocate) a mailbox to a different server'],
 		xfer => 'xfermailbox',
+		subscribe =>
+		  [\&_sc_subscribe, '[mailbox]',
+                  'subscribe to a mailbox'],
+		sub => 'subscribe',
+		unsubscribe =>
+		  [\&_sc_unsubscribe, '[mailbox]',
+                  'unsubscribe from a mailbox'],
+		unsub => 'unsubscribe',
 		#? alias
 		#? unalias
 		#? load
@@ -1328,6 +1336,59 @@ sub _sc_info {
     my $attrname = $1;
 
     $lfh->[1]->print("  ", $attrname, ": ", $info{$attrib}, "\n");
+  }
+  0;
+}
+
+sub _sc_subscribe {
+  my ($cyrref, $name, $fh, $lfh, @argv) = @_;
+  my (@nargv, $opt);
+  shift(@argv);
+  while (defined ($opt = shift(@argv))) {
+    # gack.  bloody tcl.
+    last if $opt eq '--';
+    if ($opt =~ /^-/) {
+      die "usage: subscribe [mailbox]\n";
+    }
+    else {
+      push(@nargv, $opt);
+      last;
+    }
+  }
+  push(@nargv, @argv);
+  if (!$cyrref || !$$cyrref) {
+    die "subscribe: no connection to server\n";
+  }
+  $$cyrref->subscribe(@nargv);
+  if (defined $$cyrref->error) {
+    $lfh->[2]->print($$cyrref->error, "\n");
+    return 1;
+  }
+  0;
+}
+sub _sc_unsubscribe {
+  my ($cyrref, $name, $fh, $lfh, @argv) = @_;
+  my (@nargv, $opt);
+  shift(@argv);
+  while (defined ($opt = shift(@argv))) {
+    # gack.  bloody tcl.
+    last if $opt eq '--';
+    if ($opt =~ /^-/) {
+      die "usage: unsubscribe [mailbox]\n";
+    }
+    else {
+      push(@nargv, $opt);
+      last;
+    }
+  }
+  push(@nargv, @argv);
+  if (!$cyrref || !$$cyrref) {
+    die "unsubscribe: no connection to server\n";
+  }
+  $$cyrref->unsubscribe(@nargv);
+  if (defined $$cyrref->error) {
+    $lfh->[2]->print($$cyrref->error, "\n");
+    return 1;
   }
   0;
 }
