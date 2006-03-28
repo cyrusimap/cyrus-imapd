@@ -4,7 +4,7 @@
 
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-<meta name="revision" content="$Id: mailbox-format.html,v 1.3.2.5 2005/12/12 21:40:43 murch Exp $" />
+<meta name="revision" content="$Id: mailbox-format.html,v 1.3.2.6 2006/03/28 20:01:24 murch Exp $" />
 <meta name="author" content="Rob Siemborski" />
 
 <title>mailbox format</title>
@@ -169,11 +169,18 @@ the "poptimeout" <tt>imapd.conf</tt> option.</dd>
 <dt>Deleted, Answered, and Flagged (4 bytes each)</dt>
 <dd> Counts of how many messages have each flag.</dd>
 
-<dt>POP3 New UIDL (4 bytes)</dt> 
+<dt>Mailbox Options (4 bytes)</dt> 
+
+<dd> Bitmask of mailbox options, consisting of any combination of the
+following:
+<dl>
+<dt>POP3_NEW_UIDL</dt>
 
 <dd> Flag signalling that we're using
 "<em>uidvalidity</em>.<em>uid</em>" instead of just "<em>uid</em>" for
 the output of the POP3 UIDL command.</dd>
+</dl>
+</dd>
 
 <dt>Leaked Cache (4 bytes)</dt> 
 <dd> Number of leaked records in the cache file.</dd>

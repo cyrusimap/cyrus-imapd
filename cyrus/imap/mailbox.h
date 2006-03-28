@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- * $Id: mailbox.h,v 1.77.2.11 2005/05/27 17:40:54 ken3 Exp $
+ * $Id: mailbox.h,v 1.77.2.12 2006/03/28 20:01:26 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -144,7 +144,7 @@ struct mailbox {
     unsigned long flagged;
     int dirty;
 
-    int pop3_new_uidl;
+    unsigned long options;
     unsigned long leaked_cache_records;
 
     /* future expansion -- won't need expand the header */
@@ -191,7 +191,7 @@ struct index_record {
 #define OFFSET_DELETED 48      /* added for ACAP */
 #define OFFSET_ANSWERED 52
 #define OFFSET_FLAGGED 56
-#define OFFSET_POP3_NEW_UIDL 60	/* added for Outlook stupidity */
+#define OFFSET_MAILBOX_OPTIONS 60
 #define OFFSET_LEAKED_CACHE 64 /* Number of leaked records in cache file */
 #define OFFSET_SPARE1 68
 #define OFFSET_SPARE2 72
@@ -221,6 +221,9 @@ struct index_record {
 #define FLAG_FLAGGED (1<<1)
 #define FLAG_DELETED (1<<2)
 #define FLAG_DRAFT (1<<3)
+
+#define OPT_POP3_NEW_UIDL (1<<0)	/* added for Outlook stupidity */
+
 
 struct mailbox_header_cache {
     const char *name; /* Name of header */

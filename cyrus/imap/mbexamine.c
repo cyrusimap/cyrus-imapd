@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: mbexamine.c,v 1.5.2.7 2005/12/05 15:01:37 murch Exp $ */
+/* $Id: mbexamine.c,v 1.5.2.8 2006/03/28 20:01:26 murch Exp $ */
 
 #include <config.h>
 
@@ -274,8 +274,17 @@ int do_examine(char *name,
 	   mailbox.last_uid);
     printf("  Deleted: %ld  Answered: %ld  Flagged: %ld\n",
 	   mailbox.deleted, mailbox.answered, mailbox.flagged);
-    if (mailbox.minor_version >= 4)
-	printf("  POP3 New UIDL: %d\n", mailbox.pop3_new_uidl);
+    if (mailbox.minor_version >= 4) {
+	printf("  Mailbox Options:");
+	if (!mailbox.options) {
+	    printf(" NONE");
+	} else {
+	    if (mailbox.options & OPT_POP3_NEW_UIDL) {
+		printf(" POP3_NEW_UIDL");
+	    }
+	}
+	printf("\n");
+    }
     printf("  Last POP3 Login: (%ld) %s", mailbox.pop3_last_login,
 	   ctime(&mailbox.pop3_last_login));
 

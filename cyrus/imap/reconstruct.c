@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.81.2.17 2006/03/06 13:11:01 murch Exp $ */
+/* $Id: reconstruct.c,v 1.81.2.18 2006/03/28 20:01:27 murch Exp $ */
 
 #include <config.h>
 
@@ -535,7 +535,7 @@ int reconstruct(char *name, struct discovered *found)
 	mailbox.uidvalidity = time(0);
 	/* If we can't read the index, assume new UIDL so that stupid clients
 	   will retrieve all of the messages in the mailbox. */
-	mailbox.pop3_new_uidl = 1;
+	mailbox.options = OPT_POP3_NEW_UIDL;
     }
     else {
 	(void) mailbox_lock_index(&mailbox);
@@ -727,7 +727,7 @@ int reconstruct(char *name, struct discovered *found)
 	    message_index.internaldate = sbuf.st_mtime;
 	    /* If we are recovering a message, assume new UIDL
 	       so that stupid clients will retrieve this message */
-	    mailbox.pop3_new_uidl = 1;
+	    mailbox.options |= OPT_POP3_NEW_UIDL;
             /* Wipe the Message UUID */
             message_uuid_set_null(&message_index.uuid);
 	}
@@ -799,7 +799,7 @@ int reconstruct(char *name, struct discovered *found)
     *((bit32 *)(buf+OFFSET_DELETED)) = htonl(new_deleted);
     *((bit32 *)(buf+OFFSET_ANSWERED)) = htonl(new_answered);
     *((bit32 *)(buf+OFFSET_FLAGGED)) = htonl(new_flagged);
-    *((bit32 *)(buf+OFFSET_POP3_NEW_UIDL)) = htonl(mailbox.pop3_new_uidl);
+    *((bit32 *)(buf+OFFSET_MAILBOX_OPTIONS)) = htonl(mailbox.options);
     *((bit32 *)(buf+OFFSET_LEAKED_CACHE)) = htonl(0);
 
     message_uuid_pack(&message_index.uuid, buf+OFFSET_MESSAGE_UUID);

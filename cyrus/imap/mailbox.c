@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.147.2.30 2005/11/10 06:04:55 murch Exp $
+ * $Id: mailbox.c,v 1.147.2.31 2006/03/28 20:01:24 murch Exp $
  *
  */
 
@@ -936,10 +936,12 @@ int mailbox_read_index_header(struct mailbox *mailbox)
     mailbox->flagged = 
 	ntohl(*((bit32 *)(mailbox->index_base+OFFSET_FLAGGED)));
     mailbox->dirty = 0;
-    mailbox->pop3_new_uidl = !mailbox->exists ||
-	ntohl(*((bit32 *)(mailbox->index_base+OFFSET_POP3_NEW_UIDL)));
+    mailbox->options =
+	ntohl(*((bit32 *)(mailbox->index_base+OFFSET_MAILBOX_OPTIONS)));
     mailbox->leaked_cache_records =
 	ntohl(*((bit32 *)(mailbox->index_base+OFFSET_LEAKED_CACHE)));
+
+    if (!mailbox->exists) mailbox->options |= OPT_POP3_NEW_UIDL;
 
     if (!mailbox_doing_reconstruct &&
 	(mailbox->minor_version < MAILBOX_MINOR_VERSION)) {
@@ -1298,7 +1300,7 @@ int mailbox_write_index_header(struct mailbox *mailbox)
     *((bit32 *)(buf+OFFSET_DELETED)) = htonl(mailbox->deleted);
     *((bit32 *)(buf+OFFSET_ANSWERED)) = htonl(mailbox->answered);
     *((bit32 *)(buf+OFFSET_FLAGGED)) = htonl(mailbox->flagged);
-    *((bit32 *)(buf+OFFSET_POP3_NEW_UIDL)) = htonl(mailbox->pop3_new_uidl);
+    *((bit32 *)(buf+OFFSET_MAILBOX_OPTIONS)) = htonl(mailbox->options);
     *((bit32 *)(buf+OFFSET_LEAKED_CACHE)) =
 	htonl(mailbox->leaked_cache_records);
     *((bit32 *)(buf+OFFSET_SPARE1)) = htonl(0); /* RESERVED */
@@ -1545,8 +1547,9 @@ static void mailbox_upgrade_index_work(struct mailbox *mailbox,
 
 	calculate_flagcounts = 1;
     }
-    if (oldstart_offset < OFFSET_POP3_NEW_UIDL-quota_offset+sizeof(bit32)) {
-	*((bit32 *)(buf+OFFSET_POP3_NEW_UIDL)) = htonl(!exists);
+    if (oldstart_offset < OFFSET_MAILBOX_OPTIONS-quota_offset+sizeof(bit32)) {
+	unsigned long options = !exists ? OPT_POP3_NEW_UIDL : 0;
+	*((bit32 *)(buf+OFFSET_MAILBOX_OPTIONS)) = htonl(options);
     }
     if (oldstart_offset < OFFSET_LEAKED_CACHE-quota_offset+sizeof(bit32)) {
 	*((bit32 *)(buf+OFFSET_LEAKED_CACHE)) = htonl(0);
@@ -2570,7 +2573,7 @@ int mailbox_create(const char *name,
     mailbox.deleted = 0;
     mailbox.answered = 0;
     mailbox.flagged = 0;
-    mailbox.pop3_new_uidl = 1;
+    mailbox.options = OPT_POP3_NEW_UIDL;
 
     if (!uniqueid) {
 	size_t unique_size = sizeof(char) * 32;
