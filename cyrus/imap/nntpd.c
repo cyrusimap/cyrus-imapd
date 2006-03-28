@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.46 2006/02/10 21:10:56 murch Exp $
+ * $Id: nntpd.c,v 1.2.2.47 2006/03/28 19:58:21 murch Exp $
  */
 
 /*
@@ -116,7 +116,6 @@ int imapd_exists;
 struct protstream *imapd_out = NULL;
 struct auth_state *imapd_authstate = NULL;
 char *imapd_userid = NULL;
-int imapd_condstore_enabled = 0;
 
 void printastring(const char *s __attribute__((unused)))
 {
