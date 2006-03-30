@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.147.2.31 2006/03/28 20:01:24 murch Exp $
+ * $Id: mailbox.c,v 1.147.2.32 2006/03/30 22:41:28 murch Exp $
  *
  */
 
@@ -920,10 +920,11 @@ int mailbox_read_index_header(struct mailbox *mailbox)
         mailbox->quota_mailbox_used =
             ntohll(*((bit64 *)(mailbox->index_base+OFFSET_QUOTA_MAILBOX_USED64)));
     } else
-#else
-    mailbox->quota_mailbox_used =
-	ntohl(*((bit32 *)(mailbox->index_base+OFFSET_QUOTA_MAILBOX_USED)));
 #endif
+    {
+	mailbox->quota_mailbox_used =
+	    ntohl(*((bit32 *)(mailbox->index_base+OFFSET_QUOTA_MAILBOX_USED)));
+    }
 
     mailbox->pop3_last_login =
 	ntohl(*((bit32 *)(mailbox->index_base+OFFSET_POP3_LAST_LOGIN)));
