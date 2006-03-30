@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notify_mailto.c,v 1.8.2.2 2005/04/11 06:22:54 shadow Exp $
+ * $Id: notify_mailto.c,v 1.8.2.3 2006/03/30 16:08:56 murch Exp $
  */
 
 #include <config.h>
@@ -63,7 +63,7 @@ static int contains_8bit(const char *msg);
 
 static int global_outgoing_count = 0;
 
-char* notify_mailto(const char *class __attribute__((unused)),
+char* notify_mailto(const char *class,
 		    const char *priority __attribute__((unused)),
 		    const char *user __attribute__((unused)),
 		    const char *mailbox __attribute__((unused)),
@@ -121,7 +121,7 @@ char* notify_mailto(const char *class __attribute__((unused)),
     fprintf(sm, "X-Sieve: %s\r\n", SIEVE_VERSION);
     fprintf(sm, "From: Mail Sieve Subsystem <%s>\r\n", config_getstring(IMAPOPT_POSTMASTER));
     fprintf(sm, "To: <%s>\r\n", options[0]);
-    fprintf(sm, "Subject: [SIEVE] New mail notification\r\n");
+    fprintf(sm, "Subject: [%s] New mail notification\r\n", class);
     if (contains_8bit(message)) {
 	fprintf(sm, "MIME-Version: 1.0\r\n");
 	fprintf(sm, "Content-Type: text/plain; charset=UTF-8\r\n");
