@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.35 2006/01/16 23:40:14 murch Exp $
+.\" $Id: imapoptions,v 1.36 2006/03/30 15:49:58 murch Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -561,7 +561,7 @@ are listed with ``<none>''.
    IMAP mailbox names. */
 
 { "notifysocket", "{configdirectory}/socket/notify", STRING }
-/* Unix domain socket that the new mail notification daemon listens on. */
+/* Unix domain socket that the mail notification daemon listens on. */
 
 # Commented out - there's no such thing as "partition-name", but we need
 # this for the man page
