@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.199.2.25 2005/12/13 19:36:00 murch Exp $
+ * $Id: index.c,v 1.199.2.26 2006/03/31 19:22:22 murch Exp $
  */
 #include <config.h>
 
@@ -161,7 +161,8 @@ static int index_searchcacheheader(unsigned msgno, char *name, char *substr,
 				   comp_pat *pat);
 static index_sequenceproc_t index_copysetup;
 static int _index_search(unsigned **msgno_list, struct mailbox *mailbox,
-			 struct searchargs *searchargs);
+			 struct searchargs *searchargs,
+			 modseq_t *highestmodseq);
 
 static void parse_cached_envelope(char *env, char *tokens[], int tokens_size);
 static char *find_msgid(char *str, char **rem);
@@ -431,6 +432,13 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 		    mailbox->uidvalidity);
 	prot_printf(imapd_out, "* OK [UIDNEXT %lu]  \r\n",
 		    mailbox->last_uid + 1);
+	if (mailbox->options & OPT_IMAP_CONDSTORE) {
+	    prot_printf(imapd_out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "]  \r\n",
+			mailbox->highestmodseq);
+	} else {
+	    prot_printf(imapd_out, "* OK [NOMODSEQ] Sorry, modsequences have "
+			"not been enabled on this mailbox\r\n");
+	}
     }
 
     for (msgno = 1; msgno <= oldexists; msgno++) {
@@ -440,6 +448,10 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 	    }
 	    index_fetchflags(mailbox, msgno, SYSTEM_FLAGS(msgno), user_flags,
 			     LAST_UPDATED(msgno));
+	    if ((mailbox->options & OPT_IMAP_CONDSTORE) &&
+		imapd_condstore_client) {
+		prot_printf(imapd_out, " MODSEQ (" MODSEQ_FMT ")", MODSEQ(msgno));
+	    }
 	    if (usinguid) prot_printf(imapd_out, " UID %u", UID(msgno));
 	    prot_printf(imapd_out, ")\r\n");
 	}
@@ -555,6 +567,11 @@ int oldexists;
 		    }
 		    index_fetchflags(mailbox, msgno, SYSTEM_FLAGS(msgno), 
 				     user_flags, LAST_UPDATED(msgno));
+		    if ((mailbox->options & OPT_IMAP_CONDSTORE) &&
+			imapd_condstore_client) {
+			prot_printf(imapd_out, " MODSEQ (" MODSEQ_FMT ")",
+				    MODSEQ(msgno));
+		    }
 		    if (usinguid) {
 			prot_printf(imapd_out, " UID %u", UID(msgno));
 		    }
@@ -813,7 +830,8 @@ int nflags;
     long myrights = mailbox->myrights;
 
     /* Handle simple case of just changing /Seen */
-    if (storeargs->operation != STORE_REPLACE &&
+    if (!(mailbox->options & OPT_IMAP_CONDSTORE) &&
+	storeargs->operation != STORE_REPLACE &&
 	!storeargs->system_flags && !nflags) {
 	if (!storeargs->seen) return 0; /* Nothing to change */
 	if (!(myrights & ACL_SEEN)) return IMAP_PERMISSION_DENIED;
@@ -939,6 +957,10 @@ int nflags;
     /* note that index_forsequence() doesn't sync the index file;
        that's done below in mailbox_write_index_header() */
     if (mailbox->dirty) {
+	if (mailbox->options & OPT_IMAP_CONDSTORE) {
+	    /* bump HIGHESTMODSEQ */
+	    mailbox->highestmodseq++;
+	}
 	/* xxx what to do on failure? */
 	mailbox_write_index_header(mailbox);
 	mailbox->dirty = 0;
@@ -961,11 +983,9 @@ int nflags;
  * Returns message numbers in an array.  This function is used by
  * SEARCH, SORT and THREAD.
  */
-static int
-_index_search(msgno_list, mailbox, searchargs)
-unsigned **msgno_list;
-struct mailbox *mailbox;
-struct searchargs *searchargs;
+static int _index_search(unsigned **msgno_list, struct mailbox *mailbox,
+			 struct searchargs *searchargs,
+			 modseq_t *highestmodseq)
 {
     unsigned msgno;
     struct mapfile msgfile;
@@ -991,6 +1011,9 @@ struct searchargs *searchargs;
 
 	if (index_search_evaluate(mailbox, searchargs, msgno, &msgfile)) {
 	    (*msgno_list)[n++] = msgno;
+	    if (highestmodseq && (MODSEQ(msgno) > *highestmodseq)) {
+		*highestmodseq = MODSEQ(msgno);
+	    }
 	}
 	if (msgfile.base) {
 	    mailbox_unmap_message(mailbox, UID(msgno),
@@ -1020,7 +1043,7 @@ int index_getuidsequence(struct mailbox *mailbox,
     unsigned *msgno_list;
     int i, n;
 
-    n = _index_search(&msgno_list, mailbox, searchargs);
+    n = _index_search(&msgno_list, mailbox, searchargs, NULL);
     if (n == 0) {
 	*uid_list = NULL;
 	return 0;
@@ -1038,16 +1061,15 @@ int index_getuidsequence(struct mailbox *mailbox,
  * Performs a SEARCH command.
  * This is a wrapper around _index_search() which simply prints the results.
  */
-int
-index_search(mailbox, searchargs, usinguid)
-struct mailbox *mailbox;
-struct searchargs *searchargs;
-int usinguid;
+int index_search(struct mailbox *mailbox, struct searchargs *searchargs,
+		 int usinguid)
 {
     unsigned *msgno_list;
     int i, n;
+    modseq_t highestmodseq = 0;
 
-    n = _index_search(&msgno_list, mailbox, searchargs);
+    n = _index_search(&msgno_list, mailbox, searchargs,
+		      searchargs->modseq ? &highestmodseq : NULL);
 
     prot_printf(imapd_out, "* SEARCH");
 
@@ -1057,6 +1079,10 @@ int usinguid;
 
     if (n) free(msgno_list);
 
+    if (highestmodseq) {
+	prot_printf(imapd_out, " (MODSEQ " MODSEQ_FMT ")", highestmodseq);
+    }
+
     prot_printf(imapd_out, "\r\n");
 
     return n;
@@ -1065,22 +1091,32 @@ int usinguid;
 /*
  * Performs a SORT command
  */
-int
-index_sort(struct mailbox *mailbox,
-	   struct sortcrit *sortcrit,
-	   struct searchargs *searchargs,
-	   int usinguid)
+int index_sort(struct mailbox *mailbox, struct sortcrit *sortcrit,
+	       struct searchargs *searchargs, int usinguid)
 {
     unsigned *msgno_list;
     MsgData *msgdata = NULL, *freeme = NULL;
     int nmsg;
     clock_t start;
+    modseq_t highestmodseq = 0;
+    int i, modseq = 0;
 
     if(CONFIG_TIMING_VERBOSE)
 	start = clock();
 
+    if (searchargs->modseq) modseq = 1;
+    else {
+	for (i = 0; sortcrit[i].key != SORT_SEQUENCE; i++) {
+	    if (sortcrit[i].key == SORT_MODSEQ) {
+		modseq = 1;
+		break;
+	    }
+	}
+    }
+
     /* Search for messages based on the given criteria */
-    nmsg = _index_search(&msgno_list, mailbox, searchargs);
+    nmsg = _index_search(&msgno_list, mailbox, searchargs,
+			 modseq ? &highestmodseq : NULL);
 
     prot_printf(imapd_out, "* SORT");
 
@@ -1111,13 +1147,17 @@ index_sort(struct mailbox *mailbox,
 	free(freeme);
     }
 
+    if (highestmodseq) {
+	prot_printf(imapd_out, " (MODSEQ " MODSEQ_FMT ")", highestmodseq);
+    }
+
     prot_printf(imapd_out, "\r\n");
 
     /* debug */
     if (CONFIG_TIMING_VERBOSE) {
 	int len;
 	char *key_names[] = { "SEQUENCE", "ARRIVAL", "CC", "DATE", "FROM",
-			      "SIZE", "SUBJECT", "TO", "ANNOTATION" };
+			      "SIZE", "SUBJECT", "TO", "ANNOTATION", "MODSEQ" };
 	char buf[1024] = "";
 
 	while (sortcrit->key && sortcrit->key < VECTOR_SIZE(key_names)) {
@@ -1153,23 +1193,31 @@ int index_thread(struct mailbox *mailbox, int algorithm,
     unsigned *msgno_list;
     int nmsg;
     clock_t start;
+    modseq_t highestmodseq = 0;
 
     if(CONFIG_TIMING_VERBOSE)
 	start = clock();
 
     /* Search for messages based on the given criteria */
-    nmsg = _index_search(&msgno_list, mailbox, searchargs);
+    nmsg = _index_search(&msgno_list, mailbox, searchargs,
+			 searchargs->modseq ? &highestmodseq : NULL);
 
     if (nmsg) {
 	/* Thread messages using given algorithm */
 	(*thread_algs[algorithm].threader)(msgno_list, nmsg, usinguid);
 
 	free(msgno_list);
+
+	if (highestmodseq) {
+	    prot_printf(imapd_out, " (MODSEQ " MODSEQ_FMT ")", highestmodseq);
+	}
     }
 
     /* print an empty untagged response */
     else
 	index_thread_print(NULL, usinguid);
+
+    prot_printf(imapd_out, "\r\n");
 
     if (CONFIG_TIMING_VERBOSE) {
 	/* debug */
@@ -1435,6 +1483,11 @@ int statusitems;
     }
     if (statusitems & STATUS_UNSEEN) {
 	prot_printf(imapd_out, "%cUNSEEN %u", sepchar, num_unseen);
+	sepchar = ' ';
+    }
+    if (statusitems & STATUS_HIGHESTMODSEQ) {
+	prot_printf(imapd_out, "%cHIGHESTMODSEQ " MODSEQ_FMT, sepchar,
+		    mailbox->highestmodseq);
 	sepchar = ' ';
     }
     prot_printf(imapd_out, ")\r\n");
@@ -2372,6 +2425,9 @@ static int index_fetchreply(struct mailbox *mailbox,
     char respbuf[100];
     int r = 0;
 
+    /* Check the modseq against changedsince */
+    if (MODSEQ(msgno) <= fetchargs->changedsince) return 0;
+
     /* Open the message file if we're going to need it */
     if ((fetchitems & (FETCH_HEADER|FETCH_TEXT|FETCH_RFC822)) ||
 	fetchargs->cache_atleast > CACHE_VERSION(msgno) ||
@@ -2418,6 +2474,11 @@ static int index_fetchreply(struct mailbox *mailbox,
 
 	prot_printf(imapd_out, "%cINTERNALDATE \"%s\"",
 		    sepchar, datebuf);
+	sepchar = ' ';
+    }
+    if (fetchitems & FETCH_MODSEQ) {
+	prot_printf(imapd_out, "%cMODSEQ (" MODSEQ_FMT ")",
+		    sepchar, MODSEQ(msgno));
 	sepchar = ' ';
     }
     if (fetchitems & FETCH_SIZE) {
@@ -2790,14 +2851,20 @@ static int index_storeflag(struct mailbox *mailbox,
     int firsttry = 1;
     int dirty = 0;
     bit32 oldflags;
+    int sepchar = '(';
+
+    /* Check the modseq against unchangedsince */
+    if (MODSEQ(msgno) > storeargs->unchangedsince) return 0;
 
     /* Change \Seen flag */
-    if (storeargs->operation == STORE_REPLACE && (mailbox->myrights&ACL_SEEN))
+    if (storeargs->operation == STORE_REPLACE && (mailbox->myrights & ACL_SEEN))
     {
+	if (seenflag[msgno] != storeargs->seen) dirty++;
 	seenflag[msgno] = storeargs->seen;
     }
     else if (storeargs->seen) {
 	i = (storeargs->operation == STORE_ADD) ? 1 : 0;
+	if (seenflag[msgno] != i) dirty++;
 	seenflag[msgno] = i;
     }
 
@@ -2848,22 +2915,32 @@ static int index_storeflag(struct mailbox *mailbox,
 
     if (storeargs->operation == STORE_REPLACE) {
 	if (!(mailbox->myrights & ACL_WRITE)) {
+	    /* ACL_DELETE handled in index_store() */
+	    if ((record.system_flags & FLAG_DELETED) !=
+		(storeargs->system_flags & FLAG_DELETED)) {
+		dirty++;
+	    }
 	    record.system_flags = (record.system_flags&~FLAG_DELETED) |
 	      (storeargs->system_flags&FLAG_DELETED);
 	}
 	else {
 	    if (!(mailbox->myrights & ACL_DELETEMSG)) {
+		if ((record.system_flags & ~FLAG_DELETED) !=
+		    (storeargs->system_flags & ~FLAG_DELETED)) {
+		    dirty++;
+		}
 		record.system_flags = (record.system_flags&FLAG_DELETED) |
 		  (storeargs->system_flags&~FLAG_DELETED);
 	    }
 	    else {
+		if (record.system_flags != storeargs->system_flags) dirty++;
 		record.system_flags = storeargs->system_flags;
 	    }
 	    for (i = 0; i < VECTOR_SIZE(record.user_flags); i++) {
+		if (record.user_flags[i] != storeargs->user_flags[i]) dirty++;
 		record.user_flags[i] = storeargs->user_flags[i];
 	    }
 	}
-	dirty++;		/* Don't try to be clever */
     }
     else if (storeargs->operation == STORE_ADD) {
 	if (~record.system_flags & storeargs->system_flags) dirty++;
@@ -2886,6 +2963,11 @@ static int index_storeflag(struct mailbox *mailbox,
     }
 
     if (dirty) {
+	if (mailbox->options & OPT_IMAP_CONDSTORE) {
+	    /* bump MODSEQ */
+	    record.modseq = mailbox->highestmodseq + 1;
+	}
+
 	/* update totals */
 	if ( (record.system_flags & FLAG_DELETED) && !(oldflags & FLAG_DELETED))
 	    mailbox->deleted++;
@@ -2922,6 +3004,19 @@ static int index_storeflag(struct mailbox *mailbox,
     if (!storeargs->silent) {
 	index_fetchflags(mailbox, msgno, record.system_flags,
 			 record.user_flags, record.last_updated);
+	sepchar = ' ';
+    }
+    if ((mailbox->options & OPT_IMAP_CONDSTORE) && imapd_condstore_client) {
+	if (sepchar == '(') {
+	    /* we haven't output a fetch item yet, so start the response */
+	    prot_printf(imapd_out, "* %u FETCH ", msgno);
+	}
+	prot_printf(imapd_out, "%cMODSEQ (" MODSEQ_FMT ")",
+		    sepchar, record.modseq);
+	sepchar = ' ';
+    }
+    if (sepchar != '(') {
+	/* finsh the response if we have one */
 	if (storeargs->usinguid) {
 	    prot_printf(imapd_out, " UID %u", UID(msgno));
 	}
@@ -2970,6 +3065,8 @@ static int index_search_evaluate(struct mailbox *mailbox,
       return 0;
     if (searchargs->sentbefore && SENTDATE(msgno) > searchargs->sentbefore)
       return 0;
+
+    if (searchargs->modseq && MODSEQ(msgno) < searchargs->modseq) return 0;
 
     if (~SYSTEM_FLAGS(msgno) & searchargs->system_flags_set) return 0;
     if (SYSTEM_FLAGS(msgno) & searchargs->system_flags_unset) return 0;
@@ -4025,9 +4122,9 @@ static void index_sort_setnext(MsgData *node, MsgData *next)
 /*
  * Function for comparing two integers.
  */
-static int numcmp(int i1, int i2)
+static int numcmp(modseq_t n1, modseq_t n2)
 {
-    return ((i1 < i2) ? -1 : (i1 > i2) ? 1 : 0);
+    return ((n1 < n2) ? -1 : (n1 > n2) ? 1 : 0);
 }
 
 /*
@@ -4071,6 +4168,9 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
 	case SORT_ANNOTATION:
 	    ret = strcmp(md1->annot[ann], md2->annot[ann]);
 	    ann++;
+	    break;
+	case SORT_MODSEQ:
+	    ret = numcmp(MODSEQ(md1->msgno), MODSEQ(md2->msgno));
 	    break;
 	}
     } while (!ret && sortcrit[i++].key != SORT_SEQUENCE);
@@ -4314,8 +4414,6 @@ static void index_thread_print(Thread *thread, int usinguid)
 	prot_printf(imapd_out, " ");
 	_index_thread_print(thread->child, usinguid);
     }
-
-    prot_printf(imapd_out, "\r\n");
 }
 
 /*

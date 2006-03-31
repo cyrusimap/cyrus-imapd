@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.147.2.32 2006/03/30 22:41:28 murch Exp $
+ * $Id: mailbox.c,v 1.147.2.33 2006/03/31 19:22:24 murch Exp $
  *
  */
 
@@ -84,7 +84,6 @@
 #include "seen.h"
 #include "util.h"
 #include "xmalloc.h"
-#include "byteorder64.h"
 
 static int mailbox_doing_reconstruct = 0;
 #define zeromailbox(m) { memset(&m, 0, sizeof(struct mailbox)); \
@@ -898,7 +897,7 @@ int mailbox_read_index_header(struct mailbox *mailbox)
     mailbox->record_size =
 	ntohl(*((bit32 *)(mailbox->index_base+OFFSET_RECORD_SIZE)));
 
-    if ((mailbox->start_offset < OFFSET_LEAKED_CACHE+sizeof(bit32)) ||
+    if ((mailbox->start_offset < OFFSET_HIGHESTMODSEQ+4) ||
 	(mailbox->record_size < INDEX_RECORD_SIZE)) {
 	if (mailbox_upgrade_index(mailbox))
 	    return IMAP_IOERROR;
@@ -941,6 +940,13 @@ int mailbox_read_index_header(struct mailbox *mailbox)
 	ntohl(*((bit32 *)(mailbox->index_base+OFFSET_MAILBOX_OPTIONS)));
     mailbox->leaked_cache_records =
 	ntohl(*((bit32 *)(mailbox->index_base+OFFSET_LEAKED_CACHE)));
+#ifdef HAVE_LONG_LONG_INT
+    mailbox->highestmodseq =
+	ntohll(*((bit64 *)(mailbox->index_base+OFFSET_HIGHESTMODSEQ_64)));
+#else
+    mailbox->highestmodseq =
+	ntohl(*((bit32 *)(mailbox->index_base+OFFSET_HIGHESTMODSEQ)));
+#endif
 
     if (!mailbox->exists) mailbox->options |= OPT_POP3_NEW_UIDL;
 
@@ -989,8 +995,12 @@ struct index_record *record;
     }
     record->content_lines = htonl(*((bit32 *)(buf+OFFSET_CONTENT_LINES)));
     record->cache_version = htonl(*((bit32 *)(buf+OFFSET_CACHE_VERSION)));
-
     message_uuid_unpack(&record->uuid, buf+OFFSET_MESSAGE_UUID);
+#ifdef HAVE_LONG_LONG_INT
+    record->modseq = htonll(*((bit64 *)(buf+OFFSET_MODSEQ_64)));
+#else
+    record->modseq = htonl(*((bit32 *)(buf+OFFSET_MODSEQ)));
+#endif
     return 0;
 }
 
@@ -1304,8 +1314,17 @@ int mailbox_write_index_header(struct mailbox *mailbox)
     *((bit32 *)(buf+OFFSET_MAILBOX_OPTIONS)) = htonl(mailbox->options);
     *((bit32 *)(buf+OFFSET_LEAKED_CACHE)) =
 	htonl(mailbox->leaked_cache_records);
+#ifdef HAVE_LONG_LONG_INT
+    *((bit64 *)(buf+OFFSET_HIGHESTMODSEQ_64)) = htonll(mailbox->highestmodseq);
+#else
+    /* zero the unused 32bits */
+    *((bit32 *)(buf+OFFSET_HIGHESTMODSEQ_64)) = htonl(0);
+    *((bit32 *)(buf+OFFSET_HIGHESTMODSEQ)) = htonl(mailbox->highestmodseq);
+#endif
+    *((bit32 *)(buf+OFFSET_SPARE0)) = htonl(0); /* RESERVED */
     *((bit32 *)(buf+OFFSET_SPARE1)) = htonl(0); /* RESERVED */
     *((bit32 *)(buf+OFFSET_SPARE2)) = htonl(0); /* RESERVED */
+    *((bit32 *)(buf+OFFSET_SPARE3)) = htonl(0); /* RESERVED */
 
     if (mailbox->start_offset < header_size)
 	header_size = mailbox->start_offset;
@@ -1345,6 +1364,13 @@ void mailbox_index_record_to_buf(struct index_record *record, char *buf)
     *((bit32 *)(buf+OFFSET_CONTENT_LINES)) = htonl(record->content_lines);
     *((bit32 *)(buf+OFFSET_CACHE_VERSION)) = htonl(record->cache_version);
     message_uuid_pack(&record->uuid, buf+OFFSET_MESSAGE_UUID);
+#ifdef HAVE_LONG_LONG_INT
+    *((bit64 *)(buf+OFFSET_MODSEQ_64)) = htonll(record->modseq);
+#else
+    /* zero the unused 32bits */
+    *((bit32 *)(buf+OFFSET_MODSEQ_64)) = htonl(0);
+    *((bit32 *)(buf+OFFSET_MODSEQ)) = htonl(record->modseq);
+#endif
 }
 
 /*
@@ -1515,6 +1541,15 @@ static void mailbox_upgrade_index_work(struct mailbox *mailbox,
 	*((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) = htonl(0);
     }
 
+    if (ntohl(*((bit32 *)(buf+OFFSET_MINOR_VERSION))) < 8) {
+#ifdef HAVE_LONG_LONG_INT
+	*((bit64 *)(buf+OFFSET_HIGHESTMODSEQ_64)) = htonll(1);
+#else
+	*((bit32 *)(buf+OFFSET_HIGHESTMODSEQ_64)) = htonl(0);
+	*((bit32 *)(buf+OFFSET_HIGHESTMODSEQ)) = htonl(1);
+#endif
+    }
+
     /* change version number */
     *((bit32 *)(buf+OFFSET_MINOR_VERSION)) = htonl(MAILBOX_MINOR_VERSION);
 
@@ -1552,11 +1587,16 @@ static void mailbox_upgrade_index_work(struct mailbox *mailbox,
 	unsigned long options = !exists ? OPT_POP3_NEW_UIDL : 0;
 	*((bit32 *)(buf+OFFSET_MAILBOX_OPTIONS)) = htonl(options);
     }
-    if (oldstart_offset < OFFSET_LEAKED_CACHE-quota_offset+sizeof(bit32)) {
-	*((bit32 *)(buf+OFFSET_LEAKED_CACHE)) = htonl(0);
+#if 0
+    if (oldstart_offset < OFFSET_HIGHESTMODSEQ-quota_offset+sizeof(bit32) ||
+	!ntohll(*((bit64 *)(buf+OFFSET_HIGHESTMODSEQ_64)))) {
+	*((bit64 *)(buf+OFFSET_HIGHESTMODSEQ_64)) = htonll(1);
     }
+#endif
+    *((bit32 *)(buf+OFFSET_SPARE0)) = htonl(0); /* RESERVED */
     *((bit32 *)(buf+OFFSET_SPARE1)) = htonl(0); /* RESERVED */
     *((bit32 *)(buf+OFFSET_SPARE2)) = htonl(0); /* RESERVED */
+    *((bit32 *)(buf+OFFSET_SPARE3)) = htonl(0); /* RESERVED */
 
     /* Write new header */
     fwrite(buf, 1, INDEX_HEADER_SIZE, newindex);
@@ -1598,6 +1638,16 @@ static void mailbox_upgrade_index_work(struct mailbox *mailbox,
             /* Reset undefined MessageUUIDs to NULL value (slow copy) */
             if (oldrecord_size < OFFSET_MESSAGE_UUID+MESSAGE_UUID_PACKED_SIZE)
                 memset(buf+OFFSET_MESSAGE_UUID, 0, MESSAGE_UUID_PACKED_SIZE);
+
+	    /* Set the initial modseq to 1 */
+	    if (oldrecord_size < OFFSET_MODSEQ+4) {
+#ifdef HAVE_LONG_LONG_INT
+		*((bit64 *)(buf+OFFSET_MODSEQ_64)) = htonll(1);
+#else
+		*((bit32 *)(buf+OFFSET_MODSEQ_64)) = htonl(0);
+		*((bit32 *)(buf+OFFSET_MODSEQ)) = htonl(1);
+#endif
+	    }
 
 	    fwrite(buf+oldrecord_size, recsize_diff, 1, newindex);
 	}
@@ -2575,6 +2625,8 @@ int mailbox_create(const char *name,
     mailbox.answered = 0;
     mailbox.flagged = 0;
     mailbox.options = OPT_POP3_NEW_UIDL;
+    mailbox.leaked_cache_records = 0;
+    mailbox.highestmodseq = 1;
 
     if (!uniqueid) {
 	size_t unique_size = sizeof(char) * 32;

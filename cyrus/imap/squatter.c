@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squatter.c,v 1.12.2.4 2004/05/25 01:28:13 ken3 Exp $
+ * $Id: squatter.c,v 1.12.2.5 2006/03/31 19:22:28 murch Exp $
  */
 
 /*
@@ -109,6 +109,7 @@ int imapd_exists;
 struct protstream *imapd_out = NULL;
 struct auth_state *imapd_authstate = NULL;
 char *imapd_userid = NULL;
+int imapd_condstore_client = 0;
 void printastring(const char *s __attribute__((unused)))
 {
     fatal("not implemented", EC_SOFTWARE);

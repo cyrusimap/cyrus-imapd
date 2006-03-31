@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.102.2.13 2006/03/09 22:39:23 murch Exp $
+ * $Id: append.c,v 1.102.2.14 2006/03/31 19:22:11 murch Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -291,6 +291,7 @@ int append_commit(struct appendstate *as,
     /* Calculate new index header information */
     as->m.exists += as->nummsg;
     as->m.last_uid += as->nummsg;
+    if (as->m.options & OPT_IMAP_CONDSTORE) as->m.highestmodseq++;
     
     as->m.answered += as->numanswered;
     as->m.deleted += as->numdeleted;
@@ -550,6 +551,9 @@ int append_fromstage(struct appendstate *as, struct body **body,
 
     /* Setup */
     message_index.uid = mailbox->last_uid + as->nummsg + 1;
+    if (mailbox->options & OPT_IMAP_CONDSTORE) {
+	message_index.modseq = mailbox->highestmodseq + 1;
+    }
     message_index.last_updated = time(0);
     message_index.internaldate = internaldate;
     lseek(mailbox->cache_fd, 0L, SEEK_END);
@@ -703,6 +707,9 @@ int append_fromstream(struct appendstate *as, struct body **body,
     zero_index(message_index);
     /* Setup */
     message_index.uid = mailbox->last_uid + as->nummsg + 1;
+    if (mailbox->options & OPT_IMAP_CONDSTORE) {
+	message_index.modseq = mailbox->highestmodseq + 1;
+    }
     message_index.last_updated = time(0);
     message_index.internaldate = internaldate;
     lseek(mailbox->cache_fd, 0L, SEEK_END);

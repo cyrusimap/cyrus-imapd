@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- * $Id: mailbox.h,v 1.77.2.12 2006/03/28 20:01:26 murch Exp $
+ * $Id: mailbox.h,v 1.77.2.13 2006/03/31 19:22:25 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -50,6 +50,7 @@
 #include "auth.h"
 #include "quota.h"
 #include "message_uuid.h"
+#include "byteorder64.h"
 
 
 #define BIT32_MAX 4294967295U
@@ -66,6 +67,11 @@ typedef unsigned short bit32;
 
 #ifdef HAVE_LONG_LONG_INT
 typedef unsigned long long int bit64;
+typedef unsigned long long int modseq_t;
+#define MODSEQ_FMT "%llu"
+#else 
+typedef unsigned long int modseq_t;
+#define MODSEQ_FMT "%lu"
 #endif
 
 #define MAX_MAILBOX_NAME 490
@@ -80,7 +86,7 @@ typedef unsigned long long int bit64;
 #define MAILBOX_FORMAT_NORMAL	0
 #define MAILBOX_FORMAT_NETNEWS	1
 
-#define MAILBOX_MINOR_VERSION	7
+#define MAILBOX_MINOR_VERSION	8
 #define MAILBOX_CACHE_MINOR_VERSION 2
 
 #define FNAME_HEADER "/cyrus.header"
@@ -146,9 +152,17 @@ struct mailbox {
 
     unsigned long options;
     unsigned long leaked_cache_records;
+    modseq_t highestmodseq;
 
-    /* future expansion -- won't need expand the header */
-    unsigned long spares[2];
+    /*
+     * future expansion -- won't need expand the header
+     *
+     * If the change to the index header change also includes a change
+     * to the index record, there is no benefit to using a spare.  In
+     * this case, just add a new field, and optionally add some more
+     * spares.
+     */
+    unsigned long spares[4];
 
     struct quota quota;
 
@@ -173,6 +187,7 @@ struct index_record {
     unsigned long content_lines;
     unsigned long cache_version;
     struct message_uuid uuid;
+    modseq_t modseq;
 };
 
 /* Offsets of index/expunge header fields */
@@ -193,8 +208,12 @@ struct index_record {
 #define OFFSET_FLAGGED 56
 #define OFFSET_MAILBOX_OPTIONS 60
 #define OFFSET_LEAKED_CACHE 64 /* Number of leaked records in cache file */
-#define OFFSET_SPARE1 68
-#define OFFSET_SPARE2 72
+#define OFFSET_HIGHESTMODSEQ_64 68 /* CONDSTORE (64-bit modseq) */
+#define OFFSET_HIGHESTMODSEQ 72    /* CONDSTORE (32-bit modseq) */
+#define OFFSET_SPARE0 76 /* Spares - only use these if the index */
+#define OFFSET_SPARE1 80 /*  record size remains the same */
+#define OFFSET_SPARE2 84 /*  (see note above about spares) */
+#define OFFSET_SPARE3 88
 
 /* Offsets of index_record fields in index/expunge file */
 #define OFFSET_UID 0
@@ -210,9 +229,11 @@ struct index_record {
 #define OFFSET_CONTENT_LINES (OFFSET_USER_FLAGS+MAX_USER_FLAGS/8) /* added for nntpd */
 #define OFFSET_CACHE_VERSION OFFSET_CONTENT_LINES+sizeof(bit32)
 #define OFFSET_MESSAGE_UUID OFFSET_CACHE_VERSION+sizeof(bit32)
+#define OFFSET_MODSEQ_64 (OFFSET_MESSAGE_UUID+MESSAGE_UUID_PACKED_SIZE) /* CONDSTORE (64-bit modseq) */
+#define OFFSET_MODSEQ (OFFSET_MODSEQ_64+sizeof(bit32)) /* CONDSTORE (32-bit modseq) */
 
-#define INDEX_HEADER_SIZE (OFFSET_SPARE2+sizeof(bit32))
-#define INDEX_RECORD_SIZE (OFFSET_MESSAGE_UUID+MESSAGE_UUID_PACKED_SIZE)
+#define INDEX_HEADER_SIZE (OFFSET_SPARE3+sizeof(bit32))
+#define INDEX_RECORD_SIZE (OFFSET_MODSEQ+sizeof(bit32))
 
 /* Number of fields in an individual message's cache record */
 #define NUM_CACHE_FIELDS 10
@@ -223,6 +244,7 @@ struct index_record {
 #define FLAG_DRAFT (1<<3)
 
 #define OPT_POP3_NEW_UIDL (1<<0)	/* added for Outlook stupidity */
+#define OPT_IMAP_CONDSTORE (1<<1)	/* added for CONDSTORE extension */
 
 
 struct mailbox_header_cache {

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: unexpunge.c,v 1.1.2.4 2005/05/03 01:32:14 ken3 Exp $
+ * $Id: unexpunge.c,v 1.1.2.5 2006/03/31 19:22:28 murch Exp $
  */
 
 #include <config.h>
@@ -57,7 +57,6 @@
 #include <signal.h>
 
 #include "annotate.h"
-#include "byteorder64.h"
 #include "cyrusdb.h"
 #include "duplicate.h"
 #include "exitcodes.h"

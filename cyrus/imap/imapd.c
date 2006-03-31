@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.76 2006/03/23 17:01:55 murch Exp $ */
+/* $Id: imapd.c,v 1.443.2.77 2006/03/31 19:22:12 murch Exp $ */
 
 #include <config.h>
 
@@ -151,6 +151,7 @@ static char *imapd_magicplus = NULL;
 struct auth_state *imapd_authstate = 0;
 static int imapd_userisadmin = 0;
 static int imapd_userisproxyadmin = 0;
+int imapd_condstore_client = 0;
 static sasl_conn_t *imapd_saslconn; /* the sasl connection context */
 static int imapd_starttls_done = 0; /* have we done a successful starttls? */
 const char *plaintextloginalert = NULL;
@@ -209,7 +210,7 @@ void cmd_close(char *tag);
 void cmd_fetch(char *tag, char *sequence, int usinguid);
 void cmd_partial(const char *tag, const char *msgno, char *data,
 		 const char *start, const char *count);
-void cmd_store(char *tag, char *sequence, char *operation, int usinguid);
+void cmd_store(char *tag, char *sequence, int usinguid);
 void cmd_search(char *tag, int usinguid);
 void cmd_sort(char *tag, int usinguid);
 void cmd_thread(char *tag, int usinguid);
@@ -581,6 +582,7 @@ static void imapd_reset(void)
     }
     imapd_userisadmin = 0;
     imapd_userisproxyadmin = 0;
+    imapd_condstore_client = 0;
     if (imapd_saslconn) {
 	sasl_dispose(&imapd_saslconn);
 	imapd_saslconn = NULL;
@@ -1092,8 +1094,7 @@ void cmdloop()
 		if (c != ' ') goto missingargs;
 		c = getastring(imapd_in, imapd_out, &arg1);
 		if (c == EOF) goto missingargs;
-		if (c == '\r') c = prot_getc(imapd_in);
-		if (c != '\n') goto extraargs;
+		prot_ungetc(c, imapd_in);
 
 		cmd_select(tag.s, cmd.s, arg1.s);
 
@@ -1222,8 +1223,7 @@ void cmdloop()
 		if (c != ' ') goto missingargs;
 		c = getastring(imapd_in, imapd_out, &arg1);
 		if (c == EOF) goto missingargs;
-		if (c == '\r') c = prot_getc(imapd_in);
-		if (c != '\n') goto extraargs;
+		prot_ungetc(c, imapd_in);
 
 		cmd_select(tag.s, cmd.s, arg1.s);
 
@@ -1636,10 +1636,8 @@ void cmdloop()
 	    store:
 		c = getword(imapd_in, &arg1);
 		if (c != ' ' || !imparse_issequence(arg1.s)) goto badsequence;
-		c = getword(imapd_in, &arg2);
-		if (c != ' ') goto missingargs;
 
-		cmd_store(tag.s, arg1.s, arg2.s, usinguid);
+		cmd_store(tag.s, arg1.s, usinguid);
 
 		snmp_increment(STORE_COUNT, 1);
 	    }
@@ -1647,8 +1645,7 @@ void cmdloop()
 		if (c != ' ') goto missingargs;
 		c = getastring(imapd_in, imapd_out, &arg1);
 		if (c == EOF) goto missingargs;
-		if (c == '\r') c = prot_getc(imapd_in);
-		if (c != '\n') goto extraargs;
+		prot_ungetc(c, imapd_in);
 
 		cmd_select(tag.s, cmd.s, arg1.s);
 
@@ -3232,6 +3229,7 @@ void cmd_append(char *tag, char *name, const char *cur_name)
  */
 void cmd_select(char *tag, char *cmd, char *name)
 {
+    int c;
     struct mailbox mailbox;
     char mailboxname[MAX_MAILBOX_NAME+1];
     int r = 0;
@@ -3242,6 +3240,48 @@ void cmd_select(char *tag, char *cmd, char *name)
     struct backend *backend_next = NULL;
     static char lastqr[MAX_MAILBOX_PATH+1] = "";
     static time_t nextalert = 0;
+
+    c = prot_getc(imapd_in);
+    if (cmd[0] != 'B' && c == ' ') {
+	static struct buf arg;
+
+	c = prot_getc(imapd_in);
+	if (c != '(') goto badlist;
+
+	c = getword(imapd_in, &arg);
+	if (arg.s[0] == '\0') goto badlist;
+	for (;;) {
+	    lcase(arg.s);
+	    if (!strcmp(arg.s, "condstore")) {
+		imapd_condstore_client = 1;
+	    }
+	    else {
+		prot_printf(imapd_out, "%s BAD Invalid %s modifier %s\r\n",
+			    tag, cmd, arg.s);
+		eatline(imapd_in, c);
+		return;
+	    }
+	    
+	    if (c == ' ') c = getword(imapd_in, &arg);
+	    else break;
+	}
+
+	if (c != ')') {
+	    prot_printf(imapd_out,
+			"%s BAD Missing close parenthesis in %s\r\n", tag, cmd);
+	    eatline(imapd_in, c);
+	    return;
+	}
+
+	c = prot_getc(imapd_in);
+    }
+    if (c == '\r') c = prot_getc(imapd_in);
+    if (c != '\n') {
+	prot_printf(imapd_out,
+		    "%s BAD Unexpected extra arguments to %s\r\n", tag, cmd);
+	eatline(imapd_in, c);
+	return;
+    }
 
     if (imapd_mailbox) {
 	index_closemailbox(imapd_mailbox);
@@ -3404,6 +3444,11 @@ void cmd_select(char *tag, char *cmd, char *name)
 
     proc_register("imapd", imapd_clienthost, imapd_userid, mailboxname);
     syslog(LOG_DEBUG, "open: user %s opened %s", imapd_userid, name);
+    return;
+
+ badlist:
+    prot_printf(imapd_out, "%s BAD Invalid modifier list in %s\r\n", tag, cmd);
+    eatline(imapd_in, c);
 }
 	  
 /*
@@ -3759,6 +3804,13 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 	    else goto badatt;
 	    break;
 
+	case 'M':
+	    if ((imapd_mailbox->options & OPT_IMAP_CONDSTORE) &&
+		!strcmp(fetchatt.s, "MODSEQ")) {
+		fetchitems |= FETCH_MODSEQ;
+	    }
+	    else goto badatt;
+	    break;
 	case 'R':
 	    if (!strcmp(fetchatt.s, "RFC822")) {
 		fetchitems |= FETCH_RFC822|FETCH_SETSEEN;
@@ -3852,9 +3904,56 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
     if (inlist && c == ')') {
 	inlist = 0;
 	c = prot_getc(imapd_in);
+	if (c == ' ') {
+	    /* Grab/parse the modifier(s) */
+	    c = prot_getc(imapd_in);
+	    if (c != '(') {
+		prot_printf(imapd_out,
+			    "%s BAD Missing required open parenthesis in %s modifiers\r\n",
+			    tag, cmd);
+		eatline(imapd_in, c);
+		goto freeargs;
+	    }
+	    inlist = 1;
+	    do {
+		c = getword(imapd_in, &fetchatt);
+		ucase(fetchatt.s);
+		if ((imapd_mailbox->options & OPT_IMAP_CONDSTORE) &&
+		    !strcmp(fetchatt.s, "CHANGEDSINCE")) {
+		    if (c != ' ') {
+			prot_printf(imapd_out,
+				    "%s BAD Missing required argument to %s %s\r\n",
+				    tag, cmd, fetchatt.s);
+			eatline(imapd_in, c);
+			goto freeargs;
+		    }
+		    c = getastring(imapd_in, imapd_out, &fieldname);
+		    fetchargs.changedsince = strtoul(fieldname.s, &p, 10);
+		    if (*p || fetchargs.changedsince == ULONG_MAX) {
+			prot_printf(imapd_out,
+				    "%s BAD Invalid argument to %s %s\r\n",
+				    tag, cmd, fetchatt.s);
+			eatline(imapd_in, c);
+			goto freeargs;
+		    }
+		    fetchitems |= FETCH_MODSEQ;
+		}
+		else {
+		    prot_printf(imapd_out, "%s BAD Invalid %s modifier %s\r\n",
+				tag, cmd, fetchatt.s);
+		    eatline(imapd_in, c);
+		    goto freeargs;
+		}
+	    } while (c == ' ');
+	    if (c == ')') {
+		inlist = 0;
+		c = prot_getc(imapd_in);
+	    }
+	}
     }
     if (inlist) {
-	prot_printf(imapd_out, "%s BAD Missing close parenthesis in %s\r\n", tag, cmd);
+	prot_printf(imapd_out, "%s BAD Missing close parenthesis in %s\r\n",
+		    tag, cmd);
 	eatline(imapd_in, c);
 	goto freeargs;
     }
@@ -3870,6 +3969,12 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 	!fetchargs.headers && !fetchargs.headers_not) {
 	prot_printf(imapd_out, "%s BAD Missing required argument to %s\r\n", tag, cmd);
 	goto freeargs;
+    }
+
+    if (fetchitems & FETCH_MODSEQ) {
+	if (!imapd_condstore_client++)
+	    prot_printf(imapd_out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "]  \r\n",
+			imapd_mailbox->highestmodseq);
     }
 
     if (usinguid || config_getswitch(IMAPOPT_FLUSHSEENSTATE)) {
@@ -4041,13 +4146,13 @@ void cmd_partial(const char *tag, const char *msgno, char *data,
 /*
  * Parse and perform a STORE/UID STORE command
  * The command has been parsed up to and including
- * the FLAGS/+FLAGS/-FLAGS
+ * the sequence
  */
-void cmd_store(char *tag, char *sequence, char *operation, int usinguid)
+void cmd_store(char *tag, char *sequence, int usinguid)
 {
     const char *cmd = usinguid ? "UID Store" : "Store";
     struct storeargs storeargs;
-    static struct buf flagname;
+    static struct buf operation, flagname;
     int len, c;
     char **flag = 0;
     int nflags = 0, flagalloc = 0;
@@ -4064,22 +4169,84 @@ void cmd_store(char *tag, char *sequence, char *operation, int usinguid)
 
     /* local mailbox */
     memset(&storeargs, 0, sizeof storeargs);
+    storeargs.unchangedsince = ULONG_MAX;
 
-    lcase(operation);
+    c = prot_getc(imapd_in);
+    if (c == '(') {
+	/* Grab/parse the modifier(s) */
+	static struct buf storemod, modvalue;
+	char *p;
 
-    len = strlen(operation);
-    if (len > 7 && !strcmp(operation+len-7, ".silent")) {
+	do {
+	    c = getword(imapd_in, &storemod);
+	    lcase(storemod.s);
+	    if ((imapd_mailbox->options & OPT_IMAP_CONDSTORE) &&
+		!strcmp(storemod.s, "unchangedsince")) {
+		if (c != ' ') {
+		    prot_printf(imapd_out,
+				"%s BAD Missing required argument to %s %s\r\n",
+				tag, cmd, storemod.s);
+		    eatline(imapd_in, c);
+		    return;
+		}
+		c = getastring(imapd_in, imapd_out, &modvalue);
+		storeargs.unchangedsince = strtoul(modvalue.s, &p, 10);
+		if (*p || storeargs.unchangedsince == ULONG_MAX) {
+		    prot_printf(imapd_out,
+				"%s BAD Invalid argument to %s %s\r\n",
+				tag, cmd, storemod.s);
+		    eatline(imapd_in, c);
+		    return;
+		}
+	    }
+	    else {
+		prot_printf(imapd_out, "%s BAD Invalid %s modifier %s\r\n",
+			    tag, cmd, storemod.s);
+		eatline(imapd_in, c);
+		return;
+	    }
+	} while (c == ' ');
+	if (c != ')') {
+	    prot_printf(imapd_out,
+			"%s BAD Missing close paren in store modifier entry \r\n",
+			tag);
+	    eatline(imapd_in, c);
+	    return;
+	}
+	c = prot_getc(imapd_in);
+	if (c != ' ') {
+	    prot_printf(imapd_out,
+			"%s BAD Missing required argument to %s\r\n",
+			tag, cmd);
+	    eatline(imapd_in, c);
+	    return;
+	}
+    }
+    else
+	prot_ungetc(c, imapd_in);
+
+    c = getword(imapd_in, &operation);
+    if (c != ' ') {
+	prot_printf(imapd_out,
+		    "%s BAD Missing required argument to %s\r\n", tag, cmd);
+	eatline(imapd_in, c);
+	return;
+    }
+    lcase(operation.s);
+
+    len = strlen(operation.s);
+    if (len > 7 && !strcmp(operation.s+len-7, ".silent")) {
 	storeargs.silent = 1;
-	operation[len-7] = '\0';
+	operation.s[len-7] = '\0';
     }
     
-    if (!strcmp(operation, "+flags")) {
+    if (!strcmp(operation.s, "+flags")) {
 	storeargs.operation = STORE_ADD;
     }
-    else if (!strcmp(operation, "-flags")) {
+    else if (!strcmp(operation.s, "-flags")) {
 	storeargs.operation = STORE_REMOVE;
     }
-    else if (!strcmp(operation, "flags")) {
+    else if (!strcmp(operation.s, "flags")) {
 	storeargs.operation = STORE_REPLACE;
     }
     else {
@@ -4160,6 +4327,11 @@ void cmd_store(char *tag, char *sequence, char *operation, int usinguid)
 	prot_printf(imapd_out, "%s BAD Unexpected extra arguments to %s\r\n", tag, cmd);
 	eatline(imapd_in, c);
 	goto freeflags;
+    }
+
+    if ((storeargs.unchangedsince != ULONG_MAX) && !imapd_condstore_client++) {
+	prot_printf(imapd_out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "]  \r\n",
+		    imapd_mailbox->highestmodseq);
     }
 
     r = index_store(imapd_mailbox, sequence, usinguid, &storeargs,
@@ -6512,6 +6684,9 @@ void cmd_status(char *tag, char *name)
 	else if (!strcmp(arg.s, "unseen")) {
 	    statusitems |= STATUS_UNSEEN;
 	}
+	else if (!strcmp(arg.s, "highestmodseq")) {
+	    statusitems |= STATUS_HIGHESTMODSEQ;
+	}
 	else {
 	    prot_printf(imapd_out, "%s BAD Invalid Status attribute %s\r\n",
 			tag, arg.s);
@@ -6553,7 +6728,11 @@ void cmd_status(char *tag, char *name)
     }
 
     if (!r) {
-	r = index_status(&mailbox, name, statusitems);
+	if (!(mailbox.options & OPT_IMAP_CONDSTORE)) {
+	    /* mailbox doesn't support CONDSTORE, so remove the status item */
+	    statusitems &= ~STATUS_HIGHESTMODSEQ;
+	}
+	if (statusitems) r = index_status(&mailbox, name, statusitems);
     }
 
     if (doclose) mailbox_close(&mailbox);
@@ -7285,6 +7464,19 @@ int parsecharset;
 	    }
 	    if (!arg.s || *p) goto badnumber;
 	    if (size > searchargs->larger) searchargs->larger = size;
+	}
+	else goto badcri;
+	break;
+
+    case 'm':
+	if ((imapd_mailbox->options & OPT_IMAP_CONDSTORE) &&
+	    !strcmp(criteria.s, "modseq")) {
+	    if (c != ' ') goto missingarg;		
+	    c = getword(imapd_in, &arg);
+	    for (p = arg.s; *p && isdigit((int) *p); p++) {
+		searchargs->modseq = searchargs->modseq * 10 + *p - '0';
+	    }
+	    if (!arg.s || *p) goto badnumber;
 	}
 	else goto badcri;
 	break;
@@ -8455,6 +8647,9 @@ int getsortcriteria(char *tag, struct sortcrit **sortcrit)
 	    (*sortcrit)[n].args.annot.attrib = xstrdup(arg.s);
 	}
 #endif
+	else if ((imapd_mailbox->options & OPT_IMAP_CONDSTORE) &&
+		 !strcmp(criteria.s, "modseq"))
+	    (*sortcrit)[n].key = SORT_MODSEQ;
 	else {
 	    prot_printf(imapd_out, "%s BAD Invalid Sort criterion %s\r\n",
 			tag, criteria.s);

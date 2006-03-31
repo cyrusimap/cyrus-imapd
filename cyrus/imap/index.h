@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.h,v 1.9.2.5 2005/11/17 15:46:28 murch Exp $
+ * $Id: index.h,v 1.9.2.6 2006/03/31 19:22:24 murch Exp $
  */
 
 /* Header for internal usage of index.c + programs that make raw access
@@ -79,6 +79,11 @@
 #define USER_FLAGS(msgno,i) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_USER_FLAGS+((i)*4))))
 #define CONTENT_LINES(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_CONTENT_LINES)))
 #define CACHE_VERSION(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_CACHE_VERSION)))
+#ifdef HAVE_LONG_LONG_INT
+#define MODSEQ(msgno) ntohll(*((bit64 *)(INDEC_OFFSET(msgno)+OFFSET_MODSEQ_64)))
+#else
+#define MODSEQ(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_MODSEQ)))
+#endif
 
 /* Access assistance macros for memory-mapped cache file data */
 /* CACHE_ITEM_BIT32: Convert to host byte order */

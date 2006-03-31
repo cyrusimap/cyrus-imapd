@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: mbexamine.c,v 1.5.2.8 2006/03/28 20:01:26 murch Exp $ */
+/* $Id: mbexamine.c,v 1.5.2.9 2006/03/31 19:22:26 murch Exp $ */
 
 #include <config.h>
 
@@ -121,8 +121,8 @@ int main(int argc, char **argv)
 /*    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE); */
 
     /* Ensure we're up-to-date on the index file format */
-    assert(INDEX_HEADER_SIZE == (OFFSET_SPARE2+4));
-    assert(INDEX_RECORD_SIZE == (OFFSET_MESSAGE_UUID+MESSAGE_UUID_PACKED_SIZE));
+    assert(INDEX_HEADER_SIZE == (OFFSET_SPARE3+4));
+    assert(INDEX_RECORD_SIZE == (OFFSET_MODSEQ+4));
 
     while ((opt = getopt(argc, argv, "C:u:s:")) != EOF) {
 	switch (opt) {
@@ -282,11 +282,18 @@ int do_examine(char *name,
 	    if (mailbox.options & OPT_POP3_NEW_UIDL) {
 		printf(" POP3_NEW_UIDL");
 	    }
+	    if (mailbox.options & OPT_IMAP_CONDSTORE) {
+		printf(" IMAP_CONDSTORE");
+	    }
 	}
 	printf("\n");
     }
     printf("  Last POP3 Login: (%ld) %s", mailbox.pop3_last_login,
 	   ctime(&mailbox.pop3_last_login));
+    if (mailbox.minor_version >= 8) {
+	printf("  Highest Mod Sequence: " MODSEQ_FMT "\n",
+	       mailbox.highestmodseq);
+    }
 
     printf("\n Message Info:\n");
 
@@ -317,6 +324,10 @@ int do_examine(char *name,
 
 	if (mailbox.minor_version >= 6)
 	    printf(" CACHEVER:%-6d", CACHE_VERSION(i));
+
+	if (mailbox.minor_version >= 8) {
+	    printf(" MODSEQ:" MODSEQ_FMT, MODSEQ(i));
+	}
 
 	printf("\n");
 

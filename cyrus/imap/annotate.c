@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.16.2.13 2005/10/19 14:50:04 ken3 Exp $
+ * $Id: annotate.c,v 1.16.2.14 2006/03/31 19:22:10 murch Exp $
  */
 
 #include <config.h>
@@ -859,6 +859,61 @@ static void annotation_get_lastpop(const char *int_mboxname,
     output_entryatt(ext_mboxname, entry, "", &attrib, fdata);
 }
 
+static void annotation_get_condstore(const char *int_mboxname,
+				     const char *ext_mboxname,
+				     const char *entry,
+				     struct fetchdata *fdata,
+				     struct mailbox_annotation_rock *mbrock,
+				     void *rock __attribute__((unused)))
+{ 
+    struct mailbox mailbox;
+    int r = 0;
+    char value[40];
+    struct annotation_data attrib;
+  
+    if(!int_mboxname || !ext_mboxname || !fdata || !mbrock)
+
+      fatal("annotation_get_condstore called with bad parameters",
+              EC_TEMPFAIL);
+
+    get_mb_data(int_mboxname, mbrock);
+
+    /* Check ACL */
+    if(!fdata->isadmin &&
+       (!mbrock->acl ||
+      !(cyrus_acl_myrights(fdata->auth_state, mbrock->acl) & ACL_LOOKUP) ||
+      !(cyrus_acl_myrights(fdata->auth_state, mbrock->acl) & ACL_READ)))
+      return;
+
+
+    if (mailbox_open_header(int_mboxname, 0, &mailbox) != 0)
+      return;
+
+    if (!r) {
+      r = mailbox_open_index(&mailbox);
+    }
+
+    if (!r) {
+      if (mailbox.options & OPT_IMAP_CONDSTORE) {
+          strcpy(value, "true");
+      } else {
+          strcpy(value, "false");
+      }
+    }
+
+    mailbox_close(&mailbox);
+
+    if (r) return;
+
+    memset(&attrib, 0, sizeof(attrib));
+
+    attrib.value = value;
+    attrib.size = strlen(value);
+    attrib.contenttype = "text/plain";
+
+    output_entryatt(ext_mboxname, entry, "", &attrib, fdata);
+}
+
 struct rw_rock {
     const char *ext_mboxname;
     struct fetchdata *fdata;
@@ -949,6 +1004,8 @@ const struct annotate_f_entry mailbox_ro_entries[] =
       annotation_get_lastupdate, NULL },
     { "/vendor/cmu/cyrus-imapd/lastpop", BACKEND_ONLY,
       annotation_get_lastpop, NULL },
+    { "/vendor/cmu/cyrus-imapd/condstore", BACKEND_ONLY,
+      annotation_get_condstore, NULL },
     { NULL, ANNOTATION_PROXY_T_INVALID, NULL, NULL }
 };
 
@@ -1625,6 +1682,43 @@ static int annotation_set_todb(const char *int_mboxname,
     return r;
 }
 
+static int annotation_set_condstore(const char *int_mboxname,
+				    struct annotate_st_entry_list *entry,
+				    struct storedata *sdata,
+				    struct mailbox_annotation_rock *mbrock,
+				    void *rock __attribute__((unused)))
+{
+    struct mailbox mailbox;
+    int r = 0;
+  
+    /* Check ACL */
+    if(!sdata->isadmin &&
+       (!mbrock->acl ||
+	!(cyrus_acl_myrights(sdata->auth_state, mbrock->acl) & ACL_LOOKUP) ||
+	!(cyrus_acl_myrights(sdata->auth_state, mbrock->acl) & ACL_WRITE))) {
+	return;
+    }
+
+    r = mailbox_open_header(int_mboxname, 0, &mailbox);
+    if (!r) r = mailbox_open_index(&mailbox);
+    if (!r) r = mailbox_lock_index(&mailbox);
+
+    if (!r) {
+	if (!strcmp(entry->shared.value, "true")) {
+	    mailbox.options |= OPT_IMAP_CONDSTORE;
+	} else {
+	    mailbox.options &= ~OPT_IMAP_CONDSTORE;
+	}
+
+	r = mailbox_write_index_header(&mailbox);
+    }
+
+    mailbox_close(&mailbox);
+
+    return r;
+
+}
+
 const struct annotate_st_entry server_entries[] =
 {
     { "/comment", ATTRIB_TYPE_STRING, PROXY_AND_BACKEND,
@@ -1683,6 +1777,9 @@ const struct annotate_st_entry mailbox_rw_entries[] =
     { "/vendor/cmu/cyrus-imapd/sieve", ATTRIB_TYPE_STRING, BACKEND_ONLY,
       ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
       ACL_ADMIN, annotation_set_todb, NULL },
+    { "/vendor/cmu/cyrus-imapd/condstore", ATTRIB_TYPE_BOOLEAN, BACKEND_ONLY,
+      ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
+      ACL_ADMIN, annotation_set_condstore, NULL },
     { NULL, 0, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL }
 };
 

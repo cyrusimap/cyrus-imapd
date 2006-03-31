@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.81.2.18 2006/03/28 20:01:27 murch Exp $ */
+/* $Id: reconstruct.c,v 1.81.2.19 2006/03/31 19:22:27 murch Exp $ */
 
 #include <config.h>
 
@@ -94,7 +94,6 @@
 #include "retry.h"
 #include "convert_code.h"
 #include "util.h"
-#include "byteorder64.h"
 
 extern int optind;
 extern char *optarg;
@@ -139,8 +138,8 @@ int main(int argc, char **argv)
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
     /* Ensure we're up-to-date on the index file format */
-    assert(INDEX_HEADER_SIZE == (OFFSET_SPARE2+4));
-    assert(INDEX_RECORD_SIZE == (OFFSET_MESSAGE_UUID+MESSAGE_UUID_PACKED_SIZE));
+    assert(INDEX_HEADER_SIZE == (OFFSET_SPARE3+4));
+    assert(INDEX_RECORD_SIZE == (OFFSET_MODSEQ+4));
 
     while ((opt = getopt(argc, argv, "C:p:rmfx")) != EOF) {
 	switch (opt) {
@@ -536,6 +535,7 @@ int reconstruct(char *name, struct discovered *found)
 	/* If we can't read the index, assume new UIDL so that stupid clients
 	   will retrieve all of the messages in the mailbox. */
 	mailbox.options = OPT_POP3_NEW_UIDL;
+	mailbox.highestmodseq = 1;
     }
     else {
 	(void) mailbox_lock_index(&mailbox);
@@ -713,6 +713,7 @@ int reconstruct(char *name, struct discovered *found)
 	if (old_index.uid == uid[msg]) {
 	    /* Use data in old index file, subject to validity checks */
 	    message_index.internaldate = old_index.internaldate;
+	    message_index.modseq = old_index.modseq;
 	    message_index.system_flags = old_index.system_flags &
 	      (FLAG_ANSWERED|FLAG_FLAGGED|FLAG_DELETED|FLAG_DRAFT);
 	    for (i = 0; i < MAX_USER_FLAGS/32; i++) {
@@ -730,8 +731,13 @@ int reconstruct(char *name, struct discovered *found)
 	    mailbox.options |= OPT_POP3_NEW_UIDL;
             /* Wipe the Message UUID */
             message_uuid_set_null(&message_index.uuid);
+	    /* If we are recovering a message, reset MODSEQ */
+	    message_index.modseq = 1;
 	}
 	message_index.last_updated = time(0);
+	if (message_index.modseq > mailbox.highestmodseq) {
+	    mailbox.highestmodseq = message_index.modseq;
+	}
 	
 	if (((r = message_parse_file(msgfile, NULL, NULL, &body)) != 0) ||
 	    ((r = message_create_record(&mailbox, &message_index, body)) != 0)) {
@@ -775,6 +781,7 @@ int reconstruct(char *name, struct discovered *found)
     if (mailbox.uidvalidity == 0 || mailbox.uidvalidity > time(0)) {
 	mailbox.uidvalidity = time(0);
     }
+
     free(uid);
     *((bit32 *)(buf+OFFSET_GENERATION_NO)) = htonl(mailbox.generation_no + 1);
     *((bit32 *)(buf+OFFSET_FORMAT)) = htonl(mailbox.format);
@@ -801,8 +808,17 @@ int reconstruct(char *name, struct discovered *found)
     *((bit32 *)(buf+OFFSET_FLAGGED)) = htonl(new_flagged);
     *((bit32 *)(buf+OFFSET_MAILBOX_OPTIONS)) = htonl(mailbox.options);
     *((bit32 *)(buf+OFFSET_LEAKED_CACHE)) = htonl(0);
-
-    message_uuid_pack(&message_index.uuid, buf+OFFSET_MESSAGE_UUID);
+#ifdef HAVE_LONG_LONG_INT
+    *((bit64 *)(buf+OFFSET_HIGHESTMODSEQ_64)) = htonll(mailbox.highestmodseq);
+#else
+    /* zero the unused 32bits */
+    *((bit32 *)(buf+OFFSET_HIGHESTMODSEQ_64)) = htonl(0);
+    *((bit32 *)(buf+OFFSET_HIGHESTMODSEQ)) = htonl(mailbox.highestmodseq);
+#endif
+    *((bit32 *)(buf+OFFSET_SPARE0)) = htonl(0); /* RESERVED */
+    *((bit32 *)(buf+OFFSET_SPARE1)) = htonl(0); /* RESERVED */
+    *((bit32 *)(buf+OFFSET_SPARE2)) = htonl(0); /* RESERVED */
+    *((bit32 *)(buf+OFFSET_SPARE3)) = htonl(0); /* RESERVED */
 
     n = fwrite(buf, 1, INDEX_HEADER_SIZE, newindex);
     fflush(newindex);

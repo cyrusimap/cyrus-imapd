@@ -1,5 +1,5 @@
 /* imapd.h -- Common state for IMAP daemon
- * $Id: imapd.h,v 1.55.2.3 2005/06/02 16:16:13 ken3 Exp $
+ * $Id: imapd.h,v 1.55.2.4 2006/03/31 19:22:21 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -58,6 +58,9 @@ extern struct auth_state *imapd_authstate;
 /* Number of messages in currently open mailbox */
 extern int imapd_exists;
 
+/* Is client CONDSTORE-aware? */
+extern int imapd_condstore_client;
+
 /* List of HEADER.FIELDS[.NOT] fetch specifications */
 struct fieldlist {
     char *section;		/* First part of BODY[x] value */
@@ -69,15 +72,16 @@ struct fieldlist {
 
 /* Items that may be fetched */
 struct fetchargs {
-    int fetchitems;		/* Bitmask */
-    struct strlist *binsections; /* BINARY[x]<x> values */
+    int fetchitems;		  /* Bitmask */
+    struct strlist *binsections;  /* BINARY[x]<x> values */
     struct strlist *sizesections; /* BINARY.SIZE[x] values */
     struct strlist *bodysections; /* BODY[x]<x> values */
     struct fieldlist *fsections;  /* BODY[xHEADER.FIELDSx]<x> values */
-    struct strlist *headers;	/* RFC822.HEADER.LINES */
-    struct strlist *headers_not; /* RFC822.HEADER.LINES.NOT */
-    int start_octet;           /* start_octet for partial fetch */
-    int octet_count;           /* octet_count for partial fetch, or 0 */
+    struct strlist *headers;	  /* RFC822.HEADER.LINES */
+    struct strlist *headers_not;  /* RFC822.HEADER.LINES.NOT */
+    int start_octet;              /* start_octet for partial fetch */
+    int octet_count;              /* octet_count for partial fetch, or 0 */
+    modseq_t changedsince;        /* changed since modseq, or 0 */
 
     bit32 cache_atleast;          /* to do headers we need atleast this
 				   * cache version */
@@ -103,7 +107,8 @@ enum {
     FETCH_RFC822 =              (1<<9),
     FETCH_SETSEEN =             (1<<10),
 /*     FETCH_UNCACHEDHEADER =      (1<<11) -- obsolete */
-    FETCH_IS_PARTIAL =          (1<<12) /* this is the PARTIAL command */
+    FETCH_IS_PARTIAL =          (1<<12), /* this is the PARTIAL command */
+    FETCH_MODSEQ =		(1<<13)
 };
 
 enum {
@@ -115,6 +120,7 @@ enum {
 /* Arguments to Store functions */
 struct storeargs {
     int operation;
+    modseq_t unchangedsince; /* unchanged since modseq, or ULLONG_MAX */
     int silent;
     int seen;
     bit32 system_flags;
@@ -174,6 +180,7 @@ struct searchargs {
     struct strlist *text;
     struct strlist *header_name, *header;
     struct searchsub *sublist;
+    modseq_t modseq;
 
     bit32 cache_atleast;
 };
@@ -200,7 +207,8 @@ enum {
     SORT_SIZE,
     SORT_SUBJECT,
     SORT_TO,
-    SORT_ANNOTATION
+    SORT_ANNOTATION,
+    SORT_MODSEQ
     /* values > 255 are reserved for internal use */
 };
 
@@ -213,7 +221,8 @@ enum {
     STATUS_RECENT =		(1<<1),
     STATUS_UIDNEXT =		(1<<2),
     STATUS_UIDVALIDITY =	(1<<3),
-    STATUS_UNSEEN =		(1<<4)
+    STATUS_UNSEEN =		(1<<4),
+    STATUS_HIGHESTMODSEQ =	(1<<5)
 };
 
 /* Bitmask for list options */

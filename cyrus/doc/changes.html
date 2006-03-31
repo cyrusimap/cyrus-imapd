@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.71.2.42 2006/03/09 22:39:21 murch Exp $ -->
+<!-- $Id: changes.html,v 1.71.2.43 2006/03/31 19:22:08 murch Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -12,6 +12,9 @@
 <ul> 
 <li>Added support for BINARY APPEND (including CATENATE).
 <i>Based on contributions from Tom Esh &lt;esh@lucent.com&gt;</i>.</li>
+<li>Added support for CONDSTORE (must be enabled on a per-mailbox
+basis with the <tt>/vendor/cmu/cyrus-imapd/condstore</tt> mailbox
+annotation.</li>
 <li>Fixed bug in reconstruct using bad name for cyrus.header.</li>
 <li>Fixed bug with replication and default partition.</li>
 </ul>
@@ -2105,7 +2108,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2006/03/09 22:39:21 $ <br />
+last modified: $Date: 2006/03/31 19:22:08 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>

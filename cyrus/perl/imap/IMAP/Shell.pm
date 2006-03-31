@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Shell.pm,v 1.31.2.6 2006/03/24 21:11:56 jeaton Exp $
+# $Id: Shell.pm,v 1.31.2.7 2006/03/31 19:22:35 murch Exp $
 #
 # A shell framework for Cyrus::IMAP::Admin
 #
@@ -126,7 +126,7 @@ my %builtins = (exit =>
 		  [\&_sc_info, '[mailbox]',
 		   'display mailbox/server metadata'],
 		mboxcfg =>
-		  [\&_sc_mboxcfg, 'mailbox [comment|news2mail|expire|sieve|squat] value',
+		  [\&_sc_mboxcfg, 'mailbox [comment|condstore|news2mail|expire|sieve|squat] value',
 		   'configure mailbox'],
 		mboxconfig => 'mboxcfg',
 		reconstruct =>
@@ -1424,7 +1424,7 @@ sub _sc_mboxcfg {
   while (defined ($opt = shift(@argv))) {
     last if $opt eq '--';
     if ($opt =~ /^-/) {
-      die "usage: mboxconfig mailbox [comment|news2mail|expire|sieve|squat] value\n";
+      die "usage: mboxconfig mailbox [comment|condstore|news2mail|expire|sieve|squat] value\n";
     }
     else {
       push(@nargv, $opt);
@@ -1433,7 +1433,7 @@ sub _sc_mboxcfg {
   }
   push(@nargv, @argv);
   if (@nargv < 2) {
-    die "usage: mboxconfig mailbox [comment|news2mail|expire|sieve|squat] value\n";
+    die "usage: mboxconfig mailbox [comment|condstore|news2mail|expire|sieve|squat] value\n";
   }
   if (!$cyrref || !$$cyrref) {
     die "mboxconfig: no connection to server\n";
@@ -1662,6 +1662,10 @@ The currently supported attributes are:
 =item C<comment>
 
 Sets a comment or description associated with the mailbox.
+
+=item C<condstore>
+
+Enables the IMAP CONDSTORE extension (modification sequences) on the mailbox.
 
 =item C<expire>
 

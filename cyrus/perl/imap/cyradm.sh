@@ -39,7 +39,7 @@
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 #
-# $Id: cyradm.sh,v 1.13.2.5 2006/02/07 18:57:20 murch Exp $
+# $Id: cyradm.sh,v 1.13.2.6 2006/03/31 19:22:29 murch Exp $
 case "x$BASH_VERSION" in
 x) exec perl -MCyrus::IMAP::Shell -e shell -- ${1+"$@"} ;;
 *) exec perl -MCyrus::IMAP::Shell -e shell -- "$@" ;;
@@ -211,6 +211,10 @@ The currently supported attributes are:
 =item C<comment>
 
 Sets a comment or description associated with the mailbox.
+
+=item C<condstore>
+
+Enables the IMAP CONDSTORE extension (modification sequences) on the mailbox.
 
 =item C<expire>
 

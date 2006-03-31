@@ -4,7 +4,7 @@
 
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-<meta name="revision" content="$Id: mailbox-format.html,v 1.3.2.6 2006/03/28 20:01:24 murch Exp $" />
+<meta name="revision" content="$Id: mailbox-format.html,v 1.3.2.7 2006/03/31 19:22:10 murch Exp $" />
 <meta name="author" content="Rob Siemborski" />
 
 <title>mailbox format</title>
@@ -179,11 +179,21 @@ following:
 <dd> Flag signalling that we're using
 "<em>uidvalidity</em>.<em>uid</em>" instead of just "<em>uid</em>" for
 the output of the POP3 UIDL command.</dd>
+
+<dt>IMAP_CONDSTORE</dt>
+
+<dd> Flag signalling that we're supporting the IMAP CONDSTORE
+extension on the mailbox.</dd>
 </dl>
 </dd>
 
 <dt>Leaked Cache (4 bytes)</dt> 
 <dd> Number of leaked records in the cache file.</dd>
+
+<dt>HighestModSeq (8 bytes)</dt>
+
+<dd> Highest Modification Sequence of all the messages in the
+mailbox (CONDSTORE).</dd>
 </dl>
 
 <p>
@@ -237,6 +247,9 @@ of the message.</p>
 
 <dt>UUID (MESSAGE_UUID_SIZE bytes)</dt>
 <dd>Universal UID of the message (used by replication code).</dd>
+
+<dt>MODSEQ (8 bytes)</dt>
+<dd>Modification Sequence of the message (CONDSTORE).</dd>
 </dl>
 
 <h3><tt>cyrus.cache</tt> file format detail</h3>
