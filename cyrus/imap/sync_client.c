@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.29 2005/12/13 15:31:09 murch Exp $
+ * $Id: sync_client.c,v 1.1.2.30 2006/04/04 18:10:54 murch Exp $
  */
 
 #include <config.h>
@@ -3137,6 +3137,26 @@ int do_daemon_work(const char *sync_log_file, const char *sync_shutdown_file,
     return(r);
 }
 
+struct backend *replica_connect(struct backend *be, const char *servername,
+				sasl_callback_t *cb)
+{
+    int wait;
+
+    for (wait = 15;; wait *= 2) {
+	be = backend_connect(be, servername, &protocol[PROTOCOL_CSYNC],
+			     "", cb, NULL);
+
+	if (be || wait > 1000) break;
+
+	fprintf(stderr,
+		"Can not connect to server '%s', retrying in %d seconds\n",
+		servername, wait);
+	sleep(wait);
+    }
+
+    return be;
+}
+
 void do_daemon(const char *sync_log_file, const char *sync_shutdown_file,
 	       unsigned long timeout, unsigned long min_delta,
 	       struct backend *be, sasl_callback_t *cb)
@@ -3169,9 +3189,8 @@ void do_daemon(const char *sync_log_file, const char *sync_shutdown_file,
         if (pid == 0) {
 	    if (be->sock == -1) {
 		/* Reopen up connection to server */
-		be = backend_connect(be, be->hostname,
-				     &protocol[PROTOCOL_CSYNC],
-				     "", cb, NULL);
+		be = replica_connect(be, be->hostname, cb);
+
 		if (!be) {
 		    fprintf(stderr, "Can not connect to server '%s'\n",
 			    be->hostname);
@@ -3355,8 +3374,8 @@ int main(int argc, char **argv)
 			  config_getstring(IMAPOPT_SYNC_PASSWORD));
 
     /* Open up connection to server */
-    be = backend_connect(NULL, servername, &protocol[PROTOCOL_CSYNC],
-			 "", cb, NULL);
+    be = replica_connect(NULL, servername, cb);
+
     if (!be) {
         fprintf(stderr, "Can not connect to server '%s'\n", servername);
         exit(1);
