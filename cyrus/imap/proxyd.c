@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: proxyd.c,v 1.199 2006/02/07 20:57:27 murch Exp $ */
+/* $Id: proxyd.c,v 1.200 2006/04/05 13:03:28 murch Exp $ */
 
 #include <config.h>
 
@@ -4253,13 +4253,13 @@ void cmd_getquotaroot(char *tag, char *name)
 						proxyd_userid, mailboxname);
     if (!r) r = mlookup(mailboxname, &server, NULL, NULL);
 
-    if(proxyd_userisadmin) {
+    if(!r && proxyd_userisadmin) {
 	/* If they are an admin, they won't retain that privledge if we
 	 * proxy for them, so we need to refer them -- even if they haven't
 	 * told us they're able to handle it. */
 	proxyd_refer(tag, server, name);
-    } else {
-	if (!r) s = proxyd_findserver(server);
+    } else if (!r) {
+	s = proxyd_findserver(server);
 
 	if (s) {
 	    prot_printf(s->out, "%s Getquotaroot {%d+}\r\n%s\r\n",
@@ -4268,11 +4268,10 @@ void cmd_getquotaroot(char *tag, char *name)
 	} else {
 	    r = IMAP_SERVER_UNAVAILABLE;
 	}
+    }
 
-	if (r) {
-	    prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
-	    return;
-	}
+    if (r) {
+	prot_printf(proxyd_out, "%s NO %s\r\n", tag, error_message(r));
     }
 }
 
