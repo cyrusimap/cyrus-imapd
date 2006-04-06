@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.43.2.6 2005/11/23 13:41:24 murch Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.43.2.7 2006/04/06 15:42:10 murch Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -187,7 +187,7 @@ static int dump_cb(void *rockp,
     switch (d->op) {
     case DUMP:
 	if(!d->partition || !strcmp(d->partition, part)) {
-	    printf("%s\t%s\t%s\n", name, part, acl);
+	    printf("%s\t%d %s\t%s\n", name, mbtype, part, acl);
 	    if(d->purge) {
 		config_mboxlist_db->delete(mbdb, key, keylen, &(d->tid), 0);
 	    }
@@ -491,7 +491,7 @@ void do_undump(void)
     while (fgets(buf, sizeof(buf), stdin)) {
 	char *name, *partition, *acl;
 	char *p;
-	int tries = 0;
+	int mbtype = 0, tries = 0;
 	
 	line++;
 
@@ -502,6 +502,12 @@ void do_undump(void)
 	    continue;
 	}
 	*p++ = '\0';
+	if (isdigit((int) *p)) {
+	    /* new style dump */
+	    mbtype = strtol(p, &p, 10);
+	    /* skip trailing space */
+	    if (*p == ' ') p++;
+	}
 	partition = p;
 	for (; *p && *p != '\t'; p++) ;
 	if (!*p) {
@@ -524,7 +530,7 @@ void do_undump(void)
 	}
 
 	key = name; keylen = strlen(key);
-	data = mboxlist_makeentry(0, partition, acl); datalen = strlen(data);
+	data = mboxlist_makeentry(mbtype, partition, acl); datalen = strlen(data);
 	
 	tries = 0;
     retry:
