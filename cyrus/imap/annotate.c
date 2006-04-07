@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.16.2.14 2006/03/31 19:22:10 murch Exp $
+ * $Id: annotate.c,v 1.16.2.15 2006/04/07 15:11:54 murch Exp $
  */
 
 #include <config.h>
@@ -816,11 +816,13 @@ static void annotation_get_lastpop(const char *int_mboxname,
     struct annotation_data attrib;
   
     if(!int_mboxname || !ext_mboxname || !fdata || !mbrock)
-
       fatal("annotation_get_lastpop called with bad parameters",
               EC_TEMPFAIL);
 
     get_mb_data(int_mboxname, mbrock);
+
+    /* Make sure its a local mailbox */
+    if (mbrock->server) return;
 
     /* Check ACL */
     if(!fdata->isadmin &&
@@ -872,11 +874,13 @@ static void annotation_get_condstore(const char *int_mboxname,
     struct annotation_data attrib;
   
     if(!int_mboxname || !ext_mboxname || !fdata || !mbrock)
-
       fatal("annotation_get_condstore called with bad parameters",
               EC_TEMPFAIL);
 
     get_mb_data(int_mboxname, mbrock);
+
+    /* Make sure its a local mailbox */
+    if (mbrock->server) return;
 
     /* Check ACL */
     if(!fdata->isadmin &&
