@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.167 2005/04/11 06:57:35 shadow Exp $
+ * $Id: pop3d.c,v 1.168 2006/04/07 19:58:25 murch Exp $
  */
 #include <config.h>
 
@@ -1027,15 +1027,18 @@ static void cmd_apop(char *response)
     /* failed authentication */
     if (sasl_result != SASL_OK)
     {
-	sleep(3);      
-		
-	prot_printf(popd_out, "-ERR [AUTH] authenticating: %s\r\n",
-		    sasl_errstring(sasl_result, NULL, NULL));
-
 	syslog(LOG_NOTICE, "badlogin: %s APOP (%s) %s",
 	       popd_clienthost, popd_apop_chal,
 	       sasl_errdetail(popd_saslconn));
 	
+	sleep(3);      
+		
+	/* Don't allow user probing */
+	if (sasl_result == SASL_NOUSER) sasl_result = SASL_BADAUTH;
+		
+	prot_printf(popd_out, "-ERR [AUTH] authenticating: %s\r\n",
+		    sasl_errstring(sasl_result, NULL, NULL));
+
 	return;
     }
 
@@ -1292,11 +1295,6 @@ void cmd_auth(char *arg)
 	    break;
 	default:
 	    /* failed authentication */
-	    sleep(3);
-		
-	    prot_printf(popd_out, "-ERR [AUTH] authenticating: %s\r\n",
-			sasl_errstring(sasl_result, NULL, NULL));
-
 	    if (authtype) {
 		syslog(LOG_NOTICE, "badlogin: %s %s %s",
 		       popd_clienthost, authtype,
@@ -1305,6 +1303,14 @@ void cmd_auth(char *arg)
 		syslog(LOG_NOTICE, "badlogin: %s %s",
 		       popd_clienthost, authtype);
 	    }
+
+	    sleep(3);
+		
+	    /* Don't allow user probing */
+	    if (sasl_result == SASL_NOUSER) sasl_result = SASL_BADAUTH;
+		
+	    prot_printf(popd_out, "-ERR [AUTH] authenticating: %s\r\n",
+			sasl_errstring(sasl_result, NULL, NULL));
 	}
 	
 	reset_saslconn(&popd_saslconn);
