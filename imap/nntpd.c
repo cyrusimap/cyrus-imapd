@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.51 2005/12/13 15:18:55 murch Exp $
+ * $Id: nntpd.c,v 1.52 2006/04/07 19:58:23 murch Exp $
  */
 
 /*
@@ -2140,13 +2140,16 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
 	    default:
 		code = 481;
 	    }
-	    errorstring = sasl_errstring(sasl_result, NULL, NULL);
 
 	    syslog(LOG_NOTICE, "badlogin: %s %s [%s]",
 		   nntp_clienthost, mech, sasl_errdetail(nntp_saslconn));
 
 	    sleep(3);
 
+	    /* Don't allow user probing */
+	    if (sasl_result == SASL_NOUSER) sasl_result = SASL_BADAUTH;
+
+	    errorstring = sasl_errstring(sasl_result, NULL, NULL);
 	    if (errorstring) {
 		prot_printf(nntp_out, "%d %s\r\n", code, errorstring);
 	    } else {
