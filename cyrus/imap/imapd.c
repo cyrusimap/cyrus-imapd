@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.78 2006/04/07 19:59:36 murch Exp $ */
+/* $Id: imapd.c,v 1.443.2.79 2006/04/13 18:28:16 murch Exp $ */
 
 #include <config.h>
 
@@ -6429,6 +6429,12 @@ void cmd_setquota(const char *tag, const char *quotaroot)
 	 * roots */
 	r = IMAP_PERMISSION_DENIED;
     } else {
+	/* are we forcing the creation of a quotaroot by having a leading +? */
+	if (quotaroot[0] == '+') {
+	    force = 1;
+	    quotaroot++;
+	}
+	
 	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, quotaroot,
 						   imapd_userid, mailboxname);
     }
@@ -6464,13 +6470,7 @@ void cmd_setquota(const char *tag, const char *quotaroot)
     }
 
     /* local mailbox */
-    if (!r) {
-	/* are we forcing the creation of a quotaroot by having a leading +? */
-	if (quotaroot[0] == '+') {
-	    force = 1;
-	    quotaroot++;
-	}
-	
+    if (!r || (r == IMAP_MAILBOX_NONEXISTENT)) {
 	r = mboxlist_setquota(mailboxname, newquota, force);
     }
 
