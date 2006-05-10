@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.143 2006/01/20 20:29:33 jeaton Exp $
+ * $Id: lmtpd.c,v 1.144 2006/05/10 16:27:17 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -321,6 +321,7 @@ int deliver_mailbox(struct protstream *msg,
 			       strlen(mailboxname), now, uid);
 
 	    append_commit(&as, quotaoverride ? -1 : 0, NULL, &uid, NULL);
+	    syslog(LOG_INFO, "Delivered: %s to mailbox: %s", id, mailboxname);
 	}
     }
 

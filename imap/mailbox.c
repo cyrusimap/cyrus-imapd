@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- * $Id: mailbox.c,v 1.159 2005/04/07 00:25:52 shadow Exp $
+ * $Id: mailbox.c,v 1.160 2006/05/10 16:27:18 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1931,6 +1931,11 @@ mailbox_expunge(struct mailbox *mailbox,
 	}
     }
 
+    if (numdeleted > 0) {
+	syslog(LOG_NOTICE, "Expunged %d messages from %s",
+	       numdeleted, mailbox->name); 
+    }
+
     free(buf);
     if (deleted) free(deleted);
 
@@ -2187,6 +2192,7 @@ int mailbox_delete(struct mailbox *mailbox, int delete_quota_root)
 	*tail = '\0';
     } while (rmdir(buf) == 0 && (tail = strrchr(buf, '/')));
 
+    syslog(LOG_NOTICE, "Deleted mailbox %s", mailbox->name); 
     mailbox_close(mailbox);
     return 0;
 }

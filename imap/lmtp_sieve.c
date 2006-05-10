@@ -1,6 +1,6 @@
 /* lmtp_sieve.c -- Sieve implementation for lmtpd
  *
- * $Id: lmtp_sieve.c,v 1.11 2005/11/21 16:26:16 murch Exp $
+ * $Id: lmtp_sieve.c,v 1.12 2006/05/10 16:27:17 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -327,6 +327,8 @@ static int sieve_redirect(void *ac,
 				    sievedb, strlen(sievedb), time(NULL), 0);
 
 	snmp_increment(SIEVE_REDIRECT, 1);
+	syslog(LOG_INFO, "sieve redirected: %s to: %s",
+	       m->id ? m->id : "<nomsgid>", rc->addr);
 	return SIEVE_OK;
     } else {
 	if (res == -1) {
@@ -349,17 +351,8 @@ static int sieve_discard(void *ac __attribute__((unused)),
     snmp_increment(SIEVE_DISCARD, 1);
 
     /* ok, we won't file it, but log it */
-    if (md->id && strlen(md->id) < 80) {
-	char pretty[160];
-
-	beautify_copy(pretty, md->id);
-	syslog(LOG_INFO, "sieve: discarded message to %s id %s",
-	       sd->username, pretty);
-    }
-    else {
-	syslog(LOG_INFO, "sieve: discarded message to %s",
-	       sd->username);
-    }	
+    syslog(LOG_INFO, "sieve discarded: %s",
+	   md->id ? md->id : "<nomsgid>");
 
     return SIEVE_OK;
 }
@@ -383,7 +376,7 @@ static int sieve_reject(void *ac,
 
     if (strlen(md->return_path) == 0) {
 	syslog(LOG_INFO, "sieve: discarded reject to <> for %s id %s",
-	       sd->username, md->id);
+	       sd->username, md->id ? md->id : "<nomsgid>");
         return SIEVE_OK;
     }
 
@@ -393,6 +386,8 @@ static int sieve_reject(void *ac,
 			      origreceip, sd->username,
 			      rc->msg, md->data)) == 0) {
 	snmp_increment(SIEVE_REJECT, 1);
+	syslog(LOG_INFO, "sieve rejected: %s to: %s",
+	       md->id ? md->id : "<nomsgid>", md->return_path);
 	return SIEVE_OK;
     } else {
 	if (res == -1) {
