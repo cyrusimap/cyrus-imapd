@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.241 2005/11/22 18:20:51 murch Exp $
+ * $Id: mboxlist.c,v 1.242 2006/05/10 15:41:52 murch Exp $
  */
 
 #include <config.h>
@@ -475,10 +475,6 @@ mboxlist_mycreatemailboxcheck(char *name,
 		/* Disallow creating user.X.* when no user.X */
 		free(acl);
 		return IMAP_PERMISSION_DENIED;
-	    }
-	    /* disallow wildcards in userids with inboxes. */	     
-	    if (strchr(mbox, '*') || strchr(mbox, '%') || strchr(mbox, '?')) {
-		return IMAP_MAILBOX_BADNAME;
 	    }
 
 	    /*
