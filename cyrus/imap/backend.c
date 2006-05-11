@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.40 2006/04/03 16:34:36 murch Exp $ */
+/* $Id: backend.c,v 1.41 2006/05/11 18:05:29 murch Exp $ */
 
 #include <config.h>
 
@@ -264,7 +264,7 @@ static void timed_out(int sig)
     }
 }
 
-struct backend *backend_connect(struct backend *ret, const char *server,
+struct backend *backend_connect(struct backend *ret_backend, const char *server,
 				struct protocol_t *prot, const char *userid,
 				const char **auth_status)
 {
@@ -276,13 +276,16 @@ struct backend *backend_connect(struct backend *ret, const char *server,
     struct sockaddr_un sunsock;
     char buf[2048], *mechlist = NULL;
     struct sigaction action;
+    struct backend *ret;
 
-    if (!ret) {
+    if (!ret_backend) {
 	ret = xmalloc(sizeof(struct backend));
 	memset(ret, 0, sizeof(struct backend));
 	strlcpy(ret->hostname, server, sizeof(ret->hostname));
 	ret->timeout = NULL;
     }
+    else
+	ret = ret_backend;
 
     if (server[0] == '/') { /* unix socket */
 	res0 = &hints;
@@ -312,7 +315,7 @@ struct backend *backend_connect(struct backend *ret, const char *server,
 	if (err) {
 	    syslog(LOG_ERR, "getaddrinfo(%s) failed: %s",
 		   server, gai_strerror(err));
-	    free(ret);
+	    if (!ret_backend) free(ret);
 	    return NULL;
 	}
         /* Get addrinfo struct for local interface. */
@@ -363,7 +366,7 @@ struct backend *backend_connect(struct backend *ret, const char *server,
 	if (res0 != &hints)
 	    freeaddrinfo(res0);
 	syslog(LOG_ERR, "connect(%s) failed: %m", server);
-	free(ret);
+	if (!ret_backend) free(ret);
 	return NULL;
     }
     memcpy(&ret->addr, res->ai_addr, res->ai_addrlen);
@@ -381,7 +384,7 @@ struct backend *backend_connect(struct backend *ret, const char *server,
 	    syslog(LOG_ERR,
 		   "backend_connect(): couldn't read initial greeting: %s",
 		   ret->in->error ? ret->in->error : "(null)");
-	    free(ret);
+	    if (!ret_backend) free(ret);
 	    close(sock);
 	    return NULL;
 	}
@@ -396,14 +399,16 @@ struct backend *backend_connect(struct backend *ret, const char *server,
 	if ((r = backend_authenticate(ret, prot, &mechlist, userid, auth_status))) {
 	    syslog(LOG_ERR, "couldn't authenticate to backend server: %s",
 		   sasl_errstring(r, NULL, NULL));
-	    free(ret);
+	    if (!ret_backend) free(ret);
 	    close(sock);
 	    ret = NULL;
 	}
     }
 
     if (mechlist) free(mechlist);
-    
+
+    if (!ret_backend) ret_backend = ret;
+	    
     return ret;
 }
 
