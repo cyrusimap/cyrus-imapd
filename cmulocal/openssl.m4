@@ -1,6 +1,6 @@
 dnl
 dnl macros for configure.in to detect openssl
-dnl $Id: openssl.m4,v 1.10 2005/04/26 19:14:08 shadow Exp $
+dnl $Id: openssl.m4,v 1.11 2006/05/17 18:30:19 murch Exp $
 dnl
 
 AC_DEFUN([CMU_HAVE_OPENSSL], [
@@ -24,8 +24,11 @@ case "$with_openssl" in
 	  dnl we need to include the rsaref libraries in the crypto check
                 LIB_RSAREF=""
 	        AC_CHECK_LIB(rsaref, RSAPublicEncrypt,
-		       LIB_RSAREF="-lRSAglue -lrsaref"; cmu_have_rsaref=yes,
-		       cmu_have_rsaref=no)
+			cmu_have_rsaref=yes;
+			[AC_CHECK_LIB(RSAglue, RSAPublicEncrypt,
+				LIB_RSAREF="-lRSAglue -lrsaref",
+				LIB_RSAREF="-lrsaref")],
+			cmu_have_rsaref=no)
 
 		AC_CHECK_HEADER(openssl/evp.h, [
 			AC_CHECK_LIB(crypto, EVP_DigestInit,
