@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.79 2006/04/13 18:28:16 murch Exp $ */
+/* $Id: imapd.c,v 1.443.2.80 2006/05/18 18:04:40 murch Exp $ */
 
 #include <config.h>
 
@@ -3405,7 +3405,7 @@ void cmd_select(char *tag, char *cmd, char *name)
 
     /* Examine command puts mailbox in read-only mode */
     if (cmd[0] == 'E') {
-	imapd_mailbox->myrights &= ~(ACL_SEEN|ACL_WRITE|ACL_DELETEMSG|ACL_EXPUNGE);
+	imapd_mailbox->myrights &= ~ACL_READ_WRITE;
     }
 
     if (imapd_mailbox->myrights & ACL_EXPUNGE) {
@@ -3444,7 +3444,7 @@ void cmd_select(char *tag, char *cmd, char *name)
     }
 
     prot_printf(imapd_out, "%s OK [READ-%s] %s\r\n", tag,
-	   (imapd_mailbox->myrights & (ACL_INSERT|ACL_EXPUNGE|ACL_WRITE|ACL_DELETEMSG)) ?
+		(imapd_mailbox->myrights & ACL_READ_WRITE) ?
 		"WRITE" : "ONLY", error_message(IMAP_OK_COMPLETED));
 
     proc_register("imapd", imapd_clienthost, imapd_userid, mailboxname);
