@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.144.2.41 2006/04/07 19:59:47 murch Exp $
+ * $Id: pop3d.c,v 1.144.2.42 2006/05/22 19:38:32 murch Exp $
  */
 #include <config.h>
 
@@ -204,6 +204,10 @@ static int popd_canon_user(sasl_conn_t *conn, void *context,
 
     if (config_getswitch(IMAPOPT_POPSUBFOLDERS)) {
 	/* make a working copy of the auth[z]id */
+	if (ulen > MAX_MAILBOX_NAME) {
+	    sasl_seterror(conn, 0, "buffer overflow while canonicalizing");
+	    return SASL_BUFOVER;
+	}
 	memcpy(userbuf, user, ulen);
 	userbuf[ulen] = '\0';
 	user = userbuf;
@@ -261,6 +265,10 @@ static int popd_proxy_policy(sasl_conn_t *conn,
 
 	/* make a working copy of the authzid */
 	if (!rlen) rlen = strlen(requested_user);
+	if (rlen > MAX_MAILBOX_NAME) {
+	    sasl_seterror(conn, 0, "buffer overflow while proxying");
+	    return SASL_BUFOVER;
+	}
 	memcpy(userbuf, requested_user, rlen);
 	userbuf[rlen] = '\0';
 	requested_user = userbuf;
