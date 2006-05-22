@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.26.2.9 2005/12/19 15:22:45 murch Exp $
+ * $Id: mbdump.c,v 1.26.2.10 2006/05/22 20:52:27 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -617,6 +617,10 @@ int undump_mailbox(const char *mbname, const char *mbpath,
     while(1) {
 	char fnamebuf[MAX_MAILBOX_PATH + 1024];
 	char *seen_file = NULL;
+	int isnowait, sawdigit;
+	unsigned long size;
+	unsigned long cutoff = ULONG_MAX / 10;
+	unsigned digit, cutlim = ULONG_MAX % 10;
 	
       	c = getastring(pin, pout, &file);
 	if(c != ' ') {
@@ -708,11 +712,41 @@ int undump_mailbox(const char *mbname, const char *mbpath,
 
 	    continue;
 	}
-	    
-	c = getbastring(pin, pout, &data);
-	if(c != ' ' && c != ')') {
+
+	/* read size of literal */
+	c = prot_getc(pin);
+	if (c != '{') {
 	    r = IMAP_PROTOCOL_ERROR;
 	    goto done;
+	}
+
+	size = isnowait = sawdigit = 0;
+	while ((c = prot_getc(pin)) != EOF && isdigit(c)) {
+	    sawdigit = 1;
+	    digit = c - '0';
+	    /* check for overflow */
+	    if (size > cutoff || (size == cutoff && digit > cutlim)) {
+                fatal("literal too big", EC_IOERR);
+            }
+	    size = size*10 + digit;
+	}
+	if (c == '+') {
+	    isnowait++;
+	    c = prot_getc(pin);
+	}
+	if (c == '}') {
+	    c = prot_getc(pin);
+	    if (c == '\r') c = prot_getc(pin);
+	}
+	if (!sawdigit || c != '\n') {
+	    r = IMAP_PROTOCOL_ERROR;
+	    goto done;
+	}
+
+	if (!isnowait) {
+	    /* Tell client to send the message */
+	    prot_printf(pout, "+ go ahead\r\n");
+	    prot_flush(pout);
 	}
 
 	if(userid && !strcmp(file.s, "SUBS")) {
@@ -782,7 +816,7 @@ int undump_mailbox(const char *mbname, const char *mbpath,
 	    if(strncmp(file.s, "cyrus.", 6)) {
 		/* it doesn't match cyrus.*, so its a message file.
 		 * charge it against the quota */
-		quotaused += data.len;
+		quotaused += size;
 	    }
 	}	
 
@@ -800,10 +834,24 @@ int undump_mailbox(const char *mbname, const char *mbpath,
 	    goto done;
 	}
 
-	if(write(curfile,data.s,data.len) == -1) {
-	    syslog(LOG_ERR, "IOERROR: writing %s: %m", fnamebuf);
-	    r = IMAP_IOERROR;
-	    goto done;
+	/* write data to file */
+	while (size) {
+	    char buf[4096+1];
+	    int n = prot_read(pin, buf, size > 4096 ? 4096 : size);
+	    if (!n) {
+		syslog(LOG_ERR,
+		       "IOERROR: reading message: unexpected end of file");
+		r = IMAP_IOERROR;
+		goto done;
+	    }
+
+	    size -= n;
+
+	    if (write(curfile, buf, n) != n) {
+		syslog(LOG_ERR, "IOERROR: writing %s: %m", fnamebuf);
+		r = IMAP_IOERROR;
+		goto done;
+	    }
 	}
 
 	close(curfile);
@@ -817,7 +865,12 @@ int undump_mailbox(const char *mbname, const char *mbpath,
 	    unlink(fnamebuf);
 	}
 	
-	if(c == ')') break;
+	c = prot_getc(pin);
+	if (c == ')') break;
+	if (c != ' ') {
+	    r = IMAP_PROTOCOL_ERROR;
+	    goto done;
+	}
     }
     
     if(!r && quotaused) {
