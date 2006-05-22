@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.80 2006/05/18 18:04:40 murch Exp $ */
+/* $Id: imapd.c,v 1.443.2.81 2006/05/22 20:37:14 murch Exp $ */
 
 #include <config.h>
 
@@ -5342,11 +5342,6 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	    oldmailboxname[nmlen] == '.') {
 	    recursive_rename = 0;
 	}
-    }
-
-    /* verify that the mailbox doesn't have a wildcard in it */
-    for (p = oldmailboxname; !r && *p; p++) {
-	if (*p == '*' || *p == '%') r = IMAP_MAILBOX_BADNAME;
     }
 
     /* attempt to rename the base mailbox */
