@@ -1,4 +1,4 @@
-dnl $Id: arx.m4,v 1.5 2003/10/08 20:35:24 rjs3 Exp $
+dnl $Id: arx.m4,v 1.5.4.1 2006/05/23 13:27:14 murch Exp $
 
 AC_DEFUN([CMU_ARX_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS
@@ -57,6 +57,7 @@ AC_DEFUN([CMU_ARX_LIB_WHERE], [
 ])
 
 AC_DEFUN([CMU_USE_ARX], [
+AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_ARG_WITH(arx,
 	[  --with-arx=PREFIX      Compile with arx support],
 	[if test "X$with_arx" = "X"; then
@@ -75,7 +76,7 @@ AC_ARG_WITH(arx-include,
 
 	if test "X$with_arx" != "X"; then
 	  if test "$with_arx" != "yes"; then
-	    ac_cv_arx_where_lib=$with_arx/lib
+	    ac_cv_arx_where_lib=$with_arx/${CMU_LIB_SUBDIR}
 	    ac_cv_arx_where_inc=$with_arx/include
 	  fi
 	fi
@@ -84,7 +85,7 @@ AC_ARG_WITH(arx-include,
 	  ac_cv_arx_where_lib=$with_arx_lib
 	fi
 	if test "X$ac_cv_arx_where_lib" = "X"; then
-	  CMU_ARX_LIB_WHERE(/usr/athena/lib /usr/local/lib /usr/lib)
+	  CMU_ARX_LIB_WHERE(/usr/athena/${CMU_LIB_SUBDIR} /usr/local/${CMU_LIB_SUBDIR} /usr/${CMU_LIB_SUBDIR})
 	fi
 
 	if test "X$with_arx_include" != "X"; then

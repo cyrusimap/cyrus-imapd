@@ -1,4 +1,4 @@
-dnl $Id: libXau.m4,v 1.4 2003/10/08 20:35:25 rjs3 Exp $
+dnl $Id: libXau.m4,v 1.4.4.1 2006/05/23 13:27:17 murch Exp $
 
 AC_DEFUN([CMU_XAU_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS
@@ -54,6 +54,7 @@ AC_DEFUN([CMU_XAU_LIB_WHERE], [
 ])
 
 AC_DEFUN([CMU_XAU], [
+AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_REQUIRE([CMU_SOCKETS])
 AC_ARG_WITH(Xau,
 	[  --with-Xau=PREFIX      Compile with Xau support],
@@ -73,7 +74,7 @@ AC_ARG_WITH(Xau-include,
 
 	if test "X$with_Xau" != "X"; then
 	  if test "$with_Xau" != "yes"; then
-	    ac_cv_Xau_where_lib=$with_Xau/lib
+	    ac_cv_Xau_where_lib=$with_Xau/$CMU_LIB_SUBDIR
 	    ac_cv_Xau_where_inc=$with_Xau/include
 	  fi
 	fi
@@ -82,7 +83,7 @@ AC_ARG_WITH(Xau-include,
 	  ac_cv_Xau_where_lib=$with_Xau_lib
 	fi
 	if test "X$ac_cv_Xau_where_lib" = "X"; then
-	  CMU_XAU_LIB_WHERE(/usr/X11R6/lib /usr/local/lib /usr/openwin/lib)
+	  CMU_XAU_LIB_WHERE(/usr/X11R6/$CMU_LIB_SUBDIR /usr/local/$CMU_LIB_SUBDIR /usr/openwin/$CMU_LIB_SUBDIR)
 	fi
 
 	if test "X$with_Xau_include" != "X"; then

@@ -2,7 +2,7 @@ dnl damnit, i don't want to figure out if I need to build an integral com_err
 dnl library with the collection, I just want to know where it's installed,
 dnl so don't bitch, Rob...
 dnl Derrick Brashear
-dnl $Id: com_err_link.m4,v 1.7 2003/10/08 20:35:24 rjs3 Exp $
+dnl $Id: com_err_link.m4,v 1.7.4.1 2006/05/23 13:27:15 murch Exp $
 
 
 AC_DEFUN([CMU_COMERR_INC_WHERE1], [
@@ -60,6 +60,7 @@ AC_DEFUN([CMU_COMERR_LIB_WHERE], [
 ])
 
 AC_DEFUN([CMU_USE_COMERR], [
+AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_ARG_WITH(comerr,
 	[  --with-comerr=PREFIX      Compile with com_err support],
 	[if test "X$with_comerr" = "X"; then
@@ -78,7 +79,7 @@ AC_ARG_WITH(comerr-include,
 
 	if test "X$with_comerr" != "X"; then
 	  if test "$with_comerr" != "yes"; then
-	    ac_cv_comerr_where_lib=$with_comerr/lib
+	    ac_cv_comerr_where_lib=$with_comerr/$CMU_LIB_SUBDIR
 	    ac_cv_comerr_where_inc=$with_comerr/include
 	  fi
 	fi
@@ -87,7 +88,7 @@ AC_ARG_WITH(comerr-include,
 	  ac_cv_comerr_where_lib=$with_comerr_lib
 	fi
 	if test "X$ac_cv_comerr_where_lib" = "X"; then
-	  CMU_COMERR_LIB_WHERE(/usr/athena/lib /usr/lib /usr/local/lib)
+	  CMU_COMERR_LIB_WHERE(/usr/athena/$CMU_LIB_SUBDIR /usr/$CMU_LIB_SUBDIR /usr/local/$CMU_LIB_SUBDIR)
 	fi
 
 	if test "X$with_comerr_include" != "X"; then
@@ -106,8 +107,9 @@ AC_ARG_WITH(comerr-include,
 	  AC_MSG_RESULT(yes)
 	  COMERR_INC_DIR=$ac_cv_comerr_where_inc
 	  COMERR_LIB_DIR=$ac_cv_comerr_where_lib
-	  COMERR_INC_FLAGS="-I${COMERR_INC_DIR}"
-	  COMERR_LIB_FLAGS="-L${COMERR_LIB_DIR} -lcom_err"
+	  test "$COMERR_INC_DIR"  && COMERR_INC_FLAGS="-I${COMERR_INC_DIR}"
+	  COMERR_LIB_FLAGS="-lcom_err"
+	  test "$COMERR_LIB_DIR"  && COMERR_LIB_FLAGS="-L${COMERR_LIB_DIR} -lcom_err"
           dnl Do not force configure.in to put these in CFLAGS and LIBS unconditionally
           dnl Allow makefile substitutions....
           AC_SUBST(COMERR_INC_FLAGS)

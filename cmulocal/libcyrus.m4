@@ -1,7 +1,7 @@
 dnl libcyrus.m4--Cyrus libraries and includes
 dnl Derrick Brashear
 dnl from KTH kafs and Arla
-dnl $Id: libcyrus.m4,v 1.19 2003/10/08 20:35:25 rjs3 Exp $
+dnl $Id: libcyrus.m4,v 1.19.4.1 2006/05/23 13:27:17 murch Exp $
 
 AC_DEFUN([CMU_LIBCYRUS_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS
@@ -54,6 +54,7 @@ AC_DEFUN([CMU_LIBCYRUS_LIB_WHERE], [
 ])
 
 AC_DEFUN([CMU_LIBCYRUS], [
+AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_REQUIRE([CMU_SOCKETS])
 AC_REQUIRE([CMU_SASL2])
 AC_REQUIRE([CMU_LIBSSL])
@@ -75,7 +76,7 @@ AC_ARG_WITH(libcyrus-include,
 
 	if test "X$with_libcyrus" != "X"; then
 	  if test "$with_libcyrus" != "yes" -a "$with_libcyrus" != no; then
-	    ac_cv_cyrus_where_lib=$with_libcyrus/lib
+	    ac_cv_cyrus_where_lib=$with_libcyrus/$CMU_LIB_SUBDIR
 	    ac_cv_cyrus_where_inc=$with_libcyrus/include
 	  fi
 	fi
@@ -85,7 +86,7 @@ AC_ARG_WITH(libcyrus-include,
 	    ac_cv_cyrus_where_lib=$with_libcyrus_lib
 	  fi
 	  if test "X$ac_cv_cyrus_where_lib" = "X"; then
-	    CMU_LIBCYRUS_LIB_WHERE(/usr/cyrus/lib /usr/local/lib /usr/lib)
+	    CMU_LIBCYRUS_LIB_WHERE(/usr/cyrus/$CMU_LIB_SUBDIR /usr/local/$CMU_LIB_SUBDIR /usr/$CMU_LIB_SUBDIR)
 	  fi
 
 	  if test "X$with_libcyrus_include" != "X"; then

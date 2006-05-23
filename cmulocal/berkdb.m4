@@ -1,4 +1,4 @@
-dnl $Id: berkdb.m4,v 1.12.4.6 2004/11/26 21:41:58 ken3 Exp $
+dnl $Id: berkdb.m4,v 1.12.4.7 2006/05/23 13:27:15 murch Exp $
 
 AC_DEFUN([CMU_DB_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS
@@ -77,6 +77,7 @@ fi
 ])
 
 AC_DEFUN([CMU_USE_DB], [
+AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_ARG_WITH(db,
 	[  --with-db=PREFIX      Compile with db support],
 	[if test "X$with_db" = "X"; then
@@ -97,7 +98,7 @@ AC_ARG_ENABLE(db4,
 	
 	if test "X$with_db" != "X"; then
 	  if test "$with_db" != "yes"; then
-	    ac_cv_db_where_lib=$with_db/lib
+	    ac_cv_db_where_lib=$with_db/$CMU_LIB_SUBDIR
 	    ac_cv_db_where_inc=$with_db/include
 	  fi
 	fi
@@ -106,7 +107,7 @@ AC_ARG_ENABLE(db4,
 	  ac_cv_db_where_lib=$with_db_lib
 	fi
 	if test "X$ac_cv_db_where_lib" = "X"; then
-	  CMU_DB_LIB_WHERE(/usr/athena/lib /usr/lib /usr/local/lib)
+	  CMU_DB_LIB_WHERE(/usr/athena/$CMU_LIB_SUBDIR /usr/$CMU_LIB_SUBDIR /usr/local/$CMU_LIB_SUBDIR)
 	fi
 
 	if test "X$with_db_include" != "X"; then
@@ -212,7 +213,7 @@ AC_DEFUN([CYRUS_BERKELEY_DB_CHK_LIB],
 	fi
 
 	saved_LIBS=$LIBS
-        for dbname in db-4.2 db4.2 db42 db-4.1 db4.1 db41 db-4.0 db4.0 db-4 db40 db4 db-3.3 db3.3 db33 db-3.2 db3.2 db32 db-3.1 db3.1 db31 db-3 db30 db3 db
+        for dbname in db-4.4 db4.4 db44 db-4.3 db4.3 db43 db-4.2 db4.2 db42 db-4.1 db4.1 db41 db-4.0 db4.0 db-4 db40 db4 db-3.3 db3.3 db33 db-3.2 db3.2 db32 db-3.1 db3.1 db31 db-3 db30 db3 db
           do
 	    LIBS="$saved_LIBS -l$dbname"
 	    AC_TRY_LINK([#include <db.h>],

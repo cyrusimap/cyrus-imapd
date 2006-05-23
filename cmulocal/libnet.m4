@@ -1,7 +1,7 @@
 dnl libnet.m4--libnet and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
-dnl $Id: libnet.m4,v 1.7 2003/10/08 20:35:25 rjs3 Exp $
+dnl $Id: libnet.m4,v 1.7.4.1 2006/05/23 13:27:18 murch Exp $
 
 AC_DEFUN([CMU_LIBNET_CFG_WHERE1], [
 ac_cv_found_libnet_bin=no
@@ -78,6 +78,7 @@ AC_DEFUN([CMU_LIBNET_LIB_WHERE], [
 ])
 
 AC_DEFUN([CMU_LIBNET], [
+AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_ARG_WITH(libnet,
 	[  --with-libnet=PREFIX      Compile with LIBNET support],
 	[if test "X$with_libnet" = "X"; then
@@ -106,7 +107,7 @@ AC_ARG_WITH(libnet-include,
             else
 	      ac_cv_libnet_where_cfg=$with_libnet/bin
             fi
-	    ac_cv_libnet_where_lib=$with_libnet/lib
+	    ac_cv_libnet_where_lib=$with_libnet/$CMU_LIB_SUBDIR
 	    ac_cv_libnet_where_inc=$with_libnet/include
 	  fi
 	fi
@@ -122,7 +123,7 @@ AC_ARG_WITH(libnet-include,
 	  ac_cv_libnet_where_lib=$with_libnet_lib
 	fi
 	if test "X$ac_cv_libnet_where_lib" = "X"; then
-	  CMU_LIBNET_LIB_WHERE(/usr/ng/lib /usr/lib /usr/local/lib)
+	  CMU_LIBNET_LIB_WHERE(/usr/ng/$CMU_LIB_SUBDIR /usr/$CMU_LIB_SUBDIR /usr/local/$CMU_LIB_SUBDIR)
 	fi
 
 	if test "X$with_libnet_include" != "X"; then

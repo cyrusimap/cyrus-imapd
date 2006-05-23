@@ -1,7 +1,8 @@
 dnl look for the (ucd|net)snmp libraries
-dnl $Id: ucdsnmp.m4,v 1.8.2.1 2004/05/25 01:27:58 ken3 Exp $
+dnl $Id: ucdsnmp.m4,v 1.8.2.2 2006/05/23 13:27:20 murch Exp $
 
 AC_DEFUN([CMU_UCDSNMP], [
+AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
   AC_REQUIRE([CMU_SOCKETS])
   AC_ARG_WITH(snmp, 
               [  --with-snmp=DIR         use ucd|net snmp (rooted in DIR) [yes] ],
@@ -46,7 +47,7 @@ if test "$with_snmp" != "no"; then
     if test "$with_snmp" != no; then
       if test -d "$with_snmp"; then
         CPPFLAGS="$CPPFLAGS -I${with_snmp}/include"
-        LDFLAGS="$LDFLAGS -L${with_snmp}/lib"
+        LDFLAGS="$LDFLAGS -L${with_snmp}/$CMU_LIB_SUBDIR"
       fi
       cmu_save_LIBS="$LIBS"
       AC_CHECK_LIB(snmp, sprint_objid, [

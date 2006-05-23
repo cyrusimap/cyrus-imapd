@@ -1,7 +1,7 @@
 dnl libpcap.m4--PCAP libraries and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
-dnl $Id: libpcap.m4,v 1.8 2003/10/08 20:35:25 rjs3 Exp $
+dnl $Id: libpcap.m4,v 1.8.4.1 2006/05/23 13:27:18 murch Exp $
 
 AC_DEFUN([CMU_PCAP_INC_WHERE1], [
 ac_cv_found_pcap_inc=no
@@ -50,6 +50,7 @@ AC_DEFUN([CMU_PCAP_LIB_WHERE], [
 ])
 
 AC_DEFUN([CMU_PCAP], [
+AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_ARG_WITH(pcap,
 	[  --with-pcap=PREFIX      Compile with PCAP support],
 	[if test "X$with_pcap" = "X"; then
@@ -68,7 +69,7 @@ AC_ARG_WITH(pcap-include,
 
 	if test "X$with_pcap" != "X"; then
 	  if test "$with_pcap" != "yes"; then
-	    ac_cv_pcap_where_lib=$with_pcap/lib
+	    ac_cv_pcap_where_lib=$with_pcap/$CMU_LIB_SUBDIR
 	    ac_cv_pcap_where_inc=$with_pcap/include
 	  fi
 	fi
@@ -77,7 +78,7 @@ AC_ARG_WITH(pcap-include,
 	  ac_cv_pcap_where_lib=$with_pcap_lib
 	fi
 	if test "X$ac_cv_pcap_where_lib" = "X"; then
-	  CMU_PCAP_LIB_WHERE(/usr/ng/lib /usr/lib /usr/local/lib)
+	  CMU_PCAP_LIB_WHERE(/usr/ng/$CMU_LIB_SUBDIR /usr/$CMU_LIB_SUBDIR /usr/local/$CMU_LIB_SUBDIR)
 	fi
 
 	if test "X$with_pcap_include" != "X"; then

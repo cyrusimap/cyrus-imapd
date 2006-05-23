@@ -2,7 +2,7 @@ dnl zephyr.m4--Zephyr libraries and includes
 dnl based on kafs.m4, by
 dnl Derrick Brashear
 dnl from KTH kafs and Arla
-dnl $Id: zephyr.m4,v 1.1.2.1 2004/02/19 01:42:45 ken3 Exp $
+dnl $Id: zephyr.m4,v 1.1.2.2 2006/05/23 13:27:21 murch Exp $
 
 AC_DEFUN([CMU_ZEPHYR_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS
@@ -57,6 +57,7 @@ AC_DEFUN([CMU_ZEPHYR_LIB_WHERE], [
 ])
 
 AC_DEFUN([CMU_ZEPHYR], [
+AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_REQUIRE([CMU_SOCKETS])
 AC_REQUIRE([CMU_KRB4])
 AC_ARG_WITH(zephyr,
@@ -77,7 +78,7 @@ AC_ARG_WITH(zephyr-include,
 
         if test "X$with_zephyr" != "X"; then
           if test "$with_zephyr" != "yes" -a "$with_zephyr" != no; then
-            ac_cv_zephyr_where_lib=$with_zephyr/lib
+            ac_cv_zephyr_where_lib=$with_zephyr/$CMU_LIB_SUBDIR
             ac_cv_zephyr_where_inc=$with_zephyr/include
           fi
         fi
@@ -87,7 +88,7 @@ AC_ARG_WITH(zephyr-include,
             ac_cv_zephyr_where_lib=$with_zephyr_lib
           fi
           if test "X$ac_cv_zephyr_where_lib" = "X"; then
-            CMU_ZEPHYR_LIB_WHERE(/usr/athena/lib /usr/local/lib /usr/lib)
+            CMU_ZEPHYR_LIB_WHERE(/usr/athena/$CMU_LIB_SUBDIR /usr/local/$CMU_LIB_SUBDIR /usr/$CMU_LIB_SUBDIR)
           fi
 
           if test "X$with_zephyr_include" != "X"; then
