@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.147.2.33 2006/03/31 19:22:24 murch Exp $
+ * $Id: mailbox.c,v 1.147.2.34 2006/05/23 13:09:37 murch Exp $
  *
  */
 
@@ -2456,6 +2456,11 @@ int mailbox_expunge(struct mailbox *mailbox,
 	}
     }
 
+    if (numdeleted > 0) {
+	syslog(LOG_NOTICE, "Expunged %d messages from %s",
+	       numdeleted, mailbox->name);
+    }
+
     if (deleted) free(deleted);
 
     return 0;
@@ -2750,6 +2755,7 @@ int mailbox_delete(struct mailbox *mailbox, int delete_quota_root)
     } while (mailbox->mpath && (path != mailbox->mpath) &&
 	     (path = mailbox->mpath));
 
+    syslog(LOG_NOTICE, "Deleted mailbox %s", mailbox->name);
     mailbox_close(mailbox);
     return 0;
 }
