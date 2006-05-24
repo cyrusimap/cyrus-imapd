@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.102.2.14 2006/03/31 19:22:11 murch Exp $
+ * $Id: append.c,v 1.102.2.15 2006/05/24 18:37:42 murch Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -553,6 +553,8 @@ int append_fromstage(struct appendstate *as, struct body **body,
     message_index.uid = mailbox->last_uid + as->nummsg + 1;
     if (mailbox->options & OPT_IMAP_CONDSTORE) {
 	message_index.modseq = mailbox->highestmodseq + 1;
+    } else {
+	message_index.modseq = 1;
     }
     message_index.last_updated = time(0);
     message_index.internaldate = internaldate;
@@ -709,6 +711,8 @@ int append_fromstream(struct appendstate *as, struct body **body,
     message_index.uid = mailbox->last_uid + as->nummsg + 1;
     if (mailbox->options & OPT_IMAP_CONDSTORE) {
 	message_index.modseq = mailbox->highestmodseq + 1;
+    } else {
+	message_index.modseq = 1;
     }
     message_index.last_updated = time(0);
     message_index.internaldate = internaldate;
