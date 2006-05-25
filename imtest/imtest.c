@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/NNTP/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.107 2006/01/20 20:31:23 jeaton Exp $
+ * $Id: imtest.c,v 1.108 2006/05/25 15:23:07 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -886,6 +886,12 @@ imt_stat getauthline(struct sasl_cmd_t *sasl_cmd, char **line, int *linelen)
     }
     
     if (*str != '\r') {
+	/* trim CRLF */
+	char *p = str + strlen(str) - 1;
+	if (p >= str && *p == '\n') *p-- = '\0';
+	if (p >= str && *p == '\r') *p-- = '\0';
+
+	/* alloc space for decoded response */
 	len = strlen(str) + 1;
 	*line = malloc(len);
 	if ((*line) == NULL) {
