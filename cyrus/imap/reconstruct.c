@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.81.2.19 2006/03/31 19:22:27 murch Exp $ */
+/* $Id: reconstruct.c,v 1.81.2.20 2006/05/25 12:57:32 murch Exp $ */
 
 #include <config.h>
 
@@ -714,6 +714,9 @@ int reconstruct(char *name, struct discovered *found)
 	    /* Use data in old index file, subject to validity checks */
 	    message_index.internaldate = old_index.internaldate;
 	    message_index.modseq = old_index.modseq;
+	    /* This should never happen, but bugs in 2.3.4 and 2.3.5
+	     * could have left modseq blank.  If so, update it */
+	    if (!message_index.modseq) message_index.modseq = 1;
 	    message_index.system_flags = old_index.system_flags &
 	      (FLAG_ANSWERED|FLAG_FLAGGED|FLAG_DELETED|FLAG_DRAFT);
 	    for (i = 0; i < MAX_USER_FLAGS/32; i++) {

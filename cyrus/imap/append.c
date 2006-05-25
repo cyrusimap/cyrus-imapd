@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.102.2.15 2006/05/24 18:37:42 murch Exp $
+ * $Id: append.c,v 1.102.2.16 2006/05/25 12:57:31 murch Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -857,6 +857,11 @@ int append_copy(struct mailbox *mailbox,
     for (msg = 0; msg < nummsg; msg++) {
 	zero_index(message_index[msg]);
 	message_index[msg].uid = append_mailbox->last_uid + 1 + as->nummsg;
+	if (append_mailbox->options & OPT_IMAP_CONDSTORE) {
+	    message_index[msg].modseq = append_mailbox->highestmodseq + 1;
+	} else {
+	    message_index[msg].modseq = 1;
+	}
 	message_index[msg].last_updated = time(0);
 	message_index[msg].internaldate = copymsg[msg].internaldate;
 	as->nummsg++;
