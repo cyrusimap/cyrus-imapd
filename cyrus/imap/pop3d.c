@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.144.2.42 2006/05/22 19:38:32 murch Exp $
+ * $Id: pop3d.c,v 1.144.2.43 2006/05/26 15:50:09 murch Exp $
  */
 #include <config.h>
 
@@ -128,6 +128,7 @@ struct msg {
     int deleted;
 } *popd_msg = NULL;
 
+static sasl_ssf_t extprops_ssf = 0;
 static int pop3s = 0;
 int popd_starttls_done = 0;
 
@@ -412,7 +413,7 @@ int service_init(int argc __attribute__((unused)),
 	fatal(error_message(r), EC_CONFIG);
     }
 
-    while ((opt = getopt(argc, argv, "sk")) != EOF) {
+    while ((opt = getopt(argc, argv, "skp:")) != EOF) {
 	switch(opt) {
 	case 's': /* pop3s (do starttls right away) */
 	    pop3s = 1;
@@ -426,6 +427,11 @@ int service_init(int argc __attribute__((unused)),
 	case 'k':
 	    kflag++;
 	    break;
+
+	case 'p': /* external protection */
+	    extprops_ssf = atoi(optarg);
+	    break;
+
 	default:
 	    usage();
 	}
@@ -492,6 +498,7 @@ int service_main(int argc __attribute__((unused)),
     /* will always return something valid */
     secprops = mysasl_secprops(SASL_SEC_NOPLAINTEXT);
     sasl_setprop(popd_saslconn, SASL_SEC_PROPS, secprops);
+    sasl_setprop(popd_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf);
     
     if(iptostring((struct sockaddr *)&popd_localaddr,
 		  salen, localip, 60) == 0) {
@@ -1782,7 +1789,9 @@ static int reset_saslconn(sasl_conn_t **conn)
 
     /* If we have TLS/SSL info, set it */
     if(saslprops.ssf) {
-       ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &saslprops.ssf);
+	ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &saslprops.ssf);
+    } else {
+	ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &extprops_ssf);
     }
 
     if(ret != SASL_OK) return ret;

@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.1.2.21 2005/12/20 15:54:43 murch Exp $
+ * $Id: sync_server.c,v 1.1.2.22 2006/05/26 15:50:10 murch Exp $
  */
 
 #include <config.h>
@@ -104,6 +104,8 @@ extern int opterr;
 
 /* for config.c */
 const int config_need_data = 0;
+
+static sasl_ssf_t extprops_ssf = 0;
 
 /* Stuff to make index.c link */
 int imapd_exists;
@@ -299,8 +301,11 @@ int service_init(int argc __attribute__((unused)),
     /* load the SASL plugins */
     global_sasl_init(1, 1, mysasl_cb);
 
-    while ((opt = getopt(argc, argv, "")) != EOF) {
+    while ((opt = getopt(argc, argv, "p:")) != EOF) {
 	switch(opt) {
+	case 'p': /* external protection */
+	    extprops_ssf = atoi(optarg);
+	    break;
 	default:
 	    usage();
 	}
@@ -408,6 +413,7 @@ int service_main(int argc __attribute__((unused)),
     /* will always return something valid */
     secprops = mysasl_secprops(SASL_SEC_NOPLAINTEXT);
     sasl_setprop(sync_saslconn, SASL_SEC_PROPS, secprops);
+    sasl_setprop(sync_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf);
     
     if(iptostring((struct sockaddr *)&sync_localaddr, salen,
 		  localip, 60) == 0) {
@@ -542,6 +548,8 @@ static int reset_saslconn(sasl_conn_t **conn)
     /* If we have TLS/SSL info, set it */
     if(saslprops.ssf) {
        ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &saslprops.ssf);
+    } else {
+	ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &extprops_ssf);
     }
 
     if(ret != SASL_OK) return ret;

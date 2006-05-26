@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: sync_server.8,v 1.1.2.2 2005/03/13 01:24:13 ken3 Exp $
+.\" $Id: sync_server.8,v 1.1.2.3 2006/05/26 15:50:12 murch Exp $
 .SH NAME
 sync_server \- server side of the synchronization (replication) engine
 .SH SYNOPSIS
@@ -47,6 +47,10 @@ sync_server \- server side of the synchronization (replication) engine
 [
 .B \-C
 .I config-file
+]
+[
+.B \-p
+.I ssf
 ]
 .SH DESCRIPTION
 
@@ -61,6 +65,13 @@ the master system.
 .TP
 .BI \-C " config-file"
 Read configuration options from \fIconfig-file\fR.
+.TP
+.BI \-p " ssf"
+Tell
+.I sync_server
+that an external layer exists.  An SSF (security strength factor) of 1
+means an integrity protection layer exists.  Any higher SSF implies
+some form of privacy protection.
 .SH FILES
 .TP
 .B /etc/imapd.conf

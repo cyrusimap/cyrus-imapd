@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.2.2.49 2006/04/07 19:59:46 murch Exp $
+ * $Id: nntpd.c,v 1.2.2.50 2006/05/26 15:50:07 murch Exp $
  */
 
 /*
@@ -167,6 +167,7 @@ enum {
 
 static unsigned nntp_capa = MODE_READ | MODE_FEED; /* general-purpose */
 
+static sasl_ssf_t extprops_ssf = 0;
 static int nntps = 0;
 int nntp_starttls_done = 0;
 
@@ -466,7 +467,7 @@ int service_init(int argc __attribute__((unused)),
     /* setup for sending IMAP IDLE notifications */
     idle_enabled();
 
-    while ((opt = getopt(argc, argv, "srf")) != EOF) {
+    while ((opt = getopt(argc, argv, "srfp:")) != EOF) {
 	switch(opt) {
 	case 's': /* nntps (do starttls right away) */
 	    nntps = 1;
@@ -483,6 +484,10 @@ int service_init(int argc __attribute__((unused)),
 
 	case 'f': /* enter feeder-only mode */
 	    nntp_capa = MODE_FEED;
+	    break;
+
+	case 'p': /* external protection */
+	    extprops_ssf = atoi(optarg);
 	    break;
 
 	default:
@@ -566,6 +571,7 @@ int service_main(int argc __attribute__((unused)),
     /* will always return something valid */
     secprops = mysasl_secprops(SASL_SEC_NOPLAINTEXT);
     sasl_setprop(nntp_saslconn, SASL_SEC_PROPS, secprops);
+    sasl_setprop(nntp_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf);
     
     if(iptostring((struct sockaddr *)&nntp_localaddr, salen,
 		  localip, 60) == 0) {
@@ -735,7 +741,9 @@ static int reset_saslconn(sasl_conn_t **conn)
 
     /* If we have TLS/SSL info, set it */
     if(saslprops.ssf) {
-       ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &saslprops.ssf);
+	ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &saslprops.ssf);
+    } else {
+	ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &extprops_ssf);
     }
 
     if(ret != SASL_OK) return ret;

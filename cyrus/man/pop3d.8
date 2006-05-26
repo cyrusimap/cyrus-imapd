@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: pop3d.8,v 1.13 2002/10/03 19:02:41 ken3 Exp $
+.\" $Id: pop3d.8,v 1.13.4.1 2006/05/26 15:50:12 murch Exp $
 .SH NAME
 pop3d \- POP3 server process
 .SH SYNOPSIS
@@ -65,6 +65,10 @@ pop3d \- POP3 server process
 ]
 [
 .B \-k
+]
+[
+.B \-p
+.I ssf
 ]
 .SH DESCRIPTION
 .I Pop3d
@@ -116,6 +120,13 @@ is encrypted using the Secure Sockets Layer.
 .TP
 .B \-k
 Serve MIT's KPOP (Kerberized POP) protocol instead.
+.TP
+.BI \-p " ssf"
+Tell
+.I pop3d
+that an external layer exists.  An SSF (security strength factor) of 1
+means an integrity protection layer exists.  Any higher SSF implies
+some form of privacy protection.
 .SH FILES
 .TP
 .B /etc/imapd.conf
