@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: message.c,v 1.97.2.10 2006/03/10 23:41:57 murch Exp $
+ * $Id: message.c,v 1.97.2.11 2006/05/26 16:27:18 murch Exp $
  */
 
 #include <config.h>
@@ -230,6 +230,7 @@ int allow_null;
     int n;
     int sawcr = 0, sawnl;
     int reject8bit = config_getswitch(IMAPOPT_REJECT8BIT);
+    int munge8bit = config_getswitch(IMAPOPT_MUNGE8BIT);
     int inheader = 1, blankline = 1;
 
     while (size) {
@@ -274,7 +275,7 @@ int allow_null;
 			/* We have been configured to reject all mail of this
 			   form. */
 			if (!r) r = IMAP_MESSAGE_CONTAINS8BIT;
-		    } else {
+		    } else if (munge8bit) {
 			/* We have been configured to munge all mail of this
 			   form. */
 			*p = 'X';

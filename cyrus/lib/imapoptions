@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.2.2.44 2006/03/30 16:06:46 murch Exp $
+.\" $Id: imapoptions,v 1.2.2.45 2006/05/26 16:27:20 murch Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -535,6 +535,13 @@ are listed with ``<none>''.
 { "md5_user_map", NULL, STRING }
 /* Map file (cdb) to allow partial make_md5 runs. Maps username to UID */
 
+{ "munge8bit", 1, SWITCH }
+/* If enabled, lmtpd munges messages with 8-bit characters in the
+   headers.  The 8-bit characters are changed to `X'.  If
+   \fBreject8bit\fR is enabled, setting \fBmunge8bit\fR has no effect.
+   (A proper solution to non-ASCII characters in headers is offered by
+   RFC 2047 and its predecessors.) */ 
+
 # xxx badly worded
 { "mupdate_connections_max", 128, INT }
 /* The max number of connections that a mupdate process will allow, this
@@ -773,9 +780,7 @@ are listed with ``<none>''.
 
 { "reject8bit", 0, SWITCH }
 /* If enabled, lmtpd rejects messages with 8-bit characters in the
-   headers.  Otherwise, 8-bit characters are changed to `X'.  (A
-   proper solution to non-ASCII characters in headers is offered by  
-   RFC 2047 and its predecessors.) */
+   headers. */
 
 { "rfc2046_strict", 0, SWITCH }
 /* If enabled, imapd will be strict (per RFC 2046) when matching MIME

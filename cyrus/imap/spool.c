@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: spool.c,v 1.2.2.6 2005/10/24 12:58:43 ken3 Exp $
+ * $Id: spool.c,v 1.2.2.7 2006/05/26 16:27:19 murch Exp $
  */
 
 #include <config.h>
@@ -140,6 +140,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
     state s = NAME_START;
     int r = 0;
     int reject8bit = config_getswitch(IMAPOPT_REJECT8BIT);
+    int munge8bit = config_getswitch(IMAPOPT_MUNGE8BIT);
     const char **skip = NULL;
 
     if (namelen == 0) {
@@ -266,7 +267,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
 			   form. */
 			r = IMAP_MESSAGE_CONTAINS8BIT;
 			goto ph_error;
-		    } else {
+		    } else if (munge8bit) {
 			/* We have been configured to munge all mail of this
 			   form. */
 			c = 'X';
