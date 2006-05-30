@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.81 2006/05/22 20:37:14 murch Exp $ */
+/* $Id: imapd.c,v 1.443.2.82 2006/05/30 19:38:29 murch Exp $ */
 
 #include <config.h>
 
@@ -6728,11 +6728,7 @@ void cmd_status(char *tag, char *name)
     }
 
     if (!r) {
-	if (!(mailbox.options & OPT_IMAP_CONDSTORE)) {
-	    /* mailbox doesn't support CONDSTORE, so remove the status item */
-	    statusitems &= ~STATUS_HIGHESTMODSEQ;
-	}
-	if (statusitems) r = index_status(&mailbox, name, statusitems);
+	r = index_status(&mailbox, name, statusitems);
     }
 
     if (doclose) mailbox_close(&mailbox);

@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.199.2.26 2006/03/31 19:22:22 murch Exp $
+ * $Id: index.c,v 1.199.2.27 2006/05/30 19:38:39 murch Exp $
  */
 #include <config.h>
 
@@ -1487,7 +1487,8 @@ int statusitems;
     }
     if (statusitems & STATUS_HIGHESTMODSEQ) {
 	prot_printf(imapd_out, "%cHIGHESTMODSEQ " MODSEQ_FMT, sepchar,
-		    mailbox->highestmodseq);
+		    (mailbox->options & OPT_IMAP_CONDSTORE) ?
+		    mailbox->highestmodseq : 0);
 	sepchar = ' ';
     }
     prot_printf(imapd_out, ")\r\n");
