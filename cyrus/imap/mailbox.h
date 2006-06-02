@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- * $Id: mailbox.h,v 1.77.2.13 2006/03/31 19:22:25 murch Exp $
+ * $Id: mailbox.h,v 1.77.2.14 2006/06/02 16:41:57 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -86,7 +86,7 @@ typedef unsigned long int modseq_t;
 #define MAILBOX_FORMAT_NORMAL	0
 #define MAILBOX_FORMAT_NETNEWS	1
 
-#define MAILBOX_MINOR_VERSION	8
+#define MAILBOX_MINOR_VERSION	9
 #define MAILBOX_CACHE_MINOR_VERSION 2
 
 #define FNAME_HEADER "/cyrus.header"
@@ -190,7 +190,11 @@ struct index_record {
     modseq_t modseq;
 };
 
-/* Offsets of index/expunge header fields */
+/* Offsets of index/expunge header fields
+ *
+ * NOTE: Since we might be using a 64-bit MODSEQ in the index record,
+ *       the size of the index header MUST be a multiple of 8 bytes.
+ */
 #define OFFSET_GENERATION_NO 0
 #define OFFSET_FORMAT 4
 #define OFFSET_MINOR_VERSION 8
@@ -214,8 +218,14 @@ struct index_record {
 #define OFFSET_SPARE1 80 /*  record size remains the same */
 #define OFFSET_SPARE2 84 /*  (see note above about spares) */
 #define OFFSET_SPARE3 88
+#define OFFSET_SPARE4 92
 
-/* Offsets of index_record fields in index/expunge file */
+/* Offsets of index_record fields in index/expunge file
+ *
+ * NOTE: Since we might be using a 64-bit MODSEQ in the index record,
+ *       OFFSET_MODSEQ_64 and the size of the index record MUST be
+ *       multiples of 8 bytes.
+ */
 #define OFFSET_UID 0
 #define OFFSET_INTERNALDATE 4
 #define OFFSET_SENTDATE 8
@@ -232,7 +242,7 @@ struct index_record {
 #define OFFSET_MODSEQ_64 (OFFSET_MESSAGE_UUID+MESSAGE_UUID_PACKED_SIZE) /* CONDSTORE (64-bit modseq) */
 #define OFFSET_MODSEQ (OFFSET_MODSEQ_64+sizeof(bit32)) /* CONDSTORE (32-bit modseq) */
 
-#define INDEX_HEADER_SIZE (OFFSET_SPARE3+sizeof(bit32))
+#define INDEX_HEADER_SIZE (OFFSET_SPARE4+sizeof(bit32))
 #define INDEX_RECORD_SIZE (OFFSET_MODSEQ+sizeof(bit32))
 
 /* Number of fields in an individual message's cache record */

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.81.2.20 2006/05/25 12:57:32 murch Exp $ */
+/* $Id: reconstruct.c,v 1.81.2.21 2006/06/02 16:41:57 murch Exp $ */
 
 #include <config.h>
 
@@ -138,7 +138,7 @@ int main(int argc, char **argv)
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
 
     /* Ensure we're up-to-date on the index file format */
-    assert(INDEX_HEADER_SIZE == (OFFSET_SPARE3+4));
+    assert(INDEX_HEADER_SIZE == (OFFSET_SPARE4+4));
     assert(INDEX_RECORD_SIZE == (OFFSET_MODSEQ+4));
 
     while ((opt = getopt(argc, argv, "C:p:rmfx")) != EOF) {
@@ -822,6 +822,7 @@ int reconstruct(char *name, struct discovered *found)
     *((bit32 *)(buf+OFFSET_SPARE1)) = htonl(0); /* RESERVED */
     *((bit32 *)(buf+OFFSET_SPARE2)) = htonl(0); /* RESERVED */
     *((bit32 *)(buf+OFFSET_SPARE3)) = htonl(0); /* RESERVED */
+    *((bit32 *)(buf+OFFSET_SPARE4)) = htonl(0); /* RESERVED */
 
     n = fwrite(buf, 1, INDEX_HEADER_SIZE, newindex);
     fflush(newindex);

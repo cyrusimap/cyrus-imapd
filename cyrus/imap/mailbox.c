@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.147.2.34 2006/05/23 13:09:37 murch Exp $
+ * $Id: mailbox.c,v 1.147.2.35 2006/06/02 16:41:55 murch Exp $
  *
  */
 
@@ -898,7 +898,8 @@ int mailbox_read_index_header(struct mailbox *mailbox)
 	ntohl(*((bit32 *)(mailbox->index_base+OFFSET_RECORD_SIZE)));
 
     if ((mailbox->start_offset < OFFSET_HIGHESTMODSEQ+4) ||
-	(mailbox->record_size < INDEX_RECORD_SIZE)) {
+	(mailbox->record_size < INDEX_RECORD_SIZE) ||
+	(mailbox->minor_version < MAILBOX_MINOR_VERSION)) {
 	if (mailbox_upgrade_index(mailbox))
 	    return IMAP_IOERROR;
 
@@ -1325,6 +1326,7 @@ int mailbox_write_index_header(struct mailbox *mailbox)
     *((bit32 *)(buf+OFFSET_SPARE1)) = htonl(0); /* RESERVED */
     *((bit32 *)(buf+OFFSET_SPARE2)) = htonl(0); /* RESERVED */
     *((bit32 *)(buf+OFFSET_SPARE3)) = htonl(0); /* RESERVED */
+    *((bit32 *)(buf+OFFSET_SPARE4)) = htonl(0); /* RESERVED */
 
     if (mailbox->start_offset < header_size)
 	header_size = mailbox->start_offset;
@@ -1597,6 +1599,7 @@ static void mailbox_upgrade_index_work(struct mailbox *mailbox,
     *((bit32 *)(buf+OFFSET_SPARE1)) = htonl(0); /* RESERVED */
     *((bit32 *)(buf+OFFSET_SPARE2)) = htonl(0); /* RESERVED */
     *((bit32 *)(buf+OFFSET_SPARE3)) = htonl(0); /* RESERVED */
+    *((bit32 *)(buf+OFFSET_SPARE4)) = htonl(0); /* RESERVED */
 
     /* Write new header */
     fwrite(buf, 1, INDEX_HEADER_SIZE, newindex);

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: mbexamine.c,v 1.5.2.9 2006/03/31 19:22:26 murch Exp $ */
+/* $Id: mbexamine.c,v 1.5.2.10 2006/06/02 16:41:57 murch Exp $ */
 
 #include <config.h>
 
@@ -121,7 +121,7 @@ int main(int argc, char **argv)
 /*    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE); */
 
     /* Ensure we're up-to-date on the index file format */
-    assert(INDEX_HEADER_SIZE == (OFFSET_SPARE3+4));
+    assert(INDEX_HEADER_SIZE == (OFFSET_SPARE4+4));
     assert(INDEX_RECORD_SIZE == (OFFSET_MODSEQ+4));
 
     while ((opt = getopt(argc, argv, "C:u:s:")) != EOF) {
