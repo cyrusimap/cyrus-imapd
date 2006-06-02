@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- * $Id: mailbox.c,v 1.160 2006/05/10 16:27:18 murch Exp $
+ * $Id: mailbox.c,v 1.161 2006/06/02 18:56:52 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1391,11 +1391,14 @@ static int mailbox_upgrade_index(struct mailbox *mailbox)
 	return r;
     }
 
-    r = mailbox_lock_pop(mailbox);
-    if (r) {
-	mailbox_unlock_index(mailbox);
-	mailbox_unlock_header(mailbox);
-	return r;
+    if (!mailbox_doing_reconstruct) {
+	/* If we're reconstructing, we don't open the existing cache file */
+	r = mailbox_lock_pop(mailbox);
+	if (r) {
+	    mailbox_unlock_index(mailbox);
+	    mailbox_unlock_header(mailbox);
+	    return r;
+	}
     }
 
     strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
@@ -1499,7 +1502,7 @@ static int mailbox_upgrade_index(struct mailbox *mailbox)
 	goto fail;
     }
 
-    mailbox_unlock_pop(mailbox);
+    if (!mailbox_doing_reconstruct) mailbox_unlock_pop(mailbox);
     mailbox_unlock_index(mailbox);
     mailbox_unlock_header(mailbox);
     fclose(newindex);
@@ -1507,7 +1510,7 @@ static int mailbox_upgrade_index(struct mailbox *mailbox)
     return 0;
 
  fail:
-    mailbox_unlock_pop(mailbox);
+    if (!mailbox_doing_reconstruct) mailbox_unlock_pop(mailbox);
     mailbox_unlock_index(mailbox);
     mailbox_unlock_header(mailbox);
 
