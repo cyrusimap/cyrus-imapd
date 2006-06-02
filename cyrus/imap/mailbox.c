@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.147.2.35 2006/06/02 16:41:55 murch Exp $
+ * $Id: mailbox.c,v 1.147.2.36 2006/06/02 18:55:06 murch Exp $
  *
  */
 
@@ -1688,11 +1688,14 @@ static int mailbox_upgrade_index(struct mailbox *mailbox)
 	return r;
     }
 
-    r = mailbox_lock_pop(mailbox);
-    if (r) {
-	mailbox_unlock_index(mailbox);
-	mailbox_unlock_header(mailbox);
-	return r;
+    if (!mailbox_doing_reconstruct) {
+	/* If we're reconstructing, we don't open the existing cache file */
+	r = mailbox_lock_pop(mailbox);
+	if (r) {
+	    mailbox_unlock_index(mailbox);
+	    mailbox_unlock_header(mailbox);
+	    return r;
+	}
     }
 
     /* Upgrade index file */
@@ -1795,7 +1798,7 @@ static int mailbox_upgrade_index(struct mailbox *mailbox)
 	}
     }
 
-    mailbox_unlock_pop(mailbox);
+    if (!mailbox_doing_reconstruct) mailbox_unlock_pop(mailbox);
     mailbox_unlock_index(mailbox);
     mailbox_unlock_header(mailbox);
     if (newindex) fclose(newindex);
@@ -1803,7 +1806,7 @@ static int mailbox_upgrade_index(struct mailbox *mailbox)
     return 0;
 
  fail:
-    mailbox_unlock_pop(mailbox);
+    if (!mailbox_doing_reconstruct) mailbox_unlock_pop(mailbox);
     mailbox_unlock_index(mailbox);
     mailbox_unlock_header(mailbox);
     if (newindex) fclose(newindex);
