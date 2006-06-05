@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.2.2.45 2006/05/26 16:27:20 murch Exp $
+.\" $Id: imapoptions,v 1.2.2.46 2006/06/05 23:32:30 murch Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -929,7 +929,7 @@ are listed with ``<none>''.
    next opportunity. Safer than sending signals to running processes */
 
 { "syslog_prefix", NULL, STRING }
-/* String to be appended to the process name in syslog entries. */
+/* String to be prepended to the process name in syslog entries. */
 
 { "temp_path", "/tmp", STRING }
 /* The pathname to store temporary files in */
