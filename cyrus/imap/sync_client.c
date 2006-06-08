@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.30 2006/04/04 18:10:54 murch Exp $
+ * $Id: sync_client.c,v 1.1.2.31 2006/06/08 18:06:38 murch Exp $
  */
 
 #include <config.h>
@@ -2799,6 +2799,7 @@ static int do_sync(const char *filename)
 	   action for same user */
 	(sync_namespace.mboxname_tointernal)(&sync_namespace, "INBOX",
 					      action->user, inboxname);
+        remove_folder(inboxname, mailbox_list, 1);
         remove_folder(inboxname, append_list, 1);
         remove_folder(inboxname, acl_list, 1);
         remove_folder(inboxname, quota_list, 1);
