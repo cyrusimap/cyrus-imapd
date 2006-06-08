@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.c,v 1.1.2.16 2006/03/06 13:12:26 murch Exp $
+ * $Id: sync_support.c,v 1.1.2.17 2006/06/08 15:02:30 murch Exp $
  */
 
 #include <config.h>
@@ -1097,6 +1097,7 @@ void sync_message_list_free(struct sync_message_list **lp)
     rmdir(l->stage_dir);
     free(l->cache_buffer);
     free(l->hash);
+    free(l->file);
     free(l);
     *lp = NULL;
 }

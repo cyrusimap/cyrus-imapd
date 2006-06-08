@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_commit.c,v 1.1.2.8 2005/12/13 15:31:10 murch Exp $
+ * $Id: sync_commit.c,v 1.1.2.9 2006/06/08 15:02:30 murch Exp $
  */
 
 #include <config.h>
@@ -826,7 +826,7 @@ sync_create_commit(char *name, char *partition, char *uniqueid, char *acl,
     int r;
     int free_uniqueid = 0;
     const char *root = NULL;
-    char *newpartition;
+    char *newpartition = NULL;
     char *mboxent = NULL;
     int newreserved = 0; /* made reserved entry in local mailbox list */
     int mboxopen = 0;
@@ -902,6 +902,7 @@ sync_create_commit(char *name, char *partition, char *uniqueid, char *acl,
 	}
     }
     if (mboxent) free(mboxent);
+    if (newpartition) free(newpartition);
 
     /* Fix UIDvalidity */
     if (!r) r = mailbox_open_header(name, 0, &m);
