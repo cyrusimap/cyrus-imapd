@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.c,v 1.1.2.17 2006/06/08 15:02:30 murch Exp $
+ * $Id: sync_support.c,v 1.1.2.18 2006/06/09 15:14:34 murch Exp $
  */
 
 #include <config.h>
@@ -1120,7 +1120,8 @@ struct sync_message *sync_message_find(struct sync_message_list *l,
 
 int sync_message_list_need_restart(struct sync_message_list *l)
 {
-    return(lseek(l->cache_fd, 0, SEEK_CUR) >= SYNC_MESSAGE_LIST_MAX_CACHE);
+    return((l->count > 1000) ||
+	   lseek(l->cache_fd, 0, SEEK_CUR) >= SYNC_MESSAGE_LIST_MAX_CACHE);
 }
 
 /* ====================================================================== */
