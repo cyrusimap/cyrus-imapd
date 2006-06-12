@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.31 2006/06/08 18:06:38 murch Exp $
+ * $Id: sync_client.c,v 1.1.2.32 2006/06/12 18:55:50 murch Exp $
  */
 
 #include <config.h>
@@ -2169,9 +2169,7 @@ int do_user_sub(char *user, struct sync_folder_list *server_list)
 	}
 	else if (c && n < 0) {
 	    /* add the current client subscription */
-	    (sync_namespace.mboxname_tointernal)(&sync_namespace, c->name,
-						 user, buf);
-	    if ((r = user_addsub(user, buf))) goto bail;
+	    if ((r = user_addsub(user, c->name))) goto bail;
 	}
     }
 
