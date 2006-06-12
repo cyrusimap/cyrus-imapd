@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.1.2.22 2006/05/26 15:50:10 murch Exp $
+ * $Id: sync_server.c,v 1.1.2.23 2006/06/12 18:56:42 murch Exp $
  */
 
 #include <config.h>
@@ -173,8 +173,7 @@ static void cmd_create(char *mailboxname, char *partition,
 static void cmd_delete(char *name);
 static void cmd_rename(char *oldmailboxname, char *newmailboxname);
 static void cmd_lsub(char *user);
-static void cmd_addsub(char *user, char *name);
-static void cmd_delsub(char *user, char *name);
+static void cmd_changesub(char *user, char *name, int add);
 static void cmd_set_annotation(char *mailboxname, char *entry, char *userid,
 			       char *value);
 static void cmd_list_annotations(char *mailboxname);
@@ -645,7 +644,7 @@ static void cmdloop(void)
 		c = getastring(sync_in, sync_out, &arg2);
 		if (c == '\r') c = prot_getc(sync_in);
 		if (c != '\n') goto extraargs;
-                cmd_addsub(arg1.s, arg2.s);
+                cmd_changesub(arg1.s, arg2.s,1);
                 continue;
             }
 	    else if (!strcmp(cmd.s, "Activate_sieve")) {
@@ -699,7 +698,7 @@ static void cmdloop(void)
 		c = getastring(sync_in, sync_out, &arg2);
 		if (c == '\r') c = prot_getc(sync_in);
 		if (c != '\n') goto extraargs;
-                cmd_delsub(arg1.s, arg2.s);
+                cmd_changesub(arg1.s, arg2.s, 0);
                 continue;
             } else if (!strcmp(cmd.s, "Deactivate_sieve")) {
 		if (c != ' ') goto missingargs;
@@ -2561,30 +2560,28 @@ static void cmd_lsub(char *user)
         prot_printf(sync_out, "OK Lsub completed\r\n");
 }
 
-static void cmd_addsub(char *user, char *name)
+static void cmd_changesub(char *user, char *name, int add)
 {
+    char mboxname[MAX_MAILBOX_PATH+1];
     int r;
 
-    r = mboxlist_changesub(name, user, sync_authstate, 1, 1);
+    if (!strncasecmp(name, "inbox", 5)) {
+	((*sync_namespacep).mboxname_tointernal)(sync_namespacep, "INBOX",
+						 user, mboxname);
+	strlcat(mboxname, name+5, sizeof(mboxname));
+    }
+    else
+	strlcpy(mboxname, name, sizeof(mboxname));
+
+    r = mboxlist_changesub(mboxname, user, sync_authstate, add, add);
 
     if (r) {
-        prot_printf(sync_out, "NO Addsub %s %s failed: %s\r\n",
+        prot_printf(sync_out, "NO %s %s %s failed: %s\r\n",
+		    add ? "Addsub" : "Delsub",
 		    user, name, error_message(r));
     } else
-        prot_printf(sync_out, "OK Addsub completed\r\n");
-}
-
-static void cmd_delsub(char *user, char *name)
-{
-    int r;
-
-    r = mboxlist_changesub(name, user, sync_authstate, 0, 0);
-
-    if (r) {
-        prot_printf(sync_out, "NO Delsub %s %s failed: %s\r\n",
-		    user, name, error_message(r));
-    } else
-        prot_printf(sync_out, "OK Delsub completed\r\n");
+        prot_printf(sync_out, "OK %s completed\r\n",
+		    add ? "Addsub" : "Delsub");
 }
 
 /* ====================================================================== */
