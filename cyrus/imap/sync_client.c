@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.33 2006/06/13 17:24:40 murch Exp $
+ * $Id: sync_client.c,v 1.1.2.34 2006/06/13 17:31:30 murch Exp $
  */
 
 #include <config.h>
@@ -2440,7 +2440,7 @@ int do_user_work(char *user, int *vanishedp)
     if (r) {
         if (mailbox_open) mailbox_close(&m);
         syslog(LOG_ERR, "IOERROR: Failed to open %s: %s",
-               m.name, error_message(r));
+               buf, error_message(r));
         r = IMAP_IOERROR;
         goto bail;
     }
