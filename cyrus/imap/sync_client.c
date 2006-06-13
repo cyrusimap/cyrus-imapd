@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.32 2006/06/12 18:55:50 murch Exp $
+ * $Id: sync_client.c,v 1.1.2.33 2006/06/13 17:24:40 murch Exp $
  */
 
 #include <config.h>
@@ -2426,6 +2426,25 @@ int do_user_work(char *user, int *vanishedp)
     if (verbose_logging)
         syslog(LOG_INFO, "USER %s", user);
 
+    (sync_namespace.mboxname_tointernal)(&sync_namespace, "INBOX",
+					  user, buf);
+    r = mailbox_open_header(buf, 0, &m);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+	/* user has been removed, RESET server */
+	r = user_reset(user);
+	goto bail;
+    }
+    if (!r) mailbox_open = 1;
+    if (!r) r = mailbox_open_index(&m);
+
+    if (r) {
+        if (mailbox_open) mailbox_close(&m);
+        syslog(LOG_ERR, "IOERROR: Failed to open %s: %s",
+               m.name, error_message(r));
+        r = IMAP_IOERROR;
+        goto bail;
+    }
+
     /* Get server started */
     do_user_start(user);
 
@@ -2438,20 +2457,6 @@ int do_user_work(char *user, int *vanishedp)
         sync_folder_list_free(&server_list);
         sync_folder_list_free(&server_sub_list);
         return(r);
-    }
-
-    (sync_namespace.mboxname_tointernal)(&sync_namespace, "INBOX",
-					  user, buf);
-    r = mailbox_open_header(buf, 0, &m);
-    if (!r) mailbox_open = 1;
-    if (!r) r = mailbox_open_index(&m);
-
-    if (r) {
-        if (mailbox_open) mailbox_close(&m);
-        syslog(LOG_ERR, "IOERROR: Failed to open %s: %s",
-               m.name, error_message(r));
-        r = IMAP_IOERROR;
-        goto bail;
     }
 
     /* Reset target account entirely if uniqueid of inbox doesn't match
@@ -2792,7 +2797,7 @@ static int do_sync(const char *filename)
     for (action = user_list->head ; action ; action = action->next) {
 	char inboxname[MAX_MAILBOX_NAME+1];
 
-	/* USER action overrides any APPEND, ACL, QUOTA, ANNOTATION action on
+	/* USER action overrides any MAILBOX, APPEND, ACL, QUOTA, ANNOTATION action on
 	   any of the user's mailboxes or any META, SIEVE, SEEN, SUB, UNSUB
 	   action for same user */
 	(sync_namespace.mboxname_tointernal)(&sync_namespace, "INBOX",

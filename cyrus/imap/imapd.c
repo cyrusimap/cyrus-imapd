@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.82 2006/05/30 19:38:29 murch Exp $ */
+/* $Id: imapd.c,v 1.443.2.83 2006/06/13 17:24:38 murch Exp $ */
 
 #include <config.h>
 
@@ -4917,8 +4917,6 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
     }
     else {
-	char *userid = NULL;
-
 	if (config_mupdate_server &&
 	    (config_mupdate_config != IMAP_ENUM_MUPDATE_CONFIG_STANDARD)) {
 	    kick_mupdate();
@@ -4927,8 +4925,8 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
 
-	if ((userid = mboxname_isusermailbox(mailboxname, 1)))
-	    sync_log_user(userid);
+	if (mboxname_isusermailbox(mailboxname, 1))
+	    sync_log_user(name+5);
 	else
 	    sync_log_mailbox(mailboxname);
     }
@@ -5057,6 +5055,10 @@ void cmd_delete(char *tag, char *name, int localonly, int force)
 	    }
 	    user_deletedata(mailboxname+domainlen+5, imapd_userid,
 			    imapd_authstate, 1);
+
+	    sync_log_user(mailboxname+domainlen+5);
+
+	    *p = '\0'; /* clip off domain */
         }
     }
 
@@ -5073,7 +5075,7 @@ void cmd_delete(char *tag, char *name, int localonly, int force)
 
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
-	/* XXX should sent a RESET here to cleanup meta-data */
+
 	sync_log_mailbox(mailboxname);
     }
 }	

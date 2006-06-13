@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_commit.c,v 1.1.2.9 2006/06/08 15:02:30 murch Exp $
+ * $Id: sync_commit.c,v 1.1.2.10 2006/06/13 17:24:40 murch Exp $
  */
 
 #include <config.h>
@@ -834,11 +834,11 @@ sync_create_commit(char *name, char *partition, char *uniqueid, char *acl,
     /* Must be atleast MAX_PARTITION_LEN + 30 for partition, need
      * MAX_PARTITION_LEN + HOSTNAME_SIZE + 2 for mupdate location */
     char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
-
+#if 0  /* XXX  is this really necessary since only sync_client talks to us? */
     /* Need an extra sanity check here as normal ACL logic is bypassed */
     r = mboxname_policycheck(name);
     if (r) return r;
-
+#endif
     if (!uniqueid) {
 	uniqueid = xmalloc(sizeof(char) * 32);
 	mailbox_make_uniqueid(name, uidvalidity, uniqueid, 32); /* YYY */
