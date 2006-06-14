@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 /*
- * $Id: charset.c,v 1.44 2003/10/22 18:50:12 rjs3 Exp $
+ * $Id: charset.c,v 1.45 2006/06/14 12:44:05 murch Exp $
  */
 #include <config.h>
 #include <ctype.h>
@@ -861,24 +861,22 @@ char *charset_decode_mimebody(const char *msg_base, int len, int encoding,
 	return (char *) msg_base;
 
     case ENCODING_QP:
-	if (alloced < len)
-	    *retval = xrealloc(*retval, len);
-	*outlen = charset_readqp(&state, *retval, len);
-	return (*outlen ? *retval : NULL);
+	state.rawproc = charset_readqp;
+	break;
 
     case ENCODING_BASE64:
-	if (alloced < len)
-	    *retval = xrealloc(*retval, len);
-	*outlen = charset_readbase64(&state, *retval, len);
-	return (*outlen ? *retval : NULL);
+	state.rawproc = charset_readbase64;
+	break;
 
     default:
 	/* Don't know encoding--nothing can match */
 	return NULL;
     }
 
-    /* should never get here */
-    return NULL;
+    if (alloced < len+1) *retval = xrealloc(*retval, len+1);
+    *outlen = (*state.rawproc)(&state, *retval, len);
+    (*retval)[*outlen] = '\0';
+    return *retval;
 }
 
 /*
