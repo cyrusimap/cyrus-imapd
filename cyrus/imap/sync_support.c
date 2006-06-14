@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.c,v 1.1.2.18 2006/06/09 15:14:34 murch Exp $
+ * $Id: sync_support.c,v 1.1.2.19 2006/06/14 18:03:24 murch Exp $
  */
 
 #include <config.h>
@@ -1416,6 +1416,27 @@ void sync_flag_list_free(struct sync_flag_list **lp)
 
 /* ====================================================================== */
 
+char *sync_sieve_get_path(char *userid, char *sieve_path, size_t psize)
+{
+    char *domain;
+
+    if (config_getenum(IMAPOPT_VIRTDOMAINS) && (domain = strchr(userid, '@'))) {
+	char d = (char) dir_hash_c(domain+1);
+	*domain = '\0';  /* split user@domain */
+	snprintf(sieve_path, psize, "%s%s%c/%s/%c/%s",
+		 config_getstring(IMAPOPT_SIEVEDIR),
+		 FNAME_DOMAINDIR, d, domain+1, dir_hash_c(userid), userid);
+	*domain = '@';  /* reassemble user@domain */
+    }
+    else {
+	snprintf(sieve_path, psize, "%s/%c/%s",
+		 config_getstring(IMAPOPT_SIEVEDIR), dir_hash_c(userid), userid);
+    }
+
+    return sieve_path;
+}
+
+
 struct sync_sieve_list *sync_sieve_list_create()
 {
     struct sync_sieve_list *l = xzmalloc(sizeof (struct sync_sieve_list));
@@ -1497,8 +1518,7 @@ struct sync_sieve_list *sync_sieve_list_generate(char *userid)
 
     list = sync_sieve_list_create();
 
-    snprintf(sieve_path, sizeof(sieve_path), "%s/%c/%s",
-             config_getstring(IMAPOPT_SIEVEDIR), dir_hash_c(userid), userid);
+    sync_sieve_get_path(userid, sieve_path, sizeof(sieve_path));
 
     if (!(mbdir = opendir(sieve_path)))
         return(list);
@@ -1549,8 +1569,7 @@ char *sync_sieve_read(char *userid, char *name, unsigned long *sizep)
     if (sizep)
         *sizep = 0;
 
-    snprintf(sieve_path, sizeof(sieve_path), "%s/%c/%s",
-             config_getstring(IMAPOPT_SIEVEDIR), dir_hash_c(userid), userid);
+    sync_sieve_get_path(userid, sieve_path, sizeof(sieve_path));
     
     snprintf(filename, sizeof(filename), "%s/%s", sieve_path, name);
 
@@ -1591,8 +1610,7 @@ int sync_sieve_upload(struct protstream *input, struct protstream *output,
     char buf[8192+1];
     int n;
 
-    snprintf(sieve_path, sizeof(sieve_path), "%s/%c/%s",
-             config_getstring(IMAPOPT_SIEVEDIR), dir_hash_c(userid), userid);
+    sync_sieve_get_path(userid, sieve_path, sizeof(sieve_path));
 
     if (stat(sieve_path, &sbuf) == -1 && errno == ENOENT) {
 	if (cyrus_mkdir(sieve_path, 0755) == -1) return IMAP_IOERROR;
@@ -1649,8 +1667,7 @@ int sync_sieve_activate(char *userid, char *name)
     char target[2048];
     char active[2048];
 
-    snprintf(sieve_path, sizeof(sieve_path), "%s/%c/%s",
-             config_getstring(IMAPOPT_SIEVEDIR), dir_hash_c(userid), userid);
+    sync_sieve_get_path(userid, sieve_path, sizeof(sieve_path));
 
     snprintf(target, sizeof(target), "%s", name);
     snprintf(active, sizeof(active), "%s/%s", sieve_path, "defaultbc");
@@ -1667,8 +1684,7 @@ int sync_sieve_deactivate(char *userid)
     char sieve_path[2048];
     char active[2048];
 
-    snprintf(sieve_path, sizeof(sieve_path), "%s/%c/%s",
-             config_getstring(IMAPOPT_SIEVEDIR), dir_hash_c(userid), userid);
+    sync_sieve_get_path(userid, sieve_path, sizeof(sieve_path));
 
     snprintf(active, sizeof(active), "%s/%s", sieve_path, "defaultbc");
     unlink(active);
@@ -1687,8 +1703,7 @@ int sync_sieve_delete(char *userid, char *name)
     int is_default = 0;
     int count;
 
-    snprintf(sieve_path, sizeof(sieve_path), "%s/%c/%s",
-             config_getstring(IMAPOPT_SIEVEDIR), dir_hash_c(userid), userid);
+    sync_sieve_get_path(userid, sieve_path, sizeof(sieve_path));
 
     if (!(mbdir = opendir(sieve_path)))
         return(IMAP_IOERROR);

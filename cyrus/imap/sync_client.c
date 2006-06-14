@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.34 2006/06/13 17:31:30 murch Exp $
+ * $Id: sync_client.c,v 1.1.2.35 2006/06/14 18:03:24 murch Exp $
  */
 
 #include <config.h>
@@ -2258,7 +2258,7 @@ int do_user_sieve(char *user, struct sync_sieve_list *server_list)
             goto bail;
     }
 
-    /* Change active script if necassary */
+    /* Change active script if necessary */
     client_active = 0;
     for (item = client_list->head ; item ; item = item->next) {
         if (!item->active)
