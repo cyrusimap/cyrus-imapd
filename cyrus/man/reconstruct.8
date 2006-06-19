@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: reconstruct.8,v 1.18.2.1 2004/10/13 18:08:03 shadow Exp $
+.\" $Id: reconstruct.8,v 1.18.2.2 2006/06/19 12:59:37 murch Exp $
 .SH NAME
 reconstruct \- reconstruct mailboxes
 .SH SYNOPSIS
@@ -118,8 +118,8 @@ Create the mailboxes in the database in addition to reconstructing them.
 .B \-x
 When processing a mailbox which is not in the mailbox list (e.g. via
 the -p or -f options), do not import the metadata from the mailbox,
-instead create it anew (this specifically affects atleast the mailbox's seen
-stat unique identifier, user flags, and ACL).
+instead create it anew (this specifically affects at least the mailbox's seen
+state unique identifier, user flags, and ACL).
 .TP
 .B \-r
 Recursively reconstruct all sub-mailboxes of the mailboxes or mailbox
