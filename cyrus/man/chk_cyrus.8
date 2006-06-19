@@ -40,7 +40,7 @@
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
 .SH NAME
-chk_cyrus \- perform a consistancy check of the cyrus mailstore
+chk_cyrus \- perform a consistency check of the cyrus mailstore
 .SH SYNOPSIS
 .B chk_cyrus
 [
@@ -57,7 +57,7 @@ chk_cyrus \- perform a consistancy check of the cyrus mailstore
 ]
 .SH DESCRIPTION
 .I Chk_cyrus
-is used to perform a consistancy check on the cyrus datastore, and output
+is used to perform a consistency check on the cyrus datastore, and output
 a list of files/directories that are expected to exist, but do not.
 Status messagess are output to stderr, the list of files/directories is
 output to stdout.  This list can be passed to a backup program to aid a
@@ -73,10 +73,10 @@ file unless specified otherwise by \fB-C\fR.
 Read configuration options from \fIconfig-file\fR.
 .TP
 .BI \-P " partition"
-Run the consistancy check for only the given partition.
+Run the consistency check for only the given partition.
 May not be specified with -M.
 .BI \-M " mailbox"
-Run the consistancy check for only the given mailbox.
+Run the consistency check for only the given mailbox.
 May not be specified with -P.
 .SH FILES
 .TP
