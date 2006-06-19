@@ -41,7 +41,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.in,v 1.23.2.6 2005/02/17 18:43:03 shadow Exp $
+# $Id: Makefile.in,v 1.23.2.7 2006/06/19 16:00:18 murch Exp $
 # 
 srcdir = @srcdir@
 top_srcdir = @top_srcdir@
@@ -53,7 +53,7 @@ INSTALL = @INSTALL@
 RANLIB = @RANLIB@
 
 DEFS = @DEFS@
-CPPFLAGS = -I.. -I$(srcdir)/../imap -I$(srcdir)/../lib @COM_ERR_CPPFLAGS@ @CPPFLAGS@
+CPPFLAGS = -I.. -I$(srcdir)/../imap -I$(srcdir)/../lib @COM_ERR_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@
 AFS_LDFLAGS = @AFS_LDFLAGS@ @COM_ERR_LDFLAGS@
 AFS_LIBS = @AFS_LIBS@
 IMAP_LIBS = @IMAP_LIBS@ @LIB_RT@
