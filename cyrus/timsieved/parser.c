@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.33.2.7 2005/11/03 13:42:16 murch Exp $
+ * $Id: parser.c,v 1.33.2.8 2006/06/27 15:58:43 murch Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -60,6 +60,7 @@
 #include "libconfig.h"
 #include "global.h"
 #include "auth.h"
+#include "backend.h"
 #include "mboxname.h"
 #include "mboxlist.h"
 #include "xmalloc.h"
@@ -90,6 +91,7 @@ static SSL *tls_conn = NULL;
 /* from elsewhere */
 void fatal(const char *s, int code);
 extern int sieved_logfd;
+extern struct backend *backend;
 
 /* forward declarations */
 static void cmd_logout(struct protstream *sieved_out,
@@ -680,19 +682,20 @@ static int cmd_authenticate(struct protstream *sieved_out,
       }
 
       if(type & MBTYPE_REMOTE) {
-	  /* It's a remote mailbox, we want to set up a referral */
-	  if (sieved_domainfromip) {
-	      char *authname, *p;
+	  /* It's a remote mailbox */
+	  if (config_getswitch(IMAPOPT_SIEVE_ALLOWREFERRALS)) {
+	      /* We want to set up a referral */
+	      if (sieved_domainfromip) {
+		  char *authname, *p;
 
-	      /* get a new copy of the userid */
-	      free(username);
-	      username = xstrdup(canon_user);
+		  /* get a new copy of the userid */
+		  free(username);
+		  username = xstrdup(canon_user);
 
-	      /* get the authid from SASL */
-	      sasl_result=sasl_getprop(sieved_saslconn, SASL_AUTHUSER,
-				       (const void **) &canon_user);
-	      if (sasl_result!=SASL_OK)
-		  {
+		  /* get the authid from SASL */
+		  sasl_result=sasl_getprop(sieved_saslconn, SASL_AUTHUSER,
+					   (const void **) &canon_user);
+		  if (sasl_result!=SASL_OK) {
 		      *errmsg = "Internal SASL error";
 		      syslog(LOG_ERR, "SASL: sasl_getprop SASL_AUTHUSER: %s",
 			     sasl_errstring(sasl_result, NULL, NULL));
@@ -704,21 +707,46 @@ static int cmd_authenticate(struct protstream *sieved_out,
 		      ret = FALSE;
 		      goto cleanup;
 		  }
-	      authname = xstrdup(canon_user);
+		  authname = xstrdup(canon_user);
 
-	      if ((p = strchr(authname, '@'))) *p = '%';
-	      if ((p = strchr(username, '@'))) *p = '%';
+		  if ((p = strchr(authname, '@'))) *p = '%';
+		  if ((p = strchr(username, '@'))) *p = '%';
 
-	      referral_host =
-		  (char*) xmalloc(strlen(authname)+1+strlen(username)+1+
-				  strlen(server)+1);
-	      sprintf((char*) referral_host, "%s;%s@%s",
-		      authname, username, server);
+		  referral_host =
+		      (char*) xmalloc(strlen(authname)+1+strlen(username)+1+
+				      strlen(server)+1);
+		  sprintf((char*) referral_host, "%s;%s@%s",
+			  authname, username, server);
 
-	      free(authname);
+		  free(authname);
+	      }
+	      else
+		  referral_host = xstrdup(server);
 	  }
-	  else
-	      referral_host = xstrdup(server);
+	  else {
+	      /* We want to set up a connection to the backend for proxying */
+	      const char *statusline = NULL;
+
+	      /* xxx hide the fact that we are storing partitions */
+	      if (server) {
+		  char *c;
+		  c = strchr(server, '!');
+		  if(c) *c = '\0';
+	      }
+
+	      backend = backend_connect(NULL, server, &protocol[PROTOCOL_SIEVE],
+					username, NULL, &statusline);
+
+	      if (!backend) {
+		  syslog(LOG_ERR, "couldn't authenticate to backend server");
+		  prot_printf(sieved_out, "NO \"%s\"\r\n",
+			      statusline ? statusline :
+			      "Authentication to backend server failed");
+		  prot_flush(sieved_out);
+
+		  goto cleanup;
+	      }
+	  }
       } else if (actions_setuser(username) != TIMSIEVE_OK) {
 	  *errmsg = "internal error";
 	  syslog(LOG_ERR, "error in actions_setuser()");

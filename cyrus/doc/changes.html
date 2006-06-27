@@ -1,12 +1,27 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.71.2.49 2006/05/25 15:24:49 murch Exp $ -->
+<!-- $Id: changes.html,v 1.71.2.50 2006/06/27 15:58:40 murch Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
 <title>Changes to the Cyrus IMAP Server</title>
 </head>
 <body>
+
+<h1>Changes to the Cyrus IMAP Server since 2.3.6</h1>
+<ul>
+<li>Fixed problems with replication and virtual domains.</li>
+<li>Fixed problems with newer cyrus.index files on 64-bit
+machines.</li>
+<li>Added '<tt>-p &lt;ssf&gt;</tt>' option to services so
+that PLAIN authentication can be used without TLS in secure
+environments.</li>
+<li>Added <tt>munge8bit</tt> to control whether unencoded 8-bit
+characters in headers are changed to 'X' or are left alone.</li>
+<li>Added <tt>sieve_allowreferrals</tt> option to control whether
+<tt>timsieved</tt> issues referrals or proxys traffic to backends.</li>
+<li>Fixed miscellaneous bugs and build issues.</li>
+</ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.3.5</h1> 
 <ul> 
@@ -2125,7 +2140,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2006/05/25 15:24:49 $ <br />
+last modified: $Date: 2006/06/27 15:58:40 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: saslclient.c,v 1.12.2.1 2004/07/12 20:20:51 ken3 Exp $ */
+/* $Id: saslclient.c,v 1.12.2.2 2006/06/27 15:58:42 murch Exp $ */
 
 #include <config.h>
 
@@ -281,9 +281,22 @@ int saslclient(sasl_conn_t *conn, struct sasl_cmd_t *sasl_cmd,
 	    r = SASL_BADAUTH;
 	    break;
 	}
-	else if (!strncasecmp(buf, sasl_cmd->cont, strlen(sasl_cmd->cont))) {
+	else if (sasl_cmd->cont &&
+		 !strncasecmp(buf, sasl_cmd->cont, strlen(sasl_cmd->cont))) {
 	    /* continue */
 	    base64 = buf + strlen(sasl_cmd->cont);
+	}
+	else if (!sasl_cmd->cont && buf[0] == '{') {
+	    unsigned int litsize = atoi(buf+1);
+
+	    /* get actual literal data */
+	    if (!prot_fgets(buf, AUTH_BUF_SIZE, pin)) {
+		if (sasl_result) *sasl_result = SASL_FAIL;
+		if (status) *status = "EOF from server";
+		return IMAP_SASL_PROTERR;
+	    }
+
+	    base64 = buf;
 	}
 	else {
 	    /* unknown response */

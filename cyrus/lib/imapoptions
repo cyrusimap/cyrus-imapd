@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.2.2.46 2006/06/05 23:32:30 murch Exp $
+.\" $Id: imapoptions,v 1.2.2.47 2006/06/27 15:58:42 murch Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -837,6 +837,11 @@ are listed with ``<none>''.
 { "sharedprefix", "Shared Folders", STRING }
 /* If using the alternate IMAP namespace, the prefix for the shared
    namespace.  The hierarchy delimiter will be automatically appended. */
+
+{ "sieve_allowreferrals", 1, SWITCH }
+/* If enabled, timsieved will issue referrals to clients when the
+   user's scripts reside on a remote server (in a Murder).
+   Otherwise, timsieved will proxy traffic to the remote server. */
 
 { "sieve_extensions", "fileinto reject vacation imapflags notify envelope relational regex subaddress copy", BITFIELD("fileinto", "reject", "vacation", "imapflags", "notify", "include", "envelope", "body", "relational", "regex", "subaddress", "copy") }
 /* Space-separated list of Sieve extensions allowed to be used in

@@ -1,6 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.36.2.5 2005/11/18 14:16:11 murch Exp $
+ * $Id: actions.c,v 1.36.2.6 2006/06/27 15:58:43 murch Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -183,8 +183,9 @@ int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
     int mechcount;
 
     /* implementation */
-    prot_printf(conn, "\"IMPLEMENTATION\" \"Cyrus timsieved %s\"\r\n",
-		CYRUS_VERSION);
+    prot_printf(conn,
+		"\"IMPLEMENTATION\" \"Cyrus timsieved%s %s\"\r\n",
+		config_mupdate_server ? " (Murder)" : "", CYRUS_VERSION);
     
     /* SASL */
     if (!authenticated &&

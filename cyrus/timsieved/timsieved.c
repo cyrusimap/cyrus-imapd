@@ -1,7 +1,7 @@
 /* timsieved.c -- main file for timsieved (sieve script accepting program)
  * Tim Martin
  * 9/21/99
- * $Id: timsieved.c,v 1.48.2.11 2005/11/18 14:16:56 murch Exp $
+ * $Id: timsieved.c,v 1.48.2.12 2006/06/27 15:58:43 murch Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -84,6 +84,7 @@
 
 #include "auth.h"
 #include "acl.h"
+#include "backend.h"
 #include "mboxlist.h"
 #include "util.h"
 
@@ -125,6 +126,12 @@ static struct proxy_context sieved_proxyctx = {
     1, 1, &sieved_authstate, &sieved_userisadmin, NULL
 };
 
+/* PROXY stuff */
+struct backend *backend = NULL;
+
+static void bitpipe(void);
+/* end PROXY stuff */
+
 /*
  * Cleanly shut down and exit
  */
@@ -133,6 +140,12 @@ void shut_down(int code)
 {
     /* free interpreter */
     if (interp) sieve_interp_free(&interp);
+
+    /* close backend connection */
+    if (backend) {
+	backend_disconnect(backend);
+	free(backend);
+    }
 
     /* close mailboxes */
     mboxlist_close();
@@ -172,6 +185,14 @@ void cmdloop()
 
     while (ret != TRUE)
     {
+	if (backend) {
+	    /* create a pipe from client to backend */
+	    bitpipe();
+
+	    /* pipe has been closed */
+	    return;
+	}
+
 	ret = parser(sieved_out, sieved_in);
     }
 
@@ -213,7 +234,7 @@ int service_init(int argc __attribute__((unused)),
 		 char **argv __attribute__((unused)),
 		 char **envp __attribute__((unused)))
 {
-    global_sasl_init(0, 1, mysasl_cb);
+    global_sasl_init(1, 1, mysasl_cb);
 
     /* open mailboxes */
     mboxlist_init(0);
@@ -365,4 +386,37 @@ int reset_saslconn(sasl_conn_t **conn, sasl_ssf_t ssf, char *authid)
     /* End TLS/SSL Info */
 
     return SASL_OK;
+}
+
+/* we've authenticated the client, we've connected to the backend.
+   now it's all up to them */
+static void bitpipe(void)
+{
+    struct protgroup *protin = protgroup_new(2);
+    int shutdown = 0;
+    char buf[4096];
+
+    protgroup_insert(protin, sieved_in);
+    protgroup_insert(protin, backend->in);
+
+    do {
+	/* Flush any buffered output */
+	prot_flush(sieved_out);
+	prot_flush(backend->out);
+
+	/* check for shutdown file */
+	if (shutdown_file(buf, sizeof(buf))) {
+	    shutdown = 1;
+	    goto done;
+	}
+    } while (!proxy_check_input(protin, sieved_in, sieved_out,
+				backend->in, backend->out, 0));
+
+ done:
+    /* ok, we're done. */
+    protgroup_free(protin);
+
+    if (shutdown) prot_printf(sieved_out, "NO \"%s\"\r\n", buf);
+
+    return;
 }
