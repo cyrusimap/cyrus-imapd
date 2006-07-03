@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.443.2.83 2006/06/13 17:24:38 murch Exp $ */
+/* $Id: imapd.c,v 1.443.2.84 2006/07/03 13:22:41 murch Exp $ */
 
 #include <config.h>
 
@@ -4166,8 +4166,8 @@ void cmd_store(char *tag, char *sequence, int usinguid)
 
     if (backend_current) {
 	/* remote mailbox */
-	prot_printf(backend_current->out, "%s %s %s %s ",
-		    tag, cmd, sequence, operation);
+	prot_printf(backend_current->out, "%s %s %s ",
+		    tag, cmd, sequence);
 	pipe_command(backend_current, 65536);
 	return;
     }
