@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_commit.c,v 1.1.2.10 2006/06/13 17:24:40 murch Exp $
+ * $Id: sync_commit.c,v 1.1.2.11 2006/07/05 20:24:16 murch Exp $
  */
 
 #include <config.h>
@@ -108,6 +108,7 @@ sync_combine_commit(struct mailbox *mailbox,
     struct index_record record;
     int   n, r = 0, rc;
     struct txn *tid = NULL;
+    modseq_t highestmodseq = 0;
 
     if (upload_list->count == 0) return(0);   /* NOOP */
 
@@ -233,6 +234,17 @@ sync_combine_commit(struct mailbox *mailbox,
 		= htonl(message->cache_version);
 
             message_uuid_pack(&item->uuid, buf+OFFSET_MESSAGE_UUID);
+
+#ifdef HAVE_LONG_LONG_INT
+            *((bit64 *)(buf+OFFSET_MODSEQ_64)) = htonll(item->modseq);
+#else
+	    /* zero the unused 32bits */
+            *((bit32 *)(buf+OFFSET_MODSEQ_64)) = htonl(0);
+            *((bit32 *)(buf+OFFSET_MODSEQ)) = htonl(item->modseq);
+#endif
+
+	    if (item->modseq > highestmodseq) highestmodseq = item->modseq;
+
             quota_add  += message->msg_size;
 
             if (item->flags.system_flags & FLAG_ANSWERED) numansweredflag++;
@@ -296,6 +308,18 @@ sync_combine_commit(struct mailbox *mailbox,
 
     /* Fix up last_append time */
     *((bit32 *)(buf+OFFSET_LAST_APPENDDATE)) = htonl(last_appenddate);
+
+    /* Fix up highest modseq */
+#ifdef HAVE_LONG_LONG_INT
+    if (highestmodseq > *((bit64 *)(buf+OFFSET_HIGHESTMODSEQ_64))) {
+	*((bit64 *)(buf+OFFSET_HIGHESTMODSEQ_64)) = htonll(highestmodseq);
+    }
+#else
+    if (highestmodseq > *((bit32 *)(buf+OFFSET_HIGHESTMODSEQ))) {
+	*((bit32 *)(buf+OFFSET_HIGHESTMODSEQ_64)) = htonl(0);
+	*((bit32 *)(buf+OFFSET_HIGHESTMODSEQ)) = htonl(highestmodseq);
+    }
+#endif
 
     rewind(newindex);
     fwrite(buf, 1, mailbox->start_offset, newindex);
@@ -451,6 +475,7 @@ sync_append_commit(struct mailbox *mailbox,
     char  target[MAX_MAILBOX_PATH];
     int   n, r = 0;
     struct txn *tid = NULL;
+    modseq_t highestmodseq = 0;
 
     if (upload_list->count == 0) return(0);   /* NOOP */
 
@@ -492,6 +517,16 @@ sync_append_commit(struct mailbox *mailbox,
         *((bit32 *)(record+OFFSET_CACHE_VERSION))
 	    = htonl(message->cache_version);
         message_uuid_pack(&item->uuid, record+OFFSET_MESSAGE_UUID);
+
+#ifdef HAVE_LONG_LONG_INT
+            *((bit64 *)(record+OFFSET_MODSEQ_64)) = htonll(item->modseq);
+#else
+	    /* zero the unused 32bits */
+            *((bit32 *)(record+OFFSET_MODSEQ_64)) = htonl(0);
+            *((bit32 *)(record+OFFSET_MODSEQ)) = htonl(item->modseq);
+#endif
+
+	if (item->modseq > highestmodseq) highestmodseq = item->modseq;
 
         cache_size += message->cache_size;
         quota_add  += message->msg_size;
@@ -579,6 +614,18 @@ sync_append_commit(struct mailbox *mailbox,
     /* Fix up last_append time */
     *((bit32 *)(hbuf+OFFSET_LAST_APPENDDATE)) = htonl(last_appenddate);
 	
+    /* Fix up highest modseq */
+#ifdef HAVE_LONG_LONG_INT
+    if (highestmodseq > ntohll(*((bit64 *)(hbuf+OFFSET_HIGHESTMODSEQ_64)))) {
+	*((bit64 *)(hbuf+OFFSET_HIGHESTMODSEQ_64)) = htonll(highestmodseq);
+    }
+#else
+    if (highestmodseq > ntohl(*((bit32 *)(hbuf+OFFSET_HIGHESTMODSEQ)))) {
+	*((bit32 *)(hbuf+OFFSET_HIGHESTMODSEQ_64)) = htonl(0);
+	*((bit32 *)(hbuf+OFFSET_HIGHESTMODSEQ)) = htonl(highestmodseq);
+    }
+#endif
+
     /* And write it back out */
     lseek(mailbox->index_fd, 0L, SEEK_SET);
 

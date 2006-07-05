@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.1.2.35 2006/06/14 18:03:24 murch Exp $
+ * $Id: sync_client.c,v 1.1.2.36 2006/07/05 20:24:16 murch Exp $
  */
 
 #include <config.h>
@@ -1118,8 +1118,8 @@ static int upload_message_work(struct mailbox *mailbox,
     unsigned long msg_size = 0;
 
     /* Protocol for PARSED items:
-     * C:  PARSED  <msgid> <uid> 
-     *             <internaldate> <sent-date> <last-updated> <flags>
+     * C:  PARSED  <msgid> <uid>
+     *             <internaldate> <sent-date> <last-updated> <modseq> <flags>
      *             <hdr size> <content_lines>
      *             <cache literal (includes cache size!)>
      * <msg literal (includes msg size!)>
@@ -1127,7 +1127,7 @@ static int upload_message_work(struct mailbox *mailbox,
 
     /* Protocol for COPY items:
      * C:  COPY <msgid> <uid>
-     *           <internaldate> <sent-date> <last-updated> <flags>
+     *           <internaldate> <sent-date> <last-updated> <modseq> <flags>
      */
 
     if (sync_msgid_lookup(msgid_onserver, &record->uuid)) {
@@ -1139,10 +1139,10 @@ static int upload_message_work(struct mailbox *mailbox,
         need_body = 1;
     }
 
-    prot_printf(toserver, " %s %lu %lu %lu %lu (",
+    prot_printf(toserver, " %s %lu %lu %lu %lu " MODSEQ_FMT " (",
              message_uuid_text(&record->uuid),
              record->uid, record->internaldate,
-             record->sentdate, record->last_updated);
+             record->sentdate, record->last_updated, record->modseq);
 
     flags_printed = 0;
 

@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.1.2.23 2006/06/12 18:56:42 murch Exp $
+ * $Id: sync_server.c,v 1.1.2.24 2006/07/05 20:24:16 murch Exp $
  */
 
 #include <config.h>
@@ -1838,6 +1838,17 @@ static void cmd_upload(struct mailbox *mailbox,
             goto parse_err;
         }
 
+        /* Parse modseq */
+        if ((c = getastring(sync_in, sync_out, &arg)) != ' ') {
+            err = "Invalid modseq";
+            goto parse_err;
+        }
+#ifdef HAVE_LONG_LONG_INT
+        item->modseq = sync_atoull(arg.s);
+#else
+        item->modseq = sync_atoul(arg.s);
+#endif
+        
         /* Parse Flags */
         c = sync_getflags(sync_in, &item->flags, &upload_list->meta);
 

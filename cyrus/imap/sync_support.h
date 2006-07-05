@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.h,v 1.1.2.9 2005/06/16 00:02:10 ken3 Exp $
+ * $Id: sync_support.h,v 1.1.2.10 2006/07/05 20:24:16 murch Exp $
  */
 
 #ifndef INCLUDED_SYNC_SUPPORT_H
@@ -54,6 +54,7 @@
 #define SYNC_MESSAGE_LIST_MAX_OPEN_FILES (64)
 
 #define sync_atoul(s) strtoul(s, NULL, 10)
+#define sync_atoull(s) strtoull(s, NULL, 10)
 
 int sync_eatlines_unsolicited(struct protstream *pin, int c);
 
@@ -323,6 +324,7 @@ struct sync_upload_item {
     time_t last_updated;
     struct sync_flags    flags;
     struct message_uuid  uuid;
+    modseq_t modseq;
     struct sync_message *message;
 };
 
