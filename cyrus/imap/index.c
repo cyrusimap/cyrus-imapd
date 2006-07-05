@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.199.2.27 2006/05/30 19:38:39 murch Exp $
+ * $Id: index.c,v 1.199.2.28 2006/07/05 19:51:30 murch Exp $
  */
 #include <config.h>
 
@@ -2427,7 +2427,10 @@ static int index_fetchreply(struct mailbox *mailbox,
     int r = 0;
 
     /* Check the modseq against changedsince */
-    if (MODSEQ(msgno) <= fetchargs->changedsince) return 0;
+    if (fetchargs->changedsince &&
+	MODSEQ(msgno) <= fetchargs->changedsince) {
+	return 0;
+    }
 
     /* Open the message file if we're going to need it */
     if ((fetchitems & (FETCH_HEADER|FETCH_TEXT|FETCH_RFC822)) ||
