@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.32.2.6 2006/05/25 12:57:31 murch Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.32.2.7 2006/07/10 13:46:20 murch Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -7,6 +7,12 @@
 <body>
 
 <h1>Upgrading From Previous Versions</h1>
+
+<h2>Upgrading from 2.3.3 or later (64-bit machines)</h2>
+<ul>
+<li>Due to byte alignment issues in cyrus.index, all mailboxes
+will have to be reconstructed.</li>
+</ul>
 
 <h2>Upgrading from 2.3.4 or 2.3.5</h2>
 <ul>
@@ -455,7 +461,7 @@ worry about it.)
 </ul>
 
 <HR><P>
-last modified: $Date: 2006/05/25 12:57:31 $
+last modified: $Date: 2006/07/10 13:46:20 $
 </BODY></HTML>
 
 
