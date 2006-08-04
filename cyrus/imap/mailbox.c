@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- * $Id: mailbox.c,v 1.161 2006/06/02 18:56:52 murch Exp $
+ * $Id: mailbox.c,v 1.162 2006/08/04 14:40:54 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -884,20 +884,20 @@ struct index_record *record;
 
     buf = (unsigned char*) mailbox->index_base + offset;
 
-    record->uid = htonl(*((bit32 *)(buf+OFFSET_UID)));
-    record->internaldate = htonl(*((bit32 *)(buf+OFFSET_INTERNALDATE)));
-    record->sentdate = htonl(*((bit32 *)(buf+OFFSET_SENTDATE)));
-    record->size = htonl(*((bit32 *)(buf+OFFSET_SIZE)));
-    record->header_size = htonl(*((bit32 *)(buf+OFFSET_HEADER_SIZE)));
-    record->content_offset = htonl(*((bit32 *)(buf+OFFSET_CONTENT_OFFSET)));
-    record->cache_offset = htonl(*((bit32 *)(buf+OFFSET_CACHE_OFFSET)));
-    record->last_updated = htonl(*((bit32 *)(buf+OFFSET_LAST_UPDATED)));
-    record->system_flags = htonl(*((bit32 *)(buf+OFFSET_SYSTEM_FLAGS)));
+    record->uid = ntohl(*((bit32 *)(buf+OFFSET_UID)));
+    record->internaldate = ntohl(*((bit32 *)(buf+OFFSET_INTERNALDATE)));
+    record->sentdate = ntohl(*((bit32 *)(buf+OFFSET_SENTDATE)));
+    record->size = ntohl(*((bit32 *)(buf+OFFSET_SIZE)));
+    record->header_size = ntohl(*((bit32 *)(buf+OFFSET_HEADER_SIZE)));
+    record->content_offset = ntohl(*((bit32 *)(buf+OFFSET_CONTENT_OFFSET)));
+    record->cache_offset = ntohl(*((bit32 *)(buf+OFFSET_CACHE_OFFSET)));
+    record->last_updated = ntohl(*((bit32 *)(buf+OFFSET_LAST_UPDATED)));
+    record->system_flags = ntohl(*((bit32 *)(buf+OFFSET_SYSTEM_FLAGS)));
     for (n = 0; n < MAX_USER_FLAGS/32; n++) {
-	record->user_flags[n] = htonl(*((bit32 *)(buf+OFFSET_USER_FLAGS+4*n)));
+	record->user_flags[n] = ntohl(*((bit32 *)(buf+OFFSET_USER_FLAGS+4*n)));
     }
-    record->content_lines = htonl(*((bit32 *)(buf+OFFSET_CONTENT_LINES)));
-    record->cache_version = htonl(*((bit32 *)(buf+OFFSET_CACHE_VERSION)));
+    record->content_lines = ntohl(*((bit32 *)(buf+OFFSET_CONTENT_LINES)));
+    record->cache_version = ntohl(*((bit32 *)(buf+OFFSET_CACHE_VERSION)));
     return 0;
 }
 
