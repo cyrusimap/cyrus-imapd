@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: saslclient.c,v 1.13 2004/07/07 19:49:05 rjs3 Exp $ */
+/* $Id: saslclient.c,v 1.14 2006/08/30 16:29:11 murch Exp $ */
 
 #include <config.h>
 
@@ -237,21 +237,24 @@ int saslclient(sasl_conn_t *conn, struct sasl_cmd_t *sasl_cmd,
     do {
 	char *p;
 
+	base64 = buf;
+	*base64 = '\0';
+
 	if (clientout) { /* response */
 	    /* convert to base64 */
-	    base64 = buf;
 	    r = sasl_encode64(clientout, clientoutlen,
 			      base64, BASE64_BUF_SIZE, NULL);
 
 	    clientout = NULL;
-
-	    /* send to server */
-	    if (sendliteral) {
-		prot_printf(pout, "{%d+}\r\n", strlen(base64));
-		prot_flush(pout);
-	    }
-	    prot_printf(pout, "%s", base64);
 	}
+
+	/* send to server */
+	if (sendliteral) {
+	    prot_printf(pout, "{%d+}\r\n", strlen(base64));
+	    prot_flush(pout);
+	}
+	prot_printf(pout, "%s", base64);
+
       noinitresp:
 	prot_printf(pout, "\r\n");
 	prot_flush(pout);
@@ -281,9 +284,22 @@ int saslclient(sasl_conn_t *conn, struct sasl_cmd_t *sasl_cmd,
 	    r = SASL_BADAUTH;
 	    break;
 	}
-	else if (!strncasecmp(buf, sasl_cmd->cont, strlen(sasl_cmd->cont))) {
+	else if (sasl_cmd->cont &&
+		 !strncasecmp(buf, sasl_cmd->cont, strlen(sasl_cmd->cont))) {
 	    /* continue */
 	    base64 = buf + strlen(sasl_cmd->cont);
+	}
+	else if (!sasl_cmd->cont && buf[0] == '{') {
+	    unsigned int litsize = atoi(buf+1);
+
+	    /* get actual literal data */
+	    if (!prot_fgets(buf, AUTH_BUF_SIZE, pin)) {
+		if (sasl_result) *sasl_result = SASL_FAIL;
+		if (status) *status = "EOF from server";
+		return IMAP_SASL_PROTERR;
+	    }
+
+	    base64 = buf;
 	}
 	else {
 	    /* unknown response */
