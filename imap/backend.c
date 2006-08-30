@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.41 2006/05/11 18:05:29 murch Exp $ */
+/* $Id: backend.c,v 1.42 2006/08/30 16:29:11 murch Exp $ */
 
 #include <config.h>
 
@@ -74,7 +74,8 @@
 #include "util.h"
 
 static char *ask_capability(struct protstream *pout, struct protstream *pin,
-			    struct protocol_t *prot, unsigned long *capa)
+			    struct protocol_t *prot, unsigned long *capa,
+			    int banner)
 {
     char str[4096];
     char *ret = NULL, *tmp;
@@ -82,7 +83,7 @@ static char *ask_capability(struct protstream *pout, struct protstream *pin,
 
     *capa = 0;
     
-    if (prot->capa_cmd.cmd) {
+    if (!banner && prot->capa_cmd.cmd) {
 	/* request capabilities of server */
 	prot_printf(pout, "%s\r\n", prot->capa_cmd.cmd);
 	prot_flush(pout);
@@ -239,7 +240,7 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
 	/* If we don't have a usable mech, do TLS and try again */
     } while (r == SASL_NOMECH && CAPA(s, CAPA_STARTTLS) &&
 	     do_starttls(s, &prot->tls_cmd) != -1 &&
-	     (*mechlist = ask_capability(s->out, s->in, prot, &s->capability)));
+	     (*mechlist = ask_capability(s->out, s->in, prot, &s->capability, 0)));
 
     /* xxx unclear that this is correct */
     free_callbacks(cb);
@@ -378,20 +379,23 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
     ret->sock = sock;
     prot_setflushonread(ret->in, ret->out);
     
-    if (prot->capa_cmd.cmd) {
-	/* read the initial greeting */
-	if (!prot_fgets(buf, sizeof(buf), ret->in)) {
-	    syslog(LOG_ERR,
-		   "backend_connect(): couldn't read initial greeting: %s",
-		   ret->in->error ? ret->in->error : "(null)");
-	    if (!ret_backend) free(ret);
-	    close(sock);
-	    return NULL;
-	}
+    if (!prot->banner.is_capa) {
+	do { /* read the initial greeting */
+	    if (!prot_fgets(buf, sizeof(buf), ret->in)) {
+		syslog(LOG_ERR,
+		       "backend_connect(): couldn't read initial greeting: %s",
+		       ret->in->error ? ret->in->error : "(null)");
+		if (!ret_backend) free(ret);
+		close(sock);
+		return NULL;
+	    }
+	} while (strncasecmp(buf, prot->banner.resp,
+			     strlen(prot->banner.resp)));
     }
 
     /* get the capabilities */
-    mechlist = ask_capability(ret->out, ret->in, prot, &ret->capability);
+    mechlist = ask_capability(ret->out, ret->in, prot, &ret->capability,
+			      prot->banner.is_capa);
 
     /* now need to authenticate to backend server,
        unless we're doing LMTP on a UNIX socket (deliver) */

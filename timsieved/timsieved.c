@@ -1,7 +1,7 @@
 /* timsieved.c -- main file for timsieved (sieve script accepting program)
  * Tim Martin
  * 9/21/99
- * $Id: timsieved.c,v 1.56 2005/11/18 14:18:35 murch Exp $
+ * $Id: timsieved.c,v 1.57 2006/08/30 16:29:11 murch Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -82,6 +82,7 @@
 
 #include "auth.h"
 #include "acl.h"
+#include "backend.h"
 #include "mboxlist.h"
 #include "util.h"
 
@@ -117,12 +118,24 @@ static struct proxy_context sieved_proxyctx = {
     1, 1, &sieved_authstate, &sieved_userisadmin, NULL
 };
 
+/* PROXY stuff */
+struct backend *backend = NULL;
+
+static void bitpipe(void);
+/* end PROXY stuff */
+
 /*
  * Cleanly shut down and exit
  */
 void shut_down(int code) __attribute__ ((noreturn));
 void shut_down(int code)
 {
+    /* close backend connection */
+    if (backend) {
+	backend_disconnect(backend, &protocol[PROTOCOL_SIEVE]);
+	free(backend);
+    }
+
     /* close mailboxes */
     mboxlist_close();
     mboxlist_done();
@@ -161,6 +174,14 @@ void cmdloop()
 
     while (ret != TRUE)
     {
+	if (backend) {
+	    /* create a pipe from client to backend */
+	    bitpipe();
+
+	    /* pipe has been closed */
+	    return;
+	}
+
 	ret = parser(sieved_out, sieved_in);
     }
 
@@ -202,7 +223,7 @@ int service_init(int argc __attribute__((unused)),
 		 char **argv __attribute__((unused)),
 		 char **envp __attribute__((unused)))
 {
-    global_sasl_init(0, 1, mysasl_cb);
+    global_sasl_init(1, 1, mysasl_cb);
 
     /* open mailboxes */
     mboxlist_init(0);
@@ -350,4 +371,80 @@ int reset_saslconn(sasl_conn_t **conn, sasl_ssf_t ssf, char *authid)
     /* End TLS/SSL Info */
 
     return SASL_OK;
+}
+
+/* we've authenticated the client, we've connected to the backend.
+   now it's all up to them */
+static void bitpipe(void)
+{
+    struct protgroup *protin = protgroup_new(2);
+    struct protgroup *protout = NULL;
+    struct timeval timeout;
+    int n, shutdown = 0;
+    char buf[4096];
+
+    /* Reset protin to all zeros (to preserve memory allocation) */
+    protgroup_reset(protin);
+    protgroup_insert(protin, sieved_in);
+    protgroup_insert(protin, backend->in);
+
+    for (;;) {
+	/* check for shutdown file */
+	if (shutdown_file(buf, sizeof(buf))) {
+	    shutdown = 1;
+	    goto done;
+	}
+
+	/* Clear protout if needed */
+	protgroup_free(protout);
+	protout = NULL;
+
+	timeout.tv_sec = 60;
+	timeout.tv_usec = 0;
+
+	n = prot_select(protin, PROT_NO_FD, &protout, NULL, &timeout);
+	if (n == -1) {
+	    syslog(LOG_ERR, "prot_select() failed in bitpipe(): %m");
+	    fatal("prot_select() failed in bitpipe()", EC_TEMPFAIL);
+	}
+	if (n && protout) {
+	    struct protstream *ptmp;
+
+	    for (; n; n--) {
+		ptmp = protgroup_getelement(protout, n-1);
+
+		if (ptmp == sieved_in) {
+		    do {
+			int c = prot_read(sieved_in, buf, sizeof(buf));
+			if (c == 0 || c < 0) goto done;
+			prot_write(backend->out, buf, c);
+		    } while (sieved_in->cnt > 0);
+		    prot_flush(backend->out);
+		}
+		else if (ptmp == backend->in) {
+		    do {
+			int c = prot_read(backend->in, buf, sizeof(buf));
+			if (c == 0 || c < 0) goto done;
+			prot_write(sieved_out, buf, c);
+		    } while (backend->in->cnt > 0);
+		    prot_flush(sieved_out);
+		}
+		else {
+		    /* XXX shouldn't get here !!! */
+		    fatal("unknown protstream returned by prot_select in bitpipe()",
+			  EC_SOFTWARE);
+		}
+	    }
+	}
+    }
+
+
+ done:
+    /* ok, we're done. */
+    protgroup_free(protin);
+    protgroup_free(protout);
+
+    if (shutdown) prot_printf(sieved_out, "NO \"%s\"\r\n", buf);
+
+    return;
 }
