@@ -42,7 +42,7 @@
  * Start Date: 6/28/93
  */
 
-/* $Id: acl.h,v 1.16 2004/03/05 19:19:21 rjs3 Exp $ */
+/* $Id: acl.h,v 1.17 2006/11/13 16:17:53 murch Exp $ */
 
 #ifndef INCLUDED_ACL_H
 #define INCLUDED_ACL_H
@@ -74,6 +74,8 @@
 #define ACL_USER8  0x20000L
 #define ACL_USER9  0x40000L
 #define ACL_FULL   0xFFFFFL
+
+#define ACL_READ_WRITE	(ACL_SEEN|ACL_WRITE|ACL_INSERT|ACL_DELETE)
 
 #define ACL_MODE_SET 0
 #define ACL_MODE_ADD 1
