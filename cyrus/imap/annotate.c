@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.33 2006/06/01 13:26:07 murch Exp $
+ * $Id: annotate.c,v 1.34 2006/11/30 17:11:17 murch Exp $
  */
 
 #include <config.h>
@@ -73,6 +73,7 @@
 #include "xmalloc.h"
 
 #include "annotate.h"
+#include "sync_log.h"
 
 #define DB config_annotation_db
 
@@ -416,7 +417,7 @@ typedef enum {
 
 struct mailbox_annotation_rock
 {
-    char *server, *partition, *acl, *path;
+    char *server, *partition, *acl, *path, *mpath;
 };
 
 /* To free values in the mailbox_annotation_rock as needed */
@@ -431,14 +432,15 @@ static void get_mb_data(const char *mboxname,
 			struct mailbox_annotation_rock *mbrock) 
 {
     if(!mbrock->server && !mbrock->partition) {
-	int r = mboxlist_detail(mboxname, NULL, &(mbrock->path),
+	int r = mboxlist_detail(mboxname, NULL,
+				&(mbrock->path), &(mbrock->mpath),
 				&(mbrock->server), &(mbrock->acl), NULL);
 	if (r) return;
 
 	mbrock->partition = strchr(mbrock->server, '!');
 	if (mbrock->partition) {
 	    *(mbrock->partition)++ = '\0';
-	    mbrock->path = NULL;
+	    mbrock->path = mbrock->mpath = NULL;
 	} else {
 	    mbrock->partition = mbrock->server;
 	    mbrock->server = NULL;
@@ -644,6 +646,9 @@ static void annotation_get_server(const char *int_mboxname,
     
     get_mb_data(int_mboxname, mbrock);
 
+    /* Make sure its a remote mailbox */
+    if (!mbrock->server) return;
+
     /* Check ACL */
     if(!fdata->isadmin &&
        (!mbrock->acl ||
@@ -675,6 +680,9 @@ static void annotation_get_partition(const char *int_mboxname,
 	      EC_TEMPFAIL);
     
     get_mb_data(int_mboxname, mbrock);
+
+    /* Make sure its a local mailbox */
+    if (mbrock->server) return;
 
     /* Check ACL */
     if(!fdata->isadmin &&
@@ -718,6 +726,9 @@ static void annotation_get_size(const char *int_mboxname,
 	      EC_TEMPFAIL);
     
     get_mb_data(int_mboxname, mbrock);
+
+    /* Make sure its a local mailbox */
+    if (mbrock->server) return;
 
     /* Check ACL */
     if(!fdata->isadmin &&
@@ -771,6 +782,9 @@ static void annotation_get_lastupdate(const char *int_mboxname,
     
     get_mb_data(int_mboxname, mbrock);
 
+    /* Make sure its a local mailbox */
+    if (mbrock->server) return;
+
     /* Check ACL */
     if(!fdata->isadmin &&
        (!mbrock->acl ||
@@ -779,7 +793,7 @@ static void annotation_get_lastupdate(const char *int_mboxname,
 	return;
 
     if (!mbrock->path) return;
-    if (mailbox_stat(mbrock->path, &header, &index, NULL)) return;
+    if (mailbox_stat(mbrock->path, mbrock->mpath, &header, &index, NULL)) return;
 
     modtime = (header.st_mtime > index.st_mtime) ?
 	header.st_mtime : index.st_mtime;
@@ -808,11 +822,13 @@ static void annotation_get_lastpop(const char *int_mboxname,
     struct annotation_data attrib;
   
     if(!int_mboxname || !ext_mboxname || !fdata || !mbrock)
-
       fatal("annotation_get_lastpop called with bad parameters",
               EC_TEMPFAIL);
 
     get_mb_data(int_mboxname, mbrock);
+
+    /* Make sure its a local mailbox */
+    if (mbrock->server) return;
 
     /* Check ACL */
     if(!fdata->isadmin &&
@@ -841,6 +857,63 @@ static void annotation_get_lastpop(const char *int_mboxname,
 
     if ( r)
       return;
+
+    memset(&attrib, 0, sizeof(attrib));
+
+    attrib.value = value;
+    attrib.size = strlen(value);
+    attrib.contenttype = "text/plain";
+
+    output_entryatt(ext_mboxname, entry, "", &attrib, fdata);
+}
+
+static void annotation_get_condstore(const char *int_mboxname,
+				     const char *ext_mboxname,
+				     const char *entry,
+				     struct fetchdata *fdata,
+				     struct mailbox_annotation_rock *mbrock,
+				     void *rock __attribute__((unused)))
+{ 
+    struct mailbox mailbox;
+    int r = 0;
+    char value[40];
+    struct annotation_data attrib;
+  
+    if(!int_mboxname || !ext_mboxname || !fdata || !mbrock)
+      fatal("annotation_get_condstore called with bad parameters",
+              EC_TEMPFAIL);
+
+    get_mb_data(int_mboxname, mbrock);
+
+    /* Make sure its a local mailbox */
+    if (mbrock->server) return;
+
+    /* Check ACL */
+    if(!fdata->isadmin &&
+       (!mbrock->acl ||
+      !(cyrus_acl_myrights(fdata->auth_state, mbrock->acl) & ACL_LOOKUP) ||
+      !(cyrus_acl_myrights(fdata->auth_state, mbrock->acl) & ACL_READ)))
+      return;
+
+
+    if (mailbox_open_header(int_mboxname, 0, &mailbox) != 0)
+      return;
+
+    if (!r) {
+      r = mailbox_open_index(&mailbox);
+    }
+
+    if (!r) {
+      if (mailbox.options & OPT_IMAP_CONDSTORE) {
+          strcpy(value, "true");
+      } else {
+          strcpy(value, "false");
+      }
+    }
+
+    mailbox_close(&mailbox);
+
+    if (r) return;
 
     memset(&attrib, 0, sizeof(attrib));
 
@@ -894,6 +967,9 @@ static void annotation_get_fromdb(const char *int_mboxname,
 	/* mailbox annotation */
 	get_mb_data(int_mboxname, mbrock);
 
+	/* Make sure its a local mailbox */
+	if (mbrock->server) return;
+
 	/* Check ACL */
 	if(!fdata->isadmin &&
 	   (!mbrock->acl ||
@@ -938,6 +1014,8 @@ const struct annotate_f_entry mailbox_ro_entries[] =
       annotation_get_lastupdate, NULL },
     { "/vendor/cmu/cyrus-imapd/lastpop", BACKEND_ONLY,
       annotation_get_lastpop, NULL },
+    { "/vendor/cmu/cyrus-imapd/condstore", BACKEND_ONLY,
+      annotation_get_condstore, NULL },
     { NULL, ANNOTATION_PROXY_T_INVALID, NULL, NULL }
 };
 
@@ -1047,8 +1125,8 @@ static int fetch_cb(char *name, int matchlen,
 					  (void*) entries_ptr->entrypat));
     }
 
-    if (proxy_fetch_func && fdata->orig_entry && mbrock.server
-	&& !hash_lookup(mbrock.server, &(fdata->server_table))) {
+    if (proxy_fetch_func && fdata->orig_entry && mbrock.server &&
+	!hash_lookup(mbrock.server, &(fdata->server_table))) {
 	/* xxx ignoring result */
 	proxy_fetch_func(mbrock.server, fdata->orig_mailbox,
 			 fdata->orig_entry, fdata->orig_attribute);
@@ -1127,19 +1205,10 @@ int annotatemore_fetch(char *mailbox,
 	     entrycount++) {
 
 	    if (GLOB_TEST(g, non_db_entries[entrycount].name) != -1) {
-		if (strcmp(e->s, non_db_entries[entrycount].name)) {
-		    /* not an exact match */
-		    fdata.orig_entry = entries;  /* proxy it */
-		    check_db = 1;
-		}
-
 		/* Add this entry to our list only if it
 		   applies to our particular server type */
-		if (non_db_entries[entrycount].proxytype == PROXY_AND_BACKEND
-		    || (proxy_fetch_func &&
-			non_db_entries[entrycount].proxytype == PROXY_ONLY)
-		    || (!proxy_fetch_func &&
-			non_db_entries[entrycount].proxytype == BACKEND_ONLY)) {
+		if ((non_db_entries[entrycount].proxytype != PROXY_ONLY)
+		    || proxy_fetch_func) {
 		    struct annotate_f_entry_list *nentry =
 			xmalloc(sizeof(struct annotate_f_entry_list));
 
@@ -1148,19 +1217,26 @@ int annotatemore_fetch(char *mailbox,
 		    fdata.entry_list = nentry;
 		}
 	    }
-	    else {
-		/* no match */
-		fdata.orig_entry = entries;  /* proxy it */
-		check_db = 1;
+
+	    if (!strcmp(e->s, non_db_entries[entrycount].name)) {
+		/* exact match */
+		if (non_db_entries[entrycount].proxytype != PROXY_ONLY) {
+		    fdata.orig_entry = entries;  /* proxy it */
+		}
+		break;
 	    }
 	}
 		
+	if (!non_db_entries[entrycount].name) {
+	    /* no [exact] match */
+	    fdata.orig_entry = entries;  /* proxy it */
+	    check_db = 1;
+	}
+
 	/* Add the db entry to our list if only if it
 	   applies to our particular server type */
 	if (check_db &&
-	    (db_entry->proxytype == PROXY_AND_BACKEND
-	     || (proxy_fetch_func && db_entry->proxytype == PROXY_ONLY)
-	     || (!proxy_fetch_func && db_entry->proxytype == BACKEND_ONLY))) {
+	    ((db_entry->proxytype != PROXY_ONLY) || proxy_fetch_func)) {
 	    /* Add the db entry to our list */
 	    struct annotate_f_entry_list *nentry =
 		xmalloc(sizeof(struct annotate_f_entry_list));
@@ -1492,9 +1568,11 @@ static int store_cb(char *name, int matchlen,
 	if (r) goto cleanup;
     }
 
+    sync_log_annotation(int_mboxname);
+
     sdata->count++;
 
-    if (proxy_store_func &&
+    if (proxy_store_func && mbrock.server &&
 	!hash_lookup(mbrock.server, &(sdata->server_table))) {
 	hash_insert(mbrock.server, (void *)0xDEADBEEF, &(sdata->server_table));
     }
@@ -1567,7 +1645,8 @@ static int annotation_set_todb(const char *int_mboxname,
 	    return IMAP_PERMISSION_DENIED;
 	}
 
-	if (!int_mboxname[0] || !proxy_store_func) {
+	/* Make sure its a server or local mailbox annotation */
+	if (!int_mboxname[0] || !mbrock->server) {
 	    /* if we don't have a value, retrieve the existing entry */
 	    if (!entry->shared.value) {
 		struct annotation_data shared;
@@ -1592,7 +1671,8 @@ static int annotation_set_todb(const char *int_mboxname,
 	 * and we wouldn't be in this callback without it.
 	 */
 
-	if (!int_mboxname[0] || !proxy_store_func) {
+	/* Make sure its a server or local mailbox annotation */
+	if (!int_mboxname[0] || !mbrock->server) {
 	    /* if we don't have a value, retrieve the existing entry */
 	    if (!entry->priv.value) {
 		struct annotation_data priv;
@@ -1610,6 +1690,45 @@ static int annotation_set_todb(const char *int_mboxname,
     }
 
     return r;
+}
+
+static int annotation_set_condstore(const char *int_mboxname,
+				    struct annotate_st_entry_list *entry,
+				    struct storedata *sdata,
+				    struct mailbox_annotation_rock *mbrock,
+				    void *rock __attribute__((unused)))
+{
+    struct mailbox mailbox;
+    int r = 0;
+  
+    /* Check ACL */
+    if(!sdata->isadmin &&
+       (!mbrock->acl ||
+	!(cyrus_acl_myrights(sdata->auth_state, mbrock->acl) & ACL_LOOKUP) ||
+	!(cyrus_acl_myrights(sdata->auth_state, mbrock->acl) & ACL_WRITE))) {
+	return IMAP_PERMISSION_DENIED;
+    }
+
+    r = mailbox_open_header(int_mboxname, 0, &mailbox);
+    if (!r) r = mailbox_open_index(&mailbox);
+    if (!r) r = mailbox_lock_index(&mailbox);
+
+    if (!r) {
+	if (!strcmp(entry->shared.value, "true")) {
+	    mailbox.options |= OPT_IMAP_CONDSTORE;
+	} else {
+	    mailbox.options &= ~OPT_IMAP_CONDSTORE;
+	}
+
+	r = mailbox_write_index_header(&mailbox);
+    }
+
+    mailbox_close(&mailbox);
+
+    if (!r) sync_log_mailbox(int_mboxname);
+
+    return r;
+
 }
 
 const struct annotate_st_entry server_entries[] =
@@ -1670,6 +1789,9 @@ const struct annotate_st_entry mailbox_rw_entries[] =
     { "/vendor/cmu/cyrus-imapd/sieve", ATTRIB_TYPE_STRING, BACKEND_ONLY,
       ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
       ACL_ADMIN, annotation_set_todb, NULL },
+    { "/vendor/cmu/cyrus-imapd/condstore", ATTRIB_TYPE_BOOLEAN, BACKEND_ONLY,
+      ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
+      ACL_ADMIN, annotation_set_condstore, NULL },
     { NULL, 0, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL }
 };
 
@@ -1722,11 +1844,8 @@ int annotatemore_store(char *mailbox,
 
 	/* Add this entry to our list only if it
 	   applies to our particular server type */
-	if (entries[entrycount].proxytype == PROXY_AND_BACKEND
-	    || (proxy_store_func &&
-		entries[entrycount].proxytype == PROXY_ONLY)
-	    || (!proxy_store_func &&
-		entries[entrycount].proxytype == BACKEND_ONLY)) {
+	if ((entries[entrycount].proxytype != PROXY_ONLY)
+	    || proxy_store_func) {
 	    nentry = xzmalloc(sizeof(struct annotate_st_entry_list));
 	    nentry->next = sdata.entry_list;
 	    nentry->entry = &(entries[entrycount]);
@@ -1818,6 +1937,8 @@ int annotatemore_store(char *mailbox,
 					    entries_ptr->entry->rock);
 		if (r) break;
 	    }
+
+	    if (!r) sync_log_annotation("");
 	}
     }
 

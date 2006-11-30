@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_expire.c,v 1.7 2004/05/22 03:45:48 rjs3 Exp $
+ * $Id: cyr_expire.c,v 1.8 2006/11/30 17:11:17 murch Exp $
  */
 
 #include <config.h>
@@ -73,21 +73,78 @@ const int config_need_data = 0;
 void usage(void)
 {
     fprintf(stderr,
-	    "cyr_expire [-C <altconfig>] -E <days> [-v]\n");
+	    "cyr_expire [-C <altconfig>] -E <days> [-X <expunge-days>] [-v]\n");
     exit(-1);
 }
 
+struct expire_rock {
+    struct hash_table *table;
+    enum enum_value expunge_mode;
+    time_t expire_mark;
+    time_t expunge_mark;
+    unsigned long mailboxes;
+    unsigned long messages;
+    unsigned long deleted;
+    int verbose;
+};
+
 /*
- * mboxlist_findall() callback function to build a hash table of mailboxes
- * which need to have messages expired.
+ * mailbox_expunge() callback to expunge expired articles.
  */
-int build_table(char *name, int matchlen, int maycreate __attribute__((unused)),
-	       void *rock)
+static int expire_cb(struct mailbox *mailbox __attribute__((unused)),
+		      void *rock, char *index, int expunge_flags)
 {
-    struct hash_table *expire_table = (struct hash_table *) rock;
+    struct expire_rock *erock = (struct expire_rock *) rock;
+    bit32 tstamp;
+
+    erock->messages++;
+
+    /* if we're cleaning up expunge, delete by expunge time */
+    if (expunge_flags & EXPUNGE_CLEANUP) {
+	tstamp = ntohl(*((bit32 *)(index+OFFSET_LAST_UPDATED)));
+	if (tstamp < erock->expunge_mark) {
+	    erock->deleted++;
+	    return 1;
+	}
+    } else {
+	/* otherwise, we're expiring messages by sent date */
+	tstamp = ntohl(*((bit32 *)(index+OFFSET_SENTDATE)));
+	if (tstamp < erock->expire_mark) {
+	    erock->deleted++;
+	    return 1;
+	}
+    }
+
+    return 0;
+}
+
+
+/*
+ * mboxlist_findall() callback function to:
+ * - expire messages from mailboxes,
+ * - build a hash table of mailboxes in which we expired messages,
+ * - and perform a cleanup of expunged messages
+ */
+int expire(char *name, int matchlen, int maycreate __attribute__((unused)),
+	   void *rock)
+{
+    struct expire_rock *erock = (struct expire_rock *) rock;
     char buf[MAX_MAILBOX_NAME+1] = "", *p;
     struct annotation_data attrib;
     int r, domainlen = 0;
+
+    int mbtype;
+    char *path, *mpath;
+
+    /* Skip remote mailboxes */
+    r = mboxlist_detail(name, &mbtype, &path, &mpath, NULL, NULL, NULL);
+    if (r) {
+	if (erock->verbose) {
+	    printf("error looking up %s: %s\n", name, error_message(r));
+	}
+	return 1;
+    }
+    if (mbtype & MBTYPE_REMOTE) return 0;
 
     if (config_virtdomains && (p = strchr(name, '!')))
 	domainlen = p - name + 1;
@@ -95,8 +152,10 @@ int build_table(char *name, int matchlen, int maycreate __attribute__((unused)),
     strncpy(buf, name, matchlen);
     buf[matchlen] = '\0';
 
-    /* since mailboxes inherit /vendor/cmu/cyrus-imapd/expire,
-       we need to iterate all the way up to "" (server entry) */
+    /* see if we need to expire messages.
+     * since mailboxes inherit /vendor/cmu/cyrus-imapd/expire,
+     * we need to iterate all the way up to "" (server entry)
+     */
     while (1) {
 	r = annotatemore_lookup(buf, "/vendor/cmu/cyrus-imapd/expire", "",
 				&attrib);
@@ -119,84 +178,91 @@ int build_table(char *name, int matchlen, int maycreate __attribute__((unused)),
 	    buf[domainlen] = '\0';
     }
 
-    if (!r && attrib.value) {
-	/* add mailbox to table */
-	unsigned long days = strtoul(attrib.value, NULL, 10);
-	time_t *expmark = (time_t *) xmalloc(sizeof(time_t));
+    if (!r && (attrib.value ||
+	       erock->expunge_mode != IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE)) {
+	struct mailbox mailbox;
+	int doclose = 0;
+	int expunge_flags = 0;
 
-	*expmark = days ? time(0) - (days * 60 * 60 * 24) : 0 /* never */ ;
-	hash_insert(name, (void *) expmark, expire_table);
+	if (!attrib.value &&
+	    erock->expunge_mode != IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE) {
+	    /* ONLY cleanup mailbox of expunged messages.
+
+	       Try to short circuit additional I/O by checking
+	       for presence of cyrus.expunge.
+	    */
+	    char fnamebuf[MAX_MAILBOX_PATH+1];
+	    struct stat sbuf;
+
+	    if (mpath &&
+		(config_metapartition_files &
+		 IMAP_ENUM_METAPARTITION_FILES_EXPUNGE)) {
+		strlcpy(fnamebuf, mpath, sizeof(fnamebuf));
+	    } else {
+		strlcpy(fnamebuf, path, sizeof(fnamebuf));
+	    }
+	    strlcat(fnamebuf, FNAME_EXPUNGE_INDEX, sizeof(fnamebuf));
+	    if (stat(fnamebuf, &sbuf)) return 0;
+
+	    expunge_flags |= EXPUNGE_CLEANUP;
+	}
+
+	/* Open/lock header */
+	r = mailbox_open_header(name, 0, &mailbox);
+	if (!r && mailbox.header_fd != -1) {
+	    doclose = 1;
+	    (void) mailbox_lock_header(&mailbox);
+	    mailbox.header_lock_count = 1;
+	}
+
+	/* Attempt to open/lock index */
+	if (!r) r = mailbox_open_index(&mailbox);
+	if (!r) {
+	    (void) mailbox_lock_index(&mailbox);
+	    mailbox.index_lock_count = 1;
+	}
+
+	if (r) {
+	    /* mailbox corrupt/nonexistent -- skip it */
+	    syslog(LOG_WARNING, "unable to open/lock mailbox %s", name);
+	    if (doclose) mailbox_close(&mailbox);
+	    return 0;
+	}
+
+	erock->mailboxes++;
+	erock->expire_mark = 0;
+
+	if (attrib.value) {
+	    /* add mailbox to table */
+	    unsigned long expire_days = strtoul(attrib.value, NULL, 10);
+	    time_t *expire_mark = (time_t *) xmalloc(sizeof(time_t));
+
+	    *expire_mark = expire_days ?
+		time(0) - (expire_days * 60 * 60 * 24) : 0 /* never */ ;
+	    hash_insert(name, (void *) expire_mark, erock->table);
+
+	    if (erock->verbose) {
+		fprintf(stderr,
+			"expiring messages in %s older than %ld days\n",
+			name, expire_days);
+	    }
+
+	    erock->expire_mark = *expire_mark;
+
+	    expunge_flags |= EXPUNGE_FORCE;
+	}
+
+	r = mailbox_expunge(&mailbox, expire_cb, erock, expunge_flags);
+	mailbox_close(&mailbox);
     }
 
     return r;
 }
 
-struct expire_rock {
-    time_t expmark;
-    unsigned long mailboxes;
-    unsigned long messages;
-    unsigned long deleted;
-    int verbose;
-};
-
-/*
- * mailbox_expunge() callback to expunge expired articles.
- */
-static int expunge_cb(struct mailbox *mailbox __attribute__((unused)),
-		      void *rock, char *index)
-{
-    struct expire_rock *erock = (struct expire_rock *) rock;
-    bit32 senttime = ntohl(*((bit32 *)(index+OFFSET_SENTDATE)));
-
-    erock->messages++;
-
-    if (senttime < erock->expmark) {
-	erock->deleted++;
-	return 1;
-    }
-
-    return 0;
-}
-
-static void do_expire(char *mboxname, void *data, void *rock)
-{
-    struct expire_rock *erock = (struct expire_rock *) rock;
-    time_t *expmark = (time_t *) data;
-    struct mailbox mailbox;
-    int r;
-
-    if (erock->verbose) {
-	fprintf(stderr, "expiring messages in %s older than %ld days\n",
-		mboxname, (time(0) - *expmark) / (60 * 60 * 24));
-    }
-
-    erock->mailboxes++;
-    erock->expmark = *expmark;
-
-    /* Open/lock header */
-    r = mailbox_open_header(mboxname, 0, &mailbox);
-    if (!r && mailbox.header_fd != -1) {
-	(void) mailbox_lock_header(&mailbox);
-	mailbox.header_lock_count = 1;
-    }
-
-    if (!r) r = chdir(mailbox.path);
-
-    /* Attempt to open/lock index */
-    if (!r) r = mailbox_open_index(&mailbox);
-    if (!r) {
-	(void) mailbox_lock_index(&mailbox);
-	mailbox.index_lock_count = 1;
-    }
-
-    if (!r) mailbox_expunge(&mailbox, 1, expunge_cb, erock);
-    mailbox_close(&mailbox);
-}
-
 int main(int argc, char *argv[])
 {
     extern char *optarg;
-    int opt, r = 0, days = 0;
+    int opt, r = 0, expire_days = 0, expunge_days = 0;
     char *alt_config = NULL;
     char buf[100];
     struct hash_table expire_table;
@@ -207,15 +273,20 @@ int main(int argc, char *argv[])
     /* zero the expire_rock */
     memset(&erock, 0, sizeof(erock));
 
-    while ((opt = getopt(argc, argv, "C:E:v")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:E:X:v")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
 	    break;
 
 	case 'E':
-	    if (days) usage();
-	    days = atoi(optarg);
+	    if (expire_days) usage();
+	    expire_days = atoi(optarg);
+	    break;
+
+	case 'X':
+	    if (expunge_days) usage();
+	    expunge_days = atoi(optarg);
 	    break;
 
 	case 'v':
@@ -228,7 +299,7 @@ int main(int argc, char *argv[])
 	}
     }
 
-    if (!days) usage();
+    if (!expire_days) usage();
 
     cyrus_init(alt_config, "cyr_expire", 0);
 
@@ -251,21 +322,33 @@ int main(int argc, char *argv[])
     /* xxx better way to determine a size for this table? */
     construct_hash_table(&expire_table, 10000, 1);
 
-    strlcpy(buf, "*", sizeof(buf));
-    mboxlist_findall(NULL, buf, 1, 0, 0, &build_table, &expire_table);
+    /* expire messages from mailboxes,
+     * build a hash table of mailboxes in which we expired messages,
+     * and perform a cleanup of expunged messages
+     */
+    erock.table = &expire_table;
+    erock.expunge_mode = config_getenum(IMAPOPT_EXPUNGE_MODE);
+    erock.expunge_mark = time(0) - (expunge_days * 60 * 60 * 24);
 
-    r = duplicate_prune(days, &expire_table);
-
-    if (!r) {
-	hash_enumerate(&expire_table, do_expire, &erock);
-
-	syslog(LOG_NOTICE, "expunged %lu out of %lu messages from %lu mailboxes",
-	       erock.deleted, erock.messages, erock.mailboxes);
-	if (erock.verbose) {
-	    fprintf(stderr, "\nexpunged %lu out of %lu messages from %lu mailboxes\n",
-		    erock.deleted, erock.messages, erock.mailboxes);
-	}
+    if (erock.verbose && 
+	erock.expunge_mode != IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE) {
+	fprintf(stderr,
+		"expunging deleted messages in mailboxes older than %d days\n",
+		expunge_days);
     }
+
+    strlcpy(buf, "*", sizeof(buf));
+    mboxlist_findall(NULL, buf, 1, 0, 0, &expire, &erock);
+
+    syslog(LOG_NOTICE, "expunged %lu out of %lu messages from %lu mailboxes",
+	   erock.deleted, erock.messages, erock.mailboxes);
+    if (erock.verbose) {
+	fprintf(stderr, "\nexpunged %lu out of %lu messages from %lu mailboxes\n",
+		erock.deleted, erock.messages, erock.mailboxes);
+    }
+
+    /* purge deliver.db entries of expired messages */
+    r = duplicate_prune(expire_days, &expire_table);
 
     free_hash_table(&expire_table, free);
 

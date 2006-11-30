@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.62 2004/07/15 15:02:51 ken3 Exp $
+ * $Id: script.c,v 1.63 2006/11/30 17:11:24 murch Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -38,10 +38,10 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <unistd.h>
 #include <assert.h>
 
+#include "charset.h"
+#include "hash.h"
 #include "xmalloc.h"
 
-#include "md5global.h"
-#include "md5.h"
 #include "sieve_interface.h"
 #include "interp.h"
 #include "script.h"
@@ -50,61 +50,90 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "sieve.h"
 #include "message.h"
 #include "bytecode.h"
+#include "libconfig.h"
 
 /* does this interpretor support this requirement? */
 int script_require(sieve_script_t *s, char *req)
 {
+    unsigned long config_sieve_extensions =
+	config_getbitfield(IMAPOPT_SIEVE_EXTENSIONS);
+
     if (!strcmp("fileinto", req)) {
-	if (s->interp.fileinto) {
+	if (s->interp.fileinto &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_FILEINTO)) {
 	    s->support.fileinto = 1;
 	    return 1;
 	} else {
 	    return 0;
 	}
     } else if (!strcmp("reject", req)) {
-	if (s->interp.reject) {
+	if (s->interp.reject &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_REJECT)) {
 	    s->support.reject = 1;
 	    return 1;
 	} else {
 	    return 0;
 	}
     } else if (!strcmp("envelope", req)) {
-	if (s->interp.getenvelope) {
+	if (s->interp.getenvelope &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_ENVELOPE)) {
 	    s->support.envelope = 1;
 	    return 1;
 	} else {
 	    return 0;
 	}
+    } else if (!strcmp("body", req)) {
+	if (s->interp.getbody &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_BODY)) {
+	    s->support.body = 1;
+	    return 1;
+	} else {
+	    return 0;
+	}
     } else if (!strcmp("vacation", req)) {
-	if (s->interp.vacation) {
+	if (s->interp.vacation &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VACATION)) {
 	    s->support.vacation = 1;
 	    return 1;
 	} else {
 	    return 0;
 	}
     } else if (!strcmp("imapflags", req)) {
-	if (s->interp.markflags->flag) {
+	if (s->interp.markflags->flag &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_IMAPFLAGS)) {
 	    s->support.imapflags = 1;
 	    return 1;
 	} else {
 	    return 0;
 	}
     } else if (!strcmp("notify",req)) {
-	if (s->interp.notify) {
+	if (s->interp.notify &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_NOTIFY)) {
 	    s->support.notify = 1;
 	    return 1;
 	} else {
 	    return 0;
 	}
+    } else if (!strcmp("include", req)) {
+	if (s->interp.getinclude &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_INCLUDE)) {
+	    s->support.include = 1;
+	    return 1;
+	} else {
+	    return 0;
+	}
 #ifdef ENABLE_REGEX
-    } else if (!strcmp("regex", req)) {
+    } else if (!strcmp("regex", req) &&
+	       (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_REGEX)) {
 	s->support.regex = 1;
 	return 1;
 #endif
-    } else if (!strcmp("subaddress", req)) {
+    } else if (!strcmp("subaddress", req) &&
+	       (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_SUBADDRESS)) {
 	s->support.subaddress = 1;
 	return 1;
-    } else if (!strcmp("relational", req)) {
+    } else if (!strcmp("relational", req) &&
+	       (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_RELATIONAL)) {
 	s->support.relational = 1;
 	return 1;
     } else if (!strcmp("comparator-i;octet", req)) {
@@ -113,6 +142,10 @@ int script_require(sieve_script_t *s, char *req)
 	return 1;
     } else if (!strcmp("comparator-i;ascii-numeric", req)) {
 	s->support.i_ascii_numeric = 1;
+	return 1;
+    } else if (!strcmp("copy", req) &&
+	       (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_COPY)) {
+	s->support.copy = 1;
 	return 1;
     }
     return 0;
@@ -206,12 +239,14 @@ static void add_header(sieve_interp_t *i, int isenv, char *header,
     *outlen += addlen;
 }
 
-static int fillin_headers(sieve_interp_t *i, const char *msg, 
-			  void *message_context, char **out, int *outlen)
+static int build_notify_message(sieve_interp_t *i,
+				struct hash_table *body_cache,
+				const char *msg, 
+				void *message_context, char **out, int *outlen)
 {
     int allocsize = GROW_AMOUNT;
     const char *c;
-    int n;
+    size_t n;
 
     *out = xmalloc(GROW_AMOUNT);
     *outlen = 0;
@@ -235,7 +270,75 @@ static int fillin_headers(sieve_interp_t *i, const char *msg,
 	    add_header(i, 0, "Subject", message_context, out, outlen, &allocsize);
 	    c += 9;
 	}
-	/* XXX need to do $text$ variables */
+	else if (i->getbody &&
+		 !strncasecmp(c, "$text", 5) && (c[5] == '[' || c[5] == '$')) {
+	    const char *content_types[] = { "text", NULL };
+	    sieve_bodypart_t **parts = NULL;
+
+	    c += 5;
+	    n = 0;
+	    if (*c++ == '[') {
+		while (*c != ']') n = n * 10 + (*c++ - '0');
+		c += 2; /* skip ]$ */
+	    }
+
+	    i->getbody(message_context, content_types, &parts);
+
+	    /* we only use the first text part */
+	    if (parts && parts[0]) {
+		const char *content = parts[0]->content;
+		int size = parts[0]->size;
+		int encoding;
+
+		/* XXX currently unknown encodings are processed as raw */
+		if (!parts[0]->encoding)
+		    encoding = ENCODING_NONE;
+		else if (!strcmp(parts[0]->encoding, "BASE64"))
+		    encoding = ENCODING_BASE64;
+		else if (!strcmp(parts[0]->encoding, "QUOTED-PRINTABLE"))
+		    encoding = ENCODING_QP;
+		else
+		    encoding = ENCODING_NONE;
+
+		if (encoding != ENCODING_NONE) {
+		    content = hash_lookup(parts[0]->section, body_cache);
+		    if (content) {
+			/* already decoded this part */
+			size = strlen(content);
+		    }
+		    else {
+			/* decode this part and add it to the cache */
+			char *decbuf = NULL;
+			content = charset_decode_mimebody(parts[0]->content,
+							  parts[0]->size,
+							  encoding, &decbuf,
+							  0, &size);
+			hash_insert(parts[0]->section, (void *) content,
+				    body_cache);
+		    }
+		}
+
+		if (n == 0 || n > size) n = size;
+
+		/* realloc if necessary */
+		if ( (*outlen) + n+1 >= allocsize) {
+		    allocsize = (*outlen) + n+1 + GROW_AMOUNT;
+		    *out = xrealloc(*out, allocsize);
+		}
+		/* copy the plaintext */
+		strncat(*out, parts[0]->content, n);
+		(*out)[*outlen+n]='\0';
+		(*outlen) += n;
+	    }
+
+	    /* free the results */
+	    if (parts) {
+		sieve_bodypart_t **p;
+
+		for (p = parts; *p; p++) free(*p);
+		free(parts);
+	    }
+	}
 	else {
 	    /* find length of plaintext up to next potential variable */
 	    n = strcspn(c+1, "$") + 1; /* skip opening '$' */
@@ -306,7 +409,9 @@ static int sieve_removeflag(sieve_imapflags_t *imapflags, const char *flag)
     return SIEVE_OK;
 }
 
-static int send_notify_callback(sieve_interp_t *interp, void *message_context, 
+static int send_notify_callback(sieve_interp_t *interp,
+				struct hash_table *body_cache,
+				void *message_context, 
 				void * script_context, notify_list_t *notify, 
 				char *actions_string, const char **errmsg)
 {
@@ -326,8 +431,8 @@ static int send_notify_callback(sieve_interp_t *interp, void *message_context,
     nc.options = notify->options ? notify->options : NULL;
     nc.priority = notify->priority;
 
-    fillin_headers(interp, notify->message, message_context, 
-		   &out_msg, &out_msglen);
+    build_notify_message(interp, body_cache, notify->message, message_context, 
+			 &out_msg, &out_msglen);
 
     build_msg = xmalloc(out_msglen + strlen(actions_string) + 30);
 
@@ -370,7 +475,7 @@ static char *action_to_string(action_t action)
 	default: return "Unknown";
 	}
 
-    return "Error!";
+    /* never reached */
 }
 
 static char *sieve_errstr(int code)
@@ -386,22 +491,7 @@ static char *sieve_errstr(int code)
 	default: return "Unknown error";
 	}
 
-    return "Error!";
-}
-
-#define HASHSIZE 16
-
-static int makehash(unsigned char hash[HASHSIZE],
-		    const char *s1, const char *s2)
-{
-    MD5_CTX ctx;
-
-    MD5Init(&ctx);
-    MD5Update(&ctx, s1, strlen(s1));
-    MD5Update(&ctx, s2, strlen(s2));
-    MD5Final(hash, &ctx);
-
-    return SIEVE_OK;
+    /* never reached */
 }
 
 
@@ -409,11 +499,11 @@ static int makehash(unsigned char hash[HASHSIZE],
  *****************************************************************************/
 
 /* Load a compiled script */
-int sieve_script_load(const char *fname, sieve_bytecode_t **ret) 
+int sieve_script_load(const char *fname, sieve_execute_t **ret) 
 {
     struct stat sbuf;
-    sieve_bytecode_t *r;
-    int fd;
+    sieve_execute_t *r;
+    sieve_bytecode_t *bc;
    
     if (!fname || !ret) return SIEVE_FAIL;
     
@@ -422,36 +512,62 @@ int sieve_script_load(const char *fname, sieve_bytecode_t **ret)
 	return SIEVE_FAIL;
     }
 
-    fd = open(fname, O_RDONLY);
-    if (fd == -1) {
-	syslog(LOG_ERR, "IOERROR: can not open sieve script %s: %m", fname);
-	return SIEVE_FAIL;
+    if (!*ret) {
+	/* new sieve_bytecode_t */
+	r = (sieve_execute_t *) xzmalloc(sizeof(sieve_execute_t));
+    } else {
+	/* existing sieve_execute_t (INCLUDE) */
+	r = *ret;
     }
 
-    r = (sieve_bytecode_t *) xzmalloc(sizeof(sieve_bytecode_t));
-
-    r->fd = fd;
-    
-    map_refresh(fd, 1, &r->data, &r->len, sbuf.st_size, fname, "sievescript");
-
-    if ((r->len < (BYTECODE_MAGIC_LEN + 2*sizeof(bytecode_input_t))) ||
-	memcmp(r->data, BYTECODE_MAGIC, BYTECODE_MAGIC_LEN)) {
-	syslog(LOG_ERR, "IOERROR: not a sieve bytecode file %s", fname);
-	sieve_script_unload(&r);
-	return SIEVE_FAIL;
+    /* see if we already have this script loaded */
+    bc = r->bc_list;
+    while (bc) {
+	if (sbuf.st_ino == bc->inode) break;
+	bc = bc->next;
     }
 
+    if (!bc) {
+	int fd;
+
+	/* new script -- load it */
+	fd = open(fname, O_RDONLY);
+	if (fd == -1) {
+	    syslog(LOG_ERR, "IOERROR: can not open sieve script %s: %m", fname);
+	    return SIEVE_FAIL;
+	}
+
+	bc = (sieve_bytecode_t *) xzmalloc(sizeof(sieve_bytecode_t));
+
+	bc->fd = fd;
+	bc->inode = sbuf.st_ino;
+
+	map_refresh(fd, 1, &bc->data, &bc->len, sbuf.st_size,
+		    fname, "sievescript");
+
+	/* add buffer to list */
+	bc->next = r->bc_list;
+	r->bc_list = bc;
+    }
+
+    r->bc_cur = bc;
     *ret = r;
     return SIEVE_OK;
 }
 
 
 
-int sieve_script_unload(sieve_bytecode_t **s) 
+int sieve_script_unload(sieve_execute_t **s) 
 {
     if(s && *s) {
-	map_free(&((*s)->data), &((*s)->len));
-	close((*s)->fd);
+	sieve_bytecode_t *bc = (*s)->bc_list;
+
+	/* free each bytecode buffer in the linked list */
+	while (bc) {
+	    map_free(&(bc->data), &(bc->len));
+	    close(bc->fd);
+	    bc = bc->next;
+	}
 	free(*s);
 	*s = NULL;
     } 
@@ -466,6 +582,7 @@ int sieve_script_unload(sieve_bytecode_t **s)
 
 static int do_sieve_error(int ret,
 			  sieve_interp_t *interp,
+			  struct hash_table *body_cache,
 			  void *script_context,
 			  void *message_context,
 			  sieve_imapflags_t * imapflags,
@@ -504,9 +621,10 @@ static int do_sieve_error(int ret,
 	    if (n->isactive) 
 	      {
 	      lastaction = ACTION_NOTIFY;
-	       notify_ret = send_notify_callback(interp, message_context, 
-						script_context,n,
-						actions_string, &errmsg);
+	       notify_ret = send_notify_callback(interp, body_cache,
+						 message_context, 
+						 script_context,n,
+						 actions_string, &errmsg);
 	      ret |= notify_ret;
 	      }
 	    n = n->next;
@@ -517,7 +635,8 @@ static int do_sieve_error(int ret,
 	
 	
 	if (notify_ret != SIEVE_OK) 
-	  return do_sieve_error(ret, interp, script_context, message_context,
+	  return do_sieve_error(ret, interp, body_cache,
+				script_context, message_context,
 				imapflags, actions, notify_list, lastaction,
 				implicit_keep, actions_string, errmsg);
       
@@ -550,7 +669,8 @@ static int do_sieve_error(int ret,
 		     "Kept\n");
 	else {
 	    implicit_keep = 0;	/* don't try an implicit keep again */
-	    return do_sieve_error(ret, interp, script_context, message_context,
+	    return do_sieve_error(ret, interp, body_cache,
+				  script_context, message_context,
 				  imapflags, actions, notify_list, lastaction,
 				  implicit_keep, actions_string, errmsg);
 	}
@@ -564,6 +684,7 @@ static int do_sieve_error(int ret,
 
 
 static int do_action_list(sieve_interp_t *interp,
+			  struct hash_table *body_cache,
 			  void *script_context,
 			  void *message_context,
 			  sieve_imapflags_t *imapflags,
@@ -576,19 +697,18 @@ static int do_action_list(sieve_interp_t *interp,
     action_list_t *a;
     action_t lastaction = -1;
     int ret = 0;
-    int implicit_keep = 0;
+    int implicit_keep = 1;
     
     strcpy(actions_string,"Action(s) taken:\n");
   
     /* now perform actions attached to m */
     a = actions;
-    implicit_keep = 1;
     while (a != NULL) {
 	lastaction = a->a;
 	errmsg = NULL;
+	implicit_keep = implicit_keep && !a->cancel_keep;
 	switch (a->a) {
 	case ACTION_REJECT:
-	    implicit_keep = 0;
 	    if (!interp->reject)
 		return SIEVE_INTERNAL_ERROR;
 	    ret = interp->reject(&a->u.rej,
@@ -604,7 +724,6 @@ static int do_action_list(sieve_interp_t *interp,
 
 	    break;
 	case ACTION_FILEINTO:
-	    implicit_keep = 0;
 	    if (!interp->fileinto)
 		return SIEVE_INTERNAL_ERROR;
 	    ret = interp->fileinto(&a->u.fil,
@@ -619,7 +738,6 @@ static int do_action_list(sieve_interp_t *interp,
 			 "Filed into: %s\n",a->u.fil.mailbox);
 	    break;
 	case ACTION_KEEP:
-	    implicit_keep = 0;
 	    if (!interp->keep)
 		return SIEVE_INTERNAL_ERROR;
 	    ret = interp->keep(&a->u.keep,
@@ -633,7 +751,6 @@ static int do_action_list(sieve_interp_t *interp,
 			 "Kept\n");
 	    break;
 	case ACTION_REDIRECT:
-	    implicit_keep = 0;
 	    if (!interp->redirect)
 		return SIEVE_INTERNAL_ERROR;
 	    ret = interp->redirect(&a->u.red,
@@ -647,7 +764,6 @@ static int do_action_list(sieve_interp_t *interp,
 			 "Redirected to %s\n", a->u.red.addr);
 	    break;
 	case ACTION_DISCARD:
-	    implicit_keep = 0;
 	    if (interp->discard) /* discard is optional */
 		ret = interp->discard(NULL, interp->interp_context,
 				      script_context,
@@ -661,24 +777,16 @@ static int do_action_list(sieve_interp_t *interp,
 
 	case ACTION_VACATION:
 	    {
-		unsigned char hash[HASHSIZE];
-
 		if (!interp->vacation)
 		    return SIEVE_INTERNAL_ERROR;
 
 		/* first, let's figure out if we should respond to this */
-		ret = makehash(hash, a->u.vac.send.addr,
-			       a->u.vac.send.msg);
+		ret = interp->vacation->autorespond(&a->u.vac.autoresp,
+						    interp->interp_context,
+						    script_context,
+						    message_context,
+						    &errmsg);
 
-		if (ret == SIEVE_OK) {
-		    a->u.vac.autoresp.hash = hash;
-		    a->u.vac.autoresp.len = HASHSIZE;
-		    ret = interp->vacation->autorespond(&a->u.vac.autoresp,
-							interp->interp_context,
-							script_context,
-							message_context,
-							&errmsg);
-		}
 		if (ret == SIEVE_OK) {
 		    /* send the response */
 		    ret = interp->vacation->send_response(&a->u.vac.send,
@@ -752,20 +860,20 @@ static int do_action_list(sieve_interp_t *interp,
 	}
     }
 
-    return do_sieve_error(ret, interp, script_context, message_context, 
+    return do_sieve_error(ret, interp, body_cache,
+			  script_context, message_context, 
 			  imapflags, actions, notify_list, lastaction, 
 			  implicit_keep, actions_string, errmsg);
 }
 
 
 /* execute some bytecode */
-int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
-		  void *m, sieve_imapflags_t * imapflags,
-		  action_list_t *actions,
-		  notify_list_t *notify_list,
-		  const char **errmsg);
+int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
+		  struct hash_table *body_cache, void *sc, void *m,
+		  sieve_imapflags_t * imapflags, action_list_t *actions,
+		  notify_list_t *notify_list, const char **errmsg);
 
-int sieve_execute_bytecode(sieve_bytecode_t *bc, sieve_interp_t *interp,
+int sieve_execute_bytecode(sieve_execute_t *exe, sieve_interp_t *interp,
 			   void *script_context, void *message_context) 
 {
     action_list_t *actions = NULL;
@@ -776,46 +884,52 @@ int sieve_execute_bytecode(sieve_bytecode_t *bc, sieve_interp_t *interp,
     char actions_string[ACTIONS_STRING_LEN] = "";
     const char *errmsg = NULL;
     sieve_imapflags_t imapflags;
+    struct hash_table body_cache;
     
     if (!interp) return SIEVE_FAIL;
 
     imapflags.flag = NULL; 
     imapflags.nflags = 0;
     
-    if (interp->notify)
-    {
+    if (interp->notify) {
 	notify_list = new_notify_list();
-	if (notify_list == NULL)
-	    {
-		ret = SIEVE_NOMEM;
-		return do_sieve_error(ret, interp, script_context,
-				      message_context, &imapflags,
-				      actions, notify_list, lastaction, 0,
-				      actions_string, errmsg);
-	    }
+	if (notify_list == NULL) {
+	    return do_sieve_error(SIEVE_NOMEM, interp, NULL,
+				  script_context, message_context, &imapflags,
+				  actions, notify_list, lastaction, 0,
+				  actions_string, errmsg);
+	}
     }
 
+    /* build a hash table to cache decoded body parts */
+    construct_hash_table(&body_cache, 10, 1);
+    
     actions = new_action_list();
-    if (actions == NULL) 
-    {
-	ret = SIEVE_NOMEM;
-	return do_sieve_error(ret, interp, script_context,
-			      message_context, &imapflags,
-			      actions, notify_list, lastaction, 0,
-			      actions_string, errmsg);
+    if (actions == NULL) {
+	ret = do_sieve_error(SIEVE_NOMEM, interp, &body_cache,
+			     script_context, message_context, &imapflags,
+			     actions, notify_list, lastaction, 0,
+			     actions_string, errmsg);
     }
-    
-    if (sieve_eval_bc(interp, bc->data, bc->len, message_context, 
-		      &imapflags, actions, notify_list, &errmsg) < 0)
-    {
-	ret = SIEVE_RUN_ERROR;
-	return do_sieve_error(ret, interp, script_context,
-			      message_context, &imapflags,
-			      actions, notify_list, lastaction, 0,
-			      actions_string, errmsg);
+    else {
+	ret = sieve_eval_bc(exe, 0, interp, &body_cache,
+			    script_context, message_context,
+			    &imapflags, actions, notify_list, &errmsg);
+
+	if (ret < 0) {
+	    ret = do_sieve_error(SIEVE_RUN_ERROR, interp, &body_cache,
+				 script_context, message_context, &imapflags,
+				 actions, notify_list, lastaction, 0,
+				 actions_string, errmsg);
+	}
+	else {
+	    ret = do_action_list(interp, &body_cache,
+				 script_context, message_context, 
+				 &imapflags, actions, notify_list,
+				 actions_string, errmsg);
+	}
     }
-    
-    return do_action_list(interp, script_context, message_context, 
-			  &imapflags, actions, notify_list, actions_string,
-			  errmsg);
+
+    free_hash_table(&body_cache, free);
+    return ret;
 }

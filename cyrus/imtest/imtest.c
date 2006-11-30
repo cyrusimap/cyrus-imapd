@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/NNTP/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.109 2006/08/30 16:58:49 murch Exp $
+ * $Id: imtest.c,v 1.110 2006/11/30 17:11:22 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -2251,6 +2251,13 @@ static struct protocol_t protocols[] = {
       { "AUTHENTICATE", INT_MAX, 1, "OK", "NO", NULL, "*", &sieve_parse_success },
       NULL, { "LOGOUT", "OK" }, NULL, NULL, NULL
     },
+    { "csync", NULL, "csync",
+      { 1, "* OK", NULL },
+      { NULL , "* OK", "* STARTTLS", "* SASL ", NULL },
+      { "STARTTLS", "OK", "NO", 1 },
+      { "AUTHENTICATE", INT_MAX, 0, "OK", "NO", "+ ", "*", NULL },
+      NULL, { "EXIT", "OK" }, NULL, NULL, NULL
+    },
     { NULL, NULL, NULL,
       { 0, NULL, NULL },
       { NULL, NULL, NULL, NULL, NULL },
@@ -2428,6 +2435,8 @@ int main(int argc, char **argv)
 	    prot = "mupdate";
 	else if (!strcasecmp(prog, "sivtest"))
 	    prot = "sieve";
+	else if (!strcasecmp(prog, "synctest"))
+	    prot = "csync";
     }
 
     protocol = protocols;

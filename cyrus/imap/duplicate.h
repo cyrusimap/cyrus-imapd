@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: duplicate.h,v 1.15 2004/02/12 02:32:22 ken3 Exp $ */
+/* $Id: duplicate.h,v 1.16 2006/11/30 17:11:17 murch Exp $ */
 
 #ifndef DUPLICATE_H
 #define DUPLICATE_H

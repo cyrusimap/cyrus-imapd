@@ -67,7 +67,7 @@
 #include "ptloader.h"
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ptloader.c,v 1.41 2005/10/13 20:37:10 jeaton Exp $";
+      "$Id: ptloader.c,v 1.42 2006/11/30 17:11:24 murch Exp $";
 
 struct pts_module *pts_modules[] = {
 #ifdef HAVE_LDAP
@@ -85,10 +85,10 @@ static struct pts_module *pts_fromname()
     int i;
     const char *name = config_getstring(IMAPOPT_PTS_MODULE);
     static struct pts_module *pts = NULL;
-
+    
     if (pts)
         return pts;
-
+    
     for (i = 0; pts_modules[i]; i++) {
 	if (!strcmp(pts_modules[i]->name, name)) {
 	    pts = pts_modules[i]; break;
@@ -101,14 +101,14 @@ static struct pts_module *pts_fromname()
 		 "PTS module %s not supported", name);
 	fatal(errbuf, EC_CONFIG);
     }
-
+    
     return pts;
 }
 
 void ptsmodule_init(void)
 {
     struct pts_module *pts = pts_fromname();
-
+    
     pts->init();
 }
 
@@ -117,7 +117,7 @@ struct auth_state *ptsmodule_make_authstate(const char *identifier,
 					    const char **reply, int *dsize)
 {
     struct pts_module *pts = pts_fromname();
-
+    
     return pts->make_authstate(identifier, size, reply, dsize);
 }
 
@@ -148,8 +148,7 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     /* set signal handlers */
     signal(SIGPIPE, SIG_IGN);
 
-    syslog(LOG_NOTICE,
-	   "starting: $Id: ptloader.c,v 1.41 2005/10/13 20:37:10 jeaton Exp $");
+    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.42 2006/11/30 17:11:24 murch Exp $");
 
     while ((opt = getopt(argc, argv, "d:")) != EOF) {
 	switch (opt) {

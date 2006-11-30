@@ -40,7 +40,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-# $Id: Makefile.in,v 1.64 2006/01/10 23:18:48 jeaton Exp $
+# $Id: Makefile.in,v 1.65 2006/11/30 17:11:22 murch Exp $
 
 # Authorization namespace.
 AUTH=auth.o auth_krb.o auth_unix.o auth_krb5.o auth_pts.o
@@ -85,21 +85,24 @@ LIBCYR_HDRS = $(srcdir)/acl.h $(srcdir)/assert.h $(srcdir)/auth.h \
 	$(srcdir)/lsort.h $(srcdir)/stristr.h \
 	$(srcdir)/util.h $(srcdir)/xstrlcpy.h $(srcdir)/xstrlcat.h $(srcdir)/xmalloc.h $(srcdir)/imapurl.h \
 	$(srcdir)/cyrusdb.h $(srcdir)/iptostring.h $(srcdir)/rfc822date.h \
-	$(srcdir)/libcyr_cfg.h
+	$(srcdir)/libcyr_cfg.h $(srcdir)/byteorder64.h \
+	$(srcdir)/message_uuid.h $(srcdir)/md5.h $(srcdir)/hmac-md5.h
 
 LIBCYR_OBJS = acl.o bsearch.o charset.o glob.o retry.o util.o \
 	libcyr_cfg.o mkgmtime.o prot.o parseaddr.o imclient.o imparse.o \
 	lsort.o stristr.o rfc822date.o cyrusdb.o strhash.o \
 	chartable.o imapurl.o nonblock_@WITH_NONBLOCK@.o lock_@WITH_LOCK@.o \
 	gmtoff_@WITH_GMTOFF@.o map_@WITH_MAP@.o $(ACL) $(AUTH) \
-	@LIBOBJS@ @CYRUSDB_OBJS@ \
-	iptostring.o xstrlcpy.o xstrlcat.o xmalloc.o wildmat.o
+	@LIBOBJS@ @CYRUSDB_OBJS@ @MD5OBJ@ \
+	iptostring.o xmalloc.o wildmat.o byteorder64.o \
+	message_uuid.o xstrlcat.o xstrlcpy.o
 
-LIBCYRM_HDRS = $(srcdir)/hash.h $(srcdir)/mpool.h $(srcdir)/xstrlcpy.h $(srcdir)/xstrlcat.h $(srcdir)/xmalloc.h \
-	$(srcdir)/strhash.o $(srcdir)/libconfig.h \
-	$(srcdir)/assert.h imapopts.h
-LIBCYRM_OBJS = libconfig.o imapopts.o hash.o mpool.o xstrlcpy.o xstrlcat.o xmalloc.o \
-	strhash.o assert.o @IPV6_OBJS@
+LIBCYRM_HDRS = $(srcdir)/hash.h $(srcdir)/mpool.h $(srcdir)/xmalloc.h \
+	$(srcdir)/xstrlcat.h $(srcdir)/xstrlcpy.h \
+	$(srcdir)/strhash.o $(srcdir)/libconfig.h $(srcdir)/assert.h \
+	imapopts.h
+LIBCYRM_OBJS = libconfig.o imapopts.o hash.o mpool.o xmalloc.o strhash.o \
+	xstrlcat.o xstrlcpy.o assert.o @IPV6_OBJS@
 
 all: $(BUILTSOURCES) libcyrus_min.a libcyrus.a
 

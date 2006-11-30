@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-/* $Id: signals.c,v 1.13 2005/02/14 16:26:50 shadow Exp $ */
+/* $Id: signals.c,v 1.14 2006/11/30 17:11:20 murch Exp $ */
 
 #include <config.h>
 

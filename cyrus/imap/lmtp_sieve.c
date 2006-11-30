@@ -1,6 +1,6 @@
 /* lmtp_sieve.c -- Sieve implementation for lmtpd
  *
- * $Id: lmtp_sieve.c,v 1.12 2006/05/10 16:27:17 murch Exp $
+ * $Id: lmtp_sieve.c,v 1.13 2006/11/30 17:11:18 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -62,6 +62,7 @@
 #include "duplicate.h"
 #include "exitcodes.h"
 #include "global.h"
+#include "imap_err.h"
 #include "lmtpd.h"
 #include "lmtp_sieve.h"
 #include "lmtpengine.h"
@@ -146,6 +147,64 @@ static int getenvelope(void *mc, const char *field, const char ***contents)
 	*contents = NULL;
 	return SIEVE_FAIL;
     }
+}
+
+static int getbody(void *mc, const char **content_types,
+		   sieve_bodypart_t ***parts)
+{
+    deliver_data_t *mydata = (deliver_data_t *) mc;
+    message_data_t *m = mydata->m;
+    int r = 0;
+
+    if (!mydata->content->body) {
+	/* parse the message body if we haven't already */
+	r = message_parse_file(m->f, &mydata->content->base,
+			       &mydata->content->len, &mydata->content->body);
+    }
+
+    /* XXX currently struct bodypart as defined in message.h is the same as
+       sieve_bodypart_t as defined in sieve_interface.h, so we can typecast */
+    if (!r) message_fetch_part(mydata->content, content_types,
+			       (struct bodypart ***) parts);
+    return (!r ? SIEVE_OK : SIEVE_FAIL);
+}
+
+
+static int sieve_find_script(const char *user, const char *domain,
+			     const char *script, char *fname, size_t size);
+
+static int getinclude(void *sc, const char *script, int isglobal,
+		      char *fname, size_t size)
+{
+    script_data_t *sdata = (script_data_t *) sc;
+    char userbuf[MAX_MAILBOX_NAME+1], *user, *domain = NULL;
+    struct stat sbuf;
+    int r;
+
+    if (strstr(script, "../")) {
+	syslog(LOG_NOTICE, "Illegal script name '%s' for user '%s'",
+	       script, sdata->username);
+	return SIEVE_FAIL;
+    }
+
+    user = (char *) sdata->username;
+    if (config_virtdomains && strchr(user, '@')) {
+	/* split the user and domain */
+	strlcpy(userbuf, sdata->username, sizeof(userbuf));
+	user = userbuf;
+	if ((domain = strrchr(user, '@'))) *domain++ = '\0';
+    }
+
+    r = sieve_find_script(isglobal ? NULL : user, domain, script,
+			  fname, size);
+
+    if (!r && isglobal && domain && stat(fname, &sbuf) != 0) {
+	/* if the domain-specific global script doesn't exist,
+	   try a server-wide global script */
+	r = sieve_find_script(NULL, NULL, script, fname, size);
+    }
+
+    return r;
 }
 
 static int global_outgoing_count = 0;
@@ -417,7 +476,7 @@ static int sieve_fileinto(void *ac,
 						   fc->mailbox,
 						   sd->username, namebuf);
     if (!ret) {
-	ret = deliver_mailbox(md->data, mdata->stage, md->size,
+	ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
 			      fc->imapflags->flag, fc->imapflags->nflags,
 			      (char *) sd->username, sd->authstate, md->id,
 			      sd->username, mdata->notifyheader,
@@ -440,6 +499,7 @@ static int sieve_keep(void *ac,
     sieve_keep_context_t *kc = (sieve_keep_context_t *) ac;
     script_data_t *sd = (script_data_t *) sc;
     deliver_data_t *mydata = (deliver_data_t *) mc;
+    message_data_t *md = mydata->m;
     int ret;
 
     ret = deliver_local(mydata, kc->imapflags->flag, kc->imapflags->nflags,
@@ -497,7 +557,7 @@ static int autorespond(void *ac,
     now = time(NULL);
 
     /* ok, let's see if we've responded before */
-    t = duplicate_check(arc->hash, arc->len, 
+    t = duplicate_check((char *) arc->hash, SIEVE_HASHLEN, 
 			sd->username, strlen(sd->username));
     if (t) {
 	if (now >= t) {
@@ -512,7 +572,7 @@ static int autorespond(void *ac,
     }
 
     if (ret == SIEVE_OK) {
-	duplicate_mark((char *) arc->hash, arc->len, 
+	duplicate_mark((char *) arc->hash, SIEVE_HASHLEN, 
 		       sd->username, strlen(sd->username), 
 		       now + arc->days * (24 * 60 * 60), 0);
     }
@@ -713,6 +773,18 @@ sieve_interp_t *setup_sieve(void)
 	fatal("sieve_register_envelope()", EC_SOFTWARE);
     }
     
+    res = sieve_register_body(interp, &getbody);
+    if (res != SIEVE_OK) {
+	syslog(LOG_ERR,"sieve_register_body() returns %d\n", res);
+	fatal("sieve_register_body()", EC_SOFTWARE);
+    }
+    
+    res = sieve_register_include(interp, &getinclude);
+    if (res != SIEVE_OK) {
+	syslog(LOG_ERR,"sieve_register_include() returns %d\n", res);
+	fatal("sieve_register_include()", EC_SOFTWARE);
+    }
+
     res = sieve_register_vacation(interp, &vacation);
     if (res != SIEVE_OK) {
 	syslog(LOG_ERR, "sieve_register_vacation() returns %d\n", res);
@@ -779,7 +851,6 @@ static int sieve_find_script(const char *user, const char *domain,
 
 	snprintf(fname+len, size-len, "%s.bc", script);
     }
-	
     return 0;
 }
 
@@ -790,7 +861,7 @@ int run_sieve(const char *user, const char *domain, const char *mailbox,
     struct annotation_data attrib;
     const char *script = NULL;
     char fname[MAX_MAILBOX_PATH+1];
-    sieve_bytecode_t *bc = NULL;
+    sieve_execute_t *bc = NULL;
     script_data_t sdata;
     char userbuf[MAX_MAILBOX_NAME+1] = "";
     char authuserbuf[MAX_MAILBOX_NAME+1];

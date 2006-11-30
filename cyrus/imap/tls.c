@@ -93,7 +93,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.51 2005/10/28 14:45:19 ken3 Exp $ */
+/* $Id: tls.c,v 1.52 2006/11/30 17:11:20 murch Exp $ */
 
 #include <config.h>
 
@@ -226,7 +226,7 @@ static int verify_callback(int ok, X509_STORE_CTX * ctx)
     int     err;
     int     depth;
 
-    syslog(LOG_ERR,"Doing a peer verify");
+    syslog(LOG_DEBUG, "Doing a peer verify");
 
     err_cert = X509_STORE_CTX_get_current_cert(ctx);
     err = X509_STORE_CTX_get_error(ctx);
@@ -419,9 +419,9 @@ static int new_session_cb(SSL *ssl __attribute__((unused)),
     if (data && len) {
 	/* store the session in our database */
 	do {
-	    ret = DB->store(sessdb, sess->session_id,
+	    ret = DB->store(sessdb, (const char *) sess->session_id,
 			    sess->session_id_length,
-			    data, len + sizeof(time_t), NULL);
+			    (const char *) data, len + sizeof(time_t), NULL);
 	} while (ret == CYRUSDB_AGAIN);
     }
 
@@ -454,7 +454,7 @@ static void remove_session(unsigned char *id, int idlen)
     if (!sess_dbopen) return;
 
     do {
-	ret = DB->delete(sessdb, id, idlen, NULL, 1);
+	ret = DB->delete(sessdb, (const char *) id, idlen, NULL, 1);
     } while (ret == CYRUSDB_AGAIN);
 
     /* log this transaction */
@@ -495,7 +495,6 @@ static SSL_SESSION *get_session_cb(SSL *ssl __attribute__((unused)),
 {
     int ret;
     const char *data = NULL;
-    unsigned char *asn;
     int len = 0;
     time_t expire = 0, now = time(0);
     SSL_SESSION *sess = NULL;
@@ -506,7 +505,7 @@ static SSL_SESSION *get_session_cb(SSL *ssl __attribute__((unused)),
     if (!sess_dbopen) return NULL;
 
     do {
-	ret = DB->fetch(sessdb, id, idlen, &data, &len, NULL);
+	ret = DB->fetch(sessdb, (const char *) id, idlen, &data, &len, NULL);
     } while (ret == CYRUSDB_AGAIN);
 
     if (!ret && data) {
@@ -522,7 +521,7 @@ static SSL_SESSION *get_session_cb(SSL *ssl __attribute__((unused)),
 	else {
 	    /* transform the ASN1 representation of the session
 	       into an SSL_SESSION object */
-	    asn = (unsigned char*) data + sizeof(time_t);
+	    const unsigned char *asn = (unsigned char *) data + sizeof(time_t);
 	    sess = d2i_SSL_SESSION(NULL, &asn, len - sizeof(time_t));
 	    if (!sess) syslog(LOG_ERR, "d2i_SSL_SESSION failed: %m");
 	}

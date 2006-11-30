@@ -1,4 +1,6 @@
-/* 
+/*
+ * proxy.h - proxy support functions
+ *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -25,8 +27,8 @@
  *      tech-transfer@andrew.cmu.edu
  *
  * 4. Redistributions of any form whatsoever must retain the following
- *    acknowledgment:
  *    "This product includes software developed by Computing Services
+ *    acknowledgment:
  *     at Carnegie Mellon University (http://www.cmu.edu/computing/)."
  *
  * CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
@@ -36,29 +38,50 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ *
+ * $Id: proxy.h,v 1.2 2006/11/30 17:11:19 murch Exp $
  */
 
-/* $Id: idle_no.c,v 1.6 2005/12/09 16:12:50 murch Exp $ */
+#ifndef _PROXY_H
+#define _PROXY_H
 
-#include "idle.h"
+#include "backend.h"
+#include "protocol.h"
+#include "prot.h"
 
+#define IDLE_TIMEOUT (5 * 60)
 
-const char *idle_method_desc = (char *)0;
+/* a final destination for a message */
+struct rcpt {
+    char rcpt[MAX_MAILBOX_NAME+1]; /* where? */
+    int rcpt_num;		    /* credit this to who? */
+    struct rcpt *next;
+};
 
-int idle_enabled(void)
-{
-    return 0;
-}
+struct dest {
+    char server[MAX_MAILBOX_NAME+1];  /* where? */
+    char authas[MAX_MAILBOX_NAME+1];  /* as who? */
+    int rnum;			      /* number of rcpts */
+    struct rcpt *to;
+    struct dest *next;
+};
 
-int idle_init(idle_updateproc_t *proc)
-{
-    return 0;
-}
+void proxy_adddest(struct dest **dlist, const char *rcpt, int rcpt_num,
+		   char *server, const char *authas);
 
-void idle_start(struct mailbox *mailbox)
-{
-}
+struct backend *
+proxy_findserver(const char *server, struct protocol_t *prot,
+		 const char *userid, struct backend ***cache,
+		 struct backend **current, struct backend **inbox,
+		 struct protstream *clientin);
 
-void idle_done(struct mailbox *mailbox)
-{
-}
+void proxy_downserver(struct backend *s);
+
+int proxy_check_input(struct protgroup *protin,
+		      struct protstream *clientin,
+		      struct protstream *clientout,
+		      struct protstream *serverin,
+		      struct protstream *serverout,
+		      unsigned long timeout_sec);
+
+#endif /* _PROXY_H */

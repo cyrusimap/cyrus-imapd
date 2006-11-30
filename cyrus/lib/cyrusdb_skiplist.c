@@ -1,5 +1,5 @@
 /* cyrusdb_skiplist.c -- cyrusdb skiplist implementation
- * $Id: cyrusdb_skiplist.c,v 1.50 2004/06/08 19:55:17 rjs3 Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.51 2006/11/30 17:11:22 murch Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -61,6 +61,7 @@
 #endif
 #include <netinet/in.h>
 
+#include "bsearch.h"
 #include "cyrusdb.h"
 #include "libcyr_cfg.h"
 #include "lock.h"
@@ -153,6 +154,9 @@ struct db {
     int listsize;
     int logstart;		/* where the log starts from last chkpnt */
     time_t last_recovery;
+
+    /* comparator function to use for sorting */
+    int (*compar) (const char *s1, int l1, const char *s2, int l2);
 };
 
 struct txn {
@@ -174,6 +178,8 @@ enum {
     be_paranoid = 0,
     use_osync = 0
 };
+
+static int compare(const char *s1, int l1, const char *s2, int l2);
 
 static void newtxn(struct db *db, struct txn *t)
 {
@@ -674,6 +680,7 @@ static int myopen(const char *fname, int flags, struct db **ret)
 
     db->fd = -1;
     db->fname = xstrdup(fname);
+    db->compar = (flags & CYRUSDB_MBOXSORT) ? bsearch_ncompare : compare;
 
     db->fd = open(fname, O_RDWR, 0644);
     if (db->fd == -1 && errno == ENOENT && (flags & CYRUSDB_CREATE)) {
@@ -824,7 +831,7 @@ static const char *find_node(struct db *db,
 
     for (i = db->curlevel - 1; i >= 0; i--) {
 	while ((offset = FORWARD(ptr, i)) && 
-	       compare(KEY(db->map_base + offset), KEYLEN(db->map_base + offset), 
+	       db->compar(KEY(db->map_base + offset), KEYLEN(db->map_base + offset), 
 		       key, keylen) < 0) {
 	    /* move forward at level 'i' */
 	    ptr = db->map_base + offset;
@@ -875,7 +882,7 @@ int myfetch(struct db *db,
 
     ptr = find_node(db, key, keylen, 0);
 
-    if (ptr == db->map_base || compare(KEY(ptr), KEYLEN(ptr), key, keylen)) {
+    if (ptr == db->map_base || db->compar(KEY(ptr), KEYLEN(ptr), key, keylen)) {
 	/* failed to find key/keylen */
 	r = CYRUSDB_NOTFOUND;
     } else {
@@ -963,7 +970,7 @@ int myforeach(struct db *db,
     while (ptr != db->map_base) {
 	/* does it match prefix? */
 	if (KEYLEN(ptr) < (bit32) prefixlen) break;
-	if (prefixlen && compare(KEY(ptr), prefixlen, prefix, prefixlen)) break;
+	if (prefixlen && db->compar(KEY(ptr), prefixlen, prefix, prefixlen)) break;
 
 	if (!goodp ||
 	    goodp(rock, KEY(ptr), KEYLEN(ptr), DATA(ptr), DATALEN(ptr))) {
@@ -1070,7 +1077,7 @@ int mystore(struct db *db,
     unsigned int lvl;
     int num_iov;
     struct txn t, *tp;
-    bit32 endpadding = htonl(-1);
+    bit32 endpadding = (bit32) htonl(-1);
     bit32 zeropadding[4] = { 0, 0, 0, 0 };
     int updateoffsets[SKIPLIST_MAXLEVEL];
     int newoffsets[SKIPLIST_MAXLEVEL];
@@ -1116,7 +1123,7 @@ int mystore(struct db *db,
     newoffset = tp->logend;
     ptr = find_node(db, key, keylen, updateoffsets);
     if (ptr != db->map_base && 
-	!compare(KEY(ptr), KEYLEN(ptr), key, keylen)) {
+	!db->compar(KEY(ptr), KEYLEN(ptr), key, keylen)) {
 	    
 	if (!overwrite) {
 	    myabort(db, tp);	/* releases lock */
@@ -1282,7 +1289,7 @@ int mydelete(struct db *db,
 
     ptr = find_node(db, key, keylen, updateoffsets);
     if (ptr == db->map_base ||
-	!compare(KEY(ptr), KEYLEN(ptr), key, keylen)) {
+	!db->compar(KEY(ptr), KEYLEN(ptr), key, keylen)) {
 	/* gotcha */
 	offset = ptr - db->map_base;
 
@@ -1825,11 +1832,11 @@ static int myconsistent(struct db *db, struct txn *tid, int locked)
 		const char *q = db->map_base + offset;
 		int cmp;
 
-		cmp = compare(KEY(ptr), KEYLEN(ptr), KEY(q), KEYLEN(q));
+		cmp = db->compar(KEY(ptr), KEYLEN(ptr), KEY(q), KEYLEN(q));
 		if (cmp >= 0) {
 		    fprintf(stdout, 
 			    "skiplist inconsistent: %04X: ptr %d is %04X; "
-			    "compare() = %d\n", 
+			    "db->compar() = %d\n", 
 			    ptr - db->map_base,
 			    i,
 			    offset, cmp);
@@ -2058,7 +2065,7 @@ static int recovery(struct db *db, int flags)
 	if (TYPE(ptr) == ADD) {
 	    keyptr = find_node(db, KEY(ptr), KEYLEN(ptr), updateoffsets);
 	    if (keyptr == db->map_base ||
-		compare(KEY(ptr), KEYLEN(ptr), KEY(keyptr), KEYLEN(keyptr))) {
+		db->compar(KEY(ptr), KEYLEN(ptr), KEY(keyptr), KEYLEN(keyptr))) {
 		/* didn't find exactly this node */
 		keyptr = NULL;
 	    }

@@ -1,5 +1,5 @@
 /* ptloader.h -- Site authorization module
- * $Id: ptloader.h,v 1.1 2005/02/16 20:38:04 shadow Exp $
+ * $Id: ptloader.h,v 1.2 2006/11/30 17:11:24 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *

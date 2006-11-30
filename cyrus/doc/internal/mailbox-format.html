@@ -4,7 +4,7 @@
 
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-<meta name="revision" content="$Id: mailbox-format.html,v 1.4 2004/01/09 01:37:20 ken3 Exp $" />
+<meta name="revision" content="$Id: mailbox-format.html,v 1.5 2006/11/30 17:11:16 murch Exp $" />
 <meta name="author" content="Rob Siemborski" />
 
 <title>mailbox format</title>
@@ -32,6 +32,7 @@ following files:</p>
 <li> the <tt>cyrus.header</tt> metadata file </li>
 <li> the <tt>cyrus.index</tt> metadata file </li>
 <li> the <tt>cyrus.cache</tt> metadata file </li>
+<li> zero or one <tt>cyrus.expunge</tt> metadata file </li>
 <li> zero or one <tt>cyrus.squat</tt> search indexes </li>
 <li> zero or more subdirectories </li>
 </ul>
@@ -55,7 +56,7 @@ often. Its format:</p>
 &lt;Mailbox ACL&gt;\n
 </pre>
 
-<h2><tt>cyrus.index</tt> and <tt>cyrus.cache</tt></h2>
+<h2><tt>cyrus.index</tt>, <tt>cyrus.expunge</tt> and <tt>cyrus.cache</tt></h2>
 
 <p>xxx not just caches; the index file stores stuff not present in the
 message file! </p>
@@ -71,6 +72,10 @@ All of the binary data is also 4-byte aligned. Strings in the
 <tt>cyrus.cache</tt> are stored NUL-terminated (this only applies to
 <tt>cyrus.cache</tt>). To ensure alignment of following data, the end
 of strings may be NUL-padded by up to 4 bytes.</p>
+
+<p> The cyrus.expunge file has the exact same format as cyrus.index,
+and holds the records of expunged messages which have yet to have their
+corresponding cache records and messages files deleted.</p>
 
 <p>
 The overall format of these files looks sort of like this:</p>
@@ -149,11 +154,9 @@ Generation Number (4 bytes)</dt>
 <dt>Last UID (4 bytes)</dt>
 <dd> Highest UID of all messages in the mailbox (UIDNEXT - 1).</dd>
 
-<dt>Quota Reserved Field (4 bytes)</dt>
-<dd> Reserved for future 64-bit quotas.</dd>
-
-<dt>Quota Mailbox Used (4 bytes)</dt>
-<dd> Total amount of storage used by all of the messages in the mailbox.</dd>
+<dt>Quota Mailbox Used (8 bytes)</dt>
+<dd> Total amount of storage used by all of the messages in the mailbox.
+Platforms that don't support 64-bit integers only use the last 4 bytes.</dd>
 
 <dt>POP3 Last Login (4 bytes)</dt>
 <dd>  (time_t) of the last pop3 login to this INBOX, used to enforce
@@ -166,14 +169,31 @@ the "poptimeout" <tt>imapd.conf</tt> option.</dd>
 <dt>Deleted, Answered, and Flagged (4 bytes each)</dt>
 <dd> Counts of how many messages have each flag.</dd>
 
-<dt>POP3 New UIDL (4 bytes)</dt> 
+<dt>Mailbox Options (4 bytes)</dt> 
+
+<dd> Bitmask of mailbox options, consisting of any combination of the
+following:
+<dl>
+<dt>POP3_NEW_UIDL</dt>
 
 <dd> Flag signalling that we're using
 "<em>uidvalidity</em>.<em>uid</em>" instead of just "<em>uid</em>" for
 the output of the POP3 UIDL command.</dd>
 
+<dt>IMAP_CONDSTORE</dt>
+
+<dd> Flag signalling that we're supporting the IMAP CONDSTORE
+extension on the mailbox.</dd>
+</dl>
+</dd>
+
 <dt>Leaked Cache (4 bytes)</dt> 
 <dd> Number of leaked records in the cache file.</dd>
+
+<dt>HighestModSeq (8 bytes)</dt>
+
+<dd> Highest Modification Sequence of all the messages in the
+mailbox (CONDSTORE).</dd>
 </dl>
 
 <p>
@@ -224,6 +244,12 @@ of the message.</p>
 <dt>CACHE_VERSION (4 bytes)</dt>
 <dd>Indicates the version number of the cache record for the message
 (determines which headers are cached).</dd>
+
+<dt>UUID (MESSAGE_UUID_SIZE bytes)</dt>
+<dd>Universal UID of the message (used by replication code).</dd>
+
+<dt>MODSEQ (8 bytes)</dt>
+<dd>Modification Sequence of the message (CONDSTORE).</dd>
 </dl>
 
 <h3><tt>cyrus.cache</tt> file format detail</h3>

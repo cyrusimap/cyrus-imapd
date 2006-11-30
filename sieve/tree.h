@@ -1,6 +1,6 @@
 /* tree.h -- abstract syntax tree
  * Larry Greenfield
- * $Id: tree.h,v 1.9 2004/08/30 11:33:17 ken3 Exp $
+ * $Id: tree.h,v 1.10 2006/11/30 17:11:25 murch Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -76,6 +76,16 @@ struct Test {
 	    stringlist_t *pl;
             int addrpart;
 	} ae; 
+	struct { /* it's a body test */
+	    int comptag;
+	    int relation; 
+	    char * comparator;
+	    void *comprock;
+	    int transform;
+	    int offset;
+	    stringlist_t *content_types;
+	    stringlist_t *pl;
+	} b; 
 	test_t *t; /* not */
 	struct { /* size */
 	    int t; /* tag */
@@ -99,11 +109,26 @@ struct Commandlist {
 	    commandlist_t *do_then;
 	    commandlist_t *do_else;
 	} i;
+	struct { /* it's an include action */
+	    int location;
+	    char *script;
+	} inc;
+	struct { /* it's a fileinto action */
+	    char *folder;
+	    int copy;
+	    /* add stringlist_t for imap4flags */
+	} f;
+	struct { /* it's a redirect action */
+	    char *address;
+	    int copy;
+	} r;
 	struct { /* it's a vacation action */
 	    char *subject;
 	    int days;
 	    stringlist_t *addresses;
 	    char *message;
+	    char *from;
+	    char *handle;
 	    int mime;
 	} v;
 	struct { /* it's a notify action */

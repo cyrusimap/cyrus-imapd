@@ -1,5 +1,5 @@
 /* libconfig.h -- Header for imapd.conf processing
- * $Id: libconfig.h,v 1.4 2003/12/29 20:22:55 ken3 Exp $
+ * $Id: libconfig.h,v 1.5 2006/11/30 17:11:22 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -53,11 +53,13 @@ extern const char *config_getstring(enum imapopt opt);
 extern int config_getint(enum imapopt opt);
 extern int config_getswitch(enum imapopt opt);
 extern enum enum_value config_getenum(enum imapopt opt);
+extern unsigned long config_getbitfield(enum imapopt opt);
 
 /* these work on additional strings that are not defined in the
  * imapoptions table */
 extern const char *config_getoverflowstring(const char *key, const char *def);
 extern const char *config_partitiondir(const char *partition);
+extern const char *config_metapartitiondir(const char *partition);
 
 /* cached configuration variables accessable to external world */
 extern const char *config_filename;
@@ -70,6 +72,7 @@ extern const char *config_ident;
 extern int config_hashimapspool;
 extern int config_implicitrights;
 extern enum enum_value config_virtdomains;
+extern enum enum_value config_mupdate_config;
 
 /* config requirement flags */
 #define CONFIG_NEED_PARTITION_DATA (1<<0)

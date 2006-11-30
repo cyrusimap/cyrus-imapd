@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: util.c,v 1.30 2004/09/09 16:22:01 shadow Exp $
+ * $Id: util.c,v 1.31 2006/11/30 17:11:22 murch Exp $
  */
 
 #include <config.h>
@@ -292,7 +292,7 @@ void cyrus_reset_stdio()
     if (devnull == -1) {
         fatal("open() on /dev/null failed", EC_TEMPFAIL);
     }
-
+    
     /* stdin */
     shutdown(0, SHUT_RD);
     dup2(devnull, 0);
@@ -300,14 +300,13 @@ void cyrus_reset_stdio()
     /* stdout */
     shutdown(1, SHUT_RD);
     dup2(devnull, 1);
-
+    
     /* stderr */
     shutdown(2, SHUT_RD);
     dup2(devnull, 2);
 
     if (devnull > 2) close(devnull);
 }
-
 
 /* Given a mkstemp(3) pattern for a filename,
  * create the file and return the file descriptor.

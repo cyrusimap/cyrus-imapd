@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Shell.pm,v 1.37 2006/03/23 15:41:56 jeaton Exp $
+# $Id: Shell.pm,v 1.38 2006/11/30 17:11:24 murch Exp $
 #
 # A shell framework for Cyrus::IMAP::Admin
 #
@@ -126,7 +126,7 @@ my %builtins = (exit =>
 		  [\&_sc_info, '[mailbox]',
 		   'display mailbox/server metadata'],
 		mboxcfg =>
-		  [\&_sc_mboxcfg, 'mailbox [comment|news2mail|expire|sieve|squat] value',
+		  [\&_sc_mboxcfg, 'mailbox [comment|condstore|news2mail|expire|sieve|squat] value',
 		   'configure mailbox'],
 		mboxconfig => 'mboxcfg',
 		reconstruct =>
@@ -160,12 +160,12 @@ my %builtins = (exit =>
 		   'transfer (relocate) a mailbox to a different server'],
 		xfer => 'xfermailbox',
 		subscribe =>
-		  [\&_sc_subscribe, '[mailbox]',
-                  'subscribe to a mailbox'],
-		sub => 'subscribe',
+                  [\&_sc_subscribe, '[mailbox]',
+                    'subscribe to a mailbox'],
+                sub => 'subscribe',
 		unsubscribe =>
 		  [\&_sc_unsubscribe, '[mailbox]',
-                  'unsubscribe from a mailbox'],
+		     'unsubscribe from a mailbox'],
 		unsub => 'unsubscribe',
 		#? alias
 		#? unalias
@@ -436,9 +436,10 @@ sub run {
 # (It's not as trivial as run() because it does things expected of standalone
 # programs, as opposed to things expected from within a program.)
 sub shell {
-  my ($server, $port, $authz, $auth, $systemrc, $userrc, $dorc, $mech, $pw) =
+  my ($server, $port, $authz, $auth, $systemrc, $userrc, $dorc, $mech, $pw,
+      $tlskey, $notls) =
     ('', 143, undef, $ENV{USER} || $ENV{LOGNAME}, '/usr/local/etc/cyradmrc.pl',
-     "$ENV{HOME}/.cyradmrc.pl", 1, undef, undef);
+     "$ENV{HOME}/.cyradmrc.pl", 1, undef, undef, undef, undef);
   GetOptions('user|u=s' => \$auth,
 	     'authz|z=s' => \$authz,
 	     'rc|r!' => \$dorc,
@@ -448,6 +449,8 @@ sub shell {
 	     'port|p=i' => \$port,
 	     'auth|a=s' => \$mech,
 	     'password|w=s' => \$pw,
+  	     'tlskey|t:s' => \$tlskey,
+  	     'notls' => \$notls,
 	     'help|h' => sub { cyradm_usage(); exit(0); }
 	    );
   if ($server ne '' && @ARGV) {
@@ -466,7 +469,8 @@ sub shell {
 			  -callback => \&_cb_eof,
 			  -rock => \$cyradm});
     $cyradm->authenticate(-authz => $authz, -user => $auth,
-			  -mechanism => $mech, -password => $pw)
+			  -mechanism => $mech, -password => $pw,
+			  -tlskey => $tlskey, -notls => $notls)
       or die "cyradm: cannot authenticate to server with $mech as $auth\n";
   }
   my $fstk = [*STDIN, *STDOUT, *STDERR];
@@ -773,6 +777,20 @@ sub _sc_auth {
       $want = '-service';
       next;
     }
+    if (Cyrus::IMAP::imclient_havetls()) {
+      if ($opt ne '' && '-tlskey' =~ /^\Q$opt/ || $opt eq '--tlskey') {
+	$want = '-tlskey';
+	next;
+      }
+      if ($opt ne '' && '-notls' =~ /^\Q$opt/ || $opt eq '--notls') {
+	$want = '-notls';
+	next;
+      }
+      if ($opt =~ /^-/) {
+	die "usage: authenticate [-minssf N] [-maxssf N] [-mechanisms STR]\n".
+	    "                    [-service name] [-tlskey keyfile] [-notls] [user]\n";
+      }
+    }
     if ($opt =~ /^-/) {
       die "usage: authenticate [-minssf N] [-maxssf N] [-mechanisms STR]\n".
 	  "                    [-service name] [user]\n";
@@ -784,8 +802,13 @@ sub _sc_auth {
   }
   push(@nargv, @argv);
   if (@nargv > 1) {
-    die "usage: authenticate [-minssf N] [-maxssf N] [-mechanisms STR]\n".
-        "                    [-service name] [user]\n";
+    if (Cyrus::IMAP::imclient_havetls()) {
+      die "usage: authenticate [-minssf N] [-maxssf N] [-mechanisms STR]\n".
+          "                    [-service name] [-tlskey keyfile] [-notls] [user]\n";
+    } else {
+      die "usage: authenticate [-minssf N] [-maxssf N] [-mechanisms STR]\n".
+          "                    [-service name] [user]\n";
+    }
   }
   if (@nargv) {
     $opts{-user} = shift(@nargv);
@@ -1366,6 +1389,7 @@ sub _sc_subscribe {
   }
   0;
 }
+
 sub _sc_unsubscribe {
   my ($cyrref, $name, $fh, $lfh, @argv) = @_;
   my (@nargv, $opt);
@@ -1400,7 +1424,7 @@ sub _sc_mboxcfg {
   while (defined ($opt = shift(@argv))) {
     last if $opt eq '--';
     if ($opt =~ /^-/) {
-      die "usage: mboxconfig mailbox [comment|news2mail|expire|sieve|squat] value\n";
+      die "usage: mboxconfig mailbox [comment|condstore|news2mail|expire|sieve|squat] value\n";
     }
     else {
       push(@nargv, $opt);
@@ -1409,7 +1433,7 @@ sub _sc_mboxcfg {
   }
   push(@nargv, @argv);
   if (@nargv < 2) {
-    die "usage: mboxconfig mailbox [comment|news2mail|expire|sieve|squat] value\n";
+    die "usage: mboxconfig mailbox [comment|condstore|news2mail|expire|sieve|squat] value\n";
   }
   if (!$cyrref || !$$cyrref) {
     die "mboxconfig: no connection to server\n";
@@ -1553,9 +1577,8 @@ Remove ACLs from the specified mailbox.
 Delete the specified mailbox.
 
 Administrators do not have implicit delete rights on mailboxes.  Use the
-B<setaclmailbox> command to grant the C<c> permission (or other permission
-as specified by the deleteright configuration option in imapd.conf)
-to your principal if you need to delete a mailbox you do not own. 
+B<setaclmailbox> command to grant the C<k> permission to your
+principal if you need to delete a mailbox you do not own.
 
 Note that the online help admits to an optional host argument.  This argument
 is not currently used, and will be rejected with an error if specified; it
@@ -1640,6 +1663,10 @@ The currently supported attributes are:
 
 Sets a comment or description associated with the mailbox.
 
+=item C<condstore>
+
+Enables the IMAP CONDSTORE extension (modification sequences) on the mailbox.
+
 =item C<expire>
 
 Sets the number of days after which messages will be expired from the mailbox.
@@ -1700,21 +1727,23 @@ of the connected server.
 
 Set ACLs on a mailbox.  The ACL may be one of the special strings C<none>,
 C<read> (C<lrs>), C<post> (C<lrsp>), C<append> (C<lrsip>), C<write>
-(C<lrswipcd>), or C<all> (C<lrswipcda>), or any combinations of the ACL codes:
+(C<lrswipkxte>), C<delete> (C<lrxte>), or C<all> (C<lrswipkxte>), or
+any combinations of the ACL codes:
 
 =over 4
 
 =item l
 
-Lookup (visible to LIST/LSUB/UNSEEN)
+Lookup (mailbox is visible to LIST/LSUB, SUBSCRIBE mailbox)
 
 =item r
 
-Read (SELECT, CHECK, FETCH, PARTIAL, SEARCH, COPY source)
+Read (SELECT/EXAMINE the mailbox, perform STATUS)
 
 =item s
 
-Seen (STORE \SEEN)
+Seen (set/clear \SEEN flag via STORE, also set \SEEN flag during
+    APPEND/COPY/FETCH BODY[...])
 
 =item w
 
@@ -1728,17 +1757,26 @@ Insert (APPEND, COPY destination)
 
 Post (send mail to mailbox)
 
-=item c
+=item k
 
-Create (subfolders)
+Create mailbox (CREATE new sub-mailboxes, parent for new mailbox in RENAME)
 
-=item d
+=item x
 
-Delete (STORE \DELETED, EXPUNGE)
+Delete mailbox (DELETE mailbox, old mailbox name in RENAME)
+
+=item t
+
+Delete messages (set/clear \DELETED flag via STORE, also set \DELETED
+    flag during APPEND/COPY)
+
+=item e
+
+Perform EXPUNGE and expunge as part of CLOSE
 
 =item a
 
-Administer (SETACL)
+Administer (SETACL/DELETEACL/GETACL/LISTRIGHTS)
 
 =back
 

@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: managesieve.xs,v 1.22 2005/04/21 18:38:10 shadow Exp $ */
+/* $Id: managesieve.xs,v 1.23 2006/11/30 17:11:24 murch Exp $ */
 
 #ifdef __cplusplus
 extern "C" {
@@ -64,7 +64,7 @@ typedef struct xscyrus *Sieveobj;
 static char *globalerr = NULL;
 
 #include "isieve.h"
-
+#include "util.h"
 #include "xmalloc.h"
 
 static int
@@ -126,7 +126,7 @@ perlsieve_getpass(conn, context, id, psecret)
         /* copy result */
         *psecret = malloc(sizeof(sasl_secret_t) + strlen(tmp) + 2);
         if (!*psecret) return SASL_NOMEM;
-        strcpy( (*psecret)->data ,tmp);
+        strcpy((char *) (*psecret)->data ,tmp);
         (*psecret)->len = strlen(tmp);
 
         PUTBACK ;
@@ -177,8 +177,8 @@ perlsieve_simple(context, id, result, len)
         /* copy result */
         *result = malloc(strlen(tmp) + 2);
         if (!*result) return SASL_NOMEM;
-        strcpy(*result,tmp);
-        if (len) *len = strlen(*result);
+        strcpy((char *) *result, tmp);
+        if (len) *len = strlen((char *) *result);
 
         PUTBACK ;
         FREETMPS ;
@@ -195,7 +195,7 @@ call_listcb(unsigned char *name, int isactive, void *rock)
 {
         dSP ;
         PUSHMARK(sp) ;
-        XPUSHs(sv_2mortal(newSVpv(name, 0)));
+        XPUSHs(sv_2mortal(newSVpv((const char *) name, 0)));
         XPUSHs(sv_2mortal(newSViv(isactive)));
         PUTBACK ;
 

@@ -1,7 +1,7 @@
 dnl Process this file with autoconf to produce a configure script.
 
 dnl
-dnl Copyright (c) 1998-2005 Carnegie Mellon University.  All rights reserved.
+dnl Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
 dnl
 dnl Redistribution and use in source and binary forms, with or without
 dnl modification, are permitted provided that the following conditions
@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.296 2005/10/13 19:56:14 jeaton Exp $
+dnl $Id: configure.in,v 1.297 2006/11/30 17:11:16 murch Exp $
 dnl
 
 
@@ -100,10 +100,19 @@ if test $ac_cv_sys_long_file_names = no; then
 fi
 AC_C_INLINE
 
+AC_CHECK_SIZEOF(long)
+
+dnl Check if `long long int' is available
+AC_CHECK_SIZEOF(long long int)
+AC_CHECK_SIZEOF(unsigned long long int)
+if test "$ac_cv_sizeof_long_long_int" -eq 8 -a \
+        "$ac_cv_sizeof_unsigned_long_long_int" -eq 8; then
+  AC_DEFINE(HAVE_LONG_LONG_INT,[],[Does the compiler support long long int?])
+  AC_C_BIGENDIAN
+fi
+
 CMU_C___ATTRIBUTE__
 CMU_C_FPIC
-
-AC_CHECK_SIZEOF(long)
 
 dnl check for -R, etc. switch
 CMU_GUESS_RUNPATH_SWITCH
@@ -455,11 +464,11 @@ AC_SUBST(cyrus_sigveclib)
 # all authentication goes through SASL
 
 AC_ARG_WITH(afs,[  --with-afs=PATH         use AFS libraries from PATH],
-	with_afs="${withval}", with_afs="no")
-
+	    with_afs="${withval}", with_afs="no")
+  
 AC_ARG_WITH(ldap, [  --with-ldap=DIR         use LDAP (in DIR) (experimental) [/usr/local] ],
-	with_ldap="${withval}", with_ldap="no")
-
+	    with_ldap="${withval}", with_ldap="no")
+  
 dnl select mode of afspts
 AC_ARG_ENABLE(krb5afspts,[  --enable-krb5afspts     compile afskrb PTS module with krb5 support],
 	[SASL_SET_GSSAPI_LIBS
@@ -472,11 +481,11 @@ if test "x$with_afs" != "xno"; then
     CFLAGS="${CFLAGS} -I${with_afs}/include"
     AFS_LIBS="${with_afs}/lib/afs/libkauth.a ${with_afs}/lib/afs/libprot.a  ${with_afs}/lib/afs/libauth.a ${with_afs}/lib/afs/libsys.a ${with_afs}/lib/librxkad.a ${with_afs}/lib/librx.a ${with_afs}/lib/afs/libsys.a ${with_afs}/lib/libubik.a  ${with_afs}/lib/liblwp.a ${with_afs}/lib/afs/util.a"
     if test -f ${with_afs}/lib/afs/libaudit.a; then
-    AFS_LIBS="$AFS_LIBS ${with_afs}/lib/afs/libaudit.a"
+      AFS_LIBS="$AFS_LIBS ${with_afs}/lib/afs/libaudit.a"
     fi
     if test -f /usr/ucblib/libucb.a; then
-    CMU_ADD_LIBPATH_TO(/usr/ucblib, AFS_LDFLAGS)
-    AFS_LIBS="$AFS_LIBS -lc -lucb"
+      CMU_ADD_LIBPATH_TO(/usr/ucblib, AFS_LDFLAGS)
+      AFS_LIBS="$AFS_LIBS -lc -lucb"
     fi
 
     AC_CACHE_VAL(cyrus_afs_sigvec,[
@@ -537,18 +546,31 @@ if test "x$with_ldap" != "xno"; then
         [ AC_DEFINE(HAVE_LDAP,[],[Should we build ldap pts module?])
           AC_SUBST(LDAP_CPPFLAGS)
           AC_SUBST(LDAP_LDFLAGS)
-          AC_SUBST(LDAP_LIBS)	
+          AC_SUBST(LDAP_LIBS) 
+          LDAP_LIBS="-lldap -llber" ],,-llber)
+
+    CPPFLAGS=$save_CPPFLAGS
+    LDFLAGS=$LDAP_LDFLAGS
+
+    AC_CHECK_LIB(ldap, ldap_initialize, 
+        [ AC_DEFINE(HAVE_LDAP,[],[Should we build ldap pts module?])
+          AC_SUBST(LDAP_CPPFLAGS)
+          AC_SUBST(LDAP_LDFLAGS)
+          AC_SUBST(LDAP_LIBS) 
           LDAP_LIBS="-lldap -llber" ],,-llber)
 
     CPPFLAGS=$save_CPPFLAGS
     LDFLAGS=$save_LDFLAGS
 fi
-
+ 
 if test "x$with_afs" != "xno" -o "x$with_ldap" != "xno"; then
-	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} ptclient"
-	EXTRA_OUTPUT="${EXTRA_OUTPUT} ptclient/Makefile"
+        EXTRA_SUBDIRS="${EXTRA_SUBDIRS} ptclient"
+        EXTRA_OUTPUT="${EXTRA_OUTPUT} ptclient/Makefile"
+
 	AC_DEFINE(WITH_PTS,[],[Build in PTS support?])
 fi
+
+
 
 SERVER_SUBDIRS="master imap"
 AC_ARG_ENABLE(server,
@@ -747,22 +769,20 @@ MASTERPIDFILE="\"$MASTERPIDFILE\""
 AC_DEFINE_UNQUOTED(MASTER_PIDFILE, $MASTERPIDFILE,[Name of the pidfile for master])
 
 dnl
-dnl Select a method for IMAP IDLE
+dnl see if we're compiling with IMAP idled support
 dnl
-AC_ARG_WITH(idle,[  --with-idle=METHOD      use METHOD for IMAP IDLE
-                          METHOD is [poll], idled or no],
-	WITH_IDLE="${withval}",WITH_IDLE="poll")
-AC_SUBST(WITH_IDLE)
-if test "$WITH_IDLE" = "idled"; then
-  IMAP_PROGS="$IMAP_PROGS idled"
-fi
+AC_ARG_ENABLE(idled,
+        [  --enable-idled          enable IMAP idled support],
+        if test "$enable_val" != no; then
+	  IMAP_PROGS="$IMAP_PROGS idled"
+        fi) 
 
 dnl
 dnl see if we're compiling with NNTP support
 dnl
 ENABLE_NNTP=no
 AC_ARG_ENABLE(nntp,
-        [  --enable-nntp           enable NNTP support (experimental)],
+        [  --enable-nntp           enable NNTP support],
 	ENABLE_NNTP=$enableval
         if test "$ENABLE_NNTP" != no; then
 	  IMAP_PROGS="$IMAP_PROGS nntpd fetchnews"
@@ -771,10 +791,26 @@ AC_ARG_ENABLE(nntp,
 dnl
 dnl see if we're compiling the Murder support programs
 dnl
+ENABLE_MURDER=no
 AC_ARG_ENABLE(murder,
         [  --enable-murder         enable IMAP Murder support],
-        if test "$enableval" != no; then
-	  IMAP_PROGS="$IMAP_PROGS proxyd lmtpproxyd mupdate"
+	ENABLE_MURDER=$enableval)
+
+if test "$ENABLE_MURDER" != no; then
+	IMAP_PROGS="$IMAP_PROGS mupdate"
+	# for master/slave auto-selection
+	AC_CHECK_HEADERS(sys/sockio.h)
+fi
+
+dnl
+dnl see if we're compiling replication support programs
+dnl
+ENABLE_REPLICATION=no
+AC_ARG_ENABLE(replication,
+        [  --enable-replication    enable replication support (experimental)],
+	ENABLE_REPLICATION=$enableval
+        if test "$ENABLE_REPLICATION" != no; then
+	  IMAP_PROGS="$IMAP_PROGS sync_client sync_server sync_reset make_md5"
         fi) 
 
 AC_SUBST(IMAP_PROGS)
@@ -1018,7 +1054,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.296 2005/10/13 19:56:14 jeaton Exp $ */
+/* $Id: configure.in,v 1.297 2006/11/30 17:11:16 murch Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *

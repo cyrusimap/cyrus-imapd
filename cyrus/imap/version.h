@@ -37,10 +37,10 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: version.h,v 1.140 2006/03/29 19:08:06 murch Exp $
+ * $Id: version.h,v 1.141 2006/11/30 17:11:20 murch Exp $
  */
 
-#define _CYRUS_VERSION "v2.2.13"
+#define _CYRUS_VERSION "v2.3.7"
 
 /* EXTRA_IDENT is a hack to add some version information for which compile
  * was used to build this version (at CMU, but we don't care what you do with
@@ -53,13 +53,21 @@
 #define CYRUS_VERSION _CYRUS_VERSION
 #endif
 
-/* CAPABILITIES are now defined here, not including sasl ones */
-#define CAPABILITY_STRING "IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ " \
-	"MAILBOX-REFERRALS NAMESPACE UIDPLUS ID " \
+enum {
+    CAPA_PREAUTH = 0x1,
+    CAPA_POSTAUTH = 0x2
+};
+
+/* CAPABILITIES are defined here, not including TLS/SASL ones,
+   and those that are configurable */
+#define CAPA_PREAUTH_STRING "IMAP4 IMAP4rev1 LITERAL+ ID"
+
+#define CAPA_POSTAUTH_STRING " ACL RIGHTS=kxte QUOTA " \
+	"MAILBOX-REFERRALS NAMESPACE UIDPLUS " \
 	"NO_ATOMIC_RENAME UNSELECT " \
 	"CHILDREN MULTIAPPEND BINARY " \
-	"SORT THREAD=ORDEREDSUBJECT THREAD=REFERENCES " \
-	"ANNOTATEMORE"
+	"SORT SORT=MODSEQ THREAD=ORDEREDSUBJECT THREAD=REFERENCES " \
+	"ANNOTATEMORE CATENATE CONDSTORE"
 
 
 /* Values for ID processing */

@@ -1,5 +1,5 @@
 /* auth.h -- Site authorization module
- * $Id: auth.h,v 1.16 2005/02/16 20:38:01 shadow Exp $
+ * $Id: auth.h,v 1.17 2006/11/30 17:11:22 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *

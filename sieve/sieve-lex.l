@@ -1,7 +1,7 @@
 %{
 /* sieve.l -- sieve lexer
  * Larry Greenfield
- * $Id: sieve-lex.l,v 1.20 2002/06/07 20:04:49 ken3 Exp $
+ * $Id: sieve-lex.l,v 1.21 2006/11/30 17:11:25 murch Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -89,6 +89,7 @@ CRLF		(\r\n|\r|\n)
 <INITIAL>address	return ADDRESS;
 <INITIAL>envelope	return ENVELOPE;
 <INITIAL>header		return HEADER;
+<INITIAL>body		return BODY;
 <INITIAL>not		return NOT;
 <INITIAL>size		return SIZE;
 <INITIAL>reject		return REJCT;
@@ -116,6 +117,8 @@ CRLF		(\r\n|\r|\n)
 <INITIAL>:days		return DAYS;
 <INITIAL>:addresses	return ADDRESSES;
 <INITIAL>:subject	return SUBJECT;
+<INITIAL>:from		return FROM;
+<INITIAL>:handle	return HANDLE;
 <INITIAL>:mime		return MIME;
 <INITIAL>:comparator	return COMPARATOR;
 <INITIAL>:is		return IS;
@@ -131,6 +134,14 @@ CRLF		(\r\n|\r|\n)
 <INITIAL>:domain	return DOMAIN;
 <INITIAL>:user		return USER;
 <INITIAL>:detail	return DETAIL;
+<INITIAL>:raw		return RAW;
+<INITIAL>:text		return TEXT;
+<INITIAL>:content	return CONTENT;
+<INITIAL>include	return INCLUDE;
+<INITIAL>:personal	return PERSONAL;
+<INITIAL>:global	return GLOBAL;
+<INITIAL>return		return RETURN;
+<INITIAL>:copy		return COPY;
 <INITIAL>[ \t\n\r] ;	/* ignore whitespace */
 <INITIAL>#.* ;		/* ignore hash comments */
 <INITIAL>"/*"([^\*]|\*[^\/])*\*?"*/" ;	/* ignore bracket comments */

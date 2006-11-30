@@ -39,16 +39,41 @@
  *
  */
 
-/* $Id: imapurl.h,v 1.5 2003/02/13 20:15:40 rjs3 Exp $ */
+/* $Id: imapurl.h,v 1.6 2006/11/30 17:11:22 murch Exp $ */
 
 #ifndef IMAPURL_H
 #define IMAPURL_H
+
+struct imapurl {
+    char *freeme;		/* copy of original URL + decoded mailbox;
+				   caller must free() */
+
+    /* RFC 2192 */
+    const char *user;
+    const char *auth;
+    const char *server;
+    const char *mailbox;
+    unsigned long uidvalidity;
+    unsigned long uid;
+    const char *section;
+    /* RFC 2192bis */
+    unsigned long start_octet;
+    unsigned long octet_count;
+    /* URLAUTH */
+    struct {
+	const char *access;
+	const char *mech;
+	const char *token;
+	time_t expire;
+	size_t rump_len;
+    } urlauth;
+};
 
 /* Convert hex coded UTF-8 URL path to modified UTF-7 IMAP mailbox
  *  mailbox should be about twice the length of src to deal with non-hex
  *  coded URLs; server should be as large as src.
  */
-void imapurl_fromURL(char *server, char *mailbox, const char *src);
+int imapurl_fromURL(struct imapurl *url, const char *src);
 
 /* Convert an IMAP mailbox to a URL path
  *  dst needs to have roughly 4 times the storage space of mailbox
@@ -58,7 +83,6 @@ void imapurl_fromURL(char *server, char *mailbox, const char *src);
  *
  *  it is valid for mechname to be NULL (implies anonymous mech)
  */
-void imapurl_toURL(char *dst, const char *server, const char *mailbox,
-		   const char *mechname);
+void imapurl_toURL(char *dst, struct imapurl *url);
 
-#endif
+#endif /* IMAPURL_H */

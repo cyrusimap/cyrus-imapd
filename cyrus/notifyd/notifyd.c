@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notifyd.c,v 1.19 2005/04/13 15:42:05 shadow Exp $
+ * $Id: notifyd.c,v 1.20 2006/11/30 17:11:23 murch Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -189,7 +189,6 @@ int do_notify()
     }
 
     /* never reached */
-    return 0;
 }
 
 

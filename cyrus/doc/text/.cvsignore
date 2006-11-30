@@ -16,6 +16,7 @@ install-netnews
 install-virtdomains
 install-perf
 install-prereq
+install-replication
 install-sieve
 install-snmpmon
 install-testing

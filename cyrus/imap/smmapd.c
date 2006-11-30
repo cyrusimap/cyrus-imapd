@@ -72,7 +72,7 @@
  * may contain an explanatory message.
  *
  *
- * $Id: smmapd.c,v 1.13 2005/04/13 15:42:04 shadow Exp $
+ * $Id: smmapd.c,v 1.14 2006/11/30 17:11:20 murch Exp $
  */
 
 #include <config.h>
@@ -280,10 +280,10 @@ int verify_user(const char *key, long quotacheck,
 	 * - don't care about ACL on INBOX (always allow post)
 	 * - don't care about message size (1 msg over quota allowed)
 	 */
-	r = mboxlist_detail(namebuf, &type, &path, NULL, &acl, NULL);
+	r = mboxlist_detail(namebuf, &type, &path, NULL, NULL, &acl, NULL);
 	if (r == IMAP_MAILBOX_NONEXISTENT && config_mupdate_server) {
 	    kick_mupdate();
-	    r = mboxlist_detail(namebuf, &type, &path, NULL, &acl, NULL);
+	    r = mboxlist_detail(namebuf, &type, &path, NULL, NULL, &acl, NULL);
 	}
 
 	if (!r && (type & MBTYPE_REMOTE)) {
@@ -347,7 +347,9 @@ int verify_user(const char *key, long quotacheck,
 
 	} else if (!r) {
 	    r = append_check(namebuf, MAILBOX_FORMAT_NORMAL, authstate,
-			     aclcheck, quotacheck > 0 ? 0 : quotacheck);
+			     aclcheck, (quotacheck < 0 )
+			     || config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA) ?
+			     quotacheck : 0);
 	}
     }
 

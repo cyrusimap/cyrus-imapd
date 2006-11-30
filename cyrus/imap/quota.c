@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: quota.c,v 1.65 2005/05/27 16:49:13 ken3 Exp $ */
+/* $Id: quota.c,v 1.66 2006/11/30 17:11:19 murch Exp $ */
 
 
 #include <config.h>
@@ -107,7 +107,7 @@ struct quotaentry {
     struct quota quota;
     int refcount;
     int deleted;
-    unsigned long newused;
+    uquota_t newused;
 };
 
 /* forward declarations */
@@ -473,7 +473,8 @@ int fixquota_finish(int thisquota, struct txn **tid, unsigned long *count)
 	(*count)++;
     }
     if (quota[thisquota].quota.used != quota[thisquota].newused) {
-	printf("%s: usage was %lu, now %lu\n", quota[thisquota].quota.root,
+	printf("%s: usage was " UQUOTA_T_FMT ", now " UQUOTA_T_FMT "\n",
+	       quota[thisquota].quota.root,
 	       quota[thisquota].quota.used, quota[thisquota].newused);
 	quota[thisquota].quota.used = quota[thisquota].newused;
 	r = quota_write(&quota[thisquota].quota, tid);
@@ -539,12 +540,12 @@ void reportquota(void)
     int i;
     char buf[MAX_MAILBOX_PATH+1];
 
-    printf("   Quota  %% Used    Used Root\n");
+    printf("   Quota   %% Used     Used Root\n");
 
     for (i = 0; i < quota_num; i++) {
 	if (quota[i].deleted) continue;
 	if (quota[i].quota.limit > 0) {
-	    printf(" %7d %7ld", quota[i].quota.limit,
+	    printf(" %7d " QUOTA_REPORT_FMT , quota[i].quota.limit,
 		   ((quota[i].quota.used / QUOTA_UNITS) * 100) / quota[i].quota.limit);
 	}
 	else if (quota[i].quota.limit == 0) {
@@ -557,6 +558,7 @@ void reportquota(void)
 	(*quota_namespace.mboxname_toexternal)(&quota_namespace,
 					       quota[i].quota.root,
 					       "cyrus", buf);
-	printf(" %7ld %s\n", quota[i].quota.used / QUOTA_UNITS, buf);
+	printf(" " QUOTA_REPORT_FMT " %s\n",
+	       quota[i].quota.used / QUOTA_UNITS, buf);
     }
 }

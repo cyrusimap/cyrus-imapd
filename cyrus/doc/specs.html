@@ -1,4 +1,4 @@
-<!-- $Id: specs.html,v 1.65 2006/03/31 15:22:58 murch Exp $ -->
+<!-- $Id: specs.html,v 1.66 2006/11/30 17:11:16 murch Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Cyrus IMAP Server Protocol Specifications</TITLE>
@@ -15,8 +15,8 @@
 rfc3501-errata</A></TD></TR>
 <TR><TD><A HREF="http://www.ietf.org/rfc/rfc1730.txt">RFC 1730</A></TD>
 <TD>Internet Message Access Protocol - version 4</TD></TR>
-<TR><TD><A HREF="http://www.ietf.org/rfc/rfc2086.txt">RFC 2086</A></TD>
-<TD>IMAP4 ACL extension</TD></TR>
+<TR><TD><A HREF="http://www.ietf.org/rfc/rfc4314.txt">RFC 4314</A></TD>
+<TD>IMAP4 Access Control List (ACL) Extension</TD></TR>
 <TR><TD><A HREF="http://www.ietf.org/rfc/rfc2087.txt">RFC 2087</A></TD>
 <TD>IMAP4 QUOTA extension</TD></TR>
 <TR><TD><A HREF="http://www.ietf.org/rfc/rfc2088.txt">RFC 2088</A></TD>
@@ -24,7 +24,8 @@ rfc3501-errata</A></TD></TR>
 <TR><TD><A HREF="http://www.ietf.org/rfc/rfc2177.txt">RFC 2177</A></TD>
 <TD>IMAP4 IDLE command</TD></TR>
 <TR><TD><A HREF="http://www.ietf.org/rfc/rfc2192.txt">RFC 2192</A></TD>
-<TD>IMAP URL Scheme</TD></TR>
+<TD>IMAP URL Scheme
+<BR><I>being updated by</I> <A HREF="http://www.ietf.org/internet-drafts/draft-ietf-lemonade-rfc2192bis-02.txt">draft-ietf-lemonade-rfc2192bis</A></TD></TR>
 <TR><TD><A HREF="http://www.ietf.org/rfc/rfc2193.txt">RFC 2193</A></TD>
 <TD>IMAP4 Mailbox Referrals</TD></TR>
 <TR><TD><A HREF="http://www.ietf.org/rfc/rfc2342.txt">RFC 2342</A></TD>
@@ -41,16 +42,25 @@ rfc3501-errata</A></TD></TR>
 <TD>IMAP4 Binary Content Extension</TD></TR>
 <TR><TD><A HREF="http://www.ietf.org/rfc/rfc3691.txt">RFC 3691</A></TD>
 <TD>Internet Message Access Protocol (IMAP) UNSELECT command</TD></TR>
+<TR><TD><A HREF="http://www.ietf.org/rfc/rfc4467.txt">RFC 4467</A></TD>
+<TD>Internet Message Access Protocol (IMAP) - URLAUTH Extension</TD></TR>
+<TR><TD><A HREF="http://www.ietf.org/rfc/rfc4469.txt">RFC 4469</A></TD>
+<TD>Internet Message Access Protocol (IMAP) CATENATE Extension</TD></TR>
+<TR><TD><A HREF="http://www.ietf.org/rfc/rfc4550.txt">RFC 4550</A></TD>
+<TD>Internet Email to Support Diverse Service Environments (Lemonade)
+Profile</TD></TR>
+<TR><TD><A HREF="http://www.ietf.org/rfc/rfc4551.txt">RFC 4551</A></TD>
+<TD>IMAP Extension for Conditional STORE operation</TD></TR>
 <TR><TD><A HREF="http://www.ietf.org/internet-drafts/draft-ietf-imapext-sort-17.txt">
 draft-ietf-imapext-sort</A></TD>
 <TD>IMAP SORT and THREAD Extension</TD></TR>
-<TR><TD><A HREF="http://www.ietf.org/internet-drafts/draft-ietf-imapext-list-extensions-09.txt">
+<TR><TD><A HREF="http://www.ietf.org/internet-drafts/draft-ietf-imapext-list-extensions-13.txt">
 draft-ietf-imapext-list-extensions</A></TD>
 <TD>IMAP4 LIST Command Extensions</TD></TR>
-<TR><TD><A HREF="http://www.ietf.org/internet-drafts/draft-daboo-imap-annotatemore-05.txt">
+<TR><TD><A HREF="http://www.ietf.org/internet-drafts/draft-daboo-imap-annotatemore-09.txt">
 draft-daboo-imap-annotatemore</A></TD>
 <TD>IMAP ANNOTATEMORE Extension</TD></TR>
-<TR><TD><A HREF="http://www.ietf.org/internet-drafts/draft-siemborski-imap-sasl-initial-response-03.txt">
+<TR><TD><A HREF="http://www.ietf.org/internet-drafts/draft-siemborski-imap-sasl-initial-response-04.txt">
 draft-siemborski-imap-sasl-initial-response</A></TD>
 <TD>IMAP Extension for SASL Initial Client Response</TD></TR>
 
@@ -60,7 +70,7 @@ draft-siemborski-imap-sasl-initial-response</A></TD>
 <TD>Post Office Protocol - Version 3 (POP3)</TD></TR>
 <TR><TD><A HREF="http://www.ietf.org/rfc/rfc1734.txt">RFC 1734</A></TD>
 <TD>POP3 AUTHentication command
-<BR><I>being updated by</I> <A HREF="http://www.ietf.org/internet-drafts/draft-siemborski-rfc1734bis-03.txt">
+<BR><I>being updated by</I> <A HREF="http://www.ietf.org/internet-drafts/draft-siemborski-rfc1734bis-04.txt">
 draft-siemborski-rfc1734bis</A></TD></TR>
 <TR><TD><A HREF="http://www.ietf.org/rfc/rfc2449.txt">RFC 2449</A></TD>
 <TD>POP3 Extension Mechanism</TD></TR>
@@ -70,56 +80,48 @@ draft-siemborski-rfc1734bis</A></TD></TR>
 RFC 3206</A></TD><TD>The SYS and AUTH POP Response Codes</TD></TR>
 
 <TR><TD COLSPAN=2><br><h2>NNTP</h2></TD></TR>
-<TR><TD><A HREF="http://www.ietf.org/rfc/rfc0977.txt">RFC 977</A></TD>
-<TD>Network News Transfer Protocol
-<BR><I>being updated by</I> <A HREF="http://www.ietf.org/internet-drafts/draft-ietf-nntpext-base-24.txt">
-draft-ietf-nntpext-base</A></TD></TR>
+<TR><TD><A HREF="http://www.ietf.org/rfc/rfc3977.txt">RFC 3977</A></TD>
+<TD>Network News Transfer Protocol (NNTP)</TD></TR>
+<TR><TD><A HREF="http://www.ietf.org/rfc/rfc4642.txt">RFC 4642</A></TD>
+<TD>Using Transport Layer Security (TLS) with 
+Network News Transfer Protocol (NNTP)</TD></TR>
+<TR><TD><A HREF="http://www.ietf.org/rfc/rfc4643.txt">RFC 4643</A></TD>
+<TD>Network News Transfer Protocol (NNTP) Extension for Authentication</TD></TR>
+<TR><TD><A HREF="http://www.ietf.org/rfc/rfc4644.txt">RFC 4644</A></TD>
+<TD>Network News Transfer Protocol (NNTP) Extension for Streaming Feeds</TD></TR>
 <TR><TD><A HREF="http://www.ietf.org/rfc/rfc2980.txt">RFC 2980</A></TD>
 <TD>Common NNTP Extensions</TD></TR>
-<TR><TD><A HREF="http://www.ietf.org/internet-drafts/draft-ietf-nntpext-streaming-01.txt">
-draft-ietf-nntpext-streaming</A></TD>
-<TD>NNTP Extension for Streaming Feeds</TD></TR>
-<TR><TD><A HREF="http://www.ietf.org/internet-drafts/draft-ietf-nntpext-authinfo-04.txt">
-draft-ietf-nntpext-authinfo</A></TD>
-<TD>NNTP Extension for Authentication</TD></TR>
-<TR><TD><A HREF="http://www.ietf.org/internet-drafts/draft-ietf-nntpext-tls-nntp-02.txt">
-draft-ietf-nntpext-tls-nntp</A></TD>
-<TD>Using TLS with NNTP</TD></TR>
 
 <TR><TD COLSPAN=2><br><h2>SASL</h2></TD></TR>
-<TR><TD><A HREF="http://www.ietf.org/rfc/rfc2222.txt">RFC 2222</A></TD>
-<TD>Simple Authentication and Security Layer (SASL)
-<BR><I>being revised by</I> <A HREF="http://www.ietf.org/internet-drafts/draft-ietf-sasl-rfc2222bis-08.txt">
-draft-ietf-sasl-rfc2222bis</A></TD></TR>
+<TR><TD><A HREF="http://www.ietf.org/rfc/rfc4422.txt">RFC 4422</A></TD>
+<TD>Simple Authentication and Security Layer (SASL)</TD></TR>
+<TR><TD><A HREF="http://www.ietf.org/rfc/rfc4505.txt">RFC 4505</A></TD>
+<TD>Anonymous Simple Authentication and Security Layer (SASL) Mechanism</TD></TR>
+<TR><TD><A HREF="http://www.ietf.org/rfc/rfc4616.txt">RFC 4616</A></TD>
+<TD>The PLAIN Simple Authentication and Security Layer (SASL) Mechanism</TD></TR>
 <TR><TD><A HREF="http://www.ietf.org/rfc/rfc2195.txt">RFC 2195</A></TD>
 <TD>IMAP/POP AUTHorize Extension for Simple Challenge/Response
 <BR><I>being revised by</I>
-<A HREF="http://www.ietf.org/internet-drafts/draft-ietf-sasl-crammd5-03.txt">
+<A HREF="http://www.ietf.org/internet-drafts/draft-ietf-sasl-crammd5-07.txt">
 draft-ietf-sasl-crammd5</A></TD></TR>
-<TR><TD><A HREF="http://www.ietf.org/rfc/rfc2245.txt">RFC 2245</A></TD>
-<TD>Anonymous SASL Mechanism
-<BR><I>being revised by</I> <A HREF="http://www.ietf.org/internet-drafts/draft-ietf-sasl-anon-03.txt">
-draft-ietf-sasl-anon</A></TD></TR>
 <TR><TD><A HREF="http://www.ietf.org/rfc/rfc2444.txt">RFC 2444</A></TD>
 <TD>The One-Time-Password SASL Mechanism</TD></TR>
-<TR><TD><A HREF="http://www.ietf.org/rfc/rfc2595.txt">RFC 2595</A></TD>
-<TD>Using TLS with IMAP, POP3 and ACAP
-<BR><I>being revised by</I> <A HREF="http://www.ietf.org/internet-drafts/draft-ietf-sasl-plain-04.txt">
-draft-ietf-sasl-plain</a></TD></TR>
 <TR><TD><A HREF="http://www.ietf.org/rfc/rfc2831.txt">RFC 2831</A></TD>
 <TD>Using Digest Authentication as a SASL Mechanism
-<BR><I>being revised by</I> <A HREF="http://www.ietf.org/internet-drafts/draft-ietf-sasl-rfc2831bis-04.txt">
+<BR><I>being revised by</I> <A HREF="http://www.ietf.org/internet-drafts/draft-ietf-sasl-rfc2831bis-10.txt">
 draft-ietf-sasl-rfc2831bis</a></TD></TR>
 
 <TR><TD COLSPAN=2><br><h2>TLS/SSL</h2></TD></TR>
+<TR><TD><A HREF="http://www.ietf.org/rfc/rfc4346.txt">RFC 4346</A></TD>
+<TD>The Transport Layer Security (TLS) Protocol Version 1.1</TD></TR>
 <TR><TD><A HREF="http://www.ietf.org/rfc/rfc2246.txt">RFC 2246</A></TD>
-<TD>TLS Protocol</TD></TR>
+<TD>The TLS Protocol Version 1.0</TD></TR>
 <TR><TD><A HREF="http://www.netscape.com/eng/ssl3/draft302.txt">
 draft-freier-ssl-version3</A></TD>
 <TD>The SSL Protocol Version 3.0</TD></TR>
 <TR><TD><A HREF="http://www.netscape.com/eng/security/SSL_2.html">
 draft-hickman-netscape-ssl</A></TD>
-<TD>The SSL Protocol</TD></TR>
+<TD>The SSL Protocol Version 2.0</TD></TR>
 
 <TR><TD COLSPAN=2><br><h2>LMTP</h2></TD></TR>
 <TR><TD><A HREF="http://www.ietf.org/rfc/rfc2033.txt">RFC 2033</A></TD>
@@ -140,7 +142,7 @@ draft-hickman-netscape-ssl</A></TD>
 <TD>SMTP Service Extension for Secure SMTP over TLS</TD></TR>
 <TR><TD><A HREF="http://www.ietf.org/rfc/rfc2554.txt">RFC 2554</A></TD>
 <TD>SMTP Service Extension for Authentication
-<BR><I>being updated by</I> <A HREF="http://www.ietf.org/internet-drafts/draft-siemborski-rfc2554bis-03.txt">
+<BR><I>being updated by</I> <A HREF="http://www.ietf.org/internet-drafts/draft-siemborski-rfc2554bis-04.txt">
 draft-siemborski-rfc2554bis</A></TD></TR>
 <TR><TD><A HREF="http://www.ietf.org/rfc/rfc2920.txt">RFC 2920</A></TD>
 <TD>SMTP Service Extension for Command Pipelining</TD></TR>
@@ -151,24 +153,36 @@ draft-murchison-lmtp-ignorequota</A></TD>
 <TD>LMTP Service Extension for Ignoring Recipient Quotas</TD></TR>
 
 
-<TR><TD COLSPAN=2><br><h2><a name="sieve.txt">Sieve</a></h2></TD></TR>
+<TR><TD COLSPAN=2><br><h2>Sieve</h2></TD></TR>
 <TR><TD><A HREF="http://www.ietf.org/rfc/rfc3028.txt">RFC 3028</A></TD>
-<TD>Sieve: A Mail Filtering Language</TD></TR>
+<TD>Sieve: A Mail Filtering Language
+<BR><I>being updated by</I> <A HREF="http://ietf.org/internet-drafts/draft-ietf-sieve-3028bis-06.txt">
+draft-ietf-sieve-3028bis</A></TD></TR>
 <TR><TD><A HREF="http://www.ietf.org/rfc/rfc3431.txt">RFC 3431</A></TD>
 <TD>Sieve Extension: Relational Tests</TD></TR>
 <TR><TD><A HREF="http://www.ietf.org/rfc/rfc3598.txt">RFC 3598</A></TD>
-<TD>Sieve Email Filtering -- Subaddress Extension</TD></TR>
+<TD>Sieve Email Filtering -- Subaddress Extension
+<BR><I>being updated by</I> <A HREF="http://www.ietf.org/internet-drafts/draft-ietf-sieve-rfc3598bis-04.txt">
+draft-ietf-sieve-rfc3598bis</A></TD></TR>
+<TR><TD><A HREF="http://www.ietf.org/rfc/rfc3894.txt">RFC 3894</A></TD>
+<TD>Sieve Extension: Copying Without Side Effects</TD></TR>
 <TR><TD><A HREF="http://www.ietf.org/rfc/rfc2298.txt">RFC 2298</A></TD>
 <TD>Extensible Message Format for Message Disposition Notifications (MDNs)</TD></TR>
-<TR><TD><A HREF="http://www.ietf.org/internet-drafts/draft-showalter-sieve-vacation-05.txt">
-draft-showalter-sieve-vacation</A></TD>
-<TD>Sieve -- Vacation Extension</TD></TR>
+<TR><TD><A HREF="http://www.ietf.org/internet-drafts/draft-ietf-sieve-vacation-06.txt">
+draft-ietf-sieve-vacation</A></TD>
+<TD>Sieve Email Filtering:  Vacation Extension</TD></TR>
+<TR><TD><A HREF="http://www.ietf.org/internet-drafts/draft-ietf-sieve-body-03.txt">
+draft-ietf-sieve-body</A></TD>
+<TD>Sieve Mail Filtering Language: Body Extension</TD></TR>
+<TR><TD><A HREF="http://www.ietf.org/internet-drafts/draft-ietf-sieve-regex-00.txt">
+draft-ietf-sieve-regex</A></TD>
+<TD>Sieve -- Regular Expression Extension</TD></TR>
+<TR><TD><A HREF="http://www.oceana.com/ftp/drafts/draft-daboo-sieve-include-01.txt">
+draft-daboo-sieve-include</A></TD>
+<TD>SIEVE Include Extension</TD></TR>
 <TR><TD><A HREF="http://www.oceana.com/ftp/drafts/draft-melnikov-sieve-imapflags-03.txt">
 draft-melnikov-sieve-imapflags</A></TD>
 <TD>Sieve -- IMAP flag Extension</TD></TR>
-<TR><TD><A HREF="http://www.oceana.com/ftp/drafts/draft-murchison-sieve-regex-07.txt">
-draft-murchison-sieve-regex</A></TD>
-<TD>Sieve -- Regular Expression Extension</TD></TR>
 <TR><TD><A HREF="http://www.oceana.com/ftp/drafts/draft-martin-sieve-notify-01.txt">
 draft-martin-sieve-notify</A></TD>
 <TD>Sieve -- An extension for providing instant notifications</TD></TR>
@@ -182,9 +196,9 @@ draft-martin-managesieve</A></TD>
 <TR><TD><A HREF="http://www.ietf.org/rfc/rfc1036.txt">RFC 1036</A></TD>
 <TD>Standard for Interchange of USENET Messages
 <BR><I>being updated by</I>
-<A HREF="http://www.ietf.org/internet-drafts/draft-ietf-usefor-usefor-01.txt">
+<A HREF="http://www.ietf.org/internet-drafts/draft-ietf-usefor-usefor-10.txt">
 draft-ietf-usefor-usefor</A> <I>and</I>
-<A HREF="http://www.ietf.org/internet-drafts/draft-ietf-usefor-usepro-01.txt">
+<A HREF="http://www.ietf.org/internet-drafts/draft-ietf-usefor-usepro-05.txt">
 draft-ietf-usefor-usepro</A></TD></TR>
 <TR><TD><A HREF="http://www.ietf.org/rfc/rfc3656.txt">RFC 3656</a></TD>
 <TD>MUPDATE Protocol (For Cyrus Murder)</TD></TR>

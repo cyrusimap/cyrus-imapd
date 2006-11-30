@@ -1,6 +1,6 @@
 /* mupdate-slave.c -- cyrus murder database clients
  *
- * $Id: mupdate-slave.c,v 1.27 2005/11/23 13:40:09 murch Exp $
+ * $Id: mupdate-slave.c,v 1.28 2006/11/30 17:11:19 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -147,7 +147,7 @@ static int get_kick_fds(int kicksock,
 	  int len = sizeof(clientaddr);
 
 	  fd_list[*num_fds] =
-	    accept(kicksock, (struct sockaddr *)&clientaddr, &len);
+	      accept(kicksock, (struct sockaddr *)&clientaddr, (socklen_t *)&len);
 	  if (fd_list[*num_fds] == -1) {
 	    syslog(LOG_WARNING, "kicksock accept() failed: %m %d", kicksock);
 	    return -1;
@@ -187,10 +187,10 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
     mupdate_ready();
 
     kicksock = open_kick_socket();
-    highest_fd = ((kicksock > handle->sock) ? kicksock : handle->sock) + 1;
+    highest_fd = ((kicksock > handle->conn->sock) ? kicksock : handle->conn->sock) + 1;
 
     FD_ZERO(&read_set);
-    FD_SET(handle->sock, &read_set);
+    FD_SET(handle->conn->sock, &read_set);
     FD_SET(kicksock, &read_set);
 
     /* Now just listen to the rest of the updates */
@@ -200,7 +200,7 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
 	tv.tv_sec = pingtimeout;
 	tv.tv_usec = 0;
 
-	prot_flush(handle->pout);
+	prot_flush(handle->conn->out);
 
 	rset = read_set;
 
@@ -211,7 +211,7 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
 	    syslog(LOG_ERR, "select failed");
 	    break;
 	} else if(gotdata != 0) {
-	    if (FD_ISSET(handle->sock, &rset)) {
+	    if (FD_ISSET(handle->conn->sock, &rset)) {
 		/* If there is a fatal error, die, other errors ignore */
 		if (mupdate_scarf(handle, cmd_change, NULL, 
 				  waiting_for_noop, NULL) != 0) {
@@ -241,15 +241,15 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
 		    break;
 		}
 
-		prot_printf(handle->pout, "N%u NOOP\r\n", handle->tagn++);
-		prot_flush(handle->pout);
+		prot_printf(handle->conn->out, "N%u NOOP\r\n", handle->tagn++);
+		prot_flush(handle->conn->out);
 		waiting_for_noop = 1;
 	    }
 	} else /* (gotdata == 0) */ {
 	    /* Timeout, send a NOOP */
 	    if(!waiting_for_noop) {
-		prot_printf(handle->pout, "N%u NOOP\r\n", handle->tagn++);
-		prot_flush(handle->pout);
+		prot_printf(handle->conn->out, "N%u NOOP\r\n", handle->tagn++);
+		prot_flush(handle->conn->out);
 		waiting_for_noop = 1;
 	    } else {
 		/* We were already waiting on a noop! */
@@ -297,11 +297,7 @@ void *mupdate_client_start(void *rock __attribute__((unused)))
 
     retry:
 	/* Cleanup */
-	if(h && h->pin) prot_free(h->pin);
-	if(h && h->pout) prot_free(h->pout);
-	if(h) close(h->sock);
-	if(h && h->saslconn) sasl_dispose(&h->saslconn);
-	free(h); h = NULL;
+	mupdate_disconnect(&h);
 
 	real_delay = retry_delay + (rand() % (retry_delay / 2));
 	
@@ -330,7 +326,7 @@ void *mupdate_placebo_kick_start(void *rock __attribute__((unused)))
 	/* Only handle one kick at a time -- they're fast */
 	len = sizeof(clientaddr);
 	kickconn =
-	  accept(kicksock, (struct sockaddr *)&clientaddr, &len);
+	    accept(kicksock, (struct sockaddr *)&clientaddr, (socklen_t *)&len);
 	
 	if (kickconn == -1) {
 	  syslog(LOG_WARNING, "accept(): %m");

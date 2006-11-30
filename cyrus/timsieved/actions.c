@@ -1,6 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.39 2006/08/30 16:29:11 murch Exp $
+ * $Id: actions.c,v 1.40 2006/11/30 17:11:25 murch Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -61,6 +61,7 @@
 #include <ctype.h>
 #include <unistd.h>
 #include <string.h>
+#include <retry.h>
 
 #include "prot.h"
 #include "tls.h"
@@ -74,11 +75,15 @@
 #include "actions.h"
 #include "scripttest.h"
 
+#include "sync_log.h"
+
 /* after a user has authentication, our current directory is their Sieve 
    directory! */
 
 extern int sieved_userisadmin;
 char *sieve_dir = NULL;
+
+const static char *sieved_userid = NULL;
 
 int actions_init(void)
 {
@@ -107,6 +112,7 @@ int actions_setuser(const char *userid)
 
   sieve_dir = (char *) xzmalloc(size+1);
   
+  sieved_userid = xstrdup(userid);
   user = (char *) userid;
   if (config_virtdomains && strchr(user, '@')) {
       /* split the user and domain */
@@ -192,7 +198,7 @@ int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
     }
     
     /* Sieve capabilities */
-    prot_printf(conn,"\"SIEVE\" \"%s\"\r\n",sieve_listextensions());
+    prot_printf(conn,"\"SIEVE\" \"%s\"\r\n",sieve_listextensions(interp));
 
     if (tls_enabled() && !starttls_done && !authenticated) {
 	prot_printf(conn, "\"STARTTLS\"\r\n");
@@ -427,6 +433,7 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data,
   }
 
   prot_printf(conn, "OK\r\n");
+  sync_log_sieve(sieved_userid);
 
   return TIMSIEVE_OK;
 }
@@ -439,6 +446,7 @@ static int deleteactive(struct protstream *conn)
 	prot_printf(conn,"NO \"Unable to unlink active script\"\r\n");
 	return TIMSIEVE_FAIL;
     }
+    sync_log_sieve(sieved_userid);
 
     return TIMSIEVE_OK;
 }
@@ -500,6 +508,7 @@ int deletescript(struct protstream *conn, mystring_t *name)
       prot_printf(conn,"NO \"Error deleting bytecode\"\r\n");
       return TIMSIEVE_FAIL;
   }
+  sync_log_sieve(sieved_userid);
 
   prot_printf(conn,"OK\r\n");
   return TIMSIEVE_OK;
@@ -623,6 +632,7 @@ int setactive(struct protstream *conn, mystring_t *name)
 	prot_printf(conn,"NO \"Error renaming\"\r\n");
 	return TIMSIEVE_FAIL;
     }
+    sync_log_sieve(sieved_userid);
 
     prot_printf(conn,"OK\r\n");
     return TIMSIEVE_OK;

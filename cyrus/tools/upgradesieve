@@ -4,7 +4,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 # script to upgrade sievedir from imapd 1.6.13
 # make sure you run it as the cyrus user
 #!/usr/bin/perl
-# $Id: upgradesieve,v 1.7 2005/12/01 22:01:13 murch Exp $
+# $Id: upgradesieve,v 1.8 2006/11/30 17:11:25 murch Exp $
 # 
 # Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
 #

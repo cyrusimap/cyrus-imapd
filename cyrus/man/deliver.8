@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: deliver.8,v 1.18 2004/06/21 18:40:10 rjs3 Exp $
+.\" $Id: deliver.8,v 1.19 2006/11/30 17:11:23 murch Exp $
 .SH NAME
 deliver \- deliver mail to an IMAP mailbox
 .SH SYNOPSIS
@@ -147,8 +147,10 @@ Deliver message even when receiving mailbox is over quota.
 Accept messages using the LMTP protocol.
 .SH NOTES
 Depending on the setting of \fBreject8bit\fR in \fBimapd.conf(5)\fR, deliver
-either rejects messages with 8-bit-set characters in the headers or 
-changes these characters to `X'.
+either rejects/accepts messages with 8-bit-set characters in the headers.
+If we accept messages with 8-bit-set characters in the headers, then depending
+on the setting of \fBmunge8bit\fR, these characters are either left un-touched
+or changed to `X'.
 This is because such characters can't be interpreted since the
 character set is not known, although some communities not well-served by
 US-ASCII assume that those characters can be used to represent characters not

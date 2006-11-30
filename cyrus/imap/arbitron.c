@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: arbitron.c,v 1.39 2006/01/13 16:47:18 murch Exp $ */
+/* $Id: arbitron.c,v 1.40 2006/11/30 17:11:17 murch Exp $ */
 
 #include <config.h>
 

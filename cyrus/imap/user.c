@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: user.c,v 1.20 2004/06/22 16:59:17 rjs3 Exp $
+ * $Id: user.c,v 1.21 2006/11/30 17:11:20 murch Exp $
  */
 
 #include <config.h>
@@ -75,6 +75,7 @@
 
 #include "global.h"
 #include "user.h"
+#include "mboxkey.h"
 #include "mboxlist.h"
 #include "mailbox.h"
 #include "util.h"
@@ -92,7 +93,7 @@ static int user_deleteacl(char *name, int matchlen, int maycreate, void* rock)
     char *acl;
     char *rights, *nextid;
 
-    r = mboxlist_lookup(name, (char **)0, &acl, NULL);
+    r = mboxlist_lookup(name, &acl, NULL);
 
     while (!r && acl) {
 	rights = strchr(acl, '\t');
@@ -170,9 +171,12 @@ int user_deletedata(char *user, char *userid __attribute__((unused)),
 {
     char *fname;
 
-    /* delete seen state */
-    if(wipe_user)
+    /* delete seen state and mbox keys */
+    if(wipe_user) {
 	seen_delete_user(user);
+	/* XXX  what do we do about multiple backends? */
+	mboxkey_delete_user(user);
+    }
 
     /* delete subscriptions */
     fname = mboxlist_hash_usersubs(user);
@@ -368,7 +372,7 @@ int user_renameacl(char *name, char *olduser, char *newuser)
     char *acl;
     char *rights, *nextid;
 
-    r = mboxlist_lookup(name, (char **)0, &acl, NULL);
+    r = mboxlist_lookup(name, &acl, NULL);
 
     while (!r && acl) {
 	rights = strchr(acl, '\t');

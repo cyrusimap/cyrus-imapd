@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: protocol.h,v 1.6 2006/08/30 16:29:11 murch Exp $ */
+/* $Id: protocol.h,v 1.7 2006/11/30 17:11:19 murch Exp $ */
 
 #ifndef _INCLUDED_PROTOCOL_H
 #define _INCLUDED_PROTOCOL_H
@@ -55,13 +55,15 @@ enum {
     CAPA_IDLE		= (1 << 2),
     CAPA_MUPDATE	= (1 << 3),
     CAPA_MULTIAPPEND	= (1 << 4),
+    CAPA_LISTSUBSCRIBED	= (1 << 5),
+    CAPA_ACLRIGHTS	= (1 << 6),
 
     /* LMTP capabilities */
     CAPA_PIPELINING	= (1 << 2),
     CAPA_IGNOREQUOTA	= (1 << 3)
 };
 
-#define MAX_CAPA 5
+#define MAX_CAPA 7
 
 struct capa_t {
     const char *str;
@@ -93,7 +95,8 @@ struct tls_cmd_t {
 
 struct simple_cmd_t {
     const char *cmd;		/* command string */
-    const char *resp;		/* success response */
+    const char *unsol;		/* unsolicited response */
+    const char *ok;		/* success response */
 };
 
 struct protocol_t {
@@ -115,7 +118,8 @@ enum {
     PROTOCOL_NNTP,
     PROTOCOL_LMTP,
     PROTOCOL_MUPDATE,
-    PROTOCOL_SIEVE
+    PROTOCOL_SIEVE,
+    PROTOCOL_CSYNC
 };
 
 #endif /* _INCLUDED_PROTOCOL_H */

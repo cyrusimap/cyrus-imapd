@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cli_fatal.c,v 1.3 2003/10/24 18:24:05 rjs3 Exp $
+ * $Id: cli_fatal.c,v 1.4 2006/11/30 17:11:17 murch Exp $
  */
 
 #include <config.h>

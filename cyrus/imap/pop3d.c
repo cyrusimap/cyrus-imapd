@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.168 2006/04/07 19:58:25 murch Exp $
+ * $Id: pop3d.c,v 1.169 2006/11/30 17:11:19 murch Exp $
  */
 #include <config.h>
 
@@ -83,6 +83,9 @@
 #include "idle.h"
 #include "telemetry.h"
 #include "backend.h"
+#include "proxy.h"
+
+#include "sync_log.h"
 
 #ifdef HAVE_KRB
 /* kerberos des is purported to conflict with OpenSSL DES */
@@ -107,7 +110,7 @@ static SSL *tls_conn;
 
 sasl_conn_t *popd_saslconn; /* the sasl connection context */
 
-char *popd_userid = 0;
+char *popd_userid = 0, *popd_subfolder = 0;
 struct mailbox *popd_mailbox = 0;
 struct auth_state *popd_authstate = 0;
 int config_popuseacl;
@@ -125,6 +128,7 @@ struct msg {
     int deleted;
 } *popd_msg = NULL;
 
+static sasl_ssf_t extprops_ssf = 0;
 static int pop3s = 0;
 int popd_starttls_done = 0;
 
@@ -188,10 +192,106 @@ static struct
     char *authid;
 } saslprops = {NULL,NULL,0,NULL};
 
+static int popd_canon_user(sasl_conn_t *conn, void *context,
+			   const char *user, unsigned ulen,
+			   unsigned flags, const char *user_realm,
+			   char *out, unsigned out_max, unsigned *out_ulen)
+{
+    char userbuf[MAX_MAILBOX_NAME+1], *p;
+    size_t n;
+    int r;
+
+    if (!ulen) ulen = strlen(user);
+
+    if (config_getswitch(IMAPOPT_POPSUBFOLDERS)) {
+	/* make a working copy of the auth[z]id */
+	if (ulen > MAX_MAILBOX_NAME) {
+	    sasl_seterror(conn, 0, "buffer overflow while canonicalizing");
+	    return SASL_BUFOVER;
+	}
+	memcpy(userbuf, user, ulen);
+	userbuf[ulen] = '\0';
+	user = userbuf;
+
+	/* See if we're trying to access a subfolder */
+	if ((p = strchr(userbuf, '+'))) {
+	    n = config_virtdomains ? strcspn(p, "@") : strlen(p);
+
+	    if (flags & SASL_CU_AUTHZID) {
+		/* make a copy of the subfolder */
+		if (popd_subfolder) free(popd_subfolder);
+		popd_subfolder = xstrndup(p, n);
+	    }
+
+	    /* strip the subfolder from the auth[z]id */
+	    memmove(p, p+n, strlen(p+n)+1);
+	    ulen -= n;
+	}
+    }
+
+    r = mysasl_canon_user(conn, context, user, ulen, flags, user_realm,
+			  out, out_max, out_ulen);
+
+    if (!r && popd_subfolder && flags == SASL_CU_AUTHZID) {
+	/* If we're only doing the authzid, put back the subfolder
+	   in case its used in the challenge/response calculation */
+	n = strlen(popd_subfolder);
+	if (*out_ulen + n > out_max) {
+	    sasl_seterror(conn, 0, "buffer overflow while canonicalizing");
+	    r = SASL_BUFOVER;
+	}
+	else {
+	    p = (config_virtdomains && (p = strchr(out, '@'))) ?
+		p : out + *out_ulen;
+	    memmove(p+n, p, strlen(p)+1);
+	    memcpy(p, popd_subfolder, n);
+	    *out_ulen += n;
+	}
+    }
+
+    return r;
+}
+
+static int popd_proxy_policy(sasl_conn_t *conn,
+			     void *context,
+			     const char *requested_user, unsigned rlen,
+			     const char *auth_identity, unsigned alen,
+			     const char *def_realm,
+			     unsigned urlen,
+			     struct propctx *propctx)
+{
+    if (config_getswitch(IMAPOPT_POPSUBFOLDERS)) {
+	char userbuf[MAX_MAILBOX_NAME+1], *p;
+	size_t n;
+
+	/* make a working copy of the authzid */
+	if (!rlen) rlen = strlen(requested_user);
+	if (rlen > MAX_MAILBOX_NAME) {
+	    sasl_seterror(conn, 0, "buffer overflow while proxying");
+	    return SASL_BUFOVER;
+	}
+	memcpy(userbuf, requested_user, rlen);
+	userbuf[rlen] = '\0';
+	requested_user = userbuf;
+
+	/* See if we're trying to access a subfolder */
+	if ((p = strchr(userbuf, '+'))) {
+	    n = config_virtdomains ? strcspn(p, "@") : strlen(p);
+
+	    /* strip the subfolder from the authzid */
+	    memmove(p, p+n, strlen(p+n)+1);
+	    rlen -= n;
+	}
+    }
+
+    return mysasl_proxy_policy(conn, context, requested_user, rlen,
+			       auth_identity, alen, def_realm, urlen, propctx);
+}
+
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
-    { SASL_CB_PROXY_POLICY, &mysasl_proxy_policy, (void*) &popd_proxyctx },
-    { SASL_CB_CANON_USER, &mysasl_canon_user, NULL },
+    { SASL_CB_PROXY_POLICY, &popd_proxy_policy, (void*) &popd_proxyctx },
+    { SASL_CB_CANON_USER, &popd_canon_user, NULL },
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
@@ -207,7 +307,7 @@ static void popd_reset(void)
 
     /* close backend connection */
     if (backend) {
-	backend_disconnect(backend, &protocol[PROTOCOL_POP3]);
+	backend_disconnect(backend);
 	free(backend);
 	backend = NULL;
     }
@@ -233,7 +333,7 @@ static void popd_reset(void)
     }
 #endif
 
-    cyrus_reset_stdio(); 
+    cyrus_reset_stdio();
 
     strcpy(popd_clienthost, "[local]");
     if (popd_logfd != -1) {
@@ -243,6 +343,10 @@ static void popd_reset(void)
     if (popd_userid != NULL) {
 	free(popd_userid);
 	popd_userid = NULL;
+    }
+    if (popd_subfolder != NULL) {
+	free(popd_subfolder);
+	popd_subfolder = NULL;
     }
     if (popd_authstate) {
 	auth_freestate(popd_authstate);
@@ -304,12 +408,12 @@ int service_init(int argc __attribute__((unused)),
     idle_enabled();
 
     /* Set namespace */
-    if ((r = mboxname_init_namespace(&popd_namespace, 0)) != 0) {
+    if ((r = mboxname_init_namespace(&popd_namespace, 1)) != 0) {
 	syslog(LOG_ERR, error_message(r));
 	fatal(error_message(r), EC_CONFIG);
     }
 
-    while ((opt = getopt(argc, argv, "sk")) != EOF) {
+    while ((opt = getopt(argc, argv, "skp:")) != EOF) {
 	switch(opt) {
 	case 's': /* pop3s (do starttls right away) */
 	    pop3s = 1;
@@ -323,6 +427,11 @@ int service_init(int argc __attribute__((unused)),
 	case 'k':
 	    kflag++;
 	    break;
+
+	case 'p': /* external protection */
+	    extprops_ssf = atoi(optarg);
+	    break;
+
 	default:
 	    usage();
 	}
@@ -346,6 +455,8 @@ int service_main(int argc __attribute__((unused)),
     sasl_security_properties_t *secprops=NULL;
 
     signals_poll();
+
+    sync_log_init();
 
     popd_in = prot_new(0, 0);
     popd_out = prot_new(1, 1);
@@ -387,6 +498,7 @@ int service_main(int argc __attribute__((unused)),
     /* will always return something valid */
     secprops = mysasl_secprops(SASL_SEC_NOPLAINTEXT);
     sasl_setprop(popd_saslconn, SASL_SEC_PROPS, secprops);
+    sasl_setprop(popd_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf);
     
     if(iptostring((struct sockaddr *)&popd_localaddr,
 		  salen, localip, 60) == 0) {
@@ -470,7 +582,7 @@ void shut_down(int code)
 
     /* close backend connection */
     if (backend) {
-	backend_disconnect(backend, &protocol[PROTOCOL_POP3]);
+	backend_disconnect(backend);
 	free(backend);
     }
 
@@ -707,7 +819,9 @@ static void cmdloop(void)
 		    }
 
 		    if (msg <= popd_exists) {
-			(void) mailbox_expunge(popd_mailbox, 1, expungedeleted, 0);
+			(void) mailbox_expunge(popd_mailbox, expungedeleted,
+					       0, 0);
+			sync_log_mailbox(popd_mailbox->name);
 		    }
 		}
 		prot_printf(popd_out, "+OK\r\n");
@@ -811,7 +925,7 @@ static void cmdloop(void)
 	}
 	else if (!strcmp(inputbuf, "dele")) {
 	    if (!arg) prot_printf(popd_out, "-ERR Missing argument\r\n");
-	    else if (config_popuseacl && !(mboxstruct.myrights & ACL_DELETE)) {
+	    else if (config_popuseacl && !(mboxstruct.myrights & ACL_DELETEMSG)) {
 		prot_printf(popd_out, "-ERR [SYS/PERM] %s\r\n",
 			    error_message(IMAP_PERMISSION_DENIED));
 	    }
@@ -881,7 +995,7 @@ static void cmdloop(void)
 			 popd_msg[msg].deleted) {
 		    prot_printf(popd_out, "-ERR No such message\r\n");
 		}
-		else if (mboxstruct.pop3_new_uidl) {
+		else if (mboxstruct.options & OPT_POP3_NEW_UIDL) {
 			    prot_printf(popd_out, "+OK %u %lu.%u\r\n", msg, 
 					mboxstruct.uidvalidity,
 					popd_msg[msg].uid);
@@ -896,7 +1010,7 @@ static void cmdloop(void)
 		prot_printf(popd_out, "+OK unique-id listing follows\r\n");
 		for (msg = 1; msg <= popd_exists; msg++) {
 		    if (!popd_msg[msg].deleted) {
-			if (mboxstruct.pop3_new_uidl) {
+			if (mboxstruct.options & OPT_POP3_NEW_UIDL) {
 			    prot_printf(popd_out, "%u %lu.%u\r\n", msg, 
 					mboxstruct.uidvalidity,
 					popd_msg[msg].uid);
@@ -1032,13 +1146,17 @@ static void cmd_apop(char *response)
 	       sasl_errdetail(popd_saslconn));
 	
 	sleep(3);      
-		
+
 	/* Don't allow user probing */
 	if (sasl_result == SASL_NOUSER) sasl_result = SASL_BADAUTH;
 		
 	prot_printf(popd_out, "-ERR [AUTH] authenticating: %s\r\n",
 		    sasl_errstring(sasl_result, NULL, NULL));
 
+	if (popd_subfolder) {
+	    free(popd_subfolder);
+	    popd_subfolder = 0;
+	}
 	return;
     }
 
@@ -1055,11 +1173,16 @@ static void cmd_apop(char *response)
 	prot_printf(popd_out, 
 		    "-ERR [AUTH] weird SASL error %d getting SASL_USERNAME\r\n", 
 		    sasl_result);
+	if (popd_subfolder) {
+	    free(popd_subfolder);
+	    popd_subfolder = 0;
+	}
 	return;
     }
     
-    syslog(LOG_NOTICE, "login: %s %s APOP%s %s", popd_clienthost,
-	   popd_userid, popd_starttls_done ? "+TLS" : "", "User logged in");
+    syslog(LOG_NOTICE, "login: %s %s%s APOP%s %s", popd_clienthost,
+	   popd_userid, popd_subfolder ? popd_subfolder : "",
+	   popd_starttls_done ? "+TLS" : "", "User logged in");
 
     popd_authstate = auth_newstate(popd_userid);
 
@@ -1068,7 +1191,8 @@ static void cmd_apop(char *response)
 
 void cmd_user(char *user)
 {
-    char *p, *dot, *domain;
+    char userbuf[MAX_MAILBOX_NAME+1], *dot, *domain;
+    unsigned userlen;
 
     /* possibly disallow USER */
     if (!(kflag || popd_starttls_done ||
@@ -1083,19 +1207,21 @@ void cmd_user(char *user)
 	return;
     }
 
-    if (!(p = canonify_userid(user, NULL, NULL)) ||
+    if (popd_canon_user(popd_saslconn, NULL, user, 0,
+			SASL_CU_AUTHID | SASL_CU_AUTHZID,
+			NULL, userbuf, sizeof(userbuf), &userlen) ||
 	     /* '.' isn't allowed if '.' is the hierarchy separator */
-	     (popd_namespace.hier_sep == '.' && (dot = strchr(p, '.')) &&
+	     (popd_namespace.hier_sep == '.' && (dot = strchr(userbuf, '.')) &&
 	      !(config_virtdomains &&  /* allow '.' in dom.ain */
-		(domain = strchr(p, '@')) && (dot > domain))) ||
-	     strlen(p) + 6 > MAX_MAILBOX_PATH) {
+		(domain = strchr(userbuf, '@')) && (dot > domain))) ||
+	     strlen(userbuf) + 6 > MAX_MAILBOX_NAME) {
 	prot_printf(popd_out, "-ERR [AUTH] Invalid user\r\n");
 	syslog(LOG_NOTICE,
 	       "badlogin: %s plaintext %s invalid user",
 	       popd_clienthost, beautify_string(user));
     }
     else {
-	popd_userid = xstrdup(p);
+	popd_userid = xstrdup(userbuf);
 	prot_printf(popd_out, "+OK Name is a valid mailbox\r\n");
     }
 }
@@ -1155,13 +1281,16 @@ void cmd_pass(char *pass)
 	prot_printf(popd_out, "-ERR [AUTH] Invalid login\r\n");
 	free(popd_userid);
 	popd_userid = 0;
-
+	if (popd_subfolder) {
+	    free(popd_subfolder);
+	    popd_subfolder = 0;
+	}
 	return;
     }
     else {
-	syslog(LOG_NOTICE, "login: %s %s plaintext%s %s", popd_clienthost,
-	       popd_userid, popd_starttls_done ? "+TLS" : "", 
-	       "User logged in");
+	syslog(LOG_NOTICE, "login: %s %s%s plaintext%s %s", popd_clienthost,
+	       popd_userid, popd_subfolder ? popd_subfolder : "",
+	       popd_starttls_done ? "+TLS" : "", "User logged in");
 
 	if ((plaintextloginpause = config_getint(IMAPOPT_PLAINTEXTLOGINPAUSE))
 	     != 0) {
@@ -1180,7 +1309,7 @@ void cmd_capa()
 {
     int minpoll = config_getint(IMAPOPT_POPMINPOLL) * 60;
     int expire = config_getint(IMAPOPT_POPEXPIRETIME);
-    unsigned mechcount;
+    int mechcount;
     const char *mechlist;
 
     prot_printf(popd_out, "+OK List of capabilities follows\r\n");
@@ -1240,7 +1369,7 @@ void cmd_auth(char *arg)
      */
     if (!arg) {
 	const char *sasllist;
-	unsigned int mechnum;
+	int mechnum;
 
 	prot_printf(popd_out, "+OK List of supported mechanisms follows\r\n");
       
@@ -1305,7 +1434,7 @@ void cmd_auth(char *arg)
 	    }
 
 	    sleep(3);
-		
+
 	    /* Don't allow user probing */
 	    if (sasl_result == SASL_NOUSER) sasl_result = SASL_BADAUTH;
 		
@@ -1313,6 +1442,10 @@ void cmd_auth(char *arg)
 			sasl_errstring(sasl_result, NULL, NULL));
 	}
 	
+	if (popd_subfolder) {
+	    free(popd_subfolder);
+	    popd_subfolder = 0;
+	}
 	reset_saslconn(&popd_saslconn);
 	return;
     }
@@ -1324,15 +1457,35 @@ void cmd_auth(char *arg)
      */
     sasl_result = sasl_getprop(popd_saslconn, SASL_USERNAME,
 			       (const void **) &canon_user);
-    popd_userid = xstrdup(canon_user);
     if (sasl_result != SASL_OK) {
 	prot_printf(popd_out, 
 		    "-ERR [AUTH] weird SASL error %d getting SASL_USERNAME\r\n", 
 		    sasl_result);
 	return;
     }
-    
-    syslog(LOG_NOTICE, "login: %s %s %s%s %s", popd_clienthost, popd_userid,
+
+    /* If we're proxying, the authzid may contain a subfolder,
+       so re-canonify it */
+    if (config_getswitch(IMAPOPT_POPSUBFOLDERS) && strchr(canon_user, '+')) {
+	char userbuf[MAX_MAILBOX_NAME+1];
+	unsigned userlen;
+
+	sasl_result = popd_canon_user(popd_saslconn, NULL, canon_user, 0,
+				      SASL_CU_AUTHID | SASL_CU_AUTHZID,
+				      NULL, userbuf, sizeof(userbuf), &userlen);
+	if (sasl_result != SASL_OK) {
+	    prot_printf(popd_out, 
+			"-ERR [AUTH] SASL canonification error %d\r\n", 
+			sasl_result);
+	    return;
+	}
+
+	popd_userid = xstrdup(userbuf);
+    } else {
+	popd_userid = xstrdup(canon_user);
+    }
+    syslog(LOG_NOTICE, "login: %s %s%s %s%s %s", popd_clienthost,
+	   popd_userid, popd_subfolder ? popd_subfolder : "",
 	   authtype, popd_starttls_done ? "+TLS" : "", "User logged in");
 
     if (!openinbox()) {
@@ -1350,6 +1503,7 @@ void cmd_auth(char *arg)
 int openinbox(void)
 {
     char userid[MAX_MAILBOX_NAME+1], inboxname[MAX_MAILBOX_PATH+1];
+    char extname[MAX_MAILBOX_NAME+1] = "INBOX";
     int type, myrights = 0;
     char *server = NULL, *acl;
     int r, log_level = LOG_ERR;
@@ -1362,10 +1516,16 @@ int openinbox(void)
 				config_virtdomains ?
 				strcspn(userid, "@") : 0);
 
-    r = (*popd_namespace.mboxname_tointernal)(&popd_namespace, "INBOX",
+    /* Create the mailbox that we're trying to access */
+    if (popd_subfolder && popd_subfolder[1]) {
+	snprintf(extname+5, sizeof(extname)-5, "%c%s",
+		 popd_namespace.hier_sep, popd_subfolder+1);
+    }
+    r = (*popd_namespace.mboxname_tointernal)(&popd_namespace, extname,
 					      userid, inboxname);
 
-    if (!r) r = mboxlist_detail(inboxname, &type, NULL, &server, &acl, NULL);
+    if (!r) r = mboxlist_detail(inboxname, &type, NULL, NULL,
+				&server, &acl, NULL);
     if (!r && (config_popuseacl = config_getswitch(IMAPOPT_POPUSEACL)) &&
 	(!acl ||
 	 !((myrights = cyrus_acl_myrights(popd_authstate, acl)) & ACL_READ))) {
@@ -1375,8 +1535,8 @@ int openinbox(void)
     }
     if (r) {
 	sleep(3);
-	syslog(log_level, "Unable to locate maildrop for %s: %s",
-	       popd_userid, error_message(r));
+	syslog(log_level, "Unable to locate maildrop %s: %s",
+	       inboxname, error_message(r));
 	prot_printf(popd_out,
 		    "-ERR [SYS/PERM] Unable to locate maildrop: %s\r\n",
 		    error_message(r));
@@ -1393,8 +1553,20 @@ int openinbox(void)
 	    if(c) *c = '\0';
 	}
 
+	/* Make a working copy of userid in case we need to alter it */
+	strlcpy(userid, popd_userid, sizeof(userid));
+
+	if (popd_subfolder) {
+	    /* Add the subfolder back to the userid for proxying */
+	    size_t n = strlen(popd_subfolder);
+	    char *p = (config_virtdomains && (p = strchr(userid, '@'))) ?
+		p : userid + strlen(userid);
+	    memmove(p+n, p, strlen(p)+1);
+	    memcpy(p, popd_subfolder, n);
+	}
+
 	backend = backend_connect(NULL, server, &protocol[PROTOCOL_POP3],
-				  popd_userid, &statusline);
+				  userid, NULL, &statusline);
 
 	if (!backend) {
 	    syslog(LOG_ERR, "couldn't authenticate to backend server");
@@ -1426,8 +1598,8 @@ int openinbox(void)
 	}
 	if (r) {
 	    sleep(3);
-	    syslog(log_level, "Unable to open maildrop for %s: %s",
-		   popd_userid, error_message(r));
+	    syslog(log_level, "Unable to open maildrop %s: %s",
+		   inboxname, error_message(r));
 	    prot_printf(popd_out,
 			"-ERR [SYS/PERM] Unable to open maildrop: %s\r\n",
 			error_message(r));
@@ -1439,8 +1611,8 @@ int openinbox(void)
 	if (!r) r = mailbox_lock_pop(&mboxstruct);
 	if (r) {
 	    mailbox_close(&mboxstruct);
-	    syslog(LOG_ERR, "Unable to lock maildrop for %s: %s",
-		   popd_userid, error_message(r));
+	    syslog(LOG_ERR, "Unable to lock maildrop %s: %s",
+		   inboxname, error_message(r));
 	    prot_printf(popd_out,
 			"-ERR [IN-USE] Unable to lock maildrop: %s\r\n",
 			error_message(r));
@@ -1460,11 +1632,6 @@ int openinbox(void)
 	    goto fail;
 	}
 
-	if (chdir(mboxstruct.path)) {
-	    syslog(LOG_ERR, "IOERROR: changing directory to %s: %m",
-		   mboxstruct.path);
-	    r = IMAP_IOERROR;
-	}
 	if (!r) {
 	    popd_exists = mboxstruct.exists;
 	    popd_msg = (struct msg *) xrealloc(popd_msg, (popd_exists+1) *
@@ -1480,7 +1647,7 @@ int openinbox(void)
 	if (r) {
 	    mailbox_close(&mboxstruct);
 	    popd_exists = 0;
-	    syslog(LOG_ERR, "Unable to read maildrop for %s", popd_userid);
+	    syslog(LOG_ERR, "Unable to read maildrop %s", inboxname);
 	    prot_printf(popd_out,
 			"-ERR [SYS/PERM] Unable to read maildrop\r\n");
 	    goto fail;
@@ -1501,6 +1668,10 @@ int openinbox(void)
   fail:
     free(popd_userid);
     popd_userid = 0;
+    if (popd_subfolder) {
+	free(popd_subfolder);
+	popd_subfolder = 0;
+    }
     auth_freestate(popd_authstate);
     popd_authstate = NULL;
     return 1;
@@ -1513,8 +1684,11 @@ static void blat(int msg,int lines)
     char fnamebuf[MAILBOX_FNAME_LEN];
     int thisline = -2;
 
-    mailbox_message_get_fname(popd_mailbox, popd_msg[msg].uid, fnamebuf,
-			      sizeof(fnamebuf));
+    strlcpy(fnamebuf, popd_mailbox->path, sizeof(fnamebuf));
+    strlcat(fnamebuf, "/", sizeof(fnamebuf));
+    mailbox_message_get_fname(popd_mailbox, popd_msg[msg].uid,
+			      fnamebuf + strlen(fnamebuf),
+			      sizeof(fnamebuf) - strlen(fnamebuf));
     msgfile = fopen(fnamebuf, "r");
     if (!msgfile) {
 	prot_printf(popd_out, "-ERR [SYS/PERM] Could not read message file\r\n");
@@ -1541,6 +1715,10 @@ static void blat(int msg,int lines)
     if (buf[strlen(buf)-1] != '\n') prot_printf(popd_out, "\r\n");
 
     prot_printf(popd_out, ".\r\n");
+
+    /* Reset inactivity timer in case we spend a long time
+       pushing data to the client over a slow link. */
+    prot_resettimeout(popd_in);
 }
 
 static int parsenum(char **ptr)
@@ -1568,7 +1746,8 @@ static int parsenum(char **ptr)
 }
 
 static int expungedeleted(struct mailbox *mailbox __attribute__((unused)),
-			  void *rock __attribute__((unused)), char *index)
+			  void *rock __attribute__((unused)), char *index,
+			  int expunge_flags __attribute__((unused)))
 {
     int msg;
     int uid = ntohl(*((bit32 *)(index+OFFSET_UID)));
@@ -1610,7 +1789,9 @@ static int reset_saslconn(sasl_conn_t **conn)
 
     /* If we have TLS/SSL info, set it */
     if(saslprops.ssf) {
-       ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &saslprops.ssf);
+	ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &saslprops.ssf);
+    } else {
+	ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &extprops_ssf);
     }
 
     if(ret != SASL_OK) return ret;
@@ -1629,71 +1810,28 @@ static int reset_saslconn(sasl_conn_t **conn)
 static void bitpipe(void)
 {
     struct protgroup *protin = protgroup_new(2);
-    struct protgroup *protout = NULL;
-    struct timeval timeout;
-    int n, shutdown = 0;
+    int shutdown = 0;
     char buf[4096];
 
-    /* Reset protin to all zeros (to preserve memory allocation) */
-    protgroup_reset(protin);
     protgroup_insert(protin, popd_in);
     protgroup_insert(protin, backend->in);
 
-    for (;;) {
+    do {
+	/* Flush any buffered output */
+	prot_flush(popd_out);
+	prot_flush(backend->out);
+
 	/* check for shutdown file */
 	if (shutdown_file(buf, sizeof(buf))) {
 	    shutdown = 1;
 	    goto done;
 	}
-
-	/* Clear protout if needed */
-	protgroup_free(protout);
-	protout = NULL;
-
-	timeout.tv_sec = 60;
-	timeout.tv_usec = 0;
-
-	n = prot_select(protin, PROT_NO_FD, &protout, NULL, &timeout);
-	if (n == -1) {
-	    syslog(LOG_ERR, "prot_select() failed in bitpipe(): %m");
-	    fatal("prot_select() failed in bitpipe()", EC_TEMPFAIL);
-	}
-	if (n && protout) {
-	    struct protstream *ptmp;
-
-	    for (; n; n--) {
-		ptmp = protgroup_getelement(protout, n-1);
-
-		if (ptmp == popd_in) {
-		    do {
-			int c = prot_read(popd_in, buf, sizeof(buf));
-			if (c == 0 || c < 0) goto done;
-			prot_write(backend->out, buf, c);
-		    } while (popd_in->cnt > 0);
-		    prot_flush(backend->out);
-		}
-		else if (ptmp == backend->in) {
-		    do {
-			int c = prot_read(backend->in, buf, sizeof(buf));
-			if (c == 0 || c < 0) goto done;
-			prot_write(popd_out, buf, c);
-		    } while (backend->in->cnt > 0);
-		    prot_flush(popd_out);
-		}
-		else {
-		    /* XXX shouldn't get here !!! */
-		    fatal("unknown protstream returned by prot_select in bitpipe()",
-			  EC_SOFTWARE);
-		}
-	    }
-	}
-    }
-
+    } while (!proxy_check_input(protin, popd_in, popd_out,
+				backend->in, backend->out, 0));
 
  done:
     /* ok, we're done. */
     protgroup_free(protin);
-    protgroup_free(protout);
 
     if (shutdown) {
 	char *p;

@@ -40,7 +40,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.97 2006/01/20 20:26:46 jeaton Exp $
+# $Id: SMakefile,v 1.98 2006/11/30 17:11:16 murch Exp $
 #
 
 NEW_AUTOTOOLS=yes
@@ -118,12 +118,16 @@ case `sys` in
 	LIBS="$LIBS -ldes"
 	OS_CONFIG="--with-krbdes"
     ;;
+    sun4x_s10)
+	LIBS="$LIBS -ldes"
+	OS_CONFIG="--with-krbdes"
+    ;; 
 esac
 
 
 # settings; we have to disable these on some platforms
 DEBUG=""
-WITHAUTH="--with-afs=/usr/local --enable-krb5afspts --without-krbdes"
+WITHAUTH="--with-auth=pts --with-afs=/usr/local --enable-krb5afspts --without-krbdes"
 SSL_CONFIG="--with-openssl=/usr/local/lib"
 
 # the defaults are good enough for us
@@ -133,7 +137,7 @@ DB_CONFIG=""
 SASL_CONFIG="--with-staticsasl=/usr/local --with-gssapi=/usr/local"
 #KRB_CONFIG="--enable-statickrb --with-krb=/usr/local"
 KRB_CONFIG="--with-krb=/usr/local"
-FEATURE_CONFIG="--enable-murder --enable-cmulocal --enable-nntp --with-idle=idled"
+FEATURE_CONFIG="--enable-murder --enable-cmulocal --enable-nntp --enable-idled"
 EXT_PACKAGE_CONFIG="--with-inn=/usr/news --with-ucdsnmp=/usr/local"
 
 MFCOMMAND="./configure $WITHAUTH $KRB_CONFIG $DB_CONFIG --enable-experiment --with-cyrus-group=staff $FEATURE_CONFIG $EXT_PACKAGE_CONFIG $SASL_CONFIG $DEBUG"

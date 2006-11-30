@@ -1,5 +1,5 @@
 /* auth_krb.c -- Kerberos authorization
- * $Id: auth_krb.c,v 1.41 2005/02/16 20:38:01 shadow Exp $
+ * $Id: auth_krb.c,v 1.42 2006/11/30 17:11:22 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -45,6 +45,7 @@
 
 #include "auth.h"
 #include "exitcodes.h"
+#include "xmalloc.h"
 
 #ifdef HAVE_KRB
 
@@ -55,7 +56,7 @@
 #include <sys/types.h>
 
 #include <krb.h>
-#ifdef HAVE_LIBDB
+#ifdef HAVE_BDB
 #ifdef HAVE_DB_185_H
 #include <db_185.h>
 #else
@@ -65,8 +66,6 @@
 #include <ndbm.h>
 #endif
 #include <krb.h>
-
-#include "xmalloc.h"
 
 #ifndef KRB_MAPNAME
 #define KRB_MAPNAME (SYSCONFDIR "/krb.equiv")
@@ -87,8 +86,8 @@ static struct auth_state auth_anonymous = {
 
 static int parse_krbequiv_line (const char *src,
 				  char *principal, char *localuser);
-char *auth_map_krbid (const char *real_aname, const char *real_inst,
-		      const char *real_realm);
+static char *auth_map_krbid (const char *real_aname, const char *real_inst,
+			     const char *real_realm);
 
 /*
  * Determine if the user is a member of 'identifier'

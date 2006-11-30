@@ -40,8 +40,8 @@
  *
  */
 
-static char rcsid[] __attribute__((unused)) = 
-      "$Id: ldap.c,v 1.9 2005/05/12 19:49:55 shadow Exp $";
+static char rcsid[] =
+      "$Id: ldap.c,v 1.10 2006/11/30 17:11:24 murch Exp $";
 
 #include <config.h>
 #include "ptloader.h"
@@ -930,7 +930,12 @@ static int ptsmodule_make_authstate_attribute(
             (*newstate)->ngroups = numvals;
 
             for (i = 0; vals[i] != NULL; i++) {
+		int j;
                 strcpy((*newstate)->groups[i].id, "group:");
+		for(j =0; j < strlen(vals[i]); j++) {
+		  if(isupper(vals[i][j]))
+		    vals[i][j]=tolower(vals[i][j]);
+		}
                 strlcat((*newstate)->groups[i].id, vals[i], 
                     sizeof((*newstate)->groups[i].id));
                 (*newstate)->groups[i].hash = strhash((*newstate)->groups[i].id);
@@ -1059,7 +1064,13 @@ static int ptsmodule_make_authstate_filter(
             if (vals == NULL)
                 continue;
 
-            strcpy((*newstate)->groups[i].id, "group:");
+	    int j;
+	    strcpy((*newstate)->groups[i].id, "group:");
+	    for(j =0; j < strlen(vals[i]); j++) {
+	      if(isupper(vals[i][j]))
+		vals[i][j]=tolower(vals[i][j]);
+	    }
+
             strlcat((*newstate)->groups[i].id, vals[0], 
                 sizeof((*newstate)->groups[i].id));
             (*newstate)->groups[i].hash = strhash((*newstate)->groups[i].id);

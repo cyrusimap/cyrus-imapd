@@ -2,7 +2,7 @@
   
  * test.c -- tester for libsieve
  * Larry Greenfield
- * $Id: test.c,v 1.25 2005/03/15 16:08:48 ken3 Exp $
+ * $Id: test.c,v 1.26 2006/11/30 17:11:25 murch Exp $
  *
  * usage: "test message script"
  */
@@ -48,6 +48,10 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "comparator.h"
 #include "tree.h"
 #include "sieve.h"
+#include "imap/message.h"
+
+/* XXX so we can link against imap/message.o */
+int mailbox_cached_header_inline(const char *text) { return BIT32_MAX; }
 
 #define HEADERCACHESIZE 1019
 
@@ -61,6 +65,7 @@ typedef struct message_data {
     char *name;
     FILE *data;
     int size;
+    struct message_content content;
 
     int cache_full;
     header_t *cache[HEADERCACHESIZE];
@@ -84,18 +89,18 @@ int hashheader(char *header)
 
    returns 0 on success, negative on failure */
 typedef enum {
-    NAME_START,
-    NAME,
+    HDR_NAME_START,
+    HDR_NAME,
     COLON,
-    BODY_START,
-    BODY
+    HDR_CONTENT_START,
+    HDR_CONTENT
 } state;
 
 int parseheader(FILE *f, char **headname, char **contents) {
     char c;
     char name[80], body[1024];
     int off = 0;
-    state s = NAME_START;
+    state s = HDR_NAME_START;
 
 
     /* there are two ways out of this loop, both via gotos:
@@ -103,7 +108,7 @@ int parseheader(FILE *f, char **headname, char **contents) {
        or we hit an error (ph_error) */
     while ((c = getc(f))) {	/* examine each character */
 	switch (s) {
-	case NAME_START:
+	case HDR_NAME_START:
 	    if (c == '\r' || c == '\n') {
 		/* no header here! */
 		goto ph_error;
@@ -112,13 +117,13 @@ int parseheader(FILE *f, char **headname, char **contents) {
 		goto ph_error;
 	    name[0] = tolower(c);
 	    off = 1;
-	    s = NAME;
+	    s = HDR_NAME;
 	    break;
 
-	case NAME:
+	case HDR_NAME:
 	    if (c == ' ' || c == '\t' || c == ':') {
 		name[off] = '\0';
-		s = (c == ':' ? BODY_START : COLON);
+		s = (c == ':' ? HDR_CONTENT_START : COLON);
 		break;
 	    }
 	    if (iscntrl(c)) {
@@ -129,19 +134,19 @@ int parseheader(FILE *f, char **headname, char **contents) {
 	
 	case COLON:
 	    if (c == ':') {
-		s = BODY_START;
+		s = HDR_CONTENT_START;
 	    } else if (c != ' ' && c != '\t') {
 		goto ph_error;
 	    }
 	    break;
 
-	case BODY_START:
+	case HDR_CONTENT_START:
 	    if (c == ' ' || c == '\t') /* eat the whitespace */
 		break;
 	    off = 0;
-	    s = BODY;
+	    s = HDR_CONTENT;
 	    /* falls through! */
-	case BODY:
+	case HDR_CONTENT:
 	    if (c == '\r' || c == '\n') {
 		int peek = getc(f);
 
@@ -298,6 +303,9 @@ message_data_t *new_msg(FILE *msg, int size, char *name)
     m->data = msg;
     m->size = size;
     m->name = name;
+    m->content.base = NULL;
+    m->content.len = 0;
+    m->content.body = NULL;
     for (i = 0; i < HEADERCACHESIZE; i++) {
 	m->cache[i] = NULL;
     }
@@ -322,6 +330,33 @@ int getenvelope(void *v, const char *head, const char ***body)
     printf("Envelope body of '%s'? ", head);
     scanf("%s", (char*) buf[0]);
     *body = buf;
+
+    return SIEVE_OK;
+}
+
+int getbody(void *mc, const char **content_types, sieve_bodypart_t ***parts)
+{
+    message_data_t *m = (message_data_t *) mc;
+    int r = 0;
+
+    if (!m->content.body) {
+	/* parse the message body if we haven't already */
+	r = message_parse_file(m->data, &m->content.base,
+			       &m->content.len, &m->content.body);
+    }
+
+    /* XXX currently struct bodypart as defined in message.h is the same as
+       sieve_bodypart_t as defined in sieve_interface.h, so we can typecast */
+    if (!r) message_fetch_part(&m->content, content_types,
+			       (struct bodypart ***) parts);
+    return (!r ? SIEVE_OK : SIEVE_FAIL);
+}
+
+int getinclude(void *sc, const char *script, int isglobal,
+	       char *fpath, size_t size)
+{
+    strlcpy(fpath, script, size);
+    strlcat(fpath, ".bc", size);
 
     return SIEVE_OK;
 }
@@ -441,7 +476,7 @@ int autorespond(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     int i;
 
     printf("Have I already responded to '");
-    for (i = 0; i < arc->len; i++) {
+    for (i = 0; i < SIEVE_HASHLEN; i++) {
 	printf("%x", arc->hash[i]);
     }
     printf("' in %d days? ", arc->days);
@@ -674,7 +709,7 @@ static int test_comparator(void)
 	    didfail++;
 	    continue;
 	}
-	res = c(t->text, t->pat, comprock);
+	res = c(t->text, strlen(t->text), t->pat, comprock);
 	if (res != t->result) {
 	    printf("FAIL: %s/%s(%s, %s) = %d, not %d\n", 
 		   comp, mode, t->pat, t->text, res, t->result);
@@ -694,7 +729,7 @@ int config_need_data = 0;
 int main(int argc, char *argv[])
 {
     sieve_interp_t *i;
-    sieve_bytecode_t *bc;
+    sieve_execute_t *exe = NULL;
     message_data_t *m;
     char *script = NULL, *message = NULL;
     int c, force_fail = 0, usage_error = 0;
@@ -786,6 +821,18 @@ int main(int argc, char *argv[])
 	exit(1);
     }
 
+    res = sieve_register_body(i, &getbody);
+    if (res != SIEVE_OK) {
+	printf("sieve_register_body() returns %d\n", res);
+	exit(1);
+    }
+
+    res = sieve_register_include(i, &getinclude);
+    if (res != SIEVE_OK) {
+	printf("sieve_register_include() returns %d\n", res);
+	exit(1);
+    }
+
     res = sieve_register_vacation(i, &vacation);
     if (res != SIEVE_OK) {
 	printf("sieve_register_vacation() returns %d\n", res);
@@ -817,7 +864,7 @@ int main(int argc, char *argv[])
         exit(1);
     }   
 
-    res = sieve_script_load(argv[2], &bc);
+    res = sieve_script_load(argv[2], &exe);
     if (res != SIEVE_OK) {
 	printf("sieve_script_load() returns %d\n", res);
 	exit(1);
@@ -837,7 +884,7 @@ int main(int argc, char *argv[])
 	    exit(1);
 	}
 
-	res = sieve_execute_bytecode(bc, i, NULL, m);
+	res = sieve_execute_bytecode(exe, i, NULL, m);
 	if (res != SIEVE_OK) {
 	    printf("sieve_execute_bytecode() returns %d\n", res);
 	    exit(1);
@@ -846,7 +893,7 @@ int main(int argc, char *argv[])
 	close(fd);
     }
     /*used to be sieve_script_free*/
-    res = sieve_script_unload(&bc);
+    res = sieve_script_unload(&exe);
     if (res != SIEVE_OK) {
 	printf("sieve_script_unload() returns %d\n", res);
 	exit(1);

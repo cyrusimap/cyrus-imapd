@@ -1,7 +1,7 @@
 /* prot.h -- stdio-like module that handles buffering, SASL, and TLS
  *           details for I/O over sockets
  *
- * $Id: prot.h,v 1.42 2004/06/22 17:07:02 rjs3 Exp $
+ * $Id: prot.h,v 1.43 2006/11/30 17:11:22 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -102,6 +102,7 @@ struct protstream {
     int dontblock; /* Application requested nonblocking */
     int dontblock_isset; /* write only, we've fcntl(O_NONBLOCK)'d */
     int read_timeout;
+    time_t timeout_mark;
     struct protstream *flushonread;
 
     /* Events */
@@ -180,6 +181,9 @@ extern int prot_settls(struct protstream *s, SSL *tlsconn);
 /* Set a timeout for the connection (in seconds) */
 extern int prot_settimeout(struct protstream *s, int timeout);
 
+/* Reset the timeout timer for the connection (in seconds) */
+extern int prot_resettimeout(struct protstream *s);
+
 /* Connect two streams so that when you block on reading s, the layer
  * will automaticly flush flushs */
 extern int prot_setflushonread(struct protstream *s,
@@ -235,6 +239,9 @@ void protgroup_free(struct protgroup *group);
 
 /* Insert an element into a protgroup */
 void protgroup_insert(struct protgroup *group, struct protstream *item);
+
+/* Delete an element from a protgroup */
+void protgroup_delete(struct protgroup *group, struct protstream *item);
 
 /* Returns the protstream at that position in the protgroup, or NULL if
  * an invalid element is requested */

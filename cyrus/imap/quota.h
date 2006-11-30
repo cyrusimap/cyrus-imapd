@@ -38,17 +38,36 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: quota.h,v 1.2 2004/02/27 17:44:56 ken3 Exp $
+ * $Id: quota.h,v 1.3 2006/11/30 17:11:20 murch Exp $
  */
 
 #ifndef INCLUDED_QUOTA_H
 #define INCLUDED_QUOTA_H
 
 #include "cyrusdb.h"
+#include <config.h>
 
 #define FNAME_QUOTADB "/quotas.db"
 
 #define QUOTA_UNITS (1024)
+
+/* Define the proper quota type, it should either be a
+ * long or a long long int depending upon what the
+ * the compiler supports.
+ */
+#ifdef HAVE_LONG_LONG_INT
+typedef unsigned long long int uquota_t;
+typedef long long int quota_t;
+#define UQUOTA_T_FMT     "%llu"
+#define QUOTA_T_FMT      "%lld"
+#define QUOTA_REPORT_FMT "%8llu"
+#else
+typedef unsigned long uquota_t;
+typedef long quota_t;
+#define UQUOTA_T_FMT     "%lu"
+#define QUOTA_T_FMT      "%ld"
+#define QUOTA_REPORT_FMT "%8lu"
+#endif
 
 extern struct db *qdb;
 
@@ -56,7 +75,7 @@ struct quota {
     char *root;
 
     /* Information in quota entry */
-    unsigned long used;
+    uquota_t used;
     int limit;			/* in QUOTA_UNITS */
 };
 

@@ -40,12 +40,13 @@
  *
  */
 
-static char rcsid[] __attribute__((unused)) = 
-      "$Id: afskrb.c,v 1.12 2005/10/13 20:37:10 jeaton Exp $";
+static char rcsid[] =
+      "$Id: afskrb.c,v 1.13 2006/11/30 17:11:24 murch Exp $";
 
 #include <config.h>
 #include "ptloader.h"
 #include "exitcodes.h"
+#include "xmalloc.h"
 
 #ifdef HAVE_AFSKRB
 
@@ -70,7 +71,6 @@ static char rcsid[] __attribute__((unused)) =
 #include "auth_pts.h"
 #include "libconfig.h"
 #include "strhash.h"
-#include "xmalloc.h"
 
 /* AFS stuff */
 #include <des.h> /* for int32, necessary for the AFS includes below */

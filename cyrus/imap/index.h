@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.h,v 1.10 2004/05/22 03:45:50 rjs3 Exp $
+ * $Id: index.h,v 1.11 2006/11/30 17:11:18 murch Exp $
  */
 
 /* Header for internal usage of index.c + programs that make raw access
@@ -79,6 +79,11 @@
 #define USER_FLAGS(msgno,i) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_USER_FLAGS+((i)*4))))
 #define CONTENT_LINES(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_CONTENT_LINES)))
 #define CACHE_VERSION(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_CACHE_VERSION)))
+#ifdef HAVE_LONG_LONG_INT
+#define MODSEQ(msgno) ntohll(*((bit64 *)(INDEC_OFFSET(msgno)+OFFSET_MODSEQ_64)))
+#else
+#define MODSEQ(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_MODSEQ)))
+#endif
 
 /* Access assistance macros for memory-mapped cache file data */
 /* CACHE_ITEM_BIT32: Convert to host byte order */
@@ -176,6 +181,10 @@ struct nntp_overview {
 extern void index_operatemailbox(struct mailbox *mailbox);
 extern int index_finduid(unsigned uid);
 extern int index_getuid(unsigned msgno);
+extern int index_urlfetch(struct mailbox *mailbox, unsigned msgno,
+			  const char *section,
+			  unsigned long start_octet, unsigned long octet_count,
+			  struct protstream *pout, unsigned long *size);
 extern char *index_get_msgid(struct mailbox *mailbox, unsigned msgno);
 extern struct nntp_overview *index_overview(struct mailbox *mailbox,
 					    unsigned msgno);
@@ -183,5 +192,7 @@ extern char *index_getheader(struct mailbox *mailbox, unsigned msgno,
 			     char *hdr);
 extern unsigned long index_getsize(struct mailbox *mailbox, unsigned msgno);
 extern unsigned long index_getlines(struct mailbox *mailbox, unsigned msgno);
+extern int index_copy_remote(struct mailbox *mailbox, char *sequence, 
+			     int usinguid, struct protstream *pout);
 
 #endif /* INDEX_H */

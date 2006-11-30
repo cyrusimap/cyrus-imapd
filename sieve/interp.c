@@ -1,6 +1,6 @@
 /* interp.c -- sieve script interpretor builder
  * Larry Greenfield
- * $Id: interp.c,v 1.23 2004/11/07 14:53:19 ken3 Exp $
+ * $Id: interp.c,v 1.24 2006/11/30 17:11:24 murch Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -30,11 +30,13 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #endif
 
 #include <stdlib.h>
+#include <string.h>
 
 #include "xmalloc.h"
 
 #include "sieve_interface.h"
 #include "interp.h"
+#include "libconfig.h"
 
 /* build a sieve interpretor */
 int sieve_interp_alloc(sieve_interp_t **interp, void *interp_context)
@@ -57,6 +59,8 @@ int sieve_interp_alloc(sieve_interp_t **interp, void *interp_context)
     i->getsize = NULL;
     i->getheader = NULL;
     i->getenvelope = NULL;
+    i->getbody = NULL;
+    i->getinclude = NULL;
     i->vacation = NULL;
     i->notify = NULL;
 
@@ -69,18 +73,62 @@ int sieve_interp_alloc(sieve_interp_t **interp, void *interp_context)
     return SIEVE_OK;
 }
 
-static const char *sieve_extensions = "fileinto reject envelope vacation"
-                                      " imapflags notify subaddress relational"
-                                      " comparator-i;ascii-numeric"
-#ifdef ENABLE_REGEX
-" regex";
-#else
-"";
-#endif /* ENABLE_REGEX */
-
-const char *sieve_listextensions(void)
+const char *sieve_listextensions(sieve_interp_t *i)
 {
-    return sieve_extensions;
+    static int done = 0;
+    static char extensions[4096] = "";
+
+    if (!done++) {
+	unsigned long config_sieve_extensions =
+	    config_getbitfield(IMAPOPT_SIEVE_EXTENSIONS);
+
+	/* add comparators */
+	strlcat(extensions, "comparator-i;ascii-numeric", sizeof(extensions));
+
+	/* add actions */
+	if (i->fileinto &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_FILEINTO))
+	    strlcat(extensions, " fileinto", sizeof(extensions));
+	if (i->reject &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_REJECT))
+	    strlcat(extensions, " reject", sizeof(extensions));
+	if (i->vacation &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VACATION))
+	    strlcat(extensions, " vacation", sizeof(extensions));
+	if (i->markflags &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_IMAPFLAGS))
+	    strlcat(extensions, " imapflags", sizeof(extensions));
+	if (i->notify &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_NOTIFY))
+	    strlcat(extensions, " notify", sizeof(extensions));
+	if (i->getinclude &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_INCLUDE))
+	    strlcat(extensions, " include", sizeof(extensions));
+
+	/* add tests */
+	if (i->getenvelope &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_ENVELOPE))
+	    strlcat(extensions, " envelope", sizeof(extensions));
+	if (i->getbody &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_BODY))
+	    strlcat(extensions, " body", sizeof(extensions));
+
+	/* add match-types */
+	if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_RELATIONAL)
+	    strlcat(extensions, " relational", sizeof(extensions));
+#ifdef ENABLE_REGEX
+	if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_REGEX)
+	    strlcat(extensions, " regex", sizeof(extensions));
+#endif
+
+	/* add misc extensions */
+	if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_SUBADDRESS)
+	    strlcat(extensions, " subaddress", sizeof(extensions));
+	if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_COPY)
+	    strlcat(extensions, " copy", sizeof(extensions));
+    }
+
+    return extensions;
 }
 
 int sieve_interp_free(sieve_interp_t **interp)
@@ -161,6 +209,18 @@ int sieve_register_header(sieve_interp_t *interp, sieve_get_header *f)
 int sieve_register_envelope(sieve_interp_t *interp, sieve_get_envelope *f)
 {
     interp->getenvelope = f;
+    return SIEVE_OK;
+}
+
+int sieve_register_include(sieve_interp_t *interp, sieve_get_include *f)
+{
+    interp->getinclude = f;
+    return SIEVE_OK;
+}
+
+int sieve_register_body(sieve_interp_t *interp, sieve_get_body *f)
+{
+    interp->getbody = f;
     return SIEVE_OK;
 }
 
