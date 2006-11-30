@@ -42,7 +42,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #!perl -w
 # script to upgrade from versions of imapd previous to 1.6.2
 # make sure you run it as the cyrus user
-# $Id: dohash,v 1.11 2005/12/01 22:01:12 murch Exp $
+# $Id: dohash,v 1.12 2006/11/30 17:11:25 murch Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -103,7 +103,7 @@ sub read_conf {
 	if (/^configdirectory:\s+(.*)$/) {
 	    $confdir = $1;
 	}
-	if (/^partition-.*:\s+(.*)$/) {
+	if (/^(?:meta)?partition-.*:\s+(.*)$/) {
 	    if (grep /$1/, @parts) {
 		next;
 	    }

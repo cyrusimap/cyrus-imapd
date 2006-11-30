@@ -1,7 +1,7 @@
 /* bc_emit.c -- sieve bytecode - pass 2 of the compiler
  * Rob Siemborski
  * Jen Smith
- * $Id: bc_emit.c,v 1.2 2003/10/22 18:03:24 rjs3 Exp $
+ * $Id: bc_emit.c,v 1.3 2006/11/30 17:11:24 murch Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -45,7 +45,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 void dump(bytecode_info_t *d);
 #endif
 
-inline int write_int (int fd, int x)
+static inline int write_int (int fd, int x)
 {
     int y=htonl(x);
     return (write(fd, &y, sizeof(int)));
@@ -299,6 +299,45 @@ static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
 	break;
     }
     
+    case BC_BODY:
+    {
+	int ret;
+	/* Drop match type */
+	if(write_int(fd, bc->data[(*codep)].value) == -1)
+	    return -1;
+	wrote += sizeof(int);
+	(*codep)++;
+	/*drop comparator */
+	if(write_int(fd, bc->data[(*codep)].value) == -1)
+	    return -1;
+	wrote += sizeof(int);
+	(*codep)++;
+	/*now drop relation*/
+	if(write_int(fd, bc->data[(*codep)].value) == -1)
+	    return -1;
+	wrote += sizeof(int);
+	(*codep)++;
+	/*now drop transform*/
+	if(write_int(fd, bc->data[(*codep)].value) == -1)
+	    return -1;
+	wrote += sizeof(int);
+	(*codep)++;
+	/*now drop offset*/
+	if(write_int(fd, bc->data[(*codep)].value) == -1)
+	    return -1;
+	wrote += sizeof(int);
+	(*codep)++;
+	/*now drop content-types*/
+	ret = bc_stringlist_emit(fd, codep, bc);
+	if(ret < 0) return -1;
+	wrote+=ret;
+	/* Now drop data */
+	ret = bc_stringlist_emit(fd, codep, bc);
+	if(ret < 0) return -1;
+	wrote+=ret;
+	break;
+    }
+    
     default:
 	/* Unknown testcode? */
 	return -1;
@@ -453,9 +492,33 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 	    break;
 	}
 	
-	case B_REJECT:
 	case B_FILEINTO:
 	case B_REDIRECT:
+	    /* Copy (word), Folder/Address String */
+
+	    if(write_int(fd,bc->data[codep++].value) == -1)
+		return -1;
+
+	    filelen += sizeof(int);
+
+	    len = bc->data[codep++].len;
+	    if(write_int(fd,len) == -1)
+		return -1;
+
+	    filelen+=sizeof(int);
+	    
+	    if(write(fd,bc->data[codep++].str,len) == -1)
+		return -1;
+	    
+	    ret = align_string(fd, len);
+	    if(ret == -1)
+		return -1;
+
+	    filelen += len + ret;
+
+	    break;
+
+	case B_REJECT:
 	    /*just a string*/
 	    len = bc->data[codep++].len;
 	    if(write_int(fd,len) == -1)
@@ -586,7 +649,7 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 	    	    break;
 	case B_VACATION:
 	    /* Address list, Subject String, Message String,
-	       Days (word), Mime (word) */
+	       Days (word), Mime (word), From String, Handle String */
 	   
 	        /*new code-this might be broken*/
 	    ret = bc_stringlist_emit(fd, &codep, bc);
@@ -631,8 +694,60 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 	    if(write_int(fd,bc->data[codep].value) == -1)
 		return -1;
 	    codep++;
+
+	    for(i=0; i<2; i++) {/*writing strings*/
+
+		/*write length of string*/
+		len = bc->data[codep++].len;
+		if(write_int(fd,len) == -1)
+		    return -1;
+		filelen += sizeof(int);
+		    
+		if(len == -1)
+		{
+		    /* this is a nil string */
+		    /* skip the null pointer and make up for it 
+		     * by adjusting the offset */
+		    codep++;
+		}
+		else
+		{
+		    /*write string*/
+		    if(write(fd,bc->data[codep++].str,len) == -1)
+			return -1;
+		    
+		    ret = align_string(fd, len);
+		    if(ret == -1) return -1;
+		    
+		    filelen += len + ret;
+		}
+		
+	    }
 	    filelen += sizeof(int);
 	    
+	    break;
+	case B_INCLUDE:
+	    /* Location (word), Filename String */ 
+
+	    /* Location */
+	    if(write_int(fd, bc->data[codep].value) == -1)
+		return -1;
+	    filelen += sizeof(int);
+	    codep++;
+	    /* Filename */
+	    len = bc->data[codep++].len;
+	    if(write_int(fd,len) == -1)
+		return -1;
+
+	    filelen += sizeof(int);
+	    
+	    if(write(fd,bc->data[codep++].str,len) == -1)
+		return -1;
+		
+	    ret = align_string(fd, len);
+	    if(ret == -1) return -1;
+		
+	    filelen += len + ret;
 	    break;
 	case B_NULL:
 	case B_STOP:
@@ -640,6 +755,7 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 	case B_KEEP:
 	case B_MARK:
 	case B_UNMARK:
+	case B_RETURN:
 	    /* No Parameters! */
 	    break;
 

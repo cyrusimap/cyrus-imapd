@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: nntpd.8,v 1.2 2003/10/22 18:03:08 rjs3 Exp $
+.\" $Id: nntpd.8,v 1.3 2006/11/30 17:11:23 murch Exp $
 .SH NAME
 nntpd \- NNTP server process
 .SH SYNOPSIS
@@ -68,6 +68,10 @@ nntpd \- NNTP server process
 ]
 [
 .B \-f
+]
+[
+.B \-p
+.I ssf
 ]
 .SH DESCRIPTION
 .I Nntpd
@@ -137,6 +141,13 @@ allowed to read/post articles.
 .BI \-f
 Only allow NNTP feeder commands.  Permitted clients will only be
 allowed to feed articles (no reading).
+.TP
+.BI \-p " ssf"
+Tell
+.I nntpd
+that an external layer exists.  An SSF (security strength factor) of 1
+means an integrity protection layer exists.  Any higher SSF implies
+some form of privacy protection.
 .SH FILES
 .TP
 .B /etc/imapd.conf

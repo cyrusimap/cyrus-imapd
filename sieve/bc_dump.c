@@ -1,6 +1,6 @@
 /* bc_generate.c -- sieve bytecode- almost flattened bytecode
  * Rob Siemborski
- * $Id: bc_dump.c,v 1.2 2003/10/22 18:03:23 rjs3 Exp $
+ * $Id: bc_dump.c,v 1.3 2006/11/30 17:11:24 murch Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -168,6 +168,26 @@ static int dump_test(bytecode_info_t *d, int ip, int level ) {
 	ip = dump_sl(d,ip,level);
 	break;
 
+    case BC_BODY:
+	printf("%d: BODY (\n",ip++);
+	print_spaces(level*4);
+	if (d->data[ip].value == B_COUNT || d->data[ip].value == B_VALUE)
+	{
+	    printf("      MATCH:%d RELATION: %d COMP: %d TRANSFORM: %d OFFSET: %d CONTENT-TYPES:\n", 
+		   d->data[ip].value,d->data[ip+1].value,d->data[ip+2].value,
+		   d->data[ip+3].value,d->data[ip+4].value);
+	} else {
+	    printf("      MATCH:%d COMP:%d TRANSFORM:%d OFFSET: %d CONTENT-TYPES:\n",
+		   d->data[ip].value,d->data[ip+1].value,d->data[ip+3].value,
+		   d->data[ip+4].value);
+	}
+	ip+=5;
+	ip = dump_sl(d,ip,level); ip++;
+	print_spaces(level*4);
+	printf("      DATA:\n");
+	ip = dump_sl(d,ip,level);
+	break;
+
     default:
 	printf("%d: TEST(%d)\n",ip,d->data[ip].op);
 	break;
@@ -228,15 +248,15 @@ void dump(bytecode_info_t *d, int level)
 	    break;
 
 	case B_FILEINTO:
-	    printf("%d: FILEINTO {%d}%s\n",i,
-		   d->data[i+1].len,d->data[i+2].str);
-	    i+=2;
+	    printf("%d: FILEINTO COPY(%d) FOLDER({%d}%s)\n",i,
+		   d->data[i+1].value,d->data[i+2].len,d->data[i+3].str);
+	    i+=3;
 	    break;
 
 	case B_REDIRECT:
-	    printf("%d: REDIRECT {%d}%s\n",i,
-		   d->data[i+1].len,d->data[i+2].str);
-	    i+=2;
+	    printf("%d: REDIRECT COPY(%d) ADDRESS({%d}%s)\n",i,
+		   d->data[i+1].value,d->data[i+2].len,d->data[i+3].str);
+	    i+=3;
 	    break;
 
 	case B_SETFLAG:
@@ -280,11 +300,14 @@ void dump(bytecode_info_t *d, int level)
 	    printf("%d:VACATION\n",i);
 	    i++;
 	    i=dump_sl(d,i,level);
-	    printf("SUBJ({%d}%s) MESG({%d}%s)\n DAYS(%d) MIME(%d)\n", 
+	    printf("SUBJ({%d}%s) MESG({%d}%s)\n DAYS(%d) MIME(%d)\n"
+		   " FROM({%d}%s) HANDLE({%d}%s)\n",
 		   d->data[i+1].len, (d->data[i+1].len == -1 ? "[nil]" : d->data[i+2].str),
 		   d->data[i+3].len, (d->data[i+3].len == -1 ? "[nil]" : d->data[i+4].str),
-		   d->data[i+5].value, d->data[i+6].value);
-	    i+=6;
+		   d->data[i+5].value, d->data[i+6].value,
+		   d->data[i+7].len, (d->data[i+7].len == -1 ? "[nil]" : d->data[i+8].str),
+		   d->data[i+9].len, (d->data[i+9].len == -1 ? "[nil]" : d->data[i+10].str));
+	    i+=10;
 	
 	    break;
 	case B_JUMP:
@@ -293,6 +316,17 @@ void dump(bytecode_info_t *d, int level)
 	case B_NULL:
 	    printf("%d: NULL\n",i);
 	    break;
+
+	case B_INCLUDE:
+	    printf("%d: INCLUDE LOCATION:%d {%d}%s\n",i,
+		   d->data[i+1].value,d->data[i+2].len,d->data[i+3].str);
+	    i+=3;
+	    break;
+
+	case B_RETURN:
+	    printf("%d: RETURN\n",i);
+	    break;
+
 	default:
 	    printf("%d: %d\n",i,d->data[i].op);
 	    break;

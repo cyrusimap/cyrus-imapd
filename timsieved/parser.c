@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.40 2006/08/30 16:29:11 murch Exp $
+ * $Id: parser.c,v 1.41 2006/11/30 17:11:25 murch Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -667,7 +667,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
       (*sieved_namespace.mboxname_tointernal)(&sieved_namespace, "INBOX",
 					     username, inboxname);
 
-      r = mboxlist_detail(inboxname, &type, &server, NULL, NULL, NULL);
+      r = mboxlist_detail(inboxname, &type, &server, NULL, NULL, NULL, NULL);
       
       if(r && !sieved_userisadmin) {
 	  /* mboxlist_detail error */
@@ -735,7 +735,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
 	      }
 
 	      backend = backend_connect(NULL, server, &protocol[PROTOCOL_SIEVE],
-					username, &statusline);
+					username, NULL, &statusline);
 
 	      if (!backend) {
 		  syslog(LOG_ERR, "couldn't authenticate to backend server");

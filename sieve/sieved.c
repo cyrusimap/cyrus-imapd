@@ -1,4 +1,4 @@
-/* dump.c -- bytecode decompiler
+/* sieved.c -- bytecode decompiler
  * Jen Smith
  */
 /***********************************************************
@@ -25,6 +25,9 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 *****************************************************************/
 
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
 
 #include "sieve_interface.h"
 
@@ -41,6 +44,9 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <string.h>
 
 #include "map.h"
+
+/* config.c stuff */
+const int config_need_data = 0;
 
 void dump2(bytecode_input_t *d, int len);
 int dump2_test(bytecode_input_t * d, int i);
@@ -244,7 +250,7 @@ int dump2_test(bytecode_input_t * d, int i)
 	printf(")\n");
 	break;
     case BC_ADDRESS:/*7*/
-	printf("Address (");
+	printf("Address [");
 	i=printComparison(d, i+1);
 	printf("               type: ");
 	switch(ntohl(d[i++].value))
@@ -262,7 +268,7 @@ int dump2_test(bytecode_input_t * d, int i)
 	printf("             ]\n");
 	break;
     case BC_ENVELOPE:/*8*/
-	printf("Envelope (");
+	printf("Envelope [");
 	i=printComparison(d, i+1);
 	printf("                type: ");
 	switch(ntohl(d[i++].value))
@@ -288,6 +294,23 @@ int dump2_test(bytecode_input_t * d, int i)
 	i=write_list(ntohl(d[i].len), i+1, d);
 	printf("             ]\n");
 	break;
+    case BC_BODY:/*10*/
+	printf("Body [");
+	i=printComparison(d, i+1);
+	printf("              Transform: ");
+	switch(ntohl(d[i++].value))
+	{
+	case B_RAW: printf("raw"); break;
+	case B_TEXT:printf("text"); break;
+	case B_CONTENT:printf("content"); break;
+	}
+	printf("\tOffset: %d\n", ntohl(d[i++].value));
+	printf("              Content-Types:");
+	i=write_list(ntohl(d[i].len), i+1, d);
+	printf("              Data:");
+	i=write_list(ntohl(d[i].len), i+1, d);
+	printf("             ]\n");
+	break;
     default:
 	printf("WERT %d ", ntohl(d[i].value));
     }   
@@ -297,6 +320,7 @@ int dump2_test(bytecode_input_t * d, int i)
 void dump2(bytecode_input_t *d, int bc_len) 
 {
     int i;
+    int version;
     const char *data;
     int len;
     
@@ -307,80 +331,83 @@ void dump2(bytecode_input_t *d, int bc_len)
 
     i = BYTECODE_MAGIC_LEN / sizeof(bytecode_input_t);
 
-    printf("Sievecode version %d\n", ntohl(d[i].op));
+    version = ntohl(d[i].op);
+    printf("Sievecode version %d\n", version);
     if(!d) return;
     
     for(i++; i<bc_len;) 
     {
-	switch(ntohl(d[i].op)) {
+	int copy = 0;
+
+	printf("%d: ",i);
+
+	switch(ntohl(d[i++].op)) {
 	    
 	case B_STOP:/*0*/
-	    printf("%d: STOP\n",i);
-	    i++;
+	    printf("STOP\n");
 	    break;
 	    
 	case B_KEEP:/*1*/
-	    printf("%d: KEEP\n",i);
-	    i++;
+	    printf("KEEP\n");
 	    break;
 	    
 	case B_DISCARD:/*2*/
-	    printf("%d: DISCARD\n",i);
-	    i++;
+	    printf("DISCARD\n");
 	    break;
 	    
 	case B_REJECT:/*3*/
-	    i = unwrap_string(d, i+1, &data, &len);
-	    printf("%d: REJECT {%d}%s\n", i, len, data);
+	    i = unwrap_string(d, i, &data, &len);
+	    printf("REJECT {%d}%s\n", len, data);
 	    break;
 
-	case B_FILEINTO: /*4*/
-	    i = unwrap_string(d, i+1, &data, &len);
-	    printf("%d: FILEINTO {%d}%s\n",i, len, data);
+	case B_FILEINTO: /*19*/
+	    copy = ntohl(d[i++].value);
+	case B_FILEINTO_ORIG: /*4*/
+	    i = unwrap_string(d, i, &data, &len);
+	    printf("FILEINTO COPY(%d) FOLDER({%d}%s)\n",copy,len,data);
 	    break;
 
-	case B_REDIRECT: /*5*/
-	    i = unwrap_string(d, i+1, &data, &len);
-	    printf("%d: REDIRECT {%d}%s\n",i,len,data);
+	case B_REDIRECT: /*20*/
+	    copy = ntohl(d[i++].value);
+	case B_REDIRECT_ORIG: /*5*/
+	    i = unwrap_string(d, i, &data, &len);
+	    printf("REDIRECT COPY(%d) ADDRESS({%d}%s)\n",copy,len,data);
 	    break;
 	     
 	case B_IF:/*6*/
-	    printf("%d: IF (ends at %d)",i, ntohl(d[i+1].value));
+	    printf("IF (ends at %d)", ntohl(d[i].value));
 
             /* there is no short circuiting involved here*/
-	    i = dump2_test(d,i+2);
+	    i = dump2_test(d,i+1);
 	    printf("\n");
 
 	    break;
 
 	case B_MARK:/*7*/
-	    printf("%d: MARK\n",i);
-	    i++;
+	    printf("MARK\n");
 	    break;
 
 	case B_UNMARK:/*8*/
-	    printf("%d: UNMARK\n",i);
-	    i++;
+	    printf("UNMARK\n");
 	    break;
 
 	case B_ADDFLAG: /*9*/
-	    printf("%d: ADDFLAG  {%d}\n",i,ntohl(d[i+1].len));
-	    i=write_list(ntohl(d[i+1].len),i+2,d);
+	    printf("ADDFLAG  {%d}\n",ntohl(d[i].len));
+	    i=write_list(ntohl(d[i].len),i+1,d);
 	    break;
 
 	case B_SETFLAG: /*10*/
-	    printf("%d: SETFLAG  {%d}\n",i,ntohl(d[i+1].len));
-	    i=write_list(ntohl(d[i+1].len),i+2,d);
+	    printf("SETFLAG  {%d}\n",ntohl(d[i].len));
+	    i=write_list(ntohl(d[i].len),i+1,d);
 	    break;
 	    
 	case B_REMOVEFLAG: /*11*/
-	    printf("%d: REMOVEFLAG  {%d}\n",i,ntohl(d[i+1].len));
-	    i=write_list(ntohl(d[i+1].len),i+2,d);
+	    printf("REMOVEFLAG  {%d}\n",ntohl(d[i].len));
+	    i=write_list(ntohl(d[i].len),i+1,d);
 	    break;
 	    
 	case B_DENOTIFY:/*12*/
-	    printf("%d: DENOTIFY\n",i);
-	    i++; 
+	    printf("DENOTIFY\n");
 	    printf("            PRIORITY(%d) Comparison type %d (relat %d)\n",
 		   ntohl(d[i].value), ntohl(d[i+1].value), ntohl(d[i+2].value));
 	    i+=3;
@@ -391,9 +418,9 @@ void dump2(bytecode_input_t *d, int bc_len)
 	    break;
 	    
 	case B_NOTIFY: /*13*/
-	    i = unwrap_string(d, i+1, &data, &len);
+	    i = unwrap_string(d, i, &data, &len);
 
-	    printf("%d: NOTIFY METHOD({%d}%s)\n",i,len,data);
+	    printf("NOTIFY METHOD({%d}%s)\n",len,data);
 
 	    i = unwrap_string(d, i, &data, &len);
 
@@ -412,9 +439,9 @@ void dump2(bytecode_input_t *d, int bc_len)
 	    break;
 
 	case B_VACATION:/*14*/
-	    printf("%d: VACATION\n",i);
+	    printf("VACATION\n");
 	    /*add address list here!*/
-	    i=write_list(ntohl(d[i+1].len),i+2,d);
+	    i=write_list(ntohl(d[i].len),i+1,d);
 
 	    i = unwrap_string(d, i, &data, &len);
 	  
@@ -427,17 +454,41 @@ void dump2(bytecode_input_t *d, int bc_len)
 	    printf("DAYS(%d) MIME(%d)\n", ntohl(d[i].value), ntohl(d[i+1].value));
 	    i+=2;
 
+	    if (version >= 0x05) {
+		i = unwrap_string(d, i, &data, &len);
+
+		printf("%d FROM({%d}%s) \n",i, len, (!data ? "[nil]" : data));
+
+		i = unwrap_string(d, i, &data, &len);
+
+		printf("%d HANDLE({%d}%s) \n",i, len, (!data ? "[nil]" : data));
+	    }
+
 	    break;
 	case B_NULL:/*15*/
-	    printf("%d:NULL\n",i);
-	    i++;
+	    printf("NULL\n");
 	    break;
 	case B_JUMP:/*16*/
-	    printf("%d:JUMP %d\n",i, ntohl(d[i+1].jump));
-	    i+=2;
+	    printf("JUMP %d\n", ntohl(d[i].jump));
+	    i+=1;
 	    break;		  
+
+	case B_INCLUDE:/*17*/
+	    printf("INCLUDE ");
+	    switch (ntohl(d[i].value)) {
+	    case B_PERSONAL: printf("Personal"); break;
+	    case B_GLOBAL: printf("Global"); break;
+	    }
+	    i = unwrap_string(d, i+1, &data, &len);
+	    printf(" {%d}%s\n", len, data);
+	    break;
+
+	case B_RETURN:/*18*/
+	    printf("RETURN\n");
+	    break;
+	    
 	default:
-	    printf("%d: %d (NOT AN OP)\n",i,ntohl(d[i].op));
+	    printf("%d (NOT AN OP)\n",ntohl(d[i-1].op));
 	    exit(1);
 	}
     }

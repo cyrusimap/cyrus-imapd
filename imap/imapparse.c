@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapparse.c,v 1.15 2005/10/18 23:38:43 jeaton Exp $ */
+/* $Id: imapparse.c,v 1.16 2006/11/30 17:11:18 murch Exp $ */
 
 #include <config.h>
 

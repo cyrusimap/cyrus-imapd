@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ctl_cyrusdb.c,v 1.27 2005/02/16 20:37:58 shadow Exp $
+ * $Id: ctl_cyrusdb.c,v 1.28 2006/11/30 17:11:17 murch Exp $
  */
 
 #include <config.h>
@@ -126,10 +126,9 @@ static int fixmbox(char *name,
 {
     int mbtype;
     int r;
-    char *path, *part, *acl;
 
     /* Do an mboxlist_detail on the mailbox */
-    r = mboxlist_detail(name, &mbtype, &path, &part, &acl, NULL);
+    r = mboxlist_detail(name, &mbtype, NULL, NULL, NULL, NULL, NULL);
 
     /* if it is MBTYPE_RESERVED, unset it & call mboxlist_delete */
     if(!r && (mbtype & MBTYPE_RESERVE)) {

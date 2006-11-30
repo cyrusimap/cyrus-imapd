@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # script to downgrade from cyrus imapd 1.6.2+ to earlier.
 # do NOT run this script while imapd's are running
-# $Id: undohash,v 1.8 2005/12/01 22:01:13 murch Exp $
+# $Id: undohash,v 1.9 2006/11/30 17:11:25 murch Exp $
 # 
 # Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
 #
@@ -59,7 +59,7 @@ sub read_conf {
 	if (/^configdirectory:\s+(.*)$/) {
 	    $confdir = $1;
 	}
-	if (/^partition-.*:\s+(.*)$/) {
+	if (/^(?:meta)?partition-.*:\s+(.*)$/) {
 	    if (grep /$1/, @parts) {
 		next;
 	    }

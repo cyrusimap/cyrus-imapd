@@ -1,5 +1,4 @@
 # 
-# Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -37,7 +36,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.PL,v 1.17 2003/10/22 18:50:18 rjs3 Exp $
+# $Id: Makefile.PL,v 1.18 2006/11/30 17:11:23 murch Exp $
 
 use ExtUtils::MakeMaker;
 use Config;
@@ -66,7 +65,7 @@ WriteMakefile(
     'OBJECT'    => 'IMAP.o',
     'MYEXTLIB'  => '../../lib/libcyrus.a ../../lib/libcyrus_min.a',
     'LIBS'	=> ["$BDB_LIB $SASL_LIB $OPENSSL_LIB $LIB_RT -lssl -lcrypto"],
-    'DEFINE'	=> '-DPERL_POLLUTE',     # e.g., '-DHAVE_SOMETHING' 
-    'INC'	=> "-I../../lib $SASL_INC $OPENSSL_INC", 
+    'DEFINE'	=> '-DPERL_POLLUTE',    # e.g., '-DHAVE_SOMETHING' 
+    'INC'	=> "-I../../lib -I../.. -I../../et $SASL_INC $OPENSSL_INC", 
     'EXE_FILES' => [cyradm],
 );

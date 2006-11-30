@@ -1,5 +1,5 @@
 /* sieve_interface.h -- interface for deliver
- * $Id: sieve_interface.h,v 1.19 2003/10/22 18:50:30 rjs3 Exp $
+ * $Id: sieve_interface.h,v 1.20 2006/11/30 17:11:25 murch Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -29,7 +29,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #include <stdio.h>
 
-#define SIEVE_VERSION "CMU Sieve 2.2"
+#define SIEVE_VERSION "CMU Sieve 2.3"
 
 /* error codes */
 #define SIEVE_OK (0)
@@ -39,7 +39,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 /* external sieve types */
 typedef struct sieve_interp sieve_interp_t;
 typedef struct sieve_script sieve_script_t;
-typedef struct sieve_bytecode sieve_bytecode_t;
+typedef struct sieve_execute sieve_execute_t;
 typedef struct bytecode_info bytecode_info_t;
 
 typedef int sieve_callback(void *action_context, void *interp_context, 
@@ -52,6 +52,19 @@ typedef int sieve_get_header(void *message_context,
 typedef int sieve_get_envelope(void *message_context, 
 			       const char *field,
 			       const char ***contents);
+typedef int sieve_get_include(void *script_context, const char *script,
+			      int isglobal, char *fpath, size_t size);
+
+/* MUST keep this struct sync'd with bodypart in imap/message.h */
+typedef struct sieve_bodypart {
+    char section[128];
+    const char *content;
+    const char *encoding;
+    unsigned long size;
+} sieve_bodypart_t;
+
+typedef int sieve_get_body(void *message_context, const char **content_types,
+			   sieve_bodypart_t ***parts);
 
 typedef struct sieve_vacation {
     int min_response;		/* 0 -> defaults to 3 */
@@ -95,9 +108,10 @@ typedef struct sieve_notify_context {
     const char *message;
 } sieve_notify_context_t;
 
+#define SIEVE_HASHLEN 16
+
 typedef struct sieve_autorespond_context {
-    unsigned char *hash;
-    int len;
+    unsigned char hash[SIEVE_HASHLEN];
     int days;
 } sieve_autorespond_context_t;
 
@@ -123,12 +137,14 @@ int sieve_register_keep(sieve_interp_t *interp, sieve_callback *f);
 int sieve_register_vacation(sieve_interp_t *interp, sieve_vacation_t *v);
 int sieve_register_imapflags(sieve_interp_t *interp, sieve_imapflags_t *mark);
 int sieve_register_notify(sieve_interp_t *interp, sieve_callback *f);
+int sieve_register_include(sieve_interp_t *interp, sieve_get_include *f);
 
 /* add the callbacks for messages. again, undefined if used after
    sieve_script_parse */
 int sieve_register_size(sieve_interp_t *interp, sieve_get_size *f);
 int sieve_register_header(sieve_interp_t *interp, sieve_get_header *f);
 int sieve_register_envelope(sieve_interp_t *interp, sieve_get_envelope *f);
+int sieve_register_body(sieve_interp_t *interp, sieve_get_body *f);
 
 typedef int sieve_parse_error(int lineno, const char *msg, 
 			      void *interp_context,
@@ -144,21 +160,21 @@ int sieve_register_execute_error(sieve_interp_t *interp,
 int sieve_script_parse(sieve_interp_t *interp, FILE *script,
 		       void *script_context, sieve_script_t **ret);
 
-/* given a bytecode file descriptor, setup the sieve_bytecode_t */
-int sieve_script_load(const char *fname, sieve_bytecode_t **ret);
+/* given a path to a bytecode file, load it into the sieve_execute_t */
+int sieve_script_load(const char *fpath, sieve_execute_t **ret);
 
 /* Unload a sieve_bytecode_t */
-int sieve_script_unload(sieve_bytecode_t **s);
+int sieve_script_unload(sieve_execute_t **s);
 
 /* Free a sieve_script_t */
 int sieve_script_free(sieve_script_t **s);
 
 /* execute bytecode on a message */
-int sieve_execute_bytecode(sieve_bytecode_t *script, sieve_interp_t *interp,
+int sieve_execute_bytecode(sieve_execute_t *script, sieve_interp_t *interp,
 			   void *script_context, void *message_context);
 
 /* Get space separated list of extensions supported by the implementation */
-const char *sieve_listextensions(void);
+const char *sieve_listextensions(sieve_interp_t *i);
 
 /* Create a bytecode structure given a parsed commandlist */
 int sieve_generate_bytecode(bytecode_info_t **retval, sieve_script_t *s);

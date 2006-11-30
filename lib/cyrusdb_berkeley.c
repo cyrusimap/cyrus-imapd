@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_berkeley.c,v 1.14 2006/03/17 16:12:32 murch Exp $ */
+/* $Id: cyrusdb_berkeley.c,v 1.15 2006/11/30 17:11:22 murch Exp $ */
 
 #include <config.h>
 
@@ -51,6 +51,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include "bsearch.h"
 #include "cyrusdb.h"
 #include "exitcodes.h"
 #include "libcyr_cfg.h"
@@ -376,6 +377,12 @@ static int myarchive(const char **fnames, const char *dirname)
     return 0;
 }
 
+static int mbox_compar(DB *db, const DBT *a, const DBT *b)
+{
+    return bsearch_ncompare((const char *) a->data, a->size,
+			    (const char *) b->data, b->size);
+}
+
 static int myopen(const char *fname, DBTYPE type, int flags, struct db **ret)
 {
     DB *db = NULL;
@@ -392,6 +399,7 @@ static int myopen(const char *fname, DBTYPE type, int flags, struct db **ret)
 	return CYRUSDB_IOERROR;
     }
     /* xxx set comparator! */
+    if (flags & CYRUSDB_MBOXSORT) db->set_bt_compare(db, mbox_compar);
 
 #if DB_VERSION_MAJOR == 4 && DB_VERSION_MINOR >= 1
     r = db->open(db, NULL, fname, NULL, type, dbflags | DB_AUTO_COMMIT, 0664);

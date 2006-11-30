@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.86 2004/02/27 22:08:56 rjs3 Exp $
+ * $Id: prot.c,v 1.87 2006/11/30 17:11:22 murch Exp $
  */
 
 #include <config.h>
@@ -216,6 +216,19 @@ int prot_settimeout(struct protstream *s, int timeout)
     assert(!s->write);
 
     s->read_timeout = timeout;
+    s->timeout_mark = time(NULL) + timeout;
+    return 0;
+}
+
+/*
+ * Reset the read timeout_mark for the stream 's'.
+ * 'S' must have been created for reading.
+ */
+int prot_resettimeout(struct protstream *s)
+{
+    assert(!s->write);
+
+    s->timeout_mark = time(NULL) + s->read_timeout;
     return 0;
 }
 
@@ -399,9 +412,12 @@ int prot_fill(struct protstream *s)
 	    time_t now = time(NULL);
 	    time_t sleepfor;
 
-	    read_timeout = now + (s->dontblock ? 0 : s->read_timeout);
+	    read_timeout = s->dontblock ? now : s->timeout_mark;
 	    do {
-		sleepfor = read_timeout - now;
+		if (read_timeout < now)
+		    sleepfor = 0;
+		else
+		    sleepfor = read_timeout - now;
 		/* execute each callback that has timed out */
 		for (event = s->waitevent; event; event = next)
 		{
@@ -442,6 +458,9 @@ int prot_fill(struct protstream *s)
 		return EOF;
 	    }
 	}
+
+	/* we have data, reset the timeout_mark */
+	s->timeout_mark = time(NULL) + s->read_timeout;
 	
 	do {
 #ifdef HAVE_SSL	  
@@ -570,7 +589,7 @@ static void prot_flush_log(struct protstream *s)
 /* Do the encoding part of prot_flush */
 static int prot_flush_encode(struct protstream *s,
 			     const char **output_buf,
-			     int *output_len) 
+			     unsigned *output_len) 
 {
     unsigned char *ptr = s->buf;
     int left = s->ptr - s->buf;
@@ -591,7 +610,7 @@ static int prot_flush_encode(struct protstream *s,
 	    return EOF;
 	}
     } else {
-	*output_buf = ptr;
+	*output_buf = (char *) ptr;
 	*output_len = left;
     }
     return 0;
@@ -623,8 +642,8 @@ int prot_flush_internal(struct protstream *s, int force)
     int n;
     int save_dontblock = s->dontblock;
 
-    const char *ptr = s->buf; /* Memory buffer info */
-    int left = s->ptr - s->buf;
+    const char *ptr = (char *) s->buf; /* Memory buffer info */
+    unsigned left = s->ptr - s->buf;
 
     assert(s->write);
     assert(s->cnt >= 0);
@@ -857,8 +876,8 @@ int prot_write(struct protstream *s, const char *buf, unsigned len)
 
 /*
  * Stripped-down version of printf() that works on protection streams
- * Only understands '%ld', '%lu', '%d', %u', '%s', '%c', and '%%'
- * in the format string.
+ * Only understands '%lld', '%llu', '%ld', '%lu', '%d', %u', '%s',
+ * '%c', and '%%' in the format string.
  */
 int prot_printf(struct protstream *s, const char *fmt, ...)
 {
@@ -893,6 +912,31 @@ int prot_printf(struct protstream *s, const char *fmt, ...)
 		snprintf(buf, sizeof(buf), "%lu", ul);
 		prot_write(s, buf, strlen(buf));
 		break;
+
+#ifdef HAVE_LONG_LONG_INT
+            case 'l': {
+		long long int ll;
+		unsigned long long int ull;
+
+	        switch (*++percent) {
+		case 'd':
+		    ll = va_arg(pvar, long long int);
+		    snprintf(buf, sizeof(buf), "%lld", ll);
+		    prot_write(s, buf, strlen(buf));
+		    break;
+
+		case 'u':
+		    ull = va_arg(pvar, unsigned long long int);
+		    snprintf(buf, sizeof(buf), "%llu", ull);
+		    prot_write(s, buf, strlen(buf));
+		    break;
+
+	        default:
+		    abort();
+		}
+		break;
+	    }
+#endif
 
 	    default:
 		abort();
@@ -1001,14 +1045,13 @@ int prot_select(struct protgroup *readstreams, int extra_read_fd,
 
     for(i = 0; i<readstreams->next_element; i++) {
 	int have_thistimeout = 0; /* used to compute the minimal timeout for */
-	time_t this_timeout = 0;   /* this stream */
+	time_t this_timeout = 0;  /* this stream */
 	
 	s = readstreams->group[i];
+	if (!s) continue;
 
 	assert(!s->write);
 
-	have_thistimeout = 0;
-	
 	/* scan for waitevent callbacks */
 	for (event = s->waitevent; event; event = event->next)
 	{
@@ -1019,22 +1062,18 @@ int prot_select(struct protgroup *readstreams, int extra_read_fd,
 	}
 	
 	/* check the idle timeout on this one as well */
-	if(!have_thistimeout || this_timeout > s->read_timeout)
-	    this_timeout = s->read_timeout;
+	if(s->read_timeout &&
+	   (!have_thistimeout || s->timeout_mark - now < this_timeout)) {
+	    this_timeout = s->timeout_mark - now;
+	    have_thistimeout = 1;
+	}
 
-	if(!have_readtimeout && !s->dontblock) {
+	if(!s->dontblock && have_thistimeout &&
+	   (!have_readtimeout || now + this_timeout < read_timeout)) {
 	    read_timeout = now + this_timeout;
 	    have_readtimeout = 1;
-	    if(!timeout || read_timeout <= timeout->tv_sec)
+	    if(!timeout || this_timeout <= timeout->tv_sec)
 		timeout_prot = s;
-	} else if(!s->dontblock) {
-	    time_t new_timeout;
-	    new_timeout = now + this_timeout;
-	    if(new_timeout < read_timeout) {
-		read_timeout = new_timeout;
-		if(!timeout || read_timeout <= timeout->tv_sec)
-		    timeout_prot = s;
-	    }
 	}
 	    
 	FD_SET(s->fd, &rfds);
@@ -1082,10 +1121,9 @@ int prot_select(struct protgroup *readstreams, int extra_read_fd,
 	/* If we don't have a timeout structure, and we need one, use
 	 * a local version.  Otherwise, make sure that we are timing out
 	 * for the right reason */
-	if((!timeout && have_readtimeout)
-	   || (timeout && read_timeout < timeout->tv_sec)) {
-	    if(!timeout)
-		timeout = &my_timeout;
+	if(have_readtimeout &&
+	   (!timeout || sleepfor < timeout->tv_sec)) {
+	    if(!timeout) timeout = &my_timeout;
 	    timeout->tv_sec = sleepfor;
 	    timeout->tv_usec = 0;
 	}
@@ -1105,6 +1143,7 @@ int prot_select(struct protgroup *readstreams, int extra_read_fd,
 	
 	for(i = 0; i<readstreams->next_element; i++) {
 	    s = readstreams->group[i];
+	    if (!s) continue;
 
 	    if(FD_ISSET(s->fd, &rfds)) {
 		found_fds++;
@@ -1116,6 +1155,8 @@ int prot_select(struct protgroup *readstreams, int extra_read_fd,
 	    } else if(s == timeout_prot && now >= read_timeout) {
 		/* If we timed out, be sure to add the protstream we were
 		 * waiting for, even if it didn't show up */
+		found_fds++;
+
 		if(!retval)
 		    retval = protgroup_new(readstreams->next_element + 1);
 
@@ -1198,16 +1239,41 @@ void protgroup_free(struct protgroup *group)
 
 void protgroup_insert(struct protgroup *group, struct protstream *item) 
 {
+    int i, empty;
+
     assert(group);
     assert(item);
-    /* Double size of the protgroup if we're at our limit */
-    if(group->next_element == group->nalloced) {
+
+    /* See if we already have this protstream */
+    for (i = 0, empty = group->next_element; i < group->next_element; i++) {
+	if (!group->group[i]) empty = i;
+	else if (group->group[i] == item) return;
+    }
+    /* Double size of the protgroup if we're at our limit */ 
+    if (empty == group->next_element &&
+	group->next_element++ == group->nalloced) {
 	group->nalloced *= 2;
 	group->group = xrealloc(group->group,
 				group->nalloced * sizeof(struct protstream *));
     }
-    /* Insert the item on the end of the group */
-    group->group[group->next_element++] = item;
+    /* Insert the item at the empty location */
+    group->group[empty] = item;
+}
+
+void protgroup_delete(struct protgroup *group, struct protstream *item) 
+{
+    int i;
+
+    assert(group);
+    assert(item);
+
+    /* find the protstream */
+    for (i = 0; i < group->next_element; i++) {
+	if (group->group[i] == item) {
+	    group->group[i] = NULL;
+	    return;
+	}
+    }
 }
 
 struct protstream *protgroup_getelement(struct protgroup *group,

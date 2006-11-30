@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: reconstruct.8,v 1.20 2006/06/19 13:01:19 murch Exp $
+.\" $Id: reconstruct.8,v 1.21 2006/11/30 17:11:23 murch Exp $
 .SH NAME
 reconstruct \- reconstruct mailboxes
 .SH SYNOPSIS
@@ -61,6 +61,13 @@ reconstruct \- reconstruct mailboxes
 [
 .B \-f
 ]
+[
+.B \-k  
+]
+[
+.B \-s
+]
+
 .IR mailbox ...
 .br
 .B reconstruct
@@ -129,6 +136,14 @@ prefixes given as arguments.
 Examine the filesystem underneath mailbox, adding all directories with
 a cyrus.header found there as new mailboxes.  Useful for
 restoring mailboxes from backups.
+.TP
+.B \-k
+Preserve the cyrus.expunge file and the corresponding message files 
+instead of deleting them. 
+.TP
+.B \-s
+Adds synchronization records to the log, so the synchronization 
+service can replicate the changes.
 .TP
 .B \-m
 .B NOTE: CURRENTLY UNAVAILABLE

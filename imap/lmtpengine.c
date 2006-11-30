@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.116 2005/11/01 19:47:47 murch Exp $
+ * $Id: lmtpengine.c,v 1.117 2006/11/30 17:11:18 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -801,7 +801,7 @@ static int savemsg(struct clientdata *cd,
 static int process_recipient(char *addr, struct namespace *namespace,
 			     int ignorequota,
 			     int (*verify_user)(const char *, const char *,
-						const char *, long,
+						char *, long,
 						struct auth_state *),
 			     message_data_t *msg)
 {
@@ -1313,7 +1313,7 @@ void lmtpmode(struct lmtp_func *func,
       case 'l':
       case 'L':
 	  if (!strncasecmp(buf, "lhlo ", 5)) {
-	      unsigned int mechcount;
+	      int mechcount;
 	      const char *mechs;
 	      
 	      prot_printf(pout, "250-%s\r\n"
@@ -1553,7 +1553,7 @@ void lmtpmode(struct lmtp_func *func,
 
 		/* SASL and openssl have different ideas
 		   about whether ssf is signed */
-		layerp = &ssf;
+		layerp = (int *) &ssf;
 
 		if (cd.starttls_done == 1) {
 		    prot_printf(pout, "454 4.3.3 %s\r\n", 

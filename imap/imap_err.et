@@ -24,7 +24,7 @@
 #  (412) 268-4387, fax: (412) 268-7395
 #  tech-transfer@andrew.cmu.edu
 # 
-# $Id: imap_err.et,v 1.52 2003/10/22 20:05:11 ken3 Exp $
+# $Id: imap_err.et,v 1.53 2006/11/30 17:11:18 murch Exp $
 
 error_table imap
 
@@ -118,6 +118,9 @@ ec IMAP_ANNOTATION_BADATTRIB,
 ec IMAP_ANNOTATION_BADVALUE,
    "Invalid annotation value"
 
+ec IMAP_BADURL,
+   "Bad URL"
+
 # following used only proxy/db operations
 ec IMAP_BAD_SERVER,
    "Invalid server requested"
@@ -133,6 +136,9 @@ ec IMAP_AGAIN,
 
 ec IMAP_NOT_SINGULAR_ROOT,
    "This mailbox hierarchy does not exist on a single backend server."
+
+ec IMAP_REMOTE_NO_MULTIAPPEND,
+   "The remote server does not support MULTIAPPEND"
 
 # Following only used for internationalization of error messages
 

@@ -1,0 +1,79 @@
+UUID scheme
+===========
+
+The replication system uses cluster wide Globally Unique Message Unique
+Identifies (UUID)s to replicate messages shared by a single instance store,
+to improve the efficiency of the replication engine when moving messages
+between mailboxes and in order to resolve conflicts when the master and
+replica end disagree about the collection of message UIDs in a given
+folder. See ./replication_protocol for details of the replication system.
+
+The UUID system shouldn't be _required_ for replication, but it does make
+the replication system work quite a lot more effectively and reliably.
+
+UUIDs are 96 bit (12 byte) numbers, represented on the wire as 24 hex digits
+(I plan to switch to a 16 digit BASE64 wire representation for efficiency).
+
+UUIDs are stored in network byte ordering (big endian), and the first
+byte in the 12 byte array defines the structure of the remaining 11 bytes.
+At the moment only two UUID schemas are defined.
+
+UUID schema 0  (first byte == 0)
+================================
+
+The only defined value in UUID 0 is the NULL value, where all 12 bytes are
+zero. (any other value with a leading zero byte is illegal). This is the
+NULL UUID, used when UUID values are unavailable.  If a message uses the
+NULL UUID as its value, various optimisatations and sanity checks are
+disabled. The same effect is seen if UUIDs are disabled entirely.
+
+UUID schema 1 (first byte == 1)
+===============================
+
+The big idea here is that the Cyrus master process on each system is the
+natural place to allocate blocks of UUIDs to service process.
+
+Service which expect/need UUIDs use an extra option "provide_uuid=1" in the
+cyrus.conf file: see sample cyrus.conf for an example.
+
+If the first byte of a UUID is binary value 1, the remaining bytes define a
+unique message body/text. The remaining 11 bytes are allocated in blocks of
+2^24 UUIDs by the Cyrus master process with the following structure:
+
+struct uuid_info {
+    unsigned short schema;                /*  8 bits used */  /* 1 */
+    unsigned short machine;               /*  8 bits used */
+    unsigned short timestamp_generation;  /*  8 bits used */
+    unsigned long  master_start_time;     /* 32 bits used */
+    unsigned short child_counter;         /* 16 bits used */
+    unsigned long  count;                 /* 24 bits used */
+};
+
+Service applications have no interest in the first 9 bytes in the 12 byte
+sequence: they just treat them as an opaque prefix to a 24 bit counter,
+which can be converted into a 12 byte sequence or 24 digit hex number.
+
+Schema 1 limits us to 256 machines in a cluster and uses the startup time
+of the master process (a 32 bit timestamp) to create a starting value for a
+counter. To protect us from system clocks running backwards, the number
+corresponding to the master start time is recorded in the file
+"/var/imap/master_uuid" and increments slowly as the child_counter
+field overflows (65536 child processes). The master process will refuse to
+start if the current time is less than the timestamp recorded in the
+master_uuid file ("timestamp_generation" can be used as an emergency escape
+mechanism if the system clock consistently jumps backwards):
+
+In normal operation it is very unlikely that we will consistently allocate
+start 65536 child processes every second, so a buffer of available UUID
+ranges accumulates quickly after the master process starts. After a few
+seconds of operation we will normally be protected against clock slews.
+
+Sample /var/imap/master_uuid structure:
+     schema=1                      # Constant
+     machine=1                     # Should be unique within cluster at
+                                   # given time to prevent conflicts.
+     timestamp_generation=0        # Emergency escape mechanism
+     master_start_time=1062919294  # 32 bit timestamp should be good til 2070
+                                   # (and we can always overflow into
+                                     timestamp_generation or schema then!)
+

@@ -2,7 +2,7 @@
 /*
  * addr.y -- RFC 822 address parser
  * Ken Murchison
- * $Id: addr.y,v 1.11 2003/10/22 18:50:30 rjs3 Exp $
+ * $Id: addr.y,v 1.12 2006/11/30 17:11:24 murch Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -26,6 +26,10 @@ WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
 ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
 OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ******************************************************************/
+
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
 
 #include <stdlib.h>
 #include <string.h>

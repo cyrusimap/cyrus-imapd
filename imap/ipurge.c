@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.25 2004/05/26 15:32:10 rjs3 Exp $
+ * $Id: ipurge.c,v 1.26 2006/11/30 17:11:18 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -103,7 +103,7 @@ int verbose = 1;
 int forceall = 0;
 
 int purge_me(char *, int, int);
-int purge_check(struct mailbox *, void *, char *);
+int purge_check(struct mailbox *, void *, char *, int);
 int usage(char *name);
 void print_stats(mbox_stats_t *stats);
 
@@ -256,11 +256,6 @@ int purge_me(char *name, int matchlen __attribute__((unused)),
   }
   the_box.header_lock_count = 1;
 
-  error = chdir(the_box.path);
-  if (error < 0) {
-    syslog(LOG_ERR, "Couldn't change directory to %s : %m", the_box.path);
-    return error;
-  }
   error = mailbox_open_index(&the_box);
   if (error != 0) {
     mailbox_close(&the_box);
@@ -270,7 +265,7 @@ int purge_me(char *name, int matchlen __attribute__((unused)),
   (void) mailbox_lock_index(&the_box);
   the_box.index_lock_count = 1;
 
-  mailbox_expunge(&the_box, 1, purge_check, &stats);
+  mailbox_expunge(&the_box, purge_check, &stats, EXPUNGE_FORCE);
   mailbox_close(&the_box);
 
   print_stats(&stats);
@@ -287,7 +282,9 @@ void deleteit(bit32 msgsize, mbox_stats_t *stats)
 /* thumbs up routine, checks date & size and returns yes or no for deletion */
 /* 0 = no, 1 = yes */
 int purge_check(struct mailbox *mailbox __attribute__((unused)),
-		void *deciderock, char *buf) {
+		void *deciderock, char *buf,
+		int expunge_flags __attribute__((unused)))
+{
   time_t my_time;
   mbox_stats_t *stats = (mbox_stats_t *) deciderock;
   bit32 senttime;

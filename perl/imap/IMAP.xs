@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: IMAP.xs,v 1.24 2003/11/25 21:28:23 rjs3 Exp $ */
+/* $Id: IMAP.xs,v 1.25 2006/11/30 17:11:23 murch Exp $ */
 
 /*
  * Perl interface to the Cyrus imclient routines.  This enables the
@@ -57,6 +57,7 @@
 #include "xmalloc.h"
 
 #include "cyrperl.h"
+#include "config.h"
 
 typedef struct xscyrus *Cyrus_IMAP;
 
@@ -110,12 +111,13 @@ void imclient_xs_callback_free(struct xsccb *rock)
  * the reply struct becomes a hash (passed as a list).
  */
 
-void imclient_xs_cb(struct imclient *client, struct xsccb *rock,
+void imclient_xs_cb(struct imclient *client, void *prock,
 		    struct imclient_reply *reply)
 {
   dSP;
   dTARG;
   SV* rv;
+  struct xsccb *rock = (struct xsccb *) prock;
 
   /* push our args onto Perl's stack */
   ENTER;
@@ -155,10 +157,11 @@ void imclient_xs_cb(struct imclient *client, struct xsccb *rock,
  * ::_send, which is calling imclient_processoneevent() repeatedly.  (This
  * simulates a non-callback-based invocation, for trivial clients.)
  */
-void imclient_xs_fcmdcb(struct imclient *client, struct xsccb *rock,
+void imclient_xs_fcmdcb(struct imclient *client, void *prock,
 			struct imclient_reply *reply)
 {
   AV *av;
+  struct xsccb *rock = (struct xsccb *) prock;
 
   /* SvREFCNT_dec(SvRV(rock->prock)); */
   SvRV(rock->prock) = (SV *) (av = newAV());
@@ -203,7 +206,7 @@ static int get_password(sasl_conn_t *conn, void *context, int id,
 	ptr = getpass("");
 	text->password = safemalloc(sizeof(sasl_secret_t) + strlen(ptr));
 	text->password->len = strlen(ptr);
-	strncpy(text->password->data, ptr, text->password->len);
+	strncpy((char *) text->password->data, ptr, text->password->len);
   }
   *psecret = text->password;
   return SASL_OK;  
@@ -405,7 +408,7 @@ CODE:
 	    client->password =
 		safemalloc(sizeof(sasl_secret_t) + strlen(password));
 	    client->password->len = strlen(password);
-	    strncpy(client->password->data, password, client->password->len);
+	    strncpy((char *) client->password->data, password, client->password->len);
 	}
 
 	rc = imclient_authenticate(client->imclient, mechlist, service, user,
@@ -416,6 +419,44 @@ CODE:
 	  client->authenticated = 1;
 	  ST(0) = &sv_yes;
 	}
+
+int
+imclient_havetls()
+CODE:
+#ifdef HAVE_SSL
+	RETVAL = 1;
+#else
+	RETVAL = 0;
+#endif /* HAVE_SSL */
+OUTPUT:
+	RETVAL
+
+SV *
+imclient__starttls(client, tls_cert_file, tls_key_file, CAfile, CApath)
+	Cyrus_IMAP client
+	char* tls_cert_file
+	char* tls_key_file
+        char* CAfile
+        char* CApath
+PREINIT:
+	int rc;
+	int tls_layer;
+CODE:
+	ST(0) = sv_newmortal();
+
+	/* If the tls_{cert, key}_file parameters are undef, set to be NULL */
+	if(!SvOK(ST(2))) tls_cert_file = NULL;
+	if(!SvOK(ST(3))) tls_key_file = NULL;
+#ifdef HAVE_SSL
+	rc = imclient_starttls(client->imclient, tls_cert_file, tls_key_file, CAfile, CApath);
+	if (rc)
+	  ST(0) = &sv_no;
+	else {
+	  ST(0) = &sv_yes;
+	}
+#else
+	ST(0) = &sv_no;
+#endif /* HAVE_SSL */
 
 void
 imclient_addcallback(client, ...)
@@ -594,8 +635,8 @@ PPCODE:
 	/* and do it to it */
 	imclient_send(client->imclient,
 		      (SvTRUE(pcb) ?
-		       (void *) imclient_xs_cb :
-		       (void *) imclient_xs_fcmdcb),
+		       imclient_xs_cb :
+		       imclient_xs_fcmdcb),
 		      (void *) rock, xstr);
 	safefree(xstr);
 	/* if there was no Perl callback, spin on events until finished */
@@ -656,30 +697,20 @@ imclient_fromURL(client,url)
 	Cyrus_IMAP client
 	char *url
 PREINIT:
-	SV *out_server, *out_box;
-	char *server_buf, *box_buf;
-	int len;
+	struct imapurl imapurl;
 PPCODE:
-	len = strlen(url);
-	server_buf = safemalloc(len);
-	box_buf = safemalloc(2*len);
+	imapurl_fromURL(&imapurl, url);
 
-	server_buf[0] = '\0';
-	box_buf[0] = '\0';
-	imapurl_fromURL(server_buf, box_buf, url);
-
-	if(!server_buf[0] || !box_buf[0]) {
-		safefree(server_buf);
-		safefree(box_buf);
+	if(!imapurl.server || !imapurl.mailbox) {
+		safefree(imapurl.freeme);
 		XSRETURN_UNDEF;
 	}
 
-	XPUSHs(sv_2mortal(newSVpv(server_buf, 0)));
-	XPUSHs(sv_2mortal(newSVpv(box_buf, 0)));
+	XPUSHs(sv_2mortal(newSVpv(imapurl.server, 0)));
+	XPUSHs(sv_2mortal(newSVpv(imapurl.mailbox, 0)));
 
-	/* newSVpv copies these */
-	safefree(server_buf);
-	safefree(box_buf);
+	/* newSVpv copies the above */
+	safefree(imapurl.freeme);
 	
 	XSRETURN(2);
 
@@ -689,15 +720,17 @@ imclient_toURL(client,server,box)
 	char *server
 	char *box
 PREINIT:
-	SV *out;
 	char *out_buf;
 	int len;
+	struct imapurl imapurl;
 PPCODE:
 	len = strlen(server)+strlen(box);
 	out_buf = safemalloc(4*len);
 
-	out_buf[0] = '\0';
-	imapurl_toURL(out_buf, server, box, NULL);
+	memset(&imapurl, 0, sizeof(struct imapurl));
+	imapurl.server = server;
+	imapurl.mailbox = box;
+	imapurl_toURL(out_buf, &imapurl);
 
 	if(!out_buf[0]) {
 		safefree(out_buf);

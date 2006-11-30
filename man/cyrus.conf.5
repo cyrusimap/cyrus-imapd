@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: cyrus.conf.5,v 1.12 2004/02/09 18:26:57 rjs3 Exp $
+.\" $Id: cyrus.conf.5,v 1.13 2006/11/30 17:11:23 murch Exp $
 .SH NAME
 cyrus.conf \- Cyrus configuration file
 .SH DESCRIPTION
@@ -125,6 +125,11 @@ if possible.
 The number of instances of this service to always have running and
 waiting for a connection (for faster initial response time).  This
 integer value is optional.
+.IP "\fBprovide_uuid=\fR0" 5
+Provide the service the required information for constructing
+universally unique identifiers (UUIDs) for messages.  This option is
+only used for IMAP, NNTP and LMTP services when replicating the
+mailstore between servers.
 .IP "\fBmaxchild=\fR-1" 5
 The maximum number of instances of this service to spawn.  A value of
 -1 means unlimited.  This integer value is optional.

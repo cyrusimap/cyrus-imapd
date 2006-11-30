@@ -1,6 +1,6 @@
 /* imclient.c -- Streaming IMxP client library
  *
- * $Id: imclient.c,v 1.86 2005/10/28 14:45:22 ken3 Exp $
+ * $Id: imclient.c,v 1.87 2006/11/30 17:11:22 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *

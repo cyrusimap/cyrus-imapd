@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service-thread.c,v 1.19 2005/12/01 21:16:07 murch Exp $ */
+/* $Id: service-thread.c,v 1.20 2006/11/30 17:11:23 murch Exp $ */
 #include <config.h>
 
 #include <stdio.h>

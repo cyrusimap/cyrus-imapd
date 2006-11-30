@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.31 2006/05/11 17:43:18 murch Exp $
+ * $Id: mbdump.c,v 1.32 2006/11/30 17:11:19 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -68,6 +68,7 @@
 #include "mailbox.h"
 #include "map.h"
 #include "mbdump.h"
+#include "mboxkey.h"
 #include "mboxlist.h"
 #include "prot.h"
 #include "quota.h"
@@ -143,8 +144,88 @@ static int dump_annotations(const char *mailbox __attribute__((unused)),
     return 0;
 }
 
+static int dump_file(int first, int sync,
+		     struct protstream *pin, struct protstream *pout,
+		     const char *filename, const char *ftag)
+{
+    int filefd;
+    const char *base;
+    unsigned long len;
+    struct stat sbuf;
+    char c;
+
+    /* map file */
+    syslog(LOG_DEBUG, "wanting to dump %s", filename);
+    filefd = open(filename, O_RDONLY, 0666);
+    if (filefd == -1) {
+	syslog(LOG_ERR, "IOERROR: open on %s: %m", filename);
+	return IMAP_SYS_ERROR;
+    }
+    
+    if (fstat(filefd, &sbuf) == -1) {
+	syslog(LOG_ERR, "IOERROR: fstat on %s: %m", filename);
+	fatal("can't fstat message file", EC_OSFILE);
+    }	
+
+    base = NULL;
+    len = 0;
+
+    map_refresh(filefd, 1, &base, &len, sbuf.st_size, filename, NULL);
+
+    close(filefd);
+
+    /* send: name, size, and contents */
+    if (first) {
+	prot_printf(pout, " {%d}\r\n", strlen(ftag));
+
+	if (sync) {
+	    /* synchronize */
+	    c = prot_getc(pin);
+	    eatline(pin, c); /* We eat it no matter what */
+	    if (c != '+') {
+		/* Synchronization Failure, Abort! */
+		syslog(LOG_ERR, "Sync Error: expected '+' got '%c'",c);
+		return IMAP_SERVER_UNAVAILABLE;
+	    }
+	}
+
+	prot_printf(pout, "%s {%lu%s}\r\n",
+		    ftag, len, (sync ? "+" : ""));
+    } else {
+	prot_printf(pout, " {%d%s}\r\n%s {%lu%s}\r\n",
+		    strlen(ftag), (sync ? "+" : ""),
+		    ftag, len, (sync ? "+" : ""));
+    }
+    prot_write(pout, base, len);
+    map_free(&base, &len);
+
+    return 0;
+}
+
+struct data_file {
+    const char *fname;
+    int optional;
+    unsigned long flag;
+};
+
+static const char fname_header[]  = FNAME_HEADER;
+static const char fname_index[]   = FNAME_INDEX;
+static const char fname_cache[]   = FNAME_CACHE;
+static const char fname_expunge[] = FNAME_EXPUNGE_INDEX;
+
+static struct data_file data_files[] = {
+    { fname_header+1,  0, IMAP_ENUM_METAPARTITION_FILES_HEADER },
+    { fname_index+1,   0, IMAP_ENUM_METAPARTITION_FILES_INDEX },
+    { fname_cache+1,   0, IMAP_ENUM_METAPARTITION_FILES_CACHE },
+    { fname_expunge+1, 1, IMAP_ENUM_METAPARTITION_FILES_EXPUNGE },
+    { NULL, 0, 0 }
+};
+
+enum { SEEN_DB = 0, SUBS_DB = 1, MBOXKEY_DB = 2 };
+static int NUM_USER_DATA_FILES = 3;
+
 int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
-		 const char *mbacl, int uid_start,
+		 const char *metapath, const char *mbacl, int uid_start,
 		 struct protstream *pin, struct protstream *pout,
 		 struct auth_state *auth_state)
 {
@@ -152,23 +233,13 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
     int r = 0;
     struct dirent *next = NULL;
     char filename[MAX_MAILBOX_PATH + 1024];
-    int filefd;
-    const char *base;
-    unsigned long len;
     int first = 1;
     struct mailbox mb;
-    struct stat sbuf;
-    char c;
     int i;
-    const char *data_files[] = { "cyrus.header",
-				 "cyrus.cache",
-				 "cyrus.index",
-				 NULL 
-                               };
+    struct data_file *df;
+
     /* non-null userid means we are moving the user */
     const char *userid = NULL;
-    enum { SEEN_DB = 0, SUBS_DB = 1 };
-    char *user_data_files[3];
     int domainlen = 0;
     char *p = NULL, userbuf[81];
     
@@ -177,19 +248,16 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
     if (config_virtdomains && (p = strchr(mbname, '!')))
 	domainlen = p - mbname + 1; /* include separator */
 
-    if(!strncmp(mbname+domainlen, "user.", 5) &&
-       !strchr(mbname+domainlen+5, '.')) {
+    if (!strncmp(mbname+domainlen, "user.", 5) &&
+	!strchr(mbname+domainlen+5, '.')) {
 	strcpy(userbuf, mbname+domainlen+5);
 	if (domainlen)
 	    sprintf(userbuf+strlen(userbuf), "@%.*s", domainlen-1, mbname);
 	userid = userbuf;
-	memset(user_data_files, 0, sizeof(user_data_files));
-	user_data_files[SEEN_DB] = seen_getpath(userid);
-	user_data_files[SUBS_DB] = mboxlist_hash_usersubs(userid);
     }
 
     mbdir = opendir(mbpath);
-    if(!mbdir && errno == EACCES) {
+    if (!mbdir && errno == EACCES) {
 	syslog(LOG_ERR,
 	       "could not dump mailbox in %s (permission denied)", mbpath);
 	return IMAP_PERMISSION_DENIED;
@@ -199,8 +267,8 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
 	return IMAP_SYS_ERROR;
     }
 
-    r = mailbox_open_locked(mbname, mbpath, mbacl, auth_state, &mb, 0);
-    if(r) {
+    r = mailbox_open_locked(mbname, mbpath, metapath, mbacl, auth_state, &mb, 0);
+    if (r) {
 	closedir(mbdir);
 	return r;
     }
@@ -208,9 +276,7 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
     /* after this point we have to both close the directory and unlock
      * the mailbox */
 
-    /* xxx check to ensure we have the cyrus.* files, but we send those last */
-
-    if(tag) prot_printf(pout, "%s DUMP ", tag);
+    if (tag) prot_printf(pout, "%s DUMP ", tag);
     prot_putc('(',pout);
 
     /* The first member is either a number (if it is a quota root), or NIL
@@ -218,206 +284,121 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
     {
 	struct quota quota;
 
-	quota.root = (char *)mbname; /* xxx */
+	quota.root = (char *) mbname; /* xxx */
 
 	r = quota_read(&quota, NULL, 0);
-	if(r) {
-	    prot_printf(pout, "NIL ");
-	    if(r == IMAP_QUOTAROOT_NONEXISTENT) r = 0;
-	    goto dump_files; 
+	if (!r) {
+	    prot_printf(pout, "%d", quota.limit);
+	} else {
+	    prot_printf(pout, "NIL");
+	    if (r == IMAP_QUOTAROOT_NONEXISTENT) r = 0;
 	}
-	
-	prot_printf(pout, "%d ", quota.limit);
     }
 
- dump_files:
-    
-    while((next = readdir(mbdir)) != NULL) {
+    /* Dump cyrus data files */
+    for (df = data_files; df->fname; df++) {
+	const char *path;
+
+	/* construct path/filename */
+	path = (metapath && (config_metapartition_files & df->flag)) ?
+	    metapath : mbpath;
+	strlcpy(filename, path, sizeof(filename));
+	strlcat(filename, "/", sizeof(filename));
+	strlcat(filename, df->fname, sizeof(filename));
+	
+	r = dump_file(first, !tag, pin, pout, filename, df->fname);
+	if (r) {
+	    /* If an optional file doesn't exist, skip it */
+	    if (df->optional && (r == IMAP_SYS_ERROR) && (errno == ENOENT)) {
+		r = 0;
+		continue;
+	    }
+
+	    goto done;
+	}
+
+	first = 0;
+    }
+
+    /* Dump message files */
+    while ((next = readdir(mbdir)) != NULL) {
 	char *name = next->d_name;  /* Alias */
 	char *p = name;
 
-	/* special case for '.'
-	   (well, it gets '..' too) */
-	if(name[0] == '.') continue;
+	/* special case for '.' (well, it gets '..' too) */
+	if (name[0] == '.') continue;
 
 	/* skip non-message files */
-	while(*p && isdigit((int)(*p))) p++;
-	if(p[0] != '.' || p[1] != '\0') continue;
+	while (*p && isdigit((int)(*p))) p++;
+	if (p[0] != '.' || p[1] != '\0') continue;
 
 	/* ensure (number) is >= our target uid */
-	if(atoi(name) < uid_start) continue;
+	if (atoi(name) < uid_start) continue;
 
-	/* map file */
-	snprintf(filename,sizeof(filename),"%s/%s",mbpath,name);
+	/* construct path/filename */
+	snprintf(filename, sizeof(filename), "%s/%s", mbpath, name);
 
-	filefd = open(filename, O_RDONLY, 0666);
-	if (filefd == -1) {
-	    syslog(LOG_ERR, "IOERROR: open on %s: %m", filename);
-	    r = IMAP_SYS_ERROR;
-	    goto done;
-	}
-    
-	if (fstat(filefd, &sbuf) == -1) {
-	    syslog(LOG_ERR, "IOERROR: fstat on %s: %m", filename);
-	    fatal("can't fstat message file", EC_OSFILE);
-	}	
-
-	base = NULL;
-	len = 0;
-
-	map_refresh(filefd, 1, &base, &len, sbuf.st_size, filename, NULL);
-
-	close(filefd);
-
-	/* send filename, size, and contents */
-	if(first) {
-	    prot_printf(pout, "{%d}\r\n",
-			strlen(name));
-
-	    if(!tag) {
-		/* synchronize */
-		c = prot_getc(pin);
-		eatline(pin, c); /* We eat it no matter what */
-		if(c != '+') {
-		    /* Synchronization Failure, Abort! */
-		    syslog(LOG_ERR, "Sync Error: expected '+' got '%c'",c);
-		    r = IMAP_SERVER_UNAVAILABLE;
-		    goto done;
-		}
-	    }
-
-	    prot_printf(pout, "%s {%lu%s}\r\n",
-			name, len,
-			(!tag ? "+" : ""));
-
-	    first = 0;
-	} else {
-	    prot_printf(pout, " {%d%s}\r\n%s {%lu%s}\r\n",
-			strlen(name),
-			(!tag ? "+" : ""),
-			name, len,
-			(!tag ? "+" : ""));
-	}
-	prot_write(pout, base, len);
-	map_free(&base, &len);
+	r = dump_file(0, !tag, pin, pout, filename, name);
+	if (r) goto done;
     }
 
-    for(i=0;data_files[i];i++) {
-	/* map file */
-	snprintf(filename,sizeof(filename),"%s/%s",mbpath,data_files[i]);
+    closedir(mbdir);
+    mbdir = NULL;
 
-	filefd = open(filename, O_RDONLY, 0666);
-	if (filefd == -1) {
-	    syslog(LOG_ERR, "IOERROR: open on %s: %m", filename);
-	    r = IMAP_SYS_ERROR;
-	    goto done;
-	}
-    
-	if (fstat(filefd, &sbuf) == -1) {
-	    syslog(LOG_ERR, "IOERROR: fstat on %s: %m", filename);
-	    fatal("can't fstat message file", EC_OSFILE);
-	}	
-
-	base = NULL;
-	len = 0;
-
-	map_refresh(filefd, 1, &base, &len, sbuf.st_size, filename, NULL);
-
-	close(filefd);
-
-	/* send filename, size, and contents */
-	if(first) {
-	    prot_printf(pout, "{%d}\r\n",
-			strlen(data_files[i]));
-	    
-	    if(!tag) {
-		/* synchronize */
-		c = prot_getc(pin);
-		if(c != '+') {
-		    /* Synchronization Failure, Abort! */
-		    r = IMAP_SERVER_UNAVAILABLE;
-		    goto done;
-		} else {
-		    eatline(pin, c);
-		}
-	    }
-
-	    prot_printf(pout, "%s {%lu%s}\r\n",
-			data_files[i], len,
-			(!tag ? "+" : ""));
-	    first = 0;
-	} else {
-	    prot_printf(pout, " {%d%s}\r\n%s {%lu%s}\r\n",
-			strlen(data_files[i]),
-			(!tag ? "+" : ""),
-			data_files[i], len,
-			(!tag ? "+" : ""));
-	}
-	prot_write(pout, base, len);
-	map_free(&base, &len);
-    }
-
-    /* now dump annotations */
+    /* Dump annotations */
     {
 	struct dump_annotation_rock actx;
 	actx.tag = tag;
 	actx.pout = pout;
-	annotatemore_findall(mbname,"*",dump_annotations, (void *)&actx, NULL);
+	annotatemore_findall(mbname, "*", dump_annotations,
+			     (void *) &actx, NULL);
     }
 
-    if(userid) {
+    /* Dump user files */
+    if (userid) {
 	char sieve_path[MAX_MAILBOX_PATH];
 	int sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
+	char *fname, *ftag;
 
-	/* need to transfer seen, subs, and sieve files */
-	for(i=0;i<3;i++) {
-	    if(!user_data_files[i]) continue;
-	    
-	    /* map file */
-	    filefd = open(user_data_files[i], O_RDONLY, 0666);
-	    if (filefd == -1) {
-		syslog(LOG_ERR, "IOERROR: open on %s: %m (continuing)",
-		       user_data_files[i]);
-		/* but it is allowed to not exist, so... */
-		continue;
+	/* Dump seen and subs files */
+	for (i = 0; i< NUM_USER_DATA_FILES; i++) {
+
+	    /* construct path/filename */
+	    switch (i) {
+	    case SEEN_DB:
+		fname = seen_getpath(userid);
+		ftag = "SEEN";
+		break;
+	    case SUBS_DB:
+		fname = mboxlist_hash_usersubs(userid);
+		ftag = "SUBS";
+		break;
+	    case MBOXKEY_DB:
+		fname = mboxkey_getpath(userid);
+		ftag = "MBOXKEY";
+		break;
+	    default:
+		fatal("unknown user data file", EC_OSFILE);
 	    }
-    
-	    if (fstat(filefd, &sbuf) == -1) {
-		syslog(LOG_ERR, "IOERROR: fstat on %s: %m",
-		       user_data_files[i]);
-		fatal("can't fstat message file", EC_OSFILE);
-	    }	
-	    
-	    base = NULL;
-	    len = 0;
-	    
-	    map_refresh(filefd, 1, &base, &len, sbuf.st_size,
-			user_data_files[i], NULL);
-	    
-	    close(filefd);
-	    
-	    /* send user data file type, size, and contents */
-	    /* No need to test synchronization, all mailboxes should have
-	     * sent a file by this point! */
-	    if(i == SEEN_DB) prot_printf(pout, " {4%s}\r\nSEEN",
-					 (!tag ? "+" : ""));
-	    else if(i == SUBS_DB) prot_printf(pout, " {4%s}\r\nSUBS",
-					      (!tag ? "+" : ""));
-	    else fatal("unknown user_data_file", EC_OSFILE);
-	    prot_printf(pout, " {%lu%s}\r\n",
-			len, (!tag ? "+" : ""));
-	    prot_write(pout, base, len);
-	    map_free(&base, &len);
+
+	    r = dump_file(0, !tag, pin, pout, fname, ftag);
+	    free(fname);
+	    if (r) {
+		/* If an optional file doesn't exist, skip it */
+		if (errno == ENOENT) {
+		    r = 0;
+		    continue;
+		}
+
+		goto done;
+	    }
 	}
 
-	/* xxx can't use home directories currently
+	/* Dump sieve files
+	 *
+	 * xxx can't use home directories currently
 	 * (it makes almost no sense in the conext of a murder) */
-	if(!sieve_usehomedir) {
-	    char ext_fname[2048];
-	    
-	    if(mbdir) closedir(mbdir);
-	    mbdir = NULL;
-
+	if (!sieve_usehomedir) {
 	    if (domainlen) {
 		*p = '\0'; /* separate domain!mboxname */
 		snprintf(sieve_path, sizeof(sieve_path), "%s%s%c/%s/%c/%s",
@@ -431,83 +412,62 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
 			 config_getstring(IMAPOPT_SIEVEDIR),
 			 (char) dir_hash_c(userid), userid);
 	    }
-	    mbdir=opendir(sieve_path);
+	    mbdir = opendir(sieve_path);
+
+	    if (!mbdir) {
+		syslog(LOG_ERR,
+		       "could not dump sieve scripts in %s: %m)", mbpath);
+	    } else {
+		char tag_fname[2048];
 	    
-	    if(mbdir) {
 		while((next = readdir(mbdir)) != NULL) {
 		    int length=strlen(next->d_name);
 		    /* 7 == strlen(".script"); 3 == strlen(".bc") */
-		    if ((length >= 7 && !strcmp(next->d_name + (length - 7), ".script")) ||
-			(length >= 3 && !strcmp(next->d_name + (length - 3), ".bc")))
+		    if ((length >= 7 &&
+			 !strcmp(next->d_name + (length - 7), ".script")) ||
+			(length >= 3 &&
+			 !strcmp(next->d_name + (length - 3), ".bc")))
 		    {
-			    /* map file */
-			    snprintf(filename, sizeof(filename), "%s/%s",
-				     sieve_path, next->d_name);
-			    syslog(LOG_DEBUG, "wanting to dump %s", filename);
-			    filefd = open(filename, O_RDONLY, 0666);
-			    if (filefd == -1) {
-				/* non-fatal */
-				syslog(LOG_ERR,
-				       "IOERROR: open on %s: %m", filename);
-				continue;
-			    }
+			/* create tagged name */
+			if(sieve_isactive(sieve_path, next->d_name)) {
+			    snprintf(tag_fname, sizeof(tag_fname),
+				     "SIEVED-%s", next->d_name);
+			} else {
+			    snprintf(tag_fname, sizeof(tag_fname),
+				     "SIEVE-%s", next->d_name);
+			}
 
-			    if (fstat(filefd, &sbuf) == -1) {
-				syslog(LOG_ERR,
-				       "IOERROR: fstat on %s: %m", filename);
-				fatal("can't fstat message file", EC_OSFILE);
-			    }	
-			    
-			    base = NULL;
-			    len = 0;
-			    
-			    map_refresh(filefd, 1, &base, &len, sbuf.st_size,
-					filename, NULL);
-
-			    close(filefd);
-
-			    /* send filename w/tag + contents */
-			    if(sieve_isactive(sieve_path, next->d_name)) {
-				snprintf(ext_fname, sizeof(ext_fname),
-					 "SIEVED-%s", next->d_name);
-			    } else {
-				snprintf(ext_fname, sizeof(ext_fname),
-					 "SIEVE-%s", next->d_name);
-			    }
-			    prot_printf(pout, " {%d%s}\r\n%s {%lu%s}\r\n",
-					strlen(ext_fname), 
-					(!tag ? "+" : ""),
-					ext_fname,
-					len,
-					(!tag ? "+" : ""));
-			    prot_write(pout, base, len);
-			    map_free(&base, &len);
+			/* dump file */
+			r = dump_file(0, !tag, pin, pout, filename, tag_fname);
+			if (r) goto done;
 		    }
 		}
+
+		closedir(mbdir);
+		mbdir = NULL;
 	    }
-	}
+	} /* end if !sieve_userhomedir */
 	    
-	/* transmit sieve script(s) */
-	/* free strings for user_data_files */
-    } /* end if user */
+    } /* end if userid */
 
     prot_printf(pout,")\r\n");
  done:
     prot_flush(pout);
 
     mailbox_close(&mb);
-    if(mbdir) closedir(mbdir);
+    if (mbdir) closedir(mbdir);
 
     return r;
 }
 
-int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
+int undump_mailbox(const char *mbname, const char *mbpath,
+		   const char *metapath, const char *mbacl,
 		   struct protstream *pin, struct protstream *pout,
 		   struct auth_state *auth_state)
 {
     struct buf file, data;
     char c;
-    int quotaused = 0;
+    uquota_t quotaused = 0;
     int r = 0;
     int curfile = -1;
     const char *userid = NULL;
@@ -579,12 +539,12 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
 	goto done;
     }
     
-    r = mailbox_open_locked(mbname, mbpath, mbacl, auth_state, &mb, 0);
+    r = mailbox_open_locked(mbname, mbpath, metapath, mbacl, auth_state, &mb, 0);
     if(r) goto done;
 
     while(1) {
 	char fnamebuf[MAX_MAILBOX_PATH + 1024];
-	char *seen_file = NULL;
+	char *seen_file = NULL, *mboxkey_file = NULL;
 	int isnowait, sawdigit;
 	unsigned long size;
 	unsigned long cutoff = ULONG_MAX / 10;
@@ -726,6 +686,10 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
 	    seen_file = seen_getpath(userid);
 
 	    snprintf(fnamebuf,sizeof(fnamebuf),"%s.%d",seen_file,getpid());
+	} else if (userid && !strcmp(file.s, "MBOXKEY")) {
+	    mboxkey_file = mboxkey_getpath(userid);
+
+	    snprintf(fnamebuf,sizeof(fnamebuf),"%s.%d",mboxkey_file,getpid());
 	} else if (userid && !strncmp(file.s, "SIEVE", 5)) {
 	    int isdefault = !strncmp(file.s, "SIEVED", 6);
 	    char *realname;
@@ -768,8 +732,16 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
 		}
 	    }
 	} else {
+	    struct data_file *df;
+	    const char *path;
+
+	    /* see if its one of our datafiles */
+	    for (df = data_files; df->fname && strcmp(df->fname, file.s); df++);
+	    path = df->fname && metapath &&
+		(config_metapartition_files & df->flag) ?
+		metapath : mbpath;
 	    if(snprintf(fnamebuf, sizeof(fnamebuf),
-			 "%s/%s", mbpath, file.s) == -1) {
+			 "%s/%s", path, file.s) == -1) {
 		r = IMAP_PROTOCOL_ERROR;
 		goto done;
 	    }
@@ -821,6 +793,14 @@ int undump_mailbox(const char *mbname, const char *mbpath, const char *mbacl,
 	    seen_merge(fnamebuf, seen_file);
 	    free(seen_file);
 	    seen_file = NULL;
+
+	    unlink(fnamebuf);
+	}
+	/* we were operating on the seen state, so merge it and cleanup */
+	else if(mboxkey_file) {
+	    mboxkey_merge(fnamebuf, mboxkey_file);
+	    free(mboxkey_file);
+	    mboxkey_file = NULL;
 
 	    unlink(fnamebuf);
 	}

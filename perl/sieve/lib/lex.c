@@ -1,6 +1,6 @@
 /* lex.c -- lexers for command line script installer
  * Tim Martin
- * $Id: lex.c,v 1.7 2003/02/13 20:15:53 rjs3 Exp $
+ * $Id: lex.c,v 1.8 2006/11/30 17:11:24 murch Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -288,11 +288,7 @@ int yylex(lexstate_t * lvalp, void * client)
       break;
     }
 
-
-
   } /* while (1) */
 
-  return 0;
+  /* never reached */
 }
-
-

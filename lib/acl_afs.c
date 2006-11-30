@@ -8,7 +8,7 @@
  *
  */
 /* 
- $Id: acl_afs.c,v 1.25 2006/04/13 18:34:52 murch Exp $
+ $Id: acl_afs.c,v 1.26 2006/11/30 17:11:22 murch Exp $
  
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *

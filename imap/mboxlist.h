@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  * 
- * $Id: mboxlist.h,v 1.39 2004/03/17 18:07:49 ken3 Exp $
+ * $Id: mboxlist.h,v 1.40 2006/11/30 17:11:19 murch Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -80,13 +80,16 @@ struct mbox_entry {
     char acls[1];
 };
 
+/* Convert a partition into a path */
+int mboxlist_getpath(const char *partition, const char *name, 
+		     char **pathp, char **mpathp);
+
 /* Lookup 'name' in the mailbox list. */
-int mboxlist_lookup(const char *name, char **pathp, char **aclp,
-		    struct txn **tid);
+int mboxlist_lookup(const char *name, char **aclp, struct txn **tid);
 
 /* Lookup 'name' and get more detail */
-int mboxlist_detail(const char *name, int *typep, char **pathp, char **partp,
-		    char **aclp, struct txn **tid);
+int mboxlist_detail(const char *name, int *typep, char **pathp, char **mpathp,
+		    char **partp, char **aclp, struct txn **tid);
 
 /* insert/delete stub entries */
 int mboxlist_insertremote(const char *name, int mbtype, const char *host,
@@ -103,7 +106,8 @@ int mboxlist_update(char *name, int flags, const char *part, const char *acl,
 int mboxlist_createmailboxcheck(char *name, int mbtype, char *partition, 
 				int isadmin, char *userid, 
 				struct auth_state *auth_state, 
-				char **newacl, char **newpartition);
+				char **newacl, char **newpartition,
+				int forceuser);
 
 /* create mailbox */
 /* localonly creates the local mailbox without touching mupdate */
@@ -127,12 +131,15 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 /* Rename/move a mailbox (hierarchical) */
 int mboxlist_renamemailbox(char *oldname, char *newname, char *partition, 
 			   int isadmin, char *userid, 
-			   struct auth_state *auth_state);
+			   struct auth_state *auth_state, int forceuser);
 
 /* change ACL */
 int mboxlist_setacl(const char *name, const char *identifier,
 		    const char *rights, int isadmin, 
 		    const char *userid, struct auth_state *auth_state);
+
+/* Change all ACLs on mailbox */
+int mboxlist_sync_setacls(char *name, char *acl);
 
 /* Find all mailboxes that match 'pattern'. */
 int mboxlist_findall(struct namespace *namespace,

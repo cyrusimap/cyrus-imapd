@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.h,v 1.12 2006/01/12 22:17:57 murch Exp $ */
+/* $Id: backend.h,v 1.13 2006/11/30 17:11:17 murch Exp $ */
 
 #ifndef _INCLUDED_BACKEND_H
 #define _INCLUDED_BACKEND_H
@@ -57,11 +57,16 @@ struct backend {
     struct sockaddr_storage addr;
     int sock;
 
+    /* protocol we're speaking */
+    struct protocol_t *prot;
+
     /* service-specific context */
     void *context;
 
-    /* only used by proxyd and nntpd */
-    struct prot_waitevent *timeout;
+    /* only used by imapd and nntpd */
+    struct protstream *clientin; /* input stream from client to proxy */
+    struct backend **current, **inbox; /* pointers to current/inbox be ptrs */
+    struct prot_waitevent *timeout; /* event for idle timeout */
 
     sasl_conn_t *saslconn;
 #ifdef HAVE_SSL
@@ -80,9 +85,9 @@ struct backend {
  * cache on success (and returns NULL on failure, but leaves cache alone) */
 struct backend *backend_connect(struct backend *cache, const char *server,
 				struct protocol_t *prot, const char *userid,
-				const char **auth_status);
-int backend_ping(struct backend *s, struct protocol_t *prot);
-void backend_disconnect(struct backend *s, struct protocol_t *prot);
+				sasl_callback_t *cb, const char **auth_status);
+int backend_ping(struct backend *s);
+void backend_disconnect(struct backend *s);
 
 #define CAPA(s, c) ((s)->capability & (c))
 

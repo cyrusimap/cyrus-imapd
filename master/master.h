@@ -1,10 +1,12 @@
 #ifndef HAVE_MASTER_H
 #define HAVE_MASTER_H
 
-/* $Id: master.h,v 1.13 2004/12/17 16:32:24 ken3 Exp $ */
+/* $Id: master.h,v 1.14 2006/11/30 17:11:23 murch Exp $ */
 
 #include <config.h>
 #include <sys/resource.h> /* for rlim_t */
+
+#include "libconfig.h" /* for config_dir and IMAPOPT_SYNC_MACHINEID */
 
 /* needed for possible SNMP monitoring */
 struct service {
@@ -13,6 +15,7 @@ struct service {
     char *proto;		/* protocol to accept */
     char *const *exec;		/* command (with args) to execute */
     int babysit;		/* babysit this service? */
+    int provide_uuid;           /* Service assigns UUIDS */
     
     /* multiple address family support */
     int associate;		/* are we primary or additional instance? */

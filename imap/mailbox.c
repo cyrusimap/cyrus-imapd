@@ -1,5 +1,5 @@
 /* mailbox.c -- Mailbox manipulation routines
- * $Id: mailbox.c,v 1.162 2006/08/04 14:40:54 murch Exp $
+ *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
-
+ * $Id: mailbox.c,v 1.163 2006/11/30 17:11:19 murch Exp $
  *
  */
 
@@ -89,10 +89,87 @@ static int mailbox_doing_reconstruct = 0;
 #define zeromailbox(m) { memset(&m, 0, sizeof(struct mailbox)); \
                          (m).header_fd = -1; \
                          (m).index_fd = -1; \
-                         (m).cache_fd = -1; }
+                         (m).cache_fd = -1; \
+                         (m).examining = 1; }
 
-static int mailbox_calculate_flagcounts(struct mailbox *mailbox);
 static int mailbox_upgrade_index(struct mailbox *mailbox);
+
+struct fnamebuf {
+    char buf[MAX_MAILBOX_PATH+1];
+    char *tail;
+    size_t len;
+};
+
+struct fnamepath {
+    struct fnamebuf data;
+    struct fnamebuf meta;
+};
+
+/*
+ * Build the filename of the given metadata file specified by 'metaflag'.
+ *
+ * On success, returns a pointer to the correct fnamebuf.
+ * On failure (buffer overflow), returns NULL.
+ *
+ * A metaflag of 0 (zero) initializes the buffers.
+ */
+static struct fnamebuf *mailbox_meta_get_fname(struct fnamepath *fpath,
+					       struct mailbox *mailbox,
+					       unsigned long metaflag)
+{
+    const char *filename = NULL;
+    struct fnamebuf *fname;
+    char *path;
+    size_t n;
+
+    /* select the filename, based on the metadata flag */
+    switch (metaflag) {
+    case 0: /* initialize */
+	fpath->data.len = fpath->meta.len = 0;
+	filename = "";
+	break;
+    case IMAP_ENUM_METAPARTITION_FILES_HEADER:
+	filename = FNAME_HEADER;
+	break;
+    case IMAP_ENUM_METAPARTITION_FILES_INDEX:
+	filename = FNAME_INDEX;
+	break;
+    case IMAP_ENUM_METAPARTITION_FILES_CACHE:
+	filename = FNAME_CACHE;
+	break;
+    case IMAP_ENUM_METAPARTITION_FILES_EXPUNGE:
+	filename = FNAME_EXPUNGE_INDEX;
+	break;
+    case IMAP_ENUM_METAPARTITION_FILES_SQUAT:
+	filename = FNAME_SQUAT_INDEX;
+	break;
+    }
+
+    /* select the path and buffer, based on the metadata flag */
+    if (mailbox->mpath && (config_metapartition_files & metaflag)) {
+	fname = &fpath->meta;
+	path = mailbox->mpath;
+    }
+    else {
+	fname = &fpath->data;
+	path = mailbox->path;
+    }
+
+    if (!fname->len) {
+	/* first time using the buffer, add the path */
+	n = strlcpy(fname->buf, path, sizeof(fname->buf));
+	if (n >= sizeof(fname->buf)) return NULL; /* overflow */
+
+	fname->len = strlen(fname->buf);
+	fname->tail = fname->buf + fname->len;
+    }
+
+    /* append the filename to the path */
+    n = strlcpy(fname->tail, filename, sizeof(fname->buf) - fname->len);
+    if (n >= (sizeof(fname->buf) - fname->len)) return NULL; /* overflow */
+
+    return fname;
+}
 
 /*
  * Names of the headers we cache in the cyrus.cache file.
@@ -218,6 +295,29 @@ int mailbox_cached_header_inline(const char *text)
     return BIT32_MAX;
 }
 
+unsigned long
+mailbox_cache_size(struct mailbox *mailbox, unsigned msgno)
+{
+    const char *p;
+    unsigned long cache_offset;
+    unsigned int cache_ent;
+    const char *cacheitem, *cacheitembegin;
+
+    assert((msgno > 0) && (msgno <= mailbox->exists));
+
+    p = (mailbox->index_base + mailbox->start_offset +
+         ((msgno-1) * mailbox->record_size));
+    
+    cache_offset = ntohl(*((bit32 *)(p+OFFSET_CACHE_OFFSET)));
+
+    /* Compute size of this record */
+    cacheitembegin = cacheitem = mailbox->cache_base + cache_offset;
+    for (cache_ent = 0; cache_ent < NUM_CACHE_FIELDS; cache_ent++) {
+        cacheitem = CACHE_ITEM_NEXT(cacheitem);
+    }
+    return(cacheitem - cacheitembegin);
+}
+
 /* function to be used for notification of mailbox changes/updates */
 static mailbox_notifyproc_t *updatenotifier = NULL;
 
@@ -227,6 +327,14 @@ static mailbox_notifyproc_t *updatenotifier = NULL;
 void mailbox_set_updatenotifier(mailbox_notifyproc_t *notifyproc)
 {
     updatenotifier = notifyproc;
+}
+
+/*
+ * Get the updatenotifier function
+ */
+mailbox_notifyproc_t *mailbox_get_updatenotifier(void)
+{
+    return updatenotifier;
 }
 
 /*
@@ -279,33 +387,14 @@ void mailbox_message_get_fname(struct mailbox *mailbox, unsigned long uid,
  * Maps in the content for the message with UID 'uid' in 'mailbox'.
  * Returns map in 'basep' and 'lenp'
  */
-int mailbox_map_message(struct mailbox *mailbox,
-			int iscurrentdir,
-			unsigned long uid,
-			const char **basep,
-			unsigned long *lenp)
+int mailbox_map_message(struct mailbox *mailbox, unsigned long uid,
+			const char **basep, unsigned long *lenp)
 {
     int msgfd;
     char buf[4096];
-    char *p = buf;
     struct stat sbuf;
 
-    buf[0]='\0';
-
-    if (!iscurrentdir) {
-	/* 26 is max # of digits in a long + strlen("/") + strlen(".") */
-	if(strlen(mailbox->path) + 25 >= sizeof(buf)) {
-	    syslog(LOG_ERR, "IOERROR: Path too long while mapping message: %s",
-		   mailbox->path);
-	    fatal("path too long for message file", EC_OSFILE);
-	}
-
-	strlcpy(buf, mailbox->path, sizeof(buf));
-	p = buf + strlen(buf);
-	*p++ = '/';
-    }
-
-    snprintf(p, sizeof(buf) - strlen(buf), "%lu.", uid);
+    snprintf(buf, sizeof(buf), "%s/%lu.", mailbox->path,uid);
 
     msgfd = open(buf, O_RDONLY, 0666);
     if (msgfd == -1) return errno;
@@ -343,28 +432,44 @@ mailbox_reconstructmode()
 
 /* stat a mailbox's control files.  returns a bitmask that sets
  * 0x1 if the header fialed, 0x2 if the index failed, and 0x4 if the cache failed */
-int mailbox_stat(const char *mbpath,
+int mailbox_stat(const char *mbpath, const char *metapath,
 		 struct stat *header, struct stat *index, struct stat *cache) 
 {
-    char fnamebuf[MAX_MAILBOX_PATH];
+    char fnamebuf[MAX_MAILBOX_PATH+1];
+    const char *path;
     int r = 0, ret = 0;
     
     assert(mbpath && (header || index));
     
     if(header) {
-	snprintf(fnamebuf, sizeof(fnamebuf), "%s/cyrus.header", mbpath);
+	path = (metapath &&
+		(config_metapartition_files &
+		 IMAP_ENUM_METAPARTITION_FILES_HEADER)) ?
+	    metapath : mbpath;
+	strlcpy(fnamebuf, path, sizeof(fnamebuf));
+	strlcat(fnamebuf, FNAME_HEADER, sizeof(fnamebuf));
 	r = stat(fnamebuf, header);
 	if(r) ret |= 0x1;
     }
     
     if(!r && index) {
-	snprintf(fnamebuf, sizeof(fnamebuf), "%s/cyrus.index", mbpath);
+	path = (metapath &&
+		(config_metapartition_files &
+		 IMAP_ENUM_METAPARTITION_FILES_INDEX)) ?
+	    metapath : mbpath;
+	strlcpy(fnamebuf, path, sizeof(fnamebuf));
+	strlcat(fnamebuf, FNAME_INDEX, sizeof(fnamebuf));
 	r = stat(fnamebuf, index);
 	if(r) ret |= 0x2;
     }
 
     if(!r && cache) {
-	snprintf(fnamebuf, sizeof(fnamebuf), "%s/cyrus.cache", mbpath);
+	path = (metapath &&
+		(config_metapartition_files &
+		 IMAP_ENUM_METAPARTITION_FILES_CACHE)) ?
+	    metapath : mbpath;
+	strlcpy(fnamebuf, path, sizeof(fnamebuf));
+	strlcat(fnamebuf, FNAME_CACHE, sizeof(fnamebuf));
 	r = stat(fnamebuf, cache);
 	if(r) ret |= 0x4;
     }
@@ -381,13 +486,14 @@ int mailbox_open_header(const char *name,
 			struct auth_state *auth_state,
 			struct mailbox *mailbox)
 {
-    char *path, *acl;
+    char *path, *mpath, *acl;
     int r;
 
-    r = mboxlist_lookup(name, &path, &acl, NULL);
+    r = mboxlist_detail(name, NULL, &path, &mpath, NULL, &acl, NULL);
     if (r) return r;
 
-    return mailbox_open_header_path(name, path, acl, auth_state, mailbox, 0);
+    return mailbox_open_header_path(name, path, mpath,
+				    acl, auth_state, mailbox, 0);
 }
 
 /*
@@ -397,6 +503,7 @@ int mailbox_open_header(const char *name,
  */
 int mailbox_open_header_path(const char *name,
 			     const char *path,
+			     const char *mpath,
 			     const char *acl,
 			     struct auth_state *auth_state,
 			     struct mailbox *mailbox,
@@ -408,7 +515,13 @@ int mailbox_open_header_path(const char *name,
 
     zeromailbox(*mailbox);
 
-    strlcpy(fnamebuf, path, sizeof(fnamebuf));
+    if (mpath &&
+	(config_metapartition_files & IMAP_ENUM_METAPARTITION_FILES_HEADER)) {
+	strlcpy(fnamebuf, mpath, sizeof(fnamebuf));
+    }
+    else
+	strlcpy(fnamebuf, path, sizeof(fnamebuf));
+
     strlcat(fnamebuf, FNAME_HEADER, sizeof(fnamebuf));
     mailbox->header_fd = open(fnamebuf, O_RDWR, 0);
     
@@ -431,6 +544,7 @@ int mailbox_open_header_path(const char *name,
 
     mailbox->name = xstrdup(name);
     mailbox->path = xstrdup(path);
+    if (mpath) mailbox->mpath = xstrdup(mpath);
 
     /* Note that the header does have the ACL information, but it is only
      * a backup, and the mboxlist data is considered authoritative, so
@@ -452,6 +566,7 @@ int mailbox_open_header_path(const char *name,
 
 int mailbox_open_locked(const char *mbname,
 			const char *mbpath,
+			const char *metapath,
 			const char *mbacl,
 			struct auth_state *auth_state,
 			struct mailbox *mb,
@@ -459,7 +574,7 @@ int mailbox_open_locked(const char *mbname,
 {
     int r;
     
-    r = mailbox_open_header_path(mbname, mbpath, mbacl, auth_state,
+    r = mailbox_open_header_path(mbname, mbpath, metapath, mbacl, auth_state,
 				 mb, suppresslog);
     if(r) return r;
 
@@ -484,7 +599,8 @@ int mailbox_open_locked(const char *mbname,
  */
 int mailbox_open_index(struct mailbox *mailbox)
 {
-    char fnamebuf[MAX_MAILBOX_PATH+1];
+    struct fnamepath fpath;
+    struct fnamebuf *fname;
     bit32 index_gen = 0, cache_gen = 0;
     int tries = 0;
 
@@ -496,10 +612,14 @@ int mailbox_open_index(struct mailbox *mailbox)
 	close(mailbox->cache_fd);
 	map_free(&mailbox->cache_base, &mailbox->cache_len);
     }
+
+    /* initialize the paths */
+    mailbox_meta_get_fname(&fpath, mailbox, 0);
+
     do {
-	strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
-	strlcat(fnamebuf, FNAME_INDEX, sizeof(fnamebuf));
-	mailbox->index_fd = open(fnamebuf, O_RDWR, 0);
+	fname = mailbox_meta_get_fname(&fpath, mailbox,
+				       IMAP_ENUM_METAPARTITION_FILES_INDEX);
+	mailbox->index_fd = open(fname->buf, O_RDWR, 0);
 	if (mailbox->index_fd != -1) {
 	    map_refresh(mailbox->index_fd, 0, &mailbox->index_base,
 			&mailbox->index_len, MAP_UNKNOWN_LEN, "index",
@@ -507,13 +627,13 @@ int mailbox_open_index(struct mailbox *mailbox)
 	}
 	if (mailbox_doing_reconstruct) break;
 	if (mailbox->index_fd == -1) {
-	    syslog(LOG_ERR, "IOERROR: opening %s: %m", fnamebuf);
+	    syslog(LOG_ERR, "IOERROR: opening %s: %m", fname->buf);
 	    return IMAP_IOERROR;
 	}
 
-	strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
-	strlcat(fnamebuf, FNAME_CACHE, sizeof(fnamebuf));
-	mailbox->cache_fd = open(fnamebuf, O_RDWR, 0);
+	fname = mailbox_meta_get_fname(&fpath, mailbox,
+				       IMAP_ENUM_METAPARTITION_FILES_CACHE);
+	mailbox->cache_fd = open(fname->buf, O_RDWR, 0);
 	if (mailbox->cache_fd != -1) {
 	    struct stat sbuf;
 
@@ -527,7 +647,7 @@ int mailbox_open_index(struct mailbox *mailbox)
 			mailbox->name);
 	}
 	if (mailbox->cache_fd == -1) {
-	    syslog(LOG_ERR, "IOERROR: opening %s: %m", fnamebuf);
+	    syslog(LOG_ERR, "IOERROR: opening %s: %m", fname->buf);
 	    return IMAP_IOERROR;
 	}
 
@@ -567,16 +687,19 @@ void mailbox_close(struct mailbox *mailbox)
 
     if (mailbox->index_fd != -1) {
 	close(mailbox->index_fd);
-	map_free(&mailbox->index_base, &mailbox->index_len);
+	if (mailbox->index_base)
+	    map_free(&mailbox->index_base, &mailbox->index_len);
     }
 
     if (mailbox->cache_fd != -1) {
 	close(mailbox->cache_fd);
-	map_free(&mailbox->cache_base, &mailbox->cache_len);
+	if (mailbox->cache_base)
+	    map_free(&mailbox->cache_base, &mailbox->cache_len);
     }
 
     free(mailbox->name);
     free(mailbox->path);
+    if (mailbox->mpath) free(mailbox->mpath);
     free(mailbox->acl);
     free(mailbox->uniqueid);
     if (mailbox->quota.root) free(mailbox->quota.root);
@@ -728,7 +851,7 @@ int mailbox_read_acl(struct mailbox *mailbox,
     int r;
     char *acl;
 
-    r = mboxlist_lookup(mailbox->name, (char **)0, &acl, NULL);
+    r = mboxlist_lookup(mailbox->name, &acl, NULL);
     if (r) return r;
 
     free(mailbox->acl);
@@ -744,8 +867,6 @@ int mailbox_read_acl(struct mailbox *mailbox,
 int mailbox_read_index_header(struct mailbox *mailbox)
 {
     struct stat sbuf;
-    int upgrade = 0;
-    int quota_upgrade_offset = 0;
 
     if (mailbox->index_fd == -1) return IMAP_MAILBOX_BADFORMAT;
 
@@ -771,16 +892,21 @@ int mailbox_read_index_header(struct mailbox *mailbox)
 	ntohl(*((bit32 *)(mailbox->index_base+OFFSET_FORMAT)));
     mailbox->minor_version =
 	ntohl(*((bit32 *)(mailbox->index_base+OFFSET_MINOR_VERSION)));
-
-    if(mailbox->minor_version <= 5) {
-	/* Upgrade Quota, Add Cache Version Field */
-	quota_upgrade_offset = sizeof(bit32);
-    }
-
     mailbox->start_offset =
 	ntohl(*((bit32 *)(mailbox->index_base+OFFSET_START_OFFSET)));
     mailbox->record_size =
 	ntohl(*((bit32 *)(mailbox->index_base+OFFSET_RECORD_SIZE)));
+
+    if ((mailbox->start_offset < OFFSET_HIGHESTMODSEQ+4) ||
+	(mailbox->record_size < INDEX_RECORD_SIZE) ||
+	(mailbox->minor_version < MAILBOX_MINOR_VERSION)) {
+	if (mailbox_upgrade_index(mailbox))
+	    return IMAP_IOERROR;
+
+	/* things might have been changed out from under us. reread */
+	return mailbox_open_index(mailbox); 
+    }
+
     mailbox->exists =
 	ntohl(*((bit32 *)(mailbox->index_base+OFFSET_EXISTS)));
     mailbox->last_appenddate =
@@ -788,70 +914,42 @@ int mailbox_read_index_header(struct mailbox *mailbox)
     mailbox->last_uid =
 	ntohl(*((bit32 *)(mailbox->index_base+OFFSET_LAST_UID)));
 
-    mailbox->quota_mailbox_used =
-	ntohl(*((bit32 *)(mailbox->index_base+OFFSET_QUOTA_MAILBOX_USED-quota_upgrade_offset)));
-
-    if (mailbox->start_offset < OFFSET_POP3_LAST_LOGIN-quota_upgrade_offset+sizeof(bit32)) {
-	mailbox->pop3_last_login = 0;
-    }
-    else {
-	mailbox->pop3_last_login =
-	    ntohl(*((bit32 *)(mailbox->index_base+OFFSET_POP3_LAST_LOGIN-quota_upgrade_offset)));
-    }
-
-    if (mailbox->start_offset < OFFSET_UIDVALIDITY-quota_upgrade_offset+sizeof(bit32)) {
-	mailbox->uidvalidity = 1;
-    }
-    else {
-	mailbox->uidvalidity =
-	    ntohl(*((bit32 *)(mailbox->index_base-quota_upgrade_offset+OFFSET_UIDVALIDITY)));
+#ifdef HAVE_LONG_LONG_INT
+    if (mailbox->minor_version > 5) {
+	/* newer versions may use 64bit quotas now */
+        mailbox->quota_mailbox_used =
+            ntohll(*((bit64 *)(mailbox->index_base+OFFSET_QUOTA_MAILBOX_USED64)));
+    } else
+#endif
+    {
+	mailbox->quota_mailbox_used =
+	    ntohl(*((bit32 *)(mailbox->index_base+OFFSET_QUOTA_MAILBOX_USED)));
     }
 
-    if (mailbox->start_offset < OFFSET_FLAGGED-quota_upgrade_offset+sizeof(bit32)) {
-	/* calculate them now */
-	if (mailbox_calculate_flagcounts(mailbox))
-	    return IMAP_IOERROR;
-	
-	upgrade = 1;
-    } else {
-	mailbox->deleted = 
-	    ntohl(*((bit32 *)(mailbox->index_base+OFFSET_DELETED-quota_upgrade_offset)));
-	mailbox->answered = 
-	    ntohl(*((bit32 *)(mailbox->index_base+OFFSET_ANSWERED-quota_upgrade_offset)));
-	mailbox->flagged = 
-	    ntohl(*((bit32 *)(mailbox->index_base+OFFSET_FLAGGED-quota_upgrade_offset)));
-	mailbox->dirty = 0;
-    }
+    mailbox->pop3_last_login =
+	ntohl(*((bit32 *)(mailbox->index_base+OFFSET_POP3_LAST_LOGIN)));
+    mailbox->uidvalidity =
+	ntohl(*((bit32 *)(mailbox->index_base+OFFSET_UIDVALIDITY)));
+    mailbox->deleted = 
+	ntohl(*((bit32 *)(mailbox->index_base+OFFSET_DELETED)));
+    mailbox->answered = 
+	ntohl(*((bit32 *)(mailbox->index_base+OFFSET_ANSWERED)));
+    mailbox->flagged = 
+	ntohl(*((bit32 *)(mailbox->index_base+OFFSET_FLAGGED)));
+    mailbox->dirty = 0;
+    mailbox->options =
+	ntohl(*((bit32 *)(mailbox->index_base+OFFSET_MAILBOX_OPTIONS)));
+    mailbox->leaked_cache_records =
+	ntohl(*((bit32 *)(mailbox->index_base+OFFSET_LEAKED_CACHE)));
+#ifdef HAVE_LONG_LONG_INT
+    mailbox->highestmodseq =
+	ntohll(*((bit64 *)(mailbox->index_base+OFFSET_HIGHESTMODSEQ_64)));
+#else
+    mailbox->highestmodseq =
+	ntohl(*((bit32 *)(mailbox->index_base+OFFSET_HIGHESTMODSEQ)));
+#endif
 
-    if (mailbox->start_offset < OFFSET_POP3_NEW_UIDL-quota_upgrade_offset+sizeof(bit32)) {
-	mailbox->pop3_new_uidl = !mailbox->exists;
-	upgrade = 1;
-    }
-    else {
-	mailbox->pop3_new_uidl = !mailbox->exists ||
-	    ntohl(*((bit32 *)(mailbox->index_base+OFFSET_POP3_NEW_UIDL-quota_upgrade_offset)));
-    }
-
-    if (mailbox->start_offset < OFFSET_LEAKED_CACHE-quota_upgrade_offset+sizeof(bit32)) {
-	mailbox->leaked_cache_records = 0;
-	upgrade = 1;
-    }
-    else {
-	mailbox->leaked_cache_records =
-	    ntohl(*((bit32 *)(mailbox->index_base+OFFSET_LEAKED_CACHE-quota_upgrade_offset)));
-    }
-
-    if (mailbox->record_size < INDEX_RECORD_SIZE) {
-	upgrade = 1;
-    }
-
-    if (upgrade) {
-	if (mailbox_upgrade_index(mailbox))
-	    return IMAP_IOERROR;
-
-	/* things might have been changed out from under us. reread */
-	return mailbox_open_index(mailbox); 
-    }
+    if (!mailbox->exists) mailbox->options |= OPT_POP3_NEW_UIDL;
 
     if (!mailbox_doing_reconstruct &&
 	(mailbox->minor_version < MAILBOX_MINOR_VERSION)) {
@@ -898,17 +996,21 @@ struct index_record *record;
     }
     record->content_lines = ntohl(*((bit32 *)(buf+OFFSET_CONTENT_LINES)));
     record->cache_version = ntohl(*((bit32 *)(buf+OFFSET_CACHE_VERSION)));
+    message_uuid_unpack(&record->uuid, buf+OFFSET_MESSAGE_UUID);
+#ifdef HAVE_LONG_LONG_INT
+    record->modseq = ntohll(*((bit64 *)(buf+OFFSET_MODSEQ_64)));
+#else
+    record->modseq = ntohl(*((bit32 *)(buf+OFFSET_MODSEQ)));
+#endif
     return 0;
 }
 
 /*
  * Lock the header for 'mailbox'.  Reread header if necessary.
  */
-int
-mailbox_lock_header(mailbox)
-struct mailbox *mailbox;
+int mailbox_lock_header(struct mailbox *mailbox)
 {
-    char fnamebuf[MAX_MAILBOX_PATH+1];
+    char fnamebuf[MAX_MAILBOX_PATH+1], *path;
     struct stat sbuf;
     const char *lockfailaction;
     int r;
@@ -918,7 +1020,11 @@ struct mailbox *mailbox;
     assert(mailbox->index_lock_count == 0);
     assert(mailbox->seen_lock_count == 0);
 
-    strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
+    path = (mailbox->mpath &&
+	    (config_metapartition_files &
+	     IMAP_ENUM_METAPARTITION_FILES_HEADER)) ?
+	mailbox->mpath : mailbox->path;
+    strlcpy(fnamebuf, path, sizeof(fnamebuf));
     strlcat(fnamebuf, FNAME_HEADER, sizeof(fnamebuf));
 
     r = lock_reopen(mailbox->header_fd, fnamebuf, &sbuf, &lockfailaction);
@@ -948,11 +1054,9 @@ struct mailbox *mailbox;
 /*
  * Lock the index file for 'mailbox'.  Reread index file header if necessary.
  */
-int
-mailbox_lock_index(mailbox)
-struct mailbox *mailbox;
+int mailbox_lock_index(struct mailbox *mailbox)
 {
-    char fnamebuf[MAX_MAILBOX_PATH+1];
+    char fnamebuf[MAX_MAILBOX_PATH+1], *path;
     struct stat sbuffd, sbuffile;
     int r;
 
@@ -960,7 +1064,11 @@ struct mailbox *mailbox;
 
     assert(mailbox->seen_lock_count == 0);
 
-    strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
+    path = (mailbox->mpath &&
+	    (config_metapartition_files &
+	     IMAP_ENUM_METAPARTITION_FILES_INDEX)) ?
+	mailbox->mpath : mailbox->path;
+    strlcpy(fnamebuf, path, sizeof(fnamebuf));
     strlcat(fnamebuf, FNAME_INDEX, sizeof(fnamebuf));
 
     /* why is this not a lock_reopen()? -leg
@@ -1084,7 +1192,7 @@ int mailbox_write_header(struct mailbox *mailbox)
     int newheader_fd;
     int r = 0;
     const char *quota_root;
-    char fnamebuf[MAX_MAILBOX_PATH+1];
+    char fnamebuf[MAX_MAILBOX_PATH+1], *path;
     char newfnamebuf[MAX_MAILBOX_PATH+1];
     struct stat sbuf;
     struct iovec iov[10];
@@ -1092,7 +1200,11 @@ int mailbox_write_header(struct mailbox *mailbox)
 
     assert(mailbox->header_lock_count != 0);
 
-    strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
+    path = (mailbox->mpath &&
+	    (config_metapartition_files &
+	     IMAP_ENUM_METAPARTITION_FILES_HEADER)) ?
+	mailbox->mpath : mailbox->path;
+    strlcpy(fnamebuf, path, sizeof(fnamebuf));
     strlcat(fnamebuf, FNAME_HEADER, sizeof(fnamebuf));
     strlcpy(newfnamebuf, fnamebuf, sizeof(newfnamebuf));
     strlcat(newfnamebuf, ".NEW", sizeof(newfnamebuf));
@@ -1183,19 +1295,38 @@ int mailbox_write_index_header(struct mailbox *mailbox)
     *((bit32 *)(buf+OFFSET_EXISTS)) = htonl(mailbox->exists);
     *((bit32 *)(buf+OFFSET_LAST_APPENDDATE)) = htonl(mailbox->last_appenddate);
     *((bit32 *)(buf+OFFSET_LAST_UID)) = htonl(mailbox->last_uid);
-    *((bit32 *)(buf+OFFSET_QUOTA_RESERVED_FIELD)) = htonl(0); /* RESERVED */
+
+    /* quotas may be 64bit now */
+#ifdef HAVE_LONG_LONG_INT
+    *((bit64 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) =
+	htonll(mailbox->quota_mailbox_used);
+#else	
+    /* zero the unused 32bits */
+    *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) = htonl(0);
     *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) =
 	htonl(mailbox->quota_mailbox_used);
+#endif
+
     *((bit32 *)(buf+OFFSET_POP3_LAST_LOGIN)) = htonl(mailbox->pop3_last_login);
     *((bit32 *)(buf+OFFSET_UIDVALIDITY)) = htonl(mailbox->uidvalidity);
     *((bit32 *)(buf+OFFSET_DELETED)) = htonl(mailbox->deleted);
     *((bit32 *)(buf+OFFSET_ANSWERED)) = htonl(mailbox->answered);
     *((bit32 *)(buf+OFFSET_FLAGGED)) = htonl(mailbox->flagged);
-    *((bit32 *)(buf+OFFSET_POP3_NEW_UIDL)) = htonl(mailbox->pop3_new_uidl);
+    *((bit32 *)(buf+OFFSET_MAILBOX_OPTIONS)) = htonl(mailbox->options);
     *((bit32 *)(buf+OFFSET_LEAKED_CACHE)) =
 	htonl(mailbox->leaked_cache_records);
+#ifdef HAVE_LONG_LONG_INT
+    *((bit64 *)(buf+OFFSET_HIGHESTMODSEQ_64)) = htonll(mailbox->highestmodseq);
+#else
+    /* zero the unused 32bits */
+    *((bit32 *)(buf+OFFSET_HIGHESTMODSEQ_64)) = htonl(0);
+    *((bit32 *)(buf+OFFSET_HIGHESTMODSEQ)) = htonl(mailbox->highestmodseq);
+#endif
+    *((bit32 *)(buf+OFFSET_SPARE0)) = htonl(0); /* RESERVED */
     *((bit32 *)(buf+OFFSET_SPARE1)) = htonl(0); /* RESERVED */
     *((bit32 *)(buf+OFFSET_SPARE2)) = htonl(0); /* RESERVED */
+    *((bit32 *)(buf+OFFSET_SPARE3)) = htonl(0); /* RESERVED */
+    *((bit32 *)(buf+OFFSET_SPARE4)) = htonl(0); /* RESERVED */
 
     if (mailbox->start_offset < header_size)
 	header_size = mailbox->start_offset;
@@ -1234,6 +1365,14 @@ void mailbox_index_record_to_buf(struct index_record *record, char *buf)
     }
     *((bit32 *)(buf+OFFSET_CONTENT_LINES)) = htonl(record->content_lines);
     *((bit32 *)(buf+OFFSET_CACHE_VERSION)) = htonl(record->cache_version);
+    message_uuid_pack(&record->uuid, buf+OFFSET_MESSAGE_UUID);
+#ifdef HAVE_LONG_LONG_INT
+    *((bit64 *)(buf+OFFSET_MODSEQ_64)) = htonll(record->modseq);
+#else
+    /* zero the unused 32bits */
+    *((bit32 *)(buf+OFFSET_MODSEQ_64)) = htonl(0);
+    *((bit32 *)(buf+OFFSET_MODSEQ)) = htonl(record->modseq);
+#endif
 }
 
 /*
@@ -1327,7 +1466,7 @@ int mailbox_append_index(struct mailbox *mailbox,
  */
 static int mailbox_lock_index_for_upgrade(struct mailbox *mailbox)
 {
-    char fnamebuf[MAX_MAILBOX_PATH+1];
+    char fnamebuf[MAX_MAILBOX_PATH+1], *path;
     struct stat sbuffd, sbuffile;
     int r;
 
@@ -1335,7 +1474,11 @@ static int mailbox_lock_index_for_upgrade(struct mailbox *mailbox)
 
     assert(mailbox->seen_lock_count == 0);
 
-    strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
+    path = (mailbox->mpath &&
+	    (config_metapartition_files &
+	     IMAP_ENUM_METAPARTITION_FILES_INDEX)) ?
+	mailbox->mpath : mailbox->path;
+    strlcpy(fnamebuf, path, sizeof(fnamebuf));
     strlcat(fnamebuf, FNAME_INDEX, sizeof(fnamebuf));
 
     for (;;) {
@@ -1367,20 +1510,174 @@ static int mailbox_lock_index_for_upgrade(struct mailbox *mailbox)
 }
 
 /*
- * Upgrade the index header for 'mailbox'
+ * Upgrade an index/expunge file for 'mailbox'
  */
-static int mailbox_upgrade_index(struct mailbox *mailbox)
+static void mailbox_upgrade_index_work(struct mailbox *mailbox,
+				       FILE *newindex,
+				       const char *index_base,
+				       unsigned long index_len)
 {
-    int r;
+    unsigned long exists;
     unsigned msgno;
     bit32 oldstart_offset, oldrecord_size, recsize_diff;
     char buf[INDEX_HEADER_SIZE > INDEX_RECORD_SIZE ?
 	     INDEX_HEADER_SIZE : INDEX_RECORD_SIZE];
-    char fnamebuf[MAX_MAILBOX_PATH+1], fnamebufnew[MAX_MAILBOX_PATH+1];
-    size_t fnamebuf_len;
-    FILE *newindex;
-    char *fnametail;
     char *bufp;
+    int quota_offset = 0;
+    int calculate_flagcounts = 0;
+    bit32 numansweredflag = 0;
+    bit32 numdeletedflag = 0;
+    bit32 numflaggedflag = 0;
+
+    /* Copy existing header so we can upgrade it */ 
+    memcpy(buf, index_base, INDEX_HEADER_SIZE);
+
+    exists = ntohl(*((bit32 *)(buf+OFFSET_EXISTS)));
+
+    if (ntohl(*((bit32 *)(buf+OFFSET_MINOR_VERSION))) <= 5) {
+	quota_offset = sizeof(bit32);
+	/* upgrade quota to 64-bits (bump existing fields) */
+	memmove(buf+OFFSET_QUOTA_MAILBOX_USED, buf+OFFSET_QUOTA_MAILBOX_USED64,
+		INDEX_HEADER_SIZE - OFFSET_QUOTA_MAILBOX_USED64 - quota_offset);
+	/* zero the unused 32-bits */
+	*((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) = htonl(0);
+    }
+
+    if (ntohl(*((bit32 *)(buf+OFFSET_MINOR_VERSION))) < 8) {
+#ifdef HAVE_LONG_LONG_INT
+	*((bit64 *)(buf+OFFSET_HIGHESTMODSEQ_64)) = htonll(1);
+#else
+	*((bit32 *)(buf+OFFSET_HIGHESTMODSEQ_64)) = htonl(0);
+	*((bit32 *)(buf+OFFSET_HIGHESTMODSEQ)) = htonl(1);
+#endif
+    }
+
+    /* change version number */
+    *((bit32 *)(buf+OFFSET_MINOR_VERSION)) = htonl(MAILBOX_MINOR_VERSION);
+
+    /* save old start_offset; change start_offset */
+    oldstart_offset = ntohl(*((bit32 *)(buf+OFFSET_START_OFFSET)));
+    *((bit32 *)(buf+OFFSET_START_OFFSET)) = htonl(INDEX_HEADER_SIZE);
+
+    /* save old record_size; change record_size */
+    oldrecord_size = ntohl(*((bit32 *)(buf+OFFSET_RECORD_SIZE)));
+    *((bit32 *)(buf+OFFSET_RECORD_SIZE)) = htonl(INDEX_RECORD_SIZE);
+    recsize_diff = INDEX_RECORD_SIZE - oldrecord_size;
+
+    /* upgrade other fields as necessary */
+    if (oldstart_offset < OFFSET_POP3_LAST_LOGIN-quota_offset+sizeof(bit32)) {
+	*((bit32 *)(buf+OFFSET_POP3_LAST_LOGIN)) = htonl(0);
+    }
+    if (oldstart_offset < OFFSET_UIDVALIDITY-quota_offset+sizeof(bit32)) {
+	*((bit32 *)(buf+OFFSET_UIDVALIDITY)) = htonl(1);
+    }
+    if (oldstart_offset < OFFSET_FLAGGED-quota_offset+sizeof(bit32)) {
+	struct stat sbuf;
+
+	if (fstat(mailbox->cache_fd, &sbuf) == -1) {
+	    syslog(LOG_ERR, "IOERROR: fstating %s: %m", mailbox->name);
+	    fatal("can't fstat cache file", EC_OSFILE);
+	}
+	mailbox->cache_size = sbuf.st_size;
+	map_refresh(mailbox->cache_fd, 0, &mailbox->cache_base,
+		    &mailbox->cache_len, mailbox->cache_size, 
+		    "cache", mailbox->name);
+
+	calculate_flagcounts = 1;
+    }
+    if (oldstart_offset < OFFSET_MAILBOX_OPTIONS-quota_offset+sizeof(bit32)) {
+	unsigned long options = !exists ? OPT_POP3_NEW_UIDL : 0;
+	*((bit32 *)(buf+OFFSET_MAILBOX_OPTIONS)) = htonl(options);
+    }
+#if 0
+    if (oldstart_offset < OFFSET_HIGHESTMODSEQ-quota_offset+sizeof(bit32) ||
+	!ntohll(*((bit64 *)(buf+OFFSET_HIGHESTMODSEQ_64)))) {
+	*((bit64 *)(buf+OFFSET_HIGHESTMODSEQ_64)) = htonll(1);
+    }
+#endif
+    *((bit32 *)(buf+OFFSET_SPARE0)) = htonl(0); /* RESERVED */
+    *((bit32 *)(buf+OFFSET_SPARE1)) = htonl(0); /* RESERVED */
+    *((bit32 *)(buf+OFFSET_SPARE2)) = htonl(0); /* RESERVED */
+    *((bit32 *)(buf+OFFSET_SPARE3)) = htonl(0); /* RESERVED */
+    *((bit32 *)(buf+OFFSET_SPARE4)) = htonl(0); /* RESERVED */
+
+    /* Write new header */
+    fwrite(buf, 1, INDEX_HEADER_SIZE, newindex);
+
+    /* Write the rest of new index */
+    memset(buf, 0, INDEX_RECORD_SIZE);
+    for (msgno = 1; msgno <= exists; msgno++) {
+	/* Write the existing (old) part of the index record */
+	bufp = (char *) (index_base + oldstart_offset +
+			 (msgno - 1)*oldrecord_size);
+
+	if (calculate_flagcounts) {
+	    bit32 sysflags = ntohl(*((bit32 *)(bufp+OFFSET_SYSTEM_FLAGS)));
+
+	    if (sysflags & FLAG_ANSWERED) numansweredflag++;
+	    if (sysflags & FLAG_DELETED) numdeletedflag++;
+	    if (sysflags & FLAG_FLAGGED) numflaggedflag++;
+	}
+
+	fwrite(bufp, oldrecord_size, 1, newindex);
+
+	if (recsize_diff) {
+	    /* We need to upgrade the index record to include new fields. */
+
+	    /* Currently, this means adding a content_lines placeholder.
+	     * We use BIT32_MAX rather than 0, since a message body can
+	     * be empty.  We'll calculate the actual value on demand.
+	     */
+	    if (oldrecord_size < OFFSET_CONTENT_LINES+sizeof(bit32)) {
+		*((bit32 *)(buf+OFFSET_CONTENT_LINES)) = htonl(BIT32_MAX);
+	    }
+
+	    /* Set the initial cache version to 0, that is, with the old
+	     * format of the cached headers */
+	    if (oldrecord_size < OFFSET_CACHE_VERSION+sizeof(bit32)) {
+		*((bit32 *)(buf+OFFSET_CACHE_VERSION)) = htonl(0);
+	    }
+
+            /* Reset undefined MessageUUIDs to NULL value (slow copy) */
+            if (oldrecord_size < OFFSET_MESSAGE_UUID+MESSAGE_UUID_PACKED_SIZE)
+                memset(buf+OFFSET_MESSAGE_UUID, 0, MESSAGE_UUID_PACKED_SIZE);
+
+	    /* Set the initial modseq to 1 */
+	    if (oldrecord_size < OFFSET_MODSEQ+4) {
+#ifdef HAVE_LONG_LONG_INT
+		*((bit64 *)(buf+OFFSET_MODSEQ_64)) = htonll(1);
+#else
+		*((bit32 *)(buf+OFFSET_MODSEQ_64)) = htonl(0);
+		*((bit32 *)(buf+OFFSET_MODSEQ)) = htonl(1);
+#endif
+	    }
+
+	    fwrite(buf+oldrecord_size, recsize_diff, 1, newindex);
+	}
+    }
+
+    if (calculate_flagcounts) {
+	/* go back and add flag counts to header */
+	memset(buf, 0, INDEX_RECORD_SIZE);
+	*((bit32 *)(buf+OFFSET_DELETED)) = htonl(numdeletedflag);
+	*((bit32 *)(buf+OFFSET_ANSWERED)) = htonl(numansweredflag);
+	*((bit32 *)(buf+OFFSET_FLAGGED)) = htonl(numflaggedflag);
+
+	fseek(newindex, OFFSET_DELETED, SEEK_SET);
+	fwrite(buf+OFFSET_DELETED,
+	       OFFSET_FLAGGED+sizeof(bit32)-OFFSET_DELETED, 1, newindex);
+    }
+}
+
+/*
+ * Upgrade the index and expunge files for 'mailbox'
+ */
+static int mailbox_upgrade_index(struct mailbox *mailbox)
+{
+    int r;
+    char fnamebuf[MAX_MAILBOX_PATH+1], fnamebufnew[MAX_MAILBOX_PATH+1], *path;
+    FILE *newindex = NULL;
+    int expunge_fd;
 
     /* Lock files and open new index file */
     r = mailbox_lock_header(mailbox);
@@ -1401,81 +1698,25 @@ static int mailbox_upgrade_index(struct mailbox *mailbox)
 	}
     }
 
-    strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
+    /* Upgrade index file */
+    path = (mailbox->mpath &&
+	    (config_metapartition_files &
+	     IMAP_ENUM_METAPARTITION_FILES_INDEX)) ?
+	mailbox->mpath : mailbox->path;
+    strlcpy(fnamebuf, path, sizeof(fnamebuf));
     strlcat(fnamebuf, FNAME_INDEX, sizeof(fnamebuf));
-    strlcat(fnamebuf, ".NEW", sizeof(fnamebuf));
 
-    newindex = fopen(fnamebuf, "w+");
+    strlcpy(fnamebufnew, fnamebuf, sizeof(fnamebufnew));
+    strlcat(fnamebufnew, ".NEW", sizeof(fnamebufnew));
+
+    newindex = fopen(fnamebufnew, "w+");
     if (!newindex) {
-	syslog(LOG_ERR, "IOERROR: creating %s: %m", fnamebuf);
+	syslog(LOG_ERR, "IOERROR: creating %s: %m", fnamebufnew);
 	goto fail;
     }
 
-    /* change version number */
-    mailbox->minor_version = MAILBOX_MINOR_VERSION;
-
-    /* save old start_offset; change start_offset */
-    oldstart_offset = mailbox->start_offset;
-    mailbox->start_offset = INDEX_HEADER_SIZE;
-
-    /* save old record_size; change record_size */
-    oldrecord_size = mailbox->record_size;
-    mailbox->record_size = INDEX_RECORD_SIZE;
-    recsize_diff = INDEX_RECORD_SIZE - oldrecord_size;
-
-    /* Write the new index header */ 
-    memset(buf, 0, INDEX_HEADER_SIZE);
-    *((bit32 *)(buf+OFFSET_GENERATION_NO)) = htonl(mailbox->generation_no);
-    *((bit32 *)(buf+OFFSET_FORMAT)) = htonl(mailbox->format);
-    *((bit32 *)(buf+OFFSET_MINOR_VERSION)) = htonl(mailbox->minor_version);
-    *((bit32 *)(buf+OFFSET_START_OFFSET)) = htonl(mailbox->start_offset);
-    *((bit32 *)(buf+OFFSET_RECORD_SIZE)) = htonl(mailbox->record_size);
-    *((bit32 *)(buf+OFFSET_EXISTS)) = htonl(mailbox->exists);
-    *((bit32 *)(buf+OFFSET_LAST_APPENDDATE)) = htonl(mailbox->last_appenddate);
-    *((bit32 *)(buf+OFFSET_LAST_UID)) = htonl(mailbox->last_uid);
-    /* OFFSET_QUOTA_RESERVED_FIELD left as zero */
-    *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) =
-	htonl(mailbox->quota_mailbox_used);
-    *((bit32 *)(buf+OFFSET_POP3_LAST_LOGIN)) = htonl(mailbox->pop3_last_login);
-    *((bit32 *)(buf+OFFSET_UIDVALIDITY)) = htonl(mailbox->uidvalidity);
-    *((bit32 *)(buf+OFFSET_DELETED)) = htonl(mailbox->deleted);
-    *((bit32 *)(buf+OFFSET_ANSWERED)) = htonl(mailbox->answered);
-    *((bit32 *)(buf+OFFSET_FLAGGED)) = htonl(mailbox->flagged);
-    *((bit32 *)(buf+OFFSET_POP3_NEW_UIDL)) = htonl(mailbox->pop3_new_uidl);
-    *((bit32 *)(buf+OFFSET_LEAKED_CACHE)) =
-	htonl(mailbox->leaked_cache_records);
-
-    fwrite(buf, 1, INDEX_HEADER_SIZE, newindex);
-
-    /* Write the rest of new index */
-    memset(buf, 0, INDEX_RECORD_SIZE);
-    for (msgno = 1; msgno <= mailbox->exists; msgno++) {
-	/* Write the existing (old) part of the index record */
-	bufp = (char *) (mailbox->index_base + oldstart_offset +
-			 (msgno - 1)*oldrecord_size);
-	
-	fwrite(bufp, oldrecord_size, 1, newindex);
-
-	if (recsize_diff) {
-	    /* We need to upgrade the index record to include new fields. */
-
-	    /* Currently, this means adding a content_lines placeholder.
-	     * We use BIT32_MAX rather than 0, since a message body can
-	     * be empty.  We'll calculate the actual value on demand.
-	     */
-	    if (oldrecord_size < OFFSET_CONTENT_LINES+sizeof(bit32)) {
-		*((bit32 *)(buf+OFFSET_CONTENT_LINES)) = htonl(BIT32_MAX);
-	    }
-
-	    /* Set the initial cache version to 0, that is, with the old
-	     * format of the cached headers */
-	    if (oldrecord_size < OFFSET_CACHE_VERSION+sizeof(bit32)) {
-		*((bit32 *)(buf+OFFSET_CACHE_VERSION)) = htonl(0);
-	    }
-
-	    fwrite(buf+oldrecord_size, recsize_diff, 1, newindex);
-	}
-    }
+    mailbox_upgrade_index_work(mailbox, newindex,
+			       mailbox->index_base, mailbox->index_len);
 
     /* Ensure everything made it to disk */
     fflush(newindex);
@@ -1486,26 +1727,81 @@ static int mailbox_upgrade_index(struct mailbox *mailbox)
 	goto fail;
     }
 
-    strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
-
-    fnamebuf_len = strlen(fnamebuf);
-    fnametail = fnamebuf + fnamebuf_len;
-
-    strlcpy(fnametail, FNAME_INDEX, sizeof(fnamebuf) - fnamebuf_len);
-
-    strlcpy(fnamebufnew, fnamebuf, sizeof(fnamebufnew));
-    strlcat(fnamebufnew, ".NEW", sizeof(fnamebufnew));
-
     if (rename(fnamebufnew, fnamebuf)) {
 	syslog(LOG_ERR, "IOERROR: renaming index file for %s: %m",
 	       mailbox->name);
 	goto fail;
     }
 
+    fclose(newindex);
+    newindex = NULL;
+
+    /* Upgrade expunge index file */
+    path = (mailbox->mpath &&
+	    (config_metapartition_files &
+	     IMAP_ENUM_METAPARTITION_FILES_EXPUNGE)) ?
+	mailbox->mpath : mailbox->path;
+    strlcpy(fnamebuf, path, sizeof(fnamebuf));
+    strlcat(fnamebuf, FNAME_EXPUNGE_INDEX, sizeof(fnamebuf));
+
+    expunge_fd = open(fnamebuf, O_RDWR, 0666);
+    if (expunge_fd != -1) {
+	struct stat sbuf;
+	const char *lockfailaction;
+	const char *expunge_index_base = NULL;
+	unsigned long expunge_index_len = 0;	/* mapped size */
+
+	strlcpy(fnamebufnew, fnamebuf, sizeof(fnamebufnew));
+	strlcat(fnamebufnew, ".NEW", sizeof(fnamebufnew));
+
+	newindex = fopen(fnamebufnew, "w+");
+	if (!newindex) {
+	    syslog(LOG_ERR, "IOERROR: creating %s: %m", fnamebufnew);
+	    close(expunge_fd);
+	    goto fail;
+	}
+
+	if ((r = lock_reopen(expunge_fd, fnamebuf, &sbuf, &lockfailaction))) {
+	    syslog(LOG_ERR, "IOERROR: %s expunge index for %s: %m",
+		   lockfailaction, mailbox->name);
+	    close(expunge_fd);
+	    goto fail;
+	}
+
+	map_refresh(expunge_fd, 1, &expunge_index_base,
+		    &expunge_index_len, sbuf.st_size, "expunge",
+		    mailbox->name);
+
+	mailbox_upgrade_index_work(mailbox, newindex,
+				   expunge_index_base, expunge_index_len);
+
+	map_free(&expunge_index_base, &expunge_index_len);
+	if (lock_unlock(expunge_fd))
+	    syslog(LOG_ERR,
+		   "IOERROR: unlocking expunge index of %s: %m", 
+		   mailbox->name);
+	close(expunge_fd);
+
+	/* Ensure everything made it to disk */
+	fflush(newindex);
+	if (ferror(newindex) ||
+	    fsync(fileno(newindex))) {
+	    syslog(LOG_ERR, "IOERROR: writing index for %s: %m",
+		   mailbox->name);
+	    goto fail;
+	}
+
+	if (rename(fnamebufnew, fnamebuf)) {
+	    syslog(LOG_ERR, "IOERROR: renaming index file for %s: %m",
+		   mailbox->name);
+	    goto fail;
+	}
+    }
+
     if (!mailbox_doing_reconstruct) mailbox_unlock_pop(mailbox);
     mailbox_unlock_index(mailbox);
     mailbox_unlock_header(mailbox);
-    fclose(newindex);
+    if (newindex) fclose(newindex);
 
     return 0;
 
@@ -1513,127 +1809,280 @@ static int mailbox_upgrade_index(struct mailbox *mailbox)
     if (!mailbox_doing_reconstruct) mailbox_unlock_pop(mailbox);
     mailbox_unlock_index(mailbox);
     mailbox_unlock_header(mailbox);
+    if (newindex) fclose(newindex);
 
     return IMAP_IOERROR;
 }
 
 /*
- * Calculate the number of messages in the mailbox with
- * answered/deleted/flagged system flags
+ * Expunge decision proc used by mailbox_expunge() (in cleanup mode) 
+ * to avoid expunging any messages from cyrus.index
  */
-
-static int mailbox_calculate_flagcounts(struct mailbox *mailbox)
+static int expungenone(struct mailbox *mailbox __attribute__((unused)),
+		       void *rock __attribute__((unused)),
+		       char *index __attribute__((unused)),
+		       int expunge_flags __attribute__((unused)))
 {
-    int r;
-    unsigned msgno;
-    bit32 numansweredflag = 0;
-    bit32 numdeletedflag = 0;
-    bit32 numflaggedflag = 0;
-    struct stat sbuf;
-    char *bufp;
-
-    /* Lock files */
-    r = mailbox_lock_header(mailbox);
-    if (r) return r;
-    r = mailbox_lock_index_for_upgrade(mailbox);
-    if (r) {
-	mailbox_unlock_header(mailbox);
-	return r;
-    }
-
-    r = mailbox_lock_pop(mailbox);
-    if (r) {
-	mailbox_unlock_index(mailbox);
-	mailbox_unlock_header(mailbox);
-	return r;
-    }
-
-    if (fstat(mailbox->cache_fd, &sbuf) == -1) {
-	syslog(LOG_ERR, "IOERROR: fstating %s: %m", mailbox->name);
-	fatal("can't fstat cache file", EC_OSFILE);
-    }
-    mailbox->cache_size = sbuf.st_size;
-    map_refresh(mailbox->cache_fd, 0, &mailbox->cache_base,
-		&mailbox->cache_len, mailbox->cache_size, 
-		"cache", mailbox->name);
-
-    /* for each message look at the system flags */
-    for (msgno = 1; msgno <= mailbox->exists; msgno++) {
-	bit32 sysflags;
-	
-	bufp = (char *) (mailbox->index_base + mailbox->start_offset +
-			(msgno - 1)*mailbox->record_size);
-
-	/* Sanity check */
-	if (*((bit32 *)(bufp+OFFSET_UID)) == 0) {
-	    syslog(LOG_ERR, "IOERROR: %s zero index record %u/%lu",
-		   mailbox->name, msgno, mailbox->exists);
-	    mailbox_unlock_pop(mailbox);
-	    mailbox_unlock_index(mailbox);
-	    mailbox_unlock_header(mailbox);
-	    return IMAP_IOERROR;
-	}
-
-	sysflags = ntohl(*((bit32 *)(bufp+OFFSET_SYSTEM_FLAGS)));
-	if (sysflags & FLAG_ANSWERED)
-	    numansweredflag++;
-	if (sysflags & FLAG_DELETED)
-	    numdeletedflag++;
-	if (sysflags & FLAG_FLAGGED)
-	    numflaggedflag++;
-    }
-
-    mailbox->answered = numansweredflag;
-    mailbox->deleted = numdeletedflag;
-    mailbox->flagged = numflaggedflag;
-
-    mailbox_unlock_pop(mailbox);
-    mailbox_unlock_index(mailbox);
-    mailbox_unlock_header(mailbox);
-
     return 0;
 }
 
 /*
- * Perform an expunge operation on 'mailbox'.  If 'iscurrentdir' is nonzero,
- * the current directory is set to the mailbox directory.  If nonzero, the
- * function pointed to by 'decideproc' is called (with 'deciderock') to
- * determine which messages to expunge.  If 'decideproc' is a null pointer,
- * then messages with the \Deleted flag are expunged.
+ * Expunge decision proc used by mailbox_expunge() (in cleanup mode) 
+ * to expunge all messages in cyrus.expunge
+ * Also used by mailbox_rename() to expunge all messages in INBOX
  */
-int
-mailbox_expunge(struct mailbox *mailbox,
-		int iscurrentdir, mailbox_decideproc_t *decideproc,
-		void *deciderock)
+static int expungeall(struct mailbox *mailbox __attribute__((unused)),
+		      void *rock __attribute__((unused)),
+		      char *indexbuf __attribute__((unused)),
+		      int expunge_flags __attribute__((unused)))
 {
-    int r, n;
-    char fnamebuf[MAX_MAILBOX_PATH+1], fnamebufnew[MAX_MAILBOX_PATH+1];
-    size_t fnamebuf_len;
-    FILE *newindex = NULL, *newcache = NULL;
-    unsigned long *deleted;
-    unsigned numdeleted = 0, quotadeleted = 0;
-    unsigned numansweredflag = 0;
-    unsigned numdeletedflag = 0;
-    unsigned numflaggedflag = 0;
+    return 1;
+}
+
+static int process_records(struct mailbox *mailbox, FILE *newindex,
+			   const char *index_base, unsigned long exists,
+			   unsigned long *deleted, unsigned *numdeleted,
+			   uquota_t *quotadeleted, unsigned *numansweredflag,
+			   unsigned *numdeletedflag, unsigned *numflaggedflag,
+			   FILE *newcache, size_t *new_cache_total_size,
+			   int expunge_fd, long last_offset,
+			   mailbox_decideproc_t *decideproc, void *deciderock,
+			   int expunge_flags)
+{
+    char buf[INDEX_HEADER_SIZE > INDEX_RECORD_SIZE ?
+	     INDEX_HEADER_SIZE : INDEX_RECORD_SIZE];
+    unsigned msgno;
     unsigned newexpunged;
     unsigned newexists;
     unsigned newdeleted;
     unsigned newanswered;
     unsigned newflagged; 
+    time_t now = time(NULL);
+    int n;
+
+    /* Copy over records for nondeleted messages */
+    for (msgno = 1; msgno <= exists; msgno++) {
+	/* Copy index record for this message */
+	memcpy(buf,
+	       index_base + mailbox->start_offset +
+	       (msgno - 1) * mailbox->record_size, mailbox->record_size);
+
+	/* Sanity check */
+	if (*((bit32 *)(buf+OFFSET_UID)) == 0) {
+	    syslog(LOG_ERR, "IOERROR: %s zero index/expunge record %u/%lu",
+		   mailbox->name, msgno, exists);
+	    return IMAP_IOERROR;
+	}
+
+	/* Should we delete the message from the index file? */
+	if (decideproc ? decideproc(mailbox, deciderock, buf, expunge_flags) :
+	    (ntohl(*((bit32 *)(buf+OFFSET_SYSTEM_FLAGS))) & FLAG_DELETED)) {
+
+	    bit32 sysflags = ntohl(*((bit32 *)(buf+OFFSET_SYSTEM_FLAGS)));
+
+	    /* Remember UID and size */
+	    deleted[(*numdeleted)++] = ntohl(*((bit32 *)(buf+OFFSET_UID)));
+	    *quotadeleted += ntohl(*((bit32 *)(buf+OFFSET_SIZE)));
+
+	    /* Update system flag counts accordingly */
+	    if (sysflags & FLAG_ANSWERED) (*numansweredflag)++;
+	    if (sysflags & FLAG_DELETED) (*numdeletedflag)++;
+	    if (sysflags & FLAG_FLAGGED) (*numflaggedflag)++;
+
+	    if (expunge_fd != -1) {
+		/* Copy the index record to cyrus.expunge */
+		/* XXX  For now, we just append to the end of the file.
+		 * For two-phase, we should sort by UID.
+		 */
+		*((bit32 *)(buf+OFFSET_LAST_UPDATED)) = htonl(now);
+		n = retry_write(expunge_fd, buf, mailbox->record_size);
+		if (n != mailbox->record_size) {
+		    syslog(LOG_ERR,
+			   "IOERROR: writing expunge index record %u for %s: %m",
+			   msgno, mailbox->name);
+		    ftruncate(expunge_fd, last_offset);
+		    return IMAP_IOERROR;
+		}
+	    }
+	} else if (newcache) {
+	    /* Keep this message and update the index/cache record */
+	    size_t cache_record_size;
+	    unsigned long cache_offset;
+	    unsigned int cache_ent;
+	    const char *cacheitem, *cacheitembegin;
+	    
+	    cache_offset = ntohl(*((bit32 *)(buf+OFFSET_CACHE_OFFSET)));
+
+	    if (cache_offset == 0) {
+		syslog(LOG_ERR, "IOERROR: reading index header for %s: got 0 cache_offset on message %u/%lu; trying recovery",
+		       mailbox->name, msgno, mailbox->exists);
+		continue;
+	    }
+
+	    /* Fix up cache file offset */
+	    *((bit32 *)(buf+OFFSET_CACHE_OFFSET)) =
+		htonl(*new_cache_total_size);
+	    if (newindex) fwrite(buf, 1, mailbox->record_size, newindex);
+
+	    /* Compute size of this record */
+	    cacheitembegin = cacheitem = mailbox->cache_base + cache_offset;
+	    for (cache_ent = 0; cache_ent < NUM_CACHE_FIELDS; cache_ent++) {
+		cacheitem = CACHE_ITEM_NEXT(cacheitem);
+	    }
+	    cache_record_size = (cacheitem - cacheitembegin);
+	    *new_cache_total_size += cache_record_size;
+
+	    /* fwrite will automatically call write() in a sane way */
+	    fwrite(cacheitembegin, 1, cache_record_size, newcache);
+
+	} else if (newindex) {
+	    /* Keep this message, but just update the index record */
+	    fwrite(buf, 1, mailbox->record_size, newindex);
+	}
+    }
+
+    if (!newindex) return 0;
+
+    /* Fix up information in index header */
+    rewind(newindex);
+    n = fread(buf, 1, mailbox->start_offset, newindex);
+    if ((unsigned long) n != mailbox->start_offset) {
+	syslog(LOG_ERR,
+	       "IOERROR: reading index header for %s: got %d of %ld",
+	       mailbox->name, n, mailbox->start_offset);
+	return IMAP_IOERROR;
+    }
+
+    /* Fix up exists */
+    newexists = ntohl(*((bit32 *)(buf+OFFSET_EXISTS))) - *numdeleted;
+    *((bit32 *)(buf+OFFSET_EXISTS)) = htonl(newexists);
+
+    /* Fix up expunged count */
+    if (newcache) {
+	*((bit32 *)(buf+OFFSET_LEAKED_CACHE)) = htonl(0);
+    } else {
+	newexpunged = ntohl(*((bit32 *)(buf+OFFSET_LEAKED_CACHE))) + *numdeleted;
+	*((bit32 *)(buf+OFFSET_LEAKED_CACHE)) = htonl(newexpunged);
+    }
+	    
+    /* Fix up other counts */
+    newanswered = ntohl(*((bit32 *)(buf+OFFSET_ANSWERED))) - *numansweredflag;
+    *((bit32 *)(buf+OFFSET_ANSWERED)) = htonl(newanswered);
+    newdeleted = ntohl(*((bit32 *)(buf+OFFSET_DELETED))) - *numdeletedflag;
+    *((bit32 *)(buf+OFFSET_DELETED)) = htonl(newdeleted);
+    newflagged = ntohl(*((bit32 *)(buf+OFFSET_FLAGGED))) - *numflaggedflag;
+    *((bit32 *)(buf+OFFSET_FLAGGED)) = htonl(newflagged);
+
+    /* Fix up quota_mailbox_used */
+#ifdef HAVE_LONG_LONG_INT
+    *((bit64 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) =
+	htonll(ntohll(*((bit64 *)(buf+OFFSET_QUOTA_MAILBOX_USED64))) - *quotadeleted);
+#else
+    /* zero the unused 32bits */
+    *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) = htonl(0);
+    *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) =
+	htonl(ntohl(*((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED))) - *quotadeleted);
+#endif
+
+    /* Fix up start offset if necessary */
+    if (mailbox->start_offset < INDEX_HEADER_SIZE) {
+	*((bit32 *)(buf+OFFSET_START_OFFSET)) = htonl(INDEX_HEADER_SIZE);
+    }
+	
+    /* Write out new index header */
+    rewind(newindex);
+    fwrite(buf, 1, mailbox->start_offset, newindex);
+
+    return 0;
+}
+
+/*
+ * Perform an expunge operation on 'mailbox'.  If nonzero, the
+ * function pointed to by 'decideproc' is called (with 'deciderock') to
+ * determine which messages to expunge.  If 'decideproc' is a null pointer,
+ * then messages with the \Deleted flag are expunged.  If 'flags' includes
+ * EXPUNGE_FORCE, then messages will be expunged immediately, regardless of
+ * expunge_mode.  If 'flags' includes EXPUNGE_CLEANUP, then any previously
+ * delayed expunges will be completed (remove leaked cache entries
+ * and delete messages files).
+ *
+ * The following files are updated for the various modes:
+ * - immediate mode: cyrus.index, cyrus.cache, quota.db, messages
+ * - delayed mode: cyrus.index, cyrus.expunge, quota.db
+ * - cleanup mode: cyrus.index, cyrus.cache, cyrus.expunge, messages
+ */
+int mailbox_expunge(struct mailbox *mailbox,
+		    mailbox_decideproc_t *decideproc, void *deciderock,
+		    int flags)
+{
+    enum enum_value config_expunge_mode = config_getenum(IMAPOPT_EXPUNGE_MODE);
+    int r, n;
+    struct fnamepath fpath;
+    struct fnamebuf *fname;
+    char fnamebufnew[MAX_MAILBOX_PATH+1];
+    FILE *newindex = NULL, *newcache = NULL, *newexpungeindex = NULL;
+    unsigned long *deleted = 0;
+    unsigned numdeleted = 0;
+    uquota_t quotadeleted = 0;
+    unsigned numansweredflag = 0;
+    unsigned numdeletedflag = 0;
+    unsigned numflaggedflag = 0;
+    unsigned newexists;
+    unsigned newdeleted;
+    unsigned newanswered;
+    unsigned newflagged; 
     
-    char *buf;
+    char buf[INDEX_HEADER_SIZE > INDEX_RECORD_SIZE ?
+	     INDEX_HEADER_SIZE : INDEX_RECORD_SIZE];
     unsigned msgno;
     struct stat sbuf;
-    char *fnametail;
     struct txn *tid = NULL;
 
     /* Offset into the new cache file for use when updating the index record */
     size_t new_cache_total_size = sizeof(bit32);
 
-    /* flag => true if we are compressing the cache on this expunge */
-    int fixcache = 0;
+    /* delayed expunge related stuff */
+    int expunge_fd = -1;
+    long last_offset = 0;
+    const char *expunge_index_base = NULL;
+    unsigned long expunge_index_len = 0;	/* mapped size */
+    time_t now = time(NULL);
+    unsigned long expunge_exists = 0;
 
-    /* Lock files and open new index/cache files */
+    /* EXPUNGE_FORCE means immediate mode */
+    if (flags == EXPUNGE_FORCE)
+	config_expunge_mode = IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE;
+
+    /* initialize the paths */
+    mailbox_meta_get_fname(&fpath, mailbox, 0);
+
+    /* If we're in delayed or cleanup mode, open the expunge index */
+    if ((config_expunge_mode != IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE) ||
+	(flags & EXPUNGE_CLEANUP)) {
+	fname = mailbox_meta_get_fname(&fpath, mailbox,
+				       IMAP_ENUM_METAPARTITION_FILES_EXPUNGE);
+
+	expunge_fd = open(fname->buf, O_RDWR, 0666);
+	if (expunge_fd == -1 && errno == ENOENT &&
+	    !(flags & EXPUNGE_CLEANUP)) {
+	    /* we're not in cleanup mode, try creating one */
+	    expunge_fd = open(fname->buf, O_RDWR|O_CREAT, 0666);
+	}
+	if (expunge_fd == -1) {
+	    if (errno == ENOENT && (flags & EXPUNGE_CLEANUP)) {
+		/* we're doing cleanup and no cyrus.expunge */
+		if (flags == EXPUNGE_CLEANUP) {
+		    /* we're ONLY doing cleanup, so we're done */
+		    return 0;
+		}
+	    } else {
+		syslog(LOG_ERR, "IOERROR: opening %s: %m", fname->buf);
+		return IMAP_IOERROR;
+	    }
+	}
+    }
+
+    /* Lock files and open new index file */
     r = mailbox_lock_header(mailbox);
     if (r) return r;
     r = mailbox_lock_index(mailbox);
@@ -1649,58 +2098,39 @@ mailbox_expunge(struct mailbox *mailbox,
 	return r;
     }
 
-#if 0
-    /* Decide if we are going to prune the cache file.  Currently run if
-     * we have a combined total of (flagged) deleted messages and
-     * already leaked records that is >= floor(10% of the mailbox size) */
-    newexists = ntohl(*((bit32 *)(mailbox->index_base+OFFSET_EXISTS)));
+    fname = mailbox_meta_get_fname(&fpath, mailbox,
+				   IMAP_ENUM_METAPARTITION_FILES_INDEX);
+    strlcat(fname->buf, ".NEW", sizeof(fname->buf));
 
-    newdeleted = ntohl(*((bit32 *)(mailbox->index_base+OFFSET_DELETED)));
-    newexpunged = ntohl(*((bit32 *)(mailbox->index_base+OFFSET_LEAKED_CACHE)));
-    if(newdeleted + newexpunged >= newexists / 10) {
-	newexpunged = 0;
-	fixcache = 1;
-	syslog(LOG_DEBUG, "Flushing cache file: %s", mailbox->name);
-    }
-#else
-    /* Currently we aren't sure we want to actually orphan entries during
-     * an expunge, so we'll just force cleanup every time */
-    newexpunged = 0;
-    fixcache = 1;
-#endif
-
-    if(fixcache) {
-	if (fstat(mailbox->cache_fd, &sbuf) == -1) {
-	    syslog(LOG_ERR, "IOERROR: fstating %s: %m", fnamebuf); /* xxx is fnamebuf initialized??? */
-	    fatal("can't fstat cache file", EC_OSFILE);
-	}
-	mailbox->cache_size = sbuf.st_size;
-	map_refresh(mailbox->cache_fd, 0, &mailbox->cache_base,
-		    &mailbox->cache_len, mailbox->cache_size,
-		    "cache", mailbox->name);
-    }
-    
-    strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
-    strlcat(fnamebuf, FNAME_INDEX, sizeof(fnamebuf));
-    strlcat(fnamebuf, ".NEW", sizeof(fnamebuf));
-
-    newindex = fopen(fnamebuf, "w+");
+    newindex = fopen(fname->buf, "w+");
     if (!newindex) {
-	syslog(LOG_ERR, "IOERROR: creating %s: %m", fnamebuf);
+	syslog(LOG_ERR, "IOERROR: creating %s: %m", fname->buf);
 	mailbox_unlock_pop(mailbox);
 	mailbox_unlock_index(mailbox);
 	mailbox_unlock_header(mailbox);
 	return IMAP_IOERROR;
     }
 
-    if(fixcache) {
-	strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
-	strlcat(fnamebuf, FNAME_CACHE, sizeof(fnamebuf));
-	strlcat(fnamebuf, ".NEW", sizeof(fnamebuf));
+    /* If we're in immediate or cleanup mode, open cache files */
+    if ((config_expunge_mode == IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE) ||
+	(flags & EXPUNGE_CLEANUP)) {
+        fname = mailbox_meta_get_fname(&fpath, mailbox,
+				       IMAP_ENUM_METAPARTITION_FILES_CACHE);
+
+	if (fstat(mailbox->cache_fd, &sbuf) == -1) {
+	    syslog(LOG_ERR, "IOERROR: fstating %s: %m", fname->buf);
+	    fatal("can't fstat cache file", EC_OSFILE);
+	}
+	mailbox->cache_size = sbuf.st_size;
+	map_refresh(mailbox->cache_fd, 0, &mailbox->cache_base,
+		    &mailbox->cache_len, mailbox->cache_size,
+		    "cache", mailbox->name);
+
+	strlcat(fname->buf, ".NEW", sizeof(fname->buf));
 	
-	newcache = fopen(fnamebuf, "w+");
+	newcache = fopen(fname->buf, "w+");
 	if (!newcache) {
-	    syslog(LOG_ERR, "IOERROR: creating %s: %m", fnamebuf);
+	    syslog(LOG_ERR, "IOERROR: creating %s: %m", fname->buf);
 	    fclose(newindex);
 	    mailbox_unlock_pop(mailbox);
 	    mailbox_unlock_index(mailbox);
@@ -1708,24 +2138,12 @@ mailbox_expunge(struct mailbox *mailbox,
 	    return IMAP_IOERROR;
 	}
     }
-	
-    /* Allocate temporary buffers */
-    if (mailbox->exists > 0) {
-        /* XXX kludge: not all mallocs return a valid pointer to 0 bytes;
-           some have the good sense to return 0 */
-        deleted = (unsigned long *)
-            xmalloc(mailbox->exists*sizeof(unsigned long));
-    } else {
-        deleted = 0;
-    }
-    buf = xmalloc(mailbox->start_offset > mailbox->record_size ?
-		  mailbox->start_offset : mailbox->record_size);
 
-    /* Copy over headers */
+    /* Copy over index header */
     memcpy(buf, mailbox->index_base, mailbox->start_offset);
 
     /* Update Generation Number */
-    if(fixcache) {
+    if (newcache) {
 	*((bit32 *)buf+OFFSET_GENERATION_NO) = htonl(mailbox->generation_no+1);
 
 	/* Write generation number to cache file */
@@ -1745,118 +2163,107 @@ mailbox_expunge(struct mailbox *mailbox,
 	}
     }
 
-    /* Copy over records for nondeleted messages */
-    for (msgno = 1; msgno <= mailbox->exists; msgno++) {
-	memcpy(buf,
-	       mailbox->index_base + mailbox->start_offset +
-	       (msgno - 1)*mailbox->record_size, mailbox->record_size);
+    /* If we're using cyrus.expunge, lock it */
+    if (expunge_fd != -1) {
+	const char *lockfailaction;
 
-	/* Sanity check */
-	if (*((bit32 *)(buf+OFFSET_UID)) == 0) {
-	    syslog(LOG_ERR, "IOERROR: %s zero index record %u/%lu",
-		   mailbox->name, msgno, mailbox->exists);
-	    goto fail;
+	fname = mailbox_meta_get_fname(&fpath, mailbox,
+				       IMAP_ENUM_METAPARTITION_FILES_EXPUNGE);
+
+	if ((r = lock_reopen(expunge_fd, fname->buf, &sbuf, &lockfailaction))) {
+	    syslog(LOG_ERR, "IOERROR: %s expunge index for %s: %m",
+		   lockfailaction, mailbox->name);
+	    close(expunge_fd);
 	}
+	else {
+	    /* Read the expunge index */
+	    if (!sbuf.st_size) {
+		/* Empty cyrus.expunge, create a header */
+		*((bit32 *)(buf+OFFSET_EXISTS)) = htonl(0);
+		*((bit32 *)(buf+OFFSET_ANSWERED)) = htonl(0);
+		*((bit32 *)(buf+OFFSET_DELETED)) = htonl(0);
+		*((bit32 *)(buf+OFFSET_FLAGGED)) = htonl(0);
 
-	if (decideproc ? decideproc(mailbox, deciderock, buf) :
-	    (ntohl(*((bit32 *)(buf+OFFSET_SYSTEM_FLAGS))) & FLAG_DELETED)) {
-	    bit32 sysflags;
+		/* quotas may be 64bit now */
+#ifdef HAVE_LONG_LONG_INT
+		*((bit64 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) = htonll(0);
+#else
+		/* zero the unused 32bits */
+		*((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) = htonl(0);
+		*((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) = htonl(0);
+#endif
 
-	    /* Remember UID and size */
-	    deleted[numdeleted++] = ntohl(*((bit32 *)(buf+OFFSET_UID)));
-	    quotadeleted += ntohl(*((bit32 *)(buf+OFFSET_SIZE)));
+		*((bit32 *)(buf+OFFSET_LEAKED_CACHE)) = htonl(0);
 
-	    /* figure out if deleted msg has system flags.
-	       update counts accordingly */
-	    sysflags = ntohl(*((bit32 *)(buf+OFFSET_SYSTEM_FLAGS)));
-	    if (sysflags & FLAG_ANSWERED)
-		numansweredflag++;
-	    if (sysflags & FLAG_DELETED)
-		numdeletedflag++;
-	    if (sysflags & FLAG_FLAGGED)
-		numflaggedflag++;
-	} else if(fixcache) {
-	    size_t cache_record_size;
-	    unsigned long cache_offset;
-	    unsigned int cache_ent;
-	    const char *cacheitem, *cacheitembegin;
-	    
-	    cache_offset = ntohl(*((bit32 *)(buf+OFFSET_CACHE_OFFSET)));
+		n = retry_write(expunge_fd, buf, mailbox->start_offset);
+    
+		/* Ensure everything made it to disk */
+		if (n != mailbox->start_offset || fsync(expunge_fd)) {
+		    syslog(LOG_ERR, "IOERROR: writing expunge index for %s: %m",
+			   mailbox->name);
+		    goto fail;
+		}
 
-	    if (cache_offset == 0) {
-		syslog(LOG_ERR, "IOERROR: reading index header for %s: got 0 cache_offset on message %u/%lu; trying recovery",
-		       mailbox->name, msgno, mailbox->exists);
-		continue;
+		sbuf.st_size = mailbox->start_offset;
 	    }
 
-	    /* Fix up cache file offset */
-	    *((bit32 *)(buf+OFFSET_CACHE_OFFSET)) =
-		htonl(new_cache_total_size);
-	    fwrite(buf, 1, mailbox->record_size, newindex);
+	    map_refresh(expunge_fd, 1, &expunge_index_base,
+			&expunge_index_len, sbuf.st_size, "expunge",
+			mailbox->name);
 
-	    /* Compute size of this record */
-	    cacheitembegin = cacheitem = mailbox->cache_base + cache_offset;
-	    for(cache_ent = 0; cache_ent < NUM_CACHE_FIELDS; cache_ent++) {
-		cacheitem = CACHE_ITEM_NEXT(cacheitem);
+	    expunge_exists = ntohl(*((bit32 *)(expunge_index_base+OFFSET_EXISTS)));
+
+	    /* Skip to end of file, so we can append new records */
+	    last_offset = mailbox->start_offset +
+		expunge_exists * mailbox->record_size;
+	    lseek(expunge_fd, last_offset, SEEK_SET);
+
+	    if ((flags & EXPUNGE_CLEANUP) && expunge_exists && decideproc) {
+		/* If we're doing a cleanup and there's a chance that we'll
+		 * leave expunged messages behind, open a new expunge file.
+		 */
+		strlcat(fname->buf, ".NEW", sizeof(fname->buf));
+
+		newexpungeindex = fopen(fname->buf, "w+");
+		if (!newexpungeindex) {
+		    syslog(LOG_ERR, "IOERROR: creating %s: %m", fname->buf);
+		    map_free(&expunge_index_base, &expunge_index_len);
+		    if (lock_unlock(expunge_fd))
+			syslog(LOG_ERR,
+			       "IOERROR: unlocking expunge index of %s: %m", 
+			       mailbox->name);
+		    r = IMAP_IOERROR;
+		}
 	    }
-	    cache_record_size = (cacheitem - cacheitembegin);
-	    new_cache_total_size += cache_record_size;
-
-	    /* fwrite will automatically call write() in a sane way */
-	    fwrite(cacheitembegin, 1,
-		   cache_record_size, newcache);
-	} else {
-	    /* Just copy the index record */
-	    fwrite(buf, 1, mailbox->record_size, newindex);
 	}
-    }
 
-    /* Fix up information in index header */
-    rewind(newindex);
-    n = fread(buf, 1, mailbox->start_offset, newindex);
-    if ((unsigned long)n != mailbox->start_offset) {
-	syslog(LOG_ERR, "IOERROR: reading index header for %s: got %d of %ld",
-	       mailbox->name, n, mailbox->start_offset);
-	goto fail;
-    }
-    /* Fix up exists */
-    newexists = ntohl(*((bit32 *)(buf+OFFSET_EXISTS)))-numdeleted;
-    *((bit32 *)(buf+OFFSET_EXISTS)) = htonl(newexists);
-    /* Fix up expunged count */
-    if(fixcache) {
-	*((bit32 *)(buf+OFFSET_LEAKED_CACHE)) = htonl(0);
-    } else {
-	*((bit32 *)(buf+OFFSET_LEAKED_CACHE)) = htonl(newexpunged + numdeleted);
-    }
-	    
-    /* Fix up other counts */
-    newanswered = ntohl(*((bit32 *)(buf+OFFSET_ANSWERED)))-numansweredflag;
-    *((bit32 *)(buf+OFFSET_ANSWERED)) = htonl(newanswered);
-    newdeleted = ntohl(*((bit32 *)(buf+OFFSET_DELETED)))-numdeletedflag;
-    *((bit32 *)(buf+OFFSET_DELETED)) = htonl(newdeleted);
-    newflagged = ntohl(*((bit32 *)(buf+OFFSET_FLAGGED)))-numflaggedflag;
-    *((bit32 *)(buf+OFFSET_FLAGGED)) = htonl(newflagged);
-
-    /* Fix up quota_mailbox_used */
-    *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) =
-      htonl(ntohl(*((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)))-quotadeleted);
-    /* Fix up start offset if necessary */
-    if (mailbox->start_offset < INDEX_HEADER_SIZE) {
-	*((bit32 *)(buf+OFFSET_START_OFFSET)) = htonl(INDEX_HEADER_SIZE);
+	if (r) {
+	    mailbox_unlock_pop(mailbox);
+	    mailbox_unlock_index(mailbox);
+	    mailbox_unlock_header(mailbox);
+	    return IMAP_IOERROR;
+	}
     }
 	
-    rewind(newindex);
-    fwrite(buf, 1, mailbox->start_offset, newindex);
-    
-    /* Ensure everything made it to disk */
-    fflush(newindex);
-    if(fixcache) fflush(newcache);
-    if (ferror(newindex) || (fixcache && ferror(newcache)) ||
-	fsync(fileno(newindex)) || (fixcache && fsync(fileno(newcache)))) {
-	syslog(LOG_ERR, "IOERROR: writing index/cache for %s: %m",
-	       mailbox->name);
-	goto fail;
+    /* Allocate array for deleted msgnos */
+    if (mailbox->exists || expunge_exists) {
+        /* XXX kludge: not all mallocs return a valid pointer to 0 bytes;
+           some have the good sense to return 0 */
+        deleted = (unsigned long *)
+            xmalloc((mailbox->exists + expunge_exists) * sizeof(unsigned long));
     }
+
+    /* If we're doing a cleanup w/o a decideproc, use expungenone()
+       so we don't delete any records from cyrus.index. */
+    if ((flags & EXPUNGE_CLEANUP) && !decideproc) decideproc = expungenone;
+
+    /* Copy over records for nondeleted messages */
+    r = process_records(mailbox, newindex, mailbox->index_base,
+			mailbox->exists, deleted, &numdeleted,
+			&quotadeleted, &numansweredflag, &numdeletedflag,
+			&numflaggedflag, newcache, &new_cache_total_size,
+			expunge_fd, last_offset, decideproc, deciderock, 0);
+    if (r) goto fail;
 
     /* Record quota release */
     r = quota_read(&mailbox->quota, &tid, 1);
@@ -1871,35 +2278,129 @@ mailbox_expunge(struct mailbox *mailbox,
 	if (!r) quota_commit(&tid);
 	else {
 	    syslog(LOG_ERR,
-		   "LOSTQUOTA: unable to record free of %u bytes in quota %s",
+		   "LOSTQUOTA: unable to record free of " UQUOTA_T_FMT " bytes in quota %s",
 		   quotadeleted, mailbox->quota.root);
 	}
     }
     else if (r != IMAP_QUOTAROOT_NONEXISTENT) goto fail;
 
-    strlcpy(fnamebuf, mailbox->path, sizeof(fnamebuf));
+    if (flags & EXPUNGE_CLEANUP) {
+	unsigned new_deleted = numdeleted;
 
-    fnamebuf_len = strlen(fnamebuf);
-    fnametail = fnamebuf + fnamebuf_len;
+	if (newexpungeindex) {
+	    /* Copy over expunge index header */
+	    memcpy(buf, expunge_index_base, mailbox->start_offset);
 
-    strlcpy(fnametail, FNAME_INDEX, sizeof(fnamebuf) - fnamebuf_len);
+	    /* Update Generation Number */
+	    *((bit32 *)buf+OFFSET_GENERATION_NO) = htonl(mailbox->generation_no+1);
 
-    strlcpy(fnamebufnew, fnamebuf, sizeof(fnamebufnew));
+	    /* Write out new expunge index header */
+	    fwrite(buf, 1, mailbox->start_offset, newexpungeindex);
+	}
+
+	/* If we're doing a cleanup w/o a decideproc, use expungeall()
+	   so we delete all records from cyrus.expunge. */
+	if (decideproc == expungenone) decideproc = expungeall;
+
+	/* Copy over records for nonpurged messages */
+	r = process_records(mailbox, newexpungeindex, expunge_index_base,
+			    expunge_exists, deleted, &numdeleted,
+			    &quotadeleted, &numansweredflag, &numdeletedflag,
+			    &numflaggedflag, newcache, &new_cache_total_size,
+			    -1, 0, decideproc, deciderock, EXPUNGE_CLEANUP);
+	if (r) goto fail;
+	expunge_exists -= (numdeleted - new_deleted);
+    }
+    else if (config_expunge_mode != IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE) {
+	/* Fix up information in expunge index header */
+	lseek(expunge_fd, 0, SEEK_SET);
+	n = read(expunge_fd, buf, mailbox->start_offset);
+	if ((unsigned long)n != mailbox->start_offset) {
+	    syslog(LOG_ERR,
+		   "IOERROR: reading expunge index header for %s: got %d of %ld",
+		   mailbox->name, n, mailbox->start_offset);
+	    ftruncate(expunge_fd, last_offset);
+	    goto fail;
+	}
+
+	/* Update appenddate */
+	*((bit32 *)(buf+OFFSET_LAST_APPENDDATE)) = htonl(now);
+
+	/* Fix up exists */
+	newexists = ntohl(*((bit32 *)(buf+OFFSET_EXISTS)))+numdeleted;
+	*((bit32 *)(buf+OFFSET_EXISTS)) = htonl(newexists);
+
+	/* Fix up other counts */
+	newanswered = ntohl(*((bit32 *)(buf+OFFSET_ANSWERED)))+numansweredflag;
+	*((bit32 *)(buf+OFFSET_ANSWERED)) = htonl(newanswered);
+	newdeleted = ntohl(*((bit32 *)(buf+OFFSET_DELETED)))+numdeletedflag;
+	*((bit32 *)(buf+OFFSET_DELETED)) = htonl(newdeleted);
+	newflagged = ntohl(*((bit32 *)(buf+OFFSET_FLAGGED)))+numflaggedflag;
+	*((bit32 *)(buf+OFFSET_FLAGGED)) = htonl(newflagged);
+
+	/* Fix up quota_mailbox_used */
+#ifdef HAVE_LONG_LONG_INT
+	*((bit64 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) =
+	    htonll(ntohll(*((bit64 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)))+quotadeleted);
+#else
+	/* zero the unused 32bits */
+	*((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) = htonl(0);
+	*((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) =
+	    htonl(ntohl(*((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)))+quotadeleted);
+#endif
+
+	/* Fix up start offset if necessary */
+	if (mailbox->start_offset < INDEX_HEADER_SIZE) {
+	    *((bit32 *)(buf+OFFSET_START_OFFSET)) = htonl(INDEX_HEADER_SIZE);
+	}
+
+	/* Write out new cyrus.expunge header */
+	lseek(expunge_fd, 0, SEEK_SET);
+	n = retry_write(expunge_fd, buf, mailbox->start_offset);
+
+	/* Ensure everything made it to disk */
+	if (n != mailbox->start_offset || fsync(expunge_fd)) {
+	    syslog(LOG_ERR, "IOERROR: writing index/cache for %s: %m",
+		   mailbox->name);
+	    ftruncate(expunge_fd, last_offset);
+	    goto fail;
+	}
+    }
+
+    /* Ensure everything made it to disk */
+    fflush(newindex);
+    if (newcache) fflush(newcache);
+    if (newexpungeindex) fflush(newexpungeindex);
+    if (ferror(newindex) || fsync(fileno(newindex)) ||
+	(newcache && (ferror(newcache) || fsync(fileno(newcache)))) ||
+	(newexpungeindex &&
+	 (ferror(newexpungeindex) || fsync(fileno(newexpungeindex))))) {
+	syslog(LOG_ERR, "IOERROR: writing index/cache/expunge for %s: %m",
+	       mailbox->name);
+	goto fail;
+    }
+
+    /* Rename/close our files */
+    fname = mailbox_meta_get_fname(&fpath, mailbox,
+				   IMAP_ENUM_METAPARTITION_FILES_INDEX);
+
+    strlcpy(fnamebufnew, fname->buf, sizeof(fnamebufnew));
     strlcat(fnamebufnew, ".NEW", sizeof(fnamebufnew));
 
-    if (rename(fnamebufnew, fnamebuf)) {
+    if (rename(fnamebufnew, fname->buf)) {
 	syslog(LOG_ERR, "IOERROR: renaming index file for %s: %m",
 	       mailbox->name);
 	goto fail;
     }
 
-    if(fixcache) {
-	strlcpy(fnametail, FNAME_CACHE, sizeof(fnamebuf) - fnamebuf_len);
-	
-	strlcpy(fnamebufnew, fnamebuf, sizeof(fnamebufnew));
+    if (newcache) {
+        fname = mailbox_meta_get_fname(&fpath, mailbox,
+				       IMAP_ENUM_METAPARTITION_FILES_CACHE);
+
+	strlcpy(fnamebufnew, fname->buf, sizeof(fnamebufnew));
 	strlcat(fnamebufnew, ".NEW", sizeof(fnamebufnew));
 	
-	if (rename(fnamebufnew, fnamebuf)) {
+	if (rename(fnamebufnew, fname->buf)) {
 	    syslog(LOG_CRIT,
 		   "CRITICAL IOERROR: renaming cache file for %s, need to reconstruct: %m",
 		   mailbox->name);
@@ -1907,48 +2408,81 @@ mailbox_expunge(struct mailbox *mailbox,
 	}
     }
 
-    if (numdeleted) {
+    if (flags & EXPUNGE_CLEANUP) {
+        fname = mailbox_meta_get_fname(&fpath, mailbox,
+				       IMAP_ENUM_METAPARTITION_FILES_EXPUNGE);
+
+	if (newexpungeindex) {
+	    strlcpy(fnamebufnew, fname->buf, sizeof(fnamebufnew));
+	    strlcat(fnamebufnew, ".NEW", sizeof(fnamebufnew));
+	
+	    if (rename(fnamebufnew, fname->buf)) {
+		syslog(LOG_CRIT,
+		       "CRITICAL IOERROR: renaming cache file for %s, need to reconstruct: %m",
+		       mailbox->name);
+		/* Fall through and delete message files anyway */
+	    }
+
+	    fclose(newexpungeindex);
+	}
+
+	if (!expunge_exists) {
+	    /* We deleted all cyrus.expunge records, so delete the file */
+	    unlink(fname->buf);
+	}
+    }
+    else if (numdeleted) {
 	if (updatenotifier) updatenotifier(mailbox);
     }
 
     mailbox_unlock_pop(mailbox);
     mailbox_unlock_index(mailbox);
     mailbox_unlock_header(mailbox);
+    if (expunge_fd != -1) {
+	if (lock_unlock(expunge_fd))
+	    syslog(LOG_ERR, "IOERROR: unlocking expunge index of %s: %m", 
+		   mailbox->name);
+	close(expunge_fd);
+    }
+    if (expunge_index_base) map_free(&expunge_index_base, &expunge_index_len);
     fclose(newindex);
-    if(fixcache) fclose(newcache);
 
-    /* Delete message files */
-    *fnametail++ = '/';
-    for (msgno = 0; msgno < numdeleted; msgno++) {
-	if (iscurrentdir) {
-	    char shortfnamebuf[MAILBOX_FNAME_LEN];
+    if (newcache) {
+	fclose(newcache);
+
+	/* Delete message files */
+	fname = &fpath.data;
+	*(fname->tail)++ = '/';
+	fname->len++;
+	for (msgno = 0; msgno < numdeleted; msgno++) {
 	    mailbox_message_get_fname(mailbox, deleted[msgno],
-				      shortfnamebuf, sizeof(shortfnamebuf));
-	    unlink(shortfnamebuf);
-	}
-	else {
-	    mailbox_message_get_fname(mailbox, deleted[msgno],
-				      fnametail,
-				      sizeof(fnamebuf) - strlen(fnamebuf));
-	    unlink(fnamebuf);
+				      fname->tail,
+				      sizeof(fname->buf) - fname->len);
+	    unlink(fname->buf);
 	}
     }
 
     if (numdeleted > 0) {
 	syslog(LOG_NOTICE, "Expunged %d messages from %s",
-	       numdeleted, mailbox->name); 
+	       numdeleted, mailbox->name);
     }
 
-    free(buf);
     if (deleted) free(deleted);
 
     return 0;
 
  fail:
-    free(buf);
-    free(deleted);
-    fclose(newindex);
-    if(fixcache) fclose(newcache);
+    if (deleted) free(deleted);
+    if (newindex) fclose(newindex);
+    if (newcache) fclose(newcache);
+    if (expunge_fd != -1) {
+	if (lock_unlock(expunge_fd))
+	    syslog(LOG_ERR, "IOERROR: unlocking expunge index of %s: %m", 
+		   mailbox->name);
+	close(expunge_fd);
+    }
+    if (expunge_index_base) map_free(&expunge_index_base, &expunge_index_len);
+    if (newexpungeindex) fclose(newexpungeindex);
     mailbox_unlock_pop(mailbox);
     mailbox_unlock_index(mailbox);
     mailbox_unlock_header(mailbox);
@@ -1956,23 +2490,26 @@ mailbox_expunge(struct mailbox *mailbox,
 }
 
 int mailbox_create(const char *name,
-		   char *path,
+		   char *partition,
 		   const char *acl,
 		   const char *uniqueid,
 		   int format,
 		   struct mailbox *mailboxp)
 {
     int r;
-    char *p;
     char quota_root[MAX_MAILBOX_PATH+1];
     int hasquota;
-    char fnamebuf[MAX_MAILBOX_PATH+1];
-    size_t fname_len;
+    char *path, *mpath;
+    struct fnamepath fpath;
+    struct fnamebuf *fname;
     struct mailbox mailbox;
     int save_errno;
     int n;
     const char *lockfailaction;
     struct stat sbuf;
+
+    r = mboxlist_getpath(partition, name, &path, &mpath);
+    if (r) return r;
 
     if (cyrus_mkdir(path, 0755) == -1) return IMAP_IOERROR;
     if (mkdir(path, 0755) == -1 && errno != EEXIST) {
@@ -1984,39 +2521,44 @@ int mailbox_create(const char *name,
 	}
     }
 
+    if (mpath && config_metapartition_files) {
+	if (cyrus_mkdir(mpath, 0755) == -1) return IMAP_IOERROR;
+	if (mkdir(mpath, 0755) == -1 && errno != EEXIST) {
+	    save_errno = errno;
+	    if (stat(mpath, &sbuf) == -1) {
+		errno = save_errno;
+		syslog(LOG_ERR, "IOERROR: creating directory %s: %m", mpath);
+		return IMAP_IOERROR;
+	    }
+	}
+    }
+
     zeromailbox(mailbox);
+
+    mailbox.name = xstrdup(name);
+    mailbox.path = xstrdup(path);
+    if (mpath) mailbox.mpath = xstrdup(mpath);
+    mailbox.acl = xstrdup(acl);
 
     hasquota = quota_findroot(quota_root, sizeof(quota_root), name);
 
-    /* Set up buffer */
-    strlcpy(fnamebuf, path, sizeof(fnamebuf));
-    fname_len = strlen(fnamebuf);
-    p = fnamebuf + fname_len;
+    /* Initialize the paths */
+    mailbox_meta_get_fname(&fpath, &mailbox, 0);
     
-    /* Bounds Check 
-     *
-     * - Do all bounds checking now, before we open anything so that we
-     *   fail as early as possible */
-    if(fname_len + strlen(FNAME_HEADER) >= sizeof(fnamebuf)) {
+    fname = mailbox_meta_get_fname(&fpath, &mailbox,
+				   IMAP_ENUM_METAPARTITION_FILES_HEADER);
+    /* Bounds Check */
+    if(!fname) {
 	syslog(LOG_ERR, "IOERROR: Mailbox name too long (%s + %s)",
-	       fnamebuf, FNAME_HEADER);
-	return IMAP_IOERROR;
-    } else if(fname_len + strlen(FNAME_INDEX) >= sizeof(fnamebuf)) {
-	syslog(LOG_ERR, "IOERROR: Mailbox name too long (%s + %s)",
-	       fnamebuf, FNAME_INDEX);
-	return IMAP_IOERROR;
-    } else if(fname_len + strlen(FNAME_CACHE) >= sizeof(fnamebuf)) {
-	syslog(LOG_ERR, "IOERROR: Mailbox name too long (%s + %s)",
-	       fnamebuf, FNAME_CACHE);
+	       fname->buf, FNAME_HEADER);
+	mailbox_close(&mailbox);
 	return IMAP_IOERROR;
     }
 
-    /* Concatinate */
-    strcpy(p, FNAME_HEADER);
-
-    mailbox.header_fd = open(fnamebuf, O_RDWR|O_TRUNC|O_CREAT, 0666);
+    mailbox.header_fd = open(fname->buf, O_RDWR|O_TRUNC|O_CREAT, 0666);
     if (mailbox.header_fd == -1) {
-	syslog(LOG_ERR, "IOERROR: creating %s: %m", fnamebuf);
+	syslog(LOG_ERR, "IOERROR: creating %s: %m", fname->buf);
+	mailbox_close(&mailbox);
 	return IMAP_IOERROR;
     }
 
@@ -2026,7 +2568,7 @@ int mailbox_create(const char *name,
      * changes have not been committed, and the mailbox we create here *can't*
      * be opened by anyone else */
 
-    r = lock_reopen(mailbox.header_fd, fnamebuf, NULL, &lockfailaction);
+    r = lock_reopen(mailbox.header_fd, fname->buf, NULL, &lockfailaction);
     if(r) {
 	syslog(LOG_ERR, "IOERROR: %s header for new mailbox %s: %m",
 	       lockfailaction, mailbox.name);
@@ -2035,19 +2577,24 @@ int mailbox_create(const char *name,
     }
     mailbox.header_lock_count++;
 
-    mailbox.name = xstrdup(name);
-    mailbox.path = xstrdup(path);
-    mailbox.acl = xstrdup(acl);
-
-    strcpy(p, FNAME_INDEX);
-    mailbox.index_fd = open(fnamebuf, O_RDWR|O_TRUNC|O_CREAT, 0666);
-    if (mailbox.index_fd == -1) {
-	syslog(LOG_ERR, "IOERROR: creating %s: %m", fnamebuf);
+    fname = mailbox_meta_get_fname(&fpath, &mailbox,
+				   IMAP_ENUM_METAPARTITION_FILES_INDEX);
+    /* Bounds Check */
+    if(!fname) {
+	syslog(LOG_ERR, "IOERROR: Mailbox name too long (%s + %s)",
+	       fname->buf, FNAME_INDEX);
 	mailbox_close(&mailbox);
 	return IMAP_IOERROR;
     }
 
-    r = lock_reopen(mailbox.index_fd, fnamebuf, NULL, &lockfailaction);
+    mailbox.index_fd = open(fname->buf, O_RDWR|O_TRUNC|O_CREAT, 0666);
+    if (mailbox.index_fd == -1) {
+	syslog(LOG_ERR, "IOERROR: creating %s: %m", fname->buf);
+	mailbox_close(&mailbox);
+	return IMAP_IOERROR;
+    }
+
+    r = lock_reopen(mailbox.index_fd, fname->buf, NULL, &lockfailaction);
     if(r) {
 	syslog(LOG_ERR, "IOERROR: %s index for new mailbox %s: %m",
 	       lockfailaction, mailbox.name);
@@ -2056,10 +2603,19 @@ int mailbox_create(const char *name,
     }
     mailbox.index_lock_count++;
 
-    strcpy(p, FNAME_CACHE);
-    mailbox.cache_fd = open(fnamebuf, O_RDWR|O_TRUNC|O_CREAT, 0666);
+    fname = mailbox_meta_get_fname(&fpath, &mailbox,
+				   IMAP_ENUM_METAPARTITION_FILES_CACHE);
+    /* Bounds Check */
+    if(!fname) {
+	syslog(LOG_ERR, "IOERROR: Mailbox name too long (%s + %s)",
+	       fname->buf, FNAME_CACHE);
+	mailbox_close(&mailbox);
+	return IMAP_IOERROR;
+    }
+
+    mailbox.cache_fd = open(fname->buf, O_RDWR|O_TRUNC|O_CREAT, 0666);
     if (mailbox.cache_fd == -1) {
-	syslog(LOG_ERR, "IOERROR: creating %s: %m", fnamebuf);
+	syslog(LOG_ERR, "IOERROR: creating %s: %m", fname->buf);
 	mailbox_close(&mailbox);
 	return IMAP_IOERROR;
     }
@@ -2079,7 +2635,9 @@ int mailbox_create(const char *name,
     mailbox.deleted = 0;
     mailbox.answered = 0;
     mailbox.flagged = 0;
-    mailbox.pop3_new_uidl = 1;
+    mailbox.options = OPT_POP3_NEW_UIDL;
+    mailbox.leaked_cache_records = 0;
+    mailbox.highestmodseq = 1;
 
     if (!uniqueid) {
 	size_t unique_size = sizeof(char) * 32;
@@ -2112,16 +2670,70 @@ int mailbox_create(const char *name,
 }
 
 /*
+ * Remove all files in directory
+ */
+static void mailbox_delete_files(char *path)
+{
+    DIR *dirp;
+    struct dirent *f;
+    char buf[MAX_MAILBOX_PATH+1];
+    char *tail;
+
+    strlcpy(buf, path, sizeof(buf));
+
+    if(strlen(buf) >= sizeof(buf) - 2) {
+	syslog(LOG_ERR, "IOERROR: Path too long (%s)", buf);
+	fatal("path too long", EC_OSFILE);
+    }
+
+    tail = buf + strlen(buf);
+    *tail++ = '/';
+    *tail = '\0';
+    dirp = opendir(path);
+    if (dirp) {
+	while ((f = readdir(dirp))!=NULL) {
+	    if (f->d_name[0] == '.'
+		&& (f->d_name[1] == '\0'
+		    || (f->d_name[1] == '.' &&
+			f->d_name[2] == '\0'))) {
+		/* readdir() can return "." or "..", and I got a bug report
+		   that SCO might blow the file system to smithereens if we
+		   unlink("..").  Let's not do that. */
+		continue;
+	    }
+
+	    if(strlen(buf) + strlen(f->d_name) >= sizeof(buf)) {
+		syslog(LOG_ERR, "IOERROR: Path too long (%s + %s)",
+		       buf, f->d_name);
+		fatal("Path too long", EC_OSFILE);
+	    }
+	    strcpy(tail, f->d_name);
+	    unlink(buf);
+	    *tail = '\0';
+	}
+	closedir(dirp);
+    }
+}
+
+/* Callback for use by cmd_delete */
+static int chkchildren(char *name,
+		       int matchlen __attribute__((unused)),
+		       int maycreate __attribute__((unused)),
+		       void *rock __attribute__((unused)))
+{
+    return CYRUSDB_DONE;
+}
+
+/*
  * Delete and close the mailbox 'mailbox'.  Closes 'mailbox' whether
  * or not the deletion was successful.  Requires a locked mailbox.
  */
 int mailbox_delete(struct mailbox *mailbox, int delete_quota_root)
 {
     int r, rquota = 0;
-    DIR *dirp;
-    struct dirent *f;
-    char buf[MAX_MAILBOX_PATH+1];
-    char *tail;
+    char nbuf[MAX_MAILBOX_NAME+1];
+    char pbuf[MAX_MAILBOX_PATH+1], mbuf[MAX_MAILBOX_PATH+1];
+    char *ntail, *ptail, *mtail = NULL;
     struct txn *tid = NULL;
     
     /* Ensure that we are locked */
@@ -2146,69 +2758,71 @@ int mailbox_delete(struct mailbox *mailbox, int delete_quota_root)
 	r = quota_write(&mailbox->quota, &tid);
 	if (r) {
 	    syslog(LOG_ERR,
-		   "LOSTQUOTA: unable to record free of %lu bytes in quota %s",
+		   "LOSTQUOTA: unable to record free of " UQUOTA_T_FMT " bytes in quota %s",
 		   mailbox->quota_mailbox_used, mailbox->quota.root);
 	}
 	else
 	    quota_commit(&tid);
     }
 
-    /* remove all files in directory */
-    strlcpy(buf, mailbox->path, sizeof(buf));
+    /* Flush data (message file) directory */
+    mailbox_delete_files(mailbox->path);
+    strlcpy(pbuf, mailbox->path, sizeof(pbuf));
+    ptail = pbuf + strlen(pbuf);
 
-    if(strlen(buf) >= sizeof(buf) - 2) {
-	syslog(LOG_ERR, "IOERROR: Path too long (%s)", buf);
-	fatal("path too long", EC_OSFILE);
+    /* Flush metadata directory */
+    if (mailbox->mpath) {
+	mailbox_delete_files(mailbox->mpath);
+	strlcpy(mbuf, mailbox->mpath, sizeof(mbuf));
+	mtail = mbuf + strlen(mbuf);
     }
 
-    tail = buf + strlen(buf);
-    *tail++ = '/';
-    *tail = '\0';
-    dirp = opendir(mailbox->path);
-    if (dirp) {
-	while ((f = readdir(dirp))!=NULL) {
-	    if (f->d_name[0] == '.'
-		&& (f->d_name[1] == '\0'
-		    || (f->d_name[1] == '.' &&
-			f->d_name[2] == '\0'))) {
-		/* readdir() can return "." or "..", and I got a bug report
-		   that SCO might blow the file system to smithereens if we
-		   unlink("..").  Let's not do that. */
-		continue;
-	    }
-
-	    if(strlen(buf) + strlen(f->d_name) >= sizeof(buf)) {
-		syslog(LOG_ERR, "IOERROR: Path too long (%s + %s)",
-		       buf, f->d_name);
-		fatal("Path too long", EC_OSFILE);
-	    }
-	    strcpy(tail, f->d_name);
-	    unlink(buf);
-	    *tail = '\0';
-	}
-	closedir(dirp);
-    }
-
-    /* Remove empty directories, going up path */
-    tail--;
+    strlcpy(nbuf, mailbox->name, sizeof(nbuf));
+    ntail = nbuf + strlen(nbuf);
     do {
-	*tail = '\0';
-    } while (rmdir(buf) == 0 && (tail = strrchr(buf, '/')));
+	/* Check if the mailbox has children */
+	strcpy(ntail, ".*");
+	r = mboxlist_findall(NULL, nbuf, 1, NULL, NULL, chkchildren, NULL);
+	if (r != 0) break; /* We short-circuit with CYRUSDB_DONE */
 
-    syslog(LOG_NOTICE, "Deleted mailbox %s", mailbox->name); 
+	/* No children, remove mailbox spool dir(s) */
+	if (rmdir(pbuf)) {
+	    syslog(LOG_NOTICE,
+		   "Remove of supposedly empty directory %s failed: %m",
+		   pbuf);
+	}
+	ptail = strrchr(pbuf, '/');
+	*ptail ='\0';
+
+	if (mtail) {
+	    if (rmdir(mbuf)) {
+		syslog(LOG_NOTICE,
+		       "Remove of supposedly empty directory %s failed: %m",
+		       mbuf);
+	    }
+	    mtail = strrchr(mbuf, '/');
+	    *mtail ='\0';
+	}
+
+	/* Check if parent mailbox exists */
+	*ntail = '\0';
+	ntail = strrchr(nbuf, '.');
+	if (!ntail || strchr(ntail, '!')) {
+	    /* Hit top of hierarchy or domain separator */
+	    break;
+	}
+	*ntail = '\0';
+	if (!strcmp(nbuf, "user") ||
+	    ((ntail - nbuf > 5) && !strcmp(ntail-5, "!user"))) {
+	    /* Hit top of 'user' hierarchy */
+	    break;
+	}
+	r = mboxlist_lookup(nbuf, NULL, NULL);
+    } while(r == IMAP_MAILBOX_NONEXISTENT);
+
+    syslog(LOG_NOTICE, "Deleted mailbox %s", mailbox->name);
     mailbox_close(mailbox);
     return 0;
-}
-
-/*
- * Expunge decision proc used by mailbox_rename() to expunge all messages
- * in INBOX
- */
-static int expungeall(struct mailbox *mailbox __attribute__((unused)),
-		      void *rock __attribute__((unused)),
-		      char *indexbuf __attribute__((unused)))
-{
-    return 1;
 }
 
 /* if 'isinbox' is set, we perform the funky RENAME INBOX INBOX.old
@@ -2216,23 +2830,23 @@ static int expungeall(struct mailbox *mailbox __attribute__((unused)),
    'user.foo'.*/
 /* requires a LOCKED oldmailbox pointer */
 int mailbox_rename_copy(struct mailbox *oldmailbox, 
-			const char *newname, char *newpath,
+			const char *newname,
+			char *newpartition,
 			bit32 *olduidvalidityp, bit32 *newuidvalidityp,
 			struct mailbox *newmailbox)
 {
     int r;
     unsigned int flag, msgno;
     struct index_record record;
-    char oldfname[MAX_MAILBOX_PATH+1], newfname[MAX_MAILBOX_PATH+1];
-    size_t oldfname_len, newfname_len, fn_len;
-    char *oldfnametail, *newfnametail;
+    struct fnamepath oldfpath, newfpath;
+    struct fnamebuf *oldfname, *newfname;
     struct txn *tid = NULL;
 
     assert(oldmailbox->header_lock_count > 0
 	   && oldmailbox->index_lock_count > 0);
 
     /* Create new mailbox */
-    r = mailbox_create(newname, newpath, 
+    r = mailbox_create(newname, newpartition,
 		       oldmailbox->acl, oldmailbox->uniqueid,
 		       oldmailbox->format, newmailbox);
 
@@ -2265,7 +2879,7 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
 	    strcmp(oldmailbox->quota.root, newmailbox->quota.root) != 0) {
 	    if (!r && newmailbox->quota.limit >= 0 &&
 		newmailbox->quota.used + oldmailbox->quota_mailbox_used >
-		((unsigned) newmailbox->quota.limit * QUOTA_UNITS)) {
+		((uquota_t) newmailbox->quota.limit * QUOTA_UNITS)) {
 		r = IMAP_QUOTA_EXCEEDED;
 	    }
 	}
@@ -2275,59 +2889,58 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
 	}
     }
 
-    strlcpy(oldfname, oldmailbox->path, sizeof(oldfname));
-    oldfname_len = strlen(oldfname);
-    oldfnametail = oldfname + oldfname_len;
-
-    strlcpy(newfname, newmailbox->path, sizeof(newfname));
-    newfname_len = strlen(newfname);
-    newfnametail = newfname + newfname_len;
-
-    /* Check to see if we're going to be over-long */
-    fn_len = strlen(FNAME_INDEX);
-    if(oldfname_len + fn_len > sizeof(oldfname))
-    {
-	syslog(LOG_ERR, "IOERROR: Path too long (%s + %s)",
-	       oldfname, FNAME_INDEX);
-	fatal("Path Too Long", EC_OSFILE);
-    }
-    if(newfname_len + fn_len > sizeof(newfname))
-    {
-	syslog(LOG_ERR, "IOERROR: Path too long (%s + %s)",
-	       newfname, FNAME_INDEX);
-	fatal("Path Too Long", EC_OSFILE);
-    }
-
-    fn_len = strlen(FNAME_CACHE);
-    if(oldfname_len + fn_len > sizeof(oldfname))
-    {
-	syslog(LOG_ERR, "IOERROR: Path too long (%s + %s)",
-	       oldfname, FNAME_CACHE);
-	fatal("Path Too Long", EC_OSFILE);
-    }
-    if(newfname_len + fn_len > sizeof(newfname))
-    {
-	syslog(LOG_ERR, "IOERROR: Path too long (%s + %s)",
-	       newfname, FNAME_CACHE);
-	fatal("Path Too Long", EC_OSFILE);
-    }
+    /* Initialize the paths */
+    mailbox_meta_get_fname(&oldfpath, oldmailbox, 0);
+    mailbox_meta_get_fname(&newfpath, newmailbox, 0);
 
     /* Copy over index/cache files */
-    strlcpy(oldfnametail, FNAME_INDEX, sizeof(oldfname) - oldfname_len);
-    strlcpy(newfnametail, FNAME_INDEX, sizeof(newfname) - newfname_len);
-    unlink(newfname);		/* Make link() possible */
+    oldfname = mailbox_meta_get_fname(&oldfpath, oldmailbox,
+				      IMAP_ENUM_METAPARTITION_FILES_INDEX);
+    newfname = mailbox_meta_get_fname(&newfpath, newmailbox,
+				      IMAP_ENUM_METAPARTITION_FILES_INDEX);
 
-    r = mailbox_copyfile(oldfname, newfname, 0);
+    /* Check to see if we're going to be over-long */
+    if (!oldfname) {
+	syslog(LOG_ERR, "IOERROR: Path too long (%s + %s)",
+	       oldfname->buf, FNAME_INDEX);
+	fatal("Path Too Long", EC_OSFILE);
+    }
+    if (!newfname) {
+	syslog(LOG_ERR, "IOERROR: Path too long (%s + %s)",
+	       newfname->buf, FNAME_INDEX);
+	fatal("Path Too Long", EC_OSFILE);
+    }
 
-    strlcpy(oldfnametail, FNAME_CACHE, sizeof(oldfname) - oldfname_len);
-    strlcpy(newfnametail, FNAME_CACHE, sizeof(newfname) - newfname_len);
-    unlink(newfname);
+    unlink(newfname->buf);		/* Make link() possible */
 
-    if (!r) r = mailbox_copyfile(oldfname, newfname, 0);
+    r = mailbox_copyfile(oldfname->buf, newfname->buf, 0);
+
+    oldfname = mailbox_meta_get_fname(&oldfpath, oldmailbox,
+				      IMAP_ENUM_METAPARTITION_FILES_CACHE);
+    newfname = mailbox_meta_get_fname(&newfpath, newmailbox,
+				      IMAP_ENUM_METAPARTITION_FILES_CACHE);
+
+    /* Check to see if we're going to be over-long */
+    if (!oldfname) {
+	syslog(LOG_ERR, "IOERROR: Path too long (%s + %s)",
+	       oldfname->buf, FNAME_CACHE);
+	fatal("Path Too Long", EC_OSFILE);
+    }
+    if (!newfname) {
+	syslog(LOG_ERR, "IOERROR: Path too long (%s + %s)",
+	       newfname->buf, FNAME_CACHE);
+	fatal("Path Too Long", EC_OSFILE);
+    }
+
+    unlink(newfname->buf);
+
+    if (!r) r = mailbox_copyfile(oldfname->buf, newfname->buf, 0);
     if (r) {
 	mailbox_close(newmailbox);
 	return r;
     }
+
+    /* XXX For two-phase expunge, we also need to copy cyrus.expunge */
 
     /* Re-open index file and store new uidvalidity  */
     close(newmailbox->index_fd);
@@ -2337,26 +2950,34 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     (void) mailbox_write_index_header(newmailbox);
 
     /* Copy over message files */
-    oldfnametail++;
-    newfnametail++;
+    oldfname = &oldfpath.data;
+    *(oldfname->tail)++ = '/';
+    oldfname->len++;
+    newfname = &newfpath.data;
+    *(newfname->tail)++ = '/';
+    newfname->len++;
+
     for (msgno = 1; msgno <= oldmailbox->exists; msgno++) {
 	r = mailbox_read_index_record(oldmailbox, msgno, &record);
 	if (r) break;
-	mailbox_message_get_fname(oldmailbox, record.uid, oldfnametail,
-				  sizeof(oldfname) - strlen(oldfname));
+	mailbox_message_get_fname(oldmailbox, record.uid, oldfname->tail,
+				  sizeof(oldfname->buf) - oldfname->len);
 
-	if(strlen(newfname) + strlen(oldfnametail) >= sizeof(newfname)) {
+	if(newfname->len + strlen(oldfname->tail) >= sizeof(newfname->buf)) {
 	    syslog(LOG_ERR, "IOERROR: Path too long (%s + %s)",
-		   newfname, oldfnametail);
+		   newfname->buf, oldfname->tail);
 	    fatal("Path too long", EC_OSFILE);
 	}
 
-	strcpy(newfnametail, oldfnametail);
+	strcpy(newfname->tail, oldfname->tail);
 
-	r = mailbox_copyfile(oldfname, newfname, 0);
+	r = mailbox_copyfile(oldfname->buf, newfname->buf, 0);
 	if (r) break;
     }
     if (!r) r = seen_copy(oldmailbox, newmailbox);
+
+    /* XXX For two-phase expunge, we also need to copy message files
+       referenced by cyrus.expunge */
 
     /* Record new quota usage */
     if (!r && newmailbox->quota.root) {
@@ -2369,9 +2990,9 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
 	for (msgno = 1; msgno <= oldmailbox->exists; msgno++) {
 	    if (mailbox_read_index_record(oldmailbox, msgno, &record))
 		continue;
-	    mailbox_message_get_fname(oldmailbox, record.uid, newfnametail,
-				      sizeof(newfname) - strlen(newfname));
-	    (void) unlink(newfname);
+	    mailbox_message_get_fname(oldmailbox, record.uid, newfname->tail,
+				      sizeof(newfname->buf) - newfname->len);
+	    (void) unlink(newfname->buf);
 	}
     }
 
@@ -2384,7 +3005,7 @@ int mailbox_rename_cleanup(struct mailbox *oldmailbox, int isinbox)
     
     if (isinbox) {
 	/* Expunge old mailbox */
-	r = mailbox_expunge(oldmailbox, 0, expungeall, (char *)0);
+	r = mailbox_expunge(oldmailbox, expungeall, (char *)0, EXPUNGE_FORCE);
     } else {
 	r = mailbox_delete(oldmailbox, 0);
     }
@@ -2404,8 +3025,9 @@ int mailbox_rename_cleanup(struct mailbox *oldmailbox, int isinbox)
  * Synchronize 'new' mailbox to 'old' mailbox.
  */
 int
-mailbox_sync(const char *oldname, const char *oldpath, const char *oldacl, 
-	     const char *newname, char *newpath, int docreate, 
+mailbox_sync(const char *oldname, const char *oldpath,
+	     const char *oldmpath, const char *oldacl, 
+	     const char *newname, char *newpath, char *newmpath, int docreate, 
 	     bit32 *olduidvalidityp, bit32 *newuidvalidityp,
 	     struct mailbox *mailboxp)
 {
@@ -2419,7 +3041,8 @@ mailbox_sync(const char *oldname, const char *oldpath, const char *oldacl,
     struct txn *tid = NULL;
 
     /* Open old mailbox and lock */
-    mailbox_open_header_path(oldname, oldpath, oldacl, 0, &oldmailbox, 0);
+    mailbox_open_header_path(oldname, oldpath, oldmpath,
+			     oldacl, 0, &oldmailbox, 0);
 
     if (oldmailbox.format == MAILBOX_FORMAT_NETNEWS) {
 	mailbox_close(&oldmailbox);
@@ -2442,7 +3065,8 @@ mailbox_sync(const char *oldname, const char *oldpath, const char *oldacl,
     }
     else {
 	/* Open new mailbox and lock */
-	r = mailbox_open_header_path(newname, newpath, oldacl, 0, &newmailbox, 0);
+	r = mailbox_open_header_path(newname, newpath, newmpath,
+				     oldacl, 0, &newmailbox, 0);
 	r =  mailbox_lock_header(&newmailbox);
 	if (!r) r = mailbox_open_index(&newmailbox);
 	if (!r) r = mailbox_lock_index(&newmailbox);
@@ -2479,7 +3103,7 @@ mailbox_sync(const char *oldname, const char *oldpath, const char *oldacl,
 	    strcmp(oldmailbox.quota.root, newmailbox.quota.root) != 0) {
 	    if (!r && newmailbox.quota.limit >= 0 &&
 		newmailbox.quota.used + oldmailbox.quota_mailbox_used >
-		((unsigned) newmailbox.quota.limit * QUOTA_UNITS)) {
+		((uquota_t) newmailbox.quota.limit * QUOTA_UNITS)) {
 		r = IMAP_QUOTA_EXCEEDED;
 	    }
 	}
@@ -2632,7 +3256,7 @@ mailbox_sync(const char *oldname, const char *oldpath, const char *oldacl,
 	else if (r2 == IMAP_QUOTAROOT_NONEXISTENT) r2 = 0;
 	if (r2) {
 	    syslog(LOG_ERR,
-	      "LOSTQUOTA: unable to record use of %lu bytes in quota %s",
+	      "LOSTQUOTA: unable to record use of " UQUOTA_T_FMT " bytes in quota %s",
 		   newmailbox.quota_mailbox_used, newmailbox.quota.root);
 	}
     }

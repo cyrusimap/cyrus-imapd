@@ -1,4 +1,4 @@
-$Id: README,v 1.3 2003/11/24 20:19:50 rjs3 Exp $
+$Id: README,v 1.4 2006/11/30 17:11:23 murch Exp $
 
 This is a Perl interface to the Cyrus imclient library, and an administrative
 library, and a replacement for the "cyradm" shell.  The imclient library is

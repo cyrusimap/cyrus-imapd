@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
-/* $Id: signals.h,v 1.1 2004/12/17 16:32:22 ken3 Exp $ */
+/* $Id: signals.h,v 1.2 2006/11/30 17:11:20 murch Exp $ */
 
 #ifndef INCLUDED_SIGNALS_H
 #define INCLUDED_SIGNALS_H

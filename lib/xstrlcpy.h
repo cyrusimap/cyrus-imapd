@@ -1,5 +1,5 @@
 /* xmalloc.h -- Allocation package that calls fatal() when out of memory
- * $Id: xstrlcpy.h,v 1.1 2006/01/10 23:18:48 jeaton Exp $
+ * $Id: xstrlcpy.h,v 1.2 2006/11/30 17:11:22 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -44,10 +44,14 @@
 #ifndef INCLUDED_XSTRLCPY_H
 #define INCLUDED_XSTRLCPY_H
 
+#include <config.h>
+
 /* for size_t */
 #include <stdio.h>
 /* for free() */
 #include <stdlib.h>
+/* for strlen() */
+#include <string.h>
 
 /* handy string manipulation functions */
 #ifndef HAVE_STRLCPY

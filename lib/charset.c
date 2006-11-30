@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 /*
- * $Id: charset.c,v 1.45 2006/06/14 12:44:05 murch Exp $
+ * $Id: charset.c,v 1.46 2006/11/30 17:11:22 murch Exp $
  */
 #include <config.h>
 #include <ctype.h>
@@ -1328,4 +1328,77 @@ static int charset_readbase64_nospc(struct input_state *state,
 	}
     }
     return retval;
+}
+
+/*
+ * Base64 encode the MIME body part (per RFC 2045) of 'len' bytes located at
+ * 'msg_base'.  Encodes into 'retval' which must large enough to
+ * accomodate the encoded data.  Returns the number of encoded bytes in
+ * 'outlen' and the number of encoded lines in 'outlines'.
+ *
+ * May be called with 'msg_base' as NULL to get the number of encoded
+ * bytes for allocating 'retval' of the proper size.
+ */
+#define BASE64_MAX_LINE_LEN  72
+
+static char base_64[] =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+char *charset_encode_mimebody(const char *msg_base, int len,
+			      char *retval, int *outlen, int *outlines)
+{
+    const unsigned char *s;
+    unsigned char s0, s1, s2;
+    char *d;
+    int b64_len, b64_lines, cnt;
+
+    b64_len = ((len + 2) / 3) * 4;
+    b64_lines = (b64_len + BASE64_MAX_LINE_LEN - 1) / BASE64_MAX_LINE_LEN;
+
+    /* account for CRLF added to each line */
+    b64_len += 2 * b64_lines;
+
+    if (outlen) *outlen = b64_len;
+    if (outlines) *outlines = b64_lines;
+
+    if (!msg_base) return NULL;
+
+    for (s = (const unsigned char*) msg_base, d = retval, cnt = 0; len;
+	 s += 3, d += 4, cnt += 4) { /* process tuplets */
+	if (cnt == BASE64_MAX_LINE_LEN) {
+	    /* reset line len count, add CRLF */
+	    cnt = 0;
+	    *d++ = '\r';
+	    *d++ = '\n';
+	}
+
+	s0 = s[0];
+	s1 = --len ? s[1] : 0;
+	/* byte 1: high 6 bits (1) */
+	d[0] = base_64[s0 >> 2];
+	/* byte 2: low 2 bits (1), high 4 bits (2) */
+	d[1] = base_64[((s0 & 0x3) << 4) | ((s1 & 0xf0) >> 4)];
+	if (len) {
+	    s2 = --len ? s[2] : 0;
+	    /* byte 3: low 4 bits (2), high 2 bits (3) */
+	    d[2] = base_64[((s1 & 0xf) << 2) | ((s2 & 0xc0) >> 6)];
+	} else {
+	    /* byte 3: pad */
+	    d[2] = '=';
+	}
+	if (len) {
+	    --len;
+	    /* byte 4: low 6 bits (3) */
+	    d[3] = base_64[s2 & 0x3f];
+	} else {
+	    /* byte 4: pad */
+	    d[3] = '=';
+	}
+    }
+
+    /* add final CRLF */
+    *d++ = '\r';
+    *d++ = '\n';
+
+    return (b64_len ? retval : NULL);
 }

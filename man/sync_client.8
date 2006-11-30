@@ -1,0 +1,181 @@
+.\" -*- nroff -*-
+.TH SYNC_CLIENT 8 "Project Cyrus" CMU
+.\" 
+.\" Copyright (c) 2005 Carnegie Mellon University.  All rights reserved.
+.\"
+.\" Redistribution and use in source and binary forms, with or without
+.\" modification, are permitted provided that the following conditions
+.\" are met:
+.\"
+.\" 1. Redistributions of source code must retain the above copyright
+.\"    notice, this list of conditions and the following disclaimer. 
+.\"
+.\" 2. Redistributions in binary form must reproduce the above copyright
+.\"    notice, this list of conditions and the following disclaimer in
+.\"    the documentation and/or other materials provided with the
+.\"    distribution.
+.\"
+.\" 3. The name "Carnegie Mellon University" must not be used to
+.\"    endorse or promote products derived from this software without
+.\"    prior written permission. For permission or any other legal
+.\"    details, please contact  
+.\"      Office of Technology Transfer
+.\"      Carnegie Mellon University
+.\"      5000 Forbes Avenue
+.\"      Pittsburgh, PA  15213-3890
+.\"      (412) 268-4387, fax: (412) 268-7395
+.\"      tech-transfer@andrew.cmu.edu
+.\"
+.\" 4. Redistributions of any form whatsoever must retain the following
+.\"    acknowledgment:
+.\"    "This product includes software developed by Computing Services
+.\"     at Carnegie Mellon University (http://www.cmu.edu/computing/)."
+.\"
+.\" CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
+.\" THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+.\" AND FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE
+.\" FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+.\" WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+.\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
+.\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+.\" 
+.\" $Id: sync_client.8,v 1.2 2006/11/30 17:11:23 murch Exp $
+.SH NAME
+sync_client \- client side of the synchronization (replication) engine
+.SH SYNOPSIS
+.B sync_client
+[
+.B \-v
+]
+[
+.B \-l
+]
+[
+.B \-C
+.I config-file
+]
+[
+.B \-S
+.I servername
+]
+.br
+            [
+.B \-f
+.I input-file
+]
+[
+.B \-F
+.I shutdown_file
+]
+[
+.B \-w
+.I wait_interval
+]
+.br
+            [
+.B \-t
+.I timeout
+]
+[
+.B \-d
+.I delay
+]
+[
+.B \-r
+]
+[
+.B \-u
+]
+[
+.B \-m
+]
+.br
+            [
+.B \-s
+]
+.IR objects ...
+
+.SH DESCRIPTION
+.I Sync_client
+is the client side of the replication system.  It runs on the client
+(master) system and connects to the target (replica) system and
+generates an appropriate sequence of transactions to synchronize the
+replica system with the master system.
+.SH OPTIONS
+.TP
+.BI \-v
+Verbose mode.
+.TP
+.BI \-l
+Verbose logging mode.
+.TP
+.BI \-C " config-file"
+Read configuration options from \fIconfig-file\fR.
+.TP
+.BI \-S " servername"
+Tells
+.B sync_client
+which server to communicate with.  Overrides the \fIsync_host\fR
+configuration option.
+.TP
+.BI \-f " input-file"
+In mailbox or user replication mode: provides list of users or mailboxes
+to replicate.  In rolling replication mode, specifies an alternate log
+file (sync_client will exit after processing the log file).
+.TP
+.BI \-F " shutdown-file"
+Rolling replication checks for this file at the end of each replication
+cycle and shuts down if it is present. Used to request nice clean shutdown
+at first convenient point. The file in question is removed on shutdown.
+Overrides
+.I sync_shutdown_file
+option in
+.I imapd.conf
+.TP
+.BI \-w " interval"
+Wait this long before starting. Typically used so that we can attach a
+debugger to one end of the replication system or the other.
+.TP
+.BI \-t " timeout"
+Timeout for single replication run in rolling replication.
+.B sync_client
+will negotiate a restart after this many seconds. Default: 600 seconds
+.TP
+.BI \-d " delay"
+Minimum delay between replication runs in rolling replication mode.
+Larger values provide better efficiency as transactions can be merged.
+Smaller values mean that the replica system is more up to date and that
+you don't end up with large blocks of replication transactions as a single
+group. Default: 3 seconds.
+.TP
+.BI \-r
+Rolling (repeat) replication mode. Pick up a list of actions recorded by
+the
+.B lmtpd(8), imapd(8), popd(8) and nntpd(8)
+daemons from the file specified in
+.I sync_log_file.
+Repeat until
+.I sync_shutdwon_file
+appears.
+.TP
+.BI \-u
+User mode.
+Remaining arguments are list of users who should be replicated.
+.TP
+.BI \-m
+Mailbox mode.
+Remaining arguments are list of mailboxes which should be replicated.
+.TP
+.BI \-s
+Sieve mode.
+Remaining arguments are list of users whose Sieve files should be replicated.
+Principally used for debugging purposes: not exposed to
+.B sync_client(8).
+.SH FILES
+.TP
+.B /etc/imapd.conf
+.SH SEE ALSO
+.PP
+\fBsync_server(8)\fR
+.SH AUTHORS
+David Carter (dpc22@cam.ac.uk), Ken Murchison (ken@oceana.com)

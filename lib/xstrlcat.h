@@ -1,5 +1,5 @@
 /* xmalloc.h -- Allocation package that calls fatal() when out of memory
- * $Id: xstrlcat.h,v 1.1 2006/01/10 23:18:48 jeaton Exp $
+ * $Id: xstrlcat.h,v 1.2 2006/11/30 17:11:22 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -44,10 +44,14 @@
 #ifndef INCLUDED_XSTRLCAT_H
 #define INCLUDED_XSTRLCAT_H
 
+#include <config.h>
+
 /* for size_t */
 #include <stdio.h>
 /* for free() */
 #include <stdlib.h>
+/* for strlen() */
+#include <string.h>
 
 #ifndef HAVE_STRLCAT
 extern size_t strlcat(char *dst, const char *src, size_t len);

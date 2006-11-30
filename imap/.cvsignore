@@ -20,6 +20,7 @@ lmtpd
 lmtpproxyd
 lmtpstats.c
 lmtpstats.h
+make_md5
 mbexamine
 mbpath
 mupdate
@@ -36,5 +37,9 @@ quota
 reconstruct
 smmapd
 squatter
+sync_client
+sync_reset
+sync_server
 tls_prune
+unexpunge
 xversion.h

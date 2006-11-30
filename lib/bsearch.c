@@ -1,5 +1,5 @@
 /* bsearch.c -- binary search newline-separated fields in memory
- $Id: bsearch.c,v 1.19 2003/02/13 20:15:39 rjs3 Exp $
+ $Id: bsearch.c,v 1.20 2006/11/30 17:11:22 murch Exp $
  
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -213,3 +213,22 @@ int bsearch_compare(const char *s1, const char *s2)
 	s2++;
     }
 }
+
+int bsearch_ncompare(const char *s1, int l1, const char *s2, int l2)
+{
+    int min = l1 < l2 ? l1 : l2;
+    int cmp = 0;
+
+    while (min-- > 0 && (cmp = TOCOMPARE(*s1) - TOCOMPARE(*s2)) == 0) {
+        s1++;
+        s2++;
+    }
+    if (min >= 0) {
+        return cmp;
+    } else {
+        if (l2 > l1) return -1;
+        else if (l1 > l2) return 1;
+        else return 0;
+    }
+}
+

@@ -1,6 +1,6 @@
 /* lmtpd.h -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.h,v 1.3 2005/10/31 14:21:54 ken3 Exp $
+ * $Id: lmtpd.h,v 1.4 2006/11/30 17:11:18 murch Exp $
  * Copyright (c) 1998-2005 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -71,7 +71,14 @@ typedef struct deliver_data {
 } deliver_data_t;
 
 /* forward declarations */
-extern int deliver_mailbox(struct protstream *msg,
+extern int deliver_local(deliver_data_t *mydata,
+			 char **flag,
+			 int nflags,
+			 const char *username,
+			 const char *mailboxname);
+
+extern int deliver_mailbox(FILE *f,
+			   struct message_content *content,
 			   struct stagemsg *stage,
 			   unsigned size,
 			   char **flag,
@@ -84,9 +91,6 @@ extern int deliver_mailbox(struct protstream *msg,
 			   const char *mailboxname,
 			   int quotaoverride,
 			   int acloverride);
-
-extern int deliver_local(deliver_data_t *mydata, char **flag, int nflags,
-			 const char *username, const char *mailboxname);
 
 extern int fuzzy_match(char *mboxname);
 

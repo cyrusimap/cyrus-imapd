@@ -1,6 +1,6 @@
 /* message.c -- message parsing functions
  * Larry Greenfield
- * $Id: message.c,v 1.28 2004/07/15 15:02:51 ken3 Exp $
+ * $Id: message.c,v 1.29 2006/11/30 17:11:24 murch Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -38,6 +38,8 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <fcntl.h>
 #include <string.h>
 
+#include "md5global.h"
+#include "md5.h"
 #include "sieve_interface.h"
 #include "interp.h"
 #include "message.h"
@@ -76,6 +78,7 @@ int do_reject(action_list_t *a, const char *msg)
     if (a == NULL)
 	return SIEVE_NOMEM;
     a->a = ACTION_REJECT;
+    a->cancel_keep = 1;
     a->u.rej.msg = msg;
     b->next = a;
     a->next =  NULL;
@@ -86,7 +89,7 @@ int do_reject(action_list_t *a, const char *msg)
  *
  * incompatible with: reject
  */
-int do_fileinto(action_list_t *a, const char *mbox,
+int do_fileinto(action_list_t *a, const char *mbox, int cancel_keep,
 		sieve_imapflags_t *imapflags)
 {
     action_list_t *b = NULL;
@@ -104,6 +107,7 @@ int do_fileinto(action_list_t *a, const char *mbox,
     if (a == NULL)
 	return SIEVE_NOMEM;
     a->a = ACTION_FILEINTO;
+    a->cancel_keep = cancel_keep;
     a->u.fil.mailbox = mbox;
     a->u.fil.imapflags = imapflags;
     b->next = a;
@@ -115,7 +119,7 @@ int do_fileinto(action_list_t *a, const char *mbox,
  *
  * incompatible with: reject
  */
-int do_redirect(action_list_t *a, const char *addr)
+int do_redirect(action_list_t *a, const char *addr, int cancel_keep)
 {
     action_list_t *b = NULL;
 
@@ -134,6 +138,7 @@ int do_redirect(action_list_t *a, const char *addr)
     if (a == NULL)
 	return SIEVE_NOMEM;
     a->a = ACTION_REDIRECT;
+    a->cancel_keep = cancel_keep;
     a->u.red.addr = addr;
     a->next = NULL;
     b->next = a;
@@ -163,6 +168,7 @@ int do_keep(action_list_t *a, sieve_imapflags_t *imapflags)
     if (a == NULL)
 	return SIEVE_NOMEM;
     a->a = ACTION_KEEP;
+    a->cancel_keep = 1;
     a->u.keep.imapflags = imapflags;
     a->next = NULL;
     b->next = a;
@@ -190,14 +196,29 @@ int do_discard(action_list_t *a)
     if (a == NULL)
 	return SIEVE_NOMEM;
     a->a = ACTION_DISCARD;
+    a->cancel_keep = 1;
     a->next = NULL;
     b->next = a;
     return 0;
 }
 
+static int makehash(unsigned char hash[],
+		    const char *s1, const char *s2, const char *s3)
+{
+    MD5_CTX ctx;
+
+    MD5Init(&ctx);
+    MD5Update(&ctx, s1, strlen(s1));
+    MD5Update(&ctx, s2, strlen(s2));
+    if (s3) MD5Update(&ctx, s3, strlen(s3));
+    MD5Final(hash, &ctx);
+
+    return SIEVE_OK;
+}
+
 int do_vacation(action_list_t *a, char *addr, char *fromaddr,
 		char *subj, const char *msg, int days,
-		int mime)
+		int mime, char *handle)
 {
     action_list_t *b = NULL;
 
@@ -215,11 +236,16 @@ int do_vacation(action_list_t *a, char *addr, char *fromaddr,
     if (a == NULL)
 	return SIEVE_NOMEM;
     a->a = ACTION_VACATION;
+    a->cancel_keep = 0;
     a->u.vac.send.addr = addr;
     a->u.vac.send.fromaddr = fromaddr;
     a->u.vac.send.subj = subj;	/* user specified subject */
     a->u.vac.send.msg = msg;
     a->u.vac.send.mime = mime;
+    if (handle)
+	makehash(a->u.vac.autoresp.hash, addr, handle, NULL);
+    else
+	makehash(a->u.vac.autoresp.hash, addr, fromaddr, msg);
     a->u.vac.autoresp.days = days;
     a->next = NULL;
     b->next = a;
@@ -247,6 +273,7 @@ int do_setflag(action_list_t *a, const char *flag)
     if (a == NULL)
 	return SIEVE_NOMEM;
     a->a = ACTION_SETFLAG;
+    a->cancel_keep = 0;
     a->u.fla.flag = flag;
     b->next = a;
     a->next = NULL;
@@ -274,6 +301,7 @@ int do_addflag(action_list_t *a, const char *flag)
     if (a == NULL)
 	return SIEVE_NOMEM;
     a->a = ACTION_ADDFLAG;
+    a->cancel_keep = 0;
     a->u.fla.flag = flag;
     b->next = a;
     a->next = NULL;
@@ -301,6 +329,7 @@ int do_removeflag(action_list_t *a, const char *flag)
     if (a == NULL)
 	return SIEVE_NOMEM;
     a->a = ACTION_REMOVEFLAG;
+    a->cancel_keep = 0;
     a->u.fla.flag = flag;
     b->next = a;
     a->next = NULL;
@@ -329,6 +358,7 @@ int do_mark(action_list_t *a)
     if (a == NULL)
 	return SIEVE_NOMEM;
     a->a = ACTION_MARK;
+    a->cancel_keep = 0;
     b->next = a;
     a->next = NULL;
     return 0;
@@ -356,6 +386,7 @@ int do_unmark(action_list_t *a)
     if (a == NULL)
 	return SIEVE_NOMEM;
     a->a = ACTION_UNMARK;
+    a->cancel_keep = 0;
     b->next = a;
     a->next = NULL;
     return 0;
@@ -403,7 +434,7 @@ int do_denotify(notify_list_t *n, comparator_t *comp, const void *pat,
     while (n != NULL) {
 	if (n->isactive && 
 	    (!priority || !strcasecmp(n->priority, priority)) &&
-	    (!comp || (n->id && comp(n->id, pat, comprock)))) {
+	    (!comp || (n->id && comp(n->id, strlen(n->id), pat, comprock)))) {
 	    n->isactive = 0;
 	}
 	n = n->next;
@@ -559,6 +590,7 @@ action_list_t *new_action_list(void)
 	ret->a = ACTION_NONE;
 	ret->param = NULL;
 	ret->next = NULL;
+	ret->cancel_keep = 0;
     }
     return ret;
 }

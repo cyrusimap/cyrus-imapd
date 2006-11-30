@@ -1,6 +1,6 @@
 /* mpool.h memory pool management
  *
- * $Id: mpool.h,v 1.11 2006/01/10 18:14:53 murch Exp $
+ * $Id: mpool.h,v 1.12 2006/11/30 17:11:22 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without

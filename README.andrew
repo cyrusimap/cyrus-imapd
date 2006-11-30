@@ -8,7 +8,7 @@
 #
 #
 
-smake -d init mf checkdepend all install 2>&1 | tee LOG.`sys`
+smake -d init mf checkdepend all install
 
 exit 0
 
@@ -44,7 +44,7 @@ To make a release:
     cyrus-announce
     freshmeat.net
 
-- update asg.web links to new version
+- update cyrusimap.web.cmu.edu links to new version
 
 ---
 to bring up a new Andrew Cyrus server:

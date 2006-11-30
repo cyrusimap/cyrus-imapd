@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idled.c,v 1.23 2004/07/27 16:19:44 rjs3 Exp $ */
+/* $Id: idled.c,v 1.24 2006/11/30 17:11:17 murch Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -216,6 +216,9 @@ void process_msg(idle_data_t *idledata)
 
 	/* remove pid from list of those idling on mboxname */
 	idle_done(idledata->mboxname, idledata->pid);
+	break;
+
+    case IDLE_NOOP:
 	break;
 	
     default:

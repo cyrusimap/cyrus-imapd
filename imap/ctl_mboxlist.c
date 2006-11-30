@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.50 2006/04/06 15:33:08 murch Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.51 2006/11/30 17:11:17 murch Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -125,7 +125,7 @@ static int mupdate_list_cb(struct mupdate_mailboxdata *mdata,
     int ret;
 
     /* the server thinks we have it, do we think we have it? */
-    ret = mboxlist_lookup(mdata->mailbox, NULL, NULL, NULL);
+    ret = mboxlist_lookup(mdata->mailbox, NULL, NULL);
     if(ret) {
 	struct mb_node *next;
 	
@@ -415,7 +415,8 @@ void do_dump(enum mboxop op, const char *part, int purge)
 	    
 	    unflag_head = unflag_head->next;
 	    
-	    ret = mboxlist_detail(me->mailbox, &type, NULL, &part, &acl, NULL);
+	    ret = mboxlist_detail(me->mailbox, &type, NULL, NULL,
+				  &part, &acl, NULL);
 	    if(ret) {
 		fprintf(stderr,
 			"couldn't perform lookup to un-remote-flag %s\n",

@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: cvt_cyrusdb.c,v 1.15 2004/05/22 03:45:48 rjs3 Exp $
+ * $Id: cvt_cyrusdb.c,v 1.16 2006/11/30 17:11:17 murch Exp $
  */
 
 #include <config.h>

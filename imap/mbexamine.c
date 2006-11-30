@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: mbexamine.c,v 1.11 2004/12/17 16:32:16 ken3 Exp $ */
+/* $Id: mbexamine.c,v 1.12 2006/11/30 17:11:19 murch Exp $ */
 
 #include <config.h>
 
@@ -121,8 +121,8 @@ int main(int argc, char **argv)
 /*    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE); */
 
     /* Ensure we're up-to-date on the index file format */
-    assert(INDEX_HEADER_SIZE == (OFFSET_SPARE2+4));
-    assert(INDEX_RECORD_SIZE == (OFFSET_CACHE_VERSION+4));
+    assert(INDEX_HEADER_SIZE == (OFFSET_SPARE4+4));
+    assert(INDEX_RECORD_SIZE == (OFFSET_MODSEQ+4));
 
     while ((opt = getopt(argc, argv, "C:u:s:")) != EOF) {
 	switch (opt) {
@@ -266,7 +266,7 @@ int do_examine(char *name,
     printf("  Minor Version: %d\n", mailbox.minor_version);
     printf("  Header Size: %ld bytes  Record Size: %ld bytes\n",
 	   mailbox.start_offset, mailbox.record_size);
-    printf("  Number of Messages: %lu  Mailbox Size: %lu bytes\n",
+    printf("  Number of Messages: %lu  Mailbox Size: " UQUOTA_T_FMT " bytes\n",
 	   mailbox.exists, mailbox.quota_mailbox_used);
     printf("  Last Append Date: (%ld) %s", mailbox.last_appenddate,
 	   ctime(&mailbox.last_appenddate));
@@ -274,10 +274,26 @@ int do_examine(char *name,
 	   mailbox.last_uid);
     printf("  Deleted: %ld  Answered: %ld  Flagged: %ld\n",
 	   mailbox.deleted, mailbox.answered, mailbox.flagged);
-    if (mailbox.minor_version >= 4)
-	printf("  POP3 New UIDL: %d\n", mailbox.pop3_new_uidl);
+    if (mailbox.minor_version >= 4) {
+	printf("  Mailbox Options:");
+	if (!mailbox.options) {
+	    printf(" NONE");
+	} else {
+	    if (mailbox.options & OPT_POP3_NEW_UIDL) {
+		printf(" POP3_NEW_UIDL");
+	    }
+	    if (mailbox.options & OPT_IMAP_CONDSTORE) {
+		printf(" IMAP_CONDSTORE");
+	    }
+	}
+	printf("\n");
+    }
     printf("  Last POP3 Login: (%ld) %s", mailbox.pop3_last_login,
-	   ctime(&mailbox.pop3_last_login));
+	   ctime((const long *) &mailbox.pop3_last_login));
+    if (mailbox.minor_version >= 8) {
+	printf("  Highest Mod Sequence: " MODSEQ_FMT "\n",
+	       mailbox.highestmodseq);
+    }
 
     printf("\n Message Info:\n");
 
@@ -308,6 +324,10 @@ int do_examine(char *name,
 
 	if (mailbox.minor_version >= 6)
 	    printf(" CACHEVER:%-6d", CACHE_VERSION(i));
+
+	if (mailbox.minor_version >= 8) {
+	    printf(" MODSEQ:" MODSEQ_FMT, MODSEQ(i));
+	}
 
 	printf("\n");
 

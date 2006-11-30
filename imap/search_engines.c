@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: search_engines.c,v 1.5 2003/04/23 18:07:48 rjs3 Exp $
+ * $Id: search_engines.c,v 1.6 2006/11/30 17:11:20 murch Exp $
  */
 
 #include <config.h>
@@ -54,6 +54,7 @@
 #endif
 
 #include "imapd.h"
+#include "global.h"
 #include "xmalloc.h"
 
 #include "squat.h"
@@ -242,14 +243,17 @@ cleanup:
 
 static int search_squat(unsigned* msg_list, struct mailbox *mailbox,
                         struct searchargs *searchargs) {
-  char index_file_name[MAX_MAILBOX_PATH+1];
+  char index_file_name[MAX_MAILBOX_PATH+1], *path;
   int fd;
   SquatSearchIndex* index;
   unsigned char* msg_vector;
   int result;
 
-  snprintf(index_file_name, sizeof(index_file_name),
-	   "%s%s", mailbox->path, FNAME_SQUAT_INDEX);
+  path = mailbox->mpath &&
+      (config_metapartition_files & IMAP_ENUM_METAPARTITION_FILES_SQUAT) ?
+      mailbox->mpath : mailbox->path;
+  strlcpy(index_file_name, path, sizeof(index_file_name));
+  strlcat(index_file_name, FNAME_SQUAT_INDEX, sizeof(index_file_name));
   if ((fd = open(index_file_name, O_RDONLY)) < 0) {
     syslog(LOG_DEBUG, "SQUAT failed to open index file");
     return -1;   /* probably not found. Just bail */

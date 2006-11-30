@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle_idled.c,v 1.16 2005/12/09 21:09:14 murch Exp $ */
+/* $Id: idle.c,v 1.3 2006/11/30 17:11:17 murch Exp $ */
 
 #include <config.h>
 
@@ -53,12 +53,13 @@
 #include <unistd.h>
 #endif
 #include <signal.h>
+#include <string.h>
 
 #include "idle.h"
 #include "idled.h"
 #include "global.h"
 
-const char *idle_method_desc = "idled";
+const char *idle_method_desc = "no";
 
 /* function to report mailbox updates to the client */
 static idle_updateproc_t *idle_update = NULL;
@@ -72,70 +73,114 @@ static int notify_sock = -1;
 static struct sockaddr_un idle_remote;
 static int idle_remote_len = 0;
 
-/* Forward declarations */
-int idle_send_msg(int msg, struct mailbox *mailbox);
-void idle_notify(struct mailbox *mailbox);
 
+/*
+ * Send a message to idled
+ */
+static int idle_send_msg(int msg, struct mailbox *mailbox)
+{
+    idle_data_t idledata;
+
+    /* fill the structure */
+    idledata.msg = msg;
+    idledata.pid = getpid();
+    strcpy(idledata.mboxname, mailbox ? mailbox->name : ".");
+
+    /* send */
+    if (sendto(notify_sock, (void *) &idledata,
+	       IDLEDATA_BASE_SIZE+strlen(idledata.mboxname)+1, /* 1 for NULL */
+	       0, (struct sockaddr *) &idle_remote, idle_remote_len) == -1) {
+      syslog(LOG_ERR, "error sending to idled: %x", msg);
+      return 0;
+    }
+
+    return 1;
+}
+
+/*
+ * Notify idled of a mailbox change
+ */
+void idle_notify(struct mailbox *mailbox)
+{
+    /* We should try to determine if we need to send this
+     * (ie, is an imapd is IDLE on 'mailbox'?).
+     */
+    idle_send_msg(IDLE_NOTIFY, mailbox);
+}
 
 /*
  * Create connection to idled for sending notifications
  */
 int idle_enabled(void)
 {
-    int s;
-    int fdflags;
-    struct stat sbuf;
-    const char *idle_sock;
+    if (idle_period == -1) {
+	int s;
+	int fdflags;
+	struct stat sbuf;
+	const char *idle_sock;
 
-    /* if the socket is already open, return */
-    if (notify_sock != -1) {
+	/* get polling period in case we can't connect to idled
+	 * NOTE: if used, a period of zero disables IDLE
+	 */
+	idle_period = config_getint(IMAPOPT_IMAPIDLEPOLL);
+	if (idle_period < 0) idle_period = 0;
+
+	if (!idle_period) return 0;
+
+	idle_method_desc = "poll";
+
+	if ((s = socket(AF_UNIX, SOCK_DGRAM, 0)) == -1) {
+	    return idle_period;
+	}
+
+	idle_remote.sun_family = AF_UNIX;
+	idle_sock = config_getstring(IMAPOPT_IDLESOCKET);
+	if (idle_sock) {	
+	    strcpy(idle_remote.sun_path, idle_sock);
+	}
+	else {
+	    strcpy(idle_remote.sun_path, config_dir);
+	    strcat(idle_remote.sun_path, FNAME_IDLE_SOCK);
+	}
+	idle_remote_len = sizeof(idle_remote.sun_family) +
+	    strlen(idle_remote.sun_path) + 1;
+
+	/* check that the socket exists */
+	if (stat(idle_remote.sun_path, &sbuf) < 0) {
+	    close(s);
+	    return idle_period;
+	}
+
+	/* put us in non-blocking mode */
+	fdflags = fcntl(s, F_GETFD, 0);
+	if (fdflags != -1) fdflags = fcntl(s, F_SETFL, O_NONBLOCK | fdflags);
+	if (fdflags == -1) { close(s); return idle_period; }
+
+	notify_sock = s;
+
+	if (!idle_send_msg(IDLE_NOOP, NULL)) {
+	    close(s);
+	    notify_sock = -1;
+	    return idle_period;
+	}
+
+	/* set the mailbox update notifier */
+	mailbox_set_updatenotifier(idle_notify);
+
+	idle_method_desc = "idled";
+
 	return 1;
     }
-
-    /* get polling period in case we can't connect to idled
-     * NOTE: if used, a period of zero disables IDLE
-     */
-    if (idle_period == -1) {
-	idle_period = config_getint(IMAPOPT_IMAPIDLEPOLL);
-      if (idle_period < 0) idle_period = 0;
-    }
-
-    if ((s = socket(AF_UNIX, SOCK_DGRAM, 0)) == -1) {
-	return idle_period;
-    }
-
-    /* set the mailbox update notifier */
-    mailbox_set_updatenotifier(idle_notify);
-
-    idle_remote.sun_family = AF_UNIX;
-    idle_sock = config_getstring(IMAPOPT_IDLESOCKET);
-    if (idle_sock) {	
-	strcpy(idle_remote.sun_path, idle_sock);
+    else if (notify_sock != -1) {
+	/* if the idle socket is already open, we're enabled */
+	return 1;
     }
     else {
-	strcpy(idle_remote.sun_path, config_dir);
-	strcat(idle_remote.sun_path, FNAME_IDLE_SOCK);
-    }
-    idle_remote_len = sizeof(idle_remote.sun_family) +
-	strlen(idle_remote.sun_path) + 1;
-
-    /* check that the socket exists */
-    if (stat(idle_remote.sun_path, &sbuf) < 0) {
-	close(s);
 	return idle_period;
     }
-
-    /* put us in non-blocking mode */
-    fdflags = fcntl(s, F_GETFD, 0);
-    if (fdflags != -1) fdflags = fcntl(s, F_SETFL, O_NONBLOCK | fdflags);
-    if (fdflags == -1) { close(s); return idle_period; }
-
-    notify_sock = s;
-
-    return 1;
 }
 
-static void idle_poll(int sig)
+static void idle_handler(int sig)
 {
     /* ignore the signals, unless the server has started idling */
     if (!idle_started) return;
@@ -168,7 +213,7 @@ int idle_init(idle_updateproc_t *proc)
 #ifdef SA_RESTART
     action.sa_flags |= SA_RESTART;
 #endif
-    action.sa_handler = idle_poll;
+    action.sa_handler = idle_handler;
 
     /* Setup the signal handlers */
     if ((sigaction(SIGUSR1, &action, NULL) < 0) ||
@@ -189,7 +234,7 @@ void idle_start(struct mailbox *mailbox)
     idle_started = 1;
 
     /* Tell idled that we're idling */
-    if (!idle_send_msg(IDLE_INIT, mailbox)) {
+    if (notify_sock == -1 || !idle_send_msg(IDLE_INIT, mailbox)) {
 	/* otherwise, we'll poll with SIGALRM */
 	alarm(idle_period);
     }
@@ -198,7 +243,10 @@ void idle_start(struct mailbox *mailbox)
 void idle_done(struct mailbox *mailbox)
 {
     /* Tell idled that we're done idling */
-    idle_send_msg(IDLE_DONE, mailbox);
+    if (notify_sock != -1) idle_send_msg(IDLE_DONE, mailbox);
+
+    /* Cancel alarm */
+    alarm(0);
 
     /* Remove the signal handlers */
     signal(SIGUSR1, SIG_IGN);
@@ -207,38 +255,4 @@ void idle_done(struct mailbox *mailbox)
 
     idle_update = NULL;
     idle_started = 0;
-}
-
-/*
- * Send a message to idled
- */
-int idle_send_msg(int msg, struct mailbox *mailbox)
-{
-    idle_data_t idledata;
-
-    /* fill the structure */
-    idledata.msg = msg;
-    idledata.pid = getpid();
-    strcpy(idledata.mboxname, mailbox ? mailbox->name : ".");
-
-    /* send */
-    if (sendto(notify_sock, (void *) &idledata,
-	       IDLEDATA_BASE_SIZE+strlen(idledata.mboxname)+1, /* 1 for NULL */
-	       0, (struct sockaddr *) &idle_remote, idle_remote_len) == -1) {
-      syslog(LOG_ERR, "error sending to idled: %x", msg);
-      return 0;
-    }
-
-    return 1;
-}
-
-/*
- * Notify imapidled of a mailbox change
- */
-void idle_notify(struct mailbox *mailbox)
-{
-    /* We should try to determine if we need to send this
-     * (ie, is an imapd is IDLE on 'mailbox'?).
-     */
-    idle_send_msg(IDLE_NOTIFY, mailbox);
 }

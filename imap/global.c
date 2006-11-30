@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.19 2005/03/03 15:59:12 shadow Exp $ */
+/* $Id: global.c,v 1.20 2006/11/30 17:11:17 murch Exp $ */
 
 #include <config.h>
 
@@ -82,11 +82,13 @@ static enum {
 static int cyrus_init_nodb = 0;
 
 int config_implicitrights;        /* "lca" */
+unsigned long config_metapartition_files;    /* 0 */
 struct cyrusdb_backend *config_mboxlist_db;
 struct cyrusdb_backend *config_quota_db;
 struct cyrusdb_backend *config_subscription_db;
 struct cyrusdb_backend *config_annotation_db;
 struct cyrusdb_backend *config_seenstate_db;
+struct cyrusdb_backend *config_mboxkey_db;
 struct cyrusdb_backend *config_duplicate_db;
 struct cyrusdb_backend *config_tlscache_db;
 struct cyrusdb_backend *config_ptscache_db;
@@ -161,6 +163,8 @@ int cyrus_init(const char *alt_config, const char *ident, unsigned flags)
     config_implicitrights =
 	cyrus_acl_strtomask(config_getstring(IMAPOPT_IMPLICIT_OWNER_RIGHTS));
 
+    config_metapartition_files = config_getbitfield(IMAPOPT_METAPARTITION_FILES);
+
     if (!cyrus_init_nodb) {
 	/* lookup the database backends */
 	config_mboxlist_db =
@@ -173,6 +177,8 @@ int cyrus_init(const char *alt_config, const char *ident, unsigned flags)
 	    cyrusdb_fromname(config_getstring(IMAPOPT_ANNOTATION_DB));
 	config_seenstate_db =
 	    cyrusdb_fromname(config_getstring(IMAPOPT_SEENSTATE_DB));
+	config_mboxkey_db =
+	    cyrusdb_fromname(config_getstring(IMAPOPT_MBOXKEY_DB));
 	config_duplicate_db =
 	    cyrusdb_fromname(config_getstring(IMAPOPT_DUPLICATE_DB));
 	config_tlscache_db =
@@ -208,6 +214,8 @@ int cyrus_init(const char *alt_config, const char *ident, unsigned flags)
 			       config_getint(IMAPOPT_BERKELEY_LOCKS_MAX));
 	libcyrus_config_setint(CYRUSOPT_BERKELEY_TXNS_MAX,
 			       config_getint(IMAPOPT_BERKELEY_TXNS_MAX));
+	libcyrus_config_setstring(CYRUSOPT_DELETERIGHT,
+				  config_getstring(IMAPOPT_DELETERIGHT));
 
 	/* Not until all configuration parameters are set! */
 	libcyrus_init();
@@ -486,7 +494,7 @@ static int acl_ok(const char *user, struct auth_state *authstate)
 					     bufuser, inboxname);
 
     if (r || !authstate ||
-	mboxlist_lookup(inboxname, NULL, &acl, NULL)) {
+	mboxlist_lookup(inboxname, &acl, NULL)) {
 	r = 0;  /* Failed so assume no proxy access */
     }
     else {

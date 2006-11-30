@@ -1,0 +1,75 @@
+.\" -*- nroff -*-
+.TH MAKE_MD5 HERMES 8
+.SH NAME
+make_md5 \- Generate MD5 checksums for given set of users.
+.SH SYNOPSIS
+.B make_md5
+[
+.B \-C
+.I config-file
+]
+[
+.B \-D
+.I md5_dir
+]
+[
+.B \-k
+.I count
+]
+[
+.B \-f
+.I input_file
+]
+[
+.B \-m
+.I offset
+]
+[
+.B \-M
+.I modulo
+]
+[
+.B \-v
+]
+[
+.IR userid ...
+]
+.SH DESCRIPTION
+Generate MD5 checksums for messages given set of users. Works as
+incremental update: reads in existing set of md5 checksums from
+\fImd5_dir/u/userid\fR (hashed on first letter of userid) if that file
+exists. Scans account looking for new messages, and then updates record.
+
+The MD5 checksums which are generated are used to test integrity of the
+master, replica and backup systems on Hermes.
+.SH OPTIONS
+.TP
+.BI \-C " config-file"
+Read configuration options from \fIconfig-file\fR.
+.TP
+.BI \-D " md5_dir"
+Read and write md5 checksums from \fImd5_dir\fR, overrides configuration
+file setting of the same name.
+.TP
+.BI \-k " count"
+Concurrency level: run up to
+.I count
+asynchronous child processes.
+.TP
+.BI \-f " input_file"
+List of accounts to process: use in place of command line arguments.
+.TP
+.BI \-m " offset"
+Regenerate given fraction of the user database in combination with \-M below.
+.TP
+.BI \-M " modulo"
+Regenerate MD5 checksums for given fraction of user database. Allows for
+rolling consisency checks.
+.TP
+.BI \-v
+Verbose mode.
+.SH FILES
+.TP
+.B /etc/imapd.conf
+.SH AUTHORS
+David Carter (dpc22@cam.ac.uk)

@@ -1,5 +1,5 @@
 /* bc_eval.c - evaluate the bytecode
- * $Id: bc_eval.c,v 1.7 2004/07/29 15:42:31 rjs3 Exp $
+ * $Id: bc_eval.c,v 1.8 2006/11/30 17:11:24 murch Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -31,9 +31,12 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "sieve_interface.h"
 #include "interp.h"
 #include "message.h"
+#include "script.h"
 
 #include "bytecode.h"
 
+#include "charset.h"
+#include "hash.h"
 #include "xmalloc.h"
 
 #include <string.h>
@@ -124,7 +127,7 @@ static int sysaddr(const char *addr)
     if (!strncasecmp(addr, "majordomo", 9))
 	return 1;
 
-    if (strstr(addr, "-request"))
+    if (strstr(addr, "-request@"))
 	return 1;
 
     if (!strncmp(addr, "owner-", 6))
@@ -186,6 +189,17 @@ static char* look_for_me(char *myaddr, int numaddresses,
 
     return found;
 }
+
+static char *list_fields[] = {
+    "list-id",
+    "list-help",
+    "list-subscribe",
+    "list-unsubscribe",
+    "list-post",
+    "list-owner",
+    "list-archive",
+    NULL
+};
  
 /* Determine if we should respond to a vacation message */
 int shouldRespond(void * m, sieve_interp_t *interp,
@@ -195,14 +209,28 @@ int shouldRespond(void * m, sieve_interp_t *interp,
     const char **body;
     char buf[128];
     char *myaddr = NULL;
-    int l = SIEVE_OK;
+    int l = SIEVE_OK, j;
     void *data = NULL, *marker = NULL;
     char *tmp;
     int curra, x;
     char *found=NULL;
     char *reply_to=NULL;
   
-    /* is there an Auto-Submitted keyword other than "no"? */
+    /* Implementations SHOULD NOT respond to any message that contains a
+       "List-Id" [RFC2919], "List-Help", "List-Subscribe", "List-
+       Unsubscribe", "List-Post", "List-Owner" or "List-Archive" [RFC2369]
+       header field. */
+    for (j = 0; list_fields[j]; j++) {
+	strcpy(buf, list_fields[j]);
+	if (interp->getheader(m, buf, &body) == SIEVE_OK) {
+	    l = SIEVE_DONE;
+	    break;
+	}
+    }
+
+    /* Implementations SHOULD NOT respond to any message that has an
+       "Auto-submitted" header field with a value other than "no".
+       This header field is described in [RFC3834]. */
     strcpy(buf, "auto-submitted");
     if (interp->getheader(m, buf, &body) == SIEVE_OK) {
 	/* we don't deal with comments, etc. here */
@@ -212,6 +240,7 @@ int shouldRespond(void * m, sieve_interp_t *interp,
     }
 
     /* is there a Precedence keyword of "junk | bulk | list"? */
+    /* XXX  non-standard header, but worth checking */
     strcpy(buf, "precedence");
     if (interp->getheader(m, buf, &body) == SIEVE_OK) {
 	/* we don't deal with comments, etc. here */
@@ -282,7 +311,7 @@ int shouldRespond(void * m, sieve_interp_t *interp,
     if (l == SIEVE_OK) {
 	/* ok, we're willing to respond to the sender.
 	   but is this message to me?  that is, is my address
-	   in the TO, CC or BCC fields? */
+	   in the [Resent]-To, [Resent]-Cc or [Resent]-Bcc fields? */
 	if (strcpy(buf, "to"), 
 	    interp->getheader(m, buf, &body) == SIEVE_OK)
 	    found = look_for_me(myaddr, numaddresses ,bc, i, body);
@@ -290,6 +319,15 @@ int shouldRespond(void * m, sieve_interp_t *interp,
 		       (interp->getheader(m, buf, &body) == SIEVE_OK)))
 	    found = look_for_me(myaddr, numaddresses, bc, i, body);
 	if (!found && (strcpy(buf, "bcc"),
+		       (interp->getheader(m, buf, &body) == SIEVE_OK)))
+	    found = look_for_me(myaddr, numaddresses, bc, i, body);
+	if (!found && strcpy(buf, "resent-to"), 
+	    interp->getheader(m, buf, &body) == SIEVE_OK)
+	    found = look_for_me(myaddr, numaddresses ,bc, i, body);
+	if (!found && (strcpy(buf, "resent-cc"),
+		       (interp->getheader(m, buf, &body) == SIEVE_OK)))
+	    found = look_for_me(myaddr, numaddresses, bc, i, body);
+	if (!found && (strcpy(buf, "resent-bcc"),
 		       (interp->getheader(m, buf, &body) == SIEVE_OK)))
 	    found = look_for_me(myaddr, numaddresses, bc, i, body);
 	if (!found)
@@ -303,7 +341,8 @@ int shouldRespond(void * m, sieve_interp_t *interp,
 }
 
 /* Evaluate a bytecode test */
-int eval_bc_test(sieve_interp_t *interp, void* m,
+int eval_bc_test(sieve_interp_t *interp,
+		 struct hash_table *body_cache, void* m,
 		 bytecode_input_t * bc, int * ip)
 {
     int res=0; 
@@ -326,7 +365,7 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 
     case BC_NOT:/*2*/
 	i+=1;
-	res = eval_bc_test(interp,m, bc, &i);
+	res = eval_bc_test(interp, body_cache, m, bc, &i);
 	if(res >= 0) res = !res; /* Only invert in non-error case */
 	break;
 
@@ -385,7 +424,7 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 	 * in the right place */
 	for (x=0; x<list_len && !res; x++) { 
 	    int tmp;
-	    tmp = eval_bc_test(interp,m,bc,&i);
+	    tmp = eval_bc_test(interp,body_cache,m,bc,&i);
 	    if(tmp < 0) {
 		res = tmp;
 		break;
@@ -405,7 +444,7 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 	/* return 1 unless you find one that isn't true, then return 0 */
 	for (x=0; x<list_len && res; x++) {
 	    int tmp;
-	    tmp = eval_bc_test(interp,m,bc,&i);
+	    tmp = eval_bc_test(interp,body_cache,m,bc,&i);
 	    if(tmp < 0) {
 		res = tmp;
 		break;
@@ -550,15 +589,16 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 				    goto alldone;
 				}
 
-				res |= comp(val[y], (const char *)reg,
-					    comprock);
+				res |= comp(val[y], strlen(val[y]),
+					    (const char *)reg, comprock);
 				free(reg);
 			    } else {
 #if VERBOSE
 				printf("%s compared to %s(from script)\n",
 				       addr, data_val);
 #endif 
-				res |= comp(addr, data_val, comprock);
+				res |= comp(addr, strlen(addr),
+					    data_val, comprock);
 			    }
 			} /* For each data */
 		    }
@@ -583,7 +623,7 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 		
 		currd = unwrap_string(bc, currd, &data_val, NULL);
 
-		res |= comp(scount, data_val, comprock);
+		res |= comp(scount, strlen(scount), data_val, comprock);
 	    }
 	}
 
@@ -676,11 +716,12 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 				goto alldone;
 			    }
 			    
-			    res |= comp(val[y], (const char *)reg,
-					comprock);
+			    res |= comp(val[y], strlen(val[y]),
+					(const char *)reg, comprock);
 			    free(reg);
 			} else {
-			    res |= comp(val[y], data_val, comprock);
+			    res |= comp(val[y], strlen(val[y]),
+					data_val, comprock);
 			}
 		    }
 		}
@@ -700,9 +741,159 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 #if VERBOSE
 		printf("%d, %s \n", count, data_val);
 #endif
-		res |= comp(scount, data_val, comprock);
+		res |= comp(scount, strlen(scount), data_val, comprock);
 	    }
 	      
+	}
+
+	/* Update IP */
+	i=(ntohl(bc[datai+1].value)/4);
+	
+	break;
+    }
+    case BC_BODY:/*10*/
+    {
+	sieve_bodypart_t ** val;
+	const char **content_types = NULL;
+
+	int typesi=i+6;/* the i value for the begining of the content-types */
+ 	int datai=(ntohl(bc[typesi+1].value)/4);
+
+	int numdata=ntohl(bc[datai].len);
+
+	int currd; /* current data */
+
+	int match=ntohl(bc[i+1].value);
+	int relation=ntohl(bc[i+2].value);
+	int comparator=ntohl(bc[i+3].value);
+	int transform=ntohl(bc[i+4].value);
+	int offset=ntohl(bc[i+5].value);
+	int count=0;
+	char scount[3];
+	int isReg = (match==B_REGEX);
+	int ctag = 0;
+	regex_t *reg;
+	char errbuf[100]; /* Basically unused, as regexps are tested at compile */
+
+	/* set up variables needed for compiling regex */
+	if (isReg)
+	{
+	    if (comparator== B_ASCIICASEMAP)
+	    {
+		ctag = REG_EXTENDED | REG_NOSUB | REG_ICASE;
+	    }
+	    else
+	    {
+		ctag = REG_EXTENDED | REG_NOSUB;
+	    }
+	}
+
+	/*find the correct comparator fcn*/
+	comp = lookup_comp(comparator, match, relation, &comprock);
+
+	if(!comp) {
+	    res = SIEVE_RUN_ERROR;
+	    break;
+	}
+	
+	/*find the part(s) of the body that we want*/
+	content_types = bc_makeArray(bc, &typesi);
+	if(interp->getbody(m, content_types, &val) != SIEVE_OK) {
+	    res = SIEVE_RUN_ERROR;
+	    break;
+	}
+	free(content_types);
+	
+	/* bodypart(s) exist, now to test them */
+	    
+	for (y=0; val && val[y]!=NULL && !res; y++) {
+
+	    if (match == B_COUNT) {
+		count++;
+	    } else {
+		const char *content = val[y]->content;
+		int size = val[y]->size;
+
+		if (transform != B_RAW) {
+		    int encoding;
+
+		    /* XXX currently unknown encodings are processed as raw */
+		    if (!val[y]->encoding)
+			encoding = ENCODING_NONE;
+		    else if (!strcmp(val[y]->encoding, "BASE64"))
+			encoding = ENCODING_BASE64;
+		    else if (!strcmp(val[y]->encoding, "QUOTED-PRINTABLE"))
+			encoding = ENCODING_QP;
+		    else
+			encoding = ENCODING_NONE;
+
+		    if (encoding != ENCODING_NONE) {
+			content = hash_lookup(val[y]->section, body_cache);
+			if (content) {
+			    /* already decoded this part */
+			    size = strlen(content);
+			}
+			else {
+			    /* decode this part and add it to the cache */
+			    char *decbuf = NULL;
+			    content = charset_decode_mimebody(val[y]->content,
+							      val[y]->size,
+							      encoding, &decbuf,
+							      0, &size);
+			    hash_insert(val[y]->section, (void *) content,
+					body_cache);
+			}
+		    }
+
+		    /* XXX convert charset */
+		}
+
+		/* search through all the data */ 
+		currd=datai+2;
+		for (z=0; z<numdata && !res; z++)
+		{
+		    const char *data_val;
+			    
+		    currd = unwrap_string(bc, currd, &data_val, NULL);
+
+		    if (isReg) {
+			reg = bc_compile_regex(data_val, ctag,
+					       errbuf, sizeof(errbuf));
+			if (!reg) {
+			    /* Oops */
+			    res=-1;
+			    goto alldone;
+			}
+
+			res |= comp(content, size, (const char *)reg, comprock);
+			free(reg);
+		    } else {
+			res |= comp(content, size, data_val, comprock);
+		    }
+		} /* For each data */
+	    }
+
+	    /* free the bodypart */
+	    free(val[y]);
+
+	} /* For each body part */
+
+	/* free the bodypart array */
+	if (val) free(val);
+
+	if  (match == B_COUNT)
+	{
+	    sprintf(scount, "%u", count);
+	    /* search through all the data */ 
+	    currd=datai+2;
+	    for (z=0; z<numdata && !res; z++)
+	    {
+		const char *data_val;
+		
+		currd = unwrap_string(bc, currd, &data_val, NULL);
+
+		res |= comp(scount, strlen(scount), data_val, comprock);
+	    }
 	}
 
 	/* Update IP */
@@ -726,26 +917,32 @@ int eval_bc_test(sieve_interp_t *interp, void* m,
 }
 
 /* The entrypoint for bytecode evaluation */
-int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
-		  void *m, sieve_imapflags_t * imapflags,
-		  action_list_t *actions,
-		  notify_list_t *notify_list,
-		  const char **errmsg) 
+int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
+		  struct hash_table *body_cache, void *sc, void *m,
+		  sieve_imapflags_t * imapflags, action_list_t *actions,
+		  notify_list_t *notify_list, const char **errmsg) 
 {
     const char *data;
-    unsigned int ip = 0, ip_max = (bc_len/sizeof(bytecode_input_t));
     int res=0;
     int op;
     int version;
-    
-    bytecode_input_t *bc = (bytecode_input_t *)bc_in;
+  
+    sieve_bytecode_t *bc_cur = exe->bc_cur;
+    bytecode_input_t *bc = (bytecode_input_t *) bc_cur->data;
+    int ip = 0, ip_max = (bc_cur->len/sizeof(bytecode_input_t));
+
+    if (bc_cur->is_executing) {
+	*errmsg = "Recursive Include";
+	return SIEVE_RUN_ERROR;
+    }
+    bc_cur->is_executing = 1;
     
     /* Check that we
      * a) have bytecode
      * b) it is atleast long enough for the magic number, the version
      *    and one opcode */
     if(!bc) return SIEVE_FAIL;
-    if(bc_len < (BYTECODE_MAGIC_LEN + 2*sizeof(bytecode_input_t)))
+    if(bc_cur->len < (BYTECODE_MAGIC_LEN + 2*sizeof(bytecode_input_t)))
        return SIEVE_FAIL;
 
     if(memcmp(bc, BYTECODE_MAGIC, BYTECODE_MAGIC_LEN)) {
@@ -770,7 +967,7 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 	return SIEVE_FAIL;
     }
     
-    if( version != BYTECODE_VERSION) {
+    if((version < BYTECODE_MIN_VERSION) || (version > BYTECODE_VERSION)) {
 	if(errmsg) {
 	    *errmsg =
 		"Incorrect Bytecode Version, please recompile (use sievec)";
@@ -783,6 +980,8 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 #endif
 
     for(ip++; ip<ip_max; ) { 
+	int copy = 0;
+
 	op=ntohl(bc[ip].op);
 	switch(op) {
 	case B_STOP:/*0*/
@@ -811,11 +1010,15 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 
 	    break;
 
-	case B_FILEINTO:/*4*/
+	case B_FILEINTO:/*19*/
+	    copy = ntohl(bc[ip+1].value);
+	    ip+=1;
+
+	case B_FILEINTO_ORIG:/*4*/
 	{
 	    ip = unwrap_string(bc, ip+1, &data, NULL);
 
-	    res = do_fileinto(actions, data, imapflags);
+	    res = do_fileinto(actions, data, !copy, imapflags);
 
 	    if (res == SIEVE_RUN_ERROR)
 		*errmsg = "Fileinto can not be used with Reject";
@@ -823,11 +1026,15 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 	    break;
 	}
 
-	case B_REDIRECT:/*5*/
+	case B_REDIRECT:/*20*/
+	    copy = ntohl(bc[ip+1].value);
+	    ip+=1;
+
+	case B_REDIRECT_ORIG:/*5*/
 	{
 	    ip = unwrap_string(bc, ip+1, &data, NULL);
 
-	    res = do_redirect(actions, data);
+	    res = do_redirect(actions, data, !copy);
 
 	    if (res == SIEVE_RUN_ERROR)
 		*errmsg = "Redirect can not be used with Reject";
@@ -841,7 +1048,7 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 	    int result;
 	   
 	    ip+=2;
-	    result=eval_bc_test(i, m, bc, &ip);
+	    result=eval_bc_test(i, body_cache, m, bc, &ip);
 	    
 	    if (result<0) {
 		*errmsg = "Invalid test";
@@ -1064,7 +1271,9 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 	    int respond;
 	    char *fromaddr = NULL; /* relative to message we send */
 	    char *toaddr = NULL; /* relative to message we send */
+	    char *handle = NULL;
 	    const char *message = NULL;
+	    int days, mime;
 	    char buf[128];
 	    char subject[1024];
 	    int x;
@@ -1093,10 +1302,7 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 			/* s[0] contains the original subject */
 			const char *origsubj = s[0];
 
-			while (!strncasecmp(origsubj, "Re: ", 4)) 
-			    origsubj += 4;
-
-			snprintf(subject, sizeof(subject), "Re: %s", origsubj);
+			snprintf(subject, sizeof(subject), "Auto: %s", origsubj);
 		    }
 		} else {
 		    /* user specified subject */
@@ -1105,11 +1311,30 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 		
 		ip = unwrap_string(bc, ip, &message, NULL);
 
-		res = do_vacation(actions, toaddr, fromaddr,
-				  xstrdup(subject), message,
-				  ntohl(bc[ip].value), ntohl(bc[ip+1].value));
+		days = ntohl(bc[ip].value);
+		mime = ntohl(bc[ip+1].value);
 
-		ip+=2;		
+		ip+=2;	
+
+		if (version >= 0x05) {
+		    ip = unwrap_string(bc, ip, &data, NULL);
+
+		    if (data) {
+			/* user specified from address */
+			free(fromaddr);
+			fromaddr = xstrdup(data);
+		    }
+
+		    ip = unwrap_string(bc, ip, &data, NULL);
+
+		    if (data) {
+			/* user specified handle */
+			handle = (char *) data;
+		    }
+		}
+
+		res = do_vacation(actions, toaddr, fromaddr, xstrdup(subject),
+				  message, days, mime, handle);
 
 		if (res == SIEVE_RUN_ERROR)
 		    *errmsg = "Vacation can not be used with Reject or Vacation";
@@ -1120,6 +1345,12 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 		ip = unwrap_string(bc, ip, &data, NULL);
 
 		ip+=2;/*skip days and mime flag*/
+
+		if (version >= 0x05) {
+		    /* skip from and handle */
+		    ip = unwrap_string(bc, ip, &data, NULL);
+		    ip = unwrap_string(bc, ip, &data, NULL);
+		}
 	    } else {
 		res = SIEVE_RUN_ERROR; /* something is bad */ 
 	    }
@@ -1134,6 +1365,38 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 	    ip= ntohl(bc[ip+1].jump);
 	    break;
 	    
+	case B_INCLUDE:/*17*/
+	{
+	    int isglobal = (ntohl(bc[ip+1].value) == B_GLOBAL);
+	    char fpath[4096];
+
+	    ip = unwrap_string(bc, ip+2, &data, NULL);
+
+	    res = i->getinclude(sc, data, isglobal, fpath, sizeof(fpath));
+	    if (res != SIEVE_OK)
+		*errmsg = "Include can not find script";
+
+	    if (!res) {
+		res = sieve_script_load(fpath, &exe);
+		if (res != SIEVE_OK)
+		*errmsg = "Include can not load script";
+	    }
+
+	    if (!res)
+		res = sieve_eval_bc(exe, 1, i, body_cache,
+				    sc, m, imapflags, actions,
+				    notify_list, errmsg);
+
+	    break;
+	}
+
+	case B_RETURN:/*18*/
+	    if (is_incl)
+		goto done;
+	    else
+		res=1;
+	    break;
+
 	default:
 	    if(errmsg) *errmsg = "Invalid sieve bytecode";
 	    return SIEVE_FAIL;
@@ -1142,5 +1405,9 @@ int sieve_eval_bc(sieve_interp_t *i, const void *bc_in, unsigned int bc_len,
 	if (res) /* we've either encountered an error or a stop */
 	    break;
     }
+
+  done:
+    bc_cur->is_executing = 0;
+
     return res;      
 }

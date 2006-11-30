@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.PL,v 1.13 2005/10/13 20:30:03 jeaton Exp $
+# $Id: Makefile.PL,v 1.14 2006/11/30 17:11:24 murch Exp $
 #
 use ExtUtils::MakeMaker;
 use Config;
@@ -63,6 +63,4 @@ WriteMakefile(
     'LIBS'	=> ["$BDB_LIB $SASL_LIB $OPENSSL_LIB $LIB_RT -lssl -lcrypto"], 
     'DEFINE'	=> '-DPERL_POLLUTE',     # e.g., '-DHAVE_SOMETHING' 
     'INC'	=> "-I../lib/ -I../../../lib/ $SASL_INC $OPENSSL_INC",
-    'CC'	=> $ENV{CC},
-    'LD'	=> $ENV{CC}
 );

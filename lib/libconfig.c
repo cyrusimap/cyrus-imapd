@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: libconfig.c,v 1.10 2005/03/23 19:44:59 shadow Exp $ */
+/* $Id: libconfig.c,v 1.11 2006/11/30 17:11:22 murch Exp $ */
 
 #include <config.h>
 
@@ -74,6 +74,7 @@ const char *config_defdomain = NULL;     /* NULL */
 const char *config_ident = NULL;         /* the service name */
 int config_hashimapspool;	  /* f */
 enum enum_value config_virtdomains;	          /* f */
+enum enum_value config_mupdate_config;	/* IMAP_ENUM_MUPDATE_CONFIG_STANDARD */
 
 /* declared in each binary that uses libconfig */
 extern const int config_need_data;
@@ -124,8 +125,16 @@ enum enum_value config_getenum(enum imapopt opt)
 {
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
     assert(imapopts[opt].t == OPT_ENUM);
-     
+    
     return imapopts[opt].val.e;
+}
+
+unsigned long config_getbitfield(enum imapopt opt)
+{
+    assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
+    assert(imapopts[opt].t == OPT_BITFIELD);
+    
+    return imapopts[opt].val.x;
 }
 
 const char *config_getoverflowstring(const char *key, const char *def)
@@ -163,9 +172,21 @@ const char *config_partitiondir(const char *partition)
     return config_getoverflowstring(buf, NULL);
 }
 
+const char *config_metapartitiondir(const char *partition)
+{
+    char buf[80];
+
+    if(strlcpy(buf, "metapartition-", sizeof(buf)) >= sizeof(buf))
+	return 0;
+    if(strlcat(buf, partition, sizeof(buf)) >= sizeof(buf))
+	return 0;
+
+    return config_getoverflowstring(buf, NULL);
+}
+
 void config_read(const char *alt_config)
 {
-    enum opttype opt = IMAPOPT_ZERO;
+    enum imapopt opt = IMAPOPT_ZERO;
     char buf[4096];
     char *p;
 
@@ -259,12 +280,16 @@ void config_read(const char *alt_config)
     }
 
     config_mupdate_server = config_getstring(IMAPOPT_MUPDATE_SERVER);
+
+    if (config_mupdate_server) {
+	config_mupdate_config = config_getenum(IMAPOPT_MUPDATE_CONFIG);
+    }
 }
 
 void config_read_file(const char *filename)
 {
     FILE *infile;
-    enum opttype opt = IMAPOPT_ZERO;
+    enum imapopt opt = IMAPOPT_ZERO;
     int lineno = 0;
     char buf[4096], errbuf[1024];
     char *p, *q, *key, *fullkey, *srvkey, *val, *newval;
@@ -455,8 +480,15 @@ void config_read_file(const char *filename)
 	    }
 	    case OPT_ENUM:
 	    case OPT_STRINGLIST:
+	    case OPT_BITFIELD:
 	    {
-		const struct enum_option_s *e = imapopts[opt].enum_options;
+		const struct enum_option_s *e;
+
+		/* zero the value */
+		memset(&imapopts[opt].val, 0, sizeof(imapopts[opt].val));
+
+		/* q is already at EOS so we'll process entire the string
+		   as one value unless told otherwise */
 
 		if (imapopts[opt].t == OPT_ENUM) {
 		    /* normalize on/off values */
@@ -467,23 +499,37 @@ void config_read_file(const char *filename)
 			       !strcmp(p, "f") || !strcmp(p, "false")) {
 			p = "off";
 		    }
+		} else if (imapopts[opt].t == OPT_BITFIELD) {
+		    /* split the string into separate values */
+		    q = p;
 		}
 
-		while (e->name) {
-		    if (!strcmp(e->name, p)) break;
-		    e++;
-		}
-		if (e->name) {
-		    if (imapopts[opt].t == OPT_ENUM)
+		while (*p) {
+		    /* find the end of the first value */
+		    for (; *q && !isspace((int) *q); q++);
+		    if (*q) *q++ = '\0';
+
+		    /* see if its a legal value */
+		    for (e = imapopts[opt].enum_options;
+			 e->name && strcmp(e->name, p); e++);
+
+		    if (!e->name) {
+			/* error during conversion */
+			sprintf(errbuf, "invalid value '%s' for %s in line %d",
+				p, imapopts[opt].optname, lineno);
+			fatal(errbuf, EC_CONFIG);
+		    }
+		    else if (imapopts[opt].t == OPT_STRINGLIST)
+			imapopts[opt].val.s = e->name;
+		    else if (imapopts[opt].t == OPT_ENUM)
 			imapopts[opt].val.e = e->val;
 		    else
-			imapopts[opt].val.s = e->name;
-		} else {
-		    /* error during conversion */
-		    sprintf(errbuf, "invalid value for %s in line %d",
-			    imapopts[opt].optname, lineno);
-		    fatal(errbuf, EC_CONFIG);
+			imapopts[opt].val.x |= e->val;
+
+		    /* find the start of the next value */
+		    for (p = q; *p && isspace((int) *p); p++);
 		}
+
 		break;
 	    }
 	    case OPT_NOTOPT:

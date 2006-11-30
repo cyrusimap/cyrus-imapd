@@ -1,5 +1,6 @@
-/* 
- * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
+/* byteorder64.c -- convert 64-bit values between host and network byte order
+ * 
+ * Copyright (c) 2004 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -36,82 +37,59 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ *
+ * $Id: byteorder64.c,v 1.2 2006/11/30 17:11:22 murch Exp $
  */
-
-/* $Id: idle_poll.c,v 1.12 2005/12/09 19:15:35 murch Exp $ */
 
 #include <config.h>
 
-#include <syslog.h>
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif
-#include <signal.h>
+#if defined(HAVE_LONG_LONG_INT) && !defined(WORDS_BIGENDIAN)
 
-#include "idle.h"
-#include "global.h"
+#include <netinet/in.h>
 
-const char *idle_method_desc = "poll";
+/* Structure used to swap the bytes in a 64-bit unsigned long long. */
+union byteswap_64_u {
+    unsigned long long a;
+    uint32_t b[2];
+};
 
-/* function to report mailbox updates to the client */
-static idle_updateproc_t *idle_update = NULL;
-
-/* how often to poll the mailbox */
-static time_t idle_period = -1;
-
-int idle_enabled(void)
+/* Function to byteswap 64bit unsigned integers on
+ * little endian machines to big endian network order. 
+ * On big endian machines this will be a null macro.
+ * The macro htonll() is defined in byteorder64.h,
+ * and if needed refers to _htonll() here.
+ */
+unsigned long long _htonll(unsigned long long x)
 {
-    /* get polling period */
-    if (idle_period == -1) {
-      idle_period = config_getint(IMAPOPT_IMAPIDLEPOLL);
-      if (idle_period < 0) idle_period = 0;
-    }
+    union byteswap_64_u u1;
+    union byteswap_64_u u2;
 
-    /* a period of zero disables IDLE */
-    return idle_period;
+    u1.a = x;
+
+    u2.b[0] = htonl(u1.b[1]);
+    u2.b[1] = htonl(u1.b[0]);
+
+    return u2.a;
 }
 
-static void idle_poll(int sig __attribute__((unused)))
-{
-    idle_update(IDLE_MAILBOX|IDLE_ALERT);
 
-    alarm(idle_period);
+/* Function to byteswap big endian 64bit unsigned integers
+ * back to little endian host order on little endian machines. 
+ * As above, on big endian machines this will be a null macro.
+ * The macro ntohll() is defined in byteorder64.h, and if needed,
+ * refers to _ntohll() here.
+ */
+unsigned long long _ntohll(unsigned long long x)
+{
+    union byteswap_64_u u1;
+    union byteswap_64_u u2;
+
+    u1.a = x;
+
+    u2.b[1] = ntohl(u1.b[0]);
+    u2.b[0] = ntohl(u1.b[1]);
+
+    return u2.a;
 }
 
-int idle_init(idle_updateproc_t *proc)
-{
-    struct sigaction action;
-
-    idle_update = proc;
-
-    /* Setup the mailbox polling function to be called at 'idle_period'
-       seconds from now */
-    sigemptyset(&action.sa_mask);
-    action.sa_flags = 0;
-#ifdef SA_RESTART
-    action.sa_flags |= SA_RESTART;
-#endif
-    action.sa_handler = idle_poll;
-    if (sigaction(SIGALRM, &action, NULL) < 0) {
-	syslog(LOG_ERR, "sigaction: %m");
-
-	/* Cancel receiving signals */
-	idle_done(NULL);
-	return 0;
-    }
-
-    return 1;
-}
-
-void idle_start(struct mailbox *mailbox __attribute__((unused)))
-{
-    alarm(idle_period);
-}
-
-void idle_done(struct mailbox *mailbox __attribute__((unused)))
-{
-    /* Remove the polling function */
-    signal(SIGALRM, SIG_IGN);
-
-    idle_update = NULL;
-}
+#endif /* defined(HAVE_LONG_LONG_INT) && !defined(WORDS_BIGENDIAN) */

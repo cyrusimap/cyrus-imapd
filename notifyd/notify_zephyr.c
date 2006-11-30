@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notify_zephyr.c,v 1.4 2003/02/13 20:15:48 rjs3 Exp $
+ * $Id: notify_zephyr.c,v 1.5 2006/11/30 17:11:23 murch Exp $
  */
 
 #include <config.h>
@@ -56,7 +56,7 @@
 #include <string.h>
 #include <netdb.h>
 #include <sys/types.h>
-#ifdef HAVE_LIBKRB
+#ifdef HAVE_KRB
 #include <netinet/in.h>
 #include <krb.h>
 #endif
@@ -96,7 +96,7 @@ char* notify_zephyr(const char *class, const char *priority,
     }
     myhost[sizeof(myhost)-1] = '\0';
   
-#ifdef HAVE_LIBKRB
+#ifdef HAVE_KRB
     mykrbhost = krb_get_phost(myhost);
 #endif
   

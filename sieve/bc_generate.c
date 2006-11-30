@@ -1,6 +1,6 @@
 /* bc_generate.c -- sieve bytecode- almost flattened bytecode
  * Rob Siemborski
- * $Id: bc_generate.c,v 1.3 2004/08/11 18:43:15 ken3 Exp $
+ * $Id: bc_generate.c,v 1.4 2006/11/30 17:11:24 murch Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -355,6 +355,50 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 	if (codep == -1) return -1;
      
 	break;
+    case BODY:
+	/* BC_BODY {c : comparator} (B_RAW | B_TEXT | ...)
+	   { content-types : stringlist }
+	   { offset : int }
+	   { pattern : string list } */
+      
+	if(!atleast(retval,codep+1)) return -1;
+      
+	retval->data[codep++].op = BC_BODY;
+            
+	codep = bc_comparator_generate(codep, retval,t->u.b.comptag,
+				       t->u.b.relation, 
+				       t->u.b.comparator);
+	if (codep == -1) return -1;
+
+	if(!atleast(retval,codep+2)) return -1;
+
+	/*transform*/
+	switch(t->u.b.transform) {
+	case RAW:
+	    retval->data[codep++].value = B_RAW;
+	    break;
+	case TEXT:
+	    retval->data[codep++].value = B_TEXT;
+	    break;
+	case CONTENT:
+	    retval->data[codep++].value = B_CONTENT;
+	    break;
+	default:
+	    return -1;
+	}
+
+	/*offset*/
+	retval->data[codep++].value = t->u.b.offset;
+
+	/*content-types*/
+	codep = bc_stringlist_generate(codep, retval, t->u.b.content_types);
+	if (codep == -1) return -1;
+
+	/*patterns*/
+	codep = bc_stringlist_generate(codep, retval, t->u.b.pl);
+	if (codep == -1) return -1;
+     
+	break;
     default:
 	return -1;
       
@@ -407,6 +451,13 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
 		if(!atleast(retval,codep+1)) return -1;
 		retval->data[codep++].op = B_UNMARK;
 		break;
+
+	    case RETURN:
+		/* RETURN (no arguments) */
+		if(!atleast(retval,codep+1)) return -1;
+		retval->data[codep++].op = B_RETURN;
+		break;
+
 	    case DENOTIFY:
 		/* DENOTIFY  */
 		if(!atleast(retval,codep+6)) return -1;
@@ -468,18 +519,26 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
 		retval->data[codep++].str = c->u.str;
 		break;
 	    case FILEINTO:
-		/* FILEINTO (STRING: len + dataptr) */
-		if(!atleast(retval,codep+3)) return -1;
+		/* FILEINTO
+		   VALUE copy
+		   STRING folder
+		*/
+		if(!atleast(retval,codep+4)) return -1;
 		retval->data[codep++].op = B_FILEINTO;
-		retval->data[codep++].len = strlen(c->u.str);
-		retval->data[codep++].str = c->u.str;
+		retval->data[codep++].value = c->u.f.copy;
+		retval->data[codep++].len = strlen(c->u.f.folder);
+		retval->data[codep++].str = c->u.f.folder;
 		break;
 	    case REDIRECT:
-		/* REDIRECT (STRING: len + dataptr) */
-		if(!atleast(retval,codep+3)) return -1;
+		/* REDIRECT
+		   VALUE copy
+		   STRING address
+		*/
+		if(!atleast(retval,codep+4)) return -1;
 		retval->data[codep++].op = B_REDIRECT;
-		retval->data[codep++].len = strlen(c->u.str);
-		retval->data[codep++].str = c->u.str;
+		retval->data[codep++].value = c->u.r.copy;
+		retval->data[codep++].len = strlen(c->u.r.address);
+		retval->data[codep++].str = c->u.r.address;
 		break;
 	    case ADDFLAG:
 		/* ADDFLAG stringlist */
@@ -561,9 +620,11 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
 		/* VACATION
 		   STRINGLIST addresses
 		   STRING subject (if len is -1, then subject was NULL)
-		   STRING message (again, len == -1 means subject was NULL)
+		   STRING message (again, len == -1 means message was NULL)
 		   VALUE days
 		   VALUE mime
+		   STRING from (if len is -1, then from was NULL)
+		   STRING handle (again, len == -1 means handle was NULL)
 		*/
 
 		if(!atleast(retval,codep+1)) return -1;
@@ -594,8 +655,47 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
 		retval->data[codep++].value = c->u.v.days;
 		retval->data[codep++].value = c->u.v.mime;
 	    
+		if (!atleast(retval,codep+2)) return -1;
+		if(c->u.v.from) {
+		    retval->data[codep++].len = strlen(c->u.v.from);
+		    retval->data[codep++].str = c->u.v.from;
+		} else {
+		    retval->data[codep++].len = -1;
+		    retval->data[codep++].str = NULL;
+		}
+
+		if (!atleast(retval,codep+2)) return -1;
+		if(c->u.v.handle) {
+		    retval->data[codep++].len = strlen(c->u.v.handle);
+		    retval->data[codep++].str = c->u.v.handle;
+		} else {
+		    retval->data[codep++].len = -1;
+		    retval->data[codep++].str = NULL;
+		}
+
 
 		if(codep == -1) return -1;
+		break;
+	    case INCLUDE:
+		/* INCLUDE
+		   VALUE location
+		   STRING filename */
+		if(!atleast(retval,codep+4)) return -1;
+		retval->data[codep++].op = B_INCLUDE;
+
+		switch(c->u.inc.location) {
+		case PERSONAL:
+		    retval->data[codep++].value = B_PERSONAL;
+		    break;
+		case GLOBAL:
+		    retval->data[codep++].value = B_GLOBAL;
+		    break;
+		default:
+		    return -1;
+		}
+		
+		retval->data[codep++].len = strlen(c->u.inc.script);
+		retval->data[codep++].str = c->u.inc.script;
 		break;
 	    case IF:
 	    {

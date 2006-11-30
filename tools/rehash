@@ -45,7 +45,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #
 # Written by Gary Mills <mills@cc.UManitoba.CA>
 #
-# $Id: rehash,v 1.8 2005/12/01 22:01:12 murch Exp $
+# $Id: rehash,v 1.9 2006/11/30 17:11:25 murch Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -154,7 +154,7 @@ sub read_conf {
 	if (/^configdirectory:\s+(.*)$/) {
 	    $confdir = $1;
 	}
-	if (/^partition-.*:\s+(.*)$/) {
+	if (/^(?:meta)?partition-.*:\s+(.*)$/) {
 	    if (grep /$1/, @parts) {
 		next;
 	    }

@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.92 2005/11/04 13:33:30 murch Exp $
+ * $Id: mupdate.c,v 1.93 2006/11/30 17:11:19 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -59,6 +59,12 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/types.h>
+#include <sys/ioctl.h>
+#if !defined(SIOCGIFCONF) && defined(HAVE_SYS_SOCKIO_H)
+# include <sys/sockio.h>
+#endif
+#include <net/if.h>
 
 #include <pthread.h>
 #include <sasl/sasl.h>
@@ -494,6 +500,62 @@ static struct sasl_callback mysasl_cb[] = {
 };
 
 /*
+ * Is the IP address of the given hostname local?
+ * Returns 1 if local, 0 otherwise.
+ */
+static int islocalip(const char *hostname)
+{
+    struct hostent *hp;
+    struct in_addr *haddr, *iaddr;
+    struct ifconf ifc;
+    struct ifreq *ifr;
+    char buf[8192]; /* XXX this limits us to 256 interfaces */
+    int sock, islocal = 0;
+
+    if ((hp = gethostbyname(hostname)) == NULL) {
+	fprintf(stderr, "unknown host: %s\n", hostname);
+	return 0;
+    }
+
+    haddr = (struct in_addr *) hp->h_addr;
+
+    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+	fprintf(stderr, "socket() failed\n");
+	return 0;
+    }
+
+    ifc.ifc_buf = buf;
+    ifc.ifc_len = sizeof(buf);
+    
+    if (ioctl(sock, SIOCGIFCONF, &ifc) != 0) {
+	fprintf(stderr, "ioctl(SIOCGIFCONF) failed: %d\n", errno);
+	close(sock);
+	return 0;
+    }
+
+    for (ifr = ifc.ifc_req; ifr - ifc.ifc_req < ifc.ifc_len; ifr++) {
+	if (ioctl(sock, SIOCGIFADDR, ifr) != 0) continue;
+	if (ioctl(sock, SIOCGIFFLAGS, ifr) != 0) continue;
+
+	/* skip any inactive or loopback interfaces */
+	if (!(ifr->ifr_flags & IFF_UP) || (ifr->ifr_flags & IFF_LOOPBACK))
+	    continue;
+
+	iaddr = &(((struct sockaddr_in *) &ifr->ifr_addr)->sin_addr);
+
+	/* compare the host address to the interface address */
+	if (!memcmp(haddr, iaddr, sizeof(struct in_addr))) {
+	    islocal = 1;
+	    break;
+	}
+    }
+
+    close(sock);
+
+    return islocal;
+}
+
+/*
  * run once when process is forked;
  * MUST NOT exit directly; must return with non-zero error code
  */
@@ -501,7 +563,7 @@ int service_init(int argc, char **argv,
 		 char **envp __attribute__((unused)))
 {
     int i, r, workers_to_start;
-    int opt;
+    int opt, autoselect = 0;
     pthread_t t;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
@@ -541,14 +603,29 @@ int service_init(int argc, char **argv,
     global_sasl_init(1, 1, mysasl_cb);
 
     /* see if we're the master or a slave */
-    while ((opt = getopt(argc, argv, "m")) != EOF) {
+    while ((opt = getopt(argc, argv, "ma")) != EOF) {
 	switch (opt) {
 	case 'm':
 	    masterp = 1;
 	    break;
+	case 'a':
+	    autoselect = 1;
+	    break;
 	default:
 	    break;
 	}
+    }
+
+    if (!masterp && autoselect) masterp = islocalip(config_mupdate_server);
+
+    if (masterp &&
+	config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) {
+	/* XXX  We currently prohibit this because mailboxes created
+	 * on the master will cause local mailbox entries to be propagated
+	 * to the slave.  We can probably fix this by prepending
+	 * config_servername onto the entries before updating the slaves.
+	 */
+	fatal("can not run mupdate master on a unified server", EC_USAGE);
     }
 
     if(pipe(conn_pipe) == -1) {
@@ -1352,13 +1429,13 @@ void database_log(const struct mbent *mb, struct txn **mytid)
  * a non-null pool implies we should use the mpool functionality */
 struct mbent *database_lookup(const char *name, struct mpool *pool) 
 {
-    char *path, *acl;
+    char *part, *acl;
     int type;
     struct mbent *out;
     
     if(!name) return NULL;
     
-    if(mboxlist_detail(name, &type, &path, NULL, &acl, NULL))
+    if(mboxlist_detail(name, &type, NULL, NULL, &part, &acl, NULL))
 	return NULL;
 
     if(type & MBTYPE_RESERVE) {
@@ -1374,7 +1451,7 @@ struct mbent *database_lookup(const char *name, struct mpool *pool)
     }
 
     out->mailbox = (pool) ? mpool_strdup(pool, name) : xstrdup(name);
-    out->server = (pool) ? mpool_strdup(pool, path) : xstrdup(path);
+    out->server = (pool) ? mpool_strdup(pool, part) : xstrdup(part);
 
     return out;
 }
@@ -1494,9 +1571,12 @@ void cmd_set(struct conn *C,
 
     m = database_lookup(mailbox, NULL);
     if (m && t == SET_RESERVE) {
-	/* failed; mailbox already exists */
-	msg = EXISTS;
-	goto done;
+	if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD) {
+	    /* failed; mailbox already exists */
+	    msg = EXISTS;
+	    goto done;
+	}
+	/* otherwise do nothing (local create on master) */
     }
 
     if ((!m || m->t != SET_ACTIVE) && t == SET_DEACTIVATE) {
@@ -1509,15 +1589,18 @@ void cmd_set(struct conn *C,
     
     if (t == SET_DELETE) {
 	if (!m) {
-	    /* failed; mailbox doesn't exist */
-	    msg = DOESNTEXIST;
-	    goto done;
+	    if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD) {
+		/* failed; mailbox doesn't exist */
+		msg = DOESNTEXIST;
+		goto done;
+	    }
+	    /* otherwise do nothing (local delete on master) */
+	} else {
+	    oldserver = xstrdup(m->server);
+
+	    /* do the deletion */
+	    m->t = SET_DELETE;
 	}
-
-	oldserver = xstrdup(m->server);
-
-	/* do the deletion */
-	m->t = SET_DELETE;
     } else {
 	if(m)
 	    oldserver = m->server;
@@ -1554,7 +1637,7 @@ void cmd_set(struct conn *C,
     }
 
     /* write to disk */
-    database_log(m, NULL);
+    if (m) database_log(m, NULL);
 
     if(oldserver) {
 	tmp = strchr(oldserver, '!');
@@ -2153,7 +2236,7 @@ int mupdate_synchronize(mupdate_handle *handle)
     rock.pool = pool;
     
     /* ask for updates and set nonblocking */
-    prot_printf(handle->pout, "U01 UPDATE\r\n");
+    prot_printf(handle->conn->out, "U01 UPDATE\r\n");
 
     /* Note that this prevents other people from running an UPDATE against
      * us for the duration.  this is a GOOD THING */
@@ -2182,7 +2265,7 @@ int mupdate_synchronize(mupdate_handle *handle)
     }
 
     /* Make socket nonblocking now */
-    prot_NONBLOCK(handle->pin);
+    prot_NONBLOCK(handle->conn->in);
 
     rock.boxes = &local_boxes;
 

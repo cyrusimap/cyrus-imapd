@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: ctl_mboxlist.8,v 1.9 2006/04/06 15:33:09 murch Exp $
+.\" $Id: ctl_mboxlist.8,v 1.10 2006/11/30 17:11:23 murch Exp $
 .SH NAME
 ctl_mboxlist \- perform operations on the mailbox list database
 .SH SYNOPSIS
@@ -106,7 +106,7 @@ Read configuration options from \fIconfig-file\fR.
 Dump the contents of the database to standard output in a portable
 flat-text format.  NOTE: In Cyrus versions 2.2.13 and earlier, the dump
 format did not include the mailbox type flags, breaking remote
-mailboxes (frontends, mupdate master) when undumped.
+mailboxes (frontends, mupdate master, unified backends) when undumped.
 .TP
 .B \-x
 When performing a dump, remove the mailboxes dumped from the mailbox list

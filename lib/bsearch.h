@@ -1,5 +1,5 @@
 /* bsearch.h -- binary search
-	$Id: bsearch.h,v 1.7 2003/02/13 20:15:39 rjs3 Exp $
+	$Id: bsearch.h,v 1.8 2006/11/30 17:11:22 murch Exp $
 	
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -50,5 +50,7 @@ extern int bsearch_mem(const char *word, int caseSensitive,
 		       unsigned long *linelenp);
 
 extern int bsearch_compare(const char *s1, const char *s2);
+
+extern int bsearch_ncompare(const char *s1, int l1, const char *s2, int l2);
 
 #endif /* INCLUDED_BSEARCH_H */
