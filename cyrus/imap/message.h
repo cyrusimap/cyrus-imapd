@@ -1,5 +1,5 @@
 /* message.h -- Message parsing
- $Id: message.h,v 1.7 2006/11/30 17:11:19 murch Exp $
+ $Id: message.h,v 1.8 2006/12/19 18:56:27 murch Exp $
 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -61,9 +61,10 @@ extern int message_copy_strict P((struct protstream *from, FILE *to,
 				  unsigned size, int allow_null));
 
 /* Flags for parsing message date/time - to be bitwise OR'd */
-#define PARSE_DATE	(1<<0)
+#define PARSE_DATE	(1<<0)  /* Default (always parsed) */
 #define PARSE_TIME	(1<<1)
 #define PARSE_ZONE	(1<<2)
+#define PARSE_NOCREATE	(1<<15) /* Don't create one if its missing/invalid */
 
 extern time_t message_parse_date P((char *hdr, unsigned flags));
 
