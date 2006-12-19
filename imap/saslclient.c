@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: saslclient.c,v 1.15 2006/11/30 17:11:20 murch Exp $ */
+/* $Id: saslclient.c,v 1.14.2.1 2006/12/19 14:30:28 murch Exp $ */
 
 #include <config.h>
 
@@ -151,7 +151,7 @@ sasl_callback_t *mysasl_callbacks(const char *username,
 	    return NULL;
 	}
 
-	strcpy((char *) secret->data, password);
+	strcpy(secret->data,password);
 	secret->len = len;
 		
 	/* password */
