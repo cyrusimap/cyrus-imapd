@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.220 2006/12/19 18:56:27 murch Exp $
+ * $Id: index.c,v 1.221 2006/12/19 19:32:23 murch Exp $
  */
 #include <config.h>
 
@@ -4166,10 +4166,12 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
 	case SORT_CC:
 	    ret = strcmp(md1->cc, md2->cc);
 	    break;
-	case SORT_DATE:
-	    ret = (md1->date && md2->date) ?
-		numcmp(md1->date, md2->date) : numcmp(md1->msgno, md2->msgno);
+	case SORT_DATE: {
+	    time_t d1 = md1->date ? md1->date : INTERNALDATE(md1->msgno);
+	    time_t d2 = md2->date ? md2->date : INTERNALDATE(md2->msgno);
+	    ret = numcmp(d1, d2);
 	    break;
+	}
 	case SORT_FROM:
 	    ret = strcmp(md1->from, md2->from);
 	    break;
