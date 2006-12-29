@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.502 2006/11/30 17:11:18 murch Exp $ */
+/* $Id: imapd.c,v 1.503 2006/12/29 18:46:00 murch Exp $ */
 
 #include <config.h>
 
@@ -3528,10 +3528,11 @@ void cmd_unselect(char *tag)
 	/* xxx do we want this to say OK if the connection is gone?
 	 * saying NO is clearly wrong, hense the fatal request. */
 	pipe_including_tag(backend_current, tag, 0);
-	backend_current = NULL;
 
 	/* remove backend_current from the protgroup */
 	protgroup_delete(protin, backend_current->in);
+
+	backend_current = NULL;
 	return;
     }
 
