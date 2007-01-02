@@ -1,5 +1,5 @@
 /* acl.c -- routines for access control lists
- $Id: acl.c,v 1.11 2006/11/30 17:11:22 murch Exp $
+ $Id: acl.c,v 1.12 2007/01/02 17:19:49 murch Exp $
  
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -60,7 +60,7 @@ int cyrus_acl_strtomask(const char *str)
     long result = 0;
 
     while (*str) {
-	switch (*str++) {
+	switch (*str) {
 	    case 'l': result |= ACL_LOOKUP; break;
 	    case 'r': result |= ACL_READ; break;
 	    case 's': result |= ACL_SEEN; break;
@@ -68,17 +68,13 @@ int cyrus_acl_strtomask(const char *str)
 	    case 'i': result |= ACL_INSERT; break;
 	    case 'p': result |= ACL_POST; break;
 	    case 'c': /* legacy CREATE macro - build member rights */
-		legacy_create = ACL_CREATE;
-		if (*deleteright == 'c') legacy_create |= ACL_DELETEMBOX;
-		break;
+		legacy_create = ACL_CREATE; break;
 	    case 'k': result |= ACL_CREATE; break;
 	    case 'x': result |= ACL_DELETEMBOX; break;
 	    case 't': result |= ACL_DELETEMSG; break;
 	    case 'e': result |= ACL_EXPUNGE; break;
 	    case 'd': /* legacy DELETE macro - build member rights */
-		legacy_delete = (ACL_DELETEMSG | ACL_EXPUNGE);
-		if (*deleteright == 'd') legacy_delete |= ACL_DELETEMBOX;
-		break;
+		legacy_delete = (ACL_DELETEMSG | ACL_EXPUNGE); break;
 	    case 'a': result |= ACL_ADMIN; break;
 	    case '0': result |= ACL_USER0; break;
 	    case '1': result |= ACL_USER1; break;
@@ -90,6 +86,16 @@ int cyrus_acl_strtomask(const char *str)
 	    case '7': result |= ACL_USER7; break;
 	    case '8': result |= ACL_USER8; break;
 	    case '9': result |= ACL_USER9; break;
+	}
+
+	if (*str++ == *deleteright) {
+	    switch (*deleteright) {
+	    case 'c': /* legacy CREATE macro - build member rights */
+		legacy_create |= ACL_DELETEMBOX; break;
+	    case 'd': /* legacy DELETE macro - build member rights */
+		legacy_delete |= ACL_DELETEMBOX; break;
+	    default: result |= ACL_DELETEMBOX; break;
+	    }
 	}
     }
 
@@ -128,8 +134,14 @@ char *cyrus_acl_masktostr(int acl, char *str)
     if (acl & ACL_DELETEMBOX) *pos++ = 'x';
     if (acl & ACL_DELETEMSG) *pos++ = 't';
     if (acl & ACL_EXPUNGE) *pos++ = 'e';
-    if (acl & legacy_create) *pos++ = 'c';
-    if (acl & legacy_delete) *pos++ = 'd';
+    if (acl & legacy_create) {
+	/* legacy CREATE macro member right(s) - add macro */
+	*pos++ = 'c';
+    }
+    if (acl & legacy_delete) {
+	/* legacy DELETE macro member right(s) - add macro */
+	*pos++ = 'd';
+    }
     if (acl & ACL_ADMIN) *pos++ = 'a';
     if (acl & ACL_USER0) *pos++ = '0';
     if (acl & ACL_USER1) *pos++ = '1';
