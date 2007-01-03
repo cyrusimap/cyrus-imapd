@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.145 2006/11/30 17:11:18 murch Exp $
+ * $Id: lmtpd.c,v 1.146 2007/01/03 00:14:53 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -412,7 +412,7 @@ static int mlookup(const char *name, char **server, char **aclp, void *tid)
 	r = mupdate_find(mhandle, name, &mailboxdata);
 
 	if (r == MUPDATE_MAILBOX_UNKNOWN) {
-	    r = IMAP_MAILBOX_NONEXISTENT;
+	    return IMAP_MAILBOX_NONEXISTENT;
 	} else if (r) {
 	    /* xxx -- yuck: our error handling for now will be to exit;
 	       this txn will be retried later -- to do otherwise means
@@ -422,6 +422,7 @@ static int mlookup(const char *name, char **server, char **aclp, void *tid)
 
 	type |= MBTYPE_REMOTE;
 	if (server) *server = (char *) mailboxdata->server;
+	if (aclp) *aclp = (char *) mailboxdata->acl;
     }
     else {
 	/* do a local lookup and kick the slave if necessary */
@@ -440,8 +441,7 @@ static int mlookup(const char *name, char **server, char **aclp, void *tid)
 	    if (c) *c = '\0';
 	}
     }
-    else if (server)
-	*server = NULL;
+    else if (server) *server = NULL;
 
     return r;
 }
@@ -514,6 +514,16 @@ int deliver_mailbox(FILE *f,
 	    syslog(LOG_INFO, "Delivered: %s to mailbox: %s", id, mailboxname);
 
 	    sync_log_append(mailboxname);
+
+	    if (user) {
+		/* check if the \Seen flag has been set on this message */
+		while (nflags) {
+		    if (!strcmp(flag[--nflags], "\\seen")) {
+			sync_log_seen(user, mailboxname);
+			break;
+		    }
+		}
+	    }
 	}
     }
 
