@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: proxy.c,v 1.2 2006/11/30 17:11:19 murch Exp $
+ * $Id: proxy.c,v 1.3 2007/01/04 13:20:13 murch Exp $
  */
 
 #include <config.h>
@@ -125,7 +125,7 @@ backend_timeout(struct protstream *s __attribute__((unused)),
     struct backend *be = (struct backend *) rock;
     int is_active = (be->context ? *((int *) be->context) : 0);
 
-    if ((be != *(be->current)) && !is_active) {
+    if ((!be->current || (be != *(be->current))) && !is_active) {
 	/* server is not our current server, and idle too long.
 	 * down the backend server (removes the event as a side-effect)
 	 */
