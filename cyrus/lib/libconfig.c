@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: libconfig.c,v 1.11 2006/11/30 17:11:22 murch Exp $ */
+/* $Id: libconfig.c,v 1.12 2007/01/05 19:54:20 jeaton Exp $ */
 
 #include <config.h>
 
@@ -57,6 +57,8 @@
 #include "libconfig.h"
 #include "imapopts.h"
 #include "xmalloc.h"
+#include "xstrlcat.h"
+#include "xstrlcpy.h"
 
 #define CONFIGHASHSIZE 30 /* relatively small,
 			   * because it is for overflow only */
