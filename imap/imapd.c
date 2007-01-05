@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.503 2006/12/29 18:46:00 murch Exp $ */
+/* $Id: imapd.c,v 1.504 2007/01/05 19:10:04 murch Exp $ */
 
 #include <config.h>
 
@@ -1931,6 +1931,7 @@ void cmd_login(char *tag, char *user)
 			 userbuf, sizeof(userbuf), &userlen);
 
     if (r) {
+	eatline(imapd_in, ' ');
 	syslog(LOG_NOTICE, "badlogin: %s plaintext %s invalid user",
 	       imapd_clienthost, beautify_string(user));
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, 
@@ -3310,6 +3311,10 @@ void cmd_select(char *tag, char *cmd, char *name)
 	mailbox_close(imapd_mailbox);
 	imapd_mailbox = 0;
     }
+    if (backend_current) {
+	/* remove backend_current from the protgroup */
+	protgroup_delete(protin, backend_current->in);
+    }
 
     if (cmd[0] == 'B') {
 	/* BBoard namespace is empty */
@@ -3340,9 +3345,6 @@ void cmd_select(char *tag, char *cmd, char *name)
 
 	if (backend_current && backend_current != backend_next) {
 	    char mytag[128];
-
-	    /* remove backend_current from the protgroup */
-	    protgroup_delete(protin, backend_current->in);
 
 	    /* switching servers; flush old server output */
 	    proxy_gentag(mytag, sizeof(mytag));
@@ -3384,9 +3386,6 @@ void cmd_select(char *tag, char *cmd, char *name)
     /* local mailbox */
     if (backend_current) {
       char mytag[128];
-
-      /* remove backend_current from the protgroup */
-      protgroup_delete(protin, backend_current->in);
 
       /* switching servers; flush old server output */
       proxy_gentag(mytag, sizeof(mytag));
