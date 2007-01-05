@@ -67,7 +67,7 @@
 #include "ptloader.h"
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ptloader.c,v 1.42 2006/11/30 17:11:24 murch Exp $";
+      "$Id: ptloader.c,v 1.43 2007/01/05 19:22:08 jeaton Exp $";
 
 struct pts_module *pts_modules[] = {
 #ifdef HAVE_LDAP
@@ -148,7 +148,7 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     /* set signal handlers */
     signal(SIGPIPE, SIG_IGN);
 
-    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.42 2006/11/30 17:11:24 murch Exp $");
+    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.43 2007/01/05 19:22:08 jeaton Exp $");
 
     while ((opt = getopt(argc, argv, "d:")) != EOF) {
 	switch (opt) {
@@ -224,6 +224,12 @@ int service_main_fd(int c, int argc __attribute__((unused)),
 	       size, PTS_DB_KEYSIZE);
 	reply = "Error: invalid request size";
 	goto sendreply;
+    }
+
+    if (size = 0) {
+        syslog(LOG_ERR, "size sent is 0");
+        reply = "Error: zero request size";
+        goto sendreply;
     }
 
     memset(&user, 0, sizeof(user));
