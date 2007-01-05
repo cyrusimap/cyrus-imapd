@@ -1,5 +1,5 @@
 /* auth_pts.c -- PTLOADER authorization
- * $Id: auth_pts.c,v 1.10 2006/11/30 17:11:22 murch Exp $
+ * $Id: auth_pts.c,v 1.11 2007/01/05 19:53:46 jeaton Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -246,6 +246,12 @@ static char *mycanonifyid(const char *identifier,
 	strlcpy(retbuf, identifier, sizeof(retbuf));
 	return retbuf;
     }
+
+    if (!strcmp(identifier, "")) {
+        syslog(LOG_ERR, "unable to canonify empty identifier");
+        return NULL;
+    }
+
 
     canonuser_cache = NULL;
     if(ptload(identifier, &canonuser_cache) < 0) {
