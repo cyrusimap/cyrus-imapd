@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.504 2007/01/05 19:10:04 murch Exp $ */
+/* $Id: imapd.c,v 1.505 2007/01/05 19:54:17 jeaton Exp $ */
 
 #include <config.h>
 
@@ -101,6 +101,7 @@
 #include "util.h"
 #include "version.h"
 #include "xmalloc.h"
+#include "xstrlcat.h"
 
 #include "pushstats.h"		/* SNMP interface */
 
