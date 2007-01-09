@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.221 2006/12/19 19:32:23 murch Exp $
+ * $Id: index.c,v 1.222 2007/01/09 17:04:10 murch Exp $
  */
 #include <config.h>
 
@@ -516,8 +516,8 @@ int oldexists;
      */
     old = seenuids;
     new = newseenuids;
-    while (isdigit((int) *old)) oldnext = oldnext * 10 + *old++ - '0';
-    while (isdigit((int) *new)) newnext = newnext * 10 + *new++ - '0';
+    while (cyrus_isdigit((int) *old)) oldnext = oldnext * 10 + *old++ - '0';
+    while (cyrus_isdigit((int) *new)) newnext = newnext * 10 + *new++ - '0';
 
     for (msgno = 1; msgno <= imapd_exists; msgno++) {
 	uid = UID(msgno);
@@ -531,7 +531,7 @@ int oldexists;
 		oldnext = 0;
 		if (!*old) oldnext = mailbox->last_uid+1;
 		else old++;
-		while (isdigit((int) *old)) {
+		while (cyrus_isdigit((int) *old)) {
 		    oldnext = oldnext * 10 + *old++ - '0';
 		}
 		oldnext += oldseen;
@@ -550,7 +550,7 @@ int oldexists;
 		    neweof++;
 		}
 		else new++;
-		while (isdigit((int) *new)) {
+		while (cyrus_isdigit((int) *new)) {
 		    newnext = newnext * 10 + *new++ - '0';
 		}
 		newnext += newseen;
@@ -682,7 +682,7 @@ int oldexists;
 		neweof++;
 	    }
 	    else new++;
-	    while (isdigit((int) *new)) newnext = newnext * 10 + *new++ - '0';
+	    while (cyrus_isdigit((int) *new)) newnext = newnext * 10 + *new++ - '0';
 	    newnext += newseen;
 	}
     }
@@ -700,7 +700,7 @@ int oldexists;
 		/* There's a ":M" after the ",N".  Parse/include that too. */
 		new++;
 		newnext = 0;
-		while (isdigit((int) *new)) newnext = newnext * 10 + *new++ - '0';
+		while (cyrus_isdigit((int) *new)) newnext = newnext * 10 + *new++ - '0';
 	    }
 	    uid = newnext;
 	    newseen++;		/* Forget we parsed ",N" */
@@ -1689,7 +1689,7 @@ index_forsequence(struct mailbox* mailbox,
     }
 
     for (;;) {
-	if (isdigit((int) *sequence)) {
+	if (cyrus_isdigit((int) *sequence)) {
 	    start = start*10 + *sequence - '0';
 	}
 	else if (*sequence == '*') {
@@ -1698,7 +1698,7 @@ index_forsequence(struct mailbox* mailbox,
 	else if (*sequence == ':') {
 	    end = 0;
 	    sequence++;
-	    while (isdigit((int) *sequence)) {
+	    while (cyrus_isdigit((int) *sequence)) {
 		end = end*10 + *sequence++ - '0';
 	    }
 	    if (*sequence == '*') {
@@ -1756,7 +1756,7 @@ int usinguid;
     unsigned i, start = 0, end;
 
     for (;;) {
-	if (isdigit((int) *sequence)) {
+	if (cyrus_isdigit((int) *sequence)) {
 	    start = start*10 + *sequence - '0';
 	}
 	else if (*sequence == '*') {
@@ -1766,7 +1766,7 @@ int usinguid;
 	else if (*sequence == ':') {
 	    end = 0;
 	    sequence++;
-	    while (isdigit((int) *sequence)) {
+	    while (cyrus_isdigit((int) *sequence)) {
 		end = end*10 + *sequence++ - '0';
 	    }
 	    if (*sequence == '*') {
@@ -1897,7 +1897,7 @@ static int index_fetchsection(const char *resp,
     while (*p != ']' && *p != 'M') {
 	/* Generate the actual part number */
 	skip = 0;
-	while (isdigit((int) *p)) {
+	while (cyrus_isdigit((int) *p)) {
             skip = skip * 10 + *p++ - '0';
             /* xxx overflow */
         }
@@ -2026,7 +2026,7 @@ static void index_fetchfsection(const char *msg_base,
 
     while (*p != 'H') {
 	skip = 0;
-	while (isdigit((int) *p)) {
+	while (cyrus_isdigit((int) *p)) {
             skip = skip * 10 + *p++ - '0';
             /* xxx overflow */
         }
@@ -2732,7 +2732,7 @@ int index_urlfetch(struct mailbox *mailbox, unsigned msgno,
 	while (*p && *p != 'M') {
 	    /* Generate the actual part number */
 	    skip = 0;
-	    while (isdigit((int) *p)) {
+	    while (cyrus_isdigit((int) *p)) {
 		skip = skip * 10 + *p++ - '0';
 		/* xxx overflow */
 	    }
@@ -3756,7 +3756,7 @@ static void parse_cached_envelope(char *env, char *tokens[], int tokens_size)
 	case '{':			/* literal */
 	    c++;			/* skip open brace */
 	    len = 0;			/* determine length of literal */
-	    while (isdigit((int) *c)) {
+	    while (cyrus_isdigit((int) *c)) {
 		len = len*10 + *c - '0';
 		c++;
 	    }
@@ -3910,7 +3910,7 @@ static char *_index_extract_subject(char *s, int *is_refwd)
 			break;
 		    			/* if we have a digit, and we're still
 					   counting, keep building the count */
-		    } else if (isdigit((int) *x) && count != -1) {
+		    } else if (cyrus_isdigit((int) *x) && count != -1) {
 			count = count * 10 + *x - '0';
                         if (count < 0) {                /* overflow */
                             count = -1; /* abort counting */
