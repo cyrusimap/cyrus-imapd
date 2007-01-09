@@ -67,7 +67,7 @@
 #include "ptloader.h"
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ptloader.c,v 1.43 2007/01/05 19:22:08 jeaton Exp $";
+      "$Id: ptloader.c,v 1.44 2007/01/09 21:25:04 jeaton Exp $";
 
 struct pts_module *pts_modules[] = {
 #ifdef HAVE_LDAP
@@ -148,7 +148,7 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     /* set signal handlers */
     signal(SIGPIPE, SIG_IGN);
 
-    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.43 2007/01/05 19:22:08 jeaton Exp $");
+    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.44 2007/01/09 21:25:04 jeaton Exp $");
 
     while ((opt = getopt(argc, argv, "d:")) != EOF) {
 	switch (opt) {
@@ -226,7 +226,7 @@ int service_main_fd(int c, int argc __attribute__((unused)),
 	goto sendreply;
     }
 
-    if (size = 0) {
+    if (size == 0) {
         syslog(LOG_ERR, "size sent is 0");
         reply = "Error: zero request size";
         goto sendreply;
@@ -243,6 +243,7 @@ int service_main_fd(int c, int argc __attribute__((unused)),
     if (ptclient_debug) {
 	syslog(LOG_DEBUG, "user %s, cacheid %s", user, keyinhex);
     }
+
 
     newstate = ptsmodule_make_authstate(user, size, &reply, &dsize);
 
