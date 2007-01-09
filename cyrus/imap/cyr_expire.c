@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_expire.c,v 1.8 2006/11/30 17:11:17 murch Exp $
+ * $Id: cyr_expire.c,v 1.9 2007/01/09 17:37:03 murch Exp $
  */
 
 #include <config.h>
@@ -256,7 +256,12 @@ int expire(char *name, int matchlen, int maycreate __attribute__((unused)),
 	mailbox_close(&mailbox);
     }
 
-    return r;
+    if (r) {
+	syslog(LOG_WARNING, "failure expiring %s: %s", name, error_message(r));
+    }
+
+    /* Even if we had a problem with one mailbox, continue with the others */
+    return 0;
 }
 
 int main(int argc, char *argv[])
