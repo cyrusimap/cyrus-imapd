@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.2 2006/11/30 17:11:20 murch Exp $
+ * $Id: sync_client.c,v 1.3 2007/01/09 16:51:20 murch Exp $
  */
 
 #include <config.h>
@@ -121,6 +121,7 @@ static struct auth_state *sync_authstate = NULL;
 
 static int verbose         = 0;
 static int verbose_logging = 0;
+static int connect_once    = 0;
 
 static int do_meta(char *user);
 
@@ -3165,12 +3166,18 @@ struct backend *replica_connect(struct backend *be, const char *servername,
 	be = backend_connect(be, servername, &protocol[PROTOCOL_CSYNC],
 			     "", cb, NULL);
 
-	if (be || wait > 1000) break;
+	if (be || connect_once || wait > 1000) break;
 
 	fprintf(stderr,
 		"Can not connect to server '%s', retrying in %d seconds\n",
 		servername, wait);
 	sleep(wait);
+    }
+
+    if (!be) {
+		    fprintf(stderr, "Can not connect to server '%s'\n",
+			    servername);
+		    _exit(1);
     }
 
     return be;
@@ -3279,10 +3286,14 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:vlS:F:f:w:t:d:rums")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:vlS:F:f:w:t:d:rumso")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
+            break;
+
+        case 'o': /* only try to connect once */
+            connect_once = 1;
             break;
 
         case 'v': /* verbose */
