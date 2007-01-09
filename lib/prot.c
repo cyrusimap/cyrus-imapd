@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.88 2007/01/03 20:08:55 murch Exp $
+ * $Id: prot.c,v 1.89 2007/01/09 16:50:31 murch Exp $
  */
 
 #include <config.h>
@@ -1279,6 +1279,7 @@ void protgroup_delete(struct protgroup *group, struct protstream *item)
 	    return;
 	}
     }
+    syslog(LOG_ERR, "protgroup_delete(): can't find protstream in group");
 }
 
 struct protstream *protgroup_getelement(struct protgroup *group,
