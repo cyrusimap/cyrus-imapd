@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.3 2007/01/09 16:51:20 murch Exp $
+ * $Id: sync_client.c,v 1.4 2007/01/09 17:29:30 murch Exp $
  */
 
 #include <config.h>
@@ -1199,13 +1199,16 @@ static int upload_message_work(struct mailbox *mailbox,
 static int upload_messages_list(struct mailbox *mailbox,
 				struct sync_msg_list *list)
 {
-    unsigned long msgno;
+    unsigned long msgno = 1;
     int r = 0;
     struct index_record record;
     struct sync_msg *msg;
-    int count = 0;
+    int count;
     int c = ' ';
     static struct buf token;   /* BSS */
+    int max_count = config_getint(IMAPOPT_SYNC_BATCH_SIZE);
+
+    if (max_count <= 0) max_count = INT_MAX;
 
     if (chdir(mailbox->path)) {
         syslog(LOG_ERR, "Couldn't chdir to %s: %s",
@@ -1213,8 +1216,10 @@ static int upload_messages_list(struct mailbox *mailbox,
         return(IMAP_IOERROR);
     }
 
+repeatupload:
+
     msg = list->head;
-    for (msgno = 1 ; msgno <= mailbox->exists ; msgno++) {
+    for (count = 0; count < max_count && msgno <= mailbox->exists ; msgno++) {
         r = mailbox_read_index_record(mailbox, msgno, &record);
 
         if (r) {
@@ -1271,6 +1276,12 @@ static int upload_messages_list(struct mailbox *mailbox,
         msgid_onserver = sync_msgid_list_create(hash_size);
 
 	syslog(LOG_INFO, "UPLOAD: received RESTART");
+    }
+
+    /* don't overload the server with too many uploads at once! */
+    if (count >= max_count) {
+	syslog(LOG_INFO, "UPLOAD: hit %d uploads at msgno %d", count, msgno);
+	goto repeatupload;
     }
 
     return(0);
@@ -3175,9 +3186,9 @@ struct backend *replica_connect(struct backend *be, const char *servername,
     }
 
     if (!be) {
-		    fprintf(stderr, "Can not connect to server '%s'\n",
-			    servername);
-		    _exit(1);
+	fprintf(stderr, "Can not connect to server '%s'\n",
+		servername);
+	_exit(1);
     }
 
     return be;
