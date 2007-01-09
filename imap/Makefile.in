@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.185 2006/11/30 17:11:17 murch Exp $
+# $Id: Makefile.in,v 1.186 2007/01/09 17:41:35 murch Exp $
 # 
 # @configure_input@
 # 
@@ -114,7 +114,7 @@ SERVICE=../master/service.o
 SERVICETHREAD=../master/service-thread.o
 
 PROGS = imapd lmtpd pop3d \
-	fud smmapd reconstruct quota mbpath ipurge \
+	fud smmapd reconstruct quota mbpath ipurge cyr_dbtool \
 	cyrdump chk_cyrus cvt_cyrusdb deliver ctl_mboxlist \
 	ctl_deliver ctl_cyrusdb squatter mbexamine cyr_expire arbitron \
 	unexpunge @IMAP_PROGS@
@@ -256,6 +256,10 @@ sync_server: sync_server.o sync_support.o sync_commit.o \
 ### Command Line Utilities
 arbitron: arbitron.o $(CLIOBJS) libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o arbitron arbitron.o $(CLIOBJS) \
+	libimap.a $(DEPLIBS) $(LIBS)
+
+cyr_dbtool: cyr_dbtool.o mutex_fake.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o cyr_dbtool cyr_dbtool.o $(CLIOBJS) \
 	libimap.a $(DEPLIBS) $(LIBS)
 
 cvt_cyrusdb: cvt_cyrusdb.o mutex_fake.o libimap.a $(DEPLIBS)
