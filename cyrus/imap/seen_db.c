@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
- * $Id: seen_db.c,v 1.49 2006/11/30 17:11:20 murch Exp $
+ * $Id: seen_db.c,v 1.50 2007/01/09 16:47:41 murch Exp $
  * 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -605,7 +605,7 @@ static int seen_merge_cb(void *rockp,
 		      &(rockdata->tid));
     if(!r && tgtdata) {
 	/* compare timestamps */
-	int version, tmplast, tgtlast;
+	int version, tmplast, tgtlast, tmpuid, tgtuid;
 	char *p;
 	const char *tmp = tmpdata, *tgt = tgtdata;
 	
@@ -614,8 +614,8 @@ static int seen_merge_cb(void *rockp,
 	assert(version == SEEN_VERSION);
        	/* skip lastread */
 	strtol(tgt, &p, 10); tgt = p;
-	/* skip lastuid */
-	strtol(tgt, &p, 10); tgt = p;
+	/* get lastuid */
+	tgtuid = strtol(tgt, &p, 10); tgt = p;
 	/* get lastchange */
 	tgtlast = strtol(tgt, &p, 10);
 
@@ -624,11 +624,12 @@ static int seen_merge_cb(void *rockp,
 	assert(version == SEEN_VERSION);
        	/* skip lastread */
 	strtol(tmp, &p, 10); tmp = p;
-	/* skip lastuid */
-	strtol(tmp, &p, 10); tmp = p;
+	/* get lastuid */
+	tmpuid = strtol(tmp, &p, 10); tmp = p;
 	/* get lastchange */
 	tmplast = strtol(tmp, &p, 10);
 
+	if(tmpuid > tgtuid) dirty = 1;
 	if(tmplast > tgtlast) dirty = 1;
     } else {
 	dirty = 1;
