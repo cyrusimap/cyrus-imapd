@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.55 2006/11/30 17:11:23 murch Exp $ */
+/* $Id: service.c,v 1.56 2007/01/09 17:32:50 murch Exp $ */
 
 #include <config.h>
 
@@ -335,6 +335,11 @@ int main(int argc, char **argv, char **envp)
 	exit(EX_SOFTWARE);
     }
     id = atoi(p);
+
+    /* pick a random timeout between reuse_timeout -> 2*reuse_timeout
+     * to avoid massive IO overload if the network connection goes away */
+    srand(time(NULL) * getpid());
+    reuse_timeout = reuse_timeout + (rand() % reuse_timeout);
 
     cyrus_init(alt_config, service, 0);
 
