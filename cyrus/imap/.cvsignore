@@ -7,6 +7,7 @@ ctl_deliver
 ctl_mboxlist
 cvt_cyrusdb
 cyrdump
+cyr_dbtool
 cyr_expire
 deliver
 fetchnews
