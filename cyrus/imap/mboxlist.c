@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.243 2006/11/30 17:11:19 murch Exp $
+ * $Id: mboxlist.c,v 1.244 2007/01/09 17:13:15 murch Exp $
  */
 
 #include <config.h>
@@ -1436,7 +1436,7 @@ int mboxlist_setacl(const char *name, const char *identifier,
     int r;
     int access;
     int mode = ACL_MODE_SET;
-    int isusermbox = 0;
+    int isusermbox = 0, anyoneuseracl = 1;
     struct mailbox mailbox;
     int mailbox_open = 0;
     char *acl, *newacl = NULL;
@@ -1493,6 +1493,7 @@ int mboxlist_setacl(const char *name, const char *identifier,
 	 name[domainlen+5+useridlen] == '.')) {
 	isusermbox = 1;
     }
+    anyoneuseracl = config_getswitch(IMAPOPT_ANYONEUSERACL);
 
     /* 1. Start Transaction */
     /* lookup the mailbox to make sure it exists and get its acl */
@@ -1540,6 +1541,12 @@ int mboxlist_setacl(const char *name, const char *identifier,
 		IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
 	    goto done;
 	}
+    }
+
+    /* 2.1 Only admin user can set 'anyone' rights if config says so */
+    if (!r && !isadmin && !anyoneuseracl && !strncmp(identifier, "anyone", 6)) {
+      r = IMAP_PERMISSION_DENIED;
+      goto done;
     }
 
     /* 3. Set DB Entry */
