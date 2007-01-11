@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.169 2006/11/30 17:11:19 murch Exp $
+ * $Id: pop3d.c,v 1.170 2007/01/11 16:02:04 murch Exp $
  */
 #include <config.h>
 
@@ -1624,10 +1624,6 @@ int openinbox(void)
 	    prot_printf(popd_out,
 			"-ERR [LOGIN-DELAY] Logins must be at least %d minute%s apart\r\n",
 			minpoll, minpoll > 1 ? "s" : "");
-	    if (!mailbox_lock_index(&mboxstruct)) {
-		mboxstruct.pop3_last_login = popd_login_time;
-		mailbox_write_index_header(&mboxstruct);
-	    }
 	    mailbox_close(&mboxstruct);
 	    goto fail;
 	}
