@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: proxy.c,v 1.3 2007/01/04 13:20:13 murch Exp $
+ * $Id: proxy.c,v 1.4 2007/01/12 12:27:58 murch Exp $
  */
 
 #include <config.h>
@@ -258,14 +258,15 @@ int proxy_check_input(struct protgroup *protin,
 
 	    if (pout) {
 		const char *err;
+		char buf[4096];
+		int c;
 
 		do {
-		    char buf[4096];
-		    int c = prot_read(pin, buf, sizeof(buf));
+		    c = prot_read(pin, buf, sizeof(buf));
 
 		    if (c == 0 || c < 0) break;
 		    prot_write(pout, buf, c);
-		} while (pin->cnt > 0);
+		} while (c == sizeof(buf));
 
 		if ((err = prot_error(pin)) != NULL) {
 		    if (serverout && !strcmp(err, PROT_EOF_STRING)) {
