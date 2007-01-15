@@ -33,6 +33,7 @@ To make a release:
 - make sure the version number is correct (Makefile.in, imap/version.h)
 - add upgrade notes to doc/install-upgrade.html
 - add changes to doc/changes.html
+- make sure that contrib/drac_auth.patch applies cleanly
 - commit to repository
 - make dist
 
