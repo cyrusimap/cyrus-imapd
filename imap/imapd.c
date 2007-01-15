@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.505 2007/01/05 19:54:17 jeaton Exp $ */
+/* $Id: imapd.c,v 1.506 2007/01/15 15:34:36 murch Exp $ */
 
 #include <config.h>
 
@@ -2243,6 +2243,7 @@ void cmd_noop(char *tag, char *cmd)
     if (backend_current) {
 	/* remote mailbox */
 	prot_printf(backend_current->out, "%s %s\r\n", tag, cmd);
+	pipe_including_tag(backend_current, tag, 0);
 
 	return;
     }
@@ -3006,7 +3007,7 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 			    tag, strlen(name), name, 0, "");
 	    }
 	    if (!(r = pipe_command(s, 16384))) {
-		if (s != backend_current) pipe_including_tag(s, tag, 0);
+		pipe_including_tag(s, tag, 0);
 	    }
 	    s->context = NULL;
 	} else {
@@ -3603,7 +3604,9 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
     if (backend_current) {
 	/* remote mailbox */
 	prot_printf(backend_current->out, "%s %s %s ", tag, cmd, sequence);
-	pipe_command(backend_current, 65536);
+	if (!pipe_command(backend_current, 65536)) {
+	    pipe_including_tag(backend_current, tag, 0);
+	}
 	return;
     }
 
@@ -4059,6 +4062,7 @@ void cmd_partial(const char *tag, const char *msgno, char *data,
 	/* remote mailbox */
 	prot_printf(backend_current->out, "%s Partial %s %s %s %s\r\n",
 		    tag, msgno, data, start, count);
+	pipe_including_tag(backend_current, tag, 0);
 	return;
     }
 
@@ -4188,7 +4192,9 @@ void cmd_store(char *tag, char *sequence, int usinguid)
 	/* remote mailbox */
 	prot_printf(backend_current->out, "%s %s %s ",
 		    tag, cmd, sequence);
-	pipe_command(backend_current, 65536);
+	if (!pipe_command(backend_current, 65536)) {
+	    pipe_including_tag(backend_current, tag, 0);
+	}
 	return;
     }
 
@@ -4407,7 +4413,9 @@ void cmd_search(char *tag, int usinguid)
 	const char *cmd = usinguid ? "UID Search" : "Search";
 
 	prot_printf(backend_current->out, "%s %s ", tag, cmd);
-	pipe_command(backend_current, 65536);
+	if (!pipe_command(backend_current, 65536)) {
+	    pipe_including_tag(backend_current, tag, 0);
+	}
 	return;
     }
 
@@ -4465,7 +4473,9 @@ void cmd_sort(char *tag, int usinguid)
 	char *cmd = usinguid ? "UID Sort" : "Sort";
 
 	prot_printf(backend_current->out, "%s %s ", tag, cmd);
-	pipe_command(backend_current, 65536);
+	if (!pipe_command(backend_current, 65536)) {
+	    pipe_including_tag(backend_current, tag, 0);
+	}
 	return;
     }
 
@@ -4557,7 +4567,9 @@ void cmd_thread(char *tag, int usinguid)
 	const char *cmd = usinguid ? "UID Thread" : "Thread";
 
 	prot_printf(backend_current->out, "%s %s ", tag, cmd);
-	pipe_command(backend_current, 65536);
+	if (!pipe_command(backend_current, 65536)) {
+	    pipe_including_tag(backend_current, tag, 0);
+	}
 	return;
     }
 
@@ -4674,6 +4686,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 	prot_printf(backend_current->out, "%s %s %s {%d+}\r\n%s\r\n",
 		    tag, usinguid ? "UID Copy" : "Copy",
 		    sequence, strlen(name), name);
+	pipe_including_tag(backend_current, tag, 0);
 
 	return;
     }
@@ -4788,6 +4801,7 @@ void cmd_expunge(char *tag, char *sequence)
 	} else {
 	    prot_printf(backend_current->out, "%s Expunge\r\n", tag);
 	}
+	pipe_including_tag(backend_current, tag, 0);
 	return;
     }
 
@@ -5848,8 +5862,7 @@ void cmd_changesub(char *tag, char *namespace, char *name, int add)
 			    tag, cmd, 
 			    strlen(name), name);
 	    }
-	    if (backend_inbox != backend_current)
-		pipe_including_tag(backend_inbox, tag, 0);
+	    pipe_including_tag(backend_inbox, tag, 0);
 	}
 	else {
 	    prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
@@ -6335,7 +6348,7 @@ void cmd_getquotaroot(const char *tag, const char *name)
 	    if (!r) {
 		prot_printf(s->out, "%s Getquotaroot {%d+}\r\n%s\r\n",
 			    tag, strlen(name), name);
-		if (s != backend_current) pipe_including_tag(s, tag, 0);
+		pipe_including_tag(s, tag, 0);
 	    } else {
 		prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
 	    }
@@ -6665,7 +6678,7 @@ void cmd_status(char *tag, char *name)
 		prot_printf(s->out, "%s Status {%d+}\r\n%s ", tag,
 			    strlen(name), name);
 		if (!pipe_command(s, 65536)) {
-		    if (s != backend_current) pipe_including_tag(s, tag, 0);
+		    pipe_including_tag(s, tag, 0);
 		}
 	    } else {
 		eatline(imapd_in, prot_getc(imapd_in));
