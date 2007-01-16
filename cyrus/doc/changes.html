@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.105 2006/11/30 17:11:16 murch Exp $ -->
+<!-- $Id: changes.html,v 1.106 2007/01/16 18:40:44 murch Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -16,8 +16,12 @@ names.  See <tt>imapd.conf.5</tt> for details</li>
 <li>Fixed problem with DELETEing mailboxes with split metadata
 directories.</li>
 <li>Fixed problem with replication and COPYing \Seen messages.</li>
+<li>Fixed problem with replication and XFER.</li>
 <li>Added options to reconstruct to preserve cyrus.expunge and to
 synchronize changes to a replica server.</li>
+<li>Removed (broken) support for proxying of pipelined IMAP commands.</li>
+<li>Added new <tt>cyr_dbtool</tt> utility for manipulating Cyrus
+databases (courtesy of Fastmail.fm).</li>
 <li>Fixed miscellaneous bugs and build issues.</li>
 </ul>
 
@@ -2184,7 +2188,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2006/11/30 17:11:16 $ <br />
+last modified: $Date: 2007/01/16 18:40:44 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
