@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.507 2007/01/18 20:05:20 murch Exp $ */
+/* $Id: imapd.c,v 1.508 2007/01/22 17:41:46 murch Exp $ */
 
 #include <config.h>
 
@@ -4918,7 +4918,8 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
 	    return;
 	}
 	else if (!r &&
-		 config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD) {
+		 (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD) &&
+		 !config_getstring(IMAPOPT_PROXYSERVERS)) {
 	    /* can't create maiilboxes on proxy-only servers */
 	    r = IMAP_PERMISSION_DENIED;
 	}
