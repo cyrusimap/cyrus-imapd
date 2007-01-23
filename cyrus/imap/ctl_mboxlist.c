@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.51 2006/11/30 17:11:17 murch Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.52 2007/01/23 17:10:34 murch Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -458,6 +458,7 @@ void do_dump(enum mboxop op, const char *part, int purge)
 	    wipe_head = wipe_head->next;
 	    
 	    ret = mboxlist_deletemailbox(me->mailbox, 1, "", NULL, 0, 1, 1);
+	    if(!ret) sync_log_mailbox(me->mailbox);
 	    if(ret) {
 		fprintf(stderr, "couldn't delete defunct mailbox %s\n",
 			me->mailbox);
