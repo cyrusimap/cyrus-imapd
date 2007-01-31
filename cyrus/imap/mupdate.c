@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.93 2006/11/30 17:11:19 murch Exp $
+ * $Id: mupdate.c,v 1.94 2007/01/31 14:10:05 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -182,7 +182,7 @@ static pthread_mutex_t listener_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t listener_cond = PTHREAD_COND_INITIALIZER;
 static int listener_lock = 0;
 
-/* if you want to lick both listener and either of these two, you
+/* if you want to lock both listener and either of these two, you
  * must lock listener first.  You must have both listener_mutex and
  * idle_connlist_mutex locked to remove anything from the idle_connlist */
 static pthread_mutex_t idle_connlist_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -707,6 +707,12 @@ mupdate_docmd_result_t docmd(struct conn *c)
     int was_blocking = prot_IS_BLOCKING(c->pin);
     char *p;
 
+    /* We know we have input, so skip the check below.
+     * Note that we MUST skip this nonblocking check in order to properly
+     * catch connections that have timed out.
+     */
+    goto cmd;
+
  nextcmd:
     /* First we do a check for input */
     prot_NONBLOCK(c->pin);
@@ -725,6 +731,7 @@ mupdate_docmd_result_t docmd(struct conn *c)
     /* Set it back to blocking so we don't get half a word */
     prot_BLOCK(c->pin);
 
+  cmd:
     ch = getword(c->pin, &(c->tag));
     if (ch == EOF) goto lost_conn;
     
@@ -1172,12 +1179,13 @@ static void *thread_main(void *rock __attribute__((unused)))
 	pthread_mutex_unlock(&listener_mutex); /* UNLOCK */
 
 	if(ret == ETIMEDOUT) {
+	    pthread_mutex_lock(&idle_worker_mutex); /* LOCK */
 	    if(idle_worker_count <= config_getint(IMAPOPT_MUPDATE_WORKERS_MINSPARE)) {
+		pthread_mutex_unlock(&idle_worker_mutex); /* UNLOCK */
 		/* below number of spare workers, try to get the lock again */
 		goto retry_lock;
 	    } else {
 		/* Decrement Idle Worker Count */
-		pthread_mutex_lock(&idle_worker_mutex); /* LOCK */
 		idle_worker_count--;
 		pthread_mutex_unlock(&idle_worker_mutex); /* UNLOCK */
 		
@@ -1256,7 +1264,9 @@ static void *thread_main(void *rock __attribute__((unused)))
 	 
 	/* If we've been signaled to be unready, drop all current connections
 	 * in the idle list */
+	pthread_mutex_lock(&ready_for_connections_mutex); /* LOCK */
 	if(!ready_for_connections) {
+	    pthread_mutex_unlock(&ready_for_connections_mutex); /* UNLOCK */
 	    /* Free all connections on idle_connlist.  Note that
 	     * any connection not currently on the idle_connlist will
 	     * instead be freed when they drop out of their docmd() below */
@@ -1273,6 +1283,7 @@ static void *thread_main(void *rock __attribute__((unused)))
 
 	    goto nextlistener;
 	}
+	pthread_mutex_unlock(&ready_for_connections_mutex); /* UNLOCK */
 	
 	if(connflag) {
 	    /* read the fd from the pipe, if needed */
@@ -1340,7 +1351,9 @@ static void *thread_main(void *rock __attribute__((unused)))
 	    }
 
 	    /* Are we allowed to continue serving data? */
+	    pthread_mutex_lock(&ready_for_connections_mutex); /* LOCK */
 	    if(!ready_for_connections) {
+		pthread_mutex_unlock(&ready_for_connections_mutex); /* UNLOCK */
 		prot_printf(C->pout,
 			    "* BYE \"no longer ready for connections\"\r\n");
 		conn_free(currConn);
@@ -1348,11 +1361,12 @@ static void *thread_main(void *rock __attribute__((unused)))
 		 * this back to the idle list */
 		continue;
 	    }
+	    pthread_mutex_unlock(&ready_for_connections_mutex); /* UNLOCK */
 	} /* done handling command */
 
 	if(send_a_banner || do_a_command) {
 	    /* We did work in this thread, so we need to [re-]add the
-	     * connection to the idle list and signal the current listner */
+	     * connection to the idle list and signal the current listener */
 
 	    pthread_mutex_lock(&idle_connlist_mutex); /* LOCK */
 	    currConn->idle = 1;
@@ -1377,9 +1391,11 @@ static void *thread_main(void *rock __attribute__((unused)))
      * in the idle_worker_count */
     pthread_mutex_lock(&worker_count_mutex); /* LOCK */
     worker_count--;
+    pthread_mutex_lock(&idle_worker_mutex); /* LOCK */
     syslog(LOG_DEBUG,
 	   "Worker thread finished, for a total of %d (%d spare)",
 	   worker_count, idle_worker_count);
+    pthread_mutex_unlock(&idle_worker_mutex); /* UNLOCK */
     pthread_mutex_unlock(&worker_count_mutex); /* UNLOCK */
 
     protgroup_free(protin);
@@ -2347,12 +2363,13 @@ void mupdate_signal_db_synced(void)
 
 void mupdate_ready(void) 
 {
+    pthread_mutex_lock(&ready_for_connections_mutex);
+
     if(ready_for_connections) {
 	syslog(LOG_CRIT, "mupdate_ready called when already ready");
 	fatal("mupdate_ready called when already ready", EC_TEMPFAIL);
     }
 
-    pthread_mutex_lock(&ready_for_connections_mutex);
     ready_for_connections = 1;
     pthread_cond_broadcast(&ready_for_connections_cond);
     pthread_mutex_unlock(&ready_for_connections_mutex);
