@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: arbitron.c,v 1.40 2006/11/30 17:11:17 murch Exp $ */
+/* $Id: arbitron.c,v 1.41 2007/02/03 17:54:42 murch Exp $ */
 
 #include <config.h>
 
@@ -268,6 +268,8 @@ int do_mailbox(const char *name, int matchlen __attribute__((unused)),
     
 	d->nreaders = 0;
 	d->nsubscribers = 0;
+	d->readers = NULL;
+	d->subscribers = NULL;
 
 /*	printf("inserting %s (key %s)\n", name, mbox.uniqueid); */
 
