@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: unexpunge.c,v 1.2 2006/11/30 17:11:20 murch Exp $
+ * $Id: unexpunge.c,v 1.3 2007/02/05 18:41:48 jeaton Exp $
  */
 
 #include <config.h>
@@ -71,6 +71,8 @@
 #include "mboxlist.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
 
 /* global state */
 const int config_need_data = 0;

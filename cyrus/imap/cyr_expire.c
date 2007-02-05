@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_expire.c,v 1.9 2007/01/09 17:37:03 murch Exp $
+ * $Id: cyr_expire.c,v 1.10 2007/02/05 18:41:46 jeaton Exp $
  */
 
 #include <config.h>
@@ -66,6 +66,8 @@
 #include "mboxlist.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
 
 /* global state */
 const int config_need_data = 0;

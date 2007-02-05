@@ -1,5 +1,5 @@
 /* auth_pts.c -- PTLOADER authorization
- * $Id: auth_pts.c,v 1.11 2007/01/05 19:53:46 jeaton Exp $
+ * $Id: auth_pts.c,v 1.12 2007/02/05 18:43:26 jeaton Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -62,6 +62,8 @@
 #include "retry.h"
 #include "strhash.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
 
 static char *canonuser_id = NULL;
 static struct auth_state *canonuser_cache = NULL;

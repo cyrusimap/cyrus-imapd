@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
- * $Id: seen_db.c,v 1.50 2007/01/09 16:47:41 murch Exp $
+ * $Id: seen_db.c,v 1.51 2007/02/05 18:41:48 jeaton Exp $
  * 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -64,6 +64,8 @@
 
 #include "global.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
 #include "mailbox.h"
 #include "imap_err.h"
 #include "seen.h"

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.43 2006/11/30 17:11:17 murch Exp $ */
+/* $Id: backend.c,v 1.44 2007/02/05 18:41:46 jeaton Exp $ */
 
 #include <config.h>
 
@@ -70,6 +70,8 @@
 #include "backend.h"
 #include "global.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
 #include "iptostring.h"
 #include "util.h"
 

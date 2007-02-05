@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_log.c,v 1.2 2006/11/30 17:11:20 murch Exp $
+ * $Id: sync_log.c,v 1.3 2007/02/05 18:41:48 jeaton Exp $
  */
 
 /* YYY Need better quoting for obscure filenames: use literals? */
@@ -69,6 +69,8 @@
 #include "retry.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
 
 static int sync_log_enabled = 0;
 static char sync_log_file[MAX_MAILBOX_PATH+1];

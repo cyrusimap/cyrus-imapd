@@ -1,5 +1,5 @@
 /* bc_eval.c - evaluate the bytecode
- * $Id: bc_eval.c,v 1.8 2006/11/30 17:11:24 murch Exp $
+ * $Id: bc_eval.c,v 1.9 2007/02/05 18:44:01 jeaton Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -38,6 +38,8 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "charset.h"
 #include "hash.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
 
 #include <string.h>
 #include <ctype.h>

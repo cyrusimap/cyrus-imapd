@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.222 2007/01/09 17:04:10 murch Exp $
+ * $Id: index.c,v 1.223 2007/02/05 18:41:46 jeaton Exp $
  */
 #include <config.h>
 
@@ -76,6 +76,8 @@
 #include "stristr.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
 
 #include "index.h"
 #include "sync_log.h"

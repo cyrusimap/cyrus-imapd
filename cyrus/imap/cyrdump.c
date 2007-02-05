@@ -1,4 +1,4 @@
-/* $Id: cyrdump.c,v 1.17 2006/11/30 17:11:17 murch Exp $
+/* $Id: cyrdump.c,v 1.18 2007/02/05 18:41:46 jeaton Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -61,6 +61,8 @@
 #include "mboxlist.h"
 #include "sysexits.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
 
 
 /* config.c stuff */

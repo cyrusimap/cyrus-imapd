@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  * 
- * $Id: chk_cyrus.c,v 1.17 2006/11/30 17:11:17 murch Exp $
+ * $Id: chk_cyrus.c,v 1.18 2007/02/05 18:41:46 jeaton Exp $
  */
 
 #include <config.h>
@@ -67,6 +67,8 @@
 #include "mailbox.h"
 #include "map.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
 
 /* config.c stuff */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;

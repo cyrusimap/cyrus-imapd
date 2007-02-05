@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idled.c,v 1.24 2006/11/30 17:11:17 murch Exp $ */
+/* $Id: idled.c,v 1.25 2007/02/05 18:41:46 jeaton Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -61,6 +61,8 @@
 #include "global.h"
 #include "mboxlist.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
 #include "hash.h"
 #include "exitcodes.h"
 

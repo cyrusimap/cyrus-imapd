@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.117 2006/11/30 17:11:18 murch Exp $
+ * $Id: lmtpengine.c,v 1.118 2007/02/05 18:41:47 jeaton Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -81,6 +81,8 @@
 #include "imap_err.h"
 #include "mupdate_err.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
 #include "version.h"
 
 #include "lmtpengine.h"

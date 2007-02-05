@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.34 2006/11/30 17:11:17 murch Exp $
+ * $Id: annotate.c,v 1.35 2007/02/05 18:41:45 jeaton Exp $
  */
 
 #include <config.h>
@@ -71,6 +71,8 @@
 #include "mboxlist.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
 
 #include "annotate.h"
 #include "sync_log.h"
