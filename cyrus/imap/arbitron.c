@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: arbitron.c,v 1.41 2007/02/03 17:54:42 murch Exp $ */
+/* $Id: arbitron.c,v 1.42 2007/02/05 18:49:55 jeaton Exp $ */
 
 #include <config.h>
 
@@ -68,6 +68,8 @@
 #include "convert_code.h"
 #include "seen.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
 
 /* config.c stuff */
 const int config_need_data = 0;
