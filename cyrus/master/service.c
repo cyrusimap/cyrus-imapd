@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.56 2007/01/09 17:32:50 murch Exp $ */
+/* $Id: service.c,v 1.57 2007/02/05 18:57:24 jeaton Exp $ */
 
 #include <config.h>
 
@@ -70,6 +70,8 @@
 #include "service.h"
 #include "libconfig.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
 #include "signals.h"
 
 extern int optind, opterr;
