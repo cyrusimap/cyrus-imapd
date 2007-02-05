@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: mbexamine.c,v 1.12 2006/11/30 17:11:19 murch Exp $ */
+/* $Id: mbexamine.c,v 1.13 2007/02/05 18:41:47 jeaton Exp $ */
 
 #include <config.h>
 
@@ -92,6 +92,8 @@
 #include "retry.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
 
 extern int optind;
 extern char *optarg;

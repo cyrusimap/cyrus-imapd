@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: quota_db.c,v 1.3 2006/11/30 17:11:20 murch Exp $
+ * $Id: quota_db.c,v 1.4 2007/02/05 18:41:48 jeaton Exp $
  *
  */
 
@@ -62,6 +62,8 @@
 #include "quota.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
 
 #define QDB config_quota_db
 

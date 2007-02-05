@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.20 2006/11/30 17:11:17 murch Exp $ */
+/* $Id: global.c,v 1.21 2007/02/05 18:41:46 jeaton Exp $ */
 
 #include <config.h>
 
@@ -72,6 +72,8 @@
 #include "prot.h" /* for PROT_BUFSIZE */
 #include "util.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
 
 static enum {
     NOT_RUNNING = 0,

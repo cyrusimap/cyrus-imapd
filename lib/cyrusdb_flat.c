@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_flat.c,v 1.36 2006/11/30 17:11:22 murch Exp $ */
+/* $Id: cyrusdb_flat.c,v 1.37 2007/02/05 18:43:26 jeaton Exp $ */
 
 #include <config.h>
 
@@ -65,6 +65,8 @@
 #include "retry.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
 
 /* we have the file locked iff we have an outstanding transaction */
 

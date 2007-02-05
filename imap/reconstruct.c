@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.89 2006/11/30 17:11:20 murch Exp $ */
+/* $Id: reconstruct.c,v 1.90 2007/02/05 18:41:48 jeaton Exp $ */
 
 #include <config.h>
 
@@ -86,6 +86,8 @@
 #include "map.h"
 #include "message.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
 #include "global.h"
 #include "mboxname.h"
 #include "mboxlist.h"

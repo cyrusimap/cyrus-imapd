@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_berkeley.c,v 1.15 2006/11/30 17:11:22 murch Exp $ */
+/* $Id: cyrusdb_berkeley.c,v 1.16 2007/02/05 18:43:26 jeaton Exp $ */
 
 #include <config.h>
 
@@ -56,6 +56,8 @@
 #include "exitcodes.h"
 #include "libcyr_cfg.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
 
 extern void fatal(const char *, int);
 

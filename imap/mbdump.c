@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.32 2006/11/30 17:11:19 murch Exp $
+ * $Id: mbdump.c,v 1.33 2007/02/05 18:41:47 jeaton Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -74,6 +74,8 @@
 #include "quota.h"
 #include "seen.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
 #include "util.h"
 
 /* is this the active script? */

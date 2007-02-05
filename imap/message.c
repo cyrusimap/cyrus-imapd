@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: message.c,v 1.101 2006/12/19 18:56:27 murch Exp $
+ * $Id: message.c,v 1.102 2007/02/05 18:41:47 jeaton Exp $
  */
 
 #include <config.h>
@@ -70,6 +70,8 @@
 #include "stristr.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
 #include "global.h"
 #include "retry.h"
 

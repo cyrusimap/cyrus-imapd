@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.52 2007/01/23 17:10:34 murch Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.53 2007/02/05 18:41:46 jeaton Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -63,6 +63,10 @@
 #include "mboxlist.h"
 #include "mupdate.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
+
+#include "sync_log.h"
 
 /* config.c stuff */
 const int config_need_data = 0;

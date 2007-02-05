@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: quota.c,v 1.66 2006/11/30 17:11:19 murch Exp $ */
+/* $Id: quota.c,v 1.67 2007/02/05 18:41:48 jeaton Exp $ */
 
 
 #include <config.h>
@@ -82,6 +82,8 @@
 #include "imap_err.h"
 #include "mailbox.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
 #include "mboxlist.h"
 #include "mboxname.h"
 #include "quota.h"

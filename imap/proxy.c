@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: proxy.c,v 1.4 2007/01/12 12:27:58 murch Exp $
+ * $Id: proxy.c,v 1.5 2007/02/05 18:41:48 jeaton Exp $
  */
 
 #include <config.h>
@@ -60,6 +60,8 @@
 #include "prot.h"
 #include "proxy.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
 
 void proxy_adddest(struct dest **dlist, const char *rcpt, int rcpt_num,
 		   char *server, const char *authas)

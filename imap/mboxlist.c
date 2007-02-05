@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.244 2007/01/09 17:13:15 murch Exp $
+ * $Id: mboxlist.c,v 1.245 2007/02/05 18:41:47 jeaton Exp $
  */
 
 #include <config.h>
@@ -74,6 +74,8 @@
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
 
 #include "mboxname.h"
 #include "mupdate-client.h"

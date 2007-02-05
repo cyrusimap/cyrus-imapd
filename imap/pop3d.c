@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.170 2007/01/11 16:02:04 murch Exp $
+ * $Id: pop3d.c,v 1.171 2007/02/05 18:41:48 jeaton Exp $
  */
 #include <config.h>
 
@@ -79,6 +79,8 @@
 #include "mailbox.h"
 #include "version.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
 #include "mboxlist.h"
 #include "idle.h"
 #include "telemetry.h"

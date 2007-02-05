@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squatter.c,v 1.16 2006/11/30 17:11:20 murch Exp $
+ * $Id: squatter.c,v 1.17 2007/02/05 18:41:48 jeaton Exp $
  */
 
 /*
@@ -88,6 +88,8 @@
 #include "imap_err.h"
 #include "mailbox.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
 #include "acl.h"
 #include "seen.h"
 #include "mboxname.h"

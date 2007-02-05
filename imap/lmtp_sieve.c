@@ -1,6 +1,6 @@
 /* lmtp_sieve.c -- Sieve implementation for lmtpd
  *
- * $Id: lmtp_sieve.c,v 1.13 2006/11/30 17:11:18 murch Exp $
+ * $Id: lmtp_sieve.c,v 1.14 2007/02/05 18:41:47 jeaton Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -75,6 +75,8 @@
 #include "util.h"
 #include "version.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
 
 static int sieve_usehomedir = 0;
 static const char *sieve_dir = NULL;

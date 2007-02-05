@@ -1,6 +1,6 @@
 /* imclient.c -- Streaming IMxP client library
  *
- * $Id: imclient.c,v 1.87 2006/11/30 17:11:22 murch Exp $
+ * $Id: imclient.c,v 1.88 2007/02/05 18:43:26 jeaton Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -78,6 +78,8 @@
 
 #include "exitcodes.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
 #include "imparse.h"
 #include "imclient.h"
 #include "nonblock.h"
