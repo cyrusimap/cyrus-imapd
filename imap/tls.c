@@ -93,7 +93,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.52 2006/11/30 17:11:20 murch Exp $ */
+/* $Id: tls.c,v 1.53 2007/02/05 18:49:56 jeaton Exp $ */
 
 #include <config.h>
 
@@ -119,6 +119,8 @@
 /* Application-specific. */
 #include "assert.h"
 #include "xmalloc.h"
+#include "xstrlcat.h"
+#include "xstrlcpy.h"
 #include "tls.h"
 
 /* Session caching/reuse stuff */

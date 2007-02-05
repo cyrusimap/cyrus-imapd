@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.53 2006/11/30 17:11:19 murch Exp $
+ * $Id: nntpd.c,v 1.54 2007/02/05 18:49:56 jeaton Exp $
  */
 
 /*
@@ -106,6 +106,8 @@
 #include "version.h"
 #include "wildmat.h"
 #include "xmalloc.h"
+#include "xstrlcat.h"
+#include "xstrlcpy.h"
 
 extern int optind;
 extern char *optarg;
