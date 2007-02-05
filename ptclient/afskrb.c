@@ -41,7 +41,7 @@
  */
 
 static char rcsid[] =
-      "$Id: afskrb.c,v 1.13 2006/11/30 17:11:24 murch Exp $";
+      "$Id: afskrb.c,v 1.14 2007/02/05 18:58:27 jeaton Exp $";
 
 #include <config.h>
 #include "ptloader.h"
@@ -489,7 +489,7 @@ static struct auth_state *myauthstate(const char *identifier,
     /* fill in our new state structure */
     *dsize = sizeof(struct auth_state) + 
 	(groups.namelist_len * sizeof(struct auth_ident));
-    newstate = (struct auth_state *) xmalloc(*dsize);
+    newstate = (struct auth_state *) xzmalloc(*dsize);
 
     strcpy(newstate->userid.id, canon_id);
     newstate->userid.hash = strhash(canon_id);
