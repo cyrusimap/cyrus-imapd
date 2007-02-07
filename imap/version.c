@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: version.c,v 1.20 2006/11/30 17:11:20 murch Exp $
+ * $Id: version.c,v 1.21 2007/02/07 18:58:07 murch Exp $
  */
 
 #include <config.h>
@@ -99,7 +99,7 @@ void id_response(struct protstream *pout)
 		"\"name\" \"Cyrus IMAPD\""
 		" \"version\" \"%s %s\""
 		" \"vendor\" \"Project Cyrus\""
-		" \"support-url\" \"http://asg.web.cmu.edu/cyrus\"",
+		" \"support-url\" \"http://cyrusimap.web.cmu.edu\"",
 		CYRUS_VERSION, CYRUS_CVSDATE);
 
     /* add the os info */
