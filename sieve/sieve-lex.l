@@ -1,7 +1,7 @@
 %{
 /* sieve.l -- sieve lexer
  * Larry Greenfield
- * $Id: sieve-lex.l,v 1.21 2006/11/30 17:11:25 murch Exp $
+ * $Id: sieve-lex.l,v 1.22 2007/02/07 13:25:14 murch Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -77,7 +77,7 @@ CRLF		(\r\n|\r|\n)
 			  mlcur = 0; mlbufsz = 0; mlbuf = NULL; }
 <INITIAL>\"        { BEGIN QSTRING;
                     mlcur = 0; mlbufsz = 0; mlbuf = NULL; }
-<INITIAL>[0-9]+[KMG]?	{ yylval.nval = tonum(yytext); return NUMBER; }
+<INITIAL>[0-9]+[KMGkmg]?	{ yylval.nval = tonum(yytext); return NUMBER; }
 <INITIAL>if		return IF;
 <INITIAL>elsif		return ELSIF;
 <INITIAL>else		return ELSE;
@@ -153,9 +153,9 @@ static int tonum(char *c)
 {
   int val = atoi(c);
   switch (c[strlen(c)-1]) {
-  case 'K': val *= (1 << 10); break;
-  case 'M': val *= (1 << 20); break;
-  case 'G': val *= (1 << 30); break;
+  case 'K': case 'k': val *= (1 << 10); break;
+  case 'M': case 'm': val *= (1 << 20); break;
+  case 'G': case 'g': val *= (1 << 30); break;
   default: break;
   }
   return val;
