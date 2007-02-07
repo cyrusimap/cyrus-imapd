@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: unexpunge.c,v 1.3 2007/02/05 18:41:48 jeaton Exp $
+ * $Id: unexpunge.c,v 1.4 2007/02/07 14:27:52 murch Exp $
  */
 
 #include <config.h>
@@ -76,6 +76,9 @@
 
 /* global state */
 const int config_need_data = 0;
+
+/* current namespace */
+static struct namespace unex_namespace;
 
 int verbose = 0;
 
@@ -419,6 +422,7 @@ int main(int argc, char *argv[])
     extern char *optarg;
     int opt, r = 0;
     char *alt_config = NULL;
+    char buf[MAX_MAILBOX_PATH+1];
     struct mailbox mailbox;
     int doclose = 0, mode = MODE_UNKNOWN, unsetdeleted = 0;
     char expunge_fname[MAX_MAILBOX_PATH+1];
@@ -477,8 +481,18 @@ int main(int argc, char *argv[])
     quotadb_init(0);
     quotadb_open(NULL);
 
+    /* Set namespace -- force standard (internal) */
+    if ((r = mboxname_init_namespace(&unex_namespace, 1)) != 0) {
+	syslog(LOG_ERR, error_message(r));
+	fatal(error_message(r), EC_CONFIG);
+    }
+
+    /* Translate mailboxname */
+    (*unex_namespace.mboxname_tointernal)(&unex_namespace, argv[optind],
+					  NULL, buf);
+
     /* Open/lock header */
-    r = mailbox_open_header(argv[optind], 0, &mailbox);
+    r = mailbox_open_header(buf, 0, &mailbox);
     if (!r && mailbox.header_fd != -1) {
 	doclose = 1;
 	(void) mailbox_lock_header(&mailbox);
