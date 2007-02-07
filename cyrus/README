@@ -1,4 +1,4 @@
-$Id: README,v 1.13 2003/10/22 18:50:01 rjs3 Exp $
+$Id: README,v 1.14 2007/02/07 18:58:07 murch Exp $
 
 This is the Carnegie Mellon University Cyrus IMAP Server.
 
@@ -26,7 +26,7 @@ the binary distribution.
   read doc/readme.html first!).
 
 * To obtain updates to this software, visit the web page
-            http://asg.web.cmu.edu/cyrus 
+            http://cyrusimap.web.cmu.edu/downloads.html
   or ftp directly from
             ftp://ftp.andrew.cmu.edu/pub/cyrus-mail
 
