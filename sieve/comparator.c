@@ -1,7 +1,7 @@
 /* comparator.c -- comparator functions
  * Larry Greenfield
  * Ken Murchison (rewritten to handle relational ops and non-terminated text)
- * $Id: comparator.c,v 1.18 2006/11/30 17:11:24 murch Exp $
+ * $Id: comparator.c,v 1.19 2007/02/08 13:04:25 murch Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -226,7 +226,7 @@ static int octet_matches_(const char *text, size_t tlen,
 		t++; tlen--;
 	    }
 	case '\\':
-	    p++;
+	    c = *p++;
 	    /* falls through */
 	default:
 	    if ((c == *t) || (casemap && (toupper(c) == toupper(*t)))) {
