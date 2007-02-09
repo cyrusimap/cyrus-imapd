@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.90 2007/02/05 18:41:48 jeaton Exp $ */
+/* $Id: reconstruct.c,v 1.91 2007/02/09 13:18:42 murch Exp $ */
 
 #include <config.h>
 
@@ -577,13 +577,12 @@ reconstruct_expunge (char * path, struct mailbox * mailbox,
 	    free(expuid);
 	    return IMAP_IOERROR;
    	}
-	unsigned msgno;
-	const char *p = index_base + start_offset;
 
 	/* 
 	* verify the message files exist - 
 	* optionally deleting message files 
 	*/
+	p = index_base + start_offset;
 	for (msgno = 1; msgno <= exists; msgno++, p += record_size) {
 	    unsigned long fileuid = ntohl(*((bit32 *)(p + OFFSET_UID)));
 
