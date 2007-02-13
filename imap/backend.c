@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.45 2007/02/13 18:49:46 murch Exp $ */
+/* $Id: backend.c,v 1.46 2007/02/13 19:48:05 murch Exp $ */
 
 #include <config.h>
 
@@ -148,6 +148,7 @@ static int do_starttls(struct backend *s, struct tls_cmd_t *tls_cmd)
     if (r != SASL_OK) return -1;
 
     r = sasl_setprop(s->saslconn, SASL_AUTH_EXTERNAL, auth_id);
+    if (auth_id) free(auth_id);
     if (r != SASL_OK) return -1;
 
     prot_settls(s->in,  s->tlsconn);
