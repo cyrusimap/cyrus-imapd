@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.509 2007/02/05 18:49:55 jeaton Exp $ */
+/* $Id: imapd.c,v 1.510 2007/02/13 17:04:27 murch Exp $ */
 
 #include <config.h>
 
@@ -592,6 +592,7 @@ static void imapd_reset(void)
     imapd_condstore_client = 0;
     if (imapd_saslconn) {
 	sasl_dispose(&imapd_saslconn);
+	free(imapd_saslconn);
 	imapd_saslconn = NULL;
     }
     imapd_starttls_done = 0;
@@ -2050,8 +2051,7 @@ void cmd_login(char *tag, char *user)
 	}
     }
     
-    imapd_authstate = auth_newstate(imapd_userid);
-
+    /* authstate already created by mysasl_proxy_policy() */
     imapd_userisadmin = global_authisa(imapd_authstate, IMAPOPT_ADMINS);
 
     prot_printf(imapd_out, "%s OK [CAPABILITY ", tag);
