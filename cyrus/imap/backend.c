@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.44 2007/02/05 18:41:46 jeaton Exp $ */
+/* $Id: backend.c,v 1.45 2007/02/13 18:49:46 murch Exp $ */
 
 #include <config.h>
 
@@ -285,8 +285,7 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
     struct backend *ret;
 
     if (!ret_backend) {
-	ret = xmalloc(sizeof(struct backend));
-	memset(ret, 0, sizeof(struct backend));
+	ret = xzmalloc(sizeof(struct backend));
 	strlcpy(ret->hostname, server, sizeof(ret->hostname));
 	ret->timeout = NULL;
     }
