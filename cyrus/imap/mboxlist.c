@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.245 2007/02/05 18:41:47 jeaton Exp $
+ * $Id: mboxlist.c,v 1.246 2007/02/13 20:14:00 murch Exp $
  */
 
 #include <config.h>
@@ -1269,7 +1269,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	    syslog(LOG_ERR, "DBERROR: error deleting %s: %s",
 		   oldname, cyrusdb_strerror(r));
 	    r = IMAP_IOERROR;
-	    mailbox_close(&newmailbox);
+	    if (newopen) mailbox_close(&newmailbox);
 	    goto done;
 	    break;
 	}
