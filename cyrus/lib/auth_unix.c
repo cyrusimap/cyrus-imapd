@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: auth_unix.c,v 1.40 2006/11/30 17:11:22 murch Exp $
+ * $Id: auth_unix.c,v 1.41 2007/02/13 16:42:49 murch Exp $
  */
 
 #include <config.h>
@@ -260,7 +260,12 @@ static struct auth_state *mynewstate(const char *identifier)
 static void myfreestate(auth_state)
 struct auth_state *auth_state;
 {
-    if (auth_state->group) free((char *)auth_state->group);
+    if (auth_state->group) {
+	while (auth_state->ngroups) {
+	    free((char *)auth_state->group[--auth_state->ngroups]);
+	}
+	free((char *)auth_state->group);
+    }
     free((char *)auth_state);
 }
 
