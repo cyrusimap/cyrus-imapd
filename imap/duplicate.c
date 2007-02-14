@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: duplicate.c,v 1.42 2006/11/30 17:11:17 murch Exp $ */
+/* $Id: duplicate.c,v 1.43 2007/02/14 13:29:02 murch Exp $ */
 
 #include <config.h>
 
@@ -164,17 +164,8 @@ time_t duplicate_check(char *id, int idlen, const char *to, int tolen)
 
 void duplicate_log(char *msgid, const char *name, char *action)
 {
-    if (strlen(msgid) < 80) {
-	char pretty[160];
-
-	beautify_copy(pretty, msgid);
-	syslog(LOG_INFO, "dupelim: eliminated duplicate message to %s id %s (%s)",
-	       name, msgid, action);
-    }
-    else {
-	syslog(LOG_INFO, "dupelim: eliminated duplicate message to %s (%s)",
-	       name, action);
-    }	
+    syslog(LOG_INFO, "dupelim: eliminated duplicate message to %s id %s (%s)",
+	   name, msgid, action);
 }
 
 void duplicate_mark(char *id, int idlen, const char *to, int tolen, time_t mark,
