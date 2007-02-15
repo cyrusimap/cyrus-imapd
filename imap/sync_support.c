@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.c,v 1.2 2006/11/30 17:11:20 murch Exp $
+ * $Id: sync_support.c,v 1.3 2007/02/15 14:57:01 murch Exp $
  */
 
 #include <config.h>
@@ -967,6 +967,15 @@ FILE *sync_message_open(struct sync_message_list *l,
 
     if (l->file_count == l->file_max)
         sync_message_fsync(l);
+
+    /* unlink just in case a previous crash left a file 
+     * hard linked into someone else's mailbox! */
+    if (unlink(message->msg_path) == -1 && errno != ENOENT) {
+	syslog(LOG_ERR,
+	       "sync_message_open(): failed to unlink stale file %s: %m",
+	       message->msg_path);
+	return(NULL);
+    }
 
     /* Open read/write so file can later be mmap()ed if needed */
     if ((file=fopen(message->msg_path, "w+")) == NULL) {
