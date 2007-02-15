@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.4 2007/01/09 17:29:30 murch Exp $
+ * $Id: sync_client.c,v 1.5 2007/02/15 16:55:54 murch Exp $
  */
 
 #include <config.h>
@@ -2043,8 +2043,12 @@ static int addmbox(char *name,
 		   void *rock)
 {
     struct sync_folder_list *list = (struct sync_folder_list *) rock;
+    int mbtype;
 
-    sync_folder_list_add(list, NULL, name, NULL, 0, NULL);
+    mboxlist_detail(name, &mbtype, NULL, NULL, NULL, NULL, NULL);
+    if (!(mbtype & (MBTYPE_RESERVE | MBTYPE_MOVING | MBTYPE_REMOTE))) {
+	sync_folder_list_add(list, NULL, name, NULL, 0, NULL);
+    }
     return(0);
 }
 
@@ -2552,10 +2556,7 @@ static int do_user(char *user)
          * Following just protects us against folder rename smack in the
          * middle of night or manual sys. admin inspired sync run */
 
-        sync_lock_reset(&lock);
-        sync_lock(&lock);
         r = do_user_work(user, &vanished);
-        sync_unlock(&lock);
     }
     return(r);
 }
