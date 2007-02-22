@@ -1,6 +1,6 @@
 /* mkchartable.c -- Generate character set mapping table
  *
- * $Id: mkchartable.c,v 1.25 2003/05/14 18:56:34 rjs3 Exp $
+ * $Id: mkchartable.c,v 1.26 2007/02/22 14:50:02 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -195,6 +195,9 @@ main(int argc, char **argv)
     printf("    { \"iso-8859-15\", chartables_iso_8859_15 },\n");
     printf("    { \"windows-1252\", chartables_windows_1252 },\n");
     printf("    { \"windows-1256\", chartables_windows_1256 },\n");
+    printf("    { \"windows-1250\", chartables_windows_1250 },\n");
+    printf("    { \"windows-1251\", chartables_windows_1251 },\n");
+    printf("    { \"windows-1255\", chartables_windows_1255 },\n");
     printf("    /* New character sets should only be added to end so that\n");
     printf("     * cache files stay with valid information */\n");
     printf("};\n");
