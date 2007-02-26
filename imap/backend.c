@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.46 2007/02/13 19:48:05 murch Exp $ */
+/* $Id: backend.c,v 1.47 2007/02/26 18:43:38 murch Exp $ */
 
 #include <config.h>
 
@@ -488,4 +488,7 @@ void backend_disconnect(struct backend *s)
 	sasl_dispose(&(s->saslconn));
 	s->saslconn = NULL;
     }
+
+    /* free last_result buffer */
+    freebuf(&s->last_result);
 }
