@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.510 2007/02/13 17:04:27 murch Exp $ */
+/* $Id: imapd.c,v 1.511 2007/02/26 18:47:58 murch Exp $ */
 
 #include <config.h>
 
@@ -8433,8 +8433,8 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	    snprintf(buf, sizeof(buf), "%s!%s", config_servername, part);
 	    r = mupdate_deactivate(mupdate_h, mailboxname, buf);
 	    if(r) syslog(LOG_ERR,
-			 "Could deactivate mailbox: %s, during move",
-			 mailboxname);
+			 "Could not deactivate mailbox: %s, during move (%s)",
+			 mailboxname, error_message(r));
 	    else backout_mupdate = 1;
 	}
 
