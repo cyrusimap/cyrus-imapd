@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.94 2007/01/31 14:10:05 murch Exp $
+ * $Id: mupdate.c,v 1.95 2007/03/06 13:56:00 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -2313,7 +2313,10 @@ int mupdate_synchronize(mupdate_handle *handle)
 	    remote_boxes.head = r->next;
 	} else if (ret < 0) {
 	    /* Local without corresponding remote, delete it */
-	    mboxlist_deletemailbox(l->mailbox, 1, "", NULL, 0, 0, 0);
+	    if (config_mupdate_config != IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) {
+		/* But not for a unified configuration */
+		mboxlist_deletemailbox(l->mailbox, 1, "", NULL, 0, 0, 0);
+	    }
 	    local_boxes.head = l->next;
 	} else /* (ret > 0) */ {
 	    /* Remote without corresponding local, insert it */
@@ -2328,7 +2331,10 @@ int mupdate_synchronize(mupdate_handle *handle)
     if(l && !r) {
 	/* we have more deletes to do */
 	while(l) {
-	    mboxlist_deletemailbox(l->mailbox, 1, "", NULL, 0, 0, 0);
+	    if (config_mupdate_config != IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) {
+		/* But not for a unified configuration */
+		mboxlist_deletemailbox(l->mailbox, 1, "", NULL, 0, 0, 0);
+	    }
 	    local_boxes.head = l->next;
 	    l = local_boxes.head;
 	}
