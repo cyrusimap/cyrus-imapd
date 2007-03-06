@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.53 2007/02/05 18:41:46 jeaton Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.54 2007/03/06 13:56:00 murch Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -267,13 +267,17 @@ static int dump_cb(void *rockp,
 		/* since it lives on another server, schedule it for a wipe */
 		struct mb_node *next;
 		
-		if(warn_only) {
-		    printf("Remove Local Mailbox: %s\n", name);
-		} else {
-		    next = xzmalloc(sizeof(struct mb_node));
-		    strlcpy(next->mailbox, name, sizeof(next->mailbox));
-		    next->next = wipe_head;
-		    wipe_head = next;
+		if (config_mupdate_config != 
+		    IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) {
+		    /* But not for a unified configuration */
+		    if(warn_only) {
+			printf("Remove Local Mailbox: %s\n", name);
+		    } else {
+			next = xzmalloc(sizeof(struct mb_node));
+			strlcpy(next->mailbox, name, sizeof(next->mailbox));
+			next->next = wipe_head;
+			wipe_head = next;
+		    }
 		}
 		
 		skip_flag = 1;		
