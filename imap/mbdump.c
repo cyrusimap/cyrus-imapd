@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.33 2007/02/05 18:41:47 jeaton Exp $
+ * $Id: mbdump.c,v 1.34 2007/03/13 12:35:16 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -418,7 +418,7 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
 
 	    if (!mbdir) {
 		syslog(LOG_ERR,
-		       "could not dump sieve scripts in %s: %m)", mbpath);
+		       "could not dump sieve scripts in %s: %m)", sieve_path);
 	    } else {
 		char tag_fname[2048];
 	    
@@ -438,6 +438,10 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
 			    snprintf(tag_fname, sizeof(tag_fname),
 				     "SIEVE-%s", next->d_name);
 			}
+
+			/* construct path/filename */
+			snprintf(filename, sizeof(filename), "%s/%s",
+				 sieve_path, next->d_name);
 
 			/* dump file */
 			r = dump_file(0, !tag, pin, pout, filename, tag_fname);
