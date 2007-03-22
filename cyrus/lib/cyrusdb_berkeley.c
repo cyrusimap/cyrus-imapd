@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_berkeley.c,v 1.16 2007/02/05 18:43:26 jeaton Exp $ */
+/* $Id: cyrusdb_berkeley.c,v 1.17 2007/03/22 13:53:45 murch Exp $ */
 
 #include <config.h>
 
@@ -172,6 +172,7 @@ static int init(const char *dbdir, int myflags)
 
     dbenv->set_lk_detect(dbenv, CONFIG_DEADLOCK_DETECTION);
 
+#if (DB_VERSION_MAJOR == 4) && (DB_VERSION_MINOR < 5)
     if ((opt = libcyrus_config_getint(CYRUSOPT_BERKELEY_LOCKS_MAX)) < 0) {
 	syslog(LOG_WARNING,
 	       "DBERROR: invalid berkeley_locks_max value, using internal default");
@@ -183,6 +184,7 @@ static int init(const char *dbdir, int myflags)
 	    abort();
 	}
     }
+#endif
 
     if ((opt = libcyrus_config_getint(CYRUSOPT_BERKELEY_TXNS_MAX)) < 0) {
 	syslog(LOG_WARNING,
