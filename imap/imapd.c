@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.511 2007/02/26 18:47:58 murch Exp $ */
+/* $Id: imapd.c,v 1.512 2007/03/23 18:47:12 murch Exp $ */
 
 #include <config.h>
 
@@ -4889,11 +4889,12 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
 
 	    if (!r) {
 		/* ok, send the create to that server */
-		if (partition)
+		if (partition) {
+		    /* Send partition as an atom, since its all we accept */
 		    prot_printf(s->out,
-				"%s CREATE {%d+}\r\n%s {%d+}\r\n%s\r\n", 
-				tag, strlen(name), name,
-				strlen(partition), partition);
+				"%s CREATE {%d+}\r\n%s %s\r\n", 
+				tag, strlen(name), name, partition);
+		}
 		else
 		    prot_printf(s->out, "%s CREATE {%d+}\r\n%s\r\n", 
 				tag, strlen(name), name);
