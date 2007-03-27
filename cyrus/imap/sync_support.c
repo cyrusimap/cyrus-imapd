@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.c,v 1.3 2007/02/15 14:57:01 murch Exp $
+ * $Id: sync_support.c,v 1.4 2007/03/27 19:05:16 murch Exp $
  */
 
 #include <config.h>
@@ -78,6 +78,7 @@
 #include "imapd.h"
 #include "imparse.h"
 #include "message.h"
+#include "xstrcase.h"
 #include "util.h"
 #include "retry.h"
 #include "lock.h"

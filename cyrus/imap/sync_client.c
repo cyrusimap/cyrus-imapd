@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.5 2007/02/15 16:55:54 murch Exp $
+ * $Id: sync_client.c,v 1.6 2007/03/27 19:05:16 murch Exp $
  */
 
 #include <config.h>
@@ -75,6 +75,7 @@
 #include "map.h"
 #include "imapd.h"
 #include "imparse.h"
+#include "xstrcase.h"
 #include "util.h"
 #include "prot.h"
 #include "sync_support.h"

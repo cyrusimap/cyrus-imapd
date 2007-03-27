@@ -1,7 +1,7 @@
-/* strcasecmp.c -- replacement strcasecmp() & strncasecmp() routines
- $Id: strcasecmp.c,v 1.7 2007/03/27 19:05:16 murch Exp $
- 
- * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
+/* xstrcase.h -- functions to convert the case of strings
+ * $Id: xstrcase.h,v 1.1 2007/03/27 19:05:16 murch Exp $
+ *
+ * Copyright (c) 1998-2007 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -39,31 +39,25 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- *
  * Author: Chris Newman
  * Start Date: 4/6/93
  */
 
-#include "xstrcase.h"
+#ifndef INCLUDED_STRCASE_H
+#define INCLUDED_STRCASE_H
 
-/* case insensitive string compare
+extern const unsigned char convert_to_lowercase[256];
+extern const unsigned char convert_to_uppercase[256];
+
+#define TOUPPER(c) (convert_to_uppercase[(unsigned char)(c)])
+#define TOLOWER(c) (convert_to_lowercase[(unsigned char)(c)])
+
+/* convert string to all lower case
  */
-int strcasecmp(str1, str2)
-    char *str1, *str2;
-{
-    while (*str1 && TOLOWER(*str1) == TOLOWER(*str2)) ++str1, ++str2;
+extern char *lcase (char *str);
 
-    return ((int) TOLOWER(*str1) - (int) TOLOWER(*str2));
-}
-
-/* case insensitive string compare with count
+/* convert string to all upper case
  */
-int strncasecmp(str1, str2, n)
-    char *str1, *str2;
-    int n;
-{
-    while (n && *str1 && TOLOWER(*str1) == TOLOWER(*str2)) ++str1, ++str2, --n;
+extern char *ucase (char *str);
 
-    return (n ? (int) TOLOWER(*str1) - (int) TOLOWER(*str2) : 0);
-}
-
+#endif /* INCLUDED_STRCASE_H */

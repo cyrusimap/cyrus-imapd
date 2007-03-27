@@ -72,7 +72,7 @@
  * may contain an explanatory message.
  *
  *
- * $Id: smmapd.c,v 1.15 2007/02/05 18:41:48 jeaton Exp $
+ * $Id: smmapd.c,v 1.16 2007/03/27 19:05:16 murch Exp $
  */
 
 #include <config.h>
@@ -93,6 +93,7 @@
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "mupdate-client.h"
+#include "xstrcase.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"

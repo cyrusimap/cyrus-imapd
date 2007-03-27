@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.513 2007/03/27 18:08:43 murch Exp $ */
+/* $Id: imapd.c,v 1.514 2007/03/27 19:05:14 murch Exp $ */
 
 #include <config.h>
 
@@ -94,6 +94,7 @@
 #include "mkgmtime.h"
 #include "mupdate-client.h"
 #include "quota.h"
+#include "xstrcase.h"
 #include "sync_log.h"
 #include "telemetry.h"
 #include "tls.h"

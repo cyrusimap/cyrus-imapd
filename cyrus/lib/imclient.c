@@ -1,6 +1,6 @@
 /* imclient.c -- Streaming IMxP client library
  *
- * $Id: imclient.c,v 1.88 2007/02/05 18:43:26 jeaton Exp $
+ * $Id: imclient.c,v 1.89 2007/03/27 19:05:16 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -83,7 +83,7 @@
 #include "imparse.h"
 #include "imclient.h"
 #include "nonblock.h"
-#include "util.h"
+#include "xstrcase.h"
 #include "iptostring.h"
 
 /* I/O buffer size */

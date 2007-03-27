@@ -42,14 +42,14 @@
  * Start Date: 4/5/93
  */
 /*
- * $Id: glob.c,v 1.32 2006/11/30 17:11:22 murch Exp $
+ * $Id: glob.c,v 1.33 2007/03/27 19:05:16 murch Exp $
  */
 
 #include <config.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>
-#include "util.h"
+#include "xstrcase.h"
 #include "glob.h"
 #include "xmalloc.h"
 

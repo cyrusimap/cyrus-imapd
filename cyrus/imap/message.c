@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: message.c,v 1.102 2007/02/05 18:41:47 jeaton Exp $
+ * $Id: message.c,v 1.103 2007/03/27 19:05:16 murch Exp $
  */
 
 #include <config.h>
@@ -67,6 +67,7 @@
 #include "message.h"
 #include "parseaddr.h"
 #include "charset.h"
+#include "xstrcase.h"
 #include "stristr.h"
 #include "util.h"
 #include "xmalloc.h"
