@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.172 2007/03/27 19:05:16 murch Exp $
+ * $Id: pop3d.c,v 1.173 2007/03/27 19:29:56 murch Exp $
  */
 #include <config.h>
 
@@ -72,7 +72,6 @@
 #include "auth.h"
 #include "iptostring.h"
 #include "global.h"
-#include "xstrcase.h"
 #include "tls.h"
 
 #include "exitcodes.h"

@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: isieve.c,v 1.31 2007/03/27 19:05:16 murch Exp $ */
+/* $Id: isieve.c,v 1.32 2007/03/27 19:29:56 murch Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -64,7 +64,7 @@
 #include "request.h"
 #include "iptostring.h"
 #include "xmalloc.h"
-#include "xstrcase.h"
+#include "util.h"
 
 #include <prot.h>
 

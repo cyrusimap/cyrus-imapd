@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 /*
- * $Id: charset.c,v 1.47 2007/03/27 19:05:16 murch Exp $
+ * $Id: charset.c,v 1.48 2007/03/27 19:29:56 murch Exp $
  */
 #include <config.h>
 #include <ctype.h>
@@ -50,7 +50,7 @@
 #include "charset.h"
 #include "xmalloc.h"
 #include "chartable.h"
-#include "xstrcase.h"
+#include "util.h"
 
 extern const unsigned char chartables_long_translations[];
 extern const int charset_max_translation;
