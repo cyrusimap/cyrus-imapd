@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.246 2007/02/13 20:14:00 murch Exp $
+ * $Id: mboxlist.c,v 1.247 2007/03/27 19:53:09 murch Exp $
  */
 
 #include <config.h>
@@ -2764,15 +2764,15 @@ char *mboxlist_hash_usersubs(const char *userid)
     char c, *domain;
 
     if (config_virtdomains && (domain = strchr(userid, '@'))) {
-	char d = (char) dir_hash_c(domain+1);
+	char d = (char) dir_hash_c(domain+1, config_fulldirhash);
 	*domain = '\0';  /* split user@domain */
-	c = (char) dir_hash_c(userid);
+	c = (char) dir_hash_c(userid, config_fulldirhash);
 	sprintf(fname, "%s%s%c/%s%s%c/%s%s", config_dir, FNAME_DOMAINDIR, d,
 		domain+1, FNAME_USERDIR, c, userid, FNAME_SUBSSUFFIX);
 	*domain = '@';  /* replace '@' */
     }
     else {
-	c = (char) dir_hash_c(userid);
+	c = (char) dir_hash_c(userid, config_fulldirhash);
 	sprintf(fname, "%s%s%c/%s%s", config_dir, FNAME_USERDIR, c, userid,
 		FNAME_SUBSSUFFIX);
     }

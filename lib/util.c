@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: util.c,v 1.33 2007/03/27 19:29:56 murch Exp $
+ * $Id: util.c,v 1.34 2007/03/27 19:53:09 murch Exp $
  */
 
 #include <config.h>
@@ -61,7 +61,6 @@
 #include <errno.h>
 
 #include "exitcodes.h"
-#include "libcyr_cfg.h"
 #include "util.h"
 #include "xmalloc.h"
 
@@ -249,11 +248,11 @@ keyvalue *kv_bsearch(const char* key, keyvalue* kv, int nelem,
  *  directory.  Stop before the first dot.  Caller is responsible
  *  for skipping any prefix of the name.
  */
-int dir_hash_c(const char *name)
+int dir_hash_c(const char *name, int full)
 {
     int c;
 
-    if (libcyrus_config_getswitch(CYRUSOPT_FULLDIRHASH)) {
+    if (full) {
 	unsigned char *pt;
 	unsigned int n;
 	enum {
@@ -315,11 +314,10 @@ void cyrus_reset_stdio()
  * directory listing (but you won't have to worry about cleaning up
  * after it)
  */
-int create_tempfile() 
+int create_tempfile(const char *path) 
 {
     int fd;
     char pattern[2048];
-    const char *path = libcyrus_config_getstring(CYRUSOPT_TEMP_PATH);
 
     if(snprintf(pattern, sizeof(pattern), "%s/cyrus_tmpfile_XXXXXX",
 		path) >= sizeof(pattern)){

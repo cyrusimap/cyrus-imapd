@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.c,v 1.5 2007/03/27 19:29:56 murch Exp $
+ * $Id: sync_support.c,v 1.6 2007/03/27 19:53:09 murch Exp $
  */
 
 #include <config.h>
@@ -1432,16 +1432,18 @@ char *sync_sieve_get_path(char *userid, char *sieve_path, size_t psize)
     char *domain;
 
     if (config_getenum(IMAPOPT_VIRTDOMAINS) && (domain = strchr(userid, '@'))) {
-	char d = (char) dir_hash_c(domain+1);
+	char d = (char) dir_hash_c(domain+1, config_fulldirhash);
 	*domain = '\0';  /* split user@domain */
 	snprintf(sieve_path, psize, "%s%s%c/%s/%c/%s",
 		 config_getstring(IMAPOPT_SIEVEDIR),
-		 FNAME_DOMAINDIR, d, domain+1, dir_hash_c(userid), userid);
+		 FNAME_DOMAINDIR, d, domain+1,
+		 dir_hash_c(userid, config_fulldirhash), userid);
 	*domain = '@';  /* reassemble user@domain */
     }
     else {
 	snprintf(sieve_path, psize, "%s/%c/%s",
-		 config_getstring(IMAPOPT_SIEVEDIR), dir_hash_c(userid), userid);
+		 config_getstring(IMAPOPT_SIEVEDIR),
+		 dir_hash_c(userid, config_fulldirhash), userid);
     }
 
     return sieve_path;

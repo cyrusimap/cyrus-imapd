@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.164 2007/02/05 18:41:47 jeaton Exp $
+ * $Id: mailbox.c,v 1.165 2007/03/27 19:53:08 murch Exp $
  *
  */
 
@@ -3360,7 +3360,7 @@ void mailbox_hash_mbox(char *buf, size_t buf_len,
     if (config_virtdomains && (p = strchr(name, '!'))) {
 	*p = '\0';  /* split domain!user */
 	if (config_hashimapspool) {
-	    c = (char) dir_hash_c(name);
+	    c = (char) dir_hash_c(name, config_fulldirhash);
 	    snprintf(buf, buf_len, "%s%c/%s", FNAME_DOMAINDIR, c, name);
 	}
 	else {
@@ -3379,7 +3379,7 @@ void mailbox_hash_mbox(char *buf, size_t buf_len,
 	} else {
 	    idx++;
 	}
-	c = (char) dir_hash_c(idx);
+	c = (char) dir_hash_c(idx, config_fulldirhash);
 	
 	snprintf(buf, buf_len, "/%c/%s", c, name);
     } else {

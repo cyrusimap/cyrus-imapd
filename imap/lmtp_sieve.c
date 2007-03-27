@@ -1,6 +1,6 @@
 /* lmtp_sieve.c -- Sieve implementation for lmtpd
  *
- * $Id: lmtp_sieve.c,v 1.14 2007/02/05 18:41:47 jeaton Exp $
+ * $Id: lmtp_sieve.c,v 1.15 2007/03/27 19:53:08 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -833,7 +833,7 @@ static int sieve_find_script(const char *user, const char *domain,
 	size_t len = strlcpy(fname, sieve_dir, size);
 
 	if (domain) {
-	    char dhash = (char) dir_hash_c(domain);
+	    char dhash = (char) dir_hash_c(domain, config_fulldirhash);
 	    len += snprintf(fname+len, size-len, "%s%c/%s",
 			    FNAME_DOMAINDIR, dhash, domain);
 	}
@@ -842,7 +842,7 @@ static int sieve_find_script(const char *user, const char *domain,
 	    len = strlcat(fname, "/global/", size);
 	}
 	else {
-	    char hash = (char) dir_hash_c(user);
+	    char hash = (char) dir_hash_c(user, config_fulldirhash);
 	    len += snprintf(fname+len, size-len, "/%c/%s/", hash, user);
 
 	    if (!script) { /* default script */
