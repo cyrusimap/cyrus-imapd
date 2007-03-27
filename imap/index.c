@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.223 2007/02/05 18:41:46 jeaton Exp $
+ * $Id: index.c,v 1.224 2007/03/27 19:05:15 murch Exp $
  */
 #include <config.h>
 
@@ -72,6 +72,7 @@
 #include "parseaddr.h"
 #include "search_engines.h"
 #include "seen.h"
+#include "xstrcase.h"
 #include "strhash.h"
 #include "stristr.h"
 #include "util.h"

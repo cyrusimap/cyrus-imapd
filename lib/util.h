@@ -1,5 +1,5 @@
 /* util.h -- general utility functions
- * $Id: util.h,v 1.20 2007/01/09 17:04:10 murch Exp $
+ * $Id: util.h,v 1.21 2007/03/27 19:05:16 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -46,23 +46,9 @@
 #ifndef INCLUDED_UTIL_H
 #define INCLUDED_UTIL_H
 
-extern const unsigned char convert_to_lowercase[256];
-extern const unsigned char convert_to_uppercase[256];
-
-#define TOUPPER(c) (convert_to_uppercase[(unsigned char)(c)])
-#define TOLOWER(c) (convert_to_lowercase[(unsigned char)(c)])
-
 typedef struct keyvalue {
     char *key, *value;
 } keyvalue;
-
-/* convert string to all lower case
- */
-extern char *lcase (char *str);
-
-/* convert string to all upper case
- */
-extern char *ucase (char *str);
 
 /* clean up control characters in a string while copying it
  *  returns pointer to end of dst string.

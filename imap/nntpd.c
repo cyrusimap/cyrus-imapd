@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.54 2007/02/05 18:49:56 jeaton Exp $
+ * $Id: nntpd.c,v 1.55 2007/03/27 19:05:16 murch Exp $
  */
 
 /*
@@ -99,6 +99,7 @@
 #include "rfc822date.h"
 #include "smtpclient.h"
 #include "spool.h"
+#include "xstrcase.h"
 #include "sync_log.h"
 #include "telemetry.h"
 #include "tls.h"

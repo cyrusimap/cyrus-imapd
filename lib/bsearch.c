@@ -1,5 +1,5 @@
 /* bsearch.c -- binary search newline-separated fields in memory
- $Id: bsearch.c,v 1.20 2006/11/30 17:11:22 murch Exp $
+ $Id: bsearch.c,v 1.21 2007/03/27 19:05:16 murch Exp $
  
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -46,7 +46,7 @@
 #include <string.h>
 
 #include "bsearch.h"
-#include "util.h"		/* TOLOWER and convert_to_lowercase */
+#include "xstrcase.h"		/* TOLOWER and convert_to_lowercase */
 
 /* Case-dependent comparison converter.
  * Treats \r and \t as end-of-string and treats '.' lower than

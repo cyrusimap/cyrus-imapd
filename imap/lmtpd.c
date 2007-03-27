@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.147 2007/02/05 18:41:47 jeaton Exp $
+ * $Id: lmtpd.c,v 1.148 2007/03/27 19:05:15 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -87,6 +87,7 @@
 #include "notify.h"
 #include "prot.h"
 #include "proxy.h"
+#include "xstrcase.h"
 #include "tls.h"
 #include "util.h"
 #include "version.h"

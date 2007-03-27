@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: spool.c,v 1.9 2006/11/30 17:11:20 murch Exp $
+ * $Id: spool.c,v 1.10 2007/03/27 19:05:16 murch Exp $
  */
 
 #include <config.h>
@@ -55,6 +55,7 @@
 
 #include "spool.h"
 #include "prot.h"
+#include "xstrcase.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "exitcodes.h"
