@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.34 2007/03/27 19:05:17 murch Exp $
+ * $Id: sieve.y,v 1.35 2007/03/27 19:29:57 murch Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -40,7 +40,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "script.h"
 #include "tree.h"
 
-#include "../lib/xstrcase.h"
+#include "../lib/util.h"
 #include "../lib/imparse.h"
 #include "../lib/libconfig.h"
 

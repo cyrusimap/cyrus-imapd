@@ -1,5 +1,5 @@
 /* strcasecmp.c -- replacement strcasecmp() & strncasecmp() routines
- $Id: strcasecmp.c,v 1.7 2007/03/27 19:05:16 murch Exp $
+ $Id: strcasecmp.c,v 1.8 2007/03/27 19:29:56 murch Exp $
  
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -44,7 +44,7 @@
  * Start Date: 4/6/93
  */
 
-#include "xstrcase.h"
+#include "util.h"
 
 /* case insensitive string compare
  */

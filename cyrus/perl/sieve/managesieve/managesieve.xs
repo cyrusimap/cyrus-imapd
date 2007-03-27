@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: managesieve.xs,v 1.24 2007/03/27 19:05:16 murch Exp $ */
+/* $Id: managesieve.xs,v 1.25 2007/03/27 19:29:56 murch Exp $ */
 
 #ifdef __cplusplus
 extern "C" {
@@ -64,7 +64,7 @@ typedef struct xscyrus *Sieveobj;
 static char *globalerr = NULL;
 
 #include "isieve.h"
-#include "xstrcase.h"
+#include "util.h"
 #include "xmalloc.h"
 
 static int
