@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.149 2007/03/27 19:29:56 murch Exp $
+ * $Id: lmtpd.c,v 1.150 2007/03/27 19:53:08 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1106,7 +1106,7 @@ FILE *spoolfile(message_data_t *msgdata)
 
     if (!f) {
 	/* we only have remote mailboxes, so use a tempfile */
-	int fd = create_tempfile();
+	int fd = create_tempfile(config_getstring(IMAPOPT_TEMP_PATH));
 
 	if (fd != -1) f = fdopen(fd, "w+");
     }

@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.89 2007/01/09 16:50:31 murch Exp $
+ * $Id: prot.c,v 1.90 2007/03/27 19:53:09 murch Exp $
  */
 
 #include <config.h>
@@ -67,6 +67,7 @@
 
 #include "assert.h"
 #include "exitcodes.h"
+#include "libcyr_cfg.h"
 #include "map.h"
 #include "nonblock.h"
 #include "prot.h"
@@ -777,7 +778,7 @@ int prot_flush_internal(struct protstream *s, int force)
 	    
 	    if(s->big_buffer == PROT_NO_FD) {
 		/* open new bigbuffer */
-		int fd = create_tempfile();
+		int fd = create_tempfile(libcyrus_config_getstring(CYRUSOPT_TEMP_PATH));
 		if(fd == -1) {
 		    s->error = xstrdup(strerror(errno));
 		    goto done;

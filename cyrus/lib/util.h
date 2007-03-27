@@ -1,5 +1,5 @@
 /* util.h -- general utility functions
- * $Id: util.h,v 1.22 2007/03/27 19:29:56 murch Exp $
+ * $Id: util.h,v 1.23 2007/03/27 19:53:09 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -89,12 +89,12 @@ extern keyvalue *kv_bsearch (const char *key, keyvalue *kv, int nelem,
  *  directory.  Caller is responsible for skipping any prefix
  *  of the name.
  */
-extern int dir_hash_c(const char *name);
+extern int dir_hash_c(const char *name, int full);
 
 /* 
  * create an [unlinked] temporary file and return the file descriptor.
  */
-extern int create_tempfile();
+extern int create_tempfile(const char *path);
 
 /* Close a network filedescriptor the "safe" way */
 extern int cyrus_close_sock(int fd);

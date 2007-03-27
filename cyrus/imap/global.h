@@ -1,5 +1,5 @@
 /* global.h -- Header for global/shared variables & functions.
- * $Id: global.h,v 1.8 2006/11/30 17:11:17 murch Exp $
+ * $Id: global.h,v 1.9 2007/03/27 19:53:08 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -142,6 +142,7 @@ extern void cyrus_ctime(time_t date, char *datebuf);
 extern int shutdown_file(char *buf, int size);
 
 /* Misc globals */
+extern int config_fulldirhash;
 extern int config_implicitrights;
 extern unsigned long config_metapartition_files;
 extern struct cyrusdb_backend *config_mboxlist_db;

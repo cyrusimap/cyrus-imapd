@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_quotalegacy.c,v 1.14 2007/02/05 18:43:26 jeaton Exp $ */
+/* $Id: cyrusdb_quotalegacy.c,v 1.15 2007/03/27 19:53:09 murch Exp $ */
 
 #include <config.h>
 
@@ -99,6 +99,7 @@ int abort_txn(struct db *db __attribute__((unused)), struct txn *tid);
 static void hash_quota(char *buf, size_t size, const char *qr, char *path)
 {
     int config_virtdomains = libcyrus_config_getswitch(CYRUSOPT_VIRTDOMAINS);
+    int config_fulldirhash = libcyrus_config_getswitch(CYRUSOPT_FULLDIRHASH);
     const char *idx;
     char c, *p;
     unsigned len;
@@ -111,7 +112,7 @@ static void hash_quota(char *buf, size_t size, const char *qr, char *path)
 
     if (config_virtdomains && (p = strchr(qr, '!'))) {
 	*p = '\0';  /* split domain!qr */
-	c = (char) dir_hash_c(qr);
+	c = (char) dir_hash_c(qr, config_fulldirhash);
 	if ((len = snprintf(buf, size, "%s%c/%s",
 			    FNAME_DOMAINDIR, c, qr)) >= size) {
 	    fatal("insufficient buffer size in hash_quota", EC_TEMPFAIL);
@@ -137,7 +138,7 @@ static void hash_quota(char *buf, size_t size, const char *qr, char *path)
     } else {
 	idx++;
     }
-    c = (char) dir_hash_c(idx);
+    c = (char) dir_hash_c(idx, config_fulldirhash);
 
     if (snprintf(buf, size, "%s%c/%s", FNAME_QUOTADIR, c, qr) >= size) {
 	fatal("insufficient buffer size in hash_quota", EC_TEMPFAIL);

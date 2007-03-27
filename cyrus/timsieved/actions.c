@@ -1,6 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.40 2006/11/30 17:11:25 murch Exp $
+ * $Id: actions.c,v 1.41 2007/03/27 19:53:09 murch Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -124,7 +124,7 @@ int actions_setuser(const char *userid)
   len = strlcpy(sieve_dir, foo, size);
 
   if (domain) {
-      char dhash = (char) dir_hash_c(domain);
+      char dhash = (char) dir_hash_c(domain, config_fulldirhash);
       len += snprintf(sieve_dir+len, size-len, "%s%c/%s",
 		      FNAME_DOMAINDIR, dhash, domain);
   }
@@ -133,7 +133,7 @@ int actions_setuser(const char *userid)
       strlcat(sieve_dir, "/global", size);
   }
   else {
-      char hash = (char) dir_hash_c(user);
+      char hash = (char) dir_hash_c(user, config_fulldirhash);
       snprintf(sieve_dir+len, size-len, "/%c/%s", hash, user);
   }
 

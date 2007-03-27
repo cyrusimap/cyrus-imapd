@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.21 2007/02/05 18:41:46 jeaton Exp $ */
+/* $Id: global.c,v 1.22 2007/03/27 19:53:08 murch Exp $ */
 
 #include <config.h>
 
@@ -83,8 +83,9 @@ static enum {
 
 static int cyrus_init_nodb = 0;
 
-int config_implicitrights;        /* "lca" */
-unsigned long config_metapartition_files;    /* 0 */
+int config_fulldirhash;				/* 0 */
+int config_implicitrights;			/* "lca" */
+unsigned long config_metapartition_files;	/* 0 */
 struct cyrusdb_backend *config_mboxlist_db;
 struct cyrusdb_backend *config_quota_db;
 struct cyrusdb_backend *config_subscription_db;
@@ -160,6 +161,8 @@ int cyrus_init(const char *alt_config, const char *ident, unsigned flags)
 	val++;
     }
     umask(umaskval);
+
+    config_fulldirhash = config_getswitch(IMAPOPT_FULLDIRHASH);
 
     /* look up and canonify the implicit rights of mailbox owners */
     config_implicitrights =

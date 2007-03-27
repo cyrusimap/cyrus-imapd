@@ -1,5 +1,5 @@
 /* mboxkey.c -- implementation of URLAUTH mailbox keys
- * $Id: mboxkey.c,v 1.2 2006/11/30 17:11:19 murch Exp $
+ * $Id: mboxkey.c,v 1.3 2007/03/27 19:53:09 murch Exp $
  * 
  * Copyright (c) 1998-2005 Carnegie Mellon University.  All rights reserved.
  *
@@ -106,15 +106,15 @@ char *mboxkey_getpath(const char *userid)
     char c, *domain;
 
     if (config_virtdomains && (domain = strchr(userid, '@'))) {
-	char d = (char) dir_hash_c(domain+1);
+	char d = (char) dir_hash_c(domain+1, config_fulldirhash);
 	*domain = '\0';  /* split user@domain */
-	c = (char) dir_hash_c(userid);
+	c = (char) dir_hash_c(userid, config_fulldirhash);
 	sprintf(fname, "%s%s%c/%s%s%c/%s%s", config_dir, FNAME_DOMAINDIR, d,
 		domain+1, FNAME_USERDIR, c, userid, FNAME_MBOXKEYSUFFIX);
 	*domain = '@';  /* reassemble user@domain */
     }
     else {
-	c = (char) dir_hash_c(userid);
+	c = (char) dir_hash_c(userid, config_fulldirhash);
 	sprintf(fname, "%s%s%c/%s%s", config_dir, FNAME_USERDIR, c, userid,
 		FNAME_MBOXKEYSUFFIX);
     }
