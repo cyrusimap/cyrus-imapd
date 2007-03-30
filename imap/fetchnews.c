@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: fetchnews.c,v 1.16 2006/11/30 17:11:17 murch Exp $
+ * $Id: fetchnews.c,v 1.17 2007/03/30 18:40:20 murch Exp $
  */
 
 #include <config.h>
@@ -267,7 +267,9 @@ int main(int argc, char *argv[])
     int newnews = 1;
     char *datefmt = "%y%m%d %H%M%S";
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+    if ((geteuid()) == 0 && (become_cyrus() != 0)) {
+	fatal("must run as the Cyrus user", EC_USAGE);
+    }
 
     while ((opt = getopt(argc, argv, "C:s:w:f:a:p:ny")) != EOF) {
 	switch (opt) {

@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.7 2007/03/27 19:29:56 murch Exp $
+ * $Id: sync_client.c,v 1.8 2007/03/30 18:40:20 murch Exp $
  */
 
 #include <config.h>
@@ -3293,8 +3293,9 @@ int main(int argc, char **argv)
     /* Global list */
     msgid_onserver = sync_msgid_list_create(SYNC_MSGID_LIST_HASH_SIZE);
 
-    if(geteuid() == 0)
-        fatal("must run as the Cyrus user", EC_USAGE);
+    if ((geteuid()) == 0 && (become_cyrus() != 0)) {
+	fatal("must run as the Cyrus user", EC_USAGE);
+    }
 
     setbuf(stdout, NULL);
 

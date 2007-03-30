@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.104 2006/11/30 17:11:23 murch Exp $ */
+/* $Id: master.c,v 1.105 2007/03/30 18:40:21 murch Exp $ */
 
 #include <config.h>
 
@@ -48,7 +48,6 @@
 #include <string.h>
 #include <time.h>
 #include <sys/time.h>
-#include <grp.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #ifdef HAVE_UNISTD_H
@@ -59,7 +58,6 @@
 #endif
 #include <fcntl.h>
 #include <signal.h>
-#include <pwd.h>
 #include <sys/param.h>
 #include <sys/stat.h>
 #include <syslog.h>
@@ -110,7 +108,7 @@
 #include "service.h"
 
 #include "lock.h"
-
+#include "util.h"
 #include "xmalloc.h"
 
 #include "message_uuid_master.h"
@@ -188,45 +186,6 @@ void event_free(struct event *a)
     if(a->exec) free((char**)a->exec);
     if(a->name) free((char*)a->name);
     free(a);
-}
-
-int become_cyrus(void)
-{
-    struct passwd *p;
-    int newuid, newgid;
-    int result;
-    static int uid = 0;
-
-    if (uid) return setuid(uid);
-
-    p = getpwnam(CYRUS_USER);
-    if (p == NULL) {
-	syslog(LOG_ERR, "no entry in /etc/passwd for user %s", CYRUS_USER);
-	return -1;
-    }
-
-    /* Save these in case initgroups does a getpw*() */
-    newuid = p->pw_uid;
-    newgid = p->pw_gid;
-
-    if (initgroups(CYRUS_USER, newgid)) {
-        syslog(LOG_ERR, "unable to initialize groups for user %s: %s",
-	       CYRUS_USER, strerror(errno));
-        return -1;
-    }
-
-    if (setgid(newgid)) {
-        syslog(LOG_ERR, "unable to set group id to %d for user %s: %s",
-              newgid, CYRUS_USER, strerror(errno));
-        return -1;
-    }
-
-    result = setuid(newuid);
-
-    /* Only set static uid if successful, else future calls won't reset gid */
-    if (result == 0)
-        uid = newuid;
-    return result;
 }
 
 void get_prog(char *path, unsigned size, char *const *cmd)

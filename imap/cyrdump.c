@@ -1,4 +1,4 @@
-/* $Id: cyrdump.c,v 1.18 2007/02/05 18:41:46 jeaton Exp $
+/* $Id: cyrdump.c,v 1.19 2007/03/30 18:40:20 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -101,7 +101,9 @@ int main(int argc, char *argv[])
     char *alt_config = NULL;
     struct incremental_record irec;
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+    if ((geteuid()) == 0 && (become_cyrus() != 0)) {
+	fatal("must run as the Cyrus user", EC_USAGE);
+    }
 
     while ((option = getopt(argc, argv, "v")) != EOF) {
 	switch (option) {

@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_reset.c,v 1.2 2006/11/30 17:11:20 murch Exp $
+ * $Id: sync_reset.c,v 1.3 2007/03/30 18:40:21 murch Exp $
  */
 
 #include <config.h>
@@ -322,8 +322,9 @@ main(int argc, char **argv)
 
     sync_lock_reset(&lock);
 
-    if(geteuid() == 0)
-        fatal("must run as the Cyrus user", EC_USAGE);
+    if ((geteuid()) == 0 && (become_cyrus() != 0)) {
+	fatal("must run as the Cyrus user", EC_USAGE);
+    }
 
     setbuf(stdout, NULL);
 

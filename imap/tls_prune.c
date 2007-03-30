@@ -40,7 +40,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: tls_prune.c,v 1.7 2006/11/30 17:11:20 murch Exp $ */
+/* $Id: tls_prune.c,v 1.8 2007/03/30 18:40:21 murch Exp $ */
 
 #include <config.h>
 
@@ -67,7 +67,9 @@ int main(int argc, char *argv[])
     int opt,r;
     char *alt_config = NULL;
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+    if ((geteuid()) == 0 && (become_cyrus() != 0)) {
+	fatal("must run as the Cyrus user", EC_USAGE);
+    }
 
     while ((opt = getopt(argc, argv, "C:")) != EOF) {
 	switch (opt) {

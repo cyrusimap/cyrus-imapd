@@ -42,7 +42,7 @@
  */
 
 /*
- * $Id: syncnews.c,v 1.27 2006/11/30 17:11:20 murch Exp $
+ * $Id: syncnews.c,v 1.28 2007/03/30 18:40:21 murch Exp $
  */
 #include <config.h>
 
@@ -94,7 +94,9 @@ int main(int argc, char **argv)
     int opt;
     char *alt_config = NULL;
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+    if ((geteuid()) == 0 && (become_cyrus() != 0)) {
+	fatal("must run as the Cyrus user", EC_USAGE);
+    }
 
     while ((opt = getopt(argc, argv, "C:")) != EOF) {
 	switch (opt) {
