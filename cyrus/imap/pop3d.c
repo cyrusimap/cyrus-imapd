@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.173 2007/03/27 19:29:56 murch Exp $
+ * $Id: pop3d.c,v 1.174 2007/03/30 18:51:01 murch Exp $
  */
 #include <config.h>
 
@@ -498,7 +498,7 @@ int service_main(int argc __attribute__((unused)),
 	fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL); 
 
     /* will always return something valid */
-    secprops = mysasl_secprops(SASL_SEC_NOPLAINTEXT);
+    secprops = mysasl_secprops(0);
     sasl_setprop(popd_saslconn, SASL_SEC_PROPS, secprops);
     sasl_setprop(popd_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf);
     
@@ -1780,7 +1780,7 @@ static int reset_saslconn(sasl_conn_t **conn)
        ret = sasl_setprop(*conn, SASL_IPLOCALPORT,
                           saslprops.iplocalport);
     if(ret != SASL_OK) return ret;
-    secprops = mysasl_secprops(SASL_SEC_NOPLAINTEXT);
+    secprops = mysasl_secprops(0);
     ret = sasl_setprop(*conn, SASL_SEC_PROPS, secprops);
     if(ret != SASL_OK) return ret;
     /* end of service_main initialization excepting SSF */

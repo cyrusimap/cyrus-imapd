@@ -1,7 +1,7 @@
 /* timsieved.c -- main file for timsieved (sieve script accepting program)
  * Tim Martin
  * 9/21/99
- * $Id: timsieved.c,v 1.58 2006/11/30 17:11:25 murch Exp $
+ * $Id: timsieved.c,v 1.59 2007/03/30 18:51:02 murch Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -258,7 +258,6 @@ int service_main(int argc __attribute__((unused)),
 {
     socklen_t salen;
     int timeout;
-    int secflags = 0;
     char remoteip[60], localip[60];
     sasl_security_properties_t *secprops = NULL;
     char hbuf[NI_MAXHOST];
@@ -325,11 +324,7 @@ int service_main(int argc __attribute__((unused)),
     }
 
     /* will always return something valid */
-    /* should be configurable! */
-    if (!config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
-	secflags |= SASL_SEC_NOPLAINTEXT;
-    }
-    secprops = mysasl_secprops(secflags);
+    secprops = mysasl_secprops(0);
     sasl_setprop(sieved_saslconn, SASL_SEC_PROPS, secprops);
 
     if (actions_init() != TIMSIEVE_OK)
@@ -345,7 +340,6 @@ int service_main(int argc __attribute__((unused)),
 int reset_saslconn(sasl_conn_t **conn, sasl_ssf_t ssf, char *authid)
 {
     int ret = 0;
-    int secflags = 0;
     sasl_security_properties_t *secprops = NULL;
 
     sasl_dispose(conn);
@@ -365,10 +359,7 @@ int reset_saslconn(sasl_conn_t **conn, sasl_ssf_t ssf, char *authid)
 			   saslprops.iplocalport);
     if(ret != SASL_OK) return ret;
     
-    if (!config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
-	secflags |= SASL_SEC_NOPLAINTEXT;
-    }
-    secprops = mysasl_secprops(secflags);
+    secprops = mysasl_secprops(0);
     ret = sasl_setprop(*conn, SASL_SEC_PROPS, secprops);
     if(ret != SASL_OK) return ret;
 
