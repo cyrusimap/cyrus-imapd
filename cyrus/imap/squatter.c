@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squatter.c,v 1.17 2007/02/05 18:41:48 jeaton Exp $
+ * $Id: squatter.c,v 1.18 2007/03/30 18:40:20 murch Exp $
  */
 
 /*
@@ -486,8 +486,9 @@ int main(int argc, char **argv)
     char buf[MAX_MAILBOX_PATH+1];
     int r;
 
-    if(geteuid() == 0)
-        fatal("must run as the Cyrus user", EC_USAGE);
+    if ((geteuid()) == 0 && (become_cyrus() != 0)) {
+	fatal("must run as the Cyrus user", EC_USAGE);
+    }
 
     setbuf(stdout, NULL);
 

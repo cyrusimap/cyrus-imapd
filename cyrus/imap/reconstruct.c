@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.91 2007/02/09 13:18:42 murch Exp $ */
+/* $Id: reconstruct.c,v 1.92 2007/03/30 18:40:20 murch Exp $ */
 
 #include <config.h>
 
@@ -150,7 +150,9 @@ int main(int argc, char **argv)
 
     memset(&head, 0, sizeof(head));
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+    if ((geteuid()) == 0 && (become_cyrus() != 0)) {
+	fatal("must run as the Cyrus user", EC_USAGE);
+    }
 
     /* Ensure we're up-to-date on the index file format */
     assert(INDEX_HEADER_SIZE == (OFFSET_SPARE4+4));

@@ -69,7 +69,7 @@
 #include "lock.h"
 #include "xmalloc.h"
 
-static char rcsid[] = "$Id: ptexpire.c,v 1.19 2006/11/30 17:11:24 murch Exp $";
+static char rcsid[] = "$Id: ptexpire.c,v 1.20 2007/03/30 18:40:21 murch Exp $";
 
 /* global */
 time_t timenow;
@@ -112,7 +112,9 @@ int main(int argc, char *argv[])
     int r;
     char *alt_config = NULL;
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+    if ((geteuid()) == 0 && (become_cyrus() != 0)) {
+	fatal("must run as the Cyrus user", EC_USAGE);
+    }
     
     openlog("ptexpire", LOG_PID, SYSLOG_FACILITY);
 

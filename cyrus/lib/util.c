@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: util.c,v 1.34 2007/03/27 19:53:09 murch Exp $
+ * $Id: util.c,v 1.35 2007/03/30 18:40:21 murch Exp $
  */
 
 #include <config.h>
@@ -48,6 +48,8 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <errno.h>
+#include <grp.h>
+#include <pwd.h>
 #include <string.h>
 #include <stdlib.h>
 #include <syslog.h>
@@ -359,4 +361,43 @@ int cyrus_mkdir(const char *path, mode_t mode __attribute__((unused)))
     }
 
     return 0;
+}
+
+int become_cyrus(void)
+{
+    struct passwd *p;
+    int newuid, newgid;
+    int result;
+    static int uid = 0;
+
+    if (uid) return setuid(uid);
+
+    p = getpwnam(CYRUS_USER);
+    if (p == NULL) {
+	syslog(LOG_ERR, "no entry in /etc/passwd for user %s", CYRUS_USER);
+	return -1;
+    }
+
+    /* Save these in case initgroups does a getpw*() */
+    newuid = p->pw_uid;
+    newgid = p->pw_gid;
+
+    if (initgroups(CYRUS_USER, newgid)) {
+        syslog(LOG_ERR, "unable to initialize groups for user %s: %s",
+	       CYRUS_USER, strerror(errno));
+        return -1;
+    }
+
+    if (setgid(newgid)) {
+        syslog(LOG_ERR, "unable to set group id to %d for user %s: %s",
+              newgid, CYRUS_USER, strerror(errno));
+        return -1;
+    }
+
+    result = setuid(newuid);
+
+    /* Only set static uid if successful, else future calls won't reset gid */
+    if (result == 0)
+        uid = newuid;
+    return result;
 }

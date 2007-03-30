@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: unexpunge.c,v 1.4 2007/02/07 14:27:52 murch Exp $
+ * $Id: unexpunge.c,v 1.5 2007/03/30 18:40:21 murch Exp $
  */
 
 #include <config.h>
@@ -432,7 +432,9 @@ int main(int argc, char *argv[])
     struct msg *msgs;
     unsigned numrestored = 0;
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+    if ((geteuid()) == 0 && (become_cyrus() != 0)) {
+	fatal("must run as the Cyrus user", EC_USAGE);
+    }
 
     while ((opt = getopt(argc, argv, "C:laudv")) != EOF) {
 	switch (opt) {

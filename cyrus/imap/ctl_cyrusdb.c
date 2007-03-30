@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ctl_cyrusdb.c,v 1.28 2006/11/30 17:11:17 murch Exp $
+ * $Id: ctl_cyrusdb.c,v 1.29 2007/03/30 18:40:20 murch Exp $
  */
 
 #include <config.h>
@@ -184,7 +184,9 @@ int main(int argc, char *argv[])
     char *msg = "";
     int i, j, rotated = 0;
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+    if ((geteuid()) == 0 && (become_cyrus() != 0)) {
+	fatal("must run as the Cyrus user", EC_USAGE);
+    }
     r = r2 = 0;
 
     while ((opt = getopt(argc, argv, "C:rxc")) != EOF) {

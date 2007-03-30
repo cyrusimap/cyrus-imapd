@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: mbexamine.c,v 1.13 2007/02/05 18:41:47 jeaton Exp $ */
+/* $Id: mbexamine.c,v 1.14 2007/03/30 18:40:20 murch Exp $ */
 
 #include <config.h>
 
@@ -120,7 +120,9 @@ int main(int argc, char **argv)
     char buf[MAX_MAILBOX_PATH+1];
     char *alt_config = NULL;
 
-/*    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE); */
+    if ((geteuid()) == 0 && (become_cyrus() != 0)) {
+	fatal("must run as the Cyrus user", EC_USAGE);
+    }
 
     /* Ensure we're up-to-date on the index file format */
     assert(INDEX_HEADER_SIZE == (OFFSET_SPARE4+4));

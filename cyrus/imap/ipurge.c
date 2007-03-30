@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.26 2006/11/30 17:11:18 murch Exp $
+ * $Id: ipurge.c,v 1.27 2007/03/30 18:40:20 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -113,7 +113,9 @@ int main (int argc, char *argv[]) {
   char *alt_config = NULL;
   int r;
 
-  if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+  if ((geteuid()) == 0 && (become_cyrus() != 0)) {
+      fatal("must run as the Cyrus user", EC_USAGE);
+  }
 
   while ((option = getopt(argc, argv, "C:hxd:b:k:m:fsXi")) != EOF) {
     switch (option) {

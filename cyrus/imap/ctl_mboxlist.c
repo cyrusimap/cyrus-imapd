@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.54 2007/03/06 13:56:00 murch Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.55 2007/03/30 18:40:20 murch Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -613,7 +613,9 @@ int main(int argc, char *argv[])
     enum mboxop op = NONE;
     char *alt_config = NULL;
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+    if ((geteuid()) == 0 && (become_cyrus() != 0)) {
+	fatal("must run as the Cyrus user", EC_USAGE);
+    }
 
     while ((opt = getopt(argc, argv, "C:awmdurcxf:p:")) != EOF) {
 	switch (opt) {

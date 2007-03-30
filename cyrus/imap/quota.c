@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: quota.c,v 1.67 2007/02/05 18:41:48 jeaton Exp $ */
+/* $Id: quota.c,v 1.68 2007/03/30 18:40:20 murch Exp $ */
 
 
 #include <config.h>
@@ -140,7 +140,9 @@ int main(int argc,char **argv)
     struct fix_rock frock;
     struct txn *tid = NULL;
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+    if ((geteuid()) == 0 && (become_cyrus() != 0)) {
+	fatal("must run as the Cyrus user", EC_USAGE);
+    }
 
     while ((opt = getopt(argc, argv, "C:d:f")) != EOF) {
 	switch (opt) {

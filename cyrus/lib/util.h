@@ -1,5 +1,5 @@
 /* util.h -- general utility functions
- * $Id: util.h,v 1.23 2007/03/27 19:53:09 murch Exp $
+ * $Id: util.h,v 1.24 2007/03/30 18:40:21 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -106,6 +106,8 @@ extern void cyrus_reset_stdio();
  * up to but not including the basename.
  */
 extern int cyrus_mkdir(const char *path, mode_t mode);
+
+extern int become_cyrus(void);
 
 /* Some systems have very inefficient implementations of isdigit,
  * and we use it in a lot of inner loops

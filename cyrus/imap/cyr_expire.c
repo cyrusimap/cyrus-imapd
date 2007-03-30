@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_expire.c,v 1.10 2007/02/05 18:41:46 jeaton Exp $
+ * $Id: cyr_expire.c,v 1.11 2007/03/30 18:40:20 murch Exp $
  */
 
 #include <config.h>
@@ -275,7 +275,9 @@ int main(int argc, char *argv[])
     struct hash_table expire_table;
     struct expire_rock erock;
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+    if ((geteuid()) == 0 && (become_cyrus() != 0)) {
+	fatal("must run as the Cyrus user", EC_USAGE);
+    }
 
     /* zero the expire_rock */
     memset(&erock, 0, sizeof(erock));
