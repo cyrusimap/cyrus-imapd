@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.47 2007/02/26 18:43:38 murch Exp $ */
+/* $Id: backend.c,v 1.48 2007/03/30 18:51:00 murch Exp $ */
 
 #include <config.h>
 
@@ -207,7 +207,7 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
 	return r;
     }
 
-    secprops = mysasl_secprops(SASL_SEC_NOPLAINTEXT);
+    secprops = mysasl_secprops(0);
     r = sasl_setprop(s->saslconn, SASL_SEC_PROPS, secprops);
     if (r != SASL_OK) {
 	return r;

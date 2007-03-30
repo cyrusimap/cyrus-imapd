@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.22 2007/03/27 19:53:08 murch Exp $ */
+/* $Id: global.c,v 1.23 2007/03/30 18:51:00 murch Exp $ */
 
 #include <config.h>
 
@@ -313,7 +313,9 @@ sasl_security_properties_t *mysasl_secprops(int flags)
 				/* maximum allowable security strength */
 
     ret.security_flags = flags;
-    /* ret.security_flags |= SASL_SEC_NOPLAINTEXT; */
+    if (!config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
+	ret.security_flags |= SASL_SEC_NOPLAINTEXT;
+    }
     if (!config_getswitch(IMAPOPT_ALLOWANONYMOUSLOGIN)) {
 	ret.security_flags |= SASL_SEC_NOANONYMOUS;
     }

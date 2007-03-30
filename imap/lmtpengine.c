@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.120 2007/03/27 19:29:56 murch Exp $
+ * $Id: lmtpengine.c,v 1.121 2007/03/30 18:51:01 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -936,7 +936,7 @@ static struct sasl_callback localauth_override_cb[] = {
 /* Reset the given sasl_conn_t to a sane state */
 static int reset_saslconn(sasl_conn_t **conn) 
 {
-    int ret, secflags;
+    int ret;
     sasl_security_properties_t *secprops = NULL;
 
     sasl_dispose(conn);
@@ -956,12 +956,7 @@ static int reset_saslconn(sasl_conn_t **conn)
                           saslprops.iplocalport);
     if(ret != SASL_OK) return ret;
     
-    secflags = SASL_SEC_NOANONYMOUS;
-    if (!config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
-	secflags |= SASL_SEC_NOPLAINTEXT;
-    }
-
-    secprops = mysasl_secprops(secflags);
+    secprops = mysasl_secprops(SASL_SEC_NOANONYMOUS);
     ret = sasl_setprop(*conn, SASL_SEC_PROPS, secprops);
     if(ret != SASL_OK) return ret;
     /* end of service_main initialization excepting SSF */
@@ -1003,7 +998,6 @@ void lmtpmode(struct lmtp_func *func,
     sasl_ssf_t ssf;
     char *auth_id;
 
-    int secflags = 0;
     sasl_security_properties_t *secprops = NULL;
 
     /* setup the clientdata structure */
@@ -1098,12 +1092,7 @@ void lmtpmode(struct lmtp_func *func,
 
     /* set my allowable security properties */
     /* ANONYMOUS is silly because we allow that anyway */
-    secflags = SASL_SEC_NOANONYMOUS;
-    if (!config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
-	secflags |= SASL_SEC_NOPLAINTEXT;
-    }
-
-    secprops = mysasl_secprops(secflags);
+    secprops = mysasl_secprops(SASL_SEC_NOANONYMOUS);
     sasl_setprop(cd.conn, SASL_SEC_PROPS, secprops);
 
     if (func->preauth) {

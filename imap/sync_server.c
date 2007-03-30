@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.2 2006/11/30 17:11:20 murch Exp $
+ * $Id: sync_server.c,v 1.3 2007/03/30 18:51:01 murch Exp $
  */
 
 #include <config.h>
@@ -411,7 +411,7 @@ int service_main(int argc __attribute__((unused)),
 	fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL); 
 
     /* will always return something valid */
-    secprops = mysasl_secprops(SASL_SEC_NOPLAINTEXT);
+    secprops = mysasl_secprops(SASL_SEC_NOANONYMOUS);
     sasl_setprop(sync_saslconn, SASL_SEC_PROPS, secprops);
     sasl_setprop(sync_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf);
     
@@ -540,7 +540,7 @@ static int reset_saslconn(sasl_conn_t **conn)
        ret = sasl_setprop(*conn, SASL_IPLOCALPORT,
                           saslprops.iplocalport);
     if(ret != SASL_OK) return ret;
-    secprops = mysasl_secprops(SASL_SEC_NOPLAINTEXT);
+    secprops = mysasl_secprops(SASL_SEC_NOANONYMOUS);
     ret = sasl_setprop(*conn, SASL_SEC_PROPS, secprops);
     if(ret != SASL_OK) return ret;
     /* end of service_main initialization excepting SSF */

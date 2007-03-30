@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.42 2007/02/07 18:58:07 murch Exp $
+.\" $Id: imapoptions,v 1.43 2007/03/30 18:51:02 murch Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -121,7 +121,7 @@ are listed with ``<none>''.
   Note that this is a very expensive command and should only be
   enabled when absolutely necessary. */
 
-{ "allowplaintext", 1, SWITCH }
+{ "allowplaintext", 0, SWITCH }
 /* Allow the use of cleartext passwords on the wire. */
    
 { "allowusermoves", 0, SWITCH }

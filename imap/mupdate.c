@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.95 2007/03/06 13:56:00 murch Exp $
+ * $Id: mupdate.c,v 1.96 2007/03/30 18:51:01 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -252,7 +252,6 @@ static struct conn *conn_new(int fd)
     int r;    
     int haveaddr = 0;
     int salen;
-    int secflags;
     char hbuf[NI_MAXHOST];
     int niflags;
 
@@ -337,11 +336,7 @@ static struct conn *conn_new(int fd)
     }
 
     /* set my allowable security properties */
-    secflags = SASL_SEC_NOANONYMOUS;
-    if (!config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
-	secflags |= SASL_SEC_NOPLAINTEXT;
-    }
-    sasl_setprop(C->saslconn, SASL_SEC_PROPS, mysasl_secprops(secflags));
+    sasl_setprop(C->saslconn, SASL_SEC_PROPS, mysasl_secprops(SASL_SEC_NOANONYMOUS));
 
     /* Clear Buffers */
     memset(&(C->tag), 0, sizeof(struct buf));
@@ -1999,7 +1994,7 @@ void shut_down(int code)
 /* Reset the given sasl_conn_t to a sane state */
 static int reset_saslconn(struct conn *c)
 {
-    int ret, secflags;
+    int ret;
     sasl_security_properties_t *secprops = NULL;
 
     sasl_dispose(&c->saslconn);
@@ -2019,11 +2014,7 @@ static int reset_saslconn(struct conn *c)
                           c->saslprops.iplocalport);
     if(ret != SASL_OK) return ret;
     
-    secflags = SASL_SEC_NOANONYMOUS;
-    if (!config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
-	secflags |= SASL_SEC_NOPLAINTEXT;
-    }
-    secprops = mysasl_secprops(secflags);
+    secprops = mysasl_secprops(SASL_SEC_NOANONYMOUS);
     ret = sasl_setprop(c->saslconn, SASL_SEC_PROPS, secprops);
     if(ret != SASL_OK) return ret;
     /* end of service_main initialization excepting SSF */
