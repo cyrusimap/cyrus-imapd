@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_commit.c,v 1.2 2006/11/30 17:11:20 murch Exp $
+ * $Id: sync_commit.c,v 1.3 2007/04/02 18:25:51 murch Exp $
  */
 
 #include <config.h>
@@ -311,11 +311,11 @@ sync_combine_commit(struct mailbox *mailbox,
 
     /* Fix up highest modseq */
 #ifdef HAVE_LONG_LONG_INT
-    if (highestmodseq > *((bit64 *)(buf+OFFSET_HIGHESTMODSEQ_64))) {
+    if (highestmodseq > ntohll(*((bit64 *)(buf+OFFSET_HIGHESTMODSEQ_64)))) {
 	*((bit64 *)(buf+OFFSET_HIGHESTMODSEQ_64)) = htonll(highestmodseq);
     }
 #else
-    if (highestmodseq > *((bit32 *)(buf+OFFSET_HIGHESTMODSEQ))) {
+    if (highestmodseq > ntohl(*((bit32 *)(buf+OFFSET_HIGHESTMODSEQ)))) {
 	*((bit32 *)(buf+OFFSET_HIGHESTMODSEQ_64)) = htonl(0);
 	*((bit32 *)(buf+OFFSET_HIGHESTMODSEQ)) = htonl(highestmodseq);
     }
