@@ -1,4 +1,4 @@
-<!-- $Id: install-replication.html,v 1.3 2007/02/06 18:49:19 murch Exp $ -->
+<!-- $Id: install-replication.html,v 1.4 2007/04/03 15:10:02 murch Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Cyrus replication
@@ -136,7 +136,8 @@ sync_machineid: 1
 </pre>
 
 <p><li>For each IMAP, NNTP and LMTP service in cyrus.conf, enable the
-<tt>provide_uuid</tt> argument.  Example:<p>
+<tt>provide_uuid</tt> argument.  Valid values are 0 or 1.  The UUID
+itself will be calculated based on the sync_machineid above.  Example:<p>
 
 <pre>
 imap	cmd="imapd" listen="imap" prefork=5 provide_uuid=1
@@ -180,7 +181,7 @@ has been configured.
 <h3>Failover</h3>
 
 <P><HR>
-last modified: $Date: 2007/02/06 18:49:19 $
+last modified: $Date: 2007/04/03 15:10:02 $
 </BODY></HTML>
 
 
