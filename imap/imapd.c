@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.516 2007/03/30 18:51:00 murch Exp $ */
+/* $Id: imapd.c,v 1.517 2007/04/03 13:28:42 murch Exp $ */
 
 #include <config.h>
 
@@ -8224,14 +8224,32 @@ static int do_xfer_single(char *toserver, char *topart,
     /* 7) local delete of mailbox
      * & remove local "remote" mailboxlist entry */
     if(!r) {
-	/* Note that we do not check the ACL, and we don't update MUPDATE */
-	/* note also that we need to remember to let proxyadmins do this */
-	r = mboxlist_deletemailbox(mailboxname,
-				   imapd_userisadmin || imapd_userisproxyadmin,
-				   imapd_userid, imapd_authstate, 0, 1, 0);
-	if(r) syslog(LOG_ERR,
-		     "Could not delete local mailbox during move of %s",
-		     mailboxname);
+	if (config_mupdate_config != IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) {
+	    /* Note that we do not check the ACL, and we don't update MUPDATE */
+	    /* note also that we need to remember to let proxyadmins do this */
+	    r = mboxlist_deletemailbox(mailboxname,
+				       imapd_userisadmin || imapd_userisproxyadmin,
+				       imapd_userid, imapd_authstate, 0, 1, 0);
+	    if(r) syslog(LOG_ERR,
+			 "Could not delete local mailbox during move of %s",
+			 mailboxname);
+	} else {
+	    /* Can't trust local mailboxes database with unified config */
+	    struct mailbox mailbox;
+
+	    r = mailbox_open_locked(mailboxname, path, mpath,
+				    acl, 0, &mailbox, 0);
+	    if(r) syslog(LOG_ERR,
+			 "Could not open local mailbox during move of %s",
+			 mailboxname);
+	    if(!r) {
+		/* Delete mailbox and quota root */
+		r = mailbox_delete(&mailbox, 1);
+		if(r) syslog(LOG_ERR,
+			     "Could not delete local mailbox during move of %s",
+			     mailboxname);
+	    }
+	}
 
 	if (!r) {
 	    /* Delete mailbox annotations */
@@ -8306,12 +8324,15 @@ static int xfer_user_cb(char *name,
 
     if (!r) {
 	/* NOTE: NOT mlookup() because we don't want to issue a referral */
-	/* xxx but what happens if they are remote
-	 * mailboxes? */
 	r = mboxlist_detail(name, &mbflags,
 			    &inpath, &inmpath, &inpart, &inacl, NULL);
     }
     
+    if (!r && (mbflags & MBTYPE_REMOTE)) {
+	/* Skip remote mailbox */
+	return 0;
+    }
+
     if (!r) {
 	path = xstrdup(inpath);
 	if (inmpath) mpath = xstrdup(inmpath);
