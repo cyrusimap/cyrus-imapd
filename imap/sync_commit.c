@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_commit.c,v 1.3 2007/04/02 18:25:51 murch Exp $
+ * $Id: sync_commit.c,v 1.4 2007/04/03 13:01:13 murch Exp $
  */
 
 #include <config.h>
@@ -311,8 +311,8 @@ sync_combine_commit(struct mailbox *mailbox,
 
     /* Fix up highest modseq */
 #ifdef HAVE_LONG_LONG_INT
-    if (highestmodseq > ntohll(*((bit64 *)(buf+OFFSET_HIGHESTMODSEQ_64)))) {
-	*((bit64 *)(buf+OFFSET_HIGHESTMODSEQ_64)) = htonll(highestmodseq);
+    if (highestmodseq > align_ntohll(buf+OFFSET_HIGHESTMODSEQ_64)) {
+	align_htonll(buf+OFFSET_HIGHESTMODSEQ_64, highestmodseq);
     }
 #else
     if (highestmodseq > ntohl(*((bit32 *)(buf+OFFSET_HIGHESTMODSEQ)))) {
@@ -616,8 +616,8 @@ sync_append_commit(struct mailbox *mailbox,
 	
     /* Fix up highest modseq */
 #ifdef HAVE_LONG_LONG_INT
-    if (highestmodseq > ntohll(*((bit64 *)(hbuf+OFFSET_HIGHESTMODSEQ_64)))) {
-	*((bit64 *)(hbuf+OFFSET_HIGHESTMODSEQ_64)) = htonll(highestmodseq);
+    if (highestmodseq > align_ntohll(hbuf+OFFSET_HIGHESTMODSEQ_64)) {
+	align_htonll(hbuf+OFFSET_HIGHESTMODSEQ_64, highestmodseq);
     }
 #else
     if (highestmodseq > ntohl(*((bit32 *)(hbuf+OFFSET_HIGHESTMODSEQ)))) {

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.165 2007/03/27 19:53:08 murch Exp $
+ * $Id: mailbox.c,v 1.166 2007/04/03 13:01:12 murch Exp $
  *
  */
 
@@ -945,7 +945,7 @@ int mailbox_read_index_header(struct mailbox *mailbox)
 	ntohl(*((bit32 *)(mailbox->index_base+OFFSET_LEAKED_CACHE)));
 #ifdef HAVE_LONG_LONG_INT
     mailbox->highestmodseq =
-	ntohll(*((bit64 *)(mailbox->index_base+OFFSET_HIGHESTMODSEQ_64)));
+	align_ntohll(mailbox->index_base+OFFSET_HIGHESTMODSEQ_64);
 #else
     mailbox->highestmodseq =
 	ntohl(*((bit32 *)(mailbox->index_base+OFFSET_HIGHESTMODSEQ)));
@@ -1318,7 +1318,7 @@ int mailbox_write_index_header(struct mailbox *mailbox)
     *((bit32 *)(buf+OFFSET_LEAKED_CACHE)) =
 	htonl(mailbox->leaked_cache_records);
 #ifdef HAVE_LONG_LONG_INT
-    *((bit64 *)(buf+OFFSET_HIGHESTMODSEQ_64)) = htonll(mailbox->highestmodseq);
+    align_htonll(buf+OFFSET_HIGHESTMODSEQ_64, mailbox->highestmodseq);
 #else
     /* zero the unused 32bits */
     *((bit32 *)(buf+OFFSET_HIGHESTMODSEQ_64)) = htonl(0);
@@ -1547,7 +1547,7 @@ static void mailbox_upgrade_index_work(struct mailbox *mailbox,
 
     if (ntohl(*((bit32 *)(buf+OFFSET_MINOR_VERSION))) < 8) {
 #ifdef HAVE_LONG_LONG_INT
-	*((bit64 *)(buf+OFFSET_HIGHESTMODSEQ_64)) = htonll(1);
+	align_htonll(buf+OFFSET_HIGHESTMODSEQ_64, 1);
 #else
 	*((bit32 *)(buf+OFFSET_HIGHESTMODSEQ_64)) = htonl(0);
 	*((bit32 *)(buf+OFFSET_HIGHESTMODSEQ)) = htonl(1);
@@ -1593,8 +1593,8 @@ static void mailbox_upgrade_index_work(struct mailbox *mailbox,
     }
 #if 0
     if (oldstart_offset < OFFSET_HIGHESTMODSEQ-quota_offset+sizeof(bit32) ||
-	!ntohll(*((bit64 *)(buf+OFFSET_HIGHESTMODSEQ_64)))) {
-	*((bit64 *)(buf+OFFSET_HIGHESTMODSEQ_64)) = htonll(1);
+	!align_ntohll(buf+OFFSET_HIGHESTMODSEQ_64)) {
+	align_htonll(buf+OFFSET_HIGHESTMODSEQ_64, 1);
     }
 #endif
     *((bit32 *)(buf+OFFSET_SPARE0)) = htonl(0); /* RESERVED */
