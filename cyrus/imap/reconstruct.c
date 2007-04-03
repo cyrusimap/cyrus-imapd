@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.92 2007/03/30 18:40:20 murch Exp $ */
+/* $Id: reconstruct.c,v 1.93 2007/04/03 13:01:12 murch Exp $ */
 
 #include <config.h>
 
@@ -1074,7 +1074,7 @@ int reconstruct(char *name, struct discovered *found)
     *((bit32 *)(buf+OFFSET_MAILBOX_OPTIONS)) = htonl(mailbox.options);
     *((bit32 *)(buf+OFFSET_LEAKED_CACHE)) = htonl(0);
 #ifdef HAVE_LONG_LONG_INT
-    *((bit64 *)(buf+OFFSET_HIGHESTMODSEQ_64)) = htonll(mailbox.highestmodseq);
+    align_htonll(buf+OFFSET_HIGHESTMODSEQ_64, mailbox.highestmodseq);
 #else
     /* zero the unused 32bits */
     *((bit32 *)(buf+OFFSET_HIGHESTMODSEQ_64)) = htonl(0);

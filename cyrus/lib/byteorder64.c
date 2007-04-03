@@ -38,12 +38,15 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: byteorder64.c,v 1.2 2006/11/30 17:11:22 murch Exp $
+ * $Id: byteorder64.c,v 1.3 2007/04/03 13:01:13 murch Exp $
  */
 
 #include <config.h>
+#include "byteorder64.h"
 
-#if defined(HAVE_LONG_LONG_INT) && !defined(WORDS_BIGENDIAN)
+#if defined(HAVE_LONG_LONG_INT)
+
+#if !defined(WORDS_BIGENDIAN)
 
 #include <netinet/in.h>
 
@@ -92,4 +95,22 @@ unsigned long long _ntohll(unsigned long long x)
     return u2.a;
 }
 
-#endif /* defined(HAVE_LONG_LONG_INT) && !defined(WORDS_BIGENDIAN) */
+#endif /* !defined(WORDS_BIGENDIAN) */
+
+#include <string.h>
+
+void *align_htonll(void *dst, unsigned long long src)
+{
+    unsigned long long tmp = htonll(src);
+    return memcpy(dst, (void *) &tmp, sizeof(unsigned long long));
+}
+
+unsigned long long align_ntohll(const void *src)
+{
+    unsigned long long dst;
+
+    memcpy((void *) &dst, src, sizeof(unsigned long long));
+    return ntohll(dst);
+}
+
+#endif /* defined(HAVE_LONG_LONG_INT) */

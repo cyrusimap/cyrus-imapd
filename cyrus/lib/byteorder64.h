@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: byteorder64.h,v 1.2 2006/11/30 17:11:22 murch Exp $
+ * $Id: byteorder64.h,v 1.3 2007/04/03 13:01:13 murch Exp $
  */
 
 #ifndef _BYTEORDER64_H
@@ -61,5 +61,10 @@ extern unsigned long long _htonll(unsigned long long);
 extern unsigned long long _ntohll(unsigned long long);
 
 #endif /* WORDS_BIGENDIAN */
+
+/* 64-bit host/network byte-order swap functions to/from non-aligned buffers */
+extern void *align_htonll(void *dst, unsigned long long src);
+extern unsigned long long align_ntohll(const void *src);
+
 #endif /* HAVE_LONG_LONG_INT */
 #endif /* _BYTEORDER64_H */
