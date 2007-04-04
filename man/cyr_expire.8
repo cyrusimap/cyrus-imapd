@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: cyr_expire.8,v 1.3 2006/11/30 17:11:23 murch Exp $
+.\" $Id: cyr_expire.8,v 1.4 2007/04/04 15:04:39 murch Exp $
 .SH NAME
 cyr_expire \- expire messages and duplicate delivery database entries
 .SH SYNOPSIS
@@ -96,6 +96,11 @@ days, which will expunge \fBall\fR previously deleted messages.
 .TP
 .B \-v
 Enable verbose output.
+.TP
+.B \-a
+Skip the annotation lookup, so all \fB/vendor/cmu/cyrus-imapd/expire\fR
+annotations are ignored entirely.  It behaves as if they were not set, so
+only \fIexpire-days\fR is considered for all mailboxes.
 .SH FILES
 .TP
 .B /etc/imapd.conf
