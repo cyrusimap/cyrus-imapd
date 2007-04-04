@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_expire.c,v 1.11 2007/03/30 18:40:20 murch Exp $
+ * $Id: cyr_expire.c,v 1.12 2007/04/04 15:04:39 murch Exp $
  */
 
 #include <config.h>
@@ -75,7 +75,7 @@ const int config_need_data = 0;
 void usage(void)
 {
     fprintf(stderr,
-	    "cyr_expire [-C <altconfig>] -E <days> [-X <expunge-days>] [-v]\n");
+	    "cyr_expire [-C <altconfig>] -E <days> [-X <expunge-days>] [-a] [-v]\n");
     exit(-1);
 }
 
@@ -88,6 +88,7 @@ struct expire_rock {
     unsigned long messages;
     unsigned long deleted;
     int verbose;
+    int skip_annotate;
 };
 
 /*
@@ -158,26 +159,32 @@ int expire(char *name, int matchlen, int maycreate __attribute__((unused)),
      * since mailboxes inherit /vendor/cmu/cyrus-imapd/expire,
      * we need to iterate all the way up to "" (server entry)
      */
-    while (1) {
-	r = annotatemore_lookup(buf, "/vendor/cmu/cyrus-imapd/expire", "",
-				&attrib);
-
-	if (r ||				/* error */
-	    attrib.value ||			/* found an entry */
-	    !buf[0] ||				/* done recursing */
-	    !strcmp(buf+domainlen, "user")) {	/* server entry doesn't apply
-						   to personal mailboxes */
-	    break;
-	}
-
-	p = strrchr(buf, '.');			/* find parent mailbox */
-
-	if (p && (p - buf > domainlen))		/* don't split subdomain */
-	    *p = '\0';
-	else if (!buf[domainlen])		/* server entry */
-	    buf[0] = '\0';
-	else					/* domain entry */
-	    buf[domainlen] = '\0';
+    if (erock->skip_annotate) {
+      /* we don't want to check for annotations, so we didn't find any */
+      attrib.value = 0;
+    }
+    else {
+        while (1) {
+	    r = annotatemore_lookup(buf, "/vendor/cmu/cyrus-imapd/expire", "",
+				    &attrib);
+    
+	    if (r ||				/* error */
+	        attrib.value ||			/* found an entry */
+	        !buf[0] ||				/* done recursing */
+	        !strcmp(buf+domainlen, "user")) {	/* server entry doesn't apply
+						       to personal mailboxes */
+	        break;
+	    }
+    
+	    p = strrchr(buf, '.');			/* find parent mailbox */
+    
+	    if (p && (p - buf > domainlen))		/* don't split subdomain */
+	        *p = '\0';
+	    else if (!buf[domainlen])		/* server entry */
+	        buf[0] = '\0';
+	    else					/* domain entry */
+	        buf[domainlen] = '\0';
+        }
     }
 
     if (!r && (attrib.value ||
@@ -282,7 +289,7 @@ int main(int argc, char *argv[])
     /* zero the expire_rock */
     memset(&erock, 0, sizeof(erock));
 
-    while ((opt = getopt(argc, argv, "C:E:X:v")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:E:X:va")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -300,6 +307,10 @@ int main(int argc, char *argv[])
 
 	case 'v':
 	    erock.verbose++;
+	    break;
+
+	case 'a':
+	    erock.skip_annotate = 1;
 	    break;
 	
 	default:
