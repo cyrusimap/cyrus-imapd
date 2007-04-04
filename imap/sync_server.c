@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.3 2007/03/30 18:51:01 murch Exp $
+ * $Id: sync_server.c,v 1.4 2007/04/04 15:22:42 murch Exp $
  */
 
 #include <config.h>
@@ -65,6 +65,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <ctype.h>
+#include <utime.h>
 
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
@@ -1762,6 +1763,7 @@ static void cmd_upload(struct mailbox *mailbox,
     struct sync_upload_list *upload_list;
     struct sync_upload_item *item;
     struct sync_message     *message;
+    struct utimbuf settime;
     static struct buf arg;
     int   c;
     enum {MSG_SIMPLE, MSG_PARSED, MSG_COPY} msg_type;
@@ -1878,6 +1880,11 @@ static void cmd_upload(struct mailbox *mailbox,
                 err = "Invalid Message";
                 goto parse_err;
             }
+
+            /* Set mtime of message file to be internal date */
+            settime.actime = settime.modtime = item->internaldate;
+            utime(message->msg_path, &settime);
+
             c = prot_getc(sync_in);
             break;
         case MSG_PARSED:
@@ -1912,6 +1919,10 @@ static void cmd_upload(struct mailbox *mailbox,
                 err = "Invalid Message";
                 goto parse_err;
             }
+
+            /* Set mtime of message file to be internal date */
+            settime.actime = settime.modtime = item->internaldate;
+            utime(message->msg_path, &settime);
             c = prot_getc(sync_in);
 
             break;
