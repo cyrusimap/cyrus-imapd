@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.8 2007/03/30 18:40:20 murch Exp $
+ * $Id: sync_client.c,v 1.9 2007/04/06 13:51:02 murch Exp $
  */
 
 #include <config.h>
@@ -554,7 +554,7 @@ static int folders_get_uniqueid(struct sync_folder_list *client_list,
         /* Quietly ignore objects that we don't have access to.
          * Includes directory stubs, which have not underlying cyrus.*
          * files in the filesystem */
-        if (r == IMAP_MAILBOX_NONEXISTENT) {
+        if (r == IMAP_PERMISSION_DENIED) {
             r = 0;
             continue;
         }
