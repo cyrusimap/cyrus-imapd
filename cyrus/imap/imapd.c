@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.517 2007/04/03 13:28:42 murch Exp $ */
+/* $Id: imapd.c,v 1.518 2007/04/06 20:54:31 murch Exp $ */
 
 #include <config.h>
 
@@ -8244,7 +8244,7 @@ static int do_xfer_single(char *toserver, char *topart,
 			 mailboxname);
 	    if(!r) {
 		/* Delete mailbox and quota root */
-		r = mailbox_delete(&mailbox, 1);
+		r = mailbox_delete(&mailbox, 0);
 		if(r) syslog(LOG_ERR,
 			     "Could not delete local mailbox during move of %s",
 			     mailboxname);
