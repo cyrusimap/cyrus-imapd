@@ -1,4 +1,4 @@
-$Id: drac_auth.patch,v 1.21 2007/04/12 03:20:35 murch Exp $
+$Id: drac_auth.patch,v 1.22 2007/04/12 14:22:06 murch Exp $
 
 Patch to add support for Dynamic Relay Authorization Control
 
@@ -70,7 +70,7 @@ RCS file: /afs/andrew/system/cvs/src/cyrus/configure.in,v
 retrieving revision 1.297
 diff -u -r1.297 configure.in
 --- configure.in	30 Nov 2006 17:11:16 -0000	1.297
-+++ configure.in	12 Apr 2007 03:18:02 -0000
++++ configure.in	12 Apr 2007 14:20:37 -0000
 @@ -1003,6 +1003,19 @@
  SNMP_SUBDIRS=""
  AC_SUBST(SNMP_SUBDIRS)
@@ -97,7 +97,7 @@ RCS file: /afs/andrew/system/cvs/src/cyrus/imap/Makefile.in,v
 retrieving revision 1.186
 diff -u -r1.186 Makefile.in
 --- imap/Makefile.in	9 Jan 2007 17:41:35 -0000	1.186
-+++ imap/Makefile.in	12 Apr 2007 03:18:02 -0000
++++ imap/Makefile.in	12 Apr 2007 14:20:37 -0000
 @@ -66,6 +66,7 @@
  SIEVE_LIBS = @SIEVE_LIBS@
  IMAP_COM_ERR_LIBS = @IMAP_COM_ERR_LIBS@
@@ -142,7 +142,7 @@ RCS file: /afs/andrew/system/cvs/src/cyrus/imap/imapd.c,v
 retrieving revision 1.518
 diff -u -r1.518 imapd.c
 --- imap/imapd.c	6 Apr 2007 20:54:31 -0000	1.518
-+++ imap/imapd.c	12 Apr 2007 03:18:03 -0000
++++ imap/imapd.c	12 Apr 2007 14:20:37 -0000
 @@ -183,6 +183,18 @@
      1, 1, &imapd_authstate, &imapd_userisadmin, &imapd_userisproxyadmin
  };
@@ -266,7 +266,7 @@ diff -u -r1.518 imapd.c
      prot_printf(imapd_out, "] %s\r\n", reply);
  
 +#ifdef DRAC_AUTH
-+    if (drac.interval && drac.clientaddr)
++    if (!imapd_userisproxyadmin && drac.interval && drac.clientaddr)
 +	drac.event = prot_addwaitevent(imapd_in, 0 /* now */, drac_ping, NULL);
 +#endif /* DRAC_AUTH */
 +
@@ -279,7 +279,7 @@ diff -u -r1.518 imapd.c
      prot_setsasl(imapd_out, imapd_saslconn);
 +
 +#ifdef DRAC_AUTH
-+    if (drac.interval && drac.clientaddr)
++    if (!imapd_userisproxyadmin && drac.interval && drac.clientaddr)
 +	drac.event = prot_addwaitevent(imapd_in, 0 /* now */, drac_ping, NULL);
 +#endif /* DRAC_AUTH */
  
@@ -291,7 +291,7 @@ RCS file: /afs/andrew/system/cvs/src/cyrus/imap/pop3d.c,v
 retrieving revision 1.174
 diff -u -r1.174 pop3d.c
 --- imap/pop3d.c	30 Mar 2007 18:51:01 -0000	1.174
-+++ imap/pop3d.c	12 Apr 2007 03:18:03 -0000
++++ imap/pop3d.c	12 Apr 2007 14:20:38 -0000
 @@ -105,6 +105,10 @@
  extern int opterr;
  
@@ -367,7 +367,7 @@ RCS file: /afs/andrew/system/cvs/src/cyrus/imap/version.c,v
 retrieving revision 1.21
 diff -u -r1.21 version.c
 --- imap/version.c	7 Feb 2007 18:58:07 -0000	1.21
-+++ imap/version.c	12 Apr 2007 03:18:03 -0000
++++ imap/version.c	12 Apr 2007 14:20:38 -0000
 @@ -151,6 +151,10 @@
      snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
  	     "; %s", SIEVE_VERSION);
@@ -385,7 +385,7 @@ RCS file: /afs/andrew/system/cvs/src/cyrus/lib/imapoptions,v
 retrieving revision 1.43
 diff -u -r1.43 imapoptions
 --- lib/imapoptions	30 Mar 2007 18:51:02 -0000	1.43
-+++ lib/imapoptions	12 Apr 2007 03:18:03 -0000
++++ lib/imapoptions	12 Apr 2007 14:20:38 -0000
 @@ -203,6 +203,14 @@
     grant the user the ability to delete a mailbox.  If a user has this
     right, they will automatically be given the new 'x' right. */
