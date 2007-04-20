@@ -2,7 +2,7 @@
   
  * test.c -- tester for libsieve
  * Larry Greenfield
- * $Id: test.c,v 1.26 2006/11/30 17:11:25 murch Exp $
+ * $Id: test.c,v 1.27 2007/04/20 12:56:47 murch Exp $
  *
  * usage: "test message script"
  */
@@ -871,16 +871,18 @@ int main(int argc, char *argv[])
     }
 
     if (message) {
+	FILE *f;
+
 	fd = open(message, O_RDONLY);
 	res = fstat(fd, &sbuf);
 	if (res != 0) {
 	    perror("fstat");
 	}
 
-
-	m = new_msg(fdopen(fd, "r"), sbuf.st_size, message);
-	if (res != SIEVE_OK) {
-	    printf("sieve_msg_parse() returns %d\n", res);
+	f = fdopen(fd, "r");
+	if (f) m = new_msg(f, sbuf.st_size, message);
+	if (!f || !m) {
+	    printf("can not open message '%s'\n", message);
 	    exit(1);
 	}
 
@@ -890,6 +892,7 @@ int main(int argc, char *argv[])
 	    exit(1);
 	}
 	
+	fclose(f);
 	close(fd);
     }
     /*used to be sieve_script_free*/
