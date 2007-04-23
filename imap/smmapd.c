@@ -72,7 +72,7 @@
  * may contain an explanatory message.
  *
  *
- * $Id: smmapd.c,v 1.17 2007/03/27 19:29:56 murch Exp $
+ * $Id: smmapd.c,v 1.18 2007/04/23 13:33:02 murch Exp $
  */
 
 #include <config.h>
@@ -115,13 +115,30 @@ const int config_need_data = 0;
 extern void setproctitle_init(int argc, char **argv, char **envp);
 int begin_handling(void);
 
+void smmapd_reset(void)
+{
+    if (map_in) {
+	/* Flush the incoming buffer */
+	prot_NONBLOCK(map_in);
+	prot_fill(map_in);
+	prot_free(map_in);
+    }
+
+    if (map_out) {
+	/* Flush the outgoing buffer */
+	prot_flush(map_out);
+	prot_free(map_out);
+    }
+
+    map_in = map_out = NULL;
+
+    cyrus_reset_stdio(); 
+}
+
 void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
-    if (map_in) prot_free(map_in);
-    if (map_out) prot_free(map_out);
-
-    cyrus_reset_stdio(); 
+    smmapd_reset();
 
     mboxlist_close();
     mboxlist_done();
@@ -191,16 +208,16 @@ int service_main(int argc __attribute__((unused)),
 		 char **argv __attribute__((unused)),
 		 char **envp __attribute__((unused)))
 {
-    int r; 
 
     map_in = prot_new(0, 0);
     map_out = prot_new(1, 1);
     prot_setflushonread(map_in, map_out);
     prot_settimeout(map_in, 360);
 
-    r = begin_handling();
+    if (begin_handling() != 0) shut_down(0);
 
-    shut_down(r);
+    /* prepare for new connection */
+    smmapd_reset();
     return 0;
 }
 
@@ -361,6 +378,10 @@ int verify_user(const char *key, long quotacheck,
     return r;
 }
 
+/*
+ * begin_handling: handle requests on a single connection.
+ * returns non-zero if requested to stop handling new connections (SIGHUP)
+ */
 #define MAXREQUEST 1024		/* XXX  is this reasonable? */
 
 int begin_handling(void)
@@ -376,7 +397,7 @@ int begin_handling(void)
 
 	if (signals_poll() == SIGHUP) {
 	    /* caught a SIGHUP, return */
-	    return 0;
+	    return 1;
 	}
 
 	while (isdigit(c)) {
