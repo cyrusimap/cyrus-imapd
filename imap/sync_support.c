@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.c,v 1.6 2007/03/27 19:53:09 murch Exp $
+ * $Id: sync_support.c,v 1.7 2007/04/23 14:15:32 murch Exp $
  */
 
 #include <config.h>
@@ -914,9 +914,9 @@ struct sync_message *sync_message_add(struct sync_message_list *l,
     result = xzmalloc(sizeof(struct sync_message));
     message_uuid_set_null(&result->uuid);
     
-    result->msg_path = xzmalloc(5 * (MAX_MAILBOX_PATH+1) * sizeof(char));
+    result->msg_path = xzmalloc((MAX_MAILBOX_PATH+1) * sizeof(char));
     result->msg_path_end = result->msg_path +
-	5 * (MAX_MAILBOX_PATH+1) * sizeof(char);
+	(MAX_MAILBOX_PATH+1) * sizeof(char);
 
     snprintf(result->stagename, sizeof(result->stagename), "%lu.", l->count);
 
