@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.9 2007/04/06 13:51:02 murch Exp $
+ * $Id: sync_client.c,v 1.10 2007/05/07 16:23:21 murch Exp $
  */
 
 #include <config.h>
@@ -3476,7 +3476,7 @@ int main(int argc, char **argv)
 		if (do_user(argv[i])) {
 		    if (verbose)
 			fprintf(stderr, "Error from do_user(%s): bailing out!\n",
-				argv[1]);
+				argv[i]);
 		    syslog(LOG_ERR, "Error in do_user(%s): bailing out!", argv[i]);
 		    exit_rc = 1;
 		}
