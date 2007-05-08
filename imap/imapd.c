@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.518 2007/04/06 20:54:31 murch Exp $ */
+/* $Id: imapd.c,v 1.519 2007/05/08 18:23:04 murch Exp $ */
 
 #include <config.h>
 
@@ -4973,10 +4973,12 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
 
-	if (mboxname_isusermailbox(mailboxname, 1))
-	    sync_log_user(name+5);
-	else
-	    sync_log_mailbox(mailboxname);
+	if ( !localonly ) {
+	    if (mboxname_isusermailbox(mailboxname, 1))
+		sync_log_user(name+5);
+	    else
+		sync_log_mailbox(mailboxname);
+	}
     }
 }	
 
@@ -7836,6 +7838,10 @@ void cmd_undump(char *tag, char *name)
     } else {
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
+	if (mboxname_isusermailbox(mailboxname, 1))
+	    sync_log_user(name+5);
+	else
+	    sync_log_mailbox(mailboxname);
     }
 }
 
