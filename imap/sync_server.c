@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.4 2007/04/04 15:22:42 murch Exp $
+ * $Id: sync_server.c,v 1.5 2007/05/18 13:24:39 murch Exp $
  */
 
 #include <config.h>
@@ -1889,8 +1889,9 @@ static void cmd_upload(struct mailbox *mailbox,
             break;
         case MSG_PARSED:
             if (c != ' ') {
-                err = "Invalid flags";
-                goto parse_err;
+		/* Missing message - UPLOAD short-circuited by client */
+		sync_upload_list_remove(upload_list, item);
+		goto done;
             }
 
             message = sync_message_add(message_list, &item->uuid);
@@ -1943,6 +1944,7 @@ static void cmd_upload(struct mailbox *mailbox,
 	/* if we see a SP, we're trying to upload more than one message */
     } while (c == ' ');
 
+  done:
     if (c == EOF) {
         err = "Unexpected end of sync_in at end of item";
         goto parse_err;

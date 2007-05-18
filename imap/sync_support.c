@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.c,v 1.7 2007/04/23 14:15:32 murch Exp $
+ * $Id: sync_support.c,v 1.8 2007/05/18 13:24:39 murch Exp $
  */
 
 #include <config.h>
@@ -509,6 +509,22 @@ struct sync_msgid *sync_msgid_add(struct sync_msgid_list *l,
     l->hash[offset]   = result;
 
     return(result);
+}
+
+void sync_msgid_remove(struct sync_msgid_list *l,
+		       struct message_uuid *uuid)
+{
+    int offset = message_uuid_hash(uuid, l->hash_size);
+    struct sync_msgid *msgid;
+
+    if (message_uuid_isnull(uuid)) return;
+
+    for (msgid = l->hash[offset] ; msgid ; msgid = msgid->hash_next) {
+	if (message_uuid_compare(&msgid->uuid, uuid)) {
+	    message_uuid_set_null(&msgid->uuid);
+	    return;
+	}
+    }
 }
 
 void sync_msgid_list_free(struct sync_msgid_list **lp)
@@ -1363,6 +1379,27 @@ struct sync_upload_item *sync_upload_list_add(struct sync_upload_list *l)
     l->count++;
 
     return(result);
+}
+
+void sync_upload_list_remove(struct sync_upload_list *l,
+			     struct sync_upload_item *i)
+{
+    struct sync_upload_item *prev, *current, *next;
+
+    prev = NULL;
+    current = l->head;
+    while (current) {
+	next = current->next;
+	if (current == i) {
+	    l->count--;
+	    free(current);
+	    if (prev) prev->next = next;
+	    else l->head = next;
+	    return;
+	}
+	prev = current;
+	current = next;
+    }
 }
 
 void sync_upload_list_free(struct sync_upload_list **lp)

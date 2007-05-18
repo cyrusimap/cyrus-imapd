@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.10 2007/05/07 16:23:21 murch Exp $
+ * $Id: sync_client.c,v 1.11 2007/05/18 13:24:39 murch Exp $
  */
 
 #include <config.h>
@@ -1177,6 +1177,7 @@ static int upload_message_work(struct mailbox *mailbox,
         if (r) {
             syslog(LOG_ERR, "IOERROR: opening message file %lu of %s: %m",
                    record->uid, mailbox->name);
+	    sync_msgid_remove(msgid_onserver, &record->uuid);
             return(IMAP_IOERROR);
         }
 
@@ -1246,7 +1247,7 @@ repeatupload:
 
         /* Message with this UUID exists on client but not server */
         if ((r=upload_message_work(mailbox, msgno, &record)))
-            return(r);
+	    break;
 
         if (msg && (msg->uid == record.uid))  /* Overwritten on server */
             msg = msg->next;
@@ -1321,7 +1322,7 @@ static int upload_messages_from(struct mailbox *mailbox,
                      mailbox->last_uid, mailbox->last_appenddate); 
 
         if ((r=upload_message_work(mailbox, msgno, &record)))
-            return(r);
+	    break;
     }
 
     if (count == 0)
