@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.h,v 1.2 2006/11/30 17:11:20 murch Exp $
+ * $Id: sync_support.h,v 1.3 2007/05/18 13:24:40 murch Exp $
  */
 
 #ifndef INCLUDED_SYNC_SUPPORT_H
@@ -143,6 +143,9 @@ struct sync_msgid_list *sync_msgid_list_create(int hash_size);
 
 struct sync_msgid *sync_msgid_add(struct sync_msgid_list *list,
 				  struct message_uuid *uuid);
+
+void sync_msgid_remove(struct sync_msgid_list *l,
+		       struct message_uuid *uuid);
 
 struct sync_msgid *sync_msgid_lookup(struct sync_msgid_list *list,
 				     struct message_uuid *uuid);
@@ -342,6 +345,9 @@ struct sync_upload_list *sync_upload_list_create(unsigned long new_last_uid,
 						 char **flagname);
 
 struct sync_upload_item *sync_upload_list_add(struct sync_upload_list *l);
+
+void sync_upload_list_remove(struct sync_upload_list *l,
+			     struct sync_upload_item *i);
 
 void sync_upload_list_free(struct sync_upload_list **lp);
 
