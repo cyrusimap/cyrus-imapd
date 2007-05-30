@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.5 2007/05/18 13:24:39 murch Exp $
+ * $Id: sync_server.c,v 1.6 2007/05/30 15:04:12 murch Exp $
  */
 
 #include <config.h>
@@ -124,7 +124,7 @@ void printastring(const char *s __attribute__((unused)))
 static SSL *tls_conn;
 #endif /* HAVE_SSL */
 
-sasl_conn_t *sync_saslconn; /* the sasl connection context */
+sasl_conn_t *sync_saslconn = NULL; /* the sasl connection context */
 
 char *sync_userid = 0;
 struct namespace sync_namespace;
@@ -340,14 +340,17 @@ static void dobanner(void)
     const char *mechlist;
     unsigned int mechcount;
 
-    if (sasl_listmech(sync_saslconn, NULL,
-		      "* SASL ", " ", "\r\n",
-		      &mechlist, NULL, &mechcount) == SASL_OK && mechcount > 0) {
-	prot_printf(sync_out, "%s", mechlist);
-    }
+    if (!sync_userid) {
+	if (sasl_listmech(sync_saslconn, NULL,
+			  "* SASL ", " ", "\r\n",
+			  &mechlist, NULL, &mechcount) == SASL_OK
+	    && mechcount > 0) {
+	    prot_printf(sync_out, "%s", mechlist);
+	}
 
-    if (tls_enabled() && !sync_starttls_done) {
-	prot_printf(sync_out, "* STARTTLS\r\n");
+	if (tls_enabled() && !sync_starttls_done) {
+	    prot_printf(sync_out, "* STARTTLS\r\n");
+	}
     }
 
     prot_printf(sync_out,
@@ -404,28 +407,33 @@ int service_main(int argc __attribute__((unused)),
 	if (getsockname(0, (struct sockaddr *)&sync_localaddr, &salen) == 0) {
 	    sync_haveaddr = 1;
 	}
-    }
 
-    /* other params should be filled in */
-    if (sasl_server_new("csync", config_servername, NULL, NULL, NULL,
-			NULL, 0, &sync_saslconn) != SASL_OK)
-	fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL); 
+	/* other params should be filled in */
+	if (sasl_server_new("csync", config_servername, NULL, NULL, NULL,
+			    NULL, 0, &sync_saslconn) != SASL_OK)
+	    fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL); 
 
-    /* will always return something valid */
-    secprops = mysasl_secprops(SASL_SEC_NOANONYMOUS);
-    sasl_setprop(sync_saslconn, SASL_SEC_PROPS, secprops);
-    sasl_setprop(sync_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf);
+	/* will always return something valid */
+	secprops = mysasl_secprops(SASL_SEC_NOANONYMOUS);
+	sasl_setprop(sync_saslconn, SASL_SEC_PROPS, secprops);
+	sasl_setprop(sync_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf);
     
-    if(iptostring((struct sockaddr *)&sync_localaddr, salen,
-		  localip, 60) == 0) {
-	sasl_setprop(sync_saslconn, SASL_IPLOCALPORT, localip);
-	saslprops.iplocalport = xstrdup(localip);
-    }
+	if(iptostring((struct sockaddr *)&sync_localaddr, salen,
+		      localip, 60) == 0) {
+	    sasl_setprop(sync_saslconn, SASL_IPLOCALPORT, localip);
+	    saslprops.iplocalport = xstrdup(localip);
+	}
     
-    if(iptostring((struct sockaddr *)&sync_remoteaddr, salen,
-		  remoteip, 60) == 0) {
-	sasl_setprop(sync_saslconn, SASL_IPREMOTEPORT, remoteip);  
-	saslprops.ipremoteport = xstrdup(remoteip);
+	if(iptostring((struct sockaddr *)&sync_remoteaddr, salen,
+		      remoteip, 60) == 0) {
+	    sasl_setprop(sync_saslconn, SASL_IPREMOTEPORT, remoteip);  
+	    saslprops.ipremoteport = xstrdup(remoteip);
+	}
+    } else {
+	/* we're not connected to an internet socket! */
+	strcpy(sync_clienthost, "[unix socket]");
+	sync_userid = xstrdup("cyrus");
+	sync_userisadmin = 1;
     }
 
     proc_register("sync_server", sync_clienthost, NULL, NULL);

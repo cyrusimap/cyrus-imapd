@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.48 2007/03/30 18:51:00 murch Exp $ */
+/* $Id: backend.c,v 1.49 2007/05/30 15:04:12 murch Exp $ */
 
 #include <config.h>
 
@@ -389,8 +389,10 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
 			      prot->banner.is_capa);
 
     /* now need to authenticate to backend server,
-       unless we're doing LMTP on a UNIX socket (deliver) */
-    if ((server[0] != '/') || strcmp(prot->sasl_service, "lmtp")) {
+       unless we're doing LMTP/CSYNC on a UNIX socket (deliver/sync_client) */
+    if ((server[0] != '/') ||
+	(strcmp(prot->sasl_service, "lmtp") &&
+	 strcmp(prot->sasl_service, "csync"))) {
 	if ((r = backend_authenticate(ret, prot, &mechlist, userid,
 				      cb, auth_status))) {
 	    syslog(LOG_ERR, "couldn't authenticate to backend server: %s",
