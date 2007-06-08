@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.116 2007/05/30 15:04:12 murch Exp $ -->
+<!-- $Id: changes.html,v 1.117 2007/06/08 14:06:43 murch Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -30,6 +30,8 @@ reconstruction a little friendlier). <i>-- courtesy of Fastmail.fm</i></li>
 message was deleted out from under it.</li>
 <li>Allow <tt>sync_server</tt> to accept unauthenticated connections
 from <tt>sync_client</tt> on a UNIX socket.</li>
+<li>Drastically reduced the amount of time it takes for a
+<tt>mupdate</tt> slave to synchronize with a master.</li>
 </ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.3.7</h1>
@@ -2216,7 +2218,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2007/05/30 15:04:12 $ <br />
+last modified: $Date: 2007/06/08 14:06:43 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
