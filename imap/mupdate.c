@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.96 2007/03/30 18:51:01 murch Exp $
+ * $Id: mupdate.c,v 1.97 2007/06/08 14:06:43 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -2235,6 +2235,7 @@ int mupdate_synchronize(mupdate_handle *handle)
     struct mpool *pool;
     struct sync_rock rock;
     char pattern[] = { '*', '\0' };
+    struct txn *tid = NULL;
     int ret = 0;    
 
     if(!handle || !handle->saslcompleted) return 1;
@@ -2297,7 +2298,7 @@ int mupdate_synchronize(mupdate_handle *handle)
 		mboxlist_insertremote(r->mailbox, 
 				     (r->t == SET_RESERVE ?
 				        MBTYPE_RESERVE : 0),
-				      r->server, r->acl, NULL);
+				      r->server, r->acl, &tid);
 	    }
 	    /* Okay, dump these two */
 	    local_boxes.head = l->next;
@@ -2306,7 +2307,7 @@ int mupdate_synchronize(mupdate_handle *handle)
 	    /* Local without corresponding remote, delete it */
 	    if (config_mupdate_config != IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) {
 		/* But not for a unified configuration */
-		mboxlist_deletemailbox(l->mailbox, 1, "", NULL, 0, 0, 0);
+		mboxlist_deleteremote(l->mailbox, &tid);
 	    }
 	    local_boxes.head = l->next;
 	} else /* (ret > 0) */ {
@@ -2314,7 +2315,7 @@ int mupdate_synchronize(mupdate_handle *handle)
 	    mboxlist_insertremote(r->mailbox, 
 				  (r->t == SET_RESERVE ?
 				   MBTYPE_RESERVE : 0),
-				  r->server, r->acl, NULL);
+				  r->server, r->acl, &tid);
 	    remote_boxes.head = r->next;
 	}
     }
@@ -2324,7 +2325,7 @@ int mupdate_synchronize(mupdate_handle *handle)
 	while(l) {
 	    if (config_mupdate_config != IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) {
 		/* But not for a unified configuration */
-		mboxlist_deletemailbox(l->mailbox, 1, "", NULL, 0, 0, 0);
+		mboxlist_deleteremote(l->mailbox, &tid);
 	    }
 	    local_boxes.head = l->next;
 	    l = local_boxes.head;
@@ -2335,11 +2336,13 @@ int mupdate_synchronize(mupdate_handle *handle)
 	    mboxlist_insertremote(r->mailbox, 
 				  (r->t == SET_RESERVE ?
 				   MBTYPE_RESERVE : 0),
-				  r->server, r->acl, NULL);
+				  r->server, r->acl, &tid);
 	    remote_boxes.head = r->next;
 	    r = remote_boxes.head;
 	}
     }
+
+    if (tid) mboxlist_commit(tid);
 
     /* All up to date! */
     syslog(LOG_NOTICE, "mailbox list synchronization complete");
