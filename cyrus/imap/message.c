@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: message.c,v 1.104 2007/03/27 19:29:56 murch Exp $
+ * $Id: message.c,v 1.105 2007/06/14 18:15:02 murch Exp $
  */
 
 #include <config.h>
@@ -103,6 +103,7 @@ struct body {
     char *disposition;
     struct param *disposition_params;
     struct param *language;
+    char *location;
 
     /* Location/size information */
     long header_offset;
@@ -782,6 +783,9 @@ struct boundary *boundaries;
 		    case 'L':
 			if (!strncasecmp(next+10, "anguage:", 8)) {
 			    message_parse_language(next+18, &body->language);
+			}
+			else if (!strncasecmp(next+10, "ocation:", 8)) {
+			    message_parse_string(next+18, &body->location);
 			}
 			break;
 
@@ -2166,6 +2170,8 @@ int newformat;
 		PUTIBUF(ibuf, ')');
 	    }
 	    else message_write_nstring(ibuf, (char *)0);
+	    PUTIBUF(ibuf, ' ');
+	    message_write_nstring(ibuf, body->location);
 	}
 
 	PUTIBUF(ibuf, ')');
@@ -2256,6 +2262,8 @@ int newformat;
 	    PUTIBUF(ibuf, ')');
 	}
 	else message_write_nstring(ibuf, (char *)0);
+	PUTIBUF(ibuf, ' ');
+	message_write_nstring(ibuf, body->location);
     }
 
     PUTIBUF(ibuf, ')');
@@ -2729,6 +2737,7 @@ struct body *body;
 	free(param->value);
 	free(param);
     }
+    if (body->location) free(body->location);
     if (body->date) free(body->date);
     if (body->subject) free(body->subject);
     if (body->from) parseaddr_free(body->from);
