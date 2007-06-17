@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: quota_db.c,v 1.4 2007/02/05 18:41:48 jeaton Exp $
+ * $Id: quota_db.c,v 1.5 2007/06/17 14:47:48 murch Exp $
  *
  */
 
@@ -89,9 +89,14 @@ int quota_read(struct quota *quota, struct txn **tid, int wrlock)
     else
 	r = QDB->fetch(qdb, quota->root, qrlen, &data, &datalen, tid);
 
+    if (!data) r = CYRUSDB_IOERROR;
+
     switch (r) {
     case CYRUSDB_OK:
-	sscanf(data, UQUOTA_T_FMT " %d", &quota->used, &quota->limit);
+	if (sscanf(data, UQUOTA_T_FMT " %d",
+		   &quota->used, &quota->limit) != 2) {
+	    r = CYRUSDB_IOERROR;
+	}
 	break;
 
     case CYRUSDB_AGAIN:
@@ -101,12 +106,12 @@ int quota_read(struct quota *quota, struct txn **tid, int wrlock)
     case CYRUSDB_NOTFOUND:
 	return IMAP_QUOTAROOT_NONEXISTENT;
 	break;
+    }
 
-    default:
+    if (r) {
 	syslog(LOG_ERR, "DBERROR: error fetching %s: %s",
 	       quota->root, cyrusdb_strerror(r));
 	return IMAP_IOERROR;
-	break;
     }
 
     return 0;
