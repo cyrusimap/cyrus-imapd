@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.11 2007/05/18 13:24:39 murch Exp $
+ * $Id: sync_client.c,v 1.12 2007/07/10 00:53:07 murch Exp $
  */
 
 #include <config.h>
@@ -436,7 +436,8 @@ static int reserve_messages(struct sync_folder_list *client_list,
         if (r) {
             if (mailbox_open) mailbox_close(&m);
 
-            syslog(LOG_ERR, "IOERROR: %s", error_message(r));
+            syslog(LOG_ERR, "IOERROR: Failed to open %s: %s",
+                   folder->name, error_message(r));
             goto bail;
         }
 
@@ -565,7 +566,8 @@ static int folders_get_uniqueid(struct sync_folder_list *client_list,
 
        if (r) {
             if (mailbox_open) mailbox_close(&m);
-            syslog(LOG_ERR, "IOERROR: %s", error_message(r));
+            syslog(LOG_ERR, "IOERROR: Failed to open %s: %s",
+                   folder->name, error_message(r));
             return(r);
         }
 
