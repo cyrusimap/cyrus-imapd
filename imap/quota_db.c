@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: quota_db.c,v 1.5 2007/06/17 14:47:48 murch Exp $
+ * $Id: quota_db.c,v 1.6 2007/07/10 19:20:30 murch Exp $
  *
  */
 
@@ -89,11 +89,10 @@ int quota_read(struct quota *quota, struct txn **tid, int wrlock)
     else
 	r = QDB->fetch(qdb, quota->root, qrlen, &data, &datalen, tid);
 
-    if (!data) r = CYRUSDB_IOERROR;
-
     switch (r) {
     case CYRUSDB_OK:
-	if (sscanf(data, UQUOTA_T_FMT " %d",
+	if (!data ||
+	    sscanf(data, UQUOTA_T_FMT " %d",
 		   &quota->used, &quota->limit) != 2) {
 	    r = CYRUSDB_IOERROR;
 	}
