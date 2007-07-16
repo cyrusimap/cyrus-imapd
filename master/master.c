@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.106 2007/04/03 15:10:02 murch Exp $ */
+/* $Id: master.c,v 1.107 2007/07/16 17:15:53 murch Exp $ */
 
 #include <config.h>
 
@@ -1890,11 +1890,8 @@ int main(int argc, char **argv)
     init_snmp("cyrusMaster"); 
 #endif
 
+    /* have_uuid is global used in add_service. Rather awkward dependancy */
     have_uuid = (config_getint(IMAPOPT_SYNC_MACHINEID) >= 0);
-    if (have_uuid && !message_uuid_master_init()) {
-        syslog(LOG_ERR, "Couldn't initialise UUID subsystem");
-        exit(EX_OSERR);
-    }
 
     masterconf_getsection("START", &add_start, NULL);
     masterconf_getsection("SERVICES", &add_service, NULL);
@@ -1919,6 +1916,11 @@ int main(int argc, char **argv)
 	}
     }
 
+    /* Should only call message_uuid_master_init after we are cyrus user */
+    if (have_uuid && !message_uuid_master_init()) {
+        syslog(LOG_ERR, "Couldn't initialise UUID subsystem");
+        exit(EX_OSERR);
+    }
     /* init ctable janitor */
     init_janitor();
     
