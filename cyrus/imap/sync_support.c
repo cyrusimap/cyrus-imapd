@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.c,v 1.8 2007/05/18 13:24:39 murch Exp $
+ * $Id: sync_support.c,v 1.9 2007/07/16 18:01:25 murch Exp $
  */
 
 #include <config.h>
@@ -1341,6 +1341,8 @@ int sync_getsimple(struct protstream *input, struct protstream *output,
 
     message->hdr_size     = record.header_size;
     message->cache_offset = record.cache_offset;
+    message->content_lines = record.content_lines;
+    message->cache_version = record.cache_version;
     message->cache_size 
         = lseek(list->cache_fd, 0, SEEK_CUR) - record.cache_offset;
 
