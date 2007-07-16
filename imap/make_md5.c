@@ -64,6 +64,7 @@ static void shut_down(int code)
     quotadb_done();
     mboxlist_close();
     mboxlist_done();
+    cyrus_done();
     exit(code);
 }
 

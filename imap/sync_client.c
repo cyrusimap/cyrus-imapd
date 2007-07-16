@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.12 2007/07/10 00:53:07 murch Exp $
+ * $Id: sync_client.c,v 1.13 2007/07/16 17:19:00 murch Exp $
  */
 
 #include <config.h>
@@ -135,6 +135,7 @@ static void shut_down(int code)
     quotadb_done();
     mboxlist_close();
     mboxlist_done();
+    cyrus_done();
     exit(code);
 }
 
