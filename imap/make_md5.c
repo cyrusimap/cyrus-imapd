@@ -28,7 +28,6 @@
 #include "map.h"
 #include "md5global.h"
 #include "md5.h"
-/*#include "cdb.h"*/
 
 /* global state */
 const int config_need_data = 0;
@@ -597,30 +596,25 @@ md5_single(char *name, int matchlen, int maycreate, void *rock)
  * but given tranche of users. That tranche gets regenerated from scratch */
 
 static int
-use_existing_data(char *user, int uid_set, int uid_modulo, int uid_fd)
+use_existing_data(char *s, int uid_set, int uid_modulo)
 {
-    char buf[64];
-    unsigned long len;
-    int  uid;
+    unsigned long total;
 
-    if ((uid_modulo == 0) || (uid_fd < 0))
-        return(1);
-#if 0 /* XXX  make sure we're not the replica */
-    if (cdb_seek(uid_fd, (unsigned char *)user, strlen(user), &len) != 1)
-        return(1);
-#endif
-    if ((len >= sizeof(buf)) || (read(uid_fd, buf, len) != len))
+    if (uid_modulo == 0)
         return(1);
 
-    if ((uid = atoi(buf)) == 0)
-        return(1);
-
-    return ((uid_set == (uid % uid_modulo)) ? 0 : 1);
+    total = 0;
+    while (*s) {
+        total += (unsigned long)*s;
+        s++;
+    }
+    
+    return ((uid_set == (total % uid_modulo)) ? 0 : 1);
 }
 
 static int
 do_user(const char *md5_dir, char *user, struct namespace *namespacep,
-        int uid_set, int uid_modulo, int uid_fd)
+        int uid_set, int uid_modulo)
 {
     char  buf[MAX_MAILBOX_PATH+1];
     char  buf2[MAX_MAILBOX_PATH+1];
@@ -631,7 +625,7 @@ do_user(const char *md5_dir, char *user, struct namespace *namespacep,
     imapd_userid    = user;
     imapd_authstate = auth_newstate(imapd_userid);
 
-    if (use_existing_data(user, uid_set, uid_modulo, uid_fd)) {
+    if (use_existing_data(user, uid_set, uid_modulo)) {
         snprintf(buf, sizeof(buf)-1, "%s/%c/%s", md5_dir, user[0], user);
         r = md5_mailbox_list_read(md5_mailbox_list, buf);
 
@@ -736,7 +730,6 @@ main(int argc, char **argv)
     char *input_file = NULL;
     const char *md5_dir  = NULL;
     const char *uid_file = NULL;
-    int   uid_fd     = (-1);
     int   uid_set    = 0;
     int   uid_modulo = 0;
     int   r = 0;
@@ -821,12 +814,6 @@ main(int argc, char **argv)
     if (!md5_dir)
         md5_dir = xstrdup("/var/imap/md5");
 
-    if (((uid_file = config_getstring(IMAPOPT_MD5_USER_MAP)) != NULL) &&
-        ((uid_fd=open(uid_file, O_RDONLY)) < 0)) {
-        syslog(LOG_NOTICE, "Failed to open uid file %s: %m\n", uid_file);
-        shut_down(1);
-    }
-
     if (max_children == 0) {
         /* Simple case */
 
@@ -844,7 +831,7 @@ main(int argc, char **argv)
                     continue;
 
                 if (do_user(md5_dir, buf, &md5_namespace,
-                            uid_set, uid_modulo, uid_fd)) {
+                            uid_set, uid_modulo)) {
                     syslog(LOG_NOTICE, "Error make_md5 %s: %m", buf);
                     shut_down(1);
                 }
@@ -852,7 +839,7 @@ main(int argc, char **argv)
             fclose(file);
         } else for (i = optind; i < argc; i++) {
             if (do_user(md5_dir, argv[i], &md5_namespace,
-                        uid_set, uid_modulo, uid_fd)) {
+                        uid_set, uid_modulo)) {
                 syslog(LOG_NOTICE, "Error make_md5 %s: %m", argv[i]);
                 shut_down(1);
             }
@@ -892,7 +879,7 @@ main(int argc, char **argv)
             if (pid == 0) {
                 /* Child process */
                 do_user(md5_dir, buf, &md5_namespace,
-                        uid_set, uid_modulo, uid_fd);
+                        uid_set, uid_modulo);
                 _exit(0);
             }
             md5_children++;   /* Parent process */
@@ -909,7 +896,7 @@ main(int argc, char **argv)
         if (pid == 0) {
             /* Child process */
             do_user(md5_dir, argv[i], &md5_namespace,
-                    uid_set, uid_modulo, uid_fd);
+                    uid_set, uid_modulo);
             _exit(0);
         }
         md5_children++;   /* Parent process */
