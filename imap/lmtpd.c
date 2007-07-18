@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.150 2007/03/27 19:53:08 murch Exp $
+ * $Id: lmtpd.c,v 1.151 2007/07/18 18:11:55 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -485,8 +485,9 @@ int deliver_mailbox(FILE *f,
 
     r = append_setup(&as, mailboxname, MAILBOX_FORMAT_NORMAL,
 		     authuser, authstate, acloverride ? 0 : ACL_POST, 
-		     quotaoverride ? -1 :
-		     config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA) ? size : 0);
+		     quotaoverride ? (long) -1 :
+		     config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA) ?
+		     (long) size : 0);
 
     if (!r && !content->body) {
 	/* parse the message body if we haven't already,
