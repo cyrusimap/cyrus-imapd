@@ -1,5 +1,5 @@
 /* libconfig.h -- Header for imapd.conf processing
- * $Id: libconfig.h,v 1.5 2006/11/30 17:11:22 murch Exp $
+ * $Id: libconfig.h,v 1.6 2007/07/18 18:56:11 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -58,6 +58,8 @@ extern unsigned long config_getbitfield(enum imapopt opt);
 /* these work on additional strings that are not defined in the
  * imapoptions table */
 extern const char *config_getoverflowstring(const char *key, const char *def);
+extern void config_foreachoverflowstring(
+    void (*func)(const char *, const char *, void *), void *rock);
 extern const char *config_partitiondir(const char *partition);
 extern const char *config_metapartitiondir(const char *partition);
 

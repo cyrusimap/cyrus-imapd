@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: ctl_mboxlist.8,v 1.10 2006/11/30 17:11:23 murch Exp $
+.\" $Id: ctl_mboxlist.8,v 1.11 2007/07/18 18:56:11 murch Exp $
 .SH NAME
 ctl_mboxlist \- perform operations on the mailbox list database
 .SH SYNOPSIS
@@ -55,7 +55,8 @@ ctl_mboxlist \- perform operations on the mailbox list database
 [
 \fB\-p \fIpartition\fR
 ]
-[
+.br
+             [
 \fB\-f \fIfilename\fR
 ]
 .br
@@ -83,6 +84,16 @@ ctl_mboxlist \- perform operations on the mailbox list database
 ]
 .br
              [
+\fB\-f \fIfilename\fR
+]
+.br
+.B ctl_mboxlist
+[
+.B \-C
+.I config-file
+]
+.B \-v
+[
 \fB\-f \fIfilename\fR
 ]
 .SH DESCRIPTION
@@ -133,6 +144,13 @@ USE THIS OPTION WITH CARE, as it allows namespace collisions into the murder.
 .B \-w
 When used with -m, print out what would be done but do not perform the
 operations.
+.TP
+.B \-v
+Verify the consistency of the mailbox list database and the spool
+partition(s). Mailboxes present in the database and not located on a
+spool partition, and those located on a spool partition (directory
+containing a valid cyrus.header file) and not present in the database
+will be reported.  Note that this function is very I/O intensive.
 .TP
 \fB\-f \fIfilename\fR
 Use the database specified by \fIfilename\fR instead of the default

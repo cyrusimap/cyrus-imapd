@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: libconfig.c,v 1.12 2007/01/05 19:54:20 jeaton Exp $ */
+/* $Id: libconfig.c,v 1.13 2007/07/18 18:56:11 murch Exp $ */
 
 #include <config.h>
 
@@ -160,6 +160,12 @@ const char *config_getoverflowstring(const char *key, const char *def)
 
     /* Return what we got or the default */
     return ret ? ret : def;
+}
+
+void config_foreachoverflowstring(void (*func)(const char *, const char *, void *),
+				  void *rock)
+{
+    hash_enumerate(&confighash, (void (*)(char *, void *, void *)) func, rock);
 }
 
 const char *config_partitiondir(const char *partition)
