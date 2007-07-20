@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.166 2007/04/03 13:01:12 murch Exp $
+ * $Id: mailbox.c,v 1.167 2007/07/20 14:21:57 murch Exp $
  *
  */
 
@@ -2827,6 +2827,18 @@ int mailbox_delete(struct mailbox *mailbox, int delete_quota_root)
     return 0;
 }
 
+struct data_file {
+    unsigned long metaflag;
+    int optional;
+};
+
+static struct data_file data_files[] = {
+    { IMAP_ENUM_METAPARTITION_FILES_INDEX, 0 },
+    { IMAP_ENUM_METAPARTITION_FILES_CACHE, 0 },
+    { IMAP_ENUM_METAPARTITION_FILES_EXPUNGE, 1 },
+    { 0, 0 }
+};
+
 /* if 'isinbox' is set, we perform the funky RENAME INBOX INBOX.old
    semantics, regardless of whether or not the name of the mailbox is
    'user.foo'.*/
@@ -2843,6 +2855,9 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     struct fnamepath oldfpath, newfpath;
     struct fnamebuf *oldfname, *newfname;
     struct txn *tid = NULL;
+    struct data_file *df;
+    DIR *mbdir;
+    struct dirent *next;
 
     assert(oldmailbox->header_lock_count > 0
 	   && oldmailbox->index_lock_count > 0);
@@ -2895,54 +2910,36 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     mailbox_meta_get_fname(&oldfpath, oldmailbox, 0);
     mailbox_meta_get_fname(&newfpath, newmailbox, 0);
 
-    /* Copy over index/cache files */
-    oldfname = mailbox_meta_get_fname(&oldfpath, oldmailbox,
-				      IMAP_ENUM_METAPARTITION_FILES_INDEX);
-    newfname = mailbox_meta_get_fname(&newfpath, newmailbox,
-				      IMAP_ENUM_METAPARTITION_FILES_INDEX);
+    /* Copy over index/cache/expunge files */
+    for (df = data_files; !r && df->metaflag; df++) {
+	struct stat sbuf;
 
-    /* Check to see if we're going to be over-long */
-    if (!oldfname) {
-	syslog(LOG_ERR, "IOERROR: Path too long (%s + %s)",
-	       oldfname->buf, FNAME_INDEX);
-	fatal("Path Too Long", EC_OSFILE);
-    }
-    if (!newfname) {
-	syslog(LOG_ERR, "IOERROR: Path too long (%s + %s)",
-	       newfname->buf, FNAME_INDEX);
-	fatal("Path Too Long", EC_OSFILE);
-    }
+	oldfname = mailbox_meta_get_fname(&oldfpath, oldmailbox, df->metaflag);
+	newfname = mailbox_meta_get_fname(&newfpath, newmailbox, df->metaflag);
 
-    unlink(newfname->buf);		/* Make link() possible */
+	/* Check to see if we're going to be over-long */
+	if (!oldfname) {
+	    syslog(LOG_ERR, "IOERROR: Path too long (%s + %s)",
+		   oldfname->buf, FNAME_INDEX);
+	    fatal("Path Too Long", EC_OSFILE);
+	}
+	if (!newfname) {
+	    syslog(LOG_ERR, "IOERROR: Path too long (%s + %s)",
+		   newfname->buf, FNAME_INDEX);
+	    fatal("Path Too Long", EC_OSFILE);
+	}
 
-    r = mailbox_copyfile(oldfname->buf, newfname->buf, 0);
+	unlink(newfname->buf);		/* Make link() possible */
 
-    oldfname = mailbox_meta_get_fname(&oldfpath, oldmailbox,
-				      IMAP_ENUM_METAPARTITION_FILES_CACHE);
-    newfname = mailbox_meta_get_fname(&newfpath, newmailbox,
-				      IMAP_ENUM_METAPARTITION_FILES_CACHE);
-
-    /* Check to see if we're going to be over-long */
-    if (!oldfname) {
-	syslog(LOG_ERR, "IOERROR: Path too long (%s + %s)",
-	       oldfname->buf, FNAME_CACHE);
-	fatal("Path Too Long", EC_OSFILE);
-    }
-    if (!newfname) {
-	syslog(LOG_ERR, "IOERROR: Path too long (%s + %s)",
-	       newfname->buf, FNAME_CACHE);
-	fatal("Path Too Long", EC_OSFILE);
+	if (!df->optional || !stat(oldfname->buf, &sbuf)) {
+	    r = mailbox_copyfile(oldfname->buf, newfname->buf, 0);
+	}
     }
 
-    unlink(newfname->buf);
-
-    if (!r) r = mailbox_copyfile(oldfname->buf, newfname->buf, 0);
     if (r) {
 	mailbox_close(newmailbox);
 	return r;
     }
-
-    /* XXX For two-phase expunge, we also need to copy cyrus.expunge */
 
     /* Re-open index file and store new uidvalidity  */
     close(newmailbox->index_fd);
@@ -2952,6 +2949,12 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     (void) mailbox_write_index_header(newmailbox);
 
     /* Copy over message files */
+    mbdir = opendir(oldmailbox->path);
+    if (!mbdir) {
+	syslog(LOG_ERR, "error opening %s: %m", oldmailbox->path);
+	r = IMAP_SYS_ERROR;
+    }
+
     oldfname = &oldfpath.data;
     *(oldfname->tail)++ = '/';
     oldfname->len++;
@@ -2959,27 +2962,31 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     *(newfname->tail)++ = '/';
     newfname->len++;
 
-    for (msgno = 1; msgno <= oldmailbox->exists; msgno++) {
-	r = mailbox_read_index_record(oldmailbox, msgno, &record);
-	if (r) break;
-	mailbox_message_get_fname(oldmailbox, record.uid, oldfname->tail,
-				  sizeof(oldfname->buf) - oldfname->len);
+    while (!r && (next = readdir(mbdir))) {
+	char *name = next->d_name;  /* Alias */
+	char *p = name;
 
-	if(newfname->len + strlen(oldfname->tail) >= sizeof(newfname->buf)) {
+	/* special case for '.' (well, it gets '..' too) */
+	if (name[0] == '.') continue;
+
+	/* skip non-message files */
+	while (*p && isdigit((int)(*p))) p++;
+	if (p[0] != '.' || p[1] != '\0') continue;
+
+	if(newfname->len + strlen(name) >= sizeof(newfname->buf)) {
 	    syslog(LOG_ERR, "IOERROR: Path too long (%s + %s)",
-		   newfname->buf, oldfname->tail);
+		   newfname->buf, name);
 	    fatal("Path too long", EC_OSFILE);
 	}
 
-	strcpy(newfname->tail, oldfname->tail);
+	strcpy(oldfname->tail, name);
+	strcpy(newfname->tail, name);
 
 	r = mailbox_copyfile(oldfname->buf, newfname->buf, 0);
-	if (r) break;
     }
-    if (!r) r = seen_copy(oldmailbox, newmailbox);
+    closedir(mbdir);
 
-    /* XXX For two-phase expunge, we also need to copy message files
-       referenced by cyrus.expunge */
+    if (!r) r = seen_copy(oldmailbox, newmailbox);
 
     /* Record new quota usage */
     if (!r && newmailbox->quota.root) {
@@ -2989,13 +2996,8 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     }
     if (r) {
 	/* failure and back out */
-	for (msgno = 1; msgno <= oldmailbox->exists; msgno++) {
-	    if (mailbox_read_index_record(oldmailbox, msgno, &record))
-		continue;
-	    mailbox_message_get_fname(oldmailbox, record.uid, newfname->tail,
-				      sizeof(newfname->buf) - newfname->len);
-	    (void) unlink(newfname->buf);
-	}
+	mailbox_delete_files(newmailbox->path);
+	if (newmailbox->mpath) mailbox_delete_files(newmailbox->mpath);
     }
 
     return r;
