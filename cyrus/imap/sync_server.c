@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.6 2007/05/30 15:04:12 murch Exp $
+ * $Id: sync_server.c,v 1.7 2007/08/01 19:19:03 murch Exp $
  */
 
 #include <config.h>
@@ -1870,7 +1870,7 @@ static void cmd_upload(struct mailbox *mailbox,
         switch (msg_type) {
         case MSG_SIMPLE:
             if (c != ' ') {
-                err = "Invalid flags";
+                err = "Invalid flags or missing message";
                 goto parse_err;
             }
 
@@ -1897,9 +1897,8 @@ static void cmd_upload(struct mailbox *mailbox,
             break;
         case MSG_PARSED:
             if (c != ' ') {
-		/* Missing message - UPLOAD short-circuited by client */
-		sync_upload_list_remove(upload_list, item);
-		goto done;
+                err = "Invalid flags or missing message";
+                goto parse_err;
             }
 
             message = sync_message_add(message_list, &item->uuid);

@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.13 2007/07/16 17:19:00 murch Exp $
+ * $Id: sync_client.c,v 1.14 2007/08/01 19:19:02 murch Exp $
  */
 
 #include <config.h>
@@ -1135,7 +1135,6 @@ static int upload_message_work(struct mailbox *mailbox,
         prot_printf(toserver, " COPY");
         need_body = 0;
     } else {
-        sync_msgid_add(msgid_onserver, &record->uuid);
         prot_printf(toserver, " PARSED");
         need_body = 1;
     }
@@ -1180,9 +1179,9 @@ static int upload_message_work(struct mailbox *mailbox,
         if (r) {
             syslog(LOG_ERR, "IOERROR: opening message file %lu of %s: %m",
                    record->uid, mailbox->name);
-	    sync_msgid_remove(msgid_onserver, &record->uuid);
             return(IMAP_IOERROR);
         }
+        sync_msgid_add(msgid_onserver, &record->uuid);
 
         prot_printf(toserver, " %lu %lu %lu {%lu+}\r\n",
 		    record->header_size, record->content_lines,
@@ -1262,6 +1261,10 @@ repeatupload:
     prot_printf(toserver, "\r\n"); 
     prot_flush(toserver);
 
+    if (r) {
+        sync_parse_code("UPLOAD", fromserver, SYNC_PARSE_EAT_OKLINE, NULL);
+        return(r);
+    }
     r = sync_parse_code("UPLOAD", fromserver, SYNC_PARSE_NOEAT_OKLINE, NULL);
     if (r) return(r);
 
@@ -1334,6 +1337,10 @@ static int upload_messages_from(struct mailbox *mailbox,
     prot_printf(toserver, "\r\n"); 
     prot_flush(toserver);
 
+    if (r) {
+        sync_parse_code("UPLOAD", fromserver, SYNC_PARSE_EAT_OKLINE, NULL);
+        return(r);
+    }
     r = sync_parse_code("UPLOAD", fromserver, SYNC_PARSE_NOEAT_OKLINE, NULL);
     if (r) return(r);
 
