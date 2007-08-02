@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.225 2007/03/27 19:29:56 murch Exp $
+ * $Id: index.c,v 1.226 2007/08/02 14:18:52 murch Exp $
  */
 #include <config.h>
 
@@ -454,6 +454,54 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 		imapd_condstore_client) {
 		prot_printf(imapd_out, " MODSEQ (" MODSEQ_FMT ")", MODSEQ(msgno));
 	    }
+	    if (usinguid) prot_printf(imapd_out, " UID %u", UID(msgno));
+	    prot_printf(imapd_out, ")\r\n");
+	}
+    }
+}
+
+/* Flush seen state (but only if anything changed) and check for flag/seen
+ * updates from other processes.  Bails out if the cyrus.index file has
+ * changed under our feet, which indicates an expunge from another process.
+ * In this case pending updates will be flushed on the next index_check()
+ */
+void
+index_check_existing(struct mailbox *mailbox, int usinguid, int checkseen)
+{
+    struct stat sbuf;
+    int msgno, i;
+    bit32 user_flags[MAX_USER_FLAGS/32];
+
+    if (imapd_exists == -1)
+        return;
+
+    /* Check for expunge, just like index_check() */
+    if (index_len) {
+        char fnamebuf[MAX_MAILBOX_PATH+1], *path;
+
+	path = (mailbox->mpath &&
+		(config_metapartition_files &
+		 IMAP_ENUM_METAPARTITION_FILES_INDEX)) ?
+	    mailbox->mpath : mailbox->path;
+	strlcpy(fnamebuf, path, sizeof(fnamebuf));
+	strlcat(fnamebuf, FNAME_INDEX, sizeof(fnamebuf));
+
+	if ((stat(fnamebuf, &sbuf) != 0) ||
+            (sbuf.st_ino != mailbox->index_ino) ||
+	    (index_ino != mailbox->index_ino))
+            return;
+    }
+
+    if (checkseen)
+        index_checkseen(mailbox, 0, usinguid, imapd_exists);
+
+    for (msgno = 1; msgno <= imapd_exists; msgno++) {
+	if (flagreport[msgno] < LAST_UPDATED(msgno)) {
+	    for (i = 0; i < VECTOR_SIZE(user_flags); i++) {
+		user_flags[i] = USER_FLAGS(msgno, i);
+	    }
+	    index_fetchflags(mailbox, msgno, SYSTEM_FLAGS(msgno), user_flags,
+			     LAST_UPDATED(msgno));
 	    if (usinguid) prot_printf(imapd_out, " UID %u", UID(msgno));
 	    prot_printf(imapd_out, ")\r\n");
 	}

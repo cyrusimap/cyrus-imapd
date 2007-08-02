@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.519 2007/05/08 18:23:04 murch Exp $ */
+/* $Id: imapd.c,v 1.520 2007/08/02 14:18:51 murch Exp $ */
 
 #include <config.h>
 
@@ -4005,15 +4005,21 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 			imapd_mailbox->highestmodseq);
     }
 
-    if (usinguid || config_getswitch(IMAPOPT_FLUSHSEENSTATE)) {
-	if (usinguid) fetchitems |= FETCH_UID; 
-	index_check(imapd_mailbox, usinguid, /* update \Seen state from disk? */
-		    config_getswitch(IMAPOPT_FLUSHSEENSTATE) << 1 /* quiet */);
+    /* EXPUNGE responses allowed for UID FETCH */
+    if (usinguid) {
+	fetchitems |= FETCH_UID;
+	index_check(imapd_mailbox, 1, 0);
     }
 
     fetchargs.fetchitems = fetchitems;
     r = index_fetch(imapd_mailbox, sequence, usinguid, &fetchargs,
 		&fetchedsomething);
+
+    if (config_getswitch(IMAPOPT_FLUSHSEENSTATE)) {
+        /* Flush \Seen state to disk immediately (but only if anything
+           changed) and check for updates by other processes */
+        index_check_existing(imapd_mailbox, usinguid, 1);  
+    }
 
     snprintf(mytime, sizeof(mytime), "%2.3f", 
 	     (clock() - start) / (double) CLOCKS_PER_SEC);
@@ -4024,11 +4030,6 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
     } else if (fetchedsomething || usinguid) {
 	prot_printf(imapd_out, "%s OK %s (%s sec)\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED), mytime);
-	if (config_getswitch(IMAPOPT_FLUSHSEENSTATE) &&
-	    (fetchargs.fetchitems & FETCH_SETSEEN)) {
-	    /* flush \Seen state to disk */
-	    index_check(imapd_mailbox, usinguid, 2 /* quiet */);
-	}
     } else {
 	/* normal FETCH, nothing came back */
 	prot_printf(imapd_out, "%s NO %s (%s sec)\r\n", tag,
@@ -4156,9 +4157,11 @@ void cmd_partial(const char *tag, const char *msgno, char *data,
 
     index_fetch(imapd_mailbox, msgno, 0, &fetchargs, &fetchedsomething);
 
-    index_check(imapd_mailbox, 0,  /* flush \Seen state to disk? */
-		config_getswitch(IMAPOPT_FLUSHSEENSTATE) &&
-		fetchedsomething && (fetchargs.fetchitems & FETCH_SETSEEN));
+    if (config_getswitch(IMAPOPT_FLUSHSEENSTATE)) {
+        /* Flush \Seen state to disk immediately (but only if anything
+           changed) and check for updates by other processes */
+        index_check_existing(imapd_mailbox, 0, 1);
+    }
 
     if (fetchedsomething) {
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
@@ -4368,13 +4371,12 @@ void cmd_store(char *tag, char *sequence, int usinguid)
     r = index_store(imapd_mailbox, sequence, usinguid, &storeargs,
 		    flag, nflags);
 
-    if (config_getswitch(IMAPOPT_FLUSHSEENSTATE) &&
-	(storeargs.seen || storeargs.operation == STORE_REPLACE)) {
-	/* flush \Seen state to disk */
-	index_check(imapd_mailbox, usinguid, 1);
-    }
-    else if (usinguid) {
-	index_check(imapd_mailbox, 1, 0);
+    if (usinguid) {
+	index_check(imapd_mailbox, 1, 1);   /* Check \Seen too */
+    } else if (config_getswitch(IMAPOPT_FLUSHSEENSTATE)) {
+        /* Flush \Seen state to disk immediately (but only if anything
+           changed) and check for updates by other processes */
+        index_check_existing(imapd_mailbox, 0, 1);
     }
 
     if (r) {
