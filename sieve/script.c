@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.63 2006/11/30 17:11:24 murch Exp $
+ * $Id: script.c,v 1.64 2007/08/09 16:44:47 murch Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -534,6 +534,11 @@ int sieve_script_load(const char *fname, sieve_execute_t **ret)
 	fd = open(fname, O_RDONLY);
 	if (fd == -1) {
 	    syslog(LOG_ERR, "IOERROR: can not open sieve script %s: %m", fname);
+	    return SIEVE_FAIL;
+	}
+	if (fstat(fd, &sbuf) == -1) {
+	    syslog(LOG_ERR, "IOERROR: fstating sieve script %s: %m", fname);
+	    close(fd);
 	    return SIEVE_FAIL;
 	}
 
