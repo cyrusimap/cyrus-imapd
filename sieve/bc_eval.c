@@ -1,5 +1,5 @@
 /* bc_eval.c - evaluate the bytecode
- * $Id: bc_eval.c,v 1.9 2007/02/05 18:44:01 jeaton Exp $
+ * $Id: bc_eval.c,v 1.10 2007/08/10 16:04:52 murch Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -591,7 +591,7 @@ int eval_bc_test(sieve_interp_t *interp,
 				    goto alldone;
 				}
 
-				res |= comp(val[y], strlen(val[y]),
+				res |= comp(addr, strlen(addr),
 					    (const char *)reg, comprock);
 				free(reg);
 			    } else {
