@@ -39,6 +39,8 @@ To make a release:
 
 - tag the CVS repository with cyrus-release-Major-Minor-Revision
 
+- upload tarball to /afs/andrew.cmu.edu/system/archive/cmu/anonftp/pub/cyrus
+
 - announce to:
     info-cyrus
     comp.mail.imap
