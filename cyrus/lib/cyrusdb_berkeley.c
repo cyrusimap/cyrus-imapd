@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_berkeley.c,v 1.18 2007/03/23 13:35:54 murch Exp $ */
+/* $Id: cyrusdb_berkeley.c,v 1.19 2007/08/15 17:20:57 murch Exp $ */
 
 #include <config.h>
 
@@ -212,7 +212,7 @@ static int init(const char *dbdir, int myflags)
 	r = dbenv->set_cachesize(dbenv, 0, opt * 1024, 0);
 	if (r) {
 	    dbenv->err(dbenv, r, "set_cachesize");
-	    dbenv->close(dbenv, 0);
+	    (dbenv->close)(dbenv, 0);
 	    syslog(LOG_ERR, "DBERROR: set_cachesize(): %s", db_strerror(r));
 	    return CYRUSDB_IOERROR;
 	}
@@ -223,9 +223,9 @@ static int init(const char *dbdir, int myflags)
     flags |= DB_INIT_LOCK | DB_INIT_MPOOL | 
 	     DB_INIT_LOG | DB_INIT_TXN;
 #if (DB_VERSION_MAJOR > 3) || ((DB_VERSION_MAJOR == 3) && (DB_VERSION_MINOR > 0))
-    r = dbenv->open(dbenv, dbdir, flags, 0644); 
+    r = (dbenv->open)(dbenv, dbdir, flags, 0644); 
 #else
-    r = dbenv->open(dbenv, dbdir, NULL, flags, 0644); 
+    r = (dbenv->open)(dbenv, dbdir, NULL, flags, 0644); 
 #endif
     if (r) {
         if (do_retry && (r == ENOENT)) {
@@ -264,7 +264,7 @@ static int done(void)
 
     if (--dbinit) return 0;
 
-    r = dbenv->close(dbenv, 0);
+    r = (dbenv->close)(dbenv, 0);
     dbinit = 0;
     if (r) {
 	syslog(LOG_ERR, "DBERROR: error exiting application: %s",
@@ -412,15 +412,15 @@ static int myopen(const char *fname, DBTYPE type, int flags, struct db **ret)
     if (flags & CYRUSDB_MBOXSORT) db->set_bt_compare(db, mbox_compar);
 
 #if DB_VERSION_MAJOR == 4 && DB_VERSION_MINOR >= 1
-    r = db->open(db, NULL, fname, NULL, type, dbflags | DB_AUTO_COMMIT, 0664);
+    r = (db->open)(db, NULL, fname, NULL, type, dbflags | DB_AUTO_COMMIT, 0664);
 #else
-    r = db->open(db, fname, NULL, type, dbflags, 0664);
+    r = (db->open)(db, fname, NULL, type, dbflags, 0664);
 #endif
 
     if (r != 0) {
 	int level = (flags & CYRUSDB_CREATE) ? LOG_ERR : LOG_DEBUG;
 	syslog(level, "DBERROR: opening %s: %s", fname, db_strerror(r));
-	r = db->close(db, DB_NOSYNC);
+	r = (db->close)(db, DB_NOSYNC);
         if (r != 0) {
             syslog(level, "DBERROR: closing %s: %s", fname, db_strerror(r));
         }
@@ -450,7 +450,7 @@ static int myclose(struct db *db)
     assert(dbinit && db);
 
     /* since we're using txns, we can supply DB_NOSYNC */
-    r = a->close(a, DB_NOSYNC);
+    r = (a->close)(a, DB_NOSYNC);
     if (r != 0) {
 	syslog(LOG_ERR, "DBERROR: error closing: %s", db_strerror(r));
 	r = CYRUSDB_IOERROR;

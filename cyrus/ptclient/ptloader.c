@@ -67,7 +67,7 @@
 #include "ptloader.h"
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ptloader.c,v 1.45 2007/03/13 17:07:04 jeaton Exp $";
+      "$Id: ptloader.c,v 1.46 2007/08/15 17:20:57 murch Exp $";
 
 struct pts_module *pts_modules[] = {
 #ifdef HAVE_LDAP
@@ -148,7 +148,7 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     /* set signal handlers */
     signal(SIGPIPE, SIG_IGN);
 
-    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.45 2007/03/13 17:07:04 jeaton Exp $");
+    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.46 2007/08/15 17:20:57 murch Exp $");
 
     while ((opt = getopt(argc, argv, "d:")) != EOF) {
 	switch (opt) {
@@ -167,7 +167,7 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
 
     strcpy(fnamebuf, config_dir);
     strcat(fnamebuf, PTS_DBFIL);
-    r = DB->open(fnamebuf, CYRUSDB_CREATE, &ptsdb);
+    r = (DB->open)(fnamebuf, CYRUSDB_CREATE, &ptsdb);
     if (r != 0) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s", fnamebuf,
 	       cyrusdb_strerror(ret));
@@ -184,7 +184,7 @@ void service_abort(int error)
 {
     int r;
 
-    r = DB->close(ptsdb);
+    r = (DB->close)(ptsdb);
     if (r) {
 	syslog(LOG_ERR, "DBERROR: error closing ptsdb: %s",
 	       cyrusdb_strerror(r));

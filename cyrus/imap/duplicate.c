@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: duplicate.c,v 1.43 2007/02/14 13:29:02 murch Exp $ */
+/* $Id: duplicate.c,v 1.44 2007/08/15 17:20:55 murch Exp $ */
 
 #include <config.h>
 
@@ -105,7 +105,7 @@ int duplicate_init(char *fname, int myflags __attribute__((unused)))
 	    strcat(fname, FNAME_DELIVERDB);
 	}
 
-	r = DB->open(fname, CYRUSDB_CREATE, &dupdb);
+	r = (DB->open)(fname, CYRUSDB_CREATE, &dupdb);
 	if (r != 0)
 	    syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
 		   cyrusdb_strerror(r));
@@ -395,7 +395,7 @@ int duplicate_done(void)
     int r = 0;
 
     if (duplicate_dbopen) {
-	r = DB->close(dupdb);
+	r = (DB->close)(dupdb);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: error closing deliverdb: %s",
 		   cyrusdb_strerror(r));

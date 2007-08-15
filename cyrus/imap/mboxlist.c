@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.247 2007/03/27 19:53:09 murch Exp $
+ * $Id: mboxlist.c,v 1.248 2007/08/15 17:20:55 murch Exp $
  */
 
 #include <config.h>
@@ -2722,7 +2722,7 @@ void mboxlist_open(char *fname)
 	flags |= CYRUSDB_MBOXSORT;
     }
 
-    ret = DB->open(fname, flags, &mbdb);
+    ret = (DB->open)(fname, flags, &mbdb);
     if (ret != 0) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
 	       cyrusdb_strerror(ret));
@@ -2741,7 +2741,7 @@ void mboxlist_close(void)
     int r;
 
     if (mboxlist_dbopen) {
-	r = DB->close(mbdb);
+	r = (DB->close)(mbdb);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: error closing mailboxes: %s",
 		   cyrusdb_strerror(r));
@@ -2801,7 +2801,7 @@ mboxlist_opensubs(const char *userid,
 	flags |= CYRUSDB_MBOXSORT;
     }
 
-    r = SUBDB->open(subsfname, flags, ret);
+    r = (SUBDB->open)(subsfname, flags, ret);
     if (r != CYRUSDB_OK) {
 	r = IMAP_IOERROR;
     }
@@ -2815,7 +2815,7 @@ mboxlist_opensubs(const char *userid,
  */
 static void mboxlist_closesubs(struct db *sub)
 {
-    SUBDB->close(sub);
+    (SUBDB->close)(sub);
 }
 
 /*

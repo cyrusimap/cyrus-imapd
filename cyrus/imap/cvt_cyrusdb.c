@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: cvt_cyrusdb.c,v 1.16 2006/11/30 17:11:17 murch Exp $
+ * $Id: cvt_cyrusdb.c,v 1.17 2007/08/15 17:20:55 murch Exp $
  */
 
 #include <config.h>
@@ -157,10 +157,10 @@ int main(int argc, char *argv[])
     printf("Converting from %s (%s) to %s (%s)\n", old_db, DB_OLD->name,
 	   new_db, DB_NEW->name);
 
-    r = DB_OLD->open(old_db, 0, &odb);
+    r = (DB_OLD->open)(old_db, 0, &odb);
     if(r != CYRUSDB_OK)
 	fatal("can't open old database", EC_TEMPFAIL);
-    r = DB_NEW->open(new_db, CYRUSDB_CREATE, &ndb);
+    r = (DB_NEW->open)(new_db, CYRUSDB_CREATE, &ndb);
     if(r != CYRUSDB_OK)
 	fatal("can't open new database", EC_TEMPFAIL);
 
@@ -173,8 +173,8 @@ int main(int argc, char *argv[])
 	fprintf(stderr, "Warning: apparently empty database converted.\n");
     
 
-    DB_OLD->close(odb);
-    DB_NEW->close(ndb);
+    (DB_OLD->close)(odb);
+    (DB_NEW->close)(ndb);
     
     cyrus_done();
 

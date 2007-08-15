@@ -1,5 +1,5 @@
 /* auth_pts.c -- PTLOADER authorization
- * $Id: auth_pts.c,v 1.12 2007/02/05 18:43:26 jeaton Exp $
+ * $Id: auth_pts.c,v 1.13 2007/08/15 17:20:57 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -359,7 +359,7 @@ static int ptload(const char *identifier, struct auth_state **state)
     
     strcpy(fnamebuf, config_dir);
     strcat(fnamebuf, PTS_DBFIL);
-    r = the_ptscache_db->open(fnamebuf, CYRUSDB_CREATE, &ptdb);
+    r = (the_ptscache_db->open)(fnamebuf, CYRUSDB_CREATE, &ptdb);
     if (r != 0) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s", fnamebuf,
 	       cyrusdb_strerror(ret));
@@ -501,7 +501,7 @@ static int ptload(const char *identifier, struct auth_state **state)
     }
 
     /* close and unlock the database */
-    the_ptscache_db->close(ptdb);
+    (the_ptscache_db->close)(ptdb);
 
     return rc;
 }

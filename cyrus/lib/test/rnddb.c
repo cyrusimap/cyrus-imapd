@@ -133,7 +133,7 @@ int main(int argc, char *argv[])
 	srand(atoi(argv[2]));
     }
 
-    TRY(DB->open("scratch", &db));
+    TRY((DB->open)("scratch", &db));
 
     if (DB->consistent) {
 	TRY(DB->consistent(db));
@@ -291,7 +291,7 @@ int main(int argc, char *argv[])
 #endif
     }
 
-    TRY(DB->close(db));
+    TRY((DB->close)(db));
     TRY(DB->done());
 
     do_report();

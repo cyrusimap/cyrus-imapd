@@ -93,7 +93,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.53 2007/02/05 18:49:56 jeaton Exp $ */
+/* $Id: tls.c,v 1.54 2007/08/15 17:20:57 murch Exp $ */
 
 #include <config.h>
 
@@ -650,7 +650,7 @@ int     tls_init_serverengine(const char *ident,
 	strlcpy(dbdir, config_dir, sizeof(dbdir));
 	strlcat(dbdir, FNAME_TLSSESSIONS, sizeof(dbdir));
 
-	r = DB->open(dbdir, CYRUSDB_CREATE, &sessdb);
+	r = (DB->open)(dbdir, CYRUSDB_CREATE, &sessdb);
 	if (r != 0) {
 	    syslog(LOG_ERR, "DBERROR: opening %s: %s",
 		   dbdir, cyrusdb_strerror(ret));
@@ -931,7 +931,7 @@ int tls_shutdown_serverengine(void)
     int r;
 
     if (tls_serverengine && sess_dbopen) {
-	r = DB->close(sessdb);
+	r = (DB->close)(sessdb);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: error closing tlsdb: %s",
 		   cyrusdb_strerror(r));
@@ -1008,7 +1008,7 @@ int tls_prune_sessions(void)
     strlcpy(dbdir, config_dir, sizeof(dbdir));
     strlcat(dbdir, FNAME_TLSSESSIONS, sizeof(dbdir));
 
-    ret = DB->open(dbdir, CYRUSDB_CREATE, &sessdb);
+    ret = (DB->open)(dbdir, CYRUSDB_CREATE, &sessdb);
     if (ret != CYRUSDB_OK) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s",
 	       dbdir, cyrusdb_strerror(ret));
@@ -1019,7 +1019,7 @@ int tls_prune_sessions(void)
 	sess_dbopen = 1;
 	prock.count = prock.deletions = 0;
 	DB->foreach(sessdb, "", 0, &prune_p, &prune_cb, &prock, NULL);
-	DB->close(sessdb);
+	(DB->close)(sessdb);
 	sessdb = NULL;
 	sess_dbopen = 0;
 

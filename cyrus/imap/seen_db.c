@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
- * $Id: seen_db.c,v 1.52 2007/03/27 19:53:09 murch Exp $
+ * $Id: seen_db.c,v 1.53 2007/08/15 17:20:57 murch Exp $
  * 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -157,7 +157,7 @@ int seen_open(struct mailbox *mailbox,
     /* otherwise, close the existing database */
     if (seendb) {
 	abortcurrent(seendb);
-	r = DB->close(seendb->db);
+	r = (DB->close)(seendb->db);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: error closing seendb: %s", 
 		   cyrusdb_strerror(r));
@@ -170,7 +170,7 @@ int seen_open(struct mailbox *mailbox,
 
     /* open the seendb corresponding to user */
     fname = seen_getpath(user);
-    r = DB->open(fname, (flags & SEEN_CREATE) ? CYRUSDB_CREATE : 0,
+    r = (DB->open)(fname, (flags & SEEN_CREATE) ? CYRUSDB_CREATE : 0,
 		 &seendb->db);
     if (r != 0) {
 	int level = (flags & SEEN_CREATE) ? LOG_ERR : LOG_DEBUG;
@@ -416,7 +416,7 @@ int seen_close(struct seen *seendb)
 
 	/* free the old database hanging around */
 	abortcurrent(lastseen);
-	r = DB->close(lastseen->db);
+	r = (DB->close)(lastseen->db);
 	if (r != CYRUSDB_OK) {
 	    syslog(LOG_ERR, "DBERROR: error closing lastseen: %s",
 		   cyrusdb_strerror(r));
@@ -555,7 +555,7 @@ int seen_done(void)
 
     if (lastseen) {
 	abortcurrent(lastseen);
-	r = DB->close(lastseen->db);
+	r = (DB->close)(lastseen->db);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: error closing lastseen: %s",
 		   cyrusdb_strerror(r));
@@ -653,10 +653,10 @@ int seen_merge(const char *tmpfile, const char *tgtfile)
     struct seen_merge_rock rock;
 
     /* xxx does this need to be CYRUSDB_CREATE? */
-    r = DB->open(tmpfile, CYRUSDB_CREATE, &tmp);
+    r = (DB->open)(tmpfile, CYRUSDB_CREATE, &tmp);
     if(r) goto done;
 	    
-    r = DB->open(tgtfile, CYRUSDB_CREATE, &tgt);
+    r = (DB->open)(tgtfile, CYRUSDB_CREATE, &tgt);
     if(r) goto done;
 
     rock.db = tgt;
@@ -669,8 +669,8 @@ int seen_merge(const char *tmpfile, const char *tgtfile)
 
  done:
 
-    if(tgt) DB->close(tgt);
-    if(tmp) DB->close(tmp);
+    if(tgt) (DB->close)(tgt);
+    if(tmp) (DB->close)(tmp);
     
     return r;
 }

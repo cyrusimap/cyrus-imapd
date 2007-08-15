@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: fetchnews.c,v 1.17 2007/03/30 18:40:20 murch Exp $
+ * $Id: fetchnews.c,v 1.18 2007/08/15 17:20:55 murch Exp $
  */
 
 #include <config.h>
@@ -94,7 +94,7 @@ int newsrc_init(char *fname, int myflags __attribute__((unused)))
 	    strcat(fname, FNAME_NEWSRCDB);
 	}
 
-	r = DB->open(fname, CYRUSDB_CREATE, &newsrc_db);
+	r = (DB->open)(fname, CYRUSDB_CREATE, &newsrc_db);
 	if (r != 0)
 	    syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
 		   cyrusdb_strerror(r));
@@ -112,7 +112,7 @@ int newsrc_done(void)
     int r = 0;
 
     if (newsrc_dbopen) {
-	r = DB->close(newsrc_db);
+	r = (DB->close)(newsrc_db);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: error closing fetchnews.db: %s",
 		   cyrusdb_strerror(r));
