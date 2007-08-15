@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: quota_db.c,v 1.6 2007/07/10 19:20:30 murch Exp $
+ * $Id: quota_db.c,v 1.7 2007/08/15 17:20:57 murch Exp $
  *
  */
 
@@ -251,7 +251,7 @@ void quotadb_open(char *fname)
 	strlcat(fname, FNAME_QUOTADB, fname_len);
     }
 
-    ret = QDB->open(fname, CYRUSDB_CREATE, &qdb);
+    ret = (QDB->open)(fname, CYRUSDB_CREATE, &qdb);
     if (ret != 0) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
 	       cyrusdb_strerror(ret));
@@ -270,7 +270,7 @@ void quotadb_close(void)
     int r;
 
     if (quota_dbopen) {
-	r = QDB->close(qdb);
+	r = (QDB->close)(qdb);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: error closing quotas: %s",
 		   cyrusdb_strerror(r));

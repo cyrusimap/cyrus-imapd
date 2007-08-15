@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: cyr_dbtool.c,v 1.1 2007/01/09 17:41:35 murch Exp $
+ * $Id: cyr_dbtool.c,v 1.2 2007/08/15 17:20:55 murch Exp $
  */
 
 #include <config.h>
@@ -203,7 +203,7 @@ int main(int argc, char *argv[])
     cyrus_init(alt_config, "cyr_dbtool", 0);
 
 
-    r = DB_OLD->open(old_db, db_flags, &odb);
+    r = (DB_OLD->open)(old_db, db_flags, &odb);
     if(r != CYRUSDB_OK)
 	fatal("can't open database", EC_TEMPFAIL);
 
@@ -250,7 +250,7 @@ int main(int argc, char *argv[])
         printf("Unknown action %s\n", action);
     }
 
-    DB_OLD->close(odb);
+    (DB_OLD->close)(odb);
     
     cyrus_done();
 

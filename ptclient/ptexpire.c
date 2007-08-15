@@ -69,7 +69,7 @@
 #include "lock.h"
 #include "xmalloc.h"
 
-static char rcsid[] = "$Id: ptexpire.c,v 1.20 2007/03/30 18:40:21 murch Exp $";
+static char rcsid[] = "$Id: ptexpire.c,v 1.21 2007/08/15 17:20:57 murch Exp $";
 
 /* global */
 time_t timenow;
@@ -148,7 +148,7 @@ int main(int argc, char *argv[])
     /* open database */
     strcpy(fnamebuf, config_dir);
     strcat(fnamebuf, PTS_DBFIL);
-    r = config_ptscache_db->open(fnamebuf, CYRUSDB_CREATE, &ptdb);
+    r = (config_ptscache_db->open)(fnamebuf, CYRUSDB_CREATE, &ptdb);
     if(r != CYRUSDB_OK) {
 	syslog(LOG_ERR, "error opening %s (%s)", fnamebuf,
 	       cyrusdb_strerror(r));
@@ -158,7 +158,7 @@ int main(int argc, char *argv[])
     /* iterate through db, wiping expired entries */
     config_ptscache_db->foreach(ptdb, "", 0, expire_p, expire_cb, ptdb, NULL);
 
-    config_ptscache_db->close(ptdb);
+    (config_ptscache_db->close)(ptdb);
 
     cyrus_done();
 

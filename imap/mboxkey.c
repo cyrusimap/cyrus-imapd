@@ -1,5 +1,5 @@
 /* mboxkey.c -- implementation of URLAUTH mailbox keys
- * $Id: mboxkey.c,v 1.3 2007/03/27 19:53:09 murch Exp $
+ * $Id: mboxkey.c,v 1.4 2007/08/15 17:20:55 murch Exp $
  * 
  * Copyright (c) 1998-2005 Carnegie Mellon University.  All rights reserved.
  *
@@ -150,7 +150,7 @@ int mboxkey_open(const char *user,
     /* otherwise, close the existing database */
     if (mboxkeydb) {
 	abortcurrent(mboxkeydb);
-	r = DB->close(mboxkeydb->db);
+	r = (DB->close)(mboxkeydb->db);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: error closing mboxkeydb: %s", 
 		   cyrusdb_strerror(r));
@@ -164,7 +164,7 @@ int mboxkey_open(const char *user,
 
     /* open the mboxkeydb corresponding to user */
     fname = mboxkey_getpath(user);
-    r = DB->open(fname, (flags & MBOXKEY_CREATE) ? CYRUSDB_CREATE : 0,
+    r = (DB->open)(fname, (flags & MBOXKEY_CREATE) ? CYRUSDB_CREATE : 0,
 		 &mboxkeydb->db);
     if (r != 0) {
 	int level = (flags & MBOXKEY_CREATE) ? LOG_ERR : LOG_DEBUG;
@@ -325,7 +325,7 @@ int mboxkey_close(struct mboxkey *mboxkeydb)
 
 	/* free the old database hanging around */
 	abortcurrent(lastmboxkey);
-	r = DB->close(lastmboxkey->db);
+	r = (DB->close)(lastmboxkey->db);
 	if (r != CYRUSDB_OK) {
 	    syslog(LOG_ERR, "DBERROR: error closing lastmboxkey: %s",
 		   cyrusdb_strerror(r));
@@ -409,7 +409,7 @@ int mboxkey_done(void)
 
     if (lastmboxkey) {
 	abortcurrent(lastmboxkey);
-	r = DB->close(lastmboxkey->db);
+	r = (DB->close)(lastmboxkey->db);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: error closing lastmboxkey: %s",
 		   cyrusdb_strerror(r));
@@ -482,10 +482,10 @@ int mboxkey_merge(const char *tmpfile, const char *tgtfile)
     struct mboxkey_merge_rock rock;
 
     /* xxx does this need to be CYRUSDB_CREATE? */
-    r = DB->open(tmpfile, CYRUSDB_CREATE, &tmp);
+    r = (DB->open)(tmpfile, CYRUSDB_CREATE, &tmp);
     if(r) goto done;
 	    
-    r = DB->open(tgtfile, CYRUSDB_CREATE, &tgt);
+    r = (DB->open)(tgtfile, CYRUSDB_CREATE, &tgt);
     if(r) goto done;
 
     rock.db = tgt;
@@ -498,8 +498,8 @@ int mboxkey_merge(const char *tmpfile, const char *tgtfile)
 
  done:
 
-    if(tgt) DB->close(tgt);
-    if(tmp) DB->close(tmp);
+    if(tgt) (DB->close)(tgt);
+    if(tmp) (DB->close)(tmp);
     
     return r;
 }

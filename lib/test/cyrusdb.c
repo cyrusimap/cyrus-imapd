@@ -70,15 +70,15 @@ int main(int argc, char *argv[])
 	    char *fname = buf + 5;
 
 	    if (db) { /* close it */
-		TRY(DB->close(db));
+		TRY((DB->close)(db));
 	    }
-	    TRY(DB->open(fname, 1, &db));
+	    TRY((DB->open)(fname, 1, &db));
 
 	    printf("ok\n");
 	} else if (!db) {
 	    TRY(db == NULL);
 	} else if (!strncasecmp(buf, "close", 5)) {
-	    TRY(DB->close(db));
+	    TRY((DB->close)(db));
 	    db = NULL;
 	    printf("ok\n");
 	} else if (!strncasecmp(buf, "put ", 4)) {

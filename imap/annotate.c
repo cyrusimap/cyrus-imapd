@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.35 2007/02/05 18:41:45 jeaton Exp $
+ * $Id: annotate.c,v 1.36 2007/08/15 17:20:55 murch Exp $
  */
 
 #include <config.h>
@@ -253,7 +253,7 @@ void annotatemore_open(char *fname)
 	strcat(fname, FNAME_ANNOTATIONS);
     }
 
-    ret = DB->open(fname, CYRUSDB_CREATE, &anndb);
+    ret = (DB->open)(fname, CYRUSDB_CREATE, &anndb);
     if (ret != 0) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
 	       cyrusdb_strerror(ret));
@@ -270,7 +270,7 @@ void annotatemore_close(void)
     int r;
 
     if (annotate_dbopen) {
-	r = DB->close(anndb);
+	r = (DB->close)(anndb);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: error closing annotations: %s",
 		   cyrusdb_strerror(r));

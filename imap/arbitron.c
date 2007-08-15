@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: arbitron.c,v 1.43 2007/03/30 18:40:20 murch Exp $ */
+/* $Id: arbitron.c,v 1.44 2007/08/15 17:20:55 murch Exp $ */
 
 #include <config.h>
 
@@ -419,14 +419,14 @@ void process_seen(const char *path, const char *user)
     int r;    
     struct db *tmp = NULL;
 
-    r = DB->open(path, 0, &tmp);
+    r = (DB->open)(path, 0, &tmp);
     if(r) goto done;
     
     DB->foreach(tmp, "", 0, process_user_p, process_user_cb,
 		(void *) user, NULL);
 
  done:
-    if(tmp) DB->close(tmp);
+    if(tmp) (DB->close)(tmp);
 }
 
 static int process_subs_cb(void *rockp __attribute__((unused)),
@@ -475,14 +475,14 @@ void process_subs(const char *path, const char *user)
     int r;    
     struct db *tmp = NULL;
 
-    r = SUBDB->open(path, 0, &tmp);
+    r = (SUBDB->open)(path, 0, &tmp);
     if(r) goto done;
     
     SUBDB->foreach(tmp, "", 0, process_subs_p, process_subs_cb,
 		   (void *) user, NULL);
 
  done:
-    if(tmp) SUBDB->close(tmp);
+    if(tmp) (SUBDB->close)(tmp);
 }
 
 void report_users(struct user_list *u)

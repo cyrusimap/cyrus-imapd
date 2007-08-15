@@ -1,5 +1,5 @@
 /* seen_bigdb.c -- implementation of seen database using one big cyrusdb
- * $Id: seen_bigdb.c,v 1.11 2006/11/30 17:11:20 murch Exp $
+ * $Id: seen_bigdb.c,v 1.12 2007/08/15 17:20:57 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -104,7 +104,7 @@ static void seen_init(void)
     strcpy(fname, config_dir);
     strcat(fname, FNAME_SEENDB);
 
-    r = DB->open(fname, CYRUSDB_CREATE, &bigdb);
+    r = (DB->open)(fname, CYRUSDB_CREATE, &bigdb);
     if (r != 0) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
 	       cyrusdb_strerror(r));
@@ -385,7 +385,7 @@ int seen_done(void)
     int r;
 
     if (seen_inited) {
-	r = DB->close(bigdb);
+	r = (DB->close)(bigdb);
 	if (r != 0) {
 	    syslog(LOG_ERR, "DBERROR: closing seen database: %s",
 		   cyrusdb_strerror(r));
