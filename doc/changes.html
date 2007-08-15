@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.119 2007/08/10 15:54:21 murch Exp $ -->
+<!-- $Id: changes.html,v 1.120 2007/08/15 17:18:42 murch Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -10,7 +10,7 @@
 
 <h1>Changes to the Cyrus IMAP Server since 2.3.8</h1>
 <ul>
-<li>Added support for BDB 4.5.</li>
+<li>Added support for BDB 4.5 and 4.6.</li>
 <li>Fixed bug in frontend handling of CREATE for both proxying and
 referring. <i>-- courtesy of Gary Mills</i></li>
 <li>Fixed local deletion during XFER from a unified server. <i>-- courtesy
@@ -45,6 +45,8 @@ the mailbox list database and the spool  partition(s).  See
 <tt>ctl_mboxlist.8</tt> for details.</li>
 <li>RENAME now copies <tt>cyrus.expunge</tt> index file as well as
 expunged message files.</li>
+<li>Fixed replication of 64-bit quotas.  <i>-- courtesy of David 
+Carter</i></li>
 <li>Fixed miscellaneous bugs, memory leaks, and build issues.</li>
 </ul>
 
@@ -2232,7 +2234,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2007/08/10 15:54:21 $ <br />
+last modified: $Date: 2007/08/15 17:18:42 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
