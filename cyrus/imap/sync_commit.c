@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_commit.c,v 1.4 2007/04/03 13:01:13 murch Exp $
+ * $Id: sync_commit.c,v 1.5 2007/08/15 17:04:34 murch Exp $
  */
 
 #include <config.h>
@@ -95,7 +95,7 @@ sync_combine_commit(struct mailbox *mailbox,
     unsigned char *buf  = NULL;
     struct sync_upload_item *item;
     struct sync_message     *message;
-    long quota_add       = 0;  /* Following may be negative on UUID conflict */
+    quota_t quota_add    = 0;  /* Following may be negative on UUID conflict */
     long numansweredflag = 0;
     long numdeletedflag  = 0;
     long numflaggedflag  = 0;
@@ -299,8 +299,14 @@ sync_combine_commit(struct mailbox *mailbox,
     *((bit32 *)(buf+OFFSET_FLAGGED)) = htonl(newflagged);
 
     /* Fix up quota_mailbox_used */
+#ifdef HAVE_LONG_LONG_INT
+    *((bit64 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) = 
+      htonll(ntohll(*((bit64 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)))+quota_add);
+#else
+    *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) = htonl(0);
     *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) =
         htonl(ntohl(*((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED))) + quota_add );
+#endif
     /* Fix up start offset if necessary */
     if (mailbox->start_offset < INDEX_HEADER_SIZE) {
         *((bit32 *)(buf+OFFSET_START_OFFSET)) = htonl(INDEX_HEADER_SIZE);
@@ -346,7 +352,8 @@ sync_combine_commit(struct mailbox *mailbox,
 
 	if (r) {
 	    syslog(LOG_ERR,
-		   "LOSTQUOTA: unable to record add of %lu bytes in quota %s",
+		   "LOSTQUOTA: unable to record add of " QUOTA_T_FMT
+                   " bytes in quota %s",
 		   quota_add, mailbox->quota.root);
 	}
     }
@@ -464,7 +471,7 @@ sync_append_commit(struct mailbox *mailbox,
     struct sync_upload_item *item;
     struct sync_message     *message;
     unsigned long cache_size;
-    unsigned long quota_add       = 0;
+    uquota_t      quota_add       = 0;
     unsigned long numansweredflag = 0;
     unsigned long numdeletedflag  = 0;
     unsigned long numflaggedflag  = 0;
@@ -603,8 +610,14 @@ sync_append_commit(struct mailbox *mailbox,
     *((bit32 *)(hbuf+OFFSET_FLAGGED)) = htonl(newflagged);
 
     /* Fix up quota_mailbox_used */
+#ifdef HAVE_LONG_LONG_INT
+    *((bit64 *)(hbuf+OFFSET_QUOTA_MAILBOX_USED64)) = 
+      htonll(ntohll(*((bit64 *)(hbuf+OFFSET_QUOTA_MAILBOX_USED64)))+quota_add);
+#else
+    *((bit32 *)(hbuf+OFFSET_QUOTA_MAILBOX_USED64)) = htonl(0);
     *((bit32 *)(hbuf+OFFSET_QUOTA_MAILBOX_USED)) =
         htonl(ntohl(*((bit32 *)(hbuf+OFFSET_QUOTA_MAILBOX_USED)))+quota_add);
+#endif
 
     /* Fix up start offset if necessary */
     if (mailbox->start_offset < INDEX_HEADER_SIZE) {
@@ -655,7 +668,8 @@ sync_append_commit(struct mailbox *mailbox,
 
 	if (r) {
 	    syslog(LOG_ERR,
-		   "LOSTQUOTA: unable to record add of %lu bytes in quota %s",
+		   "LOSTQUOTA: unable to record add of " UQUOTA_T_FMT
+                   " bytes in quota %s",
 		   quota_add, mailbox->quota.root);
 	}
     }
