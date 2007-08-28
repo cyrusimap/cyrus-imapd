@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  * 
- * $Id: mboxlist.h,v 1.40 2006/11/30 17:11:19 murch Exp $
+ * $Id: mboxlist.h,v 1.41 2007/08/28 18:42:28 murch Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -118,6 +118,12 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 			   struct auth_state *auth_state,
 			   int localonly, int forceuser, int dbonly);
 
+/* delated delete */
+/* Translate delete into rename */
+int
+mboxlist_delayed_deletemailbox(const char *name, int isadmin, char *userid, 
+                               struct auth_state *auth_state, int checkacl,
+                               int local_only, int force);
 /* Delete a mailbox. */
 /* setting local_only disables any communication with the mupdate server
  * and deletes the mailbox from the filesystem regardless of if it is
@@ -204,4 +210,6 @@ void mboxlist_done(void);
 int mboxlist_commit(struct txn *tid);
 int mboxlist_abort(struct txn *tid);
 
+int mboxlist_delayed_delete_isenabled(void);
+int mboxlist_in_deletedhierarchy(const char *mailboxname);
 #endif

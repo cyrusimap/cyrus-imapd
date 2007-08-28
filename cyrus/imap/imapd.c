@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.520 2007/08/02 14:18:51 murch Exp $ */
+/* $Id: imapd.c,v 1.521 2007/08/28 18:42:27 murch Exp $ */
 
 #include <config.h>
 
@@ -4992,9 +4992,19 @@ static int delmbox(char *name,
 {
     int r;
 
-    r = mboxlist_deletemailbox(name, imapd_userisadmin,
-			       imapd_userid, imapd_authstate,
-			       0, 0, 0);
+    if (!mboxlist_delayed_delete_isenabled()) {
+        r = mboxlist_deletemailbox(name, imapd_userisadmin,
+                                   imapd_userid, imapd_authstate,
+                                   0, 0, 0);
+    } else if (imapd_userisadmin && mboxlist_in_deletedhierarchy(name)) {
+        r = mboxlist_deletemailbox(name, imapd_userisadmin,
+                                   imapd_userid, imapd_authstate,
+                                   0, 0, 0);
+    } else {
+        r = mboxlist_delayed_deletemailbox(name, imapd_userisadmin,
+                                           imapd_userid, imapd_authstate,
+                                           0, 0, 0);
+    }
     
     if (!r) sync_log_mailbox(name);
 
@@ -5074,9 +5084,20 @@ void cmd_delete(char *tag, char *name, int localonly, int force)
 	if (config_virtdomains && (p = strchr(mailboxname, '!')))
 	    domainlen = p - mailboxname + 1;
 
-	r = mboxlist_deletemailbox(mailboxname, imapd_userisadmin,
-				   imapd_userid, imapd_authstate, 1-force,
-				   localonly, 0);
+        if (localonly || !mboxlist_delayed_delete_isenabled()) {
+            r = mboxlist_deletemailbox(mailboxname, imapd_userisadmin,
+                                       imapd_userid, imapd_authstate, 
+                                       1-force, localonly, 0);
+        } else if (imapd_userisadmin &&
+                   mboxlist_in_deletedhierarchy(mailboxname)) {
+            r = mboxlist_deletemailbox(mailboxname, imapd_userisadmin,
+                                       imapd_userid, imapd_authstate,
+                                       0 /* checkacl */, localonly, 0);
+        } else {
+            r = mboxlist_delayed_deletemailbox(mailboxname, imapd_userisadmin,
+                                               imapd_userid, imapd_authstate,
+                                               1-force, localonly, 0);
+        }
     }
 
     /* was it a top-level user mailbox? */
