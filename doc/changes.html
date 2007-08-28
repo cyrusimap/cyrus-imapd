@@ -1,12 +1,26 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.120 2007/08/15 17:18:42 murch Exp $ -->
+<!-- $Id: changes.html,v 1.121 2007/08/28 18:42:27 murch Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
 <title>Changes to the Cyrus IMAP Server</title>
 </head>
 <body>
+
+<h1>Changes to the Cyrus IMAP Server since 2.3.9</h1>
+<ul>
+<li>Added support for "delayed" delete, in which mailboxes are renamed
+to a special admin-only "deleted" hierarchy at the time of the DELETE
+(hiding them from the client), rather than immediately removing them
+from the filesystem.  This allows messages/mailboxes to be recovered
+by the admin in case of user error.  The mailboxes and messages can be
+removed at a later time by <tt>cyr_expire</tt>.  The new
+<tt>delete_mode</tt> and <tt>deletedprefix</tt> options in
+<tt>imapd.conf</tt> controls whether deletes are "immediate" or
+"delayed" and the mailbox hierarchy for "delayed" deletes. 
+<i>-- courtesy of David Carter and FastMail.fm</i>.</li>
+</ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.3.8</h1>
 <ul>
@@ -2234,7 +2248,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2007/08/15 17:18:42 $ <br />
+last modified: $Date: 2007/08/28 18:42:27 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>

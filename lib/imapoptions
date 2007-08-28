@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.43 2007/03/30 18:51:02 murch Exp $
+.\" $Id: imapoptions,v 1.44 2007/08/28 18:42:28 murch Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -196,6 +196,18 @@ are listed with ``<none>''.
 
 { "defaultpartition", "default", STRING }
 /* The partition name used by default for new mailboxes. */
+
+{ "deletedprefix", "DELETED", STRING }
+/* If "delete_mode" set to be "delayed", the prefix for the deleted
+   mailboxes hierarchy.  The hierarchy delimiter will be automatically
+   appended. */
+
+{ "delete_mode", "immediate", ENUM("immediate", "delayed") }
+/*  The manner in which mailboxes are deleted. "Immediate" mode is the
+    default behavior in which mailboxes are removed immediately.  In
+    "delayed" mode, mailboxes are renamed to a special hiearchy defined
+    by the "deletedprefix" option to be removed later by cyr_expire.
+*/
 
 { "deleteright", "c", STRING }
 /* Deprecated - only used for backwards compatibility with existing

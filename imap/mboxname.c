@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- * $Id: mboxname.c,v 1.37 2006/11/30 17:11:19 murch Exp $
+ * $Id: mboxname.c,v 1.38 2007/08/28 18:42:28 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -599,11 +599,25 @@ int mboxname_userownsmailbox(const char *userid, const char *name)
 char *mboxname_isusermailbox(const char *name, int isinbox)
 {
     const char *p;
+    const char *start = name;
+    const char *deletedprefix = config_getstring(IMAPOPT_DELETEDPREFIX);
+    const char sep = config_getswitch(IMAPOPT_UNIXHIERARCHYSEP) ? '/' : '.';
+    int len = strlen(deletedprefix);
+    int isdel = 0;
 
-    if (((!strncmp(name, "user.", 5) && (p = name+5)) ||
-	 ((p = strstr(name, "!user.")) && (p += 6))) &&
-	(!isinbox || !strchr(p, '.')))
-	return (char*) p;
+    /* step past the domain part */
+    if (config_virtdomains && (p = strchr(start, '!')))
+	start = p + 1;
+
+    /* step past any deleted bit */
+    if (mboxlist_delayed_delete_isenabled() && strlen(start) > len && !strncmp(start, deletedprefix, len) && start[len] == sep)  {
+	start += len + 1;
+	isdel = 1; /* there's an additional sep + hextimestamp on isdel folders */
+    }
+
+    if (strlen(start) > 5 && !strncmp(start, "user", 4) && start[4] == sep && 
+      (!isinbox || !strchr(start+5, sep)) || (isdel && (p = strchr(start+5, sep)) && !strchr(p+1, sep)))
+	return (char*) start+5;
     else
 	return NULL;
 }

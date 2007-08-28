@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: cyr_expire.8,v 1.4 2007/04/04 15:04:39 murch Exp $
+.\" $Id: cyr_expire.8,v 1.5 2007/08/28 18:42:28 murch Exp $
 .SH NAME
 cyr_expire \- expire messages and duplicate delivery database entries
 .SH SYNOPSIS
@@ -47,6 +47,9 @@ cyr_expire \- expire messages and duplicate delivery database entries
 [
 .B \-C
 .I config-file
+]
+[
+.BI \-D " delete-days"
 ]
 .BI \-E " expire-days"
 [
@@ -83,6 +86,11 @@ file unless specified otherwise by \fB-C\fR.
 .TP
 .BI \-C " config-file"
 Read configuration options from \fIconfig-file\fR.
+.TP
+\fB\-D \fIdelete-days\fR
+Remove previously deleted mailboxes older than \fIdelete-days\fR
+(when using the "delayed" delete mode).  The default is 0 (zero)
+days, which will delete \fBall\fR previously deleted mailboxes.
 .TP
 \fB\-E \fIexpire-days\fR
 Prune the duplicate database of entries older than \fIexpire-days\fR.  This
