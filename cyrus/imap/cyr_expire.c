@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_expire.c,v 1.13 2007/08/28 18:42:27 murch Exp $
+ * $Id: cyr_expire.c,v 1.14 2007/08/29 16:44:11 murch Exp $
  */
 
 #include <config.h>
@@ -291,8 +291,6 @@ int delete(char *name, int matchlen, int maycreate __attribute__((unused)),
 	 void *rock)
 {
     struct delete_rock *drock = (struct delete_rock *) rock;
-    char fnamebuf[MAX_MAILBOX_PATH+1];
-    struct stat sbuf;
     char *p;
     int i, r, domainlen = 0;
     struct delete_node *node;
@@ -320,6 +318,8 @@ int delete(char *name, int matchlen, int maycreate __attribute__((unused)),
     /* Sanity check for 8 hex digits only at the end */
     p = strrchr(name, '.');
     if (!p) return(0);
+    p++;
+
     for (i = 0 ; i < 7; i++) {
         if (!isxdigit(p[i])) return(0);
     }
