@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.249 2007/08/28 18:42:28 murch Exp $
+ * $Id: mboxlist.c,v 1.250 2007/08/30 14:25:08 murch Exp $
  */
 
 #include <config.h>
@@ -1346,7 +1346,8 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     if (!r && !(mbtype & MBTYPE_REMOTE)) {
 	/* Rename the actual mailbox */
 	r = mailbox_rename_copy(&oldmailbox, newname, newpartition,
-				NULL, NULL, &newmailbox);
+				NULL, NULL, &newmailbox,
+				isusermbox ? userid : NULL);
 	if (r) {
 	    goto done;
 	} else {
