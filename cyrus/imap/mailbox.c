@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.167 2007/07/20 14:21:57 murch Exp $
+ * $Id: mailbox.c,v 1.168 2007/08/30 14:25:08 murch Exp $
  *
  */
 
@@ -2839,7 +2839,7 @@ static struct data_file data_files[] = {
     { 0, 0 }
 };
 
-/* if 'isinbox' is set, we perform the funky RENAME INBOX INBOX.old
+/* if 'userid' is set, we perform the funky RENAME INBOX INBOX.old
    semantics, regardless of whether or not the name of the mailbox is
    'user.foo'.*/
 /* requires a LOCKED oldmailbox pointer */
@@ -2847,7 +2847,7 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
 			const char *newname,
 			char *newpartition,
 			bit32 *olduidvalidityp, bit32 *newuidvalidityp,
-			struct mailbox *newmailbox)
+			struct mailbox *newmailbox, char *userid)
 {
     int r;
     unsigned int flag, msgno;
@@ -2864,7 +2864,7 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
 
     /* Create new mailbox */
     r = mailbox_create(newname, newpartition,
-		       oldmailbox->acl, oldmailbox->uniqueid,
+		       oldmailbox->acl, (userid ? NULL : oldmailbox->uniqueid),
 		       oldmailbox->format, newmailbox);
 
     if (r) return r;
@@ -2986,7 +2986,7 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     }
     closedir(mbdir);
 
-    if (!r) r = seen_copy(oldmailbox, newmailbox);
+    if (!r) r = seen_copy(oldmailbox, newmailbox, userid);
 
     /* Record new quota usage */
     if (!r && newmailbox->quota.root) {
@@ -3176,7 +3176,7 @@ mailbox_sync(const char *oldname, const char *oldpath,
 	    if (r) break;
 	}
     }
-    if (!r) r = seen_copy(&oldmailbox, &newmailbox);
+    if (!r) r = seen_copy(&oldmailbox, &newmailbox, NULL);
 
     if (!r) {
 	/* Copy over index/cache files */

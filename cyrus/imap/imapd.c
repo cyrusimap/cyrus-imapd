@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.521 2007/08/28 18:42:27 murch Exp $ */
+/* $Id: imapd.c,v 1.522 2007/08/30 14:25:06 murch Exp $ */
 
 #include <config.h>
 
@@ -5525,6 +5525,11 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
         sync_log_mailbox_double(oldmailboxname2, newmailboxname2);
+
+	/* if user is renaming inbox, sync seen state on new mailbox */
+	if (!strcasecmp(oldname, "inbox")) {
+	    sync_log_seen(imapd_userid, newmailboxname2);
+	}
     }
 }	
 

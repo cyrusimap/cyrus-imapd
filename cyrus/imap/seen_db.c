@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
- * $Id: seen_db.c,v 1.53 2007/08/15 17:20:57 murch Exp $
+ * $Id: seen_db.c,v 1.54 2007/08/30 14:25:08 murch Exp $
  * 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -511,11 +511,35 @@ int seen_rename_user(const char *olduser, const char *newuser)
     return r;
 }
 
-int seen_copy(struct mailbox *oldmailbox, struct mailbox *newmailbox)
+int seen_copy(struct mailbox *oldmailbox, struct mailbox *newmailbox,
+	      char *userid)
 {
     if (SEEN_DEBUG) {
-	syslog(LOG_DEBUG, "seen_db: seen_copy(%s, %s)",
-	       oldmailbox->uniqueid, newmailbox->uniqueid);
+	syslog(LOG_DEBUG, "seen_db: seen_copy(%s, %s, %s)",
+	       oldmailbox->uniqueid, newmailbox->uniqueid,
+	       userid ? userid : "");
+    }
+
+    if (userid && strcmp(oldmailbox->uniqueid, newmailbox->uniqueid)) {
+	int r;
+	struct seen *seendb;
+	time_t last_read, last_change;
+	unsigned last_uid;
+	char *seenuids = NULL;
+
+	r = seen_open(oldmailbox, userid, 0, &seendb);
+	if (r) return r;
+    
+	r = seen_lockread(seendb, &last_read, &last_uid, &last_change, &seenuids);
+	if (r) goto done;
+
+	seendb->uniqueid = newmailbox->uniqueid;
+	r = seen_write(seendb, last_read, last_uid, last_change, seenuids);
+
+      done:
+	if (seenuids) free(seenuids);
+	seen_close(seendb);
+	return r;
     }
 
     /* noop */
