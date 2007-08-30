@@ -1,5 +1,5 @@
 dnl
-dnl $Id: c-fpic.m4,v 1.2 2003/10/08 20:35:24 rjs3 Exp $
+dnl $Id: c-fpic.m4,v 1.3 2007/08/30 16:57:55 murch Exp $
 dnl
 
 dnl
@@ -13,13 +13,13 @@ save_CFLAGS=$CFLAGS
 CFLAGS="${CFLAGS} -fPIC"
 AC_TRY_COMPILE([
 #include <stdlib.h>
-],
-[
 static void
 foo(void)
 {
   exit(1);
 }
+],
+[
 ],
 ac_cv_fpic=yes,
 ac_cv_fpic=no)

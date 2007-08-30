@@ -1,5 +1,5 @@
 dnl
-dnl $Id: c-attribute.m4,v 1.3 2003/10/08 20:35:24 rjs3 Exp $
+dnl $Id: c-attribute.m4,v 1.4 2007/08/30 16:57:55 murch Exp $
 dnl
 
 dnl
@@ -11,8 +11,6 @@ AC_MSG_CHECKING(for __attribute__)
 AC_CACHE_VAL(ac_cv___attribute__, [
 AC_TRY_COMPILE([
 #include <stdlib.h>
-],
-[
 static void foo(void) __attribute__ ((noreturn));
 
 static void
@@ -20,6 +18,8 @@ foo(void)
 {
   exit(1);
 }
+],
+[
 ],
 ac_cv___attribute__=yes,
 ac_cv___attribute__=no)])
