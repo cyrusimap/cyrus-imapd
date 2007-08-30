@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.7 2007/08/01 19:19:03 murch Exp $
+ * $Id: sync_server.c,v 1.8 2007/08/30 17:51:44 murch Exp $
  */
 
 #include <config.h>
@@ -63,6 +63,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <utime.h>
@@ -367,6 +368,7 @@ int service_main(int argc __attribute__((unused)),
 		 char **argv __attribute__((unused)),
 		 char **envp __attribute__((unused)))
 {
+    struct protoent *proto;
     socklen_t salen;
     char localip[60], remoteip[60];
     char hbuf[NI_MAXHOST];
@@ -378,6 +380,21 @@ int service_main(int argc __attribute__((unused)),
 
     sync_in = prot_new(0, 0);
     sync_out = prot_new(1, 1);
+
+    /* Disable Nagle's Algorithm => increase throughput
+     *
+     * http://en.wikipedia.org/wiki/Nagle's_algorithm
+     */
+    if ((proto = getprotobyname("tcp")) != NULL) {
+	int on = 1;
+
+	if (setsockopt(1, proto->p_proto, TCP_NODELAY,
+		       (void *) &on, sizeof(on)) != 0) {
+	    syslog(LOG_ERR, "unable to setsocketopt(TCP_NODELAY): %m");
+	}
+    } else {
+	syslog(LOG_ERR, "unable to getprotobyname(\"tcp\"): %m");
+    }
 
     /* Find out name of client host */
     salen = sizeof(sync_remoteaddr);
