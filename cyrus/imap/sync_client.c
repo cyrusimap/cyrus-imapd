@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.14 2007/08/01 19:19:02 murch Exp $
+ * $Id: sync_client.c,v 1.15 2007/08/30 17:51:44 murch Exp $
  */
 
 #include <config.h>
@@ -60,6 +60,8 @@
 #include <sys/wait.h>
 #include <errno.h>
 #include <ctype.h>
+
+#include <netinet/tcp.h>
 
 #include "global.h"
 #include "assert.h"
@@ -3184,6 +3186,7 @@ struct backend *replica_connect(struct backend *be, const char *servername,
 				sasl_callback_t *cb)
 {
     int wait;
+    struct protoent *proto;
 
     for (wait = 15;; wait *= 2) {
 	be = backend_connect(be, servername, &protocol[PROTOCOL_CSYNC],
@@ -3201,6 +3204,21 @@ struct backend *replica_connect(struct backend *be, const char *servername,
 	fprintf(stderr, "Can not connect to server '%s'\n",
 		servername);
 	_exit(1);
+    }
+
+    /* Disable Nagle's Algorithm => increase throughput
+     *
+     * http://en.wikipedia.org/wiki/Nagle's_algorithm
+     */ 
+    if ((proto = getprotobyname("tcp")) != NULL) {
+	int on = 1;
+
+	if (setsockopt(be->sock, proto->p_proto, TCP_NODELAY,
+		       (void *) &on, sizeof(on)) != 0) {
+	    syslog(LOG_ERR, "unable to setsocketopt(TCP_NODELAY): %m");
+	}
+    } else {
+	syslog(LOG_ERR, "unable to getprotobyname(\"tcp\"): %m");
     }
 
     return be;
