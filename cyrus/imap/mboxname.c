@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- * $Id: mboxname.c,v 1.38 2007/08/28 18:42:28 murch Exp $
+ * $Id: mboxname.c,v 1.39 2007/08/31 17:15:00 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -601,7 +601,6 @@ char *mboxname_isusermailbox(const char *name, int isinbox)
     const char *p;
     const char *start = name;
     const char *deletedprefix = config_getstring(IMAPOPT_DELETEDPREFIX);
-    const char sep = config_getswitch(IMAPOPT_UNIXHIERARCHYSEP) ? '/' : '.';
     int len = strlen(deletedprefix);
     int isdel = 0;
 
@@ -609,15 +608,22 @@ char *mboxname_isusermailbox(const char *name, int isinbox)
     if (config_virtdomains && (p = strchr(start, '!')))
 	start = p + 1;
 
-    /* step past any deleted bit */
-    if (mboxlist_delayed_delete_isenabled() && strlen(start) > len && !strncmp(start, deletedprefix, len) && start[len] == sep)  {
+    /* step past any deletedprefix */
+    if (mboxlist_delayed_delete_isenabled() && strlen(start) > len+1 &&
+	!strncmp(start, deletedprefix, len) && start[len] == '.')  {
 	start += len + 1;
-	isdel = 1; /* there's an additional sep + hextimestamp on isdel folders */
+	isdel = 1; /* there's an add'l sep + hextimestamp on isdel folders */
     }
 
-    if (strlen(start) > 5 && !strncmp(start, "user", 4) && start[4] == sep && 
-      (!isinbox || !strchr(start+5, sep)) || (isdel && (p = strchr(start+5, sep)) && !strchr(p+1, sep)))
-	return (char*) start+5;
+    /* starts with "user." AND
+     * we don't care if it's an inbox OR
+     * there's no dots after the username OR 
+     * it's deleted and there's only one more dot
+     */
+    if (!strncmp(start, "user.", 5) &&
+	(!isinbox || !strchr(start+5, '.') ||
+	 (isdel && (p = strchr(start+5, '.')) && !strchr(p+1, '.'))))
+	return (char*) start+5; /* could have trailing bits if isinbox+isdel */
     else
 	return NULL;
 }
