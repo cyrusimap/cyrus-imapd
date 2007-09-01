@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_commit.c,v 1.5 2007/08/15 17:04:34 murch Exp $
+ * $Id: sync_commit.c,v 1.6 2007/09/01 16:19:36 murch Exp $
  */
 
 #include <config.h>
@@ -481,6 +481,7 @@ sync_append_commit(struct mailbox *mailbox,
     unsigned long newflagged;
     char  target[MAX_MAILBOX_PATH];
     int   n, r = 0;
+    long last_offset;
     struct txn *tid = NULL;
     modseq_t highestmodseq = 0;
 
@@ -577,9 +578,11 @@ sync_append_commit(struct mailbox *mailbox,
     if (retry_writev(mailbox->cache_fd, cache_iovec, upload_list->count) < 0)
         goto fail;
 
-    lseek(mailbox->index_fd, mailbox->index_size, SEEK_SET);
+    
+    last_offset = mailbox->start_offset + mailbox->exists * mailbox->record_size;
+    lseek(mailbox->index_fd, last_offset, SEEK_SET);
     if (retry_write(mailbox->index_fd, index_chunk,
-                    upload_list->count * INDEX_RECORD_SIZE) < 0)
+                    upload_list->count * mailbox->record_size) < 0)
         goto fail;
 
 
