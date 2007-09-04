@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.151 2007/07/18 18:11:55 murch Exp $
+ * $Id: lmtpd.c,v 1.152 2007/09/04 18:47:39 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -509,21 +509,24 @@ int deliver_mailbox(FILE *f,
 		return 0;
 	    }         
 	} else {
-	    if (dupelim && id) 
-		duplicate_mark(id, strlen(id), mailboxname, 
-			       strlen(mailboxname), now, uid);
+	    r = append_commit(&as, quotaoverride ? -1 : 0, NULL, &uid, NULL);
+	    if (!r) {
+		syslog(LOG_INFO, "Delivered: %s to mailbox: %s", id, mailboxname);
 
-	    append_commit(&as, quotaoverride ? -1 : 0, NULL, &uid, NULL);
-	    syslog(LOG_INFO, "Delivered: %s to mailbox: %s", id, mailboxname);
+		if (dupelim && id) {
+		    duplicate_mark(id, strlen(id), mailboxname, 
+				   strlen(mailboxname), now, uid);
+		}
 
-	    sync_log_append(mailboxname);
+		sync_log_append(mailboxname);
 
-	    if (user) {
-		/* check if the \Seen flag has been set on this message */
-		while (nflags) {
-		    if (!strcmp(flag[--nflags], "\\seen")) {
-			sync_log_seen(user, mailboxname);
-			break;
+		if (user) {
+		    /* check if the \Seen flag has been set on this message */
+		    while (nflags) {
+			if (!strcmp(flag[--nflags], "\\seen")) {
+			    sync_log_seen(user, mailboxname);
+			    break;
+			}
 		    }
 		}
 	    }
