@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_expire.c,v 1.14 2007/08/29 16:44:11 murch Exp $
+ * $Id: cyr_expire.c,v 1.15 2007/09/04 15:13:28 murch Exp $
  */
 
 #include <config.h>
@@ -75,7 +75,7 @@ const int config_need_data = 0;
 void usage(void)
 {
     fprintf(stderr,
-	    "cyr_expire [-C <altconfig>] -E <days> [-X <expunge-days>] [-a] [-v]\n");
+	    "cyr_expire [-C <altconfig>] -E <days> [-X <expunge-days>] [-p prefix] [-a] [-v]\n");
     exit(-1);
 }
 
@@ -348,6 +348,7 @@ int main(int argc, char *argv[])
     extern char *optarg;
     int opt, r = 0, expire_days = 0, expunge_days = 0, delete_days = 0;
     char *alt_config = NULL;
+    char *find_prefix = NULL;
     char buf[100];
     struct hash_table expire_table;
     struct expire_rock erock;
@@ -362,7 +363,7 @@ int main(int argc, char *argv[])
     memset(&erock, 0, sizeof(erock));
     memset(&drock, 0, sizeof(drock));
 
-    while ((opt = getopt(argc, argv, "C:D:E:X:va")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:D:E:X:p:va")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -381,6 +382,10 @@ int main(int argc, char *argv[])
 	case 'X':
 	    if (expunge_days) usage();
 	    expunge_days = atoi(optarg);
+	    break;
+
+	case 'p':
+	    find_prefix = optarg;
 	    break;
 
 	case 'v':
@@ -436,7 +441,11 @@ int main(int argc, char *argv[])
 		expunge_days);
     }
 
-    strlcpy(buf, "*", sizeof(buf));
+    if (find_prefix) {
+	strlcpy(buf, find_prefix, sizeof(buf));
+    } else {
+	strlcpy(buf, "*", sizeof(buf));
+    }
     mboxlist_findall(NULL, buf, 1, 0, 0, &expire, &erock);
 
     syslog(LOG_NOTICE, "expunged %lu out of %lu messages from %lu mailboxes",

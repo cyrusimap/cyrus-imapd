@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: cyr_expire.8,v 1.5 2007/08/28 18:42:28 murch Exp $
+.\" $Id: cyr_expire.8,v 1.6 2007/09/04 15:13:27 murch Exp $
 .SH NAME
 cyr_expire \- expire messages and duplicate delivery database entries
 .SH SYNOPSIS
@@ -54,6 +54,9 @@ cyr_expire \- expire messages and duplicate delivery database entries
 .BI \-E " expire-days"
 [
 .BI \-X " expunge-days"
+]
+[
+.B \-p " mailbox-prefix"
 ]
 [
 .B \-v
@@ -101,6 +104,10 @@ value is only used for entries which do not have a corresponding
 Expunge previously deleted messages older than \fIexpunge-days\fR
 (when using the "delayed" expunge mode).  The default is 0 (zero)
 days, which will expunge \fBall\fR previously deleted messages.
+.TP
+\fB\-p \fImailbox-prefix\fR
+Only find mailboxes starting with this prefix.  e.g.
+"user.justgotspammedlots"
 .TP
 .B \-v
 Enable verbose output.
