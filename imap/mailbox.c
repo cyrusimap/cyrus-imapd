@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.168 2007/08/30 14:25:08 murch Exp $
+ * $Id: mailbox.c,v 1.169 2007/09/04 15:11:35 murch Exp $
  *
  */
 
@@ -1930,6 +1930,16 @@ static int process_records(struct mailbox *mailbox, FILE *newindex,
 	    cacheitembegin = cacheitem = mailbox->cache_base + cache_offset;
 	    for (cache_ent = 0; cache_ent < NUM_CACHE_FIELDS; cache_ent++) {
 		cacheitem = CACHE_ITEM_NEXT(cacheitem);
+		if ((cacheitem < (mailbox->cache_base + cache_offset)) || 
+		    (cacheitem > (mailbox->cache_base + mailbox->cache_len))) {
+		    syslog(LOG_ERR,
+			   "IOERROR: reading cache record for %s:"
+			   " got bogus offset %d for %u/%lu; try reconstruct",
+			   mailbox->name,
+			   cacheitem - (mailbox->cache_base + cache_offset),
+			   msgno, mailbox->exists);
+		    return IMAP_IOERROR;
+		}
 	    }
 	    cache_record_size = (cacheitem - cacheitembegin);
 	    *new_cache_total_size += cache_record_size;
