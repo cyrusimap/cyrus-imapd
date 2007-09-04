@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.c,v 1.9 2007/07/16 18:01:25 murch Exp $
+ * $Id: sync_support.c,v 1.10 2007/09/04 15:00:17 murch Exp $
  */
 
 #include <config.h>
@@ -959,9 +959,10 @@ struct sync_message *sync_message_add(struct sync_message_list *l,
     return(result);
 }
 
-void sync_message_fsync(struct sync_message_list *l)
+int sync_message_fsync(struct sync_message_list *l)
 {
     int i;
+    int r = 0;
 
     if (l->file_count == 0)
         return;
@@ -969,11 +970,15 @@ void sync_message_fsync(struct sync_message_list *l)
     /* fsync() files in reverse order: ReiserFS FAQ indicates that this
      * gives best potential for optimisation */
     for (i = (l->file_count-1) ; i >= 0 ; i--) {
-        fsync(fileno(l->file[i]));
-        fclose(l->file[i]);
+        if ((fflush(l->file[i]) != 0) ||
+            (fsync(fileno(l->file[i])) < 0) ||
+            (fclose(l->file[i]) != 0))
+            r = IMAP_IOERROR;  /* Aggregate to single error */
         l->file[i] = NULL;
     }
     l->file_count = 0;
+
+    return(r);
 }
 
 FILE *sync_message_open(struct sync_message_list *l,
@@ -981,8 +986,12 @@ FILE *sync_message_open(struct sync_message_list *l,
 {
     FILE *file;
 
-    if (l->file_count == l->file_max)
-        sync_message_fsync(l);
+    if (l->file_count == l->file_max) {
+        if (sync_message_fsync(l) != 0) {
+            syslog(LOG_ERR, "sync_message_open(): Unable to flush files");
+            return(NULL);
+        }
+    }
 
     /* unlink just in case a previous crash left a file 
      * hard linked into someone else's mailbox! */
@@ -1286,8 +1295,10 @@ int sync_getsimple(struct protstream *input, struct protstream *output,
     /* If switching from PARSED to SIMPLE, need to flush cache.  This is
      * redundant as it duplicates code in cmd_upload() (which is the
      * logical place for the code to go), but better safe than sorry. */
-    if (list->cache_buffer_size > 0)
-        sync_message_list_cache_flush(list);
+    if (list->cache_buffer_size > 0) {
+        if ((r = sync_message_list_cache_flush(list)))
+            return(r);
+    }
 
     if ((r = sync_getliteral_size(input, output, &message->msg_size)))
         return(r);
