@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.h,v 1.3 2007/05/18 13:24:40 murch Exp $
+ * $Id: sync_support.h,v 1.4 2007/09/04 15:00:17 murch Exp $
  */
 
 #ifndef INCLUDED_SYNC_SUPPORT_H
@@ -310,7 +310,7 @@ int sync_message_list_need_restart(struct sync_message_list *l);
 struct sync_message *sync_message_find(struct sync_message_list *l,
 				       struct message_uuid *uuid);
 
-void sync_message_fsync(struct sync_message_list *l);
+int sync_message_fsync(struct sync_message_list *l);
 
 FILE *sync_message_open(struct sync_message_list *l,
 			struct sync_message *message);

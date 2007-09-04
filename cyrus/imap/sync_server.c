@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.8 2007/08/30 17:51:44 murch Exp $
+ * $Id: sync_server.c,v 1.9 2007/09/04 15:00:17 murch Exp $
  */
 
 #include <config.h>
@@ -1891,8 +1891,13 @@ static void cmd_upload(struct mailbox *mailbox,
                 goto parse_err;
             }
 
-            if (message_list->cache_buffer_size > 0)
-                sync_message_list_cache_flush(message_list);
+            if (message_list->cache_buffer_size > 0) {
+                r = sync_message_list_cache_flush(message_list);
+                if (r) {
+                    err = "Failed to flush messages to disk";
+                    goto parse_err;
+                }
+            }
 
             /* YYY Problem: sync_server needs source of Message-UUID for
                new uploaded messages. Schema 2? */
@@ -1981,10 +1986,10 @@ static void cmd_upload(struct mailbox *mailbox,
     }
 
     /* Make sure cache data flushed to disk before we commit */
-    sync_message_fsync(message_list);
-    sync_message_list_cache_flush(message_list);
-
-    r=sync_upload_commit(mailbox, last_appenddate, upload_list, message_list);
+    r = sync_message_fsync(message_list);
+    if (!r) sync_message_list_cache_flush(message_list);
+    if (!r) r = sync_upload_commit(mailbox, last_appenddate,
+                                   upload_list, message_list);
 
     if (r) {
         prot_printf(sync_out, "NO Failed to commit message upload to %s: %s\r\n",
