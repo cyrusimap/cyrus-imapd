@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.110 2007/02/05 18:41:45 jeaton Exp $
+ * $Id: append.c,v 1.111 2007/09/05 17:26:26 murch Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -1091,7 +1091,9 @@ static int append_addseen(struct mailbox *mailbox,
     /* what's the first uid in our new list? */
     start = atoi(msgrange);
 
-    r = seen_open(mailbox, userid, SEEN_CREATE, &seendb);
+    r = seen_open(mailbox,
+		  (mailbox->options & OPT_IMAP_SHAREDSEEN) ? "anyone" : userid,
+		  SEEN_CREATE, &seendb);
     if (r) return r;
     
     r = seen_lockread(seendb, &last_read, &last_uid, &last_change, &seenuids);

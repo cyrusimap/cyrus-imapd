@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.152 2007/09/04 18:47:39 murch Exp $
+ * $Id: lmtpd.c,v 1.153 2007/09/05 17:26:27 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -509,6 +509,8 @@ int deliver_mailbox(FILE *f,
 		return 0;
 	    }         
 	} else {
+	    int sharedseen = (as.m.options & OPT_IMAP_SHAREDSEEN);
+
 	    r = append_commit(&as, quotaoverride ? -1 : 0, NULL, &uid, NULL);
 	    if (!r) {
 		syslog(LOG_INFO, "Delivered: %s to mailbox: %s", id, mailboxname);
@@ -524,7 +526,8 @@ int deliver_mailbox(FILE *f,
 		    /* check if the \Seen flag has been set on this message */
 		    while (nflags) {
 			if (!strcmp(flag[--nflags], "\\seen")) {
-			    sync_log_seen(user, mailboxname);
+			    sync_log_seen(sharedseen ? "anyone" : user,
+					  mailboxname);
 			    break;
 			}
 		    }

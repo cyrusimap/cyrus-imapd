@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.123 2007/08/30 17:51:44 murch Exp $ -->
+<!-- $Id: changes.html,v 1.124 2007/09/05 17:26:26 murch Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -28,6 +28,9 @@ href="http://en.wikipedia.org/wiki/Nagle's_algorithm">Nagle's
 algorithm</a> in <tt>sync_client</tt> and <tt>sync_server</tt> to
 increase the throughput of the replication protocol.
 <i>-- courtesy of Wes Craig</i>.</li>
+<li>Added support for a shared \Seen flag on messages (must be
+enabled on a per-mailbox basis with the
+<tt>/vendor/cmu/cyrus-imapd/sharedseen</tt> mailbox annotation.</li>
 <li>Fixed miscellaneous bugs and build issues.</li>
 </ul>
 
@@ -2257,7 +2260,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2007/08/30 17:51:44 $ <br />
+last modified: $Date: 2007/09/05 17:26:26 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>

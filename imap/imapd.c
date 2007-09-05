@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.522 2007/08/30 14:25:06 murch Exp $ */
+/* $Id: imapd.c,v 1.523 2007/09/05 17:26:26 murch Exp $ */
 
 #include <config.h>
 
@@ -3192,10 +3192,15 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 	if (body) free(body);
 
 	if (!r) {
+	    int sharedseen = (mailbox.m.options & OPT_IMAP_SHAREDSEEN);
+
 	    r = append_commit(&mailbox, totalsize, &uidvalidity, &firstuid, &num);
             if (!r) {
 		sync_log_append(mailboxname);
-		if (sync_seen) sync_log_seen(imapd_userid, mailboxname);
+		if (sync_seen) {
+		    sync_log_seen(sharedseen ? "anyone" : imapd_userid,
+				  mailboxname);
+		}
 	    }
 	} else {
 	    append_abort(&mailbox);
@@ -5528,6 +5533,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 
 	/* if user is renaming inbox, sync seen state on new mailbox */
 	if (!strcasecmp(oldname, "inbox")) {
+	    /* XXX  Need to check for sharedseen somehow */
 	    sync_log_seen(imapd_userid, newmailboxname2);
 	}
     }
