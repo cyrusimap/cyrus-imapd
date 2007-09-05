@@ -39,7 +39,7 @@
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 #
-# $Id: cyradm.sh,v 1.18 2006/11/30 17:11:23 murch Exp $
+# $Id: cyradm.sh,v 1.19 2007/09/05 17:26:27 murch Exp $
 case "x$BASH_VERSION" in
 x) exec perl -MCyrus::IMAP::Shell -e shell -- ${1+"$@"} ;;
 *) exec perl -MCyrus::IMAP::Shell -e shell -- "$@" ;;
@@ -220,6 +220,17 @@ Enables the IMAP CONDSTORE extension (modification sequences) on the mailbox.
 
 Sets the number of days after which messages will be expired from the mailbox.
 
+=item C<news2mail>
+
+Sets an email address to which messages injected into the server via NNTP 
+will be sent.
+
+=item C<sharedseen>
+
+Enables the use of a shared \Seen flag on messages rather than a
+per-user \Seen flag.  The 's' right in the mailbox ACL still controls
+whether a user can set the shared \Seen flag.
+
 =item C<sieve>
 
 Indicates the name of the global sieve script that should be run when
@@ -229,11 +240,6 @@ mailboxes).
 =item C<squat>
 
 Indicates that the mailbox should have a squat index created for it.
-
-=item C<news2mail>
-
-Sets an email address to which messages injected into the server via NNTP 
-will be sent.
 
 =back 
 

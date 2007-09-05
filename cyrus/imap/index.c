@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.226 2007/08/02 14:18:52 murch Exp $
+ * $Id: index.c,v 1.227 2007/09/05 17:26:27 murch Exp $
  */
 #include <config.h>
 
@@ -367,7 +367,10 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 
     /* If opening mailbox, get \Recent info */
     if (oldexists == -1 && mailbox->keepingseen) {
-	r = seen_open(mailbox, imapd_userid, SEEN_CREATE, &seendb);
+	r = seen_open(mailbox,
+		      (mailbox->options & OPT_IMAP_SHAREDSEEN) ? "anyone" :
+		      imapd_userid,
+		      SEEN_CREATE, &seendb);
 	if (!r) {
 	    free(seenuids);
 	    seenuids = NULL;
@@ -822,7 +825,8 @@ int oldexists;
      * imapd.c doesn't have enough context to work out where seen flags set.
      * Downside: we have to link sync_client, sync_server with sync_log */
     if (!r && dosync) {
-        sync_log_seen(imapd_userid, mailbox->name);
+        sync_log_seen((mailbox->options & OPT_IMAP_SHAREDSEEN) ? "anyone" :
+		      imapd_userid, mailbox->name);
     }
 
 #if TOIMSP
@@ -1324,13 +1328,19 @@ index_copy(struct mailbox *mailbox,
 
     r = append_copy(mailbox, &append_mailbox, copyargs.nummsg,
 		    copyargs.copymsg, nolink);
-    if (!r) append_commit(&append_mailbox, totalsize,
-			  &uidvalidity, &startuid, &num);
-
     if (!r) {
-	sync_log_mailbox_double(mailbox->name, name);
-	/* if any messages are seen then we need to sync the seen state */
-	if (haveseen) sync_log_seen(imapd_userid, name);
+	int sharedseen = (append_mailbox.m.options & OPT_IMAP_SHAREDSEEN);
+
+	r = append_commit(&append_mailbox, totalsize,
+		      &uidvalidity, &startuid, &num);
+
+	if (!r) {
+	    sync_log_mailbox_double(mailbox->name, name);
+	    /* if any messages are seen then we need to sync the seen state */
+	    if (haveseen) {
+		sync_log_seen(sharedseen ? "anyone" : imapd_userid, name);
+	    }
+	}
     }
 
     if (!r && docopyuid) {
@@ -1481,7 +1491,10 @@ int statusitems;
     if (mailbox->exists != 0 &&
 	(statusitems &
 	 (STATUS_RECENT | STATUS_UNSEEN))) {
-	r = seen_open(mailbox, imapd_userid, SEEN_CREATE, &status_seendb);
+	r = seen_open(mailbox,
+		      (mailbox->options & OPT_IMAP_SHAREDSEEN) ? "anyone" :
+		      imapd_userid,
+		      SEEN_CREATE, &status_seendb);
 	if (r) return r;
 
 	r = seen_lockread(status_seendb, &last_read, &last_uid,
