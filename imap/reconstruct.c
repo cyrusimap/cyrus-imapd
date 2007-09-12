@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.93 2007/04/03 13:01:12 murch Exp $ */
+/* $Id: reconstruct.c,v 1.94 2007/09/12 14:55:19 murch Exp $ */
 
 #include <config.h>
 
@@ -133,6 +133,8 @@ extern cyrus_acl_canonproc_t mboxlist_ensureOwnerRights;
 int code = 0;
 int keepflag = 0;
 int syncflag = 0;
+int uuid_clear = 0;
+int uuid_set   = 0;
 
 int main(int argc, char **argv)
 {
@@ -158,7 +160,7 @@ int main(int argc, char **argv)
     assert(INDEX_HEADER_SIZE == (OFFSET_SPARE4+4));
     assert(INDEX_RECORD_SIZE == (OFFSET_MODSEQ+4));
 
-    while ((opt = getopt(argc, argv, "C:kp:rmfsx")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:kp:rmfsxuU")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -190,6 +192,14 @@ int main(int argc, char **argv)
 	    
 	case 'x':
 	    xflag = 1;
+	    break;
+	    
+	case 'u':
+	    uuid_clear = 1;
+	    break;
+	    
+	case 'U':
+	    uuid_set = 1;
 	    break;
 	    
 	default:
@@ -992,8 +1002,11 @@ int reconstruct(char *name, struct discovered *found)
 	if (message_index.modseq > mailbox.highestmodseq) {
 	    mailbox.highestmodseq = message_index.modseq;
 	}
-	
-	}	
+	}
+
+	/* Force rebuild from message_create_record() */
+	if (uuid_set) message_uuid_set_null(&message_index.uuid);
+
 	if (((r = message_parse_file(msgfile, NULL, NULL, &body)) != 0) ||
 	    ((r = message_create_record(&mailbox, &message_index, body)) != 0)) {
 	    fclose(msgfile);
@@ -1008,6 +1021,9 @@ int reconstruct(char *name, struct discovered *found)
 	fclose(msgfile);
 	if (body) message_free_body(body);
 	
+        /* Clear out existing or regenerated UUID */
+        if (uuid_clear) message_uuid_set_null(&message_index.uuid);
+
 	if (expunge_found == 0) {	
 	/* Write out new entry in index file */
 	mailbox_index_record_to_buf(&message_index, buf);
