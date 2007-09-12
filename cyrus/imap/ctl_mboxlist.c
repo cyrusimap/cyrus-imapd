@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.56 2007/07/18 18:56:11 murch Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.57 2007/09/12 14:28:11 murch Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -210,7 +210,7 @@ static int dump_cb(void *rockp,
     switch (d->op) {
     case DUMP:
 	if(!d->partition || !strcmp(d->partition, part)) {
-	    printf("%s\t%d %s\t%s\n", name, mbtype, part, acl);
+	    printf("%s\t%d %s %s\n", name, mbtype, part, acl);
 	    if(d->purge) {
 		config_mboxlist_db->delete(mbdb, key, keylen, &(d->tid), 0);
 	    }
@@ -537,7 +537,7 @@ void do_undump(void)
 	    if (*p == ' ') p++;
 	}
 	partition = p;
-	for (; *p && *p != '\t'; p++) ;
+	for (; *p && (*p != ' ') && (*p != '\t'); p++) ;
 	if (!*p) {
 	    fprintf(stderr, "line %d: no acl found\n", line);
 	    continue;
