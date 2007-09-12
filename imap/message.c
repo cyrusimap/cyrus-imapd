@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: message.c,v 1.105 2007/06/14 18:15:02 murch Exp $
+ * $Id: message.c,v 1.106 2007/09/12 17:53:29 murch Exp $
  */
 
 #include <config.h>
@@ -202,6 +202,7 @@ static void message_write_address P((struct ibuf *ibuf,
 				     struct address *addrlist));
 static void message_write_nstring P((struct ibuf *ibuf, char *s));
 static void message_write_text P((struct ibuf *ibuf, char *s));
+static void message_write_text_lcase P((struct ibuf *ibuf, char *s));
 static void message_write_number P((struct ibuf *ibuf, unsigned n));
 static void message_write_section P((struct ibuf *ibuf, struct body *body));
 static void message_write_charset P((struct ibuf *ibuf, struct body *body));
@@ -2360,6 +2361,20 @@ char *s;
 }
 
 /*
+ * Write the text 's' to 'ibuf', converting to lower case as we go.
+ */
+static void
+message_write_text_lcase(ibuf, s)
+struct ibuf *ibuf;
+char *s;
+{
+    char *p;
+
+    message_ibuf_ensure(ibuf, strlen(s));
+    for (p = s; *p; p++) *(ibuf->end)++ = TOLOWER(*p);
+}
+
+/*
  * Write out the IMAP number 'n' to 'ibuf'
  */
 static void
@@ -2607,17 +2622,14 @@ struct address *addrlist;
 
 	    PUTIBUF(ibuf, '<');
 	    if (addrlist->route) {
-		lcase(addrlist->route);
-		message_write_text(ibuf, addrlist->route);
+		message_write_text_lcase(ibuf, addrlist->route);
 		PUTIBUF(ibuf, ':');
 	    }
 
-	    lcase(addrlist->mailbox);
-	    message_write_text(ibuf, addrlist->mailbox);
+	    message_write_text_lcase(ibuf, addrlist->mailbox);
 	    PUTIBUF(ibuf, '@');
 
-	    lcase(addrlist->domain);
-	    message_write_text(ibuf, addrlist->domain);
+	    message_write_text_lcase(ibuf, addrlist->domain);
 	    PUTIBUF(ibuf, '>');
 	    prevaddr = 1;
 	}
