@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.15 2007/08/30 17:51:44 murch Exp $
+ * $Id: sync_client.c,v 1.16 2007/09/12 13:53:07 murch Exp $
  */
 
 #include <config.h>
@@ -1631,8 +1631,7 @@ static int do_annotation(char *name)
  */
 
 static int do_mailbox_work(struct mailbox *mailbox, 
-			   struct sync_msg_list *list, int just_created,
-			   char *uniqueid)
+			   struct sync_msg_list *list, int just_created)
 {
     unsigned int last_recent_uid;
     time_t lastread, lastchange;
@@ -1834,9 +1833,9 @@ int do_folders(struct sync_folder_list *client_list,
                 if (!r && do_contents) {
                     struct sync_msg_list *folder_msglist;
 
-                    /* 0L, 0L Forces last_uid and seendb push as well */
-                    folder_msglist = sync_msg_list_create(m.flagname, 0);
-                    r = do_mailbox_work(&m, folder_msglist, 1, m.uniqueid);
+                    /* 0L forces lastuid push */
+                    folder_msglist = sync_msg_list_create(m.flagname, 0L);
+                    r = do_mailbox_work(&m, folder_msglist, 1);
                     sync_msg_list_free(&folder_msglist);
                 }
             } else {
@@ -1858,7 +1857,7 @@ int do_folders(struct sync_folder_list *client_list,
 		if (!r) r = do_annotation(m.name);
 
                 if (!r && do_contents)
-                    r = do_mailbox_work(&m, folder2->msglist, 0, m.uniqueid);
+                    r = do_mailbox_work(&m, folder2->msglist, 0);
             }
         } else {
 	    char *userid, *part;
@@ -1877,9 +1876,9 @@ int do_folders(struct sync_folder_list *client_list,
             if (!r && do_contents) {
                 struct sync_msg_list *folder_msglist;
 
-                /* 0L, 0L Forces last_uid and seendb push as well */
-                folder_msglist = sync_msg_list_create(m.flagname, 0);
-                r = do_mailbox_work(&m, folder_msglist, 1, m.uniqueid);
+                /* 0L forces uidlast push */
+                folder_msglist = sync_msg_list_create(m.flagname, 0L);
+                r = do_mailbox_work(&m, folder_msglist, 1);
                 sync_msg_list_free(&folder_msglist);
             }
 
