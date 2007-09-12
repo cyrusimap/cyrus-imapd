@@ -1,4 +1,4 @@
-<!-- $Id: install-replication.html,v 1.4 2007/04/03 15:10:02 murch Exp $ -->
+<!-- $Id: install-replication.html,v 1.5 2007/09/12 15:48:52 murch Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Cyrus replication
@@ -52,10 +52,12 @@ replication client/server applications and utilities.
 
 <h3>Configuring the "replica" server</h3>
 
-The "replica" server is a standalone server which listens for
+The "replica" server is a <i>standalone</i> server which listens for
 and processes synchronization messages from a "master" server.  The
 "replica" server needs to be configured to accept these synchonization
-messages.<p>
+messages.  The "replica" server <b>MUST NOT</b> be configured to be
+part of a Murder (it should only be configured into the Murder at the
+point at which it replaces a failed backend "master").<p>
 
 <ol>
 <p><li>Configure a standalone server as described in the rest
@@ -181,7 +183,7 @@ has been configured.
 <h3>Failover</h3>
 
 <P><HR>
-last modified: $Date: 2007/04/03 15:10:02 $
+last modified: $Date: 2007/09/12 15:48:52 $
 </BODY></HTML>
 
 
