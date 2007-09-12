@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_commit.c,v 1.6 2007/09/01 16:19:36 murch Exp $
+ * $Id: sync_commit.c,v 1.7 2007/09/12 15:51:04 murch Exp $
  */
 
 #include <config.h>
@@ -800,6 +800,49 @@ sync_uidlast_commit(struct mailbox *mailbox,
     /* Ensure everything made it to disk */
     if (fsync(mailbox->index_fd)) {
         syslog(LOG_ERR, "IOERROR: writing expunge index/cache for %s: %m",
+               mailbox->name);
+        return(IMAP_IOERROR);
+    }
+    return(0);
+}
+
+int
+sync_uidvalidity_commit(struct mailbox *mailbox,
+                        unsigned long uidvalidity)
+{
+    unsigned char *hbuf = xmalloc(mailbox->start_offset);
+    int n;
+
+    /* Fix up information in index header */
+    lseek(mailbox->index_fd, 0L, SEEK_SET);
+
+    n = read(mailbox->index_fd, hbuf, mailbox->start_offset);
+    if ((unsigned long)n != mailbox->start_offset) {
+        free(hbuf);
+        syslog(LOG_ERR,
+               "IOERROR: reading index header for %s: got %d of %lu",
+               mailbox->name, n, mailbox->start_offset);
+        return(IMAP_IOERROR);
+    }
+
+    /* Fix up uidvalidity */
+    *((bit32 *)(hbuf+OFFSET_UIDVALIDITY)) = htonl(uidvalidity);
+
+    /* And write it back out */
+    lseek(mailbox->index_fd, 0L, SEEK_SET);
+
+    n = retry_write(mailbox->index_fd, hbuf, mailbox->start_offset);
+
+    free(hbuf);
+    if ((unsigned long)n != mailbox->start_offset) {
+        syslog(LOG_ERR, "IOERROR: writing out new index header for %s",
+               mailbox->name);
+        return(IMAP_IOERROR);
+    }
+    
+    /* Ensure everything made it to disk */
+    if (fsync(mailbox->index_fd)) {
+        syslog(LOG_ERR, "IOERROR: writing index for %s: %m",
                mailbox->name);
         return(IMAP_IOERROR);
     }

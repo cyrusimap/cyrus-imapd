@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_reset.c,v 1.3 2007/03/30 18:40:21 murch Exp $
+ * $Id: sync_reset.c,v 1.4 2007/09/12 15:51:04 murch Exp $
  */
 
 #include <config.h>
@@ -183,7 +183,7 @@ addmbox_full(char *name,
 
     /* List all mailboxes, including directories and deleted items */
 
-    sync_folder_list_add(list, name, name, NULL, 0, NULL);
+    sync_folder_list_add(list, name, name, NULL, 0, 0, NULL);
     return(0);
 }
 
@@ -195,7 +195,7 @@ addmbox_sub(char *name,
 {
     struct sync_folder_list *list = (struct sync_folder_list *) rock;
 
-    sync_folder_list_add(list, name, name, NULL, 0, NULL);
+    sync_folder_list_add(list, name, name, NULL, 0, 0, NULL);
     return(0);
 }
 
