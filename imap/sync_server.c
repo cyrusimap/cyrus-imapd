@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.9 2007/09/04 15:00:17 murch Exp $
+ * $Id: sync_server.c,v 1.10 2007/09/12 15:51:04 murch Exp $
  */
 
 #include <config.h>
@@ -166,6 +166,7 @@ static void cmd_setseen(struct mailbox **mailboxp, char *user, char *mboxname,
 			time_t lastchange, char *seenuid);
 static void cmd_setseen_all(char *user, struct buf *data);
 static void cmd_setacl(char *name, char *acl);
+static void cmd_setuidvalidity(char *name, unsigned long uidvalidity);
 static void cmd_expunge(struct mailbox *mailbox);
 static void cmd_mailboxes();
 static void cmd_user(char *userid);
@@ -985,7 +986,21 @@ static void cmdloop(void)
                 cmd_set_annotation(arg1.s, arg2.s, arg3.s, arg4.s);
                 continue;
             }
-	    break;
+            else if (!strcmp(cmd.s, "Setuidvalidity")) {
+		if (c != ' ') goto missingargs;
+		c = getastring(sync_in, sync_out, &arg1);
+		if (c != ' ') goto missingargs;
+		c = getastring(sync_in, sync_out, &arg2);
+		if (c == EOF) goto missingargs;
+		if (c == '\r') c = prot_getc(sync_in);
+		if (c != '\n') goto extraargs;
+
+                if (!imparse_isnumber(arg2.s)) goto invalidargs;
+
+                cmd_setuidvalidity(arg1.s, sync_atoul(arg2.s));
+                continue;
+            }
+            break;
 	case 'U':
             if (!strcmp(cmd.s, "Upload")) {
 		int restart;
@@ -1557,7 +1572,7 @@ static int addmbox_full(char *name,
 
     /* List all mailboxes, including directories and deleted items */
 
-    sync_folder_list_add(list, name, name, NULL, 0, NULL);
+    sync_folder_list_add(list, name, name, NULL, 0, 0, NULL);
     return(0);
 }
 
@@ -1568,7 +1583,7 @@ static int addmbox_sub(char *name,
 {
     struct sync_folder_list *list = (struct sync_folder_list *) rock;
 
-    sync_folder_list_add(list, name, name, NULL, 0, NULL);
+    sync_folder_list_add(list, name, name, NULL, 0, 0, NULL);
     return(0);
 }
 
@@ -2205,6 +2220,29 @@ static void cmd_setacl(char *name, char *acl)
         prot_printf(sync_out, "OK SetAcl Suceeded\r\n");
 }
 
+/* ====================================================================== */
+
+static void cmd_setuidvalidity(char *name, unsigned long uidvalidity)
+{
+    struct mailbox m;
+    int mboxopen = 0;
+    int r;
+
+    /* Open and lock mailbox */
+    r = mailbox_open_header(name, 0, &m);
+    if (!r) mboxopen = 1;
+    if (!r) r = mailbox_open_index(&m);
+    if (!r) r = sync_uidvalidity_commit(&m, uidvalidity);
+
+    if (!r) {
+        prot_printf(sync_out, "OK SetUIDvalidity succeeded\r\n");
+    } else {
+        prot_printf(sync_out, "NO SetUIDvalidity failed: %s\r\n",
+                    error_message(r));
+    }
+
+    if (mboxopen) mailbox_close(&m);
+}
 
 /* ====================================================================== */
 
@@ -2338,6 +2376,7 @@ static int do_mailbox_single(char *name, int matchlen, int maycreate, void *rock
         sync_printastring(sync_out, m.name);
 	prot_printf(sync_out, " ");
         sync_printastring(sync_out, m.acl);
+        prot_printf(sync_out, " %lu", m.uidvalidity);
         prot_printf(sync_out, " %lu", m.last_uid);
 	prot_printf(sync_out, " %lu", m.options);
 	if (m.quota.root && !strcmp(name, m.quota.root) &&

@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.h,v 1.4 2007/09/04 15:00:17 murch Exp $
+ * $Id: sync_support.h,v 1.5 2007/09/12 15:51:04 murch Exp $
  */
 
 #ifndef INCLUDED_SYNC_SUPPORT_H
@@ -161,6 +161,7 @@ struct sync_folder {
     char *name;
     char *acl;
     unsigned options;
+    unsigned long uidvalidity;
     struct quota quota;
     int   mark; 
     int   reserve;  /* Folder has been processed by reserve operation */
@@ -176,6 +177,7 @@ struct sync_folder_list *sync_folder_list_create(void);
 
 struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
 					 char *id, char *name, char *acl,
+                                         unsigned long uidvalidity,
 					 unsigned long options,
 					 struct quota *quota);
 

@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.16 2007/09/12 13:53:07 murch Exp $
+ * $Id: sync_client.c,v 1.17 2007/09/12 15:51:04 murch Exp $
  */
 
 #include <config.h>
@@ -738,6 +738,17 @@ static int folder_setannotation(char *name, char *entry, char *userid,
 
     return(sync_parse_code("SETANNOTATION", fromserver,
 			   SYNC_PARSE_EAT_OKLINE, NULL));
+}
+
+static int folder_setuidvalidity(char *name, unsigned long uidvalidity)
+{
+    prot_printf(toserver, "SETUIDVALIDITY "); 
+    sync_printastring(toserver, name);
+    prot_printf(toserver, " %lu\r\n", uidvalidity); 
+    prot_flush(toserver);
+
+    return(sync_parse_code("SETUIDVALIDITY",
+                           fromserver, SYNC_PARSE_EAT_OKLINE, NULL));
 }
 
 /* ====================================================================== */
@@ -1843,7 +1854,11 @@ int do_folders(struct sync_folder_list *client_list,
                 if (!(folder2->acl && !strcmp(m.acl, folder2->acl)))
                     r = folder_setacl(folder->name, m.acl);
 
-                if ((folder2->options ^ m.options) & OPT_IMAP_CONDSTORE) {
+                if (!r && (m.uidvalidity != folder2->uidvalidity))
+                    r = folder_setuidvalidity(folder->name, m.uidvalidity);
+
+                if (!r &&
+                    (folder2->options ^ m.options) & OPT_IMAP_CONDSTORE) {
                     r = folder_setannotation(m.name,
 					     "/vendor/cmu/cyrus-imapd/condstore",
 					     "",
@@ -1917,6 +1932,7 @@ int do_mailboxes_work(struct sync_folder_list *client_list,
     static struct buf id;
     static struct buf acl;
     static struct buf name;
+    static struct buf uidvalidity;
     static struct buf lastuid;
     static struct buf options;
     static struct buf arg;
@@ -1950,6 +1966,9 @@ int do_mailboxes_work(struct sync_folder_list *client_list,
             if ((c = getastring(fromserver, toserver, &acl)) != ' ')
                 goto parse_err;
 
+            if ((c = getastring(fromserver, toserver, &uidvalidity)) != ' ')
+                goto parse_err;
+
             if ((c = getastring(fromserver, toserver, &lastuid)) != ' ')
                 goto parse_err;
 
@@ -1964,10 +1983,13 @@ int do_mailboxes_work(struct sync_folder_list *client_list,
 
             if (c == '\r') c = prot_getc(fromserver);
             if (c != '\n') goto parse_err;
-            if (!imparse_isnumber(lastuid.s))  goto parse_err;
+            if (!imparse_isnumber(uidvalidity.s)) goto parse_err;
+            if (!imparse_isnumber(lastuid.s))     goto parse_err;
 
             folder = sync_folder_list_add(server_list, id.s, name.s, acl.s,
-					  sync_atoul(options.s), quotap);
+					  sync_atoul(uidvalidity.s),
+					  sync_atoul(options.s),
+                                          quotap);
             folder->msglist = sync_msg_list_create(NULL, sync_atoul(lastuid.s));
             break;
         case 1:
@@ -2059,7 +2081,7 @@ static int addmbox(char *name,
 
     mboxlist_detail(name, &mbtype, NULL, NULL, NULL, NULL, NULL);
     if (!(mbtype & (MBTYPE_RESERVE | MBTYPE_MOVING | MBTYPE_REMOTE))) {
-	sync_folder_list_add(list, NULL, name, NULL, 0, NULL);
+	sync_folder_list_add(list, NULL, name, NULL, 0, 0, NULL);
     }
     return(0);
 }
@@ -2071,7 +2093,7 @@ static int addmbox_sub(char *name,
 {
     struct sync_folder_list *list = (struct sync_folder_list *) rock;
 
-    sync_folder_list_add(list, name, name, NULL, 0, NULL);
+    sync_folder_list_add(list, name, name, NULL, 0, 0, NULL);
     return(0);
 }
 
@@ -2348,6 +2370,7 @@ int do_user_parse(char *user,
     static struct buf time;
     static struct buf flag;
     static struct buf acl;
+    static struct buf uidvalidity;
     static struct buf lastuid;
     static struct buf options;
     static struct buf arg;
@@ -2386,7 +2409,8 @@ int do_user_parse(char *user,
             c = getastring(fromserver, toserver, &name);
             if (c == '\r') c = prot_getc(fromserver);
             if (c != '\n') goto parse_err;
-            sync_folder_list_add(server_sub_list, name.s, name.s, NULL, 0, NULL);
+            sync_folder_list_add(server_sub_list, name.s, name.s,
+                                 NULL, 0, 0, NULL);
             break;
         case 2:
             /* New folder */
@@ -2397,6 +2421,9 @@ int do_user_parse(char *user,
                 goto parse_err;
 
             if ((c = getastring(fromserver, toserver, &acl)) != ' ')
+                goto parse_err;
+
+            if ((c = getastring(fromserver, toserver, &uidvalidity)) != ' ')
                 goto parse_err;
 
             if ((c = getastring(fromserver, toserver, &lastuid)) != ' ')
@@ -2413,10 +2440,13 @@ int do_user_parse(char *user,
 
             if (c == '\r') c = prot_getc(fromserver);
             if (c != '\n') goto parse_err;
-            if (!imparse_isnumber(lastuid.s)) goto parse_err;
+            if (!imparse_isnumber(uidvalidity.s)) goto parse_err;
+            if (!imparse_isnumber(lastuid.s))     goto parse_err;
 
             folder = sync_folder_list_add(server_list, id.s, name.s, acl.s,
-					  sync_atoul(options.s), quotap);
+					  sync_atoul(uidvalidity.s),
+					  sync_atoul(options.s),
+                                          quotap);
             folder->msglist = sync_msg_list_create(NULL, sync_atoul(lastuid.s));
             break;
         case 1:
@@ -2598,7 +2628,7 @@ static int do_meta_sub(char *user)
             r = IMAP_PROTOCOL_ERROR;
             break;
         }
-        sync_folder_list_add(server_list, name.s, name.s, NULL, 0, NULL);
+        sync_folder_list_add(server_list, name.s, name.s, NULL, 0, 0, NULL);
 
         r = sync_parse_code("LSUB", fromserver,
                             SYNC_PARSE_EAT_OKLINE, &unsolicited);
@@ -3006,8 +3036,8 @@ static int do_sync(const char *filename)
     for (action = mailbox_list->head ; action ; action = action->next) {
         if (!action->active)
             continue;
-
-	sync_folder_list_add(folder_list, NULL, action->name, NULL, 0, NULL);
+	sync_folder_list_add(folder_list, NULL, action->name,
+                             NULL, 0, 0, NULL);
     }
 
     if (folder_list->count) {
@@ -3534,12 +3564,13 @@ int main(int argc, char **argv)
 
 		if (!sync_folder_lookup_byname(folder_list, argv[i]))
 		    sync_folder_list_add(folder_list,
-					 NULL, argv[i], NULL, 0, NULL);
+					 NULL, argv[i], NULL, 0, 0, NULL);
 	    }
 	    fclose(file);
 	} else for (i = optind; i < argc; i++) {
 	    if (!sync_folder_lookup_byname(folder_list, argv[i]))
-		sync_folder_list_add(folder_list, NULL, argv[i], NULL, 0, NULL);
+		sync_folder_list_add(folder_list, NULL, argv[i],
+                                     NULL, 0, 0, NULL);
 	}
 
 	if ((r = send_lock())) {
