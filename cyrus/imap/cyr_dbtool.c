@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: cyr_dbtool.c,v 1.2 2007/08/15 17:20:55 murch Exp $
+ * $Id: cyr_dbtool.c,v 1.3 2007/09/12 15:55:58 murch Exp $
  */
 
 #include <config.h>
@@ -145,6 +145,7 @@ int main(int argc, char *argv[])
     int is_delete = 0;
     int use_stdin = 0;
     int db_flags = 0;
+    struct txn *tid = NULL;
 
     while ((opt = getopt(argc, argv, "C:n")) != EOF) {
 	switch (opt) {
@@ -225,13 +226,13 @@ int main(int argc, char *argv[])
         while ( loop ) {
           if (is_get) {
             int i;
-            DB_OLD->fetch(odb, key, keylen, &res, &reslen, NULL);
+            DB_OLD->fetch(odb, key, keylen, &res, &reslen, &tid);
             fwrite(res, sizeof(char), reslen, stdout);
             printf("\n");
           } else if (is_set) {
-            DB_OLD->store(odb, key, keylen, value, vallen, NULL);
+            DB_OLD->store(odb, key, keylen, value, vallen, &tid);
           } else if (is_delete) {
-            DB_OLD->delete(odb, key, keylen, NULL, 1);
+            DB_OLD->delete(odb, key, keylen, &tid, 1);
           }
           loop = 0;
           if ( use_stdin ) {
@@ -240,14 +241,18 @@ int main(int argc, char *argv[])
         }
     } else if (!strcmp(action, "show")) {
         if ((argc - optind) < 4) {
-            DB_OLD->foreach(odb, "", 0, NULL, printer_cb, NULL, NULL);
+            DB_OLD->foreach(odb, "", 0, NULL, printer_cb, NULL, &tid);
         } else {
             key = argv[optind+3];
             keylen = strlen(key);
-            DB_OLD->foreach(odb, key, keylen, NULL, printer_cb, NULL, NULL);
+            DB_OLD->foreach(odb, key, keylen, NULL, printer_cb, NULL, &tid);
         }
     } else {
         printf("Unknown action %s\n", action);
+    }
+    if (tid) {
+      DB_OLD->commit(odb, tid);
+      tid = NULL;
     }
 
     (DB_OLD->close)(odb);
