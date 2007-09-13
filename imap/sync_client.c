@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.17 2007/09/12 15:51:04 murch Exp $
+ * $Id: sync_client.c,v 1.18 2007/09/13 18:30:32 murch Exp $
  */
 
 #include <config.h>
@@ -1131,12 +1131,18 @@ static int upload_message_work(struct mailbox *mailbox,
     const char *msg_base = NULL;
     unsigned long msg_size = 0;
 
+    /* Protocol for SIMPLE items:
+     * C:  SIMPLE  <msgid> <uid> 
+     *             <internaldate> <sent-date> <last-updated> <modseq> <flags>
+     *             <msg literal (includes msg size!)>
+     */
+
     /* Protocol for PARSED items:
      * C:  PARSED  <msgid> <uid>
      *             <internaldate> <sent-date> <last-updated> <modseq> <flags>
-     *             <hdr size> <content_lines>
+     *             <hdr size> <content_lines> <cache_version>
      *             <cache literal (includes cache size!)>
-     * <msg literal (includes msg size!)>
+     *             <msg literal (includes msg size!)>
      */
 
     /* Protocol for COPY items:
@@ -1148,7 +1154,7 @@ static int upload_message_work(struct mailbox *mailbox,
         prot_printf(toserver, " COPY");
         need_body = 0;
     } else {
-        prot_printf(toserver, " PARSED");
+        prot_printf(toserver, " SIMPLE");
         need_body = 1;
     }
 
@@ -1178,15 +1184,6 @@ static int upload_message_work(struct mailbox *mailbox,
 
     if (need_body) {
         /* Server doesn't have this message yet */
-        cache_size = mailbox_cache_size(mailbox, msgno);
-
-        if (cache_size == 0) {
-            syslog(LOG_ERR,
-                   "upload_messages(): Empty cache entry for msgno %lu",
-                   msgno);
-            return(IMAP_INTERNAL);
-        }
-        
         r = mailbox_map_message(mailbox, record->uid, &msg_base, &msg_size);
         
         if (r) {
@@ -1196,15 +1193,7 @@ static int upload_message_work(struct mailbox *mailbox,
         }
         sync_msgid_add(msgid_onserver, &record->uuid);
 
-        prot_printf(toserver, " %lu %lu %lu {%lu+}\r\n",
-		    record->header_size, record->content_lines,
-		    record->cache_version, cache_size);
-
-        prot_write(toserver,
-		   (char *)(mailbox->cache_base + record->cache_offset),
-		   cache_size);
-                    
-        prot_printf(toserver, "{%lu+}\r\n", msg_size);
+        prot_printf(toserver, " {%lu+}\r\n", msg_size);
         prot_write(toserver, (char *)msg_base, msg_size);
         mailbox_unmap_message(mailbox, record->uid, &msg_base, &msg_size);
         sequence++;
