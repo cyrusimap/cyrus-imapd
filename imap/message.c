@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: message.c,v 1.106 2007/09/12 17:53:29 murch Exp $
+ * $Id: message.c,v 1.107 2007/09/13 17:35:15 murch Exp $
  */
 
 #include <config.h>
@@ -328,12 +328,10 @@ int allow_null;
 }
 
 /*
- * Parse the message 'infile' in 'mailbox'.  Appends the message's
- * cache information to the mailbox's cache file and fills in
- * appropriate information in the index record pointed to by
- * 'message_index'.
+ * Parse the message 'infile'.
  *
  * The caller MUST free the allocated body struct.
+ *
  * If msg_base/msg_len are non-NULL, the file will remain memory-mapped
  * and returned to the caller.  The caller MUST unmap the file.
  */
@@ -372,10 +370,7 @@ int message_parse_file(FILE *infile,
 
 
 /*
- * Parse the message 'infile' in 'mailbox'.  Appends the message's
- * cache information to the mailbox's cache file and fills in
- * appropriate information in the index record pointed to by
- * 'message_index'.
+ * Parse the message 'infile'.
  *
  * The caller MUST free the allocated body struct.
  *
@@ -429,10 +424,7 @@ int message_parse_binary_file(FILE *infile, struct body **body)
 
 
 /*
- * Parse the message at 'msg_base' of length 'msg_len' in 'mailbox'.
- * Appends the message's cache information to the mailbox's cache file
- * and fills in appropriate information in the index record pointed to
- * by 'message_index'.
+ * Parse the message at 'msg_base' of length 'msg_len'.
  */
 int message_parse_mapped(const char *msg_base, unsigned long msg_len,
 			 struct body *body)
@@ -521,13 +513,14 @@ void message_fetch_part(struct message_content *msg,
 }
 
 /*
- * Appends the message's cache information to the mailbox's cache file
+ * Appends the message's cache information to the cache file
  * and fills in appropriate information in the index record pointed to
  * by 'message_index'.
  */
 int
-message_create_record(mailbox, message_index, body)
-struct mailbox *mailbox;
+message_create_record(cache_name, cache_fd, message_index, body)
+const char *cache_name;
+int cache_fd;
 struct index_record *message_index;
 struct body *body;
 {
@@ -539,59 +532,14 @@ struct body *body;
     message_index->content_offset = body->content_offset;
     message_index->content_lines = body->content_lines;
 
-    message_index->cache_offset = lseek(mailbox->cache_fd, 0, SEEK_CUR);
+    message_index->cache_offset = lseek(cache_fd, 0, SEEK_CUR);
 
     message_index->cache_version = MAILBOX_CACHE_MINOR_VERSION;
 
-    n = message_write_cache(mailbox->cache_fd, body);
+    n = message_write_cache(cache_fd, body);
 
     if (n == -1) {
-	syslog(LOG_ERR, "IOERROR: appending cache for %s: %m", mailbox->name);
-	return IMAP_IOERROR;
-    }
-
-    return 0;
-}
-
-/* YYY Following used by sync_support.c. Should use message_create_record()
- *     instead now that is available?
- *
- * Parse the message at 'msg_base' of length 'msg_len' in 'mailbox'.
- * Appends the message's cache information to the mailbox's cache file
- * and fills in appropriate information in the index record pointed to
- * by 'message_index'.
- */
-int
-message_parse_mapped_async(msg_base, msg_len, format, cache_fd, message_index)
-const char *msg_base;
-unsigned long msg_len;
-int format;
-int cache_fd;
-struct index_record *message_index;
-{
-    struct body body;
-    struct msg msg;
-    int n;
-
-    msg.base = msg_base;
-    msg.len = msg_len;
-    msg.offset = 0;
-    msg.encode = 0;
-
-    message_parse_body(&msg, format, &body,
-		       DEFAULT_CONTENT_TYPE, (struct boundary *)0);
-    
-    message_index->sentdate = message_parse_date(body.date, 0);
-    message_index->size = body.header_size + body.content_size;
-    message_index->header_size = body.header_size;
-    message_index->content_offset = body.content_offset;
-
-    message_index->cache_offset = lseek(cache_fd, 0, SEEK_CUR);
-    n = message_write_cache(cache_fd, &body);
-    message_free_body(&body);
-
-    if (n == -1) {
-	syslog(LOG_ERR, "IOERROR: appending cache for sync_server: %m");
+	syslog(LOG_ERR, "IOERROR: appending cache for %s: %m", cache_name);
 	return IMAP_IOERROR;
     }
 

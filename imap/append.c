@@ -1,5 +1,5 @@
 /* append.c -- Routines for appending messages to a mailbox
- * $Id: append.c,v 1.111 2007/09/05 17:26:26 murch Exp $
+ * $Id: append.c,v 1.112 2007/09/13 17:35:15 murch Exp $
  *
  * Copyright (c)1998, 2000 Carnegie Mellon University.  All rights reserved.
  *
@@ -576,7 +576,8 @@ int append_fromstage(struct appendstate *as, struct body **body,
 	/* ok, we've successfully created the file */
 	if (!*body || (as->nummsg - 1))
 	    r = message_parse_file(destfile, NULL, NULL, body);
-	if (!r) r = message_create_record(mailbox, &message_index, *body);
+	if (!r) r = message_create_record(mailbox->name, mailbox->cache_fd,
+					  &message_index, *body);
     }
     if (destfile) {
 	/* this will hopefully ensure that the link() actually happened
@@ -741,7 +742,8 @@ int append_fromstream(struct appendstate *as, struct body **body,
     if (!r) {
 	if (!*body || (as->nummsg - 1))
 	    r = message_parse_file(destfile, NULL, NULL, body);
-	if (!r) r = message_create_record(mailbox, &message_index, *body);
+	if (!r) r = message_create_record(mailbox->name, mailbox->cache_fd,
+					  &message_index, *body);
     }
     fclose(destfile);
     if (r) {
@@ -950,7 +952,8 @@ int append_copy(struct mailbox *mailbox,
 				  &src_base, &src_size);
 
 	    if (!r) r = message_parse_file(destfile, NULL, NULL, &body);
-	    if (!r) r = message_create_record(append_mailbox,
+	    if (!r) r = message_create_record(append_mailbox->name,
+					      append_mailbox->cache_fd,
 					      &message_index[msg], body);
 	    if (body) message_free_body(body);
 	    fclose(destfile);

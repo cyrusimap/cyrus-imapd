@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.94 2007/09/12 14:55:19 murch Exp $ */
+/* $Id: reconstruct.c,v 1.95 2007/09/13 17:35:15 murch Exp $ */
 
 #include <config.h>
 
@@ -1008,7 +1008,8 @@ int reconstruct(char *name, struct discovered *found)
 	if (uuid_set) message_uuid_set_null(&message_index.uuid);
 
 	if (((r = message_parse_file(msgfile, NULL, NULL, &body)) != 0) ||
-	    ((r = message_create_record(&mailbox, &message_index, body)) != 0)) {
+	    ((r = message_create_record(mailbox.name, mailbox.cache_fd,
+					&message_index, body)) != 0)) {
 	    fclose(msgfile);
 	    fclose(newindex);
 	    mailbox_close(&mailbox);
