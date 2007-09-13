@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.297 2006/11/30 17:11:16 murch Exp $
+dnl $Id: configure.in,v 1.298 2007/09/13 17:24:41 murch Exp $
 dnl
 
 
@@ -119,7 +119,7 @@ CMU_GUESS_RUNPATH_SWITCH
 
 AC_CHECK_HEADERS(unistd.h sys/select.h sys/param.h stdarg.h)
 AC_REPLACE_FUNCS(memmove strcasecmp ftruncate strerror)
-AC_CHECK_FUNCS(strlcat strlcpy)
+AC_CHECK_FUNCS(strlcat strlcpy getgrouplist)
 AC_HEADER_DIRENT
 
 dnl do this before Berkeley DB/IPv6 detection
@@ -1054,7 +1054,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.297 2006/11/30 17:11:16 murch Exp $ */
+/* $Id: configure.in,v 1.298 2007/09/13 17:24:41 murch Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *

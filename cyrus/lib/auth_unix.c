@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: auth_unix.c,v 1.41 2007/02/13 16:42:49 murch Exp $
+ * $Id: auth_unix.c,v 1.42 2007/09/13 17:24:42 murch Exp $
  */
 
 #include <config.h>
@@ -224,6 +224,10 @@ static struct auth_state *mynewstate(const char *identifier)
     struct passwd *pwd;
     struct group *grp;
     char **mem;
+#ifdef HAVE_GETGROUPLIST
+    gid_t gid, *groupids = NULL;
+    int i, ret, ngroups;
+#endif
 
     identifier = mycanonifyid(identifier, 0);
     if (!identifier) return 0;
@@ -239,7 +243,45 @@ static struct auth_state *mynewstate(const char *identifier)
 	return newstate;
 
     pwd = getpwnam(identifier);
-	
+
+#ifdef HAVE_GETGROUPLIST
+    gid = pwd ? pwd->pw_gid : (gid_t) -1;
+
+    /* get number of groups user is member of into newstate->ngroups */
+    getgrouplist(identifier, gid, NULL, &(newstate->ngroups));
+
+    /* get the actual group ids */
+    do {
+	if (groupids) free(groupids);
+	groupids = (gid_t *)xmalloc(newstate->ngroups * sizeof(gid_t));
+
+	ngroups = newstate->ngroups;
+	ret = getgrouplist(identifier, gid, groupids, &(newstate->ngroups));
+	/*
+	 * This is tricky. We do this as long as getgrouplist tells us to
+	 * realloc _and_ the number of groups changes. It tells us to realloc
+	 * also in the case of failure...
+	 */
+    } while (ret != -1 && ngroups != newstate->ngroups);
+
+    if (ret == -1) {
+	newstate->ngroups = 0;
+	newstate->group = NULL;
+	goto err;
+    }
+
+    newstate->group = (char **)xmalloc(newstate->ngroups * sizeof(char *));
+    for (i = 0; i < newstate->ngroups; ++i ) {
+	if (pwd || groupids[i] != gid) {
+	    if ((grp = getgrgid(groupids[i])))
+		newstate->group[i] = xstrdup(grp->gr_name);
+	}
+    }
+
+err:
+    if (groupids) free(groupids);
+
+#else /* !HAVE_GETGROUPLIST */
     setgrent();
     while ((grp = getgrent())) {
 	for (mem = grp->gr_mem; *mem; mem++) {
@@ -254,6 +296,8 @@ static struct auth_state *mynewstate(const char *identifier)
 	}
     }
     endgrent();
+#endif /* HAVE_GETGROUPLIST */
+
     return newstate;
 }
 
