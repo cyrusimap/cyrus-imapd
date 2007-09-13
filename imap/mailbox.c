@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.169 2007/09/04 15:11:35 murch Exp $
+ * $Id: mailbox.c,v 1.170 2007/09/13 20:49:53 murch Exp $
  *
  */
 
@@ -1124,6 +1124,10 @@ struct mailbox *mailbox;
 {
     int r = -1;
 
+    /* we don't have a cache_fd in reconstruct mode, so we can't lock
+     * pop */
+    if (mailbox_doing_reconstruct) return 0;
+
     if (mailbox->pop_lock_count++) return 0;
 
     r = lock_nonblocking(mailbox->cache_fd);
@@ -1176,6 +1180,10 @@ void
 mailbox_unlock_pop(mailbox)
 struct mailbox *mailbox;
 {
+    /* we don't have a cache_fd in reconstruct mode, so we can't lock
+     * pop */
+    if (mailbox_doing_reconstruct) return;
+
     assert(mailbox->pop_lock_count != 0);
 
     if (--mailbox->pop_lock_count == 0) {
