@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.c,v 1.11 2007/09/12 15:51:04 murch Exp $
+ * $Id: sync_support.c,v 1.12 2007/09/13 17:35:15 murch Exp $
  */
 
 #include <config.h>
@@ -1288,8 +1288,7 @@ int sync_getsimple(struct protstream *input, struct protstream *output,
     FILE         *file;
     int           r = 0;
     unsigned long size;
-    const char *msg_base = 0;
-    unsigned long msg_len = 0;
+    struct body *body = NULL;
     struct index_record record;
     char buf[8192+1];
     int n;
@@ -1344,13 +1343,11 @@ int sync_getsimple(struct protstream *input, struct protstream *output,
         return(IMAP_IOERROR);
     }
 
-    map_refresh(fileno(file), 1, &msg_base, &msg_len, message->msg_size,
-		"new message", "unknown");
-
-    r = message_parse_mapped_async(msg_base, msg_len,
-                                   MAILBOX_FORMAT_NORMAL,
-                                   list->cache_fd, &record);
-    map_free(&msg_base, &msg_len);
+    r = message_parse_file(file, NULL, NULL, &body);
+    if (!r) r = message_create_record(list->cache_name,
+				      list->cache_fd,
+				      &record, body);
+    if (body) message_free_body(body);
 
     message->hdr_size     = record.header_size;
     message->cache_offset = record.cache_offset;
