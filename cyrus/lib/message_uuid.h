@@ -31,7 +31,12 @@ message_uuid_free(struct message_uuid **uuidp);
 
 int
 message_uuid_compare(struct message_uuid *uuid1, struct message_uuid *uuid2);
-  /* Compare a pair of UUIDs: Returns 1 => match */
+  /* Compare a pair of UUIDs: Returns 1 => match. NULL UUIDs do not match. */
+
+int
+message_uuid_compare_allow_null(struct message_uuid *uuid1,
+                                struct message_uuid *uuid2);
+  /* Compare a pair of UUIDs: Returns 1 => match. NULL UUIDs match anything */
 
 int
 message_uuid_copy(struct message_uuid *dst, struct message_uuid *src);

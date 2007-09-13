@@ -297,7 +297,7 @@ message_uuid_copy(struct message_uuid *dst, struct message_uuid *src)
 
 /* message_uuid_compare() ************************************************
  *
- * Compare a pair of UUIDs: Returns 1 => match
+ * Compare a pair of UUIDs: Returns 1 => match. NULL UUIDs do not match.
  *
  ************************************************************************/
 
@@ -307,6 +307,34 @@ message_uuid_compare(struct message_uuid *uuid1, struct message_uuid *uuid2)
     unsigned char *s = &uuid1->value[0];
     unsigned char *t = &uuid2->value[0];
     int i;
+
+    /* Refuse to match NULL UUIDs: message could be anything */
+    if (message_uuid_isnull(uuid1) || message_uuid_isnull(uuid2))
+        return(0);
+
+    for (i = 0; i < MESSAGE_UUID_SIZE; i++) {
+        if (s[i] != t[i]) return(0);
+    }
+    return(1);
+}
+
+/* message_uuid_compare_allow_null() *************************************
+ *
+ * Compare a pair of UUIDs: Returns 1 => match. NULL UUIDs match anything.
+ *
+ ************************************************************************/
+
+int
+message_uuid_compare_allow_null(struct message_uuid *uuid1,
+                                struct message_uuid *uuid2)
+{
+    unsigned char *s = &uuid1->value[0];
+    unsigned char *t = &uuid2->value[0];
+    int i;
+
+    /* Match if either UUID is NULL, trust caller knows what they are doing */
+    if (message_uuid_isnull(uuid1) || message_uuid_isnull(uuid2))
+        return(1);
 
     for (i = 0; i < MESSAGE_UUID_SIZE; i++) {
         if (s[i] != t[i]) return(0);
