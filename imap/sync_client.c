@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.18 2007/09/13 18:30:32 murch Exp $
+ * $Id: sync_client.c,v 1.19 2007/09/13 20:25:31 murch Exp $
  */
 
 #include <config.h>
@@ -228,10 +228,14 @@ static int find_reserve_messages(struct mailbox *mailbox,
             return(IMAP_IOERROR);
         }
 
-        if (msg && ((msg->uid < record.uid) ||
-                    ((msg->uid == record.uid) &&
-                     message_uuid_compare(&msg->uuid, &record.uuid)))) {
+        /* Skip over messages recorded on server which are missing on client
+         * (either will be expunged or have been expunged already) */
+        while (msg && (record.uid > msg->uid))
             msg = msg->next;
+
+        if (msg && (record.uid == msg->uid) &&
+            message_uuid_compare_allow_null(&record.uuid, &msg->uuid)) {
+            msg = msg->next;  /* Ignore exact match */
             continue;
         }
 
@@ -1106,7 +1110,7 @@ static int check_upload_messages(struct mailbox *mailbox,
             msg = msg->next;
 
         if (msg && (record.uid == msg->uid) &&
-            message_uuid_compare(&record.uuid, &msg->uuid)) {
+            message_uuid_compare_allow_null(&record.uuid, &msg->uuid)) {
             msg = msg->next;  /* Ignore exact match */
             continue;
         }
@@ -1240,7 +1244,7 @@ repeatupload:
             msg = msg->next;
 
         if (msg && (record.uid == msg->uid) &&
-            message_uuid_compare(&record.uuid, &msg->uuid)) {
+            message_uuid_compare_allow_null(&record.uuid, &msg->uuid)) {
             msg = msg->next;  /* Ignore exact match */
             continue;
         }
