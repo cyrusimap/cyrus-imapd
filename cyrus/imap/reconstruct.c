@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.95 2007/09/13 17:35:15 murch Exp $ */
+/* $Id: reconstruct.c,v 1.96 2007/09/13 20:21:38 murch Exp $ */
 
 #include <config.h>
 
@@ -429,7 +429,8 @@ do_reconstruct(char *name,
 
     r = reconstruct(lastname, rock);
     if (r) {
-	com_err(name, r, (r == IMAP_IOERROR) ? error_message(errno) : NULL);
+	com_err(lastname, r,
+		(r == IMAP_IOERROR) ? error_message(errno) : NULL);
 	code = convert_code(r);
     } else {
 	/* Convert internal name to external */
