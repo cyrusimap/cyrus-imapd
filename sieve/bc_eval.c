@@ -1,5 +1,5 @@
 /* bc_eval.c - evaluate the bytecode
- * $Id: bc_eval.c,v 1.10 2007/08/10 16:04:52 murch Exp $
+ * $Id: bc_eval.c,v 1.11 2007/09/14 10:59:18 murch Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -323,8 +323,8 @@ int shouldRespond(void * m, sieve_interp_t *interp,
 	if (!found && (strcpy(buf, "bcc"),
 		       (interp->getheader(m, buf, &body) == SIEVE_OK)))
 	    found = look_for_me(myaddr, numaddresses, bc, i, body);
-	if (!found && strcpy(buf, "resent-to"), 
-	    interp->getheader(m, buf, &body) == SIEVE_OK)
+	if (!found && (strcpy(buf, "resent-to"), 
+		       (interp->getheader(m, buf, &body) == SIEVE_OK)))
 	    found = look_for_me(myaddr, numaddresses ,bc, i, body);
 	if (!found && (strcpy(buf, "resent-cc"),
 		       (interp->getheader(m, buf, &body) == SIEVE_OK)))
