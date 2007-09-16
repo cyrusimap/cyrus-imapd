@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Shell.pm,v 1.39 2007/09/05 17:26:27 murch Exp $
+# $Id: Shell.pm,v 1.40 2007/09/16 14:12:33 murch Exp $
 #
 # A shell framework for Cyrus::IMAP::Admin
 #
@@ -777,7 +777,7 @@ sub _sc_auth {
       $want = '-service';
       next;
     }
-    if (Cyrus::IMAP::imclient_havetls()) {
+    if (Cyrus::IMAP::havetls()) {
       if ($opt ne '' && '-tlskey' =~ /^\Q$opt/ || $opt eq '--tlskey') {
 	$want = '-tlskey';
 	next;
@@ -802,7 +802,7 @@ sub _sc_auth {
   }
   push(@nargv, @argv);
   if (@nargv > 1) {
-    if (Cyrus::IMAP::imclient_havetls()) {
+    if (Cyrus::IMAP::havetls()) {
       die "usage: authenticate [-minssf N] [-maxssf N] [-mechanisms STR]\n".
           "                    [-service name] [-tlskey keyfile] [-notls] [user]\n";
     } else {
