@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: auth_unix.c,v 1.43 2007/09/17 13:55:32 murch Exp $
+ * $Id: auth_unix.c,v 1.44 2007/09/17 14:17:47 murch Exp $
  */
 
 #include <config.h>
@@ -247,16 +247,16 @@ static struct auth_state *mynewstate(const char *identifier)
 #ifdef HAVE_GETGROUPLIST
     gid = pwd ? pwd->pw_gid : (gid_t) -1;
 
-    /* get number of groups user is member of into newstate->ngroups */
-    getgrouplist(identifier, gid, NULL, &(newstate->ngroups));
+    /* get number of groups user is member of into ngroups */
+    getgrouplist(identifier, gid, NULL, &ngroups);
 
     /* get the actual group ids */
     do {
 	groupids = (gid_t *)xrealloc((gid_t *)groupids,
-				     newstate->ngroups * sizeof(gid_t));
+				     ngroups * sizeof(gid_t));
 
-	ngroups = newstate->ngroups;
-	ret = getgrouplist(identifier, gid, groupids, &(newstate->ngroups));
+	newstate->ngroups = ngroups; /* copy of ngroups for comparision */
+	ret = getgrouplist(identifier, gid, groupids, &ngroups);
 	/*
 	 * This is tricky. We do this as long as getgrouplist tells us to
 	 * realloc _and_ the number of groups changes. It tells us to realloc
