@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: auth_unix.c,v 1.42 2007/09/13 17:24:42 murch Exp $
+ * $Id: auth_unix.c,v 1.43 2007/09/17 13:55:32 murch Exp $
  */
 
 #include <config.h>
@@ -226,7 +226,7 @@ static struct auth_state *mynewstate(const char *identifier)
     char **mem;
 #ifdef HAVE_GETGROUPLIST
     gid_t gid, *groupids = NULL;
-    int i, ret, ngroups;
+    int ret, ngroups;
 #endif
 
     identifier = mycanonifyid(identifier, 0);
@@ -252,8 +252,8 @@ static struct auth_state *mynewstate(const char *identifier)
 
     /* get the actual group ids */
     do {
-	if (groupids) free(groupids);
-	groupids = (gid_t *)xmalloc(newstate->ngroups * sizeof(gid_t));
+	groupids = (gid_t *)xrealloc((gid_t *)groupids,
+				     newstate->ngroups * sizeof(gid_t));
 
 	ngroups = newstate->ngroups;
 	ret = getgrouplist(identifier, gid, groupids, &(newstate->ngroups));
@@ -270,11 +270,14 @@ static struct auth_state *mynewstate(const char *identifier)
 	goto err;
     }
 
-    newstate->group = (char **)xmalloc(newstate->ngroups * sizeof(char *));
-    for (i = 0; i < newstate->ngroups; ++i ) {
-	if (pwd || groupids[i] != gid) {
-	    if ((grp = getgrgid(groupids[i])))
-		newstate->group[i] = xstrdup(grp->gr_name);
+    newstate->ngroups = 0;
+    newstate->group = (char **)xmalloc(ngroups * sizeof(char *));
+    while (ngroups--) {
+	if (pwd || groupids[ngroups] != gid) {
+	    if ((grp = getgrgid(groupids[ngroups]))) {
+		newstate->ngroups++;
+		newstate->group[newstate->ngroups-1] = xstrdup(grp->gr_name);
+	    }
 	}
     }
 
