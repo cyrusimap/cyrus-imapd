@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- * $Id: mailbox.h,v 1.84 2007/09/05 17:26:27 murch Exp $
+ * $Id: mailbox.h,v 1.85 2007/09/18 11:33:14 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -266,6 +266,17 @@ struct mailbox_header_cache {
 #define MAX_CACHED_HEADER_SIZE 32 /* Max size of a cached header name */
 extern const struct mailbox_header_cache mailbox_cache_headers[];
 extern const int MAILBOX_NUM_CACHE_HEADERS;
+
+/* Aligned buffer for manipulating index header/record fields */
+typedef union {
+    char buf[INDEX_HEADER_SIZE > INDEX_RECORD_SIZE ?
+	     INDEX_HEADER_SIZE : INDEX_RECORD_SIZE];
+#ifdef HAVE_LONG_LONG_INT
+    bit64 align8; /* align on 8-byte boundary */
+#else
+    bit32 align4; /* align on 4-byte boundary */
+#endif
+} indexbuffer_t;
 
 /* Bitmasks for expunging */
 enum {

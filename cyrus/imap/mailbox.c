@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.170 2007/09/13 20:49:53 murch Exp $
+ * $Id: mailbox.c,v 1.171 2007/09/18 11:33:14 murch Exp $
  *
  */
 
@@ -1291,8 +1291,9 @@ int mailbox_write_header(struct mailbox *mailbox)
  */
 int mailbox_write_index_header(struct mailbox *mailbox)
 {
-    char buf[INDEX_HEADER_SIZE];
-    unsigned long header_size = sizeof(buf);
+    indexbuffer_t ibuf;
+    char *buf = ibuf.buf;
+    unsigned long header_size = INDEX_HEADER_SIZE;
     int n;
     
     assert(mailbox->index_lock_count != 0);
@@ -1396,7 +1397,8 @@ mailbox_write_index_record(struct mailbox *mailbox,
 			   int sync)
 {
     int n;
-    char buf[INDEX_RECORD_SIZE];
+    indexbuffer_t ibuf;
+    char *buf = ibuf.buf;
 
     mailbox_index_record_to_buf(record, buf);
 
@@ -1530,9 +1532,8 @@ static void mailbox_upgrade_index_work(struct mailbox *mailbox,
     unsigned long exists;
     unsigned msgno;
     bit32 oldstart_offset, oldrecord_size, recsize_diff;
-    char buf[INDEX_HEADER_SIZE > INDEX_RECORD_SIZE ?
-	     INDEX_HEADER_SIZE : INDEX_RECORD_SIZE];
-    char *bufp;
+    indexbuffer_t ibuf;
+    char *buf = ibuf.buf, *bufp;
     int quota_offset = 0;
     int calculate_flagcounts = 0;
     bit32 numansweredflag = 0;
@@ -1859,8 +1860,8 @@ static int process_records(struct mailbox *mailbox, FILE *newindex,
 			   mailbox_decideproc_t *decideproc, void *deciderock,
 			   int expunge_flags)
 {
-    char buf[INDEX_HEADER_SIZE > INDEX_RECORD_SIZE ?
-	     INDEX_HEADER_SIZE : INDEX_RECORD_SIZE];
+    indexbuffer_t ibuf;
+    char *buf = ibuf.buf;
     unsigned msgno;
     unsigned newexpunged;
     unsigned newexists;
@@ -2052,8 +2053,8 @@ int mailbox_expunge(struct mailbox *mailbox,
     unsigned newanswered;
     unsigned newflagged; 
     
-    char buf[INDEX_HEADER_SIZE > INDEX_RECORD_SIZE ?
-	     INDEX_HEADER_SIZE : INDEX_RECORD_SIZE];
+    indexbuffer_t ibuf;
+    char *buf = ibuf.buf;
     unsigned msgno;
     struct stat sbuf;
     struct txn *tid = NULL;
