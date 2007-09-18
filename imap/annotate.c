@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.37 2007/09/05 17:26:26 murch Exp $
+ * $Id: annotate.c,v 1.38 2007/09/18 11:33:14 murch Exp $
  */
 
 #include <config.h>
@@ -306,11 +306,12 @@ static int make_key(const char *mboxname, const char *entry,
 static int split_attribs(const char *data, int datalen __attribute__((unused)),
 			 struct annotation_data *attrib)
 {
-    unsigned long tmp;
+    unsigned long tmp; /* for alignment */
 
     /* xxx use datalen? */
     /* xxx sanity check the data? */
-    attrib->size = (size_t) ntohl(*(unsigned long *) data);
+    memcpy(&tmp, data, sizeof(unsigned long));
+    attrib->size = (size_t) ntohl(tmp);
     data += sizeof(unsigned long); /* skip to value */
 
     attrib->value = data;
