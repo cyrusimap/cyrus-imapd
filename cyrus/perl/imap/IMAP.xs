@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: IMAP.xs,v 1.25 2006/11/30 17:11:23 murch Exp $ */
+/* $Id: IMAP.xs,v 1.26 2007/09/19 01:21:50 murch Exp $ */
 
 /*
  * Perl interface to the Cyrus imclient routines.  This enables the
@@ -320,7 +320,7 @@ PREINIT:
 	struct xscb *nx;
 CODE:
 /* fprintf(stderr, "!DESTROY %p %d\n", client, client->cnt); */
-	if (!--client->cnt) {
+	if (!client->cnt--) {
 /* printf("closing\n"); */
 	  imclient_close(client->imclient);
 	  while (client->cb) {
