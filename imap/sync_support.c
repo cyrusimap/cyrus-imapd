@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.c,v 1.12 2007/09/13 17:35:15 murch Exp $
+ * $Id: sync_support.c,v 1.13 2007/09/22 12:08:23 murch Exp $
  */
 
 #include <config.h>
@@ -82,6 +82,8 @@
 #include "retry.h"
 #include "lock.h"
 #include "prot.h"
+
+#include "message_guid.h"
 #include "sync_support.h"
 #include "sync_commit.h"
 
@@ -485,18 +487,18 @@ struct sync_msgid_list *sync_msgid_list_create(int hash_size)
 }
 
 struct sync_msgid *sync_msgid_add(struct sync_msgid_list *l,
-				  struct message_uuid *uuid)
+				  struct message_guid *guid)
 {
     struct sync_msgid *result;
     int offset;
 
-    if (message_uuid_isnull(uuid))
+    if (message_guid_isnull(guid))
         return(NULL);
 
     result = xzmalloc(sizeof(struct sync_msgid));
-    offset = message_uuid_hash(uuid, l->hash_size);
+    offset = message_guid_hash(guid, l->hash_size);
 
-    message_uuid_copy(&result->uuid, uuid);
+    message_guid_copy(&result->guid, guid);
 
     l->count++;
     if (l->tail)
@@ -512,16 +514,16 @@ struct sync_msgid *sync_msgid_add(struct sync_msgid_list *l,
 }
 
 void sync_msgid_remove(struct sync_msgid_list *l,
-		       struct message_uuid *uuid)
+		       struct message_guid *guid)
 {
-    int offset = message_uuid_hash(uuid, l->hash_size);
+    int offset = message_guid_hash(guid, l->hash_size);
     struct sync_msgid *msgid;
 
-    if (message_uuid_isnull(uuid)) return;
+    if (message_guid_isnull(guid)) return;
 
     for (msgid = l->hash[offset] ; msgid ; msgid = msgid->hash_next) {
-	if (message_uuid_compare(&msgid->uuid, uuid)) {
-	    message_uuid_set_null(&msgid->uuid);
+	if (message_guid_compare(&msgid->guid, guid)) {
+	    message_guid_set_null(&msgid->guid);
 	    return;
 	}
     }
@@ -545,16 +547,16 @@ void sync_msgid_list_free(struct sync_msgid_list **lp)
 }
 
 struct sync_msgid *sync_msgid_lookup(struct sync_msgid_list *l,
-				     struct message_uuid *uuid)
+				     struct message_guid *guid)
 {
-    int offset = message_uuid_hash(uuid, l->hash_size);
+    int offset = message_guid_hash(guid, l->hash_size);
     struct sync_msgid *msgid;
 
-    if (message_uuid_isnull(uuid))
+    if (message_guid_isnull(guid))
         return(NULL);
 
     for (msgid = l->hash[offset] ; msgid ; msgid = msgid->hash_next) {
-        if (message_uuid_compare(&msgid->uuid, uuid))
+        if (message_guid_compare(&msgid->guid, guid))
             return(msgid);
     }
     return(NULL);
@@ -924,13 +926,13 @@ char *sync_message_next_path(struct sync_message_list *l)
 }
 
 struct sync_message *sync_message_add(struct sync_message_list *l,
-				      struct message_uuid *uuid)
+				      struct message_guid *guid)
 {
     struct sync_message *result;
     int offset;
 
     result = xzmalloc(sizeof(struct sync_message));
-    message_uuid_set_null(&result->uuid);
+    message_guid_set_null(&result->guid);
     
     result->msg_path = xzmalloc((MAX_MAILBOX_PATH+1) * sizeof(char));
     result->msg_path_end = result->msg_path +
@@ -949,10 +951,10 @@ struct sync_message *sync_message_add(struct sync_message_list *l,
     else
         l->head = l->tail = result;
 
-    if (uuid && !message_uuid_isnull(uuid)) {
-        /* Messages with UUIDs get fast hash lookup for duplicate copies */
-        message_uuid_copy(&result->uuid, uuid);
-        offset = message_uuid_hash(uuid, l->hash_size);
+    if (guid && !message_guid_isnull(guid)) {
+        /* Messages with GUIDs get fast hash lookup for duplicate copies */
+        message_guid_copy(&result->guid, guid);
+        offset = message_guid_hash(guid, l->hash_size);
 
         /* Insert at start of list */
         result->hash_next = l->hash[offset];
@@ -966,8 +968,7 @@ int sync_message_fsync(struct sync_message_list *l)
     int i;
     int r = 0;
 
-    if (l->file_count == 0)
-        return;
+    if (l->file_count == 0) return(0);
 
     /* fsync() files in reverse order: ReiserFS FAQ indicates that this
      * gives best potential for optimisation */
@@ -1141,16 +1142,16 @@ void sync_message_list_free(struct sync_message_list **lp)
 }
 
 struct sync_message *sync_message_find(struct sync_message_list *l,
-				       struct message_uuid *uuid)
+				       struct message_guid *guid)
 {
     struct sync_message *current;
-    int offset = message_uuid_hash(uuid, l->hash_size);
+    int offset = message_guid_hash(guid, l->hash_size);
 
-    if (message_uuid_isnull(uuid))
+    if (message_guid_isnull(guid))
         return(NULL);
 
     for (current = l->hash[offset] ; current ; current = current->hash_next) {
-        if (message_uuid_compare(&current->uuid, uuid))
+        if (message_guid_compare(&current->guid, guid))
             return(current);
     }
     return(NULL);
