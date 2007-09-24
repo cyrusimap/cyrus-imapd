@@ -4,7 +4,7 @@
 
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-<meta name="revision" content="$Id: mailbox-format.html,v 1.6 2007/09/05 17:26:26 murch Exp $" />
+<meta name="revision" content="$Id: mailbox-format.html,v 1.7 2007/09/24 12:48:29 murch Exp $" />
 <meta name="author" content="Rob Siemborski" />
 
 <title>mailbox format</title>
@@ -250,8 +250,9 @@ of the message.</p>
 <dd>Indicates the version number of the cache record for the message
 (determines which headers are cached).</dd>
 
-<dt>UUID (MESSAGE_UUID_SIZE bytes)</dt>
-<dd>Universal UID of the message (used by replication code).</dd>
+<dt>GUID (MESSAGE_GUID_SIZE bytes)</dt>
+<dd>Globally Unique IDentifier of the message (used by replication
+engine).</dd>
 
 <dt>MODSEQ (8 bytes)</dt>
 <dd>Modification Sequence of the message (CONDSTORE).</dd>

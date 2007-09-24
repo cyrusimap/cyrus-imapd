@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.10 2007/09/12 15:51:04 murch Exp $
+ * $Id: sync_server.c,v 1.11 2007/09/24 12:48:32 murch Exp $
  */
 
 #include <config.h>
@@ -96,6 +96,7 @@
 #include "version.h"
 #include "xmalloc.h"
 
+#include "message_guid.h"
 #include "sync_support.h"
 #include "sync_commit.h"
 /*#include "cdb.h"*/
@@ -868,7 +869,7 @@ static void cmdloop(void)
 		c = getastring(sync_in, sync_out, &arg1);
 		if (c != ' ') goto missingargs;
 
-                /* Let cmd_reserve() process list of Message-UUIDs */
+                /* Let cmd_reserve() process list of Message-GUIDs */
                 cmd_reserve(arg1.s, message_list);
                 continue;
             }
@@ -1410,12 +1411,12 @@ static void cmd_reserve(char *mailbox_name,
     int r = 0, c;
     int mailbox_open = 0;
     int alloc = RESERVE_DELTA, count = 0, i, msgno;
-    struct message_uuid *ids = xmalloc(alloc*sizeof(struct message_uuid));
+    struct message_guid *ids = xmalloc(alloc*sizeof(struct message_guid));
     char *err = NULL;
     char mailbox_msg_path[MAX_MAILBOX_PATH+1];
     char *stage_msg_path;
     struct sync_message *message = NULL;
-    struct message_uuid tmp_uuid;
+    struct message_guid tmp_guid;
 
     if ((r = sync_message_list_newstage(message_list, mailbox_name))) {
 	eatline(sync_in,c);
@@ -1427,16 +1428,16 @@ static void cmd_reserve(char *mailbox_name,
     do {
         c = getastring(sync_in, sync_out, &arg);
 
-        if (!arg.s || !message_uuid_from_text(&tmp_uuid, arg.s)) {
+        if (!arg.s || !message_guid_decode(&tmp_guid, arg.s)) {
             err = "Not a MessageID";
             goto parse_err;
         }
         
         if (alloc == count) {
             alloc += RESERVE_DELTA;
-            ids = xrealloc(ids, (alloc*sizeof(struct message_uuid)));
+            ids = xrealloc(ids, (alloc*sizeof(struct message_guid)));
         }
-        message_uuid_copy(&ids[count++], &tmp_uuid);
+        message_guid_copy(&ids[count++], &tmp_guid);
     } while (c == ' ');
 
     if (c == EOF) {
@@ -1467,11 +1468,11 @@ static void cmd_reserve(char *mailbox_name,
     for (i = 0, msgno = 1 ; msgno <= m.exists; msgno++) {
         mailbox_read_index_record(&m, msgno, &record);
 
-        if (!message_uuid_compare(&record.uuid, &ids[i]))
+        if (!message_guid_compare(&record.guid, &ids[i]))
             continue;
 
-        if (sync_message_find(message_list, &record.uuid))
-            continue; /* Duplicate UUID on RESERVE list */
+        if (sync_message_find(message_list, &record.guid))
+            continue; /* Duplicate GUID on RESERVE list */
 
         /* Attempt to reserve this message */
         snprintf(mailbox_msg_path, sizeof(mailbox_msg_path),
@@ -1486,7 +1487,7 @@ static void cmd_reserve(char *mailbox_name,
         }
 
         /* Reserve succeeded */
-        message = sync_message_add(message_list, &record.uuid);
+        message = sync_message_add(message_list, &record.guid);
         message->msg_size     = record.size;
         message->hdr_size     = record.header_size;
         message->cache_offset = sync_message_list_cache_offset(message_list);
@@ -1498,7 +1499,7 @@ static void cmd_reserve(char *mailbox_name,
                                 (char *)(m.cache_base+record.cache_offset),
                                 message->cache_size);
 
-        prot_printf(sync_out, "* %s\r\n", message_uuid_text(&record.uuid));
+        prot_printf(sync_out, "* %s\r\n", message_guid_encode(&record.guid));
         i++;
     }
     mailbox_close(&m);
@@ -1676,7 +1677,7 @@ static void cmd_status_work(struct mailbox *mailbox)
         mailbox_read_index_record(mailbox, msgno, &record);
 
         prot_printf(sync_out, "* %lu %s (",
-                 record.uid, message_uuid_text(&record.uuid));
+                 record.uid, message_guid_encode(&record.guid));
 
         flags_printed = 0;
 
@@ -1847,15 +1848,15 @@ static void cmd_upload(struct mailbox *mailbox,
             goto parse_err;
         }
 
-        /* Get Message-UUID */
+        /* Get Message-GUID */
         if ((c = getastring(sync_in, sync_out, &arg)) != ' ') {
             err = "Invalid sequence ID";
             goto parse_err;
         }
         if (!strcmp(arg.s, "NIL"))
-            message_uuid_set_null(&item->uuid);
-        else if (!message_uuid_from_text(&item->uuid, arg.s)) {
-            err = "Invalid Message-UUID";
+            message_guid_set_null(&item->guid);
+        else if (!message_guid_decode(&item->guid, arg.s)) {
+            err = "Invalid Message-GUID";
             goto parse_err;
         }
 
@@ -1914,7 +1915,7 @@ static void cmd_upload(struct mailbox *mailbox,
                 }
             }
 
-            /* YYY Problem: sync_server needs source of Message-UUID for
+            /* YYY Problem: sync_server needs source of Message-GUID for
                new uploaded messages. Schema 2? */
 
             message = sync_message_add(message_list, NULL /* YYY */);
@@ -1938,7 +1939,7 @@ static void cmd_upload(struct mailbox *mailbox,
                 goto parse_err;
             }
 
-            message = sync_message_add(message_list, &item->uuid);
+            message = sync_message_add(message_list, &item->guid);
 
             /* Parse Message (header size, content lines, cache, message body */
             if ((c = getastring(sync_in, sync_out, &arg)) != ' ') {
@@ -1972,7 +1973,7 @@ static void cmd_upload(struct mailbox *mailbox,
 
             break;
         case MSG_COPY:
-            if (!(message=sync_message_find(message_list, &item->uuid))) {
+            if (!(message=sync_message_find(message_list, &item->guid))) {
                 err = "Unknown Reserved message";
                 goto parse_err;
             }

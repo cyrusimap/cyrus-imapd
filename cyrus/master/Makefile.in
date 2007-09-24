@@ -1,5 +1,5 @@
 # Makefile for the Cyrus controlling process
-# $Id: Makefile.in,v 1.22 2006/11/30 17:11:23 murch Exp $
+# $Id: Makefile.in,v 1.23 2007/09/24 12:48:32 murch Exp $
 # 
 # @configure_input@
 #
@@ -86,8 +86,8 @@ install:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) \
 	$<
 
-master: master.o masterconf.o message_uuid_master.o cyrusMasterMIB.o ../lib/lock_@WITH_LOCK@.o
-	$(CC) $(LDFLAGS) -o master master.o masterconf.o message_uuid_master.o cyrusMasterMIB.o ../lib/lock_@WITH_LOCK@.o $(LIBS) $(DEPLIBS)
+master: master.o masterconf.o cyrusMasterMIB.o ../lib/lock_@WITH_LOCK@.o
+	$(CC) $(LDFLAGS) -o master master.o masterconf.o cyrusMasterMIB.o ../lib/lock_@WITH_LOCK@.o $(LIBS) $(DEPLIBS)
 
 clean:
 	rm -f *.o *.a Makefile.bak $(PROGS)

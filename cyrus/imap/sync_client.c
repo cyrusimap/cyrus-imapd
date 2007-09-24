@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.19 2007/09/13 20:25:31 murch Exp $
+ * $Id: sync_client.c,v 1.20 2007/09/24 12:48:32 murch Exp $
  */
 
 #include <config.h>
@@ -79,6 +79,7 @@
 #include "imparse.h"
 #include "util.h"
 #include "prot.h"
+#include "message_guid.h"
 #include "sync_support.h"
 #include "sync_commit.h"
 #include "lock.h"
@@ -234,14 +235,14 @@ static int find_reserve_messages(struct mailbox *mailbox,
             msg = msg->next;
 
         if (msg && (record.uid == msg->uid) &&
-            message_uuid_compare_allow_null(&record.uuid, &msg->uuid)) {
+            message_guid_compare_allow_null(&record.guid, &msg->guid)) {
             msg = msg->next;  /* Ignore exact match */
             continue;
         }
 
         /* Want to upload this message; does the server have a copy? */
-        if (sync_msgid_lookup(server_msgid_list, &record.uuid))
-            sync_msgid_add(reserve_msgid_list, &record.uuid);
+        if (sync_msgid_lookup(server_msgid_list, &record.guid))
+            sync_msgid_add(reserve_msgid_list, &record.guid);
     }
     
     return(0);
@@ -269,8 +270,8 @@ static int reserve_all_messages(struct mailbox *mailbox,
         }
 
         /* Want to upload this message; does the server have a copy? */
-        if (sync_msgid_lookup(server_msgid_list, &record.uuid))
-            sync_msgid_add(reserve_msgid_list, &record.uuid);
+        if (sync_msgid_lookup(server_msgid_list, &record.guid))
+            sync_msgid_add(reserve_msgid_list, &record.guid);
     }
     
     return(0);
@@ -287,7 +288,7 @@ static int count_reserve_messages(struct sync_folder *server_folder,
     struct sync_msgid    *msgid;
 
     for (msg = msglist->head ; msg ; msg = msg->next) {
-        if ((msgid=sync_msgid_lookup(reserve_msgid_list, &msg->uuid)))
+        if ((msgid=sync_msgid_lookup(reserve_msgid_list, &msg->guid)))
             msgid->count++;
     }
     
@@ -301,7 +302,7 @@ static int reserve_check_folder(struct sync_msgid_list *reserve_msgid_list,
     struct sync_msgid *msgid;
 
     for (msg = folder->msglist->head ; msg ; msg = msg->next) {
-        msgid = sync_msgid_lookup(reserve_msgid_list, &msg->uuid);
+        msgid = sync_msgid_lookup(reserve_msgid_list, &msg->guid);
 
         if (msgid && !msgid->reserved)
             return(1);
@@ -321,12 +322,12 @@ static int reserve_folder(struct sync_msgid_list *reserve_msgid_list,
     sync_printastring(toserver, folder->name);
 
     for (msg = folder->msglist->head ; msg ; msg = msg->next) {
-        msgid = sync_msgid_lookup(reserve_msgid_list, &msg->uuid);
+        msgid = sync_msgid_lookup(reserve_msgid_list, &msg->guid);
 
         if (msgid && !msgid->reserved) {
             /* Attempt to Reserve message in this folder */
             prot_printf(toserver, " "); 
-            sync_printastring(toserver, message_uuid_text(&msgid->uuid));
+            sync_printastring(toserver, message_guid_encode(&msgid->guid));
         }
     }
     prot_printf(toserver, "\r\n"); 
@@ -337,7 +338,7 @@ static int reserve_folder(struct sync_msgid_list *reserve_msgid_list,
 
     /* Parse response to record successfully reserved messages */
     while (!r && unsolicited) {
-        struct message_uuid tmp_uuid;
+        struct message_guid tmp_guid;
 
         c = getword(fromserver, &arg);
 
@@ -350,16 +351,16 @@ static int reserve_folder(struct sync_msgid_list *reserve_msgid_list,
             return(IMAP_PROTOCOL_ERROR);
         }
  
-        if (!message_uuid_from_text(&tmp_uuid, arg.s)) {
+        if (!message_guid_decode(&tmp_guid, arg.s)) {
             syslog(LOG_ERR, "Illegal response to RESERVE: %s", arg.s);
             sync_eatlines_unsolicited(fromserver, c);
             return(IMAP_PROTOCOL_ERROR);
         }
 
-        if ((msgid = sync_msgid_lookup(reserve_msgid_list, &tmp_uuid))) {
+        if ((msgid = sync_msgid_lookup(reserve_msgid_list, &tmp_guid))) {
             msgid->reserved = 1;
             reserve_msgid_list->reserved++;
-            sync_msgid_add(msgid_onserver, &tmp_uuid);
+            sync_msgid_add(msgid_onserver, &tmp_guid);
         } else
             syslog(LOG_ERR, "RESERVE: Unexpected response MessageID %s in %s",
                    arg.s, folder->name);
@@ -406,8 +407,8 @@ static int reserve_messages(struct sync_folder_list *client_list,
     /* Generate fast lookup hash of all MessageIDs available on server */
     for (folder = server_list->head ; folder ; folder = folder->next) {
         for (msg = folder->msglist->head ; msg ; msg = msg->next) {
-            if (!sync_msgid_lookup(server_msgid_list, &msg->uuid))
-                sync_msgid_add(server_msgid_list, &msg->uuid);
+            if (!sync_msgid_lookup(server_msgid_list, &msg->guid))
+                sync_msgid_add(server_msgid_list, &msg->guid);
         }
     }
 
@@ -476,7 +477,7 @@ static int reserve_messages(struct sync_folder_list *client_list,
      * (as they will definitely be needed) */
     for (folder = server_list->head ; folder ; folder = folder->next) {
         for (msg = folder->msglist->head ; msg ; msg = msg->next) {
-            msgid = sync_msgid_lookup(reserve_msgid_list, &msg->uuid);
+            msgid = sync_msgid_lookup(reserve_msgid_list, &msg->guid);
 
             if (msgid && (msgid->count == 1)) {
                 reserve_folder(reserve_msgid_list, folder);
@@ -497,7 +498,7 @@ static int reserve_messages(struct sync_folder_list *client_list,
         if (folder->reserve) continue;
 
         for (count = 0, msg = folder->msglist->head ; msg ; msg = msg->next) {
-            msgid = sync_msgid_lookup(reserve_msgid_list, &msg->uuid);
+            msgid = sync_msgid_lookup(reserve_msgid_list, &msg->guid);
 
             if (msgid && !msgid->reserved)
                 count++;
@@ -1110,7 +1111,7 @@ static int check_upload_messages(struct mailbox *mailbox,
             msg = msg->next;
 
         if (msg && (record.uid == msg->uid) &&
-            message_uuid_compare_allow_null(&record.uuid, &msg->uuid)) {
+            message_guid_compare_allow_null(&record.guid, &msg->guid)) {
             msg = msg->next;  /* Ignore exact match */
             continue;
         }
@@ -1154,7 +1155,7 @@ static int upload_message_work(struct mailbox *mailbox,
      *           <internaldate> <sent-date> <last-updated> <modseq> <flags>
      */
 
-    if (sync_msgid_lookup(msgid_onserver, &record->uuid)) {
+    if (sync_msgid_lookup(msgid_onserver, &record->guid)) {
         prot_printf(toserver, " COPY");
         need_body = 0;
     } else {
@@ -1163,7 +1164,7 @@ static int upload_message_work(struct mailbox *mailbox,
     }
 
     prot_printf(toserver, " %s %lu %lu %lu %lu " MODSEQ_FMT " (",
-             message_uuid_text(&record->uuid),
+             message_guid_encode(&record->guid),
              record->uid, record->internaldate,
              record->sentdate, record->last_updated, record->modseq);
 
@@ -1195,7 +1196,7 @@ static int upload_message_work(struct mailbox *mailbox,
                    record->uid, mailbox->name);
             return(IMAP_IOERROR);
         }
-        sync_msgid_add(msgid_onserver, &record->uuid);
+        sync_msgid_add(msgid_onserver, &record->guid);
 
         prot_printf(toserver, " {%lu+}\r\n", msg_size);
         prot_write(toserver, (char *)msg_base, msg_size);
@@ -1244,7 +1245,7 @@ repeatupload:
             msg = msg->next;
 
         if (msg && (record.uid == msg->uid) &&
-            message_uuid_compare_allow_null(&record.uuid, &msg->uuid)) {
+            message_guid_compare_allow_null(&record.guid, &msg->guid)) {
             msg = msg->next;  /* Ignore exact match */
             continue;
         }
@@ -1253,7 +1254,7 @@ repeatupload:
             prot_printf(toserver, "UPLOAD %lu %lu",
                      mailbox->last_uid, mailbox->last_appenddate); 
 
-        /* Message with this UUID exists on client but not server */
+        /* Message with this GUID exists on client but not server */
         if ((r=upload_message_work(mailbox, msgno, &record)))
 	    break;
 
@@ -1995,7 +1996,7 @@ int do_mailboxes_work(struct sync_folder_list *client_list,
             
             if (((c = getword(fromserver, &arg)) != ' ')) goto parse_err;
 
-            if (!message_uuid_from_text(&msg->uuid, arg.s))
+            if (!message_guid_decode(&msg->guid, arg.s))
                 goto parse_err;
 
             c = sync_getflags(fromserver, &msg->flags, &folder->msglist->meta);
@@ -2452,7 +2453,7 @@ int do_user_parse(char *user,
             
             if (((c = getword(fromserver, &arg)) != ' ')) goto parse_err;
 
-            if (!message_uuid_from_text(&msg->uuid, arg.s))
+            if (!message_guid_decode(&msg->guid, arg.s))
                 goto parse_err;
 
             c = sync_getflags(fromserver, &msg->flags, &folder->msglist->meta);

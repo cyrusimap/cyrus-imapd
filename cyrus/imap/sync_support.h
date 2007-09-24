@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.h,v 1.5 2007/09/12 15:51:04 murch Exp $
+ * $Id: sync_support.h,v 1.6 2007/09/24 12:48:32 murch Exp $
  */
 
 #ifndef INCLUDED_SYNC_SUPPORT_H
@@ -101,7 +101,7 @@ void sync_flags_meta_to_list(struct sync_flags_meta *meta, char **flagname);
 
 struct sync_msg {
     struct sync_msg *next;
-    struct message_uuid uuid;
+    struct message_guid guid;
     unsigned long uid;
     struct sync_flags flags;
 };
@@ -125,7 +125,7 @@ void sync_msg_list_free(struct sync_msg_list **lp);
 struct sync_msgid {
     struct sync_msgid *next;
     struct sync_msgid *hash_next;
-    struct message_uuid uuid;
+    struct message_guid guid;
     int count;
     int reserved;
 };
@@ -142,13 +142,13 @@ struct sync_msgid_list {
 struct sync_msgid_list *sync_msgid_list_create(int hash_size);
 
 struct sync_msgid *sync_msgid_add(struct sync_msgid_list *list,
-				  struct message_uuid *uuid);
+				  struct message_guid *guid);
 
 void sync_msgid_remove(struct sync_msgid_list *l,
-		       struct message_uuid *uuid);
+		       struct message_guid *guid);
 
 struct sync_msgid *sync_msgid_lookup(struct sync_msgid_list *list,
-				     struct message_uuid *uuid);
+				     struct message_guid *guid);
 
 void sync_msgid_list_free(struct sync_msgid_list **list);
 
@@ -254,7 +254,7 @@ struct sync_message {
     unsigned  long  cache_size;
     unsigned  long  content_lines;
     unsigned  long  cache_version;
-    struct message_uuid uuid;
+    struct message_guid guid;
     char           stagename[100];
 
     /* the msg_path buffer consists of
@@ -301,7 +301,7 @@ unsigned long sync_message_list_cache_offset(struct sync_message_list *l);
 
 
 struct sync_message *sync_message_add(struct sync_message_list *l,
-				      struct message_uuid *uuid);
+				      struct message_guid *guid);
 
 char *sync_message_next_path(struct sync_message_list *l);
 
@@ -310,7 +310,7 @@ void sync_message_list_free(struct sync_message_list **lp);
 int sync_message_list_need_restart(struct sync_message_list *l);
 
 struct sync_message *sync_message_find(struct sync_message_list *l,
-				       struct message_uuid *uuid);
+				       struct message_guid *guid);
 
 int sync_message_fsync(struct sync_message_list *l);
 
@@ -330,7 +330,7 @@ struct sync_upload_item {
     time_t sentdate;    
     time_t last_updated;
     struct sync_flags    flags;
-    struct message_uuid  uuid;
+    struct message_guid  guid;
     modseq_t modseq;
     struct sync_message *message;
 };

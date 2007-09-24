@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.523 2007/09/05 17:26:26 murch Exp $ */
+/* $Id: imapd.c,v 1.524 2007/09/24 12:48:31 murch Exp $ */
 
 #include <config.h>
 
@@ -685,9 +685,6 @@ int service_init(int argc, char **argv, char **envp)
 
     /* Create a protgroup for input from the client and selected backend */
     protin = protgroup_new(2);
-
-    /* YYY Sanity checks possible here? */
-    message_uuid_client_init(getenv("CYRUS_UUID_PREFIX"));
 
     return 0;
 }

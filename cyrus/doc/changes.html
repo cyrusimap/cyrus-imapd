@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.127 2007/09/18 11:33:14 murch Exp $ -->
+<!-- $Id: changes.html,v 1.128 2007/09/24 12:48:29 murch Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -36,6 +36,8 @@ enabled on a per-mailbox basis with the
 <li>Added <tt>SETUIDVALIDITY</tt> command to the replication protocol
 <i>-- courtesy of David Carter</i>.</li>
 <li>Finally fixed (again?) alignment issues on 64-bit SPARC.</li>
+<li>Changed message GUIDs used by replication to be the SHA1 hash of
+the messages <i>-- based on work of David Carter and Fastmail.fm</i>.</li>
 <li>Fixed miscellaneous bugs and build issues.</li>
 </ul>
 
@@ -2265,7 +2267,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2007/09/18 11:33:14 $ <br />
+last modified: $Date: 2007/09/24 12:48:29 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.97 2007/09/18 11:33:14 murch Exp $ */
+/* $Id: reconstruct.c,v 1.98 2007/09/24 12:48:32 murch Exp $ */
 
 #include <config.h>
 
@@ -85,6 +85,7 @@
 #include "mailbox.h"
 #include "map.h"
 #include "message.h"
+#include "message_guid.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
@@ -133,8 +134,8 @@ extern cyrus_acl_canonproc_t mboxlist_ensureOwnerRights;
 int code = 0;
 int keepflag = 0;
 int syncflag = 0;
-int uuid_clear = 0;
-int uuid_set   = 0;
+int guid_clear = 0;
+int guid_set   = 0;
 
 int main(int argc, char **argv)
 {
@@ -195,11 +196,11 @@ int main(int argc, char **argv)
 	    break;
 	    
 	case 'u':
-	    uuid_clear = 1;
+	    guid_clear = 1;
 	    break;
 	    
 	case 'U':
-	    uuid_set = 1;
+	    guid_set = 1;
 	    break;
 	    
 	default:
@@ -984,8 +985,8 @@ int reconstruct(char *name, struct discovered *found)
 		message_index.user_flags[i] =
 		  old_index.user_flags[i] & valid_user_flags[i];
 	    }
-            /* Copy across MessageUUID if confident that data on disk */
-            message_uuid_copy(&message_index.uuid, &old_index.uuid);
+            /* Copy across MessageGUID if confident that data on disk */
+            message_guid_copy(&message_index.guid, &old_index.guid);
 	}
 	else {
 	    /* Message file write time is good estimate of internaldate */
@@ -993,8 +994,8 @@ int reconstruct(char *name, struct discovered *found)
 	    /* If we are recovering a message, assume new UIDL
 	       so that stupid clients will retrieve this message */
 	    mailbox.options |= OPT_POP3_NEW_UIDL;
-            /* Wipe the Message UUID */
-            message_uuid_set_null(&message_index.uuid);
+            /* Wipe the Message GUID */
+            message_guid_set_null(&message_index.guid);
 	    /* If we are recovering a message, reset MODSEQ */
 	    message_index.modseq = 1;
 	}
@@ -1006,8 +1007,9 @@ int reconstruct(char *name, struct discovered *found)
 	}
 
 	/* Force rebuild from message_create_record() */
-	if (uuid_set) message_uuid_set_null(&message_index.uuid);
+	if (guid_set) message_guid_set_null(&message_index.guid);
 
+	/* NB: message_create_record() will reconstruct GUID if NULL */
 	if (((r = message_parse_file(msgfile, NULL, NULL, &body)) != 0) ||
 	    ((r = message_create_record(mailbox.name, mailbox.cache_fd,
 					&message_index, body)) != 0)) {
@@ -1023,8 +1025,8 @@ int reconstruct(char *name, struct discovered *found)
 	fclose(msgfile);
 	if (body) message_free_body(body);
 	
-        /* Clear out existing or regenerated UUID */
-        if (uuid_clear) message_uuid_set_null(&message_index.uuid);
+        /* Clear out existing or regenerated GUID */
+        if (guid_clear) message_guid_set_null(&message_index.guid);
 
 	if (expunge_found == 0) {	
 	/* Write out new entry in index file */

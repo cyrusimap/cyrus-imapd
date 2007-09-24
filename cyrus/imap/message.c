@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: message.c,v 1.107 2007/09/13 17:35:15 murch Exp $
+ * $Id: message.c,v 1.108 2007/09/24 12:48:32 murch Exp $
  */
 
 #include <config.h>
@@ -65,6 +65,7 @@
 #include "map.h"
 #include "mailbox.h"
 #include "message.h"
+#include "message_guid.h"
 #include "parseaddr.h"
 #include "charset.h"
 #include "stristr.h"
@@ -138,6 +139,9 @@ struct body {
      * Cached headers.  Only filled in at top-level
      */
     struct ibuf cacheheaders;
+
+    /* Message GUID. Only filled in at top level */
+    struct message_guid guid;
 };
 
 /* List of Content-type parameters */
@@ -439,6 +443,8 @@ int message_parse_mapped(const char *msg_base, unsigned long msg_len,
     message_parse_body(&msg, MAILBOX_FORMAT_NORMAL, body,
 		       DEFAULT_CONTENT_TYPE, (struct boundary *)0);
 
+    message_guid_generate(&body->guid, msg_base, msg_len);
+
     return 0;
 }
 
@@ -525,6 +531,7 @@ struct index_record *message_index;
 struct body *body;
 {
     int n;
+    enum enum_value config_guidmode = config_getenum(IMAPOPT_GUID_MODE);
 
     message_index->sentdate = message_parse_date(body->date, 0);
     message_index->size = body->header_size + body->content_size;
@@ -541,6 +548,13 @@ struct body *body;
     if (n == -1) {
 	syslog(LOG_ERR, "IOERROR: appending cache for %s: %m", cache_name);
 	return IMAP_IOERROR;
+    }
+
+    /* Copy in GUID unless GUID already assigned to the message
+     * (allows parent to decide which source of GUIDs to use)
+     */
+    if (config_guidmode && message_guid_isnull(&message_index->guid)) {
+	message_guid_copy(&message_index->guid, &body->guid);
     }
 
     return 0;
