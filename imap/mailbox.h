@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- * $Id: mailbox.h,v 1.85 2007/09/18 11:33:14 murch Exp $
+ * $Id: mailbox.h,v 1.86 2007/09/24 12:48:32 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -49,7 +49,7 @@
 
 #include "auth.h"
 #include "quota.h"
-#include "message_uuid.h"
+#include "message_guid.h"
 #include "byteorder64.h"
 
 
@@ -86,7 +86,7 @@ typedef unsigned long int modseq_t;
 #define MAILBOX_FORMAT_NORMAL	0
 #define MAILBOX_FORMAT_NETNEWS	1
 
-#define MAILBOX_MINOR_VERSION	9
+#define MAILBOX_MINOR_VERSION	10
 #define MAILBOX_CACHE_MINOR_VERSION 2
 
 #define FNAME_HEADER "/cyrus.header"
@@ -186,7 +186,7 @@ struct index_record {
     bit32 user_flags[MAX_USER_FLAGS/32];
     unsigned long content_lines;
     unsigned long cache_version;
-    struct message_uuid uuid;
+    struct message_guid guid;
     modseq_t modseq;
 };
 
@@ -238,8 +238,8 @@ struct index_record {
 #define OFFSET_USER_FLAGS 36
 #define OFFSET_CONTENT_LINES (OFFSET_USER_FLAGS+MAX_USER_FLAGS/8) /* added for nntpd */
 #define OFFSET_CACHE_VERSION OFFSET_CONTENT_LINES+sizeof(bit32)
-#define OFFSET_MESSAGE_UUID OFFSET_CACHE_VERSION+sizeof(bit32)
-#define OFFSET_MODSEQ_64 (OFFSET_MESSAGE_UUID+MESSAGE_UUID_PACKED_SIZE) /* CONDSTORE (64-bit modseq) */
+#define OFFSET_MESSAGE_GUID OFFSET_CACHE_VERSION+sizeof(bit32)
+#define OFFSET_MODSEQ_64 (OFFSET_MESSAGE_GUID+MESSAGE_GUID_SIZE) /* CONDSTORE (64-bit modseq) */
 #define OFFSET_MODSEQ (OFFSET_MODSEQ_64+sizeof(bit32)) /* CONDSTORE (32-bit modseq) */
 
 #define INDEX_HEADER_SIZE (OFFSET_SPARE4+sizeof(bit32))

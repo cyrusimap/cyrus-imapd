@@ -1,4 +1,4 @@
-<!-- $Id: install-replication.html,v 1.5 2007/09/12 15:48:52 murch Exp $ -->
+<!-- $Id: install-replication.html,v 1.6 2007/09/24 12:48:29 murch Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Cyrus replication
@@ -117,33 +117,16 @@ authentication.
 
 </ol>
 
-<h4>Universally Unique Identifiers (UUIDs)</h4>
+<h4>Globally Unique IDentifiers (GUIDs)</h4>
 
-An optional, but recommended step is to enable UUIDs for messages.
-Use of UUIDs improves efficiency by eliminating the synchronization
+An optional, but recommended step is to enable GUIDs for messages.
+Use of GUIDs improves efficiency by eliminating the synchronization
 of messages which the "replica" has already received from the
-"master".  Note that UUIDs can be safely enabled and disabled at any
+"master".  Note that GUIDs can be safely enabled and disabled at any
 time.
 
 <ol>
-<p><li>
-Define the <tt>sync_machineid</tt> option in imapd.conf.  This option
-specifies the numeric identifier (1 - 255) of the "master" machine
-which is used in constructing the UUID for each message on the server.
-This identifier MUST be unique across all active "backend" servers in
-a Murder.  Example:<p>
-
-<pre>
-sync_machineid: 1
-</pre>
-
-<p><li>For each IMAP, NNTP and LMTP service in cyrus.conf, enable the
-<tt>provide_uuid</tt> argument.  Valid values are 0 or 1.  The UUID
-itself will be calculated based on the sync_machineid above.  Example:<p>
-
-<pre>
-imap	cmd="imapd" listen="imap" prefork=5 provide_uuid=1
-</pre>
+<p><li>Set the <tt>guid_mode</tt> option in imapd.conf to <tt>sha1</tt>.
 </ol>
 
 <h4>"Rolling" replication</h4>
@@ -183,7 +166,7 @@ has been configured.
 <h3>Failover</h3>
 
 <P><HR>
-last modified: $Date: 2007/09/12 15:48:52 $
+last modified: $Date: 2007/09/24 12:48:29 $
 </BODY></HTML>
 
 

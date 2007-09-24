@@ -36,7 +36,7 @@ S: * Sync Server v0.0 [EXPERIMENTAL]
 #      Folder UniqueID, Name, ACL, UIDlast, timestamp for last seen update.
 #
 #   "*" response for each mail message in folder:
-#      UID, UUID, flags (other than \Seen state)
+#      UID, GUID, flags (other than \Seen state)
 
 C: user_some dpc22 user.dpc22
 S: ** 6b98205c796c6c61 user.dpc22 \
@@ -59,7 +59,7 @@ C: select user.dpc22
 S: OK 6b98205c796c6c61 4151 1062945305
 
 # Remove message with UID "1" from folder list (message which has been
-# sitting in my inbox since January, has no UUID defined)
+# sitting in my inbox since January, has no GUID defined)
 
 C: expunge 1
 S: OK Expunge Complete
@@ -130,7 +130,7 @@ Ask server for contents of the two folders:
 
 S:   USER_SOME dpc22 ...
 
-Reserve message with given UUID in user.dpc22 so that it can be moved
+Reserve message with given GUID in user.dpc22 so that it can be moved
 
 S:   RESERVE user.dpc22 ...
 

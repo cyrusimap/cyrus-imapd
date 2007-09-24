@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: cyrus.conf.5,v 1.14 2007/04/03 15:10:02 murch Exp $
+.\" $Id: cyrus.conf.5,v 1.15 2007/09/24 12:48:32 murch Exp $
 .SH NAME
 cyrus.conf \- Cyrus configuration file
 .SH DESCRIPTION
@@ -125,13 +125,6 @@ if possible.
 The number of instances of this service to always have running and
 waiting for a connection (for faster initial response time).  This
 integer value is optional.
-.IP "\fBprovide_uuid=\fR0" 5
-Provide the service the required information for constructing
-universally unique identifiers (UUIDs) for messages.  This option
-should be given to all IMAP, NNTP and LMTP services on the master side
-of a replicated configuration.  Possible values are 0 (false) or 1 (true).
-The UUID will be created based on the sync_machineid value specified
-in imapd.conf.
 .IP "\fBmaxchild=\fR-1" 5
 The maximum number of instances of this service to spawn.  A value of
 -1 means unlimited.  This integer value is optional.

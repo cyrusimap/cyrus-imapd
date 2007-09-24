@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.171 2007/09/18 11:33:14 murch Exp $
+ * $Id: mailbox.c,v 1.172 2007/09/24 12:48:32 murch Exp $
  *
  */
 
@@ -998,7 +998,7 @@ struct index_record *record;
     }
     record->content_lines = ntohl(*((bit32 *)(buf+OFFSET_CONTENT_LINES)));
     record->cache_version = ntohl(*((bit32 *)(buf+OFFSET_CACHE_VERSION)));
-    message_uuid_unpack(&record->uuid, buf+OFFSET_MESSAGE_UUID);
+    message_guid_import(&record->guid, buf+OFFSET_MESSAGE_GUID);
 #ifdef HAVE_LONG_LONG_INT
     record->modseq = ntohll(*((bit64 *)(buf+OFFSET_MODSEQ_64)));
 #else
@@ -1376,7 +1376,7 @@ void mailbox_index_record_to_buf(struct index_record *record, char *buf)
     }
     *((bit32 *)(buf+OFFSET_CONTENT_LINES)) = htonl(record->content_lines);
     *((bit32 *)(buf+OFFSET_CACHE_VERSION)) = htonl(record->cache_version);
-    message_uuid_pack(&record->uuid, buf+OFFSET_MESSAGE_UUID);
+    message_guid_export(&record->guid, buf+OFFSET_MESSAGE_GUID);
 #ifdef HAVE_LONG_LONG_INT
     *((bit64 *)(buf+OFFSET_MODSEQ_64)) = htonll(record->modseq);
 #else
@@ -1531,7 +1531,7 @@ static void mailbox_upgrade_index_work(struct mailbox *mailbox,
 {
     unsigned long exists;
     unsigned msgno;
-    bit32 oldstart_offset, oldrecord_size, recsize_diff;
+    bit32 oldstart_offset, oldrecord_size;
     indexbuffer_t ibuf;
     char *buf = ibuf.buf, *bufp;
     int quota_offset = 0;
@@ -1539,13 +1539,17 @@ static void mailbox_upgrade_index_work(struct mailbox *mailbox,
     bit32 numansweredflag = 0;
     bit32 numdeletedflag = 0;
     bit32 numflaggedflag = 0;
+    int old_minor_version = 0;
 
     /* Copy existing header so we can upgrade it */ 
     memcpy(buf, index_base, INDEX_HEADER_SIZE);
 
     exists = ntohl(*((bit32 *)(buf+OFFSET_EXISTS)));
 
-    if (ntohl(*((bit32 *)(buf+OFFSET_MINOR_VERSION))) <= 5) {
+    old_minor_version = ntohl(*((bit32 *)(buf+OFFSET_MINOR_VERSION)));
+
+    /* QUOTA_MAILBOX_USED64 added with minor version 6 */
+    if (old_minor_version < 6) {
 	quota_offset = sizeof(bit32);
 	/* upgrade quota to 64-bits (bump existing fields) */
 	memmove(buf+OFFSET_QUOTA_MAILBOX_USED, buf+OFFSET_QUOTA_MAILBOX_USED64,
@@ -1554,7 +1558,9 @@ static void mailbox_upgrade_index_work(struct mailbox *mailbox,
 	*((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) = htonl(0);
     }
 
-    if (ntohl(*((bit32 *)(buf+OFFSET_MINOR_VERSION))) < 8) {
+    /* HIGHESTMODSEQ[_64] added with minor version 8 */
+    if (old_minor_version < 8) {
+	/* Set the initial highestmodseq to 1 */
 #ifdef HAVE_LONG_LONG_INT
 	align_htonll(buf+OFFSET_HIGHESTMODSEQ_64, 1);
 #else
@@ -1573,9 +1579,20 @@ static void mailbox_upgrade_index_work(struct mailbox *mailbox,
     /* save old record_size; change record_size */
     oldrecord_size = ntohl(*((bit32 *)(buf+OFFSET_RECORD_SIZE)));
     *((bit32 *)(buf+OFFSET_RECORD_SIZE)) = htonl(INDEX_RECORD_SIZE);
-    recsize_diff = INDEX_RECORD_SIZE - oldrecord_size;
 
-    /* upgrade other fields as necessary */
+    /* sanity check the record size */
+    if (oldrecord_size > INDEX_RECORD_SIZE) {
+        char *err = xmalloc(MAX_MAILBOX_NAME+128);
+        snprintf(err, MAX_MAILBOX_NAME+128,
+                 "Mailbox %s needs reconstruct: Record size %d > %d",
+                 mailbox->name, oldrecord_size, INDEX_RECORD_SIZE);
+        fatal(err, EC_SOFTWARE);
+    }
+
+    /* upgrade other fields as necessary
+     *
+     * minor version wasn't updated religiously in the early days,
+     * so we need to use the old offset instead */
     if (oldstart_offset < OFFSET_POP3_LAST_LOGIN-quota_offset+sizeof(bit32)) {
 	*((bit32 *)(buf+OFFSET_POP3_LAST_LOGIN)) = htonl(0);
     }
@@ -1600,12 +1617,7 @@ static void mailbox_upgrade_index_work(struct mailbox *mailbox,
 	unsigned long options = !exists ? OPT_POP3_NEW_UIDL : 0;
 	*((bit32 *)(buf+OFFSET_MAILBOX_OPTIONS)) = htonl(options);
     }
-#if 0
-    if (oldstart_offset < OFFSET_HIGHESTMODSEQ-quota_offset+sizeof(bit32) ||
-	!align_ntohll(buf+OFFSET_HIGHESTMODSEQ_64)) {
-	align_htonll(buf+OFFSET_HIGHESTMODSEQ_64, 1);
-    }
-#endif
+
     *((bit32 *)(buf+OFFSET_SPARE0)) = htonl(0); /* RESERVED */
     *((bit32 *)(buf+OFFSET_SPARE1)) = htonl(0); /* RESERVED */
     *((bit32 *)(buf+OFFSET_SPARE2)) = htonl(0); /* RESERVED */
@@ -1616,9 +1628,7 @@ static void mailbox_upgrade_index_work(struct mailbox *mailbox,
     fwrite(buf, 1, INDEX_HEADER_SIZE, newindex);
 
     /* Write the rest of new index */
-    memset(buf, 0, INDEX_RECORD_SIZE);
     for (msgno = 1; msgno <= exists; msgno++) {
-	/* Write the existing (old) part of the index record */
 	bufp = (char *) (index_base + oldstart_offset +
 			 (msgno - 1)*oldrecord_size);
 
@@ -1630,41 +1640,60 @@ static void mailbox_upgrade_index_work(struct mailbox *mailbox,
 	    if (sysflags & FLAG_FLAGGED) numflaggedflag++;
 	}
 
-	fwrite(bufp, oldrecord_size, 1, newindex);
+	if (old_minor_version == MAILBOX_MINOR_VERSION) {
+            /* Just copy the original data as is */
+            fwrite(bufp, INDEX_RECORD_SIZE, 1, newindex);
+            continue;
+        }
 
-	if (recsize_diff) {
-	    /* We need to upgrade the index record to include new fields. */
+        /* We need to upgrade the index record to include new fields. */
+        memset(buf, 0, INDEX_RECORD_SIZE);
+        memcpy(buf, bufp, oldrecord_size);
 
-	    /* Currently, this means adding a content_lines placeholder.
-	     * We use BIT32_MAX rather than 0, since a message body can
-	     * be empty.  We'll calculate the actual value on demand.
-	     */
-	    if (oldrecord_size < OFFSET_CONTENT_LINES+sizeof(bit32)) {
-		*((bit32 *)(buf+OFFSET_CONTENT_LINES)) = htonl(BIT32_MAX);
-	    }
+        /* CONTENT_LINES added with minor version 5 */
+        if (old_minor_version < 5) {
+	    /* Set the initial content lines to BIT32_MAX rather than 0,
+	     * since a message body can be empty.
+	     * We'll calculate the actual value on demand. */
+            *((bit32 *)(buf+OFFSET_CONTENT_LINES)) = htonl(BIT32_MAX);
+        }
 
+        /* CACHE_VERSION added with minor version 6 */
+        if (old_minor_version < 6) {
 	    /* Set the initial cache version to 0, that is, with the old
 	     * format of the cached headers */
-	    if (oldrecord_size < OFFSET_CACHE_VERSION+sizeof(bit32)) {
-		*((bit32 *)(buf+OFFSET_CACHE_VERSION)) = htonl(0);
-	    }
+            *((bit32 *)(buf+OFFSET_CACHE_VERSION)) = htonl(0);
+        }
 
-            /* Reset undefined MessageUUIDs to NULL value (slow copy) */
-            if (oldrecord_size < OFFSET_MESSAGE_UUID+MESSAGE_UUID_PACKED_SIZE)
-                memset(buf+OFFSET_MESSAGE_UUID, 0, MESSAGE_UUID_PACKED_SIZE);
+        if (old_minor_version < 7) {
+            /* 12-byte GUIDs added with minor version 7.
+	     * Set to NIL GUID */
+            memset(buf+OFFSET_MESSAGE_GUID, 0, MESSAGE_GUID_SIZE);
+        } else if (old_minor_version < 10) {
+            /* GUIDs extended from 12 to 20 bytes with minor version 10 */
+            void *src = (buf+OFFSET_MESSAGE_GUID)+12;
+            void *dst = (buf+OFFSET_MESSAGE_GUID)+20;
+            size_t len = INDEX_RECORD_SIZE - (OFFSET_MESSAGE_GUID+20);
+                         
+            /* Bump everything after MESSAGE_GUID down by 8 bytes */
+            memmove(dst, src, len);
 
+            /* Pad existing GUID with zeros */
+            memset(buf+OFFSET_MESSAGE_GUID+12, 0, 8);
+        }
+
+        /* MODSEQ added with minor version 8 */
+        if (old_minor_version < 8) {
 	    /* Set the initial modseq to 1 */
-	    if (oldrecord_size < OFFSET_MODSEQ+4) {
 #ifdef HAVE_LONG_LONG_INT
-		*((bit64 *)(buf+OFFSET_MODSEQ_64)) = htonll(1);
+	    *((bit64 *)(buf+OFFSET_MODSEQ_64)) = htonll(1);
 #else
-		*((bit32 *)(buf+OFFSET_MODSEQ_64)) = htonl(0);
-		*((bit32 *)(buf+OFFSET_MODSEQ)) = htonl(1);
+	    *((bit32 *)(buf+OFFSET_MODSEQ_64)) = htonl(0);
+	    *((bit32 *)(buf+OFFSET_MODSEQ)) = htonl(1);
 #endif
-	    }
-
-	    fwrite(buf+oldrecord_size, recsize_diff, 1, newindex);
 	}
+
+        fwrite(buf, INDEX_RECORD_SIZE, 1, newindex);
     }
 
     if (calculate_flagcounts) {

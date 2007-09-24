@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.153 2007/09/05 17:26:27 murch Exp $
+ * $Id: lmtpd.c,v 1.154 2007/09/24 12:48:31 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -225,9 +225,6 @@ int service_init(int argc __attribute__((unused)),
     /* create connection to the SNMP listener, if available. */
     snmp_connect(); /* ignore return code */
     snmp_set_str(SERVER_NAME_VERSION, CYRUS_VERSION);
-
-    /* YYY Sanity checks possible here? */
-    message_uuid_client_init(getenv("CYRUS_UUID_PREFIX"));
 
     return 0;
 }

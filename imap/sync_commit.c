@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_commit.c,v 1.7 2007/09/12 15:51:04 murch Exp $
+ * $Id: sync_commit.c,v 1.8 2007/09/24 12:48:32 murch Exp $
  */
 
 #include <config.h>
@@ -95,7 +95,7 @@ sync_combine_commit(struct mailbox *mailbox,
     unsigned char *buf  = NULL;
     struct sync_upload_item *item;
     struct sync_message     *message;
-    quota_t quota_add    = 0;  /* Following may be negative on UUID conflict */
+    quota_t quota_add    = 0;  /* Following may be negative on GUID conflict */
     long numansweredflag = 0;
     long numdeletedflag  = 0;
     long numflaggedflag  = 0;
@@ -140,7 +140,7 @@ sync_combine_commit(struct mailbox *mailbox,
     }
 
     /* Copy messages into target mailfolder (blat existing messages:
-     * caused by UUID conflict on messages: sync_client wins) */
+     * caused by GUID conflict on messages: sync_client wins) */
     for (item = upload_list->head ; item ; item = item->next) {
 #if 0
         snprintf(target, MAX_MAILBOX_PATH,
@@ -233,7 +233,7 @@ sync_combine_commit(struct mailbox *mailbox,
             *((bit32 *)(buf+OFFSET_CACHE_VERSION))
 		= htonl(message->cache_version);
 
-            message_uuid_pack(&item->uuid, buf+OFFSET_MESSAGE_UUID);
+            message_guid_export(&item->guid, buf+OFFSET_MESSAGE_GUID);
 
 #ifdef HAVE_LONG_LONG_INT
             *((bit64 *)(buf+OFFSET_MODSEQ_64)) = htonll(item->modseq);
@@ -260,7 +260,7 @@ sync_combine_commit(struct mailbox *mailbox,
 
             fwrite(buf, 1, mailbox->record_size, newindex);
 
-            /* Discard existing msg on server because of UUID conflict */
+            /* Discard existing msg on server because of GUID conflict */
             /* Need to reclaim allocated space and resources */
             if (record.uid == item->uid) {
                 quota_add -= record.size;
@@ -524,7 +524,7 @@ sync_append_commit(struct mailbox *mailbox,
 	    = htonl(message->content_lines);
         *((bit32 *)(record+OFFSET_CACHE_VERSION))
 	    = htonl(message->cache_version);
-        message_uuid_pack(&item->uuid, record+OFFSET_MESSAGE_UUID);
+        message_guid_export(&item->guid, record+OFFSET_MESSAGE_GUID);
 
 #ifdef HAVE_LONG_LONG_INT
             *((bit64 *)(record+OFFSET_MODSEQ_64)) = htonll(item->modseq);

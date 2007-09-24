@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.227 2007/09/05 17:26:27 murch Exp $
+ * $Id: index.c,v 1.228 2007/09/24 12:48:31 murch Exp $
  */
 #include <config.h>
 
@@ -3603,9 +3603,9 @@ void *rock;
     copyargs->copymsg[copyargs->nummsg].content_lines = CONTENT_LINES(msgno);
     copyargs->copymsg[copyargs->nummsg].cache_version = CACHE_VERSION(msgno);
     copyargs->copymsg[copyargs->nummsg].cache_begin = cache_base + CACHE_OFFSET(msgno);
-    message_uuid_unpack(&copyargs->copymsg[copyargs->nummsg].uuid,
+    message_guid_import(&copyargs->copymsg[copyargs->nummsg].guid,
                         (unsigned char *) /* YYY */
-                        INDEC_OFFSET(msgno)+OFFSET_MESSAGE_UUID);
+                        INDEC_OFFSET(msgno)+OFFSET_MESSAGE_GUID);
 
     if (mailbox->format != MAILBOX_FORMAT_NORMAL) {
 	/* Force copy and re-parse of message */

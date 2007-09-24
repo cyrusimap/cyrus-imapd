@@ -40,7 +40,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-# $Id: Makefile.in,v 1.70 2007/08/09 14:13:26 murch Exp $
+# $Id: Makefile.in,v 1.71 2007/09/24 12:48:32 murch Exp $
 
 # Authorization namespace.
 AUTH=auth.o auth_krb.o auth_unix.o auth_krb5.o auth_pts.o
@@ -83,10 +83,11 @@ LIBCYR_HDRS = $(srcdir)/acl.h $(srcdir)/assert.h $(srcdir)/auth.h \
 	$(srcdir)/nonblock.h $(srcdir)/parseaddr.h $(srcdir)/prot.h \
 	$(srcdir)/retry.h $(srcdir)/sysexits.h $(srcdir)/strhash.h \
 	$(srcdir)/lsort.h $(srcdir)/stristr.h \
-	$(srcdir)/util.h $(srcdir)/xstrlcpy.h $(srcdir)/xstrlcat.h $(srcdir)/xmalloc.h $(srcdir)/imapurl.h \
+	$(srcdir)/util.h $(srcdir)/xstrlcpy.h $(srcdir)/xstrlcat.h \
+	$(srcdir)/xmalloc.h $(srcdir)/imapurl.h \
 	$(srcdir)/cyrusdb.h $(srcdir)/iptostring.h $(srcdir)/rfc822date.h \
 	$(srcdir)/libcyr_cfg.h $(srcdir)/byteorder64.h \
-	$(srcdir)/message_uuid.h $(srcdir)/md5.h $(srcdir)/hmac-md5.h
+	$(srcdir)/md5.h $(srcdir)/hmac-md5.h
 
 LIBCYR_OBJS = acl.o bsearch.o charset.o glob.o retry.o util.o \
 	libcyr_cfg.o mkgmtime.o prot.o parseaddr.o imclient.o imparse.o \
@@ -95,7 +96,7 @@ LIBCYR_OBJS = acl.o bsearch.o charset.o glob.o retry.o util.o \
 	gmtoff_@WITH_GMTOFF@.o map_@WITH_MAP@.o $(ACL) $(AUTH) \
 	@LIBOBJS@ @CYRUSDB_OBJS@ @MD5OBJ@ \
 	iptostring.o xmalloc.o wildmat.o byteorder64.o \
-	message_uuid.o xstrlcat.o xstrlcpy.o
+	xstrlcat.o xstrlcpy.o
 
 LIBCYRM_HDRS = $(srcdir)/hash.h $(srcdir)/mpool.h $(srcdir)/xmalloc.h \
 	$(srcdir)/xstrlcat.h $(srcdir)/xstrlcpy.h $(srcdir)/util.h \
