@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.11 2007/09/24 12:48:32 murch Exp $
+ * $Id: sync_server.c,v 1.12 2007/09/25 12:49:11 murch Exp $
  */
 
 #include <config.h>
@@ -1465,14 +1465,17 @@ static void cmd_reserve(char *mailbox_name,
         goto cleanup;
     }
 
-    for (i = 0, msgno = 1 ; msgno <= m.exists; msgno++) {
+    for (i = 0, msgno = 1 ; (msgno <= m.exists) && (i < count); msgno++) {
         mailbox_read_index_record(&m, msgno, &record);
 
         if (!message_guid_compare(&record.guid, &ids[i]))
             continue;
 
-        if (sync_message_find(message_list, &record.guid))
-            continue; /* Duplicate GUID on RESERVE list */
+        if (sync_message_find(message_list, &record.guid)) {
+	    /* Duplicate GUID on RESERVE list */
+	    i++;
+            continue;
+	}
 
         /* Attempt to reserve this message */
         snprintf(mailbox_msg_path, sizeof(mailbox_msg_path),
