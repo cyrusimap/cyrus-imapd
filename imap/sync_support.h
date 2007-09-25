@@ -41,13 +41,14 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.h,v 1.6 2007/09/24 12:48:32 murch Exp $
+ * $Id: sync_support.h,v 1.7 2007/09/25 13:53:47 murch Exp $
  */
 
 #ifndef INCLUDED_SYNC_SUPPORT_H
 #define INCLUDED_SYNC_SUPPORT_H
 
 #include "prot.h"
+#include "mailbox.h"
 
 #define SYNC_MSGID_LIST_HASH_SIZE        (65536)
 #define SYNC_MESSAGE_LIST_HASH_SIZE      (65536)
@@ -94,6 +95,29 @@ int sync_getflags(struct protstream *input,
 		  struct sync_flags *flags, struct sync_flags_meta *meta);
 
 void sync_flags_meta_to_list(struct sync_flags_meta *meta, char **flagname);
+
+/* ====================================================================== */
+
+/* sync_index_list records index records for upload */
+
+struct sync_index {
+    struct sync_index *next;
+    struct index_record record;
+    unsigned long msgno;
+};
+
+struct sync_index_list {
+    struct sync_index *head, *tail;
+    unsigned long count;
+    unsigned long last_uid;
+};
+
+struct sync_index_list *sync_index_list_create(void);
+
+void sync_index_list_add(struct sync_index_list *l,
+             unsigned long msgno, struct index_record *record);
+
+void sync_index_list_free(struct sync_index_list **lp);
 
 /* ====================================================================== */
 
