@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.c,v 1.13 2007/09/22 12:08:23 murch Exp $
+ * $Id: sync_support.c,v 1.14 2007/09/25 13:53:47 murch Exp $
  */
 
 #include <config.h>
@@ -412,6 +412,56 @@ int sync_getflags(struct protstream *input,
 
     return(prot_getc(input));
 }
+
+/* ====================================================================== */
+
+/* sync_index stuff */
+
+struct sync_index_list *sync_index_list_create()
+{
+    struct sync_index_list *l = xzmalloc(sizeof (struct sync_index_list));
+
+    l->head     = NULL;
+    l->tail     = NULL;
+    l->count    = 0;
+    l->last_uid = 0;
+
+    return l;
+}
+
+void sync_index_list_add(struct sync_index_list *l,
+        unsigned long msgno, struct index_record *record)
+{
+    struct sync_index *result = xzmalloc(sizeof(struct sync_index));
+
+    result->msgno = msgno;
+    memcpy(&(result->record), record, sizeof(struct index_record));
+
+    if (l->tail)
+        l->tail = l->tail->next = result;
+    else
+        l->head = l->tail = result;
+
+    l->count++;
+    l->last_uid = record->uid;
+}
+
+void sync_index_list_free(struct sync_index_list **lp)
+{
+    struct sync_index_list *l = *lp;
+    struct sync_index *current, *next;
+
+    current = l->head;
+    while (current) {
+        next = current->next;
+        free(current);
+        current = next;
+    }
+    free(l);
+
+    *lp = NULL;
+}
+
 
 /* ====================================================================== */
 

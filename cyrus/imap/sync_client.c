@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.20 2007/09/24 12:48:32 murch Exp $
+ * $Id: sync_client.c,v 1.21 2007/09/25 13:53:47 murch Exp $
  */
 
 #include <config.h>
@@ -1206,16 +1206,72 @@ static int upload_message_work(struct mailbox *mailbox,
     return(r);
 }
 
+/* upload_messages() null operations still requires UIDLAST update */
+
+static int update_uidlast(struct mailbox *mailbox)
+{
+    prot_printf(toserver, "UIDLAST %lu %lu\r\n",
+             mailbox->last_uid, mailbox->last_appenddate);
+    prot_flush(toserver);
+    return(sync_parse_code("UIDLAST",fromserver, SYNC_PARSE_EAT_OKLINE, NULL));
+}
+
+static int index_list_work(struct mailbox *mailbox,
+			   struct sync_index_list *index_list)
+{
+    struct sync_index *index;
+    int r = 0;
+    int c = ' ';
+    static struct buf token;   /* BSS */
+
+    if (index_list->count == 0) return(0);
+
+    prot_printf(toserver, "UPLOAD %lu %lu",
+                index_list->last_uid, mailbox->last_appenddate); 
+
+    for (index = index_list->head; index; index = index->next) {
+        r = upload_message_work(mailbox, index->msgno, &(index->record));
+	      if (r) break;
+    }
+
+    prot_printf(toserver, "\r\n");
+    prot_flush(toserver);
+
+    if (r) {
+        sync_parse_code("UPLOAD", fromserver, SYNC_PARSE_EAT_OKLINE, NULL);
+        return(r);
+    }
+    r = sync_parse_code("UPLOAD", fromserver, SYNC_PARSE_NOEAT_OKLINE, NULL);
+    if (r) return(r);
+
+    if ((c = getword(fromserver, &token)) != ' ') {
+        eatline(fromserver, c);
+        syslog(LOG_ERR, "Garbage on Upload response");
+        return(IMAP_PROTOCOL_ERROR);
+    }
+    eatline(fromserver, c);
+
+    /* Clear out msgid_on_server list if server restarted */
+    if (!strcmp(token.s, "[RESTART]")) {
+        int hash_size = msgid_onserver->hash_size;
+
+        sync_msgid_list_free(&msgid_onserver);
+        msgid_onserver = sync_msgid_list_create(hash_size);
+
+        syslog(LOG_INFO, "UPLOAD: received RESTART");
+    }
+
+    return(0);
+}
+
 static int upload_messages_list(struct mailbox *mailbox,
 				struct sync_msg_list *list)
 {
-    unsigned long msgno = 1;
+    unsigned long msgno;
     int r = 0;
     struct index_record record;
     struct sync_msg *msg;
-    int count;
-    int c = ' ';
-    static struct buf token;   /* BSS */
+    struct sync_index_list *index_list;
     int max_count = config_getint(IMAPOPT_SYNC_BATCH_SIZE);
 
     if (max_count <= 0) max_count = INT_MAX;
@@ -1226,79 +1282,61 @@ static int upload_messages_list(struct mailbox *mailbox,
         return(IMAP_IOERROR);
     }
 
-repeatupload:
-
+    msgno = 1;
     msg = list->head;
-    for (count = 0; count < max_count && msgno <= mailbox->exists ; msgno++) {
-        r = mailbox_read_index_record(mailbox, msgno, &record);
+    do {
+	/* Break UPLOAD into chunks of <=max_count messages */
+	index_list = sync_index_list_create();
 
-        if (r) {
-            syslog(LOG_ERR,
-                   "IOERROR: reading index entry for nsgno %lu of %s: %m",
-                   record.uid, mailbox->name);
-            return(IMAP_IOERROR);
-        }
+	for (; (index_list->count < max_count) &&
+		 (msgno <= mailbox->exists); msgno++) {
+	    r = mailbox_read_index_record(mailbox, msgno, &record);
 
-        /* Skip over messages recorded on server which are missing on client
-         * (either will be expunged or have been expunged already) */
-        while (msg && (record.uid > msg->uid))
-            msg = msg->next;
+	    if (r) {
+		syslog(LOG_ERR,
+		       "IOERROR: reading index entry for msgno %lu of %s: %m",
+		       record.uid, mailbox->name);
+		return(IMAP_IOERROR);
+	    }
 
-        if (msg && (record.uid == msg->uid) &&
-            message_guid_compare_allow_null(&record.guid, &msg->guid)) {
-            msg = msg->next;  /* Ignore exact match */
-            continue;
-        }
+	    /* Skip over messages recorded on server which are missing on client
+	     * (either will be expunged or have been expunged already) */
+	    while (msg && (record.uid > msg->uid))
+		msg = msg->next;
 
-        if (count++ == 0)
-            prot_printf(toserver, "UPLOAD %lu %lu",
-                     mailbox->last_uid, mailbox->last_appenddate); 
+	    if (msg && (record.uid == msg->uid) &&
+		message_guid_compare_allow_null(&record.guid, &msg->guid)) {
+		msg = msg->next;  /* Ignore exact match */
+		continue;
+	    }
 
-        /* Message with this GUID exists on client but not server */
-        if ((r=upload_message_work(mailbox, msgno, &record)))
-	    break;
+	    /* Message with this GUID exists on client but not server */
+	    sync_index_list_add(index_list, msgno, &record);
+	}
 
-        if (msg && (msg->uid == record.uid))  /* Overwritten on server */
-            msg = msg->next;
-    }
+	if (index_list->count == 0) {
+	    /* Reached end of existing messages, with nothing in our list -
+	     * final UID might not be same as UIDLAST, force update */
+	    r = update_uidlast(mailbox);
+	}
+	else {
+	    /* We have a chunk of messages to UPLOAD */
+	    if (msgno > mailbox->exists) {
+		/* Last chunk - set final UID to be the same as UIDLAST */
+		index_list->last_uid = mailbox->last_uid;
+	    } else {
+		syslog(LOG_NOTICE,
+		       "Hit upload limit %d at UID %lu for %s, sending",
+		       max_count, index_list->last_uid, mailbox->name);
+	    }
 
-    if (count == 0)
-        return(r);
+	    r = index_list_work(mailbox, index_list);
+	}
+	sync_index_list_free(&index_list);
 
-    prot_printf(toserver, "\r\n"); 
-    prot_flush(toserver);
+    } while (!r && (msgno <= mailbox->exists));
 
-    if (r) {
-        sync_parse_code("UPLOAD", fromserver, SYNC_PARSE_EAT_OKLINE, NULL);
-        return(r);
-    }
-    r = sync_parse_code("UPLOAD", fromserver, SYNC_PARSE_NOEAT_OKLINE, NULL);
-    if (r) return(r);
-
-    if ((c = getword(fromserver, &token)) != ' ') {
-        eatline(fromserver, c);
-        syslog(LOG_ERR, "Garbage on Upload response");
-        return(IMAP_PROTOCOL_ERROR);
-    }
-    eatline(fromserver, c);
-
-    /* Clear out msgid_on_server list if server restarted */
-    if (!strcmp(token.s, "[RESTART]")) {
-        int hash_size = msgid_onserver->hash_size;
-
-        sync_msgid_list_free(&msgid_onserver);
-        msgid_onserver = sync_msgid_list_create(hash_size);
-
-	syslog(LOG_INFO, "UPLOAD: received RESTART");
-    }
-
-    /* don't overload the server with too many uploads at once! */
-    if (count >= max_count) {
-	syslog(LOG_INFO, "UPLOAD: hit %d uploads at msgno %d", count, msgno);
-	goto repeatupload;
-    }
-
-    return(0);
+    return(r);
 }
 
 static int upload_messages_from(struct mailbox *mailbox,
@@ -1307,9 +1345,8 @@ static int upload_messages_from(struct mailbox *mailbox,
     unsigned long msgno;
     int r = 0;
     struct index_record record;
-    int count = 0;
-    int c = ' ';
-    static struct buf token;   /* BSS */
+    struct sync_index_list *index_list;
+    int max_count = config_getint(IMAPOPT_SYNC_BATCH_SIZE);
 
     if (chdir(mailbox->path)) {
         syslog(LOG_ERR, "Couldn't chdir to %s: %s",
@@ -1317,68 +1354,50 @@ static int upload_messages_from(struct mailbox *mailbox,
         return(IMAP_IOERROR);
     }
 
-    for (msgno = 1 ; msgno <= mailbox->exists ; msgno++) {
-        r =  mailbox_read_index_record(mailbox, msgno, &record);
+    do {
+	/* Break UPLOAD into chunks of <=max_count messages */
+	index_list = sync_index_list_create();
 
-        if (r) {
-            syslog(LOG_ERR,
-                   "IOERROR: reading index entry for nsgno %lu of %s: %m",
-                   record.uid, mailbox->name);
-            return(IMAP_IOERROR);
-        }
+	for (; (index_list->count <= max_count) &&
+		 (msgno <= mailbox->exists); msgno++) {
+	    r = mailbox_read_index_record(mailbox, msgno, &record);
 
-        if (record.uid <= old_last_uid)
-            continue;
+	    if (r) {
+		syslog(LOG_ERR,
+		       "IOERROR: reading index entry for msgno %lu of %s: %m",
+		       record.uid, mailbox->name);
+		return(IMAP_IOERROR);
+	    }
 
-        if (count++ == 0)
-            prot_printf(toserver, "UPLOAD %lu %lu",
-                     mailbox->last_uid, mailbox->last_appenddate); 
+	    if (record.uid <= old_last_uid) continue;
 
-        if ((r=upload_message_work(mailbox, msgno, &record)))
-	    break;
-    }
+	    /* Message with this GUID exists on client but not server */
+	    sync_index_list_add(index_list, msgno, &record);
+	}
 
-    if (count == 0)
-        return(r);
+	if (index_list->count == 0) {
+	    /* Reached end of existing messages, with nothing in our list -
+	     * final UID might not be same as UIDLAST, force update */
+	    r = update_uidlast(mailbox);
+	}
+	else {
+	    /* We have a chunk of messages to UPLOAD */
+	    if (msgno > mailbox->exists) {
+		/* Last chunk - set final UID to be the same as UIDLAST */
+		index_list->last_uid = mailbox->last_uid;
+	    } else {
+		syslog(LOG_NOTICE,
+		       "Hit upload limit %d at UID %lu for %s, sending",
+		       max_count, index_list->last_uid, mailbox->name);
+	    }
 
-    prot_printf(toserver, "\r\n"); 
-    prot_flush(toserver);
+	    r = index_list_work(mailbox, index_list);
+	}
+	sync_index_list_free(&index_list);
 
-    if (r) {
-        sync_parse_code("UPLOAD", fromserver, SYNC_PARSE_EAT_OKLINE, NULL);
-        return(r);
-    }
-    r = sync_parse_code("UPLOAD", fromserver, SYNC_PARSE_NOEAT_OKLINE, NULL);
-    if (r) return(r);
+    } while(!r && (msgno <= mailbox->exists));
 
-    if ((c = getword(fromserver, &token)) != ' ') {
-        eatline(fromserver, c);
-        syslog(LOG_ERR, "Garbage on Upload response");
-        return(IMAP_PROTOCOL_ERROR);
-    }
-    eatline(fromserver, c);
-
-    /* Clear out msgid_on_server list if server restarted */
-    if (!strcmp(token.s, "[RESTART]")) {
-        int hash_size = msgid_onserver->hash_size;
-
-        sync_msgid_list_free(&msgid_onserver);
-        msgid_onserver = sync_msgid_list_create(hash_size);
-
-	syslog(LOG_INFO, "UPLOAD: received RESTART");
-    }
-
-    return(0);
-}
-
-/* upload_messages() null operations still requires UIDLAST update */
-
-static int update_uidlast(struct mailbox *mailbox)
-{
-    prot_printf(toserver, "UIDLAST %lu %lu\r\n",
-             mailbox->last_uid, mailbox->last_appenddate);
-    prot_flush(toserver);
-    return(sync_parse_code("UIDLAST",fromserver, SYNC_PARSE_EAT_OKLINE, NULL));
+    return(r);
 }
 
 
