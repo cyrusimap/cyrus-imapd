@@ -93,7 +93,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.54 2007/08/15 17:20:57 murch Exp $ */
+/* $Id: tls.c,v 1.55 2007/09/27 18:40:32 murch Exp $ */
 
 #include <config.h>
 
@@ -217,6 +217,47 @@ static RSA *tmp_rsa_cb(SSL * s __attribute__((unused)),
 	rsa_tmp = RSA_generate_key(keylength, RSA_F4, NULL, NULL);
     }
     return (rsa_tmp);
+}
+
+/* Logic copied from OpenSSL apps/s_server.c: give the TLS context
+ * DH params to work with DHE-* cipher suites. Hardcoded fallback
+ * in case no DH params in tls_key_file or tls_cert_file.
+ */
+static DH *get_dh1024(void)
+{
+    /* Second Oakley group 1024-bits MODP group from RFC2409 */
+    DH *dh=NULL;
+
+    if ((dh=DH_new()) == NULL) return(NULL);
+    dh->p=get_rfc2409_prime_1024(NULL);
+    dh->g=NULL;
+    BN_dec2bn(&(dh->g), "2");
+    if ((dh->p == NULL) || (dh->g == NULL)) return(NULL);
+
+    return(dh);
+	
+}
+static DH *load_dh_param(const char *keyfile, const char *certfile)
+{
+    DH *ret=NULL;
+    BIO *bio = NULL;
+
+    if (keyfile) bio = BIO_new_file(keyfile, "r");
+
+    if ((bio == NULL) && certfile) bio = BIO_new_file(certfile,"r");
+
+    if (bio) ret=PEM_read_bio_DHparams(bio,NULL,NULL,NULL);
+
+    if (ret == NULL) {
+	ret = get_dh1024();
+	syslog(LOG_NOTICE, "imapd:Loading hard-coded DH parameters");
+    } else {
+	syslog(LOG_NOTICE, "imapd:Loading DH parameters from file");
+    }
+
+    if (bio != NULL) BIO_free(bio);
+
+    return(ret);
 }
 
 /* taken from OpenSSL apps/s_cb.c */
@@ -683,6 +724,9 @@ int     tls_init_serverengine(const char *ident,
 	return (-1);
     }
     SSL_CTX_set_tmp_rsa_callback(s_ctx, tmp_rsa_cb);
+    /* Load DH params for DHE-* key exchanges */
+    SSL_CTX_set_tmp_dh(s_ctx, load_dh_param(s_key_file, s_cert_file));
+    /* FIXME: Load ECDH params for ECDHE suites: when OpenSSL >= 0.9.9 is released */
 
     verify_depth = verifydepth;
     if (askcert!=0)
