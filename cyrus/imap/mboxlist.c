@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.250 2007/08/30 14:25:08 murch Exp $
+ * $Id: mboxlist.c,v 1.251 2007/09/27 18:24:41 murch Exp $
  */
 
 #include <config.h>
@@ -1654,7 +1654,8 @@ int mboxlist_setacl(const char *name, const char *identifier,
     if(!r) {
 	/* Make change to ACL */
 	newacl = xstrdup(acl);
-	if (rights) {
+	if (rights && *rights) {
+	    /* rights are present and non-empty */
 	    mode = ACL_MODE_SET;
 	    if (*rights == '+') {
 		rights++;
