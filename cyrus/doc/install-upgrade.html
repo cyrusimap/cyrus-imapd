@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.37 2007/03/30 18:51:00 murch Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.38 2007/09/27 16:28:36 murch Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -7,6 +7,20 @@
 <body>
 
 <h1>Upgrading From Previous Versions</h1>
+
+<h2>Upgrading from 2.3.9</h2>
+<ul>
+<li>The method used for generating Globally Unique IDentifiers used
+for replication has been changed to be the SHA1 hash of the messages.
+If you wish to upgrade the existing GUIDs in particular mailbox(es) or
+the entire server, perform the following steps in the listed order.
+Note that is is NOT REQUIRED that existing GUIDs be upgraded.
+<ol>
+<li>Zero GUIDs on the replica (<tt>reconstruct -g</tt>)</li>
+<li>Regenerate GUIDs on the master (<tt>reconstruct -G</tt>)</li>
+<li>Regenerate GUIDs on the replica (<tt>reconstruct -G</tt>)</li>
+</ol>
+</ul>
 
 <h2>Upgrading from 2.3.8</h2>
 <ul>
@@ -470,7 +484,7 @@ worry about it.)
 </ul>
 
 <HR><P>
-last modified: $Date: 2007/03/30 18:51:00 $
+last modified: $Date: 2007/09/27 16:28:36 $
 </BODY></HTML>
 
 
