@@ -1,5 +1,5 @@
 /* auth_pts.c -- PTLOADER authorization
- * $Id: auth_pts.c,v 1.13 2007/08/15 17:20:57 murch Exp $
+ * $Id: auth_pts.c,v 1.14 2007/09/27 20:02:45 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -108,7 +108,7 @@ timeout_select (int sock, int op, int sec) {
   tv.tv_usec = 0;
 
   syslog(LOG_DEBUG, "timeout_select: sock = %d, rp = 0x%x, wp = 0x%x, sec = %d", 
-         sock, rp, wp, sec);
+         sock, (unsigned) rp, (unsigned) wp, sec);
 
   if ((r = select(sock+1, rp, wp, NULL, &tv)) == 0) {
     /* r == 0 then timed out. we change this into an error */

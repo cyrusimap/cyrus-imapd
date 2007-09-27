@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: util.c,v 1.35 2007/03/30 18:40:21 murch Exp $
+ * $Id: util.c,v 1.36 2007/09/27 20:02:45 murch Exp $
  */
 
 #include <config.h>
@@ -322,7 +322,7 @@ int create_tempfile(const char *path)
     char pattern[2048];
 
     if(snprintf(pattern, sizeof(pattern), "%s/cyrus_tmpfile_XXXXXX",
-		path) >= sizeof(pattern)){
+		path) >= (int) sizeof(pattern)){
 	fatal("temporary file pathname is too long in prot_flush",
 	      EC_TEMPFAIL);
     }

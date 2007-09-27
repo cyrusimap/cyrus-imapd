@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_berkeley.c,v 1.19 2007/08/15 17:20:57 murch Exp $ */
+/* $Id: cyrusdb_berkeley.c,v 1.20 2007/09/27 20:02:45 murch Exp $ */
 
 #include <config.h>
 
@@ -387,7 +387,8 @@ static int myarchive(const char **fnames, const char *dirname)
     return 0;
 }
 
-static int mbox_compar(DB *db, const DBT *a, const DBT *b)
+static int mbox_compar(DB *db __attribute__((unused)),
+		       const DBT *a, const DBT *b)
 {
     return bsearch_ncompare((const char *) a->data, a->size,
 			    (const char *) b->data, b->size);
