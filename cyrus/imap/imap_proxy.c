@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.c,v 1.2 2006/11/30 17:11:18 murch Exp $
+ * $Id: imap_proxy.c,v 1.3 2007/09/27 20:48:51 murch Exp $
  */
 
 #include <config.h>
@@ -109,11 +109,12 @@ struct backend *proxy_findinboxserver(void)
    in the output, otherwise the tagged line is stored in 's->last_result'. 
    In either case, the result of the tagged command is returned.
 
-/* 's->last_result' assumes that tagged responses don't contain literals.
-   Unfortunately, the IMAP grammar allows them */
+   's->last_result' assumes that tagged responses don't contain literals.
+   Unfortunately, the IMAP grammar allows them
 
-/* force_notfatal says to not fatal() if we lose connection to backend_current
- * even though it is in 95% of the cases, a good idea... */
+   force_notfatal says to not fatal() if we lose connection to backend_current
+   even though it is in 95% of the cases, a good idea...
+*/
 static int pipe_response(struct backend *s, const char *tag, int include_tag,
 			 int force_notfatal)
 {
@@ -121,7 +122,7 @@ static int pipe_response(struct backend *s, const char *tag, int include_tag,
     char eol[128];
     int sl;
     int cont = 0, last = !tag, r = PROXY_OK;
-    size_t taglen;
+    size_t taglen = 0;
 
     s->timeout->mark = time(NULL) + IDLE_TIMEOUT;
 
@@ -1126,7 +1127,7 @@ int proxy_catenate_url(struct backend *s, struct imapurl *url, FILE *f,
 	}
 
 	for (/* each fetch item */;;) {
-	    unsigned long uid, sz;
+	    unsigned long uid, sz = 0;
 
 	    switch (c) {
 	    case 'u': case 'U':

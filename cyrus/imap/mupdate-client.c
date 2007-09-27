@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.49 2007/02/05 18:41:47 jeaton Exp $
+ * $Id: mupdate-client.c,v 1.50 2007/09/27 20:48:54 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -81,19 +81,8 @@
 
 const char service_name[] = "mupdate";
 
-static sasl_security_properties_t *make_secprops(void)
-{
-  sasl_security_properties_t *ret =
-      (sasl_security_properties_t *) xzmalloc(sizeof(sasl_security_properties_t));
-
-  ret->maxbufsize = PROT_BUFSIZE;
-  ret->min_ssf = config_getint(IMAPOPT_SASL_MINIMUM_LAYER);	
-  ret->max_ssf = config_getint(IMAPOPT_SASL_MAXIMUM_LAYER);
-
-  return ret;
-}
-
-int mupdate_connect(const char *server, const char *port,
+int mupdate_connect(const char *server,
+		    const char *port __attribute__((unused)),
 		    mupdate_handle **handle,
 		    sasl_callback_t *cbs)
 {

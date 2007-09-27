@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.172 2007/09/24 12:48:32 murch Exp $
+ * $Id: mailbox.c,v 1.173 2007/09/27 20:48:52 murch Exp $
  *
  */
 
@@ -1527,7 +1527,7 @@ static int mailbox_lock_index_for_upgrade(struct mailbox *mailbox)
 static void mailbox_upgrade_index_work(struct mailbox *mailbox,
 				       FILE *newindex,
 				       const char *index_base,
-				       unsigned long index_len)
+				       unsigned long index_len __attribute__((unused)))
 {
     unsigned long exists;
     unsigned msgno;
@@ -2766,7 +2766,7 @@ static void mailbox_delete_files(char *path)
 }
 
 /* Callback for use by cmd_delete */
-static int chkchildren(char *name,
+static int chkchildren(char *name __attribute__((unused)),
 		       int matchlen __attribute__((unused)),
 		       int maycreate __attribute__((unused)),
 		       void *rock __attribute__((unused)))
@@ -2898,8 +2898,7 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
 			struct mailbox *newmailbox, char *userid)
 {
     int r;
-    unsigned int flag, msgno;
-    struct index_record record;
+    unsigned int flag;
     struct fnamepath oldfpath, newfpath;
     struct fnamebuf *oldfname, *newfname;
     struct txn *tid = NULL;

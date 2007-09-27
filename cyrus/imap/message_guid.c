@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: message_guid.c,v 1.3 2007/09/24 12:48:32 murch Exp $
+ * $Id: message_guid.c,v 1.4 2007/09/27 20:48:54 murch Exp $
  */
 
 #include <config.h>
@@ -97,6 +97,8 @@ void message_guid_generate(struct message_guid *guid,
 	guid->status = GUID_NONNULL;
 	SHA1((const unsigned char *) msg_base, msg_len, guid->value);
 #endif /* HAVE_SSL */
+	break;
+    default:
 	break;
     }
 }
