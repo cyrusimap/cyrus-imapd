@@ -2,7 +2,7 @@
 /*
  * addr.y -- RFC 822 address parser
  * Ken Murchison
- * $Id: addr.y,v 1.12 2006/11/30 17:11:24 murch Exp $
+ * $Id: addr.y,v 1.13 2007/09/27 19:26:07 murch Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -37,6 +37,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "addr.h"
 #include "script.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
     
 int yyerror(char *msg);
 extern int yylex(void);

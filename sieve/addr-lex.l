@@ -2,7 +2,7 @@
 /*
  * addr-lex.l -- RFC 822 address lexer
  * Ken Murchison
- * $Id: addr-lex.l,v 1.9 2006/11/30 17:11:24 murch Exp $
+ * $Id: addr-lex.l,v 1.10 2007/09/27 19:26:07 murch Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -34,7 +34,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #undef YY_INPUT
 #define YY_INPUT(b, r, ms) (r = addrinput(b, ms))
 
-int addrinput(char *buf, int max_size);
+int addrinput(char *buf, size_t max_size);
 void addrerror(const char *);
 
 static int ncom;	/* number of open comments */
@@ -78,7 +78,7 @@ static int ncom;	/* number of open comments */
 %%
 
 /* take input from address string provided by sieve parser */
-int addrinput(char *buf, int max_size)
+int addrinput(char *buf, size_t max_size)
 {
     extern char *addrptr;	/* current position in address string */
     size_t n;			/* number of characters to read from string */

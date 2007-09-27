@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.64 2007/08/09 16:44:47 murch Exp $
+ * $Id: script.c,v 1.65 2007/09/27 19:26:07 murch Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -186,7 +186,7 @@ int sieve_script_parse(sieve_interp_t *interp, FILE *script,
     return res;
 }
 
-void free_imapflags(sieve_imapflags_t *imapflags)
+static void free_imapflags(sieve_imapflags_t *imapflags)
 {
     while (imapflags->nflags)
 	free(imapflags->flag[--imapflags->nflags]);
@@ -318,10 +318,10 @@ static int build_notify_message(sieve_interp_t *i,
 		    }
 		}
 
-		if (n == 0 || n > size) n = size;
+		if (n == 0 || n > (size_t)size) n = size;
 
 		/* realloc if necessary */
-		if ( (*outlen) + n+1 >= allocsize) {
+		if ( (*outlen) + n+1 >= (size_t)allocsize) {
 		    allocsize = (*outlen) + n+1 + GROW_AMOUNT;
 		    *out = xrealloc(*out, allocsize);
 		}
@@ -343,7 +343,7 @@ static int build_notify_message(sieve_interp_t *i,
 	    /* find length of plaintext up to next potential variable */
 	    n = strcspn(c+1, "$") + 1; /* skip opening '$' */
 	    /* realloc if necessary */
-	    if ( (*outlen) + n+1 >= allocsize) {
+	    if ( (*outlen) + n+1 >= (size_t)allocsize) {
 		allocsize = (*outlen) + n+1 + GROW_AMOUNT;
 		*out = xrealloc(*out, allocsize);
 	    }

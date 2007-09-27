@@ -1,6 +1,6 @@
 /* bc_generate.c -- sieve bytecode- almost flattened bytecode
  * Rob Siemborski
- * $Id: bc_dump.c,v 1.3 2006/11/30 17:11:24 murch Exp $
+ * $Id: bc_dump.c,v 1.4 2007/09/27 19:26:07 murch Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -40,17 +40,17 @@ struct bytecode_info
     size_t reallen; /* allocated length of 'data' */
 };
 
+#if DUMPCODE
+
 /*this would work a lot better if we actually could tell how many levels deep in if statements we were.  currently it doesn't know*/
 
-void print_spaces(int n)
+static void print_spaces(int n)
 {
     int temp_n=0;
     while(temp_n++ < (n))
 	putchar(' ');
 }
 
-
-#if DUMPCODE
 
 /* Dump a stringlist.  Return the last address used by the list */
 static int dump_sl(bytecode_info_t *d, int ip, int level) 
