@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: service.c,v 1.57 2007/02/05 18:57:24 jeaton Exp $ */
+/* $Id: service.c,v 1.58 2007/09/27 20:10:39 murch Exp $ */
 
 #include <config.h>
 
@@ -252,7 +252,7 @@ int main(int argc, char **argv, char **envp)
     int max_use = MAX_USE;
     int reuse_timeout = REUSE_TIMEOUT;
     int soctype;
-    int typelen = sizeof(soctype);
+    socklen_t typelen = sizeof(soctype);
     int newargc = 0;
     char **newargv = (char **) xmalloc(ARGV_GROW * sizeof(char *));
     int id;
