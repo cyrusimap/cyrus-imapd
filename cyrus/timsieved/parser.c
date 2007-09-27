@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.41 2006/11/30 17:11:25 murch Exp $
+ * $Id: parser.c,v 1.42 2007/09/27 20:17:04 murch Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -64,6 +64,7 @@
 #include "mboxname.h"
 #include "mboxlist.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
 #include "prot.h"
 #include "tls.h"
 #include "lex.h"

@@ -1,7 +1,7 @@
 /* lex.c -- lexer for timsieved
  * Tim Martin
  * 9/21/99
- * $Id: lex.c,v 1.25 2006/11/30 17:11:25 murch Exp $
+ * $Id: lex.c,v 1.26 2007/09/27 20:17:04 murch Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -132,7 +132,7 @@ void lex_setrecovering(void)
   lexer_state = LEXER_STATE_RECOVER;
 }
 
-int maxscriptsize=0;
+unsigned long maxscriptsize=0;
 char *buffer;
 
 int lex_init(void)
@@ -295,7 +295,7 @@ int timlex(mystring_t **outstr, unsigned long *outnum,  struct protstream *strea
 	}
       } else {
 	/* just read the chars and throw them away */
-	int lup;
+	unsigned long lup;
 
 	for (lup=0;lup<count;lup++)
 	  prot_getc(stream);

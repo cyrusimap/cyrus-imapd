@@ -1,6 +1,6 @@
 /* actions.c -- executes the commands for timsieved
  * Tim Martin
- * $Id: actions.c,v 1.41 2007/03/27 19:53:09 murch Exp $
+ * $Id: actions.c,v 1.42 2007/09/27 20:17:04 murch Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -69,6 +69,8 @@
 #include "global.h"
 #include "libconfig.h"
 #include "xmalloc.h"
+#include "xstrlcat.h"
+#include "xstrlcpy.h"
 #include "sieve_interface.h"
 
 #include "codes.h"
@@ -83,7 +85,7 @@
 extern int sieved_userisadmin;
 char *sieve_dir = NULL;
 
-const static char *sieved_userid = NULL;
+static const char *sieved_userid = NULL;
 
 int actions_init(void)
 {
@@ -277,7 +279,7 @@ static int countscripts(char *name)
 {
     DIR *dp;
     struct dirent *dir;
-    int length;
+    size_t length;
     int number=0;
     char myname[1024];
     
@@ -519,7 +521,7 @@ int listscripts(struct protstream *conn)
 {
     DIR *dp;
     struct dirent *dir;
-    int length;
+    size_t length;
 
     /* open the directory */
     dp=opendir(".");

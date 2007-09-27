@@ -1,7 +1,7 @@
 /* timsieved.c -- main file for timsieved (sieve script accepting program)
  * Tim Martin
  * 9/21/99
- * $Id: timsieved.c,v 1.59 2007/03/30 18:51:02 murch Exp $
+ * $Id: timsieved.c,v 1.60 2007/09/27 20:17:04 murch Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -88,6 +88,8 @@
 #include "mboxlist.h"
 #include "proxy.h"
 #include "util.h"
+#include "xstrlcat.h"
+#include "xstrlcpy.h"
 
 #include "scripttest.h"
 
