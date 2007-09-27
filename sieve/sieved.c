@@ -48,8 +48,8 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 /* config.c stuff */
 const int config_need_data = 0;
 
-void dump2(bytecode_input_t *d, int len);
-int dump2_test(bytecode_input_t * d, int i);
+static void dump2(bytecode_input_t *d, int len);
+static int dump2_test(bytecode_input_t * d, int i);
  
 /* from bc_eval.c */
 int unwrap_string(bytecode_input_t *bc, int pos, const char **str, int *len);
@@ -62,7 +62,7 @@ void fatal(const char *s, int code)
     exit(1);
 }
 
-int load(int fd, bytecode_input_t ** d)
+static int load(int fd, bytecode_input_t ** d)
 {  
     const char * data=NULL;
     struct stat sbuf;
@@ -86,7 +86,7 @@ int load(int fd, bytecode_input_t ** d)
 
 int main(int argc, char * argv[])
 {
-    bytecode_input_t * bc;
+    bytecode_input_t *bc = NULL;
     int script_fd;
     
     unsigned long len;
@@ -115,7 +115,7 @@ int main(int argc, char * argv[])
     }
 }
 
-int write_list(int list_len, int i, bytecode_input_t * d)
+static int write_list(int list_len, int i, bytecode_input_t * d)
 {
     int x;
     i++;
@@ -131,7 +131,7 @@ int write_list(int list_len, int i, bytecode_input_t * d)
     return i;
 }
 
-int printComparison(bytecode_input_t *d ,int i)
+static int printComparison(bytecode_input_t *d ,int i)
 {
     printf("Comparison: ");
     switch(ntohl(d[i].value))
@@ -185,7 +185,7 @@ int printComparison(bytecode_input_t *d ,int i)
 }
 
 
-int dump2_test(bytecode_input_t * d, int i)
+static int dump2_test(bytecode_input_t * d, int i)
 {
     int l,x;
     switch(ntohl(d[i].value)) {
@@ -317,7 +317,7 @@ int dump2_test(bytecode_input_t * d, int i)
     return i;
 }
 
-void dump2(bytecode_input_t *d, int bc_len) 
+static void dump2(bytecode_input_t *d, int bc_len)
 {
     int i;
     int version;

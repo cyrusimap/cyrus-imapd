@@ -1,6 +1,6 @@
 /* message.c -- message parsing functions
  * Larry Greenfield
- * $Id: message.c,v 1.32 2007/03/27 19:29:57 murch Exp $
+ * $Id: message.c,v 1.33 2007/09/27 19:26:07 murch Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -220,7 +220,7 @@ static int makehash(unsigned char hash[],
 
 int do_vacation(action_list_t *a, char *addr, char *fromaddr,
 		char *subj, const char *msg, int days,
-		int mime, char *handle)
+		int mime, const char *handle)
 {
     action_list_t *b = NULL;
 
@@ -515,7 +515,7 @@ char *get_address(address_part_t addrpart,
 	case ADDRESS_USER:
 	    if (a->mailbox) {
 		char *p = strchr(a->mailbox, '+');
-		int len = p ? p - a->mailbox : strlen(a->mailbox);
+		int len = p ? p - a->mailbox : (int)strlen(a->mailbox);
 
 		am->freeme = (char *) xmalloc(len + 1);
 		strncpy(am->freeme, a->mailbox, len);

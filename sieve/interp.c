@@ -1,6 +1,6 @@
 /* interp.c -- sieve script interpretor builder
  * Larry Greenfield
- * $Id: interp.c,v 1.24 2006/11/30 17:11:24 murch Exp $
+ * $Id: interp.c,v 1.25 2007/09/27 19:26:07 murch Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -33,6 +33,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <string.h>
 
 #include "xmalloc.h"
+#include "xstrlcat.h"
 
 #include "sieve_interface.h"
 #include "interp.h"

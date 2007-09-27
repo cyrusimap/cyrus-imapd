@@ -1,6 +1,6 @@
 /* tree.c -- abstract syntax tree handling
  * Larry Greenfield
- * $Id: tree.c,v 1.12 2006/11/30 17:11:25 murch Exp $
+ * $Id: tree.c,v 1.13 2007/09/27 19:26:07 murch Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -111,7 +111,7 @@ void free_sl(stringlist_t *sl)
 
 void free_test(test_t *t);
 
-void free_tl(testlist_t *tl)
+static void free_tl(testlist_t *tl)
 {
     testlist_t *tl2;
 

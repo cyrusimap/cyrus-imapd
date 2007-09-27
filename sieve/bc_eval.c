@@ -1,5 +1,5 @@
 /* bc_eval.c - evaluate the bytecode
- * $Id: bc_eval.c,v 1.11 2007/09/14 10:59:18 murch Exp $
+ * $Id: bc_eval.c,v 1.12 2007/09/27 19:26:07 murch Exp $
  */
 /***********************************************************
         Copyright 2001 by Carnegie Mellon University
@@ -82,8 +82,8 @@ int unwrap_string(bytecode_input_t *bc, int pos, const char **str, int *len)
 /* this is used by notify to pass the options list to do_notify
  * do_notify needs null-terminated (char *)[],
  *  we have a stringlist, the beginning of which is pointed at by pos */
-const char ** bc_makeArray(bytecode_input_t *bc, int *pos) 
-{ 
+static const char ** bc_makeArray(bytecode_input_t *bc, int *pos)
+{
     int i;
     const char** array;
     int len = ntohl(bc[*pos].value);
@@ -102,8 +102,8 @@ const char ** bc_makeArray(bytecode_input_t *bc, int *pos)
 }
 
 /* Compile a regular expression for use during parsing */
-regex_t * bc_compile_regex(const char *s, int ctag,
-			   char *errmsg, size_t errsiz)
+static regex_t * bc_compile_regex(const char *s, int ctag,
+				  char *errmsg, size_t errsiz)
 {
     int ret;
     regex_t *reg = (regex_t *) xmalloc(sizeof(regex_t));
@@ -204,9 +204,9 @@ static char *list_fields[] = {
 };
  
 /* Determine if we should respond to a vacation message */
-int shouldRespond(void * m, sieve_interp_t *interp,
-		  int numaddresses, bytecode_input_t* bc,
-		  int i, char **from, char **to)
+static int shouldRespond(void * m, sieve_interp_t *interp,
+			 int numaddresses, bytecode_input_t* bc,
+			 int i, char **from, char **to)
 {
     const char **body;
     char buf[128];
@@ -343,9 +343,9 @@ int shouldRespond(void * m, sieve_interp_t *interp,
 }
 
 /* Evaluate a bytecode test */
-int eval_bc_test(sieve_interp_t *interp,
-		 struct hash_table *body_cache, void* m,
-		 bytecode_input_t * bc, int * ip)
+static int eval_bc_test(sieve_interp_t *interp,
+			struct hash_table *body_cache, void* m,
+			bytecode_input_t * bc, int * ip)
 {
     int res=0; 
     int i=*ip;
@@ -769,7 +769,7 @@ int eval_bc_test(sieve_interp_t *interp,
 	int relation=ntohl(bc[i+2].value);
 	int comparator=ntohl(bc[i+3].value);
 	int transform=ntohl(bc[i+4].value);
-	int offset=ntohl(bc[i+5].value);
+	/* ntohl(bc[i+5].value) is the now unused 'offset' */
 	int count=0;
 	char scount[3];
 	int isReg = (match==B_REGEX);
@@ -960,7 +960,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
        order.  all the scripts written then would have version 0x01 written
        in host byte order.*/
 
-     if(version == ntohl(1)) {
+     if(version == (int)ntohl(1)) {
 	if(errmsg) {
 	    *errmsg =
 		"Incorrect Bytecode Version, please recompile (use sievec)";
@@ -1273,7 +1273,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    int respond;
 	    char *fromaddr = NULL; /* relative to message we send */
 	    char *toaddr = NULL; /* relative to message we send */
-	    char *handle = NULL;
+	    const char *handle = NULL;
 	    const char *message = NULL;
 	    int days, mime;
 	    char buf[128];
@@ -1331,7 +1331,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
 		    if (data) {
 			/* user specified handle */
-			handle = (char *) data;
+			handle = data;
 		    }
 		}
 
