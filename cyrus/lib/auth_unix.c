@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: auth_unix.c,v 1.45 2007/09/17 14:36:40 murch Exp $
+ * $Id: auth_unix.c,v 1.46 2007/09/27 20:02:45 murch Exp $
  */
 
 #include <config.h>
@@ -223,10 +223,11 @@ static struct auth_state *mynewstate(const char *identifier)
     struct auth_state *newstate;
     struct passwd *pwd;
     struct group *grp;
-    char **mem;
 #ifdef HAVE_GETGROUPLIST
     gid_t gid, *groupids = NULL;
     int ret, ngroups = 0;
+#else
+    char **mem;
 #endif
 
     identifier = mycanonifyid(identifier, 0);

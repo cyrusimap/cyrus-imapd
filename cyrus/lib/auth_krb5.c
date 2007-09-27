@@ -1,5 +1,5 @@
 /* auth_krb5.c -- Kerberos V authorization for Cyrus IMAP
- * $Id: auth_krb5.c,v 1.5 2006/11/30 17:11:22 murch Exp $
+ * $Id: auth_krb5.c,v 1.6 2007/09/27 20:02:45 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -45,6 +45,7 @@
 
 #include "auth.h"
 #include "exitcodes.h"
+#include "xmalloc.h"
 
 #ifdef HAVE_GSSAPI_H
 
@@ -57,7 +58,6 @@
 #include <krb5.h>
 
 #include "auth.h"
-#include "xmalloc.h"
 
 struct auth_state {
     char *userid; /* Canonified Userid */
@@ -204,6 +204,7 @@ static int mymemberof(
     const char *identifier __attribute__((unused)))
 {
 	fatal("Authentication mechanism (krb5) not compiled in", EC_CONFIG);
+	return 0;
 }
 
 static char *mycanonifyid(
@@ -211,12 +212,14 @@ static char *mycanonifyid(
     size_t len __attribute__((unused)))
 {
 	fatal("Authentication mechanism (krb5) not compiled in", EC_CONFIG);
+	return NULL;
 }
 
 static struct auth_state *mynewstate(
     const char *identifier __attribute__((unused)))
 {
 	fatal("Authentication mechanism (krb5) not compiled in", EC_CONFIG);
+	return NULL;
 }
 
 static void myfreestate(

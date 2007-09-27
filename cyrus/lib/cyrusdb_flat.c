@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_flat.c,v 1.37 2007/02/05 18:43:26 jeaton Exp $ */
+/* $Id: cyrusdb_flat.c,v 1.38 2007/09/27 20:02:45 murch Exp $ */
 
 #include <config.h>
 
@@ -443,7 +443,7 @@ static int foreach(struct db *db,
 	else dontmove = 0;
 	
 	/* does it still match prefix? */
-	if (keylen < prefixlen) break;
+	if (keylen < (size_t) prefixlen) break;
 	if (prefixlen && memcmp(key, prefix, prefixlen)) break;
 
 	if (!goodp || goodp(rock, key, keylen, data, datalen)) {

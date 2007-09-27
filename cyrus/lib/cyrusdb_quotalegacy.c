@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_quotalegacy.c,v 1.15 2007/03/27 19:53:09 murch Exp $ */
+/* $Id: cyrusdb_quotalegacy.c,v 1.16 2007/09/27 20:02:45 murch Exp $ */
 
 #include <config.h>
 
@@ -124,7 +124,7 @@ static void hash_quota(char *buf, size_t size, const char *qr, char *path)
 
 	if (!*qr) {
 	    /* quota for entire domain */
-	    if (snprintf(buf, size, "%sroot", FNAME_QUOTADIR) >= size) {
+	    if (snprintf(buf, size, "%sroot", FNAME_QUOTADIR) >= (int) size) {
 		fatal("insufficient buffer size in hash_quota",
 		      EC_TEMPFAIL);
 	    }
@@ -140,7 +140,7 @@ static void hash_quota(char *buf, size_t size, const char *qr, char *path)
     }
     c = (char) dir_hash_c(idx, config_fulldirhash);
 
-    if (snprintf(buf, size, "%s%c/%s", FNAME_QUOTADIR, c, qr) >= size) {
+    if (snprintf(buf, size, "%s%c/%s", FNAME_QUOTADIR, c, qr) >= (int) size) {
 	fatal("insufficient buffer size in hash_quota", EC_TEMPFAIL);
     }
 }
@@ -479,7 +479,7 @@ static int foreach(struct db *db,
     int config_virtdomains = libcyrus_config_getswitch(CYRUSOPT_VIRTDOMAINS);
     char quota_path[MAX_QUOTA_PATH+1];
     glob_t globbuf;
-    int i;
+    size_t i;
     char *tmpprefix = NULL, *p = NULL;
 
     /* if we need to truncate the prefix, do so */
