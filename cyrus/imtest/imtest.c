@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/NNTP/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.110 2006/11/30 17:11:22 murch Exp $
+ * $Id: imtest.c,v 1.111 2007/09/27 20:05:22 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -82,6 +82,8 @@
 #include "imparse.h"
 #include "iptostring.h"
 #include "xmalloc.h"
+#include "xstrlcat.h"
+#include "xstrlcpy.h"
 
 #ifdef HAVE_SSL
 #include <openssl/ssl.h>
@@ -1061,7 +1063,7 @@ int auth_sasl(struct sasl_cmd_t *sasl_cmd, char *mechlist)
 	    out = NULL;
 	}
 	else if (!sendliteral &&
-		 ((strlen(cmdbuf) + outlen + 3) > sasl_cmd->maxlen)) {
+		 ((int) (strlen(cmdbuf) + outlen + 3) > sasl_cmd->maxlen)) {
 	    /* initial response is too long for auth command,
 	       so wait for a server challenge before sending it */
 	    goto noinitresp;
