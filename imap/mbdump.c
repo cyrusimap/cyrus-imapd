@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.35 2007/03/27 19:53:09 murch Exp $
+ * $Id: mbdump.c,v 1.36 2007/09/27 20:48:53 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -360,7 +360,7 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
     if (userid) {
 	char sieve_path[MAX_MAILBOX_PATH];
 	int sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
-	char *fname, *ftag;
+	char *fname = NULL, *ftag = NULL;
 
 	/* Dump seen and subs files */
 	for (i = 0; i< NUM_USER_DATA_FILES; i++) {

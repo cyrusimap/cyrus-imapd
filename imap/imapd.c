@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.524 2007/09/24 12:48:31 murch Exp $ */
+/* $Id: imapd.c,v 1.525 2007/09/27 20:48:51 murch Exp $ */
 
 #include <config.h>
 
@@ -637,7 +637,7 @@ int service_init(int argc, char **argv, char **envp)
     ret = snprintf(shutdownfilename, sizeof(shutdownfilename),
 		   "%s/msg/shutdown", config_dir);
     
-    if(ret < 0 || ret >= sizeof(shutdownfilename)) {
+    if(ret < 0 || ret >= (int) sizeof(shutdownfilename)) {
        fatal("shutdownfilename buffer too small (configdirectory too long)",
 	     EC_CONFIG);
     }
@@ -972,7 +972,7 @@ void cmdloop()
     ret = snprintf(motdfilename, sizeof(motdfilename), "%s/msg/motd",
 		   config_dir);
     
-    if(ret < 0 || ret >= sizeof(motdfilename)) {
+    if(ret < 0 || ret >= (int) sizeof(motdfilename)) {
        fatal("motdfilename buffer too small (configdirectory too long)",
 	     EC_CONFIG);
     }
@@ -2950,7 +2950,6 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 {
     int c;
     static struct buf arg;
-    char *p;
     time_t now = time(NULL);
     unsigned size, totalsize = 0;
     int sync_seen = 0;
@@ -5233,9 +5232,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
     char newmailboxname2[MAX_MAILBOX_NAME+1];
     char oldextname[MAX_MAILBOX_NAME+1];
     char newextname[MAX_MAILBOX_NAME+1];
-    int sync_lockfd = (-1);
     int omlen, nmlen;
-    char *p;
     int recursive_rename = 1;
     int rename_user = 0;
     char olduser[128], newuser[128];
@@ -9513,7 +9510,7 @@ void cmd_urlfetch(char *tag)
     static struct buf arg;
     struct imapurl url;
     char mailboxname[MAX_MAILBOX_NAME+1];
-    struct mailbox mboxstruct, *mailbox;
+    struct mailbox mboxstruct, *mailbox = NULL;
     unsigned msgno;
     unsigned int token_len;
     int mbtype;
@@ -9727,7 +9724,7 @@ void cmd_genurlauth(char *tag)
 {
     struct mboxkey *mboxkey_db;
     int first = 1;
-    int c, r, doclose;
+    int c, r;
     static struct buf arg1, arg2;
     struct imapurl url;
     char mailboxname[MAX_MAILBOX_NAME+1], *urlauth = NULL;

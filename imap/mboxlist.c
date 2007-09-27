@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.251 2007/09/27 18:24:41 murch Exp $
+ * $Id: mboxlist.c,v 1.252 2007/09/27 20:48:53 murch Exp $
  */
 
 #include <config.h>
@@ -883,7 +883,8 @@ int mboxlist_deleteremote(const char *name, struct txn **in_tid)
 int
 mboxlist_delayed_deletemailbox(const char *name, int isadmin, char *userid, 
                                struct auth_state *auth_state, int checkacl,
-                               int local_only, int force)
+                               int local_only __attribute__((unused)),
+			       int force)
 {
     char newname[MAX_MAILBOX_PATH+1];
     char *path, *mpath;
@@ -891,9 +892,6 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin, char *userid,
     char *partition;
     int r;
     long access;
-    struct mailbox mailbox;
-    int deletequotaroot = 0;
-    struct txn *tid = NULL;
     int isremote = 0;
     int mbtype;
     const char *p;
@@ -960,7 +958,7 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin, char *userid,
     if (domainlen && domainlen < sizeof(newname))
 	strncpy(newname, name, domainlen);
     snprintf(newname+domainlen, sizeof(newname)-domainlen, "%s.%s.%X",
-             deletedprefix, name+domainlen, tv.tv_sec);
+             deletedprefix, name+domainlen, (unsigned) tv.tv_sec);
 
     /* Get mboxlist_renamemailbox to do the hard work. No ACL checks needed */
     r = mboxlist_renamemailbox((char *)name, newname, partition,

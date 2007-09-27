@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: protocol.c,v 1.15 2006/11/30 17:11:19 murch Exp $ */
+/* $Id: protocol.c,v 1.16 2007/09/27 20:48:54 murch Exp $ */
 
 #include <config.h>
 
@@ -49,6 +49,7 @@
 
 #include "protocol.h"
 #include "xmalloc.h"
+#include "xstrlcat.h"
 
 static char *imap_parsemechlist(const char *str, struct protocol_t *prot)
 {
