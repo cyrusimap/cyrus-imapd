@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.98 2007/09/24 12:48:32 murch Exp $ */
+/* $Id: reconstruct.c,v 1.99 2007/09/27 16:27:10 murch Exp $ */
 
 #include <config.h>
 
@@ -161,7 +161,7 @@ int main(int argc, char **argv)
     assert(INDEX_HEADER_SIZE == (OFFSET_SPARE4+4));
     assert(INDEX_RECORD_SIZE == (OFFSET_MODSEQ+4));
 
-    while ((opt = getopt(argc, argv, "C:kp:rmfsxuU")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:kp:rmfsxgG")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -195,11 +195,11 @@ int main(int argc, char **argv)
 	    xflag = 1;
 	    break;
 	    
-	case 'u':
+	case 'g':
 	    guid_clear = 1;
 	    break;
 	    
-	case 'U':
+	case 'G':
 	    guid_set = 1;
 	    break;
 	    
