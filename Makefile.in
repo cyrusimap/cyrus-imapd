@@ -62,7 +62,7 @@ YACC = @YACC@
 LEX = @LEX@
 COMPILE_ET = @COMPILE_ET@
 
-VERSION = 2.3.9
+VERSION = 2.3.10
 
 all:: 
 	@for d in  $(SUBDIRS); \
