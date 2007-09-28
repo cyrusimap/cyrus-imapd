@@ -1,4 +1,4 @@
-<!-- $Id: install-replication.html,v 1.6 2007/09/24 12:48:29 murch Exp $ -->
+<!-- $Id: install-replication.html,v 1.7 2007/09/28 10:48:15 murch Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Cyrus replication
@@ -13,15 +13,23 @@ grand scheme of things, and if you choose to deploy you are doing so
 at your own risk.  The core of the replication code has been used
 successfully in production at <a
 href="http://www-uxsup.csx.cam.ac.uk/~dpc22/cyrus/replication.html">Cambridge 
-University</a> for about a year, but it has been rewritten extensively
+University</a> since the summer of 2003, but it has been rewritten extensively
 as part of the integration into the mainstream Cyrus codebase.
-</i></b><br><br>
-<b><i>Also note that the replication protocol currently does not have
+The replication code as integrated into Cyrus 2.3 has been running in
+production at Fastmail.fm and Columbia.edu since early 2006 and will
+be put into production at CMU in winter 2007.
+</i></b>
+<p><b><i>Also note that the replication protocol currently does not have
 the facility to support the IMAP CONDSTORE extension (modification
 sequences).  It is recommended that you do not try to use both
-CONDSTORE and replication at this time.  The deficiencies in the
-replication protocol will be fixed in version 2.3.9.
-</i></b><br>
+CONDSTORE and replication at this time.  The replication protocol will
+be augmented to support CONDSTORE at a later date.
+</i></b>
+
+<p><i>The Cyrus team owes a debt of gratitude to the kind folks at
+Cambridge, Columbia, and Fastmail for their considerable effort in
+helping to identify and correct the bugs the in Cyrus 2.3 replication
+code.</i>
 
 <h3>Introduction &amp; Assumptions</h3>
 <p>The Cyrus replication engine is designed to replicate the mailstore on
@@ -166,7 +174,7 @@ has been configured.
 <h3>Failover</h3>
 
 <P><HR>
-last modified: $Date: 2007/09/24 12:48:29 $
+last modified: $Date: 2007/09/28 10:48:15 $
 </BODY></HTML>
 
 
