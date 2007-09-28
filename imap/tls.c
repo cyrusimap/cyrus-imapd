@@ -93,7 +93,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.55 2007/09/27 18:40:32 murch Exp $ */
+/* $Id: tls.c,v 1.56 2007/09/28 14:23:36 wescraig Exp $ */
 
 #include <config.h>
 
@@ -1262,7 +1262,7 @@ int tls_start_clienttls(int readfd, int writefd,
     if (layerbits != NULL)
 	*layerbits = tls_cipher_usebits;
     
-    syslog(LOG_NOTICE, "starttls: %s with cipher %s (%d/%d bits %s)"
+    syslog(LOG_DEBUG, "starttls: %s with cipher %s (%d/%d bits %s client)"
 	   " no authentication", 
 	   tls_protocol, tls_cipher_name,
 	   tls_cipher_usebits, tls_cipher_algbits,
