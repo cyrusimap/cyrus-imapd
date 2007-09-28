@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: saslclient.c,v 1.15 2006/11/30 17:11:20 murch Exp $ */
+/* $Id: saslclient.c,v 1.16 2007/09/28 02:26:56 murch Exp $ */
 
 #include <config.h>
 
@@ -226,7 +226,7 @@ int saslclient(sasl_conn_t *conn, struct sasl_cmd_t *sasl_cmd,
 	clientout = NULL;
     }
     else if (!sendliteral &&
-	     ((strlen(cmdbuf) + clientoutlen + 3) > sasl_cmd->maxlen)) {
+	     ((int) (strlen(cmdbuf) + clientoutlen + 3) > sasl_cmd->maxlen)) {
 	/* initial response is too long for auth command,
 	   so wait for a server challenge before sending it */
 	goto noinitresp;
@@ -291,13 +291,19 @@ int saslclient(sasl_conn_t *conn, struct sasl_cmd_t *sasl_cmd,
 	    base64 = buf + strlen(sasl_cmd->cont);
 	}
 	else if (!sasl_cmd->cont && buf[0] == '{') {
-	    unsigned int litsize = atoi(buf+1);
+	    unsigned int n, litsize = atoi(buf+1);
 
 	    /* get actual literal data */
-	    if (!prot_fgets(buf, AUTH_BUF_SIZE, pin)) {
-		if (sasl_result) *sasl_result = SASL_FAIL;
-		if (status) *status = "EOF from server";
-		return IMAP_SASL_PROTERR;
+	    litsize += 2; /* +2 for \r\n */
+	    p = buf;
+	    while (litsize) {
+		if (!(n = prot_read(pin, p, litsize))) {
+		    if (sasl_result) *sasl_result = SASL_FAIL;
+		    if (status) *status = "EOF from server";
+		    return IMAP_SASL_PROTERR;
+		}
+		litsize -= n;
+		p += n;
 	    }
 
 	    base64 = buf;
