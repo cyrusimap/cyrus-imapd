@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: unexpunge.c,v 1.6 2007/09/18 11:33:14 murch Exp $
+ * $Id: unexpunge.c,v 1.7 2007/09/28 02:27:47 murch Exp $
  */
 
 #include <config.h>
@@ -540,7 +540,7 @@ int main(int argc, char *argv[])
 	const char *rec;
 	unsigned msgno;
 	unsigned long *uids = NULL;
-	unsigned nuids;
+	unsigned nuids = 0;
 
 	map_refresh(expunge_fd, 1, &expunge_index_base,
 		    &expunge_index_len, sbuf.st_size, "expunge",
@@ -552,7 +552,7 @@ int main(int argc, char *argv[])
 
 	/* Get UIDs of messages to restore */
 	if (mode == MODE_UID) {
-	    int i;
+	    unsigned i;
 
 	    nuids = argc - ++optind;
 	    uids = (unsigned long *) xmalloc(nuids * sizeof(unsigned long));

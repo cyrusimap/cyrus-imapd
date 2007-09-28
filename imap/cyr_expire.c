@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_expire.c,v 1.15 2007/09/04 15:13:28 murch Exp $
+ * $Id: cyr_expire.c,v 1.16 2007/09/28 02:27:46 murch Exp $
  */
 
 #include <config.h>
@@ -119,14 +119,14 @@ static int expire_cb(struct mailbox *mailbox __attribute__((unused)),
     /* if we're cleaning up expunge, delete by expunge time */
     if (expunge_flags & EXPUNGE_CLEANUP) {
 	tstamp = ntohl(*((bit32 *)(index+OFFSET_LAST_UPDATED)));
-	if (tstamp < erock->expunge_mark) {
+	if ((time_t) tstamp < erock->expunge_mark) {
 	    erock->deleted++;
 	    return 1;
 	}
     } else {
 	/* otherwise, we're expiring messages by sent date */
 	tstamp = ntohl(*((bit32 *)(index+OFFSET_SENTDATE)));
-	if (tstamp < erock->expire_mark) {
+	if ((time_t) tstamp < erock->expire_mark) {
 	    erock->deleted++;
 	    return 1;
 	}
@@ -287,8 +287,10 @@ int expire(char *name, int matchlen, int maycreate __attribute__((unused)),
     return 0;
 }
 
-int delete(char *name, int matchlen, int maycreate __attribute__((unused)),
-	 void *rock)
+int delete(char *name,
+	   int matchlen __attribute__((unused)),
+	   int maycreate __attribute__((unused)),
+	   void *rock)
 {
     struct delete_rock *drock = (struct delete_rock *) rock;
     char *p;

@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.174 2007/03/30 18:51:01 murch Exp $
+ * $Id: pop3d.c,v 1.175 2007/09/28 02:27:47 murch Exp $
  */
 #include <config.h>
 
@@ -803,7 +803,7 @@ static void cmdloop(void)
 		        int pollpadding =config_getint(IMAPOPT_POPPOLLPADDING);
 			int minpollsec = config_getint(IMAPOPT_POPMINPOLL)*60;
 		        if ((minpollsec > 0) && (pollpadding > 1)) { 
-			    int mintime = popd_login_time - (minpollsec*(pollpadding));
+			    unsigned mintime = popd_login_time - (minpollsec*(pollpadding));
 			    if (popd_mailbox->pop3_last_login < mintime) {
 			        popd_mailbox->pop3_last_login = mintime + minpollsec; 
 			    } else {
@@ -1582,7 +1582,7 @@ int openinbox(void)
     }
     else {
 	/* local mailbox */
-	int msg;
+	unsigned msg;
 	struct index_record record;
 	int minpoll;
 	int doclose = 0;
@@ -1747,8 +1747,8 @@ static int expungedeleted(struct mailbox *mailbox __attribute__((unused)),
 			  void *rock __attribute__((unused)), char *index,
 			  int expunge_flags __attribute__((unused)))
 {
-    int msg;
-    int uid = ntohl(*((bit32 *)(index+OFFSET_UID)));
+    unsigned msg;
+    unsigned uid = ntohl(*((bit32 *)(index+OFFSET_UID)));
 
     for (msg = 1; msg <= popd_exists; msg++) {
 	if (popd_msg[msg].uid == uid) {

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: arbitron.c,v 1.44 2007/08/15 17:20:55 murch Exp $ */
+/* $Id: arbitron.c,v 1.45 2007/09/28 02:27:45 murch Exp $ */
 
 #include <config.h>
 
@@ -67,6 +67,7 @@
 #include "mboxlist.h"
 #include "convert_code.h"
 #include "seen.h"
+#include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"

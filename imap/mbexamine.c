@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: mbexamine.c,v 1.14 2007/03/30 18:40:20 murch Exp $ */
+/* $Id: mbexamine.c,v 1.15 2007/09/28 02:27:46 murch Exp $ */
 
 #include <config.h>
 
@@ -111,8 +111,8 @@ void shut_down(int code);
 
 int code = 0;
 
-int wantuid = 0;
-int wantvalue = 0;
+unsigned wantuid = 0;
+unsigned wantvalue = 0;
 
 int main(int argc, char **argv)
 {
@@ -200,7 +200,8 @@ int do_examine(char *name,
 	       int maycreate __attribute__((unused)),
 	       void *rock __attribute__((unused)))
 {
-    int i,r = 0;
+    unsigned i;
+    int r = 0;
     int flag = 0;
     char ext_name_buf[MAX_MAILBOX_PATH+1];
     struct mailbox mailbox;

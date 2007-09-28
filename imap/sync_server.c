@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.12 2007/09/25 12:49:11 murch Exp $
+ * $Id: sync_server.c,v 1.13 2007/09/28 02:27:47 murch Exp $
  */
 
 #include <config.h>
@@ -92,9 +92,12 @@
 #include "spool.h"
 #include "telemetry.h"
 #include "tls.h"
+#include "user.h"
 #include "util.h"
 #include "version.h"
 #include "xmalloc.h"
+#include "xstrlcat.h"
+#include "xstrlcpy.h"
 
 #include "message_guid.h"
 #include "sync_support.h"
@@ -224,8 +227,6 @@ static struct sasl_callback mysasl_cb[] = {
 
 static void sync_reset(void)
 {
-    int i;
-
     proc_cleanup();
 
     if (sync_in) {
@@ -341,7 +342,7 @@ int service_init(int argc __attribute__((unused)),
 static void dobanner(void)
 {
     const char *mechlist;
-    unsigned int mechcount;
+    int mechcount;
 
     if (!sync_userid) {
 	if (sasl_listmech(sync_saslconn, NULL,
@@ -375,7 +376,6 @@ int service_main(int argc __attribute__((unused)),
     char localip[60], remoteip[60];
     char hbuf[NI_MAXHOST];
     int niflags;
-    int timeout;
     sasl_security_properties_t *secprops = NULL;
 
     signals_poll();
@@ -494,8 +494,6 @@ void usage(void)
  */
 void shut_down(int code)
 {
-    int i;
-
     proc_cleanup();
 
     seen_done();
@@ -1142,7 +1140,6 @@ static void cmd_authenticate(char *mech, char *resp)
 		   sync_in, sync_out, &sasl_result, NULL);
 
     if (r) {
-	int code;
 	const char *errorstring = NULL;
 
 	switch (r) {
@@ -1314,6 +1311,7 @@ static void cmd_starttls(void)
 }
 #endif /* HAVE_SSL */
 
+#if 0
 static int
 user_master_is_local(char *user)
 {
@@ -1332,6 +1330,7 @@ user_master_is_local(char *user)
     /* rc: -1 => error, 0 => lookup failed, 1 => lookup suceeded */
     return(rc == 1);  
 }
+#endif
 
 /* ====================================================================== */
 
@@ -1408,9 +1407,10 @@ static void cmd_reserve(char *mailbox_name,
     struct mailbox m;
     struct index_record record;
     static struct buf arg;
-    int r = 0, c;
+    int r = 0, c = ' ';
     int mailbox_open = 0;
-    int alloc = RESERVE_DELTA, count = 0, i, msgno;
+    int alloc = RESERVE_DELTA, count = 0, i;
+    unsigned msgno;
     struct message_guid *ids = xmalloc(alloc*sizeof(struct message_guid));
     char *err = NULL;
     char mailbox_msg_path[MAX_MAILBOX_PATH+1];
@@ -1551,8 +1551,6 @@ static void cmd_quota(char *quotaroot)
 
 static void cmd_setquota(char *root, int limit)
 {
-    char quota_path[MAX_MAILBOX_PATH];
-    struct quota quota;
     int r = 0;
 
     /* NB: Minimal interface without two phase expunge */
@@ -1657,7 +1655,7 @@ static void cmd_status_work_preload(struct mailbox *mailbox)
 {
     unsigned long msgno;
     struct index_record record;
-    int lastuid = 0;
+    unsigned lastuid = 0;
 
     /* Quietly preload data from index */
     for (msgno = 1 ; msgno <= mailbox->exists; msgno++) {
@@ -1715,7 +1713,7 @@ static void cmd_status(struct mailbox *mailbox)
 }
 
 /* ====================================================================== */
-
+#if 0
 static const char *
 seen_parse(const char *s, unsigned long *first_uidp, unsigned long *last_uidp)
 {
@@ -1795,7 +1793,7 @@ find_return_path(char *hdr)
     }
     return(NULL);
 }
-
+#endif
 /* ====================================================================== */
 
 static void cmd_upload(struct mailbox *mailbox,
@@ -1809,7 +1807,7 @@ static void cmd_upload(struct mailbox *mailbox,
     struct sync_message     *message;
     struct utimbuf settime;
     static struct buf arg;
-    int   c;
+    int   c = ' ';
     enum {MSG_SIMPLE, MSG_PARSED, MSG_COPY} msg_type;
     int   r = 0;
     char *err;
@@ -1992,7 +1990,6 @@ static void cmd_upload(struct mailbox *mailbox,
 	/* if we see a SP, we're trying to upload more than one message */
     } while (c == ' ');
 
-  done:
     if (c == EOF) {
         err = "Unexpected end of sync_in at end of item";
         goto parse_err;
@@ -2358,7 +2355,10 @@ static void cmd_expunge(struct mailbox *mailbox)
 
 /* ====================================================================== */
 
-static int do_mailbox_single(char *name, int matchlen, int maycreate, void *rock)
+static int do_mailbox_single(char *name,
+			     int matchlen __attribute__((unused)),
+			     int maycreate __attribute__((unused)),
+			     void *rock)
 {
     struct mailbox m;
     int r;
@@ -2399,8 +2399,10 @@ static int do_mailbox_single(char *name, int matchlen, int maycreate, void *rock
 
 /* ====================================================================== */
 
-static int do_lsub_all_single(char *name, int matchlen, int maycreate,
-			       void *rock)
+static int do_lsub_all_single(char *name,
+			      int matchlen __attribute__((unused)),
+			      int maycreate __attribute__((unused)),
+			      void *rock __attribute__((unused)))
 {
     prot_printf(sync_out, "*** ");
     sync_printastring(sync_out, name);
@@ -2419,7 +2421,6 @@ static void cmd_mailboxes()
     char **folder_name = xmalloc(alloc*sizeof(char *));
     char *err;
     int live = 1;
-    int r = 0;
 
     /* Parse list of Folders */
     do {
@@ -2571,9 +2572,8 @@ static void cmd_create(char *mailboxname, char *partition,
 		       unsigned long uidvalidity)
 {
     int r;
-    char buf[MAX_MAILBOX_PATH+1];
     char aclbuf[128];
-    int size;
+    size_t size;
 
     if (uniqueid && !strcasecmp(uniqueid, "NIL"))
         uniqueid = NULL;
@@ -2635,7 +2635,10 @@ static void cmd_rename(char *oldmailboxname, char *newmailboxname)
 
 }
 
-static int do_lsub_single(char *name, int matchlen, int maycreate, void *rock)
+static int do_lsub_single(char *name,
+			  int matchlen __attribute__((unused)),
+			  int maycreate __attribute__((unused)),
+			  void *rock __attribute__((unused)))
 {
     prot_printf(sync_out, "* ");
     sync_printastring(sync_out, name);
@@ -2646,7 +2649,6 @@ static int do_lsub_single(char *name, int matchlen, int maycreate, void *rock)
 
 static void cmd_lsub(char *user)
 {
-    char buf[MAX_MAILBOX_PATH];
     int r;
 
     r = ((*sync_namespacep).mboxlist_findsub)(sync_namespacep, "*",

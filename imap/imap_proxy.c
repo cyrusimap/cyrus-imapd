@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.c,v 1.3 2007/09/27 20:48:51 murch Exp $
+ * $Id: imap_proxy.c,v 1.4 2007/09/28 02:27:46 murch Exp $
  */
 
 #include <config.h>
@@ -183,7 +183,7 @@ static int pipe_response(struct backend *s, const char *tag, int include_tag,
 		/* Store the tagged line */
 		if (sl > s->last_result.alloc - s->last_result.len) {
 		    s->last_result.alloc =
-			(s->last_result.alloc == 0) ? sizeof(buf) :
+			(s->last_result.alloc == 0) ? (int) sizeof(buf) :
 			s->last_result.alloc * 2;
 		    s->last_result.s = xrealloc(s->last_result.s,
 						s->last_result.alloc+1);
@@ -237,7 +237,8 @@ static int pipe_response(struct backend *s, const char *tag, int include_tag,
 	    /* copy the literal over */
 	    if (islit) {
 		while (litlen > 0) {
-		    int j = (litlen > sizeof(buf) ? sizeof(buf) : litlen);
+		    int j = (litlen > (int) sizeof(buf) ?
+			     (int) sizeof(buf) : litlen);
 		    
 		    j = prot_read(s->in, buf, j);
 		    if(!j) {
@@ -379,7 +380,8 @@ int pipe_command(struct backend *s, int optimistic_literal)
 
 		/* gobble literal and sent it onward */
 		while (litlen > 0) {
-		    int j = (litlen > sizeof(buf) ? sizeof(buf) : litlen);
+		    int j = (litlen > (int) sizeof(buf) ?
+			     (int) sizeof(buf) : litlen);
 
 		    j = prot_read(imapd_in, buf, j);
 		    if(!j) {
@@ -955,7 +957,8 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
 				q->flags, q->idate, sz);
 		    while (sz) {
 			char buf[2048];
-			int j = (sz > sizeof(buf) ? sizeof(buf) : sz);
+			int j = (sz > (int) sizeof(buf) ?
+				 (int) sizeof(buf) : sz);
 
 			j = prot_read(backend_current->in, buf, j);
 			if(!j) break;

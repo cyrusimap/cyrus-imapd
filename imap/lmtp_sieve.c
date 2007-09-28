@@ -1,6 +1,6 @@
 /* lmtp_sieve.c -- Sieve implementation for lmtpd
  *
- * $Id: lmtp_sieve.c,v 1.15 2007/03/27 19:53:08 murch Exp $
+ * $Id: lmtp_sieve.c,v 1.16 2007/09/28 02:27:46 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -403,10 +403,10 @@ static int sieve_redirect(void *ac,
 
 static int sieve_discard(void *ac __attribute__((unused)), 
 			 void *ic __attribute__((unused)), 
-			 void *sc, void *mc, 
+			 void *sc __attribute__((unused)), 
+			 void *mc, 
 			 const char **errmsg __attribute__((unused)))
 {
-    script_data_t *sd = (script_data_t *) sc;
     message_data_t *md = ((deliver_data_t *) mc)->m;
 
     snmp_increment(SIEVE_DISCARD, 1);
@@ -501,7 +501,6 @@ static int sieve_keep(void *ac,
     sieve_keep_context_t *kc = (sieve_keep_context_t *) ac;
     script_data_t *sd = (script_data_t *) sc;
     deliver_data_t *mydata = (deliver_data_t *) mc;
-    message_data_t *md = mydata->m;
     int ret;
 
     ret = deliver_local(mydata, kc->imapflags->flag, kc->imapflags->nflags,

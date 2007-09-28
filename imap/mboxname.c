@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- * $Id: mboxname.c,v 1.39 2007/08/31 17:15:00 murch Exp $
+ * $Id: mboxname.c,v 1.40 2007/09/28 02:27:46 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -601,7 +601,7 @@ char *mboxname_isusermailbox(const char *name, int isinbox)
     const char *p;
     const char *start = name;
     const char *deletedprefix = config_getstring(IMAPOPT_DELETEDPREFIX);
-    int len = strlen(deletedprefix);
+    size_t len = strlen(deletedprefix);
     int isdel = 0;
 
     /* step past the domain part */

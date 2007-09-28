@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_commit.c,v 1.8 2007/09/24 12:48:32 murch Exp $
+ * $Id: sync_commit.c,v 1.9 2007/09/28 02:27:47 murch Exp $
  */
 
 #include <config.h>
@@ -69,6 +69,8 @@
 #include "mailbox.h"
 #include "quota.h"
 #include "xmalloc.h"
+#include "xstrlcat.h"
+#include "xstrlcpy.h"
 #include "acl.h"
 #include "seen.h"
 #include "mboxname.h"
@@ -104,9 +106,9 @@ sync_combine_commit(struct mailbox *mailbox,
     unsigned long newanswered;
     unsigned long newflagged;
     unsigned long msgno;
-    char  target[MAX_MAILBOX_PATH+1];
     struct index_record record;
-    int   n, r = 0, rc;
+    int r = 0;
+    unsigned n;
     struct txn *tid = NULL;
     modseq_t highestmodseq = 0;
 
@@ -403,7 +405,7 @@ sync_combine_commit(struct mailbox *mailbox,
 }
 
 /* ====================================================================== */
-
+#if 0
 /* Couple of helper routines to clear out expunged messages that we want to
  * upload again to resolve inconsistent state. upload_list should be in
  * correct UID order, unsorted expunge index may be in any order (and we
@@ -456,7 +458,7 @@ uid_array_free(struct uid_array *uid_array)
     free(uid_array->array);
     free(uid_array);
 }
-
+#endif
 /* ====================================================================== */
 
 static int
@@ -479,7 +481,6 @@ sync_append_commit(struct mailbox *mailbox,
     unsigned long newdeleted;
     unsigned long newanswered;
     unsigned long newflagged;
-    char  target[MAX_MAILBOX_PATH];
     int   n, r = 0;
     long last_offset;
     struct txn *tid = NULL;
@@ -928,19 +929,17 @@ sync_setflags_commit(struct mailbox *mailbox, struct sync_flag_list *flag_list)
 int
 sync_create_commit(char *name, char *partition, char *uniqueid, char *acl,
                    int mbtype, unsigned long options, unsigned long uidvalidity,
-                   int isadmin, char *userid, struct auth_state *auth_state)
+                   int isadmin __attribute__((unused)),
+		   char *userid __attribute__((unused)),
+		   struct auth_state *auth_state __attribute__((unused)))
 {
     int r;
     int free_uniqueid = 0;
-    const char *root = NULL;
     char *newpartition = NULL;
     char *mboxent = NULL;
     int newreserved = 0; /* made reserved entry in local mailbox list */
     int mboxopen = 0;
     struct mailbox m;
-    /* Must be atleast MAX_PARTITION_LEN + 30 for partition, need
-     * MAX_PARTITION_LEN + HOSTNAME_SIZE + 2 for mupdate location */
-    char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
 #if 0  /* XXX  is this really necessary since only sync_client talks to us? */
     /* Need an extra sanity check here as normal ACL logic is bypassed */
     r = mboxname_policycheck(name);

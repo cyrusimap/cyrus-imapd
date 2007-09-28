@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.23 2007/03/30 18:51:00 murch Exp $ */
+/* $Id: global.c,v 1.24 2007/09/28 02:27:46 murch Exp $ */
 
 #include <config.h>
 
@@ -330,7 +330,7 @@ int global_authisa(struct auth_state *authstate, enum imapopt opt)
 {
     char buf[1024];
     const char *val = config_getstring(opt);
-    int len;
+    size_t len;
 
     /* Is the option defined? */
     if(!val) return 0;

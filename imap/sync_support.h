@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.h,v 1.7 2007/09/25 13:53:47 murch Exp $
+ * $Id: sync_support.h,v 1.8 2007/09/28 02:27:47 murch Exp $
  */
 
 #ifndef INCLUDED_SYNC_SUPPORT_H
@@ -316,8 +316,10 @@ struct sync_message_list {
 
 struct sync_message_list *sync_message_list_create(int hash_size, int file_max);
 
+int sync_message_list_newstage(struct sync_message_list *l, char *mboxname);
+
 void sync_message_list_cache(struct sync_message_list *l,
-			     char *entry, int size);
+			     char *entry, unsigned size);
 
 int sync_message_list_cache_flush(struct sync_message_list *l);
 
@@ -507,6 +509,8 @@ struct sync_lock {
 };
 
 void sync_lock_reset(struct sync_lock *sync_lock);
+
+int sync_unlock(struct sync_lock *lock);
 
 int sync_lock(struct sync_lock *lock);
 

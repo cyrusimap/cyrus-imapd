@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.c,v 1.14 2007/09/25 13:53:47 murch Exp $
+ * $Id: sync_support.c,v 1.15 2007/09/28 02:27:47 murch Exp $
  */
 
 #include <config.h>
@@ -71,6 +71,8 @@
 #include "mailbox.h"
 #include "quota.h"
 #include "xmalloc.h"
+#include "xstrlcat.h"
+#include "xstrlcpy.h"
 #include "acl.h"
 #include "seen.h"
 #include "mboxname.h"
@@ -185,7 +187,7 @@ void sync_printstring(struct protstream *out, const char *s)
 
     /* if it's too long, literal it */
     if (*p || len >= 1024) {
-	prot_printf(out, "{%lu+}\r\n%s", strlen(s), s);
+	prot_printf(out, "{%u+}\r\n%s", strlen(s), s);
     } else {
 	prot_printf(out, "\"%s\"", s);
     }
@@ -218,7 +220,7 @@ void sync_printastring(struct protstream *out, const char *s)
 
     /* if it's too long, literal it */
     if (*p || len >= 1024) {
-	prot_printf(out, "{%lu+}\r\n%s", strlen(s), s);
+	prot_printf(out, "{%u+}\r\n%s", strlen(s), s);
     } else {
 	prot_printf(out, "\"%s\"", s);
     }
@@ -926,7 +928,8 @@ int sync_message_list_newstage(struct sync_message_list *l, char *mboxname)
     return 0;
 }
 
-void sync_message_list_cache(struct sync_message_list *l, char *entry, int size)
+void sync_message_list_cache(struct sync_message_list *l,
+			     char *entry, unsigned size)
 {
     if ((l->cache_buffer_size + size) > l->cache_buffer_alloc) {
         if (size > l->cache_buffer_alloc)
@@ -942,7 +945,7 @@ void sync_message_list_cache(struct sync_message_list *l, char *entry, int size)
 
 int sync_message_list_cache_flush(struct sync_message_list *l)
 {
-    int n;
+    unsigned n;
 
     if (l->cache_buffer_size == 0)
         return(0);

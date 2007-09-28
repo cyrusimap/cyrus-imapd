@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: quota.c,v 1.68 2007/03/30 18:40:20 murch Exp $ */
+/* $Id: quota.c,v 1.69 2007/09/28 02:27:47 murch Exp $ */
 
 
 #include <config.h>
@@ -219,7 +219,7 @@ void usage(void)
 void errmsg(const char *fmt, const char *arg, int err)
 {
     char buf[1024];
-    int len;
+    size_t len;
 
     len = snprintf(buf, sizeof(buf), fmt, arg);
     if (len < sizeof(buf))
@@ -348,7 +348,7 @@ int fixquota_mailbox(char *name,
 
     /* make sure the domains match */
     if (domain &&
-	(!(p = strchr(name, '!')) || (p - name) != strlen(domain) ||
+	(!(p = strchr(name, '!')) || (p - name) != (int) strlen(domain) ||
 	 strncmp(name, domain, p - name))) {
 	return 0;
     }
