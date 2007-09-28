@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.154 2007/09/24 12:48:31 murch Exp $
+ * $Id: lmtpd.c,v 1.155 2007/09/28 02:27:46 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -334,7 +334,7 @@ static int fuzzy_match_cb(char *name,
 			  void *rock)
 {
     struct fuzz_rock *frock = (struct fuzz_rock *) rock;
-    int i;
+    unsigned i;
 
     for (i = frock->prefixlen; name[i] && frock->pat[i]; i++) {
 	if (tolower((int) name[i]) != frock->pat[i] &&
@@ -543,7 +543,7 @@ int deliver_mailbox(FILE *f,
 	/* translate user.foo to INBOX */
 	if (!(*lmtpd_namespace.mboxname_tointernal)(&lmtpd_namespace,
 						    "INBOX", user, inbox)) {
-	    int inboxlen = strlen(inbox);
+	    size_t inboxlen = strlen(inbox);
 	    if (strlen(mailboxname) >= inboxlen &&
 		!strncmp(mailboxname, inbox, inboxlen) &&
 		(!mailboxname[inboxlen] || mailboxname[inboxlen] == '.')) {

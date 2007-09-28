@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: duplicate.c,v 1.44 2007/08/15 17:20:55 murch Exp $ */
+/* $Id: duplicate.c,v 1.45 2007/09/28 02:27:46 murch Exp $ */
 
 #include <config.h>
 
@@ -128,7 +128,7 @@ time_t duplicate_check(char *id, int idlen, const char *to, int tolen)
 
     if (!duplicate_dbopen) return 0;
 
-    if (idlen + tolen > sizeof(buf) - 30) return 0;
+    if (idlen + tolen > (int) sizeof(buf) - 30) return 0;
     memcpy(buf, id, idlen);
     buf[idlen] = '\0';
     memcpy(buf + idlen + 1, to, tolen);
@@ -176,7 +176,7 @@ void duplicate_mark(char *id, int idlen, const char *to, int tolen, time_t mark,
 
     if (!duplicate_dbopen) return;
 
-    if (idlen + tolen > sizeof(buf) - 30) return;
+    if (idlen + tolen > (int) sizeof(buf) - 30) return;
     memcpy(buf, id, idlen);
     buf[idlen] = '\0';
     memcpy(buf + idlen + 1, to, tolen);
@@ -231,7 +231,7 @@ static int find_cb(void *rock, const char *id,
 
     /* grab the mark and uid */
     memcpy(&mark, data, sizeof(time_t));
-    if (datalen > sizeof(mark))
+    if (datalen > (int) sizeof(mark))
 	memcpy(&uid, data + sizeof(mark), sizeof(unsigned long));
 
     r = (*frock->proc)(id, rcpt, mark, uid, frock->rock);
@@ -346,7 +346,7 @@ static int dump_cb(void *rock,
     drock->count++;
 
     memcpy(&mark, data, sizeof(time_t));
-    if (datalen > sizeof(mark))
+    if (datalen > (int) sizeof(mark))
 	memcpy(&uid, data + sizeof(mark), sizeof(unsigned long));
     to = (char*) key + strlen(key) + 1;
     id = (char *) key;

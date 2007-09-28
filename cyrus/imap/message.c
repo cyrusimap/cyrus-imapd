@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: message.c,v 1.108 2007/09/24 12:48:32 murch Exp $
+ * $Id: message.c,v 1.109 2007/09/28 02:27:46 murch Exp $
  */
 
 #include <config.h>
@@ -459,7 +459,7 @@ static void message_find_part(struct body *body, const char *section,
 
     for (match = 0, type = content_types; !match && *type; type++) {
 	const char *subtype = strchr(*type, '/');
-	size_t tlen = subtype ? (subtype++ - *type) : strlen(*type);
+	size_t tlen = subtype ? (size_t) (subtype++ - *type) : strlen(*type);
 
 	if ((!(*type)[0] || (tlen == strlen(body->type) &&
 			     !strncasecmp(body->type, *type, tlen))) &&

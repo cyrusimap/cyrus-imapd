@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.99 2007/09/27 16:27:10 murch Exp $ */
+/* $Id: reconstruct.c,v 1.100 2007/09/28 02:27:47 murch Exp $ */
 
 #include <config.h>
 
@@ -419,10 +419,10 @@ do_reconstruct(char *name,
     signals_poll();
 
     /* don't repeat */
-    if (matchlen == strlen(lastname) &&
+    if (matchlen == (int) strlen(lastname) &&
 	!strncmp(name, lastname, matchlen)) return 0;
 
-    if(matchlen >= sizeof(lastname))
+    if(matchlen >= (int) sizeof(lastname))
 	matchlen = sizeof(lastname) - 1;
     
     strncpy(lastname, name, matchlen);
@@ -445,7 +445,7 @@ do_reconstruct(char *name,
 
 int 
 reconstruct_expunge (char * path, struct mailbox * mailbox, 
-			unsigned long **expuid, int *expuid_num)
+			unsigned long **expuid, unsigned *expuid_num)
 {
     char fnamebuf[MAX_MAILBOX_PATH+1];
     char newfnamebuf[MAX_MAILBOX_PATH+1];
@@ -473,9 +473,9 @@ reconstruct_expunge (char * path, struct mailbox * mailbox,
     int   n;
 
     unsigned long *expuid_array = NULL;
-    int expuid_idx = 0;
-    int expuid_alloc = 0;
-    int expmsg;
+    unsigned expuid_idx = 0;
+    unsigned expuid_alloc = 0;
+    unsigned expmsg;
 
     *expuid = NULL;
     *expuid_num = 0;
@@ -507,7 +507,7 @@ reconstruct_expunge (char * path, struct mailbox * mailbox,
 	(minor_version == 0) || (minor_version > MAILBOX_MINOR_VERSION) || 
 	(start_offset == 0)  ||  (start_offset > INDEX_HEADER_SIZE) ||
 	(record_size  == 0)  || (record_size > INDEX_RECORD_SIZE) ||
-	(sbuf.st_size < (start_offset + exists * record_size))) {
+	((unsigned) sbuf.st_size < (start_offset + exists * record_size))) {
 
 	syslog(LOG_ERR, "Unable to verify header - deleting: %s", fnamebuf);
 	close (expunge_fd);
@@ -653,7 +653,6 @@ char *
 getmailname (char * mailboxname) 
 {
     static char   namebuf[MAX_MAILBOX_PATH + 1];
-    static int    namebuflen;
 
     char * pname;
 
@@ -726,13 +725,13 @@ int reconstruct(char *name, struct discovered *found)
     int newcache_fd;
 
     unsigned long *uid;
-    int uid_num, uid_alloc;
+    unsigned uid_num, uid_alloc;
 
     unsigned long *expuid;
-    int expuid_num;
-    int expmsg;
+    unsigned expuid_num;
+    unsigned expmsg;
 
-    int msg, old_msg = 0;
+    unsigned msg, old_msg = 0;
     int new_exists = 0, 
 	new_answered = 0,
 	new_flagged = 0,
@@ -1063,7 +1062,7 @@ int reconstruct(char *name, struct discovered *found)
     if (mailbox.last_appenddate == 0 || mailbox.last_appenddate > time(0)) {
 	mailbox.last_appenddate = time(0);
     }
-    if (mailbox.uidvalidity == 0 || mailbox.uidvalidity > time(0)) {
+    if (mailbox.uidvalidity == 0 || mailbox.uidvalidity > (unsigned) time(0)) {
 	mailbox.uidvalidity = time(0);
     }
 

@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: cyr_dbtool.c,v 1.3 2007/09/12 15:55:58 murch Exp $
+ * $Id: cyr_dbtool.c,v 1.4 2007/09/28 02:27:46 murch Exp $
  */
 
 #include <config.h>
@@ -225,7 +225,6 @@ int main(int argc, char *argv[])
         }
         while ( loop ) {
           if (is_get) {
-            int i;
             DB_OLD->fetch(odb, key, keylen, &res, &reslen, &tid);
             fwrite(res, sizeof(char), reslen, stdout);
             printf("\n");

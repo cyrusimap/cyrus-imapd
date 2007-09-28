@@ -40,7 +40,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: tls_prune.c,v 1.8 2007/03/30 18:40:21 murch Exp $ */
+/* $Id: tls_prune.c,v 1.9 2007/09/28 02:27:47 murch Exp $ */
 
 #include <config.h>
 
@@ -50,6 +50,7 @@
 #include "exitcodes.h"
 #include "global.h"
 #include "tls.h"
+#include "util.h"
 #include "xmalloc.h"
 
 /* global state */

@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.38 2007/09/18 11:33:14 murch Exp $
+ * $Id: annotate.c,v 1.39 2007/09/28 02:27:45 murch Exp $
  */
 
 #include <config.h>
@@ -713,7 +713,8 @@ static void annotation_get_size(const char *int_mboxname,
 {
     struct mailbox mailbox;
     struct index_record record;
-    int r = 0, msg;
+    int r = 0;
+    unsigned msg;
 #ifdef HAVE_LONG_LONG_INT
     unsigned long long totsize = 0;
 # define SIZE_FMT "%llu"

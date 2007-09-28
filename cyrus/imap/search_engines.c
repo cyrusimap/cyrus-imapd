@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: search_engines.c,v 1.7 2007/02/05 18:41:48 jeaton Exp $
+ * $Id: search_engines.c,v 1.8 2007/09/28 02:27:47 murch Exp $
  */
 
 #include <config.h>
@@ -90,7 +90,7 @@ static int parse_doc_name(SquatSearchResult* r, char const* doc_name) {
   int doc_UID, index;
 
   if (ch == 'v' && strncmp(doc_name, "validity.", 9) == 0) {
-    if (atoi(doc_name + 9) == r->mailbox->uidvalidity) {
+      if ((unsigned) atoi(doc_name + 9) == r->mailbox->uidvalidity) {
       r->found_validity = 1;
     }
     return -1;

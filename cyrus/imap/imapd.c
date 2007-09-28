@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.525 2007/09/27 20:48:51 murch Exp $ */
+/* $Id: imapd.c,v 1.526 2007/09/28 02:27:46 murch Exp $ */
 
 #include <config.h>
 
@@ -2712,7 +2712,7 @@ static int catenate_text(FILE *f, unsigned *totalsize, int *binary,
     static struct buf arg;
     unsigned size = 0;
     char buf[4096+1];
-    int n;
+    unsigned n;
     int r;
 
     c = getword(imapd_in, &arg);
@@ -4838,7 +4838,6 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
     int r = 0;
     char mailboxname[MAX_MAILBOX_NAME+1];
     int autocreatequota;
-    int sync_lockfd = (-1);
 
     if (partition && !imapd_userisadmin) {
 	r = IMAP_PERMISSION_DENIED;
@@ -5028,7 +5027,6 @@ void cmd_delete(char *tag, char *name, int localonly, int force)
     char *server;
     char *p;
     int domainlen = 0;
-    int sync_lockfd = (-1);
 
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
 					       imapd_userid, mailboxname);

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: fetchnews.c,v 1.18 2007/08/15 17:20:55 murch Exp $
+ * $Id: fetchnews.c,v 1.19 2007/09/28 02:27:46 murch Exp $
  */
 
 #include <config.h>
@@ -63,7 +63,9 @@
 #include "gmtoff.h"
 #include "lock.h"
 #include "prot.h"
+#include "util.h"
 #include "xmalloc.h"
+#include "xstrlcat.h"
 
 /* global state */
 const int config_need_data = 0;
@@ -413,7 +415,7 @@ int main(int argc, char *argv[])
 	    goto quit;
 	}
 
-	if (read(fd, &stamp, sizeof(stamp)) < sizeof(stamp)) {
+	if (read(fd, &stamp, sizeof(stamp)) < (int) sizeof(stamp)) {
 	    /* XXX do something better here */
 	    stamp = 0;
 	}
@@ -501,7 +503,7 @@ int main(int argc, char *argv[])
 
 	/* write the current timestamp */
 	lseek(fd, 0, SEEK_SET);
-	if (write(fd, &stamp, sizeof(stamp)) < sizeof(stamp))
+	if (write(fd, &stamp, sizeof(stamp)) < (int) sizeof(stamp))
 	    syslog(LOG_ERR, "error writing %s", sfile);
 	lock_unlock(fd);
 	close(fd);

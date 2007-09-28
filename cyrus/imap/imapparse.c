@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapparse.c,v 1.16 2006/11/30 17:11:18 murch Exp $ */
+/* $Id: imapparse.c,v 1.17 2007/09/28 02:27:46 murch Exp $ */
 
 #include <config.h>
 
@@ -224,7 +224,7 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 	}
 	buf->s[len] = '\0';
 	buf->len = len;
-	if (type != IMAP_BIN_ASTRING && strlen(buf->s) != len)
+	if (type != IMAP_BIN_ASTRING && (int) strlen(buf->s) != len)
 	    return EOF; /* Disallow imbedded NUL for non IMAP_BIN_ASTRING */
 	return prot_getc(pin);
 

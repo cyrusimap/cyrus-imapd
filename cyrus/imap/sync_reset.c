@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_reset.c,v 1.4 2007/09/12 15:51:04 murch Exp $
+ * $Id: sync_reset.c,v 1.5 2007/09/28 02:27:47 murch Exp $
  */
 
 #include <config.h>
@@ -91,12 +91,12 @@ struct protstream *imapd_out = NULL;
 struct auth_state *imapd_authstate = NULL;
 char *imapd_userid = NULL;
 
-void printastring(const char *s)
+void printastring(const char *s __attribute__((unused)))
 {
     fatal("not implemented", EC_SOFTWARE);
 }
 
-void printstring(const char *s)
+void printstring(const char *s __attribute__((unused)))
 {
     fatal("not implemented", EC_SOFTWARE);
 }
@@ -148,7 +148,7 @@ void fatal(const char* s, int code)
 }
 
 /* ====================================================================== */
-
+#if 0
 static int
 user_master_is_local(char *user)
 {
@@ -169,7 +169,7 @@ user_master_is_local(char *user)
     /* rc: -1 => error, 0 => lookup failed, 1 => lookup suceeded */
     return(rc == 1);  
 }
-
+#endif
 
 /* ====================================================================== */
 
@@ -218,12 +218,12 @@ reset_single(struct sync_lock *lock, char *user)
 
     if (verbose > 1)
         fprintf(stderr, "   RESET %s\n", user);
-
+#if 0
     if (user_master_is_local(user)) {
         fprintf(stderr, "Attempt to update master for %s\n", user);
         return(IMAP_INVALID_USER);
     }
-
+#endif
     if ((r = sync_lock(lock))) {
         fprintf(stderr, "Failed to lock: %s\n", error_message(r));
         return(r);

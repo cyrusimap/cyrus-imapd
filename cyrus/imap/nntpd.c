@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.57 2007/03/30 18:51:01 murch Exp $
+ * $Id: nntpd.c,v 1.58 2007/09/28 02:27:47 murch Exp $
  */
 
 /*
@@ -1505,10 +1505,6 @@ static void cmdloop(void)
 
       nocurrent:
 	prot_printf(nntp_out, "420 Current article number is invalid\r\n");
-	continue;
-
-      noarticle:
-	prot_printf(nntp_out, "423 No such article(s) in this newsgroup\r\n");
 	continue;
     }
 }
@@ -3322,7 +3318,6 @@ static int newgroup(message_data_t *msg)
     int r;
     char *group;
     char mailboxname[MAX_MAILBOX_NAME+1];
-    int sync_lockfd = (-1);
 
     /* isolate newsgroup */
     group = msg->control + 8; /* skip "newgroup" */
@@ -3346,7 +3341,6 @@ static int rmgroup(message_data_t *msg)
     int r;
     char *group;
     char mailboxname[MAX_MAILBOX_NAME+1];
-    int sync_lockfd = (-1);
 
     /* isolate newsgroup */
     group = msg->control + 7; /* skip "rmgroup" */
@@ -3371,7 +3365,6 @@ static int mvgroup(message_data_t *msg)
     char *group;
     char oldmailboxname[MAX_MAILBOX_NAME+1];
     char newmailboxname[MAX_MAILBOX_NAME+1];
-    int sync_lockfd = (-1);
 
     /* isolate old newsgroup */
     group = msg->control + 7; /* skip "mvgroup" */

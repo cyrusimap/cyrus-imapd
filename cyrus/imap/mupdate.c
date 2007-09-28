@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.97 2007/06/08 14:06:43 murch Exp $
+ * $Id: mupdate.c,v 1.98 2007/09/28 02:27:46 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -87,6 +87,8 @@
 #include "util.h"
 #include "version.h"
 #include "xmalloc.h"
+#include "xstrlcat.h"
+#include "xstrlcpy.h"
 
 /* Sent to clients that we can't accept a connection for. */
 static const char SERVER_UNABLE_STRING[] = "* BYE \"Server Unable\"\r\n";
@@ -251,7 +253,7 @@ static struct conn *conn_new(int fd)
     struct sockaddr_storage localaddr, remoteaddr;
     int r;    
     int haveaddr = 0;
-    int salen;
+    socklen_t salen;
     char hbuf[NI_MAXHOST];
     int niflags;
 
@@ -1074,7 +1076,7 @@ static void dobanner(struct conn *c)
 {
     char slavebuf[4096];
     const char *mechs;
-    unsigned int mechcount;
+    int mechcount;
     int ret;
 
     /* send initial the banner + flush pout */

@@ -1,4 +1,4 @@
-/* $Id: cyrdump.c,v 1.19 2007/03/30 18:40:20 murch Exp $
+/* $Id: cyrdump.c,v 1.20 2007/09/28 02:27:46 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -60,6 +60,7 @@
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "sysexits.h"
+#include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
@@ -90,7 +91,7 @@ char *imapd_userid = NULL;
 int imapd_condstore_client = 0;
 
 struct incremental_record {
-    int incruid;
+    unsigned incruid;
 };
 
 int main(int argc, char *argv[])

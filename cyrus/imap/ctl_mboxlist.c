@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.57 2007/09/12 14:28:11 murch Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.58 2007/09/28 02:27:46 murch Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -80,6 +80,7 @@
 #include "libcyr_cfg.h"
 #include "mboxlist.h"
 #include "mupdate.h"
+#include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
@@ -710,7 +711,7 @@ int compar_mbox(const void *v1, const void *v2)
 
 static int verify_cb(void *rockp,
 		     const char *key, int keylen,
-		     const char *data, int datalen)
+		     const char *data, int datalen __attribute__((unused)))
 {
     struct found_list *found = (struct found_list *) rockp;
     int r;
@@ -762,7 +763,6 @@ static int verify_cb(void *rockp,
 void do_verify(void)
 {
     struct found_list found;
-    struct found_data *data;
     int i;
 
     found.idx = 0;

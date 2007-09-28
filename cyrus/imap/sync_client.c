@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.21 2007/09/25 13:53:47 murch Exp $
+ * $Id: sync_client.c,v 1.22 2007/09/28 02:27:47 murch Exp $
  */
 
 #include <config.h>
@@ -84,6 +84,8 @@
 #include "sync_commit.h"
 #include "lock.h"
 #include "backend.h"
+#include "xstrlcat.h"
+#include "xstrlcpy.h"
 
 /* signal to config.c */
 const int config_need_data = 0;  /* YYY */
@@ -94,12 +96,12 @@ struct protstream *imapd_out = NULL;
 struct auth_state *imapd_authstate = NULL;
 char *imapd_userid = NULL;
 
-void printastring(const char *s)
+void printastring(const char *s __attribute__((unused)))
 {
     fatal("not implemented", EC_SOFTWARE);
 }
 
-void printstring(const char *s)
+void printstring(const char *s __attribute__((unused)))
 {
     fatal("not implemented", EC_SOFTWARE);
 }
@@ -120,7 +122,6 @@ static struct protstream *fromserver = NULL;
 static struct sync_msgid_list *msgid_onserver = NULL;
 
 static struct namespace   sync_namespace;
-static struct auth_state *sync_authstate = NULL;
 
 static int verbose         = 0;
 static int verbose_logging = 0;
@@ -1126,10 +1127,9 @@ static int check_upload_messages(struct mailbox *mailbox,
 /* Upload missing messages from folders (uses UPLOAD COPY where possible) */
 
 static int upload_message_work(struct mailbox *mailbox,
-			       unsigned long msgno,
+			       unsigned long msgno __attribute__((unused)),
 			       struct index_record *record)
 {
-    unsigned long cache_size;
     int flags_printed = 0;
     int r = 0, flag, need_body;
     static unsigned long sequence = 1;
@@ -1272,7 +1272,7 @@ static int upload_messages_list(struct mailbox *mailbox,
     struct index_record record;
     struct sync_msg *msg;
     struct sync_index_list *index_list;
-    int max_count = config_getint(IMAPOPT_SYNC_BATCH_SIZE);
+    unsigned max_count = config_getint(IMAPOPT_SYNC_BATCH_SIZE);
 
     if (max_count <= 0) max_count = INT_MAX;
 
@@ -1342,11 +1342,11 @@ static int upload_messages_list(struct mailbox *mailbox,
 static int upload_messages_from(struct mailbox *mailbox,
 				unsigned long old_last_uid)
 {
-    unsigned long msgno;
+    unsigned long msgno = 0;
     int r = 0;
     struct index_record record;
     struct sync_index_list *index_list;
-    int max_count = config_getint(IMAPOPT_SYNC_BATCH_SIZE);
+    unsigned max_count = config_getint(IMAPOPT_SYNC_BATCH_SIZE);
 
     if (chdir(mailbox->path)) {
         syslog(LOG_ERR, "Couldn't chdir to %s: %s",
@@ -1439,7 +1439,7 @@ static int do_seen(char *user, char *name)
     sync_printastring(toserver, user);
     prot_printf(toserver, " ");
     sync_printastring(toserver, m.name);
-    prot_printf(toserver, " %lu %lu %lu ",
+    prot_printf(toserver, " %lu %u %lu ",
 		lastread, last_recent_uid, lastchange);
     sync_printastring(toserver, seenuid);
     prot_printf(toserver, "\r\n");
@@ -1553,7 +1553,7 @@ static int do_annotation(char *name)
 
     prot_printf(toserver, "LIST_ANNOTATIONS ");
     sync_printastring(toserver, name);
-    prot_printf(toserver, "\r\n", name);
+    prot_printf(toserver, "\r\n");
     prot_flush(toserver);
     r=sync_parse_code("LIST_ANNOTATIONS", fromserver,
 		      SYNC_PARSE_EAT_OKLINE, &unsolicited);
@@ -1657,10 +1657,6 @@ static int do_annotation(char *name)
 static int do_mailbox_work(struct mailbox *mailbox, 
 			   struct sync_msg_list *list, int just_created)
 {
-    unsigned int last_recent_uid;
-    time_t lastread, lastchange;
-    struct seen *seendb;
-    char *seenuid;
     int r = 0;
     int selected = 0;
     int flag_lookup_table[MAX_USER_FLAGS];
@@ -2118,7 +2114,7 @@ int do_mailbox_preload(struct sync_folder *folder)
     int r = 0;
     unsigned long msgno;
     struct index_record record;
-    int lastuid = 0;
+    unsigned lastuid = 0;
 
     if ((r=mailbox_open_header(folder->name, 0, &m)))
         return(r);
@@ -2369,10 +2365,10 @@ int do_user_start(char *user)
     return(0);
 }
 
-int do_user_parse(char *user,
-		      struct sync_folder_list *server_list,
-		      struct sync_folder_list *server_sub_list,
-		      struct sync_sieve_list  *server_sieve_list)
+int do_user_parse(char *user __attribute__((unused)),
+		  struct sync_folder_list *server_list,
+		  struct sync_folder_list *server_sub_list,
+		  struct sync_sieve_list  *server_sieve_list)
 {
     int r = 0;
     int c = ' ';
@@ -2576,7 +2572,6 @@ int do_user_work(char *user, int *vanishedp)
 
 static int do_user(char *user)
 {
-    struct sync_lock lock;
     int r = 0;
     int vanished = 0;
 
@@ -2775,7 +2770,6 @@ static void remove_folder(char *name, struct sync_action_list *list,
 static int do_sync(const char *filename)
 {
     struct sync_user_list   *user_folder_list = sync_user_list_create();
-    struct sync_user        *user;
     struct sync_action_list *user_list   = sync_action_list_create();
     struct sync_action_list *meta_list   = sync_action_list_create();
     struct sync_action_list *sieve_list  = sync_action_list_create();
@@ -2790,7 +2784,6 @@ static int do_sync(const char *filename)
     struct sync_folder_list *folder_list = sync_folder_list_create();
     static struct buf type, arg1, arg2;
     char *arg1s, *arg2s;
-    char *userid;
     struct sync_action *action;
     int c;
     int fd;
@@ -3174,7 +3167,8 @@ int do_daemon_work(const char *sync_log_file, const char *sync_shutdown_file,
             break;
         }
 
-        if ((timeout > 0) && ((single_start - session_start) > timeout)) {
+        if ((timeout > 0) &&
+	    ((single_start - session_start) > (time_t) timeout)) {
             *restartp = 1;
             break;
         }
@@ -3203,7 +3197,7 @@ int do_daemon_work(const char *sync_log_file, const char *sync_shutdown_file,
         }
         delta = time(NULL) - single_start;
 
-        if ((delta < min_delta) && ((min_delta-delta) > 0))
+        if (((unsigned) delta < min_delta) && ((min_delta-delta) > 0))
             sleep(min_delta-delta);
     }
     free(work_file_name);
@@ -3352,7 +3346,6 @@ int main(int argc, char **argv)
     int   wait     = 0;
     int   timeout  = 600;
     int   min_delta = 0;
-    const char *sync_host = NULL;
     char sync_log_file[MAX_MAILBOX_PATH+1];
     const char *sync_shutdown_file = NULL;
     char buf[512];
@@ -3559,8 +3552,6 @@ int main(int argc, char **argv)
     case MODE_MAILBOX:
     {
 	struct sync_folder_list *folder_list = sync_folder_list_create();
-	struct sync_user   *user;
-	char   *s, *t;
 
 	if (input_filename) {
 	    if ((file=fopen(input_filename, "r")) == NULL) {
@@ -3662,6 +3653,5 @@ int main(int argc, char **argv)
     sync_msgid_list_free(&msgid_onserver);
     backend_disconnect(be);
 
-  quit:
     shut_down(exit_rc);
 }

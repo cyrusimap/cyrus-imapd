@@ -72,7 +72,7 @@
  * may contain an explanatory message.
  *
  *
- * $Id: smmapd.c,v 1.18 2007/04/23 13:33:02 murch Exp $
+ * $Id: smmapd.c,v 1.19 2007/09/28 02:27:47 murch Exp $
  */
 
 #include <config.h>
@@ -290,7 +290,8 @@ int verify_user(const char *key, long quotacheck,
         char *host;
         struct sockaddr_in sin,sfrom;
         char buf[512];
-        int soc, x, rc;
+        int soc, rc;
+	socklen_t x;
 
 	/*
 	 * check to see if mailbox exists and we can append to it:

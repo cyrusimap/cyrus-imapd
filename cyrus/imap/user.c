@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: user.c,v 1.22 2007/03/27 19:53:09 murch Exp $
+ * $Id: user.c,v 1.23 2007/09/28 02:27:47 murch Exp $
  */
 
 #include <config.h>
@@ -423,7 +423,7 @@ static int find_p(void *rockp,
     char *inboxname = ((struct find_rock *) rockp)->inboxname;
 
     return (!strncmp(key, inboxname, strlen(inboxname)) &&
-	    (keylen == strlen(inboxname) || key[strlen(inboxname)] == '.'));
+	    (keylen == (int) strlen(inboxname) || key[strlen(inboxname)] == '.'));
 }
 
 static int find_cb(void *rockp,
