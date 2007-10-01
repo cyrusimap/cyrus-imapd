@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.90 2007/03/27 19:53:09 murch Exp $
+ * $Id: prot.c,v 1.91 2007/10/01 18:57:14 murch Exp $
  */
 
 #include <config.h>
@@ -647,7 +647,6 @@ int prot_flush_internal(struct protstream *s, int force)
     unsigned left = s->ptr - s->buf;
 
     assert(s->write);
-    assert(s->cnt >= 0);
 
     /* Is this protstream finished? */
     if (s->eof || s->error) {
@@ -1023,7 +1022,7 @@ int prot_select(struct protgroup *readstreams, int extra_read_fd,
     struct protstream *s, *timeout_prot = NULL;
     struct protgroup *retval = NULL;
     int max_fd, found_fds = 0;
-    int i;
+    unsigned i;
     fd_set rfds;
     int have_readtimeout = 0;
     struct timeval my_timeout;
@@ -1240,7 +1239,7 @@ void protgroup_free(struct protgroup *group)
 
 void protgroup_insert(struct protgroup *group, struct protstream *item) 
 {
-    int i, empty;
+    unsigned i, empty;
 
     assert(group);
     assert(item);
@@ -1263,7 +1262,7 @@ void protgroup_insert(struct protgroup *group, struct protstream *item)
 
 void protgroup_delete(struct protgroup *group, struct protstream *item) 
 {
-    int i;
+    unsigned i;
 
     assert(group);
     assert(item);

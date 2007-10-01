@@ -1,7 +1,7 @@
 /* prot.h -- stdio-like module that handles buffering, SASL, and TLS
  *           details for I/O over sockets
  *
- * $Id: prot.h,v 1.43 2006/11/30 17:11:22 murch Exp $
+ * $Id: prot.h,v 1.44 2007/10/01 18:57:14 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -69,9 +69,9 @@ typedef void prot_readcallback_t(struct protstream *s, void *rock);
 struct protstream {
     /* The Buffer */
     unsigned char *buf;
-    int buf_size;
+    unsigned buf_size;
     unsigned char *ptr; /* The end of data in the buffer */
-    int cnt; /* Space Remaining in buffer */
+    unsigned cnt; /* Space Remaining in buffer */
 
     /* File Descriptors */
     int fd;         /* The Socket */
