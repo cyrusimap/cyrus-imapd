@@ -41,7 +41,7 @@
  */
 
 static char rcsid[] =
-      "$Id: ldap.c,v 1.11 2007/09/20 14:22:05 murch Exp $";
+      "$Id: ldap.c,v 1.12 2007/10/01 22:07:34 murch Exp $";
 
 #include <config.h>
 #include "ptloader.h"
@@ -60,6 +60,9 @@ static char rcsid[] =
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/uio.h>
+
+/* Functions like ldap_bind() have been deprecated in OpenLDAP 2.3 */
+#define LDAP_DEPRECATED 1
 
 #include <ldap.h>
 #include <lber.h>
