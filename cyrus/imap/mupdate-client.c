@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.50 2007/09/27 20:48:54 murch Exp $
+ * $Id: mupdate-client.c,v 1.51 2007/10/01 18:36:00 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -295,7 +295,7 @@ static int mupdate_find_cb(struct mupdate_mailboxdata *mdata,
     strlcpy(h->server_buf, mdata->server, sizeof(h->server_buf));
 
     if(!strncmp(cmd, "MAILBOX", 7)) {
-	int len = strlen(mdata->acl) + 1;
+	size_t len = strlen(mdata->acl) + 1;
 	
 	h->mailboxdata_buf.t = ACTIVE;
 	

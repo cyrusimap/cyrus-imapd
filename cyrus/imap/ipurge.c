@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.28 2007/09/28 02:27:46 murch Exp $
+ * $Id: ipurge.c,v 1.29 2007/10/01 18:35:59 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -104,7 +104,7 @@ int verbose = 1;
 int forceall = 0;
 
 int purge_me(char *, int, int);
-int purge_check(struct mailbox *, void *, char *, int);
+unsigned purge_check(struct mailbox *, void *, unsigned char *, int);
 int usage(char *name);
 void print_stats(mbox_stats_t *stats);
 
@@ -284,9 +284,10 @@ void deleteit(bit32 msgsize, mbox_stats_t *stats)
 
 /* thumbs up routine, checks date & size and returns yes or no for deletion */
 /* 0 = no, 1 = yes */
-int purge_check(struct mailbox *mailbox __attribute__((unused)),
-		void *deciderock, char *buf,
-		int expunge_flags __attribute__((unused)))
+unsigned purge_check(struct mailbox *mailbox __attribute__((unused)),
+		     void *deciderock,
+		     unsigned char *buf,
+		     int expunge_flags __attribute__((unused)))
 {
   time_t my_time;
   mbox_stats_t *stats = (mbox_stats_t *) deciderock;
@@ -320,7 +321,7 @@ int purge_check(struct mailbox *mailbox __attribute__((unused)),
     }
     if (size >= 0) {
       /* check size */
-      if (msgsize == size) {
+	if ((int) msgsize == size) {
 	  if (invertmatch) return 0;
 	  deleteit(msgsize, stats);
 	  return 1;
@@ -346,11 +347,11 @@ int purge_check(struct mailbox *mailbox __attribute__((unused)),
     }
     if (size >= 0) {
       /* check size */
-      if (!invertmatch && (msgsize > size)) {
+	if (!invertmatch && ((int) msgsize > size)) {
 	  deleteit(msgsize, stats);
 	  return 1;
       }
-      if (invertmatch && (msgsize < size)) {
+	if (invertmatch && ((int) msgsize < size)) {
 	  deleteit(msgsize, stats);
 	  return 1;
       }

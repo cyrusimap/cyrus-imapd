@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.100 2007/09/28 02:27:47 murch Exp $ */
+/* $Id: reconstruct.c,v 1.101 2007/10/01 18:36:00 murch Exp $ */
 
 #include <config.h>
 
@@ -452,7 +452,7 @@ reconstruct_expunge (char * path, struct mailbox * mailbox,
     struct stat sbuf;
 
     indexbuffer_t ibuf;
-    char *buf = ibuf.buf;
+    unsigned char *buf = ibuf.buf;
 
     int expunge_fd;
     FILE *fexpunge;
@@ -705,7 +705,7 @@ add_uniqid ( char * mailboxname, char * mailboxid)
 int reconstruct(char *name, struct discovered *found)
 {
     indexbuffer_t ibuf;
-    char *buf = ibuf.buf;
+    unsigned char *buf = ibuf.buf;
     char quota_root[MAX_MAILBOX_PATH+1];
     bit32 valid_user_flags[MAX_USER_FLAGS/32];
 

@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- * $Id: mailbox.h,v 1.86 2007/09/24 12:48:32 murch Exp $
+ * $Id: mailbox.h,v 1.87 2007/10/01 18:35:59 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -269,8 +269,8 @@ extern const int MAILBOX_NUM_CACHE_HEADERS;
 
 /* Aligned buffer for manipulating index header/record fields */
 typedef union {
-    char buf[INDEX_HEADER_SIZE > INDEX_RECORD_SIZE ?
-	     INDEX_HEADER_SIZE : INDEX_RECORD_SIZE];
+    unsigned char buf[INDEX_HEADER_SIZE > INDEX_RECORD_SIZE ?
+		      INDEX_HEADER_SIZE : INDEX_RECORD_SIZE];
 #ifdef HAVE_LONG_LONG_INT
     bit64 align8; /* align on 8-byte boundary */
 #else
@@ -284,13 +284,14 @@ enum {
     EXPUNGE_CLEANUP =		(1<<1)
 };
 
-int mailbox_cached_header(const char *s);
-int mailbox_cached_header_inline(const char *text);
+unsigned mailbox_cached_header(const char *s);
+unsigned mailbox_cached_header_inline(const char *text);
 
 unsigned long mailbox_cache_size(struct mailbox *mailbox, unsigned msgno);
 
-typedef int mailbox_decideproc_t(struct mailbox *mailbox, void *rock,
-				 char *indexbuf, int expunge_flags);
+typedef unsigned mailbox_decideproc_t(struct mailbox *mailbox, void *rock,
+				      unsigned char *indexbuf,
+				      int expunge_flags);
 
 typedef void mailbox_notifyproc_t(struct mailbox *mailbox);
 
@@ -354,7 +355,8 @@ extern void mailbox_unlock_pop(struct mailbox *mailbox);
 
 extern int mailbox_write_header(struct mailbox *mailbox);
 extern int mailbox_write_index_header(struct mailbox *mailbox);
-extern void mailbox_index_record_to_buf(struct index_record *record, char *buf);
+extern void mailbox_index_record_to_buf(struct index_record *record,
+					unsigned char *buf);
 extern int mailbox_write_index_record(struct mailbox *mailbox,
 				      unsigned msgno,
 				      struct index_record *record, int sync);

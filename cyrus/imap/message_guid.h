@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: message_guid.h,v 1.3 2007/09/24 12:48:32 murch Exp $
+ * $Id: message_guid.h,v 1.4 2007/10/01 18:36:00 murch Exp $
  */
 
 #ifndef MESSAGE_GUID_H
@@ -88,7 +88,7 @@ int message_guid_isnull(struct message_guid *guid);
 /* Export Message GUID as byte sequence (MESSAGE_GUID_SIZE)
  * (Wrapper for memcpy() with current implementation)
  */
-void message_guid_export(struct message_guid *guid, char *buf);
+void message_guid_export(struct message_guid *guid, unsigned char *buf);
 
 /* Import Message GUID from packed sequence (MESSAGE_GUID_SIZE)
  * (Wrapper for memcpy() with current implementation)

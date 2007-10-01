@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.173 2007/09/27 20:48:52 murch Exp $
+ * $Id: mailbox.c,v 1.174 2007/10/01 18:35:59 murch Exp $
  *
  */
 
@@ -236,7 +236,7 @@ const int MAILBOX_NUM_CACHE_HEADERS =
  *  Assume cache entry version 1, unless other data is found
  *  in the table.
  */
-static inline int is_cached_header(const char *hdr) 
+static inline unsigned is_cached_header(const char *hdr) 
 {
     int i;
     
@@ -258,7 +258,7 @@ static inline int is_cached_header(const char *hdr)
  *   Returns minimum version required for lookup to succeed
  *   or BIT32_MAX if header not cached
  */
-int mailbox_cached_header(const char *s) 
+unsigned mailbox_cached_header(const char *s) 
 {
     char hdr[MAX_CACHED_HEADER_SIZE];
     int i;
@@ -278,7 +278,7 @@ int mailbox_cached_header(const char *s)
 /* Same as mailbox_cached_header, but for use on a header
  * as it appears in the message (i.e. :-terminated, not NUL-terminated)
  */
-int mailbox_cached_header_inline(const char *text)
+unsigned mailbox_cached_header_inline(const char *text)
 {
     char buf[MAX_CACHED_HEADER_SIZE];
     int i;
@@ -1292,7 +1292,7 @@ int mailbox_write_header(struct mailbox *mailbox)
 int mailbox_write_index_header(struct mailbox *mailbox)
 {
     indexbuffer_t ibuf;
-    char *buf = ibuf.buf;
+    unsigned char *buf = ibuf.buf;
     unsigned long header_size = INDEX_HEADER_SIZE;
     int n;
     
@@ -1358,7 +1358,8 @@ int mailbox_write_index_header(struct mailbox *mailbox)
 /*
  * Put an index record into a buffer suitable for writing to a file.
  */
-void mailbox_index_record_to_buf(struct index_record *record, char *buf)
+void mailbox_index_record_to_buf(struct index_record *record,
+				 unsigned char *buf)
 {
     int n;
 
@@ -1398,7 +1399,7 @@ mailbox_write_index_record(struct mailbox *mailbox,
 {
     int n;
     indexbuffer_t ibuf;
-    char *buf = ibuf.buf;
+    unsigned char *buf = ibuf.buf;
 
     mailbox_index_record_to_buf(record, buf);
 
@@ -1433,7 +1434,7 @@ int mailbox_append_index(struct mailbox *mailbox,
 {
     unsigned i;
     int len, n;
-    char *buf, *p;
+    unsigned char *buf, *p;
     long last_offset;
     time_t now = time(NULL);
 
@@ -1533,7 +1534,7 @@ static void mailbox_upgrade_index_work(struct mailbox *mailbox,
     unsigned msgno;
     bit32 oldstart_offset, oldrecord_size;
     indexbuffer_t ibuf;
-    char *buf = ibuf.buf, *bufp;
+    unsigned char *buf = ibuf.buf, *bufp;
     int quota_offset = 0;
     int calculate_flagcounts = 0;
     bit32 numansweredflag = 0;
@@ -1629,8 +1630,8 @@ static void mailbox_upgrade_index_work(struct mailbox *mailbox,
 
     /* Write the rest of new index */
     for (msgno = 1; msgno <= exists; msgno++) {
-	bufp = (char *) (index_base + oldstart_offset +
-			 (msgno - 1)*oldrecord_size);
+	bufp = (unsigned char *) (index_base + oldstart_offset +
+				  (msgno - 1)*oldrecord_size);
 
 	if (calculate_flagcounts) {
 	    bit32 sysflags = ntohl(*((bit32 *)(bufp+OFFSET_SYSTEM_FLAGS)));
@@ -1858,10 +1859,10 @@ static int mailbox_upgrade_index(struct mailbox *mailbox)
  * Expunge decision proc used by mailbox_expunge() (in cleanup mode) 
  * to avoid expunging any messages from cyrus.index
  */
-static int expungenone(struct mailbox *mailbox __attribute__((unused)),
-		       void *rock __attribute__((unused)),
-		       char *index __attribute__((unused)),
-		       int expunge_flags __attribute__((unused)))
+static unsigned expungenone(struct mailbox *mailbox __attribute__((unused)),
+			    void *rock __attribute__((unused)),
+			    unsigned char *index __attribute__((unused)),
+			    int expunge_flags __attribute__((unused)))
 {
     return 0;
 }
@@ -1871,10 +1872,10 @@ static int expungenone(struct mailbox *mailbox __attribute__((unused)),
  * to expunge all messages in cyrus.expunge
  * Also used by mailbox_rename() to expunge all messages in INBOX
  */
-static int expungeall(struct mailbox *mailbox __attribute__((unused)),
-		      void *rock __attribute__((unused)),
-		      char *indexbuf __attribute__((unused)),
-		      int expunge_flags __attribute__((unused)))
+static unsigned expungeall(struct mailbox *mailbox __attribute__((unused)),
+			   void *rock __attribute__((unused)),
+			   unsigned char *indexbuf __attribute__((unused)),
+			   int expunge_flags __attribute__((unused)))
 {
     return 1;
 }
@@ -1890,7 +1891,7 @@ static int process_records(struct mailbox *mailbox, FILE *newindex,
 			   int expunge_flags)
 {
     indexbuffer_t ibuf;
-    char *buf = ibuf.buf;
+    unsigned char *buf = ibuf.buf;
     unsigned msgno;
     unsigned newexpunged;
     unsigned newexists;
@@ -1898,7 +1899,7 @@ static int process_records(struct mailbox *mailbox, FILE *newindex,
     unsigned newanswered;
     unsigned newflagged; 
     time_t now = time(NULL);
-    int n;
+    unsigned n;
 
     /* Copy over records for nondeleted messages */
     for (msgno = 1; msgno <= exists; msgno++) {
@@ -2066,7 +2067,8 @@ int mailbox_expunge(struct mailbox *mailbox,
 		    int flags)
 {
     enum enum_value config_expunge_mode = config_getenum(IMAPOPT_EXPUNGE_MODE);
-    int r, n;
+    int r;
+    unsigned n;
     struct fnamepath fpath;
     struct fnamebuf *fname;
     char fnamebufnew[MAX_MAILBOX_PATH+1];
@@ -2083,7 +2085,7 @@ int mailbox_expunge(struct mailbox *mailbox,
     unsigned newflagged; 
     
     indexbuffer_t ibuf;
-    char *buf = ibuf.buf;
+    unsigned char *buf = ibuf.buf;
     unsigned msgno;
     struct stat sbuf;
     struct txn *tid = NULL;

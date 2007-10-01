@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.13 2007/09/28 02:27:47 murch Exp $
+ * $Id: sync_server.c,v 1.14 2007/10/01 18:36:00 murch Exp $
  */
 
 #include <config.h>
@@ -2254,9 +2254,10 @@ struct uid_list {
     unsigned long  count;
 };
 
-static int cmd_expunge_decide(struct mailbox *mailbox __attribute__((unused)),
-			      void *rock, char *indexbuf,
-			      int expunge_flags __attribute__((unused)))
+static unsigned cmd_expunge_decide(struct mailbox *mailbox __attribute__((unused)),
+				   void *rock,
+				   unsigned char *indexbuf,
+				   int expunge_flags __attribute__((unused)))
 {
     struct uid_list *uids = (struct uid_list *)rock;
     unsigned long uid = htonl(*((bit32 *)(indexbuf+OFFSET_UID)));
