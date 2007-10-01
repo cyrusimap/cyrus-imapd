@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.526 2007/09/28 02:27:46 murch Exp $ */
+/* $Id: imapd.c,v 1.527 2007/10/01 18:35:58 murch Exp $ */
 
 #include <config.h>
 
@@ -2953,7 +2953,8 @@ void cmd_append(char *tag, char *name, const char *cur_name)
     time_t now = time(NULL);
     unsigned size, totalsize = 0;
     int sync_seen = 0;
-    int r, i;
+    int r;
+    unsigned i;
     char mailboxname[MAX_MAILBOX_NAME+1];
     struct appendstate mailbox;
     unsigned long uidvalidity;
@@ -2962,7 +2963,7 @@ void cmd_append(char *tag, char *name, const char *cur_name)
     const char *parseerr = NULL, *url = NULL;
     int mbtype;
     char *newserver;
-    int numalloc = 5;
+    unsigned numalloc = 5;
     struct appendstage *curstage;
 
     /* See if we can append */
@@ -3501,7 +3502,7 @@ void cmd_close(char *tag)
     /* local mailbox */
     if (!(imapd_mailbox->myrights & ACL_EXPUNGE)) r = 0;
     else {
-	r = mailbox_expunge(imapd_mailbox, (int (*)())0, (char *)0, 0);
+	r = mailbox_expunge(imapd_mailbox, NULL, NULL, 0);
 	if (!r) sync_log_mailbox(imapd_mailbox->name);
     }
 
@@ -5026,7 +5027,7 @@ void cmd_delete(char *tag, char *name, int localonly, int force)
     int mbtype;
     char *server;
     char *p;
-    int domainlen = 0;
+    size_t domainlen = 0;
 
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
 					       imapd_userid, mailboxname);
@@ -5104,7 +5105,7 @@ void cmd_delete(char *tag, char *name, int localonly, int force)
     if (!r && !localonly &&
 	!strncmp(mailboxname+domainlen, "user.", 5) &&
 	!strchr(mailboxname+domainlen+5, '.')) {
- 	int mailboxname_len = strlen(mailboxname);
+ 	size_t mailboxname_len = strlen(mailboxname);
 
  	/* If we aren't too close to MAX_MAILBOX_NAME, append .* */
  	p = mailboxname + mailboxname_len; /* end of mailboxname */
@@ -5588,7 +5589,7 @@ void cmd_reconstruct(const char *tag, const char *name, int recursive)
 	    fclose(stderr);
 
 	    ret = snprintf(buf, sizeof(buf), "%s/reconstruct", SERVICE_PATH);
-	    if(ret < 0 || ret >= sizeof(buf)) {
+	    if(ret < 0 || ret >= (int) sizeof(buf)) {
 		/* in child, so fatailing won't disconnect our user */ 
 	        fatal("reconstruct buffer not sufficiently big", EC_CONFIG);
 	    }
@@ -5650,7 +5651,7 @@ void cmd_reconstruct(const char *tag, const char *name, int recursive)
 	    fclose(stderr);
 
 	    ret = snprintf(buf, sizeof(buf), "%s/quota", SERVICE_PATH);
-	    if(ret < 0 || ret >= sizeof(buf)) {
+	    if(ret < 0 || ret >= (int) sizeof(buf)) {
 		/* in child, so fatailing won't disconnect our user */ 
 	        fatal("quota buffer not sufficiently big", EC_CONFIG);
 	    }
@@ -5916,7 +5917,7 @@ void cmd_changesub(char *tag, char *namespace, char *name, int add)
     /* local INBOX */
     if (namespace) lcase(namespace);
     if (!namespace || !strcmp(namespace, "mailbox")) {
-	int len = strlen(name);
+	size_t len = strlen(name);
 	if (force && imapd_namespace.isalt &&
 	    (((len == strlen(imapd_namespace.prefix[NAMESPACE_USER]) - 1) &&
 	      !strncmp(name, imapd_namespace.prefix[NAMESPACE_USER], len)) ||

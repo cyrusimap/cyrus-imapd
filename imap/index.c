@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.228 2007/09/24 12:48:31 murch Exp $
+ * $Id: index.c,v 1.229 2007/10/01 18:35:59 murch Exp $
  */
 #include <config.h>
 
@@ -1084,7 +1084,7 @@ static int _index_search(unsigned **msgno_list, struct mailbox *mailbox,
     return n;
 }
 
-int index_getuid(unsigned msgno) {
+unsigned index_getuid(unsigned msgno) {
   return UID(msgno);
 }
 
@@ -1687,11 +1687,9 @@ unsigned seendate;
  * If no message with UID 'uid', returns the message with
  * the higest UID not greater than 'uid'.
  */
-int
-index_finduid(uid)
-unsigned uid;
+unsigned index_finduid(unsigned uid)
 {
-    int low=1, high=imapd_exists, mid;
+    unsigned low=1, high=imapd_exists, mid;
     unsigned miduid;
 
     while (low <= high) {
@@ -1714,9 +1712,10 @@ unsigned uid;
  * Expunge decision procedure to get rid of articles
  * both \Deleted and listed in the sequence under 'rock'.
  */
-int index_expungeuidlist(struct mailbox *mailbox __attribute__((unused)),
-			 void *rock, char *indexbuf,
-			 int expunge_flags __attribute__((unused)))
+unsigned index_expungeuidlist(struct mailbox *mailbox __attribute__((unused)),
+			      void *rock,
+			      unsigned char *indexbuf,
+			      int expunge_flags __attribute__((unused)))
 {
     char *sequence = (char *)rock;
     unsigned uid = ntohl(*((bit32 *)(indexbuf+OFFSET_UID)));
@@ -3420,7 +3419,7 @@ static int index_searchcacheheader(unsigned msgno,
     char *q;
     static struct strlist header;
     static char *buf;
-    static int bufsize;
+    static unsigned bufsize;
     const char *cacheitem;
     unsigned size;
     int r;
@@ -5294,7 +5293,7 @@ extern char *index_getheader(struct mailbox *mailbox, unsigned msgno,
     static unsigned long msg_size = 0;
     struct strlist headers = { NULL, NULL, NULL, NULL };
     static char *alloc = NULL;
-    static int allocsize = 0;
+    static unsigned allocsize = 0;
     const char *cacheitem;
     unsigned size;
     char *buf;

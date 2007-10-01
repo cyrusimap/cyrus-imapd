@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: unexpunge.c,v 1.7 2007/09/28 02:27:47 murch Exp $
+ * $Id: unexpunge.c,v 1.8 2007/10/01 18:36:00 murch Exp $
  */
 
 #include <config.h>
@@ -169,7 +169,7 @@ int restore_expunged(struct mailbox *mailbox,
     int r = 0;
     const char *irec;
     indexbuffer_t ibuf;
-    char *buf = ibuf.buf;
+    unsigned char *buf = ibuf.buf;
     char *path, fnamebuf[MAX_MAILBOX_PATH+1], fnamebufnew[MAX_MAILBOX_PATH+1];
     FILE *newindex = NULL, *newexpungeindex = NULL;
     unsigned emsgno, imsgno;

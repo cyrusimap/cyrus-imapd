@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.252 2007/09/27 20:48:53 murch Exp $
+ * $Id: mboxlist.c,v 1.253 2007/10/01 18:35:59 murch Exp $
  */
 
 #include <config.h>
@@ -767,7 +767,7 @@ int mboxlist_insertremote(const char *name, int mbtype,
 
     if ((p = strchr(host, '!'))) {
       /* remote mailbox */
-      int len = (p - host);
+      size_t len = (p - host);
       if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_UNIFIED &&
 	  len == strlen(config_servername) &&
 	  !strncasecmp(host, config_servername, len)) {
@@ -896,7 +896,7 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin, char *userid,
     int mbtype;
     const char *p;
     const char *deletedprefix = config_getstring(IMAPOPT_DELETEDPREFIX);
-    int domainlen = 0;
+    size_t domainlen = 0;
     struct timeval tv;
 
     if(!isadmin && force) return IMAP_PERMISSION_DENIED;
@@ -906,7 +906,7 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin, char *userid,
     if ((p = mboxname_isusermailbox(name, 1))) {
 	/* Can't DELETE INBOX (your own inbox) */
 	if (userid) {
-	    int len = config_virtdomains ?
+	    size_t len = config_virtdomains ?
                 strcspn(userid, "@") : strlen(userid);
 	    if ((len == strlen(p)) && !strncmp(p, userid, len)) {
 		return(IMAP_MAILBOX_NOTSUPPORTED);
@@ -1007,7 +1007,7 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
     if ((p = mboxname_isusermailbox(name, 1))) {
 	/* Can't DELETE INBOX (your own inbox) */
 	if (userid) {
-	    int len = config_virtdomains ? strcspn(userid, "@") : strlen(userid);
+	    size_t len = config_virtdomains ? strcspn(userid, "@") : strlen(userid);
 	    if ((len == strlen(p)) && !strncmp(p, userid, len)) {
 		r = IMAP_MAILBOX_NOTSUPPORTED;
 		goto done;
@@ -1922,7 +1922,7 @@ static int find_p(void *rockp,
     if (rock->inboxoffset) {
 	char namebuf[MAX_MAILBOX_NAME+1];
 
-	if(keylen >= sizeof(namebuf)) {
+	if(keylen >= (int) sizeof(namebuf)) {
 	    syslog(LOG_ERR, "oversize keylen in mboxlist.c:find_p()");
 	    return 0;
 	}
@@ -2032,7 +2032,7 @@ static int find_cb(void *rockp,
     while (minmatch >= 0) {
 	long matchlen;
 	
-	if(keylen >= sizeof(namebuf)) {
+	if(keylen >= (int) sizeof(namebuf)) {
 	    syslog(LOG_ERR, "oversize keylen in mboxlist.c:find_cb()");
 	    return 0;
 	}

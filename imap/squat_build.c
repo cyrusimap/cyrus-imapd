@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squat_build.c,v 1.11 2006/11/30 17:11:20 murch Exp $
+ * $Id: squat_build.c,v 1.12 2007/10/01 18:36:00 murch Exp $
  */
 
 /*
@@ -305,7 +305,7 @@ static void init_doc_word_table(SquatWordTable** t) {
 
 SquatIndex* squat_index_init(int fd, SquatOptions const* options) {
   SquatIndex* index;
-  int i;
+  unsigned i;
   int path_len;
   char* buf;
   char const* tmp_path;
@@ -461,7 +461,7 @@ int squat_index_open_document(SquatIndex* index, char const* name) {
 /* Destroy the SquatWordTable. The leaf data and the internal nodes are free'd. */
 static void delete_doc_word_table(SquatWordTable* t, int depth) {
   if (depth > 2) {
-    int i;
+    unsigned i;
 
     depth--;
     for (i = 0; i < VECTOR_SIZE(t->entries); i++) {
@@ -472,7 +472,7 @@ static void delete_doc_word_table(SquatWordTable* t, int depth) {
       }
     }
   } else {
-    int i;
+    unsigned i;
 
     /* this happens to work whether the leaf entries are leaf_presence
        or leaf_docs. This is ugly but acceptable :-) */
@@ -804,7 +804,7 @@ static int write_words(SquatIndex* index, SquatWriteBuffer* b,
         int last_byte = p->last_valid_entry >> 3;
 
         for (i = p->first_valid_entry >> 3; i <= last_byte; i++) {
-	    if(i >= VECTOR_SIZE(p->presence)) {
+	    if((unsigned) i >= VECTOR_SIZE(p->presence)) {
 		return SQUAT_ERR;
 	    } else {
 		int bits = (unsigned char)p->presence[i];
@@ -851,7 +851,7 @@ static int write_words(SquatIndex* index, SquatWriteBuffer* b,
 
 int squat_index_close_document(SquatIndex* index) {
   char* buf;
-  int i;
+  unsigned i;
   
   squat_set_last_error(SQUAT_ERR_OK);
 
@@ -1301,7 +1301,7 @@ static int index_close_internal(SquatIndex* index, int OK) {
   int doc_ID_list_offset;
   int word_list_offset;
   char* buf;
-  int i;
+  unsigned i;
   SquatDiskHeader* header;
   int offset_buf[256];
   
@@ -1384,7 +1384,7 @@ static int index_close_internal(SquatIndex* index, int OK) {
     if (offset_buf[i] != 0) {
       offset_buf[i] = word_list_offset - offset_buf[i];
 
-      if (i < index->doc_word_table->first_valid_entry) {
+      if ((int) i < index->doc_word_table->first_valid_entry) {
         index->doc_word_table->first_valid_entry = i;
       }
       index->doc_word_table->last_valid_entry = i;

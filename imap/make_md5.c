@@ -21,6 +21,7 @@
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"
+#include "util.h"
 #include "xmalloc.h"
 #include "acl.h"
 #include "seen.h"
@@ -41,12 +42,12 @@ struct protstream *imapd_out = NULL;
 struct auth_state *imapd_authstate = NULL;
 char *imapd_userid = NULL;
 
-void printastring(const char *s)
+void printastring(const char *s __attribute__((unused)))
 {
     fatal("not implemented", EC_SOFTWARE);
 }
 
-void printstring(const char *s)
+void printstring(const char *s __attribute__((unused)))
 {
     fatal("not implemented", EC_SOFTWARE);
 }
@@ -459,7 +460,9 @@ md5_stream (FILE *stream, void *resblock)
 }
 
 static int
-md5_single(char *name, int matchlen, int maycreate, void *rock)
+md5_single(char *name, int matchlen __attribute__((unused)),
+	   int maycreate __attribute__((unused)),
+	   void *rock)
 {
     struct mailbox m;
     int    r = 0;
@@ -596,7 +599,7 @@ md5_single(char *name, int matchlen, int maycreate, void *rock)
  * but given tranche of users. That tranche gets regenerated from scratch */
 
 static int
-use_existing_data(char *s, int uid_set, int uid_modulo)
+use_existing_data(char *s, unsigned uid_set, int uid_modulo)
 {
     unsigned long total;
 
@@ -614,7 +617,7 @@ use_existing_data(char *s, int uid_set, int uid_modulo)
 
 static int
 do_user(const char *md5_dir, char *user, struct namespace *namespacep,
-        int uid_set, int uid_modulo)
+        unsigned uid_set, int uid_modulo)
 {
     char  buf[MAX_MAILBOX_PATH+1];
     char  buf2[MAX_MAILBOX_PATH+1];
@@ -729,12 +732,11 @@ main(int argc, char **argv)
     char *alt_config = NULL;
     char *input_file = NULL;
     const char *md5_dir  = NULL;
-    const char *uid_file = NULL;
-    int   uid_set    = 0;
+    unsigned uid_set    = 0;
     int   uid_modulo = 0;
     int   r = 0;
     int   i;
-    int   max_children = 0;
+    unsigned max_children = 0;
     pid_t pid;
     struct namespace md5_namespace;
     char buf[512];

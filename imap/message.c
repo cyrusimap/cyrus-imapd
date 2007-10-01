@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: message.c,v 1.109 2007/09/28 02:27:46 murch Exp $
+ * $Id: message.c,v 1.110 2007/10/01 18:36:00 murch Exp $
  */
 
 #include <config.h>
@@ -236,7 +236,7 @@ int allow_null;
     char buf[4096+1];
     unsigned char *p, *endp;
     int r = 0;
-    int n;
+    size_t n;
     int sawcr = 0, sawnl;
     int reject8bit = config_getswitch(IMAPOPT_REJECT8BIT);
     int munge8bit = config_getswitch(IMAPOPT_MUNGE8BIT);
@@ -390,7 +390,7 @@ int message_parse_binary_file(FILE *infile, struct body **body)
     int fd = fileno(infile);
     struct stat sbuf;
     struct msg msg;
-    int n;
+    size_t n;
 
     if (fstat(fd, &sbuf) == -1) {
 	syslog(LOG_ERR, "IOERROR: fstat on new message in spool: %m");
@@ -470,7 +470,7 @@ static void message_find_part(struct body *body, const char *section,
 
     if (match) {
 	/* matching part, sanity check the size against the mmap'd file */
-	if (body->content_offset + body->content_size > msg_len) {
+	if ((unsigned long) body->content_offset + body->content_size > msg_len) {
 	    syslog(LOG_ERR, "IOERROR: body part exceeds size of message file");
 	    fatal("body part exceeds size of message file", EC_OSFILE);
 	}
@@ -2529,7 +2529,7 @@ struct ibuf *ibuf;
 bit32 val;
 {
     bit32 buf;
-    int i;
+    unsigned i;
     char *p = (char *)&buf;
     
     message_ibuf_ensure(ibuf, sizeof(bit32));
@@ -2624,7 +2624,7 @@ message_ibuf_ensure(struct ibuf *ibuf,
     char *s;
     int size;
 
-    if (ibuf->last - ibuf->end >= len) return 0;
+    if ((unsigned) (ibuf->last - ibuf->end) >= len) return 0;
     if (len < IBUFGROWSIZE) len = IBUFGROWSIZE;
 
     s = ibuf->start - sizeof(bit32);

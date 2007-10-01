@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: search_engines.c,v 1.8 2007/09/28 02:27:47 murch Exp $
+ * $Id: search_engines.c,v 1.9 2007/10/01 18:36:00 murch Exp $
  */
 
 #include <config.h>
@@ -115,7 +115,7 @@ static int parse_doc_name(SquatSearchResult* r, char const* doc_name) {
   
   /* now we need to convert the UID to the message sequence number */
   index = index_finduid(doc_UID);
-  if (index < 1 || index > imapd_exists || doc_UID != index_getuid(index)) {
+  if (index < 1 || index > imapd_exists || doc_UID != (int) index_getuid(index)) {
     return -1;
   }
 

@@ -1,5 +1,5 @@
 /* retry.c -- keep trying write system calls
- * $Id: retry.c,v 1.23 2006/11/30 17:11:22 murch Exp $
+ * $Id: retry.c,v 1.24 2007/10/01 18:36:00 murch Exp $
  * 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -56,7 +56,7 @@
  * Keep calling the read() system call with 'fd', 'buf', and 'nbyte'
  * until all the data is read in or an error occurs.
  */
-int retry_read(int fd, char *buf, size_t nbyte)
+int retry_read(int fd, void *buf, size_t nbyte)
 {
     int n;
     int nread = 0;
@@ -88,7 +88,7 @@ int retry_read(int fd, char *buf, size_t nbyte)
  * Keep calling the write() system call with 'fd', 'buf', and 'nbyte'
  * until all the data is written out or an error occurs.
  */
-int retry_write(int fd, const char *buf, size_t nbyte)
+int retry_write(int fd, const void *buf, size_t nbyte)
 {
     int n;
     int written = 0;
