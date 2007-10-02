@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.51 2007/10/01 18:36:00 murch Exp $
+ * $Id: mupdate-client.c,v 1.52 2007/10/02 01:20:13 jeaton Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -88,6 +88,7 @@ int mupdate_connect(const char *server,
 {
     mupdate_handle *h = NULL;
     int local_cbs = 0;
+    char *status = NULL;
     
     if(!handle)
 	return MUPDATE_BADPARAM;
@@ -112,12 +113,13 @@ int mupdate_connect(const char *server,
     }
 
     h->conn = backend_connect(NULL, server, &protocol[PROTOCOL_MUPDATE],
-			      "", cbs, NULL);
+			      "", cbs, &status);
 
     /* xxx unclear that this is correct, but it prevents a memory leak */
     if (local_cbs) free_callbacks(cbs);
 
     if (!h->conn) {
+        syslog(LOG_ERR, "mupdate_connect failed: %s", status ? status : "unknown error");
 	return MUPDATE_NOCONN;
     }
     
