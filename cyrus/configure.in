@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.299 2007/09/27 17:08:22 murch Exp $
+dnl $Id: configure.in,v 1.300 2007/10/02 18:33:50 murch Exp $
 dnl
 
 
@@ -242,10 +242,6 @@ if test "$sievedir" != "no"; then
 	AC_PROG_YACC
 	AC_PROG_LEX
 	AC_CHECK_LIB(fl,main)
-
- 	AC_SEARCH_LIBS(regcomp, pcreposix, [LIBS="${LIBS} -lpcre -lpcreposix"
- 			AC_DEFINE(ENABLE_REGEX,[],[Do we have a decent regex library?])
-		 	AC_CHECK_HEADER(pcreposix.h, AC_DEFINE(HAVE_PCREPOSIX,[],[Do we have pcreposix.h?]))])
 
  	AC_SEARCH_LIBS(regcomp, rx regex, [
  			AC_DEFINE(ENABLE_REGEX,[],[Do we have a decent regex library?])
@@ -1057,7 +1053,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.299 2007/09/27 17:08:22 murch Exp $ */
+/* $Id: configure.in,v 1.300 2007/10/02 18:33:50 murch Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
