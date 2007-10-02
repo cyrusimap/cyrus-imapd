@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.22 2007/09/28 02:27:47 murch Exp $
+ * $Id: sync_client.c,v 1.23 2007/10/02 01:47:33 jeaton Exp $
  */
 
 #include <config.h>
@@ -3566,9 +3566,9 @@ int main(int argc, char **argv)
 		if ((len == 0) || (buf[0] == '#'))
 		    continue;
 
-		if (!sync_folder_lookup_byname(folder_list, argv[i]))
+		if (!sync_folder_lookup_byname(folder_list, buf))
 		    sync_folder_list_add(folder_list,
-					 NULL, argv[i], NULL, 0, 0, NULL);
+					 NULL, buf, NULL, 0, 0, NULL);
 	    }
 	    fclose(file);
 	} else for (i = optind; i < argc; i++) {
