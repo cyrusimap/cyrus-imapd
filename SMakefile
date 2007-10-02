@@ -40,7 +40,7 @@
 # This file is specific to Carnegie Mellon University's
 # software build process
 # 
-# $Id: SMakefile,v 1.98 2006/11/30 17:11:16 murch Exp $
+# $Id: SMakefile,v 1.99 2007/10/02 01:37:22 jeaton Exp $
 #
 
 NEW_AUTOTOOLS=yes
@@ -137,7 +137,7 @@ DB_CONFIG=""
 SASL_CONFIG="--with-staticsasl=/usr/local --with-gssapi=/usr/local"
 #KRB_CONFIG="--enable-statickrb --with-krb=/usr/local"
 KRB_CONFIG="--with-krb=/usr/local"
-FEATURE_CONFIG="--enable-murder --enable-cmulocal --enable-nntp --enable-idled"
+FEATURE_CONFIG="--enable-murder --enable-cmulocal --enable-nntp --enable-idled --enable-replication"
 EXT_PACKAGE_CONFIG="--with-inn=/usr/news --with-ucdsnmp=/usr/local"
 
 MFCOMMAND="./configure $WITHAUTH $KRB_CONFIG $DB_CONFIG --enable-experiment --with-cyrus-group=staff $FEATURE_CONFIG $EXT_PACKAGE_CONFIG $SASL_CONFIG $DEBUG"
