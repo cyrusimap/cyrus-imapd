@@ -93,7 +93,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.56 2007/09/28 14:23:36 wescraig Exp $ */
+/* $Id: tls.c,v 1.57 2007/10/02 20:32:07 murch Exp $ */
 
 #include <config.h>
 
@@ -219,6 +219,7 @@ static RSA *tmp_rsa_cb(SSL * s __attribute__((unused)),
     return (rsa_tmp);
 }
 
+#if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
 /* Logic copied from OpenSSL apps/s_server.c: give the TLS context
  * DH params to work with DHE-* cipher suites. Hardcoded fallback
  * in case no DH params in tls_key_file or tls_cert_file.
@@ -259,6 +260,7 @@ static DH *load_dh_param(const char *keyfile, const char *certfile)
 
     return(ret);
 }
+#endif /* OPENSSL_VERSION_NUMBER >= 0x0090801fL */
 
 /* taken from OpenSSL apps/s_cb.c */
 
@@ -724,9 +726,12 @@ int     tls_init_serverengine(const char *ident,
 	return (-1);
     }
     SSL_CTX_set_tmp_rsa_callback(s_ctx, tmp_rsa_cb);
+
+#if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
     /* Load DH params for DHE-* key exchanges */
     SSL_CTX_set_tmp_dh(s_ctx, load_dh_param(s_key_file, s_cert_file));
-    /* FIXME: Load ECDH params for ECDHE suites: when OpenSSL >= 0.9.9 is released */
+    /* FIXME: Load ECDH params for ECDHE suites when 0.9.9 is released */
+#endif
 
     verify_depth = verifydepth;
     if (askcert!=0)
