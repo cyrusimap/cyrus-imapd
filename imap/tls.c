@@ -93,7 +93,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.57 2007/10/02 20:32:07 murch Exp $ */
+/* $Id: tls.c,v 1.58 2007/10/02 20:32:40 murch Exp $ */
 
 #include <config.h>
 
@@ -260,7 +260,7 @@ static DH *load_dh_param(const char *keyfile, const char *certfile)
 
     return(ret);
 }
-#endif /* OPENSSL_VERSION_NUMBER >= 0x0090801fL */
+#endif /* OPENSSL_VERSION_NUMBER >= 0x009080fL */
 
 /* taken from OpenSSL apps/s_cb.c */
 
