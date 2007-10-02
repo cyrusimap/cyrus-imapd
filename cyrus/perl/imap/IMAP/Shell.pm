@@ -37,7 +37,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Shell.pm,v 1.40 2007/09/16 14:12:33 murch Exp $
+# $Id: Shell.pm,v 1.41 2007/10/02 01:49:20 jeaton Exp $
 #
 # A shell framework for Cyrus::IMAP::Admin
 #
@@ -698,13 +698,25 @@ sub _sc_listacl {
       my $flags = $mbx->[1];
       next if($flags =~ /(\\noselect|\\nonexistent|\\placeholder)/i);
       $lfh->[1]->print($name,":\n");
-      $nargv[0] = $name;
-      if(showacl(2,@nargv) != 0) {
-	return 1;
+      my %acl = $$cyrref->listaclmailbox($name);
+      if (defined $$cyrref->error) {
+         $lfh->[2]->print($$cyrref->error, "\n");
+         next;
+      }
+      foreach my $acl (keys %acl) {
+        $lfh->[1]->print("  ", $acl, " ", $acl{$acl}, "\n");
       }
     }
   } else {
-    return showacl(0,@nargv);
+    my %acl = $$cyrref->listaclmailbox(@nargv);
+    if (defined $$cyrref->error) {
+       $lfh->[2]->print($$cyrref->error, "\n");
+       return 1;
+    }
+
+    foreach my $acl (keys %acl) {
+      $lfh->[1]->print($acl, " ", $acl{$acl}, "\n");
+    }
   }
   return 0;
 }
