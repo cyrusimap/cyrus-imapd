@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.176 2007/10/01 18:36:00 murch Exp $
+ * $Id: pop3d.c,v 1.177 2007/10/03 17:06:09 murch Exp $
  */
 #include <config.h>
 
@@ -1362,7 +1362,6 @@ void cmd_auth(char *arg)
     int r, sasl_result;
     char *authtype;
     char *canon_user;
-    void *tmp;
 
     /* if client didn't specify an argument we give them the list
      *
@@ -1458,7 +1457,6 @@ void cmd_auth(char *arg)
     /* get the userid from SASL --- already canonicalized from
      * mysasl_proxy_policy()
      */
-    tmp = canon_user;
     sasl_result = sasl_getprop(popd_saslconn, SASL_USERNAME,
 			       (const void **) &canon_user);
     if (sasl_result != SASL_OK) {
