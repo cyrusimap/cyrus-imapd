@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.14 2007/10/01 18:36:00 murch Exp $
+ * $Id: sync_server.c,v 1.15 2007/10/03 10:42:42 murch Exp $
  */
 
 #include <config.h>
@@ -1916,10 +1916,7 @@ static void cmd_upload(struct mailbox *mailbox,
                 }
             }
 
-            /* YYY Problem: sync_server needs source of Message-GUID for
-               new uploaded messages. Schema 2? */
-
-            message = sync_message_add(message_list, NULL /* YYY */);
+            message = sync_message_add(message_list, &item->guid);
 
             r = sync_getsimple(sync_in, sync_out, message_list, message);
 
