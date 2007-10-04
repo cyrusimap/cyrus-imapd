@@ -6,7 +6,7 @@
  *
  * includes support for ISPN virtual host extensions
  *
- * $Id: ipurge.c,v 1.29 2007/10/01 18:35:59 murch Exp $
+ * $Id: ipurge.c,v 1.30 2007/10/04 14:33:50 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -68,6 +68,7 @@
 #include "xmalloc.h"
 #include "mboxlist.h"
 #include "util.h"
+#include "sync_log.h"
 
 /* config.c stuff */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
@@ -186,6 +187,8 @@ int main (int argc, char *argv[]) {
   quotadb_init(0);
   quotadb_open(NULL);
 
+  sync_log_init();
+
   if (optind == argc) { /* do the whole partition */
     strcpy(buf, "*");
     (*purge_namespace.mboxlist_findall)(&purge_namespace, buf, 1, 0, 0,
@@ -269,6 +272,8 @@ int purge_me(char *name, int matchlen __attribute__((unused)),
   the_box.index_lock_count = 1;
 
   mailbox_expunge(&the_box, purge_check, &stats, EXPUNGE_FORCE);
+
+  sync_log_mailbox(the_box.name);
   mailbox_close(&the_box);
 
   print_stats(&stats);

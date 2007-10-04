@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- * $Id: mailbox.h,v 1.87 2007/10/01 18:35:59 murch Exp $
+ * $Id: mailbox.h,v 1.88 2007/10/04 14:33:50 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -342,6 +342,11 @@ extern int mailbox_read_header_acl(struct mailbox *mailbox);
 extern int mailbox_read_acl(struct mailbox *mailbox, 
 			    struct auth_state *auth_state);
 extern int mailbox_read_index_header(struct mailbox *mailbox);
+extern int mailbox_read_index_record_from_mapped(struct mailbox *mailbox,
+						 const char *index_base,
+						 unsigned long index_len,
+						 unsigned msgno,
+						 struct index_record *record);
 extern int mailbox_read_index_record(struct mailbox *mailbox,
 				     unsigned msgno,
 				     struct index_record *record);
