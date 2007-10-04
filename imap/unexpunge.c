@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: unexpunge.c,v 1.9 2007/10/04 13:19:36 murch Exp $
+ * $Id: unexpunge.c,v 1.10 2007/10/04 14:33:51 murch Exp $
  */
 
 #include <config.h>
@@ -73,6 +73,7 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+#include "sync_log.h"
 
 /* global state */
 const int config_need_data = 0;
@@ -327,7 +328,7 @@ int restore_expunged(struct mailbox *mailbox,
     memcpy(buf, expunge_index_base, mailbox->start_offset);
 
     /* Update uidvalidity */
-    *((bit32 *)(buf+OFFSET_UIDVALIDITY)) = now;
+    *((bit32 *)(buf+OFFSET_UIDVALIDITY)) = htonl(now);
 
     /* Fix up exists */
     newexists = ntohl(*((bit32 *)(buf+OFFSET_EXISTS))) - *numrestored;
@@ -483,6 +484,8 @@ int main(int argc, char *argv[])
     quotadb_init(0);
     quotadb_open(NULL);
 
+    sync_log_init();
+
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&unex_namespace, 1)) != 0) {
 	syslog(LOG_ERR, error_message(r));
@@ -620,6 +623,8 @@ int main(int argc, char *argv[])
     mailbox_unlock_pop(&mailbox);
     mailbox_unlock_index(&mailbox);
     mailbox_unlock_header(&mailbox);
+
+    if (!r) sync_log_mailbox(mailbox.name);
     mailbox_close(&mailbox);
 
     quotadb_close();

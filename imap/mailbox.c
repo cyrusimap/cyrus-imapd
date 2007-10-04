@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.174 2007/10/01 18:35:59 murch Exp $
+ * $Id: mailbox.c,v 1.175 2007/10/04 14:33:50 murch Exp $
  *
  */
 
@@ -297,8 +297,7 @@ unsigned mailbox_cached_header_inline(const char *text)
     return BIT32_MAX;
 }
 
-unsigned long
-mailbox_cache_size(struct mailbox *mailbox, unsigned msgno)
+unsigned long mailbox_cache_size(struct mailbox *mailbox, unsigned msgno)
 {
     const char *p;
     unsigned long cache_offset;
@@ -962,27 +961,27 @@ int mailbox_read_index_header(struct mailbox *mailbox)
 }
 
 /*
- * Read an index record from a mailbox
+ * Read an index record from a mapped index file
  */
-int
-mailbox_read_index_record(mailbox, msgno, record)
-struct mailbox *mailbox;
-unsigned msgno;
-struct index_record *record;
+int mailbox_read_index_record_from_mapped(struct mailbox *mailbox,
+					  const char *index_base,
+					  unsigned long index_len,
+					  unsigned msgno,
+					  struct index_record *record)
 {
     unsigned long offset;
     unsigned const char *buf;
     int n;
 
     offset = mailbox->start_offset + (msgno-1) * mailbox->record_size;
-    if (offset + INDEX_RECORD_SIZE > mailbox->index_len) {
+    if (offset + INDEX_RECORD_SIZE > index_len) {
 	syslog(LOG_ERR,
 	       "IOERROR: index record %u for %s past end of file",
 	       msgno, mailbox->name);
 	return IMAP_IOERROR;
     }
 
-    buf = (unsigned char*) mailbox->index_base + offset;
+    buf = (unsigned char*) index_base + offset;
 
     record->uid = ntohl(*((bit32 *)(buf+OFFSET_UID)));
     record->internaldate = ntohl(*((bit32 *)(buf+OFFSET_INTERNALDATE)));
@@ -1005,6 +1004,20 @@ struct index_record *record;
     record->modseq = ntohl(*((bit32 *)(buf+OFFSET_MODSEQ)));
 #endif
     return 0;
+}
+
+/*
+ * Read an index record from a mailbox
+ */
+int mailbox_read_index_record(struct mailbox *mailbox,
+			      unsigned msgno,
+			      struct index_record *record)
+{
+    return mailbox_read_index_record_from_mapped(mailbox,
+						 mailbox->index_base,
+						 mailbox->index_len,
+						 msgno,
+						 record);
 }
 
 /*
