@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.23 2007/10/02 01:47:33 jeaton Exp $
+ * $Id: sync_client.c,v 1.24 2007/10/04 19:11:46 murch Exp $
  */
 
 #include <config.h>
@@ -115,6 +115,7 @@ void printstring(const char *s __attribute__((unused)))
 extern char *optarg;
 extern int optind;
 
+static const char *servername = NULL;
 static struct protstream *toserver   = NULL;
 static struct protstream *fromserver = NULL;
 
@@ -153,7 +154,8 @@ static int usage(const char *name)
 
 void fatal(const char *s, int code)
 {
-    fprintf(stderr, "sync_client: %s\n", s);
+    fprintf(stderr, "Fatal error: %s\n", s);
+    syslog(LOG_ERR, "Fatal error: %s", s);
     exit(code);
 }
 
@@ -2821,13 +2823,11 @@ static int do_sync(const char *filename)
             continue;
         }
 
-	if ((c = getastring(input, 0, &arg1)) == EOF)
-            break;
+	if ((c = getastring(input, 0, &arg1)) == EOF) break;
         arg1s = arg1.s;
 
         if (c == ' ') {
-            if ((c = getastring(input, 0, &arg2)) == EOF)
-                break;
+            if ((c = getastring(input, 0, &arg2)) == EOF) break;
             arg2s = arg2.s;
 
         } else 
@@ -3140,6 +3140,12 @@ static int do_sync(const char *filename)
 
 /* ====================================================================== */
 
+enum {
+    RESTART_NONE = 0,
+    RESTART_NORMAL,
+    RESTART_RECONNECT
+};
+
 int do_daemon_work(const char *sync_log_file, const char *sync_shutdown_file,
 		   unsigned long timeout, unsigned long min_delta,
 		   int *restartp)
@@ -3151,49 +3157,77 @@ int do_daemon_work(const char *sync_log_file, const char *sync_shutdown_file,
     int    delta;
     struct stat sbuf;
 
-    *restartp = 0;
+    *restartp = RESTART_NONE;
 
+    /* Create a work log filename.  Use the parent PID so we can
+     * try to reprocess it if the child fails.
+     */
     work_file_name = xmalloc(strlen(sync_log_file)+20);
     snprintf(work_file_name, strlen(sync_log_file)+20,
-             "%s-%d", sync_log_file, getpid());
+             "%s-%d", sync_log_file, getppid());
 
     session_start = time(NULL);
 
     while (1) {
         single_start = time(NULL);
 
+	/* Check for shutdown file */
         if (sync_shutdown_file && !stat(sync_shutdown_file, &sbuf)) {
             unlink(sync_shutdown_file);
             break;
         }
 
+	/* See if its time to RESTART */
         if ((timeout > 0) &&
 	    ((single_start - session_start) > (time_t) timeout)) {
-            *restartp = 1;
+            *restartp = RESTART_NORMAL;
             break;
         }
 
-        if (stat(sync_log_file, &sbuf) < 0) {
-            if (min_delta > 0) {
-                sleep(min_delta);
-            } else {
-                usleep(100000);    /* 1/10th second */
-            }
-            continue;
-        }
+        if ((stat(work_file_name, &sbuf) == 0) &&
+	    (sbuf.st_mtime - single_start < 3600)) {
+	    /* Existing work log file from our parent < 1 hour old */
+	    /* XXX  Is 60 minutes a resonable timeframe? */
+	    syslog(LOG_NOTICE,
+		   "Reprocessing sync log file %s", work_file_name);
+	}
+	else {
+	    /* Check for sync_log file */
+	    if (stat(sync_log_file, &sbuf) < 0) {
+		if (min_delta > 0) {
+		    sleep(min_delta);
+		} else {
+		    usleep(100000);    /* 1/10th second */
+		}
+		continue;
+	    }
 
-        if (rename(sync_log_file, work_file_name) < 0) {
-            syslog(LOG_ERR, "Rename %s -> %s failed: %m",
-                   sync_log_file, work_file_name);
-            exit(1);
-        }
+	    /* Move sync_log to our work file */
+	    if (rename(sync_log_file, work_file_name) < 0) {
+		syslog(LOG_ERR, "Rename %s -> %s failed: %m",
+		       sync_log_file, work_file_name);
+		r = IMAP_IOERROR;
+		break;
+	    }
+	}
 
-        if ((r=do_sync(work_file_name)))
-            return(r);
-        
+	/* Process the work log */
+        if ((r=do_sync(work_file_name))) {
+	    syslog(LOG_ERR,
+		   "Processing sync log file %s failed: %s",
+		   work_file_name, error_message(r));
+
+	    /* Force a reconnect */
+	    *restartp = RESTART_RECONNECT;
+	    r = 0;
+	    break;
+	}
+
+	/* Remove the work log */
         if (unlink(work_file_name) < 0) {
             syslog(LOG_ERR, "Unlink %s failed: %m", work_file_name);
-            exit(1);
+	    r = IMAP_IOERROR;
+	    break;
         }
         delta = time(NULL) - single_start;
 
@@ -3202,18 +3236,20 @@ int do_daemon_work(const char *sync_log_file, const char *sync_shutdown_file,
     }
     free(work_file_name);
 
-    if (*restartp == 0)
-        return(0);
+    if (*restartp == RESTART_NORMAL) {
+	prot_printf(toserver, "RESTART\r\n"); 
+	prot_flush(toserver);
 
-    prot_printf(toserver, "RESTART\r\n"); 
-    prot_flush(toserver);
+	r = sync_parse_code("RESTART", fromserver, SYNC_PARSE_EAT_OKLINE, NULL);
 
-    r = sync_parse_code("RESTART", fromserver, SYNC_PARSE_EAT_OKLINE, NULL);
-
-    if (r)
-        syslog(LOG_ERR, "sync_client RESTART failed");
-    else
-        syslog(LOG_INFO, "sync_client RESTART succeeded");
+	if (r) {
+	    syslog(LOG_ERR, "sync_client RESTART failed: %s",
+		   error_message(r));
+	} else {
+	    syslog(LOG_INFO, "sync_client RESTART succeeded");
+	}
+	r = 0;
+    }
 
     return(r);
 }
@@ -3239,6 +3275,7 @@ struct backend *replica_connect(struct backend *be, const char *servername,
     if (!be) {
 	fprintf(stderr, "Can not connect to server '%s'\n",
 		servername);
+	syslog(LOG_ERR, "Can not connect to server '%s'", servername);
 	_exit(1);
     }
 
@@ -3246,15 +3283,17 @@ struct backend *replica_connect(struct backend *be, const char *servername,
      *
      * http://en.wikipedia.org/wiki/Nagle's_algorithm
      */ 
-    if ((proto = getprotobyname("tcp")) != NULL) {
-	int on = 1;
+    if (servername[0] != '/') {
+	if ((proto = getprotobyname("tcp")) != NULL) {
+	    int on = 1;
 
-	if (setsockopt(be->sock, proto->p_proto, TCP_NODELAY,
-		       (void *) &on, sizeof(on)) != 0) {
-	    syslog(LOG_ERR, "unable to setsocketopt(TCP_NODELAY): %m");
+	    if (setsockopt(be->sock, proto->p_proto, TCP_NODELAY,
+			   (void *) &on, sizeof(on)) != 0) {
+		syslog(LOG_ERR, "unable to setsocketopt(TCP_NODELAY): %m");
+	    }
+	} else {
+	    syslog(LOG_ERR, "unable to getprotobyname(\"tcp\"): %m");
 	}
-    } else {
-	syslog(LOG_ERR, "unable to getprotobyname(\"tcp\"): %m");
     }
 
     return be;
@@ -3269,9 +3308,8 @@ void do_daemon(const char *sync_log_file, const char *sync_shutdown_file,
     int status;
     int restart;
 
-    /* for a child so we can release from master */
-    if ((pid=fork()) < 0)
-	fatal("fork failed", EC_SOFTWARE);
+    /* fork a child so we can release from master */
+    if ((pid=fork()) < 0) fatal("fork failed", EC_SOFTWARE);
 
     if (pid != 0) { /* parent */
 	cyrus_done();
@@ -3285,18 +3323,23 @@ void do_daemon(const char *sync_log_file, const char *sync_shutdown_file,
         return;
     }
 
-    do {
-        if ((pid=fork()) < 0)
-            fatal("fork failed", EC_SOFTWARE);
+    signal(SIGPIPE, SIG_IGN); /* don't fail on server disconnects */
 
-        if (pid == 0) {
+    do {
+	/* fork a child so we can RESTART (flush memory) */
+        if ((pid=fork()) < 0) fatal("fork failed", EC_SOFTWARE);
+
+        if (pid == 0) { /* child */
+
 	    if (be->sock == -1) {
 		/* Reopen up connection to server */
-		be = replica_connect(be, be->hostname, cb);
+		be = replica_connect(be, servername, cb);
 
 		if (!be) {
 		    fprintf(stderr, "Can not connect to server '%s'\n",
 			    be->hostname);
+		    syslog(LOG_ERR, "Can not connect to server '%s'",
+			   be->hostname);
 		    _exit(1);
 		}
 
@@ -3312,10 +3355,22 @@ void do_daemon(const char *sync_log_file, const char *sync_shutdown_file,
             if (restart) _exit(EX_TEMPFAIL);
             _exit(0);
         }
-        if (waitpid(pid, &status, 0) < 0)
-            fatal("waitpid failed", EC_SOFTWARE);
+
+	/* parent */
+        if (waitpid(pid, &status, 0) < 0) fatal("waitpid failed", EC_SOFTWARE);
+
 	backend_disconnect(be);
     } while (WIFEXITED(status) && (WEXITSTATUS(status) == EX_TEMPFAIL));
+
+    if (WIFEXITED(status)) {
+	syslog(LOG_ERR, "process %d exited, status %d\n", pid, 
+	       WEXITSTATUS(status));
+    }
+    if (WIFSIGNALED(status)) {
+	syslog(LOG_ERR, 
+	       "process %d exited, signaled to death by %d\n",
+	       pid, WTERMSIG(status));
+    }
 }
 
 /* ====================================================================== */
@@ -3339,7 +3394,6 @@ int main(int argc, char **argv)
     int   opt, i = 0;
     char *alt_config     = NULL;
     char *input_filename = NULL;
-    const char *servername = NULL;
     int   r = 0;
     int   exit_rc = 0;
     int   mode = MODE_UNKNOWN;
