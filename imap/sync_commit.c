@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_commit.c,v 1.10 2007/10/04 14:33:51 murch Exp $
+ * $Id: sync_commit.c,v 1.11 2007/10/04 19:22:39 murch Exp $
  */
 
 #include <config.h>
@@ -260,7 +260,7 @@ static int sync_delete_single(struct mailbox *mailbox, int mask,
     return ((unlink(fnamebuf) < 0) ? IMAP_IOERROR : 0);
 }
 
-/* Update index/expunge cache */
+/* Update index/expunge/cache header */
 static void sync_write_header(struct mailbox *mailbox,
 			      const char *index_base,
 			      FILE *file)
@@ -426,6 +426,9 @@ static int sync_combine_commit(struct mailbox *mailbox,
     if (expunge_fd != -1) {
         map_refresh(expunge_fd, 1, &expunge_base, &expunge_len, size,
                     "expunge", mailbox->name);
+    }
+
+    if (expunge_base && (expunge_len >= INDEX_HEADER_SIZE)) {
         expunge_exists = ntohl(*((bit32 *)(expunge_base+OFFSET_EXISTS)));
         expunge_last_appenddate
             = ntohl(*((bit32 *)(expunge_base+OFFSET_LAST_APPENDDATE)));
@@ -880,7 +883,6 @@ static int sync_append_commit(struct mailbox *mailbox,
 	}
     }
 
-    free(hbuf);
     free(index_chunk);
     free(cache_iovec);
     return(r);
@@ -890,7 +892,6 @@ static int sync_append_commit(struct mailbox *mailbox,
     ftruncate(mailbox->cache_fd, mailbox->cache_size);
     ftruncate(mailbox->index_fd, mailbox->index_size);
 
-    free(hbuf);
     free(index_chunk);
     free(cache_iovec);
     return(IMAP_IOERROR);
