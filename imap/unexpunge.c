@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: unexpunge.c,v 1.8 2007/10/01 18:36:00 murch Exp $
+ * $Id: unexpunge.c,v 1.9 2007/10/04 13:19:36 murch Exp $
  */
 
 #include <config.h>
@@ -284,7 +284,7 @@ int restore_expunged(struct mailbox *mailbox,
     memcpy(buf, mailbox->index_base, mailbox->start_offset);
 
     /* Update uidvalidity */
-    *((bit32 *)(buf+OFFSET_UIDVALIDITY)) = now;
+    *((bit32 *)(buf+OFFSET_UIDVALIDITY)) = htonl(now);
 
     /* Fix up exists */
     newexists = ntohl(*((bit32 *)(buf+OFFSET_EXISTS))) + *numrestored;
