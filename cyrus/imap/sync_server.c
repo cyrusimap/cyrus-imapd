@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.15 2007/10/03 10:42:42 murch Exp $
+ * $Id: sync_server.c,v 1.16 2007/10/04 18:04:03 murch Exp $
  */
 
 #include <config.h>
@@ -383,21 +383,6 @@ int service_main(int argc __attribute__((unused)),
     sync_in = prot_new(0, 0);
     sync_out = prot_new(1, 1);
 
-    /* Disable Nagle's Algorithm => increase throughput
-     *
-     * http://en.wikipedia.org/wiki/Nagle's_algorithm
-     */
-    if ((proto = getprotobyname("tcp")) != NULL) {
-	int on = 1;
-
-	if (setsockopt(1, proto->p_proto, TCP_NODELAY,
-		       (void *) &on, sizeof(on)) != 0) {
-	    syslog(LOG_ERR, "unable to setsocketopt(TCP_NODELAY): %m");
-	}
-    } else {
-	syslog(LOG_ERR, "unable to getprotobyname(\"tcp\"): %m");
-    }
-
     /* Find out name of client host */
     salen = sizeof(sync_remoteaddr);
     if (getpeername(0, (struct sockaddr *)&sync_remoteaddr, &salen) == 0 &&
@@ -447,6 +432,21 @@ int service_main(int argc __attribute__((unused)),
 		      remoteip, 60) == 0) {
 	    sasl_setprop(sync_saslconn, SASL_IPREMOTEPORT, remoteip);  
 	    saslprops.ipremoteport = xstrdup(remoteip);
+	}
+
+	/* Disable Nagle's Algorithm => increase throughput
+	 *
+	 * http://en.wikipedia.org/wiki/Nagle's_algorithm
+	 */
+	if ((proto = getprotobyname("tcp")) != NULL) {
+	    int on = 1;
+
+	    if (setsockopt(1, proto->p_proto, TCP_NODELAY,
+			   (void *) &on, sizeof(on)) != 0) {
+		syslog(LOG_ERR, "unable to setsocketopt(TCP_NODELAY): %m");
+	    }
+	} else {
+	    syslog(LOG_ERR, "unable to getprotobyname(\"tcp\"): %m");
 	}
     } else {
 	/* we're not connected to an internet socket! */
