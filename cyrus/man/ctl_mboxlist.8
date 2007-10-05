@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: ctl_mboxlist.8,v 1.11 2007/07/18 18:56:11 murch Exp $
+.\" $Id: ctl_mboxlist.8,v 1.12 2007/10/05 18:39:48 murch Exp $
 .SH NAME
 ctl_mboxlist \- perform operations on the mailbox list database
 .SH SYNOPSIS
@@ -81,6 +81,9 @@ ctl_mboxlist \- perform operations on the mailbox list database
 ]
 [
 \fB\-w \fR
+]
+[
+\fB\-i \fR
 ]
 .br
              [
@@ -144,6 +147,9 @@ USE THIS OPTION WITH CARE, as it allows namespace collisions into the murder.
 .B \-w
 When used with -m, print out what would be done but do not perform the
 operations.
+.TP
+.B \-i
+When used with -m, asks for verification before deleting local mailboxes.
 .TP
 .B \-v
 Verify the consistency of the mailbox list database and the spool
