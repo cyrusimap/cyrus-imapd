@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.58 2007/09/28 02:27:46 murch Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.59 2007/10/05 18:39:48 murch Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -130,6 +130,7 @@ static struct mb_node *wipe_head = NULL, *unflag_head = NULL;
  * mupdate */
 static int local_authoritative = 0;
 static int warn_only = 0;
+static int interactive = 0;
 
 /* For each mailbox that this guy gets called for, check that
  * it is a mailbox that:
@@ -286,6 +287,14 @@ static int dump_cb(void *rockp,
 	       !mupdate_find(d->h, name, &unused_mbdata)) {
 		/* since it lives on another server, schedule it for a wipe */
 		struct mb_node *next;
+
+		/*
+		 * Verify that what we found points at another host,
+		 * not back to this host.  Good idea, since if our assumption
+		 * if wrong, we'll end up removing the authoritative
+		 * mailbox.
+		 */
+		assert(strcmp(realpart, unused_mbdata->server));
 		
 		if (config_mupdate_config != 
 		    IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) {
@@ -362,6 +371,29 @@ static int dump_cb(void *rockp,
     free(acl);
 
     return 0;
+}
+
+/*
+ * True iff user types Y\n or y\n.  Anthing else is false.
+ */
+static int yes(void)
+{
+    int c, answer = 0;
+
+    c = getchar();
+    if (c == 'Y' || c == 'y') {
+	answer = 1;
+	
+	while ((c = getchar()) != EOF) {
+	    if (c == '\n') {
+		break;
+	    } else {
+		answer = 0;
+	    }
+	}
+    }
+
+    return(answer);
 }
 
 /* Resyncing with mupdate:
@@ -480,6 +512,19 @@ void do_dump(enum mboxop op, const char *part, int purge)
 	}
 
 	/* Delete local mailboxes where needed (wipe_head) */
+	if (interactive) {
+	    int count = 0;
+	    struct mb_node *me;
+
+	    for (me = wipe_head; me != NULL; me = me->next) count++;
+
+	    fprintf(stderr, "OK to delete %d local mailboxes? ", count);
+	    if (!yes()) {
+		fprintf(stderr, "Cancelled!\n");
+		exit(1);
+	    }
+	}
+
 	while(wipe_head) {
 	    struct mb_node *me = wipe_head;
 	    
@@ -891,7 +936,7 @@ int main(int argc, char *argv[])
 	fatal("must run as the Cyrus user", EC_USAGE);
     }
 
-    while ((opt = getopt(argc, argv, "C:awmdurcxf:p:v")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:awmdurcxf:p:vi")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -959,6 +1004,10 @@ int main(int argc, char *argv[])
 	case 'v':
 	    if (op == NONE) op = VERIFY;
 	    else usage();
+	    break;
+
+	case 'i':
+	    interactive = 1;
 	    break;
 
 	default:
