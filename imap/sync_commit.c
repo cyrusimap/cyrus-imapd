@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_commit.c,v 1.12 2007/10/05 16:28:41 murch Exp $
+ * $Id: sync_commit.c,v 1.13 2007/10/05 18:18:25 murch Exp $
  */
 
 #include <config.h>
@@ -417,7 +417,7 @@ static int sync_combine_commit(struct mailbox *mailbox,
     if (upload_list->count == 0) return(0);   /* NOOP */
 
     sync_counts_clear(&index);
-    sync_counts_clear(&expunge);
+    index.newhighestmodseq = mailbox->highestmodseq;
 
     /* Map cyrus.expunge file if it exists */
     if ((r = sync_open_expunge(mailbox, &expunge_fd, &size)))
@@ -432,6 +432,16 @@ static int sync_combine_commit(struct mailbox *mailbox,
         expunge_exists = ntohl(*((bit32 *)(expunge_base+OFFSET_EXISTS)));
         expunge_last_appenddate
             = ntohl(*((bit32 *)(expunge_base+OFFSET_LAST_APPENDDATE)));
+
+	sync_counts_clear(&expunge);
+#ifdef HAVE_LONG_LONG_INT
+	expunge.newhighestmodseq =
+	    align_ntohll(expunge_base+OFFSET_HIGHESTMODSEQ_64);
+#else
+	expunge.newhighestmodseq =
+	    ntohl(*((bit32 *)(expunge_base+OFFSET_HIGHESTMODSEQ)));
+    }
+#endif
     }
 
     /* expunge_uidmap is list of msgnos sorted in ascending UID */
@@ -690,7 +700,7 @@ static int sync_append_commit(struct mailbox *mailbox,
     int   n, r = 0;
     long last_offset;
     struct txn *tid = NULL;
-    modseq_t highestmodseq = 0;
+    modseq_t highestmodseq = mailbox->highestmodseq;
 
     if (upload_list->count == 0) return(0);   /* NOOP */
 
