@@ -93,7 +93,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.58 2007/10/02 20:32:40 murch Exp $ */
+/* $Id: tls.c,v 1.59 2007/10/05 19:04:19 murch Exp $ */
 
 #include <config.h>
 
@@ -433,7 +433,7 @@ static int new_session_cb(SSL *ssl __attribute__((unused)),
 			  SSL_SESSION *sess)
 {
     int len;
-    unsigned char *data = NULL, *asn;
+    unsigned char *data = NULL;
     time_t expire;
     int ret = -1;
 
@@ -452,7 +452,7 @@ static int new_session_cb(SSL *ssl __attribute__((unused)),
 
     /* transform the session into its ASN1 representation */
     if (data) {
-	asn = data + sizeof(time_t);
+	unsigned char *asn = data + sizeof(time_t);
 	len = i2d_SSL_SESSION(sess, &asn);
 	if (!len) syslog(LOG_ERR, "i2d_SSL_SESSION failed");
     }
