@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.c,v 1.15 2007/09/28 02:27:47 murch Exp $
+ * $Id: sync_support.c,v 1.16 2007/10/05 16:28:41 murch Exp $
  */
 
 #include <config.h>
@@ -1072,13 +1072,15 @@ FILE *sync_message_open(struct sync_message_list *l,
 
 int sync_message_copy_fromstage(struct sync_message *message,
 				struct mailbox *mailbox,
-				unsigned long uid)
+				unsigned long uid,
+				time_t internaldate)
 {
     int r;
     const char *root;
     char *partition, stagefile[MAX_MAILBOX_PATH+1], *p;
     size_t sflen;
     char  target[MAX_MAILBOX_PATH+1];
+    struct utimbuf settime;
  
     /* Find mailbox partition */
     r = mboxlist_detail(mailbox->name, NULL, NULL, NULL, &partition, NULL, NULL);
@@ -1157,7 +1159,12 @@ int sync_message_copy_fromstage(struct sync_message *message,
 
     snprintf(target, MAX_MAILBOX_PATH, "%s/%lu.", mailbox->path, uid);
 
-    return mailbox_copyfile(p, target, 0);
+    r = mailbox_copyfile(p, target, 0);
+    if (!r) {
+	settime.actime = settime.modtime = internaldate;
+	utime(target, &settime);
+    }
+    return (r);
 }
 
 void sync_message_list_free(struct sync_message_list **lp)

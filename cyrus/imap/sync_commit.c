@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_commit.c,v 1.11 2007/10/04 19:22:39 murch Exp $
+ * $Id: sync_commit.c,v 1.12 2007/10/05 16:28:41 murch Exp $
  */
 
 #include <config.h>
@@ -485,7 +485,8 @@ static int sync_combine_commit(struct mailbox *mailbox,
     /* Copy messages into target mailfolder (blat existing messages:
      * caused by GUID conflict on messages: sync_client wins) */
     for (item = upload_list->head ; item ; item = item->next) {
-	if (sync_message_copy_fromstage(item->message, mailbox, item->uid)) {
+	if (sync_message_copy_fromstage(item->message, mailbox, item->uid,
+					item->internaldate)) {
             r = IMAP_IOERROR;
 	    goto bail;
 	}
@@ -767,7 +768,8 @@ static int sync_append_commit(struct mailbox *mailbox,
             goto fail;
         }
 #else
-	if (sync_message_copy_fromstage(item->message, mailbox, item->uid)) {
+	if (sync_message_copy_fromstage(item->message, mailbox, item->uid,
+		item->internaldate)) {
 	    goto fail;
 	}
 #endif
