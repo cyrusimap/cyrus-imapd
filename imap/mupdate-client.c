@@ -1,6 +1,6 @@
 /* mupdate-client.c -- cyrus murder database clients
  *
- * $Id: mupdate-client.c,v 1.52 2007/10/02 01:20:13 jeaton Exp $
+ * $Id: mupdate-client.c,v 1.53 2007/10/05 19:14:40 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -88,7 +88,7 @@ int mupdate_connect(const char *server,
 {
     mupdate_handle *h = NULL;
     int local_cbs = 0;
-    char *status = NULL;
+    const char *status = NULL;
     
     if(!handle)
 	return MUPDATE_BADPARAM;
