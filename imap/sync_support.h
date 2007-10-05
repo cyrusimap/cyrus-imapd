@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.h,v 1.8 2007/09/28 02:27:47 murch Exp $
+ * $Id: sync_support.h,v 1.9 2007/10/05 16:28:41 murch Exp $
  */
 
 #ifndef INCLUDED_SYNC_SUPPORT_H
@@ -345,7 +345,8 @@ FILE *sync_message_open(struct sync_message_list *l,
 
 int sync_message_copy_fromstage(struct sync_message *message,
 				struct mailbox *mailbox,
-				unsigned long uid);
+				unsigned long uid,
+				time_t internaldate);
 
 /* ====================================================================== */
 
