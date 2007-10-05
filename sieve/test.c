@@ -2,7 +2,7 @@
   
  * test.c -- tester for libsieve
  * Larry Greenfield
- * $Id: test.c,v 1.27 2007/04/20 12:56:47 murch Exp $
+ * $Id: test.c,v 1.28 2007/10/05 19:29:55 murch Exp $
  *
  * usage: "test message script"
  */
@@ -49,9 +49,21 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "tree.h"
 #include "sieve.h"
 #include "imap/message.h"
+#include "xstrlcat.h"
+#include "xstrlcpy.h"
 
 /* XXX so we can link against imap/message.o */
-int mailbox_cached_header_inline(const char *text) { return BIT32_MAX; }
+unsigned mailbox_cached_header_inline(const char *text __attribute__((unused)))
+{ return BIT32_MAX; }
+void message_guid_generate(struct message_guid *guid __attribute__((unused)),
+			   const char *msg_base __attribute__((unused)),
+			   unsigned long msg_len __attribute__((unused)))
+{ return; }
+void message_guid_copy(struct message_guid *dst __attribute__((unused)),
+		       struct message_guid *src __attribute__((unused)))
+{ return; }
+int message_guid_isnull(struct message_guid *guid __attribute__((unused)))
+{ return 0; }
 
 #define HEADERCACHESIZE 1019
 
@@ -322,7 +334,8 @@ int getsize(void *mc, int *size)
     return SIEVE_OK;
 }
 
-int getenvelope(void *v, const char *head, const char ***body)
+int getenvelope(void *v __attribute__((unused)),
+		const char *head, const char ***body)
 {
     static const char *buf[2];
 
@@ -352,7 +365,9 @@ int getbody(void *mc, const char **content_types, sieve_bodypart_t ***parts)
     return (!r ? SIEVE_OK : SIEVE_FAIL);
 }
 
-int getinclude(void *sc, const char *script, int isglobal,
+int getinclude(void *sc __attribute__((unused)),
+	       const char *script,
+	       int isglobal __attribute__((unused)),
 	       char *fpath, size_t size)
 {
     strlcpy(fpath, script, size);
@@ -361,7 +376,8 @@ int getinclude(void *sc, const char *script, int isglobal,
     return SIEVE_OK;
 }
 
-int redirect(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
+int redirect(void *ac, void *ic, void *sc __attribute__((unused)),
+	     void *mc, const char **errmsg __attribute__((unused)))
 {
     sieve_redirect_context_t *rc = (sieve_redirect_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
@@ -372,7 +388,9 @@ int redirect(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
 
-int discard(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
+int discard(void *ac __attribute__((unused)),
+	    void *ic, void *sc __attribute__((unused)),
+	    void *mc, const char **errmsg __attribute__((unused)))
 {
     message_data_t *m = (message_data_t *) mc;
     int *force_fail = (int*) ic;
@@ -382,7 +400,8 @@ int discard(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
 
-int reject(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
+int reject(void *ac, void *ic, void *sc __attribute__((unused)),
+	   void *mc, const char **errmsg __attribute__((unused)))
 {
     sieve_reject_context_t *rc = (sieve_reject_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
@@ -393,7 +412,8 @@ int reject(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
 
-int fileinto(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
+int fileinto(void *ac, void *ic, void *sc __attribute__((unused)),
+	     void *mc, const char **errmsg __attribute__((unused)))
 {
     sieve_fileinto_context_t *fc = (sieve_fileinto_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
@@ -412,7 +432,8 @@ int fileinto(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
 
-int keep(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
+int keep(void *ac, void *ic, void *sc __attribute__((unused)),
+	 void *mc, const char **errmsg __attribute__((unused)))
 {
     sieve_keep_context_t *kc = (sieve_keep_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
@@ -430,7 +451,9 @@ int keep(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
 
-int notify(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
+int notify(void *ac, void *ic, void *sc __attribute__((unused)),
+	   void *mc __attribute__((unused)),
+	   const char **errmsg __attribute__((unused)))
 {
     sieve_notify_context_t *nc = (sieve_notify_context_t *) ac;
     int *force_fail = (int*) ic;
@@ -454,14 +477,17 @@ int notify(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
  
-int mysieve_error(int lineno, const char *msg, void *i, void *s)
+int mysieve_error(int lineno, const char *msg, void *i __attribute__((unused)),
+		  void *s __attribute__((unused)))
 {
     fprintf(stderr, "line %d: %s\r\n", lineno, msg);
 
     return SIEVE_OK;
 }
 
-int mysieve_execute_error(const char *msg, void *i, void *s, void *m)
+int mysieve_execute_error(const char *msg, void *i __attribute__((unused)),
+			  void *s __attribute__((unused)),
+			  void *m __attribute__((unused)))
 {
     fprintf(stderr, "%s\r\n", msg);
  
@@ -469,7 +495,10 @@ int mysieve_execute_error(const char *msg, void *i, void *s, void *m)
 }
 
 
-int autorespond(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
+int autorespond(void *ac, void *ic __attribute__((unused)),
+		void *sc __attribute__((unused)),
+		void *mc __attribute__((unused)),
+		const char **errmsg __attribute__((unused)))
 {
     sieve_autorespond_context_t *arc = (sieve_autorespond_context_t *) ac;
     char yn;
@@ -488,7 +517,8 @@ int autorespond(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
     return SIEVE_FAIL;
 }
 
-int send_response(void *ac, void *ic, void *sc, void *mc, const char **errmsg)
+int send_response(void *ac, void *ic, void *sc __attribute__((unused)),
+		  void *mc, const char **errmsg __attribute__((unused)))
 {
     sieve_send_response_context_t *src = (sieve_send_response_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
