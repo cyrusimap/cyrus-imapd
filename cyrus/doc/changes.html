@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.128 2007/09/24 12:48:29 murch Exp $ -->
+<!-- $Id: changes.html,v 1.129 2007/10/08 14:33:17 murch Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -38,6 +38,9 @@ enabled on a per-mailbox basis with the
 <li>Finally fixed (again?) alignment issues on 64-bit SPARC.</li>
 <li>Changed message GUIDs used by replication to be the SHA1 hash of
 the messages <i>-- based on work of David Carter and Fastmail.fm</i>.</li>
+<li>Improve the performance of commands that operate on
+sequence-sets.  The sequence-set is now parsed only once, and the
+commands operate on a sorted list of seq-ranges.</li>
 <li>Fixed miscellaneous bugs and build issues.</li>
 </ul>
 
@@ -2267,7 +2270,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2007/09/24 12:48:29 $ <br />
+last modified: $Date: 2007/10/08 14:33:17 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>

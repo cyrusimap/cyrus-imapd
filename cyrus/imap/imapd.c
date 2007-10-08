@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.527 2007/10/01 18:35:58 murch Exp $ */
+/* $Id: imapd.c,v 1.528 2007/10/08 14:33:18 murch Exp $ */
 
 #include <config.h>
 
@@ -293,6 +293,8 @@ void appendfieldlist(struct fieldlist **l, char *section,
 		     void *d, size_t size);
 void freefieldlist(struct fieldlist *l);
 void freestrlist(struct strlist *l);
+void appendsequencelist(struct seq_set **l, char *sequence, int usinguid);
+void freesequencelist(struct seq_set *l);
 void appendsearchargs(struct searchargs *s, struct searchargs *s1,
 			 struct searchargs *s2);
 void freesearchargs(struct searchargs *s);
@@ -4812,7 +4814,10 @@ void cmd_expunge(char *tag, char *sequence)
     /* local mailbox */
     if (!(imapd_mailbox->myrights & ACL_EXPUNGE)) r = IMAP_PERMISSION_DENIED;
     else if (sequence) {
-	r = mailbox_expunge(imapd_mailbox, index_expungeuidlist, sequence, 0);
+	struct seq_set *seq_set = index_parse_sequence(sequence, 1, NULL);
+
+	r = mailbox_expunge(imapd_mailbox, index_expungeuidlist, seq_set, 0);
+	freesequencelist(seq_set);
     }
     else {
 	r = mailbox_expunge(imapd_mailbox, (mailbox_decideproc_t *)0,
@@ -7343,7 +7348,7 @@ int parsecharset;
     case '5': case '6': case '7': case '8': case '9':
     case '*':
 	if (imparse_issequence(criteria.s)) {
-	    appendstrlist(&searchargs->sequence, criteria.s);
+	    appendsequencelist(&searchargs->sequence, criteria.s, 0);
 	}
 	else goto badcri;
 	break;
@@ -7719,7 +7724,7 @@ int parsecharset;
 	    if (c != ' ') goto missingarg;
 	    c = getword(imapd_in, &arg);
 	    if (!imparse_issequence(arg.s)) goto badcri;
-	    appendstrlist(&searchargs->uidsequence, arg.s);
+	    appendsequencelist(&searchargs->uidsequence, arg.s, 1);
 	}
 	else if (!strcmp(criteria.s, "unseen")) {
 	    searchargs->flags |= SEARCH_SEEN_UNSET;
@@ -9142,6 +9147,27 @@ void freefieldlist(struct fieldlist *l)
     }
 }
 
+void appendsequencelist(struct seq_set **l, char *sequence, int usinguid)
+{
+    struct seq_set **tail = l;
+
+    while (*tail) tail = &(*tail)->next;
+
+    *tail = index_parse_sequence(sequence, usinguid, NULL);
+}
+
+void freesequencelist(struct seq_set *l)
+{
+    struct seq_set *n;
+
+    while(l) {
+	n = l->next;
+	free(l->set);
+	free(l);
+	l = n;
+    }
+}
+
 /*
  * Append the searchargs 's1' and 's2' to the sublist of 's'
  */
@@ -9171,8 +9197,8 @@ struct searchargs *s;
 
     if (!s) return;
 
-    freestrlist(s->sequence);
-    freestrlist(s->uidsequence);
+    freesequencelist(s->sequence);
+    freesequencelist(s->uidsequence);
     freestrlist(s->from);
     freestrlist(s->to);
     freestrlist(s->cc);

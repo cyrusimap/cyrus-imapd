@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.229 2007/10/01 18:35:59 murch Exp $
+ * $Id: index.c,v 1.230 2007/10/08 14:33:19 murch Exp $
  */
 #include <config.h>
 
@@ -54,6 +54,7 @@
 #include <syslog.h>
 #include <errno.h>
 #include <ctype.h>
+#include <stdlib.h>
 
 #include "acl.h"
 #include "annotate.h"
@@ -117,7 +118,9 @@ static int index_forsequence(struct mailbox *mailbox, const char *sequence,
 			     int usinguid,
 			     index_sequenceproc_t *proc, void *rock,
 			     int* fetchedsomething);
-static int index_insequence(int num, char *sequence, int usinguid);
+struct seq_set *index_parse_sequence(char *sequence, int usinguid,
+				     struct seq_set *set);
+static int index_insequence(unsigned num, struct seq_set *set, int use_mark);
 
 void index_fetchmsg(const char *msg_base, unsigned long msg_size,
 		    int format, unsigned offset, unsigned size,
@@ -1487,6 +1490,7 @@ int statusitems;
     int num_recent = 0;
     int num_unseen = 0;
     int sepchar;
+    static struct seq_set seq_set = { NULL, 0, 0, 0 , NULL};
 
     if (mailbox->exists != 0 &&
 	(statusitems &
@@ -1512,13 +1516,17 @@ int statusitems;
 			mailbox->start_offset +
 			mailbox->exists * mailbox->record_size,
 			"index", mailbox->name);
+
+	    seq_set.len = seq_set.mark = 0;
+	    index_parse_sequence(last_seenuids, 0, &seq_set);
+
 	    for (msg = 0; msg < mailbox->exists; msg++) {
 		uid = ntohl(*((bit32 *)(base + mailbox->start_offset +
 					msg * mailbox->record_size +
 					OFFSET_UID)));
 		if (uid > last_uid) num_recent++;
 		if ((statusitems & STATUS_UNSEEN) &&
-		    !index_insequence(uid, last_seenuids, 0)) num_unseen++;
+		    !index_insequence(uid, &seq_set, 1)) num_unseen++;
 		/* NB: The value of the third argument to index_insequence()
 		 * above does not matter.
 		 */
@@ -1717,14 +1725,15 @@ unsigned index_expungeuidlist(struct mailbox *mailbox __attribute__((unused)),
 			      unsigned char *indexbuf,
 			      int expunge_flags __attribute__((unused)))
 {
-    char *sequence = (char *)rock;
+    struct seq_set *sequence = (struct seq_set *)rock;
     unsigned uid = ntohl(*((bit32 *)(indexbuf+OFFSET_UID)));
 
     /* Don't expunge if not \Deleted */
     if (!(ntohl(*((bit32 *)(indexbuf+OFFSET_SYSTEM_FLAGS))) & FLAG_DELETED))
 	return 0;
 
-    return index_insequence(uid, sequence, 1);
+    /* XXX  Can we use the previous range marker? */
+    return index_insequence(uid, sequence, 0);
 }
 
 /*
@@ -1805,53 +1814,6 @@ index_forsequence(struct mailbox* mailbox,
 	sequence++;
     }
 }
-
-/*
- * Return nonzero iff 'num' is included in 'sequence'
- */
-static int
-index_insequence(num, sequence, usinguid)
-int num;
-char *sequence;
-int usinguid;
-{
-    unsigned i, start = 0, end;
-
-    for (;;) {
-	if (cyrus_isdigit((int) *sequence)) {
-	    start = start*10 + *sequence - '0';
-	}
-	else if (*sequence == '*') {
-	    sequence++;
-	    start = usinguid ? UID(imapd_exists) : imapd_exists;
-	}
-	else if (*sequence == ':') {
-	    end = 0;
-	    sequence++;
-	    while (cyrus_isdigit((int) *sequence)) {
-		end = end*10 + *sequence++ - '0';
-	    }
-	    if (*sequence == '*') {
-		sequence++;
-		end = usinguid ? UID(imapd_exists) : imapd_exists;
-	    }
-	    if (start > end) {
-		i = end;
-		end = start;
-		start = i;
-	    }
-	    if (num >= start && num <= end) return 1;
-	    start = 0;
-	    if (!*sequence) return 0;
-	}
-	else {
-	    if (num == start) return 1;
-	    start = 0;
-	    if (!*sequence) return 0;
-	}
-	sequence++;
-    }
-}    
 
 /*
  * Helper function to fetch data from a message file.  Writes a
@@ -3124,6 +3086,7 @@ static int index_search_evaluate(struct mailbox *mailbox,
     const char *cacheitem;
     int cachelen;
     struct searchsub *s;
+    struct seq_set *seq;
 
     if ((searchargs->flags & SEARCH_RECENT_SET) && msgno <= lastnotrecent) 
 	return 0;
@@ -3156,11 +3119,11 @@ static int index_search_evaluate(struct mailbox *mailbox,
 	  return 0;
     }
 
-    for (l = searchargs->sequence; l; l = l->next) {
-	if (!index_insequence(msgno, l->s, 0)) return 0;
+    for (seq = searchargs->sequence; seq; seq = seq->next) {
+	if (!index_insequence(msgno, seq, 1)) return 0;
     }
-    for (l = searchargs->uidsequence; l; l = l->next) {
-	if (!index_insequence(UID(msgno), l->s, 1)) return 0;
+    for (seq = searchargs->uidsequence; seq; seq = seq->next) {
+	if (!index_insequence(UID(msgno), seq, 1)) return 0;
     }
 
     if (searchargs->from || searchargs->to || searchargs->cc ||
@@ -5408,4 +5371,140 @@ extern unsigned long index_getlines(struct mailbox *mailbox, unsigned msgno)
     }
 
     return lines;
+}
+
+#define MAX(x, y) (x > y ? x : y)
+
+/* Comparator function that sorts ranges by the low value,
+   and coalesces intersecting ranges to have the same high value */
+static int comp_coalesce(const void *v1, const void *v2)
+{
+    struct seq_range *r1 = (struct seq_range *) v1;
+    struct seq_range *r2 = (struct seq_range *) v2;
+
+    /* If ranges don't intersect, we're done */
+    if (r1->high < r2->low) return -1;
+    if (r1->low > r2->high) return 1;
+
+    /* Ranges intersect, coalesce them */
+    r1->high = r2->high = MAX(r1->high, r2->high);
+
+    return r1->low - r2->low;;
+}
+
+#define SETGROWSIZE 100
+
+/*
+ * Parse a sequence into an array of sorted & merged ranges.
+ */
+struct seq_set *index_parse_sequence(char *sequence, int usinguid,
+				     struct seq_set *set)
+{
+    unsigned i, j, start = 0, end;
+
+    if (!set) set = xzmalloc(sizeof(struct seq_set));
+
+    for (;;) {
+	if (isdigit((int) *sequence)) {
+	    end = start = start*10 + *sequence - '0';
+	}
+	else if (*sequence == '*') {
+	    end = start = usinguid ? UID(imapd_exists) : imapd_exists;
+	}
+	else if (*sequence == ':') {
+	    end = 0;
+	    sequence++;
+	    while (isdigit((int) *sequence)) {
+		end = end*10 + *sequence++ - '0';
+	    }
+	    if (*sequence == '*') {
+		sequence++;
+		end = usinguid ? UID(imapd_exists) : imapd_exists;
+	    }
+	    if (start > end) {
+		i = end;
+		end = start;
+		start = i;
+	    }
+	    if (set->len == set->alloc) {
+		set->alloc += SETGROWSIZE;
+		set->set = realloc(set->set, set->alloc);
+	    }
+	    set->set[set->len].low = start;
+	    set->set[set->len].high = end;
+	    set->len++;
+	    start = 0;
+	    if (!*sequence) break;
+	}
+	else {
+	    if (set->len == set->alloc) {
+		set->alloc += SETGROWSIZE;
+		set->set = xrealloc(set->set, set->alloc);
+	    }
+	    set->set[set->len].low = start;
+	    set->set[set->len].high = end;
+	    set->len++;
+	    start = 0;
+	    if (!*sequence) break;
+	}
+	sequence++;
+    }
+
+    /* Sort the ranges using our special comparator */
+    qsort(set->set, set->len, sizeof(struct seq_range), comp_coalesce);
+
+    /* Merge intersecting/adjacent ranges */
+    for (i = 0, j = 1; j < set->len; j++) {
+	if ((int)(set->set[j].low - set->set[i].high) <= 1) {
+	    set->set[i].high = set->set[j].high;
+	} else {
+	    i++;
+	    set->set[i].low = set->set[j].low;
+	    set->set[i].high = set->set[j].high;
+	}
+    }
+    set->len = i+1;
+
+    return set;
+}
+
+/* Comparator function that checks if r1 is a subset of r2 */
+static int comp_subset(const void *v1, const void *v2)
+{
+    struct seq_range *r1 = (struct seq_range *) v1;
+    struct seq_range *r2 = (struct seq_range *) v2;
+
+    if (r1->low < r2->low) return -1;
+    if (r1->high > r2->high) return 1;
+    return 0;
+}
+
+/*
+ * Return nonzero iff 'num' is included in 'sequence'
+ */
+static int index_insequence(unsigned num, struct seq_set *set, int use_mark)
+{
+    if (!use_mark) set->mark = 0;
+
+    /* Short circuit if we're outside all ranges */
+    if ((num < set->set[set->mark].low) || (num > set->set[set->len-1].high)) {
+	return 0;
+    }
+    else {
+	/* Otherwise create a dummy range from our data point,
+	   and see if it intersects with our set */
+	struct seq_range key = { num, num };
+	struct seq_range *found = bsearch(&key, set->set + set->mark,
+					  set->len - set->mark,
+					  sizeof(struct seq_range),
+					  comp_subset);
+
+	if (found) {
+	    /* Set the mark to the index of the inclusive range */
+	    set->mark = found - set->set;
+	    return 1;
+	}
+
+	return 0;
+    }
 }

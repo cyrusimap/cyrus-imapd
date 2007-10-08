@@ -1,5 +1,5 @@
 /* imapd.h -- Common state for IMAP daemon
- * $Id: imapd.h,v 1.65 2007/10/01 18:35:59 murch Exp $
+ * $Id: imapd.h,v 1.66 2007/10/08 14:33:19 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -158,6 +158,19 @@ enum {
 /*    SEARCH_UNCACHEDHEADER =	(1<<4) -- obsolete */
 };
 
+struct seq_range {
+    unsigned low;
+    unsigned high;
+};
+
+struct seq_set {
+    struct seq_range *set;
+    int len;
+    int alloc;
+    int mark;
+    struct seq_set *next;
+};
+
 /* Things that may be searched for */
 struct searchargs {
     int flags;
@@ -168,8 +181,8 @@ struct searchargs {
     bit32 system_flags_unset;
     bit32 user_flags_set[MAX_USER_FLAGS/32];
     bit32 user_flags_unset[MAX_USER_FLAGS/32];
-    struct strlist *sequence;
-    struct strlist *uidsequence;
+    struct seq_set *sequence;
+    struct seq_set *uidsequence;
     struct strlist *from;
     struct strlist *to;
     struct strlist *cc;
