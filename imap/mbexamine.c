@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: mbexamine.c,v 1.15 2007/09/28 02:27:46 murch Exp $ */
+/* $Id: mbexamine.c,v 1.16 2007/10/08 13:53:31 murch Exp $ */
 
 #include <config.h>
 
@@ -86,6 +86,7 @@
 #include "imparse.h"
 #include "mailbox.h"
 #include "message.h"
+#include "message_guid.h"
 #include "mboxname.h"
 #include "mboxlist.h"
 #include "seen.h"
@@ -290,6 +291,9 @@ int do_examine(char *name,
 	    if (mailbox.options & OPT_IMAP_CONDSTORE) {
 		printf(" IMAP_CONDSTORE");
 	    }
+	    if (mailbox.options & OPT_IMAP_SHAREDSEEN) {
+		printf(" IMAP_SHAREDSEEN");
+	    }
 	}
 	printf("\n");
     }
@@ -325,10 +329,14 @@ int do_examine(char *name,
 	printf("      > HDRSIZE:%-6d LASTUPD :%ld SYSFLAGS:%08X",
 	       HEADER_SIZE(i), LAST_UPDATED(i), SYSTEM_FLAGS(i));
 	if (mailbox.minor_version >= 5)
-	    printf("   LINES:%-6d", CONTENT_LINES(i));
+	    printf("   LINES:%-6d\n", CONTENT_LINES(i));
 
 	if (mailbox.minor_version >= 6)
-	    printf(" CACHEVER:%-6d", CACHE_VERSION(i));
+	    printf("      > CACHEVER:%-2d", CACHE_VERSION(i));
+
+	if (mailbox.minor_version >= 7) {
+	    printf(" GUID: %s", message_guid_encode(GUID(i)));
+	}
 
 	if (mailbox.minor_version >= 8) {
 	    printf(" MODSEQ:" MODSEQ_FMT, MODSEQ(i));
