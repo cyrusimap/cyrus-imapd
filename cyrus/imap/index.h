@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.h,v 1.12 2007/10/01 18:35:59 murch Exp $
+ * $Id: index.h,v 1.13 2007/10/08 13:53:30 murch Exp $
  */
 
 /* Header for internal usage of index.c + programs that make raw access
@@ -64,6 +64,7 @@
 
 #include "annotate.h" /* for strlist functionality */
 #include "mailbox.h" /* for bit32 */
+#include "message_guid.h"
 
 /* Access macros for the memory-mapped index file data */
 #define INDEC_OFFSET(msgno) (index_base+start_offset+(((msgno)-1)*record_size))
@@ -84,6 +85,7 @@
 #else
 #define MODSEQ(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_MODSEQ)))
 #endif
+#define GUID(msgno) message_guid_import(NULL, (unsigned char *)(INDEC_OFFSET(msgno)+OFFSET_MESSAGE_GUID))
 
 /* Access assistance macros for memory-mapped cache file data */
 /* CACHE_ITEM_BIT32: Convert to host byte order */
