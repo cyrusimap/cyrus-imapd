@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.h,v 1.13 2007/10/08 13:53:30 murch Exp $
+ * $Id: index.h,v 1.14 2007/10/08 14:33:19 murch Exp $
  */
 
 /* Header for internal usage of index.c + programs that make raw access
@@ -196,5 +196,7 @@ extern unsigned long index_getsize(struct mailbox *mailbox, unsigned msgno);
 extern unsigned long index_getlines(struct mailbox *mailbox, unsigned msgno);
 extern int index_copy_remote(struct mailbox *mailbox, char *sequence, 
 			     int usinguid, struct protstream *pout);
+extern struct seq_set *index_parse_sequence(char *sequence, int usinguid,
+					    struct seq_set *set);
 
 #endif /* INDEX_H */
