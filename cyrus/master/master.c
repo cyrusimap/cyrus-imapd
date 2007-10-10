@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: master.c,v 1.108 2007/09/24 12:48:32 murch Exp $ */
+/* $Id: master.c,v 1.109 2007/10/10 13:59:48 murch Exp $ */
 
 #include <config.h>
 
@@ -861,6 +861,9 @@ void reap_child(void)
 			   "service %s pid %d in UNKNOWN state: exited",
 			   SERVICENAME(s->name), pid);
 		    break;
+		default:
+		    /* Shouldn't get here */
+		    break;
 		} 
 	    } else {
 	    	/* children from spawn_schedule (events) or
@@ -1118,6 +1121,9 @@ void process_msg(const int si, struct notify_message *msg)
 	    c->service_state = SERVICE_STATE_READY;
 	    s->ready_workers++;
 	    break;
+	default:
+	    /* Shouldn't get here */
+	    break;
 	}
 	break;
 
@@ -1144,6 +1150,9 @@ void process_msg(const int si, struct notify_message *msg)
 		       SERVICENAME(s->name), c->pid);
 	    c->service_state = SERVICE_STATE_BUSY;
 	    s->ready_workers--;
+	    break;
+	default:
+	    /* Shouldn't get here */
 	    break;
 	}
 	break;
@@ -1175,6 +1184,9 @@ void process_msg(const int si, struct notify_message *msg)
 	    c->service_state = SERVICE_STATE_BUSY;
 	    s->nconnections++;
 	    s->ready_workers--;
+	default:
+	    /* Shouldn't get here */
+	    break;
 	}
 	break;
 	
@@ -1205,6 +1217,9 @@ void process_msg(const int si, struct notify_message *msg)
 	    syslog(LOG_ERR,
 		   "service %s pid %d in UNKNOWN state: serving one more multi-threaded connection, forced to READY state",
 		   SERVICENAME(s->name), c->pid);
+	    break;
+	default:
+	    /* Shouldn't get here */
 	    break;
 	}
 	break;
