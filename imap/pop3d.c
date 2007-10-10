@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.178 2007/10/10 15:14:39 murch Exp $
+ * $Id: pop3d.c,v 1.179 2007/10/10 18:33:24 murch Exp $
  */
 #include <config.h>
 
@@ -202,7 +202,7 @@ static int popd_canon_user(sasl_conn_t *conn, void *context,
     char userbuf[MAX_MAILBOX_NAME+1], *p;
     size_t n;
     int r;
-
+syslog(LOG_INFO, "popd_canon: '%s'", user);
     if (!ulen) ulen = strlen(user);
 
     if (config_getswitch(IMAPOPT_POPSUBFOLDERS)) {
@@ -1207,7 +1207,7 @@ void cmd_user(char *user)
 	prot_printf(popd_out, "-ERR [AUTH] Must give PASS command\r\n");
 	return;
     }
-
+#if 0
     if (popd_canon_user(popd_saslconn, NULL, user, 0,
 			SASL_CU_AUTHID | SASL_CU_AUTHZID,
 			NULL, userbuf, sizeof(userbuf), &userlen) ||
@@ -1223,14 +1223,14 @@ void cmd_user(char *user)
     }
     else {
 	popd_userid = xstrdup(userbuf);
+#endif
+	{popd_userid = xstrdup(user);
 	prot_printf(popd_out, "+OK Name is a valid mailbox\r\n");
     }
 }
 
 void cmd_pass(char *pass)
 {
-    int plaintextloginpause;
-
     if (!popd_userid) {
 	prot_printf(popd_out, "-ERR [AUTH] Must give USER command\r\n");
 	return;
@@ -1250,7 +1250,9 @@ void cmd_pass(char *pass)
 	    return;
 	}
 
-	syslog(LOG_NOTICE, "login: %s %s kpop", popd_clienthost, popd_userid);
+	syslog(LOG_NOTICE, "login: %s %s%s KPOP%s %s", popd_clienthost,
+	       popd_userid, popd_subfolder ? popd_subfolder : "",
+	       popd_starttls_done ? "+TLS" : "", "User logged in");
 
 	openinbox();
 	return;
@@ -1289,6 +1291,29 @@ void cmd_pass(char *pass)
 	return;
     }
     else {
+	/* successful authentication */
+	int sasl_result, plaintextloginpause;
+	const void *val;
+
+	free(popd_userid);
+	popd_userid = 0;
+
+	/* get the userid from SASL --- already canonicalized from
+	 * mysasl_proxy_policy()
+	 */
+	sasl_result = sasl_getprop(popd_saslconn, SASL_USERNAME, &val);
+	if (sasl_result != SASL_OK) {
+	    prot_printf(popd_out, 
+			"-ERR [AUTH] weird SASL error %d getting SASL_USERNAME\r\n", 
+			sasl_result);
+	    if (popd_subfolder) {
+		free(popd_subfolder);
+		popd_subfolder = 0;
+	    }
+	    return;
+	}
+	popd_userid = xstrdup((const char *) val);
+
 	syslog(LOG_NOTICE, "login: %s %s%s plaintext%s %s", popd_clienthost,
 	       popd_userid, popd_subfolder ? popd_subfolder : "",
 	       popd_starttls_done ? "+TLS" : "", "User logged in");
