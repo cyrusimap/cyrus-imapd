@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.230 2007/10/08 14:33:19 murch Exp $
+ * $Id: index.c,v 1.231 2007/10/10 14:56:25 murch Exp $
  */
 #include <config.h>
 
@@ -5400,7 +5400,7 @@ static int comp_coalesce(const void *v1, const void *v2)
 struct seq_set *index_parse_sequence(char *sequence, int usinguid,
 				     struct seq_set *set)
 {
-    unsigned i, j, start = 0, end;
+    unsigned i, j, start = 0, end = 0;
 
     if (!set) set = xzmalloc(sizeof(struct seq_set));
 
