@@ -65,6 +65,8 @@
 #include <varargs.h>
 #endif
 
+#include "error_table.h"
+
 /* This should be part of k5-config.h but many application
  * programs are not including that file. We probably want to
  * come up with a better way of handling this problem.
