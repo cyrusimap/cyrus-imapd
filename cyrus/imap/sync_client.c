@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.24 2007/10/04 19:11:46 murch Exp $
+ * $Id: sync_client.c,v 1.25 2007/10/10 10:55:44 murch Exp $
  */
 
 #include <config.h>
@@ -3216,10 +3216,6 @@ int do_daemon_work(const char *sync_log_file, const char *sync_shutdown_file,
 	    syslog(LOG_ERR,
 		   "Processing sync log file %s failed: %s",
 		   work_file_name, error_message(r));
-
-	    /* Force a reconnect */
-	    *restartp = RESTART_RECONNECT;
-	    r = 0;
 	    break;
 	}
 
@@ -3351,7 +3347,17 @@ void do_daemon(const char *sync_log_file, const char *sync_shutdown_file,
             r = do_daemon_work(sync_log_file, sync_shutdown_file,
                                timeout, min_delta, &restart);
 
-            if (r)       _exit(1);
+            if (r) {
+		/* See if we're still connected to the server.
+		 * If we are, we had some type of error, so we exit.
+		 * Otherwise, try reconnecting.
+		 */
+		if (!backend_ping(be)) _exit(1);
+
+		syslog(LOG_WARNING, "Lost connection to server. Reconnecting");
+		restart = 1;
+	    }
+
             if (restart) _exit(EX_TEMPFAIL);
             _exit(0);
         }
