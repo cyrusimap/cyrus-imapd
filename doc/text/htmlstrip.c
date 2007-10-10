@@ -13,10 +13,12 @@
  *
  */
   
-/* $Id: htmlstrip.c,v 1.9 2003/10/22 18:50:06 rjs3 Exp $ */
+/* $Id: htmlstrip.c,v 1.10 2007/10/10 21:34:59 murch Exp $ */
   
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 #define MODE_PRE 1		/* Preformatted */
 #define MODE_IGNORETXT 2	/* Discard text */
