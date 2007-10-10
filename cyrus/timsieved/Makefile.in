@@ -1,5 +1,5 @@
 # Makefile.in - timsieved makefile
-# $Id: Makefile.in,v 1.26 2006/11/30 17:11:25 murch Exp $
+# $Id: Makefile.in,v 1.27 2007/10/10 21:06:56 murch Exp $
 # @configure_input@
 # 
 # Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
@@ -95,10 +95,10 @@ timsieved.pure: $(OBJS) $(SERVICE)
 	 $(SERVICE) $(OBJS) $(DEPLIBS) $(IMAP_LIBS) $(LIBS) $(LIB_WRAP)
 
 clean:
-	rm -f *.o *.a Makefile.bak makedepend.log
+	rm -f timsieved *~ *.o *.a Makefile.bak makedepend.log
 
 distclean: clean
-	rm -f Makefile timsieved
+	rm -f Makefile
 
 depend:
 	${MAKEDEPEND} $(CPPFLAGS) $(DEFS) -I$(srcdir) $(CFLAGS) *.c $(srcdir)/*.c 1>makedepend.log 2>&1
