@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.25 2007/10/10 10:55:44 murch Exp $
+ * $Id: sync_client.c,v 1.26 2007/10/10 21:23:57 murch Exp $
  */
 
 #include <config.h>
@@ -60,6 +60,7 @@
 #include <sys/wait.h>
 #include <errno.h>
 #include <ctype.h>
+#include <signal.h>
 
 #include <netinet/tcp.h>
 
