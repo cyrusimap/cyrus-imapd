@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.17 2007/10/05 16:28:41 murch Exp $
+ * $Id: sync_server.c,v 1.18 2007/10/10 15:14:39 murch Exp $
  */
 
 #include <config.h>
@@ -1126,9 +1126,9 @@ static void cmdloop(void)
 static void cmd_authenticate(char *mech, char *resp)
 {
     int r, sasl_result;
-    const int *ssfp;
+    sasl_ssf_t ssf;
     char *ssfmsg = NULL;
-    const char *canon_user;
+    const void *val;
 
     if (sync_userid) {
 	prot_printf(sync_out, "502 Already authenticated\r\n");
@@ -1178,8 +1178,7 @@ static void cmd_authenticate(char *mech, char *resp)
     /* get the userid from SASL --- already canonicalized from
      * mysasl_proxy_policy()
      */
-    sasl_result = sasl_getprop(sync_saslconn, SASL_USERNAME,
-			       (const void **) &canon_user);
+    sasl_result = sasl_getprop(sync_saslconn, SASL_USERNAME, &val);
     if (sasl_result != SASL_OK) {
 	prot_printf(sync_out, "NO weird SASL error %d SASL_USERNAME\r\n", 
 		    sasl_result);
@@ -1189,24 +1188,25 @@ static void cmd_authenticate(char *mech, char *resp)
 	return;
     }
 
-    sync_userid = xstrdup(canon_user);
+    sync_userid = xstrdup((const char *) val);
     proc_register("sync_server", sync_clienthost, sync_userid, (char *)0);
 
     syslog(LOG_NOTICE, "login: %s %s %s%s %s", sync_clienthost, sync_userid,
 	   mech, sync_starttls_done ? "+TLS" : "", "User logged in");
 
-    sasl_getprop(sync_saslconn, SASL_SSF, (const void **) &ssfp);
+    sasl_getprop(sync_saslconn, SASL_SSF, &val);
+    ssf = *((sasl_ssf_t *) val);
 
     /* really, we should be doing a sasl_getprop on SASL_SSF_EXTERNAL,
        but the current libsasl doesn't allow that. */
     if (sync_starttls_done) {
-	switch(*ssfp) {
+	switch(ssf) {
 	case 0: ssfmsg = "tls protection"; break;
 	case 1: ssfmsg = "tls plus integrity protection"; break;
 	default: ssfmsg = "tls plus privacy protection"; break;
 	}
     } else {
-	switch(*ssfp) {
+	switch(ssf) {
 	case 0: ssfmsg = "no protection"; break;
 	case 1: ssfmsg = "integrity protection"; break;
 	default: ssfmsg = "privacy protection"; break;

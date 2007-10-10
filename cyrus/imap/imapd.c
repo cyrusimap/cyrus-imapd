@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.528 2007/10/08 14:33:18 murch Exp $ */
+/* $Id: imapd.c,v 1.529 2007/10/10 15:14:38 murch Exp $ */
 
 #include <config.h>
 
@@ -1915,6 +1915,7 @@ void cmd_login(char *tag, char *user)
     char userbuf[MAX_MAILBOX_NAME+1];
     unsigned userlen;
     const char *canon_user = userbuf;
+    const void *val;
     char c;
     struct buf passwdbuf;
     char *passwd;
@@ -2009,8 +2010,7 @@ void cmd_login(char *tag, char *user)
 	return;
     }
     else {
-	r = sasl_getprop(imapd_saslconn, SASL_USERNAME,
-			 (const void **) &canon_user);
+	r = sasl_getprop(imapd_saslconn, SASL_USERNAME, &val);
 
 	if(r != SASL_OK) {
 	    if ((reply = sasl_errstring(r, NULL, NULL)) != NULL) {
@@ -2028,7 +2028,7 @@ void cmd_login(char *tag, char *user)
 	}
 
 	reply = "User logged in";
-	imapd_userid = xstrdup(canon_user);
+	imapd_userid = xstrdup((const char *) val);
 	snmp_increment_args(AUTHENTICATION_YES, 1,
 			    VARIABLE_AUTH, 0 /*hash_simple("LOGIN") */, 
 			    VARIABLE_LISTEND);
@@ -2085,8 +2085,9 @@ void
 cmd_authenticate(char *tag, char *authtype, char *resp)
 {
     int sasl_result;
-    
-    const int *ssfp;
+
+    const void *val;
+    sasl_ssf_t ssf;
     char *ssfmsg=NULL;
 
     const char *canon_user;
@@ -2141,8 +2142,7 @@ cmd_authenticate(char *tag, char *authtype, char *resp)
     /* get the userid from SASL --- already canonicalized from
      * mysasl_proxy_policy()
      */
-    sasl_result = sasl_getprop(imapd_saslconn, SASL_USERNAME,
-			       (const void **) &canon_user);
+    sasl_result = sasl_getprop(imapd_saslconn, SASL_USERNAME, &val);
     if (sasl_result != SASL_OK) {
 	prot_printf(imapd_out, "%s NO weird SASL error %d SASL_USERNAME\r\n", 
 		    tag, sasl_result);
@@ -2151,6 +2151,7 @@ cmd_authenticate(char *tag, char *authtype, char *resp)
 	reset_saslconn(&imapd_saslconn);
 	return;
     }
+    canon_user = (const char *) val;
 
     /* If we're proxying, the authzid may contain a magic plus,
        so re-canonify it */
@@ -2180,18 +2181,19 @@ cmd_authenticate(char *tag, char *authtype, char *resp)
 	   imapd_userid, imapd_magicplus ? imapd_magicplus : "",
 	   authtype, imapd_starttls_done ? "+TLS" : "", "User logged in");
 
-    sasl_getprop(imapd_saslconn, SASL_SSF, (const void **) &ssfp);
+    sasl_getprop(imapd_saslconn, SASL_SSF, &val);
+    ssf = *((sasl_ssf_t *) val);
 
     /* really, we should be doing a sasl_getprop on SASL_SSF_EXTERNAL,
        but the current libsasl doesn't allow that. */
     if (imapd_starttls_done) {
-	switch(*ssfp) {
+	switch(ssf) {
 	case 0: ssfmsg = "tls protection"; break;
 	case 1: ssfmsg = "tls plus integrity protection"; break;
 	default: ssfmsg = "tls plus privacy protection"; break;
 	}
     } else {
-	switch(*ssfp) {
+	switch(ssf) {
 	case 0: ssfmsg = "no protection"; break;
 	case 1: ssfmsg = "integrity protection"; break;
 	default: ssfmsg = "privacy protection"; break;
@@ -2202,7 +2204,7 @@ cmd_authenticate(char *tag, char *authtype, char *resp)
 			VARIABLE_AUTH, 0, /* hash_simple(authtype) */
 			VARIABLE_LISTEND);
 
-    if (!*ssfp) {
+    if (!ssf) {
 	prot_printf(imapd_out, "%s OK [CAPABILITY ", tag);
 	capa_response(CAPA_PREAUTH|CAPA_POSTAUTH);
 	prot_printf(imapd_out, "] Success (%s)\r\n", ssfmsg);

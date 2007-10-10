@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.121 2007/03/30 18:51:01 murch Exp $
+ * $Id: lmtpengine.c,v 1.122 2007/10/10 15:14:39 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -672,10 +672,11 @@ static int savemsg(struct clientdata *cd,
     p += sprintf(p, "from %s (%s)", cd->lhlo_param, cd->clienthost);
     fold[nfold++] = p;
     if (m->authuser) {
-	const int *ssfp;
-	sasl_getprop(cd->conn, SASL_SSF, (const void **) &ssfp);
-	p += sprintf(p, " (authenticated user=%s bits=%d)",
-		     m->authuser, *ssfp);
+	const void *ssfp;
+	sasl_ssf_t ssf;
+	sasl_getprop(cd->conn, SASL_SSF, &ssfp);
+	ssf = *((sasl_ssf_t *) ssfp);
+	p += sprintf(p, " (authenticated user=%s bits=%d)", m->authuser, ssf);
 	fold[nfold++] = p;
     }
 
@@ -1147,6 +1148,7 @@ void lmtpmode(struct lmtp_func *func,
 	  if (!strncasecmp(buf, "auth ", 5)) {
 	      char mech[128];
 	      int sasl_result;
+	      const void *val;
 	      const char *user;
 	      
 	      if (cd.authenticated > 0) {
@@ -1231,12 +1233,13 @@ void lmtpmode(struct lmtp_func *func,
 		  reset_saslconn(&cd.conn);
 		  continue;
 	      }
-	      r = sasl_getprop(cd.conn, SASL_USERNAME, (const void **) &user);
+	      r = sasl_getprop(cd.conn, SASL_USERNAME, &val);
 	      if (r != SASL_OK) {
 		  prot_printf(pout, "501 5.5.4 SASL Error\r\n");
 		  reset_saslconn(&cd.conn);
 		  goto nextcmd;
 	      }
+	      user = (const char *) val;
 
 	      /* Create telemetry log */
 	      deliver_logfd = telemetry_log(user, pin, pout, 0);

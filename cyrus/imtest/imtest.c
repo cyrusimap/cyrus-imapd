@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/NNTP/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.111 2007/09/27 20:05:22 murch Exp $
+ * $Id: imtest.c,v 1.112 2007/10/10 15:14:39 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -2278,7 +2278,8 @@ int main(int argc, char **argv)
     
     char *mechlist;
     unsigned ext_ssf = 0;
-    const int *ssfp;
+    const void *ssfp;
+    sasl_ssf_t ssf;
     int maxssf = 128;
     int minssf = 0;
     int c;
@@ -2608,11 +2609,12 @@ int main(int argc, char **argv)
 	    printf("Authentication failed. %s\n", s);
 	}
 	
-	result = sasl_getprop(conn, SASL_SSF, (const void **)&ssfp);
+	result = sasl_getprop(conn, SASL_SSF, &ssfp);
+	ssf = *((sasl_ssf_t *) ssfp);
 	if (result != SASL_OK) {
 	    printf("SSF: unable to determine (SASL ERROR %d)\n", result);
 	} else {
-	    printf("Security strength factor: %d\n", ext_ssf + *ssfp);
+	    printf("Security strength factor: %d\n", ext_ssf + ssf);
 	}
 
     } while (--reauth);

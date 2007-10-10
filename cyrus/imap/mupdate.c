@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.98 2007/09/28 02:27:46 murch Exp $
+ * $Id: mupdate.c,v 1.99 2007/10/10 15:14:39 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1474,6 +1474,7 @@ void cmd_authenticate(struct conn *C,
 		      const char *clientstart)
 {
     int r, sasl_result;
+    const void *val;
 
     r = saslserver(C->saslconn, mech, clientstart, "", "", "",
 		   C->pin, C->pout, &sasl_result, NULL);
@@ -1510,13 +1511,14 @@ void cmd_authenticate(struct conn *C,
     }
 
     /* Successful Authentication */
-    r = sasl_getprop(C->saslconn, SASL_USERNAME, (const void **)&C->userid);
+    r = sasl_getprop(C->saslconn, SASL_USERNAME, &val);
     if(r != SASL_OK) {
 	prot_printf(C->pout, "%s NO \"SASL Error\"\r\n", tag);
 	reset_saslconn(C);
 	return;
     }
 
+    C->userid = (char *) val;
     syslog(LOG_NOTICE, "login: %s %s %s%s %s", C->clienthost, C->userid,
 	   mech, C->tlsconn ? "+TLS" : "", "User logged in");
 

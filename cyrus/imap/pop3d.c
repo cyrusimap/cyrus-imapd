@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.177 2007/10/03 17:06:09 murch Exp $
+ * $Id: pop3d.c,v 1.178 2007/10/10 15:14:39 murch Exp $
  */
 #include <config.h>
 
@@ -1125,7 +1125,7 @@ static void cmd_starttls(int pop3s __attribute__((unused)))
 static void cmd_apop(char *response)
 {
     int sasl_result;
-    char *canon_user;
+    const void *canon_user;
 
     assert(response != NULL);
 
@@ -1168,9 +1168,7 @@ static void cmd_apop(char *response)
      * get the userid from SASL --- already canonicalized from
      * mysasl_proxy_policy()
      */
-    sasl_result = sasl_getprop(popd_saslconn, SASL_USERNAME,
-			       (const void **) &canon_user);
-    popd_userid = xstrdup(canon_user);
+    sasl_result = sasl_getprop(popd_saslconn, SASL_USERNAME, &canon_user);
     if (sasl_result != SASL_OK) {
 	prot_printf(popd_out, 
 		    "-ERR [AUTH] weird SASL error %d getting SASL_USERNAME\r\n", 
@@ -1181,6 +1179,7 @@ static void cmd_apop(char *response)
 	}
 	return;
     }
+    popd_userid = xstrdup((const char *) canon_user);
     
     syslog(LOG_NOTICE, "login: %s %s%s APOP%s %s", popd_clienthost,
 	   popd_userid, popd_subfolder ? popd_subfolder : "",
@@ -1361,7 +1360,8 @@ void cmd_auth(char *arg)
 {
     int r, sasl_result;
     char *authtype;
-    char *canon_user;
+    const void *val;
+    const char *canon_user;
 
     /* if client didn't specify an argument we give them the list
      *
@@ -1457,14 +1457,14 @@ void cmd_auth(char *arg)
     /* get the userid from SASL --- already canonicalized from
      * mysasl_proxy_policy()
      */
-    sasl_result = sasl_getprop(popd_saslconn, SASL_USERNAME,
-			       (const void **) &canon_user);
+    sasl_result = sasl_getprop(popd_saslconn, SASL_USERNAME, &val);
     if (sasl_result != SASL_OK) {
 	prot_printf(popd_out, 
 		    "-ERR [AUTH] weird SASL error %d getting SASL_USERNAME\r\n", 
 		    sasl_result);
 	return;
     }
+    canon_user = (const char *) val;
 
     /* If we're proxying, the authzid may contain a subfolder,
        so re-canonify it */
