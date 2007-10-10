@@ -1,6 +1,6 @@
 /* lex.c -- lexers for command line script installer
  * Tim Martin
- * $Id: lex.c,v 1.8 2006/11/30 17:11:24 murch Exp $
+ * $Id: lex.c,v 1.9 2007/10/10 15:38:40 murch Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -73,7 +73,7 @@ int lexer_state = LEXER_STATE_NORMAL;
 		ERR();					\
   	      }
 
-int token_lookup(char *str, int len)
+int token_lookup(char *str, int len __attribute__((unused)))
 {
   if (strcmp(str,"ok")==0) return TOKEN_OK;
   if (strcmp(str,"no")==0) return TOKEN_NO;

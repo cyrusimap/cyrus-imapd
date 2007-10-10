@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: managesieve.xs,v 1.25 2007/03/27 19:29:56 murch Exp $ */
+/* $Id: managesieve.xs,v 1.26 2007/10/10 15:38:40 murch Exp $ */
 
 #ifdef __cplusplus
 extern "C" {
@@ -66,30 +66,6 @@ static char *globalerr = NULL;
 #include "isieve.h"
 #include "util.h"
 #include "xmalloc.h"
-
-static int
-not_here(s)
-char *s;
-{
-    croak("%s not implemented on this architecture", s);
-    return -1;
-}
-
-static double
-constant(name, arg)
-char *name;
-int arg;
-{
-    errno = 0;
-    switch (*name) {
-    }
-    errno = EINVAL;
-    return 0;
-
-not_there:
-    errno = ENOENT;
-    return 0;
-}
 
 void fatal(const char *s, int t)
 {
@@ -221,8 +197,7 @@ sieve_get_handle(servername, username_cb, authname_cb, password_cb, realm_cb)
   PREINIT:
   Sieveobj ret = NULL;
   sasl_callback_t *callbacks;
-  int sock,port;
-  sasl_conn_t *saslconn;
+  int port;
   int r;
   struct servent *serv;
   char *mechlist=NULL,*mlist=NULL;

@@ -1,7 +1,7 @@
 /* request.c -- request to execute functions on the timsieved server
  * Tim Martin
  * 9/21/99
- * $Id: request.c,v 1.16 2003/02/13 20:15:53 rjs3 Exp $
+ * $Id: request.c,v 1.17 2007/10/10 15:38:40 murch Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -522,7 +522,7 @@ int setscriptactive(int version, struct protstream *pout,
   return 0;
 }
 
-static int viewafile(mystring_t *data, char *name)
+static int viewafile(mystring_t *data, char *name __attribute__((unused)))
 {
   printf("%s\r\n", string_DATAPTR(data));
 
@@ -560,7 +560,6 @@ int getscript(int version, struct protstream *pout,
 	      char **refer_to, char **errstrp)
 {
   int res;
-  mystring_t *str=NULL;
   mystring_t *errstr=NULL;
   lexstate_t state;
   int ret = 0;
