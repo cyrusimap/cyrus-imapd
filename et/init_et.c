@@ -46,10 +46,9 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include "error_table.h"
 #include "mit-sipb-copyright.h"
-
-extern char *malloc(), *realloc();
 
 struct foobar {
     struct et_list etl;
