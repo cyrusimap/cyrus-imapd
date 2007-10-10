@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.59 2007/10/01 18:36:00 murch Exp $
+ * $Id: nntpd.c,v 1.60 2007/10/10 15:14:39 murch Exp $
  */
 
 /*
@@ -2051,9 +2051,9 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
 {
     int r, sasl_result;
     char *success_data;
-    const int *ssfp;
+    sasl_ssf_t ssf;
     char *ssfmsg = NULL;
-    const char *canon_user;
+    const void *val;
 
     if (nntp_userid) {
 	prot_printf(nntp_out, "502 Already authenticated\r\n");
@@ -2147,9 +2147,7 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
     /* get the userid from SASL --- already canonicalized from
      * mysasl_proxy_policy()
      */
-    sasl_result = sasl_getprop(nntp_saslconn, SASL_USERNAME,
-			       (const void **) &canon_user);
-    nntp_userid = xstrdup(canon_user);
+    sasl_result = sasl_getprop(nntp_saslconn, SASL_USERNAME, &val);
     if (sasl_result != SASL_OK) {
 	prot_printf(nntp_out, "481 weird SASL error %d SASL_USERNAME\r\n", 
 		    sasl_result);
@@ -2158,24 +2156,26 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
 	reset_saslconn(&nntp_saslconn);
 	return;
     }
+    nntp_userid = xstrdup((const char *) val);
 
     proc_register("nntpd", nntp_clienthost, nntp_userid, (char *)0);
 
     syslog(LOG_NOTICE, "login: %s %s %s%s %s", nntp_clienthost, nntp_userid,
 	   mech, nntp_starttls_done ? "+TLS" : "", "User logged in");
 
-    sasl_getprop(nntp_saslconn, SASL_SSF, (const void **) &ssfp);
+    sasl_getprop(nntp_saslconn, SASL_SSF, &val);
+    ssf = *((sasl_ssf_t *) val);
 
     /* really, we should be doing a sasl_getprop on SASL_SSF_EXTERNAL,
        but the current libsasl doesn't allow that. */
     if (nntp_starttls_done) {
-	switch(*ssfp) {
+	switch(ssf) {
 	case 0: ssfmsg = "tls protection"; break;
 	case 1: ssfmsg = "tls plus integrity protection"; break;
 	default: ssfmsg = "tls plus privacy protection"; break;
 	}
     } else {
-	switch(*ssfp) {
+	switch(ssf) {
 	case 0: ssfmsg = "no protection"; break;
 	case 1: ssfmsg = "integrity protection"; break;
 	default: ssfmsg = "privacy protection"; break;

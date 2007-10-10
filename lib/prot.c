@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.91 2007/10/01 18:57:14 murch Exp $
+ * $Id: prot.c,v 1.92 2007/10/10 15:14:40 murch Exp $
  */
 
 #include <config.h>
@@ -163,7 +163,7 @@ int prot_setsasl(s, conn)
 struct protstream *s;
 sasl_conn_t *conn;
 {
-    const int *ssfp;
+    const void *ssfp;
     int result;
 
     if (s->write && s->ptr != s->buf) {
@@ -174,20 +174,20 @@ sasl_conn_t *conn;
    
     s->conn = conn;
 
-    result = sasl_getprop(conn, SASL_SSF, (const void **) &ssfp);
+    result = sasl_getprop(conn, SASL_SSF, &ssfp);
     if (result != SASL_OK) {
 	return -1;
     }
-    s->saslssf = *ssfp;
+    s->saslssf = *((const int *) ssfp);
 
     if (s->write) {
 	int result;
-	const unsigned int *maxp;
+	const void *maxp;
 	unsigned int max;
 
 	/* ask SASL for layer max */
-	result = sasl_getprop(conn, SASL_MAXOUTBUF, (const void **) &maxp);
-	max = *maxp;
+	result = sasl_getprop(conn, SASL_MAXOUTBUF, &maxp);
+	max = *((const unsigned int *) maxp);
 	if (result != SASL_OK) {
 	    return -1;
 	}
