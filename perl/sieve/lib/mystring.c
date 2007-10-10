@@ -1,7 +1,7 @@
 /* mystring.c -- string utility
  * Tim Martin
  * 9/21/99
- * $Id: mystring.c,v 1.7 2003/02/13 20:15:53 rjs3 Exp $
+ * $Id: mystring.c,v 1.8 2007/10/10 15:38:40 murch Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -111,7 +111,8 @@ int string_compare(mystring_t *str1, mystring_t *str2)
   return SIEVE_OK;
 }
 
-int string_compare_with(mystring_t *str1, mystring_t *str2, mystring_t *comp)
+int string_compare_with(mystring_t *str1, mystring_t *str2,
+			mystring_t *comp __attribute__((unused)))
 {
   char *data1;
   char *data2;
