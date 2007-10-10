@@ -1,0 +1,103 @@
+.\" -*- nroff -*-
+.TH CYR_SYNCLOG 8 "Project Cyrus" CMU
+.\" 
+.\" Copyright (c) 1998-2007 Carnegie Mellon University.  All rights reserved.
+.\"
+.\" Redistribution and use in source and binary forms, with or without
+.\" modification, are permitted provided that the following conditions
+.\" are met:
+.\"
+.\" 1. Redistributions of source code must retain the above copyright
+.\"    notice, this list of conditions and the following disclaimer. 
+.\"
+.\" 2. Redistributions in binary form must reproduce the above copyright
+.\"    notice, this list of conditions and the following disclaimer in
+.\"    the documentation and/or other materials provided with the
+.\"    distribution.
+.\"
+.\" 3. The name "Carnegie Mellon University" must not be used to
+.\"    endorse or promote products derived from this software without
+.\"    prior written permission. For permission or any other legal
+.\"    details, please contact  
+.\"      Office of Technology Transfer
+.\"      Carnegie Mellon University
+.\"      5000 Forbes Avenue
+.\"      Pittsburgh, PA  15213-3890
+.\"      (412) 268-4387, fax: (412) 268-7395
+.\"      tech-transfer@andrew.cmu.edu
+.\"
+.\" 4. Redistributions of any form whatsoever must retain the following
+.\"    acknowledgment:
+.\"    "This product includes software developed by Computing Services
+.\"     at Carnegie Mellon University (http://www.cmu.edu/computing/)."
+.\"
+.\" CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
+.\" THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+.\" AND FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE
+.\" FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+.\" WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+.\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
+.\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+.\" 
+.\" $Id: cyr_synclog.8,v 1.1 2007/10/10 13:07:04 murch Exp $
+.SH NAME
+cyr_synclog \- add entries to the replication log
+.SH SYNOPSIS
+.B cyr_synclog
+[
+.B \-C
+.I config-file
+]
+[
+.B \-type
+]
+<value>
+.SH DESCRIPTION
+.I cyr_synclog
+is used to append a value to the log file.  You can either specify 
+the log type and value, or an entire log line.
+.PP
+\-u   USER
+
+\-v   SIEVE
+
+\-m   MAILBOX
+
+\-a   APPEND
+
+\-c   ACL
+
+\-q   QUOTA
+
+\-n   ANNOTATION
+
+\-s   SEEN
+
+\-b   SUBSCRIPTION
+.PP
+Running without any options will print a short usage document.
+.PP
+.I cyr_synclog
+reads any applicable configuration options out of the
+.IR imapd.conf (5)
+file unless specified otherwise by \fB-C\fR.
+.SH EXAMPLES
+Here are some example ways to use cyr_synclog:
+.PP
+cyr_synclog \-m user.brong
+
+cyr_synclog \-u brong
+
+cyr_synclog \-C /etc/imapd-special.conf \-s user.brong brong
+
+cyr_synclog "SEEN user.brong brong"
+.SH OPTIONS
+.TP
+.BI \-C " config-file"
+Read configuration options from \fIconfig-file\fR.
+.SH FILES
+.TP
+.B /etc/imapd.conf
+.SH SEE ALSO
+.PP
+\fBimapd.conf(5)\fR
