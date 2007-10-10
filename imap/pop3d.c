@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.179 2007/10/10 18:33:24 murch Exp $
+ * $Id: pop3d.c,v 1.180 2007/10/10 18:34:45 murch Exp $
  */
 #include <config.h>
 
@@ -1207,7 +1207,7 @@ void cmd_user(char *user)
 	prot_printf(popd_out, "-ERR [AUTH] Must give PASS command\r\n");
 	return;
     }
-#if 0
+
     if (popd_canon_user(popd_saslconn, NULL, user, 0,
 			SASL_CU_AUTHID | SASL_CU_AUTHZID,
 			NULL, userbuf, sizeof(userbuf), &userlen) ||
@@ -1223,8 +1223,6 @@ void cmd_user(char *user)
     }
     else {
 	popd_userid = xstrdup(userbuf);
-#endif
-	{popd_userid = xstrdup(user);
 	prot_printf(popd_out, "+OK Name is a valid mailbox\r\n");
     }
 }
