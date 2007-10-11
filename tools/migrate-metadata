@@ -42,7 +42,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #!perl -w
 # script to upgrade from versions of imapd previous to 1.6.2
 # make sure you run it as the cyrus user
-# $Id: migrate-metadata,v 1.2 2006/11/30 17:11:25 murch Exp $
+# $Id: migrate-metadata,v 1.3 2007/10/11 15:59:39 murch Exp $
 
 if ($] !~ /^5\..*/) {
   # uh-oh. this isn't perl 5.
@@ -151,6 +151,15 @@ sub migrate {
     while ($subdir = readdir DIR) {
 	my $subpath = $path . "/" . $subdir;
 
+	# skip message files, '.' and '..'
+	next if ( $subdir =~ /^[0-9]+\.$/ || 
+	          $subdir =~ /^\.\.$/ || 
+		  $subdir =~ /^\.$/ );
+	# skip special subdirs
+	next if ( $subpath =~ /^\/socket$/ ||
+	          $subpath =~ /^\/stage\.$/ ||
+		  $subpath =~ /^\/sync\.$/ );
+
 	if ($subdir =~ /^cyrus\.(.+)/s) {
 	    # cyrus.* file, see if we should migrate it
 	    if (defined($mfiles{$1})) {
@@ -160,8 +169,8 @@ sub migrate {
 		    ouch "couldn't delete $part$subpath";
 	    }
 	}
-	elsif ($subdir =~ /^[^\.]+$/s) {
-	    # no dot in name, so this is a subdir, process it
+	else {
+	    # this is a mailbox subdir, process it
 	    mkdir($mpart . $subpath, 0700) ||
 		ouch "couldn't create $mpart$subpath";
 	    migrate($part, $mpart, $subpath);
