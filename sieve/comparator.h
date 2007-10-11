@@ -1,6 +1,6 @@
 /* comparator.h
  * Larry Greenfield
- * $Id: comparator.h,v 1.13 2007/09/27 17:08:23 murch Exp $
+ * $Id: comparator.h,v 1.14 2007/10/11 16:52:11 murch Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -29,16 +29,16 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #define COMPARATOR_H
 
 #ifdef ENABLE_REGEX
-#ifdef HAVE_PCREPOSIX
-#include <pcreposix.h>
-#else /* !HAVE_PCREPOSIX */
-#ifdef HAVE_RX
-#include <rxposix.h>
-#else /* !HAVE_RX */
-#include <sys/types.h>
-#include <regex.h>
-#endif /* HAVE_RX */
-#endif /* HAVE_PCREPOSIX */
+# ifdef HAVE_PCREPOSIX_H
+#  include <pcreposix.h>
+# else /* !HAVE_PCREPOSIX_H */
+#  ifdef HAVE_RXPOSIX_H
+#   include <rxposix.h>
+#  else /* !HAVE_RXPOSIX_H */
+#   include <sys/types.h>
+#   include <regex.h>
+#  endif /* HAVE_RXPOSIX_H */
+# endif /* HAVE_PCREPOSIX_H */
 #endif /* ENABLE_REGEX */
 
 /* compares pat to text; returns 1 if it's true, 0 otherwise 
