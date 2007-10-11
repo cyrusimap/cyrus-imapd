@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.300 2007/10/02 18:33:50 murch Exp $
+dnl $Id: configure.in,v 1.301 2007/10/11 16:52:11 murch Exp $
 dnl
 
 
@@ -243,9 +243,21 @@ if test "$sievedir" != "no"; then
 	AC_PROG_LEX
 	AC_CHECK_LIB(fl,main)
 
- 	AC_SEARCH_LIBS(regcomp, rx regex, [
- 			AC_DEFINE(ENABLE_REGEX,[],[Do we have a decent regex library?])
-		 	AC_CHECK_HEADER(rxposix.h, AC_DEFINE(HAVE_RX,[],[Do we have rxposix.h?]))])
+	AC_CHECK_HEADERS(pcreposix.h rxposix.h)
+	if test "$ac_cv_header_pcreposix_h" == "yes"; then
+		LIBS="$LIBS -lpcre -lpcreposix";
+		AC_DEFINE(ENABLE_REGEX, [], [Do we have a regex library?])
+	else 
+		if test "$ac_cv_header_rxposix_h" == "yes"; then
+			LIBS="$LIBS -lrx"
+			AC_DEFINE(ENABLE_REGEX, [],
+				  [Do we have a regex library?])
+		else
+			AC_SEARCH_LIBS(regcomp, regex,
+					AC_DEFINE(ENABLE_REGEX, [],
+					[Do we have a regex library?]), [])
+		fi
+	fi
 
 	SIEVE_SUBDIRS="${SIEVE_SUBDIRS} $sievedir"
 	EXTRA_OUTPUT="${EXTRA_OUTPUT} $sievedir/Makefile"
@@ -1053,7 +1065,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.300 2007/10/02 18:33:50 murch Exp $ */
+/* $Id: configure.in,v 1.301 2007/10/11 16:52:11 murch Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
