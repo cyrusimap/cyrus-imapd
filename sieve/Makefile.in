@@ -1,6 +1,6 @@
 # Makefile.in - sieve makefile
 # @configure_input@
-# $Id: Makefile.in,v 1.41 2007/10/10 22:15:51 murch Exp $
+# $Id: Makefile.in,v 1.42 2007/10/11 19:11:30 murch Exp $
 ################################################################
 #        Copyright 1998 by Carnegie Mellon University
 #
@@ -27,6 +27,7 @@ srcdir = @srcdir@
 top_srcdir = @top_srcdir@
 VPATH = @srcdir@
 
+prefix = @prefix@
 cyrus_prefix = @cyrus_prefix@
 service_path = @service_path@
 
