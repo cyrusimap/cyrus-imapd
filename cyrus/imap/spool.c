@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: spool.c,v 1.11 2007/03/27 19:29:56 murch Exp $
+ * $Id: spool.c,v 1.12 2007/10/11 19:36:33 murch Exp $
  */
 
 #include <config.h>
@@ -291,7 +291,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
 
  ph_error:
     /* put the last character back; we'll copy it later */
-    prot_ungetc(c, fin);
+    if (c != EOF) prot_ungetc(c, fin);
 
     /* and we didn't get a header */
     if (headname != NULL) *headname = NULL;
