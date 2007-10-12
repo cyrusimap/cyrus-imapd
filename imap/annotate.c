@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: annotate.c,v 1.39 2007/09/28 02:27:45 murch Exp $
+ * $Id: annotate.c,v 1.40 2007/10/12 12:54:23 murch Exp $
  */
 
 #include <config.h>
@@ -897,6 +897,8 @@ static void annotation_get_mailboxopt(const char *int_mboxname,
 	flag = OPT_IMAP_CONDSTORE;
     } else if (!strcmp(entry, "/vendor/cmu/cyrus-imapd/sharedseen")) {
 	flag = OPT_IMAP_SHAREDSEEN;
+    } else if (!strcmp(entry, "/vendor/cmu/cyrus-imapd/duplicatedeliver")) {
+	flag = OPT_IMAP_DUPDELIVER;
     } else {
 	return;
     }
@@ -1030,6 +1032,8 @@ const struct annotate_f_entry mailbox_ro_entries[] =
     { "/vendor/cmu/cyrus-imapd/condstore", BACKEND_ONLY,
       annotation_get_mailboxopt, NULL },
     { "/vendor/cmu/cyrus-imapd/sharedseen", BACKEND_ONLY,
+      annotation_get_mailboxopt, NULL },
+    { "/vendor/cmu/cyrus-imapd/duplicatedeliver", BACKEND_ONLY,
       annotation_get_mailboxopt, NULL },
     { NULL, ANNOTATION_PROXY_T_INVALID, NULL, NULL }
 };
@@ -1719,8 +1723,12 @@ static int annotation_set_mailboxopt(const char *int_mboxname,
     /* Check entry */
     if (!strcmp(entry->entry->name, "/vendor/cmu/cyrus-imapd/condstore")) {
 	flag = OPT_IMAP_CONDSTORE;
-    } else if (!strcmp(entry->entry->name, "/vendor/cmu/cyrus-imapd/sharedseen")) {
+    } else if (!strcmp(entry->entry->name,
+		       "/vendor/cmu/cyrus-imapd/sharedseen")) {
 	flag = OPT_IMAP_SHAREDSEEN;
+    } else if (!strcmp(entry->entry->name,
+		       "/vendor/cmu/cyrus-imapd/duplicatedeliver")) {
+	flag = OPT_IMAP_DUPDELIVER;
     } else {
 	return IMAP_PERMISSION_DENIED;
     }
@@ -1817,6 +1825,9 @@ const struct annotate_st_entry mailbox_rw_entries[] =
       ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
       ACL_ADMIN, annotation_set_mailboxopt, NULL },
     { "/vendor/cmu/cyrus-imapd/sharedseen", ATTRIB_TYPE_BOOLEAN, BACKEND_ONLY,
+      ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
+      ACL_ADMIN, annotation_set_mailboxopt, NULL },
+    { "/vendor/cmu/cyrus-imapd/duplicatedeliver", ATTRIB_TYPE_BOOLEAN, BACKEND_ONLY,
       ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
       ACL_ADMIN, annotation_set_mailboxopt, NULL },
     { NULL, 0, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL }

@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: mbexamine.c,v 1.16 2007/10/08 13:53:31 murch Exp $ */
+/* $Id: mbexamine.c,v 1.17 2007/10/12 12:54:23 murch Exp $ */
 
 #include <config.h>
 
@@ -293,6 +293,9 @@ int do_examine(char *name,
 	    }
 	    if (mailbox.options & OPT_IMAP_SHAREDSEEN) {
 		printf(" IMAP_SHAREDSEEN");
+	    }
+	    if (mailbox.options & OPT_IMAP_DUPDELIVER) {
+		printf(" IMAP_DUPDELIVER");
 	    }
 	}
 	printf("\n");
