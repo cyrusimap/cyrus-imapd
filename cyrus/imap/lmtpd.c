@@ -1,6 +1,6 @@
 /* lmtpd.c -- Program to deliver mail to a mailbox
  *
- * $Id: lmtpd.c,v 1.155 2007/09/28 02:27:46 murch Exp $
+ * $Id: lmtpd.c,v 1.156 2007/10/12 12:54:23 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -473,18 +473,19 @@ int deliver_mailbox(FILE *f,
     unsigned long uid;
     const char *notifier;
 
-    if (dupelim && id && 
-	duplicate_check(id, strlen(id), mailboxname, strlen(mailboxname))) {
-	/* duplicate message */
-	duplicate_log(id, mailboxname, "delivery");
-	return 0;
-    }
-
     r = append_setup(&as, mailboxname, MAILBOX_FORMAT_NORMAL,
 		     authuser, authstate, acloverride ? 0 : ACL_POST, 
 		     quotaoverride ? (long) -1 :
 		     config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA) ?
 		     (long) size : 0);
+
+    /* check for duplicate message */
+    if (!r && id && dupelim && !(as.m.options & OPT_IMAP_DUPDELIVER) &&
+	duplicate_check(id, strlen(id), mailboxname, strlen(mailboxname))) {
+	duplicate_log(id, mailboxname, "delivery");
+	append_abort(&as);
+	return 0;
+    }
 
     if (!r && !content->body) {
 	/* parse the message body if we haven't already,
@@ -495,8 +496,10 @@ int deliver_mailbox(FILE *f,
     if (!r) {
 	r = append_fromstage(&as, &content->body, stage, now,
 			     (const char **) flag, nflags, !singleinstance);
+
+	/* check for duplicate again in case of delivery during setup */
 	if (r ||
-	    (dupelim && id && 
+	    (id && dupelim && !(as.m.options & OPT_IMAP_DUPDELIVER) &&
 	     duplicate_check(id, strlen(id), mailboxname, strlen(mailboxname)))) {
 	    append_abort(&as);
                     

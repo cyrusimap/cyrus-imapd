@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- * $Id: mailbox.h,v 1.88 2007/10/04 14:33:50 murch Exp $
+ * $Id: mailbox.h,v 1.89 2007/10/12 12:54:23 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -256,6 +256,7 @@ struct index_record {
 #define OPT_POP3_NEW_UIDL (1<<0)	/* added for Outlook stupidity */
 #define OPT_IMAP_CONDSTORE (1<<1)	/* added for CONDSTORE extension */
 #define OPT_IMAP_SHAREDSEEN (1<<2)	/* added for shared \Seen flag */
+#define OPT_IMAP_DUPDELIVER (1<<3)	/* added to allow duplicate delivery */
 
 
 struct mailbox_header_cache {
