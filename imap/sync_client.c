@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.26 2007/10/10 21:23:57 murch Exp $
+ * $Id: sync_client.c,v 1.27 2007/10/12 18:11:37 murch Exp $
  */
 
 #include <config.h>
@@ -3414,6 +3414,7 @@ int main(int argc, char **argv)
     int len;
     struct backend *be = NULL;
     sasl_callback_t *cb;
+    int config_virtdomains;
 
     /* Global list */
     msgid_onserver = sync_msgid_list_create(SYNC_MSGID_LIST_HASH_SIZE);
@@ -3513,6 +3514,7 @@ int main(int argc, char **argv)
     }
 
     /* Set namespace -- force standard (internal) */
+    config_virtdomains = config_getenum(IMAPOPT_VIRTDOMAINS);
     if ((r = mboxname_init_namespace(&sync_namespace, 1)) != 0) {
         fatal(error_message(r), EC_CONFIG);
     }
@@ -3576,6 +3578,9 @@ int main(int argc, char **argv)
 		    exit_rc = 1;
 		}
 		else {
+		    mboxname_hiersep_tointernal(&sync_namespace, buf,
+						config_virtdomains ?
+						strcspn(buf, "@") : 0);
 		    if (do_user(buf)) {
 			if (verbose)
 			    fprintf(stderr,
@@ -3598,6 +3603,9 @@ int main(int argc, char **argv)
 		exit_rc = 1;
 	    }
 	    else {
+		mboxname_hiersep_tointernal(&sync_namespace, argv[i],
+					    config_virtdomains ?
+					    strcspn(argv[i], "@") : 0);
 		if (do_user(argv[i])) {
 		    if (verbose)
 			fprintf(stderr, "Error from do_user(%s): bailing out!\n",
@@ -3613,6 +3621,7 @@ int main(int argc, char **argv)
     case MODE_MAILBOX:
     {
 	struct sync_folder_list *folder_list = sync_folder_list_create();
+	char mailboxname[MAX_MAILBOX_NAME+1];
 
 	if (input_filename) {
 	    if ((file=fopen(input_filename, "r")) == NULL) {
@@ -3627,14 +3636,18 @@ int main(int argc, char **argv)
 		if ((len == 0) || (buf[0] == '#'))
 		    continue;
 
-		if (!sync_folder_lookup_byname(folder_list, buf))
+		(*sync_namespace.mboxname_tointernal)(&sync_namespace, buf,
+						      NULL, mailboxname);
+		if (!sync_folder_lookup_byname(folder_list, mailboxname))
 		    sync_folder_list_add(folder_list,
-					 NULL, buf, NULL, 0, 0, NULL);
+					 NULL, mailboxname, NULL, 0, 0, NULL);
 	    }
 	    fclose(file);
 	} else for (i = optind; i < argc; i++) {
-	    if (!sync_folder_lookup_byname(folder_list, argv[i]))
-		sync_folder_list_add(folder_list, NULL, argv[i],
+	    (*sync_namespace.mboxname_tointernal)(&sync_namespace, argv[i],
+						   NULL, mailboxname);
+	    if (!sync_folder_lookup_byname(folder_list, mailboxname))
+		sync_folder_list_add(folder_list, NULL, mailboxname,
                                      NULL, 0, 0, NULL);
 	}
 
@@ -3672,6 +3685,9 @@ int main(int argc, char **argv)
 		exit_rc = 1;
 	    }
 	    else {
+		mboxname_hiersep_tointernal(&sync_namespace, argv[i],
+					    config_virtdomains ?
+					    strcspn(argv[i], "@") : 0);
 		if (do_sieve(argv[i])) {
 		    if (verbose) {
 			fprintf(stderr,
