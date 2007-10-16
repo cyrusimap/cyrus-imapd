@@ -1,7 +1,7 @@
 /* prot.h -- stdio-like module that handles buffering, SASL, and TLS
  *           details for I/O over sockets
  *
- * $Id: prot.h,v 1.44 2007/10/01 18:57:14 murch Exp $
+ * $Id: prot.h,v 1.45 2007/10/16 16:22:01 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -136,7 +136,7 @@ extern int prot_getc(struct protstream *s);
 extern int prot_ungetc(int c, struct protstream *s);
 extern int prot_putc(int c, struct protstream *s);
 
-#define prot_getc(s) ((s)->cnt-- > 0 ? (int)*(s)->ptr++ : prot_fill(s))
+#define prot_getc(s) ((s)->cnt > 0 ? (--(s)->cnt, (int)*(s)->ptr++) : prot_fill(s))
 #define prot_ungetc(c, s) ((s)->cnt++, (*--(s)->ptr = (c)))
 #define prot_putc(c, s) ((*(s)->ptr++ = (c)), --(s)->cnt == 0 ? prot_flush_internal(s,0) : 0)
 

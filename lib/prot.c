@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: prot.c,v 1.92 2007/10/10 15:14:40 murch Exp $
+ * $Id: prot.c,v 1.93 2007/10/16 16:22:01 murch Exp $
  */
 
 #include <config.h>
@@ -1299,7 +1299,8 @@ int prot_getc(struct protstream *s)
 {
     assert(!s->write);
 
-    if (s->cnt-- > 0) {
+    if (s->cnt > 0) {
+	--s->cnt;
 	return *(s->ptr)++;
     } else {
 	return prot_fill(s);
