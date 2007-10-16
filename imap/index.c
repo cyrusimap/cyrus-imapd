@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.231 2007/10/10 14:56:25 murch Exp $
+ * $Id: index.c,v 1.232 2007/10/16 16:21:31 murch Exp $
  */
 #include <config.h>
 
@@ -5428,7 +5428,7 @@ struct seq_set *index_parse_sequence(char *sequence, int usinguid,
 	    }
 	    if (set->len == set->alloc) {
 		set->alloc += SETGROWSIZE;
-		set->set = realloc(set->set, set->alloc);
+		set->set = xrealloc(set->set, set->alloc * sizeof(struct seq_range));
 	    }
 	    set->set[set->len].low = start;
 	    set->set[set->len].high = end;
@@ -5439,7 +5439,7 @@ struct seq_set *index_parse_sequence(char *sequence, int usinguid,
 	else {
 	    if (set->len == set->alloc) {
 		set->alloc += SETGROWSIZE;
-		set->set = xrealloc(set->set, set->alloc);
+		set->set = xrealloc(set->set, set->alloc * sizeof(struct seq_range));
 	    }
 	    set->set[set->len].low = start;
 	    set->set[set->len].high = end;
