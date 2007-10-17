@@ -1,4 +1,4 @@
-# $Id: Makefile.dist,v 1.9 2006/11/30 17:11:17 murch Exp $
+# $Id: Makefile.dist,v 1.10 2007/10/17 20:05:57 murch Exp $
 # it would be nice to figure out how to make "Makefile" do an
 # 'include' of this file.
 # we'd have to make this use srcdir and only define COMPILE_ET if it wasn't
@@ -6,22 +6,10 @@
 
 SNMPGEN = ../snmp/snmpgen
 
-BUILT_SOURCES = imap_err.h imap_err.c \
-	nntp_err.h nntp_err.c \
-	mupdate_err.h mupdate_err.c \
-	lmtpstats.c lmtpstats.h \
+BUILT_SOURCES = lmtpstats.c lmtpstats.h \
 	pushstats.c pushstats.h
 
 dist: $(BUILT_SOURCES)
-
-imap_err.h imap_err.c: imap_err.et
-	$(COMPILE_ET) imap_err.et
-
-nntp_err.h nntp_err.c: nntp_err.et
-	$(COMPILE_ET) nntp_err.et
-
-mupdate_err.h mupdate_err.c: mupdate_err.et
-	$(COMPILE_ET) mupdate_err.et
 
 pushstats.c pushstats.h: pushstats.snmp
 	$(SNMPGEN) pushstats.snmp
