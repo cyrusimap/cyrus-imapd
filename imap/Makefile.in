@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.188 2007/10/10 13:07:04 murch Exp $
+# $Id: Makefile.in,v 1.189 2007/10/17 18:45:48 murch Exp $
 # 
 # @configure_input@
 # 
@@ -151,11 +151,10 @@ libimap.a: $(LOBJS)
 
 ### Built Source Files
 
-xversion:
-	rm -f version.o
+xversion xversion.h:
 	AWK=$(AWK) $(srcdir)/xversion.sh
 
-xversion.h: xversion
+version.o: xversion.h
 
 pushstats.c: pushstats.snmp $(srcdir)/../snmp/snmpgen
 	$(srcdir)/../snmp/snmpgen $(srcdir)/pushstats.snmp
