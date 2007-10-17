@@ -36,7 +36,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.PL,v 1.18 2006/11/30 17:11:23 murch Exp $
+# $Id: Makefile.PL,v 1.19 2007/10/17 20:06:33 murch Exp $
 
 use ExtUtils::MakeMaker;
 use Config;
@@ -66,6 +66,6 @@ WriteMakefile(
     'MYEXTLIB'  => '../../lib/libcyrus.a ../../lib/libcyrus_min.a',
     'LIBS'	=> ["$BDB_LIB $SASL_LIB $OPENSSL_LIB $LIB_RT -lssl -lcrypto"],
     'DEFINE'	=> '-DPERL_POLLUTE',    # e.g., '-DHAVE_SOMETHING' 
-    'INC'	=> "-I../../lib -I../.. -I../../et $SASL_INC $OPENSSL_INC", 
+    'INC'	=> "-I../../lib -I../.. -I../../com_err/et $SASL_INC $OPENSSL_INC", 
     'EXE_FILES' => [cyradm],
 );

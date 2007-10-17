@@ -42,7 +42,7 @@ dnl
 
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.301 2007/10/11 16:52:11 murch Exp $
+dnl $Id: configure.in,v 1.302 2007/10/17 20:06:31 murch Exp $
 dnl
 
 
@@ -872,12 +872,12 @@ fi
 case "$with_com_err" in
   # built-in et
   yes) # use the com_err we're gonna build
-	  COM_ERR_LIBS="../et/libcom_err.a"
-	  COMPILE_ET="../et/compile_et"
+	  COM_ERR_LIBS="../com_err/et/libcom_err.a"
+	  COMPILE_ET="../com_err/et/compile_et"
 	  COM_ERR_LDFLAGS=""
-	  COM_ERR_CPPFLAGS="-I\${top_srcdir}/et"
-	  PRE_SUBDIRS="et ${PRE_SUBDIRS}"
-	  EXTRA_OUTPUT="${EXTRA_OUTPUT} et/Makefile"
+	  COM_ERR_CPPFLAGS="-I\${top_srcdir}/com_err/et"
+	  PRE_SUBDIRS="com_err/et ${PRE_SUBDIRS}"
+	  EXTRA_OUTPUT="${EXTRA_OUTPUT} com_err/et/Makefile"
 	  ;;
   "")   # no problem, we already have it in the paths
 	# we do nothing to pick it up
@@ -1065,7 +1065,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.301 2007/10/11 16:52:11 murch Exp $ */
+/* $Id: configure.in,v 1.302 2007/10/17 20:06:31 murch Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
