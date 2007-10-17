@@ -1,7 +1,7 @@
 \input texinfo @c -*-texinfo-*-
 
-@c $Header: /mnt/data/cyrus/cvsroot/src/cyrus/et/Attic/com_err.texinfo,v 1.1 1995/07/05 18:34:05 jm36 Exp $
-@c $Source: /mnt/data/cyrus/cvsroot/src/cyrus/et/Attic/com_err.texinfo,v $
+@c $Header: /mnt/data/cyrus/cvsroot/src/cyrus/com_err/et/com_err.texinfo,v 1.1 2007/10/17 20:06:32 murch Exp $
+@c $Source: /mnt/data/cyrus/cvsroot/src/cyrus/com_err/et/com_err.texinfo,v $
 @c $Locker:  $
 
 @c Note that although this source file is in texinfo format (more
