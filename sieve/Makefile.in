@@ -1,6 +1,6 @@
 # Makefile.in - sieve makefile
 # @configure_input@
-# $Id: Makefile.in,v 1.42 2007/10/11 19:11:30 murch Exp $
+# $Id: Makefile.in,v 1.43 2007/10/17 18:42:25 murch Exp $
 ################################################################
 #        Copyright 1998 by Carnegie Mellon University
 #
@@ -118,7 +118,8 @@ sieve_err.h sieve_err.c: sieve_err.et
 clean:
 	rm -f sievec sieved test *~ *.o *.a Makefile.bak makedepend.log
 
-distclean: clean sieve_err.c sieve_err.h
+distclean: clean
+	rm -f sieve_err.c sieve_err.h
 	rm -f Makefile
 
 clobber:
