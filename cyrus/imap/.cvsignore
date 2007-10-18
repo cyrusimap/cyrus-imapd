@@ -23,6 +23,7 @@ lmtpproxyd
 lmtpstats.c
 lmtpstats.h
 make_md5
+make_sha1
 mbexamine
 mbpath
 mupdate

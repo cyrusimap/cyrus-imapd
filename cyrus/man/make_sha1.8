@@ -1,5 +1,5 @@
 .\" -*- nroff -*-
-.TH MAKE_MD5 8 "Project Cyrus" CMU
+.TH MAKE_SHA1 8 "Project Cyrus" CMU
 .\" 
 .\" Copyright (c) 2007 Carnegie Mellon University.  All rights reserved.
 .\"
@@ -39,11 +39,11 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: make_md5.8,v 1.3 2007/10/18 18:14:48 murch Exp $
+.\" $Id: make_sha1.8,v 1.1 2007/10/18 18:14:48 murch Exp $
 .SH NAME
-make_md5 \- Generate MD5 checksums for given set of users.
+make_sha1 \- Generate SHA1 checksums for given set of users.
 .SH SYNOPSIS
-.B make_md5
+.B make_sha1
 [
 .B \-C
 .I config-file
@@ -75,20 +75,20 @@ make_md5 \- Generate MD5 checksums for given set of users.
 .IR userid ...
 ]
 .SH DESCRIPTION
-Generate MD5 checksums for messages given set of users. Works as
-incremental update: reads in existing set of MD5 checksums from
-\fImd5_dir/u/userid\fR (hashed on first letter of userid) if that file
+Generate SHA1 checksums for messages given set of users. Works as
+incremental update: reads in existing set of SHA1 checksums from
+\fIsha1_dir/u/userid\fR (hashed on first letter of userid) if that file
 exists. Scans account looking for new messages, and then updates record.
 
-The MD5 checksums which are generated are used to test integrity of the
+The SHA1 checksums which are generated are used to test integrity of the
 master, replica and backup systems on Hermes.
 .SH OPTIONS
 .TP
 .BI \-C " config-file"
 Read configuration options from \fIconfig-file\fR.
 .TP
-.BI \-D " md5_dir"
-Read and write MD5 checksums from \fImd5_dir\fR, overrides configuration
+.BI \-D " sha1_dir"
+Read and write SHA1 checksums from \fIsha1_dir\fR, overrides configuration
 file setting of the same name.
 .TP
 .BI \-k " count"
@@ -103,7 +103,7 @@ List of accounts to process: use in place of command line arguments.
 Regenerate given fraction of the user database in combination with \-M below.
 .TP
 .BI \-M " modulo"
-Regenerate MD5 checksums for given fraction of user database. Allows for
+Regenerate SHA1 checksums for given fraction of user database. Allows for
 rolling consisency checks.
 .TP
 .BI \-v

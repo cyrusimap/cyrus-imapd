@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.189 2007/10/17 18:45:48 murch Exp $
+# $Id: Makefile.in,v 1.190 2007/10/18 18:14:48 murch Exp $
 # 
 # @configure_input@
 # 
@@ -335,6 +335,9 @@ unexpunge: unexpunge.o $(CLIOBJS) libimap.a $(DEPLIBS)
 
 make_md5: make_md5.o libimap.a mutex_fake.o $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o make_md5 make_md5.o libimap.a mutex_fake.o $(DEPLIBS) $(LIBS)
+
+make_sha1: make_sha1.o libimap.a mutex_fake.o $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o make_sha1 make_sha1.o libimap.a mutex_fake.o $(DEPLIBS) $(LIBS)
 
 sync_client: sync_client.o sync_support.o \
 	backend.o tls.o imapparse.o libimap.a mutex_fake.o $(DEPLIBS)
