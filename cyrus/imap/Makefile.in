@@ -1,5 +1,5 @@
 # Makefile for cyrus imap server and associated programs
-# $Id: Makefile.in,v 1.190 2007/10/18 18:14:48 murch Exp $
+# $Id: Makefile.in,v 1.191 2007/10/18 18:48:02 murch Exp $
 # 
 # @configure_input@
 # 
@@ -123,7 +123,7 @@ BUILTSOURCES = imap_err.c imap_err.h pushstats.c pushstats.h \
 	lmtpstats.c lmtpstats.h xversion.h mupdate_err.c mupdate_err.h \
 	nntp_err.c nntp_err.h
 
-all: $(BUILTSOURCES) $(PROGS) $(SUIDPROGS)
+all: xversion $(BUILTSOURCES) $(PROGS) $(SUIDPROGS)
 
 pure: imapd.pure lmtpd.pure mupdate.pure
 
@@ -198,7 +198,7 @@ lmtpd.pure: lmtpd.o proxy.o $(LMTPOBJS) $(SIEVE_OBJS) \
 	 $(SERVICE) lmtpd.o proxy.o $(LMTPOBJS) $(SIEVE_OBJS) \
 	 mutex_fake.o libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
-imapd: xversion $(IMAPDOBJS) mutex_fake.o libimap.a $(DEPLIBS) $(SERVICE)
+imapd: $(IMAPDOBJS) mutex_fake.o libimap.a $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o imapd \
 	 $(SERVICE) $(IMAPDOBJS) mutex_fake.o \
 	libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP)
