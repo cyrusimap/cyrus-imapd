@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.35 2007/03/27 19:29:57 murch Exp $
+ * $Id: sieve.y,v 1.36 2007/10/18 12:03:23 murch Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -201,7 +201,7 @@ reqs: /* empty */
 	;
 
 require: REQUIRE stringlist ';'	{ if (!check_reqs($2)) {
-                                    yyerror("unsupported feature");
+                                    yyerror("Unsupported feature(s) in \"require\"");
 				    YYERROR; 
                                   } }
 	;
@@ -221,7 +221,7 @@ elsif: /* empty */               { $$ = NULL; }
 	;
 
 action: REJCT STRING             { if (!parse_script->support.reject) {
-				     yyerror("reject not required");
+				     yyerror("reject MUST be enabled with \"require\"");
 				     YYERROR;
 				   }
 				   if (!verify_utf8($2)) {
@@ -230,7 +230,7 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
 				   $$ = new_command(REJCT);
 				   $$->u.str = $2; }
 	| FILEINTO copy STRING	 { if (!parse_script->support.fileinto) {
-				     yyerror("fileinto not required");
+				     yyerror("fileinto MUST be enabled with \"require\"");
 	                             YYERROR;
                                    }
 				   if (!verify_mailbox($3)) {
@@ -245,7 +245,7 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
 	| STOP			 { $$ = new_command(STOP); }
 	| DISCARD		 { $$ = new_command(DISCARD); }
 	| VACATION vtags STRING  { if (!parse_script->support.vacation) {
-				     yyerror("vacation not required");
+				     yyerror("vacation MUST be enabled with \"require\"");
 				     YYERROR;
 				   }
 				   if (($2->mime == -1) && !verify_utf8($3)) {
@@ -254,7 +254,7 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
   				   $$ = build_vacation(VACATION,
 					    canon_vtags($2), $3); }
         | SETFLAG stringlist     { if (!parse_script->support.imapflags) {
-                                    yyerror("imapflags not required");
+                                    yyerror("imapflags MUST be enabled with \"require\"");
                                     YYERROR;
                                    }
                                   if (!verify_stringlist($2, verify_flag)) {
@@ -263,7 +263,7 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
                                   $$ = new_command(SETFLAG);
                                   $$->u.sl = $2; }
          | ADDFLAG stringlist     { if (!parse_script->support.imapflags) {
-                                    yyerror("imapflags not required");
+                                    yyerror("imapflags MUST be enabled with \"require\"");
                                     YYERROR;
                                     }
                                   if (!verify_stringlist($2, verify_flag)) {
@@ -272,7 +272,7 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
                                   $$ = new_command(ADDFLAG);
                                   $$->u.sl = $2; }
          | REMOVEFLAG stringlist  { if (!parse_script->support.imapflags) {
-                                    yyerror("imapflags not required");
+                                    yyerror("imapflags MUST be enabled with \"require\"");
                                     YYERROR;
                                     }
                                   if (!verify_stringlist($2, verify_flag)) {
@@ -281,18 +281,18 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
                                   $$ = new_command(REMOVEFLAG);
                                   $$->u.sl = $2; }
          | MARK                   { if (!parse_script->support.imapflags) {
-                                    yyerror("imapflags not required");
+                                    yyerror("imapflags MUST be enabled with \"require\"");
                                     YYERROR;
                                     }
                                   $$ = new_command(MARK); }
          | UNMARK                 { if (!parse_script->support.imapflags) {
-                                    yyerror("imapflags not required");
+                                    yyerror("imapflags MUST be enabled with \"require\"");
                                     YYERROR;
                                     }
                                   $$ = new_command(UNMARK); }
 
          | NOTIFY ntags           { if (!parse_script->support.notify) {
-				       yyerror("notify not required");
+				       yyerror("notify MUST be enabled with \"require\"");
 				       $$ = new_command(NOTIFY); 
 				       YYERROR;
 	 			    } else {
@@ -300,7 +300,7 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
 				             canon_ntags($2));
 				    } }
          | DENOTIFY dtags         { if (!parse_script->support.notify) {
-                                       yyerror("notify not required");
+                                       yyerror("notify MUST be enabled with \"require\"");
 				       $$ = new_command(DENOTIFY);
 				       YYERROR;
 				    } else {
@@ -310,14 +310,14 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
 			YYERROR; } } }
 
 	 | INCLUDE location STRING { if (!parse_script->support.include) {
-				     yyerror("include not required");
+				     yyerror("include MUST be enabled with \"require\"");
 	                             YYERROR;
                                    }
 	                           $$ = new_command(INCLUDE);
 				   $$->u.inc.location = $2;
 				   $$->u.inc.script = $3; }
          | RETURN		 { if (!parse_script->support.include) {
-                                    yyerror("include not required");
+                                    yyerror("include MUST be enabled with \"require\"");
                                     YYERROR;
                                   }
                                    $$ = new_command(RETURN); }
@@ -482,7 +482,7 @@ test:     ANYOF testlist	 { $$ = new_test(ANYOF); $$->u.tl = $2; }
 	| BODY btags stringlist
 				 {
 				     if (!parse_script->support.body) {
-                                       yyerror("body not required");
+                                       yyerror("body MUST be enabled with \"require\"");
 				       YYERROR;
 				     }
 					
@@ -513,7 +513,7 @@ test:     ANYOF testlist	 { $$ = new_test(ANYOF); $$->u.tl = $2; }
 
 addrorenv: ADDRESS		 { $$ = ADDRESS; }
 	| ENVELOPE		 {if (!parse_script->support.envelope)
-	                              {yyerror("envelope not required"); YYERROR;}
+	                              {yyerror("envelope MUST be enabled with \"require\""); YYERROR;}
 	                          else{$$ = ENVELOPE; }
 	                         }
 
@@ -542,7 +542,7 @@ aetags: /* empty */              { $$ = new_aetags(); }
 			yyerror("duplicate comparator tag"); YYERROR; }
 				   else if (!strcmp($3, "i;ascii-numeric") &&
 					    !parse_script->support.i_ascii_numeric) {
-			yyerror("comparator-i;ascii-numeric not required");
+			yyerror("comparator-i;ascii-numeric MUST be enabled with \"require\"");
 			YYERROR; }
 				   else { $$->comparator = $3; } }
 	;
@@ -565,7 +565,7 @@ htags: /* empty */		 { $$ = new_htags(); }
 			 yyerror("duplicate comparator tag"); YYERROR; }
 				   else if (!strcmp($3, "i;ascii-numeric") &&
 					    !parse_script->support.i_ascii_numeric) { 
-			 yyerror("comparator-i;ascii-numeric not required");  YYERROR; }
+			 yyerror("comparator-i;ascii-numeric MUST be enabled with \"require\"");  YYERROR; }
 				   else { 
 				     $$->comparator = $3; } }
         ;
@@ -606,7 +606,7 @@ btags: /* empty */		 { $$ = new_btags(); }
 			 yyerror("duplicate comparator tag"); YYERROR; }
 				   else if (!strcmp($3, "i;ascii-numeric") &&
 					    !parse_script->support.i_ascii_numeric) { 
-			 yyerror("comparator-i;ascii-numeric not required");  YYERROR; }
+			 yyerror("comparator-i;ascii-numeric MUST be enabled with \"require\"");  YYERROR; }
 				   else { 
 				     $$->comparator = $3; } }
         ;
@@ -616,12 +616,12 @@ addrparttag: ALL                 { $$ = ALL; }
 	| LOCALPART		 { $$ = LOCALPART; }
 	| DOMAIN                 { $$ = DOMAIN; }
 	| USER                   { if (!parse_script->support.subaddress) {
-				     yyerror("subaddress not required");
+				     yyerror("subaddress MUST be enabled with \"require\"");
 				     YYERROR;
 				   }
 				   $$ = USER; }  
 	| DETAIL                { if (!parse_script->support.subaddress) {
-				     yyerror("subaddress not required");
+				     yyerror("subaddress MUST be enabled with \"require\"");
 				     YYERROR;
 				   }
 				   $$ = DETAIL; }
@@ -630,19 +630,19 @@ comptag: IS			 { $$ = IS; }
 	| CONTAINS		 { $$ = CONTAINS; }
 	| MATCHES		 { $$ = MATCHES; }
 	| REGEX			 { if (!parse_script->support.regex) {
-				     yyerror("regex not required");
+				     yyerror("regex MUST be enabled with \"require\"");
 				     YYERROR;
 				   }
 				   $$ = REGEX; }
 	;
 
 relcomp: COUNT			 { if (!parse_script->support.relational) {
-				     yyerror("relational not required");
+				     yyerror("relational MUST be enabled with \"require\"");
 				     YYERROR;
 				   }
 				   $$ = COUNT; }
 	| VALUE			 { if (!parse_script->support.relational) {
-				     yyerror("relational not required");
+				     yyerror("relational MUST be enabled with \"require\"");
 				     YYERROR;
 				   }
 				   $$ = VALUE; }
@@ -655,7 +655,7 @@ sizetag: OVER			 { $$ = OVER; }
 
 copy: /* empty */		 { $$ = 0; }
 	| COPY			 { if (!parse_script->support.copy) {
-				     yyerror("copy not required");
+				     yyerror("copy MUST be enabled with \"require\"");
 	                             YYERROR;
                                    }
 				   $$ = COPY; }
