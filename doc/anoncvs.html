@@ -1,6 +1,6 @@
 <html>
   <title> Cyrus IMAP: Anonymous CVS Access </title>
-  <!-- $Id: anoncvs.html,v 1.4 2007/10/19 14:25:56 murch Exp $ -->
+  <!-- $Id: anoncvs.html,v 1.5 2007/10/19 14:33:13 murch Exp $ -->
   
   <body>
     <h1>Cyrus IMAP: Anonymous CVS Access</h1>
@@ -42,7 +42,15 @@
       You will need autoconf, yacc (bison) and lex (flex) to build CVS
       from the repository because we don't keep generated files in the
       repository, along with the usual tools to build Cyrus (a
-      compiler, a Unix box, a network.)
+      compiler, a Unix box, a network.)  To create the configure
+      script, do the following:
+
+      <p><pre><kbd>
+      aclocal -I cmulocal
+      autoheader
+      autoconf
+      </kbd></pre>
+      
       
     <p>
       Read access to the repository is availible to anyone via
@@ -77,7 +85,7 @@ would like to submit a bug, feature request or (best of all) patch.
 
 
 <P><HR>
-last modified: $Date: 2007/10/19 14:25:56 $
+last modified: $Date: 2007/10/19 14:33:13 $
 <br>
 <A HREF="index.html">Return</A> to the Cyrus IMAP Server Home Page
 </BODY></HTML>
