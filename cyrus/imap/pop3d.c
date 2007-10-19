@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.180 2007/10/10 18:34:45 murch Exp $
+ * $Id: pop3d.c,v 1.181 2007/10/19 01:03:17 murch Exp $
  */
 #include <config.h>
 
@@ -202,7 +202,7 @@ static int popd_canon_user(sasl_conn_t *conn, void *context,
     char userbuf[MAX_MAILBOX_NAME+1], *p;
     size_t n;
     int r;
-syslog(LOG_INFO, "popd_canon: '%s'", user);
+
     if (!ulen) ulen = strlen(user);
 
     if (config_getswitch(IMAPOPT_POPSUBFOLDERS)) {
