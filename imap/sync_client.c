@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.27 2007/10/12 18:11:37 murch Exp $
+ * $Id: sync_client.c,v 1.28 2007/10/23 12:46:32 murch Exp $
  */
 
 #include <config.h>
@@ -1345,7 +1345,7 @@ static int upload_messages_list(struct mailbox *mailbox,
 static int upload_messages_from(struct mailbox *mailbox,
 				unsigned long old_last_uid)
 {
-    unsigned long msgno = 0;
+    unsigned long msgno;
     int r = 0;
     struct index_record record;
     struct sync_index_list *index_list;
@@ -1357,6 +1357,7 @@ static int upload_messages_from(struct mailbox *mailbox,
         return(IMAP_IOERROR);
     }
 
+    msgno = 1;
     do {
 	/* Break UPLOAD into chunks of <=max_count messages */
 	index_list = sync_index_list_create();
