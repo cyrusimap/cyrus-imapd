@@ -1,5 +1,5 @@
 /* mboxname.h -- Mailbox list manipulation routines
- * $Id: mboxname.h,v 1.14 2006/11/30 17:11:19 murch Exp $
+ * $Id: mboxname.h,v 1.15 2007/10/23 16:53:07 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -107,6 +107,11 @@ int mboxname_userownsmailbox(const char *userid, const char *name);
  * returns a pointer to the userid, otherwise returns NULL.
  */
 char *mboxname_isusermailbox(const char *name, int isinbox);
+
+/*
+ * Translate (internal) inboxname into corresponding userid.
+ */
+char *mboxname_inbox_touserid(const char *inboxname);
 
 /*
  * Return nonzero if (internal) mailbox 'name' consists of legal characters.
