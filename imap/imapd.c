@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.530 2007/10/18 17:23:06 murch Exp $ */
+/* $Id: imapd.c,v 1.531 2007/10/23 16:53:07 murch Exp $ */
 
 #include <config.h>
 
@@ -4985,7 +4985,7 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
 
 	if ( !localonly ) {
 	    if (mboxname_isusermailbox(mailboxname, 1))
-		sync_log_user(mailboxname+5);
+		sync_log_user(mboxname_inbox_touserid(mailboxname));
 	    else
 		sync_log_mailbox(mailboxname);
 	}
@@ -5136,7 +5136,7 @@ void cmd_delete(char *tag, char *name, int localonly, int force)
 	    user_deletedata(mailboxname+domainlen+5, imapd_userid,
 			    imapd_authstate, 1);
 
-	    sync_log_user(mailboxname+domainlen+5);
+	    sync_log_user(mboxname_inbox_touserid(mailboxname));
 
 	    *p = '\0'; /* clip off domain */
         }
@@ -7873,7 +7873,7 @@ void cmd_undump(char *tag, char *name)
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
 	if (mboxname_isusermailbox(mailboxname, 1))
-	    sync_log_user(mailboxname+5);
+	    sync_log_user(mboxname_inbox_touserid(mailboxname));
 	else
 	    sync_log_mailbox(mailboxname);
     }
@@ -8573,7 +8573,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	    /* this was a successful user delete, and we need to delete
 	       certain user meta-data (but not seen state!) */
 	    user_deletedata(mailboxname+5, imapd_userid, imapd_authstate, 0);
-	    sync_log_user(mailboxname+5);
+	    sync_log_user(mboxname_inbox_touserid(mailboxname));
 	}
 	
 	if(!r && mupdate_h) {

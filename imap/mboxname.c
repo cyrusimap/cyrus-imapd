@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- * $Id: mboxname.c,v 1.40 2007/09/28 02:27:46 murch Exp $
+ * $Id: mboxname.c,v 1.41 2007/10/23 16:53:07 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -626,6 +626,37 @@ char *mboxname_isusermailbox(const char *name, int isinbox)
 	return (char*) start+5; /* could have trailing bits if isinbox+isdel */
     else
 	return NULL;
+}
+
+/*
+ * Translate (internal) inboxname into corresponding userid.
+ */
+char *mboxname_inbox_touserid(const char *inboxname)
+{
+    static char userid[MAX_MAILBOX_NAME+1];
+    const char *domain = NULL, *cp;
+    size_t domainlen = 0;
+
+    if (config_virtdomains && (cp = strchr(inboxname, '!'))) {
+	/* locate, save, and skip domain */
+	domain = inboxname;
+	domainlen = cp++ - inboxname;
+    } else {
+	cp = inboxname;
+    }
+
+    cp += 5; /* skip "user." */
+
+    /* copy localpart of userid */
+    strcpy(userid, cp);
+
+    if (domain) {
+	/* append domain */
+	sprintf(userid+strlen(userid), "@%.*s",
+		domainlen, domain);
+    }
+
+    return(userid);
 }
 
 /*
