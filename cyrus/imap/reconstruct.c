@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.101 2007/10/01 18:36:00 murch Exp $ */
+/* $Id: reconstruct.c,v 1.102 2007/10/24 18:12:09 murch Exp $ */
 
 #include <config.h>
 
@@ -443,9 +443,8 @@ do_reconstruct(char *name,
     return 0;
 }
 
-int 
-reconstruct_expunge (char * path, struct mailbox * mailbox, 
-			unsigned long **expuid, unsigned *expuid_num)
+int reconstruct_expunge (char * path, struct mailbox * mailbox, 
+			 unsigned long **expuid, unsigned *expuid_num)
 {
     char fnamebuf[MAX_MAILBOX_PATH+1];
     char newfnamebuf[MAX_MAILBOX_PATH+1];
@@ -474,8 +473,8 @@ reconstruct_expunge (char * path, struct mailbox * mailbox,
 
     unsigned long *expuid_array = NULL;
     unsigned expuid_idx = 0;
+    unsigned expuid_pos = 0;
     unsigned expuid_alloc = 0;
-    unsigned expmsg;
 
     *expuid = NULL;
     *expuid_num = 0;
@@ -592,37 +591,51 @@ reconstruct_expunge (char * path, struct mailbox * mailbox,
 	    return IMAP_IOERROR;
    	}
 
+	memcpy(buf, index_base, INDEX_HEADER_SIZE);
+        /* may as well just update exists here,
+	 * since we ensure it's all good at the end anyway */
+	*((bit32 *)(buf+OFFSET_EXISTS)) = htonl(expuid_idx);
+	n = fwrite(buf, 1, INDEX_HEADER_SIZE, fexpunge);
+	if (n != INDEX_HEADER_SIZE || ferror(fexpunge) ) {
+	    syslog (LOG_ERR,
+		    "IOERROR: %m writing expunge header: %s", newfnamebuf);
+	    close(expunge_fd);
+	    map_free(&index_base, &index_len);
+	    free(expuid);
+	    fclose(fexpunge);
+	    return IMAP_IOERROR;
+	}
+
 	/* 
-	* verify the message files exist - 
-	* optionally deleting message files 
+	 * copy records which are in the expuid_array to the new expunge file
 	*/
 	p = index_base + start_offset;
 	for (msgno = 1; msgno <= exists; msgno++, p += record_size) {
-	    unsigned long fileuid = ntohl(*((bit32 *)(p + OFFSET_UID)));
+	    unsigned long recorduid = ntohl(*((bit32 *)(p + OFFSET_UID)));
 
-	    for (expmsg = 0; expmsg < expuid_idx; expmsg++) {
-		if (fileuid == expuid_array [expmsg]) {
+            /* we know these records are in expunge file order */
+	    if (recorduid == expuid_array[expuid_pos]) {
+	        n = fwrite(p, 1, INDEX_RECORD_SIZE, fexpunge);
+		if (n != INDEX_RECORD_SIZE) {
+	    	    syslog(LOG_ERR,
+			   "IOERROR: %m writing cyrus.expunge record: %s",
+			   newfnamebuf);
+		    close(expunge_fd);
+		    map_free(&index_base, &index_len);
+		    free(expuid);
+		    fclose(fexpunge);
 
-		    n = fwrite(buf, 1, INDEX_RECORD_SIZE, fexpunge);
-		    if (n != INDEX_RECORD_SIZE) {
-	    		syslog (LOG_ERR, 
-		"IOERROR: %m writing cyrus.expunge record: %s", newfnamebuf);
-			close(expunge_fd);
-			map_free(&index_base, &index_len);
-			free(expuid);
-			fclose(fexpunge);
-			
-			return IMAP_IOERROR;
-		    }
-		    break;
-		}
+		    return IMAP_IOERROR;
+	        }
+                if (++expuid_pos >= expuid_idx)
+                  break;
 	    }
 	}
-	rewind (fexpunge);
-	*((bit32 *)(buf+OFFSET_EXISTS)) = htonl(*expuid_num);	
-	n = fwrite(buf, 1, INDEX_HEADER_SIZE, fexpunge);
-	if (n != INDEX_HEADER_SIZE || ferror(fexpunge) ) {
-	    syslog (LOG_ERR, "IOERROR: %m writing expunge header: %s", newfnamebuf);
+
+	if (expuid_pos != expuid_idx) {
+	    syslog (LOG_ERR,
+		    "IOERROR: %m failed to find all records for: %s",
+		    newfnamebuf);
 	    close(expunge_fd);
 	    map_free(&index_base, &index_len);
 	    free(expuid);
