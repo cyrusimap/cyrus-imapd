@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_quotalegacy.c,v 1.16 2007/09/27 20:02:45 murch Exp $ */
+/* $Id: cyrusdb_quotalegacy.c,v 1.17 2007/10/24 14:14:06 murch Exp $ */
 
 #include <config.h>
 
@@ -75,14 +75,6 @@
 
 /* we have the file locked iff we have an outstanding transaction */
 
-struct db {
-    char *path;
-
-    char *data;  /* allocated buffer for fetched data */
-
-    hash_table table;  /* transaction (hash table of sub-transactions) */
-};
-
 struct subtxn {
     int fd;
 
@@ -92,7 +84,24 @@ struct subtxn {
     int delete;
 };
 
-int abort_txn(struct db *db __attribute__((unused)), struct txn *tid);
+struct txn {
+    hash_table table;	/* hash table of sub-transactions */
+
+    int (*proc)(char *, struct subtxn *);  /* commit/abort procedure */
+
+    int result;		/* final result of the commit/abort */
+};
+
+struct db {
+    char *path;
+
+    char *data;		/* allocated buffer for fetched data */
+
+    struct txn txn;	/* transaction associated with this db handle */
+};
+
+static int abort_txn(struct db *db __attribute__((unused)), struct txn *tid);
+
 
 /* simple hash so it's easy to find these things in the filesystem;
    our human time is worth more than efficiency */
@@ -239,7 +248,7 @@ static void free_db(struct db *db)
     if (db) {
 	if (db->path) free(db->path);
 	if (db->data) free(db->data);
-	free_hash_table(&db->table, NULL);
+	free_hash_table(&db->txn.table, NULL);
 	free(db);
     }
 }
@@ -288,7 +297,7 @@ static int myopen(const char *fname, int flags, struct db **ret)
     assert(fname && ret);
 
     db->path = xstrdup(fname);
-    construct_hash_table(&db->table, 200, 0);
+    construct_hash_table(&db->txn.table, 200, 0);
 
     /* strip any filename from the path */
     if ((p = strrchr(db->path, '/'))) *p = '\0';
@@ -346,9 +355,9 @@ static int myfetch(struct db *db, char *quota_path,
 
     if (tid) {
 	if (!*tid)
-	    *tid = (struct txn *) &db->table;
+	    *tid = &db->txn;
 	else
-	    mytid = (struct subtxn *) hash_lookup(quota_path, &db->table);
+	    mytid = (struct subtxn *) hash_lookup(quota_path, &db->txn.table);
     }
 
     /* open and lock file, if needed */
@@ -377,7 +386,7 @@ static int myfetch(struct db *db, char *quota_path,
 	    }
 
 	    mytid = new_subtxn(quota_path, quota_fd);
-	    hash_insert(quota_path, mytid, &db->table);
+	    hash_insert(quota_path, mytid, &db->txn.table);
 	}
     }
     else
@@ -522,7 +531,7 @@ static int foreach(struct db *db,
     }
     if (tmpprefix) free(tmpprefix);
 
-    if (tid && !*tid) *tid = (struct txn *) &db->table;
+    if (tid && !*tid) *tid = &db->txn;
 
     /* sort the quotaroots (ignoring paths) */
     qsort(globbuf.gl_pathv, globbuf.gl_pathc, sizeof(char *), &compar_qr);
@@ -571,9 +580,9 @@ static int mystore(struct db *db,
 
     if (tid) {
 	if (!*tid)
-	    *tid = (struct txn *) &db->table;
+	    *tid = &db->txn;
 	else
-	    mytid = (struct subtxn *) hash_lookup(quota_path, &db->table);
+	    mytid = (struct subtxn *) hash_lookup(quota_path, &db->txn.table);
     }
 
     /* open and lock file, if needed */
@@ -604,8 +613,7 @@ static int mystore(struct db *db,
 
 	mytid = new_subtxn(quota_path, fd);
 
-	if (tid)
-	    hash_insert(quota_path, mytid, &db->table);
+	if (tid) hash_insert(quota_path, mytid, &db->txn.table);
     }
 
     if (!data) {
@@ -675,7 +683,8 @@ static int mystore(struct db *db,
 		syslog(LOG_ERR, "IOERROR: writing quota file %s: %m",
 		       new_quota_path);
 	    else
-		syslog(LOG_ERR, "IOERROR: writing quota file %s: failed to write %d bytes",
+		syslog(LOG_ERR,
+		       "IOERROR: writing quota file %s: failed to write %d bytes",
 		       new_quota_path, datalen+1);
 	    if (tid)
 		abort_txn(db, *tid);
@@ -719,47 +728,35 @@ static int delete(struct db *db,
     return mystore(db, key, keylen, NULL, 0, mytid, 1);
 }
 
-struct txn_rock {
-    hash_table *table;
-    int (*func)(char *, struct subtxn *);
-    int ret;
-};
-
-static void enum_func(char *fname, void *data, void *rock)
+static void txn_proc(char *fname, void *data, void *rock)
 {
-    struct txn_rock *trock = (struct txn_rock *) rock;
+    struct txn *tid = (struct txn *) rock;
     int r;
 
-    r = trock->func(fname, (struct subtxn *) data);
-    hash_del(fname, trock->table);
+    r = tid->proc(fname, (struct subtxn *) data);
+    hash_del(fname, &tid->table);
 
-    if (r && !trock->ret) trock->ret = r;
+    if (r && !tid->result) tid->result = r;
 }
 
-int commit_txn(struct db *db __attribute__((unused)), struct txn *tid)
+static int commit_txn(struct db *db __attribute__((unused)), struct txn *tid)
 {
-    struct txn_rock trock;
+    tid->proc = commit_subtxn;
+    tid->result = 0;
 
-    trock.table = (hash_table *) tid;
-    trock.func = commit_subtxn;
-    trock.ret = 0;
+    hash_enumerate(&tid->table, txn_proc, tid);
 
-    hash_enumerate((hash_table *) tid, enum_func, &trock);
-
-    return trock.ret;
+    return tid->result;
 }
 
-int abort_txn(struct db *db __attribute__((unused)), struct txn *tid)
+static int abort_txn(struct db *db __attribute__((unused)), struct txn *tid)
 {
-    struct txn_rock trock;
+    tid->proc = abort_subtxn;
+    tid->result = 0;
 
-    trock.table = (hash_table *) tid;
-    trock.func = abort_subtxn;
-    trock.ret = 0;
+    hash_enumerate(&tid->table, txn_proc, tid);
 
-    hash_enumerate((hash_table *) tid, enum_func, &trock);
-
-    return trock.ret;
+    return tid->result;
 }
 
 struct cyrusdb_backend cyrusdb_quotalegacy = 
