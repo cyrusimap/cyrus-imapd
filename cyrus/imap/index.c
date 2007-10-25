@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.233 2007/10/25 18:21:14 murch Exp $
+ * $Id: index.c,v 1.234 2007/10/25 18:22:08 murch Exp $
  */
 #include <config.h>
 
@@ -1571,124 +1571,6 @@ int statusitems;
     prot_printf(imapd_out, ")\r\n");
     return 0;
 }
-
-/*
- * Performs a GETUIDS command
- */
-int
-index_getuids(mailbox, lowuid)
-struct mailbox *mailbox __attribute__((unused));
-unsigned lowuid;
-{
-    int msgno;
-    unsigned firstuid = 0, lastuid = 0;
-
-
-    prot_printf(imapd_out, "* GETUIDS");
-
-    for (msgno = 1; msgno <= imapd_exists; msgno++) {
-	if (firstuid == 0) {
-	    if (UID(msgno) >= lowuid) {
-		prot_printf(imapd_out, " %u %u", msgno, UID(msgno));
-		firstuid = lastuid = UID(msgno);
-	    }
-	}
-	else {
-	    if (UID(msgno) != ++lastuid) {
-		if (lastuid-1 != firstuid) {
-		    prot_printf(imapd_out, ":%u", lastuid-1);
-		}
-		firstuid = lastuid = UID(msgno);
-		prot_printf(imapd_out, ",%u", firstuid);
-	    }
-	}
-    }
-    if (lastuid != firstuid) {
-	prot_printf(imapd_out, ":%u", lastuid);
-    }
-    prot_printf(imapd_out, "\r\n");
-
-    return 0;
-}
-
-/*
- * Performs a XGETSTATE command
- */
-int
-index_getstate(mailbox)
-struct mailbox *mailbox;
-{    
-
-    prot_printf(imapd_out, "* XSTATE %lu %lu\r\n", mailbox->index_mtime,
-		seen_last_change);
-
-    return 0;
-}
-
-#if 0
-/* What's this for?  Might as well keep it around. */
-/*
- * Performs a XCHECKSTATE command
- */
-int
-index_checkstate(mailbox, indexdate, seendate)
-struct mailbox *mailbox;
-unsigned indexdate;
-unsigned seendate;
-{
-    int r;
-    int msgno;
-    unsigned int startmsgno = 0;
-    int sepchar = ' ';
-
-    /* No messages == everything OK */
-    if (imapd_exists < 1) {
-	prot_printf(imapd_out, "* XCHECKSTATE\r\n");
-	return 0;
-    }
-	
-    /* If \Seen data changed, we don't know anything */
-    if (seendate != seen_last_change) {
-	if (imapd_exists == 1) {
-	    prot_printf(imapd_out,
-			"* XCHECKSTATE %u\r\n", UID(1));
-	}
-	else {
-	    prot_printf(imapd_out,
-			"* XCHECKSTATE %u:%u\r\n", UID(1), UID(imapd_exists));
-	}
-	return 0;
-    }
-
-    prot_printf(imapd_out, "* XCHECKSTATE");
-    for (msgno = 1; msgno <= imapd_exists; msgno++) {
-	/*
-	 * Below is >= instead of > because we can get
-	 * two STORE commands within the same second.
-	 */
-	if (LAST_UPDATED(msgno) >= indexdate) {
-	    if (startmsgno == 0) {
-		prot_printf(imapd_out, "%c%u", sepchar, UID(msgno));
-		sepchar = ',';
-		startmsgno = msgno;
-	    }
-	}
-	else {
-	    if (startmsgno != 0 && startmsgno < msgno - 1) {
-		prot_printf(imapd_out, ":%u", UID(msgno-1));
-	    }
-	    startmsgno = 0;
-	}
-    }
-
-    if (startmsgno != 0 && startmsgno < imapd_exists) {
-	prot_printf(imapd_out, ":%u", UID(imapd_exists));
-    }
-
-    prot_printf(imapd_out, "\r\n");
-    return 0;
-}
-#endif
 
 /*
  * Returns the msgno of the message with UID 'uid'.
