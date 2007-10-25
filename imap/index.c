@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.232 2007/10/16 16:21:31 murch Exp $
+ * $Id: index.c,v 1.233 2007/10/25 18:21:14 murch Exp $
  */
 #include <config.h>
 
@@ -5405,7 +5405,7 @@ struct seq_set *index_parse_sequence(char *sequence, int usinguid,
     if (!set) set = xzmalloc(sizeof(struct seq_set));
 
     for (;;) {
-	if (isdigit((int) *sequence)) {
+	if (cyrus_isdigit((int) *sequence)) {
 	    end = start = start*10 + *sequence - '0';
 	}
 	else if (*sequence == '*') {
@@ -5414,7 +5414,7 @@ struct seq_set *index_parse_sequence(char *sequence, int usinguid,
 	else if (*sequence == ':') {
 	    end = 0;
 	    sequence++;
-	    while (isdigit((int) *sequence)) {
+	    while (cyrus_isdigit((int) *sequence)) {
 		end = end*10 + *sequence++ - '0';
 	    }
 	    if (*sequence == '*') {
