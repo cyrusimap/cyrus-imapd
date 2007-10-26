@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: auth_unix.c,v 1.46 2007/09/27 20:02:45 murch Exp $
+ * $Id: auth_unix.c,v 1.47 2007/10/26 15:33:12 murch Exp $
  */
 
 #include <config.h>
@@ -225,7 +225,7 @@ static struct auth_state *mynewstate(const char *identifier)
     struct group *grp;
 #ifdef HAVE_GETGROUPLIST
     gid_t gid, *groupids = NULL;
-    int ret, ngroups = 0;
+    int ret, ngroups = 10;
 #else
     char **mem;
 #endif
@@ -248,10 +248,7 @@ static struct auth_state *mynewstate(const char *identifier)
 #ifdef HAVE_GETGROUPLIST
     gid = pwd ? pwd->pw_gid : (gid_t) -1;
 
-    /* get number of groups user is member of into ngroups */
-    getgrouplist(identifier, gid, NULL, &ngroups);
-
-    /* get the actual group ids */
+    /* get the group ids */
     do {
 	groupids = (gid_t *)xrealloc((gid_t *)groupids,
 				     ngroups * sizeof(gid_t));
