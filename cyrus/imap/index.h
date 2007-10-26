@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.h,v 1.14 2007/10/08 14:33:19 murch Exp $
+ * $Id: index.h,v 1.15 2007/10/26 15:31:40 murch Exp $
  */
 
 /* Header for internal usage of index.c + programs that make raw access
@@ -180,6 +180,19 @@ struct nntp_overview {
     unsigned long lines;
 };
 
+struct seq_range {
+    unsigned low;
+    unsigned high;
+};
+
+struct seq_set {
+    struct seq_range *set;
+    unsigned len;
+    unsigned alloc;
+    unsigned mark;
+    struct seq_set *next;
+};
+
 extern void index_operatemailbox(struct mailbox *mailbox);
 extern unsigned index_finduid(unsigned uid);
 extern unsigned index_getuid(unsigned msgno);
@@ -196,7 +209,11 @@ extern unsigned long index_getsize(struct mailbox *mailbox, unsigned msgno);
 extern unsigned long index_getlines(struct mailbox *mailbox, unsigned msgno);
 extern int index_copy_remote(struct mailbox *mailbox, char *sequence, 
 			     int usinguid, struct protstream *pout);
-extern struct seq_set *index_parse_sequence(char *sequence, int usinguid,
+
+void appendsequencelist(struct seq_set **l, char *sequence, int usinguid);
+void freesequencelist(struct seq_set *l);
+
+extern struct seq_set *index_parse_sequence(const char *sequence, int usinguid,
 					    struct seq_set *set);
 
 #endif /* INDEX_H */
