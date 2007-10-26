@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.234 2007/10/25 18:22:08 murch Exp $
+ * $Id: index.c,v 1.235 2007/10/26 11:05:11 murch Exp $
  */
 #include <config.h>
 
@@ -5282,51 +5282,42 @@ static int comp_coalesce(const void *v1, const void *v2)
 struct seq_set *index_parse_sequence(char *sequence, int usinguid,
 				     struct seq_set *set)
 {
-    unsigned i, j, start = 0, end = 0;
+    unsigned i, j, start, end, *num;
 
     if (!set) set = xzmalloc(sizeof(struct seq_set));
 
+    start = end = 0;
+    num = &start;
     for (;;) {
 	if (cyrus_isdigit((int) *sequence)) {
-	    end = start = start*10 + *sequence - '0';
+	    *num = (*num)*10 + *sequence - '0';
 	}
 	else if (*sequence == '*') {
-	    end = start = usinguid ? UID(imapd_exists) : imapd_exists;
+	    *num = usinguid ? UID(imapd_exists) : imapd_exists;
 	}
 	else if (*sequence == ':') {
-	    end = 0;
-	    sequence++;
-	    while (cyrus_isdigit((int) *sequence)) {
-		end = end*10 + *sequence++ - '0';
-	    }
-	    if (*sequence == '*') {
-		sequence++;
-		end = usinguid ? UID(imapd_exists) : imapd_exists;
-	    }
-	    if (start > end) {
+	    num = &end;
+	}
+	else {
+	    if (!end) end = start;
+	    else if (start > end) {
 		i = end;
 		end = start;
 		start = i;
 	    }
+
 	    if (set->len == set->alloc) {
 		set->alloc += SETGROWSIZE;
-		set->set = xrealloc(set->set, set->alloc * sizeof(struct seq_range));
+		set->set =
+		    xrealloc(set->set, set->alloc * sizeof(struct seq_range));
 	    }
 	    set->set[set->len].low = start;
 	    set->set[set->len].high = end;
 	    set->len++;
-	    start = 0;
-	    if (!*sequence) break;
-	}
-	else {
-	    if (set->len == set->alloc) {
-		set->alloc += SETGROWSIZE;
-		set->set = xrealloc(set->set, set->alloc * sizeof(struct seq_range));
-	    }
-	    set->set[set->len].low = start;
-	    set->set[set->len].high = end;
-	    set->len++;
-	    start = 0;
+
+	    start = end = 0;
+	    num = &start;
+
 	    if (!*sequence) break;
 	}
 	sequence++;
