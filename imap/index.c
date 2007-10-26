@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.236 2007/10/26 14:59:15 murch Exp $
+ * $Id: index.c,v 1.237 2007/10/26 15:31:40 murch Exp $
  */
 #include <config.h>
 
@@ -104,7 +104,7 @@ static unsigned lastnotrecent;	/* Msgno of last non-\Recent message */
 static time_t *flagreport;	/* Array for each msgno of last_updated when
 				 * FLAGS data reported to client.
 				 * Zero if FLAGS data never reported */
-static char *seenflag;		/* Array for each msgno, nonzero if \Seen */
+static unsigned char *seenflag;	/* Array for each msgno, nonzero if \Seen */
 static time_t seen_last_change;	/* Last mod time of \Seen state change */
 static int flagalloced = -1;	/* Allocated size of above two arrays */
 struct seen *seendb;		/* Seen state database object */
@@ -118,8 +118,6 @@ static int index_forsequence(struct mailbox *mailbox, const char *sequence,
 			     int usinguid,
 			     index_sequenceproc_t *proc, void *rock,
 			     int* fetchedsomething);
-struct seq_set *index_parse_sequence(char *sequence, int usinguid,
-				     struct seq_set *set);
 static int index_insequence(unsigned num, struct seq_set *set, int use_mark);
 
 void index_fetchmsg(const char *msg_base, unsigned long msg_size,
@@ -307,7 +305,7 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 
 	    for (oldmsgno = msgno = 1; oldmsgno <= imapd_exists;
 		 oldmsgno++, msgno++) {
-		if (msgno <= mailbox->exists) {
+		if ((unsigned) msgno <= mailbox->exists) {
 		    mailbox_read_index_record(mailbox, msgno, &record);
 		}
 		else {
@@ -361,7 +359,7 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 	       mailbox->name);
 	fatal("failed to stat cache file", EC_IOERR);
     }
-    if (cache_end < sbuf.st_size) {
+    if (cache_end < (unsigned long) sbuf.st_size) {
 	cache_end = sbuf.st_size;
 	map_refresh(mailbox->cache_fd, 0, &cache_base, &cache_len,
 		    cache_end, "cache", mailbox->name);
@@ -451,7 +449,7 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 
     for (msgno = 1; msgno <= oldexists; msgno++) {
 	if (flagreport[msgno] < LAST_UPDATED(msgno)) {
-	    for (i = 0; i < VECTOR_SIZE(user_flags); i++) {
+	    for (i = 0; (unsigned) i < VECTOR_SIZE(user_flags); i++) {
 		user_flags[i] = USER_FLAGS(msgno, i);
 	    }
 	    index_fetchflags(mailbox, msgno, SYSTEM_FLAGS(msgno), user_flags,
@@ -475,7 +473,8 @@ void
 index_check_existing(struct mailbox *mailbox, int usinguid, int checkseen)
 {
     struct stat sbuf;
-    int msgno, i;
+    int msgno;
+    unsigned i;
     bit32 user_flags[MAX_USER_FLAGS/32];
 
     if (imapd_exists == -1)
@@ -541,11 +540,11 @@ int oldexists;
     unsigned oldnext = 0, oldseen = 0;
     unsigned newnext = 0, newseen = 0;
     int neweof = 0;
-    unsigned msgno, uid, dirty = 0;
-    int i;
+    unsigned uid, dirty = 0, i;
+    int msgno;
     bit32 user_flags[MAX_USER_FLAGS/32];
     char *saveseenuids, *save;
-    int savealloced;
+    size_t savealloced;
     unsigned start, newallseen, inrange, usecomma;
     mailbox_notifyproc_t *updatenotifier;
     int dosync = 0;
@@ -714,7 +713,7 @@ int oldexists;
 		inrange = 1;
 	    }
 	}
-	if (save - saveseenuids > savealloced - 30) {
+	if ((size_t) (save - saveseenuids) > savealloced - 30) {
 	    savealloced += SAVEGROW;
 	    saveseenuids = xrealloc(saveseenuids, savealloced);
 	    save = saveseenuids + strlen(saveseenuids);
@@ -881,7 +880,8 @@ struct storeargs *storeargs;
 char **flag;
 int nflags;
 {
-    int i, r, userflag, emptyflag;
+    int i, r, emptyflag;
+    unsigned userflag;
     int writeheader = 0;
     int newflag[MAX_USER_FLAGS];
     long myrights = mailbox->myrights;
@@ -1509,8 +1509,7 @@ int statusitems;
 	if (statusitems & (STATUS_RECENT | STATUS_UNSEEN)) {
 	    const char *base;
 	    unsigned long len = 0;
-	    int msg;
-	    unsigned uid;
+	    unsigned msg, uid;
 
 	    map_refresh(mailbox->index_fd, 0, &base, &len,
 			mailbox->start_offset +
@@ -1653,7 +1652,7 @@ index_forsequence(struct mailbox* mailbox,
 	    end = index_finduid(end);
 	}
 	if (start < 1) start = 1;
-	if (end > imapd_exists) end = imapd_exists;
+	if (end > (unsigned) imapd_exists) end = imapd_exists;
 
 	for (j = start; j <= end; j++) {
 	    if (fetchedsomething) *fetchedsomething = 1;
@@ -1687,7 +1686,7 @@ unsigned start_octet;
 unsigned octet_count;
 struct protstream *pout;
 {
-    int n;
+    unsigned n;
 
     /* If no data, output NIL */
     if (!msg_base) {
@@ -1749,7 +1748,7 @@ static int index_fetchsection(const char *resp,
 			      unsigned start_octet, unsigned octet_count)
 {
     char *p;
-    int skip = 0;
+    unsigned skip = 0;
     int fetchmime = 0;
     unsigned offset = 0;
     char *decbuf = NULL;
@@ -1825,7 +1824,8 @@ static int index_fetchsection(const char *resp,
 
     cacheitem += skip * 5 * 4 + CACHE_ITEM_SIZE_SKIP + (fetchmime ? 0 : 2 * 4);
     
-    if (CACHE_ITEM_BIT32(cacheitem + CACHE_ITEM_SIZE_SKIP) == -1) goto badpart;
+    if (CACHE_ITEM_BIT32(cacheitem + CACHE_ITEM_SIZE_SKIP) == (bit32) -1)
+	goto badpart;
 
     offset = CACHE_ITEM_BIT32(cacheitem);
     size = CACHE_ITEM_BIT32(cacheitem + CACHE_ITEM_SIZE_SKIP);
@@ -1883,7 +1883,7 @@ static void index_fetchfsection(const char *msg_base,
 				unsigned start_octet, unsigned octet_count)
 {
     char *p;
-    int skip = 0;
+    unsigned skip = 0;
     int fields_not = 0;
     unsigned crlf_start = 0;
     unsigned crlf_size = 2;
@@ -1925,7 +1925,8 @@ static void index_fetchfsection(const char *msg_base,
 
     cacheitem += 4;
 
-    if (CACHE_ITEM_BIT32(cacheitem+CACHE_ITEM_SIZE_SKIP) == -1) goto badpart;
+    if (CACHE_ITEM_BIT32(cacheitem+CACHE_ITEM_SIZE_SKIP) == (bit32) -1)
+	goto badpart;
 	
     if (p[13]) fields_not++;	/* Check for "." after "HEADER.FIELDS" */
 
@@ -1995,7 +1996,7 @@ unsigned offset;
 unsigned size;
 {
     static char *buf;
-    static int bufsize;
+    static unsigned bufsize;
 
     if (offset + size > msg_size) {
 	/* Message file is too short, truncate request */
@@ -2040,7 +2041,7 @@ index_pruneheader(char *buf, struct strlist *headers,
 	if (colon && headers_not) {
 	    goodheader = 1;
 	    for (l = headers_not; l; l = l->next) {
-		if (colon - p == strlen(l->s) &&
+		if ((size_t) (colon - p) == strlen(l->s) &&
 		    !strncasecmp(p, l->s, colon - p)) {
 		    goodheader = 0;
 		    break;
@@ -2051,7 +2052,7 @@ index_pruneheader(char *buf, struct strlist *headers,
 	}
 	if (colon) {
 	    for (l = headers; l; l = l->next) {
-		if (colon - p == strlen(l->s) &&
+		if ((size_t) (colon - p) == strlen(l->s) &&
 		    !strncasecmp(p, l->s, colon - p)) {
 		    goodheader = 1;
 		    break;
@@ -2119,7 +2120,7 @@ index_fetchcacheheader(unsigned msgno, struct strlist *headers,
 		       unsigned start_octet, unsigned octet_count)
 {
     static char *buf;
-    static int bufsize;
+    static unsigned bufsize;
     const char *cacheitem;
     unsigned size;
     unsigned crlf_start = 0;
@@ -2183,7 +2184,7 @@ index_fetchcacheheader(unsigned msgno, struct strlist *headers,
  */
 static void index_listflags(struct mailbox *mailbox)
 {
-    int i;
+    unsigned i;
     int cancreate = 0;
     char sepchar = '(';
 
@@ -2287,7 +2288,7 @@ static void index_fetchflags(struct mailbox *mailbox,
     if (sepchar == '(') prot_putc('(', imapd_out);
     prot_putc(')', imapd_out);
 
-    assert(flagalloced > 0 || msgno < flagalloced);
+    assert(flagalloced > 0 || msgno < (unsigned) flagalloced);
 
     flagreport[msgno] = last_updated;
 }
@@ -2305,7 +2306,7 @@ static int index_fetchreply(struct mailbox *mailbox,
     struct octetinfo *oi = NULL;
     int sepchar = '(';
     int started = 0;
-    int i;
+    unsigned i;
     bit32 user_flags[MAX_USER_FLAGS/32];
     const char *cacheitem;
     struct strlist *section, *field;
@@ -2576,9 +2577,8 @@ int index_urlfetch(struct mailbox *mailbox, unsigned msgno,
     const char *msg_base = 0;
     unsigned long msg_size = 0;
     const char *cacheitem;
-    int skip = 0;
     int fetchmime = 0;
-    unsigned size, offset = 0;
+    unsigned size, offset = 0, skip = 0;;
     int n, r = 0;
 
     if (outsize) *outsize = 0;
@@ -2664,7 +2664,7 @@ int index_urlfetch(struct mailbox *mailbox, unsigned msgno,
 	cacheitem += skip * 5 * 4 + CACHE_ITEM_SIZE_SKIP +
 	    (fetchmime ? 0 : 2 * 4);
     
-	if (CACHE_ITEM_BIT32(cacheitem + CACHE_ITEM_SIZE_SKIP) == -1) {
+	if (CACHE_ITEM_BIT32(cacheitem + CACHE_ITEM_SIZE_SKIP) == (bit32) -1) {
 	    r = IMAP_BADURL;
 	    goto done;
 	}
@@ -2705,7 +2705,7 @@ static int index_storeseen(struct mailbox *mailbox, unsigned msgno, void *rock)
 {
     struct storeargs *storeargs = (struct storeargs *)rock;
     int val = (storeargs->operation == STORE_ADD) ? 1 : 0;
-    int i;
+    unsigned i;
     bit32 user_flags[MAX_USER_FLAGS/32];
     
     if (seenflag[msgno] == val) return 0;
@@ -2733,11 +2733,11 @@ static int index_storeflag(struct mailbox *mailbox,
 			   unsigned msgno, void *rock)
 {
     struct storeargs *storeargs = (struct storeargs *)rock;
-    int i;
+    unsigned i;
     struct index_record record;
-    int uid = UID(msgno);
-    int low=1, high=mailbox->exists;
-    int mid = 0;
+    unsigned long uid = UID(msgno);
+    unsigned low=1, high=mailbox->exists;
+    unsigned mid = 0;
     int r;
     int firsttry = 1;
     int dirty = 0;
@@ -2932,7 +2932,7 @@ static int index_search_evaluate(struct mailbox *mailbox,
 				 unsigned msgno,
 				 struct mapfile *msgfile)
 {
-    int i;
+    unsigned i;
     struct strlist *l, *h;
     const char *cacheitem;
     int cachelen;
@@ -2949,13 +2949,13 @@ static int index_search_evaluate(struct mailbox *mailbox,
     if (searchargs->smaller && SIZE(msgno) >= searchargs->smaller) return 0;
     if (searchargs->larger && SIZE(msgno) <= searchargs->larger) return 0;
 
-    if (searchargs->after && INTERNALDATE(msgno) < searchargs->after)
+    if (searchargs->after && (time_t) INTERNALDATE(msgno) < searchargs->after)
       return 0;
-    if (searchargs->before && INTERNALDATE(msgno) > searchargs->before)
+    if (searchargs->before && (time_t) INTERNALDATE(msgno) > searchargs->before)
       return 0;
-    if (searchargs->sentafter && SENTDATE(msgno) < searchargs->sentafter)
+    if (searchargs->sentafter && (time_t) SENTDATE(msgno) < searchargs->sentafter)
       return 0;
-    if (searchargs->sentbefore && SENTDATE(msgno) > searchargs->sentbefore)
+    if (searchargs->sentbefore && (time_t) SENTDATE(msgno) > searchargs->sentbefore)
       return 0;
 
     if (searchargs->modseq && MODSEQ(msgno) < searchargs->modseq) return 0;
@@ -3144,7 +3144,8 @@ index_searchmsg(char *substr,
 {
     int partsleft = 1;
     int subparts;
-    int start, len, charset, encoding;
+    unsigned long start;
+    int len, charset, encoding;
     char *p, *q;
     
     /* Won't find anything in a truncated file */
@@ -3280,7 +3281,8 @@ static void index_getsearchtextmsg(struct mailbox* mailbox,
   struct mapfile msgfile;
   int partsleft = 1;
   int subparts;
-  int start, len, charset, encoding;
+  unsigned long start;
+  int len, charset, encoding;
   int partcount = 0;
   char *p, *q;
   int format = mailbox->format;
@@ -3424,7 +3426,7 @@ void *rock;
 	/* Force copy and re-parse of message */
 	copyargs->copymsg[copyargs->nummsg].cache_len = 0;
     }
-    else if (msgno < imapd_exists) {
+    else if (msgno < (unsigned) imapd_exists) {
 	copyargs->copymsg[copyargs->nummsg].cache_len =
 	  CACHE_OFFSET(msgno+1) - CACHE_OFFSET(msgno);
     }
@@ -4043,8 +4045,8 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
 	    ret = strcmp(md1->cc, md2->cc);
 	    break;
 	case SORT_DATE: {
-	    time_t d1 = md1->date ? md1->date : INTERNALDATE(md1->msgno);
-	    time_t d2 = md2->date ? md2->date : INTERNALDATE(md2->msgno);
+	    time_t d1 = md1->date ? md1->date : (time_t) INTERNALDATE(md1->msgno);
+	    time_t d2 = md2->date ? md2->date : (time_t) INTERNALDATE(md2->msgno);
 	    ret = numcmp(d1, d2);
 	    break;
 	}
@@ -5248,7 +5250,7 @@ static int comp_coalesce(const void *v1, const void *v2)
 /*
  * Parse a sequence into an array of sorted & merged ranges.
  */
-struct seq_set *index_parse_sequence(char *sequence, int usinguid,
+struct seq_set *index_parse_sequence(const char *sequence, int usinguid,
 				     struct seq_set *set)
 {
     unsigned i, j, start, end, *num;
@@ -5262,7 +5264,7 @@ struct seq_set *index_parse_sequence(char *sequence, int usinguid,
 	    *num = (*num)*10 + *sequence - '0';
 	}
 	else if (*sequence == '*') {
-	    *num = usinguid ? UID(imapd_exists) : imapd_exists;
+	    *num = usinguid ? UID(imapd_exists) : (unsigned) imapd_exists;
 	}
 	else if (*sequence == ':') {
 	    num = &end;
@@ -5348,5 +5350,26 @@ static int index_insequence(unsigned num, struct seq_set *set, int use_mark)
 	}
 
 	return 0;
+    }
+}
+
+void appendsequencelist(struct seq_set **l, char *sequence, int usinguid)
+{
+    struct seq_set **tail = l;
+
+    while (*tail) tail = &(*tail)->next;
+
+    *tail = index_parse_sequence(sequence, usinguid, NULL);
+}
+
+void freesequencelist(struct seq_set *l)
+{
+    struct seq_set *n;
+
+    while(l) {
+	n = l->next;
+	free(l->set);
+	free(l);
+	l = n;
     }
 }

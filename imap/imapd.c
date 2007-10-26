@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.532 2007/10/24 10:54:11 murch Exp $ */
+/* $Id: imapd.c,v 1.533 2007/10/26 15:31:37 murch Exp $ */
 
 #include <config.h>
 
@@ -293,8 +293,6 @@ void appendfieldlist(struct fieldlist **l, char *section,
 		     void *d, size_t size);
 void freefieldlist(struct fieldlist *l);
 void freestrlist(struct strlist *l);
-void appendsequencelist(struct seq_set **l, char *sequence, int usinguid);
-void freesequencelist(struct seq_set *l);
 void appendsearchargs(struct searchargs *s, struct searchargs *s1,
 			 struct searchargs *s2);
 void freesearchargs(struct searchargs *s);
@@ -9145,27 +9143,6 @@ void freefieldlist(struct fieldlist *l)
 	free(l->trail);
 	if (l->rock) free(l->rock);
 	free((char *)l);
-	l = n;
-    }
-}
-
-void appendsequencelist(struct seq_set **l, char *sequence, int usinguid)
-{
-    struct seq_set **tail = l;
-
-    while (*tail) tail = &(*tail)->next;
-
-    *tail = index_parse_sequence(sequence, usinguid, NULL);
-}
-
-void freesequencelist(struct seq_set *l)
-{
-    struct seq_set *n;
-
-    while(l) {
-	n = l->next;
-	free(l->set);
-	free(l);
 	l = n;
     }
 }
