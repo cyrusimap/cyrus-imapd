@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.38 2007/09/27 16:28:36 murch Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.39 2007/10/26 10:41:12 murch Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -24,6 +24,11 @@ Note that is is NOT REQUIRED that existing GUIDs be upgraded.
 
 <h2>Upgrading from 2.3.8</h2>
 <ul>
+<li> You must install and configure Cyrus SASL version 2.1.17 or later
+to use Cyrus IMAP 2.3.9 and later.  You can download SASL at <a
+href="http://cyrusimap.web.cmu.edu/downloads.html#sasl">
+http://cyrusimap.web.cmu.edu/downloads.html#sasl</a>.</li>
+
 <li>The default value of the <tt>allowplaintext</tt> option has been
 changed to disabled (0).  If you need to allow cleartext passwords on
 the wire, then you will have to explicitly enable the
@@ -484,7 +489,7 @@ worry about it.)
 </ul>
 
 <HR><P>
-last modified: $Date: 2007/09/27 16:28:36 $
+last modified: $Date: 2007/10/26 10:41:12 $
 </BODY></HTML>
 
 
