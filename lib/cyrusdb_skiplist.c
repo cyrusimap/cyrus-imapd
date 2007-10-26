@@ -1,5 +1,5 @@
 /* cyrusdb_skiplist.c -- cyrusdb skiplist implementation
- * $Id: cyrusdb_skiplist.c,v 1.52 2007/02/05 18:43:26 jeaton Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.53 2007/10/26 19:44:15 murch Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -149,12 +149,12 @@ struct db {
     ino_t map_ino;
 
     /* header info */
-    int version;
-    int version_minor;
-    int maxlevel;
-    int curlevel;
-    int listsize;
-    int logstart;		/* where the log starts from last chkpnt */
+    unsigned version;
+    unsigned version_minor;
+    unsigned maxlevel;
+    unsigned curlevel;
+    unsigned listsize;
+    unsigned logstart;		/* where the log starts from last chkpnt */
     time_t last_recovery;
 
     /* comparator function to use for sorting */
@@ -167,8 +167,8 @@ struct txn {
 
     /* logstart is where we start changes from on commit, where we truncate
        to on abort */
-    int logstart;
-    int logend;			/* where to write to continue this txn */
+    unsigned logstart;
+    unsigned logend;		/* where to write to continue this txn */
 };
 
 static time_t global_recovery = 0;
@@ -189,7 +189,7 @@ static void newtxn(struct db *db, struct txn *t)
     t->ismalloc = 0;
     t->syncfd = -1;
     t->logstart = db->map_size;
-    assert(t->logstart != -1);
+/*    assert(t->logstart != -1);*/
     t->logend = t->logstart;
 }
 
@@ -388,7 +388,7 @@ enum {
 #define FORWARD(ptr, x) (ntohl(*((bit32 *)(FIRSTPTR(ptr) + 4 * (x)))))
 
 /* how many levels does this record have? */
-static int LEVEL(const char *ptr)
+static unsigned LEVEL(const char *ptr)
 {
     const bit32 *p, *q;
 
@@ -399,7 +399,7 @@ static int LEVEL(const char *ptr)
 }
 
 /* how big is this record? */
-static int RECSIZE(const char *ptr)
+static unsigned RECSIZE(const char *ptr)
 {
     int ret = 0;
     switch (TYPE(ptr)) {
@@ -823,10 +823,10 @@ static const char *find_node(struct db *db,
 {
     const char *ptr = db->map_base + DUMMY_OFFSET(db);
     int i;
-    int offset;
+    unsigned offset;
 
     if (updateoffsets) {
-	for (i = 0; i < db->maxlevel; i++) {
+	for (i = 0; (unsigned) i < db->maxlevel; i++) {
 	    updateoffsets[i] = DUMMY_OFFSET(db);
 	}
     }
@@ -1076,7 +1076,7 @@ int mystore(struct db *db,
     const char *ptr;
     bit32 klen, dlen;
     struct iovec iov[50];
-    unsigned int lvl;
+    unsigned int lvl, i;
     int num_iov;
     struct txn t, *tp;
     bit32 endpadding = (bit32) htonl(-1);
@@ -1087,7 +1087,7 @@ int mystore(struct db *db,
     int delrectype = htonl(DELETE);
     bit32 todelete;
     bit32 newoffset;
-    int r, i;
+    int r;
 
     assert(db != NULL);
     assert(key && keylen);
@@ -1258,7 +1258,7 @@ int mydelete(struct db *db,
     bit32 offset;
     bit32 writebuf[2];
     struct txn t, *tp;
-    int i;
+    unsigned i;
     int r;
 
     if (!tid || !*tid) {
@@ -1425,7 +1425,7 @@ int myabort(struct db *db, struct txn *tid)
     const char *ptr;
     int updateoffsets[SKIPLIST_MAXLEVEL];
     bit32 offset;
-    int i;
+    unsigned i;
     int r = 0;
 
     assert(db && tid);
@@ -1531,7 +1531,7 @@ static int mycheckpoint(struct db *db, int locked)
     bit32 offset;
     int r = 0;
     int iorectype = htonl(INORDER);
-    int i;
+    unsigned i;
     time_t start = time(NULL);
 
     /* grab write lock (could be read but this prevents multiple checkpoints
@@ -1742,7 +1742,7 @@ static int mycheckpoint(struct db *db, int locked)
 static int dump(struct db *db, int detail __attribute__((unused)))
 {
     const char *ptr, *end;
-    int i;
+    unsigned i;
 
     read_lock(db);
 
@@ -1813,7 +1813,7 @@ static int myconsistent(struct db *db, struct txn *tid, int locked)
 
     offset = FORWARD(db->map_base + DUMMY_OFFSET(db), 0);
     while (offset != 0) {
-	int i;
+	unsigned i;
 
 	ptr = db->map_base + offset;
 
@@ -1863,7 +1863,7 @@ static int recovery(struct db *db, int flags)
     bit32 offset, offsetnet, myoff = 0;
     int r = 0;
     time_t start = time(NULL);
-    int i;
+    unsigned i;
 
     if (!(flags & RECOVERY_CALLER_LOCKED) && (r = write_lock(db, NULL)) < 0) {
 	return r;
