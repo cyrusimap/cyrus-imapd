@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.235 2007/10/26 11:05:11 murch Exp $
+ * $Id: index.c,v 1.236 2007/10/26 14:59:15 murch Exp $
  */
 #include <config.h>
 
@@ -1633,68 +1633,37 @@ index_forsequence(struct mailbox* mailbox,
 		  void* rock,
 		  int* fetchedsomething)
 {
-    unsigned i, start = 0, end;
+    struct seq_set *seq;
+    unsigned i, j;
     int r, result = 0;
 
-    /* no messages, no calls.  dumps core otherwise */
-    if (! imapd_exists) {
-	return 0;
+    /* no messages, no calls. */
+    if (!imapd_exists) return 0;
+
+    seq = index_parse_sequence(sequence, usinguid, NULL);
+
+    for (i = 0; i < seq->len; i++) {
+	unsigned start = seq->set[i].low;
+	unsigned end = seq->set[i].high;
+
+	if (usinguid) {
+	    j = index_finduid(start);
+	    if (!j || start != UID(j)) j++;
+	    start = j;
+	    end = index_finduid(end);
+	}
+	if (start < 1) start = 1;
+	if (end > imapd_exists) end = imapd_exists;
+
+	for (j = start; j <= end; j++) {
+	    if (fetchedsomething) *fetchedsomething = 1;
+	    r = (*proc)(mailbox, j, rock);
+	    if (r && !result) result = r;
+	}
     }
 
-    for (;;) {
-	if (cyrus_isdigit((int) *sequence)) {
-	    start = start*10 + *sequence - '0';
-	}
-	else if (*sequence == '*') {
-	    start = usinguid ? UID(imapd_exists) : imapd_exists;
-	}
-	else if (*sequence == ':') {
-	    end = 0;
-	    sequence++;
-	    while (cyrus_isdigit((int) *sequence)) {
-		end = end*10 + *sequence++ - '0';
-	    }
-	    if (*sequence == '*') {
-		sequence++;
-		end = usinguid ? UID(imapd_exists) : imapd_exists;
-	    }
-	    if (start > end) {
-		i = end;
-		end = start;
-		start = i;
-	    }
-	    if (usinguid) {
-		i = index_finduid(start);
-		if (!i || start != UID(i)) i++;
-		start = i;
-		end = index_finduid(end);
-	    }
-	    if (start < 1) start = 1;
-	    if (end > imapd_exists) end = imapd_exists;
-	    for (i = start; i <= end; i++) {
-		if (fetchedsomething) *fetchedsomething = 1;
-		r = (*proc)(mailbox, i, rock);
-		if (r && !result) result = r;
-	    }
-	    start = 0;
-	    if (!*sequence) return result;
-	}
-	else {
-	    if (start && usinguid) {
-		i = index_finduid(start);
-		if (!i || start != UID(i)) i = 0;
-		start = i;
-	    }
-	    if (start > 0 && start <= imapd_exists) {
-		if (fetchedsomething) *fetchedsomething = 1;
-		r = (*proc)(mailbox, start, rock);
-		if (r && !result) result = r;
-	    }
-	    start = 0;
-	    if (!*sequence) return result;
-	}
-	sequence++;
-    }
+    freesequencelist(seq);
+    return result;
 }
 
 /*
