@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: auth_unix.c,v 1.47 2007/10/26 15:33:12 murch Exp $
+ * $Id: auth_unix.c,v 1.48 2007/10/27 14:37:10 murch Exp $
  */
 
 #include <config.h>
@@ -260,7 +260,7 @@ static struct auth_state *mynewstate(const char *identifier)
 	 * realloc _and_ the number of groups changes. It tells us to realloc
 	 * also in the case of failure...
 	 */
-    } while (ret != -1 && ngroups != newstate->ngroups);
+    } while (ret == -1 && ngroups != newstate->ngroups);
 
     if (ret == -1) {
 	newstate->ngroups = 0;
