@@ -41,7 +41,7 @@
  */
 
 /*
- * $Id: auth_unix.c,v 1.48 2007/10/27 14:37:10 murch Exp $
+ * $Id: auth_unix.c,v 1.49 2007/10/31 10:42:18 murch Exp $
  */
 
 #include <config.h>
@@ -223,7 +223,7 @@ static struct auth_state *mynewstate(const char *identifier)
     struct auth_state *newstate;
     struct passwd *pwd;
     struct group *grp;
-#ifdef HAVE_GETGROUPLIST
+#if defined(HAVE_GETGROUPLIST) && defined(__GLIBC__)
     gid_t gid, *groupids = NULL;
     int ret, ngroups = 10;
 #else
@@ -245,7 +245,7 @@ static struct auth_state *mynewstate(const char *identifier)
 
     pwd = getpwnam(identifier);
 
-#ifdef HAVE_GETGROUPLIST
+#if defined(HAVE_GETGROUPLIST) && defined(__GLIBC__)
     gid = pwd ? pwd->pw_gid : (gid_t) -1;
 
     /* get the group ids */
