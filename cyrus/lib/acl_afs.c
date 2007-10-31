@@ -8,7 +8,7 @@
  *
  */
 /* 
- $Id: acl_afs.c,v 1.26 2006/11/30 17:11:22 murch Exp $
+ $Id: acl_afs.c,v 1.27 2007/10/31 10:37:59 murch Exp $
  
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -122,36 +122,20 @@ void *canonrock;
     char *rights;
 
     /* Convert 'identifier' into canonical form */
-    if (*identifier == '-') {
-	canonid = auth_canonifyid(identifier+1, 0);
-	if (!canonid) {
-	    if (access != 0L) {
-		return -1;
-	    } else {
-		/* trying to delete invalid/non-existent identifier */
-		canonid = identifier+1;
-	    }
-	}
-	newidentifier = xmalloc(strlen(canonid)+2);
-	newidentifier[0] = '-';
-	strcpy(newidentifier+1, canonid);
-	identifier = newidentifier;
-	if (canonproc) {
-	    access = ~(canonproc(canonrock, canonid, ~access));
-	}
-    }
-    else {
-	canonid = auth_canonifyid(identifier, 0);
-	if (canonid) {
-	    identifier = canonid;
-	} else if (access != 0L) {
-	    return -1;
+    canonid = auth_canonifyid(*identifier == '-' ? identifier+1 : identifier, 0);
+    if (canonid) {
+	if (*identifier == '-') {
+	    newidentifier = xmalloc(strlen(canonid)+2);
+	    newidentifier[0] = '-';
+	    strcpy(newidentifier+1, canonid);
+	    identifier = newidentifier;
 	} else {
-	    /* trying to delete invalid/non-existent identifier */
+	    identifier = canonid;
 	}
-	if (canonproc) {
-	    access = canonproc(canonrock, identifier, access);
-	}
+    } else if (access != 0L) {
+	return -1;
+    } else {
+	/* trying to delete invalid/non-existent identifier */
     }
 
     /* Find any existing entry for 'identifier' in 'acl' */
@@ -193,6 +177,13 @@ void *canonrock;
     case ACL_MODE_REMOVE:
 	access = oldaccess & ~access;
 	break;
+    }
+
+    if (canonproc) {
+	if (*identifier == '-')
+	    access = ~(canonproc(canonrock, identifier+1, ~access));
+	else
+	    access = canonproc(canonrock, identifier, access);
     }
 
     if (access == 0L) {
