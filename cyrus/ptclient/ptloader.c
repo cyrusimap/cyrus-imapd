@@ -67,7 +67,7 @@
 #include "ptloader.h"
 
 static char rcsid[] __attribute__((unused)) = 
-      "$Id: ptloader.c,v 1.46 2007/08/15 17:20:57 murch Exp $";
+      "$Id: ptloader.c,v 1.47 2007/11/01 21:00:22 wescraig Exp $";
 
 struct pts_module *pts_modules[] = {
 #ifdef HAVE_LDAP
@@ -148,7 +148,7 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     /* set signal handlers */
     signal(SIGPIPE, SIG_IGN);
 
-    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.46 2007/08/15 17:20:57 murch Exp $");
+    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.47 2007/11/01 21:00:22 wescraig Exp $");
 
     while ((opt = getopt(argc, argv, "d:")) != EOF) {
 	switch (opt) {
@@ -256,7 +256,9 @@ int service_main_fd(int c, int argc __attribute__((unused)),
 	reply = "OK";
     } else {
         /* Failure */
-        reply = "Error making authstate";
+	if ( reply == NULL ) {
+	    reply = "Error making authstate";
+	}
     }
 
  sendreply:
