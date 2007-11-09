@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.534 2007/11/09 12:48:34 murch Exp $ */
+/* $Id: imapd.c,v 1.535 2007/11/09 12:54:22 murch Exp $ */
 
 #include <config.h>
 
@@ -3943,6 +3943,7 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 	eatline(imapd_in, c);
 	goto freeargs;
     }
+
     if (c == ' ') {
 	/* Grab/parse the modifier(s) */
 	c = prot_getc(imapd_in);
