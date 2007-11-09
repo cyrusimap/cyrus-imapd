@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.533 2007/10/26 15:31:37 murch Exp $ */
+/* $Id: imapd.c,v 1.534 2007/11/09 12:48:34 murch Exp $ */
 
 #include <config.h>
 
@@ -3280,8 +3280,8 @@ void cmd_select(char *tag, char *cmd, char *name)
 	c = getword(imapd_in, &arg);
 	if (arg.s[0] == '\0') goto badlist;
 	for (;;) {
-	    lcase(arg.s);
-	    if (!strcmp(arg.s, "condstore")) {
+	    ucase(arg.s);
+	    if (!strcmp(arg.s, "CONDSTORE")) {
 		imapd_condstore_client = 1;
 	    }
 	    else {
@@ -3936,52 +3936,6 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
     if (inlist && c == ')') {
 	inlist = 0;
 	c = prot_getc(imapd_in);
-	if (c == ' ') {
-	    /* Grab/parse the modifier(s) */
-	    c = prot_getc(imapd_in);
-	    if (c != '(') {
-		prot_printf(imapd_out,
-			    "%s BAD Missing required open parenthesis in %s modifiers\r\n",
-			    tag, cmd);
-		eatline(imapd_in, c);
-		goto freeargs;
-	    }
-	    inlist = 1;
-	    do {
-		c = getword(imapd_in, &fetchatt);
-		ucase(fetchatt.s);
-		if ((imapd_mailbox->options & OPT_IMAP_CONDSTORE) &&
-		    !strcmp(fetchatt.s, "CHANGEDSINCE")) {
-		    if (c != ' ') {
-			prot_printf(imapd_out,
-				    "%s BAD Missing required argument to %s %s\r\n",
-				    tag, cmd, fetchatt.s);
-			eatline(imapd_in, c);
-			goto freeargs;
-		    }
-		    c = getastring(imapd_in, imapd_out, &fieldname);
-		    fetchargs.changedsince = strtoul(fieldname.s, &p, 10);
-		    if (*p || fetchargs.changedsince == ULONG_MAX) {
-			prot_printf(imapd_out,
-				    "%s BAD Invalid argument to %s %s\r\n",
-				    tag, cmd, fetchatt.s);
-			eatline(imapd_in, c);
-			goto freeargs;
-		    }
-		    fetchitems |= FETCH_MODSEQ;
-		}
-		else {
-		    prot_printf(imapd_out, "%s BAD Invalid %s modifier %s\r\n",
-				tag, cmd, fetchatt.s);
-		    eatline(imapd_in, c);
-		    goto freeargs;
-		}
-	    } while (c == ' ');
-	    if (c == ')') {
-		inlist = 0;
-		c = prot_getc(imapd_in);
-	    }
-	}
     }
     if (inlist) {
 	prot_printf(imapd_out, "%s BAD Missing close parenthesis in %s\r\n",
@@ -3989,6 +3943,55 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 	eatline(imapd_in, c);
 	goto freeargs;
     }
+    if (c == ' ') {
+	/* Grab/parse the modifier(s) */
+	c = prot_getc(imapd_in);
+	if (c != '(') {
+	    prot_printf(imapd_out,
+			"%s BAD Missing required open parenthesis in %s modifiers\r\n",
+			tag, cmd);
+	    eatline(imapd_in, c);
+	    goto freeargs;
+	}
+	do {
+	    c = getword(imapd_in, &fetchatt);
+	    ucase(fetchatt.s);
+	    if ((imapd_mailbox->options & OPT_IMAP_CONDSTORE) &&
+		!strcmp(fetchatt.s, "CHANGEDSINCE")) {
+		if (c != ' ') {
+		    prot_printf(imapd_out,
+				"%s BAD Missing required argument to %s %s\r\n",
+				tag, cmd, fetchatt.s);
+		    eatline(imapd_in, c);
+		    goto freeargs;
+		}
+		c = getastring(imapd_in, imapd_out, &fieldname);
+		fetchargs.changedsince = strtoul(fieldname.s, &p, 10);
+		if (*p || fetchargs.changedsince == ULONG_MAX) {
+		    prot_printf(imapd_out,
+				"%s BAD Invalid argument to %s %s\r\n",
+				tag, cmd, fetchatt.s);
+		    eatline(imapd_in, c);
+		    goto freeargs;
+		}
+		fetchitems |= FETCH_MODSEQ;
+	    }
+	    else {
+		prot_printf(imapd_out, "%s BAD Invalid %s modifier %s\r\n",
+			    tag, cmd, fetchatt.s);
+		eatline(imapd_in, c);
+		goto freeargs;
+	    }
+	} while (c == ' ');
+	if (c != ')') {
+	    prot_printf(imapd_out, "%s BAD Missing close parenthesis in %s\r\n",
+			tag, cmd);
+	    eatline(imapd_in, c);
+	    goto freeargs;
+	}
+	c = prot_getc(imapd_in);
+    }
+
     if (c == '\r') c = prot_getc(imapd_in);
     if (c != '\n') {
 	prot_printf(imapd_out, "%s BAD Unexpected extra arguments to %s\r\n", tag, cmd);
@@ -4217,9 +4220,9 @@ void cmd_store(char *tag, char *sequence, int usinguid)
 
 	do {
 	    c = getword(imapd_in, &storemod);
-	    lcase(storemod.s);
+	    ucase(storemod.s);
 	    if ((imapd_mailbox->options & OPT_IMAP_CONDSTORE) &&
-		!strcmp(storemod.s, "unchangedsince")) {
+		!strcmp(storemod.s, "UNCHANGEDSINCE")) {
 		if (c != ' ') {
 		    prot_printf(imapd_out,
 				"%s BAD Missing required argument to %s %s\r\n",
