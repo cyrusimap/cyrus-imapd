@@ -1,6 +1,6 @@
 /* comparator.h
  * Larry Greenfield
- * $Id: comparator.h,v 1.14 2007/10/11 16:52:11 murch Exp $
+ * $Id: comparator.h,v 1.15 2007/11/15 11:58:41 murch Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -30,6 +30,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #ifdef ENABLE_REGEX
 # ifdef HAVE_PCREPOSIX_H
+#  include <pcre.h>
 #  include <pcreposix.h>
 # else /* !HAVE_PCREPOSIX_H */
 #  ifdef HAVE_RXPOSIX_H
