@@ -1,5 +1,5 @@
 /* cyrusdb_skiplist.c -- cyrusdb skiplist implementation
- * $Id: cyrusdb_skiplist.c,v 1.54 2007/11/16 12:15:57 murch Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.55 2007/11/16 12:20:37 murch Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -1881,7 +1881,7 @@ static int recovery(struct db *db, int flags)
     const char *ptr, *keyptr;
     int updateoffsets[SKIPLIST_MAXLEVEL];
     bit32 offset, offsetnet, myoff = 0;
-    int r = 0;
+    int r = 0, need_checkpoint = 0;
     time_t start = time(NULL);
     unsigned i;
 
@@ -1946,20 +1946,13 @@ static int recovery(struct db *db, int flags)
     
     /* reset the data that was written INORDER by the last checkpoint */
     offset = DUMMY_OFFSET(db) + DUMMY_SIZE(db);
-    while (!r && (offset < (bit32) db->logstart)) {
+    while (!r && (offset < db->map_size)
+	      && TYPE(db->map_base + offset) == INORDER) {
 	ptr = db->map_base + offset;
 	offsetnet = htonl(offset);
 
 	db->listsize++;
 
-	/* make sure this is INORDER */
-	if (TYPE(ptr) != INORDER) {
-	    syslog(LOG_ERR, "DBERROR: skiplist recovery: %04X should be INORDER",
-		   offset);
-	    r = CYRUSDB_IOERROR;
-	    continue;
-	}
-	    
 	/* xxx check \0 fill on key */
 
 	/* xxx check \0 fill on data */
@@ -2000,6 +1993,12 @@ static int recovery(struct db *db, int flags)
 	}
     }
 
+    if (offset != db->logstart) {
+	syslog(LOG_NOTICE, "skiplist recovery %s: incorrect logstart %04X changed to %04X", 
+	       db->fname, db->logstart, offset);
+	db->logstart = offset; /* header will be committed later */
+    }
+
     /* zero out the remaining pointers */
     if (!r) {
 	for (i = 0; !r && i < db->maxlevel; i++) {
@@ -2033,6 +2032,19 @@ static int recovery(struct db *db, int flags)
 		    db->fname, 0);
 
 	ptr = db->map_base + offset;
+
+	/* bugs in recovery truncates could have left some bogus zeros here */
+	if (TYPE(ptr) == 0) {
+	    int orig = offset;
+	    while (TYPE(ptr) == 0 && offset < db->map_size) {
+		offset += 4;
+		ptr = db->map_base + offset;
+	    }
+	    syslog(LOG_ERR, "skiplist recovery %s: skipped %d bytes of zeros at %04X",
+			    db->fname, offset - orig, orig);
+	    need_checkpoint = 1;
+	}
+
 	offsetnet = htonl(offset);
 
 	/* if this is a commit, we've processed everything in this txn */
@@ -2203,6 +2215,10 @@ static int recovery(struct db *db, int flags)
 	       "skiplist: recovered %s (%d record%s, %ld bytes) in %d second%s",
 	       db->fname, db->listsize, db->listsize == 1 ? "" : "s", 
 	       db->map_size, diff, diff == 1 ? "" : "s"); 
+    }
+
+    if (!r && need_checkpoint) {
+	r = mycheckpoint(db, 1);
     }
 
     if(r || !(flags & RECOVERY_CALLER_LOCKED)) {
