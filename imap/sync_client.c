@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.28 2007/10/23 12:46:32 murch Exp $
+ * $Id: sync_client.c,v 1.29 2007/11/26 20:25:04 murch Exp $
  */
 
 #include <config.h>
@@ -924,6 +924,7 @@ static int check_flags(struct mailbox *mailbox, struct sync_msg_list *list,
             if (cvalue != svalue)
                 return(1);
         }
+	msg = msg->next;
     }
     return(0);
 }
@@ -1005,6 +1006,7 @@ static int update_flags(struct mailbox *mailbox, struct sync_msg_list *list,
                                 mailbox->flagname[flag]);
         }
         prot_printf(toserver, ")");
+	msg = msg->next;
     }
 
     if (!have_update)
