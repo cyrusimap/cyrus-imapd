@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_commit.c,v 1.13 2007/10/05 18:18:25 murch Exp $
+ * $Id: sync_commit.c,v 1.14 2007/11/26 20:35:59 murch Exp $
  */
 
 #include <config.h>
@@ -1103,6 +1103,97 @@ int sync_setflags_commit(struct mailbox *mailbox,
             for (n = 0; n < MAX_USER_FLAGS/32; n++) {
                 record.user_flags[n] = item->flags.user_flags[n];
             }
+            record.last_updated = ((record.last_updated >= now) ?
+                                   record.last_updated + 1 : now);
+            mailbox_write_index_record(mailbox, msgno, &record, 0);
+            item = item->next;
+        }
+        msgno++;
+    }
+
+    if (!r) r = mailbox_write_index_header(mailbox);
+    if (!r) mailbox_unlock_index(mailbox);
+    if (!r) mailbox_unlock_header(mailbox);
+
+    if (fsync(mailbox->index_fd)) {
+	syslog(LOG_ERR, "IOERROR: writing index record %lu for %s: %m",
+	       msgno, mailbox->name);
+	return IMAP_IOERROR;
+    }
+
+    r = mailbox_open_index(mailbox);   /* Update internal index */
+    return(r);
+}
+
+/* ====================================================================== */
+
+int sync_highestmodseq_commit(struct mailbox *mailbox,
+                              modseq_t newhighestmodseq)
+{
+    unsigned char *hbuf = xmalloc(mailbox->start_offset);
+    int n;
+
+    /* Fix up information in index header */
+    lseek(mailbox->index_fd, 0L, SEEK_SET);
+
+    n = read(mailbox->index_fd, hbuf, mailbox->start_offset);
+    if ((unsigned long)n != mailbox->start_offset) {
+        free(hbuf);
+        syslog(LOG_ERR,
+               "IOERROR: reading index header for %s: got %d of %lu",
+               mailbox->name, n, mailbox->start_offset);
+        return(IMAP_IOERROR);
+    }
+
+#ifdef HAVE_LONG_LONG_INT
+    align_htonll(hbuf+OFFSET_HIGHESTMODSEQ_64, newhighestmodseq);
+#else
+    *((bit32 *)(hbuf+OFFSET_HIGHESTMODSEQ_64)) = htonl(0);
+    *((bit32 *)(hbuf+OFFSET_HIGHESTMODSEQ))    = htonl(newhighestmodseq);
+#endif
+
+    /* And write it back out */
+    lseek(mailbox->index_fd, 0L, SEEK_SET);
+
+    n = retry_write(mailbox->index_fd, hbuf, mailbox->start_offset);
+
+    free(hbuf);
+    if ((unsigned long)n != mailbox->start_offset) {
+        syslog(LOG_ERR, "IOERROR: writing out new index header for %s",
+               mailbox->name);
+        return(IMAP_IOERROR);
+    }
+    
+    /* Ensure everything made it to disk */
+    if (fsync(mailbox->index_fd)) {
+        syslog(LOG_ERR, "IOERROR: writing index for %s: %m",
+               mailbox->name);
+        return(IMAP_IOERROR);
+    }
+    return(0);
+}
+
+int sync_modseq_commit(struct mailbox *mailbox,
+                       struct sync_modseq_list *modseq_list)
+{
+    struct index_record record;
+    struct sync_modseq_item *item = modseq_list->head;
+    unsigned long msgno = 1;
+    int r = 0;
+    time_t now = time(NULL);
+
+    if (!r) r = mailbox_lock_header(mailbox);
+    if (!r) r = mailbox_lock_index(mailbox);
+
+    if (r) return(r);
+
+    while (item && (msgno <= mailbox->exists)) {
+        r = mailbox_read_index_record(mailbox, msgno, &record);
+
+        if (r) return(r);
+
+        if (record.uid == item->uid) {
+            record.modseq = item->modseq;
             record.last_updated = ((record.last_updated >= now) ?
                                    record.last_updated + 1 : now);
             mailbox_write_index_record(mailbox, msgno, &record, 0);

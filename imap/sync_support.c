@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.c,v 1.16 2007/10/05 16:28:41 murch Exp $
+ * $Id: sync_support.c,v 1.17 2007/11/26 20:35:59 murch Exp $
  */
 
 #include <config.h>
@@ -470,7 +470,8 @@ void sync_index_list_free(struct sync_index_list **lp)
 /* sync_msg stuff */
 
 struct sync_msg_list *sync_msg_list_create(char **flagname,
-					   unsigned long last_uid)
+					   unsigned long last_uid,
+                                           modseq_t highestmodseq)
 {
     struct sync_msg_list *l = xzmalloc(sizeof (struct sync_msg_list));
 
@@ -478,6 +479,7 @@ struct sync_msg_list *sync_msg_list_create(char **flagname,
     l->tail     = NULL;
     l->count    = 0;
     l->last_uid = last_uid;
+    l->highestmodseq = highestmodseq;
     sync_flags_meta_clear(&l->meta);
 
     if (flagname)
@@ -1531,6 +1533,52 @@ void sync_flag_list_free(struct sync_flag_list **lp)
         current = next;
     }
     sync_flags_meta_free(&l->meta);
+    free(l);
+    *lp = NULL;
+}
+
+/* ====================================================================== */
+
+struct sync_modseq_list *sync_modseq_list_create()
+{
+    struct sync_modseq_list *l = xzmalloc(sizeof (struct sync_modseq_list));
+
+    l->head   = NULL;
+    l->tail   = NULL;
+    l->count  = 0;
+    return(l);
+}
+
+struct sync_modseq_item *sync_modseq_list_add(struct sync_modseq_list *l,
+                                              unsigned long uid,
+                                              modseq_t modseq)
+{
+    struct sync_modseq_item *result
+        = xzmalloc(sizeof(struct sync_modseq_item));
+
+    result->uid = uid;
+    result->modseq = modseq;
+
+    if (l->tail)
+        l->tail = l->tail->next = result;
+    else
+        l->head = l->tail = result;
+
+    l->count++;
+    return(result);
+}
+
+void sync_modseq_list_free(struct sync_modseq_list **lp)
+{
+    struct sync_modseq_list *l = *lp;
+    struct sync_modseq_item *current, *next;
+
+    current = l->head;
+    while (current) {
+        next = current->next;
+        free(current);
+        current = next;
+    }
     free(l);
     *lp = NULL;
 }
