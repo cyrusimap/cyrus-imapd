@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_support.h,v 1.9 2007/10/05 16:28:41 murch Exp $
+ * $Id: sync_support.h,v 1.10 2007/11/26 20:35:59 murch Exp $
  */
 
 #ifndef INCLUDED_SYNC_SUPPORT_H
@@ -127,6 +127,7 @@ struct sync_msg {
     struct sync_msg *next;
     struct message_guid guid;
     unsigned long uid;
+    modseq_t modseq;
     struct sync_flags flags;
 };
 
@@ -134,11 +135,13 @@ struct sync_msg_list {
     struct sync_msg *head, *tail;
     unsigned long count;
     unsigned long last_uid;
+    modseq_t highestmodseq;
     struct sync_flags_meta meta;
 };
 
 struct sync_msg_list *sync_msg_list_create(char **flagname,
-					   unsigned long last_uid);
+					   unsigned long last_uid,
+                                           modseq_t highestmodseq);
 
 struct sync_msg *sync_msg_list_add(struct sync_msg_list *l);
 
@@ -415,6 +418,28 @@ struct sync_flag_list *sync_flag_list_create(char **flagname);
 struct sync_flag_item *sync_flag_list_add(struct sync_flag_list *l);
 
 void sync_flag_list_free(struct sync_flag_list **lp);
+
+/* ====================================================================== */
+
+struct sync_modseq_item {
+    struct sync_modseq_item *next;
+    unsigned long uid;
+    modseq_t modseq;
+};
+
+struct sync_modseq_list {
+    struct sync_modseq_item *head;
+    struct sync_modseq_item *tail;
+    unsigned long count;
+};
+
+struct sync_modseq_list *sync_modseq_list_create();
+
+struct sync_modseq_item *sync_modseq_list_add(struct sync_modseq_list *l,
+                                              unsigned long uid,
+                                              modseq_t modseq);
+
+void sync_modseq_list_free(struct sync_modseq_list **lp);
 
 /* ====================================================================== */
 

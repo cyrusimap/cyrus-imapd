@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.19 2007/11/26 20:23:06 murch Exp $
+ * $Id: sync_server.c,v 1.20 2007/11/26 20:35:59 murch Exp $
  */
 
 #include <config.h>
@@ -168,6 +168,7 @@ static void cmd_setseen(struct mailbox **mailboxp, char *user, char *mboxname,
 			time_t lastread, unsigned int last_recent_uid,
 			time_t lastchange, char *seenuid);
 static void cmd_setseen_all(char *user, struct buf *data);
+static void cmd_setmodseq(struct mailbox *mailbox);
 static void cmd_setacl(char *name, char *acl);
 static void cmd_setuidvalidity(char *name, unsigned long uidvalidity);
 static void cmd_expunge(struct mailbox *mailbox);
@@ -909,6 +910,9 @@ static void cmdloop(void)
             } else if (!strcmp(cmd.s, "Setflags")) {
 		if (c != ' ') goto missingargs;
                 cmd_setflags(mailbox);
+                continue;
+            } else if (!strcmp(cmd.s, "Setmodseq")) {
+                cmd_setmodseq(mailbox);
                 continue;
             } else if (!strcmp(cmd.s, "Setseen")) {
 		if (c != ' ') goto missingargs;
@@ -1677,8 +1681,8 @@ static void cmd_status_work(struct mailbox *mailbox)
     for (msgno = 1 ; msgno <= mailbox->exists; msgno++) {
         mailbox_read_index_record(mailbox, msgno, &record);
 
-        prot_printf(sync_out, "* %lu %s (",
-                 record.uid, message_guid_encode(&record.guid));
+        prot_printf(sync_out, "* %lu " MODSEQ_FMT " %s (",
+                 record.uid, record.modseq, message_guid_encode(&record.guid));
 
         flags_printed = 0;
 
@@ -1709,7 +1713,8 @@ static void cmd_status(struct mailbox *mailbox)
         return;
     }
     cmd_status_work(mailbox);
-    prot_printf(sync_out, "OK %lu\r\n", mailbox->last_uid);
+    prot_printf(sync_out, "OK %lu " MODSEQ_FMT "\r\n",
+                mailbox->last_uid, mailbox->highestmodseq);
 }
 
 /* ====================================================================== */
@@ -2234,6 +2239,94 @@ static void cmd_setuidvalidity(char *name, unsigned long uidvalidity)
 
 /* ====================================================================== */
 
+static void cmd_setmodseq(struct mailbox *mailbox)
+{
+    struct sync_modseq_list *modseq_list = sync_modseq_list_create();
+    static struct buf arg;
+    char *err = NULL;
+    int   c;
+    int   r = 0;
+    unsigned long uid;
+    modseq_t modseq, highestmodseq;
+
+    if (!mailbox) {
+        eatline(sync_in, ' ');
+        prot_printf(sync_out, "NO Mailbox not open\r\n");
+        return;
+    }
+
+    if ((c = getastring(sync_in, sync_out, &arg)) == EOF)
+        goto bail;
+
+#ifdef HAVE_LONG_LONG_INT
+    highestmodseq = sync_atoull(arg.s);
+#else
+    highestmodseq = sync_atoul(arg.s);
+#endif
+
+    while (c == ' ') {
+        err  = NULL;
+
+        /* Parse UID */
+        if ((c = getastring(sync_in, sync_out, &arg)) == EOF)
+            goto bail;
+
+        if ((c != ' ') || ((uid = sync_atoul(arg.s)) == 0))
+            err = "Invalid UID";
+        else if (uid > mailbox->last_uid)
+            err = "UID out of range";
+
+        if ((c = getastring(sync_in, sync_out, &arg)) == EOF)
+            goto bail;
+
+        if ((c != ' ') && (c != '\r') && (c != '\n')) {
+            if (!err) err = "Invalid modseq";
+        } else {
+#ifdef HAVE_LONG_LONG_INT
+            modseq = sync_atoull(arg.s);
+#else
+            modseq = sync_atoul(arg.s);
+#endif
+            if (modseq == 0)
+                err = "Invalid modseq";
+        }
+
+        if (err != NULL) {
+            eatline(sync_in, c);
+            prot_printf(sync_out, "BAD Syntax error in Setflags: %s\r\n", err);
+            goto bail;
+        }
+        sync_modseq_list_add(modseq_list, uid, modseq);
+
+	/* if we see a SP, we're trying to set more than one flag */
+    }
+
+    if (c == '\r') c = prot_getc(sync_in);
+    if (c != '\n') {
+        eatline(sync_in, c);
+        prot_printf(sync_out, "BAD Garbage at end of Setmodseq sequence\r\n");
+        goto bail;
+    }
+
+    r = sync_highestmodseq_commit(mailbox, highestmodseq);
+    if (!r) r = sync_modseq_commit(mailbox, modseq_list);
+
+    if (r) {
+        prot_printf(sync_out,
+                    "NO Failed to commit modseq update for %s: %s\r\n",
+                    mailbox->name, error_message(r));
+    } else {
+        prot_printf(sync_out, "OK Updated modseqs on %lu messages okay\r\n",
+                    modseq_list->count);
+    }
+
+ bail:
+    sync_modseq_list_free(&modseq_list);
+}
+
+
+/* ====================================================================== */
+
 struct uid_list {
     unsigned long *array;
     unsigned long  alloc;
@@ -2370,6 +2463,7 @@ static int do_mailbox_single(char *name,
         sync_printastring(sync_out, m.acl);
         prot_printf(sync_out, " %lu", m.uidvalidity);
         prot_printf(sync_out, " %lu", m.last_uid);
+	prot_printf(sync_out, " " MODSEQ_FMT, m.highestmodseq);
 	prot_printf(sync_out, " %lu", m.options);
 	if (m.quota.root && !strcmp(name, m.quota.root) &&
 	    !quota_read(&m.quota, NULL, 0)) {

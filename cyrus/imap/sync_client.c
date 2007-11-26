@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_client.c,v 1.29 2007/11/26 20:25:04 murch Exp $
+ * $Id: sync_client.c,v 1.30 2007/11/26 20:35:59 murch Exp $
  */
 
 #include <config.h>
@@ -1020,6 +1020,85 @@ static int update_flags(struct mailbox *mailbox, struct sync_msg_list *list,
 
 /* ====================================================================== */
 
+static int check_modseq(struct mailbox *mailbox, struct sync_msg_list *list)
+{
+    struct sync_msg *msg;
+    unsigned long msgno;
+    struct index_record record;
+
+    /* Updates on the client should always cause a highestmodseq */
+    if (mailbox->highestmodseq != list->highestmodseq)
+        return(1);
+
+    msg = list->head;
+    for (msgno = 1; msg && (msgno <= mailbox->exists) ; msgno++) {
+        mailbox_read_index_record(mailbox, msgno, &record);
+
+        /* Skip msgs on client missing on server (will upload later) */
+        if (record.uid < msg->uid)
+            continue;
+
+        /* Skip over messages recorded on server which are missing on client
+         * (either will be expunged or have been expunged already) */
+        while (msg && (msg->uid < record.uid))
+            msg = msg->next;
+
+        if (!(msg && (record.uid == msg->uid)))
+            continue;
+
+        /* Got a message on client which has same UID as message on server */
+        /* If the modseqs don't match, then we need to make an update */
+        if (record.modseq != msg->modseq)
+            return(1);
+
+        msg = msg->next;
+    }
+    return(0);
+}
+
+static int update_modseq(struct mailbox *mailbox, struct sync_msg_list *list)
+{
+    struct sync_msg *msg;
+    unsigned long msgno;
+    struct index_record record;
+
+    prot_printf(toserver, "SETMODSEQ " MODSEQ_FMT, mailbox->highestmodseq);
+
+    msg = list->head;
+    for (msgno = 1; msg && (msgno <= mailbox->exists) ; msgno++) {
+        mailbox_read_index_record(mailbox, msgno, &record);
+
+        /* Skip msgs on client missing on server (will upload later) */
+        if (record.uid < msg->uid)
+            continue;
+        
+        /* Skip over messages recorded on server which are missing on client
+         * (either will be expunged or have been expunged already) */
+        while (msg && (msg->uid < record.uid))
+            msg = msg->next;
+
+        if (!(msg && (record.uid == msg->uid)))
+            continue;
+
+        /* Got a message on client which has same UID as message on server */
+        if (record.modseq == msg->modseq) {
+            msg = msg->next;
+            continue;
+        }
+
+        /* ... but a different modseq */
+        prot_printf(toserver, " %lu " MODSEQ_FMT, record.uid, record.modseq);
+        msg = msg->next;
+    }
+
+    prot_printf(toserver, "\r\n");
+    prot_flush(toserver);
+
+    return(sync_parse_code("SETMODSEQ",fromserver,SYNC_PARSE_EAT_OKLINE,NULL));
+}
+
+/* ====================================================================== */
+
 static int check_expunged(struct mailbox *mailbox, struct sync_msg_list *list)
 {
     struct sync_msg *msg = list->head;
@@ -1680,6 +1759,16 @@ static int do_mailbox_work(struct mailbox *mailbox,
             goto bail;
     }
     
+    if (check_modseq(mailbox, list)) {
+        if (!selected &&
+            (r=folder_select(mailbox->name, mailbox->uniqueid, NULL)))
+            return(r);
+
+        selected = 1;
+        if ((r=update_modseq(mailbox, list)))
+            goto bail;
+    }
+    
     if (check_expunged(mailbox, list)) {
         if (!selected &&
             (r=folder_select(mailbox->name, mailbox->uniqueid, NULL)))
@@ -1859,8 +1948,8 @@ int do_folders(struct sync_folder_list *client_list,
                 if (!r && do_contents) {
                     struct sync_msg_list *folder_msglist;
 
-                    /* 0L forces lastuid push */
-                    folder_msglist = sync_msg_list_create(m.flagname, 0L);
+                    /* 0L forces lastuid, highestmodseq push */
+                    folder_msglist = sync_msg_list_create(m.flagname, 0L, 0L);
                     r = do_mailbox_work(&m, folder_msglist, 1);
                     sync_msg_list_free(&folder_msglist);
                 }
@@ -1906,8 +1995,8 @@ int do_folders(struct sync_folder_list *client_list,
             if (!r && do_contents) {
                 struct sync_msg_list *folder_msglist;
 
-                /* 0L forces uidlast push */
-                folder_msglist = sync_msg_list_create(m.flagname, 0L);
+                /* 0L forces uidlast, highestmodseq push */
+                folder_msglist = sync_msg_list_create(m.flagname, 0L, 0L);
                 r = do_mailbox_work(&m, folder_msglist, 1);
                 sync_msg_list_free(&folder_msglist);
             }
@@ -1949,6 +2038,7 @@ int do_mailboxes_work(struct sync_folder_list *client_list,
     static struct buf name;
     static struct buf uidvalidity;
     static struct buf lastuid;
+    static struct buf highestmodseq;
     static struct buf options;
     static struct buf arg;
     struct quota quota, *quotap;
@@ -1987,6 +2077,9 @@ int do_mailboxes_work(struct sync_folder_list *client_list,
             if ((c = getastring(fromserver, toserver, &lastuid)) != ' ')
                 goto parse_err;
 
+            if ((c = getastring(fromserver, toserver, &highestmodseq)) != ' ')
+                goto parse_err;
+
             c = getastring(fromserver, toserver, &options);
 
 	    quotap = NULL;
@@ -2005,7 +2098,13 @@ int do_mailboxes_work(struct sync_folder_list *client_list,
 					  sync_atoul(uidvalidity.s),
 					  sync_atoul(options.s),
                                           quotap);
-            folder->msglist = sync_msg_list_create(NULL, sync_atoul(lastuid.s));
+#ifdef HAVE_LONG_LONG_INT
+            folder->msglist = sync_msg_list_create
+                (NULL, sync_atoul(lastuid.s), sync_atoull(highestmodseq.s));
+#else
+            folder->msglist = sync_msg_list_create
+                (NULL, sync_atoul(lastuid.s), sync_atoul(highestmodseq.s));
+#endif
             break;
         case 1:
             /* New message in current folder */
@@ -2014,7 +2113,13 @@ int do_mailboxes_work(struct sync_folder_list *client_list,
         
             if (((c = getword(fromserver, &arg)) != ' ') ||
                 ((msg->uid = sync_atoul(arg.s)) == 0)) goto parse_err;
-            
+#ifdef HAVE_LONG_LONG_INT
+            if (((c = getword(fromserver, &arg)) != ' ') ||
+                ((msg->modseq = sync_atoull(arg.s)) == 0)) goto parse_err;
+#else
+            if (((c = getword(fromserver, &arg)) != ' ') ||
+                ((msg->modseq = sync_atoul(arg.s)) == 0)) goto parse_err;
+#endif
             if (((c = getword(fromserver, &arg)) != ' ')) goto parse_err;
 
             if (!message_guid_decode(&msg->guid, arg.s))
@@ -2387,6 +2492,7 @@ int do_user_parse(char *user __attribute__((unused)),
     static struct buf acl;
     static struct buf uidvalidity;
     static struct buf lastuid;
+    static struct buf highestmodseq;
     static struct buf options;
     static struct buf arg;
     struct sync_folder *folder = NULL;
@@ -2444,6 +2550,9 @@ int do_user_parse(char *user __attribute__((unused)),
             if ((c = getastring(fromserver, toserver, &lastuid)) != ' ')
                 goto parse_err;
 
+            if ((c = getastring(fromserver, toserver, &highestmodseq)) != ' ')
+                goto parse_err;
+
             c = getastring(fromserver, toserver, &options);
 
 	    quotap = NULL;
@@ -2455,14 +2564,21 @@ int do_user_parse(char *user __attribute__((unused)),
 
             if (c == '\r') c = prot_getc(fromserver);
             if (c != '\n') goto parse_err;
-            if (!imparse_isnumber(uidvalidity.s)) goto parse_err;
-            if (!imparse_isnumber(lastuid.s))     goto parse_err;
+            if (!imparse_isnumber(uidvalidity.s))   goto parse_err;
+            if (!imparse_isnumber(lastuid.s))       goto parse_err;
+            if (!imparse_isnumber(highestmodseq.s)) goto parse_err;
 
             folder = sync_folder_list_add(server_list, id.s, name.s, acl.s,
 					  sync_atoul(uidvalidity.s),
 					  sync_atoul(options.s),
                                           quotap);
-            folder->msglist = sync_msg_list_create(NULL, sync_atoul(lastuid.s));
+#ifdef HAVE_LONG_LONG_INT
+            folder->msglist = sync_msg_list_create
+                (NULL, sync_atoul(lastuid.s), sync_atoull(highestmodseq.s));
+#else
+            folder->msglist = sync_msg_list_create
+                (NULL, sync_atoul(lastuid.s), sync_atoul(highestmodseq.s));
+#endif
             break;
         case 1:
             /* New message in current folder */
@@ -2471,7 +2587,13 @@ int do_user_parse(char *user __attribute__((unused)),
 
             if (((c = getword(fromserver, &arg)) != ' ') ||
                 ((msg->uid = sync_atoul(arg.s)) == 0)) goto parse_err;
-            
+#ifdef HAVE_LONG_LONG_INT
+            if (((c = getword(fromserver, &arg)) != ' ') ||
+                ((msg->modseq = sync_atoull(arg.s)) == 0)) goto parse_err;
+#else
+            if (((c = getword(fromserver, &arg)) != ' ') ||
+                ((msg->modseq = sync_atoul(arg.s)) == 0)) goto parse_err;
+#endif
             if (((c = getword(fromserver, &arg)) != ' ')) goto parse_err;
 
             if (!message_guid_decode(&msg->guid, arg.s))
