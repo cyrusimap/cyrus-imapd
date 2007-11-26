@@ -1,5 +1,5 @@
 /* cyrusdb_skiplist.c -- cyrusdb skiplist implementation
- * $Id: cyrusdb_skiplist.c,v 1.55 2007/11/16 12:20:37 murch Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.56 2007/11/26 23:26:38 murch Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -2113,7 +2113,9 @@ static int recovery(struct db *db, int flags)
 	    myoff = ntohl(*((bit32 *)(ptr + 4)));
 	    p = db->map_base + myoff;
 	    keyptr = find_node(db, KEY(p), KEYLEN(p), updateoffsets);
-	    if (keyptr == db->map_base) {
+	    if (keyptr == db->map_base ||
+		db->compar(KEY(p), KEYLEN(p), KEY(keyptr), KEYLEN(keyptr))) {
+		/* didn't find exactly this node */
 		keyptr = NULL;
 	    }
 	}
@@ -2138,23 +2140,23 @@ static int recovery(struct db *db, int flags)
 	/* otherwise if DELETE, throw an error */
 	} else if (TYPE(ptr) == DELETE) {
 	    syslog(LOG_ERR, 
-		   "DBERROR: skiplist recovery %s: DELETE at %04X doesn't exist",
+		   "DBERROR: skiplist recovery %s: DELETE at %04X doesn't exist, skipping",
 		   db->fname, offset);
-	    r = CYRUSDB_IOERROR;
-
-	/* otherwise if ADD & found key, throw an error */
-	} else if (TYPE(ptr) == ADD && keyptr) {
-	    syslog(LOG_ERR, 
-		   "DBERROR: skiplist recovery %s: ADD at %04X exists", 
-		   db->fname, offset);
-	    r = CYRUSDB_IOERROR;
+	    need_checkpoint = 1;
 
 	/* otherwise insert it */
 	} else if (TYPE(ptr) == ADD) {
 	    unsigned int lvl;
 	    bit32 newoffsets[SKIPLIST_MAXLEVEL];
 
-	    db->listsize++;
+	    if (keyptr) {
+		syslog(LOG_ERR, 
+		       "DBERROR: skiplist recovery %s: ADD at %04X exists, replacing", 
+		       db->fname, offset);
+		need_checkpoint = 1;
+	    } else {
+		db->listsize++;
+	    }
 	    offsetnet = htonl(offset);
 
 	    lvl = LEVEL(ptr);
@@ -2164,10 +2166,36 @@ static int recovery(struct db *db, int flags)
 		       db->fname, lvl, SKIPLIST_MAXLEVEL);
 		r = CYRUSDB_IOERROR;
 	    } else {
+		/* NOTE - in the bogus case where a record with the same key already
+		 * exists, there are three possible cases:
+		 * lvl == LEVEL(keyptr)
+		 *    * trivial: all to me, all mine to keyptr's FORWARD
+		 * lvl > LEVEL(keyptr)	 -
+		 *    * all updateoffsets values should point to me
+		 *    * up until LEVEL(keyptr) set to keyptr's next values
+		 *      (updateoffsets[i] should be keyptr in these cases)
+		 *      then point all my higher pointers are updateoffsets[i]'s
+		 *      FORWARD instead.
+		 * lvl < LEVEL(keyptr)
+		 *    * updateoffsets values up to lvl should point to me
+		 *    * all mine should point to keyptr's next values
+		 *    * from lvl up, all updateoffsets[i] should point to
+		 *      FORWARD(keyptr, i) instead.
+		 *
+		 * All of this fully unstitches keyptr from the chain and stitches
+		 * the current node in, regardless of height difference.  Man what
+		 * a pain!
+		 */
 		for (i = 0; i < lvl; i++) {
 		    /* set our next pointers */
-		    newoffsets[i] = 
-			htonl(FORWARD(db->map_base + updateoffsets[i], i));
+		    if (keyptr && i < LEVEL(keyptr)) {
+                        /* need to replace the matching record key */
+			newoffsets[i] = 
+			    htonl(FORWARD(keyptr, i));
+		    } else {
+			newoffsets[i] = 
+			    htonl(FORWARD(db->map_base + updateoffsets[i], i));
+		    }
 		    
 		    /* replace 'updateoffsets' to point to me */
 		    lseek(db->fd, 
@@ -2178,6 +2206,18 @@ static int recovery(struct db *db, int flags)
 		/* write out newoffsets */
 		lseek(db->fd, FIRSTPTR(ptr) - db->map_base, SEEK_SET);
 		retry_write(db->fd, (char *) newoffsets, 4 * lvl);
+                
+		if (keyptr && lvl < LEVEL(keyptr)) {
+		    bit32 newoffsetnet;
+		    for (i = lvl; i < LEVEL(keyptr); i++) {
+			newoffsetnet = htonl(FORWARD(keyptr, i));
+			/* replace 'updateoffsets' to point onwards */
+			lseek(db->fd, 
+			      PTR(db->map_base + updateoffsets[i], i) - db->map_base,
+			      SEEK_SET);
+			retry_write(db->fd, (char *) &newoffsetnet, 4);
+		    }
+		}
 	    }
 	/* can't happen */
 	} else {
