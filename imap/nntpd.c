@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.60 2007/10/10 15:14:39 murch Exp $
+ * $Id: nntpd.c,v 1.61 2007/11/26 20:23:06 murch Exp $
  */
 
 /*
@@ -142,6 +142,7 @@ static SSL *tls_conn;
 
 sasl_conn_t *nntp_saslconn; /* the sasl connection context */
 
+int nntp_timeout;
 char newsprefix[100] = "";
 char *nntp_userid = 0, *newsmaster;
 struct auth_state *nntp_authstate = 0, *newsmaster_authstate;
@@ -523,7 +524,6 @@ int service_main(int argc __attribute__((unused)),
     char localip[60], remoteip[60];
     char hbuf[NI_MAXHOST];
     int niflags;
-    int timeout;
     sasl_security_properties_t *secprops=NULL;
     char unavail[1024];
 
@@ -590,9 +590,10 @@ int service_main(int argc __attribute__((unused)),
     proc_register("nntpd", nntp_clienthost, NULL, NULL);
 
     /* Set inactivity timer */
-    timeout = config_getint(IMAPOPT_NNTPTIMEOUT);
-    if (timeout < 3) timeout = 3;
-    prot_settimeout(nntp_in, timeout*60);
+    nntp_timeout = config_getint(IMAPOPT_NNTPTIMEOUT);
+    if (nntp_timeout < 3) nntp_timeout = 3;
+    nntp_timeout *= 60;
+    prot_settimeout(nntp_in, nntp_timeout);
     prot_setflushonread(nntp_in, nntp_out);
 
     /* we were connected on nntps port so we should do 
@@ -4025,6 +4026,7 @@ static void cmd_starttls(int nntps)
   
     result=tls_start_servertls(0, /* read */
 			       1, /* write */
+			       nntps ? 180 : nntp_timeout,
 			       layerp,
 			       &auth_id,
 			       &tls_conn);

@@ -93,7 +93,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.59 2007/10/05 19:04:19 murch Exp $ */
+/* $Id: tls.c,v 1.60 2007/11/26 20:23:06 murch Exp $ */
 
 #include <config.h>
 
@@ -118,6 +118,7 @@
 
 /* Application-specific. */
 #include "assert.h"
+#include "nonblock.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
@@ -794,7 +795,7 @@ static long bio_dump_cb(BIO * bio, int cmd, const char *argp, int argi,
   * filled in if the client authenticated. 'ret' is the SSL connection
   * on success.
   */
-int tls_start_servertls(int readfd, int writefd,
+int tls_start_servertls(int readfd, int writefd, int timeout,
 			int *layerbits, char **authid, SSL **ret)
 {
     int     sts;
@@ -849,14 +850,73 @@ int tls_start_servertls(int readfd, int writefd,
     if (var_imapd_tls_loglevel >= 3)
 	do_dump = 1;
 
-    if ((sts = SSL_accept(tls_conn)) <= 0) {
-	SSL_SESSION *session = SSL_get_session(tls_conn);
-	if (session) {
-	    SSL_CTX_remove_session(s_ctx, session);
+    nonblock(readfd, 1);
+    while (1) {
+	fd_set rfds;
+	struct timeval tv;
+	int err;
+
+	FD_ZERO(&rfds);
+	FD_SET(readfd, &rfds);
+	tv.tv_sec = timeout;
+	tv.tv_usec = 0;
+
+	sts = select(1, &rfds, NULL, NULL, &tv);
+	if (sts <= 0) {
+	    if (sts == 0) {
+		syslog(LOG_DEBUG, "SSL_accept() timed out -> fail");
+	    } else {
+		syslog(LOG_DEBUG,
+		       "tls_start_servertls() failed in select() -> fail: %m");
+	    }
+	    r = -1;
+	    goto done;
+	}
+
+	sts = SSL_accept(tls_conn);
+	if (sts > 0) {
+	    syslog(LOG_DEBUG, "SSL_accept() succeeded -> done");
+	    break;
+	}
+
+	/* Check the error code */
+	err = SSL_get_error(tls_conn, sts);
+	switch (err) {
+	case SSL_ERROR_WANT_READ:
+	case SSL_ERROR_WANT_WRITE:
+	    syslog(LOG_DEBUG, "SSL_accept() incomplete -> wait");
+	    continue;
+	case SSL_ERROR_SYSCALL:
+	    if (sts == 0) {
+		syslog(LOG_DEBUG, "EOF in SSL_accept() -> fail");
+	    } else if (errno == EINTR || errno == EAGAIN) {
+		syslog(LOG_DEBUG,
+		       "SSL_accept() interrupted by signal %m -> retry");
+		continue;
+	    } else {
+		syslog(LOG_DEBUG,
+		       "SSL_accept() interrupted by signal %m -> fail");
+	    }
+	    break;
+	case SSL_ERROR_SSL:
+	    syslog(LOG_DEBUG, "protocol error in SSL_accept() -> fail");
+	    break;
+	case SSL_ERROR_ZERO_RETURN:
+	    syslog(LOG_DEBUG,
+		   "TLS/SSL connection closed in SSL_accept() -> fail");
+	    break;
+	default:
+	    syslog(LOG_DEBUG,
+		   "SSL_accept() failed with unknown error %d -> fail",
+		   err);
+	    break;
 	}
 	r = -1;
 	goto done;
+
+	/* Should never get here */
     }
+
     /* Only loglevel==4 dumps everything */
     if (var_imapd_tls_loglevel < 4)
 	do_dump = 0;
@@ -939,8 +999,13 @@ int tls_start_servertls(int readfd, int writefd,
     }
 
  done:
+    nonblock(readfd, 0);
     if (r && tls_conn) {
 	/* error; clean up */
+	SSL_SESSION *session = SSL_get_session(tls_conn);
+	if (session) {
+	    SSL_CTX_remove_session(s_ctx, session);
+	}
 	SSL_free(tls_conn);
 	tls_conn = NULL;
     }

@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.135 2007/11/26 20:14:18 murch Exp $ -->
+<!-- $Id: changes.html,v 1.136 2007/11/26 20:23:05 murch Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -18,7 +18,10 @@ hierarchy) to work when using delayed delete
 <i>-- courtesy of Simon Matter</i>.</li>
 <li>Fixed interaction with removal of rights and
 <tt>implicitownerrights</tt>.</li>
-<li>Fixed parsing of single FETCH item when using FETCH modifiers.</li>
+<li>Fixed parsing of single FETCH item when using FETCH
+modifiers.</li>
+<li>Prevented SSL_accept() from blocking indefinitely when using
+TLS/SSL.<li>
 <li>Fixed miscellaneous bugs and build issues.</li>
 </ul>
 
@@ -2291,7 +2294,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2007/11/26 20:14:18 $ <br />
+last modified: $Date: 2007/11/26 20:23:05 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>

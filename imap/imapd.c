@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.535 2007/11/09 12:54:22 murch Exp $ */
+/* $Id: imapd.c,v 1.536 2007/11/26 20:23:05 murch Exp $ */
 
 #include <config.h>
 
@@ -148,6 +148,7 @@ static int supports_referrals;
 /* end PROXY STUFF */
 
 /* per-user/session state */
+int imapd_timeout;
 struct protstream *imapd_out = NULL;
 struct protstream *imapd_in = NULL;
 struct protgroup *protin = NULL;
@@ -701,7 +702,6 @@ int service_main(int argc __attribute__((unused)),
 #endif
 {
     socklen_t salen;
-    int timeout;
     sasl_security_properties_t *secprops = NULL;
     struct sockaddr_storage imapd_localaddr, imapd_remoteaddr;
     char localip[60], remoteip[60];
@@ -778,9 +778,10 @@ int service_main(int argc __attribute__((unused)),
     proc_register("imapd", imapd_clienthost, NULL, NULL);
 
     /* Set inactivity timer */
-    timeout = config_getint(IMAPOPT_TIMEOUT);
-    if (timeout < 30) timeout = 30;
-    prot_settimeout(imapd_in, timeout*60);
+    imapd_timeout = config_getint(IMAPOPT_TIMEOUT);
+    if (imapd_timeout < 30) imapd_timeout = 30;
+    imapd_timeout *= 60;
+    prot_settimeout(imapd_in, imapd_timeout);
     prot_setflushonread(imapd_in, imapd_out);
 
     /* we were connected on imaps port so we should do 
@@ -6626,6 +6627,7 @@ void cmd_starttls(char *tag, int imaps)
   
     result=tls_start_servertls(0, /* read */
 			       1, /* write */
+			       imaps ? 180 : imapd_timeout,
 			       layerp,
 			       &auth_id,
 			       &tls_conn);

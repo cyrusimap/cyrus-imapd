@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.181 2007/10/19 01:03:17 murch Exp $
+ * $Id: pop3d.c,v 1.182 2007/11/26 20:23:06 murch Exp $
  */
 #include <config.h>
 
@@ -112,6 +112,7 @@ static SSL *tls_conn;
 
 sasl_conn_t *popd_saslconn; /* the sasl connection context */
 
+int popd_timeout;
 char *popd_userid = 0, *popd_subfolder = 0;
 struct mailbox *popd_mailbox = 0;
 struct auth_state *popd_authstate = 0;
@@ -453,7 +454,6 @@ int service_main(int argc __attribute__((unused)),
     char hbuf[NI_MAXHOST];
     char localip[60], remoteip[60];
     int niflags;
-    int timeout;
     sasl_security_properties_t *secprops=NULL;
 
     signals_poll();
@@ -517,9 +517,10 @@ int service_main(int argc __attribute__((unused)),
     proc_register("pop3d", popd_clienthost, NULL, NULL);
 
     /* Set inactivity timer */
-    timeout = config_getint(IMAPOPT_POPTIMEOUT);
-    if (timeout < 10) timeout = 10;
-    prot_settimeout(popd_in, timeout*60);
+    popd_timeout = config_getint(IMAPOPT_POPTIMEOUT);
+    if (popd_timeout < 10) popd_timeout = 10;
+    popd_timeout *= 60;
+    prot_settimeout(popd_in, popd_timeout);
     prot_setflushonread(popd_in, popd_out);
 
     if (kflag) kpop();
@@ -1075,6 +1076,7 @@ static void cmd_starttls(int pop3s)
   
     result=tls_start_servertls(0, /* read */
 			       1, /* write */
+			       pop3s ? 180 : popd_timeout,
 			       layerp,
 			       &auth_id,
 			       &tls_conn);
