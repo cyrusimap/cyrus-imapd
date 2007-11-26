@@ -1,7 +1,7 @@
 /* timsieved.c -- main file for timsieved (sieve script accepting program)
  * Tim Martin
  * 9/21/99
- * $Id: timsieved.c,v 1.60 2007/09/27 20:17:04 murch Exp $
+ * $Id: timsieved.c,v 1.61 2007/11/26 20:23:06 murch Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -113,6 +113,7 @@ struct auth_state *sieved_authstate = 0;
 struct sockaddr_storage sieved_localaddr;
 struct sockaddr_storage sieved_remoteaddr;
 
+int sieved_timeout;
 struct protstream *sieved_out;
 struct protstream *sieved_in;
 
@@ -259,7 +260,6 @@ int service_main(int argc __attribute__((unused)),
 		 char **envp __attribute__((unused)))
 {
     socklen_t salen;
-    int timeout;
     char remoteip[60], localip[60];
     sasl_security_properties_t *secprops = NULL;
     char hbuf[NI_MAXHOST];
@@ -271,9 +271,10 @@ int service_main(int argc __attribute__((unused)),
     sieved_in = prot_new(0, 0);
     sieved_out = prot_new(1, 1);
 
-    timeout = config_getint(IMAPOPT_TIMEOUT);
-    if (timeout < 10) timeout = 10;
-    prot_settimeout(sieved_in, timeout * 60);
+    sieved_timeout = config_getint(IMAPOPT_TIMEOUT);
+    if (sieved_timeout < 10) sieved_timeout = 10;
+    sieved_timeout *= 60;
+    prot_settimeout(sieved_in, sieved_timeout);
     prot_setflushonread(sieved_in, sieved_out);
 
     signal(SIGPIPE, SIG_IGN);

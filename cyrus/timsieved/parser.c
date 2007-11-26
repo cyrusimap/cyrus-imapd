@@ -1,7 +1,7 @@
 /* parser.c -- parser used by timsieved
  * Tim Martin
  * 9/21/99
- * $Id: parser.c,v 1.43 2007/10/10 14:17:38 murch Exp $
+ * $Id: parser.c,v 1.44 2007/11/26 20:23:06 murch Exp $
  */
 /*
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
@@ -88,6 +88,7 @@ int starttls_done = 0;
 /* our tls connection, if any */
 static SSL *tls_conn = NULL;
 #endif /* HAVE_SSL */
+extern int sieved_timeout;
 
 /* from elsewhere */
 void fatal(const char *s, int code);
@@ -829,6 +830,7 @@ static int cmd_starttls(struct protstream *sieved_out, struct protstream *sieved
 
     result=tls_start_servertls(0, /* read */
 			       1, /* write */
+			       sieved_timeout,
 			       layerp,
 			       &authid,
 			       &tls_conn);

@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.18 2007/10/10 15:14:39 murch Exp $
+ * $Id: sync_server.c,v 1.19 2007/11/26 20:23:06 murch Exp $
  */
 
 #include <config.h>
@@ -1266,6 +1266,7 @@ static void cmd_starttls(void)
   
     result=tls_start_servertls(0, /* read */
 			       1, /* write */
+			       180, /* 3 minutes */
 			       layerp,
 			       &auth_id,
 			       &tls_conn);

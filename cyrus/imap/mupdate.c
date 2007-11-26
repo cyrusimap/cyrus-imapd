@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.99 2007/10/10 15:14:39 murch Exp $
+ * $Id: mupdate.c,v 1.100 2007/11/26 20:23:06 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1941,6 +1941,7 @@ void cmd_starttls(struct conn *C, const char *tag)
   
     result=tls_start_servertls(C->pin->fd, /* read */
 			       C->pout->fd, /* write */
+			       180, /* 3 minutes */
 			       layerp,
 			       &auth_id,
 			       &C->tlsconn);
