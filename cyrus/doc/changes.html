@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.134 2007/10/26 15:34:23 murch Exp $ -->
+<!-- $Id: changes.html,v 1.135 2007/11/26 20:14:18 murch Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -10,6 +10,15 @@
 
 <h1>Changes to the Cyrus IMAP Server since 2.3.10</h1>
 <ul>
+<li>Fixed several skiplist bugs <i>-- courtesy of Fastmail.fm</i>.</li>
+<li>Add robustness to skiplist recovery <i>-- courtesy of
+Fastmail.fm</i>.</li>
+<li>Allow [un]deleting of user INBOXes (renaming to/from deleted
+hierarchy) to work when using delayed delete
+<i>-- courtesy of Simon Matter</i>.</li>
+<li>Fixed interaction with removal of rights and
+<tt>implicitownerrights</tt>.</li>
+<li>Fixed parsing of single FETCH item when using FETCH modifiers.</li>
 <li>Fixed miscellaneous bugs and build issues.</li>
 </ul>
 
@@ -2282,7 +2291,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2007/10/26 15:34:23 $ <br />
+last modified: $Date: 2007/11/26 20:14:18 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
