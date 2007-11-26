@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.20 2007/11/26 20:35:59 murch Exp $
+ * $Id: sync_server.c,v 1.21 2007/11/26 20:45:14 murch Exp $
  */
 
 #include <config.h>
@@ -2246,7 +2246,7 @@ static void cmd_setmodseq(struct mailbox *mailbox)
     char *err = NULL;
     int   c;
     int   r = 0;
-    unsigned long uid;
+    unsigned long uid = 0;
     modseq_t modseq, highestmodseq;
 
     if (!mailbox) {
