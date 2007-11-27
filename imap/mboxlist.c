@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: mboxlist.c,v 1.254 2007/11/15 13:34:41 murch Exp $
+ * $Id: mboxlist.c,v 1.255 2007/11/27 15:31:29 murch Exp $
  */
 
 #include <config.h>
@@ -1223,8 +1223,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	    isusermbox = 1;
 	} else if ((config_getswitch(IMAPOPT_ALLOWUSERMOVES) &&
 		    mboxname_isusermailbox(newname, 1)) ||
-		   mboxlist_in_deletedhierarchy(oldname) ||
-		   mboxlist_in_deletedhierarchy(newname)) {
+		   mboxname_isdeletedmailbox(newname)) {
 	    /* Special case of renaming a user */
 	    access = cyrus_acl_myrights(auth_state, oldacl);
 	    if (!(access & ACL_DELETEMBOX) && !isadmin) {
@@ -1257,8 +1256,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	if (mboxname_isusermailbox(newname, 1)) {
 	    if ((config_getswitch(IMAPOPT_ALLOWUSERMOVES) &&
 		 mboxname_isusermailbox(oldname, 1)) ||
-		mboxlist_in_deletedhierarchy(oldname) ||
-		mboxlist_in_deletedhierarchy(newname)) {
+		mboxname_isdeletedmailbox(oldname)) {
 		if (!isadmin) {
 		    /* Only admins can rename users (INBOX to INBOX) */
 		    r = IMAP_MAILBOX_NOTSUPPORTED;
@@ -1975,7 +1973,7 @@ static int find_p(void *rockp,
 	memcpy(namebuf, key, keylen);
 	namebuf[keylen] = '\0';
 	if (mboxlist_delayed_delete_isenabled() && 
-	        mboxlist_in_deletedhierarchy(namebuf))
+	    mboxname_isdeletedmailbox(namebuf))
 	    return 0;
     }
 
@@ -3381,25 +3379,4 @@ int mboxlist_delayed_delete_isenabled(void)
     enum enum_value config_delete_mode = config_getenum(IMAPOPT_DELETE_MODE);
 
     return(config_delete_mode == IMAP_ENUM_DELETE_MODE_DELAYED);
-}
-
-int mboxlist_in_deletedhierarchy(const char *mailboxname)
-{
-    static const char *deletedprefix = NULL;
-    static int deletedprefix_len = 0;
-    int domainlen = 0;
-    char *p;
-
-    if (!mboxlist_delayed_delete_isenabled()) return(0);
-
-    if (!deletedprefix) {
-        deletedprefix = config_getstring(IMAPOPT_DELETEDPREFIX);
-	deletedprefix_len = strlen(deletedprefix);
-    }
-
-    if (config_virtdomains && (p = strchr(mailboxname, '!')))
-        domainlen = p - mailboxname + 1;    
-
-    return ((!strncmp(mailboxname + domainlen, deletedprefix, deletedprefix_len) &&
-             mailboxname[domainlen + deletedprefix_len] == '.') ? 1 : 0);
 }

@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.536 2007/11/26 20:23:05 murch Exp $ */
+/* $Id: imapd.c,v 1.537 2007/11/27 15:31:28 murch Exp $ */
 
 #include <config.h>
 
@@ -5007,7 +5007,7 @@ static int delmbox(char *name,
         r = mboxlist_deletemailbox(name, imapd_userisadmin,
                                    imapd_userid, imapd_authstate,
                                    0, 0, 0);
-    } else if (imapd_userisadmin && mboxlist_in_deletedhierarchy(name)) {
+    } else if (imapd_userisadmin && mboxname_isdeletedmailbox(name)) {
         r = mboxlist_deletemailbox(name, imapd_userisadmin,
                                    imapd_userid, imapd_authstate,
                                    0, 0, 0);
@@ -5099,7 +5099,7 @@ void cmd_delete(char *tag, char *name, int localonly, int force)
                                        imapd_userid, imapd_authstate, 
                                        1-force, localonly, 0);
         } else if (imapd_userisadmin &&
-                   mboxlist_in_deletedhierarchy(mailboxname)) {
+                   mboxname_isdeletedmailbox(mailboxname)) {
             r = mboxlist_deletemailbox(mailboxname, imapd_userisadmin,
                                        imapd_userid, imapd_authstate,
                                        0 /* checkacl */, localonly, 0);

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  * 
- * $Id: mboxlist.h,v 1.41 2007/08/28 18:42:28 murch Exp $
+ * $Id: mboxlist.h,v 1.42 2007/11/27 15:31:29 murch Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -211,5 +211,4 @@ int mboxlist_commit(struct txn *tid);
 int mboxlist_abort(struct txn *tid);
 
 int mboxlist_delayed_delete_isenabled(void);
-int mboxlist_in_deletedhierarchy(const char *mailboxname);
 #endif

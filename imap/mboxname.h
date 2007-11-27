@@ -1,5 +1,5 @@
 /* mboxname.h -- Mailbox list manipulation routines
- * $Id: mboxname.h,v 1.15 2007/10/23 16:53:07 murch Exp $
+ * $Id: mboxname.h,v 1.16 2007/11/27 15:31:29 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -107,6 +107,12 @@ int mboxname_userownsmailbox(const char *userid, const char *name);
  * returns a pointer to the userid, otherwise returns NULL.
  */
 char *mboxname_isusermailbox(const char *name, int isinbox);
+
+/*
+ * If (internal) mailbox 'name' is in the DELETED namespace
+ * returns boolean
+ */
+int mboxname_isdeletedmailbox(const char *name);
 
 /*
  * Translate (internal) inboxname into corresponding userid.
