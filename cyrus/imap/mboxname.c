@@ -1,5 +1,5 @@
 /* mboxname.c -- Mailbox list manipulation routines
- * $Id: mboxname.c,v 1.41 2007/10/23 16:53:07 murch Exp $
+ * $Id: mboxname.c,v 1.42 2007/11/27 15:31:29 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -600,32 +600,44 @@ char *mboxname_isusermailbox(const char *name, int isinbox)
 {
     const char *p;
     const char *start = name;
-    const char *deletedprefix = config_getstring(IMAPOPT_DELETEDPREFIX);
-    size_t len = strlen(deletedprefix);
-    int isdel = 0;
 
     /* step past the domain part */
     if (config_virtdomains && (p = strchr(start, '!')))
 	start = p + 1;
 
-    /* step past any deletedprefix */
-    if (mboxlist_delayed_delete_isenabled() && strlen(start) > len+1 &&
-	!strncmp(start, deletedprefix, len) && start[len] == '.')  {
-	start += len + 1;
-	isdel = 1; /* there's an add'l sep + hextimestamp on isdel folders */
-    }
-
     /* starts with "user." AND
      * we don't care if it's an inbox OR
-     * there's no dots after the username OR 
-     * it's deleted and there's only one more dot
+     * there's no dots after the username 
      */
-    if (!strncmp(start, "user.", 5) &&
-	(!isinbox || !strchr(start+5, '.') ||
-	 (isdel && (p = strchr(start+5, '.')) && !strchr(p+1, '.'))))
-	return (char*) start+5; /* could have trailing bits if isinbox+isdel */
+    if (!strncmp(start, "user.", 5) && (!isinbox || !strchr(start+5, '.')))
+	return (char*) start+5;
     else
 	return NULL;
+}
+
+/*
+ * If (internal) mailbox 'name' is a DELETED mailbox
+ * returns boolean
+ */
+int mboxname_isdeletedmailbox(const char *name)
+{
+    static const char *deletedprefix = NULL;
+    static int deletedprefix_len = 0;
+    int domainlen = 0;
+    char *p;
+
+    if (!mboxlist_delayed_delete_isenabled()) return(0);
+
+    if (!deletedprefix) {
+	deletedprefix = config_getstring(IMAPOPT_DELETEDPREFIX);
+  deletedprefix_len = strlen(deletedprefix);
+    }
+
+    if (config_virtdomains && (p = strchr(name, '!')))
+	domainlen = p - name + 1;
+
+    return ((!strncmp(name + domainlen, deletedprefix, deletedprefix_len) &&
+	     name[domainlen + deletedprefix_len] == '.') ? 1 : 0);
 }
 
 /*
