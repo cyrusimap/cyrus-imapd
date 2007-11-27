@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
- * $Id: seen_db.c,v 1.54 2007/08/30 14:25:08 murch Exp $
+ * $Id: seen_db.c,v 1.55 2007/11/27 16:02:10 murch Exp $
  * 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -675,6 +675,7 @@ int seen_merge(const char *tmpfile, const char *tgtfile)
     int r = 0;
     struct db *tmp = NULL, *tgt = NULL;
     struct seen_merge_rock rock;
+    struct txn *tid = NULL;
 
     /* xxx does this need to be CYRUSDB_CREATE? */
     r = (DB->open)(tmpfile, CYRUSDB_CREATE, &tmp);
@@ -686,10 +687,12 @@ int seen_merge(const char *tmpfile, const char *tgtfile)
     rock.db = tgt;
     rock.tid = NULL;
     
-    r = DB->foreach(tmp, "", 0, NULL, seen_merge_cb, &rock, &rock.tid);
+    r = DB->foreach(tmp, "", 0, NULL, seen_merge_cb, &rock, &tid);
 
-    if(r) DB->abort(rock.db, rock.tid);
-    else DB->commit(rock.db, rock.tid);
+    if (rock.tid) {
+	if(r) DB->abort(rock.db, rock.tid);
+	else DB->commit(rock.db, rock.tid);
+    }
 
  done:
 
