@@ -93,7 +93,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.60 2007/11/26 20:23:06 murch Exp $ */
+/* $Id: tls.c,v 1.61 2007/11/28 11:49:26 murch Exp $ */
 
 #include <config.h>
 
@@ -899,7 +899,13 @@ int tls_start_servertls(int readfd, int writefd, int timeout,
 	    }
 	    break;
 	case SSL_ERROR_SSL:
-	    syslog(LOG_DEBUG, "protocol error in SSL_accept() -> fail");
+	    err = ERR_get_error();
+	    if (err == 0) {
+		syslog(LOG_DEBUG, "protocol error in SSL_accept() -> fail");
+	    } else {
+		syslog(LOG_DEBUG, "%s in SSL_accept() -> fail",
+		       ERR_reason_error_string(err));
+	    }
 	    break;
 	case SSL_ERROR_ZERO_RETURN:
 	    syslog(LOG_DEBUG,
