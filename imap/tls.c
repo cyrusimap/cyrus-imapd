@@ -66,7 +66,7 @@
 *
 *	tls_stop_servertls() sends the "close notify" alert via
 *	SSL_shutdown() to the peer and resets all connection specific
-*	TLS data. As RFC2487 does not specify a seperate shutdown, it
+*	TLS data. As RFC2487 does not specify a separate shutdown, it
 *	is supposed that the underlying TCP connection is shut down
 *	immediately afterwards, so we don't care about additional data
 *	coming through the channel.
@@ -93,7 +93,7 @@
 *
 */
 
-/* $Id: tls.c,v 1.61 2007/11/28 11:49:26 murch Exp $ */
+/* $Id: tls.c,v 1.62 2007/11/28 11:51:27 murch Exp $ */
 
 #include <config.h>
 
