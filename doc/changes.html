@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.141 2007/11/28 14:49:01 murch Exp $ -->
+<!-- $Id: changes.html,v 1.142 2007/12/08 19:20:46 murch Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -25,6 +25,10 @@ hierarchy) to work when using delayed delete
 modifiers.</li>
 <li>Prevented SSL_accept() from blocking indefinitely when using
 TLS/SSL.</li>
+<li>Allow STARTTLS to be used to externally preauth'd LMTP
+connections.</li>
+<li>Allow a TLS client certificate to be sufficient authentication for
+LMTP.</li>
 <li>Fixed miscellaneous bugs and build issues.</li>
 </ul>
 
@@ -2297,7 +2301,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2007/11/28 14:49:01 $ <br />
+last modified: $Date: 2007/12/08 19:20:46 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
