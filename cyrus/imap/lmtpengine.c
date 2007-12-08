@@ -1,5 +1,5 @@
 /* lmtpengine.c: LMTP protocol engine
- * $Id: lmtpengine.c,v 1.123 2007/11/26 20:23:06 murch Exp $
+ * $Id: lmtpengine.c,v 1.124 2007/12/08 19:16:59 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -114,6 +114,7 @@ struct clientdata {
     sasl_conn_t *conn;
 
     enum {
+	TLSCERT_AUTHED = -2,  /* -2: TLS cert auth'd, but no AUTH issued */
 	EXTERNAL_AUTHED = -1, /* -1: external auth'd, but no AUTH issued */
 	NOAUTH = 0,
 	DIDAUTH = 1
@@ -1319,7 +1320,8 @@ void lmtpmode(struct lmtp_func *func,
 		  prot_printf(pout, "250-SIZE %d\r\n", max_msgsize);
 	      else
 		  prot_printf(pout, "250-SIZE\r\n");
-	      if (tls_enabled() && !cd.starttls_done && !cd.authenticated) {
+	      if (tls_enabled() && !cd.starttls_done &&
+		  cd.authenticated <= NOAUTH) {
 		  prot_printf(pout, "250-STARTTLS\r\n");
 	      }
 	      if (cd.authenticated <= NOAUTH &&
@@ -1606,8 +1608,10 @@ void lmtpmode(struct lmtp_func *func,
 		    free(saslprops.authid);
 		    saslprops.authid = NULL;
 		}
-		if(auth_id)
+		if(auth_id) {
 		    saslprops.authid = xstrdup(auth_id);		
+		    cd.authenticated = TLSCERT_AUTHED;
+		}
 
 		/* tell the prot layer about our new layers */
 		prot_settls(pin, cd.tls_conn);
