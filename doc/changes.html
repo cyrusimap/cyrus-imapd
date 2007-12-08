@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.142 2007/12/08 19:20:46 murch Exp $ -->
+<!-- $Id: changes.html,v 1.143 2007/12/08 19:25:18 murch Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -24,7 +24,7 @@ hierarchy) to work when using delayed delete
 <li>Fixed parsing of single FETCH item when using FETCH
 modifiers.</li>
 <li>Prevented SSL_accept() from blocking indefinitely when using
-TLS/SSL.</li>
+TLS/SSL.  This should eliminate a lot of hung SSL-wrapped processes.</li>
 <li>Allow STARTTLS to be used to externally preauth'd LMTP
 connections.</li>
 <li>Allow a TLS client certificate to be sufficient authentication for
@@ -2301,7 +2301,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2007/12/08 19:20:46 $ <br />
+last modified: $Date: 2007/12/08 19:25:18 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
