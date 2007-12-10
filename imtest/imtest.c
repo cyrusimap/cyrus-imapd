@@ -1,7 +1,7 @@
 /* imtest.c -- IMAP/POP3/NNTP/LMTP/SMTP/MUPDATE/MANAGESIEVE test client
  * Ken Murchison (multi-protocol implementation)
  * Tim Martin (SASL implementation)
- * $Id: imtest.c,v 1.112 2007/10/10 15:14:39 murch Exp $
+ * $Id: imtest.c,v 1.113 2007/12/10 14:47:08 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -2249,7 +2249,7 @@ static struct protocol_t protocols[] = {
     { "sieve", NULL, SIEVE_SERVICE_NAME,
       { 1, "OK", NULL },
       { "CAPABILITY", "OK", "\"STARTTLS\"", "\"SASL\" ", NULL },
-      { "STARTTLS", "OK", "NO", 0 },
+      { "STARTTLS", "OK", "NO", 1 },
       { "AUTHENTICATE", INT_MAX, 1, "OK", "NO", NULL, "*", &sieve_parse_success },
       NULL, { "LOGOUT", "OK" }, NULL, NULL, NULL
     },
