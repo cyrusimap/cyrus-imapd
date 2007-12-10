@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.143 2007/12/08 19:25:18 murch Exp $ -->
+<!-- $Id: changes.html,v 1.144 2007/12/10 14:47:08 murch Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -29,6 +29,9 @@ TLS/SSL.  This should eliminate a lot of hung SSL-wrapped processes.</li>
 connections.</li>
 <li>Allow a TLS client certificate to be sufficient authentication for
 LMTP.</li>
+<li><tt>timsieved</tt> now automatically sends CAPABILITY response
+after STARTTLS.  This code was reintroduced after being mistakenly
+removed as part of bug #1338.</li>
 <li>Fixed miscellaneous bugs and build issues.</li>
 </ul>
 
@@ -2301,7 +2304,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2007/12/08 19:25:18 $ <br />
+last modified: $Date: 2007/12/10 14:47:08 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
