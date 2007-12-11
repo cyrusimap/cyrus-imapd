@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.237 2007/10/26 15:31:40 murch Exp $
+ * $Id: index.c,v 1.238 2007/12/11 12:00:13 murch Exp $
  */
 #include <config.h>
 
@@ -2578,7 +2578,7 @@ int index_urlfetch(struct mailbox *mailbox, unsigned msgno,
     unsigned long msg_size = 0;
     const char *cacheitem;
     int fetchmime = 0;
-    unsigned size, offset = 0, skip = 0;;
+    unsigned size, offset = 0, skip = 0;
     int n, r = 0;
 
     if (outsize) *outsize = 0;
