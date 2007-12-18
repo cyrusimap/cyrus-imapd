@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: reconstruct.c,v 1.102 2007/10/24 18:12:09 murch Exp $ */
+/* $Id: reconstruct.c,v 1.103 2007/12/18 14:50:20 murch Exp $ */
 
 #include <config.h>
 
@@ -938,6 +938,7 @@ int reconstruct(char *name, struct discovered *found)
     if (mailbox.cache_fd) close(mailbox.cache_fd);
     mailbox.cache_fd = newcache_fd;
 
+    expmsg = 0;
     for (msg = 0; msg < uid_num; msg++) {
 	char msgfname[MAILBOX_FNAME_LEN+1];
 
@@ -964,58 +965,55 @@ int reconstruct(char *name, struct discovered *found)
 	}
 
         /* Check if this message is on the expunge list */
+        while ((expmsg < expuid_num) && (expuid [expmsg] < uid[msg]))
+            expmsg++;
+
         expunge_found = 0;
-        for (expmsg = 0; expmsg < expuid_num; expmsg++) {
-            if (uid[msg] == expuid [expmsg]) {
-                expunge_found = 1;
-                break;
-            }
-            if (uid[msg] > expuid [expmsg]) {
-                break;
-            }
+        if ((expmsg < expuid_num) && (uid[msg] == expuid[expmsg])) {
+            expunge_found = 1;
+            expmsg++;
         }
-        if ( expunge_found == 0 ) {
-            
 
-	/* Find old index record, if it exists */
-	while (old_msg < mailbox.exists && old_index.uid < uid[msg]) {
-	    if (mailbox_read_index_record(&mailbox, ++old_msg, &old_index)) {
-		old_index.uid = 0;
+	if (expunge_found == 0) {
+	    /* Find old index record, if it exists */
+	    while (old_msg < mailbox.exists && old_index.uid < uid[msg]) {
+		if (mailbox_read_index_record(&mailbox, ++old_msg, &old_index)) {
+		    old_index.uid = 0;
+		}
 	    }
-	}
 
-	if (old_index.uid == uid[msg]) {
-	    /* Use data in old index file, subject to validity checks */
-	    message_index.internaldate = old_index.internaldate;
-	    message_index.modseq = old_index.modseq;
-	    /* This should never happen, but bugs in 2.3.4 and 2.3.5
-	     * could have left modseq blank.  If so, update it */
-	    if (!message_index.modseq) message_index.modseq = 1;
-	    message_index.system_flags = old_index.system_flags &
-	      (FLAG_ANSWERED|FLAG_FLAGGED|FLAG_DELETED|FLAG_DRAFT);
-	    for (i = 0; i < MAX_USER_FLAGS/32; i++) {
-		message_index.user_flags[i] =
-		  old_index.user_flags[i] & valid_user_flags[i];
+	    if (old_index.uid == uid[msg]) {
+		/* Use data in old index file, subject to validity checks */
+		message_index.internaldate = old_index.internaldate;
+		message_index.modseq = old_index.modseq;
+		/* This should never happen, but bugs in 2.3.4 and 2.3.5
+		 * could have left modseq blank.  If so, update it */
+		if (!message_index.modseq) message_index.modseq = 1;
+		message_index.system_flags = old_index.system_flags &
+		    (FLAG_ANSWERED|FLAG_FLAGGED|FLAG_DELETED|FLAG_DRAFT);
+		for (i = 0; i < MAX_USER_FLAGS/32; i++) {
+		    message_index.user_flags[i] =
+			old_index.user_flags[i] & valid_user_flags[i];
+		}
+		/* Copy across MessageGUID if confident that data on disk */
+		message_guid_copy(&message_index.guid, &old_index.guid);
 	    }
-            /* Copy across MessageGUID if confident that data on disk */
-            message_guid_copy(&message_index.guid, &old_index.guid);
-	}
-	else {
-	    /* Message file write time is good estimate of internaldate */
-	    message_index.internaldate = sbuf.st_mtime;
-	    /* If we are recovering a message, assume new UIDL
-	       so that stupid clients will retrieve this message */
-	    mailbox.options |= OPT_POP3_NEW_UIDL;
-            /* Wipe the Message GUID */
-            message_guid_set_null(&message_index.guid);
-	    /* If we are recovering a message, reset MODSEQ */
-	    message_index.modseq = 1;
-	}
+	    else {
+		/* Message file write time is good estimate of internaldate */
+		message_index.internaldate = sbuf.st_mtime;
+		/* If we are recovering a message, assume new UIDL
+		   so that stupid clients will retrieve this message */
+		mailbox.options |= OPT_POP3_NEW_UIDL;
+		/* Wipe the Message GUID */
+		message_guid_set_null(&message_index.guid);
+		/* If we are recovering a message, reset MODSEQ */
+		message_index.modseq = 1;
+	    }
 
-	message_index.last_updated = time(0);
-	if (message_index.modseq > mailbox.highestmodseq) {
-	    mailbox.highestmodseq = message_index.modseq;
-	}
+	    message_index.last_updated = time(0);
+	    if (message_index.modseq > mailbox.highestmodseq) {
+		mailbox.highestmodseq = message_index.modseq;
+	    }
 	}
 
 	/* Force rebuild from message_create_record() */
