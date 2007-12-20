@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: mbexamine.c,v 1.17 2007/10/12 12:54:23 murch Exp $ */
+/* $Id: mbexamine.c,v 1.18 2007/12/20 15:17:34 murch Exp $ */
 
 #include <config.h>
 
@@ -107,6 +107,7 @@ const int config_need_data = 0;
 
 /* forward declarations */
 int do_examine(char *name, int matchlen, int maycreate, void *rock);
+int do_quota(char *name, int matchlen, int maycreate, void *rock);
 void usage(void);
 void shut_down(int code);
 
@@ -120,6 +121,7 @@ int main(int argc, char **argv)
     int opt, i, r;
     char buf[MAX_MAILBOX_PATH+1];
     char *alt_config = NULL;
+    int quotachk = 0;
 
     if ((geteuid()) == 0 && (become_cyrus() != 0)) {
 	fatal("must run as the Cyrus user", EC_USAGE);
@@ -129,7 +131,7 @@ int main(int argc, char **argv)
     assert(INDEX_HEADER_SIZE == (OFFSET_SPARE4+4));
     assert(INDEX_RECORD_SIZE == (OFFSET_MODSEQ+4));
 
-    while ((opt = getopt(argc, argv, "C:u:s:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:u:s:q")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -144,6 +146,10 @@ int main(int argc, char **argv)
 	case 's':
 	    if(wantvalue) usage();
 	    wantvalue = atoi(optarg);
+	    break;
+
+	case 'q':
+	    quotachk = 1;
 	    break;
 	    
 	default:
@@ -168,15 +174,17 @@ int main(int argc, char **argv)
     if (optind == argc) {
 	strlcpy(buf, "*", sizeof(buf));
 	(*recon_namespace.mboxlist_findall)(&recon_namespace, buf, 1, 0, 0,
-					    do_examine, NULL);
+					    quotachk ? do_quota : do_examine,
+					    NULL);
     }
 
     for (i = optind; i < argc; i++) {
 	/* Handle virtdomains and separators in mailboxname */
 	(*recon_namespace.mboxname_tointernal)(&recon_namespace, argv[i],
 					       NULL, buf);
-	(*recon_namespace.mboxlist_findall)(&recon_namespace, buf, 1, 0,
-					    0, do_examine, NULL);
+	(*recon_namespace.mboxlist_findall)(&recon_namespace, buf, 1, 0, 0,
+					    quotachk ? do_quota : do_examine,
+					    NULL);
     }
 
     mboxlist_close();
@@ -189,7 +197,8 @@ void usage(void)
 {
     fprintf(stderr,
 	    "usage: mbexamine [-C <alt_config>] [-s seqnum] mailbox...\n"
-	    "       mbexamine [-C <alt_config>] [-u uid] mailbox...\n");
+	    "       mbexamine [-C <alt_config>] [-u uid] mailbox...\n"
+	    "       mbexamine [-C <alt_config>] -q mailbox...\n");
     exit(EC_USAGE);
 }    
 
@@ -394,6 +403,95 @@ int do_examine(char *name,
 
     if(wantvalue && !flag) {
 	printf("Desired message not found\n");
+    }
+
+ done:
+    mailbox_close(&mailbox);
+
+    return r;
+}
+
+/*
+ * mboxlist_findall() callback function to examine a mailbox quota usage
+ */
+int do_quota(char *name,
+	       int matchlen __attribute__((unused)),
+	       int maycreate __attribute__((unused)),
+	       void *rock __attribute__((unused)))
+{
+    unsigned i;
+    int r = 0;
+    char ext_name_buf[MAX_MAILBOX_PATH+1];
+    struct mailbox mailbox;
+    const char *index_base;
+    long int start_offset, record_size;
+    uquota_t total = 0;
+    
+    signals_poll();
+
+    /* Convert internal name to external */
+    (*recon_namespace.mboxname_toexternal)(&recon_namespace, name,
+					   "cyrus", ext_name_buf);
+    printf("Examining %s...", ext_name_buf);
+
+    /* Open/lock header */
+    r = mailbox_open_header(name, 0, &mailbox);
+    if (r) {
+	return r;
+    }
+    if (mailbox.header_fd != -1) {
+	(void) mailbox_lock_header(&mailbox);
+    }
+    mailbox.header_lock_count = 1;
+
+    if (chdir(mailbox.path) == -1) {
+	r = IMAP_IOERROR;
+	goto done;
+    }
+
+    /* Attempt to open/lock index */
+    r = mailbox_open_index(&mailbox);
+    if (r) {
+	goto done;
+    } else {
+	(void) mailbox_lock_index(&mailbox);
+    }
+    mailbox.index_lock_count = 1;
+
+    index_base = mailbox.index_base;
+    start_offset = mailbox.start_offset;
+    record_size = mailbox.record_size;
+    
+    for(i=1; i<=mailbox.exists; i++) {
+	char fnamebuf[MAILBOX_FNAME_LEN];
+	struct stat sbuf;
+
+	strlcpy(fnamebuf, mailbox.path, sizeof(fnamebuf));
+	strlcat(fnamebuf, "/", sizeof(fnamebuf));
+	mailbox_message_get_fname(&mailbox, UID(i),
+				  fnamebuf + strlen(fnamebuf),
+				  sizeof(fnamebuf) - strlen(fnamebuf));
+
+	if (stat(fnamebuf, &sbuf) != 0) {
+	    syslog(LOG_WARNING,
+		   "Can not open message file %s -- skipping\n", fnamebuf);
+	    continue;
+	}
+
+	if (SIZE(i) != (unsigned) sbuf.st_size) {
+	    printf("  Message %u has INCORRECT size in index record\n", UID(i));
+	    r = 0;
+	    goto done;
+	}
+
+	total += sbuf.st_size;
+    }
+
+    if (mailbox.quota_mailbox_used != total) {
+	printf("  Mailbox has INCORRECT total quota usage\n");
+    }
+    else {
+	printf("  Mailbox has CORRECT total quota usage\n");
     }
 
  done:
