@@ -304,7 +304,7 @@ sha1_parse(unsigned char sha1[20], char *s)
     int i;
     char c;
 
-    if (strlen(s) != 32)
+    if (strlen(s) != 40)
         return(0);
 
     for (i = 0 ; i < 20 ; i++) {
