@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squat_build.c,v 1.12 2007/10/01 18:36:00 murch Exp $
+ * $Id: squat_build.c,v 1.13 2008/01/04 12:11:06 murch Exp $
  */
 
 /*
@@ -1178,6 +1178,8 @@ static int write_trie_word_data(SquatIndex* index, SquatWordTable* t, int len,
             != SQUAT_OK) {
           return SQUAT_ERR;
         }
+        free(entries[i].table);
+        entries[i].table = NULL;
       } else {
         offsets[i] = 0;
       }
