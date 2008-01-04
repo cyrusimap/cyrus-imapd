@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ctl_cyrusdb.c,v 1.29 2007/03/30 18:40:20 murch Exp $
+ * $Id: ctl_cyrusdb.c,v 1.30 2008/01/04 12:24:05 murch Exp $
  */
 
 #include <config.h>
@@ -160,9 +160,16 @@ void recover_reserved()
     annotatemore_init(0, NULL, NULL);
     annotatemore_open(NULL);
 
+    /* Need quotadb for deleting mailboxes with quotas */
+    quotadb_init(0);
+    quotadb_open(NULL);
+
     /* build a list of mailboxes - we're using internal names here */
     mboxlist_findall(NULL, pattern, 1, NULL,
 		     NULL, fixmbox, NULL);
+
+    quotadb_close();
+    quotadb_done();
 
     annotatemore_close();
     annotatemore_done();
