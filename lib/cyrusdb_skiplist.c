@@ -1,5 +1,5 @@
 /* cyrusdb_skiplist.c -- cyrusdb skiplist implementation
- * $Id: cyrusdb_skiplist.c,v 1.57 2008/01/07 16:27:44 murch Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.58 2008/01/07 16:41:18 murch Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -138,6 +138,12 @@ enum {
     DUMMY = 257
 };
 
+enum {
+    UNLOCKED = 0,
+    READLOCKED = 1,
+    WRITELOCKED = 2,
+};
+
 struct db {
     /* file data */
     char *fname;
@@ -156,6 +162,10 @@ struct db {
     unsigned listsize;
     unsigned logstart;		/* where the log starts from last chkpnt */
     time_t last_recovery;
+
+    /* tracking info */
+    int lock_status;
+    int is_open;
 
     /* comparator function to use for sorting */
     int (*compar) (const char *s1, int l1, const char *s2, int l2);
@@ -457,10 +467,8 @@ static int newtxn(struct db *db, struct txn *t)
      * 
      * If it isn't, we need to run recovery. */
     if (SAFE_TO_APPEND(db)) {
-	int r;
-	if ((r = recovery(db, RECOVERY_FORCE | RECOVERY_CALLER_LOCKED)) < 0) {
-	    return r;
-	}
+	int r = recovery(db, RECOVERY_FORCE | RECOVERY_CALLER_LOCKED);
+	if (r) return r;
     }
 
     /* fill in t */
@@ -481,7 +489,8 @@ static int read_header(struct db *db)
     const char *dptr;
     int r;
     
-    assert(db && db->map_len && db->fname && db->map_base);
+    assert(db && db->map_len && db->fname && db->map_base 
+              && db->is_open && db->lock_status);
     if (db->map_len < HEADER_SIZE) {
 	syslog(LOG_ERR, 
 	       "skiplist: file not large enough for header: %s", db->fname);
@@ -559,6 +568,7 @@ static int write_header(struct db *db)
     char buf[HEADER_SIZE];
     int n;
 
+    assert (db->lock_status == WRITELOCKED);
     memcpy(buf + 0, HEADER_MAGIC, HEADER_MAGIC_SIZE);
     *((bit32 *)(buf + OFFSET_VERSION)) = htonl(db->version);
     *((bit32 *)(buf + OFFSET_VERSION_MINOR)) = htonl(db->version_minor);
@@ -580,28 +590,11 @@ static int write_header(struct db *db)
     return 0;
 }
 
-static int dispose_db(struct db *db)
-{
-    if (!db) return 0;
-    if (db->fname) { 
-	free(db->fname);
-    }
-    if (db->map_base) {
-	map_free(&db->map_base, &db->map_len);
-    }
-    if (db->fd != -1) {
-	close(db->fd);
-    }
-
-    free(db);
-
-    return 0;
-}
-
 /* make sure our mmap() is big enough */
 static int update_lock(struct db *db, struct txn *txn) 
 {
     /* txn->logend is the current size of the file */
+    assert (db->is_open && db->lock_status == WRITELOCKED);
     map_refresh(db->fd, 0, &db->map_base, &db->map_len, txn->logend,
 		db->fname, 0);
     db->map_size = txn->logend;
@@ -615,6 +608,7 @@ static int write_lock(struct db *db, const char *altname)
     const char *lockfailaction;
     const char *fname = altname ? altname : db->fname;
 
+    assert(db->lock_status == UNLOCKED);
     if (lock_reopen(db->fd, fname, &sbuf, &lockfailaction) < 0) {
 	syslog(LOG_ERR, "IOERROR: %s %s: %m", lockfailaction, fname);
 	return CYRUSDB_IOERROR;
@@ -624,11 +618,12 @@ static int write_lock(struct db *db, const char *altname)
     }
     db->map_size = sbuf.st_size;
     db->map_ino = sbuf.st_ino;
+    db->lock_status = WRITELOCKED;
     
     map_refresh(db->fd, 0, &db->map_base, &db->map_len, sbuf.st_size,
 		fname, 0);
 
-    if (db->curlevel) {
+    if (db->is_open) {
 	/* reread header */
 	read_header(db);
     }
@@ -643,6 +638,7 @@ static int read_lock(struct db *db)
     struct stat sbuf, sbuffile;
     int newfd = -1;
 
+    assert(db->lock_status == UNLOCKED);
     for (;;) {
 	if (lock_shared(db->fd) < 0) {
 	    syslog(LOG_ERR, "IOERROR: lock_shared %s: %m", db->fname);
@@ -678,13 +674,14 @@ static int read_lock(struct db *db)
     }
     db->map_size = sbuf.st_size;
     db->map_ino = sbuf.st_ino;
+    db->lock_status = READLOCKED;
     
     /* printf("%d: read lock: %d\n", getpid(), db->map_ino); */
 
     map_refresh(db->fd, 0, &db->map_base, &db->map_len, sbuf.st_size,
 		db->fname, 0);
 
-    if (db->curlevel) {
+    if (db->is_open) {
 	/* reread header */
 	read_header(db);
     }
@@ -694,12 +691,39 @@ static int read_lock(struct db *db)
 
 static int unlock(struct db *db)
 {
+    if (db->lock_status == UNLOCKED) {
+	syslog(LOG_NOTICE, "skiplist: unlock while not locked");
+    }
     if (lock_unlock(db->fd) < 0) {
 	syslog(LOG_ERR, "IOERROR: lock_unlock %s: %m", db->fname);
 	return CYRUSDB_IOERROR;
     }
+    db->lock_status = UNLOCKED;
 
     /* printf("%d: unlock: %d\n", getpid(), db->map_ino); */
+
+    return 0;
+}
+
+static int dispose_db(struct db *db)
+{
+    if (!db) return 0;
+    assert(db->is_open);
+    if (db->lock_status) {
+	syslog(LOG_ERR, "skiplist: closed while still locked");
+	unlock(db);
+    }
+    if (db->fname) { 
+	free(db->fname);
+    }
+    if (db->map_base) {
+	map_free(&db->map_base, &db->map_len);
+    }
+    if (db->fd != -1) {
+	close(db->fd);
+    }
+
+    free(db);
 
     return 0;
 }
@@ -729,29 +753,31 @@ static int myopen(const char *fname, int flags, struct db **ret)
 	return CYRUSDB_IOERROR;
     }
 
- retry:
     db->curlevel = 0;
+    db->is_open = 0;
+    db->lock_status = UNLOCKED;
 
-    if (new) {
-	/* lock the db (this normally rereads db->curlevel, but
-	 db->curlevel is currently 0) */
+    /* grab a read lock, only reading the header */
+    r = read_lock(db);
+    if (r < 0) {
+        dispose_db(db);
+	return r;
+    }
+
+    /* if the file is empty, then the header needs to be created first */
+    if (db->map_size == 0) {
+        unlock(db);
 	r = write_lock(db, NULL);
-	if (r < 0) {
-	    dispose_db(db);
-	    return r;
-	}
-    } else {
-	/* grab a read lock */
-	r = read_lock(db);
 	if (r < 0) {
 	    dispose_db(db);
 	    return r;
 	}
     }
 
-    if (new && db->map_size == 0) {
-	/* make sure someone didn't come along and "fix" this db */
-
+    /* race condition.  Another process may have already got the write
+     * lock and created the header. Only go ahead if the map_size is 
+     * still zero (read/write_lock updates map_size). */
+    if (db->map_size == 0) {
 	/* initialize in memory structure */
 	db->version = SKIPLIST_VERSION;
 	db->version_minor = SKIPLIST_VERSION_MINOR;
@@ -789,14 +815,13 @@ static int myopen(const char *fname, int flags, struct db **ret)
 	    r = CYRUSDB_IOERROR;
 	}
 
+	/* map the new file */
+	db->map_size = db->logstart;
+	map_refresh(db->fd, 0, &db->map_base, &db->map_len, db->logstart,
+		    db->fname, 0);
     }
 
-    if (db->map_size == 0) {
-	/* race condition to initialize this guy! */
-	new = 1;
-	unlock(db);
-	goto retry;
-    }
+    db->is_open = 1;
 
     r = read_header(db);
     if (r) {
@@ -1564,6 +1589,7 @@ static int mycheckpoint(struct db *db, int locked)
 	if (r < 0) return r;
     } else {
 	/* we need the latest and greatest data */
+        assert(db->is_open && db->lock_status == WRITELOCKED);
 	map_refresh(db->fd, 0, &db->map_base, &db->map_len, MAP_UNKNOWN_LEN,
 		    db->fname, 0);
     }
@@ -1704,6 +1730,7 @@ static int mycheckpoint(struct db *db, int locked)
     
     if (!r) {
 	/* get new lock */
+	db->lock_status = UNLOCKED; /* well, the new file is... */
 	r = write_lock(db, fname);
     }
 
@@ -1901,6 +1928,7 @@ static int recovery(struct db *db, int flags)
     if (!(flags & RECOVERY_CALLER_LOCKED) && (r = write_lock(db, NULL)) < 0) {
 	return r;
     }
+    assert(db->is_open && db->lock_status == WRITELOCKED);
 
     if ((r = read_header(db)) < 0) {
 	unlock(db);
