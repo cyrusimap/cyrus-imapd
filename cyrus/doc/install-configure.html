@@ -1,4 +1,4 @@
-<!-- $Id: install-configure.html,v 1.34 2006/11/30 17:11:16 murch Exp $ -->
+<!-- $Id: install-configure.html,v 1.35 2008/01/07 17:56:09 murch Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Installing and configuring the IMAP Server
@@ -227,11 +227,11 @@ restarted.
 </kbd></pre>
 
 <p>Optionally, you can edit <tt>/etc/cyrus.conf</tt> to disable or
-enabling certain services, or to tune the number of preforked copies.
+enable certain services, or to tune the number of preforked copies.
 Be sure not to remove the entries that are labeled required.
 
 <p><li>Arrange to start "<tt>/usr/cyrus/bin/master</tt>" as root when
-the system starts.  It will bind some ports and then give up it's root
+the system starts.  It will bind some ports and then give up its root
 privileges.  Until your system reboots, you can start the master
 process by hand:
 
@@ -247,7 +247,7 @@ shut down the mail system by sending it a signal with <tt>kill</tt>.
 <a name="mta"><h3>Configuring the Mail Transfer Agent</h3></a>
 
 <p>In order to deliver mail to the Cyrus system, you'll have to
-configure your MTA (Sendmail, Postfix, Exim, etc) to use LMTP.
+configure your MTA (Sendmail, Postfix, Exim, etc.) to use LMTP.
 
 <h4>Configuring <a href="http://www.sendmail.org/">Sendmail</a></h4>
 
@@ -435,13 +435,13 @@ authenticate the client.</p>
 <li><p>OpenSSL requires the certificate and key in PEM format.  You can
 create the server's private key and certificate yourself using
 OpenSSL.  Here, we create a self-signed  key for the machine
-"<tt> foobar.andrew.cmu.edu</tt>" and put both the certificate and key
+"<tt>foobar.andrew.cmu.edu</tt>" and put both the certificate and key 
 in the file "<tt>/var/imap/server.pem</tt>".</p>
 
 <p>Please do not blindly enter in the information to OpenSSL
 below. Instead, enter the appropriate information for your
-organization (i.e. NOT Carnegie Mellon University for the Organization
-name, etc.).</p>
+organization (i.e., NOT Carnegie Mellon University for the Organization
+Name, etc.).</p>
 
 <pre>
 <kbd>openssl req -new -x509 -nodes -out /var/imap/server.pem -keyout /var/imap/server.pem -days 365</kbd>
@@ -471,7 +471,7 @@ Email Address []:
 example: <kbd>chown cyrus /var/imap/server.pem</kbd>
 
 <li>Add the following to <tt>/etc/imapd.conf</tt> to tell the server
-where to find the certificate and key file (used for ALL services):
+where to find the certificate and key files (used for ALL services):
 
 <pre>tls_cert_file: /var/imap/server.pem
 tls_key_file: /var/imap/server.pem
@@ -485,10 +485,10 @@ service:
 </pre>
 
 &quot;servicename&quot; here refers to the name of the service as specified
-in cyrus.conf.  It is <i>not</i> necessaraly the name of the binary.
+in <tt>cyrus.conf</tt>.  It is <i>not</i> necessarily the name of the binary.
 
 <p>This is useful if you want to use different hostnames for each service
-(e.g. via virtual host interfaces or DNS CNAMEs). In the absence of
+(e.g., via virtual host interfaces or DNS CNAMEs). In the absence of
 any of the service specific options, the value of the global option is
 used. A value of <b>disabled</b> for the certificate or key file for
 a particular service will disable SSL/TLS for that service.
@@ -537,5 +537,5 @@ convention, consult <a
 href=altnamespace.html#altnameconfig>altnamespace.html</a>.
 
 <P><HR>
-last modified: $Date: 2006/11/30 17:11:16 $
+last modified: $Date: 2008/01/07 17:56:09 $
 </BODY></HTML>

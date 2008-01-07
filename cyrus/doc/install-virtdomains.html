@@ -1,18 +1,18 @@
-<!-- $Id: install-virtdomains.html,v 1.4 2006/11/30 17:11:16 murch Exp $ -->
+<!-- $Id: install-virtdomains.html,v 1.5 2008/01/07 17:56:12 murch Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Configuring Virtual Domains
 </title>
 </head>
-<h1>Configuring Virtual Domains
-</h1>
 <body>
+
+<h1>Configuring Virtual Domains</h1>
 
 <h2>Introduction</h2>
 
 <p>Virtual domains is the practice of hosting a service for more than one
 domain on one server.  Cyrus IMAP has the ability to host IMAP/POP
-mailboxes for multiple domains (e.g. <tt>test@example.com</tt> and
+mailboxes for multiple domains (e.g., <tt>test@example.com</tt> and
 <tt>test@example.net</tt>) on a single server or Murder.</p>
 
 <p>In order to accomplish this, Cyrus needs to know which domain to look
@@ -21,7 +21,7 @@ determine the domain:</p>
 
 <ul>
 <li>Fully qualified userid - the client logs in with a userid
-containing the domain in which the user belongs (e.g
+containing the domain in which the user belongs (e.g.,
 <tt>test@example.com</tt> or <tt>test%example.net</tt>)</li>
 <li>IP address - the server looks up the domain based on the IP
 address of the receiving interface (useful for servers with multiple
@@ -44,7 +44,7 @@ the changes in the paradigm.</p>
 as existing inside a domain.  Unqualified users are technically inside the
 <tt>defaultdomain</tt>.</li>
 <li><b>Names can be qualified</b> - Global admins can reference
-mailboxes and ids by qualified names.  That is, for any given mailbox
+mailboxes and IDs by qualified names.  That is, for any given mailbox
 command, you can add <tt>@domain</tt> to the end of the mailbox name.
 Here are some examples:
  <ul>
@@ -69,9 +69,9 @@ Here are some examples:
     implementation supports per-domain administrators as well as
     global (inter-domain) administrators.  Domain-specific
     administrators are specified with a fully qualified userid in the
-    <tt>admins</tt> option (e.g. <tt>admin@example.net</tt>) and only
+    <tt>admins</tt> option (e.g., <tt>admin@example.net</tt>) and only
     have access to mailboxes in the associated domain.  Global
-    administrators are specified with an unqualified userid.
+    administrators are specified with unqualified userids.
 </ul>
 
 <h2>Quick Start</h2>
@@ -133,7 +133,7 @@ hostname of the receiving interface.  For example:</p>
 </kbd></pre>
 
 <p>Once the server obtains the fully qualified hostname of the
-interface, it removes the localpart (ie, 'mail') and uses the
+interface, it removes the localpart (i.e., 'mail') and uses the
 remainder as the domain for any user that logs in.</p>
 
 <p>This address to hostname mapping would usually be done via DNS,
@@ -149,7 +149,7 @@ qualified with the correct domain.</p>
 <h4>Configuring Sendmail</h4>
 
 <p>In general, follow the basic <a href=install-configure.html>configuration
-instructions</a>.  Here are a few caveots:</p>
+instructions</a>.  Here are a few caveats:</p>
 
 <ul>
 <li> It is easiest to use the mailertable to route mail to Cyrus,
@@ -163,7 +163,7 @@ example.com              cyrusv2:/var/imap/socket/lmtp
 
 <li> You'll have to use the Cyrus mailer in LMTP mode, and you'll have
 to change the mailer flags so that it provides the full domain while
-communicating LMTP.  Specifically these changes:
+communicating via LMTP.  Specifically these changes:
 
 <pre>
 S=EnvFromSMTP/HdrFromSMTP, R=EnvToSMTP
@@ -171,12 +171,12 @@ S=EnvFromSMTP/HdrFromSMTP, R=EnvToSMTP
 </ul>
 
 <h3>Mail Clients</h3>
-<p>The only changes you'll need to make to the mail client is to change the
-username to the fully qualified domain name, ie <tt>user@example.com</tt>.
+<p>The only changes you'll need to make to mail clients is to change
+usernames to the fully qualified domain names, i.e., <tt>user@example.com</tt>.
 Note that to support some mail clients, the <tt>user%example.com</tt>
 form of userid is also supported.  Users in the default domain will not
-need to reconfigur their clients (as unqualified userids are assumed to
-be in the default domain)</p>
+need to reconfigure their clients (as unqualified userids are assumed to
+be in the default domain).</p>
 
 <a name="admins"><h3>Administration</h3></a>
 
@@ -184,20 +184,20 @@ be in the default domain)</p>
 administrators as well as "global" (inter-domain) administrators.
 Domain-specific administrators are specified with a
 fully qualified userid in the <tt>admins</tt> option
-(e.g. <tt>admin@example.net</tt>) and only have access to mailboxes in
+(e.g., <tt>admin@example.net</tt>) and only have access to mailboxes in
 the associated domain.  Mailbox names should be specified in the same
 fashion as on a single domain configuration.</p>
 
 <p>Global administrators are specified with an unqualified userid in the
 <tt>admins</tt> option and have access to <i>any</i> mailbox on the
 server.  Because global admins use unqualified userids, they belong
-to the <tt>defaultdomain</tt>.  As a result, you can NOT have a global
+to the <tt>defaultdomain</tt>.  As a result, you CANNOT have a global
 admin without specifying a <tt>defaultdomain</tt>.  Note that when
-trying to login as a global admin to a multi-homed server from remote
+trying to login as a global admin to a multi-homed server from a remote
 machine, it might be necessary to fully qualify the userid with the
 <tt>defaultdomain</tt>.</p>
 
-<p>Global admins must use a <tt>mailbox@domain</tt> syntax when
+<p>Global admins must use <tt>mailbox@domain</tt> syntax when
 specifying mailboxes outside of the <tt>defaultdomain</tt>.  Examples
 (using <tt>cyradm</tt>):</p>
 
@@ -220,5 +220,5 @@ To list all mailboxes in domain 'example.com':</p>
 </kbd></pre>
 
 <P><HR>
-last modified: $Date: 2006/11/30 17:11:16 $
+last modified: $Date: 2008/01/07 17:56:12 $
 </BODY></HTML>

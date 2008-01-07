@@ -4,7 +4,7 @@
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
 <title>Cyrus IMAP Server FAQ</title>
-<!-- $Id: faq.html,v 1.37 2006/11/30 17:11:16 murch Exp $ -->
+<!-- $Id: faq.html,v 1.38 2008/01/07 17:56:06 murch Exp $ -->
 </head>
 <body>
 <h1>Cyrus IMAP Server FAQ</h1>
@@ -202,12 +202,12 @@ What's wrong?
 
 <dd>
 <p><b>A:</b> Nothing is wrong. These messages are logged whenever
-Berkeley db encounters lock contention, but isn't necessarily a
-problem by themselves. This is especially likely when you have an
+Berkeley DB encounters lock contention, but aren't necessarily
+problems. This is especially likely when you have an
 empty or small duplicate delivery database and are receiving a large
 volume of e-mail.</p>
 
-<p>Berkeley db 4.0 has a bug where the number of lockers isn't
+<p>Berkeley DB 4.0 has a bug where the number of lockers isn't
 decremented properly, causing this number to be unreliable.</p>
 </dd>
 
@@ -216,13 +216,13 @@ that I receive are being changed to 'X's.  What's going on?</dt>
 
 <dd>
 <p><b>A:</b> 8-bit characters are illegal in message headers.  Following
-the principal of &quot;be liberal in what you accept, and strict in what you
-send&quot; cyrus converts them to Xs.  (Without a character set, having
+the principle of &quot;be liberal in what you accept, and strict in what you
+send&quot;, Cyrus converts them to Xs.  (Without a character set, having
 the 8-bit characters replaced with Xs is just as good as having them be any
 other 8-bit character, especially for sorting and searching).
 Alternatively, you can set &quot;reject8bit: t&quot; in <tt>imapd.conf</tt> to
 reject the messages outright.  It might
-also be reasonable for cyrus to support the use of a default character set,
+also be reasonable for Cyrus to support the use of a default character set,
 however thus far no one has done the work to do so (it would also involve
 QP-encoding the corrupted headers).
 </p>
@@ -233,7 +233,7 @@ I'm using a client with a 'trash folder'.</dt>
 
 <dd>
 <p><b>A:</b>
-Trash folders, as they are commonly implemented (as an actual IMAP mailbox),
+Trash folders, as they are commonly implemented (as actual IMAP mailboxes),
 do not fit the IMAP delete/expunge model very well.  In fact, naive
 client implementations will get stuck in a situation where they cannot
 delete a message from a mailbox because they try to COPY it to the trash
@@ -272,7 +272,7 @@ mechanisms that you require.</p>
 </dl>
 
 <hr />
-last modified: $Date: 2006/11/30 17:11:16 $ <br />
+last modified: $Date: 2008/01/07 17:56:06 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>

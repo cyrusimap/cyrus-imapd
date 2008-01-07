@@ -1,4 +1,4 @@
-<!-- $Id: os.html,v 1.4 2001/11/18 19:50:43 leg Exp $ -->
+<!-- $Id: os.html,v 1.5 2008/01/07 17:56:13 murch Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Operating System Notes
@@ -47,9 +47,9 @@ from the basic HP C) must be built on the target system.
 <h2>Linux</h2>
 
 <ol>
-<li> synchronous fs updates.
+<li> synchronous FS updates.
 <br>By turning on synchronous updates for ext2fs, all updates (instead of
-just meta-data) become synchronous. This is good for reliability. Bad
+just meta-data) become synchronous. This is good for reliability, but bad
 for performance.
 
 <p> The big problem used to be with the <tt>mailboxes</tt> file. The
@@ -59,13 +59,11 @@ to a Berkerley DB database.
 <p>Note this is for ext2fs. If you are using a newer filesystem (such
 as xfs, jfs, or reiserfs) the synchronous metadata issue shouldn't
 come up.  Then again, we haven't really looked at other filesystems
-for linux yet.  (It appears that the different filesystems support
+for Linux yet.  (It appears that the different filesystems support
 slightly different semantics, and it's not always clear what the right
 thing for the application to do is.)
 </ol>
 
 <P><HR>
-last modified: $Date: 2001/11/18 19:50:43 $
+last modified: $Date: 2008/01/07 17:56:13 $
 </BODY></HTML>
-
-

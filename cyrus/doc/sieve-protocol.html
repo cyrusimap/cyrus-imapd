@@ -1,4 +1,4 @@
-<!-- $Id: sieve-protocol.html,v 1.3 2003/05/02 17:01:57 rjs3 Exp $ -->
+<!-- $Id: sieve-protocol.html,v 1.4 2008/01/07 17:56:14 murch Exp $ -->
 
 <HTML><HEAD>
 <TITLE>Protocol for Sieve script exchange</TITLE>
@@ -6,7 +6,7 @@
 <H1>Protocol for Sieve script exchange</H1>
 
 <i>Please note that this document is not authoritative and may well be out
-of date, you should look at <a href=specs.html>specs.html</a> for the
+of date; you should look at <a href=specs.html>specs.html</a> for the
 current authoritative document for the MANAGESIEVE protocol.</i>
 
 Note: This is <b>not</b> a standards track protocol. If you decide to base
@@ -31,9 +31,9 @@ of them being the "active" sieve script
 
 <h3>Types</h3>
 
-This a line oriented protocol much like [IMAP] or [ACAP]. There
-are two types: ATOMS and strings. Strings may be quoted or
-literal. See [ACAP] for detailed descriptions.
+This is a line-oriented protocol much like [IMAP] or [ACAP]. There
+are two types: ATOMS and strings, all space ('SP') separated. Strings
+may be quoted or literal. See [ACAP] for detailed descriptions.
 <br>
 
 <i>sievename</i> is a string where only certain characters are
@@ -46,44 +46,45 @@ allowed and it must be at least 1 character long.
 <DD>
 SASL authentication; the parameters are the mechanism and optionally
 the initial data. Initial data is base64 encoded. The server
-replies with a OK or NO response, or a string base64 encoded followed
-by an EOL. Client then replies with a string base64 encoded followed
-by an EOL and the procedure is repeated.
+replies with an OK or NO response, or a base64 string followed
+by an EOL. Client then replies with a base64 string followed
+by an EOL, and the procedure is repeated.
 
 <DT><tt>NOOP EOL</tt>
 <DD>
-No side affects. OK, NO replies
+No side effects. Valid replies: OK or NO.
 
 <DT><tt>LOGOUT EOL</tt>
 <DD>
-Logout, terminates connection. OK, NO replies.
+Logout: terminates connection. Valid replies: OK or NO.
 
 <DT><tt>GETSCRIPT SP <i>sievename</i> EOL</tt>
 <DD>
 
 The parameter is the name of the requested script.
 Returns: <tt>string EOL</tt> containing the script data.
-Get the script with name <i>sievename</i> from the server. OK, NO replies
+Get the script with name <i>sievename</i> from the server. Valid
+replies: OK or NO.
 
 <DT><tt>PUTSCRIPT SP <i>sievename</i> SP <i>string</i> </tt> EOL
 <DD>
 Puts <i>sievename</i> with data <i>data</i> onto the server if
-possible. OK, NO replies.
+possible. Valid replies: OK or NO.
 
 <DT><tt> SETACTIVE SP <i>sievename</i> </tt>EOL
 <DD>
 Set the script with the name <i>sievename</i> as the active
-script. Any other script that was active is no longer. OK, NO replies
+script. Any other script that was active is no longer. Valid replies: OK or NO.
 
 <DT><TT>DELETESCRIPT SP <i>sievename</i> </tt>EOL
 <DD>
-Delete the script with <i>sievename</i>. OK or NO replies.
+Delete the script with <i>sievename</i>. Valid replies: OK or NO.
 
 <DT><TT>LISTSCRIPTS EOL</TT>
 <DD>
-returns zero or more: <i>sievename</i> EOL.
-where the active script has a '*' at the end of it's name
-OK or NO replies
+Returns zero or more: <i>sievename</i> EOL.
+Where the active script has a '*' at the end of its name.
+Valid replies: OK or NO.
 
 </dl>
 

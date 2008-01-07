@@ -1,19 +1,19 @@
-<!-- $Id: install-prereq.html,v 1.12 2003/10/22 18:50:04 rjs3 Exp $ -->
+<!-- $Id: install-prereq.html,v 1.13 2008/01/07 17:56:11 murch Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Prerequisites and other notes
 </title>
 </head>
-<h1>Prerequisites and other notes
-</h1>
 <body>
+
+<h1>Prerequisites and other notes</h1>
 
 <P>The following programs and/or packages are <b>required</b>.
 
 <ul>
-<LI> <b>libsasl</b>, version 2.1.7 or higher.  To obtain libsasl, ftp
+<LI> <b>libsasl</b>, version 2.1.7 or higher.  To obtain <tt>libsasl</tt>, <tt>ftp</tt>
 it from <a
-href="ftp://ftp.andrew.cmu.edu/pub/cyrus-mail"><TT>ftp.andrew.cmu.edu</TT></a>.
+href="ftp://ftp.andrew.cmu.edu/pub/cyrus-mail">ftp.andrew.cmu.edu</a>.
 Earlier versions of SASL will not work; please get the latest one.
 Configure SASL so that it supports whatever authentication method your
 site uses.  Please pay careful attention to the SASL
@@ -21,7 +21,7 @@ configuration. This is the biggest problem that most people have.
 
 <li> <b>Berkeley DB</b>, version 3.0.55 or higher. Berkeley DB can be
 obtained from <a href="http://www.sleepycat.com">Sleepycat</a>.  It is
-strongly recommended that libsasl be compiled with Berkeley DB
+strongly recommended that <tt>libsasl</tt> be compiled with Berkeley DB
 support, using the same version of Berkeley DB.  (If you have a
 Berkeley DB version mismatch, somewhat perplexing crashes result.)
 
@@ -40,14 +40,14 @@ will be disabled.
 <ul>
 <LI> <b>makedepend</b>.  A version is included in the
 <TT>makedepend</TT> subdirectory of the distribution.  Try and install
-it before installing the Cyrus IMAPd.  If it fails, the configure
-script will use a dummy shell script instead of makedepend, and you
+it before installing the Cyrus IMAPd.  If it fails, the <tt>configure</tt>
+script will use a dummy shell script instead of <code>makedepend</code>, and you
 should be sure to always give the command "<TT>make clean</TT>" before
 "<TT>make all</TT>". If you don't mind builds taking longer, this
-isn't a big deal and you can ignore any makedepend errors.
+isn't a big deal and you can ignore any <code>makedepend</code> errors.
 
-<LI> <b>Perl</b>, version 5.  To obtain Perl, see <a
-href="http://www.cpan.org/">the comprehensive Perl archive</a>.  This
+<LI> <b>Perl</b>, version 5.  To obtain Perl, see the <a
+href="http://www.cpan.org/">Comprehensive Perl Archive</a>.  This
 is required for <tt>cyradm</tt> (written by Brandon Allbery).  It is
 also used for some installation scripts: you don't need it but it may
 make your life easier.  We recommend at least version 5.00502.
@@ -85,14 +85,12 @@ have reported success with
 <ul>
 <li><a href="ftp://ftp.gnu.org/non-gnu/flex">flex</a> - libsieve has
 two different lexical analyzers, and that's hard to do with
-traditional lex.  
+traditional <tt>lex</tt>.
 
-<li><a href="ftp://ftp.gnu.org/gnu/gcc">gcc</a> - we build using gcc
+<li><a href="ftp://ftp.gnu.org/gnu/gcc">gcc</a> - we build using <code>gcc</code>
 	  and the compiler options <tt>-O2 -g</tt>.
 </ul>
 
 <P><HR>
-last modified: $Date: 2003/10/22 18:50:04 $
+last modified: $Date: 2008/01/07 17:56:11 $
 </BODY></HTML>
-
-
