@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.177 2008/01/07 18:26:54 murch Exp $
+ * $Id: mailbox.c,v 1.178 2008/01/07 18:30:08 murch Exp $
  *
  */
 
@@ -2844,6 +2844,8 @@ int mailbox_delete(struct mailbox *mailbox, int delete_quota_root)
 
     strlcpy(nbuf, mailbox->name, sizeof(nbuf));
     ntail = nbuf + strlen(nbuf);
+    mailbox_close(mailbox);
+
     do {
 	/* Check if the mailbox has children */
 	strcpy(ntail, ".*");
@@ -2885,11 +2887,11 @@ int mailbox_delete(struct mailbox *mailbox, int delete_quota_root)
 	r = mboxlist_lookup(nbuf, NULL, NULL);
     } while(r == IMAP_MAILBOX_NONEXISTENT);
 
-    syslog(LOG_NOTICE, "Deleted mailbox %s", mailbox->name);
+    *ntail = '\0';
+    syslog(LOG_NOTICE, "Deleted mailbox %s", nbuf);
 
-    if (updatenotifier) updatenotifier(mailbox->name);
+    if (updatenotifier) updatenotifier(nbuf);
 
-    mailbox_close(mailbox);
     return 0;
 }
 
