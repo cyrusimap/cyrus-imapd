@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.238 2007/12/11 12:00:13 murch Exp $
+ * $Id: index.c,v 1.239 2008/01/07 18:26:54 murch Exp $
  */
 #include <config.h>
 
@@ -846,7 +846,7 @@ int oldexists;
     seenuids = saveseenuids;
 
     updatenotifier = mailbox_get_updatenotifier();
-    if (updatenotifier) updatenotifier(mailbox);
+    if (updatenotifier) updatenotifier(mailbox->name);
 }
 
 

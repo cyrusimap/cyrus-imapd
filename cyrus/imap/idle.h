@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: idle.h,v 1.8 2006/11/30 17:11:17 murch Exp $ */
+/* $Id: idle.h,v 1.9 2008/01/07 18:26:53 murch Exp $ */
 
 #ifndef IDLE_H
 #define IDLE_H
@@ -65,9 +65,9 @@ int idle_enabled(void);
 int idle_init(idle_updateproc_t *proc);
 
 /* Start IDLEing on 'mailbox'. */
-void idle_start(struct mailbox *mailbox);
+void idle_start(const char *mboxname);
 
 /* Cleanup when IDLE is completed. */
-void idle_done(struct mailbox *mailbox);
+void idle_done(const char *mboxname);
 
 #endif
