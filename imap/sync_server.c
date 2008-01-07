@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.21 2007/11/26 20:45:14 murch Exp $
+ * $Id: sync_server.c,v 1.22 2008/01/07 16:20:27 murch Exp $
  */
 
 #include <config.h>
@@ -1488,7 +1488,7 @@ static void cmd_reserve(char *mailbox_name,
 
         if (mailbox_copyfile(mailbox_msg_path, stage_msg_path, 0) != 0) {
             syslog(LOG_ERR, "IOERROR: Unable to link %s -> %s: %m",
-                   message->msg_path, mailbox_msg_path);
+                   mailbox_msg_path, stage_msg_path);
             i++;       /* Failed to reserve message. */
             continue;
         }
