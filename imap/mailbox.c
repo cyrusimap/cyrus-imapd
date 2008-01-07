@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.176 2007/11/16 13:47:46 murch Exp $
+ * $Id: mailbox.c,v 1.177 2008/01/07 18:26:54 murch Exp $
  *
  */
 
@@ -1363,7 +1363,7 @@ int mailbox_write_index_header(struct mailbox *mailbox)
 	return IMAP_IOERROR;
     }
 
-    if (updatenotifier) updatenotifier(mailbox);
+    if (updatenotifier) updatenotifier(mailbox->name);
 
     return 0;
 }
@@ -2497,7 +2497,7 @@ int mailbox_expunge(struct mailbox *mailbox,
 	}
     }
     else if (numdeleted) {
-	if (updatenotifier) updatenotifier(mailbox);
+	if (updatenotifier) updatenotifier(mailbox->name);
     }
 
     mailbox_unlock_pop(mailbox);
@@ -2887,7 +2887,7 @@ int mailbox_delete(struct mailbox *mailbox, int delete_quota_root)
 
     syslog(LOG_NOTICE, "Deleted mailbox %s", mailbox->name);
 
-    if (updatenotifier) updatenotifier(mailbox);
+    if (updatenotifier) updatenotifier(mailbox->name);
 
     mailbox_close(mailbox);
     return 0;

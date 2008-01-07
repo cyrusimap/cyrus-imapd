@@ -1,5 +1,5 @@
 /* mailbox.h -- Mailbox format definitions
- * $Id: mailbox.h,v 1.89 2007/10/12 12:54:23 murch Exp $
+ * $Id: mailbox.h,v 1.90 2008/01/07 18:26:54 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -294,7 +294,7 @@ typedef unsigned mailbox_decideproc_t(struct mailbox *mailbox, void *rock,
 				      unsigned char *indexbuf,
 				      int expunge_flags);
 
-typedef void mailbox_notifyproc_t(struct mailbox *mailbox);
+typedef void mailbox_notifyproc_t(const char *mboxname);
 
 extern void mailbox_set_updatenotifier(mailbox_notifyproc_t *notifyproc);
 extern mailbox_notifyproc_t *mailbox_get_updatenotifier(void);

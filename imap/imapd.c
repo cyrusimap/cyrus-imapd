@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.537 2007/11/27 15:31:28 murch Exp $ */
+/* $Id: imapd.c,v 1.538 2008/01/07 18:26:53 murch Exp $ */
 
 #include <config.h>
 
@@ -2443,13 +2443,13 @@ void cmd_idle(char *tag)
 
 	/* Start doing mailbox updates */
 	if (imapd_mailbox) index_check(imapd_mailbox, 0, 1);
-	idle_start(imapd_mailbox);
+	idle_start(imapd_mailbox ? imapd_mailbox->name : NULL);
 
 	/* Get continuation data */
 	c = getword(imapd_in, &arg);
 
 	/* Stop updates and do any necessary cleanup */
-	idle_done(imapd_mailbox);
+	idle_done(imapd_mailbox ? imapd_mailbox->name : NULL);
     }
     else {  /* Remote mailbox */
 	int done = 0, shutdown = 0;
