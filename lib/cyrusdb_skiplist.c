@@ -1,5 +1,5 @@
 /* cyrusdb_skiplist.c -- cyrusdb skiplist implementation
- * $Id: cyrusdb_skiplist.c,v 1.56 2007/11/26 23:26:38 murch Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.57 2008/01/07 16:27:44 murch Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -182,16 +182,6 @@ enum {
 };
 
 static int compare(const char *s1, int l1, const char *s2, int l2);
-
-static void newtxn(struct db *db, struct txn *t)
-{
-    /* fill in t */
-    t->ismalloc = 0;
-    t->syncfd = -1;
-    t->logstart = db->map_size;
-/*    assert(t->logstart != -1);*/
-    t->logend = t->logstart;
-}
 
 static void getsyncfd(struct db *db, struct txn *t)
 {
@@ -429,17 +419,57 @@ static unsigned RECSIZE(const char *ptr)
 
 /* Determine if it is safe to append to this skiplist database.
  *  e.g. does it end in 4 bytes of -1 followed by a commit record? 
+ * *or* does it end with 'DELETE' + 4 bytes + a commit record?
  * *or* is this the beginning of the log, in which case we only need
  * the padding from the last INORDER (or DUMMY) record
  */
 static int SAFE_TO_APPEND(struct db *db)
 {
-    return (db->map_size % 4
-	    || (db->map_size == db->logstart &&
-		*((bit32 *)(db->map_base + db->map_size - 4)) != htonl(-1))
-	    || (db->map_size != db->logstart &&
-		*((bit32 *)(db->map_base + db->map_size - 8)) != htonl(-1) &&
-		*((bit32 *)(db->map_base + db->map_size - 4)) != htonl(COMMIT)));
+    /* check it's a multiple of 4 */
+    if (db->map_size % 4) return 1;
+
+    /* is it the beginning of the log? */
+    if (db->map_size == db->logstart) {
+	if (*((bit32 *)(db->map_base + db->map_size - 4)) != htonl(-1)) {
+	    return 1;
+	}
+    }
+
+    /* in the middle of the log somewhere */
+    else {
+	if (*((bit32 *)(db->map_base + db->map_size - 4)) != htonl(COMMIT)) {
+	    return 1;
+	}
+
+	/* if it's not an end of a record or a delete */
+	if (!((*((bit32 *)(db->map_base + db->map_size - 8)) == htonl(-1)) ||
+	      (*((bit32 *)(db->map_base + db->map_size -12)) == htonl(DELETE)))) {
+	    return 1;
+	}
+    }
+
+    return 0;
+}
+
+static int newtxn(struct db *db, struct txn *t)
+{
+    /* is this file safe to append to?
+     * 
+     * If it isn't, we need to run recovery. */
+    if (SAFE_TO_APPEND(db)) {
+	int r;
+	if ((r = recovery(db, RECOVERY_FORCE | RECOVERY_CALLER_LOCKED)) < 0) {
+	    return r;
+	}
+    }
+
+    /* fill in t */
+    t->ismalloc = 0;
+    t->syncfd = -1;
+    t->logstart = db->map_size;
+/*    assert(t->logstart != -1);*/
+    t->logend = t->logstart;
+    return 0;
 }
 
 
@@ -599,8 +629,8 @@ static int write_lock(struct db *db, const char *altname)
 		fname, 0);
 
     if (db->curlevel) {
-	/* reread curlevel */
-	db->curlevel = ntohl(*((bit32 *)(db->map_base + OFFSET_CURLEVEL)));
+	/* reread header */
+	read_header(db);
     }
     
     /* printf("%d: write lock: %d\n", getpid(), db->map_ino); */
@@ -655,8 +685,8 @@ static int read_lock(struct db *db)
 		db->fname, 0);
 
     if (db->curlevel) {
-	/* reread curlevel */
-	db->curlevel = ntohl(*((bit32 *)(db->map_base + OFFSET_CURLEVEL)));
+	/* reread header */
+	read_header(db);
     }
     
     return 0;
@@ -874,7 +904,7 @@ int myfetch(struct db *db,
 	}
 
 	/* fill in t */
-	newtxn(db, &t);
+	if ((r = newtxn(db, &t))) return r;
 
 	tp = &t;
     } else {
@@ -959,7 +989,7 @@ int myforeach(struct db *db,
 	}
 
 	/* fill in t */
-	newtxn(db, &t);
+	if ((r = newtxn(db, &t))) return r;
 
 	tp = &t;
     } else {
@@ -1098,17 +1128,8 @@ int mystore(struct db *db,
 	    return r;
 	}
 
-	/* is this file safe to append to?
-	 * 
-	 * If it isn't, we need to run recovery. */
-	if(SAFE_TO_APPEND(db))
-	{
-	    if((r = recovery(db, RECOVERY_FORCE | RECOVERY_CALLER_LOCKED)) < 0)
-		return r;
-	}
-
 	/* fill in t */
-	newtxn(db, &t);
+	if ((r = newtxn(db, &t))) return r;
 
 	tp = &t;
     } else {
@@ -1268,17 +1289,8 @@ int mydelete(struct db *db,
 	    return r;
 	}
 
-	/* is this file safe to append to?
-	 * 
-	 * If it isn't, we need to run recovery. */
-	if(SAFE_TO_APPEND(db))
-	{
-	    if((r = recovery(db, RECOVERY_FORCE | RECOVERY_CALLER_LOCKED)) < 0)
-		return r;
-	}
-
 	/* fill in t */
-	newtxn(db, &t);
+	if ((r = newtxn(db, &t))) return r;
 
 	tp = &t;
     } else {
@@ -1681,6 +1693,7 @@ static int mycheckpoint(struct db *db, int locked)
 
     /* create the header */
     db->logstart = lseek(db->fd, 0, SEEK_END);
+    db->last_recovery = time(NULL);
     r = write_header(db);
 
     /* sync new file */
