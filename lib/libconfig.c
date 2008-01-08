@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: libconfig.c,v 1.13 2007/07/18 18:56:11 murch Exp $ */
+/* $Id: libconfig.c,v 1.14 2008/01/08 22:47:15 murch Exp $ */
 
 #include <config.h>
 
@@ -536,6 +536,7 @@ void config_read_file(const char *filename)
 
 		    /* find the start of the next value */
 		    for (p = q; *p && isspace((int) *p); p++);
+		    q = p;
 		}
 
 		break;
