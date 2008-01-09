@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: libconfig.c,v 1.14 2008/01/08 22:47:15 murch Exp $ */
+/* $Id: libconfig.c,v 1.15 2008/01/09 19:10:57 murch Exp $ */
 
 #include <config.h>
 
@@ -294,47 +294,76 @@ void config_read(const char *alt_config)
     }
 }
 
+#define GROWSIZE 4096
+
 void config_read_file(const char *filename)
 {
     FILE *infile;
     enum imapopt opt = IMAPOPT_ZERO;
     int lineno = 0;
-    char buf[4096], errbuf[1024];
+    char *buf, errbuf[1024];
+    unsigned bufsize, len;
     char *p, *q, *key, *fullkey, *srvkey, *val, *newval;
     int service_specific;
     int idlen = (config_ident ? strlen(config_ident) : 0);
 
+    bufsize = GROWSIZE;
+    buf = xmalloc(bufsize);
+
     /* read in config file */
     infile = fopen(filename, "r");
     if (!infile) {
-	strlcpy(buf, CYRUS_PATH, sizeof(buf));
-	strlcat(buf, filename, sizeof(buf));
+	strlcpy(buf, CYRUS_PATH, bufsize);
+	strlcat(buf, filename, bufsize);
 	infile = fopen(buf, "r");
     }
     if (!infile) {
-	snprintf(buf, sizeof(buf), "can't open configuration file %s: %s",
+	snprintf(buf, bufsize, "can't open configuration file %s: %s",
 		 filename, error_message(errno));
 	fatal(buf, EC_CONFIG);
     }
 
     /* check to see if we've already read this file */
     if (hash_lookup(filename, &includehash)) {
-	snprintf(buf, sizeof(buf), "configuration file %s included twice",
+	snprintf(buf, bufsize, "configuration file %s included twice",
 		 filename);
 	fatal(buf, EC_CONFIG);
-	return;
     }
     else {
 	hash_insert(filename, (void*) 0xDEADBEEF, &includehash);
     }
     
-    while (fgets(buf, sizeof(buf), infile)) {
+    len = 0;
+    while (fgets(buf+len, bufsize-len, infile)) {
+	if (buf[len]) {
+	    len = strlen(buf);
+	    if (buf[len-1] == '\n') {
+		/* end of line */
+		buf[--len] = '\0';
+
+		if (buf[len-1] == '\\') {
+		    /* line continuation */
+		    len--;
+		    lineno++;
+		    continue;
+		}
+	    }
+	    else if (!feof(infile) && len == bufsize-1) {
+		/* line is longer than the buffer */
+		bufsize += GROWSIZE;
+		buf = xrealloc(buf, bufsize);
+		continue;
+	    }
+	}
+	len = 0;
 	lineno++;
 
 	service_specific = 0;
-	
-	if (buf[0] && buf[strlen(buf)-1] == '\n') buf[strlen(buf)-1] = '\0';
+
+	/* remove leading whitespace */
 	for (p = buf; *p && isspace((int) *p); p++);
+
+	/* skip comments */
 	if (!*p || *p == '#') continue;
 
 	fullkey = key = p;
@@ -351,6 +380,7 @@ void config_read_file(const char *filename)
 	}
 	*p++ = '\0';
 	
+	/* remove leading whitespace */
 	while (*p && isspace((int) *p)) p++;
 	
 	/* remove trailing whitespace */
@@ -574,4 +604,5 @@ void config_read_file(const char *filename)
 	}
     }
     fclose(infile);
+    free(buf);
 }
