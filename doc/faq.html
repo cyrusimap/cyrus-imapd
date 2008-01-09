@@ -4,15 +4,12 @@
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
 <title>Cyrus IMAP Server FAQ</title>
-<!-- $Id: faq.html,v 1.38 2008/01/07 17:56:06 murch Exp $ -->
+<!-- $Id: faq.html,v 1.39 2008/01/09 22:04:51 murch Exp $ -->
 </head>
 <body>
 <h1>Cyrus IMAP Server FAQ</h1>
 
 <ul>
-<li><b>Using PAM</b> Under Linux when using PAM and shadow
-passwords, /etc/shadow needs to be readable by the Cyrus user.</li>
-
 <li><b>POP-Before-SMTP</b> It is not included in the default distribution
 because there is already a standard way of doing this with SMTP AUTH.
 Any good MTA and/or MUA should support SMTP AUTH, so we shouldn't have
@@ -75,9 +72,70 @@ need to conform to the hierarchy separator appropriate to your site.
 href="install-perf.html">the performance guide</a>.</li>
 </ul>
 
+<h2>General Questions</h2>
+
+<dl compact="compact">
+<dt><b>Q:</b> What are the advantages of LMTP?</dt>
+
+<dd>
+<p><b>A:</b> LMTP protocol differs from SMTP in that it causes the
+   Cyrus to return, after the final "." of the DATA command, one
+   reply for each recipient.  If, for example, a server is given a
+   transaction for two recipients, delivery to the first succeeds, and
+   delivery to the second encounters a temporary failure condition,
+   the MTA will get a separate response for each recipient and
+   will only have to reattempt to deliver it to the second recipient.
+   If using SMTP, only a single temporary failure response would be
+   returned, and the entire transaction would have to be reattempted.
+<p>Furthermore, LMTP is superior to invoking command-line delivery
+agents from the MTA in that most ESMTP extensions are supported by
+LMTP, without having to extend any interfaces.
+<p>Lastly, because LMTP can be run over TCP, it allows you to run SMTP
+(and spam/virus scanning) and mailbox access on separate servers, thus
+allowing better scalability.
+</dd>
+
+<dt><b>Q:</b> How do I configure my MTA?</dt>
+
+<dd>
+<p><b>A:</b> See <a href="install-configure.html#mta">Configuring the
+Mail Transfer Agent</a>
+</dd>
+
+<dt><b>Q:</b> How should I configure partitions to deal
+with a large number of users?</dt>
+
+<dd>
+<p><b>A:</b> The key is not to over-subscribe any partitions. Avoid
+putting too many users on any one partition, such that read/write
+performance becomes unacceptable. Good RAID performance (plenty of
+read/write cache, and perhaps RAID 10 instead of RAID 5) will improve
+the number of users a partition can serve.  To benefit from multiple
+partitions, each should be on its own set of disks, served by an
+unsaturated interface (FC, SCSI, SAS, SATA, etc) to the host running
+Cyrus.
+<p>See <a href="install-perf.html">the performance guide</a> or general
+performance guidelines.  Also see <tt>metapartition_files</tt> and
+<tt>metapartition-name</tt> in <tt>imapd.conf.5</tt> for additional
+configuration options which can help with performance, especially if
+you have access to high-speed storage (faster than disks).
+</dd>
+</dl>
+
 <h2>Troubleshooting</h2>
 
 <dl compact="compact">
+<dt><b>Q:</b> Why doesn't <tt>imapd/pop3d/nntpd/lmtpd/timsieved</tt>
+advertise PLAIN or plaintext login commands?</dt>
+
+<dd>
+<p><b>A:</b> Unless otherwise configured, Cyrus services only advertise
+PLAIN or plaintext login commands on encrypted connections
+(SSL-wrapped connections or after a successful STARTTLS command).
+This behavior can be changed with the use of the
+<tt>allowplaintext</tt> option in <tt>imapd.conf.5</tt>.
+</dd>
+
 <dt><b>Q:</b> I'm getting syslog'd messages from the master process
 saying processes are "signaled to death by 10". What's up?</dt>
 
@@ -272,7 +330,7 @@ mechanisms that you require.</p>
 </dl>
 
 <hr />
-last modified: $Date: 2008/01/07 17:56:06 $ <br />
+last modified: $Date: 2008/01/09 22:04:51 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
