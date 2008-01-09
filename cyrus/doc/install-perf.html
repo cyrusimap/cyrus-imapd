@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: install-perf.html,v 1.10 2003/01/02 19:23:11 rjs3 Exp $ -->
+<!-- $Id: install-perf.html,v 1.11 2008/01/09 19:51:07 murch Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -9,7 +9,7 @@
 <body>
 <h1>Performance Notes</h1>
 
-Performance issues for you to consider. If you never expect to have
+Cyrus presents various performance issues for you to consider. If you never expect to have
 more than 100 simultaneous users, chances are any hardware you have
 will be fine. If you plan on having thousands or more users, please
 be sure to review this section. 
@@ -19,24 +19,24 @@ adjust accordingly.</p>
 
 <ul>
 <li><tt><b>/var/imap/proc</b></tt> - After a successful login, the
-imapd creates a file in <tt>/var/imap/proc</tt> that is its unix
-process id. It also contains the name of any <tt>SELECT</tt>'d
+<tt>imapd</tt> creates a file in <tt>var/imap/proc</tt> that is its unix
+process id. It also contains the name of any <tt>SELECT</tt>ed
 mailbox. The file is deleted when the user logs out. 
 
 <p>Given the potential load, this is a good candidate to move
 elsewhere. This can be done by symlink'ing the directory to another
-partition. We symlink it to a directory on a memory/viritual memory
-filesystem (specifically Solaris' tmpfs). If you use a tmpfs type
+partition. We symlink it to a directory on a memory/virtual memory
+filesystem (specifically Solaris' <tt>tmpfs</tt>). If you use a <tt>tmpfs</tt> type
 filesystem, make sure that you have sufficient memory/swap to do
 this.</p>
 
-<p>Some people don't care about this information and just #ifdef
+<p>Some people don't care about this information and just <tt>#ifdef</tt>
 out the code. We probably should add a <tt>configure</tt> option to
 do this.</p>
 </li>
 
 <li><tt><b>/var/imap/mailboxes.db</b></tt> - The mailboxes list is often
-the ultimate source of contention between imap processes, especially if
+the ultimate source of contention between <tt>imapd</tt> processes, especially if
 clients are inefficient about their use of the LIST command.  For this reason
 it is often better to use the skiplist backend which is optimized for
 enumeration of the database, as opposed to the default, Berkeley DB
@@ -46,16 +46,16 @@ enumeration of the database, as opposed to the default, Berkeley DB
 you can also tweak the Berkeley backend if you want to or have to stick
 with it. Cyrus doesn't do anything to increase the BDB cache size, and the
 default (256 kB) is way too small for any reasonably large site. With some
-50000 mailboxes and random operations, I found the hit rate for default
-BDB cache to be 70-80%. After growing the cache size to 2M, hit rate
+50000 mailboxes and random operations, I found the hit rate for the default
+BDB cache to be 70-80%. After growing the cache size to 2M, the hit rate
 approached 99% and disk traffic was greatly reduced since most of the
 operations are reads anyway. Therefore processes could complete their work
 and release their locks much more quickly, and the dreaded "DBERROR: xxx
 lockers" messages stayed at a comfortable level. You can modify the source
 (<tt>/lib/cyrusdb_db3.c</tt>, the setting is commented out) or you can put
 a <tt>DB_CONFIG</tt> file under <tt>/var/imap/db</tt> with the appropriate
-setting. Read more about this in the Berkeley docs before trying it, typos
-and incorrect settings can cause havoc.</p>
+setting. Read more about this in the Berkeley docs before trying it - typos
+and incorrect settings can wreak havoc.</p>
 
 <li><tt><b>/var/imap/deliverdb</b></tt> - Unless you disable
 duplicate delivery suppression, each time a mail message is
@@ -73,20 +73,20 @@ usually a good idea. Consider using LMTP and delivering from a
 separate machine.</li>
 
 <li>Unused SASL mechanisms - If you just build the SASL library and
-copied all the mechanisms into /usr/lib/sasl2, the <tt>imapd</tt>
-will try to use them and allocate some amount of memory. In
+copy all the mechanisms into <tt>/usr/lib/sasl2</tt>, the <tt>imapd</tt>
+will try to use them and allocate some amount of memory for each. In
 general, the operating system will swap out those pages but you may
-be allocating more swap space than you need. So, look in
-/usr/lib/sasl2 and if you don't plan on using those mechanisms,
+be allocating more swap space than you need. So look in
+<tt>usr/lib/sasl2</tt> and if you don't plan on using those mechanisms,
 don't leave them there.</li>
 
 <li>You may want to increase the listen queue value when starting
 up the master process. For example, you may want to do this if you
-see the Listen queue drop counter increasing quickly. For example,
-under Solaris, look at the variable tcpListenDrop (from <tt>netstat
+see the listen queue drop counter increasing quickly.
+Under Solaris, look at the variable <tt>tcpListenDrop</tt> (from <tt>netstat
 -sP tcp</tt>).</li>
 
-<li><b>Database recovery.</b> If restarting the server takes a long
+<li>Database recovery. If restarting the server takes a long
 time due to the <tt>cyrusdb</tt> database recovery procedure (this is
 usually true if you have a large number of deliveries) you should look
 into shortening the interval between checkpoints, controlled by the
@@ -102,12 +102,12 @@ enable this feature.</li>
 generate thousands of syslog messages.  On Linux, syslog
 performance can be greatly improved by disabling synchronous
 logging (disabling fsync() after each message).  Prepending
-filenames in /etc/syslog.conf with a "-", e.g., "/var/log/maillog"
-becomes "-/var/log/maillog", disables syslog's fsync() call after
+filenames in <tt>etc/syslog.conf</tt> with a "-", e.g., "<code>/var/log/maillog</code>"
+becomes "<tt>-/var/log/maillog</tt>", disables syslog's fsync() call after
 each log message.  If you log many messages those fsync()s will
 kill your I/O throughput.  Note that if you do not need the detail provided
 by the LOG_DEBUG level, then not logging these messages can significantly
-reduces the amount of log entries that cyrus makes.</li>
+reduces the number of log entries that Cyrus makes.</li>
 </ul>
 
 <p>In general, there's no magic bullet for performance. It depends
@@ -115,12 +115,12 @@ on your hardware, your operating system, and how your users use the
 system. In general, an <tt>imapd</tt> process takes up anywhere
 from 256 Kbytes of memory to 512 Kbytes when it is first fired up.
 CPU has not been a big deal, but it may become more important as
-the imap sessions are encrypted and now that searching may be more
+the IMAP sessions are encrypted and now that searching may be more
 frequent. Disk I/O is probably the most important and having a
-hardware RAID subsystem with an amount of write-back cache would be
+hardware RAID subsystem with a decent amount of write-back cache would be
 a good thing.</p>
 
-<p>Finally, if you are talking about less than 100 interactive
+<p>Again, if you are talking about less than 100 interactive
 users it is likely that any relatively modern hardware can support
 it. If you are talking about having more than 1000 interactive
 users, you should know how to predict your utilization, go
@@ -132,7 +132,6 @@ Solaris by Adrian Cockcroft. Go to your favorite search engine and
 look for his name.</p>
 
 <hr />
-last modified: $Date: 2003/01/02 19:23:11 $
+last modified: $Date: 2008/01/09 19:51:07 $
 </body>
 </html>
-
