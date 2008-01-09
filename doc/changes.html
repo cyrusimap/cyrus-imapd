@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.147 2008/01/09 19:55:36 murch Exp $ -->
+<!-- $Id: changes.html,v 1.148 2008/01/09 20:02:58 murch Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -12,6 +12,8 @@
 <ul>
 <li>Fixed major bugs in <tt>reconstruct -k</tt> implementation 
 <i>-- courtesy of David Carter</i>.</li>
+<li>Added code to promote transaction safety and to track the lock
+status of skiplist databases <i>-- courtesy of Fastmail.fm</i>.</li>
 <li>Add option to <tt>mbexamine</tt> to compare quota usage in
 cyrus.index to the actual message file sizes.</li>
 <li>Allow long lines in <tt>imapd.conf</tt> to be split across
@@ -2315,7 +2317,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2008/01/09 19:55:36 $ <br />
+last modified: $Date: 2008/01/09 20:02:58 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
