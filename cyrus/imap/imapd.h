@@ -1,5 +1,5 @@
 /* imapd.h -- Common state for IMAP daemon
- * $Id: imapd.h,v 1.67 2007/10/26 15:31:40 murch Exp $
+ * $Id: imapd.h,v 1.68 2008/01/11 14:50:20 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -275,6 +275,10 @@ extern unsigned index_getuid(unsigned msgno);
 extern mailbox_decideproc_t index_expungeuidlist;
 
 /* See lib/charset.h for the definition of receiver. */
+extern void index_getsearchtext_single(struct mailbox* mailbox, unsigned msgno,
+                                       index_search_text_receiver_t receiver,
+                                       void* rock);
+
 extern void index_getsearchtext(struct mailbox* mailbox,
                                 index_search_text_receiver_t receiver,
                                 void* rock);

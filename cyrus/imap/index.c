@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.239 2008/01/07 18:26:54 murch Exp $
+ * $Id: index.c,v 1.240 2008/01/11 14:50:22 murch Exp $
  */
 #include <config.h>
 
@@ -3346,17 +3346,13 @@ static void index_getsearchtextmsg(struct mailbox* mailbox,
   mailbox_unmap_message(mailbox, uid, &msgfile.base, &msgfile.size);
 }
 
-void index_getsearchtext(struct mailbox* mailbox,
-                         index_search_text_receiver_t receiver,
-                         void* rock) {
-  int i;
-
-  /* Send the converted text of every message out to the receiver. */
-  for (i = 1; i <= imapd_exists; i++) {
+void index_getsearchtext_single(struct mailbox* mailbox, unsigned msgno,
+                                index_search_text_receiver_t receiver,
+                                void* rock) {
     const char *cacheitem;
-    int uid = UID(i);
+    int uid = UID(msgno);
 
-    cacheitem = cache_base + CACHE_OFFSET(i);
+    cacheitem = cache_base + CACHE_OFFSET(msgno);
     cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip envelope */
     cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bodystructure */
     cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body */
@@ -3385,7 +3381,17 @@ void index_getsearchtext(struct mailbox* mailbox,
     receiver(uid, SEARCHINDEX_PART_SUBJECT, SEARCHINDEX_CMD_STUFFPART,
              cacheitem + 4, CACHE_ITEM_LEN(cacheitem), rock);
     cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip subject */
-  }
+}
+
+void index_getsearchtext(struct mailbox* mailbox,
+                         index_search_text_receiver_t receiver,
+                         void* rock)
+{
+    int i;
+
+    /* Send the converted text of every message out to the receiver. */
+    for (i = 1; i <= imapd_exists; i++)
+        index_getsearchtext_single(mailbox, i, receiver, rock);
 }
 
 /*

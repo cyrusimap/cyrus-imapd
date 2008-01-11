@@ -39,7 +39,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: squatter.8,v 1.6 2003/10/22 18:50:13 rjs3 Exp $
+.\" $Id: squatter.8,v 1.7 2008/01/11 14:50:30 murch Exp $
 .SH NAME
 squatter \- create SQUAT indexes for mailboxes
 .SH SYNOPSIS
@@ -53,6 +53,9 @@ squatter \- create SQUAT indexes for mailboxes
 ]
 [
 .B \-s
+]
+[
+.B \-i
 ]
 [
 .B \-a
@@ -103,6 +106,8 @@ mailbox prefixes given as arguments.
 .B \-s
 Skip mailboxes whose index file is older than their current squat file
 (within a small time delta).
+.B \-i
+Incremental updates where squat indexes already exist.
 .TP
 .B \-a
 Only create indexes for mailboxes which have the shared
