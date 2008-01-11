@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squat.h,v 1.2 2003/02/13 20:15:31 rjs3 Exp $
+ * $Id: squat.h,v 1.3 2008/01/11 14:50:27 murch Exp $
  */
 
 /*
@@ -257,8 +257,8 @@ int         squat_index_close_document(SquatIndex* index);
    index are released whether this call succeeds or fails.
    Call this after successfully calling squat_index_init or
    squat_index_close_document. */
-int         squat_index_finish(SquatIndex* index);
 
+int         squat_index_finish(SquatIndex* index);
 
 /* Notify SQUAT that something has gone wrong and index construction
    must be aborted. It is the client's responsibility to close and/or
@@ -267,6 +267,15 @@ int         squat_index_finish(SquatIndex* index);
    Call this anytime. */
 int         squat_index_destroy(SquatIndex* index);
 
+
+typedef int (* SquatScanCallback)(void* closure, char *name, int doc_ID);
+
+int         squat_scan(SquatSearchIndex* index, char first_char,
+                       SquatScanCallback handler,
+                       void* closure);
+
+int         squat_count_docs(SquatSearchIndex* index, char first_char,
+                             int *counter);
 
 /***************************************
    INDEX SEARCH API
@@ -317,4 +326,12 @@ int               squat_search_execute(SquatSearchIndex* index, char const* data
    Call this anytime. */
 int               squat_search_close(SquatSearchIndex* index);
 
+
+typedef int (* SquatDocChooserCallback)(void* closure,
+                                        SquatListDoc const* doc);
+
+int squat_index_add_existing(SquatIndex* index,
+                             SquatSearchIndex *old_index,
+                             SquatDocChooserCallback choose_existing,
+                             void *closure);
 #endif
