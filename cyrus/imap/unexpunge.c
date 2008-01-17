@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: unexpunge.c,v 1.10 2007/10/04 14:33:51 murch Exp $
+ * $Id: unexpunge.c,v 1.11 2008/01/17 18:51:39 murch Exp $
  */
 
 #include <config.h>
@@ -87,6 +87,7 @@ void usage(void)
 {
     fprintf(stderr,
 	    "unexpunge [-C <altconfig>] -l <mailbox>\n"
+            "unexpunge [-C <altconfig>] -t time-interval [ -d ] [ -v ] mailbox\n"
 	    "unexpunge [-C <altconfig>] -a [-d] [-v] <mailbox>\n"
 	    "unexpunge [-C <altconfig>] -u [-d] [-v] <mailbox> <uid>...\n");
     exit(-1);
@@ -96,6 +97,7 @@ enum {
     MODE_UNKNOWN = -1,
     MODE_LIST,
     MODE_ALL,
+    MODE_TIME,
     MODE_UID
 };
 
@@ -432,12 +434,14 @@ int main(int argc, char *argv[])
     const char *lockfailaction;
     struct msg *msgs;
     unsigned numrestored = 0;
+    time_t last_update, time_since = time(NULL);
+    int len, secs = 0;
 
     if ((geteuid()) == 0 && (become_cyrus() != 0)) {
 	fatal("must run as the Cyrus user", EC_USAGE);
     }
 
-    while ((opt = getopt(argc, argv, "C:laudv")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:laudt:v")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -453,6 +457,32 @@ int main(int argc, char *argv[])
 	    mode = MODE_ALL;
 	    break;
 	
+	case 't':
+	    if (mode != MODE_UNKNOWN) usage();
+
+	    mode = MODE_TIME;
+            secs = atoi(optarg);
+            len  = strlen(optarg);
+            
+            if ((secs > 0) && (len > 1)) {
+                switch (optarg[len-1]) {
+                case 'm':
+                    secs *= 60;
+                    break;
+                case 'h':
+                    secs *= (60*60);
+                    break;
+                case 'd':
+                    secs *= (24*60*60);
+                    break;
+                case 'w':
+                    secs *= (7*24*60*60);
+                    break;
+                }
+            }
+            time_since = time(NULL) - secs;
+	    break;
+
 	case 'u':
 	    if (mode != MODE_UNKNOWN) usage();
 	    mode = MODE_UID;
@@ -580,6 +610,10 @@ int main(int argc, char *argv[])
 	    switch (mode) {
 	    case MODE_LIST: msgs[msgno].restore = 0; break;
 	    case MODE_ALL: msgs[msgno].restore = 1; break;
+            case MODE_TIME:
+                last_update = ntohl(*((bit32 *)(rec+OFFSET_LAST_UPDATED)));
+                msgs[msgno].restore = (last_update > time_since);
+                break;
 	    case MODE_UID:
 		/* see if this UID is in our list */
 		msgs[msgno].restore = bsearch(&uid, uids, nuids,
