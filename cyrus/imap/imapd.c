@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.538 2008/01/07 18:26:53 murch Exp $ */
+/* $Id: imapd.c,v 1.539 2008/01/17 13:07:40 murch Exp $ */
 
 #include <config.h>
 
@@ -77,6 +77,7 @@
 #include "exitcodes.h"
 #include "idle.h"
 #include "global.h"
+#include "hash.h"
 #include "imap_err.h"
 #include "proxy.h"
 #include "imap_proxy.h"
@@ -232,7 +233,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart);
 void cmd_rename(char *tag, char *oldname, char *newname, char *partition);
 void cmd_reconstruct(const char *tag, const char *name, int recursive);
 void cmd_find(char *tag, char *namespace, char *pattern);
-void cmd_list(char *tag, int listopts, char *reference, char *pattern);
+void cmd_list(char *tag, struct listargs *listargs);
 void cmd_changesub(char *tag, char *namespace, char *name, int add);
 void cmd_getacl(const char *tag, const char *name);
 void cmd_listrights(char *tag, char *name, char *identifier);
@@ -275,7 +276,7 @@ int getannotatestoredata(char *tag, struct entryattlist **entryatts);
 void annotate_response(struct entryattlist *l);
 
 #ifdef ENABLE_LISTEXT
-int getlistopts(char *tag, int *listopts);
+int getlistopts(char *tag, unsigned *listopts);
 #endif
 
 int getsearchprogram(char *tag, struct searchargs *searchargs,
@@ -302,7 +303,7 @@ static void freesortcrit(struct sortcrit *s);
 static int mailboxdata(char *name, int matchlen, int maycreate, void *rock);
 static int listdata(char *name, int matchlen, int maycreate, void *rock);
 static void mstringdata(char *cmd, char *name, int matchlen, int maycreate,
-			int listopts);
+			unsigned listopts);
 
 extern void setproctitle_init(int argc, char **argv, char **envp);
 extern int proc_register(const char *progname, const char *clienthost, 
@@ -1361,12 +1362,15 @@ void cmdloop()
 	    }
 	    else if (!imapd_userid) goto nologin;
 	    else if (!strcmp(cmd.s, "List")) {
-		int listopts = LIST_CHILDREN;
+		struct listargs listargs;
+
+		memset(&listargs, 0, sizeof(struct listargs));
+		listargs.opts = LIST_CHILDREN;
 #ifdef ENABLE_LISTEXT
 		/* Check for and parse LISTEXT options */
 		c = prot_getc(imapd_in);
 		if (c == '(') {
-		    c = getlistopts(tag.s, &listopts);
+		    c = getlistopts(tag.s, &listargs.opts);
 		    if (c == EOF) {
 			eatline(imapd_in, c);
 			continue;
@@ -1375,23 +1379,34 @@ void cmdloop()
 		else
 		    prot_ungetc(c, imapd_in);
 #endif /* ENABLE_LISTEXT */
-		if (imapd_magicplus) listopts += LIST_SUBSCRIBED;
+		if (imapd_magicplus) listargs.opts += LIST_SUBSCRIBED;
+
 		c = getastring(imapd_in, imapd_out, &arg1);
 		if (c != ' ') goto missingargs;
 		c = getastring(imapd_in, imapd_out, &arg2);
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-		cmd_list(tag.s, listopts, arg1.s, arg2.s);
+
+		listargs.ref = arg1.s;
+		listargs.pat = arg2.s;
+		cmd_list(tag.s, &listargs);
 
 		snmp_increment(LIST_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Lsub")) {
+		struct listargs listargs;
+
 		c = getastring(imapd_in, imapd_out, &arg1);
 		if (c != ' ') goto missingargs;
 		c = getastring(imapd_in, imapd_out, &arg2);
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-		cmd_list(tag.s, LIST_LSUB | LIST_CHILDREN, arg1.s, arg2.s);
+
+		memset(&listargs, 0, sizeof(struct listargs));
+		listargs.opts = LIST_LSUB | LIST_CHILDREN;
+		listargs.ref = arg1.s;
+		listargs.pat = arg2.s;
+		cmd_list(tag.s, &listargs);
 
 		snmp_increment(LSUB_COUNT, 1);
 	    }
@@ -1558,23 +1573,37 @@ void cmdloop()
 		/* snmp_increment(RECONSTRUCT_COUNT, 1); */
 	    } 
 	    else if (!strcmp(cmd.s, "Rlist")) {
+		struct listargs listargs;
+
 		c = getastring(imapd_in, imapd_out, &arg1);
 		if (c != ' ') goto missingargs;
 		c = getastring(imapd_in, imapd_out, &arg2);
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-		cmd_list(tag.s, LIST_CHILDREN | LIST_REMOTE, arg1.s, arg2.s);
+
+		memset(&listargs, 0, sizeof(struct listargs));
+		listargs.opts = LIST_CHILDREN | LIST_REMOTE;
+		listargs.ref = arg1.s;
+		listargs.pat = arg2.s;
+		cmd_list(tag.s, &listargs);
 
 /* 		snmp_increment(LIST_COUNT, 1); */
 	    }
 	    else if (!strcmp(cmd.s, "Rlsub")) {
+		struct listargs listargs;
+
 		c = getastring(imapd_in, imapd_out, &arg1);
 		if (c != ' ') goto missingargs;
 		c = getastring(imapd_in, imapd_out, &arg2);
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-		cmd_list(tag.s, LIST_LSUB | LIST_CHILDREN | LIST_REMOTE,
-			 arg1.s, arg2.s);
+
+		memset(&listargs, 0, sizeof(struct listargs));
+		listargs.opts = LIST_LSUB | LIST_CHILDREN | LIST_REMOTE;
+		listargs.ref = arg1.s;
+		listargs.pat = arg2.s;
+		cmd_list(tag.s, &listargs);
+
 /* 		snmp_increment(LSUB_COUNT, 1); */
 	    }
 #ifdef HAVE_SSL
@@ -1730,6 +1759,25 @@ void cmdloop()
 		cmd_status(tag.s, arg1.s);
 
 		snmp_increment(STATUS_COUNT, 1);
+	    }
+	    else if (!strcmp(cmd.s, "Scan")) {
+		struct listargs listargs;
+
+		c = getastring(imapd_in, imapd_out, &arg1);
+		if (c != ' ') goto missingargs;
+		c = getastring(imapd_in, imapd_out, &arg2);
+		if (c != ' ') goto missingargs;
+		c = getastring(imapd_in, imapd_out, &arg3);
+		if (c == '\r') c = prot_getc(imapd_in);
+		if (c != '\n') goto extraargs;
+
+		memset(&listargs, 0, sizeof(struct listargs));
+		listargs.ref = arg1.s;
+		listargs.pat = arg2.s;
+		listargs.scan = arg3.s;
+		cmd_list(tag.s, &listargs);
+
+		snmp_increment(SCAN_COUNT, 1);
 	    }
 	    else goto badcmd;
 	    break;
@@ -5754,11 +5802,8 @@ static int mstringdatacalls;
 /*
  * Perform a LIST or LSUB command
  */
-void cmd_list(char *tag, int listopts, char *reference, char *pattern)
+void cmd_list(char *tag, struct listargs *listargs)
 {
-    char *buf = NULL;
-    int patlen = 0;
-    int reflen = 0;
     static int ignorereference = 0;
     clock_t start = clock();
     char mytime[100];
@@ -5771,7 +5816,7 @@ void cmd_list(char *tag, int listopts, char *reference, char *pattern)
 		   struct auth_state *auth_state, int (*proc)(),
 		   void *rock, int force);
 
-    if (listopts & LIST_REMOTE) supports_referrals = !disable_referrals;
+    if (listargs->opts & LIST_REMOTE) supports_referrals = !disable_referrals;
 
     /* Ignore the reference argument?
        (the behavior in 1.5.10 & older) */
@@ -5782,19 +5827,19 @@ void cmd_list(char *tag, int listopts, char *reference, char *pattern)
     /* Reset state in mstringdata */
     mstringdata(NULL, NULL, 0, 0, 0);
 
-    if (!pattern[0] && !(listopts & LIST_LSUB)) {
+    if (!listargs->pat[0] && !(listargs->opts & LIST_LSUB)) {
 	/* Special case: query top-level hierarchy separator */
 	prot_printf(imapd_out, "* LIST (\\Noselect) \"%c\" \"\"\r\n",
 		    imapd_namespace.hier_sep);
-    } else if ((listopts & (LIST_LSUB | LIST_SUBSCRIBED)) &&
+    } else if ((listargs->opts & (LIST_LSUB | LIST_SUBSCRIBED)) &&
 	       (backend_inbox || (backend_inbox = proxy_findinboxserver()))) {
 	/* remote INBOX */
-	if ((listopts & LIST_SUBSCRIBED) && (listopts & LIST_EXT) &&
+	if ((listargs->opts & LIST_SUBSCRIBED) && (listargs->opts & LIST_EXT) &&
 	    CAPA(backend_inbox, CAPA_LISTSUBSCRIBED)) {
 	    prot_printf(backend_inbox->out, "%s List (subscribed", tag);
-	    if (listopts & LIST_CHILDREN)
+	    if (listargs->opts & LIST_CHILDREN)
 		prot_printf(backend_inbox->out, " children");
-	    if (listopts & LIST_REMOTE)
+	    if (listargs->opts & LIST_REMOTE)
 		prot_printf(backend_inbox->out, " remote");
 	    prot_printf(backend_inbox->out, ") ");
 	} else {
@@ -5802,34 +5847,38 @@ void cmd_list(char *tag, int listopts, char *reference, char *pattern)
 	}
 	prot_printf(backend_inbox->out, 
 		    "{%d+}\r\n%s {%d+}\r\n%s\r\n",
-		    strlen(reference), reference,
-		    strlen(pattern), pattern);
-	pipe_lsub(backend_inbox, tag, 0, (listopts & LIST_LSUB) ? "LSUB" : "LIST");
+		    strlen(listargs->ref), listargs->ref,
+		    strlen(listargs->pat), listargs->pat);
+	pipe_lsub(backend_inbox, tag, 0,
+		  (listargs->opts & LIST_LSUB) ? "LSUB" : "LIST");
     } else {
+	char *pattern = NULL;
+
 	/* Do we need to concatenate fields? */
-	if (!ignorereference || pattern[0] == imapd_namespace.hier_sep) {
+	if (!ignorereference || listargs->pat[0] == imapd_namespace.hier_sep) {
 	    /* Either
 	     * - name begins with dot
 	     * - we're configured to honor the reference argument */
 
 	    /* Allocate a buffer, figure out how to stick the arguments
 	       together, do it, then do that instead of using pattern. */
-	    patlen = strlen(pattern);
-	    reflen = strlen(reference);
+	    int patlen = strlen(listargs->pat);
+	    int reflen = strlen(listargs->ref);
 	    
-	    buf = xmalloc(patlen + reflen + 1);
-	    buf[0] = '\0';
+	    pattern = xmalloc(patlen + reflen + 1);
+	    pattern[0] = '\0';
 
-	    if (*reference) {
+	    if (*listargs->ref) {
+		strcpy(pattern, listargs->ref);
 		/* check for LIST A. .B, change to LIST "" A.B */
-		if (reference[reflen-1] == imapd_namespace.hier_sep &&
-		    pattern[0] == imapd_namespace.hier_sep) {
-		    reference[--reflen] = '\0';
+		if (listargs->ref[reflen-1] == imapd_namespace.hier_sep &&
+		    listargs->pat[0] == imapd_namespace.hier_sep) {
+		    pattern[--reflen] = '\0';
 		}
-		strcpy(buf, reference);
 	    }
-	    strcat(buf, pattern);
-	    pattern = buf;
+	    strcat(pattern, listargs->pat);
+	} else {
+	    pattern = xstrdup(listargs->pat);
 	}
 
 	/* Translate any separators in pattern */
@@ -5840,9 +5889,8 @@ void cmd_list(char *tag, int listopts, char *reference, char *pattern)
 	/* Check to see if we should only list the personal namespace */
 	if (!strcmp(pattern, "*")
 	    && config_getswitch(IMAPOPT_FOOLSTUPIDCLIENTS)) {
-	    if (buf) free(buf);
-	    buf = xstrdup("INBOX*");
-	    pattern = buf;
+	    if (pattern) free(pattern);
+	    pattern = xstrdup("INBOX*");
 	    findsub = mboxlist_findsub;
 	    findall = mboxlist_findall;
 	}
@@ -5851,25 +5899,37 @@ void cmd_list(char *tag, int listopts, char *reference, char *pattern)
 	    findall = imapd_namespace.mboxlist_findall;
 	}
 
-	if (listopts & (LIST_LSUB | LIST_SUBSCRIBED)) {
+	if (listargs->opts & (LIST_LSUB | LIST_SUBSCRIBED)) {
 	    int force = config_getswitch(IMAPOPT_ALLOWALLSUBSCRIBE);
 
 	    (*findsub)(&imapd_namespace, pattern,
 		       imapd_userisadmin, imapd_userid, imapd_authstate,
-		       listdata, &listopts, force);
+		       listdata, listargs, force);
 	}
 	else {
+	    if (listargs->scan) {
+		construct_hash_table(&listargs->server_table, 10, 1);
+	    }
+
 	    (*findall)(&imapd_namespace, pattern,
 		       imapd_userisadmin, imapd_userid, imapd_authstate,
-		       listdata, &listopts);
+		       listdata, listargs);
+
+	    free_hash_table(&listargs->server_table, NULL);
 	}
 
-	listdata((char *)0, 0, 0, &listopts);
+	listdata((char *)0, 0, 0, listargs);
 
-	if (buf) free(buf);
+	if (pattern) free(pattern);
     }
 
-    imapd_check(!(listopts & (LIST_LSUB | LIST_SUBSCRIBED)) ?
+    if (listargs->scan && imapd_mailbox) {
+	/* SCAN will mess with the globals in index.c,
+	   so reset them for our currently mailbox */
+	index_operatemailbox(imapd_mailbox);
+    }
+
+    imapd_check(!(listargs->opts & (LIST_LSUB | LIST_SUBSCRIBED)) ?
 		backend_inbox : NULL, 0, 0);
 
     snprintf(mytime, sizeof(mytime), "%2.3f",
@@ -8815,7 +8875,7 @@ int getsortcriteria(char *tag, struct sortcrit **sortcrit)
  * Parse LIST options.
  * The command has been parsed up to and including the opening '('.
  */
-int getlistopts(char *tag, int *listopts)
+int getlistopts(char *tag, unsigned *listopts)
 {
     int c;
     static struct buf arg;
@@ -9243,7 +9303,7 @@ static int mailboxdata(char *name,
  * Issue a LIST or LSUB untagged response
  */
 static void mstringdata(char *cmd, char *name, int matchlen, int maycreate,
-			int listopts)
+			unsigned listopts)
 {
     static char lastname[MAX_MAILBOX_PATH+1];
     static int lastnamedelayed = 0;
@@ -9385,10 +9445,88 @@ static void mstringdata(char *cmd, char *name, int matchlen, int maycreate,
  */
 static int listdata(char *name, int matchlen, int maycreate, void *rock)
 {
-    int listopts = *((int *)rock);
-    
-    mstringdata(((listopts & LIST_LSUB) ? "LSUB" : "LIST"),
-	name, matchlen, maycreate, listopts);
+    struct listargs *listargs = (struct listargs *) rock;
+
+    if (name && listargs->scan) {
+	/* SCAN mailbox for content */
+	char mailboxname[MAX_MAILBOX_NAME+1];
+	int r = 0;
+	int mbtype;
+	char *server;
+	static struct mailbox mailbox;
+
+	/* Convert "INBOX" to "user.<userid>" */
+	if (!strncasecmp(name, "inbox", 5)) {
+	    (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, "INBOX",
+						   imapd_userid, mailboxname);
+	    strlcat(mailboxname, name+5, sizeof(mailboxname));
+	}
+	else
+	    strlcpy(mailboxname, name, sizeof(mailboxname));
+
+	if (!r) r = mlookup(NULL, NULL, mailboxname, &mbtype, NULL, NULL,
+			    &server, NULL, NULL);
+
+	if (!r && (mbtype & MBTYPE_REMOTE) &&
+	    !hash_lookup(server, &listargs->server_table)) {
+	    /* remote mailbox that we haven't proxied to yet */
+	    struct backend *s;
+
+	    hash_insert(server,  (void *)0xDEADBEEF, &listargs->server_table);
+	    s = proxy_findserver(server, &protocol[PROTOCOL_IMAP],
+				 proxy_userid, &backend_cached,
+				 &backend_current, &backend_inbox, imapd_in);
+	    if (!s) r = IMAP_SERVER_UNAVAILABLE;
+
+	    if (!r) {
+		char mytag[128];
+		proxy_gentag(mytag, sizeof(mytag));
+
+		prot_printf(s->out,
+			    "%s Scan {%d+}\r\n%s {%d+}\r\n%s {%d+}\r\n%s\r\n",
+			    mytag,
+			    strlen(listargs->ref), listargs->ref,
+			    strlen(listargs->pat), listargs->pat,
+			    strlen(listargs->scan), listargs->scan);
+
+		r = pipe_until_tag(s, mytag, 0);
+	    }
+
+	    return 0;
+	}
+	else if (!r) {
+	    /* local mailbox */
+	    int doclose = 0;
+
+	    r = mailbox_open_header(mailboxname, imapd_authstate, &mailbox);
+
+	    if (!r) {
+		doclose = 1;
+		r = mailbox_open_index(&mailbox);
+	    }
+
+	    if (!r && !(mailbox.myrights & ACL_READ)) {
+		r = (imapd_userisadmin || (mailbox.myrights & ACL_LOOKUP)) ?
+		    IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+	    }
+
+	    if (!r) {
+		/* Set the globals in index.c for this mailbox.
+		   The globals are used by the search_engines.c */
+		index_operatemailbox(&mailbox);
+		if (index_scan(&mailbox, listargs->scan) > 0) {
+		    mstringdata("LIST", name, matchlen, maycreate, 0);
+		}
+	    }
+
+	    if (doclose) mailbox_close(&mailbox);
+
+	    return 0;
+	}
+    }
+
+    mstringdata(((listargs->opts & LIST_LSUB) ? "LSUB" : "LIST"),
+	name, matchlen, maycreate, listargs->opts);
 
     return 0;
 }
