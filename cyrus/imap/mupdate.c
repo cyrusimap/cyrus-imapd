@@ -1,6 +1,6 @@
 /* mupdate.c -- cyrus murder database master 
  *
- * $Id: mupdate.c,v 1.100 2007/11/26 20:23:06 murch Exp $
+ * $Id: mupdate.c,v 1.101 2008/01/17 13:25:30 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -51,7 +51,6 @@
 #include <ctype.h>
 #include <signal.h>
 #include <stdlib.h>
-#include <assert.h>
 #include <syslog.h>
 #include <errno.h>
 
@@ -74,6 +73,7 @@
 #include "mupdate-client.h"
 #include "telemetry.h"
 
+#include "assert.h"
 #include "exitcodes.h"
 #include "global.h"
 #include "imap_err.h"

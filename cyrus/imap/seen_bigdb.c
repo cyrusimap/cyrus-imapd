@@ -1,5 +1,5 @@
 /* seen_bigdb.c -- implementation of seen database using one big cyrusdb
- * $Id: seen_bigdb.c,v 1.12 2007/08/15 17:20:57 murch Exp $
+ * $Id: seen_bigdb.c,v 1.13 2008/01/17 13:25:31 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -43,7 +43,6 @@
 #include <config.h>
 
 #include <stdlib.h>
-#include <assert.h>
 #include <syslog.h>
 #include <string.h>
 #include <ctype.h>
@@ -58,6 +57,7 @@
 #include <sys/uio.h>
 #include "cyrusdb.h"
 
+#include "assert.h"
 #include "global.h"
 #include "xmalloc.h"
 #include "mailbox.h"

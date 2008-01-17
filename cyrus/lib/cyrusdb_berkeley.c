@@ -39,18 +39,18 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_berkeley.c,v 1.20 2007/09/27 20:02:45 murch Exp $ */
+/* $Id: cyrusdb_berkeley.c,v 1.21 2008/01/17 13:25:31 murch Exp $ */
 
 #include <config.h>
 
 #include <db.h>
 #include <syslog.h>
-#include <assert.h>
 #include <string.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <unistd.h>
 
+#include "assert.h"
 #include "bsearch.h"
 #include "cyrusdb.h"
 #include "exitcodes.h"

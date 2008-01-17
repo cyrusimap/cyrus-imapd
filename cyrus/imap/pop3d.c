@@ -40,7 +40,7 @@
  */
 
 /*
- * $Id: pop3d.c,v 1.182 2007/11/26 20:23:06 murch Exp $
+ * $Id: pop3d.c,v 1.183 2008/01/17 13:25:31 murch Exp $
  */
 #include <config.h>
 
@@ -53,7 +53,6 @@
 #include <string.h>
 #include <fcntl.h>
 #include <signal.h>
-#include <assert.h>
 #include <sys/types.h>
 #include <sys/param.h>
 #include <syslog.h>
@@ -67,6 +66,7 @@
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
+#include "assert.h"
 #include "acl.h"
 #include "util.h"
 #include "auth.h"

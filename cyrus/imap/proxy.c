@@ -39,12 +39,11 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: proxy.c,v 1.5 2007/02/05 18:41:48 jeaton Exp $
+ * $Id: proxy.c,v 1.6 2008/01/17 13:25:31 murch Exp $
  */
 
 #include <config.h>
 
-#include <assert.h>
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>
@@ -52,6 +51,7 @@
 #include <syslog.h>
 #include <sys/un.h>
 
+#include "assert.h"
 #include "backend.h"
 #include "exitcodes.h"
 #include "global.h"

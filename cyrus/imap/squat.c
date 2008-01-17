@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squat.c,v 1.9 2008/01/11 14:50:25 murch Exp $
+ * $Id: squat.c,v 1.10 2008/01/17 13:25:31 murch Exp $
  */
 
 /*
@@ -52,10 +52,10 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 
 #include "squat_internal.h"
 
+#include "assert.h"
 #include "xmalloc.h"
 
 struct _SquatSearchIndex {

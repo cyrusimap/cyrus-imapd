@@ -1,6 +1,6 @@
 /* imclient.c -- Streaming IMxP client library
  *
- * $Id: imclient.c,v 1.91 2007/10/10 15:14:40 murch Exp $
+ * $Id: imclient.c,v 1.92 2008/01/17 13:25:31 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -43,7 +43,6 @@
  *
  */
 #include <config.h>
-#include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
@@ -76,6 +75,7 @@
 #include <openssl/ssl.h>
 #endif /* HAVE_SSL */
 
+#include "assert.h"
 #include "exitcodes.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"

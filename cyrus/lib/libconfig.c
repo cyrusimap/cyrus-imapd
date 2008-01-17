@@ -39,11 +39,10 @@
  *
  */
 
-/* $Id: libconfig.c,v 1.15 2008/01/09 19:10:57 murch Exp $ */
+/* $Id: libconfig.c,v 1.16 2008/01/17 13:25:31 murch Exp $ */
 
 #include <config.h>
 
-#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -53,6 +52,7 @@
 #include <netinet/in.h>
 #include <sys/stat.h>
 
+#include "assert.h"
 #include "hash.h"
 #include "libconfig.h"
 #include "imapopts.h"

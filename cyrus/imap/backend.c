@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: backend.c,v 1.49 2007/05/30 15:04:12 murch Exp $ */
+/* $Id: backend.c,v 1.50 2008/01/17 13:25:30 murch Exp $ */
 
 #include <config.h>
 
@@ -59,13 +59,13 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
+#include "assert.h"
 #include "prot.h"
 #include "backend.h"
 #include "global.h"

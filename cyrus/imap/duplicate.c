@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: duplicate.c,v 1.45 2007/09/28 02:27:46 murch Exp $ */
+/* $Id: duplicate.c,v 1.46 2008/01/17 13:25:30 murch Exp $ */
 
 #include <config.h>
 
@@ -47,7 +47,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <syslog.h>
-#include <assert.h>
 #include <ctype.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -71,6 +70,7 @@
 #endif
 #include <errno.h>
 
+#include "assert.h"
 #include "xmalloc.h"
 #include "imap_err.h"
 #include "global.h"

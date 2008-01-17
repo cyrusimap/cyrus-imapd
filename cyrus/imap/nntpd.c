@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.61 2007/11/26 20:23:06 murch Exp $
+ * $Id: nntpd.c,v 1.62 2008/01/17 13:25:30 murch Exp $
  */
 
 /*
@@ -59,7 +59,6 @@
 #include <string.h>
 #include <fcntl.h>
 #include <signal.h>
-#include <assert.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/param.h>
@@ -74,6 +73,7 @@
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
+#include "assert.h"
 #include "acl.h"
 #include "annotate.h"
 #include "append.h"

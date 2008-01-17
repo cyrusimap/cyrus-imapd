@@ -40,16 +40,16 @@
  *
  */
 /*
- * $Id: libcyr_cfg.c,v 1.13 2006/11/30 17:11:22 murch Exp $
+ * $Id: libcyr_cfg.c,v 1.14 2008/01/17 13:25:31 murch Exp $
  */
 
 #include <config.h>
 
-#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <syslog.h>
 
+#include "assert.h"
 #include "libcyr_cfg.h"
 #include "cyrusdb.h"
 

@@ -40,7 +40,7 @@
  *
  */
 /*
- * $Id: spool.c,v 1.12 2007/10/11 19:36:33 murch Exp $
+ * $Id: spool.c,v 1.13 2008/01/17 13:25:31 murch Exp $
  */
 
 #include <config.h>
@@ -50,9 +50,9 @@
 #endif
 #include <stdio.h>
 #include <string.h>
-#include <assert.h>
 #include <ctype.h>
 
+#include "assert.h"
 #include "spool.h"
 #include "prot.h"
 #include "util.h"

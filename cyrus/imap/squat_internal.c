@@ -37,7 +37,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squat_internal.c,v 1.2 2003/02/13 20:15:31 rjs3 Exp $
+ * $Id: squat_internal.c,v 1.3 2008/01/17 13:25:31 murch Exp $
  */
 
 /*
@@ -45,8 +45,8 @@
   Robert O'Callahan
 */
 
-#include <assert.h>
 
+#include "assert.h"
 #include "squat_internal.h"
 
 static int last_err = SQUAT_ERR_OK;
