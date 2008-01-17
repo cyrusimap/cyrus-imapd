@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.240 2008/01/11 14:50:22 murch Exp $
+ * $Id: index.c,v 1.241 2008/01/17 13:07:40 murch Exp $
  */
 #include <config.h>
 
@@ -1032,6 +1032,80 @@ int nflags;
     index_dirty = 1;
 
     return r;
+}
+
+static int index_scan_work(const char *s, unsigned long len,
+			   const char *match, unsigned long min)
+{
+    while (len > min) {
+        if (!strncasecmp(s, match, min)) return(1);
+        s++;
+        len--;
+    }
+    return(0);
+}
+
+/*
+ * Guts of the SCAN command, lifted from _index_search()
+ * 
+ * Returns 1 if we get a hit, otherwise returns 0.
+ */
+int index_scan(struct mailbox *mailbox, const char *contents)
+{
+    unsigned *msgno_list;
+    unsigned msgno;
+    struct mapfile msgfile;
+    int n = 0;
+    int listindex;
+    int listcount;
+    struct searchargs searchargs;
+    struct strlist strlist;
+    struct index_record record;
+    unsigned long length;
+
+    if (!(contents && contents[0])) return(0);
+
+    if (mailbox->exists <= 0) return 0;
+
+    length = strlen(contents);
+
+    memset(&searchargs, 0, sizeof(struct searchargs));
+    searchargs.text = &strlist;
+
+    /* Use US-ASCII to emulate fgrep */
+    strlist.s = charset_convert(contents, charset_lookupname("US-ASCII"),
+				NULL, 0); 
+    strlist.p = charset_compilepat(strlist.s);
+    strlist.next = NULL;
+
+    msgno_list = (unsigned *) xmalloc(mailbox->exists * sizeof(unsigned));
+
+    listcount = search_prefilter_messages(msgno_list, mailbox, &searchargs);
+
+    for (listindex = 0; !n && listindex < listcount; listindex++) {
+        msgno = msgno_list[listindex];
+
+        if (mailbox_read_index_record(mailbox, msgno, &record))
+            continue;
+
+	msgfile.base = 0;
+	msgfile.size = 0;
+
+        if (mailbox_map_message(mailbox, record.uid,
+                                &msgfile.base, &msgfile.size))
+            continue;
+
+        n += index_scan_work(msgfile.base, msgfile.size, contents, length);
+
+        mailbox_unmap_message(mailbox, record.uid,
+                              &msgfile.base, &msgfile.size);
+    }
+
+    free(strlist.s);
+    free(strlist.p);
+    free(msgno_list);
+
+    return(n);
 }
 
 /*

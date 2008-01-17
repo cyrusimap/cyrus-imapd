@@ -116,6 +116,7 @@ C,NOOP_COUNT,"Number of noop", auto
 C,NAMESPACE_COUNT,"Number of namespace", auto
 C,PARTIAL_COUNT,"Number of partial", auto
 C,RENAME_COUNT,"Number of rename", auto
+C,SCAN_COUNT,"Number of list", auto
 C,STARTTLS_COUNT,"Number of starttls", auto
 C,STORE_COUNT,"Number of store", auto
 C,SELECT_COUNT,"Number of select", auto

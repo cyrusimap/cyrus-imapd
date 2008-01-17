@@ -1,5 +1,5 @@
 /* imapd.h -- Common state for IMAP daemon
- * $Id: imapd.h,v 1.68 2008/01/11 14:50:20 murch Exp $
+ * $Id: imapd.h,v 1.69 2008/01/17 13:07:40 murch Exp $
  *
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -46,6 +46,7 @@
 
 #include "annotate.h"
 #include "charset.h"
+#include "hash.h"
 #include "mailbox.h"
 #include "prot.h"
 
@@ -225,6 +226,15 @@ enum {
     STATUS_HIGHESTMODSEQ =	(1<<5)
 };
 
+/* Arguments to List functions */
+struct listargs {
+    unsigned opts;		/* LISTEXT options */
+    const char *ref;		/* Reference name */
+    const char *pat;		/* Mailbox pattern */
+    const char *scan;		/* SCAN content */
+    hash_table server_table;	/* for proxying SCAN */
+};
+
 /* Bitmask for list options */
 enum {
     LIST_LSUB =			(1<<0),
@@ -255,6 +265,7 @@ extern int index_store(struct mailbox *mailbox, char *sequence,
 extern int index_search(struct mailbox *mailbox,
 			struct searchargs *searchargs, int usinguid);
 extern int find_thread_algorithm(char *arg);
+extern int index_scan(struct mailbox *mailbox, const char *contents);
 extern int index_sort(struct mailbox *mailbox, struct sortcrit *sortcrit,
 		      struct searchargs *searchargs, int usinguid);
 extern int index_thread(struct mailbox *mailbox, int algorithm,
