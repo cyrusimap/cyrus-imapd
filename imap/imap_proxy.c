@@ -39,18 +39,18 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.c,v 1.4 2007/09/28 02:27:46 murch Exp $
+ * $Id: imap_proxy.c,v 1.5 2008/01/17 13:25:30 murch Exp $
  */
 
 #include <config.h>
 
-#include <assert.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 #include <syslog.h>
 #include <sys/un.h>
 
+#include "assert.h"
 #include "acl.h"
 #include "annotate.h"
 #include "backend.h"

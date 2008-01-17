@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.22 2008/01/07 16:20:27 murch Exp $
+ * $Id: sync_server.c,v 1.23 2008/01/17 13:25:31 murch Exp $
  */
 
 #include <config.h>
@@ -54,7 +54,6 @@
 #include <string.h>
 #include <fcntl.h>
 #include <signal.h>
-#include <assert.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/param.h>
@@ -70,6 +69,7 @@
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
+#include "assert.h"
 #include "acl.h"
 #include "annotate.h"
 #include "append.h"

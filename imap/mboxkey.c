@@ -1,5 +1,5 @@
 /* mboxkey.c -- implementation of URLAUTH mailbox keys
- * $Id: mboxkey.c,v 1.4 2007/08/15 17:20:55 murch Exp $
+ * $Id: mboxkey.c,v 1.5 2008/01/17 13:25:30 murch Exp $
  * 
  * Copyright (c) 1998-2005 Carnegie Mellon University.  All rights reserved.
  *
@@ -44,7 +44,6 @@
 #include <config.h>
 
 #include <stdlib.h>
-#include <assert.h>
 #include <syslog.h>
 #include <string.h>
 #include <ctype.h>
@@ -58,6 +57,7 @@
 #include <sys/stat.h>
 #include <sys/uio.h>
 
+#include "assert.h"
 #include "cyrusdb.h"
 #include "map.h"
 #include "util.h"

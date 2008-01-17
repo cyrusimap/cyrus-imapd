@@ -1,6 +1,6 @@
 /* mpool.c memory pool management
  *
- * $Id: mpool.c,v 1.16 2006/11/30 17:11:22 murch Exp $
+ * $Id: mpool.c,v 1.17 2008/01/17 13:25:31 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -51,10 +51,10 @@
 #include <ctype.h>
 #include <signal.h>
 #include <stdlib.h>
-#include <assert.h>
 #include <syslog.h>
 #include <errno.h>
 
+#include "assert.h"
 #include "mpool.h"
 #include "xmalloc.h"
 #include "exitcodes.h"

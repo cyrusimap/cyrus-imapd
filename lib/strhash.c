@@ -1,6 +1,6 @@
 /* strhash.c string hashing
  *
- * $Id: strhash.c,v 1.2 2003/10/22 18:03:05 rjs3 Exp $
+ * $Id: strhash.c,v 1.3 2008/01/17 13:25:31 murch Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -49,10 +49,10 @@
 #include <ctype.h>
 #include <signal.h>
 #include <stdlib.h>
-#include <assert.h>
 #include <syslog.h>
 #include <errno.h>
 
+#include "assert.h"
 #include "strhash.h"
 
 unsigned strhash(const char *string)

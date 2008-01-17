@@ -1,5 +1,5 @@
 /* cyrusdb_skiplist.c -- cyrusdb skiplist implementation
- * $Id: cyrusdb_skiplist.c,v 1.58 2008/01/07 16:41:18 murch Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.59 2008/01/17 13:25:31 murch Exp $
  *
  * Copyright (c) 1998, 2000, 2002 Carnegie Mellon University.
  * All rights reserved.
@@ -50,7 +50,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
-#include <assert.h>
 #include <errno.h>
 #include <syslog.h>
 #include <sys/types.h>
@@ -61,6 +60,7 @@
 #endif
 #include <netinet/in.h>
 
+#include "assert.h"
 #include "bsearch.h"
 #include "cyrusdb.h"
 #include "libcyr_cfg.h"

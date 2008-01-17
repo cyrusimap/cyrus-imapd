@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
- * $Id: seen_db.c,v 1.56 2007/11/27 16:23:31 murch Exp $
+ * $Id: seen_db.c,v 1.57 2008/01/17 13:25:31 murch Exp $
  * 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -44,7 +44,6 @@
 #include <config.h>
 
 #include <stdlib.h>
-#include <assert.h>
 #include <syslog.h>
 #include <string.h>
 #include <ctype.h>
@@ -62,6 +61,7 @@
 #include "bsearch.h"
 #include "util.h"
 
+#include "assert.h"
 #include "global.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
