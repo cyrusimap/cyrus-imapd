@@ -41,7 +41,7 @@
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
  *
- * $Id: sync_server.c,v 1.23 2008/01/17 13:25:31 murch Exp $
+ * $Id: sync_server.c,v 1.24 2008/01/18 19:17:09 murch Exp $
  */
 
 #include <config.h>
@@ -89,6 +89,7 @@
 #include "retry.h"
 #include "seen.h"
 #include "spool.h"
+#include "statuscache.h"
 #include "telemetry.h"
 #include "tls.h"
 #include "user.h"
@@ -333,6 +334,11 @@ int service_init(int argc __attribute__((unused)),
     annotatemore_init(0, NULL, NULL);
     annotatemore_open(NULL);
 
+    /* Open the statuscache so we can invalidate seen states */
+    if (config_getswitch(IMAPOPT_STATUSCACHE)) {
+	statuscache_open(NULL);
+    }
+
     return 0;
 }
 
@@ -495,6 +501,11 @@ void usage(void)
 void shut_down(int code)
 {
     proc_cleanup();
+
+    if (config_getswitch(IMAPOPT_STATUSCACHE)) {
+	statuscache_close();
+	statuscache_done();
+    }
 
     seen_done();
     mboxlist_close();

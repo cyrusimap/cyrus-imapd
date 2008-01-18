@@ -4,7 +4,7 @@
 
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-<meta name="revision" content="$Id: database-formats.html,v 1.3 2006/11/30 17:11:16 murch Exp $" />
+<meta name="revision" content="$Id: database-formats.html,v 1.4 2008/01/18 19:17:07 murch Exp $" />
 <meta name="author" content="Ken Murchison" />
 
 <title>Database Formats</title>
@@ -121,6 +121,25 @@ state for the userid.  The format of each record is as follows:</p>
 Key: &lt;Userid&gt;
 
 Data: &lt;Auth State (multi-byte)&gt;
+</pre>
+
+<h2>STATUS cache (statuscache.db)</h2>
+
+<p>This database caches IMAP STATUS information resulting in less I/O
+when the STATUS information hasn't changed (mailbox and \Seen state
+unchanged).  The database is indexed by mailbox name + userid and each
+data record contains the database version number, a bitmask of the
+stored status items, the mtime, inode, and size of the cyrus.index
+file at the time the record was written, the total number of messages
+in the mailbox, the number of recent messages, the next UID value, the
+mailbox UID validity value, the number of unseen messages, and the highest
+modification sequence in the mailbox.  The format of each record is as
+follows:</p>
+
+<pre>
+Key: &lt;Mailbox Name&gt;\0&lt;Userid&gt;\0
+
+Data: &lt;Version&gt;SP&lt;Bitmask of Items&gt;SP&lt;Mtime of Index&gt;SP&lt;Inode of Index&gt;SP&lt;Size of Index&gt;SP&lt;# of Messages&gt;SP&lt;# of Recent Messages&gt;SP&lt;Next UID&gt;SP&lt;UID Validity&gt;SP&lt;# of Unseen Messages&gt;SP&lt;Highest Mod Sequence&gt;
 </pre>
 
 <h2>Seen State (&lt;userid&gt;.seen)</h2>

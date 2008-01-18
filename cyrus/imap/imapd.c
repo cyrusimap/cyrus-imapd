@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.539 2008/01/17 13:07:40 murch Exp $ */
+/* $Id: imapd.c,v 1.540 2008/01/18 19:17:07 murch Exp $ */
 
 #include <config.h>
 
@@ -95,6 +95,7 @@
 #include "mkgmtime.h"
 #include "mupdate-client.h"
 #include "quota.h"
+#include "statuscache.h"
 #include "sync_log.h"
 #include "telemetry.h"
 #include "tls.h"
@@ -685,6 +686,10 @@ int service_init(int argc, char **argv, char **envp)
 	annotatemore_init(0, NULL, NULL);
     annotatemore_open(NULL);
 
+    if (config_getswitch(IMAPOPT_STATUSCACHE)) {
+	statuscache_open(NULL);
+    }
+
     /* Create a protgroup for input from the client and selected backend */
     protin = protgroup_new(2);
 
@@ -865,6 +870,11 @@ void shut_down(int code)
 
     annotatemore_close();
     annotatemore_done();
+
+    if (config_getswitch(IMAPOPT_STATUSCACHE)) {
+	statuscache_close();
+	statuscache_done();
+    }
 
     if (imapd_in) {
 	/* Flush the incoming buffer */
@@ -6747,21 +6757,19 @@ void cmd_starttls(char *tag, int imaps)
 void cmd_status(char *tag, char *name)
 {
     int c;
-    int statusitems = 0;
+    unsigned statusitems = 0;
     static struct buf arg;
-    struct mailbox mailbox;
     char mailboxname[MAX_MAILBOX_NAME+1];
     int mbtype;
-    char *server;
+    char *server, *acl;
     int r = 0;
-    int doclose = 0;
 
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
 					       imapd_userid, mailboxname);
 
     if (!r) {
 	r = mlookup(tag, name, mailboxname, &mbtype, NULL, NULL,
-		    &server, NULL, NULL);
+		    &server, &acl, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) {
 	/* Eat the argument */
@@ -6864,24 +6872,18 @@ void cmd_status(char *tag, char *name)
     }
 
     if (!r) {
-	r = mailbox_open_header(mailboxname, imapd_authstate, &mailbox);
+	int myrights = cyrus_acl_myrights(imapd_authstate, acl);
+
+	if (!(myrights & ACL_READ)) {
+	    r = (imapd_userisadmin || (myrights & ACL_LOOKUP)) ?
+		IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+	}
     }
 
     if (!r) {
-	doclose = 1;
-	r = mailbox_open_index(&mailbox);
-    }
-    if (!r && !(mailbox.myrights & ACL_READ)) {
-	r = (imapd_userisadmin || (mailbox.myrights & ACL_LOOKUP)) ?
-	  IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+	r = index_status(mailboxname, name, statusitems);
     }
 
-    if (!r) {
-	r = index_status(&mailbox, name, statusitems);
-    }
-
-    if (doclose) mailbox_close(&mailbox);
-    
     if (r) {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
 	return;

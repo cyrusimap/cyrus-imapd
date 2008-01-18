@@ -1,5 +1,5 @@
 /* seen_db.c -- implementation of seen database using per-user berkeley db
- * $Id: seen_db.c,v 1.57 2008/01/17 13:25:31 murch Exp $
+ * $Id: seen_db.c,v 1.58 2008/01/18 19:17:09 murch Exp $
  * 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
@@ -68,6 +68,7 @@
 #include "xstrlcat.h"
 #include "mailbox.h"
 #include "imap_err.h"
+#include "statuscache.h"
 #include "seen.h"
 
 #define FNAME_SEENSUFFIX ".seen" /* per user seen state extension */
@@ -80,6 +81,7 @@ enum {
 
 struct seen {
     char *user;			/* what user is this for? */
+    const char *mboxname;	/* what mailbox name? */
     const char *uniqueid;	/* what mailbox? */
     const char *path;		/* where is this mailbox? */
     struct db *db;
@@ -147,6 +149,7 @@ int seen_open(struct mailbox *mailbox,
     /* if this is the db we've already opened, return it */
     if (seendb && !strcmp(seendb->user, user)) {
 	abortcurrent(seendb);
+	seendb->mboxname = mailbox->name;
 	seendb->uniqueid = mailbox->uniqueid;
 	seendb->path = mailbox->path;
 	*seendbptr = seendb;
@@ -185,6 +188,7 @@ int seen_open(struct mailbox *mailbox,
     free(fname);
 
     seendb->tid = NULL;
+    seendb->mboxname = mailbox->name;
     seendb->uniqueid = mailbox->uniqueid;
     seendb->path = mailbox->path;
     seendb->user = xstrdup(user);
@@ -386,6 +390,9 @@ int seen_write(struct seen *seendb, time_t lastread, unsigned int lastuid,
 	break;
     }
 
+    /* Something changed, kill our status cache for this mailbox */
+    statuscache_invalidate(seendb->mboxname, seendb->user);
+
     free(data);
     return r;
 }
@@ -408,6 +415,7 @@ int seen_close(struct seen *seendb)
 	seendb->tid = NULL;
     }
 
+    seendb->mboxname = NULL;
     seendb->uniqueid = NULL;
     seendb->path = NULL;
 

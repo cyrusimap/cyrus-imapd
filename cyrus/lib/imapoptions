@@ -42,7 +42,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\" 
-.\" $Id: imapoptions,v 1.47 2008/01/09 19:10:56 murch Exp $
+.\" $Id: imapoptions,v 1.48 2008/01/18 19:17:09 murch Exp $
 .SH NAME
 imapd.conf \- IMAP configuration file
 .SH DESCRIPTION
@@ -952,6 +952,12 @@ are listed with ``<none>''.
 
 { "subscription_db", "flat", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist")}
 /* The cyrusdb backend to use for the subscriptions list. */
+
+{ "statuscache", 0, SWITCH }
+/* Enable/disable the imap status cache. */
+
+{ "statuscache_db", "berkeley-nosync", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist") }
+/* The cyrusdb backend to use for the imap status cache. */
 
 { "sync_authname", NULL, STRING }
 /* The authentication name to use when authenticating to a sync server. */

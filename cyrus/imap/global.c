@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: global.c,v 1.24 2007/09/28 02:27:46 murch Exp $ */
+/* $Id: global.c,v 1.25 2008/01/18 19:17:07 murch Exp $ */
 
 #include <config.h>
 
@@ -95,6 +95,7 @@ struct cyrusdb_backend *config_mboxkey_db;
 struct cyrusdb_backend *config_duplicate_db;
 struct cyrusdb_backend *config_tlscache_db;
 struct cyrusdb_backend *config_ptscache_db;
+struct cyrusdb_backend *config_statuscache_db;
 
 /* Called before a cyrus application starts (but after command line parameters
  * are read) */
@@ -190,6 +191,8 @@ int cyrus_init(const char *alt_config, const char *ident, unsigned flags)
 	    cyrusdb_fromname(config_getstring(IMAPOPT_TLSCACHE_DB));
 	config_ptscache_db =
 	    cyrusdb_fromname(config_getstring(IMAPOPT_PTSCACHE_DB));
+	config_statuscache_db =
+	    cyrusdb_fromname(config_getstring(IMAPOPT_STATUSCACHE_DB));
 
 	/* configure libcyrus as needed */
 	libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, config_dir);
