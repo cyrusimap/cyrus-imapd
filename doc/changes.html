@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.152 2008/01/17 18:51:39 murch Exp $ -->
+<!-- $Id: changes.html,v 1.153 2008/01/18 19:17:07 murch Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -10,6 +10,10 @@
 
 <h1>Changes to the Cyrus IMAP Server since 2.3.11</h1>
 <ul>
+<li>Added <tt>statuscache.db</tt> to cache IMAP STATUS data which
+significantly reduces the amount of I/O necessary when neither the
+mailbox nor \Seen state has changed
+<i>-- courtesy of Fastmail.fm</i>.</li>
 <li>Added option to <tt>unexpunge</tt> to restore messages by time
 interval
 <i>-- courtesy of David Carter</i>.</li>
@@ -2325,7 +2329,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2008/01/17 18:51:39 $ <br />
+last modified: $Date: 2008/01/18 19:17:07 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>

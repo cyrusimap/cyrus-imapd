@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.241 2008/01/17 13:07:40 murch Exp $
+ * $Id: index.c,v 1.242 2008/01/18 19:17:08 murch Exp $
  */
 #include <config.h>
 
@@ -73,6 +73,7 @@
 #include "parseaddr.h"
 #include "search_engines.h"
 #include "seen.h"
+#include "statuscache.h"
 #include "strhash.h"
 #include "stristr.h"
 #include "util.h"
@@ -1550,53 +1551,84 @@ int index_copy_remote(struct mailbox *mailbox, char *sequence,
 /*
  * Performs a STATUS command
  */
-int
-index_status(mailbox, name, statusitems)
-struct mailbox *mailbox;
-char *name;
-int statusitems;
+int index_status(char *mboxname, char *name, unsigned statusitems)
 {
     int r;
-    struct seen *status_seendb;
-    time_t last_read, last_change = 0;
-    unsigned last_uid;
-    char *last_seenuids;
+    struct statuscache_data scdata;
+    struct mailbox mailbox;
+    int doclose = 0;
     int num_recent = 0;
     int num_unseen = 0;
     int sepchar;
     static struct seq_set seq_set = { NULL, 0, 0, 0 , NULL};
 
-    if (mailbox->exists != 0 &&
-	(statusitems &
-	 (STATUS_RECENT | STATUS_UNSEEN))) {
-	r = seen_open(mailbox,
-		      (mailbox->options & OPT_IMAP_SHAREDSEEN) ? "anyone" :
+    /* Check status cache if possible */
+    if (config_getswitch(IMAPOPT_STATUSCACHE)) {
+	/* Do actual lookup of cache item. */
+	r = statuscache_lookup(mboxname, imapd_userid, statusitems, &scdata);
+
+	/* Seen/recent status uses "push" invalidation events from
+	 * seen_db.c.   This avoids needing to open cyrus.header to get
+	 * the mailbox uniqueid to open the seen db and get the
+	 * unseen_mtime and recentuid.
+	 */
+
+	if (!r) {
+	    syslog(LOG_DEBUG, "statuscache, '%s', '%s', '0x%02x', 'yes'",
+		   mboxname, imapd_userid, statusitems);
+	    goto statusdone;
+	}
+
+	syslog(LOG_DEBUG, "statuscache, '%s', '%s', '0x%02x', 'no'",
+	       mboxname, imapd_userid, statusitems);
+    }
+
+    /* Missing or invalid cache entry */
+    r = mailbox_open_header(mboxname, imapd_authstate, &mailbox);
+
+    if (!r) {
+	doclose = 1;
+	r = mailbox_open_index(&mailbox);
+    }
+
+    if (!r && mailbox.exists != 0 &&
+	(statusitems & (STATUS_RECENT | STATUS_UNSEEN))) {
+	/* Read \Seen state */
+	struct seen *status_seendb;
+	time_t last_read, last_change = 0;
+	unsigned last_uid;
+	char *last_seenuids;
+
+	r = seen_open(&mailbox,
+		      (mailbox.options & OPT_IMAP_SHAREDSEEN) ? "anyone" :
 		      imapd_userid,
 		      SEEN_CREATE, &status_seendb);
-	if (r) return r;
 
-	r = seen_lockread(status_seendb, &last_read, &last_uid,
-			  &last_change, &last_seenuids);
-	seen_close(status_seendb);
-	if (r) return r;
+	if (!r) {
+	    r = seen_lockread(status_seendb, &last_read, &last_uid,
+			      &last_change, &last_seenuids);
+	    seen_close(status_seendb);
+	}
 
-	if (statusitems & (STATUS_RECENT | STATUS_UNSEEN)) {
+	if (!r) {
 	    const char *base;
 	    unsigned long len = 0;
 	    unsigned msg, uid;
 
-	    map_refresh(mailbox->index_fd, 0, &base, &len,
-			mailbox->start_offset +
-			mailbox->exists * mailbox->record_size,
-			"index", mailbox->name);
+	    map_refresh(mailbox.index_fd, 0, &base, &len,
+			mailbox.start_offset +
+			mailbox.exists * mailbox.record_size,
+			"index", mailbox.name);
 
 	    seq_set.len = seq_set.mark = 0;
 	    index_parse_sequence(last_seenuids, 0, &seq_set);
 
-	    for (msg = 0; msg < mailbox->exists; msg++) {
-		uid = ntohl(*((bit32 *)(base + mailbox->start_offset +
-					msg * mailbox->record_size +
+	    for (msg = 0; msg < mailbox.exists; msg++) {
+		uid = ntohl(*((bit32 *)(base + mailbox.start_offset +
+					msg * mailbox.record_size +
 					OFFSET_UID)));
+		/* Always calculate num_recent,
+		   even if only need num_unseen... for caching below */
 		if (uid > last_uid) num_recent++;
 		if ((statusitems & STATUS_UNSEEN) &&
 		    !index_insequence(uid, &seq_set, 1)) num_unseen++;
@@ -1609,36 +1641,57 @@ int statusitems;
 	}
     }
 
+    if (!r) {
+	/* We always have message count, uidnext,
+	   uidvalidity, and highestmodseq for cache */
+	unsigned c_statusitems = statusitems | STATUS_MESSAGES |
+	    STATUS_UIDNEXT | STATUS_UIDVALIDITY | STATUS_HIGHESTMODSEQ;
+
+	/* If we calculated num_unseen, we implicitly calculated num_recent */
+	if (c_statusitems & STATUS_UNSEEN) c_statusitems |= STATUS_RECENT;
+
+	statuscache_fill(&scdata, &mailbox,
+			 c_statusitems, num_recent, num_unseen);
+    }
+
+    if (doclose) mailbox_close(&mailbox);
+    if (r) return r;
+
+    /* Upate the statuscache entry */
+    if (config_getswitch(IMAPOPT_STATUSCACHE)) {
+	statuscache_update(mboxname, imapd_userid, &scdata);
+    }
+
+  statusdone:
     prot_printf(imapd_out, "* STATUS ");
     printastring(name);
     prot_printf(imapd_out, " ");
     sepchar = '(';
 
     if (statusitems & STATUS_MESSAGES) {
-	prot_printf(imapd_out, "%cMESSAGES %lu", sepchar, mailbox->exists);
+	prot_printf(imapd_out, "%cMESSAGES %lu", sepchar, scdata.messages);
 	sepchar = ' ';
     }
     if (statusitems & STATUS_RECENT) {
-	prot_printf(imapd_out, "%cRECENT %u", sepchar, num_recent);
+	prot_printf(imapd_out, "%cRECENT %u", sepchar, scdata.recent);
 	sepchar = ' ';
     }
     if (statusitems & STATUS_UIDNEXT) {
-	prot_printf(imapd_out, "%cUIDNEXT %lu", sepchar, mailbox->last_uid+1);
+	prot_printf(imapd_out, "%cUIDNEXT %lu", sepchar, scdata.uidnext);
 	sepchar = ' ';
     }
     if (statusitems & STATUS_UIDVALIDITY) {
 	prot_printf(imapd_out, "%cUIDVALIDITY %lu", sepchar,
-		    mailbox->uidvalidity);
+		    scdata.uidvalidity);
 	sepchar = ' ';
     }
     if (statusitems & STATUS_UNSEEN) {
-	prot_printf(imapd_out, "%cUNSEEN %u", sepchar, num_unseen);
+	prot_printf(imapd_out, "%cUNSEEN %u", sepchar, scdata.unseen);
 	sepchar = ' ';
     }
     if (statusitems & STATUS_HIGHESTMODSEQ) {
 	prot_printf(imapd_out, "%cHIGHESTMODSEQ " MODSEQ_FMT, sepchar,
-		    (mailbox->options & OPT_IMAP_CONDSTORE) ?
-		    mailbox->highestmodseq : 0);
+		    scdata.highestmodseq);
 	sepchar = ' ';
     }
     prot_printf(imapd_out, ")\r\n");
