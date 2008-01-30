@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: statuscache_db.c,v 1.1 2008/01/18 19:17:09 murch Exp $
+ * $Id: statuscache_db.c,v 1.2 2008/01/30 17:44:14 murch Exp $
  */
 
 #include <config.h>
@@ -227,14 +227,12 @@ int statuscache_lookup(const char *mboxname, const char *userid,
 int statuscache_update(const char *mboxname, const char *userid,
 		       struct statuscache_data *scdata)
 {
-    int sz = 250;  /* enough room for 11*(UULONG + SP) */
-    char *data = xmalloc(sz);
+    char data[250];  /* enough room for 11*(UULONG + SP) */
     int r, keylen, datalen;
     char *key = statuscache_buildkey(mboxname, userid, &keylen);
 
-    /* Store raw struct in database */
-    datalen = snprintf(data, sz, "%u %u %ld %lu %lu %lu %u %lu %lu %u "
-		       MODSEQ_FMT,
+    datalen = snprintf(data, sizeof(data),
+		       "%u %u %ld %lu %lu %lu %u %lu %lu %u " MODSEQ_FMT,
 		       STATUSCACHE_VERSION, scdata->statusitems,
 		       scdata->index_mtime, scdata->index_ino,
 		       scdata->index_size, scdata->messages,
