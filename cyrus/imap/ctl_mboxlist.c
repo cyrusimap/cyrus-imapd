@@ -40,7 +40,7 @@
  *
  */
 
-/* $Id: ctl_mboxlist.c,v 1.59 2007/10/05 18:39:48 murch Exp $ */
+/* $Id: ctl_mboxlist.c,v 1.60 2008/02/07 17:19:35 murch Exp $ */
 
 /* currently doesn't catch signals; probably SHOULD */
 
@@ -791,9 +791,9 @@ static int verify_cb(void *rockp,
 		   name, part);
 	}
 	else if (r > 0) {
-	    printf("'%s' has a directory on partition '%s' but no DB entry\n",
+	    printf("'%s' has a directory '%s' but no DB entry\n",
 		   found->data[found->idx].mboxname,
-		   found->data[found->idx].partition);
+		   found->data[found->idx].path);
 	    found->idx++;
 	}
 	else found->idx++;
