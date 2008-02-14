@@ -1,6 +1,6 @@
 /* script.c -- sieve script functions
  * Larry Greenfield
- * $Id: script.c,v 1.65 2007/09/27 19:26:07 murch Exp $
+ * $Id: script.c,v 1.66 2008/02/14 18:37:47 murch Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -326,7 +326,7 @@ static int build_notify_message(sieve_interp_t *i,
 		    *out = xrealloc(*out, allocsize);
 		}
 		/* copy the plaintext */
-		strncat(*out, parts[0]->content, n);
+		strncat(*out, content, n);
 		(*out)[*outlen+n]='\0';
 		(*outlen) += n;
 	    }
