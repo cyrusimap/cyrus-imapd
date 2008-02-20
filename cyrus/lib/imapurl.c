@@ -39,7 +39,7 @@
  *
  * derived from chris newman's code */
 
-/* $Id: imapurl.c,v 1.13 2007/09/27 20:02:45 murch Exp $ */
+/* $Id: imapurl.c,v 1.14 2008/02/20 17:48:46 murch Exp $ */
 
 #include <stdio.h>
 #include <string.h>
@@ -197,7 +197,7 @@ static void MailboxToURL(char *dst, const char *src)
  *  dst should be about twice the length of src to deal with non-hex
  *  coded URLs
  */
-static int URLtoMailbox(char *dst, char *src)
+int URLtoMailbox(char *dst, char *src)
 {
     unsigned int utf8pos = 0, utf8total, i, c, utf7mode, bitstogo, utf16flag;
     unsigned long ucs4 = 0, bitbuf = 0;

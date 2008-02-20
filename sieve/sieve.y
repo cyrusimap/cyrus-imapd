@@ -1,7 +1,7 @@
 %{
 /* sieve.y -- sieve parser
  * Larry Greenfield
- * $Id: sieve.y,v 1.36 2007/10/18 12:03:23 murch Exp $
+ * $Id: sieve.y,v 1.37 2008/02/20 17:48:46 murch Exp $
  */
 /***********************************************************
         Copyright 1999 by Carnegie Mellon University
@@ -40,6 +40,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "script.h"
 #include "tree.h"
 
+#include "../lib/imapurl.h"
 #include "../lib/util.h"
 #include "../lib/imparse.h"
 #include "../lib/libconfig.h"
@@ -832,7 +833,9 @@ static commandlist_t *build_fileinto(int t, int copy, char *folder)
 
     if (ret) {
 	ret->u.f.copy = copy;
-	ret->u.f.folder = folder;
+	ret->u.f.folder = xmalloc(2 * strlen(folder) + 1);
+	UTF8_to_mUTF7(ret->u.f.folder, folder);
+	free(folder);
     }
     return ret;
 }
