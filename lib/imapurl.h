@@ -39,7 +39,7 @@
  *
  */
 
-/* $Id: imapurl.h,v 1.6 2006/11/30 17:11:22 murch Exp $ */
+/* $Id: imapurl.h,v 1.7 2008/02/20 17:48:46 murch Exp $ */
 
 #ifndef IMAPURL_H
 #define IMAPURL_H
@@ -74,6 +74,8 @@ struct imapurl {
  *  coded URLs; server should be as large as src.
  */
 int imapurl_fromURL(struct imapurl *url, const char *src);
+int URLtoMailbox(char *dst, char *src);
+#define UTF8_to_mUTF7(dst, src) URLtoMailbox(dst, src)
 
 /* Convert an IMAP mailbox to a URL path
  *  dst needs to have roughly 4 times the storage space of mailbox
