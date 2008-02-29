@@ -38,7 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: imapd.c,v 1.540 2008/01/18 19:17:07 murch Exp $ */
+/* $Id: imapd.c,v 1.541 2008/02/29 01:37:22 murch Exp $ */
 
 #include <config.h>
 
@@ -8746,8 +8746,7 @@ time_t *start, *end;
     tm.tm_isdst = -1;
     *start = mktime(&tm);
 
-    tm.tm_sec = tm.tm_min = 59;
-    tm.tm_hour = 23;
+    tm.tm_hour = 24;
     tm.tm_isdst = -1;
     *end = mktime(&tm);
 

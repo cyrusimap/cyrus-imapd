@@ -41,7 +41,7 @@
  *
  */
 /*
- * $Id: index.c,v 1.242 2008/01/18 19:17:08 murch Exp $
+ * $Id: index.c,v 1.243 2008/02/29 01:37:38 murch Exp $
  */
 #include <config.h>
 
@@ -3078,11 +3078,11 @@ static int index_search_evaluate(struct mailbox *mailbox,
 
     if (searchargs->after && (time_t) INTERNALDATE(msgno) < searchargs->after)
       return 0;
-    if (searchargs->before && (time_t) INTERNALDATE(msgno) > searchargs->before)
+    if (searchargs->before && (time_t) INTERNALDATE(msgno) >= searchargs->before)
       return 0;
     if (searchargs->sentafter && (time_t) SENTDATE(msgno) < searchargs->sentafter)
       return 0;
-    if (searchargs->sentbefore && (time_t) SENTDATE(msgno) > searchargs->sentbefore)
+    if (searchargs->sentbefore && (time_t) SENTDATE(msgno) >= searchargs->sentbefore)
       return 0;
 
     if (searchargs->modseq && MODSEQ(msgno) < searchargs->modseq) return 0;
