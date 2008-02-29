@@ -47,7 +47,8 @@ To make a release:
     cyrus-announce
     freshmeat.net
 
-- update cyrusimap.web.cmu.edu links to new version
+- update cyrusimap.web.cmu.edu:/usr/www/htdocs/downloads.html
+  links to new version
 
 ---
 to bring up a new Andrew Cyrus server:
