@@ -1,5 +1,5 @@
 /* mbdump.c -- Mailbox dump routines
- * $Id: mbdump.c,v 1.37 2008/01/17 13:25:30 murch Exp $
+ * $Id: mbdump.c,v 1.38 2008/03/03 22:54:39 wescraig Exp $
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -77,6 +77,7 @@
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 #include "util.h"
+#include "index.h"
 
 /* is this the active script? */
 static int sieve_isactive(char *sievepath, char *name)
@@ -854,6 +855,42 @@ int undump_mailbox(const char *mbname, const char *mbpath,
 
     if(curfile >= 0) close(curfile);
     mailbox_close(&mb);
+
+    if ( r || quotaused == 0 ) {
+	return r;
+    }
+
+    /*
+     * Set mtimes of message files to INTERNALDATE.  This allows later
+     * reconstructs to recover INTERNALDATE from the filesystem.
+     */
+    r = mailbox_open_locked(mbname, mbpath, metapath, mbacl, auth_state, &mb, 0);
+    if (!r) {
+	struct timeval times[ 2 ];
+        char fname[MAX_MAILBOX_PATH+1];
+	const char *index_base;
+	long int start_offset, record_size;
+	int offset, i;
+ 
+        strlcpy(fname, mb.path, sizeof(fname));
+        strlcat(fname, "/", sizeof(fname));
+	offset = strlen( fname );
+
+	index_base = mb.index_base;
+	start_offset = mb.start_offset;
+	record_size = mb.record_size;
+
+	for ( i = 1; i <= mb.exists; i++ ) {
+	    mailbox_message_get_fname( &mb, UID(i),
+		    fname + offset, sizeof( fname ) - offset);
+	    times[ 0 ].tv_sec = INTERNALDATE( i );
+	    times[ 0 ].tv_usec = 0;
+	    times[ 1 ].tv_sec = INTERNALDATE( i );
+	    times[ 1 ].tv_usec = 0;
+	    (void)utimes( fname, times );
+	}
+    }
+    mailbox_close( &mb );
     
     return r;
 }
