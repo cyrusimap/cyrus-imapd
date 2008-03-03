@@ -1,6 +1,6 @@
 # sasl2.m4--sasl2 libraries and includes
 # Rob Siemborski
-# $Id: sasl2.m4,v 1.52 2006/05/18 19:25:00 murch Exp $
+# $Id: sasl2.m4,v 1.53 2008/03/03 22:06:34 wescraig Exp $
 
 # SASL2_CRYPT_CHK
 # ---------------
@@ -65,9 +65,7 @@ if test "$gssapi" != no; then
       fi
     fi
   fi
-  AC_CHECK_HEADER([gssapi.h],
-                  [AC_DEFINE(HAVE_GSSAPI_H,,
-                             [Define if you have the gssapi.h header file])],
+  AC_CHECK_HEADER([gssapi.h],,
                   [AC_CHECK_HEADER([gssapi/gssapi.h],,
                                    [AC_WARN([Disabling GSSAPI - no include files found]); gssapi=no])])
 
@@ -76,6 +74,10 @@ if test "$gssapi" != no; then
 fi
 
 if test "$gssapi" != no; then
+  if test "$ac_cv_header_gssapi_h" = "yes" -o "$ac_cv_header_gssapi_gssapi_h" = "yes"; then
+    AC_DEFINE(HAVE_GSSAPI_H,,[Define if you have the gssapi.h header file])
+  fi
+
   # We need to find out which gssapi implementation we are
   # using. Supported alternatives are: MIT Kerberos 5,
   # Heimdal Kerberos 5 (http://www.pdc.kth.se/heimdal),
