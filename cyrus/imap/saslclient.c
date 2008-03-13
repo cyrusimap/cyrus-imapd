@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: saslclient.c,v 1.16 2007/09/28 02:26:56 murch Exp $ */
+/* $Id: saslclient.c,v 1.17 2008/03/13 13:58:54 murch Exp $ */
 
 #include <config.h>
 
@@ -306,6 +306,7 @@ int saslclient(sasl_conn_t *conn, struct sasl_cmd_t *sasl_cmd,
 		p += n;
 	    }
 
+	    *p = '\0';
 	    base64 = buf;
 	}
 	else {
