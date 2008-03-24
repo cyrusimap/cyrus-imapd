@@ -1,14 +1,13 @@
 /* ptloader.c -- group loader daemon
- */
-/*
- * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
+ *
+ * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
  *
  * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer. 
+ *    notice, this list of conditions and the following disclaimer.
  *
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in
@@ -17,14 +16,15 @@
  *
  * 3. The name "Carnegie Mellon University" must not be used to
  *    endorse or promote products derived from this software without
- *    prior written permission. For permission or any other legal
- *    details, please contact  
- *      Office of Technology Transfer
+ *    prior written permission. For permission or any legal
+ *    details, please contact
  *      Carnegie Mellon University
- *      5000 Forbes Avenue
- *      Pittsburgh, PA  15213-3890
- *      (412) 268-4387, fax: (412) 268-7395
- *      tech-transfer@andrew.cmu.edu
+ *      Center for Technology Transfer and Enterprise Creation
+ *      4615 Forbes Avenue
+ *      Suite 302
+ *      Pittsburgh, PA  15213
+ *      (412) 268-7393, fax: (412) 268-7395
+ *      innovation@andrew.cmu.edu
  *
  * 4. Redistributions of any form whatsoever must retain the following
  *    acknowledgment:
@@ -39,6 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
+ * $Id: ptloader.c,v 1.48 2008/03/24 18:34:22 murch Exp $
  */
 
 #include <config.h>
@@ -65,9 +66,6 @@
 #include "retry.h"
 #include "xmalloc.h"
 #include "ptloader.h"
-
-static char rcsid[] __attribute__((unused)) = 
-      "$Id: ptloader.c,v 1.47 2007/11/01 21:00:22 wescraig Exp $";
 
 struct pts_module *pts_modules[] = {
 #ifdef HAVE_LDAP
@@ -148,7 +146,7 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     /* set signal handlers */
     signal(SIGPIPE, SIG_IGN);
 
-    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.47 2007/11/01 21:00:22 wescraig Exp $");
+    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.48 2008/03/24 18:34:22 murch Exp $");
 
     while ((opt = getopt(argc, argv, "d:")) != EOF) {
 	switch (opt) {
