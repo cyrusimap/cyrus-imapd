@@ -1,14 +1,14 @@
 dnl Process this file with autoconf to produce a configure script.
 
 dnl
-dnl Copyright (c) 1998-2000 Carnegie Mellon University.  All rights reserved.
+dnl Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
 dnl
 dnl Redistribution and use in source and binary forms, with or without
 dnl modification, are permitted provided that the following conditions
 dnl are met:
 dnl
 dnl 1. Redistributions of source code must retain the above copyright
-dnl    notice, this list of conditions and the following disclaimer. 
+dnl    notice, this list of conditions and the following disclaimer.
 dnl
 dnl 2. Redistributions in binary form must reproduce the above copyright
 dnl    notice, this list of conditions and the following disclaimer in
@@ -17,19 +17,20 @@ dnl    distribution.
 dnl
 dnl 3. The name "Carnegie Mellon University" must not be used to
 dnl    endorse or promote products derived from this software without
-dnl    prior written permission. For permission or any other legal
-dnl    details, please contact  
-dnl      Office of Technology Transfer
+dnl    prior written permission. For permission or any legal
+dnl    details, please contact
 dnl      Carnegie Mellon University
-dnl      5000 Forbes Avenue
-dnl      Pittsburgh, PA  15213-3890
-dnl      (412) 268-4387, fax: (412) 268-7395
-dnl      tech-transfer@andrew.cmu.edu
+dnl      Center for Technology Transfer and Enterprise Creation
+dnl      4615 Forbes Avenue
+dnl      Suite 302
+dnl      Pittsburgh, PA  15213
+dnl      (412) 268-7393, fax: (412) 268-7395
+dnl      innovation@andrew.cmu.edu
 dnl
 dnl 4. Redistributions of any form whatsoever must retain the following
 dnl    acknowledgment:
-dnl    \"This product includes software developed by Computing Services
-dnl     at Carnegie Mellon University (http://www.cmu.edu/computing/).\"
+dnl    "This product includes software developed by Computing Services
+dnl     at Carnegie Mellon University (http://www.cmu.edu/computing/)."
 dnl
 dnl CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
 dnl THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
@@ -39,10 +40,9 @@ dnl WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
 dnl AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 dnl OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 dnl
-
+dnl $Id: configure.in,v 1.304 2008/03/24 18:43:45 murch Exp $
 dnl
 dnl configure.in for the Cyrus imapd
-dnl $Id: configure.in,v 1.303 2007/10/18 18:14:47 murch Exp $
 dnl
 
 
@@ -1068,7 +1068,7 @@ AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 AH_TOP([
-/* $Id: configure.in,v 1.303 2007/10/18 18:14:47 murch Exp $ */
+/* $Id: configure.in,v 1.304 2008/03/24 18:43:45 murch Exp $ */
 /* 
  * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
  *
