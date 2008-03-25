@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mupdate-client.c,v 1.54 2008/03/24 17:09:18 murch Exp $
+ * $Id: mupdate-client.c,v 1.55 2008/03/25 18:13:37 murch Exp $
  */
 
 #include <config.h>
@@ -170,16 +170,18 @@ int mupdate_activate(mupdate_handle *handle,
 {
     int ret;
     enum mupdate_cmd_response response;
+    const char *p;
     
     if (!handle) return MUPDATE_BADPARAM;
     if (!mailbox || !server || !acl) return MUPDATE_BADPARAM;
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
+    /* make sure we don't have a double server!partition */
+    if ((p = strchr(server, '!')) && strchr(p+1, '!')) return MUPDATE_BADPARAM;
+
     if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_REPLICATED) {
 	/* we don't care about the server part, everything is local */
-	const char *part = strchr(server, '!');
-
-	if (part) server = part + 1;
+	if (p) server = p + 1;
     }
 
     prot_printf(handle->conn->out,
@@ -202,16 +204,18 @@ int mupdate_reserve(mupdate_handle *handle,
 {
     int ret;
     enum mupdate_cmd_response response;
+    const char *p;
     
     if (!handle) return MUPDATE_BADPARAM;
     if (!mailbox || !server) return MUPDATE_BADPARAM;
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
+    /* make sure we don't have a double server!partition */
+    if ((p = strchr(server, '!')) && strchr(p+1, '!')) return MUPDATE_BADPARAM;
+
     if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_REPLICATED) {
 	/* we don't care about the server part, everything is local */
-	const char *part = strchr(server, '!');
-
-	if (part) server = part + 1;
+	if (p) server = p + 1;
     }
 
     prot_printf(handle->conn->out,
@@ -234,16 +238,18 @@ int mupdate_deactivate(mupdate_handle *handle,
 {
     int ret;
     enum mupdate_cmd_response response;
+    const char *p;
     
     if (!handle) return MUPDATE_BADPARAM;
     if (!mailbox || !server) return MUPDATE_BADPARAM;
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
+    /* make sure we don't have a double server!partition */
+    if ((p = strchr(server, '!')) && strchr(p+1, '!')) return MUPDATE_BADPARAM;
+
     if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_REPLICATED) {
 	/* we don't care about the server part, everything is local */
-	const char *part = strchr(server, '!');
-
-	if (part) server = part + 1;
+	if (p) server = p + 1;
     }
 
     prot_printf(handle->conn->out,
