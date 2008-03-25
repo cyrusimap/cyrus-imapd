@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.542 2008/03/24 17:09:16 murch Exp $
+ * $Id: imapd.c,v 1.543 2008/03/25 19:06:27 wescraig Exp $
  */
 
 #include <config.h>
@@ -5827,7 +5827,11 @@ void cmd_list(char *tag, struct listargs *listargs)
 		   struct auth_state *auth_state, int (*proc)(),
 		   void *rock, int force);
 
-    if (listargs->opts & LIST_REMOTE) supports_referrals = !disable_referrals;
+    if (listargs->opts & LIST_REMOTE) {
+	if (!config_getswitch(IMAPOPT_PROXYD_DISABLE_MAILBOX_REFERRALS)) {
+	    supports_referrals = !disable_referrals;
+	}
+    }
 
     /* Ignore the reference argument?
        (the behavior in 1.5.10 & older) */
