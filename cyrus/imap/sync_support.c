@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_support.c,v 1.18 2008/03/24 17:09:20 murch Exp $
+ * $Id: sync_support.c,v 1.19 2008/03/25 20:53:51 murch Exp $
  */
 
 #include <config.h>
@@ -1364,6 +1364,15 @@ int sync_getsimple(struct protstream *input, struct protstream *output,
 
     if ((r = sync_getliteral_size(input, output, &message->msg_size)))
         return(r);
+
+    /* unlink just in case a previous crash left a file 
+     * hard linked into someone else's mailbox! */
+    if (unlink(message->msg_path) == -1 && errno != ENOENT) {
+	syslog(LOG_ERR,
+	       "sync_getsimple(): failed to unlink stale file %s: %m",
+	       message->msg_path);
+	return(IMAP_IOERROR);
+    }
 
     /* Open read/write so file can later be mmap()ed */
     if ((file=fopen(message->msg_path, "w+")) == NULL) {
