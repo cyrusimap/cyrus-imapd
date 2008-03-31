@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_expire.c,v 1.18 2008/03/24 17:09:16 murch Exp $
+ * $Id: cyr_expire.c,v 1.19 2008/03/31 15:31:02 murch Exp $
  */
 
 #include <config.h>
@@ -56,6 +56,8 @@
 #include <syslog.h>
 #include <errno.h>
 #include <signal.h>
+
+#include <sasl/sasl.h>
 
 #include "annotate.h"
 #include "cyrusdb.h"
@@ -409,6 +411,7 @@ int main(int argc, char *argv[])
     if (!expire_days) usage();
 
     cyrus_init(alt_config, "cyr_expire", 0);
+    global_sasl_init(1, 0, NULL);
 
     annotatemore_init(0, NULL, NULL);
     annotatemore_open(NULL);
@@ -508,6 +511,7 @@ int main(int argc, char *argv[])
     annotatemore_close();
     annotatemore_done();
     duplicate_done();
+    sasl_done();
     cyrus_done();
 
     exit(r);
