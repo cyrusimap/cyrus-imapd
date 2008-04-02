@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_client.c,v 1.31 2008/03/24 17:09:20 murch Exp $
+ * $Id: sync_client.c,v 1.32 2008/04/02 15:23:15 murch Exp $
  *
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
@@ -1357,7 +1357,7 @@ static int upload_messages_list(struct mailbox *mailbox,
     struct index_record record;
     struct sync_msg *msg;
     struct sync_index_list *index_list;
-    unsigned max_count = config_getint(IMAPOPT_SYNC_BATCH_SIZE);
+    int max_count = config_getint(IMAPOPT_SYNC_BATCH_SIZE);
 
     if (max_count <= 0) max_count = INT_MAX;
 
@@ -1373,7 +1373,7 @@ static int upload_messages_list(struct mailbox *mailbox,
 	/* Break UPLOAD into chunks of <=max_count messages */
 	index_list = sync_index_list_create();
 
-	for (; (index_list->count < max_count) &&
+	for (; (index_list->count < (unsigned) max_count) &&
 		 (msgno <= mailbox->exists); msgno++) {
 	    r = mailbox_read_index_record(mailbox, msgno, &record);
 
@@ -1431,7 +1431,9 @@ static int upload_messages_from(struct mailbox *mailbox,
     int r = 0;
     struct index_record record;
     struct sync_index_list *index_list;
-    unsigned max_count = config_getint(IMAPOPT_SYNC_BATCH_SIZE);
+    int max_count = config_getint(IMAPOPT_SYNC_BATCH_SIZE);
+
+    if (max_count <= 0) max_count = INT_MAX;
 
     if (chdir(mailbox->path)) {
         syslog(LOG_ERR, "Couldn't chdir to %s: %s",
@@ -1444,7 +1446,7 @@ static int upload_messages_from(struct mailbox *mailbox,
 	/* Break UPLOAD into chunks of <=max_count messages */
 	index_list = sync_index_list_create();
 
-	for (; (index_list->count <= max_count) &&
+	for (; (index_list->count <= (unsigned) max_count) &&
 		 (msgno <= mailbox->exists); msgno++) {
 	    r = mailbox_read_index_record(mailbox, msgno, &record);
 
