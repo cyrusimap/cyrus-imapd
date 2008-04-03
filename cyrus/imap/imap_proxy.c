@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.c,v 1.6 2008/03/24 17:09:16 murch Exp $
+ * $Id: imap_proxy.c,v 1.7 2008/04/03 21:09:51 murch Exp $
  */
 
 #include <config.h>
@@ -63,6 +63,7 @@
 #include "mupdate-client.h"
 #include "prot.h"
 #include "xmalloc.h"
+#include "xstrlcat.h"
 
 extern unsigned int proxy_cmdcnt;
 extern struct protstream *imapd_in, *imapd_out;
@@ -75,6 +76,51 @@ extern void printastring(const char *s);
 extern int mlookup(const char *tag, const char *ext_name,
 		   const char *name, int *flags, char **pathp, char **mpathp,
 		   char **partp, char **aclp, struct txn **tid) ;
+
+static char *imap_parsemechlist(const char *str, struct protocol_t *prot)
+{
+    char *ret = xzmalloc(strlen(str)+1);
+    char *tmp;
+    int num = 0;
+    
+    if (strstr(str, "SASL-IR")) {
+	/* server supports initial response in AUTHENTICATE command */
+	prot->sasl_cmd.maxlen = INT_MAX;
+    }
+    
+    while ((tmp = strstr(str, "AUTH="))) {
+	char *end = (tmp += 5);
+	
+	while((*end != ' ') && (*end != '\0')) end++;
+	
+	/* add entry to list */
+	if (num++ > 0) strcat(ret, " ");
+	strlcat(ret, tmp, strlen(ret) + (end - tmp) + 1);
+	
+	/* reset the string */
+	str = end + 1;
+    }
+    
+    return ret;
+}
+
+struct protocol_t imap_protocol =
+{ "imap", "imap",
+  { 0, "* OK" },
+  { "C01 CAPABILITY", NULL, "C01 ", &imap_parsemechlist,
+    { { " AUTH=", CAPA_AUTH },
+      { " STARTTLS", CAPA_STARTTLS },
+      { " IDLE", CAPA_IDLE },
+      { " MUPDATE", CAPA_MUPDATE },
+      { " MULTIAPPEND", CAPA_MULTIAPPEND },
+      { " LIST-SUBSCRIBED", CAPA_LISTSUBSCRIBED },
+      { " RIGHTS=kxte", CAPA_ACLRIGHTS },
+      { NULL, 0 } } },
+  { "S01 STARTTLS", "S01 OK", "S01 NO" },
+  { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*", NULL },
+  { "N01 NOOP", "* ", "N01 OK" },
+  { "Q01 LOGOUT", "* ", "Q01 " }
+};
 
 void proxy_gentag(char *tag, size_t len)
 {
@@ -94,7 +140,7 @@ struct backend *proxy_findinboxserver(void)
     if(!r) {
 	r = mlookup(NULL, NULL, inbox, &mbtype, NULL, NULL, &server, NULL, NULL);
 	if (!r && (mbtype & MBTYPE_REMOTE)) {
-	    s = proxy_findserver(server, &protocol[PROTOCOL_IMAP],
+	    s = proxy_findserver(server, &imap_protocol,
 				 proxy_userid, &backend_cached,
 				 &backend_current, &backend_inbox, imapd_in);
 	}
@@ -1263,7 +1309,7 @@ int annotate_fetch_proxy(const char *server, const char *mbox_pat,
     
     assert(server && mbox_pat && entry_pat && attribute_pat);
     
-    be = proxy_findserver(server, &protocol[PROTOCOL_IMAP],
+    be = proxy_findserver(server, &imap_protocol,
 			  proxy_userid, &backend_cached,
 			  &backend_current, &backend_inbox, imapd_in);
     if (!be) return IMAP_SERVER_UNAVAILABLE;
@@ -1299,7 +1345,7 @@ int annotate_store_proxy(const char *server, const char *mbox_pat,
     
     assert(server && mbox_pat && entryatts);
     
-    be = proxy_findserver(server, &protocol[PROTOCOL_IMAP],
+    be = proxy_findserver(server, &imap_protocol,
 			  proxy_userid, &backend_cached,
 			  &backend_current, &backend_inbox, imapd_in);
     if (!be) return IMAP_SERVER_UNAVAILABLE;

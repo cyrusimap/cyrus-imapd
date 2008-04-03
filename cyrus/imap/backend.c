@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: backend.c,v 1.51 2008/03/24 17:09:16 murch Exp $
+ * $Id: backend.c,v 1.52 2008/04/03 21:09:51 murch Exp $
  */
 
 #include <config.h>
@@ -88,7 +88,9 @@ static char *ask_capability(struct protstream *pout, struct protstream *pin,
     
     if (!banner && prot->capa_cmd.cmd) {
 	/* request capabilities of server */
-	prot_printf(pout, "%s\r\n", prot->capa_cmd.cmd);
+	prot_printf(pout, "%s", prot->capa_cmd.cmd);
+	if (prot->capa_cmd.arg) prot_printf(pout, " %s", prot->capa_cmd.arg);
+	prot_printf(pout, "\r\n");
 	prot_flush(pout);
     }
 

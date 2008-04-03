@@ -39,7 +39,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.in,v 1.193 2008/03/24 17:09:15 murch Exp $
+# $Id: Makefile.in,v 1.194 2008/04/03 21:09:51 murch Exp $
 
 DEFINES=-DSETPROCTITLE
 
@@ -100,7 +100,7 @@ LOBJS= append.o mailbox.o mboxlist.o mupdate-client.o mboxname.o message.o \
 	global.o imap_err.o mupdate_err.o proc.o setproctitle.o \
 	convert_code.o duplicate.o saslclient.o saslserver.o signals.o \
 	annotate.o search_engines.o squat.o squat_internal.o mbdump.o \
-	imapparse.o telemetry.o user.o notify.o protocol.o idle.o quota_db.o \
+	imapparse.o telemetry.o user.o notify.o idle.o quota_db.o \
 	sync_log.o $(SEEN) mboxkey.o backend.o tls.o message_guid.o \
 	statuscache_db.o
 

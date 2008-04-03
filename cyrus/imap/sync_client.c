@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_client.c,v 1.32 2008/04/02 15:23:15 murch Exp $
+ * $Id: sync_client.c,v 1.33 2008/04/03 21:09:52 murch Exp $
  *
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
@@ -129,6 +129,19 @@ static struct namespace   sync_namespace;
 static int verbose         = 0;
 static int verbose_logging = 0;
 static int connect_once    = 0;
+
+static struct protocol_t csync_protocol =
+{ "csync", "csync",
+  { 1, "* OK" },
+  { NULL, NULL, "* OK", NULL,
+    { { "* SASL ", CAPA_AUTH },
+      { "* STARTTLS", CAPA_STARTTLS },
+      { NULL, 0 } } },
+  { "STARTTLS", "OK", "NO" },
+  { "AUTHENTICATE", INT_MAX, 0, "OK", "NO", "+ ", "*", NULL },
+  { "NOOP", NULL, "OK" },
+  { "EXIT", NULL, "OK" }
+};
 
 static int do_meta(char *user);
 
@@ -3386,7 +3399,7 @@ struct backend *replica_connect(struct backend *be, const char *servername,
     struct protoent *proto;
 
     for (wait = 15;; wait *= 2) {
-	be = backend_connect(be, servername, &protocol[PROTOCOL_CSYNC],
+	be = backend_connect(be, servername, &csync_protocol,
 			     "", cb, NULL);
 
 	if (be || connect_once || wait > 1000) break;

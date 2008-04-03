@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mupdate-client.c,v 1.55 2008/03/25 18:13:37 murch Exp $
+ * $Id: mupdate-client.c,v 1.56 2008/04/03 21:09:52 murch Exp $
  */
 
 #include <config.h>
@@ -83,6 +83,19 @@
 
 const char service_name[] = "mupdate";
 
+static struct protocol_t mupdate_protocol =
+{ "mupdate", "mupdate",
+  { 1, "* OK" },
+  { NULL, NULL, "* OK", NULL,
+    { { "* AUTH ", CAPA_AUTH },
+      { "* STARTTLS", CAPA_STARTTLS },
+      { NULL, 0 } } },
+  { "S01 STARTTLS", "S01 OK", "S01 NO" },
+  { "A01 AUTHENTICATE", INT_MAX, 1, "A01 OK", "A01 NO", "", "*", NULL },
+  { "N01 NOOP", NULL, "N01 OK" },
+  { "Q01 LOGOUT", NULL, "Q01 " }
+};
+
 int mupdate_connect(const char *server,
 		    const char *port __attribute__((unused)),
 		    mupdate_handle **handle,
@@ -114,7 +127,7 @@ int mupdate_connect(const char *server,
 			       config_getstring(IMAPOPT_MUPDATE_PASSWORD));
     }
 
-    h->conn = backend_connect(NULL, server, &protocol[PROTOCOL_MUPDATE],
+    h->conn = backend_connect(NULL, server, &mupdate_protocol,
 			      "", cbs, &status);
 
     /* xxx unclear that this is correct, but it prevents a memory leak */

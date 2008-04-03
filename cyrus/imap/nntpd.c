@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.63 2008/03/24 17:09:18 murch Exp $
+ * $Id: nntpd.c,v 1.64 2008/04/03 21:09:52 murch Exp $
  */
 
 /*
@@ -269,6 +269,31 @@ static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_PROXY_POLICY, &mysasl_proxy_policy, (void*) &nntp_proxyctx },
     { SASL_CB_CANON_USER, &mysasl_canon_user, NULL },
     { SASL_CB_LIST_END, NULL, NULL }
+};
+
+static char *nntp_parsesuccess(char *str, const char **status)
+{
+    char *success = NULL;
+
+    if (!strncmp(str, "283 ", 4)) {
+	success = str+4;
+    }
+
+    if (status) *status = NULL;
+    return success;
+}
+
+static struct protocol_t nntp_protocol =
+{ "nntp", "nntp",
+  { 0, "20" },
+  { "CAPABILITIES", NULL, ".", NULL,
+    { { "SASL ", CAPA_AUTH },
+      { "STARTTLS", CAPA_STARTTLS },
+      { NULL, 0 } } },
+  { "STARTTLS", "382", "580" },
+  { "AUTHINFO SASL", 512, 0, "28", "48", "383 ", "*", &nntp_parsesuccess },
+  { "DATE", NULL, "111" },
+  { "QUIT", NULL, "205" }
 };
 
 /* proxy mboxlist_lookup; on misses, it asks the listener for this
@@ -1749,7 +1774,7 @@ static int open_group(char *name, int has_prefix, struct backend **ret,
 
     if (newserver) {
 	/* remote group */
-	backend_next = proxy_findserver(newserver, &protocol[PROTOCOL_NNTP],
+	backend_next = proxy_findserver(newserver, &nntp_protocol,
 					nntp_userid ? nntp_userid : "anonymous",
 					&backend_cached, &backend_current,
 					NULL, nntp_in);
@@ -2417,7 +2442,7 @@ void list_proxy(char *server, void *data __attribute__((unused)), void *rock)
     int r;
     char *result;
 
-    be = proxy_findserver(server, &protocol[PROTOCOL_NNTP],
+    be = proxy_findserver(server, &nntp_protocol,
 			  nntp_userid ? nntp_userid : "anonymous",
 			  &backend_cached, &backend_current, NULL, nntp_in);
     if (!be) return;
@@ -3174,7 +3199,7 @@ static int deliver_remote(message_data_t *msg, struct dest *dlist)
 	struct backend *be;
 	char buf[4096];
 
-	be = proxy_findserver(d->server, &protocol[PROTOCOL_NNTP],
+	be = proxy_findserver(d->server, &nntp_protocol,
 			      nntp_userid ? nntp_userid : "anonymous",
 			      &backend_cached, &backend_current,
 			      NULL, nntp_in);

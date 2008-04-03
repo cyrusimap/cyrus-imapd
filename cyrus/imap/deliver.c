@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: deliver.c,v 1.177 2008/03/24 17:09:16 murch Exp $
+ * $Id: deliver.c,v 1.178 2008/04/03 21:09:51 murch Exp $
  */
 
 #include <config.h>
@@ -88,6 +88,21 @@ static int logdebug = 0;
 static struct protstream *deliver_out, *deliver_in;
 
 static const char *sockaddr;
+
+static struct protocol_t lmtp_protocol =
+{ "lmtp", "lmtp",
+  { 0, "220 " },
+  { "LHLO", "deliver", "250 ", NULL,
+    { { "AUTH ", CAPA_AUTH },
+      { "STARTTLS", CAPA_STARTTLS },
+      { "PIPELINING", CAPA_PIPELINING },
+      { "IGNOREQUOTA", CAPA_IGNOREQUOTA },
+      { NULL, 0 } } },
+  { "STARTTLS", "220", "454" },
+  { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL },
+  { "NOOP", NULL, "250" },
+  { "QUIT", NULL, "221" }
+};
 
 /* unused for deliver.c, but needed to make lmtpengine.c happy */
 int deliver_logfd = -1;
@@ -295,7 +310,7 @@ static struct backend *init_net(const char *unixpath)
   conn->out = prot_new(lmtpdsock, 1);
   conn->sock = lmtpdsock;
   prot_setflushonread(conn->in, conn->out);
-  conn->prot = &protocol[PROTOCOL_LMTP];
+  conn->prot = &lmtp_protocol;
 
   return conn;
 }
@@ -315,7 +330,7 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
     }
 
     /* connect */
-    conn = backend_connect(NULL, sockaddr, &protocol[PROTOCOL_LMTP],
+    conn = backend_connect(NULL, sockaddr, &lmtp_protocol,
 			   "", NULL, NULL);
     if (!conn) {
 	just_exit("couldn't connect to lmtpd");

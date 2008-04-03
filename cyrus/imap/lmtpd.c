@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: lmtpd.c,v 1.157 2008/03/24 17:09:17 murch Exp $
+ * $Id: lmtpd.c,v 1.158 2008/04/03 21:09:52 murch Exp $
  */
 
 #include <config.h>
@@ -144,6 +144,21 @@ int deliver_logfd = -1; /* used in lmtpengine.c */
 /* our cached connections */
 mupdate_handle *mhandle = NULL;
 struct backend **backend_cached = NULL;
+
+static struct protocol_t lmtp_protocol =
+{ "lmtp", "lmtp",
+  { 0, "220 " },
+  { "LHLO", "lmtpproxyd", "250 ", NULL,
+    { { "AUTH ", CAPA_AUTH },
+      { "STARTTLS", CAPA_STARTTLS },
+      { "PIPELINING", CAPA_PIPELINING },
+      { "IGNOREQUOTA", CAPA_IGNOREQUOTA },
+      { NULL, 0 } } },
+  { "STARTTLS", "220", "454" },
+  { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL },
+  { "NOOP", NULL, "250" },
+  { "QUIT", NULL, "221" }
+};
 
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
@@ -613,7 +628,7 @@ void deliver_remote(message_data_t *msgdata,
 	}
 	assert(i == d->rnum);
 
-	remote = proxy_findserver(d->server, &protocol[PROTOCOL_LMTP], "",
+	remote = proxy_findserver(d->server, &lmtp_protocol, "",
 				  &backend_cached, NULL, NULL, NULL);
 	if (remote) {
 	    r = lmtp_runtxn(remote, lt);
