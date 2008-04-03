@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ctl_mboxlist.c,v 1.61 2008/03/24 17:09:16 murch Exp $
+ * $Id: ctl_mboxlist.c,v 1.62 2008/04/03 02:06:38 wescraig Exp $
  */
 
 /* currently doesn't catch signals; probably SHOULD */
@@ -518,10 +518,12 @@ void do_dump(enum mboxop op, const char *part, int purge)
 
 	    for (me = wipe_head; me != NULL; me = me->next) count++;
 
-	    fprintf(stderr, "OK to delete %d local mailboxes? ", count);
-	    if (!yes()) {
-		fprintf(stderr, "Cancelled!\n");
-		exit(1);
+	    if ( count > 0 ) {
+		fprintf(stderr, "OK to delete %d local mailboxes? ", count);
+		if (!yes()) {
+		    fprintf(stderr, "Cancelled!\n");
+		    exit(1);
+		}
 	    }
 	}
 
