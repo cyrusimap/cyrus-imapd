@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: parser.c,v 1.47 2008/03/24 20:20:57 murch Exp $
+ * $Id: parser.c,v 1.48 2008/04/03 21:09:52 murch Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -101,6 +101,34 @@ static void cmd_logout(struct protstream *sieved_out,
 static int cmd_authenticate(struct protstream *sieved_out, struct protstream *sieved_in,
 			    mystring_t *mechanism_name, mystring_t *initial_challenge, const char **errmsg);
 static int cmd_starttls(struct protstream *sieved_out, struct protstream *sieved_in);
+
+static char *sieve_parsesuccess(char *str, const char **status)
+{
+    char *success = NULL, *tmp;
+
+    if (!strncmp(str, "OK (", 4) &&
+	(tmp = strstr(str+4, "SASL \"")) != NULL) {
+	success = tmp+6; /* skip SASL " */
+	tmp = strstr(success, "\"");
+	*tmp = '\0'; /* clip " */
+    }
+
+    if (status) *status = NULL;
+    return success;
+}
+
+static struct protocol_t sieve_protocol =
+{ "sieve", SIEVE_SERVICE_NAME,
+  { 1, "OK" },
+  { "CAPABILITY", NULL, "OK", NULL,
+    { { "\"SASL\" ", CAPA_AUTH },
+      { "\"STARTTLS\"", CAPA_STARTTLS },
+      { NULL, 0 } } },
+  { "STARTTLS", "OK", "NO" },
+  { "AUTHENTICATE", INT_MAX, 1, "OK", "NO", NULL, "*", &sieve_parsesuccess },
+  { NULL, NULL, NULL },
+  { "LOGOUT", NULL, "OK" }
+};
 
 /* Returns TRUE if we are done */
 int parser(struct protstream *sieved_out, struct protstream *sieved_in)
@@ -742,7 +770,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
 		  if(c) *c = '\0';
 	      }
 
-	      backend = backend_connect(NULL, server, &protocol[PROTOCOL_SIEVE],
+	      backend = backend_connect(NULL, server, &sieve_protocol,
 					username, NULL, &statusline);
 
 	      if (!backend) {

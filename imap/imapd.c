@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.543 2008/03/25 19:06:27 wescraig Exp $
+ * $Id: imapd.c,v 1.544 2008/04/03 21:09:51 murch Exp $
  */
 
 #include <config.h>
@@ -2855,7 +2855,7 @@ static int catenate_url(const char *s, const char *cur_name, FILE *f,
 		    /* remote mailbox */
 		    struct backend *be;
 
-		    be = proxy_findserver(newserver, &protocol[PROTOCOL_IMAP],
+		    be = proxy_findserver(newserver, &imap_protocol,
 					 proxy_userid, &backend_cached,
 					 &backend_current, &backend_inbox, imapd_in);
 		    if (!s) {
@@ -3047,7 +3047,7 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 	    return;
 	}
 
-	s = proxy_findserver(newserver, &protocol[PROTOCOL_IMAP],
+	s = proxy_findserver(newserver, &imap_protocol,
 			     proxy_userid, &backend_cached,
 			     &backend_current, &backend_inbox, imapd_in);
 	if (!s) r = IMAP_SERVER_UNAVAILABLE;
@@ -3403,7 +3403,7 @@ void cmd_select(char *tag, char *cmd, char *name)
 	    return;
 	}
 
-	backend_next = proxy_findserver(newserver, &protocol[PROTOCOL_IMAP],
+	backend_next = proxy_findserver(newserver, &imap_protocol,
 					proxy_userid, &backend_cached,
 					&backend_current, &backend_inbox,
 					imapd_in);
@@ -4735,7 +4735,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 	   (remove when we move to a unified environment) */
 	struct backend *s = NULL;
 
-	s = proxy_findserver(server, &protocol[PROTOCOL_IMAP],
+	s = proxy_findserver(server, &imap_protocol,
 			     proxy_userid, &backend_cached,
 			     &backend_current, &backend_inbox, imapd_in);
 	if (!s) {
@@ -4772,7 +4772,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 
 	index_check(imapd_mailbox, usinguid, 0);
 
-	s = proxy_findserver(server, &protocol[PROTOCOL_IMAP],
+	s = proxy_findserver(server, &imap_protocol,
 			     proxy_userid, &backend_cached,
 			     &backend_current, &backend_inbox, imapd_in);
 	if (!s) r = IMAP_SERVER_UNAVAILABLE;
@@ -4947,7 +4947,7 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
 	    if (partition) *partition++ = '\0';
 	    if (guessedpart) partition = NULL;
 
-	    s = proxy_findserver(server, &protocol[PROTOCOL_IMAP],
+	    s = proxy_findserver(server, &imap_protocol,
 				 proxy_userid, &backend_cached,
 				 &backend_current, &backend_inbox, imapd_in);
 	    if (!s) r = IMAP_SERVER_UNAVAILABLE;
@@ -5117,7 +5117,7 @@ void cmd_delete(char *tag, char *name, int localonly, int force)
 	    return;
 	}
 
-	s = proxy_findserver(server, &protocol[PROTOCOL_IMAP],
+	s = proxy_findserver(server, &imap_protocol,
 			     proxy_userid, &backend_cached,
 			     &backend_current, &backend_inbox, imapd_in);
 	if (!s) r = IMAP_SERVER_UNAVAILABLE;
@@ -5333,7 +5333,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	struct backend *s = NULL;
 	int res;
 
-	s = proxy_findserver(server, &protocol[PROTOCOL_IMAP],
+	s = proxy_findserver(server, &imap_protocol,
 			     proxy_userid, &backend_cached,
 			     &backend_current, &backend_inbox, imapd_in);
 	if (!s) r = IMAP_SERVER_UNAVAILABLE;
@@ -6272,7 +6272,7 @@ void cmd_setacl(char *tag, const char *name,
 	struct backend *s = NULL;
 	int res;
 
-	s = proxy_findserver(server, &protocol[PROTOCOL_IMAP],
+	s = proxy_findserver(server, &imap_protocol,
 			     proxy_userid, &backend_cached,
 			     &backend_current, &backend_inbox, imapd_in);
 	if (!s) r = IMAP_SERVER_UNAVAILABLE;
@@ -6466,7 +6466,7 @@ void cmd_getquotaroot(const char *tag, const char *name)
 	} else {
 	    struct backend *s;
 
-	    s = proxy_findserver(server, &protocol[PROTOCOL_IMAP],
+	    s = proxy_findserver(server, &imap_protocol,
 				 proxy_userid, &backend_cached,
 				 &backend_current, &backend_inbox, imapd_in);
 	    if (!s) r = IMAP_SERVER_UNAVAILABLE;
@@ -6794,7 +6794,7 @@ void cmd_status(char *tag, char *name)
 	else {
 	    struct backend *s;
 
-	    s = proxy_findserver(server, &protocol[PROTOCOL_IMAP],
+	    s = proxy_findserver(server, &imap_protocol,
 				 proxy_userid, &backend_cached,
 				 &backend_current, &backend_inbox, imapd_in);
 	    if (!s) r = IMAP_SERVER_UNAVAILABLE;
@@ -8208,7 +8208,7 @@ static int do_xfer_single(char *toserver, char *topart,
     /* Step 1: Connect to remote server */
     if(!r && !be_in) {
 	/* Just authorize as the IMAP server, so pass "" as our authzid */
-	be = backend_connect(NULL, toserver, &protocol[PROTOCOL_IMAP],
+	be = backend_connect(NULL, toserver, &imap_protocol,
 			     "", NULL, NULL);
 	if(!be) r = IMAP_SERVER_UNAVAILABLE;
 	if(r) syslog(LOG_ERR,
@@ -8555,7 +8555,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	}
 
 	/* Get a single connection to the remote backend */
-	be = backend_connect(NULL, toserver, &protocol[PROTOCOL_IMAP],
+	be = backend_connect(NULL, toserver, &imap_protocol,
 			     "", NULL, NULL);
 	if(!be) {
 	    r = IMAP_SERVER_UNAVAILABLE;
@@ -9479,7 +9479,7 @@ static int listdata(char *name, int matchlen, int maycreate, void *rock)
 	    struct backend *s;
 
 	    hash_insert(server,  (void *)0xDEADBEEF, &listargs->server_table);
-	    s = proxy_findserver(server, &protocol[PROTOCOL_IMAP],
+	    s = proxy_findserver(server, &imap_protocol,
 				 proxy_userid, &backend_cached,
 				 &backend_current, &backend_inbox, imapd_in);
 	    if (!s) r = IMAP_SERVER_UNAVAILABLE;
@@ -9735,7 +9735,7 @@ void cmd_urlfetch(char *tag)
 	    /* remote mailbox */
 	    struct backend *be;
 
-	    be = proxy_findserver(newserver, &protocol[PROTOCOL_IMAP],
+	    be = proxy_findserver(newserver, &imap_protocol,
 				  proxy_userid, &backend_cached,
 				  &backend_current, &backend_inbox, imapd_in);
 	    if (!be) {

@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: protocol.h,v 1.8 2008/03/24 17:09:18 murch Exp $
+ * $Id: protocol.h,v 1.9 2008/04/03 21:09:52 murch Exp $
  */
 
 #ifndef _INCLUDED_PROTOCOL_H
@@ -47,28 +47,17 @@
 
 #include "saslclient.h"
 
+#define MAX_CAPA 8
+
 enum {
     /* generic capabilities */
     CAPA_AUTH		= (1 << 0),
     CAPA_STARTTLS	= (1 << 1),
 
-    /* IMAP capabilities */
-    CAPA_IDLE		= (1 << 2),
-    CAPA_MUPDATE	= (1 << 3),
-    CAPA_MULTIAPPEND	= (1 << 4),
-    CAPA_LISTSUBSCRIBED	= (1 << 5),
-    CAPA_ACLRIGHTS	= (1 << 6),
-
-    /* LMTP capabilities */
-    CAPA_PIPELINING	= (1 << 2),
-    CAPA_IGNOREQUOTA	= (1 << 3)
-};
-
-#define MAX_CAPA 7
-
-struct capa_t {
-    const char *str;
-    unsigned long flag;
+    /*
+      protocol specific capabilites MUST be in the range
+      (1 << 2) .. (1 << MAX_CAPA)
+    */
 };
 
 struct protocol_t;
@@ -78,8 +67,14 @@ struct banner_t {
     char *resp;			/* end of banner response */
 };
 
+struct capa_t {
+    const char *str;
+    unsigned long flag;
+};
+
 struct capa_cmd_t {
     const char *cmd;		/* [OPTIONAL] capability command string */
+    const char *arg;		/* [OPTIONAL] capability command argument */
     const char *resp;		/* end of capability response */
     char *(*parse_mechlist)(const char *str, struct protocol_t *prot);
 				/* [OPTIONAL] parse capability string,
@@ -109,18 +104,6 @@ struct protocol_t {
     struct sasl_cmd_t sasl_cmd;
     struct simple_cmd_t ping_cmd;
     struct simple_cmd_t logout_cmd;
-};
-
-extern struct protocol_t protocol[];
-
-enum {
-    PROTOCOL_IMAP = 0,
-    PROTOCOL_POP3,
-    PROTOCOL_NNTP,
-    PROTOCOL_LMTP,
-    PROTOCOL_MUPDATE,
-    PROTOCOL_SIEVE,
-    PROTOCOL_CSYNC
 };
 
 #endif /* _INCLUDED_PROTOCOL_H */

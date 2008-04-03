@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: pop3d.c,v 1.184 2008/03/24 17:09:18 murch Exp $
+ * $Id: pop3d.c,v 1.185 2008/04/03 21:09:52 murch Exp $
  */
 
 #include <config.h>
@@ -152,6 +152,19 @@ static struct namespace popd_namespace;
 
 /* PROXY stuff */
 struct backend *backend = NULL;
+
+static struct protocol_t pop3_protocol =
+{ "pop3", "pop",
+  { 0, "+OK " },
+  { "CAPA", NULL, ".", NULL,
+    { { "SASL ", CAPA_AUTH },
+      { "STLS", CAPA_STARTTLS },
+      { NULL, 0 } } },
+  { "STLS", "+OK", "-ERR" },
+  { "AUTH", 255, 0, "+OK", "-ERR", "+ ", "*", NULL },
+  { "NOOP", NULL, "+OK" },
+  { "QUIT", NULL, "+OK" }
+};
 
 static void bitpipe(void);
 /* end PROXY stuff */
@@ -1592,7 +1605,7 @@ int openinbox(void)
 	    memcpy(p, popd_subfolder, n);
 	}
 
-	backend = backend_connect(NULL, server, &protocol[PROTOCOL_POP3],
+	backend = backend_connect(NULL, server, &pop3_protocol,
 				  userid, NULL, &statusline);
 
 	if (!backend) {

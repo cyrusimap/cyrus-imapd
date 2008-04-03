@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: lmtpengine.h,v 1.24 2008/03/24 17:09:17 murch Exp $
+ * $Id: lmtpengine.h,v 1.25 2008/04/03 21:09:52 murch Exp $
  */
 
 #ifndef LMTPENGINE_H
@@ -134,6 +134,12 @@ void lmtpmode(struct lmtp_func *func,
 /************** client-side LMTP ****************/
 
 #include "backend.h"
+
+enum {
+    /* LMTP capabilities */
+    CAPA_PIPELINING	= (1 << 2),
+    CAPA_IGNOREQUOTA	= (1 << 3)
+};
 
 struct lmtp_txn {
     const char *from;
