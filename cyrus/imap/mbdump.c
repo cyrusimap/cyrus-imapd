@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mbdump.c,v 1.39 2008/03/24 17:09:17 murch Exp $
+ * $Id: mbdump.c,v 1.40 2008/04/03 19:24:08 murch Exp $
  */
 
 #include <config.h>
@@ -872,7 +872,8 @@ int undump_mailbox(const char *mbname, const char *mbpath,
         char fname[MAX_MAILBOX_PATH+1];
 	const char *index_base;
 	long int start_offset, record_size;
-	int offset, i;
+	size_t offset;
+	unsigned long i;
  
         strlcpy(fname, mb.path, sizeof(fname));
         strlcat(fname, "/", sizeof(fname));
