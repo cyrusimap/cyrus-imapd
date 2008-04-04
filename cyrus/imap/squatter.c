@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squatter.c,v 1.21 2008/03/24 17:09:19 murch Exp $
+ * $Id: squatter.c,v 1.22 2008/04/04 13:58:59 murch Exp $
  */
 
 /*
@@ -123,10 +123,10 @@ void printastring(const char *s __attribute__((unused)))
 
 /* These stats are gathered 1) per mailbox and 2) for the whole operation. */
 typedef struct {
-  int indexed_bytes;    /* How many bytes of processed message text
+  unsigned long indexed_bytes;    /* How many bytes of processed message text
 			   have we indexed? */
-  int indexed_messages; /* How many messages have we indexed? */
-  int index_size;       /* How many bytes is the index using? */
+  unsigned long indexed_messages; /* How many messages have we indexed? */
+  unsigned long index_size;       /* How many bytes is the index using? */
   time_t start_time;    /* When did this operation start? */
   time_t end_time;      /* When did it end? */
 } SquatStats;
@@ -151,8 +151,8 @@ static void stop_stats(SquatStats* stats) {
 }
 
 static void print_stats(FILE* out, SquatStats* stats) {
-  fprintf(out, "Indexed %d messages (%d bytes) "
-          "into %d index bytes in %d seconds\n",
+  fprintf(out, "Indexed %lu messages (%lu bytes) "
+          "into %lu index bytes in %d seconds\n",
           stats->indexed_messages, stats->indexed_bytes,
           stats->index_size, (int) (stats->end_time - stats->start_time));
 }
