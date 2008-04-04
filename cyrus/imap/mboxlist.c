@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mboxlist.c,v 1.256 2008/03/24 17:09:18 murch Exp $
+ * $Id: mboxlist.c,v 1.257 2008/04/04 11:09:42 murch Exp $
  */
 
 #include <config.h>
@@ -1338,11 +1338,15 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
     if(!r) {
 	r = mailbox_open_locked(oldname, oldpath, oldmpath, oldacl, auth_state,
 				&oldmailbox, 0);
-	oldopen = 1;
+	if (r) {
+	    goto done;
+	} else {
+	    oldopen = 1;
+	}
     }
 
     /* 6. Copy mailbox */
-    if (!r && !(mbtype & MBTYPE_REMOTE)) {
+    if (!(mbtype & MBTYPE_REMOTE)) {
 	/* Rename the actual mailbox */
 	r = mailbox_rename_copy(&oldmailbox, newname, newpartition,
 				NULL, NULL, &newmailbox,
