@@ -1,13 +1,13 @@
 #! /usr/bin/perl -w
-# 
-# Copyright (c) 2000 Carnegie Mellon University.  All rights reserved.
+#
+# Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
 # are met:
 #
 # 1. Redistributions of source code must retain the above copyright
-#    notice, this list of conditions and the following disclaimer. 
+#    notice, this list of conditions and the following disclaimer.
 #
 # 2. Redistributions in binary form must reproduce the above copyright
 #    notice, this list of conditions and the following disclaimer in
@@ -16,14 +16,15 @@
 #
 # 3. The name "Carnegie Mellon University" must not be used to
 #    endorse or promote products derived from this software without
-#    prior written permission. For permission or any other legal
-#    details, please contact  
-#      Office of Technology Transfer
+#    prior written permission. For permission or any legal
+#    details, please contact
 #      Carnegie Mellon University
-#      5000 Forbes Avenue
-#      Pittsburgh, PA  15213-3890
-#      (412) 268-4387, fax: (412) 268-7395
-#      tech-transfer@andrew.cmu.edu
+#      Center for Technology Transfer and Enterprise Creation
+#      4615 Forbes Avenue
+#      Suite 302
+#      Pittsburgh, PA  15213
+#      (412) 268-7393, fax: (412) 268-7395
+#      innovation@andrew.cmu.edu
 #
 # 4. Redistributions of any form whatsoever must retain the following
 #    acknowledgment:
@@ -38,7 +39,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: auditmbox.pl,v 1.5 2006/11/30 17:11:24 murch Exp $
+# $Id: auditmbox.pl,v 1.6 2008/04/04 12:47:12 murch Exp $
 #
 # This script WON'T work for you.  Guaranteed.
 # It checks CMU ECE policy, and your policy *will* be different.
