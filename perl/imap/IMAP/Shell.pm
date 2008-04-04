@@ -38,7 +38,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Shell.pm,v 1.42 2008/04/04 12:47:12 murch Exp $
+# $Id: Shell.pm,v 1.43 2008/04/04 13:44:49 murch Exp $
 #
 # A shell framework for Cyrus::IMAP::Admin
 #
@@ -1808,8 +1808,8 @@ The currently supported attributes are:
 
 =item C<motd>
 
-Sets a "message of the day".  The message gets displayed as an ALERT after
-authentication.
+Sets a "message of the day".  The message gets displayed as an ALERT upon
+connection.
 
 =item C<comment>
 
