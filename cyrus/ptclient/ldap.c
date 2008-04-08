@@ -1,4 +1,4 @@
-/* ldap.c - LDAP Backend to ptloader */
+/* ldap.c - LDAP Backend to ptloader
  *
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
  *
@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ldap.c,v 1.13 2008/03/24 18:34:22 murch Exp $
+ * $Id: ldap.c,v 1.14 2008/04/08 15:29:53 wescraig Exp $
  */
 
 #include <config.h>
