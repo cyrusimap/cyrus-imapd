@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyrusdb_skiplist.c,v 1.60 2008/03/24 17:43:08 murch Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.61 2008/04/09 17:56:57 murch Exp $
  */
 
 /* xxx check retry_xxx for failure */
@@ -145,6 +145,16 @@ enum {
     WRITELOCKED = 2,
 };
 
+struct txn {
+    int ismalloc;
+    int syncfd;
+
+    /* logstart is where we start changes from on commit, where we truncate
+       to on abort */
+    unsigned logstart;
+    unsigned logend;			/* where to write to continue this txn */
+};
+
 struct db {
     /* file data */
     char *fname;
@@ -167,22 +177,20 @@ struct db {
     /* tracking info */
     int lock_status;
     int is_open;
+    struct txn *current_txn;
 
     /* comparator function to use for sorting */
     int (*compar) (const char *s1, int l1, const char *s2, int l2);
 };
 
-struct txn {
-    int ismalloc;
-    int syncfd;
-
-    /* logstart is where we start changes from on commit, where we truncate
-       to on abort */
-    unsigned logstart;
-    unsigned logend;		/* where to write to continue this txn */
+struct db_list {
+    struct db *db;
+    struct db_list *next;
+    int refcount;
 };
 
 static time_t global_recovery = 0;
+static struct db_list *open_db = NULL;
 
 /* Perform an FSYNC/FDATASYNC if we are *not* operating in UNSAFE mode */
 #define DO_FSYNC (!libcyrus_config_getswitch(CYRUSOPT_SKIPLIST_UNSAFE))
@@ -258,6 +266,8 @@ static int myinit(const char *dbdir, int myflags)
     }
 
     srand(time(NULL) * getpid());
+
+    open_db = NULL;
 
     return 0;
 }
@@ -731,10 +741,24 @@ static int dispose_db(struct db *db)
 
 static int myopen(const char *fname, int flags, struct db **ret)
 {
-    struct db *db = (struct db *) xzmalloc(sizeof(struct db));
+    struct db *db;
+    struct db_list *list_ent = open_db;
     int r;
     int new = 0;
 
+    while (list_ent && strcmp(list_ent->db->fname, fname)) {
+	list_ent = list_ent->next;
+    }
+    if (list_ent) {
+	/* we already have this DB open! */
+	syslog(LOG_NOTICE, "skiplist: %s is already open %d time%s, returning object", 
+	fname, list_ent->refcount, list_ent->refcount == 1 ? "" : "s");
+	*ret = list_ent->db;
+	++list_ent->refcount;
+	return 0;
+    }
+
+    db = (struct db *) xzmalloc(sizeof(struct db));
     db->fd = -1;
     db->fname = xstrdup(fname);
     db->compar = (flags & CYRUSDB_MBOXSORT) ? bsearch_ncompare : compare;
@@ -844,12 +868,36 @@ static int myopen(const char *fname, int flags, struct db **ret)
     }
 
     *ret = db;
+
+    /* track this database in the open list */
+    list_ent = (struct db_list *) xzmalloc(sizeof(struct db_list));
+    list_ent->db = db;
+    list_ent->next = open_db;
+    list_ent->refcount = 1;
+    open_db = list_ent;
+
     return 0;
 }
 
 int myclose(struct db *db)
 {
-    return dispose_db(db);
+    struct db_list *list_ent = open_db;
+    struct db_list *prev = NULL;
+
+    /* remove this DB from the open list */
+    while (list_ent && list_ent->db != db) {
+	prev = list_ent;
+	list_ent = list_ent->next;
+    }
+    assert(list_ent);
+    if (--list_ent->refcount <= 0) {
+	if (prev) prev->next = list_ent->next;
+	else open_db = list_ent->next;
+	free(list_ent);
+	return dispose_db(db);
+    }
+
+    return 0;
 }
 
 static int compare(const char *s1, int l1, const char *s2, int l2)
@@ -917,13 +965,18 @@ int myfetch(struct db *db,
     if (datalen) *datalen = 0;
 
     if (!mytid) {
-	/* grab a r lock */
-	if ((r = read_lock(db)) < 0) {
-	    return r;
+	if (db->current_txn == NULL) {
+	    /* grab a r lock */
+	    if ((r = read_lock(db)) < 0) {
+		return r;
+	    }
+	    tp = NULL;
+	} else {
+	    tp = db->current_txn;
+	    update_lock(db, tp);
 	}
-
-	tp = NULL;
     } else if (!*mytid) {
+	assert(db->current_txn == NULL);
 	/* grab a r/w lock */
 	if ((r = write_lock(db, NULL)) < 0) {
 	    return r;
@@ -934,6 +987,7 @@ int myfetch(struct db *db,
 
 	tp = &t;
     } else {
+	assert(db->current_txn == *mytid);
 	tp = *mytid;
 	update_lock(db, tp);
     }
@@ -955,8 +1009,10 @@ int myfetch(struct db *db,
 	    *mytid = xmalloc(sizeof(struct txn));
 	    memcpy(*mytid, tp, sizeof(struct txn));
 	    (*mytid)->ismalloc = 1;
+
+	    db->current_txn = *mytid;
 	}
-    } else {
+    } else if (!tp) {
 	/* release read lock */
 	int r1;
 	if ((r1 = unlock(db)) < 0) {
@@ -1002,13 +1058,18 @@ int myforeach(struct db *db,
     assert(prefixlen >= 0);
 
     if (!tid) {
-	/* grab a r lock */
-	if ((r = read_lock(db)) < 0) {
-	    return r;
+	if (db->current_txn == NULL) {
+	    /* grab a r lock */
+	    if ((r = read_lock(db)) < 0) {
+		return r;
+	    }
+	    tp = NULL;
+	} else {
+	    tp = db->current_txn;
+	    update_lock(db, tp);
 	}
-
-	tp = NULL;
     } else if (!*tid) {
+	assert(db->current_txn == NULL);
 	/* grab a r/w lock */
 	if ((r = write_lock(db, NULL)) < 0) {
 	    return r;
@@ -1019,6 +1080,7 @@ int myforeach(struct db *db,
 
 	tp = &t;
     } else {
+	assert(db->current_txn == *tid);
 	tp = *tid;
 	update_lock(db, tp);
     }
@@ -1035,7 +1097,7 @@ int myforeach(struct db *db,
 	    ino_t ino = db->map_ino;
 	    unsigned long sz = db->map_size;
 
-	    if (!tid) {
+	    if (!tp) {
 		/* release read lock */
 		if ((r = unlock(db)) < 0) {
 		    return r;
@@ -1054,7 +1116,7 @@ int myforeach(struct db *db,
 	    cb_r = cb(rock, KEY(ptr), KEYLEN(ptr), DATA(ptr), DATALEN(ptr));
 	    if (cb_r) break;
 
-	    if (!tid) {
+	    if (!tp) {
 		/* grab a r lock */
 		if ((r = read_lock(db)) < 0) {
 		    return r;
@@ -1096,8 +1158,10 @@ int myforeach(struct db *db,
 	    *tid = xmalloc(sizeof(struct txn));
 	    memcpy(*tid, tp, sizeof(struct txn));
 	    (*tid)->ismalloc = 1;
+
+	    db->current_txn = *tid;
 	}
-    } else {
+    } else if (!tp) {
 	/* release read lock */
 	if ((r = unlock(db)) < 0) {
 	    return r;
@@ -1149,6 +1213,7 @@ int mystore(struct db *db,
     assert(key && keylen);
 
     if (!tid || !*tid) {
+	assert(db->current_txn == NULL);
 	/* grab a r/w lock */
 	if ((r = write_lock(db, NULL)) < 0) {
 	    return r;
@@ -1158,7 +1223,10 @@ int mystore(struct db *db,
 	if ((r = newtxn(db, &t))) return r;
 
 	tp = &t;
+
+	db->current_txn = tp;
     } else {
+	assert(db->current_txn == *tid);
 	tp = *tid;
 	update_lock(db, tp);
     }
@@ -1267,6 +1335,8 @@ int mystore(struct db *db,
 	    *tid = xmalloc(sizeof(struct txn));
 	    memcpy(*tid, tp, sizeof(struct txn));
 	    (*tid)->ismalloc = 1;
+
+	    db->current_txn = *tid;
 	}
 
 	if (be_paranoid) {
@@ -1310,6 +1380,7 @@ int mydelete(struct db *db,
     int r;
 
     if (!tid || !*tid) {
+	assert(db->current_txn == NULL);
 	/* grab a r/w lock */
 	if ((r = write_lock(db, NULL)) < 0) {
 	    return r;
@@ -1319,7 +1390,10 @@ int mydelete(struct db *db,
 	if ((r = newtxn(db, &t))) return r;
 
 	tp = &t;
+
+	db->current_txn = tp;
     } else {
+	assert(db->current_txn == *tid);
 	tp = *tid;
 	update_lock(db, tp);
     }
@@ -1372,6 +1446,8 @@ int mydelete(struct db *db,
 	    *tid = xmalloc(sizeof(struct txn));
 	    memcpy(*tid, tp, sizeof(struct txn));
 	    (*tid)->ismalloc = 1;
+
+	    db->current_txn = *tid;
 	}
 
 	if (be_paranoid) {
@@ -1391,6 +1467,8 @@ int mycommit(struct db *db, struct txn *tid)
     int r = 0;
 
     assert(db && tid);
+
+    assert(db->current_txn == tid);
 
     update_lock(db, tid);
 
@@ -1430,13 +1508,16 @@ int mycommit(struct db *db, struct txn *tid)
     }
 
  done:
+    if (!r)
+	db->current_txn = NULL;
+
     /* consider checkpointing */
     if (!r && tid->logend > (2 * db->logstart + SKIPLIST_MINREWRITE)) {
 	r = mycheckpoint(db, 1);
     }
     
     if (be_paranoid) {
-	assert(myconsistent(db, NULL, 1) == 0);
+	assert(myconsistent(db, db->current_txn, 1) == 0);
     }
 
     if (r) {
@@ -1475,6 +1556,8 @@ int myabort(struct db *db, struct txn *tid)
     int r = 0;
 
     assert(db && tid);
+
+    assert(db->current_txn == tid);
 
     /* update the mmap so we can see the log entries we need to remove */
     update_lock(db, tid);
@@ -1564,6 +1647,8 @@ int myabort(struct db *db, struct txn *tid)
 	free(tid);
     }
 
+    db->current_txn = NULL;
+
     return 0;
 }
 
@@ -1594,6 +1679,9 @@ static int mycheckpoint(struct db *db, int locked)
 	map_refresh(db->fd, 0, &db->map_base, &db->map_len, MAP_UNKNOWN_LEN,
 		    db->fname, 0);
     }
+
+    /* can't be in a transaction */
+    assert(db->current_txn == NULL);
 
     if ((r = myconsistent(db, NULL, 1)) < 0) {
 	syslog(LOG_ERR, "db %s, inconsistent pre-checkpoint, bailing out",
@@ -1869,6 +1957,8 @@ static int myconsistent(struct db *db, struct txn *tid, int locked)
     const char *ptr;
     bit32 offset;
 
+    assert(db->current_txn == tid); /* could both be null */
+
     if (!locked) read_lock(db);
     else if (tid) update_lock(db, tid);
 
@@ -1943,6 +2033,9 @@ static int recovery(struct db *db, int flags)
 	unlock(db);
 	return 0;
     }
+
+    /* can't run recovery inside a txn */
+    assert(db->current_txn == NULL);
 
     db->listsize = 0;
 
