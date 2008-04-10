@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: pop3d.c,v 1.185 2008/04/03 21:09:52 murch Exp $
+ * $Id: pop3d.c,v 1.186 2008/04/10 17:30:19 murch Exp $
  */
 
 #include <config.h>
@@ -1211,7 +1211,7 @@ void cmd_user(char *user)
     unsigned userlen;
 
     /* possibly disallow USER */
-    if (!(kflag || popd_starttls_done ||
+    if (!(kflag || popd_starttls_done || (extprops_ssf > 1) ||
 	  config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
 	prot_printf(popd_out,
 		    "-ERR [AUTH] USER command only available under a layer\r\n");
@@ -1380,7 +1380,7 @@ void cmd_capa()
     prot_printf(popd_out, "AUTH-RESP-CODE\r\n");
 
     if (!popd_mailbox && !backend &&
-	(kflag || popd_starttls_done
+	(kflag || popd_starttls_done || (extprops_ssf > 1)
 	 || config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
 	prot_printf(popd_out, "USER\r\n");
     }

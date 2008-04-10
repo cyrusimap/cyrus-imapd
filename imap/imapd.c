@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.544 2008/04/03 21:09:51 murch Exp $
+ * $Id: imapd.c,v 1.545 2008/04/10 17:30:18 murch Exp $
  */
 
 #include <config.h>
@@ -2000,8 +2000,8 @@ void cmd_login(char *tag, char *user)
     }
 
     /* possibly disallow login */
-    if ((imapd_starttls_done == 0) &&
-	(config_getswitch(IMAPOPT_ALLOWPLAINTEXT) == 0) &&
+    if (!imapd_starttls_done && (extprops_ssf < 2) &&
+	!config_getswitch(IMAPOPT_ALLOWPLAINTEXT) &&
 	!is_userid_anonymous(canon_user)) {
 	eatline(imapd_in, ' ');
 	prot_printf(imapd_out, "%s NO Login only available under a layer\r\n",
@@ -2631,7 +2631,8 @@ void capa_response(int flags)
 	prot_printf(imapd_out, " STARTTLS");
     }
     if (imapd_authstate ||
-	(!imapd_starttls_done && !config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
+	(!imapd_starttls_done && (extprops_ssf < 2) &&
+	 !config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
 	prot_printf(imapd_out, " LOGINDISABLED");
     }
 
