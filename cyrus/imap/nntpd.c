@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.64 2008/04/03 21:09:52 murch Exp $
+ * $Id: nntpd.c,v 1.65 2008/04/10 17:30:19 murch Exp $
  */
 
 /*
@@ -1832,7 +1832,7 @@ static void cmd_capabilities(char *keyword __attribute__((unused)))
     /* add the AUTHINFO variants */
     if (!nntp_authstate) {
 	prot_printf(nntp_out, "AUTHINFO%s%s\r\n",
-		    (nntp_starttls_done ||
+		    (nntp_starttls_done || (extprops_ssf > 1) ||
 		     config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) ?
 		    " USER" : "", mechcount ? " SASL" : "");
     }
@@ -1997,7 +1997,8 @@ static void cmd_authinfo_user(char *user)
     }
 
     /* possibly disallow USER */
-    if (!(nntp_starttls_done || config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
+    if (!(nntp_starttls_done || (extprops_ssf > 1) ||
+	  config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
 	prot_printf(nntp_out,
 		    "483 AUTHINFO USER command only available under a layer\r\n");
 	return;
