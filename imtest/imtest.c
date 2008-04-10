@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imtest.c,v 1.114 2008/03/24 18:55:59 murch Exp $
+ * $Id: imtest.c,v 1.115 2008/04/10 17:06:15 murch Exp $
  */
 
 #include "config.h"
@@ -1874,8 +1874,6 @@ static int auth_pop(void)
     unsigned int passlen;
     
     interaction(SASL_CB_AUTHNAME, NULL, "Authname", &username, &userlen);
-    interaction(SASL_CB_PASS, NULL, "Please enter your password",
-		&pass, &passlen);
     
     printf("C: USER %s\r\n", username);
     prot_printf(pout,"USER %s\r\n", username);
@@ -1889,6 +1887,9 @@ static int auth_pop(void)
     
     if (strncasecmp(str, "+OK ", 4)) return IMTEST_FAIL;
     
+    interaction(SASL_CB_PASS, NULL, "Please enter your password",
+		&pass, &passlen);
+
     printf("C: PASS <omitted>\r\n");
     prot_printf(pout,"PASS %s\r\n",pass);
     prot_flush(pout);
