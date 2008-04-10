@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: reconstruct.c,v 1.105 2008/03/24 17:09:19 murch Exp $
+ * $Id: reconstruct.c,v 1.106 2008/04/10 14:19:51 murch Exp $
  */
 
 #include <config.h>
@@ -341,7 +341,8 @@ int main(int argc, char **argv)
 					    fflag ? &head : NULL);
 	if (rflag) {
 	    /* build a pattern for submailboxes */
-	    /* XXX mboxlist_findall() is destructive and removes domain */
+	    char *p = strchr(buf, '@');
+	    if (p) *p = '\0';
 	    strlcat(buf, ".*", sizeof(buf));
 
 	    /* append the domain */
