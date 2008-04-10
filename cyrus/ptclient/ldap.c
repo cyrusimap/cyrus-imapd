@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ldap.c,v 1.14 2008/04/08 15:29:53 wescraig Exp $
+ * $Id: ldap.c,v 1.15 2008/04/10 18:03:47 wescraig Exp $
  */
 
 #include <config.h>
@@ -858,8 +858,14 @@ static int ptsmodule_get_dn(
             return PTSM_FAIL;
         }
 
-        if ( (entry = ldap_first_entry(ptsm->ld, res)) != NULL )
-            *ret = ldap_get_dn(ptsm->ld, entry);
+	/*
+	 * We don't want to return the *first* entry found, we want to return
+	 * the *only* entry found.
+	 */
+	if ( ldap_count_entries(ptsm->ld, res) == 1 ) {
+	    if ( (entry = ldap_first_entry(ptsm->ld, res)) != NULL )
+		*ret = ldap_get_dn(ptsm->ld, entry);
+	}
 
         ldap_msgfree(res);
         res = NULL;
@@ -879,8 +885,7 @@ static int ptsmodule_make_authstate_attribute(
     char *dn = NULL;
     LDAPMessage *res = NULL;
     LDAPMessage *entry = NULL;
-    char *attr = NULL, **vals = NULL;
-    BerElement *ber = NULL;
+    char **vals = NULL;
     int rc;
     char *attrs[] = {(char *)ptsm->member_attribute,NULL};
 
@@ -909,45 +914,37 @@ static int ptsmodule_make_authstate_attribute(
     }
 
     if ((entry = ldap_first_entry(ptsm->ld, res)) != NULL) {
-        for (attr = ldap_first_attribute(ptsm->ld, entry, &ber); attr != NULL; 
-            attr = ldap_next_attribute(ptsm->ld, entry, ber)) {
-            int i, numvals;
+	int i, numvals;
 
-            vals = ldap_get_values(ptsm->ld, entry, attr);
-            if (vals == NULL)
-                continue;
+	vals = ldap_get_values(ptsm->ld, entry, (char *)ptsm->member_attribute);
+	if (vals != NULL) {
+	    numvals = ldap_count_values( vals );
 
-            for (i = 0; vals[i] != NULL; i++)
-                numvals = i;
-            numvals++;
+	    *dsize = sizeof(struct auth_state) +
+		     (numvals * sizeof(struct auth_ident));
+	    *newstate = xmalloc(*dsize);
+	    if (*newstate == NULL) {
+		*reply = "no memory";
+		rc = PTSM_FAIL;
+		goto done;
+	    }
+	    (*newstate)->ngroups = numvals;
 
-            *dsize = sizeof(struct auth_state) +
-                     (numvals * sizeof(struct auth_ident));
-            *newstate = xmalloc(*dsize);
-            if (*newstate == NULL) {
-                *reply = "no memory";
-                rc = PTSM_FAIL;
-                goto done;
-            }
-            (*newstate)->ngroups = numvals;
-
-            for (i = 0; vals[i] != NULL; i++) {
+	    for (i = 0; i < numvals; i++) {
 		int j;
-                strcpy((*newstate)->groups[i].id, "group:");
+		strcpy((*newstate)->groups[i].id, "group:");
 		for(j =0; j < strlen(vals[i]); j++) {
 		  if(isupper(vals[i][j]))
 		    vals[i][j]=tolower(vals[i][j]);
 		}
-                strlcat((*newstate)->groups[i].id, vals[i], 
-                    sizeof((*newstate)->groups[i].id));
-                (*newstate)->groups[i].hash = strhash((*newstate)->groups[i].id);
-            }
+		strlcat((*newstate)->groups[i].id, vals[i], 
+		    sizeof((*newstate)->groups[i].id));
+		(*newstate)->groups[i].hash = strhash((*newstate)->groups[i].id);
+	    }
 
-            ldap_value_free(vals);
-            vals = NULL;
-            ldap_memfree(attr);
-            attr = NULL;
-        }
+	    ldap_value_free(vals);
+	    vals = NULL;
+	}
     }
 
     if(!*newstate) {
@@ -974,10 +971,6 @@ done:;
         ldap_msgfree(res);
     if (vals)
         ldap_value_free(vals);
-    if (attr)
-        ldap_memfree(attr);
-    if (ber)
-        ber_free(ber, 0);
     if (dn)
         free(dn);
 
@@ -996,8 +989,7 @@ static int ptsmodule_make_authstate_filter(
     int i; int n;
     LDAPMessage *res = NULL;
     LDAPMessage *entry = NULL;
-    char *attr = NULL, **vals = NULL;
-    BerElement *ber = NULL;
+    char **vals = NULL;
     char *attrs[] = {(char *)ptsm->member_attribute,NULL};
     char *dn = NULL;
 
@@ -1059,30 +1051,33 @@ static int ptsmodule_make_authstate_filter(
 
     for (i = 0, entry = ldap_first_entry(ptsm->ld, res); entry != NULL;
          i++, entry = ldap_next_entry(ptsm->ld, entry)) {
-        for (attr = ldap_first_attribute(ptsm->ld, entry, &ber); attr != NULL; 
-            attr = ldap_next_attribute(ptsm->ld, entry, ber)) {
 
-            vals = ldap_get_values(ptsm->ld, entry, attr);
-            if (vals == NULL)
-                continue;
+	vals = ldap_get_values(ptsm->ld, entry, (char *)ptsm->member_attribute);
+	if (vals == NULL)
+	    continue;
 
-	    strcpy((*newstate)->groups[i].id, "group:");
+	if ( ldap_count_values( vals ) != 1 ) {
+	    *reply = "too many values";
+	    rc = PTSM_FAIL;
+	    ldap_value_free(vals);
+	    vals = NULL;
+	    goto done;
+	}
 
-	    int j;
-	    for(j =0; j < strlen(vals[0]); j++) {
-	      if(isupper(vals[0][j]))
-		vals[0][j]=tolower(vals[0][j]);
-	    }
+	strcpy((*newstate)->groups[i].id, "group:");
 
-            strlcat((*newstate)->groups[i].id, vals[0], 
-                sizeof((*newstate)->groups[i].id));
-            (*newstate)->groups[i].hash = strhash((*newstate)->groups[i].id);
+	int j;
+	for(j =0; j < strlen(vals[0]); j++) {
+	  if(isupper(vals[0][j]))
+	    vals[0][j]=tolower(vals[0][j]);
+	}
 
-            ldap_value_free(vals);
-            vals = NULL;
-            ldap_memfree(attr);
-            attr = NULL;
-        }
+	strlcat((*newstate)->groups[i].id, vals[0], 
+	    sizeof((*newstate)->groups[i].id));
+	(*newstate)->groups[i].hash = strhash((*newstate)->groups[i].id);
+
+	ldap_value_free(vals);
+	vals = NULL;
     }
 
     rc = PTSM_OK;
@@ -1091,9 +1086,6 @@ done:;
 
     if (res)
         ldap_msgfree(res);
-    if (ber)
-        ber_free(ber, 0);
-    ber = NULL;
     if (dn)
         free(dn);
     if (filter)
@@ -1116,7 +1108,7 @@ static int ptsmodule_make_authstate_group(
     int i; int n;
     LDAPMessage *res = NULL;
     LDAPMessage *entry = NULL;
-    char *attr = NULL, **vals = NULL;
+    char **vals = NULL;
     char *attrs[] = {NULL};
 
     if (strncmp(canon_id, "group:", 6))  { // Sanity check
