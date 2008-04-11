@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imtest.c,v 1.115 2008/04/10 17:06:15 murch Exp $
+ * $Id: imtest.c,v 1.116 2008/04/11 12:35:18 murch Exp $
  */
 
 #include "config.h"
@@ -2228,7 +2228,7 @@ static struct protocol_t protocols[] = {
     },
     { "lmtp", NULL, "lmtp",
       { 0, "220 ", NULL },
-      { "LHLO example.com", "250 ", "STARTTLS", "AUTH ", NULL },
+      { "LHLO lmtptest", "250 ", "STARTTLS", "AUTH ", NULL },
       { "STARTTLS", "220", "454", 0 },
       { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL },
       &xmtp_do_auth, { "QUIT", "221" },
@@ -2236,7 +2236,7 @@ static struct protocol_t protocols[] = {
     },
     { "smtp", "smtps", "smtp",
       { 0, "220 ", NULL },
-      { "EHLO example.com", "250 ", "STARTTLS", "AUTH ", NULL },
+      { "EHLO smtptest", "250 ", "STARTTLS", "AUTH ", NULL },
       { "STARTTLS", "220", "454", 0 },
       { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL },
       &xmtp_do_auth, { "QUIT", "221" },
