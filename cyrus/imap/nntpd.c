@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.65 2008/04/10 17:30:19 murch Exp $
+ * $Id: nntpd.c,v 1.66 2008/04/11 20:07:00 murch Exp $
  */
 
 /*
@@ -551,6 +551,7 @@ int service_main(int argc __attribute__((unused)),
     char hbuf[NI_MAXHOST];
     int niflags;
     sasl_security_properties_t *secprops=NULL;
+    int shutdown;
     char unavail[1024];
 
     signals_poll();
@@ -626,21 +627,24 @@ int service_main(int argc __attribute__((unused)),
        TLS negotiation immediatly */
     if (nntps == 1) cmd_starttls(1);
 
-    if (shutdown_file(unavail, sizeof(unavail))) {
-	prot_printf(nntp_out,
-		    "400 %s Cyrus NNTP%s %s server unavailable, %s\r\n",
-		    config_servername, config_mupdate_server ? " Murder" : "",
-		    CYRUS_VERSION, unavail);
-
+    if ((shutdown = shutdown_file(unavail, sizeof(unavail)))) {
+	prot_printf(nntp_out, "%u", 400);
+    } else {
+	prot_printf(nntp_out, "%u", (nntp_capa & MODE_READ) ? 200 : 201);
+    }
+    if (config_serverinfo) prot_printf(nntp_out, " %s", config_servername);
+    if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
+	prot_printf(nntp_out, " Cyrus NNTP%s %s",
+		    config_mupdate_server ? " Murder" : "", CYRUS_VERSION);
+    }
+    if (shutdown) {
+	prot_printf(nntp_out, "server unavailable, %s\r\n", unavail);
 	shut_down(0);
     }
-
-    prot_printf(nntp_out,
-		"%u %s Cyrus NNTP%s %s server ready, posting %s\r\n",
-		(nntp_capa & MODE_READ) ? 200 : 201,
-		config_servername, config_mupdate_server ? " Murder" : "",
-		CYRUS_VERSION,
-		(nntp_capa & MODE_READ) ? "allowed" : "prohibited");
+    else {
+	prot_printf(nntp_out, " server ready, posting %s\r\n",
+		    (nntp_capa & MODE_READ) ? "allowed" : "prohibited");
+    }
 
     cmdloop();
 
@@ -1817,9 +1821,11 @@ static void cmd_capabilities(char *keyword __attribute__((unused)))
 
     prot_printf(nntp_out, "101 Capability list follows:\r\n");
     prot_printf(nntp_out, "VERSION 2\r\n");
-    prot_printf(nntp_out,
-		"IMPLEMENTATION Cyrus NNTP%s server %s\r\n",
-		config_mupdate_server ? " Murder" : "", CYRUS_VERSION);
+    if (nntp_authstate || (config_serverinfo == IMAP_ENUM_SERVERINFO_ON)) {
+	prot_printf(nntp_out,
+		    "IMPLEMENTATION Cyrus NNTP%s %s\r\n",
+		    config_mupdate_server ? " Murder" : "", CYRUS_VERSION);
+    }
 
     /* add STARTTLS */
     if (tls_enabled() && !nntp_starttls_done && !nntp_authstate)
@@ -2701,11 +2707,15 @@ static void cmd_mode(char *arg)
     lcase(arg);
 
     if (!strcmp(arg, "reader")) {
-	prot_printf(nntp_out,
-		    "%u %s Cyrus NNTP%s %s server ready, posting %s\r\n",
-		    (nntp_capa & MODE_READ) ? 200 : 201,
-		    config_servername, config_mupdate_server ? " Murder" : "",
-		    CYRUS_VERSION,
+	prot_printf(nntp_out, "%u", (nntp_capa & MODE_READ) ? 200 : 201);
+	if (config_serverinfo || nntp_authstate) {
+	    prot_printf(nntp_out, " %s", config_servername);
+	}
+	if (nntp_authstate || (config_serverinfo == IMAP_ENUM_SERVERINFO_ON)) {
+	    prot_printf(nntp_out, " Cyrus NNTP%s %s",
+			config_mupdate_server ? " Murder" : "", CYRUS_VERSION);
+	}
+	prot_printf(nntp_out, " server ready, posting %s\r\n",
 		    (nntp_capa & MODE_READ) ? "allowed" : "prohibited");
     }
     else if (!strcmp(arg, "stream")) {

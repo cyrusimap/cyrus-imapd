@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: libconfig.c,v 1.17 2008/03/24 17:43:09 murch Exp $
+ * $Id: libconfig.c,v 1.18 2008/04/11 20:07:00 murch Exp $
  */
 
 #include <config.h>
@@ -72,6 +72,7 @@ const char *config_filename= NULL;       /* filename of configuration file */
 const char *config_dir = NULL;		 /* ie /var/imap */
 const char *config_defpartition = NULL;  /* /var/spool/imap */
 const char *config_servername= NULL;	 /* gethostname() */
+enum enum_value config_serverinfo;	 /* on */
 const char *config_mupdate_server = NULL;/* NULL */
 const char *config_defdomain = NULL;     /* NULL */
 const char *config_ident = NULL;         /* the service name */
@@ -281,12 +282,13 @@ void config_read(const char *alt_config)
     config_virtdomains = config_getenum(IMAPOPT_VIRTDOMAINS);
     config_defdomain = config_getstring(IMAPOPT_DEFAULTDOMAIN);
 
-    /* look up the hostname we should present to the user */
+    /* look up the hostname and info we should present to the user */
     config_servername = config_getstring(IMAPOPT_SERVERNAME);
     if (!config_servername) {
 	config_servername = xmalloc(sizeof(char) * 256);
 	gethostname((char *) config_servername, 256);
     }
+    config_serverinfo = config_getenum(IMAPOPT_SERVERINFO);
 
     config_mupdate_server = config_getstring(IMAPOPT_MUPDATE_SERVER);
 

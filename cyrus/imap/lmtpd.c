@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: lmtpd.c,v 1.158 2008/04/03 21:09:52 murch Exp $
+ * $Id: lmtpd.c,v 1.159 2008/04/11 20:07:00 murch Exp $
  */
 
 #include <config.h>
@@ -300,8 +300,13 @@ int service_main(int argc, char **argv,
     } else {
 	syslog(LOG_ERR, "couldn't connect to %s: %s", config_mupdate_server,
 	       error_message(r));
-	prot_printf(deliver_out, "451 %s LMTP Cyrus %s %s\r\n",
-		    config_servername, CYRUS_VERSION, error_message(r));
+	prot_printf(deliver_out, "451");
+	if (config_serverinfo) prot_printf(deliver_out, " %s", config_servername);
+	if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
+	    prot_printf(deliver_out, " Cyrus LMTP%s %s",
+			config_mupdate_server ? " Murder" : "", CYRUS_VERSION);
+	}
+	prot_printf(deliver_out, " %s\r\n", error_message(r));
     }
 
     /* free session state */
