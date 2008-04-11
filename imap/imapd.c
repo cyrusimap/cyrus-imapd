@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.545 2008/04/10 17:30:18 murch Exp $
+ * $Id: imapd.c,v 1.546 2008/04/11 20:06:59 murch Exp $
  */
 
 #include <config.h>
@@ -978,9 +978,13 @@ void cmdloop()
 
     prot_printf(imapd_out, "* OK [CAPABILITY ");
     capa_response(CAPA_PREAUTH);
-    prot_printf(imapd_out, "] %s Cyrus IMAP4 %s%s server ready\r\n",
-		config_servername,
-		config_mupdate_server ? "(Murder) " : "", CYRUS_VERSION);
+    prot_printf(imapd_out, "]");
+    if (config_serverinfo) prot_printf(imapd_out, " %s", config_servername);
+    if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
+	prot_printf(imapd_out, " Cyrus POP3%s %s",
+		    config_mupdate_server ? " Murder" : "", CYRUS_VERSION);
+    }
+    prot_printf(imapd_out, " server ready\r\n");
 
     ret = snprintf(motdfilename, sizeof(motdfilename), "%s/msg/motd",
 		   config_dir);
@@ -2463,7 +2467,8 @@ void cmd_id(char *tag)
 
     /* spit out our ID string.
        eventually this might be configurable. */
-    if (config_getswitch(IMAPOPT_IMAPIDRESPONSE)) {
+    if (config_getswitch(IMAPOPT_IMAPIDRESPONSE) &&
+	(imapd_authstate || (config_serverinfo == IMAP_ENUM_SERVERINFO_ON))) {
 	id_response(imapd_out);
 	prot_printf(imapd_out, ")\r\n");
     }

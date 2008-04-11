@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: pop3d.c,v 1.186 2008/04/10 17:30:19 murch Exp $
+ * $Id: pop3d.c,v 1.187 2008/04/11 20:07:00 murch Exp $
  */
 
 #include <config.h>
@@ -551,9 +551,14 @@ int service_main(int argc __attribute__((unused)),
 	syslog(LOG_WARNING, "APOP disabled: can't create challenge");
     }
 
-    prot_printf(popd_out, "+OK %s Cyrus POP3%s %s server ready %s\r\n",
-		config_servername, config_mupdate_server ? " Murder" : "",
-		CYRUS_VERSION, popd_apop_chal);
+    prot_printf(popd_out, "+OK %s", popd_apop_chal);
+    if (config_serverinfo) prot_printf(popd_out, " %s", config_servername);
+    if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
+	prot_printf(popd_out, " Cyrus POP3%s %s",
+		    config_mupdate_server ? " Murder" : "", CYRUS_VERSION);
+    }
+    prot_printf(popd_out, " server ready\r\n");
+
     cmdloop();
 
     /* QUIT executed */
@@ -1385,9 +1390,11 @@ void cmd_capa()
 	prot_printf(popd_out, "USER\r\n");
     }
     
-    prot_printf(popd_out,
-		"IMPLEMENTATION Cyrus POP3%s server %s\r\n",
-		config_mupdate_server ? " Murder" : "", CYRUS_VERSION);
+    if (popd_authstate || (config_serverinfo == IMAP_ENUM_SERVERINFO_ON)) {
+	prot_printf(popd_out,
+		    "IMPLEMENTATION Cyrus POP3%s %s\r\n",
+		    config_mupdate_server ? " Murder" : "", CYRUS_VERSION);
+    }
 
     prot_printf(popd_out, ".\r\n");
     prot_flush(popd_out);

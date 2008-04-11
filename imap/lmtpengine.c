@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: lmtpengine.c,v 1.125 2008/03/24 17:09:17 murch Exp $
+ * $Id: lmtpengine.c,v 1.126 2008/04/11 20:07:00 murch Exp $
  */
 
 #include <config.h>
@@ -1114,9 +1114,12 @@ void lmtpmode(struct lmtp_func *func,
 	if(haveremote) sasl_setprop(cd.conn, SASL_IPREMOTEPORT, &remoteip);  
     }
 
-    prot_printf(pout, "220 %s LMTP Cyrus %s ready\r\n", 
-		config_servername,
-		CYRUS_VERSION);
+    prot_printf(pout, "220 %s", config_servername);
+    if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
+	prot_printf(pout, " Cyrus LMTP%s %s",
+		    config_mupdate_server ? " Murder" : "", CYRUS_VERSION);
+    }
+    prot_printf(pout, " server ready\r\n");
 
     for (;;) {
     nextcmd:

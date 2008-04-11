@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: libconfig.h,v 1.7 2008/03/24 17:43:09 murch Exp $
+ * $Id: libconfig.h,v 1.8 2008/04/11 20:07:00 murch Exp $
  */
 
 #ifndef INCLUDED_LIBCONFIG_H
@@ -70,6 +70,7 @@ extern const char *config_filename;
 extern const char *config_dir;
 extern const char *config_defpartition;
 extern const char *config_servername;
+extern enum enum_value config_serverinfo;
 extern const char *config_mupdate_server;
 extern const char *config_defdomain;
 extern const char *config_ident;
