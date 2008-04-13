@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.546 2008/04/11 20:06:59 murch Exp $
+ * $Id: imapd.c,v 1.547 2008/04/13 15:40:29 murch Exp $
  */
 
 #include <config.h>
@@ -981,7 +981,7 @@ void cmdloop()
     prot_printf(imapd_out, "]");
     if (config_serverinfo) prot_printf(imapd_out, " %s", config_servername);
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-	prot_printf(imapd_out, " Cyrus POP3%s %s",
+	prot_printf(imapd_out, " Cyrus IMAP%s %s",
 		    config_mupdate_server ? " Murder" : "", CYRUS_VERSION);
     }
     prot_printf(imapd_out, " server ready\r\n");
