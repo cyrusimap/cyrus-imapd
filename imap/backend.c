@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: backend.c,v 1.52 2008/04/03 21:09:51 murch Exp $
+ * $Id: backend.c,v 1.53 2008/04/15 16:50:18 murch Exp $
  */
 
 #include <config.h>
@@ -166,7 +166,8 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
 				sasl_callback_t *cb, const char **status)
 {
     int r;
-    sasl_security_properties_t *secprops = NULL;
+    sasl_security_properties_t secprops =
+	{ 0, 0xFF, PROT_BUFSIZE, 0, NULL, NULL }; /* default secprops */
     struct sockaddr_storage saddr_l, saddr_r;
     char remoteip[60], localip[60];
     socklen_t addrsize;
@@ -210,8 +211,7 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
 	return r;
     }
 
-    secprops = mysasl_secprops(0);
-    r = sasl_setprop(s->saslconn, SASL_SEC_PROPS, secprops);
+    r = sasl_setprop(s->saslconn, SASL_SEC_PROPS, &secprops);
     if (r != SASL_OK) {
 	return r;
     }
