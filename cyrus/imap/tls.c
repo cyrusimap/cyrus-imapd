@@ -43,7 +43,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: tls.c,v 1.64 2008/04/15 16:55:25 murch Exp $
+ * $Id: tls.c,v 1.65 2008/04/15 17:58:08 murch Exp $
  */
 
 /*
@@ -983,7 +983,7 @@ int tls_start_servertls(int readfd, int writefd, int timeout,
 
 	if (authid != NULL) {
 	    /* save the peer id for our caller */
-	    *authid = peer_CN ? xstrdup(peer_CN) : NULL;
+	    *authid = peer_CN[0] ? xstrdup(peer_CN) : NULL;
 	}
 	X509_free(peer);
     }
@@ -1333,7 +1333,7 @@ int tls_start_clienttls(int readfd, int writefd,
 
 	if (authid != NULL) {
 	    /* save the peer id for our caller */
-	    *authid = peer_CN ? xstrdup(peer_CN) : NULL;
+	    *authid = peer_CN[0] ? xstrdup(peer_CN) : NULL;
 	}
 	X509_free(peer);
     }
