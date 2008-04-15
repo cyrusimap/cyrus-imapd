@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: master.c,v 1.110 2008/03/24 17:47:41 murch Exp $
+ * $Id: master.c,v 1.111 2008/04/15 18:11:52 murch Exp $
  */
 
 #include <config.h>
@@ -91,6 +91,11 @@
   #include <net-snmp/agent/net-snmp-agent-includes.h>
 
   #include "cyrusMasterMIB.h"
+
+
+  /* Use our own definitions for these */
+  #undef TOUPPER
+  #undef TOLOWER
 
 #elif defined(HAVE_UCDSNMP)
   #include <ucd-snmp/ucd-snmp-config.h>
