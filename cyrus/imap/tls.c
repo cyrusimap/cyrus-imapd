@@ -43,7 +43,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: tls.c,v 1.63 2008/03/24 17:09:20 murch Exp $
+ * $Id: tls.c,v 1.64 2008/04/15 16:55:25 murch Exp $
  */
 
 /*
@@ -406,6 +406,10 @@ static int set_cert_stuff(SSL_CTX * ctx,
 			  const char *cert_file, const char *key_file)
 {
     if (cert_file != NULL) {
+	/* SSL_CTX_use_certificate_chain_file() requires an empty error stack.
+	 * To make sure there is no error from previous op, we clear it here...
+	 */
+	ERR_clear_error();
 	if (SSL_CTX_use_certificate_chain_file(ctx, cert_file) <= 0) {
 	    syslog(LOG_ERR, "unable to get certificate from '%s'", cert_file);
 	    return (0);
