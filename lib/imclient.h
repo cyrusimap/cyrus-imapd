@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imclient.h,v 1.29 2008/03/24 17:43:09 murch Exp $
+ * $Id: imclient.h,v 1.30 2008/04/15 18:06:29 murch Exp $
  */
 
 #ifndef INCLUDED_IMCLIENT_H
@@ -88,7 +88,7 @@ extern int imclient_authenticate(struct imclient *imclient,
 				 int minssf, 
 				 int maxssf);
 
-extern int imclient_have_tls (void);
+extern int imclient_havetls (void);
 
 extern int imclient_starttls(struct imclient *imclient,
 			     char *cert_file, 
