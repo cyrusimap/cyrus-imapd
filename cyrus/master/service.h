@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: service.h,v 1.17 2008/03/24 17:47:41 murch Exp $
+ * $Id: service.h,v 1.18 2008/04/15 18:06:30 murch Exp $
  */
 
 #ifndef SERVICE_H
@@ -59,7 +59,7 @@ enum {
 extern int service_init(int argc, char **argv, char **envp);
 extern int service_main(int argc, char **argv, char **envp);
 extern int service_main_fd(int fd, int argc, char **argv, char **envp);
-extern int service_abort(int error);
+extern void service_abort(int error);
 
 enum {
     MAX_USE = 250,
