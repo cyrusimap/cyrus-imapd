@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imtest.c,v 1.116 2008/04/11 12:35:18 murch Exp $
+ * $Id: imtest.c,v 1.117 2008/04/21 15:55:01 murch Exp $
  */
 
 #include "config.h"
@@ -1454,13 +1454,21 @@ static void interactive(struct protocol_t *protocol, char *filename)
     return;
 }
 
+enum {
+    AUTO_BANNER = -1,
+    AUTO_NO = 0,
+    AUTO_YES = 1
+};
+
 static char *ask_capability(struct protocol_t *prot,
 			    int *supports_starttls, int automatic)
 {
-    char str[1024];
-    char *ret = NULL, *tmp;
+    char str[1024] = "";
+    char *ret = NULL, *tmp, *resp;
     
     *supports_starttls = 0;
+
+    resp = (automatic == AUTO_BANNER) ? prot->banner.resp : prot->capa_cmd.resp;
 
     if (!automatic) {
 	/* no capability command */
@@ -1474,7 +1482,8 @@ static char *ask_capability(struct protocol_t *prot,
 
     do { /* look for the end of the capabilities */
 	if (prot_fgets(str, sizeof(str), pin) == NULL) {
-	    imtest_fatal("prot layer failure");
+	    if (!*str) imtest_fatal("prot layer failure");
+	    else break;
 	}
 	printf("S: %s", str);
 
@@ -1492,8 +1501,16 @@ static char *ask_capability(struct protocol_t *prot,
 	    else
 		ret = strdup(tmp+strlen(prot->capa_cmd.auth));
 	}
-    } while (strncasecmp(str, prot->capa_cmd.resp, strlen(prot->capa_cmd.resp)));
+
+	if (!resp) {
+	    /* multiline response with no distinct end (IMAP banner) */
+	    prot_NONBLOCK(pin);
+	}
+
+ 	/* look for the end of the capabilities */
+    } while (!resp || strncasecmp(str, resp, strlen(resp)));
     
+    prot_BLOCK(pin);
     return ret;
 }
 
@@ -2205,7 +2222,7 @@ void usage(char *prog, char *prot)
 
 static struct protocol_t protocols[] = {
     { "imap", "imaps", "imap",
-      { 0, "* OK", NULL },
+      { 1, NULL, NULL },
       { "C01 CAPABILITY", "C01 ", " STARTTLS", " AUTH=", &imap_parse_mechlist },
       { "S01 STARTTLS", "S01 OK", "S01 NO", 0 },
       { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*", NULL },
@@ -2279,7 +2296,7 @@ int main(int argc, char **argv)
     char servername[1024];
     char *filename=NULL;
     
-    char *mechlist;
+    char *mechlist = NULL;
     unsigned ext_ssf = 0;
     const void *ssfp;
     sasl_ssf_t ssf;
@@ -2532,7 +2549,12 @@ int main(int argc, char **argv)
 #endif /* HAVE_SSL */
 
 	if (protocol->banner.is_capa) {
-	    mechlist = ask_capability(protocol, &server_supports_tls, 1);
+	    /* try to get the capabilities from the banner */
+	    mechlist = ask_capability(protocol, &server_supports_tls, AUTO_BANNER);
+	    if (!mechlist && !server_supports_tls) {
+		/* found no capabilities in banner -> get them explicitly */
+		protocol->banner.is_capa = 0;
+	    }
 	}
 	else {
 	    do { /* look for the banner response */
@@ -2546,8 +2568,9 @@ int main(int argc, char **argv)
 		    rock = protocol->banner.parse_banner(str);
 	    } while (strncasecmp(str, protocol->banner.resp,
 				 strlen(protocol->banner.resp)));
-	
-	    mechlist = ask_capability(protocol, &server_supports_tls, 0);
+	}	
+	if (!protocol->banner.is_capa) {
+	    mechlist = ask_capability(protocol, &server_supports_tls, AUTO_NO);
 	}
 	
 #ifdef HAVE_SSL

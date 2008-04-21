@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.c,v 1.7 2008/04/03 21:09:51 murch Exp $
+ * $Id: imap_proxy.c,v 1.8 2008/04/21 15:55:01 murch Exp $
  */
 
 #include <config.h>
@@ -106,7 +106,7 @@ static char *imap_parsemechlist(const char *str, struct protocol_t *prot)
 
 struct protocol_t imap_protocol =
 { "imap", "imap",
-  { 0, "* OK" },
+  { 1, NULL },
   { "C01 CAPABILITY", NULL, "C01 ", &imap_parsemechlist,
     { { " AUTH=", CAPA_AUTH },
       { " STARTTLS", CAPA_STARTTLS },
@@ -116,7 +116,7 @@ struct protocol_t imap_protocol =
       { " LIST-SUBSCRIBED", CAPA_LISTSUBSCRIBED },
       { " RIGHTS=kxte", CAPA_ACLRIGHTS },
       { NULL, 0 } } },
-  { "S01 STARTTLS", "S01 OK", "S01 NO" },
+  { "S01 STARTTLS", "S01 OK", "S01 NO", 0 },
   { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*", NULL },
   { "N01 NOOP", "* ", "N01 OK" },
   { "Q01 LOGOUT", "* ", "Q01 " }

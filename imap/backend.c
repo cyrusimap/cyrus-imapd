@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: backend.c,v 1.53 2008/04/15 16:50:18 murch Exp $
+ * $Id: backend.c,v 1.54 2008/04/21 15:55:01 murch Exp $
  */
 
 #include <config.h>
@@ -76,17 +76,26 @@
 #include "iptostring.h"
 #include "util.h"
 
+enum {
+    AUTO_BANNER = -1,
+    AUTO_NO = 0,
+    AUTO_YES = 1
+};
+
 static char *ask_capability(struct protstream *pout, struct protstream *pin,
 			    struct protocol_t *prot, unsigned long *capa,
-			    int banner)
+			    int automatic)
 {
     char str[4096];
     char *ret = NULL, *tmp;
     struct capa_t *c;
+    const char *resp;
 
     *capa = 0;
     
-    if (!banner && prot->capa_cmd.cmd) {
+    resp = (automatic == AUTO_BANNER) ? prot->banner.resp : prot->capa_cmd.resp;
+
+    if (!automatic && prot->capa_cmd.cmd) {
 	/* request capabilities of server */
 	prot_printf(pout, "%s", prot->capa_cmd.cmd);
 	if (prot->capa_cmd.arg) prot_printf(pout, " %s", prot->capa_cmd.arg);
@@ -95,9 +104,7 @@ static char *ask_capability(struct protstream *pout, struct protstream *pin,
     }
 
     do {
-	if (prot_fgets(str, sizeof(str), pin) == NULL) {
-	    return NULL;
-	}
+	if (prot_fgets(str, sizeof(str), pin) == NULL) break;
 
 	/* look for capabilities in the string */
 	for (c = prot->capa_cmd.capa; c->str; c++) {
@@ -112,9 +119,15 @@ static char *ask_capability(struct protstream *pout, struct protstream *pin,
 		}
 	    }
 	}
+	if (!resp) {
+	    /* multiline response with no distinct end (IMAP banner) */
+	    prot_NONBLOCK(pin);
+	}
+
 	/* look for the end of the capabilities */
-    } while (strncasecmp(str, prot->capa_cmd.resp, strlen(prot->capa_cmd.resp)));
+    } while (!resp || strncasecmp(str, resp, strlen(resp)));
     
+    prot_BLOCK(pin);
     return ret;
 }
 
@@ -249,7 +262,9 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
 	/* If we don't have a usable mech, do TLS and try again */
     } while (r == SASL_NOMECH && CAPA(s, CAPA_STARTTLS) &&
 	     do_starttls(s, &prot->tls_cmd) != -1 &&
-	     (*mechlist = ask_capability(s->out, s->in, prot, &s->capability, 0)));
+	     (*mechlist = ask_capability(s->out, s->in, prot,
+					 &s->capability,
+					 prot->tls_cmd.auto_capa)));
 
     /* xxx unclear that this is correct */
     if (local_cb) free_callbacks(cb);
@@ -373,7 +388,16 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
     prot_setflushonread(ret->in, ret->out);
     ret->prot = prot;
     
-    if (!prot->banner.is_capa) {
+    if (prot->banner.is_capa) {
+	/* try to get the capabilities from the banner */
+	mechlist = ask_capability(ret->out, ret->in, prot,
+				  &ret->capability, AUTO_BANNER);
+	if (!mechlist && !ret->capability) {
+	    /* found no capabilities in banner -> get them explicitly */
+	    prot->banner.is_capa = 0;
+	}
+    }
+    else {
 	do { /* read the initial greeting */
 	    if (!prot_fgets(buf, sizeof(buf), ret->in)) {
 		syslog(LOG_ERR,
@@ -387,9 +411,11 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
 			     strlen(prot->banner.resp)));
     }
 
-    /* get the capabilities */
-    mechlist = ask_capability(ret->out, ret->in, prot, &ret->capability,
-			      prot->banner.is_capa);
+    if (!prot->banner.is_capa) {
+	/* get the capabilities */
+	mechlist = ask_capability(ret->out, ret->in, prot,
+				  &ret->capability, AUTO_NO);
+    }
 
     /* now need to authenticate to backend server,
        unless we're doing LMTP/CSYNC on a UNIX socket (deliver/sync_client) */
