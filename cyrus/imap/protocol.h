@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: protocol.h,v 1.9 2008/04/03 21:09:52 murch Exp $
+ * $Id: protocol.h,v 1.10 2008/04/21 15:55:01 murch Exp $
  */
 
 #ifndef _INCLUDED_PROTOCOL_H
@@ -87,6 +87,8 @@ struct tls_cmd_t {
     const char *cmd;		/* tls command string */
     const char *ok;		/* start tls prompt */
     const char *fail;		/* failure response */
+    int auto_capa;		/* capability response sent automatically
+				   after TLS */
 };
 
 struct simple_cmd_t {
