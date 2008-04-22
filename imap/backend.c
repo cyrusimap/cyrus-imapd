@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: backend.c,v 1.54 2008/04/21 15:55:01 murch Exp $
+ * $Id: backend.c,v 1.55 2008/04/22 13:11:17 murch Exp $
  */
 
 #include <config.h>
@@ -270,8 +270,16 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
     if (local_cb) free_callbacks(cb);
 
     if (r == SASL_OK) {
+	const void *ssf;
+
 	prot_setsasl(s->in, s->saslconn);
 	prot_setsasl(s->out, s->saslconn);
+
+	sasl_getprop(s->saslconn, SASL_SSF, &ssf);
+	if (*((sasl_ssf_t *) ssf) && prot->sasl_cmd.auto_capa) {
+	    free(*mechlist);
+	    *mechlist = ask_capability(s->out, s->in, prot, &s->capability, 1);
+	}
     }
 
     /* r == SASL_OK on success */

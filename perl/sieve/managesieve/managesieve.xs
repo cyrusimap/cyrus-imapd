@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: managesieve.xs,v 1.27 2008/04/04 12:47:24 murch Exp $
+ * $Id: managesieve.xs,v 1.28 2008/04/22 13:11:19 murch Exp $
  */
 
 #ifdef __cplusplus
@@ -204,6 +204,7 @@ sieve_get_handle(servername, username_cb, authname_cb, password_cb, realm_cb)
   const char *mtried;
   isieve_t *obj;
   char *p;
+  sasl_ssf_t ssf;
 
   CODE:
 
@@ -277,7 +278,7 @@ sieve_get_handle(servername, username_cb, authname_cb, password_cb, realm_cb)
   /* loop through all the mechanisms */
   do {
     mtried = NULL;
-    r = auth_sasl(mlist, obj, &mtried, &globalerr);
+    r = auth_sasl(mlist, obj, &mtried, &ssf, &globalerr);
 
     if(r) init_sasl(obj, 128, callbacks);
 
@@ -309,6 +310,15 @@ sieve_get_handle(servername, username_cb, authname_cb, password_cb, realm_cb)
 	free(ret);
 	XSRETURN_UNDEF;
   }
+
+  if (ssf) {
+	/* SASL security layer negotiated --
+	   server will automatically send capabilites */
+	free(mechlist);
+	mechlist=read_capability(obj);
+  }
+  free(mechlist);
+
   ST(0) = sv_newmortal();
   sv_setref_pv(ST(0), ret->class, (void *) ret);
 

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.547 2008/04/13 15:40:29 murch Exp $
+ * $Id: imapd.c,v 1.548 2008/04/22 13:11:17 murch Exp $
  */
 
 #include <config.h>
@@ -2149,7 +2149,6 @@ cmd_authenticate(char *tag, char *authtype, char *resp)
     int sasl_result;
 
     const void *val;
-    sasl_ssf_t ssf;
     char *ssfmsg=NULL;
 
     const char *canon_user;
@@ -2244,18 +2243,18 @@ cmd_authenticate(char *tag, char *authtype, char *resp)
 	   authtype, imapd_starttls_done ? "+TLS" : "", "User logged in");
 
     sasl_getprop(imapd_saslconn, SASL_SSF, &val);
-    ssf = *((sasl_ssf_t *) val);
+    saslprops.ssf = *((sasl_ssf_t *) val);
 
     /* really, we should be doing a sasl_getprop on SASL_SSF_EXTERNAL,
        but the current libsasl doesn't allow that. */
     if (imapd_starttls_done) {
-	switch(ssf) {
+	switch(saslprops.ssf) {
 	case 0: ssfmsg = "tls protection"; break;
 	case 1: ssfmsg = "tls plus integrity protection"; break;
 	default: ssfmsg = "tls plus privacy protection"; break;
 	}
     } else {
-	switch(ssf) {
+	switch(saslprops.ssf) {
 	case 0: ssfmsg = "no protection"; break;
 	case 1: ssfmsg = "integrity protection"; break;
 	default: ssfmsg = "privacy protection"; break;
@@ -2266,7 +2265,7 @@ cmd_authenticate(char *tag, char *authtype, char *resp)
 			VARIABLE_AUTH, 0, /* hash_simple(authtype) */
 			VARIABLE_LISTEND);
 
-    if (!ssf) {
+    if (!saslprops.ssf) {
 	prot_printf(imapd_out, "%s OK [CAPABILITY ", tag);
 	capa_response(CAPA_PREAUTH|CAPA_POSTAUTH);
 	prot_printf(imapd_out, "] Success (%s)\r\n", ssfmsg);
@@ -2642,10 +2641,10 @@ void capa_response(int flags)
     }
 
     /* add the SASL mechs */
-    if (!imapd_authstate &&
+    if ((!imapd_authstate || saslprops.ssf) &&
 	sasl_listmech(imapd_saslconn, NULL, 
-		      "AUTH=", " AUTH=", " SASL-IR",
-		      &sasllist,
+		      "AUTH=", " AUTH=",
+		      !imapd_authstate ? " SASL-IR" : "", &sasllist,
 		      NULL, &mechcount) == SASL_OK && mechcount > 0) {
 	prot_printf(imapd_out, " %s", sasllist);      
     } else {

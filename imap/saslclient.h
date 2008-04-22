@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: saslclient.h,v 1.3 2008/03/24 17:09:19 murch Exp $
+ * $Id: saslclient.h,v 1.4 2008/04/22 13:11:18 murch Exp $
  */
 
 #ifndef SASLCLIENT_H
@@ -61,6 +61,8 @@ struct sasl_cmd_t {
     const char *cancel;	/* cancel auth string */
     char *(*parse_success)(char *str, const char **status);
 			/* [OPTIONAL] parse response for success data */
+    int auto_capa;      /* capability response sent automatically
+			   after AUTH with SASL security layer */
 };
 
 sasl_callback_t *mysasl_callbacks(const char *username,

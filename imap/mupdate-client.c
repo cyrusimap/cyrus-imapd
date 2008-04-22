@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mupdate-client.c,v 1.57 2008/04/21 15:55:01 murch Exp $
+ * $Id: mupdate-client.c,v 1.58 2008/04/22 13:11:18 murch Exp $
  */
 
 #include <config.h>
@@ -91,7 +91,7 @@ static struct protocol_t mupdate_protocol =
       { "* STARTTLS", CAPA_STARTTLS },
       { NULL, 0 } } },
   { "S01 STARTTLS", "S01 OK", "S01 NO", 0 },
-  { "A01 AUTHENTICATE", INT_MAX, 1, "A01 OK", "A01 NO", "", "*", NULL },
+  { "A01 AUTHENTICATE", INT_MAX, 1, "A01 OK", "A01 NO", "", "*", NULL, 0 },
   { "N01 NOOP", NULL, "N01 OK" },
   { "Q01 LOGOUT", NULL, "Q01 " }
 };

@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: parser.c,v 1.49 2008/04/21 15:55:01 murch Exp $
+ * $Id: parser.c,v 1.50 2008/04/22 13:11:19 murch Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -125,7 +125,7 @@ static struct protocol_t sieve_protocol =
       { "\"STARTTLS\"", CAPA_STARTTLS },
       { NULL, 0 } } },
   { "STARTTLS", "OK", "NO", 1 },
-  { "AUTHENTICATE", INT_MAX, 1, "OK", "NO", NULL, "*", &sieve_parsesuccess },
+  { "AUTHENTICATE", INT_MAX, 1, "OK", "NO", NULL, "*", &sieve_parsesuccess, 1 },
   { NULL, NULL, NULL },
   { "LOGOUT", NULL, "OK" }
 };
@@ -527,7 +527,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
   const char *serverout=NULL;
   unsigned int serveroutlen;
   const char *errstr=NULL;
-  const void *canon_user;
+  const void *canon_user, *sasl_ssf;
   char *username;
   int ret = TRUE;
 
@@ -819,6 +819,11 @@ static int cmd_authenticate(struct protstream *sieved_out,
 
   prot_setsasl(sieved_in, sieved_saslconn);
   prot_setsasl(sieved_out, sieved_saslconn);
+
+  sasl_getprop(sieved_saslconn, SASL_SSF, &sasl_ssf);
+  if (*((sasl_ssf_t *) sasl_ssf)) {
+      capabilities(sieved_out, sieved_saslconn, starttls_done, 2);
+  }
 
   /* Create telemetry log */
   sieved_logfd = telemetry_log(username, sieved_in, sieved_out, 0);

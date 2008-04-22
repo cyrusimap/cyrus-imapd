@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: isieve.c,v 1.33 2008/04/04 12:47:18 murch Exp $
+ * $Id: isieve.c,v 1.34 2008/04/22 13:11:18 murch Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -353,7 +353,7 @@ static int getauthline(isieve_t *obj, char **line, unsigned int *linelen,
 
 
 int auth_sasl(char *mechlist, isieve_t *obj, const char **mechusing,
-	      char **errstr)
+	      sasl_ssf_t *ssf, char **errstr)
 {
   sasl_interact_t *client_interact=NULL;
   int saslresult=SASL_INTERACT;
@@ -462,6 +462,15 @@ int auth_sasl(char *mechlist, isieve_t *obj, const char **mechusing,
 	      return -1;
       }
 
+      if (ssf) {
+	  const void *ssfp;
+
+	  saslresult = sasl_getprop(obj->conn, SASL_SSF, &ssfp);
+	  if(saslresult != SASL_OK) return -1;
+
+	  *ssf = *((sasl_ssf_t *) ssfp);
+      }
+
       /* turn on layer if need be */
       prot_setsasl(obj->pin,  obj->conn);
       prot_setsasl(obj->pout, obj->conn);
@@ -510,6 +519,7 @@ int do_referral(isieve_t *obj, char *refer_to)
     const char *scheme = "sieve://";
     char *host, *p;
     sasl_callback_t *callbacks;
+    sasl_ssf_t ssf;
 
     /* check scheme */
     if (strncasecmp(refer_to, scheme, strlen(scheme)))
@@ -592,7 +602,7 @@ int do_referral(isieve_t *obj, char *refer_to)
 
     do {
 	mtried = NULL;
-	ret = auth_sasl(mechlist, obj_new, &mtried, &errstr);
+	ret = auth_sasl(mechlist, obj_new, &mtried, &ssf, &errstr);
 	if(ret) init_sasl(obj_new, 128, callbacks);
 
 	if(mtried) {
@@ -619,6 +629,14 @@ int do_referral(isieve_t *obj, char *refer_to)
 
     /* xxx leak? */
     if(ret) return STAT_NO;
+
+    if (ssf) {
+	/* SASL security layer negotiated --
+	   server will automatically send capabilites */
+	free(mechlist);
+	mechlist = read_capability(obj_new);
+    }
+    free(mechlist);
 
     /* free old isieve_t */
     sieve_dispose(obj);

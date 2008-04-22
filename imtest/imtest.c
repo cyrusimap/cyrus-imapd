@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imtest.c,v 1.117 2008/04/21 15:55:01 murch Exp $
+ * $Id: imtest.c,v 1.118 2008/04/22 13:11:18 murch Exp $
  */
 
 #include "config.h"
@@ -194,7 +194,7 @@ struct tls_cmd_t {
     char *cmd;		/* tls command string */
     char *ok;		/* start tls prompt */
     char *fail;		/* failure response */
-    int auto_capa;      /* capa response given automatically after TLS */
+    int auto_capa;      /* capability response sent automatically after TLS */
 };
 
 struct sasl_cmd_t {
@@ -209,6 +209,8 @@ struct sasl_cmd_t {
     char *cancel;	/* cancel auth string */
     char *(*parse_success)(char *str);
 			/* [OPTIONAL] parse response for success data */
+    int auto_capa;      /* capability response sent automatically
+			   after AUTH with SASL security layer */
 };
 
 struct logout_cmd_t {
@@ -2225,7 +2227,7 @@ static struct protocol_t protocols[] = {
       { 1, NULL, NULL },
       { "C01 CAPABILITY", "C01 ", " STARTTLS", " AUTH=", &imap_parse_mechlist },
       { "S01 STARTTLS", "S01 OK", "S01 NO", 0 },
-      { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*", NULL },
+      { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*", NULL, 0 },
       &imap_do_auth, { "Q01 LOGOUT", "Q01 " },
       &imap_init_conn, &generic_pipe, &imap_reset
     },
@@ -2233,21 +2235,21 @@ static struct protocol_t protocols[] = {
       { 0, "+OK ", &pop3_parse_banner },
       { "CAPA", ".", "STLS", "SASL ", NULL },
       { "STLS", "+OK", "-ERR", 0 },
-      { "AUTH", 255, 0, "+OK", "-ERR", "+ ", "*", NULL },
+      { "AUTH", 255, 0, "+OK", "-ERR", "+ ", "*", NULL, 0 },
       &pop3_do_auth, { "QUIT", "+OK" }, NULL, NULL, NULL
     },
     { "nntp", "nntps", "nntp",
       { 0, "20", NULL },
       { "CAPABILITIES", ".", "STARTTLS", "SASL ", NULL },
       { "STARTTLS", "382", "580", 0 },
-      { "AUTHINFO SASL", 512, 0, "28", "48", "383 ", "*", &nntp_parse_success },
+      { "AUTHINFO SASL", 512, 0, "28", "48", "383 ", "*", &nntp_parse_success, 0 },
       &nntp_do_auth, { "QUIT", "205" }, NULL, NULL, NULL
     },
     { "lmtp", NULL, "lmtp",
       { 0, "220 ", NULL },
       { "LHLO lmtptest", "250 ", "STARTTLS", "AUTH ", NULL },
       { "STARTTLS", "220", "454", 0 },
-      { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL },
+      { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL, 0 },
       &xmtp_do_auth, { "QUIT", "221" },
       &xmtp_init_conn, &generic_pipe, &xmtp_reset
     },
@@ -2255,7 +2257,7 @@ static struct protocol_t protocols[] = {
       { 0, "220 ", NULL },
       { "EHLO smtptest", "250 ", "STARTTLS", "AUTH ", NULL },
       { "STARTTLS", "220", "454", 0 },
-      { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL },
+      { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL, 0 },
       &xmtp_do_auth, { "QUIT", "221" },
       &xmtp_init_conn, &generic_pipe, &xmtp_reset
     },
@@ -2263,28 +2265,28 @@ static struct protocol_t protocols[] = {
       { 1, "* OK", NULL },
       { NULL , "* OK", "* STARTTLS", "* AUTH ", NULL },
       { "S01 STARTTLS", "S01 OK", "S01 NO", 1 },
-      { "A01 AUTHENTICATE", INT_MAX, 1, "A01 OK", "A01 NO", "", "*", NULL },
+      { "A01 AUTHENTICATE", INT_MAX, 1, "A01 OK", "A01 NO", "", "*", NULL, 0 },
       NULL, { "Q01 LOGOUT", "Q01 " }, NULL, NULL, NULL
     },
     { "sieve", NULL, SIEVE_SERVICE_NAME,
       { 1, "OK", NULL },
       { "CAPABILITY", "OK", "\"STARTTLS\"", "\"SASL\" ", NULL },
       { "STARTTLS", "OK", "NO", 1 },
-      { "AUTHENTICATE", INT_MAX, 1, "OK", "NO", NULL, "*", &sieve_parse_success },
+      { "AUTHENTICATE", INT_MAX, 1, "OK", "NO", NULL, "*", &sieve_parse_success, 1 },
       NULL, { "LOGOUT", "OK" }, NULL, NULL, NULL
     },
     { "csync", NULL, "csync",
       { 1, "* OK", NULL },
       { NULL , "* OK", "* STARTTLS", "* SASL ", NULL },
       { "STARTTLS", "OK", "NO", 1 },
-      { "AUTHENTICATE", INT_MAX, 0, "OK", "NO", "+ ", "*", NULL },
+      { "AUTHENTICATE", INT_MAX, 0, "OK", "NO", "+ ", "*", NULL, 0 },
       NULL, { "EXIT", "OK" }, NULL, NULL, NULL
     },
     { NULL, NULL, NULL,
       { 0, NULL, NULL },
       { NULL, NULL, NULL, NULL, NULL },
       { NULL, NULL, NULL, 0 },
-      { NULL, 0, 0, NULL, NULL, NULL, NULL, NULL },
+      { NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, 0 },
       NULL, { NULL, NULL }, NULL, NULL, NULL
     }
 };
@@ -2641,6 +2643,15 @@ int main(int argc, char **argv)
 	    printf("SSF: unable to determine (SASL ERROR %d)\n", result);
 	} else {
 	    printf("Security strength factor: %d\n", ext_ssf + ssf);
+
+	    if (ssf && protocol->sasl_cmd.auto_capa) {
+		/* ask for the capabilities again */
+		if (verbose==1)
+		    printf("Asking for capabilities again "
+			   "since they might have changed\n");
+		mechlist = ask_capability(protocol, &server_supports_tls, 1);
+		if (mechlist) free(mechlist);
+	    }
 	}
 
     } while (--reauth);

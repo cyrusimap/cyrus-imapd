@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.67 2008/04/21 15:55:01 murch Exp $
+ * $Id: nntpd.c,v 1.68 2008/04/22 13:11:18 murch Exp $
  */
 
 /*
@@ -291,7 +291,7 @@ static struct protocol_t nntp_protocol =
       { "STARTTLS", CAPA_STARTTLS },
       { NULL, 0 } } },
   { "STARTTLS", "382", "580", 0 },
-  { "AUTHINFO SASL", 512, 0, "28", "48", "383 ", "*", &nntp_parsesuccess },
+  { "AUTHINFO SASL", 512, 0, "28", "48", "383 ", "*", &nntp_parsesuccess, 0 },
   { "DATE", NULL, "111" },
   { "QUIT", NULL, "205" }
 };
