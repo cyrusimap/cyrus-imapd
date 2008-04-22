@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_client.c,v 1.34 2008/04/21 15:55:01 murch Exp $
+ * $Id: sync_client.c,v 1.35 2008/04/22 13:11:18 murch Exp $
  *
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
@@ -138,7 +138,7 @@ static struct protocol_t csync_protocol =
       { "* STARTTLS", CAPA_STARTTLS },
       { NULL, 0 } } },
   { "STARTTLS", "OK", "NO", 0 },
-  { "AUTHENTICATE", INT_MAX, 0, "OK", "NO", "+ ", "*", NULL },
+  { "AUTHENTICATE", INT_MAX, 0, "OK", "NO", "+ ", "*", NULL, 0 },
   { "NOOP", NULL, "OK" },
   { "EXIT", NULL, "OK" }
 };

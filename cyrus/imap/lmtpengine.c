@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: lmtpengine.c,v 1.126 2008/04/11 20:07:00 murch Exp $
+ * $Id: lmtpengine.c,v 1.127 2008/04/22 13:11:18 murch Exp $
  */
 
 #include <config.h>
@@ -1247,6 +1247,14 @@ void lmtpmode(struct lmtp_func *func,
 	      }
 	      user = (const char *) val;
 
+	      r = sasl_getprop(cd.conn, SASL_SSF, &val);
+	      if (r != SASL_OK) {
+		  prot_printf(pout, "501 5.5.4 SASL Error\r\n");
+		  reset_saslconn(&cd.conn);
+		  goto nextcmd;
+	      }
+	      saslprops.ssf = *((sasl_ssf_t *) val);
+
 	      /* Create telemetry log */
 	      deliver_logfd = telemetry_log(user, pin, pout, 0);
 
@@ -1329,7 +1337,7 @@ void lmtpmode(struct lmtp_func *func,
 		  cd.authenticated <= NOAUTH) {
 		  prot_printf(pout, "250-STARTTLS\r\n");
 	      }
-	      if (cd.authenticated <= NOAUTH &&
+	      if ((cd.authenticated <= NOAUTH || saslprops.ssf) &&
 		  sasl_listmech(cd.conn, NULL, "AUTH ", " ", "", &mechs, 
 				NULL, &mechcount) == SASL_OK && 
 		  mechcount > 0) {

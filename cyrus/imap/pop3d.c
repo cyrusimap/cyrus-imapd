@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: pop3d.c,v 1.188 2008/04/21 15:55:01 murch Exp $
+ * $Id: pop3d.c,v 1.189 2008/04/22 13:11:18 murch Exp $
  */
 
 #include <config.h>
@@ -161,7 +161,7 @@ static struct protocol_t pop3_protocol =
       { "STLS", CAPA_STARTTLS },
       { NULL, 0 } } },
   { "STLS", "+OK", "-ERR", 0 },
-  { "AUTH", 255, 0, "+OK", "-ERR", "+ ", "*", NULL },
+  { "AUTH", 255, 0, "+OK", "-ERR", "+ ", "*", NULL, 0 },
   { "NOOP", NULL, "+OK" },
   { "QUIT", NULL, "+OK" }
 };
@@ -1359,7 +1359,7 @@ void cmd_capa()
     prot_printf(popd_out, "+OK List of capabilities follows\r\n");
 
     /* SASL special case: print SASL, then a list of supported capabilities */
-    if (!popd_mailbox && !backend &&
+    if ((!popd_authstate || saslprops.ssf) &&
 	sasl_listmech(popd_saslconn,
 		      NULL, /* should be id string */
 		      "SASL ", " ", "\r\n",
@@ -1368,7 +1368,7 @@ void cmd_capa()
 	prot_write(popd_out, mechlist, strlen(mechlist));
     }
 
-    if (tls_enabled() && !popd_starttls_done && !popd_mailbox && !backend) {
+    if (tls_enabled() && !popd_starttls_done && !popd_authstate) {
 	prot_printf(popd_out, "STLS\r\n");
     }
     if (expire < 0) {
@@ -1384,7 +1384,7 @@ void cmd_capa()
     prot_printf(popd_out, "RESP-CODES\r\n");
     prot_printf(popd_out, "AUTH-RESP-CODE\r\n");
 
-    if (!popd_mailbox && !backend &&
+    if (!popd_authstate &&
 	(kflag || popd_starttls_done || (extprops_ssf > 1)
 	 || config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
 	prot_printf(popd_out, "USER\r\n");
@@ -1534,6 +1534,9 @@ void cmd_auth(char *arg)
     syslog(LOG_NOTICE, "login: %s %s%s %s%s %s", popd_clienthost,
 	   popd_userid, popd_subfolder ? popd_subfolder : "",
 	   authtype, popd_starttls_done ? "+TLS" : "", "User logged in");
+
+    sasl_getprop(popd_saslconn, SASL_SSF, &val);
+    saslprops.ssf = *((sasl_ssf_t *) val);
 
     if (!openinbox()) {
 	prot_setsasl(popd_in,  popd_saslconn);

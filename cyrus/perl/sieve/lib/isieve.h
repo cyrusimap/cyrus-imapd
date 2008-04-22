@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: isieve.h,v 1.11 2008/04/04 12:47:19 murch Exp $
+ * $Id: isieve.h,v 1.12 2008/04/22 13:11:19 murch Exp $
  */
 
 #ifndef ISIEVE_H_
@@ -67,7 +67,7 @@ typedef enum {
     STAT_OK = 2
 } imt_stat;
 
-int auth_sasl(char *mechlist, isieve_t *obj, const char **mechusing, char **errstr);
+int auth_sasl(char *mechlist, isieve_t *obj, const char **mechusing, sasl_ssf_t *ssf, char **errstr);
 
 int isieve_logout(isieve_t **obj);
 int isieve_put_file(isieve_t *obj, char *filename, char *destname,
