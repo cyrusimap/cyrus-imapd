@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: global.c,v 1.26 2008/03/24 17:09:16 murch Exp $
+ * $Id: global.c,v 1.27 2008/04/22 11:06:03 murch Exp $
  */
 
 #include <config.h>
@@ -85,7 +85,7 @@ static enum {
 static int cyrus_init_nodb = 0;
 
 int config_fulldirhash;				/* 0 */
-int config_implicitrights;			/* "lca" */
+int config_implicitrights;			/* "lkxa" */
 unsigned long config_metapartition_files;	/* 0 */
 struct cyrusdb_backend *config_mboxlist_db;
 struct cyrusdb_backend *config_quota_db;
