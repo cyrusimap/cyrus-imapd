@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: libconfig.c,v 1.18 2008/04/11 20:07:00 murch Exp $
+ * $Id: libconfig.c,v 1.19 2008/04/23 11:03:45 murch Exp $
  */
 
 #include <config.h>
@@ -340,7 +340,7 @@ void config_read_file(const char *filename)
     while (fgets(buf+len, bufsize-len, infile)) {
 	if (buf[len]) {
 	    len = strlen(buf);
-	    if (buf[len-1] == '\n') {
+	    if (len && buf[len-1] == '\n') {
 		/* end of line */
 		buf[--len] = '\0';
 
