@@ -1,12 +1,21 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.156 2008/04/11 20:06:59 murch Exp $ -->
+<!-- $Id: changes.html,v 1.157 2008/05/22 16:06:31 murch Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
 <title>Changes to the Cyrus IMAP Server</title>
 </head>
 <body>
+
+<h1>Changes to the Cyrus IMAP Server since 2.3.12</h1>
+<ul>
+<li>Added support for IMAP [CAPABILITY] response code to client-side
+of Murder proxies.</li>
+<li>Added support for ManageSieve auto-capability response after
+STARTTLS and after AUTH with a SASL security layer.</li>
+<li>Fixed miscellaneous bugs and build issues.</li>
+</ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.3.11</h1>
 <ul>
@@ -2335,7 +2344,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2008/04/11 20:06:59 $ <br />
+last modified: $Date: 2008/05/22 16:06:31 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
