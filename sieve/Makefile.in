@@ -40,7 +40,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.in,v 1.44 2008/03/24 20:08:46 murch Exp $
+# $Id: Makefile.in,v 1.45 2008/07/10 16:37:20 murch Exp $
 
 srcdir = @srcdir@
 top_srcdir = @top_srcdir@
@@ -79,9 +79,10 @@ all: libsieve.a sievec sieved
 
 dist: $(BUILT_SOURCES)
 
-install: sievec
+install: sievec sieved
 	$(srcdir)/../install-sh -d ${DESTDIR}$(service_path)
 	$(srcdir)/../install-sh -c -m 755 sievec $(DESTDIR)$(service_path) || exit
+	$(srcdir)/../install-sh -c -m 755 sieved $(DESTDIR)$(service_path) || exit
 
 test: $(DEPLIBS) libsieve.a test.o ../imap/message.o
 	$(CC) $(LDFLAGS) -o test test.o ../imap/message.o \
