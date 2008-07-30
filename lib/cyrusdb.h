@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyrusdb.h,v 1.32 2008/03/24 17:43:08 murch Exp $
+ * $Id: cyrusdb.h,v 1.33 2008/07/30 16:03:38 murch Exp $
  */
 
 #ifndef INCLUDED_CYRUSDB_H
@@ -190,6 +190,7 @@ extern struct cyrusdb_backend cyrusdb_berkeley_hash_nosync;
 extern struct cyrusdb_backend cyrusdb_flat;
 extern struct cyrusdb_backend cyrusdb_skiplist;
 extern struct cyrusdb_backend cyrusdb_quotalegacy;
+extern struct cyrusdb_backend cyrusdb_sql;
 
 extern int cyrusdb_copyfile(const char *srcname, const char *dstname);
 

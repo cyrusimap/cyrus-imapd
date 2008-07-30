@@ -43,7 +43,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\"
-.\" $Id: imapoptions,v 1.53 2008/04/22 11:06:03 murch Exp $
+.\" $Id: imapoptions,v 1.54 2008/07/30 16:03:38 murch Exp $
 
 .SH NAME
 imapd.conf \- IMAP configuration file
@@ -236,7 +236,7 @@ are listed with ``<none>''.
    grant the user the ability to delete a mailbox.  If a user has this
    right, they will automatically be given the new 'x' right. */
 
-{ "duplicate_db", "berkeley-nosync", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist")}
+{ "duplicate_db", "berkeley-nosync", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql")}
 /* The cyrusdb backend to use for the duplicate delivery suppression
    and sieve. */
 
@@ -819,7 +819,7 @@ are listed with ``<none>''.
    strip the default realm from the userid (this does not affect the stripping
    of realms specified by the afspts_localrealms option) */
 
-{ "quota_db", "quotalegacy", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist", "quotalegacy")}
+{ "quota_db", "quotalegacy", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist", "sql", "quotalegacy")}
 /* The cyrusdb backend to use for quotas. */
 
 { "quotawarn", 90, INT }
@@ -956,6 +956,24 @@ product version in the capabilities */
    successfully authenticate.  Otherwise lmtpd returns permanent failures
    (causing the mail to bounce immediately). */
 
+{ "sql_database", NULL, STRING }
+/* Name of the database which contains the cyrusdb table(s). */
+
+{ "sql_engine", NULL, STRINGLIST("mysql", "pgsql", "sqlite") }
+/* Name of the SQL engine to use. */
+
+{ "sql_hostnames", "", STRING }
+/* Comma separated list of SQL servers (in host[:port] format). */
+
+{ "sql_passwd", NULL, STRING }
+/* Password to use for authentication to the SQL server. */
+
+{ "sql_user", NULL, STRING }
+/* Username to use for authentication to the SQL server. */
+
+{ "sql_usessl", 0, SWITCH }
+/* If enabled, a secure connection will be made to the SQL server. */
+
 { "srvtab", "", STRING }
 /* The pathname of \fIsrvtab\fR file containing the server's private
    key.  This option is passed to the SASL library and overrides its
@@ -1026,7 +1044,7 @@ product version in the capabilities */
    have filenames with the hashed value of the certificate (see
    openssl(XXX)). */
 
-{ "tlscache_db", "berkeley-nosync", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist")}
+{ "tlscache_db", "berkeley-nosync", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql")}
 /* The cyrusdb backend to use for the TLS cache. */
 
 { "tls_cert_file", NULL, STRING }

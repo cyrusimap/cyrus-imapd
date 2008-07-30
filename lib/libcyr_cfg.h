@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: libcyr_cfg.h,v 1.11 2008/03/24 17:43:09 murch Exp $
+ * $Id: libcyr_cfg.h,v 1.12 2008/07/30 16:03:39 murch Exp $
  */
 
 #ifndef INCLUDED_LIBCYR_CFG_H
@@ -100,6 +100,18 @@ enum cyrus_opt {
     CYRUSOPT_BERKELEY_TXNS_MAX,
     /* RFC 2086 right which allows DELETE ("c") */
     CYRUSOPT_DELETERIGHT,
+    /* SQL database */
+    CYRUSOPT_SQL_DATABASE,
+    /* SQL engine ("mysql") */
+    CYRUSOPT_SQL_ENGINE,
+    /* SQL hostname(s) ("") */
+    CYRUSOPT_SQL_HOSTNAMES,
+    /* SQL username */
+    CYRUSOPT_SQL_USER,
+    /* SQL password */
+    CYRUSOPT_SQL_PASSWD,
+    /* Secure SQL connection (OFF) */
+    CYRUSOPT_SQL_USESSL,
 
     CYRUSOPT_LAST
     

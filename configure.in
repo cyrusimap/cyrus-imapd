@@ -40,7 +40,7 @@ dnl WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
 dnl AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 dnl OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 dnl
-dnl $Id: configure.in,v 1.305 2008/04/04 12:46:33 murch Exp $
+dnl $Id: configure.in,v 1.306 2008/07/30 16:03:36 murch Exp $
 dnl
 dnl configure.in for the Cyrus imapd
 dnl
@@ -218,6 +218,204 @@ if test "$use_berkeley" != "no"; then
 fi
 
 dnl End Berkeley DB Detection
+
+
+dnl SQL DB Detection
+
+HAVE_SQL=0
+
+dnl MySQL
+AC_ARG_WITH(mysql,  [  --with-mysql=PATH       use MySQL from PATH [[no]] ],
+  with_mysql=$withval, with_mysql=no)
+
+# find location of library 
+# presuming if one given then correct
+if test "${with_mysql}" = "yes"; then
+  with_mysql=notfound
+  for mysqlloc in lib/mysql lib mysql/lib
+  do
+    if test -f ${prefix}/${mysqlloc}/libmysqlclient.a; then
+      with_mysql="${prefix}"
+      break
+    elif test -f /usr/local/${mysqlloc}/libmysqlclient.a; then
+      with_mysql="/usr/local"
+      break
+    elif test -f /usr/${mysqlloc}/libmysqlclient.a; then
+      with_mysql="/usr"
+      break
+    fi
+  done
+fi
+
+LIB_MYSQL_DIR=""
+
+case "$with_mysql" in
+    no) true;;
+    notfound) AC_WARN([MySQL Library not found]); true;;
+    *)
+     if test -d ${with_mysql}/lib/mysql; then
+	CMU_ADD_LIBPATH_TO(${with_mysql}/lib/mysql, LIB_MYSQL_DIR)
+     elif test -d ${with_mysql}/mysql/lib; then
+	CMU_ADD_LIBPATH_TO(${with_mysql}/mysql/lib, LIB_MYSQL_DIR)
+     elif test -d ${with_mysql}/lib; then
+	CMU_ADD_LIBPATH_TO(${with_mysql}/lib, LIB_MYSQL_DIR)
+     else
+	CMU_ADD_LIBPATH_TO(${with_mysql}, LIB_MYSQL_DIR)
+     fi
+
+     if test -d ${with_mysql}/include/mysql; then
+         CPPFLAGS="${CPPFLAGS} -I${with_mysql}/include/mysql"
+     elif test -d ${with_mysql}/mysql/include; then
+         CPPFLAGS="${CPPFLAGS} -I${with_mysql}/mysql/include"
+     elif test -d ${with_mysql}/include; then
+         CPPFLAGS="${CPPFLAGS} -I${with_mysql}/include"
+     else
+         CPPFLAGS="${CPPFLAGS} -I${with_mysql}"
+     fi
+
+     save_mysql_LDFLAGS=$LDFLAGS
+     LDFLAGS="$LDFLAGS $LIB_MYSQL_DIR"
+     AC_CHECK_LIB(mysqlclient, mysql_select_db,
+         AC_DEFINE(HAVE_MYSQL, [], [Do we have MySQL support?]),
+         [AC_WARN([MySQL library mysqlclient does not work])
+	 with_mysql=no])
+     LDFLAGS=$save_mysql_LDFLAGS
+         
+     if test "${with_mysql}" != "no"; then
+         LDFLAGS="$LDFLAGS $LIB_MYSQL_DIR"
+         LIBS="$LIBS -lmysqlclient"
+	 HAVE_SQL=1
+     fi
+     ;;
+esac
+
+dnl PgSQL
+AC_ARG_WITH(pgsql,  [  --with-pgsql=PATH       use PostgreSQL from PATH [[no]] ],
+  with_pgsql=$withval, with_pgsql=no)
+
+# find location of library 
+# presuming if one given then correct
+if test "${with_pgsql}" = "yes"; then
+  with_pgsql=notfound
+  for pgsqlloc in lib/pgsql lib pgsql/lib
+  do
+    if test -f ${prefix}/${pgsqlloc}/libpq.a -o -f ${prefix}/${pgsqlloc}/libpq.so; then
+      with_pgsql="${prefix}"
+      break
+    elif test -f /usr/local/${pgsqlloc}/libpq.a -o -f /usr/local/${pgsqlloc}/libpq.so; then
+      with_pgsql="/usr/local"
+      break
+    elif test -f /usr/${pgsqlloc}/libpq.a -o -f /usr/${pgsqlloc}/libpq.so; then
+      with_pgsql="/usr"
+      break
+    fi
+  done
+fi
+
+LIB_PGSQL_DIR=""
+
+case "$with_pgsql" in
+    no) true;;
+    notfound) AC_WARN([PostgreSQL Library not found]); true;;
+    *)
+     if test -d ${with_pgsql}/lib/pgsql; then
+	CMU_ADD_LIBPATH_TO(${with_pgsql}/lib/pgsql, LIB_PGSQL_DIR)
+     elif test -d ${with_pgsql}/pgsql/lib; then
+	CMU_ADD_LIBPATH_TO(${with_pgsql}/pgsql/lib, LIB_PGSQL_DIR)
+     elif test -d ${with_pgsql}/lib; then
+	CMU_ADD_LIBPATH_TO(${with_pgsql}/lib, LIB_PGSQL_DIR)
+     else
+	CMU_ADD_LIBPATH_TO(${with_pgsql}, LIB_PGSQL_DIR)
+     fi
+
+     if test -d ${with_pgsql}/include/pgsql; then
+         CPPFLAGS="${CPPFLAGS} -I${with_pgsql}/include/pgsql"
+     elif test -d ${with_pgsql}/pgsql/include; then
+         CPPFLAGS="${CPPFLAGS} -I${with_pgsql}/pgsql/include"
+     elif test -d ${with_pgsql}/include; then
+         CPPFLAGS="${CPPFLAGS} -I${with_pgsql}/include"
+     else
+         CPPFLAGS="${CPPFLAGS} -I${with_pgsql}"
+     fi
+
+     save_pgsql_LDFLAGS=$LDFLAGS
+     LDFLAGS="$LDFLAGS $LIB_PGSQL_DIR"
+     AC_CHECK_LIB(pq, PQsetdbLogin,
+         AC_DEFINE(HAVE_PGSQL, [], [Do we have Postgres support?]),
+         [AC_WARN([PostgreSQL Library pq does not work])
+	 with_pgsql=no])
+     LDFLAGS=$save_pgsql_LDFLAGS
+
+     if test "${with_pgsql}" != "no"; then
+         LDFLAGS="$LDFLAGS $LIB_PGSQL_DIR"
+         LIBS="$LIBS -lpq"
+	 HAVE_SQL=1
+     fi
+     ;;
+esac
+
+dnl SQLite
+AC_ARG_WITH(sqlite,  [  --with-sqlite=PATH      use SQLite from PATH [[no]] ],
+  with_sqlite=$withval, with_sqlite=no)
+
+# find location of library 
+# presuming if one given then correct
+if test "${with_sqlite}" = "yes"; then
+  with_sqlite=notfound
+  for sqliteloc in lib
+  do
+    if test -f ${prefix}/${sqliteloc}/libsqlite3.a -o -f ${prefix}/${sqliteloc}/libsqlite3.so; then
+      with_sqlite="${prefix}"
+      break
+    elif test -f /usr/local/${sqliteloc}/libsqlite3.a -o -f /usr/local/${sqliteloc}/libsqlite3.so; then
+      with_sqlite="/usr/local"
+      break
+    elif test -f /usr/${sqliteloc}/libsqlite3.a -o -f /usr/${sqliteloc}/libsqlite3.so; then
+      with_sqlite="/usr"
+      break
+    fi
+  done
+fi
+
+LIB_SQLITE_DIR=""
+
+case "$with_sqlite" in
+    no) true;;
+    notfound) AC_WARN([SQLite Library not found]); true;;
+    *)
+     if test -d ${with_sqlite}/lib; then
+         CMU_ADD_LIBPATH_TO(${with_sqlite}/lib, LIB_SQLITE_DIR)
+     else
+         CMU_ADD_LIBPATH_TO(${with_sqlite}, LIB_SQLITE_DIR)
+     fi
+
+     if test -d ${with_sqlite}/include; then
+         CPPFLAGS="${CPPFLAGS} -I${with_sqlite}/include"
+     else
+         CPPFLAGS="${CPPFLAGS} -I${with_sqlite}"
+     fi
+
+     save_sqlite_LDFLAGS=$LDFLAGS
+     LDFLAGS="$LDFLAGS $LIB_SQLITE_DIR"
+     AC_CHECK_LIB(sqlite3, sqlite3_open,
+         AC_DEFINE(HAVE_SQLITE, [], [Do we have SQLite support?]),
+         [AC_WARN([SQLite library sqlite does not work])
+	 with_sqlite=no])
+     LDFLAGS=$save_sqlite_LDFLAGS
+
+     if test "${with_sqlite}" != "no"; then
+         LDFLAGS="$LDFLAGS $LIB_SQLITE_DIR"
+         LIBS="$LIBS -lsqlite3"
+	 HAVE_SQL=1
+     fi
+     ;;
+esac
+
+if test $HAVE_SQL = 1; then
+  CYRUSDB_OBJS="${CYRUSDB_OBJS} cyrusdb_sql.o"
+fi
+
+dnl End SQL DB Detection
 
 AC_SUBST(CYRUSDB_OBJS)
 
@@ -1051,7 +1249,7 @@ for flag in ${ldflags} ${default_ldflags}; do
 done
 
 IMAP_COM_ERR_LIBS="${COM_ERR_LIBS}"
-IMAP_LIBS="${LIB_SASL} ${LIBS}"
+IMAP_LIBS="${LIB_SASL} ${LIBS} ${SQL_LIBS}"
 
 AC_SUBST(LIB_RT)
 AC_SUBST(IMAP_COM_ERR_LIBS)
@@ -1108,7 +1306,7 @@ AH_TOP([
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: configure.in,v 1.305 2008/04/04 12:46:33 murch Exp $
+ * $Id: configure.in,v 1.306 2008/07/30 16:03:36 murch Exp $
  */
 
 #ifndef _CYRUS_IMAPD_CONFIG_H_

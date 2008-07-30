@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyrusdb.c,v 1.12 2008/03/24 17:43:08 murch Exp $
+ * $Id: cyrusdb.c,v 1.13 2008/07/30 16:03:38 murch Exp $
  */
 
 #include <config.h>
@@ -72,6 +72,9 @@ struct cyrusdb_backend *cyrusdb_backends[] = {
     &cyrusdb_flat,
     &cyrusdb_skiplist,
     &cyrusdb_quotalegacy,
+#if defined HAVE_MYSQL || defined HAVE_PGSQL || defined HAVE_SQLITE
+    &cyrusdb_sql,
+#endif
     NULL };
 
 void cyrusdb_init() 
