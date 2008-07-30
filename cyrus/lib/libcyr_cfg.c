@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: libcyr_cfg.c,v 1.15 2008/03/24 17:43:09 murch Exp $
+ * $Id: libcyr_cfg.c,v 1.16 2008/07/30 16:03:38 murch Exp $
  */
 
 #include <config.h>
@@ -125,6 +125,30 @@ struct cyrusopt_s cyrus_options[] = {
     { CYRUSOPT_DELETERIGHT,
       CFGVAL(const char *, "c"),
       CYRUS_OPT_STRING },
+
+    { CYRUSOPT_SQL_DATABASE,
+      CFGVAL(const char *, NULL),
+      CYRUS_OPT_STRING },
+
+    { CYRUSOPT_SQL_ENGINE,
+      CFGVAL(const char *, "mysql"),
+      CYRUS_OPT_STRING },
+
+    { CYRUSOPT_SQL_HOSTNAMES,
+      CFGVAL(const char *, ""),
+      CYRUS_OPT_STRING },
+
+    { CYRUSOPT_SQL_USER,
+      CFGVAL(const char *, NULL),
+      CYRUS_OPT_STRING },
+
+    { CYRUSOPT_SQL_PASSWD,
+      CFGVAL(const char *, NULL),
+      CYRUS_OPT_STRING },
+
+    { CYRUSOPT_SQL_USESSL,
+      CFGVAL(long, 0),
+      CYRUS_OPT_SWITCH },
 
     { CYRUSOPT_LAST, { NULL }, CYRUS_OPT_NOTOPT }
 };

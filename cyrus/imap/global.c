@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: global.c,v 1.27 2008/04/22 11:06:03 murch Exp $
+ * $Id: global.c,v 1.28 2008/07/30 16:03:37 murch Exp $
  */
 
 #include <config.h>
@@ -225,6 +225,18 @@ int cyrus_init(const char *alt_config, const char *ident, unsigned flags)
 			       config_getint(IMAPOPT_BERKELEY_TXNS_MAX));
 	libcyrus_config_setstring(CYRUSOPT_DELETERIGHT,
 				  config_getstring(IMAPOPT_DELETERIGHT));
+	libcyrus_config_setstring(CYRUSOPT_SQL_DATABASE,
+				  config_getstring(IMAPOPT_SQL_DATABASE));
+	libcyrus_config_setstring(CYRUSOPT_SQL_ENGINE,
+				  config_getstring(IMAPOPT_SQL_ENGINE));
+	libcyrus_config_setstring(CYRUSOPT_SQL_HOSTNAMES,
+				  config_getstring(IMAPOPT_SQL_HOSTNAMES));
+	libcyrus_config_setstring(CYRUSOPT_SQL_USER,
+				  config_getstring(IMAPOPT_SQL_USER));
+	libcyrus_config_setstring(CYRUSOPT_SQL_PASSWD,
+				  config_getstring(IMAPOPT_SQL_PASSWD));
+	libcyrus_config_setswitch(CYRUSOPT_SQL_USESSL,
+				  config_getswitch(IMAPOPT_SQL_USESSL));
 
 	/* Not until all configuration parameters are set! */
 	libcyrus_init();
