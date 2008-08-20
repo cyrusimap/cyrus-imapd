@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.548 2008/04/22 13:11:17 murch Exp $
+ * $Id: imapd.c,v 1.549 2008/08/20 20:34:48 wescraig Exp $
  */
 
 #include <config.h>
@@ -120,6 +120,7 @@ const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 static char shutdownfilename[1024];
 static int imaps = 0;
 static sasl_ssf_t extprops_ssf = 0;
+static nosaslpasswdcheck = 0;
 
 /* PROXY STUFF */
 /* we want a list of our outgoing connections here and which one we're
@@ -662,7 +663,7 @@ int service_init(int argc, char **argv, char **envp)
     snmp_connect(); /* ignore return code */
     snmp_set_str(SERVER_NAME_VERSION,CYRUS_VERSION);
 
-    while ((opt = getopt(argc, argv, "sp:")) != EOF) {
+    while ((opt = getopt(argc, argv, "sp:N")) != EOF) {
 	switch (opt) {
 	case 's': /* imaps (do starttls right away) */
 	    imaps = 1;
@@ -674,6 +675,10 @@ int service_init(int argc, char **argv, char **envp)
 	    break;
 	case 'p': /* external protection */
 	    extprops_ssf = atoi(optarg);
+	    break;
+	case 'N': /* bypass SASL password check.  Not recommended unless
+		   * you know what you're doing! */
+	    nosaslpasswdcheck = 1;
 	    break;
 	default:
 	    break;
@@ -2045,6 +2050,15 @@ void cmd_login(char *tag, char *user)
 	    freebuf(&passwdbuf);
 	    return;
 	}
+    }
+    else if ( nosaslpasswdcheck ) {
+	reply = "User logged in";
+	imapd_userid = xstrdup(canon_user);
+	imapd_authstate = auth_newstate(canon_user);
+	syslog(LOG_NOTICE, "login: %s %s%s nopassword%s %s", imapd_clienthost,
+	       imapd_userid, imapd_magicplus ? imapd_magicplus : "",
+	       imapd_starttls_done ? "+TLS" : "", 
+	       reply ? reply : "");
     }
     else if ((r = sasl_checkpass(imapd_saslconn,
 				 canon_user,
