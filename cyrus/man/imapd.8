@@ -40,7 +40,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\"
-.\" $Id: imapd.8,v 1.16 2008/04/04 12:46:54 murch Exp $
+.\" $Id: imapd.8,v 1.17 2008/08/20 20:41:16 wescraig Exp $
 .SH NAME
 imapd \- IMAP server process
 .SH SYNOPSIS
@@ -63,6 +63,9 @@ imapd \- IMAP server process
 .br
       [
 .B \-s
+]
+[
+.B \-N
 ]
 [
 .B \-p
@@ -137,6 +140,9 @@ Run external debugger specified in debug_command.
 Serve IMAP over SSL (imaps).  All data to and from
 .I imapd
 is encrypted using the Secure Sockets Layer.
+.TP
+.BI \-N
+Bypass password checking.  (Not recommended unless you know what you're doing.)
 .TP
 .BI \-p " ssf"
 Tell
