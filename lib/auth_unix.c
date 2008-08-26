@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: auth_unix.c,v 1.50 2008/03/24 17:43:08 murch Exp $
+ * $Id: auth_unix.c,v 1.51 2008/08/26 19:20:39 wescraig Exp $
  */
 
 #include <config.h>
@@ -176,7 +176,9 @@ size_t len;
     
     if (!strncmp(retbuf, "group:", 6)) {
 	grp = getgrnam(retbuf+6);
-	if (!grp) return 0;
+	if (!grp) return NULL;
+	if (strlen(grp->gr_name) >= sizeof(retbuf)-6)
+		return NULL;
 	strcpy(retbuf+6, grp->gr_name);
 	return retbuf;
     }
