@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imtest.c,v 1.118 2008/04/22 13:11:18 murch Exp $
+ * $Id: imtest.c,v 1.119 2008/08/27 08:28:47 selsky Exp $
  */
 
 #include "config.h"
@@ -2472,7 +2472,7 @@ int main(int argc, char **argv)
 	imtest_fatal("unknown protocol\n");
     
     if (dossl && !protocol->sprotocol)
-	imtest_fatal("protocol can not be SSL-wrapped\n");
+	imtest_fatal("protocol cannot be SSL-wrapped\n");
 
     if (run_stress_test && strcmp(protocol->protocol, "imap"))
 	imtest_fatal("stress test can only be run for IMAP\n");
@@ -2530,7 +2530,7 @@ int main(int argc, char **argv)
 	}
 
 	if (init_net(servername, port) != IMTEST_OK) {
-	    imtest_fatal("Network initialization - can not connect to %s:%s",
+	    imtest_fatal("Network initialization - cannot connect to %s:%s",
 			 servername, port);
 	}
     

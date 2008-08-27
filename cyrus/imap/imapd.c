@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.549 2008/08/20 20:34:48 wescraig Exp $
+ * $Id: imapd.c,v 1.550 2008/08/27 08:28:46 selsky Exp $
  */
 
 #include <config.h>
@@ -2850,7 +2850,7 @@ static int catenate_url(const char *s, const char *cur_name, FILE *f,
 	r = IMAP_BADURL;
 #if 0
     } else if (url.server && strcmp(url.server, config_servername)) {
-	*parseerr = "Can not catenate messages from another server";
+	*parseerr = "Cannot catenate messages from another server";
 	r = IMAP_BADURL;
 #endif
     } else if (!url.mailbox && !imapd_mailbox && !cur_name) {
@@ -3730,7 +3730,7 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 		}
 		while (isdigit((int) *p) || *p == '.') {
 		    if (*p == '.' && !isdigit((int) p[-1])) break;
-		    /* Part number can not begin with '0' */
+		    /* Part number cannot begin with '0' */
 		    if (*p == '0' && !isdigit((int) p[-1])) break;
 		    p++;
 		}
@@ -9913,7 +9913,7 @@ void cmd_genurlauth(char *tag)
     r = mboxkey_open(imapd_userid, MBOXKEY_CREATE, &mboxkey_db);
     if (r) {
 	prot_printf(imapd_out,
-		   "%s NO Can not open mailbox key db for %s: %s\r\n",
+		   "%s NO Cannot open mailbox key db for %s: %s\r\n",
 		   tag, imapd_userid, error_message(r));
 	return;
     }

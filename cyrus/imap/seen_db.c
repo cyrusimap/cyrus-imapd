@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: seen_db.c,v 1.59 2008/03/24 17:09:19 murch Exp $
+ * $Id: seen_db.c,v 1.60 2008/08/27 08:28:47 selsky Exp $
  */
 
 #include <config.h>
@@ -488,7 +488,7 @@ int seen_delete_user(const char *user)
     /* erp! */
     r = unlink(fname);
     if (r < 0 && errno == ENOENT) {
-	syslog(LOG_DEBUG, "can not unlink %s: %m", fname);
+	syslog(LOG_DEBUG, "cannot unlink %s: %m", fname);
 	/* but maybe the user just never read anything? */
 	r = 0;
     }
