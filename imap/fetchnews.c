@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: fetchnews.c,v 1.20 2008/03/24 17:09:16 murch Exp $
+ * $Id: fetchnews.c,v 1.21 2008/08/27 08:28:46 selsky Exp $
  */
 
 #include <config.h>
@@ -408,11 +408,11 @@ int main(int argc, char *argv[])
 	}
 
 	if ((fd = open(sfile, O_RDWR | O_CREAT, 0644)) == -1) {
-	    syslog(LOG_ERR, "can not open %s", sfile);
+	    syslog(LOG_ERR, "cannot open %s", sfile);
 	    goto quit;
 	}
 	if (lock_nonblocking(fd) == -1) {
-	    syslog(LOG_ERR, "can not lock %s: %m", sfile);
+	    syslog(LOG_ERR, "cannot lock %s: %m", sfile);
 	    goto quit;
 	}
 

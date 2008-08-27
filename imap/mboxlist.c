@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mboxlist.c,v 1.257 2008/04/04 11:09:42 murch Exp $
+ * $Id: mboxlist.c,v 1.258 2008/08/27 08:28:47 selsky Exp $
  */
 
 #include <config.h>
@@ -314,7 +314,7 @@ int mboxlist_update(char *name, int flags, const char *part, const char *acl,
 	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
 	if(r) {
 	    syslog(LOG_ERR,
-		   "can not connect to mupdate server for update of '%s'",
+		   "cannot connect to mupdate server for update of '%s'",
 		   name);
 	} else {
 	    r = mupdate_activate(mupdate_h, name, buf, acl);
@@ -638,7 +638,7 @@ int mboxlist_createmailbox(char *name, int mbtype, char *partition,
 	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
 	if(r) {
 	    syslog(LOG_ERR,
-		   "can not connect to mupdate server for reservation on '%s'",
+		   "cannot connect to mupdate server for reservation on '%s'",
 		   name);
 	    goto done;
 	}
@@ -1095,7 +1095,7 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
 	if(r) {
 	    syslog(LOG_ERR,
-		   "can not connect to mupdate server for delete of '%s'",
+		   "cannot connect to mupdate server for delete of '%s'",
 		   name);
 	    goto done;
 	}
@@ -1311,7 +1311,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
 	if(r) {
 	    syslog(LOG_ERR,
-		   "can not connect to mupdate server for rename of '%s'",
+		   "cannot connect to mupdate server for rename of '%s'",
 		   newname);
 	    goto done;
 	}
@@ -1729,7 +1729,7 @@ int mboxlist_setacl(const char *name, const char *identifier,
 	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
 	if(r) {
 	    syslog(LOG_ERR,
-		   "can not connect to mupdate server for reservation on '%s'",
+		   "cannot connect to mupdate server for reservation on '%s'",
 		   name);
 	} else {
 	    r = mupdate_activate(mupdate_h, name, buf, newacl);
@@ -1864,7 +1864,7 @@ mboxlist_sync_setacls(char *name, char *newacl)
 	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
 	if(r) {
 	    syslog(LOG_ERR,
-		   "can not connect to mupdate server for reservation on '%s'",
+		   "cannot connect to mupdate server for reservation on '%s'",
 		   name);
 	} else {
 	    r = mupdate_activate(mupdate_h, name, buf, newacl);

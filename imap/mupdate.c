@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mupdate.c,v 1.102 2008/03/24 17:09:18 murch Exp $
+ * $Id: mupdate.c,v 1.103 2008/08/27 08:28:47 selsky Exp $
  */
 
 #include <config.h>
@@ -624,7 +624,7 @@ int service_init(int argc, char **argv,
 	 * to the slave.  We can probably fix this by prepending
 	 * config_servername onto the entries before updating the slaves.
 	 */
-	fatal("can not run mupdate master on a unified server", EC_USAGE);
+	fatal("cannot run mupdate master on a unified server", EC_USAGE);
     }
 
     if(pipe(conn_pipe) == -1) {
