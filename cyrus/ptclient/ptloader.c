@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ptloader.c,v 1.48 2008/03/24 18:34:22 murch Exp $
+ * $Id: ptloader.c,v 1.49 2008/09/04 20:44:08 wescraig Exp $
  */
 
 #include <config.h>
@@ -146,7 +146,7 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     /* set signal handlers */
     signal(SIGPIPE, SIG_IGN);
 
-    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.48 2008/03/24 18:34:22 murch Exp $");
+    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.49 2008/09/04 20:44:08 wescraig Exp $");
 
     while ((opt = getopt(argc, argv, "d:")) != EOF) {
 	switch (opt) {
@@ -203,7 +203,6 @@ int service_main_fd(int c, int argc __attribute__((unused)),
 		    char **argv __attribute__((unused)),
 		    char **envp __attribute__((unused)))
 {
-    char keyinhex[512];
     const char *reply = NULL;
     char user[PTS_DB_KEYSIZE];
     int rc, dsize;
@@ -232,16 +231,14 @@ int service_main_fd(int c, int argc __attribute__((unused)),
 
     memset(&user, 0, sizeof(user));
     if (read(c, &user, size) < 0) {
-        syslog(LOG_ERR, "socket(user; size = %d; key = %s): %m", 
-	       size, keyinhex);
+        syslog(LOG_ERR, "socket(user; size = %d): %m", size);
         reply = "Error reading request (user)";
         goto sendreply;
     }
 
     if (ptclient_debug) {
-	syslog(LOG_DEBUG, "user %s, cacheid %s", user, keyinhex);
+	syslog(LOG_DEBUG, "user %s", user);
     }
-
 
     newstate = ptsmodule_make_authstate(user, size, &reply, &dsize);
 
@@ -260,7 +257,7 @@ int service_main_fd(int c, int argc __attribute__((unused)),
     }
 
  sendreply:
-    if (retry_write(c, reply, strlen(reply)) <0) {
+    if (retry_write(c, reply, strlen(reply) + 1) <0) {
 	syslog(LOG_WARNING, "retry_write: %m");
     }
     close(c);
