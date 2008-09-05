@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.550 2008/08/27 08:28:46 selsky Exp $
+ * $Id: imapd.c,v 1.551 2008/09/05 15:56:21 murch Exp $
  */
 
 #include <config.h>
@@ -120,7 +120,7 @@ const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 static char shutdownfilename[1024];
 static int imaps = 0;
 static sasl_ssf_t extprops_ssf = 0;
-static nosaslpasswdcheck = 0;
+static int nosaslpasswdcheck = 0;
 
 /* PROXY STUFF */
 /* we want a list of our outgoing connections here and which one we're
