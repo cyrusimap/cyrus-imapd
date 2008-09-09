@@ -10,6 +10,7 @@ cyrdump
 cyr_dbtool
 cyr_expire
 cyr_synclog
+cyr_virusscan
 deliver
 fetchnews
 fud
