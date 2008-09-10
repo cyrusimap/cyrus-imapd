@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_virusscan.c,v 1.1 2008/09/09 15:28:25 murch Exp $
+ * $Id: cyr_virusscan.c,v 1.2 2008/09/10 14:40:51 murch Exp $
  */
 
 #include <config.h>
@@ -66,10 +66,6 @@
 
 #define HAVE_CLAMAV
 
-#ifdef HAVE_CLAMAV
-#include <clamav.h>
-#endif
-
 /* config.c stuff */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
@@ -81,13 +77,6 @@ extern int  optopt;
 
 /* globals for callback functions */
 int disinfect = 0;
-
-#ifdef HAVE_CLAMAV
-struct cl_engine *av_engine = NULL;
-struct cl_limits av_limits;
-void init_clamav();
-void destroy_clamav();
-#endif
 
 /* for statistical purposes */
 typedef struct mbox_stats_s {
@@ -104,10 +93,113 @@ static struct namespace scan_namespace;
 
 int verbose = 1;
 
+struct scan_engine {
+    const char *name;
+    void *state;
+    void *(*init)(void);  /* initialize state */
+    int (*scanfile)(void *state,  /* scan fname & return non-zero if infected */
+		    const char *fname, const char **virname);
+    void (*destroy)(void *state);  /* destroy state */
+};
+
+#ifdef HAVE_CLAMAV
+#include <clamav.h>
+
+struct clamav_state {
+    struct cl_engine *av_engine;
+    struct cl_limits av_limits;
+};
+
+void *clamav_init()
+{
+    unsigned int sigs = 0;
+    int r;
+
+    struct clamav_state *st = xzmalloc(sizeof(struct clamav_state));
+
+    /* load all available databases from default directory */
+    if ((r = cl_load(cl_retdbdir(), &st->av_engine, &sigs, CL_DB_STDOPT))) {
+	syslog(LOG_ERR, "cl_load: %s", cl_strerror(r));
+	fatal(cl_strerror(r), EC_SOFTWARE);
+    }
+
+    if (verbose) printf("Loaded %d virus signatures.\n", sigs);
+
+    /* build av_engine */
+    if((r = cl_build(st->av_engine))) {
+	syslog(LOG_ERR,
+	       "Database initialization error: %s", cl_strerror(r));
+	cl_free(st->av_engine);
+	fatal(cl_strerror(r), EC_SOFTWARE);
+    }
+
+    /* set up archive av_limits */
+    st->av_limits.maxfiles = 10000; /* max files */
+    st->av_limits.maxscansize = 100 * 1048576; /* during the scanning of
+						* archives
+						* this size (100 MB) will never
+						* be exceeded
+						*/
+    st->av_limits.maxfilesize = 10 * 1048576; /* compressed files will only be
+					       * decompressed and scanned up to
+					       * this size (10 MB)
+					       */
+    st->av_limits.maxreclevel = 16; /* maximum recursion level for archives */
+
+    return (void *) st;
+}
+
+
+int clamav_scanfile(void *state, const char *fname,
+		    const char **virname)
+{
+    struct clamav_state *st = (struct clamav_state *) state;
+    int r;
+
+    /* scan file */
+    r = cl_scanfile(fname, virname, NULL, st->av_engine, &st->av_limits,
+		    CL_SCAN_STDOPT);
+
+    switch (r) {
+    case CL_CLEAN:
+	/* do nothing */
+	break;
+    case CL_VIRUS:
+	return 1;
+	break;
+
+    default:
+	printf("cl_scanfile error: %s\n", cl_strerror(r));
+	syslog(LOG_ERR, "cl_scanfile error: %s\n", cl_strerror(r));
+	break;
+    }
+
+    return 0;
+}
+
+void clamav_destroy(void *state)
+{
+    struct clamav_state *st = (struct clamav_state *) state;
+
+    if (st->av_engine) {
+	/* free memory */
+	cl_free(st->av_engine);
+    }
+    free(st);
+}
+
+struct scan_engine engine =
+{ "ClamAV", NULL, &clamav_init, &clamav_scanfile, &clamav_destroy };
+
+#else /* no configured virus scanner */
+struct scan_engine engine = { NULL, NULL, NULL, NULL, NULL };
+#endif
+
 int scan_me(char *, int, int);
 unsigned virus_check(struct mailbox *, void *, unsigned char *, int);
 int usage(char *name);
 void print_stats(mbox_stats_t *stats);
+
 
 int main (int argc, char *argv[]) {
     int option;		/* getopt() returns an int */
@@ -136,9 +228,13 @@ int main (int argc, char *argv[]) {
 
     cyrus_init(alt_config, "cyr_virusscan", 0);
 
-#ifdef HAVE_CLAMAV
-    init_clamav();
-#endif
+    if (!engine.name) {
+	fatal("no virus scanner configured", EC_SOFTWARE);
+    } else {
+	if (verbose) printf("Using %s virus scanner\n", engine.name);
+    }
+
+    engine.state = engine.init();
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&scan_namespace, 1)) != 0) {
@@ -176,9 +272,7 @@ int main (int argc, char *argv[]) {
     mboxlist_close();
     mboxlist_done();
 
-#ifdef HAVE_CLAMAV
-    destroy_clamav();
-#endif
+    engine.destroy(engine.state);
 
     cyrus_done();
 
@@ -192,51 +286,6 @@ int usage(char *name)
     printf("\t -r remove infected messages\n");
     exit(0);
 }
-
-#ifdef HAVE_CLAMAV
-void init_clamav()
-{
-    unsigned int sigs = 0;
-    int r;
-
-    /* load all available databases from default directory */
-    if ((r = cl_load(cl_retdbdir(), &av_engine, &sigs, CL_DB_STDOPT))) {
-	syslog(LOG_ERR, "cl_load: %s", cl_strerror(r));
-	fatal(cl_strerror(r), EC_SOFTWARE);
-    }
-
-    printf("Loaded %d virus signatures.\n", sigs);
-
-    /* build av_engine */
-    if((r = cl_build(av_engine))) {
-	syslog(LOG_ERR,
-	       "Database initialization error: %s", cl_strerror(r));
-	cl_free(av_engine);
-	fatal(cl_strerror(r), EC_SOFTWARE);
-    }
-
-    /* set up archive av_limits */
-    memset(&av_limits, 0, sizeof(struct cl_limits));
-    av_limits.maxfiles = 10000; /* max files */
-    av_limits.maxscansize = 100 * 1048576; /* during the scanning of archives
-					    * this size (100 MB) will never be
-					    * exceeded
-					    */
-    av_limits.maxfilesize = 10 * 1048576; /* compressed files will only be
-					   * decompressed and scanned up to this
-					   * size (10 MB)
-					   */
-    av_limits.maxreclevel = 16; /* maximum recursion level for archives */
-}
-
-void destroy_clamav()
-{
-    if (av_engine) {
-	/* free memory */
-	cl_free(av_engine);
-    }
-}
-#endif /* HAVE_CLAMAV */
 
 /* we don't check what comes in on matchlen and maycreate, should we? */
 int scan_me(char *name, int matchlen __attribute__((unused)),
@@ -301,49 +350,28 @@ unsigned virus_check(struct mailbox *mailbox __attribute__((unused)),
     mbox_stats_t *stats = (mbox_stats_t *) deciderock;
     bit32 senttime;
     bit32 msgsize;
-    bit32 flagged;
+    unsigned long  uid;
+    char fname[4096];
+    const char *virname;
 
     senttime = ntohl(*((bit32 *)(buf + OFFSET_SENTDATE)));
     msgsize = ntohl(*((bit32 *)(buf + OFFSET_SIZE)));
-    flagged = ntohl(*((bit32 *)(buf + OFFSET_SYSTEM_FLAGS))) & FLAG_FLAGGED;
+    uid = ntohl(*((bit32 *)(buf+OFFSET_UID)));
 
     stats->total++;
     stats->total_bytes += msgsize;
 
-#ifdef HAVE_CLAMAV
-    if (av_engine) {
-	int r;
-	char fname[4096];
-	const char *virname;
-	unsigned long uid = ntohl(*((bit32 *)(buf+OFFSET_UID)));
+    snprintf(fname, sizeof(fname), "%s/%lu.", mailbox->path, uid);
 
-	snprintf(fname, sizeof(fname), "%s/%lu.", mailbox->path, uid);
-
-	/* scan file */
-	r = cl_scanfile(fname, &virname, NULL, av_engine, &av_limits,
-			CL_SCAN_STDOPT);
-
-	switch (r) {
-	case CL_CLEAN:
-	    /* do nothing */
-	    break;
-	case CL_VIRUS:
-	    if (verbose) {
-		printf("Virus detected in message %lu: %s\n", uid, virname);
-	    }
-	    if (disinfect) {
-		deleteit(msgsize, stats);
-		return 1;
-	    }
-	    break;
-
-	default:
-	    printf("cl_scanfile error: %s\n", cl_strerror(r));
-	    syslog(LOG_ERR, "cl_scanfile error: %s\n", cl_strerror(r));
-	    break;
+    if (engine.scanfile(engine.state, fname, &virname)) {
+	if (verbose) {
+	    printf("Virus detected in message %lu: %s\n", uid, virname);
+	}
+	if (disinfect) {
+	    deleteit(msgsize, stats);
+	    return 1;
 	}
     }
-#endif
 
     return 0;
 }
