@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_virusscan.c,v 1.3 2008/09/10 15:30:02 murch Exp $
+ * $Id: cyr_virusscan.c,v 1.4 2008/09/10 15:38:17 murch Exp $
  */
 
 #include <config.h>
@@ -204,7 +204,7 @@ struct scan_engine engine = { NULL, NULL, NULL, NULL, NULL };
 
 /* forward declarations */
 int usage(char *name);
-int scan_me(char *, int, int);
+int scan_me(char *, int, int, void *);
 unsigned virus_check(struct mailbox *, void *, unsigned char *, int);
 void print_stats(mbox_stats_t *stats);
 
@@ -297,8 +297,10 @@ int usage(char *name)
 }
 
 /* we don't check what comes in on matchlen and maycreate, should we? */
-int scan_me(char *name, int matchlen __attribute__((unused)),
-	    int maycreate __attribute__((unused)))
+int scan_me(char *name,
+	    int matchlen __attribute__((unused)),
+	    int maycreate __attribute__((unused)),
+	    void *rock __attribute__((unused)))
 {
     struct mailbox the_box;
     int            error;
@@ -352,7 +354,7 @@ void deleteit(bit32 msgsize, mbox_stats_t *stats)
 
 /* thumbs up routine, checks for virus and returns yes or no for deletion */
 /* 0 = no, 1 = yes */
-unsigned virus_check(struct mailbox *mailbox __attribute__((unused)),
+unsigned virus_check(struct mailbox *mailbox,
 		     void *deciderock,
 		     unsigned char *buf,
 		     int expunge_flags __attribute__((unused)))
@@ -360,7 +362,7 @@ unsigned virus_check(struct mailbox *mailbox __attribute__((unused)),
     mbox_stats_t *stats = (mbox_stats_t *) deciderock;
     bit32 senttime;
     bit32 msgsize;
-    unsigned long  uid;
+    unsigned long uid;
     char fname[4096];
     const char *virname;
 
