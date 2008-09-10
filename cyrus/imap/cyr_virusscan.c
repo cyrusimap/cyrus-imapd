@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_virusscan.c,v 1.2 2008/09/10 14:40:51 murch Exp $
+ * $Id: cyr_virusscan.c,v 1.3 2008/09/10 15:30:02 murch Exp $
  */
 
 #include <config.h>
@@ -63,8 +63,6 @@
 #include "mboxlist.h"
 #include "util.h"
 #include "sync_log.h"
-
-#define HAVE_CLAMAV
 
 /* config.c stuff */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
@@ -93,6 +91,7 @@ static struct namespace scan_namespace;
 
 int verbose = 1;
 
+/* abstract definition of a virus scan engine */
 struct scan_engine {
     const char *name;
     void *state;
@@ -102,7 +101,10 @@ struct scan_engine {
     void (*destroy)(void *state);  /* destroy state */
 };
 
+
+#define HAVE_CLAMAV
 #ifdef HAVE_CLAMAV
+/* ClamAV implementation */
 #include <clamav.h>
 
 struct clamav_state {
@@ -191,13 +193,19 @@ void clamav_destroy(void *state)
 struct scan_engine engine =
 { "ClamAV", NULL, &clamav_init, &clamav_scanfile, &clamav_destroy };
 
-#else /* no configured virus scanner */
+#elif defined(HAVE_SOME_UNKNOWN_VIRUS_SCANNER)
+/* XXX  Add other implementations here */
+
+#else
+/* NO configured virus scanner */
 struct scan_engine engine = { NULL, NULL, NULL, NULL, NULL };
 #endif
 
+
+/* forward declarations */
+int usage(char *name);
 int scan_me(char *, int, int);
 unsigned virus_check(struct mailbox *, void *, unsigned char *, int);
-int usage(char *name);
 void print_stats(mbox_stats_t *stats);
 
 
@@ -281,7 +289,8 @@ int main (int argc, char *argv[]) {
 
 int usage(char *name)
 {
-    printf("usage: %s [-C <alt_config>] [-r]\n\t[mboxpattern1 ... [mboxpatternN]]\n", name);
+    printf("usage: %s [-C <alt_config>] [-r]\n"
+	   "\t[mboxpattern1 ... [mboxpatternN]]\n", name);
     printf("\tif no mboxpattern is given %s works on all mailboxes\n", name);
     printf("\t -r remove infected messages\n");
     exit(0);
@@ -289,7 +298,8 @@ int usage(char *name)
 
 /* we don't check what comes in on matchlen and maycreate, should we? */
 int scan_me(char *name, int matchlen __attribute__((unused)),
-	    int maycreate __attribute__((unused))) {
+	    int maycreate __attribute__((unused)))
+{
     struct mailbox the_box;
     int            error;
     mbox_stats_t   stats;
