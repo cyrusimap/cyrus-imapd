@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mbexamine.c,v 1.19 2008/03/24 17:09:17 murch Exp $
+ * $Id: mbexamine.c,v 1.20 2008/09/19 01:03:20 wescraig Exp $
  */
 
 #include <config.h>
@@ -365,13 +365,13 @@ int do_examine(char *name,
 
 	cacheitem = mailbox.cache_base + CACHE_OFFSET(i);
 	
-	printf(" Envel>{%d}%s\n", CACHE_ITEM_LEN(cacheitem),
+	printf(" Envel>{%d}%.*s\n", CACHE_ITEM_LEN(cacheitem), CACHE_ITEM_LEN(cacheitem),
 	       cacheitem + CACHE_ITEM_SIZE_SKIP);
 	cacheitem = CACHE_ITEM_NEXT(cacheitem);
-	printf("BdyStr>{%d}%s\n", CACHE_ITEM_LEN(cacheitem),
+	printf("BdyStr>{%d}%.*s\n", CACHE_ITEM_LEN(cacheitem), CACHE_ITEM_LEN(cacheitem),
 	       cacheitem + CACHE_ITEM_SIZE_SKIP);
 	cacheitem = CACHE_ITEM_NEXT(cacheitem);
-	printf("  Body>{%d}%s\n", CACHE_ITEM_LEN(cacheitem),
+	printf("  Body>{%d}%.*s\n", CACHE_ITEM_LEN(cacheitem), CACHE_ITEM_LEN(cacheitem),
 	       cacheitem + CACHE_ITEM_SIZE_SKIP);
 	cacheitem = CACHE_ITEM_NEXT(cacheitem);
 
@@ -381,22 +381,22 @@ int do_examine(char *name,
 #endif
 
 	cacheitem = CACHE_ITEM_NEXT(cacheitem);
-	printf("CacHdr>{%d}%s\n", CACHE_ITEM_LEN(cacheitem),
+	printf("CacHdr>{%d}%.*s\n", CACHE_ITEM_LEN(cacheitem), CACHE_ITEM_LEN(cacheitem),
 	       cacheitem + CACHE_ITEM_SIZE_SKIP);
 	cacheitem = CACHE_ITEM_NEXT(cacheitem);
-	printf("  From>{%d}%s\n", CACHE_ITEM_LEN(cacheitem),
+	printf("  From>{%d}%.*s\n", CACHE_ITEM_LEN(cacheitem), CACHE_ITEM_LEN(cacheitem),
 	       cacheitem + CACHE_ITEM_SIZE_SKIP);
 	cacheitem = CACHE_ITEM_NEXT(cacheitem);
-	printf("    To>{%d}%s\n", CACHE_ITEM_LEN(cacheitem),
+	printf("    To>{%d}%.*s\n", CACHE_ITEM_LEN(cacheitem), CACHE_ITEM_LEN(cacheitem),
 	       cacheitem + CACHE_ITEM_SIZE_SKIP);
 	cacheitem = CACHE_ITEM_NEXT(cacheitem);
-	printf("    Cc>{%d}%s\n", CACHE_ITEM_LEN(cacheitem),
+	printf("    Cc>{%d}%.*s\n", CACHE_ITEM_LEN(cacheitem), CACHE_ITEM_LEN(cacheitem),
 	       cacheitem + CACHE_ITEM_SIZE_SKIP);
 	cacheitem = CACHE_ITEM_NEXT(cacheitem);
-	printf("   Bcc>{%d}%s\n", CACHE_ITEM_LEN(cacheitem),
+	printf("   Bcc>{%d}%.*s\n", CACHE_ITEM_LEN(cacheitem), CACHE_ITEM_LEN(cacheitem),
 	       cacheitem + CACHE_ITEM_SIZE_SKIP);
 	cacheitem = CACHE_ITEM_NEXT(cacheitem);
-	printf("Subjct>{%d}%s\n", CACHE_ITEM_LEN(cacheitem),
+	printf("Subjct>{%d}%.*s\n", CACHE_ITEM_LEN(cacheitem), CACHE_ITEM_LEN(cacheitem),
 	       cacheitem + CACHE_ITEM_SIZE_SKIP);
 
 	if(flag) break;
