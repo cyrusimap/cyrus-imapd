@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyrusdb_quotalegacy.c,v 1.18 2008/03/24 17:43:08 murch Exp $
+ * $Id: cyrusdb_quotalegacy.c,v 1.19 2008/09/19 17:10:51 murch Exp $
  */
 
 #include <config.h>
@@ -56,7 +56,23 @@
 #include <sys/stat.h>
 #include <sys/uio.h>
 #include <fcntl.h>
-#include <glob.h>
+
+#if HAVE_DIRENT_H
+# include <dirent.h>
+# define NAMLEN(dirent) strlen((dirent)->d_name)
+#else
+# define dirent direct
+# define NAMLEN(dirent) (dirent)->d_namlen
+# if HAVE_SYS_NDIR_H
+#  include <sys/ndir.h>
+# endif
+# if HAVE_SYS_DIR_H
+#  include <sys/dir.h>
+# endif
+# if HAVE_NDIR_H
+#  include <ndir.h>
+# endif
+#endif
 
 #include "assert.h"
 #include "cyrusdb.h"
@@ -477,7 +493,72 @@ static int compar_qr(const void *v1, const void *v2)
     qr2 = path_to_qr(*((const char **) v2), qrbuf2);
 
     return strcmp(qr1, qr2);
-}   
+}
+
+#define PATH_ALLOC 100
+struct qr_path {
+    char **path;
+    size_t count;
+    size_t alloc;
+};
+
+static void scan_qr_dir(char *quota_path, char *prefix, struct qr_path *pathbuf)
+{
+    int config_fulldirhash = libcyrus_config_getswitch(CYRUSOPT_FULLDIRHASH);
+    int config_virtdomains = libcyrus_config_getswitch(CYRUSOPT_VIRTDOMAINS);
+    char *endp;
+    int c, i;
+    DIR *qrdir;
+    struct dirent *next = NULL;
+
+    /* strip off the qr specific path */
+    endp = strstr(quota_path, FNAME_QUOTADIR) + strlen(FNAME_QUOTADIR);
+    strcpy(endp, "?/");
+
+    c = config_fulldirhash ? 'A' : 'a';
+    for (i = 0; i < 26; i++, c++) {
+	*endp = c;
+
+	qrdir = opendir(quota_path);
+
+	if (qrdir) {
+	    while ((next = readdir(qrdir)) != NULL) {
+		if (!strcmp(next->d_name, ".")
+		    || !strcmp(next->d_name, "..")) continue;
+
+		if (!strncmp(next->d_name, prefix, strlen(prefix))) {
+		    if (pathbuf->count == pathbuf->alloc) {
+			pathbuf->alloc += PATH_ALLOC;
+			pathbuf->path = xrealloc(pathbuf->path, pathbuf->alloc);
+		    }
+		    pathbuf->path[pathbuf->count] = xmalloc(MAX_QUOTA_PATH+1);
+		    sprintf(pathbuf->path[pathbuf->count++],
+			    "%s%s", quota_path, next->d_name);
+		}
+	    }
+
+	    closedir(qrdir);
+	}
+    }
+
+    if (config_virtdomains && !strlen(prefix) &&
+	strstr(quota_path, FNAME_DOMAINDIR)) {
+	/* search for a domain quota */
+	struct stat buf;
+
+	strcpy(endp, "root");
+
+	if (!stat(quota_path, &buf)) {
+	    if (pathbuf->count == pathbuf->alloc) {
+		pathbuf->alloc += PATH_ALLOC;
+		pathbuf->path = xrealloc(pathbuf->path, pathbuf->alloc);
+	    }
+	    pathbuf->path[pathbuf->count] = xmalloc(MAX_QUOTA_PATH+1);
+	    sprintf(pathbuf->path[pathbuf->count++],
+		    "%s", quota_path);
+	}
+    }
+}
 
 static int foreach(struct db *db,
 		   char *prefix, int prefixlen,
@@ -486,9 +567,10 @@ static int foreach(struct db *db,
 		   struct txn **tid)
 {
     int r = CYRUSDB_OK;
+    int config_fulldirhash = libcyrus_config_getswitch(CYRUSOPT_FULLDIRHASH);
     int config_virtdomains = libcyrus_config_getswitch(CYRUSOPT_VIRTDOMAINS);
     char quota_path[MAX_QUOTA_PATH+1];
-    glob_t globbuf;
+    struct qr_path pathbuf;
     size_t i;
     char *tmpprefix = NULL, *p = NULL;
 
@@ -504,48 +586,62 @@ static int foreach(struct db *db,
     if (config_virtdomains && (p = strchr(prefix, '!')))
 	prefix = p + 1;
 
-    /* strip off the qr specific path and replace with pattern */
-    sprintf(strstr(quota_path, FNAME_QUOTADIR) + strlen(FNAME_QUOTADIR),
-	    "?/%s*", prefix);
-
     /* search for the quotaroots */
-    glob(quota_path, GLOB_NOSORT, NULL, &globbuf);
+    memset(&pathbuf, 0, sizeof(struct qr_path));
+    scan_qr_dir(quota_path, prefix, &pathbuf);
 
-    if (config_virtdomains) {
-	if (!prefixlen) {
-	    /* search for all virtdomain quotaroots */
-	    snprintf(quota_path, sizeof(quota_path), "%s%s?/*%s?/*",
-		     db->path, FNAME_DOMAINDIR, FNAME_QUOTADIR);
-	    glob(quota_path, GLOB_NOSORT | GLOB_APPEND, NULL, &globbuf);
+    if (config_virtdomains && !prefixlen) {
+	/* search for all virtdomain quotaroots */
+	char *endp;
+	int c, i, n;
+	DIR *qrdir;
+	struct dirent *next = NULL;
 
-	    /* search for all domain quotas */
-	    snprintf(quota_path, sizeof(quota_path), "%s%s?/*%sroot",
-		     db->path, FNAME_DOMAINDIR, FNAME_QUOTADIR);
-	    glob(quota_path, GLOB_NOSORT | GLOB_APPEND, NULL, &globbuf);
-	}
-	else if (!strlen(prefix)) {
-	    /* search for the domain quotas */
-	    strcpy(strstr(quota_path, FNAME_QUOTADIR) + strlen(FNAME_QUOTADIR),
-		   "root");
-	    glob(quota_path, GLOB_NOSORT | GLOB_APPEND, NULL, &globbuf);
+	n = snprintf(quota_path, sizeof(quota_path), "%s%s",
+		     db->path, FNAME_DOMAINDIR);
+
+	endp = quota_path + n;
+	strcpy(endp, "?/");
+
+	c = config_fulldirhash ? 'A' : 'a';
+	for (i = 0; i < 26; i++, c++) {
+	    *endp = c;
+
+	    qrdir = opendir(quota_path);
+
+	    if (qrdir) {
+		while ((next = readdir(qrdir)) != NULL) {
+		    if (!strcmp(next->d_name, ".")
+			|| !strcmp(next->d_name, "..")) continue;
+
+		    snprintf(endp+2, sizeof(quota_path) - (n+2),
+			     "%s%s", next->d_name, FNAME_QUOTADIR);
+		    scan_qr_dir(quota_path, "", &pathbuf);
+		}
+
+		closedir(qrdir);
+	    }
 	}
     }
+
     if (tmpprefix) free(tmpprefix);
 
     if (tid && !*tid) *tid = &db->txn;
 
     /* sort the quotaroots (ignoring paths) */
-    qsort(globbuf.gl_pathv, globbuf.gl_pathc, sizeof(char *), &compar_qr);
+    qsort(pathbuf.path, pathbuf.count, sizeof(char *), &compar_qr);
 
-    for (i = 0; i < globbuf.gl_pathc; i++) {
+    for (i = 0; i < pathbuf.count; i++) {
 	const char *data, *key;
 	int keylen, datalen;
 
-	r = myfetch(db, globbuf.gl_pathv[i], &data, &datalen, tid);
+	r = myfetch(db, pathbuf.path[i], &data, &datalen, tid);
 	if (r) break;
 
-	key = path_to_qr(globbuf.gl_pathv[i], quota_path);
+	key = path_to_qr(pathbuf.path[i], quota_path);
 	keylen = strlen(key);
+
+	free(pathbuf.path[i]);
 
 	if (!goodp || goodp(rock, key, keylen, data, datalen)) {
 	    /* make callback */
@@ -554,7 +650,7 @@ static int foreach(struct db *db,
 	}
     }
 
-    globfree(&globbuf);
+    free(pathbuf.path);
 
     return r;
 }
