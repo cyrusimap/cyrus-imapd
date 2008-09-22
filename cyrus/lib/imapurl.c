@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapurl.c,v 1.15 2008/03/24 17:43:09 murch Exp $
+ * $Id: imapurl.c,v 1.16 2008/09/22 12:58:35 murch Exp $
  *
  * derived from chris newman's code
  */
@@ -369,7 +369,7 @@ int imapurl_fromURL(struct imapurl *url, const char *s)
     int step = 0;  /* used to force correct ordering of url parts */
 
     memset(url, 0, sizeof(struct imapurl));
-    url->freeme = xmalloc(3 * strlen(s) + 3); /* space for copy of URL +
+    url->freeme = xmalloc(6 * strlen(s) + 3); /* space for copy of URL +
 						 decoded mailbox */
     src = strcpy(url->freeme, s);
 
