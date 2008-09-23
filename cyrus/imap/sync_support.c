@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_support.c,v 1.19 2008/03/25 20:53:51 murch Exp $
+ * $Id: sync_support.c,v 1.20 2008/09/23 17:34:37 murch Exp $
  */
 
 #include <config.h>
@@ -90,8 +90,6 @@
 /* Parse routines */
 
 enum {
-    MAXQUOTED = 8192,
-    MAXWORD = 8192,
     MAXLITERAL = INT_MAX / 20
 };
 
@@ -123,7 +121,7 @@ int sync_getline(struct protstream *in, struct buf *buf)
 	if (len == buf->alloc) {
 	    buf->alloc += BUFGROWSIZE;
 	    buf->s = xrealloc(buf->s, buf->alloc+1);
-            if (len > MAXWORD) {
+            if (len > config_maxword) {
                 fatal("word too long", EC_IOERR);
             }
 	}

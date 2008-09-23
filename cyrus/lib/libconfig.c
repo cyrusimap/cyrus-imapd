@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: libconfig.c,v 1.20 2008/05/22 16:01:57 murch Exp $
+ * $Id: libconfig.c,v 1.21 2008/09/23 17:34:38 murch Exp $
  */
 
 #include <config.h>
@@ -79,6 +79,8 @@ const char *config_ident = NULL;         /* the service name */
 int config_hashimapspool;	  /* f */
 enum enum_value config_virtdomains;	          /* f */
 enum enum_value config_mupdate_config;	/* IMAP_ENUM_MUPDATE_CONFIG_STANDARD */
+int config_maxword;
+int config_maxquoted;
 
 /* declared in each binary that uses libconfig */
 extern const int config_need_data;
@@ -295,6 +297,10 @@ void config_read(const char *alt_config)
     if (config_mupdate_server) {
 	config_mupdate_config = config_getenum(IMAPOPT_MUPDATE_CONFIG);
     }
+
+    /* set some limits */
+    config_maxquoted = config_getint(IMAPOPT_MAXQUOTED);
+    config_maxword = config_getint(IMAPOPT_MAXWORD);
 }
 
 #define GROWSIZE 4096

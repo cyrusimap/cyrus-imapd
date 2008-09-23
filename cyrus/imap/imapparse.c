@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapparse.c,v 1.18 2008/03/24 17:09:17 murch Exp $
+ * $Id: imapparse.c,v 1.19 2008/09/23 17:34:37 murch Exp $
  */
 
 #include <config.h>
@@ -53,8 +53,6 @@
 #include "exitcodes.h"
 
 enum {
-    MAXQUOTED = 32768,
-    MAXWORD = 32768,
     MAXLITERAL = INT_MAX / 20
 };
 
@@ -94,7 +92,7 @@ int getword(struct protstream *in, struct buf *buf)
             /* xxx limit len */
 	    buf->alloc += BUFGROWSIZE;
 	    buf->s = xrealloc(buf->s, buf->alloc+1);
-            if (len > MAXWORD) {
+            if (len > config_maxword) {
                 fatal("word too long", EC_IOERR);
             }
 	}
@@ -159,7 +157,7 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 		buf->alloc += BUFGROWSIZE;
 		buf->s = xrealloc(buf->s, buf->alloc+1);
 
-                if (len > MAXQUOTED) {
+                if (len > config_maxquoted) {
                     fatal("word too long", EC_IOERR);
                 }
 	    }
