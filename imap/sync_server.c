@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_server.c,v 1.25 2008/03/24 17:09:20 murch Exp $
+ * $Id: sync_server.c,v 1.26 2008/09/23 16:28:15 murch Exp $
  *
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
@@ -1433,6 +1433,7 @@ static void cmd_reserve(char *mailbox_name,
     char *stage_msg_path;
     struct sync_message *message = NULL;
     struct message_guid tmp_guid;
+    unsigned long cache_size;
 
     if ((r = sync_message_list_newstage(message_list, mailbox_name))) {
 	eatline(sync_in,c);
@@ -1505,6 +1506,14 @@ static void cmd_reserve(char *mailbox_name,
             continue;
         }
 
+        cache_size = mailbox_cache_size(&m, msgno);
+        if (!cache_size) {
+            syslog(LOG_ERR, "IOERROR: bogus cache record %s %d",
+                m.name, msgno);
+            i++;       /* Failed to read cache record */
+            continue;
+        }
+
         /* Reserve succeeded */
         message = sync_message_add(message_list, &record.guid);
         message->msg_size     = record.size;
@@ -1512,7 +1521,7 @@ static void cmd_reserve(char *mailbox_name,
         message->cache_offset = sync_message_list_cache_offset(message_list);
         message->content_lines = record.content_lines;
         message->cache_version = record.cache_version;
-        message->cache_size   = mailbox_cache_size(&m, msgno);
+        message->cache_size   = cache_size;
         
         sync_message_list_cache(message_list,
                                 (char *)(m.cache_base+record.cache_offset),
