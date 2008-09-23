@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyrusdb_skiplist.c,v 1.61 2008/04/09 17:56:57 murch Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.62 2008/09/23 16:39:19 murch Exp $
  */
 
 /* xxx check retry_xxx for failure */
@@ -1977,6 +1977,7 @@ static int myconsistent(struct db *db, struct txn *tid, int locked)
 			"eof is %04X\n", 
 			ptr - db->map_base,
 			i, offset, (unsigned int) db->map_size);
+		if (!locked) unlock(db);
 		return CYRUSDB_INTERNAL;
 	    }
 
@@ -1993,6 +1994,7 @@ static int myconsistent(struct db *db, struct txn *tid, int locked)
 			    ptr - db->map_base,
 			    i,
 			    offset, cmp);
+		    if (!locked) unlock(db);
 		    return CYRUSDB_INTERNAL;
 		}
 	    }

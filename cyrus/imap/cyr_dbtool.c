@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_dbtool.c,v 1.5 2008/03/24 17:09:16 murch Exp $
+ * $Id: cyr_dbtool.c,v 1.6 2008/09/23 16:39:18 murch Exp $
  */
 
 #include <config.h>
@@ -244,6 +244,10 @@ int main(int argc, char *argv[])
             key = argv[optind+3];
             keylen = strlen(key);
             DB_OLD->foreach(odb, key, keylen, NULL, printer_cb, NULL, &tid);
+        }
+    } else if (!strcmp(action, "consistency")) {
+        if (DB_OLD->consistent(odb)) {
+            printf("Consistency Error for %s\n", old_db);
         }
     } else {
         printf("Unknown action %s\n", action);
