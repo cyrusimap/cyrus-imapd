@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: append.c,v 1.114 2008/03/24 17:09:16 murch Exp $
+ * $Id: append.c,v 1.115 2008/09/23 16:19:42 murch Exp $
  */
 
 #include <config.h>
@@ -431,6 +431,7 @@ FILE *append_newstage(const char *mailboxname, time_t internaldate,
     strlcat(stagefile, stage->fname, sizeof(stagefile));
 
     /* create this file and put it into stage->parts[0] */
+    unlink(stagefile);
     f = fopen(stagefile, "w+");
     if (!f) {
 	if (mkdir(stagedir, 0755) != 0) {
