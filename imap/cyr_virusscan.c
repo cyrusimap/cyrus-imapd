@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_virusscan.c,v 1.4 2008/09/10 15:38:17 murch Exp $
+ * $Id: cyr_virusscan.c,v 1.5 2008/09/23 16:17:09 murch Exp $
  */
 
 #include <config.h>
@@ -57,15 +57,49 @@
 #include "global.h"
 #include "sysexits.h"
 #include "exitcodes.h"
+#include "append.h"
 #include "imap_err.h"
+#include "index.h"
 #include "mailbox.h"
 #include "xmalloc.h"
 #include "mboxlist.h"
+#include "prot.h"
 #include "util.h"
 #include "sync_log.h"
+#include "rfc822date.h"
 
 /* config.c stuff */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
+
+/* Stuff to make index.c link */
+int imapd_exists;
+struct protstream *imapd_out = NULL;
+struct auth_state *imapd_authstate = NULL;
+char *imapd_userid = NULL;
+int imapd_condstore_client = 0;
+void printastring(const char *s __attribute__((unused)))
+{
+    fatal("not implemented", EC_SOFTWARE);
+}
+/* end stuff to make index.c link */
+
+struct infected_msg {
+    char *mboxname;
+    char *virname;
+    char *msgid;
+    char *date;
+    char *from;
+    char *subj;
+    unsigned long uid;
+    struct infected_msg *next;
+};
+
+struct infected_mbox {
+    char *owner;
+    unsigned msgno; /* running count of which message we're scanning */
+    struct infected_msg *msgs;
+    struct infected_mbox *next;
+};
 
 /* globals for getopt routines */
 extern char *optarg;
@@ -75,16 +109,9 @@ extern int  optopt;
 
 /* globals for callback functions */
 int disinfect = 0;
-
-/* for statistical purposes */
-typedef struct mbox_stats_s {
-
-    int total;         /* total including those deleted */
-    int total_bytes;
-    int deleted;       
-    int deleted_bytes;
-
-} mbox_stats_t;
+int notify = 0;
+struct infected_mbox *public = NULL;
+struct infected_mbox *user = NULL;
 
 /* current namespace */
 static struct namespace scan_namespace;
@@ -206,7 +233,7 @@ struct scan_engine engine = { NULL, NULL, NULL, NULL, NULL };
 int usage(char *name);
 int scan_me(char *, int, int, void *);
 unsigned virus_check(struct mailbox *, void *, unsigned char *, int);
-void print_stats(mbox_stats_t *stats);
+void append_notifications();
 
 
 int main (int argc, char *argv[]) {
@@ -219,7 +246,7 @@ int main (int argc, char *argv[]) {
 	fatal("must run as the Cyrus user", EC_USAGE);
     }
 
-    while ((option = getopt(argc, argv, "C:r")) != EOF) {
+    while ((option = getopt(argc, argv, "C:rn")) != EOF) {
 	switch (option) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -227,6 +254,10 @@ int main (int argc, char *argv[]) {
 
 	case 'r':
 	    disinfect = 1;
+	    break;
+
+	case 'n':
+	    notify = 1;
 	    break;
 
 	case 'h':
@@ -274,6 +305,9 @@ int main (int argc, char *argv[]) {
 					       scan_me, NULL);
 	}
     }
+
+    if (notify) append_notifications();
+
     quotadb_close();
     quotadb_done();
 
@@ -289,10 +323,11 @@ int main (int argc, char *argv[]) {
 
 int usage(char *name)
 {
-    printf("usage: %s [-C <alt_config>] [-r]\n"
+    printf("usage: %s [-C <alt_config>] [ -r [-n] ]\n"
 	   "\t[mboxpattern1 ... [mboxpatternN]]\n", name);
     printf("\tif no mboxpattern is given %s works on all mailboxes\n", name);
     printf("\t -r remove infected messages\n");
+    printf("\t -n notify mailbox owner of deleted messages via email\n");
     exit(0);
 }
 
@@ -304,9 +339,7 @@ int scan_me(char *name,
 {
     struct mailbox the_box;
     int            error;
-    mbox_stats_t   stats;
-
-    memset(&stats, '\0', sizeof(mbox_stats_t));
+    struct infected_mbox *i_mbox = NULL;
 
     if (verbose) {
 	char mboxname[MAX_MAILBOX_NAME+1];
@@ -336,20 +369,65 @@ int scan_me(char *name,
     (void) mailbox_lock_index(&the_box);
     the_box.index_lock_count = 1;
 
-    mailbox_expunge(&the_box, virus_check, &stats, EXPUNGE_FORCE);
+    if (notify) {
+	/* XXX  Need to handle virtdomains */
+	if (!strncmp(name, "user.", 5)) {
+	    size_t ownerlen;
+
+	    if (user && (ownerlen = strlen(user->owner)) &&
+		!strncmp(name, user->owner, ownerlen) &&
+		(name[ownerlen] == '.' || name[ownerlen] =='\0')) {
+		/* mailbox belongs to current owner */
+		i_mbox = user;
+	    } else {
+		/* new owner (Inbox) */
+		struct infected_mbox *new = xzmalloc(sizeof(struct infected_mbox));
+		new->owner = xstrdup(name);
+		new->next = user;
+		i_mbox = user = new;
+	    }
+	}
+#if 0  /* XXX what to do with public mailboxes (bboards)? */
+	else {
+	    if (!public) {
+		public = xzmalloc(sizeof(struct infected_mbox));
+		public->owner = xstrdup("");
+	    }
+
+	    i_mbox = public;
+	}
+#endif
+
+	if (i_mbox) i_mbox->msgno = 1;
+    }
+
+    mailbox_expunge(&the_box, virus_check, i_mbox, EXPUNGE_FORCE);
 
     sync_log_mailbox(the_box.name);
     mailbox_close(&the_box);
 
-    if (disinfect) print_stats(&stats);
-
     return 0;
 }
 
-void deleteit(bit32 msgsize, mbox_stats_t *stats)
+void create_digest(struct infected_mbox *i_mbox, struct mailbox *mbox,
+		   unsigned msgno, unsigned long uid, const char *virname)
 {
-    stats->deleted++;
-    stats->deleted_bytes += msgsize;
+    struct infected_msg *i_msg = xmalloc(sizeof(struct infected_msg));
+    struct nntp_overview *over;
+
+    i_msg->mboxname = xstrdup(mbox->name);
+    i_msg->virname = xstrdup(virname);
+    i_msg->uid= uid;
+
+    index_operatemailbox(mbox);
+    over = index_overview(mbox, msgno);
+    i_msg->msgid = strdup(over->msgid);
+    i_msg->date = strdup(over->date);
+    i_msg->from = strdup(over->from);
+    i_msg->subj = strdup(over->subj);
+
+    i_msg->next = i_mbox->msgs;
+    i_mbox->msgs = i_msg;
 }
 
 /* thumbs up routine, checks for virus and returns yes or no for deletion */
@@ -359,42 +437,113 @@ unsigned virus_check(struct mailbox *mailbox,
 		     unsigned char *buf,
 		     int expunge_flags __attribute__((unused)))
 {
-    mbox_stats_t *stats = (mbox_stats_t *) deciderock;
-    bit32 senttime;
-    bit32 msgsize;
+    struct infected_mbox *i_mbox = (struct infected_mbox *) deciderock;
     unsigned long uid;
     char fname[4096];
     const char *virname;
+    int r = 0;
 
-    senttime = ntohl(*((bit32 *)(buf + OFFSET_SENTDATE)));
-    msgsize = ntohl(*((bit32 *)(buf + OFFSET_SIZE)));
     uid = ntohl(*((bit32 *)(buf+OFFSET_UID)));
-
-    stats->total++;
-    stats->total_bytes += msgsize;
 
     snprintf(fname, sizeof(fname), "%s/%lu.", mailbox->path, uid);
 
-    if (engine.scanfile(engine.state, fname, &virname)) {
+    if ((r = engine.scanfile(engine.state, fname, &virname))) {
 	if (verbose) {
 	    printf("Virus detected in message %lu: %s\n", uid, virname);
 	}
 	if (disinfect) {
-	    deleteit(msgsize, stats);
-	    return 1;
+	    if (notify && i_mbox) {
+		create_digest(i_mbox, mailbox, i_mbox->msgno, uid, virname);
+	    }
 	}
     }
 
-    return 0;
+    if (i_mbox) i_mbox->msgno++;
+
+    return r;
 }
 
-void print_stats(mbox_stats_t *stats)
+void append_notifications()
 {
-    printf("total messages    \t\t %d\n",stats->total);
-    printf("total bytes       \t\t %d\n",stats->total_bytes);
-    printf("Deleted messages  \t\t %d\n",stats->deleted);
-    printf("Deleted bytes     \t\t %d\n",stats->deleted_bytes);
-    printf("Remaining messages\t\t %d\n",stats->total - stats->deleted);
-    printf("Remaining bytes   \t\t %d\n",
-	   stats->total_bytes - stats->deleted_bytes);
+    struct infected_mbox *i_mbox;
+    int outgoing_count = 0;
+    pid_t p = getpid();;
+    int fd = create_tempfile(config_getstring(IMAPOPT_TEMP_PATH));
+
+    while ((i_mbox = user)) {
+	if (i_mbox->msgs) {
+	    FILE *f = fdopen(fd, "w+");
+	    size_t ownerlen;
+	    struct infected_msg *msg;
+	    char buf[8192], datestr[80];
+	    time_t t;
+	    struct protstream *pout;
+	    struct appendstate as;
+	    struct body *body = NULL;
+	    long msgsize;
+
+	    fprintf(f, "Return-Path: <>\r\n");
+	    t = time(NULL);
+	    snprintf(buf, sizeof(buf), "<cmu-cyrus-%d-%d-%d@%s>",
+		     (int) p, (int) t, 
+		     outgoing_count++, config_servername);
+	    fprintf(f, "Message-ID: %s\r\n", buf);
+	    rfc822date_gen(datestr, sizeof(datestr), t);
+	    fprintf(f, "Date: %s\r\n", datestr);
+	    fprintf(f, "From: Mail System Administrator <%s>\r\n",
+		    config_getstring(IMAPOPT_POSTMASTER));
+	    /* XXX  Need to handle virtdomains */
+	    fprintf(f, "To: <%s>\r\n", i_mbox->owner+5);
+	    fprintf(f, "MIME-Version: 1.0\r\n");
+	    fprintf(f, "Subject: Automatically deleted mail\r\n");
+
+	    ownerlen = strlen(i_mbox->owner);
+
+	    while ((msg = i_mbox->msgs)) {
+		fprintf(f, "\r\n\r\nThe following message was deleted from mailbox "
+			"'Inbox%s'\r\n", msg->mboxname+ownerlen);
+		fprintf(f, "because it was infected with virus '%s'\r\n\r\n",
+			msg->virname);
+		fprintf(f, "\tMessage-ID: %s\r\n", msg->msgid);
+		fprintf(f, "\tDate: %s\r\n", msg->date);
+		fprintf(f, "\tFrom: %s\r\n", msg->from);
+		fprintf(f, "\tSubject: %s\r\n", msg->subj);
+		fprintf(f, "\tIMAP UID: %lu\r\n", msg->uid);
+
+		i_mbox->msgs = msg->next;
+
+		/* free msg digest */
+		free(msg->mboxname);
+		free(msg->msgid);
+		free(msg->date);
+		free(msg->from);
+		free(msg->subj);
+		free(msg->virname);
+		free(msg);
+	    }
+
+	    fflush(f);
+	    msgsize = ftell(f);
+
+	    append_setup(&as, i_mbox->owner, MAILBOX_FORMAT_NORMAL,
+			 NULL, NULL, 0, -1);
+	    pout = prot_new(fd, 0);
+	    prot_rewind(pout);
+	    append_fromstream(&as, &body, pout, msgsize, t, NULL, 0);
+	    append_commit(&as, -1, NULL, NULL, NULL);
+
+	    if (body) {
+		message_free_body(body);
+		free(body);
+	    }
+	    prot_free(pout);
+	    fclose(f);
+	}
+	
+	user = i_mbox->next;
+
+	/* free owner info */
+	free(i_mbox->owner);
+	free(i_mbox);
+    }
 }
