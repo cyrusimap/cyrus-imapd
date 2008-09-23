@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.179 2008/03/24 17:09:17 murch Exp $
+ * $Id: mailbox.c,v 1.180 2008/09/23 16:28:15 murch Exp $
  */
 
 #include <config.h>
@@ -310,13 +310,22 @@ unsigned long mailbox_cache_size(struct mailbox *mailbox, unsigned msgno)
          ((msgno-1) * mailbox->record_size));
     
     cache_offset = ntohl(*((bit32 *)(p+OFFSET_CACHE_OFFSET)));
+    if (cache_offset > mailbox->cache_size) {
+	return 0;
+    }
 
     /* Compute size of this record */
     cacheitembegin = cacheitem = mailbox->cache_base + cache_offset;
+    if (cache_offset >= mailbox->cache_size)
+	return 0;
     for (cache_ent = 0; cache_ent < NUM_CACHE_FIELDS; cache_ent++) {
-        cacheitem = CACHE_ITEM_NEXT(cacheitem);
+	cacheitem = CACHE_ITEM_NEXT(cacheitem);
+	if (cacheitem < cacheitembegin ||
+	    cacheitem > cacheitembegin + mailbox->cache_size) {
+	    return 0; /* clearly bogus */
+	}
     }
-    return(cacheitem - cacheitembegin);
+    return (cacheitem - cacheitembegin);
 }
 
 /* function to be used for notification of mailbox changes/updates */
@@ -1980,10 +1989,19 @@ static int process_records(struct mailbox *mailbox, FILE *newindex,
 
 	    /* Compute size of this record */
 	    cacheitembegin = cacheitem = mailbox->cache_base + cache_offset;
+            if (cache_offset >= mailbox->cache_size) {
+		syslog(LOG_ERR,
+		       "IOERROR: reading cache record for %s:"
+		       " got bogus offset %d for %u/%lu; try reconstruct",
+		       mailbox->name,
+		       cacheitem - (mailbox->cache_base + cache_offset),
+		       msgno, mailbox->exists);
+		return IMAP_IOERROR;
+            }
 	    for (cache_ent = 0; cache_ent < NUM_CACHE_FIELDS; cache_ent++) {
 		cacheitem = CACHE_ITEM_NEXT(cacheitem);
 		if ((cacheitem < (mailbox->cache_base + cache_offset)) || 
-		    (cacheitem > (mailbox->cache_base + mailbox->cache_len))) {
+		    (cacheitem > (mailbox->cache_base + mailbox->cache_size))) {
 		    syslog(LOG_ERR,
 			   "IOERROR: reading cache record for %s:"
 			   " got bogus offset %d for %u/%lu; try reconstruct",
