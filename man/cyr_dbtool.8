@@ -40,7 +40,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\"
-.\" $Id: cyr_dbtool.8,v 1.3 2008/04/04 12:46:51 murch Exp $
+.\" $Id: cyr_dbtool.8,v 1.4 2008/09/23 16:39:19 murch Exp $
 .SH NAME
 cyr_dbtool \- manage Cyrus databases
 .SH SYNOPSIS
@@ -71,11 +71,16 @@ is used to manage a cyrusdb file. The usable actions are:
 .PP
 .BI delete " <key>"
 .PP
+.BI consistency
+.PP
 You may omit key or key/value and specify one per line on stdin. Keys are
 terminated by tab or newline, values are terminated by newline.
 .PP
 Running without any options will list the available database backends and
 usable actions.
+.PP
+The 'consistency' command runs a consistency check on the DB by calling
+'myconsistent' on it.
 .PP
 .I cyr_dbtool
 reads any applicable configuration options out of the
