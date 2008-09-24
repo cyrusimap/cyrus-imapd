@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.158 2008/07/30 16:03:37 murch Exp $ -->
+<!-- $Id: changes.html,v 1.159 2008/09/24 11:11:08 murch Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -17,6 +17,11 @@ options for details.</li>
 of Murder proxies.</li>
 <li>Added support for ManageSieve auto-capability response after
 STARTTLS and after AUTH with a SASL security layer.</li>
+<li>Made <tt>MAXWORD</tt> and <tt>MAXQUOTED</tt> sizes configurable
+  via <tt>imapd.conf</tt> <i>-- courtesy of Fastmail.fm</i>.</li>
+<li>Rewrote <tt>cyrusdb_quotalegacy.c</tt> to use <tt>readir()</tt>
+  rather than <tt>glob.c</tt>.  This avoids a potential crash due to
+  conflicts between glibc and Heimdal implementations of <tt>glob()</tt>.
 <li>Fixed miscellaneous bugs and build issues.</li>
 </ul>
 
@@ -2347,7 +2352,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2008/07/30 16:03:37 $ <br />
+last modified: $Date: 2008/09/24 11:11:08 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
