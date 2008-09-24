@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ctl_mboxlist.c,v 1.62 2008/04/03 02:06:38 wescraig Exp $
+ * $Id: ctl_mboxlist.c,v 1.63 2008/09/24 11:45:50 murch Exp $
  */
 
 /* currently doesn't catch signals; probably SHOULD */
@@ -832,11 +832,18 @@ void do_verify(void)
 
 	if (config_hashimapspool && (found.data[i].type & ROOT)) {
 	    /* need to add hashed directories */
+	    int config_fulldirhash = libcyrus_config_getswitch(CYRUSOPT_FULLDIRHASH);
 	    char *tail;
-	    int c;
+	    int j, c;
 
 	    /* make the toplevel partition /a */
-	    strcat(found.data[i].path, "/a");
+	    if (config_fulldirhash) {
+		strcat(found.data[i].path, "/A");
+		c = 'B';
+	    } else {
+		strcat(found.data[i].path, "/a");
+		c = 'b';
+	    }
 	    type = (found.data[i].type &= ~ROOT);
 
 	    /* make a template path for /b - /z */
@@ -845,7 +852,7 @@ void do_verify(void)
 	    strcpy(path, found.data[i].path);
 	    tail = path + strlen(path) - 1;
 
-	    for (c = 'b'; c <= 'z'; c++) {
+	    for (j = 1; j < 26; j++, c++) {
 		*tail = c;
 		add_path(&found, type, name, part, path);
 	    }
