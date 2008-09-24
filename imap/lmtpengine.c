@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: lmtpengine.c,v 1.127 2008/04/22 13:11:18 murch Exp $
+ * $Id: lmtpengine.c,v 1.128 2008/09/24 12:14:00 murch Exp $
  */
 
 #include <config.h>
@@ -684,9 +684,11 @@ static int savemsg(struct clientdata *cd,
     }
 
     /* We are always atleast "with LMTPA" -- no unauth delivery */
-    p += sprintf(p, " by %s (Cyrus %s) with LMTP%s%s",
-		 config_servername,
-		 CYRUS_VERSION,
+    p += sprintf(p, " by %s", config_servername);
+    if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
+	p += sprintf(p, " (Cyrus %s)", CYRUS_VERSION);
+    }
+    p += sprintf(p, " with LMTP%s%s",
 		 cd->starttls_done ? "S" : "",
 		 cd->authenticated != NOAUTH ? "A" : "");
 
