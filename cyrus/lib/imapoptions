@@ -43,7 +43,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\"
-.\" $Id: imapoptions,v 1.56 2008/09/23 17:34:38 murch Exp $
+.\" $Id: imapoptions,v 1.57 2008/09/24 11:56:41 murch Exp $
 
 .SH NAME
 imapd.conf \- IMAP configuration file
@@ -121,7 +121,7 @@ are listed with ``<none>''.
    typically used on backend servers in a Murder so that users can
    subscribe to mailboxes that don't reside on their "home" server.
    This option can also be used as a workaround for IMAP clients which
-   don't play well with nonexistent or unselectable mailboxes (eg.
+   don't play well with nonexistent or unselectable mailboxes (e.g.,
    Microsoft Outlook). */
 
 { "allowanonymouslogin", 0, SWITCH }
@@ -133,8 +133,8 @@ are listed with ``<none>''.
 .PP
   Note that this command requires that SASL is compiled with APOP
   support, that the plaintext passwords are available in a SASL auxprop
-  backend (eg. sasldb), and that the system can provide enough entropy
-  (eg. from /dev/urandom) to create a challenge in the banner. */
+  backend (e.g., sasldb), and that the system can provide enough entropy
+  (e.g., from /dev/urandom) to create a challenge in the banner. */
 
 { "allownewnews", 0, SWITCH }
 /* Allow use of the NNTP NEWNEWS command.
@@ -196,7 +196,7 @@ are listed with ``<none>''.
 
 { "client_timeout", 10, INT }
 /* Number of seconds to wait before returning a timeout failure when
-   performing a client connection (e.g. in a murder environment) */
+   performing a client connection (e.g., in a murder environment) */
 
 { "configdirectory", NULL, STRING }
 /* The pathname of the IMAP configuration directory.  This field is
@@ -271,17 +271,18 @@ are listed with ``<none>''.
 
 { "force_sasl_client_mech", NULL, STRING }
 /* Force preference of a given SASL mechanism for client side operations
-   (e.g. murder environments).  This is separate from (and overridden by)
+   (e.g., murder environments).  This is separate from (and overridden by)
    the ability to use the <host shortname>_mechs option to set preferred
    mechanisms for a specific host */
 
 { "fulldirhash", 0, SWITCH }
 /* If enabled, uses an improved directory hashing scheme which hashes
-   the entire username instead of using just the first letter.  This
-   changes hash algorithm used for quota and user directories and if
-   \fIhashimapspool\fR is enabled, the entire mail spool.
+   on the entire username instead of using just the first letter as
+   the hash.  This changes hash algorithm used for quota and user
+   directories and if \fIhashimapspool\fR is enabled, the entire mail
+   spool.
 .PP
-   Note that this option cannot be changed on a live system.  The
+   Note that this option CANNOT be changed on a live system.  The
    server must be quiesced and then the directories moved with the
    \fBrehash\fR utility. */
 
@@ -495,7 +496,7 @@ are listed with ``<none>''.
    set to 3. */
 
 { "lmtp_downcase_rcpt", 0, SWITCH }
-/* If enabled, lmtpd will convert the recipient address to lowercase
+/* If enabled, lmtpd will convert the recipient addresses to lowercase
    (up to a '+' character, if present). */
 
 { "lmtp_fuzzy_mailbox_match", 0, SWITCH }
@@ -587,7 +588,7 @@ are listed with ``<none>''.
 { "md5_dir", NULL, STRING }
 /* Top level directory for MD5 store manipulated by make_md5. File
    structure within this directory is one file for each user on the system,
-   hashed on the first letter of the userid (e.g: /var/imap/md5/d/dpc22). */
+   hashed on the first letter of the userid (e.g., /var/imap/md5/d/dpc22). */
 
 { "md5_user_map", NULL, STRING }
 /* Map file (cdb) to allow partial make_md5 runs. Maps username to UID */
@@ -738,7 +739,7 @@ are listed with ``<none>''.
    connections before the minpoll restriction is triggered.  Additionally,
    one padding entry is recovered every \fIpopminpoll\fR minutes.
    This allows for the occasional polling rate faster than popminpoll, 
-   (i.e. for clients that require a send/receive to send mail) but still 
+   (i.e., for clients that require a send/receive to send mail) but still 
    enforces the rate long-term.  Default is 1 (disabled).
 .br
 .sp
@@ -833,7 +834,7 @@ are listed with ``<none>''.
    warnings. */
 
 { "quotawarnkb", 0, INT }
-/* The maximum amount of free space (in kB) in which to give a quota
+/* The maximum amount of free space (in kB) at which to give a quota
    warning (if this value is 0, or if the quota is smaller than this
    amount, than warnings are always given). */
 
@@ -924,7 +925,7 @@ product version in the capabilities */
    previously installed script will be unaffected by this option and
    will continue to execute regardless of the extensions used.  This
    option has no effect on options that are disabled at compile time
-   (e.g. "regex"). */
+   (e.g., "regex"). */
 
 { "sieve_maxscriptsize", 32, INT }
 /* Maximum size (in kilobytes) any sieve script can be, enforced at
@@ -1047,7 +1048,7 @@ product version in the capabilities */
 
 { "tls_ca_path", NULL, STRING }
 /* Path to directory with certificates of CAs.  This directory must
-   have filenames with the hashed value of the certificate (see
+   have filenames with the hashed value of the certificates (see
    openssl(XXX)). */
 
 { "tlscache_db", "berkeley-nosync", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql")}
@@ -1077,7 +1078,7 @@ product version in the capabilities */
 /* The umask value used by various Cyrus IMAP programs. */
 
 { "username_tolower", 1, SWITCH }
-/* Convert usernames to all lowercase before login/authenticate.  This
+/* Convert usernames to all lowercase before login/authentication.  This
    is useful with authentication backends which ignore case during
    username lookups (such as LDAP).  */
 
