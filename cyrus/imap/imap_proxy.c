@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.c,v 1.9 2008/04/22 13:11:17 murch Exp $
+ * $Id: imap_proxy.c,v 1.10 2008/09/25 10:41:13 murch Exp $
  */
 
 #include <config.h>
@@ -151,8 +151,8 @@ struct backend *proxy_findinboxserver(void)
 
 /* pipe_response() reads from 's->in' until either the tagged response
    starting with 'tag' appears, or if 'tag' is NULL, to the end of the
-   current line.  If 'include_tag' is set, the tagged line is included
-   in the output, otherwise the tagged line is stored in 's->last_result'. 
+   current line.  If 'include_last' is set, the last/tagged line is included
+   in the output, otherwise the last/tagged line is stored in 's->last_result'. 
    In either case, the result of the tagged command is returned.
 
    's->last_result' assumes that tagged responses don't contain literals.
@@ -161,7 +161,7 @@ struct backend *proxy_findinboxserver(void)
    force_notfatal says to not fatal() if we lose connection to backend_current
    even though it is in 95% of the cases, a good idea...
 */
-static int pipe_response(struct backend *s, const char *tag, int include_tag,
+static int pipe_response(struct backend *s, const char *tag, int include_last,
 			 int force_notfatal)
 {
     char buf[2048];
@@ -225,7 +225,7 @@ static int pipe_response(struct backend *s, const char *tag, int include_tag,
 		last = 1;
 	    }
 	
-	    if (last && !include_tag) {
+	    if (last && !include_last) {
 		/* Store the tagged line */
 		if (sl > s->last_result.alloc - s->last_result.len) {
 		    s->last_result.alloc =
@@ -248,14 +248,14 @@ static int pipe_response(struct backend *s, const char *tag, int include_tag,
 
 	    /* write out this part, but we have to keep reading until we
 	       hit the end of the line */
-	    if (!last || include_tag) prot_write(imapd_out, buf, sl);
+	    if (!last || include_last) prot_write(imapd_out, buf, sl);
 	    cont = 1;
 	    continue;
 	} else {		/* we got the end of the line */
 	    int i;
 	    int litlen = 0, islit = 0;
 
-	    if (!last || include_tag) prot_write(imapd_out, buf, sl);
+	    if (!last || include_last) prot_write(imapd_out, buf, sl);
 
 	    /* now we have to see if this line ends with a literal */
 	    if (sl < 64) {
@@ -291,7 +291,7 @@ static int pipe_response(struct backend *s, const char *tag, int include_tag,
 			/* EOF or other error */
 			return -1;
 		    }
-		    if (!last || include_tag) prot_write(imapd_out, buf, j);
+		    if (!last || include_last) prot_write(imapd_out, buf, j);
 		    litlen -= j;
 		}
 
@@ -317,7 +317,8 @@ int pipe_until_tag(struct backend *s, const char *tag, int force_notfatal)
     return pipe_response(s, tag, 0, force_notfatal);
 }
 
-int pipe_including_tag(struct backend *s, const char *tag, int force_notfatal) {
+int pipe_including_tag(struct backend *s, const char *tag, int force_notfatal)
+{
     int r;
 
     r = pipe_response(s, tag, 1, force_notfatal);
@@ -332,7 +333,7 @@ int pipe_including_tag(struct backend *s, const char *tag, int force_notfatal) {
 
 static int pipe_to_end_of_response(struct backend *s, int force_notfatal)
 {
-    return pipe_response(s, NULL, 0, force_notfatal);
+    return pipe_response(s, NULL, 1, force_notfatal);
 }
 
 /* copy our current input to 's' until we hit a true EOL.
