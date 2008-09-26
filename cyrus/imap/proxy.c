@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: proxy.c,v 1.7 2008/03/24 17:09:18 murch Exp $
+ * $Id: proxy.c,v 1.8 2008/09/26 13:30:00 murch Exp $
  */
 
 #include <config.h>
@@ -260,15 +260,14 @@ int proxy_check_input(struct protgroup *protin,
 
 	    if (pout) {
 		const char *err;
-		char buf[4096];
-		int c;
 
 		do {
-		    c = prot_read(pin, buf, sizeof(buf));
+		    char buf[4096];
+		    int c = prot_read(pin, buf, sizeof(buf));
 
 		    if (c == 0 || c < 0) break;
 		    prot_write(pout, buf, c);
-		} while (c == sizeof(buf));
+		} while (pin->cnt > 0);
 
 		if ((err = prot_error(pin)) != NULL) {
 		    if (serverout && !strcmp(err, PROT_EOF_STRING)) {
@@ -280,6 +279,9 @@ int proxy_check_input(struct protgroup *protin,
 			fatal("Lost connection to input stream",
 			      EC_UNAVAILABLE);
 		    }
+		}
+		else {
+		    return 0;
 		}
 	    }
 	}
