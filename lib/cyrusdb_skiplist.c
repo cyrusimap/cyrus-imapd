@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyrusdb_skiplist.c,v 1.62 2008/09/23 16:39:19 murch Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.63 2008/09/26 12:15:30 murch Exp $
  */
 
 /* xxx check retry_xxx for failure */
@@ -146,7 +146,6 @@ enum {
 };
 
 struct txn {
-    int ismalloc;
     int syncfd;
 
     /* logstart is where we start changes from on commit, where we truncate
@@ -472,8 +471,9 @@ static int SAFE_TO_APPEND(struct db *db)
     return 0;
 }
 
-static int newtxn(struct db *db, struct txn *t)
+static int newtxn(struct db *db, struct txn **tidptr)
 {
+    struct txn *tid;
     /* is this file safe to append to?
      * 
      * If it isn't, we need to run recovery. */
@@ -482,12 +482,17 @@ static int newtxn(struct db *db, struct txn *t)
 	if (r) return r;
     }
 
-    /* fill in t */
-    t->ismalloc = 0;
-    t->syncfd = -1;
-    t->logstart = db->map_size;
+    /* create the transaction */
+    tid = xmalloc(sizeof(struct txn));
+    tid->syncfd = -1;
+    tid->logstart = db->map_size;
 /*    assert(t->logstart != -1);*/
-    t->logend = t->logstart;
+    tid->logend = tid->logstart;
+    db->current_txn = tid;
+
+    /* pass it back out */
+    *tidptr = tid;
+
     return 0;
 }
 
@@ -712,6 +717,37 @@ static int unlock(struct db *db)
     db->lock_status = UNLOCKED;
 
     /* printf("%d: unlock: %d\n", getpid(), db->map_ino); */
+
+    return 0;
+}
+
+static int lock_or_refresh(struct db *db, struct txn **tidptr)
+{
+    int r;
+
+    assert(db != NULL && tidptr != NULL);
+
+    if (*tidptr) {
+	/* check that the DB agrees that we're in this transaction */
+	assert(db->current_txn == *tidptr);
+
+     	/* just update the active transaction */
+	update_lock(db, *tidptr);
+
+    } else {
+	/* check that the DB isn't in a transaction */
+	assert(db->current_txn == NULL);
+
+	/* grab a r/w lock */
+	if ((r = write_lock(db, NULL)) < 0) {
+	    return r;
+	}
+
+	/* start the transaction */
+	if ((r = newtxn(db, tidptr))) {
+	    return r;
+	}
+    }
 
     return 0;
 }
@@ -953,10 +989,9 @@ static const char *find_node(struct db *db,
 int myfetch(struct db *db,
 	    const char *key, int keylen,
 	    const char **data, int *datalen,
-	    struct txn **mytid)
+	    struct txn **tidptr)
 {
     const char *ptr;
-    struct txn t, *tp;
     int r = 0;
 
     assert(db != NULL && key != NULL);
@@ -964,32 +999,25 @@ int myfetch(struct db *db,
     if (data) *data = NULL;
     if (datalen) *datalen = 0;
 
-    if (!mytid) {
-	if (db->current_txn == NULL) {
-	    /* grab a r lock */
-	    if ((r = read_lock(db)) < 0) {
-		return r;
-	    }
-	    tp = NULL;
-	} else {
-	    tp = db->current_txn;
-	    update_lock(db, tp);
-	}
-    } else if (!*mytid) {
-	assert(db->current_txn == NULL);
-	/* grab a r/w lock */
-	if ((r = write_lock(db, NULL)) < 0) {
+    /* Hacky workaround:
+     *
+     * If no transaction was passed, but we're in a transaction,
+     * then just do the read within that transaction. 
+     */
+    if (!tidptr && db->current_txn != NULL) {
+	tidptr = &(db->current_txn);
+    }
+
+    if (tidptr) {
+	/* make sure we're write locked and up to date */
+	if ((r = lock_or_refresh(db, tidptr)) < 0) {
 	    return r;
 	}
-
-	/* fill in t */
-	if ((r = newtxn(db, &t))) return r;
-
-	tp = &t;
     } else {
-	assert(db->current_txn == *mytid);
-	tp = *mytid;
-	update_lock(db, tp);
+	/* grab a r lock */
+	if ((r = read_lock(db)) < 0) {
+	    return r;
+	}
     }
 
     ptr = find_node(db, key, keylen, 0);
@@ -1002,17 +1030,7 @@ int myfetch(struct db *db,
 	if (data) *data = DATA(ptr);
     }
 
-    if (mytid) {
-	if (!*mytid) {
-	    /* return the txn structure */
-
-	    *mytid = xmalloc(sizeof(struct txn));
-	    memcpy(*mytid, tp, sizeof(struct txn));
-	    (*mytid)->ismalloc = 1;
-
-	    db->current_txn = *mytid;
-	}
-    } else if (!tp) {
+    if (!tidptr) {
 	/* release read lock */
 	int r1;
 	if ((r1 = unlock(db)) < 0) {
@@ -1026,16 +1044,16 @@ int myfetch(struct db *db,
 static int fetch(struct db *mydb, 
 		 const char *key, int keylen,
 		 const char **data, int *datalen,
-		 struct txn **mytid)
+		 struct txn **tidptr)
 {
-    return myfetch(mydb, key, keylen, data, datalen, mytid);
+    return myfetch(mydb, key, keylen, data, datalen, tidptr);
 }
 static int fetchlock(struct db *db, 
 		     const char *key, int keylen,
 		     const char **data, int *datalen,
-		     struct txn **mytid)
+		     struct txn **tidptr)
 {
-    return myfetch(db, key, keylen, data, datalen, mytid);
+    return myfetch(db, key, keylen, data, datalen, tidptr);
 }
 
 /* foreach allows for subsidary mailbox operations in 'cb'.
@@ -1045,45 +1063,37 @@ int myforeach(struct db *db,
 	      char *prefix, int prefixlen,
 	      foreach_p *goodp,
 	      foreach_cb *cb, void *rock, 
-	      struct txn **tid)
+	      struct txn **tidptr)
 {
     const char *ptr;
     char *savebuf = NULL;
     size_t savebuflen = 0;
     size_t savebufsize;
-    struct txn t, *tp;
     int r = 0, cb_r = 0;
 
     assert(db != NULL);
     assert(prefixlen >= 0);
 
-    if (!tid) {
-	if (db->current_txn == NULL) {
-	    /* grab a r lock */
-	    if ((r = read_lock(db)) < 0) {
-		return r;
-	    }
-	    tp = NULL;
-	} else {
-	    tp = db->current_txn;
-	    update_lock(db, tp);
-	}
-    } else if (!*tid) {
-	assert(db->current_txn == NULL);
-	/* grab a r/w lock */
-	if ((r = write_lock(db, NULL)) < 0) {
+    /* Hacky workaround:
+     *
+     * If no transaction was passed, but we're in a transaction,
+     * then just do the read within that transaction. 
+     */
+    if (!tidptr && db->current_txn != NULL) {
+	tidptr = &(db->current_txn);
+    }
+
+    if (tidptr) {
+	/* make sure we're write locked and up to date */
+	if ((r = lock_or_refresh(db, tidptr)) < 0) {
 	    return r;
 	}
-
-	/* fill in t */
-	if ((r = newtxn(db, &t))) return r;
-
-	tp = &t;
     } else {
-	assert(db->current_txn == *tid);
-	tp = *tid;
-	update_lock(db, tp);
-    }
+	/* grab a r lock */
+	if ((r = read_lock(db)) < 0) {
+	    return r;
+	}
+    } 
 
     ptr = find_node(db, prefix, prefixlen, 0);
 
@@ -1097,7 +1107,7 @@ int myforeach(struct db *db,
 	    ino_t ino = db->map_ino;
 	    unsigned long sz = db->map_size;
 
-	    if (!tp) {
+	    if (!tidptr) {
 		/* release read lock */
 		if ((r = unlock(db)) < 0) {
 		    return r;
@@ -1116,14 +1126,14 @@ int myforeach(struct db *db,
 	    cb_r = cb(rock, KEY(ptr), KEYLEN(ptr), DATA(ptr), DATALEN(ptr));
 	    if (cb_r) break;
 
-	    if (!tp) {
+	    if (!tidptr) {
 		/* grab a r lock */
 		if ((r = read_lock(db)) < 0) {
 		    return r;
 		}
 	    } else {
 		/* make sure we're up to date */
-		update_lock(db, tp);
+		update_lock(db, *tidptr);
 	    }
 
 	    /* reposition */
@@ -1151,17 +1161,7 @@ int myforeach(struct db *db,
 	}
     }
 
-    if (tid) {
-	if (!*tid) {
-	    /* return the txn structure */
-
-	    *tid = xmalloc(sizeof(struct txn));
-	    memcpy(*tid, tp, sizeof(struct txn));
-	    (*tid)->ismalloc = 1;
-
-	    db->current_txn = *tid;
-	}
-    } else if (!tp) {
+    if (!tidptr) {
 	/* release read lock */
 	if ((r = unlock(db)) < 0) {
 	    return r;
@@ -1191,14 +1191,14 @@ unsigned int randlvl(struct db *db)
 int mystore(struct db *db, 
 	    const char *key, int keylen,
 	    const char *data, int datalen,
-	    struct txn **tid, int overwrite)
+	    struct txn **tidptr, int overwrite)
 {
     const char *ptr;
     bit32 klen, dlen;
     struct iovec iov[50];
     unsigned int lvl, i;
     int num_iov;
-    struct txn t, *tp;
+    struct txn *tid, *localtid = NULL;
     bit32 endpadding = (bit32) htonl(-1);
     bit32 zeropadding[4] = { 0, 0, 0, 0 };
     int updateoffsets[SKIPLIST_MAXLEVEL];
@@ -1212,38 +1212,32 @@ int mystore(struct db *db,
     assert(db != NULL);
     assert(key && keylen);
 
-    if (!tid || !*tid) {
-	assert(db->current_txn == NULL);
-	/* grab a r/w lock */
-	if ((r = write_lock(db, NULL)) < 0) {
-	    return r;
-	}
-
-	/* fill in t */
-	if ((r = newtxn(db, &t))) return r;
-
-	tp = &t;
-
-	db->current_txn = tp;
-    } else {
-	assert(db->current_txn == *tid);
-	tp = *tid;
-	update_lock(db, tp);
+    /* not keeping the transaction, just create one local to
+     * this function */
+    if (!tidptr) {
+	tidptr = &localtid;
     }
 
+    /* make sure we're write locked and up to date */
+    if ((r = lock_or_refresh(db, tidptr)) < 0) {
+	return r;
+    }
+
+    tid = *tidptr; /* consistent naming is nice */
+
     if (be_paranoid) {
-	assert(myconsistent(db, tp, 1) == 0);
+	assert(myconsistent(db, tid, 1) == 0);
     }
 
     num_iov = 0;
     
-    newoffset = tp->logend;
+    newoffset = tid->logend;
     ptr = find_node(db, key, keylen, updateoffsets);
     if (ptr != db->map_base && 
 	!db->compar(KEY(ptr), KEYLEN(ptr), key, keylen)) {
 	    
 	if (!overwrite) {
-	    myabort(db, tp);	/* releases lock */
+	    myabort(db, tid);	/* releases lock */
 	    return CYRUSDB_EXISTS;
 	} else {
 	    /* replace with an equal height node */
@@ -1307,15 +1301,15 @@ int mystore(struct db *db,
     WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) newoffsets, 4 * lvl);
     WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) &endpadding, 4);
 
-    getsyncfd(db, tp);
-    lseek(tp->syncfd, tp->logend, SEEK_SET);
-    r = retry_writev(tp->syncfd, iov, num_iov);
+    getsyncfd(db, tid);
+    lseek(tid->syncfd, tid->logend, SEEK_SET);
+    r = retry_writev(tid->syncfd, iov, num_iov);
     if (r < 0) {
 	syslog(LOG_ERR, "DBERROR: retry_writev(): %m");
-	myabort(db, tp);
+	myabort(db, tid);
 	return CYRUSDB_IOERROR;
     }
-    tp->logend += r;		/* update where to write next */
+    tid->logend += r;		/* update where to write next */
 
     /* update pointers after writing record so abort is guaranteed to
      * see which records need reverting */
@@ -1328,23 +1322,14 @@ int mystore(struct db *db,
 	retry_write(db->fd, (char *) &netnewoffset, 4);
     }
 
-    if (tid) {
-	if (!*tid) {
-	    /* return the txn structure */
+    if (be_paranoid) {
+	assert(myconsistent(db, tid, 1) == 0);
+    }
 
-	    *tid = xmalloc(sizeof(struct txn));
-	    memcpy(*tid, tp, sizeof(struct txn));
-	    (*tid)->ismalloc = 1;
-
-	    db->current_txn = *tid;
-	}
-
-	if (be_paranoid) {
-	    assert(myconsistent(db, *tid, 1) == 0);
-	}
-    } else {
+    if (localtid) {
 	/* commit the store, which releases the write lock */
-	mycommit(db, tp);
+	r = mycommit(db, tid);
+	if (r) return r;
     }
     
     return 0;
@@ -1368,38 +1353,32 @@ static int store(struct db *db,
 
 int mydelete(struct db *db, 
 	     const char *key, int keylen,
-	     struct txn **tid, int force __attribute__((unused)))
+	     struct txn **tidptr, int force __attribute__((unused)))
 {
     const char *ptr;
     int delrectype = htonl(DELETE);
     int updateoffsets[SKIPLIST_MAXLEVEL];
     bit32 offset;
     bit32 writebuf[2];
-    struct txn t, *tp;
+    struct txn *tid, *localtid = NULL;
     unsigned i;
     int r;
 
-    if (!tid || !*tid) {
-	assert(db->current_txn == NULL);
-	/* grab a r/w lock */
-	if ((r = write_lock(db, NULL)) < 0) {
-	    return r;
-	}
-
-	/* fill in t */
-	if ((r = newtxn(db, &t))) return r;
-
-	tp = &t;
-
-	db->current_txn = tp;
-    } else {
-	assert(db->current_txn == *tid);
-	tp = *tid;
-	update_lock(db, tp);
+    /* not keeping the transaction, just create one local to
+     * this function */
+    if (!tidptr) {
+	tidptr = &localtid;
     }
 
+    /* make sure we're write locked and up to date */
+    if ((r = lock_or_refresh(db, tidptr)) < 0) {
+	return r;
+    }
+
+    tid = *tidptr; /* consistent naming is nice */
+
     if (be_paranoid) {
-	assert(myconsistent(db, tp, 1) == 0);
+	assert(myconsistent(db, tid, 1) == 0);
     }
 
     ptr = find_node(db, key, keylen, updateoffsets);
@@ -1409,19 +1388,19 @@ int mydelete(struct db *db,
 	offset = ptr - db->map_base;
 
 	/* log the deletion */
-	getsyncfd(db, tp);
-	lseek(tp->syncfd, tp->logend, SEEK_SET);
+	getsyncfd(db, tid);
+	lseek(tid->syncfd, tid->logend, SEEK_SET);
 	writebuf[0] = delrectype;
 	writebuf[1] = htonl(offset);
 
 	/* update end-of-log */
-	r = retry_write(tp->syncfd, (char *) writebuf, 8);
+	r = retry_write(tid->syncfd, (char *) writebuf, 8);
 	if (r < 0) {
 	    syslog(LOG_ERR, "DBERROR: retry_write(): %m");
-	    myabort(db, tp);
+	    myabort(db, tid);
 	    return CYRUSDB_IOERROR;
 	}
-	tp->logend += r;
+	tid->logend += r;
 
 	/* update pointers after writing record so abort is guaranteed to
 	 * see which records need reverting */
@@ -1439,23 +1418,13 @@ int mydelete(struct db *db,
 	}
     }
 
-    if (tid) {
-	if (!*tid) {
-	    /* return the txn structure */
+    if (be_paranoid) {
+	assert(myconsistent(db, tid, 1) == 0);
+    }
 
-	    *tid = xmalloc(sizeof(struct txn));
-	    memcpy(*tid, tp, sizeof(struct txn));
-	    (*tid)->ismalloc = 1;
-
-	    db->current_txn = *tid;
-	}
-
-	if (be_paranoid) {
-	    assert(myconsistent(db, *tid, 1) == 0);
-	}
-    } else {
+    if (localtid) {
 	/* commit the store, which releases the write lock */
-	mycommit(db, tp);
+	mycommit(db, tid);
     }
 
     return 0;
@@ -1538,10 +1507,8 @@ int mycommit(struct db *db, struct txn *tid)
         /* must close this after releasing the lock */
         closesyncfd(db, tid);
 
-        /* free tid if needed */
-        if (tid->ismalloc) {
-            free(tid);
-        }
+        /* free tid */
+        free(tid);
     }
 
     return r;
@@ -1643,9 +1610,7 @@ int myabort(struct db *db, struct txn *tid)
     closesyncfd(db, tid);
 
     /* free the tid */
-    if (tid->ismalloc) {
-	free(tid);
-    }
+    free(tid);
 
     db->current_txn = NULL;
 
