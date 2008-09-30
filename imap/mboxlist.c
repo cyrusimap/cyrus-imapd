@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mboxlist.c,v 1.258 2008/08/27 08:28:47 selsky Exp $
+ * $Id: mboxlist.c,v 1.259 2008/09/30 19:19:23 murch Exp $
  */
 
 #include <config.h>
@@ -387,7 +387,7 @@ mboxlist_mycreatemailboxcheck(char *name,
     if(!isadmin && force_user_create) return IMAP_PERMISSION_DENIED;
 
     /* User has admin rights over their own mailbox namespace */
-    if (mboxname_userownsmailbox(userid, name) && strchr(name+5, '.') &&
+    if (mboxname_userownsmailbox(userid, name) && strchr(mbox+5, '.') &&
 	(config_implicitrights & ACL_ADMIN)) {
 	isadmin = 1;
     }

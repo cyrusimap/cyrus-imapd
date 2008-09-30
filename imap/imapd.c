@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.551 2008/09/05 15:56:21 murch Exp $
+ * $Id: imapd.c,v 1.552 2008/09/30 19:19:23 murch Exp $
  */
 
 #include <config.h>
@@ -5024,7 +5024,10 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
 	}
 
 	/* local mailbox -- fall through */
-	if (guessedpart) partition = NULL;
+	if (guessedpart) {
+	    partition = NULL;
+	    r = 0;
+	}
     }
 
     /* local mailbox */
