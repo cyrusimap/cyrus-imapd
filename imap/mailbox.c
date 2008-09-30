@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.180 2008/09/23 16:28:15 murch Exp $
+ * $Id: mailbox.c,v 1.181 2008/09/30 17:04:20 murch Exp $
  */
 
 #include <config.h>
@@ -1713,6 +1713,18 @@ static void mailbox_upgrade_index_work(struct mailbox *mailbox,
 #else
 	    *((bit32 *)(buf+OFFSET_MODSEQ_64)) = htonl(0);
 	    *((bit32 *)(buf+OFFSET_MODSEQ)) = htonl(1);
+#endif
+	} else {
+	    /* Older versions may have incorrectly allowed modseq to be 0 */
+#ifdef HAVE_LONG_LONG_INT
+	    if ( *((bit64 *)(buf+OFFSET_MODSEQ_64)) == 0 ) {
+		*((bit64 *)(buf+OFFSET_MODSEQ_64)) = htonll(1);
+	    }
+#else
+	    if ( *((bit32 *)(buf+OFFSET_MODSEQ)) == 0 ) {
+		*((bit32 *)(buf+OFFSET_MODSEQ_64)) = htonl(0);
+		*((bit32 *)(buf+OFFSET_MODSEQ)) = htonl(1);
+	    }
 #endif
 	}
 
