@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mupdate.c,v 1.103 2008/08/27 08:28:47 selsky Exp $
+ * $Id: mupdate.c,v 1.104 2008/09/30 17:09:54 murch Exp $
  */
 
 #include <config.h>
@@ -156,8 +156,8 @@ struct conn {
 
     /* pending changes to send, in reverse order */
     pthread_mutex_t m;
-    pthread_cond_t cond;
     struct pending *plist;
+    struct pending *ptail;
     struct conn *updatelist_next;
     struct prot_waitevent *ev; /* invoked every 'update_wait' seconds
 				  to send out updates */
@@ -1547,6 +1547,7 @@ void log_update(const char *mailbox,
     for (upc = updatelist; upc != NULL; upc = upc->updatelist_next) {
 	/* for each connection, add to pending list */
 	struct pending *p = (struct pending *) xmalloc(sizeof(struct pending));
+	p->next = NULL;
 	strlcpy(p->mailbox, mailbox, sizeof(p->mailbox));
 	
 	/* this might need to be inside the mutex, but I doubt it */
@@ -1558,12 +1559,16 @@ void log_update(const char *mailbox,
 	    /* No Match! Continue! */
 	    continue;
 	}
-	
+
 	pthread_mutex_lock(&upc->m);
-	p->next = upc->plist;
-	upc->plist = p;
-	
-	pthread_cond_signal(&upc->cond);
+
+	if ( upc->plist == NULL ) {
+	    upc->plist = upc->ptail = p;
+	} else {
+	    upc->ptail->next = p;
+	    upc->ptail = p;
+	}
+
 	pthread_mutex_unlock(&upc->m);
     }
 }
@@ -1848,7 +1853,6 @@ void cmd_startupdate(struct conn *C, const char *tag,
     char pattern[2] = {'*','\0'};
 
     /* initialize my condition variable */
-    pthread_cond_init(&C->cond, NULL);
 
     /* The inital dump of the database can result in a lot of data,
      * let's do this nonblocking */
@@ -1889,6 +1893,7 @@ void sendupdates(struct conn *C, int flushnow)
     /* just grab the update list and release the lock */
     p = C->plist;
     C->plist = NULL;
+    C->ptail = NULL;
     pthread_mutex_unlock(&C->m);
 
     while (p != NULL) {
