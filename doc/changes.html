@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.160 2008/09/24 11:45:49 murch Exp $ -->
+<!-- $Id: changes.html,v 1.161 2008/09/30 16:57:24 murch Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -23,6 +23,7 @@ STARTTLS and after AUTH with a SASL security layer.</li>
   rather than <tt>glob.c</tt>.  This avoids a potential crash due to
   conflicts between glibc and Heimdal implementations of <tt>glob()</tt>.</li>
 <li>Added support for <tt>fulldirhash</tt> to <tt>ctl_mboxlist -v</tt>.</li>
+<li>More skiplist transaction fixes <i>-- courtesy of Fastmail.fm</i>.</li>
 <li>Fixed miscellaneous bugs and build issues.</li>
 </ul>
 
@@ -2353,7 +2354,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2008/09/24 11:45:49 $ <br />
+last modified: $Date: 2008/09/30 16:57:24 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
