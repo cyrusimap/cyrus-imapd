@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mupdate.c,v 1.104 2008/09/30 17:09:54 murch Exp $
+ * $Id: mupdate.c,v 1.105 2008/10/01 17:52:43 wescraig Exp $
  */
 
 #include <config.h>
@@ -2249,6 +2249,7 @@ int mupdate_synchronize(mupdate_handle *handle)
     char pattern[] = { '*', '\0' };
     struct txn *tid = NULL;
     int ret = 0;    
+    int err = 0;
 
     if(!handle || !handle->saslcompleted) return 1;
 
@@ -2307,18 +2308,45 @@ int mupdate_synchronize(mupdate_handle *handle)
 	       strcmp(l->server, r->server) ||
 	       strcmp(l->acl,r->acl)) {
 		/* Something didn't match, replace it */
-		mboxlist_insertremote(r->mailbox, 
-				     (r->t == SET_RESERVE ?
-				        MBTYPE_RESERVE : 0),
-				      r->server, r->acl, &tid);
+		/*
+		 * If this is a locally hosted mailbox, don't make a
+		 * change, just warn.
+		 */
+		if ((config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) &&
+			(strchr( l->server, '!' ) == NULL )) {
+		    syslog(LOG_ERR, "local mailbox %s wrong in mailbox list",
+			    l->mailbox );
+		    err++;
+		} else {
+		    mboxlist_insertremote(r->mailbox, 
+					 (r->t == SET_RESERVE ?
+					    MBTYPE_RESERVE : 0),
+					  r->server, r->acl, &tid);
+		}
 	    }
 	    /* Okay, dump these two */
 	    local_boxes.head = l->next;
 	    remote_boxes.head = r->next;
 	} else if (ret < 0) {
 	    /* Local without corresponding remote, delete it */
-	    if (config_mupdate_config != IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) {
-		/* But not for a unified configuration */
+		/*
+		 * In a unified murder, we don't want to delete locally
+		 * hosted mailboxes during mupdate's resync process.
+		 * If that sort of operation appears necessary, it
+		 * probably requires an operator to review it --
+		 * ctl_mboxlist is the right place to fix the kind
+		 * of configuration error implied.
+		 * 
+		 * A similar problem exists when the server thinks
+		 * it is locally hosting a mailbox, but mupdate master
+		 * thinks it's somewhere else.
+		 */
+	    if ((config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) &&
+		    (strchr( l->server, '!' ) == NULL )) {
+		syslog(LOG_ERR, "local mailbox %s not in mailbox list",
+			l->mailbox );
+		err++;
+	    } else {
 		mboxlist_deleteremote(l->mailbox, &tid);
 	    }
 	    local_boxes.head = l->next;
@@ -2335,8 +2363,12 @@ int mupdate_synchronize(mupdate_handle *handle)
     if(l && !r) {
 	/* we have more deletes to do */
 	while(l) {
-	    if (config_mupdate_config != IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) {
-		/* But not for a unified configuration */
+	    if ((config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) &&
+		    (strchr( l->server, '!' ) == NULL )) {
+		syslog(LOG_ERR, "local mailbox %s not in mailbox list",
+			l->mailbox );
+		err++;
+	    } else {
 		mboxlist_deleteremote(l->mailbox, &tid);
 	    }
 	    local_boxes.head = l->next;
@@ -2357,7 +2389,12 @@ int mupdate_synchronize(mupdate_handle *handle)
     if (tid) mboxlist_commit(tid);
 
     /* All up to date! */
-    syslog(LOG_NOTICE, "mailbox list synchronization complete");
+    if ( err ) {
+	syslog(LOG_ERR, "mailbox list synchronization NOT complete (%d) errors",
+		err);
+    } else {
+	syslog(LOG_NOTICE, "mailbox list synchronization complete");
+    }
 
  done:
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
