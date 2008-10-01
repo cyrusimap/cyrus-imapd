@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: backend.c,v 1.55 2008/04/22 13:11:17 murch Exp $
+ * $Id: backend.c,v 1.56 2008/10/01 14:04:03 murch Exp $
  */
 
 #include <config.h>
@@ -305,6 +305,7 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
     int sock = -1;
     int r;
     int err = -1;
+    int ask = 1; /* should we explicitly ask for capabilities? */
     struct addrinfo hints, *res0 = NULL, *res;
     struct sockaddr_un sunsock;
     char buf[2048], *mechlist = NULL;
@@ -400,9 +401,9 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
 	/* try to get the capabilities from the banner */
 	mechlist = ask_capability(ret->out, ret->in, prot,
 				  &ret->capability, AUTO_BANNER);
-	if (!mechlist && !ret->capability) {
-	    /* found no capabilities in banner -> get them explicitly */
-	    prot->banner.is_capa = 0;
+	if (mechlist || ret->capability) {
+	    /* found capabilities in banner -> don't ask */
+	    ask = 0;
 	}
     }
     else {
@@ -419,7 +420,7 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
 			     strlen(prot->banner.resp)));
     }
 
-    if (!prot->banner.is_capa) {
+    if (ask) {
 	/* get the capabilities */
 	mechlist = ask_capability(ret->out, ret->in, prot,
 				  &ret->capability, AUTO_NO);
