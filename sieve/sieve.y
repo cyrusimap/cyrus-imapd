@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sieve.y,v 1.38 2008/03/24 20:08:46 murch Exp $
+ * $Id: sieve.y,v 1.39 2008/10/02 13:36:56 murch Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -851,9 +851,14 @@ static commandlist_t *build_fileinto(int t, int copy, char *folder)
 
     if (ret) {
 	ret->u.f.copy = copy;
-	ret->u.f.folder = xmalloc(2 * strlen(folder) + 1);
-	UTF8_to_mUTF7(ret->u.f.folder, folder);
-	free(folder);
+	if (config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO)) {
+	    ret->u.f.folder = xmalloc(5 * strlen(folder) + 1);
+	    UTF8_to_mUTF7(ret->u.f.folder, folder);
+	    free(folder);
+	}
+	else {
+	    ret->u.f.folder = folder;
+	}
     }
     return ret;
 }
