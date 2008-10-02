@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mboxname.c,v 1.43 2008/03/24 17:09:18 murch Exp $
+ * $Id: mboxname.c,v 1.44 2008/10/02 13:41:19 murch Exp $
  */
 
 #include <config.h>
@@ -714,7 +714,7 @@ int mboxname_netnewscheck(char *name)
  * Apply site policy restrictions on mailbox names.
  * Restrictions are hardwired for now.
  */
-#define GOODCHARS " +,-.0123456789:=@ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz~"
+#define GOODCHARS " #$'+,-.0123456789:=@ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz~"
 int mboxname_policycheck(char *name)
 {
     unsigned i;
