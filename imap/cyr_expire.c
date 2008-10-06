@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_expire.c,v 1.19 2008/03/31 15:31:02 murch Exp $
+ * $Id: cyr_expire.c,v 1.20 2008/10/06 15:24:03 murch Exp $
  */
 
 #include <config.h>
@@ -351,7 +351,7 @@ int delete(char *name,
 int main(int argc, char *argv[])
 {
     extern char *optarg;
-    int opt, r = 0, expire_days = 0, expunge_days = 0, delete_days = 0;
+    int opt, r = 0, expire_days = 0, expunge_days = -1, delete_days = -1;
     char *alt_config = NULL;
     char *find_prefix = NULL;
     char buf[100];
@@ -375,7 +375,7 @@ int main(int argc, char *argv[])
 	    break;
 
 	case 'D':
-	    if (delete_days) usage();
+	    if (delete_days >= 0) usage();
 	    delete_days = atoi(optarg);
 	    break;
 
@@ -385,7 +385,7 @@ int main(int argc, char *argv[])
 	    break;
 
 	case 'X':
-	    if (expunge_days) usage();
+	    if (expunge_days >= 0) usage();
 	    expunge_days = atoi(optarg);
 	    break;
 
@@ -438,13 +438,17 @@ int main(int argc, char *argv[])
      */
     erock.table = &expire_table;
     erock.expunge_mode = config_getenum(IMAPOPT_EXPUNGE_MODE);
-    erock.expunge_mark = time(0) - (expunge_days * 60 * 60 * 24);
+    if (expunge_days == -1) {
+	erock.expunge_mark = 0;
+    } else {
+	erock.expunge_mark = time(0) - (expunge_days * 60 * 60 * 24);
 
-    if (erock.verbose && 
-	erock.expunge_mode != IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE) {
-	fprintf(stderr,
-		"expunging deleted messages in mailboxes older than %d days\n",
-		expunge_days);
+	if (erock.verbose && 
+	    erock.expunge_mode != IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE) {
+	    fprintf(stderr,
+		    "Expunging deleted messages in mailboxes older than %d days\n",
+		    expunge_days);
+	}
     }
 
     if (find_prefix) {
@@ -454,14 +458,14 @@ int main(int argc, char *argv[])
     }
     mboxlist_findall(NULL, buf, 1, 0, 0, &expire, &erock);
 
-    syslog(LOG_NOTICE, "expunged %lu out of %lu messages from %lu mailboxes",
+    syslog(LOG_NOTICE, "Expunged %lu out of %lu messages from %lu mailboxes",
 	   erock.deleted, erock.messages, erock.mailboxes);
     if (erock.verbose) {
-	fprintf(stderr, "\nexpunged %lu out of %lu messages from %lu mailboxes\n",
+	fprintf(stderr, "\nExpunged %lu out of %lu messages from %lu mailboxes\n",
 		erock.deleted, erock.messages, erock.mailboxes);
     }
 
-    if (mboxlist_delayed_delete_isenabled() &&
+    if ((delete_days != -1) && mboxlist_delayed_delete_isenabled() &&
         (deletedprefix = config_getstring(IMAPOPT_DELETEDPREFIX))) {
         struct delete_node *node;
         int count = 0;
