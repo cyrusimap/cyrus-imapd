@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: parser.c,v 1.50 2008/04/22 13:11:19 murch Exp $
+ * $Id: parser.c,v 1.51 2008/10/08 17:18:13 wescraig Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -770,6 +770,11 @@ static int cmd_authenticate(struct protstream *sieved_out,
 		  if(c) *c = '\0';
 	      }
 
+	      if (config_getswitch(IMAPOPT_SIEVE_SASL_EXPECT_UNSOLICITED_CAPABILITY)) {
+		  sieve_protocol.sasl_cmd.auto_capa = 1;
+	      } else {
+		  sieve_protocol.sasl_cmd.auto_capa = 0;
+	      }
 	      backend = backend_connect(NULL, server, &sieve_protocol,
 					username, NULL, &statusline);
 
@@ -820,9 +825,11 @@ static int cmd_authenticate(struct protstream *sieved_out,
   prot_setsasl(sieved_in, sieved_saslconn);
   prot_setsasl(sieved_out, sieved_saslconn);
 
-  sasl_getprop(sieved_saslconn, SASL_SSF, &sasl_ssf);
-  if (*((sasl_ssf_t *) sasl_ssf)) {
-      capabilities(sieved_out, sieved_saslconn, starttls_done, 2);
+  if (config_getswitch(IMAPOPT_SIEVE_SASL_SEND_UNSOLICITED_CAPABILITY)) {
+      sasl_getprop(sieved_saslconn, SASL_SSF, &sasl_ssf);
+      if (*((sasl_ssf_t *) sasl_ssf)) {
+	  capabilities(sieved_out, sieved_saslconn, starttls_done, 2);
+      }
   }
 
   /* Create telemetry log */
