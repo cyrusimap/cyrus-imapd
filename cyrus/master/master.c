@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: master.c,v 1.111 2008/04/15 18:11:52 murch Exp $
+ * $Id: master.c,v 1.112 2008/10/08 13:12:41 wescraig Exp $
  */
 
 #include <config.h>
@@ -965,7 +965,7 @@ void child_janitor(time_t now)
     }
 }
 
-static volatile int gotsigchld = 0;
+static volatile sig_atomic_t gotsigchld = 0;
 
 void sigchld_handler(int sig __attribute__((unused)))
 {

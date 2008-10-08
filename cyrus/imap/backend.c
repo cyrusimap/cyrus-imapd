@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: backend.c,v 1.56 2008/10/01 14:04:03 murch Exp $
+ * $Id: backend.c,v 1.57 2008/10/08 13:12:41 wescraig Exp $
  */
 
 #include <config.h>
@@ -286,7 +286,7 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
     return r;
 }
 
-static int timedout = 0;
+static volatile sig_atomic_t timedout = 0;
 
 static void timed_out(int sig) 
 {
