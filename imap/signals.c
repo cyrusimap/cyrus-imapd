@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: signals.c,v 1.15 2008/03/24 17:09:19 murch Exp $
+ * $Id: signals.c,v 1.16 2008/10/08 13:12:41 wescraig Exp $
  */
 
 #include <config.h>
@@ -52,7 +52,7 @@
 #include "xmalloc.h"
 #include "exitcodes.h"
 
-static int gotsignal = 0;
+static volatile sig_atomic_t gotsignal = 0;
 
 static void sighandler(int sig)
 {
