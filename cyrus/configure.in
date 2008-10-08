@@ -40,7 +40,7 @@ dnl WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
 dnl AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 dnl OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 dnl
-dnl $Id: configure.in,v 1.307 2008/10/08 15:47:06 murch Exp $
+dnl $Id: configure.in,v 1.308 2008/10/08 23:28:58 murch Exp $
 dnl
 dnl configure.in for the Cyrus imapd
 dnl
@@ -100,9 +100,11 @@ if test $ac_cv_sys_long_file_names = no; then
 fi
 AC_C_INLINE
 
+dnl Check the size of various types
 AC_CHECK_SIZEOF(int)
 AC_CHECK_SIZEOF(long)
 AC_CHECK_SIZEOF(size_t)
+AC_CHECK_SIZEOF(off_t)
 
 dnl Check if `long long int' is available
 AC_CHECK_SIZEOF(long long int)
@@ -1308,7 +1310,7 @@ AH_TOP([
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: configure.in,v 1.307 2008/10/08 15:47:06 murch Exp $
+ * $Id: configure.in,v 1.308 2008/10/08 23:28:58 murch Exp $
  */
 
 #ifndef _CYRUS_IMAPD_CONFIG_H_
@@ -1424,6 +1426,7 @@ struct sockaddr_storage {
 #define shutdown(fd, mode) 0
 #endif
 
+/* *printf() macros */
 #if (SIZEOF_SIZE_T == SIZEOF_INT)
 #define SIZE_T_FMT "%u"
 #elif (SIZEOF_SIZE_T == SIZEOF_LONG)
@@ -1432,6 +1435,16 @@ struct sockaddr_storage {
 #define SIZE_T_FMT "%llu"
 #else
 #error dont know what to use for SIZE_T_FMT
+#endif
+
+#if (SIZEOF_OFF_T == SIZEOF_LONG)
+#define OFF_T_FMT "%ld"
+#define strtoofft(nptr, endptr, base) strtol(nptr, endptr, base)
+#elif (SIZEOF_OFF_T == SIZEOF_LONG_LONG_INT)
+#define OFF_T_FMT "%lld"
+#define strtoofft(nptr, endptr, base) strtoll(nptr, endptr, base)
+#else
+#error dont know what to use for OFF_T_FMT
 #endif
 
 /* compile time options; think carefully before modifying */

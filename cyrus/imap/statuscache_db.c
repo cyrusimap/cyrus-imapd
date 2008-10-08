@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: statuscache_db.c,v 1.3 2008/03/24 17:09:20 murch Exp $
+ * $Id: statuscache_db.c,v 1.4 2008/10/08 23:28:58 murch Exp $
  */
 
 #include <config.h>
@@ -187,7 +187,7 @@ int statuscache_lookup(const char *mboxname, const char *userid,
     if (p < dend) scdata->statusitems = (unsigned) strtol(p, &p, 10);
     if (p < dend) scdata->index_mtime = strtol(p, &p, 10);
     if (p < dend) scdata->index_ino = strtoul(p, &p, 10);
-    if (p < dend) scdata->index_size = strtoul(p, &p, 10);
+    if (p < dend) scdata->index_size = strtoofft(p, &p, 10);
     if (p < dend) scdata->messages = strtoul(p, &p, 10);
     if (p < dend) scdata->recent = (unsigned) strtoul(p, &p, 10);
     if (p < dend) scdata->uidnext = strtoul(p, &p, 10);
@@ -233,7 +233,7 @@ int statuscache_update(const char *mboxname, const char *userid,
     char *key = statuscache_buildkey(mboxname, userid, &keylen);
 
     datalen = snprintf(data, sizeof(data),
-		       "%u %u %ld %lu %lu %lu %u %lu %lu %u " MODSEQ_FMT,
+		       "%u %u %ld %lu " OFF_T_FMT " %lu %u %lu %lu %u " MODSEQ_FMT,
 		       STATUSCACHE_VERSION, scdata->statusitems,
 		       scdata->index_mtime, scdata->index_ino,
 		       scdata->index_size, scdata->messages,
