@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: deliver.c,v 1.180 2008/04/22 13:11:17 murch Exp $
+ * $Id: deliver.c,v 1.181 2008/10/08 15:47:06 murch Exp $
  */
 
 #include <config.h>
@@ -362,7 +362,8 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
 
 		/* find the length of the userid minus the domain */
 		ulen = strcspn(users[j], "@");
-		sprintf(txn->rcpt[j].addr, "%.*s+%s", ulen, users[j], mailbox);
+		sprintf(txn->rcpt[j].addr, "%.*s+%s",
+			(int) ulen, users[j], mailbox);
 
 		/* add the domain if we have one */
 		if (ulen < strlen(users[j]))

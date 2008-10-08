@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.552 2008/09/30 19:19:23 murch Exp $
+ * $Id: imapd.c,v 1.553 2008/10/08 15:47:06 murch Exp $
  */
 
 #include <config.h>
@@ -3077,11 +3077,13 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 	    int is_active = 1;
 	    s->context = (void*) &is_active;
 	    if (imapd_mailbox) {
-		prot_printf(s->out, "%s Localappend {%d+}\r\n%s {%d+}\r\n%s ",
+		prot_printf(s->out, "%s Localappend {" SIZE_T_FMT "+}\r\n%s"
+			    " {" SIZE_T_FMT "+}\r\n%s ",
 			    tag, strlen(name), name,
 			    strlen(imapd_mailbox->name), imapd_mailbox->name);
 	    } else {
-		prot_printf(s->out, "%s Localappend {%d+}\r\n%s {%d+}\r\n%s ",
+		prot_printf(s->out, "%s Localappend {" SIZE_T_FMT "+}\r\n%s"
+			    " {" SIZE_T_FMT "+}\r\n%s ",
 			    tag, strlen(name), name, 0, "");
 	    }
 	    if (!(r = pipe_command(s, 16384))) {
@@ -3445,8 +3447,8 @@ void cmd_select(char *tag, char *cmd, char *name)
 	    return;
 	}
 
-	prot_printf(backend_current->out, "%s %s {%d+}\r\n%s%s\r\n", tag, cmd, 
-		    strlen(name), name,
+	prot_printf(backend_current->out, "%s %s {" SIZE_T_FMT "+}\r\n%s%s\r\n",
+		    tag, cmd, strlen(name), name,
 		    imapd_condstore_client ? " (CONDSTORE)" : "");
 	switch (pipe_including_tag(backend_current, tag, 0)) {
 	case PROXY_OK:
@@ -4772,7 +4774,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 	/* xxx  end of separate proxy-only code */
 
 	/* simply send the COPY to the backend */
-	prot_printf(backend_current->out, "%s %s %s {%d+}\r\n%s\r\n",
+	prot_printf(backend_current->out, "%s %s %s {" SIZE_T_FMT "+}\r\n%s\r\n",
 		    tag, usinguid ? "UID Copy" : "Copy",
 		    sequence, strlen(name), name);
 	pipe_including_tag(backend_current, tag, 0);
@@ -4803,7 +4805,8 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 	if (r) goto done;
 
 	/* start the append */
-	prot_printf(s->out, "%s Append {%d+}\r\n%s", tag, strlen(name), name);
+	prot_printf(s->out, "%s Append {" SIZE_T_FMT "+}\r\n%s",
+		    tag, strlen(name), name);
 
 	/* append the messages */
 	r = index_copy_remote(imapd_mailbox, sequence, usinguid, s->out);
@@ -4989,11 +4992,11 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
 		if (partition) {
 		    /* Send partition as an atom, since its all we accept */
 		    prot_printf(s->out,
-				"%s CREATE {%d+}\r\n%s %s\r\n", 
+				"%s CREATE {" SIZE_T_FMT "+}\r\n%s %s\r\n", 
 				tag, strlen(name), name, partition);
 		}
 		else
-		    prot_printf(s->out, "%s CREATE {%d+}\r\n%s\r\n", 
+		    prot_printf(s->out, "%s CREATE {" SIZE_T_FMT "+}\r\n%s\r\n", 
 				tag, strlen(name), name);
 		res = pipe_until_tag(s, tag, 0);
 	
@@ -5145,7 +5148,7 @@ void cmd_delete(char *tag, char *name, int localonly, int force)
 	if (!s) r = IMAP_SERVER_UNAVAILABLE;
 
 	if (!r) {
-	    prot_printf(s->out, "%s DELETE {%d+}\r\n%s\r\n", 
+	    prot_printf(s->out, "%s DELETE {" SIZE_T_FMT "+}\r\n%s\r\n", 
 			tag, strlen(name), name);
 	    res = pipe_until_tag(s, tag, 0);
 
@@ -5400,7 +5403,9 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 		    /* Cross Server */
 		    /* <tag> XFER <name> <dest server> <dest partition> */
 		    prot_printf(s->out,
-				"%s XFER {%d+}\r\n%s {%d+}\r\n%s {%d+}\r\n%s\r\n", 
+				"%s XFER {" SIZE_T_FMT "+}\r\n%s"
+				" {" SIZE_T_FMT "+}\r\n%s"
+				" {" SIZE_T_FMT "+}\r\n%s\r\n", 
 				tag, strlen(oldname), oldname,
 				strlen(newserver), newserver,
 				strlen(destpart), destpart);
@@ -5408,7 +5413,8 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	    
 	    } else {
 		/* <tag> XFER <name> <dest server> */
-		prot_printf(s->out, "%s XFER {%d+}\r\n%s {%d+}\r\n%s\r\n", 
+		prot_printf(s->out, "%s XFER {" SIZE_T_FMT "+}\r\n%s"
+			    " {" SIZE_T_FMT "+}\r\n%s\r\n", 
 			    tag, strlen(oldname), oldname,
 			    strlen(partition), partition);
 	    }
@@ -5427,7 +5433,8 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 		/* do MUPDATE create operations for new mailbox */
 	    }
 
-	    prot_printf(s->out, "%s RENAME {%d+}\r\n%s {%d+}\r\n%s\r\n", 
+	    prot_printf(s->out, "%s RENAME {" SIZE_T_FMT "+}\r\n%s"
+			" {" SIZE_T_FMT "+}\r\n%s\r\n", 
 			tag, strlen(oldname), oldname,
 			strlen(newname), newname);
 	    res = pipe_until_tag(s, tag, 0);
@@ -5526,7 +5533,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	strcpy(olduser, domain ? domain+6 : oldmailboxname+5);
 	if (domain)
 	    sprintf(olduser+strlen(olduser), "@%.*s",
-		    domain - oldmailboxname, oldmailboxname);
+		    (int) (domain - oldmailboxname), oldmailboxname);
 	strcpy(acl_olduser, olduser);
 
 	/* Translate any separators in source old userid (for ACLs) */
@@ -5538,7 +5545,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	strcpy(newuser, domain ? domain+6 : newmailboxname+5);
 	if (domain)
 	    sprintf(newuser+strlen(newuser), "@%.*s",
-		    domain - newmailboxname, newmailboxname);
+		    (int) (domain - newmailboxname), newmailboxname);
 	strcpy(acl_newuser, newuser);
 
 	/* Translate any separators in destination new userid (for ACLs) */
@@ -5787,7 +5794,7 @@ void cmd_find(char *tag, char *namespace, char *pattern)
 	if (backend_inbox || (backend_inbox = proxy_findinboxserver())) {
 	    /* remote INBOX */
 	    prot_printf(backend_inbox->out, 
-			"%s Lsub \"\" {%d+}\r\n%s\r\n",
+			"%s Lsub \"\" {" SIZE_T_FMT "+}\r\n%s\r\n",
 			tag, strlen(pattern), pattern);
 	    pipe_lsub(backend_inbox, tag, 0, "MAILBOX");
 	} else {
@@ -5883,7 +5890,7 @@ void cmd_list(char *tag, struct listargs *listargs)
 	    prot_printf(backend_inbox->out, "%s Lsub ", tag);
 	}
 	prot_printf(backend_inbox->out, 
-		    "{%d+}\r\n%s {%d+}\r\n%s\r\n",
+		    "{" SIZE_T_FMT "+}\r\n%s {" SIZE_T_FMT "+}\r\n%s\r\n",
 		    strlen(listargs->ref), listargs->ref,
 		    strlen(listargs->pat), listargs->pat);
 	pipe_lsub(backend_inbox, tag, 0,
@@ -6003,12 +6010,13 @@ void cmd_changesub(char *tag, char *namespace, char *name, int add)
 	if (!r) {
 	    if (namespace) {
 		prot_printf(backend_inbox->out, 
-			    "%s %s {%d+}\r\n%s {%d+}\r\n%s\r\n", 
+			    "%s %s {" SIZE_T_FMT "+}\r\n%s"
+			    " {" SIZE_T_FMT "+}\r\n%s\r\n", 
 			    tag, cmd, 
 			    strlen(namespace), namespace,
 			    strlen(name), name);
 	    } else {
-		prot_printf(backend_inbox->out, "%s %s {%d+}\r\n%s\r\n", 
+		prot_printf(backend_inbox->out, "%s %s {" SIZE_T_FMT "+}\r\n%s\r\n", 
 			    tag, cmd, 
 			    strlen(name), name);
 	    }
@@ -6307,13 +6315,15 @@ void cmd_setacl(char *tag, const char *name,
 	} else if (!r) {
 	    if (rights) {
 		prot_printf(s->out, 
-			    "%s Setacl {%d+}\r\n%s {%d+}\r\n%s {%d+}\r\n%s\r\n",
+			    "%s Setacl {" SIZE_T_FMT "+}\r\n%s"
+			    " {" SIZE_T_FMT "+}\r\n%s {" SIZE_T_FMT "+}\r\n%s\r\n",
 			    tag, strlen(name), name,
 			    strlen(identifier), identifier,
 			    strlen(rights), rights);
 	    } else {
 		prot_printf(s->out, 
-			    "%s Deleteacl {%d+}\r\n%s {%d+}\r\n%s\r\n",
+			    "%s Deleteacl {" SIZE_T_FMT "+}\r\n%s"
+			    " {" SIZE_T_FMT "+}\r\n%s\r\n",
 			    tag, strlen(name), name,
 			    strlen(identifier), identifier);
 	    }
@@ -6496,7 +6506,7 @@ void cmd_getquotaroot(const char *tag, const char *name)
 	    imapd_check(s, 0, 0);
 
 	    if (!r) {
-		prot_printf(s->out, "%s Getquotaroot {%d+}\r\n%s\r\n",
+		prot_printf(s->out, "%s Getquotaroot {" SIZE_T_FMT "+}\r\n%s\r\n",
 			    tag, strlen(name), name);
 		pipe_including_tag(s, tag, 0);
 	    } else {
@@ -6824,7 +6834,7 @@ void cmd_status(char *tag, char *name)
 	    imapd_check(s, 0, 0);
 
 	    if (!r) {
-		prot_printf(s->out, "%s Status {%d+}\r\n%s ", tag,
+		prot_printf(s->out, "%s Status {" SIZE_T_FMT "+}\r\n%s ", tag,
 			    strlen(name), name);
 		if (!pipe_command(s, 65536)) {
 		    pipe_including_tag(s, tag, 0);
@@ -8011,7 +8021,7 @@ static int trashacl(struct protstream *pin, struct protstream *pout,
     memset(&tmp, 0, sizeof(struct buf));
     memset(&user, 0, sizeof(struct buf));
 
-    prot_printf(pout, "ACL0 GETACL {%d+}\r\n%s\r\n",
+    prot_printf(pout, "ACL0 GETACL {" SIZE_T_FMT "+}\r\n%s\r\n",
 		strlen(mailbox), mailbox);
 
     while(1) {
@@ -8062,7 +8072,8 @@ static int trashacl(struct protstream *pin, struct protstream *pout,
 
 		snprintf(tagbuf, sizeof(tagbuf), "ACL%d", ++i);
 		
-		prot_printf(pout, "%s DELETEACL {%d+}\r\n%s {%d+}\r\n%s\r\n",
+		prot_printf(pout, "%s DELETEACL {" SIZE_T_FMT "+}\r\n%s"
+			    " {" SIZE_T_FMT "+}\r\n%s\r\n",
 			    tagbuf, strlen(mailbox), mailbox,
 			    strlen(user.s), user.s);
 		if(c == '\r') {
@@ -8121,7 +8132,6 @@ static int dumpacl(struct protstream *pin, struct protstream *pout,
     char tag[128];
     int tagnum = 1;
     char *rights, *nextid;
-    int mailboxlen = strlen(mailbox);
     char *acl_safe = acl_in ? xstrdup(acl_in) : NULL;
     char *acl = acl_safe;
     struct buf inbuf;
@@ -8139,9 +8149,10 @@ static int dumpacl(struct protstream *pin, struct protstream *pout,
 
 	snprintf(tag, sizeof(tag), "SACL%d", tagnum++);
 	
-	prot_printf(pout, "%s SETACL {%d+}\r\n%s {%d+}\r\n%s {%d+}\r\n%s\r\n",
+	prot_printf(pout, "%s SETACL {" SIZE_T_FMT "+}\r\n%s"
+		    " {" SIZE_T_FMT "+}\r\n%s {" SIZE_T_FMT "+}\r\n%s\r\n",
 		    tag,
-		    mailboxlen, mailbox,
+		    strlen(mailbox), mailbox,
 		    strlen(acl), acl,
 		    strlen(rights), rights);
 
@@ -8258,10 +8269,10 @@ static int do_xfer_single(char *toserver, char *topart,
     if(!r) {
 	if(topart) {
 	    /* need to send partition as an atom */
-	    prot_printf(be->out, "LC1 LOCALCREATE {%d+}\r\n%s %s\r\n",
+	    prot_printf(be->out, "LC1 LOCALCREATE {" SIZE_T_FMT "+}\r\n%s %s\r\n",
 			strlen(name), name, topart);
 	} else {
-	    prot_printf(be->out, "LC1 LOCALCREATE {%d+}\r\n%s\r\n",
+	    prot_printf(be->out, "LC1 LOCALCREATE {" SIZE_T_FMT "+}\r\n%s\r\n",
 			strlen(name), name);
 	}
 	r = getresult(be->in, "LC1");
@@ -8296,7 +8307,8 @@ static int do_xfer_single(char *toserver, char *topart,
     if(!r) {
 	backout_mupdate = 1;
 
-	prot_printf(be->out, "D01 UNDUMP {%d+}\r\n%s ", strlen(name), name);
+	prot_printf(be->out, "D01 UNDUMP {" SIZE_T_FMT "+}\r\n%s ",
+		    strlen(name), name);
 
 	r = dump_mailbox(NULL, mailboxname, path, mpath, acl,
 			 0, be->in, be->out, imapd_authstate);
@@ -8342,7 +8354,7 @@ static int do_xfer_single(char *toserver, char *topart,
 	/* 6.5) Kick remote server to correct mupdate entry */
 	/* Note that we don't really care if this succeeds or not */
 	if (mupdate_h) {
-	    prot_printf(be->out, "MP1 MUPDATEPUSH {%d+}\r\n%s\r\n",
+	    prot_printf(be->out, "MP1 MUPDATEPUSH {" SIZE_T_FMT "+}\r\n%s\r\n",
 			strlen(name), name);
 	    rerr = getresult(be->in, "MP1");
 	    if(rerr) {
@@ -8406,7 +8418,7 @@ done:
     }
     if(r && backout_remotebox) {
 	rerr = 0;
-	prot_printf(be->out, "LD1 LOCALDELETE {%d+}\r\n%s\r\n",
+	prot_printf(be->out, "LD1 LOCALDELETE {" SIZE_T_FMT "+}\r\n%s\r\n",
 		    strlen(name), name);
 	rerr = getresult(be->in, "LD1");
  	if(rerr) {
@@ -8609,7 +8621,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	    if(!r) {
 		/* note use of + to force the setting of a nonexistant
 		 * quotaroot */
-		prot_printf(be->out, "Q01 SETQUOTA {%d+}\r\n" \
+		prot_printf(be->out, "Q01 SETQUOTA {" SIZE_T_FMT "+}\r\n" \
 			    "+%s (STORAGE %d)\r\n",
 			    strlen(name)+1, name, quota.limit);
 		r = getresult(be->in, "Q01");
@@ -9511,7 +9523,8 @@ static int listdata(char *name, int matchlen, int maycreate, void *rock)
 		proxy_gentag(mytag, sizeof(mytag));
 
 		prot_printf(s->out,
-			    "%s Scan {%d+}\r\n%s {%d+}\r\n%s {%d+}\r\n%s\r\n",
+			    "%s Scan {" SIZE_T_FMT "+}\r\n%s"
+			    " {" SIZE_T_FMT "+}\r\n%s {" SIZE_T_FMT "+}\r\n%s\r\n",
 			    mytag,
 			    strlen(listargs->ref), listargs->ref,
 			    strlen(listargs->pat), listargs->pat,

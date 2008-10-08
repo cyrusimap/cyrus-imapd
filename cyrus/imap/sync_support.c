@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_support.c,v 1.20 2008/09/23 17:34:37 murch Exp $
+ * $Id: sync_support.c,v 1.21 2008/10/08 15:47:08 murch Exp $
  */
 
 #include <config.h>
@@ -183,7 +183,7 @@ void sync_printstring(struct protstream *out, const char *s)
 
     /* if it's too long, literal it */
     if (*p || len >= 1024) {
-	prot_printf(out, "{%u+}\r\n%s", strlen(s), s);
+	prot_printf(out, "{" SIZE_T_FMT "+}\r\n%s", strlen(s), s);
     } else {
 	prot_printf(out, "\"%s\"", s);
     }
@@ -216,7 +216,7 @@ void sync_printastring(struct protstream *out, const char *s)
 
     /* if it's too long, literal it */
     if (*p || len >= 1024) {
-	prot_printf(out, "{%u+}\r\n%s", strlen(s), s);
+	prot_printf(out, "{" SIZE_T_FMT "+}\r\n%s", strlen(s), s);
     } else {
 	prot_printf(out, "\"%s\"", s);
     }

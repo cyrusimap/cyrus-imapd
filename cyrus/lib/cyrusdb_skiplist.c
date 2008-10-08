@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyrusdb_skiplist.c,v 1.63 2008/09/26 12:15:30 murch Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.64 2008/10/08 15:47:08 murch Exp $
  */
 
 /* xxx check retry_xxx for failure */
@@ -1940,7 +1940,7 @@ static int myconsistent(struct db *db, struct txn *tid, int locked)
 		fprintf(stdout, 
 			"skiplist inconsistent: %04X: ptr %d is %04X; "
 			"eof is %04X\n", 
-			ptr - db->map_base,
+			(unsigned int) (ptr - db->map_base),
 			i, offset, (unsigned int) db->map_size);
 		if (!locked) unlock(db);
 		return CYRUSDB_INTERNAL;
@@ -1956,7 +1956,7 @@ static int myconsistent(struct db *db, struct txn *tid, int locked)
 		    fprintf(stdout, 
 			    "skiplist inconsistent: %04X: ptr %d is %04X; "
 			    "db->compar() = %d\n", 
-			    ptr - db->map_base,
+			    (unsigned int) (ptr - db->map_base),
 			    i,
 			    offset, cmp);
 		    if (!locked) unlock(db);

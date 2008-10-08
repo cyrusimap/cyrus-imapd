@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mupdate-client.c,v 1.58 2008/04/22 13:11:18 murch Exp $
+ * $Id: mupdate-client.c,v 1.59 2008/10/08 15:47:08 murch Exp $
  */
 
 #include <config.h>
@@ -198,7 +198,8 @@ int mupdate_activate(mupdate_handle *handle,
     }
 
     prot_printf(handle->conn->out,
-		"X%u ACTIVATE {%d+}\r\n%s {%d+}\r\n%s {%d+}\r\n%s\r\n", 
+		"X%u ACTIVATE {" SIZE_T_FMT "+}\r\n%s"
+		" {" SIZE_T_FMT "+}\r\n%s {" SIZE_T_FMT "+}\r\n%s\r\n", 
 		handle->tagn++, strlen(mailbox), mailbox, 
 		strlen(server), server, strlen(acl), acl);
 
@@ -232,7 +233,7 @@ int mupdate_reserve(mupdate_handle *handle,
     }
 
     prot_printf(handle->conn->out,
-		"X%u RESERVE {%d+}\r\n%s {%d+}\r\n%s\r\n",
+		"X%u RESERVE {" SIZE_T_FMT "+}\r\n%s {" SIZE_T_FMT "+}\r\n%s\r\n",
 		handle->tagn++, strlen(mailbox), mailbox, 
 		strlen(server), server);
 
@@ -266,7 +267,7 @@ int mupdate_deactivate(mupdate_handle *handle,
     }
 
     prot_printf(handle->conn->out,
-		"X%u DEACTIVATE {%d+}\r\n%s {%d+}\r\n%s\r\n",
+		"X%u DEACTIVATE {" SIZE_T_FMT "+}\r\n%s {" SIZE_T_FMT "+}\r\n%s\r\n",
 		handle->tagn++, strlen(mailbox), mailbox, 
 		strlen(server), server);
 
@@ -291,7 +292,7 @@ int mupdate_delete(mupdate_handle *handle,
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
     prot_printf(handle->conn->out,
-		"X%u DELETE {%d+}\r\n%s\r\n", handle->tagn++, 
+		"X%u DELETE {" SIZE_T_FMT "+}\r\n%s\r\n", handle->tagn++, 
 		strlen(mailbox), mailbox);
 
     ret = mupdate_scarf(handle, mupdate_scarf_one, NULL, 1, &response);
@@ -360,7 +361,7 @@ int mupdate_find(mupdate_handle *handle, const char *mailbox,
     if(!handle || !mailbox || !target) return MUPDATE_BADPARAM;
 
     prot_printf(handle->conn->out,
-		"X%u FIND {%d+}\r\n%s\r\n", handle->tagn++, 
+		"X%u FIND {" SIZE_T_FMT "+}\r\n%s\r\n", handle->tagn++, 
 		strlen(mailbox), mailbox);
 
     memset(&(handle->mailboxdata_buf), 0, sizeof(handle->mailboxdata_buf));
@@ -393,7 +394,7 @@ int mupdate_list(mupdate_handle *handle, mupdate_callback callback,
 
     if(prefix) {
 	prot_printf(handle->conn->out,
-		    "X%u LIST {%d+}\r\n%s\r\n", handle->tagn++,
+		    "X%u LIST {" SIZE_T_FMT "+}\r\n%s\r\n", handle->tagn++,
 		    strlen(prefix), prefix);
     } else {
 	prot_printf(handle->conn->out,

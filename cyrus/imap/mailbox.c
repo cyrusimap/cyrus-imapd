@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.182 2008/10/07 19:15:38 wescraig Exp $
+ * $Id: mailbox.c,v 1.183 2008/10/08 15:47:08 murch Exp $
  */
 
 #include <config.h>
@@ -1608,7 +1608,7 @@ static void mailbox_upgrade_index_work(struct mailbox *mailbox,
         char *err = xmalloc(MAX_MAILBOX_NAME+128);
         snprintf(err, MAX_MAILBOX_NAME+128,
                  "Mailbox %s needs reconstruct: Record size %d > %d",
-                 mailbox->name, oldrecord_size, INDEX_RECORD_SIZE);
+                 mailbox->name, (int) oldrecord_size, INDEX_RECORD_SIZE);
         fatal(err, EC_SOFTWARE);
     }
 
@@ -2006,7 +2006,7 @@ static int process_records(struct mailbox *mailbox, FILE *newindex,
 		       "IOERROR: reading cache record for %s:"
 		       " got bogus offset %d for %u/%lu; try reconstruct",
 		       mailbox->name,
-		       cacheitem - (mailbox->cache_base + cache_offset),
+		       (int) (cacheitem - (mailbox->cache_base + cache_offset)),
 		       msgno, mailbox->exists);
 		return IMAP_IOERROR;
             }
@@ -2018,7 +2018,7 @@ static int process_records(struct mailbox *mailbox, FILE *newindex,
 			   "IOERROR: reading cache record for %s:"
 			   " got bogus offset %d for %u/%lu; try reconstruct",
 			   mailbox->name,
-			   cacheitem - (mailbox->cache_base + cache_offset),
+			   (int) (cacheitem - (mailbox->cache_base + cache_offset)),
 			   msgno, mailbox->exists);
 		    return IMAP_IOERROR;
 		}

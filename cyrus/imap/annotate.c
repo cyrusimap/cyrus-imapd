@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: annotate.c,v 1.41 2008/03/24 17:09:15 murch Exp $
+ * $Id: annotate.c,v 1.42 2008/10/08 15:47:06 murch Exp $
  */
 
 #include <config.h>
@@ -563,7 +563,7 @@ static void output_entryatt(const char *mboxname, const char *entry,
 	/* Base the return of the size attribute on whether or not there is
 	 * an attribute, not whether size is nonzero. */
 	if ((fdata->attribs & ATTRIB_SIZE_SHARED) && attrib->value) {
-	    snprintf(buf, sizeof(buf), "%u", attrib->size);
+	    snprintf(buf, sizeof(buf), SIZE_T_FMT, attrib->size);
 	    appendattvalue(&attvalues, "size.shared", buf);
 	}
 
@@ -589,7 +589,7 @@ static void output_entryatt(const char *mboxname, const char *entry,
 	/* Base the return of the size attribute on whether or not there is
 	 * an attribute, not whether size is nonzero. */
 	if ((fdata->attribs & ATTRIB_SIZE_PRIV) && attrib->value) {
-	    snprintf(buf, sizeof(buf), "%u", attrib->size);
+	    snprintf(buf, sizeof(buf), SIZE_T_FMT, attrib->size);
 	    appendattvalue(&attvalues, "size.priv", buf);
 	}
 

@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.68 2008/04/22 13:11:18 murch Exp $
+ * $Id: nntpd.c,v 1.69 2008/10/08 15:47:08 murch Exp $
  */
 
 /*
@@ -2937,7 +2937,7 @@ static int parse_groups(const char *groups, message_data_t *msg)
 	if (!rcpt) return -1;
 
 	/* construct the mailbox name */
-	sprintf(rcpt, "%s%.*s", newsprefix, n, p);
+	sprintf(rcpt, "%s%.*s", newsprefix, (int) n, p);
 	
 	/* Only add mailboxes that exist */
 	if (!mlookup(rcpt, NULL, NULL, NULL)) {
@@ -3033,7 +3033,7 @@ static int savemsg(message_data_t *m, FILE *f)
 
     /* get control */
     if ((body = spool_getheader(m->hdrcache, "control")) != NULL) {
-	int len;
+	size_t len;
 
 	m->control = xstrdup(body[0]);
 
@@ -3042,7 +3042,7 @@ static int savemsg(message_data_t *m, FILE *f)
 	m->rcpt = (char **) xmalloc(sizeof(char *));
 	len = strcspn(m->control, " \t\r\n");
 	m->rcpt[0] = xmalloc(strlen(newsprefix) + 8 + len + 1);
-	sprintf(m->rcpt[0], "%scontrol.%.*s", newsprefix, len, m->control);
+	sprintf(m->rcpt[0], "%scontrol.%.*s", newsprefix, (int) len, m->control);
     } else {
 	m->control = NULL;	/* no control */
 
@@ -3106,7 +3106,7 @@ static int savemsg(message_data_t *m, FILE *f)
 
 			    /* add the post address */
 			    r += sprintf(r, "%s%s+%.*s",
-					 sep, newspostuser, n, p);
+					 sep, newspostuser, (int) n, p);
 
 			    sep = ", ";
 			}
@@ -3125,7 +3125,7 @@ static int savemsg(message_data_t *m, FILE *f)
 		    fprintf(f, "Reply-To: ");
 		    r = replyto;
 		    if (fold) {
-			fprintf(f, "%.*s\r\n\t", fold - r, r);
+			fprintf(f, "%.*s\r\n\t", (int) (fold - r), r);
 			r = fold;
 		    }
 		    fprintf(f, "%s\r\n", r);
@@ -3399,7 +3399,8 @@ static int rmgroup(message_data_t *msg)
 
 static int mvgroup(message_data_t *msg)
 {
-    int r, len;
+    int r;
+    size_t len;
     char *group;
     char oldmailboxname[MAX_MAILBOX_NAME+1];
     char newmailboxname[MAX_MAILBOX_NAME+1];
@@ -3408,7 +3409,7 @@ static int mvgroup(message_data_t *msg)
     group = msg->control + 7; /* skip "mvgroup" */
     while (isspace((int) *group)) group++;
 
-    len = (int) strcspn(group, " \t\r\n");
+    len = strcspn(group, " \t\r\n");
     snprintf(oldmailboxname, sizeof(oldmailboxname), "%s%.*s",
 	     newsprefix, len, group);
 
@@ -3416,9 +3417,9 @@ static int mvgroup(message_data_t *msg)
     group += len; /* skip old newsgroup */
     while (isspace((int) *group)) group++;
 
-    len = (int) strcspn(group, " \t\r\n");
+    len = strcspn(group, " \t\r\n");
     snprintf(newmailboxname, sizeof(newmailboxname), "%s%.*s",
-	     newsprefix, len, group);
+	     newsprefix, (int) len, group);
 
     r = mboxlist_renamemailbox(oldmailboxname, newmailboxname, NULL, 0,
 			       newsmaster, newsmaster_authstate, 0);

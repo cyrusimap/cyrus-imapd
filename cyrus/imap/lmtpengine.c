@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: lmtpengine.c,v 1.128 2008/09/24 12:14:00 murch Exp $
+ * $Id: lmtpengine.c,v 1.129 2008/10/08 15:47:08 murch Exp $
  */
 
 #include <config.h>
@@ -703,7 +703,7 @@ static int savemsg(struct clientdata *cd,
  
     fprintf(f, "Received: ");
     for (i = 0, p = addbody; i < nfold; p = fold[i], i++) {
-	fprintf(f, "%.*s\r\n\t", fold[i] - p, p);
+	fprintf(f, "%.*s\r\n\t", (int) (fold[i] - p), p);
     }
     fprintf(f, "%s\r\n", p);
     spool_cache_header(xstrdup("Received"), addbody, m->hdrcache);

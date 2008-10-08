@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: actions.c,v 1.44 2008/04/22 13:11:19 murch Exp $
+ * $Id: actions.c,v 1.45 2008/10/08 15:47:08 murch Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -373,7 +373,8 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data,
 
   if (result != TIMSIEVE_OK) {
       if (errstr && *errstr) { 
-	  prot_printf(conn, "NO {%d}\r\n%s\r\n", strlen(errstr), errstr);
+	  prot_printf(conn, "NO {" SIZE_T_FMT "}\r\n%s\r\n",
+		      strlen(errstr), errstr);
 	  free(errstr);
       } else {
 	  if (errstr) free(errstr);
