@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mupdate.c,v 1.105 2008/10/01 17:52:43 wescraig Exp $
+ * $Id: mupdate.c,v 1.106 2008/10/08 15:47:08 murch Exp $
  */
 
 #include <config.h>
@@ -1718,19 +1718,21 @@ void cmd_find(struct conn *C, const char *tag, const char *mailbox,
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 
     if (m && m->t == SET_ACTIVE) {
-	prot_printf(C->pout, "%s MAILBOX {%d+}\r\n%s {%d+}\r\n%s {%d+}\r\n%s\r\n",
+	prot_printf(C->pout, "%s MAILBOX {" SIZE_T_FMT "+}\r\n%s"
+		    " {" SIZE_T_FMT "+}\r\n%s {" SIZE_T_FMT "+}\r\n%s\r\n",
 		    tag,
 		    strlen(m->mailbox), m->mailbox,
 		    strlen(m->server), m->server,
 		    strlen(m->acl), m->acl);
     } else if (m && m->t == SET_RESERVE) {
-	prot_printf(C->pout, "%s RESERVE {%d+}\r\n%s {%d+}\r\n%s\r\n",
+	prot_printf(C->pout, "%s RESERVE {" SIZE_T_FMT "+}\r\n%s"
+		    " {" SIZE_T_FMT "+}\r\n%s\r\n",
 		    tag,
 		    strlen(m->mailbox), m->mailbox,
 		    strlen(m->server), m->server);
     } else if (send_delete) {
 	/* not found, if needed, send a delete */
-	prot_printf(C->pout, "%s DELETE {%d+}\r\n%s\r\n",
+	prot_printf(C->pout, "%s DELETE {" SIZE_T_FMT "+}\r\n%s\r\n",
 		    tag, strlen(mailbox), mailbox);
     }
     
@@ -1773,14 +1775,16 @@ static int sendupdate(char *name,
 	    switch (m->t) {
 	    case SET_ACTIVE:
 		prot_printf(C->pout,
-			    "%s MAILBOX {%d+}\r\n%s {%d+}\r\n%s {%d+}\r\n%s\r\n",
+			    "%s MAILBOX {" SIZE_T_FMT "+}\r\n%s"
+			    " {" SIZE_T_FMT "+}\r\n%s {" SIZE_T_FMT "+}\r\n%s\r\n",
 			    C->streaming,
 			    strlen(m->mailbox), m->mailbox,
 			    strlen(m->server), m->server,
 			    strlen(m->acl), m->acl);
 		break;
 	    case SET_RESERVE:
-		prot_printf(C->pout, "%s RESERVE {%d+}\r\n%s {%d+}\r\n%s\r\n",
+		prot_printf(C->pout, "%s RESERVE {" SIZE_T_FMT "+}\r\n%s"
+			    " {" SIZE_T_FMT "+}\r\n%s\r\n",
 			    C->streaming,
 			    strlen(m->mailbox), m->mailbox,
 			    strlen(m->server), m->server);

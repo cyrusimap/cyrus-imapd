@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.c,v 1.10 2008/09/25 10:41:13 murch Exp $
+ * $Id: imap_proxy.c,v 1.11 2008/10/08 15:47:06 murch Exp $
  */
 
 #include <config.h>
@@ -911,7 +911,8 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
     }
 
     /* start the append */
-    prot_printf(s->out, "%s Append {%d+}\r\n%s", tag, strlen(name), name);
+    prot_printf(s->out, "%s Append {" SIZE_T_FMT "+}\r\n%s",
+		tag, strlen(name), name);
     prot_printf(backend_current->out, "%s %s %s (Rfc822.peek)\r\n",
 		mytag, usinguid ? "Uid Fetch" : "Fetch", sequence);
     for (/* each FETCH response */;;) {
@@ -1105,7 +1106,7 @@ int proxy_catenate_url(struct backend *s, struct imapurl *url, FILE *f,
 
     /* select the mailbox (read-only) */
     proxy_gentag(mytag, sizeof(mytag));
-    prot_printf(s->out, "%s Examine {%d+}\r\n%s\r\n",
+    prot_printf(s->out, "%s Examine {" SIZE_T_FMT "+}\r\n%s\r\n",
 		mytag, strlen(url->mailbox), url->mailbox);
     for (/* each examine response */;;) {
 	/* read a line */

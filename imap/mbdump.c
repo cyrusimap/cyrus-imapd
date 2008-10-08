@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mbdump.c,v 1.40 2008/04/03 19:24:08 murch Exp $
+ * $Id: mbdump.c,v 1.41 2008/10/08 15:47:08 murch Exp $
  */
 
 #include <config.h>
@@ -137,7 +137,8 @@ static int dump_annotations(const char *mailbox __attribute__((unused)),
     /* Transfer all attributes for this annotation, don't transfer size
      * separately since that can be implicitly determined */
     prot_printf(ctx->pout,
-		" {%ld%s}\r\nA-%s%s (%ld {%d%s}\r\n%s {%d%s}\r\n%s)",
+		" {%ld%s}\r\nA-%s%s (%ld {" SIZE_T_FMT "%s}\r\n%s"
+		" {" SIZE_T_FMT "%s}\r\n%s)",
 		ename_size, (!ctx->tag ? "+" : ""),
 		userid, entry,
 		attrib->modifiedsince,
@@ -181,7 +182,7 @@ static int dump_file(int first, int sync,
 
     /* send: name, size, and contents */
     if (first) {
-	prot_printf(pout, " {%d}\r\n", strlen(ftag));
+	prot_printf(pout, " {" SIZE_T_FMT "}\r\n", strlen(ftag));
 
 	if (sync) {
 	    /* synchronize */
@@ -197,7 +198,7 @@ static int dump_file(int first, int sync,
 	prot_printf(pout, "%s {%lu%s}\r\n",
 		    ftag, len, (sync ? "+" : ""));
     } else {
-	prot_printf(pout, " {%d%s}\r\n%s {%lu%s}\r\n",
+	prot_printf(pout, " {" SIZE_T_FMT "%s}\r\n%s {%lu%s}\r\n",
 		    strlen(ftag), (sync ? "+" : ""),
 		    ftag, len, (sync ? "+" : ""));
     }

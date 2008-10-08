@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mboxlist.c,v 1.259 2008/09/30 19:19:23 murch Exp $
+ * $Id: mboxlist.c,v 1.260 2008/10/08 15:47:08 murch Exp $
  */
 
 #include <config.h>
@@ -505,7 +505,7 @@ mboxlist_mycreatemailboxcheck(char *name,
 	    if (mbox != name) {
 		/* add domain to identifier */
 		sprintf(identifier+strlen(identifier),
-			"@%.*s", mbox - name - 1, name);
+			"@%.*s", (int) (mbox - name - 1), name);
 	    }
 	    cyrus_acl_set(&acl, identifier, ACL_MODE_SET, ACL_ALL,
 		    (cyrus_acl_canonproc_t *)0, (void *)0);
@@ -1573,7 +1573,7 @@ int mboxlist_setacl(const char *name, const char *identifier,
 		!strcmp(identifier, "anonymous") ||
 		!strcmp(identifier, "anyone")) {
 		snprintf(ident, sizeof(ident),
-			 "%.*s", cp - identifier, identifier);
+			 "%.*s", (int) (cp - identifier), identifier);
 	    } else {
 		strlcpy(ident, identifier, sizeof(ident));
 	    }
@@ -2172,7 +2172,7 @@ int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
 		domainlen = strlen(p);
 	    }
 	    snprintf(domainpat+domainlen, sizeof(domainpat)-domainlen,
-		     "%.*s", p - pattern, pattern);
+		     "%.*s", (int) (p - pattern), pattern);
 	}
     }
 

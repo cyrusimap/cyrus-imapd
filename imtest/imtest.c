@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imtest.c,v 1.119 2008/08/27 08:28:47 selsky Exp $
+ * $Id: imtest.c,v 1.120 2008/10/08 15:47:08 murch Exp $
  */
 
 #include "config.h"
@@ -1801,7 +1801,8 @@ static int append_msg(char *mbox, int size)
 {
     int lup;
     
-    prot_printf(pout,"A003 APPEND %s (\\Seen) {%u}\r\n",mbox,size+strlen(HEADERS));
+    prot_printf(pout,"A003 APPEND %s (\\Seen) {" SIZE_T_FMT "}\r\n",
+		mbox,size+strlen(HEADERS));
     /* do normal header foo */
     prot_printf(pout,HEADERS);
     

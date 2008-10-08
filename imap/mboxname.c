@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mboxname.c,v 1.44 2008/10/02 13:41:19 murch Exp $
+ * $Id: mboxname.c,v 1.45 2008/10/08 15:47:08 murch Exp $
  */
 
 #include <config.h>
@@ -377,7 +377,7 @@ static int mboxname_toexternal(struct namespace *namespace, const char *name,
 	    return IMAP_MAILBOX_BADNAME;
 
 	snprintf(result+resultlen, MAX_MAILBOX_NAME+1-resultlen, 
-		 "@%.*s", domainlen, domain);
+		 "@%.*s", (int) domainlen, domain);
     }
 
     return 0;
@@ -440,7 +440,7 @@ static int mboxname_toexternal_alt(struct namespace *namespace, const char *name
 	    return IMAP_MAILBOX_BADNAME;
 
 	sprintf(result, "%.*s",
-		prefixlen-1, namespace->prefix[NAMESPACE_USER]);
+		(int) (prefixlen-1), namespace->prefix[NAMESPACE_USER]);
 	resultlen = strlen(result);
 	if (name[4] == '.') {
 	    sprintf(result+resultlen, "%c%s", namespace->hier_sep, name+5);
@@ -648,7 +648,7 @@ char *mboxname_inbox_touserid(const char *inboxname)
 {
     static char userid[MAX_MAILBOX_NAME+1];
     const char *domain = NULL, *cp;
-    size_t domainlen = 0;
+    int domainlen = 0;
 
     if (config_virtdomains && (cp = strchr(inboxname, '!'))) {
 	/* locate, save, and skip domain */

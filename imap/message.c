@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: message.c,v 1.111 2008/03/24 17:09:18 murch Exp $
+ * $Id: message.c,v 1.112 2008/10/08 15:47:08 murch Exp $
  */
 
 #include <config.h>
@@ -2292,7 +2292,7 @@ char *s;
     if (*p || len >= 1024) {
 	/* Write out as literal */
 	char buf[100];
-	snprintf(buf, sizeof(buf), "{%u}\r\n", strlen(s));
+	snprintf(buf, sizeof(buf), "{" SIZE_T_FMT "}\r\n", strlen(s));
 	message_ibuf_ensure(ibuf, strlen(s)+strlen(buf));
 	for (p = buf; *p; p++) *(ibuf->end)++ = *p;
 	for (p = s; *p; p++) *(ibuf->end)++ = *p;

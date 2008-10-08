@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: smmapd.c,v 1.20 2008/03/24 17:09:19 murch Exp $
+ * $Id: smmapd.c,v 1.21 2008/10/08 15:47:08 murch Exp $
  *
  * smmapd.c -- sendmail socket map daemon
  *
@@ -354,7 +354,7 @@ int verify_user(const char *key, long quotacheck,
                return r;
             }
 
-            sprintf(buf,"%d:cyrus %s,%c",strlen(key)+6,key,4);
+            sprintf(buf,SIZE_T_FMT ":cyrus %s,%c",strlen(key)+6,key,4);
             sendto(soc,buf,strlen(buf),0,(struct sockaddr *)&sin,sizeof(sin));
 
             x = sizeof(sfrom);
@@ -449,17 +449,17 @@ int begin_handling(void)
             break;
 
 	case 0:
-	    prot_printf(map_out, "%d:OK %s,", 3+strlen(key), key);
+	    prot_printf(map_out, SIZE_T_FMT ":OK %s,", 3+strlen(key), key);
 	    break;
 
 	case IMAP_MAILBOX_NONEXISTENT:
-	    prot_printf(map_out, "%d:NOTFOUND %s,",
+	    prot_printf(map_out, SIZE_T_FMT ":NOTFOUND %s,",
 			9+strlen(error_message(r)), error_message(r));
 	    break;
 
 	case IMAP_QUOTA_EXCEEDED:
 	    if (!config_getswitch(IMAPOPT_LMTP_OVER_QUOTA_PERM_FAILURE)) {
-		prot_printf(map_out, "%d:TEMP %s,", strlen(error_message(r))+5,
+		prot_printf(map_out, SIZE_T_FMT ":TEMP %s,", strlen(error_message(r))+5,
 			    error_message(r));
 		break;
 	    }
@@ -467,11 +467,11 @@ int begin_handling(void)
 
 	default:
 	    if (errstring)
-		prot_printf(map_out, "%d:PERM %s (%s),",
+		prot_printf(map_out, SIZE_T_FMT ":PERM %s (%s),",
 			    5+strlen(error_message(r))+3+strlen(errstring),
 			    error_message(r), errstring);
 	    else
-		prot_printf(map_out, "%d:PERM %s,",
+		prot_printf(map_out, SIZE_T_FMT ":PERM %s,",
 			    5+strlen(error_message(r)), error_message(r));
 	    break;
 	}
