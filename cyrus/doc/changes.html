@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.163 2008/10/06 15:24:03 murch Exp $ -->
+<!-- $Id: changes.html,v 1.164 2008/10/09 14:40:20 murch Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -28,6 +28,9 @@ STARTTLS and after AUTH with a SASL security layer.</li>
   for <tt>-X</tt> and <tt>-D</tt>.  These options must be used
   explicitly in order to have the desired effect.</li>
 <li>Added <tt>sieve_utf8fileinto</tt> option.</li>
+<li>Added <tt>sieve_sasl_send_unsolicited_capability</tt>
+  and <tt>sieve_sasl_expect_unsolicited_capability</tt> options.</li>
+<li>Several 32/64-bit compatibility fixes.</li>
 <li>Fixed miscellaneous bugs and build issues.</li>
 </ul>
 
@@ -2358,7 +2361,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2008/10/06 15:24:03 $ <br />
+last modified: $Date: 2008/10/09 14:40:20 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
