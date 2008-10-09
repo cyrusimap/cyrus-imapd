@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notify_mailto.c,v 1.13 2008/03/24 19:59:32 murch Exp $
+ * $Id: notify_mailto.c,v 1.14 2008/10/09 15:19:55 murch Exp $
  */
 
 #include <config.h>
@@ -109,8 +109,8 @@ char* notify_mailto(const char *class,
 	return strdup("NO mailto could not spawn sendmail process");
 
     t = time(NULL);
-    snprintf(outmsgid, sizeof(outmsgid), "<cmu-sieve-%u-%lu-%d@%s>", 
-	     sm_pid, t, global_outgoing_count++, config_servername);
+    snprintf(outmsgid, sizeof(outmsgid), "<cmu-sieve-%d-%lu-%d@%s>", 
+	     (int) sm_pid, t, global_outgoing_count++, config_servername);
     
     fprintf(sm, "Message-ID: %s\r\n", outmsgid);
 
