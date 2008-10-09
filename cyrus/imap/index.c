@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: index.c,v 1.245 2008/09/30 17:06:06 murch Exp $
+ * $Id: index.c,v 1.246 2008/10/09 13:59:53 murch Exp $
  */
 
 #include <config.h>
@@ -173,7 +173,7 @@ static char *get_localpart_addr(const char *header);
 static char *index_extract_subject(const char *subj, size_t len, int *is_refwd);
 static char *_index_extract_subject(char *s, int *is_refwd);
 static void index_get_ids(MsgData *msgdata,
-			  char *envtokens[], const char *headers);
+			  char *envtokens[], const char *headers, unsigned size);
 static MsgData *index_msgdata_load(unsigned *msgno_list, int n,
 				   struct sortcrit *sortcrit);
 
@@ -3724,7 +3724,8 @@ static MsgData *index_msgdata_load(unsigned *msgno_list, int n,
  		cur->nannot++;
  		break;
 	    case LOAD_IDS:
-		index_get_ids(cur, envtokens, headers + CACHE_ITEM_SIZE_SKIP);
+		index_get_ids(cur, envtokens, headers + CACHE_ITEM_SIZE_SKIP,
+			      CACHE_ITEM_LEN(headers));
 		break;
 	    }
 	}
@@ -4101,27 +4102,42 @@ static char *find_msgid(char *str, char **rem)
 }
 
 /* Get message-id, and references/in-reply-to */
-#define REFGROWSIZE 10
+#define REFGROWSIZE 20
 
-void index_get_ids(MsgData *msgdata, char *envtokens[], const char *headers)
+void index_get_ids(MsgData *msgdata, char *envtokens[], const char *headers,
+		   unsigned size)
 {
+    static char *buf;
+    static unsigned bufsize;
+    static struct strlist refhdr;
     char *refstr, *ref, *in_reply_to;
     int refsize = REFGROWSIZE;
-    char buf[100];
+
+    if (bufsize < size+2) {
+	bufsize = size+100;
+	buf = xrealloc(buf, bufsize);
+    }
 
     /* get msgid */
     msgdata->msgid = find_msgid(envtokens[ENV_MSGID], NULL);
      /* if we don't have one, create one */
     if (!msgdata->msgid) {
-	snprintf(buf, sizeof(buf), "<Empty-ID: %u>", msgdata->msgno);
+	snprintf(buf, bufsize, "<Empty-ID: %u>", msgdata->msgno);
 	msgdata->msgid = xstrdup(buf);
     }
 
+    /* Copy headers to the buffer */
+    memcpy(buf, headers, size);
+    buf[size] = '\0';
+
     /* grab the References header */
-    if ((refstr = stristr(headers, "references:"))) {
+    refhdr.s = "references";
+    index_pruneheader(buf, &refhdr, 0);
+    if (*buf) {
 	/* allocate some space for refs */
 	msgdata->ref = (char **) xmalloc(refsize * sizeof(char *));
 	/* find references */
+	refstr = buf;
 	while ((ref = find_msgid(refstr, &refstr)) != NULL) {
 	    /* reallocate space for this msgid if necessary */
 	    if (msgdata->nref == refsize) {
@@ -5178,6 +5194,7 @@ extern struct nntp_overview *index_overview(struct mailbox *mailbox,
     int size;
     char *envtokens[NUMENVTOKENS];
     struct address addr = { NULL, NULL, NULL, NULL, NULL, NULL };
+    static struct strlist refhdr;
 
     cacheitem = cache_base + CACHE_OFFSET(msgno); /* envelope */
 
@@ -5198,13 +5215,13 @@ extern struct nntp_overview *index_overview(struct mailbox *mailbox,
     cacheitem = CACHE_ITEM_NEXT(cacheitem); /* cacheheaders */
 
     /* make a working copy of headers */
-    /* +1 -> leave space for NUL */
-    size = CACHE_ITEM_LEN(cacheitem) + 1;
-    if (hdrsize < size) {
-	hdrsize = size;
+    size = CACHE_ITEM_LEN(cacheitem);
+    if (hdrsize < size+2) {
+	hdrsize = size+100;
 	hdr = xrealloc(hdr, hdrsize);
     }
-    strlcpy(hdr, cacheitem + CACHE_ITEM_SIZE_SKIP, size);
+    memcpy(hdr, cacheitem + CACHE_ITEM_SIZE_SKIP, size);
+    hdr[size] = '\0';
 
     parse_cached_envelope(env, envtokens, VECTOR_SIZE(envtokens));
 
@@ -5242,8 +5259,10 @@ extern struct nntp_overview *index_overview(struct mailbox *mailbox,
 	over.from = NULL;
 
     /* massage references */
-    if ((over.ref = stristr(hdr, "references:"))) {
-	over.ref += 11; /* skip over header name */
+    refhdr.s = "references";
+    index_pruneheader(hdr, &refhdr, 0);
+    if (*hdr) {
+	over.ref = hdr + 11; /* skip over header name */
 	massage_header(over.ref);
     }
 
