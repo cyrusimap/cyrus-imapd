@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_dbtool.c,v 1.6 2008/09/23 16:39:18 murch Exp $
+ * $Id: cyr_dbtool.c,v 1.7 2008/10/14 14:53:40 murch Exp $
  */
 
 #include <config.h>
@@ -158,15 +158,15 @@ int main(int argc, char *argv[])
     }
 	
     if((argc - optind) < 3) {
-	fprintf(stderr, "Usage: %s [-C altconfig] <old db> <old db backend> <action> [<key>] [<value>]\n", argv[0]);
-	fprintf(stderr, "Usable Backends:  ");
+	char sep;
 
-	if(!cyrusdb_backends || !cyrusdb_backends[0])
-	    fatal("we don't seem to have any db backends available", EC_OSERR);
-	
-	fprintf(stderr, "%s", cyrusdb_backends[0]->name);
-	for(i=1; cyrusdb_backends[i]; i++)
-	    fprintf(stderr, ", %s", cyrusdb_backends[i]->name);
+	fprintf(stderr, "Usage: %s [-C altconfig] <old db> <old db backend> <action> [<key>] [<value>]\n", argv[0]);
+	fprintf(stderr, "Usable Backends");
+
+	for(i=0, sep = ':'; cyrusdb_backends[i]; i++) {
+	    fprintf(stderr, "%c %s", sep, cyrusdb_backends[i]->name);
+	    sep = ',';
+	}
 	
 	fprintf(stderr, "\n");
 	fprintf(stderr, "\n");
