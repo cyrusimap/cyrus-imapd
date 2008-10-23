@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imtest.c,v 1.120 2008/10/08 15:47:08 murch Exp $
+ * $Id: imtest.c,v 1.121 2008/10/23 12:47:49 murch Exp $
  */
 
 #include "config.h"
@@ -1867,7 +1867,7 @@ static void *pop3_parse_banner(char *str)
     char *chal = NULL;
     
     /* look for APOP challenge in banner '<...@...>' */
-    cp = str+4;
+    cp = str+3;
     while (cp && (start = strchr(cp, '<'))) {
 	cp = start + 1;
 	while (*cp && *cp != '@' && *cp != '<' && *cp != '>') cp++;
@@ -1905,7 +1905,7 @@ static int auth_pop(void)
     
     printf("S: %s", str);
     
-    if (strncasecmp(str, "+OK ", 4)) return IMTEST_FAIL;
+    if (strncasecmp(str, "+OK", 3)) return IMTEST_FAIL;
     
     interaction(SASL_CB_PASS, NULL, "Please enter your password",
 		&pass, &passlen);
@@ -1920,7 +1920,7 @@ static int auth_pop(void)
     
     printf("S: %s", str);
     
-    if (!strncasecmp(str, "+OK ", 4)) {
+    if (!strncasecmp(str, "+OK", 3)) {
 	return IMTEST_OK;
     } else {
 	return IMTEST_FAIL;
@@ -1968,7 +1968,7 @@ static int auth_apop(char *apop_chal)
     
     printf("S: %s", str);
     
-    if (!strncasecmp(str, "+OK ", 4)) {
+    if (!strncasecmp(str, "+OK", 3)) {
 	return IMTEST_OK;
     } else {
 	return IMTEST_FAIL;
@@ -2233,7 +2233,7 @@ static struct protocol_t protocols[] = {
       &imap_init_conn, &generic_pipe, &imap_reset
     },
     { "pop3", "pop3s", "pop",
-      { 0, "+OK ", &pop3_parse_banner },
+      { 0, "+OK", &pop3_parse_banner },
       { "CAPA", ".", "STLS", "SASL ", NULL },
       { "STLS", "+OK", "-ERR", 0 },
       { "AUTH", 255, 0, "+OK", "-ERR", "+ ", "*", NULL, 0 },
