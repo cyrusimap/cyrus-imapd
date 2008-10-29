@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_client.c,v 1.35 2008/04/22 13:11:18 murch Exp $
+ * $Id: sync_client.c,v 1.36 2008/10/29 15:34:24 murch Exp $
  *
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
@@ -129,6 +129,7 @@ static struct namespace   sync_namespace;
 static int verbose         = 0;
 static int verbose_logging = 0;
 static int connect_once    = 0;
+static int foreground      = 0;
 
 static struct protocol_t csync_protocol =
 { "csync", "csync",
@@ -3446,14 +3447,16 @@ void do_daemon(const char *sync_log_file, const char *sync_shutdown_file,
     int status;
     int restart;
 
-    /* fork a child so we can release from master */
-    if ((pid=fork()) < 0) fatal("fork failed", EC_SOFTWARE);
+    if (!foreground) {
+	/* fork a child so we can release from master */
+	if ((pid=fork()) < 0) fatal("fork failed", EC_SOFTWARE);
 
-    if (pid != 0) { /* parent */
-	cyrus_done();
-	exit(0);
+	if (pid != 0) { /* parent */
+	    cyrus_done();
+	    exit(0);
+	}
+	/* child */
     }
-    /* child */
 
     if (timeout == 0) {
         do_daemon_work(sync_log_file, sync_shutdown_file,
@@ -3566,7 +3569,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:vlS:F:f:w:t:d:rumso")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:vlS:F:f:w:t:d:rRumso")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -3609,6 +3612,8 @@ int main(int argc, char **argv)
             min_delta = atoi(optarg);
             break;
 
+        case 'R':
+	    foreground = 1;
         case 'r':
 	    if (mode != MODE_UNKNOWN)
 		fatal("Mutually exclusive options defined", EC_USAGE);
