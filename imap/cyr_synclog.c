@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_synclog.c,v 1.2 2008/03/24 17:09:16 murch Exp $
+ * $Id: cyr_synclog.c,v 1.3 2008/11/06 18:39:00 wescraig Exp $
  *
  * Originally written by Bron Gondwana <brong@fastmail.fm>
  */
@@ -63,6 +63,10 @@ int main(int argc, char *argv[])
     char *alt_config = NULL;
     char cmd = '\0';
     char opt;
+
+    if ((geteuid()) == 0 && (become_cyrus() != 0)) {
+	fatal("must run as the Cyrus user", EC_USAGE);
+    }
 
     while ((opt = getopt(argc, argv, "C:uvmacqnsb")) != EOF) {
 	switch (opt) {
