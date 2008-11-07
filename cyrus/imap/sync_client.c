@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_client.c,v 1.36 2008/10/29 15:34:24 murch Exp $
+ * $Id: sync_client.c,v 1.37 2008/11/07 15:34:58 murch Exp $
  *
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
@@ -3458,7 +3458,7 @@ void do_daemon(const char *sync_log_file, const char *sync_shutdown_file,
 	/* child */
     }
 
-    if (timeout == 0) {
+    if (foreground || timeout == 0) {
         do_daemon_work(sync_log_file, sync_shutdown_file,
                        timeout, min_delta, &restart);
         return;
