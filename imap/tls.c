@@ -43,7 +43,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: tls.c,v 1.65 2008/04/15 17:58:08 murch Exp $
+ * $Id: tls.c,v 1.66 2008/11/14 22:24:38 wescraig Exp $
  */
 
 /*
@@ -1135,7 +1135,7 @@ int tls_prune_sessions(void)
     strlcpy(dbdir, config_dir, sizeof(dbdir));
     strlcat(dbdir, FNAME_TLSSESSIONS, sizeof(dbdir));
 
-    ret = (DB->open)(dbdir, CYRUSDB_CREATE, &sessdb);
+    ret = (DB->open)(dbdir, 0, &sessdb);
     if (ret != CYRUSDB_OK) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s",
 	       dbdir, cyrusdb_strerror(ret));
