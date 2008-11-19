@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imtest.c,v 1.121 2008/10/23 12:47:49 murch Exp $
+ * $Id: imtest.c,v 1.122 2008/11/19 16:41:48 murch Exp $
  */
 
 #include "config.h"
@@ -2524,6 +2524,9 @@ int main(int argc, char **argv)
 	    
 	    prot_free(pin);
 	    prot_free(pout);
+
+	    /* Properly shutdown TLS so that session can be reused */
+	    if (tls_conn) SSL_shutdown(tls_conn);
 	    
 	    close(sock);
 	    
