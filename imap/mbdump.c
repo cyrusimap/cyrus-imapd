@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mbdump.c,v 1.41 2008/10/08 15:47:08 murch Exp $
+ * $Id: mbdump.c,v 1.42 2008/12/02 02:20:22 wescraig Exp $
  */
 
 #include <config.h>
@@ -757,11 +757,6 @@ int undump_mailbox(const char *mbname, const char *mbpath,
 		r = IMAP_PROTOCOL_ERROR;
 		goto done;
 	    }
-	    if(strncmp(file.s, "cyrus.", 6)) {
-		/* it doesn't match cyrus.*, so its a message file.
-		 * charge it against the quota */
-		quotaused += size;
-	    }
 	}	
 
 	/* if we haven't opened it, do so */
@@ -824,31 +819,6 @@ int undump_mailbox(const char *mbname, const char *mbpath,
 	    goto done;
 	}
     }
-    
-    if(!r && quotaused) {
-	struct quota quota;
-	char quota_root[MAX_MAILBOX_PATH+1];
-	struct txn *tid = NULL;
-	
-	if (quota_findroot(quota_root, sizeof(quota_root), mbname)) {
-	    /* update the quota file */
-	    memset(&quota, 0, sizeof(quota));
-	    quota.root = quota_root;
-	    r = quota_read(&quota, &tid, 1);
-	    if(!r) {
-		quota.used += quotaused;
-		r = quota_write(&quota, &tid);
-		if (!r) quota_commit(&tid);
-	    } else {
-		syslog(LOG_ERR, "could not lock quota file for %s (%s)",
-		       quota_root, error_message(r));
-	    }
-	    if(r) {
-		syslog(LOG_ERR, "failed writing quota file for %s (%s)",
-		       quota_root, error_message(r));
-	    }
-	}
-    }
 
  done:
     /* eat the rest of the line, we have atleast a \r\n coming */
@@ -859,7 +829,7 @@ int undump_mailbox(const char *mbname, const char *mbpath,
     if(curfile >= 0) close(curfile);
     mailbox_close(&mb);
 
-    if ( r || quotaused == 0 ) {
+    if ( r ) {
 	return r;
     }
 
@@ -885,6 +855,12 @@ int undump_mailbox(const char *mbname, const char *mbpath,
 	record_size = mb.record_size;
 
 	for ( i = 1; i <= mb.exists; i++ ) {
+	    /*
+	     * We calculate the usage here to avoid counting expunged
+	     * messages that may have been included in the undump.
+	     */
+	    quotaused += SIZE( i );
+
 	    mailbox_message_get_fname( &mb, UID(i),
 		    fname + offset, sizeof( fname ) - offset);
 	    times[ 0 ].tv_sec = INTERNALDATE( i );
@@ -894,6 +870,32 @@ int undump_mailbox(const char *mbname, const char *mbpath,
 	    (void)utimes( fname, times );
 	}
     }
+
+    if(!r && quotaused) {
+	struct quota quota;
+	char quota_root[MAX_MAILBOX_PATH+1];
+	struct txn *tid = NULL;
+	
+	if (quota_findroot(quota_root, sizeof(quota_root), mbname)) {
+	    /* update the quota file */
+	    memset(&quota, 0, sizeof(quota));
+	    quota.root = quota_root;
+	    r = quota_read(&quota, &tid, 1);
+	    if(!r) {
+		quota.used += quotaused;
+		r = quota_write(&quota, &tid);
+		if (!r) quota_commit(&tid);
+	    } else {
+		syslog(LOG_ERR, "could not lock quota file for %s (%s)",
+		       quota_root, error_message(r));
+	    }
+	    if(r) {
+		syslog(LOG_ERR, "failed writing quota file for %s (%s)",
+		       quota_root, error_message(r));
+	    }
+	}
+    }
+
     mailbox_close( &mb );
     
     return r;
