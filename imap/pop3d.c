@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: pop3d.c,v 1.189 2008/04/22 13:11:18 murch Exp $
+ * $Id: pop3d.c,v 1.190 2008/12/23 15:16:03 murch Exp $
  */
 
 #include <config.h>
@@ -551,13 +551,13 @@ int service_main(int argc __attribute__((unused)),
 	syslog(LOG_WARNING, "APOP disabled: can't create challenge");
     }
 
-    prot_printf(popd_out, "+OK %s", popd_apop_chal);
+    prot_printf(popd_out, "+OK");
     if (config_serverinfo) prot_printf(popd_out, " %s", config_servername);
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	prot_printf(popd_out, " Cyrus POP3%s %s",
 		    config_mupdate_server ? " Murder" : "", CYRUS_VERSION);
     }
-    prot_printf(popd_out, " server ready\r\n");
+    prot_printf(popd_out, " server ready %s\r\n", popd_apop_chal);
 
     cmdloop();
 
