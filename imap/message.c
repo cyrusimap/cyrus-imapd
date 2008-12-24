@@ -321,6 +321,7 @@ int allow_null;
 	/* Check for valid header name */
 	if (sawnl && buf[0] != ' ' && buf[0] != '\t') {
 	    if (buf[0] == ':') return IMAP_MESSAGE_BADHEADER;
+      if (strstr(buf, "From ") != buf)
 	    for (p = (unsigned char *)buf; *p != ':'; p++) {
 		if (*p <= ' ') return IMAP_MESSAGE_BADHEADER;
 	    }
