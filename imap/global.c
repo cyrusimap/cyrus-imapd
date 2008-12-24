@@ -101,6 +101,11 @@ struct cyrusdb_backend *config_ptscache_db;
 struct cyrusdb_backend *config_statuscache_db;
 struct cyrusdb_backend *config_userdeny_db;
 
+#define MAX_SESSIONID_SIZE 256
+char session_id_buf[MAX_SESSIONID_SIZE];
+int session_id_time = 0;
+int session_id_count = 0;
+
 /* Called before a cyrus application starts (but after command line parameters
  * are read) */
 int cyrus_init(const char *alt_config, const char *ident, unsigned flags)
@@ -756,4 +761,28 @@ char *find_free_partition(unsigned long *tavail)
 
     if (tavail) *tavail = stats.tavail;
     return stats.name;
+}
+
+/* Set up the Session ID Buffer */
+void session_new_id()
+{
+    const char *base;
+    int now = time(NULL);    
+    if (now != session_id_time) {
+        session_id_time = now;
+        session_id_count = 0;
+    }
+    ++session_id_count;
+    base = config_getstring(IMAPOPT_SYSLOG_PREFIX);
+    if (!base) base = config_getstring(IMAPOPT_SERVERNAME);
+    snprintf(session_id_buf, MAX_SESSIONID_SIZE, "%.128s-%d-%d-%d",
+             base, getpid(), session_id_time, session_id_count);
+}
+
+/* Return the session id */
+const char *session_id()
+{
+    if (!session_id_count) 
+        session_new_id();
+    return (const char *)session_id_buf;
 }

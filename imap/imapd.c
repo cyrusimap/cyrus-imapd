@@ -803,6 +803,8 @@ int service_main(int argc __attribute__((unused)),
     int niflags;
     int imapd_haveaddr = 0;
 
+    session_new_id();
+
     signals_poll();
 
 #ifdef ID_SAVE_CMDLINE
@@ -2064,6 +2066,7 @@ void cmdloop()
 void cmd_login(char *tag, char *user)
 {
     char userbuf[MAX_MAILBOX_BUFFER];
+    char replybuf[MAX_MAILBOX_BUFFER];
     unsigned userlen;
     const char *canon_user = userbuf;
     const void *val;
@@ -2187,7 +2190,9 @@ void cmd_login(char *tag, char *user)
 	    return;
 	}
 
-	reply = "User logged in";
+	snprintf(replybuf, sizeof(replybuf), 
+	    "User logged in SESSIONID=<%s>", session_id());
+	reply = replybuf;
 	imapd_userid = xstrdup((const char *) val);
 	snmp_increment_args(AUTHENTICATION_YES, 1,
 			    VARIABLE_AUTH, 0 /*hash_simple("LOGIN") */, 

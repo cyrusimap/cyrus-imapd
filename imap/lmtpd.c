@@ -263,6 +263,8 @@ int service_main(int argc, char **argv,
 {
     int opt, r;
 
+    session_new_id();
+
     sync_log_init();
 
     deliver_in = prot_new(0, 0);

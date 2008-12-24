@@ -485,6 +485,8 @@ int service_main(int argc __attribute__((unused)),
     int niflags;
     sasl_security_properties_t *secprops=NULL;
 
+    session_new_id();
+
     signals_poll();
 
     sync_log_init();
@@ -1393,9 +1395,9 @@ void cmd_pass(char *pass)
 	}
 	popd_userid = xstrdup((const char *) val);
 
-	syslog(LOG_NOTICE, "login: %s %s%s plaintext%s %s", popd_clienthost,
+	syslog(LOG_NOTICE, "login: %s %s%s plaintext%s %s SESSIONID=<%s>", popd_clienthost,
 	       popd_userid, popd_subfolder ? popd_subfolder : "",
-	       popd_starttls_done ? "+TLS" : "", "User logged in");
+	       popd_starttls_done ? "+TLS" : "", "User logged in", session_id());
 
 	if ((plaintextloginpause = config_getint(IMAPOPT_PLAINTEXTLOGINPAUSE))
 	     != 0) {
@@ -1799,8 +1801,10 @@ int openinbox(void)
     /* Create telemetry log */
     popd_logfd = telemetry_log(popd_userid, popd_in, popd_out, 0);
 
-    prot_printf(popd_out, "+OK%s",
-		statusline ? statusline : " Mailbox locked and ready\r\n");
+    if (statusline)
+	prot_printf(popd_out, "+OK%s", statusline);
+    else
+	prot_printf(popd_out, "+OK Mailbox locked and ready SESSIONID=<%s>\r\n", session_id());
     prot_flush(popd_out);
     return 0;
 

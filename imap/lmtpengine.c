@@ -173,7 +173,7 @@ static void send_lmtp_error(struct protstream *pout, int r)
 {
     switch (r) {
     case 0:
-	prot_printf(pout, "250 2.1.5 Ok\r\n");
+	prot_printf(pout, "250 2.1.5 Ok SESSIONID=<%s>\r\n", session_id());
 	break;
 
     case IMAP_IOERROR:
@@ -213,10 +213,10 @@ static void send_lmtp_error(struct protstream *pout, int r)
     case IMAP_QUOTA_EXCEEDED:
 	if(config_getswitch(IMAPOPT_LMTP_OVER_QUOTA_PERM_FAILURE)) {
 	    /* Not Default - Perm Failure */
-	    prot_printf(pout, "552 5.2.2 Over quota\r\n");
+	    prot_printf(pout, "552 5.2.2 Over quota SESSIONID=<%s>\r\n", session_id());
 	} else {
 	    /* Default - Temp Failure */
-	    prot_printf(pout, "452 4.2.2 Over quota\r\n");
+	    prot_printf(pout, "452 4.2.2 Over quota SESSIONID=<%s>\r\n", session_id());
 	}
 	break;
 
