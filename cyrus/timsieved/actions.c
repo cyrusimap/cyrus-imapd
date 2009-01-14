@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: actions.c,v 1.45 2008/10/08 15:47:08 murch Exp $
+ * $Id: actions.c,v 1.46 2009/01/14 15:50:47 murch Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -179,7 +179,7 @@ int scriptname_valid(mystring_t *name)
 }
 
 int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
-		 int starttls_done, int authenticated)
+		 int starttls_done, int authenticated, sasl_ssf_t sasl_ssf)
 {
     const char *sasllist;
     int mechcount;
@@ -190,7 +190,7 @@ int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
 		config_mupdate_server ? " (Murder)" : "", CYRUS_VERSION);
     
     /* SASL */
-    if (authenticated != 1 &&
+    if ((!authenticated || sasl_ssf) &&
 	sasl_listmech(saslconn, NULL, 
 		    "\"SASL\" \"", " ", "\"\r\n",
 		    &sasllist,

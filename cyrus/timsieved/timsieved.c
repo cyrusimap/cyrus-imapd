@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: timsieved.c,v 1.62 2008/03/24 20:20:57 murch Exp $
+ * $Id: timsieved.c,v 1.63 2009/01/14 15:50:47 murch Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -182,7 +182,7 @@ void cmdloop()
     
     chdir("/tmp/");
 
-    capabilities(sieved_out, sieved_saslconn, 0, 0);
+    capabilities(sieved_out, sieved_saslconn, 0, 0, 0);
 
     /* initialize lexer */
     lex_init();

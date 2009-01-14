@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: managesieve.xs,v 1.28 2008/04/22 13:11:19 murch Exp $
+ * $Id: managesieve.xs,v 1.29 2009/01/14 15:50:47 murch Exp $
  */
 
 #ifdef __cplusplus
@@ -312,10 +312,14 @@ sieve_get_handle(servername, username_cb, authname_cb, password_cb, realm_cb)
   }
 
   if (ssf) {
-	/* SASL security layer negotiated --
-	   server will automatically send capabilites */
-	free(mechlist);
-	mechlist=read_capability(obj);
+        /* SASL security layer negotiated --
+	   check if SASL mech list changed */
+        if (detect_mitm(obj, mechlist)) {
+	    globalerr = "possible MITM attack: "
+		"list of available SASL mechamisms changed";
+	    free(mechlist);
+	    XSRETURN_UNDEF;
+	}
   }
   free(mechlist);
 

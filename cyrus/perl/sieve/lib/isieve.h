@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: isieve.h,v 1.12 2008/04/22 13:11:19 murch Exp $
+ * $Id: isieve.h,v 1.13 2009/01/14 15:50:47 murch Exp $
  */
 
 #ifndef ISIEVE_H_
@@ -60,6 +60,7 @@ int init_sasl(isieve_t *obj,
 	      sasl_callback_t *callbacks);
 
 char * read_capability(isieve_t *obj);
+int detect_mitm(isieve_t *obj, char *mechlist);
 
 typedef enum {
     STAT_CONT = 0,
