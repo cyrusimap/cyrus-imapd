@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imtest.c,v 1.123 2008/11/25 15:17:14 murch Exp $
+ * $Id: imtest.c,v 1.124 2009/01/14 15:50:47 murch Exp $
  */
 
 #include "config.h"
@@ -2630,7 +2630,6 @@ int main(int argc, char **argv)
 	}
 	
 	if (rock) free(rock);
-	if (mechlist) free(mechlist);
 	
 	if (result == IMTEST_OK) {
 	    printf("Authenticated.\n");
@@ -2651,15 +2650,41 @@ int main(int argc, char **argv)
 	} else {
 	    printf("Security strength factor: %d\n", ext_ssf + ssf);
 
-	    if (ssf && protocol->sasl_cmd.auto_capa) {
+	    if (ssf) {
 		/* ask for the capabilities again */
+		char *new_mechlist;
+
 		if (verbose==1)
 		    printf("Asking for capabilities again "
 			   "since they might have changed\n");
-		mechlist = ask_capability(protocol, &server_supports_tls, 1);
-		if (mechlist) free(mechlist);
+		if (!strcmp(protocol->protocol, "sieve")) {
+		    /* XXX  Hack to handle ManageSieve servers.
+		     * No way to tell from protocol if server will
+		     * automatically send capabilities, so we treat it
+		     * as optional.
+		     */
+		    char ch;
+
+		    /* wait and probe for possible auto-capability response*/
+		    usleep(250000);
+		    prot_NONBLOCK(pin);
+		    if ((ch = prot_getc(pin)) != EOF) {
+			prot_ungetc(ch, pin);
+		    } else {
+			protocol->sasl_cmd.auto_capa = 0;
+		    }
+		    prot_BLOCK(pin);
+		}
+		new_mechlist = ask_capability(protocol, &server_supports_tls,
+					      protocol->sasl_cmd.auto_capa);
+		if (new_mechlist && strcmp(new_mechlist, mechlist)) {
+		    printf("WARNING: possible MITM attack: "
+			   "list of available SASL mechanisms changed\n");
+		    free(new_mechlist);
+		}
 	    }
 	}
+	if (mechlist) free(mechlist);
 
     } while (--reauth);
 

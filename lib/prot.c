@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: prot.c,v 1.94 2008/03/24 17:43:09 murch Exp $
+ * $Id: prot.c,v 1.95 2009/01/14 15:50:47 murch Exp $
  */
 
 #include <config.h>
@@ -154,6 +154,50 @@ int prot_settls(struct protstream *s, SSL *tlsconn)
 #endif /* HAVE_SSL */
 
 /*
+ * Decode data sent via a SASL security layer. Returns EOF on error.
+ */
+int prot_sasldecode(struct protstream *s, int n)
+{
+    int result;
+    const char *out;
+    unsigned outlen;
+    
+    assert(!s->write);
+
+    /* decode the input */
+    result = sasl_decode(s->conn, (const char *) s->buf, n, 
+			 &out, &outlen);
+
+    if (result != SASL_OK) {
+	char errbuf[256];
+	const char *ed = sasl_errdetail(s->conn);
+
+	snprintf(errbuf, 256, "decoding error: %s; %s",
+		 sasl_errstring(result, NULL, NULL),
+		 ed ? ed : "no detail");
+	s->error = xstrdup(errbuf);
+	return EOF;
+    }
+   
+    if (outlen > 0) {
+	/* XXX can we just serve data from 'out' without copying
+	   it to s->buf ? */
+	if (outlen > s->buf_size) {
+	    s->buf = (unsigned char *) 
+		xrealloc(s->buf, sizeof(char) * (outlen + 4));
+	    s->buf_size = outlen;
+	}
+	memcpy(s->buf, out, outlen);
+	s->ptr = s->buf;
+	s->cnt = outlen;
+    } else {		/* didn't decode anything */
+	s->cnt = 0;
+    }
+
+    return 0;
+}
+
+/*
  * Turn on SASL for this connection
  */
 
@@ -179,7 +223,6 @@ sasl_conn_t *conn;
     s->saslssf = *((const int *) ssfp);
 
     if (s->write) {
-	int result;
 	const void *maxp;
 	unsigned int max;
 
@@ -199,8 +242,8 @@ sasl_conn_t *conn;
 	s->cnt = max;
     }
     else if (s->cnt) {  
-	/* flush any pending input */
-	s->cnt = 0;
+	/* decode any pending input */
+	if (prot_sasldecode(s, s->cnt) == EOF) return EOF;
     }
 
     return 0;
@@ -481,43 +524,10 @@ int prot_fill(struct protstream *s)
 	}
 	
 	if (s->saslssf) { /* decode it */
-	    int result;
-	    const char *out;
-	    unsigned outlen;
-	    
-	    /* Decode the input token */
-	    result = sasl_decode(s->conn, (const char *) s->buf, n, 
-				 &out, &outlen);
-	    
-	    if (result != SASL_OK) {
-		char errbuf[256];
-		const char *ed = sasl_errdetail(s->conn);
-
-		snprintf(errbuf, 256, "decoding error: %s; %s",
-			 sasl_errstring(result, NULL, NULL),
-			 ed ? ed : "no detail");
-		s->error = xstrdup(errbuf);
-		return EOF;
-	    }
-	    
-	    if (outlen > 0) {
-		/* XXX can we just serve data from 'out' without copying
-		   it to s->buf ? */
-		if (outlen > s->buf_size) {
-		    s->buf = (unsigned char *) 
-			xrealloc(s->buf, sizeof(char) * (outlen + 4));
-		    s->buf_size = outlen;
-		}
-		memcpy(s->buf, out, outlen);
-		s->ptr = s->buf + 1;
-		s->cnt = outlen;
-	    } else {		/* didn't decode anything */
-		s->cnt = 0;
-	    }
-	    
+	    if (prot_sasldecode(s, n) == EOF) return EOF;
 	} else {
 	    /* No protection function, just use the raw data */
-	    s->ptr = s->buf+1;
+	    s->ptr = s->buf;
 	    s->cnt = n;
 	}
 	
@@ -545,7 +555,7 @@ int prot_fill(struct protstream *s)
 	    }
 
 	    s->cnt--;		/* we return the first char */
-	    return *s->buf;
+	    return *s->ptr++;
 	}
     } while (1);
 }

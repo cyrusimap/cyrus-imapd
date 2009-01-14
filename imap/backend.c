@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: backend.c,v 1.57 2008/10/08 13:12:41 wescraig Exp $
+ * $Id: backend.c,v 1.58 2009/01/14 15:50:47 murch Exp $
  */
 
 #include <config.h>
@@ -270,16 +270,8 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
     if (local_cb) free_callbacks(cb);
 
     if (r == SASL_OK) {
-	const void *ssf;
-
 	prot_setsasl(s->in, s->saslconn);
 	prot_setsasl(s->out, s->saslconn);
-
-	sasl_getprop(s->saslconn, SASL_SSF, &ssf);
-	if (*((sasl_ssf_t *) ssf) && prot->sasl_cmd.auto_capa) {
-	    free(*mechlist);
-	    *mechlist = ask_capability(s->out, s->in, prot, &s->capability, 1);
-	}
     }
 
     /* r == SASL_OK on success */
@@ -431,7 +423,9 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
     if ((server[0] != '/') ||
 	(strcmp(prot->sasl_service, "lmtp") &&
 	 strcmp(prot->sasl_service, "csync"))) {
-	if ((r = backend_authenticate(ret, prot, &mechlist, userid,
+	char *mlist = xstrdup(mechlist); /* backend_auth is destructive */
+
+	if ((r = backend_authenticate(ret, prot, &mlist, userid,
 				      cb, auth_status))) {
 	    syslog(LOG_ERR, "couldn't authenticate to backend server: %s",
 		   sasl_errstring(r, NULL, NULL));
@@ -439,6 +433,50 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
 	    close(sock);
 	    ret = NULL;
 	}
+	else {
+	    const void *ssf;
+
+	    sasl_getprop(ret->saslconn, SASL_SSF, &ssf);
+	    if (*((sasl_ssf_t *) ssf)) {
+		/* if we have a SASL security layer, compare SASL mech lists
+		   to check for a MITM attack */
+		char *new_mechlist;
+		int auto_capa = prot->sasl_cmd.auto_capa;
+
+		if (!strcmp(prot->service, "sieve")) {
+		    /* XXX  Hack to handle ManageSieve servers.
+		     * No way to tell from protocol if server will
+		     * automatically send capabilities, so we treat it
+		     * as optional.
+		     */
+		    char ch;
+
+		    /* wait and probe for possible auto-capability response */
+		    usleep(250000);
+		    prot_NONBLOCK(ret->in);
+		    if ((ch = prot_getc(ret->in)) != EOF) {
+			prot_ungetc(ch, ret->in);
+		    } else {
+			auto_capa = AUTO_NO;
+		    }
+		    prot_BLOCK(ret->in);
+		}
+
+		new_mechlist = ask_capability(ret->out, ret->in, prot,
+					      &ret->capability, auto_capa);
+		if (new_mechlist && strcmp(new_mechlist, mechlist)) {
+		    syslog(LOG_ERR, "possible MITM attack:"
+			   "list of available SASL mechanisms changed");
+		    if (!ret_backend) free(ret);
+		    close(sock);
+		    ret = NULL;
+		}
+
+		free(new_mechlist);
+	    }
+	}
+
+	if (mlist) free(mlist);
     }
 
     if (mechlist) free(mechlist);

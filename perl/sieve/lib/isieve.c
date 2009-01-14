@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: isieve.c,v 1.34 2008/04/22 13:11:18 murch Exp $
+ * $Id: isieve.c,v 1.35 2009/01/14 15:50:47 murch Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -55,6 +55,7 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <string.h>
+#include <unistd.h>
 
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
@@ -297,6 +298,33 @@ char * read_capability(isieve_t *obj)
   }
   
   return cap;
+}
+
+int detect_mitm(isieve_t *obj, char *mechlist)
+{
+    char *new_mechlist;
+    int ch, r = 0;
+
+    /* wait and probe for possible automatic capability response */
+    usleep(250000);
+    prot_NONBLOCK(obj->pin);
+    if ((ch = prot_getc(obj->pin)) != EOF) {
+	/* automatic capability response */
+	prot_ungetc(ch, obj->pin);
+    } else {
+	/* manually ask for capabilities */
+	prot_printf(obj->pout, "CAPABILITY\r\n");
+	prot_flush(obj->pout);
+    }
+    prot_BLOCK(obj->pin);
+
+    if ((new_mechlist = read_capability(obj))) {
+	/* if the server still advertises SASL mechs, compare lists */
+	r = strcmp(new_mechlist, mechlist);
+	free(new_mechlist);
+    }
+
+    return r;
 }
 
 static int getauthline(isieve_t *obj, char **line, unsigned int *linelen,
@@ -631,10 +659,12 @@ int do_referral(isieve_t *obj, char *refer_to)
     if(ret) return STAT_NO;
 
     if (ssf) {
-	/* SASL security layer negotiated --
-	   server will automatically send capabilites */
-	free(mechlist);
-	mechlist = read_capability(obj_new);
+        /* SASL security layer negotiated --
+	   check if SASL mech list changed */
+        if (detect_mitm(obj_new, mechlist)) {
+	    free(mechlist);
+	    return STAT_NO;
+	}
     }
     free(mechlist);
 

@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: actions.h,v 1.12 2008/03/24 20:20:57 murch Exp $
+ * $Id: actions.h,v 1.13 2009/01/14 15:50:47 murch Exp $
  */
 
 #ifndef _ACTIONS_H_
@@ -57,7 +57,7 @@
  */
 
 int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
-		 int starttls_done, int authenticated);
+		 int starttls_done, int authenticated, sasl_ssf_t sasl_ssf);
 
 /*
  * Get a sieve scripe with name "name" and output it's contents

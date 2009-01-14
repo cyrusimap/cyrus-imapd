@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: parser.c,v 1.51 2008/10/08 17:18:13 wescraig Exp $
+ * $Id: parser.c,v 1.52 2009/01/14 15:50:47 murch Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -84,6 +84,7 @@ const char *referral_host = NULL;
 int authenticated = 0;
 int verify_only = 0;
 int starttls_done = 0;
+sasl_ssf_t sasl_ssf = 0;
 #ifdef HAVE_SSL
 /* our tls connection, if any */
 static SSL *tls_conn = NULL;
@@ -241,7 +242,8 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
       if(referral_host)
 	  goto do_referral;
 
-      capabilities(sieved_out, sieved_saslconn, starttls_done, authenticated);
+      capabilities(sieved_out, sieved_saslconn, starttls_done, authenticated,
+		   sasl_ssf);
       break;
 
   case HAVESPACE:
@@ -527,7 +529,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
   const char *serverout=NULL;
   unsigned int serveroutlen;
   const char *errstr=NULL;
-  const void *canon_user, *sasl_ssf;
+  const void *canon_user, *val;
   char *username;
   int ret = TRUE;
 
@@ -770,11 +772,6 @@ static int cmd_authenticate(struct protstream *sieved_out,
 		  if(c) *c = '\0';
 	      }
 
-	      if (config_getswitch(IMAPOPT_SIEVE_SASL_EXPECT_UNSOLICITED_CAPABILITY)) {
-		  sieve_protocol.sasl_cmd.auto_capa = 1;
-	      } else {
-		  sieve_protocol.sasl_cmd.auto_capa = 0;
-	      }
 	      backend = backend_connect(NULL, server, &sieve_protocol,
 					username, NULL, &statusline);
 
@@ -825,11 +822,14 @@ static int cmd_authenticate(struct protstream *sieved_out,
   prot_setsasl(sieved_in, sieved_saslconn);
   prot_setsasl(sieved_out, sieved_saslconn);
 
-  if (config_getswitch(IMAPOPT_SIEVE_SASL_SEND_UNSOLICITED_CAPABILITY)) {
-      sasl_getprop(sieved_saslconn, SASL_SSF, &sasl_ssf);
-      if (*((sasl_ssf_t *) sasl_ssf)) {
-	  capabilities(sieved_out, sieved_saslconn, starttls_done, 2);
-      }
+  sasl_getprop(sieved_saslconn, SASL_SSF, &val);
+  sasl_ssf = *((sasl_ssf_t *) val);
+
+  if (sasl_ssf &&
+      config_getswitch(IMAPOPT_SIEVE_SASL_SEND_UNSOLICITED_CAPABILITY)) {
+      capabilities(sieved_out, sieved_saslconn, starttls_done, authenticated,
+		   sasl_ssf);
+      prot_flush(sieved_out);
   }
 
   /* Create telemetry log */
@@ -908,7 +908,8 @@ static int cmd_starttls(struct protstream *sieved_out, struct protstream *sieved
 
     starttls_done = 1;
 
-    return capabilities(sieved_out, sieved_saslconn, starttls_done, authenticated);
+    return capabilities(sieved_out, sieved_saslconn, starttls_done,
+			authenticated, sasl_ssf);
 }
 #else
 static int cmd_starttls(struct protstream *sieved_out, struct protstream *sieved_in)
