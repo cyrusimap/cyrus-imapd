@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyrusdb_quotalegacy.c,v 1.19 2008/09/19 17:10:51 murch Exp $
+ * $Id: cyrusdb_quotalegacy.c,v 1.20 2009/01/14 15:54:42 murch Exp $
  */
 
 #include <config.h>
@@ -529,7 +529,8 @@ static void scan_qr_dir(char *quota_path, char *prefix, struct qr_path *pathbuf)
 		if (!strncmp(next->d_name, prefix, strlen(prefix))) {
 		    if (pathbuf->count == pathbuf->alloc) {
 			pathbuf->alloc += PATH_ALLOC;
-			pathbuf->path = xrealloc(pathbuf->path, pathbuf->alloc);
+			pathbuf->path = xrealloc(pathbuf->path,
+						 pathbuf->alloc * sizeof(char *));
 		    }
 		    pathbuf->path[pathbuf->count] = xmalloc(MAX_QUOTA_PATH+1);
 		    sprintf(pathbuf->path[pathbuf->count++],
@@ -551,7 +552,8 @@ static void scan_qr_dir(char *quota_path, char *prefix, struct qr_path *pathbuf)
 	if (!stat(quota_path, &buf)) {
 	    if (pathbuf->count == pathbuf->alloc) {
 		pathbuf->alloc += PATH_ALLOC;
-		pathbuf->path = xrealloc(pathbuf->path, pathbuf->alloc);
+		pathbuf->path = xrealloc(pathbuf->path,
+					 pathbuf->alloc * sizeof(char *));
 	    }
 	    pathbuf->path[pathbuf->count] = xmalloc(MAX_QUOTA_PATH+1);
 	    sprintf(pathbuf->path[pathbuf->count++],
