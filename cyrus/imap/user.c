@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: user.c,v 1.24 2008/03/24 17:09:20 murch Exp $
+ * $Id: user.c,v 1.25 2009/01/30 10:38:27 brong Exp $
  */
 
 #include <config.h>
@@ -91,8 +91,12 @@ static int user_deleteacl(char *name, int matchlen, int maycreate, void* rock)
     int r;
     char *acl;
     char *rights, *nextid;
+    char *origacl, *aclalloc;
 
-    r = mboxlist_lookup(name, &acl, NULL);
+    r = mboxlist_lookup(name, &origacl, NULL);
+
+    /* setacl re-calls mboxlist_lookup and will stomp on us */
+    aclalloc = acl = xstrdup(origacl);
 
     while (!r && acl) {
 	rights = strchr(acl, '\t');
@@ -111,6 +115,9 @@ static int user_deleteacl(char *name, int matchlen, int maycreate, void* rock)
 
 	acl = nextid;
     }
+
+    free(aclalloc);
+
     return 0;
 }
 #endif
@@ -370,8 +377,12 @@ int user_renameacl(char *name, char *olduser, char *newuser)
     int r = 0;
     char *acl;
     char *rights, *nextid;
+    char *origacl, *aclalloc;
 
-    r = mboxlist_lookup(name, &acl, NULL);
+    r = mboxlist_lookup(name, &origacl, NULL);
+
+    /* setacl re-calls mboxlist_lookup and will stomp on us */
+    aclalloc = acl = xstrdup(origacl);
 
     while (!r && acl) {
 	rights = strchr(acl, '\t');
@@ -392,6 +403,8 @@ int user_renameacl(char *name, char *olduser, char *newuser)
 
 	acl = nextid;
     }
+
+    free(aclalloc);
 
     return r;
 }
