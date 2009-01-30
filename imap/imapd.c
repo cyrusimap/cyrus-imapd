@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.553 2008/10/08 15:47:06 murch Exp $
+ * $Id: imapd.c,v 1.554 2009/01/30 10:47:25 brong Exp $
  */
 
 #include <config.h>
@@ -5306,6 +5306,14 @@ static int renmbox(char *name,
 		    oldextname, newextname);
 
         sync_log_mailbox_double(name, text->newmailboxname);
+
+	if (text->rename_user) {
+	    /* allow the replica to get the correct new quotaroot 
+	     * and acls copied across */
+	    sync_log_user(text->newuser);
+	    /* allow the replica to clean up the old meta files */
+	    sync_log_user(text->olduser);
+	}
     }
 
     prot_flush(imapd_out);
