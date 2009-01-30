@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mboxlist.h,v 1.43 2008/03/24 17:09:18 murch Exp $
+ * $Id: mboxlist.h,v 1.44 2009/01/30 10:54:13 brong Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -178,6 +178,9 @@ int mboxlist_findsub_alt(struct namespace *namespace,
 /* given a mailbox 'name', where should we stage messages for it? 
    'stagedir' should be MAX_MAILBOX_PATH. */
 int mboxlist_findstage(const char *name, char *stagedir, size_t sd_len);
+
+/* Check 'user's subscription status for mailbox 'name' */
+int mboxlist_checksub(const char *name, const char *userid);
 
 /* Change 'user's subscription status for mailbox 'name'. */
 int mboxlist_changesub(const char *name, const char *userid, 

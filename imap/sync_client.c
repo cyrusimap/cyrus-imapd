@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_client.c,v 1.38 2009/01/30 03:34:22 brong Exp $
+ * $Id: sync_client.c,v 1.39 2009/01/30 10:54:13 brong Exp $
  *
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
@@ -88,6 +88,8 @@
 #include "backend.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
+#include "signals.h"
+#include "cyrusdb.h"
 
 /* signal to config.c */
 const int config_need_data = 0;  /* YYY */
@@ -697,40 +699,41 @@ static int folder_delete(char *name)
     return(sync_parse_code("DELETE", fromserver, SYNC_PARSE_EAT_OKLINE, NULL));
 }
 
-static int user_addsub(char *user, char *name)
+static int set_sub(char *user, char *name, int add)
 {
+    char *cmd = add ? "ADDSUB" : "DELSUB";
+
     if (verbose) 
-        printf("ADDSUB %s %s\n", user, name);
+        printf("%s %s %s\n", cmd, user, name);
 
     if (verbose_logging)
-        syslog(LOG_INFO, "ADDSUB %s %s", user, name);
+        syslog(LOG_INFO, "%s %s %s", cmd, user, name);
 
-    prot_printf(toserver, "ADDSUB ");
+    sync_printastring(toserver, cmd);
+    prot_printf(toserver, " ");
     sync_printastring(toserver, user);
     prot_printf(toserver, " ");
     sync_printastring(toserver, name);
     prot_printf(toserver, "\r\n");
     prot_flush(toserver);
 
-    return(sync_parse_code("ADDSUB", fromserver, SYNC_PARSE_EAT_OKLINE, NULL));
+    return(sync_parse_code(cmd, fromserver, SYNC_PARSE_EAT_OKLINE, NULL));
 }
 
-static int user_delsub(char *user, char *name)
+static int user_sub(char *user, char *name)
 {
-    if (verbose) 
-        printf("DELSUB %s %s\n", user, name);
+    int r;
 
-    if (verbose_logging)
-        syslog(LOG_INFO, "DELSUB %s %s", user, name);
+    r = mboxlist_checksub(name, user);
 
-    prot_printf(toserver, "DELSUB ");
-    sync_printastring(toserver, user);
-    prot_printf(toserver, " ");
-    sync_printastring(toserver, name);
-    prot_printf(toserver, "\r\n");
-    prot_flush(toserver);
-
-    return(sync_parse_code("DELSUB", fromserver, SYNC_PARSE_EAT_OKLINE, NULL));
+    switch (r) {
+    case CYRUSDB_OK:
+	return set_sub(user, name, 1);
+    case CYRUSDB_NOTFOUND:
+	return set_sub(user, name, 0);
+    default:
+	return r;
+    }
 }
 
 static int folder_setacl(char *name, char *acl)
@@ -2353,7 +2356,7 @@ int do_user_sub(char *user, struct sync_folder_list *server_list)
 	    do {
 		(sync_namespace.mboxname_tointernal)(&sync_namespace, s->name,
 						     user, buf);
-		if ((r = user_delsub(user, buf))) goto bail;
+		if ((r = set_sub(user, buf, 0))) goto bail;
 		s = s->next;
 		if (!s) n = -1;		/* end of server list, we're done */
 		else if (!c) n = 1;	/* remove all server subscriptions */
@@ -2367,7 +2370,7 @@ int do_user_sub(char *user, struct sync_folder_list *server_list)
 	}
 	else if (c && n < 0) {
 	    /* add the current client subscription */
-	    if ((r = user_addsub(user, c->name))) goto bail;
+	    if ((r = set_sub(user, c->name, 1))) goto bail;
 	}
     }
 
@@ -2925,7 +2928,6 @@ static int do_sync(const char *filename)
     struct sync_action_list *annot_list  = sync_action_list_create();
     struct sync_action_list *seen_list   = sync_action_list_create();
     struct sync_action_list *sub_list    = sync_action_list_create();
-    struct sync_action_list *unsub_list  = sync_action_list_create();
     struct sync_folder_list *folder_list = sync_folder_list_create();
     static struct buf type, arg1, arg2;
     char *arg1s, *arg2s;
@@ -3006,7 +3008,7 @@ static int do_sync(const char *filename)
         else if (!strcmp(type.s, "SUB"))
             sync_action_list_add(sub_list, arg2s, arg1s);
         else if (!strcmp(type.s, "UNSUB"))
-            sync_action_list_add(unsub_list, arg2s, arg1s);
+            sync_action_list_add(sub_list, arg2s, arg1s);
         else
             syslog(LOG_ERR, "Unknown action type: %s", type.s);
     }
@@ -3030,7 +3032,6 @@ static int do_sync(const char *filename)
         remove_meta(action->user, sieve_list);
         remove_meta(action->user, seen_list);
         remove_meta(action->user, sub_list);
-        remove_meta(action->user, unsub_list);
     }
     
     for (action = meta_list->head ; action ; action = action->next) {
@@ -3039,7 +3040,6 @@ static int do_sync(const char *filename)
         remove_meta(action->user, sieve_list);
         remove_meta(action->user, seen_list);
         remove_meta(action->user, sub_list);
-        remove_meta(action->user, unsub_list);
     }
 
     for (action = mailbox_list->head ; action ; action = action->next) {
@@ -3156,7 +3156,7 @@ static int do_sync(const char *filename)
     }
 
     for (action = sub_list->head ; action ; action = action->next) {
-        if (action->active && user_addsub(action->user, action->name)) {
+        if (action->active && user_sub(action->user, action->name)) {
             sync_action_list_add(meta_list, NULL, action->user);
             if (verbose) {
                 printf("  Promoting: SUB %s %s -> META %s\n",
@@ -3169,19 +3169,6 @@ static int do_sync(const char *filename)
         }
     }
 
-    for (action = unsub_list->head ; action ; action = action->next) {
-        if (action->active && user_delsub(action->user, action->name)) {
-            sync_action_list_add(meta_list, NULL, action->user);
-            if (verbose) {
-                printf("  Promoting: UNSUB %s %s -> META %s\n",
-                       action->user, action->name, action->user);
-            }
-            if (verbose_logging) {
-                syslog(LOG_INFO, "  Promoting: UNSUB %s %s -> META %s",
-                       action->user, action->name, action->name);
-            }
-        }
-    }
     for (action = mailbox_list->head ; action ; action = action->next) {
         if (!action->active)
             continue;
@@ -3272,7 +3259,6 @@ static int do_sync(const char *filename)
     sync_action_list_free(&annot_list);
     sync_action_list_free(&seen_list);
     sync_action_list_free(&sub_list);
-    sync_action_list_free(&unsub_list);
     sync_folder_list_free(&folder_list);
 
     prot_free(input);

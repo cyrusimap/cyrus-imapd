@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.554 2009/01/30 10:47:25 brong Exp $
+ * $Id: imapd.c,v 1.555 2009/01/30 10:54:12 brong Exp $
  */
 
 #include <config.h>
@@ -6073,7 +6073,7 @@ void cmd_changesub(char *tag, char *namespace, char *name, int add)
     else {
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
-        sync_log_subscribe(imapd_userid, mailboxname, add);
+        sync_log_subscribe(imapd_userid, mailboxname);
     }
 }
 
