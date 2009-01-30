@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_client.c,v 1.37 2008/11/07 15:34:58 murch Exp $
+ * $Id: sync_client.c,v 1.38 2009/01/30 03:34:22 brong Exp $
  *
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
@@ -3197,12 +3197,12 @@ static int do_sync(const char *filename)
 	    if (r) {
 		/* promote failed personal mailboxes to USER */
 		struct sync_folder *folder;
-		char *userid, *p;
+		char *userid, *p, *useridp;
 
 		for (folder = folder_list->head; folder && folder->mark;
 		     folder = folder->next);
-		if (folder &&
-		    (userid = xstrdup(mboxname_isusermailbox(folder->name, 0)))) {
+		if (folder && (useridp = mboxname_isusermailbox(folder->name, 0))) {
+		    userid = xstrdup(useridp);
 		    if ((p = strchr(userid, '.'))) *p = '\0';
 		    folder->mark = 1;
 		    if (--folder_list->count == 0) r = 0;
