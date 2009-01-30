@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: append.h,v 1.30 2008/03/24 17:09:16 murch Exp $
+ * $Id: append.h,v 1.31 2009/01/30 03:23:57 brong Exp $
  */
 
 #ifndef INCLUDED_APPEND_H
@@ -76,7 +76,7 @@ struct appendstate {
 				/* current state of append */
 
     /* if we abort, where should we truncate the cache file? */
-    unsigned long orig_cache_len;
+    unsigned long orig_cache_size;
 
     int writeheader;		/* did we change the mailbox header? */
 

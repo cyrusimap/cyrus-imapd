@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: append.c,v 1.115 2008/09/23 16:19:42 murch Exp $
+ * $Id: append.c,v 1.116 2009/01/30 03:23:57 brong Exp $
  */
 
 #include <config.h>
@@ -234,8 +234,10 @@ int append_setup(struct appendstate *as, const char *name,
 	as->userid[0] = '\0';
     }
 
+    /* store original size to truncate if append is aborted */
+    as->orig_cache_size = as->m.cache_size;
+
     /* zero out metadata */
-    as->orig_cache_len = as->m.cache_len;
     as->nummsg = as->numanswered = 
 	as->numdeleted = as->numflagged = 0;
     as->quota_used = 0;
@@ -369,7 +371,7 @@ int append_abort(struct appendstate *as)
     }
 
     /* truncate the cache */
-    ftruncate(as->m.cache_fd, as->orig_cache_len);
+    ftruncate(as->m.cache_fd, as->orig_cache_size);
 
     /* unlock mailbox */
     mailbox_unlock_index(&as->m);
