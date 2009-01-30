@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mboxlist.c,v 1.260 2008/10/08 15:47:08 murch Exp $
+ * $Id: mboxlist.c,v 1.261 2009/01/30 10:54:12 brong Exp $
  */
 
 #include <config.h>
@@ -3308,6 +3308,22 @@ int mboxlist_findsub_alt(struct namespace *namespace,
     glob_free(&cbrock.g);
     if (pat) free(pat);
 
+    return r;
+}
+
+/* returns CYRUSDB_NOTFOUND if the folder doesn't exist, and 0 if it does! */
+int mboxlist_checksub(const char *name, const char *userid)
+{
+    int r;
+    struct db *subs;
+    const char *val;
+    int vallen;
+
+    r = mboxlist_opensubs(userid, &subs);
+
+    if (!r) r = SUBDB->fetch(subs, name, strlen(name), &val, &vallen, NULL);
+
+    mboxlist_closesubs(subs);
     return r;
 }
 
