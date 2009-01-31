@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: comparator.c,v 1.20 2008/03/24 20:08:46 murch Exp $
+ * $Id: comparator.c,v 1.21 2009/01/31 14:53:46 brong Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -270,17 +270,13 @@ static int octet_matches(const char *text, size_t tlen, const char *pat,
 static int octet_regex(const char *text, size_t tlen, const char *pat,
                        void *rock __attribute__((unused)))
 {
-    if (!text[tlen]) {
-	/* NUL-terminated string */
-	return (!regexec((regex_t *) pat, text, 0, NULL, 0));
-    }
-    else {
-	/* regexec() requires a NUL-terminated string */
-	char *buf = (char *) xstrndup(text, tlen);
-	int r = !regexec((regex_t *) pat, buf, 0, NULL, 0);
-	free(buf);
-	return r;
-    }
+    /* regexec() requires a NUL-terminated string, and we have no
+     * guarantee that "text" is one.  Also, it may be only exactly
+     * tlen's length, so we can't safely check.  Always dup. */
+    char *buf = (char *) xstrndup(text, tlen);
+    int r = !regexec((regex_t *) pat, buf, 0, NULL, 0);
+    free(buf);
+    return r;
 }
 #endif
 
