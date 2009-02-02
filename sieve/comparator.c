@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: comparator.c,v 1.21 2009/01/31 14:53:46 brong Exp $
+ * $Id: comparator.c,v 1.22 2009/02/02 05:11:15 brong Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -270,12 +270,22 @@ static int octet_matches(const char *text, size_t tlen, const char *pat,
 static int octet_regex(const char *text, size_t tlen, const char *pat,
                        void *rock __attribute__((unused)))
 {
+# ifdef HAVE_PCREPOSIX_H
+    /* PCRE has a length-based interface, use it */
+    int r = !pcre_exec(((regex_t *)pat)->re_pcre, NULL, text, tlen, 0, 0, NULL, 0);
+# else
+#  ifdef if HAVE_RX_POSIX_H
+    /* rx provides regnexec */
+    int r = !regnexec((regex_t *) pat, text, tlen, 0, NULL, 0);
+#  else
     /* regexec() requires a NUL-terminated string, and we have no
      * guarantee that "text" is one.  Also, it may be only exactly
      * tlen's length, so we can't safely check.  Always dup. */
     char *buf = (char *) xstrndup(text, tlen);
     int r = !regexec((regex_t *) pat, buf, 0, NULL, 0);
     free(buf);
+#  endif
+# endif
     return r;
 }
 #endif
