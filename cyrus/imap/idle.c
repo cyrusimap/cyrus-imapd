@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: idle.c,v 1.5 2008/03/24 17:09:16 murch Exp $
+ * $Id: idle.c,v 1.6 2009/02/06 13:46:18 brong Exp $
  */
 
 #include <config.h>
@@ -85,7 +85,7 @@ static int idle_send_msg(int msg, const char *mboxname)
     /* fill the structure */
     idledata.msg = msg;
     idledata.pid = getpid();
-    strcpy(idledata.mboxname, mboxname ? mboxname : ".");
+    strncpy(idledata.mboxname, mboxname ? mboxname : ".", sizeof(idledata.mboxname));
 
     /* send */
     if (sendto(notify_sock, (void *) &idledata,
