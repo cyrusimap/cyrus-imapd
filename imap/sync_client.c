@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_client.c,v 1.40 2009/02/09 05:01:59 brong Exp $
+ * $Id: sync_client.c,v 1.41 2009/02/09 05:05:48 brong Exp $
  *
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
@@ -3023,7 +3023,9 @@ static int do_sync(const char *filename)
 	   action for same user */
 	(sync_namespace.mboxname_tointernal)(&sync_namespace, "INBOX",
 					      action->user, inboxname);
-        remove_folder(inboxname, mailbox_list, 1);
+        /* breaks DELETED namespace renames
+        * remove_folder(inboxname, mailbox_list, 1);
+        */
         remove_folder(inboxname, append_list, 1);
         remove_folder(inboxname, acl_list, 1);
         remove_folder(inboxname, quota_list, 1);
