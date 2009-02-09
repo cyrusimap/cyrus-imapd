@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.h,v 1.92 2009/02/09 05:01:58 brong Exp $
+ * $Id: mailbox.h,v 1.93 2009/02/09 05:08:21 brong Exp $
  */
 
 #ifndef INCLUDED_MAILBOX_H
@@ -258,10 +258,11 @@ struct index_record {
 #define FLAG_DRAFT (1<<3)
 
 #define OPT_POP3_NEW_UIDL (1<<0)	/* added for Outlook stupidity */
+/* these three are annotations, if you add more, update annotate.c
+ * struct annotate_mailbox_flags */
 #define OPT_IMAP_CONDSTORE (1<<1)	/* added for CONDSTORE extension */
 #define OPT_IMAP_SHAREDSEEN (1<<2)	/* added for shared \Seen flag */
 #define OPT_IMAP_DUPDELIVER (1<<3)	/* added to allow duplicate delivery */
-
 
 struct mailbox_header_cache {
     const char *name; /* Name of header */

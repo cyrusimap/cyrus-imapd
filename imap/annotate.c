@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: annotate.c,v 1.43 2009/02/09 05:01:56 brong Exp $
+ * $Id: annotate.c,v 1.44 2009/02/09 05:08:20 brong Exp $
  */
 
 #include <config.h>
@@ -420,6 +420,19 @@ typedef enum {
 struct mailbox_annotation_rock
 {
     char *server, *partition, *acl, *path, *mpath;
+};
+
+const struct annotate_info_t annotate_mailbox_flags[] =
+{
+    { "/vendor/cmu/cyrus-imapd/pop3newuidl",
+      OPT_POP3_NEW_UIDL },
+    { "/vendor/cmu/cyrus-imapd/duplicatedeliver",
+      OPT_IMAP_DUPDELIVER },
+    { "/vendor/cmu/cyrus-imapd/sharedseen",
+      OPT_IMAP_SHAREDSEEN },
+    { "/vendor/cmu/cyrus-imapd/condstore",
+      OPT_IMAP_CONDSTORE },
+    { NULL, 0 }
 };
 
 /* To free values in the mailbox_annotation_rock as needed */
@@ -878,7 +891,7 @@ static void annotation_get_mailboxopt(const char *int_mboxname,
 				      void *rock __attribute__((unused)))
 { 
     struct mailbox mailbox;
-    int flag, r = 0;
+    int flag = 0, r = 0, i;
     char value[40];
     struct annotation_data attrib;
   
@@ -891,16 +904,14 @@ static void annotation_get_mailboxopt(const char *int_mboxname,
     /* Make sure its a local mailbox */
     if (mbrock->server) return;
 
-    /* Check entry */
-    if (!strcmp(entry, "/vendor/cmu/cyrus-imapd/condstore")) {
-	flag = OPT_IMAP_CONDSTORE;
-    } else if (!strcmp(entry, "/vendor/cmu/cyrus-imapd/sharedseen")) {
-	flag = OPT_IMAP_SHAREDSEEN;
-    } else if (!strcmp(entry, "/vendor/cmu/cyrus-imapd/duplicatedeliver")) {
-	flag = OPT_IMAP_DUPDELIVER;
-    } else {
-	return;
+    /* check that this is a mailboxopt annotation */
+    for (i = 0; annotate_mailbox_flags[i].name; i++) {
+	if (!strcmp(entry, annotate_mailbox_flags[i].name)) {
+	    flag = annotate_mailbox_flags[i].flag;
+	    break;
+	}
     }
+    if (!flag) return;
   
     /* Check ACL */
     if(!fdata->isadmin &&
@@ -1028,6 +1039,8 @@ const struct annotate_f_entry mailbox_ro_entries[] =
       annotation_get_lastupdate, NULL },
     { "/vendor/cmu/cyrus-imapd/lastpop", BACKEND_ONLY,
       annotation_get_lastpop, NULL },
+    { "/vendor/cmu/cyrus-imapd/pop3newuidl", BACKEND_ONLY,
+      annotation_get_mailboxopt, NULL },
     { "/vendor/cmu/cyrus-imapd/condstore", BACKEND_ONLY,
       annotation_get_mailboxopt, NULL },
     { "/vendor/cmu/cyrus-imapd/sharedseen", BACKEND_ONLY,
@@ -1717,20 +1730,16 @@ static int annotation_set_mailboxopt(const char *int_mboxname,
 				     void *rock __attribute__((unused)))
 {
     struct mailbox mailbox;
-    int flag, r = 0;
+    int flag = 0, r = 0, i;
 
     /* Check entry */
-    if (!strcmp(entry->entry->name, "/vendor/cmu/cyrus-imapd/condstore")) {
-	flag = OPT_IMAP_CONDSTORE;
-    } else if (!strcmp(entry->entry->name,
-		       "/vendor/cmu/cyrus-imapd/sharedseen")) {
-	flag = OPT_IMAP_SHAREDSEEN;
-    } else if (!strcmp(entry->entry->name,
-		       "/vendor/cmu/cyrus-imapd/duplicatedeliver")) {
-	flag = OPT_IMAP_DUPDELIVER;
-    } else {
-	return IMAP_PERMISSION_DENIED;
+    for (i = 0; annotate_mailbox_flags[i].name; i++) {
+	if (!strcmp(entry->entry->name, annotate_mailbox_flags[i].name)) {
+	    flag = annotate_mailbox_flags[i].flag;
+	    break;
+	}
     }
+    if (!flag) return IMAP_PERMISSION_DENIED;
   
     /* Check ACL */
     if(!sdata->isadmin &&
@@ -1820,6 +1829,9 @@ const struct annotate_st_entry mailbox_rw_entries[] =
     { "/vendor/cmu/cyrus-imapd/sieve", ATTRIB_TYPE_STRING, BACKEND_ONLY,
       ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
       ACL_ADMIN, annotation_set_todb, NULL },
+    { "/vendor/cmu/cyrus-imapd/pop3newuidl", ATTRIB_TYPE_BOOLEAN, BACKEND_ONLY,
+      ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
+      ACL_ADMIN, annotation_set_mailboxopt, NULL },
     { "/vendor/cmu/cyrus-imapd/condstore", ATTRIB_TYPE_BOOLEAN, BACKEND_ONLY,
       ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
       ACL_ADMIN, annotation_set_mailboxopt, NULL },

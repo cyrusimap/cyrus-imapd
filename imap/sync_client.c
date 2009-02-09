@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_client.c,v 1.41 2009/02/09 05:05:48 brong Exp $
+ * $Id: sync_client.c,v 1.42 2009/02/09 05:08:21 brong Exp $
  *
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
@@ -1831,7 +1831,7 @@ int do_folders(struct sync_folder_list *client_list,
 	       int doing_user)
 {
     struct mailbox m;
-    int r = 0, mailbox_open = 0;
+    int r = 0, mailbox_open = 0, i;
     struct sync_rename_list *rename_list = sync_rename_list_create();
     struct sync_folder   *folder, *folder2;
 
@@ -1981,13 +1981,14 @@ int do_folders(struct sync_folder_list *client_list,
                 if (!r && (m.uidvalidity != folder2->uidvalidity))
                     r = folder_setuidvalidity(folder->name, m.uidvalidity);
 
-                if (!r &&
-                    (folder2->options ^ m.options) & OPT_IMAP_CONDSTORE) {
-                    r = folder_setannotation(m.name,
-					     "/vendor/cmu/cyrus-imapd/condstore",
+		for (i = 0; !r && annotate_mailbox_flags[i].name; i++) {
+		    if ((folder2->options ^ m.options) & annotate_mailbox_flags[i].flag) {
+                    	r = folder_setannotation(m.name,
+					     annotate_mailbox_flags[i].name,
 					     "",
-					     (m.options & OPT_IMAP_CONDSTORE) ?
+					     (m.options & annotate_mailbox_flags[i].flag) ?
 					     "true" : "false");
+		    }
 		}
 
 		if (!r && m.quota.root && !strcmp(m.name, m.quota.root))
