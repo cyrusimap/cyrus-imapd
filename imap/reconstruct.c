@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: reconstruct.c,v 1.107 2009/02/09 05:01:58 brong Exp $
+ * $Id: reconstruct.c,v 1.108 2009/02/09 05:06:55 brong Exp $
  */
 
 #include <config.h>
@@ -903,7 +903,7 @@ int reconstruct(char *name, struct discovered *found)
 	mailbox.exists = 0;
 	mailbox.last_uid = 0;
 	mailbox.last_appenddate = 0;
-	mailbox.uidvalidity = time(0);
+	mailbox.uidvalidity = now;
 	/* If we can't read the index, assume new UIDL so that stupid clients
 	   will retrieve all of the messages in the mailbox. */
 	mailbox.options = OPT_POP3_NEW_UIDL;
@@ -1127,8 +1127,8 @@ int reconstruct(char *name, struct discovered *found)
             message_index.modseq = 1;
         }
 
-        if (message_index.modseq > mailbox.highestmodseq) {
-            mailbox.highestmodseq = message_index.modseq;
+        if (message_index.modseq > highestmodseq) {
+            highestmodseq = message_index.modseq;
         }
 
 	/* Force rebuild from message_create_record() */
@@ -1166,12 +1166,37 @@ int reconstruct(char *name, struct discovered *found)
     }
 
     /* Write out new index and expunge file headers */
-    if (uid_num && mailbox.last_uid < uid[uid_num-1])
+    if (uid_num && mailbox.last_uid < uid[uid_num-1]) {
+	syslog (LOG_ERR, "Updating last_uid for %s: %lu => %lu",
+		mailbox.name, mailbox.last_uid, uid[uid_num-1] + 100);
 	mailbox.last_uid = uid[uid_num-1] + 100;
-    if (mailbox.last_appenddate == 0 || mailbox.last_appenddate > time(0))
-	mailbox.last_appenddate = time(0);
-    if (mailbox.uidvalidity == 0 || mailbox.uidvalidity > (unsigned) time(0))
-	mailbox.uidvalidity = time(0);
+    }
+
+    if (mailbox.last_appenddate == 0 || mailbox.last_appenddate > now) {
+	syslog (LOG_ERR, "Updating last_appenddate for %s: %lu => %lu",
+		mailbox.name, mailbox.last_appenddate, now);
+	mailbox.last_appenddate = now;
+    }
+
+    if (mailbox.uidvalidity == 0 || mailbox.uidvalidity > (unsigned)now) {
+	syslog (LOG_ERR, "Updating uidvalidity for %s: %lu => %lu",
+		mailbox.name, mailbox.uidvalidity, now);
+	mailbox.uidvalidity = (unsigned)now;
+    }
+
+    if (mailbox.highestmodseq < highestmodseq) {
+	syslog (LOG_ERR, "Updating highestmodseq for %s: "
+		MODSEQ_FMT " => " MODSEQ_FMT,
+		mailbox.name, mailbox.highestmodseq, highestmodseq);
+	mailbox.highestmodseq = highestmodseq;
+    }
+
+    if (mailbox.quota_mailbox_used != index_counts.newquota_used) {
+	syslog (LOG_ERR, "Updating quota_mailbox_used for %s: "
+                QUOTA_T_FMT " => " QUOTA_T_FMT,
+		mailbox.name, mailbox.quota_mailbox_used, index_counts.newquota_used);
+	/* updated by the counts_tobuf below, different in each file */
+    }
 
     rewind(newindex);
     reconstruct_counts_tobuf(buf, &mailbox, &index_counts);
