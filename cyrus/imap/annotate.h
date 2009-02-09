@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: annotate.h,v 1.11 2008/03/24 17:09:16 murch Exp $
+ * $Id: annotate.h,v 1.12 2009/02/09 05:08:21 brong Exp $
  */
 
 #ifndef ANNOTATE_H
@@ -118,6 +118,14 @@ struct annotation_data {
     time_t modifiedsince;
     const char *contenttype;
 };
+
+struct annotate_info_t
+{
+    const char *name;
+    int flag;
+};
+
+extern const struct annotate_info_t annotate_mailbox_flags[];
 
 /* lookup a single annotation and return result */
 int annotatemore_lookup(const char *mboxname, const char *entry,
