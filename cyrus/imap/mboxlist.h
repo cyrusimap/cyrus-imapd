@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mboxlist.h,v 1.44 2009/01/30 10:54:13 brong Exp $
+ * $Id: mboxlist.h,v 1.45 2009/02/09 05:01:58 brong Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -74,7 +74,7 @@ extern struct db *mbdb;
 
 /* each mailbox has the following data */
 struct mbox_entry {
-    char name[MAX_MAILBOX_NAME];
+    char name[MAX_MAILBOX_BUFFER];
     int mbtype;
     char partition[MAX_PARTITION_LEN];
 				/* holds remote machine for REMOTE mailboxes */

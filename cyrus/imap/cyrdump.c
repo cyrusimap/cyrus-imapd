@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyrdump.c,v 1.21 2008/03/24 17:09:16 murch Exp $
+ * $Id: cyrdump.c,v 1.22 2009/02/09 05:01:56 brong Exp $
  */
 
 #include <config.h>
@@ -178,7 +178,7 @@ static int dump_me(char *name, int matchlen __attribute__((unused)),
     struct mailbox m;
     char boundary[128];
     struct imapurl url;
-    char imapurl[MAX_MAILBOX_PATH];
+    char imapurl[MAX_MAILBOX_PATH+1];
     struct incremental_record *irec = (struct incremental_record *) rock;
     struct searchargs searchargs;
     unsigned *uids;

@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: idled.h,v 1.7 2008/03/24 17:09:16 murch Exp $
+ * $Id: idled.h,v 1.8 2009/02/09 05:01:56 brong Exp $
  */
 
 #ifndef IDLED_H
@@ -55,7 +55,7 @@ typedef struct idle_data_s {
     unsigned long pid;
 
     /* 1 for null. leave at end of structure for alignment */
-    char mboxname[MAX_MAILBOX_NAME+1];
+    char mboxname[MAX_MAILBOX_BUFFER];
 } idle_data_t;
 
 #define IDLEDATA_BASE_SIZE	(2 * (int) sizeof(unsigned long))

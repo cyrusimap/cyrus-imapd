@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mboxname.c,v 1.45 2008/10/08 15:47:08 murch Exp $
+ * $Id: mboxname.c,v 1.46 2009/02/09 05:01:58 brong Exp $
  */
 
 #include <config.h>
@@ -101,7 +101,9 @@ static const char index_mod64[256] = {
  * Convert the external mailbox 'name' to an internal name.
  * If 'userid' is non-null, it is the name of the current user.
  * On success, results are placed in the buffer pointed to by
- * 'result', the buffer must be of size MAX_MAILBOX_NAME+1.
+ * 'result', the buffer must be of size MAX_MAILBOX_BUFFER to
+ * allow space for DELETED mailboxes and moving the domain from
+ * one end to the other and such.  Yay flexibility.
  */
 
 /* Handle conversion from the standard namespace to the internal namespace */
@@ -326,7 +328,7 @@ static int mboxname_tointernal_alt(struct namespace *namespace,
     if (domainlen+resultlen+6+namelen > MAX_MAILBOX_NAME) {
 	return IMAP_MAILBOX_BADNAME;
     }
-    snprintf(result+resultlen, MAX_MAILBOX_NAME+1-resultlen, ".%.*s", 
+    snprintf(result+resultlen, MAX_MAILBOX_BUFFER-resultlen, ".%.*s", 
 	     namelen, name);
 
     /* Translate any separators in mailboxname */
@@ -338,7 +340,7 @@ static int mboxname_tointernal_alt(struct namespace *namespace,
  * Convert the internal mailbox 'name' to an external name.
  * If 'userid' is non-null, it is the name of the current user.
  * On success, results are placed in the buffer pointed to by
- * 'result', the buffer must be of size MAX_MAILBOX_NAME+1.
+ * 'result', the buffer must be of size MAX_MAILBOX_BUFFER.
  */
 
 /* Handle conversion from the internal namespace to the standard namespace */
@@ -376,7 +378,7 @@ static int mboxname_toexternal(struct namespace *namespace, const char *name,
 	if(resultlen+domainlen+1 > MAX_MAILBOX_NAME) 
 	    return IMAP_MAILBOX_BADNAME;
 
-	snprintf(result+resultlen, MAX_MAILBOX_NAME+1-resultlen, 
+	snprintf(result+resultlen, MAX_MAILBOX_BUFFER-resultlen, 
 		 "@%.*s", (int) domainlen, domain);
     }
 
@@ -583,7 +585,7 @@ int mboxname_userownsmailbox(const char *userid, const char *name)
 {
     struct namespace internal = { '.', 0, 0, { "INBOX.", "user.", "" },
 				  NULL, NULL, NULL, NULL };
-    char inboxname[MAX_MAILBOX_NAME+1];
+    char inboxname[MAX_MAILBOX_BUFFER];
 
     if (!mboxname_tointernal(&internal, "INBOX", userid, inboxname) &&
 	!strncmp(name, inboxname, strlen(inboxname)) &&
@@ -631,7 +633,7 @@ int mboxname_isdeletedmailbox(const char *name)
 
     if (!deletedprefix) {
 	deletedprefix = config_getstring(IMAPOPT_DELETEDPREFIX);
-  deletedprefix_len = strlen(deletedprefix);
+	deletedprefix_len = strlen(deletedprefix);
     }
 
     if (config_virtdomains && (p = strchr(name, '!')))
@@ -646,7 +648,7 @@ int mboxname_isdeletedmailbox(const char *name)
  */
 char *mboxname_inbox_touserid(const char *inboxname)
 {
-    static char userid[MAX_MAILBOX_NAME+1];
+    static char userid[MAX_MAILBOX_BUFFER];
     const char *domain = NULL, *cp;
     int domainlen = 0;
 

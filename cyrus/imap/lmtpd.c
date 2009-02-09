@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: lmtpd.c,v 1.161 2008/04/22 13:11:18 murch Exp $
+ * $Id: lmtpd.c,v 1.162 2009/02/09 05:01:58 brong Exp $
  */
 
 #include <config.h>
@@ -377,7 +377,7 @@ static int fuzzy_match_cb(char *name,
 
 int fuzzy_match(char *mboxname)
 {
-    char name[MAX_MAILBOX_NAME+1], prefix[MAX_MAILBOX_NAME+1], *p = NULL;
+    char name[MAX_MAILBOX_BUFFER], prefix[MAX_MAILBOX_BUFFER], *p = NULL;
     size_t prefixlen;
     struct fuzz_rock frock;
 
@@ -557,9 +557,9 @@ int deliver_mailbox(FILE *f,
     }
 
     if (!r && user && (notifier = config_getstring(IMAPOPT_MAILNOTIFIER))) {
-	char inbox[MAX_MAILBOX_NAME+1];
-	char namebuf[MAX_MAILBOX_NAME+1];
-	char userbuf[MAX_MAILBOX_NAME+1];
+	char inbox[MAX_MAILBOX_BUFFER];
+	char namebuf[MAX_MAILBOX_BUFFER];
+	char userbuf[MAX_MAILBOX_BUFFER];
 	const char *notify_mailbox = mailboxname;
 	int r2;
 
@@ -683,7 +683,7 @@ void deliver_remote(message_data_t *msgdata,
 int deliver_local(deliver_data_t *mydata, char **flag, int nflags,
 		  const char *username, const char *mailboxname)
 {
-    char namebuf[MAX_MAILBOX_NAME+1] = "", *tail;
+    char namebuf[MAX_MAILBOX_BUFFER] = "", *tail;
     message_data_t *md = mydata->m;
     int quotaoverride = msg_getrcpt_ignorequota(md, mydata->cur_rcpt);
     int ret;
@@ -778,8 +778,8 @@ int deliver(message_data_t *msgdata, char *authuser,
     
     /* loop through each recipient, attempting delivery for each */
     for (n = 0; n < nrcpts; n++) {
-	char namebuf[MAX_MAILBOX_NAME+1] = "", *server;
-	char userbuf[MAX_MAILBOX_NAME+1];
+	char namebuf[MAX_MAILBOX_BUFFER] = "", *server;
+	char userbuf[MAX_MAILBOX_BUFFER];
 	const char *rcpt, *user, *domain, *mailbox;
 	int r = 0;
 
@@ -979,7 +979,7 @@ void shut_down(int code)
 static int verify_user(const char *user, const char *domain, char *mailbox,
 		       long quotacheck, struct auth_state *authstate)
 {
-    char namebuf[MAX_MAILBOX_NAME+1] = "";
+    char namebuf[MAX_MAILBOX_BUFFER] = "";
     int r = 0;
 
     if ((!user && !mailbox) ||
@@ -1103,7 +1103,7 @@ FILE *spoolfile(message_data_t *msgdata)
        (don't bother if we're only a proxy) */
     n = mhandle ? 0 : msg_getnumrcpt(msgdata);
     for (i = 0; !f && (i < n); i++) {
-	char namebuf[MAX_MAILBOX_NAME+1] = "", *server;
+	char namebuf[MAX_MAILBOX_BUFFER] = "", *server;
 	const char *user, *domain, *mailbox;
 	int r;
 

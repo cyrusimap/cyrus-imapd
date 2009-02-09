@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: make_sha1.c,v 1.4 2008/10/02 14:05:44 murch Exp $
+ * $Id: make_sha1.c,v 1.5 2009/02/09 05:01:58 brong Exp $
  */
 
 #include <config.h>
@@ -381,7 +381,7 @@ sha1_mailbox_list_read(struct sha1_mailbox_list *list, char *name)
 {
     struct sha1_mailbox *current = NULL;
     FILE *file;
-    char buf[MAX_MAILBOX_NAME+18]; /* mboxname + uniqueid(16) + SP + CR */
+    char buf[MAX_MAILBOX_BUFFER]; /* mboxname + uniqueid(16) + SP + CR */
     unsigned char sha1_msg[20];
     unsigned char sha1_cache[20];
     int len;

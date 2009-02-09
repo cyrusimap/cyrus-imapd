@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: parser.c,v 1.52 2009/01/14 15:50:47 murch Exp $
+ * $Id: parser.c,v 1.53 2009/02/09 05:01:59 brong Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -687,7 +687,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
   if (!verify_only) {
       /* Check for a remote mailbox (should we setup a redirect?) */
       struct namespace sieved_namespace;
-      char inboxname[MAX_MAILBOX_NAME];
+      char inboxname[MAX_MAILBOX_BUFFER];
       char *server;
       int type = 0, r;
       

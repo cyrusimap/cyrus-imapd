@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: quota_db.c,v 1.8 2008/03/24 17:09:19 murch Exp $
+ * $Id: quota_db.c,v 1.9 2009/02/09 05:01:58 brong Exp $
  */
 
 #include <config.h>
@@ -197,7 +197,7 @@ int quota_delete(struct quota *quota, struct txn **tid)
 
 /*
  * Find the mailbox 'name' 's quotaroot, and return it in 'ret'.
- * 'ret' must be at least MAX_MAILBOX_PATH. 
+ * 'ret' must be at least MAX_MAILBOX_NAME.
  *
  * returns true if a quotaroot is found, 0 otherwise. 
 */

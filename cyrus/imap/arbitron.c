@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: arbitron.c,v 1.46 2008/03/24 17:09:16 murch Exp $
+ * $Id: arbitron.c,v 1.47 2009/02/09 05:01:56 brong Exp $
  */
 
 #include <config.h>
@@ -121,7 +121,7 @@ int main(int argc,char **argv)
     int opt, r;
     int report_days = 30;
     int prune_months = 0;
-    char pattern[MAX_MAILBOX_NAME+1];
+    char pattern[MAX_MAILBOX_BUFFER];
     char *alt_config = NULL;
     time_t now = time(0);
 
@@ -446,7 +446,7 @@ static int process_subs_p(void *rockp,
 			  int tmpdatalen __attribute__((unused))) 
 {
     struct arb_mailbox_data *mbox;
-    char buf[MAX_MAILBOX_NAME+1];
+    char buf[MAX_MAILBOX_BUFFER];
     const char *user = (const char *) rockp;
 
     memcpy(buf, key, keylen);

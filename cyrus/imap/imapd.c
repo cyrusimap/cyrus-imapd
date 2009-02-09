@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.555 2009/01/30 10:54:12 brong Exp $
+ * $Id: imapd.c,v 1.556 2009/02/09 05:01:57 brong Exp $
  */
 
 #include <config.h>
@@ -117,7 +117,7 @@ extern char *optarg;
 /* global state */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
-static char shutdownfilename[1024];
+static char shutdownfilename[MAX_MAILBOX_PATH+1];
 static int imaps = 0;
 static sasl_ssf_t extprops_ssf = 0;
 static int nosaslpasswdcheck = 0;
@@ -335,7 +335,7 @@ static int imapd_canon_user(sasl_conn_t *conn, void *context,
 			    unsigned flags, const char *user_realm,
 			    char *out, unsigned out_max, unsigned *out_ulen)
 {
-    char userbuf[MAX_MAILBOX_NAME+1], *p;
+    char userbuf[MAX_MAILBOX_BUFFER], *p;
     size_t n;
     int r;
 
@@ -343,7 +343,7 @@ static int imapd_canon_user(sasl_conn_t *conn, void *context,
 
     if (config_getswitch(IMAPOPT_IMAPMAGICPLUS)) {
 	/* make a working copy of the auth[z]id */
-	if (ulen > MAX_MAILBOX_NAME) {
+	if (ulen >= MAX_MAILBOX_BUFFER) {
 	    sasl_seterror(conn, 0, "buffer overflow while canonicalizing");
 	    return SASL_BUFOVER;
 	}
@@ -400,12 +400,12 @@ static int imapd_proxy_policy(sasl_conn_t *conn,
 			      struct propctx *propctx)
 {
     if (config_getswitch(IMAPOPT_IMAPMAGICPLUS)) {
-	char userbuf[MAX_MAILBOX_NAME+1], *p;
+	char userbuf[MAX_MAILBOX_BUFFER], *p;
 	size_t n;
 
 	/* make a working copy of the authzid */
 	if (!rlen) rlen = strlen(requested_user);
-	if (rlen > MAX_MAILBOX_NAME) {
+	if (rlen >= MAX_MAILBOX_BUFFER) {
 	    sasl_seterror(conn, 0, "buffer overflow while proxying");
 	    return SASL_BUFOVER;
 	}
@@ -828,7 +828,7 @@ void motd_file(fd)
 int fd;
 {
     struct protstream *motd_in;
-    char buf[1024];
+    char buf[MAX_MAILBOX_PATH+1];
     char *p;
 
     motd_in = prot_new(fd, 0);
@@ -973,12 +973,12 @@ static void imapd_check(struct backend *be, int usinguid, int checkseen)
 void cmdloop()
 {
     int fd;
-    char motdfilename[1024];
+    char motdfilename[MAX_MAILBOX_PATH+1];
     int c;
     int ret;
     int usinguid, havepartition, havenamespace, recursive;
     static struct buf tag, cmd, arg1, arg2, arg3, arg4;
-    char *p, shut[1024];
+    char *p, shut[MAX_MAILBOX_PATH+1];
     const char *err;
 
     prot_printf(imapd_out, "* OK [CAPABILITY ");
@@ -1979,7 +1979,7 @@ void cmdloop()
  */
 void cmd_login(char *tag, char *user)
 {
-    char userbuf[MAX_MAILBOX_NAME+1];
+    char userbuf[MAX_MAILBOX_BUFFER];
     unsigned userlen;
     const char *canon_user = userbuf;
     const void *val;
@@ -2231,7 +2231,7 @@ cmd_authenticate(char *tag, char *authtype, char *resp)
     /* If we're proxying, the authzid may contain a magic plus,
        so re-canonify it */
     if (config_getswitch(IMAPOPT_IMAPMAGICPLUS) && strchr(canon_user, '+')) {
-	char userbuf[MAX_MAILBOX_NAME+1];
+	char userbuf[MAX_MAILBOX_BUFFER];
 	unsigned userlen;
 
 	sasl_result = imapd_canon_user(imapd_saslconn, NULL, canon_user, 0,
@@ -2622,7 +2622,7 @@ void idle_update(idle_flags_t flags)
 	index_check(imapd_mailbox, 0, 1);
 
     if (flags & IDLE_ALERT) {
-	char shut[1024];
+	char shut[MAX_MAILBOX_PATH+1];
 	if (! imapd_userisadmin && shutdown_file(shut, sizeof(shut))) {
 	    char *p;
 	    for (p = shut; *p == '['; p++); /* can't have [ be first char */
@@ -2834,7 +2834,7 @@ static int catenate_url(const char *s, const char *cur_name, FILE *f,
 			unsigned *totalsize, const char **parseerr)
 {
     struct imapurl url;
-    char mailboxname[MAX_MAILBOX_NAME+1];
+    char mailboxname[MAX_MAILBOX_BUFFER];
     struct mailbox mboxstruct, *mailbox;
     unsigned msgno;
     int r = 0, doclose = 0;
@@ -3036,7 +3036,7 @@ void cmd_append(char *tag, char *name, const char *cur_name)
     int sync_seen = 0;
     int r;
     unsigned i;
-    char mailboxname[MAX_MAILBOX_NAME+1];
+    char mailboxname[MAX_MAILBOX_BUFFER];
     struct appendstate mailbox;
     unsigned long uidvalidity;
     unsigned long firstuid, num;
@@ -3341,7 +3341,7 @@ void cmd_select(char *tag, char *cmd, char *name)
 {
     int c;
     struct mailbox mailbox;
-    char mailboxname[MAX_MAILBOX_NAME+1];
+    char mailboxname[MAX_MAILBOX_BUFFER];
     int r = 0;
     double usage;
     int doclose = 0;
@@ -4734,7 +4734,7 @@ void cmd_thread(char *tag, int usinguid)
 void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 {
     int r, myrights;
-    char mailboxname[MAX_MAILBOX_NAME+1];
+    char mailboxname[MAX_MAILBOX_BUFFER];
     int mbtype;
     char *server, *acl;
     char *copyuid;
@@ -4928,7 +4928,7 @@ void cmd_expunge(char *tag, char *sequence)
 void cmd_create(char *tag, char *name, char *partition, int localonly)
 {
     int r = 0;
-    char mailboxname[MAX_MAILBOX_NAME+1];
+    char mailboxname[MAX_MAILBOX_BUFFER];
     int autocreatequota;
 
     if (partition && !imapd_userisadmin) {
@@ -5117,7 +5117,7 @@ static int delmbox(char *name,
 void cmd_delete(char *tag, char *name, int localonly, int force)
 {
     int r;
-    char mailboxname[MAX_MAILBOX_NAME+1];
+    char mailboxname[MAX_MAILBOX_BUFFER];
     int mbtype;
     char *server;
     char *p;
@@ -5201,7 +5201,7 @@ void cmd_delete(char *tag, char *name, int localonly, int force)
 	!strchr(mailboxname+domainlen+5, '.')) {
  	size_t mailboxname_len = strlen(mailboxname);
 
- 	/* If we aren't too close to MAX_MAILBOX_NAME, append .* */
+ 	/* If we aren't too close to MAX_MAILBOX_BUFFER, append .* */
  	p = mailboxname + mailboxname_len; /* end of mailboxname */
  	if (mailboxname_len < sizeof(mailboxname) - 3) {
  	    strcpy(p, ".*");
@@ -5264,12 +5264,12 @@ static int renmbox(char *name,
 		   int maycreate __attribute__((unused)),
 		   void *rock)
 {
-    char oldextname[MAX_MAILBOX_NAME+1];
-    char newextname[MAX_MAILBOX_NAME+1];
+    char oldextname[MAX_MAILBOX_BUFFER];
+    char newextname[MAX_MAILBOX_BUFFER];
     struct renrock *text = (struct renrock *)rock;
     int r;
 
-    if((text->nl + strlen(name + text->ol)) > MAX_MAILBOX_NAME)
+    if((text->nl + strlen(name + text->ol)) >= MAX_MAILBOX_BUFFER)
 	return 0;
 
     strcpy(text->newmailboxname + text->nl, name + text->ol);
@@ -5327,12 +5327,12 @@ static int renmbox(char *name,
 void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 {
     int r = 0;
-    char oldmailboxname[MAX_MAILBOX_NAME+3];
-    char newmailboxname[MAX_MAILBOX_NAME+2];
-    char oldmailboxname2[MAX_MAILBOX_NAME+1];
-    char newmailboxname2[MAX_MAILBOX_NAME+1];
-    char oldextname[MAX_MAILBOX_NAME+1];
-    char newextname[MAX_MAILBOX_NAME+1];
+    char oldmailboxname[MAX_MAILBOX_BUFFER];
+    char newmailboxname[MAX_MAILBOX_BUFFER];
+    char oldmailboxname2[MAX_MAILBOX_BUFFER];
+    char newmailboxname2[MAX_MAILBOX_BUFFER];
+    char oldextname[MAX_MAILBOX_BUFFER];
+    char newextname[MAX_MAILBOX_BUFFER];
     int omlen, nmlen;
     int recursive_rename = 1;
     int rename_user = 0;
@@ -5389,7 +5389,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 
 	    destpart = strchr(partition,'!');
 	    if (destpart) {
-		char newserver[MAX_MAILBOX_NAME+1];	    
+		char newserver[MAX_MAILBOX_BUFFER];	    
 		if (strlen(partition) >= sizeof(newserver)) {
 		    prot_printf(imapd_out,
 				"%s NO Partition name too long\r\n", tag);
@@ -5644,8 +5644,8 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 void cmd_reconstruct(const char *tag, const char *name, int recursive)
 {
     int r = 0;
-    char mailboxname[MAX_MAILBOX_NAME+1];
-    char quotaroot[MAX_MAILBOX_NAME+1];
+    char mailboxname[MAX_MAILBOX_BUFFER];
+    char quotaroot[MAX_MAILBOX_BUFFER];
     int mbtype;
     char *server;
     struct mailbox mailbox;
@@ -5998,7 +5998,7 @@ void cmd_changesub(char *tag, char *namespace, char *name, int add)
 {
     const char *cmd = add ? "Subscribe" : "Unsubscribe";
     int r = 0;
-    char mailboxname[MAX_MAILBOX_NAME+1];
+    char mailboxname[MAX_MAILBOX_BUFFER];
     int force = config_getswitch(IMAPOPT_ALLOWALLSUBSCRIBE);
 
     if (backend_inbox || (backend_inbox = proxy_findinboxserver())) {
@@ -6082,7 +6082,7 @@ void cmd_changesub(char *tag, char *namespace, char *name, int add)
  */
 void cmd_getacl(const char *tag, const char *name)
 {
-    char mailboxname[MAX_MAILBOX_NAME+1];
+    char mailboxname[MAX_MAILBOX_BUFFER];
     int r, access;
     char *acl;
     char *rights, *nextid;
@@ -6145,7 +6145,7 @@ char *tag;
 char *name;
 char *identifier;
 {
-    char mailboxname[MAX_MAILBOX_NAME+1];
+    char mailboxname[MAX_MAILBOX_BUFFER];
     int r, rights;
     char *acl;
 
@@ -6240,7 +6240,7 @@ char *identifier;
  */
 void cmd_myrights(const char *tag, const char *name)
 {
-    char mailboxname[MAX_MAILBOX_NAME+1];
+    char mailboxname[MAX_MAILBOX_BUFFER];
     int r, rights = 0;
     char *acl;
     char str[ACL_MAXSTR];
@@ -6291,7 +6291,7 @@ void cmd_setacl(char *tag, const char *name,
 		const char *identifier, const char *rights)
 {
     int r;
-    char mailboxname[MAX_MAILBOX_NAME+1];
+    char mailboxname[MAX_MAILBOX_BUFFER];
     char *server;
     int mbtype;
 
@@ -6408,8 +6408,8 @@ void cmd_getquota(const char *tag, const char *name)
 {
     int r;
     struct quota quota;
-    char quotarootbuf[MAX_MAILBOX_PATH+3];
-    char mailboxname[MAX_MAILBOX_NAME+1];
+    char quotarootbuf[MAX_MAILBOX_BUFFER];
+    char mailboxname[MAX_MAILBOX_BUFFER];
     int mbtype;
     char *server_rock = NULL, *server_rock_tmp = NULL;
 
@@ -6479,7 +6479,7 @@ void cmd_getquota(const char *tag, const char *name)
  */
 void cmd_getquotaroot(const char *tag, const char *name)
 {
-    char mailboxname[MAX_MAILBOX_NAME+1];
+    char mailboxname[MAX_MAILBOX_BUFFER];
     char *server;
     int mbtype;
     struct mailbox mailbox;
@@ -6589,7 +6589,7 @@ void cmd_setquota(const char *tag, const char *quotaroot)
     static struct buf arg;
     char *p;
     int r;
-    char mailboxname[MAX_MAILBOX_NAME+1];
+    char mailboxname[MAX_MAILBOX_BUFFER];
     int mbtype;
     char *server_rock_tmp = NULL;
 
@@ -6644,7 +6644,7 @@ void cmd_setquota(const char *tag, const char *quotaroot)
 
     if (!r && (mbtype & MBTYPE_REMOTE)) {
 	/* remote mailbox */
-	char quotarootbuf[MAX_MAILBOX_NAME + 3];
+	char quotarootbuf[MAX_MAILBOX_BUFFER];
 	char *server_rock = xstrdup(server_rock_tmp);
 
 	snprintf(quotarootbuf, sizeof(quotarootbuf), "%s.*", mailboxname);
@@ -6804,7 +6804,7 @@ void cmd_status(char *tag, char *name)
     int c;
     unsigned statusitems = 0;
     static struct buf arg;
-    char mailboxname[MAX_MAILBOX_NAME+1];
+    char mailboxname[MAX_MAILBOX_BUFFER];
     int mbtype;
     char *server, *acl;
     int r = 0;
@@ -7006,9 +7006,9 @@ void cmd_namespace(tag)
     char* pattern;
 
     if (SLEEZY_NAMESPACE) {
-	char inboxname[MAX_MAILBOX_NAME+1];
+	char inboxname[MAX_MAILBOX_BUFFER];
 
-	if (strlen(imapd_userid) + 5 > MAX_MAILBOX_NAME)
+	if (strlen(imapd_userid) + 5 >= MAX_MAILBOX_BUFFER)
 	    sawone[NAMESPACE_INBOX] = 0;
 	else {
 	    (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, "INBOX",
@@ -7905,7 +7905,7 @@ int parsecharset;
 void cmd_dump(char *tag, char *name, int uid_start) 
 {
     int r = 0;
-    char mailboxname[MAX_MAILBOX_NAME+1];
+    char mailboxname[MAX_MAILBOX_BUFFER];
     char *path, *mpath, *acl;
 
     /* administrators only please */
@@ -7940,7 +7940,7 @@ void cmd_dump(char *tag, char *name, int uid_start)
 void cmd_undump(char *tag, char *name) 
 {
     int r = 0;
-    char mailboxname[MAX_MAILBOX_NAME+1];
+    char mailboxname[MAX_MAILBOX_BUFFER];
     char *path, *mpath, *acl;
 
     /* administrators only please */
@@ -8469,7 +8469,7 @@ static int xfer_user_cb(char *name,
     char *toserver = ((struct xfer_user_rock *)rock)->toserver;
     char *topart = ((struct xfer_user_rock *)rock)->topart;
     struct backend *be = ((struct xfer_user_rock *)rock)->be;
-    char externalname[MAX_MAILBOX_NAME+1];
+    char externalname[MAX_MAILBOX_BUFFER];
     int mbflags;
     int r = 0;
     char *inpath, *inmpath, *inpart, *inacl;
@@ -8518,7 +8518,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 {
     int r = 0;
     char buf[MAX_PARTITION_LEN+HOSTNAME_SIZE+2];
-    char mailboxname[MAX_MAILBOX_NAME+1];
+    char mailboxname[MAX_MAILBOX_BUFFER];
     int mbflags;
     int moving_user = 0;
     int backout_mupdate = 0;
@@ -9339,7 +9339,7 @@ static int mailboxdata(char *name,
 		       int maycreate __attribute__((unused)),
 		       void *rock __attribute__((unused)))
 {
-    char mboxname[MAX_MAILBOX_PATH+1];
+    char mboxname[MAX_MAILBOX_BUFFER];
 
     (*imapd_namespace.mboxname_toexternal)(&imapd_namespace, name,
 					   imapd_userid, mboxname);
@@ -9360,7 +9360,7 @@ static void mstringdata(char *cmd, char *name, int matchlen, int maycreate,
     static int sawuser = 0;
     int lastnamehassub = 0;
     int c, mbtype;
-    char mboxname[MAX_MAILBOX_PATH+1];
+    char mboxname[MAX_MAILBOX_BUFFER];
 
     /* We have to reset the sawuser flag before each list command.
      * Handle it as a dirty hack.
@@ -9497,7 +9497,7 @@ static int listdata(char *name, int matchlen, int maycreate, void *rock)
 
     if (name && listargs->scan) {
 	/* SCAN mailbox for content */
-	char mailboxname[MAX_MAILBOX_NAME+1];
+	char mailboxname[MAX_MAILBOX_BUFFER];
 	int r = 0;
 	int mbtype;
 	char *server;
@@ -9628,7 +9628,7 @@ static int reset_saslconn(sasl_conn_t **conn)
 void cmd_mupdatepush(char *tag, char *name)
 {
     int r = 0;
-    char mailboxname[MAX_MAILBOX_NAME+1];
+    char mailboxname[MAX_MAILBOX_BUFFER];
     char *part, *acl;
     mupdate_handle *mupdate_h = NULL;
     char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
@@ -9706,7 +9706,7 @@ void cmd_urlfetch(char *tag)
     int c, r, doclose;
     static struct buf arg;
     struct imapurl url;
-    char mailboxname[MAX_MAILBOX_NAME+1];
+    char mailboxname[MAX_MAILBOX_BUFFER];
     struct mailbox mboxstruct, *mailbox = NULL;
     unsigned msgno;
     unsigned int token_len;
@@ -9924,7 +9924,7 @@ void cmd_genurlauth(char *tag)
     int c, r;
     static struct buf arg1, arg2;
     struct imapurl url;
-    char mailboxname[MAX_MAILBOX_NAME+1], *urlauth = NULL;
+    char mailboxname[MAX_MAILBOX_BUFFER], *urlauth = NULL;
     char newkey[MBOX_KEY_LEN];
     const char *key;
     size_t keylen;
@@ -10070,7 +10070,7 @@ void cmd_resetkey(char *tag, char *mailbox,
 
     if (mailbox) {
 	/* delete key for specified mailbox */
-	char mailboxname[MAX_MAILBOX_NAME+1], *newserver;
+	char mailboxname[MAX_MAILBOX_BUFFER], *newserver;
 	int mbtype;
 	struct mboxkey *mboxkey_db;
 

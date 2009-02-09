@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squatter.c,v 1.22 2008/04/04 13:58:59 murch Exp $
+ * $Id: squatter.c,v 1.23 2009/02/09 05:01:59 brong Exp $
  */
 
 /*
@@ -574,7 +574,7 @@ static int index_me(char *name, int matchlen __attribute__((unused)),
     char squat_file_name[MAX_MAILBOX_PATH+1], *path;
     struct stat squat_file_info;
     struct stat index_file_info;
-    char extname[MAX_MAILBOX_NAME+1];
+    char extname[MAX_MAILBOX_BUFFER];
     int use_annot = *((int *) rock);
     int mbtype;
 
@@ -596,7 +596,7 @@ static int index_me(char *name, int matchlen __attribute__((unused)),
     /* make sure the mailbox (or an ancestor) has
        /vendor/cmu/cyrus-imapd/squat set to "true" */
     if (use_annot) {
-	char buf[MAX_MAILBOX_NAME+1] = "", *p;
+	char buf[MAX_MAILBOX_BUFFER] = "", *p;
 	struct annotation_data attrib;
 	int domainlen = 0;
 

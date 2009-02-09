@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: global.c,v 1.28 2008/07/30 16:03:37 murch Exp $
+ * $Id: global.c,v 1.29 2009/02/09 05:01:56 brong Exp $
  */
 
 #include <config.h>
@@ -496,7 +496,7 @@ static int acl_ok(const char *user, struct auth_state *authstate)
 {
     struct namespace namespace;
     char *acl;
-    char bufuser[MAX_MAILBOX_NAME], inboxname[MAX_MAILBOX_NAME];
+    char bufuser[MAX_MAILBOX_BUFFER], inboxname[MAX_MAILBOX_BUFFER];
     int r;
 
     /* Set namespace */

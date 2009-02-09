@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: reconstruct.c,v 1.106 2008/04/10 14:19:51 murch Exp $
+ * $Id: reconstruct.c,v 1.107 2009/02/09 05:01:58 brong Exp $
  */
 
 #include <config.h>
@@ -769,7 +769,7 @@ int reconstruct(char *name, struct discovered *found)
 {
     indexbuffer_t ibuf;
     unsigned char *buf = ibuf.buf;
-    char quota_root[MAX_MAILBOX_PATH+1];
+    char quota_root[MAX_MAILBOX_BUFFER];
     bit32 valid_user_flags[MAX_USER_FLAGS/32];
 
     struct mailbox mailbox;

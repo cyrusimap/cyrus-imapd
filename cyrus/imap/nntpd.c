@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.69 2008/10/08 15:47:08 murch Exp $
+ * $Id: nntpd.c,v 1.70 2009/02/09 05:01:58 brong Exp $
  */
 
 /*
@@ -899,7 +899,7 @@ static void cmdloop(void)
 	    else if (!(nntp_capa & MODE_READ)) goto noperm;
 	    else if (!nntp_userid && !allowanonymous) goto nologin;
 	    else if (!strcmp(cmd.s, "Article")) {
-		char curgroup[MAX_MAILBOX_NAME+1], *msgid;
+		char curgroup[MAX_MAILBOX_BUFFER], *msgid;
 
 		mode = ARTICLE_ALL;
 
@@ -1055,7 +1055,7 @@ static void cmdloop(void)
 	    else if (!(nntp_capa & MODE_READ)) goto noperm;
 	    else if (!nntp_userid && !allowanonymous) goto nologin;
 	    else if (!strcmp(cmd.s, "Hdr")) {
-		char curgroup[MAX_MAILBOX_NAME+1], *msgid;
+		char curgroup[MAX_MAILBOX_BUFFER], *msgid;
 
 	      hdr:
 		if (arg2.s) *arg2.s = 0;
@@ -1331,7 +1331,7 @@ static void cmdloop(void)
 
 	case 'O':
 	    if (!strcmp(cmd.s, "Over")) {
-		char curgroup[MAX_MAILBOX_NAME+1], *msgid;
+		char curgroup[MAX_MAILBOX_BUFFER], *msgid;
 
 	      over:
 		if (arg1.s) *arg1.s = 0;
@@ -1437,7 +1437,7 @@ static void cmdloop(void)
 		goto over;
 	    }
 	    else if (!strcmp(cmd.s, "Xpat")) {
-		char curgroup[MAX_MAILBOX_NAME+1], *msgid;
+		char curgroup[MAX_MAILBOX_BUFFER], *msgid;
 
 		if (c != ' ') goto missingargs;
 		c = getword(nntp_in, &arg1); /* header */
@@ -1745,7 +1745,7 @@ static time_t parse_datetime(char *datestr, char *timestr, char *gmt)
 static int open_group(char *name, int has_prefix, struct backend **ret,
 		      int *postable /* used for LIST ACTIVE only */)
 {
-    char mailboxname[MAX_MAILBOX_NAME+1];
+    char mailboxname[MAX_MAILBOX_BUFFER];
     int r = 0;
     char *acl, *newserver;
     struct backend *backend_next = NULL;
@@ -2400,7 +2400,7 @@ struct list_rock {
 int list_cb(char *name, int matchlen, int maycreate __attribute__((unused)),
 	    void *rock)
 {
-    static char lastname[MAX_MAILBOX_NAME+1];
+    static char lastname[MAX_MAILBOX_BUFFER];
     struct list_rock *lrock = (struct list_rock *) rock;
     struct wildmat *wild;
 
@@ -2567,7 +2567,7 @@ static void cmd_list(char *arg1, char *arg2)
 	lcase(arg1);
 
     if (!strcmp(arg1, "active")) {
-	char pattern[MAX_MAILBOX_NAME+1];
+	char pattern[MAX_MAILBOX_BUFFER];
 	struct list_rock lrock;
 	struct enum_rock erock;
 
@@ -2628,7 +2628,7 @@ static void cmd_list(char *arg1, char *arg2)
 	prot_printf(nntp_out, ".\r\n");
     }
     else if (!strcmp(arg1, "newsgroups")) {
-	char pattern[MAX_MAILBOX_NAME+1];
+	char pattern[MAX_MAILBOX_BUFFER];
 	struct list_rock lrock;
 	struct enum_rock erock;
 
@@ -3355,7 +3355,7 @@ static int newgroup(message_data_t *msg)
 {
     int r;
     char *group;
-    char mailboxname[MAX_MAILBOX_NAME+1];
+    char mailboxname[MAX_MAILBOX_BUFFER];
 
     /* isolate newsgroup */
     group = msg->control + 8; /* skip "newgroup" */
@@ -3378,7 +3378,7 @@ static int rmgroup(message_data_t *msg)
 {
     int r;
     char *group;
-    char mailboxname[MAX_MAILBOX_NAME+1];
+    char mailboxname[MAX_MAILBOX_BUFFER];
 
     /* isolate newsgroup */
     group = msg->control + 7; /* skip "rmgroup" */
@@ -3402,8 +3402,8 @@ static int mvgroup(message_data_t *msg)
     int r;
     size_t len;
     char *group;
-    char oldmailboxname[MAX_MAILBOX_NAME+1];
-    char newmailboxname[MAX_MAILBOX_NAME+1];
+    char oldmailboxname[MAX_MAILBOX_BUFFER];
+    char newmailboxname[MAX_MAILBOX_BUFFER];
 
     /* isolate old newsgroup */
     group = msg->control + 7; /* skip "mvgroup" */
@@ -4115,7 +4115,7 @@ static void cmd_starttls(int nntps __attribute__((unused)))
 static struct wildmat *split_wildmats(char *str)
 {
     const char *prefix;
-    char pattern[MAX_MAILBOX_NAME+1] = "", *p, *c;
+    char pattern[MAX_MAILBOX_BUFFER] = "", *p, *c;
     struct wildmat *wild = NULL;
     int n = 0;
 

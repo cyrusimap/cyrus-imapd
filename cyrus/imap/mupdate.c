@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mupdate.c,v 1.106 2008/10/08 15:47:08 murch Exp $
+ * $Id: mupdate.c,v 1.107 2009/02/09 05:01:58 brong Exp $
  */
 
 #include <config.h>
@@ -112,7 +112,7 @@ enum {
 struct pending {
     struct pending *next;
 
-    char mailbox[MAX_MAILBOX_NAME+1];
+    char mailbox[MAX_MAILBOX_BUFFER];
 };
 
 struct stringlist 

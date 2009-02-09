@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mbdump.c,v 1.42 2008/12/02 02:20:22 wescraig Exp $
+ * $Id: mbdump.c,v 1.43 2009/02/09 05:01:58 brong Exp $
  */
 
 #include <config.h>
@@ -873,7 +873,7 @@ int undump_mailbox(const char *mbname, const char *mbpath,
 
     if(!r && quotaused) {
 	struct quota quota;
-	char quota_root[MAX_MAILBOX_PATH+1];
+	char quota_root[MAX_MAILBOX_BUFFER];
 	struct txn *tid = NULL;
 	
 	if (quota_findroot(quota_root, sizeof(quota_root), mbname)) {
