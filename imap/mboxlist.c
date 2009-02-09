@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mboxlist.c,v 1.262 2009/02/09 05:01:58 brong Exp $
+ * $Id: mboxlist.c,v 1.263 2009/02/09 05:04:38 brong Exp $
  */
 
 #include <config.h>
@@ -239,7 +239,7 @@ static int mboxlist_mylookup(const char *name, int *typep,
 	break;
 
     default:
-	syslog(LOG_ERR, "DBERROR: error fetching %s: %s",
+	syslog(LOG_ERR, "DBERROR: error fetching mboxlist %s: %s",
 	       name, cyrusdb_strerror(r));
 	return IMAP_IOERROR;
 	break;

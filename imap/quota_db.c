@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: quota_db.c,v 1.9 2009/02/09 05:01:58 brong Exp $
+ * $Id: quota_db.c,v 1.10 2009/02/09 05:04:38 brong Exp $
  */
 
 #include <config.h>
@@ -94,6 +94,10 @@ int quota_read(struct quota *quota, struct txn **tid, int wrlock)
 	if (!data ||
 	    sscanf(data, UQUOTA_T_FMT " %d",
 		   &quota->used, &quota->limit) != 2) {
+            char *buf = xstrndup(data, datalen);
+            syslog(LOG_ERR, "DBERROR: parsed bogus quota data <%s> for %s",
+               buf, quota->root);
+            free(buf);
 	    r = CYRUSDB_IOERROR;
 	}
 	break;
@@ -108,7 +112,7 @@ int quota_read(struct quota *quota, struct txn **tid, int wrlock)
     }
 
     if (r) {
-	syslog(LOG_ERR, "DBERROR: error fetching %s: %s",
+	syslog(LOG_ERR, "DBERROR: error fetching quota %s: %s",
 	       quota->root, cyrusdb_strerror(r));
 	return IMAP_IOERROR;
     }
