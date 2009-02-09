@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.556 2009/02/09 05:01:57 brong Exp $
+ * $Id: imapd.c,v 1.557 2009/02/09 05:05:48 brong Exp $
  */
 
 #include <config.h>
@@ -5071,10 +5071,9 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
 		    error_message(IMAP_OK_COMPLETED));
 
 	if ( !localonly ) {
+	    sync_log_mailbox(mailboxname);
 	    if (mboxname_isusermailbox(mailboxname, 1))
 		sync_log_user(mboxname_inbox_touserid(mailboxname));
-	    else
-		sync_log_mailbox(mailboxname);
 	}
     }
 }	
