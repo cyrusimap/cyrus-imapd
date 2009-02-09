@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.188 2009/02/09 05:08:21 brong Exp $
+ * $Id: mailbox.c,v 1.189 2009/02/09 05:25:20 brong Exp $
  */
 
 #include <config.h>
@@ -1641,7 +1641,7 @@ static void mailbox_upgrade_index_work(struct mailbox *mailbox,
 	calculate_flagcounts = 1;
     }
     if (oldstart_offset < OFFSET_MAILBOX_OPTIONS-quota_offset+sizeof(bit32)) {
-	unsigned long options = 0;
+	unsigned long options = config_getint(IMAPOPT_MAILBOX_DEFAULT_OPTIONS);
 	if (!exists) options |= OPT_POP3_NEW_UIDL;
 	*((bit32 *)(headerbuf+OFFSET_MAILBOX_OPTIONS)) = htonl(options);
     }
@@ -2736,7 +2736,7 @@ int mailbox_create(const char *name,
     mailbox.deleted = 0;
     mailbox.answered = 0;
     mailbox.flagged = 0;
-    mailbox.options = OPT_POP3_NEW_UIDL;
+    mailbox.options = config_getint(IMAPOPT_MAILBOX_DEFAULT_OPTIONS) | OPT_POP3_NEW_UIDL;
     mailbox.leaked_cache_records = 0;
     mailbox.highestmodseq = 1;
 
