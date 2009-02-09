@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.186 2009/02/09 05:01:58 brong Exp $
+ * $Id: mailbox.c,v 1.187 2009/02/09 05:03:49 brong Exp $
  */
 
 #include <config.h>
@@ -1555,8 +1555,11 @@ static void mailbox_upgrade_index_work(struct mailbox *mailbox,
     unsigned long exists;
     unsigned msgno;
     bit32 oldstart_offset, oldrecord_size;
-    indexbuffer_t ibuf;
-    unsigned char *buf = ibuf.buf, *bufp;
+    indexbuffer_t rbuf;
+    indexbuffer_t hbuf;
+    unsigned char *bufp;
+    unsigned char *recordbuf = rbuf.buf;
+    unsigned char *headerbuf = hbuf.buf;
     int quota_offset = 0;
     int calculate_flagcounts = 0;
     bit32 numansweredflag = 0;
@@ -1565,43 +1568,43 @@ static void mailbox_upgrade_index_work(struct mailbox *mailbox,
     int old_minor_version = 0;
 
     /* Copy existing header so we can upgrade it */ 
-    memcpy(buf, index_base, INDEX_HEADER_SIZE);
+    memcpy(headerbuf, index_base, INDEX_HEADER_SIZE);
 
-    exists = ntohl(*((bit32 *)(buf+OFFSET_EXISTS)));
+    exists = ntohl(*((bit32 *)(headerbuf+OFFSET_EXISTS)));
 
-    old_minor_version = ntohl(*((bit32 *)(buf+OFFSET_MINOR_VERSION)));
+    old_minor_version = ntohl(*((bit32 *)(headerbuf+OFFSET_MINOR_VERSION)));
 
     /* QUOTA_MAILBOX_USED64 added with minor version 6 */
     if (old_minor_version < 6) {
 	quota_offset = sizeof(bit32);
 	/* upgrade quota to 64-bits (bump existing fields) */
-	memmove(buf+OFFSET_QUOTA_MAILBOX_USED, buf+OFFSET_QUOTA_MAILBOX_USED64,
+	memmove(headerbuf+OFFSET_QUOTA_MAILBOX_USED, headerbuf+OFFSET_QUOTA_MAILBOX_USED64,
 		INDEX_HEADER_SIZE - OFFSET_QUOTA_MAILBOX_USED64 - quota_offset);
 	/* zero the unused 32-bits */
-	*((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) = htonl(0);
+	*((bit32 *)(headerbuf+OFFSET_QUOTA_MAILBOX_USED64)) = htonl(0);
     }
 
     /* HIGHESTMODSEQ[_64] added with minor version 8 */
     if (old_minor_version < 8) {
 	/* Set the initial highestmodseq to 1 */
 #ifdef HAVE_LONG_LONG_INT
-	align_htonll(buf+OFFSET_HIGHESTMODSEQ_64, 1);
+	align_htonll(headerbuf+OFFSET_HIGHESTMODSEQ_64, 1);
 #else
-	*((bit32 *)(buf+OFFSET_HIGHESTMODSEQ_64)) = htonl(0);
-	*((bit32 *)(buf+OFFSET_HIGHESTMODSEQ)) = htonl(1);
+	*((bit32 *)(headerbuf+OFFSET_HIGHESTMODSEQ_64)) = htonl(0);
+	*((bit32 *)(headerbuf+OFFSET_HIGHESTMODSEQ)) = htonl(1);
 #endif
     }
 
     /* change version number */
-    *((bit32 *)(buf+OFFSET_MINOR_VERSION)) = htonl(MAILBOX_MINOR_VERSION);
+    *((bit32 *)(headerbuf+OFFSET_MINOR_VERSION)) = htonl(MAILBOX_MINOR_VERSION);
 
     /* save old start_offset; change start_offset */
-    oldstart_offset = ntohl(*((bit32 *)(buf+OFFSET_START_OFFSET)));
-    *((bit32 *)(buf+OFFSET_START_OFFSET)) = htonl(INDEX_HEADER_SIZE);
+    oldstart_offset = ntohl(*((bit32 *)(headerbuf+OFFSET_START_OFFSET)));
+    *((bit32 *)(headerbuf+OFFSET_START_OFFSET)) = htonl(INDEX_HEADER_SIZE);
 
     /* save old record_size; change record_size */
-    oldrecord_size = ntohl(*((bit32 *)(buf+OFFSET_RECORD_SIZE)));
-    *((bit32 *)(buf+OFFSET_RECORD_SIZE)) = htonl(INDEX_RECORD_SIZE);
+    oldrecord_size = ntohl(*((bit32 *)(headerbuf+OFFSET_RECORD_SIZE)));
+    *((bit32 *)(headerbuf+OFFSET_RECORD_SIZE)) = htonl(INDEX_RECORD_SIZE);
 
     /* sanity check the record size */
     if (oldrecord_size > INDEX_RECORD_SIZE) {
@@ -1617,10 +1620,10 @@ static void mailbox_upgrade_index_work(struct mailbox *mailbox,
      * minor version wasn't updated religiously in the early days,
      * so we need to use the old offset instead */
     if (oldstart_offset < OFFSET_POP3_LAST_LOGIN-quota_offset+sizeof(bit32)) {
-	*((bit32 *)(buf+OFFSET_POP3_LAST_LOGIN)) = htonl(0);
+	*((bit32 *)(headerbuf+OFFSET_POP3_LAST_LOGIN)) = htonl(0);
     }
     if (oldstart_offset < OFFSET_UIDVALIDITY-quota_offset+sizeof(bit32)) {
-	*((bit32 *)(buf+OFFSET_UIDVALIDITY)) = htonl(1);
+	*((bit32 *)(headerbuf+OFFSET_UIDVALIDITY)) = htonl(1);
     }
     if (oldstart_offset < OFFSET_FLAGGED-quota_offset+sizeof(bit32)) {
 	struct stat sbuf;
@@ -1638,17 +1641,17 @@ static void mailbox_upgrade_index_work(struct mailbox *mailbox,
     }
     if (oldstart_offset < OFFSET_MAILBOX_OPTIONS-quota_offset+sizeof(bit32)) {
 	unsigned long options = !exists ? OPT_POP3_NEW_UIDL : 0;
-	*((bit32 *)(buf+OFFSET_MAILBOX_OPTIONS)) = htonl(options);
+	*((bit32 *)(headerbuf+OFFSET_MAILBOX_OPTIONS)) = htonl(options);
     }
 
-    *((bit32 *)(buf+OFFSET_SPARE0)) = htonl(0); /* RESERVED */
-    *((bit32 *)(buf+OFFSET_SPARE1)) = htonl(0); /* RESERVED */
-    *((bit32 *)(buf+OFFSET_SPARE2)) = htonl(0); /* RESERVED */
-    *((bit32 *)(buf+OFFSET_SPARE3)) = htonl(0); /* RESERVED */
-    *((bit32 *)(buf+OFFSET_SPARE4)) = htonl(0); /* RESERVED */
+    *((bit32 *)(headerbuf+OFFSET_SPARE0)) = htonl(0); /* RESERVED */
+    *((bit32 *)(headerbuf+OFFSET_SPARE1)) = htonl(0); /* RESERVED */
+    *((bit32 *)(headerbuf+OFFSET_SPARE2)) = htonl(0); /* RESERVED */
+    *((bit32 *)(headerbuf+OFFSET_SPARE3)) = htonl(0); /* RESERVED */
+    *((bit32 *)(headerbuf+OFFSET_SPARE4)) = htonl(0); /* RESERVED */
 
     /* Write new header */
-    fwrite(buf, 1, INDEX_HEADER_SIZE, newindex);
+    fwrite(headerbuf, 1, INDEX_HEADER_SIZE, newindex);
 
     /* Write the rest of new index */
     for (msgno = 1; msgno <= exists; msgno++) {
@@ -1670,77 +1673,75 @@ static void mailbox_upgrade_index_work(struct mailbox *mailbox,
         }
 
         /* We need to upgrade the index record to include new fields. */
-        memset(buf, 0, INDEX_RECORD_SIZE);
-        memcpy(buf, bufp, oldrecord_size);
+        memset(recordbuf, 0, INDEX_RECORD_SIZE);
+        memcpy(recordbuf, bufp, oldrecord_size);
 
         /* CONTENT_LINES added with minor version 5 */
         if (old_minor_version < 5) {
 	    /* Set the initial content lines to BIT32_MAX rather than 0,
 	     * since a message body can be empty.
 	     * We'll calculate the actual value on demand. */
-            *((bit32 *)(buf+OFFSET_CONTENT_LINES)) = htonl(BIT32_MAX);
+            *((bit32 *)(recordbuf+OFFSET_CONTENT_LINES)) = htonl(BIT32_MAX);
         }
 
         /* CACHE_VERSION added with minor version 6 */
         if (old_minor_version < 6) {
 	    /* Set the initial cache version to 0, that is, with the old
 	     * format of the cached headers */
-            *((bit32 *)(buf+OFFSET_CACHE_VERSION)) = htonl(0);
+            *((bit32 *)(recordbuf+OFFSET_CACHE_VERSION)) = htonl(0);
         }
 
         if (old_minor_version < 7) {
             /* 12-byte GUIDs added with minor version 7.
 	     * Set to NIL GUID */
-            memset(buf+OFFSET_MESSAGE_GUID, 0, MESSAGE_GUID_SIZE);
+            memset(recordbuf+OFFSET_MESSAGE_GUID, 0, MESSAGE_GUID_SIZE);
         } else if (old_minor_version < 10) {
             /* GUIDs extended from 12 to 20 bytes with minor version 10 */
-            void *src = (buf+OFFSET_MESSAGE_GUID)+12;
-            void *dst = (buf+OFFSET_MESSAGE_GUID)+20;
+            void *src = (recordbuf+OFFSET_MESSAGE_GUID)+12;
+            void *dst = (recordbuf+OFFSET_MESSAGE_GUID)+20;
             size_t len = INDEX_RECORD_SIZE - (OFFSET_MESSAGE_GUID+20);
                          
             /* Bump everything after MESSAGE_GUID down by 8 bytes */
             memmove(dst, src, len);
 
             /* Pad existing GUID with zeros */
-            memset(buf+OFFSET_MESSAGE_GUID+12, 0, 8);
+            memset(recordbuf+OFFSET_MESSAGE_GUID+12, 0, 8);
         }
 
         /* MODSEQ added with minor version 8 */
         if (old_minor_version < 8) {
 	    /* Set the initial modseq to 1 */
 #ifdef HAVE_LONG_LONG_INT
-	    *((bit64 *)(buf+OFFSET_MODSEQ_64)) = htonll(1);
+	    *((bit64 *)(recordbuf+OFFSET_MODSEQ_64)) = htonll(1);
 #else
-	    *((bit32 *)(buf+OFFSET_MODSEQ_64)) = htonl(0);
-	    *((bit32 *)(buf+OFFSET_MODSEQ)) = htonl(1);
+	    *((bit32 *)(recordbuf+OFFSET_MODSEQ_64)) = htonl(0);
+	    *((bit32 *)(recordbuf+OFFSET_MODSEQ)) = htonl(1);
 #endif
 	} else {
 	    /* Older versions may have incorrectly allowed modseq to be 0 */
 #ifdef HAVE_LONG_LONG_INT
-	    if ( *((bit64 *)(buf+OFFSET_MODSEQ_64)) == 0 ) {
-		*((bit64 *)(buf+OFFSET_MODSEQ_64)) = htonll(1);
+	    if ( *((bit64 *)(recordbuf+OFFSET_MODSEQ_64)) == 0 ) {
+		*((bit64 *)(recordbuf+OFFSET_MODSEQ_64)) = htonll(1);
 	    }
 #else
-	    if ( *((bit32 *)(buf+OFFSET_MODSEQ)) == 0 ) {
-		*((bit32 *)(buf+OFFSET_MODSEQ_64)) = htonl(0);
-		*((bit32 *)(buf+OFFSET_MODSEQ)) = htonl(1);
+	    if ( *((bit32 *)(recordbuf+OFFSET_MODSEQ)) == 0 ) {
+		*((bit32 *)(recordbuf+OFFSET_MODSEQ_64)) = htonl(0);
+		*((bit32 *)(recordbuf+OFFSET_MODSEQ)) = htonl(1);
 	    }
 #endif
 	}
 
-        fwrite(buf, INDEX_RECORD_SIZE, 1, newindex);
+        fwrite(recordbuf, INDEX_RECORD_SIZE, 1, newindex);
     }
 
     if (calculate_flagcounts) {
 	/* go back and add flag counts to header */
-	memset(buf, 0, INDEX_RECORD_SIZE);
-	*((bit32 *)(buf+OFFSET_DELETED)) = htonl(numdeletedflag);
-	*((bit32 *)(buf+OFFSET_ANSWERED)) = htonl(numansweredflag);
-	*((bit32 *)(buf+OFFSET_FLAGGED)) = htonl(numflaggedflag);
+	*((bit32 *)(headerbuf+OFFSET_DELETED)) = htonl(numdeletedflag);
+	*((bit32 *)(headerbuf+OFFSET_ANSWERED)) = htonl(numansweredflag);
+	*((bit32 *)(headerbuf+OFFSET_FLAGGED)) = htonl(numflaggedflag);
 
-	fseek(newindex, OFFSET_DELETED, SEEK_SET);
-	fwrite(buf+OFFSET_DELETED,
-	       OFFSET_FLAGGED+sizeof(bit32)-OFFSET_DELETED, 1, newindex);
+	rewind(newindex);
+	fwrite(headerbuf, INDEX_HEADER_SIZE, 1, newindex);
     }
 }
 
