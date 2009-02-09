@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_server.c,v 1.27 2009/02/09 05:01:59 brong Exp $
+ * $Id: sync_server.c,v 1.28 2009/02/09 05:02:54 brong Exp $
  *
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
@@ -2204,17 +2204,19 @@ static void cmd_setseen_all(char *user, struct buf *data)
 	r = IMAP_IOERROR;
     }
 
-    if (!r && write(filefd, data->s, data->len) == -1) {
+    if (!r && retry_write(filefd, data->s, data->len) == -1) {
 	syslog(LOG_ERR, "IOERROR: writing %s: %m", fnamebuf);
 	r = IMAP_IOERROR;
     }
 
-    /* we were operating on the seen state, so merge it and cleanup */
-    if (!r) seen_merge(fnamebuf, seen_file);
+    /* new seen file from the master is in place */
+    if (filefd != -1) close(filefd);
+
+    /* overwrite the old seen file */
+    if (!r) rename(fnamebuf, seen_file);
+    else unlink(fnamebuf);
 
     free(seen_file);
-    unlink(fnamebuf);
-    if (filefd != -1) close(filefd);
 
     if (r)
         prot_printf(sync_out, "NO Setseen_all Failed on %s: %s\r\n",
