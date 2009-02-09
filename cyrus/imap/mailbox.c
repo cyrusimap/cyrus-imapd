@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.184 2008/10/15 17:40:37 wescraig Exp $
+ * $Id: mailbox.c,v 1.185 2009/02/09 04:43:59 brong Exp $
  */
 
 #include <config.h>
@@ -1935,7 +1935,7 @@ static int process_records(struct mailbox *mailbox, FILE *newindex,
     time_t now = time(NULL);
     unsigned n;
 
-    /* Copy over records for nondeleted messages */
+    /* Copy over records for all messages */
     for (msgno = 1; msgno <= exists; msgno++) {
 	/* Copy index record for this message */
 	memcpy(buf,
@@ -2004,10 +2004,11 @@ static int process_records(struct mailbox *mailbox, FILE *newindex,
             if (cache_offset >= mailbox->cache_size) {
 		syslog(LOG_ERR,
 		       "IOERROR: reading cache record for %s:"
-		       " got bogus offset %d for %u/%lu; try reconstruct",
+		       " initial bogus offset %d of %d for %u/%lu; mailbox needs a reconstruct",
 		       mailbox->name,
-		       (int) (cacheitem - (mailbox->cache_base + cache_offset)),
-		       msgno, mailbox->exists);
+		       (int) (cacheitem - mailbox->cache_base),
+		       (int) mailbox->cache_size,
+		       msgno, exists);
 		return IMAP_IOERROR;
             }
 	    for (cache_ent = 0; cache_ent < NUM_CACHE_FIELDS; cache_ent++) {
@@ -2016,10 +2017,12 @@ static int process_records(struct mailbox *mailbox, FILE *newindex,
 		    (cacheitem > (mailbox->cache_base + mailbox->cache_size))) {
 		    syslog(LOG_ERR,
 			   "IOERROR: reading cache record for %s:"
-			   " got bogus offset %d for %u/%lu; try reconstruct",
+			   " item %d has bogus offset %d of %d for %u/%lu; mailbox needs a reconstruct",
 			   mailbox->name,
-			   (int) (cacheitem - (mailbox->cache_base + cache_offset)),
-			   msgno, mailbox->exists);
+			   cache_ent+1,
+			   (int) (cacheitem - mailbox->cache_base),
+			   (int) mailbox->cache_size,
+			   msgno, exists);
 		    return IMAP_IOERROR;
 		}
 	    }
