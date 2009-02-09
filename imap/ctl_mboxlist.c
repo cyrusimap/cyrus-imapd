@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ctl_mboxlist.c,v 1.63 2008/09/24 11:45:50 murch Exp $
+ * $Id: ctl_mboxlist.c,v 1.64 2009/02/09 05:01:56 brong Exp $
  */
 
 /* currently doesn't catch signals; probably SHOULD */
@@ -116,8 +116,8 @@ struct dumprock {
 
 struct mb_node 
 {
-    char mailbox[MAX_MAILBOX_NAME+1];
-    char server[MAX_MAILBOX_NAME+1];
+    char mailbox[MAX_MAILBOX_BUFFER];
+    char server[MAX_MAILBOX_BUFFER];
     char *acl;
     struct mb_node *next;
 };
@@ -556,7 +556,7 @@ void do_undump(void)
     int r = 0;
     char buf[16384];
     int line = 0;
-    char last_commit[MAX_MAILBOX_NAME];
+    char last_commit[MAX_MAILBOX_BUFFER];
     char *key=NULL, *data=NULL;
     int keylen, datalen;
     int untilCommit = PER_COMMIT;
@@ -596,7 +596,7 @@ void do_undump(void)
 	for (; *p && *p != '\r' && *p != '\n'; p++) ;
 	*p++ = '\0';
 
-	if (strlen(name) > MAX_MAILBOX_NAME) {
+	if (strlen(name) >= MAX_MAILBOX_BUFFER) {
 	    fprintf(stderr, "line %d: mailbox name too long\n", line);
 	    continue;
 	}
@@ -666,8 +666,8 @@ enum {
 
 struct found_data {
     int type;
-    char mboxname[MAX_MAILBOX_NAME+1];
-    char partition[MAX_MAILBOX_NAME+1];
+    char mboxname[MAX_MAILBOX_BUFFER];
+    char partition[MAX_MAILBOX_BUFFER];
     char path[MAX_MAILBOX_PATH+1];
 };
 
@@ -825,8 +825,8 @@ void do_verify(void)
     for (i = 0; i < found.size; i++) {
 	DIR *dirp;
 	struct dirent *dirent;
-	char name[MAX_MAILBOX_NAME+1];
-	char part[MAX_MAILBOX_NAME+1]; 
+	char name[MAX_MAILBOX_BUFFER];
+	char part[MAX_MAILBOX_BUFFER]; 
 	char path[MAX_MAILBOX_PATH+1];
 	int type;
 

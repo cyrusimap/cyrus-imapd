@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.c,v 1.11 2008/10/08 15:47:06 murch Exp $
+ * $Id: imap_proxy.c,v 1.12 2009/02/09 05:01:56 brong Exp $
  */
 
 #include <config.h>
@@ -129,7 +129,7 @@ void proxy_gentag(char *tag, size_t len)
 
 struct backend *proxy_findinboxserver(void)
 {
-    char inbox[MAX_MAILBOX_NAME+1];
+    char inbox[MAX_MAILBOX_BUFFER];
     int r, mbtype;
     char *server = NULL;
     struct backend *s = NULL;
@@ -468,7 +468,7 @@ int pipe_lsub(struct backend *s, const char *tag,
     int c;
     int r = PROXY_OK;
     int exist_r;
-    char mailboxname[MAX_MAILBOX_PATH + 1];
+    char mailboxname[MAX_MAILBOX_BUFFER];
     static struct buf tagb, cmd, sep, name;
     int cur_flags_size = 64;
     char *flags = xmalloc(cur_flags_size);

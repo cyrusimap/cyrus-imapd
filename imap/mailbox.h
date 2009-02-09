@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.h,v 1.91 2008/03/24 17:09:17 murch Exp $
+ * $Id: mailbox.h,v 1.92 2009/02/09 05:01:58 brong Exp $
  */
 
 #ifndef INCLUDED_MAILBOX_H
@@ -78,6 +78,7 @@ typedef unsigned long int modseq_t;
 #endif
 
 #define MAX_MAILBOX_NAME 490
+#define MAX_MAILBOX_BUFFER 1024   /* enough space for all possible rewrites and DELETED.* and stuff */
 #define MAX_MAILBOX_PATH 4096
 
 #define MAX_USER_FLAGS (16*8)

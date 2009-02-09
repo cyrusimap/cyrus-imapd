@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: pop3d.c,v 1.190 2008/12/23 15:16:03 murch Exp $
+ * $Id: pop3d.c,v 1.191 2009/02/09 05:01:58 brong Exp $
  */
 
 #include <config.h>
@@ -213,7 +213,7 @@ static int popd_canon_user(sasl_conn_t *conn, void *context,
 			   unsigned flags, const char *user_realm,
 			   char *out, unsigned out_max, unsigned *out_ulen)
 {
-    char userbuf[MAX_MAILBOX_NAME+1], *p;
+    char userbuf[MAX_MAILBOX_BUFFER], *p;
     size_t n;
     int r;
 
@@ -221,7 +221,7 @@ static int popd_canon_user(sasl_conn_t *conn, void *context,
 
     if (config_getswitch(IMAPOPT_POPSUBFOLDERS)) {
 	/* make a working copy of the auth[z]id */
-	if (ulen > MAX_MAILBOX_NAME) {
+	if (ulen >= MAX_MAILBOX_BUFFER) {
 	    sasl_seterror(conn, 0, "buffer overflow while canonicalizing");
 	    return SASL_BUFOVER;
 	}
@@ -277,12 +277,12 @@ static int popd_proxy_policy(sasl_conn_t *conn,
 			     struct propctx *propctx)
 {
     if (config_getswitch(IMAPOPT_POPSUBFOLDERS)) {
-	char userbuf[MAX_MAILBOX_NAME+1], *p;
+	char userbuf[MAX_MAILBOX_BUFFER], *p;
 	size_t n;
 
 	/* make a working copy of the authzid */
 	if (!rlen) rlen = strlen(requested_user);
-	if (rlen > MAX_MAILBOX_NAME) {
+	if (rlen >= MAX_MAILBOX_BUFFER) {
 	    sasl_seterror(conn, 0, "buffer overflow while proxying");
 	    return SASL_BUFOVER;
 	}
@@ -1212,7 +1212,7 @@ static void cmd_apop(char *response)
 
 void cmd_user(char *user)
 {
-    char userbuf[MAX_MAILBOX_NAME+1], *dot, *domain;
+    char userbuf[MAX_MAILBOX_BUFFER], *dot, *domain;
     unsigned userlen;
 
     /* possibly disallow USER */
@@ -1235,7 +1235,7 @@ void cmd_user(char *user)
 	     (popd_namespace.hier_sep == '.' && (dot = strchr(userbuf, '.')) &&
 	      !(config_virtdomains &&  /* allow '.' in dom.ain */
 		(domain = strchr(userbuf, '@')) && (dot > domain))) ||
-	     strlen(userbuf) + 6 > MAX_MAILBOX_NAME) {
+	     strlen(userbuf) + 6 >= MAX_MAILBOX_BUFFER) {
 	prot_printf(popd_out, "-ERR [AUTH] Invalid user\r\n");
 	syslog(LOG_NOTICE,
 	       "badlogin: %s plaintext %s invalid user",
@@ -1514,7 +1514,7 @@ void cmd_auth(char *arg)
     /* If we're proxying, the authzid may contain a subfolder,
        so re-canonify it */
     if (config_getswitch(IMAPOPT_POPSUBFOLDERS) && strchr(canon_user, '+')) {
-	char userbuf[MAX_MAILBOX_NAME+1];
+	char userbuf[MAX_MAILBOX_BUFFER];
 	unsigned userlen;
 
 	sasl_result = popd_canon_user(popd_saslconn, NULL, canon_user, 0,
@@ -1552,8 +1552,8 @@ void cmd_auth(char *arg)
  */
 int openinbox(void)
 {
-    char userid[MAX_MAILBOX_NAME+1], inboxname[MAX_MAILBOX_PATH+1];
-    char extname[MAX_MAILBOX_NAME+1] = "INBOX";
+    char userid[MAX_MAILBOX_BUFFER], inboxname[MAX_MAILBOX_BUFFER];
+    char extname[MAX_MAILBOX_BUFFER] = "INBOX";
     int type, myrights = 0;
     char *server = NULL, *acl;
     int r, log_level = LOG_ERR;

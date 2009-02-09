@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: annotate.c,v 1.42 2008/10/08 15:47:06 murch Exp $
+ * $Id: annotate.c,v 1.43 2009/02/09 05:01:56 brong Exp $
  */
 
 #include <config.h>
@@ -506,9 +506,9 @@ static void output_entryatt(const char *mboxname, const char *entry,
 			    struct fetchdata *fdata)
 {
     static struct attvaluelist *attvalues = NULL;
-    static char lastname[MAX_MAILBOX_NAME+1];
-    static char lastentry[MAX_MAILBOX_NAME+1];
-    char key[MAX_MAILBOX_PATH+1]; /* XXX MAX_MAILBOX_NAME + entry + userid */
+    static char lastname[MAX_MAILBOX_BUFFER];
+    static char lastentry[MAX_MAILBOX_BUFFER];
+    char key[MAX_MAILBOX_BUFFER]; /* XXX MAX_MAILBOX_NAME + entry + userid */
     char buf[100];
 
     /* We have to reset before each GETANNOTATION command.
@@ -611,7 +611,7 @@ static void annotation_get_fromfile(const char *int_mboxname __attribute__((unus
 				    void *rock)
 {
     const char *filename = (const char *) rock;
-    char path[1024], buf[1024], *p;
+    char path[MAX_MAILBOX_PATH+1], buf[MAX_MAILBOX_PATH+1], *p;
     FILE *f;
     struct stat statbuf;
     struct annotation_data attrib;
@@ -1080,10 +1080,10 @@ static int fetch_cb(char *name, int matchlen,
 {
     struct fetchdata *fdata = (struct fetchdata *) rock;
     struct annotate_f_entry_list *entries_ptr;
-    static char lastname[MAX_MAILBOX_PATH+1];
+    static char lastname[MAX_MAILBOX_BUFFER];
     static int sawuser = 0;
     int c;
-    char int_mboxname[MAX_MAILBOX_PATH+1], ext_mboxname[MAX_MAILBOX_PATH+1];
+    char int_mboxname[MAX_MAILBOX_BUFFER], ext_mboxname[MAX_MAILBOX_BUFFER];
     struct mailbox_annotation_rock mbrock;
 
     /* We have to reset the sawuser flag before each fetch command.
@@ -1298,7 +1298,7 @@ int annotatemore_fetch(char *mailbox,
 	/* mailbox annotation(s) */
 
 	if (fdata.entry_list || proxy_fetch_func) {
-	    char mboxpat[MAX_MAILBOX_NAME+1];
+	    char mboxpat[MAX_MAILBOX_BUFFER];
 
 	    /* Reset state in fetch_cb */
 	    fetch_cb(NULL, 0, 0, 0);
@@ -1537,7 +1537,7 @@ static int store_cb(char *name, int matchlen,
     struct annotate_st_entry_list *entries_ptr;
     static char lastname[MAX_MAILBOX_PATH+1];
     static int sawuser = 0;
-    char int_mboxname[MAX_MAILBOX_PATH+1];
+    char int_mboxname[MAX_MAILBOX_BUFFER];
     struct mailbox_annotation_rock mbrock;
     int r = 0;
 
@@ -1621,7 +1621,7 @@ static int annotation_set_tofile(const char *int_mboxname __attribute__((unused)
 				 void *rock)
 {
     const char *filename = (const char *) rock;
-    char path[1024];
+    char path[MAX_MAILBOX_PATH+1];
     FILE *f;
 
     /* Check ACL */
@@ -1982,7 +1982,7 @@ int annotatemore_store(char *mailbox,
     else {
 	/* mailbox annotations */
 
-	char mboxpat[MAX_MAILBOX_NAME+1];
+	char mboxpat[MAX_MAILBOX_BUFFER];
 
 	/* Reset state in store_cb */
 	store_cb(NULL, 0, 0, 0);

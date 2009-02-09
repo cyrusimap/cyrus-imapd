@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_reset.c,v 1.6 2008/03/24 17:09:20 murch Exp $
+ * $Id: sync_reset.c,v 1.7 2009/02/09 05:01:59 brong Exp $
  *
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
@@ -207,7 +207,7 @@ reset_single(struct sync_lock *lock, char *user)
 {
     struct sync_folder_list *list = NULL;
     struct sync_folder *item;
-    char buf[MAX_MAILBOX_NAME+1];
+    char buf[MAX_MAILBOX_BUFFER];
     int r = 0;
     static int md5_dir_set     = 0;
     static const char *md5_dir = NULL;

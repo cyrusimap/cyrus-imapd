@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: fud.c,v 1.56 2008/03/24 17:09:16 murch Exp $
+ * $Id: fud.c,v 1.57 2009/02/09 05:01:56 brong Exp $
  */
 
 #include <config.h>
@@ -112,18 +112,21 @@ int begin_handling(void)
         struct sockaddr_storage sfrom;
         socklen_t sfromsiz = sizeof(sfrom);
         int r;
-        char    buf[MAXLOGNAME + MAXDOMNAME+ MAX_MAILBOX_NAME + 1];
+        char    buf[MAXLOGNAME + MAXDOMNAME + MAX_MAILBOX_BUFFER];
         char    username[MAXLOGNAME + MAXDOMNAME];
-        char    mbox[MAX_MAILBOX_NAME+1];
+        char    mbox[MAX_MAILBOX_BUFFER];
         char    *q;
         int     off;
-	int     maxuserlen = MAXLOGNAME + config_virtdomains ? MAXDOMNAME : 0;
+	int     maxuserlen = MAXLOGNAME;
+
+	if (config_virtdomains) 
+	    maxuserlen += MAXDOMNAME + 1; /* @ + DOM */
 
         while(1) {
             /* For safety */
-            memset(username,'\0',MAXLOGNAME + MAXDOMNAME);	
-            memset(mbox,'\0',MAX_MAILBOX_NAME+1);
-            memset(buf, '\0', MAXLOGNAME + MAX_MAILBOX_NAME + 1);
+            memset(buf, 0, sizeof(buf));
+            memset(username, 0, sizeof(username));
+            memset(mbox, 0, sizeof(mbox));
 
 	    if (signals_poll() == SIGHUP) {
 		/* caught a SIGHUP, return */
@@ -354,7 +357,7 @@ int handle_request(const char *who, const char *name,
     unsigned recentuid;
     char *seenuids;
     unsigned numrecent;
-    char mboxname[MAX_MAILBOX_NAME+1];
+    char mboxname[MAX_MAILBOX_BUFFER];
     char *location, *acl;
     int mbflag;
 

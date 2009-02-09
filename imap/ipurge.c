@@ -42,7 +42,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ipurge.c,v 1.31 2008/03/24 17:09:17 murch Exp $
+ * $Id: ipurge.c,v 1.32 2009/02/09 05:01:57 brong Exp $
  */
 
 #include <config.h>
@@ -192,7 +192,7 @@ int main (int argc, char *argv[]) {
 					purge_me, NULL);
   } else {
     for (; optind < argc; optind++) {
-      strncpy(buf, argv[optind], MAX_MAILBOX_NAME);
+      strncpy(buf, argv[optind], MAX_MAILBOX_BUFFER);
       /* Translate any separators in mailboxname */
       mboxname_hiersep_tointernal(&purge_namespace, buf,
 				  config_virtdomains ?
@@ -241,7 +241,7 @@ int purge_me(char *name, int matchlen __attribute__((unused)),
   memset(&stats, '\0', sizeof(mbox_stats_t));
 
   if (verbose) {
-      char mboxname[MAX_MAILBOX_NAME+1];
+      char mboxname[MAX_MAILBOX_BUFFER];
 
       /* Convert internal name to external */
       (*purge_namespace.mboxname_toexternal)(&purge_namespace, name,

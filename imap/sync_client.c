@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_client.c,v 1.39 2009/01/30 10:54:13 brong Exp $
+ * $Id: sync_client.c,v 1.40 2009/02/09 05:01:59 brong Exp $
  *
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
@@ -2268,7 +2268,7 @@ int do_mailbox_preload(struct sync_folder *folder)
 
 int do_user_preload(char *user)
 {
-    char buf[MAX_MAILBOX_NAME+1];
+    char buf[MAX_MAILBOX_BUFFER];
     int r = 0;
     struct sync_folder_list *client_list = sync_folder_list_create();
     struct sync_folder *folder;
@@ -2302,7 +2302,7 @@ int do_user_preload(char *user)
 int do_user_main(char *user, struct sync_folder_list *server_list,
 		 int *vanishedp)
 {
-    char buf[MAX_MAILBOX_NAME+1];
+    char buf[MAX_MAILBOX_BUFFER];
     int r = 0;
     struct sync_folder_list *client_list = sync_folder_list_create();
 
@@ -2330,7 +2330,7 @@ int do_user_sub(char *user, struct sync_folder_list *server_list)
     struct sync_folder_list *client_list = sync_folder_list_create();
     struct sync_folder *c, *s;
     int n;
-    char buf[MAX_MAILBOX_NAME+1];
+    char buf[MAX_MAILBOX_BUFFER];
 
     /* Includes subsiduary nodes automatically */
     r = (sync_namespace.mboxlist_findsub)(&sync_namespace, "*", 1,
@@ -2642,7 +2642,7 @@ int do_user_parse(char *user __attribute__((unused)),
 
 int do_user_work(char *user, int *vanishedp)
 {
-    char buf[MAX_MAILBOX_NAME+1];
+    char buf[MAX_MAILBOX_BUFFER];
     int r = 0, mailbox_open = 0;
     struct sync_folder_list *server_list      = sync_folder_list_create();
     struct sync_folder_list *server_sub_list  = sync_folder_list_create();
@@ -3016,7 +3016,7 @@ static int do_sync(const char *filename)
     /* Optimise out redundant clauses */
 
     for (action = user_list->head ; action ; action = action->next) {
-	char inboxname[MAX_MAILBOX_NAME+1];
+	char inboxname[MAX_MAILBOX_BUFFER];
 
 	/* USER action overrides any MAILBOX, APPEND, ACL, QUOTA, ANNOTATION action on
 	   any of the user's mailboxes or any META, SIEVE, SEEN, SUB, UNSUB
@@ -3753,7 +3753,7 @@ int main(int argc, char **argv)
     case MODE_MAILBOX:
     {
 	struct sync_folder_list *folder_list = sync_folder_list_create();
-	char mailboxname[MAX_MAILBOX_NAME+1];
+	char mailboxname[MAX_MAILBOX_BUFFER];
 
 	if (input_filename) {
 	    if ((file=fopen(input_filename, "r")) == NULL) {

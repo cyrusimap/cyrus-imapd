@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: smmapd.c,v 1.21 2008/10/08 15:47:08 murch Exp $
+ * $Id: smmapd.c,v 1.22 2009/02/09 05:01:59 brong Exp $
  *
  * smmapd.c -- sendmail socket map daemon
  *
@@ -225,7 +225,7 @@ int service_main(int argc __attribute__((unused)),
 int verify_user(const char *key, long quotacheck,
 		struct auth_state *authstate)
 {
-    char rcpt[MAX_MAILBOX_NAME+1], namebuf[MAX_MAILBOX_NAME+1] = "";
+    char rcpt[MAX_MAILBOX_BUFFER], namebuf[MAX_MAILBOX_BUFFER] = "";
     char *user = rcpt, *domain = NULL, *mailbox = NULL;
     int r = 0;
 

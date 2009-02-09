@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_virusscan.c,v 1.5 2008/09/23 16:17:09 murch Exp $
+ * $Id: cyr_virusscan.c,v 1.6 2009/02/09 05:01:56 brong Exp $
  */
 
 #include <config.h>
@@ -296,7 +296,7 @@ int main (int argc, char *argv[]) {
 					   scan_me, NULL);
     } else {
 	for (; optind < argc; optind++) {
-	    strncpy(buf, argv[optind], MAX_MAILBOX_NAME);
+	    strncpy(buf, argv[optind], MAX_MAILBOX_BUFFER);
 	    /* Translate any separators in mailboxname */
 	    mboxname_hiersep_tointernal(&scan_namespace, buf,
 					config_virtdomains ?
@@ -342,7 +342,7 @@ int scan_me(char *name,
     struct infected_mbox *i_mbox = NULL;
 
     if (verbose) {
-	char mboxname[MAX_MAILBOX_NAME+1];
+	char mboxname[MAX_MAILBOX_BUFFER];
 
 	/* Convert internal name to external */
 	(*scan_namespace.mboxname_toexternal)(&scan_namespace, name,

@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: quota.c,v 1.70 2008/03/24 17:09:19 murch Exp $
+ * $Id: quota.c,v 1.71 2009/02/09 05:01:58 brong Exp $
  */
 
 #include <config.h>
@@ -285,7 +285,7 @@ int buildquotalist(char *domain, char **roots, int nroots,
 		   struct fix_rock *frock)
 {
     int i, r;
-    char buf[MAX_MAILBOX_NAME+1], *tail;
+    char buf[MAX_MAILBOX_BUFFER], *tail;
     size_t domainlen = 0;
 
     buf[0] = '\0';

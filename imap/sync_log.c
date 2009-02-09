@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_log.c,v 1.4 2008/03/24 17:09:20 murch Exp $
+ * $Id: sync_log.c,v 1.5 2009/02/09 05:01:59 brong Exp $
  *
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
@@ -142,7 +142,7 @@ static void sync_log_base(const char *string, int len)
 
 static const char *sync_quote_name(const char *name)
 {
-    static char buf[(2*MAX_MAILBOX_NAME)+3];
+    static char buf[MAX_MAILBOX_BUFFER]; /* 2 * MAX_MAILBOX_NAME + 3 */
     const char *s;
     char *p = buf;
     char c;
@@ -159,7 +159,7 @@ static const char *sync_quote_name(const char *name)
             fatal("Illegal line break in folder name", EC_IOERR);
     }
 
-    if ((s-name) > MAX_MAILBOX_NAME+64)
+    if ((s-name) > MAX_MAILBOX_NAME+64) /* XXX: hope that's safe! */
         fatal("word too long", EC_IOERR);
 
     if (!need_quote) return(name);

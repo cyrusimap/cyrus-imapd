@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: proxy.h,v 1.3 2008/03/24 17:09:19 murch Exp $
+ * $Id: proxy.h,v 1.4 2009/02/09 05:01:58 brong Exp $
  */
 
 #ifndef _PROXY_H
@@ -53,14 +53,14 @@
 
 /* a final destination for a message */
 struct rcpt {
-    char rcpt[MAX_MAILBOX_NAME+1]; /* where? */
+    char rcpt[MAX_MAILBOX_BUFFER]; /* where? */
     int rcpt_num;		    /* credit this to who? */
     struct rcpt *next;
 };
 
 struct dest {
-    char server[MAX_MAILBOX_NAME+1];  /* where? */
-    char authas[MAX_MAILBOX_NAME+1];  /* as who? */
+    char server[MAX_MAILBOX_BUFFER];  /* where? */
+    char authas[MAX_MAILBOX_BUFFER];  /* as who? */
     int rnum;			      /* number of rcpts */
     struct rcpt *to;
     struct dest *next;

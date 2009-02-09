@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_expire.c,v 1.20 2008/10/06 15:24:03 murch Exp $
+ * $Id: cyr_expire.c,v 1.21 2009/02/09 05:01:56 brong Exp $
  */
 
 #include <config.h>
@@ -149,7 +149,7 @@ int expire(char *name, int matchlen, int maycreate __attribute__((unused)),
 	   void *rock)
 {
     struct expire_rock *erock = (struct expire_rock *) rock;
-    char buf[MAX_MAILBOX_NAME+1] = "", *p;
+    char buf[MAX_MAILBOX_BUFFER] = "", *p;
     struct annotation_data attrib;
     int r, domainlen = 0;
 

@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: user.c,v 1.25 2009/01/30 10:38:27 brong Exp $
+ * $Id: user.c,v 1.26 2009/02/09 05:01:59 brong Exp $
  */
 
 #include <config.h>
@@ -221,7 +221,7 @@ static int user_renamesub(char *name, int matchlen __attribute__((unused)),
 			  int maycreate __attribute__((unused)), void* rock)
 {
     struct rename_rock *rrock = (struct rename_rock *) rock;
-    char newname[MAX_MAILBOX_NAME+1];
+    char newname[MAX_MAILBOX_BUFFER];
 
     if (!strncasecmp(name, "INBOX", 5) &&
 	(name[5] == '\0' || name[5] == '.')) {
@@ -319,10 +319,10 @@ int user_renamedata(char *olduser, char *newuser,
 		    struct auth_state *authstate)
 {
     struct namespace namespace;
-    char oldinbox[MAX_MAILBOX_NAME+1], newinbox[MAX_MAILBOX_NAME+1];
+    char oldinbox[MAX_MAILBOX_BUFFER], newinbox[MAX_MAILBOX_BUFFER];
     char *olddomain, *newdomain;
     struct rename_rock rrock;
-    char pat[MAX_MAILBOX_NAME+1];
+    char pat[MAX_MAILBOX_BUFFER];
     int r;
 
     /* set namespace */
@@ -456,7 +456,7 @@ static int find_cb(void *rockp,
 int user_deletequotaroots(const char *user)
 {
     struct namespace namespace;
-    char buf[MAX_MAILBOX_NAME+1], *inboxname = buf;
+    char buf[MAX_MAILBOX_BUFFER], *inboxname = buf;
     struct txn *tid = NULL;
     int r;
 

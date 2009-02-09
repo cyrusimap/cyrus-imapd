@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: append.h,v 1.31 2009/01/30 03:23:57 brong Exp $
+ * $Id: append.h,v 1.32 2009/02/09 05:01:56 brong Exp $
  */
 
 #ifndef INCLUDED_APPEND_H
@@ -70,7 +70,7 @@ struct copymsg {
 struct appendstate {
     /* mailbox we're appending to */
     struct mailbox m;
-    char userid[MAX_MAILBOX_NAME+1];
+    char userid[MAX_MAILBOX_BUFFER];
 
     enum { APPEND_READY, APPEND_DONE } s;
 				/* current state of append */

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: make_md5.c,v 1.8 2008/10/02 14:05:44 murch Exp $
+ * $Id: make_md5.c,v 1.9 2009/02/09 05:01:58 brong Exp $
  */
 
 #include <config.h>
@@ -378,7 +378,7 @@ md5_mailbox_list_read(struct md5_mailbox_list *list, char *name)
 {
     struct md5_mailbox *current = NULL;
     FILE *file;
-    char buf[MAX_MAILBOX_NAME+18]; /* mboxname + uniqueid(16) + SP + CR */
+    char buf[MAX_MAILBOX_BUFFER]; /* mboxname + uniqueid(16) + SP + CR */
     unsigned char md5_msg[16];
     unsigned char md5_cache[16];
     int len;

@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.185 2009/02/09 04:43:59 brong Exp $
+ * $Id: mailbox.c,v 1.186 2009/02/09 05:01:58 brong Exp $
  */
 
 #include <config.h>
@@ -1605,8 +1605,8 @@ static void mailbox_upgrade_index_work(struct mailbox *mailbox,
 
     /* sanity check the record size */
     if (oldrecord_size > INDEX_RECORD_SIZE) {
-        char *err = xmalloc(MAX_MAILBOX_NAME+128);
-        snprintf(err, MAX_MAILBOX_NAME+128,
+        char *err = xmalloc(MAX_MAILBOX_BUFFER);
+        snprintf(err, MAX_MAILBOX_BUFFER,
                  "Mailbox %s needs reconstruct: Record size %d > %d",
                  mailbox->name, (int) oldrecord_size, INDEX_RECORD_SIZE);
         fatal(err, EC_SOFTWARE);
@@ -2595,7 +2595,7 @@ int mailbox_create(const char *name,
 		   struct mailbox *mailboxp)
 {
     int r;
-    char quota_root[MAX_MAILBOX_PATH+1];
+    char quota_root[MAX_MAILBOX_BUFFER];
     int hasquota;
     char *path, *mpath;
     struct fnamepath fpath;
@@ -2829,7 +2829,7 @@ static int chkchildren(char *name __attribute__((unused)),
 int mailbox_delete(struct mailbox *mailbox, int delete_quota_root)
 {
     int r, rquota = 0;
-    char nbuf[MAX_MAILBOX_NAME+1];
+    char nbuf[MAX_MAILBOX_BUFFER];
     char pbuf[MAX_MAILBOX_PATH+1], mbuf[MAX_MAILBOX_PATH+1];
     char *ntail, *ptail, *mtail = NULL;
     struct txn *tid = NULL;

@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: statuscache_db.c,v 1.4 2008/10/08 23:28:58 murch Exp $
+ * $Id: statuscache_db.c,v 1.5 2009/02/09 05:01:59 brong Exp $
  */
 
 #include <config.h>
@@ -145,7 +145,7 @@ void statuscache_done(void)
 static char *statuscache_buildkey(const char *mailboxname, const char *userid,
 				  int *keylen)
 {
-    static char key[MAX_MAILBOX_NAME*2+2];
+    static char key[MAX_MAILBOX_BUFFER];
 
     /* Build statuscache key */
     *keylen = strlcpy(key, mailboxname, sizeof(key)) + 1;

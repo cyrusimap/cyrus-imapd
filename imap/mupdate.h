@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mupdate.h,v 1.18 2008/03/24 17:09:18 murch Exp $
+ * $Id: mupdate.h,v 1.19 2009/02/09 05:01:58 brong Exp $
  */
 
 #ifndef INCLUDED_MUPDATE_H
@@ -70,8 +70,8 @@ struct mupdate_handle_s {
     struct buf tag, cmd, arg1, arg2, arg3;
 
     /* For client side mupdate_find calls */
-    char mailbox_buf[MAX_MAILBOX_NAME];
-    char server_buf[MAX_MAILBOX_NAME];
+    char mailbox_buf[MAX_MAILBOX_BUFFER];
+    char server_buf[MAX_MAILBOX_BUFFER];
     char *acl_buf;
     size_t acl_buf_len;
     struct mupdate_mailboxdata mailboxdata_buf;

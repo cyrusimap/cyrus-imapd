@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: lmtp_sieve.c,v 1.17 2008/03/24 17:09:17 murch Exp $
+ * $Id: lmtp_sieve.c,v 1.18 2009/02/09 05:01:57 brong Exp $
  */
 
 #include <config.h>
@@ -179,7 +179,7 @@ static int getinclude(void *sc, const char *script, int isglobal,
 		      char *fname, size_t size)
 {
     script_data_t *sdata = (script_data_t *) sc;
-    char userbuf[MAX_MAILBOX_NAME+1], *user, *domain = NULL;
+    char userbuf[MAX_MAILBOX_BUFFER], *user, *domain = NULL;
     struct stat sbuf;
     int r;
 
@@ -471,7 +471,7 @@ static int sieve_fileinto(void *ac,
     deliver_data_t *mdata = (deliver_data_t *) mc;
     message_data_t *md = mdata->m;
     int quotaoverride = msg_getrcpt_ignorequota(md, mdata->cur_rcpt);
-    char namebuf[MAX_MAILBOX_NAME+1];
+    char namebuf[MAX_MAILBOX_BUFFER];
     int ret;
 
     ret = (*mdata->namespace->mboxname_tointernal)(mdata->namespace,
@@ -858,14 +858,14 @@ static int sieve_find_script(const char *user, const char *domain,
 int run_sieve(const char *user, const char *domain, const char *mailbox,
 	      sieve_interp_t *interp, deliver_data_t *msgdata)
 {
-    char namebuf[MAX_MAILBOX_NAME+1] = "";
+    char namebuf[MAX_MAILBOX_BUFFER] = "";
     struct annotation_data attrib;
     const char *script = NULL;
     char fname[MAX_MAILBOX_PATH+1];
     sieve_execute_t *bc = NULL;
     script_data_t sdata;
-    char userbuf[MAX_MAILBOX_NAME+1] = "";
-    char authuserbuf[MAX_MAILBOX_NAME+1];
+    char userbuf[MAX_MAILBOX_BUFFER] = "";
+    char authuserbuf[MAX_MAILBOX_BUFFER];
     int r = 0;
 
     if (!user) {
