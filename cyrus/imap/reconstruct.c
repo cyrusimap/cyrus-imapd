@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: reconstruct.c,v 1.108 2009/02/09 05:06:55 brong Exp $
+ * $Id: reconstruct.c,v 1.109 2009/02/11 18:53:04 murch Exp $
  */
 
 #include <config.h>
@@ -814,6 +814,9 @@ int reconstruct(char *name, struct discovered *found)
     
     int expunge_found, index_found;
     char unique_buf[32];
+
+    time_t now = time(0);
+    modseq_t highestmodseq = 0;
 
     /* Start by looking up current data in mailbox list */
     r = mboxlist_detail(name, &mytype, &mypath, &mympath,
