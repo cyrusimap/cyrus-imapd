@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_synclog.c,v 1.4 2009/01/30 10:54:12 brong Exp $
+ * $Id: cyr_synclog.c,v 1.5 2009/02/11 19:11:32 murch Exp $
  *
  * Originally written by Bron Gondwana <brong@fastmail.fm>
  */
@@ -54,6 +54,8 @@
 
 #include "global.h"
 #include "sync_log.h"
+#include "util.h"
+#include "xmalloc.h"
 
 /* config.c stuff */
 const int config_need_data = 0;

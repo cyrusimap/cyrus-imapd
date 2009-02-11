@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_client.c,v 1.42 2009/02/09 05:08:21 brong Exp $
+ * $Id: sync_client.c,v 1.43 2009/02/11 19:11:32 murch Exp $
  *
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
@@ -748,7 +748,7 @@ static int folder_setacl(char *name, char *acl)
     return(sync_parse_code("SETACL", fromserver, SYNC_PARSE_EAT_OKLINE, NULL));
 }
 
-static int folder_setannotation(char *name, char *entry, char *userid,
+static int folder_setannotation(char *name, const char *entry, char *userid,
 				char *value)
 {
     prot_printf(toserver, "SETANNOTATION "); 
