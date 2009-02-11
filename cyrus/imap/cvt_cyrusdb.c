@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cvt_cyrusdb.c,v 1.18 2008/03/24 17:09:16 murch Exp $
+ * $Id: cvt_cyrusdb.c,v 1.19 2009/02/11 19:11:32 murch Exp $
  */
 
 #include <config.h>
@@ -107,9 +107,14 @@ int main(int argc, char *argv[])
 	fprintf(stderr, "Usage: %s [-C altconfig] <old db> <old db backend> <new db> <new db backend>\n", argv[0]);
 	fprintf(stderr, "Usable Backends:  ");
 
+	/* The following is commented out because its an over-paranoid
+	   check (cyrusdb_backends[] is statically defined to be non-empty)
+	   and causes a compiler warning
+
 	if(!cyrusdb_backends || !cyrusdb_backends[0])
 	    fatal("we don't seem to have any db backends available", EC_OSERR);
-	
+	*/
+
 	fprintf(stderr, "%s", cyrusdb_backends[0]->name);
 	for(i=1; cyrusdb_backends[i]; i++)
 	    fprintf(stderr, ", %s", cyrusdb_backends[i]->name);
