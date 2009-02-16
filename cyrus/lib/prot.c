@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: prot.c,v 1.95 2009/01/14 15:50:47 murch Exp $
+ * $Id: prot.c,v 1.96 2009/02/16 18:13:22 murch Exp $
  */
 
 #include <config.h>
@@ -592,6 +592,8 @@ static void prot_flush_log(struct protstream *s)
 		left -= n;
 	    }
 	} while (left);
+
+	fsync(s->logfd);
     }
 }
 
