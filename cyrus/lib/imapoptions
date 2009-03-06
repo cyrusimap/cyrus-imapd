@@ -43,7 +43,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\"
-.\" $Id: imapoptions,v 1.61 2009/02/09 05:25:20 brong Exp $
+.\" $Id: imapoptions,v 1.62 2009/03/06 03:52:55 brong Exp $
 
 .SH NAME
 imapd.conf \- IMAP configuration file
@@ -542,6 +542,13 @@ are listed with ``<none>''.
 { "mailnotifier", NULL, STRING }
 /* Notifyd(8) method to use for "MAIL" notifications.  If not set, "MAIL"
    notifications are disabled. */
+
+{ "maxheaderlines", 1000, INT }
+/* Maximum number of lines of header that will be processed into cache
+   records.  Default 1000.  If set to zero, it is unlimited.
+   If a message hits the limit, an error will be logged and the rest of
+   the lines in the header will be skipped.  This is to avoid malformed
+   messages causing giant cache records */
 
 { "maxmessagesize", 0, INT }
 /* Maximum incoming LMTP message size.  If non-zero, lmtpd will reject
