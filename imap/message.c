@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: message.c,v 1.112 2008/10/08 15:47:08 murch Exp $
+ * $Id: message.c,v 1.113 2009/03/06 03:52:55 brong Exp $
  */
 
 #include <config.h>
@@ -645,6 +645,8 @@ struct boundary *boundaries;
     int left, len;
     char *next;
     int sawboundary = 0;
+    int maxlines = config_getint(IMAPOPT_MAXHEADERLINES);
+    int have_max = 0;
 
     body->header_offset = msg->offset;
 
@@ -700,6 +702,17 @@ struct boundary *boundaries;
     for (next = headers; *next; next++) {
 	if (*next == '\n') {
 	    body->header_lines++;
+
+	    /* if we're skipping, skip now */
+	    if (have_max) continue;
+
+	    /* check if we've hit a limit and flag it */
+	    if (maxlines && body->header_lines > maxlines) {
+		syslog(LOG_ERR, "ERROR: message has more than %d header lines, not caching any more",
+		       maxlines);
+		have_max = 1;
+		continue;
+	    }
 
 	    /* Check for headers in generic cache */
 	    if (body->cacheheaders.start &&
