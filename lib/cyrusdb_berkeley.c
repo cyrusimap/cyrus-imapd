@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyrusdb_berkeley.c,v 1.22 2008/03/24 17:43:08 murch Exp $
+ * $Id: cyrusdb_berkeley.c,v 1.23 2009/03/10 02:56:22 brong Exp $
  */
 
 #include <config.h>
@@ -874,6 +874,8 @@ static int mydelete(struct db *mydb,
 		   (unsigned long) txn_id(tid));
     }
     r = db->del(db, tid, &k, 0);
+    if (force && r == DB_NOTFOUND) 
+	r = CYRUSDB_OK;  /* ignore not found errors */
     if (!mytid) {
 	/* finish txn for the write */
 	if (r) {
@@ -906,8 +908,6 @@ static int mydelete(struct db *mydb,
 	}
 	if (r == DB_LOCK_DEADLOCK) {
 	    r = CYRUSDB_AGAIN;
-	} else if (force && r == DB_NOTFOUND) {
-	    r = CYRUSDB_OK;  /* ignore not found errors */
 	} else {
 	    syslog(LOG_ERR, "DBERROR: mydelete: error deleting %s: %s",
 		   key, db_strerror(r));
