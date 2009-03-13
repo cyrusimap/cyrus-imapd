@@ -1,4 +1,4 @@
-$Id: drac_auth.patch,v 1.27 2008/09/25 11:24:48 murch Exp $
+$Id: drac_auth.patch,v 1.28 2009/03/13 12:16:24 murch Exp $
 
 Patch to add support for Dynamic Relay Authorization Control
 
@@ -67,11 +67,11 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
 Index: configure.in
 ===================================================================
 RCS file: /afs/andrew/system/cvs/src/cyrus/configure.in,v
-retrieving revision 1.306
-diff -u -r1.306 configure.in
---- configure.in	30 Jul 2008 16:03:36 -0000	1.306
-+++ configure.in	25 Sep 2008 11:15:28 -0000
-@@ -1215,6 +1215,19 @@
+retrieving revision 1.308
+diff -u -r1.308 configure.in
+--- configure.in	8 Oct 2008 23:28:58 -0000	1.308
++++ configure.in	13 Mar 2009 12:12:52 -0000
+@@ -1219,6 +1219,19 @@
  SNMP_SUBDIRS=""
  AC_SUBST(SNMP_SUBDIRS)
  
@@ -97,7 +97,7 @@ RCS file: /afs/andrew/system/cvs/src/cyrus/imap/Makefile.in,v
 retrieving revision 1.196
 diff -u -r1.196 Makefile.in
 --- imap/Makefile.in	23 Sep 2008 16:17:09 -0000	1.196
-+++ imap/Makefile.in	25 Sep 2008 11:15:28 -0000
++++ imap/Makefile.in	13 Mar 2009 12:12:53 -0000
 @@ -66,6 +66,7 @@
  SIEVE_LIBS = @SIEVE_LIBS@
  IMAP_COM_ERR_LIBS = @IMAP_COM_ERR_LIBS@
@@ -139,10 +139,10 @@ diff -u -r1.196 Makefile.in
 Index: imap/imapd.c
 ===================================================================
 RCS file: /afs/andrew/system/cvs/src/cyrus/imap/imapd.c,v
-retrieving revision 1.551
-diff -u -r1.551 imapd.c
---- imap/imapd.c	5 Sep 2008 15:56:21 -0000	1.551
-+++ imap/imapd.c	25 Sep 2008 11:15:29 -0000
+retrieving revision 1.557
+diff -u -r1.557 imapd.c
+--- imap/imapd.c	9 Feb 2009 05:05:48 -0000	1.557
++++ imap/imapd.c	13 Mar 2009 12:12:54 -0000
 @@ -188,6 +188,18 @@
      1, 1, &imapd_authstate, &imapd_userisadmin, &imapd_userisproxyadmin
  };
@@ -289,10 +289,10 @@ diff -u -r1.551 imapd.c
 Index: imap/pop3d.c
 ===================================================================
 RCS file: /afs/andrew/system/cvs/src/cyrus/imap/pop3d.c,v
-retrieving revision 1.189
-diff -u -r1.189 pop3d.c
---- imap/pop3d.c	22 Apr 2008 13:11:18 -0000	1.189
-+++ imap/pop3d.c	25 Sep 2008 11:15:29 -0000
+retrieving revision 1.191
+diff -u -r1.191 pop3d.c
+--- imap/pop3d.c	9 Feb 2009 05:01:58 -0000	1.191
++++ imap/pop3d.c	13 Mar 2009 12:12:54 -0000
 @@ -105,6 +105,10 @@
  extern int opterr;
  
@@ -368,7 +368,7 @@ RCS file: /afs/andrew/system/cvs/src/cyrus/imap/version.c,v
 retrieving revision 1.22
 diff -u -r1.22 version.c
 --- imap/version.c	24 Mar 2008 17:09:20 -0000	1.22
-+++ imap/version.c	25 Sep 2008 11:15:29 -0000
++++ imap/version.c	13 Mar 2009 12:12:54 -0000
 @@ -153,6 +153,10 @@
      snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
  	     "; %s", SIEVE_VERSION);
@@ -383,10 +383,10 @@ diff -u -r1.22 version.c
 Index: lib/imapoptions
 ===================================================================
 RCS file: /afs/andrew/system/cvs/src/cyrus/lib/imapoptions,v
-retrieving revision 1.57
-diff -u -r1.57 imapoptions
---- lib/imapoptions	24 Sep 2008 11:56:41 -0000	1.57
-+++ lib/imapoptions	25 Sep 2008 11:15:29 -0000
+retrieving revision 1.62
+diff -u -r1.62 imapoptions
+--- lib/imapoptions	6 Mar 2009 03:52:55 -0000	1.62
++++ lib/imapoptions	13 Mar 2009 12:12:55 -0000
 @@ -236,6 +236,14 @@
     grant the user the ability to delete a mailbox.  If a user has this
     right, they will automatically be given the new 'x' right. */
