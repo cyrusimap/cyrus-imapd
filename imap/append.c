@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: append.c,v 1.117 2009/03/16 00:16:40 brong Exp $
+ * $Id: append.c,v 1.118 2009/03/16 00:17:14 brong Exp $
  */
 
 #include <config.h>
@@ -107,7 +107,7 @@ static void addme(char **msgrange, int *alloced, long uid);
  */
 int append_check(const char *name, int format, 
 		 struct auth_state *auth_state,
-		 long aclcheck, long quotacheck)
+		 long aclcheck, quota_t quotacheck)
 {
     struct mailbox m;
     int r;
@@ -173,7 +173,7 @@ int append_check(const char *name, int format,
 int append_setup(struct appendstate *as, const char *name,
 		 int format, 
 		 const char *userid, struct auth_state *auth_state,
-		 long aclcheck, long quotacheck)
+		 long aclcheck, quota_t quotacheck)
 {
     int r;
 
@@ -252,7 +252,7 @@ int append_setup(struct appendstate *as, const char *name,
 /* may return non-zero, indicating that the entire append has failed
  and the mailbox is probably in an inconsistent state. */
 int append_commit(struct appendstate *as, 
-		  long quotacheck __attribute__((unused)),
+		  quota_t quotacheck __attribute__((unused)),
 		  unsigned long *uidvalidity, 
 		  unsigned long *start,
 		  unsigned long *num)

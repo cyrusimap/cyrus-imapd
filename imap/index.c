@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: index.c,v 1.246 2008/10/09 13:59:53 murch Exp $
+ * $Id: index.c,v 1.247 2009/03/16 00:17:16 brong Exp $
  */
 
 #include <config.h>
@@ -1389,7 +1389,7 @@ index_copy(struct mailbox *mailbox,
 {
     static struct copyargs copyargs;
     int i;
-    unsigned long totalsize = 0;
+    uquota_t totalsize = 0;
     int r;
     struct appendstate append_mailbox;
     char *copyuid;

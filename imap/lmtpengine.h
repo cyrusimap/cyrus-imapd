@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: lmtpengine.h,v 1.25 2008/04/03 21:09:52 murch Exp $
+ * $Id: lmtpengine.h,v 1.26 2009/03/16 00:17:16 brong Exp $
  */
 
 #ifndef LMTPENGINE_H
@@ -49,6 +49,7 @@
 
 #include "spool.h"
 #include "mboxname.h"
+#include "quota.h"
 
 typedef struct message_data message_data_t;
 typedef struct address_data address_data_t;
@@ -109,7 +110,7 @@ struct lmtp_func {
     int (*deliver)(message_data_t *m, 
 		   char *authuser, struct auth_state *authstate);
     int (*verify_user)(const char *user, const char *domain, char *mailbox,
-		       long quotacheck, /* user must have this much quota left
+		       quota_t quotacheck, /* user must have this much quota left
 					   (-1 means don't care about quota) */
 		       struct auth_state *authstate);
     void (*shutdown)(int code);

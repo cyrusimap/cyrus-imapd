@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: append.h,v 1.32 2009/02/09 05:01:56 brong Exp $
+ * $Id: append.h,v 1.33 2009/03/16 00:17:14 brong Exp $
  */
 
 #ifndef INCLUDED_APPEND_H
@@ -91,7 +91,7 @@ struct appendstate {
     int seen_alloced;
 
     /* the amount of quota we've used so far in this append */
-    int quota_used;
+    uquota_t quota_used;
 
     /* txn for updating quota */
     struct txn *tid;
@@ -103,16 +103,16 @@ struct stagemsg;
 
 extern int append_check(const char *name, int format, 
 			struct auth_state *auth_state,
-			long aclcheck, long quotacheck);
+			long aclcheck, quota_t quotacheck);
 
 /* appendstate must be allocated by client */
 extern int append_setup(struct appendstate *mailbox, const char *name,
 			int format, 
 			const char *userid, struct auth_state *auth_state,
-			long aclcheck, long quotacheck);
+			long aclcheck, quota_t quotacheck);
 
 extern int append_commit(struct appendstate *mailbox,
-			 long quotacheck,
+			 quota_t quotacheck,
 			 unsigned long *uidvalidity, 
 			 unsigned long *startuid, 
 			 unsigned long *num);

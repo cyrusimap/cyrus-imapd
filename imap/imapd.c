@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.557 2009/02/09 05:05:48 brong Exp $
+ * $Id: imapd.c,v 1.558 2009/03/16 00:17:14 brong Exp $
  */
 
 #include <config.h>
@@ -3032,7 +3032,8 @@ void cmd_append(char *tag, char *name, const char *cur_name)
     int c;
     static struct buf arg;
     time_t now = time(NULL);
-    unsigned size, totalsize = 0;
+    uquota_t totalsize = 0;
+    unsigned size;
     int sync_seen = 0;
     int r;
     unsigned i;
