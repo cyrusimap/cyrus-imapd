@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: lmtpd.c,v 1.162 2009/02/09 05:01:58 brong Exp $
+ * $Id: lmtpd.c,v 1.163 2009/03/16 00:17:16 brong Exp $
  */
 
 #include <config.h>
@@ -109,7 +109,7 @@ static sieve_interp_t *sieve_interp = NULL;
 static int deliver(message_data_t *msgdata, char *authuser,
 		   struct auth_state *authstate);
 static int verify_user(const char *user, const char *domain, char *mailbox,
-		       long quotacheck, struct auth_state *authstate);
+		       quota_t quotacheck, struct auth_state *authstate);
 static char *generate_notify(message_data_t *m);
 
 void shut_down(int code);
@@ -977,7 +977,7 @@ void shut_down(int code)
 }
 
 static int verify_user(const char *user, const char *domain, char *mailbox,
-		       long quotacheck, struct auth_state *authstate)
+		       quota_t quotacheck, struct auth_state *authstate)
 {
     char namebuf[MAX_MAILBOX_BUFFER] = "";
     int r = 0;
