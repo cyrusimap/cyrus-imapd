@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: append.c,v 1.116 2009/01/30 03:23:57 brong Exp $
+ * $Id: append.c,v 1.117 2009/03/16 00:16:40 brong Exp $
  */
 
 #include <config.h>
@@ -217,7 +217,6 @@ int append_setup(struct appendstate *as, const char *name,
 	    as->m.quota.used + quotacheck > 
 	    ((uquota_t) as->m.quota.limit * QUOTA_UNITS)) {
 	    quota_abort(&as->tid);
-	    mailbox_close(&as->m);
 	    r = IMAP_QUOTA_EXCEEDED;
 	}
     }
