@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: tree.c,v 1.14 2008/03/24 20:08:47 murch Exp $
+ * $Id: tree.c,v 1.15 2009/03/25 23:58:54 brong Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -61,6 +61,19 @@ stringlist_t *new_sl(char *s, stringlist_t *n)
     return p;
 }
 
+stringlist_t *sl_reverse(stringlist_t *l)
+{
+    stringlist_t *prev = NULL;
+    stringlist_t *next;
+    stringlist_t *cur = l;
+    while (cur) {
+	next = cur->next;
+	cur->next = prev;
+	prev = cur;
+	cur = next;
+    }
+    return prev;
+}
 
 tag_t *new_tag(int type, char *s)
 {

@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: tree.h,v 1.11 2008/03/24 20:08:47 murch Exp $
+ * $Id: tree.h,v 1.12 2009/03/25 23:58:54 brong Exp $
  */
 
 #ifndef TREE_H
@@ -168,6 +168,7 @@ struct Commandlist {
 };
 
 stringlist_t *new_sl(char *s, stringlist_t *n);
+stringlist_t *sl_reverse(stringlist_t *l);
 tag_t *new_tag(int type, char *s);
 taglist_t *new_taglist(tag_t *t, taglist_t *n);
 test_t *new_test(int type);
