@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sieve.y,v 1.39 2008/10/02 13:36:56 murch Exp $
+ * $Id: sieve.y,v 1.40 2009/03/25 23:58:54 brong Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -435,12 +435,12 @@ vtags: /* empty */		 { $$ = new_vtags(); }
 				   else { $$->mime = MIME; } }
 	;
 
-stringlist: '[' strings ']'      { $$ = $2; }
+stringlist: '[' strings ']'      { $$ = sl_reverse($2); }
 	| STRING		 { $$ = new_sl($1, NULL); }
 	;
 
 strings: STRING			 { $$ = new_sl($1, NULL); }
-	| STRING ',' strings	 { $$ = new_sl($1, $3); }
+	| strings ',' STRING	 { $$ = new_sl($3, $1); }
 	;
 
 block: '{' commands '}'		 { $$ = $2; }
