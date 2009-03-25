@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sieved.c,v 1.8 2008/03/24 20:08:46 murch Exp $
+ * $Id: sieved.c,v 1.9 2009/03/25 23:58:05 brong Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -75,7 +75,7 @@ int unwrap_string(bytecode_input_t *bc, int pos, const char **str, int *len);
 /*this is called by xmalloc*/
 void fatal(const char *s, int code)
 {  
-    printf("Fatal error: %s (%d)\r\n", s, code);
+    fprintf(stderr, "Fatal error: %s (%d)\r\n", s, code);
                            
     exit(1);
 }
@@ -87,7 +87,7 @@ static int load(int fd, bytecode_input_t ** d)
     unsigned long len=0;
     
     if (fstat(fd, &sbuf) == -1) {
-	printf("IOERROR: fstating sieve script: %m");
+	fprintf(stderr, "IOERROR: fstating sieve script: %m");
 	return SIEVE_FAIL;
     }
     
@@ -118,7 +118,7 @@ int main(int argc, char * argv[])
     script_fd = open(argv[1], O_RDONLY);
     if (script_fd == -1) 
     {
-	printf("can not open script '%s'\n", argv[1]);
+	fprintf(stderr, "can not open script '%s'\n", argv[1]);
 	exit(1);
     }
     
