@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.190 2009/03/26 00:03:22 brong Exp $
+ * $Id: mailbox.c,v 1.191 2009/03/26 00:11:09 brong Exp $
  */
 
 #include <config.h>
@@ -2151,7 +2151,7 @@ int mailbox_expunge(struct mailbox *mailbox,
     unsigned long expunge_exists = 0;
 
     /* EXPUNGE_FORCE means immediate mode */
-    if (flags == EXPUNGE_FORCE)
+    if (flags & EXPUNGE_FORCE)
 	config_expunge_mode = IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE;
 
     /* initialize the paths */
