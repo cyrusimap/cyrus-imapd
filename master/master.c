@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: master.c,v 1.112 2008/10/08 13:12:41 wescraig Exp $
+ * $Id: master.c,v 1.113 2009/03/26 00:02:59 brong Exp $
  */
 
 #include <config.h>
@@ -144,6 +144,8 @@ struct event {
     char *name;
     time_t mark;
     time_t period;
+    time_t hour;
+    time_t min;
     int periodic;
     char *const *exec;
     struct event *next;
@@ -774,9 +776,26 @@ void spawn_schedule(time_t now)
 	    if(a->periodic) {
 		a->mark = now + a->period;
 	    } else {
+		struct tm *tm;
+		int delta;
 		/* Daily Event */
 		while(a->mark <= now) {
-			a->mark += a->period;
+		    a->mark += a->period;
+		}
+		/* check for daylight savings fuzz... */
+		tm = localtime(&(a->mark));
+		if (tm->tm_hour != a->hour || tm->tm_min != a->min) {
+		    /* calculate the same time on the new day */
+		    tm->tm_hour = a->hour;
+		    tm->tm_min = a->min;
+		    delta = mktime(tm) - a->mark;
+		    /* bring it within half a period either way */
+		    while (delta > (a->period/2)) delta -= a->period;
+		    while (delta < -(a->period/2)) delta += a->period;
+		    /* update the time */
+		    a->mark += delta;
+		    /* and let us know about the change */
+		    syslog(LOG_NOTICE, "timezone shift for %s - altering schedule by %d seconds", a->name, delta);
 		}
 	    }
 	    /* reschedule a */
@@ -916,6 +935,7 @@ void init_janitor(void)
     
     evt->name = xstrdup("janitor periodic wakeup call");
     evt->period = 10;
+    evt->periodic = 1;
     evt->mark = time(NULL) + 2;
     schedule_event(evt);
 }
@@ -1450,6 +1470,8 @@ void add_event(const char *name, struct entry *e, void *rock)
 
 	period = 86400; /* 24 hours */
 	evt->periodic = 0;
+	evt->hour = hour;
+	evt->min = min;
 	tm->tm_hour = hour;
 	tm->tm_min = min;
 	tm->tm_sec = 0;
