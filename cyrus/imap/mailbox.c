@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.189 2009/02/09 05:25:20 brong Exp $
+ * $Id: mailbox.c,v 1.190 2009/03/26 00:03:22 brong Exp $
  */
 
 #include <config.h>
@@ -3111,7 +3111,8 @@ int mailbox_rename_cleanup(struct mailbox *oldmailbox, int isinbox)
     
     if (isinbox) {
 	/* Expunge old mailbox */
-	r = mailbox_expunge(oldmailbox, expungeall, (char *)0, EXPUNGE_FORCE);
+	r = mailbox_expunge(oldmailbox, expungeall, (char *)0,
+			    EXPUNGE_FORCE|EXPUNGE_CLEANUP);
     } else {
 	r = mailbox_delete(oldmailbox, 0);
     }
