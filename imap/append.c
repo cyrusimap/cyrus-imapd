@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: append.c,v 1.118 2009/03/16 00:17:14 brong Exp $
+ * $Id: append.c,v 1.119 2009/03/26 00:03:57 brong Exp $
  */
 
 #include <config.h>
@@ -1095,7 +1095,10 @@ static int append_addseen(struct mailbox *mailbox,
     if (r) return r;
     
     r = seen_lockread(seendb, &last_read, &last_uid, &last_change, &seenuids);
-    if (r) return r;
+    if (r) {
+	seen_close(seendb);
+	return r;
+    }
     
     oldlen = strlen(seenuids);
     newlen = oldlen + strlen(msgrange) + 10;
