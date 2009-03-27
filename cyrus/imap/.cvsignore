@@ -8,6 +8,7 @@ ctl_mboxlist
 cvt_cyrusdb
 cyrdump
 cyr_dbtool
+cyr_df
 cyr_expire
 cyr_synclog
 cyr_virusscan

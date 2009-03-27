@@ -39,7 +39,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.in,v 1.196 2008/09/23 16:17:09 murch Exp $
+# $Id: Makefile.in,v 1.197 2009/03/27 18:11:30 murch Exp $
 
 DEFINES=-DSETPROCTITLE
 
@@ -317,6 +317,10 @@ cyr_virusscan: cyr_virusscan.o index.o $(CLIOBJS) libimap.a $(DEPLIBS)
 cyrdump: cyrdump.o index.o $(CLIOBJS) libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o cyrdump cyrdump.o index.o $(CLIOBJS) \
 	libimap.a $(DEPLIBS) $(LIBS)
+
+cyr_df: cyr_df.o $(CLIOBJS) libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o \
+	 cyr_df cyr_df.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
 
 mbexamine: mbexamine.o $(CLIOBJS) libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o \

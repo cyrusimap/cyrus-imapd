@@ -41,7 +41,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.in,v 1.40 2008/04/04 12:46:49 murch Exp $
+# $Id: Makefile.in,v 1.41 2009/03/27 18:12:13 murch Exp $
 
 srcdir = @srcdir@
 VPATH = @srcdir@
@@ -70,7 +70,7 @@ MAN8 = $(srcdir)/arbitron.8 $(srcdir)/cyr_expire.8 $(srcdir)/deliver.8 \
 	$(srcdir)/nntpd.8 $(srcdir)/fetchnews.8 $(srcdir)/smmapd.8 \
 	$(srcdir)/sync_client.8 $(srcdir)/sync_server.8 $(srcdir)/sync_reset.8 \
 	$(srcdir)/unexpunge.8 $(srcdir)/make_md5.8 $(srcdir)/cyr_dbtool.8 \
-	$(srcdir)/cyr_synclog.8 $(srcdir)/make_sha1.8
+	$(srcdir)/cyr_synclog.8 $(srcdir)/make_sha1.8 $(srcdir)/cyr_df.8
 
 all: $(MAN1) $(MAN3) $(MAN5) $(MAN8)
 
