@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.167 2009/03/27 18:11:10 murch Exp $ -->
+<!-- $Id: changes.html,v 1.168 2009/03/28 12:00:18 murch Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -16,6 +16,9 @@ disk space usage.</li>
 
 <h1>Changes to the Cyrus IMAP Server since 2.3.13</h1>
 <ul>
+<li>Fixed incompatibility between older ManageSieve clients and newer
+servers that issue an auto-capability response after AUTH with a
+SASL security layer.</li>
 <li>Fixed quota calculation to ignore files not mentioned in the
   index</li>
 <li>Correct cache truncation after an aborted append (was leaving
@@ -2400,7 +2403,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2009/03/27 18:11:10 $ <br />
+last modified: $Date: 2009/03/28 12:00:18 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
