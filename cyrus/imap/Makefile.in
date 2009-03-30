@@ -39,7 +39,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.in,v 1.197 2009/03/27 18:11:30 murch Exp $
+# $Id: Makefile.in,v 1.198 2009/03/30 16:04:56 murch Exp $
 
 DEFINES=-DSETPROCTITLE
 
@@ -118,7 +118,7 @@ PROGS = imapd lmtpd pop3d \
 	fud smmapd reconstruct quota mbpath ipurge cyr_dbtool cyr_synclog \
 	cyrdump chk_cyrus cvt_cyrusdb deliver ctl_mboxlist \
 	ctl_deliver ctl_cyrusdb squatter mbexamine cyr_expire arbitron \
-	unexpunge @IMAP_PROGS@
+	unexpunge cyr_df @IMAP_PROGS@
 
 BUILTSOURCES = imap_err.c imap_err.h pushstats.c pushstats.h \
 	lmtpstats.c lmtpstats.h xversion.h mupdate_err.c mupdate_err.h \
