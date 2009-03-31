@@ -40,7 +40,7 @@ dnl WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
 dnl AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 dnl OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 dnl
-dnl $Id: configure.in,v 1.308 2008/10/08 23:28:58 murch Exp $
+dnl $Id: configure.in,v 1.309 2009/03/31 04:09:42 brong Exp $
 dnl
 dnl configure.in for the Cyrus imapd
 dnl
@@ -653,25 +653,25 @@ AC_CHECK_FUNC(fdatasync, AC_DEFINE(HAVE_FDATASYNC,[],[Do we have fdatasync()?]),
 
 dnl for makedepend and AFS.
 cant_find_sigvec=no
-AC_CACHE_VAL(cyrus_sigveclib,[
+AC_CACHE_VAL(cyrus_cv_sigveclib,[
  dnl bsd classic flavor
  AC_CHECK_FUNC(sigvec, [
-	cyrus_sigveclib=""
+	cyrus_cv_sigveclib=""
   ], [
   dnl hp flavor
-  AC_CHECK_LIB(BSD, sigvec, cyrus_sigveclib="-lBSD", [
+  AC_CHECK_LIB(BSD, sigvec, cyrus_cv_sigveclib="-lBSD", [
     dnl not hp flavor
     SAVE_LDFLAGS="$LDFLAGS"
     dnl solaris flavor
     LDFLAGS="-L/usr/ucblib -R/usr/ucblib $LDFLAGS"
     AC_CHECK_LIB(ucb, sigvec, [
       dnl more solaris flavor
-      cyrus_sigveclib="-lc -L/usr/ucblib -R/usr/ucblib -lucb"],
+      cyrus_cv_sigveclib="-lc -L/usr/ucblib -R/usr/ucblib -lucb"],
       [ cant_find_sigvec=yes ])
     LDFLAGS="$SAVE_LDFLAGS"])
   ])
 ])
-AC_SUBST(cyrus_sigveclib)
+AC_SUBST(cyrus_cv_sigveclib)
 
 # ok, we still look for this stuff because of checking groups, but
 # all authentication goes through SASL
@@ -701,7 +701,7 @@ if test "x$with_afs" != "xno"; then
       AFS_LIBS="$AFS_LIBS -lc -lucb"
     fi
 
-    AC_CACHE_VAL(cyrus_afs_sigvec,[
+    AC_CACHE_VAL(cyrus_cv_afs_sigvec,[
         SAVE_LIBS="$LIBS"
         LIBS="${with_afs}/lib/liblwp.a"
         AC_MSG_CHECKING(if AFS libraries need sigvec)
@@ -712,18 +712,18 @@ if test "x$with_afs" != "xno"; then
                 [
                         dnl it linked; don't need it
                         AC_MSG_RESULT(no)
-                        cyrus_afs_sigvec="no"
+                        cyrus_cv_afs_sigvec="no"
                 ], [
                         dnl didn't link; pick up sigvec
                         AC_MSG_RESULT(yes)
-                        cyrus_afs_sigvec="yes"
+                        cyrus_cv_afs_sigvec="yes"
                 ])
         ])
-    if test "$cyrus_afs_sigvec" = yes; then
+    if test "$cyrus_cv_afs_sigvec" = yes; then
       if test "$cant_find_sigvec" = yes; then
         AC_MSG_WARN([Can't find a sigvec for AFS libraries which seem to need one.])
       else
-        AFS_LIBS="${AFS_LIBS} $cyrus_sigveclib"
+        AFS_LIBS="${AFS_LIBS} $cyrus_cv_sigveclib"
         AC_SUBST(AFS_LIBS)
         AC_SUBST(AFS_LDFLAGS)
         AC_DEFINE(HAVE_AFSKRB,[],[Should we build afskrb pts module?])
@@ -833,18 +833,18 @@ fi
 dnl if we were ambitious, we'd look more aggressively for the
 dnl krb4 install
 if test -d ${with_krb}; then
-   AC_CACHE_CHECK(for Kerberos includes, cyrus_krbinclude, [
+   AC_CACHE_CHECK(for Kerberos includes, cyrus_cv_krbinclude, [
      for krbhloc in include/kerberosIV include
      do
        if test -f ${with_krb}/${krbhloc}/krb.h ; then
-         cyrus_krbinclude=${with_krb}/${krbhloc}
+         cyrus_cv_krbinclude=${with_krb}/${krbhloc}
          break
        fi
      done
      ])
 
-   if test -n "${cyrus_krbinclude}"; then
-     CPPFLAGS="$CPPFLAGS -I${cyrus_krbinclude}"
+   if test -n "${cyrus_cv_krbinclude}"; then
+     CPPFLAGS="$CPPFLAGS -I${cyrus_cv_krbinclude}"
    fi
    CMU_ADD_LIBPATH(${with_krb}/lib)
 fi
@@ -1310,7 +1310,7 @@ AH_TOP([
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: configure.in,v 1.308 2008/10/08 23:28:58 murch Exp $
+ * $Id: configure.in,v 1.309 2009/03/31 04:09:42 brong Exp $
  */
 
 #ifndef _CYRUS_IMAPD_CONFIG_H_
