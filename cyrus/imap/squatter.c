@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squatter.c,v 1.23 2009/02/09 05:01:59 brong Exp $
+ * $Id: squatter.c,v 1.24 2009/03/31 04:12:25 brong Exp $
  */
 
 /*
@@ -589,6 +589,9 @@ static int index_me(char *name, int matchlen __attribute__((unused)),
             printf("error opening looking up %s: %s\n",
 		   extname, error_message(r));
         }
+        syslog(LOG_INFO, "error opening looking up %s: %s\n",
+               extname, error_message(r));
+
         return 1;
     }
     if (mbtype & MBTYPE_REMOTE) return 0;
@@ -639,6 +642,8 @@ static int index_me(char *name, int matchlen __attribute__((unused)),
         if (verbose) {
             printf("error opening %s: %s\n", extname, error_message(r));
         }
+        syslog(LOG_INFO, "error opening %s: %s\n", extname, error_message(r));
+
         return 1;
     }
 
@@ -648,6 +653,9 @@ static int index_me(char *name, int matchlen __attribute__((unused)),
         if (verbose) {
             printf("error locking index %s: %s\n", extname, error_message(r));
         }
+        syslog(LOG_INFO, "error locking index %s: %s\n",
+               extname, error_message(r));
+
         mailbox_close(&m);
         return 1;
     }
@@ -686,6 +694,37 @@ static int index_me(char *name, int matchlen __attribute__((unused)),
 
     mailbox_close(&m);
     mailbox_count++;
+
+    return 0;
+}
+
+struct tmpnode {
+    struct tmpnode *next;
+    char *name;
+};
+struct tmplist {
+    struct tmpnode *head;
+    struct tmpnode *tail;
+};
+
+static int addmbox(char *name,
+		   int matchlen __attribute__((unused)),
+		   int maycreate __attribute__((unused)),
+		   void *rock)
+{
+    struct tmplist **lptr = (struct tmplist **) rock;
+    struct tmplist *l = *lptr;
+    struct tmpnode *n = xmalloc(sizeof (struct tmpnode));
+
+    n->next = NULL;
+    n->name = xstrdup(name);
+
+    if (l->head) {
+        l->tail->next = n;
+        l->tail = l->tail->next;
+    } else {
+        l->head = l->tail = n;
+    }
 
     return 0;
 }
@@ -755,6 +794,12 @@ int main(int argc, char **argv)
     start_stats(&total_stats);
 
     if (optind == argc) {
+        struct tmplist *l;
+        struct tmpnode *current;
+
+        l = xmalloc(sizeof(struct tmplist));
+        l->head = l->tail = NULL;
+
 	if (rflag) {
 	    fprintf(stderr, "please specify a mailbox to recurse from\n");
 	    exit(EC_USAGE);
@@ -762,7 +807,12 @@ int main(int argc, char **argv)
 	assert(!rflag);
 	strlcpy(buf, "*", sizeof(buf));
 	(*squat_namespace.mboxlist_findall)(&squat_namespace, buf, 1,
-					    0, 0, index_me, &use_annot);
+					    0, 0, addmbox, &l);
+
+        for (current = l->head; current; current = current->next) {
+            index_me(current->name, strlen(current->name), 0, &use_annot);
+            /* Ignore errors: most will be mailboxes moving around */
+        }
     }
 
     for (i = optind; i < argc; i++) {
