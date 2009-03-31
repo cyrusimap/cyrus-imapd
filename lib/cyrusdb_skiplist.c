@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyrusdb_skiplist.c,v 1.64 2008/10/08 15:47:08 murch Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.65 2009/03/31 04:43:20 brong Exp $
  */
 
 /* xxx check retry_xxx for failure */
@@ -2328,6 +2328,20 @@ static int recovery(struct db *db, int flags)
 
 	/* move to next record */
 	offset += RECSIZE(ptr);
+    }
+
+    if (libcyrus_config_getswitch(CYRUSOPT_SKIPLIST_ALWAYS_CHECKPOINT)) {
+	/* refresh map, so we see the writes we've just done */
+	map_refresh(db->fd, 0, &db->map_base, &db->map_len, db->map_size,
+		    db->fname, 0);
+
+	r = mycheckpoint(db, 1);
+
+	if (r || !(flags & RECOVERY_CALLER_LOCKED)) {
+	    unlock(db);
+	}
+    
+	return r;
     }
 
     /* fsync the recovered database */
