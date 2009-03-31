@@ -43,7 +43,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\"
-.\" $Id: imapoptions,v 1.62 2009/03/06 03:52:55 brong Exp $
+.\" $Id: imapoptions,v 1.63 2009/03/31 04:43:20 brong Exp $
 
 .SH NAME
 imapd.conf \- IMAP configuration file
@@ -974,6 +974,12 @@ product version in the capabilities */
 /* If enabled, imapd, lmtpd and nntpd attempt to only write one copy
    of a message per partition and create hard links, resulting in a
    potentially large disk savings. */
+
+{ "skiplist_always_checkpoint", 1, SWITCH }
+/* If enabled, this option forces the skiplist cyrusdb backend to
+   always checkpoint when doing a recovery.  This causes slightly
+   more IO, but on the other hand leads to more efficient databases,
+   and the entire file is already "hot". */
 
 { "skiplist_unsafe", 0, SWITCH }
 /* If enabled, this option forces the skiplist cyrusdb backend to

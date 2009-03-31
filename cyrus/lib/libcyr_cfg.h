@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: libcyr_cfg.h,v 1.12 2008/07/30 16:03:39 murch Exp $
+ * $Id: libcyr_cfg.h,v 1.13 2009/03/31 04:43:20 brong Exp $
  */
 
 #ifndef INCLUDED_LIBCYR_CFG_H
@@ -112,6 +112,8 @@ enum cyrus_opt {
     CYRUSOPT_SQL_PASSWD,
     /* Secure SQL connection (OFF) */
     CYRUSOPT_SQL_USESSL,
+    /* Checkpoint after every recovery (OFF) */
+    CYRUSOPT_SKIPLIST_ALWAYS_CHECKPOINT,
 
     CYRUSOPT_LAST
     

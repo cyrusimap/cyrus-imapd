@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: libcyr_cfg.c,v 1.16 2008/07/30 16:03:38 murch Exp $
+ * $Id: libcyr_cfg.c,v 1.17 2009/03/31 04:43:20 brong Exp $
  */
 
 #include <config.h>
@@ -148,6 +148,10 @@ struct cyrusopt_s cyrus_options[] = {
 
     { CYRUSOPT_SQL_USESSL,
       CFGVAL(long, 0),
+      CYRUS_OPT_SWITCH },
+
+    { CYRUSOPT_SKIPLIST_ALWAYS_CHECKPOINT,
+      CFGVAL(long, 1),
       CYRUS_OPT_SWITCH },
 
     { CYRUSOPT_LAST, { NULL }, CYRUS_OPT_NOTOPT }
