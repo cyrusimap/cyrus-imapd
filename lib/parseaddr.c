@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: parseaddr.c,v 1.18 2008/03/24 17:43:09 murch Exp $
+ * $Id: parseaddr.c,v 1.19 2009/03/31 04:11:23 brong Exp $
  */
 
 #include <config.h>
@@ -50,6 +50,7 @@
 
 #include "parseaddr.h"
 #include "xmalloc.h"
+#include "util.h"
 
 static char parseaddr_unspecified_domain[] = "unspecified-domain";
 
@@ -221,7 +222,7 @@ char **freemep;
 	    } \
 	    (s)--; \
 	} \
-	else if (!isspace(_c)) break; \
+	else if (!Uisspace(_c)) break; \
 	(s)++; \
     } \
 }
@@ -255,7 +256,7 @@ char *specials;
 		*dst++ = c;
 	    }
 	}
-	else if (isspace(c) || c == '(') {
+	else if (Uisspace(c) || c == '(') {
 	    src--;
 	    SKIPWHITESPACE(src);
 	    *dst++ = ' ';
@@ -293,7 +294,7 @@ char **commentp;
 
     for (;;) {
         c = *src++;
-	if (isalnum(c) || c == '-' || c == '[' || c == ']' || c == ':') {
+	if (Uisalnum(c) || c == '-' || c == '[' || c == ']' || c == ':') {
 	    *dst++ = c;
 	    if (commentp) *commentp = 0;
 	}
@@ -320,7 +321,7 @@ char **commentp;
 		SKIPWHITESPACE(src);
 	    }
 	}
-	else if (!isspace(c)) {
+	else if (!Uisspace(c)) {
 	    if (dst > *domainp && dst[-1] == '.') dst--;
 	    *dst = '\0';
 	    *inp = src;
@@ -346,14 +347,14 @@ char **routep;
 
     for (;;) {
         c = *src++;
-	if (isalnum(c) || c == '-' || c == '[' || c == ']' ||
+	if (Uisalnum(c) || c == '-' || c == '[' || c == ']' ||
 	    c == ',' || c == '@') {
 	    *dst++ = c;
 	}
 	else if (c == '.') {
 	    if (dst > *routep && dst[-1] != '.') *dst++ = c;
 	}
-	else if (isspace(c) || c == '(') {
+	else if (Uisspace(c) || c == '(') {
 	    src--;
 	    SKIPWHITESPACE(src);
 	}

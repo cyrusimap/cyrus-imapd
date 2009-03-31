@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: lmtp_sieve.c,v 1.18 2009/02/09 05:01:57 brong Exp $
+ * $Id: lmtp_sieve.c,v 1.19 2009/03/31 04:11:18 brong Exp $
  */
 
 #include <config.h>
@@ -625,7 +625,7 @@ static int send_response(void *ac,
     /* check that subject is sane */
     sl = strlen(src->subj);
     for (i = 0; i < sl; i++)
-	if (iscntrl((int) src->subj[i])) {
+	if (Uiscntrl(src->subj[i])) {
 	    src->subj[i] = '\0';
 	    break;
 	}

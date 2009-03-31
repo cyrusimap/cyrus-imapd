@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: lex.c,v 1.12 2008/03/24 20:33:11 murch Exp $
+ * $Id: lex.c,v 1.13 2009/03/31 04:11:21 brong Exp $
  */
 
 #include <stdlib.h>
@@ -52,6 +52,7 @@
 #include "lex.h"
 
 #include "codes.h"
+#include "util.h"
 
 /* current state the lexer is in */
 int lexer_state = LEXER_STATE_NORMAL;
@@ -224,7 +225,7 @@ int yylex(lexstate_t * lvalp, void * client)
       }
       break;
     case LEXER_STATE_NORMAL:
-      if (isalpha((unsigned char) ch)) {
+      if (Uisalpha(ch)) {
 	lexer_state=LEXER_STATE_ATOM;
 	*buff_ptr++ = tolower(ch);
 	break;
@@ -271,7 +272,7 @@ int yylex(lexstate_t * lvalp, void * client)
       }
       break;
     case LEXER_STATE_ATOM:
-      if (!isalpha((unsigned char) ch)) {
+      if (!Uisalpha(ch)) {
 	int token;
 
 	buffer[ buff_ptr - buffer] = '\0';

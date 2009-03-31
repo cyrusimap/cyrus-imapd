@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.c,v 1.12 2009/02/09 05:01:56 brong Exp $
+ * $Id: imap_proxy.c,v 1.13 2009/03/31 04:11:16 brong Exp $
  */
 
 #include <config.h>
@@ -62,6 +62,7 @@
 #include "mboxname.h"
 #include "mupdate-client.h"
 #include "prot.h"
+#include "util.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
 
@@ -271,7 +272,7 @@ static int pipe_response(struct backend *s, const char *tag, int include_last,
 		eol[i-1] == '\n' && eol[i-2] == '\r' && eol[i-3] == '}') {
 		/* possible literal */
 		i -= 4;
-		while (i > 0 && eol[i] != '{' && isdigit((int) eol[i])) {
+		while (i > 0 && eol[i] != '{' && Uisdigit(eol[i])) {
 		    i--;
 		}
 		if (eol[i] == '{') {
@@ -392,7 +393,7 @@ int pipe_command(struct backend *s, int optimistic_literal)
 		    nonsynch = 1;
 		    i--;
 		}
-		while (i > 0 && eol[i] != '{' && isdigit((int) eol[i])) {
+		while (i > 0 && eol[i] != '{' && Uisdigit(eol[i])) {
 		    i--;
 		}
 		if (eol[i] == '{') {

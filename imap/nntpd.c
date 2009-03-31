@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.70 2009/02/09 05:01:58 brong Exp $
+ * $Id: nntpd.c,v 1.71 2009/03/31 04:11:19 brong Exp $
  */
 
 /*
@@ -839,10 +839,10 @@ static void cmdloop(void)
 	    eatline(nntp_in, c);
 	    continue;
 	}
-	if (islower((unsigned char) cmd.s[0])) 
+	if (Uislower(cmd.s[0])) 
 	    cmd.s[0] = toupper((unsigned char) cmd.s[0]);
 	for (p = &cmd.s[1]; *p; p++) {
-	    if (isupper((unsigned char) *p)) *p = tolower((unsigned char) *p);
+	    if (Uisupper(*p)) *p = tolower((unsigned char) *p);
 	}
 
 	/* Ihave/Takethis only allowed for feeders */
@@ -1590,7 +1590,7 @@ static int parsenum(char *str, char **rem)
     char *p = str;
     int result = 0;
 
-    while (*p && isdigit((int) *p)) {
+    while (*p && Uisdigit(*p)) {
 	result = result * 10 + *p++ - '0';
 	if (result < 0) {
 	    /* xxx overflow */
@@ -2921,7 +2921,7 @@ static int parse_groups(const char *groups, message_data_t *msg)
 
     for (p = groups;; p += n) {
 	/* skip whitespace */
-	while (p && *p && (isspace((int) *p) || *p == ',')) p++;
+	while (p && *p && (Uisspace(*p) || *p == ',')) p++;
 
 	if (!p || !*p) return 0;
 
@@ -3098,7 +3098,7 @@ static int savemsg(message_data_t *m, FILE *f)
 			for (p = postto[0];; p += n) {
 			    /* skip whitespace */
 			    while (p && *p &&
-				   (isspace((int) *p) || *p == ',')) p++;
+				   (Uisspace(*p) || *p == ',')) p++;
 			    if (!p || !*p) break;
 
 			    /* find end of group name */
@@ -3359,7 +3359,7 @@ static int newgroup(message_data_t *msg)
 
     /* isolate newsgroup */
     group = msg->control + 8; /* skip "newgroup" */
-    while (isspace((int) *group)) group++;
+    while (Uisspace(*group)) group++;
 
     snprintf(mailboxname, sizeof(mailboxname), "%s%.*s",
 	     newsprefix, (int) strcspn(group, " \t\r\n"), group);
@@ -3382,7 +3382,7 @@ static int rmgroup(message_data_t *msg)
 
     /* isolate newsgroup */
     group = msg->control + 7; /* skip "rmgroup" */
-    while (isspace((int) *group)) group++;
+    while (Uisspace(*group)) group++;
 
     snprintf(mailboxname, sizeof(mailboxname), "%s%.*s",
 	     newsprefix, (int) strcspn(group, " \t\r\n"), group);
@@ -3407,7 +3407,7 @@ static int mvgroup(message_data_t *msg)
 
     /* isolate old newsgroup */
     group = msg->control + 7; /* skip "mvgroup" */
-    while (isspace((int) *group)) group++;
+    while (Uisspace(*group)) group++;
 
     len = strcspn(group, " \t\r\n");
     snprintf(oldmailboxname, sizeof(oldmailboxname), "%s%.*s",
@@ -3415,7 +3415,7 @@ static int mvgroup(message_data_t *msg)
 
     /* isolate new newsgroup */
     group += len; /* skip old newsgroup */
-    while (isspace((int) *group)) group++;
+    while (Uisspace(*group)) group++;
 
     len = strcspn(group, " \t\r\n");
     snprintf(newmailboxname, sizeof(newmailboxname), "%s%.*s",
@@ -3530,7 +3530,7 @@ static int strip_post_addresses(char *body)
 	end = p;
 
 	/* skip whitespace */
-	while (p && *p && (isspace((int) *p) || *p == ',')) p++;
+	while (p && *p && (Uisspace(*p) || *p == ',')) p++;
 
 	if (!p || !*p) break;
 
@@ -3981,7 +3981,7 @@ static void cmd_post(char *msgid, int mode)
 
 		    while (cur_peer) {
 			/* eat any leading whitespace */
-			while (isspace(*cur_peer)) cur_peer++;
+			while (Uisspace(*cur_peer)) cur_peer++;
 
 			/* find end of peer */
 			if ((next_peer = strchr(cur_peer, ' ')) ||

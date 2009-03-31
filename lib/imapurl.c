@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapurl.c,v 1.16 2008/09/22 12:58:35 murch Exp $
+ * $Id: imapurl.c,v 1.17 2009/03/31 04:11:22 brong Exp $
  *
  * derived from chris newman's code
  */
@@ -53,6 +53,7 @@
 
 #include "imapurl.h"
 #include "xmalloc.h"
+#include "util.h"
 
 /* hexadecimal lookup table */
 static const char hex[] = "0123456789ABCDEF";
@@ -466,7 +467,7 @@ int imapurl_fromURL(struct imapurl *url, const char *s)
 		src += 19;
 		if (*src == '.') {
 		    /* skip fractional secs */
-		    while (isdigit((int) *(++src)));
+		    while (Uisdigit(*(++src)));
 		}
 
 		/* handle offset */

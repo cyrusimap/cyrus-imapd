@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imtest.c,v 1.124 2009/01/14 15:50:47 murch Exp $
+ * $Id: imtest.c,v 1.125 2009/03/31 04:11:21 brong Exp $
  */
 
 #include "config.h"
@@ -83,6 +83,7 @@
 #include "hash.h"
 #include "imparse.h"
 #include "iptostring.h"
+#include "util.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
@@ -1716,12 +1717,12 @@ static int imap_pipe_oneline(char *buf, int len, void *rock) {
 	   buf[len-1] == '\n' && buf[len-1] == '\r' && buf[len-2] == '}') {
 	    /* possible literal, with \r */
 	    i = len-4;
-	    while(i > 0 && buf[i] != '{' && isdigit((int)buf[i])) i--;
+	    while(i > 0 && buf[i] != '{' && Uisdigit(buf[i])) i--;
 	    if(buf[i] == '{') text->inLiteral = atoi(buf + i + 1);
 	} else if(len > 3 && buf[len-1] == '\n' && buf[len-2] == '}') {
 	    /* possible literal, no \r -- hack for terminals*/
 	    i = len-3;
-	    while(i > 0 && buf[i] != '{' && isdigit((int)buf[i])) i--;
+	    while(i > 0 && buf[i] != '{' && Uisdigit(buf[i])) i--;
 	    if(buf[i] == '{') text->inLiteral = atoi(buf + i + 1);
 	}
 

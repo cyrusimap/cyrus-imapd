@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.558 2009/03/16 00:17:14 brong Exp $
+ * $Id: imapd.c,v 1.559 2009/03/31 04:11:16 brong Exp $
  */
 
 #include <config.h>
@@ -1049,10 +1049,10 @@ void cmdloop()
 	    eatline(imapd_in, c);
 	    continue;
 	}
-	if (islower((unsigned char) cmd.s[0])) 
+	if (Uislower(cmd.s[0])) 
 	    cmd.s[0] = toupper((unsigned char) cmd.s[0]);
 	for (p = &cmd.s[1]; *p; p++) {
-	    if (isupper((unsigned char) *p)) *p = tolower((unsigned char) *p);
+	    if (Uisupper(*p)) *p = tolower((unsigned char) *p);
 	}
 
 	/* if we need to force a kick, do so */
@@ -2748,7 +2748,7 @@ static int getliteralsize(char *p, int c,
     /* Read size from literal */
     isnowait = 0;
     *size = 0;
-    for (++p; *p && isdigit((int) *p); p++) {
+    for (++p; *p && Uisdigit(*p); p++) {
 	sawdigit++;
 	if (*size > (UINT_MAX - (*p - '0')) / 10)
 	    return IMAP_MESSAGE_TOO_LARGE;
@@ -3638,10 +3638,10 @@ void cmd_unselect(char *tag)
  */
 #define PARSE_PARTIAL(start_octet, octet_count)			        \
     (start_octet) = (octet_count) = 0;                                  \
-    if (*p == '<' && isdigit((int) p[1])) {				\
-	(start_octet) = p[1] - '0';				\
+    if (*p == '<' && Uisdigit(p[1])) {					\
+	(start_octet) = p[1] - '0';					\
 	p += 2;								\
-	while (isdigit((int) *p)) {					\
+	while (Uisdigit((int) *p)) {					\
 	    (start_octet) =					\
 		(start_octet) * 10 + *p++ - '0';		\
 	}								\
@@ -3651,7 +3651,7 @@ void cmd_unselect(char *tag)
 	    p[0] = '>'; p[1] = '\0'; /* clip off the octet count 	\
 					(its not used in the reply) */	\
 	    p += 2;							\
-	    while (isdigit((int) *p)) {					\
+	    while (Uisdigit(*p)) {					\
 		(octet_count) =					\
 		    (octet_count) * 10 + *p++ - '0';		\
 	    }								\
@@ -3731,10 +3731,10 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 		else {
 		    fetchitems |= FETCH_SETSEEN;
 		}
-		while (isdigit((int) *p) || *p == '.') {
-		    if (*p == '.' && !isdigit((int) p[-1])) break;
+		while (Uisdigit(*p) || *p == '.') {
+		    if (*p == '.' && !Uisdigit(p[-1])) break;
 		    /* Part number cannot begin with '0' */
-		    if (*p == '0' && !isdigit((int) p[-1])) break;
+		    if (*p == '0' && !Uisdigit(p[-1])) break;
 		    p++;
 		}
 
@@ -3772,10 +3772,10 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 		else {
 		    fetchitems |= FETCH_SETSEEN;
 		}
-		while (isdigit((int) *p) || *p == '.') {
-		    if (*p == '.' && !isdigit((int) p[-1])) break;
+		while (Uisdigit(*p) || *p == '.') {
+		    if (*p == '.' && !Uisdigit(p[-1])) break;
 		    /* Obsolete section 0 can only occur before close brace */
-		    if (*p == '0' && !isdigit((int) p[-1]) && p[1] != ']') break;
+		    if (*p == '0' && !Uisdigit(p[-1]) && p[1] != ']') break;
 		    p++;
 		}
 
@@ -4161,7 +4161,7 @@ void cmd_partial(const char *tag, const char *msgno, char *data,
     memset(&fetchargs, 0, sizeof(struct fetchargs));
 
     for (pc = msgno; *pc; pc++) {
-	if (!isdigit((int) *pc)) break;
+	if (!Uisdigit(*pc)) break;
     }
     if (*pc || !*msgno) {
 	prot_printf(imapd_out, "%s BAD Invalid message number\r\n", tag);
@@ -4193,8 +4193,8 @@ void cmd_partial(const char *tag, const char *msgno, char *data,
 	else {
 	    fetchargs.fetchitems = FETCH_SETSEEN;
 	}
-	while (isdigit((int) *p) || *p == '.') {
-	    if (*p == '.' && (p == section || !isdigit((int) p[1]))) break;
+	while (Uisdigit(*p) || *p == '.') {
+	    if (*p == '.' && (p == section || !Uisdigit(p[1]))) break;
 	    p++;
 	}
 	if (p == section || *p != ']' || p[1]) {
@@ -4212,7 +4212,7 @@ void cmd_partial(const char *tag, const char *msgno, char *data,
     }
 
     for (pc = start; *pc; pc++) {
-	if (!isdigit((int) *pc)) break;
+	if (!Uisdigit(*pc)) break;
 	prev = fetchargs.start_octet;
 	fetchargs.start_octet = fetchargs.start_octet*10 + *pc - '0';
 	if(fetchargs.start_octet < prev) {
@@ -4229,7 +4229,7 @@ void cmd_partial(const char *tag, const char *msgno, char *data,
     
     prev = fetchargs.octet_count;
     for (pc = count; *pc; pc++) {
-	if (!isdigit((int) *pc)) break;
+	if (!Uisdigit(*pc)) break;
 	prev = fetchargs.octet_count;
 	fetchargs.octet_count = fetchargs.octet_count*10 + *pc - '0';
 	if(fetchargs.octet_count < prev) {
@@ -6606,7 +6606,7 @@ void cmd_setquota(const char *tag, const char *quotaroot)
 	    if (arg.s[0] == '\0') goto badlist;
 	    newquota = 0;
 	    for (p = arg.s; *p; p++) {
-		if (!isdigit((int) *p)) goto badlist;
+		if (!Uisdigit(*p)) goto badlist;
 		newquota = newquota * 10 + *p - '0';
                 if (newquota < 0) goto badlist; /* overflow */
 	    }
@@ -7650,7 +7650,7 @@ int parsecharset;
 	    if (c != ' ') goto missingarg;		
 	    c = getword(imapd_in, &arg);
 	    size = 0;
-	    for (p = arg.s; *p && isdigit((int) *p); p++) {
+	    for (p = arg.s; *p && Uisdigit(*p); p++) {
 		size = size * 10 + *p - '0';
                 /* if (size < 0) goto badnumber; */
 	    }
@@ -7665,7 +7665,7 @@ int parsecharset;
 	    !strcmp(criteria.s, "modseq")) {
 	    if (c != ' ') goto missingarg;		
 	    c = getword(imapd_in, &arg);
-	    for (p = arg.s; *p && isdigit((int) *p); p++) {
+	    for (p = arg.s; *p && Uisdigit(*p); p++) {
 		searchargs->modseq = searchargs->modseq * 10 + *p - '0';
 	    }
 	    if (!arg.s || *p) goto badnumber;
@@ -7777,7 +7777,7 @@ int parsecharset;
 	    if (c != ' ') goto missingarg;		
 	    c = getword(imapd_in, &arg);
 	    size = 0;
-	    for (p = arg.s; *p && isdigit((int) *p); p++) {
+	    for (p = arg.s; *p && Uisdigit(*p); p++) {
 		size = size * 10 + *p - '0';
                 /* if (size < 0) goto badnumber; */
 	    }
@@ -9686,7 +9686,7 @@ void hex2bin(const char *hex, unsigned char *bin, unsigned int *binlen)
     const char *c;
     unsigned char msn, lsn;
 
-    for (c = hex, i = 0; *c && isxdigit((int) *c); c++) {
+    for (c = hex, i = 0; *c && Uisxdigit(*c); c++) {
 	msn = (*c > '9') ? tolower((int) *c) - 'a' + 10 : *c - '0';
 	c++;
 	lsn = (*c > '9') ? tolower((int) *c) - 'a' + 10 : *c - '0';

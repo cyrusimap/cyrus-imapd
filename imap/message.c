@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: message.c,v 1.113 2009/03/06 03:52:55 brong Exp $
+ * $Id: message.c,v 1.114 2009/03/31 04:11:19 brong Exp $
  */
 
 #include <config.h>
@@ -906,7 +906,7 @@ char **hdrp;
     if (!hdr) return;
 
     /* Find end of encoding token */
-    for (p = hdr; *p && !isspace((int) *p) && *p != '('; p++) {
+    for (p = hdr; *p && !Uisspace(*p) && *p != '('; p++) {
 	if (*p < ' ' || strchr(TSPECIALS, *p)) return;
     }
     len = p - hdr;
@@ -919,7 +919,7 @@ char **hdrp;
     *hdrp = xmalloc(len + 1);
     strlcpy(*hdrp, hdr, len + 1);
     for (p = *hdrp; *p; p++) {
-	if (islower((int) *p)) *p = toupper((int) *p);
+	if (Uislower(*p)) *p = toupper((int) *p);
     }
 }
 	
@@ -1025,7 +1025,7 @@ struct body *body;
 
     /* Find end of type token */
     type = hdr;
-    for (; *hdr && !isspace((int) *hdr) && *hdr != '/' && *hdr != '('; hdr++) {
+    for (; *hdr && !Uisspace(*hdr) && *hdr != '/' && *hdr != '('; hdr++) {
 	if (*hdr < ' ' || strchr(TSPECIALS, *hdr)) return;
     }
     typelen = hdr - type;
@@ -1043,7 +1043,7 @@ struct body *body;
 
     /* Find end of subtype token */
     subtype = hdr;
-    for (; *hdr && !isspace((int) *hdr) && *hdr != ';' && *hdr != '('; hdr++) {
+    for (; *hdr && !Uisspace(*hdr) && *hdr != ';' && *hdr != '('; hdr++) {
 	if (*hdr < ' ' || strchr(TSPECIALS, *hdr)) return;
     }
     subtypelen = hdr - subtype;
@@ -1058,12 +1058,12 @@ struct body *body;
     body->type = xmalloc(typelen + 1);
     strlcpy(body->type, type, typelen + 1);
     for (p = body->type; *p; p++) {
-	if (islower((int) *p)) *p = toupper((int) *p);
+	if (Uislower(*p)) *p = toupper((int) *p);
     }
     body->subtype = xmalloc(subtypelen + 1);
     strlcpy(body->subtype, subtype, subtypelen + 1);
     for (p = body->subtype; *p; p++) {
-	if (islower((int) *p)) *p = toupper((int) *p);
+	if (Uislower(*p)) *p = toupper((int) *p);
     }
 
     /* Parse parameter list */
@@ -1094,7 +1094,7 @@ struct body *body;
 
     /* Find end of disposition token */
     disposition = hdr;
-    for (; *hdr && !isspace((int) *hdr) && *hdr != ';' && *hdr != '('; hdr++) {
+    for (; *hdr && !Uisspace(*hdr) && *hdr != ';' && *hdr != '('; hdr++) {
 	if (*hdr < ' ' || strchr(TSPECIALS, *hdr)) return;
     }
     dispositionlen = hdr - disposition;
@@ -1110,7 +1110,7 @@ struct body *body;
     strlcpy(body->disposition, disposition, dispositionlen + 1);
 
     for (p = body->disposition; *p; p++) {
-	if (islower((int) *p)) *p = toupper((int) *p);
+	if (Uislower(*p)) *p = toupper((int) *p);
     }
 
     /* Parse parameter list */
@@ -1142,7 +1142,7 @@ struct param **paramp;
 
 	/* Find end of attribute */
 	attribute = hdr;
-	for (; *hdr && !isspace((int) *hdr) && *hdr != '=' && *hdr != '('; hdr++) {
+	for (; *hdr && !Uisspace(*hdr) && *hdr != '=' && *hdr != '('; hdr++) {
 	    if (*hdr < ' ' || strchr(TSPECIALS, *hdr)) return;
 	}
 	attributelen = hdr - attribute;
@@ -1176,7 +1176,7 @@ struct param **paramp;
 	    if (!*hdr++) return;
 	}
 	else {
-	    for (; *hdr && !isspace((int) *hdr) && *hdr != ';' && *hdr != '('; hdr++) {
+	    for (; *hdr && !Uisspace(*hdr) && *hdr != ';' && *hdr != '('; hdr++) {
 		if (*hdr < ' ' || strchr(TSPECIALS, *hdr)) return;
 	    }
 	}
@@ -1195,7 +1195,7 @@ struct param **paramp;
 	strlcpy(param->attribute, attribute, attributelen + 1);
 
 	for (p = param->attribute; *p; p++) {
-	    if (islower((int) *p)) *p = toupper((int) *p);
+	    if (Uislower(*p)) *p = toupper((int) *p);
 	}
 	param->value = xmalloc(valuelen + 1);
 	if (*value == '\"') {
@@ -1411,8 +1411,8 @@ struct param **paramp;
 
 	/* Find end of value */
 	value = hdr;
-	for (; *hdr && !isspace((int) *hdr) && *hdr != ',' && *hdr != '('; hdr++) {
-	    if (*hdr != '-' && !isalpha(((int) *hdr))) return;
+	for (; *hdr && !Uisspace(*hdr) && *hdr != ',' && *hdr != '('; hdr++) {
+	    if (*hdr != '-' && !Uisalpha((*hdr))) return;
 	}
 	valuelen = hdr - value;
 
@@ -1429,7 +1429,7 @@ struct param **paramp;
 	strlcpy(param->value, value, valuelen + 1);
 
 	for (p = param->value; *p; p++) {
-	    if (islower((int) *p)) *p = toupper((int) *p);
+	    if (Uislower(*p)) *p = toupper((int) *p);
 	}
 
 	/* Get ready to parse the next parameter */
@@ -1462,12 +1462,12 @@ unsigned flags;
     message_parse_rfc822space(&hdr);
     if (!hdr) goto baddate;
 
-    if (isalpha((int) *hdr)) {
+    if (Uisalpha(*hdr)) {
 	/* Day name -- skip over it */
 	hdr++;
-	if (!isalpha((int) *hdr)) goto baddate;
+	if (!Uisalpha(*hdr)) goto baddate;
 	hdr++;
-	if (!isalpha((int) *hdr)) goto baddate;
+	if (!Uisalpha(*hdr)) goto baddate;
 	hdr++;
 	message_parse_rfc822space(&hdr);
 	if (!hdr || *hdr++ != ',') goto baddate;
@@ -1475,9 +1475,9 @@ unsigned flags;
 	if (!hdr) goto baddate;
     }
 
-    if (!isdigit((int) *hdr)) goto baddate;
+    if (!Uisdigit(*hdr)) goto baddate;
     tm.tm_mday = *hdr++ - '0';
-    if (isdigit((int) *hdr)) {
+    if (Uisdigit(*hdr)) {
 	tm.tm_mday = tm.tm_mday*10 + *hdr++ - '0';
     }
     
@@ -1485,11 +1485,11 @@ unsigned flags;
     message_parse_rfc822space(&hdr);
     if (!hdr) goto baddate;
     month[0] = *hdr++;
-    if (!isalpha((int) month[0])) goto baddate;
+    if (!Uisalpha(month[0])) goto baddate;
     month[1] = *hdr++;
-    if (!isalpha((int) month[1])) goto baddate;
+    if (!Uisalpha(month[1])) goto baddate;
     month[2] = *hdr++;
-    if (!isalpha((int) month[2])) goto baddate;
+    if (!Uisalpha(month[2])) goto baddate;
     month[3] = '\0';
     lcase(month);
     for (tm.tm_mon = 0; tm.tm_mon < 12; tm.tm_mon++) {
@@ -1499,15 +1499,15 @@ unsigned flags;
     
     /* Parse year */
     message_parse_rfc822space(&hdr);
-    if (!hdr || !isdigit((int) *hdr)) goto baddate;
+    if (!hdr || !Uisdigit(*hdr)) goto baddate;
     tm.tm_year = *hdr++ - '0';
-    if (!isdigit((int) *hdr)) goto baddate;
+    if (!Uisdigit(*hdr)) goto baddate;
     tm.tm_year = tm.tm_year * 10 + *hdr++ - '0';
-    if (isdigit((int) *hdr)) {
+    if (Uisdigit(*hdr)) {
 	if (tm.tm_year < 19) goto baddate;
 	tm.tm_year -= 19;
 	tm.tm_year = tm.tm_year * 10 + *hdr++ - '0';
-	if (!isdigit((int) *hdr)) goto baddate;
+	if (!Uisdigit(*hdr)) goto baddate;
 	tm.tm_year = tm.tm_year * 10 + *hdr++ - '0';
     } else {
 	if (tm.tm_year < 70) {
@@ -1517,7 +1517,7 @@ unsigned flags;
 	    tm.tm_year += 100;
 	}
     }
-    if (isdigit((int) *hdr)) {
+    if (Uisdigit(*hdr)) {
        /* five-digit date */
        goto baddate;
      }
@@ -1525,23 +1525,23 @@ unsigned flags;
     message_parse_rfc822space(&hdr);
     if (hdr && (flags & PARSE_TIME)) {
 	/* Parse hour */
-	if (!hdr || !isdigit((int) *hdr)) goto badtime;
+	if (!hdr || !Uisdigit(*hdr)) goto badtime;
 	tm.tm_hour = *hdr++ - '0';
-	if (!isdigit((int) *hdr)) goto badtime;
+	if (!Uisdigit(*hdr)) goto badtime;
 	tm.tm_hour = tm.tm_hour * 10 + *hdr++ - '0';
 	if (!hdr || *hdr++ != ':') goto badtime;
 
 	/* Parse min */
-	if (!hdr || !isdigit((int) *hdr)) goto badtime;
+	if (!hdr || !Uisdigit(*hdr)) goto badtime;
 	tm.tm_min = *hdr++ - '0';
-	if (!isdigit((int) *hdr)) goto badtime;
+	if (!Uisdigit(*hdr)) goto badtime;
 	tm.tm_min = tm.tm_min * 10 + *hdr++ - '0';
 
 	if (*hdr == ':') {
 	    /* Parse sec */
-	    if (!++hdr || !isdigit((int) *hdr)) goto badtime;
+	    if (!++hdr || !Uisdigit(*hdr)) goto badtime;
 	    tm.tm_sec = *hdr++ - '0';
-	    if (!isdigit((int) *hdr)) goto badtime;
+	    if (!Uisdigit(*hdr)) goto badtime;
 	    tm.tm_sec = tm.tm_sec * 10 + *hdr++ - '0';
 	}
 
@@ -1552,22 +1552,22 @@ unsigned flags;
 		/* Parse numeric offset */
 		int east = (*hdr++ == '-');
 
-		if (!hdr || !isdigit((int) *hdr)) goto badzone;
+		if (!hdr || !Uisdigit(*hdr)) goto badzone;
 		zone_off = *hdr++ - '0';
-		if (!hdr || !isdigit((int) *hdr)) goto badzone;
+		if (!hdr || !Uisdigit(*hdr)) goto badzone;
 		zone_off = zone_off * 10 + *hdr++ - '0';
-		if (!hdr || !isdigit((int) *hdr)) goto badzone;
+		if (!hdr || !Uisdigit(*hdr)) goto badzone;
 		zone_off = zone_off * 6 + *hdr++ - '0';
-		if (!hdr || !isdigit((int) *hdr)) goto badzone;
+		if (!hdr || !Uisdigit(*hdr)) goto badzone;
 		zone_off = zone_off * 10 + *hdr++ - '0';
 
 		if (east) zone_off = -zone_off;
 	    }
-	    else if (isalpha((unsigned char) *hdr)) {
+	    else if (Uisalpha(*hdr)) {
 		char zone[4];
 
 		zone[0] = *hdr++;
-		if (!isalpha((unsigned char) *hdr)) {
+		if (!Uisalpha(*hdr)) {
 		    /* Parse military (single-char) zone */
 		    zone[1] = '\0';
 		    lcase(zone);
@@ -1584,7 +1584,7 @@ unsigned flags;
 		}
 		else {
 		    zone[1] = *hdr++;
-		    if (!isalpha((unsigned char) *hdr)) {
+		    if (!Uisalpha(*hdr)) {
 			/* Parse UT (universal time) */
 			zone[2] = '\0';
 			lcase(zone);
@@ -1644,7 +1644,7 @@ char **s;
     int commentlevel = 0;
 
     if (!p) return;
-    while (*p && (isspace((int) *p) || *p == '(')) {
+    while (*p && (Uisspace(*p) || *p == '(')) {
 	if (*p == '\n') {
 	    p++;
 	    if (*p != ' ' && *p != '\t') {
@@ -1935,7 +1935,7 @@ int *boundaryct;
 	len = strlen(boundaries[i]);
         if (!strncmp(s, boundaries[i], len)) {
             if (s[len] == '-' && s[len+1] == '-') *boundaryct = i;
-	    else if (!rfc2046_strict && s[len] && !isspace((int) s[len])) {
+	    else if (!rfc2046_strict && s[len] && !Uisspace(s[len])) {
 		/* Allow substring matches in the boundary.
 		 *
 		 * If rfc2046_strict is enabled, boundaries containing

@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imclient.c,v 1.93 2008/03/24 17:43:09 murch Exp $
+ * $Id: imclient.c,v 1.94 2009/03/31 04:11:22 brong Exp $
  */
 
 #include <config.h>
@@ -781,7 +781,7 @@ static void imclient_input(struct imclient *imclient, char *buf, int len)
 	}
 	else {
 	    replytag = 0;
-	    while (isdigit((unsigned char) *p)) {
+	    while (Uisdigit(*p)) {
 		replytag = replytag * 10 + *p++ - '0';
 	    }
 	    if (*p++ != ' ') {
@@ -793,9 +793,9 @@ static void imclient_input(struct imclient *imclient, char *buf, int len)
 	}
 
 	/* parse num, if there */
-	if (replytag == 0 && isdigit((unsigned char) *p)) {
+	if (replytag == 0 && Uisdigit(*p)) {
 	    reply.msgno = 0;
-	    while (isdigit((unsigned char) *p)) {
+	    while (Uisdigit(*p)) {
 		reply.msgno = reply.msgno * 10 + *p++ - '0';
 	    }
 	    if (*p++ != ' ') {
@@ -835,10 +835,10 @@ static void imclient_input(struct imclient *imclient, char *buf, int len)
 	    /* Scan back and see if the end of the line introduces a literal */
 	    if (!iscompletion && endreply > imclient->replystart+2 &&
 		endreply[-1] == '\r' && endreply[-2] == '}' &&
-		isdigit((unsigned char) endreply[-3])) {
+		Uisdigit(endreply[-3])) {
 		p = endreply - 4;
 		while (p > imclient->replystart && 
-		       isdigit((unsigned char) *p)) {
+		       Uisdigit(*p)) {
 		    p--;
 		}
 		if (p > imclient->replystart + 2 && *p == '{' &&
@@ -847,7 +847,7 @@ static void imclient_input(struct imclient *imclient, char *buf, int len)
 		    /* Parse the size of the literal */
 		    literallen = 0;
 		    p++;
-		    while (isdigit((unsigned char) *p)) {
+		    while (Uisdigit(*p)) {
 		        literallen = literallen*10 + *p++ -'0';
 		    }
 
@@ -909,10 +909,10 @@ static void imclient_input(struct imclient *imclient, char *buf, int len)
 	if (!(imclient->callback[keywordindex].flags & CALLBACK_NOLITERAL)) {
 	    if (endreply > imclient->replystart+2 &&
 		endreply[-1] == '\r' && endreply[-2] == '}' &&
-		isdigit((unsigned char) endreply[-3])) {
+		Uisdigit(endreply[-3])) {
 		p = endreply - 4;
 		while (p > imclient->replystart && 
-		       isdigit((unsigned char) *p)) {
+		       Uisdigit(*p)) {
 		    p--;
 		}
 		if (p > imclient->replystart + 2 && *p == '{' &&
@@ -921,7 +921,7 @@ static void imclient_input(struct imclient *imclient, char *buf, int len)
 		    /* Parse the size of the literal */
 		    literallen = 0;
 		    p++;
-		    while (isdigit((unsigned char) *p)) {
+		    while (Uisdigit(*p)) {
 		        literallen = literallen*10 + *p++ -'0';
 		    }
 
@@ -1310,7 +1310,7 @@ static int imclient_authenticate_sub(struct imclient *imclient,
     /* stop looping on command completion */
     if (!imclient->readytxt) break;
 
-    if (isspace((unsigned char) *imclient->readytxt)) {
+    if (Uisspace(*imclient->readytxt)) {
 	inlen = 0;
     } else {
 	inlen = imclient_decodebase64(imclient->readytxt);

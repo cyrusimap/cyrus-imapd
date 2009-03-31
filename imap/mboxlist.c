@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mboxlist.c,v 1.263 2009/02/09 05:04:38 brong Exp $
+ * $Id: mboxlist.c,v 1.264 2009/03/31 04:11:18 brong Exp $
  */
 
 #include <config.h>
@@ -514,15 +514,15 @@ mboxlist_mycreatemailboxcheck(char *name,
 	    defaultacl = identifier = 
 		xstrdup(config_getstring(IMAPOPT_DEFAULTACL));
 	    for (;;) {
-		while (*identifier && isspace((int) *identifier)) identifier++;
+		while (*identifier && Uisspace(*identifier)) identifier++;
 		rights = identifier;
-		while (*rights && !isspace((int) *rights)) rights++;
+		while (*rights && !Uisspace(*rights)) rights++;
 		if (!*rights) break;
 		*rights++ = '\0';
-		while (*rights && isspace((int) *rights)) rights++;
+		while (*rights && Uisspace(*rights)) rights++;
 		if (!*rights) break;
 		p = rights;
-		while (*p && !isspace((int) *p)) p++;
+		while (*p && !Uisspace(*p)) p++;
 		if (*p) *p++ = '\0';
 		cyrus_acl_set(&acl, identifier, ACL_MODE_SET, cyrus_acl_strtomask(rights),
 			(cyrus_acl_canonproc_t *)0, (void *)0);

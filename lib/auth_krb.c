@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: auth_krb.c,v 1.44 2008/03/24 17:43:08 murch Exp $
+ * $Id: auth_krb.c,v 1.45 2009/03/31 04:11:21 brong Exp $
  */
 
 #include <config.h>
@@ -48,6 +48,7 @@
 #include "auth.h"
 #include "exitcodes.h"
 #include "xmalloc.h"
+#include "util.h"
 
 #ifdef HAVE_KRB
 
@@ -148,20 +149,20 @@ char *localuser;
 {
     int i;
 
-    while (isspace(*src)) src++;
+    while (Uisspace(*src)) src++;
     if (!*src) return 0;
 
-    for (i = 0; *src && !isspace(*src); i++) {
+    for (i = 0; *src && !Uisspace(*src); i++) {
 	if (i >= MAX_K_NAME_SZ) return 0;
 	*principal++ = *src++;
     }
     *principal = 0;
 
-    if (!isspace(*src)) return 0; /* Need at least one separator */
-    while (isspace(*src)) src++;
+    if (!Uisspace(*src)) return 0; /* Need at least one separator */
+    while (Uisspace(*src)) src++;
     if (!*src) return 0;
   
-    for (i = 0; *src && !isspace(*src); i++) {
+    for (i = 0; *src && !Uisspace(*src); i++) {
 	if (i >= MAX_K_NAME_SZ) return 0;
 	*localuser++ = *src++;
     }
@@ -214,7 +215,7 @@ const char *real_realm;
 
 	    /* Upcase realm name */
 	    for (p = realm; *p; p++) {
-		if (islower(*p)) *p = toupper(*p);
+		if (Uislower(*p)) *p = toupper(*p);
 	    }
 
 	    if (*realm) {
@@ -280,7 +281,7 @@ size_t len;
 
     /* Upcase realm name */
     for (p = realm; *p; p++) {
-	if (islower(*p)) *p = toupper(*p);
+	if (Uislower(*p)) *p = toupper(*p);
     }
 
     if (*realm) {

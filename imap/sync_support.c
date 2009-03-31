@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_support.c,v 1.21 2008/10/08 15:47:08 murch Exp $
+ * $Id: sync_support.c,v 1.22 2009/03/31 04:11:20 brong Exp $
  */
 
 #include <config.h>
@@ -1240,7 +1240,7 @@ static int sync_getliteral_size(struct protstream *input,
         return(IMAP_PROTOCOL_ERROR);
 
     /* Read size from literal */
-    for (p = p + 1; *p && isdigit((int) *p); p++) {
+    for (p = p + 1; *p && Uisdigit(*p); p++) {
         sawdigit++;
         size = (size*10) + *p - '0';
     }

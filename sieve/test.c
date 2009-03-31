@@ -45,7 +45,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: test.c,v 1.29 2008/03/24 20:08:46 murch Exp $
+ * $Id: test.c,v 1.30 2009/03/31 04:11:30 brong Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -68,6 +68,7 @@
 #include "tree.h"
 #include "sieve.h"
 #include "imap/message.h"
+#include "util.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 
@@ -106,7 +107,7 @@ int hashheader(char *header)
 {
     int x = 0;
     /* any CHAR except ' ', :, or a ctrl char */
-    for (; !iscntrl(*header) && (*header != ' ') && (*header != ':'); 
+    for (; !Uiscntrl(*header) && (*header != ' ') && (*header != ':'); 
 	 header++) {
 	x *= 256;
 	x += *header;

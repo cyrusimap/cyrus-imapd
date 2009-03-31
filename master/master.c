@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: master.c,v 1.113 2009/03/26 00:02:59 brong Exp $
+ * $Id: master.c,v 1.114 2009/03/31 04:11:23 brong Exp $
  */
 
 #include <config.h>
@@ -1268,13 +1268,13 @@ static char **tokenize(char *p)
 
     if (!p || !*p) return NULL; /* sanity check */
     while (*p) {
-	while (*p && isspace((int) *p)) p++; /* skip whitespace */
+	while (*p && Uisspace(*p)) p++; /* skip whitespace */
 
 	if (!(i % 10)) tokens = xrealloc(tokens, (i+10) * sizeof(char *));
 
 	/* got a token */
 	tokens[i++] = p;
-	while (*p && !isspace((int) *p)) p++;
+	while (*p && !Uisspace(*p)) p++;
 
 	/* p is whitespace or end of cmd */
 	if (*p) *p++ = '\0';

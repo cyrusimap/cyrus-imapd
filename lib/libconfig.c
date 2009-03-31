@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: libconfig.c,v 1.21 2008/09/23 17:34:38 murch Exp $
+ * $Id: libconfig.c,v 1.22 2009/03/31 04:11:22 brong Exp $
  */
 
 #include <config.h>
@@ -60,6 +60,7 @@
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
+#include "util.h"
 
 #define CONFIGHASHSIZE 30 /* relatively small,
 			   * because it is for overflow only */
@@ -264,10 +265,10 @@ void config_read(const char *alt_config)
     /* Look up default partition */
     config_defpartition = config_getstring(IMAPOPT_DEFAULTPARTITION);
     for (p = (char *)config_defpartition; *p; p++) {
-	if (!isalnum((unsigned char) *p))
+	if (!Uisalnum(*p))
 	  fatal("defaultpartition option contains non-alphanumeric character",
 		EC_CONFIG);
-	if (isupper((unsigned char) *p)) *p = tolower((unsigned char) *p);
+	if (Uisupper(*p)) *p = tolower((unsigned char) *p);
     }
     if ((config_need_data & CONFIG_NEED_PARTITION_DATA) &&
 	(!config_defpartition || !config_partitiondir(config_defpartition))) {
@@ -370,15 +371,15 @@ void config_read_file(const char *filename)
 	service_specific = 0;
 
 	/* remove leading whitespace */
-	for (p = buf; *p && isspace((int) *p); p++);
+	for (p = buf; *p && Uisspace(*p); p++);
 
 	/* skip comments */
 	if (!*p || *p == '#') continue;
 
 	fullkey = key = p;
 	if (*p == '@') p++;  /* allow @ as the first char (for directives) */
-	while (*p && (isalnum((int) *p) || *p == '-' || *p == '_')) {
-	    if (isupper((unsigned char) *p)) *p = tolower((unsigned char) *p);
+	while (*p && (Uisalnum(*p) || *p == '-' || *p == '_')) {
+	    if (Uisupper(*p)) *p = tolower((unsigned char) *p);
 	    p++;
 	}
 	if (*p != ':') {
@@ -390,10 +391,10 @@ void config_read_file(const char *filename)
 	*p++ = '\0';
 	
 	/* remove leading whitespace */
-	while (*p && isspace((int) *p)) p++;
+	while (*p && Uisspace(*p)) p++;
 	
 	/* remove trailing whitespace */
-	for (q = p + strlen(p) - 1; q > p && isspace((int) *q); q--) {
+	for (q = p + strlen(p) - 1; q > p && Uisspace(*q); q--) {
 	    *q = '\0';
 	}
 	
@@ -553,7 +554,7 @@ void config_read_file(const char *filename)
 
 		while (*p) {
 		    /* find the end of the first value */
-		    for (; *q && !isspace((int) *q); q++);
+		    for (; *q && !Uisspace(*q); q++);
 		    if (*q) *q++ = '\0';
 
 		    /* see if its a legal value */
@@ -574,7 +575,7 @@ void config_read_file(const char *filename)
 			imapopts[opt].val.x |= e->val;
 
 		    /* find the start of the next value */
-		    for (p = q; *p && isspace((int) *p); p++);
+		    for (p = q; *p && Uisspace(*p); p++);
 		    q = p;
 		}
 

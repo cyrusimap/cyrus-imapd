@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: reconstruct.c,v 1.109 2009/02/11 18:53:04 murch Exp $
+ * $Id: reconstruct.c,v 1.110 2009/03/31 04:11:20 brong Exp $
  */
 
 #include <config.h>
@@ -1006,11 +1006,11 @@ int reconstruct(char *name, struct discovered *found)
         goto bail;
     }
     while ((dirent = readdir(dirp))!=NULL) {
-	if (!isdigit((int) (dirent->d_name[0])) || dirent->d_name[0] == '0')
+	if (!Uisdigit((dirent->d_name[0])) || dirent->d_name[0] == '0')
             continue;
         p = dirent->d_name;
 	msg = 0;
-        while (isdigit((int) *p)) {
+        while (Uisdigit(*p)) {
 	    msg = msg * 10 + *p++ - '0';
         }
         if (*p++ != '.') continue;

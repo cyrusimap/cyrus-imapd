@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: append.c,v 1.119 2009/03/26 00:03:57 brong Exp $
+ * $Id: append.c,v 1.120 2009/03/31 04:11:15 brong Exp $
  */
 
 #include <config.h>
@@ -69,6 +69,7 @@
 #include "seen.h"
 #include "retry.h"
 #include "quota.h"
+#include "util.h"
 
 #include "message_guid.h"
 
@@ -1047,7 +1048,7 @@ static void addme(char **msgrange, int *alloced, long uid)
 
 	/* see what the last one is */
 	p = *msgrange + len - 1;
-	while (isdigit((int) *p) && p > *msgrange) p--;
+	while (Uisdigit(*p) && p > *msgrange) p--;
 	/* second time, p == msgrange here */
 	if (*p == ':') wasrange = 1;
 	p++;
@@ -1106,7 +1107,7 @@ static int append_addseen(struct mailbox *mailbox,
 
     tail = seenuids + oldlen;
     /* Scan back to last uid */
-    while (tail > seenuids && isdigit((int) tail[-1])) tail--;
+    while (tail > seenuids && Uisdigit(tail[-1])) tail--;
     for (p = tail, last_seen=0; *p; p++) last_seen = last_seen * 10 + *p - '0';
     if (last_seen && last_seen >= start-1) {
 	if (tail > seenuids && tail[-1] == ':') p = tail - 1;

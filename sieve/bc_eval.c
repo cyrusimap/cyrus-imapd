@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: bc_eval.c,v 1.13 2008/03/24 20:08:46 murch Exp $
+ * $Id: bc_eval.c,v 1.14 2009/03/31 04:11:30 brong Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -58,6 +58,7 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+#include "util.h"
 
 #include <string.h>
 #include <ctype.h>
@@ -255,7 +256,7 @@ static int shouldRespond(void * m, sieve_interp_t *interp,
     if (interp->getheader(m, buf, &body) == SIEVE_OK) {
 	/* we don't deal with comments, etc. here */
 	/* skip leading white-space */
-	while (*body[0] && isspace((int) *body[0])) body[0]++;
+	while (*body[0] && Uisspace(*body[0])) body[0]++;
 	if (strcasecmp(body[0], "no")) l = SIEVE_DONE;
     }
 
@@ -265,7 +266,7 @@ static int shouldRespond(void * m, sieve_interp_t *interp,
     if (interp->getheader(m, buf, &body) == SIEVE_OK) {
 	/* we don't deal with comments, etc. here */
 	/* skip leading white-space */
-	while (*body[0] && isspace((int) *body[0])) body[0]++;
+	while (*body[0] && Uisspace(*body[0])) body[0]++;
 	if (!strcasecmp(body[0], "junk") ||
 	    !strcasecmp(body[0], "bulk") ||
 	    !strcasecmp(body[0], "list"))

@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: seen_db.c,v 1.60 2008/08/27 08:28:47 selsky Exp $
+ * $Id: seen_db.c,v 1.61 2009/03/31 04:11:20 brong Exp $
  */
 
 #include <config.h>
@@ -253,10 +253,10 @@ static int seen_readold(struct seen *seendb,
     *lastreadptr = strtol(buf, (char **) &p, 10); buf = p;
     *lastuidptr = strtol(buf, (char **) &p, 10); buf = p;
     *lastchangeptr = strtol(buf, (char **) &p, 10); buf = p;
-    while (isspace((int) *p)) p++;
+    while (Uisspace(*p)) p++;
     buf = p;
     /* Scan for end of uids */
-    while (p < base + offset + linelen && !isspace((int) *p)) p++;
+    while (p < base + offset + linelen && !Uisspace(*p)) p++;
 
     *seenuidsptr = xmalloc(p - buf + 1);
     strlcpy(*seenuidsptr, buf, p - buf + 1);
@@ -321,7 +321,7 @@ static int seen_readit(struct seen *seendb,
     *lastreadptr = strtol(data, &p, 10); data = p;
     *lastuidptr = strtol(data, &p, 10); data = p;
     *lastchangeptr = strtol(data, &p, 10); data = p;
-    while (p < dend && isspace((int) *p)) p++; data = p;
+    while (p < dend && Uisspace(*p)) p++; data = p;
     uidlen = dend - data;
     *seenuidsptr = xmalloc(uidlen + 1);
     memcpy(*seenuidsptr, data, uidlen);

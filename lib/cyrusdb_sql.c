@@ -39,7 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_sql.c,v 1.1 2008/07/30 16:03:38 murch Exp $ */
+/* $Id: cyrusdb_sql.c,v 1.2 2009/03/31 04:11:22 brong Exp $ */
 
 #include <config.h>
 
@@ -54,6 +54,7 @@
 #include "exitcodes.h"
 #include "libcyr_cfg.h"
 #include "xmalloc.h"
+#include "util.h"
 
 extern void fatal(const char *, int);
 
@@ -503,7 +504,7 @@ static int myopen(const char *fname, int flags, struct db **ret)
 	    host[0] = '\0';
 
 	    /* loop till we find some text */
-	    while (!isalnum(host[0])) host++;
+	    while (!Uisalnum(host[0])) host++;
 	}
 	
 	syslog(LOG_DEBUG,

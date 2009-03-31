@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: readconfig.c,v 1.9 2008/03/24 19:06:32 murch Exp $
+ * $Id: readconfig.c,v 1.10 2009/03/31 04:11:23 brong Exp $
  */
 
 /*   Copyright 1991 Rich Salz.
@@ -79,6 +79,7 @@
 #include "imclient.h"
 #include "imparse.h"
 #include "wildmat.h"
+#include "util.h"
 
 #define NUM_STORAGE_CLASSES 100
 
@@ -193,7 +194,7 @@ STATIC BOOL EXPgetnum(int line, char *word, time_t *v, char *name)
 		break;
 	    SawDot = TRUE;
 	}
-	else if (!isdigit( (int)*p))
+	else if (!Uisdigit(*p))
 	    break;
     if (*p) {
 	(void)fprintf(stderr, "Line %d, bad `%c' character in %s field\n",
@@ -277,7 +278,7 @@ BOOL EXPreadfile(FILE *F)
 	else
 	    p = buff + strlen(buff);
 	while (--p >= buff) {
-	    if (isspace((int)*p))
+	    if (Uisspace(*p))
                 *p = '\0';
             else
                 break;

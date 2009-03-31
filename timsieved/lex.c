@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: lex.c,v 1.28 2008/03/24 20:20:57 murch Exp $
+ * $Id: lex.c,v 1.29 2009/03/31 04:11:24 brong Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -61,6 +61,7 @@
 #include "actions.h"
 #include "libconfig.h"
 #include "global.h"
+#include "util.h"
 #include "xmalloc.h"
 
 int token_lookup (char *str, int len __attribute__((unused)))
@@ -304,7 +305,7 @@ int timlex(mystring_t **outstr, unsigned long *outnum,  struct protstream *strea
       return STRING;
     case LEXER_STATE_NUMBER:
 
-	if (isdigit((unsigned char) ch)) {
+	if (Uisdigit(ch)) {
 	    unsigned long   newcount = tmpnum * 10 + (ch - '0');
 
 	    if (newcount < tmpnum)
@@ -321,12 +322,12 @@ int timlex(mystring_t **outstr, unsigned long *outnum,  struct protstream *strea
 	
 	break;
     case LEXER_STATE_NORMAL:
-      if (isalpha((unsigned char) ch)) {
+      if (Uisalpha(ch)) {
 	lexer_state=LEXER_STATE_ATOM;
 	*buff_ptr++ = tolower(ch);
 	break;
       }
-      if (isdigit((unsigned char) ch)) {
+      if (Uisdigit(ch)) {
 	lexer_state=LEXER_STATE_NUMBER;
 	tmpnum = ch -'0';
 	break;
@@ -359,7 +360,7 @@ int timlex(mystring_t **outstr, unsigned long *outnum,  struct protstream *strea
       }
       break;
     case LEXER_STATE_ATOM:
-      if (!isalpha((unsigned char) ch)) {
+      if (!Uisalpha(ch)) {
 	int token;
 
 	buffer[ buff_ptr - buffer] = '\0';

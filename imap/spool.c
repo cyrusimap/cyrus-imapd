@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: spool.c,v 1.14 2008/03/24 17:09:19 murch Exp $
+ * $Id: spool.c,v 1.15 2009/03/31 04:11:20 brong Exp $
  */
 
 #include <config.h>
@@ -91,7 +91,7 @@ static int hashheader(char *header)
 {
     int x = 0;
     /* any CHAR except ' ', :, or a ctrl char */
-    for (; !iscntrl((int) *header) && (*header != ' ') && (*header != ':'); 
+    for (; !Uiscntrl(*header) && (*header != ' ') && (*header != ':'); 
 	 header++) {
 	x *= 256;
 	x += *header;

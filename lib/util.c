@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: util.c,v 1.37 2008/03/24 17:43:09 murch Exp $
+ * $Id: util.c,v 1.38 2009/03/31 04:11:23 brong Exp $
  */
 
 #include <config.h>
@@ -273,7 +273,7 @@ int dir_hash_c(const char *name, int full)
     }
     else {
 	c = tolower(*name);
-	if (!isascii(c) || !islower(c)) c = 'q';
+	if (!Uisascii(c) || !Uislower(c)) c = 'q';
     }
 
     return c;

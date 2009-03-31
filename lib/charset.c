@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: charset.c,v 1.50 2008/03/24 17:43:08 murch Exp $
+ * $Id: charset.c,v 1.51 2009/03/31 04:11:22 brong Exp $
  */
 
 #include <config.h>
@@ -303,7 +303,7 @@ char *charset_decode_mimeheader(const char *s, char *retval, int alloced)
 	 * whitespace and is between two 1522-words.
 	 */
 	if (eatspace) {
-	    for (p = s; p < (start-1) && isspace((int) *p); p++);
+	    for (p = s; p < (start-1) && Uisspace(*p); p++);
 	    if (p < (start-1)) eatspace = 0;
 	}
 	if (!eatspace) {

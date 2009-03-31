@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: auth_unix.c,v 1.51 2008/08/26 19:20:39 wescraig Exp $
+ * $Id: auth_unix.c,v 1.52 2009/03/31 04:11:22 brong Exp $
  */
 
 #include <config.h>
@@ -52,6 +52,7 @@
 #include "auth.h"
 #include "libcyr_cfg.h"
 #include "xmalloc.h"
+#include "util.h"
 
 struct auth_state {
     char userid[81];
@@ -190,7 +191,7 @@ size_t len;
     username_tolower = libcyrus_config_getswitch(CYRUSOPT_USERNAME_TOLOWER);
     sawalpha = 0;
     for(p = retbuf; *p; p++) {
-	if (username_tolower && isupper((unsigned char)*p))
+	if (username_tolower && Uisupper(*p))
 	    *p = tolower((unsigned char)*p);
 
 	switch (allowedchars[*(unsigned char*) p]) {

@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_server.c,v 1.28 2009/02/09 05:02:54 brong Exp $
+ * $Id: sync_server.c,v 1.29 2009/03/31 04:11:20 brong Exp $
  *
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
@@ -635,10 +635,10 @@ static void cmdloop(void)
 	    continue;
 	}
 
-	if (islower((unsigned char) cmd.s[0])) 
+	if (Uislower(cmd.s[0])) 
 	    cmd.s[0] = toupper((unsigned char) cmd.s[0]);
 	for (p = &cmd.s[1]; *p; p++) {
-	    if (isupper((unsigned char) *p)) *p = tolower((unsigned char) *p);
+	    if (Uisupper(*p)) *p = tolower((unsigned char) *p);
 	}
 
 	/* Only Authenticate/Exit/Restart/Starttls
@@ -1745,13 +1745,13 @@ seen_parse(const char *s, unsigned long *first_uidp, unsigned long *last_uidp)
 {
     unsigned long uid;
 
-    if (!isdigit(*s)) {
+    if (!Uisdigit(*s)) {
         *first_uidp = *last_uidp = 0L;
         return(NULL);
     }
 
     uid = 0;
-    while (isdigit(*s)) {
+    while (Uisdigit(*s)) {
         uid *= 10;
         uid += (*s++) -'0';
     }
@@ -1767,7 +1767,7 @@ seen_parse(const char *s, unsigned long *first_uidp, unsigned long *last_uidp)
 
     s++;
     uid = 0;
-    while (isdigit(*s)) {
+    while (Uisdigit(*s)) {
         uid *= 10;
         uid += (*s++) -'0';
     }

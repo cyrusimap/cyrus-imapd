@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: masterconf.c,v 1.14 2008/03/24 17:47:41 murch Exp $
+ * $Id: masterconf.c,v 1.15 2009/03/31 04:11:23 brong Exp $
  */
 
 #include <config.h>
@@ -135,7 +135,7 @@ const char *masterconf_getstring(struct entry *e, const char *key,
 	} else {
 	    /* one word */
 	    for (i = 0; i < 255; i++) {
-		if (isspace((int) *p)) break;
+		if (Uisspace(*p)) break;
 		v[i] = *p++;
 	    }
 	}
@@ -152,8 +152,8 @@ int masterconf_getint(struct entry *e,
     const char *val = masterconf_getstring(e, key, NULL);
 
     if (!val) return def;
-    if (!isdigit((int) *val) && 
-	(*val != '-' || !isdigit((int) val[1]))) return def;
+    if (!Uisdigit(*val) && 
+	(*val != '-' || !Uisdigit(val[1]))) return def;
     return atoi(val);
 }
 
@@ -189,7 +189,7 @@ static void process_section(FILE *f, int *lnptr,
 	/* remove EOL character */
 	if (buf[strlen(buf)-1] == '\n') buf[strlen(buf)-1] = '\0';
 	/* remove starting whitespace */
-	for (p = buf; *p && isspace((int) *p); p++);
+	for (p = buf; *p && Uisspace(*p); p++);
 	
 	/* remove comments */
 	q = strchr(p, '#');
@@ -199,7 +199,7 @@ static void process_section(FILE *f, int *lnptr,
 	if (!*p) continue;
 	if (*p == '}') break;
 
-	for (q = p; isalnum((int) *q); q++) ;
+	for (q = p; Uisalnum(*q); q++) ;
 	if (q) { *q = '\0'; q++; }
 	
 	if (q - p > 0) {
@@ -238,7 +238,7 @@ void masterconf_getsection(const char *section, masterconf_process *f,
 	lineno++;
 
 	if (buf[strlen(buf)-1] == '\n') buf[strlen(buf)-1] = '\0';
-	for (p = buf; *p && isspace((int) *p); p++);
+	for (p = buf; *p && Uisspace(*p); p++);
 	
 	/* remove comments */
 	q = strchr(p, '#');
@@ -249,7 +249,7 @@ void masterconf_getsection(const char *section, masterconf_process *f,
 	
 	if (level == 0 &&
 	    *p == *section && !strncasecmp(p, section, seclen) &&
-	    !isalnum((int) p[seclen])) {
+	    !Uisalnum(p[seclen])) {
 	    for (p += seclen; *p; p++) {
 		if (*p == '{') level++;
 		if (*p == '}') level--;

@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: index.c,v 1.247 2009/03/16 00:17:16 brong Exp $
+ * $Id: index.c,v 1.248 2009/03/31 04:11:18 brong Exp $
  */
 
 #include <config.h>
@@ -3894,7 +3894,7 @@ static char *_index_extract_subject(char *s, int *is_refwd)
      * resetting the end of the string as we go.
      */
     for (x = s + strlen(s) - 1; x >= s;) {
-	if (isspace((int) *x)) {                        /* whitespace? */
+	if (Uisspace(*x)) {                             /* whitespace? */
 	    *x = '\0';					/* yes, trim it */
 	    x--;					/* skip past it */
 	}
@@ -3914,7 +3914,7 @@ static char *_index_extract_subject(char *s, int *is_refwd)
      * skipping over stuff we don't care about.
      */
     for (base = s; base;) {
-	if (isspace((int) *base)) base++;		/* whitespace? */
+	if (Uisspace(*base)) base++;			/* whitespace? */
 
 	/* possible refwd */
 	else if ((!strncasecmp(base, "re", 2) &&	/* "re"? */
@@ -3925,7 +3925,7 @@ static char *_index_extract_subject(char *s, int *is_refwd)
 		  (x = base + 2))) {			/* yes, skip past it */
 	    int count = 0;				/* init counter */
 	    
-	    while (isspace((int) *x)) x++;		/* skip whitespace */
+	    while (Uisspace(*x)) x++;			/* skip whitespace */
 
 	    if (*x == '[') {				/* start of blob? */
 		for (x++; x;) {				/* yes, get count */
@@ -3954,7 +3954,7 @@ static char *_index_extract_subject(char *s, int *is_refwd)
 		    break;				/* no, we're done */
 	    }
 
-	    while (isspace((int) *x)) x++;              /* skip whitespace */
+	    while (Uisspace(*x)) x++;                   /* skip whitespace */
 
 	    if (*x == ':') {				/* ending colon? */
 		base = x + 1;				/* yes, skip past it */

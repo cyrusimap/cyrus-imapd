@@ -39,12 +39,13 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ldap.c,v 1.15 2008/04/10 18:03:47 wescraig Exp $
+ * $Id: ldap.c,v 1.16 2009/03/31 04:11:23 brong Exp $
  */
 
 #include <config.h>
 #include "ptloader.h"
 #include "exitcodes.h"
+#include "util.h"
 
 #ifdef HAVE_LDAP
 
@@ -252,7 +253,7 @@ static char *ptsmodule_canonifyid(const char *identifier, size_t len)
     username_tolower = config_getswitch(IMAPOPT_USERNAME_TOLOWER);
     sawalpha = 0;
     for(p = retbuf+i; *p; p++) {
-        if (username_tolower && isupper((unsigned char)*p))
+        if (username_tolower && Uisupper(*p))
             *p = tolower((unsigned char)*p);
 
         switch (allowedchars[*(unsigned char*) p]) {
@@ -934,7 +935,7 @@ static int ptsmodule_make_authstate_attribute(
 		int j;
 		strcpy((*newstate)->groups[i].id, "group:");
 		for(j =0; j < strlen(vals[i]); j++) {
-		  if(isupper(vals[i][j]))
+		  if(Uisupper(vals[i][j]))
 		    vals[i][j]=tolower(vals[i][j]);
 		}
 		strlcat((*newstate)->groups[i].id, vals[i], 
@@ -1068,7 +1069,7 @@ static int ptsmodule_make_authstate_filter(
 
 	int j;
 	for(j =0; j < strlen(vals[0]); j++) {
-	  if(isupper(vals[0][j]))
+	  if(Uisupper(vals[0][j]))
 	    vals[0][j]=tolower(vals[0][j]);
 	}
 

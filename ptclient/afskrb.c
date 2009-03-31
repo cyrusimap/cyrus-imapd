@@ -39,12 +39,13 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: afskrb.c,v 1.16 2008/03/24 18:34:22 murch Exp $
+ * $Id: afskrb.c,v 1.17 2009/03/31 04:11:23 brong Exp $
  */
 
 #include <config.h>
 #include "ptloader.h"
 #include "exitcodes.h"
+#include "util.h"
 #include "xmalloc.h"
 
 #ifdef HAVE_AFSKRB
@@ -103,7 +104,7 @@ int is_local_realm(const char *realm)
 	size_t len;
 	char *p;
 	
-	for (p = (char *) val; *p && !isspace((int) *p); p++);
+	for (p = (char *) val; *p && !Uisspace(*p); p++);
 	len = p-val;
 	if(len >= sizeof(buf))
 	    len = sizeof(buf) - 1;
@@ -114,7 +115,7 @@ int is_local_realm(const char *realm)
 	    return 1;
 	}
 	val = p;
-	while (*val && isspace((int) *val)) val++;
+	while (*val && Uisspace(*val)) val++;
     }
 
     return 0;
@@ -277,20 +278,20 @@ static int parse_krbequiv_line(const char *src,
 {
     int i;
     
-    while (isspace(*src)) src++;
+    while (Uisspace(*src)) src++;
     if (!*src) return 0;
 
-    for (i = 0; *src && !isspace(*src); i++) {
+    for (i = 0; *src && !Uisspace(*src); i++) {
         if (i >= MAX_K_NAME_SZ) return 0;
         *principal++ = *src++;
     }
     *principal = 0;
     
-    if (!isspace(*src)) return 0; /* Need at least one separator */
-    while (isspace(*src)) src++;
+    if (!Uisspace(*src)) return 0; /* Need at least one separator */
+    while (Uisspace(*src)) src++;
     if (!*src) return 0;
   
-    for (i = 0; *src && !isspace(*src); i++) {
+    for (i = 0; *src && !Uisspace(*src); i++) {
         if (i >= MAX_K_NAME_SZ) return 0;
         *localuser++ = *src++;
     }
@@ -342,7 +343,7 @@ static char *auth_map_krbid(const char *real_aname,
             
             /* Upcase realm name */
             for (p = realm; *p; p++) {
-                if (islower(*p)) *p = toupper(*p);
+                if (Uislower(*p)) *p = toupper(*p);
             }
             
             if (*realm) {
@@ -405,7 +406,7 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
     
     /* Upcase realm name */
     for (p = realm; *p; p++) {
-        if (islower(*p)) *p = toupper(*p);
+        if (Uislower(*p)) *p = toupper(*p);
     }
     
     if (*realm) {

@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_expire.c,v 1.21 2009/02/09 05:01:56 brong Exp $
+ * $Id: cyr_expire.c,v 1.22 2009/03/31 04:11:15 brong Exp $
  */
 
 #include <config.h>
@@ -326,7 +326,7 @@ int delete(char *name,
     p++;
 
     for (i = 0 ; i < 7; i++) {
-        if (!isxdigit(p[i])) return(0);
+        if (!Uisxdigit(p[i])) return(0);
     }
     if (p[8] != '\0') return(0);
 

@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mkchartable.c,v 1.27 2008/03/24 17:43:09 murch Exp $
+ * $Id: mkchartable.c,v 1.28 2009/03/31 04:11:22 brong Exp $
  */
 
 #include <config.h>
@@ -49,6 +49,7 @@
 #include <string.h>
 #include <unistd.h>
 #include "xmalloc.h"
+#include "util.h"
 
 #define XX 127
 /*
@@ -235,7 +236,7 @@ readmapfile(char *name)
     while (fgets(buf, sizeof(buf), mapfile)) {
 	line++;
 	p = buf;
-	while (*p && isspace(*(unsigned char*)p)) p++;
+	while (*p && Uisspace(*p)) p++;
 	if (!*p || *p == '#') continue;
 
 	/* Unicode character */
@@ -530,7 +531,7 @@ readcharfile(char *name)
 	p = buf + strlen(buf);
 	if (p > buf && p[-1] == '\n') p[-1] = '\0';
 	p = buf;
-	while (*p && isspace(*(unsigned char*)p)) p++;
+	while (*p && Uisspace(*p)) p++;
 	if (!*p || *p == '#') continue;
 
 	if (*p == ':') {
@@ -545,14 +546,14 @@ readcharfile(char *name)
 
 	thisstate = curstate;
 	thischar = i = 0;
-	while (!isspace(*(unsigned char*)p)) {
+	while (!Uisspace(*p)) {
 	    c = HEXCHAR(*p);
 	    i++;
 	    p++;
 	    if (c == XX) goto syntaxerr;
 	    thischar = thischar*16 + c;
 	}
-	while (*p && isspace(*(unsigned char*)p)) p++;
+	while (*p && Uisspace(*p)) p++;
 
 	if (i > 4) goto syntaxerr;	
 	if (i > 2) {
@@ -613,7 +614,7 @@ readcharfile(char *name)
 
 	if (*p == ':' || *p == '>' || *p == '<') {
 	    p = table[thisstate].ch[thischar].action = xstrdup(p);
-	    while (*p && !isspace(*(unsigned char*)p)) p++;
+	    while (*p && !Uisspace(*p)) p++;
 	    *p = '\0';
 	    continue;
 	}
@@ -799,7 +800,7 @@ newstate(char *args)
     }
 
     p = table[table_num].name;
-    while (*p && !isspace(*(unsigned char*)p)) p++;
+    while (*p && !Uisspace(*p)) p++;
     if (*p) *p++ = '\0';
     while (*p) {
 	if (*p == '<') table[table_num].endaction = "RET";

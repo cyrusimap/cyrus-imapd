@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ctl_mboxlist.c,v 1.64 2009/02/09 05:01:56 brong Exp $
+ * $Id: ctl_mboxlist.c,v 1.65 2009/03/31 04:11:15 brong Exp $
  */
 
 /* currently doesn't catch signals; probably SHOULD */
@@ -578,7 +578,7 @@ void do_undump(void)
 	    continue;
 	}
 	*p++ = '\0';
-	if (isdigit((int) *p)) {
+	if (Uisdigit(*p)) {
 	    /* new style dump */
 	    mbtype = strtol(p, &p, 10);
 	    /* skip trailing space */
