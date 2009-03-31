@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_client.c,v 1.43 2009/02/11 19:11:32 murch Exp $
+ * $Id: sync_client.c,v 1.44 2009/03/31 04:09:01 brong Exp $
  *
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
@@ -2355,9 +2355,7 @@ int do_user_sub(char *user, struct sync_folder_list *server_list)
 	       current client subscription, or we reach the end of the
 	       server list */
 	    do {
-		(sync_namespace.mboxname_tointernal)(&sync_namespace, s->name,
-						     user, buf);
-		if ((r = set_sub(user, buf, 0))) goto bail;
+		if ((r = set_sub(user, s->name, 0))) goto bail;
 		s = s->next;
 		if (!s) n = -1;		/* end of server list, we're done */
 		else if (!c) n = 1;	/* remove all server subscriptions */
