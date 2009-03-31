@@ -44,7 +44,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: getaddrinfo.c,v 1.7 2008/03/24 17:43:08 murch Exp $
+ * $Id: getaddrinfo.c,v 1.8 2009/03/31 04:11:22 brong Exp $
  */
 /*
  * fake library for ssh
@@ -68,6 +68,8 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "util.h"
 
 static struct addrinfo *
 malloc_ai(int port, u_long addr, int socktype, int proto)
@@ -155,7 +157,7 @@ getaddrinfo(const char *hostname, const char *servname,
 	}
     }
     if (servname) {
-	if (isdigit((int)*servname))
+	if (Uisdigit(*servname))
 	    port = htons(atoi(servname));
 	else {
 	    struct servent *se;

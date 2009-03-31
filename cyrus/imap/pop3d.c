@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: pop3d.c,v 1.191 2009/02/09 05:01:58 brong Exp $
+ * $Id: pop3d.c,v 1.192 2009/03/31 04:11:19 brong Exp $
  */
 
 #include <config.h>
@@ -787,12 +787,12 @@ static void cmdloop(void)
 	if (p > inputbuf && p[-1] == '\r') *--p = '\0';
 
 	/* Parse into keword and argument */
-	for (p = inputbuf; *p && !isspace((int) *p); p++);
+	for (p = inputbuf; *p && !Uisspace(*p); p++);
 	if (*p) {
 	    *p++ = '\0';
 	    arg = p;
 	    if (strcasecmp(inputbuf, "pass") != 0) {
-		while (*arg && isspace((int) *arg)) {
+		while (*arg && Uisspace(*arg)) {
 		    arg++;
 		}
 	    }
@@ -1440,10 +1440,10 @@ void cmd_auth(char *arg)
      * must accept an optional second argument as an initial client
      * response (base64 encoded!).
      */ 
-    while (*arg && !isspace((int) *arg)) {
+    while (*arg && !Uisspace(*arg)) {
 	arg++;
     }
-    if (isspace((int) *arg)) {
+    if (Uisspace(*arg)) {
 	/* null terminate authtype, get argument */
 	*arg++ = '\0';
     } else {
@@ -1772,11 +1772,11 @@ static int parsenum(char **ptr)
     char *p = *ptr;
     int result = 0;
 
-    if (!isdigit((int) *p)) {
+    if (!Uisdigit(*p)) {
 	*ptr = 0;
 	return -1;
     }
-    while (*p && isdigit((int) *p)) {
+    while (*p && Uisdigit(*p)) {
 	result = result * 10 + *p++ - '0';
         if (result < 0) {
             /* xxx overflow */
@@ -1784,7 +1784,7 @@ static int parsenum(char **ptr)
     }
 
     if (*p) {
-	while (*p && isspace((int) *p)) p++;
+	while (*p && Uisspace(*p)) p++;
 	*ptr = p;
     }
     else *ptr = 0;

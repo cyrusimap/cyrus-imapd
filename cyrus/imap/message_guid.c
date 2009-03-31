@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: message_guid.c,v 1.7 2008/03/24 17:09:18 murch Exp $
+ * $Id: message_guid.c,v 1.8 2009/03/31 04:11:19 brong Exp $
  */
 
 #include <config.h>
@@ -49,6 +49,7 @@
 #include "assert.h"
 #include "global.h"
 #include "message_guid.h"
+#include "util.h"
 
 #ifdef HAVE_SSL
 #include <openssl/sha.h>
@@ -294,11 +295,11 @@ int message_guid_decode(struct message_guid *guid, const char *text)
     guid->status = GUID_NULL;
 
     for (i = 0; i < MESSAGE_GUID_SIZE; i++, v++) {
-	if (!isxdigit((int) *p)) return(0);
+	if (!Uisxdigit(*p)) return(0);
 	msn = (*p > '9') ? tolower((int) *p) - 'a' + 10 : *p - '0';
 	p++;
 
-	if (!isxdigit((int) *p)) return(0);
+	if (!Uisxdigit(*p)) return(0);
 	lsn = (*p > '9') ? tolower((int) *p) - 'a' + 10 : *p - '0';
 	p++;
 	

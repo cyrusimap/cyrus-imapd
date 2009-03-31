@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mupdate.c,v 1.107 2009/02/09 05:01:58 brong Exp $
+ * $Id: mupdate.c,v 1.108 2009/03/31 04:11:19 brong Exp $
  */
 
 #include <config.h>
@@ -755,11 +755,11 @@ mupdate_docmd_result_t docmd(struct conn *c)
 	goto nextcmd;
     }
     
-    if (islower((unsigned char) c->cmd.s[0])) {
+    if (Uislower(c->cmd.s[0])) {
 	c->cmd.s[0] = toupper((unsigned char) c->cmd.s[0]);
     }
     for (p = &(c->cmd.s[1]); *p; p++) {
-	if (isupper((unsigned char) *p)) *p = tolower((unsigned char) *p);
+	if (Uisupper(*p)) *p = tolower((unsigned char) *p);
     }
     
     switch (c->cmd.s[0]) {

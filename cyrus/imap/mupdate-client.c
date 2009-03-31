@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mupdate-client.c,v 1.59 2008/10/08 15:47:08 murch Exp $
+ * $Id: mupdate-client.c,v 1.60 2009/03/31 04:11:19 brong Exp $
  */
 
 #include <config.h>
@@ -77,6 +77,7 @@
 #include "mupdate.h"
 #include "prot.h"
 #include "protocol.h"
+#include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
@@ -500,11 +501,11 @@ int mupdate_scarf(mupdate_handle *handle,
 	    break;
 	}
 	
-	if (islower((unsigned char) handle->cmd.s[0])) {
+	if (Uislower(handle->cmd.s[0])) {
 	    handle->cmd.s[0] = toupper((unsigned char) handle->cmd.s[0]);
 	}
 	for (p = &(handle->cmd.s[1]); *p; p++) {
-	    if (islower((unsigned char) *p))
+	    if (Uislower(*p))
 		*p = toupper((unsigned char) *p);
 	}
 	

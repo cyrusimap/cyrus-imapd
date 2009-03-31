@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imparse.c,v 1.13 2008/03/24 17:43:09 murch Exp $
+ * $Id: imparse.c,v 1.14 2009/03/31 04:11:22 brong Exp $
  */
 
 #include <config.h>
@@ -47,6 +47,7 @@
 #include <ctype.h>
 
 #include "imparse.h"
+#include "util.h"
 
 /*
  * Parse a word from the string starting at the pointer pointed to by 's'.
@@ -63,7 +64,7 @@ char **retval;
     *retval = *s;
     for (;;) {
 	c = *(*s)++;
-	if (!c || isspace(c) || c == '(' || c == ')' || c == '\"') {
+	if (!c || Uisspace(c) || c == '(' || c == ')' || c == '\"') {
 	    (*s)[-1] = '\0';
 	    return c;
 	}
@@ -131,7 +132,7 @@ char **retval;
     case '{':
 	/* Literal */
         (*s)++;
-        while (isdigit(c = *(*s)++)) {
+        while (Uisdigit(c = *(*s)++)) {
             sawdigit = 1;
             len = len*10 + c - '0';
         }
@@ -178,26 +179,26 @@ int imparse_issequence(const char* s)
     while ((c = *s)) {
 	if (c == ',') {
 	    if (!len) return 0;
-	    if (!isdigit((int) s[-1]) && s[-1] != '*') return 0;
+	    if (!Uisdigit(s[-1]) && s[-1] != '*') return 0;
 	    sawcolon = 0;
 	}
 	else if (c == ':') {
 	    if (sawcolon || !len) return 0;
-	    if (!isdigit((int) s[-1]) && s[-1] != '*') return 0;
+	    if (!Uisdigit(s[-1]) && s[-1] != '*') return 0;
 	    sawcolon = 1;
 	}
 	else if (c == '*') {
 	    if (len && s[-1] != ',' && s[-1] != ':') return 0;
-	    if (isdigit((int) s[1])) return 0;
+	    if (Uisdigit(s[1])) return 0;
 	}
-	else if (!isdigit(c)) {
+	else if (!Uisdigit(c)) {
 	    return 0;
 	}
 	s++;
 	len++;
     }
     if (len == 0) return 0;
-    if (!isdigit((int) s[-1]) && s[-1] != '*') return 0;
+    if (!Uisdigit(s[-1]) && s[-1] != '*') return 0;
     return 1;
 }
 
@@ -208,7 +209,7 @@ int imparse_isnumber(const char *s)
 {
     if (!*s) return 0;
     for (; *s; s++) {
-	if (!isdigit((int) *s)) return 0;
+	if (!Uisdigit(*s)) return 0;
     }
     return 1;
 }

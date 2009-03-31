@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: util.h,v 1.25 2008/03/24 17:43:09 murch Exp $
+ * $Id: util.h,v 1.26 2009/03/31 04:11:23 brong Exp $
  *
  * Author: Chris Newman
  * Start Date: 4/6/93
@@ -47,6 +47,16 @@
 
 #ifndef INCLUDED_UTIL_H
 #define INCLUDED_UTIL_H
+
+#define Uisalnum(c) isalnum((int)((unsigned char)(c)))
+#define Uisalpha(c) isalpha((int)((unsigned char)(c)))
+#define Uisascii(c) isascii((int)((unsigned char)(c)))
+#define Uiscntrl(c) iscntrl((int)((unsigned char)(c)))
+#define Uisdigit(c) isdigit((int)((unsigned char)(c)))
+#define Uislower(c) islower((int)((unsigned char)(c)))
+#define Uisspace(c) isspace((int)((unsigned char)(c)))
+#define Uisupper(c) isupper((int)((unsigned char)(c)))
+#define Uisxdigit(c) isxdigit((int)((unsigned char)(c)))
 
 extern const unsigned char convert_to_lowercase[256];
 extern const unsigned char convert_to_uppercase[256];

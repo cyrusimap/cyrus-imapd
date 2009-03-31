@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.191 2009/03/26 00:11:09 brong Exp $
+ * $Id: mailbox.c,v 1.192 2009/03/31 04:11:18 brong Exp $
  */
 
 #include <config.h>
@@ -3072,7 +3072,7 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
 	if (name[0] == '.') continue;
 
 	/* skip non-message files */
-	while (*p && isdigit((int)(*p))) p++;
+	while (*p && Uisdigit(*p)) p++;
 	if (p[0] != '.' || p[1] != '\0') continue;
 
 	if(newfname->len + strlen(name) >= sizeof(newfname->buf)) {

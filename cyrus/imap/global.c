@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: global.c,v 1.29 2009/02/09 05:01:56 brong Exp $
+ * $Id: global.c,v 1.30 2009/03/31 04:11:16 brong Exp $
  */
 
 #include <config.h>
@@ -150,10 +150,10 @@ int cyrus_init(const char *alt_config, const char *ident, unsigned flags)
     /* Look up default partition */
     config_defpartition = config_getstring(IMAPOPT_DEFAULTPARTITION);
     for (p = (char *)config_defpartition; *p; p++) {
-	if (!isalnum((unsigned char) *p))
+	if (!Uisalnum(*p))
 	  fatal("defaultpartition option contains non-alphanumeric character",
 		EC_CONFIG);
-	if (isupper((unsigned char) *p)) *p = tolower((unsigned char) *p);
+	if (Uisupper(*p)) *p = tolower((unsigned char) *p);
     }
 
     /* Look up umask */
@@ -354,7 +354,7 @@ int global_authisa(struct auth_state *authstate, enum imapopt opt)
     while (*val) {
 	char *p;
 	
-	for (p = (char *) val; *p && !isspace((int) *p); p++);
+	for (p = (char *) val; *p && !Uisspace(*p); p++);
 	len = p-val;
 	if(len >= sizeof(buf))
 	    len = sizeof(buf) - 1;
@@ -365,7 +365,7 @@ int global_authisa(struct auth_state *authstate, enum imapopt opt)
 	    return 1;
 	}
 	val = p;
-	while (*val && isspace((int) *val)) val++;
+	while (*val && Uisspace(*val)) val++;
     }
 
     return 0;
@@ -548,12 +548,12 @@ int mysasl_proxy_policy(sasl_conn_t *conn,
 	realm++;
 	while (*val) {
 	    if (!strncasecmp(val, realm, strlen(realm)) &&
-		(!val[strlen(realm)] || isspace((int) val[strlen(realm)]))) {
+		(!val[strlen(realm)] || Uisspace(val[strlen(realm)]))) {
 		break;
 	    }
 	    /* not this realm, try next one */
-	    while (*val && !isspace((int) *val)) val++;
-	    while (*val && isspace((int) *val)) val++;
+	    while (*val && !Uisspace(*val)) val++;
+	    while (*val && Uisspace(*val)) val++;
 	}
 	if (!*val) {
 	    sasl_seterror(conn, 0, "cross-realm login %s denied",

@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: seen_bigdb.c,v 1.14 2008/03/24 17:09:19 murch Exp $
+ * $Id: seen_bigdb.c,v 1.15 2009/03/31 04:11:20 brong Exp $
  */
 
 #include <config.h>
@@ -65,6 +65,7 @@
 #include "mailbox.h"
 #include "imap_err.h"
 #include "exitcodes.h"
+#include "util.h"
 
 #include "cyrusdb.h"
 #include "seen.h"
@@ -208,7 +209,7 @@ static int seen_readit(struct seen *seendb,
     *lastreadptr = strtol(data, &p, 10); data = p;
     *lastuidptr = strtol(data, &p, 10); data = p;
     *lastchangeptr = strtol(data, &p, 10); data = p;
-    while (isspace((int) *p) && p < dend) p++; data = p;
+    while (Uisspace(*p) && p < dend) p++; data = p;
     uidlen = dend - data;
     *seenuidsptr = xmalloc(uidlen + 1);
     memcpy(*seenuidsptr, data, uidlen);

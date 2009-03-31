@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: lmtpengine.c,v 1.129 2008/10/08 15:47:08 murch Exp $
+ * $Id: lmtpengine.c,v 1.130 2009/03/31 04:11:18 brong Exp $
  */
 
 #include <config.h>
@@ -479,11 +479,11 @@ static char *parseaddr(char *s)
 	p++;
 	if (*p == '[') {
 	    p++;
-	    while (isdigit((int) *p) || *p == '.') p++;
+	    while (Uisdigit(*p) || *p == '.') p++;
 	    if (*p++ != ']') return 0;
 	}
 	else {
-	    while (isalnum((int) *p) || *p == '.' || *p == '-') p++;
+	    while (Uisalnum(*p) || *p == '.' || *p == '-') p++;
 	}
 	if (*p == ',' && p[1] == '@') p++;
 	else if (*p == ':' && p[1] != '@') p++;
@@ -519,11 +519,11 @@ static char *parseaddr(char *s)
 	p++;
 	if (*p == '[') {
 	    p++;
-	    while (isdigit((int) *p) || *p == '.') p++;
+	    while (Uisdigit(*p) || *p == '.') p++;
 	    if (*p++ != ']') return 0;
 	}
 	else {
-	    while (isalnum((int) *p) || *p == '.' || *p == '-') p++;
+	    while (Uisalnum(*p) || *p == '.' || *p == '-') p++;
 	}
     }
     
@@ -1424,7 +1424,7 @@ void lmtpmode(struct lmtp_func *func,
 			}
 			tmp += 5;
 			/* make sure we have a value */
-			if (!isdigit((int) *tmp)) {
+			if (!Uisdigit(*tmp)) {
 				prot_printf(pout, 
 					    "501 5.5.2 SIZE requires a value\r\n");
 				goto nextcmd;
@@ -1738,9 +1738,9 @@ static int ask_code(const char *s)
     if (strlen(s) < 3) return -1;
 
     /* check to make sure 0-2 are digits */
-    if ((isdigit((int) s[0])==0) ||
-	(isdigit((int) s[1])==0) ||
-	(isdigit((int) s[2])==0))
+    if ((Uisdigit(s[0])==0) ||
+	(Uisdigit(s[1])==0) ||
+	(Uisdigit(s[2])==0))
     {
 	return -1;
     }

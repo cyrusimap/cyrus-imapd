@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mbdump.c,v 1.43 2009/02/09 05:01:58 brong Exp $
+ * $Id: mbdump.c,v 1.44 2009/03/31 04:11:18 brong Exp $
  */
 
 #include <config.h>
@@ -335,7 +335,7 @@ int dump_mailbox(const char *tag, const char *mbname, const char *mbpath,
 	if (name[0] == '.') continue;
 
 	/* skip non-message files */
-	while (*p && isdigit((int)(*p))) p++;
+	while (*p && Uisdigit(*p)) p++;
 	if (p[0] != '.' || p[1] != '\0') continue;
 
 	/* ensure (number) is >= our target uid */
@@ -608,7 +608,7 @@ int undump_mailbox(const char *mbname, const char *mbpath,
 		goto done;
 	    }
 	    for (p = data.s; *p; p++) {
-		if (!isdigit((int) *p)) {
+		if (!Uisdigit(*p)) {
 		    r = IMAP_PROTOCOL_ERROR;
 		    goto done;
 		}

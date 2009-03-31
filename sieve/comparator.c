@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: comparator.c,v 1.23 2009/02/03 05:14:51 brong Exp $
+ * $Id: comparator.c,v 1.24 2009/03/31 04:11:30 brong Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -57,6 +57,7 @@
 #include "sieve.h"
 #include "bytecode.h"
 #include "xmalloc.h"
+#include "util.h"
 
 /*!!! uses B_CONTAINS not CONTAINS, etc, only works with bytecode*/
 
@@ -343,14 +344,14 @@ static int ascii_numeric_cmp(const char *text, size_t tlen, const char *pat)
     unsigned text_digit_len;
     unsigned pat_digit_len;
 
-    if (isdigit((int) *pat)) {
-	if (isdigit((int) *text)) {
+    if (Uisdigit(*pat)) {
+	if (Uisdigit(*text)) {
 	    /* Count how many digits each string has */
 	    for (text_digit_len = 0;
-		 tlen-- && isdigit((int) text[text_digit_len]);
+		 tlen-- && Uisdigit(text[text_digit_len]);
 		 text_digit_len++);
 	    for (pat_digit_len = 0;
-		 isdigit((int) pat[pat_digit_len]);
+		 Uisdigit(pat[pat_digit_len]);
 		 pat_digit_len++);
 
 	    if (text_digit_len < pat_digit_len) {
@@ -393,7 +394,7 @@ static int ascii_numeric_cmp(const char *text, size_t tlen, const char *pat)
 	} else {
 	    return 1;
 	}
-    } else if (isdigit((int) *text)) {
+    } else if (Uisdigit(*text)) {
 	return -1;
     } else {
 	return 0; /* both not digits */

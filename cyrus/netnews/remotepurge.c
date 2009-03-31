@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: remotepurge.c,v 1.19 2008/03/24 19:06:32 murch Exp $
+ * $Id: remotepurge.c,v 1.20 2009/03/31 04:11:23 brong Exp $
  */
 
 #include <config.h>
@@ -74,6 +74,7 @@
 
 #include "imparse.h"
 #include "imclient.h"
+#include "util.h"
 #include "xmalloc.h"
 #include "exitcodes.h"
 
@@ -299,7 +300,7 @@ callback_search(struct imclient *imclient,
 
     s = reply->text;
 
-    while (isdigit((int) *s)) {
+    while (Uisdigit(*s)) {
 	num = 0;
 	
 	while ((*s!='\0') && (*s!=' '))
