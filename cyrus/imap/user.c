@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: user.c,v 1.26 2009/02/09 05:01:59 brong Exp $
+ * $Id: user.c,v 1.27 2009/03/31 16:54:45 murch Exp $
  */
 
 #include <config.h>
@@ -464,9 +464,10 @@ int user_deletequotaroots(const char *user)
     r = mboxname_init_namespace(&namespace, 0);
 
     /* get user's toplevel quotaroot (INBOX) */
-    if (!r)
+    if (!r) {
 	r = (*namespace.mboxname_tointernal)(&namespace, "INBOX",
 						 user, inboxname);
+    }
 
     if (!r) {
 	struct find_rock frock = { NULL, NULL };
