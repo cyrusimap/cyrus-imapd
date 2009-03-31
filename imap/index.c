@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: index.c,v 1.248 2009/03/31 04:11:18 brong Exp $
+ * $Id: index.c,v 1.249 2009/03/31 04:16:27 brong Exp $
  */
 
 #include <config.h>
@@ -205,10 +205,9 @@ static const struct thread_algorithm thread_algs[] = {
  */
 void index_closemailbox(struct mailbox *mailbox)
 {
-    if (seendb) {
+    int r;
+    if (imapd_exists) {
 	index_checkseen(mailbox, 1, 0, imapd_exists);
-	seen_close(seendb);
-	seendb = 0;
     }
     if (index_len) {
 	/* So what happens if these weren't cloned from this mailbox? */
@@ -377,7 +376,10 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 	    seenuids = NULL;
 	    r = seen_lockread(seendb, &last_read, &mailbox->recentuid,
 			      &seen_last_change, &seenuids);
-	    if (r) seen_close(seendb);
+	    if (r) {
+		seen_close(seendb);
+		seendb = 0;
+	    }
 	}
 	if (r) {
 	    seendb = 0;
@@ -427,7 +429,10 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 
     /* Check Flags */
     if (checkseen) index_checkseen(mailbox, checkseen >> 1, usinguid, oldexists);
-    else if (oldexists == -1) seen_unlock(seendb);
+    else if (oldexists == -1) {
+	seen_close(seendb);
+	seendb = 0;
+    }
     for (i = 1; i <= imapd_exists && seenflag[i]; i++);
     if (i == imapd_exists + 1) mailbox->allseen = mailbox->last_uid;
     if (oldexists == -1) {
@@ -549,10 +554,25 @@ int oldexists;
     mailbox_notifyproc_t *updatenotifier;
     int dosync = 0;
 
-    if (!mailbox->keepingseen || !seendb) return;
+
+    if (!mailbox->keepingseen) return;
     if (imapd_exists == 0) {
-	seen_unlock(seendb);
+	if (seendb) {
+	    seen_close(seendb);
+	    seendb = 0;
+	}
 	return;
+    }
+    if (!seendb) {
+	r = seen_open(mailbox,
+		      (mailbox->options & OPT_IMAP_SHAREDSEEN) ? "anyone" :
+		      imapd_userid,
+		      SEEN_CREATE, &seendb);
+	if (r) {
+	    syslog(LOG_ERR, "Failed to open seen for %s", mailbox->name);
+	    seendb = 0;
+	    return;
+	}
     }
 
     /* Lock \Seen database and read current values */
@@ -562,6 +582,7 @@ int oldexists;
 	prot_printf(imapd_out, "* OK %s: %s\r\n",
 	       error_message(IMAP_NO_CHECKSEEN), error_message(r));
 	seen_close(seendb);
+	seendb = 0;
 	return;
     }
 
@@ -678,22 +699,23 @@ int oldexists;
 
     /* If there's nothing to save back to the database, clean up and return */
     if (!dirty) {
-	seen_unlock(seendb);
+	seen_close(seendb);
+	seendb = 0;
 	free(seenuids);
 	seenuids = newseenuids;
 	/* We might have deleted our last unseen message */
+#if TOIMSP
 	if (!mailbox->allseen) {
 	    for (msgno = 1; msgno <= imapd_exists; msgno++) {
 		if (!seenflag[msgno]) break;
 	    }
-#if TOIMSP
 	    if (msgno == imapd_exists + 1) {
 		toimsp(mailbox->name, mailbox->uidvalidity,
 		       "SEENsnn", imapd_userid, mailbox->last_uid,
 		       seen_last_change, 0);
 	    }
-#endif
 	}
+#endif
 	return;
     }
     
@@ -827,7 +849,8 @@ int oldexists;
 
     /* Write the changes, clean up, and return */
     r = seen_write(seendb, last_read, last_uid, seen_last_change, saveseenuids);
-    seen_unlock(seendb);
+    seen_close(seendb);
+    seendb = 0;
     free(seenuids);
 
     if (r) {
@@ -1620,7 +1643,7 @@ int index_status(char *mboxname, char *name, unsigned statusitems)
 		      SEEN_CREATE, &status_seendb);
 
 	if (!r) {
-	    r = seen_lockread(status_seendb, &last_read, &last_uid,
+	    r = seen_read(status_seendb, &last_read, &last_uid,
 			      &last_change, &last_seenuids);
 	    seen_close(status_seendb);
 	}
