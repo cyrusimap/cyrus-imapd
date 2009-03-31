@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_commit.c,v 1.15 2008/03/24 17:09:20 murch Exp $
+ * $Id: sync_commit.c,v 1.16 2009/03/31 04:12:46 brong Exp $
  *
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
@@ -398,7 +398,7 @@ static int sync_combine_commit(struct mailbox *mailbox,
     FILE *newindex = NULL;
     FILE *newcache = NULL;
     FILE *newexpunge = NULL;
-    uquota_t original_quota = mailbox->quota_mailbox_used;
+    uquota_t original_mailbox_quota = 0;
     struct txn *tid = NULL;
     indexbuffer_t ibuf;
     unsigned char *buf = ibuf.buf;
@@ -416,6 +416,13 @@ static int sync_combine_commit(struct mailbox *mailbox,
     struct sync_counts index, expunge;
 
     if (upload_list->count == 0) return(0);   /* NOOP */
+
+    /* Calculate mailbox quota. Should match mailbox->quota_mailbox_used */
+    original_mailbox_quota = 0;
+    for (index_msgno = 1; index_msgno <= mailbox->exists; index_msgno++) {
+        mailbox_read_index_record(mailbox, index_msgno, &index_record);
+        original_mailbox_quota += index_record.size;
+    }
 
     sync_counts_clear(&index);
     index.newhighestmodseq = mailbox->highestmodseq;
@@ -631,9 +638,11 @@ static int sync_combine_commit(struct mailbox *mailbox,
 
     /* Record quota addition */
     if (!r && mailbox->quota.root) {
+        quota_t quota_delta = (index.newquota_used - original_mailbox_quota);
+
 	r = quota_read(&mailbox->quota, &tid, 1);
 	if (!r) {
-	    mailbox->quota.used = index.newquota_used;
+	    mailbox->quota.used += quota_delta;
 	    r = quota_write(&mailbox->quota, &tid);
 	    if (!r) quota_commit(&tid);
 	}
@@ -642,8 +651,7 @@ static int sync_combine_commit(struct mailbox *mailbox,
 	if (r) {
 	    syslog(LOG_ERR,
 		   "LOSTQUOTA: unable to record add of " QUOTA_T_FMT
-                   " bytes in quota %s",
-		   index.newquota_used - original_quota, mailbox->quota.root);
+                   " bytes in quota %s", quota_delta, mailbox->quota.root);
 	}
     }
 
