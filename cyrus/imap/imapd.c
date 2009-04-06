@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.559 2009/03/31 04:11:16 brong Exp $
+ * $Id: imapd.c,v 1.560 2009/04/06 04:01:41 brong Exp $
  */
 
 #include <config.h>
@@ -9566,6 +9566,7 @@ static int listdata(char *name, int matchlen, int maycreate, void *rock)
 		if (index_scan(&mailbox, listargs->scan) > 0) {
 		    mstringdata("LIST", name, matchlen, maycreate, 0);
 		}
+		index_closemailbox(&mailbox);
 	    }
 
 	    if (doclose) mailbox_close(&mailbox);
