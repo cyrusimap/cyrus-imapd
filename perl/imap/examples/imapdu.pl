@@ -39,7 +39,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: imapdu.pl,v 1.9 2008/04/04 12:47:14 murch Exp $
+# $Id: imapdu.pl,v 1.10 2009/04/07 19:49:29 murch Exp $
 
 use strict;
 use Getopt::Long;
@@ -145,7 +145,7 @@ sub sizeofmailbox {
 		       },
 		       -rock => \@info});
   print STDERR "$mb...\n" if $verbose;
-  my ($rc, $msg) = $cyrus->send('', '', "EXAMINE $mb");
+  my ($rc, $msg) = $cyrus->send('', '', "EXAMINE \"$mb\"");
   if ($rc eq 'OK') {
   } else {
       print "failed: $mb: $msg\n";
