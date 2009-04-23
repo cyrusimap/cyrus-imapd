@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mupdate.c,v 1.108 2009/03/31 04:11:19 brong Exp $
+ * $Id: mupdate.c,v 1.109 2009/04/23 15:20:40 murch Exp $
  */
 
 #include <config.h>
@@ -2243,54 +2243,64 @@ static int sync_findall_cb(char *name,
     return 0;
 }
 
-int mupdate_synchronize(mupdate_handle *handle) 
+int mupdate_synchronize_remote(mupdate_handle *handle,
+			       struct mbent_queue *remote_boxes,
+			       struct mpool *pool)
+{
+    struct sync_rock rock;
+  
+    if(!handle || !handle->saslcompleted) return 1;
+
+    rock.pool = pool;
+  
+    /* ask mupdate master for updates and set nonblocking */
+    prot_printf(handle->conn->out, "U01 UPDATE\r\n");
+  
+    syslog(LOG_NOTICE,
+	   "scarfing mailbox list from master mupdate server");
+
+    remote_boxes->head = NULL;
+    remote_boxes->tail = &(remote_boxes->head);
+  
+    rock.boxes = remote_boxes;
+  
+    /* If there is a fatal error, return, other errors ignore */
+    if (mupdate_scarf(handle, cmd_resync, &rock, 1, NULL) != 0) {
+	struct mbent *p=remote_boxes->head, *p_next=NULL;
+	while(p) {
+	    p_next = p->next;
+	    p = p_next;
+	}
+	return 1;
+    }
+
+    /* Make socket nonblocking now */
+    prot_NONBLOCK(handle->conn->in);
+
+    return 0;
+}
+
+int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
 {
     struct mbent_queue local_boxes;
-    struct mbent_queue remote_boxes;
     struct mbent *l,*r;
-    struct mpool *pool;
     struct sync_rock rock;
     char pattern[] = { '*', '\0' };
     struct txn *tid = NULL;
     int ret = 0;    
     int err = 0;
 
-    if(!handle || !handle->saslcompleted) return 1;
-
-    pool = new_mpool(131072); /* Arbitrary, but large (128k) */
     rock.pool = pool;
     
-    /* ask for updates and set nonblocking */
-    prot_printf(handle->conn->out, "U01 UPDATE\r\n");
-
     /* Note that this prevents other people from running an UPDATE against
      * us for the duration.  this is a GOOD THING */
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
     
-    syslog(LOG_NOTICE, 
+    syslog(LOG_NOTICE,
 	   "synchronizing mailbox list with master mupdate server");
 
     local_boxes.head = NULL;
     local_boxes.tail = &(local_boxes.head);
-    remote_boxes.head = NULL;
-    remote_boxes.tail = &(remote_boxes.head);
-
-    rock.boxes = &remote_boxes;
-
-    /* If there is a fatal error, die, other errors ignore */
-    if (mupdate_scarf(handle, cmd_resync, &rock, 1, NULL) != 0) {
-	struct mbent *p=remote_boxes.head, *p_next=NULL;
-	while(p) {
-	    p_next = p->next;
-	    p = p_next;
-	}
-	
-	ret = 1;
-	goto done;	
-    }
-
-    /* Make socket nonblocking now */
-    prot_NONBLOCK(handle->conn->in);
 
     rock.boxes = &local_boxes;
 
@@ -2302,8 +2312,8 @@ int mupdate_synchronize(mupdate_handle *handle)
        move on, if not, fix them */
     /* If the local is before the next remote, delete it */
     /* If the next remote is before theis local, insert it and try again */
-    for(l = local_boxes.head, r = remote_boxes.head; l && r;
-	l = local_boxes.head, r = remote_boxes.head) 
+    for(l = local_boxes.head, r = remote_boxes->head; l && r;
+	l = local_boxes.head, r = remote_boxes->head) 
     {
 	int ret = strcmp(l->mailbox, r->mailbox);
 	if(!ret) {
@@ -2330,7 +2340,7 @@ int mupdate_synchronize(mupdate_handle *handle)
 	    }
 	    /* Okay, dump these two */
 	    local_boxes.head = l->next;
-	    remote_boxes.head = r->next;
+	    remote_boxes->head = r->next;
 	} else if (ret < 0) {
 	    /* Local without corresponding remote, delete it */
 		/*
@@ -2360,7 +2370,7 @@ int mupdate_synchronize(mupdate_handle *handle)
 				  (r->t == SET_RESERVE ?
 				   MBTYPE_RESERVE : 0),
 				  r->server, r->acl, &tid);
-	    remote_boxes.head = r->next;
+	    remote_boxes->head = r->next;
 	}
     }
 
@@ -2385,8 +2395,8 @@ int mupdate_synchronize(mupdate_handle *handle)
 				  (r->t == SET_RESERVE ?
 				   MBTYPE_RESERVE : 0),
 				  r->server, r->acl, &tid);
-	    remote_boxes.head = r->next;
-	    r = remote_boxes.head;
+	    remote_boxes->head = r->next;
+	    r = remote_boxes->head;
 	}
     }
 
@@ -2400,9 +2410,7 @@ int mupdate_synchronize(mupdate_handle *handle)
 	syslog(LOG_NOTICE, "mailbox list synchronization complete");
     }
 
- done:
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
-    free_mpool(pool);
     return ret;
 }
 

@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mupdate-slave.c,v 1.30 2008/03/24 17:09:18 murch Exp $
+ * $Id: mupdate-slave.c,v 1.31 2009/04/23 15:20:40 murch Exp $
  */
 
 #include <config.h>
@@ -76,6 +76,7 @@
 #include "assert.h"
 #include "imparse.h"
 #include "iptostring.h"
+#include "mpool.h"
 #include "mupdate.h"
 #include "exitcodes.h"
 
@@ -175,15 +176,29 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
     int waiting_for_noop = 0;
     int kick_fds[KICK_FDS_LEN];
     int num_kick_fds = 0;
+    struct mbent_queue remote_boxes;
+    struct mpool *pool;
+    int r;
     
     if (!handle || !handle->saslcompleted) return;
+
+    pool = new_mpool(131072); /* Arbitrary, but large (128k) */
+
+    /* first get the list of remote mailboxes from the mupdate master */
+    r = mupdate_synchronize_remote(handle, &remote_boxes, pool);
+    if (r) {
+	free_mpool(pool);
+	return;
+    }
 
     /* don't handle connections (and drop current connections)
      * while we sync */
     mupdate_unready();
 
-    /* First, resync the database */
-    if(mupdate_synchronize(handle)) return;
+    /* Now, resync the database by comparing the remote mbox with our local*/
+    r = mupdate_synchronize(&remote_boxes, pool);
+    free_mpool(pool);
+    if (r) return;
 
     mupdate_signal_db_synced();
     

@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.169 2009/04/06 04:01:40 brong Exp $ -->
+<!-- $Id: changes.html,v 1.170 2009/04/23 15:20:40 murch Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -13,6 +13,10 @@
 <li>Added new <tt>cyr_df</tt> tool for reporting Cyrus spool partition
 disk space usage.</li>
 <li>Fixed a crash when selecting a folder after using the SCAN command</li>
+<li>Split mupdate_synchronize() into network scarfing and mailbox
+  comparision pieces.  This allows us to not lock out the
+  mailboxes.db and mupdate clients while scarfing the UPDATE
+  response, which can be quite time consuming over slow links.</li>
 </ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.3.13</h1>
@@ -2404,7 +2408,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2009/04/06 04:01:40 $ <br />
+last modified: $Date: 2009/04/23 15:20:40 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
