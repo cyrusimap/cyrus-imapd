@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: deliver.c,v 1.181 2008/10/08 15:47:06 murch Exp $
+ * $Id: deliver.c,v 1.182 2009/04/23 17:10:05 murch Exp $
  */
 
 #include <config.h>
@@ -100,6 +100,7 @@ static struct protocol_t lmtp_protocol =
       { NULL, 0 } } },
   { "STARTTLS", "220", "454", 0 },
   { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL, 0 },
+  { NULL, NULL, NULL },
   { "NOOP", NULL, "250" },
   { "QUIT", NULL, "221" }
 };

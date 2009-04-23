@@ -40,7 +40,7 @@ dnl WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
 dnl AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 dnl OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 dnl
-dnl $Id: configure.in,v 1.309 2009/03/31 04:09:42 brong Exp $
+dnl $Id: configure.in,v 1.310 2009/04/23 17:10:05 murch Exp $
 dnl
 dnl configure.in for the Cyrus imapd
 dnl
@@ -942,6 +942,13 @@ if test -n "$EGD_SOCKET" ; then
 fi
 
 dnl
+dnl Test for zlib
+dnl
+CMU_HAVE_ZLIB
+AC_MSG_CHECKING(for zlib)
+AC_MSG_RESULT($with_zlib)
+
+dnl
 dnl Test for Zephyr
 dnl
 AC_ARG_WITH(zephyr,[  --with-zephyr[=PATH]    enable Zephyr notification (installed on PATH)],
@@ -1310,7 +1317,7 @@ AH_TOP([
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: configure.in,v 1.309 2009/03/31 04:09:42 brong Exp $
+ * $Id: configure.in,v 1.310 2009/04/23 17:10:05 murch Exp $
  */
 
 #ifndef _CYRUS_IMAPD_CONFIG_H_

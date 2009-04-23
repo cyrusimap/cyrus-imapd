@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: backend.c,v 1.59 2009/02/04 16:42:02 murch Exp $
+ * $Id: backend.c,v 1.60 2009/04/23 17:10:05 murch Exp $
  */
 
 #include <config.h>
@@ -91,8 +91,6 @@ static char *ask_capability(struct protstream *pout, struct protstream *pin,
     struct capa_t *c;
     const char *resp;
 
-    *capa = 0;
-    
     resp = (automatic == AUTO_BANNER) ? prot->banner.resp : prot->capa_cmd.resp;
 
     if (!automatic) {
@@ -106,6 +104,8 @@ static char *ask_capability(struct protstream *pout, struct protstream *pin,
 	prot_flush(pout);
     }
 
+    *capa = 0;
+    
     do {
 	if (prot_fgets(str, sizeof(str), pin) == NULL) break;
 
@@ -132,6 +132,29 @@ static char *ask_capability(struct protstream *pout, struct protstream *pin,
     
     prot_BLOCK(pin);
     return ret;
+}
+
+static int do_compress(struct backend *s, struct simple_cmd_t *compress_cmd)
+{
+#ifndef HAVE_ZLIB
+    return -1;
+#else
+    char buf[1024];
+
+    /* send compress command */
+    prot_printf(s->out, "%s\r\n", compress_cmd->cmd);
+    prot_flush(s->out);
+
+    /* check response */
+    if (!prot_fgets(buf, sizeof(buf), s->in) ||
+	strncmp(buf, compress_cmd->ok, strlen(compress_cmd->ok)))
+	return -1;
+
+    prot_setcompress(s->in);
+    prot_setcompress(s->out);
+
+    return 0;
+#endif /* HAVE_ZLIB */
 }
 
 static int do_starttls(struct backend *s, struct tls_cmd_t *tls_cmd)
@@ -483,6 +506,18 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
     }
 
     if (mechlist) free(mechlist);
+
+    /* start compression if requested and both client/server support it */
+    if (config_getswitch(IMAPOPT_PROXY_COMPRESS) &&
+	CAPA(ret, CAPA_COMPRESS) &&
+	prot->compress_cmd.cmd &&
+	do_compress(ret, &prot->compress_cmd)) {
+
+	syslog(LOG_ERR, "couldn't enable compression on backend server");
+	if (!ret_backend) free(ret);
+	close(sock);
+	ret = NULL;
+    }
 
     if (!ret_backend) ret_backend = ret;
 	    

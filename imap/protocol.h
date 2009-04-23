@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: protocol.h,v 1.10 2008/04/21 15:55:01 murch Exp $
+ * $Id: protocol.h,v 1.11 2009/04/23 17:10:07 murch Exp $
  */
 
 #ifndef _INCLUDED_PROTOCOL_H
@@ -53,10 +53,11 @@ enum {
     /* generic capabilities */
     CAPA_AUTH		= (1 << 0),
     CAPA_STARTTLS	= (1 << 1),
+    CAPA_COMPRESS	= (1 << 2)
 
     /*
       protocol specific capabilites MUST be in the range
-      (1 << 2) .. (1 << MAX_CAPA)
+      (1 << 3) .. (1 << MAX_CAPA)
     */
 };
 
@@ -104,6 +105,7 @@ struct protocol_t {
     struct capa_cmd_t capa_cmd;
     struct tls_cmd_t tls_cmd;
     struct sasl_cmd_t sasl_cmd;
+    struct simple_cmd_t compress_cmd;
     struct simple_cmd_t ping_cmd;
     struct simple_cmd_t logout_cmd;
 };

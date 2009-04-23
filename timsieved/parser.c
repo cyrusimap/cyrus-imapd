@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: parser.c,v 1.53 2009/02/09 05:01:59 brong Exp $
+ * $Id: parser.c,v 1.54 2009/04/23 17:10:07 murch Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -127,6 +127,7 @@ static struct protocol_t sieve_protocol =
       { NULL, 0 } } },
   { "STARTTLS", "OK", "NO", 1 },
   { "AUTHENTICATE", INT_MAX, 1, "OK", "NO", NULL, "*", &sieve_parsesuccess, 1 },
+  { NULL, NULL, NULL },
   { NULL, NULL, NULL },
   { "LOGOUT", NULL, "OK" }
 };

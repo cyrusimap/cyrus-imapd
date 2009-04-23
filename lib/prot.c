@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: prot.c,v 1.96 2009/02/16 18:13:22 murch Exp $
+ * $Id: prot.c,v 1.97 2009/04/23 17:10:07 murch Exp $
  */
 
 #include <config.h>
@@ -119,6 +119,15 @@ int prot_free(struct protstream *s)
 	close(s->big_buffer);
     }
 
+#ifdef HAVE_ZLIB
+    if (s->zstrm) {
+	if (s->write) deflateEnd(s->zstrm);
+	else inflateEnd(s->zstrm);
+	free(s->zstrm);
+    }
+    if (s->zbuf) free(s->zbuf);
+#endif
+
     free((char*)s);
 
     return 0;
@@ -180,15 +189,9 @@ int prot_sasldecode(struct protstream *s, int n)
     }
    
     if (outlen > 0) {
-	/* XXX can we just serve data from 'out' without copying
-	   it to s->buf ? */
-	if (outlen > s->buf_size) {
-	    s->buf = (unsigned char *) 
-		xrealloc(s->buf, sizeof(char) * (outlen + 4));
-	    s->buf_size = outlen;
-	}
-	memcpy(s->buf, out, outlen);
-	s->ptr = s->buf;
+      /* The contents of 'out' is static until next call to
+	 sasl_decode(), so serve data directly from 'out' */
+	s->ptr = (unsigned char *) out;
 	s->cnt = outlen;
     } else {		/* didn't decode anything */
 	s->cnt = 0;
@@ -246,6 +249,104 @@ sasl_conn_t *conn;
 	if (prot_sasldecode(s, s->cnt) == EOF) return EOF;
     }
 
+    return 0;
+}
+
+#ifdef HAVE_ZLIB
+
+#define ZLARGE_DIFF_CHUNK (5120) /* 5K */
+
+/* Wrappers for our memory management functions */
+static voidpf zalloc(voidpf opaque __attribute__((unused)),
+		     uInt items, uInt size)
+{
+    return (voidpf) xmalloc(items * size);
+}
+
+static void zfree(voidpf opaque __attribute__((unused)),
+		  voidpf address)
+{
+    free(address);
+}
+
+/*
+ * Turn on (de)compression for this connection
+ * If its an output stream, initialize a compressor,
+ * otherwise initialize a decompressor.
+ */
+
+int prot_setcompress(struct protstream *s)
+{
+    int zr = Z_OK;
+    z_stream *zstrm = (z_stream *) xmalloc(sizeof(z_stream));
+
+    zstrm->zalloc = zalloc;
+    zstrm->zfree = zfree;
+    zstrm->opaque = Z_NULL;
+
+    if (s->write) {
+	if (s->ptr != s->buf) {
+	    /* flush any pending output */
+	    if (prot_flush_internal(s,0) == EOF) zr = EOF;
+	}
+
+	if (zr == Z_OK) {
+	    s->zlevel = Z_DEFAULT_COMPRESSION;
+	    zr = deflateInit2(zstrm, s->zlevel, Z_DEFLATED,
+			     -15, 8, Z_DEFAULT_STRATEGY);
+	}
+    }
+    else {
+	zstrm->next_in = Z_NULL;
+	zstrm->avail_in = 0;
+	zr = inflateInit2(zstrm, -15);
+    }
+
+    if (zr != Z_OK) free(zstrm);
+    else s->zstrm = zstrm;
+
+    return zr;
+}
+
+/* Table of incompressible file type signatures */
+static struct file_sig {
+    const char *type;
+    size_t len;
+    const char *sig;
+} sig_tbl[] = {
+    { "GIF87a",	6, "GIF87a" },
+    { "GIF89a",	6, "GIF89a" },
+    { "GZIP",	2, "\x1F\x8B" },
+    { "JPEG",	4, "\xFF\xD8\xFF\xE0" },
+    { "PNG",	8, "\x89\x50\x4E\x47\x0D\x0A\x1A\x0A" },
+    { NULL,	0, NULL }
+};
+
+/* Check if a chunk of data is incompressible */
+static int is_incompressible(const char *p, size_t n)
+{
+    struct file_sig *sig = sig_tbl;
+
+    while (sig->type) {
+	if (n >= sig->len && !memcmp(p, sig->sig, sig->len)) {
+	    syslog(LOG_DEBUG, "data is %s", sig->type);
+	    return 1;
+	}
+	sig++;
+    }
+
+    return 0;
+}
+
+#endif /* HAVE_ZLIB */
+
+/* Tell the protstream that the type of data is about to change.
+ * Since we might want to look at the data, we only set a flag and delay
+ * any changes to the stream layers until the next prot_write().
+ */
+int prot_data_boundary(struct protstream *s)
+{
+    s->boundary = 1;
     return 0;
 }
 
@@ -530,6 +631,48 @@ int prot_fill(struct protstream *s)
 	    s->ptr = s->buf;
 	    s->cnt = n;
 	}
+
+#ifdef HAVE_ZLIB
+	if (s->zstrm && s->cnt > 0) {
+	    /* Decompress the data */
+	    int zr = Z_OK;
+
+	    s->zstrm->next_in = s->ptr;
+	    s->zstrm->avail_in = s->cnt;
+	    s->zstrm->next_out = s->zbuf;
+	    s->zstrm->avail_out = s->zbuf_size;
+
+	    syslog(LOG_DEBUG, "inflate(%d bytes)", s->cnt);
+
+	    do {
+		if (!s->zstrm->avail_out) {
+		    /* Need more space to decompress */
+		    syslog(LOG_DEBUG,
+			   "growing decompress buffer from %d to %d bytes",
+			   s->zbuf_size, s->zbuf_size + PROT_BUFSIZE);
+
+		    s->zbuf = (unsigned char *)
+			xrealloc(s->zbuf, s->zbuf_size + PROT_BUFSIZE);
+		    s->zstrm->next_out = s->zbuf + s->zbuf_size;
+		    s->zstrm->avail_out = PROT_BUFSIZE;
+		    s->zbuf_size += PROT_BUFSIZE;
+		}
+
+		zr = inflate(s->zstrm, Z_SYNC_FLUSH);
+	    } while (zr == Z_OK && !s->zstrm->avail_out);
+
+	    if (zr != Z_OK || s->zstrm->avail_in) {
+		/* Error decompressing */
+		s->error = xstrdup("Error decompressing data");
+		return EOF;
+	    }
+
+	    s->ptr = s->zbuf;
+	    s->cnt = s->zbuf_size - s->zstrm->avail_out;
+
+	    syslog(LOG_DEBUG, "   => decompressed to %d bytes", s->cnt);
+	}
+#endif /* HAVE_ZLIB */
 	
 	if (s->cnt > 0) {
 	    if (s->logfd != -1) {
@@ -541,7 +684,7 @@ int prot_fill(struct protstream *s)
 		write(s->logfd, timebuf, strlen(timebuf));
 
 		left = s->cnt;
-		ptr = s->buf;
+		ptr = s->ptr;
 		do {
 		    n = write(s->logfd, ptr, left);
 		    if (n == -1 && errno != EINTR) {
@@ -604,6 +747,53 @@ static int prot_flush_encode(struct protstream *s,
 {
     unsigned char *ptr = s->buf;
     int left = s->ptr - s->buf;
+
+#ifdef HAVE_ZLIB
+    if (s->zstrm) {
+	/* Compress the data */
+	unsigned long def_size = deflateBound(s->zstrm, left);
+	int zflush = s->boundary ? Z_FULL_FLUSH : Z_SYNC_FLUSH;
+	int zr = Z_OK;
+
+	if (def_size > s->zbuf_size) {
+	    /* Make sure buffer is large enough to hold compressed data.
+	     * Oversize the buffer, so we (hopefully) eliminate
+	     * multiple small incremental reallocations.
+	     */
+	    syslog(LOG_DEBUG, "growing compress buffer from %u to %lu bytes",
+		   s->zbuf_size, def_size + PROT_BUFSIZE);
+
+	    s->zbuf_size = def_size + PROT_BUFSIZE;
+	    s->zbuf = (unsigned char *) xrealloc(s->zbuf, s->zbuf_size);
+	}
+
+	s->zstrm->next_in = ptr;
+	s->zstrm->avail_in = left;
+	s->zstrm->next_out = s->zbuf;
+	s->zstrm->avail_out = s->zbuf_size;
+
+	syslog(LOG_DEBUG, "deflate(%d bytes, level=%d, flush=%s)",
+	       left, s->zlevel,
+	       zflush == Z_FULL_FLUSH ? "FULL" : "SYNC");
+
+	if (s->boundary) {
+	    /* Set (new) compression level */
+	    zr = deflateParams(s->zstrm, s->zlevel, Z_DEFAULT_STRATEGY);
+	}
+	if (zr == Z_OK) zr = deflate(s->zstrm, zflush);
+
+	if (zr != Z_OK || s->zstrm->avail_in) {
+	    /* Error compressing */
+	    s->error = xstrdup("Error compressing data");
+	    return EOF;
+	}
+
+	ptr = s->zbuf;
+	left = s->zbuf_size - s->zstrm->avail_out;
+
+	syslog(LOG_DEBUG, "   => compressed to %d bytes", left);
+    }
+#endif /* HAVE_ZLIB */
 
     if (s->saslssf != 0) {
 	/* encode the data */
@@ -865,6 +1055,35 @@ int prot_write(struct protstream *s, const char *buf, unsigned len)
     if(s->error || s->eof) return EOF;
     if(len == 0) return 0;
     
+    /* Different type of data, adjust layers accordingly */
+    if (s->boundary) {
+#ifdef HAVE_ZLIB
+	if (s->zstrm) {
+	    s->zlevel = Z_DEFAULT_COMPRESSION;
+
+	    if (len > ZLARGE_DIFF_CHUNK) {
+		/* Start of a large chunk of different data */
+		s->zflush = 1;
+
+		/* Check for incompressible data */
+		if (is_incompressible(buf, len)) s->zlevel = Z_NO_COMPRESSION;
+	    }
+
+	    if (s->zflush) {
+		/* Flush any pending output */
+		if (prot_flush_internal(s, 1) == EOF) return EOF;
+	    }
+
+	    if (len <= ZLARGE_DIFF_CHUNK) {
+		/* End of large chunk */
+		s->zflush = 0;
+	    }
+	}
+#endif /* HAVE_ZLIB */
+
+	s->boundary = 0;
+    }
+
     while (len >= s->cnt) {
 	/* XXX can we manage to write data from 'buf' without copying it
 	   to s->ptr ? */

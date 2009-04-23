@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mupdate.c,v 1.109 2009/04/23 15:20:40 murch Exp $
+ * $Id: mupdate.c,v 1.110 2009/04/23 17:10:07 murch Exp $
  */
 
 #include <config.h>
@@ -135,6 +135,8 @@ struct conn {
 #else
     void *tlsconn;
 #endif
+    void *tls_comp;     /* TLS compression method, if any */
+    int compress_done;  /* have we done a successful compress? */
 
     int idle;
     
@@ -223,6 +225,7 @@ void cmd_list(struct conn *C, const char *tag, const char *host_prefix);
 void cmd_startupdate(struct conn *C, const char *tag,
 		     struct stringlist *partial);
 void cmd_starttls(struct conn *C, const char *tag);
+void cmd_compress(struct conn *C, const char *tag, const char *alg);
 void shut_down(int code);
 static int reset_saslconn(struct conn *c);
 void database_init();
@@ -803,7 +806,20 @@ mupdate_docmd_result_t docmd(struct conn *c)
 	}
 	else goto badcmd;
 	break;
-	
+
+#ifdef HAVE_ZLIB
+    case 'C':
+	if (!strcmp(c->cmd.s, "Compress")) {
+	    if (ch != ' ') goto missingargs;
+	    ch = getstring(c->pin, c->pout, &(c->arg1));
+	    CHECKNEWLINE(c, ch);
+
+	    cmd_compress(c, c->tag.s, c->arg1.s);
+	}	
+	else goto badcmd;
+	break;
+#endif
+
     case 'D':
 	if (!c->userid) goto nologin;
 	else if (!strcmp(c->cmd.s, "Deactivate")) {
@@ -920,6 +936,14 @@ mupdate_docmd_result_t docmd(struct conn *c)
 	    if (c->userid) {
 		prot_printf(c->pout, 
 			    "%s BAD Can't Starttls after authentication\r\n",
+			    c->tag.s);
+		goto nextcmd;
+	    }
+		
+	    /* if we've already done COMPRESS fail */
+	    if (c->compress_done) {
+		prot_printf(c->pout, 
+			    "%s BAD Can't Starttls after Compress\r\n",
 			    c->tag.s);
 		goto nextcmd;
 	    }
@@ -1102,6 +1126,12 @@ static void dobanner(struct conn *c)
     if (tls_enabled() && !c->tlsconn) {
 	prot_printf(c->pout, "* STARTTLS\r\n");
     }
+
+#ifdef HAVE_ZLIB
+    if (!c->compress_done && !c->tls_comp) {
+	prot_printf(c->pout, "* COMPRESS \"DEFLATE\"\r\n");
+    }
+#endif
 
     prot_printf(c->pout, "* PARTIAL-UPDATE\r\n");
 
@@ -1988,6 +2018,10 @@ void cmd_starttls(struct conn *C, const char *tag)
     prot_settls(C->pin, C->tlsconn);
     prot_settls(C->pout, C->tlsconn);
 
+#if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
+    C->tls_comp = (void *) SSL_get_current_compression(C->tlsconn);
+#endif
+
     /* Reissue capability banner */
     dobanner(C);
 }
@@ -1998,6 +2032,48 @@ void cmd_starttls(struct conn *C, const char *tag)
 	  EC_SOFTWARE);
 }
 #endif /* HAVE_SSL */
+
+#ifdef HAVE_ZLIB
+void cmd_compress(struct conn *C, const char *tag, const char *alg)
+{
+    if (C->compress_done) {
+	prot_printf(C->pout,
+		    "%s BAD DEFLATE active via COMPRESS\r\n", tag);
+    }
+#if defined(HAVE_SSL) && (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
+    else if (C->tls_comp) {
+	prot_printf(C->pout,
+		    "%s NO %s active via TLS\r\n",
+		    tag, SSL_COMP_get_name(C->tls_comp));
+    }
+#endif
+    else if (strcasecmp(alg, "DEFLATE")) {
+	prot_printf(C->pout,
+		    "%s NO Unknown COMPRESS algorithm: %s\r\n", tag, alg);
+    }
+    else if (ZLIB_VERSION[0] != zlibVersion()[0]) {
+	prot_printf(C->pout,
+		    "%s NO Error initializing %s (incompatible zlib version)\r\n",
+		    tag, alg);
+    }
+    else {
+	prot_printf(C->pout,
+		    "%s OK %s active\r\n", tag, alg);
+
+	/* enable (de)compression for the prot layer */
+	prot_setcompress(C->pin);
+	prot_setcompress(C->pout);
+
+	C->compress_done = 1;
+    }
+}
+#else
+void cmd_compress(struct conn *C, const char *tag, const char *alg)
+{
+    fatal("cmd_compress() executed, but COMPRESS isn't implemented!",
+	  EC_SOFTWARE);
+}
+#endif /* HAVE_ZLIB */
 
 void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
