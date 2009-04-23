@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: lmtpengine.c,v 1.130 2009/03/31 04:11:18 brong Exp $
+ * $Id: lmtpengine.c,v 1.131 2009/04/23 01:30:32 murch Exp $
  */
 
 #include <config.h>
@@ -809,7 +809,7 @@ static int savemsg(struct clientdata *cd,
 static int process_recipient(char *addr, struct namespace *namespace,
 			     int ignorequota,
 			     int (*verify_user)(const char *, const char *,
-						char *, long,
+						char *, quota_t,
 						struct auth_state *),
 			     message_data_t *msg)
 {
@@ -898,7 +898,7 @@ static int process_recipient(char *addr, struct namespace *namespace,
 	ret->user = NULL;
 
     r = verify_user(ret->user, ret->domain, ret->mailbox,
-		    ignorequota ? -1 : msg->size, msg->authstate);
+		    (quota_t) (ignorequota ? -1 : msg->size), msg->authstate);
     if (r) {
 	/* we lost */
 	free(ret->all);
