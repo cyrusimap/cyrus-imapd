@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mupdate.h,v 1.19 2009/02/09 05:01:58 brong Exp $
+ * $Id: mupdate.h,v 1.20 2009/04/23 15:20:40 murch Exp $
  */
 
 #ifndef INCLUDED_MUPDATE_H
@@ -56,6 +56,7 @@
 
 #include "backend.h"
 #include "mailbox.h"
+#include "mpool.h"
 #include "mupdate-client.h"
 #include "mupdate_err.h"
 #include "global.h"
@@ -109,8 +110,11 @@ void free_mbent(struct mbent *p);
 int cmd_change(struct mupdate_mailboxdata *mdata,
 	       const char *cmd, void *context);
 
+int mupdate_synchronize_remote(mupdate_handle *handle,
+			       struct mbent_queue *remote_boxes,
+			       struct mpool *pool);
 /* Given an mbent_queue, will synchronize the local database to it */
-int mupdate_synchronize(mupdate_handle *handle);
+int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool);
 
 /* Signal that we are ready to accept connections */
 void mupdate_ready(void);
