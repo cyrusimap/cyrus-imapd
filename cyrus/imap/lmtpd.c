@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: lmtpd.c,v 1.163 2009/03/16 00:17:16 brong Exp $
+ * $Id: lmtpd.c,v 1.164 2009/04/23 17:10:06 murch Exp $
  */
 
 #include <config.h>
@@ -156,6 +156,7 @@ static struct protocol_t lmtp_protocol =
       { NULL, 0 } } },
   { "STARTTLS", "220", "454", 0 },
   { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL, 0 },
+  { NULL, NULL, NULL },
   { "NOOP", NULL, "250" },
   { "QUIT", NULL, "221" }
 };

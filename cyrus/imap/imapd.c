@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.560 2009/04/06 04:01:41 brong Exp $
+ * $Id: imapd.c,v 1.561 2009/04/23 17:10:06 murch Exp $
  */
 
 #include <config.h>
@@ -166,6 +166,8 @@ static int imapd_userisproxyadmin = 0;
 int imapd_condstore_client = 0;
 static sasl_conn_t *imapd_saslconn; /* the sasl connection context */
 static int imapd_starttls_done = 0; /* have we done a successful starttls? */
+static void *imapd_tls_comp = NULL; /* TLS compression method, if any */
+static int imapd_compress_done = 0; /* have we done a successful compress? */
 const char *plaintextloginalert = NULL;
 #ifdef HAVE_SSL
 /* our tls connection, if any */
@@ -263,6 +265,10 @@ void cmd_starttls(char *tag, int imaps);
 void cmd_urlfetch(char *tag);
 void cmd_genurlauth(char *tag);
 void cmd_resetkey(char *tag, char *mailbox, char *mechanism);
+#endif
+
+#ifdef HAVE_ZLIB
+void cmd_compress(char *tag, char *alg);
 #endif
 
 #ifdef ENABLE_X_NETSCAPE_HACK
@@ -600,6 +606,8 @@ static void imapd_reset(void)
 	free(imapd_saslconn);
 	imapd_saslconn = NULL;
     }
+    imapd_compress_done = 0;
+    imapd_tls_comp = NULL;
     imapd_starttls_done = 0;
     plaintextloginalert = NULL;
 
@@ -1137,6 +1145,19 @@ void cmdloop()
 
 		snmp_increment(CAPABILITY_COUNT, 1);
 	    }
+#ifdef HAVE_ZLIB
+	    else if (!strcmp(cmd.s, "Compress")) {
+		if (c != ' ') goto missingargs;
+		c = getword(imapd_in, &arg1);
+		if (c == EOF) goto missingargs;
+		if (c == '\r') c = prot_getc(imapd_in);
+		if (c != '\n') goto extraargs;
+
+		cmd_compress(tag.s, arg1.s);
+
+		snmp_increment(COMPRESS_COUNT, 1);
+	    }
+#endif /* HAVE_ZLIB */
 	    else if (!imapd_userid) goto nologin;
 	    else if (!strcmp(cmd.s, "Check")) {
 		if (!imapd_mailbox && !backend_current) goto nomailbox;
@@ -1664,6 +1685,13 @@ void cmdloop()
 		if (imapd_userid != NULL) {
 		    prot_printf(imapd_out, 
 	       "%s BAD Can't Starttls after authentication\r\n", tag.s);
+		    continue;
+		}
+		
+		/* if we've already done COMPRESS fail */
+		if (imapd_compress_done == 1) {
+		    prot_printf(imapd_out, 
+	       "%s BAD Can't Starttls after Compress\r\n", tag.s);
 		    continue;
 		}
 		
@@ -2664,6 +2692,12 @@ void capa_response(int flags)
     } else {
 	/* else don't show anything */
     }
+
+#ifdef HAVE_ZLIB
+    if (!imapd_compress_done && !imapd_tls_comp) {
+	prot_printf(imapd_out, " COMPRESS=DEFLATE");
+    }
+#endif
 
     if (!(flags & CAPA_POSTAUTH)) return;
 
@@ -6786,6 +6820,10 @@ void cmd_starttls(char *tag, int imaps)
     prot_settls(imapd_out, tls_conn);
 
     imapd_starttls_done = 1;
+
+#if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
+    imapd_tls_comp = (void *) SSL_get_current_compression(tls_conn);
+#endif
 }
 #else
 void cmd_starttls(char *tag, int imaps)
@@ -10120,3 +10158,40 @@ void cmd_resetkey(char *tag, char *mailbox,
     }
 }
 #endif /* HAVE_SSL */
+
+#ifdef HAVE_ZLIB
+void cmd_compress(char *tag, char *alg)
+{
+    if (imapd_compress_done) {
+	prot_printf(imapd_out,
+		    "%s BAD [COMPRESSIONACTIVE] DEFLATE active via COMPRESS\r\n",
+		    tag);
+    }
+#if defined(HAVE_SSL) && (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
+    else if (imapd_tls_comp) {
+	prot_printf(imapd_out,
+		    "%s NO [COMPRESSIONACTIVE] %s active via TLS\r\n",
+		    tag, SSL_COMP_get_name(imapd_tls_comp));
+    }
+#endif
+    else if (strcasecmp(alg, "DEFLATE")) {
+	prot_printf(imapd_out,
+		    "%s NO Unknown COMPRESS algorithm: %s\r\n", tag, alg);
+    }
+    else if (ZLIB_VERSION[0] != zlibVersion()[0]) {
+	prot_printf(imapd_out,
+		    "%s NO Error initializing %s (incompatible zlib version)\r\n",
+		    tag, alg);
+    }
+    else {
+	prot_printf(imapd_out,
+		    "%s OK %s active\r\n", tag, alg);
+
+	/* enable (de)compression for the prot layer */
+	prot_setcompress(imapd_in);
+	prot_setcompress(imapd_out);
+
+	imapd_compress_done = 1;
+    }
+}
+#endif /* HAVE_ZLIB */

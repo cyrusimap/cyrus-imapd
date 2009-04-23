@@ -43,7 +43,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\"
-.\" $Id: imapoptions,v 1.63 2009/03/31 04:43:20 brong Exp $
+.\" $Id: imapoptions,v 1.64 2009/04/23 17:10:07 murch Exp $
 
 .SH NAME
 imapd.conf \- IMAP configuration file
@@ -788,6 +788,14 @@ are listed with ``<none>''.
 { "proxy_authname", "proxy", STRING }
 /* The authentication name to use when authenticating to a backend server
    in the Cyrus Murder. */
+
+{ "proxy_compress", 0, SWITCH }
+/* Try to enable protocol-specific compression when performing a client
+   connection to a backend server in the Cyrus Murder.
+.PP
+  Note that this should only be necessary over slow network
+  connections.  Also note that currently only IMAP and MUPDATE support
+  compression. */
 
 { "proxy_password", NULL, STRING }
 /* The default password to use when authenticating to a backend server

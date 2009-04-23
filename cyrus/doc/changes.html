@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.170 2009/04/23 15:20:40 murch Exp $ -->
+<!-- $Id: changes.html,v 1.171 2009/04/23 17:10:05 murch Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -17,6 +17,8 @@ disk space usage.</li>
   comparision pieces.  This allows us to not lock out the
   mailboxes.db and mupdate clients while scarfing the UPDATE
   response, which can be quite time consuming over slow links.</li>
+<li>Added support for MUPDATE COMPRESS and IMAP COMPRESS commands
+  which help speed up bulk data commands over slow links.</li>
 </ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.3.13</h1>
@@ -2408,7 +2410,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2009/04/23 15:20:40 $ <br />
+last modified: $Date: 2009/04/23 17:10:05 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>

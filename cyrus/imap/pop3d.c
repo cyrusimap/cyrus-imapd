@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: pop3d.c,v 1.192 2009/03/31 04:11:19 brong Exp $
+ * $Id: pop3d.c,v 1.193 2009/04/23 17:10:07 murch Exp $
  */
 
 #include <config.h>
@@ -162,6 +162,7 @@ static struct protocol_t pop3_protocol =
       { NULL, 0 } } },
   { "STLS", "+OK", "-ERR", 0 },
   { "AUTH", 255, 0, "+OK", "-ERR", "+ ", "*", NULL, 0 },
+  { NULL, NULL, NULL },
   { "NOOP", NULL, "+OK" },
   { "QUIT", NULL, "+OK" }
 };

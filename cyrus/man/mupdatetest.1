@@ -40,7 +40,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\"
-.\" $Id: mupdatetest.1,v 1.8 2008/04/04 12:46:59 murch Exp $
+.\" $Id: mupdatetest.1,v 1.9 2009/04/23 17:10:07 murch Exp $
 .SH NAME
 mupdatetest \- interactive MUPDATE test program
 .SH SYNOPSIS
@@ -84,10 +84,13 @@ mupdatetest \- interactive MUPDATE test program
 .I num
 ]
 [
-.B \-c
+.B \-q
 ]
 .br
             [
+.B \-c
+]
+[
 .B \-i
 ]
 [
@@ -150,6 +153,9 @@ Pipe \fIfile\fR into connection after authentication.
 .BI -n " num"
 Number of authentication attempts; default = 1.  The client will
 attempt to fast reauth (e.g. DIGEST-MD5), if possible.
+.TP
+.B -q
+Enable MUPDATE COMPRESSion (before the last authentication attempt).
 .TP
 .B -c
 Enable challenge prompt callbacks.  This will cause the OTP mechanism

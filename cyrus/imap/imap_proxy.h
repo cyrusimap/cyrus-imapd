@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.h,v 1.4 2008/04/03 21:09:51 murch Exp $
+ * $Id: imap_proxy.h,v 1.5 2009/04/23 17:10:06 murch Exp $
  */
 
 #ifndef _IMAP_PROXY_H
@@ -58,11 +58,11 @@ enum {
 
 enum {
     /* IMAP capabilities */
-    CAPA_IDLE		= (1 << 2),
-    CAPA_MUPDATE	= (1 << 3),
-    CAPA_MULTIAPPEND	= (1 << 4),
-    CAPA_LISTSUBSCRIBED	= (1 << 5),
-    CAPA_ACLRIGHTS	= (1 << 6)
+    CAPA_IDLE		= (1 << 3),
+    CAPA_MUPDATE	= (1 << 4),
+    CAPA_MULTIAPPEND	= (1 << 5),
+    CAPA_LISTSUBSCRIBED	= (1 << 6),
+    CAPA_ACLRIGHTS	= (1 << 7)
 };
 
 extern struct protocol_t imap_protocol;

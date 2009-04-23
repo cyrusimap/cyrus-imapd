@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: version.c,v 1.22 2008/03/24 17:09:20 murch Exp $
+ * $Id: version.c,v 1.23 2009/04/23 17:10:07 murch Exp $
  */
 
 #include <config.h>
@@ -146,8 +146,14 @@ void id_response(struct protstream *pout)
 	     "; Running w/%s", SSLeay_version(SSLEAY_VERSION));
 #ifdef EGD_SOCKET
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
-	     " (with EGD)");
+	     " (with EGD)")
 #endif
+#endif
+#ifdef HAVE_ZLIB
+    snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
+	     "; Built w/zlib %s", ZLIB_VERSION);
+    snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
+	     "; Running w/zlib %s", zlibVersion());
 #endif
 #ifdef USE_SIEVE
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),

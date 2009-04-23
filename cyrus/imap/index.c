@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: index.c,v 1.249 2009/03/31 04:16:27 brong Exp $
+ * $Id: index.c,v 1.250 2009/04/23 17:10:06 murch Exp $
  */
 
 #include <config.h>
@@ -1830,6 +1830,24 @@ index_forsequence(struct mailbox* mailbox,
     return result;
 }
 
+/* Helper function to determine domain of data */
+enum {
+    DOMAIN_7BIT = 0,
+    DOMAIN_8BIT,
+    DOMAIN_BINARY
+};
+
+static int data_domain(const unsigned char *p, size_t n)
+{
+    while (n--) {
+	if (!*p) return DOMAIN_BINARY;
+	if (*p & 0x80) return DOMAIN_8BIT;
+	p++;
+    }
+ 
+    return DOMAIN_7BIT;
+}
+
 /*
  * Helper function to fetch data from a message file.  Writes a
  * quoted-string or literal containing data from 'msg_base', which is
@@ -1851,7 +1869,7 @@ unsigned start_octet;
 unsigned octet_count;
 struct protstream *pout;
 {
-    unsigned n;
+  unsigned n, domain;
 
     /* If no data, output NIL */
     if (!msg_base) {
@@ -1883,14 +1901,19 @@ struct protstream *pout;
 	n = msg_size - offset;
     }
 
-    /* Look for a NUL in the data */
-    if (memchr(msg_base + offset, 0, n)) {
+    /* Get domain of the data */
+    domain = data_domain(msg_base + offset, n);
+
+    if (domain == DOMAIN_BINARY) {
 	/* Write size of literal8 */
 	prot_printf(pout, "~{%u}\r\n", size);
     } else {
 	/* Write size of literal */
 	prot_printf(pout, "{%u}\r\n", size);
     }
+
+    /* Non-text literal -- tell the protstream about it */
+    if (domain != DOMAIN_7BIT) prot_data_boundary(pout);
 
     prot_write(pout, msg_base + offset, n);
     while (n++ < size) {
@@ -1901,6 +1924,9 @@ struct protstream *pout;
 	 */
 	prot_putc(' ', pout);
     }
+
+    /* End of non-text literal -- tell the protstream about it */
+    if (domain != DOMAIN_7BIT) prot_data_boundary(pout);
 }
 
 /*
