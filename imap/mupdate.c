@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mupdate.c,v 1.110 2009/04/23 17:10:07 murch Exp $
+ * $Id: mupdate.c,v 1.111 2009/04/30 18:20:58 murch Exp $
  */
 
 #include <config.h>
@@ -1299,8 +1299,12 @@ static void *thread_main(void *rock __attribute__((unused)))
 	    /* Free all connections on idle_connlist.  Note that
 	     * any connection not currently on the idle_connlist will
 	     * instead be freed when they drop out of their docmd() below */
+	    struct conn *ni;
+
 	    pthread_mutex_lock(&idle_connlist_mutex); /* LOCK */
-	    for(C=idle_connlist; C; C=C->next_idle) {
+	    for(C=idle_connlist; C; C = ni) {
+		ni = C->next_idle;
+
 		prot_printf(C->pout,
 			    "* BYE \"no longer ready for connections\"\r\n");
 
