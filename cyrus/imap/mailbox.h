@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.h,v 1.93 2009/02/09 05:08:21 brong Exp $
+ * $Id: mailbox.h,v 1.94 2009/05/05 01:20:03 brong Exp $
  */
 
 #ifndef INCLUDED_MAILBOX_H
@@ -392,7 +392,8 @@ extern int mailbox_delete(struct mailbox *mailbox, int delete_quota_root);
 extern int mailbox_rename_copy(struct mailbox *oldmailbox, 
 			       const char *newname, char *newpartition,
 			       bit32 *olduidvalidityp, bit32 *newuidvalidityp,
-			       struct mailbox *mailboxp, char *userid);
+			       struct mailbox *mailboxp, char *userid,
+                               int ignorequota);
 extern int mailbox_rename_cleanup(struct mailbox *oldmailbox, int isinbox);
 
 extern int mailbox_sync(const char *oldname, const char *oldpath, 

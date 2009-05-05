@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mboxlist.h,v 1.45 2009/02/09 05:01:58 brong Exp $
+ * $Id: mboxlist.h,v 1.46 2009/05/05 01:20:03 brong Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -138,7 +138,8 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
 /* Rename/move a mailbox (hierarchical) */
 int mboxlist_renamemailbox(char *oldname, char *newname, char *partition, 
 			   int isadmin, char *userid, 
-			   struct auth_state *auth_state, int forceuser);
+			   struct auth_state *auth_state, int forceuser,
+                           int ignorequota);
 
 /* change ACL */
 int mboxlist_setacl(const char *name, const char *identifier,

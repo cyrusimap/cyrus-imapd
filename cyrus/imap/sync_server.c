@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_server.c,v 1.29 2009/03/31 04:11:20 brong Exp $
+ * $Id: sync_server.c,v 1.30 2009/05/05 01:20:03 brong Exp $
  *
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
@@ -2730,7 +2730,7 @@ static void cmd_rename(char *oldmailboxname, char *newmailboxname)
     int r;
 
     r = mboxlist_renamemailbox(oldmailboxname, newmailboxname, NULL,
-                               1, sync_userid, sync_authstate, 1);
+                               1, sync_userid, sync_authstate, 1, 1);
 
     if (r)
         prot_printf(sync_out, "NO Rename failed %s -> %s: %s\r\n",

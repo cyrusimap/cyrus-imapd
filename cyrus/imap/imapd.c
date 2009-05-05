@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.561 2009/04/23 17:10:06 murch Exp $
+ * $Id: imapd.c,v 1.562 2009/05/05 01:19:58 brong Exp $
  */
 
 #include <config.h>
@@ -5310,7 +5310,8 @@ static int renmbox(char *name,
 
     r = mboxlist_renamemailbox(name, text->newmailboxname,
 			       text->partition,
-			       1, imapd_userid, imapd_authstate, 0);
+			       1, imapd_userid, imapd_authstate, 0,
+                               text->rename_user);
     
     (*imapd_namespace.mboxname_toexternal)(&imapd_namespace,
 					   name,
@@ -5561,7 +5562,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
     if (!r) {
 	r = mboxlist_renamemailbox(oldmailboxname, newmailboxname, partition,
 				   imapd_userisadmin, 
-				   imapd_userid, imapd_authstate, 0);
+				   imapd_userid, imapd_authstate, 0, rename_user);
     }
 
     /* If we're renaming a user, take care of changing quotaroot, ACL,
