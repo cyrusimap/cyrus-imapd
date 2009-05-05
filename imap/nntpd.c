@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.73 2009/05/05 01:20:03 brong Exp $
+ * $Id: nntpd.c,v 1.74 2009/05/05 01:23:02 brong Exp $
  */
 
 /*
@@ -3479,7 +3479,7 @@ static int cancel_cb(const char *msgid __attribute__((unused)),
 	if (!r) {
 	    mailbox_lock_index(&mbox);
 	    mbox.index_lock_count = 1;
-	    mailbox_expunge(&mbox, expunge_cancelled, &uid, EXPUNGE_FORCE);
+	    mailbox_expunge(&mbox, expunge_cancelled, &uid, 0);
 	}
 
 	if (doclose) mailbox_close(&mbox);
