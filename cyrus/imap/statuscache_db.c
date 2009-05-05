@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: statuscache_db.c,v 1.5 2009/02/09 05:01:59 brong Exp $
+ * $Id: statuscache_db.c,v 1.6 2009/05/05 01:22:36 brong Exp $
  */
 
 #include <config.h>
@@ -232,8 +232,12 @@ int statuscache_update(const char *mboxname, const char *userid,
     int r, keylen, datalen;
     char *key = statuscache_buildkey(mboxname, userid, &keylen);
 
+    /* The trailing whitespace is necessary because we
+     * use non-length-based functions to parse the values.
+     * Any non-digit char would be fine, but whitespace 
+     * looks less ugly in dbtool output */
     datalen = snprintf(data, sizeof(data),
-		       "%u %u %ld %lu " OFF_T_FMT " %lu %u %lu %lu %u " MODSEQ_FMT,
+		       "%u %u %ld %lu " OFF_T_FMT " %lu %u %lu %lu %u " MODSEQ_FMT " ",
 		       STATUSCACHE_VERSION, scdata->statusitems,
 		       scdata->index_mtime, scdata->index_ino,
 		       scdata->index_size, scdata->messages,
