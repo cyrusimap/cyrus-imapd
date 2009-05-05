@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyrusdb_skiplist.c,v 1.65 2009/03/31 04:43:20 brong Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.66 2009/05/05 01:15:50 brong Exp $
  */
 
 /* xxx check retry_xxx for failure */
@@ -755,7 +755,7 @@ static int lock_or_refresh(struct db *db, struct txn **tidptr)
 static int dispose_db(struct db *db)
 {
     if (!db) return 0;
-    assert(db->is_open);
+
     if (db->lock_status) {
 	syslog(LOG_ERR, "skiplist: closed while still locked");
 	unlock(db);
