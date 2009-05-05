@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_virusscan.c,v 1.6 2009/02/09 05:01:56 brong Exp $
+ * $Id: cyr_virusscan.c,v 1.7 2009/05/05 01:23:02 brong Exp $
  */
 
 #include <config.h>
@@ -401,7 +401,7 @@ int scan_me(char *name,
 	if (i_mbox) i_mbox->msgno = 1;
     }
 
-    mailbox_expunge(&the_box, virus_check, i_mbox, EXPUNGE_FORCE);
+    mailbox_expunge(&the_box, virus_check, i_mbox, 0);
 
     sync_log_mailbox(the_box.name);
     mailbox_close(&the_box);
