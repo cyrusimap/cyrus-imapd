@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.72 2009/04/23 17:10:07 murch Exp $
+ * $Id: nntpd.c,v 1.73 2009/05/05 01:20:03 brong Exp $
  */
 
 /*
@@ -3423,7 +3423,7 @@ static int mvgroup(message_data_t *msg)
 	     newsprefix, (int) len, group);
 
     r = mboxlist_renamemailbox(oldmailboxname, newmailboxname, NULL, 0,
-			       newsmaster, newsmaster_authstate, 0);
+			       newsmaster, newsmaster_authstate, 0, 0);
 
     /* XXX check body of message for useful MIME parts */
 

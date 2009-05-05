@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mboxlist.c,v 1.264 2009/03/31 04:11:18 brong Exp $
+ * $Id: mboxlist.c,v 1.265 2009/05/05 01:20:03 brong Exp $
  */
 
 #include <config.h>
@@ -962,7 +962,7 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin, char *userid,
     /* Get mboxlist_renamemailbox to do the hard work. No ACL checks needed */
     r = mboxlist_renamemailbox((char *)name, newname, partition,
                                1 /* isadmin */, userid,
-                               auth_state, force);
+                               auth_state, force, 1);
 
     /* don't forget to log the rename! */
     sync_log_mailbox_double((char *)name, newname);
@@ -1144,7 +1144,8 @@ int mboxlist_deletemailbox(const char *name, int isadmin, char *userid,
  */
 int mboxlist_renamemailbox(char *oldname, char *newname, char *partition, 
 			   int isadmin, char *userid, 
-			   struct auth_state *auth_state, int forceuser)
+			   struct auth_state *auth_state, int forceuser,
+                           int ignorequota)
 {
     int r;
     long access;
@@ -1350,7 +1351,7 @@ int mboxlist_renamemailbox(char *oldname, char *newname, char *partition,
 	/* Rename the actual mailbox */
 	r = mailbox_rename_copy(&oldmailbox, newname, newpartition,
 				NULL, NULL, &newmailbox,
-				isusermbox ? userid : NULL);
+				isusermbox ? userid : NULL, ignorequota);
 	if (r) {
 	    goto done;
 	} else {

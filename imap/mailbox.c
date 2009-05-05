@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.192 2009/03/31 04:11:18 brong Exp $
+ * $Id: mailbox.c,v 1.193 2009/05/05 01:20:02 brong Exp $
  */
 
 #include <config.h>
@@ -2950,7 +2950,8 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
 			const char *newname,
 			char *newpartition,
 			bit32 *olduidvalidityp, bit32 *newuidvalidityp,
-			struct mailbox *newmailbox, char *userid)
+			struct mailbox *newmailbox, char *userid, 
+                        int ignorequota)
 {
     int r;
     unsigned int flag;
@@ -2996,7 +2997,7 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
 	r = quota_read(&(newmailbox->quota), &tid, 1);
 	if (!oldmailbox->quota.root ||
 	    strcmp(oldmailbox->quota.root, newmailbox->quota.root) != 0) {
-	    if (!r && newmailbox->quota.limit >= 0 &&
+	    if (!r && !ignorequota && newmailbox->quota.limit >= 0 &&
 		newmailbox->quota.used + oldmailbox->quota_mailbox_used >
 		((uquota_t) newmailbox->quota.limit * QUOTA_UNITS)) {
 		r = IMAP_QUOTA_EXCEEDED;
