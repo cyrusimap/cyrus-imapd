@@ -41,7 +41,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.in,v 1.16 2008/04/04 12:47:07 murch Exp $
+# $Id: Makefile.in,v 1.17 2009/05/06 13:48:04 murch Exp $
 # 
 
 SUBDIRS = @PERL_SUBDIRS@
@@ -62,6 +62,7 @@ BDB_LIB=@BDB_LIB@
 BDB_INC=@BDB_INC@
 
 LIB_RT=@LIB_RT@
+ZLIB=@ZLIB@
 
 PERL=@PERL@
 
@@ -81,6 +82,7 @@ all::
 		(cd $$d; echo "### Making" all "in" `pwd`;	\
 			if [ -f Makefile.PL -a ! -f Makefile ]; then \
 			   LIB_RT="$(LIB_RT)" \
+			   ZLIB="$(ZLIB)" \
 			   BDB_LIB="$(BDB_LIB)" BDB_INC="$(BDB_INC)" \
 			   OPENSSL_LIB="$(OPENSSL_LIB)" OPENSSL_INC="$(OPENSSL_INC)" \
 			   SASL_LIB="$(SASL_LIB)" SASL_INC="$(SASL_INC)" CC="$(CC)" \
