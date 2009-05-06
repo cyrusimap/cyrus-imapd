@@ -38,7 +38,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.PL,v 1.15 2008/04/04 12:47:23 murch Exp $
+# $Id: Makefile.PL,v 1.16 2009/05/06 13:48:04 murch Exp $
 #
 use ExtUtils::MakeMaker;
 use Config;
@@ -51,6 +51,7 @@ my $BDB_INC = $ENV{BDB_INC};
 my $BDB_LIB = $ENV{BDB_LIB};
 
 my $LIB_RT = $ENV{LIB_RT};
+my $ZLIB = $ENV{ZLIB};
 
 $libs = "-lcyrus";
 
@@ -61,7 +62,7 @@ WriteMakefile(
     'ABSTRACT'  => 'Cyurs Sieve management interface',
     'VERSION_FROM' => 'managesieve.pm', # finds $VERSION
     'MYEXTLIB'  => '../lib/isieve.o ../lib/lex.o ../lib/mystring.o ../lib/request.o ../../../lib/libcyrus.a ../../../lib/libcyrus_min.a',
-    'LIBS'	=> ["$BDB_LIB $SASL_LIB $OPENSSL_LIB $LIB_RT -lssl -lcrypto"], 
+    'LIBS'	=> ["$BDB_LIB $SASL_LIB $OPENSSL_LIB $LIB_RT $ZLIB -lssl -lcrypto"], 
     'DEFINE'	=> '-DPERL_POLLUTE',     # e.g., '-DHAVE_SOMETHING' 
     'INC'	=> "-I../lib/ -I../../../lib/ $SASL_INC $OPENSSL_INC",
 );

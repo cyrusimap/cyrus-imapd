@@ -1,6 +1,6 @@
 dnl
 dnl macros for configure.in to detect zlib
-dnl $Id: zlib.m4,v 1.2 2009/04/23 17:10:05 murch Exp $
+dnl $Id: zlib.m4,v 1.3 2009/05/06 13:48:04 murch Exp $
 dnl
 
 AC_DEFUN([CMU_HAVE_ZLIB], [
@@ -16,6 +16,7 @@ AC_ARG_WITH(zlib,[  --with-zlib=PATH        use zlib from PATH],
 	  CMU_ADD_LIBPATH(${with_zlib}/$CMU_LIB_SUBDIR)
 	fi
 
+ZLIB=""
 case "$with_zlib" in
 	no)
 	  with_zlib="no";;
@@ -30,6 +31,7 @@ esac
 
 	if test "$with_zlib" != "no"; then
 		AC_DEFINE(HAVE_ZLIB,[],[Do we have zlib?])
+		ZLIB="-lz"
 	else
 		CPPFLAGS=$save_CPPFLAGS
 		LDFLAGS=$save_LDFLAGS
