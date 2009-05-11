@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mboxlist.c,v 1.265 2009/05/05 01:20:03 brong Exp $
+ * $Id: mboxlist.c,v 1.266 2009/05/11 13:22:02 murch Exp $
  */
 
 #include <config.h>
@@ -1922,7 +1922,7 @@ static int find_p(void *rockp,
     long matchlen;
 
     /* don't list mailboxes outside of the default domain */
-    if (!rock->domainlen && !rock->isadmin && strchr(key, '!')) return 0; 
+    if (!rock->domainlen && !rock->isadmin && memchr(key, '!', keylen)) return 0; 
 
     minmatch = 0;
     if (rock->inboxoffset) {
