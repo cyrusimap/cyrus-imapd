@@ -74,6 +74,7 @@
 
 /* global state */
 const int config_need_data = 0;
+static int sigquit = 0;
 
 void usage(void)
 {
@@ -156,6 +157,9 @@ int expire(char *name, int matchlen, int maycreate __attribute__((unused)),
     int mbtype;
     char *path, *mpath;
 
+    if (sigquit) {
+	return 1;
+    }
     /* Skip remote mailboxes */
     r = mboxlist_detail(name, &mbtype, &path, &mpath, NULL, NULL, NULL);
     if (r) {
@@ -301,6 +305,9 @@ int delete(char *name,
     char *path, *mpath;
     time_t timestamp;
 
+    if (sigquit) {
+	return 1;
+    }
     if (config_virtdomains && (p = strchr(name, '!')))
 	domainlen = p - name + 1;
 
@@ -345,6 +352,11 @@ int delete(char *name,
     }
     return(0);
 }
+static void sighandler (int sig)
+{
+    sigquit = 1;
+    return;
+}
 
 int main(int argc, char *argv[])
 {
@@ -357,6 +369,7 @@ int main(int argc, char *argv[])
     struct expire_rock erock;
     struct delete_rock drock;
     const char *deletedprefix;
+    struct sigaction action;
 
     if ((geteuid()) == 0 && (become_cyrus() != 0)) {
 	fatal("must run as the Cyrus user", EC_USAGE);
@@ -412,6 +425,13 @@ int main(int argc, char *argv[])
     }
 
     if (!expire_days) usage();
+
+    sigemptyset(&action.sa_mask);
+    action.sa_flags = 0;
+    action.sa_handler = sighandler;
+    if (sigaction(SIGQUIT, &action, NULL) < 0) {
+        fatal("unable to install signal handler for %d: %m", SIGQUIT);
+    }
 
     cyrus_init(alt_config, "cyr_expire", 0);
     global_sasl_init(1, 0, NULL);
@@ -470,6 +490,9 @@ int main(int argc, char *argv[])
 		    erock.deleted, erock.messages, erock.mailboxes);
 	}
     }
+    if (sigquit) {
+	goto finish;
+    }
 
     if ((delete_days != -1) && mboxlist_delayed_delete_isenabled() &&
 	(deletedprefix = config_getstring(IMAPOPT_DELETEDPREFIX))) {
@@ -492,6 +515,9 @@ int main(int argc, char *argv[])
         mboxlist_findall(NULL, buf, 1, 0, 0, &delete, &drock);
 
         for (node = drock.head ; node ; node = node->next) {
+	    if (sigquit) {
+		goto finish;
+	    }
             if (drock.verbose) {
                 fprintf(stderr, "Removing: %s\n", node->name);
             }
@@ -508,10 +534,14 @@ int main(int argc, char *argv[])
         }
         syslog(LOG_NOTICE, "Removed %d deleted mailboxes", count);
     }
+    if (sigquit) {
+	goto finish;
+    }
 
     /* purge deliver.db entries of expired messages */
     r = duplicate_prune(expire_days, &expire_table);
 
+finish:
     free_hash_table(&expire_table, free);
 
     quotadb_close();

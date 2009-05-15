@@ -77,6 +77,7 @@ extern char *optarg;
 static int verbose = 0;
 static int debugmode = 0;
 static time_t idle_timeout;
+static int sigquit = 0;
 
 struct ientry {
     pid_t pid;
@@ -247,6 +248,12 @@ void idle_alert(char *key __attribute__((unused)),
     }
 }
 
+static void sighandler (int sig) 
+{
+    sigquit = 1;
+    return;
+}
+
 int main(int argc, char **argv)
 {
     char shutdownfilename[1024];
@@ -266,6 +273,7 @@ int main(int argc, char **argv)
     int fd;
     char *alt_config = NULL;
     const char *idle_sock;
+    struct sigaction action;
 
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
@@ -320,6 +328,14 @@ int main(int argc, char **argv)
     mboxlist_close();
     mboxlist_done();
 
+    sigemptyset(&action.sa_mask);
+    
+    action.sa_flags = 0;
+    action.sa_handler = sighandler;
+    if (sigaction(SIGQUIT, &action, NULL) < 0) {
+        fatal("unable to install signal handler for %d: %m", SIGQUIT);
+    }
+
     /* create idle table -- +1 to avoid a zero value */
     construct_hash_table(&itable, nmbox + 1, 1);
     ifreelist = NULL;
@@ -369,6 +385,11 @@ int main(int argc, char **argv)
 		syslog(LOG_DEBUG, "IDLE_ALERT\n");
 
 	    hash_enumerate(&itable, idle_alert, NULL);
+	    break;
+	}
+	if (sigquit) {
+	    hash_enumerate(&itable, idle_alert, NULL);
+	    break;
 	}
 
 	/* timeout for select is 1 second */
@@ -408,7 +429,6 @@ int main(int argc, char **argv)
 
     cyrus_done();
 
-    /* never gets here */      
     exit(1);
 }
 
