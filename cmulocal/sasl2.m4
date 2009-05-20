@@ -1,6 +1,6 @@
 # sasl2.m4--sasl2 libraries and includes
 # Rob Siemborski
-# $Id: sasl2.m4,v 1.53 2008/03/03 22:06:34 wescraig Exp $
+# $Id: sasl2.m4,v 1.54 2009/05/20 12:24:48 murch Exp $
 
 # SASL2_CRYPT_CHK
 # ---------------
@@ -255,7 +255,7 @@ if test "$gssapi" != no; then
   AC_CHECK_LIB(resolv,res_search,GSSAPIBASE_LIBS="$GSSAPIBASE_LIBS -lresolv")
   SASL_MECHS="$SASL_MECHS libgssapiv2.la"
   SASL_STATIC_OBJS="$SASL_STATIC_OBJS gssapi.o"
-  SASL_STATIC_SRCS="$SASL_STATIC_SRCS ../plugins/gssapi.c"
+  SASL_STATIC_SRCS="$SASL_STATIC_SRCS \$(top_srcdir)/plugins/gssapi.c"
 
   cmu_save_LIBS="$LIBS"
   LIBS="$LIBS $GSSAPIBASE_LIBS"
