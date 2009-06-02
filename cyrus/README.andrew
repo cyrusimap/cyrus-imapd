@@ -49,6 +49,8 @@ To make a release:
 
 - update cyrusimap.web.cmu.edu:/usr/www/htdocs/downloads.html
   links to new version
+- update cyrusimap.web.cmu.edu:/usr/www/htdocs/imapd
+  from tarball
 
 ---
 to bring up a new Andrew Cyrus server:
