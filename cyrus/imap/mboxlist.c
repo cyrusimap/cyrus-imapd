@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mboxlist.c,v 1.266 2009/05/11 13:22:02 murch Exp $
+ * $Id: mboxlist.c,v 1.267 2009/06/11 14:23:57 murch Exp $
  */
 
 #include <config.h>
@@ -532,7 +532,12 @@ mboxlist_mycreatemailboxcheck(char *name,
 	}
 
 	if (!partition) {  
+	    /* use defaultpartition if specified */
 	    partition = (char *)config_defpartition;
+
+	    /* otherwise find partition with most available space */
+	    if (!partition) partition = find_free_partition(NULL);
+
 	    if (strlen(partition) > MAX_PARTITION_LEN) {
 		/* Configuration error */
 		fatal("name of default partition is too long", EC_CONFIG);
