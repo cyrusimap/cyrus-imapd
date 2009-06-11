@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: global.c,v 1.30 2009/03/31 04:11:16 brong Exp $
+ * $Id: global.c,v 1.31 2009/06/11 14:23:57 murch Exp $
  */
 
 #include <config.h>
@@ -49,6 +49,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <syslog.h>
+#include <sys/statvfs.h>
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <sys/stat.h>
@@ -149,7 +150,7 @@ int cyrus_init(const char *alt_config, const char *ident, unsigned flags)
 
     /* Look up default partition */
     config_defpartition = config_getstring(IMAPOPT_DEFAULTPARTITION);
-    for (p = (char *)config_defpartition; *p; p++) {
+    for (p = (char *)config_defpartition; p && *p; p++) {
 	if (!Uisalnum(*p))
 	  fatal("defaultpartition option contains non-alphanumeric character",
 		EC_CONFIG);
@@ -677,4 +678,65 @@ int shutdown_file(char *buf, int size)
     syslog(LOG_DEBUG, "Shutdown file: %s, closing connection", buf);
 
     return 1;
+}
+
+struct part_stats {
+    char name[MAX_PARTITION_LEN+1]; /* name of part with most space */
+    unsigned long avail;	/* 1k free blocks on freeest part */
+    unsigned long tavail;	/* total 1k free blocks on server */
+    unsigned long fsid[512];	/* array of file system IDs */
+    unsigned nfsid;		/* number of file system IDs */
+};
+
+/*
+ * config_foreachoverflowstring() callback which finds spool partition
+ * with the most available space and totals the space available on
+ * all partitions.
+ */
+static void get_part_stats(const char *key, const char *val, void *rock)
+{
+    struct part_stats *stats = (struct part_stats *) rock;
+    struct statvfs s;
+    unsigned long avail;
+    unsigned i;
+
+    /* not a partition-* config option */
+    if (strncmp("partition-", key, 10)) return;
+
+    /* can't stat the given path */
+    if (statvfs(val, &s)) return;
+
+    /* eliminate duplicate filesystems */
+    for (i = 0; i < stats->nfsid; i++) {
+	if (s.f_fsid == stats->fsid[i]) return;
+    }
+    stats->fsid[stats->nfsid++] = s.f_fsid;
+
+    /* calculate avail space in 1k blocks */
+    avail = (unsigned long) (s.f_bavail * (s.f_frsize / 1024.0));
+
+    /* add to total */
+    stats->tavail += avail;
+
+    if (avail > stats->avail) {
+	/* this part has the most avail space */
+	stats->avail = avail;
+	strlcpy(stats->name, key+10, MAX_PARTITION_LEN);
+    }
+}
+
+/*
+ * Returns the name of the spool partition with the most available space.
+ * Optionally returns the total amount of available space on the server
+ * (all partitions) in 1k blocks.
+ */
+char *find_free_partition(unsigned long *tavail)
+{
+    static struct part_stats stats;
+
+    memset(&stats, 0, sizeof(struct part_stats));
+    config_foreachoverflowstring(get_part_stats, &stats);
+
+    if (tavail) *tavail = stats.tavail;
+    return stats.name;
 }

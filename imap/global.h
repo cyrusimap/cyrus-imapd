@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: global.h,v 1.11 2008/03/24 17:09:16 murch Exp $
+ * $Id: global.h,v 1.12 2009/06/11 14:23:57 murch Exp $
  */
 
 #ifndef INCLUDED_GLOBAL_H
@@ -142,6 +142,7 @@ void eatline(struct protstream *pin, int c);
 /* Misc utils */
 extern void cyrus_ctime(time_t date, char *datebuf);
 extern int shutdown_file(char *buf, int size);
+extern char *find_free_partition(unsigned long *tavail);
 
 /* Misc globals */
 extern int config_fulldirhash;

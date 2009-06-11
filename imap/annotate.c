@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: annotate.c,v 1.44 2009/02/09 05:08:20 brong Exp $
+ * $Id: annotate.c,v 1.45 2009/06/11 14:23:57 murch Exp $
  */
 
 #include <config.h>
@@ -647,6 +647,30 @@ static void annotation_get_fromfile(const char *int_mboxname __attribute__((unus
     if (f) fclose(f);
 }
 
+static void annotation_get_freespace(const char *int_mboxname __attribute__((unused)),
+				     const char *ext_mboxname,
+				     const char *entry,
+				     struct fetchdata *fdata,
+				     struct mailbox_annotation_rock *mbrock __attribute__((unused)),
+				     void *rock __attribute__((unused)))
+{
+    unsigned long tavail;
+    char value[21];
+    struct annotation_data attrib;
+
+    (void) find_free_partition(&tavail);
+
+    if (snprintf(value, sizeof(value), "%lu", tavail) == -1) return;
+
+    memset(&attrib, 0, sizeof(attrib));
+
+    attrib.value = value;
+    attrib.size = strlen(value);
+    attrib.contenttype = "text/plain";
+
+    output_entryatt(ext_mboxname, entry, "", &attrib, fdata);
+}
+
 static void annotation_get_server(const char *int_mboxname,
 				  const char *ext_mboxname,
 				  const char *entry,
@@ -1058,6 +1082,8 @@ const struct annotate_f_entry server_legacy_entries[] =
     { "/motd", PROXY_AND_BACKEND, annotation_get_fromfile, "motd" },
     { "/vendor/cmu/cyrus-imapd/shutdown", PROXY_AND_BACKEND,
       annotation_get_fromfile, "shutdown" },
+    { "/vendor/cmu/cyrus-imapd/freespace", BACKEND_ONLY,
+      annotation_get_freespace, NULL },
     { NULL, ANNOTATION_PROXY_T_INVALID, NULL, NULL }
 };
 
@@ -1297,11 +1323,14 @@ int annotatemore_fetch(char *mailbox,
 		 entries_ptr;
 		 entries_ptr = entries_ptr->next) {
 	
+		if (!(entries_ptr->entry->proxytype == BACKEND_ONLY &&
+		      proxy_fetch_func && !config_getstring(IMAPOPT_PROXYSERVERS))) {
 		entries_ptr->entry->get("", "", entries_ptr->entry->name,
 					&fdata, NULL,
 					(entries_ptr->entry->rock ?
 					 entries_ptr->entry->rock :
 					 (void*) entries_ptr->entrypat));
+		}
 	    }
 
 	    free_hash_table(&fdata.entry_table, NULL);

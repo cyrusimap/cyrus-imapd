@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: libconfig.c,v 1.22 2009/03/31 04:11:22 brong Exp $
+ * $Id: libconfig.c,v 1.23 2009/06/11 14:23:57 murch Exp $
  */
 
 #include <config.h>
@@ -197,6 +197,15 @@ const char *config_metapartitiondir(const char *partition)
     return config_getoverflowstring(buf, NULL);
 }
 
+static void config_ispartition(const char *key,
+			       const char *val __attribute__((unused)),
+			       void *rock)
+{
+    int *found = (int *) rock;
+
+    if (!strncmp("partition-", key, 10)) *found = 1;
+}
+
 void config_read(const char *alt_config)
 {
     enum imapopt opt = IMAPOPT_ZERO;
@@ -264,18 +273,31 @@ void config_read(const char *alt_config)
 
     /* Look up default partition */
     config_defpartition = config_getstring(IMAPOPT_DEFAULTPARTITION);
-    for (p = (char *)config_defpartition; *p; p++) {
+    for (p = (char *)config_defpartition; p && *p; p++) {
 	if (!Uisalnum(*p))
 	  fatal("defaultpartition option contains non-alphanumeric character",
 		EC_CONFIG);
 	if (Uisupper(*p)) *p = tolower((unsigned char) *p);
     }
-    if ((config_need_data & CONFIG_NEED_PARTITION_DATA) &&
-	(!config_defpartition || !config_partitiondir(config_defpartition))) {
-	snprintf(buf, sizeof(buf),
-		"partition-%s option not specified in configuration file",
-		config_defpartition);
-	fatal(buf, EC_CONFIG);
+
+    if (config_need_data & CONFIG_NEED_PARTITION_DATA) {
+	int found = 0;
+
+	if (config_defpartition) {
+	    /* see if defaultpartition is specified properly */
+	    if (config_partitiondir(config_defpartition)) found = 1;
+	}
+	else {
+	    /* see if we have ANY partition-<name> options */
+	    config_foreachoverflowstring(config_ispartition, &found);
+	}
+
+	if (!found) {
+	    snprintf(buf, sizeof(buf),
+		     "partition-%s option not specified in configuration file",
+		     config_defpartition ? config_defpartition : "<name>");
+	    fatal(buf, EC_CONFIG);
+	}
     }
 
     /* look up mailbox hashing */
