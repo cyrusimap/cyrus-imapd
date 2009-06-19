@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mboxlist.c,v 1.267 2009/06/11 14:23:57 murch Exp $
+ * $Id: mboxlist.c,v 1.268 2009/06/19 16:34:07 murch Exp $
  */
 
 #include <config.h>
@@ -532,15 +532,27 @@ mboxlist_mycreatemailboxcheck(char *name,
 	}
 
 	if (!partition) {  
-	    /* use defaultpartition if specified */
-	    partition = (char *)config_defpartition;
+	    if ((config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD) &&
+		!config_getstring(IMAPOPT_PROXYSERVERS)) {
+		/* use defaultserver if specified */
+		char *server = (char *) config_getstring(IMAPOPT_DEFAULTSERVER);
 
-	    /* otherwise find partition with most available space */
-	    if (!partition) partition = find_free_partition(NULL);
+		/* otherwise find server with most available space */
+		/* XXX   TODO */
 
-	    if (strlen(partition) > MAX_PARTITION_LEN) {
-		/* Configuration error */
-		fatal("name of default partition is too long", EC_CONFIG);
+		partition = server ? server : "unknown-server";
+	    }
+	    else {
+		/* use defaultpartition if specified */
+		partition = (char *)config_defpartition;
+
+		/* otherwise find partition with most available space */
+		if (!partition) partition = find_free_partition(NULL);
+
+		if (strlen(partition) > MAX_PARTITION_LEN) {
+		    /* Configuration error */
+		    fatal("name of default partition is too long", EC_CONFIG);
+		}
 	    }
 	}
 	partition = xstrdup(partition);

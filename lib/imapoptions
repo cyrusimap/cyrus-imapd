@@ -43,7 +43,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\"
-.\" $Id: imapoptions,v 1.65 2009/06/11 14:23:57 murch Exp $
+.\" $Id: imapoptions,v 1.66 2009/06/19 16:34:07 murch Exp $
 
 .SH NAME
 imapd.conf \- IMAP configuration file
@@ -218,6 +218,11 @@ are listed with ``<none>''.
 { "defaultpartition", NULL, STRING }
 /* The partition name used by default for new mailboxes.  If not
    specified, the partition with the most free space will be used for new
+   mailboxes. */
+
+{ "defaultserver", NULL, STRING }
+/* The backend server name used by default for new mailboxes.  If not
+   specified, the server with the most free space will be used for new
    mailboxes. */
 
 { "deletedprefix", "DELETED", STRING }

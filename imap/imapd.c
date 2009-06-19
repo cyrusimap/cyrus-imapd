@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.562 2009/05/05 01:19:58 brong Exp $
+ * $Id: imapd.c,v 1.563 2009/06/19 16:34:06 murch Exp $
  */
 
 #include <config.h>
@@ -4987,7 +4987,7 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
 	if (!partition) {
 	    guessedpart = 1;
 	    r = mboxlist_createmailboxcheck(mailboxname, 0, 0,
-					    imapd_userisadmin,
+					    imapd_userisadmin || imapd_userisproxyadmin,
 					    imapd_userid, imapd_authstate,
 					    NULL, &partition, 0);
 	}
@@ -5073,7 +5073,7 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
 	/* xxx we do forced user creates on LOCALCREATE to facilitate
 	 * mailbox moves */
 	r = mboxlist_createmailbox(mailboxname, 0, partition,
-				   imapd_userisadmin, 
+				   imapd_userisadmin || imapd_userisproxyadmin, 
 				   imapd_userid, imapd_authstate,
 				   localonly, localonly, 0);
 
