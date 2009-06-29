@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.564 2009/06/29 17:21:05 murch Exp $
+ * $Id: imapd.c,v 1.565 2009/06/29 18:22:56 murch Exp $
  */
 
 #include <config.h>
@@ -5139,15 +5139,19 @@ static int delmbox(char *name,
     int r;
 
     if (!mboxlist_delayed_delete_isenabled()) {
-        r = mboxlist_deletemailbox(name, imapd_userisadmin,
+        r = mboxlist_deletemailbox(name,
+				   imapd_userisadmin || imapd_userisproxyadmin,
                                    imapd_userid, imapd_authstate,
                                    0, 0, 0);
-    } else if (imapd_userisadmin && mboxname_isdeletedmailbox(name)) {
-        r = mboxlist_deletemailbox(name, imapd_userisadmin,
+    } else if ((imapd_userisadmin || imapd_userisproxyadmin) && 
+	       mboxname_isdeletedmailbox(name)) {
+        r = mboxlist_deletemailbox(name,
+				   imapd_userisadmin || imapd_userisproxyadmin,
                                    imapd_userid, imapd_authstate,
                                    0, 0, 0);
     } else {
-        r = mboxlist_delayed_deletemailbox(name, imapd_userisadmin,
+        r = mboxlist_delayed_deletemailbox(name,
+					   imapd_userisadmin || imapd_userisproxyadmin,
                                            imapd_userid, imapd_authstate,
                                            0, 0, 0);
     }
@@ -5230,16 +5234,19 @@ void cmd_delete(char *tag, char *name, int localonly, int force)
 	    domainlen = p - mailboxname + 1;
 
         if (localonly || !mboxlist_delayed_delete_isenabled()) {
-            r = mboxlist_deletemailbox(mailboxname, imapd_userisadmin,
+            r = mboxlist_deletemailbox(mailboxname,
+				       imapd_userisadmin || imapd_userisproxyadmin,
                                        imapd_userid, imapd_authstate, 
                                        1-force, localonly, 0);
-        } else if (imapd_userisadmin &&
+        } else if ((imapd_userisadmin || imapd_userisproxyadmin) &&
                    mboxname_isdeletedmailbox(mailboxname)) {
-            r = mboxlist_deletemailbox(mailboxname, imapd_userisadmin,
+            r = mboxlist_deletemailbox(mailboxname,
+				       imapd_userisadmin || imapd_userisproxyadmin,
                                        imapd_userid, imapd_authstate,
                                        0 /* checkacl */, localonly, 0);
         } else {
-            r = mboxlist_delayed_deletemailbox(mailboxname, imapd_userisadmin,
+            r = mboxlist_delayed_deletemailbox(mailboxname,
+					       imapd_userisadmin || imapd_userisproxyadmin,
                                                imapd_userid, imapd_authstate,
                                                1-force, localonly, 0);
         }
@@ -5259,7 +5266,9 @@ void cmd_delete(char *tag, char *name, int localonly, int force)
  	}
 	
 	/* build a list of mailboxes - we're using internal names here */
-	mboxlist_findall(NULL, mailboxname, imapd_userisadmin, imapd_userid,
+	mboxlist_findall(NULL, mailboxname,
+			 imapd_userisadmin || imapd_userisproxyadmin,
+			 imapd_userid,
 			 imapd_authstate, delmbox, NULL);
 
 	/* take care of deleting ACLs, subscriptions, seen state and quotas */
@@ -6412,7 +6421,8 @@ void cmd_setacl(char *tag, const char *name,
     /* local mailbox */
     if (!r) {
 	r = mboxlist_setacl(mailboxname, identifier, rights,
-			    imapd_userisadmin, imapd_userid, imapd_authstate);
+			    imapd_userisadmin || imapd_userisproxyadmin,
+			    imapd_userid, imapd_authstate);
     }
 
     imapd_check(NULL, 0, 0);
