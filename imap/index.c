@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: index.c,v 1.250 2009/04/23 17:10:06 murch Exp $
+ * $Id: index.c,v 1.251 2009/06/29 17:39:31 murch Exp $
  */
 
 #include <config.h>
@@ -205,7 +205,6 @@ static const struct thread_algorithm thread_algs[] = {
  */
 void index_closemailbox(struct mailbox *mailbox)
 {
-    int r;
     if (imapd_exists) {
 	index_checkseen(mailbox, 1, 0, imapd_exists);
     }
@@ -1837,7 +1836,7 @@ enum {
     DOMAIN_BINARY
 };
 
-static int data_domain(const unsigned char *p, size_t n)
+static int data_domain(const char *p, size_t n)
 {
     while (n--) {
 	if (!*p) return DOMAIN_BINARY;

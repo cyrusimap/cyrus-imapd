@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_client.c,v 1.45 2009/04/23 17:10:07 murch Exp $
+ * $Id: sync_client.c,v 1.46 2009/06/29 17:39:31 murch Exp $
  *
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
@@ -2332,7 +2332,6 @@ int do_user_sub(char *user, struct sync_folder_list *server_list)
     struct sync_folder_list *client_list = sync_folder_list_create();
     struct sync_folder *c, *s;
     int n;
-    char buf[MAX_MAILBOX_BUFFER];
 
     /* Includes subsiduary nodes automatically */
     r = (sync_namespace.mboxlist_findsub)(&sync_namespace, "*", 1,
