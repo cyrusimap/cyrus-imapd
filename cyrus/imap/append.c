@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: append.c,v 1.120 2009/03/31 04:11:15 brong Exp $
+ * $Id: append.c,v 1.121 2009/06/29 17:39:31 murch Exp $
  */
 
 #include <config.h>
@@ -325,7 +325,7 @@ int append_commit(struct appendstate *as,
     else {
 	quota_abort(&as->tid);
 	syslog(LOG_ERR,
-	       "LOSTQUOTA: unable to record use of %u bytes in quota file %s",
+	       "LOSTQUOTA: unable to record use of " UQUOTA_T_FMT " bytes in quota file %s",
 	       as->quota_used, as->m.quota.root);
     }
 
