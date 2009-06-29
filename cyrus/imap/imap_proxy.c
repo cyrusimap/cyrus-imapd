@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.c,v 1.14 2009/04/23 17:10:06 murch Exp $
+ * $Id: imap_proxy.c,v 1.15 2009/06/29 17:21:05 murch Exp $
  */
 
 #include <config.h>
@@ -1376,4 +1376,95 @@ int annotate_store_proxy(const char *server, const char *mbox_pat,
     pipe_until_tag(be, mytag, 0);
 
     return 0;
+}
+
+
+char *find_free_server()
+{
+    const char *servers = config_getstring(IMAPOPT_SERVERLIST);
+    unsigned long max_avail = 0;
+    char *server = NULL;
+
+    if (servers) {
+	char *tmpbuf, *cur_server, *next_server;
+	char mytag[128];
+	struct backend *be;
+
+	/* make a working copy of the list */
+	cur_server = tmpbuf = xstrdup(servers);
+
+	while (cur_server) {
+	    /* eat any leading whitespace */
+	    while (Uisspace(*cur_server)) cur_server++;
+
+	    /* find end of server */
+	    if ((next_server = strchr(cur_server, ' ')) ||
+		(next_server = strchr(cur_server, '\t')))
+		*next_server++ = '\0';
+
+	    /* connect to server */
+	    be = proxy_findserver(cur_server, &imap_protocol,
+				  proxy_userid, &backend_cached,
+				  &backend_current, &backend_inbox, imapd_in);
+	    if (be) {
+		unsigned long avail = 0;
+		int c;
+
+		/* fetch annotation from remote */
+		proxy_gentag(mytag, sizeof(mytag));
+		prot_printf(be->out,
+			    "%s GETANNOTATION \"\" "
+			    "\"/vendor/cmu/cyrus-imapd/freespace\" "
+			    "\"value.shared\"\r\n", mytag);
+		prot_flush(be->out);
+
+		for (/* each annotation response */;;) {
+		    /* read a line */
+		    c = prot_getc(be->in);
+		    if (c != '*') break;
+		    c = prot_getc(be->in);
+		    if (c != ' ') { /* protocol error */ c = EOF; break; }
+
+		    c = chomp(be->in,
+			      "ANNOTATION \"\" "
+			      "\"/vendor/cmu/cyrus-imapd/freespace\" "
+			      "(\"value.shared\" \"");
+		    if (c == EOF) {
+			/* we don't care about this response */
+			eatline(be->in, c);
+			continue;
+		    }
+
+		    /* read uidvalidity */
+		    while (isdigit(c = prot_getc(be->in))) {
+			avail *= 10;
+			avail += c - '0';
+		    }
+		    if (c != '\"') { c = EOF; break; }
+		    eatline(be->in, c); /* we don't care about the rest of the line */
+		}
+		if (c != EOF) {
+		    prot_ungetc(c, be->in);
+
+		    /* we should be looking at the tag now */
+		    eatline(be->in, c);
+		}
+		if (c == EOF) {
+		    /* uh oh, we're not happy */
+		    fatal("Lost connection to backend", EC_UNAVAILABLE);
+		}
+		if (avail > max_avail) {
+		    server = cur_server;
+		    max_avail = avail;
+		}
+	    }
+
+	    /* move to next server */
+	    cur_server = next_server;
+	}
+
+	free(tmpbuf);
+    }
+
+    return (server ?  xstrdup(server) : NULL);
 }

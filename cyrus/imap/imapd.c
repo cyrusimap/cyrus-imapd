@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.563 2009/06/19 16:34:06 murch Exp $
+ * $Id: imapd.c,v 1.564 2009/06/29 17:21:05 murch Exp $
  */
 
 #include <config.h>
@@ -4990,6 +4990,21 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
 					    imapd_userisadmin || imapd_userisproxyadmin,
 					    imapd_userid, imapd_authstate,
 					    NULL, &partition, 0);
+
+	    if (!r && !partition &&
+		(config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD) &&
+		!config_getstring(IMAPOPT_PROXYSERVERS)) {
+		/* proxy-only server, and no parent mailbox */
+		guessedpart = 0;
+
+		/* use defaultserver if specified */
+		partition = (char *)config_getstring(IMAPOPT_DEFAULTSERVER);
+
+		/* otherwise, find server with most available space */
+		if (!partition) partition = find_free_server();
+
+		if (!partition) r = IMAP_SERVER_UNAVAILABLE;
+	    }
 	}
 
 	if (!r && !config_partitiondir(partition)) {
@@ -5054,12 +5069,14 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
 
 	    return;
 	}
+#if 0
 	else if (!r &&
 		 (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD) &&
 		 !config_getstring(IMAPOPT_PROXYSERVERS)) {
 	    /* can't create maiilboxes on proxy-only servers */
 	    r = IMAP_PERMISSION_DENIED;
 	}
+#endif
 
 	/* local mailbox -- fall through */
 	if (guessedpart) {
