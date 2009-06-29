@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.h,v 1.5 2009/04/23 17:10:06 murch Exp $
+ * $Id: imap_proxy.h,v 1.6 2009/06/29 17:21:05 murch Exp $
  */
 
 #ifndef _IMAP_PROXY_H
@@ -88,4 +88,5 @@ int annotate_fetch_proxy(const char *server, const char *mbox_pat,
 			 struct strlist *attribute_pat);
 int annotate_store_proxy(const char *server, const char *mbox_pat,
 			 struct entryattlist *entryatts);
+char *find_free_server();
 #endif /* _IMAP_PROXY_H */
