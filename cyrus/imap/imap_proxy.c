@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.c,v 1.15 2009/06/29 17:21:05 murch Exp $
+ * $Id: imap_proxy.c,v 1.16 2009/07/23 18:43:49 murch Exp $
  */
 
 #include <config.h>
@@ -1397,10 +1397,14 @@ char *find_free_server()
 	    /* eat any leading whitespace */
 	    while (Uisspace(*cur_server)) cur_server++;
 
+	    if (!*cur_server) break;
+
 	    /* find end of server */
 	    if ((next_server = strchr(cur_server, ' ')) ||
 		(next_server = strchr(cur_server, '\t')))
 		*next_server++ = '\0';
+
+	    syslog(LOG_DEBUG, "checking free space on server '%s'", cur_server);
 
 	    /* connect to server */
 	    be = proxy_findserver(cur_server, &imap_protocol,
