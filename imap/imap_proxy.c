@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.c,v 1.16 2009/07/23 18:43:49 murch Exp $
+ * $Id: imap_proxy.c,v 1.17 2009/07/24 15:15:43 murch Exp $
  */
 
 #include <config.h>
@@ -1467,8 +1467,10 @@ char *find_free_server()
 	    cur_server = next_server;
 	}
 
+	if (server) server = xstrdup(server);
+
 	free(tmpbuf);
     }
 
-    return (server ?  xstrdup(server) : NULL);
+    return server;
 }
