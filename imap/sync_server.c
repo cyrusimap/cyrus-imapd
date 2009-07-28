@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_server.c,v 1.30 2009/05/05 01:20:03 brong Exp $
+ * $Id: sync_server.c,v 1.31 2009/07/28 02:45:43 brong Exp $
  *
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
@@ -1379,10 +1379,10 @@ static void cmd_unlock(struct sync_lock *lock, int restart)
 		    error_message(r));
     } else if (restart) {
         prot_printf(sync_out, "OK [RESTART] Unlocked\r\n");
-        syslog(LOG_INFO, "Unlocked [RESTART]");
+        syslog(LOG_DEBUG, "Unlocked [RESTART]");
     } else {
         prot_printf(sync_out, "OK [CONTINUE] Unlocked\r\n");
-        syslog(LOG_INFO, "Unlocked");
+        syslog(LOG_DEBUG, "Unlocked");
     }
 }
 
