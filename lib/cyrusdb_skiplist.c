@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyrusdb_skiplist.c,v 1.67 2009/07/28 02:47:00 brong Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.68 2009/07/28 02:47:28 brong Exp $
  */
 
 /* xxx check retry_xxx for failure */
@@ -1070,6 +1070,7 @@ int myforeach(struct db *db,
     size_t savebuflen = 0;
     size_t savebufsize;
     int r = 0, cb_r = 0;
+    int need_unlock = 0;
 
     assert(db != NULL);
     assert(prefixlen >= 0);
@@ -1093,6 +1094,7 @@ int myforeach(struct db *db,
 	if ((r = read_lock(db)) < 0) {
 	    return r;
 	}
+	need_unlock = 1;
     } 
 
     ptr = find_node(db, prefix, prefixlen, 0);
@@ -1112,6 +1114,7 @@ int myforeach(struct db *db,
 		if ((r = unlock(db)) < 0) {
 		    return r;
 		}
+		need_unlock = 0;
 	    }
 
 	    /* save KEY, KEYLEN */
@@ -1131,6 +1134,7 @@ int myforeach(struct db *db,
 		if ((r = read_lock(db)) < 0) {
 		    return r;
 		}
+		need_unlock = 1;
 	    } else {
 		/* make sure we're up to date */
 		update_lock(db, *tidptr);
@@ -1161,7 +1165,7 @@ int myforeach(struct db *db,
 	}
     }
 
-    if (!tidptr) {
+    if (need_unlock) {
 	/* release read lock */
 	if ((r = unlock(db)) < 0) {
 	    return r;
