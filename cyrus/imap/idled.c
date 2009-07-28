@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: idled.c,v 1.26 2008/03/24 17:09:16 murch Exp $
+ * $Id: idled.c,v 1.27 2009/07/28 02:50:54 brong Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -285,6 +285,22 @@ int main(int argc, char **argv)
 	}
     }
 
+    /* fork unless we were given the -d option */
+    if (debugmode == 0) {
+	
+	pid = fork();
+	
+	if (pid == -1) {
+	    perror("fork");
+	    exit(1);
+	}
+	
+	if (pid != 0) { /* parent */
+	    exit(0);
+	}
+    }
+    /* child */
+
     cyrus_init(alt_config, "idled", 0);
 
     /* get name of shutdown file */
@@ -337,24 +353,6 @@ int main(int argc, char **argv)
     }
     umask(oldumask); /* for Linux */
     chmod(local.sun_path, 0777); /* for DUX */
-
-    /* fork unless we were given the -d option */
-    if (debugmode == 0) {
-	
-	pid = fork();
-	
-	if (pid == -1) {
-	    perror("fork");
-	    cyrus_done();
-	    exit(1);
-	}
-	
-	if (pid != 0) { /* parent */
-	    cyrus_done();
-	    exit(0);
-	}
-    }
-    /* child */
 
     /* get ready for select() */
     FD_ZERO(&read_set);
