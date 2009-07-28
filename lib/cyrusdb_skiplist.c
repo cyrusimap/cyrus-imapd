@@ -39,12 +39,12 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyrusdb_skiplist.c,v 1.68 2009/07/28 02:47:28 brong Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.69 2009/07/28 02:48:18 brong Exp $
  */
 
 /* xxx check retry_xxx for failure */
 
-/* xxx all offsets should be bit32s i think */
+/* xxx all offsets should be uint32_ts i think */
 
 #include <config.h>
 
@@ -165,12 +165,12 @@ struct db {
     ino_t map_ino;
 
     /* header info */
-    unsigned version;
-    unsigned version_minor;
-    unsigned maxlevel;
-    unsigned curlevel;
-    unsigned listsize;
-    unsigned logstart;		/* where the log starts from last chkpnt */
+    uint32_t version;
+    uint32_t version_minor;
+    uint32_t maxlevel;
+    uint32_t curlevel;
+    uint32_t listsize;
+    uint32_t logstart;		/* where the log starts from last chkpnt */
     time_t last_recovery;
 
     /* tracking info */
@@ -190,18 +190,6 @@ struct db_list {
 
 static time_t global_recovery = 0;
 static struct db_list *open_db = NULL;
-
-#define BIT32_MAX 4294967295U
-
-#if UINT_MAX == BIT32_MAX
-typedef unsigned int bit32;
-#elif ULONG_MAX == BIT32_MAX
-typedef unsigned long bit32;
-#elif USHRT_MAX == BIT32_MAX
-typedef unsigned short bit32;
-#else
-#error dont know what to use for bit32
-#endif
 
 /* Perform an FSYNC/FDATASYNC if we are *not* operating in UNSAFE mode */
 #define DO_FSYNC (!libcyrus_config_getswitch(CYRUSOPT_SKIPLIST_UNSAFE))
@@ -237,7 +225,7 @@ static int myinit(const char *dbdir, int myflags)
 {
     char sfile[1024];
     int fd, r = 0;
-    bit32 net32_time;
+    uint32_t net32_time;
     
     snprintf(sfile, sizeof(sfile), "%s/skipstamp", dbdir);
 
@@ -368,11 +356,11 @@ enum {
        ...
    }
    struct dummy {
-       bit32 t = htonl(DUMMY);
-       bit32 ks = 0;
-       bit32 ds = 0;
-       bit32 forward[db->maxlevel];
-       bit32 pad = -1;
+       uint32_t t = htonl(DUMMY);
+       uint32_t ks = 0;
+       uint32_t ds = 0;
+       uint32_t forward[db->maxlevel];
+       uint32_t pad = -1;
    } */
 #define DUMMY_OFFSET(db) (HEADER_SIZE)
 #define DUMMY_PTR(db) ((db)->map_base + HEADER_SIZE)
@@ -381,11 +369,11 @@ enum {
 /* bump to the next multiple of 4 bytes */
 #define ROUNDUP(num) (((num) + 3) & 0xFFFFFFFC)
 
-#define TYPE(ptr) (ntohl(*((bit32 *)(ptr))))
+#define TYPE(ptr) (ntohl(*((uint32_t *)(ptr))))
 #define KEY(ptr) ((ptr) + 8)
-#define KEYLEN(ptr) (ntohl(*((bit32 *)((ptr) + 4))))
+#define KEYLEN(ptr) (ntohl(*((uint32_t *)((ptr) + 4))))
 #define DATA(ptr) ((ptr) + 8 + ROUNDUP(KEYLEN(ptr)) + 4)
-#define DATALEN(ptr) (ntohl(*((bit32 *)((ptr) + 8 + ROUNDUP(KEYLEN(ptr))))))
+#define DATALEN(ptr) (ntohl(*((uint32_t *)((ptr) + 8 + ROUNDUP(KEYLEN(ptr))))))
 #define FIRSTPTR(ptr) ((ptr) + 8 + ROUNDUP(KEYLEN(ptr)) + 4 + ROUNDUP(DATALEN(ptr)))
 
 /* return a pointer to the pointer */
@@ -395,16 +383,16 @@ enum {
  * given a pointer to the start of the record, return the offset
  * corresponding to the xth pointer
  */
-#define FORWARD(ptr, x) (ntohl(*((bit32 *)(FIRSTPTR(ptr) + 4 * (x)))))
+#define FORWARD(ptr, x) (ntohl(*((uint32_t *)(FIRSTPTR(ptr) + 4 * (x)))))
 
 /* how many levels does this record have? */
 static unsigned LEVEL(const char *ptr)
 {
-    const bit32 *p, *q;
+    const uint32_t *p, *q;
 
     assert(TYPE(ptr) == DUMMY || TYPE(ptr) == INORDER || TYPE(ptr) == ADD);
-    p = q = (bit32 *) FIRSTPTR(ptr);
-    while (*p != (bit32)-1) p++;
+    p = q = (uint32_t *) FIRSTPTR(ptr);
+    while (*p != (uint32_t)-1) p++;
     return (p - q);
 }
 
@@ -450,20 +438,20 @@ static int SAFE_TO_APPEND(struct db *db)
 
     /* is it the beginning of the log? */
     if (db->map_size == db->logstart) {
-	if (*((bit32 *)(db->map_base + db->map_size - 4)) != htonl(-1)) {
+	if (*((uint32_t *)(db->map_base + db->map_size - 4)) != htonl(-1)) {
 	    return 1;
 	}
     }
 
     /* in the middle of the log somewhere */
     else {
-	if (*((bit32 *)(db->map_base + db->map_size - 4)) != htonl(COMMIT)) {
+	if (*((uint32_t *)(db->map_base + db->map_size - 4)) != htonl(COMMIT)) {
 	    return 1;
 	}
 
 	/* if it's not an end of a record or a delete */
-	if (!((*((bit32 *)(db->map_base + db->map_size - 8)) == htonl(-1)) ||
-	      (*((bit32 *)(db->map_base + db->map_size -12)) == htonl(DELETE)))) {
+	if (!((*((uint32_t *)(db->map_base + db->map_size - 8)) == htonl(-1)) ||
+	      (*((uint32_t *)(db->map_base + db->map_size -12)) == htonl(DELETE)))) {
 	    return 1;
 	}
     }
@@ -497,7 +485,7 @@ static int newtxn(struct db *db, struct txn **tidptr)
 }
 
 
-#define PADDING(ptr) (ntohl(*((bit32 *)((ptr) + RECSIZE(ptr) - 4))))
+#define PADDING(ptr) (ntohl(*((uint32_t *)((ptr) + RECSIZE(ptr) - 4))))
 
 /* given an open, mapped db, read in the header information */
 static int read_header(struct db *db)
@@ -517,16 +505,16 @@ static int read_header(struct db *db)
 	return CYRUSDB_IOERROR;
     }
 
-    db->version = ntohl(*((bit32 *)(db->map_base + OFFSET_VERSION)));
+    db->version = ntohl(*((uint32_t *)(db->map_base + OFFSET_VERSION)));
     db->version_minor = 
-	ntohl(*((bit32 *)(db->map_base + OFFSET_VERSION_MINOR)));
+	ntohl(*((uint32_t *)(db->map_base + OFFSET_VERSION_MINOR)));
     if (db->version != SKIPLIST_VERSION) {
 	syslog(LOG_ERR, "skiplist: version mismatch: %s has version %d.%d",
 	       db->fname, db->version, db->version_minor);
 	return CYRUSDB_IOERROR;
     }
 
-    db->maxlevel = ntohl(*((bit32 *)(db->map_base + OFFSET_MAXLEVEL)));
+    db->maxlevel = ntohl(*((uint32_t *)(db->map_base + OFFSET_MAXLEVEL)));
 
     if(db->maxlevel > SKIPLIST_MAXLEVEL) {
 	syslog(LOG_ERR,
@@ -535,7 +523,7 @@ static int read_header(struct db *db)
 	return CYRUSDB_IOERROR;
     }
 
-    db->curlevel = ntohl(*((bit32 *)(db->map_base + OFFSET_CURLEVEL)));
+    db->curlevel = ntohl(*((uint32_t *)(db->map_base + OFFSET_CURLEVEL)));
 
     if(db->curlevel > db->maxlevel) {
 	syslog(LOG_ERR,
@@ -544,10 +532,10 @@ static int read_header(struct db *db)
 	return CYRUSDB_IOERROR;
     }
 
-    db->listsize = ntohl(*((bit32 *)(db->map_base + OFFSET_LISTSIZE)));
-    db->logstart = ntohl(*((bit32 *)(db->map_base + OFFSET_LOGSTART)));
+    db->listsize = ntohl(*((uint32_t *)(db->map_base + OFFSET_LISTSIZE)));
+    db->logstart = ntohl(*((uint32_t *)(db->map_base + OFFSET_LOGSTART)));
     db->last_recovery = 
-	ntohl(*((bit32 *)(db->map_base + OFFSET_LASTRECOVERY)));
+	ntohl(*((uint32_t *)(db->map_base + OFFSET_LASTRECOVERY)));
 
     /* verify dummy node */
     dptr = DUMMY_PTR(db);
@@ -586,13 +574,13 @@ static int write_header(struct db *db)
 
     assert (db->lock_status == WRITELOCKED);
     memcpy(buf + 0, HEADER_MAGIC, HEADER_MAGIC_SIZE);
-    *((bit32 *)(buf + OFFSET_VERSION)) = htonl(db->version);
-    *((bit32 *)(buf + OFFSET_VERSION_MINOR)) = htonl(db->version_minor);
-    *((bit32 *)(buf + OFFSET_MAXLEVEL)) = htonl(db->maxlevel);
-    *((bit32 *)(buf + OFFSET_CURLEVEL)) = htonl(db->curlevel);
-    *((bit32 *)(buf + OFFSET_LISTSIZE)) = htonl(db->listsize);
-    *((bit32 *)(buf + OFFSET_LOGSTART)) = htonl(db->logstart);
-    *((bit32 *)(buf + OFFSET_LASTRECOVERY)) = htonl(db->last_recovery);
+    *((uint32_t *)(buf + OFFSET_VERSION)) = htonl(db->version);
+    *((uint32_t *)(buf + OFFSET_VERSION_MINOR)) = htonl(db->version_minor);
+    *((uint32_t *)(buf + OFFSET_MAXLEVEL)) = htonl(db->maxlevel);
+    *((uint32_t *)(buf + OFFSET_CURLEVEL)) = htonl(db->curlevel);
+    *((uint32_t *)(buf + OFFSET_LISTSIZE)) = htonl(db->listsize);
+    *((uint32_t *)(buf + OFFSET_LOGSTART)) = htonl(db->logstart);
+    *((uint32_t *)(buf + OFFSET_LASTRECOVERY)) = htonl(db->last_recovery);
 
     /* write it out */
     lseek(db->fd, 0, SEEK_SET);
@@ -855,7 +843,7 @@ static int myopen(const char *fname, int flags, struct db **ret)
 	if (!r) {
 	    int n;
 	    int dsize = DUMMY_SIZE(db);
-	    bit32 *buf = (bit32 *) xzmalloc(dsize);
+	    uint32_t *buf = (uint32_t *) xzmalloc(dsize);
 
 	    buf[0] = htonl(DUMMY);
 	    buf[(dsize / 4) - 1] = htonl(-1);
@@ -959,7 +947,7 @@ static int compare(const char *s1, int l1, const char *s2, int l2)
    if previous is set, finds the last node < key */
 static const char *find_node(struct db *db, 
 			     const char *key, int keylen,
-			     int *updateoffsets)
+			     unsigned *updateoffsets)
 {
     const char *ptr = db->map_base + DUMMY_OFFSET(db);
     int i;
@@ -1101,7 +1089,7 @@ int myforeach(struct db *db,
 
     while (ptr != db->map_base) {
 	/* does it match prefix? */
-	if (KEYLEN(ptr) < (bit32) prefixlen) break;
+	if (KEYLEN(ptr) < (uint32_t) prefixlen) break;
 	if (prefixlen && db->compar(KEY(ptr), prefixlen, prefix, prefixlen)) break;
 
 	if (!goodp ||
@@ -1198,19 +1186,23 @@ int mystore(struct db *db,
 	    struct txn **tidptr, int overwrite)
 {
     const char *ptr;
-    bit32 klen, dlen;
+    uint32_t klen;
+    uint32_t dlen;
     struct iovec iov[50];
-    unsigned int lvl, i;
-    int num_iov;
-    struct txn *tid, *localtid = NULL;
-    bit32 endpadding = (bit32) htonl(-1);
-    bit32 zeropadding[4] = { 0, 0, 0, 0 };
-    int updateoffsets[SKIPLIST_MAXLEVEL];
-    int newoffsets[SKIPLIST_MAXLEVEL];
-    int addrectype = htonl(ADD);
-    int delrectype = htonl(DELETE);
-    bit32 todelete;
-    bit32 newoffset, netnewoffset;
+    unsigned lvl;
+    unsigned i;
+    unsigned num_iov;
+    struct txn *tid;
+    struct txn *localtid = NULL;
+    uint32_t endpadding = htonl(-1);
+    uint32_t zeropadding[4] = { 0, 0, 0, 0 };
+    unsigned updateoffsets[SKIPLIST_MAXLEVEL];
+    unsigned newoffsets[SKIPLIST_MAXLEVEL];
+    uint32_t addrectype = htonl(ADD);
+    uint32_t delrectype = htonl(DELETE);
+    uint32_t todelete;
+    unsigned newoffset;
+    uint32_t netnewoffset;
     int r;
 
     assert(db != NULL);
@@ -1360,10 +1352,10 @@ int mydelete(struct db *db,
 	     struct txn **tidptr, int force __attribute__((unused)))
 {
     const char *ptr;
-    int delrectype = htonl(DELETE);
-    int updateoffsets[SKIPLIST_MAXLEVEL];
-    bit32 offset;
-    bit32 writebuf[2];
+    uint32_t delrectype = htonl(DELETE);
+    unsigned updateoffsets[SKIPLIST_MAXLEVEL];
+    uint32_t offset;
+    uint32_t writebuf[2];
     struct txn *tid, *localtid = NULL;
     unsigned i;
     int r;
@@ -1409,16 +1401,16 @@ int mydelete(struct db *db,
 	/* update pointers after writing record so abort is guaranteed to
 	 * see which records need reverting */
 	for (i = 0; i < db->curlevel; i++) {
-	    int newoffset;
+	    uint32_t netnewoffset;
 
 	    if (FORWARD(db->map_base + updateoffsets[i], i) != offset) {
 		break;
 	    }
-	    newoffset = htonl(FORWARD(ptr, i));
+	    netnewoffset = htonl(FORWARD(ptr, i));
 	    lseek(db->fd, 
 		  PTR(db->map_base + updateoffsets[i], i) - db->map_base, 
 		  SEEK_SET);
-	    retry_write(db->fd, (char *) &newoffset, 4);
+	    retry_write(db->fd, (char *) &netnewoffset, 4);
 	}
     }
 
@@ -1436,7 +1428,7 @@ int mydelete(struct db *db,
 
 int mycommit(struct db *db, struct txn *tid)
 {
-    bit32 commitrectype = htonl(COMMIT);
+    uint32_t commitrectype = htonl(COMMIT);
     int r = 0;
 
     assert(db && tid);
@@ -1521,8 +1513,8 @@ int mycommit(struct db *db, struct txn *tid)
 int myabort(struct db *db, struct txn *tid)
 {
     const char *ptr;
-    int updateoffsets[SKIPLIST_MAXLEVEL];
-    bit32 offset;
+    unsigned updateoffsets[SKIPLIST_MAXLEVEL];
+    unsigned offset;
     unsigned i;
     int r = 0;
 
@@ -1537,7 +1529,7 @@ int myabort(struct db *db, struct txn *tid)
     while (tid->logstart != tid->logend) {
 	/* find the last log entry */
 	for (offset = tid->logstart, ptr = db->map_base + offset; 
-	     offset + RECSIZE(ptr) != (bit32) tid->logend;
+	     offset + RECSIZE(ptr) != (uint32_t) tid->logend;
 	     offset += RECSIZE(ptr), ptr = db->map_base + offset) ;
 	
 	offset = ptr - db->map_base;
@@ -1553,28 +1545,28 @@ int myabort(struct db *db, struct txn *tid)
 	    /* remove this record */
 	    (void) find_node(db, KEY(ptr), KEYLEN(ptr), updateoffsets);
 	    for (i = 0; i < db->curlevel; i++) {
-		int newoffset;
+		uint32_t netnewoffset;
 
 		if (FORWARD(db->map_base + updateoffsets[i], i) != offset) {
 		    break;
 		}
 
-		newoffset = htonl(FORWARD(ptr, i));
+		netnewoffset = htonl(FORWARD(ptr, i));
 		lseek(db->fd,
 		      PTR(db->map_base + updateoffsets[i], i) - db->map_base, 
 		      SEEK_SET);
-		retry_write(db->fd, (char *) &newoffset, 4);
+		retry_write(db->fd, (char *) &netnewoffset, 4);
 	    }
 	    break;
 	case DELETE:
 	{
-	    unsigned int lvl;
-	    int newoffset;
+	    unsigned lvl;
+	    uint32_t netnewoffset;
 	    const char *q;
 	    
 	    /* re-add this record.  it can't exist right now. */
-	    newoffset = *((bit32 *)(ptr + 4));
-	    q = db->map_base + ntohl(newoffset);
+	    netnewoffset = *((uint32_t *)(ptr + 4));
+	    q = db->map_base + ntohl(netnewoffset);
 	    lvl = LEVEL(q);
 	    (void) find_node(db, KEY(q), KEYLEN(q), updateoffsets);
 	    for (i = 0; i < lvl; i++) {
@@ -1583,7 +1575,7 @@ int myabort(struct db *db, struct txn *tid)
 		lseek(db->fd, 
 		      PTR(db->map_base + updateoffsets[i], i) - db->map_base,
 		      SEEK_SET);
-		retry_write(db->fd, (char *) &newoffset, 4);
+		retry_write(db->fd, (char *) &netnewoffset, 4);
 	    }
 	    break;
 	}
@@ -1628,12 +1620,12 @@ static int mycheckpoint(struct db *db, int locked)
     char fname[1024];
     int oldfd;
     struct iovec iov[50];
-    int num_iov;
-    int updateoffsets[SKIPLIST_MAXLEVEL];
+    unsigned num_iov;
+    unsigned updateoffsets[SKIPLIST_MAXLEVEL];
     const char *ptr;
-    bit32 offset;
+    unsigned offset;
     int r = 0;
-    int iorectype = htonl(INORDER);
+    uint32_t iorectype = htonl(INORDER);
     unsigned i;
     time_t start = time(NULL);
 
@@ -1681,7 +1673,7 @@ static int mycheckpoint(struct db *db, int locked)
     /* write dummy record */
     if (!r) {
 	int dsize = DUMMY_SIZE(db);
-	bit32 *buf = (bit32 *) xzmalloc(dsize);
+	uint32_t *buf = (uint32_t *) xzmalloc(dsize);
 
 	buf[0] = htonl(DUMMY);
 	buf[(dsize / 4) - 1] = htonl(-1);
@@ -1709,7 +1701,8 @@ static int mycheckpoint(struct db *db, int locked)
     db->listsize = 0;
     while (!r && offset != 0) {
 	unsigned int lvl;
-	bit32 newoffset, newoffsetnet;
+	unsigned newoffset; 
+	uint32_t netnewoffset;
 
 	ptr = db->map_base + offset;
 	lvl = LEVEL(ptr);
@@ -1721,7 +1714,7 @@ static int mycheckpoint(struct db *db, int locked)
 	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) ptr + 4, RECSIZE(ptr) - 4);
 
 	newoffset = lseek(db->fd, 0, SEEK_END);
-	newoffsetnet = htonl(newoffset);
+	netnewoffset = htonl(newoffset);
 	r = retry_writev(db->fd, iov, num_iov);
 	if (r < 0) {
 	    r = CYRUSDB_IOERROR;
@@ -1738,7 +1731,7 @@ static int mycheckpoint(struct db *db, int locked)
 		r = 0;
 	    }
 		    
-	    r = retry_write(db->fd, (char *) &newoffsetnet, 4);
+	    r = retry_write(db->fd, (char *) &netnewoffset, 4);
 	    if (r < 0) {
 		r = CYRUSDB_IOERROR;
 		break;
@@ -1756,7 +1749,7 @@ static int mycheckpoint(struct db *db, int locked)
 
     /* set any dangling pointers to zero */
     for (i = 0; !r && i < db->maxlevel; i++) {
-	bit32 newoffset = htonl(0);
+	uint32_t netnewoffset = htonl(0);
 
 	r = lseek(db->fd, updateoffsets[i], SEEK_SET);
 	if (r < 0) {
@@ -1766,7 +1759,7 @@ static int mycheckpoint(struct db *db, int locked)
 	    r = 0;
 	}
 
-	r = retry_write(db->fd, (char *) &newoffset, 4);
+	r = retry_write(db->fd, (char *) &netnewoffset, 4);
 	if (r < 0) {
 	    r = CYRUSDB_IOERROR;
 	    break;
@@ -1900,7 +1893,7 @@ static int dump(struct db *db, int detail __attribute__((unused)))
 	    break;
 
 	case DELETE:
-	    printf("offset=%04X\n", ntohl(*((bit32 *)(ptr + 4))));
+	    printf("offset=%04X\n", ntohl(*((uint32_t *)(ptr + 4))));
 	    break;
 
 	case COMMIT:
@@ -1924,7 +1917,7 @@ static int consistent(struct db *db)
 static int myconsistent(struct db *db, struct txn *tid, int locked)
 {
     const char *ptr;
-    bit32 offset;
+    uint32_t offset;
 
     assert(db->current_txn == tid); /* could both be null */
 
@@ -1982,7 +1975,7 @@ static int recovery(struct db *db, int flags)
 {
     const char *ptr, *keyptr;
     int updateoffsets[SKIPLIST_MAXLEVEL];
-    bit32 offset, offsetnet, myoff = 0;
+    uint32_t offset, offsetnet, myoff = 0;
     int r = 0, need_checkpoint = 0;
     time_t start = time(NULL);
     unsigned i;
@@ -2088,7 +2081,7 @@ static int recovery(struct db *db, int flags)
 	}
 
 	/* check padding */
-	if (!r && PADDING(ptr) != (bit32) -1) {
+	if (!r && PADDING(ptr) != (uint32_t) -1) {
 	    syslog(LOG_ERR, "DBERROR: %s: offset %04X padding not -1",
 		   db->fname, offset);
 	    r = CYRUSDB_IOERROR;
@@ -2216,7 +2209,7 @@ static int recovery(struct db *db, int flags)
 	} else { /* type == DELETE */
 	    const char *p;
 
-	    myoff = ntohl(*((bit32 *)(ptr + 4)));
+	    myoff = ntohl(*((uint32_t *)(ptr + 4)));
 	    p = db->map_base + myoff;
 	    keyptr = find_node(db, KEY(p), KEYLEN(p), updateoffsets);
 	    if (keyptr == db->map_base ||
@@ -2253,7 +2246,7 @@ static int recovery(struct db *db, int flags)
 	/* otherwise insert it */
 	} else if (TYPE(ptr) == ADD) {
 	    unsigned int lvl;
-	    bit32 newoffsets[SKIPLIST_MAXLEVEL];
+	    uint32_t newoffsets[SKIPLIST_MAXLEVEL];
 
 	    if (keyptr) {
 		syslog(LOG_ERR, 
@@ -2314,7 +2307,7 @@ static int recovery(struct db *db, int flags)
 		retry_write(db->fd, (char *) newoffsets, 4 * lvl);
                 
 		if (keyptr && lvl < LEVEL(keyptr)) {
-		    bit32 newoffsetnet;
+		    uint32_t newoffsetnet;
 		    for (i = lvl; i < LEVEL(keyptr); i++) {
 			newoffsetnet = htonl(FORWARD(keyptr, i));
 			/* replace 'updateoffsets' to point onwards */
