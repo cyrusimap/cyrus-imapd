@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mboxname.c,v 1.46 2009/02/09 05:01:58 brong Exp $
+ * $Id: mboxname.c,v 1.47 2009/07/28 06:17:26 brong Exp $
  */
 
 #include <config.h>
@@ -628,8 +628,6 @@ int mboxname_isdeletedmailbox(const char *name)
     static int deletedprefix_len = 0;
     int domainlen = 0;
     char *p;
-
-    if (!mboxlist_delayed_delete_isenabled()) return(0);
 
     if (!deletedprefix) {
 	deletedprefix = config_getstring(IMAPOPT_DELETEDPREFIX);
