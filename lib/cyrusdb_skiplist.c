@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyrusdb_skiplist.c,v 1.66 2009/05/05 01:15:50 brong Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.67 2009/07/28 02:47:00 brong Exp $
  */
 
 /* xxx check retry_xxx for failure */
@@ -191,6 +191,18 @@ struct db_list {
 static time_t global_recovery = 0;
 static struct db_list *open_db = NULL;
 
+#define BIT32_MAX 4294967295U
+
+#if UINT_MAX == BIT32_MAX
+typedef unsigned int bit32;
+#elif ULONG_MAX == BIT32_MAX
+typedef unsigned long bit32;
+#elif USHRT_MAX == BIT32_MAX
+typedef unsigned short bit32;
+#else
+#error dont know what to use for bit32
+#endif
+
 /* Perform an FSYNC/FDATASYNC if we are *not* operating in UNSAFE mode */
 #define DO_FSYNC (!libcyrus_config_getswitch(CYRUSOPT_SKIPLIST_UNSAFE))
 
@@ -225,7 +237,7 @@ static int myinit(const char *dbdir, int myflags)
 {
     char sfile[1024];
     int fd, r = 0;
-    time_t a;
+    bit32 net32_time;
     
     snprintf(sfile, sizeof(sfile), "%s/skipstamp", dbdir);
 
@@ -238,8 +250,8 @@ static int myinit(const char *dbdir, int myflags)
 	if (fd == -1) r = -1;
 
 	if (r != -1) r = ftruncate(fd, 0);
-	a = htonl(global_recovery);
-	if (r != -1) r = write(fd, &a, 4);
+	net32_time = htonl(global_recovery);
+	if (r != -1) r = write(fd, &net32_time, 4);
 	if (r != -1) r = close(fd);
 
 	if (r == -1) {
@@ -252,7 +264,7 @@ static int myinit(const char *dbdir, int myflags)
 
 	fd = open(sfile, O_RDONLY, 0644);
 	if (fd == -1) r = -1;
-	if (r != -1) r = read(fd, &a, 4);
+	if (r != -1) r = read(fd, &net32_time, 4);
 	if (r != -1) r = close(fd);
 
 	if (r == -1) {
@@ -260,7 +272,7 @@ static int myinit(const char *dbdir, int myflags)
 		   sfile);
 	    global_recovery = 0;
 	} else {
-	    global_recovery = ntohl(a);
+	    global_recovery = ntohl(net32_time);
 	}
     }
 
@@ -314,18 +326,6 @@ enum {
     SKIPLIST_MAXLEVEL = 20,
     SKIPLIST_MINREWRITE = 16834 /* don't rewrite logs smaller than this */
 };
-
-#define BIT32_MAX 4294967295U
-
-#if UINT_MAX == BIT32_MAX
-typedef unsigned int bit32;
-#elif ULONG_MAX == BIT32_MAX
-typedef unsigned long bit32;
-#elif USHRT_MAX == BIT32_MAX
-typedef unsigned short bit32;
-#else
-#error dont know what to use for bit32
-#endif
 
 #define HEADER_MAGIC ("\241\002\213\015skiplist file\0\0\0")
 #define HEADER_MAGIC_SIZE (20)
