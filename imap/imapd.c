@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.565 2009/06/29 18:22:56 murch Exp $
+ * $Id: imapd.c,v 1.566 2009/07/28 02:48:46 brong Exp $
  */
 
 #include <config.h>
@@ -4512,7 +4512,7 @@ void cmd_store(char *tag, char *sequence, int usinguid)
 
 	/* We only need to log a MAILBOX event if we've changed
 	   a flag other than \Seen */
-	if (storeargs.system_flags || nflags ||
+	if (storeargs.system_flags || nflags || (imapd_mailbox->options & OPT_IMAP_CONDSTORE) ||
 	    storeargs.operation == STORE_REPLACE) {
 	    sync_log_mailbox(imapd_mailbox->name);
 	}
