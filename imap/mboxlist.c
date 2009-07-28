@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mboxlist.c,v 1.269 2009/06/29 17:21:06 murch Exp $
+ * $Id: mboxlist.c,v 1.270 2009/07/28 02:46:23 brong Exp $
  */
 
 #include <config.h>
@@ -532,7 +532,8 @@ mboxlist_mycreatemailboxcheck(char *name,
 	}
 
 	if (!partition) {  
-	    if ((config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD) &&
+	    if (config_mupdate_server &&
+		(config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD) &&
 		!config_getstring(IMAPOPT_PROXYSERVERS)) {
 		/* proxy-only server -- caller will find a server */
 		partition = NULL;
