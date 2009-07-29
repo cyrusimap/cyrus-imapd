@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.566 2009/07/28 02:48:46 brong Exp $
+ * $Id: imapd.c,v 1.567 2009/07/29 15:51:21 murch Exp $
  */
 
 #include <config.h>
@@ -6477,8 +6477,9 @@ void cmd_getquota(const char *tag, const char *name)
 
     imapd_check(NULL, 0, 0);
 
-    if (!imapd_userisadmin) r = IMAP_PERMISSION_DENIED;
-    else {
+    if (!imapd_userisadmin && !imapd_userisproxyadmin) {
+	r = IMAP_PERMISSION_DENIED;
+    } else {
 	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
 						   imapd_userid, mailboxname);
     }
@@ -6499,13 +6500,24 @@ void cmd_getquota(const char *tag, const char *name)
 			     imapd_authstate, quota_cb, server_rock);
 
 	if (!r) {
-	    /* Do the referral */
-	    imapd_refer(tag, server_rock, name);
-	    free(server_rock);
-	} else {
-	    if(server_rock) free(server_rock);
-	    prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+	    struct backend *s;
+
+	    s = proxy_findserver(server_rock, &imap_protocol,
+				 proxy_userid, &backend_cached,
+				 &backend_current, &backend_inbox, imapd_in);
+	    if (!s) r = IMAP_SERVER_UNAVAILABLE;
+
+	    imapd_check(s, 0, 0);
+
+	    if (!r) {
+		prot_printf(s->out, "%s Getquota {" SIZE_T_FMT "+}\r\n%s\r\n",
+			    tag, strlen(name), name);
+		pipe_including_tag(s, tag, 0);
+	    }
 	}
+
+	if (server_rock) free(server_rock);
+	if (r) prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
 
 	return;
     }
@@ -6718,13 +6730,25 @@ void cmd_setquota(const char *tag, const char *quotaroot)
 	imapd_check(NULL, 0, 0);
 
 	if (!r) {
-	    /* Do the referral */
-	    imapd_refer(tag, server_rock, quotaroot);
-	    free(server_rock);
-	} else {
-	    if (server_rock) free(server_rock);
-	    prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+	    struct backend *s;
+
+	    s = proxy_findserver(server_rock, &imap_protocol,
+				 proxy_userid, &backend_cached,
+				 &backend_current, &backend_inbox, imapd_in);
+	    if (!s) r = IMAP_SERVER_UNAVAILABLE;
+
+	    imapd_check(s, 0, 0);
+
+	    if (!r) {
+		prot_printf(s->out, "%s Setquota {" SIZE_T_FMT "+}\r\n%s"
+			    " (Storage %d)\r\n",
+			    tag, strlen(quotaroot), quotaroot, newquota);
+		pipe_including_tag(s, tag, 0);
+	    }
 	}
+
+	if (server_rock) free(server_rock);
+	if (r) prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
 
 	return;
     }
