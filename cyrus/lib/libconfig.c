@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: libconfig.c,v 1.23 2009/06/11 14:23:57 murch Exp $
+ * $Id: libconfig.c,v 1.24 2009/08/20 15:26:15 murch Exp $
  */
 
 #include <config.h>
@@ -149,6 +149,8 @@ const char *config_getoverflowstring(const char *key, const char *def)
     char buf[256];
     char *ret = NULL;
 
+    if (!config_filename) return 0;
+
     /* First lookup <ident>_key, to see if we have a service-specific
      * override */
 
@@ -170,6 +172,8 @@ const char *config_getoverflowstring(const char *key, const char *def)
 void config_foreachoverflowstring(void (*func)(const char *, const char *, void *),
 				  void *rock)
 {
+    if (!config_filename) return;
+
     hash_enumerate(&confighash, (void (*)(char *, void *, void *)) func, rock);
 }
 
