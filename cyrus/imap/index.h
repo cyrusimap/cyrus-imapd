@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: index.h,v 1.16 2008/03/24 17:09:17 murch Exp $
+ * $Id: index.h,v 1.17 2009/08/28 13:48:46 brong Exp $
  */
 
 /* Header for internal usage of index.c + programs that make raw access
@@ -85,35 +85,8 @@
 #endif
 #define GUID(msgno) message_guid_import(NULL, (unsigned char *)(INDEC_OFFSET(msgno)+OFFSET_MESSAGE_GUID))
 
-/* Access assistance macros for memory-mapped cache file data */
-/* CACHE_ITEM_BIT32: Convert to host byte order */
-/* CACHE_ITEM_LEN: Get the length out */
-/* CACHE_ITEM_NEXT: Return a pointer to the next entry.  Sizes are
- * 4-byte aligned, so round up to the next 4 byte boundry */
-#define CACHE_ITEM_BIT32(ptr) (ntohl(*((bit32 *)(ptr))))
-#define CACHE_ITEM_LEN(ptr) CACHE_ITEM_BIT32(ptr)
-#define CACHE_ITEM_NEXT(ptr) ((ptr)+4+((3+CACHE_ITEM_LEN(ptr))&~3))
-
-/* Size of a bit32 to skip when jumping over cache item sizes */
-#define CACHE_ITEM_SIZE_SKIP sizeof(bit32)
-
 /* Calculate the number of entries in a vector */
 #define VECTOR_SIZE(vector) (sizeof(vector)/sizeof(vector[0]))
-
-/* Cached envelope token positions */
-enum {
-    ENV_DATE = 0,
-    ENV_SUBJECT,
-    ENV_FROM,
-    ENV_SENDER,
-    ENV_REPLYTO,
-    ENV_TO,
-    ENV_CC,
-    ENV_BCC,
-    ENV_INREPLYTO,
-    ENV_MSGID
-};
-#define NUMENVTOKENS (10)
 
 /* Special "sort criteria" to load message-id and references/in-reply-to
  * into msgdata array for threaders that need them.

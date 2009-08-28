@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mbexamine.c,v 1.20 2008/09/19 01:03:20 wescraig Exp $
+ * $Id: mbexamine.c,v 1.21 2009/08/28 13:48:46 brong Exp $
  */
 
 #include <config.h>
@@ -218,6 +218,7 @@ int do_examine(char *name,
     struct mailbox mailbox;
     const char *index_base;
     long int start_offset, record_size;
+    cacherecord crec;
     
     signals_poll();
 
@@ -324,7 +325,6 @@ int do_examine(char *name,
     record_size = mailbox.record_size;
     
     for(i=1; i<=mailbox.exists; i++) {
-	const char *cacheitem;
 	int j;
 
 	if(wantvalue) {
@@ -363,41 +363,32 @@ int do_examine(char *name,
 	}
 	printf("\n");
 
-	cacheitem = mailbox.cache_base + CACHE_OFFSET(i);
-	
-	printf(" Envel>{%d}%.*s\n", CACHE_ITEM_LEN(cacheitem), CACHE_ITEM_LEN(cacheitem),
-	       cacheitem + CACHE_ITEM_SIZE_SKIP);
-	cacheitem = CACHE_ITEM_NEXT(cacheitem);
-	printf("BdyStr>{%d}%.*s\n", CACHE_ITEM_LEN(cacheitem), CACHE_ITEM_LEN(cacheitem),
-	       cacheitem + CACHE_ITEM_SIZE_SKIP);
-	cacheitem = CACHE_ITEM_NEXT(cacheitem);
-	printf("  Body>{%d}%.*s\n", CACHE_ITEM_LEN(cacheitem), CACHE_ITEM_LEN(cacheitem),
-	       cacheitem + CACHE_ITEM_SIZE_SKIP);
-	cacheitem = CACHE_ITEM_NEXT(cacheitem);
+	if (mailbox_cacherecord_offset(&mailbox, CACHE_OFFSET(i), &crec)) {
+	    printf(" Envel>{%d}%.*s\n", crec[CACHE_ENVELOPE].l, 
+		crec[CACHE_ENVELOPE].l, crec[CACHE_ENVELOPE].s);
+	    printf("BdyStr>{%d}%.*s\n", crec[CACHE_BODYSTRUCTURE].l,
+		crec[CACHE_BODYSTRUCTURE].l, crec[CACHE_BODYSTRUCTURE].s);
+	    printf("  Body>{%d}%.*s\n", crec[CACHE_BODY].l,
+		crec[CACHE_BODY].l, crec[CACHE_BODY].s);
 
 #if 0
-	/* xxx print out machine-readable bodystructure? */
-	printf(" Sects>\n");
+	    /* xxx print out machine-readable bodystructure? */
+	    printf(" Sects>\n");
 #endif
 
-	cacheitem = CACHE_ITEM_NEXT(cacheitem);
-	printf("CacHdr>{%d}%.*s\n", CACHE_ITEM_LEN(cacheitem), CACHE_ITEM_LEN(cacheitem),
-	       cacheitem + CACHE_ITEM_SIZE_SKIP);
-	cacheitem = CACHE_ITEM_NEXT(cacheitem);
-	printf("  From>{%d}%.*s\n", CACHE_ITEM_LEN(cacheitem), CACHE_ITEM_LEN(cacheitem),
-	       cacheitem + CACHE_ITEM_SIZE_SKIP);
-	cacheitem = CACHE_ITEM_NEXT(cacheitem);
-	printf("    To>{%d}%.*s\n", CACHE_ITEM_LEN(cacheitem), CACHE_ITEM_LEN(cacheitem),
-	       cacheitem + CACHE_ITEM_SIZE_SKIP);
-	cacheitem = CACHE_ITEM_NEXT(cacheitem);
-	printf("    Cc>{%d}%.*s\n", CACHE_ITEM_LEN(cacheitem), CACHE_ITEM_LEN(cacheitem),
-	       cacheitem + CACHE_ITEM_SIZE_SKIP);
-	cacheitem = CACHE_ITEM_NEXT(cacheitem);
-	printf("   Bcc>{%d}%.*s\n", CACHE_ITEM_LEN(cacheitem), CACHE_ITEM_LEN(cacheitem),
-	       cacheitem + CACHE_ITEM_SIZE_SKIP);
-	cacheitem = CACHE_ITEM_NEXT(cacheitem);
-	printf("Subjct>{%d}%.*s\n", CACHE_ITEM_LEN(cacheitem), CACHE_ITEM_LEN(cacheitem),
-	       cacheitem + CACHE_ITEM_SIZE_SKIP);
+	    printf("CacHdr>{%d}%.*s\n", crec[CACHE_HEADERS].l,
+		crec[CACHE_HEADERS].l, crec[CACHE_HEADERS].s);
+	    printf("  From>{%d}%.*s\n", crec[CACHE_FROM].l,
+		crec[CACHE_FROM].l, crec[CACHE_FROM].s);
+	    printf("    To>{%d}%.*s\n", crec[CACHE_TO].l,
+		crec[CACHE_TO].l, crec[CACHE_TO].s);
+	    printf("    Cc>{%d}%.*s\n", crec[CACHE_CC].l,
+		crec[CACHE_CC].l, crec[CACHE_CC].s);
+	    printf("   Bcc>{%d}%.*s\n", crec[CACHE_BCC].l,
+		crec[CACHE_BCC].l, crec[CACHE_BCC].s);
+	    printf("Subjct>{%d}%.*s\n", crec[CACHE_SUBJECT].l,
+		crec[CACHE_SUBJECT].l, crec[CACHE_SUBJECT].s);
+	}
 
 	if(flag) break;
     }

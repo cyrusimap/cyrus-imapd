@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.h,v 1.94 2009/05/05 01:20:03 brong Exp $
+ * $Id: mailbox.h,v 1.95 2009/08/28 13:48:46 brong Exp $
  */
 
 #ifndef INCLUDED_MAILBOX_H
@@ -290,10 +290,62 @@ enum {
     EXPUNGE_CLEANUP =		(1<<1)
 };
 
+/* Access assistance macros for memory-mapped cache file data */
+/* CACHE_ITEM_BIT32: Convert to host byte order */
+/* CACHE_ITEM_LEN: Get the length out */
+/* CACHE_ITEM_NEXT: Return a pointer to the next entry.  Sizes are
+ * 4-byte aligned, so round up to the next 4 byte boundry */
+#define CACHE_ITEM_BIT32(ptr) (ntohl(*((bit32 *)(ptr))))
+#define CACHE_ITEM_LEN(ptr) CACHE_ITEM_BIT32(ptr)
+#define CACHE_ITEM_NEXT(ptr) ((ptr)+4+((3+CACHE_ITEM_LEN(ptr))&~3))
+
+/* Size of a bit32 to skip when jumping over cache item sizes */
+#define CACHE_ITEM_SIZE_SKIP sizeof(bit32)
+
+/* Cache item positions */
+enum {
+    CACHE_ENVELOPE = 0,
+    CACHE_BODYSTRUCTURE,
+    CACHE_BODY,
+    CACHE_SECTION,
+    CACHE_HEADERS,
+    CACHE_FROM,
+    CACHE_TO,
+    CACHE_CC,
+    CACHE_BCC,
+    CACHE_SUBJECT
+};
+#define NUMCACHEITEMS 10
+
+struct cacheitem {
+    unsigned l;
+    const char *s;
+};
+
+/* pointers for a single cache record */
+typedef struct cacheitem cacherecord[NUMCACHEITEMS];
+
+/* Cached envelope token positions */
+enum {
+    ENV_DATE = 0,
+    ENV_SUBJECT,
+    ENV_FROM,
+    ENV_SENDER,
+    ENV_REPLYTO,
+    ENV_TO,
+    ENV_CC,
+    ENV_BCC,
+    ENV_INREPLYTO,
+    ENV_MSGID
+};
+#define NUMENVTOKENS (10)
+
 unsigned mailbox_cached_header(const char *s);
 unsigned mailbox_cached_header_inline(const char *text);
 
-unsigned long mailbox_cache_size(struct mailbox *mailbox, unsigned msgno);
+unsigned cache_parserecord(const char *map_base, unsigned map_size, unsigned cache_offset, cacherecord *rec);
+unsigned mailbox_cacherecord_offset(struct mailbox *mailbox, unsigned cache_offset, cacherecord *rec);
+unsigned mailbox_cacherecord_index(struct mailbox *mailbox, unsigned msgno, cacherecord *rec);
 
 typedef unsigned mailbox_decideproc_t(struct mailbox *mailbox, void *rock,
 				      unsigned char *indexbuf,
