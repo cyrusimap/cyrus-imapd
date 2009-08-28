@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mbdump.c,v 1.44 2009/03/31 04:11:18 brong Exp $
+ * $Id: mbdump.c,v 1.45 2009/08/28 13:53:25 brong Exp $
  */
 
 #include <config.h>
@@ -483,6 +483,7 @@ int undump_mailbox(const char *mbname, const char *mbpath,
     int curfile = -1;
     const char *userid = NULL;
     struct mailbox mb;
+    struct index_record rec;
     char sieve_path[2048];
     int sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
     int domainlen = 0;
@@ -841,8 +842,6 @@ int undump_mailbox(const char *mbname, const char *mbpath,
     if (!r) {
 	struct timeval times[ 2 ];
         char fname[MAX_MAILBOX_PATH+1];
-	const char *index_base;
-	long int start_offset, record_size;
 	size_t offset;
 	unsigned long i;
  
@@ -850,22 +849,19 @@ int undump_mailbox(const char *mbname, const char *mbpath,
         strlcat(fname, "/", sizeof(fname));
 	offset = strlen( fname );
 
-	index_base = mb.index_base;
-	start_offset = mb.start_offset;
-	record_size = mb.record_size;
-
 	for ( i = 1; i <= mb.exists; i++ ) {
+	    mailbox_read_index_record(&mb, i, &rec);
 	    /*
 	     * We calculate the usage here to avoid counting expunged
 	     * messages that may have been included in the undump.
 	     */
-	    quotaused += SIZE( i );
+	    quotaused += rec.size;
 
-	    mailbox_message_get_fname( &mb, UID(i),
+	    mailbox_message_get_fname( &mb, rec.uid,
 		    fname + offset, sizeof( fname ) - offset);
-	    times[ 0 ].tv_sec = INTERNALDATE( i );
+	    times[ 0 ].tv_sec = rec.internaldate;
 	    times[ 0 ].tv_usec = 0;
-	    times[ 1 ].tv_sec = INTERNALDATE( i );
+	    times[ 1 ].tv_sec = rec.internaldate;
 	    times[ 1 ].tv_usec = 0;
 	    (void)utimes( fname, times );
 	}

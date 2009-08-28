@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mbexamine.c,v 1.21 2009/08/28 13:48:46 brong Exp $
+ * $Id: mbexamine.c,v 1.22 2009/08/28 13:53:25 brong Exp $
  */
 
 #include <config.h>
@@ -216,8 +216,7 @@ int do_examine(char *name,
     int flag = 0;
     char ext_name_buf[MAX_MAILBOX_PATH+1];
     struct mailbox mailbox;
-    const char *index_base;
-    long int start_offset, record_size;
+    struct index_record record;
     cacherecord crec;
     
     signals_poll();
@@ -320,50 +319,50 @@ int do_examine(char *name,
 
     printf("\n Message Info:\n");
 
-    index_base = mailbox.index_base;
-    start_offset = mailbox.start_offset;
-    record_size = mailbox.record_size;
-    
     for(i=1; i<=mailbox.exists; i++) {
+	mailbox_read_index_record(&mailbox, i, &record);
 	int j;
 
 	if(wantvalue) {
 	    if(!wantuid) {
 		if(i != wantvalue) continue;
 	    } else {
-		if(UID(i) != wantvalue) continue;
+		if(record.uid != wantvalue) continue;
 	    }
 	    flag = 1;
 	}
 
-	printf("%06d> UID:%08d   INT_DATE:%d SENTDATE:%d SIZE:%-6d\n",
-	       i, UID(i), INTERNALDATE(i), SENTDATE(i),
-	       SIZE(i));
-	printf("      > HDRSIZE:%-6d LASTUPD :%ld SYSFLAGS:%08X",
-	       HEADER_SIZE(i), LAST_UPDATED(i), SYSTEM_FLAGS(i));
+	printf("%06d> UID:%08ld   INT_DATE:" SIZE_T_FMT 
+               " SENTDATE: " SIZE_T_FMT " SIZE:%-6ld\n",
+	       i, record.uid, record.internaldate,
+	       record.sentdate, record.size);
+	printf("      > HDRSIZE:%-6ld LASTUPD : " SIZE_T_FMT
+               " SYSFLAGS:%08X",
+	       record.header_size, record.last_updated,
+	       record.system_flags);
 	if (mailbox.minor_version >= 5)
-	    printf("   LINES:%-6d\n", CONTENT_LINES(i));
+	    printf("   LINES:%-6ld\n", record.content_lines);
 
 	if (mailbox.minor_version >= 6)
-	    printf("      > CACHEVER:%-2d", CACHE_VERSION(i));
+	    printf("      > CACHEVER:%-2ld", record.cache_version);
 
 	if (mailbox.minor_version >= 7) {
-	    printf(" GUID: %s", message_guid_encode(GUID(i)));
+	    printf(" GUID:%s", message_guid_encode(&record.guid));
 	}
 
 	if (mailbox.minor_version >= 8) {
-	    printf(" MODSEQ:" MODSEQ_FMT, MODSEQ(i));
+	    printf(" MODSEQ:" MODSEQ_FMT, record.modseq);
 	}
 
 	printf("\n");
 
 	printf("      > USERFLAGS:");
 	for(j=(MAX_USER_FLAGS/32)-1; j>=0; j--) {
-	    printf(" %08X", USER_FLAGS(i,j));
+	    printf(" %08X", record.user_flags[j]);
 	}
 	printf("\n");
 
-	if (mailbox_cacherecord_offset(&mailbox, CACHE_OFFSET(i), &crec)) {
+	if (mailbox_cacherecord_offset(&mailbox, record.cache_offset, &crec)) {
 	    printf(" Envel>{%d}%.*s\n", crec[CACHE_ENVELOPE].l, 
 		crec[CACHE_ENVELOPE].l, crec[CACHE_ENVELOPE].s);
 	    printf("BdyStr>{%d}%.*s\n", crec[CACHE_BODYSTRUCTURE].l,
@@ -415,8 +414,7 @@ int do_quota(char *name,
     int r = 0;
     char ext_name_buf[MAX_MAILBOX_PATH+1];
     struct mailbox mailbox;
-    const char *index_base;
-    long int start_offset, record_size;
+    struct index_record record;
     uquota_t total = 0;
     
     signals_poll();
@@ -450,17 +448,14 @@ int do_quota(char *name,
     }
     mailbox.index_lock_count = 1;
 
-    index_base = mailbox.index_base;
-    start_offset = mailbox.start_offset;
-    record_size = mailbox.record_size;
-    
     for(i=1; i<=mailbox.exists; i++) {
+	mailbox_read_index_record(&mailbox, i, &record);
 	char fnamebuf[MAILBOX_FNAME_LEN];
 	struct stat sbuf;
 
 	strlcpy(fnamebuf, mailbox.path, sizeof(fnamebuf));
 	strlcat(fnamebuf, "/", sizeof(fnamebuf));
-	mailbox_message_get_fname(&mailbox, UID(i),
+	mailbox_message_get_fname(&mailbox, record.uid,
 				  fnamebuf + strlen(fnamebuf),
 				  sizeof(fnamebuf) - strlen(fnamebuf));
 
@@ -470,8 +465,8 @@ int do_quota(char *name,
 	    continue;
 	}
 
-	if (SIZE(i) != (unsigned) sbuf.st_size) {
-	    printf("  Message %u has INCORRECT size in index record\n", UID(i));
+	if (record.size != (unsigned) sbuf.st_size) {
+	    printf("  Message %lu has INCORRECT size in index record\n", record.uid);
 	    r = 0;
 	    goto done;
 	}
