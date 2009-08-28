@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: index.c,v 1.251 2009/06/29 17:39:31 murch Exp $
+ * $Id: index.c,v 1.252 2009/08/28 13:45:46 brong Exp $
  */
 
 #include <config.h>
@@ -296,35 +296,37 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 		fatal("failed to reopen index file", EC_IOERR);
 	    }
 
-	    if (olduidvalidity != mailbox->uidvalidity) {
-		/* Force a * OK [UIDVALIDITY n] message */
-		oldexists = -1;
-	    }
+	    if (olduidvalidity == mailbox->uidvalidity) {
+	        /* See if any messages have been expunged */
+		for (oldmsgno = msgno = 1; oldmsgno <= imapd_exists;
+		     oldmsgno++, msgno++) {
+		    if ((unsigned) msgno <= mailbox->exists) {
+			mailbox_read_index_record(mailbox, msgno, &record);
+		    }
+		    else {
+			record.uid = mailbox->last_uid+1;
+		    }
 
-	    for (oldmsgno = msgno = 1; oldmsgno <= imapd_exists;
-		 oldmsgno++, msgno++) {
-		if ((unsigned) msgno <= mailbox->exists) {
-		    mailbox_read_index_record(mailbox, msgno, &record);
-		}
-		else {
-		    record.uid = mailbox->last_uid+1;
-		}
-		
-		nexpunge = 0;
-		while (oldmsgno<=imapd_exists && UID(oldmsgno) < record.uid) {
-		    nexpunge++;
-		    oldmsgno++;
-		}
-		if (nexpunge) {
-		    memmove(flagreport+msgno, flagreport+msgno+nexpunge,
-			    (oldexists-msgno-nexpunge+1)*sizeof(*flagreport));
-		    memmove(seenflag+msgno, seenflag+msgno+nexpunge,
-			    (oldexists-msgno-nexpunge+1)*sizeof(*seenflag));
-		    oldexists -= nexpunge;
-		    while (nexpunge--) {
-			prot_printf(imapd_out, "* %u EXPUNGE\r\n", msgno);
+		    nexpunge = 0;
+		    while (oldmsgno<=imapd_exists && UID(oldmsgno) < record.uid) {
+			nexpunge++;
+			oldmsgno++;
+		    }
+		    if (nexpunge) {
+			memmove(flagreport+msgno, flagreport+msgno+nexpunge,
+				(oldexists-msgno-nexpunge+1)*sizeof(*flagreport));
+			memmove(seenflag+msgno, seenflag+msgno+nexpunge,
+				(oldexists-msgno-nexpunge+1)*sizeof(*seenflag));
+			oldexists -= nexpunge;
+			while (nexpunge--) {
+			    prot_printf(imapd_out, "* %u EXPUNGE\r\n", msgno);
+			}
 		    }
 		}
+	    }
+	    else {
+		/* Force a * OK [UIDVALIDITY n] message */
+		oldexists = -1;
 	    }
 
 	    /* Force re-map of index/cache files */
