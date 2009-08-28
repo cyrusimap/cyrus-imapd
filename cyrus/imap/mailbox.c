@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.193 2009/05/05 01:20:02 brong Exp $
+ * $Id: mailbox.c,v 1.194 2009/08/28 13:47:09 brong Exp $
  */
 
 #include <config.h>
@@ -917,6 +917,15 @@ int mailbox_read_index_header(struct mailbox *mailbox)
 	return mailbox_open_index(mailbox); 
     }
 
+    /* check for future version.  We don't know how to handle it, so
+     * bail now before doing any damage */
+    if (!mailbox_doing_reconstruct &&
+	(mailbox->minor_version > MAILBOX_MINOR_VERSION)) {
+	syslog(LOG_INFO, "Future index version: %s (%d > %d)", mailbox->name, 
+			 mailbox->minor_version, MAILBOX_MINOR_VERSION);
+	return IMAP_MAILBOX_BADFORMAT;
+    }
+
     mailbox->exists =
 	ntohl(*((bit32 *)(mailbox->index_base+OFFSET_EXISTS)));
     mailbox->last_appenddate =
@@ -961,11 +970,6 @@ int mailbox_read_index_header(struct mailbox *mailbox)
 
     if (!mailbox->exists) 
 	mailbox->options |= OPT_POP3_NEW_UIDL;
-
-    if (!mailbox_doing_reconstruct &&
-	(mailbox->minor_version < MAILBOX_MINOR_VERSION)) {
-	return IMAP_MAILBOX_BADFORMAT;
-    }
 
     return 0;
 }
