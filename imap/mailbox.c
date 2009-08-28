@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.194 2009/08/28 13:47:09 brong Exp $
+ * $Id: mailbox.c,v 1.195 2009/08/28 13:48:46 brong Exp $
  */
 
 #include <config.h>
@@ -297,12 +297,52 @@ unsigned mailbox_cached_header_inline(const char *text)
     return BIT32_MAX;
 }
 
-unsigned long mailbox_cache_size(struct mailbox *mailbox, unsigned msgno)
+/* returns the length of the parsed record, if it's valid */
+unsigned cache_parserecord(const char *map_base, unsigned map_size, unsigned cache_offset, cacherecord *rec)
 {
+    unsigned cache_ent, offset;
+    const char *cacheitem, *range_start, *range_end;
+
+    if (cache_offset >= map_size) {
+	syslog(LOG_ERR, "IOERROR: cache offset greater than mapped size");
+	return 0;
+    }
+
+    /* Compute size of this record */
+    range_start = cacheitem = map_base + cache_offset;
+    range_end = map_base + map_size;
+
+    for (cache_ent = 0; cache_ent < NUMCACHEITEMS; cache_ent++) {
+	/* copy locations */
+	if (rec) {
+	    (*rec)[cache_ent].l = CACHE_ITEM_LEN(cacheitem);
+	    (*rec)[cache_ent].s = cacheitem + CACHE_ITEM_SIZE_SKIP;
+	}
+
+	/* moving on */
+	cacheitem = CACHE_ITEM_NEXT(cacheitem);
+	if (cacheitem <= range_start || cacheitem > range_end) {
+	    syslog(LOG_ERR, "IOERROR: cache offset greater than mapped size");
+	    return 0;
+	}
+    }
+
+    /* all fit within the cache, it's gold as far as we can tell */
+    return (cacheitem - range_start);
+}
+
+unsigned mailbox_cacherecord_offset(struct mailbox *mailbox, unsigned cache_offset, cacherecord *rec)
+{
+    unsigned cache_ent, offset;
+    const char *cacheitem;
+
+    return cache_parserecord(mailbox->cache_base, mailbox->cache_size, cache_offset, rec);
+}
+
+unsigned mailbox_cacherecord_index(struct mailbox *mailbox, unsigned msgno, cacherecord *rec)
+{
+    unsigned cache_offset;
     const char *p;
-    unsigned long cache_offset;
-    unsigned int cache_ent;
-    const char *cacheitem, *cacheitembegin;
 
     assert((msgno > 0) && (msgno <= mailbox->exists));
 
@@ -310,22 +350,8 @@ unsigned long mailbox_cache_size(struct mailbox *mailbox, unsigned msgno)
          ((msgno-1) * mailbox->record_size));
     
     cache_offset = ntohl(*((bit32 *)(p+OFFSET_CACHE_OFFSET)));
-    if (cache_offset > mailbox->cache_size) {
-	return 0;
-    }
 
-    /* Compute size of this record */
-    cacheitembegin = cacheitem = mailbox->cache_base + cache_offset;
-    if (cache_offset >= mailbox->cache_size)
-	return 0;
-    for (cache_ent = 0; cache_ent < NUM_CACHE_FIELDS; cache_ent++) {
-	cacheitem = CACHE_ITEM_NEXT(cacheitem);
-	if (cacheitem < cacheitembegin ||
-	    cacheitem > cacheitembegin + mailbox->cache_size) {
-	    return 0; /* clearly bogus */
-	}
-    }
-    return (cacheitem - cacheitembegin);
+    return mailbox_cacherecord_offset(mailbox, cache_offset, rec);
 }
 
 /* function to be used for notification of mailbox changes/updates */
@@ -2018,22 +2044,14 @@ static int process_records(struct mailbox *mailbox, FILE *newindex,
 		       msgno, exists);
 		return IMAP_IOERROR;
             }
-	    for (cache_ent = 0; cache_ent < NUM_CACHE_FIELDS; cache_ent++) {
-		cacheitem = CACHE_ITEM_NEXT(cacheitem);
-		if ((cacheitem < (mailbox->cache_base + cache_offset)) || 
-		    (cacheitem > (mailbox->cache_base + mailbox->cache_size))) {
-		    syslog(LOG_ERR,
-			   "IOERROR: reading cache record for %s:"
-			   " item %d has bogus offset %d of %d for %u/%lu; mailbox needs a reconstruct",
-			   mailbox->name,
-			   cache_ent+1,
-			   (int) (cacheitem - mailbox->cache_base),
-			   (int) mailbox->cache_size,
-			   msgno, exists);
-		    return IMAP_IOERROR;
-		}
+
+	    cache_record_size = mailbox_cacherecord_offset(mailbox, cache_offset, 0);
+	    if (!cache_record_size) {
+		syslog(LOG_ERR,
+			"IOERROR: reading cache record for %s record %d; mailbox needs a reconstruct",
+			mailbox->name, msgno);
+		return IMAP_IOERROR;
 	    }
-	    cache_record_size = (cacheitem - cacheitembegin);
 	    *new_cache_total_size += cache_record_size;
 
 	    /* fwrite will automatically call write() in a sane way */

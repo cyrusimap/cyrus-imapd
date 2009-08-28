@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_server.c,v 1.31 2009/07/28 02:45:43 brong Exp $
+ * $Id: sync_server.c,v 1.32 2009/08/28 13:48:46 brong Exp $
  *
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
@@ -1506,7 +1506,7 @@ static void cmd_reserve(char *mailbox_name,
             continue;
         }
 
-        cache_size = mailbox_cache_size(&m, msgno);
+        cache_size = mailbox_cacherecord_index(&m, msgno, 0);
         if (!cache_size) {
             syslog(LOG_ERR, "IOERROR: bogus cache record %s %d",
                 m.name, msgno);

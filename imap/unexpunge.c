@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: unexpunge.c,v 1.12 2008/03/24 17:09:20 murch Exp $
+ * $Id: unexpunge.c,v 1.13 2009/08/28 13:48:46 brong Exp $
  */
 
 #include <config.h>
@@ -126,7 +126,7 @@ void list_expunged(struct mailbox *mailbox,
     unsigned msgno;
     unsigned long uid, size, cache_offset;
     time_t internaldate, sentdate, last_updated;
-    const char *cacheitem;
+    cacherecord crec;
 
     for (msgno = 0; msgno < exists; msgno++) {
 	/* Jump to index record for this message */
@@ -146,22 +146,16 @@ void list_expunged(struct mailbox *mailbox,
 	printf("\tRecv: %s", ctime(&internaldate));
 	printf("\tExpg: %s", ctime(&last_updated));
 
-	cacheitem = mailbox->cache_base + cache_offset;
-	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip envelope */
-	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body structure */
-	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body */
-	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip binary body */
-	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip cached headers */
+	if (!mailbox_cacherecord_offset(mailbox, cache_offset, &crec)) {
+	    printf("\tERROR: cache record missing or corrupt, not printing cache details\n\n");
+	    continue;
+	}
 
-	printf("\tFrom: %s\n", cacheitem + CACHE_ITEM_SIZE_SKIP);
-	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip from */
-	printf("\tTo  : %s\n", cacheitem + CACHE_ITEM_SIZE_SKIP);
-	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip to */
-	printf("\tCc  : %s\n", cacheitem + CACHE_ITEM_SIZE_SKIP);
-	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip cc */
-	printf("\tBcc : %s\n", cacheitem + CACHE_ITEM_SIZE_SKIP);
-	cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bcc */
-	printf("\tSubj: %s\n\n", cacheitem + CACHE_ITEM_SIZE_SKIP);
+	printf("\tFrom: %.*s\n", crec[CACHE_FROM].l, crec[CACHE_FROM].s);
+	printf("\tTo  : %.*s\n", crec[CACHE_TO].l, crec[CACHE_TO].s);
+	printf("\tCc  : %.*s\n", crec[CACHE_CC].l, crec[CACHE_CC].s);
+	printf("\tBcc : %.*s\n", crec[CACHE_BCC].l, crec[CACHE_BCC].s);
+	printf("\tSubj: %.*s\n\n", crec[CACHE_SUBJECT].l, crec[CACHE_SUBJECT].s);
     }
 }
 

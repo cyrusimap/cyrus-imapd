@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: make_sha1.c,v 1.5 2009/02/09 05:01:58 brong Exp $
+ * $Id: make_sha1.c,v 1.6 2009/08/28 13:48:46 brong Exp $
  */
 
 #include <config.h>
@@ -611,7 +611,7 @@ sha1_single(char *name, int matchlen __attribute__((unused)),
         }
 
         cache_offset = record.cache_offset;
-        cache_size = mailbox_cache_size(&m, msgno);
+        cache_size = mailbox_cacherecord_index(&m, msgno, 0);
 
         if (!sha1_buffer(m.cache_base+cache_offset, cache_size, sha1_cache)) {
             syslog(LOG_ERR, "IOERROR: %s failed to sha1 msg cache UID %lu",

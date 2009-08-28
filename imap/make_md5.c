@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: make_md5.c,v 1.9 2009/02/09 05:01:58 brong Exp $
+ * $Id: make_md5.c,v 1.10 2009/08/28 13:48:46 brong Exp $
  */
 
 #include <config.h>
@@ -611,7 +611,7 @@ md5_single(char *name, int matchlen __attribute__((unused)),
         }
 
         cache_offset = record.cache_offset;
-        cache_size = mailbox_cache_size(&m, msgno);
+        cache_size = mailbox_cacherecord_index(&m, msgno, 0);
 
         if (!md5_buffer(m.cache_base+cache_offset, cache_size, md5_cache)) {
             syslog(LOG_ERR, "IOERROR: %s failed to md5 msg cache UID %lu",
