@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: search_engines.c,v 1.10 2008/03/24 17:09:19 murch Exp $
+ * $Id: search_engines.c,v 1.11 2009/08/28 13:54:13 brong Exp $
  */
 
 #include <config.h>
@@ -161,6 +161,8 @@ static int search_strlist(SquatSearchIndex* index, struct mailbox* mailbox,
     memset(tmp, 0, len);
     if (squat_search_execute(index, s, strlen(s), fill_with_hits, &r)
         != SQUAT_OK) {
+      if (squat_get_last_error() == SQUAT_ERR_SEARCH_STRING_TOO_SHORT)
+        return 1; /* The rest of the search is still viable */
       syslog(LOG_DEBUG, "SQUAT string list search failed on string %s "
              "with part types %s", s, part_types);
       return 0;
