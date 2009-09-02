@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: script.c,v 1.67 2008/03/24 20:08:46 murch Exp $
+ * $Id: script.c,v 1.68 2009/09/02 13:56:18 brong Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -688,7 +688,7 @@ static int do_sieve_error(int ret,
 	ret |= keep_ret;
         if (keep_ret == SIEVE_OK)
             snprintf(actions_string+strlen(actions_string),
-		     sizeof(actions_string)-strlen(actions_string),
+		     ACTIONS_STRING_LEN-strlen(actions_string),
 		     "Kept\n");
 	else {
 	    implicit_keep = 0;	/* don't try an implicit keep again */
@@ -742,7 +742,7 @@ static int do_action_list(sieve_interp_t *interp,
 	    
 	    if (ret == SIEVE_OK)
 		snprintf(actions_string+strlen(actions_string),
-			 sizeof(actions_string)-strlen(actions_string), 
+			 ACTIONS_STRING_LEN-strlen(actions_string), 
 			 "Rejected with: %s\n", a->u.rej.msg);
 
 	    break;
@@ -757,7 +757,7 @@ static int do_action_list(sieve_interp_t *interp,
 
 	    if (ret == SIEVE_OK)
 		snprintf(actions_string+strlen(actions_string),
-			 sizeof(actions_string)-strlen(actions_string),
+			 ACTIONS_STRING_LEN-strlen(actions_string),
 			 "Filed into: %s\n",a->u.fil.mailbox);
 	    break;
 	case ACTION_KEEP:
@@ -770,7 +770,7 @@ static int do_action_list(sieve_interp_t *interp,
 			       &errmsg);
 	    if (ret == SIEVE_OK)
 		snprintf(actions_string+strlen(actions_string),
-			 sizeof(actions_string)-strlen(actions_string),
+			 ACTIONS_STRING_LEN-strlen(actions_string),
 			 "Kept\n");
 	    break;
 	case ACTION_REDIRECT:
@@ -783,7 +783,7 @@ static int do_action_list(sieve_interp_t *interp,
 				   &errmsg);
 	    if (ret == SIEVE_OK)
 		snprintf(actions_string+strlen(actions_string),
-			 sizeof(actions_string)-strlen(actions_string),
+			 ACTIONS_STRING_LEN-strlen(actions_string),
 			 "Redirected to %s\n", a->u.red.addr);
 	    break;
 	case ACTION_DISCARD:
@@ -794,7 +794,7 @@ static int do_action_list(sieve_interp_t *interp,
 				      &errmsg);
 	    if (ret == SIEVE_OK)
 		snprintf(actions_string+strlen(actions_string),
-			 sizeof(actions_string)-strlen(actions_string),
+			 ACTIONS_STRING_LEN-strlen(actions_string),
 			 "Discarded\n");
 	    break;
 
@@ -820,12 +820,12 @@ static int do_action_list(sieve_interp_t *interp,
 
 		    if (ret == SIEVE_OK)
 			snprintf(actions_string+strlen(actions_string),
-				 sizeof(actions_string)-strlen(actions_string),
+				 ACTIONS_STRING_LEN-strlen(actions_string),
 				 "Sent vacation reply\n");
 
 		} else if (ret == SIEVE_DONE) {
 		    snprintf(actions_string+strlen(actions_string),
-			     sizeof(actions_string)-strlen(actions_string),
+			     ACTIONS_STRING_LEN-strlen(actions_string),
 			     "Vacation reply suppressed\n");
 
 		    ret = SIEVE_OK;
