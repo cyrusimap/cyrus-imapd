@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: index.c,v 1.254 2009/08/28 14:06:04 brong Exp $
+ * $Id: index.c,v 1.255 2009/09/07 01:37:54 brong Exp $
  */
 
 #include <config.h>
@@ -3566,7 +3566,7 @@ void *rock;
     }
     else {
 	copyargs->copymsg[copyargs->nummsg].cache_len =
-	    mailbox_cacherecord_index(mailbox, msgno, 0);
+	    cache_parserecord(cache_base, cache_end, CACHE_OFFSET(msgno), 0);
     }
     copyargs->copymsg[copyargs->nummsg].seen = seenflag[msgno];
     copyargs->copymsg[copyargs->nummsg].system_flags = SYSTEM_FLAGS(msgno);
