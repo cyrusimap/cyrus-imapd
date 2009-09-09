@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.172 2009/09/08 17:40:39 murch Exp $ -->
+<!-- $Id: changes.html,v 1.173 2009/09/09 01:26:16 brong Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -26,6 +26,24 @@ disk space usage.</li>
   toplevel mailboxes are created on this particular server), or
   the <tt>serverlist</tt> option must be set (new toplevel mailboxes
   are created on whichever server has the most available spool space).</li>
+<li>Use delayed expunge in ipurge to avoid corrupting cache file
+  and as a bonus make it unexpungable.</li>
+<li>Run daily tasks at the same time each day instead of exactly
+  24 hours apart to detect daylight savings changes</li>
+<li>Fixed Bug #2727 by immediately expunging old messages on INBOX
+  to INBOX.sub rename</li>
+<li>Fixed incorrect quota calculations on sync_server when replicating
+  unexpunged messages (thanks David Carter)</li>
+<li>Allow user rename to succeed even if the user is over quota</li>
+<li>Fixed a skiplist foreach bug and various datatype size issues that 
+  caused problems on some 64 bit architectures</li>
+<li>Added additional logging of mailbox events if condstore is enabled
+  to ensure modseq values are always correctly replicated</li>
+<li>Fixed "DBERROR db4: environment reference count went negative" by
+  forking idled before opening the database environment.</li>
+<li>Fixed a squatter bug where any short search term (&lt; 4 characters)
+  would cause squatter to return all messages regardless of the other
+  filters being applied</li>
 </ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.3.13</h1>
@@ -2417,7 +2435,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2009/09/08 17:40:39 $ <br />
+last modified: $Date: 2009/09/09 01:26:16 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
