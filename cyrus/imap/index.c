@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: index.c,v 1.255 2009/09/07 01:37:54 brong Exp $
+ * $Id: index.c,v 1.256 2009/09/09 01:22:38 brong Exp $
  */
 
 #include <config.h>
@@ -1061,6 +1061,10 @@ int nflags;
 	/* xxx what to do on failure? */
 	mailbox_write_index_header(mailbox);
 	mailbox->dirty = 0;
+
+	/* remove the statuscache record if enabled */
+	if (config_getswitch(IMAPOPT_STATUSCACHE))
+	    statuscache_invalidate(mailbox->name, imapd_userid);
     }
 
     mailbox_unlock_index(mailbox);
