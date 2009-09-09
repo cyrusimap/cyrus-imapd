@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.173 2009/09/09 01:26:16 brong Exp $ -->
+<!-- $Id: changes.html,v 1.174 2009/09/09 13:17:35 murch Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -10,6 +10,9 @@
 
 <h1>Changes to the Cyrus IMAP Server since 2.3.14</h1>
 <ul>
+<li>Fixed
+ CERT <a href="http://www.kb.cert.org/vuls/id/336053">VU#336053</a>
+ - Potential buffer overflow in Sieve.</li>
 <li>Added new <tt>cyr_df</tt> tool for reporting Cyrus spool partition
 disk space usage.</li>
 <li>Fixed a crash when selecting a folder after using the SCAN command</li>
@@ -2435,7 +2438,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2009/09/09 01:26:16 $ <br />
+last modified: $Date: 2009/09/09 13:17:35 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
