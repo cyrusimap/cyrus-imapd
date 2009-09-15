@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: script.c,v 1.68 2009/09/02 13:56:18 brong Exp $
+ * $Id: script.c,v 1.69 2009/09/15 16:24:03 murch Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -668,9 +668,9 @@ static int do_sieve_error(int ret,
     if ((ret != SIEVE_OK) && interp->err) {
 	char buf[1024];
 	if (lastaction == -1) /* we never executed an action */
-	    sprintf(buf, "%s", errmsg ? errmsg : sieve_errstr(ret));
+	    snprintf(buf, sizeof(buf), "%s", errmsg ? errmsg : sieve_errstr(ret));
 	else
-	    sprintf(buf, "%s: %s", action_to_string(lastaction),
+	    snprintf(buf, sizeof(buf), "%s: %s", action_to_string(lastaction),
 		    errmsg ? errmsg : sieve_errstr(ret));
  
 	ret |= interp->execute_err(buf, interp->interp_context,

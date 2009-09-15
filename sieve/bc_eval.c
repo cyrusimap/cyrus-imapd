@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: bc_eval.c,v 1.14 2009/03/31 04:11:30 brong Exp $
+ * $Id: bc_eval.c,v 1.15 2009/09/15 16:24:03 murch Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -500,7 +500,7 @@ static int eval_bc_test(sieve_interp_t *interp,
 	int comparator=ntohl(bc[i+3].value);
 	int apart=ntohl(bc[i+4].value);
 	int count=0;
-	char scount[3];
+	char scount[21];
 	int isReg = (match==B_REGEX);
 	int ctag = 0;
 	regex_t *reg;
@@ -669,7 +669,7 @@ static int eval_bc_test(sieve_interp_t *interp,
 	int relation=ntohl(bc[i+2].value);
 	int comparator=ntohl(bc[i+3].value);
 	int count=0;	
-	char scount[3];
+	char scount[21];
 	int isReg = (match==B_REGEX);
 	int ctag = 0;
 	regex_t *reg;
@@ -790,7 +790,7 @@ static int eval_bc_test(sieve_interp_t *interp,
 	int transform=ntohl(bc[i+4].value);
 	/* ntohl(bc[i+5].value) is the now unused 'offset' */
 	int count=0;
-	char scount[3];
+	char scount[21];
 	int isReg = (match==B_REGEX);
 	int ctag = 0;
 	regex_t *reg;
