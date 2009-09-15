@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imtest.c,v 1.126 2009/04/23 17:10:07 murch Exp $
+ * $Id: imtest.c,v 1.127 2009/09/15 16:26:49 murch Exp $
  */
 
 #include "config.h"
@@ -1797,7 +1797,7 @@ static int imap_reset(void *rock)
 
     if(text->inLiteral || gentext->midLine) return IMTEST_FAIL;
 
-    snprintf(tag, sizeof(tag-1), "UN%d", i);
+    snprintf(tag, sizeof(tag) - 1, "UN%d", i);
     prot_printf(pout, "%s UNSELECT\r\n", tag);
     prot_flush(pout);
     waitfor(tag, NULL, 0);
