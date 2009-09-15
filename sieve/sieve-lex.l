@@ -54,6 +54,8 @@
 #include "tree.h"
 #include "sieve.h"
 
+#define YY_NO_INPUT
+
 static int tonum(char *c);
 static char *chkstr(char *);
 static char *mlbuf;

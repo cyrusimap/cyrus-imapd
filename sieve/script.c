@@ -70,6 +70,8 @@
 #include "bytecode.h"
 #include "libconfig.h"
 
+#define ERR_BUF_SIZE 1024
+
 /* does this interpretor support this requirement? */
 int script_require(sieve_script_t *s, char *req)
 {
@@ -494,8 +496,9 @@ static char *sieve_errstr(int code)
 int sieve_script_load(const char *fname, sieve_execute_t **ret) 
 {
     struct stat sbuf;
-    sieve_execute_t *r;
+    sieve_execute_t *ex;
     sieve_bytecode_t *bc;
+    int dofree = 0;
    
     if (!fname || !ret) return SIEVE_FAIL;
     
@@ -506,14 +509,15 @@ int sieve_script_load(const char *fname, sieve_execute_t **ret)
 
     if (!*ret) {
 	/* new sieve_bytecode_t */
-	r = (sieve_execute_t *) xzmalloc(sizeof(sieve_execute_t));
+	ex = (sieve_execute_t *) xzmalloc(sizeof(sieve_execute_t));
+	dofree = 1;
     } else {
 	/* existing sieve_execute_t (INCLUDE) */
-	r = *ret;
+	ex = *ret;
     }
 
     /* see if we already have this script loaded */
-    bc = r->bc_list;
+    bc = ex->bc_list;
     while (bc) {
 	if (sbuf.st_ino == bc->inode) break;
 	bc = bc->next;
@@ -526,11 +530,13 @@ int sieve_script_load(const char *fname, sieve_execute_t **ret)
 	fd = open(fname, O_RDONLY);
 	if (fd == -1) {
 	    syslog(LOG_ERR, "IOERROR: can not open sieve script %s: %m", fname);
+	    if (dofree) free(ex);
 	    return SIEVE_FAIL;
 	}
 	if (fstat(fd, &sbuf) == -1) {
 	    syslog(LOG_ERR, "IOERROR: fstating sieve script %s: %m", fname);
 	    close(fd);
+	    if (dofree) free(ex);
 	    return SIEVE_FAIL;
 	}
 
@@ -543,12 +549,12 @@ int sieve_script_load(const char *fname, sieve_execute_t **ret)
 		    fname, "sievescript");
 
 	/* add buffer to list */
-	bc->next = r->bc_list;
-	r->bc_list = bc;
+	bc->next = ex->bc_list;
+	ex->bc_list = bc;
     }
 
-    r->bc_cur = bc;
-    *ret = r;
+    ex->bc_cur = bc;
+    *ret = ex;
     return SIEVE_OK;
 }
 
@@ -639,11 +645,13 @@ static int do_sieve_error(int ret,
       }
     
     if ((ret != SIEVE_OK) && interp->err) {
-	char buf[1024];
+	char buf[ERR_BUF_SIZE];
 	if (lastaction == -1) /* we never executed an action */
-	    snprintf(buf, sizeof(buf), "%s", errmsg ? errmsg : sieve_errstr(ret));
+	    snprintf(buf, ERR_BUF_SIZE,
+		     "%s", errmsg ? errmsg : sieve_errstr(ret));
 	else
-	    snprintf(buf, sizeof(buf), "%s: %s", action_to_string(lastaction),
+	    snprintf(buf, ERR_BUF_SIZE,
+		    "%s: %s", action_to_string(lastaction),
 		    errmsg ? errmsg : sieve_errstr(ret));
  
 	ret |= interp->execute_err(buf, interp->interp_context,

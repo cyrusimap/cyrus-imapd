@@ -63,6 +63,9 @@
 #include <string.h>
 #include <ctype.h>
 
+#define SCOUNT_SIZE 20
+char scount[SCOUNT_SIZE];
+
 /**************************************************************************/
 /**************************************************************************/
 /**************************************************************************/
@@ -238,8 +241,8 @@ static int shouldRespond(void * m, sieve_interp_t *interp,
     void *data = NULL, *marker = NULL;
     char *tmp;
     int curra, x;
-    char *found=NULL;
-    char *reply_to=NULL;
+    char *found = NULL;
+    char *reply_to = NULL;
   
     /* Implementations SHOULD NOT respond to any message that contains a
        "List-Id" [RFC2919], "List-Help", "List-Subscribe", "List-
@@ -309,7 +312,7 @@ static int shouldRespond(void * m, sieve_interp_t *interp,
 	}
     
 	/* first, is it from me? */
-	if (l == SIEVE_OK && !strcmp(myaddr, reply_to)) {
+	if (l == SIEVE_OK && myaddr && !strcmp(myaddr, reply_to)) {
 	    l = SIEVE_DONE;
 	}
    
@@ -324,7 +327,7 @@ static int shouldRespond(void * m, sieve_interp_t *interp,
 		curra = unwrap_string(bc, curra, &address, NULL);
 		
 		if (!strcmp(address, reply_to))
-		    l=SIEVE_DONE;
+		    l = SIEVE_DONE;
 	    }
 	}
    
@@ -360,8 +363,8 @@ static int shouldRespond(void * m, sieve_interp_t *interp,
     }
     /* ok, ok, if we got here maybe we should reply */
     if (myaddr) free(myaddr);
-    *from=found;
-    *to=reply_to;
+    *from = found;
+    *to = reply_to;
     return l;
 }
 
@@ -503,7 +506,6 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
 	int comparator=ntohl(bc[i+3].value);
 	int apart=ntohl(bc[i+4].value);
 	int count=0;
-	char scount[21];
 	int isReg = (match==B_REGEX);
 	int ctag = 0;
 	regex_t *reg;
@@ -638,7 +640,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
      
 	if  (match == B_COUNT)
 	{
-	    sprintf(scount, "%u", count);
+	    snprintf(scount, SCOUNT_SIZE, "%u", count);
 	    /* search through all the data */ 
 	    currd=datai+2;
 	    for (z=0; z<numdata && !res; z++)
@@ -672,7 +674,6 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
 	int relation=ntohl(bc[i+2].value);
 	int comparator=ntohl(bc[i+3].value);
 	int count=0;	
-	char scount[21];
 	int isReg = (match==B_REGEX);
 	int ctag = 0;
 	regex_t *reg;
@@ -757,7 +758,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
 	
 	if  (match == B_COUNT )
 	{
-	    sprintf(scount, "%u", count);
+	    snprintf(scount, SCOUNT_SIZE, "%u", count);
 	    /*search through all the data*/ 
 	    currd=datai+2;
 	    for (z=0; z<numdata && !res; z++)
@@ -796,7 +797,6 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
 	int transform=ntohl(bc[i+4].value);
 	/* ntohl(bc[i+5].value) is the now unused 'offset' */
 	int count=0;
-	char scount[21];
 	int isReg = (match==B_REGEX);
 	int ctag = 0;
 	regex_t *reg;
@@ -884,7 +884,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
 
 	if  (match == B_COUNT)
 	{
-	    sprintf(scount, "%u", count);
+	    snprintf(scount, SCOUNT_SIZE, "%u", count);
 	    /* search through all the data */ 
 	    currd=datai+2;
 	    for (z=0; z<numdata && !res; z++)
@@ -1015,6 +1015,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    copy = ntohl(bc[ip+1].value);
 	    ip+=1;
 
+	    /* fall through */
 	case B_FILEINTO_ORIG:/*4*/
 	{
 	    ip = unwrap_string(bc, ip+1, &data, NULL);
@@ -1031,6 +1032,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    copy = ntohl(bc[ip+1].value);
 	    ip+=1;
 
+	    /* fall through */
 	case B_REDIRECT_ORIG:/*5*/
 	{
 	    ip = unwrap_string(bc, ip+1, &data, NULL);
@@ -1278,19 +1280,19 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    char buf[128];
 	    char subject[1024];
 	    int x;
-	    
+
 	    ip++;
 
-	    x=ntohl( bc[ip].len);
+	    x = ntohl(bc[ip].len);
 	    
-	    respond=shouldRespond(m, i, x, bc, ip+2,
-				  &fromaddr, &toaddr);
+	    respond = shouldRespond(m, i, x, bc, ip+2,
+				    &fromaddr, &toaddr);
 	    
-	    ip=(ntohl(bc[ip+1].value)/4);	
+	    ip = ntohl(bc[ip+1].value) / 4;
 	    if (respond==SIEVE_OK)
-	    {	 
+	    {
 		ip = unwrap_string(bc, ip, &data, NULL);
-		
+
 		if (!data) 
 		{
 		    /* we have to generate a subject */
@@ -1302,20 +1304,19 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 		    } else {
 			/* s[0] contains the original subject */
 			const char *origsubj = s[0];
-
 			snprintf(subject, sizeof(subject), "Auto: %s", origsubj);
 		    }
 		} else {
 		    /* user specified subject */
 		    strlcpy(subject, data, sizeof(subject));
 		}
-		
+
 		ip = unwrap_string(bc, ip, &message, NULL);
 
 		days = ntohl(bc[ip].value);
 		mime = ntohl(bc[ip+1].value);
 
-		ip+=2;	
+		ip+=2;
 
 		if (version >= 0x05) {
 		    ip = unwrap_string(bc, ip, &data, NULL);

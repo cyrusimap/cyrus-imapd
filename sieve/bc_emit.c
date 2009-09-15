@@ -87,7 +87,7 @@ static int align_string(int fd, int string_len)
     int needed = sizeof(int) - (string_len % sizeof(int));
     if (needed>= 0 && needed <=4)
     {
-    	if(write(fd, "\0\0\0\0", needed) == -1) return -1;
+	if (write(fd, "\0\0\0\0", needed) == -1) return -1;
     }
     return needed;
 }
@@ -139,6 +139,7 @@ static int bc_stringlist_emit(int fd, int *codep, bytecode_info_t *bc)
 	wrote+=ret;
     }
     end=lseek(fd,0,SEEK_CUR);
+    if (end < 0) return -1;
  
     /* go back and write end of list position */
     lseek(fd,begin,SEEK_SET);
@@ -180,6 +181,7 @@ static int bc_testlist_emit(int fd, int *codep, bytecode_info_t *bc)
 	*codep = nextcodep;
     }
     end = lseek(fd, 0, SEEK_CUR);
+    if (end < 0) return -1;
 
     /* go back and write the end of list position */
     lseek(fd,begin,SEEK_SET);

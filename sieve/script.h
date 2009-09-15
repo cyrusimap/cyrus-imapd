@@ -52,8 +52,6 @@
 #include "interp.h"
 #include "tree.h"
 
-#define ADDRERR_SIZE 500
-
 struct sieve_script {
     sieve_interp_t interp;
 
