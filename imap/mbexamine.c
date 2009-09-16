@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mbexamine.c,v 1.22 2009/08/28 13:53:25 brong Exp $
+ * $Id: mbexamine.c,v 1.23 2009/09/16 12:45:26 murch Exp $
  */
 
 #include <config.h>
@@ -332,12 +332,10 @@ int do_examine(char *name,
 	    flag = 1;
 	}
 
-	printf("%06d> UID:%08ld   INT_DATE:" SIZE_T_FMT 
-               " SENTDATE: " SIZE_T_FMT " SIZE:%-6ld\n",
+	printf("%06d> UID:%08ld   INT_DATE:%ld SENTDATE:%ld SIZE:%-6ld\n",
 	       i, record.uid, record.internaldate,
 	       record.sentdate, record.size);
-	printf("      > HDRSIZE:%-6ld LASTUPD : " SIZE_T_FMT
-               " SYSFLAGS:%08X",
+	printf("      > HDRSIZE:%-6ld LASTUPD :%ld SYSFLAGS:%08X",
 	       record.header_size, record.last_updated,
 	       record.system_flags);
 	if (mailbox.minor_version >= 5)
