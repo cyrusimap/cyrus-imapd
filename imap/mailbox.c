@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.195 2009/08/28 13:48:46 brong Exp $
+ * $Id: mailbox.c,v 1.196 2009/09/16 12:30:58 murch Exp $
  */
 
 #include <config.h>
@@ -298,9 +298,10 @@ unsigned mailbox_cached_header_inline(const char *text)
 }
 
 /* returns the length of the parsed record, if it's valid */
-unsigned cache_parserecord(const char *map_base, unsigned map_size, unsigned cache_offset, cacherecord *rec)
+unsigned cache_parserecord(const char *map_base, unsigned map_size,
+			   unsigned cache_offset, cacherecord *rec)
 {
-    unsigned cache_ent, offset;
+    unsigned cache_ent;
     const char *cacheitem, *range_start, *range_end;
 
     if (cache_offset >= map_size) {
@@ -331,15 +332,15 @@ unsigned cache_parserecord(const char *map_base, unsigned map_size, unsigned cac
     return (cacheitem - range_start);
 }
 
-unsigned mailbox_cacherecord_offset(struct mailbox *mailbox, unsigned cache_offset, cacherecord *rec)
+unsigned mailbox_cacherecord_offset(struct mailbox *mailbox,
+				    unsigned cache_offset, cacherecord *rec)
 {
-    unsigned cache_ent, offset;
-    const char *cacheitem;
-
-    return cache_parserecord(mailbox->cache_base, mailbox->cache_size, cache_offset, rec);
+    return cache_parserecord(mailbox->cache_base, mailbox->cache_size,
+			     cache_offset, rec);
 }
 
-unsigned mailbox_cacherecord_index(struct mailbox *mailbox, unsigned msgno, cacherecord *rec)
+unsigned mailbox_cacherecord_index(struct mailbox *mailbox, unsigned msgno,
+				   cacherecord *rec)
 {
     unsigned cache_offset;
     const char *p;
@@ -467,7 +468,8 @@ mailbox_reconstructmode()
 }
 
 /* stat a mailbox's control files.  returns a bitmask that sets
- * 0x1 if the header fialed, 0x2 if the index failed, and 0x4 if the cache failed */
+ * 0x1 if the header failed, 0x2 if the index failed, 
+ * and 0x4 if the cache failed */
 int mailbox_stat(const char *mbpath, const char *metapath,
 		 struct stat *header, struct stat *index, struct stat *cache) 
 {
@@ -2016,7 +2018,6 @@ static int process_records(struct mailbox *mailbox, FILE *newindex,
 	    /* Keep this message and update the index/cache record */
 	    size_t cache_record_size;
 	    unsigned long cache_offset;
-	    unsigned int cache_ent;
 	    const char *cacheitem, *cacheitembegin;
 	    
 	    cache_offset = ntohl(*((bit32 *)(buf+OFFSET_CACHE_OFFSET)));
