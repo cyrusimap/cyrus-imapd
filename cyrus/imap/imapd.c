@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.567 2009/07/29 15:51:21 murch Exp $
+ * $Id: imapd.c,v 1.568 2009/09/22 01:48:12 brong Exp $
  */
 
 #include <config.h>
@@ -207,6 +207,9 @@ static const int max_monthdays[] = {
     31, 29, 31, 30, 31, 30,
     31, 31, 30, 31, 30, 31
 };
+
+/* track if we're idling */
+static int idling = 0;
 
 void motd_file(int fd);
 void shut_down(int code);
@@ -869,6 +872,9 @@ void shut_down(int code)
 	i++;
     }
     if (backend_cached) free(backend_cached);
+
+    if (idling)
+	idle_done(imapd_mailbox ? imapd_mailbox->name : NULL);
 
     if (imapd_mailbox) {
 	index_closemailbox(imapd_mailbox);
@@ -2549,11 +2555,15 @@ void cmd_idle(char *tag)
 	/* Start doing mailbox updates */
 	if (imapd_mailbox) index_check(imapd_mailbox, 0, 1);
 	idle_start(imapd_mailbox ? imapd_mailbox->name : NULL);
+	/* use this flag so if getc causes a shutdown due to
+	 * connection abort we tell idled about it */
+	idling = 1;
 
 	/* Get continuation data */
 	c = getword(imapd_in, &arg);
 
 	/* Stop updates and do any necessary cleanup */
+	idling = 0;
 	idle_done(imapd_mailbox ? imapd_mailbox->name : NULL);
     }
     else {  /* Remote mailbox */
