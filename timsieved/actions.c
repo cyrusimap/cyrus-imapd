@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: actions.c,v 1.46 2009/01/14 15:50:47 murch Exp $
+ * $Id: actions.c,v 1.47 2009/09/22 01:47:11 brong Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -301,6 +301,8 @@ static int countscripts(char *name)
 	}
     }
     
+    closedir(dp);
+
     return number;
 }
 
@@ -554,6 +556,8 @@ int listscripts(struct protstream *conn)
 	    }
 	}    
     }
+
+    closedir(dp);
 
     prot_printf(conn,"OK\r\n");
   
