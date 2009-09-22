@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mupdate.c,v 1.111 2009/04/30 18:20:58 murch Exp $
+ * $Id: mupdate.c,v 1.112 2009/09/22 01:46:54 brong Exp $
  */
 
 #include <config.h>
@@ -1163,6 +1163,7 @@ static void *thread_main(void *rock __attribute__((unused)))
     int connflag;
     int new_fd;
     int ret = 0;
+    struct conn *ni;
 
     /* Lock Worker Count Mutex */
     pthread_mutex_lock(&worker_count_mutex); /* LOCK */
@@ -1299,7 +1300,6 @@ static void *thread_main(void *rock __attribute__((unused)))
 	    /* Free all connections on idle_connlist.  Note that
 	     * any connection not currently on the idle_connlist will
 	     * instead be freed when they drop out of their docmd() below */
-	    struct conn *ni;
 
 	    pthread_mutex_lock(&idle_connlist_mutex); /* LOCK */
 	    for(C=idle_connlist; C; C = ni) {

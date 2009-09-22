@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mbexamine.c,v 1.23 2009/09/16 12:45:26 murch Exp $
+ * $Id: mbexamine.c,v 1.24 2009/09/22 01:46:54 brong Exp $
  */
 
 #include <config.h>
@@ -218,6 +218,7 @@ int do_examine(char *name,
     struct mailbox mailbox;
     struct index_record record;
     cacherecord crec;
+    int j;
     
     signals_poll();
 
@@ -321,7 +322,6 @@ int do_examine(char *name,
 
     for(i=1; i<=mailbox.exists; i++) {
 	mailbox_read_index_record(&mailbox, i, &record);
-	int j;
 
 	if(wantvalue) {
 	    if(!wantuid) {
@@ -414,6 +414,8 @@ int do_quota(char *name,
     struct mailbox mailbox;
     struct index_record record;
     uquota_t total = 0;
+    char fnamebuf[MAILBOX_FNAME_LEN];
+    struct stat sbuf;
     
     signals_poll();
 
@@ -448,8 +450,6 @@ int do_quota(char *name,
 
     for(i=1; i<=mailbox.exists; i++) {
 	mailbox_read_index_record(&mailbox, i, &record);
-	char fnamebuf[MAILBOX_FNAME_LEN];
-	struct stat sbuf;
 
 	strlcpy(fnamebuf, mailbox.path, sizeof(fnamebuf));
 	strlcat(fnamebuf, "/", sizeof(fnamebuf));
