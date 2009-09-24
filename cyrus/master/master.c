@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: master.c,v 1.114 2009/03/31 04:11:23 brong Exp $
+ * $Id: master.c,v 1.115 2009/09/24 14:41:06 murch Exp $
  */
 
 #include <config.h>
@@ -87,8 +87,10 @@
 #if defined(HAVE_NETSNMP)
   #include <net-snmp/net-snmp-config.h>
   #include <net-snmp/net-snmp-includes.h>
-  #include <net-snmp/agent/agent_module_config.h>
   #include <net-snmp/agent/net-snmp-agent-includes.h>
+#if defined(HAVE_NET_SNMP_AGENT_AGENT_MODULE_CONFIG_H)
+    #include <net-snmp/agent/agent_module_config.h>
+#endif
 
   #include "cyrusMasterMIB.h"
 
