@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imtest.c,v 1.127 2009/09/15 16:26:49 murch Exp $
+ * $Id: imtest.c,v 1.128 2009/09/24 13:35:05 murch Exp $
  */
 
 #include "config.h"
@@ -1092,7 +1092,7 @@ int auth_sasl(struct sasl_cmd_t *sasl_cmd, char *mechlist)
     do {
 	if (out) { /* response */
 	    /* convert to base64 */
-	    saslresult = sasl_encode64(out, outlen, inbase64, 2048,
+	    saslresult = sasl_encode64(out, outlen, inbase64, sizeof(inbase64),
 				       (unsigned *) &inbase64len);
 	    if (saslresult != SASL_OK) return saslresult;
 
@@ -2564,11 +2564,13 @@ int main(int argc, char **argv)
 	    prot_free(pin);
 	    prot_free(pout);
 
+#ifdef HAVE_SSL
 	    /* Properly shutdown TLS so that session can be reused */
 	    if (tls_conn) {
 		SSL_shutdown(tls_conn);
 		SSL_set_shutdown(tls_conn, SSL_SENT_SHUTDOWN|SSL_RECEIVED_SHUTDOWN);
 	    }
+#endif
 	    
 	    close(sock);
 	    
