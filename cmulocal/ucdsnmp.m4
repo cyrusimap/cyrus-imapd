@@ -1,5 +1,5 @@
 dnl look for the (ucd|net)snmp libraries
-dnl $Id: ucdsnmp.m4,v 1.11 2005/04/26 19:14:08 shadow Exp $
+dnl $Id: ucdsnmp.m4,v 1.12 2009/09/24 14:41:06 murch Exp $
 
 AC_DEFUN([CMU_UCDSNMP], [
 AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
@@ -36,6 +36,7 @@ if test "$with_snmp" != "no"; then
       AC_DEFINE(HAVE_NETSNMP,1,[Do we have Net-SNMP support?])
       AC_SUBST(LIB_UCDSNMP)
       AC_MSG_RESULT(yes)
+      AC_CHECK_HEADERS(net-snmp/agent/agent_module_config.h,,)
     else
       AC_MSG_RESULT(no)
       AC_MSG_WARN([Could not find the required paths. Please check your net-snmp installation.])
