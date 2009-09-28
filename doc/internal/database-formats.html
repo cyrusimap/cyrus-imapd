@@ -4,7 +4,7 @@
 
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-<meta name="revision" content="$Id: database-formats.html,v 1.4 2008/01/18 19:17:07 murch Exp $" />
+<meta name="revision" content="$Id: database-formats.html,v 1.5 2009/09/28 21:52:48 murch Exp $" />
 <meta name="author" content="Ken Murchison" />
 
 <title>Database Formats</title>
@@ -169,6 +169,21 @@ each record is follows:</p>
 Key: &lt;Mailbox Name&gt;
 
 Data: None
+</pre>
+
+
+<h2>Mailbox Keys (&lt;userid&gt;.mboxkey)</h2>
+
+<p>This database is a per-user database and contains the list of
+mailbox access keys which are used for generating URLAUTH-authorized
+URLs.  The database is indexed by mailbox name and each data record
+contains the database version number and the associated access key.
+The format of each record is follows:</p>
+
+<pre>
+Key: &lt;Mailbox Name&gt;
+
+Data: &lt;Version (2 bytes)&gt;&lt;Access Key (multi-byte)&gt;
 </pre>
 
 </body>
