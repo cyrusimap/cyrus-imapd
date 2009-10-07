@@ -4,7 +4,7 @@
 
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-<meta name="revision" content="$Id: database-formats.html,v 1.5 2009/09/28 21:52:48 murch Exp $" />
+<meta name="revision" content="$Id: database-formats.html,v 1.6 2009/10/07 15:23:02 murch Exp $" />
 <meta name="author" content="Ken Murchison" />
 
 <title>Database Formats</title>
@@ -140,6 +140,22 @@ follows:</p>
 Key: &lt;Mailbox Name&gt;\0&lt;Userid&gt;\0
 
 Data: &lt;Version&gt;SP&lt;Bitmask of Items&gt;SP&lt;Mtime of Index&gt;SP&lt;Inode of Index&gt;SP&lt;Size of Index&gt;SP&lt;# of Messages&gt;SP&lt;# of Recent Messages&gt;SP&lt;Next UID&gt;SP&lt;UID Validity&gt;SP&lt;# of Unseen Messages&gt;SP&lt;Highest Mod Sequence&gt;
+</pre>
+
+<h2>User Access (user_deny.db)</h2>
+
+<p>This database contains a list of users that are denied access to
+Cyrus services.  The database is indexed by userid and each data
+record contains the database version number and a list
+of <a href="http://tools.ietf.org/html/rfc3977#section-4">wildmat</a>
+patterns specifying Cyrus services to be denied.  The service names to
+be matched are those as used  in <tt>cyrus.conf(5)</tt>.  The format
+of each record is as follows:</p>
+
+<pre>
+Key: &lt;Userid&gt;
+
+Data: &lt;Version&gt;TAB&lt;Deny List (comma-separated wildmat patterns)&gt;
 </pre>
 
 <h2>Seen State (&lt;userid&gt;.seen)</h2>
