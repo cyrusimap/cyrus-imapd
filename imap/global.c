@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: global.c,v 1.31 2009/06/11 14:23:57 murch Exp $
+ * $Id: global.c,v 1.32 2009/10/07 15:23:02 murch Exp $
  */
 
 #include <config.h>
@@ -73,6 +73,7 @@
 #include "mutex.h"
 #include "prot.h" /* for PROT_BUFSIZE */
 #include "util.h"
+#include "wildmat.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
@@ -98,6 +99,7 @@ struct cyrusdb_backend *config_duplicate_db;
 struct cyrusdb_backend *config_tlscache_db;
 struct cyrusdb_backend *config_ptscache_db;
 struct cyrusdb_backend *config_statuscache_db;
+struct cyrusdb_backend *config_userdeny_db;
 
 /* Called before a cyrus application starts (but after command line parameters
  * are read) */
@@ -195,6 +197,8 @@ int cyrus_init(const char *alt_config, const char *ident, unsigned flags)
 	    cyrusdb_fromname(config_getstring(IMAPOPT_PTSCACHE_DB));
 	config_statuscache_db =
 	    cyrusdb_fromname(config_getstring(IMAPOPT_STATUSCACHE_DB));
+	config_userdeny_db =
+	    cyrusdb_fromname(config_getstring(IMAPOPT_USERDENY_DB));
 
 	/* configure libcyrus as needed */
 	libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, config_dir);
@@ -527,6 +531,114 @@ static int acl_ok(const char *user, struct auth_state *authstate)
     return r;
 }
 
+#define DENYDB config_userdeny_db
+#define FNAME_USERDENYDB "/user_deny.db"
+#define USERDENY_VERSION 1
+
+/*
+ * access_ok() checks to see if 'user' is allowed access to 'service'
+ * Returns 1 if so, 0 if not.
+ */
+static int access_ok(const char *user, unsigned ulen, const char *service)
+{
+    static char *fname = NULL;
+    struct db *db = NULL;
+    int r, ret = 1;  /* access always granted by default */
+
+    if (!fname) {
+	/* create path to database */
+	fname = xmalloc(strlen(config_dir) + sizeof(FNAME_USERDENYDB) + 1);
+	strcpy(fname, config_dir);
+	strcat(fname, FNAME_USERDENYDB);
+    }
+
+    /* try to open database */
+    r = DENYDB->open(fname, 0, &db);
+    if (r) {
+	/* ignore non-existent DB, report all other errors */
+	if (errno != ENOENT) {
+	    syslog(LOG_WARNING, "DENYDB_ERROR: error opening '%s': %s",
+		   fname, cyrusdb_strerror(r));
+	}
+
+    } else {
+	/* fetch entry for user */
+	const char *data = NULL;
+	int datalen;
+
+	do {
+	    r = DENYDB->fetch(db, user, ulen, &data, &datalen, NULL);
+	} while (r == CYRUSDB_AGAIN);
+
+	if (r || !data || !datalen) {
+	    /* ignore non-existent/empty entry, report all other errors */
+	    if (r != CYRUSDB_NOTFOUND) {
+		syslog(LOG_WARNING,
+		       "DENYDB_ERROR: error reading entry '%s': %s",
+		       user, cyrusdb_strerror(r));
+	    }
+	} else {
+	    /* parse the data */
+	    char *buf, *wild;
+	    unsigned long version;
+
+	    buf = xstrndup(data, datalen);  /* use a working copy */
+
+	    /* check version */
+	    if ((version = strtoul(buf, &wild, 10)) != USERDENY_VERSION) {
+		syslog(LOG_WARNING,
+		       "DENYDB_ERROR: invalid version for entry '%s': %lu",
+		       user, version);
+	    } else if (*wild++ != '\t') {
+		syslog(LOG_WARNING,
+		       "DENYDB_ERROR: missing wildmat for entry '%s'", user);
+	    } else {
+		char *pat;
+		int not;
+
+		/* scan wildmat right to left for a match against our service */
+		syslog(LOG_DEBUG, "wild: '%s'   service: '%s'", wild, service);
+		do {
+		    /* isolate next pattern */
+		    if ((pat = strrchr(wild, ','))) {
+			*pat++ = '\0';
+		    } else {
+			pat = wild;
+		    }
+
+		    /* XXX  trim leading & trailing whitespace? */
+
+		    /* is it a negated pattern? */
+		    not = (*pat == '!');
+		    if (not) ++pat;
+
+		    syslog(LOG_DEBUG, "pat %d:'%s'", not, pat);
+
+		    /* see if pattern matches our service */
+		    if (wildmat(service, pat)) {
+			/* match ==> we're done */
+			ret = not;
+			break;
+		    }
+
+		    /* continue until we reach head of wildmat */
+		} while (pat != wild);
+	    }
+
+	    free(buf);
+	}
+
+
+	r = DENYDB->close(db);
+	if (r) {
+	    syslog(LOG_WARNING, "DENYDB_ERROR: error closing: %s",
+		   cyrusdb_strerror(r));
+	}
+    }
+
+    return ret;
+}
+
 /* should we allow users to proxy?  return SASL_OK if yes,
    SASL_BADAUTH otherwise */
 int mysasl_proxy_policy(sasl_conn_t *conn,
@@ -579,6 +691,19 @@ int mysasl_proxy_policy(sasl_conn_t *conn,
 	}
 
 	return SASL_OK;
+    }
+
+    /* is requested_user denied access?  authenticated admins are exempt */
+    if (!userisadmin && !access_ok(requested_user, rlen, config_ident)) {
+	syslog(LOG_ERR, "user '%s' denied access to service '%s'",
+	       requested_user, config_ident);
+	sasl_seterror(conn, SASL_NOLOG,
+		      "user '%s' is denied access to service '%s'",
+		      requested_user, config_ident);
+
+	auth_freestate(authstate);
+
+	return SASL_NOAUTHZ;
     }
 
     if (alen != rlen || strncmp(auth_identity, requested_user, alen)) {
