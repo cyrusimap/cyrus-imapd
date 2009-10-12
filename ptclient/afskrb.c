@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: afskrb.c,v 1.17 2009/03/31 04:11:23 brong Exp $
+ * $Id: afskrb.c,v 1.18 2009/10/12 14:13:42 jeaton Exp $
  */
 
 #include <config.h>
@@ -547,6 +547,7 @@ static struct auth_state *myauthstate(
     int *dsize __attribute__((unused))) 
 {
 	fatal("PTS module (afskrb) not compiled in", EC_CONFIG);
+	return NULL;
 }
 
 #endif /* HAVE_AFSKRB */
