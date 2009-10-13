@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.74 2009/05/05 01:23:02 brong Exp $
+ * $Id: nntpd.c,v 1.75 2009/10/13 15:10:36 murch Exp $
  */
 
 /*
@@ -811,7 +811,9 @@ static void cmdloop(void)
 	if (backend_current) prot_flush(backend_current->out);
 
 	/* Check for shutdown file */
-	if (shutdown_file(buf, sizeof(buf))) {
+	if (shutdown_file(buf, sizeof(buf)) ||
+	    (nntp_userid &&
+	     !access_ok(nntp_userid, config_ident, buf, sizeof(buf)))) {
 	    prot_printf(nntp_out, "400 %s\r\n", buf);
 	    shut_down(0);
 	}

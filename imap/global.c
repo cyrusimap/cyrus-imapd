@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: global.c,v 1.32 2009/10/07 15:23:02 murch Exp $
+ * $Id: global.c,v 1.33 2009/10/13 15:10:36 murch Exp $
  */
 
 #include <config.h>
@@ -533,13 +533,13 @@ static int acl_ok(const char *user, struct auth_state *authstate)
 
 #define DENYDB config_userdeny_db
 #define FNAME_USERDENYDB "/user_deny.db"
-#define USERDENY_VERSION 1
+#define USERDENY_VERSION 2
 
 /*
  * access_ok() checks to see if 'user' is allowed access to 'service'
  * Returns 1 if so, 0 if not.
  */
-static int access_ok(const char *user, unsigned ulen, const char *service)
+int access_ok(const char *user, const char *service, char *msgbuf, int size)
 {
     static char *fname = NULL;
     struct db *db = NULL;
@@ -566,8 +566,9 @@ static int access_ok(const char *user, unsigned ulen, const char *service)
 	const char *data = NULL;
 	int datalen;
 
+	syslog(LOG_DEBUG, "fetching user_deny.db entry for '%s'", user);
 	do {
-	    r = DENYDB->fetch(db, user, ulen, &data, &datalen, NULL);
+	    r = DENYDB->fetch(db, user, strlen(user), &data, &datalen, NULL);
 	} while (r == CYRUSDB_AGAIN);
 
 	if (r || !data || !datalen) {
@@ -585,7 +586,8 @@ static int access_ok(const char *user, unsigned ulen, const char *service)
 	    buf = xstrndup(data, datalen);  /* use a working copy */
 
 	    /* check version */
-	    if ((version = strtoul(buf, &wild, 10)) != USERDENY_VERSION) {
+	    if (((version = strtoul(buf, &wild, 10)) < 1) ||
+		(version > USERDENY_VERSION)) {
 		syslog(LOG_WARNING,
 		       "DENYDB_ERROR: invalid version for entry '%s': %lu",
 		       user, version);
@@ -593,8 +595,15 @@ static int access_ok(const char *user, unsigned ulen, const char *service)
 		syslog(LOG_WARNING,
 		       "DENYDB_ERROR: missing wildmat for entry '%s'", user);
 	    } else {
-		char *pat;
+		char *pat, *msg = "Access to this service has been blocked";
 		int not;
+
+		/* check if we have a deny message */
+		switch (version) {
+		case USERDENY_VERSION:
+		    if ((msg = strchr(wild, '\t'))) *msg++ = '\0';
+		    break;
+		}
 
 		/* scan wildmat right to left for a match against our service */
 		syslog(LOG_DEBUG, "wild: '%s'   service: '%s'", wild, service);
@@ -618,6 +627,7 @@ static int access_ok(const char *user, unsigned ulen, const char *service)
 		    if (wildmat(service, pat)) {
 			/* match ==> we're done */
 			ret = not;
+			if (msgbuf) strlcpy(msgbuf, msg, size);
 			break;
 		    }
 
@@ -694,7 +704,7 @@ int mysasl_proxy_policy(sasl_conn_t *conn,
     }
 
     /* is requested_user denied access?  authenticated admins are exempt */
-    if (!userisadmin && !access_ok(requested_user, rlen, config_ident)) {
+    if (!userisadmin && !access_ok(requested_user, config_ident, NULL, 0)) {
 	syslog(LOG_ERR, "user '%s' denied access to service '%s'",
 	       requested_user, config_ident);
 	sasl_seterror(conn, SASL_NOLOG,
