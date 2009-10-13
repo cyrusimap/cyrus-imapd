@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.568 2009/09/22 01:48:12 brong Exp $
+ * $Id: imapd.c,v 1.569 2009/10/13 15:10:36 murch Exp $
  */
 
 #include <config.h>
@@ -1024,8 +1024,9 @@ void cmdloop()
 	if (backend_current) prot_flush(backend_current->out);
 
 	/* Check for shutdown file */
-	if ( !imapd_userisadmin && imapd_userid
-	     && shutdown_file(shut, sizeof(shut))) {
+	if ( !imapd_userisadmin && imapd_userid &&
+	     (shutdown_file(shut, sizeof(shut)) ||
+	      !access_ok(imapd_userid, config_ident, shut, sizeof(shut)))) {
 	    for (p = shut; *p == '['; p++); /* can't have [ be first char */
 	    prot_printf(imapd_out, "* BYE [ALERT] %s\r\n", p);
 	    shut_down(0);
@@ -2603,7 +2604,10 @@ void cmd_idle(char *tag)
 	    prot_flush(imapd_out);
 
 	    /* Check for shutdown file */
-	    if (!imapd_userisadmin && shutdown_file(buf, sizeof(buf))) {
+	    if (!imapd_userisadmin &&
+		(shutdown_file(buf, sizeof(buf)) ||
+		 (imapd_userid && 
+		  !access_ok(imapd_userid, config_ident, buf, sizeof(buf))))) {
 		shutdown = done = 1;
 		goto done;
 	    }
@@ -2661,7 +2665,10 @@ void idle_update(idle_flags_t flags)
 
     if (flags & IDLE_ALERT) {
 	char shut[MAX_MAILBOX_PATH+1];
-	if (! imapd_userisadmin && shutdown_file(shut, sizeof(shut))) {
+	if (! imapd_userisadmin &&
+	    (shutdown_file(shut, sizeof(shut)) ||
+	     (imapd_userid && 
+	      !access_ok(imapd_userid, config_ident, shut, sizeof(shut))))) {
 	    char *p;
 	    for (p = shut; *p == '['; p++); /* can't have [ be first char */
 	    prot_printf(imapd_out, "* BYE [ALERT] %s\r\n", p);

@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: pop3d.c,v 1.193 2009/04/23 17:10:07 murch Exp $
+ * $Id: pop3d.c,v 1.194 2009/10/13 15:10:36 murch Exp $
  */
 
 #include <config.h>
@@ -773,7 +773,9 @@ static void cmdloop(void)
 	}
 
 	/* check for shutdown file */
-	if (shutdown_file(inputbuf, sizeof(inputbuf))) {
+	if (shutdown_file(inputbuf, sizeof(inputbuf)) ||
+	    (popd_userid &&
+	     !access_ok(popd_userid, config_ident, inputbuf, sizeof(inputbuf)))) {
 	    for (p = inputbuf; *p == '['; p++); /* can't have [ be first char */
 	    prot_printf(popd_out, "-ERR [SYS/TEMP] %s\r\n", p);
 	    shut_down(0);
@@ -1870,7 +1872,8 @@ static void bitpipe(void)
 	prot_flush(backend->out);
 
 	/* check for shutdown file */
-	if (shutdown_file(buf, sizeof(buf))) {
+	if (shutdown_file(buf, sizeof(buf)) ||
+	    !access_ok(popd_userid, config_ident, buf, sizeof(buf))) {
 	    shutdown = 1;
 	    goto done;
 	}
