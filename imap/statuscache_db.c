@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: statuscache_db.c,v 1.6 2009/05/05 01:22:36 brong Exp $
+ * $Id: statuscache_db.c,v 1.7 2009/11/04 12:38:30 brong Exp $
  */
 
 #include <config.h>
@@ -94,7 +94,8 @@ void statuscache_open(char *fname)
     if (ret != 0) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
 	       cyrusdb_strerror(ret));
-	fatal("can't read statuscache file", EC_TEMPFAIL);
+	syslog(LOG_ERR, "statuscache in degraded mode");
+	return;
     }    
 
     if (tofree) free(tofree);
@@ -165,6 +166,10 @@ int statuscache_lookup(const char *mboxname, const char *userid,
     char *path, *mpath;
     struct stat istat;
 
+    /* Don't access DB if it hasn't been opened */
+    if (!statuscache_dbopen)
+	return IMAP_NO_NOSUCHMSG;
+
     memset(scdata, 0, sizeof(struct statuscache_data));
 
     /* Check if there is an entry in the database */
@@ -232,6 +237,10 @@ int statuscache_update(const char *mboxname, const char *userid,
     int r, keylen, datalen;
     char *key = statuscache_buildkey(mboxname, userid, &keylen);
 
+    /* Don't access DB if it hasn't been opened */
+    if (!statuscache_dbopen)
+	return 0;
+
     /* The trailing whitespace is necessary because we
      * use non-length-based functions to parse the values.
      * Any non-digit char would be fine, but whitespace 
@@ -259,7 +268,8 @@ int statuscache_invalidate(const char *mboxname, const char *userid)
     char *key = statuscache_buildkey(mboxname, userid, &keylen);
 
     /* Don't access DB if it hasn't been opened */
-    if (!statuscachedb) return 0;
+    if (!statuscache_dbopen)
+	return 0;
 
     /* Delete db entry */
     r = DB->delete(statuscachedb, key, keylen, NULL, 1);
