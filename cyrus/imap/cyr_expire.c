@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_expire.c,v 1.23 2009/05/05 01:23:02 brong Exp $
+ * $Id: cyr_expire.c,v 1.24 2009/11/05 00:20:09 brong Exp $
  */
 
 #include <config.h>
@@ -349,7 +349,7 @@ int delete(char *name,
 int main(int argc, char *argv[])
 {
     extern char *optarg;
-    int opt, r = 0, expire_days = 0, expunge_days = -1, delete_days = -1;
+    int opt, r = 0, expire_days = 0, expunge_days = -1, delete_days = -1, do_expunge = 1;
     char *alt_config = NULL;
     char *find_prefix = NULL;
     char buf[100];
@@ -366,7 +366,7 @@ int main(int argc, char *argv[])
     memset(&erock, 0, sizeof(erock));
     memset(&drock, 0, sizeof(drock));
 
-    while ((opt = getopt(argc, argv, "C:D:E:X:p:va")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:D:E:X:p:vax")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -385,6 +385,11 @@ int main(int argc, char *argv[])
 	case 'X':
 	    if (expunge_days >= 0) usage();
 	    expunge_days = atoi(optarg);
+	    break;
+
+	case 'x':
+	    if (!do_expunge) usage();
+	    do_expunge = 0;
 	    break;
 
 	case 'p':
@@ -427,44 +432,47 @@ int main(int argc, char *argv[])
 	exit(1);
     }
 
-    /* xxx better way to determine a size for this table? */
-    construct_hash_table(&expire_table, 10000, 1);
+    if (do_expunge) {
+	/* xxx better way to determine a size for this table? */
+	construct_hash_table(&expire_table, 10000, 1);
 
-    /* expire messages from mailboxes,
-     * build a hash table of mailboxes in which we expired messages,
-     * and perform a cleanup of expunged messages
-     */
-    erock.table = &expire_table;
-    erock.expunge_mode = config_getenum(IMAPOPT_EXPUNGE_MODE);
-    if (expunge_days == -1) {
-	erock.expunge_mark = 0;
-    } else {
-	erock.expunge_mark = time(0) - (expunge_days * 60 * 60 * 24);
+	/* expire messages from mailboxes,
+	 * build a hash table of mailboxes in which we expired messages,
+	 * and perform a cleanup of expunged messages
+	 */
+	erock.table = &expire_table;
+	erock.expunge_mode = config_getenum(IMAPOPT_EXPUNGE_MODE);
+	if (expunge_days == -1) {
+	    erock.expunge_mark = 0;
+	} else {
+	    erock.expunge_mark = time(0) - (expunge_days * 60 * 60 * 24);
 
-	if (erock.verbose && 
-	    erock.expunge_mode != IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE) {
-	    fprintf(stderr,
-		    "Expunging deleted messages in mailboxes older than %d days\n",
-		    expunge_days);
+	    if (erock.verbose && 
+		erock.expunge_mode != IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE) {
+		fprintf(stderr,
+			"Expunging deleted messages in mailboxes older than %d days\n",
+			expunge_days);
+	    }
+	}
+
+	if (find_prefix) {
+	    strlcpy(buf, find_prefix, sizeof(buf));
+	} else {
+	    strlcpy(buf, "*", sizeof(buf));
+	}
+
+	mboxlist_findall(NULL, buf, 1, 0, 0, &expire, &erock);
+
+	syslog(LOG_NOTICE, "Expunged %lu out of %lu messages from %lu mailboxes",
+	       erock.deleted, erock.messages, erock.mailboxes);
+	if (erock.verbose) {
+	    fprintf(stderr, "\nExpunged %lu out of %lu messages from %lu mailboxes\n",
+		    erock.deleted, erock.messages, erock.mailboxes);
 	}
     }
 
-    if (find_prefix) {
-	strlcpy(buf, find_prefix, sizeof(buf));
-    } else {
-	strlcpy(buf, "*", sizeof(buf));
-    }
-    mboxlist_findall(NULL, buf, 1, 0, 0, &expire, &erock);
-
-    syslog(LOG_NOTICE, "Expunged %lu out of %lu messages from %lu mailboxes",
-	   erock.deleted, erock.messages, erock.mailboxes);
-    if (erock.verbose) {
-	fprintf(stderr, "\nExpunged %lu out of %lu messages from %lu mailboxes\n",
-		erock.deleted, erock.messages, erock.mailboxes);
-    }
-
     if ((delete_days != -1) && mboxlist_delayed_delete_isenabled() &&
-        (deletedprefix = config_getstring(IMAPOPT_DELETEDPREFIX))) {
+	(deletedprefix = config_getstring(IMAPOPT_DELETEDPREFIX))) {
         struct delete_node *node;
         int count = 0;
         
