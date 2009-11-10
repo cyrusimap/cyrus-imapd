@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mboxname.c,v 1.47 2009/07/28 06:17:26 brong Exp $
+ * $Id: mboxname.c,v 1.48 2009/11/10 04:16:46 brong Exp $
  */
 
 #include <config.h>
@@ -111,6 +111,7 @@ static int mboxname_tointernal(struct namespace *namespace, const char *name,
 			       const char *userid, char *result)
 {
     char *cp;
+    char *atp;
     int userlen, domainlen = 0, namelen;
 
     /* Blank the result, just in case */
@@ -122,13 +123,13 @@ static int mboxname_tointernal(struct namespace *namespace, const char *name,
     if (config_virtdomains) {
 	if (userid && (cp = strrchr(userid, '@'))) {
 	    /* user logged in as user@domain */
-	    userlen = cp++ - userid;
+	    userlen = cp - userid;
 	    /* don't prepend default domain */
-	    if (!(config_defdomain && !strcasecmp(config_defdomain, cp))) {
-		domainlen = strlen(cp)+1;
+	    if (!(config_defdomain && !strcasecmp(config_defdomain, cp+1))) {
+		domainlen = strlen(cp+1)+1;
 		if (domainlen > MAX_MAILBOX_NAME) 
 		    return IMAP_MAILBOX_BADNAME; 
-		sprintf(result, "%s!", cp);
+		sprintf(result, "%s!", cp+1);
 	    }
 	}
 	if ((cp = strrchr(name, '@'))) {
@@ -153,6 +154,12 @@ static int mboxname_tointernal(struct namespace *namespace, const char *name,
 		if (domainlen > MAX_MAILBOX_NAME) 
 		    return IMAP_MAILBOX_BADNAME; 
 		sprintf(result, "%s!", cp+1);
+	    }
+
+	    atp = strchr(name, '@');
+	    if (atp && atp != cp) {
+		/* don't allow multiple '@' in name */
+		return IMAP_MAILBOX_BADNAME;
 	    }
 	}
 
