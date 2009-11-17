@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mboxlist.h,v 1.46 2009/05/05 01:20:03 brong Exp $
+ * $Id: mboxlist.h,v 1.47 2009/11/17 03:34:17 brong Exp $
  */
 
 #ifndef INCLUDED_MBOXLIST_H
@@ -216,4 +216,9 @@ int mboxlist_commit(struct txn *tid);
 int mboxlist_abort(struct txn *tid);
 
 int mboxlist_delayed_delete_isenabled(void);
+
+/* Small utility routine for limit_user_folders */
+int mboxlist_count_inferiors(char *mailboxname, int isadmin, char *userid,
+                             struct auth_state *authstate);
+
 #endif
