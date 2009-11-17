@@ -43,7 +43,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\"
-.\" $Id: imapoptions,v 1.68 2009/10/07 15:23:02 murch Exp $
+.\" $Id: imapoptions,v 1.69 2009/11/17 03:34:30 brong Exp $
 
 .SH NAME
 imapd.conf \- IMAP configuration file
@@ -1127,6 +1127,10 @@ product version in the capabilities */
 
 { "userdeny_db", "flat", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist", "sql")}
 /* The cyrusdb backend to use for the user access list. */
+
+{ "user_folder_limit", 0, INT }
+/* Limit the number of folders a user can create in their INBOX.  
+   Set to 0 (default) for no limit.  Only affects folders in user. */
 
 { "username_tolower", 1, SWITCH }
 /* Convert usernames to all lowercase before login/authentication.  This

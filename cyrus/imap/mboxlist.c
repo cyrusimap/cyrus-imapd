@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mboxlist.c,v 1.271 2009/11/17 03:34:16 brong Exp $
+ * $Id: mboxlist.c,v 1.272 2009/11/17 03:34:30 brong Exp $
  */
 
 #include <config.h>
@@ -370,6 +370,7 @@ mboxlist_mycreatemailboxcheck(char *name,
     unsigned long parentpartitionlen = 0;
     unsigned long parentacllen = 0;
     int mbtype;
+    int user_folder_limit;
     
     /* Check for invalid name/partition */
     if (partition && strlen(partition) > MAX_PARTITION_LEN) {
@@ -443,6 +444,23 @@ mboxlist_mycreatemailboxcheck(char *name,
 	    break;
 	}
     }
+
+    /* check the folder limit */
+    if (!isadmin && (user_folder_limit = config_getint(IMAPOPT_USER_FOLDER_LIMIT))) {
+	char buf[MAX_MAILBOX_NAME+1];
+	strncpy(buf, mbox, strlen(mbox));
+	if (!strncmp(buf, "user.", 5)) {
+	    char *firstdot = strchr(buf+5, '.');
+	    if (firstdot) *firstdot = '\0';
+	    if (mboxlist_count_inferiors(buf, isadmin, userid, auth_state) + 1
+					 >= user_folder_limit) {
+		syslog(LOG_ERR, "LIMIT: refused to create %s for %s because of limit %d",
+			        mbox, userid, user_folder_limit);
+		return IMAP_PERMISSION_DENIED;
+	    }
+	}
+    }
+
     if (parentlen != 0) {
 	/* check acl */
 	if (!isadmin &&
@@ -3423,7 +3441,7 @@ mboxlist_count_addmbox(char *name __attribute__((unused)),
 {
     int *count = (int *)rock;
 
-    *count++;
+    (*count)++;
     
     return 0;
 }
