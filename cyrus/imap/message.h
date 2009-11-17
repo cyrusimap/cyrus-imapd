@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: message.h,v 1.10 2008/03/24 17:09:18 murch Exp $
+ * $Id: message.h,v 1.11 2009/11/17 03:31:45 brong Exp $
  */
 
 #ifndef INCLUDED_MESSAGE_H
@@ -81,9 +81,7 @@ struct message_content {
 /* MUST keep this struct sync'd with sieve_bodypart in sieve_interface.h */
 struct bodypart {
     char section[128];
-    const char *content;
-    const char *encoding;
-    unsigned long size;
+    const char *decoded_body;
 };
 
 extern int message_parse_binary_file P((FILE *infile, struct body **body));
