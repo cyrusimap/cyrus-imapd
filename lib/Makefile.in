@@ -41,7 +41,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.in,v 1.73 2009/11/17 03:30:56 brong Exp $
+# $Id: Makefile.in,v 1.74 2009/11/17 03:33:28 brong Exp $
 
 # Authorization namespace.
 AUTH=auth.o auth_krb.o auth_unix.o auth_krb5.o auth_pts.o
@@ -141,12 +141,12 @@ imapopts.c: imapoptions $(srcdir)/../tools/config2header
 
 imapopts.h: imapopts.c
 
-chartable.c: mkchartable.pl
+chartable.c: mkchartable.pl charset/*.t charset/unifix.txt charset/unidata5_2.txt
 	@echo "### Building chartables..."
 	rm -f chartable.c
 	perl ./mkchartable.pl \
-	 -m $(srcdir)/charset/unifix.txt	\
-	 -m $(srcdir)/charset/unidata2.txt \
+	 -m $(srcdir)/charset/unifix.txt \
+	 -m $(srcdir)/charset/unidata5_2.txt \
 	 $(srcdir)/charset/*.t \
 	 > chartable.c \
 	 || (rm -f chartable.c && exit 1)
