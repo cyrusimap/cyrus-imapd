@@ -41,7 +41,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: mkchartable.pl,v 1.1 2009/11/17 03:30:57 brong Exp $
+# $Id: mkchartable.pl,v 1.2 2009/11/17 03:32:16 brong Exp $
 
 use strict;
 use warnings;
@@ -511,6 +511,11 @@ const struct charset chartables_charset_table[] = {
     { "windows-1250", chartables_windows_1250 },
     { "windows-1251", chartables_windows_1251 },
     { "windows-1255", chartables_windows_1255 },
+    { "iso-8859-10", chartables_iso_8859_10 },
+    { "iso-8859-11", chartables_iso_8859_11 },
+    { "iso-8859-13", chartables_iso_8859_13 },
+    { "iso-8859-14", chartables_iso_8859_14 },
+    { "iso-8859-16", chartables_iso_8859_16 },
     /* New character sets should only be added to end so that
      * cache files stay with valid information */
 };
