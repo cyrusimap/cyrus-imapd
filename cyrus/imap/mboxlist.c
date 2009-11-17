@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mboxlist.c,v 1.270 2009/07/28 02:46:23 brong Exp $
+ * $Id: mboxlist.c,v 1.271 2009/11/17 03:34:16 brong Exp $
  */
 
 #include <config.h>
@@ -3412,4 +3412,37 @@ int mboxlist_delayed_delete_isenabled(void)
     enum enum_value config_delete_mode = config_getenum(IMAPOPT_DELETE_MODE);
 
     return(config_delete_mode == IMAP_ENUM_DELETE_MODE_DELAYED);
+}
+
+/* Callback used by mboxlist_count_inferiors below */
+static int
+mboxlist_count_addmbox(char *name __attribute__((unused)),
+                       int matchlen __attribute__((unused)),
+                       int maycreate __attribute__((unused)),
+                       void *rock)
+{
+    int *count = (int *)rock;
+
+    *count++;
+    
+    return 0;
+}
+
+/* Count how many children a mailbox has */
+int
+mboxlist_count_inferiors(char *mailboxname, int isadmin, char *userid,
+                         struct auth_state *authstate)
+{
+    int count = 0;
+    char mailboxname2[MAX_MAILBOX_NAME+1];
+    char *p;
+
+    strcpy(mailboxname2, mailboxname);
+    p = mailboxname2 + strlen(mailboxname2); /* end of mailboxname */
+    strcpy(p, ".*");
+
+    mboxlist_findall(NULL, mailboxname2, isadmin, userid,
+                     authstate, mboxlist_count_addmbox, &count);
+
+    return(count);
 }
