@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.196 2009/09/16 12:30:58 murch Exp $
+ * $Id: mailbox.c,v 1.197 2009/11/17 03:25:41 brong Exp $
  */
 
 #include <config.h>
@@ -1507,7 +1507,7 @@ int mailbox_append_index(struct mailbox *mailbox,
 	/* Sanity check the timestamps so index_fetchreply() won't abort() */
         if (record[i].internaldate <= 0) record[i].internaldate = now;
         if (record[i].sentdate <= 0) record[i].sentdate = now;
-        if (record[i].last_updated <= 0) record[i].internaldate = now;
+        if (record[i].last_updated <= 0) record[i].last_updated = now;
 
 	p = buf + i*mailbox->record_size;
 
