@@ -41,7 +41,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: mkchartable.pl,v 1.2 2009/11/17 03:32:16 brong Exp $
+# $Id: mkchartable.pl,v 1.3 2009/11/17 03:32:50 brong Exp $
 
 use strict;
 use warnings;
@@ -483,39 +483,40 @@ sub printlookup {
  */
 
 const struct charset chartables_charset_table[] = {
-    { "us-ascii", chartables_us_ascii },	/* US-ASCII must be charset number 0 */
-    { "utf-8", 0 }, /* handled directly */
-    { "utf-7", 0 }, /* handled directly */
-    { "iso-8859-1", chartables_iso_8859_1 },
-    { "iso-8859-2", chartables_iso_8859_2 },
-    { "iso-8859-3", chartables_iso_8859_3 },
-    { "iso-8859-4", chartables_iso_8859_4 },
-    { "iso-8859-5", chartables_iso_8859_5 },
-    { "iso-8859-6", chartables_iso_8859_6 },
-    { "iso-8859-7", chartables_iso_8859_7 },
-    { "iso-8859-8", chartables_iso_8859_8 },
-    { "iso-8859-9", chartables_iso_8859_9 },
-    { "koi8-r", chartables_koi8_r },
-    { "iso-2022-jp", chartables_iso_2022_jp },
-    { "iso-2022-kr", chartables_iso_2022_kr },
-    { "gb2312", chartables_gb2312 },
-    { "big5", chartables_big5 },
+    { "us-ascii",     CHARTABLE_NORMAL, chartables_us_ascii },	/* US-ASCII must be charset number 0 */
+    { "utf-8",        CHARTABLE_UTF8,   0 },
+    { "utf-7",        CHARTABLE_UTF7,   0 },
+    { "iso-8859-1",   CHARTABLE_NORMAL, chartables_iso_8859_1 },
+    { "iso-8859-2",   CHARTABLE_NORMAL, chartables_iso_8859_2 },
+    { "iso-8859-3",   CHARTABLE_NORMAL, chartables_iso_8859_3 },
+    { "iso-8859-4",   CHARTABLE_NORMAL, chartables_iso_8859_4 },
+    { "iso-8859-5",   CHARTABLE_NORMAL, chartables_iso_8859_5 },
+    { "iso-8859-6",   CHARTABLE_NORMAL, chartables_iso_8859_6 },
+    { "iso-8859-7",   CHARTABLE_NORMAL, chartables_iso_8859_7 },
+    { "iso-8859-8",   CHARTABLE_NORMAL, chartables_iso_8859_8 },
+    { "iso-8859-9",   CHARTABLE_NORMAL, chartables_iso_8859_9 },
+    { "koi8-r",       CHARTABLE_NORMAL, chartables_koi8_r },
+    { "iso-2022-jp",  CHARTABLE_NORMAL, chartables_iso_2022_jp },
+    { "iso-2022-kr",  CHARTABLE_NORMAL, chartables_iso_2022_kr },
+    { "gb2312",       CHARTABLE_NORMAL, chartables_gb2312 },
+    { "big5",         CHARTABLE_NORMAL, chartables_big5 },
     /* Compatibility names */
-    { "unicode-1-1-utf-7", 0 }, /* handled directly */
-    { "unicode-2-0-utf-7", 0 }, /* handled directly */
-    { "x-unicode-2-0-utf-7", 0 }, /* handled directly */
+    { "unicode-1-1-utf-7",   CHARTABLE_UTF7, 0 },
+    { "unicode-2-0-utf-7",   CHARTABLE_UTF7, 0 },
+    { "x-unicode-2-0-utf-7", CHARTABLE_UTF7, 0 },
     /* End Compatibility Names */
-    { "iso-8859-15", chartables_iso_8859_15 },
-    { "windows-1252", chartables_windows_1252 },
-    { "windows-1256", chartables_windows_1256 },
-    { "windows-1250", chartables_windows_1250 },
-    { "windows-1251", chartables_windows_1251 },
-    { "windows-1255", chartables_windows_1255 },
-    { "iso-8859-10", chartables_iso_8859_10 },
-    { "iso-8859-11", chartables_iso_8859_11 },
-    { "iso-8859-13", chartables_iso_8859_13 },
-    { "iso-8859-14", chartables_iso_8859_14 },
-    { "iso-8859-16", chartables_iso_8859_16 },
+    { "iso-8859-15",  CHARTABLE_NORMAL, chartables_iso_8859_15 },
+    { "windows-1252", CHARTABLE_NORMAL, chartables_windows_1252 },
+    { "windows-1256", CHARTABLE_NORMAL, chartables_windows_1256 },
+    { "windows-1250", CHARTABLE_NORMAL, chartables_windows_1250 },
+    { "windows-1251", CHARTABLE_NORMAL, chartables_windows_1251 },
+    { "windows-1255", CHARTABLE_NORMAL, chartables_windows_1255 },
+    { "iso-8859-10",  CHARTABLE_NORMAL, chartables_iso_8859_10 },
+    { "iso-8859-11",  CHARTABLE_NORMAL, chartables_iso_8859_11 },
+    { "iso-8859-13",  CHARTABLE_NORMAL, chartables_iso_8859_13 },
+    { "iso-8859-14",  CHARTABLE_NORMAL, chartables_iso_8859_14 },
+    { "iso-8859-16",  CHARTABLE_NORMAL, chartables_iso_8859_16 },
+    { "euc-kr",       CHARTABLE_EUC_KR, chartables_iso_2022_kr },
     /* New character sets should only be added to end so that
      * cache files stay with valid information */
 };
