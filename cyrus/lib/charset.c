@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: charset.c,v 1.52 2009/11/17 03:30:57 brong Exp $
+ * $Id: charset.c,v 1.53 2009/11/17 03:32:50 brong Exp $
  */
 
 #include <config.h>
@@ -385,6 +385,24 @@ void utf7_2uni (struct convert_rock *rock, int c)
     }
 }
 
+void euc_kr2uni(struct convert_rock *rock, int c)
+{
+    struct table_state *s = (struct table_state *)rock->state;
+
+    if (c & 0x80) {
+	/* unless we're already in a high table, jump up */
+	/* magic number 5 == skip: US-ASCII + US-ASCII_1b + US-ASCII_1b_24 + US-ASCII_1b_24_29 + KSC-1003 */
+	if (s->curtable < s->initialtable + 5)
+	    s->curtable = s->initialtable + 5;
+    }
+    else {
+	/* low bit is always table 4 (G0) */
+	/* magic number 4 == skip: US-ASCII + US-ASCII_1b + US-ASCII_1b_24 + US-ASCII_1b_24_29 */
+	s->curtable = s->initialtable + 4;
+    }
+    table2uni(rock, c & 0x7f);
+}
+
 void uni2searchform(struct convert_rock *rock, int c)
 {
     struct canon_state *s = (struct canon_state *)rock->state;
@@ -533,26 +551,29 @@ void table_switch(struct convert_rock *rock, int charset_num)
     /* wipe any current state */
     memset(state, 0, sizeof(struct table_state)); 
 
-    /* it's a table based lookup */
-    if (chartables_charset_table[charset_num].table) {
+    switch (chartables_charset_table[charset_num].tabletype) {
+    case CHARTABLE_NORMAL:
 	/* set up the initial table */
 	state->curtable = state->initialtable
 	    = chartables_charset_table[charset_num].table;
 	rock->f = table2uni;
-    }
+	break;
 
-    /* special case UTF-8 */
-    else if (strstr(chartables_charset_table[charset_num].name, "utf-8")) {
+    case CHARTABLE_UTF8:
 	rock->f = utf8_2uni;
-    }
+	break;
 
-    /* special case UTF-7 */
-    else if (strstr(chartables_charset_table[charset_num].name, "utf-7")) {
+    case CHARTABLE_UTF7:
 	rock->f = utf7_2uni;
-    }
+	break;
 
-    /* should never happen */
-    else {
+    case CHARTABLE_EUC_KR:
+	state->curtable = state->initialtable
+	    = chartables_charset_table[charset_num].table;
+	rock->f = euc_kr2uni;
+	break;
+
+    default: /* really shouldn't happen! */
 	exit(1);
 	/* do something fatal here! */
     }
@@ -829,7 +850,7 @@ void mimeheader_cat(struct convert_rock *target, const char *s)
     int len;
     char *res;
 
-    if (!s) return 0;
+    if (!s) return;
 
     /* set up the conversion path */
     input = table_init(0, target);

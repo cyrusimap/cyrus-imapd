@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: chartable.h,v 1.7 2009/11/17 03:30:57 brong Exp $
+ * $Id: chartable.h,v 1.8 2009/11/17 03:32:50 brong Exp $
  */
 
 struct charmap {
@@ -49,7 +49,11 @@ struct charmap {
 
 struct charset {
     char *name;
+    unsigned char tabletype;
     const struct charmap (*table)[256];
 };
 
-
+#define CHARTABLE_NORMAL 0
+#define CHARTABLE_UTF8 1
+#define CHARTABLE_UTF7 2
+#define CHARTABLE_EUC_KR 3
