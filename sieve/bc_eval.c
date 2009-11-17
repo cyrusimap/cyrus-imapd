@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: bc_eval.c,v 1.17 2009/11/17 03:39:50 brong Exp $
+ * $Id: bc_eval.c,v 1.18 2009/11/17 04:01:28 brong Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -127,7 +127,7 @@ static regex_t * bc_compile_regex(const char *s, int ctag,
     int ret;
     regex_t *reg = (regex_t *) xmalloc(sizeof(regex_t));
 
-#ifdef HAVE_PCREPOSIX_H
+#ifdef REG_UTF8
     /* support UTF8 comparisons */
     ctag |= REG_UTF8;
 #endif
