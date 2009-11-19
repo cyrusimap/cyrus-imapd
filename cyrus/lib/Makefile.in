@@ -41,7 +41,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.in,v 1.74 2009/11/17 03:33:28 brong Exp $
+# $Id: Makefile.in,v 1.75 2009/11/19 21:52:55 murch Exp $
 
 # Authorization namespace.
 AUTH=auth.o auth_krb.o auth_unix.o auth_krb5.o auth_pts.o
@@ -141,19 +141,24 @@ imapopts.c: imapoptions $(srcdir)/../tools/config2header
 
 imapopts.h: imapopts.c
 
-chartable.c: mkchartable.pl charset/*.t charset/unifix.txt charset/unidata5_2.txt
+chartable.c: mkchartable 
 	@echo "### Building chartables..."
 	rm -f chartable.c
-	perl ./mkchartable.pl \
-	 -m $(srcdir)/charset/unifix.txt \
-	 -m $(srcdir)/charset/unidata5_2.txt \
+	./mkchartable \
+	 -m $(srcdir)/charset/unifix.txt	\
+	 -m $(srcdir)/charset/unidata2.txt \
 	 $(srcdir)/charset/*.t \
 	 > chartable.c \
 	 || (rm -f chartable.c && exit 1)
 	@echo "### Done building chartables."
+#	./mkchartable -m $(srcdir)/charset/unicode.map $(srcdir)/charset/*.t >x-chartables.h
+#	mv x-chartables.h chartables.h
+
+mkchartable: mkchartable.o xstrlcpy.o xstrlcat.o xmalloc.o assert.o
+	$(CC) $(LDFLAGS) -o mkchartable mkchartable.o xstrlcpy.o xstrlcat.o xmalloc.o assert.o
 
 clean:
-	rm -f *.o *.a chartable.c Makefile.bak makedepend.log \
+	rm -f *.o *.a chartable.c Makefile.bak mkchartable makedepend.log \
 	$(BUILTSOURCES)
 
 distclean: clean
