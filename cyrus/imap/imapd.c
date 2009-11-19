@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.571 2009/11/19 21:52:54 murch Exp $
+ * $Id: imapd.c,v 1.572 2009/11/19 22:44:42 murch Exp $
  */
 
 #include <config.h>
@@ -223,7 +223,7 @@ void capa_response(int flags);
 void cmd_capability(char *tag);
 void cmd_append(char *tag, char *name, const char *cur_name);
 void cmd_select(char *tag, char *cmd, char *name);
-void cmd_close(char *tag);
+void cmd_close(char *tag, char *cmd);
 void cmd_fetch(char *tag, char *sequence, int usinguid);
 void cmd_partial(const char *tag, const char *msgno, char *data,
 		 const char *start, const char *count);
@@ -252,7 +252,6 @@ void cmd_getquota(const char *tag, const char *name);
 void cmd_getquotaroot(const char *tag, const char *name);
 void cmd_setquota(const char *tag, const char *quotaroot);
 void cmd_status(char *tag, char *name);
-void cmd_unselect(char* tag);
 void cmd_namespace(char* tag);
 void cmd_mupdatepush(char *tag, char *name);
 void cmd_id(char* tag);
@@ -1213,7 +1212,7 @@ void cmdloop()
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 
-		cmd_close(tag.s);
+		cmd_close(tag.s, cmd.s);
 
 		snmp_increment(CLOSE_COUNT, 1);
 	    }
@@ -1914,7 +1913,8 @@ void cmdloop()
 		if (!imapd_mailbox && !backend_current) goto nomailbox;
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-		cmd_unselect(tag.s);
+
+		cmd_close(tag.s, cmd.s);
 
 		snmp_increment(UNSELECT_COUNT, 1);
 	    }
@@ -3614,15 +3614,13 @@ void cmd_select(char *tag, char *cmd, char *name)
 }
 	  
 /*
- * Perform a CLOSE command
+ * Perform a CLOSE/UNSELECT command
  */
-void cmd_close(char *tag)
+void cmd_close(char *tag, char *cmd)
 {
-    int r;
-
     if (backend_current) {
 	/* remote mailbox */
-	prot_printf(backend_current->out, "%s Close\r\n", tag);
+	prot_printf(backend_current->out, "%s %s\r\n", tag, cmd);
 	/* xxx do we want this to say OK if the connection is gone?
 	 * saying NO is clearly wrong, hense the fatal request. */
 	pipe_including_tag(backend_current, tag, 0);
@@ -3635,53 +3633,19 @@ void cmd_close(char *tag)
     }
 
     /* local mailbox */
-    if (!(imapd_mailbox->myrights & ACL_EXPUNGE)) r = 0;
-    else {
-	r = mailbox_expunge(imapd_mailbox, NULL, NULL, 0);
-	if (!r) sync_log_mailbox(imapd_mailbox->name);
+    if ((cmd[0] == 'C') && (imapd_mailbox->myrights & ACL_EXPUNGE)) {
+	if (!mailbox_expunge(imapd_mailbox, NULL, NULL, 0)) {
+	    sync_log_mailbox(imapd_mailbox->name);
+	}
     }
 
-    index_closemailbox(imapd_mailbox);
-    mailbox_close(imapd_mailbox);
-    imapd_mailbox = 0;
-
-    if (r) {
-	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
-    }
-    else {
-	prot_printf(imapd_out, "%s OK %s\r\n", tag,
-		    error_message(IMAP_OK_COMPLETED));
-    }
-}    
-
-/*
- * Perform an UNSELECT command -- for some support of IMAP proxy.
- * Just like close except no expunge.
- */
-void cmd_unselect(char *tag)
-{
-    if (backend_current) {
-	/* remote mailbox */
-	prot_printf(backend_current->out, "%s Unselect\r\n", tag);
-	/* xxx do we want this to say OK if the connection is gone?
-	 * saying NO is clearly wrong, hense the fatal request. */
-	pipe_including_tag(backend_current, tag, 0);
-
-	/* remove backend_current from the protgroup */
-	protgroup_delete(protin, backend_current->in);
-
-	backend_current = NULL;
-	return;
-    }
-
-    /* local mailbox */
     index_closemailbox(imapd_mailbox);
     mailbox_close(imapd_mailbox);
     imapd_mailbox = 0;
 
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
-}
+}    
 
 /*
  * Parse the syntax for a partial fetch:
