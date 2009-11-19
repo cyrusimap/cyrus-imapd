@@ -38,11 +38,15 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: charset.h,v 1.22 2009/11/17 03:30:57 brong Exp $
+ * $Id: charset.h,v 1.23 2009/11/19 21:52:55 murch Exp $
  */
 
 #ifndef INCLUDED_CHARSET_H
 #define INCLUDED_CHARSET_H
+
+/* Marker to indicate characters that don't map to anything */
+#define EMPTY 'X'
+#define EMPTY_STRING "X"
 
 #define ENCODING_NONE 0
 #define ENCODING_QP 1
@@ -56,27 +60,22 @@ typedef int charset_index;
 
 /* ensure up to MAXTRANSLATION times expansion into buf */
 extern char *charset_convert(const char *s, charset_index charset, char *buf,
-    size_t bufsz);
-extern char *charset_decode_mimeheader(const char *s, char *buf, 
-    size_t bufsz);
-extern char *charset_parse_mimeheader(const char *s);
+    int bufsz);
+extern char *charset_decode_mimeheader(const char *s, char *buf, int bufsz);
 
 extern charset_index charset_lookupname(const char *name);
 extern comp_pat *charset_compilepat(const char *s);
 extern void charset_freepat(comp_pat *pat);
 extern int charset_searchstring(const char *substr, comp_pat *pat,
-    const char *s, size_t len);
+    const char *s, int len);
 extern int charset_searchfile(const char *substr, comp_pat *pat,
-                              const char *msg_base, int mapnl, size_t len, 
+                              const char *msg_base, int mapnl, int len, 
                               charset_index charset, int encoding);
-extern char *charset_decode_mimebody(const char *msg_base, size_t len,
-				     int encoding, char **retval, size_t alloced,
-				     size_t *outlen);
-extern char *charset_encode_mimebody(const char *msg_base, size_t len,
-				     char *retval, size_t *outlen, 
-				     int *outlines);
-extern char *charset_to_utf8(const char *msg_base, size_t len, charset_index charset, int encoding);
-extern int charset_search_mimeheader(const char *substr, comp_pat *pat, const char *s, int searchform);
+extern char *charset_decode_mimebody(const char *msg_base, int len,
+				     int encoding, char **retval, int alloced,
+				     int *outlen);
+extern char *charset_encode_mimebody(const char *msg_base, int len,
+				     char *retval, int *outlen, int *outlines);
 
 /* Definitions for charset_extractfile */
 
@@ -122,7 +121,7 @@ typedef void index_search_text_receiver_t(int UID, int part, int cmds,
    by index_getsearchtextmsg to extract the MIME body parts. */ 
 extern int charset_extractfile(index_search_text_receiver_t receiver,
                                void* rock, int uid, const char *msg_base, 
-                               int mapnl, size_t len, charset_index charset,
+                               int mapnl, int len, charset_index charset,
                                int encoding);
 
 #endif /* INCLUDED_CHARSET_H */

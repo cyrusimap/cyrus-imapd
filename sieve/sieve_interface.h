@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sieve_interface.h,v 1.22 2009/11/17 03:39:25 brong Exp $
+ * $Id: sieve_interface.h,v 1.23 2009/11/19 21:52:56 murch Exp $
  */
 
 #ifndef SIEVE_H
@@ -76,7 +76,9 @@ typedef int sieve_get_include(void *script_context, const char *script,
 /* MUST keep this struct sync'd with bodypart in imap/message.h */
 typedef struct sieve_bodypart {
     char section[128];
-    const char *decoded_body;
+    const char *content;
+    const char *encoding;
+    unsigned long size;
 } sieve_bodypart_t;
 
 typedef int sieve_get_body(void *message_context, const char **content_types,

@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: message.c,v 1.115 2009/11/17 03:31:44 brong Exp $
+ * $Id: message.c,v 1.116 2009/11/19 21:52:55 murch Exp $
  */
 
 #include <config.h>
@@ -138,11 +138,6 @@ struct body {
      */
     struct ibuf cacheheaders;
 
-    /*
-     * decoded body.  Filled in as needed.
-     */
-    char *decoded_body;
-
     /* Message GUID. Only filled in at top level */
     struct message_guid guid;
 };
@@ -180,7 +175,6 @@ static int message_parse_headers P((struct msg *msg,
 				    struct boundary *boundaries));
 static void message_parse_address P((char *hdr, struct address **addrp));
 static void message_parse_encoding P((char *hdr, char **hdrp));
-static void message_parse_charset P((struct body *body, int *encoding, int *charset));
 static void message_parse_string P((char *hdr, char **hdrp));
 static void message_parse_header P((char *hdr, struct ibuf *ibuf));
 static void message_parse_type P((char *hdr, struct body *body));
@@ -479,19 +473,13 @@ static void message_find_part(struct body *body, const char *section,
 	    fatal("body part exceeds size of message file", EC_OSFILE);
 	}
 
-	if (!body->decoded_body) {
-	    int encoding, charset;
-	    message_parse_charset(body, &encoding, &charset);
-	    body->decoded_body = charset_to_utf8(
-		msg_base + body->content_offset, body->content_size,
-		charset, encoding); /* returns a cstring */
-	}
-
 	/* grow the array and add the new part */
 	*parts = xrealloc(*parts, (*n+2)*sizeof(struct bodypart *));
 	(*parts)[*n] = xmalloc(sizeof(struct bodypart));
 	strlcpy((*parts)[*n]->section, section, sizeof((*parts)[*n]->section));
-	(*parts)[*n]->decoded_body = body->decoded_body;
+	(*parts)[*n]->content = msg_base + body->content_offset;
+	(*parts)[*n]->encoding = body->encoding;
+	(*parts)[*n]->size = body->content_size;
 	(*parts)[++(*n)] = NULL;
     }
     else if (!strcmp(body->type, "MULTIPART")) {
@@ -934,68 +922,7 @@ char **hdrp;
 	if (Uislower(*p)) *p = toupper((int) *p);
     }
 }
-
-/* 
- * parse a charset and encoding out of a body structure
- */
-static void
-message_parse_charset(struct body *body, int *e_ptr, int *c_ptr)
-{
-    int encoding = ENCODING_NONE;
-    int charset = 0;
-    struct param *param;
-
-    if (body->encoding) {
-	switch (body->encoding[0]) {
-	case '7':
-	case '8':
-	    if (!strcmp(body->encoding+1, "BIT")) 
-		encoding = ENCODING_NONE;
-	    else 
-		encoding = ENCODING_UNKNOWN;
-	    break;
-
-	case 'B':
-	    if (!strcmp(body->encoding, "BASE64")) 
-		encoding = ENCODING_BASE64;
-	    else if (!strcmp(body->encoding, "BINARY"))
-		encoding = ENCODING_NONE;
-	    else 
-		encoding = ENCODING_UNKNOWN;
-	    break;
-
-	case 'Q':
-	    if (!strcmp(body->encoding, "QUOTED-PRINTABLE"))
-		encoding = ENCODING_QP;
-	    else 
-		encoding = ENCODING_UNKNOWN;
-	    break;
-
-	default:
-	    encoding = ENCODING_UNKNOWN;
-	}
-    }
-
-    if (!body->type || !strcmp(body->type, "TEXT")) {
-	for (param = body->params; param; param = param->next) {
-	    if (!strcasecmp(param->attribute, "charset")) {
-		charset = charset_lookupname(param->value);
-		break;
-	    }
-	}
-    }
-    else if (!strcmp(body->type, "MESSAGE")) {
-	if (!strcmp(body->subtype, "RFC822"))
-	    charset = -1;
-	encoding = ENCODING_NONE;
-    }
-    else
-	charset = -1;
-
-    if (e_ptr) *e_ptr = encoding;
-    if (c_ptr) *c_ptr = charset;
-}
-
+	
 /*
  * Parse an uninterpreted header
  */
@@ -2552,10 +2479,56 @@ struct ibuf *ibuf;
 struct body *body;
 {
     int encoding, charset;
+    struct param *param;
 
-    message_parse_charset(body, &encoding, &charset);
+    if (!body->encoding) encoding = ENCODING_NONE;
+    else {
+	switch (body->encoding[0]) {
+	case '7':
+	case '8':
+	    if (!strcmp(body->encoding+1, "BIT")) encoding = ENCODING_NONE;
+	    else encoding = ENCODING_UNKNOWN;
+	    break;
 
-    message_write_bit32(ibuf, (charset<<16)|encoding);
+	case 'B':
+	    if (!strcmp(body->encoding, "BASE64")) encoding = ENCODING_BASE64;
+	    else if (!strcmp(body->encoding, "BINARY"))
+	      encoding = ENCODING_NONE;
+	    else encoding = ENCODING_UNKNOWN;
+	    break;
+
+	case 'Q':
+	    if (!strcmp(body->encoding, "QUOTED-PRINTABLE"))
+	      encoding = ENCODING_QP;
+	    else encoding = ENCODING_UNKNOWN;
+	    break;
+
+	default:
+	    encoding = ENCODING_UNKNOWN;
+	}
+    }
+	
+    if (!body->type || !strcmp(body->type, "TEXT")) {
+	charset = 0;		/* Default is us-ascii */
+	for (param = body->params; param; param = param->next) {
+	    if (!strcasecmp(param->attribute, "charset")) {
+		charset = charset_lookupname(param->value);
+		break;
+	    }
+	}
+	message_write_bit32(ibuf, (charset<<16)|encoding);
+    }
+    else if (!strcmp(body->type, "MESSAGE")) {
+	if (!strcmp(body->subtype, "RFC822")) {
+	    message_write_bit32(ibuf, (-1<<16)|ENCODING_NONE);
+	}
+	else {
+	    message_write_bit32(ibuf, (0<<16)|ENCODING_NONE);
+	}
+    }
+    else {
+	message_write_bit32(ibuf, (-1<<16)|encoding);
+    }
 }
 
 /*
@@ -2772,10 +2745,7 @@ struct body *body;
 	}
 	free(body->subpart);
     }
-
     if (body->cacheheaders.start) {
 	message_ibuf_free(&body->cacheheaders);
     }
-
-    if (body->decoded_body) free(body->decoded_body);
 }
