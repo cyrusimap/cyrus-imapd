@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: index.c,v 1.256 2009/09/09 01:22:38 brong Exp $
+ * $Id: index.c,v 1.257 2009/12/02 02:18:12 murch Exp $
  */
 
 #include <config.h>
@@ -248,10 +248,6 @@ void index_operatemailbox(struct mailbox *mailbox)
 
 /*
  * Check for and report updates
- *
- * If checkseen is 0, \Seen state will not be checkpointed
- * If checkseen is 1, \Seen state will be checkpointed
- * If checkseen is 2, \Seen state will be quietly checkpointed
  */
 void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 {
@@ -276,7 +272,14 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 	
 	if (stat(fnamebuf, &sbuf) != 0) {
 	    if (errno == ENOENT) {
-		/* Mailbox has been deleted */
+		/* Mailbox has been (re)moved */
+		if (config_getswitch(IMAPOPT_DISCONNECT_ON_VANISHED_MAILBOX)) {
+		    syslog(LOG_WARNING,
+			   "Mailbox %s has been (re)moved out from under client",
+			   mailbox->name );
+		    fatal("Mailbox has been (re)moved", EC_IOERR);
+		}
+
 		for(;imapd_exists > 0; imapd_exists--) {
 		    prot_printf(imapd_out, "* 1 EXPUNGE\r\n");
 		}
@@ -429,7 +432,7 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
     }
 
     /* Check Flags */
-    if (checkseen) index_checkseen(mailbox, checkseen >> 1, usinguid, oldexists);
+    if (checkseen) index_checkseen(mailbox, 0, usinguid, oldexists);
     else if (oldexists == -1) {
 	seen_close(seendb);
 	seendb = 0;
@@ -498,9 +501,20 @@ index_check_existing(struct mailbox *mailbox, int usinguid, int checkseen)
 	strlcat(fnamebuf, FNAME_INDEX, sizeof(fnamebuf));
 
 	if ((stat(fnamebuf, &sbuf) != 0) ||
-            (sbuf.st_ino != mailbox->index_ino) ||
-	    (index_ino != mailbox->index_ino))
+	    (sbuf.st_ino != mailbox->index_ino) ||
+	    (index_ino != mailbox->index_ino)) {
+	    if (errno == ENOENT) {
+		/* Mailbox has been (re)moved */
+		if (config_getswitch(IMAPOPT_DISCONNECT_ON_VANISHED_MAILBOX)) {
+		    syslog(LOG_WARNING,
+			   "Mailbox %s has been (re)moved out from under client",
+			   mailbox->name );
+		    fatal("Mailbox has been (re)moved", EC_IOERR);
+		}
+	    }
+
             return;
+	}
     }
 
     if (checkseen)

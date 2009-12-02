@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.573 2009/12/02 02:09:43 murch Exp $
+ * $Id: imapd.c,v 1.574 2009/12/02 02:18:11 murch Exp $
  */
 
 #include <config.h>
@@ -4111,10 +4111,12 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 			imapd_mailbox->highestmodseq);
     }
 
-    /* EXPUNGE responses allowed for UID FETCH */
+    /* EXPUNGE responses only allowed for UID FETCH */
     if (usinguid) {
 	fetchitems |= FETCH_UID;
 	index_check(imapd_mailbox, 1, 0);
+    } else {
+	index_check_existing(imapd_mailbox, 0, 0);
     }
 
     fetchargs.fetchitems = fetchitems;
@@ -4122,9 +4124,8 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 		&fetchedsomething);
 
     if (config_getswitch(IMAPOPT_FLUSHSEENSTATE)) {
-        /* Flush \Seen state to disk immediately (but only if anything
-           changed) and check for updates by other processes */
-        index_check_existing(imapd_mailbox, usinguid, 1);  
+	/* Flush \Seen state to disk */
+	index_checkseen(imapd_mailbox, 0, usinguid, imapd_exists);
     }
 
     snprintf(mytime, sizeof(mytime), "%2.3f", 
@@ -4263,11 +4264,7 @@ void cmd_partial(const char *tag, const char *msgno, char *data,
 
     index_fetch(imapd_mailbox, msgno, 0, &fetchargs, &fetchedsomething);
 
-    if (config_getswitch(IMAPOPT_FLUSHSEENSTATE)) {
-        /* Flush \Seen state to disk immediately (but only if anything
-           changed) and check for updates by other processes */
-        index_check_existing(imapd_mailbox, 0, 1);
-    }
+    index_check(imapd_mailbox, 0, config_getswitch(IMAPOPT_FLUSHSEENSTATE));
 
     if (fetchedsomething) {
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
@@ -4477,12 +4474,12 @@ void cmd_store(char *tag, char *sequence, int usinguid)
     r = index_store(imapd_mailbox, sequence, usinguid, &storeargs,
 		    flag, nflags);
 
+    /* EXPUNGE responses only allowed for UID STORE */
     if (usinguid) {
-	index_check(imapd_mailbox, 1, 1);   /* Check \Seen too */
-    } else if (config_getswitch(IMAPOPT_FLUSHSEENSTATE)) {
-        /* Flush \Seen state to disk immediately (but only if anything
-           changed) and check for updates by other processes */
-        index_check_existing(imapd_mailbox, 0, 1);
+	index_check(imapd_mailbox, 1, config_getswitch(IMAPOPT_FLUSHSEENSTATE));
+    } else {
+	index_check_existing(imapd_mailbox, 0,
+			     config_getswitch(IMAPOPT_FLUSHSEENSTATE));
     }
 
     if (r) {
@@ -4545,7 +4542,12 @@ void cmd_search(char *tag, int usinguid)
 	return;
     }
 
-    index_check(imapd_mailbox, 1, 0);
+    /* EXPUNGE responses only allowed for UID SEARCH */
+    if (usinguid) {
+	index_check(imapd_mailbox, 1, 0);
+    } else {
+	index_check_existing(imapd_mailbox, 0, 0);
+    }
 
     if (charset == -1) {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag,
@@ -4643,7 +4645,12 @@ void cmd_sort(char *tag, int usinguid)
 	return;
     }
 
-    index_check(imapd_mailbox, 1, 0);
+    /* EXPUNGE responses only allowed for UID SORT */
+    if (usinguid) {
+	index_check(imapd_mailbox, 1, 0);
+    } else {
+	index_check_existing(imapd_mailbox, 0, 0);
+    }
 
     n = index_sort(imapd_mailbox, sortcrit, searchargs, usinguid);
     snprintf(mytime, sizeof(mytime), "%2.3f",
@@ -4733,7 +4740,12 @@ void cmd_thread(char *tag, int usinguid)
 	return;
     }
 
-    index_check(imapd_mailbox, 1, 0);
+    /* EXPUNGE responses only allowed for UID THREAD */
+    if (usinguid) {
+	index_check(imapd_mailbox, 1, 0);
+    } else {
+	index_check_existing(imapd_mailbox, 0, 0);
+    }
 
     n = index_thread(imapd_mailbox, alg, searchargs, usinguid);
     snprintf(mytime, sizeof(mytime), "%2.3f", 
