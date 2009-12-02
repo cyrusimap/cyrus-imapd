@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.c,v 1.17 2009/07/24 15:15:43 murch Exp $
+ * $Id: imap_proxy.c,v 1.18 2009/12/02 02:09:43 murch Exp $
  */
 
 #include <config.h>
@@ -789,12 +789,19 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
 	c = prot_getc(backend_current->in);
 	if (c != ' ') { /* protocol error */ c = EOF; break; }
 	    
+	/* check for OK/NO/BAD/BYE response */
+	if (!isdigit(c = prot_getc(backend_current->in))) {
+	    prot_printf(imapd_out, "* %c", c);
+	    pipe_to_end_of_response(backend_current, 0);
+	    continue;
+	}
+
 	/* read seqno */
 	seqno = 0;
-	while (isdigit(c = prot_getc(backend_current->in))) {
+	do {
 	    seqno *= 10;
 	    seqno += c - '0';
-	}
+	} while (isdigit(c = prot_getc(backend_current->in)));
 	if (seqno == 0 || c != ' ') {
 	    /* we suck and won't handle this case */
 	    c = EOF; break;
@@ -926,13 +933,20 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
 	if (c != '*') break;
 	c = prot_getc(backend_current->in);
 	if (c != ' ') { /* protocol error */ c = EOF; break; }
-	    
+
+	/* check for OK/NO/BAD/BYE response */
+	if (!isdigit(c = prot_getc(backend_current->in))) {
+	    prot_printf(imapd_out, "* %c", c);
+	    pipe_to_end_of_response(backend_current, 0);
+	    continue;
+	}
+
 	/* read seqno */
 	seqno = 0;
-	while (isdigit(c = prot_getc(backend_current->in))) {
+	do {
 	    seqno *= 10;
 	    seqno += c - '0';
-	}
+	} while (isdigit(c = prot_getc(backend_current->in)));
 	if (seqno == 0 || c != ' ') {
 	    /* we suck and won't handle this case */
 	    c = EOF; break;
@@ -989,7 +1003,11 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
 	    case 'r': case 'R':
 		c = chomp(backend_current->in, "fc822");
 		if (c == ' ') c = prot_getc(backend_current->in);
-		if (c != '{') c = EOF;
+		if (c != '{') {
+		    /* NIL? */
+		    eatline(backend_current->in, c);
+		    c = EOF;
+		}
 		else {
 		    sz = 0;
 		    while (isdigit(c = prot_getc(backend_current->in))) {
@@ -1078,7 +1096,7 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
 	}
     } else {
 	/* abort the append */
-	prot_printf(s->out, " {0}\r\n");
+	prot_printf(s->out, " {0+}\r\n\r\n");
 	pipe_until_tag(backend_current, mytag, 0);
 	pipe_until_tag(s, tag, 0);
 	    

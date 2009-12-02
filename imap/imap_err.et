@@ -39,7 +39,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: imap_err.et,v 1.54 2008/03/24 17:09:16 murch Exp $
+# $Id: imap_err.et,v 1.55 2009/12/02 02:09:43 murch Exp $
 
 error_table imap
 
@@ -135,6 +135,9 @@ ec IMAP_ANNOTATION_BADVALUE,
 
 ec IMAP_BADURL,
    "Bad URL"
+
+ec IMAP_ZERO_LENGTH_LITERAL,
+   "Zero-length message literal"
 
 # following used only proxy/db operations
 ec IMAP_BAD_SERVER,
