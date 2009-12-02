@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.572 2009/11/19 22:44:42 murch Exp $
+ * $Id: imapd.c,v 1.573 2009/12/02 02:09:43 murch Exp $
  */
 
 #include <config.h>
@@ -3261,6 +3261,7 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 	else {
 	    /* Read size from literal */
 	    r = getliteralsize(arg.s, c, &size, &(curstage->binary), &parseerr);
+	    if (!r && size == 0) r = IMAP_ZERO_LENGTH_LITERAL;
 	    if (r) goto done;
 
 	    /* Copy message to stage */
