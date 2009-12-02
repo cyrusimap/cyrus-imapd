@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.75 2009/10/13 15:10:36 murch Exp $
+ * $Id: nntpd.c,v 1.76 2009/12/02 02:18:12 murch Exp $
  */
 
 /*
@@ -825,6 +825,24 @@ static void cmdloop(void)
 			       NULL, 0)) {
 	    /* No input from client */
 	    continue;
+	}
+
+	if (nntp_group &&
+	    config_getswitch(IMAPOPT_DISCONNECT_ON_VANISHED_MAILBOX)) {
+	    struct stat sbuf;
+
+	    if (mailbox_stat(nntp_group->path, nntp_group->mpath,
+			     NULL, &sbuf, NULL) != 0) {
+		if (errno == ENOENT) {
+		    /* Mailbox has been (re)moved */
+		    syslog(LOG_WARNING,
+			   "Newsgroup %s has been (re)moved out from under client",
+			   nntp_group->name);
+		    prot_printf(nntp_out,
+				"400 Newsgroup has been (re)moved\r\n");
+		    shut_down(0);
+		}
+	    }
 	}
 
 	/* Parse command name */

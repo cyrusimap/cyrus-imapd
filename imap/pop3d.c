@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: pop3d.c,v 1.194 2009/10/13 15:10:36 murch Exp $
+ * $Id: pop3d.c,v 1.195 2009/12/02 02:18:12 murch Exp $
  */
 
 #include <config.h>
@@ -783,6 +783,25 @@ static void cmdloop(void)
 
 	if (!prot_fgets(inputbuf, sizeof(inputbuf), popd_in)) {
 	    shut_down(0);
+	}
+
+	if (popd_mailbox &&
+	    config_getswitch(IMAPOPT_DISCONNECT_ON_VANISHED_MAILBOX)) {
+	    struct stat sbuf;
+
+	    if (mailbox_stat(popd_mailbox->path, popd_mailbox->mpath,
+			     NULL, &sbuf, NULL) != 0) {
+		if (errno == ENOENT) {
+		    /* Mailbox has been (re)moved */
+		    syslog(LOG_WARNING,
+			   "Maildrop %s has been (re)moved out from under client",
+			   popd_mailbox->name);
+		    prot_printf(popd_out,
+				"-ERR [SYS/TEMP] "
+				"Maildrop has been (re)moved\r\n");
+		    shut_down(0);
+		}
+	    }
 	}
 
 	p = inputbuf + strlen(inputbuf);
