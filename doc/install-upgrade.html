@@ -1,4 +1,4 @@
-<!-- $Id: install-upgrade.html,v 1.42 2009/04/20 10:53:56 murch Exp $ -->
+<!-- $Id: install-upgrade.html,v 1.43 2009/12/03 20:48:14 murch Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Upgrading From Previous Versions
@@ -8,12 +8,11 @@
 
 <h1>Upgrading From Previous Versions</h1>
 
-<h2>Upgrading from 2.3.12</h2>
+<h2>Upgrading from 2.3.15</h2>
 <ul>
-<li>Sieve has reverted back to expecting modified UTF7 folder names in
-  fileinto actions by default.  If your scripts are using UTF8 folder
-  names, you <b>MUST</b> enable the <tt>sieve_utf8fileinto</tt>
-  in <tt>imapd.conf</tt>.</li>
+<li>The SQL detection code in configure has been reworked.  Separate
+  options for the include directories and lib directories have been
+  added.  Previous SQL options may not work as expected.</li>
 </ul>
 
 <h2>Upgrading from 2.3.10</h2>
@@ -505,7 +504,7 @@ worry about it.)
 </ul>
 
 <HR><P>
-last modified: $Date: 2009/04/20 10:53:56 $
+last modified: $Date: 2009/12/03 20:48:14 $
 </BODY></HTML>
 
 
