@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: pop3d.c,v 1.195 2009/12/02 02:18:12 murch Exp $
+ * $Id: pop3d.c,v 1.196 2009/12/10 15:34:15 murch Exp $
  */
 
 #include <config.h>
@@ -879,14 +879,6 @@ static void cmdloop(void)
 		cmd_capa();
 	    }
 	}
-	else if (!strcmp(inputbuf, "stls") && tls_enabled()) {
-	    if (arg) {
-		prot_printf(popd_out,
-			    "-ERR STLS doesn't take any arguments\r\n");
-	    } else {
-		cmd_starttls(0);
-	    }
-	}
 	else if (!popd_mailbox) {
 	    if (!strcmp(inputbuf, "user")) {
 		if (!arg) {
@@ -906,6 +898,13 @@ static void cmdloop(void)
 	    }
 	    else if (!strcmp(inputbuf, "auth")) {
 		cmd_auth(arg);
+	    }
+	    else if (!strcmp(inputbuf, "stls") && tls_enabled()) {
+		if (arg) {
+		    prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");
+		} else {
+		    cmd_starttls(0);
+		}
 	    }
 	    else {
 		prot_printf(popd_out, "-ERR Unrecognized command\r\n");
