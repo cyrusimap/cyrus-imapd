@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: pop3d.c,v 1.196 2009/12/10 15:34:15 murch Exp $
+ * $Id: pop3d.c,v 1.197 2009/12/10 16:53:42 murch Exp $
  */
 
 #include <config.h>
@@ -86,6 +86,7 @@
 #include "telemetry.h"
 #include "backend.h"
 #include "proxy.h"
+#include "seen.h"
 
 #include "sync_log.h"
 
@@ -116,7 +117,7 @@ int popd_timeout;
 char *popd_userid = 0, *popd_subfolder = 0;
 struct mailbox *popd_mailbox = 0;
 struct auth_state *popd_authstate = 0;
-int config_popuseacl;
+int config_popuseacl, config_popuseimapflags;
 struct sockaddr_storage popd_localaddr, popd_remoteaddr;
 int popd_haveaddr = 0;
 char popd_clienthost[NI_MAXHOST*2+1] = "[local]";
@@ -129,6 +130,7 @@ struct msg {
     unsigned uid;
     unsigned size;
     int deleted;
+    int seen;
 } *popd_msg = NULL;
 
 static sasl_ssf_t extprops_ssf = 0;
@@ -178,11 +180,12 @@ static void cmd_capa(void);
 static void cmd_pass(char *pass);
 static void cmd_user(char *user);
 static void cmd_starttls(int pop3s);
-static void blat(int msg,int lines);
+static int blat(int msg,int lines);
 static int openinbox(void);
 static void cmdloop(void);
 static void kpop(void);
 static int parsenum(char **ptr);
+static int update_seen(void);
 void usage(void);
 void shut_down(int code) __attribute__ ((noreturn));
 
@@ -866,6 +869,16 @@ static void cmdloop(void)
 					       0, 0);
 			sync_log_mailbox(popd_mailbox->name);
 		    }
+
+		    if (config_popuseimapflags &&
+			(!config_popuseacl || (popd_mailbox->myrights & ACL_SEEN))) {
+			if (update_seen() == 0) {
+			    sync_log_seen((popd_mailbox->options &
+					   OPT_IMAP_SHAREDSEEN) ? "anyone" :
+					  popd_userid,
+					  popd_mailbox->name);
+			}
+		    }
 		}
 		prot_printf(popd_out, "+OK\r\n");
 		return;
@@ -961,7 +974,7 @@ static void cmdloop(void)
 		    prot_printf(popd_out, "-ERR No such message\r\n");
 		}
 		else {
-		    blat(msg, -1);
+		    if (blat(msg, -1) == 0) popd_msg[msg].seen = 1;
 		}
 	    }
 	}
@@ -1001,6 +1014,7 @@ static void cmdloop(void)
 	    else {
 		for (msg = 1; msg <= popd_exists; msg++) {
 		    popd_msg[msg].deleted = 0;
+		    popd_msg[msg].seen = 0;
 		}
 		prot_printf(popd_out, "+OK\r\n");
 	    }
@@ -1651,7 +1665,7 @@ int openinbox(void)
     }
     else {
 	/* local mailbox */
-	unsigned msg;
+	unsigned msg, n;
 	struct index_record record;
 	int minpoll;
 	int doclose = 0;
@@ -1700,16 +1714,26 @@ int openinbox(void)
 	}
 
 	if (!r) {
-	    popd_exists = mboxstruct.exists;
-	    popd_msg = (struct msg *) xrealloc(popd_msg, (popd_exists+1) *
+	    popd_msg = (struct msg *) xrealloc(popd_msg, (mboxstruct.exists+1) *
 					       sizeof(struct msg));
-	    for (msg = 1; msg <= popd_exists; msg++) {
+	    config_popuseimapflags = config_getswitch(IMAPOPT_POPUSEIMAPFLAGS);
+	    for (n = 0, msg = 1; msg <= mboxstruct.exists; msg++) {
 		if ((r = mailbox_read_index_record(&mboxstruct, msg, &record))!=0)
 		    break;
-		popd_msg[msg].uid = record.uid;
-		popd_msg[msg].size = record.size;
-		popd_msg[msg].deleted = 0;
+
+		if (config_popuseimapflags &&
+		    (record.system_flags & FLAG_DELETED)) {
+		    /* Ignore \Deleted messages */
+		    continue;
+		}
+
+		++n;
+		popd_msg[n].uid = record.uid;
+		popd_msg[n].size = record.size;
+		popd_msg[n].deleted = 0;
+		popd_msg[n].seen = 0;
 	    }
+	    popd_exists = n;
 	}
 	if (r) {
 	    mailbox_close(&mboxstruct);
@@ -1744,7 +1768,7 @@ int openinbox(void)
     return 1;
 }
 
-static void blat(int msg,int lines)
+static int blat(int msg,int lines)
 {
     FILE *msgfile;
     char buf[4096];
@@ -1759,7 +1783,7 @@ static void blat(int msg,int lines)
     msgfile = fopen(fnamebuf, "r");
     if (!msgfile) {
 	prot_printf(popd_out, "-ERR [SYS/PERM] Could not read message file\r\n");
-	return;
+	return IMAP_IOERROR;
     }
     prot_printf(popd_out, "+OK Message follows\r\n");
     while (lines != thisline) {
@@ -1786,6 +1810,8 @@ static void blat(int msg,int lines)
     /* Reset inactivity timer in case we spend a long time
        pushing data to the client over a slow link. */
     prot_resettimeout(popd_in);
+
+    return 0;
 }
 
 static int parsenum(char **ptr)
@@ -1918,4 +1944,164 @@ void printstring(const char *s __attribute__((unused)))
     /* needed to link against annotate.o */
     fatal("printstring() executed, but its not used for POP3!",
 	  EC_SOFTWARE);
+}
+
+/* Merge our read messages with the existing \Seen database */
+#define NEWGROW 200
+static int update_seen(void)
+{
+    int r, inrange;
+    struct seen *seendb;
+    time_t last_read, last_change;
+    unsigned last_uid, msg;
+    char *seenuids, *old, *newseenuids, *new;
+    size_t newalloced;
+    unsigned long uid, newlast, rmin, rmax;
+
+    r = seen_open(popd_mailbox,
+		  (popd_mailbox->options & OPT_IMAP_SHAREDSEEN) ? "anyone" :
+		  popd_userid,
+		  SEEN_CREATE, &seendb);
+    if (r) {
+	syslog(LOG_ERR, "Failed to open seen for %s: %s",
+	       popd_mailbox->name, error_message(r));
+	return r;
+    }
+    
+    /* Lock \Seen database and read current values */
+    r = seen_lockread(seendb, &last_read, &last_uid, &last_change, &seenuids);
+    if (r) {
+	syslog(LOG_ERR, "%s: %s",
+	       error_message(IMAP_NO_CHECKSEEN), error_message(r));
+	seen_close(seendb);
+	return r;
+    }
+
+    /* Create a buffer for our new \Seen state */
+    newalloced = strlen(seenuids) + NEWGROW;
+    new = newseenuids = xmalloc(newalloced);
+    *new = '\0';
+
+    msg = 1;
+    inrange = 0;
+    newlast = 0;
+    old = seenuids;
+
+    /* Parse existing seen state and add our newly read messages to it */
+    while (old && *old) {
+	/* Get next existing range */
+	rmin = rmax = 0;
+	while (cyrus_isdigit((int) *old)) {
+	    rmin = rmin * 10 + *old++ - '0';
+	}
+	if (*old == ':') {
+	    /* Get end of existing range */
+	    ++old;
+	    while (cyrus_isdigit((int) *old)) {
+		rmax = rmax * 10 + *old++ - '0';
+	    }
+	}
+	else {
+	    /* Single value */
+	    rmax = rmin;
+	}
+	if (*old == ',') ++old;
+
+	/* Process our messages up to the existing range */
+	while (msg <= popd_exists && (uid = popd_msg[msg].uid) < rmin) {
+
+	    if (!popd_msg[msg].seen) {
+		/* End of any current range */
+		if (inrange) new += sprintf(new, ":%lu", newlast);
+		inrange = 0;
+	    } else {
+		if (newlast && (uid - 1 == newlast)) {
+		    /* Continue with current range */
+		    inrange = 1;
+		} else {
+		    /* Start of new range */
+		    if (newlast) *new++ = ',';
+		    new += sprintf(new, "%lu", uid);
+		    inrange = 0;
+		}
+		newlast = uid;
+	    }
+	    msg++;
+
+	    /* Reallocate the new seen state if necessary */
+	    if ((size_t) (new - newseenuids) > newalloced - 30) {
+		newalloced += NEWGROW;
+		newseenuids = xrealloc(newseenuids, newalloced);
+		new = newseenuids + strlen(newseenuids);
+	    }
+	}
+
+	if (newlast && (rmin - 1 == newlast)) {
+	    /* Continue with current range */
+	    inrange = 1;
+	} else {
+	    /* End of any current range */
+	    if (inrange) new += sprintf(new, ":%lu", newlast);
+
+	    /* Add the start of the existing range to new seen state */
+	    if (newlast) *new++ = ',';
+	    new += sprintf(new, "%lu", rmin);
+	    inrange = 0;
+	}
+
+	/* Skip over uids within the existing range */
+	while (msg <= popd_exists && (uid = popd_msg[msg].uid) <= rmax) msg++;
+
+	/* Continue with the existing range as current */
+	inrange |= (rmax > rmin);
+	newlast = rmax;
+    }
+
+    /* Process any messages outside of last existing range */
+    while (msg <= popd_exists) {
+	uid = popd_msg[msg].uid;
+
+	if (!popd_msg[msg].seen) {
+	    if (inrange) new += sprintf(new, ":%lu", newlast);
+	    /* End of any current range */
+	    inrange = 0;
+	} else {
+	    if (newlast && (uid - 1 == newlast)) {
+		/* Continue with current range */
+		inrange = 1;
+	    } else {
+		/* Start of new range */
+		if (newlast) *new++ = ',';
+		new += sprintf(new, "%lu", uid);
+		inrange = 0;
+	    }
+	    newlast = uid;
+	}
+	msg++;
+
+	/* Reallocate the new seen state if necessary */
+	if ((size_t) (new - newseenuids) > newalloced - 30) {
+	    newalloced += NEWGROW;
+	    newseenuids = xrealloc(newseenuids, newalloced);
+	    new = newseenuids + strlen(newseenuids);
+	}
+    }
+
+    /* Finalize any current range */
+    if (inrange) new += sprintf(new, ":%lu", newlast);
+
+    /* Write new values to database */
+    r = seen_write(seendb, popd_login_time, popd_mailbox->last_uid,
+		   time(NULL), newseenuids);
+
+    if (r) {
+	syslog(LOG_ERR, "%s: %s",
+	       error_message(IMAP_NO_CHECKSEEN), error_message(r));
+    }
+
+    seen_close(seendb);
+    free(seenuids);
+    free(newseenuids);
+
+    return r;
 }
