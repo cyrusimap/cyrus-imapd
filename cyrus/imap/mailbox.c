@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.197 2009/11/17 03:25:41 brong Exp $
+ * $Id: mailbox.c,v 1.198 2009/12/15 03:29:33 brong Exp $
  */
 
 #include <config.h>
@@ -2173,10 +2173,6 @@ int mailbox_expunge(struct mailbox *mailbox,
     time_t now = time(NULL);
     unsigned long expunge_exists = 0;
 
-    /* EXPUNGE_FORCE means immediate mode */
-    if (flags & EXPUNGE_FORCE)
-	config_expunge_mode = IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE;
-
     /* initialize the paths */
     mailbox_meta_get_fname(&fpath, mailbox, 0);
 
@@ -2435,7 +2431,7 @@ int mailbox_expunge(struct mailbox *mailbox,
 	if (r) goto fail;
 	expunge_exists -= (numdeleted - new_deleted);
     }
-    else if (config_expunge_mode != IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE) {
+    else if (!(flags & EXPUNGE_FORCE) && config_expunge_mode != IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE) {
 	/* Fix up information in expunge index header */
 	lseek(expunge_fd, 0, SEEK_SET);
 	n = read(expunge_fd, buf, mailbox->start_offset);
@@ -2571,8 +2567,8 @@ int mailbox_expunge(struct mailbox *mailbox,
     if (expunge_index_base) map_free(&expunge_index_base, &expunge_index_len);
     fclose(newindex);
 
-    if (newcache) {
-	fclose(newcache);
+    if (newcache || (flags & EXPUNGE_FORCE)) {
+	if (newcache) fclose(newcache);
 
 	/* Delete message files */
 	fname = &fpath.data;
