@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sieve.y,v 1.44 2009/11/19 21:52:56 murch Exp $
+ * $Id: sieve.y,v 1.45 2009/12/15 18:21:20 murch Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -114,7 +114,7 @@ struct dtags {
 
 static commandlist_t *ret;
 static sieve_script_t *parse_script;
-static int check_reqs(stringlist_t *sl);
+static char *check_reqs(stringlist_t *sl);
 static test_t *build_address(int t, struct aetags *ae,
 			     stringlist_t *sl, stringlist_t *pl);
 static test_t *build_header(int t, struct htags *h,
@@ -219,8 +219,10 @@ reqs: /* empty */
 	| require reqs
 	;
 
-require: REQUIRE stringlist ';'	{ if (!check_reqs($2)) {
-                                    yyerror("Unsupported feature(s) in \"require\"");
+require: REQUIRE stringlist ';'	{ char *err = check_reqs($2);
+                                  if (err) {
+				    yyerror(err);
+				    free(err);
 				    YYERROR; 
                                   } }
 	;
@@ -718,21 +720,36 @@ int yyerror(char *msg)
     return 0;
 }
 
-static int check_reqs(stringlist_t *sl)
+static char *check_reqs(stringlist_t *sl)
 {
-    int i = 1;
     stringlist_t *s;
+    char *err = NULL, *p, sep = ':';
+    size_t alloc = 0;
     
     while (sl != NULL) {
 	s = sl;
 	sl = sl->next;
 
-	i &= script_require(parse_script, s->s);
+	if (!script_require(parse_script, s->s)) {
+	    if (!err) {
+		alloc = 100;
+		p = err = xmalloc(alloc);
+		p += sprintf(p, "Unsupported feature(s) in \"require\"");
+	    }
+	    else if ((size_t) (p - err + strlen(s->s) + 5) > alloc) {
+		alloc += 100;
+		err = xrealloc(err, alloc);
+		p = err + strlen(err);
+	    }
+
+	    p += sprintf(p, "%c \"%s\"", sep, s->s);
+	    sep = ',';
+	}
 
 	if (s->s) free(s->s);
 	free(s);
     }
-    return i;
+    return err;
 }
 
 static test_t *build_address(int t, struct aetags *ae,
