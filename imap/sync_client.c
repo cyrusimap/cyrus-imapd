@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_client.c,v 1.46 2009/06/29 17:39:31 murch Exp $
+ * $Id: sync_client.c,v 1.47 2009/12/15 03:29:54 brong Exp $
  *
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
@@ -246,8 +246,8 @@ static int find_reserve_messages(struct mailbox *mailbox,
 
         if (r) {
             syslog(LOG_ERR,
-                   "IOERROR: reading index entry for nsgno %lu of %s: %m",
-                   record.uid, mailbox->name);
+                   "IOERROR: reading index entry for msgno %lu of %s: %m",
+                   msgno, mailbox->name);
             return(IMAP_IOERROR);
         }
 
@@ -286,8 +286,8 @@ static int reserve_all_messages(struct mailbox *mailbox,
 
         if (r) {
             syslog(LOG_ERR,
-                   "IOERROR: reading index entry for nsgno %lu of %s: %m",
-                   record.uid, mailbox->name);
+                   "IOERROR: reading index entry for msgno %lu of %s: %m",
+                   msgno, mailbox->name);
             return(IMAP_IOERROR);
         }
 
@@ -1398,7 +1398,7 @@ static int upload_messages_list(struct mailbox *mailbox,
 	    if (r) {
 		syslog(LOG_ERR,
 		       "IOERROR: reading index entry for msgno %lu of %s: %m",
-		       record.uid, mailbox->name);
+		       msgno, mailbox->name);
 		return(IMAP_IOERROR);
 	    }
 
@@ -1471,7 +1471,7 @@ static int upload_messages_from(struct mailbox *mailbox,
 	    if (r) {
 		syslog(LOG_ERR,
 		       "IOERROR: reading index entry for msgno %lu of %s: %m",
-		       record.uid, mailbox->name);
+		       msgno, mailbox->name);
 		return(IMAP_IOERROR);
 	    }
 
