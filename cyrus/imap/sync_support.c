@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_support.c,v 1.23 2009/12/15 03:30:33 brong Exp $
+ * $Id: sync_support.c,v 1.24 2009/12/15 20:24:51 murch Exp $
  */
 
 #include <config.h>
@@ -858,7 +858,7 @@ void sync_user_list_free(struct sync_user_list **lp)
 struct sync_message_list *sync_message_list_create(int hash_size, int file_max)
 {
     struct sync_message_list *l = xzmalloc(sizeof (struct sync_message_list));
-    const char *root;
+    const char *root, *partition;
 
     /* Pick a sensible default if no size given */
     if (hash_size == 0)
@@ -875,7 +875,10 @@ struct sync_message_list *sync_message_list_create(int hash_size, int file_max)
     l->file_max   = file_max;  
 
     /* Set up cache file */
-    root = config_partitiondir(config_defpartition);
+    partition = config_defpartition;
+    if (!partition) partition = find_free_partition(NULL);
+
+    root = config_partitiondir(partition);
 
     snprintf(l->cache_name, sizeof(l->cache_name), "%s/sync./%lu.cache",
 	     root, (unsigned long) getpid());
