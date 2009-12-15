@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_support.c,v 1.22 2009/03/31 04:11:20 brong Exp $
+ * $Id: sync_support.c,v 1.23 2009/12/15 03:30:33 brong Exp $
  */
 
 #include <config.h>
@@ -330,6 +330,9 @@ void sync_flags_meta_to_list(struct sync_flags_meta *meta, char **flagname)
             !strcmp(flagname[n], meta->flagname[n]))
             continue;
         
+	if (flagname[n])
+	    free(flagname[n]);
+
         if (meta->flagname[n])
             flagname[n] = xstrdup(meta->flagname[n]);
         else
