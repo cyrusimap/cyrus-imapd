@@ -1,4 +1,4 @@
-<!-- $Id: install-replication.html,v 1.8 2007/11/26 20:35:59 murch Exp $ -->
+<!-- $Id: install-replication.html,v 1.9 2009/12/16 02:54:14 brong Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Cyrus replication
@@ -131,6 +131,17 @@ time.
 <p><li>Set the <tt>guid_mode</tt> option in imapd.conf to <tt>sha1</tt>.
 </ol>
 
+<h4>Compression</h4>
+
+If you are running replication over a remote link, then the tradeoff between
+bandwidth and CPU usage will tilt strongly in favour of enabling compression
+to save bandwidth at a slight increase in CPU cost.  You can set the
+'sync_compress' imapd.conf value, or pass the '-z' flag to sync_client.
+
+<ol>
+<li><tt>sync_compress: 1</tt></li>
+</ol>
+
 <h4>"Rolling" replication</h4>
 
 "Rolling" replication means that the "master" server continuously
@@ -168,7 +179,7 @@ has been configured.
 <h3>Failover</h3>
 
 <P><HR>
-last modified: $Date: 2007/11/26 20:35:59 $
+last modified: $Date: 2009/12/16 02:54:14 $
 </BODY></HTML>
 
 

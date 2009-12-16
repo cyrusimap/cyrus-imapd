@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_server.c,v 1.32 2009/08/28 13:48:46 brong Exp $
+ * $Id: sync_server.c,v 1.33 2009/12/16 02:54:14 brong Exp $
  *
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
@@ -196,6 +196,10 @@ static void cmd_delete_sieve(char *user, char *name);
 void usage(void);
 void shut_down(int code) __attribute__ ((noreturn));
 
+#ifdef HAVE_ZLIB
+static void cmd_compress(char *alg);
+static int sync_compress_done = 0;
+#endif
 
 extern void setproctitle_init(int argc, char **argv, char **envp);
 extern int proc_register(const char *progname, const char *clienthost, 
@@ -725,6 +729,17 @@ static void cmdloop(void)
 			   sync_atoul(arg7.s));
                 continue;
             }
+#ifdef HAVE_ZLIB
+	    else if (!strcmp(cmd.s, "Compress")) {
+		if (c != ' ') goto missingargs;
+		c = getword(sync_in, &arg1);
+		if (c == '\r') c = prot_getc(sync_in);
+		if (c != '\n') goto extraargs;
+
+		cmd_compress(arg1.s);
+		continue;
+	    }
+#endif
             break;
         case 'D':
             if (!strcmp(cmd.s, "Delete")) {
@@ -1326,6 +1341,29 @@ static void cmd_starttls(void)
     fatal("cmd_starttls() called, but no OpenSSL", EC_SOFTWARE);
 }
 #endif /* HAVE_SSL */
+
+#ifdef HAVE_ZLIB
+static void cmd_compress(char *alg)
+{
+    if (sync_compress_done) {
+        prot_printf(sync_out, "NO Compression already active: %s\r\n", alg);
+	return;
+    }
+    if (strcasecmp(alg, "DEFLATE")) {
+        prot_printf(sync_out, "NO Unknown compression algorithm: %s\r\n", alg);
+	return;
+    }
+    if (ZLIB_VERSION[0] != zlibVersion()[0]) {
+        prot_printf(sync_out, "NO Error initializing %s (incompatible zlib version)\r\n", alg);
+	return;
+    }
+    prot_printf(sync_out, "OK %s active\r\n", alg);
+    prot_flush(sync_out);
+    prot_setcompress(sync_in);
+    prot_setcompress(sync_out);
+    sync_compress_done = 1;
+}
+#endif
 
 #if 0
 static int

@@ -40,7 +40,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\"
-.\" $Id: sync_client.8,v 1.4 2008/04/04 12:47:04 murch Exp $
+.\" $Id: sync_client.8,v 1.5 2009/12/16 02:54:15 brong Exp $
 .SH NAME
 sync_client \- client side of the synchronization (replication) engine
 .SH SYNOPSIS
@@ -50,6 +50,9 @@ sync_client \- client side of the synchronization (replication) engine
 ]
 [
 .B \-l
+]
+[
+.B \-z
 ]
 [
 .B \-C
@@ -113,6 +116,12 @@ Verbose logging mode.
 .BI \-o
 Only attempt to connect to the backend server once rather than waiting
 up to 1000 seconds before giving up.
+.TP
+.BI \-z
+Enable compress.
+If you set 'sync_compress' in the imapd.conf or pass -z to sync_client, the
+replication protocol will attempt to enable deflate compression on the
+connection.
 .TP
 .BI \-C " config-file"
 Read configuration options from \fIconfig-file\fR.
