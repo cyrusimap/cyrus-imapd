@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_client.c,v 1.47 2009/12/15 03:29:54 brong Exp $
+ * $Id: sync_client.c,v 1.48 2009/12/16 02:54:14 brong Exp $
  *
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
@@ -132,6 +132,7 @@ static int verbose         = 0;
 static int verbose_logging = 0;
 static int connect_once    = 0;
 static int foreground      = 0;
+static int do_compress     = 0;
 
 static struct protocol_t csync_protocol =
 { "csync", "csync",
@@ -3422,6 +3423,22 @@ struct backend *replica_connect(struct backend *be, const char *servername,
 	}
     }
 
+#ifdef HAVE_ZLIB
+    /* check if we should compress */
+    if (do_compress || config_getswitch(IMAPOPT_SYNC_COMPRESS)) {
+        prot_printf(be->out, "COMPRESS DEFLATE\r\n");
+        prot_flush(be->out);
+
+        if (sync_parse_code("COMPRESS", be->in, SYNC_PARSE_EAT_OKLINE, NULL)) {
+	    syslog(LOG_ERR, "Failed to enable compression, continuing uncompressed");
+	}
+	else {
+	    prot_setcompress(be->in);
+	    prot_setcompress(be->out);
+        }
+    }
+#endif
+
     return be;
 }
 
@@ -3556,7 +3573,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:vlS:F:f:w:t:d:rRumso")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:vlS:F:f:w:t:d:rRumsoz")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -3624,6 +3641,14 @@ int main(int argc, char **argv)
 		fatal("Mutually exclusive options defined", EC_USAGE);
             mode = MODE_SIEVE;
             break;
+
+	case 'z':
+#ifdef HAVE_ZLIB
+	    do_compress = 1;
+#else
+	    fatal("Compress not available without zlib compiled in", EC_SOFTWARE);
+#endif
+	    break;
 
         default:
             usage("sync_client");
