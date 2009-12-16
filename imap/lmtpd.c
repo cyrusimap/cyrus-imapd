@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: lmtpd.c,v 1.164 2009/04/23 17:10:06 murch Exp $
+ * $Id: lmtpd.c,v 1.165 2009/12/16 02:51:41 brong Exp $
  */
 
 #include <config.h>
@@ -971,6 +971,8 @@ void shut_down(int code)
 	/* one less active connection */
 	snmp_increment(ACTIVE_CONNECTIONS, -1);
     }
+
+    sync_log_done();
 
     cyrus_done();
 

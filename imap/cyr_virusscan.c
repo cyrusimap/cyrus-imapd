@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_virusscan.c,v 1.7 2009/05/05 01:23:02 brong Exp $
+ * $Id: cyr_virusscan.c,v 1.8 2009/12/16 02:51:39 brong Exp $
  */
 
 #include <config.h>
@@ -307,6 +307,8 @@ int main (int argc, char *argv[]) {
     }
 
     if (notify) append_notifications();
+
+    sync_log_done();
 
     quotadb_close();
     quotadb_done();

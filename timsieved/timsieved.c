@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: timsieved.c,v 1.63 2009/01/14 15:50:47 murch Exp $
+ * $Id: timsieved.c,v 1.64 2009/12/16 02:51:45 brong Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -199,6 +199,8 @@ void cmdloop()
 
 	ret = parser(sieved_out, sieved_in);
     }
+
+    sync_log_done();
 
     /* done */
     shut_down(0);

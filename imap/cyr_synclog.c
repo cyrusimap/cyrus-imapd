@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_synclog.c,v 1.5 2009/02/11 19:11:32 murch Exp $
+ * $Id: cyr_synclog.c,v 1.6 2009/12/16 02:51:39 brong Exp $
  *
  * Originally written by Bron Gondwana <brong@fastmail.fm>
  */
@@ -162,6 +162,10 @@ int main(int argc, char *argv[])
             sync_log(argv[optind]);
             break;
     }
+
+    sync_log_done();
+
+    cyrus_done();
 
     return 0;
 }

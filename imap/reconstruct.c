@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: reconstruct.c,v 1.110 2009/03/31 04:11:20 brong Exp $
+ * $Id: reconstruct.c,v 1.111 2009/12/16 02:51:44 brong Exp $
  */
 
 #include <config.h>
@@ -378,6 +378,9 @@ int main(int argc, char **argv)
 	free(p->name);
 	free(p);
     }
+
+    if (syncflag)
+	sync_log_done();
 
     mboxlist_close();
     mboxlist_done();

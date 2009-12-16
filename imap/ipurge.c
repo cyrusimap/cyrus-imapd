@@ -42,7 +42,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ipurge.c,v 1.33 2009/03/26 00:02:20 brong Exp $
+ * $Id: ipurge.c,v 1.34 2009/12/16 02:51:41 brong Exp $
  */
 
 #include <config.h>
@@ -201,6 +201,9 @@ int main (int argc, char *argv[]) {
 					  purge_me, NULL);
     }
   }
+
+  sync_log_done();
+
   quotadb_close();
   quotadb_done();
 

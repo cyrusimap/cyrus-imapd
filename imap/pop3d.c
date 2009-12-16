@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: pop3d.c,v 1.197 2009/12/10 16:53:42 murch Exp $
+ * $Id: pop3d.c,v 1.198 2009/12/16 02:51:43 brong Exp $
  */
 
 #include <config.h>
@@ -610,6 +610,8 @@ void shut_down(int code)
 	backend_disconnect(backend);
 	free(backend);
     }
+
+    sync_log_done();
 
     mboxlist_close();
     mboxlist_done();
