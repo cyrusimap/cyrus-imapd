@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.76 2009/12/02 02:18:12 murch Exp $
+ * $Id: nntpd.c,v 1.77 2009/12/16 02:51:42 brong Exp $
  */
 
 /*
@@ -693,6 +693,8 @@ void shut_down(int code)
 	i++;
     }
     if (backend_cached) free(backend_cached);
+
+    sync_log_done();
 
     duplicate_done();
 

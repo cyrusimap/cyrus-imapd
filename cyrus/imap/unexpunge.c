@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: unexpunge.c,v 1.13 2009/08/28 13:48:46 brong Exp $
+ * $Id: unexpunge.c,v 1.14 2009/12/16 02:51:44 brong Exp $
  */
 
 #include <config.h>
@@ -655,6 +655,8 @@ int main(int argc, char *argv[])
 
     if (!r) sync_log_mailbox(mailbox.name);
     mailbox_close(&mailbox);
+
+    sync_log_done();
 
     quotadb_close();
     quotadb_done();

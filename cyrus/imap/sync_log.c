@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_log.c,v 1.5 2009/02/09 05:01:59 brong Exp $
+ * $Id: sync_log.c,v 1.6 2009/12/16 02:51:44 brong Exp $
  *
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
@@ -82,6 +82,11 @@ void sync_log_init(void)
 
     strlcpy(sync_log_file, config_dir, sizeof(sync_log_file));
     strlcat(sync_log_file, "/sync/log", sizeof(sync_log_file));
+}
+
+void sync_log_done(void)
+{
+    /* nothing yet */
 }
 
 static void sync_log_base(const char *string, int len)

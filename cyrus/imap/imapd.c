@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.574 2009/12/02 02:18:11 murch Exp $
+ * $Id: imapd.c,v 1.575 2009/12/16 02:51:39 brong Exp $
  */
 
 #include <config.h>
@@ -879,6 +879,7 @@ void shut_down(int code)
 	index_closemailbox(imapd_mailbox);
 	mailbox_close(imapd_mailbox);
     }
+    sync_log_done();
     seen_done();
     mboxkey_done();
     mboxlist_close();
