@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: pop3d.c,v 1.198 2009/12/16 02:51:43 brong Exp $
+ * $Id: pop3d.c,v 1.199 2009/12/17 15:32:32 murch Exp $
  */
 
 #include <config.h>
@@ -75,6 +75,7 @@
 #include "tls.h"
 
 #include "exitcodes.h"
+#include "imapd.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "version.h"
@@ -89,6 +90,7 @@
 #include "seen.h"
 
 #include "sync_log.h"
+#include "statuscache.h"
 
 #ifdef HAVE_KRB
 /* kerberos des is purported to conflict with OpenSSL DES */
@@ -424,6 +426,11 @@ int service_init(int argc __attribute__((unused)),
     quotadb_init(0);
     quotadb_open(NULL);
 
+    if (config_getswitch(IMAPOPT_STATUSCACHE)) {
+	/* open statuscache db to optimize handling an empty maildrop */
+	statuscache_open(NULL);
+    }
+
     /* setup for sending IMAP IDLE notifications */
     idle_enabled();
 
@@ -612,6 +619,11 @@ void shut_down(int code)
     }
 
     sync_log_done();
+
+    if (config_getswitch(IMAPOPT_STATUSCACHE)) {
+	statuscache_close();
+	statuscache_done();
+    }
 
     mboxlist_close();
     mboxlist_done();
@@ -894,7 +906,7 @@ static void cmdloop(void)
 		cmd_capa();
 	    }
 	}
-	else if (!popd_mailbox) {
+	else if (!popd_authstate) {
 	    if (!strcmp(inputbuf, "user")) {
 		if (!arg) {
 		    prot_printf(popd_out, "-ERR Missing argument\r\n");
@@ -1595,6 +1607,7 @@ int openinbox(void)
     char *server = NULL, *acl;
     int r, log_level = LOG_ERR;
     const char *statusline = NULL;
+    struct statuscache_data scdata;
 
     /* Translate any separators in userid
        (use a copy since we need the original userid for AUTH to backend) */
@@ -1664,6 +1677,14 @@ int openinbox(void)
 	    
 	    goto fail;
 	}
+    }
+    else if (config_getswitch(IMAPOPT_STATUSCACHE) &&
+	     !(r = statuscache_lookup(inboxname, userid, STATUS_MESSAGES, &scdata)) &&
+	     !scdata.messages) {
+	/* local mailbox (empty) -- don't bother opening the mailbox */
+	syslog(LOG_INFO, "optimized mode for empty maildrop: %s", popd_userid);
+
+	proc_register("pop3d", popd_clienthost, popd_userid, inboxname);
     }
     else {
 	/* local mailbox */
@@ -1748,6 +1769,19 @@ int openinbox(void)
 	popd_mailbox = &mboxstruct;
 	proc_register("pop3d", popd_clienthost, popd_userid,
 		      popd_mailbox->name);
+
+	/* Update the statuscache entry if the maildrop is empty */
+	if (config_getswitch(IMAPOPT_STATUSCACHE) && !popd_exists) {
+	    /* We always have message count, uidnext,
+	     * uidvalidity, and highestmodseq for cache */
+	    unsigned statusitems = STATUS_MESSAGES | STATUS_UIDNEXT |
+		STATUS_UIDVALIDITY | STATUS_HIGHESTMODSEQ;
+
+	    statuscache_fill(&scdata, &mboxstruct, statusitems, 0, 0);
+	    mailbox_close(&mboxstruct);
+	    statuscache_update(inboxname, popd_userid, &scdata);
+	    popd_mailbox = 0;
+	}
     }
 
     /* Create telemetry log */
