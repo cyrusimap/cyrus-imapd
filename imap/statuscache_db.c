@@ -134,8 +134,7 @@ void statuscache_fill(struct statuscache_data *scdata, struct mailbox *mailbox,
     scdata->uidnext = mailbox->last_uid+1;
     scdata->uidvalidity = mailbox->uidvalidity;
     scdata->unseen = num_unseen;
-    scdata->highestmodseq =
-	(mailbox->options & OPT_IMAP_CONDSTORE) ? mailbox->highestmodseq : 0;
+    scdata->highestmodseq = mailbox->highestmodseq;
 }
 
 void statuscache_done(void)

@@ -487,13 +487,8 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 		    mailbox->uidvalidity);
 	prot_printf(imapd_out, "* OK [UIDNEXT %lu] Ok\r\n",
 		    mailbox->last_uid + 1);
-	if (mailbox->options & OPT_IMAP_CONDSTORE) {
-	    prot_printf(imapd_out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "] Ok\r\n",
-			mailbox->highestmodseq);
-	} else {
-	    prot_printf(imapd_out, "* OK [NOMODSEQ] Sorry, modsequences have "
-			"not been enabled on this mailbox\r\n");
-	}
+	prot_printf(imapd_out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "] Ok\r\n",
+		    mailbox->highestmodseq);
     }
 
     for (msgno = 1; msgno <= oldexists; msgno++) {
@@ -503,8 +498,7 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 	    }
 	    index_fetchflags(mailbox, msgno, SYSTEM_FLAGS(msgno), user_flags,
 			     LAST_UPDATED(msgno));
-	    if ((mailbox->options & OPT_IMAP_CONDSTORE) &&
-		(imapd_client_capa & CAPA_CONDSTORE)) {
+	    if (imapd_condstore_client) {
 		prot_printf(imapd_out, " MODSEQ (" MODSEQ_FMT ")", MODSEQ(msgno));
 	    }
 	    if (usinguid) prot_printf(imapd_out, " UID %u", UID(msgno));
@@ -714,8 +708,7 @@ int oldexists;
 		    }
 		    index_fetchflags(mailbox, msgno, SYSTEM_FLAGS(msgno), 
 				     user_flags, LAST_UPDATED(msgno));
-		    if ((mailbox->options & OPT_IMAP_CONDSTORE) &&
-			(imapd_client_capa & CAPA_CONDSTORE)) {
+		    if (imapd_condstore_client) {
 			prot_printf(imapd_out, " MODSEQ (" MODSEQ_FMT ")",
 				    MODSEQ(msgno));
 		    }
@@ -1198,19 +1191,6 @@ int nflags;
     int newflag[MAX_USER_FLAGS];
     long myrights = mailbox->myrights;
 
-    /* Handle simple case of just changing /Seen */
-    if (!(mailbox->options & OPT_IMAP_CONDSTORE) &&
-	storeargs->operation != STORE_REPLACE &&
-	!storeargs->system_flags && !nflags) {
-	if (!storeargs->seen) return 0; /* Nothing to change */
-	if (!(myrights & ACL_SEEN)) return IMAP_PERMISSION_DENIED;
-	storeargs->usinguid = usinguid;
-
-	index_forsequence(mailbox, sequence, NULL, usinguid,
-			  index_storeseen, (char *)storeargs, NULL);
-	return 0;
-    }
-
     mailbox_read_acl(mailbox, imapd_authstate);
     myrights &= mailbox->myrights;
 
@@ -1326,10 +1306,8 @@ int nflags;
     /* note that index_forsequence() doesn't sync the index file;
        that's done below in mailbox_write_index_header() */
     if (mailbox->dirty) {
-	if (mailbox->options & OPT_IMAP_CONDSTORE) {
-	    /* bump HIGHESTMODSEQ */
-	    mailbox->highestmodseq++;
-	}
+	/* bump HIGHESTMODSEQ */
+	mailbox->highestmodseq++;
 	/* xxx what to do on failure? */
 	mailbox_write_index_header(mailbox);
 	mailbox->dirty = 0;
@@ -3447,10 +3425,8 @@ static int index_storeflag(struct mailbox *mailbox,
     }
 
     if (dirty) {
-	if (mailbox->options & OPT_IMAP_CONDSTORE) {
-	    /* bump MODSEQ */
-	    record.modseq = mailbox->highestmodseq + 1;
-	}
+	/* bump MODSEQ */
+	record.modseq = mailbox->highestmodseq + 1;
 
 	/* update totals */
 	if ( (record.system_flags & FLAG_DELETED) && !(oldflags & FLAG_DELETED))
@@ -3490,8 +3466,7 @@ static int index_storeflag(struct mailbox *mailbox,
 			 record.user_flags, record.last_updated);
 	sepchar = ' ';
     }
-    if ((mailbox->options & OPT_IMAP_CONDSTORE) &&
-	(imapd_client_capa & CAPA_CONDSTORE)) {
+    if (imapd_condstore_client) {
 	if (sepchar == '(') {
 	    /* we haven't output a fetch item yet, so start the response */
 	    prot_printf(imapd_out, "* %u FETCH ", msgno);

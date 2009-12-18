@@ -299,9 +299,6 @@ int do_examine(char *name,
 	    if (mailbox.options & OPT_POP3_NEW_UIDL) {
 		printf(" POP3_NEW_UIDL");
 	    }
-	    if (mailbox.options & OPT_IMAP_CONDSTORE) {
-		printf(" IMAP_CONDSTORE");
-	    }
 	    if (mailbox.options & OPT_IMAP_SHAREDSEEN) {
 		printf(" IMAP_SHAREDSEEN");
 	    }

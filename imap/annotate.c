@@ -434,8 +434,6 @@ const struct annotate_info_t annotate_mailbox_flags[] =
       OPT_IMAP_DUPDELIVER },
     { "/vendor/cmu/cyrus-imapd/sharedseen",
       OPT_IMAP_SHAREDSEEN },
-    { "/vendor/cmu/cyrus-imapd/condstore",
-      OPT_IMAP_CONDSTORE },
     { NULL, 0 }
 };
 
@@ -1068,8 +1066,6 @@ const struct annotate_f_entry mailbox_ro_entries[] =
     { "/vendor/cmu/cyrus-imapd/lastpop", BACKEND_ONLY,
       annotation_get_lastpop, NULL },
     { "/vendor/cmu/cyrus-imapd/pop3newuidl", BACKEND_ONLY,
-      annotation_get_mailboxopt, NULL },
-    { "/vendor/cmu/cyrus-imapd/condstore", BACKEND_ONLY,
       annotation_get_mailboxopt, NULL },
     { "/vendor/cmu/cyrus-imapd/sharedseen", BACKEND_ONLY,
       annotation_get_mailboxopt, NULL },
@@ -1863,9 +1859,6 @@ const struct annotate_st_entry mailbox_rw_entries[] =
       ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
       ACL_ADMIN, annotation_set_todb, NULL },
     { "/vendor/cmu/cyrus-imapd/pop3newuidl", ATTRIB_TYPE_BOOLEAN, BACKEND_ONLY,
-      ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
-      ACL_ADMIN, annotation_set_mailboxopt, NULL },
-    { "/vendor/cmu/cyrus-imapd/condstore", ATTRIB_TYPE_BOOLEAN, BACKEND_ONLY,
       ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
       ACL_ADMIN, annotation_set_mailboxopt, NULL },
     { "/vendor/cmu/cyrus-imapd/sharedseen", ATTRIB_TYPE_BOOLEAN, BACKEND_ONLY,

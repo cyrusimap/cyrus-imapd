@@ -4069,8 +4069,7 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 	    break;
 
 	case 'M':
-	    if ((imapd_mailbox->options & OPT_IMAP_CONDSTORE) &&
-		!strcmp(fetchatt.s, "MODSEQ")) {
+	    if (!strcmp(fetchatt.s, "MODSEQ")) {
 		fetchitems |= FETCH_MODSEQ;
 	    }
 	    else goto badatt;
@@ -4189,8 +4188,7 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 	do {
 	    c = getword(imapd_in, &fetchatt);
 	    ucase(fetchatt.s);
-	    if ((imapd_mailbox->options & OPT_IMAP_CONDSTORE) &&
-		!strcmp(fetchatt.s, "CHANGEDSINCE")) {
+	    if (!strcmp(fetchatt.s, "CHANGEDSINCE")) {
 		if (c != ' ') {
 		    prot_printf(imapd_out,
 				"%s BAD Missing required argument to %s %s\r\n",
@@ -4338,8 +4336,7 @@ void cmd_store(char *tag, char *sequence, int usinguid)
 	do {
 	    c = getword(imapd_in, &storemod);
 	    ucase(storemod.s);
-	    if ((imapd_mailbox->options & OPT_IMAP_CONDSTORE) &&
-		!strcmp(storemod.s, "UNCHANGEDSINCE")) {
+	    if (!strcmp(storemod.s, "UNCHANGEDSINCE")) {
 		if (c != ' ') {
 		    prot_printf(imapd_out,
 				"%s BAD Missing required argument to %s %s\r\n",
@@ -4512,12 +4509,9 @@ void cmd_store(char *tag, char *sequence, int usinguid)
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
 
-	/* We only need to log a MAILBOX event if we've changed
-	   a flag other than \Seen */
-	if (storeargs.system_flags || nflags || (imapd_mailbox->options & OPT_IMAP_CONDSTORE) ||
-	    storeargs.operation == STORE_REPLACE) {
-	    sync_log_mailbox(imapd_mailbox->name);
-	}
+	/* We need to log a MAILBOX event if we've made any
+	   changes, because modseq is updated */
+	sync_log_mailbox(imapd_mailbox->name);
     }
 
  freeflags:
@@ -7768,8 +7762,7 @@ int parsecharset;
 	break;
 
     case 'm':
-	if ((imapd_mailbox->options & OPT_IMAP_CONDSTORE) &&
-	    !strcmp(criteria.s, "modseq")) {
+	if (!strcmp(criteria.s, "modseq")) {
 	    if (c != ' ') goto missingarg;
 	    /* Check for optional search-modseq-ext */
 	    c = getqstring(imapd_in, imapd_out, &arg);
@@ -9044,8 +9037,7 @@ int getsortcriteria(char *tag, struct sortcrit **sortcrit)
 	    (*sortcrit)[n].args.annot.attrib = xstrdup(arg.s);
 	}
 #endif
-	else if ((imapd_mailbox->options & OPT_IMAP_CONDSTORE) &&
-		 !strcmp(criteria.s, "modseq"))
+	else if (!strcmp(criteria.s, "modseq"))
 	    (*sortcrit)[n].key = SORT_MODSEQ;
 	else {
 	    prot_printf(imapd_out, "%s BAD Invalid Sort criterion %s\r\n",

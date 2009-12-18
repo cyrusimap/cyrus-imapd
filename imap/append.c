@@ -297,7 +297,7 @@ int append_commit(struct appendstate *as,
     /* Calculate new index header information */
     as->m.exists += as->nummsg;
     as->m.last_uid += as->nummsg;
-    if (as->m.options & OPT_IMAP_CONDSTORE) as->m.highestmodseq++;
+    as->m.highestmodseq++;
     
     as->m.answered += as->numanswered;
     as->m.deleted += as->numdeleted;
@@ -555,11 +555,7 @@ int append_fromstage(struct appendstate *as, struct body **body,
 
     /* Setup */
     message_index.uid = mailbox->last_uid + as->nummsg + 1;
-    if (mailbox->options & OPT_IMAP_CONDSTORE) {
-	message_index.modseq = mailbox->highestmodseq + 1;
-    } else {
-	message_index.modseq = 1;
-    }
+    message_index.modseq = mailbox->highestmodseq + 1;
     message_index.last_updated = time(0);
     message_index.internaldate = internaldate;
     lseek(mailbox->cache_fd, 0L, SEEK_END);
@@ -711,11 +707,7 @@ int append_fromstream(struct appendstate *as, struct body **body,
     zero_index(message_index);
     /* Setup */
     message_index.uid = mailbox->last_uid + as->nummsg + 1;
-    if (mailbox->options & OPT_IMAP_CONDSTORE) {
-	message_index.modseq = mailbox->highestmodseq + 1;
-    } else {
-	message_index.modseq = 1;
-    }
+    message_index.modseq = mailbox->highestmodseq + 1;
     message_index.last_updated = time(0);
     message_index.internaldate = internaldate;
     lseek(mailbox->cache_fd, 0L, SEEK_END);
@@ -857,11 +849,7 @@ int append_copy(struct mailbox *mailbox,
     for (msg = 0; msg < nummsg; msg++) {
 	zero_index(message_index[msg]);
 	message_index[msg].uid = append_mailbox->last_uid + 1 + as->nummsg;
-	if (append_mailbox->options & OPT_IMAP_CONDSTORE) {
-	    message_index[msg].modseq = append_mailbox->highestmodseq + 1;
-	} else {
-	    message_index[msg].modseq = 1;
-	}
+	message_index[msg].modseq = append_mailbox->highestmodseq + 1;
 	message_index[msg].last_updated = time(0);
 	message_index[msg].internaldate = copymsg[msg].internaldate;
 	as->nummsg++;
