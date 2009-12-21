@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyrusdb_skiplist.c,v 1.69 2009/07/28 02:48:18 brong Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.70 2009/12/21 12:06:13 murch Exp $
  */
 
 /* xxx check retry_xxx for failure */
@@ -1974,7 +1974,7 @@ static int myconsistent(struct db *db, struct txn *tid, int locked)
 static int recovery(struct db *db, int flags)
 {
     const char *ptr, *keyptr;
-    int updateoffsets[SKIPLIST_MAXLEVEL];
+    unsigned updateoffsets[SKIPLIST_MAXLEVEL];
     uint32_t offset, offsetnet, myoff = 0;
     int r = 0, need_checkpoint = 0;
     time_t start = time(NULL);
