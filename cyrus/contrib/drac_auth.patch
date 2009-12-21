@@ -1,4 +1,4 @@
-$Id: drac_auth.patch,v 1.28 2009/03/13 12:16:24 murch Exp $
+$Id: drac_auth.patch,v 1.29 2009/12/21 11:39:55 murch Exp $
 
 Patch to add support for Dynamic Relay Authorization Control
 
@@ -67,11 +67,11 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
 Index: configure.in
 ===================================================================
 RCS file: /afs/andrew/system/cvs/src/cyrus/configure.in,v
-retrieving revision 1.308
-diff -u -r1.308 configure.in
---- configure.in	8 Oct 2008 23:28:58 -0000	1.308
-+++ configure.in	13 Mar 2009 12:12:52 -0000
-@@ -1219,6 +1219,19 @@
+retrieving revision 1.312
+diff -u -r1.312 configure.in
+--- configure.in	3 Dec 2009 20:48:13 -0000	1.312
++++ configure.in	21 Dec 2009 11:37:49 -0000
+@@ -1172,6 +1172,19 @@
  SNMP_SUBDIRS=""
  AC_SUBST(SNMP_SUBDIRS)
  
@@ -94,10 +94,10 @@ diff -u -r1.308 configure.in
 Index: imap/Makefile.in
 ===================================================================
 RCS file: /afs/andrew/system/cvs/src/cyrus/imap/Makefile.in,v
-retrieving revision 1.196
-diff -u -r1.196 Makefile.in
---- imap/Makefile.in	23 Sep 2008 16:17:09 -0000	1.196
-+++ imap/Makefile.in	13 Mar 2009 12:12:53 -0000
+retrieving revision 1.198
+diff -u -r1.198 Makefile.in
+--- imap/Makefile.in	30 Mar 2009 16:04:56 -0000	1.198
++++ imap/Makefile.in	21 Dec 2009 11:37:49 -0000
 @@ -66,6 +66,7 @@
  SIEVE_LIBS = @SIEVE_LIBS@
  IMAP_COM_ERR_LIBS = @IMAP_COM_ERR_LIBS@
@@ -139,11 +139,11 @@ diff -u -r1.196 Makefile.in
 Index: imap/imapd.c
 ===================================================================
 RCS file: /afs/andrew/system/cvs/src/cyrus/imap/imapd.c,v
-retrieving revision 1.557
-diff -u -r1.557 imapd.c
---- imap/imapd.c	9 Feb 2009 05:05:48 -0000	1.557
-+++ imap/imapd.c	13 Mar 2009 12:12:54 -0000
-@@ -188,6 +188,18 @@
+retrieving revision 1.575
+diff -u -r1.575 imapd.c
+--- imap/imapd.c	16 Dec 2009 02:51:39 -0000	1.575
++++ imap/imapd.c	21 Dec 2009 11:37:50 -0000
+@@ -190,6 +190,18 @@
      1, 1, &imapd_authstate, &imapd_userisadmin, &imapd_userisproxyadmin
  };
  
@@ -162,7 +162,7 @@ diff -u -r1.557 imapd.c
  /* current sub-user state */
  static struct mailbox mboxstruct;
  static struct mailbox *imapd_mailbox;
-@@ -659,6 +671,23 @@
+@@ -669,6 +681,23 @@
      /* setup for sending IMAP IDLE notifications */
      idle_enabled();
  
@@ -186,7 +186,7 @@ diff -u -r1.557 imapd.c
      /* create connection to the SNMP listener, if available. */
      snmp_connect(); /* ignore return code */
      snmp_set_str(SERVER_NAME_VERSION,CYRUS_VERSION);
-@@ -767,6 +796,15 @@
+@@ -777,6 +806,15 @@
  		imapd_haveaddr = 1;
  	    }
  	}
@@ -202,7 +202,7 @@ diff -u -r1.557 imapd.c
      }
  
      /* create the SASL connection */
-@@ -809,6 +847,11 @@
+@@ -819,6 +857,11 @@
      prot_flush(imapd_out);
      snmp_increment(ACTIVE_CONNECTIONS, -1);
  
@@ -214,7 +214,7 @@ diff -u -r1.557 imapd.c
      /* cleanup */
      imapd_reset();
  
-@@ -907,6 +950,10 @@
+@@ -921,6 +964,10 @@
  
      cyrus_done();
  
@@ -225,7 +225,7 @@ diff -u -r1.557 imapd.c
      exit(code);
  }
  
-@@ -967,6 +1014,36 @@
+@@ -981,6 +1028,36 @@
      }
  }
  
@@ -262,7 +262,7 @@ diff -u -r1.557 imapd.c
  /*
   * Top-level command loop parsing
   */
-@@ -2132,6 +2209,11 @@
+@@ -2168,6 +2245,11 @@
      capa_response(CAPA_PREAUTH|CAPA_POSTAUTH);
      prot_printf(imapd_out, "] %s\r\n", reply);
  
@@ -274,7 +274,7 @@ diff -u -r1.557 imapd.c
      /* Create telemetry log */
      imapd_logfd = telemetry_log(imapd_userid, imapd_in, imapd_out, 0);
  
-@@ -2289,6 +2371,11 @@
+@@ -2325,6 +2407,11 @@
  
      prot_setsasl(imapd_in,  imapd_saslconn);
      prot_setsasl(imapd_out, imapd_saslconn);
@@ -289,11 +289,11 @@ diff -u -r1.557 imapd.c
 Index: imap/pop3d.c
 ===================================================================
 RCS file: /afs/andrew/system/cvs/src/cyrus/imap/pop3d.c,v
-retrieving revision 1.191
-diff -u -r1.191 pop3d.c
---- imap/pop3d.c	9 Feb 2009 05:01:58 -0000	1.191
-+++ imap/pop3d.c	13 Mar 2009 12:12:54 -0000
-@@ -105,6 +105,10 @@
+retrieving revision 1.199
+diff -u -r1.199 pop3d.c
+--- imap/pop3d.c	17 Dec 2009 15:32:32 -0000	1.199
++++ imap/pop3d.c	21 Dec 2009 11:37:50 -0000
+@@ -108,6 +108,10 @@
  extern int opterr;
  
  
@@ -304,15 +304,15 @@ diff -u -r1.191 pop3d.c
  
  #ifdef HAVE_SSL
  static SSL *tls_conn;
-@@ -116,6 +120,7 @@
+@@ -119,6 +123,7 @@
  char *popd_userid = 0, *popd_subfolder = 0;
  struct mailbox *popd_mailbox = 0;
  struct auth_state *popd_authstate = 0;
 +static int popd_userisproxyadmin = 0;
- int config_popuseacl;
+ int config_popuseacl, config_popuseimapflags;
  struct sockaddr_storage popd_localaddr, popd_remoteaddr;
  int popd_haveaddr = 0;
-@@ -141,7 +146,7 @@
+@@ -145,7 +150,7 @@
  
  /* the sasl proxy policy context */
  static struct proxy_context popd_proxyctx = {
@@ -321,7 +321,7 @@ diff -u -r1.191 pop3d.c
  };
  
  /* signal to config.c */
-@@ -368,6 +373,7 @@
+@@ -374,6 +379,7 @@
  	auth_freestate(popd_authstate);
  	popd_authstate = NULL;
      }
@@ -329,7 +329,7 @@ diff -u -r1.191 pop3d.c
      if (popd_saslconn) {
  	sasl_dispose(&popd_saslconn);
  	popd_saslconn = NULL;
-@@ -536,6 +542,10 @@
+@@ -547,6 +553,10 @@
      prot_settimeout(popd_in, popd_timeout);
      prot_setflushonread(popd_in, popd_out);
  
@@ -340,9 +340,9 @@ diff -u -r1.191 pop3d.c
      if (kflag) kpop();
  
      /* we were connected on pop3s port so we should do 
-@@ -1702,6 +1712,21 @@
- 	proc_register("pop3d", popd_clienthost, popd_userid,
- 		      popd_mailbox->name);
+@@ -1642,6 +1652,21 @@
+ 		    error_message(r));
+ 	goto fail;
      }
 +
 +#ifdef DRAC_AUTH
@@ -360,16 +360,16 @@ diff -u -r1.191 pop3d.c
 +    }
 +#endif /* DRAC_AUTH */
  
-     /* Create telemetry log */
-     popd_logfd = telemetry_log(popd_userid, popd_in, popd_out, 0);
+     if (type & MBTYPE_REMOTE) {
+ 	/* remote mailbox */
 Index: imap/version.c
 ===================================================================
 RCS file: /afs/andrew/system/cvs/src/cyrus/imap/version.c,v
-retrieving revision 1.22
-diff -u -r1.22 version.c
---- imap/version.c	24 Mar 2008 17:09:20 -0000	1.22
-+++ imap/version.c	13 Mar 2009 12:12:54 -0000
-@@ -153,6 +153,10 @@
+retrieving revision 1.23
+diff -u -r1.23 version.c
+--- imap/version.c	23 Apr 2009 17:10:07 -0000	1.23
++++ imap/version.c	21 Dec 2009 11:37:50 -0000
+@@ -159,6 +159,10 @@
      snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
  	     "; %s", SIEVE_VERSION);
  #endif
@@ -383,13 +383,13 @@ diff -u -r1.22 version.c
 Index: lib/imapoptions
 ===================================================================
 RCS file: /afs/andrew/system/cvs/src/cyrus/lib/imapoptions,v
-retrieving revision 1.62
-diff -u -r1.62 imapoptions
---- lib/imapoptions	6 Mar 2009 03:52:55 -0000	1.62
-+++ lib/imapoptions	13 Mar 2009 12:12:55 -0000
-@@ -236,6 +236,14 @@
-    grant the user the ability to delete a mailbox.  If a user has this
-    right, they will automatically be given the new 'x' right. */
+retrieving revision 1.73
+diff -u -r1.73 imapoptions
+--- lib/imapoptions	21 Dec 2009 11:25:22 -0000	1.73
++++ lib/imapoptions	21 Dec 2009 11:37:50 -0000
+@@ -287,6 +287,14 @@
+    session.  Otherwise, the missing mailbox is treated as empty while
+    in use by the client.*/
  
 +{ "dracinterval", 5, INT }
 +/* If nonzero, enables the use of DRAC (Dynamic Relay Authorization
