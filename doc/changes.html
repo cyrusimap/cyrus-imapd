@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.180 2009/12/21 11:25:21 murch Exp $ -->
+<!-- $Id: changes.html,v 1.181 2009/12/21 12:05:57 brong Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -25,6 +25,13 @@
 <li>Added <tt>annotation_definitions</tt> option for specifying
   external (third-party) annotations. (courtesy of Thomas
   Viehmann <tv@beamnet.de>)</li>
+<li>Added <tt>sync_compress</tt> option to compress replication traffic</li>
+<li>Added <tt>user_folder_limit</tt> option to limit the number of folders a no-admin user is allowed to create.</li>
+<li>Added <tt>-x</tt> option to <tt>cyr_expire</tt> to disable expunge</li>
+<li>Track idle state so a shutdown doesn't leave idled killing random other 
+processes on a busy system</li>
+<li>Fix missing closedir() - bug #3159 (thanks Simon Matter)</li>
+<li>Make Cyrus compile with older GCC (thanks Simon Matter)</li>
 </ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.3.14</h1>
@@ -2457,7 +2464,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2009/12/21 11:25:21 $ <br />
+last modified: $Date: 2009/12/21 12:05:57 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
