@@ -40,7 +40,7 @@ dnl WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
 dnl AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 dnl OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 dnl
-dnl $Id: configure.in,v 1.312 2009/12/03 20:48:13 murch Exp $
+dnl $Id: configure.in,v 1.313 2009/12/21 13:09:10 murch Exp $
 dnl
 dnl configure.in for the Cyrus imapd
 dnl
@@ -49,7 +49,7 @@ dnl
 AC_INIT(imap/imapd.c)
 AC_PREREQ([2.54])
 AC_CONFIG_HEADER(config.h)
-AC_CANONICAL_HOST
+AC_CANONICAL_SYSTEM
 
 dnl Useful hook for distributions
 AC_ARG_WITH(extraident,[  --with-extraident=STRING   use STRING as extra version information],
@@ -1143,10 +1143,18 @@ dnl and compile perl/cyradm
     PERL="${with_perl}"
 dnl add perl cccdlflags when building libraries -- this ensures that the
 dnl libraries will be compiled as PIC if perl requires PIC objects
-dnl -- this is needed on NetBSD, but seems to cause problems on atleast Solaris --
-dnl    eval `${PERL} -V:cccdlflags`
-    PERL_CCCDLFLAGS="$cccdlflags"
-    AC_SUBST(PERL_CCCDLFLAGS)
+dnl -- this is needed on NetBSD and Linux, but seems to cause problems on atleast Solaris --
+    case "${target_os}" in
+        linux*|netbsd*)
+            AC_MSG_CHECKING(for perl cccdlflags needed on "${target_os}")
+            eval `${PERL} -V:cccdlflags`
+            PERL_CCCDLFLAGS="$cccdlflags"
+            AC_SUBST(PERL_CCCDLFLAGS)
+            AC_MSG_RESULT($PERL_CCCDLFLAGS)
+            ;;
+        *)
+            AC_MSG_WARN(skipping check for perl cccdlflags on "${target_os}")
+    esac
 fi
 
 dnl for timsieved
@@ -1263,7 +1271,7 @@ AH_TOP([
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: configure.in,v 1.312 2009/12/03 20:48:13 murch Exp $
+ * $Id: configure.in,v 1.313 2009/12/21 13:09:10 murch Exp $
  */
 
 #ifndef _CYRUS_IMAPD_CONFIG_H_
