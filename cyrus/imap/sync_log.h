@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_log.h,v 1.5 2009/12/16 02:51:44 brong Exp $
+ * $Id: sync_log.h,v 1.6 2009/12/21 12:28:12 murch Exp $
  *
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
@@ -51,7 +51,7 @@
 #define SYNC_LOG_RETRIES (64)
 
 void sync_log_init(void);
-void syng_log_done(void);
+void sync_log_done(void);
 
 void sync_log(char *fmt, ...);
 
