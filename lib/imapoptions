@@ -43,7 +43,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\"
-.\" $Id: imapoptions,v 1.72 2009/12/16 02:54:14 brong Exp $
+.\" $Id: imapoptions,v 1.73 2009/12/21 11:25:22 murch Exp $
 
 .SH NAME
 imapd.conf \- IMAP configuration file
@@ -172,6 +172,44 @@ are listed with ``<none>''.
 /* Should non-admin users be allowed to set ACLs for the 'anyone'
    user on their mailboxes?  In a large organization this can cause
    support problems, but it's enabled by default. */
+
+{ "annotation_definitions", NULL, STRING }
+/* File containing external (third-party) annotation definitions.
+.PP
+Each line of the file specifies the properties of an annotation and
+has the following form:
+.IP
+\fIname\fR, \fIscope\fR, \fIattrib-type\fR, \fIproxy-type\fR,
+\fIattrib-names\fR, \fIacl\fR
+.IP \fIname\fR 5
+is the hierarchical name as in the draft standard, typically of the
+form /vendor/acme/blurdybloop
+.IP \fIscope\fR 5
+specifies whether the annotation is for the \fBserver\fR or a
+\fBmailbox\fR
+.IP \fIattrib-type\fR 5
+specifies the attribute data type which is one of: \fBstring\fR,
+\fBboolean\fR, \fBint\fR, \fBuint\fR, or \fBcontent-type\fR
+.IP \fIproxy-type\fR 5
+specifies whether this attribute is for the \fBbackend\fR or
+\fBproxy\fR servers or both (\fBproxy_and_backend\fR) 
+.IP \fIattrib-names\fR 5
+is the space-separated list of available attributes for the
+annotation. Possible attribute names are (where the suffixless \fBfoo\fR
+permits both \fBfoo.priv\fR and \fBfoo.shared\fR): \fBalue\fR,
+\fBvalue.shared\fR, \fBvalue.priv\fR, \fBsize\fR, \fBsize.shared\fR,
+\fBsize.priv\fR, \fBmodifiedsince\fR, \fBmodifiedsince.shared\fR,
+\fBmodifiedsince.priv\fR, \fBcontent-type\fR,
+\fBcontent-type.shared\fR, \fBcontent-type.priv\fR
+.IP \fIacl\fR 5
+is the extra ACL requirements for setting annotations. This is the
+standard IMAP ACL permission bit string format. Particularly useful
+is the \fBa\fR right to require admin privileges. Note that some ACL
+requirements (read and write on the mailbox) are hard-wired in the
+server
+.PP
+Blank lines and lines beginning with ``#'' are ignored.
+*/
 
 { "auth_mech", "unix", STRINGLIST("unix", "pts", "krb", "krb5")}
 /* The authorization mechanism to use. */

@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.179 2009/12/17 15:32:32 murch Exp $ -->
+<!-- $Id: changes.html,v 1.180 2009/12/21 11:25:21 murch Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -17,10 +17,14 @@
 <li>Reworked SQL detection code in configure.
   See <a href=install-upgrade.html>install-upgrade.html</a> for more
   details.</li>
-<li>Added <tt>popuseimapflags</tt> option.</li>
+<li>Added <tt>popuseimapflags</tt> option which enables setting and
+  obeying IMAP flags in the POP server.</li>
 <li>Added optimized method of handling an empty maildrop in pop3d.
   Requires <tt>statuscache</tt> to be enabled. (based on work of
   Cyril Servant <elfejoyeux@gmail.com>) </li>
+<li>Added <tt>annotation_definitions</tt> option for specifying
+  external (third-party) annotations. (courtesy of Thomas
+  Viehmann <tv@beamnet.de>)</li>
 </ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.3.14</h1>
@@ -2453,7 +2457,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2009/12/17 15:32:32 $ <br />
+last modified: $Date: 2009/12/21 11:25:21 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>
