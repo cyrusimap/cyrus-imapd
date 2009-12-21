@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: comparator.c,v 1.24 2009/03/31 04:11:30 brong Exp $
+ * $Id: comparator.c,v 1.25 2009/12/21 12:34:30 murch Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -279,7 +279,7 @@ static int octet_regex(const char *text, size_t tlen, const char *pat,
 
     pm[0].rm_so = 0;
     pm[0].rm_eo = tlen;
-    r = !regexec((regex_t *) pat, text, 0, &pm, REG_STARTEND);
+    r = !regexec((regex_t *) pat, text, 0, pm, REG_STARTEND);
 #else
 #ifdef HAVE_RX_POSIX_H
     /* rx provides regnexec, that will work too */
