@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyrusdb_skiplist.c,v 1.70 2009/12/21 12:06:13 murch Exp $
+ * $Id: cyrusdb_skiplist.c,v 1.71 2010/01/06 17:01:45 murch Exp $
  */
 
 /* xxx check retry_xxx for failure */

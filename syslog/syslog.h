@@ -38,10 +38,10 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: syslog.h,v 1.4 2008/03/24 20:15:59 murch Exp $
+ * $Id: syslog.h,v 1.5 2010/01/06 17:02:00 murch Exp $
  */
 
-/* $Revision: 1.4 $
+/* $Revision: 1.5 $
  * Copyright (c) 1982, 1986, 1988 Regents of the University of California.
  * All rights reserved.
  *

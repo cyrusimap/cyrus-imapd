@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_virusscan.c,v 1.8 2009/12/16 02:51:39 brong Exp $
+ * $Id: cyr_virusscan.c,v 1.9 2010/01/06 17:01:31 murch Exp $
  */
 
 #include <config.h>

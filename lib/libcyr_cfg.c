@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: libcyr_cfg.c,v 1.17 2009/03/31 04:43:20 brong Exp $
+ * $Id: libcyr_cfg.c,v 1.18 2010/01/06 17:01:46 murch Exp $
  */
 
 #include <config.h>

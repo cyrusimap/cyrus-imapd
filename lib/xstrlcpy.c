@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: xstrlcpy.c,v 1.3 2008/03/24 17:43:10 murch Exp $
+ * $Id: xstrlcpy.c,v 1.4 2010/01/06 17:01:48 murch Exp $
  */
 
 #include "xstrlcpy.h"

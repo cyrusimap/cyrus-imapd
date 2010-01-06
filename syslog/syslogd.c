@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: syslogd.c,v 1.4 2008/03/24 20:15:59 murch Exp $
+ * $Id: syslogd.c,v 1.5 2010/01/06 17:02:00 murch Exp $
  */
 /*
 **  This file has been modified to get it to compile more easily

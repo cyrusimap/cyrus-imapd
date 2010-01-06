@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sieve_interface.h,v 1.23 2009/11/19 21:52:56 murch Exp $
+ * $Id: sieve_interface.h,v 1.24 2010/01/06 17:01:59 murch Exp $
  */
 
 #ifndef SIEVE_H

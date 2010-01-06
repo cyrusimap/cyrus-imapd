@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: readconfig.c,v 1.10 2009/03/31 04:11:23 brong Exp $
+ * $Id: readconfig.c,v 1.11 2010/01/06 17:01:54 murch Exp $
  */
 
 /*   Copyright 1991 Rich Salz.

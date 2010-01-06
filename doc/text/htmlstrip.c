@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: htmlstrip.c,v 1.11 2008/04/04 12:46:35 murch Exp $
+ * $Id: htmlstrip.c,v 1.12 2010/01/06 17:01:29 murch Exp $
  */
   
 #include <stdio.h>

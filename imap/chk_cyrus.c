@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: chk_cyrus.c,v 1.19 2008/03/24 17:09:16 murch Exp $
+ * $Id: chk_cyrus.c,v 1.20 2010/01/06 17:01:30 murch Exp $
  */
 
 #include <config.h>

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: error_table.h,v 1.2 2008/03/24 18:53:40 murch Exp $
+ * $Id: error_table.h,v 1.3 2010/01/06 17:01:28 murch Exp $
  *
  * Copyright 1988 by the Student Information Processing Board of the
  * Massachusetts Institute of Technology.

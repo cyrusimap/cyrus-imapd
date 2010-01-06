@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: chartable.h,v 1.9 2009/11/19 21:52:55 murch Exp $
+ * $Id: chartable.h,v 1.10 2010/01/06 17:01:44 murch Exp $
  */
 
 /* note that these are all uppercase letters. since the translation

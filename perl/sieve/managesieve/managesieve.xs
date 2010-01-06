@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: managesieve.xs,v 1.29 2009/01/14 15:50:47 murch Exp $
+ * $Id: managesieve.xs,v 1.30 2010/01/06 17:01:56 murch Exp $
  */
 
 #ifdef __cplusplus

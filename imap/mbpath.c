@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mbpath.c,v 1.22 2008/03/24 17:09:18 murch Exp $
+ * $Id: mbpath.c,v 1.23 2010/01/06 17:01:37 murch Exp $
  */
 
 #include <config.h>
@@ -161,5 +161,5 @@ main(int argc, char **argv)
   return 0;
 }
 
-/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/mbpath.c,v 1.22 2008/03/24 17:09:18 murch Exp $ */
+/* $Header: /mnt/data/cyrus/cvsroot/src/cyrus/imap/mbpath.c,v 1.23 2010/01/06 17:01:37 murch Exp $ */
 

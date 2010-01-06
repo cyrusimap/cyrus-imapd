@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: index.c,v 1.257 2009/12/02 02:18:12 murch Exp $
+ * $Id: index.c,v 1.258 2010/01/06 17:01:34 murch Exp $
  */
 
 #include <config.h>
@@ -65,6 +65,7 @@
 #include "imap_err.h"
 #include "global.h"
 #include "imapd.h"
+#include "lock.h"
 #include "lsort.h"
 #include "mailbox.h"
 #include "map.h"
@@ -114,7 +115,9 @@ static char *seenuids;		/* Sequence of UID's from last seen checkpoint */
 typedef int index_sequenceproc_t(struct mailbox *mailbox, unsigned msgno,
 				 void *rock);
 
-static int index_forsequence(struct mailbox *mailbox, const char *sequence,
+static int index_forsequence(struct mailbox *mailbox,
+			     const char *sequence,
+			     struct seq_set *seq_set,
 			     int usinguid,
 			     index_sequenceproc_t *proc, void *rock,
 			     int* fetchedsomething);
@@ -280,8 +283,17 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 		    fatal("Mailbox has been (re)moved", EC_IOERR);
 		}
 
-		for(;imapd_exists > 0; imapd_exists--) {
-		    prot_printf(imapd_out, "* 1 EXPUNGE\r\n");
+		if (imapd_exists && (imapd_client_capa & CAPA_QRESYNC)) {
+		    prot_printf(imapd_out, "* VANISHED %u", UID(1));
+		    if (imapd_exists > 1) {
+			prot_printf(imapd_out, ":%u", UID(imapd_exists));
+		    }
+		    prot_printf(imapd_out, "\r\n");
+		}
+		else {
+		    for(;imapd_exists > 0; imapd_exists--) {
+			prot_printf(imapd_out, "* 1 EXPUNGE\r\n");
+		    }
 		}
 		mailbox->exists = 0;
 		imapd_exists = -1;
@@ -294,6 +306,7 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 	else if ((sbuf.st_ino != mailbox->index_ino) ||
 	    (index_ino != mailbox->index_ino)) {
 	    unsigned long olduidvalidity = mailbox->uidvalidity;
+	    int started_vanished = 0;
 
 	    if (mailbox_open_index(mailbox)) {
 		fatal("failed to reopen index file", EC_IOERR);
@@ -321,8 +334,33 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 			memmove(seenflag+msgno, seenflag+msgno+nexpunge,
 				(oldexists-msgno-nexpunge+1)*sizeof(*seenflag));
 			oldexists -= nexpunge;
-			while (nexpunge--) {
-			    prot_printf(imapd_out, "* %u EXPUNGE\r\n", msgno);
+
+			if (imapd_client_capa & CAPA_QRESYNC) {
+			    /* Create a sequence-set */
+			    int i, j, c = ',';
+
+			    if (!started_vanished++) {
+				prot_printf(imapd_out, "* VANISHED");
+				c = ' ';
+			    }
+			    for (i = oldmsgno-nexpunge; i < oldmsgno; i++) {
+				prot_printf(imapd_out, "%c%u", c, UID(i));
+				c = ',';
+
+				/* Check if we have a range */
+				for (j = i; j+1 < oldmsgno; j++) {
+				    if (UID(j+1) != UID(j)+1) break;
+				}
+				if (j > i) {
+				    prot_printf(imapd_out, ":%u", UID(j));
+				    i = j;
+				}
+			    }
+			}
+			else {
+			    while (nexpunge--) {
+				prot_printf(imapd_out, "* %u EXPUNGE\r\n", msgno);
+			    }
 			}
 		    }
 		}
@@ -331,6 +369,8 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 		/* Force a * OK [UIDVALIDITY n] message */
 		oldexists = -1;
 	    }
+
+	    if (started_vanished) prot_printf(imapd_out, "\r\n");
 
 	    /* Force re-map of index/cache files */
 	    map_free(&index_base, &index_len);
@@ -464,7 +504,7 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
 	    index_fetchflags(mailbox, msgno, SYSTEM_FLAGS(msgno), user_flags,
 			     LAST_UPDATED(msgno));
 	    if ((mailbox->options & OPT_IMAP_CONDSTORE) &&
-		imapd_condstore_client) {
+		(imapd_client_capa & CAPA_CONDSTORE)) {
 		prot_printf(imapd_out, " MODSEQ (" MODSEQ_FMT ")", MODSEQ(msgno));
 	    }
 	    if (usinguid) prot_printf(imapd_out, " UID %u", UID(msgno));
@@ -675,7 +715,7 @@ int oldexists;
 		    index_fetchflags(mailbox, msgno, SYSTEM_FLAGS(msgno), 
 				     user_flags, LAST_UPDATED(msgno));
 		    if ((mailbox->options & OPT_IMAP_CONDSTORE) &&
-			imapd_condstore_client) {
+			(imapd_client_capa & CAPA_CONDSTORE)) {
 			prot_printf(imapd_out, " MODSEQ (" MODSEQ_FMT ")",
 				    MODSEQ(msgno));
 		    }
@@ -904,6 +944,213 @@ int oldexists;
 }
 
 
+static int compare_uid(const void *a, const void *b)
+{
+    return *((unsigned long *) a) - *((unsigned long *) b);
+}
+
+/*
+ * Perform UID FETCH (VANISHED) on a sequence.
+ */
+static void index_vanished(struct mailbox *mailbox,
+			   struct seq_set *seq,
+			   modseq_t changedsince,
+			   char *match_seq, char *match_uid)
+{
+    char *path, expunge_fname[MAX_MAILBOX_PATH+1];
+    int expunge_fd = -1, r = -1;
+    struct stat sbuf;
+    const char *lockfailaction;
+    const char *expunge_index_base = NULL;
+    unsigned long expunge_index_len = 0;	/* mapped size */
+    unsigned long exists = 0;
+    modseq_t highestmodseq = ULONG_MAX;
+    modseq_t lowestmodseq = ULONG_MAX;
+    const char *buf;
+    unsigned long minuid = 0;
+    unsigned i, j;
+    int c;
+
+    /* Open expunge index */
+    path = (mailbox->mpath &&
+	    (config_metapartition_files & IMAP_ENUM_METAPARTITION_FILES_EXPUNGE)) ?
+	mailbox->mpath : mailbox->path;
+
+    strlcpy(expunge_fname, path, sizeof(expunge_fname));
+    strlcat(expunge_fname, FNAME_EXPUNGE_INDEX, sizeof(expunge_fname));
+
+    if ((expunge_fd = open(expunge_fname, O_RDWR, 0666)) != -1) {
+	if ((r = lock_reopen(expunge_fd, expunge_fname,
+			     &sbuf, &lockfailaction))) {
+	    syslog(LOG_ERR, "IOERROR: %s expunge index for %s: %m",
+		   lockfailaction, mailbox->name);
+	}
+    }
+
+    if (!r) {
+	map_refresh(expunge_fd, 1, &expunge_index_base,
+		    &expunge_index_len, sbuf.st_size, "expunge",
+		    mailbox->name);
+
+	exists = ntohl(*((bit32 *)(expunge_index_base+OFFSET_EXISTS)));
+#ifdef HAVE_LONG_LONG_INT
+	highestmodseq =
+	    align_ntohll(expunge_index_base+OFFSET_HIGHESTMODSEQ_64);
+#else
+	highestmodseq =
+	    ntohl(*((bit32 *)(expunge_index_base+OFFSET_HIGHESTMODSEQ)));
+#endif
+
+	if (exists && (changedsince < highestmodseq)) {
+	    /* Records are appended to cyrus.expunge as messages are
+	     * expunged, so they are sorted by MODSEQ (NOT UID).
+	     * Therefore the first record will have the lowest MODSEQ.
+	     */
+	    buf = expunge_index_base + mailbox->start_offset;
+
+#ifdef HAVE_LONG_LONG_INT
+	    lowestmodseq = ntohll(*((bit64 *)(buf+OFFSET_MODSEQ_64)));
+#else
+	    lowestmodseq = ntohl(*((bit32 *)(buf+OFFSET_MODSEQ)));
+#endif
+	}
+    }
+
+    if (changedsince >= highestmodseq) {
+	/* No recently expunged messages */
+	syslog(LOG_DEBUG, "index_vanished(): no expunges since changedsince");
+	goto cleanup;
+    }
+
+    if (match_seq && match_uid) {
+	/* See what UIDs the client knows about */
+	struct seq_set *mseq = index_parse_sequence(match_seq, 0, NULL);
+	struct seq_set *muid = index_parse_sequence(match_uid, 1, NULL);
+
+	if (mseq->len && muid->len) {
+	    unsigned s = mseq->set[0].low;
+	    unsigned long u = muid->set[0].low;
+
+	    i = j = 0;
+	    while ((UID(s) == u)) {
+		minuid = u+1;
+		if (++s > mseq->set[i].high) {
+		    if (++i >= mseq->len) break;
+		    s = mseq->set[i].low;
+		}
+		if (++u > muid->set[j].high) {
+		    if (++j >= muid->len) break;
+		    u = muid->set[j].low;
+		}
+	    }
+	}
+
+	freesequencelist(mseq);
+	freesequencelist(muid);
+    }
+
+    if (changedsince < lowestmodseq-1) {
+	/* Our expunge history doesn't go back far enough
+	 * (or cyrus.expunge is missing or empty),
+	 * so list all missings UIDs from the seq.
+	 */
+	int found = 0;
+
+	syslog(LOG_DEBUG, "index_vanished(): list all missing UIDs");
+
+	for (i = 0, c = ' '; i < seq->len; i++) {
+	    unsigned start, end;
+	    unsigned long lastuid = seq->set[i].low;
+	    unsigned long enduid = seq->set[i].high;
+	    unsigned long uid;
+
+	    /* Skip over UIDs that the client knows about */
+	    if (enduid < minuid) continue;
+	    if (lastuid < minuid) lastuid = minuid;
+
+	    /* Find the closest msgno corresponding to UIDs */
+	    start = index_finduid(lastuid);
+	    if (!start || lastuid != UID(start)) start++;
+	    end = index_finduid(enduid);
+
+	    for (--lastuid, j = start; j <= end+1; j++) {
+		uid = j > end ? enduid+1 : UID(j);
+		if (uid - lastuid > 1) {
+		    if (!found++) {
+			prot_printf(imapd_out, "* VANISHED (EARLIER)");
+		    }
+		    prot_printf(imapd_out, "%c%lu", c, lastuid+1);
+		    if (uid - lastuid > 2)
+			prot_printf(imapd_out, ":%lu", uid-1);
+		    c = ',';
+		}
+		lastuid = uid;
+	    }
+	}
+	if (found) prot_printf(imapd_out, "\r\n");
+    }
+    else {
+	/* List only expunged UIDs with MODSEQ > changedsince */
+	unsigned long uid, *van = NULL;
+	unsigned msgno, nvan = 0;
+	modseq_t modseq;
+
+	syslog(LOG_DEBUG, "index_vanished(): list vanished UIDs");
+
+	/* Create an array of the requested vanished messages */
+	van = (unsigned long *) xmalloc(exists * sizeof(unsigned long));
+	for (msgno = 0; msgno < exists; msgno++) {
+	    /* Jump to index record for this message */
+	    buf = expunge_index_base + mailbox->start_offset +
+		msgno * mailbox->record_size;
+
+	    uid = ntohl(*((bit32 *)(buf+OFFSET_UID)));
+#ifdef HAVE_LONG_LONG_INT
+	    modseq = ntohll(*((bit64 *)(buf+OFFSET_MODSEQ_64)));
+#else
+	    modseq = ntohl(*((bit32 *)(buf+OFFSET_MODSEQ)));
+#endif
+
+	    if (index_insequence(uid, seq, 0) &&
+		modseq > changedsince) {
+		van[nvan++] = uid;
+	    }
+	}
+
+	/* Sort the UIDs so we can output an ordered seq-set */
+	qsort(van, nvan, sizeof(unsigned long), compare_uid);
+
+	/* Skip over UIDs that the client knows about */
+	for (i = 0; i < nvan && van[i] < minuid; i++);
+
+	if (i < nvan) {
+	    prot_printf(imapd_out, "* VANISHED (EARLIER)");
+	    for (c = ' '; i < nvan; i++, c = ',') {
+		prot_printf(imapd_out, "%c%lu", c, van[i]);
+
+		/* Check if we have a range */
+		for (j = i; (j+1 < nvan) && (van[j+1] == van[j]+1); j++);
+		if (j > i) {
+		    prot_printf(imapd_out, ":%lu", van[j]);
+		    i = j;
+		}
+	    }
+	    prot_printf(imapd_out, "\r\n");
+	}
+
+	free(van);
+    }
+
+  cleanup:
+    if (expunge_index_base) map_free(&expunge_index_base, &expunge_index_len);
+    if (!r && lock_unlock(expunge_fd)) {
+	syslog(LOG_ERR,
+	       "IOERROR: unlocking expunge index of %s: %m", 
+	       mailbox->name);
+    }
+    if (expunge_fd != -1) close(expunge_fd);
+}
+
 /*
  * Perform a FETCH-related command on a sequence.
  * Fetchedsomething argument is 0 if nothing was fetched, 1 if something was
@@ -917,9 +1164,20 @@ index_fetch(struct mailbox* mailbox,
 	    struct fetchargs* fetchargs,
 	    int* fetchedsomething)
 {
-    *fetchedsomething = 0;
-    return index_forsequence(mailbox, sequence, usinguid, index_fetchreply,
-			     (char *)fetchargs, fetchedsomething);
+    struct seq_set *seq_set = index_parse_sequence(sequence, usinguid, NULL);
+    int r;
+
+    if (fetchargs->vanished) {
+	index_vanished(mailbox, seq_set, fetchargs->changedsince,
+		       fetchargs->match_seq, fetchargs->match_uid);
+    }
+
+    if (fetchedsomething) *fetchedsomething = 0;
+    r = index_forsequence(mailbox, sequence, seq_set, usinguid,
+			  index_fetchreply,
+			  (char *)fetchargs, fetchedsomething);
+    freesequencelist(seq_set);
+    return r;
 }
 
 /*
@@ -948,7 +1206,7 @@ int nflags;
 	if (!(myrights & ACL_SEEN)) return IMAP_PERMISSION_DENIED;
 	storeargs->usinguid = usinguid;
 
-	index_forsequence(mailbox, sequence, usinguid,
+	index_forsequence(mailbox, sequence, NULL, usinguid,
 			  index_storeseen, (char *)storeargs, NULL);
 	return 0;
     }
@@ -1062,7 +1320,7 @@ int nflags;
     r = mailbox_lock_index(mailbox);
     if (r) return r;
 
-    r = index_forsequence(mailbox, sequence, usinguid,
+    r = index_forsequence(mailbox, sequence, NULL, usinguid,
 			  index_storeflag, (char *)storeargs, NULL);
 
     /* note that index_forsequence() doesn't sync the index file;
@@ -1179,7 +1437,7 @@ static int _index_search(unsigned **msgno_list, struct mailbox *mailbox,
     unsigned msgno;
     struct mapfile msgfile;
     int n = 0;
-    int listindex;
+    int listindex, min;
     int listcount;
 
     if (imapd_exists <= 0) return 0;
@@ -1193,8 +1451,20 @@ static int _index_search(unsigned **msgno_list, struct mailbox *mailbox,
        already looked at. */
     listcount = search_prefilter_messages(*msgno_list, mailbox, searchargs);
 
-    for (listindex = 0; listindex < listcount; listindex++) {
-        msgno = (*msgno_list)[listindex];
+    if (searchargs->returnopts == SEARCH_RETURN_MAX) {
+	/* If we only want MAX, then skip forward search,
+	   and do complete reverse search */
+	listindex = listcount;
+	min = 0;
+    } else {
+	/* Otherwise use forward search, potentially skipping reverse search */
+	listindex = 0;
+	min = listcount;
+    }
+
+    /* Forward search.  Used for everything other than MAX-only */
+    for (; listindex < listcount; listindex++) {
+	msgno = (*msgno_list)[listindex];
 	msgfile.base = 0;
 	msgfile.size = 0;
 
@@ -1203,6 +1473,41 @@ static int _index_search(unsigned **msgno_list, struct mailbox *mailbox,
 	    if (highestmodseq && (MODSEQ(msgno) > *highestmodseq)) {
 		*highestmodseq = MODSEQ(msgno);
 	    }
+
+	    /* See if we should short-circuit
+	       (we want MIN, but NOT COUNT or ALL) */
+	    if ((searchargs->returnopts & SEARCH_RETURN_MIN) &&
+		!(searchargs->returnopts & SEARCH_RETURN_COUNT) &&
+		!(searchargs->returnopts & SEARCH_RETURN_ALL)) {
+
+		if (searchargs->returnopts & SEARCH_RETURN_MAX) {
+		    /* If we want MAX, setup for reverse search */
+		    min = listindex;
+		}
+		/* We're done */
+		listindex = listcount;
+		*highestmodseq = MODSEQ(msgno);
+	    }
+	}
+	if (msgfile.base) {
+	    mailbox_unmap_message(mailbox, UID(msgno),
+				  &msgfile.base, &msgfile.size);
+	}
+    }
+
+    /* Reverse search.  Stops at previously found MIN (if any) */
+    for (listindex = listcount; listindex > min; listindex--) {
+        msgno = (*msgno_list)[listindex-1];
+	msgfile.base = 0;
+	msgfile.size = 0;
+
+	if (index_search_evaluate(mailbox, searchargs, msgno, &msgfile)) {
+	    (*msgno_list)[n++] = msgno;
+	    if (highestmodseq && (MODSEQ(msgno) > *highestmodseq)) {
+		*highestmodseq = MODSEQ(msgno);
+	    }
+	    /* We only care about MAX, so we're done on first match */
+	    listindex = 0;
 	}
 	if (msgfile.base) {
 	    mailbox_unmap_message(mailbox, UID(msgno),
@@ -1260,17 +1565,64 @@ int index_search(struct mailbox *mailbox, struct searchargs *searchargs,
     n = _index_search(&msgno_list, mailbox, searchargs,
 		      searchargs->modseq ? &highestmodseq : NULL);
 
-    prot_printf(imapd_out, "* SEARCH");
+    if (searchargs->returnopts) {
+	prot_printf(imapd_out, "* ESEARCH");
+	if (searchargs->tag) {
+	    prot_printf(imapd_out, " (TAG \"%s\")", searchargs->tag);
+	}
+	if (n) {
+	    if (usinguid) prot_printf(imapd_out, " UID");
+	    if (searchargs->returnopts & SEARCH_RETURN_MIN) {
+		prot_printf(imapd_out, " MIN %u",
+			    usinguid ? UID(msgno_list[0]) : msgno_list[0]);
+	    }
+	    if (searchargs->returnopts & SEARCH_RETURN_MAX) {
+		prot_printf(imapd_out, " MAX %u",
+			    usinguid ? UID(msgno_list[n-1]) : msgno_list[n-1]);
+	    }
+	    if (highestmodseq) {
+		prot_printf(imapd_out, " MODSEQ " MODSEQ_FMT, highestmodseq);
+	    }
+	    if (searchargs->returnopts & SEARCH_RETURN_ALL) {
+		int c, j;
 
-    for (i = 0; i < n; i++)
-	prot_printf(imapd_out, " %u",
-		    usinguid ? UID(msgno_list[i]) : msgno_list[i]);
+		prot_printf(imapd_out, " ALL");
+		/* Create a sequence-set */
+		for (i = 0, c = ' '; i < n; i++, c = ',') {
+		    prot_printf(imapd_out, "%c%u", c,
+				usinguid ? UID(msgno_list[i]) : msgno_list[i]);
+
+		    /* Check if we have a range */
+		    for (j = i; j+1 < n; j++) {
+			if (usinguid &&
+			    UID(msgno_list[j+1]) != UID(msgno_list[j])+1) break;
+			else if (msgno_list[j+1] != msgno_list[j]+1) break;
+		    }
+		    if (j > i) {
+			prot_printf(imapd_out, ":%u",
+				    usinguid ? UID(msgno_list[j]) : msgno_list[j]);
+			i = j;
+		    }
+		}
+	    }
+	}
+	if (searchargs->returnopts & SEARCH_RETURN_COUNT) {
+	    prot_printf(imapd_out, " COUNT %u", n);
+	}
+    }
+    else {
+	prot_printf(imapd_out, "* SEARCH");
+
+	for (i = 0; i < n; i++)
+	    prot_printf(imapd_out, " %u",
+			usinguid ? UID(msgno_list[i]) : msgno_list[i]);
+
+	if (highestmodseq) {
+	    prot_printf(imapd_out, " (MODSEQ " MODSEQ_FMT ")", highestmodseq);
+	}
+    }
 
     if (n) free(msgno_list);
-
-    if (highestmodseq) {
-	prot_printf(imapd_out, " (MODSEQ " MODSEQ_FMT ")", highestmodseq);
-    }
 
     prot_printf(imapd_out, "\r\n");
 
@@ -1445,7 +1797,7 @@ index_copy(struct mailbox *mailbox,
     *copyuidp = NULL;
 
     copyargs.nummsg = 0;
-    index_forsequence(mailbox, sequence, usinguid, index_copysetup,
+    index_forsequence(mailbox, sequence, NULL, usinguid, index_copysetup,
 		      (char *)&copyargs, NULL);
 
     if (copyargs.nummsg == 0) return IMAP_NO_NOSUCHMSG;
@@ -1601,7 +1953,8 @@ static int index_appendremote(struct mailbox *mailbox,
 int index_copy_remote(struct mailbox *mailbox, char *sequence, 
 		      int usinguid, struct protstream *pout)
 {
-    return index_forsequence(mailbox, sequence, usinguid, index_appendremote,
+    return index_forsequence(mailbox, sequence, NULL,
+			     usinguid, index_appendremote,
 			     (void *) pout, NULL);
 }
 
@@ -1811,6 +2164,7 @@ unsigned index_expungeuidlist(struct mailbox *mailbox __attribute__((unused)),
 static int
 index_forsequence(struct mailbox* mailbox,
 		  const char* sequence,
+		  struct seq_set *seq_set,
 		  int usinguid,
 		  index_sequenceproc_t proc,
 		  void* rock,
@@ -1823,7 +2177,7 @@ index_forsequence(struct mailbox* mailbox,
     /* no messages, no calls. */
     if (!imapd_exists) return 0;
 
-    seq = index_parse_sequence(sequence, usinguid, NULL);
+    seq = seq_set ? seq_set : index_parse_sequence(sequence, usinguid, NULL);
 
     for (i = 0; i < seq->len; i++) {
 	unsigned start = seq->set[i].low;
@@ -1845,7 +2199,7 @@ index_forsequence(struct mailbox* mailbox,
 	}
     }
 
-    freesequencelist(seq);
+    if (!seq_set) freesequencelist(seq);
     return result;
 }
 
@@ -2764,17 +3118,17 @@ static int index_fetchreply(struct mailbox *mailbox,
  * and index_fetchmsg().
  */
 int index_urlfetch(struct mailbox *mailbox, unsigned msgno,
-		   const char *section,
+		   unsigned params, const char *section,
 		   unsigned long start_octet, unsigned long octet_count,
 		   struct protstream *pout, unsigned long *outsize)
 {
-    const char *msg_base = 0;
+    const char *data, *msg_base = 0;
     unsigned long msg_size = 0;
-    cacherecord crec;
-    const char *cachestr;
-    int fetchmime = 0;
-    unsigned size, offset = 0, skip = 0;
+    const char *cacheitem;
+    int fetchmime = 0, domain = DOMAIN_7BIT;
+    unsigned size, skip = 0;
     int n, r = 0;
+    char *decbuf = NULL;
 
     if (outsize) *outsize = 0;
 
@@ -2783,12 +3137,17 @@ int index_urlfetch(struct mailbox *mailbox, unsigned msgno,
 	return IMAP_NO_MSGGONE;
     }
 
-    if (!cache_parserecord(cache_base, cache_end, CACHE_OFFSET(msgno), &crec)) {
-	return IMAP_NO_MSGGONE;
-    }
+    data = msg_base;
 
-    size = crec[CACHE_SECTION].l;
-    cachestr = crec[CACHE_SECTION].s;
+    cacheitem = cache_base + CACHE_OFFSET(msgno);
+    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip envelope */
+    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip bodystructure */
+    cacheitem = CACHE_ITEM_NEXT(cacheitem); /* skip body */
+
+    size = SIZE(msgno);
+    if (size > msg_size) size = msg_size;
+
+    cacheitem += CACHE_ITEM_SIZE_SKIP;
 
     /* Special-case BODY[] */
     if (!section || !*section) {
@@ -2807,7 +3166,7 @@ int index_urlfetch(struct mailbox *mailbox, unsigned msgno,
 	    if (*p == '.') p++;
 
 	    /* section number too large */
-	    if (skip >= CACHE_ITEM_BIT32(cachestr)) {
+	    if (skip >= CACHE_ITEM_BIT32(cacheitem)) {
 		r = IMAP_BADURL;
 		goto done;
 	    }
@@ -2837,56 +3196,97 @@ int index_urlfetch(struct mailbox *mailbox, unsigned msgno,
 
 		/* Skip the headers for this part, along with the number of
 		 * sub parts */
-		cachestr +=
-		    CACHE_ITEM_BIT32(cachestr) * 5 * 4 + CACHE_ITEM_SIZE_SKIP;
+		cacheitem +=
+		    CACHE_ITEM_BIT32(cacheitem) * 5 * 4 + CACHE_ITEM_SIZE_SKIP;
 
 		/* Skip to the correct part */
 		while (--skip) {
-		    if (CACHE_ITEM_BIT32(cachestr) > 0) {
+		    if (CACHE_ITEM_BIT32(cacheitem) > 0) {
 			/* Skip each part at this level */
-			skip += CACHE_ITEM_BIT32(cachestr)-1;
-			cachestr += CACHE_ITEM_BIT32(cachestr) * 5 * 4;
+			skip += CACHE_ITEM_BIT32(cacheitem)-1;
+			cacheitem += CACHE_ITEM_BIT32(cacheitem) * 5 * 4;
 		    }
-		    cachestr += CACHE_ITEM_SIZE_SKIP;
+		    cacheitem += CACHE_ITEM_SIZE_SKIP;
 		}
 	    }
 	}
 
 	if (*p == 'M') fetchmime++;
 
-	cachestr += skip * 5 * 4 + CACHE_ITEM_SIZE_SKIP +
+	cacheitem += skip * 5 * 4 + CACHE_ITEM_SIZE_SKIP +
 	    (fetchmime ? 0 : 2 * 4);
     
-	if (CACHE_ITEM_BIT32(cachestr + CACHE_ITEM_SIZE_SKIP) == (bit32) -1) {
+	if (CACHE_ITEM_BIT32(cacheitem + CACHE_ITEM_SIZE_SKIP) == (bit32) -1) {
 	    r = IMAP_BADURL;
 	    goto done;
 	}
 
-	offset = CACHE_ITEM_BIT32(cachestr);
-	size = CACHE_ITEM_BIT32(cachestr + CACHE_ITEM_SIZE_SKIP);
+	data += CACHE_ITEM_BIT32(cacheitem);
+	size = CACHE_ITEM_BIT32(cacheitem + CACHE_ITEM_SIZE_SKIP);
+    }
+
+    /* Handle extended URLFETCH parameters */
+    if (params & URLFETCH_BODYPARTSTRUCTURE) {
+	prot_printf(pout, " (BODYPARTSTRUCTURE");
+	/* XXX Calculate body part structure */
+	prot_printf(pout, " NIL");
+	prot_printf(pout, ")");
+    }
+
+    if (params & URLFETCH_BODY) {
+	prot_printf(pout, " (BODY");
+    }
+    else if (params & URLFETCH_BINARY) {
+	int encoding = CACHE_ITEM_BIT32(cacheitem + 2 * 4) & 0xff;
+
+	prot_printf(pout, " (BINARY");
+
+	data = charset_decode_mimebody(data, size, encoding,
+				       &decbuf, 0, (int *) &size);
+	if (!data) {
+	    /* failed to decode */
+	    prot_printf(pout, " NIL)");
+	    goto done;
+	}
     }
 
     /* Handle PARTIAL request */
-    offset += start_octet;
-    if (octet_count) size = octet_count;
+    n = octet_count ? octet_count : size;
 
     /* Sanity check the requested size */
-    if (size && (offset + size > msg_size))
-	n = msg_size - offset;
-    else
-	n = size;
+    if (start_octet + n > size) n = size - start_octet;
 
-    if (outsize)
+    if (outsize) {
+	/* Return size (CATENATE) */
 	*outsize = n;
-    else
-	prot_printf(pout, "{%u}\r\n", n);
+    } else {
+	domain = data_domain(data + start_octet, n);
 
-    prot_write(pout, msg_base + offset, n);
+	if (domain == DOMAIN_BINARY) {
+	    /* Write size of literal8 */
+	    prot_printf(pout, " ~{%u}\r\n", n);
+	} else {
+	    /* Write size of literal */
+	    prot_printf(pout, " {%u}\r\n", n);
+	}
+    }
+
+    /* Non-text literal -- tell the protstream about it */
+    if (domain != DOMAIN_7BIT) prot_data_boundary(pout);
+
+    prot_write(pout, data + start_octet, n);
+
+    /* End of non-text literal -- tell the protstream about it */
+    if (domain != DOMAIN_7BIT) prot_data_boundary(pout);
+
+    /* Complete extended URLFETCH response */
+    if (params & (URLFETCH_BODY | URLFETCH_BINARY)) prot_printf(pout, ")");
 
   done:
     /* Close the message file */
     mailbox_unmap_message(mailbox, UID(msgno), &msg_base, &msg_size);
 
+    if (decbuf) free(decbuf);
     return r;
 }
 
@@ -3090,7 +3490,8 @@ static int index_storeflag(struct mailbox *mailbox,
 			 record.user_flags, record.last_updated);
 	sepchar = ' ';
     }
-    if ((mailbox->options & OPT_IMAP_CONDSTORE) && imapd_condstore_client) {
+    if ((mailbox->options & OPT_IMAP_CONDSTORE) &&
+	(imapd_client_capa & CAPA_CONDSTORE)) {
 	if (sepchar == '(') {
 	    /* we haven't output a fetch item yet, so start the response */
 	    prot_printf(imapd_out, "* %u FETCH ", msgno);

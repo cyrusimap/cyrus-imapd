@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: exitcodes.h,v 1.5 2008/03/24 20:33:11 murch Exp $
+ * $Id: exitcodes.h,v 1.6 2010/01/06 17:01:43 murch Exp $
  */
 
 /* Sendmail has some weird ideas on what constitutes permenant failure.  On

@@ -1,12 +1,26 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.182 2009/12/21 12:36:10 murch Exp $ -->
+<!-- $Id: changes.html,v 1.183 2010/01/06 17:01:28 murch Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
 <title>Changes to the Cyrus IMAP Server</title>
 </head>
 <body>
+
+<h1>Changes to the Cyrus IMAP Server since 2.3.x</h1>
+<ul>
+<li>Added support for LIST-EXTENDED IMAP extension.  Removed
+support for deprecated (compile-time) LISTEXT IMAP extension.
+<i>Based on work by Martin Konold &lt;martin.konold@erfrakon.de&gt;</i></li> 
+<li>Added support for ESEARCH IMAP extension.</li>
+<li>Added support for WITHIN extension to IMAP SEARCH.</li>
+<li>Added support for ENABLE IMAP extension.</li>
+<li>Added support for QRESYNC IMAP extension.</li>
+<li>Added support for URLAUTH=BINARY IMAP extension.</li>
+<li>Removed legacy IMAP[2|3|4] cruft.  We now only support IMAPrev1 +
+  extensions.</li>
+</ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.3.15</h1>
 <ul>
@@ -48,7 +62,8 @@ disk space usage.</li>
   mailboxes.db and mupdate clients while scarfing the UPDATE
   response, which can be quite time consuming over slow links.</li>
 <li>Added support for MUPDATE COMPRESS and IMAP COMPRESS commands
-  which help speed up bulk data commands over slow links.</li>
+  which help speed up bulk data commands over slow links.
+  <i>Inspired by work of Dave Cridland &lt;dave@cridland.net&gt;</i></li>
 <li>Allow frontend servers in a Murder to proxy the CREATE, DELETE,
   SETACL, SETQUOTA, and GETQUOTA commands for toplevel mailboxes.  In
   order for a frontend to know where to CREATE a toplevel mailbox,
@@ -2465,7 +2480,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2009/12/21 12:36:10 $ <br />
+last modified: $Date: 2010/01/06 17:01:28 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>

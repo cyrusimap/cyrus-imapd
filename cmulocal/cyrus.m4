@@ -1,6 +1,6 @@
 dnl
 dnl Additional macros for configure.in packaged up for easier theft.
-dnl $Id: cyrus.m4,v 1.5 2009/03/31 04:09:47 brong Exp $
+dnl $Id: cyrus.m4,v 1.6 2010/01/06 17:01:27 murch Exp $
 dnl tjs@andrew.cmu.edu 6-may-1998
 dnl
 

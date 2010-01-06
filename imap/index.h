@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: index.h,v 1.17 2009/08/28 13:48:46 brong Exp $
+ * $Id: index.h,v 1.18 2010/01/06 17:01:35 murch Exp $
  */
 
 /* Header for internal usage of index.c + programs that make raw access
@@ -168,7 +168,7 @@ extern void index_operatemailbox(struct mailbox *mailbox);
 extern unsigned index_finduid(unsigned uid);
 extern unsigned index_getuid(unsigned msgno);
 extern int index_urlfetch(struct mailbox *mailbox, unsigned msgno,
-			  const char *section,
+			  unsigned params, const char *section,
 			  unsigned long start_octet, unsigned long octet_count,
 			  struct protstream *pout, unsigned long *size);
 extern char *index_get_msgid(struct mailbox *mailbox, unsigned msgno);

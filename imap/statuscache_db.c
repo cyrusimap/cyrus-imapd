@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: statuscache_db.c,v 1.7 2009/11/04 12:38:30 brong Exp $
+ * $Id: statuscache_db.c,v 1.8 2010/01/06 17:01:41 murch Exp $
  */
 
 #include <config.h>

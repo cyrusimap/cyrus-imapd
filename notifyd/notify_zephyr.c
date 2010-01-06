@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notify_zephyr.c,v 1.6 2008/03/24 19:59:32 murch Exp $
+ * $Id: notify_zephyr.c,v 1.7 2010/01/06 17:01:54 murch Exp $
  */
 
 #include <config.h>

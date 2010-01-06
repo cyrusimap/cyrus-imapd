@@ -1,4 +1,4 @@
-dnl $Id: sql.m4,v 1.1 2009/12/03 20:48:14 murch Exp $
+dnl $Id: sql.m4,v 1.2 2010/01/06 17:01:28 murch Exp $
 
 dnl These are the Cyrus MySQL macros.
 

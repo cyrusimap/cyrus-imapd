@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mbexamine.c,v 1.24 2009/09/22 01:46:54 brong Exp $
+ * $Id: mbexamine.c,v 1.25 2010/01/06 17:01:36 murch Exp $
  */
 
 #include <config.h>

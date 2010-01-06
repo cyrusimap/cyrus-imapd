@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: pop3d.c,v 1.199 2009/12/17 15:32:32 murch Exp $
+ * $Id: pop3d.c,v 1.200 2010/01/06 17:01:38 murch Exp $
  */
 
 #include <config.h>
@@ -880,7 +880,7 @@ static void cmdloop(void)
 
 		    if (msg <= popd_exists) {
 			(void) mailbox_expunge(popd_mailbox, expungedeleted,
-					       0, 0);
+					       0, 0, NULL);
 			sync_log_mailbox(popd_mailbox->name);
 		    }
 

@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyrusdb_berkeley.c,v 1.23 2009/03/10 02:56:22 brong Exp $
+ * $Id: cyrusdb_berkeley.c,v 1.24 2010/01/06 17:01:45 murch Exp $
  */
 
 #include <config.h>

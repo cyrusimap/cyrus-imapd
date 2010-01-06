@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: reconstruct.c,v 1.111 2009/12/16 02:51:44 brong Exp $
+ * $Id: reconstruct.c,v 1.112 2010/01/06 17:01:39 murch Exp $
  */
 
 #include <config.h>

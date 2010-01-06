@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: auth_unix.c,v 1.52 2009/03/31 04:11:22 brong Exp $
+ * $Id: auth_unix.c,v 1.53 2010/01/06 17:01:44 murch Exp $
  */
 
 #include <config.h>

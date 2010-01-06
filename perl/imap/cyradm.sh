@@ -39,7 +39,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: cyradm.sh,v 1.20 2008/04/04 12:47:10 murch Exp $
+# $Id: cyradm.sh,v 1.21 2010/01/06 17:01:55 murch Exp $
 case "x$BASH_VERSION" in
 x) exec perl -MCyrus::IMAP::Shell -e shell -- ${1+"$@"} ;;
 *) exec perl -MCyrus::IMAP::Shell -e shell -- "$@" ;;

@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mystring.h,v 1.7 2008/03/24 20:20:57 murch Exp $
+ * $Id: mystring.h,v 1.8 2010/01/06 17:02:01 murch Exp $
  */
 
 #include "codes.h"

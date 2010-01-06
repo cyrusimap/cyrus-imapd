@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.h,v 1.71 2008/03/24 17:09:17 murch Exp $
+ * $Id: imapd.h,v 1.72 2010/01/06 17:01:34 murch Exp $
  */
 
 #ifndef INCLUDED_IMAPD_H
@@ -60,8 +60,8 @@ extern struct auth_state *imapd_authstate;
 /* Number of messages in currently open mailbox */
 extern int imapd_exists;
 
-/* Is client CONDSTORE-aware? */
-extern int imapd_condstore_client;
+/* Client capabilities (via ENABLE) */
+extern unsigned imapd_client_capa;
 
 /* List of HEADER.FIELDS[.NOT] fetch specifications */
 struct fieldlist {
@@ -84,6 +84,8 @@ struct fetchargs {
     int start_octet;              /* start_octet for partial fetch */
     int octet_count;              /* octet_count for partial fetch, or 0 */
     modseq_t changedsince;        /* changed since modseq, or 0 */
+    int vanished;                 /* report expunges since changedsince */
+    char *match_seq, *match_uid;  /* sequence match data for VANISHED */
 
     bit32 cache_atleast;          /* to do headers we need atleast this
 				   * cache version */
@@ -152,12 +154,21 @@ struct searchsub {
     struct searchargs *sub2;
 };
 
+/* Bitmasks for search flags */
 enum {
     SEARCH_RECENT_SET =         (1<<0),
     SEARCH_RECENT_UNSET	=       (1<<1),
     SEARCH_SEEN_SET =           (1<<2),
     SEARCH_SEEN_UNSET =	        (1<<3)
 /*    SEARCH_UNCACHEDHEADER =	(1<<4) -- obsolete */
+};
+
+/* Bitmasks for search return options */
+enum {
+    SEARCH_RETURN_MIN =		(1<<0),
+    SEARCH_RETURN_MAX =		(1<<1),
+    SEARCH_RETURN_ALL =		(1<<2),
+    SEARCH_RETURN_COUNT =	(1<<3)
 };
 
 /* Things that may be searched for */
@@ -185,6 +196,10 @@ struct searchargs {
     modseq_t modseq;
 
     bit32 cache_atleast;
+
+    /* For ESEARCH */
+    const char *tag;
+    int returnopts;
 };
 
 /* Sort criterion */
@@ -229,20 +244,63 @@ enum {
 
 /* Arguments to List functions */
 struct listargs {
-    unsigned opts;		/* LISTEXT options */
+    unsigned cmd;		/* Command variant */
+    unsigned sel;		/* Selection options */
+    unsigned ret;		/* Return options */
     const char *ref;		/* Reference name */
-    const char *pat;		/* Mailbox pattern */
+    struct strlist *pat;	/* Mailbox pattern(s) */
     const char *scan;		/* SCAN content */
     hash_table server_table;	/* for proxying SCAN */
 };
 
-/* Bitmask for list options */
+/* Value for List command variant */
 enum {
-    LIST_LSUB =			(1<<0),
-    LIST_EXT =			(1<<1),
-    LIST_SUBSCRIBED =		(1<<2),
-    LIST_CHILDREN =		(1<<3),
-    LIST_REMOTE =		(1<<4)
+    LIST_CMD_LIST = 0,
+    LIST_CMD_LSUB,
+    LIST_CMD_EXTENDED,
+};
+
+/* Bitmask for List selection options */
+enum {
+    LIST_SEL_SUBSCRIBED =	(1<<0),
+    LIST_SEL_REMOTE =		(1<<1),
+    LIST_SEL_RECURSIVEMATCH =	(1<<2)
+};
+
+/* Bitmask for List return options */
+enum {
+    LIST_RET_SUBSCRIBED =	(1<<0),
+    LIST_RET_CHILDREN =		(1<<1)
+};
+
+/* Bitmask for List name attributes */
+enum {
+    /* from RFC 3501 */
+    MBOX_ATTRIBUTE_NOINFERIORS =	(1<<0),
+    MBOX_ATTRIBUTE_NOSELECT =		(1<<1),
+    MBOX_ATTRIBUTE_MARKED =		(1<<2),
+    MBOX_ATTRIBUTE_UNMARKED =		(1<<3),
+
+    /* from draft-ietf-imapext-list-extensions-18.txt */
+    MBOX_ATTRIBUTE_NONEXISTENT =	(1<<4),
+    MBOX_ATTRIBUTE_SUBSCRIBED =		(1<<5),
+    MBOX_ATTRIBUTE_REMOTE =		(1<<6),
+    MBOX_ATTRIBUTE_HASCHILDREN =	(1<<7),
+    MBOX_ATTRIBUTE_HASNOCHILDREN =	(1<<8),
+    MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED = (1<<9)
+};
+
+/* Bitmask for client capabilities */
+enum {
+    CAPA_CONDSTORE =	(1<<0),
+    CAPA_QRESYNC = 	(1<<1)
+};
+
+/* Bitmask for urlfetch params */
+enum {
+    URLFETCH_BODY =			(1<<0),
+    URLFETCH_BINARY =			(1<<1),
+    URLFETCH_BODYPARTSTRUCTURE =	(1<<2)
 };
 
 extern struct protstream *imapd_out, *imapd_in;

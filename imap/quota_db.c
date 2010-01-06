@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: quota_db.c,v 1.10 2009/02/09 05:04:38 brong Exp $
+ * $Id: quota_db.c,v 1.11 2010/01/06 17:01:39 murch Exp $
  */
 
 #include <config.h>

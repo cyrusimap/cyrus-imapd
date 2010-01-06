@@ -39,7 +39,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: cyrusv2.mc,v 1.5 2008/04/04 12:46:34 murch Exp $
+# $Id: cyrusv2.mc,v 1.6 2010/01/06 17:01:29 murch Exp $
 
 #
 #	This sample mc file is for a site that uses the Cyrus IMAP server

@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: saslserver.c,v 1.11 2008/03/24 17:09:19 murch Exp $
+ * $Id: saslserver.c,v 1.12 2010/01/06 17:01:39 murch Exp $
  */
 
 #include <config.h>

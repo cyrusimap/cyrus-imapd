@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyrusdb_quotalegacy.c,v 1.20 2009/01/14 15:54:42 murch Exp $
+ * $Id: cyrusdb_quotalegacy.c,v 1.21 2010/01/06 17:01:45 murch Exp $
  */
 
 #include <config.h>

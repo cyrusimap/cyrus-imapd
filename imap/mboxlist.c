@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mboxlist.c,v 1.272 2009/11/17 03:34:30 brong Exp $
+ * $Id: mboxlist.c,v 1.273 2010/01/06 17:01:36 murch Exp $
  */
 
 #include <config.h>

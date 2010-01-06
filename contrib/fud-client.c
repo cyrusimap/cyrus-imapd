@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: fud-client.c,v 1.6 2008/03/24 20:28:40 murch Exp $
+ * $Id: fud-client.c,v 1.7 2010/01/06 17:01:28 murch Exp $
  */
 
 /*  This is an example client for the experimental fud service. 

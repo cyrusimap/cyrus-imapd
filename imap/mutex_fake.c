@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mutex_fake.c,v 1.3 2008/03/24 17:09:18 murch Exp $
+ * $Id: mutex_fake.c,v 1.4 2010/01/06 17:01:38 murch Exp $
  */
 
 #include <config.h>

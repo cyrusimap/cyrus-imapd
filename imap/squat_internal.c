@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squat_internal.c,v 1.4 2008/03/24 17:09:19 murch Exp $
+ * $Id: squat_internal.c,v 1.5 2010/01/06 17:01:41 murch Exp $
  */
 
 #include "assert.h"

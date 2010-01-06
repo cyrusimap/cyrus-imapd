@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: strcasecmp.c,v 1.9 2008/03/24 17:43:09 murch Exp $
+ * $Id: strcasecmp.c,v 1.10 2010/01/06 17:01:47 murch Exp $
  *
  * Author: Chris Newman
  * Start Date: 4/6/93

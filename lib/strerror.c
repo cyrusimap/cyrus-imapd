@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: strerror.c,v 1.7 2008/03/24 17:43:09 murch Exp $
+ * $Id: strerror.c,v 1.8 2010/01/06 17:01:47 murch Exp $
  */
 
 extern int sys_nerr;

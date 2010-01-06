@@ -42,7 +42,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ipurge.c,v 1.34 2009/12/16 02:51:41 brong Exp $
+ * $Id: ipurge.c,v 1.35 2010/01/06 17:01:35 murch Exp $
  */
 
 #include <config.h>
@@ -271,7 +271,7 @@ int purge_me(char *name, int matchlen __attribute__((unused)),
   (void) mailbox_lock_index(&the_box);
   the_box.index_lock_count = 1;
 
-  mailbox_expunge(&the_box, purge_check, &stats, 0);
+  mailbox_expunge(&the_box, purge_check, &stats, 0, NULL);
 
   sync_log_mailbox(the_box.name);
   mailbox_close(&the_box);

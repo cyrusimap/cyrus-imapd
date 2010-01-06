@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mupdate-slave.c,v 1.31 2009/04/23 15:20:40 murch Exp $
+ * $Id: mupdate-slave.c,v 1.32 2010/01/06 17:01:37 murch Exp $
  */
 
 #include <config.h>

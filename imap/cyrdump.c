@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyrdump.c,v 1.22 2009/02/09 05:01:56 brong Exp $
+ * $Id: cyrdump.c,v 1.23 2010/01/06 17:01:31 murch Exp $
  */
 
 #include <config.h>
@@ -89,7 +89,7 @@ int imapd_exists;
 struct protstream *imapd_out = NULL;
 struct auth_state *imapd_authstate = NULL;
 char *imapd_userid = NULL;
-int imapd_condstore_client = 0;
+unsigned imapd_client_capa = 0;
 
 struct incremental_record {
     unsigned incruid;

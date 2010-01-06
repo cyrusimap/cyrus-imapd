@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapurl.c,v 1.17 2009/03/31 04:11:22 brong Exp $
+ * $Id: imapurl.c,v 1.18 2010/01/06 17:01:45 murch Exp $
  *
  * derived from chris newman's code
  */

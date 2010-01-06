@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: cyr_expire.c,v 1.24 2009/11/05 00:20:09 brong Exp $
+ * $Id: cyr_expire.c,v 1.25 2010/01/06 17:01:31 murch Exp $
  */
 
 #include <config.h>
@@ -276,7 +276,7 @@ int expire(char *name, int matchlen, int maycreate __attribute__((unused)),
 	    erock->expire_mark = *expire_mark;
 	}
 
-	r = mailbox_expunge(&mailbox, expire_cb, erock, expunge_flags);
+	r = mailbox_expunge(&mailbox, expire_cb, erock, expunge_flags, NULL);
 	mailbox_close(&mailbox);
     }
 

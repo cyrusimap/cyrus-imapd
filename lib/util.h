@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: util.h,v 1.26 2009/03/31 04:11:23 brong Exp $
+ * $Id: util.h,v 1.27 2010/01/06 17:01:47 murch Exp $
  *
  * Author: Chris Newman
  * Start Date: 4/6/93

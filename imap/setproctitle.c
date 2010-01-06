@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: setproctitle.c,v 1.17 2008/03/24 17:09:19 murch Exp $
+ * $Id: setproctitle.c,v 1.18 2010/01/06 17:01:40 murch Exp $
  */
 /*
  * Copyright (c) 1983, 1995 Eric P. Allman

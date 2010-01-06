@@ -38,7 +38,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: windows-1256.t,v 1.2 2008/04/04 12:46:46 murch Exp $
+# $Id: windows-1256.t,v 1.3 2010/01/06 17:01:50 murch Exp $
 #
 # Charset put together by Rayed Alrashed <rayed@saudi.net.sa>
 # Reference:

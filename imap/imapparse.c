@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapparse.c,v 1.19 2008/09/23 17:34:37 murch Exp $
+ * $Id: imapparse.c,v 1.20 2010/01/06 17:01:34 murch Exp $
  */
 
 #include <config.h>

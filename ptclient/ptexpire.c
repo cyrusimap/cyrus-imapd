@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ptexpire.c,v 1.22 2008/03/24 18:34:22 murch Exp $
+ * $Id: ptexpire.c,v 1.23 2010/01/06 17:01:57 murch Exp $
  */
 
 /* This program purges old entries from the database. It holds an exclusive
@@ -71,7 +71,7 @@
 #include "lock.h"
 #include "xmalloc.h"
 
-static char rcsid[] = "$Id: ptexpire.c,v 1.22 2008/03/24 18:34:22 murch Exp $";
+static char rcsid[] = "$Id: ptexpire.c,v 1.23 2010/01/06 17:01:57 murch Exp $";
 
 /* global */
 time_t timenow;

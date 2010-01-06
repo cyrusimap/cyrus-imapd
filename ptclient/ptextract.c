@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ptextract.c,v 1.5 2008/03/24 18:34:22 murch Exp $
+ * $Id: ptextract.c,v 1.6 2010/01/06 17:01:58 murch Exp $
  */
 
 #include <sys/types.h>

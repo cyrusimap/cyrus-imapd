@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: remotepurge.c,v 1.20 2009/03/31 04:11:23 brong Exp $
+ * $Id: remotepurge.c,v 1.21 2010/01/06 17:01:54 murch Exp $
  */
 
 #include <config.h>

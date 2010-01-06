@@ -42,7 +42,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: cyrus.pl,v 1.2 2008/03/24 20:28:40 murch Exp $
+# $Id: cyrus.pl,v 1.3 2010/01/06 17:01:28 murch Exp $
 #
 # Author: Alison Greenwald <alison@andrew.cmu.edu>
 

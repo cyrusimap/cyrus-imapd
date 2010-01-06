@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ctl_mboxlist.c,v 1.65 2009/03/31 04:11:15 brong Exp $
+ * $Id: ctl_mboxlist.c,v 1.66 2010/01/06 17:01:31 murch Exp $
  */
 
 /* currently doesn't catch signals; probably SHOULD */

@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.h,v 1.95 2009/08/28 13:48:46 brong Exp $
+ * $Id: mailbox.h,v 1.96 2010/01/06 17:01:36 murch Exp $
  */
 
 #ifndef INCLUDED_MAILBOX_H
@@ -429,7 +429,7 @@ extern int mailbox_append_index(struct mailbox *mailbox,
 
 extern int mailbox_expunge(struct mailbox *mailbox,
 			   mailbox_decideproc_t *decideproc, void *deciderock,
-			   int flags);
+			   int flags, unsigned *nexpunged);
 extern int mailbox_cleanup(struct mailbox *mailbox, int iscurrentdir,
 			   mailbox_decideproc_t *decideproc, void *deciderock);
 

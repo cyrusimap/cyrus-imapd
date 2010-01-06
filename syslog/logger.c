@@ -1,4 +1,4 @@
-/*  $Revision: 1.4 $
+/*  $Revision: 1.5 $
 **  Modified by Rich $alz <rsalz@osf.org> to be more portable to older
 **  systems.
 */
@@ -42,7 +42,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: logger.c,v 1.4 2008/03/24 20:15:59 murch Exp $
+ * $Id: logger.c,v 1.5 2010/01/06 17:02:00 murch Exp $
  */
 /*
  * Copyright (c) 1983 Regents of the University of California.

@@ -42,7 +42,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: xversion.sh,v 1.9 2008/03/24 17:09:20 murch Exp $
+# $Id: xversion.sh,v 1.10 2010/01/06 17:01:42 murch Exp $
 
 if [ "$AWK" = "" ]; then
     AWK=awk

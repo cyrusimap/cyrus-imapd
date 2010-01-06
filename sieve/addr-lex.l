@@ -42,7 +42,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: addr-lex.l,v 1.11 2008/03/24 20:08:46 murch Exp $
+ * $Id: addr-lex.l,v 1.12 2010/01/06 17:01:58 murch Exp $
  */
 
 #include "addr.h"

@@ -1,6 +1,6 @@
 # sasl2.m4--sasl2 libraries and includes
 # Rob Siemborski
-# $Id: sasl2.m4,v 1.54 2009/05/20 12:24:48 murch Exp $
+# $Id: sasl2.m4,v 1.55 2010/01/06 17:01:27 murch Exp $
 
 # SASL2_CRYPT_CHK
 # ---------------

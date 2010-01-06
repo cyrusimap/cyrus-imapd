@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: xmalloc.c,v 1.32 2008/03/24 17:43:10 murch Exp $
+ * $Id: xmalloc.c,v 1.33 2010/01/06 17:01:47 murch Exp $
  */
 
 #include <config.h>

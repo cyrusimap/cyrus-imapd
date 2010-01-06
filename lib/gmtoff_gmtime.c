@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: gmtoff_gmtime.c,v 1.12 2008/03/24 17:43:09 murch Exp $
+ * $Id: gmtoff_gmtime.c,v 1.13 2010/01/06 17:01:45 murch Exp $
  */
 
 #include <config.h>

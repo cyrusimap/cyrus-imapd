@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: iptostring.c,v 1.9 2008/03/24 17:43:09 murch Exp $
+ * $Id: iptostring.c,v 1.10 2010/01/06 17:01:45 murch Exp $
  */
 
 #include <config.h>

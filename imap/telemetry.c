@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: telemetry.c,v 1.9 2008/03/24 17:09:20 murch Exp $
+ * $Id: telemetry.c,v 1.10 2010/01/06 17:01:42 murch Exp $
  */
 
 #include <config.h>

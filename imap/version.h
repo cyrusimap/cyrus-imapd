@@ -39,10 +39,10 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: version.h,v 1.163 2009/12/21 11:42:01 murch Exp $
+ * $Id: version.h,v 1.164 2010/01/06 17:01:42 murch Exp $
  */
 
-#define _CYRUS_VERSION "v2.3.16"
+#define _CYRUS_VERSION "v2.4.0"
 
 /* EXTRA_IDENT is a hack to add some version information for which compile
  * was used to build this version (at CMU, but we don't care what you do with
@@ -62,14 +62,27 @@ enum {
 
 /* CAPABILITIES are defined here, not including TLS/SASL ones,
    and those that are configurable */
-#define CAPA_PREAUTH_STRING "IMAP4 IMAP4rev1 LITERAL+ ID"
+#define CAPA_PREAUTH_STRING "IMAP4rev1 LITERAL+ ID ENABLE"
+
+#ifdef HAVE_SSL
+#define CAPA_URLAUTH " URLAUTH URLAUTH=BINARY"
+#else
+#define CAPA_URLAUTH ""
+#endif
+
+#ifdef ENABLE_X_NETSCAPE_HACK
+#define CAPA_NETSCAPE " X-NETSCAPE"
+#else
+#define CAPA_NETSCAPE ""
+#endif
 
 #define CAPA_POSTAUTH_STRING " ACL RIGHTS=kxte QUOTA " \
 	"MAILBOX-REFERRALS NAMESPACE UIDPLUS " \
 	"NO_ATOMIC_RENAME UNSELECT " \
-	"CHILDREN MULTIAPPEND BINARY " \
+	"CHILDREN MULTIAPPEND BINARY CATENATE CONDSTORE ESEARCH " \
 	"SORT SORT=MODSEQ THREAD=ORDEREDSUBJECT THREAD=REFERENCES " \
-	"ANNOTATEMORE CATENATE CONDSTORE SCAN"
+	"ANNOTATEMORE LIST-EXTENDED WITHIN QRESYNC SCAN" \
+	CAPA_URLAUTH CAPA_NETSCAPE
 
 
 /* Values for ID processing */

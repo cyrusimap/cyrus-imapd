@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notify_mailto.c,v 1.14 2008/10/09 15:19:55 murch Exp $
+ * $Id: notify_mailto.c,v 1.15 2010/01/06 17:01:54 murch Exp $
  */
 
 #include <config.h>

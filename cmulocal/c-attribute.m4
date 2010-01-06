@@ -1,5 +1,5 @@
 dnl
-dnl $Id: c-attribute.m4,v 1.4 2007/08/30 16:57:55 murch Exp $
+dnl $Id: c-attribute.m4,v 1.5 2010/01/06 17:01:27 murch Exp $
 dnl
 
 dnl

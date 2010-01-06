@@ -1,6 +1,6 @@
 \input texinfo @c -*-texinfo-*-
 
-@c $Header: /mnt/data/cyrus/cvsroot/src/cyrus/com_err/et/com_err.texinfo,v 1.1 2007/10/17 20:06:32 murch Exp $
+@c $Header: /mnt/data/cyrus/cvsroot/src/cyrus/com_err/et/com_err.texinfo,v 1.2 2010/01/06 17:01:28 murch Exp $
 @c $Source: /mnt/data/cyrus/cvsroot/src/cyrus/com_err/et/com_err.texinfo,v $
 @c $Locker:  $
 

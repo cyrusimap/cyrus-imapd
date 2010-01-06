@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: charset.c,v 1.54 2009/11/19 21:52:55 murch Exp $
+ * $Id: charset.c,v 1.55 2010/01/06 17:01:44 murch Exp $
  */
 
 #include <config.h>

@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imap_proxy.c,v 1.18 2009/12/02 02:09:43 murch Exp $
+ * $Id: imap_proxy.c,v 1.19 2010/01/06 17:01:32 murch Exp $
  */
 
 #include <config.h>
@@ -115,8 +115,8 @@ struct protocol_t imap_protocol =
       { " IDLE", CAPA_IDLE },
       { " MUPDATE", CAPA_MUPDATE },
       { " MULTIAPPEND", CAPA_MULTIAPPEND },
-      { " LIST-SUBSCRIBED", CAPA_LISTSUBSCRIBED },
       { " RIGHTS=kxte", CAPA_ACLRIGHTS },
+      { " LIST-EXTENDED", CAPA_LISTEXTENDED },
       { NULL, 0 } } },
   { "S01 STARTTLS", "S01 OK", "S01 NO", 0 },
   { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*", NULL, 0 },

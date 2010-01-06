@@ -1,5 +1,5 @@
 dnl
-dnl $Id: c-fpic.m4,v 1.3 2007/08/30 16:57:55 murch Exp $
+dnl $Id: c-fpic.m4,v 1.4 2010/01/06 17:01:27 murch Exp $
 dnl
 
 dnl

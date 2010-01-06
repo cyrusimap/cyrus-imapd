@@ -40,7 +40,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ifparser.h,v 1.4 2008/04/04 12:46:48 murch Exp $
+ * $Id: ifparser.h,v 1.5 2010/01/06 17:01:50 murch Exp $
  *
  *
  * Copyright 1992 Network Computing Devices, Inc.

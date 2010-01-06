@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: make_sha1.c,v 1.6 2009/08/28 13:48:46 brong Exp $
+ * $Id: make_sha1.c,v 1.7 2010/01/06 17:01:36 murch Exp $
  */
 
 #include <config.h>

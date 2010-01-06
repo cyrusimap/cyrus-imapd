@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: glob.c,v 1.35 2008/03/24 17:43:08 murch Exp $
+ * $Id: glob.c,v 1.36 2010/01/06 17:01:45 murch Exp $
  *
  * Author: Chris Newman
  * Start Date: 4/5/93

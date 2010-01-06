@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_support.c,v 1.24 2009/12/15 20:24:51 murch Exp $
+ * $Id: sync_support.c,v 1.25 2010/01/06 17:01:41 murch Exp $
  */
 
 #include <config.h>

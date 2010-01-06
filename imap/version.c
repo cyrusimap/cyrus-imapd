@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: version.c,v 1.23 2009/04/23 17:10:07 murch Exp $
+ * $Id: version.c,v 1.24 2010/01/06 17:01:42 murch Exp $
  */
 
 #include <config.h>

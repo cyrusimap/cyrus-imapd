@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: auth_krb.c,v 1.45 2009/03/31 04:11:21 brong Exp $
+ * $Id: auth_krb.c,v 1.46 2010/01/06 17:01:43 murch Exp $
  */
 
 #include <config.h>

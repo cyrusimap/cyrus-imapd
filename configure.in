@@ -40,7 +40,7 @@ dnl WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
 dnl AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 dnl OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 dnl
-dnl $Id: configure.in,v 1.315 2009/12/23 15:54:23 murch Exp $
+dnl $Id: configure.in,v 1.316 2010/01/06 17:01:26 murch Exp $
 dnl
 dnl configure.in for the Cyrus imapd
 dnl
@@ -897,7 +897,7 @@ AC_SUBST(ZLIB)
 dnl
 dnl Test for Zephyr
 dnl
-AC_ARG_WITH(zephyr,[  --with-zephyr[=PATH]      enable Zephyr notification (installed on PATH)],
+AC_ARG_WITH(zephyr,[  --with-zephyr[=PATH]    enable Zephyr notification (installed on PATH)],
 	with_zephyr="${withval}")
 if test -z "$with_zephyr"; then
      if test -f /usr/local/lib/libzephyr.a; then
@@ -928,7 +928,7 @@ fi
 dnl
 dnl Set pidfile location
 dnl
-AC_ARG_WITH(pidfile,[  --with-pidfile[=PATH]     pidfile in PATH (/var/run/cyrus-master.pid)],
+AC_ARG_WITH(pidfile,[  --with-pidfile[=PATH]   pidfile in PATH (/var/run/cyrus-master.pid)],
 	[MASTERPIDFILE="$withval"],
 	[MASTERPIDFILE="/var/run/cyrus-master.pid"])
 MASTERPIDFILE="\"$MASTERPIDFILE\""
@@ -1102,12 +1102,6 @@ AC_ARG_ENABLE(oldsievename,
 	fi,
 	AC_MSG_RESULT(no))
 
-AC_ARG_ENABLE(listext,
-	[  --enable-listext        enable IMAP List extensions],
-	if test "$enableval" = yes; then
-		AC_DEFINE(ENABLE_LISTEXT,[],[Enable the LISTEXT extension?])
-	fi)
-
 AC_ARG_ENABLE(netscapehack,
 	[  --enable-netscapehack   enable Netscape hack for the menu option
                           in Communicator to Administrate Mail],
@@ -1143,10 +1137,9 @@ dnl and compile perl/cyradm
     PERL="${with_perl}"
 dnl add perl cccdlflags when building libraries -- this ensures that the
 dnl libraries will be compiled as PIC if perl requires PIC objects
-dnl -- this is needed on NetBSD, FreeBSD, and Linux, but seems to
-dnl cause problems on atleast Solaris -- 
+dnl -- this is needed on NetBSD and Linux, but seems to cause problems on atleast Solaris --
     case "${target_os}" in
-        linux*|netbsd*|freebsd*)
+        linux*|netbsd*)
             AC_MSG_CHECKING(for perl cccdlflags needed on "${target_os}")
             eval `${PERL} -V:cccdlflags`
             PERL_CCCDLFLAGS="$cccdlflags"
@@ -1272,7 +1265,7 @@ AH_TOP([
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: configure.in,v 1.315 2009/12/23 15:54:23 murch Exp $
+ * $Id: configure.in,v 1.316 2010/01/06 17:01:26 murch Exp $
  */
 
 #ifndef _CYRUS_IMAPD_CONFIG_H_

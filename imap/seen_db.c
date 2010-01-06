@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: seen_db.c,v 1.61 2009/03/31 04:11:20 brong Exp $
+ * $Id: seen_db.c,v 1.62 2010/01/06 17:01:40 murch Exp $
  */
 
 #include <config.h>

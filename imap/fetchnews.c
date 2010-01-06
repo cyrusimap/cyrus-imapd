@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: fetchnews.c,v 1.21 2008/08/27 08:28:46 selsky Exp $
+ * $Id: fetchnews.c,v 1.22 2010/01/06 17:01:31 murch Exp $
  */
 
 #include <config.h>

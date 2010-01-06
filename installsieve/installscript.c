@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: installscript.c,v 1.30 2008/03/24 20:33:11 murch Exp $
+ * $Id: installscript.c,v 1.31 2010/01/06 17:01:43 murch Exp $
  */
 
 #include <sys/stat.h>

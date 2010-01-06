@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: arbitron.c,v 1.47 2009/02/09 05:01:56 brong Exp $
+ * $Id: arbitron.c,v 1.48 2010/01/06 17:01:30 murch Exp $
  */
 
 #include <config.h>

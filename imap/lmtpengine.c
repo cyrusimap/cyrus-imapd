@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: lmtpengine.c,v 1.131 2009/04/23 01:30:32 murch Exp $
+ * $Id: lmtpengine.c,v 1.132 2010/01/06 17:01:35 murch Exp $
  */
 
 #include <config.h>

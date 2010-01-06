@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: annotate.c,v 1.46 2009/12/21 11:25:22 murch Exp $
+ * $Id: annotate.c,v 1.47 2010/01/06 17:01:30 murch Exp $
  */
 
 #include <config.h>

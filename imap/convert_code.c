@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: convert_code.c,v 1.8 2008/03/24 17:09:16 murch Exp $
+ * $Id: convert_code.c,v 1.9 2010/01/06 17:01:30 murch Exp $
  */
 
 /* Same old convert_code function moved into one place instead of being

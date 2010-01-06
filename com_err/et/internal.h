@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: internal.h,v 1.2 2008/03/24 18:53:40 murch Exp $
+ * $Id: internal.h,v 1.3 2010/01/06 17:01:28 murch Exp $
  */
 
 #include "mit-sipb-copyright.h"
