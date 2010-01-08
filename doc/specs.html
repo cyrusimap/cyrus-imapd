@@ -1,4 +1,4 @@
-<!-- $Id: specs.html,v 1.70 2010/01/07 19:46:12 murch Exp $ -->
+<!-- $Id: specs.html,v 1.71 2010/01/08 15:55:26 murch Exp $ -->
 <HTML>
 <HEAD>
 <TITLE>Cyrus IMAP Server Protocol Specifications</TITLE>
@@ -137,8 +137,8 @@ draft-hickman-netscape-ssl</A></TD>
 <TR><TD COLSPAN=2><br><h2>LMTP</h2></TD></TR>
 <TR><TD><A HREF="http://www.ietf.org/rfc/rfc2033.txt">RFC 2033</A></TD>
 <TD>Local Mail Transfer Protocol </TD></TR>
-<TR><TD><A HREF="http://www.ietf.org/rfc/rfc2821.txt">RFC 2821</A></TD>
-<TD>Simple Mail Transfer Protocol (SMTP)</TD></TR>
+<TR><TD><A HREF="http://www.ietf.org/rfc/rfc5321.txt">RFC 5321</A></TD>
+<TD>Simple Mail Transfer Protocol</TD></TR>
 <TR><TD><A HREF="http://www.ietf.org/rfc/rfc1869.txt">RFC 1869</A></TD>
 <TD>SMTP Service Extensions</TD></TR>
 <TR><TD><A HREF="http://www.ietf.org/rfc/rfc1652.txt">RFC 1652</A></TD>
@@ -164,41 +164,28 @@ draft-murchison-lmtp-ignorequota</A></TD>
 
 
 <TR><TD COLSPAN=2><br><h2>Sieve</h2></TD></TR>
-<TR><TD><A HREF="http://www.ietf.org/rfc/rfc3028.txt">RFC 3028</A></TD>
-<TD>Sieve: A Mail Filtering Language
-<BR><I>being updated by</I> <A
-HREF="http://ietf.org/internet-drafts/draft-ietf-sieve-3028bis-12.txt">
-draft-ietf-sieve-3028bis</A></TD></TR>
-<TR><TD><A HREF="http://www.ietf.org/rfc/rfc3431.txt">RFC 3431</A></TD>
-<TD>Sieve Extension: Relational Tests
-<BR><I>being updated by</I> <A
-HREF="http://www.ietf.org/internet-drafts/draft-ietf-sieve-3431bis-04.txt">
-draft-ietf-sieve-rfc3431bis</A></TD></TR>
-<TR><TD><A HREF="http://www.ietf.org/rfc/rfc3598.txt">RFC 3598</A></TD>
-<TD>Sieve Email Filtering -- Subaddress Extension
-<BR><I>being updated by</I> <A
-HREF="http://www.ietf.org/internet-drafts/draft-ietf-sieve-rfc3598bis-05.txt">
-draft-ietf-sieve-rfc3598bis</A></TD></TR>
+<TR><TD><A HREF="http://www.ietf.org/rfc/rfc5228.txt">RFC 5228</A></TD>
+<TD>Sieve: A Mail Filtering Language</TD></TR>
+<TR><TD><A HREF="http://www.ietf.org/rfc/rfc5230.txt">RFC 5230</A></TD>
+<TD>Sieve Email Filtering: Vacation Extension</TD></TR>
+<TR><TD><A HREF="http://www.ietf.org/rfc/rfc5231.txt">RFC 5231</A></TD>
+<TD>Sieve Email Filtering: Relational Extension</TD></TR>
+<TR><TD><A HREF="http://www.ietf.org/rfc/rfc5233.txt">RFC 5233</A></TD>
+<TD>Sieve Email Filtering: Subaddress Extension</TD></TR>
+<TR><TD><A HREF="http://www.ietf.org/rfc/rfc5173.txt">RFC 5173</A></TD>
+<TD>Sieve Email Filtering: Body Extension</TD></TR>
 <TR><TD><A HREF="http://www.ietf.org/rfc/rfc3894.txt">RFC 3894</A></TD>
 <TD>Sieve Extension: Copying Without Side Effects</TD></TR>
 <TR><TD><A HREF="http://www.ietf.org/rfc/rfc2298.txt">RFC 2298</A></TD>
 <TD>Extensible Message Format for Message Disposition Notifications (MDNs)</TD></TR>
 <TR><TD><A
-HREF="http://www.ietf.org/internet-drafts/draft-ietf-sieve-vacation-07.txt">
-draft-ietf-sieve-vacation</A></TD>
-<TD>Sieve Email Filtering:  Vacation Extension</TD></TR>
-<TR><TD><A
-HREF="http://www.ietf.org/internet-drafts/draft-ietf-sieve-body-06.txt">
-draft-ietf-sieve-body</A></TD>
-<TD>Sieve Mail Filtering Language: Body Extension</TD></TR>
-<TR><TD><A
 HREF="http://www.ietf.org/internet-drafts/draft-ietf-sieve-regex-00.txt">
 draft-ietf-sieve-regex</A></TD>
-<TD>Sieve -- Regular Expression Extension</TD></TR>
+<TD>Sieve Email FIltering -- Regular Expression Extension</TD></TR>
 <TR><TD><A
-HREF="http://www.oceana.com/ftp/drafts/draft-daboo-sieve-include-01.txt">
-draft-daboo-sieve-include</A></TD>
-<TD>SIEVE Include Extension</TD></TR>
+HREF="http://www.ietf.org/internet-drafts/draft-ietf-sieve-include-03.txt">
+draft-ietf-sieve-include</A></TD>
+<TD>Sieve Email Filtering: Include Extension</TD></TR>
 <TR><TD><A
 HREF="http://www.oceana.com/ftp/drafts/draft-melnikov-sieve-imapflags-03.txt">
 draft-melnikov-sieve-imapflags</A></TD>
@@ -208,23 +195,17 @@ HREF="http://www.oceana.com/ftp/drafts/draft-martin-sieve-notify-01.txt">
 draft-martin-sieve-notify</A></TD>
 <TD>Sieve -- An extension for providing instant notifications</TD></TR>
 <TR><TD><A
-HREF="http://www.ietf.org/internet-drafts/draft-martin-managesieve-08.txt">
-draft-martin-managesieve</A></TD>
+HREF="http://www.ietf.org/internet-drafts/draft-ietf-sieve-managesieve-09.txt">
+draft-ietf-sieve-managesieve</A></TD>
 <TD>A Protocol for Remotely Managing Sieve Scripts</TD></TR>
 
 <TR><TD COLSPAN=2><br><h2>Other</h2></TD></TR>
-<TR><TD><A HREF="http://www.ietf.org/rfc/rfc2822.txt">RFC 2822</A></TD>
-<TD>Internet Message Format
-<BR><I>being updated by</I> <A
-HREF="http://www.ietf.org/internet-drafts/draft-resnick-2822upd-03.txt">
-draft-resnick-2822upd</A></TD></TR>
-<TR><TD><A HREF="http://www.ietf.org/rfc/rfc1036.txt">RFC 1036</A></TD>
-<TD>Standard for Interchange of USENET Messages
-<BR><I>being updated by</I>
-<A HREF="http://www.ietf.org/internet-drafts/draft-ietf-usefor-usefor-12.txt">
-draft-ietf-usefor-usefor</A> <I>and</I>
-<A HREF="http://www.ietf.org/internet-drafts/draft-ietf-usefor-usepro-08.txt">
-draft-ietf-usefor-usepro</A></TD></TR>
+<TR><TD><A HREF="http://www.ietf.org/rfc/rfc5322.txt">RFC 5322</A></TD>
+<TD>Internet Message Format</TD></TR>
+<TR><TD><A HREF="http://www.ietf.org/rfc/rfc5536.txt">RFC 5536</A></TD>
+<TD>Netnews Article Format</TD></TR>
+<TR><TD><A HREF="http://www.ietf.org/rfc/rfc5537.txt">RFC 5537</A></TD>
+<TD>Netnews Architecture and Protocols</TD></TR>
 <TR><TD><A HREF="http://www.ietf.org/rfc/rfc3656.txt">RFC 3656</a></TD>
 <TD>MUPDATE Protocol (For Cyrus Murder)</TD></TR>
 </TABLE>
