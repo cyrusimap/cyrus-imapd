@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: fud-client.c,v 1.7 2010/01/06 17:01:28 murch Exp $
+ * $Id: fud-client.c,v 1.8 2010/01/08 20:49:27 murch Exp $
  */
 
 /*  This is an example client for the experimental fud service. 
@@ -57,6 +57,9 @@
 #include <unistd.h>
 #include <sysexits.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
 
 extern int optind;
 extern char *optarg;
