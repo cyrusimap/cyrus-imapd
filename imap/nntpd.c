@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.78 2010/01/06 17:01:38 murch Exp $
+ * $Id: nntpd.c,v 1.79 2010/01/11 16:10:59 murch Exp $
  */
 
 /*
@@ -740,7 +740,7 @@ void fatal(const char* s, int code)
     }
     recurse_code = code;
     if (nntp_out) {
-	prot_printf(nntp_out, "205 Fatal error: %s\r\n", s);
+	prot_printf(nntp_out, "400 Fatal error: %s\r\n", s);
 	prot_flush(nntp_out);
     }
     if (stage) append_removestage(stage);
@@ -2034,12 +2034,12 @@ static void cmd_authinfo_user(char *user)
     }
 
     if (nntp_userid) {
-	prot_printf(nntp_out, "502 Must give AUTHINFO PASS command\r\n");
-	return;
+	free(nntp_userid);
+	nntp_userid = NULL;
     }
 
     if (!(p = canonify_userid(user, NULL, NULL))) {
-	prot_printf(nntp_out, "502 Invalid user\r\n");
+	prot_printf(nntp_out, "481 Invalid user\r\n");
 	syslog(LOG_NOTICE,
 	       "badlogin: %s plaintext %s invalid user",
 	       nntp_clienthost, beautify_string(user));
@@ -2072,7 +2072,7 @@ static void cmd_authinfo_pass(char *pass)
 	else {
 	    syslog(LOG_NOTICE, "badlogin: %s anonymous login refused",
 		   nntp_clienthost);
-	    prot_printf(nntp_out, "502 Invalid login\r\n");
+	    prot_printf(nntp_out, "481 Invalid login\r\n");
 	    return;
 	}
     }
@@ -2084,7 +2084,7 @@ static void cmd_authinfo_pass(char *pass)
 	syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
 	       nntp_clienthost, nntp_userid, sasl_errdetail(nntp_saslconn));
 	sleep(3);
-	prot_printf(nntp_out, "502 Invalid login\r\n");
+	prot_printf(nntp_out, "481 Invalid login\r\n");
 	free(nntp_userid);
 	nntp_userid = 0;
 
@@ -2101,6 +2101,16 @@ static void cmd_authinfo_pass(char *pass)
 
 	/* Create telemetry log */
 	nntp_logfd = telemetry_log(nntp_userid, nntp_in, nntp_out, 0);
+
+	/* close any selected group */
+	if (nntp_group) {
+	    mailbox_close(nntp_group);
+	    nntp_group = 0;
+	}
+	if (backend_current) {
+	    proxy_downserver(backend_current);
+	    backend_current = NULL;
+	}
     }
 }
 
@@ -2118,8 +2128,9 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
     }
 
     if (cmd[0] == 'g') {
-	/* if client didn't specify any mech we give them the list */
+	/* AUTHINFO GENERIC */
 	if (!mech) {
+	    /* If client didn't specify any mech we give them the list */
 	    const char *sasllist;
 	    int mechnum;
 
@@ -2142,9 +2153,11 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
 	r = saslserver(nntp_saslconn, mech, resp, "AUTHINFO GENERIC ", "381 ",
 		       "", nntp_in, nntp_out, &sasl_result, &success_data);
     }
-    else
+    else {
+	/* AUTHINFO SASL */
 	r = saslserver(nntp_saslconn, mech, resp, "", "383 ", "=",
 		       nntp_in, nntp_out, &sasl_result, &success_data);
+    }
 
     if (r) {
 	int code;
@@ -2167,7 +2180,7 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
 	    switch (sasl_result) {
 	    case SASL_NOMECH:
 	    case SASL_TOOWEAK:
-		code = 501;
+		code = 503;
 		break;
 	    case SASL_ENCRYPT:
 		code = 483;
@@ -2251,6 +2264,16 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
 
     /* Create telemetry log */
     nntp_logfd = telemetry_log(nntp_userid, nntp_in, nntp_out, 0);
+
+    /* close any selected group */
+    if (nntp_group) {
+	mailbox_close(nntp_group);
+	nntp_group = 0;
+    }
+    if (backend_current) {
+	proxy_downserver(backend_current);
+	backend_current = NULL;
+    }
 }
 
 static void cmd_hdr(char *cmd, char *hdr, char *pat, char *msgid,
@@ -2275,7 +2298,7 @@ static void cmd_hdr(char *cmd, char *hdr, char *pat, char *msgid,
 
 	/* see if we're looking for metadata */
 	if (hdr[0] == ':') {
-	    if (!strcasecmp(":size", hdr)) {
+	    if (!strcasecmp(":bytes", hdr)) {
 		char xref[8192];
 		unsigned long size = index_getsize(nntp_group, msgno);
 
@@ -4054,7 +4077,12 @@ static void cmd_starttls(int nntps)
 
     if (nntp_starttls_done == 1) {
 	prot_printf(nntp_out, "502 %s\r\n", 
-		    "Already successfully executed STARTTLS");
+		    "TLS is already active");
+	return;
+    }
+    if (nntp_authstate) {
+	prot_printf(nntp_out, "502 %s\r\n", 
+		    "Already authenticated");
 	return;
     }
 
@@ -4127,10 +4155,21 @@ static void cmd_starttls(int nntps)
     prot_settls(nntp_out, tls_conn);
 
     nntp_starttls_done = 1;
+
+    /* close any selected group */
+    if (nntp_group) {
+	mailbox_close(nntp_group);
+	nntp_group = 0;
+    }
+    if (backend_current) {
+	proxy_downserver(backend_current);
+	backend_current = NULL;
+    }
 }
 #else
 static void cmd_starttls(int nntps __attribute__((unused)))
 {
+    /* XXX should never get here */
     fatal("cmd_starttls() called, but no OpenSSL", EC_SOFTWARE);
 }
 #endif /* HAVE_SSL */
