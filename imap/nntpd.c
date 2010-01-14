@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.79 2010/01/11 16:10:59 murch Exp $
+ * $Id: nntpd.c,v 1.80 2010/01/14 17:09:27 murch Exp $
  */
 
 /*
@@ -2101,16 +2101,6 @@ static void cmd_authinfo_pass(char *pass)
 
 	/* Create telemetry log */
 	nntp_logfd = telemetry_log(nntp_userid, nntp_in, nntp_out, 0);
-
-	/* close any selected group */
-	if (nntp_group) {
-	    mailbox_close(nntp_group);
-	    nntp_group = 0;
-	}
-	if (backend_current) {
-	    proxy_downserver(backend_current);
-	    backend_current = NULL;
-	}
     }
 }
 
@@ -2265,14 +2255,16 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
     /* Create telemetry log */
     nntp_logfd = telemetry_log(nntp_userid, nntp_in, nntp_out, 0);
 
-    /* close any selected group */
-    if (nntp_group) {
-	mailbox_close(nntp_group);
-	nntp_group = 0;
-    }
-    if (backend_current) {
-	proxy_downserver(backend_current);
-	backend_current = NULL;
+    if (ssf) {
+	/* close any selected group */
+	if (nntp_group) {
+	    mailbox_close(nntp_group);
+	    nntp_group = 0;
+	}
+	if (backend_current) {
+	    proxy_downserver(backend_current);
+	    backend_current = NULL;
+	}
     }
 }
 
