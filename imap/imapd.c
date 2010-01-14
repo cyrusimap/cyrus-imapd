@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.576 2010/01/06 17:01:32 murch Exp $
+ * $Id: imapd.c,v 1.577 2010/01/14 21:49:39 murch Exp $
  */
 
 #include <config.h>
@@ -1206,6 +1206,7 @@ void cmdloop()
 
 		snmp_increment(CAPABILITY_COUNT, 1);
 	    }
+	    else if (!imapd_userid) goto nologin;
 #ifdef HAVE_ZLIB
 	    else if (!strcmp(cmd.s, "Compress")) {
 		if (c != ' ') goto missingargs;
@@ -1219,7 +1220,6 @@ void cmdloop()
 		snmp_increment(COMPRESS_COUNT, 1);
 	    }
 #endif /* HAVE_ZLIB */
-	    else if (!imapd_userid) goto nologin;
 	    else if (!strcmp(cmd.s, "Check")) {
 		if (!imapd_mailbox && !backend_current) goto nomailbox;
 		if (c == '\r') c = prot_getc(imapd_in);
@@ -2726,15 +2726,15 @@ void capa_response(int flags)
 	/* else don't show anything */
     }
 
+    if (!(flags & CAPA_POSTAUTH)) return;
+
+    prot_printf(imapd_out, CAPA_POSTAUTH_STRING);
+
 #ifdef HAVE_ZLIB
     if (!imapd_compress_done && !imapd_tls_comp) {
 	prot_printf(imapd_out, " COMPRESS=DEFLATE");
     }
 #endif
-
-    if (!(flags & CAPA_POSTAUTH)) return;
-
-    prot_printf(imapd_out, CAPA_POSTAUTH_STRING);
 
     if (idle_enabled()) {
 	prot_printf(imapd_out, " IDLE");
@@ -2750,7 +2750,7 @@ void cmd_capability(char *tag)
 
     prot_printf(imapd_out, "* CAPABILITY ");
 
-    capa_response(CAPA_PREAUTH|CAPA_POSTAUTH);
+    capa_response(CAPA_PREAUTH | (imapd_authstate ? CAPA_POSTAUTH : 0));
 
     prot_printf(imapd_out, "\r\n%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
