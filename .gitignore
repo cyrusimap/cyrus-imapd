@@ -30,6 +30,7 @@ config.status
 config.status.lineno
 config.sub
 configure
+debian/
 com_err/et/compile_et
 coverage.xml
 cscope.out
