@@ -81,9 +81,7 @@ struct message_content {
 /* MUST keep this struct sync'd with sieve_bodypart in sieve_interface.h */
 struct bodypart {
     char section[128];
-    const char *content;
-    const char *encoding;
-    unsigned long size;
+    const char *decoded_body;
 };
 
 extern int message_parse_binary_file P((FILE *infile, struct body **body));

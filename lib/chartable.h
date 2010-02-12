@@ -42,31 +42,13 @@
  * $Id: chartable.h,v 1.10 2010/01/06 17:01:44 murch Exp $
  */
 
-/* note that these are all uppercase letters. since the translation
-   tables canonicalize to lower case letters, we never see these bytes
-   in the output UTF-8 and they're safely used as control codes to the
-   character decoder. */
-
-/* note that currently we never return a character that is represented
- * by more than 3 octets in UTF-8, since we only deal with characters
- * in UCS-2. this means that 11110xxx, 111110xx, and 1111110x never
- * appear in our outgoing tables, and could be used instead of the following.
- */
-
-#define XLT 'N'			/* Long translation */
-#define U7F 'O'			/* UTF-7 first base64 character */
-#define U7N 'P'			/* UTF-7 subsquent base64 character */
-#define U83 'Q'			/* UTF-8 3-char sequence */
-#define U83_2 'R'		/* second char of same */
-#define U83_3 'S'		/* third char of same */
-#define JSR 'T'
-#define JMP 'U'
-#define RET 'V'
-#define END 'W'
-
+struct charmap {
+    unsigned int c;
+    unsigned char next;
+};
+  
 struct charset {
     char *name;
-    const unsigned char (*table)[256][4];
+    const struct charmap (*table)[256];
 };
-
 

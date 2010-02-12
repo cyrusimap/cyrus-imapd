@@ -141,24 +141,19 @@ imapopts.c: imapoptions $(srcdir)/../tools/config2header
 
 imapopts.h: imapopts.c
 
-chartable.c: mkchartable 
+chartable.c: mkchartable.pl charset/*.t charset/unifix.txt charset/unidata5_2.txt
 	@echo "### Building chartables..."
 	rm -f chartable.c
-	./mkchartable \
-	 -m $(srcdir)/charset/unifix.txt	\
-	 -m $(srcdir)/charset/unidata2.txt \
+	perl ./mkchartable.pl \
+	 -m $(srcdir)/charset/unifix.txt \
+	 -m $(srcdir)/charset/unidata5_2.txt \
 	 $(srcdir)/charset/*.t \
 	 > chartable.c \
 	 || (rm -f chartable.c && exit 1)
 	@echo "### Done building chartables."
-#	./mkchartable -m $(srcdir)/charset/unicode.map $(srcdir)/charset/*.t >x-chartables.h
-#	mv x-chartables.h chartables.h
-
-mkchartable: mkchartable.o xstrlcpy.o xstrlcat.o xmalloc.o assert.o
-	$(CC) $(LDFLAGS) -o mkchartable mkchartable.o xstrlcpy.o xstrlcat.o xmalloc.o assert.o
 
 clean:
-	rm -f *.o *.a chartable.c Makefile.bak mkchartable makedepend.log \
+	rm -f *.o *.a chartable.c Makefile.bak makedepend.log \
 	$(BUILTSOURCES)
 
 distclean: clean
