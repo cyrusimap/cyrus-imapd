@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.575 2009/12/16 02:51:39 brong Exp $
+ * $Id: imapd.c,v 1.575.2.1 2010/02/12 03:38:16 brong Exp $
  */
 
 #include <config.h>
@@ -7575,26 +7575,16 @@ int parsecharset;
 	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset, NULL, 0);
-	    if (strchr(str, EMPTY)) {
-		/* Force failure */
-		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
-	    }
-	    else {
-		appendstrlistpat(&searchargs->bcc, str);
-	    }
+	    if (str) appendstrlistpat(&searchargs->bcc, str);
+	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
 	else if (!strcmp(criteria.s, "body")) {
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset, NULL, 0);
-	    if (strchr(str, EMPTY)) {
-		/* Force failure */
-		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
-	    }
-	    else {
-		appendstrlistpat(&searchargs->body, str);
-	    }
+	    if (str) appendstrlistpat(&searchargs->body, str);
+	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
 	else goto badcri;
 	break;
@@ -7605,13 +7595,8 @@ int parsecharset;
 	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset, NULL, 0);
-	    if (strchr(str, EMPTY)) {
-		/* Force failure */
-		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
-	    }
-	    else {
-		appendstrlistpat(&searchargs->cc, str);
-	    }
+	    if (str) appendstrlistpat(&searchargs->cc, str);
+	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
 	else if (parsecharset && !strcmp(criteria.s, "charset")) {
 	    if (c != ' ') goto missingarg;		
@@ -7642,13 +7627,8 @@ int parsecharset;
 	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset, NULL, 0);
-	    if (strchr(str, EMPTY)) {
-		/* Force failure */
-		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
-	    }
-	    else {
-		appendstrlistpat(&searchargs->from, str);
-	    }
+	    if (str) appendstrlistpat(&searchargs->from, str);
+	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
 	else goto badcri;
 	break;
@@ -7699,13 +7679,8 @@ int parsecharset;
 	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset, NULL, 0);
-	    if (strchr(str, EMPTY)) {
-		/* Force failure */
-		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
-	    }
-	    else {
-		appendstrlistpat(patlist, str);
-	    }
+	    if (str) appendstrlistpat(patlist, str);
+	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
 	else goto badcri;
 	break;
@@ -7876,13 +7851,8 @@ int parsecharset;
 	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset, NULL, 0);
-	    if (strchr(str, EMPTY)) {
-		/* Force failure */
-		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
-	    }
-	    else {
-		appendstrlistpat(&searchargs->subject, str);
-	    }
+	    if (str) appendstrlistpat(&searchargs->subject, str);
+	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
 	else goto badcri;
 	break;
@@ -7893,26 +7863,16 @@ int parsecharset;
 	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset, NULL, 0);
-	    if (strchr(str, EMPTY)) {
-		/* Force failure */
-		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
-	    }
-	    else {
-		appendstrlistpat(&searchargs->to, str);
-	    }
+	    if (str) appendstrlistpat(&searchargs->to, str);
+	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
 	else if (!strcmp(criteria.s, "text")) {
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
 	    str = charset_convert(arg.s, *charset, NULL, 0);
-	    if (strchr(str, EMPTY)) {
-		/* Force failure */
-		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
-	    }
-	    else {
-		appendstrlistpat(&searchargs->text, str);
-	    }
+	    if (str) appendstrlistpat(&searchargs->text, str);
+	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
 	else goto badcri;
 	break;
