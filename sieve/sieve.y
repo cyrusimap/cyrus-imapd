@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sieve.y,v 1.45.2.1 2010/02/12 03:41:11 brong Exp $
+ * $Id: sieve.y,v 1.45.2.2 2010/02/12 03:46:53 brong Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -1217,7 +1217,7 @@ static int verify_regex(char *s, int cflags)
     char errbuf[100];
     regex_t *reg = (regex_t *) xmalloc(sizeof(regex_t));
 
-#ifdef HAVE_PCREPOSIX_H
+#ifdef REG_UTF8
     /* support UTF8 comparisons */
     cflags |= REG_UTF8;
 #endif
