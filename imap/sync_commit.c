@@ -83,6 +83,7 @@
 #include "lock.h"
 #include "sync_support.h"
 #include "sync_commit.h"
+#include "sync_log.h"
 
 /* A few support functions for sync_combine_commit() */
 
@@ -927,6 +928,7 @@ int sync_upload_commit(struct mailbox *mailbox,
 {
     struct sync_upload_item *head = upload_list->head;
     int r;
+    int iscombine = 0;
 
     if (head == NULL)
         return(0);
@@ -954,15 +956,26 @@ int sync_upload_commit(struct mailbox *mailbox,
         return(r);
     }
 
-    if (mailbox->last_uid >= head->uid)
+    if (mailbox->last_uid >= head->uid) {
 	r = sync_combine_commit(mailbox, last_appenddate,
 				upload_list, message_list);
-    else
+	iscombine = 1;
+    }
+    else {
         r = sync_append_commit(mailbox, last_appenddate,
                                upload_list, message_list);
+	iscombine = 0;
+    }
 
     mailbox_unlock_index(mailbox);
     mailbox_unlock_header(mailbox);
+
+    if (config_getswitch(IMAPOPT_SYNC_LOG_CHAIN)) {
+	if (iscombine)
+	    sync_log_mailbox(mailbox->name);
+	else
+	    sync_log_append(mailbox->name);
+    }
 
     /* Update mailbox internal index to reflect change */
     if (!r)
@@ -1017,6 +1030,10 @@ int sync_uidlast_commit(struct mailbox *mailbox,
                mailbox->name);
         return(IMAP_IOERROR);
     }
+
+    if (config_getswitch(IMAPOPT_SYNC_LOG_CHAIN))
+	sync_log_mailbox(mailbox->name);
+
     return(0);
 }
 
@@ -1059,6 +1076,10 @@ int sync_uidvalidity_commit(struct mailbox *mailbox,
                mailbox->name);
         return(IMAP_IOERROR);
     }
+
+    if (config_getswitch(IMAPOPT_SYNC_LOG_CHAIN))
+	sync_log_mailbox(mailbox->name);
+
     return(0);
 }
 
@@ -1130,6 +1151,9 @@ int sync_setflags_commit(struct mailbox *mailbox,
 	return IMAP_IOERROR;
     }
 
+    if (config_getswitch(IMAPOPT_SYNC_LOG_CHAIN))
+	sync_log_mailbox(mailbox->name);
+
     r = mailbox_open_index(mailbox);   /* Update internal index */
     return(r);
 }
@@ -1179,6 +1203,10 @@ int sync_highestmodseq_commit(struct mailbox *mailbox,
                mailbox->name);
         return(IMAP_IOERROR);
     }
+
+    if (config_getswitch(IMAPOPT_SYNC_LOG_CHAIN))
+	sync_log_mailbox(mailbox->name);
+
     return(0);
 }
 
@@ -1220,6 +1248,9 @@ int sync_modseq_commit(struct mailbox *mailbox,
 	       msgno, mailbox->name);
 	return IMAP_IOERROR;
     }
+
+    if (config_getswitch(IMAPOPT_SYNC_LOG_CHAIN))
+	sync_log_mailbox(mailbox->name);
 
     r = mailbox_open_index(mailbox);   /* Update internal index */
     return(r);
@@ -1326,6 +1357,9 @@ int sync_create_commit(char *name, char *partition, char *uniqueid, char *acl,
     if (!r) mailbox_write_index_header(&m);
 
     if (mboxopen) mailbox_close(&m);
+
+    if (config_getswitch(IMAPOPT_SYNC_LOG_CHAIN))
+	sync_log_mailbox(name);
 
     if (free_uniqueid) free(uniqueid);
 

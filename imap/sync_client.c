@@ -3592,6 +3592,7 @@ int main(int argc, char **argv)
     int   timeout  = 600;
     int   min_delta = 0;
     char sync_log_file[MAX_MAILBOX_PATH+1];
+    char *sync_log_name = NULL;
     const char *sync_shutdown_file = NULL;
     char buf[512];
     FILE *file;
@@ -3609,7 +3610,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:vlS:F:f:w:t:d:rRumsoz")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:vlS:F:f:w:t:d:n:rRumsoz")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -3639,6 +3640,10 @@ int main(int argc, char **argv)
 		     alternate sync_log_file used by single-run repeat mode */
             input_filename = optarg;
             break;
+
+        case 'n':
+	    sync_log_name = optarg;
+	    break;
 
         case 'w':
             wait = atoi(optarg);
@@ -3901,8 +3906,15 @@ int main(int argc, char **argv)
 	    exit_rc = do_sync(input_filename);
 	}
 	else {
-	    strlcpy(sync_log_file, config_dir, sizeof(sync_log_file));
-	    strlcat(sync_log_file, "/sync/log", sizeof(sync_log_file));
+	    if (sync_log_name) {
+		strlcpy(sync_log_file, config_dir, sizeof(sync_log_file));
+		strlcat(sync_log_file, "/sync/", sizeof(sync_log_file));
+		strlcat(sync_log_file, sync_log_name, sizeof(sync_log_file));
+		strlcat(sync_log_file, "/log", sizeof(sync_log_file));
+	    } else {
+		strlcpy(sync_log_file, config_dir, sizeof(sync_log_file));
+		strlcat(sync_log_file, "/sync/log", sizeof(sync_log_file));
+	    }
 
 	    if (!sync_shutdown_file)
 		sync_shutdown_file = config_getstring(IMAPOPT_SYNC_SHUTDOWN_FILE);

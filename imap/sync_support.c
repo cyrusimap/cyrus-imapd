@@ -86,6 +86,7 @@
 #include "message_guid.h"
 #include "sync_support.h"
 #include "sync_commit.h"
+#include "sync_log.h"
 
 /* Parse routines */
 
@@ -1839,6 +1840,9 @@ int sync_sieve_upload(struct protstream *input, struct protstream *output,
     if (!r && (rename(tmpname, newname) < 0))
         r = IMAP_IOERROR;
 
+    if (config_getswitch(IMAPOPT_SYNC_LOG_CHAIN))
+	sync_log_sieve(userid);
+
     return(r);
 }
 
@@ -1858,6 +1862,9 @@ int sync_sieve_activate(char *userid, char *name)
     if (symlink(target, active) < 0)
         return(IMAP_IOERROR);
 
+    if (config_getswitch(IMAPOPT_SYNC_LOG_CHAIN))
+	sync_log_sieve(userid);
+
     return(0);
 }
 
@@ -1870,6 +1877,9 @@ int sync_sieve_deactivate(char *userid)
 
     snprintf(active, sizeof(active), "%s/%s", sieve_path, "defaultbc");
     unlink(active);
+
+    if (config_getswitch(IMAPOPT_SYNC_LOG_CHAIN))
+	sync_log_sieve(userid);
     
     return(0);
 }
@@ -1922,6 +1932,9 @@ int sync_sieve_delete(char *userid, char *name)
 
     snprintf(filename, sizeof(filename), "%s/%s", sieve_path, name);
     unlink(filename);
+
+    if (config_getswitch(IMAPOPT_SYNC_LOG_CHAIN))
+	sync_log_sieve(userid);
 
     return(0);
 }

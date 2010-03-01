@@ -1129,6 +1129,16 @@ product version in the capabilities */
    and nntpd(8).  The log {configdirectory}/sync/log is used by
    sync_client(8) for "rolling" replication. */
 
+{ "sync_log_chain", 0, SWITCH }
+/* Enable replication action logging by sync_server as well, allowing
+   chaining of replicas.  Use this on 'B' for A => B => C replication layout */
+
+{ "sync_log_names", NULL, STRING }
+/* If specified, log all events to multiple log files in directories
+   specified by "name".  To run these log files, you need to pass the
+   -N option to sync_client with the same name.  Use this for a mesh
+   style replication layout */
+
 { "sync_password", NULL, STRING }
 /* The default password to use when authenticating to a sync server. */
 

@@ -1630,6 +1630,9 @@ static void cmd_setquota(char *root, int limit)
                  root, error_message(r));
     else
         prot_printf(sync_out, "OK SetQuota succeeded\r\n");
+
+    if (config_getswitch(IMAPOPT_SYNC_LOG_CHAIN))
+	sync_log_quota(root);
 }
 
 /* ====================================================================== */
@@ -2223,6 +2226,9 @@ static void cmd_setseen(struct mailbox **mailboxp, char *user, char *mboxname,
         prot_printf(sync_out, "OK Setseen Suceeded\r\n");
 
     free(seenuid0);
+
+    if (config_getswitch(IMAPOPT_SYNC_LOG_CHAIN))
+	sync_log_seen(user, mboxname);
 }
 
 static void cmd_setseen_all(char *user, struct buf *data)
@@ -2267,6 +2273,9 @@ static void cmd_setseen_all(char *user, struct buf *data)
                  user, error_message(r));
     else
         prot_printf(sync_out, "OK Setseen_all Suceeded\r\n");
+
+    if (config_getswitch(IMAPOPT_SYNC_LOG_CHAIN))
+	sync_log_user(user); /* setseen_all only on full user event */
 }
 
 static void cmd_setacl(char *name, char *acl)
@@ -2278,6 +2287,9 @@ static void cmd_setacl(char *name, char *acl)
                  "NO SetAcl Failed for %s: %s\r\n", name, error_message(r));
     else
         prot_printf(sync_out, "OK SetAcl Suceeded\r\n");
+
+    if (config_getswitch(IMAPOPT_SYNC_LOG_CHAIN))
+	sync_log_acl(name);
 }
 
 /* ====================================================================== */
@@ -2711,6 +2723,9 @@ static void cmd_user(char *userid)
     }
 
     prot_printf(sync_out, "OK User completed\r\n");
+
+    if (config_getswitch(IMAPOPT_SYNC_LOG_CHAIN))
+	sync_log_user(userid);
 }
 
 /* ====================================================================== */
@@ -2752,6 +2767,9 @@ static void cmd_create(char *mailboxname, char *partition,
                  mailboxname, error_message(r));
     else
         prot_printf(sync_out, "OK Create completed\r\n");
+
+    if (config_getswitch(IMAPOPT_SYNC_LOG_CHAIN))
+	sync_log_mailbox(mailboxname);
 }
 
 static void cmd_delete(char *name)
@@ -2767,6 +2785,9 @@ static void cmd_delete(char *name)
                  name, error_message(r));
     else
         prot_printf(sync_out, "OK Delete completed\r\n");
+
+    if (config_getswitch(IMAPOPT_SYNC_LOG_CHAIN))
+	sync_log_mailbox(name);
 }
 
 static void cmd_rename(char *oldmailboxname, char *newmailboxname)
@@ -2782,6 +2803,8 @@ static void cmd_rename(char *oldmailboxname, char *newmailboxname)
     else
         prot_printf(sync_out, "OK Rename completed\r\n");
 
+    if (config_getswitch(IMAPOPT_SYNC_LOG_CHAIN))
+	sync_log_mailbox_double(oldmailboxname, newmailboxname);
 }
 
 static int do_lsub_single(char *name,
@@ -2830,12 +2853,15 @@ static void cmd_changesub(char *user, char *name, int add)
     r = mboxlist_changesub(mboxname, user, sync_authstate, add, add);
 
     if (r) {
-        prot_printf(sync_out, "NO %s %s %s failed: %s\r\n",
+	prot_printf(sync_out, "NO %s %s %s failed: %s\r\n",
 		    add ? "Addsub" : "Delsub",
 		    user, name, error_message(r));
     } else
-        prot_printf(sync_out, "OK %s completed\r\n",
+	prot_printf(sync_out, "OK %s completed\r\n",
 		    add ? "Addsub" : "Delsub");
+
+    if (config_getswitch(IMAPOPT_SYNC_LOG_CHAIN))
+	sync_log_sub(user, name);
 }
 
 /* ====================================================================== */
@@ -3001,4 +3027,7 @@ static void cmd_set_annotation(char *mailboxname, char *entry, char *userid,
     }
     else
         prot_printf(sync_out, "OK Setannotation completed\r\n");
+
+    if (config_getswitch(IMAPOPT_SYNC_LOG_CHAIN))
+	sync_log_annotation(mailboxname);
 }

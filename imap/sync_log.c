@@ -74,19 +74,56 @@
 #include "xstrlcat.h"
 
 static int sync_log_enabled = 0;
-static char sync_log_file[MAX_MAILBOX_PATH+1];
+
+struct sync_log_target {
+   char file[MAX_MAILBOX_PATH+1];
+   struct sync_log_target *next;
+};
+static struct sync_log_target *sync_target = NULL;
 
 void sync_log_init(void)
 {
-    sync_log_enabled = config_getswitch(IMAPOPT_SYNC_LOG);
+    struct sync_log_target *item = NULL;
+    char *names;
+    char *copy;
+    char *start;
+    char *end;
 
-    strlcpy(sync_log_file, config_dir, sizeof(sync_log_file));
-    strlcat(sync_log_file, "/sync/log", sizeof(sync_log_file));
+    sync_log_enabled = config_getswitch(IMAPOPT_SYNC_LOG);
+    names = config_getstring(IMAPOPT_SYNC_LOG_NAMES);
+
+    if (names) {
+	copy = start = xstrdup(names);
+	while (start[0]) {
+	    end = strchr(start, ' ');
+	    if (end) {
+		*end = '\0';
+	    }
+	    item = sync_target;
+	    sync_target = (struct sync_log_target *) xmalloc(sizeof(struct sync_log_target));
+	    sync_target->next = item;
+	    snprintf(sync_target->file, MAX_MAILBOX_PATH,
+	             "%s/sync/%s/log", config_dir, start);
+	    if (!end) break;
+	    start = end + 1;
+	}
+	free(copy);
+    } else {
+	sync_target = (struct sync_log_target *) xmalloc(sizeof(struct sync_log_target));
+	sync_target->next = NULL;
+	snprintf(sync_target->file, MAX_MAILBOX_PATH,
+	         "%s/sync/log", config_dir);
+    }
 }
 
 void sync_log_done(void)
 {
-    /* nothing yet */
+    struct sync_log_target *item = NULL;
+    while (sync_target) {
+	item = sync_target->next;
+	free(sync_target);
+	sync_target = item;
+    }
 }
 
 static void sync_log_base(const char *string, int len)
@@ -94,55 +131,59 @@ static void sync_log_base(const char *string, int len)
     int fd, rc;
     struct stat sbuffile, sbuffd;
     int retries = 0;
+    struct sync_log_target *item = sync_target;
 
     if (!sync_log_enabled) return;
 
-    while (retries++ < SYNC_LOG_RETRIES) {
-        fd = open(sync_log_file, O_WRONLY|O_APPEND|O_CREAT, 0640);
-        if (fd < 0 && errno == ENOENT) {
-	    if (!cyrus_mkdir(sync_log_file, 0755)) {
-		fd = open(sync_log_file, O_WRONLY|O_APPEND|O_CREAT, 0640);
+    while (item) {
+	while (retries++ < SYNC_LOG_RETRIES) {
+	    fd = open(item->file, O_WRONLY|O_APPEND|O_CREAT, 0640);
+	    if (fd < 0 && errno == ENOENT) {
+		if (!cyrus_mkdir(item->file, 0755)) {
+		    fd = open(item->file, O_WRONLY|O_APPEND|O_CREAT, 0640);
+		}
 	    }
+	    if (fd < 0) {
+		syslog(LOG_ERR, "sync_log(): Unable to write to log file %s: %s",
+		       item->file, strerror(errno));
+		return;
+	    }
+
+	    if (lock_blocking(fd) == -1) {
+		syslog(LOG_ERR, "sync_log(): Failed to lock %s for %s: %m",
+		       item->file, string);
+		close(fd);
+		return;
+	    }
+
+	    /* Check that the file wasn't renamed after it was opened above */
+	    if ((fstat(fd, &sbuffd) == 0) &&
+		(stat(item->file, &sbuffile) == 0) &&
+		(sbuffd.st_ino == sbuffile.st_ino))
+		break;
+
+	    close(fd);
 	}
-        if (fd < 0) {
-            syslog(LOG_ERR, "sync_log(): Unable to write to log file %s: %s",
-                   sync_log_file, strerror(errno));
-            return;
-        }
-
-        if (lock_blocking(fd) == -1) {
-	    syslog(LOG_ERR, "sync_log(): Failed to lock %s for %s: %m",
-		   sync_log_file, string);
-            close(fd);
-            return;
+	if (retries >= SYNC_LOG_RETRIES) {
+	    close(fd);
+	    syslog(LOG_ERR,
+		   "sync_log(): Failed to lock %s for %s after %d attempts",
+		   item->file, string, retries);
+	    return;
 	}
 
-        /* Check that the file wasn't renamed after it was opened above */
-        if ((fstat(fd, &sbuffd) == 0) &&
-            (stat(sync_log_file, &sbuffile) == 0) &&
-            (sbuffd.st_ino == sbuffile.st_ino))
-            break;
+	if ((rc = retry_write(fd, string, len)) < 0)
+	    syslog(LOG_ERR, "write() to %s failed: %s",
+		   item->file, strerror(errno));
+    
+	if (rc < len)
+	    syslog(LOG_ERR, "Partial write to %s: %d out of %d only written",
+		   item->file, rc, len);
 
-        close(fd);
+	fsync(fd); /* paranoia */
+	close(fd);
+	item = item->next;
     }
-    if (retries >= SYNC_LOG_RETRIES) {
-        close(fd);
-        syslog(LOG_ERR,
-               "sync_log(): Failed to lock %s for %s after %d attempts",
-               sync_log_file, string, retries);
-        return;
-    }
-
-    if ((rc = retry_write(fd, string, len)) < 0)
-        syslog(LOG_ERR, "write() to %s failed: %s",
-               sync_log_file, strerror(errno));
-
-    if (rc < len)
-        syslog(LOG_ERR, "Partial write to %s: %d out of %d only written",
-               sync_log_file, rc, len);
-
-    fsync(fd); /* paranoia */
-    close(fd);
 }
 
 static const char *sync_quote_name(const char *name)
