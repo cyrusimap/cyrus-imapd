@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: libconfig.c,v 1.25 2010/01/06 17:01:45 murch Exp $
+ * $Id: libconfig.c,v 1.26 2010/04/19 19:54:26 murch Exp $
  */
 
 #include <config.h>
@@ -82,6 +82,7 @@ enum enum_value config_virtdomains;	          /* f */
 enum enum_value config_mupdate_config;	/* IMAP_ENUM_MUPDATE_CONFIG_STANDARD */
 int config_maxword;
 int config_maxquoted;
+int config_qosmarking;
 
 /* declared in each binary that uses libconfig */
 extern const int config_need_data;
@@ -210,11 +211,21 @@ static void config_ispartition(const char *key,
     if (!strncmp("partition-", key, 10)) *found = 1;
 }
 
+static const unsigned char qos[] = {
+/* cs0..cs7 */		0x00, 0x20, 0x40, 0x60, 0x80, 0xa0, 0xc0, 0xe0,
+/* af11..af13 */	0x28, 0x30, 0x38,
+/* af21..af23 */	0x48, 0x50, 0x58,
+/* af31..af33 */	0x68, 0x70, 0x78,
+/* af41..af43 */	0x88, 0x90, 0x98,
+/* ef */		0xb8
+};
+
 void config_read(const char *alt_config)
 {
     enum imapopt opt = IMAPOPT_ZERO;
     char buf[4096];
     char *p;
+    int ival;
 
     /* xxx this is leaked, this may be able to be better in 2.2 (cyrus_done) */
     if(alt_config) config_filename = xstrdup(alt_config);
@@ -328,6 +339,9 @@ void config_read(const char *alt_config)
     /* set some limits */
     config_maxquoted = config_getint(IMAPOPT_MAXQUOTED);
     config_maxword = config_getint(IMAPOPT_MAXWORD);
+
+    ival = config_getenum(IMAPOPT_QOSMARKING);
+    config_qosmarking = qos[ival];
 }
 
 #define GROWSIZE 4096

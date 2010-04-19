@@ -43,7 +43,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\"
-.\" $Id: imapoptions,v 1.75 2010/01/06 17:24:19 murch Exp $
+.\" $Id: imapoptions,v 1.76 2010/04/19 19:54:25 murch Exp $
 
 .SH NAME
 imapd.conf \- IMAP configuration file
@@ -905,6 +905,10 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* When using the AFSKRB ptloader module with Kerberos 5 canonicalization,
    strip the default realm from the userid (this does not affect the stripping
    of realms specified by the afspts_localrealms option) */
+
+{ "qosmarking", "cs0", ENUM("cs0", "cs1", "cs2", "cs3", "cs4", "cs5", "cs6", "cs7", "af11", "af12", "af13", "af21", "af22", "af23", "af31", "af32", "af33", "af41", "af42", "af43", "ef") }
+/* This specifies the Class Selector or Differentiated Services Code Point
+   designation on IP headers (in the ToS field). */
 
 { "quota_db", "quotalegacy", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist", "sql", "quotalegacy")}
 /* The cyrusdb backend to use for quotas. */

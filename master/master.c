@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: master.c,v 1.116 2010/01/06 17:01:53 murch Exp $
+ * $Id: master.c,v 1.117 2010/04/19 19:54:26 murch Exp $
  */
 
 #include <config.h>
@@ -438,6 +438,15 @@ void service_create(struct service *s)
 	    if (r < 0) {
 		syslog(LOG_ERR, "unable to setsocketopt(IPV6_V6ONLY): %m");
 	    }
+	}
+#endif
+
+	/* set IP ToS if supported */
+#if defined(SOL_IP) && defined(IP_TOS)
+	r = setsockopt(s->socket, SOL_IP, IP_TOS,
+		       (void *) &config_qosmarking, sizeof(config_qosmarking));
+	if (r < 0) {
+	    syslog(LOG_WARNING, "unable to setsocketopt(IP_TOS): %m");
 	}
 #endif
 
