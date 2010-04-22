@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: global.c,v 1.34 2010/01/06 17:01:31 murch Exp $
+ * $Id: global.c,v 1.35 2010/04/22 17:29:53 murch Exp $
  */
 
 #include <config.h>
@@ -72,8 +72,8 @@
 #include "mupdate_err.h"
 #include "mutex.h"
 #include "prot.h" /* for PROT_BUFSIZE */
+#include "userdeny.h"
 #include "util.h"
-#include "wildmat.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
@@ -531,124 +531,6 @@ static int acl_ok(const char *user, struct auth_state *authstate)
     return r;
 }
 
-#define DENYDB config_userdeny_db
-#define FNAME_USERDENYDB "/user_deny.db"
-#define USERDENY_VERSION 2
-
-/*
- * access_ok() checks to see if 'user' is allowed access to 'service'
- * Returns 1 if so, 0 if not.
- */
-int access_ok(const char *user, const char *service, char *msgbuf, int size)
-{
-    static char *fname = NULL;
-    struct db *db = NULL;
-    int r, ret = 1;  /* access always granted by default */
-
-    if (!fname) {
-	/* create path to database */
-	fname = xmalloc(strlen(config_dir) + sizeof(FNAME_USERDENYDB) + 1);
-	strcpy(fname, config_dir);
-	strcat(fname, FNAME_USERDENYDB);
-    }
-
-    /* try to open database */
-    r = DENYDB->open(fname, 0, &db);
-    if (r) {
-	/* ignore non-existent DB, report all other errors */
-	if (errno != ENOENT) {
-	    syslog(LOG_WARNING, "DENYDB_ERROR: error opening '%s': %s",
-		   fname, cyrusdb_strerror(r));
-	}
-
-    } else {
-	/* fetch entry for user */
-	const char *data = NULL;
-	int datalen;
-
-	syslog(LOG_DEBUG, "fetching user_deny.db entry for '%s'", user);
-	do {
-	    r = DENYDB->fetch(db, user, strlen(user), &data, &datalen, NULL);
-	} while (r == CYRUSDB_AGAIN);
-
-	if (r || !data || !datalen) {
-	    /* ignore non-existent/empty entry, report all other errors */
-	    if (r != CYRUSDB_NOTFOUND) {
-		syslog(LOG_WARNING,
-		       "DENYDB_ERROR: error reading entry '%s': %s",
-		       user, cyrusdb_strerror(r));
-	    }
-	} else {
-	    /* parse the data */
-	    char *buf, *wild;
-	    unsigned long version;
-
-	    buf = xstrndup(data, datalen);  /* use a working copy */
-
-	    /* check version */
-	    if (((version = strtoul(buf, &wild, 10)) < 1) ||
-		(version > USERDENY_VERSION)) {
-		syslog(LOG_WARNING,
-		       "DENYDB_ERROR: invalid version for entry '%s': %lu",
-		       user, version);
-	    } else if (*wild++ != '\t') {
-		syslog(LOG_WARNING,
-		       "DENYDB_ERROR: missing wildmat for entry '%s'", user);
-	    } else {
-		char *pat, *msg = "Access to this service has been blocked";
-		int not;
-
-		/* check if we have a deny message */
-		switch (version) {
-		case USERDENY_VERSION:
-		    if ((msg = strchr(wild, '\t'))) *msg++ = '\0';
-		    break;
-		}
-
-		/* scan wildmat right to left for a match against our service */
-		syslog(LOG_DEBUG, "wild: '%s'   service: '%s'", wild, service);
-		do {
-		    /* isolate next pattern */
-		    if ((pat = strrchr(wild, ','))) {
-			*pat++ = '\0';
-		    } else {
-			pat = wild;
-		    }
-
-		    /* XXX  trim leading & trailing whitespace? */
-
-		    /* is it a negated pattern? */
-		    not = (*pat == '!');
-		    if (not) ++pat;
-
-		    syslog(LOG_DEBUG, "pat %d:'%s'", not, pat);
-
-		    /* see if pattern matches our service */
-		    if (wildmat(service, pat)) {
-			/* match ==> we're done */
-			ret = not;
-			if (msgbuf) strlcpy(msgbuf, msg, size);
-			break;
-		    }
-
-		    /* continue until we reach head of wildmat */
-		} while (pat != wild);
-	    }
-
-	    free(buf);
-	}
-
-
-	r = DENYDB->close(db);
-	if (r) {
-	    syslog(LOG_WARNING, "DENYDB_ERROR: error closing: %s",
-		   cyrusdb_strerror(r));
-	}
-    }
-
-    return ret;
-}
-
 /* should we allow users to proxy?  return SASL_OK if yes,
    SASL_BADAUTH otherwise */
 int mysasl_proxy_policy(sasl_conn_t *conn,
@@ -704,7 +586,7 @@ int mysasl_proxy_policy(sasl_conn_t *conn,
     }
 
     /* is requested_user denied access?  authenticated admins are exempt */
-    if (!userisadmin && !access_ok(requested_user, config_ident, NULL, 0)) {
+    if (!userisadmin && userdeny(requested_user, config_ident, NULL, 0)) {
 	syslog(LOG_ERR, "user '%s' denied access to service '%s'",
 	       requested_user, config_ident);
 	sasl_seterror(conn, SASL_NOLOG,

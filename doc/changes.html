@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!-- $Id: changes.html,v 1.185 2010/04/19 19:54:24 murch Exp $ -->
+<!-- $Id: changes.html,v 1.186 2010/04/22 17:29:53 murch Exp $ -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
@@ -22,6 +22,8 @@ support for deprecated (compile-time) LISTEXT IMAP extension.
   extensions.</li>
 <li>Added support for marking QoS on traffic. (courtesy of Philip
   Prindeville <philipp@redfish-solutions.com>)</li>
+<li>Modified <tt>user_deny.db</tt> code to open database once at
+  service startup time.</li>
 </ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.3.15</h1>
@@ -2482,7 +2484,7 @@ message for this common configuration error.</li>
 </ul>
 
 <hr />
-last modified: $Date: 2010/04/19 19:54:24 $ <br />
+last modified: $Date: 2010/04/22 17:29:53 $ <br />
 <a href="index.html">Return</a> to the Cyrus IMAP Server Home Page
 </body>
 </html>

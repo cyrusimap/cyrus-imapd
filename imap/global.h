@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: global.h,v 1.14 2010/01/06 17:01:31 murch Exp $
+ * $Id: global.h,v 1.15 2010/04/22 17:29:53 murch Exp $
  */
 
 #ifndef INCLUDED_GLOBAL_H
@@ -160,5 +160,6 @@ extern struct cyrusdb_backend *config_duplicate_db;
 extern struct cyrusdb_backend *config_tlscache_db;
 extern struct cyrusdb_backend *config_ptscache_db;
 extern struct cyrusdb_backend *config_statuscache_db;
+extern struct cyrusdb_backend *config_userdeny_db;
 
 #endif /* INCLUDED_GLOBAL_H */
