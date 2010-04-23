@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.82 2010/04/23 19:48:03 murch Exp $
+ * $Id: nntpd.c,v 1.83 2010/04/23 20:53:49 murch Exp $
  */
 
 /*
@@ -3977,13 +3977,17 @@ static void news2mail(message_data_t *msg)
 
 static void cmd_post(char *msgid, int mode)
 {
+    char *mboxname;
     FILE *f = NULL;
     message_data_t *msg;
     int r = 0;
 
     /* check if we want this article */
-    if (msgid && find_msgid(msgid, NULL, NULL)) {
+    if (msgid && find_msgid(msgid, &mboxname, NULL)) {
 	/* already have it */
+	syslog(LOG_INFO,
+	       "dupelim: news article id %s already present in mailbox %s",
+	       msgid, mboxname);
 	r = NNTP_DONT_SEND;
     }
 
