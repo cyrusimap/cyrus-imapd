@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: nntpd.c,v 1.81 2010/04/22 17:29:55 murch Exp $
+ * $Id: nntpd.c,v 1.82 2010/04/23 19:48:03 murch Exp $
  */
 
 /*
@@ -596,6 +596,9 @@ int service_main(int argc __attribute__((unused)),
 	if (getsockname(0, (struct sockaddr *)&nntp_localaddr, &salen) == 0) {
 	    nntp_haveaddr = 1;
 	}
+
+	/* Create pre-authentication telemetry log based on client IP */
+	nntp_logfd = telemetry_log(hbuf, nntp_in, nntp_out, 0);
     }
 
     /* other params should be filled in */
@@ -2060,6 +2063,13 @@ static void cmd_authinfo_user(char *user)
 
 static void cmd_authinfo_pass(char *pass)
 {
+    /* Conceal password in telemetry log */
+    if (nntp_logfd != -1 && pass) {
+	ftruncate(nntp_logfd,
+		  lseek(nntp_logfd, -2, SEEK_CUR) - strlen(pass));
+	write(nntp_logfd, "...\r\n", 5);
+    }
+
     if (nntp_authstate) {
 	prot_printf(nntp_out, "502 Already authenticated\r\n");
 	return;
@@ -2107,7 +2117,8 @@ static void cmd_authinfo_pass(char *pass)
 
 	nntp_authstate = auth_newstate(nntp_userid);
 
-	/* Create telemetry log */
+	/* Close IP-based telemetry log and create new log based on userid */
+	if (nntp_logfd != -1) close(nntp_logfd);
 	nntp_logfd = telemetry_log(nntp_userid, nntp_in, nntp_out, 0);
     }
 }
@@ -2120,9 +2131,22 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
     char *ssfmsg = NULL;
     const void *val;
 
+    /* Conceal initial response in telemetry log */
+    if (nntp_logfd != -1 && resp) {
+	ftruncate(nntp_logfd,
+		  lseek(nntp_logfd, -2, SEEK_CUR) - strlen(resp));
+	write(nntp_logfd, "...\r\n", 5);
+    }
+
     if (nntp_userid) {
 	prot_printf(nntp_out, "502 Already authenticated\r\n");
 	return;
+    }
+
+    /* Stop telemetry logging during SASL exchange */
+    if (nntp_logfd != -1 && mech) {
+	prot_setlog(nntp_in, PROT_NO_FD);
+	prot_setlog(nntp_out, PROT_NO_FD);
     }
 
     if (cmd[0] == 'g') {
@@ -2156,6 +2180,10 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
 	r = saslserver(nntp_saslconn, mech, resp, "", "383 ", "=",
 		       nntp_in, nntp_out, &sasl_result, &success_data);
     }
+
+    /* Restart any telemetry logging */
+    prot_setlog(nntp_in, nntp_logfd);
+    prot_setlog(nntp_out, nntp_logfd);
 
     if (r) {
 	int code;
@@ -2260,7 +2288,8 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
     prot_setsasl(nntp_in,  nntp_saslconn);
     prot_setsasl(nntp_out, nntp_saslconn);
 
-    /* Create telemetry log */
+    /* Close IP-based telemetry log and create new log based on userid */
+    if (nntp_logfd != -1) close(nntp_logfd);
     nntp_logfd = telemetry_log(nntp_userid, nntp_in, nntp_out, 0);
 
     if (ssf) {
