@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.578 2010/04/22 17:29:53 murch Exp $
+ * $Id: imapd.c,v 1.579 2010/05/07 18:44:20 wescraig Exp $
  */
 
 #include <config.h>
@@ -8362,7 +8362,7 @@ static int do_xfer_single(char *toserver, char *topart,
 			  int mbflags, 
 			  char *path, char *mpath, char *part, char *acl,
 			  int prereserved,
-			  mupdate_handle *h_in,
+			  mupdate_handle **h_in,
 			  struct backend *be_in) 
 {
     int r = 0, rerr = 0;
@@ -8414,8 +8414,8 @@ static int do_xfer_single(char *toserver, char *topart,
     }
 
     /* Step 1a: Connect to mupdate (as needed) */
-    if(h_in) {
-	mupdate_h = h_in;
+    if(h_in && *h_in) {
+	mupdate_h = *h_in;
     } else if (config_mupdate_server) {
 	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
 	if(r) {
@@ -8502,11 +8502,34 @@ static int do_xfer_single(char *toserver, char *topart,
     /* Step 6: mupdate.activate(mailbox, remote) */
     /* We do this from the local server first so that recovery is easier */
     if(!r && mupdate_h) {
-	/* Note the flag that we don't have a valid partiton at the moment */
-	snprintf(buf, sizeof(buf), "%s!MOVED", toserver);
+	/*
+	 * If we don't have a partition on the target server, we use
+	 * the string "MOVED" instead.  When we issue MUPDATEPUSH to the
+	 * target server, it will correctly update the mupdate master.
+	 * Note that "toserver" is also a guess, since it's not actually
+	 * required to match config_servername on the target server.  So
+	 * much for making recovery easier!
+	 */
+	if (topart) {
+	    snprintf(buf, sizeof(buf), "%s!%s", toserver, topart);
+	} else {
+	    snprintf(buf, sizeof(buf), "%s!MOVED", toserver);
+	}
 	r = mupdate_activate(mupdate_h, mailboxname, buf, acl);
+	if (r) {
+	    syslog( LOG_INFO, "MUPDATE: lost connection, retrying" );
+	    mupdate_disconnect(&mupdate_h);
+	    r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
+	    if (!r) {
+		r = mupdate_activate(mupdate_h, mailboxname, buf, acl);
+	    }
+	}
+	if (r) {
+	    syslog( LOG_ERR, "MUPDATE: can't activate mailbox entry '%s'",
+		mailboxname );
+	}
     }
-    
+
     /* MAILBOX NOW LIVES ON REMOTE */
     if(!r) {
 	backout_remotebox = 0;
@@ -8568,10 +8591,16 @@ static int do_xfer_single(char *toserver, char *topart,
 done:
     if(r && mupdate_h && backout_mupdate) {
 	rerr = 0;
-	/* xxx if the mupdate server is what failed, then this won't
-	   help any! */
 	snprintf(buf, sizeof(buf), "%s!%s", config_servername, part);
 	rerr = mupdate_activate(mupdate_h, mailboxname, buf, acl);
+	if (rerr) {
+	    syslog( LOG_INFO, "MUPDATE: lost connection, retrying" );
+	    mupdate_disconnect(&mupdate_h);
+	    rerr = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
+	    if (!rerr) {
+		rerr = mupdate_activate(mupdate_h, mailboxname, buf, acl);
+	    }
+	}
 	if(rerr) {
 	    syslog(LOG_ERR,
 		   "Could not back out mupdate during move of %s (%s)",
@@ -8598,8 +8627,15 @@ done:
     }
 
     /* release the handles we got locally if necessary */
-    if(mupdate_h && !h_in)
-	mupdate_disconnect(&mupdate_h);
+    if(mupdate_h) {
+	if (h_in && *h_in) {
+	    if (*h_in != mupdate_h) {
+		*h_in = mupdate_h;
+	    }
+	} else {
+	    mupdate_disconnect(&mupdate_h);
+	}
+    }
     if(be && !be_in)
 	backend_disconnect(be);
 
@@ -8610,7 +8646,7 @@ struct xfer_user_rock
 {
     char *toserver;
     char *topart;
-    mupdate_handle *h;
+    mupdate_handle **h;
     struct backend *be;
 };
 
@@ -8619,7 +8655,7 @@ static int xfer_user_cb(char *name,
 			int maycreate __attribute__((unused)),
 			void *rock) 
 {
-    mupdate_handle *mupdate_h = ((struct xfer_user_rock *)rock)->h;
+    mupdate_handle **mupdate_h = ((struct xfer_user_rock *)rock)->h;
     char *toserver = ((struct xfer_user_rock *)rock)->toserver;
     char *topart = ((struct xfer_user_rock *)rock)->topart;
     struct backend *be = ((struct xfer_user_rock *)rock)->be;
@@ -8802,13 +8838,21 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 
 	    rock.toserver = toserver;
 	    rock.topart = topart;
-	    rock.h = mupdate_h;
+	    rock.h = &mupdate_h;
 	    rock.be = be;
 
 	    snprintf(buf, sizeof(buf), "%s.*", mailboxname);
 	    r = mboxlist_findall(NULL, buf, 1, imapd_userid,
 				 imapd_authstate, xfer_user_cb,
 				 &rock);
+
+	    if ( !r && mboxlist_delayed_delete_isenabled()) {
+		snprintf(buf, sizeof(buf), "%s.%s.*",
+			config_getstring(IMAPOPT_DELETEDPREFIX), mailboxname);
+		r = mboxlist_findall(NULL, buf, 1, imapd_userid,
+				     imapd_authstate, xfer_user_cb,
+				     &rock);
+	    }
 	}
 
 	/* xxx how do you back out if one of the above moves fails? */
@@ -8817,7 +8861,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	/* ...and seen file, and subs file, and sieve scripts... */
 	if(!r) {
 	    r = do_xfer_single(toserver, topart, name, mailboxname, mbflags,
-			       path, mpath, part, acl, 1, mupdate_h, be);
+			       path, mpath, part, acl, 1, &mupdate_h, be);
 	}
 
 	if(be) {
@@ -8827,10 +8871,16 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 
 	if(r && mupdate_h && backout_mupdate) {
 	    int rerr = 0;
-	    /* xxx if the mupdate server is what failed, then this won't
-	       help any! */
 	    snprintf(buf, sizeof(buf), "%s!%s", config_servername, part);
 	    rerr = mupdate_activate(mupdate_h, mailboxname, buf, acl);
+	    if (rerr) {
+		syslog( LOG_INFO, "MUPDATE: lost connection, retrying" );
+		mupdate_disconnect(&mupdate_h);
+		rerr = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
+		if (!rerr) {
+		    rerr = mupdate_activate(mupdate_h, mailboxname, buf, acl);
+		}
+	    }
 	    if(rerr) {
 		syslog(LOG_ERR,
 		       "Could not back out mupdate during move of %s (%s)",
