@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: backend.c,v 1.61 2010/01/06 17:01:30 murch Exp $
+ * $Id: backend.c,v 1.62 2010/05/11 15:21:00 wescraig Exp $
  */
 
 #include <config.h>
@@ -200,6 +200,65 @@ static int do_starttls(struct backend *s, struct tls_cmd_t *tls_cmd)
 #endif /* HAVE_SSL */
 }
 
+static char *intersect_mechlists( char *config, char *server )
+{
+    char *newmechlist = xzmalloc( strlen( config ) + 1 );
+    char *cmech = NULL, *smech = NULL, *s;
+    int count = 0;
+    char csave, ssave;
+
+    do {
+	if ( isalnum( *config ) || *config == '_' || *config == '-' ) {
+	    if ( cmech == NULL ) {
+		cmech = config;
+	    }
+	} else {
+	    if ( cmech != NULL ) {
+		csave = *config;
+		*config = '\0';
+
+		s = server;
+		do {
+		    if ( isalnum( *s ) || *s == '_' || *s == '-' ) {
+			if ( smech == NULL ) {
+			    smech = s;
+			}
+		    } else {
+			if ( smech != NULL ) {
+			    ssave = *s;
+			    *s = '\0';
+
+			    if ( strcasecmp( cmech, smech ) == 0 ) {
+				if ( count > 0 ) {
+				    strcat( newmechlist, " " );
+				}
+				strcat( newmechlist, cmech );
+				count++;
+
+				*s = ssave;
+				smech = NULL;
+				break;
+			    }
+
+			    *s = ssave;
+			    smech = NULL;
+			}
+		    }
+		} while ( *s++ );
+
+		*config = csave;
+		cmech = NULL;
+	    }
+	}
+    } while ( *config++ );
+
+    if ( count == 0 ) {
+	free( newmechlist );
+	return( NULL );
+    }
+    return( newmechlist );
+}
+
 static int backend_authenticate(struct backend *s, struct protocol_t *prot,
 				char **mechlist, const char *userid,
 				sasl_callback_t *cb, const char **status)
@@ -269,9 +328,16 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
 
     do {
 	/* If we have a mech_conf, use it */
-	if (mech_conf) {
+	if (mech_conf && *mechlist) {
+	    char *newmechlist = intersect_mechlists( mech_conf, *mechlist );
+
+	    if ( newmechlist == NULL ) {
+		syslog( LOG_INFO, "%s did not offer %s", s->hostname,
+			mech_conf );
+	    }
+
 	    free(*mechlist);
-	    *mechlist = xstrdup(mech_conf);
+	    *mechlist = newmechlist;
 	}
 
 	if (*mechlist) {
