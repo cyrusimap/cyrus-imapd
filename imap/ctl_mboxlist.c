@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ctl_mboxlist.c,v 1.66 2010/01/06 17:01:31 murch Exp $
+ * $Id: ctl_mboxlist.c,v 1.67 2010/05/19 20:11:14 wescraig Exp $
  */
 
 /* currently doesn't catch signals; probably SHOULD */
@@ -137,6 +137,7 @@ static int interactive = 0;
  * a) mupdate server thinks *we* host
  *    -> Because we were called, this is the case, provided we
  *    -> gave the prefix parameter to the remote.
+ *    -> (And assuming bugs don't exist.)
  * b) we do not actually host
  *
  * if that's the case, enqueue a delete
@@ -279,12 +280,12 @@ static int dump_cb(void *rockp,
 	     * mailbox, and if it is living somewhere else, delete the local
 	     * data, if it is NOT living somewhere else, recreate it in
 	     * mupdate */
-	    struct mupdate_mailboxdata *unused_mbdata;
+	    struct mupdate_mailboxdata *mdata;
 
 	    /* if this is okay, we found it (so it is on another host, since
 	     * it wasn't in our list in this position) */
 	    if(!local_authoritative &&
-	       !mupdate_find(d->h, name, &unused_mbdata)) {
+	       !mupdate_find(d->h, name, &mdata)) {
 		/* since it lives on another server, schedule it for a wipe */
 		struct mb_node *next;
 
@@ -294,8 +295,24 @@ static int dump_cb(void *rockp,
 		 * if wrong, we'll end up removing the authoritative
 		 * mailbox.
 		 */
-		assert(strcmp(realpart, unused_mbdata->server));
+		if (strcmp(realpart, mdata->server) == 0 ) {
+		    if ( act_head ) {
+			fprintf( stderr, "mupdate said: %s %s %s\n",
+			    act_head->mailbox, act_head->server, act_head->acl );
+		    }
+		    fprintf( stderr, "mailboxes.db said: %s %s %s\n",
+			    name, realpart, acl );
+		    fprintf( stderr, "mupdate says: %s %s %s\n",
+			    mdata->mailbox, mdata->server, mdata->acl );
+		    fatal("mupdate said not us before it said us", EC_SOFTWARE);
+		}
 		
+		/*
+		 * Where does "unified" murder fit into ctl_mboxlist?
+		 * 1. Only check locally hosted mailboxes.
+		 * 2. Check everything.
+		 * Either way, this check is just wrong!
+		 */
 		if (config_mupdate_config != 
 		    IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) {
 		    /* But not for a unified configuration */
