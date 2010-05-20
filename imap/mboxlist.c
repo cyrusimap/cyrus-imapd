@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mboxlist.c,v 1.273 2010/01/06 17:01:36 murch Exp $
+ * $Id: mboxlist.c,v 1.274 2010/05/20 20:18:13 wescraig Exp $
  */
 
 #include <config.h>
@@ -3452,7 +3452,7 @@ mboxlist_count_inferiors(char *mailboxname, int isadmin, char *userid,
                          struct auth_state *authstate)
 {
     int count = 0;
-    char mailboxname2[MAX_MAILBOX_NAME+1];
+    char mailboxname2[MAX_MAILBOX_BUFFER];
     char *p;
 
     strcpy(mailboxname2, mailboxname);

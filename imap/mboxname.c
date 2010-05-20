@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mboxname.c,v 1.49 2010/01/06 17:01:37 murch Exp $
+ * $Id: mboxname.c,v 1.50 2010/05/20 20:18:14 wescraig Exp $
  */
 
 #include <config.h>
@@ -178,7 +178,7 @@ static int mboxname_tointernal(struct namespace *namespace, const char *name,
 	    return IMAP_MAILBOX_BADNAME;
 	}
 
-	if (domainlen+namelen+userlen > MAX_MAILBOX_NAME) {
+	if (domainlen+namelen+userlen > MAX_MAILBOX_BUFFER) {
 	    return IMAP_MAILBOX_BADNAME;
 	}
 
@@ -190,7 +190,7 @@ static int mboxname_tointernal(struct namespace *namespace, const char *name,
     }
 
     /* Other Users & Shared namespace */
-    if (domainlen+namelen > MAX_MAILBOX_NAME) {
+    if (domainlen+namelen > MAX_MAILBOX_BUFFER) {
 	return IMAP_MAILBOX_BADNAME;
     }
     sprintf(result, "%.*s", namelen, name);
@@ -733,7 +733,16 @@ int mboxname_policycheck(char *name)
 
     unixsep = config_getswitch(IMAPOPT_UNIXHIERARCHYSEP);
 
+    /* Skip policy check on mailbox created in delayed delete namespace
+     * assuming the mailbox existed before and was OK then.
+     * This should allow mailboxes that are extremely long to be
+     * deleted when delayed_delete is enabled.
+     * A thorough fix might remove the prefix and timestamp
+     * then continue with the check
+     */
+   if (!mboxname_isdeletedmailbox(name)) {
     if (strlen(name) > MAX_MAILBOX_NAME) return IMAP_MAILBOX_BADNAME;
+   }
     for (i = 0; i < NUM_BADMBOXPATTERNS; i++) {
 	g = glob_init(badmboxpatterns[i], 0);
 	if (GLOB_TEST(g, name) != -1) {
