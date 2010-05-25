@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: pop3d.c,v 1.201 2010/04/22 17:29:56 murch Exp $
+ * $Id: pop3d.c,v 1.202 2010/05/25 20:59:19 wescraig Exp $
  */
 
 #include <config.h>
@@ -794,6 +794,7 @@ static void cmdloop(void)
 	    bitpipe();
 
 	    /* pipe has been closed */
+           telemetry_rusage( popd_userid );
 	    return;
 	}
 
@@ -803,10 +804,12 @@ static void cmdloop(void)
 	     userdeny(popd_userid, config_ident, inputbuf, sizeof(inputbuf)))) {
 	    for (p = inputbuf; *p == '['; p++); /* can't have [ be first char */
 	    prot_printf(popd_out, "-ERR [SYS/TEMP] %s\r\n", p);
+           telemetry_rusage( popd_userid );
 	    shut_down(0);
 	}
 
 	if (!prot_fgets(inputbuf, sizeof(inputbuf), popd_in)) {
+           telemetry_rusage( popd_userid );
 	    shut_down(0);
 	}
 
@@ -903,6 +906,7 @@ static void cmdloop(void)
 		    }
 		}
 		prot_printf(popd_out, "+OK\r\n");
+               telemetry_rusage( popd_userid );
 		return;
 	    }
 	    else prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");

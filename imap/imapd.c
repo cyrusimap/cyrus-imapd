@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.579 2010/05/07 18:44:20 wescraig Exp $
+ * $Id: imapd.c,v 1.580 2010/05/25 20:59:19 wescraig Exp $
  */
 
 #include <config.h>
@@ -1105,6 +1105,7 @@ void cmdloop()
 	      userdeny(imapd_userid, config_ident, shut, sizeof(shut)))) {
 	    for (p = shut; *p == '['; p++); /* can't have [ be first char */
 	    prot_printf(imapd_out, "* BYE [ALERT] %s\r\n", p);
+           telemetry_rusage( imapd_userid );
 	    shut_down(0);
 	}
 
@@ -1463,6 +1464,7 @@ void cmdloop()
 			    error_message(IMAP_BYE_LOGOUT));
 		prot_printf(imapd_out, "%s OK %s\r\n", tag.s, 
 			    error_message(IMAP_OK_COMPLETED));
+               telemetry_rusage( imapd_userid );
 		return;
 	    }
 	    else if (!imapd_userid) goto nologin;

@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: lmtpd.c,v 1.166 2010/01/06 17:01:35 murch Exp $
+ * $Id: lmtpd.c,v 1.167 2010/05/25 20:59:19 wescraig Exp $
  */
 
 #include <config.h>
@@ -830,6 +830,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	    }
 	}
 
+       telemetry_rusage( user );
 	msg_setrcpt_status(msgdata, n, r);
     }
 
