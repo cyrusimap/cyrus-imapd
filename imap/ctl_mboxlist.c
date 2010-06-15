@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: ctl_mboxlist.c,v 1.67 2010/05/19 20:11:14 wescraig Exp $
+ * $Id: ctl_mboxlist.c,v 1.68 2010/06/15 03:10:53 selsky Exp $
  */
 
 /* currently doesn't catch signals; probably SHOULD */
@@ -937,13 +937,13 @@ void do_verify(void)
 void usage(void)
 {
     fprintf(stderr, "DUMP:\n");
-    fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -d [-x] [-f filename] [-p partition]\n");
+    fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -d [-x] [-p partition] [-f filename]\n");
     fprintf(stderr, "UNDUMP:\n");
     fprintf(stderr,
 	    "  ctl_mboxlist [-C <alt_config>] -u [-f filename]"
 	    "    [< mboxlist.dump]\n");
     fprintf(stderr, "MUPDATE populate:\n");
-    fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -m [-a] [-w] [-f filename]\n");
+    fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -m [-a] [-w] [-i] [-f filename]\n");
     fprintf(stderr, "VERIFY:\n");
     fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -v [-f filename]\n");
     exit(1);
