@@ -1142,6 +1142,11 @@ product version in the capabilities */
 { "sync_password", NULL, STRING }
 /* The default password to use when authenticating to a sync server. */
 
+{ "sync_port", "csync", STRING }
+/* Name of the service (or port number) of the replication service on
+   replica host.  The default is "csync" which is usally port 2005, but
+   any service name or numeric port can be specified. */
+
 { "sync_realm", NULL, STRING }
 /* The authentication realm to use when authenticating to a sync server. */
 

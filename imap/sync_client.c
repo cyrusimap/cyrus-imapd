@@ -3389,6 +3389,9 @@ struct backend *replica_connect(struct backend *be, const char *servername,
     int wait;
     struct protoent *proto;
 
+    /* get the right port */
+    csync_protocol.service = config_getstring(IMAPOPT_SYNC_PORT);
+
     for (wait = 15;; wait *= 2) {
 	be = backend_connect(be, servername, &csync_protocol,
 			     "", cb, NULL);
