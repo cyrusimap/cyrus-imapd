@@ -224,7 +224,7 @@ static int unlockaccept(void)
     if (lockfd != -1) {
 	alockinfo.l_type = F_UNLCK;
 	while ((rc = fcntl(lockfd, F_SETLKW, &alockinfo)) < 0 && 
-	       errno == EINTR)
+	       errno == EINTR && !signals_poll())
 	    /* noop */;
 
 	if (rc < 0) {
@@ -437,6 +437,8 @@ int main(int argc, char **argv, char **envp)
 		fd = accept(LISTEN_FD, NULL, NULL);
 		if (fd < 0) {
 		    switch (errno) {
+		    case EINTR:
+            signals_poll();
 		    case ENETDOWN:
 #ifdef EPROTO
 		    case EPROTO:
@@ -450,7 +452,6 @@ int main(int argc, char **argv, char **envp)
 		    case EOPNOTSUPP:
 		    case ENETUNREACH:
 		    case EAGAIN:
-		    case EINTR:
 			break;
 
 		    case EINVAL:

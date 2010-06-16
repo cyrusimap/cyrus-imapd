@@ -129,6 +129,8 @@ static int verbose = 0;
 static int listen_queue_backlog = 32;
 static int pidfd = -1;
 
+static volatile int in_shutdown = 0;
+
 const char *MASTER_CONFIG_FILENAME = DEFAULT_MASTER_CONFIG_FILENAME;
 
 #define SERVICE_NONE -1
@@ -866,8 +868,8 @@ void reap_child(void)
 		case SERVICE_STATE_READY:
 		    s->nactive--;
 		    s->ready_workers--;
-		    if (WIFSIGNALED(status) ||
-			(WIFEXITED(status) && WEXITSTATUS(status))) {
+		    if (!in_shutdown && (WIFSIGNALED(status) ||
+			(WIFEXITED(status) && WEXITSTATUS(status)))) {
 			syslog(LOG_WARNING, 
 			       "service %s pid %d in READY state: terminated abnormally",
 			       SERVICENAME(s->name), pid);
@@ -883,8 +885,8 @@ void reap_child(void)
 		    
 		case SERVICE_STATE_BUSY:
 		    s->nactive--;
-		    if (WIFSIGNALED(status) ||
-			(WIFEXITED(status) && WEXITSTATUS(status))) {
+		    if (!in_shutdown && (WIFSIGNALED(status) ||
+			(WIFEXITED(status) && WEXITSTATUS(status)))) {
 			syslog(LOG_DEBUG,
 			       "service %s pid %d in BUSY state: terminated abnormally",
 			       SERVICENAME(s->name), pid);
@@ -996,6 +998,31 @@ void child_janitor(time_t now)
     }
 }
 
+/* Allow a clean shutdown on SIGQUIT */
+void sigquit_handler(int sig __attribute__((unused)))
+{
+    struct sigaction action;
+
+    /* Ignore SIGQUIT ourselves */
+    sigemptyset(&action.sa_mask);
+    action.sa_flags = 0;
+    action.sa_handler = SIG_IGN;
+    if (sigaction(SIGQUIT, &action, (struct sigaction *) 0) < 0) {
+	syslog(LOG_ERR, "sigaction: %m");
+    }
+
+    /* send our process group a SIGQUIT */
+    if (kill(0, SIGQUIT) < 0) {
+	syslog(LOG_ERR, "sigquit_handler: kill(0, SIGQUIT): %m");
+    }
+
+    /* Set a flag so main loop knows to shut down when
+       all children have exited */
+    in_shutdown = 1;
+
+    syslog(LOG_INFO, "attempting clean shutdown on SIGQUIT");
+}
+
 static volatile sig_atomic_t gotsigchld = 0;
 
 void sigchld_handler(int sig __attribute__((unused)))
@@ -1059,6 +1086,12 @@ void sighandler_setup(void)
     action.sa_handler = sigalrm_handler;
     if (sigaction(SIGALRM, &action, NULL) < 0) {
 	fatal("unable to install signal handler for SIGALRM: %m", 1);
+    }
+
+    /* Allow a clean shutdown on SIGQUIT */
+    action.sa_handler = sigquit_handler;
+    if (sigaction(SIGQUIT, &action, NULL) < 0) {
+	fatal("unable to install signal handler for SIGQUIT: %m", 1);
     }
 
     /* Handle SIGTERM and SIGINT the same way -- kill
@@ -1944,7 +1977,7 @@ int main(int argc, char **argv)
 
     now = time(NULL);
     for (;;) {
-	int r, i, maxfd;
+	int r, i, maxfd, total_children = 0;
 	struct timeval tv, *tvptr;
 	struct notify_message msg;
 #if defined(HAVE_UCDSNMP) || defined(HAVE_NETSNMP)
@@ -1952,7 +1985,8 @@ int main(int argc, char **argv)
 #endif
 
 	/* run any scheduled processes */
-	spawn_schedule(now);
+	if (!in_shutdown)
+	    spawn_schedule(now);
 
 	/* reap first, that way if we need to babysit we will */
 	if (gotsigchld) {
@@ -1963,40 +1997,48 @@ int main(int argc, char **argv)
 	
 	/* do we have any services undermanned? */
 	for (i = 0; i < nservices; i++) {
-	    if (Services[i].exec /* enabled */ &&
-		(Services[i].nactive < Services[i].max_workers) &&
-		(Services[i].ready_workers < Services[i].desired_workers)) {
-		spawn_service(i);
-	    } else if (Services[i].exec
-		       && Services[i].babysit
-		       && Services[i].nactive == 0) {
-		syslog(LOG_ERR,
-		       "lost all children for service: %s.  " \
-		       "Applying babysitter.",
-		       Services[i].name);
-		spawn_service(i);
-	    } else if (!Services[i].exec /* disabled */ &&
-		       Services[i].name /* not yet removed */ &&
-		       Services[i].nactive == 0) {
-		if (verbose > 2)
-		    syslog(LOG_DEBUG, "remove: service %s pipe %d %d",
-			   Services[i].name,
-			   Services[i].stat[0], Services[i].stat[1]);
-
-		/* Only free the service info on the primary */
-		if (Services[i].associate == 0) {
-		    free(Services[i].name);
+	    total_children += Services[i].nactive;
+	    if (!in_shutdown) {
+		if (Services[i].exec /* enabled */ &&
+		    (Services[i].nactive < Services[i].max_workers) &&
+		    (Services[i].ready_workers < Services[i].desired_workers)) {
+		    spawn_service(i);
+		} else if (Services[i].exec
+			  && Services[i].babysit
+			  && Services[i].nactive == 0) {
+		    syslog(LOG_ERR,
+			  "lost all children for service: %s.  " \
+			  "Applying babysitter.",
+			  Services[i].name);
+		    spawn_service(i);
+		} else if (!Services[i].exec /* disabled */ &&
+			  Services[i].name /* not yet removed */ &&
+			  Services[i].nactive == 0) {
+		    if (verbose > 2)
+			syslog(LOG_DEBUG, "remove: service %s pipe %d %d",
+			      Services[i].name,
+			      Services[i].stat[0], Services[i].stat[1]);
+    
+		    /* Only free the service info on the primary */
+		    if (Services[i].associate == 0) {
+			free(Services[i].name);
+		    }
+		    Services[i].name = NULL;
+		    Services[i].nforks = 0;
+		    Services[i].nactive = 0;
+		    Services[i].nconnections = 0;
+		    Services[i].associate = 0;
+    
+		    if (Services[i].stat[0] > 0) close(Services[i].stat[0]);
+		    if (Services[i].stat[1] > 0) close(Services[i].stat[1]);
+		    memset(Services[i].stat, 0, sizeof(Services[i].stat));
 		}
-		Services[i].name = NULL;
-		Services[i].nforks = 0;
-		Services[i].nactive = 0;
-		Services[i].nconnections = 0;
-		Services[i].associate = 0;
-
-		if (Services[i].stat[0] > 0) close(Services[i].stat[0]);
-		if (Services[i].stat[1] > 0) close(Services[i].stat[1]);
-		memset(Services[i].stat, 0, sizeof(Services[i].stat));
 	    }
+	}
+        
+	if (in_shutdown && total_children == 0) {
+	   syslog(LOG_NOTICE, "All children have exited, closing down");
+	   exit(0);
 	}
 
 	if (gotsighup) {
@@ -2082,7 +2124,7 @@ int main(int argc, char **argv)
 		process_msg(i, &msg);
 	    }
 
-	    if (Services[i].exec &&
+	    if (!in_shutdown && Services[i].exec &&
 		Services[i].nactive < Services[i].max_workers) {
 		/* bring us up to desired_workers */
 		for (j = Services[i].ready_workers;

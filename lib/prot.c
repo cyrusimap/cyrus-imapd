@@ -69,6 +69,7 @@
 #include "map.h"
 #include "nonblock.h"
 #include "prot.h"
+#include "signals.h"
 #include "util.h"
 #include "xmalloc.h"
 
@@ -638,11 +639,11 @@ int prot_fill(struct protstream *s)
 		r = select(s->fd + 1, &rfds, (fd_set *)0, (fd_set *)0,
 			   &timeout);
 		now = time(NULL);
-	    } while ((r == 0 || (r == -1 && errno == EINTR)) &&
+	    } while ((r == 0 || (r == -1 && errno == EINTR && !signals_poll())) &&
 		     (now < read_timeout));
 	    if ((r == 0) || 
                 /* ignore EINTR if we've timed out */
-                (r == -1 && errno == EINTR && now >= read_timeout)) {
+                (r == -1 && errno == EINTR && !signals_poll() && now >= read_timeout)) {
 		if (!s->dontblock) {
 		    s->error = xstrdup("idle for too long");
 		    return EOF;
@@ -674,8 +675,8 @@ int prot_fill(struct protstream *s)
 	    n = read(s->fd, s->buf, PROT_BUFSIZE);
 #endif /* HAVE_SSL */
 	    cmdtime_netend();
-	} while (n == -1 && errno == EINTR);
-		
+	} while (n == -1 && errno == EINTR && !signals_poll());
+
 	if (n <= 0) {
 	    if (n) s->error = xstrdup(strerror(errno));
 	    else s->eof = 1;
@@ -714,7 +715,7 @@ int prot_fill(struct protstream *s)
 	ptr = s->ptr;
 	do {
 	    n = write(s->logfd, ptr, left);
-	    if (n == -1 && (errno != EINTR)) {
+	    if (n == -1 && (errno != EINTR || signals_poll())) {
 		break;
 	    }
 
@@ -753,7 +754,7 @@ static void prot_flush_log(struct protstream *s)
 
 	do {
 	    n = write(s->logfd, ptr, left);
-	    if (n == -1 && errno != EINTR) {
+	    if (n == -1 && (errno != EINTR || signals_poll())) {
 		break;
 	    }
 	    if (n > 0) {
@@ -858,7 +859,7 @@ static int prot_flush_writebuffer(struct protstream *s,
 	n = write(s->fd, buf, len);
 #endif /* HAVE_SSL */
 	cmdtime_netend();
-    } while (n == -1 && errno == EINTR);
+    } while (n == -1 && errno == EINTR && !signals_poll());
 
     return n;
 }
@@ -1013,7 +1014,7 @@ int prot_flush_internal(struct protstream *s, int force)
 
 	    do {
 		n = write(s->big_buffer, ptr, left);
-		if (n == -1 && errno != EINTR) {
+		if (n == -1 && (errno != EINTR || signals_poll())) {
 		    syslog(LOG_ERR, "write to protstream buffer failed: %s",
 			   strerror(errno));
 		    

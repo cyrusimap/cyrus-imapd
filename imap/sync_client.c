@@ -3302,6 +3302,8 @@ int do_daemon_work(const char *sync_log_file, const char *sync_shutdown_file,
     while (1) {
         single_start = time(NULL);
 
+        signals_poll();
+
 	/* Check for shutdown file */
         if (sync_shutdown_file && !stat(sync_shutdown_file, &sbuf)) {
             unlink(sync_shutdown_file);
