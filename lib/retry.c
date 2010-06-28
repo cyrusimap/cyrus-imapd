@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: retry.c,v 1.26 2010/01/06 17:01:47 murch Exp $
+ * $Id: retry.c,v 1.27 2010/06/28 12:05:57 brong Exp $
  */
 
 #include <config.h>
@@ -115,16 +115,19 @@ int retry_write(int fd, const void *buf, size_t nbyte)
 /*
  * Keep calling the writev() system call with 'fd', 'iov', and 'iovcnt'
  * until all the data is written out or an error occurs.
+ *
+ * Now no longer destructive of parameters!
  */
 int
-retry_writev(fd, iov, iovcnt)
+retry_writev(fd, srciov, iovcnt)
 int fd;
-struct iovec *iov;
+struct iovec *srciov;
 int iovcnt;
 {
     int n;
     int i;
     int written = 0;
+    struct iovec *iov, *baseiov;
     static int iov_max =
 #ifdef MAXIOV
 	MAXIOV
@@ -136,14 +139,20 @@ int iovcnt;
 #endif
 #endif
 	;
-    
+
+    baseiov = iov = (struct iovec *)xmalloc(iovcnt * sizeof(struct iovec));
+    for (i = 0; i < iovcnt; i++) {
+	iov[i].iov_base = srciov[i].iov_base;
+	iov[i].iov_len = srciov[i].iov_len;
+    }
+
     for (;;) {
 	while (iovcnt && iov[0].iov_len == 0) {
 	    iov++;
 	    iovcnt--;
 	}
 
-	if (!iovcnt) return written;
+	if (!iovcnt) goto done;
 
 	n = writev(fd, iov, iovcnt > iov_max ? iov_max : iovcnt);
 	if (n == -1) {
@@ -152,7 +161,8 @@ int iovcnt;
 		continue;
 	    }
 	    if (errno == EINTR) continue;
-	    return -1;
+	    written = -1;
+	    goto done;
 	}
 
 	written += n;
@@ -167,8 +177,12 @@ int iovcnt;
 	    iov[i].iov_len = 0;
 	}
 
-	if (i == iovcnt) return written;
+	if (i == iovcnt) goto done;
     }
+
+done:
+    free(baseiov);
+    return written;
 }
 
 	
