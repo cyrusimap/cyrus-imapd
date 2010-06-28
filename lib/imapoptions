@@ -43,7 +43,7 @@
 .\" AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 .\" OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\"
-.\" $Id: imapoptions,v 1.76 2010/04/19 19:54:25 murch Exp $
+.\" $Id: imapoptions,v 1.77 2010/06/28 12:03:53 brong Exp $
 
 .SH NAME
 imapd.conf \- IMAP configuration file
@@ -1142,6 +1142,20 @@ product version in the capabilities */
 
 { "syslog_prefix", NULL, STRING }
 /* String to be prepended to the process name in syslog entries. */
+
+{ "tcp_keepalive", 0, SWITCH }
+/* Enable keepalive on TCP connections */
+
+{ "tcp_keepalive_cnt", 0, INT }
+/* Number of TCP keepalive probes to send before declaring the 
+   connection dead (0 == system default) */
+
+{ "tcp_keepalive_idle", 0, INT }
+/* Number of seconds a connection must be idle before keepalive
+   probes are sent (0 == system default) */
+
+{ "tcp_keepalive_intvl", 0, INT }
+/* Number of seconds between keepalive probes (0 == system default) */
 
 { "temp_path", "/tmp", STRING }
 /* The pathname to store temporary files in */

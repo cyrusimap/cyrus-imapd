@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_client.c,v 1.49 2010/01/06 17:01:41 murch Exp $
+ * $Id: sync_client.c,v 1.50 2010/06/28 12:03:52 brong Exp $
  *
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
@@ -3417,6 +3417,42 @@ struct backend *replica_connect(struct backend *be, const char *servername,
 	    if (setsockopt(be->sock, proto->p_proto, TCP_NODELAY,
 			   (void *) &on, sizeof(on)) != 0) {
 		syslog(LOG_ERR, "unable to setsocketopt(TCP_NODELAY): %m");
+	    }
+
+            /* turn on TCP keepalive if set */
+            if (config_getswitch(IMAPOPT_TCP_KEEPALIVE)) {
+		int r;
+                int optval = 1;
+                socklen_t optlen = sizeof(optval);
+
+                r = setsockopt(be->sock, SOL_SOCKET, SO_KEEPALIVE, &optval, optlen);
+                if (r < 0) {
+                    syslog(LOG_ERR, "unable to setsocketopt(SO_KEEPALIVE): %m");
+                }
+#ifdef TCP_KEEPCNT
+                if (config_getint(IMAPOPT_TCP_KEEPALIVE_CNT)) {
+                    r = setsockopt(be->sock, SOL_TCP, TCP_KEEPCNT, &optval, optlen);
+                    if (r < 0) {
+                        syslog(LOG_ERR, "unable to setsocketopt(TCP_KEEPCNT): %m");
+                    }
+                }
+#endif
+#ifdef TCP_KEEPIDLE
+                if (config_getint(IMAPOPT_TCP_KEEPALIVE_IDLE)) {
+                    r = setsockopt(be->sock, SOL_TCP, TCP_KEEPIDLE, &optval, optlen);
+                    if (r < 0) {
+                        syslog(LOG_ERR, "unable to setsocketopt(TCP_KEEPIDLE): %m");
+                    }
+                }
+#endif
+#ifdef TCP_KEEPINTVL
+                if (config_getint(IMAPOPT_TCP_KEEPALIVE_INTVL)) {
+                    r = setsockopt(be->sock, SOL_TCP, TCP_KEEPINTVL, &optval, optlen);
+                    if (r < 0) {
+                        syslog(LOG_ERR, "unable to setsocketopt(TCP_KEEPINTVL): %m");
+                    }
+                }
+#endif
 	    }
 	} else {
 	    syslog(LOG_ERR, "unable to getprotobyname(\"tcp\"): %m");

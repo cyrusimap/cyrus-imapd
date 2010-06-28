@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: service.c,v 1.60 2010/01/06 17:01:53 murch Exp $
+ * $Id: service.c,v 1.61 2010/06/28 12:03:54 brong Exp $
  */
 
 #include <config.h>
@@ -61,6 +61,7 @@
 #include <netdb.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <errno.h>
 #include <stdlib.h>
@@ -512,8 +513,47 @@ int main(int argc, char **argv, char **envp)
 		close(fd);
 		continue;
 	    }
+
+	    /* turn on TCP keepalive if set */
+	    if (config_getswitch(IMAPOPT_TCP_KEEPALIVE)) {
+		int r;
+		int optval = 1;
+		socklen_t optlen = sizeof(optval);
+
+		r = setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &optval, optlen);
+		if (r < 0) {
+		    syslog(LOG_ERR, "unable to setsocketopt(SO_KEEPALIVE): %m");
+		}
+#ifdef TCP_KEEPCNT
+		optval = config_getint(IMAPOPT_TCP_KEEPALIVE_CNT);
+		if (optval) {
+		    r = setsockopt(fd, SOL_TCP, TCP_KEEPCNT, &optval, optlen);
+		    if (r < 0) {
+			syslog(LOG_ERR, "unable to setsocketopt(TCP_KEEPCNT): %m");
+		    }
+		}
+#endif
+#ifdef TCP_KEEPIDLE
+		optval = config_getint(IMAPOPT_TCP_KEEPALIVE_IDLE);
+		if (optval) {
+		    r = setsockopt(fd, SOL_TCP, TCP_KEEPIDLE, &optval, optlen);
+		    if (r < 0) {
+			syslog(LOG_ERR, "unable to setsocketopt(TCP_KEEPIDLE): %m");
+		    }
+		}
+#endif
+#ifdef TCP_KEEPINTVL
+		optval = config_getint(IMAPOPT_TCP_KEEPALIVE_INTVL);
+		if (optval) {
+		    r = setsockopt(fd, SOL_TCP, TCP_KEEPINTVL, &optval, optlen);
+		    if (r < 0) {
+			syslog(LOG_ERR, "unable to setsocketopt(TCP_KEEPINTVL): %m");
+		    }
+		}
+#endif
+	    }
 	}
-	
+
 	notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
 	syslog(LOG_DEBUG, "accepted connection");
 
