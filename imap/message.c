@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: message.c,v 1.117 2010/01/06 17:01:37 murch Exp $
+ * $Id: message.c,v 1.118 2010/06/28 12:04:38 brong Exp $
  */
 
 #include <config.h>
@@ -603,17 +603,17 @@ struct boundary *boundaries;
 	else {
 	    message_parse_body(msg, format, body->subpart,
 			       DEFAULT_CONTENT_TYPE, boundaries);
+
+	    /* Calculate our size/lines information */
+	    body->content_size = body->subpart->header_size +
+	      body->subpart->content_size;
+	    body->content_lines = body->subpart->header_lines +
+	      body->subpart->content_lines;
+
+	    /* Move any enclosing boundary information up to our level */
+	    body->boundary_size = body->subpart->boundary_size;
+	    body->boundary_lines = body->subpart->boundary_lines;
 	}
-
-	/* Calculate our size/lines information */
-	body->content_size = body->subpart->header_size +
-	  body->subpart->content_size;
-	body->content_lines = body->subpart->header_lines +
-	  body->subpart->content_lines;
-
-	/* Move any enclosing boundary information up to our level */
-	body->boundary_size = body->subpart->boundary_size;
-	body->boundary_lines = body->subpart->boundary_lines;
     }
     else {
 	if (!sawboundary) {
