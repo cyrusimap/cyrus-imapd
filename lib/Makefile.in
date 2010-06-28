@@ -41,7 +41,7 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.in,v 1.76 2010/01/06 17:01:43 murch Exp $
+# $Id: Makefile.in,v 1.77 2010/06/28 12:06:31 brong Exp $
 
 # Authorization namespace.
 AUTH=auth.o auth_krb.o auth_unix.o auth_krb5.o auth_pts.o
@@ -88,7 +88,7 @@ LIBCYR_HDRS = $(srcdir)/acl.h $(srcdir)/assert.h $(srcdir)/auth.h \
 	$(srcdir)/xmalloc.h $(srcdir)/imapurl.h \
 	$(srcdir)/cyrusdb.h $(srcdir)/iptostring.h $(srcdir)/rfc822date.h \
 	$(srcdir)/libcyr_cfg.h $(srcdir)/byteorder64.h \
-	$(srcdir)/md5.h $(srcdir)/hmac-md5.h
+	$(srcdir)/md5.h $(srcdir)/hmac-md5.h $(srcdir)/crc32.h
 
 LIBCYR_OBJS = acl.o bsearch.o charset.o glob.o retry.o util.o \
 	libcyr_cfg.o mkgmtime.o prot.o parseaddr.o imclient.o imparse.o \
@@ -97,14 +97,14 @@ LIBCYR_OBJS = acl.o bsearch.o charset.o glob.o retry.o util.o \
 	gmtoff_@WITH_GMTOFF@.o map_@WITH_MAP@.o $(ACL) $(AUTH) \
 	@LIBOBJS@ @CYRUSDB_OBJS@ @MD5OBJ@ \
 	iptostring.o xmalloc.o wildmat.o byteorder64.o \
-	xstrlcat.o xstrlcpy.o
+	xstrlcat.o xstrlcpy.o crc32.o
 
 LIBCYRM_HDRS = $(srcdir)/hash.h $(srcdir)/mpool.h $(srcdir)/xmalloc.h \
 	$(srcdir)/xstrlcat.h $(srcdir)/xstrlcpy.h $(srcdir)/util.h \
 	$(srcdir)/strhash.h $(srcdir)/libconfig.h $(srcdir)/assert.h \
-	imapopts.h
+	imapopts.h $(srcdir)/crc32.h
 LIBCYRM_OBJS = libconfig.o imapopts.o hash.o mpool.o xmalloc.o strhash.o \
-	xstrlcat.o xstrlcpy.o assert.o util.o @IPV6_OBJS@
+	xstrlcat.o xstrlcpy.o assert.o util.o crc32.o @IPV6_OBJS@
 
 all: $(BUILTSOURCES) libcyrus_min.a libcyrus.a
 
