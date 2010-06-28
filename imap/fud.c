@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: fud.c,v 1.58 2010/01/06 17:01:31 murch Exp $
+ * $Id: fud.c,v 1.59 2010/06/28 12:04:16 brong Exp $
  */
 
 #include <config.h>
@@ -181,7 +181,6 @@ int service_init(int argc, char **argv, char **envp)
 
     mboxlist_init(0);
     mboxlist_open(NULL);
-    mailbox_initialize();
 
     return 0;
 }

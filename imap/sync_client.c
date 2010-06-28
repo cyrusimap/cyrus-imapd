@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_client.c,v 1.50 2010/06/28 12:03:52 brong Exp $
+ * $Id: sync_client.c,v 1.51 2010/06/28 12:04:20 brong Exp $
  *
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
@@ -3716,7 +3716,6 @@ int main(int argc, char **argv)
     /* open the mboxlist, we'll need it for real work */
     mboxlist_init(0);
     mboxlist_open(NULL);
-    mailbox_initialize();
 
     /* open the quota db, we'll need it for real work */
     quotadb_init(0);

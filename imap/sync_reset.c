@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_reset.c,v 1.8 2010/01/06 17:01:41 murch Exp $
+ * $Id: sync_reset.c,v 1.9 2010/06/28 12:04:20 brong Exp $
  *
  * Original version written by David Carter <dpc22@cam.ac.uk>
  * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
@@ -363,8 +363,6 @@ main(int argc, char **argv)
 
     quotadb_init(0);
     quotadb_open(NULL);
-
-    mailbox_initialize();
 
     signals_set_shutdown(&shut_down);
     signals_add_handlers(0);

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.580 2010/05/25 20:59:19 wescraig Exp $
+ * $Id: imapd.c,v 1.581 2010/06/28 12:04:16 brong Exp $
  */
 
 #include <config.h>
@@ -729,7 +729,6 @@ int service_init(int argc, char **argv, char **envp)
     /* open the mboxlist, we'll need it for real work */
     mboxlist_init(0);
     mboxlist_open(NULL);
-    mailbox_initialize();
 
     /* open the quota db, we'll need it for real work */
     quotadb_init(0);

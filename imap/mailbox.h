@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.h,v 1.97 2010/06/28 12:04:06 brong Exp $
+ * $Id: mailbox.h,v 1.98 2010/06/28 12:04:20 brong Exp $
  */
 
 #ifndef INCLUDED_MAILBOX_H
@@ -355,8 +355,6 @@ typedef void mailbox_notifyproc_t(const char *mboxname);
 
 extern void mailbox_set_updatenotifier(mailbox_notifyproc_t *notifyproc);
 extern mailbox_notifyproc_t *mailbox_get_updatenotifier(void);
-
-extern int mailbox_initialize(void);
 
 extern char *mailbox_message_fname(struct mailbox *mailbox,
 				   unsigned long uid);

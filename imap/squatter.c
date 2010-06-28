@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: squatter.c,v 1.25 2010/01/06 17:01:41 murch Exp $
+ * $Id: squatter.c,v 1.26 2010/06/28 12:04:20 brong Exp $
  */
 
 /*
@@ -789,7 +789,6 @@ int main(int argc, char **argv)
 
     mboxlist_init(0);
     mboxlist_open(NULL);
-    mailbox_initialize();
 
     start_stats(&total_stats);
 

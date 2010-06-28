@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mailbox.c,v 1.200 2010/06/28 12:04:06 brong Exp $
+ * $Id: mailbox.c,v 1.201 2010/06/28 12:04:20 brong Exp $
  */
 
 #include <config.h>
@@ -377,14 +377,6 @@ void mailbox_set_updatenotifier(mailbox_notifyproc_t *notifyproc)
 mailbox_notifyproc_t *mailbox_get_updatenotifier(void)
 {
     return updatenotifier;
-}
-
-/*
- * Create connection to acappush (obsolete)
- */
-int mailbox_initialize(void)
-{
-    return 0;
 }
 
 /* create the unique identifier for a mailbox named 'name' with

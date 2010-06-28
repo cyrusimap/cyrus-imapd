@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: make_md5.c,v 1.11 2010/01/06 17:01:36 murch Exp $
+ * $Id: make_md5.c,v 1.12 2010/06/28 12:04:20 brong Exp $
  */
 
 #include <config.h>
@@ -840,7 +840,6 @@ main(int argc, char **argv)
 
     mboxlist_init(0);
     mboxlist_open(NULL);
-    mailbox_initialize();
 
     /* open the quota db, we'll need it for real work */
     quotadb_init(0);

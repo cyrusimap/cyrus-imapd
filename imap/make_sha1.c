@@ -1,4 +1,4 @@
-/*
+l/*
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: make_sha1.c,v 1.7 2010/01/06 17:01:36 murch Exp $
+ * $Id: make_sha1.c,v 1.8 2010/06/28 12:04:20 brong Exp $
  */
 
 #include <config.h>
@@ -837,7 +837,6 @@ int main(int argc, char **argv)
 
     mboxlist_init(0);
     mboxlist_open(NULL);
-    mailbox_initialize();
 
     /* open the quota db, we'll need it for real work */
     quotadb_init(0);
