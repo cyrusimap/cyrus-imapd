@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: index.c,v 1.258 2010/01/06 17:01:34 murch Exp $
+ * $Id: index.c,v 1.259 2010/06/28 12:04:53 brong Exp $
  */
 
 #include <config.h>
@@ -481,14 +481,14 @@ void index_check(struct mailbox *mailbox, int usinguid, int checkseen)
     if (i == imapd_exists + 1) mailbox->allseen = mailbox->last_uid;
     if (oldexists == -1) {
 	if (imapd_exists && i <= imapd_exists) {
-	    prot_printf(imapd_out, "* OK [UNSEEN %u]  \r\n", i);
+	    prot_printf(imapd_out, "* OK [UNSEEN %u] Ok\r\n", i);
 	}
-        prot_printf(imapd_out, "* OK [UIDVALIDITY %lu]  \r\n",
+        prot_printf(imapd_out, "* OK [UIDVALIDITY %lu] Ok\r\n",
 		    mailbox->uidvalidity);
-	prot_printf(imapd_out, "* OK [UIDNEXT %lu]  \r\n",
+	prot_printf(imapd_out, "* OK [UIDNEXT %lu] Ok\r\n",
 		    mailbox->last_uid + 1);
 	if (mailbox->options & OPT_IMAP_CONDSTORE) {
-	    prot_printf(imapd_out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "]  \r\n",
+	    prot_printf(imapd_out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "] Ok\r\n",
 			mailbox->highestmodseq);
 	} else {
 	    prot_printf(imapd_out, "* OK [NOMODSEQ] Sorry, modsequences have "
@@ -2783,7 +2783,7 @@ static void index_listflags(struct mailbox *mailbox)
 	}
     }
     if (sepchar == '(') prot_printf(imapd_out, "(");
-    prot_printf(imapd_out, ")]  \r\n");
+    prot_printf(imapd_out, ")] Ok\r\n");
 }
 
 /*

@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.581 2010/06/28 12:04:16 brong Exp $
+ * $Id: imapd.c,v 1.582 2010/06/28 12:04:52 brong Exp $
  */
 
 #include <config.h>
@@ -3683,13 +3683,11 @@ void cmd_select(char *tag, char *cmd, char *name)
 	}
     }
 
-    prot_printf(imapd_out, "* OK [URLMECH INTERNAL]\r\n");
-
+    prot_printf(imapd_out, "* OK [URLMECH INTERNAL] Ok\r\n");
     /* QRESYNC response:
      * UID FETCH seq FLAGS (CHANGEDSINCE modseq VANISHED)
      */
-    if ((imapd_mailbox->options & OPT_IMAP_CONDSTORE) &&
-	uidvalidity == imapd_mailbox->uidvalidity) {
+    if (uidvalidity == imapd_mailbox->uidvalidity) {
 	struct fetchargs fetchargs;
 	char all_uids[128];
 
@@ -3707,7 +3705,6 @@ void cmd_select(char *tag, char *cmd, char *name)
 
 	index_fetch(imapd_mailbox, sequence, 1, &fetchargs, NULL);
     }
-
     prot_printf(imapd_out, "%s OK [READ-%s] %s\r\n", tag,
 		(imapd_mailbox->myrights & ACL_READ_WRITE) ?
 		"WRITE" : "ONLY", error_message(IMAP_OK_COMPLETED));
