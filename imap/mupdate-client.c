@@ -157,11 +157,11 @@ void mupdate_disconnect(mupdate_handle **hp)
     backend_disconnect(h->conn);
     free(h->conn);
 
-    freebuf(&(h->tag));
-    freebuf(&(h->cmd));
-    freebuf(&(h->arg1));
-    freebuf(&(h->arg2));
-    freebuf(&(h->arg3));
+    buf_free(&(h->tag));
+    buf_free(&(h->cmd));
+    buf_free(&(h->arg1));
+    buf_free(&(h->arg2));
+    buf_free(&(h->arg3));
 
     if(h->acl_buf) free(h->acl_buf);
 

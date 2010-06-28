@@ -672,5 +672,5 @@ void backend_disconnect(struct backend *s)
     }
 
     /* free last_result buffer */
-    freebuf(&s->last_result);
+    buf_free(&s->last_result);
 }

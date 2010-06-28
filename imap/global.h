@@ -48,8 +48,10 @@
 #include <sasl/sasl.h>
 #include "libconfig.h"
 #include "auth.h"
+#include "prot.h"
 #include "mboxname.h"
 #include "signals.h"
+#include "util.h"
 
 /* Flags for cyrus_init() */
 enum {
@@ -103,11 +105,6 @@ extern int global_authisa(struct auth_state *authstate,
 
 /* useful types */
 struct protstream;
-struct buf {
-    char *s;
-    int len;
-    int alloc;
-};
 
 struct proxy_context {
     int use_acl;
@@ -135,7 +132,8 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 #define getnstring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_NSTRING)
 #define getqstring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_QSTRING)
 #define getstring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_STRING)
-void freebuf(struct buf *buf);
+int getnum(struct protstream *pin, int *num);
+int getunum(struct protstream *pin, unsigned int *num);
 
 void eatline(struct protstream *pin, int c);
 

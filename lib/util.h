@@ -48,6 +48,32 @@
 #ifndef INCLUDED_UTIL_H
 #define INCLUDED_UTIL_H
 
+#include <sys/types.h>
+#include <limits.h>
+
+#define BIT32_MAX 4294967295U
+
+#if UINT_MAX == BIT32_MAX
+typedef unsigned int bit32;
+#elif ULONG_MAX == BIT32_MAX
+typedef unsigned long bit32;
+#elif USHRT_MAX == BIT32_MAX
+typedef unsigned short bit32;
+#else
+#error dont know what to use for bit32
+#endif
+
+#ifdef HAVE_LONG_LONG_INT
+typedef unsigned long long int bit64;
+typedef unsigned long long int modseq_t;
+#define MODSEQ_FMT "%llu"
+#define atomodseq_t(s) strtoull(s, NULL, 10)
+#else
+typedef unsigned long int modseq_t;
+#define MODSEQ_FMT "%lu"
+#define atomodseq_t(s) strtoul(s, NULL, 10)
+#endif
+
 #define Uisalnum(c) isalnum((int)((unsigned char)(c)))
 #define Uisalpha(c) isalpha((int)((unsigned char)(c)))
 #define Uisascii(c) isascii((int)((unsigned char)(c)))
@@ -126,6 +152,7 @@ extern int become_cyrus(void);
  */
 
 #define cyrus_isdigit(x) ((x) >= '0' && (x) <= '9')
+extern int parsenum(const char *p, const char **ptr);
 
 /* Timing related funcs/vars */
 extern void cmdtime_settimer(int enable);
@@ -134,5 +161,28 @@ extern void cmdtime_endtimer(double * cmdtime, double * nettime);
 extern void cmdtime_netstart();
 extern void cmdtime_netend();
 
+
+#define BUF_CSTRING 1
+
+struct buf {
+    char *s;
+    int len;
+    int alloc;
+    int flags;
+};
+
+const char *buf_cstring(struct buf *buf);
+void buf_getmap(struct buf *buf, const char **base, int *len);
+int buf_len(struct buf *buf);
+void buf_reset(struct buf *buf);
+void buf_setcstr(struct buf *buf, char *str);
+void buf_setmap(struct buf *buf, char *base, int len);
+void buf_copy(struct buf *dst, struct buf *src);
+void buf_append(struct buf *dst, struct buf *src);
+void buf_appendcstr(struct buf *buf, char *str);
+void buf_appendbit32(struct buf *buf, bit32 num);
+void buf_appendmap(struct buf *buf, char *base, int len);
+void buf_putc(struct buf *buf, char c);
+void buf_free(struct buf *buf);
 
 #endif /* INCLUDED_UTIL_H */

@@ -60,6 +60,8 @@
 #include <zlib.h>
 #endif /* HAVE_ZLIB */
 
+#include "util.h"
+
 #define PROT_BUFSIZE 4096
 /* #define PROT_BUFSIZE 8192 */
 
@@ -234,6 +236,7 @@ extern int prot_flush(struct protstream *s);
 
 /* These are protlayer versions of the specified functions */
 extern int prot_write(struct protstream *s, const char *buf, unsigned len);
+extern int prot_putbuf(struct protstream *s, struct buf *buf);
 extern int prot_printf(struct protstream *, const char *, ...)
 #ifdef __GNUC__
     __attribute__ ((format (printf, 2, 3)));

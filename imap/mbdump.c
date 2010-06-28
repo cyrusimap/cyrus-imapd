@@ -523,8 +523,8 @@ int undump_mailbox(const char *mbname, const char *mbpath,
     }
 
     /* we better be in a list now */
-    if(c != '(' || data.s[0]) {
-	freebuf(&data);
+    if (c != '(' || data.s[0]) {
+	buf_free(&data);
 	eatline(pin, c);
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
     }

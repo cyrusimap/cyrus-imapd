@@ -48,6 +48,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <grp.h>
+#include <limits.h>
 #include <pwd.h>
 #include <string.h>
 #include <stdlib.h>
@@ -438,5 +439,139 @@ void cmdtime_netend() {
   if (!cmdtime_enabled) { return; }
   gettimeofday(&nettime_end, 0);
   nettime += timesub(&nettime_start, &nettime_end);
+}
+
+int parsenum(const char *p, const char **ptr)
+{
+    int result = 0;
+    int gotone = 0;
+
+    if (!p) return -1;
+
+    while (cyrus_isdigit(*p)) {
+	gotone = 1;
+	if (result > (INT_MAX/10 - 10))
+	    fatal("num too big", EC_IOERR);
+	result = result * 10 + *p++ - '0';
+    }
+
+    if (ptr) *ptr = p;
+
+    return gotone ? result : -1;
+}
+
+/* buffer handling functions */
+
+#define BUF_GROW 1024
+void buf_ensure(struct buf *buf, int n)
+{
+    int newlen = (buf->len + n + BUF_GROW);  /* XXX - size mod logic? */
+
+    if (buf->alloc >= (buf->len + n))
+	return;
+
+    if (buf->alloc) {
+	buf->s = xrealloc(buf->s, newlen);
+    }
+    else {
+	char *s = xmalloc(newlen);
+	if (buf->len) /* copy on write */
+	    memcpy(s, buf->s, buf->len);
+	buf->s = s;
+    }
+
+    buf->alloc = newlen;
+}
+
+const char *buf_cstring(struct buf *buf)
+{
+    if (!(buf->flags & BUF_CSTRING)) {
+	buf_ensure(buf, 1);
+	buf->s[buf->len] = '\0';
+	buf->flags |= BUF_CSTRING;
+    }
+
+    return buf->s;
+}
+
+void buf_getmap(struct buf *buf, const char **base, int *len)
+{
+    *base = buf->s;
+    *len = buf->len;
+}
+
+int buf_len(struct buf *buf)
+{
+    return buf->len;
+}
+
+void buf_reset(struct buf *buf)
+{
+    buf->len = 0;
+    buf->flags &= ~BUF_CSTRING;
+}
+
+void buf_setcstr(struct buf *buf, char *str)
+{
+    buf_setmap(buf, str, strlen(str));
+}
+
+void buf_setmap(struct buf *buf, char *base, int len)
+{
+    buf_reset(buf);
+    if (len) {
+	buf_ensure(buf, len);
+	memcpy(buf->s, base, len);
+	buf->len = len;
+    }
+}
+
+void buf_copy(struct buf *dst, struct buf *src)
+{
+    buf_setmap(dst, src->s, src->len);
+}
+
+void buf_append(struct buf *dst, struct buf *src)
+{
+    buf_appendmap(dst, src->s, src->len);
+}
+
+void buf_appendcstr(struct buf *buf, char *str)
+{
+    buf_appendmap(buf, str, strlen(str));
+}
+
+void buf_appendbit32(struct buf *buf, bit32 num)
+{
+    char item[4];
+    *((bit32 *)item) = htonl(num);
+    buf_appendmap(buf, item, 4);
+}
+
+void buf_appendmap(struct buf *buf, char *base, int len)
+{
+    if (len) {
+	buf_ensure(buf, len);
+	memcpy(buf->s + buf->len, base, len);
+	buf->len += len;
+	buf->flags &= ~BUF_CSTRING;
+    }
+}
+
+void buf_putc(struct buf *buf, char c)
+{
+    buf_ensure(buf, 1);
+    buf->s[buf->len++] = c;
+    buf->flags &= ~BUF_CSTRING;
+}
+
+void buf_free(struct buf *buf)
+{
+    if (buf->alloc)
+	free(buf->s);
+    buf->alloc = 0;
+    buf->s = NULL;
+    buf->len = 0;
+    buf->flags = 0;
 }
 

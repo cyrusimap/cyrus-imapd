@@ -2107,7 +2107,7 @@ void cmd_login(char *tag, char *user)
 
     if(c == '\r') c = prot_getc(imapd_in);
     if (c != '\n') {
-	freebuf(&passwdbuf);
+	buf_free(&passwdbuf);
 	prot_printf(imapd_out,
 		    "%s BAD Unexpected extra arguments to LOGIN\r\n",
 		    tag);
@@ -2131,7 +2131,7 @@ void cmd_login(char *tag, char *user)
 		   imapd_clienthost);
 	    prot_printf(imapd_out, "%s NO %s\r\n", tag,
 		   error_message(IMAP_ANONYMOUS_NOT_PERMITTED));
-	    freebuf(&passwdbuf);
+	    buf_free(&passwdbuf);
 	    return;
 	}
     }
@@ -2166,7 +2166,7 @@ void cmd_login(char *tag, char *user)
 	snmp_increment_args(AUTHENTICATION_NO, 1,
 			    VARIABLE_AUTH, 0 /* hash_simple("LOGIN") */,
 			    VARIABLE_LISTEND);
-    	freebuf(&passwdbuf);
+    	buf_free(&passwdbuf);
 	return;
     }
     else {
@@ -2183,7 +2183,7 @@ void cmd_login(char *tag, char *user)
 	    snmp_increment_args(AUTHENTICATION_NO, 1,
 				VARIABLE_AUTH, 0 /* hash_simple("LOGIN") */,
 				VARIABLE_LISTEND);
-	    freebuf(&passwdbuf);
+	    buf_free(&passwdbuf);
 	    return;
 	}
 
@@ -2234,7 +2234,7 @@ void cmd_login(char *tag, char *user)
 				config_virtdomains ?
 				strcspn(imapd_userid, "@") : 0);
 
-    freebuf(&passwdbuf);
+    buf_free(&passwdbuf);
     return;
 }
 
@@ -2815,43 +2815,32 @@ static int isokflag(char *s, int *isseen)
     }
 }
 
-static int getliteralsize(char *p, int c,
+static int getliteralsize(const char *p, int c,
 			  unsigned *size, int *binary, const char **parseerr)
 
 {
-    int sawdigit = 0;
     int isnowait = 0;
+    int num;
 
     /* Check for literal8 */
     if (*p == '~') {
 	p++;
-
 	*binary = 1;
     }
+
+    /* check for start of literal */
     if (*p != '{') {
 	*parseerr = "Missing required argument to Append command";
 	return IMAP_PROTOCOL_ERROR;
     }
-	
+
     /* Read size from literal */
-    isnowait = 0;
-    *size = 0;
-    for (++p; *p && Uisdigit(*p); p++) {
-	sawdigit++;
-	if (*size > (UINT_MAX - (*p - '0')) / 10)
-	    return IMAP_MESSAGE_TOO_LARGE;
-	*size = (*size)*10 + *p - '0';
-#if 0
-	if (*size < 0) {
-	    lose();
-	}
-#endif
-    }
+    num = parsenum(p+1, &p);
     if (*p == '+') {
 	isnowait++;
 	p++;
     }
-	
+
     if (c == '\r') {
 	c = prot_getc(imapd_in);
     }
@@ -2859,8 +2848,8 @@ static int getliteralsize(char *p, int c,
 	prot_ungetc(c, imapd_in);
 	c = ' ';		/* Force a syntax error */
     }
-	
-    if (*p != '}' || p[1] || c != '\n' || !sawdigit) {
+
+    if (num == -1 || *p != '}' || p[1] || c != '\n') {
 	*parseerr = "Invalid literal in Append command";
 	return IMAP_PROTOCOL_ERROR;
     }
@@ -2870,6 +2859,8 @@ static int getliteralsize(char *p, int c,
 	prot_printf(imapd_out, "+ go ahead\r\n");
 	prot_flush(imapd_out);
     }
+
+    *size = num;
 
     return 0;
 }
@@ -8300,10 +8291,10 @@ static int trashacl(struct protstream *pin, struct protstream *pout,
 
     if(r) eatline(pin, c);
 
-    freebuf(&user);
-    freebuf(&tmp);
-    freebuf(&cmd);
-    freebuf(&tag);
+    buf_free(&user);
+    buf_free(&tmp);
+    buf_free(&cmd);
+    buf_free(&tag);
 
     return r;
 }
@@ -8373,7 +8364,7 @@ static int dumpacl(struct protstream *pin, struct protstream *pout,
 	acl = nextid;
     }
 
-    freebuf(&inbuf);
+    buf_free(&inbuf);
     if(acl_safe) free(acl_safe);
 
     return r;

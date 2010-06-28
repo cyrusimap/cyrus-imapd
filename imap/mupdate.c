@@ -422,11 +422,11 @@ static void conn_free(struct conn *C)
     if (C->saslprops.authid) free(C->saslprops.authid);
 
     /* free struct bufs */
-    freebuf(&(C->tag));
-    freebuf(&(C->cmd));
-    freebuf(&(C->arg1));
-    freebuf(&(C->arg2));
-    freebuf(&(C->arg3));
+    buf_free(&(C->tag));
+    buf_free(&(C->cmd));
+    buf_free(&(C->arg1));
+    buf_free(&(C->arg2));
+    buf_free(&(C->arg3));
 
     if(C->streaming_hosts) stringlist_free(&(C->streaming_hosts));
 
