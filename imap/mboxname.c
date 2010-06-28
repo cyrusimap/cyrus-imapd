@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mboxname.c,v 1.50 2010/05/20 20:18:14 wescraig Exp $
+ * $Id: mboxname.c,v 1.51 2010/06/28 12:04:30 brong Exp $
  */
 
 #include <config.h>
@@ -69,6 +69,7 @@ static char *badmboxpatterns[] = {
     "*.",
     "*..*",
     "user",
+    "*.INBOX.INBOX*",
 };
 #define NUM_BADMBOXPATTERNS (sizeof(badmboxpatterns)/sizeof(*badmboxpatterns))
 
