@@ -38,7 +38,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: imapd.c,v 1.582 2010/06/28 12:04:52 brong Exp $
+ * $Id: imapd.c,v 1.583 2010/06/28 12:06:42 brong Exp $
  */
 
 #include <config.h>
@@ -1066,9 +1066,11 @@ void cmdloop()
     int c;
     int ret;
     int usinguid, havepartition, havenamespace, recursive;
-    static struct buf tag, cmd, arg1, arg2, arg3;
-    char *p, shut[MAX_MAILBOX_PATH+1];
+    static struct buf tag, cmd, arg1, arg2, arg3, arg4;
+    char *p, shut[MAX_MAILBOX_PATH+1], cmdname[100];
     const char *err;
+    const char * commandmintimer;
+    double commandmintimerd;
 
     prot_printf(imapd_out, "* OK [CAPABILITY ");
     capa_response(CAPA_PREAUTH);
@@ -1091,6 +1093,15 @@ void cmdloop()
     if ((fd = open(motdfilename, O_RDONLY, 0)) != -1) {
 	motd_file(fd);
 	close(fd);
+    }
+
+    /* Get command timer logging paramater. This string
+     * is a time in seconds. Any command that takes >=
+     * this time to execute is logged */
+    commandmintimer = config_getstring(IMAPOPT_COMMANDMINTIMER);
+    cmdtime_settimer(commandmintimer ? 1 : 0);
+    if (commandmintimer) {
+      commandmintimerd = atof(commandmintimer);
     }
 
     for (;;) {
@@ -1140,11 +1151,9 @@ void cmdloop()
 	    eatline(imapd_in, c);
 	    continue;
 	}
-	if (Uislower(cmd.s[0])) 
-	    cmd.s[0] = toupper((unsigned char) cmd.s[0]);
-	for (p = &cmd.s[1]; *p; p++) {
-	    if (Uisupper(*p)) *p = tolower((unsigned char) *p);
-	}
+	lcase(cmd.s);
+	strncpy(cmdname, cmd.s, 99);
+	cmd.s[0] = toupper((unsigned char) cmd.s[0]);
 
 	/* if we need to force a kick, do so */
 	if (referral_kick) {
@@ -1161,6 +1170,9 @@ void cmdloop()
  	/* Only Authenticate/Enable/Login/Logout/Noop/Capability/Id/Starttls
 	   allowed when not logged in */
 	if (!imapd_userid && !strchr("AELNCIS", cmd.s[0])) goto nologin;
+
+	/* Start command timer */
+	cmdtime_starttimer();
     
 	/* note that about half the commands (the common ones that don't
 	   hit the mailboxes file) now close the mailboxes file just in
@@ -1882,6 +1894,7 @@ void cmdloop()
 		c = getword(imapd_in, &arg1);
 		if (c != ' ') goto missingargs;
 		lcase(arg1.s);
+		strncpy(cmdname, arg1.s, 99);
 		if (!strcmp(arg1.s, "fetch")) {
 		    goto fetch;
 		}
@@ -1999,6 +2012,17 @@ void cmdloop()
 	    eatline(imapd_in, c);
 	}
 
+	/* End command timer - don't log "idle" commands */
+	if (commandmintimer && strcmp("idle", cmdname)) {
+	    double cmdtime, nettime;
+	    cmdtime_endtimer(&cmdtime, &nettime);
+	    if (cmdtime >= commandmintimerd) {
+		syslog(LOG_NOTICE, "cmdtimer: '%s' '%s' '%s' '%f' '%f' '%f'",
+		    imapd_userid ? imapd_userid : "<none>", 
+		    cmdname, imapd_mailbox ? imapd_mailbox->name : "<none>",
+		    cmdtime, nettime, cmdtime + nettime);
+	    }
+	}
 	continue;
 
     nologin:

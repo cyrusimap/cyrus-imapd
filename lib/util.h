@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: util.h,v 1.27 2010/01/06 17:01:47 murch Exp $
+ * $Id: util.h,v 1.28 2010/06/28 12:06:44 brong Exp $
  *
  * Author: Chris Newman
  * Start Date: 4/6/93
@@ -126,5 +126,13 @@ extern int become_cyrus(void);
  */
 
 #define cyrus_isdigit(x) ((x) >= '0' && (x) <= '9')
+
+/* Timing related funcs/vars */
+extern void cmdtime_settimer(int enable);
+extern void cmdtime_starttimer();
+extern void cmdtime_endtimer(double * cmdtime, double * nettime);
+extern void cmdtime_netstart();
+extern void cmdtime_netend();
+
 
 #endif /* INCLUDED_UTIL_H */

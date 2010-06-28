@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: util.c,v 1.39 2010/01/06 17:01:47 murch Exp $
+ * $Id: util.c,v 1.40 2010/06/28 12:06:43 brong Exp $
  */
 
 #include <config.h>
@@ -400,3 +400,43 @@ int become_cyrus(void)
         uid = newuid;
     return result;
 }
+
+static int cmdtime_enabled = 0;
+static struct timeval cmdtime_start, cmdtime_end, nettime_start, nettime_end;
+static double totaltime, cmdtime, nettime;
+
+double timesub(struct timeval * start, struct timeval * end) {
+  return (double)(end->tv_sec - start->tv_sec) +
+    (double)(end->tv_usec - start->tv_usec)/1000000.0;
+}
+
+void cmdtime_settimer(int enable) {
+  cmdtime_enabled = enable;
+}
+
+void cmdtime_starttimer() {
+  if (!cmdtime_enabled) { return; }
+  gettimeofday(&cmdtime_start, 0);
+  totaltime = cmdtime = nettime = 0.0;
+}
+
+void cmdtime_endtimer(double * pcmdtime, double * pnettime) {
+  if (!cmdtime_enabled) { return; }
+  gettimeofday(&cmdtime_end, 0);
+  totaltime = timesub(&cmdtime_start, &cmdtime_end);
+  cmdtime = totaltime - nettime;
+  *pcmdtime = cmdtime;
+  *pnettime = nettime;
+}
+
+void cmdtime_netstart() {
+  if (!cmdtime_enabled) { return; }
+  gettimeofday(&nettime_start, 0);
+}
+
+void cmdtime_netend() {
+  if (!cmdtime_enabled) { return; }
+  gettimeofday(&nettime_end, 0);
+  nettime += timesub(&nettime_start, &nettime_end);
+}
+

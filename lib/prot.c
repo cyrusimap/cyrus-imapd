@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: prot.c,v 1.99 2010/01/06 17:01:47 murch Exp $
+ * $Id: prot.c,v 1.100 2010/06/28 12:06:43 brong Exp $
  */
 
 #include <config.h>
@@ -662,6 +662,7 @@ int prot_fill(struct protstream *s)
 	s->timeout_mark = time(NULL) + s->read_timeout;
 	
 	do {
+	    cmdtime_netstart();
 #ifdef HAVE_SSL	  
 	    /* just do a SSL read instead if we're under a tls layer */
 	    if (s->tls_conn != NULL) {
@@ -672,6 +673,7 @@ int prot_fill(struct protstream *s)
 #else  /* HAVE_SSL */
 	    n = read(s->fd, s->buf, PROT_BUFSIZE);
 #endif /* HAVE_SSL */
+	    cmdtime_netend();
 	} while (n == -1 && errno == EINTR);
 		
 	if (n <= 0) {
@@ -845,6 +847,7 @@ static int prot_flush_writebuffer(struct protstream *s,
     int n;
     
     do {
+	cmdtime_netstart();
 #ifdef HAVE_SSL
 	if (s->tls_conn != NULL) {
 	    n = SSL_write(s->tls_conn, (char *)buf, len);
@@ -854,6 +857,7 @@ static int prot_flush_writebuffer(struct protstream *s,
 #else  /* HAVE_SSL */
 	n = write(s->fd, buf, len);
 #endif /* HAVE_SSL */
+	cmdtime_netend();
     } while (n == -1 && errno == EINTR);
 
     return n;
