@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: telemetry.c,v 1.11 2010/05/25 20:59:18 wescraig Exp $
+ * $Id: telemetry.c,v 1.12 2010/06/28 12:03:12 brong Exp $
  */
 
 #include <config.h>
@@ -97,29 +97,28 @@ int telemetry_log(const char *userid, struct protstream *pin,
     return fd;
 }
 
-    void
-telemetry_rusage( char *userid )
+void telemetry_rusage(char *userid)
 {
     static struct rusage	previous;
     struct rusage		current;
     struct timeval		sys, user;
 
-    if ( userid && *userid ) {
-	if ( getrusage( RUSAGE_SELF, &current ) != 0 ) {
-	    syslog( LOG_ERR, "getrusage: %s", userid );
+    if (userid && *userid) {
+	if (getrusage(RUSAGE_SELF, &current) != 0) {
+	    syslog(LOG_ERR, "getrusage: %s", userid);
 	    return;
 	}
 
 	user.tv_sec = current.ru_utime.tv_sec - previous.ru_utime.tv_sec;
 	user.tv_usec = current.ru_utime.tv_usec - previous.ru_utime.tv_usec;
-	if ( user.tv_usec < 0 ) {
+	if (user.tv_usec < 0) {
 	    user.tv_sec--;
 	    user.tv_usec += 1000000;
 	}
 
 	sys.tv_sec = current.ru_stime.tv_sec - previous.ru_stime.tv_sec;
 	sys.tv_usec = current.ru_stime.tv_usec - previous.ru_stime.tv_usec;
-	if ( sys.tv_usec < 0 ) {
+	if (sys.tv_usec < 0) {
 	    sys.tv_sec--;
 	    sys.tv_usec += 1000000;
 	}
@@ -128,8 +127,9 @@ telemetry_rusage( char *userid )
 	 * Some systems provide significantly more data, but POSIX
 	 * guarantees user & sys CPU time.
 	 */
-	syslog( LOG_NOTICE, "USAGE %s user: %d.%.6d sys: %d.%.6d", userid,
-	    user.tv_sec, user.tv_usec, sys.tv_sec, sys.tv_usec );
+	syslog(LOG_NOTICE, "USAGE %s user: %lu.%.6d sys: %lu.%.6d", userid,
+	       (unsigned long)user.tv_sec, (int)user.tv_usec,
+	       (unsigned long)sys.tv_sec, (int)sys.tv_usec);
 
 	previous = current;
     }
